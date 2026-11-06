@@ -296,3 +296,47 @@ func TestExecuteGatewayLargeCaptureAndRejectedReplayPreserveUsage(t *testing.T) 
 	}
 	e.noRecord()
 }
+
+type commitCapture struct {
+	statsExecutionStore
+	commits chan *core.UsageRecord
+}
+
+func (s *commitCapture) CommitExecution(_ context.Context, in core.ExecutionCommit) (*pluginv1.ExecutionReceipt, error) {
+	s.commits <- cloneUsage(in.Record)
+	return &pluginv1.ExecutionReceipt{}, nil
+}
+
+// A plugin that executes the request commits usage inside the attempt, before
+// the gateway settles the sticky binding; the committed record still carries
+// the matched rule and the hit.
+func TestExecuteGatewayCommitCarriesSticky(t *testing.T) {
+	svc := &commitCapture{
+		statsExecutionStore: statsExecutionStore{fakeSettler: &fakeSettler{ch: make(chan *core.UsageRecord, 8)}},
+		commits:             make(chan *core.UsageRecord, 8),
+	}
+	e, _ := executeFixture(t, svc)
+	e.enableSticky(onFailureFailover)
+	sess := withSession(body(testModel, false), "user_abc_account__session_exec")
+	next := func() *core.UsageRecord {
+		t.Helper()
+		select {
+		case r := <-svc.commits:
+			return r
+		case <-time.After(5 * time.Second):
+			t.Fatal("no committed usage")
+			return nil
+		}
+	}
+	require.Equal(t, 200, e.messages(sess).status)
+	first := next()
+	require.Equal(t, "claude-code-session", first.StickyRule)
+	require.False(t, first.StickyHit)
+	require.Equal(t, 200, e.messages(sess).status)
+	second := next()
+	require.Equal(t, "claude-code-session", second.StickyRule)
+	require.True(t, second.StickyHit)
+	require.Equal(t, 200, e.messages(body(testModel, false)).status)
+	require.Empty(t, next().StickyRule)
+	require.Empty(t, svc.ch)
+}

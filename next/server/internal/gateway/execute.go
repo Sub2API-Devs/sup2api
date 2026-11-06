@@ -242,6 +242,7 @@ func (x *gatewayExecution) forward(ctx context.Context, resp *http.Response) att
 	}
 	c.usage = nil
 	c.rec.LatencyMs = int(c.g.now().Sub(c.start) / time.Millisecond)
+	c.stampSticky()
 	x.base = cloneUsage(c.rec)
 	bctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()

@@ -462,6 +462,17 @@ func (c *call) dropBinding(ctx context.Context, s *stickySession) {
 	s.bound = 0
 }
 
+// stampSticky writes the matched rule and whether this attempt went to the
+// bound account into the usage record. A plugin that executes the request
+// commits usage inside the attempt, before finishSticky runs, so the attempt
+// stamps the record before it is cloned for the commit.
+func (c *call) stampSticky() {
+	if s := c.sticky; s != nil && c.g.d.Redis != nil {
+		c.rec.StickyRule = s.rule.Name
+		c.rec.StickyHit = s.hit
+	}
+}
+
 // finishSticky updates hit/miss/rebind counters, renews the binding of a
 // request its account served, and gives back a binding this request made for
 // an account that did not serve it. A request served elsewhere (it overflowed)
@@ -471,8 +482,7 @@ func (c *call) finishSticky(ctx context.Context, accountID int64, success bool) 
 	if s == nil || c.g.d.Redis == nil {
 		return
 	}
-	c.rec.StickyRule = s.rule.Name
-	c.rec.StickyHit = s.hit
+	c.stampSticky()
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 500*time.Millisecond)
 	defer cancel()
 	if !success && s.claimed != 0 && ctx.Err() == nil {
