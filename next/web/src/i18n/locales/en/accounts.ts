@@ -159,7 +159,6 @@ export default {
   tableEdit: 'Table editing',
   schedulable: 'Schedulable',
   autoDisable: 'Allow automatic disabling',
-  noAutoDisable: 'No auto-disable',
   lastUsed: 'Last used',
   editTitle: 'Edit account',
   newStep1: 'New account · choose a type',

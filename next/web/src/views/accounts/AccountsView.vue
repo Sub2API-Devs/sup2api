@@ -627,7 +627,6 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
             <SBadge :tone="statusOf(row).tone" dot data-testid="account-status">{{ statusOf(row).label }}</SBadge>
           </span>
         </STooltip>
-        <SBadge v-if="row.auto_disable === false" tone="gray" class="ml-1" :title="t('accounts.editorUi.autoDisableHint')">{{ t('accounts.noAutoDisable') }}</SBadge>
         <!-- Icon only, beside the badge, to keep the status column narrow; the name lives in the tooltip and aria-label. -->
         <SLink v-if="(row.status !== 'active' || row.status_reason || coolingDown(row)) && canResetStatus(row)" as="button" class="ml-1 inline-flex items-center align-middle" :title="`${t('accounts.resetStatus')} · ${t('accounts.resetStatusHint')}`" :aria-label="t('accounts.resetStatus')" data-testid="account-reset-status" @click="resetStatus(row)">
           <SIcon name="refresh" class="h-3.5 w-3.5" />

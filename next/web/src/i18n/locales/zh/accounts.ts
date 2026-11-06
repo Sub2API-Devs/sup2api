@@ -158,7 +158,6 @@ export default {
   tableEdit: '表格编辑',
   schedulable: '参与调度',
   autoDisable: '允许自动禁用',
-  noAutoDisable: '不自动禁用',
   lastUsed: '最近使用',
   editTitle: '编辑账号',
   newStep1: '新建账号 · 选择类型',
