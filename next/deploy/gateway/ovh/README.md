@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-07 核心 **0.1.253**（`cd505b30d`，北京时间 01:21；计划 `af96da18b10d4483f4e32a3d3978d6d5` completed/13，约 57 秒，没有暂停；没有迁移，schema 仍 `32b9376d…e2e6`；Host API 仍 9；内置插件与 0.1.252 相同，anthropic 仍 0.2.9）：
+- 内容：插件执行（platform.execute）的请求在 attempt 内提交用量前先写入粘性规则名和是否命中（`stampSticky`），usage_logs 的 `sticky_rule`/`sticky_hit` 不再恒为空。
+- 核验：两节点 v0.1.253（sup2api-1 start-primary 17:21:22Z、sup2api-ccp start 17:21:37Z），`/readyz` 200，发布后两节点错误日志 0；17:22Z 起 sup2api-ccp 上 anthropic 成功请求 48 条 `claude-code-session`/命中、1 条新绑定（未命中）、1 条无会话（无 metadata.user_id）。sup2api-1 发布后暂无 anthropic 流量（近 3 小时 237 vs ccp 8148），同一代码路径。
+- 回滚：回 0.1.252 不涉及 schema。
+- 脚本 `stage/0.1.253/`；manifest `f11d136e…39aa`；备份 `backups/core-0.1.253`（`382deac3…ac4e`）；工作树 `~/sup2api/release-0.1.253`；观察日志 `upgrade-20261106T172049.log`。
+
 2026-11-07 核心 **0.1.252** + anthropic **0.2.9**（`80cde9581`，北京时间 00:38–00:39；计划 `7d64316db7c01c42d3337f09a5121c3e` completed/13，约 59 秒，没有暂停；**迁移 0090**（只给 `sticky_rules` 加 `pass_headers text[] NOT NULL DEFAULT '{}'`），schema `d2093b20…321a` → `32b9376d…e2e6`；Host API 仍 9；内置包把 anthropic 0.2.8 换成本提交构建、`sup2api-plugins-2026` 签名的 0.2.9（`4df213ce…413c`，hostCompat `>=0.1.0 <0.2.0`），其余与 0.1.251 相同；外壳不变）：
 - 内容：粘性规则“透传请求头”（CONTRACTS §5.6，规则同 §81）；内置 claude-code-session 规则默认透传 x-claude-code-session-id / agent-id / parent-agent-id / request-class / agent-type；平台 passHeaders 加 request-class、agent-type；anthropic 插件 0.2.9 默认转发这五个头。
 - 核验：两节点 v0.1.252（sup2api-1 start-primary 16:38:54Z、sup2api-ccp start 16:39:17Z），api.prophey.ai `/readyz` 200，发布后两节点错误日志 0；`schema_migrations` 有 0090（16:38:51Z），`sticky_rules.pass_headers` 列存在；规则 1 claude-code-session `customized=false`，`pass_headers` 已同步为五个头，规则 2 为空。anthropic 插件 builtin 自动升级 rollout 234 完成，`plugins.active_version=0.2.9`；发布后账号 124、128 的 Claude Code 请求（120 个）`plugin_version=0.2.9` 全部 200。切换窗口 3 个 499（同 0.1.251）。
