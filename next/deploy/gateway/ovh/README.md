@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-06 核心 **0.1.250**（`0570a9451`，北京时间 21:47–21:48；计划 `10616a88d32a9ebac1364506e5e1fbf3` completed/13，约 56 秒，没有暂停；**迁移 0089**（只给 `accounts` 加 `header_passthrough text[] NOT NULL DEFAULT '{}'`），schema `dc1a1d43…b9cc` → `d2093b20…321a`；Host API 仍 9；内置插件与 0.1.249 相同，插件和外壳不变）：
+- 内容：账号级请求头透传（CONTRACTS §81）；平台 passHeaders 加 x-claude-code-session-id / agent-id / parent-agent-id（`2fdd291a9`）。
+- 核验：两节点 v0.1.250（sup2api-1 13:48:06Z、sup2api-ccp 13:48:26Z），`accounts.header_passthrough` 列存在，api.prophey.ai `/readyz` 200，发布后 8 分钟两节点错误日志 0，发布后账号 125、128 的 14 个请求全部成功。发布后把账号 124（sakura-api.prophey.ai）设为 `["*"]`；该账号 12:27Z 起被管理员禁用，透传到 sakura 的效果待启用后验证。
+- 回滚：迁移只加一列（有默认值）。回到 0.1.249 没有验证过，回滚前确认旧核心接受新 schema；回滚后透传规则不生效，列保留。
+- 脚本 `stage/0.1.250/`；manifest `c666bfc9…2312`；备份 `backups/core-0.1.250`（`bd170556…b6bd`）；工作树 `~/sup2api/release-0.1.250`；观察日志 `upgrade-20261106T134730.log`。
+
 2026-11-06 核心 **0.1.249**（`f0206570c`，北京时间 03:39–03:40；计划 `b09cc87ec7d20b6ba8237a01a77dbb6f` completed/13，约 52 秒，没有暂停；没有迁移，schema 仍 `dc1a1d43…b9cc`；Host API 仍 9；内置插件与 0.1.248 相同，插件和外壳不变）：
 - 内容：只有按钮、没有筛选的页头在宽屏把按钮放进顶栏（11 个页面）；使用记录筛选栏压行、列设置并入导出那一行；概览的重置/搜索接在筛选行末尾；插件页标题对齐菜单。只有前端改动。
 - 核验：两节点 0.1.249，api.prophey.ai `/readyz` 200，发布后 5 分钟两节点错误日志 0；线上首页引用的 `index-Cc1JN-qI.js` 与构建产物一致，含 `s-page-actions`。
