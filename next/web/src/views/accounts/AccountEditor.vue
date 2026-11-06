@@ -179,6 +179,17 @@ watch(defaultModels, (next, previous) => {
 /** Models and mappings of the section summary (the cards render their own counts). */
 const mappingCount = computed(() => Object.keys(mapping.value).length)
 
+/** The advanced section's summary: header passthrough and the account's own environment values. */
+const forwardingSummary = computed(() => {
+  const rules = basic.header_passthrough
+  const custom = Object.keys(basic.environment).length
+  if (!rules.length && !custom) return t('accounts.forwarding.allDefault')
+  return [
+    rules.includes('*') ? t('accounts.forwarding.passAll') : rules.length ? t('accounts.forwarding.passRules', { n: rules.length }) : t('accounts.forwarding.passNone'),
+    custom ? t('accounts.forwarding.envCustom', { n: custom }) : t('accounts.forwarding.envFollow')
+  ].join(' · ')
+})
+
 const editorSections = computed(() => [
   { key: 'connection' as const, icon: 'key', label: t('accounts.editorUi.connection'), summary: basic.name.trim() || t('accounts.editorUi.unnamed') },
   {
@@ -204,7 +215,7 @@ const editorSections = computed(() => [
     key: 'advanced' as const,
     icon: 'code',
     label: t('accounts.editorUi.advanced'),
-    summary: basic.header_passthrough.length ? t('accounts.headerPassthrough.summary', { n: basic.header_passthrough.length }) : t('accounts.editorUi.advancedSummary')
+    summary: forwardingSummary.value
   },
   ...(props.accountType?.plugin_key === 'ccgateway' ? [{ key: 'cc_features' as const, icon: 'settings', label: t('ccgateway.features.ccTitle'), summary: t('ccgateway.layers.' + (ccFeaturePolicy.value?.mode === 'custom' ? 'custom' : 'follow')) }] : [])
 ])
@@ -738,10 +749,6 @@ const { save } = useAccountSave({
             </SSettingRow>
           </SSettingsGroup>
 
-          <SSettingsGroup v-if="showEnvironment" :title="t('settings.environment.title')" :description="t('settings.environment.accountHint')" data-testid="account-environment">
-            <EnvironmentEditor v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
-          </SSettingsGroup>
-
           <AccountUsageLimitCard v-model="usageLimitModel" :status="usageLimitStatus" :load-error="usageLimitLoadError" :usage="account?.usage" :disabled="saving" :errors="usageLimitErrors" @retry="usageLimit.load" />
 
           <SSettingsGroup :title="t('accounts.modelLimits.title')" :description="t('accounts.modelLimits.hint')" data-testid="account-model-limits">
@@ -753,10 +760,11 @@ const { save } = useAccountSave({
 
         <!-- ============================================================ advanced -->
         <div v-show="activeSection === 'advanced'" data-editor-section="advanced" class="space-y-4">
-          <SSettingsGroup :title="t('accounts.headerPassthrough.title')" :description="t('accounts.headerPassthrough.hint')" data-testid="account-header-passthrough">
-            <SSettingRow :label="t('accounts.headerPassthrough.rules')" :description="t('accounts.headerPassthrough.rulesHint')" :error="errors.header_passthrough">
+          <SSettingsGroup :title="t('accounts.forwarding.title')" :description="t('accounts.forwarding.hint')" data-testid="account-forwarding">
+            <SSettingRow :label="t('accounts.headerPassthrough.title')" :description="t('accounts.headerPassthrough.hint')" :error="errors.header_passthrough" data-testid="account-header-passthrough">
               <STagInput v-model="basic.header_passthrough" :placeholder="t('accounts.headerPassthrough.placeholder')" :disabled="saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
             </SSettingRow>
+            <EnvironmentEditor v-if="showEnvironment" v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
           </SSettingsGroup>
         </div>
       </div>

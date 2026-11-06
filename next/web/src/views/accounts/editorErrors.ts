@@ -6,11 +6,11 @@ export type EditorSection = 'connection' | 'models' | 'scheduling' | 'advanced' 
 export const CONNECTION_FIELDS = ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone']
 const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit']
 
-/** Advanced settings: the header passthrough rules (CONTRACTS §81). */
-export const isAdvancedField = (k: string) => k === 'header_passthrough' || k.startsWith('header_passthrough.') || k.startsWith('header_passthrough[')
+/** The advanced section (request forwarding): header passthrough rules (CONTRACTS §81) and the account layer of the environment variables (`environment.<key>`). */
+export const isAdvancedField = (k: string) => k === 'header_passthrough' || k.startsWith('header_passthrough.') || k.startsWith('header_passthrough[') || k === 'environment' || k.startsWith('environment.')
 
-/** Scheduling fields, and the account layer of the environment variables (`environment.<key>`). */
-export const isSchedulingField = (k: string) => SCHEDULING_FIELDS.includes(k) || k.startsWith('environment.')
+/** Scheduling and limit fields. */
+export const isSchedulingField = (k: string) => SCHEDULING_FIELDS.includes(k)
 
 const CREDENTIAL_RE = /^credentials[.[]?(.*?)]?$/
 const isModelsField = (k: string) => k === 'models' || k.startsWith('models.') || k.startsWith('models[') || k.startsWith('model_mapping')

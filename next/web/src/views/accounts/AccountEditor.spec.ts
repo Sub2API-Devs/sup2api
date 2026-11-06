@@ -69,6 +69,8 @@ describe('account container environment', () => {
     const rules = w.getComponent(STagInput)
     expect(rules.props('modelValue')).toEqual(['*'])
     expect(w.get('[data-testid="account-header-passthrough"]').element.closest('[data-editor-section]')?.getAttribute('data-editor-section')).toBe('advanced')
+    const advanced = () => w.getComponent(AccountEditorNav).props('sections').find(s => s.key === 'advanced')
+    expect(advanced()).toMatchObject({ label: '高级', summary: '透传 * · 超时跟随' })
     rules.vm.$emit('update:modelValue', ['*', 'regex:^x-claude-code-'])
     await flushPromises()
     await w.get('form').trigger('submit'); await flushPromises()
