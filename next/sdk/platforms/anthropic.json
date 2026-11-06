@@ -124,7 +124,10 @@
     "x-stainless-retry-count",
     "x-stainless-runtime",
     "x-stainless-runtime-version",
-    "x-stainless-timeout"
+    "x-stainless-timeout",
+    "x-claude-code-session-id",
+    "x-claude-code-agent-id",
+    "x-claude-code-parent-agent-id"
   ],
   "usage": {
     "semantics": "exclusive",

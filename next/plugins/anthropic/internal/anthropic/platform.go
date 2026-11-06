@@ -62,6 +62,12 @@ var forwardHeaders = []string{
 	"x-stainless-runtime",
 	"x-stainless-runtime-version",
 	"x-stainless-timeout",
+	// Claude Code session/sub-agent ids: upstream gateways such as vm2api
+	// key per-agent sessions on these, so sub-agents do not queue behind
+	// the main thread.
+	"x-claude-code-session-id",
+	"x-claude-code-agent-id",
+	"x-claude-code-parent-agent-id",
 }
 
 // ForwardHeaders returns the client headers copied to the upstream request
