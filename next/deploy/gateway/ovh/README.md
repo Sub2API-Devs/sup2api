@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-06 核心 **0.1.251**（`01009036d`，北京时间 22:35–22:36；计划 `c5c713e739fff4c4d9e5bb8cace0f444` completed/13，约 55 秒，没有暂停；没有迁移，schema 仍 `d2093b20…321a`；Host API 仍 9；内置插件与 0.1.250 相同，插件和外壳不变）：
+- 内容：账号编辑页“高级”分区与“请求转发”组（请求头透传 + 上游超时）；账号列表去掉“不自动禁用”标签。只有前端改动。
+- 核验：两节点 v0.1.251（sup2api-1 14:35:39Z、sup2api-ccp 14:35:59Z），api.prophey.ai `/readyz` 200，发布后两节点错误日志 0；线上首页引用的 `index-d8am6E_y.js` 与构建产物一致，含“请求转发”。主节点切换的约 10 秒里账号 128 有 3 个进行中的请求以 499 client canceled 结束（0.1.250 时 13:47 有 8 个），之后正常。
+- 回滚：回 0.1.250 不涉及 schema。
+- 脚本 `stage/0.1.251/`；manifest `588e430c…6b8b`；备份 `backups/core-0.1.251`（`a5e10c5f…`）；工作树 `~/sup2api/release-0.1.251`；观察日志 `upgrade-20261106T143504.log`。
+
 2026-11-06 核心 **0.1.250**（`0570a9451`，北京时间 21:47–21:48；计划 `10616a88d32a9ebac1364506e5e1fbf3` completed/13，约 56 秒，没有暂停；**迁移 0089**（只给 `accounts` 加 `header_passthrough text[] NOT NULL DEFAULT '{}'`），schema `dc1a1d43…b9cc` → `d2093b20…321a`；Host API 仍 9；内置插件与 0.1.249 相同，插件和外壳不变）：
 - 内容：账号级请求头透传（CONTRACTS §81）；平台 passHeaders 加 x-claude-code-session-id / agent-id / parent-agent-id（`2fdd291a9`）。
 - 核验：两节点 v0.1.250（sup2api-1 13:48:06Z、sup2api-ccp 13:48:26Z），`accounts.header_passthrough` 列存在，api.prophey.ai `/readyz` 200，发布后 8 分钟两节点错误日志 0，发布后账号 125、128 的 14 个请求全部成功。发布后把账号 124（sakura-api.prophey.ai）设为 `["*"]`；该账号 12:27Z 起被管理员禁用，透传到 sakura 的效果待启用后验证。
