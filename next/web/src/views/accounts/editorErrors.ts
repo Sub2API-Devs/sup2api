@@ -1,10 +1,13 @@
 // Server field errors of the account editor (ApiError.fields) and the section
 // that holds each field.
 
-export type EditorSection = 'connection' | 'models' | 'scheduling' | 'cc_features'
+export type EditorSection = 'connection' | 'models' | 'scheduling' | 'advanced' | 'cc_features'
 
 export const CONNECTION_FIELDS = ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone']
 const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit']
+
+/** Advanced settings: the header passthrough rules (CONTRACTS §81). */
+export const isAdvancedField = (k: string) => k === 'header_passthrough' || k.startsWith('header_passthrough.') || k.startsWith('header_passthrough[')
 
 /** Scheduling fields, and the account layer of the environment variables (`environment.<key>`). */
 export const isSchedulingField = (k: string) => SCHEDULING_FIELDS.includes(k) || k.startsWith('environment.')
@@ -40,5 +43,6 @@ export function sectionOfErrors(base: Record<string, string>, cred: Record<strin
   if (Object.keys(cred).length || CONNECTION_FIELDS.some((k) => k in base)) return 'connection'
   if (Object.keys(base).some(isModelsField)) return 'models'
   if (Object.keys(base).some(k => k.startsWith('cc_feature_policy'))) return 'cc_features'
+  if (Object.keys(base).some(isAdvancedField) && !Object.keys(base).some(isSchedulingField)) return 'advanced'
   return Object.keys(base).length ? 'scheduling' : null
 }

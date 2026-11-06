@@ -66,7 +66,7 @@ export default {
     noModelMatch: '没有匹配的模型',
     addModels: '添加',
     groupModelHint: '账号模型与分组白名单分别生效；API Key 所属分组也必须允许请求模型。',
- authMethod: '认证方式', connection: '接入配置', connectionHint: '名称、分组与连接凭证', models: '模型配置', modelsHint: '可用模型与名称映射', scheduling: '调度与限流', schedulingHint: '优先级、并发与用量限制', navigation: '账号配置导航', searchTypes: '搜索服务商或账号类型',
+ authMethod: '认证方式', connection: '接入配置', connectionHint: '名称、分组与连接凭证', models: '模型配置', modelsHint: '可用模型与名称映射', scheduling: '调度与限流', schedulingHint: '优先级、并发与用量限制', advanced: '高级设置', advancedSummary: '未配置', navigation: '账号配置导航', searchTypes: '搜索服务商或账号类型',
     unnamed: '尚未填写名称', allModels: '全部模型', modelsSummary: '{n} 个模型', mappingSummary: '{n} 条映射', schedulingSummary: '优先级 {p} · 权重 {w} · 并发 {c}', sectionHasErrors: '此处有待修正的内容',
     basicHint: '账号名称、所属分组与出口代理', namePlaceholder: '例如 claude-main', groupsHint: '未加入分组的账号不会被调度', credentialsHint: '连接凭证由插件「{plugin}」校验与保存',
     modelsCardHint: '账号可服务的请求模型；留空表示不限制', mappingCardHint: '把请求模型改写为上游模型；计费、白名单仍按请求模型', prefilled: '已按插件预设填入 {what}，可直接保存，也可按需增删；清空模型列表表示可服务所有模型。',
@@ -131,7 +131,8 @@ export default {
     hint: '把客户端的请求头原样带给上游，插件自己设置的请求头优先。凭证（Authorization、x-api-key、Cookie）、逐跳头、客户端地址（X-Forwarded-For、X-Real-IP 等）和网关控制头（x-sub2api-*、x-kin-*）任何规则都不会透传',
     rules: '透传规则',
     rulesHint: '* 表示全部；regex:正则 按名称匹配（不区分大小写）；其他按请求头名称精确匹配。回车添加，最多 32 条，留空表示只转发平台默认的请求头',
-    placeholder: '*、regex:^x-claude-code- 或请求头名称'
+    placeholder: '*、regex:^x-claude-code- 或请求头名称',
+    summary: '请求头透传 {n} 条'
   },
   tpdHint: '0 表示不限；按 UTC 自然日',
   spmHint: '近 60 秒内活跃的会话数上限，按粘性会话键区分会话。同一会话再次请求不算新会话；已在用该账号的会话总是放行，新会话到达上限时改用其他账号。没有命中粘性规则的请求每个都算一个新会话。0 表示不限',

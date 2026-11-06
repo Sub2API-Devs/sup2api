@@ -44,7 +44,7 @@ import { containerLocales, containerTimezones, environmentOptions } from './cont
 import { useContainerEnvironment } from './useContainerEnvironment'
 import { useModelEdit } from './useModelEdit'
 import { useAccountSave } from './useAccountSave'
-import { CONNECTION_FIELDS, isSchedulingField, mappingErrorText, modelsErrorText, splitFieldErrors, type EditorSection } from './editorErrors'
+import { CONNECTION_FIELDS, isAdvancedField, isSchedulingField, mappingErrorText, modelsErrorText, splitFieldErrors, type EditorSection } from './editorErrors'
 
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
@@ -200,6 +200,12 @@ const editorSections = computed(() => [
       ...(usageLimit.summary.value ? [usageLimit.summary.value] : [])
     ].join(' · ')
   },
+  {
+    key: 'advanced' as const,
+    icon: 'code',
+    label: t('accounts.editorUi.advanced'),
+    summary: basic.header_passthrough.length ? t('accounts.headerPassthrough.summary', { n: basic.header_passthrough.length }) : t('accounts.editorUi.advancedSummary')
+  },
   ...(props.accountType?.plugin_key === 'ccgateway' ? [{ key: 'cc_features' as const, icon: 'settings', label: t('ccgateway.features.ccTitle'), summary: t('ccgateway.layers.' + (ccFeaturePolicy.value?.mode === 'custom' ? 'custom' : 'follow')) }] : [])
 ])
 const limitFields = computed(() => [
@@ -215,6 +221,7 @@ const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
   connection: CONNECTION_FIELDS.some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
   models: !!(modelsError.value || serverModelsError.value || mappingError.value || serverMappingError.value),
   scheduling: Object.keys(errors.value).some(isSchedulingField) || Object.keys(usageLimitErrors.value).length > 0,
+  advanced: Object.keys(errors.value).some(isAdvancedField),
   cc_features: Object.keys(errors.value).some(k => k.startsWith('cc_feature_policy'))
 }))
 
@@ -735,18 +742,21 @@ const { save } = useAccountSave({
             <EnvironmentEditor v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
           </SSettingsGroup>
 
-          <SSettingsGroup :title="t('accounts.headerPassthrough.title')" :description="t('accounts.headerPassthrough.hint')" data-testid="account-header-passthrough">
-            <SSettingRow :label="t('accounts.headerPassthrough.rules')" :description="t('accounts.headerPassthrough.rulesHint')" :error="errors.header_passthrough">
-              <STagInput v-model="basic.header_passthrough" :placeholder="t('accounts.headerPassthrough.placeholder')" :disabled="saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
-            </SSettingRow>
-          </SSettingsGroup>
-
           <AccountUsageLimitCard v-model="usageLimitModel" :status="usageLimitStatus" :load-error="usageLimitLoadError" :usage="account?.usage" :disabled="saving" :errors="usageLimitErrors" @retry="usageLimit.load" />
 
           <SSettingsGroup :title="t('accounts.modelLimits.title')" :description="t('accounts.modelLimits.hint')" data-testid="account-model-limits">
             <div class="p-4">
               <ModelLimitsEditor v-model="modelLimitCards" :options="modelLimitOptions" :errors="errors" :disabled="saving" />
             </div>
+          </SSettingsGroup>
+        </div>
+
+        <!-- ============================================================ advanced -->
+        <div v-show="activeSection === 'advanced'" data-editor-section="advanced" class="space-y-4">
+          <SSettingsGroup :title="t('accounts.headerPassthrough.title')" :description="t('accounts.headerPassthrough.hint')" data-testid="account-header-passthrough">
+            <SSettingRow :label="t('accounts.headerPassthrough.rules')" :description="t('accounts.headerPassthrough.rulesHint')" :error="errors.header_passthrough">
+              <STagInput v-model="basic.header_passthrough" :placeholder="t('accounts.headerPassthrough.placeholder')" :disabled="saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
+            </SSettingRow>
           </SSettingsGroup>
         </div>
       </div>

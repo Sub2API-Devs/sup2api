@@ -67,7 +67,7 @@ export default {
     noModelMatch: 'No matching models',
     addModels: 'Add',
     groupModelHint: 'Account models and group allowlists apply separately. The API Key group must also allow the request model.',
- authMethod: 'Authentication method', connection: 'Connection', connectionHint: 'Name, groups and credentials', models: 'Models', modelsHint: 'Available models and aliases', scheduling: 'Scheduling & limits', schedulingHint: 'Priority, concurrency and usage', navigation: 'Account configuration', searchTypes: 'Search providers or account types',
+ authMethod: 'Authentication method', connection: 'Connection', connectionHint: 'Name, groups and credentials', models: 'Models', modelsHint: 'Available models and aliases', scheduling: 'Scheduling & limits', schedulingHint: 'Priority, concurrency and usage', advanced: 'Advanced', advancedSummary: 'Not set', navigation: 'Account configuration', searchTypes: 'Search providers or account types',
     unnamed: 'No name yet', allModels: 'All models', modelsSummary: '{n} models', mappingSummary: '{n} mappings', schedulingSummary: 'Priority {p} · weight {w} · concurrency {c}', sectionHasErrors: 'Something here needs fixing',
     basicHint: 'Account name, groups and egress proxy', namePlaceholder: 'e.g. claude-main', groupsHint: 'Accounts outside every group are never scheduled', credentialsHint: 'Credentials are validated and stored by the {plugin} plugin',
     modelsCardHint: 'Request models the account serves; empty means no restriction', mappingCardHint: 'Rewrites request models to upstream models; billing and allowlists still use the request model', prefilled: 'Prefilled with the plugin preset: {what}. Save as is or adjust; an empty model list serves every model.',
@@ -132,7 +132,8 @@ export default {
     hint: 'Copies client request headers onto the upstream request; headers the plugin sets win. Credentials (Authorization, x-api-key, Cookie), hop-by-hop headers, client addresses (X-Forwarded-For, X-Real-IP …) and gateway control headers (x-sub2api-*, x-kin-*) never pass, whatever the rules',
     rules: 'Rules',
     rulesHint: '* passes every header; regex:<pattern> matches names (case insensitive); anything else is an exact header name. Press Enter to add, at most 32; empty forwards only the platform\'s default headers',
-    placeholder: '*, regex:^x-claude-code- or a header name'
+    placeholder: '*, regex:^x-claude-code- or a header name',
+    summary: '{n} header passthrough rules'
   },
   tpdHint: '0 = unlimited; per UTC day',
   spmHint: 'Cap of the sessions active in the last 60 seconds, told apart by sticky session key. A session asking again is not a new one; sessions already on the account always pass, new sessions over the cap go to other accounts. A request matching no sticky rule is a new session of its own. 0 means unlimited',

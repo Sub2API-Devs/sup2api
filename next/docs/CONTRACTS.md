@@ -6309,5 +6309,5 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **字段**：`accounts.header_passthrough text[]`（默认空），接口字段 `header_passthrough`（列表、详情返回，`POST`/`PATCH /accounts` 整体替换）。规则三种：`*`（全部）、`regex:<正则>` 或 `re:<正则>`（按请求头名称匹配，不区分大小写，存成 `regex:` 前缀）、其他按名称精确匹配（存小写）。最多 32 条，每条最多 256 字符；去重、去空白。正则编译失败、名称不是合法字段名报 `invalid`，精确名称落在下面的禁止列表报 `blocked`，超过 32 条报 `too_many`。
 - **生效位置**：核心按插件构造的请求发往上游时（`forwardBuilt`，含插件经核心转发的执行请求），把匹配规则的客户端请求头补到上游请求上，所有值原样带上。**插件已设置的头优先**（例如账号自己的 `x-api-key`），核心随后设置的资源头、额度头也会覆盖它。不影响插件收到的 `InboundHeaders`（仍按平台 / 账号类型的 `passHeaders`）。
 - **禁止列表**（任何规则都不透传，`core.HeaderPassthroughBlocked`）：逐跳和分帧头（connection、keep-alive、te、trailer、transfer-encoding、upgrade、expect、host、content-length、content-encoding、accept-encoding），凭证（authorization、x-api-key、x-goog-api-key、api-key、cookie），客户端地址和代理痕迹（x-forwarded-for、x-forwarded-host、x-forwarded-proto、x-forwarded-port、x-real-ip、forwarded、via、cf-connecting-ip、true-client-ip、x-client-ip、x-cluster-client-ip），以及前缀 `proxy-`、`sec-websocket-`、`x-sub2api-`（本网关内部头）、`x-kin-`（vm2api/sakura 的控制头，例如 `x-kin-debug` 会让下游写调试日志并回传槽位和账号）。比 new-api 的跳过列表多了客户端地址和网关控制头，避免客户端伪造 IP 或操控下游。
-- 控制台：账号编辑页“调度”分区的“请求头透传”，标签输入，一条一个规则。
+- 控制台：账号编辑页单独的“高级设置”分区（左侧导航最后一项，ccgateway 账号在 Claude Code 功能之前）里的“请求头透传”，标签输入，一条一个规则。
 - 未做：分组 / 全局层的透传、WebSocket 端点（`websocket.go`）的透传。
