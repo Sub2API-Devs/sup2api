@@ -12,7 +12,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, STagInput, toast } from '@sub2api/ui'
 import type { Account, AccountType, EnvironmentValues, ProxyProbeResult } from '@/api/types'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import { schemaWidgets } from '@/components/schema/widgets'
@@ -79,6 +79,7 @@ const basic = reactive({
   tpm_limit: 0,
   spm_limit: 0,
   environment: {} as EnvironmentValues,
+  header_passthrough: [] as string[],
 })
 /** 指定模型限速 (CONTRACTS §68), edited as cards and saved as one entry per list. */
 const modelLimitCards = ref<ModelLimitCard[]>([])
@@ -436,6 +437,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   basic.tpm_limit = a?.tpm_limit ?? 0
   basic.spm_limit = a?.spm_limit ?? 0
   basic.environment = { ...a?.environment }
+  basic.header_passthrough = [...(a?.header_passthrough || [])]
   modelLimitCards.value = toCards(a?.model_limits)
   if (!a) applyDefaultLimits(at)
   resetEnvironment(a?.settings)
@@ -731,6 +733,12 @@ const { save } = useAccountSave({
 
           <SSettingsGroup v-if="showEnvironment" :title="t('settings.environment.title')" :description="t('settings.environment.accountHint')" data-testid="account-environment">
             <EnvironmentEditor v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
+          </SSettingsGroup>
+
+          <SSettingsGroup :title="t('accounts.headerPassthrough.title')" :description="t('accounts.headerPassthrough.hint')" data-testid="account-header-passthrough">
+            <SSettingRow :label="t('accounts.headerPassthrough.rules')" :description="t('accounts.headerPassthrough.rulesHint')" :error="errors.header_passthrough">
+              <STagInput v-model="basic.header_passthrough" :placeholder="t('accounts.headerPassthrough.placeholder')" :disabled="saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
+            </SSettingRow>
           </SSettingsGroup>
 
           <AccountUsageLimitCard v-model="usageLimitModel" :status="usageLimitStatus" :load-error="usageLimitLoadError" :usage="account?.usage" :disabled="saving" :errors="usageLimitErrors" @retry="usageLimit.load" />

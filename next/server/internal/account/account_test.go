@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
 	"google.golang.org/grpc/codes"
@@ -1298,4 +1299,35 @@ func TestTypeViewDefaultModels(t *testing.T) {
 	if !slices.Equal(v.DefaultModels, []string{"m-1", "m-2"}) || v.DefaultModelMapping["m-1"] != "m-1-20260101" {
 		t.Fatalf("defaults = %v %v", v.DefaultModels, v.DefaultModelMapping)
 	}
+}
+
+// Header passthrough rules (CONTRACTS §81) are normalized on save, read back,
+// replaced by PATCH and reach the gateway through Load; a header that can
+// never pass is a field error.
+func TestAccountHeaderPassthroughRules(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	code, out := e.do("POST", "/accounts", map[string]any{"name": "passthrough", "plugin_key": "anthropic", "type": "apikey",
+		"credentials":        map[string]any{"api_key": "sk-good-key-123"},
+		"header_passthrough": []string{"*", " X-Claude-Code-Agent-Id ", "re:^x-stainless-", "*"}})
+	require.Equal(t, 201, code, fmt.Sprint(out))
+	id := int64(data(out)["id"].(float64))
+	require.Equal(t, []any{"*", "x-claude-code-agent-id", "regex:^x-stainless-"}, data(out)["header_passthrough"])
+
+	acc, err := e.svc.Load(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, []string{"*", "x-claude-code-agent-id", "regex:^x-stainless-"}, acc.HeaderPassthrough)
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"header_passthrough": []string{"X-Forwarded-For", "re:("}})
+	require.Equal(t, 400, code, fmt.Sprint(out))
+	require.Equal(t, []string{"header_passthrough:blocked", "header_passthrough:invalid"}, fieldsOf(out))
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"header_passthrough": []string{}})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Equal(t, []any{}, data(out)["header_passthrough"])
+
+	code, out = e.do("POST", "/accounts", map[string]any{"name": "plain", "plugin_key": "anthropic", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-456"}})
+	require.Equal(t, 201, code, fmt.Sprint(out))
+	require.Equal(t, []any{}, data(out)["header_passthrough"])
 }

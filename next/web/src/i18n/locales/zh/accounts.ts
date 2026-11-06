@@ -126,6 +126,13 @@ export default {
   tpmLimit: '每分钟 token 数（TPM）',
   tpdLimit: '每天 token 数（TPD）',
   spmLimit: '每分钟会话数（SPM）',
+  headerPassthrough: {
+    title: '请求头透传',
+    hint: '把客户端的请求头原样带给上游，插件自己设置的请求头优先。凭证（Authorization、x-api-key、Cookie）、逐跳头、客户端地址（X-Forwarded-For、X-Real-IP 等）和网关控制头（x-sub2api-*、x-kin-*）任何规则都不会透传',
+    rules: '透传规则',
+    rulesHint: '* 表示全部；regex:正则 按名称匹配（不区分大小写）；其他按请求头名称精确匹配。回车添加，最多 32 条，留空表示只转发平台默认的请求头',
+    placeholder: '*、regex:^x-claude-code- 或请求头名称'
+  },
   tpdHint: '0 表示不限；按 UTC 自然日',
   spmHint: '近 60 秒内活跃的会话数上限，按粘性会话键区分会话。同一会话再次请求不算新会话；已在用该账号的会话总是放行，新会话到达上限时改用其他账号。没有命中粘性规则的请求每个都算一个新会话。0 表示不限',
   models: '模型',

@@ -501,6 +501,7 @@ const withGroups = (a: any) => ({
   model_mapping: a.model_mapping || {},
   model_limits: (a.model_limits || []).map((l: any) => ({ spm_limit: 0, ...l })),
   spm_limit: a.spm_limit ?? 0,
+  header_passthrough: a.header_passthrough ?? [],
   weight: a.weight ?? 1,
   created_by: a.created_by ?? null,
   created_by_email: userEmail(a.created_by),

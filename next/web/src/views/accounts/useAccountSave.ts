@@ -33,6 +33,8 @@ export interface AccountBasics {
   spm_limit: number
   /** The account layer of the environment variables (CONTRACTS §74.3). */
   environment: EnvironmentValues
+  /** Header passthrough rules (CONTRACTS §81). */
+  header_passthrough: string[]
 }
 
 /** The account editor's model list / mapping editor (useModelEdit: its state and actions). */
@@ -143,7 +145,8 @@ export function useAccountSave(deps: AccountSaveDeps) {
       tpm_limit: Number(basic.tpm_limit) || 0,
       spm_limit: Number(basic.spm_limit) || 0,
       model_limits: fromCards(deps.modelLimits.value),
-      environment: basic.environment
+      environment: basic.environment,
+      header_passthrough: basic.header_passthrough
     }
     if (schedulingConfigurable.value) body.schedulable = basic.schedulable
     if (ccg.autoDisableEnabled.value === true && autoDisableConfigurable.value) body.auto_disable = basic.auto_disable

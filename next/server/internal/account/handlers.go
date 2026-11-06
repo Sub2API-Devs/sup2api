@@ -53,6 +53,7 @@ type row struct {
 	SPMLimit          int
 	ModelLimits       []byte
 	Environment       core.EnvironmentValues
+	HeaderPassthrough []string
 	LastUsedAt        *time.Time
 	CreatedBy         *int64
 	CreatedByEmail    *string
@@ -84,7 +85,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -94,7 +95,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough)
 	return &a, err
 }
 
@@ -202,7 +203,10 @@ type View struct {
 	ModelLimits  []core.ModelLimit `json:"model_limits"`
 	// Environment is the account layer of the environment variables (§74.3).
 	Environment core.EnvironmentValues `json:"environment"`
-	RateUsage   core.RateUsage         `json:"rate_usage"`
+	// HeaderPassthrough lists the client headers the account copies onto its
+	// upstream requests (CONTRACTS §81).
+	HeaderPassthrough []string       `json:"header_passthrough"`
+	RateUsage         core.RateUsage `json:"rate_usage"`
 	// Outcomes are the successful requests and failed attempts of the last 60
 	// seconds behind the success-rate column (CONTRACTS §73); null when the
 	// statistics are unavailable.
@@ -273,13 +277,18 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		if models == nil {
 			models = []string{}
 		}
+		passthrough := a.HeaderPassthrough
+		if passthrough == nil {
+			passthrough = []string{}
+		}
 		v := &View{
 			ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type, TypeLabel: s.typeLabel(a.PluginKey, a.Type),
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
 			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(), Environment: a.Environment,
-			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
+			HeaderPassthrough: passthrough,
+			Orphaned:          !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 			LastTest:         a.lastTest(),
@@ -648,10 +657,12 @@ type input struct {
 	SPMLimit       *int               `json:"spm_limit"`
 	ModelLimits    *[]core.ModelLimit `json:"model_limits"`
 	// Environment replaces the account layer as a whole (§74.3).
-	Environment    *core.EnvironmentValues `json:"environment"`
-	Credentials    json.RawMessage         `json:"credentials"`
-	Settings       json.RawMessage         `json:"settings"`
-	PreparationKey *string                 `json:"preparation_key"`
+	Environment *core.EnvironmentValues `json:"environment"`
+	// HeaderPassthrough replaces the account's header passthrough rules (§81).
+	HeaderPassthrough *[]string       `json:"header_passthrough"`
+	Credentials       json.RawMessage `json:"credentials"`
+	Settings          json.RawMessage `json:"settings"`
+	PreparationKey    *string         `json:"preparation_key"`
 	// CCGatewayRuntime is the draft runtime key a new ccgateway/managed
 	// account adopts (CONTRACTS §49.10); create only. Blank means absent.
 	CCGatewayRuntime *string `json:"ccgateway_runtime"`
@@ -691,6 +702,7 @@ func (in *input) changedFields() []string {
 	set("spm_limit", in.SPMLimit != nil)
 	set("model_limits", in.ModelLimits != nil)
 	set("environment", in.Environment != nil)
+	set("header_passthrough", in.HeaderPassthrough != nil)
 	set("credentials", in.hasCredentials())
 	set("settings", len(in.Settings) > 0)
 	set("cc_feature_policy", in.CCFeaturePolicy != nil)
@@ -838,6 +850,11 @@ func (in *input) validateScheduling(ctx context.Context) []core.FieldError {
 		values, errs := core.ValidateEnvironmentValues(ctx, core.EnvLayerAccount, "environment", *in.Environment)
 		fe = append(fe, errs...)
 		in.Environment = &values
+	}
+	if in.HeaderPassthrough != nil {
+		rules, errs := core.NormalizeHeaderPassthrough(ctx, "header_passthrough", *in.HeaderPassthrough)
+		fe = append(fe, errs...)
+		in.HeaderPassthrough = &rules
 	}
 	if in.ModelLimits != nil {
 		limits, errs := normalizeModelLimits(ctx, *in.ModelLimits)
@@ -1117,6 +1134,7 @@ func (s *Service) create(c *gin.Context) {
 	spm := core.ValueOr(in.SPMLimit, 0)
 	modelLimits := core.ValueOr(in.ModelLimits, []core.ModelLimit{})
 	environment := core.ValueOr(in.Environment, core.EnvironmentValues{})
+	headerPassthrough := core.ValueOr(in.HeaderPassthrough, []string{})
 	uid, _ := core.UserID(ctx)
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
 		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
@@ -1157,12 +1175,12 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
-			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models, model_limits, spm_limit, environment)
+			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models, model_limits, spm_limit, environment, header_passthrough)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb, $21, $22) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb, $21, $22, $23::text[]) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
-			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels, modelLimitsJSON(modelLimits), spm, environment).Scan(&id); err != nil {
+			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels, modelLimitsJSON(modelLimits), spm, environment, headerPassthrough).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1432,10 +1450,11 @@ func (s *Service) update(c *gin.Context) {
 			model_limits = COALESCE($20::jsonb, model_limits),
 			spm_limit = COALESCE($21, spm_limit),
 			environment = COALESCE($22, environment),
+			header_passthrough = COALESCE($23::text[], header_passthrough),
 			updated_at = clock_timestamp()
 			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
 			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
-			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment); err != nil {
+			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment, in.HeaderPassthrough); err != nil {
 			return err
 		}
 		if statusChanged && *in.Status == "active" && limitDisabled(locked.Status, locked.AutoDisabledSource) {

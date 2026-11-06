@@ -376,6 +376,9 @@ type Account struct {
 	AutoDisable bool
 	Credentials json.RawMessage
 	Settings    json.RawMessage
+	// HeaderPassthrough lists the client headers copied onto the upstream
+	// request (CONTRACTS §81); empty = none beyond the platform's own.
+	HeaderPassthrough []string
 }
 
 func (a *Account) PluginAccount(platform string) *pluginv1.Account {

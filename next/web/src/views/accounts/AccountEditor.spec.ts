@@ -9,7 +9,7 @@ import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import AccountModelsCard from './AccountModelsCard.vue'
 import ModelLimitsEditor from './ModelLimitsEditor.vue'
-import { SSwitch } from '@sub2api/ui'
+import { SSwitch, STagInput } from '@sub2api/ui'
 import AccountEditorNav from './AccountEditorNav.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 
@@ -61,6 +61,17 @@ describe('account container environment', () => {
     mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
     mocks.patch.mockResolvedValue(savedAccount())
     mocks.post.mockResolvedValue(savedAccount())
+  })
+
+  it('loads and saves the header passthrough rules (CONTRACTS §81)', async () => {
+    const w = render({ ...savedAccount(), header_passthrough: ['*'] } as Account)
+    await flushPromises()
+    const rules = w.getComponent(STagInput)
+    expect(rules.props('modelValue')).toEqual(['*'])
+    rules.vm.$emit('update:modelValue', ['*', 'regex:^x-claude-code-'])
+    await flushPromises()
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ header_passthrough: ['*', 'regex:^x-claude-code-'] }))
   })
 
   it('saves a feature draft atomically with account fields and omits unchanged policy', async () => {

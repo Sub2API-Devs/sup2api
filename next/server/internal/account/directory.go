@@ -162,11 +162,12 @@ func (s *Service) Load(ctx context.Context, id int64) (*core.Account, error) {
 			Priority: a.Priority, Weight: a.Weight, MaxConcurrency: a.MaxConcurrency, ProxyID: a.ProxyID,
 			Models: a.Models, ModelMapping: a.mapping(), RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(),
 			Environment: a.Environment},
-		Status:      a.Status,
-		Schedulable: a.Schedulable,
-		AutoDisable: a.AutoDisable,
-		Credentials: json.RawMessage(plain),
-		Settings:    json.RawMessage(settings),
+		Status:            a.Status,
+		Schedulable:       a.Schedulable,
+		AutoDisable:       a.AutoDisable,
+		Credentials:       json.RawMessage(plain),
+		Settings:          json.RawMessage(settings),
+		HeaderPassthrough: a.HeaderPassthrough,
 	}
 	s.cacheMu.Lock()
 	if s.epoch == epoch {

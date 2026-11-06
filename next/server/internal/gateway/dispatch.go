@@ -702,6 +702,15 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			req.Header.Set(k, v)
 		}
 	}
+	// The account's header passthrough (CONTRACTS §81) fills in client
+	// headers the plugin did not set; the core's own headers below still win.
+	if acc != nil && len(acc.HeaderPassthrough) > 0 && c.c != nil && c.c.Request != nil {
+		for k, vs := range core.PassthroughHeaders(acc.HeaderPassthrough, c.c.Request.Header) {
+			if _, set := req.Header[k]; !set {
+				req.Header[k] = vs
+			}
+		}
+	}
 	if req.Header.Get("Content-Type") == "" && reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

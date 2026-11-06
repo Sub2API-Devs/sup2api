@@ -127,6 +127,13 @@ export default {
   tpmLimit: 'Tokens per minute (TPM)',
   tpdLimit: 'Tokens per day (TPD)',
   spmLimit: 'Sessions per minute (SPM)',
+  headerPassthrough: {
+    title: 'Header passthrough',
+    hint: 'Copies client request headers onto the upstream request; headers the plugin sets win. Credentials (Authorization, x-api-key, Cookie), hop-by-hop headers, client addresses (X-Forwarded-For, X-Real-IP …) and gateway control headers (x-sub2api-*, x-kin-*) never pass, whatever the rules',
+    rules: 'Rules',
+    rulesHint: '* passes every header; regex:<pattern> matches names (case insensitive); anything else is an exact header name. Press Enter to add, at most 32; empty forwards only the platform\'s default headers',
+    placeholder: '*, regex:^x-claude-code- or a header name'
+  },
   tpdHint: '0 = unlimited; per UTC day',
   spmHint: 'Cap of the sessions active in the last 60 seconds, told apart by sticky session key. A session asking again is not a new one; sessions already on the account always pass, new sessions over the cap go to other accounts. A request matching no sticky rule is a new session of its own. 0 means unlimited',
   models: 'Models',
