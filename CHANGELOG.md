@@ -4,6 +4,14 @@
 
 每次发布在最前面加一节，写清版本、提交和用户能看到的变化。版本有三条线：核心、网关（外壳）、插件（如 ccgateway）。
 
+## 2026-11-07
+
+### 核心 0.1.252 + anthropic 0.2.9（`80cde9581`，迁移 0090）
+
+- 粘性规则可以配置“透传请求头”（写法同账号请求头透传：`*`、`regex:正则` 或请求头名称）：命中规则的请求把这些客户端请求头转发到上游，不覆盖插件和账号已设置的头，账号透传的禁止列表照样生效。粘性规则弹窗新增该项。
+- 内置 claude-code-session 规则默认透传 x-claude-code-session-id、agent-id、parent-agent-id、request-class、agent-type 五个头；内置 anthropic 平台 passHeaders 增加 request-class、agent-type。
+- anthropic 插件 0.2.9（随核心内置包发布并自动升级）：默认转发上述五个 x-claude-code-* 头，未配置请求头透传的 Anthropic API Key 账号也会带上，下游网关可据此区分子代理会话。
+
 ## 2026-11-06
 
 ### 核心 0.1.251（`01009036d`，无迁移）
