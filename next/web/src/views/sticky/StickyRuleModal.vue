@@ -1,4 +1,4 @@
-    if (isEdit.value && props.rule) {<script setup lang="ts">
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
@@ -35,7 +35,8 @@ const form = reactive({
   value_regex: '',
   ttl_seconds: 3600 as number | null,
   key_includes: ['group', 'model', 'rule'] as string[],
-  on_failure: 'failover' as 'failover' | 'stick'
+  on_failure: 'failover' as 'failover' | 'stick',
+  pass_headers: [] as string[]
 })
 const errors = ref<Record<string, string>>({})
 const busy = ref(false)
@@ -63,7 +64,8 @@ watch(
       value_regex: r?.value_regex || '',
       ttl_seconds: r ? r.ttl_seconds : 3600,
       key_includes: r ? [...(r.key_includes || [])] : ['group', 'model', 'rule'],
-      on_failure: r?.on_failure || 'failover'
+      on_failure: r?.on_failure || 'failover',
+      pass_headers: [...(r?.pass_headers || [])]
     })
     if (!form.key_sources.length) form.key_sources.push({ type: 'body', path: '' })
   }
@@ -120,7 +122,8 @@ function body() {
     value_regex: form.value_regex,
     ttl_seconds: Number(form.ttl_seconds) || 0,
     key_includes: form.key_includes,
-    on_failure: form.on_failure
+    on_failure: form.on_failure,
+    pass_headers: form.pass_headers
   }
 }
 
@@ -235,6 +238,10 @@ async function submit() {
           </div>
         </SField>
       </SGrid>
+
+      <SField :label="t('sticky.modal.passHeaders')" :hint="t('sticky.modal.passHeadersHint')" :error="errors.pass_headers">
+        <STagInput v-model="form.pass_headers" placeholder="x-claude-code-agent-id" data-testid="sticky-pass-headers" />
+      </SField>
 
       <SHint v-if="failurePolicyManaged">{{ t('failurePolicy.stickyManaged') }}</SHint>
       <SField v-else :label="t('sticky.cols.onFailure')">

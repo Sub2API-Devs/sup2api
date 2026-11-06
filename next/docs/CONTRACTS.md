@@ -1150,7 +1150,7 @@ type ProxyResolver interface {
 | 区 | order | 核心项 | 内置插件菜单 |
 | --- | --- | --- | --- |
 | overview 概览 | 100 | 仪表盘 | |
-| gateway 网关 | 200 | 分组、账号、平台、代理、模型价格、使用记录 | 模型目录（anthropic 0.2.8）、动态权重 |
+| gateway 网关 | 200 | 分组、账号、平台、代理、模型价格、使用记录 | 模型目录（anthropic 0.2.9）、动态权重 |
 | security 安全 | 300 | 无（空区不返回） | 请求守卫（guard 0.2.7）、提示词审核（moderation 0.6.2） |
 | finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
 | users 用户与权限 | 500 | 用户、角色与权限 | |
@@ -6311,3 +6311,5 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **禁止列表**（任何规则都不透传，`core.HeaderPassthroughBlocked`）：逐跳和分帧头（connection、keep-alive、te、trailer、transfer-encoding、upgrade、expect、host、content-length、content-encoding、accept-encoding），凭证（authorization、x-api-key、x-goog-api-key、api-key、cookie），客户端地址和代理痕迹（x-forwarded-for、x-forwarded-host、x-forwarded-proto、x-forwarded-port、x-real-ip、forwarded、via、cf-connecting-ip、true-client-ip、x-client-ip、x-cluster-client-ip），以及前缀 `proxy-`、`sec-websocket-`、`x-sub2api-`（本网关内部头）、`x-kin-`（vm2api/sakura 的控制头，例如 `x-kin-debug` 会让下游写调试日志并回传槽位和账号）。比 new-api 的跳过列表多了客户端地址和网关控制头，避免客户端伪造 IP 或操控下游。
 - 控制台：账号编辑页“高级”分区（左侧导航第 4 项，ccgateway 账号在 Claude Code 功能之前）的“请求转发”组：请求头透传（标签输入，一条一个规则）和账号层环境变量（各项超时，从“调度与限流”移来）。导航摘要如“透传 * · 超时跟随”，都没配时“全部跟随默认”；`header_passthrough`、`environment.*` 的字段错误定位到这个分区。
 - 未做：分组 / 全局层的透传、WebSocket 端点（`websocket.go`）的透传。
+- **粘性规则的透传头**（2026-11-06，迁移 0090，参考 new-api 渠道亲和规则模板里的 `pass_headers`）：`sticky_rules.pass_headers text[]`，接口字段 `pass_headers`，manifest `StickyRule.passHeaders`。规则写法、校验和禁止列表与账号透传相同（字段名 `pass_headers`）。请求命中某条粘性规则并取到会话值时（`c.sticky` 非空），核心在账号透传之后再按这条规则补上客户端请求头，同样不覆盖已设置的头；粘性会话关闭、没有命中规则、count_tokens 请求都不透传。内置规则 `claude-code-session` 默认带 `x-claude-code-session-id`、`x-claude-code-agent-id`、`x-claude-code-parent-agent-id`、`x-claude-code-request-class`、`x-claude-code-agent-type`；`pass_headers` 属于规则定义，管理员改过的内置规则升级时不被覆盖，“恢复默认”时重置。
+- **平台默认**：内置 anthropic 平台的 `passHeaders` 和 anthropic 插件（0.2.9）的默认转发同样带上这 5 个头，所以 anthropic API Key 账号不配置也会转发。

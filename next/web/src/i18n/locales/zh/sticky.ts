@@ -88,6 +88,8 @@ export default {
     keySourcesHint: '按顺序取第一个非空值。',
     valueRegex: '值正则',
     valueRegexHint: '可选；取第一个捕获组（或整个匹配）作为值',
+    passHeaders: '透传请求头',
+    passHeadersHint: '命中本规则的请求把这些客户端请求头带给上游。* 表示全部；regex:正则 按名称匹配；其他按名称精确匹配。凭证、客户端地址和网关控制头不会透传',
     ttlHint: '0 表示使用默认 TTL',
     keyIncludesHint: '会话 key 还包含哪些维度',
     needSource: '至少添加一个 key 来源',

@@ -68,6 +68,8 @@ var forwardHeaders = []string{
 	"x-claude-code-session-id",
 	"x-claude-code-agent-id",
 	"x-claude-code-parent-agent-id",
+	"x-claude-code-request-class",
+	"x-claude-code-agent-type",
 }
 
 // ForwardHeaders returns the client headers copied to the upstream request

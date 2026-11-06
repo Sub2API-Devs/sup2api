@@ -947,7 +947,7 @@ func (e *env) enableSticky(onFailure string) {
 	r := builtinPlatform(e.t, "anthropic").StickyRules[0]
 	rule := &stickyRule{ID: 1, Name: r.Name, Source: sourceBuiltin, Enabled: true,
 		Priority: 100, Match: r.Match, KeySources: r.KeySources, TTLSeconds: r.TTLSeconds, KeyIncludes: r.KeyIncludes,
-		OnFailure: onFailure}
+		OnFailure: onFailure, PassHeaders: r.PassHeaders}
 	e.gw.rules.mu.Lock()
 	e.gw.rules.override = activeRules([]*stickyRule{rule})
 	e.gw.rules.mu.Unlock()

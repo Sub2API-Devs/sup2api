@@ -1149,6 +1149,8 @@ export interface StickyRule {
   ttl_seconds: number
   key_includes: string[]
   on_failure: 'failover' | 'stick'
+  // Client headers a matching request forwards upstream ("*", "regex:…" or names).
+  pass_headers?: string[]
   // A built-in rule whose definition an administrator edited; upgrades keep it.
   customized?: boolean
 }

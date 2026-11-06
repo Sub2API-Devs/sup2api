@@ -66,6 +66,7 @@ type ruleDTO struct {
 	TTLSeconds  int            `json:"ttl_seconds"`
 	KeyIncludes []string       `json:"key_includes"`
 	OnFailure   string         `json:"on_failure"`
+	PassHeaders []string       `json:"pass_headers"`
 	Customized  bool           `json:"customized"`
 	UpdatedBy   *int64         `json:"updated_by"`
 	UpdatedAt   time.Time      `json:"updated_at"`
@@ -84,7 +85,7 @@ func toDTO(r *stickyRule) ruleDTO {
 		Match: ruleMatchDTO{Protocols: nonNil(r.Match.Protocols), Models: nonNil(r.Match.Models),
 			UserAgentContains: nonNil(r.Match.UserAgentContains)},
 		KeySources: []keySourceDTO{}, ValueRegex: r.ValueRegex, TTLSeconds: r.TTLSeconds,
-		KeyIncludes: nonNil(r.KeyIncludes), OnFailure: r.OnFailure, Customized: r.Customized, UpdatedBy: r.UpdatedBy, UpdatedAt: r.UpdatedAt.UTC(),
+		KeyIncludes: nonNil(r.KeyIncludes), OnFailure: r.OnFailure, PassHeaders: nonNil(r.PassHeaders), Customized: r.Customized, UpdatedBy: r.UpdatedBy, UpdatedAt: r.UpdatedAt.UTC(),
 	}
 	for _, s := range r.KeySources {
 		d.KeySources = append(d.KeySources, keySourceDTO{Type: s.Type, Path: s.Path, Name: s.Name})
@@ -103,6 +104,7 @@ type ruleInput struct {
 	TTLSeconds  *int            `json:"ttl_seconds"`
 	KeyIncludes *[]string       `json:"key_includes"`
 	OnFailure   *string         `json:"on_failure"`
+	PassHeaders *[]string       `json:"pass_headers"`
 }
 
 func (in *ruleInput) applyTo(r *stickyRule) {
@@ -136,6 +138,9 @@ func (in *ruleInput) applyTo(r *stickyRule) {
 	}
 	if in.OnFailure != nil {
 		r.OnFailure = *in.OnFailure
+	}
+	if in.PassHeaders != nil {
+		r.PassHeaders = *in.PassHeaders
 	}
 }
 
@@ -248,6 +253,9 @@ func validateRule(ctx context.Context, r *stickyRule, knownProtocol func(string)
 	if r.OnFailure != onFailureFailover && r.OnFailure != onFailureStick {
 		add("on_failure", "invalid", "must be failover or stick", "只能是 failover 或 stick")
 	}
+	passHeaders, passErrs := core.NormalizeHeaderPassthrough(ctx, "pass_headers", r.PassHeaders)
+	r.PassHeaders = passHeaders
+	fe = append(fe, passErrs...)
 	// An empty list means "any protocol"; a typo in a listed protocol would
 	// silently never match, so it is rejected here. All offenders go into one
 	// field error: a console keyed by field name shows a single message.
@@ -337,10 +345,10 @@ func (g *Gateway) createRuleHandler(c *gin.Context) {
 	var id int64
 	err = db.Pool.QueryRow(ctx, `
 		INSERT INTO sticky_rules (name, source, enabled, priority, match, key_sources, value_regex, ttl_seconds,
-			key_includes, on_failure, updated_by, updated_at)
-		VALUES ($1, 'admin', $2, $3, $4, $5, $6, $7, $8, $9, $10, now()) RETURNING id`,
+			key_includes, on_failure, updated_by, updated_at, pass_headers)
+		VALUES ($1, 'admin', $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), $11) RETURNING id`,
 		r.Name, r.Enabled, r.Priority, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, r.TTLSeconds,
-		mustJSON(nonNil(r.KeyIncludes)), r.OnFailure, nullID(uid)).Scan(&id)
+		mustJSON(nonNil(r.KeyIncludes)), r.OnFailure, nullID(uid), nonNil(r.PassHeaders)).Scan(&id)
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin sticky rule with this name already exists"))
 		return
@@ -415,10 +423,11 @@ func (g *Gateway) updateRuleHandler(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	_, err = db.Pool.Exec(ctx, `
 		UPDATE sticky_rules SET name = $2, enabled = $3, priority = $4, match = $5, key_sources = $6,
-			value_regex = $7, ttl_seconds = $8, key_includes = $9, on_failure = $10, updated_by = $11, customized = $12, updated_at = now()
+			value_regex = $7, ttl_seconds = $8, key_includes = $9, on_failure = $10, updated_by = $11, customized = $12,
+			pass_headers = $13, updated_at = now()
 		WHERE id = $1`,
 		id, r.Name, r.Enabled, r.Priority, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, r.TTLSeconds,
-		mustJSON(nonNil(r.KeyIncludes)), r.OnFailure, nullID(uid), customized)
+		mustJSON(nonNil(r.KeyIncludes)), r.OnFailure, nullID(uid), customized, nonNil(r.PassHeaders))
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin sticky rule with this name already exists"))
 		return
@@ -677,14 +686,15 @@ func syncBuiltinRules(ctx context.Context, tx pgx.Tx, rules []manifest.StickyRul
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO sticky_rules (name, source, enabled, priority, match, key_sources, value_regex,
-				ttl_seconds, key_includes, on_failure, updated_at)
-			VALUES ($1, 'builtin', true, $2, $3, $4, $5, $6, $7, $8, now())
+				ttl_seconds, key_includes, on_failure, pass_headers, updated_at)
+			VALUES ($1, 'builtin', true, $2, $3, $4, $5, $6, $7, $8, $9, now())
 			ON CONFLICT (name, source) DO UPDATE SET match = EXCLUDED.match, key_sources = EXCLUDED.key_sources,
 				value_regex = EXCLUDED.value_regex, ttl_seconds = EXCLUDED.ttl_seconds,
-				key_includes = EXCLUDED.key_includes, on_failure = EXCLUDED.on_failure, updated_at = now()
+				key_includes = EXCLUDED.key_includes, on_failure = EXCLUDED.on_failure,
+				pass_headers = EXCLUDED.pass_headers, updated_at = now()
 			WHERE NOT sticky_rules.customized`,
 			name, 100+i, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, max(r.TTLSeconds, 0),
-			mustJSON(includes), onFailure); err != nil {
+			mustJSON(includes), onFailure, nonNil(r.PassHeaders)); err != nil {
 			return err
 		}
 		names = append(names, name)
@@ -701,7 +711,7 @@ func ruleDefinition(r *stickyRule) string {
 		sources = []manifest.StickyKeySource{}
 	}
 	return string(mustJSON([]any{nonNil(r.Match.Protocols), nonNil(r.Match.Models), nonNil(r.Match.UserAgentContains),
-		sources, r.ValueRegex, r.TTLSeconds, nonNil(r.KeyIncludes), r.OnFailure}))
+		sources, r.ValueRegex, r.TTLSeconds, nonNil(r.KeyIncludes), r.OnFailure, nonNil(r.PassHeaders)}))
 }
 
 // resetRuleHandler restores a built-in rule to the core's default

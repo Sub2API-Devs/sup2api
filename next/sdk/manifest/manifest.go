@@ -667,6 +667,10 @@ type StickyRule struct {
 	TTLSeconds  int               `json:"ttlSeconds,omitempty"`
 	KeyIncludes []string          `json:"keyIncludes,omitempty"` // group | model | rule
 	OnFailure   string            `json:"onFailure,omitempty"`   // failover (default) | stick
+	// PassHeaders are the client headers a request matching the rule
+	// forwards upstream, with the rules of an account's header passthrough
+	// ("*", "regex:<pattern>" or exact names; CONTRACTS §81).
+	PassHeaders []string `json:"passHeaders,omitempty"`
 }
 
 type StickyMatch struct {

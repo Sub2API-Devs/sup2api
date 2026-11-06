@@ -88,6 +88,8 @@ export default {
     keySourcesHint: 'Tried in order; the first non-empty value is used.',
     valueRegex: 'Value regex',
     valueRegexHint: 'Optional; the first capture group (or whole match) of the value is used',
+    passHeaders: 'Pass headers',
+    passHeadersHint: 'Client headers a request matching this rule forwards upstream: * for all, regex:<pattern> by name, or exact names. Credentials, client addresses and gateway control headers never pass',
     ttlHint: '0 = use the default TTL',
     keyIncludesHint: 'Dimensions added to the session key',
     needSource: 'Add at least one key source',

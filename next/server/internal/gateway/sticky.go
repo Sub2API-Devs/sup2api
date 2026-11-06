@@ -62,7 +62,8 @@ type stickyRule struct {
 	TTLSeconds  int
 	KeyIncludes []string
 	OnFailure   string
-	Customized  bool // a built-in rule whose definition an administrator edited
+	PassHeaders []string // client headers forwarded upstream (CONTRACTS §81 rules)
+	Customized  bool     // a built-in rule whose definition an administrator edited
 	UpdatedBy   *int64
 	UpdatedAt   time.Time
 
@@ -269,13 +270,13 @@ func activeRules(all []*stickyRule) []*stickyRule {
 }
 
 const ruleColumns = `id, name, source, enabled, priority, match, key_sources,
-	value_regex, ttl_seconds, key_includes, on_failure, updated_by, updated_at, customized`
+	value_regex, ttl_seconds, key_includes, on_failure, updated_by, updated_at, customized, pass_headers`
 
 func scanRule(row interface{ Scan(...any) error }) (*stickyRule, error) {
 	var r stickyRule
 	var match, sources, includes []byte
 	if err := row.Scan(&r.ID, &r.Name, &r.Source, &r.Enabled, &r.Priority, &match, &sources,
-		&r.ValueRegex, &r.TTLSeconds, &includes, &r.OnFailure, &r.UpdatedBy, &r.UpdatedAt, &r.Customized); err != nil {
+		&r.ValueRegex, &r.TTLSeconds, &includes, &r.OnFailure, &r.UpdatedBy, &r.UpdatedAt, &r.Customized, &r.PassHeaders); err != nil {
 		return nil, err
 	}
 	if len(match) > 0 {

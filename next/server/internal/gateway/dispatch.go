@@ -711,6 +711,15 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			}
 		}
 	}
+	// So does the matched sticky rule's (CONTRACTS §5.6): the built-in
+	// Claude Code rule forwards the session and sub-agent headers.
+	if s := c.sticky; s != nil && len(s.rule.PassHeaders) > 0 && c.c != nil && c.c.Request != nil {
+		for k, vs := range core.PassthroughHeaders(s.rule.PassHeaders, c.c.Request.Header) {
+			if _, set := req.Header[k]; !set {
+				req.Header[k] = vs
+			}
+		}
+	}
 	if req.Header.Get("Content-Type") == "" && reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

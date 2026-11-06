@@ -62,3 +62,46 @@ func TestAccountHeaderPassthrough(t *testing.T) {
 		})
 	}
 }
+
+// A request matching a sticky rule forwards the rule's pass headers (CONTRACTS
+// §5.6), with the account passthrough's blocked headers still held back; a
+// request without a sticky session forwards nothing extra. The built-in
+// Claude Code rule carries the session and sub-agent headers.
+func TestStickyRulePassHeaders(t *testing.T) {
+	rule := builtinPlatform(t, "anthropic").StickyRules[0]
+	assert.Equal(t, []string{"x-claude-code-session-id", "x-claude-code-agent-id", "x-claude-code-parent-agent-id",
+		"x-claude-code-request-class", "x-claude-code-agent-type"}, rule.PassHeaders)
+
+	client := map[string]string{
+		"X-Custom-Trace":  "trace-1",
+		"X-Other-Trace":   "trace-2",
+		"X-Forwarded-For": "203.0.113.9",
+		"X-Kin-Debug":     "1",
+	}
+	setup := func(t *testing.T) *env {
+		e := newEnv(t)
+		e.enableSticky(onFailureFailover)
+		e.gw.rules.mu.Lock()
+		e.gw.rules.override[0].PassHeaders = []string{"x-custom-trace", "x-forwarded-for", "regex:^x-kin-"}
+		e.gw.rules.mu.Unlock()
+		return e
+	}
+
+	t.Run("matched", func(t *testing.T) {
+		e := setup(t)
+		r := e.do("/v1/messages", withSession(body(testModel, false), "user_abc_session_1"), client)
+		require.Equal(t, 200, r.status, string(r.body))
+		got := e.up.last().header
+		assert.Equal(t, "trace-1", got.Get("X-Custom-Trace"))
+		assert.Empty(t, got.Get("X-Other-Trace"))
+		assert.Empty(t, got.Get("X-Forwarded-For"))
+		assert.Empty(t, got.Get("X-Kin-Debug"))
+		assert.Equal(t, "acc-1", got.Get("x-api-key"))
+	})
+	t.Run("no session", func(t *testing.T) {
+		e := setup(t)
+		r := e.do("/v1/messages", body(testModel, false), client)
+		require.Equal(t, 200, r.status, string(r.body))
+		assert.Empty(t, e.up.last().header.Get("X-Custom-Trace"))
+	})
+}
