@@ -26,9 +26,11 @@
 //   `layout` 'card' (else 'table'), a Details toggle for detail fields and
 //   the expand slot, a "select this page" row instead of the header checkbox
 //   (no swipe / Shift range); #card="{ row, index, selected, toggle(on?),
-//   expanded, toggleExpand }" replaces a card's content. 'scroll' keeps the
-//   table.
-import { computed, ref, useId } from 'vue'
+//   expanded, toggleExpand }" replaces a card's content (the drag handle
+//   stays). 'scroll' keeps the table. A page that filters columns itself
+//   (useTableColumns + :columns="visibleColumns") should declare `mobile` on
+//   every column, or on none, so hiding one never changes the placement.
+import { computed, provide, ref, useId } from 'vue'
 import { useUiT } from './i18n'
 import SSpinner from './SSpinner.vue'
 import SCheckbox from './SCheckbox.vue'
@@ -41,7 +43,7 @@ import STableColumnSettings from './STableColumnSettings.vue'
 import { useScrollClip } from './scrollClip'
 import { useTableSwipeSelect } from './tableSwipeSelect'
 import { useViewport } from './viewport'
-import { cardFields } from './tableCard'
+import { cardFields, TABLE_CARD } from './tableCard'
 import ReorderHandle from './internal/ReorderHandle.vue'
 import TableCards from './internal/TableCards.vue'
 import TableCell from './internal/TableCell.vue'
@@ -98,6 +100,12 @@ const visibleColumns = computed(() => props.columnSettingsKey ? columnState.visi
 const expanded = ref(new Set<unknown>())
 const { compact } = useViewport()
 const cardLayout = computed(() => compact.value && props.mobileLayout === 'card')
+const rootClass = computed(() => {
+  if (props.card) return 'card overflow-hidden'
+  if (cardLayout.value) return undefined
+  return ['table-container', { 's-table-fit-expanded': props.fitExpandedToContainer }]
+})
+provide(TABLE_CARD, false)
 const fields = computed(() => cardFields(visibleColumns.value, props.columns))
 const table = ref<HTMLTableElement>()
 const cards = ref<{ list?: HTMLElement }>()
@@ -193,7 +201,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
   <component
     :is="card ? 'section' : 'div'"
     ref="root"
-    :class="card ? 'card overflow-hidden' : cardLayout ? undefined : ['table-container', { 's-table-fit-expanded': fitExpandedToContainer }]"
+    :class="rootClass"
   >
     <template v-if="reorderable">
       <span
@@ -229,6 +237,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
       :can-select="canSelect"
       :all-selected="allSelected"
       :some-selected="someSelected"
+      :none-selectable="!selectableKeys.length"
       :expandable="expandable"
       :expanded="expanded"
       :clickable="clickable"
@@ -254,6 +263,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
       <table
         ref="table"
         class="table"
+        data-reorder-list
         :class="{ 'table-dense': dense, 's-table-clipped': clipped }"
         :aria-busy="loading || undefined"
         @mousedown="selectable && swipe.mouseDown($event)"
@@ -332,10 +342,15 @@ function onRowKey(e: KeyboardEvent, row: T) {
           <tr v-if="error && rows.length > 0 && !loading">
             <td
               :colspan="span"
-              class="bg-red-50 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300"
+              class="!p-0"
               data-testid="table-error"
             >
-              <TableLoadError inline :text="errorText" :retry="onRetry" />
+              <TableLoadError
+                inline
+                :class="dense ? 'px-3 py-1.5' : 'px-3 py-2.5'"
+                :text="errorText"
+                :retry="onRetry"
+              />
             </td>
           </tr>
           <template
@@ -475,7 +490,8 @@ function onRowKey(e: KeyboardEvent, row: T) {
   border-collapse: separate;
   border-spacing: 0;
 }
-.s-table-dragging {
+/* Rows and phone cards alike. */
+:deep(.s-table-dragging) {
   opacity: 0.45;
 }
 .s-table-drop-before > td {

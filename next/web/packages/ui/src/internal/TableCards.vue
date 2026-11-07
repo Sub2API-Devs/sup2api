@@ -4,11 +4,12 @@
 // fields; then subtitle fields, the meta label/value grid, detail fields and
 // the `expand` slot behind a Details toggle (STable's expanded rows), and the
 // actions column as a footer. Cells render STable's `cell-<key>` slots with
-// `layout: 'card'`; the `card` slot replaces a card's content. `surface` (STable
+// `layout: 'card'`; the `card` slot replaces a card's content (the drag handle
+// stays, floated to the top end). `surface` (STable
 // `card`) = items divided inside one card, else separate cards. Selection,
 // expansion, reordering and clicks are STable's: this list only emits.
 // Everything inside a card sees TABLE_CARD. Internal to STable.
-import { h, provide, ref, useId, useSlots } from 'vue'
+import { h, provide, ref, useId, type Slot } from 'vue'
 import SCheckbox from '../SCheckbox.vue'
 import SIcon from '../SIcon.vue'
 import SSkeleton from '../SSkeleton.vue'
@@ -36,6 +37,7 @@ const props = defineProps<{
   canSelect: (row: T) => boolean
   allSelected: boolean
   someSelected: boolean
+  noneSelectable: boolean
   expandable?: boolean
   expanded: Set<unknown>
   clickable?: boolean
@@ -53,7 +55,6 @@ const emit = defineEmits<{
   (e: 'filter', column: TableColumn, value: string, row: T): void
 }>()
 const t = useUiT()
-const slots = useSlots()
 const uid = useId()
 const list = ref<HTMLElement>()
 defineExpose({ list })
@@ -63,10 +64,10 @@ const titleId = (i: number) => `${uid}-title-${i}`
 const detailId = (i: number) => `${uid}-detail-${i}`
 const isSelected = (key: unknown) => !!props.selectable && props.selected.has(key)
 
-function Cell(p: { column: TableColumn; row: T; index: number }) {
+// `render` is the column's cell slot, passed as a prop so a new slot function re-renders the cell.
+function Cell(p: { column: TableColumn; row: T; index: number; render?: Slot }) {
   const value = getPath(p.row, p.column.key)
-  const slot = slots[`cell-${p.column.key}`]
-  if (slot) return slot({ row: p.row, value, index: p.index, layout: 'card' })
+  if (p.render) return p.render({ row: p.row, value, index: p.index, layout: 'card' })
   return h(TableCell, { column: p.column, value, onFilter: (address: string) => emit('filter', p.column, address, p.row) })
 }
 </script>
@@ -86,24 +87,25 @@ function Cell(p: { column: TableColumn; row: T; index: number }) {
     <slot name="empty">{{ emptyText || t('ui.noData') }}</slot>
   </div>
   <template v-else>
-    <div
+    <TableLoadError
       v-if="error && !loading"
-      class="bg-red-50 px-4 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300"
+      inline
+      class="px-4 py-2"
       :class="surface ? 'border-b border-line' : 'mb-3 rounded-card'"
       data-testid="table-error"
-    >
-      <TableLoadError inline :text="errorText" :retry="retry" />
-    </div>
+      :text="errorText"
+      :retry="retry"
+    />
     <div v-if="selectable" class="flex items-center py-2" :class="surface ? 'border-b border-line px-4' : 'px-1'">
       <SCheckbox
         :model-value="allSelected"
         :indeterminate="someSelected"
-        :disabled="!rows.some(r => canSelect(r.row))"
+        :disabled="noneSelectable"
         :label="t('ui.bulkSelectPage')"
         @update:model-value="emit('select-all', $event)"
       />
     </div>
-    <ul ref="list" role="list" :aria-busy="loading || undefined" :class="surface ? 'divide-y divide-line' : 'space-y-3'">
+    <ul ref="list" role="list" data-reorder-list :aria-busy="loading || undefined" :class="surface ? 'divide-y divide-line' : 'space-y-3'">
       <li
         v-for="{ row, i, key } in rows"
         :key="String(key)"
@@ -124,15 +126,26 @@ function Cell(p: { column: TableColumn; row: T; index: number }) {
         @click="emit('row-click', row)"
         @keydown.enter.space.self.prevent="emit('row-click', row)"
       >
-        <slot
-          name="card"
-          :row="row"
-          :index="i"
-          :selected="isSelected(key)"
-          :toggle="(on?: boolean) => emit('select', key, on ?? !isSelected(key), i)"
-          :expanded="expanded.has(key)"
-          :toggle-expand="() => emit('expand', row, key)"
-        >
+        <template v-if="$slots.card">
+          <ReorderHandle
+            v-if="reorder"
+            class="float-end -me-1.5 -mt-1.5 ms-2"
+            :index="i"
+            :reorder="reorder"
+            :describedby="reorderHelp"
+            @click.stop
+          />
+          <slot
+            name="card"
+            :row="row"
+            :index="i"
+            :selected="isSelected(key)"
+            :toggle="(on?: boolean) => emit('select', key, on ?? !isSelected(key), i)"
+            :expanded="expanded.has(key)"
+            :toggle-expand="() => emit('expand', row, key)"
+          />
+        </template>
+        <template v-else>
           <div class="flex items-start gap-2">
             <span v-if="selectable" class="flex h-6 shrink-0 items-center" @click.stop>
               <SCheckbox
@@ -146,20 +159,22 @@ function Cell(p: { column: TableColumn; row: T; index: number }) {
             <ReorderHandle v-if="reorder" class="-my-1.5 shrink-0" :index="i" :reorder="reorder" :describedby="reorderHelp" @click.stop />
             <div :id="titleId(i)" class="min-w-0 flex-1 break-words text-[15px] font-semibold leading-6 text-fg">
               <template v-for="(c, n) in fields.title" :key="c.key"
-                >{{ n ? ' · ' : '' }}<Cell :column="c" :row="row" :index="i"
+                >{{ n ? ' · ' : '' }}<Cell :column="c" :row="row" :index="i" :render="$slots[`cell-${c.key}`]"
               /></template>
             </div>
             <div v-if="fields.status.length" class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-              <Cell v-for="c in fields.status" :key="c.key" :column="c" :row="row" :index="i" />
+              <Cell v-for="c in fields.status" :key="c.key" :column="c" :row="row" :index="i" :render="$slots[`cell-${c.key}`]" />
             </div>
           </div>
           <div v-if="fields.subtitle.length" class="mt-0.5 break-words text-xs text-fg-muted">
             <template v-for="(c, n) in fields.subtitle" :key="c.key"
-              >{{ n ? ' · ' : '' }}<Cell :column="c" :row="row" :index="i"
+              >{{ n ? ' · ' : '' }}<Cell :column="c" :row="row" :index="i" :render="$slots[`cell-${c.key}`]"
             /></template>
           </div>
           <TableCardFields v-if="fields.meta.length" class="mt-3" :columns="fields.meta">
-            <template #default="{ column }"><Cell :column="column" :row="row" :index="i" /></template>
+            <template #default="{ column }"
+              ><Cell :column="column" :row="row" :index="i" :render="$slots[`cell-${column.key}`]"
+            /></template>
           </TableCardFields>
           <template v-if="fields.detail.length || (expandable && $slots.expand)">
             <button
@@ -174,24 +189,26 @@ function Cell(p: { column: TableColumn; row: T; index: number }) {
             </button>
             <div v-if="expanded.has(key)" :id="detailId(i)" class="mt-2 space-y-3">
               <TableCardFields v-if="fields.detail.length" :columns="fields.detail">
-                <template #default="{ column }"><Cell :column="column" :row="row" :index="i" /></template>
+                <template #default="{ column }"
+                  ><Cell :column="column" :row="row" :index="i" :render="$slots[`cell-${column.key}`]"
+                /></template>
               </TableCardFields>
               <slot v-if="expandable" name="expand" :row="row" />
             </div>
           </template>
-          <div v-if="fields.actions.length" class="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-line pt-2 [&>*]:flex-wrap">
-            <Cell v-for="c in fields.actions" :key="c.key" :column="c" :row="row" :index="i" />
+          <div
+            v-if="fields.actions.length"
+            class="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-line pt-2 [&>*]:flex-wrap"
+          >
+            <Cell v-for="c in fields.actions" :key="c.key" :column="c" :row="row" :index="i" :render="$slots[`cell-${c.key}`]" />
           </div>
-        </slot>
+        </template>
       </li>
     </ul>
   </template>
 </template>
 
 <style scoped>
-.s-table-dragging {
-  opacity: 0.45;
-}
 .s-table-drop-before {
   box-shadow: 0 -2px 0 rgb(var(--primary-500, 20 184 166));
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import STable from './STable.vue'
 import SRowAction from './SRowAction.vue'
 import STableColumnSettings from './STableColumnSettings.vue'
@@ -206,6 +206,54 @@ describe('STable phone cards', () => {
     stubMedia(true)
     const table = mount(STable, { props: { columns: declared, rows }, slots })
     expect(table.get('td.s-table-actions button').classes()).toContain('w-[4.5rem]')
+  })
+
+  it('keeps SRowAction a tile in a scrolling table nested inside a card', async () => {
+    const inner = () =>
+      h(
+        STable,
+        { columns: [{ key: 'actions', label: 'Actions' }], rows: [{ id: 9 }], mobileLayout: 'scroll' },
+        {
+          'cell-actions': () => h(SRowAction, { icon: 'edit', label: 'Nested' })
+        }
+      )
+    const w = mount(STable, { props: { columns: declared, rows, expandable: true }, slots: { expand: inner } })
+    await cards(w)[0].get('button[aria-expanded]').trigger('click')
+    expect(w.get('td.s-table-actions button').classes()).toContain('w-[4.5rem]')
+  })
+
+  it('re-renders card cells when the page passes new cell slots', async () => {
+    const label = ref('one')
+    // A page whose render passes new slot closures (or none) without reactive reads inside them.
+    const w = mount({
+      render() {
+        const text = label.value
+        const slots = text === 'none' ? {} : { 'cell-name': () => `slot ${text}` }
+        return h(STable, { columns: declared, rows: rows.slice(0, 1) }, slots)
+      }
+    })
+    const title = () => w.get('li [id$="-title-0"]').text()
+    expect(title()).toBe('slot one · g1')
+    label.value = 'two'
+    await nextTick()
+    expect(title()).toBe('slot two · g1')
+    label.value = 'none'
+    await nextTick()
+    expect(title()).toBe('Alpha · g1')
+  })
+
+  it('keeps the drag handle on a custom #card', async () => {
+    const list = [
+      { id: 'a', name: 'A' },
+      { id: 'b', name: 'B' }
+    ]
+    const w = mount(STable, {
+      props: { columns: [{ key: 'name', label: 'Name' }], rows: list, reorderable: true },
+      slots: { card: '<p class="custom">{{ params.row.name }}</p>' }
+    })
+    expect(cards(w)[0].find('.custom').exists()).toBe(true)
+    await w.get('li [data-reorder-handle="0"]').trigger('keydown', { key: 'End' })
+    expect(w.emitted('update:rows')?.[0]).toEqual([[list[1], list[0]]])
   })
 })
 

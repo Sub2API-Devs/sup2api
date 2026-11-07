@@ -17,7 +17,8 @@ interface DragSession {
 
 /**
  * Handle-only pointer sorting. The parent owns rows; a gesture emits one new order.
- * `table` is the <table> or card list: its own [data-reorder-row] elements are the rows.
+ * `table` is the <table> or card list, marked [data-reorder-list]; the rows are the
+ * [data-reorder-row] elements whose nearest list it is (not those of a nested table).
  */
 export function useTableReorder<T extends Record<string, unknown>>(
   table: Readonly<Ref<HTMLElement | undefined>>,
@@ -77,7 +78,7 @@ export function useTableReorder<T extends Record<string, unknown>>(
 
   function rowElements() {
     return Array.from(table.value?.querySelectorAll<HTMLElement>('[data-reorder-row]') ?? []).filter(
-      row => row.closest('table, ul') === table.value
+      row => row.closest('[data-reorder-list]') === table.value
     )
   }
 
