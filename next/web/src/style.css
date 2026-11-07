@@ -239,6 +239,17 @@
     @apply h-4 w-7;
     background-size: 0.75rem;
   }
+  /* Touch screens: a checkbox / radio and a switch a finger can hit. */
+  @media (pointer: coarse) {
+    .checkbox,
+    .radio {
+      @apply h-5 w-5;
+    }
+    .switch {
+      @apply h-6 w-11;
+      background-size: 1.25rem;
+    }
+  }
   input[type='number']::-webkit-inner-spin-button,
   input[type='number']::-webkit-outer-spin-button {
     -webkit-appearance: none;

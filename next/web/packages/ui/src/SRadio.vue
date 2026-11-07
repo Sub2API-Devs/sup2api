@@ -4,6 +4,7 @@
 // text size and the circle (xs 14px, sm 16px, md 20px). Inside SRadioGroup
 // the group's name applies when `name` is not given. The checked state is
 // written back to the DOM when the parent keeps the old value (controlled).
+// On touch screens the circle is 20px and a labelled row a 44px-high target.
 import { inject, nextTick, ref } from 'vue'
 import type { SelectOption } from './types'
 import { RADIO_NAME_KEY } from './radio'
@@ -35,7 +36,7 @@ function onChange() {
 <template>
   <label
     class="flex items-center"
-    :class="[size === 'xs' ? 'gap-1.5' : 'gap-2', disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer']"
+    :class="[size === 'xs' ? 'gap-1.5' : 'gap-2', disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', label || $slots.default ? 'touch:min-h-11' : '']"
   >
     <input
       ref="input"

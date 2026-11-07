@@ -13,7 +13,8 @@
 // appears. Each row is its own radiogroup, so arrow keys move within
 // a field; the whole cell is the click target. `change` reports only the cells
 // one interaction set, for callers that must tell an explicit choice apart from
-// a value that merely already matched.
+// a value that merely already matched. On phones (below md) the label
+// column keeps at least 7rem and stays put while the choices scroll sideways.
 import { computed, nextTick, ref, useId } from 'vue'
 import type { OptionMatrixGroup, OptionMatrixRow, SelectOption } from './types'
 import { useUiT } from './i18n'
@@ -46,7 +47,9 @@ const { a11y } = useFieldControl(props, false)
 const toggled = ref<Record<string, boolean>>({})
 // Flat `rows` become one unnamed group, so the template has a single shape.
 const sections = computed<OptionMatrixGroup[]>(() => (props.groups.length ? props.groups : props.rows.length ? [{ key: '', label: '', rows: props.rows }] : []))
-const gridStyle = computed(() => ({ gridTemplateColumns: `minmax(0,1fr) repeat(${props.columns.length}, ${props.columnWidth})` }))
+// Literal class names so Tailwind keeps them.
+const STICKY = 'max-md:sticky max-md:left-0 max-md:z-[1] max-md:bg-surface'
+const gridStyle = computed(() => ({ gridTemplateColumns: `minmax(var(--s-matrix-label,0),1fr) repeat(${props.columns.length}, ${props.columnWidth})` }))
 
 function isOpen(group: OptionMatrixGroup): boolean {
   return !props.collapsible || (toggled.value[group.key] ?? group.defaultOpen ?? true)
@@ -105,7 +108,7 @@ function onGroup(event: Event, group: OptionMatrixGroup, column: SelectOption) {
 </script>
 
 <template>
-  <div class="overflow-x-auto">
+  <div class="overflow-x-auto max-md:[--s-matrix-label:7rem]">
     <div
       class="min-w-[20rem]"
       role="group"
@@ -116,7 +119,7 @@ function onGroup(event: Event, group: OptionMatrixGroup, column: SelectOption) {
         :style="gridStyle"
         aria-hidden="true"
       >
-        <span />
+        <span :class="STICKY" />
         <span
           v-for="column in columns"
           :key="String(column.value)"
@@ -139,7 +142,7 @@ function onGroup(event: Event, group: OptionMatrixGroup, column: SelectOption) {
             :is="collapsible ? 'button' : 'div'"
             :type="collapsible ? 'button' : undefined"
             class="flex min-w-0 items-center gap-1.5 py-1 pl-2 pr-3 text-left"
-            :class="collapsible ? 'rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40' : ''"
+            :class="[STICKY, collapsible ? 'rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40' : '']"
             :aria-expanded="collapsible ? isOpen(group) : undefined"
             :aria-controls="collapsible ? `${uid}-${group.key}` : undefined"
             @click="collapsible && (toggled[group.key] = !isOpen(group))"
@@ -189,7 +192,7 @@ function onGroup(event: Event, group: OptionMatrixGroup, column: SelectOption) {
           >
             <span
               class="min-w-0 border-l-2 py-1 pl-2 pr-3"
-              :class="row.marked ? 'border-warning-400' : 'border-transparent'"
+              :class="[STICKY, row.marked ? 'border-warning-400' : 'border-transparent']"
             >
               <span class="block truncate text-sm text-fg">{{ row.label }}</span>
               <span

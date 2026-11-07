@@ -4,7 +4,7 @@
 // move) or, with `multiple`, a group of checkboxes — then modelValue is an
 // array. `cols` 1–4 columns from sm: up (phones: one column). Inside SField
 // / SSettingRow the group is labelled by the frame's label unless
-// `ariaLabel` is given.
+// `ariaLabel` is given. Phones (below md) pad the cards 12px.
 import { computed, ref, useId } from 'vue'
 import SIcon from './SIcon.vue'
 import { TONE_TEXT, toneOf } from './tones'
@@ -40,7 +40,7 @@ function choose(o: ChoiceOption, checked: boolean) {
     <label
       v-for="(o, i) in options"
       :key="i"
-      class="relative flex items-start gap-3 rounded-control border p-4 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500/40"
+      class="relative flex items-start gap-3 rounded-control border p-4 transition-colors max-md:p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500/40"
       :class="[
         isOn(o.value) ? 'border-primary-500 bg-primary-50/60 dark:border-primary-500 dark:bg-primary-900/20' : invalid ? 'border-red-400' : 'border-line bg-surface',
         disabled || o.disabled ? 'cursor-not-allowed opacity-50' : isOn(o.value) ? 'cursor-default' : 'cursor-pointer hover:border-line-strong'

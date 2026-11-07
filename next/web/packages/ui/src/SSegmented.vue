@@ -5,11 +5,14 @@
 // Remaining attrs (data-testid, ...) go to the root. Inside SField /
 // SSettingRow the group is labelled by the frame's label unless `ariaLabel`
 // is given; `error` sets aria-invalid. The checked radio is written back to
-// the DOM when the parent keeps the old value (controlled).
-import { ref, useId } from 'vue'
+// the DOM when the parent keeps the old value (controlled). On phones (below
+// md) the row scrolls sideways when it does not fit (no scrollbar) and keeps
+// the chosen option in view; `block` options share the width equally.
+import { onMounted, ref, useId, watch } from 'vue'
 import type { SelectOption } from './types'
 import { useFieldControl } from './field'
 import { writeBackChecked } from './controlled'
+import { scrollToCentre } from './scrollClip'
 
 const props = withDefaults(
   defineProps<{
@@ -29,6 +32,13 @@ const group = useId()
 const { a11y, invalid } = useFieldControl(props, false)
 const root = ref<HTMLElement>()
 
+function revealChosen(behavior: 'auto' | 'smooth') {
+  const i = props.options.findIndex((o) => o.value === props.modelValue)
+  scrollToCentre(root.value, root.value?.querySelectorAll<HTMLElement>(':scope > label')[i], behavior)
+}
+onMounted(() => revealChosen('auto'))
+watch(() => props.modelValue, () => revealChosen('smooth'), { flush: 'post' })
+
 function choose(v: SelectOption['value']) {
   emit('update:modelValue', v)
   writeBackChecked(root, (i) => props.options[i]?.value === props.modelValue)
@@ -40,7 +50,7 @@ function choose(v: SelectOption['value']) {
     ref="root"
     role="radiogroup"
     v-bind="a11y"
-    class="gap-0.5 rounded-control bg-line/50 p-0.5 ring-1 ring-inset ring-line/70"
+    class="relative gap-0.5 rounded-control bg-line/50 p-0.5 ring-1 ring-inset ring-line/70 max-md:max-w-full max-md:overflow-x-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
     :class="[block ? 'flex w-full' : 'inline-flex', disabled ? 'opacity-50' : '', invalid ? '!ring-red-500' : '']"
   >
     <label

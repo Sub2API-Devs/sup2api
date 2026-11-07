@@ -202,7 +202,7 @@ function openTask(name: string, node = '') {
       </template>
     </SPageHeader>
 
-    <SGrid :cols="2" :md-cols="5" class="mb-4">
+    <SGrid variant="stats" :cols="2" :md-cols="5" class="mb-4">
       <SStatCard :label="t('tasks.summary.total')" :value="summary?.total ?? 0" icon="clock" :loading="loading" />
       <SStatCard :label="t('tasks.summary.running')" :value="summary?.running ?? 0" icon="play" tone="info" :loading="loading" />
       <SStatCard :label="t('tasks.summary.failing')" :value="summary?.failing ?? 0" icon="warning" :tone="summary?.failing ? 'danger' : 'success'" :loading="loading" data-testid="tasks-failing" />

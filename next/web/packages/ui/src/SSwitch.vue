@@ -6,7 +6,8 @@
 // Click and Space toggle. `describedby` is aria-describedby of the input.
 // Inside SField / SSettingRow it takes the frame's id (so the row label is
 // its <label for>) and aria-describedby. The checked state is written back
-// to the DOM when the parent keeps the old value (controlled).
+// to the DOM when the parent keeps the old value (controlled). On touch
+// screens the switch is 24px high and a labelled one a 44px-high target.
 import { computed, ref, useAttrs } from 'vue'
 import { splitAttrs, useFieldControl, type ControlSize } from './field'
 import { useCheckboxModel } from './controlled'
@@ -26,7 +27,11 @@ const { onClick, onChange } = useCheckboxModel(props, emit, input)
 </script>
 
 <template>
-  <label class="inline-flex items-center gap-2 align-middle" :class="disabled ? 'cursor-not-allowed' : 'cursor-pointer'" v-bind="parts.wrap">
+  <label
+    class="inline-flex items-center gap-2 align-middle"
+    :class="[disabled ? 'cursor-not-allowed' : 'cursor-pointer', label || $slots.default ? 'touch:min-h-11' : '']"
+    v-bind="parts.wrap"
+  >
     <input
       :id="id"
       ref="input"

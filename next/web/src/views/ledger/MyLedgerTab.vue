@@ -56,7 +56,7 @@ watch(loading, (v) => emit('update:loading', v), { immediate: true })
 
 <template>
   <div>
-    <SGrid :cols="1" :md-cols="$slots.stats ? 4 : 3" class="mb-4">
+    <SGrid variant="stats" :cols="1" :md-cols="$slots.stats ? 4 : 3" class="mb-4">
       <SStatCard
         :label="t('ledger.balance')"
         :value="formatMoney(balance)"
@@ -65,7 +65,7 @@ watch(loading, (v) => emit('update:loading', v), { immediate: true })
         :loading="balanceLoading"
       />
       <slot name="stats" />
-      <SAlert v-if="negative" tone="danger" class="self-center md:col-span-2" data-testid="ledger-negative">{{ t('ledger.negativeHint') }}</SAlert>
+      <SAlert v-if="negative" tone="danger" class="col-span-2 self-center" data-testid="ledger-negative">{{ t('ledger.negativeHint') }}</SAlert>
     </SGrid>
     <slot name="filters" />
 

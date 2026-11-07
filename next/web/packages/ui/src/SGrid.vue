@@ -7,6 +7,8 @@
 // still apply, so phones stay single-column). Numbers map to literal class
 // strings so Tailwind sees them when scanning this file; the breakpoint
 // templates go through CSS variables for the same reason.
+// `variant="stats"` (rows of SStatCard) keeps 2 columns with a tighter gap
+// on phones (below md) and starts `cols` at md instead of sm.
 import { computed } from 'vue'
 
 const props = withDefaults(
@@ -22,8 +24,9 @@ const props = withDefaults(
     mdTemplate?: string
     lgTemplate?: string
     xlTemplate?: string
+    variant?: 'stats'
   }>(),
-  { cols: 2, colsBase: 1, gap: 4 }
+  { cols: 2, colsBase: 1, gap: 4, variant: undefined }
 )
 
 const BASE: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4', 5: 'grid-cols-5', 6: 'grid-cols-6' }
@@ -34,18 +37,22 @@ const XL: Record<number, string> = { 1: 'xl:grid-cols-1', 2: 'xl:grid-cols-2', 3
 const GAP: Record<number, string> = { 2: 'gap-2', 3: 'gap-3', 4: 'gap-4', 6: 'gap-6' }
 
 // A breakpoint template replaces the numeric class of that breakpoint.
-const cls = computed(() => [
-  GAP[props.gap] ?? 'gap-4',
-  ...(props.template
-    ? []
-    : [
-        BASE[props.colsBase] ?? 'grid-cols-1',
-        props.smTemplate ? 'sm:grid-cols-[var(--s-grid-sm)]' : (SM[props.cols] ?? 'sm:grid-cols-2'),
-        props.mdTemplate ? 'md:grid-cols-[var(--s-grid-md)]' : props.mdCols ? MD[props.mdCols] : '',
-        props.lgTemplate ? 'lg:grid-cols-[var(--s-grid-lg)]' : props.lgCols ? LG[props.lgCols] : '',
-        props.xlTemplate ? 'xl:grid-cols-[var(--s-grid-xl)]' : props.xlCols ? XL[props.xlCols] : ''
-      ])
-])
+const cls = computed(() => {
+  const stats = props.variant === 'stats'
+  return [
+    GAP[props.gap] ?? 'gap-4',
+    stats ? 'max-md:gap-2' : '',
+    ...(props.template
+      ? []
+      : [
+          stats ? 'grid-cols-2' : (BASE[props.colsBase] ?? 'grid-cols-1'),
+          props.smTemplate ? 'sm:grid-cols-[var(--s-grid-sm)]' : stats ? '' : (SM[props.cols] ?? 'sm:grid-cols-2'),
+          props.mdTemplate ? 'md:grid-cols-[var(--s-grid-md)]' : props.mdCols ? MD[props.mdCols] : stats ? MD[props.cols] : '',
+          props.lgTemplate ? 'lg:grid-cols-[var(--s-grid-lg)]' : props.lgCols ? LG[props.lgCols] : '',
+          props.xlTemplate ? 'xl:grid-cols-[var(--s-grid-xl)]' : props.xlCols ? XL[props.xlCols] : ''
+        ])
+  ]
+})
 const style = computed(() => {
   if (props.template) return { gridTemplateColumns: props.template }
   const s: Record<string, string> = {}
