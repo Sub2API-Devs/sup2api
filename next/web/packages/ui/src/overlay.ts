@@ -5,7 +5,8 @@
 // from z-index 50 (Tailwind z-overlay), two steps per open layer; `top`
 // layers start at 60. Popovers (z-popover, 70) stay above them.
 // dismissTopLayer() lets the console's router turn the browser Back button /
-// Android back gesture into closing the topmost layer. On phones and touch
+// Android back gesture into closing the topmost layer — only a layer opened
+// on a phone or touch screen, and not a persistent one. On phones and touch
 // screens the visual viewport's height and top are kept in the CSS variables
 // --s-vvh / --s-vvt while a layer is open, so sheets stay above the soft
 // keyboard. useSheetSwipe: swipe down to close a sheet.
@@ -15,8 +16,11 @@ import { useViewport } from './viewport'
 interface Layer {
   id: number
   panel: Ref<HTMLElement | undefined>
-  /** Closes the layer unless it is persistent. */
-  dismiss: () => void
+  /** False while the layer is persistent. */
+  dismissible: () => boolean
+  close: () => void
+  /** Opened on a phone or touch screen: Back closes it. */
+  back: boolean
 }
 
 const stack = shallowRef<Layer[]>([])
@@ -57,7 +61,7 @@ function onKeydown(e: KeyboardEvent) {
     if (e.defaultPrevented) return
     e.preventDefault()
     e.stopPropagation()
-    top.dismiss()
+    if (top.dismissible()) top.close()
     return
   }
   if (e.key !== 'Tab') return
@@ -101,7 +105,7 @@ function sync() {
  * (gets focus when nothing inside is focusable). Returns the stacking depth
  * (0 = first open layer).
  */
-function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined>, dismiss: () => void) {
+function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined>, dismissible: () => boolean, close: () => void) {
   const id = ++seq
   const { compact, touch } = useViewport()
   let returnTo: HTMLElement | null = null
@@ -109,9 +113,10 @@ function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined
   function push() {
     if (stack.value.some((l) => l.id === id)) return
     returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    stack.value = [...stack.value, { id, panel, dismiss }]
+    const back = compact.value || touch.value
+    stack.value = [...stack.value, { id, panel, dismissible, close, back }]
     sync()
-    if (compact.value || touch.value) trackVisualViewport(true)
+    if (back) trackVisualViewport(true)
     nextTick(() => {
       const el = panel.value
       if (!el || el.contains(document.activeElement)) return
@@ -159,21 +164,22 @@ export function useDialog(
     emit('update:open', false)
     emit('close')
   }
-  const depth = useOverlayLayer(() => props.open, panel, () => {
-    if (dismissible.value) close()
-  })
+  const depth = useOverlayLayer(() => props.open, panel, () => dismissible.value, close)
   const zIndex = computed(() => (props.top ? TOP_Z : BASE_Z) + depth.value * 2)
   return { dismissible, close, zIndex }
 }
 
 /**
- * Closes the topmost layer unless it is persistent (the console's router
- * calls it on Back). False when no layer is open, so Back navigates.
+ * Closes the topmost layer when it was opened on a phone or touch screen and
+ * is not persistent (the console's router calls it on Back). False when it
+ * does not close one (none open, a wide screen with a mouse, a persistent
+ * layer), so Back navigates as usual.
  */
 export function dismissTopLayer(): boolean {
   const top = stack.value.at(-1)
-  top?.dismiss()
-  return !!top
+  if (!top?.back || !top.dismissible()) return false
+  top.close()
+  return true
 }
 
 /** Number of open layers (tests / hosts). */

@@ -1,8 +1,9 @@
 // Back / Forward (the browser button, the Android back gesture) with a
-// dialog, drawer or sheet open closes the topmost layer instead of leaving
-// the page: the step is cancelled, so the URL stays. A persistent layer
-// stays open and still swallows the step. With no layer open the step
-// navigates as usual; pushes and replaces are never touched.
+// dialog, drawer or sheet open on a phone or touch screen closes the topmost
+// layer instead of leaving the page: the step is cancelled, so the URL
+// stays. A persistent layer, a layer opened on a wide screen with a mouse,
+// or no layer at all lets the step navigate as usual (see dismissTopLayer);
+// pushes and replaces are never touched.
 import type { Router } from 'vue-router'
 import { dismissTopLayer } from '@sub2api/ui'
 
