@@ -7,8 +7,13 @@
 // selection, `allSelected` whether the selection is the whole result set.
 // Hidden while nothing is selected unless `persistent`; the #idle slot then
 // replaces the count (e.g. a hint).
+// On a compact screen a selection shows as a bar fixed to the bottom of the
+// screen: the count opens a menu with the select / clear choices, the action
+// buttons sit on the right; the idle `persistent` strip is not shown there.
 import { useUiT } from './i18n'
 import SLink from './SLink.vue'
+import BulkDock from './internal/BulkDock.vue'
+import { useViewport } from './viewport'
 
 withDefaults(
   defineProps<{
@@ -24,11 +29,26 @@ withDefaults(
 )
 const emit = defineEmits<{ (e: 'select-page'): void; (e: 'select-all'): void; (e: 'clear'): void }>()
 const t = useUiT()
+const { compact } = useViewport()
 </script>
 
 <template>
+  <BulkDock
+    v-if="compact && count > 0"
+    :count="count"
+    :total="total"
+    :page-selected="pageSelected"
+    :all-selected="allSelected"
+    :selecting-all="selectingAll"
+    :disabled="disabled"
+    @select-page="emit('select-page')"
+    @select-all="emit('select-all')"
+    @clear="emit('clear')"
+  >
+    <slot />
+  </BulkDock>
   <div
-    v-if="count > 0 || persistent"
+    v-else-if="!compact && (count > 0 || persistent)"
     class="s-bulk-bar flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-3 py-1 text-xs"
     :class="count > 0 ? 'border-primary-200 bg-primary-50/70 dark:border-primary-800 dark:bg-primary-900/20' : 'border-line bg-surface'"
     role="region"

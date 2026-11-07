@@ -1,18 +1,3 @@
-<script lang="ts">
-import { defineComponent, h } from 'vue'
-import { useFieldControl } from './field'
-
-// Inner trigger: claims the SField label like the other labelable controls.
-const Trigger = defineComponent({
-  inheritAttrs: false,
-  props: { ariaLabel: String, size: String },
-  setup(p, { attrs, slots }) {
-    const { id, a11y } = useFieldControl({ size: p.size, ariaLabel: p.ariaLabel })
-    return () => h('button', { ...attrs, ...a11y.value, id: id.value, type: 'button' }, slots.default?.())
-  }
-})
-</script>
-
 <script setup lang="ts">
 // Time range picker: a trigger showing the preset (and the dates it covers)
 // that opens a panel with the presets on the left and a start / end date
@@ -21,13 +6,17 @@ const Trigger = defineComponent({
 // typed is inclusive: Apply sends `to` = the local midnight after it.
 // Picking a preset applies it and closes; Escape closes and returns focus to
 // the trigger. `label` = false hides the field label (the trigger keeps an
-// aria-label).
+// aria-label). On a compact screen the trigger shows only the preset and the
+// panel is a bottom sheet: the presets as a grid, the date pair under them.
 import { computed, nextTick, onBeforeUnmount, ref, useId } from 'vue'
 import SField from './SField.vue'
-import SIcon from './SIcon.vue'
 import { useUiT } from './i18n'
 import { useFloating } from './floating'
+import { useViewport } from './viewport'
 import { RANGE_LABELS, dayKey, rangeBounds, type RangeKey } from './timeRange'
+import DayRangeForm from './internal/DayRangeForm.vue'
+import RangeSheet from './internal/RangeSheet.vue'
+import RangeTrigger from './internal/RangeTrigger.vue'
 
 const props = withDefaults(
   defineProps<{ range: RangeKey; from: string; to: string; keys?: RangeKey[]; size?: 'sm' | 'md'; label?: boolean }>(),
@@ -39,6 +28,7 @@ const emit = defineEmits<{
   (e: 'update:to', v: string): void
 }>()
 const t = useUiT()
+const { compact } = useViewport()
 const open = ref(false)
 const anchor = ref<HTMLElement>()
 const panel = ref<HTMLElement>()
@@ -61,7 +51,6 @@ const span = computed(() => {
 
 const draftStart = ref('')
 const draftEnd = ref('')
-const valid = computed(() => !!draftStart.value && !!draftEnd.value && draftStart.value <= draftEnd.value)
 
 /** Local midnight of a "YYYY-MM-DD" value, `plusDays` later. */
 function midnight(v: string, plusDays = 0): Date {
@@ -79,6 +68,7 @@ function show() {
   draftStart.value = props.from ? dayKey(props.from) : ''
   draftEnd.value = dayKey(props.to ? new Date(new Date(props.to).getTime() - 1) : new Date())
   open.value = true
+  if (compact.value) return
   document.addEventListener('mousedown', onDoc)
   nextTick(() => {
     floating.start()
@@ -111,7 +101,6 @@ function pick(k: RangeKey) {
   close()
 }
 function apply() {
-  if (!valid.value) return
   emit('update:range', 'custom')
   emit('update:from', midnight(draftStart.value).toISOString())
   emit('update:to', midnight(draftEnd.value, 1).toISOString())
@@ -125,25 +114,23 @@ defineExpose({ open: show, close: () => close(false) })
   <div class="inline-block">
     <SField :label="label ? t('ui.time') : undefined">
       <span ref="anchor" class="inline-block">
-        <Trigger
-          class="input inline-flex cursor-pointer items-center gap-2 whitespace-nowrap pr-3 text-left"
-          :class="size === 'sm' ? 'input-sm' : ''"
+        <RangeTrigger
+          :range="range"
+          :span="compact ? '' : span"
           :size="size"
           :aria-label="label ? undefined : t('ui.time')"
           aria-haspopup="dialog"
           :aria-expanded="open"
-          :aria-controls="open ? panelId : undefined"
+          :aria-controls="open && !compact ? panelId : undefined"
           data-testid="date-range-trigger"
           @click="toggle"
-        >
-          <SIcon name="clock" class="h-4 w-4 shrink-0 text-fg-subtle" />
-          <span class="text-fg">{{ t(RANGE_LABELS[range]) }}</span>
-          <span v-if="span" class="text-xs text-fg-subtle">{{ span }}</span>
-          <SIcon name="chevron-down" class="ml-auto h-4 w-4 shrink-0 text-fg-subtle" />
-        </Trigger>
+        />
       </span>
     </SField>
-    <Teleport to="body">
+    <RangeSheet v-if="compact" :open="open" :range="range" :presets="presets" @update:open="close(false)" @pick="pick">
+      <DayRangeForm v-if="customAllowed" v-model:start="draftStart" v-model:end="draftEnd" @apply="apply" />
+    </RangeSheet>
+    <Teleport v-else to="body">
       <div
         v-if="open"
         :id="panelId"
@@ -173,20 +160,7 @@ defineExpose({ open: show, close: () => close(false) })
             </button>
           </li>
         </ul>
-        <form v-if="customAllowed" class="flex w-56 flex-col gap-2 border-l border-line pl-3" @submit.prevent="apply">
-          <span class="text-xs font-medium text-fg-muted">{{ t('ui.custom') }}</span>
-          <label class="flex flex-col gap-1 text-xs text-fg-subtle">
-            {{ t('ui.startDate') }}
-            <input v-model="draftStart" type="date" class="input input-sm" :max="draftEnd || undefined" data-testid="date-range-start" />
-          </label>
-          <label class="flex flex-col gap-1 text-xs text-fg-subtle">
-            {{ t('ui.endDate') }}
-            <input v-model="draftEnd" type="date" class="input input-sm" :min="draftStart || undefined" data-testid="date-range-end" />
-          </label>
-          <button type="submit" class="btn btn-primary btn-sm mt-auto" :disabled="!valid" data-testid="date-range-apply">
-            {{ t('ui.apply') }}
-          </button>
-        </form>
+        <DayRangeForm v-if="customAllowed" v-model:start="draftStart" v-model:end="draftEnd" class="w-56 border-l border-line pl-3" @apply="apply" />
       </div>
     </Teleport>
   </div>
