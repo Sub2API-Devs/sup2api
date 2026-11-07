@@ -3,6 +3,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import SPageHeader from './SPageHeader.vue'
 import { provideTitleContext } from './titleContext'
+import { resetViewport } from './viewport'
 
 enableAutoUnmount(afterEach)
 
@@ -11,6 +12,7 @@ function stubMedia(matches: boolean) {
 }
 afterEach(() => {
   vi.unstubAllGlobals()
+  resetViewport()
   document.body.innerHTML = ''
 })
 

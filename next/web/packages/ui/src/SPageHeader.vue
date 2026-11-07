@@ -6,8 +6,9 @@
 // take that row, so on a wide screen they move into the top bar beside the
 // title instead. Otherwise (detail pages, nested scopes) it is a title block
 // with the actions beside it and the filters below.
-import { computed, onBeforeUnmount, onMounted, ref, useSlots, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, useSlots, watchEffect } from 'vue'
 import { useActionsTarget, useDescriptionSink, useTitleVisibility } from './titleContext'
+import { useViewport } from './viewport'
 const props = defineProps<{ title: string; description?: string }>()
 const slots = useSlots()
 const showTitle = useTitleVisibility(() => props.title)
@@ -16,19 +17,9 @@ const actionsTarget = useActionsTarget()
 const lifted = computed(() => !showTitle.value && !!sink && !slots.before && !slots['title-extra'])
 const headed = computed(() => showTitle.value || !!slots.before || !!slots['title-extra'] || (!!props.description && !lifted.value))
 
-// The top bar hides the description below md; the actions stay in the page there too.
-const WIDE = '(min-width: 768px)'
-const wide = ref(typeof window !== 'undefined' && !!window.matchMedia?.(WIDE).matches)
-let media: MediaQueryList | undefined
-const onMedia = (e: MediaQueryListEvent) => (wide.value = e.matches)
-onMounted(() => {
-  media = window.matchMedia?.(WIDE)
-  if (!media) return
-  wide.value = media.matches
-  media.addEventListener?.('change', onMedia)
-})
-onBeforeUnmount(() => media?.removeEventListener?.('change', onMedia))
-const actionsUp = computed(() => !!actionsTarget && lifted.value && !headed.value && !slots.filters && !!slots.actions && wide.value)
+// The top bar hides the description on a compact screen; the actions stay in the page there too.
+const { compact } = useViewport()
+const actionsUp = computed(() => !!actionsTarget && lifted.value && !headed.value && !slots.filters && !!slots.actions && !compact.value)
 
 let owned = ''
 watchEffect(() => {

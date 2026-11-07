@@ -77,15 +77,20 @@ export default {
         card: '0.75rem',
         panel: '1.25rem'
       },
+      // Control heights are CSS variables (style.css) so touch screens raise them in one place.
       height: {
-        'control-sm': '1.75rem',
-        control: '2rem',
+        'control-sm': 'var(--control-h-sm)',
+        control: 'var(--control-h)',
         'control-lg': '2.5rem'
       },
       minHeight: {
-        'control-sm': '1.75rem',
-        control: '2rem',
+        'control-sm': 'var(--control-h-sm)',
+        control: 'var(--control-h)',
         'control-lg': '2.5rem'
+      },
+      // `touch:` = a coarse pointer (phones, tablets): bigger hit targets.
+      screens: {
+        touch: { raw: '(pointer: coarse)' }
       },
       boxShadow: {
         glass: '0 8px 32px rgba(0, 0, 0, 0.08)',

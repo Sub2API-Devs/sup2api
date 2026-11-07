@@ -47,7 +47,8 @@ const VARIANT = {
   warning: 'btn-warning'
 }
 const SIZE = { xs: 'btn-xs', sm: 'btn-sm', md: 'btn-md', lg: 'btn-lg' }
-const SQUARE: Record<string, string> = { xs: 'w-6 px-0', sm: 'w-7 px-0', md: 'w-8 px-0', lg: 'w-10 px-0' }
+// Square = as wide as tall, so icon buttons stay square when touch screens raise the control height.
+const SQUARE = 'aspect-square px-0'
 const ICON: Record<string, string> = { xs: 'h-3.5 w-3.5', sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5' }
 const inactive = computed(() => props.disabled || props.loading)
 const isLink = computed(() => !!(props.to || props.href))
@@ -56,7 +57,7 @@ const cls = computed(() => [
   VARIANT[props.variant],
   SIZE[props.size],
   props.block ? 'w-full' : '',
-  props.iconOnly || props.square ? SQUARE[props.size] : '',
+  props.iconOnly || props.square ? SQUARE : '',
   props.tone === 'danger' ? '!text-red-600 hover:!bg-red-50 dark:!text-red-400 dark:hover:!bg-red-900/20' : '',
   isLink.value && inactive.value ? 'pointer-events-none cursor-not-allowed opacity-50' : ''
 ])
