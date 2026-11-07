@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SDateTime, SBadge, SEmpty, SIcon, SIPAddress, SSpinner, STable, STableColumnSettings, useTableColumns, type TableColumn } from '@sub2api/ui'
+import { SDateTime, SBadge, SIcon, SIPAddress, STable, STableColumnSettings, useTableColumns, type TableColumn } from '@sub2api/ui'
 import { formatMoney, formatNumber } from '@/utils/format'
 import UsageDetail from './UsageDetail.vue'
 import UsageError from './UsageError.vue'
@@ -35,7 +35,6 @@ const emit = defineEmits<{
   (e: 'filter-account-id', id: number): void
 }>()
 const { t } = useI18n()
-const expanded = ref(new Set<number>())
 const columns = computed<TableColumn[]>(() => [
   { key: 'created_at', label: t('common.time'), width: '150px', hideable: false },
   ...(props.showUser ? [{ key: 'user', label: t('common.user'), width: '150px' }] : []),
@@ -59,12 +58,6 @@ function rate(row: UsageRow) {
   const r = Number(row.rate_multiplier)
   return Number.isFinite(r) && r > 0 && r !== 1 ? '×' + formatNumber(r, 2) : ''
 }
-function toggleMobile(id: number) {
-  const next = new Set(expanded.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  expanded.value = next
-}
 </script>
 
 <template>
@@ -77,7 +70,6 @@ function toggleMobile(id: number) {
     </div>
     <STable
       card
-      class="hidden md:block"
       :columns="visibleColumns"
       :rows="rows"
       :loading="loading"
@@ -175,93 +167,89 @@ function toggleMobile(id: number) {
         </div>
       </template>
       <template #expand="{ row }"><UsageDetail :row="row" :path="detailPath?.(row.id)" /></template>
+      <template #card="{ row, expanded, toggleExpand }">
+        <div data-testid="mobile-usage-record">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p v-if="isVisible('model')" class="flex items-center gap-1.5 font-mono text-xs font-medium">
+                <span class="h-2 w-2 shrink-0 rounded-full" :class="hashColor(row.model || '')" aria-hidden="true" />
+                <span class="break-all">{{ row.model || '—' }}</span>
+              </p>
+              <p class="mt-1 text-xs text-fg-subtle">
+                <SDateTime muted :value="row.created_at" mode="time" class="tabular-nums" />
+              </p>
+            </div>
+            <UsageStatus :row="row" />
+          </div>
+          <template v-if="!row.success">
+            <UsageError :row="row" class="mt-2" />
+            <UsageErrorText v-if="isVisible('detail')" :row="row" class="mt-1" />
+          </template>
+          <div v-if="isVisible('tokens') || isVisible('total_cost') || isVisible('latency')" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-surface-2/60 p-3">
+            <div v-if="isVisible('tokens')">
+              <p class="mb-1 text-xxs text-fg-subtle">{{ t('usage.tokens.title') }}</p>
+              <UsageTokens :row="row" />
+            </div>
+            <div v-if="isVisible('total_cost')">
+              <p class="mb-1 text-xxs text-fg-subtle">{{ t('usage.cols.cost') }}</p>
+              <p class="font-mono text-xs font-medium">{{ row.billing_status === 'free' ? t('usage.free') : formatMoney(row.total_cost) }}</p>
+              <SBadge v-if="row.billing_status !== 'billed' && row.billing_status !== 'free'" size="xs" class="mt-1" :tone="billingTone(row.billing_status)">{{
+                t(`usage.billing.status.${row.billing_status}`)
+              }}</SBadge>
+            </div>
+            <div v-if="isVisible('latency')" class="col-span-2"><UsageTiming :row="row" /></div>
+          </div>
+          <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+            <template v-if="showUser && isVisible('user')">
+              <dt class="text-fg-subtle">{{ t('common.user') }}</dt>
+              <dd class="truncate">{{ userName(row) }}</dd>
+            </template>
+            <template v-if="isVisible('api_key')">
+              <dt class="text-fg-subtle">{{ t('usage.request.apiKey') }}</dt>
+              <dd class="truncate">{{ keyName(row) }}<span v-if="groupName(row)" class="text-fg-subtle"> · {{ groupName(row) }}</span></dd>
+            </template>
+            <template v-if="showAccount && isVisible('account')">
+              <dt class="text-fg-subtle">{{ t('common.account') }}</dt>
+              <dd class="min-w-0">
+                <button
+                  v-if="row.account_id"
+                  type="button"
+                  class="block max-w-full truncate text-left text-primary-600"
+                  :title="t('usage.filterByAccount', { account: accountLabel(row) })"
+                  @click="emit('filter-account-id', row.account_id)"
+                >
+                  {{ accountLabel(row) }}
+                </button>
+                <span v-else class="text-fg-subtle">—</span>
+              </dd>
+            </template>
+            <template v-if="isVisible('client_ip')">
+              <dt class="text-fg-subtle">{{ t('usage.request.clientIP') }}</dt>
+              <dd class="min-w-0">
+                <SIPAddress :value="row.client_ip" filterable @filter="emit('filter-client-ip', $event)" />
+              </dd>
+            </template>
+            <template v-if="isVisible('detail') && showClientRequestId && row.client_request_id">
+              <dt class="text-fg-subtle">{{ t('usage.request.clientId') }}</dt>
+              <dd class="min-w-0">
+                <button
+                  type="button"
+                  class="block max-w-full truncate font-mono text-primary-600"
+                  :title="t('usage.filterByClientRequestId', { id: row.client_request_id })"
+                  @click="emit('filter-client-request-id', row.client_request_id)"
+                >
+                  {{ row.client_request_id }}
+                </button>
+              </dd>
+            </template>
+          </dl>
+          <button type="button" class="mt-3 text-xs font-medium text-primary-600" :aria-expanded="expanded" @click.stop="toggleExpand()">
+            {{ expanded ? t('usage.hideDetails') : t('usage.showDetails') }}
+          </button>
+          <UsageDetail v-if="expanded" :row="row" :path="detailPath?.(row.id)" class="-mx-4 -mb-4 mt-3 border-t border-line" />
+        </div>
+      </template>
     </STable>
-
-    <div class="space-y-3 md:hidden">
-      <div v-if="loading && !rows.length" class="card p-8 text-center"><SSpinner /></div>
-      <SEmpty v-else-if="!rows.length" class="card" :text="t('common.noData')" />
-      <article v-for="row in rows" :key="row.id" class="card p-4" :class="loading ? 'opacity-60' : ''" data-testid="mobile-usage-record">
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <p v-if="isVisible('model')" class="flex items-center gap-1.5 font-mono text-xs font-medium">
-              <span class="h-2 w-2 shrink-0 rounded-full" :class="hashColor(row.model || '')" aria-hidden="true" />
-              <span class="break-all">{{ row.model || '—' }}</span>
-            </p>
-            <p class="mt-1 text-xs text-fg-subtle">
-              <SDateTime muted :value="row.created_at" mode="time" class="tabular-nums" />
-            </p>
-          </div>
-          <UsageStatus :row="row" />
-        </div>
-        <template v-if="!row.success">
-          <UsageError :row="row" class="mt-2" />
-          <UsageErrorText v-if="isVisible('detail')" :row="row" class="mt-1" />
-        </template>
-        <div v-if="isVisible('tokens') || isVisible('total_cost') || isVisible('latency')" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-surface-2/60 p-3">
-          <div v-if="isVisible('tokens')">
-            <p class="mb-1 text-xxs text-fg-subtle">{{ t('usage.tokens.title') }}</p>
-            <UsageTokens :row="row" />
-          </div>
-          <div v-if="isVisible('total_cost')">
-            <p class="mb-1 text-xxs text-fg-subtle">{{ t('usage.cols.cost') }}</p>
-            <p class="font-mono text-xs font-medium">{{ row.billing_status === 'free' ? t('usage.free') : formatMoney(row.total_cost) }}</p>
-            <SBadge v-if="row.billing_status !== 'billed' && row.billing_status !== 'free'" size="xs" class="mt-1" :tone="billingTone(row.billing_status)">{{
-              t(`usage.billing.status.${row.billing_status}`)
-            }}</SBadge>
-          </div>
-          <div v-if="isVisible('latency')" class="col-span-2"><UsageTiming :row="row" /></div>
-        </div>
-        <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
-          <template v-if="showUser && isVisible('user')">
-            <dt class="text-fg-subtle">{{ t('common.user') }}</dt>
-            <dd class="truncate">{{ userName(row) }}</dd>
-          </template>
-          <template v-if="isVisible('api_key')">
-            <dt class="text-fg-subtle">{{ t('usage.request.apiKey') }}</dt>
-            <dd class="truncate">{{ keyName(row) }}<span v-if="groupName(row)" class="text-fg-subtle"> · {{ groupName(row) }}</span></dd>
-          </template>
-          <template v-if="showAccount && isVisible('account')">
-            <dt class="text-fg-subtle">{{ t('common.account') }}</dt>
-            <dd class="min-w-0">
-              <button
-                v-if="row.account_id"
-                type="button"
-                class="block max-w-full truncate text-left text-primary-600"
-                :title="t('usage.filterByAccount', { account: accountLabel(row) })"
-                @click="emit('filter-account-id', row.account_id)"
-              >
-                {{ accountLabel(row) }}
-              </button>
-              <span v-else class="text-fg-subtle">—</span>
-            </dd>
-          </template>
-          <template v-if="isVisible('client_ip')">
-            <dt class="text-fg-subtle">{{ t('usage.request.clientIP') }}</dt>
-            <dd class="min-w-0">
-              <SIPAddress :value="row.client_ip" filterable @filter="emit('filter-client-ip', $event)" />
-            </dd>
-          </template>
-          <template v-if="isVisible('detail') && showClientRequestId && row.client_request_id">
-            <dt class="text-fg-subtle">{{ t('usage.request.clientId') }}</dt>
-            <dd class="min-w-0">
-              <button
-                type="button"
-                class="block max-w-full truncate font-mono text-primary-600"
-                :title="t('usage.filterByClientRequestId', { id: row.client_request_id })"
-                @click="emit('filter-client-request-id', row.client_request_id)"
-              >
-                {{ row.client_request_id }}
-              </button>
-            </dd>
-          </template>
-        </dl>
-        <button type="button" class="mt-3 text-xs font-medium text-primary-600" :aria-expanded="expanded.has(row.id)" @click="toggleMobile(row.id)">
-          {{ expanded.has(row.id) ? t('usage.hideDetails') : t('usage.showDetails') }}
-        </button>
-        <UsageDetail v-if="expanded.has(row.id)" :row="row" :path="detailPath?.(row.id)" class="-mx-4 -mb-4 mt-3 border-t border-line" />
-      </article>
-      <div v-if="$slots.footer" class="card px-4"><slot name="footer" /></div>
-    </div>
   </div>
 </template>
 

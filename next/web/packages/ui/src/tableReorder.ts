@@ -15,9 +15,12 @@ interface DragSession {
   document: Document
 }
 
-/** Handle-only pointer sorting. The parent owns rows; a gesture emits one new order. */
+/**
+ * Handle-only pointer sorting. The parent owns rows; a gesture emits one new order.
+ * `table` is the <table> or card list: its own [data-reorder-row] elements are the rows.
+ */
 export function useTableReorder<T extends Record<string, unknown>>(
-  table: Ref<HTMLTableElement | undefined>,
+  table: Readonly<Ref<HTMLElement | undefined>>,
   options: { rows: T[]; rowKey: string; reorderable?: boolean; reorderDisabled?: boolean; loading?: boolean },
   onReorder: (event: TableReorderEvent<T>) => void
 ) {
@@ -73,8 +76,8 @@ export function useTableReorder<T extends Record<string, unknown>>(
   }
 
   function rowElements() {
-    return Array.from(table.value?.querySelectorAll<HTMLTableRowElement>('tr[data-reorder-row]') ?? []).filter(
-      row => row.closest('table') === table.value
+    return Array.from(table.value?.querySelectorAll<HTMLElement>('[data-reorder-row]') ?? []).filter(
+      row => row.closest('table, ul') === table.value
     )
   }
 
@@ -205,3 +208,5 @@ export function useTableReorder<T extends Record<string, unknown>>(
   onBeforeUnmount(cancel)
   return { enabled, pointerDown, keyDown, rowClass }
 }
+
+export type TableReorder = ReturnType<typeof useTableReorder>

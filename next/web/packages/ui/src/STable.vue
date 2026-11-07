@@ -20,6 +20,14 @@
 // - error (truthy = the last load failed, e.g. useList's `error`): an empty
 //   table says the load failed instead of "No data" (#error slot), a filled
 //   one keeps its rows under a failure notice; @retry adds a Retry button.
+// - mobileLayout 'card' (default) / 'scroll': on a phone (useViewport
+//   compact) rows become cards — columns placed by their `mobile` field (see
+//   tableCard.ts), cells through the same `cell-<key>` slots with slot prop
+//   `layout` 'card' (else 'table'), a Details toggle for detail fields and
+//   the expand slot, a "select this page" row instead of the header checkbox
+//   (no swipe / Shift range); #card="{ row, index, selected, toggle(on?),
+//   expanded, toggleExpand }" replaces a card's content. 'scroll' keeps the
+//   table.
 import { computed, ref, useId } from 'vue'
 import { useUiT } from './i18n'
 import SSpinner from './SSpinner.vue'
@@ -32,8 +40,12 @@ import { useTableColumns, type TableColumnStorage } from './tableColumns'
 import STableColumnSettings from './STableColumnSettings.vue'
 import { useScrollClip } from './scrollClip'
 import { useTableSwipeSelect } from './tableSwipeSelect'
-import SIPAddress from './SIPAddress.vue'
-import SButton from './SButton.vue'
+import { useViewport } from './viewport'
+import { cardFields } from './tableCard'
+import ReorderHandle from './internal/ReorderHandle.vue'
+import TableCards from './internal/TableCards.vue'
+import TableCell from './internal/TableCell.vue'
+import TableLoadError from './internal/TableLoadError.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -67,8 +79,10 @@ const props = withDefaults(
     errorText?: string
     /** Declared as a prop so the Retry button shows only when someone listens. */
     onRetry?: () => void
+    /** Phone form: rows as cards (default) or the scrolling table. */
+    mobileLayout?: 'card' | 'scroll'
   }>(),
-  { rowKey: 'id', selected: () => [], swipeSelect: true, emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined, error: undefined, errorText: undefined, onRetry: undefined }
+  { rowKey: 'id', selected: () => [], swipeSelect: true, mobileLayout: 'card', emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined, error: undefined, errorText: undefined, onRetry: undefined }
 )
 const emit = defineEmits<{
   (e: 'row-click', row: T): void
@@ -82,13 +96,17 @@ const t = useUiT()
 const columnState = useTableColumns(() => props.columns, () => props.columnSettingsKey, () => props.columnStorage)
 const visibleColumns = computed(() => props.columnSettingsKey ? columnState.visibleColumns.value : props.columns)
 const expanded = ref(new Set<unknown>())
+const { compact } = useViewport()
+const cardLayout = computed(() => compact.value && props.mobileLayout === 'card')
+const fields = computed(() => cardFields(visibleColumns.value, props.columns))
 const table = ref<HTMLTableElement>()
+const cards = ref<{ list?: HTMLElement }>()
 const root = ref<HTMLElement>()
 const inner = ref<HTMLElement>()
 const clipped = useScrollClip(computed(() => (props.card ? inner.value : root.value)), table)
 const reorderHelp = useId()
 const reorderMessage = ref('')
-const reorder = useTableReorder(table, props, event => {
+const reorder = useTableReorder(computed(() => cards.value?.list ?? table.value), props, event => {
   reorderMessage.value = t('ui.rowReordered', { from: event.from + 1, to: event.to + 1 })
   emit('update:rows', event.rows)
   emit('reorder', event)
@@ -100,6 +118,8 @@ function keyOf(row: T, i: number): unknown {
 }
 /** Rows with their key (rowKey, else the index), computed once per render. */
 const keyed = computed(() => props.rows.map((row, i) => ({ row, i, key: keyOf(row, i) })))
+/** Reorderable rows are not natively draggable, whatever rowAttrs says. */
+const attrsOf = (row: T, i: number) => (props.reorderable ? { ...props.rowAttrs?.(row, i), draggable: false } : props.rowAttrs?.(row, i))
 
 function toggle(row: T, key: unknown) {
   const s = new Set(expanded.value)
@@ -173,7 +193,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
   <component
     :is="card ? 'section' : 'div'"
     ref="root"
-    :class="card ? 'card overflow-hidden' : ['table-container', { 's-table-fit-expanded': fitExpandedToContainer }]"
+    :class="card ? 'card overflow-hidden' : cardLayout ? undefined : ['table-container', { 's-table-fit-expanded': fitExpandedToContainer }]"
   >
     <template v-if="reorderable">
       <span
@@ -193,7 +213,41 @@ function onRowKey(e: KeyboardEvent, row: T) {
       <slot name="toolbar" />
       <STableColumnSettings v-if="columnSettingsKey" :state="columnState" class="ms-auto" />
     </div>
+    <TableCards
+      v-if="cardLayout"
+      ref="cards"
+      :fields="fields"
+      :rows="keyed"
+      :loading="loading"
+      :error="error"
+      :error-text="errorText"
+      :retry="onRetry"
+      :empty-text="emptyText"
+      :surface="card"
+      :selectable="selectable"
+      :selected="selectedSet"
+      :can-select="canSelect"
+      :all-selected="allSelected"
+      :some-selected="someSelected"
+      :expandable="expandable"
+      :expanded="expanded"
+      :clickable="clickable"
+      :reorder="reorderable ? reorder : undefined"
+      :reorder-help="reorderHelp"
+      :row-class="rowClass"
+      :row-attrs="attrsOf"
+      @row-click="emit('row-click', $event)"
+      @select="toggleRow"
+      @select-all="toggleAll"
+      @expand="toggle"
+      @filter="(column, value, row) => emit('filter', column, value, row)"
+    >
+      <template v-for="(_, name) in $slots" #[name]="scope">
+        <slot :name="name" v-bind="scope ?? {}" />
+      </template>
+    </TableCards>
     <div
+      v-else
       ref="inner"
       :class="card ? ['table-container s-table-in-card', { 's-table-fit-expanded': fitExpandedToContainer }] : 'contents'"
     >
@@ -261,10 +315,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
               data-testid="table-error"
             >
               <slot name="error" :error="error">
-                <div role="alert" class="flex flex-col items-center gap-3 text-sm text-red-600 dark:text-red-400">
-                  {{ errorText || t('ui.loadFailed') }}
-                  <SButton v-if="onRetry" size="sm" icon="refresh" @click="onRetry()">{{ t('ui.retry') }}</SButton>
-                </div>
+                <TableLoadError :text="errorText" :retry="onRetry" />
               </slot>
             </td>
           </tr>
@@ -284,10 +335,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
               class="bg-red-50 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300"
               data-testid="table-error"
             >
-              <div role="alert" class="flex items-center gap-3">
-                {{ errorText || t('ui.loadFailed') }}
-                <SButton v-if="onRetry" size="xs" variant="ghost" icon="refresh" @click="onRetry()">{{ t('ui.retry') }}</SButton>
-              </div>
+              <TableLoadError inline :text="errorText" :retry="onRetry" />
             </td>
           </tr>
           <template
@@ -295,7 +343,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
             :key="String(key)"
           >
             <tr
-              v-bind="reorderable ? { ...rowAttrs?.(row, i), draggable: false } : rowAttrs?.(row, i)"
+              v-bind="attrsOf(row, i)"
               :class="[
                 loading ? 'opacity-60' : '',
                 clickable ? 'cursor-pointer focus:outline-none focus-visible:bg-primary-50/60 dark:focus-visible:bg-primary-900/20' : '',
@@ -314,22 +362,11 @@ function onRowKey(e: KeyboardEvent, row: T) {
                 class="w-10 !pr-0"
                 @click.stop
               >
-                <button
-                  type="button"
-                  class="s-table-reorder-handle rounded p-1.5 text-fg-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:opacity-40"
-                  :data-reorder-handle="i"
-                  :disabled="!reorder.enabled.value"
-                  :aria-label="t('ui.reorderRow', { n: i + 1 })"
-                  :aria-describedby="reorderHelp"
-                  @pointerdown.stop="reorder.pointerDown($event, i)"
-                  @keydown.stop="reorder.keyDown($event, i)"
-                  @dragstart.prevent
-                >
-                  <SIcon
-                    name="grip-vertical"
-                    class="h-4 w-4"
-                  />
-                </button>
+                <ReorderHandle
+                  :index="i"
+                  :reorder="reorder"
+                  :describedby="reorderHelp"
+                />
               </td>
               <td
                 v-if="selectable"
@@ -376,15 +413,13 @@ function onRowKey(e: KeyboardEvent, row: T) {
                   :row="row"
                   :value="valueOf(row, c.key)"
                   :index="i"
+                  layout="table"
                 >
-                  <SIPAddress
-                    v-if="c.format === 'ip'"
+                  <TableCell
+                    :column="c"
                     :value="valueOf(row, c.key)"
-                    :copyable="c.copyable"
-                    :filterable="c.filterable"
                     @filter="emit('filter', c, $event, row)"
                   />
-                  <template v-else>{{ displayValue(valueOf(row, c.key)) }}</template>
                 </slot>
               </td>
             </tr>
@@ -440,17 +475,6 @@ function onRowKey(e: KeyboardEvent, row: T) {
   border-collapse: separate;
   border-spacing: 0;
 }
-.s-table-reorder-handle {
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-}
-.s-table-reorder-handle:active {
-  cursor: grabbing;
-}
-.s-table-reorder-handle:disabled {
-  cursor: not-allowed;
-}
 .s-table-dragging {
   opacity: 0.45;
 }
@@ -459,12 +483,6 @@ function onRowKey(e: KeyboardEvent, row: T) {
 }
 .s-table-drop-after > td {
   border-bottom: 2px solid rgb(var(--primary-500, 20 184 166));
-}
-@media (pointer: coarse) {
-  .s-table-reorder-handle {
-    min-width: 44px;
-    min-height: 44px;
-  }
 }
 .s-table-fit-expanded {
   container-type: inline-size;

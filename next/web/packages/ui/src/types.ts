@@ -32,6 +32,17 @@ export interface TableColumn {
   copyable?: boolean
   /** IP cells: clicking the address emits STable's filter event (default false). */
   filterable?: boolean
+  /**
+   * Place on the phone card (STable mobileLayout 'card'): 'title' / 'status'
+   * in the header, 'subtitle' under it, 'meta' in the label/value grid,
+   * 'detail' behind the details toggle, 'hidden' left out. When no column
+   * declares it, the card infers places (see tableCard.ts).
+   */
+  mobile?: 'title' | 'subtitle' | 'status' | 'meta' | 'detail' | 'hidden'
+  /** Short label on the phone card (defaults to `label`). */
+  mobileLabel?: string
+  /** 2 = a meta / detail item spans the whole card row. */
+  mobileSpan?: 1 | 2
 }
 
 export interface TabItem {

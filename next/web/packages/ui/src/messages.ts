@@ -111,6 +111,10 @@ export default {
     stepDone: 'Completed',
     stepCurrent: 'Current step',
     stepError: 'Failed',
+    // STable phone cards
+    rowDetails: 'Details',
+    hideRowDetails: 'Hide details',
+    columnFields: 'Fields',
     // SchemaForm / SchemaField
     schema: {
       secretKeep: 'A value is stored. Leave empty to keep it.',
@@ -246,6 +250,10 @@ export default {
     stepDone: '已完成',
     stepCurrent: '当前步骤',
     stepError: '失败',
+    // STable phone cards
+    rowDetails: '详情',
+    hideRowDetails: '收起详情',
+    columnFields: '显示字段',
     // SchemaForm / SchemaField
     schema: {
       secretKeep: '已保存值，留空表示不修改。',
