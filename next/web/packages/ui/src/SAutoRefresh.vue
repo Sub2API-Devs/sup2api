@@ -45,7 +45,7 @@ function select(key: string) {
         icon="refresh"
         :icon-right="compact ? undefined : 'chevron-down'"
         :square="compact"
-        class="relative"
+        :class="compact ? 'relative' : ''"
         :size="size"
         :disabled="disabled"
         :title="t('ui.autoRefresh')"

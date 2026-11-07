@@ -1,15 +1,17 @@
 <script setup lang="ts">
-// Phone panel of the time range pickers: a bottom sheet with the `presets`
-// as a three-column grid (a tap emits `pick`) and the custom start / end
-// inputs (default slot) stacked under it.
+// Phone panel of the time range pickers: a bottom sheet with the preset
+// `keys` (all but custom) as a three-column grid (a tap emits `pick`) and the
+// custom start / end inputs (default slot) stacked under it.
+import { computed } from 'vue'
 import { useUiT } from '../i18n'
 import { RANGE_LABELS, type RangeKey } from '../timeRange'
 import SButton from '../SButton.vue'
 import SDrawer from '../SDrawer.vue'
 
-defineProps<{ open: boolean; range: RangeKey; presets: RangeKey[] }>()
+const props = defineProps<{ open: boolean; range: RangeKey; keys: RangeKey[] }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'pick', key: RangeKey): void }>()
 const t = useUiT()
+const presets = computed(() => props.keys.filter(k => k !== 'custom'))
 </script>
 
 <template>

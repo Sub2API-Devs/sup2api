@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { h, nextTick } from 'vue'
 import SBulkBar from './SBulkBar.vue'
 import { mountCompact } from './testViewport'
+
+enableAutoUnmount(afterEach)
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -10,7 +13,8 @@ afterEach(() => {
 describe('SBulkBar on a phone', () => {
   it('docks to the bottom with the count as a menu and the actions on the right', async () => {
     const w = mountCompact(SBulkBar, { count: 3, total: 40 }, { default: () => h('button', { id: 'delete' }, 'Delete') })
-    expect(w.classes()).toEqual(expect.arrayContaining(['fixed', 'bottom-0']))
+    expect(w.attributes('data-testid')).toBe('bulk-dock-space')
+    expect(w.get('[role="region"]').classes()).toEqual(expect.arrayContaining(['fixed', 'bottom-0']))
     expect(w.find('#delete').exists()).toBe(true)
     const menu = w.get('[data-testid="bulk-menu"]')
     expect(menu.text()).toBe('3 selected')

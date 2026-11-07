@@ -110,7 +110,7 @@ const columns: TableColumn[] = [
 
 - 当前标签可见时，面板内 `SPageHeader`、`SSettingsGroup`、`SSectionTitle` 的同名 `title` 默认不再显示；不同名称的分组保持可见。判断来自组件上下文，不扫描 DOM，也不使用模糊文字匹配。
 - 说明、保存按钮、开关、筛选器等独立内容保留。只有标题且标题重复时不留下空标题栏；只读时调用方应使用 `v-if` 省略没有操作的 `#actions` 插槽。
-- 控制台顶栏（`provideTitleContext` 第三个参数给出目标选择器）显示页面标题时，`SPageHeader` 没有 `#filters`、只有 `#actions` 的情况下，把按钮移进顶栏标题旁，不再单独占一行（窄屏上带 `icon` 的 `SButton` 在顶栏只显示图标，文字留给读屏）；有筛选器或标题与顶栏不同名时仍留在页面里。
+- 控制台顶栏（`provideTitleContext` 第三个参数给出目标选择器）显示页面标题时，`SPageHeader` 没有 `#filters`、只有 `#actions` 的情况下，宽屏（≥768px）把按钮移进顶栏标题旁，不再单独占一行；窄屏、有筛选器或标题与顶栏不同名时仍留在页面里。
 - 只有一个标签时默认隐藏标签栏，恢复内容自身标题；需要显示单标签可用 `show-single`。`show-tabs=false` 同样恢复自身标题。
 - 嵌套容器使用最近层的标题，弹窗和抽屉重置上下文。折叠分组必须保留折叠按钮及名称；自定义标题插槽保持原样，避免误删其中的状态或交互。
 - `STabs` 不自动重建内容组件。需要保留草稿可继续用 `v-show` 或 `KeepAlive`，需要切换时重新创建则由调用方设置 `key`。
@@ -237,9 +237,9 @@ useAutoRefresh(list.reload, () => seconds.value * 1000, { enabled: () => !editor
 
 绑定 `@reset` 时显示“重置”，`dirty` 为假时禁用；`:card="false"` 去掉卡片外框，用于卡片内部。
 
-手机（<768px）上筛选条默认折叠为一行：`#primary` 插槽里的常用筛选（如搜索框）加一个“筛选”按钮（`active-count` 显示角标），其余筛选、`#end` 和重置放进底部抽屉，筛选仍随 v-model 即时生效；`#chips` 在折叠行下方显示已生效的筛选。`:mobile-collapse="false"` 保持换行排列。`SPageHeader` 对应 `#filters-primary`、`filters-active-count`、`filters-collapse`；次要操作可用 `mobile-menu`（`MenuAction[]`，`@menu-select` 收到 key）：宽屏是 `#actions` 后的幽灵按钮，手机上收进顶栏的“⋯”菜单。
+手机（<768px）上默认插槽里的筛选收进一个“筛选”按钮（`active-count` 显示角标），点开是底部抽屉，里面还有 `#end` 和重置，筛选仍随 v-model 即时生效；`#primary` 插槽里的常用筛选（如搜索框）留在按钮旁，宽屏时排在最前；`#chips` 在手机上的按钮行下方显示已生效的筛选。`SPageHeader` 对应 `#filters-primary` 与 `filters-active-count`。
 
-手机上的其他形态：`SPagination` 默认（`mode="auto"`）为「共 N 条 + ‹ 3 / 12 ›」，点页码打开跳页与每页条数；`SBulkBar` 有选择时固定在屏幕底部；`SDateRange` / `STimeRange` 以底部抽屉选择；`SAutoRefresh` 是带运行点的图标按钮，绑定 `@refresh` 时菜单里有“立即刷新”；`SButton fab` 是右下角 56px 圆形按钮（需 `icon`）。
+手机上的其他形态：`SPagination` 为「共 N 条 + ‹ 3 / 12 ›」，点页码打开跳页与每页条数；`SBulkBar` 有选择时固定在屏幕底部（页面流中留出同样高度）；`SDateRange` / `STimeRange` 以底部抽屉选择；`SAutoRefresh` 是带运行点的图标按钮，绑定 `@refresh` 时菜单里有“立即刷新”；`SButton fab` 是右下角 56px 圆形按钮（需 `icon`）。
 
 ### 插件页懒加载：`lazyPage`
 

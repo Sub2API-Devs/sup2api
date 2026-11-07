@@ -15,7 +15,7 @@ import { RANGE_LABELS, fromLocalInput, rangeBounds, toLocalInput, type RangeKey 
 // RFC 3339 strings ('' = open). `label` = false hides the field labels
 // (the controls keep an aria-label). On a compact screen it is a trigger
 // showing the preset that opens a bottom sheet: the presets as a grid, then
-// from / to (editing one switches the range to custom).
+// from / to when `keys` offers custom (editing one switches to it).
 const props = withDefaults(
   defineProps<{ range: RangeKey; from: string; to: string; keys?: RangeKey[]; variant?: 'select' | 'segmented'; size?: 'sm' | 'md'; label?: boolean }>(),
   { keys: () => ['today', '7d', '30d', 'custom'], variant: 'select', size: 'md', label: true }
@@ -30,7 +30,7 @@ const { compact } = useViewport()
 const sheet = ref(false)
 
 const options = computed(() => props.keys.map((k) => ({ value: k, label: t(RANGE_LABELS[k]) })))
-const presets = computed(() => props.keys.filter((k) => k !== 'custom'))
+const customAllowed = computed(() => props.keys.includes('custom'))
 const ends = computed(() => [
   { key: 'from' as const, label: t('ui.from'), value: toLocalInput(props.from) },
   { key: 'to' as const, label: t('ui.to'), value: toLocalInput(props.to) }
@@ -61,20 +61,14 @@ function setEnd(key: 'from' | 'to', v: unknown) {
 <template>
   <div v-if="compact" class="flex flex-col gap-2">
     <SField :label="label ? t('ui.time') : undefined">
-      <RangeTrigger
-        :range="range"
-        :size="size"
-        :aria-label="label ? undefined : t('ui.time')"
-        aria-haspopup="dialog"
-        :aria-expanded="sheet"
-        data-testid="time-range-trigger"
-        @click="sheet = true"
-      />
+      <RangeTrigger :range="range" :open="sheet" :label="label" :size="size" data-testid="time-range-trigger" @click="sheet = true" />
     </SField>
-    <RangeSheet v-model:open="sheet" :range="range" :presets="presets" @pick="pickPreset">
-      <SField v-for="e in ends" :key="e.key" :label="e.label">
-        <SInput type="datetime-local" :model-value="e.value" :data-testid="`time-range-${e.key}`" @update:model-value="setEnd(e.key, $event)" />
-      </SField>
+    <RangeSheet v-model:open="sheet" :range="range" :keys="keys" @pick="pickPreset">
+      <template v-if="customAllowed" #default>
+        <SField v-for="e in ends" :key="e.key" :label="e.label">
+          <SInput type="datetime-local" :model-value="e.value" :data-testid="`time-range-${e.key}`" @update:model-value="setEnd(e.key, $event)" />
+        </SField>
+      </template>
     </RangeSheet>
   </div>
   <div v-else class="flex flex-wrap items-end gap-2">

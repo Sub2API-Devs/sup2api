@@ -3,7 +3,6 @@ import { computed, inject, provide, type InjectionKey, type ComputedRef, type Re
 const TITLE_CONTEXT: InjectionKey<ComputedRef<string>> = Symbol('s-title-context')
 const DESCRIPTION_SINK: InjectionKey<Ref<string> | null> = Symbol('s-description-sink')
 const ACTIONS_TARGET: InjectionKey<string | null> = Symbol('s-actions-target')
-const IN_TOP_BAR: InjectionKey<boolean> = Symbol('s-in-top-bar')
 const normalize = (title: string | undefined) => (title || '').trim().replace(/\s+/g, ' ')
 
 /**
@@ -23,7 +22,6 @@ export function provideTitleContext(title: () => string | undefined, description
 /** Dialogs start an independent surface even though Teleport retains injection. */
 export function resetTitleContext() {
   provideTitleContext(() => '')
-  provide(IN_TOP_BAR, false)
 }
 
 export function useTitleVisibility(title: () => string | undefined, always: () => boolean = () => false) {
@@ -39,13 +37,4 @@ export function useDescriptionSink() {
 /** Where the enclosing title takes page actions, if anywhere. */
 export function useActionsTarget() {
   return inject(ACTIONS_TARGET, null)
-}
-
-/** Marks a subtree as page actions shown in the top bar, where a compact SButton with an icon shows only the icon. */
-export function provideTopBar() {
-  provide(IN_TOP_BAR, true)
-}
-
-export function useInTopBar() {
-  return inject(IN_TOP_BAR, false)
 }

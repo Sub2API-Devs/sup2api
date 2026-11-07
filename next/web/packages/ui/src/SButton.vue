@@ -7,17 +7,15 @@
 // (square button) and needs `ariaLabel`; `square` makes any button square.
 // `size` xs is the compact variant for table cells.
 // `tone="danger"` colours a ghost / secondary button red.
-// Phone forms (compact screen, button with an `icon`; the text stays for
-// screen readers): `fab` floats as a 56px round button bottom-right, above
-// the home indicator; inside the page actions lifted into the top bar (see
-// SPageHeader) the button shrinks to its icon. Wide screens are unaffected.
+// `fab` (with an `icon`): on a compact screen a 56px round button floating
+// bottom-right above the home indicator, its text visually hidden (kept for
+// screen readers); an ordinary button on wide screens.
 import { computed } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import SSpinner from './SSpinner.vue'
 import SIcon from './SIcon.vue'
 import { isDev } from './dev'
 import { useViewport } from './viewport'
-import { useInTopBar } from './titleContext'
 
 const props = withDefaults(
   defineProps<{
@@ -60,17 +58,13 @@ const SIZE = { xs: 'btn-xs', sm: 'btn-sm', md: 'btn-md', lg: 'btn-lg' }
 // Square = as wide as tall, so icon buttons stay square when touch screens raise the control height.
 const SQUARE = 'aspect-square px-0'
 const ICON: Record<string, string> = { xs: 'h-3.5 w-3.5', sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5' }
-const FORM = {
-  fab: { button: 'fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 h-14 w-14 rounded-full px-0 shadow-lg', icon: 'h-6 w-6' },
-  topbar: { button: SQUARE, icon: 'h-4 w-4' }
+// Under the bulk selection dock (z-30), which covers it while rows are selected.
+const FAB = {
+  button: 'fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-20 h-14 w-14 rounded-full px-0 shadow-lg',
+  icon: 'h-6 w-6'
 }
 const { compact } = useViewport()
-const inTopBar = useInTopBar()
-const form = computed(() => {
-  if (!compact.value || !props.icon) return undefined
-  if (props.fab) return FORM.fab
-  return inTopBar ? FORM.topbar : undefined
-})
+const fab = computed(() => props.fab && !!props.icon && compact.value)
 const inactive = computed(() => props.disabled || props.loading)
 const isLink = computed(() => !!(props.to || props.href))
 const cls = computed(() => [
@@ -79,7 +73,7 @@ const cls = computed(() => [
   SIZE[props.size],
   props.block ? 'w-full' : '',
   props.iconOnly || props.square ? SQUARE : '',
-  form.value?.button,
+  fab.value ? FAB.button : '',
   props.tone === 'danger' ? '!text-red-600 hover:!bg-red-50 dark:!text-red-400 dark:hover:!bg-red-900/20' : '',
   isLink.value && inactive.value ? 'pointer-events-none cursor-not-allowed opacity-50' : ''
 ])
@@ -95,9 +89,9 @@ const target = computed(() => {
 <template>
   <component :is="target.is" v-bind="target.attrs" :class="cls" :aria-label="ariaLabel" :aria-busy="loading || undefined">
     <SSpinner v-if="loading" size="sm" decorative />
-    <SIcon v-else-if="icon" :name="icon" :class="form?.icon ?? ICON[size]" />
-    <span v-if="form" class="sr-only"><slot /></span>
+    <SIcon v-else-if="icon" :name="icon" :class="fab ? FAB.icon : ICON[size]" />
+    <span v-if="fab && !iconOnly && !square" class="sr-only"><slot /></span>
     <slot v-else-if="!iconOnly || !icon" />
-    <SIcon v-if="iconRight && !iconOnly && !form" :name="iconRight" :class="ICON[size]" />
+    <SIcon v-if="iconRight && !iconOnly && !fab" :name="iconRight" :class="ICON[size]" />
   </component>
 </template>

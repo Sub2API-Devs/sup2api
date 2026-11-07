@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SAutoRefresh from './SAutoRefresh.vue'
 import { mountCompact } from './testViewport'
+
+enableAutoUnmount(afterEach)
 
 afterEach(() => {
   document.body.innerHTML = ''

@@ -8,23 +8,21 @@ import { useViewport } from './viewport'
 
 // Pager: total count, rows-per-page select (changing it also emits page 1),
 // previous / numbered / next buttons. `hideSizes` drops the select; `size`
-// md uses full-height controls. `mode` simple shows only ‹ page / pages ›
-// with 40px arrows, the page label opening a bottom sheet to jump to a page
-// and pick the page size; full is the numbered pager; auto (default) is
-// simple on a compact screen and full otherwise.
+// md uses full-height controls. On a compact screen it shows only
+// ‹ page / pages › with 40px arrows, the page label opening a bottom sheet
+// to jump to a page and pick the page size.
 const props = withDefaults(
-  defineProps<{ page: number; pageSize: number; total: number; pageSizes?: number[]; hideSizes?: boolean; size?: 'sm' | 'md'; mode?: 'auto' | 'full' | 'simple' }>(),
-  { pageSizes: () => [20, 50, 100], size: 'sm', mode: 'auto' }
+  defineProps<{ page: number; pageSize: number; total: number; pageSizes?: number[]; hideSizes?: boolean; size?: 'sm' | 'md' }>(),
+  { pageSizes: () => [20, 50, 100], size: 'sm' }
 )
 const emit = defineEmits<{ (e: 'update:page', v: number): void; (e: 'update:pageSize', v: number): void }>()
 const t = useUiT()
 const { compact } = useViewport()
-const simple = computed(() => props.mode === 'simple' || (props.mode === 'auto' && compact.value))
 
 const pages = computed(() => Math.max(1, Math.ceil(props.total / Math.max(1, props.pageSize))))
 
 const visible = computed(() => {
-  if (simple.value) return []
+  if (compact.value) return []
   const n = pages.value
   const cur = props.page
   const out: (number | '…')[] = []
@@ -45,19 +43,19 @@ function setSize(v: unknown) {
   emit('update:pageSize', Number(v))
   emit('update:page', 1)
 }
-const BTN = { sm: 'btn-sm min-w-[2rem]', md: 'btn-md min-w-[2.5rem]', simple: 'h-10 min-w-[2.5rem]' }
-const btn = computed(() => BTN[simple.value ? 'simple' : props.size])
+const BTN = { sm: 'btn-sm min-w-[2rem]', md: 'btn-md min-w-[2.5rem]', compact: 'h-10 min-w-[2.5rem]' }
+const btn = computed(() => BTN[compact.value ? 'compact' : props.size])
 </script>
 
 <template>
   <nav class="flex flex-wrap items-center justify-between gap-3 py-3 text-sm text-gray-500 dark:text-dark-400" :aria-label="t('ui.pagination')">
     <span>{{ t('ui.total', { n: total }) }}</span>
     <div class="flex items-center gap-1">
-      <SSelect v-if="!hideSizes && !simple" class="!w-auto" :size="size" :model-value="pageSize" :options="sizeOptions" :aria-label="t('ui.pageSize')" @update:model-value="setSize" />
+      <SSelect v-if="!hideSizes && !compact" class="!w-auto" :size="size" :model-value="pageSize" :options="sizeOptions" :aria-label="t('ui.pageSize')" @update:model-value="setSize" />
       <button type="button" class="btn btn-ghost px-0" :class="btn" :disabled="page <= 1" :aria-label="t('ui.prev')" @click="go(page - 1)">
         <SIcon name="chevron-right" class="h-4 w-4 rotate-180" />
       </button>
-      <PageJump v-if="simple" :page="page" :pages="pages" :page-size="pageSize" :sizes="hideSizes ? [] : sizeOptions" @go="go" @size="setSize" />
+      <PageJump v-if="compact" :page="page" :pages="pages" :page-size="pageSize" :sizes="hideSizes ? [] : sizeOptions" @go="go" @size="setSize" />
       <template v-for="(p, i) in visible" :key="i">
         <span v-if="p === '…'" class="px-1" aria-hidden="true">…</span>
         <button

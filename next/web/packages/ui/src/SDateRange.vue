@@ -116,18 +116,17 @@ defineExpose({ open: show, close: () => close(false) })
       <span ref="anchor" class="inline-block">
         <RangeTrigger
           :range="range"
+          :open="open"
+          :label="label"
           :span="compact ? '' : span"
           :size="size"
-          :aria-label="label ? undefined : t('ui.time')"
-          aria-haspopup="dialog"
-          :aria-expanded="open"
-          :aria-controls="open && !compact ? panelId : undefined"
+          :controls="compact ? undefined : panelId"
           data-testid="date-range-trigger"
           @click="toggle"
         />
       </span>
     </SField>
-    <RangeSheet v-if="compact" :open="open" :range="range" :presets="presets" @update:open="close(false)" @pick="pick">
+    <RangeSheet v-if="compact" :open="open" :range="range" :keys="keys" @update:open="close(false)" @pick="pick">
       <DayRangeForm v-if="customAllowed" v-model:start="draftStart" v-model:end="draftEnd" @apply="apply" />
     </RangeSheet>
     <Teleport v-else to="body">
@@ -160,7 +159,13 @@ defineExpose({ open: show, close: () => close(false) })
             </button>
           </li>
         </ul>
-        <DayRangeForm v-if="customAllowed" v-model:start="draftStart" v-model:end="draftEnd" class="w-56 border-l border-line pl-3" @apply="apply" />
+        <DayRangeForm
+          v-if="customAllowed"
+          v-model:start="draftStart"
+          v-model:end="draftEnd"
+          class="w-56 border-l border-line pl-3"
+          @apply="apply"
+        />
       </div>
     </Teleport>
   </div>

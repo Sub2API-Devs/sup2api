@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SPagination from './SPagination.vue'
 import { mountCompact } from './testViewport'
+
+enableAutoUnmount(afterEach)
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -40,11 +43,5 @@ describe('SPagination on a phone', () => {
     radio.dispatchEvent(new Event('change'))
     expect(w.emitted('update:pageSize')).toEqual([[50]])
     expect(w.emitted('update:page')?.at(-1)).toEqual([1])
-  })
-
-  it('keeps the numbered pager with mode full', () => {
-    const w = mountCompact(SPagination, { page: 3, pageSize: 20, total: 240, mode: 'full' })
-    expect(w.find('[data-testid="page-jump"]').exists()).toBe(false)
-    expect(w.find('button[aria-current="page"]').text()).toBe('3')
   })
 })

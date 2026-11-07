@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SDateRange from './SDateRange.vue'
 import { mountCompact } from './testViewport'
 import { rangeBounds, rangeSpanMs } from './timeRange'
+
+enableAutoUnmount(afterEach)
 
 function local(y: number, m: number, d: number) {
   return new Date(y, m - 1, d).toISOString()

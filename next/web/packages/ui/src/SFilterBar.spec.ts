@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { h, nextTick } from 'vue'
 import SFilterBar from './SFilterBar.vue'
 import { mountCompact } from './testViewport'
+
+enableAutoUnmount(afterEach)
 
 describe('SFilterBar', () => {
   it('lays out filters, the #end slot and a Reset button only when @reset is bound', async () => {
@@ -71,9 +73,9 @@ describe('SFilterBar on a phone', () => {
     expect(document.querySelector('[data-testid="filter-reset"]')).toBeNull()
   })
 
-  it('keeps the wrapping strip with mobileCollapse false', () => {
-    const w = mountCompact(SFilterBar, { mobileCollapse: false }, slots)
-    expect(w.find('#status').exists()).toBe(true)
+  it('keeps #primary inline when there is nothing else to fold', () => {
+    const w = mountCompact(SFilterBar, {}, { primary: () => h('input', { id: 'q' }) })
+    expect(w.find('#q').exists()).toBe(true)
     expect(w.find('[data-testid="filter-sheet-open"]').exists()).toBe(false)
   })
 })

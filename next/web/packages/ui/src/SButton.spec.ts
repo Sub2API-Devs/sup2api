@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
 import SButton from './SButton.vue'
 import { mountCompact } from './testViewport'
+
+enableAutoUnmount(afterEach)
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -19,5 +21,11 @@ describe('SButton fab', () => {
     expect(w.classes()).not.toContain('fixed')
     expect(w.find('.sr-only').exists()).toBe(false)
     expect(w.text()).toBe('New key')
+  })
+
+  it('keeps the slot of a square fab visible', () => {
+    const w = mountCompact(SButton, { fab: true, icon: 'plus', square: true }, { default: () => 'dot' })
+    expect(w.find('.sr-only').exists()).toBe(false)
+    expect(w.text()).toBe('dot')
   })
 })
