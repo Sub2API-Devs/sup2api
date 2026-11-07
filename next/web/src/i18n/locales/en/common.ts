@@ -77,7 +77,8 @@ export default {
   createdById: 'Creator ID',
   onlyMine: 'Only mine',
   theme: {
-    toggle: 'Toggle theme'
+    toggle: 'Toggle theme',
+    dark: 'Dark mode'
   },
   language: 'Language',
   secondsAgo: '{n}s ago',

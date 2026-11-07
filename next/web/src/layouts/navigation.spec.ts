@@ -8,6 +8,7 @@ import { useAppStore } from '@/stores/app'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
 import DeclarativeTable from '@/components/plugin/DeclarativeTable.vue'
+import { mountPinned } from '../../packages/ui/src/testViewport'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn() }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), api }))
@@ -113,6 +114,14 @@ describe('sidebar', () => {
     expect(labels(wrapper)).toEqual(['dashboard'])
   })
 
+  it('closes the mobile drawer on any navigation', async () => {
+    const { wrapper, app } = await mountSidebar([{ section: 'overview', items: [item('dashboard', '/dashboard')] }])
+    app.mobileNavOpen = true
+    await wrapper.vm.$router.push('/prices')
+    await flushPromises()
+    expect(app.mobileNavOpen).toBe(false)
+  })
+
   it('shows only the dashboard and a retry when the menu cannot load', async () => {
     const { wrapper, app } = await mountSidebar(new Error('down'))
     expect(app.menusError).toBe(true)
@@ -147,6 +156,20 @@ describe('top bar', () => {
     const nav = wrapper.get('[data-testid="breadcrumbs"]')
     expect(nav.findAll('a')).toHaveLength(0)
     expect(nav.text()).toContain('设置')
+  })
+
+  it('keeps the menu button, title and account menu on a phone, language and theme inside the menu', async () => {
+    const router = makeRouter()
+    await router.push('/dashboard')
+    const wrapper = mountPinned(AppTopbar, { global: { plugins: [i18n, router], stubs: { ChangePasswordDialog: true } } })
+    expect(wrapper.findAll('header > button, header > a').map(b => b.attributes('aria-label'))).toEqual(['打开导航菜单'])
+    await wrapper.get('[aria-label="账号菜单"]').trigger('click')
+    await flushPromises()
+    const items = Array.from(document.querySelectorAll<HTMLElement>('[role^="menuitem"]'))
+    expect(items.map(i => i.textContent?.trim())).toEqual(['个人中心', '修改密码', '语言 · 中文', '深色模式', '退出登录'])
+    items[2].click()
+    await flushPromises()
+    expect(i18n.global.locale.value).toBe('en')
   })
 
   it('every parent of the real routes is a page with a title', async () => {

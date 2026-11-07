@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { SIcon, SSkeleton } from '@sub2api/ui'
@@ -42,6 +42,12 @@ function active(i: NavItem): boolean {
   return i.path === activePath.value
 }
 
+// The drawer closes on any navigation, not only on a menu click (links in pages, Back).
+watch(
+  () => route.fullPath,
+  () => (app.mobileNavOpen = false)
+)
+
 /** The desktop collapse does not apply to the mobile drawer, which has no expand button. */
 const collapsed = computed(() => app.sidebarCollapsed && !app.mobileNavOpen)
 
@@ -75,7 +81,7 @@ function showDivider(s: NavSection, index: number): boolean {
 <template>
   <div v-if="app.mobileNavOpen" class="fixed inset-0 z-30 bg-black/40 lg:hidden" @click="app.mobileNavOpen = false" />
   <aside
-    class="fixed inset-y-0 left-0 z-40 flex flex-col border-r border-line bg-surface transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
+    class="fixed inset-y-0 left-0 z-40 flex flex-col border-r border-line bg-surface pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
     :class="[collapsed ? 'w-[72px]' : 'w-60', app.mobileNavOpen ? 'translate-x-0' : '-translate-x-full']"
   >
     <div class="flex min-h-12 shrink-0 items-center gap-2 border-b border-line px-4 py-2" :class="collapsed ? 'flex-col px-1' : ''">

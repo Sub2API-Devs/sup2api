@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SDropdown, SIcon, type MenuAction } from '@sub2api/ui'
+import { SButton, SDropdown, SIcon, useViewport, type MenuAction } from '@sub2api/ui'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
@@ -16,6 +16,7 @@ const plugins = usePluginStore()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+const { compact } = useViewport()
 
 const pwdOpen = ref(false)
 
@@ -41,14 +42,19 @@ const crumbs = computed(() => {
 })
 const initial = computed(() => (auth.me?.display_name || auth.me?.email || '?').slice(0, 1).toUpperCase())
 
+// On a phone the language switch and the theme toggle leave the bar for this menu.
 const userActions = computed<MenuAction[]>(() => [
   { key: 'profile', label: t('nav.items.myProfile'), icon: 'user' },
   { key: 'password', label: t('nav.changePassword'), icon: 'lock' },
-  { key: 'logout', label: t('nav.logout'), icon: 'logout', danger: true }
+  { key: 'locale', label: `${t('common.language')} · ${currentLocale() === 'zh' ? '中文' : 'English'}`, icon: 'globe', hidden: !compact.value, divider: true },
+  { key: 'theme', label: t('common.theme.dark'), icon: 'moon', checked: app.theme === 'dark', hidden: !compact.value },
+  { key: 'logout', label: t('nav.logout'), icon: 'logout', danger: true, divider: compact.value }
 ])
 function onUserAction(key: string) {
   if (key === 'profile') router.push('/me/profile')
   else if (key === 'password') pwdOpen.value = true
+  else if (key === 'locale') toggleLocale()
+  else if (key === 'theme') app.toggleTheme()
   else if (key === 'logout') void logout()
 }
 
@@ -65,7 +71,7 @@ async function logout() {
 
 <template>
   <header
-    class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur-xl sm:px-5"
+    class="sticky top-0 z-20 flex h-[calc(3rem+env(safe-area-inset-top))] items-center gap-3 border-b border-line bg-surface/80 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-xl md:px-5"
   >
     <SButton variant="ghost" size="sm" icon="menu" icon-only class="lg:hidden" :aria-label="t('nav.openMenu')" :aria-expanded="app.mobileNavOpen" @click="app.mobileNavOpen = true" />
     <div class="flex min-w-0 flex-1 items-baseline gap-3">
@@ -90,8 +96,8 @@ async function logout() {
       {{ t('nav.balance') }} {{ formatMoney(auth.balance, 2) }}
     </RouterLink>
 
-    <SButton variant="ghost" size="sm" icon="globe" :title="t('common.language')" :aria-label="t('common.language')" @click="toggleLocale">{{ currentLocale() === 'zh' ? '中' : 'EN' }}</SButton>
-    <SButton variant="ghost" size="sm" :icon="app.theme === 'dark' ? 'sun' : 'moon'" icon-only :title="t('common.theme.toggle')" :aria-label="t('common.theme.toggle')" @click="app.toggleTheme()" />
+    <SButton v-if="!compact" variant="ghost" size="sm" icon="globe" :title="t('common.language')" :aria-label="t('common.language')" @click="toggleLocale">{{ currentLocale() === 'zh' ? '中' : 'EN' }}</SButton>
+    <SButton v-if="!compact" variant="ghost" size="sm" :icon="app.theme === 'dark' ? 'sun' : 'moon'" icon-only :title="t('common.theme.toggle')" :aria-label="t('common.theme.toggle')" @click="app.toggleTheme()" />
 
     <SDropdown :actions="userActions" width="14rem" @select="onUserAction">
       <template #trigger="{ toggle, attrs }">

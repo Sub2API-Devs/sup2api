@@ -22,11 +22,11 @@ onMounted(() => void refreshShell())
 </script>
 
 <template>
-  <div class="flex min-h-screen">
+  <div class="flex min-h-dvh">
     <AppSidebar />
     <div class="flex min-w-0 flex-1 flex-col">
       <AppTopbar />
-      <main class="w-full min-w-0 flex-1 px-4 py-4 sm:px-5">
+      <main class="w-full min-w-0 flex-1 px-3 py-3 md:px-5 md:py-4">
         <RouterView v-slot="{ Component, route: view }">
           <component :is="Component" :key="view.path" />
         </RouterView>

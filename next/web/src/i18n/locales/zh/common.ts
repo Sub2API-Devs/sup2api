@@ -77,7 +77,8 @@ export default {
   createdById: '创建人 ID',
   onlyMine: '只看我的',
   theme: {
-    toggle: '切换主题'
+    toggle: '切换主题',
+    dark: '深色模式'
   },
   language: '语言',
   secondsAgo: '{n} 秒前',
