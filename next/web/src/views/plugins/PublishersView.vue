@@ -76,11 +76,11 @@ const keyColumns = computed<TableColumn[]>(() => {
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'id', label: t('common.id'), width: '64px' },
-    { key: 'name', label: t('common.name') },
-    { key: 'trust_level', label: t('publishers.trustLevel') },
-    { key: 'status', label: t('common.status') },
-    { key: 'keys', label: t('publishers.keys'), align: 'right' },
-    { key: 'created_at', label: t('common.createdAt') }
+    { key: 'name', label: t('common.name'), mobile: 'title' },
+    { key: 'trust_level', label: t('publishers.trustLevel'), mobile: 'meta' },
+    { key: 'status', label: t('common.status'), mobile: 'status' },
+    { key: 'keys', label: t('publishers.keys'), align: 'right', mobile: 'meta' },
+    { key: 'created_at', label: t('common.createdAt'), mobile: 'meta' }
   ]
   if (canManage.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
   return cols

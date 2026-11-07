@@ -31,11 +31,11 @@ const STATUSES = ['awaiting_consent', 'installed', 'enabling', 'enabled', 'upgra
 const statusOptions = computed(() => STATUSES.map((s) => ({ value: s, label: t(`plugins.status.${s}`) })))
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'name', label: t('plugins.list.plugin') },
-  { key: 'status', label: t('common.status') },
-  { key: 'version', label: t('common.version') },
-  { key: 'publisher', label: t('plugins.publisher') },
-  { key: 'nodes', label: t('plugins.list.nodes') },
+  { key: 'name', label: t('plugins.list.plugin'), mobile: 'title' },
+  { key: 'status', label: t('common.status'), mobile: 'status' },
+  { key: 'version', label: t('common.version'), mobile: 'meta' },
+  { key: 'publisher', label: t('plugins.publisher'), mobile: 'meta', mobileSpan: 2 },
+  { key: 'nodes', label: t('plugins.list.nodes'), mobile: 'meta' },
   { key: 'actions', label: '', align: 'right' }
 ])
 

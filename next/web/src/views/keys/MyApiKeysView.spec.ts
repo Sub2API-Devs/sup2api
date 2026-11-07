@@ -7,6 +7,7 @@ import { startOfToday } from '@/utils/format'
 import MyApiKeysView from './MyApiKeysView.vue'
 import KeyEditor from './KeyEditor.vue'
 import KeyGroupSwitch from './KeyGroupSwitch.vue'
+import { mountPinned } from '../../../packages/ui/src/testViewport'
 
 const { get, post, patch, reload, notifyError, deleteWithConfirm } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), reload: vi.fn(), notifyError: vi.fn(), deleteWithConfirm: vi.fn() }))
 vi.mock('@sub2api/host', () => ({ api: { get, post, patch } }))
@@ -48,6 +49,19 @@ describe('API key list', () => {
     await flushPromises()
     expect(get).toHaveBeenCalledWith('/me/usage/summary', expect.objectContaining({ api_key_id: '7', group_by: 'day' }))
     expect(new Date(get.mock.calls[0][1].from).getTime()).toBeLessThan(seven.getTime())
+  })
+  it('shows a key as a phone card: name and status with the switch on top, the key prefix under the name', async () => {
+    i18n.global.locale.value = 'zh'
+    const w = mountPinned(MyApiKeysView, { global: { plugins: [i18n], stubs: { Teleport: true, ApiKeyCell: { template: '<i class="prefix" />' }, SChart: true } } })
+    await flushPromises()
+    const card = w.get('ul[role="list"] > li')
+    const top = card.get(`#${card.attributes('aria-labelledby')}`).element.parentElement!
+    expect(top.textContent).toContain('laptop')
+    expect(top.querySelector('[data-testid="key-enabled-switch"]')).not.toBeNull()
+    expect(card.findAll('[data-testid="key-enabled-switch"]')).toHaveLength(1)
+    expect(top.nextElementSibling!.querySelector('.prefix')).not.toBeNull()
+    expect(card.findAll('dt').map(dt => dt.text())).toEqual(['分组', '用量', '额度', '过期时间'])
+    document.body.innerHTML = ''
   })
   it('marks an IP-restricted key and deletes from the row', async () => {
     const w = render()

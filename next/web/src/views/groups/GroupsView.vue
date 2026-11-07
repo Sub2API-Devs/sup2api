@@ -56,14 +56,14 @@ async function loadModels(gid: number | null) {
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'name', label: t('common.name') },
-    { key: 'platforms', label: t('platforms.served') },
-    { key: 'visibility', label: t('groups.visibility') },
-    { key: 'rate_multiplier', label: t('groups.rateMultiplier'), align: 'right' },
-    { key: 'model_allowlist', label: t('groups.modelRules') },
+    { key: 'name', label: t('common.name'), mobile: 'title' },
+    { key: 'platforms', label: t('platforms.served'), mobile: 'meta', mobileSpan: 2 },
+    { key: 'visibility', label: t('groups.visibility'), mobile: 'meta' },
+    { key: 'rate_multiplier', label: t('groups.rateMultiplier'), align: 'right', mobile: 'meta' },
+    { key: 'model_allowlist', label: t('groups.modelRules'), mobile: 'meta', mobileSpan: 2 },
     { key: 'account_count', label: t('groups.accountCount'), align: 'right' },
     { key: 'key_count', label: t('groups.keyCount'), align: 'right' },
-    { key: 'status', label: t('common.status') }
+    { key: 'status', label: t('common.status'), mobile: 'status' }
   ]
   if (canManage.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
   return cols

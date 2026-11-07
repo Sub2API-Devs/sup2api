@@ -6,7 +6,7 @@ import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SChip, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
 import type { Price } from '@/api/types'
 import { deleteWithConfirm, useRowSwitch } from '@/composables/crud'
-import { useList } from '@/composables/useList'
+import { activeFilterCount, useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime, formatMoney } from '@/utils/format'
 import { summarize, type PriceSummary } from './priceExpr'
@@ -79,11 +79,11 @@ function clearSourceFilter() {
 }
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'model', label: t('prices.model') },
-  { key: 'mode', label: t('prices.modeCol'), width: '100px' },
-  { key: 'summary', label: t('prices.summaryCol') },
-  { key: 'source', label: t('common.source'), width: '170px' },
-  { key: 'enabled', label: t('common.enabled'), width: '90px' },
+  { key: 'model', label: t('prices.model'), mobile: 'title' },
+  { key: 'mode', label: t('prices.modeCol'), width: '100px', mobile: 'meta' },
+  { key: 'summary', label: t('prices.summaryCol'), mobile: 'meta', mobileSpan: 2 },
+  { key: 'source', label: t('common.source'), width: '170px', mobile: 'meta' },
+  { key: 'enabled', label: t('common.enabled'), width: '90px', mobile: 'status' },
   { key: 'actions', label: t('common.actions'), align: 'right', width: '150px' }
 ])
 
@@ -119,14 +119,16 @@ function remove(p: Price) {
 
 <template>
   <div>
-    <SPageHeader :title="t('prices.title')" :description="t('prices.description')">
+    <SPageHeader :title="t('prices.title')" :description="t('prices.description')" :filters-active-count="activeFilterCount(filters)">
       <template #actions>
         <SButton v-if="canManage" data-testid="price-sync" @click="router.push('/prices/sources')">{{ t('prices.syncPrices') }}</SButton>
         <SButton v-else variant="ghost" data-testid="price-sources" @click="router.push('/prices/sources')">{{ t('prices.viewSources') }}</SButton>
         <SButton v-if="canManage" variant="primary" icon="plus" @click="router.push('/prices/new')">{{ t('prices.new') }}</SButton>
       </template>
-      <template #filters>
+      <template #filters-primary>
         <SInput v-model="filters.q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.searchPlaceholder')" />
+      </template>
+      <template #filters>
         <SSelect v-model="filters.mode" class="w-40" :options="modeOptions" :aria-label="t('prices.modeCol')" />
         <SSelect v-model="filters.source" class="w-36" :options="sourceOptions" :aria-label="t('common.source')" data-testid="price-source-filter" />
         <SChip

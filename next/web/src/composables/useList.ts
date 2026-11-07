@@ -16,3 +16,12 @@ export function useList<T>(
 ): UseListResult<T> {
   return useHostList<T>(api, path, initialFilters, { ...opts, onError: notifyError })
 }
+
+/**
+ * The Filters button badge on a phone (SPageHeader `filters-active-count`,
+ * SFilterBar `active-count`): how many list filters are set, leaving out the
+ * ones kept in sight beside the button (`primary`, the search box by default).
+ */
+export function activeFilterCount(filters: Record<string, unknown>, primary: readonly string[] = ['q']): number {
+  return Object.entries(filters).filter(([key, value]) => !primary.includes(key) && value !== '' && value != null && value !== false).length
+}

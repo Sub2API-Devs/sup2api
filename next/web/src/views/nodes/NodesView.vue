@@ -131,13 +131,13 @@ const badges = computed(() => new Map(nodes.value.map((n) => [n.boot_id, pluginB
 // ------------------------------------------------------------------ table
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'node_id', label: t('nodes.node') },
-  { key: 'addr', label: t('nodes.addr') },
-  { key: 'host_version', label: t('common.version') },
-  { key: 'started_at', label: t('nodes.uptime') },
-  { key: 'last_heartbeat', label: t('nodes.heartbeat') },
-  { key: 'plugins', label: t('nodes.plugins') },
-  ...(canReadTasks.value ? [{ key: 'tasks', label: t('tasks.nodesColumn'), nowrap: true }] : [])
+  { key: 'node_id', label: t('nodes.node'), mobile: 'title' },
+  { key: 'addr', label: t('nodes.addr'), mobile: 'subtitle' },
+  { key: 'host_version', label: t('common.version'), mobile: 'meta' },
+  { key: 'started_at', label: t('nodes.uptime'), mobile: 'meta' },
+  { key: 'last_heartbeat', label: t('nodes.heartbeat'), mobile: 'meta' },
+  { key: 'plugins', label: t('nodes.plugins'), mobile: 'meta', mobileSpan: 2 },
+  ...(canReadTasks.value ? [{ key: 'tasks', label: t('tasks.nodesColumn'), nowrap: true, mobile: 'meta' } satisfies TableColumn] : [])
 ])
 
 const healthy = computed(() => nodes.value.filter((n) => !isStale(n)).length)

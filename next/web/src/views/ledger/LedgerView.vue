@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { SButton, SField, SInput, SPageHeader, SPagination, SSelect, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
-import { useList } from '@/composables/useList'
+import { activeFilterCount, useList } from '@/composables/useList'
 import AdjustBalanceModal from './AdjustBalanceModal.vue'
 import LedgerTable from './LedgerTable.vue'
 import { LEDGER_RANGES, useKindOptions } from './kinds'
@@ -27,7 +27,7 @@ const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ?
 
 <template>
   <div>
-    <SPageHeader :title="t('ledger.title')" :description="t('ledger.description')">
+    <SPageHeader :title="t('ledger.title')" :description="t('ledger.description')" :filters-active-count="activeFilterCount(filters, ['from', 'to'])">
       <template #actions>
         <SButton :loading="loading" icon="refresh" @click="reload">{{ t('common.refresh') }}</SButton>
         <SButton v-permission="'balance:adjust'" variant="primary" @click="adjustOpen = true">{{ t('ledger.adjust.button') }}</SButton>

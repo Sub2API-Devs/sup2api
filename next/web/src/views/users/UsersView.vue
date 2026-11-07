@@ -28,7 +28,7 @@ import {
 } from '@sub2api/ui'
 import type { Role, User } from '@/api/types'
 import { deleteWithConfirm, useStatusOptions } from '@/composables/crud'
-import { useList } from '@/composables/useList'
+import { activeFilterCount, useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -68,14 +68,14 @@ const showBalance = computed(() => list.items.value.some((u) => u.balance !== un
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'id', label: t('common.id'), width: '64px' },
-    { key: 'email', label: t('users.email') },
-    { key: 'display_name', label: t('users.displayName') },
-    { key: 'roles', label: t('users.roles') }
+    { key: 'email', label: t('users.email'), mobile: 'title' },
+    { key: 'display_name', label: t('users.displayName'), mobile: 'subtitle' },
+    { key: 'roles', label: t('users.roles'), mobile: 'meta' }
   ]
-  if (showBalance.value) cols.push({ key: 'balance', label: t('users.balance'), align: 'right' })
+  if (showBalance.value) cols.push({ key: 'balance', label: t('users.balance'), align: 'right', mobile: 'meta' })
   cols.push(
-    { key: 'status', label: t('common.status') },
-    { key: 'last_login_at', label: t('users.lastLogin') },
+    { key: 'status', label: t('common.status'), mobile: 'status' },
+    { key: 'last_login_at', label: t('users.lastLogin'), mobile: 'meta' },
     { key: 'created_at', label: t('common.createdAt') },
     { key: 'actions', label: t('common.actions'), align: 'right' }
   )
@@ -289,12 +289,14 @@ function remove(u: User) {
 
 <template>
   <div>
-    <SPageHeader :title="t('users.title')" :description="t('users.description')">
+    <SPageHeader :title="t('users.title')" :description="t('users.description')" :filters-active-count="activeFilterCount(list.filters)">
       <template #actions>
-        <SButton v-permission="'user:create'" variant="primary" icon="plus" @click="openCreate">{{ t('users.create') }}</SButton>
+        <SButton v-permission="'user:create'" variant="primary" icon="plus" fab @click="openCreate">{{ t('users.create') }}</SButton>
+      </template>
+      <template #filters-primary>
+        <SInput v-model="list.filters.q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('users.searchPlaceholder')" />
       </template>
       <template #filters>
-        <SInput v-model="list.filters.q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('users.searchPlaceholder')" />
         <SSelect v-model="list.filters.status" class="w-40" :options="statusFilterOptions" :aria-label="t('common.status')" />
         <SSelect v-if="roles.length" v-model="list.filters.role" class="w-44" :options="roleOptions" :aria-label="t('users.roles')" />
       </template>

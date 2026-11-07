@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SStatusBadge, SDateTime, SAlert, SButton, SCode, SCopyButton, SEmpty, SIcon, SModal, SPageHeader, SPagination, SRowAction, SSwitch, STable, STooltip, toast, type TableColumn } from '@sub2api/ui'
+import { SStatusBadge, SDateTime, SAlert, SButton, SCode, SCopyButton, SEmpty, SIcon, SModal, SPageHeader, SPagination, SRowAction, STable, STooltip, toast, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { deleteWithConfirm } from '@/composables/crud'
 import { useList } from '@/composables/useList'
@@ -13,6 +13,7 @@ import { notifyError } from '@/utils/errors'
 import ApiKeyCell from './ApiKeyCell.vue'
 import KeyCcSwitchButton from './KeyCcSwitchButton.vue'
 import KeyEditor from './KeyEditor.vue'
+import KeyEnabledSwitch from './KeyEnabledSwitch.vue'
 import KeyGroupCell from './KeyGroupCell.vue'
 import KeyGroupSwitch from './KeyGroupSwitch.vue'
 import KeyLimitsCell from './KeyLimitsCell.vue'
@@ -62,14 +63,14 @@ const groupOptions = computed(() =>
 
 const columns = computed(() =>
   ([
-    { key: 'name', label: t('common.name') },
-    { key: 'key_prefix', label: t('apikeys.key') },
-    { key: 'group', label: t('common.group') },
-    ...(canReadUsage ? [{ key: 'usage', label: t('apikeys.usage.title') }] : []),
+    { key: 'name', label: t('common.name'), mobile: 'title' },
+    { key: 'key_prefix', label: t('apikeys.key'), mobile: 'subtitle' },
+    { key: 'group', label: t('common.group'), mobile: 'meta' },
+    ...(canReadUsage ? [{ key: 'usage', label: t('apikeys.usage.title'), mobile: 'meta', mobileSpan: 2 } satisfies TableColumn] : []),
     { key: 'limits', label: t('apikeys.limits.title') },
-    { key: 'quota', label: t('apikeys.quota.title') },
-    { key: 'status', label: t('common.status') },
-    { key: 'expires_at', label: t('apikeys.expiresAt') },
+    { key: 'quota', label: t('apikeys.quota.title'), mobile: 'meta' },
+    { key: 'status', label: t('common.status'), mobile: 'status' },
+    { key: 'expires_at', label: t('apikeys.expiresAt'), mobile: 'meta' },
     { key: 'last_used_at', label: t('apikeys.lastUsed') },
     { key: 'created_at', label: t('common.createdAt') },
     { key: 'actions', label: t('common.actions'), align: 'right' }
@@ -171,8 +172,9 @@ function remove(k: ApiKey) {
       </template>
       <template #cell-limits="{ row }"><KeyLimitsCell :api-key="row" /></template>
       <template #cell-quota="{ row }"><KeyQuotaCell :api-key="row" /></template>
-      <template #cell-status="{ row }">
+      <template #cell-status="{ row, layout }">
         <SStatusBadge :status="statusOf(row)" />
+        <KeyEnabledSwitch v-if="layout === 'card'" :api-key="row" :disabled="updating.has(row.id)" @change="setEnabled(row, $event)" />
       </template>
       <template #cell-expires_at="{ row }">
         <SDateTime mode="absolute" :value="row.expires_at" :empty="t('apikeys.noExpiry')" :muted="!isExpired(row)" :class="{ 'text-red-600 dark:text-red-400': isExpired(row) }" />
@@ -183,17 +185,9 @@ function remove(k: ApiKey) {
       <template #cell-created_at="{ row }">
         <SDateTime mode="absolute" muted :value="row.created_at" />
       </template>
-      <template #cell-actions="{ row }">
+      <template #cell-actions="{ row, layout }">
         <div class="flex items-center justify-end gap-0.5">
-          <SSwitch
-            :model-value="row.status === 'active'"
-            :disabled="updating.has(row.id)"
-            :aria-label="t(row.status === 'active' ? 'common.disable' : 'common.enable')"
-            :title="t(row.status === 'active' ? 'common.disable' : 'common.enable')"
-            class="mr-2"
-            data-testid="key-enabled-switch"
-            @update:model-value="setEnabled(row, $event)"
-          />
+          <KeyEnabledSwitch v-if="layout === 'table'" :api-key="row" :disabled="updating.has(row.id)" class="mr-2" @change="setEnabled(row, $event)" />
           <SRowAction icon="code" :label="t('apikeys.actions.use')" :title="t('apikeys.use.open')" data-testid="use-key" @click="useKey = row" />
           <KeyCcSwitchButton :api-key="row" :platforms="groupCell(row).platforms" />
           <SRowAction icon="edit" :label="t('common.edit')" data-testid="edit-key" @click="openEditor(row)" />

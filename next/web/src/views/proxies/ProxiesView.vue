@@ -27,7 +27,7 @@ import {
 } from '@sub2api/ui'
 import type { Proxy, ProxyProbeResult, ProxyTestResult } from '@/api/types'
 import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
-import { useList } from '@/composables/useList'
+import { activeFilterCount, useList } from '@/composables/useList'
 import { useProxiesLookup } from '@/composables/lookups'
 import { PROXY_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
@@ -54,13 +54,13 @@ const onlyMine = computed({
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
-    { key: 'name', label: t('common.name') },
-    { key: 'protocol', label: t('proxies.protocol') },
-    { key: 'address', label: t('proxies.address') },
-    { key: 'auth', label: t('proxies.auth') },
-    { key: 'real_ip', label: t('proxies.realIp') },
-    { key: 'status', label: t('common.status') },
-    { key: 'test', label: t('proxies.testResult') }
+    { key: 'name', label: t('common.name'), mobile: 'title' },
+    { key: 'protocol', label: t('proxies.protocol'), mobile: 'meta' },
+    { key: 'address', label: t('proxies.address'), mobile: 'subtitle' },
+    { key: 'auth', label: t('proxies.auth'), mobile: 'meta' },
+    { key: 'real_ip', label: t('proxies.realIp'), mobile: 'meta' },
+    { key: 'status', label: t('common.status'), mobile: 'status' },
+    { key: 'test', label: t('proxies.testResult'), mobile: 'meta' }
   ]
   if (showOwner.value) cols.push({ key: 'created_by', label: t('proxies.createdBy') })
   cols.push({ key: 'created_at', label: t('common.createdAt') })
@@ -266,9 +266,9 @@ function onAction(p: Proxy, key: string) {
 
 <template>
   <div>
-    <SPageHeader :title="t('proxies.title')" :description="t('proxies.description')">
+    <SPageHeader :title="t('proxies.title')" :description="t('proxies.description')" :filters-active-count="activeFilterCount(list.filters)">
       <template #actions>
-        <SButton v-if="canCreate" variant="primary" data-testid="proxy-new" icon="plus" @click="openCreate">{{ t('proxies.create') }}</SButton>
+        <SButton v-if="canCreate" variant="primary" data-testid="proxy-new" icon="plus" fab @click="openCreate">{{ t('proxies.create') }}</SButton>
       </template>
       <template #filters>
         <SInput

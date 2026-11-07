@@ -14,13 +14,14 @@ const { t } = useI18n()
 const tr = useOptionalT()
 
 const columns = computed<TableColumn[]>(() => {
-  const cols: TableColumn[] = [{ key: 'created_at', label: t('common.time'), width: '120px' }]
-  if (props.showUser) cols.push({ key: 'user', label: t('common.user') })
+  // A phone card: the user (else the time) as its title, the kind as its status.
+  const cols: TableColumn[] = [{ key: 'created_at', label: t('common.time'), width: '120px', mobile: props.showUser ? 'subtitle' : 'title' }]
+  if (props.showUser) cols.push({ key: 'user', label: t('common.user'), mobile: 'title' })
   cols.push(
-    { key: 'kind', label: t('ledger.cols.kind'), width: '130px' },
-    { key: 'delta', label: t('ledger.cols.delta'), align: 'right', width: '130px' },
-    { key: 'balance_after', label: t('ledger.cols.balance'), align: 'right', width: '130px' },
-    { key: 'note', label: t('ledger.cols.note') }
+    { key: 'kind', label: t('ledger.cols.kind'), width: '130px', mobile: 'status' },
+    { key: 'delta', label: t('ledger.cols.delta'), align: 'right', width: '130px', mobile: 'meta' },
+    { key: 'balance_after', label: t('ledger.cols.balance'), align: 'right', width: '130px', mobile: 'meta' },
+    { key: 'note', label: t('ledger.cols.note'), mobile: 'meta', mobileSpan: 2 }
   )
   return cols
 })

@@ -92,16 +92,16 @@ const typeFilter = computed({
 })
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'name', label: t('accounts.listUi.identity'), width: '320px' },
-  { key: 'groups', label: t('accounts.groups') },
+  { key: 'name', label: t('accounts.listUi.identity'), width: '320px', mobile: 'title' },
+  { key: 'groups', label: t('accounts.groups'), mobile: 'meta', mobileSpan: 2 },
   ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
-  { key: 'status', label: t('common.status') },
-  { key: 'priority', label: t('accounts.priority'), width: '84px' },
-  { key: 'weight', label: t('accounts.weight'), width: '84px' },
-  { key: 'limits', label: t('accounts.listUi.limitsColumn') },
-  { key: 'success_rate', label: t('accounts.successRate.column') },
+  { key: 'status', label: t('common.status'), mobile: 'status' },
+  { key: 'priority', label: t('accounts.priority'), width: '84px', mobile: 'meta' },
+  { key: 'weight', label: t('accounts.weight'), width: '84px', mobile: 'meta' },
+  { key: 'limits', label: t('accounts.listUi.limitsColumn'), mobile: 'detail', mobileSpan: 2 },
+  { key: 'success_rate', label: t('accounts.successRate.column'), mobile: 'meta' },
   // The core's usage record (CONTRACTS §73), every account type.
-  { key: 'usage', label: t('accounts.usage.column') },
+  { key: 'usage', label: t('accounts.usage.column'), mobile: 'meta' },
   // What the upstream says is left: plan windows (Claude Code) and balance,
   // only when a row of this page has either.
   ...(list.items.value.some((a) => hasQuota(a.quota) || hasBalance(a.balance)) ? [{ key: 'quota', label: t('accounts.balance.column') }] : []),
@@ -541,9 +541,11 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
 
 <template>
   <div>
-    <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')">
-      <template #filters>
+    <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')" :filters-active-count="filterCount - (list.filters.q ? 1 : 0)">
+      <template #filters-primary>
         <SInput v-model="list.filters.q" icon="search" clearable class="w-44 2xl:w-56" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
+      </template>
+      <template #filters>
         <SSelect v-model="typeFilter" :options="typeOptions" class="w-36 2xl:w-44" :aria-label="t('accounts.type')" />
         <SSelect v-model="list.filters.group_id" :options="groupOptions" class="w-32 2xl:w-36" :aria-label="t('accounts.groups')" />
         <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="w-28 2xl:w-32" :aria-label="t('common.status')" />
@@ -551,10 +553,11 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
         <SButton v-if="filterCount" variant="ghost" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
       </template>
       <template #actions>
-        <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" />
-        <SAutoRefresh v-model="refreshSeconds" />
-        <SButton icon="refresh" icon-only :loading="list.loading.value" :aria-label="t('accounts.listUi.refresh')" :title="t('accounts.listUi.refresh')" @click="list.reload()" />
-        <SButton v-if="canCreate" variant="primary" icon="plus" data-testid="account-new" @click="openCreate">{{ t('accounts.new') }}</SButton>
+        <!-- Row density means nothing to phone cards; there the auto-refresh menu holds "Refresh now". -->
+        <SSwitch v-model="denseRows" class="max-md:hidden" :label="t('accounts.listUi.compact')" />
+        <SAutoRefresh v-model="refreshSeconds" @refresh="list.reload()" />
+        <SButton icon="refresh" icon-only class="max-md:hidden" :loading="list.loading.value" :aria-label="t('accounts.listUi.refresh')" :title="t('accounts.listUi.refresh')" @click="list.reload()" />
+        <SButton v-if="canCreate" variant="primary" icon="plus" fab data-testid="account-new" @click="openCreate">{{ t('accounts.new') }}</SButton>
       </template>
     </SPageHeader>
 
