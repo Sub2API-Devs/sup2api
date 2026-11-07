@@ -263,7 +263,7 @@ const columns: TableColumn[] = [
   { key: 'status', label: '状态', mobile: 'status' },
   { key: 'key_prefix', label: '密钥', mobile: 'subtitle' },
   { key: 'usage', label: '用量', mobile: 'meta', mobileSpan: 2 },   // 占满一行
-  { key: 'quota', label: '额度限制', mobile: 'meta', mobileLabel: '额度' },
+  { key: 'quota', label: '额度', mobile: 'meta' },
   { key: 'created_at', label: '创建时间' },                          // 有声明时，未声明的列进“详情”
   { key: 'actions', label: '操作' }                                  // 操作列总在卡片底部
 ]
@@ -273,7 +273,7 @@ const columns: TableColumn[] = [
 - 单元格插槽多一个 `layout`（`'table'` / `'card'`），同一插槽可按形态微调（例如开关从操作列移到状态位）；`#card` 插槽整体替换卡片内容（`{ row, index, selected, toggle, expanded, toggleExpand }`）。`STable` 的 `mobile: 'scroll'` 保留横向滚动的表格（默认 `'card'`）。
 - 卡片里的 `SRowAction` 变成小号文字按钮；卡片底部的操作宜不超过三个，其余放进该行的“更多” `SDropdown`。选择、展开、拖动排序在卡片上照常可用，列设置变成“字段”底部抽屉。
 
-**筛选与页头。** `SFilterBar` 的默认插槽收进“筛选”按钮（`active-count` 角标）打开的底部抽屉，里面还有 `#end` 和重置，筛选随 v-model 即时生效；`#primary`（如搜索框）留在按钮旁、宽屏时排在最前；`#chips` 在按钮行下方显示已生效的筛选。`SPageHeader` 对应 `#filters-primary` 与 `filters-active-count`，手机上页头操作留在页面里。
+**筛选与页头。** `SFilterBar` 的默认插槽收进“筛选”按钮（`active-count` 角标）打开的底部抽屉，里面还有 `#end` 和重置，筛选随 v-model 即时生效；`#primary`（如搜索框）留在按钮旁、宽屏时排在最前。`SPageHeader` 对应 `#filters-primary` 与 `filters-active-count`，手机上页头操作留在页面里。
 
 **弹层。** 弹层都基于 `SDrawer side="bottom"`（底部抽屉，可下滑关闭，避开 Home 指示条）：`SModal` 与 `SFormModal` 的 `mobile`（类型 `ModalMobile`）为 `auto`（默认，sm/md 宽度为抽屉、lg 以上为整页）、`sheet`、`fullscreen`、`center`；左右 `SDrawer` 变成整页；`SDropdown` 为底部操作表（`mobile="popover"` 保留浮动菜单）；可搜索的 `SSelect`、`SDateRange`、`STimeRange` 以抽屉选择。手机或触屏上浏览器“返回”关闭最上层弹层：`dismissTopLayer()` 关闭在手机或触屏上打开的最上层（持久层除外）并返回 `true`；没有弹层、宽屏鼠标下打开的弹层或持久层返回 `false`，照常导航。控制台路由在“返回／前进”时调用它。
 

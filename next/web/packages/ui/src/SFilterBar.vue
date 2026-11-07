@@ -9,10 +9,9 @@
 // on wide screens they come first, before the default slot. On a compact
 // screen the default-slot filters fold behind a Filters button (badge
 // `activeCount`, the number of filters off their default) that opens a
-// bottom sheet with them, #end and Reset; `#chips` (e.g. the active filters
-// as removable chips) shows under that row. Done in the sheet (or Enter in
-// one of its fields) closes it and emits `done`: a page that applies a draft
-// on Search applies it then.
+// bottom sheet with them, #end and Reset. Done in the sheet (or Enter in one
+// of its fields) closes it and emits `done`: a page that applies a draft on
+// Search applies it then.
 import { useViewport } from './viewport'
 import FilterSheet from './internal/FilterSheet.vue'
 
@@ -33,7 +32,6 @@ const { compact } = useViewport()
       <template v-if="$slots.primary" #primary><slot name="primary" /></template>
       <template v-if="$slots.default" #default><slot /></template>
       <template v-if="$slots.end" #end><slot name="end" /></template>
-      <template v-if="$slots.chips" #chips><slot name="chips" /></template>
     </FilterSheet>
   </div>
 </template>

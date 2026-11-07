@@ -47,7 +47,7 @@ const declared: TableColumn[] = [
   { key: 'group', label: 'Group', mobile: 'title' },
   { key: 'status', label: 'Status', mobile: 'status' },
   { key: 'region', label: 'Region', mobile: 'subtitle' },
-  { key: 'quota', label: 'Quota limit', mobileLabel: 'Quota', mobile: 'meta' },
+  { key: 'quota', label: 'Quota', mobile: 'meta' },
   { key: 'ip', label: 'IP', format: 'ip', filterable: true, mobile: 'meta', mobileSpan: 2 },
   { key: 'note', label: 'Note' },
   { key: 'actions', label: 'Actions' }

@@ -31,23 +31,20 @@ describe('SFilterBar on a phone', () => {
   const slots = {
     primary: () => h('input', { id: 'q' }),
     default: () => h('select', { id: 'status', class: 'w-36' }),
-    end: () => 'UTC',
-    chips: () => h('span', { class: 'chip' }, 'status: on')
+    end: () => 'UTC'
   }
   const sheet = () => document.querySelector('[data-testid="filter-sheet"]')
 
   it('keeps #primary first on a wide screen', () => {
     const w = mount(SFilterBar, { slots })
     expect(w.findAll('input, select').map((e) => e.attributes('id'))).toEqual(['q', 'status'])
-    expect(w.find('.chip').exists()).toBe(false)
   })
 
-  it('folds into #primary, a Filters button with a badge, and the chips', async () => {
+  it('folds into #primary and a Filters button with a badge', async () => {
     const onReset = vi.fn()
     const w = mountPinned(SFilterBar, { props: { activeCount: 2, dirty: true, onReset, ariaLabel: 'Usage filters' }, slots })
     expect(w.find('#q').exists()).toBe(true)
     expect(w.find('#status').exists()).toBe(false)
-    expect(w.find('.chip').exists()).toBe(true)
     const open = w.get('[data-testid="filter-sheet-open"]')
     expect(open.attributes('aria-label')).toBe('Filters, 2 active')
     expect(open.text()).toContain('2')

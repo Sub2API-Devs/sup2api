@@ -39,8 +39,6 @@ export interface TableColumn {
    * declares it, the card infers places (see tableCard.ts).
    */
   mobile?: 'title' | 'subtitle' | 'status' | 'meta' | 'detail' | 'hidden'
-  /** Short label on the phone card (defaults to `label`). */
-  mobileLabel?: string
   /** 2 = a meta / detail item spans the whole card row. */
   mobileSpan?: 1 | 2
 }

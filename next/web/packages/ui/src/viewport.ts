@@ -18,8 +18,8 @@ import {
   type Ref
 } from 'vue'
 
-export const WIDE_QUERY = '(min-width: 768px)'
-export const TOUCH_QUERY = '(pointer: coarse)'
+const WIDE_QUERY = '(min-width: 768px)'
+const TOUCH_QUERY = '(pointer: coarse)'
 
 export interface Viewport {
   compact: Readonly<Ref<boolean>>

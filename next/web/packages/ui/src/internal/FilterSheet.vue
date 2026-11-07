@@ -5,7 +5,7 @@
 // `collapse` and secondary filters (default slot) it folds into one row:
 // #primary sharing the width and a Filters button (badge = `activeCount`)
 // that opens a bottom sheet with the default-slot filters stacked full
-// width, #end, and Reset / Done; #chips shows under that row. Filters apply
+// width, #end, and Reset / Done. Filters apply
 // as they change through the page's v-model; Done (or Enter in a sheet field)
 // closes the sheet and emits `done`, for a page that applies a draft then.
 import { computed, ref, useId, useSlots } from 'vue'
@@ -57,9 +57,6 @@ function finish() {
           {{ activeCount }}
         </span>
       </SButton>
-    </div>
-    <div v-if="$slots.chips" class="mt-2 flex flex-wrap gap-1.5" data-testid="filter-chips">
-      <slot name="chips" />
     </div>
     <SDrawer v-model:open="open" side="bottom" :title="title || t('ui.filters')">
       <!-- A form, so that Enter in a field submits it through Done. -->
