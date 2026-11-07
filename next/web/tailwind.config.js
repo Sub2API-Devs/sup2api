@@ -1,4 +1,5 @@
 import colors from 'tailwindcss/colors'
+import plugin from 'tailwindcss/plugin'
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -88,10 +89,7 @@ export default {
         control: 'var(--control-h)',
         'control-lg': '2.5rem'
       },
-      // `touch:` = a coarse pointer (phones, tablets): bigger hit targets.
-      screens: {
-        touch: { raw: '(pointer: coarse)' }
-      },
+
       boxShadow: {
         glass: '0 8px 32px rgba(0, 0, 0, 0.08)',
         card: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
@@ -125,5 +123,9 @@ export default {
       }
     }
   },
-  plugins: []
+  plugins: [
+    // `touch:` = a coarse pointer (phones, tablets): bigger hit targets. A variant, not a raw screen,
+    // because any non min-width screen turns off Tailwind's max-* variants (max-md:).
+    plugin(({ addVariant }) => addVariant('touch', '@media (pointer: coarse)'))
+  ]
 }
