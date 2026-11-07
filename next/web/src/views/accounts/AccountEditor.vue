@@ -229,7 +229,7 @@ const serverModelsError = computed(() => modelsErrorText(errors.value))
 const serverMappingError = computed(() => mappingErrorText(errors.value))
 /** Sections holding an error, marked in the navigation. */
 const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
-  connection: CONNECTION_FIELDS.some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
+  connection: CONNECTION_FIELDS.some((k) => errors.value[k]) || !!errors.value.plugin_widgets || Object.keys(credErrors.value).length > 0,
   models: !!(modelsError.value || serverModelsError.value || mappingError.value || serverMappingError.value),
   scheduling: Object.keys(errors.value).some(isSchedulingField) || Object.keys(usageLimitErrors.value).length > 0,
   advanced: Object.keys(errors.value).some(isAdvancedField),
@@ -541,7 +541,9 @@ async function collectCredentials(): Promise<Record<string, unknown> | null> {
   return v?.ok ? (await iframe.value.getValue()) || {} : null
 }
 
-/** Checks done before the request; the section to show when one fails. */
+// The account.form.widgets slot: its components may validate before and save after the account (CONTRACTS §23.3 UI 3.6).
+const widgetSlot = ref<InstanceType<typeof PluginSlot>>()
+
 // The save pipeline (checks, request body, POST/PATCH, error routing) lives in
 // useAccountSave; the template and the wiring below stay here.
 const { save } = useAccountSave({
@@ -576,6 +578,11 @@ const { save } = useAccountSave({
   showCredentialErrors,
   loadAutoDisablePolicy,
   usageLimit,
+  // A slot that is not mounted (or a stub without the lifecycle) has nothing to check or save.
+  widgets: {
+    validate: async () => (await widgetSlot.value?.validate?.()) ?? null,
+    save: async (a) => (await widgetSlot.value?.save?.(a)) ?? []
+  },
   saved: (a) => emit('saved', a)
 })
 </script>
@@ -697,7 +704,8 @@ const { save } = useAccountSave({
             </template>
 
             <div class="mt-4 space-y-3 empty:hidden">
-              <PluginSlot name="account.form.widgets" :props="{ account, accountType, credentials }" />
+              <PluginSlot ref="widgetSlot" name="account.form.widgets" :props="{ account, accountType, credentials, editing }" />
+              <SHint v-if="errors.plugin_widgets" tone="danger" data-testid="plugin-widgets-error">{{ errors.plugin_widgets }}</SHint>
             </div>
           </SCard>
         </div>

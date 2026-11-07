@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -155,6 +156,7 @@ type harness struct {
 	t      *testing.T
 	engine *gin.Engine
 	db     *store.DB
+	guard  *manifest.Manifest // the registry's copy; tests mutate it in place
 }
 
 func (h *harness) do(method, path, token string, body any) (int, map[string]any) {
@@ -228,7 +230,7 @@ func newHarness(t *testing.T, guardConflicts ...core.ResourceConflict) (*harness
 	engine := gin.New()
 	r := httpapi.NewRouter(engine, tokens{}, authz{})
 	a.RegisterRoutes(r)
-	return &harness{t: t, engine: engine, db: db}, root
+	return &harness{t: t, engine: engine, db: db, guard: m}, root
 }
 
 func data(out map[string]any) map[string]any {
@@ -440,6 +442,43 @@ func TestAPIFlow(t *testing.T) {
 	_ = h.db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action LIKE 'plugin.%'`).Scan(&n)
 	if n < 7 {
 		t.Fatalf("audit rows = %d", n)
+	}
+}
+
+// ui.accountActions are filtered by the action's permission like slots,
+// and alone keep a plugin in the listing (CONTRACTS §15.8, UI 3.6).
+func TestUIPluginsAccountActions(t *testing.T) {
+	h, _ := newHarness(t)
+	reset := manifest.AccountAction{ID: "reset", Label: manifest.LocalizedText{"en": "Reset"}, Permission: "rules:manage", Route: "POST /reset", Bulk: true}
+	stats := manifest.AccountAction{ID: "stats", Label: manifest.LocalizedText{"en": "Stats"}, Permission: "stats:read", Route: "POST /stats"}
+	h.guard.UI = &manifest.UI{AccountActions: []manifest.AccountAction{reset, stats}}
+
+	actions := func(token string) []any {
+		code, out := h.do("GET", "/ui/plugins", token, nil)
+		ui, _ := out["data"].([]any)
+		if code != 200 {
+			t.Fatalf("ui = %d %v", code, out)
+		}
+		if len(ui) == 0 {
+			return nil
+		}
+		return ui[0].(map[string]any)["account_actions"].([]any)
+	}
+	if got := actions("admin"); len(got) != 2 || got[0].(map[string]any)["route"] != "POST /reset" || got[0].(map[string]any)["bulk"] != true {
+		t.Fatalf("admin actions = %v", got)
+	}
+	// viewer holds only stats:read.
+	if got := actions("viewer"); len(got) != 1 || got[0].(map[string]any)["id"] != "stats" {
+		t.Fatalf("viewer actions = %v", got)
+	}
+	// A plugin whose only extension the caller may use is an action is still
+	// listed; one with nothing left for the caller is not.
+	h.guard.UI.AccountActions = []manifest.AccountAction{reset}
+	if got := actions("admin"); len(got) != 1 {
+		t.Fatalf("admin actions = %v", got)
+	}
+	if code, out := h.do("GET", "/ui/plugins", "viewer", nil); code != 200 || len(out["data"].([]any)) != 0 {
+		t.Fatalf("viewer with nothing usable = %d %v", code, out)
 	}
 }
 

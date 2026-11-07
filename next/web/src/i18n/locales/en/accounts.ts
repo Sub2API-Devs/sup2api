@@ -11,7 +11,7 @@ export default {
     clear: 'Clear filters ({count})', compact: 'Compact rows', refresh: 'Refresh accounts',
     loadFailed: 'Refresh failed; showing the previous results',
     emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', limitsColumn: 'Concurrency / RPM / TPM / Sessions',
-    numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved'
+    numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved', clearIds: 'Clear the account id filter'
   },
   limitsUi: {
     title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
@@ -99,6 +99,7 @@ export default {
   subscriptionHint: 'Subscription type the upstream reported after authorization',
   modelsBySubscription: 'Saving adjusts the model list to the account subscription: Pro accounts drop the Fable models (only while the list is still the built-in one).',
   modelsAdjusted: 'Model list adjusted for the {plan} subscription ({n} models)',
+  pluginWidgetSaveFailed: 'The account was saved, but the settings of plugin {plugin} were not: {error}',
   groups: 'Groups',
   proxy: 'Proxy',
   createdBy: 'Created by',
@@ -239,7 +240,7 @@ export default {
   batchTest: { pickPage: 'Select page', run: 'Test selected ({n})', progress: 'Testing {done}/{total}', clear: 'Clear selection', hint: 'Each account is tested once with its plugin default model, at most 3 at a time', done: 'Batch test finished: {ok} passed, {fail} failed' },
   bulk: {
     edit: 'Bulk edit ({n})', more: 'More bulk actions', delete: 'Delete ({n})',
-    enable: 'Enable ({n})', disable: 'Disable ({n})', reset: 'Reset status ({n})',
+    enable: 'Enable ({n})', disable: 'Disable ({n})', reset: 'Reset status ({n})', pluginAction: '{name} ({n})',
     progress: 'Processing {done}/{total}', nothingToChange: 'The selected accounts are already in that state',
     done: '{ok} accounts done', doneWithErrors: '{ok} succeeded, {fail} failed; {name}: {error}',
     resetConfirm: 'Clear the cooldown, error and automatic-disable state of the {n} selected accounts?',

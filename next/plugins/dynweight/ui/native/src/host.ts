@@ -1,4 +1,5 @@
-import type { PluginHost, UseListResult } from '@sub2api/host'
+import { ref } from 'vue'
+import { isApiError, type PluginHost, type UseListResult } from '@sub2api/host'
 import type { SelectOption, Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all dynweight components.
@@ -242,6 +243,45 @@ export const resetWeights = (k: Key & { account_ids?: number[] }) => api().post<
 /** The most accounts one reset takes (POST /reset). */
 export const MAX_RESET_ACCOUNTS = 500
 
+/** Row key of a (account, group, model) in the key tables. */
+export const keyOf = (k: Key) => `${k.account_id}|${k.group_id}|${k.model}`
+
+/** Dashboard page of the plugin, at a tab and (optionally) filtered to a key: ?account=&group=&model=. */
+export function dashboardRoute(tab: 'status' | 'events', key?: Partial<Key>) {
+  const query: Record<string, string> = { tab }
+  if (key?.account_id) query.account = String(key.account_id)
+  if (key?.group_id) query.group = String(key.group_id)
+  if (key?.model) query.model = key.model
+  return { path: '/p/dynweight/dashboard', query }
+}
+
+/**
+ * Confirmed resets with one running at a time: `busy` is the tag of the one
+ * running (a row key, 'all', …), for the button that started it. Reloads
+ * through `reload` on success; errors are toasted. Shared by the status tab
+ * and the account tab.
+ */
+export function useReset(reload: () => Promise<unknown>) {
+  const host = useDwHost()
+  const busy = ref('')
+  async function reset(k: Key & { account_ids?: number[] }, message: string, tag: string): Promise<boolean> {
+    if (!(await host.confirm({ message, confirmText: host.t('status.reset'), danger: true }))) return false
+    busy.value = tag
+    try {
+      const r = await resetWeights(k)
+      host.toast(host.t('status.resetDone', { n: r.reset }), 'success')
+      await reload()
+      return true
+    } catch (e) {
+      host.toast(errorMessage(e, host.t('actionFailed')), 'error')
+      return false
+    } finally {
+      busy.value = ''
+    }
+  }
+  return { busy, reset }
+}
+
 /** This node's runtime counters (GET /stats), with node_id and started_at; see CONTRACTS §74.5. */
 export type RuntimeStats = Record<string, number | boolean | string>
 export const fetchStats = () => api().get<RuntimeStats>('/stats')
@@ -255,11 +295,53 @@ export interface Named {
 
 // ------------------------------------------------------------------ account list slot
 
+/** One degraded key of an account (GET /weights, 0.5.0): effective and base weight. */
+export interface WeightKey {
+  group_id: number
+  model: string
+  eff: number
+  base: number
+}
+
 export interface AccountWeight {
   degraded: number
   lowest: number
   base: number
+  /** The lowest keys (at most 10, eff ascending); absent from a plugin before 0.5.0. */
+  keys?: WeightKey[]
 }
+
+/** Accounts with a key below its base on this node (GET /degraded); account_ids holds at most 500. */
+export interface Degraded {
+  count: number
+  account_ids: number[]
+}
+export const fetchDegraded = () => api().get<Degraded>('/degraded')
+
+// ------------------------------------------------------------------ account override (edit form slot)
+
+/** The layer in force for one group of an account (named through the catalog), and whether it degrades without climbing back. */
+export interface OverrideLayer {
+  group_id: number
+  source: 'global' | 'group'
+  no_climb: boolean
+}
+
+export interface OverrideBody {
+  override: AccountOverride | null
+  layers: OverrideLayer[]
+}
+
+/** 404 (the plugin has no record of the account yet: never scheduled, no override) reads as no override and no layers. */
+export async function fetchOverride(accountId: number): Promise<OverrideBody> {
+  try {
+    return await api().get<OverrideBody>(`/accounts/${accountId}/override`)
+  } catch (e) {
+    if (isApiError(e) && e.status === 404) return { override: null, layers: [] }
+    throw e
+  }
+}
+export const saveOverride = (accountId: number, override: AccountOverride | null) => api().put<OverrideBody>(`/accounts/${accountId}/override`, { override })
 
 // The account list renders the slot once per row: ids asked for in the same
 // tick are fetched in one GET /weights.

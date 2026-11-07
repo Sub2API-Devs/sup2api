@@ -1,32 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, shallowMount, type DOMWrapper } from '@vue/test-utils'
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import type { Account, AccountType, QuotaSnapshot } from '@/api/types'
 import { i18n } from '@/i18n'
-import { SDropdown } from '@sub2api/ui'
+import { SButton, SDropdown } from '@sub2api/ui'
 import AccountsView from './AccountsView.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountEditor from './AccountEditor.vue'
+import PluginSlot from '@/components/plugin/PluginSlot.vue'
+import type { PluginAccountActionEntry } from '@/stores/plugins'
 
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), canUpdate: true }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as unknown[]), accountActions: [] as unknown[] }))
 vi.mock('@sub2api/host', () => ({ api: { get: mocks.get, post: mocks.post, patch: mocks.patch, list: async () => ({ items: [] }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), confirm: mocks.confirm, toast: mocks.toast }))
 vi.mock('@/utils/errors', () => ({ notifyError: mocks.notifyError, errorMessage: String }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
-vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ slotEntries: () => [], plugin: () => undefined, component: () => undefined }) }))
+vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ slotEntries: mocks.slotEntries, get accountActions() { return mocks.accountActions }, plugin: () => undefined, component: () => undefined }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useGroupsLookup: () => ({ groups: ref([]) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
 vi.mock('@/composables/useOwnership', async (original) => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ scopeOf: () => 'all', can: (_a: Account, keys: readonly string[]) => keys.includes('account:update') && mocks.canUpdate }) }))
 vi.mock('./accountTypes', () => ({ typeKey: () => '', useAccountTypes: () => ({ load: vi.fn(), find: mocks.findType, grouped: ref([]), types: ref([]), pluginFacts: () => [] }) }))
 vi.mock('@/composables/useList', async (original) => ({ ...await original<object>(), useList: () => list }))
 
-const list = { items: ref<Account[]>([]), total: ref(1), page: ref(1), pageSize: ref(20), loading: ref(false), error: ref(''), filters: {}, reload: mocks.reload }
+const list = { items: ref<Account[]>([]), total: ref(1), page: ref(1), pageSize: ref(20), loading: ref(false), error: ref(''), filters: reactive<Record<string, string>>({}), reload: mocks.reload }
 enableAutoUnmount(afterEach)
 
-function render() {
+function render(stubs: Record<string, unknown> = {}) {
   return shallowMount(AccountsView, { global: { plugins: [i18n], stubs: {
     STable: { props: ['rows'], template: '<div><div v-for="row in rows" :key="row.id"><slot name="cell-status" :row="row" /><slot name="cell-actions" :row="row" /></div></div>' },
     SLink: { template: '<button><slot /></button>' },
@@ -34,6 +36,7 @@ function render() {
     SHint: { template: '<span><slot /></span>' },
     STooltip: { props: ['content', 'disabled'], template: '<span :data-tip="disabled ? undefined : content"><slot /></span>' },
     SSwitch: { props: ['modelValue'], emits: ['update:modelValue'], template: '<button role="switch" :aria-checked="modelValue" @click="$emit(\'update:modelValue\', !modelValue)" />' },
+    ...stubs
   } } })
 }
 
@@ -469,5 +472,94 @@ describe('plugin account actions', () => {
     dropdown(w).vm.$emit('select', 'plugin:ccgateway:refresh_token')
     await flushPromises()
     expect(mocks.notifyError).toHaveBeenCalledWith(unknown)
+  })
+})
+
+describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3 UI 3.6)', () => {
+  const reset: PluginAccountActionEntry = { pluginKey: 'dynweight', id: 'reset', label: { en: 'Reset dynamic weight', zh: '重置动态权重' }, route: 'POST /reset', bulk: true, danger: true, confirm: { en: 'Reset {n}?', zh: '重置 {n} 个账号的动态权重？' } }
+  const row = (id: number, over: Partial<Account> = {}) => ({ id, name: `acc-${id}`, status: 'active', schedulable: true, plugin_key: 'anthropic', type: 'apikey', orphaned: false, ...over }) as Account
+  // The bulk bar and the header render their slots; the table offers a button that selects every row.
+  const stubs = {
+    SBulkBar: { template: '<div><slot /></div>' },
+    STable: { props: ['rows'], emits: ['update:selected'], template: '<div><button data-testid="select-rows" @click="$emit(\'update:selected\', rows.map(r => r.id))" /><div v-for="row in rows" :key="row.id"><slot name="cell-actions" :row="row" /></div></div>' },
+    SPageHeader: { template: '<div><slot name="filters-primary" /><slot name="filters" /></div>' },
+    SChip: { emits: ['close'], template: '<span><slot /><button data-testid="chip-close" @click="$emit(\'close\')" /></span>' }
+  }
+  const dropdowns = (w: ReturnType<typeof render>) => w.findAllComponents(SDropdown)
+  const bulkMore = (w: ReturnType<typeof render>) => dropdowns(w).find((d) => d.attributes('data-testid') === 'account-bulk-more')!
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.canUpdate = true
+    mocks.accountActions = [reset]
+    mocks.slotEntries.mockReturnValue([])
+    mocks.confirm.mockResolvedValue(true)
+    mocks.post.mockResolvedValue({})
+    i18n.global.locale.value = 'zh'
+    list.items.value = [row(29), row(30)]
+    for (const key of Object.keys(list.filters)) delete list.filters[key]
+  })
+
+  it('offers the action in the row menu and posts the account id to the plugin route after confirming', async () => {
+    const w = render()
+    const items = dropdowns(w)[0].props('actions')
+    expect(items.find((x) => x.key === 'pa:dynweight:reset')).toMatchObject({ label: '重置动态权重', hidden: false })
+    dropdowns(w)[0].vm.$emit('select', 'pa:dynweight:reset')
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: '重置 1 个账号的动态权重？', danger: true }))
+    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_id: 29 })
+    expect(mocks.toast).toHaveBeenLastCalledWith('「重置动态权重」已完成', 'success')
+    expect(mocks.reload).toHaveBeenCalled()
+  })
+
+  it('hides the action from readers and on orphaned accounts', () => {
+    list.items.value = [row(29), row(31, { orphaned: true })]
+    const hidden = (w: ReturnType<typeof render>, i: number) => dropdowns(w)[i].props('actions').find((x) => x.key === 'pa:dynweight:reset')!.hidden
+    const w = render()
+    expect([hidden(w, 0), hidden(w, 1)]).toEqual([false, true])
+    mocks.canUpdate = false
+    expect(hidden(render(), 0)).toBe(true)
+  })
+
+  it('adds bulk actions to the "more" menu, counting the editable selection, and sends the ids together', async () => {
+    const w = render(stubs)
+    await w.get('[data-testid="select-rows"]').trigger('click')
+    await flushPromises()
+    expect(bulkMore(w).props('actions')).toContainEqual(expect.objectContaining({ key: 'pa:dynweight:reset', label: '重置动态权重（2）', danger: true, disabled: false }))
+    bulkMore(w).vm.$emit('select', 'pa:dynweight:reset')
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: '重置 2 个账号的动态权重？' }))
+    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [29, 30] })
+    expect(mocks.reload).toHaveBeenCalled()
+    mocks.accountActions = [{ ...reset, bulk: false }]
+    const without = render(stubs)
+    await without.get('[data-testid="select-rows"]').trigger('click')
+    await flushPromises()
+    expect(bulkMore(without).props('actions').some((x) => x.key.startsWith('pa:'))).toBe(false)
+  })
+
+  it('mounts the toolbar slot among the primary filters and shows the ids it sets as a closable filter chip', async () => {
+    list.items.value = []
+    const w = render(stubs)
+    const slot = () => w.getComponent(PluginSlot)
+    const slotProps = () => slot().props('props')!
+    expect(slot().props('name')).toBe('account.list.toolbar')
+    expect(slotProps().ids).toBeNull()
+    expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
+    slotProps().setIds([12, 13], '动态权重降权 2')
+    await flushPromises()
+    expect(list.filters.ids).toBe('12,13')
+    expect(slotProps().ids).toEqual([12, 13])
+    expect(w.get('[data-testid="ids-filter"]').text()).toBe('动态权重降权 2')
+    await w.get('[data-testid="chip-close"]').trigger('click')
+    expect(list.filters.ids).toBe('')
+    expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
+    slotProps().setIds([12], 'one')
+    await flushPromises()
+    w.findAllComponents(SButton).find((b) => b.attributes('data-testid') === 'clear-filters')!.vm.$emit('click')
+    await flushPromises()
+    expect(list.filters.ids).toBe('')
+    expect(slotProps().ids).toBeNull()
+    expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
   })
 })

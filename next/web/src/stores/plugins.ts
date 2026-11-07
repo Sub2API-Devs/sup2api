@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
-import { markRaw, reactive, ref, type Component } from 'vue'
+import { computed, markRaw, reactive, ref, type Component } from 'vue'
 import { api, createPluginHost, HOST_UI_VERSION, satisfiesRange, useHost, type NativePluginModule } from '@sub2api/host'
-import type { UIPlugin, UIPluginPage } from '@/api/types'
+import type { PluginAccountAction, UIPlugin, UIPluginPage } from '@/api/types'
 
 const TRUSTED = new Set(['official', 'verified'])
 
@@ -9,6 +9,11 @@ export interface SlotEntry {
   pluginKey: string
   name: string
   component: Component
+}
+
+/** A plugin's account action with the plugin it belongs to. */
+export interface PluginAccountActionEntry extends PluginAccountAction {
+  pluginKey: string
 }
 
 interface Loaded {
@@ -166,7 +171,10 @@ export const usePluginStore = defineStore('plugins', () => {
     return components[key]?.[name]
   }
 
-  /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets, account.list.weight). */
+  /** The account actions of every listed plugin (manifest `ui.accountActions`, CONTRACTS §23.3 UI 3.6), in list order. */
+  const accountActions = computed<PluginAccountActionEntry[]>(() => uiPlugins.value.flatMap((p) => (p.account_actions || []).map((a) => ({ pluginKey: p.key, ...a }))))
+
+  /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets, account.list.weight, account.list.toolbar). */
   function slotEntries(slot: string): SlotEntry[] {
     const out: SlotEntry[] = []
     for (const p of uiPlugins.value) {
@@ -179,5 +187,5 @@ export const usePluginStore = defineStore('plugins', () => {
     return out
   }
 
-  return { uiPlugins, components, errors, pending, listed, refresh, reset, plugin, page, component, slotEntries, nativeAllowed }
+  return { uiPlugins, components, errors, pending, listed, accountActions, refresh, reset, plugin, page, component, slotEntries, nativeAllowed }
 })

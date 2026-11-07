@@ -7,7 +7,9 @@ import ConfigTab from './ConfigTab.vue'
 import { useDwHost, type Filter } from './host'
 
 // Dynamic weight page (CONTRACTS §74.5): effective weights, weight events and
-// the configuration. Tabs are mounted on first visit and synced to ?tab.
+// the configuration. Tabs are mounted on first visit and synced to ?tab; the
+// account list's links come with ?account= (and group=, model=), which
+// preset the key filter of the status and events tabs (dashboardRoute).
 const host = useDwHost()
 const t = host.t
 
@@ -15,9 +17,23 @@ type TabKey = 'status' | 'events' | 'config'
 
 const tabs = computed(() => (['status', 'events', 'config'] as const).map((key) => ({ key, label: t(`tabs.${key}`) })))
 
+const query = host.router.currentRoute.value.query
+const param = (k: string) => (typeof query[k] === 'string' ? (query[k] as string) : '')
+
 function initialTab(): TabKey {
-  const q = host.router.currentRoute.value.query.tab
+  const q = query.tab
   return tabs.value.some((x) => x.key === q) ? (q as TabKey) : 'status'
+}
+
+function initialFilter(): Filter | null {
+  const f: Filter = { account_id: param('account'), group_id: param('group'), model: param('model') }
+  return f.account_id || f.group_id || f.model ? f : null
+}
+const preset = initialFilter()
+// The preset is consumed: a cleared filter must not come back on reload.
+if (preset) {
+  const { account: _a, group: _g, model: _m, ...rest } = query
+  void host.router.replace({ query: rest })
 }
 
 const tab = ref<TabKey>(initialTab())
@@ -43,7 +59,7 @@ async function refresh() {
 }
 
 // "Events of this key" from the status tab.
-const eventsPreset = ref<Filter | null>(null)
+const eventsPreset = ref<Filter | null>(preset)
 function showEvents(f: Filter) {
   eventsPreset.value = { ...f }
   tab.value = 'events'
@@ -59,7 +75,7 @@ function showEvents(f: Filter) {
     </SPageHeader>
 
     <STabs v-model="tab" :tabs="tabs">
-      <StatusTab v-if="visited.has('status')" v-show="tab === 'status'" :ref="setRef('status')" @show-events="showEvents" />
+      <StatusTab v-if="visited.has('status')" v-show="tab === 'status'" :ref="setRef('status')" :preset="preset" @show-events="showEvents" />
       <EventsTab v-if="visited.has('events')" v-show="tab === 'events'" :ref="setRef('events')" :preset="eventsPreset" />
       <ConfigTab v-if="visited.has('config')" v-show="tab === 'config'" :ref="setRef('config')" />
     </STabs>

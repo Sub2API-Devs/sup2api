@@ -1,26 +1,46 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join, normalize } from 'node:path'
+import { accounts } from './accounts'
 import { fail, on, paginate } from './router'
 
 // Mock of the dynweight plugin routes (/p/dynweight/*, CONTRACTS §74.5) and
 // its native UI from plugins/dynweight/ui/native/dist (build it first). The
-// configuration is kept in memory; validation only checks what the console
-// cannot (version conflicts), the plugin itself does the rest.
+// configuration and a few degraded keys are kept in memory; validation only
+// checks what the console cannot (version conflicts), the plugin itself does
+// the rest. The account list, detail tab, editor card and the plugin page
+// can all be tried: accounts 12 and 21 are degraded, 13 has an override.
 
 const DW_DIST = fileURLToPath(new URL('../../plugins/dynweight/ui/native/dist/', import.meta.url))
 
 export const dynweightUIPlugin = {
   key: 'dynweight',
-  version: '0.4.1',
+  version: '0.5.0',
   name: { en: 'Dynamic Weight', zh: '动态权重' },
-  asset_base: '/plugin-ui/dynweight/0.4.1-dev',
+  asset_base: '/plugin-ui/dynweight/0.5.0-dev',
   menus: [{ id: 'dynweight', section: 'gateway', label: { en: 'Dynamic Weight', zh: '动态权重' }, page: 'dashboard', icon: 'chart' }],
   pages: { dashboard: { type: 'native', title: { en: 'Dynamic Weight', zh: '动态权重' }, component: 'DynweightDashboard' } },
-  slots: [{ slot: 'account.list.weight', component: 'DynweightAccountWeight', permission: 'dynweight:read' }],
+  slots: [
+    { slot: 'account.list.weight', component: 'DynweightAccountWeight', permission: 'dynweight:read' },
+    { slot: 'account.list.toolbar', component: 'DynweightDegradedBadge', permission: 'dynweight:read' },
+    { slot: 'account.detail.tabs', component: 'DynweightAccountTab', permission: 'dynweight:read' },
+    { slot: 'account.form.widgets', component: 'DynweightOverrideCard', permission: 'dynweight:read' }
+  ],
+  // manifest ui.accountActions as /ui/plugins hands it down (CONTRACTS §23.3 "UI 3.6").
+  account_actions: [
+    {
+      id: 'reset',
+      label: { en: 'Reset dynamic weight', zh: '重置动态权重' },
+      icon: 'refresh',
+      permission: 'dynweight:manage',
+      route: 'POST /reset',
+      bulk: true,
+      confirm: { en: 'Reset the dynamic weight of {n} account(s)?', zh: '重置 {n} 个账号的动态权重？' }
+    }
+  ],
   native_entry: 'ui/native/entry.js',
   trust: 'official',
-  host_ui_compat: '^3.4'
+  host_ui_compat: '^3.6'
 }
 
 export function dynweightAsset(path: string): { type: string; body: Buffer } | null {
@@ -81,10 +101,141 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 let version = 1
 let config: any = {
   ...clone(DEFAULT_LAYER),
-  groups: { '1': { ...clone(DEFAULT_LAYER), window_seconds: 120 } },
-  accounts: { '1': { enabled: false } },
+  // Group 2 (vip) degrades without a climb strategy: the no-climb warning shows for its accounts.
+  groups: {
+    '1': { ...clone(DEFAULT_LAYER), window_seconds: 120 },
+    '2': { ...clone(DEFAULT_LAYER), strategies: DEFAULT_LAYER.strategies.filter((s) => s.actions.every((a) => a.type !== 'weight_climb')) }
+  },
+  accounts: { '13': { enabled: false } },
   notify: { enabled: false, channel: '', recipients: [], language: 'zh' },
   log_events: true
+}
+
+// ---- effective weights of a few keys (GET /status, /weights, /degraded, POST /reset)
+
+const unix = (offsetSec = 0) => Math.floor(Date.now() / 1000) + offsetSec
+
+interface MockKey {
+  account_id: number
+  group_id: number
+  model: string
+  base: number
+  effective: number
+  state: 'normal' | 'degrading' | 'climbing'
+  hits?: string[]
+  fired?: string
+}
+
+const keys: MockKey[] = [
+  { account_id: 12, group_id: 1, model: 'claude-sonnet-4-5', base: 3, effective: 1.47, state: 'degrading', hits: ['错误率过高'], fired: '错误率过高' },
+  { account_id: 12, group_id: 2, model: 'claude-opus-4-1', base: 3, effective: 0, state: 'degrading', hits: ['首字挂死'] },
+  { account_id: 12, group_id: 1, model: 'claude-haiku-4-5', base: 3, effective: 3, state: 'normal' },
+  { account_id: 21, group_id: 1, model: 'claude-sonnet-4-5', base: 2, effective: 1.2, state: 'climbing' },
+  { account_id: 13, group_id: 1, model: 'claude-sonnet-4-5', base: 1, effective: 1, state: 'normal' }
+]
+
+const degraded = (k: MockKey) => k.effective < k.base
+const accountName = (id: number) => accounts.find((a) => a.id === id)?.name ?? ''
+const layerOf = (groupId: number) => config.groups?.[String(groupId)] ?? config
+
+/** A full GET /status item of a mock key, with the window and rule detail the console shows. */
+function statusOf(k: MockKey) {
+  const layer = layerOf(k.group_id)
+  const total = 40
+  const fail = k.state === 'degrading' ? 14 : 1
+  const rules = (layer.rules as any[]).map((r) => {
+    const hit = k.hits?.includes(r.name) ?? false
+    return {
+      name: r.name,
+      scope: r.scope || 'all',
+      periods: r.periods,
+      hit_periods: r.hit_periods,
+      hit,
+      fired: k.fired === r.name,
+      bitmap: hit ? '1'.repeat(Math.min(r.hit_periods, r.periods)) : '0'.repeat(r.periods),
+      samples: total,
+      lookback: 1,
+      no_samples: r.conditions.some((c: any) => c.metric === 'weight'),
+      unjudged: false
+    }
+  })
+  return {
+    account_id: k.account_id,
+    account_name: accountName(k.account_id),
+    group_id: k.group_id,
+    model: k.model,
+    base: k.base,
+    effective: k.effective,
+    weight_min: 0,
+    state: k.state,
+    adjusting: config.accounts?.[String(k.account_id)]?.enabled !== false && layer.enabled !== false,
+    group_configured: String(k.group_id) in (config.groups ?? {}),
+    no_climb_strategy: !(layer.strategies as any[]).some((s) => s.enabled !== false && s.actions.some((a: any) => a.type === 'weight_climb')),
+    reset: false,
+    verdict: k.state === 'degrading' ? 'bad' : k.state === 'climbing' ? 'good' : 'neutral',
+    last_change: k.state === 'degrading' ? 'weight_down' : k.state === 'climbing' ? 'weight_up_start' : '',
+    changed_at: k.state === 'normal' ? 0 : unix(-420),
+    next_eval_at: unix(50),
+    eval_window: unix(-180),
+    total,
+    fail,
+    lookback: 1,
+    error_evaluable: true,
+    ttfb_samples: 30,
+    latency_samples: 10,
+    thresholds: [{ ms: 10000, count: k.state === 'degrading' ? 4 : 0 }, { ms: 60000, count: 0 }],
+    latency_thresholds: [{ ms: 120000, count: 0 }],
+    recent: { windows: 3, total: total * 3, fail: fail * 3 },
+    rules,
+    current: { window_start: unix(-45), elapsed_seconds: 45, total: 7, fail: 1, stream_total: 5, stream_fail: 1, ttfb_samples: 5, latency_samples: 2, thresholds: [{ ms: 10000, count: 0 }, { ms: 60000, count: 0 }], latency_thresholds: [{ ms: 120000, count: 0 }] }
+  }
+}
+
+const events: any[] = keys
+  .filter(degraded)
+  .map((k, i) => ({
+    id: 100 + i,
+    created_at: new Date(Date.now() - 420_000 - i * 60_000).toISOString(),
+    account_id: k.account_id,
+    account_name: accountName(k.account_id),
+    group_id: k.group_id,
+    model: k.model,
+    kind: k.state === 'climbing' ? 'weight_up_start' : 'weight_down',
+    reason: '',
+    from: k.base,
+    to: k.effective,
+    rules: k.hits ?? null,
+    detail: { window: { total: 40, fail: 14 } }
+  }))
+
+/** Puts the keys of an account (or of the given accounts), narrowed to a group / model, back to their base. */
+function resetKeys(body: any): number {
+  const ids = new Set<number>([...(body?.account_ids ?? []), ...(body?.account_id ? [body.account_id] : [])].map(Number))
+  const group = Number(body?.group_id) || 0
+  const model = String(body?.model ?? '')
+  let n = 0
+  for (const k of keys) {
+    if (!degraded(k) || (ids.size && !ids.has(k.account_id)) || (group && k.group_id !== group) || (model && k.model !== model)) continue
+    events.unshift({ id: 200 + n, created_at: new Date().toISOString(), account_id: k.account_id, account_name: accountName(k.account_id), group_id: k.group_id, model: k.model, kind: 'reset', reason: 'manual', from: k.effective, to: k.base, rules: null, detail: null })
+    k.effective = k.base
+    k.state = 'normal'
+    k.hits = undefined
+    k.fired = undefined
+    n++
+  }
+  return n
+}
+
+/** The layers in force for an account's groups (GET /accounts/:id/override). */
+function layersOf(account: any) {
+  return (account.group_ids as number[]).map((gid) => {
+    const layer = layerOf(gid)
+    return {
+      group_id: gid,
+      source: String(gid) in (config.groups ?? {}) ? 'group' : 'global',
+      no_climb: !(layer.strategies as any[]).some((s: any) => s.enabled !== false && s.actions.some((a: any) => a.type === 'weight_climb'))
+    }
+  })
 }
 
 on('GET', '/p/dynweight/config', () => ({ config, version }))
@@ -97,8 +248,54 @@ on('PUT', '/p/dynweight/config', (req) => {
   version++
   return { config, version, warnings: [] }
 })
-on('GET', '/p/dynweight/status', (req) => paginate([], req.query))
-on('GET', '/p/dynweight/events', (req) => paginate([], req.query))
-on('GET', '/p/dynweight/stats', () => ({ enabled: true, config_version: version, node_id: 'mock-1', started_at: Math.floor(Date.now() / 1000) }))
-on('GET', '/p/dynweight/weights', () => ({}))
-on('POST', '/p/dynweight/reset', () => ({ reset: 0 }))
+on('GET', '/p/dynweight/status', (req) => {
+  const q = req.query
+  const list = keys
+    .filter((k) => (!q.account_id || k.account_id === Number(q.account_id)) && (!q.group_id || k.group_id === Number(q.group_id)) && (!q.model || k.model === q.model) && (!q.degraded || degraded(k)))
+    .sort((a, b) => a.effective / a.base - b.effective / b.base)
+  return paginate(list.map(statusOf), q)
+})
+on('GET', '/p/dynweight/events', (req) => {
+  const q = req.query
+  const list = events.filter((e) => (!q.account_id || e.account_id === Number(q.account_id)) && (!q.group_id || e.group_id === Number(q.group_id)) && (!q.model || e.model === q.model) && (!q.kind || e.kind === q.kind))
+  return paginate(list, q)
+})
+on('GET', '/p/dynweight/stats', () => ({ enabled: true, config_version: version, node_id: 'mock-1', started_at: Math.floor(Date.now() / 1000), degraded_keys: keys.filter(degraded).length }))
+// Per account: the degraded keys' count, the lowest effective weight and its base, and the lowest keys (0.5.0).
+on('GET', '/p/dynweight/weights', (req) => {
+  const ids = String(req.query.account_ids ?? '').split(',').map(Number)
+  const out: Record<string, unknown> = {}
+  for (const id of ids) {
+    const mine = keys.filter((k) => k.account_id === id && degraded(k)).sort((a, b) => a.effective - b.effective)
+    if (!mine.length) continue
+    out[id] = { degraded: mine.length, lowest: Math.round(mine[0].effective), base: mine[0].base, keys: mine.slice(0, 10).map((k) => ({ group_id: k.group_id, model: k.model, eff: k.effective, base: k.base })) }
+  }
+  return out
+})
+on('GET', '/p/dynweight/degraded', () => {
+  const ids = [...new Set(keys.filter(degraded).map((k) => k.account_id))].sort((a, b) => a - b)
+  return { count: ids.length, account_ids: ids.slice(0, 500) }
+})
+on('POST', '/p/dynweight/reset', (req) => {
+  const b = req.body ?? {}
+  if (!b.account_id && !b.account_ids?.length && !b.group_id) return fail(400, 'invalid_argument', 'an account or a group is required')
+  return { reset: resetKeys(b) }
+})
+// The plugin answers 404 for an account it has no record of (never scheduled, no
+// override); every mock account counts as scheduled, so only an unknown id is 404.
+on('GET', '/p/dynweight/accounts/:id/override', (req) => {
+  const a = accounts.find((x) => x.id === Number(req.params.id))
+  if (!a) return fail(404, 'not_found', 'no dynamic weight record of this account')
+  return { override: config.accounts?.[String(a.id)] ?? null, layers: layersOf(a) }
+})
+// PUT does not check that the account exists: a new account's override is written right after it is created.
+on('PUT', '/p/dynweight/accounts/:id/override', (req) => {
+  const a = accounts.find((x) => x.id === Number(req.params.id)) ?? { id: Number(req.params.id), group_ids: [] }
+  const o = req.body?.override ?? null
+  if (o && o.min_weight_mode && (o.min_weight === undefined || o.min_weight === null)) return fail(400, 'invalid_argument', 'min_weight is required with min_weight_mode')
+  config.accounts ??= {}
+  if (o) config.accounts[String(a.id)] = o
+  else delete config.accounts[String(a.id)]
+  version++
+  return { override: o, layers: layersOf(a) }
+})

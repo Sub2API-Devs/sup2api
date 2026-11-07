@@ -6,13 +6,13 @@
     "en": "Lowers the scheduling weight of an account in a group and model while it fails or slows down, and brings it back once healthy. Each (account, group, client model) is counted per window and judged by configurable rules (error rate, first token and whole attempt percentiles, the weight itself) and strategies (degrade, climb, clear sticky sessions). Turning points can be notified through a core notification channel.",
     "zh": "账号在某个分组和模型下出错或变慢时降低其调度权重，恢复健康后再逐步抬回。每个（账号、分组、客户端模型）按窗口计数，由可配置的规则（错误率、首字与整次耗时分位、权重本身）和策略（降权、回升、清理粘性会话）判定。权重拐点可经核心通知渠道发送通知。"
   },
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "sub2api",
   "icon": "text:W",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
-  "hostCompat": ">=0.1.229 <0.2.0",
-  "hostUICompat": "^3.4",
+  "hostCompat": ">=0.1.255 <0.2.0",
+  "hostUICompat": "^3.6",
 
   "capabilities": [
     { "id": "gateway.observe.v1" },
@@ -59,6 +59,9 @@
     { "method": "GET", "path": "/events", "scope": "admin", "permission": "dynweight:read" },
     { "method": "POST", "path": "/reset", "scope": "admin", "permission": "dynweight:manage" },
     { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "GET", "path": "/degraded", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "GET", "path": "/accounts/:id/override", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "PUT", "path": "/accounts/:id/override", "scope": "admin", "permission": "dynweight:manage" },
     { "method": "GET", "path": "/stats", "scope": "admin", "permission": "dynweight:read" }
   ],
 
@@ -77,8 +80,22 @@
     "pages": {
       "dashboard": { "type": "native", "title": { "en": "Dynamic Weight", "zh": "动态权重" }, "component": "DynweightDashboard" }
     },
+    "accountActions": [
+      {
+        "id": "reset",
+        "label": { "en": "Reset dynamic weight", "zh": "重置动态权重" },
+        "icon": "refresh",
+        "permission": "dynweight:manage",
+        "route": "POST /reset",
+        "bulk": true,
+        "confirm": { "en": "Reset the dynamic weight of {n} account(s)?", "zh": "重置 {n} 个账号的动态权重？" }
+      }
+    ],
     "slots": [
-      { "slot": "account.list.weight", "component": "DynweightAccountWeight", "permission": "dynweight:read" }
+      { "slot": "account.list.weight", "component": "DynweightAccountWeight", "permission": "dynweight:read" },
+      { "slot": "account.list.toolbar", "component": "DynweightDegradedBadge", "permission": "dynweight:read" },
+      { "slot": "account.detail.tabs", "component": "DynweightAccountTab", "permission": "dynweight:read" },
+      { "slot": "account.form.widgets", "component": "DynweightOverrideCard", "permission": "dynweight:read" }
     ],
     "native": { "entry": "ui/native/entry.js" }
   },
@@ -156,8 +173,8 @@
     {
       "id": "ui.native",
       "reason": {
-        "en": "Provide the dynamic weight page and the effective weight in the account list",
-        "zh": "提供动态权重页面，并在账号列表中显示有效权重"
+        "en": "Provide the dynamic weight page, the effective weight and the degraded badge in the account list, and the dynamic weight tab and override card of an account",
+        "zh": "提供动态权重页面，在账号列表中显示有效权重和降权徽标，在账号详情和编辑页中显示动态权重标签页和覆盖卡片"
       }
     }
   ]

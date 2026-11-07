@@ -1009,6 +1009,18 @@ func TestAccountLifecycle(t *testing.T) {
 	if code, out = e.do("GET", "/accounts?type=apikey", nil); code != 400 {
 		t.Fatalf("type without plugin_key: %d %v", code, out)
 	}
+	// ids= narrows to the given accounts, ANDed with the other filters.
+	if code, out = e.do("GET", fmt.Sprintf("/accounts?ids=%d,%d", id, id+1000), nil); code != 200 || out["page"].(map[string]any)["total"].(float64) != 1 {
+		t.Fatalf("ids filter: %d %v", code, out)
+	}
+	if _, out = e.do("GET", fmt.Sprintf("/accounts?ids=%d&group_id=%d", id, g1), nil); out["page"].(map[string]any)["total"].(float64) != 0 {
+		t.Fatalf("ids AND group filter: %v", out)
+	}
+	for _, q := range []string{"ids=1,x", "ids=" + strings.Repeat("1,", 500) + "1"} {
+		if code, out = e.do("GET", "/accounts?"+q, nil); code != 400 {
+			t.Fatalf("%.30s: %d %v", q, code, out)
+		}
+	}
 
 	// Orphaned when the plugin leaves the generation; credentials fully masked
 	// and cannot be changed.

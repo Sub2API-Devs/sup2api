@@ -391,19 +391,121 @@ func TestHostUICompatNeedsMatchingHostCompat(t *testing.T) {
 		{"~3.4.2", ">=0.1.222 <0.2.0", true},
 		{"^3.0", ">=0.1.0 <0.2.0", false},
 		{">=0.1.0 <0.2.0", ">=0.1.0 <0.2.0", false},
+		// UI 3.6 starts at core 0.1.255; 0.1.254 is the last core with 3.5.
+		{"^3.6", ">=0.1.229 <0.2.0", true},
+		{"^3.6", ">=0.1.254 <0.2.0", true},
+		{"^3.6", ">=0.1.255 <0.2.0", false},
+		{"~3.6.1", ">=0.1.240 <0.2.0", true},
+		{"^3.5", ">=0.1.229 <0.2.0", false},
 	}
 	for _, tc := range cases {
-		m := uiManifest()
-		m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "ui.native"})
-		m.UI.Native = &manifest.NativeUI{Entry: "ui/native/entry.js"}
-		m.HostUICompat, m.HostCompat = tc.ui, tc.host
-		c := uiCodes(m)
+		c := uiCodes(uiNativeManifest(tc.ui, tc.host))
 		if got := c["hostCompat"] == "below_ui_core"; got != tc.bad {
 			t.Errorf("hostUICompat %s, hostCompat %s: below_ui_core = %v, want %v (%v)", tc.ui, tc.host, got, tc.bad, c)
 		}
 		if !tc.bad && len(c) > 0 {
 			t.Errorf("hostUICompat %s, hostCompat %s must be valid: %v", tc.ui, tc.host, c)
 		}
+	}
+}
+
+// uiNativeManifest is uiManifest with a native UI on the given hostUICompat
+// and hostCompat, the shape slot declarations need.
+func uiNativeManifest(uiCompat, hostCompat string) *manifest.Manifest {
+	m := uiManifest()
+	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "ui.native"})
+	m.UI.Native = &manifest.NativeUI{Entry: "ui/native/entry.js"}
+	m.HostUICompat, m.HostCompat = uiCompat, hostCompat
+	return m
+}
+
+// account.list.toolbar is a UI 3.6 slot: a core before 0.1.255 would ignore
+// it, so declaring it holds hostCompat to the 3.6 floor whatever hostUICompat
+// says. Unknown slot names stay rejected.
+func TestSlotNames(t *testing.T) {
+	for _, slot := range []string{"dashboard.widgets", "account.detail.tabs", "account.form.widgets", "account.list.weight", "account.list.toolbar"} {
+		m := uiNativeManifest("^3.3", ">=0.1.255 <0.2.0")
+		m.UI.Slots = []manifest.Slot{{Slot: slot, Component: "X", Permission: "assets:read"}}
+		if c := uiCodes(m); len(c) > 0 {
+			t.Errorf("slot %q must be accepted: %v", slot, c)
+		}
+	}
+	m := uiNativeManifest("^3.3", ">=0.1.255 <0.2.0")
+	m.UI.Slots = []manifest.Slot{{Slot: "account.list.footer", Component: "X"}}
+	if c := uiCodes(m); c["ui.slots[0].slot"] != "invalid" {
+		t.Fatalf("an unknown slot must be rejected: %v", c)
+	}
+	m = uiNativeManifest("^3.3", ">=0.1.229 <0.2.0")
+	m.UI.Slots = []manifest.Slot{{Slot: "account.list.toolbar", Component: "X"}}
+	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
+		t.Fatalf("account.list.toolbar needs core 0.1.255: %v", c)
+	}
+	m.UI.Slots[0].Slot = "account.list.weight"
+	if c := uiCodes(m); len(c) > 0 {
+		t.Fatalf("a UI 3.4 slot is fine on core 0.1.229: %v", c)
+	}
+}
+
+// withAccountAction adds a POST /assets/reset admin route and one account
+// action over it to the ui fixture (no ui.native: actions need none).
+func withAccountAction(hostCompat string, act manifest.AccountAction) *manifest.Manifest {
+	m := uiManifest()
+	m.HostCompat = hostCompat
+	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "routes.public"})
+	m.UserPermissions = append(m.UserPermissions, manifest.UserPermission{Key: "assets:manage", Label: manifest.LocalizedText{"en": "Manage assets"}})
+	m.Routes = append(m.Routes,
+		manifest.Route{Method: "POST", Path: "/assets/reset", Scope: "admin", Permission: "assets:manage"},
+		manifest.Route{Method: "POST", Path: "/assets/ping", Scope: "public"})
+	m.UI.AccountActions = []manifest.AccountAction{act}
+	return m
+}
+
+// ui.accountActions: each entry names a declared POST admin route carrying
+// the same permission, so the menu shows exactly what the route allows.
+func TestAccountActions(t *testing.T) {
+	good := manifest.AccountAction{ID: "reset", Label: manifest.LocalizedText{"en": "Reset"}, Icon: "refresh",
+		Permission: "assets:manage", Route: "POST /assets/reset", Bulk: true, Confirm: manifest.LocalizedText{"en": "Reset {n}?"}}
+	if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", good)); len(c) > 0 {
+		t.Fatalf("a valid action was rejected: %v", c)
+	}
+	// Declaring one needs the UI 3.6 core even without ui.native.
+	if c := uiCodes(withAccountAction(">=0.1.229 <0.2.0", good)); c["hostCompat"] != "below_ui_core" {
+		t.Fatalf("an action needs core 0.1.255: %v", c)
+	}
+	m := withAccountAction(">=0.1.255 <0.2.0", good)
+	m.UI.AccountActions = append(m.UI.AccountActions, good)
+	if c := uiCodes(m); c["ui.accountActions[1].id"] != "duplicate" {
+		t.Fatalf("a repeated id must be rejected: %v", c)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*manifest.AccountAction)
+		field  string
+		code   string
+	}{
+		{"bad id", func(a *manifest.AccountAction) { a.ID = "Reset!" }, "id", "invalid_format"},
+		{"no label", func(a *manifest.AccountAction) { a.Label = nil }, "label", "required"},
+		{"unknown icon", func(a *manifest.AccountAction) { a.Icon = "refrsh" }, "icon", "unknown_icon"},
+		{"no permission", func(a *manifest.AccountAction) { a.Permission = "" }, "permission", "required"},
+		{"unknown permission", func(a *manifest.AccountAction) { a.Permission = "assets:write" }, "permission", "unknown"},
+		{"not a route ref", func(a *manifest.AccountAction) { a.Route = "POST assets/reset" }, "route", "invalid_route_ref"},
+		{"undeclared route", func(a *manifest.AccountAction) { a.Route = "POST /assets/nope" }, "route", "unknown_route"},
+		{"GET route", func(a *manifest.AccountAction) { a.Route = "GET /assets" }, "route", "invalid"},
+		{"public route", func(a *manifest.AccountAction) { a.Route = "POST /assets/ping" }, "route", "invalid"},
+		{"route permission differs", func(a *manifest.AccountAction) { a.Permission = "assets:read" }, "route", "permission_mismatch"},
+	}
+	for _, tc := range cases {
+		act := good
+		tc.mutate(&act)
+		if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", act)); c["ui.accountActions[0]."+tc.field] != tc.code {
+			t.Errorf("%s: want %s = %s, got %v", tc.name, tc.field, tc.code, c)
+		}
+	}
+	// Like a form submit, the method may be left out and means POST.
+	act := good
+	act.Route = "/assets/reset"
+	if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", act)); len(c) > 0 {
+		t.Fatalf("a bare path means POST: %v", c)
 	}
 }
 

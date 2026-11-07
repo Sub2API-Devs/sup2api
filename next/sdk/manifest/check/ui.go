@@ -3,6 +3,7 @@ package check
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -34,8 +35,9 @@ func ParseRouteRef(ref, defaultMethod string) (method, path string, ok bool) {
 	return method, m[2], true
 }
 
-// pageRouteRef checks one route reference of a page (source or submit) and
-// reports whether it names a route this manifest declares.
+// routeRef checks one route reference (a page's source or submit, an account
+// action's route) and returns the declared route it names, or nil after
+// recording the error.
 //
 // Until now nothing checked this. A table page whose source did not parse, or
 // named a route that does not exist, rendered an empty table with no error:
@@ -48,20 +50,21 @@ func ParseRouteRef(ref, defaultMethod string) (method, path string, ok bool) {
 // routes() uses to find duplicates, so "/assets/:id" in routes and
 // "/assets/:asset" in a page reference are the same route (gin binds by
 // position, not by name).
-func (v *validator) pageRouteRef(field, ref, defaultMethod string) {
+func (v *validator) routeRef(field, ref, defaultMethod string) *manifest.Route {
 	method, path, ok := ParseRouteRef(ref, defaultMethod)
 	if !ok {
 		v.add(field, "invalid_route_ref", "%q is not a route reference; expected %q or %q",
 			ref, defaultMethod+" /path", "/path")
-		return
+		return nil
 	}
 	want := method + " " + NormalizeRoutePath(path)
-	for _, r := range v.m.Routes {
-		if strings.ToUpper(r.Method)+" "+NormalizeRoutePath(r.Path) == want {
-			return
+	for i := range v.m.Routes {
+		if r := &v.m.Routes[i]; strings.ToUpper(r.Method)+" "+NormalizeRoutePath(r.Path) == want {
+			return r
 		}
 	}
 	v.add(field, "unknown_route", "route %s %s is not declared in routes", method, path)
+	return nil
 }
 
 // searchParamRe is what a declared search parameter name may look like: the
@@ -166,7 +169,9 @@ func (v *validator) ui() {
 	v.uiMenus(u, sectionIDs)
 	v.uiPages(u)
 	v.uiSlots(u)
+	v.uiAccountActions(u)
 	v.uiNative(u)
+	v.uiCoreFloor(u)
 	if u.Settings != nil {
 		v.form("ui.settings", *u.Settings, true)
 	}
@@ -237,13 +242,13 @@ func (v *validator) uiPages(u *manifest.UI) {
 			if pg.Source == "" {
 				v.add(f+".source", "required", "table pages require source")
 			} else {
-				v.pageRouteRef(f+".source", pg.Source, "GET")
+				v.routeRef(f+".source", pg.Source, "GET")
 			}
 		case "form":
 			v.needFile(f+".schema", pg.Schema)
 			if pg.Source != "" {
 				// Optional on a form: it pre-fills the fields.
-				v.pageRouteRef(f+".source", pg.Source, "GET")
+				v.routeRef(f+".source", pg.Source, "GET")
 			}
 			// Without submit the console's Save button does nothing and says
 			// nothing (DeclarativeForm returns early when the reference does
@@ -252,7 +257,7 @@ func (v *validator) uiPages(u *manifest.UI) {
 			if pg.Submit == "" {
 				v.add(f+".submit", "required", "form pages require submit (the route the form posts to)")
 			} else {
-				v.pageRouteRef(f+".submit", pg.Submit, "POST")
+				v.routeRef(f+".submit", pg.Submit, "POST")
 			}
 		case "iframe":
 			v.needPerm(f, "ui.iframe", "iframe pages")
@@ -298,7 +303,7 @@ func (v *validator) uiSlots(u *manifest.UI) {
 	for i, s := range u.Slots {
 		f := fmt.Sprintf("ui.slots[%d]", i)
 		switch s.Slot {
-		case "dashboard.widgets", "account.detail.tabs", "account.form.widgets", "account.list.weight":
+		case "dashboard.widgets", "account.detail.tabs", "account.form.widgets", "account.list.weight", "account.list.toolbar":
 		default:
 			v.add(f+".slot", "invalid", "unknown slot %q", s.Slot)
 		}
@@ -311,6 +316,46 @@ func (v *validator) uiSlots(u *manifest.UI) {
 		}
 		if s.Permission != "" && !v.userPerm(s.Permission) {
 			v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", s.Permission)
+		}
+	}
+}
+
+// uiAccountActions validates ui.accountActions (UI 3.6). An action needs no
+// hostPermission of its own and no ui.native: the console renders it from
+// the declaration and the route it posts to is an admin route, which
+// routes.admin already covers. The route's permission must be the action's,
+// so what the console shows is exactly what the plugin lets through.
+func (v *validator) uiAccountActions(u *manifest.UI) {
+	ids := map[string]bool{}
+	for i, act := range u.AccountActions {
+		f := fmt.Sprintf("ui.accountActions[%d]", i)
+		if !idRe.MatchString(act.ID) {
+			v.add(f+".id", "invalid_format", "action id %q is invalid", act.ID)
+		} else if ids[act.ID] {
+			v.add(f+".id", "duplicate", "action %q declared twice", act.ID)
+		}
+		ids[act.ID] = true
+		if firstText(act.Label) == "" {
+			v.add(f+".label", "required", "label is required")
+		}
+		v.menuIcon(f+".icon", act.Icon)
+		if act.Permission == "" {
+			v.add(f+".permission", "required", "permission is required")
+		} else if !v.userPerm(act.Permission) {
+			v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", act.Permission)
+		}
+		r := v.routeRef(f+".route", act.Route, "POST")
+		if r == nil {
+			continue
+		}
+		switch {
+		case strings.ToUpper(r.Method) != "POST":
+			v.add(f+".route", "invalid", "route must be a POST route")
+		case r.Scope != "admin":
+			v.add(f+".route", "invalid", "route %s %s must have scope admin (has %q)", r.Method, r.Path, r.Scope)
+		case r.Permission != act.Permission:
+			v.add(f+".route", "permission_mismatch", "route %s %s requires permission %q, the action %q",
+				r.Method, r.Path, r.Permission, act.Permission)
 		}
 	}
 }
@@ -333,35 +378,59 @@ func (v *validator) uiNative(u *manifest.UI) {
 	}
 	if v.m.HostUICompat == "" {
 		v.add("hostUICompat", "required", "hostUICompat is required when ui.native is used")
-	} else if c, err := semver.NewConstraint(v.m.HostUICompat); err != nil {
+	} else if _, err := semver.NewConstraint(v.m.HostUICompat); err != nil {
 		v.add("hostUICompat", "invalid_constraint", "hostUICompat: %v", err)
-	} else if needsUI34(c) {
-		// The core installs a plugin on hostCompat alone and the console then
-		// refuses a native UI whose hostUICompat its UI does not satisfy, so
-		// a plugin that needs UI 3.4 or later must also keep out the cores
-		// that ship 3.3.
-		if ok, err := HostCompatible(v.m.HostCompat, lastUI33Core); err == nil && ok {
-			v.add("hostCompat", "below_ui_core", "hostCompat %q admits core %s, whose UI %s does not satisfy hostUICompat %q (UI 3.4 starts at core %s)",
-				v.m.HostCompat, lastUI33Core, lastUI33, v.m.HostUICompat, firstUI34Core)
-		}
 	}
 }
 
-// Core 0.1.228 is the last core that ships UI SDK 3.3; UI 3.4 starts at 0.1.229.
-const (
-	lastUI33      = "3.3.0"
-	lastUI33Core  = "0.1.228"
-	firstUI34Core = "0.1.229"
-)
+// uiFloor is one UI SDK minor that raised the core a plugin must
+// require: the first core shipping it, the last core before it and that
+// core's UI. uses says which declarations of a manifest need this UI even
+// without ui.native (the console of an older core ignores them silently).
+type uiFloor struct {
+	minor                       uint64
+	lastUI, lastCore, firstCore string
+	uses                        func(*manifest.UI) bool
+}
 
-// needsUI34 reports whether c rejects UI 3.3.0 but accepts a 3.x release from
-// 3.4 on (^3.4, ~3.4.2, >=3.5 ...); a range that never matches a 3.x UI is
-// wrong in other ways and left alone.
-func needsUI34(c *semver.Constraints) bool {
-	if c.Check(semver.MustParse(lastUI33)) {
+// uiFloors, newest first. Core 0.1.228 is the last that ships UI 3.3
+// (3.4 starts at 0.1.229); 0.1.254 is the last with UI 3.5 (3.6 starts at
+// 0.1.255).
+var uiFloors = []uiFloor{
+	{minor: 6, lastUI: "3.5.0", lastCore: "0.1.254", firstCore: "0.1.255", uses: func(u *manifest.UI) bool {
+		return len(u.AccountActions) > 0 ||
+			slices.ContainsFunc(u.Slots, func(s manifest.Slot) bool { return s.Slot == "account.list.toolbar" })
+	}},
+	{minor: 4, lastUI: "3.3.0", lastCore: "0.1.228", firstCore: "0.1.229"},
+}
+
+// uiCoreFloor checks hostCompat against the newest UI floor the manifest
+// needs. The core installs a plugin on hostCompat alone and the console then
+// refuses a native UI whose hostUICompat its UI does not satisfy, so a plugin
+// that needs UI 3.4 or later must also keep out the cores that ship 3.3, and
+// one using a UI 3.6 declaration the cores that ship 3.5.
+func (v *validator) uiCoreFloor(u *manifest.UI) {
+	c, _ := semver.NewConstraint(v.m.HostUICompat) // invalid or empty: nil, reported by uiNative
+	for _, fl := range uiFloors {
+		if (fl.uses == nil || !fl.uses(u)) && !fl.needs(c) {
+			continue
+		}
+		if ok, err := HostCompatible(v.m.HostCompat, fl.lastCore); err == nil && ok {
+			v.add("hostCompat", "below_ui_core", "hostCompat %q admits core %s, whose UI %s is below the UI 3.%d this manifest needs (UI 3.%d starts at core %s)",
+				v.m.HostCompat, fl.lastCore, fl.lastUI, fl.minor, fl.minor, fl.firstCore)
+		}
+		return
+	}
+}
+
+// needs reports whether c rejects the UI of fl.lastCore but accepts a 3.x
+// release from fl.minor on (^3.4, ~3.4.2, >=3.5 ...); a nil c or a range
+// that never matches a 3.x UI is wrong in other ways and left alone.
+func (fl uiFloor) needs(c *semver.Constraints) bool {
+	if c == nil || c.Check(semver.MustParse(fl.lastUI)) {
 		return false
 	}
-	for minor := uint64(4); minor <= 30; minor++ {
+	for minor := fl.minor; minor <= 30; minor++ {
 		if c.Check(semver.New(3, minor, 0, "", "")) || c.Check(semver.New(3, minor, 99, "", "")) {
 			return true
 		}

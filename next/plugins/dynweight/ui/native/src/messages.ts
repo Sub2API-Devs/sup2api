@@ -9,7 +9,8 @@ const zh = {
   remove: '移除',
   actionFailed: '操作失败',
   cancel: '取消',
-  tabs: { status: '有效权重', events: '权重事件', config: '配置' },
+  // DynweightAccountTab: the core reads the detail tab label at plugin.dynweight.tabs.<component>.
+  tabs: { status: '有效权重', events: '权重事件', config: '配置', DynweightAccountTab: '动态权重' },
   filter: { account: '账号', group: '分组', model: '模型', all: '全部', search: '查询', clear: '清空' },
   status: {
     hint: '每个（账号、分组、客户端模型）独立计数和调整；调度时用有效权重替换账号在该分组的权重。',
@@ -235,7 +236,26 @@ const zh = {
     recipientsHint: '接收人类型：{kind}，最多 20 个',
     noChannels: '没有已启用的插件提供通知渠道，可启用邮件插件。'
   },
-  slot: { label: '动态 {w}', title: '{n} 个分组/模型已降权，显示最低有效权重' }
+  slot: { label: '动态 {w}', title: '{n} 个分组/模型已降权，显示最低有效权重；点击查看该账号的全部键', more: '还有 {n} 个键已降权' },
+  degraded: { label: '动态权重降权 {n}', short: '降权 {n}', title: '本节点上有分组/模型被降权的账号；点击只看这些账号，再点取消' },
+  accountTab: {
+    hint: '本账号在各分组、各客户端模型下的有效权重；调度时用它替换账号在该分组的权重。',
+    events: '查看事件',
+    resetAll: '重置本账号全部',
+    resetAllConfirm: '把账号 {account} 在全部分组、全部模型下的有效权重重置为基准？历史窗口会被清空。'
+  },
+  override: {
+    title: '动态权重',
+    hint: '账号所在各分组生效的配置层，以及只对本账号生效的覆盖（随账号一起保存）。',
+    source: { global: '全局配置', group: '分组配置' },
+    noLayers: '没有生效的配置层：账号不在任何分组，或插件还没有见过它的调度。',
+    label: '本账号',
+    add: '添加账号覆盖',
+    none: '没有账号覆盖，沿用所在层。',
+    readOnly: '需要“管理动态权重”权限才能修改。',
+    incomplete: '动态权重覆盖选了下限方式却没有填下限',
+    loadFailed: '加载动态权重覆盖失败'
+  }
 }
 
 const en: typeof zh = {
@@ -247,7 +267,7 @@ const en: typeof zh = {
   remove: 'Remove',
   actionFailed: 'Action failed',
   cancel: 'Cancel',
-  tabs: { status: 'Effective weights', events: 'Weight events', config: 'Configuration' },
+  tabs: { status: 'Effective weights', events: 'Weight events', config: 'Configuration', DynweightAccountTab: 'Dynamic weight' },
   filter: { account: 'Account', group: 'Group', model: 'Model', all: 'All', search: 'Search', clear: 'Clear' },
   status: {
     hint: 'Each (account, group, client model) is counted and adjusted on its own; scheduling replaces the account weight in the group with the effective weight.',
@@ -473,7 +493,26 @@ const en: typeof zh = {
     recipientsHint: 'recipient kind: {kind}, at most 20',
     noChannels: 'No enabled plugin delivers notifications; enable the mail plugin for email.'
   },
-  slot: { label: 'dynamic {w}', title: '{n} group/model keys degraded; the lowest effective weight is shown' }
+  slot: { label: 'dynamic {w}', title: '{n} group/model keys degraded; the lowest effective weight is shown. Click for every key of the account', more: '{n} more keys degraded' },
+  degraded: { label: 'Dynamic weight: {n} degraded', short: '{n} degraded', title: 'Accounts with a degraded group/model key on this node; click to list only them, again to clear' },
+  accountTab: {
+    hint: 'The effective weight of this account in each group and client model; scheduling uses it in place of the account weight in the group.',
+    events: 'Events',
+    resetAll: 'Reset all of this account',
+    resetAllConfirm: 'Reset the effective weights of account {account} in every group and model to their base? Their window history is dropped.'
+  },
+  override: {
+    title: 'Dynamic weight',
+    hint: 'The configuration layer in force for each group of the account, and the override of this account alone (saved with the account).',
+    source: { global: 'global configuration', group: 'group configuration' },
+    noLayers: 'No layer in force: the account is in no group, or the plugin has not seen it scheduled yet.',
+    label: 'This account',
+    add: 'Add account override',
+    none: 'No override; the account follows its layer.',
+    readOnly: 'Changing it takes the "Manage dynamic weight" permission.',
+    incomplete: 'The dynamic weight override picks a floor mode but leaves the floor empty',
+    loadFailed: 'Failed to load the dynamic weight override'
+  }
 }
 
 export default { zh, en }

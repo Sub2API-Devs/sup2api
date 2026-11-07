@@ -207,7 +207,7 @@
 | GET `/plugins/:key/egress`（`?from=&to=`） | `plugin:egress:read` | 按域名汇总 + 明细 |
 | GET `/plugins/:key/jobs`，POST `/plugins/:key/jobs/:job_id/run` | `plugin:read` / `plugin:manage` | |
 | GET `/plugins/:key/events` | `plugin:read` | 游标、积压、死信 |
-| GET `/ui/plugins` | auth | 前端扩展：`[{key, version, asset_base, menus, pages, slots, native_entry, trust}]`（按权限过滤） |
+| GET `/ui/plugins` | auth | 前端扩展：`[{key, version, asset_base, menus, pages, slots, account_actions, native_entry, trust}]`（按权限过滤） |
 | GET `/nodes` | `node:read` | |
 | GET `/market/sources`、GET `/market/plugins?source_id=` | `plugin:market:read` | |
 | GET/POST `/publishers`，POST `/publishers/:id/keys`，POST `/publishers/:id/revoke`，POST `/publisher-keys/:key_id/revoke` | `publisher:read` / `publisher:manage` | |
@@ -701,11 +701,12 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `menus` | `[{id, section, label, icon?, page, permission?, order?}]`；按调用者权限过滤（`permission` 为插件内 key，检查 `plugin.<key>:<permission>`）；`section` 为 manifest 原值（§22） |
 | `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?, search?, create?}}`；只被无权限菜单引用的页面被去掉；`create` 的权限调用者没有时，去掉该链接以及只靠它到达的表单页（§22.1） |
 | `slots` | `[{slot, component, permission?}]`，按权限过滤 |
+| `account_actions` | manifest `ui.accountActions` 原值 `[{id, label, icon?, permission, route, bulk?, confirm?, danger?}]`，按 `permission` 过滤（UI 3.6，§23.3） |
 | `native_entry` | 仅 `trust` 为 `official`/`verified` 时返回 manifest `ui.native.entry`，否则空串；加载方式与插件可用的共享库见 §23 |
 | `trust` | |
 | `host_ui_compat` | manifest `hostUICompat`；前端用它和 `HOST_UI_VERSION` 比较，不匹配则不加载原生 UI（§23.1） |
 
-过滤后 `menus`、`slots`、`pages` 全空的插件不返回。
+过滤后 `menus`、`slots`、`pages`、`account_actions` 全空的插件不返回。
 
 ### 15.9 账号（`account/handlers.go`、`account/creds.go`、`account/testreq.go`）
 
@@ -1347,7 +1348,9 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 
 **UI 3.4 通用页面组件（2026-10-31）。** 新导出：`SStatusBadge`（props `status`、`label`、`labels`（状态 → 文案）、`tone`、`tones`（状态 → 色调）、`dot`、`size`；文案取 SDK 的 `ui.status.<status>`，未知状态显示原值）与 `statusTone(status, extra?)`（控制台直接从 `@sub2api/ui` 引入）；`SFormModal`（SModal + `<form>`，默认“取消／保存”页脚；props `open`、`title`、`width`、`loading`（期间不可关闭、提交按钮转圈）、`submitText`、`cancelText`、`submitVariant`（`primary`/`danger`）、`submitDisabled`、`enterSubmit`（默认 true；false 时字段内回车不提交，只能点按钮，调余额、删除确认等弹窗使用）、`submitAttrs`、`cancelAttrs`、`persistent`、`describedby`；事件 `submit`（字段内回车与提交按钮）、`update:open`；插槽 `#footer`、`#footer-start`、`#header`；其余属性落到 `<form>`）；`SFilterBar`（筛选条，`#end` 插槽靠右，绑定 `@reset` 时显示“重置”，`dirty` 控制可用，`card` 默认 true）；`useAutoRefresh(load, intervalMs, { enabled? })`（返回 `running`、`refresh()`；上一次加载结束后才排下一次、页面隐藏时不跑并在可见时补一次、间隔 ≤ 0 或 `enabled` 为 false 时暂停、组件内挂载后才开始）与 `SAutoRefresh`（v-model 为秒，0 = 关闭，`choices` 默认 `[0, 10, 30, 60]`）。`STable` 新增 `error`（真值表示上次加载失败：空表显示加载失败而不是“暂无数据”，`#error` 插槽可替换；有旧数据时在表头下方提示）、`errorText`、`@retry`（绑定时显示“重试”）。`SDateTime` 新增 `mode="time"`（今天只显示时刻，其他日期显示 `MM-DD HH:mm:ss`）、`live`（相对时间每秒刷新）、`muted`；`absolute` 固定为 `YYYY-MM-DD HH:mm:ss`（不加悬停标题），相对时间改用窄格式（`3m ago`／`3分钟前`）。新增 `useNow(intervalMs)`（当前时间的 ref；同一间隔的订阅者共用一个定时器，最后一个退订时清理；间隔可为 getter，变化时重新订阅，≤ 0 停表），`SDateTime` 用它计时，只有显示相对时间时才订阅。控制台自己的 `TimeText`、`StatusBadge` 与插件页的 `parts/StatusBadge` 已删除，统一用 SDK 组件（插件状态与通用状态不同的色调见 `pluginUtil.ts` 的 `PLUGIN_TONES`，作为 `tones` 传入）。SDK 文案新增 `ui.status.*`、`ui.loadFailed`、`ui.autoRefresh`、`ui.autoRefreshOff`、`ui.autoRefreshEvery`、`ui.resetFilters`、`ui.save`。原生插件使用这些新增导出应声明 `hostUICompat: "^3.4"`；`^3.0`–`^3.3` 的插件不受影响。
 
-**UI 3.5 手机形态（2026-11-07）。** 窄于 768px 时组件换成手机形态，宽屏渲染不变（`web/packages/ui/README.md`“手机形态”）。新增：`useViewport()` / `provideViewport()` 与类型 `Viewport`（`compact`、`touch`）；`TableColumn` 的 `mobile`（`title`/`subtitle`/`status`/`meta`/`detail`/`hidden`）、`mobileSpan`，`STable` 的 `mobile`（`card` 默认 / `scroll`）、`#card` 插槽与单元格插槽的 `layout`；`SFilterBar` 的 `#primary`、`activeCount`、`@done`，`SPageHeader` 的 `#filters-primary`、`filtersActiveCount`；`SButton` 的 `fab`；`SDrawer` 的 `side="bottom"`（底部抽屉）；`SSteps` 的 `direction` 默认 `auto`（手机竖排、宽屏横排）；`SModal` / `SFormModal` 的 `mobile`（类型 `ModalMobile`：`auto`/`sheet`/`fullscreen`/`center`），`SDropdown` 的 `mobile`（`sheet`/`popover`）；`SAutoRefresh` 的 `@refresh`；`SGrid` 的 `variant="stats"`；`dismissTopLayer()`（控制台路由在浏览器“返回”时关闭手机或触屏上打开的非持久最上层弹层，其余情况照常导航）。原生插件使用这些新增属性应声明 `hostUICompat: "^3.5"`；`sdk/manifest` 的核心下限检查仍按 UI 3.4 判断。
+**UI 3.5 手机形态（2026-11-07）。** 窄于 768px 时组件换成手机形态，宽屏渲染不变（`web/packages/ui/README.md`“手机形态”）。新增：`useViewport()` / `provideViewport()` 与类型 `Viewport`（`compact`、`touch`）；`TableColumn` 的 `mobile`（`title`/`subtitle`/`status`/`meta`/`detail`/`hidden`）、`mobileSpan`，`STable` 的 `mobile`（`card` 默认 / `scroll`）、`#card` 插槽与单元格插槽的 `layout`；`SFilterBar` 的 `#primary`、`activeCount`、`@done`，`SPageHeader` 的 `#filters-primary`、`filtersActiveCount`；`SButton` 的 `fab`；`SDrawer` 的 `side="bottom"`（底部抽屉）；`SSteps` 的 `direction` 默认 `auto`（手机竖排、宽屏横排）；`SModal` / `SFormModal` 的 `mobile`（类型 `ModalMobile`：`auto`/`sheet`/`fullscreen`/`center`），`SDropdown` 的 `mobile`（`sheet`/`popover`）；`SAutoRefresh` 的 `@refresh`；`SGrid` 的 `variant="stats"`；`dismissTopLayer()`（控制台路由在浏览器“返回”时关闭手机或触屏上打开的非持久最上层弹层，其余情况照常导航）。原生插件使用这些新增属性应声明 `hostUICompat: "^3.5"`；`sdk/manifest` 的核心下限检查仍按 UI 3.4 判断（3.6 起见下段）。
+
+**UI 3.6 账号界面扩展点（2026-11-07）。** 核心账号页开出三个通用扩展点（核心不认识任何具体插件；老插件一字不改照常运行），`HOST_UI_VERSION` 升到 `3.6.0`，`@sub2api/ui` / `@sub2api/host` 版本 3.6.0；用到其中任一项的插件声明 `hostUICompat: "^3.6"`，`sdk/manifest` 对 `ui.accountActions` 或 `account.list.toolbar` 的核心下限按 3.6 要求 `>=0.1.255`（0.1.254 是最后一个带 UI 3.5 的核心）。（1）**声明式账号操作 `ui.accountActions`**：manifest 条目 `{id, label, icon?, permission, route: "POST <path>", bulk?, confirm?, danger?}`（`route` 必须是已声明的 admin 作用域 POST 路由且 permission 一致，见 `sdk/manifest/check/ui.go`）；`GET /ui/plugins` 以 `account_actions` 按权限过滤下发；控制台把每条渲染进每行操作菜单（key `pa:<plugin>:<id>`，对无 `account:update` 权限的行和孤儿账号隐藏，`danger` 透传红色），`bulk: true` 的还追加进批量栏「更多」菜单（计数为所选可编辑账号数）。点击时有 `confirm` 先确认（`{n}` 替换为账号数），然后 `POST /api/v1/p/<key><path>`：单行 body `{"account_id": 7}`，批量 `{"account_ids": [...]}` 每次最多 500 个、超过分批顺序发送；响应任意 JSON，核心只看状态码，成功后 `list.reload()`，失败按批量操作口径提示。行与批量共用 `web/src/views/accounts/usePluginAccountActions.ts`。（2）**工具栏插槽 `account.list.toolbar`**：挂在账号列表 `SPageHeader #filters-primary`（搜索框之后，手机上也始终可见；`#title-extra` 会让页面说明留在页内，不用）；props `{ ids: number[] | null, setIds(ids: number[] | null, label: string) }`；`setIds` 设置或清除列表的 `ids` 筛选（`GET /accounts?ids=1,2`，与其他筛选 AND，最多 500 个），`label` 显示在同一行的可关闭芯片上，关闭芯片或「清除筛选」即清除；筛选变化照常清空勾选，跨页全选也带 `ids`。（3）**`account.form.widgets` 的校验／保存生命周期**：组件 props 在 `account`、`accountType`、`credentials` 上加 `editing: boolean`；可选 `defineExpose({ validate(): Promise<string | null>, save(account: Account): Promise<void> })`——`validate` 返回错误文案（null 通过），在账号请求发出前调用，第一个非空错误显示在插槽下方并阻断保存；`save` 在账号（及用量限制）保存之后调用，新建账号在这里第一次拿到 id，抛错 = 该插件保存失败：核心逐个 toast `accounts.pluginWidgetSaveFailed`（插件 key 与错误），账号本身不回滚。`PluginSlot` 聚合多个组件：`validate` 依次调用取第一个错误，`save` 依次调用收集失败。
 
 控制台账号列表用它做批量操作：勾选在翻页后保留，改筛选条件清空；「选择全部 N 项」按当前筛选以每页 200 条拉取全部账号。批量编辑（优先级、权重、并发、TPM、RPM、分组〔替换／追加／移除〕、代理、允许自动禁用，只改勾选的字段）、启用／停用、重置状态、删除、测试都对每个账号调用现有单条接口（`PATCH /accounts/:id`、`POST /accounts/:id/reset-status`、`DELETE /accounts/:id`、`POST /accounts/:id/test`），最多 4 个（测试 3 个）同时进行，可中途停止；权限、插件生命周期钩子、审计与单条操作完全相同，没有新增服务端接口。每项操作只作用于所选账号中适用的那部分（按钮显示数量）；与账号现值相同的字段不发送，没有变化的账号不发请求；类型固定了「自动禁用」的账号跳过该项；删除时「保留资源」只对声明了保留天数的类型生效。
 
@@ -1426,7 +1429,7 @@ message RankedAccount {
 - 响应里 `priority` 和 `weight` 都是**最终值而不是增量**：proto3 没有 presence，`0` 不是"未设置"，所以列出来的账号必须两个都带；只想改其中一个就把另一个按收到的值原样带回。
 - **只需列出要改写的账号**；没列出的保持账号自身的值。`accounts` 为**空数组**是合法应答，含义是"本次什么都不改"（等价于不实现）：不算故障、不记警告、也不打断后面的插件，最终效果与回退一致。与之相对，**整个响应对象为空（nil）**属于应答非法，按 §24.3 第 3 条 fail open 处理。
 - `weight = 0` 表示本次请求不使用该账号（该账号退出本次候选，但不是冷却、不改状态、不发事件）。同一优先级的候选全被置 0 时，流量落到下一级；所有候选都是 0 时按 §24.3 第 3 条回退。插件想要 new-api 那样"同优先级权重全 0 时平均分配"，自己把这些账号的 `weight` 回成 1 即可，核心不替插件改写 0。
-  - **层内后备**（2026-10-31 修订，团队审核 P2）：上面的"全被置 0"按插件给出的整份结果判断。插件在某一层里给了至少一个账号正权重时，这一层里被置 0 的账号是**该层的后备**：本次挑选时，层内有正权重的账号先按权重抽，全部用不上（失败切换后被排除、限流窗口用尽、并发槽位满、类型不能服务本请求）之后，再按均等权重试这些后备账号，然后才轮到下一层。原因：结果每个请求只算一次、供失败切换复用（§24.3 第 2 条），插件是在整层都在的前提下把某个账号降到 0 的（动态权重 §74.5 "一层全为 0 时每个都回 1"），同层正常账号失败或被并发、限流挡住后，不应因此落到更低一层或无账号可用。插件把整层都置 0 时，该层仍整体跳过。实现：`dispatch.go` `pick`。
+  - **权重 0 即彻底不选**（2026-11-07 用户决定，取代 2026-10-31 的"层内后备"）：被置 0 的账号在本次请求里完全不参与挑选，不论它所在层里其他账号有没有正权重。结果每个请求只算一次、供失败切换复用（§24.3 第 2 条），所以同层正权重账号失败被排除、限流窗口用尽或并发槽位满之后，请求直接落到下一层，不会回头试被置 0 的账号。同层全 0 时的均分由插件负责（动态权重 §74.5 "一层全为 0 时每个都回 1"），核心不做层内后备。实现：`dispatch.go` `pick`。
 
 ### 24.3 调用时机与边界
 
@@ -1435,7 +1438,7 @@ message RankedAccount {
 3. **故障一律 fail open**：超时、报错、插件不可用、应答非法（含响应对象为空）、或把所有候选的 `weight` 都置 0 —— 全部回退到账号自身的 `priority` / `weight`，并记一条警告日志。插件不能让网关无账号可用。（`accounts` 为空数组不算故障，见 §24.2。）
 4. **插件只能改写核心已经筛出的候选，不能凭空加账号**：响应里出现不在 `candidates` 中的 `account_id` 一律忽略（记警告）。
 5. **核心的每一道闸门插件都绕不过**：并发槽位、限流窗口（RPM/TPM/TPD/SPM）、冷却、账号是否支持该端点与该模型，全部仍由核心把关，都在拿到改写值之后照常执行。
-6. **取值钳制**：`priority` 限 0–1000000，`weight` 限 0–1000（`0` 是排除，不是"非法"）；超出范围钳到边界并记警告，不整体作废这次结果。
+6. **取值钳制**：`priority` 限 0–1000000，`weight` 限 0–1000（`0` 是排除，不是"非法"；被排除的账号本次请求彻底不选，失败切换时也不作为同层后备，见 §24.2，2026-11-07 用户决定）；超出范围钳到边界并记警告，不整体作废这次结果。
 7. 改写只影响本次请求的排序，**不写库**：账号上的 `priority` / `weight` 不变，控制台、`GET /accounts` 看到的仍是管理员配置的值。
 
 
@@ -5644,6 +5647,10 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 
 - **能力**：`gateway.observe.v1`（`attempt_finished`，`{"types":"all"}`）、`scheduler.rank.v1`（order 100，50 ms）、`app.jobs.v1`、`app.events.v1`（订阅 `account.status_changed`，0.2.0 起）、`app.broadcast.v1`、`http.routes.v1`。
 - **授权**：`sticky.clear`、`notify.send`（可选）、`db.schema`（`plg_dynweight`）、`jobs`、`events`（`account.status_changed`）、`broadcast`、`routes.admin`、`ui.menu`、`ui.native`。
+- **0.5.0（2026-11-07）**：`hostCompat >=0.1.255 <0.2.0`、`hostUICompat ^3.6`（账号界面扩展点，§23.3）。能力和授权不变，没有新迁移。manifest 新增：
+  - `ui.accountActions`：一条 `reset`（`route: "POST /reset"`、`permission: dynweight:manage`、`bulk: true`、带 `{n}` 的确认文案），核心把它渲染进账号行的操作菜单和批量栏，按单行 `{account_id}` / 批量 `{account_ids}` 调现有的 `POST /reset`。
+  - `ui.slots` 加 `account.list.toolbar → DynweightDegradedBadge`、`account.detail.tabs → DynweightAccountTab`、`account.form.widgets → DynweightOverrideCard`（都要 `dynweight:read`）。
+  - 路由加 `GET /degraded`、`GET /accounts/:id/override`（`dynweight:read`）、`PUT /accounts/:id/override`（`dynweight:manage`），`GET /weights` 多回 `keys`，见下文"接口"。
 - **只安装不启用**（`BUILTIN_PLUGINS_INSTALL_ONLY`）：启用后每次调度都会调用它，所以要由管理员有意打开。
 
 #### 计数
@@ -5710,7 +5717,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **基准取自排在前面的排序器之后**：dynweight 记录的是它收到的候选权重。若以后有 order 更小的排序器改权重，dynweight 会把改后的值当基准，键会因 `base_mismatch` 反复重置；这类排序器应排在 dynweight 之后。前面的排序器把候选权重设为 0（排除）时（0.3.0 起）：这个候选不归 dynweight 管，不记为基准（原来的基准保留，免得那个排序器每切换一次键就重置一次），dynweight 不返回它（保持 0），它也不参与下面的"一层全为 0 时均分"。
 - **调度**：`RankAccounts` 只在快照里的基准等于候选的当前权重时，才把权重换成有效权重。有效权重四舍五入后限制在 0..1000，0 表示排除这个账号；优先级原样返回。
   - 一个优先级层里由 dynweight 管的候选全部被有效权重降到 0 时，这些候选都返回 1，层内均分，与 new-api 层内加权随机在权重和为 0 时均分一致：动态权重本身不让调度跳到更低的优先级层。核心的"权重 0 排除、全部为 0 时回退"规则不变；核心传来的候选权重至少为 1 只在 dynweight 是第一个排序器时成立；之前的排序器已设为 0 的候选按上一条处理，不算进这一层，也不被抬回 1。
-    - 核心侧（2026-10-31 修订）：插件的结果按整份候选表算一次、失败切换复用。层里还有正权重账号时插件会把降到 0 的账号返回 0；这些账号是该层的后备（§24.2），同层正权重账号失败被排除、限流用尽或并发满之后由它们接手，不跳到更低一层。此前核心直接跳过它们，与本条"不会跳层"不符。
+    - 核心侧（2026-11-07 用户决定，取代 2026-10-31 的"同层后备"）：插件的结果按整份候选表算一次、失败切换复用。层里还有正权重账号时插件会把降到 0 的账号返回 0，核心对这些账号彻底不选：同层正权重账号失败被排除、限流用尽或并发满之后，请求落到更低一层，不回头用被置 0 的账号。"不会跳层"只针对整层全 0 的情况，由本条的均分（每个回 1）保证，核心不做同层后备。
   - **降到 0 时清理粘性会话**（0.3.0 起，层上的 `clear_sticky_on_zero`，默认开启）：命中粘性绑定的请求不调用 `RankAccounts`，有效权重 0 只拦得住新会话。键的有效权重从大于 0 降到 0 的那个窗口，dynweight 为该（账号、分组、模型）排一次 100% 的粘性清理（走上文的队列，事件 `detail.zero = true`，没有策略名），不需要配置 `affinity_clear` 策略。只在降到 0 的那一次清理；停在 0 期间新建的绑定（例如一层全为 0 时均分到它）不再清理。
   - 插件出错或超时时放行（fail-open），按原权重调度。
 - **清理任务**：`cleanup` 每小时跑一次，删除以下数据：
@@ -5742,7 +5749,10 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 | `GET /events?account_id&group_id&model&kind` | 权重事件，分页。每项带 `account_name`（调度最近一次看到的账号名） |
 | `POST /reset {account_id?, account_ids?, group_id?, model?}` | 至少指定账号或分组，`account_ids` 最多 500 个（0.2.0 起）。见上文"重置"；回答 `{reset}` 为重置的键数 |
 | `GET /stats` | 0.2.0 起。本节点的运行指标，见上文 |
-| `GET /weights?account_ids=1,2` | 账号列表的权重组件用，最多 500 个 id。回答本节点快照中各账号已降权键的数量、最低有效权重和基准 |
+| `GET /weights?account_ids=1,2` | 账号列表的权重组件用，最多 500 个 id。回答本节点快照中各账号已降权键的数量、最低有效权重和基准；0.5.0 起每个账号另有 `keys: [{group_id, model, eff, base}]`，按 `eff` 升序最多 10 条（`eff` 是未取整的有效权重，与 `/status` 的 `effective` 一致） |
+| `GET /degraded` | 0.5.0 起。本节点快照里有键低于基准的账号：`{count, account_ids}`，`count` 为实际数，`account_ids` 按 id 升序最多 500 个（核心账号列表 `ids` 筛选一次最多接受的数量）。账号列表工具栏的降权徽标用 |
+| `GET /accounts/:id/override` | 0.5.0 起。`{override, layers}`：`override` 是配置里该账号的覆盖（没有为 `null`），`layers` 是调度提供过该账号的每个分组（`bases`）的生效层，按分组 id 升序：`{group_id, source: "global" \| "group", no_climb}`（`source` 为该分组有没有自己的层，`no_climb` 为该层有降权策略却没有回升策略）。分组名由控制台自己解析（见下文"界面"），插件看不到核心的分组和账号。插件对该账号一无所知（调度没提供过、也没有覆盖）时 404；`id` 不是正整数时 400 |
+| `PUT /accounts/:id/override {override: AccountOverride \| null}` | 0.5.0 起。改配置里的 `accounts[id]`（`null` 删除），其余不动：读取当前配置和版本，走 `PUT /config` 同一套整体校验（校验失败 400；因此通知渠道不可用——例如 `notify.send` 授权被撤销而配置里通知仍开启——时同样被 400 拒绝，错误字段是 `config` / `notify.*`，与 `PUT /config` 一致），按版本 CAS 保存，被别的保存抢先时重读重做，首次之外最多再试 3 次，仍冲突则 409。保存后各节点重新加载，回答新的 `{override, layers}`。不检查核心有没有这个账号：新建账号的编辑页在账号创建后立刻保存覆盖 |
 
 #### 界面（`ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 
@@ -5751,7 +5761,13 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 权重事件：账号和分组显示名称。
   - 配置：全局层、分组层、账号覆盖、事件日志开关、通知。层上有"样本不足不判定"（`min_samples_strict`）和"降到 0 时清理粘性会话"（`clear_sticky_on_zero`）两个开关；样本条件的行内可选条件自己的统计范围（"同规则"即不写）和"无样本时成立 / 不成立"（0.3.0 起）。分组和账号按名称选择。规则和策略可以可视化编辑（上移、下移、复制、删除；顺序有意义），也可以切到 JSON 直接编辑两个数组（解析失败，或条目缺少可视化编辑要用的结构——`conditions`、`actions` 不是对象数组，第二条起的条件 `join` 不是 and / or（0.4.0 起），`when` 不是规则名或 all / any 数组——时提示，不写回，"校验"和"保存"不可用，"放弃修改"可用；缺少的 `conditions`、`actions` 按空数组补上，缺少的 `when` 按未设置；恢复默认、放弃修改和保存后文本跟着配置刷新，输入中的文本不会被重排）。新建分组层复制全局层，但不复制只在全局的 `log_events`。数值框清空（层上的、规则里的、策略动作的幅度和清理比例、账号覆盖选了下限方式后的下限）时标红；是否可以校验和保存按整份草稿判断，折叠起来的分组层同样算，提示里列出是全局、哪个分组还是哪个账号（0.4.0 起；之前只看展开的编辑器，折叠后标记残留，放弃修改也清不掉）。规则重名时规则名标红；改名时只有旧名不再被别的规则使用、新名也没被别的规则占用，策略里的引用才跟着改（0.4.0 起；之前复制规则后把副本改成原名再改走，会把原规则的策略一起带走）。停用的策略引用已删除的规则时同样提示（插件对它也拒绝）。"校验"调 `/config/validate` 只显示错误或警告，"保存"先校验，有警告时确认后再保存。
   - 分组和账号的名称经核心接口取得，用的是查看者自己的 `group:read` / `account:read`：分组一次读入（`@sub2api/host` 的 `listAll`，最多 1000 个，失败后下次再读）；账号不整表读入，选择框按输入的名称搜索 `GET /accounts?q=`（前 20 个），其他地方要显示的账号名按 id 读 `GET /accounts/:id`。选择框总能直接输入数字 id；选中的 id 不在列表里时显示为名称或 `#id`。没有这些权限时名称显示为 `#id`（状态和事件里的账号名仍来自插件自己记下的名称）。
-- **账号列表**：`account.list.weight` 插槽在权重下方显示"动态 N"。同一帧内所有行的请求合并成一次 `/weights`。
+- **账号列表**（0.5.0 起接上 UI 3.6 的账号界面扩展点，见 §23.3；核心不认识 dynweight，都是通用插槽和声明）：
+  - 权重徽标：`account.list.weight` 插槽在权重下方显示"动态 N"（N 为最低有效权重，色调按它对基准的比例）。同一帧内所有行的请求合并成一次 `/weights`。徽标是 `SLink`，指向插件页 `/p/dynweight/dashboard?tab=status&account=<id>`；悬停（键盘聚焦、触屏点按）弹出卡片列出 `keys` 里的每个键：分组名（经核心 catalog）、模型、取整后的有效权重 · 基准，`degraded` 多于列出的键时注明"还有 N 个"；插件后端没有 `keys`（0.5.0 之前）时不弹卡。
+  - 工具栏降权徽标：`account.list.toolbar` 插槽（`DynweightDegradedBadge`）读 `GET /degraded`，`count > 0` 时显示芯片"动态权重降权 N"（手机形态为"降权 N"；`useAutoRefresh` 每 30 秒刷新，页面隐藏时不跑）；点击 `setIds(account_ids, label)` 把账号列表筛到这些账号，芯片按下态表示当前的 `ids` 筛选就是它设的（核心的筛选芯片被关闭或"清除筛选"后自然松开），再点 `setIds(null, '')` 清除。
+  - 行与批量重置：manifest `ui.accountActions` 的 `reset`（权限 `dynweight:manage`，`route: "POST /reset"`，`bulk: true`，带 `{n}` 确认文案），由核心渲染进每行操作菜单和批量栏，调用约定（`{account_id}` / `{account_ids}` 分批 500）、提示和刷新都在核心（§23.3 UI 3.6）；插件只有现成的 `POST /reset`，不写任何前端代码。
+  - 详情标签页：`account.detail.tabs` 插槽（`DynweightAccountTab`，标签文案取 `plugin.dynweight.tabs.DynweightAccountTab`）列出该账号的全部键（`GET /status?account_id=`，不限已降权），表格与"有效权重"标签页共用 `KeyStatusTable`（列、展开 `KeyDetail`、单键重置、"事件"），没有账号列；顶部有"查看事件"（跳插件页 `?tab=events&account=<id>`）和"重置本账号全部"（`POST /reset {account_id}`，确认后执行；只对 `dynweight:manage`）。行上的"事件"跳到 `?tab=events&account=&group=&model=`。
+  - 编辑页覆盖区块：`account.form.widgets` 插槽（`DynweightOverrideCard`，权限 `dynweight:read`）。上半（仅编辑已有账号）：`GET /accounts/:id/override` 的 `layers`，每个分组一枚徽标"分组名 · 全局配置/分组配置"，`no_climb` 的标红并在上方显示"没有回升策略"告警；404（插件还没有该账号的任何记录）当作没有覆盖、没有分层正常显示，其他错误只显示一行提示、不提供表单。下半：复用配置页的 `AccountOverrideRow`（启用三态、豁免状态码、下限方式与下限）编辑 `override`，可以添加或移除整条覆盖；`defineExpose({validate, save})`：`validate` 在选了下限方式却没填下限时返回错误文案（核心阻断保存），`save(account)` 仅在覆盖有改动时 `PUT /accounts/:id/override {override}`（新建账号用这里传入的 id），失败由核心按插件 key 提示、账号本身不回滚。没有 `dynweight:manage` 时表单只读（新建账号且无此权限时整个区块不渲染）。配置页的账号覆盖表保留，与它改同一份 `config.accounts`。
+  - 插件页读 `?account=`（及 `group=`、`model=`）预填"有效权重"和"权重事件"标签页的键筛选；带预填进入"有效权重"时"只看已降权"默认关闭，以便看到该账号的全部键。
 
 ### 74.6 发布
 

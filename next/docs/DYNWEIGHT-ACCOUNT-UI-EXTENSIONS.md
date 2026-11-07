@@ -1,0 +1,166 @@
+# 动态权重账号界面扩展点：设计与实施规格（2026-11-07）
+
+本文是核心 0.1.255（UI SDK 3.6）与 dynweight 0.5.0 的实施规格。目标：把 new-api 渠道页上的动态权重操作搬到 sup2api 账号页，方式是核心加三个通用扩展点、dynweight 接上；同时把权重 0 的调度语义改成"彻底不选"（用户 2026-11-07 决定）。
+
+所有新开的口子都是通用的：核心代码不认识 dynweight。
+
+## 1. 核心改动 A：调度中权重 0 改为跳过
+
+文件：`server/internal/gateway/dispatch.go` `pick()`、`queueTarget`；`rank_tier_test.go`；`docs/CONTRACTS.md` §24.3 第 6 条、§74.5。
+
+- 排序器（scheduler.rank 插件）给出 `weight == 0` 的候选一律跳过，不进 `pool`；删掉 `served` / `reserve` 两张表和分段排序，层内只剩 `weightedOrder`。
+- `queueTarget` 的 `reserve` 参数去掉。
+- 整层全 0 的均分由插件负责：dynweight `rank.go` 已对整层为 0 的层每个返回 1，不改。核心 fail-open 规则（所有候选都为 0 则整个结果作废）保留。
+- 故障切换、忙、限流复用同一次排序结果，所以被拿掉的账号在重试时也不会被用到。
+- `rank_tier_test.go` 重写为反向断言：加权账号失败后跳到下一层（acc-1 → acc-3，不碰 acc-2）；忙/限流时同样；整层全 0 且插件均分时正常服务。
+- CONTRACTS §24.3 第 6 条与 §74.5 对应段落改写，注明 2026-11-07 用户决定（原"同层后备"语义作废）。
+
+## 2. 核心改动 B：声明式账号操作 `ui.accountActions`
+
+插件在 manifest 声明一条账号操作，核心渲染进每行操作菜单和批量栏，点击时按约定调插件自己的路由。
+
+### manifest
+
+```json
+"ui": {
+  "accountActions": [
+    { "id": "reset", "label": {"en": "Reset dynamic weight", "zh": "重置动态权重"},
+      "icon": "refresh", "permission": "dynweight:manage",
+      "route": "POST /reset", "bulk": true,
+      "confirm": {"en": "Reset the dynamic weight of {n} account(s)?", "zh": "重置 {n} 个账号的动态权重？"} }
+  ]
+}
+```
+
+| 字段 | 含义 | 校验（`sdk/manifest/check/ui.go` 新增 `uiAccountActions`） |
+| --- | --- | --- |
+| `id` | 插件内唯一 | slug，必填，不重复 |
+| `label` | 菜单文案 | 必填 |
+| `icon` | SIcon 名 | 可选 |
+| `permission` | 插件本地权限 | 必须在 `userPermissions` 里 |
+| `route` | `POST <path>` | 必须是 `routes` 里已声明的 `admin` 作用域 POST 路由，且该路由的 permission 与本条一致 |
+| `bulk` | 是否进批量栏 | 可选，默认 false |
+| `confirm` | 二次确认文案，`{n}` 为账号数 | 可选，缺省不确认 |
+| `danger` | 红色菜单项 | 可选 |
+
+Go 类型：`manifest.UI.AccountActions []AccountAction`（结构体名 `AccountAction`，json `accountActions`）。不需要新的 hostPermission（`routes.admin` 已覆盖），没有 `ui.native` 也能用。
+
+### 调用约定
+
+- 单行：`POST /api/v1/p/<key><path>`，body `{"account_id": 7}`。
+- 批量：body `{"account_ids": [7, 8]}`，核心一次最多送 500 个，超过分批。
+- 响应任意 JSON，核心只看状态码。成功后核心 `list.reload()`；失败按现有 `bulkToast` 口径提示。
+
+### 后端
+
+`server/internal/plugin/api/ui.go`：`UIPlugin` 加 `AccountActions []manifest.AccountAction \`json:"account_actions"\``，按 permission 过滤（与 slots 同一处理）；"菜单、插槽、页面全空则不返回"的判断加上它。`api_test.go` 加用例。
+
+### 前端（低侵入）
+
+- `web/src/api/types.ts`：`UIPlugin.account_actions?: PluginAccountAction[]`，`PluginAccountAction { id, label: LText, icon?, permission?, route, bulk?, confirm?: LText, danger? }`。
+- `web/src/stores/plugins.ts`：`accountActions` computed，把各插件条目扁平成 `{ pluginKey, ...decl }`。
+- `web/src/views/accounts/accountRowActions.ts`：deps 加 `pluginActions: PluginAccountActionEntry[]` 和 `runPluginAccountAction(a, entry)`；在 `delete` 之前插入 key `pa:<plugin>:<id>` 的条目，`hidden: !canUpdate(a) || a.orphaned`，`danger` 透传；`runRowAction` 识别该前缀。
+- 新建 `web/src/views/accounts/usePluginAccountActions.ts`：`run(entry, accounts: Account[])`：confirm（有 `confirm` 时，`{n}` 替换）→ 按 500 分批 POST → toast（成功 `accounts.bulk.done` 风格，失败 `bulkToast` 风格）→ `reload()`。行和批量共用。
+- `AccountsView.vue`：`moreBulkActions` 追加 `bulk: true` 的条目，计数用 `picked.edit`；`onBulkMore` 分发。
+- 权限：服务端 `/ui/plugins` 按插件权限过滤，插件路由自己再校验；前端另要求对该行有 `canUpdate`。
+
+## 3. 核心改动 C：工具栏插槽 `account.list.toolbar` 与按 id 筛选
+
+### 插槽
+
+`account.list.toolbar`，挂在 `AccountsView.vue` 的 `SPageHeader #filters-primary`（搜索框之后；`#title-extra` 会让页面说明留在页内，不用）。props：
+
+```ts
+{ ids: number[] | null,                        // 当前的 id 筛选，null = 没有
+  setIds(ids: number[] | null, label: string) } // 设置或清除；label 显示在筛选芯片上
+```
+
+### 核心前端
+
+- `list.filters.ids`（逗号分隔字符串，与其他筛选同一张表）和 `idsLabel` ref。
+- 筛选行多一个 `SChip closable`（显示 `idsLabel`），关闭即清除；`resetFilters()`、`activeFilterCount` 自然覆盖；筛选变化已会清空勾选。不存 localStorage。
+- `loadAllAccounts()`（跨页全选）本来就带 `list.filters`，自然包含 `ids`。
+
+### 核心后端
+
+`GET /accounts` 新增 `ids=1,2,3`（`server/internal/account/handlers.go` `list`）：`a.id = ANY(?)`，最多 500 个，非整数或超量返回 400（`core.ErrInvalidArgument`）。与其它筛选 AND。加测试。
+
+### mock
+
+`web/mock/accounts.ts` 的列表支持 `ids`。
+
+## 4. 核心改动 D：`account.form.widgets` 的校验/保存生命周期
+
+插件组件契约（都可选，老插件不受影响）：
+
+```ts
+defineExpose({
+  validate(): Promise<string | null>,   // 返回错误文案；null = 通过
+  save(account: Account): Promise<void> // 账号已保存；新建时这里才第一次拿到 id；抛错 = 保存失败
+})
+```
+
+props 在现有 `account`、`accountType`、`credentials` 上加 `editing: boolean`。
+
+核心：
+
+- `web/src/components/plugin/PluginSlot.vue` 收集子组件实例（`ref` 数组），`defineExpose({ validate, save })`：`validate` 依次调有该方法的子组件，返回第一个非空错误；`save` 依次调，收集失败 `{ pluginKey, error }[]` 返回（不抛）。
+- `AccountEditor.vue`：给 PluginSlot 加 ref，传给 `useAccountSave` deps 新字段 `widgets?: { validate(): Promise<string | null>; save(a: Account): Promise<Array<{ pluginKey: string; error: unknown }>> }`。
+- `useAccountSave.ts`：`invalidSection()` 末尾（`models.commitPending()` 之后）调 `widgets.validate()`，有错则 `errors.value = { plugin_widgets: msg }` 并返回 `'connection'`；`save()` 在 `usageLimit.save` 之后调 `widgets.save(result)`，每个失败 toast `accounts.pluginWidgetSaveFailed`（带插件 key 和错误），账号本身不回滚。
+- 插槽下方 `SHint tone="danger"` 显示 `errors.plugin_widgets`。
+- i18n：`web/src/i18n` zh/en 加 `accounts.pluginWidgetSaveFailed`。
+
+## 5. 核心改动 E：校验、下发、mock、文档、版本
+
+| 位置 | 改动 |
+| --- | --- |
+| `sdk/manifest/manifest.go` | `UI.AccountActions`；`Slot` 注释加 `account.list.toolbar` |
+| `sdk/manifest/check/ui.go` | `uiSlots` 白名单加 `account.list.toolbar`；新增 `uiAccountActions`；核心下限表：UI 3.4 → 0.1.229，UI 3.6 → 0.1.255（0.1.254 是最后一个带 UI 3.5 的核心）；用 `ui.accountActions` 或 `account.list.toolbar` 的插件也按 3.6 要求下限；check 测试 |
+| `server/internal/plugin/api/ui.go` | `account_actions` |
+| `server/internal/account/handlers.go` | `ids` |
+| `web/src/api/types.ts`、`stores/plugins.ts`、`components/plugin/PluginSlot.vue`、`views/accounts/*` | §2–§4 |
+| `web/packages/host/src/index.ts` | `HOST_UI_VERSION = '3.6.0'`；`PluginHost` 不加方法 |
+| `web/packages/ui/package.json`、`web/packages/host/package.json` | 3.6.0 |
+| `web/mock/pluginui.ts` | dynweight 条目加 `account_actions` 与新插槽（由插件 UI 任务改 `web/mock/dynweight.ts` 中的 `dynweightUIPlugin`） |
+| `docs/CONTRACTS.md` | §23.3 末尾加"UI 3.6 账号界面扩展点（2026-11-07）"段（accountActions、toolbar 插槽、form.widgets 生命周期、`HOST_UI_VERSION` 3.6.0、核心下限 0.1.255）；`/ui/plugins` 两处表格（约第 210 行、第 703 行）加 `account_actions`；§24.3 第 6 条；§74.5 界面段 |
+
+## 6. dynweight 0.5.0
+
+路径 `plugins/dynweight/`。
+
+### manifest
+
+`version 0.5.0`，`hostUICompat ^3.6`，`hostCompat >=0.1.255 <0.2.0`；`ui.accountActions` 加 `reset`（§2 的例子）；`ui.slots` 加 `account.list.toolbar → DynweightDegradedBadge`、`account.detail.tabs → DynweightAccountTab`、`account.form.widgets → DynweightOverrideCard`（权限 `dynweight:read`，OverrideCard 内部按 `dynweight:manage` 决定只读）；`routes` 加下表三条。
+
+### 路由（`internal/dynweight/routes.go`）
+
+| 路由 | 权限 | 内容 |
+| --- | --- | --- |
+| `GET /degraded` | dynweight:read | `{count, account_ids}`：本节点快照里有键低于基准的账号，`account_ids` 最多 500 个，`count` 为实际数 |
+| `GET /accounts/:id/override` | dynweight:read | `{override, layers: [{group_id, source: "global"|"group", no_climb: bool}]}`；`layers` 按账号所在分组解析（复用 `rules.Config` 的分层解析），分组名由控制台按 catalog 解析；插件没有该账号任何记录（调度没提供过、也没有覆盖）时 404 |
+| `PUT /accounts/:id/override` | dynweight:manage | body `{override: AccountOverride | null}`；在配置版本 CAS 下改 `config.accounts[id]`，冲突重试 3 次；复用 `putConfig` 的校验；返回新的 `{override, layers}` |
+| `GET /weights`（扩） | 不变 | 每个账号加 `keys: [{group_id, model, eff, base}]`，按 eff 升序最多 10 条 |
+
+`POST /reset` 已支持 `account_id` / `account_ids`，不改。测试加进现有 `plugin_test.go` 的真实 PostgreSQL 夹具。
+
+### 原生 UI（`ui/native/src/`）
+
+| 组件 | 插槽 | 内容 |
+| --- | --- | --- |
+| `DegradedBadge.vue` | account.list.toolbar | `GET /degraded`，`count > 0` 时显示 `SChip pressed` "动态权重降权 N"；点击 `setIds(ids, label)`，再点清除；`useAutoRefresh` 30 秒 |
+| `AccountWeight.vue`（改） | account.list.weight | 徽标包在 `STooltip #content` 里，列出 `keys` 的分组/模型/有效·基准；徽标本身是 `SLink to` 插件页 `/p/dynweight/dashboard?tab=status&account=<id>` |
+| `AccountTab.vue` | account.detail.tabs | 本账号各键：复用从 `StatusTab.vue` 抽出的 `KeyStatusTable.vue`（列、展开 `KeyDetail`、单键重置），加"重置本账号全部"和"查看事件"跳转 |
+| `OverrideCard.vue` | account.form.widgets | 上半：各分组生效层 + "无回升策略"告警；下半：复用 `AccountOverrideRow.vue` 的表单（启用三态、豁免码、下限）；`defineExpose({validate, save})`；无 `dynweight:manage` 时只读；插件未启用或新建账号且无权限时不渲染 |
+| `DynweightDashboard.vue`（改） | 菜单页 | 读 `?account=` 预填状态/事件标签的账号筛选 |
+
+`ConfigTab.vue` 的账号覆盖表保留，与编辑页共用同一行组件和同一条后端路径。`messages.ts` 加 zh/en 文案；`web/mock/dynweight.ts` 加新路由与 manifest 条目；CONTRACTS §74.5 "界面"段改写。
+
+## 7. 代码规范
+
+- 抽象：扩展点不认识 dynweight；复用：行和批量共用 `usePluginAccountActions`，`KeyStatusTable`、`AccountOverrideRow` 两处复用；解耦：核心按 id 筛选不调插件过滤，插件保存失败不影响账号保存；简洁：不加 hostPermission、不加 refresh 字段；低嵌套：`pick()` 删两层分支；低侵入：老插件一字不改也能跑。
+- 不新增只有一个调用者的模块级小函数；前端文案全部走 i18n；Go 测试按仓库现有风格。
+- 每个任务完成后自查：`go build ./... && go vet ./...`（所涉模块）、`npm run typecheck && npm run lint && npm test`（web）、插件 UI `npm run build`。
+
+## 8. 版本与发布
+
+核心 0.1.255 带 UI 3.6；dynweight 0.5.0 的 `hostCompat` 下限指向它。先核心后插件。没有核心迁移，插件没有新表。

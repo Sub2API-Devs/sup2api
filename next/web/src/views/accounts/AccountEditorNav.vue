@@ -19,7 +19,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <aside class="space-y-3 self-start md:sticky md:top-0">
+  <aside class="min-w-0 space-y-3 self-start md:sticky md:top-0">
     <div v-if="accountType" class="hidden rounded-2xl border border-line bg-surface-2 p-3 md:block" data-testid="editor-type-card">
       <div class="flex items-center gap-2.5">
         <PluginAvatar :name="lt(accountType.plugin_name) || accountType.plugin_key" :plugin-key="accountType.plugin_key" :icon="accountType.icon" :asset-base="accountType.asset_base" size="md" />

@@ -12,6 +12,7 @@ import ModelLimitsEditor from './ModelLimitsEditor.vue'
 import { SSwitch, STagInput } from '@sub2api/ui'
 import AccountEditorNav from './AccountEditorNav.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
+import PluginSlot from '@/components/plugin/PluginSlot.vue'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }), toast: vi.fn() }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<object>(), api: mocks }))
@@ -25,7 +26,7 @@ enableAutoUnmount(afterEach)
 const accountType = { plugin_key: 'ccgateway', type: 'apikey', creation_group: 'ccgateway', form: { mode: 'schema' }, platforms: [], default_models: [], default_model_mapping: {} } as unknown as AccountType
 const location = { ip: '8.8.8.8', country_code: 'US', timezone: 'America/Los_Angeles' }
 
-function render(account?: Account, realSelect = false, type: AccountType = accountType) {
+function render(account?: Account, realSelect = false, type: AccountType = accountType, stubs: Record<string, unknown> = {}) {
   return shallowMount(AccountEditor, { props: { accountType: type, account }, global: { plugins: [i18n], stubs: {
     // The models card is rendered (not stubbed) so its tag select is reachable.
     AccountModelsCard: false,
@@ -38,6 +39,7 @@ function render(account?: Account, realSelect = false, type: AccountType = accou
     SSelect: realSelect ? false : { props: ['modelValue', 'options', 'disabled', 'searchable'], emits: ['update:modelValue'], template: '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
     SInput: { props: ['modelValue'], emits: ['update:modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
     SchemaForm: { template: '<div />', methods: { validate: () => true } },
+    ...stubs
   } } })
 }
 
@@ -608,5 +610,48 @@ describe('account usage limit', () => {
     await submit(w)
     expect(mocks.patch).toHaveBeenCalledOnce()
     expect(mocks.put).toHaveBeenCalledWith('/accounts/1/usage-limit', { ...saved, amount: '0.12345678' })
+  })
+})
+
+describe('account form widgets (CONTRACTS §23.3 UI 3.6)', () => {
+  const validate = vi.fn()
+  const save = vi.fn()
+  /** The slot as the editor sees it: props and the aggregated validate / save. */
+  const slotStub = { PluginSlot: { props: ['name', 'props'], template: '<div />', methods: { validate, save } } }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    i18n.global.locale.value = 'zh'
+    mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
+    mocks.patch.mockResolvedValue(savedAccount())
+    mocks.post.mockResolvedValue(savedAccount())
+    validate.mockResolvedValue(null)
+    save.mockResolvedValue([])
+  })
+
+  it('tells the widgets whether the account is being edited and lets their error block the request', async () => {
+    validate.mockResolvedValue('下限必须小于 1')
+    const w = render(savedAccount(), false, accountType, slotStub)
+    await flushPromises()
+    expect(w.getComponent(PluginSlot).props('props')).toMatchObject({ editing: true, account: savedAccount() })
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+    expect(w.get('[data-testid="plugin-widgets-error"]').text()).toBe('下限必须小于 1')
+    expect(w.getComponent(AccountEditorNav).props('errors').connection).toBe(true)
+    expect(render(undefined, false, accountType, slotStub).getComponent(PluginSlot).props('props')).toMatchObject({ editing: false })
+  })
+
+  it('saves the widgets against the saved account and reports a failure without undoing the account', async () => {
+    save.mockResolvedValue([{ pluginKey: 'dynweight', error: new Error('conflict') }])
+    const w = render(savedAccount(), false, accountType, slotStub)
+    await flushPromises()
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledOnce()
+    expect(save).toHaveBeenCalledWith(savedAccount())
+    expect(mocks.patch.mock.invocationCallOrder[0]).toBeLessThan(save.mock.invocationCallOrder[0])
+    expect(mocks.toast).toHaveBeenCalledWith('账号已保存，但插件 dynweight 的设置保存失败：conflict', 'error')
+    expect(w.emitted('saved')).toHaveLength(1)
+    expect(w.find('[data-testid="plugin-widgets-error"]').exists()).toBe(false)
   })
 })

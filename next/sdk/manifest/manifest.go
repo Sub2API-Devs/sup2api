@@ -810,6 +810,10 @@ type UI struct {
 	Slots    []Slot          `json:"slots,omitempty"`
 	Native   *NativeUI       `json:"native,omitempty"`
 	Settings *Form           `json:"settings,omitempty"`
+	// AccountActions are entries the console adds to every account row's
+	// action menu (and, with Bulk, to the bulk bar); clicking one posts to
+	// Route (UI 3.6, core 0.1.255).
+	AccountActions []AccountAction `json:"accountActions,omitempty"`
 }
 
 // MenuSection is a sidebar group declared by a plugin. It is shown as its
@@ -920,9 +924,24 @@ type Column struct {
 }
 
 type Slot struct {
-	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight
+	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight | account.list.toolbar
 	Component  string `json:"component"`
 	Permission string `json:"permission,omitempty"`
+}
+
+// AccountAction is a declarative account operation. The console calls
+// Route as "POST /api/v1/p/<key><path>" with {"account_id": n} for one row
+// and {"account_ids": [...]} (at most 500) from the bulk bar, looks only at
+// the status code and reloads the list on success.
+type AccountAction struct {
+	ID         string        `json:"id"`                // unique within the plugin
+	Label      LocalizedText `json:"label"`             // menu text
+	Icon       string        `json:"icon,omitempty"`    // SIcon name
+	Permission string        `json:"permission"`        // required: plugin-local key in userPermissions, equal to the route's
+	Route      string        `json:"route"`             // "POST /path": an admin route declared in routes
+	Bulk       bool          `json:"bulk,omitempty"`    // also offered in the bulk bar
+	Confirm    LocalizedText `json:"confirm,omitempty"` // confirmation text, {n} = account count; none means no prompt
+	Danger     bool          `json:"danger,omitempty"`  // rendered as a destructive item
 }
 
 type NativeUI struct {

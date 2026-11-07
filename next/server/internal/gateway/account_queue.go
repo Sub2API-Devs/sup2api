@@ -83,19 +83,15 @@ func (c *call) waitForAccount(ctx context.Context, ref *core.AccountRef, maxWait
 // queueTarget chooses the account to queue for when every candidate in pool
 // (ordered, all full) is: the least loaded of the first priority tier. Load is
 // in use plus waiting over the account's cap.
-func (c *call) queueTarget(ctx context.Context, pool []core.AccountRef, reserve map[int64]bool) *core.AccountRef {
+func (c *call) queueTarget(ctx context.Context, pool []core.AccountRef) *core.AccountRef {
 	if len(pool) == 0 || c.gw.QueueFallbackMaxWaiting <= 0 || c.gw.QueueFallbackWaitSecond <= 0 || c.queueWaited || !c.queueable() {
 		return nil
 	}
-	var tier []core.AccountRef
-	for i := range pool {
-		if pool[i].Priority == pool[0].Priority && !reserve[pool[i].ID] {
-			tier = append(tier, pool[i])
-		}
+	n := 1
+	for n < len(pool) && pool[n].Priority == pool[0].Priority {
+		n++
 	}
-	if len(tier) == 0 {
-		tier = pool[:1]
-	}
+	tier := pool[:n]
 	ids := make([]int64, len(tier))
 	for i := range tier {
 		ids[i] = tier[i].ID

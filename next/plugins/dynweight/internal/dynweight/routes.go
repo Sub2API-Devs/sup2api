@@ -31,8 +31,14 @@ func (p *Plugin) routes() {
 	p.Handle("GET", "/events", p.listEvents)
 	p.Handle("POST", "/reset", p.reset)
 	p.Handle("GET", "/weights", p.getWeights)
+	p.Handle("GET", "/degraded", p.getDegraded)
+	p.Handle("GET", "/accounts/:id/override", p.getOverride)
+	p.Handle("PUT", "/accounts/:id/override", p.putOverride)
 	p.Handle("GET", "/stats", p.getStats)
 }
+
+// conflictMessage answers a save over a configuration another save changed.
+const conflictMessage = "the configuration was changed meanwhile, reload it / 配置已被修改，请刷新后重试"
 
 type configBody struct {
 	Config   rules.Config `json:"config"`
@@ -75,7 +81,7 @@ func (p *Plugin) putConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	}
 	version, err := s.saveConfig(ctx, body.Config, body.Version, req.GetCaller().GetUserId())
 	if errors.Is(err, errVersionConflict) {
-		return pluginsdk.ErrorResponse(http.StatusConflict, "conflict", "the configuration was changed meanwhile, reload it / 配置已被修改，请刷新后重试"), nil
+		return pluginsdk.ErrorResponse(http.StatusConflict, "conflict", conflictMessage), nil
 	}
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
@@ -298,18 +304,35 @@ func (p *Plugin) reset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv
 	return pluginsdk.DataResponse(map[string]int{"reset": n}), nil
 }
 
+const (
+	// maxListedAccounts bounds the accounts of GET /weights and GET
+	// /degraded: what the core's account list filters by at once.
+	maxListedAccounts = 500
+	// maxWeightKeys bounds the keys GET /weights details per account.
+	maxWeightKeys = 10
+)
+
 // accountWeight sums up an account's degraded keys for the account list.
 type accountWeight struct {
-	Degraded int   `json:"degraded"`
-	Lowest   int32 `json:"lowest"`
-	Base     int   `json:"base"`
+	Degraded int         `json:"degraded"`
+	Lowest   int32       `json:"lowest"`
+	Base     int         `json:"base"`
+	Keys     []weightKey `json:"keys"` // the lowest maxWeightKeys, by effective weight
+}
+
+// weightKey is a degraded key of an account.
+type weightKey struct {
+	GroupID int64   `json:"group_id"`
+	Model   string  `json:"model"`
+	Eff     float64 `json:"eff"`
+	Base    int     `json:"base"`
 }
 
 // getWeights answers ?account_ids=1,2,3 from this node's weights.
 func (p *Plugin) getWeights(_ context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	wanted := map[int64]bool{}
 	for _, part := range strings.Split(pluginsdk.Query(req, "account_ids"), ",") {
-		if id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil && id > 0 && len(wanted) < 500 {
+		if id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil && id > 0 && len(wanted) < maxListedAccounts {
 			wanted[id] = true
 		}
 	}
@@ -324,7 +347,164 @@ func (p *Plugin) getWeights(_ context.Context, req *pluginv1.HTTPRequest) (*plug
 			a.Lowest, a.Base = eff, w.base
 		}
 		a.Degraded++
+		a.Keys = append(a.Keys, weightKey{GroupID: k.GroupID, Model: k.Model, Eff: w.eff, Base: w.base})
 		out[k.AccountID] = a
 	}
+	for id, a := range out {
+		slices.SortFunc(a.Keys, func(x, y weightKey) int {
+			return cmp.Or(cmp.Compare(x.Eff, y.Eff), cmp.Compare(x.GroupID, y.GroupID), strings.Compare(x.Model, y.Model))
+		})
+		a.Keys = a.Keys[:min(len(a.Keys), maxWeightKeys)]
+		out[id] = a
+	}
 	return pluginsdk.DataResponse(out), nil
+}
+
+// getDegraded lists the accounts with a key below its base in this node's
+// snapshot: how many, and the first maxListedAccounts ids in order.
+func (p *Plugin) getDegraded(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	ids := []int64{}
+	for k, w := range *p.weights.Load() {
+		if w.eff < float64(w.base) {
+			ids = append(ids, k.AccountID)
+		}
+	}
+	slices.Sort(ids)
+	ids = slices.Compact(ids)
+	return pluginsdk.DataResponse(map[string]any{"count": len(ids), "account_ids": ids[:min(len(ids), maxListedAccounts)]}), nil
+}
+
+// overrideBody is an account's override (null for none) and the layers in
+// force for it: one per group scheduling has offered the account in (the
+// bases), by group id. The console resolves the group names, as it does
+// everywhere else (CONTRACTS §74.5 "界面").
+type overrideBody struct {
+	Override *rules.AccountOverride `json:"override"`
+	Layers   []accountLayer         `json:"layers"`
+}
+
+// accountLayer is the layer serving an account in a group.
+type accountLayer struct {
+	GroupID int64  `json:"group_id"`
+	Source  string `json:"source"` // global | group
+	NoClimb bool   `json:"no_climb"`
+}
+
+// overrideOf is an account's override under c and its layers (overrideBody).
+func overrideOf(c *rules.Config, id int64, bases map[pair]base) overrideBody {
+	out := overrideBody{Layers: []accountLayer{}}
+	if o, ok := c.Accounts[id]; ok {
+		out.Override = &o
+	}
+	var groups []int64
+	for pr := range bases {
+		if pr.AccountID == id {
+			groups = append(groups, pr.GroupID)
+		}
+	}
+	slices.Sort(groups)
+	for _, gid := range groups {
+		l, source := &c.Layer, "global"
+		if g := c.Groups[gid]; g != nil {
+			l, source = g, "group"
+		}
+		out.Layers = append(out.Layers, accountLayer{GroupID: gid, Source: source, NoClimb: l.NoClimb()})
+	}
+	return out
+}
+
+// accountParam reads the :id of /accounts/:id/override.
+func accountParam(req *pluginv1.HTTPRequest) (int64, *pluginv1.HTTPResponse) {
+	id, err := strconv.ParseInt(pluginsdk.Param(req, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, pluginsdk.BadRequest("id", "invalid", "the account id must be a positive integer / 账号 id 必须是正整数")
+	}
+	return id, nil
+}
+
+// getOverride is GET /accounts/:id/override from the stored configuration.
+// An account the plugin knows nothing about (never offered by scheduling,
+// no override) is 404: the plugin cannot see the core's accounts.
+func (p *Plugin) getOverride(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	id, bad := accountParam(req)
+	if bad != nil {
+		return bad, nil
+	}
+	s, err := p.store(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	c, _, _, err := s.loadConfig(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	bases, err := s.loadBases(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	body := overrideOf(&c, id, bases)
+	if body.Override == nil && len(body.Layers) == 0 {
+		return pluginsdk.ErrorResponse(http.StatusNotFound, "not_found", "the plugin has no record of this account / 插件没有这个账号的记录"), nil
+	}
+	return pluginsdk.DataResponse(body), nil
+}
+
+// overrideRetries is how many more times, after its first attempt, PUT
+// /accounts/:id/override reloads the configuration and tries again when
+// another save changed it meanwhile: 1 + overrideRetries attempts in all.
+const overrideRetries = 3
+
+// putOverride is PUT /accounts/:id/override {override: AccountOverride |
+// null}: it replaces (or removes) the account's override in the stored
+// configuration, checked as PUT /config checks it, over the version it
+// read. It does not ask whether the core has the account: a new account's
+// form saves its override right after the account is created.
+func (p *Plugin) putOverride(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	id, bad := accountParam(req)
+	if bad != nil {
+		return bad, nil
+	}
+	var body struct {
+		Override *rules.AccountOverride `json:"override"`
+	}
+	if err := pluginsdk.DecodeJSON(req, &body); err != nil {
+		return pluginsdk.BadRequest("", "invalid_json", err.Error()), nil
+	}
+	s, err := p.store(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	bases, err := s.loadBases(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	for range 1 + overrideRetries {
+		c, version, _, err := s.loadConfig(ctx)
+		if err != nil {
+			return pluginsdk.Unavailable(err.Error()), nil
+		}
+		if body.Override == nil {
+			delete(c.Accounts, id)
+		} else {
+			if c.Accounts == nil {
+				c.Accounts = map[int64]rules.AccountOverride{}
+			}
+			c.Accounts[id] = *body.Override
+		}
+		if _, resp := p.checkConfig(ctx, &c); resp != nil {
+			return resp, nil
+		}
+		if p.beforeSave != nil {
+			p.beforeSave(ctx)
+		}
+		if _, err = s.saveConfig(ctx, c, version, req.GetCaller().GetUserId()); errors.Is(err, errVersionConflict) {
+			continue
+		}
+		if err != nil {
+			return pluginsdk.Unavailable(err.Error()), nil
+		}
+		p.publish(ctx, TopicConfig, p.reloadConfig)
+		return pluginsdk.DataResponse(overrideOf(&c, id, bases)), nil
+	}
+	return pluginsdk.ErrorResponse(http.StatusConflict, "conflict", conflictMessage), nil
 }

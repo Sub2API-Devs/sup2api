@@ -15,16 +15,19 @@ import (
 
 // UIPlugin is one entry of GET /ui/plugins.
 type UIPlugin struct {
-	Key          string                   `json:"key"`
-	Version      string                   `json:"version"`
-	Name         core.LocalizedText       `json:"name"`
-	AssetBase    string                   `json:"asset_base"`
-	Menus        []manifest.Menu          `json:"menus"`
-	Pages        map[string]manifest.Page `json:"pages"`
-	Slots        []manifest.Slot          `json:"slots"`
-	NativeEntry  string                   `json:"native_entry"`
-	Trust        string                   `json:"trust"`
-	HostUICompat string                   `json:"host_ui_compat"`
+	Key       string                   `json:"key"`
+	Version   string                   `json:"version"`
+	Name      core.LocalizedText       `json:"name"`
+	AssetBase string                   `json:"asset_base"`
+	Menus     []manifest.Menu          `json:"menus"`
+	Pages     map[string]manifest.Page `json:"pages"`
+	Slots     []manifest.Slot          `json:"slots"`
+	// AccountActions are the manifest's ui.accountActions the caller may
+	// use (UI 3.6); the plugin route behind each one checks again.
+	AccountActions []manifest.AccountAction `json:"account_actions"`
+	NativeEntry    string                   `json:"native_entry"`
+	Trust          string                   `json:"trust"`
+	HostUICompat   string                   `json:"host_ui_compat"`
 }
 
 // uiPlugins lists console extensions of active plugins, filtered by the
@@ -54,17 +57,23 @@ func (a *API) uiPlugins(c *gin.Context) {
 		}
 		allowed := func(perm string) bool { return perm == "" || ps.Has(install.PermissionKey(p.Key, perm)) }
 		item := UIPlugin{Key: p.Key, Version: p.Version, Name: core.LocalizedText(m.Name), AssetBase: p.AssetBase,
-			Menus: []manifest.Menu{}, Pages: map[string]manifest.Page{}, Slots: []manifest.Slot{}, Trust: p.Trust, HostUICompat: m.HostUICompat}
+			Menus: []manifest.Menu{}, Pages: map[string]manifest.Page{}, Slots: []manifest.Slot{}, AccountActions: []manifest.AccountAction{},
+			Trust: p.Trust, HostUICompat: m.HostUICompat}
 		item.Menus, item.Pages = visibleMenusAndPages(m.UI, allowed)
 		for _, sl := range m.UI.Slots {
 			if allowed(sl.Permission) {
 				item.Slots = append(item.Slots, sl)
 			}
 		}
+		for _, act := range m.UI.AccountActions {
+			if allowed(act.Permission) {
+				item.AccountActions = append(item.AccountActions, act)
+			}
+		}
 		if m.UI.Native != nil && (p.Trust == pkg.TrustOfficial || p.Trust == pkg.TrustVerified) {
 			item.NativeEntry = m.UI.Native.Entry
 		}
-		if len(item.Menus) == 0 && len(item.Slots) == 0 && len(item.Pages) == 0 {
+		if len(item.Menus) == 0 && len(item.Slots) == 0 && len(item.Pages) == 0 && len(item.AccountActions) == 0 {
 			continue
 		}
 		out = append(out, item)

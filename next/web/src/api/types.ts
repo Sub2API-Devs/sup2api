@@ -1293,6 +1293,24 @@ export interface UIPluginPage {
   create?: { page: string; permission?: string }
 }
 
+/**
+ * A plugin's declarative account action (manifest `ui.accountActions`,
+ * CONTRACTS §23.3 UI 3.6): a row menu entry (and, with `bulk`, a bulk bar
+ * entry) that POSTs the account id(s) to the plugin's own `route`.
+ */
+export interface PluginAccountAction {
+  id: string
+  label: LText
+  icon?: string
+  permission?: string
+  /** `POST <path>`, one of the plugin's admin routes. */
+  route: string
+  bulk?: boolean
+  /** Confirmation text; `{n}` is the number of accounts. */
+  confirm?: LText
+  danger?: boolean
+}
+
 export interface UIPlugin {
   key: string
   version: string
@@ -1301,6 +1319,7 @@ export interface UIPlugin {
   menus: Array<{ id: string; section: string; label: LText; icon?: string; page: string; permission?: string; order?: number }>
   pages: Record<string, UIPluginPage>
   slots: Array<{ slot: string; component: string; permission?: string }>
+  account_actions?: PluginAccountAction[]
   native_entry: string
   trust: Trust
   host_ui_compat?: string

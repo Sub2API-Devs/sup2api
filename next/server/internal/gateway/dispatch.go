@@ -231,62 +231,40 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 		return nil, nil, true
 	}
 	// Plugins may rewrite the priority/weight of the candidates for this
-	// request (CONTRACTS §24); everything below still gates them.
+	// request (CONTRACTS §24); everything below still gates them. A plugin's
+	// weight 0 takes the account out of this request for good: the ranking is
+	// computed once and reused by failover, so a zeroed account is not tried
+	// when its tier's weighted accounts failed, are rate-limited or busy, the
+	// request moves on to the next tier (§24.3, 2026-11-07). A plugin that
+	// wants a tier it zeroed entirely split evenly gives each account 1.
 	over := c.rankOverrides(ctx, cands)
-	// A plugin's weight 0 is relative to the rest of its priority tier: in a
-	// tier where the plugin left some account a weight, the zeroed accounts
-	// are the tier's last resort, tried (evenly) after its weighted accounts
-	// and before any lower tier. So when the weighted ones failed over
-	// (excluded), are rate-limited or busy, the request stays in the tier
-	// instead of dropping a tier (§24.3, §74.5). A tier the plugin zeroed
-	// entirely is still skipped.
-	served := map[int]bool{}
-	for i := range cands {
-		p, w := cands[i].Priority, 1
-		if o, ok := over[cands[i].ID]; ok {
-			p, w = o.priority, o.weight
-		}
-		if w > 0 {
-			served[p] = true
-		}
-	}
 	var pool []core.AccountRef
-	reserve := map[int64]bool{}
 	limited := false
 	for i := range cands {
 		if excluded[cands[i].ID] || !c.usable(&cands[i]) {
 			continue
 		}
-		if exhausted[cands[i].ID] {
-			limited = true
-			continue
-		}
 		ref := cands[i]
 		if o, ok := over[ref.ID]; ok {
-			ref.Priority, ref.Weight = o.priority, o.weight
 			if o.weight == 0 {
-				if !served[o.priority] {
-					continue // a plugin took the account out of this request
-				}
-				reserve[ref.ID] = true
+				continue
 			}
+			ref.Priority, ref.Weight = o.priority, o.weight
+		}
+		if exhausted[ref.ID] {
+			limited = true
+			continue
 		}
 		pool = append(pool, ref)
 	}
 	if len(pool) == 0 {
 		return nil, nil, limited
 	}
-	// Each tier: weighted accounts in weighted random order, then the
-	// reserve in random order (weightedOrder counts weight 0 as 1).
-	sort.SliceStable(pool, func(i, j int) bool {
-		if pool[i].Priority != pool[j].Priority {
-			return pool[i].Priority < pool[j].Priority
-		}
-		return !reserve[pool[i].ID] && reserve[pool[j].ID]
-	})
+	// Each tier in weighted random order.
+	sort.SliceStable(pool, func(i, j int) bool { return pool[i].Priority < pool[j].Priority })
 	for i := 0; i < len(pool); {
 		j := i
-		for j < len(pool) && pool[j].Priority == pool[i].Priority && reserve[pool[j].ID] == reserve[pool[i].ID] {
+		for j < len(pool) && pool[j].Priority == pool[i].Priority {
 			j++
 		}
 		weightedOrder(pool[i:j], c.g.randFloat)
@@ -302,7 +280,7 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 			return c.finishPick(ctx, &ref, release, cands, excluded)
 		}
 	}
-	if ref := c.queueTarget(ctx, pool, reserve); ref != nil {
+	if ref := c.queueTarget(ctx, pool); ref != nil {
 		if release, ok := c.waitForAccount(ctx, ref, c.gw.QueueFallbackMaxWaiting, c.gw.queueFallbackWait()); ok {
 			return c.finishPick(ctx, ref, release, cands, excluded)
 		}

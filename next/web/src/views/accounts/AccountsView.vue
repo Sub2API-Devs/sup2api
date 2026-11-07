@@ -3,14 +3,14 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAutoRefresh, SBadge, SBulkBar, SButton, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, STooltip, confirm, toast, useAutoRefresh, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SAutoRefresh, SBadge, SBulkBar, SButton, SChip, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, STooltip, confirm, toast, useAutoRefresh, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountType } from '@/api/types'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
-import { errorMessage, notifyError } from '@/utils/errors'
+import { notifyError } from '@/utils/errors'
 import { formatDateTime, formatMoney, formatRelative, formatTime } from '@/utils/format'
 import { lt } from '@/i18n'
 import { useAccountTypes, typeKey } from './accountTypes'
@@ -31,11 +31,13 @@ import AccountBalanceCell from './AccountBalanceCell.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountDeleteDialog from './AccountDeleteDialog.vue'
 import LastTestCell from './AccountLastTest.vue'
-import { rowActions, runRowAction, type RowActionDeps } from './accountRowActions'
+import { pluginAccountActionKey, rowActions, runRowAction, type RowActionDeps } from './accountRowActions'
+import { usePluginAccountActions } from './usePluginAccountActions'
 import { accountStatusKey, accountStatusKeys, accountStatusTone } from './accountStatus'
 import { useBatchTest } from './useBatchTest'
 import { useSelection } from '@/composables/useSelection'
-import { useBulkRun, type BulkFailure } from '@/composables/useBulkRun'
+import { useBulkRun } from '@/composables/useBulkRun'
+import { bulkToast } from './bulkToast'
 import AccountBulkEditDialog from './AccountBulkEditDialog.vue'
 import AccountBulkDeleteDialog from './AccountBulkDeleteDialog.vue'
 import { subscriptionLabel } from './subscription'
@@ -64,7 +66,17 @@ const canReveal = (a: Account) => own.can(a, ACCOUNT_KEYS.reveal)
 
 // `mine=true` works at both levels; `created_by=<id>` only at the all level (ignored otherwise).
 // The usage column's "today" is the browser's day (CONTRACTS §73).
-const list = useList<Account>(`/accounts?${new URLSearchParams(todayQuery())}`, { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '', orphaned: '' })
+const list = useList<Account>(`/accounts?${new URLSearchParams(todayQuery())}`, { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '', orphaned: '', ids: '' })
+// The account.list.toolbar slot (CONTRACTS §23.3 UI 3.6) narrows the list to
+// the ids a plugin names (`?ids=1,2`); the label it gives shows on a chip.
+const idsLabel = ref('')
+const toolbarProps = computed(() => ({
+  ids: list.filters.ids ? String(list.filters.ids).split(',').map(Number) : null,
+  setIds(ids: number[] | null, label: string) {
+    list.filters.ids = ids?.length ? ids.join(',') : ''
+    idsLabel.value = ids?.length ? label : ''
+  }
+}))
 const onlyMine = computed({
   get: () => list.filters.mine === 'true',
   set: (v: boolean) => {
@@ -286,14 +298,15 @@ const picked = computed(() => ({
 const { batchTesting, batchRunning, batchDone, batchTotal, batchTest, stopBatch } = useBatchTest({ tested: onTested })
 
 const bulk = useBulkRun(4)
-const bulkBusy = computed(() => batchRunning.value || bulk.running.value)
+const pluginActions = usePluginAccountActions(list.reload)
+const bulkBusy = computed(() => batchRunning.value || bulk.running.value || pluginActions.running.value)
 async function bulkToggle(enable: boolean) {
   const rows = picked.value.toggle.filter((a) => (a.status !== 'disabled') !== enable)
   if (!rows.length) return toast(t('accounts.bulk.nothingToChange'), 'info')
   const out = await bulk.run(rows, async (a, signal) => {
     patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, { status: enable ? 'active' : 'disabled', schedulable: enable }, { signal, query: todayQuery() }))
   })
-  bulkToast(out.ok.length, out.failed)
+  bulkToast(t, out.ok.length, out.failed)
 }
 async function bulkReset() {
   const rows = picked.value.reset
@@ -302,13 +315,8 @@ async function bulkReset() {
   const out = await bulk.run(rows, async (a) => {
     patchAccount(a.id, await resetAccountStatus(a.id))
   })
-  bulkToast(out.ok.length, out.failed)
+  bulkToast(t, out.ok.length, out.failed)
   list.reload()
-}
-function bulkToast(ok: number, failed: BulkFailure<Account>[]) {
-  if (!failed.length) return toast(t('accounts.bulk.done', { ok }), 'success')
-  const first = failed[0]
-  toast(t('accounts.bulk.doneWithErrors', { ok, fail: failed.length, name: first.item.name, error: errorMessage(first.error) }), 'warning')
 }
 const bulkEditOpen = ref(false)
 const bulkDeleteOpen = ref(false)
@@ -324,11 +332,16 @@ const retentionOf = (a: Account) => typeOf(a)?.lifecycle?.deletion?.retentionDay
 const moreBulkActions = computed(() => [
   { key: 'enable', label: t('accounts.bulk.enable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
   { key: 'disable', label: t('accounts.bulk.disable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
-  { key: 'reset', label: t('accounts.bulk.reset', { n: picked.value.reset.length }), disabled: !picked.value.reset.length }
+  { key: 'reset', label: t('accounts.bulk.reset', { n: picked.value.reset.length }), disabled: !picked.value.reset.length },
+  ...plugins.accountActions.filter((x) => x.bulk).map((x) => ({ key: pluginAccountActionKey(x), label: t('accounts.bulk.pluginAction', { name: lt(x.label) || x.id, n: picked.value.edit.length }), icon: x.icon, danger: x.danger, disabled: !picked.value.edit.length }))
 ])
 function onBulkMore(key: string) {
   if (key === 'enable' || key === 'disable') void bulkToggle(key === 'enable')
   else if (key === 'reset') void bulkReset()
+  else {
+    const declared = plugins.accountActions.find((x) => pluginAccountActionKey(x) === key)
+    if (declared) void pluginActions.run(declared, picked.value.edit)
+  }
 }
 
 // ---------------------------------------------------------------- reveal credentials
@@ -511,7 +524,12 @@ const rowActionDeps: RowActionDeps = {
   resetStatus,
   refreshCreds,
   remove,
-  runPluginAction
+  runPluginAction,
+  // Read on each menu build: the plugin list may change after a refresh.
+  get pluginActions() {
+    return plugins.accountActions
+  },
+  runPluginAccountAction: (a, entry) => pluginActions.run(entry, [a])
 }
 const actionsFor = (a: Account) => rowActions(a, rowActionDeps)
 function onAction(a: Account, key: string) {
@@ -536,7 +554,10 @@ const advancedFilters = ref(false)
 const denseRows = ref(true)
 const filterCount = computed(() => activeFilterCount(list.filters, ['plugin_key']))
 const hasAdvancedFilters = computed(() => !!list.filters.model || !!list.filters.created_by || onlyMine.value || showOrphaned.value)
-function resetFilters() { for (const key of Object.keys(list.filters)) list.filters[key] = '' }
+function resetFilters() {
+  for (const key of Object.keys(list.filters)) list.filters[key] = ''
+  idsLabel.value = ''
+}
 </script>
 
 <template>
@@ -544,13 +565,16 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
     <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')" :filters-active-count="activeFilterCount(list.filters, ['q', 'plugin_key'])">
       <template #filters-primary>
         <SInput v-model="list.filters.q" icon="search" clearable class="w-44 2xl:w-56" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
+        <!-- Plugin toolbar items and the chip of the ids they set stay in sight on a phone too. -->
+        <PluginSlot name="account.list.toolbar" :props="toolbarProps" />
+        <SChip v-if="list.filters.ids" tone="primary" closable :close-label="t('accounts.listUi.clearIds')" data-testid="ids-filter" @close="toolbarProps.setIds(null, '')">{{ idsLabel || list.filters.ids }}</SChip>
       </template>
       <template #filters>
         <SSelect v-model="typeFilter" :options="typeOptions" class="w-36 2xl:w-44" :aria-label="t('accounts.type')" />
         <SSelect v-model="list.filters.group_id" :options="groupOptions" class="w-32 2xl:w-36" :aria-label="t('accounts.groups')" />
         <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="w-28 2xl:w-32" :aria-label="t('common.status')" />
         <SButton :variant="hasAdvancedFilters ? 'primary' : 'secondary'" :aria-expanded="advancedFilters" @click="advancedFilters = !advancedFilters">{{ t('accounts.listUi.advanced') }}</SButton>
-        <SButton v-if="filterCount" variant="ghost" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
+        <SButton v-if="filterCount" variant="ghost" data-testid="clear-filters" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
       </template>
       <template #actions>
         <!-- Row density means nothing to phone cards; there the auto-refresh menu holds "Refresh now". -->

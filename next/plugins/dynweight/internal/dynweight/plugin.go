@@ -60,6 +60,10 @@ type Plugin struct {
 	bg     context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+
+	// beforeSave, tests only, runs between reading the configuration and
+	// saving it over its version (putOverride), to stage a conflict.
+	beforeSave func(context.Context)
 }
 
 // compiledConfig is the configuration in force and its stored version.

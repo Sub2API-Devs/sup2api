@@ -11,7 +11,7 @@ export default {
     clear: '清除筛选（{count}）', compact: '紧凑显示', refresh: '刷新账号列表',
     loadFailed: '刷新失败，正在显示上次加载的数据',
     emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', limitsColumn: '并发 / RPM / TPM / 会话',
-    numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存'
+    numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存', clearIds: '清除账号 ID 筛选'
   },
   limitsUi: {
     title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',
@@ -98,6 +98,7 @@ export default {
   subscriptionHint: '账号授权后上游报告的订阅类型',
   modelsBySubscription: '保存时会按账号订阅类型调整模型列表：Pro 账号去掉 Fable 模型（仅当列表仍是内置列表时）。',
   modelsAdjusted: '已按 {plan} 订阅调整模型列表（{n} 个模型）',
+  pluginWidgetSaveFailed: '账号已保存，但插件 {plugin} 的设置保存失败：{error}',
   groups: '分组',
   proxy: '代理',
   createdBy: '创建人',
@@ -237,7 +238,7 @@ export default {
   batchTest: { pickPage: '选择本页', run: '批量测试（{n}）', progress: '测试中 {done}/{total}', clear: '清除选择', hint: '每个账号用插件默认模型测一次，最多同时 3 个', done: '批量测试完成：成功 {ok}，失败 {fail}' },
   bulk: {
     edit: '批量编辑（{n}）', more: '更多批量操作', delete: '删除（{n}）',
-    enable: '启用（{n}）', disable: '禁用（{n}）', reset: '重置状态（{n}）',
+    enable: '启用（{n}）', disable: '禁用（{n}）', reset: '重置状态（{n}）', pluginAction: '{name}（{n}）',
     progress: '处理中 {done}/{total}', nothingToChange: '所选账号已是该状态',
     done: '已完成 {ok} 个账号', doneWithErrors: '成功 {ok} 个，失败 {fail} 个；{name}：{error}',
     resetConfirm: '清除所选 {n} 个账号的冷却、错误与自动禁用状态？',
