@@ -117,13 +117,19 @@ describe('shared usage search', () => {
     expect(full.findAll('[data-testid="search-usage"]')).toHaveLength(1)
   })
 
+  it('puts the tools after the actions, before Reset / Search, on a wide screen', () => {
+    const w = mount(UsageFilters, { props: { modelValue: {} }, slots: { actions: '<button type="button" class="act" />', tools: '<button type="button" class="tool" />' }, global })
+    expect(w.get('.mt-3').findAll('button').map(b => b.classes('act') ? 'act' : b.classes('tool') ? 'tool' : b.attributes('data-testid'))).toEqual(['act', 'tool', 'reset-usage-filters', 'search-usage'])
+  })
+
   it('keeps the range, the log type and the text searches in sight on a phone, folds the rest into the Filters sheet and applies it on Done', async () => {
     const logTypes = [{ value: 'records', label: 'Records' }, { value: 'errors', label: 'Errors' }]
     const w = mountPinned(UsageFilters, {
       props: { modelValue: { protocol: 'openai.chat', stream: 'true', success: 'false' }, logTypes, logType: 'errors' },
-      slots: { range: '<button class="range">Today</button>', stats: '<span>stats</span>' },
+      slots: { range: '<button class="range">Today</button>', stats: '<span>stats</span>', tools: '<button type="button" class="tool">Export</button>' },
       global
     })
+    expect(w.find('.tool').exists()).toBe(false)
     for (const key of ['log-type', 'model_contains', 'api_key_name', 'client_ip']) expect(w.find(`[data-testid="filter-${key}"]`).exists()).toBe(true)
     expect(w.find('.range').exists()).toBe(true)
     expect(w.find('[data-testid="filter-protocol"]').exists()).toBe(false)
@@ -134,6 +140,7 @@ describe('shared usage search', () => {
     // the More filters fields come along, with no toggle
     const sheet = document.querySelector('[data-testid="filter-sheet"]')!
     expect(sheet.querySelector('[data-testid="filter-protocol"]')).not.toBeNull()
+    expect(document.querySelector('[role="dialog"] .tool')).not.toBeNull()
     const requestId = sheet.querySelector<HTMLInputElement>('input[data-testid="filter-request_id"]')!
     requestId.value = 'req-1'
     requestId.dispatchEvent(new Event('input'))

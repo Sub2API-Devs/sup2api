@@ -2,8 +2,8 @@
 // The search toolbar of the usage lists: time range (#range) and the common
 // filters on the first row (the request type select lists the protocol ids
 // seen under the current search, `protocolOptions`), the rest behind "More
-// filters", then the totals (#stats) with extra toggles (#actions) beside
-// Reset / Search. Text filters
+// filters", then the totals (#stats) with extra toggles (#actions, then the
+// secondary #tools) beside Reset / Search. Text filters
 // apply on Search (or Enter) only; the time range slot applies at once.
 // With `logTypes` the first filter picks what the page lists, as new-api's log
 // type does; it applies at once, with any filter typed so far. A type these
@@ -11,7 +11,8 @@
 // The filters sit in an SFilterBar: on a phone the log type and the three
 // text searches stay in sight beside its Filters button, and the selects and
 // the More filters fields (UsageAdvancedFilters, under the first row on a
-// wide screen) fold into its sheet, whose Done applies the search.
+// wide screen) fold into its sheet, whose Done applies the search; #tools
+// go to the end of that sheet.
 import { computed, reactive, ref, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SButton, SFilterBar, SIcon, SInput, SSelect, useViewport } from '@sub2api/ui'
@@ -168,6 +169,12 @@ function pickLogType(value: unknown) {
             :group-options="groupOptions"
             @update="(key, value) => (draft[key] = value)"
           />
+          <template
+            v-if="compact && $slots.tools"
+            #end
+          >
+            <slot name="tools" />
+          </template>
         </SFilterBar>
       </div>
       <div
@@ -175,6 +182,10 @@ function pickLogType(value: unknown) {
         class="ms-auto flex flex-wrap items-center justify-end gap-2"
       >
         <slot name="actions" />
+        <slot
+          v-if="!compact"
+          name="tools"
+        />
       </div>
       <SButton
         v-if="searchable"
@@ -237,6 +248,10 @@ function pickLogType(value: unknown) {
       <slot name="stats" />
       <div class="ms-auto flex flex-wrap items-center justify-end gap-2">
         <slot name="actions" />
+        <slot
+          v-if="!compact"
+          name="tools"
+        />
         <SButton
           type="button"
           size="sm"

@@ -143,9 +143,11 @@ async function exportCsv() {
       </template>
       <template #actions>
         <slot name="actions" />
-        <SButton v-if="tab === 'records' || tab === 'errors'" type="button" size="sm" icon="download" :loading="exporting" data-testid="export-usage" @click="exportCsv">{{ t('stats.exportCsv') }}</SButton>
-        <!-- The table's column settings sit in this row rather than on a row of their own above the table. -->
-        <STableColumnSettings v-if="table?.columnState && (tab === 'records' || tab === 'errors')" :state="table.columnState" />
+      </template>
+      <template v-if="tab === 'records' || tab === 'errors'" #tools>
+        <SButton type="button" size="sm" icon="download" :loading="exporting" data-testid="export-usage" @click="exportCsv">{{ t('stats.exportCsv') }}</SButton>
+        <!-- The table's column settings sit in the search bar rather than on a row of their own above the table. -->
+        <STableColumnSettings v-if="table?.columnState" :state="table.columnState" />
       </template>
     </UsageFilters>
 
