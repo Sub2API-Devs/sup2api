@@ -5,17 +5,18 @@
 // component: every key the page set wins.
 type Option = Record<string, any>
 
-const each = (v: any, f: (x: Option) => Option) => (Array.isArray(v) ? v.map(f) : f(v))
-const axis = (a: any) => a && each(a, x => ({ ...x, axisLabel: { hideOverlap: true, ...x.axisLabel } }))
+/** Maps an ECharts component option that may be one object or an array of them (axes, grids, legends). */
+export const eachOf = (v: any, f: (x: Option) => Option) => (Array.isArray(v) ? v.map(f) : f(v))
+const axis = (a: any) => a && eachOf(a, x => ({ ...x, axisLabel: { hideOverlap: true, ...x.axisLabel } }))
 const grid = (g: Option): Option => (g.left === undefined ? { containLabel: true, ...g } : g)
 const legend = (l: Option): Option => ({ type: 'scroll', ...(l.top === undefined && l.bottom === undefined ? { bottom: 0 } : {}), ...l })
 
 export function compactChartOption(opt: Option): Option {
   return {
     ...opt,
-    grid: opt.grid ? each(opt.grid, grid) : { left: 8, right: 8, top: 24, bottom: opt.legend ? 32 : 8, containLabel: true },
+    grid: opt.grid ? eachOf(opt.grid, grid) : { left: 8, right: 8, top: 24, bottom: opt.legend ? 32 : 8, containLabel: true },
     tooltip: { confine: true, ...opt.tooltip },
-    legend: opt.legend && each(opt.legend, legend),
+    legend: opt.legend && eachOf(opt.legend, legend),
     xAxis: axis(opt.xAxis),
     yAxis: axis(opt.yAxis)
   }

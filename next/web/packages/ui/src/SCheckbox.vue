@@ -28,7 +28,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
 const attrs = useAttrs()
-const { id, a11y, invalid } = useFieldControl(props)
+const { id, a11y, invalid } = useFieldControl(props, true, true)
 const input = ref<HTMLInputElement>()
 
 const parts = computed(() => (props.bare ? { wrap: {}, control: attrs } : splitAttrs(attrs)))

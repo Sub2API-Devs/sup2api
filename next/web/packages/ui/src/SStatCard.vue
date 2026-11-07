@@ -5,8 +5,7 @@
 // (filter tiles); `selected` highlights it and sets aria-pressed. `to`
 // renders a <RouterLink>, `href` an <a> (a tile that opens a page).
 // Phones (below md, two cards a row): the icon shrinks to 32px beside the
-// label, the value is text-xl and only the first helper line shows (both
-// lines stay in its title).
+// label and the value is text-xl.
 import { computed, getCurrentInstance } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import SIcon from './SIcon.vue'
@@ -35,7 +34,6 @@ const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 const inst = getCurrentInstance()
 const button = computed(() => props.selectable || props.selected !== undefined || !!inst?.vnode.props?.onClick)
 const interactive = computed(() => button.value || !!props.to || !!props.href)
-const helper = computed(() => [props.sub, props.sub2].filter(Boolean).join('\n'))
 const target = computed(() => {
   if (props.to) return { is: RouterLink, attrs: { to: props.to } }
   if (props.href) return { is: 'a', attrs: { href: props.href } }
@@ -70,8 +68,8 @@ const target = computed(() => {
       <p v-if="trend !== undefined && trend !== null" class="stat-trend" :class="trend >= 0 ? 'stat-trend-up' : 'stat-trend-down'">
         {{ trend >= 0 ? '▲' : '▼' }} {{ Math.abs(trend).toFixed(1) }}%
       </p>
-      <p v-if="sub" class="mt-1 truncate text-xs text-gray-500 dark:text-dark-400" :title="helper">{{ sub }}</p>
-      <p v-if="sub2" class="mt-0.5 truncate text-xs text-gray-500 dark:text-dark-400" :class="sub ? 'max-md:hidden' : ''" :title="helper">{{ sub2 }}</p>
+      <p v-if="sub" class="mt-1 truncate text-xs text-gray-500 dark:text-dark-400">{{ sub }}</p>
+      <p v-if="sub2" class="mt-0.5 truncate text-xs text-gray-500 dark:text-dark-400">{{ sub2 }}</p>
       <slot />
     </div>
   </component>

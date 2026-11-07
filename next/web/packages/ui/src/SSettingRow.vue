@@ -1,15 +1,16 @@
 <script setup lang="ts">
 // One setting: label and short description on the left, its control on the
 // right (below it on narrow screens, or always with `stacked` for wide
-// controls). On narrow screens a lone switch / checkbox stays on the
-// label's row, and other controls take the full width. The `details` slot is a longer explanation, collapsed behind a
+// controls). The `details` slot is a longer explanation, collapsed behind a
 // toggle. Like SField, the first @sub2api/ui control inside without an `id`
 // takes the label's id (`for` names a control id explicitly), and gets
 // aria-describedby (description / error) and aria-invalid. `error` shows a
 // message under the control. Remaining attrs (data-testid, ...) go to the
 // root. `dense` is for rows of a label and a small control only (unset, it
 // follows a `dense` SSettingsGroup); `flush` drops the vertical padding (a
-// single row inside a form or modal).
+// single row inside a form or modal). On narrow screens a row whose only
+// control is a switch / checkbox keeps it beside the label; other controls
+// take the full width.
 import { computed, useId, useSlots } from 'vue'
 import SDisclosure from './SDisclosure.vue'
 import { provideField, type ControlSize } from './field'
@@ -34,7 +35,7 @@ const uid = useId()
 const groupDense = useSettingsDensity()
 const isDense = computed(() => props.dense ?? groupDense())
 const hasDescription = computed(() => !!props.description || !!slots.description)
-const { labelFor } = provideField(uid, {
+const { labelFor, inlineOnly } = provideField(uid, {
   for: () => props.for,
   labelId: computed(() => `${uid}-label`),
   describedBy: computed(() => [props.error ? `${uid}-error` : '', hasDescription.value ? `${uid}-desc` : ''].filter(Boolean).join(' ') || undefined),
@@ -48,9 +49,8 @@ const { labelFor } = provideField(uid, {
     class="grid gap-3"
     :class="[
       flush ? '' : isDense ? 'py-2.5' : 'py-4',
-      stacked
-        ? ''
-        : 'items-center max-sm:has-[>div:last-child>div>label:only-child>:is(.switch,.checkbox)]:grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-8'
+      stacked ? '' : 'items-center sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-8',
+      !stacked && inlineOnly ? 'max-sm:grid-cols-[minmax(0,1fr)_auto]' : ''
     ]"
   >
     <div class="min-w-0">

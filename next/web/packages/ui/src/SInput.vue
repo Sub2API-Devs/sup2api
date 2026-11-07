@@ -11,8 +11,8 @@
 // aria-invalid and size unless set here.
 // Phone keyboards: non-prose fields (password / number / url / email / tel,
 // or `mono` such as keys and model names) turn off autocapitalize,
-// autocorrect and spellcheck, and type="number" asks for the decimal pad
-// (unless `min` is negative: that pad has no minus); attrs passed in win.
+// autocorrect and spellcheck, and type="number" with `min` >= 0 asks for the
+// decimal pad (it has no minus key); attrs passed in win.
 import { computed, ref, useAttrs, useSlots } from 'vue'
 import SIcon from './SIcon.vue'
 import { useUiT } from './i18n'
@@ -72,7 +72,7 @@ const inputProps = computed(() => ({
   disabled: props.disabled,
   readonly: props.readonly,
   maxlength: props.maxlength,
-  inputmode: props.inputmode ?? (props.type === 'number' && !(Number(props.min) < 0) ? 'decimal' : undefined),
+  inputmode: props.inputmode ?? (props.type === 'number' && Number(props.min) >= 0 ? 'decimal' : undefined),
   autocapitalize: plain.value ? 'off' : undefined,
   autocorrect: plain.value ? 'off' : undefined,
   spellcheck: plain.value ? false : undefined,

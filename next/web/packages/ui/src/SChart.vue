@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { compactChartOption } from './chart'
+import { compactChartOption, eachOf } from './chart'
 import { useViewport } from './viewport'
 
 // ECharts wrapper. echarts is loaded lazily so pages without charts don't
@@ -74,14 +74,15 @@ function themed(opt: Record<string, any>) {
 }
 
 function axis(a: any, text: string, line: string) {
-  if (!a) return a
-  const f = (x: any) => ({
-    axisLabel: { color: text },
-    axisLine: { lineStyle: { color: line } },
-    splitLine: { lineStyle: { color: line } },
-    ...x
-  })
-  return Array.isArray(a) ? a.map(f) : f(a)
+  return (
+    a &&
+    eachOf(a, (x) => ({
+      axisLabel: { color: text },
+      axisLine: { lineStyle: { color: line } },
+      splitLine: { lineStyle: { color: line } },
+      ...x
+    }))
+  )
 }
 
 async function render() {

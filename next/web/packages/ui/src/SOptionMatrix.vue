@@ -47,8 +47,9 @@ const { a11y } = useFieldControl(props, false)
 const toggled = ref<Record<string, boolean>>({})
 // Flat `rows` become one unnamed group, so the template has a single shape.
 const sections = computed<OptionMatrixGroup[]>(() => (props.groups.length ? props.groups : props.rows.length ? [{ key: '', label: '', rows: props.rows }] : []))
-// Literal class names so Tailwind keeps them.
-const STICKY = 'max-md:sticky max-md:left-0 max-md:z-[1] max-md:bg-surface'
+// The sticky label cell is opaque (the card surface) so choices scroll under it, and
+// takes the row's hover tint. Literal class names so Tailwind keeps them.
+const STICKY = 'max-md:sticky max-md:left-0 max-md:z-[1] max-md:bg-surface max-md:group-hover:bg-surface-2'
 const gridStyle = computed(() => ({ gridTemplateColumns: `minmax(var(--s-matrix-label,0),1fr) repeat(${props.columns.length}, ${props.columnWidth})` }))
 
 function isOpen(group: OptionMatrixGroup): boolean {
@@ -184,7 +185,7 @@ function onGroup(event: Event, group: OptionMatrixGroup, column: SelectOption) {
           <div
             v-for="row in group.rows"
             :key="row.key"
-            class="grid items-center rounded-lg hover:bg-surface-2/60"
+            class="group grid items-center rounded-lg hover:bg-surface-2/60"
             :style="gridStyle"
             role="radiogroup"
             :aria-label="row.label"

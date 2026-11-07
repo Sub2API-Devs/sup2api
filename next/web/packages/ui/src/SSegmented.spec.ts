@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SSegmented from './SSegmented.vue'
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('SSegmented', () => {
   const options = [{ value: 'a', label: 'A' }, { value: 1, label: 'One' }, { value: 'off', label: 'Off', disabled: true }]
@@ -20,5 +22,22 @@ describe('SSegmented', () => {
   it('disables every option', () => {
     const w = mount(SSegmented, { props: { modelValue: 'a', options, disabled: true } })
     expect(w.findAll('input').every(i => i.attributes('disabled') !== undefined)).toBe(true)
+  })
+
+  it('keeps the chosen option in the middle when the row scrolls', async () => {
+    const scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
+    const w = mount(SSegmented, { props: { modelValue: 'a', options } })
+    Object.defineProperty(w.element, 'clientWidth', { value: 100 })
+    Object.defineProperties(w.findAll('label')[1]!.element, { offsetLeft: { value: 120 }, offsetWidth: { value: 40 } })
+    await w.setProps({ modelValue: 1 })
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 90, behavior: 'smooth' })
+  })
+
+  it('fades the edge that hides options', async () => {
+    const w = mount(SSegmented, { props: { modelValue: 'a', options } })
+    Object.defineProperties(w.element, { scrollWidth: { value: 300 }, clientWidth: { value: 100 } })
+    w.element.dispatchEvent(new Event('scroll'))
+    await w.vm.$nextTick()
+    expect(w.element.className).toContain('[mask-image:linear-gradient(to_left')
   })
 })

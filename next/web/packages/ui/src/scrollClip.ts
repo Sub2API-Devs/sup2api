@@ -1,7 +1,9 @@
 // Whether a horizontally scrollable element hides content past its start /
 // end edge (left / right in LTR). Kept up to date on scroll and when the
 // element or its `content` resizes; false while the element is not mounted.
-import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
+// useScrollFade turns that into an edge fade mask; useCentredSelection keeps
+// the selected item (tab, segment) in the middle of the scroller.
+import { computed, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 
 export interface ScrollEdges {
   start: Ref<boolean>
@@ -37,8 +39,39 @@ export function useScrollClip(el: Ref<HTMLElement | undefined>, content: Ref<HTM
   return useScrollEdges(el, content).end
 }
 
-/** Scrolls a horizontal scroller so `item` sits in its middle (the scroller must be the item's offsetParent). */
-export function scrollToCentre(scroller: HTMLElement | undefined, item: HTMLElement | undefined, behavior: ScrollBehavior): void {
+// Literal class names so Tailwind keeps them.
+const FADE = {
+  both: '[mask-image:linear-gradient(to_right,transparent,#000_2rem,#000_calc(100%-2rem),transparent)]',
+  left: '[mask-image:linear-gradient(to_right,transparent,#000_2rem)]',
+  right: '[mask-image:linear-gradient(to_left,transparent,#000_2rem)]'
+}
+const isRtl = (el: HTMLElement) => getComputedStyle(el).direction === 'rtl'
+
+/** A mask class fading each side of the scroller that hides content ('' when nothing is hidden). */
+export function useScrollFade(el: Ref<HTMLElement | undefined>, content: Ref<HTMLElement | undefined>): ComputedRef<string> {
+  const edges = useScrollEdges(el, content)
+  return computed(() => {
+    const rtl = !!el.value && isRtl(el.value)
+    const left = rtl ? edges.end.value : edges.start.value
+    const right = rtl ? edges.start.value : edges.end.value
+    if (left) return right ? FADE.both : FADE.left
+    return right ? FADE.right : ''
+  })
+}
+
+function scrollToCentre(scroller: HTMLElement | undefined, item: HTMLElement | undefined, behavior: ScrollBehavior) {
   if (!scroller || !item) return
-  scroller.scrollTo?.({ left: item.offsetLeft - (scroller.clientWidth - item.offsetWidth) / 2, behavior })
+  // offsetLeft is physical; an RTL scroller counts scrollLeft from its right edge (0, then negative).
+  const left = item.offsetLeft - (scroller.clientWidth - item.offsetWidth) / 2
+  scroller.scrollTo?.({ left: isRtl(scroller) ? left - (scroller.scrollWidth - scroller.clientWidth) : left, behavior })
+}
+
+/**
+ * Keeps the selected item of a horizontal scroller in its middle: at mount and
+ * whenever `selected` (a getter reading the selection) returns another element.
+ * The scroller must be the items' offsetParent (position: relative).
+ */
+export function useCentredSelection(scroller: Ref<HTMLElement | undefined>, selected: () => HTMLElement | undefined): void {
+  onMounted(() => scrollToCentre(scroller.value, selected(), 'auto'))
+  watch(selected, item => scrollToCentre(scroller.value, item, 'smooth'), { flush: 'post' })
 }

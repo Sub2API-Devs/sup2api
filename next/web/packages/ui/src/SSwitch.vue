@@ -19,7 +19,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
 const attrs = useAttrs()
-const { id, a11y, size } = useFieldControl(props)
+const { id, a11y, size } = useFieldControl(props, true, true)
 const input = ref<HTMLInputElement>()
 const parts = computed(() => splitAttrs(attrs))
 const describedBy = computed(() => [props.describedby, a11y.value['aria-describedby']].filter(Boolean).join(' ') || undefined)

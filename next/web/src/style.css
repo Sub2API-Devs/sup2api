@@ -176,10 +176,10 @@
     @apply mt-1 text-xs text-red-500;
   }
   /* Drawn checkbox and radio (no forms plugin): the same look in every
-     browser and theme, primary when checked. */
+     browser and theme, primary when checked; a size larger on touch screens. */
   .checkbox,
   .radio {
-    @apply h-4 w-4 shrink-0 cursor-pointer appearance-none border border-line-strong bg-surface bg-center bg-no-repeat align-middle transition-colors duration-150;
+    @apply h-4 w-4 touch:h-5 touch:w-5 shrink-0 cursor-pointer appearance-none border border-line-strong bg-surface bg-center bg-no-repeat align-middle transition-colors duration-150;
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-900;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
   }
@@ -188,11 +188,11 @@
   }
   .checkbox-xs,
   .radio-xs {
-    @apply h-3.5 w-3.5;
+    @apply h-3.5 w-3.5 touch:h-4 touch:w-4;
   }
   .checkbox-md,
   .radio-md {
-    @apply h-5 w-5;
+    @apply h-5 w-5 touch:h-6 touch:w-6;
   }
   .checkbox.input-error,
   .radio.input-error {
@@ -219,13 +219,13 @@
   .radio:checked {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E");
   }
-  /* A native checkbox drawn as a toggle switch (add role="switch"). */
+  /* A native checkbox drawn as a toggle switch (add role="switch"); a size
+     larger on touch screens. */
   .switch {
-    @apply relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-gray-300 bg-no-repeat transition-all duration-150 dark:bg-dark-600;
+    @apply relative h-5 w-9 [background-size:1rem] touch:h-6 touch:w-11 touch:[background-size:1.25rem] shrink-0 cursor-pointer appearance-none rounded-full bg-gray-300 bg-no-repeat transition-all duration-150 dark:bg-dark-600;
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-900;
     @apply disabled:cursor-not-allowed disabled:opacity-50;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='white'/%3E%3C/svg%3E");
-    background-size: 1rem;
     background-position: left 0.125rem center;
   }
   .switch:checked {
@@ -236,19 +236,7 @@
     @apply bg-gray-400/80 dark:bg-dark-500;
   }
   .switch-sm {
-    @apply h-4 w-7;
-    background-size: 0.75rem;
-  }
-  /* Touch screens: a checkbox / radio and a switch a finger can hit. */
-  @media (pointer: coarse) {
-    .checkbox,
-    .radio {
-      @apply h-5 w-5;
-    }
-    .switch {
-      @apply h-6 w-11;
-      background-size: 1.25rem;
-    }
+    @apply h-4 w-7 [background-size:0.75rem] touch:h-5 touch:w-9 touch:[background-size:1rem];
   }
   input[type='number']::-webkit-inner-spin-button,
   input[type='number']::-webkit-outer-spin-button {

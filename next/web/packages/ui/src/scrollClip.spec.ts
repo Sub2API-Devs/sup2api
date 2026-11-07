@@ -1,18 +1,18 @@
-import { describe, expect, it } from 'vitest'
-import { defineComponent, h, nextTick, ref, type Ref } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h, nextTick, ref, shallowRef, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
-import { useScrollClip, useScrollEdges } from './scrollClip'
+import { useCentredSelection, useScrollClip, useScrollEdges, useScrollFade } from './scrollClip'
 
-// Mounts a scroller element watched by `use`.
-function scroller<T>(use: (el: Ref<HTMLElement | undefined>) => T) {
+// Mounts a scroller element (500px of content in 300px) watched by `use`.
+function scroller<T>(use: (el: Ref<HTMLElement | undefined>) => T, style = '') {
   let state: T | undefined
   const el = ref<HTMLElement>()
   const w = mount(defineComponent({
     setup() {
       state = use(el)
-      return () => h('div', { ref: el })
+      return () => h('div', { ref: el, style })
     }
-  }))
+  }), { attachTo: document.body })
   const node = w.element as HTMLElement
   Object.defineProperties(node, { scrollWidth: { value: 500 }, clientWidth: { value: 300 } })
   const scrollTo = (left: number) => {
@@ -48,6 +48,31 @@ describe('useScrollEdges', () => {
     expect(edges()).toEqual([true, true])
     s.scrollTo(200)
     expect(edges()).toEqual([true, false])
+    s.w.unmount()
+  })
+})
+
+describe('useScrollFade / useCentredSelection in RTL', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('fades the physical side that hides content', async () => {
+    const s = scroller(el => useScrollFade(el, ref()), 'direction: rtl')
+    await nextTick()
+    s.scrollTo(0)
+    expect(s.state().value).toBe('[mask-image:linear-gradient(to_right,transparent,#000_2rem)]')
+    s.w.unmount()
+  })
+
+  it('counts scrollLeft from the right edge', async () => {
+    const scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
+    const item = document.createElement('span')
+    Object.defineProperties(item, { offsetLeft: { value: 100 }, offsetWidth: { value: 50 } })
+    const selected = shallowRef<HTMLElement>()
+    const s = scroller(el => useCentredSelection(el, () => selected.value), 'direction: rtl')
+    selected.value = item
+    await nextTick()
+    // 100 - (300 - 50) / 2 = -25 from the left, minus the 200px of overflow.
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: -225, behavior: 'smooth' })
     s.w.unmount()
   })
 })

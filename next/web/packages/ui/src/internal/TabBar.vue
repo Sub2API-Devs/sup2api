@@ -7,10 +7,10 @@
 // When the tabs overflow, the bar scrolls sideways, fades the edge that hides
 // more tabs and centres the selected tab whenever it changes. Tabs are 44px
 // high on touch screens.
-import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 import type { TabItem } from '../types'
 import { navIndex } from '../keyboard'
-import { scrollToCentre, useScrollEdges } from '../scrollClip'
+import { useCentredSelection, useScrollFade } from '../scrollClip'
 
 const props = withDefaults(defineProps<{ tabs: TabItem[]; modelValue: string; idPrefix?: string; size?: 'sm' | 'md'; ariaLabel?: string }>(), { size: 'md' })
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
@@ -18,30 +18,19 @@ const uid = useId()
 const prefix = computed(() => props.idPrefix || uid)
 const scroller = ref<HTMLElement>()
 const nav = ref<HTMLElement>()
-const edges = useScrollEdges(scroller, nav)
-// Literal class names so Tailwind keeps them.
-const MASK = {
-  both: '[mask-image:linear-gradient(to_right,transparent,#000_2rem,#000_calc(100%-2rem),transparent)]',
-  start: '[mask-image:linear-gradient(to_right,transparent,#000_2rem)]',
-  end: '[mask-image:linear-gradient(to_left,transparent,#000_2rem)]'
-}
-const mask = computed(() => {
-  if (edges.start.value) return edges.end.value ? MASK.both : MASK.start
-  return edges.end.value ? MASK.end : ''
-})
+const fade = useScrollFade(scroller, nav)
 
 const tabId = (key: string) => `${prefix.value}-tab-${key}`
 const panelId = (key: string) => `${prefix.value}-panel-${key}`
 const focusKey = computed(() => (props.tabs.some((t) => t.key === props.modelValue && !t.disabled) ? props.modelValue : props.tabs.find((t) => !t.disabled)?.key))
 
 const tabEl = (key: string) => Array.from(nav.value?.querySelectorAll<HTMLElement>('[role="tab"]') ?? []).find((el) => el.dataset.key === key)
+useCentredSelection(scroller, () => tabEl(props.modelValue))
 
 function select(key: string) {
   emit('update:modelValue', key)
   nextTick(() => tabEl(key)?.focus())
 }
-onMounted(() => scrollToCentre(scroller.value, tabEl(props.modelValue), 'auto'))
-watch(() => props.modelValue, key => scrollToCentre(scroller.value, tabEl(key), 'smooth'), { flush: 'post' })
 function onKey(e: KeyboardEvent) {
   const enabled = props.tabs.filter((t) => !t.disabled)
   const i = enabled.findIndex((t) => t.key === (document.activeElement as HTMLElement | null)?.dataset?.key)
@@ -56,7 +45,7 @@ function onKey(e: KeyboardEvent) {
 <template>
   <div>
     <div class="border-b border-gray-200 dark:border-dark-700">
-      <div ref="scroller" class="relative -mb-px overflow-x-auto" :class="mask">
+      <div ref="scroller" class="relative -mb-px overflow-x-auto" :class="fade">
         <nav ref="nav" class="flex w-max min-w-full gap-1" role="tablist" :aria-label="ariaLabel" @keydown="onKey">
           <button
             v-for="tab in tabs"

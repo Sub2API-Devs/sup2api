@@ -24,7 +24,7 @@ const address = computed(() => typeof props.value === 'string' ? props.value.tri
       <button
         v-if="filterable"
         type="button"
-        class="min-w-0 truncate rounded-md border px-2 py-0.5 font-mono text-xs transition-colors max-md:whitespace-normal max-md:break-all max-md:text-left"
+        class="min-w-0 truncate rounded-md border px-2 py-0.5 font-mono text-xs transition-colors max-md:whitespace-normal max-md:[overflow-wrap:anywhere] max-md:text-left"
         :class="active
           ? 'border-primary-500 bg-primary-500 text-white'
           : 'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-400 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-300'"
@@ -35,7 +35,7 @@ const address = computed(() => typeof props.value === 'string' ? props.value.tri
       >
         {{ address }}
       </button>
-      <span v-else class="min-w-0 truncate font-mono text-xs max-md:whitespace-normal max-md:break-all" :title="address">{{ address }}</span>
+      <span v-else class="min-w-0 truncate font-mono text-xs max-md:whitespace-normal max-md:[overflow-wrap:anywhere]" :title="address">{{ address }}</span>
       <SCopyButton v-if="copyable" :text="address" icon-only class="shrink-0" />
     </template>
     <span v-else class="text-fg-subtle">{{ empty }}</span>
