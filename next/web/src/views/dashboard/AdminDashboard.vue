@@ -118,7 +118,7 @@ watch(() => loadingOverview.value || users.loading.value || groups.loading.value
       {{ t('stats.loadFailed', { msg: errorMessage(overviewError) }) }}
       <template #actions><SButton size="sm" icon="refresh" @click="loadOverview">{{ t('stats.retry') }}</SButton></template>
     </SAlert>
-    <SGrid :cols="2" :xl-cols="4" data-testid="admin-dashboard-cards">
+    <SGrid variant="stats" :cols="2" :xl-cols="4" data-testid="admin-dashboard-cards">
       <SStatCard
         :label="t('stats.admin.todayRequests')"
         :value="formatNumber(cards.requests)"

@@ -266,7 +266,7 @@ async function apply() {
       </SHint>
 
       <!-- stats -->
-      <SGrid :cols-base="2" :cols="3" :lg-cols="5" :gap="3" class="mb-4" data-testid="price-sync-stats">
+      <SGrid variant="stats" :cols="3" :lg-cols="5" :gap="3" class="mb-4" data-testid="price-sync-stats">
         <SStatCard
           v-for="s in stats"
           :key="s.key"

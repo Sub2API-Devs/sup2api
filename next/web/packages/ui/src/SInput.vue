@@ -9,6 +9,10 @@
 // sits in a framed div that takes class / style.
 // Inside SField / SSettingRow it takes the frame's id, aria-describedby,
 // aria-invalid and size unless set here.
+// Phone keyboards: non-prose fields (password / number / url / email / tel,
+// or `mono` such as keys and model names) turn off autocapitalize,
+// autocorrect and spellcheck, and type="number" with `min` >= 0 asks for the
+// decimal pad (it has no minus key); attrs passed in win.
 import { computed, ref, useAttrs, useSlots } from 'vue'
 import SIcon from './SIcon.vue'
 import { useUiT } from './i18n'
@@ -54,6 +58,8 @@ const input = ref<HTMLInputElement>()
 const reveal = ref(false)
 
 const DATE_TYPES = new Set(['datetime-local', 'date', 'time'])
+const PLAIN_TYPES = new Set(['password', 'number', 'url', 'email', 'tel'])
+const plain = computed(() => props.mono || PLAIN_TYPES.has(props.type))
 const lazy = computed(() => props.lazy ?? DATE_TYPES.has(props.type))
 const grouped = computed(() => !!(props.icon || props.suffix || props.clearable || props.revealable || slots.prefix || slots.suffix))
 const parts = computed(() => splitAttrs(attrs))
@@ -66,7 +72,10 @@ const inputProps = computed(() => ({
   disabled: props.disabled,
   readonly: props.readonly,
   maxlength: props.maxlength,
-  inputmode: props.inputmode,
+  inputmode: props.inputmode ?? (props.type === 'number' && Number(props.min) >= 0 ? 'decimal' : undefined),
+  autocapitalize: plain.value ? 'off' : undefined,
+  autocorrect: plain.value ? 'off' : undefined,
+  spellcheck: plain.value ? false : undefined,
   autocomplete: props.autocomplete,
   min: props.min,
   max: props.max,

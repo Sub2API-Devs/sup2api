@@ -43,7 +43,7 @@ onMounted(load)
 
 <template>
   <div class="space-y-4">
-    <SGrid :cols="3">
+    <SGrid variant="stats" :cols="3">
       <SStatCard :label="t('plugins.events.cursor')" :value="data.cursor != null ? '#' + formatNumber(data.cursor) : '—'" icon="bolt" :loading="loading" />
       <SStatCard
         :label="t('plugins.events.backlog')"

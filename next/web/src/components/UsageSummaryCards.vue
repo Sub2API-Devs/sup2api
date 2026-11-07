@@ -35,7 +35,7 @@ const v = computed(() => {
 </script>
 
 <template>
-  <SGrid :cols="2" :xl-cols="4" data-testid="usage-summary-cards">
+  <SGrid variant="stats" :cols="2" :xl-cols="4" data-testid="usage-summary-cards">
     <SStatCard
       :label="t('stats.cards.requests')"
       :value="formatNumber(v.requests)"

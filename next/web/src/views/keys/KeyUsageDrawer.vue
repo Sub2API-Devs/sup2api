@@ -59,7 +59,7 @@ const chart = computed(() => {
   <SDrawer :open="open" :title="apiKey ? t('stats.key.title', { name: apiKey.name }) : ''" width="lg" @close="emit('close')">
     <div class="flex flex-col gap-4" data-testid="key-usage-drawer">
       <SSegmented v-model="days" size="sm" :aria-label="t('stats.key.usage')" :options="dayOptions" class="self-start" data-testid="key-usage-days" />
-      <SGrid :cols="3">
+      <SGrid variant="stats" :cols="3">
         <SStatCard :label="t('stats.requests')" :value="formatNumber(sum?.requests ?? 0)" icon="usage" :loading="totals.loading.value && !sum" />
         <SStatCard :label="t('stats.cost')" :value="formatMoney(sum?.total_cost ?? 0, 2)" icon="price" tone="accent" :loading="totals.loading.value && !sum" />
         <SStatCard :label="t('stats.totalTokens')" :value="formatTokens(sum ? rowTokens(sum) : 0)" icon="bolt" tone="warning" :loading="totals.loading.value && !sum" />

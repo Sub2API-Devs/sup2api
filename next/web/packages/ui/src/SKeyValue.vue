@@ -14,6 +14,8 @@ import { TONE_TEXT } from './tones'
 // editors); `rowWarn(row, index)` returns a warning shown under a row.
 // Inside SField / SSettingRow the group is labelled by the frame's label and
 // follows its size; `error` (or the frame's error) marks every cell.
+// Phones (below md): each row is a small block, key above value (the
+// separator arrow points down) with the remove button top-right.
 const props = withDefaults(
   defineProps<{
     modelValue: Record<string, string> | null | undefined
@@ -93,7 +95,7 @@ function warn(r: Row, i: number): string {
   <div class="space-y-2" role="group" v-bind="a11y">
     <div
       v-if="rows.length"
-      class="grid gap-2 text-xs text-gray-500 dark:text-dark-400"
+      class="grid gap-2 text-xs text-gray-500 max-md:hidden dark:text-dark-400"
       :class="grid"
       aria-hidden="true"
     >
@@ -103,7 +105,7 @@ function warn(r: Row, i: number): string {
       <span class="w-8" />
     </div>
     <div v-for="(r, i) in rows" :key="i">
-      <div class="grid items-center gap-2" :class="grid">
+      <div class="grid items-center gap-2 max-md:grid-cols-[minmax(0,1fr)_auto] max-md:rounded-control max-md:border max-md:border-line max-md:p-2" :class="grid">
         <SInput
           :model-value="r.k"
           :size="size"
@@ -115,7 +117,7 @@ function warn(r: Row, i: number): string {
           :aria-label="`${keyLabel || t('ui.key')} ${i + 1}`"
           @update:model-value="setKey(r, $event)"
         />
-        <SIcon v-if="separator" name="chevron-right" class="h-4 w-4 text-fg-subtle" />
+        <SIcon v-if="separator" name="chevron-right" class="h-4 w-4 text-fg-subtle max-md:col-start-1 max-md:rotate-90 max-md:justify-self-center" />
         <SInput
           :model-value="r.v"
           :size="size"
@@ -124,6 +126,7 @@ function warn(r: Row, i: number): string {
           :placeholder="valuePlaceholder"
           :disabled="disabled"
           :list="valueListId"
+          class="max-md:col-start-1"
           :aria-label="`${valueLabel || t('ui.value')} ${i + 1}`"
           @update:model-value="setValue(r, $event)"
         />
@@ -135,6 +138,7 @@ function warn(r: Row, i: number): string {
           :disabled="disabled"
           :aria-label="t('ui.removeItem', { name: r.k || i + 1 })"
           :title="t('ui.remove')"
+          class="max-md:col-start-2 max-md:row-start-1"
           @click="remove(i)"
         />
       </div>

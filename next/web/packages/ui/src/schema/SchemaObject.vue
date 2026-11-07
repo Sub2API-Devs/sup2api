@@ -5,6 +5,8 @@
 // by themselves while one of their fields holds a value or an error).
 // Layouts: settings root (bare) = one SSettingsGroup per group; nested object
 // in settings = a stacked row around a stacked sub-form; stacked = fieldset.
+// On phones (below md) a nested object's box becomes a 2px rule on its left
+// (no frame, no side padding), so deep nesting keeps the width for fields.
 import { computed, ref } from 'vue'
 import SSettingsGroup from '../SSettingsGroup.vue'
 import SSettingRow from '../SSettingRow.vue'
@@ -82,6 +84,8 @@ function child(k: string) {
     layout: settings.value ? ('settings' as const) : ('stacked' as const)
   }
 }
+// A nested box on phones: only its left rule. Literal class names so Tailwind keeps them.
+const RULE_ON_PHONE = 'max-md:rounded-none max-md:border-0 max-md:border-l-2 max-md:pl-3 max-md:pr-0'
 const nested = computed(() => ({ ...props.ctx, layout: 'stacked' as const, bare: true }))
 </script>
 
@@ -103,12 +107,12 @@ const nested = computed(() => ({ ...props.ctx, layout: 'stacked' as const, bare:
 
   <SSettingRow v-else-if="settings" :label="ctx.label" :description="ctx.help || undefined" stacked>
     <template v-if="ctx.details" #details>{{ ctx.details }}</template>
-    <div class="w-full rounded-control border border-line p-4">
+    <div class="w-full rounded-control border border-line p-4" :class="RULE_ON_PHONE">
       <SchemaObject :model-value="modelValue" :ctx="nested" @update:model-value="emit('update:modelValue', $event)" />
     </div>
   </SSettingRow>
 
-  <fieldset v-else :class="ctx.bare ? 'space-y-4' : 'space-y-4 rounded-xl border border-gray-200 p-4 dark:border-dark-700'">
+  <fieldset v-else :class="ctx.bare ? 'space-y-4' : ['space-y-4 rounded-xl border border-gray-200 p-4 dark:border-dark-700', RULE_ON_PHONE]">
     <legend v-if="!ctx.bare" class="px-1 text-sm font-medium text-gray-700 dark:text-gray-300">{{ ctx.label }}</legend>
     <p v-if="!ctx.bare && ctx.help" class="input-hint !mt-0">{{ ctx.help }}</p>
     <template v-for="g in shown" :key="g.id">

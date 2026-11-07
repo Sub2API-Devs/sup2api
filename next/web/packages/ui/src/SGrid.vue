@@ -7,6 +7,8 @@
 // still apply, so phones stay single-column). Numbers map to literal class
 // strings so Tailwind sees them when scanning this file; the breakpoint
 // templates go through CSS variables for the same reason.
+// `variant="stats"` (rows of SStatCard) keeps 2 columns with a tighter gap
+// below md (an odd last card spans both) and starts `cols` at md, not sm.
 import { computed } from 'vue'
 
 const props = withDefaults(
@@ -22,6 +24,7 @@ const props = withDefaults(
     mdTemplate?: string
     lgTemplate?: string
     xlTemplate?: string
+    variant?: 'stats'
   }>(),
   { cols: 2, colsBase: 1, gap: 4 }
 )
@@ -33,15 +36,23 @@ const LG: Record<number, string> = { 1: 'lg:grid-cols-1', 2: 'lg:grid-cols-2', 3
 const XL: Record<number, string> = { 1: 'xl:grid-cols-1', 2: 'xl:grid-cols-2', 3: 'xl:grid-cols-3', 4: 'xl:grid-cols-4', 5: 'xl:grid-cols-5', 6: 'xl:grid-cols-6' }
 const GAP: Record<number, string> = { 2: 'gap-2', 3: 'gap-3', 4: 'gap-4', 6: 'gap-6' }
 
+const STATS = 'max-md:gap-2 max-md:[&>:last-child:nth-child(odd)]:col-span-2'
+// Column counts per breakpoint after the variant.
+const counts = computed(() => {
+  const stats = props.variant === 'stats'
+  return { base: stats ? 2 : props.colsBase, sm: stats ? undefined : props.cols, md: props.mdCols ?? (stats ? props.cols : undefined) }
+})
+
 // A breakpoint template replaces the numeric class of that breakpoint.
 const cls = computed(() => [
   GAP[props.gap] ?? 'gap-4',
+  props.variant === 'stats' ? STATS : '',
   ...(props.template
     ? []
     : [
-        BASE[props.colsBase] ?? 'grid-cols-1',
-        props.smTemplate ? 'sm:grid-cols-[var(--s-grid-sm)]' : (SM[props.cols] ?? 'sm:grid-cols-2'),
-        props.mdTemplate ? 'md:grid-cols-[var(--s-grid-md)]' : props.mdCols ? MD[props.mdCols] : '',
+        BASE[counts.value.base] ?? 'grid-cols-1',
+        props.smTemplate ? 'sm:grid-cols-[var(--s-grid-sm)]' : counts.value.sm ? (SM[counts.value.sm] ?? 'sm:grid-cols-2') : '',
+        props.mdTemplate ? 'md:grid-cols-[var(--s-grid-md)]' : counts.value.md ? MD[counts.value.md] : '',
         props.lgTemplate ? 'lg:grid-cols-[var(--s-grid-lg)]' : props.lgCols ? LG[props.lgCols] : '',
         props.xlTemplate ? 'xl:grid-cols-[var(--s-grid-xl)]' : props.xlCols ? XL[props.xlCols] : ''
       ])

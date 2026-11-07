@@ -5,6 +5,7 @@
 // turns the header into a toggle (v-model:open, or uncontrolled starting at
 // `defaultOpen`). `dense` tightens the header and makes rows without their
 // own `dense` compact. Remaining attrs (data-testid, ...) go to the root.
+// Phones (below md): 12px side padding and a header at least 44px high.
 import { computed, useId } from 'vue'
 import SDisclosure from './SDisclosure.vue'
 import SIcon from './SIcon.vue'
@@ -28,7 +29,7 @@ const showTitle = useTitleVisibility(() => props.title, () => !!props.collapsibl
   <section class="card">
     <header
       v-if="(showTitle && title) || $slots.title || description || $slots.details || $slots.actions"
-      class="flex items-start justify-between gap-3 rounded-t-card border-line bg-surface-2/60 px-4"
+      class="flex items-start justify-between gap-3 rounded-t-card border-line bg-surface-2/60 px-4 max-md:min-h-11 max-md:items-center max-md:px-3"
       :class="[dense ? 'py-2' : 'py-3', isOpen ? 'border-b' : 'rounded-b-card']"
     >
       <div class="min-w-0 flex-1">
@@ -84,7 +85,7 @@ const showTitle = useTitleVisibility(() => props.title, () => !!props.collapsibl
     <div
       v-if="isOpen"
       :id="bodyId"
-      class="divide-y divide-line px-4"
+      class="divide-y divide-line px-4 max-md:px-3"
     >
       <slot />
     </div>

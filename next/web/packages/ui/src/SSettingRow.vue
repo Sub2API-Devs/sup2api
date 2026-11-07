@@ -8,7 +8,9 @@
 // message under the control. Remaining attrs (data-testid, ...) go to the
 // root. `dense` is for rows of a label and a small control only (unset, it
 // follows a `dense` SSettingsGroup); `flush` drops the vertical padding (a
-// single row inside a form or modal).
+// single row inside a form or modal). On narrow screens a row whose only
+// control is a switch / checkbox keeps it beside the label; other controls
+// take the full width.
 import { computed, useId, useSlots } from 'vue'
 import SDisclosure from './SDisclosure.vue'
 import { provideField, type ControlSize } from './field'
@@ -33,7 +35,7 @@ const uid = useId()
 const groupDense = useSettingsDensity()
 const isDense = computed(() => props.dense ?? groupDense())
 const hasDescription = computed(() => !!props.description || !!slots.description)
-const { labelFor } = provideField(uid, {
+const { labelFor, inlineOnly } = provideField(uid, {
   for: () => props.for,
   labelId: computed(() => `${uid}-label`),
   describedBy: computed(() => [props.error ? `${uid}-error` : '', hasDescription.value ? `${uid}-desc` : ''].filter(Boolean).join(' ') || undefined),
@@ -43,7 +45,14 @@ const { labelFor } = provideField(uid, {
 </script>
 
 <template>
-  <div class="grid gap-3" :class="[flush ? '' : isDense ? 'py-2.5' : 'py-4', stacked ? '' : 'sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-8']">
+  <div
+    class="grid gap-3"
+    :class="[
+      flush ? '' : isDense ? 'py-2.5' : 'py-4',
+      stacked ? '' : 'items-center sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-8',
+      !stacked && inlineOnly ? 'max-sm:grid-cols-[minmax(0,1fr)_auto]' : ''
+    ]"
+  >
     <div class="min-w-0">
       <component :is="labelFor ? 'label' : 'p'" :id="`${uid}-label`" :for="labelFor" class="text-sm font-medium text-fg">
         <slot name="label">{{ label }}</slot><span v-if="required" class="ml-0.5 text-red-500" aria-hidden="true">*</span>
@@ -54,7 +63,7 @@ const { labelFor } = provideField(uid, {
       <SDisclosure v-if="$slots.details" class="mt-1.5"><slot name="details" /></SDisclosure>
     </div>
     <div class="min-w-0" :class="stacked ? '' : 'sm:justify-self-end'">
-      <div class="flex min-w-0 flex-wrap items-center gap-2" :class="stacked ? '' : 'sm:justify-end'"><slot /></div>
+      <div class="flex min-w-0 flex-wrap items-center gap-2 max-sm:[&>*]:grow" :class="stacked ? '' : 'sm:justify-end'"><slot /></div>
       <p v-if="error" :id="`${uid}-error`" class="input-error-text" :class="stacked ? '' : 'sm:text-right'">{{ error }}</p>
     </div>
   </div>

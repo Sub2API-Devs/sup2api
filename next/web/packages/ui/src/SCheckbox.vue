@@ -6,7 +6,8 @@
 // the text size and the box (xs 14px, sm 16px, md 20px). The checked /
 // indeterminate state is written back to the DOM when the parent keeps the
 // old value (controlled). Inside SField / SSettingRow it takes the frame's
-// id and aria-describedby.
+// id and aria-describedby. On touch screens the box is 20px and a labelled
+// row a 44px-high target.
 import { computed, onMounted, onUpdated, ref, useAttrs } from 'vue'
 import { splitAttrs, useFieldControl } from './field'
 import { useCheckboxModel } from './controlled'
@@ -27,7 +28,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
 const attrs = useAttrs()
-const { id, a11y, invalid } = useFieldControl(props)
+const { id, a11y, invalid } = useFieldControl(props, true, true)
 const input = ref<HTMLInputElement>()
 
 const parts = computed(() => (props.bare ? { wrap: {}, control: attrs } : splitAttrs(attrs)))
@@ -57,7 +58,7 @@ const { onClick, onChange } = useCheckboxModel(props, emit, input, syncDom)
   <label
     v-else
     class="flex items-center"
-    :class="[size === 'xs' ? 'gap-1.5' : 'gap-2', disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer']"
+    :class="[size === 'xs' ? 'gap-1.5' : 'gap-2', disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', label || $slots.default ? 'touch:min-h-11' : '']"
     v-bind="parts.wrap"
   >
     <input ref="input" class="checkbox" :class="[BOX[size], { 'input-error': invalid }]" v-bind="inputProps" @click="onClick" @change="onChange" />

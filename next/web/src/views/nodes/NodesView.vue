@@ -159,7 +159,7 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
       </template>
     </SPageHeader>
 
-    <SGrid :cols="1" :md-cols="3" class="mb-4">
+    <SGrid variant="stats" :md-cols="3" class="mb-4">
       <SStatCard :label="t('nodes.online')" :value="`${healthy}/${nodes.length}`" icon="node" :tone="healthy < nodes.length ? 'warning' : 'success'" :loading="loading" />
       <SStatCard :label="t('nodes.pluginIssues')" :value="pluginIssues" icon="plugin" :tone="pluginIssues ? 'danger' : 'primary'" :loading="loading" />
       <SStatCard :label="t('nodes.hostVersions')" :value="versions" icon="cpu" :tone="versions > 1 ? 'warning' : 'primary'" :sub="versions > 1 ? t('nodes.mixedVersions') : undefined" :loading="loading" />

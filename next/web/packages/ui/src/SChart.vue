@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { compactChartOption, eachOf } from './chart'
+import { useViewport } from './viewport'
 
 // ECharts wrapper. echarts is loaded lazily so pages without charts don't
 // pay for it. The option is applied as-is; colors, text, axis lines and the
@@ -8,14 +10,16 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 // `group` move their tooltip and crosshair together (echarts connect).
 // The default colors are the validated categorical palette (8 slots, its own
 // steps on the dark surface); red is the last slot, so a chart of a few
-// series does not look like an error.
+// series does not look like an error. On phones the default `height` is
+// 220px and compactChartOption() fills phone-friendly defaults into the
+// option (scrolling bottom legend, confined tooltip, labels kept inside).
 const PALETTE = {
   light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
   dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
 }
-const props = withDefaults(defineProps<{ option: Record<string, any>; height?: string; loading?: boolean; group?: string }>(), {
-  height: '280px'
-})
+const props = defineProps<{ option: Record<string, any>; height?: string; loading?: boolean; group?: string }>()
+const { compact } = useViewport()
+const height = computed(() => props.height ?? (compact.value ? '220px' : '280px'))
 
 const el = ref<HTMLDivElement>()
 const chart = shallowRef<any>(null)
@@ -70,14 +74,15 @@ function themed(opt: Record<string, any>) {
 }
 
 function axis(a: any, text: string, line: string) {
-  if (!a) return a
-  const f = (x: any) => ({
-    axisLabel: { color: text },
-    axisLine: { lineStyle: { color: line } },
-    splitLine: { lineStyle: { color: line } },
-    ...x
-  })
-  return Array.isArray(a) ? a.map(f) : f(a)
+  return (
+    a &&
+    eachOf(a, (x) => ({
+      axisLabel: { color: text },
+      axisLine: { lineStyle: { color: line } },
+      splitLine: { lineStyle: { color: line } },
+      ...x
+    }))
+  )
 }
 
 async function render() {
@@ -91,7 +96,7 @@ async function render() {
       ec.connect(props.group)
     }
   }
-  chart.value.setOption(themed(props.option), true)
+  chart.value.setOption(themed(compact.value ? compactChartOption(props.option) : props.option), true)
   if (props.loading) chart.value.showLoading('default', { maskColor: 'transparent', text: '' })
   else chart.value.hideLoading()
 }
@@ -107,7 +112,7 @@ onMounted(() => {
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
 })
 
-watch(() => [props.option, props.loading, dark.value], render)
+watch(() => [props.option, props.loading, dark.value, compact.value], render)
 
 onBeforeUnmount(() => {
   ro?.disconnect()

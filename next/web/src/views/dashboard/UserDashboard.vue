@@ -129,7 +129,7 @@ watch(() => loadingOverview.value || loadingRecent.value, (v) => emit('update:lo
       {{ t('stats.loadFailed', { msg: errorMessage(overviewError) }) }}
       <template #actions><SButton size="sm" icon="refresh" @click="loadOverview">{{ t('stats.retry') }}</SButton></template>
     </SAlert>
-    <SGrid :cols="2" :xl-cols="4" data-testid="user-dashboard-cards">
+    <SGrid variant="stats" :cols="2" :xl-cols="4" data-testid="user-dashboard-cards">
       <SStatCard
         v-if="auth.balance !== null"
         :label="t('dashboard.balance')"

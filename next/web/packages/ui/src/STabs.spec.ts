@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { h } from 'vue'
+import { h, nextTick } from 'vue'
 import STabs from './STabs.vue'
 import SSettingsGroup from './SSettingsGroup.vue'
 import SPageHeader from './SPageHeader.vue'
@@ -80,5 +80,34 @@ describe('platform tab title ownership', () => {
     expect(wrapper.find('h5').exists()).toBe(false)
     expect(wrapper.find('input').exists()).toBe(true)
     expect(values).toEqual({ enabled: true })
+  })
+})
+
+describe('tab bar that scrolls', () => {
+  const many = [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }, { key: 'c', label: 'C' }]
+  afterEach(() => vi.restoreAllMocks())
+
+  it('fades the edges that hide tabs', async () => {
+    const wrapper = mount(STabs, { props: { tabs: many, modelValue: 'a' } })
+    const scroller = wrapper.get('[role="tablist"]').element.parentElement!
+    Object.defineProperties(scroller, { scrollWidth: { value: 500 }, clientWidth: { value: 200 } })
+    const scrollTo = async (left: number) => {
+      scroller.scrollLeft = left
+      scroller.dispatchEvent(new Event('scroll'))
+      await nextTick()
+      return scroller.className
+    }
+    expect(await scrollTo(0)).toContain('to_left')
+    expect(await scrollTo(100)).toContain('calc(100%-2rem)')
+    expect(await scrollTo(300)).toContain('to_right,transparent,#000_2rem)')
+  })
+
+  it('centres the selected tab when it changes', async () => {
+    const scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
+    const wrapper = mount(STabs, { props: { tabs: many, modelValue: 'a' } })
+    Object.defineProperty(wrapper.get('[role="tablist"]').element.parentElement!, 'clientWidth', { value: 200 })
+    Object.defineProperties(wrapper.get('[data-key="c"]').element, { offsetLeft: { value: 400 }, offsetWidth: { value: 80 } })
+    await wrapper.setProps({ modelValue: 'c' })
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 340, behavior: 'smooth' })
   })
 })

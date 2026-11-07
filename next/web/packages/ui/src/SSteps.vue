@@ -2,16 +2,20 @@
 // Step list (wizards, multi-stage jobs). Each step has `title`,
 // `description` and `state` done / current / pending / error; without
 // states, steps before `current` (a key) are done, `current` is current and
-// the rest pending. `direction` horizontal (default) / vertical. Slot
-// `step-<key>` adds content under a step (vertical layouts: logs, actions).
+// the rest pending. `direction` horizontal / vertical, or auto (default):
+// vertical on phones, horizontal otherwise. Slot `step-<key>` adds content
+// under a step (vertical layouts: logs, actions).
 import { computed } from 'vue'
 import SIcon from './SIcon.vue'
 import { useUiT } from './i18n'
 import { TONE_TEXT } from './tones'
 import type { StepItem, StepState } from './types'
+import { useViewport } from './viewport'
 
-const props = withDefaults(defineProps<{ steps: StepItem[]; current?: string; direction?: 'horizontal' | 'vertical' }>(), { direction: 'horizontal' })
+const props = withDefaults(defineProps<{ steps: StepItem[]; current?: string; direction?: 'horizontal' | 'vertical' | 'auto' }>(), { direction: 'auto' })
 const t = useUiT()
+const { compact } = useViewport()
+const layout = computed(() => (props.direction === 'auto' ? (compact.value ? 'vertical' : 'horizontal') : props.direction))
 const states = computed<StepState[]>(() => {
   const ci = props.steps.findIndex((s) => s.key === props.current)
   return props.steps.map((s, i) => s.state ?? (ci < 0 ? 'pending' : i < ci ? 'done' : i === ci ? 'current' : 'pending'))
@@ -27,16 +31,16 @@ const SR: Record<StepState, string> = { done: 'ui.stepDone', current: 'ui.stepCu
 </script>
 
 <template>
-  <ol :class="direction === 'vertical' ? 'space-y-0' : 'flex flex-wrap items-start gap-y-3'">
+  <ol :class="layout === 'vertical' ? 'space-y-0' : 'flex flex-wrap items-start gap-y-3'">
     <li
       v-for="(s, i) in steps"
       :key="s.key"
       class="relative"
-      :class="direction === 'vertical' ? 'flex gap-3 pb-5 last:pb-0' : 'flex min-w-[8rem] flex-1 items-start gap-2 pr-3'"
+      :class="layout === 'vertical' ? 'flex gap-3 pb-5 last:pb-0' : 'flex min-w-[8rem] flex-1 items-start gap-2 pr-3'"
       :aria-current="states[i] === 'current' ? 'step' : undefined"
     >
       <span
-        v-if="direction === 'vertical' && i < steps.length - 1"
+        v-if="layout === 'vertical' && i < steps.length - 1"
         class="absolute left-3 top-7 -ml-px h-[calc(100%-1.75rem)] w-0.5"
         :class="states[i] === 'done' ? 'bg-primary-500' : 'bg-line'"
         aria-hidden="true"
@@ -51,7 +55,7 @@ const SR: Record<StepState, string> = { done: 'ui.stepDone', current: 'ui.stepCu
           <p class="text-sm font-medium" :class="TITLE[states[i]]">
             {{ s.title }}<span v-if="SR[states[i]]" class="sr-only"> ({{ t(SR[states[i]]) }})</span>
           </p>
-          <span v-if="direction === 'horizontal' && i < steps.length - 1" class="hidden h-px flex-1 sm:block" :class="states[i] === 'done' ? 'bg-primary-500' : 'bg-line'" aria-hidden="true" />
+          <span v-if="layout === 'horizontal' && i < steps.length - 1" class="hidden h-px flex-1 sm:block" :class="states[i] === 'done' ? 'bg-primary-500' : 'bg-line'" aria-hidden="true" />
         </div>
         <p v-if="s.description" class="mt-0.5 text-xs leading-5 text-fg-muted">{{ s.description }}</p>
         <slot :name="`step-${s.key}`" :step="s" :state="states[i]" />

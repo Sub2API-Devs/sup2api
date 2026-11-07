@@ -56,7 +56,7 @@ watch(loading, (v) => emit('update:loading', v), { immediate: true })
 
 <template>
   <div>
-    <SGrid :cols="1" :md-cols="$slots.stats ? 4 : 3" class="mb-4">
+    <SGrid :variant="$slots.stats ? 'stats' : undefined" :cols="1" :md-cols="$slots.stats ? 4 : 3" class="mb-4">
       <SStatCard
         :label="t('ledger.balance')"
         :value="formatMoney(balance)"
