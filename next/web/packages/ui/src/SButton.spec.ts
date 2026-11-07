@@ -14,11 +14,13 @@ describe('SButton fab', () => {
     const w = mountPinned(SButton, { props: { fab: true, icon: 'plus', variant: 'primary' }, slots: { default: () => 'New key' } })
     expect(w.classes()).toEqual(expect.arrayContaining(['fixed', 'h-14', 'w-14', 'rounded-full']))
     expect(w.get('.sr-only').text()).toBe('New key')
+    expect(w.attributes('data-fab')).toBe('true')
   })
 
   it('is an ordinary button on a wide screen', () => {
     const w = mount(SButton, { props: { fab: true, icon: 'plus' }, slots: { default: () => 'New key' } })
     expect(w.classes()).not.toContain('fixed')
+    expect(w.attributes('data-fab')).toBeUndefined()
     expect(w.find('.sr-only').exists()).toBe(false)
     expect(w.text()).toBe('New key')
   })

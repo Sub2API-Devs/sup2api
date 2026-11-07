@@ -9,7 +9,8 @@
 // `tone="danger"` colours a ghost / secondary button red.
 // `fab` (with an `icon`): on a compact screen a 56px round button floating
 // bottom-right above the home indicator, its text visually hidden (kept for
-// screen readers); an ordinary button on wide screens.
+// screen readers), marked `data-fab` so the page layout can keep room for it
+// under the last row; an ordinary button on wide screens.
 import { computed } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import SSpinner from './SSpinner.vue'
@@ -87,7 +88,7 @@ const target = computed(() => {
 </script>
 
 <template>
-  <component :is="target.is" v-bind="target.attrs" :class="cls" :aria-label="ariaLabel" :aria-busy="loading || undefined">
+  <component :is="target.is" v-bind="target.attrs" :class="cls" :aria-label="ariaLabel" :aria-busy="loading || undefined" :data-fab="fab || undefined">
     <SSpinner v-if="loading" size="sm" decorative />
     <SIcon v-else-if="icon" :name="icon" :class="fab ? FAB.icon : ICON[size]" />
     <span v-if="fab && !iconOnly && !square" class="sr-only"><slot /></span>
