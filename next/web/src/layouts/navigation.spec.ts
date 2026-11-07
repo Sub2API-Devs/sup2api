@@ -8,7 +8,7 @@ import { useAppStore } from '@/stores/app'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
 import DeclarativeTable from '@/components/plugin/DeclarativeTable.vue'
-import { mountPinned } from '../../packages/ui/src/testViewport'
+import { mountPinned } from '@sub2api/ui/testing'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn() }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), api }))

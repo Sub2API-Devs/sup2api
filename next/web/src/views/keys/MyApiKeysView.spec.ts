@@ -7,7 +7,7 @@ import { startOfToday } from '@/utils/format'
 import MyApiKeysView from './MyApiKeysView.vue'
 import KeyEditor from './KeyEditor.vue'
 import KeyGroupSwitch from './KeyGroupSwitch.vue'
-import { mountPinned } from '../../../packages/ui/src/testViewport'
+import { mountPinned } from '@sub2api/ui/testing'
 
 const { get, post, patch, reload, notifyError, deleteWithConfirm } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), reload: vi.fn(), notifyError: vi.fn(), deleteWithConfirm: vi.fn() }))
 vi.mock('@sub2api/host', () => ({ api: { get, post, patch } }))

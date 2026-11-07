@@ -7,7 +7,7 @@ import UsageFilters from './UsageFilters.vue'
 import UsageOverviewView from './UsageOverviewView.vue'
 import UsageView from './UsageView.vue'
 import UsageIPPanel from './UsageIPPanel.vue'
-import { mountPinned } from '../../../packages/ui/src/testViewport'
+import { mountPinned } from '@sub2api/ui/testing'
 
 const get = vi.hoisted(() => vi.fn(async () => []))
 const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))

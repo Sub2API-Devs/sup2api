@@ -12,6 +12,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': r('./src'),
+      // Before '@sub2api/ui', which would otherwise claim the subpath.
+      '@sub2api/ui/testing': r('./packages/ui/src/testViewport.ts'),
       '@sub2api/ui': r('./packages/ui/src/index.ts'),
       '@sub2api/host': r('./packages/host/src/index.ts')
     }

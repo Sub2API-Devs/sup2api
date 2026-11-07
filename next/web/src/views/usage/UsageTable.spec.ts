@@ -7,7 +7,7 @@ import UsageStatus from './UsageStatus.vue'
 import UsageError from './UsageError.vue'
 import UsageTokens from './UsageTokens.vue'
 import { errorText, type UsageRow } from './usage'
-import { mountPinned } from '../../../packages/ui/src/testViewport'
+import { mountPinned } from '@sub2api/ui/testing'
 
 enableAutoUnmount(afterEach)
 const row = {
