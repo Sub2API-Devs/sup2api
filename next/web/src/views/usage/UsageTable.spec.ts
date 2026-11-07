@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
+import { provideViewport } from '@sub2api/ui'
 import { i18n } from '@/i18n'
 import UsageTable from './UsageTable.vue'
 import UsageStatus from './UsageStatus.vue'
@@ -39,6 +40,11 @@ const global = {
   plugins: [i18n],
   stubs: { UsageDetail: { props: ['row', 'path'], template: '<div data-testid="usage-detail">{{ path }}</div>' } }
 }
+/** UsageTable on a phone (compact), where STable shows the #card form. */
+function mountPhone(props: InstanceType<typeof UsageTable>['$props']) {
+  const Phone = defineComponent({ setup: () => (provideViewport({ compact: true }), () => h(UsageTable, props)) })
+  return mount(Phone, { global }).findComponent(UsageTable)
+}
 
 describe('usage records layout', () => {
   it('uses the SDK picker for desktop and mobile fields and persists separately for self-service', async () => {
@@ -50,10 +56,11 @@ describe('usage records layout', () => {
     ip.click()
     await nextTick()
     expect(w.find('[data-testid="ip-address-filter"]').exists()).toBe(false)
-    expect(w.get('[data-testid="mobile-usage-record"]').text()).not.toContain(row.client_ip)
     w.unmount()
     const restored = mount(UsageTable, { props: { rows: [row], columnSettingsKey: 'core.usage.all' }, global })
     expect(restored.find('[data-testid="ip-address-filter"]').exists()).toBe(false)
+    const card = mountPhone({ rows: [row], columnSettingsKey: 'core.usage.all' })
+    expect(card.get('[data-testid="mobile-usage-record"]').text()).not.toContain(row.client_ip)
     const mine = mount(UsageTable, { props: { rows: [row], showUser: false, showAccount: false, columnSettingsKey: 'core.usage.self' }, global })
     expect(mine.get('[data-testid="ip-address-filter"]').text()).toBe(row.client_ip)
   })
@@ -64,7 +71,7 @@ describe('usage records layout', () => {
     expect(w.text()).toContain(row.group_name)
     expect(w.get('[data-testid="usage-client"]').text()).toContain('my-laptop')
     expect(w.get('[data-testid="ip-address-filter"]').text()).toBe('2001:db8::7')
-    expect(w.get('[data-testid="mobile-usage-record"]').text()).toContain('2001:db8::7')
+    expect(w.find('[data-testid="mobile-usage-record"]').exists()).toBe(false)
     await w.get('[data-testid="ip-address-filter"]').trigger('click')
     expect(w.emitted('filter-client-ip')).toEqual([['2001:db8::7']])
     expect(w.text()).toContain('403')
@@ -82,15 +89,11 @@ describe('usage records layout', () => {
     expect(accounts.length).toBe(1)
     expect(accounts[0].findAll('span').map(x => x.text()).filter(Boolean)).toEqual(['#9', 'Account nine'])
     expect(accounts[0].attributes('title')).toContain('#9 Account nine')
-    expect(w.findAll('[data-testid="mobile-usage-record"]')[0].text()).toContain('#9 Account nine')
     await accounts[0].trigger('click')
     expect(w.emitted('filter-account-id')).toEqual([[9]])
   })
   it('loads owner-scoped mobile detail only when expanded and keeps admin fields hidden', async () => {
-    const w = mount(UsageTable, {
-      props: { rows: [row], showUser: false, showAccount: false, detailPath: id => `/me/usage/${id}` },
-      global
-    })
+    const w = mountPhone({ rows: [row], showUser: false, showAccount: false, detailPath: id => `/me/usage/${id}` })
     expect(w.find('[data-testid="usage-detail"]').exists()).toBe(false)
     expect(w.text()).not.toContain('Account nine')
     expect(w.text()).not.toContain('#9')
@@ -116,11 +119,25 @@ describe('usage records layout', () => {
   it('shows a failed request as "status_code=…, message" in the detail column, whole text on hover', async () => {
     const w = mount(UsageTable, { props: { rows: [row, { ...row, id: 2, success: true, status_code: 200, matched_tier: 'tier-a' }] }, global, attachTo: document.body })
     const texts = w.findAll('[data-testid="usage-error-text"]')
-    expect(texts.map(x => x.text())).toEqual(['status_code=403, model not allowed for this group', 'status_code=403, model not allowed for this group'])
+    expect(texts.map(x => x.text())).toEqual(['status_code=403, model not allowed for this group'])
     expect(texts[0].element.closest('td')).not.toBeNull()
     expect(w.text()).toContain('tier-a')
     await texts[0].trigger('focusin')
     expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('status_code=403, model not allowed for this group')
+  })
+  it('shows each request as a card on a phone, with the same fields and filters', async () => {
+    const w = mountPhone({ rows: [row], showClientRequestId: true })
+    expect(w.find('table').exists()).toBe(false)
+    const card = w.get('[data-testid="mobile-usage-record"]')
+    expect(card.text()).toContain(row.model)
+    expect(card.text()).toContain('#9 Account nine')
+    expect(card.text()).toContain('status_code=403, model not allowed for this group')
+    await card.get('[data-testid="ip-address-filter"]').trigger('click')
+    expect(w.emitted('filter-client-ip')).toEqual([['2001:db8::7']])
+    await card.findAll('button').find(b => b.text() === 'client-request-one')!.trigger('click')
+    expect(w.emitted('filter-client-request-id')).toEqual([['client-request-one']])
+    await card.findAll('button').find(b => b.text() === '#9 Account nine')!.trigger('click')
+    expect(w.emitted('filter-account-id')).toEqual([[9]])
   })
   it('falls back to the error type when there is no message', () => {
     expect(errorText({ ...row, status_code: 503, error_type: 'model_availability', error_message: '' })).toBe('status_code=503, model_availability')
