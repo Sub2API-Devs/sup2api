@@ -10,7 +10,9 @@
 // screen the default-slot filters fold behind a Filters button (badge
 // `activeCount`, the number of filters off their default) that opens a
 // bottom sheet with them, #end and Reset; `#chips` (e.g. the active filters
-// as removable chips) shows under that row.
+// as removable chips) shows under that row. Done in the sheet (or Enter in
+// one of its fields) closes it and emits `done`: a page that applies a draft
+// on Search applies it then.
 import { useViewport } from './viewport'
 import FilterSheet from './internal/FilterSheet.vue'
 
@@ -21,12 +23,13 @@ withDefaults(defineProps<{ card?: boolean; dirty?: boolean; ariaLabel?: string; 
   onReset: undefined,
   activeCount: 0
 })
+const emit = defineEmits<{ done: [] }>()
 const { compact } = useViewport()
 </script>
 
 <template>
   <div role="group" :aria-label="ariaLabel" class="flex flex-wrap items-center gap-2" :class="card ? 'card p-3' : ''" data-testid="filter-bar">
-    <FilterSheet :collapse="compact" :title="ariaLabel" :active-count="activeCount" :dirty="dirty" :on-reset="onReset">
+    <FilterSheet :collapse="compact" :title="ariaLabel" :active-count="activeCount" :dirty="dirty" :on-reset="onReset" @done="emit('done')">
       <template v-if="$slots.primary" #primary><slot name="primary" /></template>
       <template v-if="$slots.default" #default><slot /></template>
       <template v-if="$slots.end" #end><slot name="end" /></template>

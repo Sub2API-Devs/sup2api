@@ -64,6 +64,18 @@ describe('SFilterBar on a phone', () => {
     document.querySelector<HTMLButtonElement>('[data-testid="filter-sheet-done"]')!.click()
     await nextTick()
     expect(sheet()).toBeNull()
+    expect(w.emitted('done')).toHaveLength(1)
+  })
+
+  it('submits the sheet (Enter in a field) like Done', async () => {
+    const w = mountPinned(SFilterBar, { slots })
+    await w.get('[data-testid="filter-sheet-open"]').trigger('click')
+    const form = sheet()!.closest('form')!
+    expect(document.querySelector('[data-testid="filter-sheet-done"]')?.getAttribute('form')).toBe(form.id)
+    form.dispatchEvent(new Event('submit', { cancelable: true }))
+    await nextTick()
+    expect(sheet()).toBeNull()
+    expect(w.emitted('done')).toHaveLength(1)
   })
 
   it('shows only the Filters button without #primary, and no Reset without @reset', async () => {

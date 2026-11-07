@@ -6,8 +6,9 @@
 // #primary sharing the width and a Filters button (badge = `activeCount`)
 // that opens a bottom sheet with the default-slot filters stacked full
 // width, #end, and Reset / Done; #chips shows under that row. Filters apply
-// as they change through the page's v-model; Done only closes the sheet.
-import { computed, ref, useSlots } from 'vue'
+// as they change through the page's v-model; Done (or Enter in a sheet field)
+// closes the sheet and emits `done`, for a page that applies a draft then.
+import { computed, ref, useId, useSlots } from 'vue'
 import { useUiT } from '../i18n'
 import SButton from '../SButton.vue'
 import SDrawer from '../SDrawer.vue'
@@ -21,10 +22,16 @@ const props = withDefaults(
     onReset: undefined
   }
 )
+const emit = defineEmits<{ done: [] }>()
 const slots = useSlots()
 const t = useUiT()
 const open = ref(false)
 const folded = computed(() => props.collapse && !!slots.default)
+const formId = useId()
+function finish() {
+  open.value = false
+  emit('done')
+}
 </script>
 
 <template>
@@ -55,12 +62,15 @@ const folded = computed(() => props.collapse && !!slots.default)
       <slot name="chips" />
     </div>
     <SDrawer v-model:open="open" side="bottom" :title="title || t('ui.filters')">
-      <div class="flex flex-col gap-3 [&>*]:!w-full" data-testid="filter-sheet">
-        <slot />
-      </div>
-      <div v-if="$slots.end" class="mt-3 flex flex-wrap items-center gap-2">
-        <slot name="end" />
-      </div>
+      <!-- A form, so that Enter in a field submits it through Done. -->
+      <form :id="formId" @submit.prevent="finish">
+        <div class="flex flex-col gap-3 [&>*]:!w-full" data-testid="filter-sheet">
+          <slot />
+        </div>
+        <div v-if="$slots.end" class="mt-3 flex flex-wrap items-center gap-2">
+          <slot name="end" />
+        </div>
+      </form>
       <template #footer>
         <SButton
           v-if="onReset"
@@ -73,7 +83,7 @@ const folded = computed(() => props.collapse && !!slots.default)
         >
           {{ t('ui.resetFilters') }}
         </SButton>
-        <SButton variant="primary" data-testid="filter-sheet-done" @click="open = false">{{ t('ui.done') }}</SButton>
+        <SButton type="submit" :form="formId" variant="primary" data-testid="filter-sheet-done">{{ t('ui.done') }}</SButton>
       </template>
     </SDrawer>
   </div>
