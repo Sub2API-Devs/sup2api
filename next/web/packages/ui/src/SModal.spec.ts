@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { h } from 'vue'
 import SModal from './SModal.vue'
 import SDrawer from './SDrawer.vue'
 import SConfirmHost from './SConfirmHost.vue'
 import { confirm } from './feedback'
-import { pinViewport } from './internal/pinViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 afterEach(() => {
@@ -13,7 +13,7 @@ afterEach(() => {
 })
 
 async function panelOf(compact: boolean, render: () => ReturnType<typeof h>) {
-  mount(pinViewport({ compact }, render), { attachTo: document.body })
+  mountPinned(render, {}, { compact })
   await flushPromises()
   return document.querySelector<HTMLElement>('[role="dialog"]')!
 }

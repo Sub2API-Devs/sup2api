@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SAutoRefresh from './SAutoRefresh.vue'
-import { mountCompact } from './testViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 
@@ -13,7 +13,7 @@ afterEach(() => {
 describe('SAutoRefresh on a phone', () => {
   it('is an icon button with a running dot whose menu offers Refresh now', async () => {
     const onRefresh = vi.fn()
-    const w = mountCompact(SAutoRefresh, { modelValue: 30, onRefresh })
+    const w = mountPinned(SAutoRefresh, { props: { modelValue: 30, onRefresh } })
     const button = w.get('[data-testid="auto-refresh"]')
     expect(button.text()).toBe('')
     expect(button.attributes('aria-label')).toBe('Auto refresh: Every 30s')
@@ -28,7 +28,7 @@ describe('SAutoRefresh on a phone', () => {
   })
 
   it('has no dot while off and no Refresh now without @refresh', async () => {
-    const w = mountCompact(SAutoRefresh, { modelValue: 0 })
+    const w = mountPinned(SAutoRefresh, { props: { modelValue: 0 } })
     expect(w.find('[data-testid="auto-refresh-dot"]').exists()).toBe(false)
     await w.get('[data-testid="auto-refresh"]').trigger('click')
     await nextTick()

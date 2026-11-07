@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { h } from 'vue'
 import SFormModal from './SFormModal.vue'
-import { pinViewport } from './internal/pinViewport'
+import { mountPinned } from './testViewport'
 
 const render = (props: Record<string, unknown> = {}) =>
   mount(SFormModal, {
@@ -50,10 +50,8 @@ describe('SFormModal', () => {
   })
 
   it('on phones puts Cancel and Submit side by side under #footer-start, without a wrapper', () => {
-    const w = mount(
-      pinViewport({ compact: true }, () =>
-        h(SFormModal, { open: true, title: 'Edit' }, { default: () => h('input'), 'footer-start': () => h('span', { class: 'hint' }, 'Hint') })
-      ),
+    const w = mountPinned(
+      () => h(SFormModal, { open: true, title: 'Edit' }, { default: () => h('input'), 'footer-start': () => h('span', { class: 'hint' }, 'Hint') }),
       { global: { stubs: { Teleport: true } } }
     )
     expect(w.find('.s-drawer-bottom').exists()).toBe(true)

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { h } from 'vue'
 import SDropdown from './SDropdown.vue'
-import { pinViewport } from './internal/pinViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 afterEach(() => {
@@ -16,10 +16,7 @@ const actions = [
 
 function phoneMenu(props: Record<string, unknown> = {}) {
   const events = { onSelect: vi.fn(), onOpen: vi.fn(), onClose: vi.fn() }
-  const w = mount(
-    pinViewport({ compact: true }, () => h(SDropdown, { actions, ...props, ...events }, { header: () => 'Row 7' })),
-    { attachTo: document.body }
-  )
+  const w = mountPinned(() => h(SDropdown, { actions, ...props, ...events }, { header: () => 'Row 7' }))
   return { w, events }
 }
 

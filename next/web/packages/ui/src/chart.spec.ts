@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { compactChartOption } from './chart'
-import { provideViewport } from './viewport'
+import { mountPinned } from './testViewport'
 import SChart from './SChart.vue'
 
 const setOption = vi.fn()
@@ -66,8 +65,8 @@ describe('compactChartOption', () => {
 })
 
 describe('SChart on phones', () => {
-  const chart = (compact: boolean, props: Record<string, unknown>) =>
-    mount(defineComponent({ setup: () => (provideViewport({ compact }), () => h(SChart, props as any)) }))
+  const chart = (compact: boolean, props: { option: Record<string, unknown>; height?: string }) =>
+    mountPinned(SChart, { props }, { compact })
 
   it('is 220px high and draws the phone option', async () => {
     const w = chart(true, { option: { legend: {}, xAxis: {}, yAxis: {} } })

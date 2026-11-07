@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { h } from 'vue'
 import STooltip from './STooltip.vue'
-import { pinViewport } from './internal/pinViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 afterEach(() => {
@@ -13,10 +13,7 @@ afterEach(() => {
 const tip = () => document.querySelector('[role="tooltip"]')
 
 function touchTip(slot: () => ReturnType<typeof h>) {
-  return mount(
-    pinViewport({ touch: true }, () => h(STooltip, { content: 'Explains' }, slot)),
-    { attachTo: document.body }
-  )
+  return mountPinned(() => h(STooltip, { content: 'Explains' }, slot), {}, { touch: true })
 }
 
 describe('STooltip on touch screens', () => {

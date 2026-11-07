@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
-import { provideViewport } from './viewport'
+import { enableAutoUnmount } from '@vue/test-utils'
+import { mountPinned } from './testViewport'
 import SSteps from './SSteps.vue'
 
 enableAutoUnmount(afterEach)
@@ -12,7 +11,7 @@ const steps = [
 ]
 // A vertical list draws a connector line under each step but the last.
 const isVertical = (compact: boolean, direction?: 'horizontal' | 'vertical') =>
-  mount(defineComponent({ setup: () => (provideViewport({ compact }), () => h(SSteps, { steps, direction })) }))
+  mountPinned(SSteps, { props: { steps, direction } }, { compact })
     .findAll('li')[0]!
     .find('span[aria-hidden="true"].absolute')
     .exists()

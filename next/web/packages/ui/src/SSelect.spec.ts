@@ -3,7 +3,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { h } from 'vue'
 import SSelect from './SSelect.vue'
 import type { SelectOption } from './types'
-import { pinViewport } from './internal/pinViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 const options = [{ label: 'en-US · English', value: 'en-US' }, { label: 'zh-CN · 中文', value: 'zh-CN' }]
@@ -59,9 +59,8 @@ describe('searchable select on phones', () => {
 
   it('opens a bottom sheet with a search field and large checked rows', async () => {
     const picked: unknown[] = []
-    const w = mount(
-      pinViewport({ compact: true }, () => h(SSelect, { modelValue: 'ber', options: grouped, searchable: true, 'onUpdate:modelValue': (v: unknown) => picked.push(v) })),
-      { attachTo: document.body }
+    const w = mountPinned(() =>
+      h(SSelect, { modelValue: 'ber', options: grouped, searchable: true, 'onUpdate:modelValue': (v: unknown) => picked.push(v) })
     )
     const trigger = w.get('input')
     expect(trigger.attributes('readonly')).toBeDefined()
@@ -89,7 +88,7 @@ describe('searchable select on phones', () => {
   })
 
   it('leaves the native select alone', () => {
-    const w = mount(pinViewport({ compact: true }, () => h(SSelect, { modelValue: 'en-US', options })))
+    const w = mountPinned(() => h(SSelect, { modelValue: 'en-US', options }))
     expect(w.find('select').exists()).toBe(true)
   })
 })

@@ -1,18 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import SPageHeader from './SPageHeader.vue'
 import { provideTitleContext } from './titleContext'
-import { resetViewport } from './viewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 
-function stubMedia(matches: boolean) {
-  vi.stubGlobal('matchMedia', (query: string) => ({ matches, media: query, addEventListener: () => {}, removeEventListener: () => {} }))
-}
 afterEach(() => {
-  vi.unstubAllGlobals()
-  resetViewport()
   document.body.innerHTML = ''
 })
 
@@ -28,32 +23,28 @@ function shell(slots: Record<string, () => unknown>, title = '分组') {
 
 describe('page header actions', () => {
   it('moves the actions of a header with no filters into the top bar on a wide screen', async () => {
-    stubMedia(true)
-    const w = mount(shell({ actions: () => h('button', '新建分组') }), { attachTo: document.body })
+    const w = mountPinned(shell({ actions: () => h('button', '新建分组') }), {}, { compact: false })
     await nextTick()
     expect(document.querySelector('#page-actions')?.textContent).toBe('新建分组')
     expect(w.find('.mb-3').exists()).toBe(false)
   })
 
   it('keeps the actions in the page on a narrow screen', async () => {
-    stubMedia(false)
-    const w = mount(shell({ actions: () => h('button', '新建分组') }), { attachTo: document.body })
+    const w = mountPinned(shell({ actions: () => h('button', '新建分组') }))
     await nextTick()
     expect(document.querySelector('#page-actions')?.textContent).toBe('')
     expect(w.get('.mb-3').text()).toBe('新建分组')
   })
 
   it('keeps the actions beside the filters when there are filters', async () => {
-    stubMedia(true)
-    const w = mount(shell({ filters: () => h('input'), actions: () => h('button', '新建分组') }), { attachTo: document.body })
+    const w = mountPinned(shell({ filters: () => h('input'), actions: () => h('button', '新建分组') }), {}, { compact: false })
     await nextTick()
     expect(document.querySelector('#page-actions')?.textContent).toBe('')
     expect(w.get('.mb-3').text()).toBe('新建分组')
   })
 
   it('keeps the actions beside a title the top bar does not show', async () => {
-    stubMedia(true)
-    const w = mount(shell({ actions: () => h('button', '新建') }, '详情'), { attachTo: document.body })
+    const w = mountPinned(shell({ actions: () => h('button', '新建') }, '详情'), {}, { compact: false })
     await nextTick()
     expect(document.querySelector('#page-actions')?.textContent).toBe('')
     expect(w.get('h1').text()).toBe('详情')
@@ -63,9 +54,8 @@ describe('page header actions', () => {
 
 describe('page header filters on a phone', () => {
   it('folds #filters behind a Filters button, keeping #filters-primary in the row', async () => {
-    stubMedia(false)
     const slots = { 'filters-primary': () => h('input', { id: 'q' }), filters: () => h('select', { id: 'status' }) }
-    const w = mount(SPageHeader, { props: { title: '分组', filtersActiveCount: 1 }, slots, attachTo: document.body })
+    const w = mountPinned(SPageHeader, { props: { title: '分组', filtersActiveCount: 1 }, slots })
     await nextTick()
     expect(w.find('#q').exists()).toBe(true)
     expect(document.querySelector('#status')).toBeNull()
@@ -76,19 +66,15 @@ describe('page header filters on a phone', () => {
   })
 
   it('keeps #filters-primary inline when there is nothing else to fold', async () => {
-    stubMedia(false)
-    const w = mount(SPageHeader, { props: { title: '分组' }, slots: { 'filters-primary': () => h('input', { id: 'q' }) } })
+    const w = mountPinned(SPageHeader, { props: { title: '分组' }, slots: { 'filters-primary': () => h('input', { id: 'q' }) } })
     await nextTick()
     expect(w.find('#q').exists()).toBe(true)
     expect(w.find('[data-testid="filter-sheet-open"]').exists()).toBe(false)
   })
 
   it('puts #filters-primary before #filters on a wide screen', async () => {
-    stubMedia(true)
-    const w = mount(SPageHeader, {
-      props: { title: '分组' },
-      slots: { filters: () => h('select', { id: 'status' }), 'filters-primary': () => h('input', { id: 'q' }) }
-    })
+    const slots = { filters: () => h('select', { id: 'status' }), 'filters-primary': () => h('input', { id: 'q' }) }
+    const w = mountPinned(SPageHeader, { props: { title: '分组' }, slots }, { compact: false })
     await nextTick()
     expect(w.findAll('input, select').map(e => e.attributes('id'))).toEqual(['q', 'status'])
   })

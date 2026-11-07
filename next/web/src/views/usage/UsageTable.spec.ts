@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
-import { provideViewport } from '@sub2api/ui'
+import { nextTick } from 'vue'
 import { i18n } from '@/i18n'
 import UsageTable from './UsageTable.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageError from './UsageError.vue'
 import UsageTokens from './UsageTokens.vue'
 import { errorText, type UsageRow } from './usage'
+import { mountPinned } from '../../../packages/ui/src/testViewport'
 
 enableAutoUnmount(afterEach)
 const row = {
@@ -40,11 +40,6 @@ const global = {
   plugins: [i18n],
   stubs: { UsageDetail: { props: ['row', 'path'], template: '<div data-testid="usage-detail">{{ path }}</div>' } }
 }
-/** UsageTable on a phone (compact), where STable shows the #card form. */
-function mountPhone(props: InstanceType<typeof UsageTable>['$props']) {
-  const Phone = defineComponent({ setup: () => (provideViewport({ compact: true }), () => h(UsageTable, props)) })
-  return mount(Phone, { global }).findComponent(UsageTable)
-}
 
 describe('usage records layout', () => {
   it('uses the SDK picker for desktop and mobile fields and persists separately for self-service', async () => {
@@ -59,7 +54,7 @@ describe('usage records layout', () => {
     w.unmount()
     const restored = mount(UsageTable, { props: { rows: [row], columnSettingsKey: 'core.usage.all' }, global })
     expect(restored.find('[data-testid="ip-address-filter"]').exists()).toBe(false)
-    const card = mountPhone({ rows: [row], columnSettingsKey: 'core.usage.all' })
+    const card = mountPinned(UsageTable, { props: { rows: [row], columnSettingsKey: 'core.usage.all' }, global })
     expect(card.get('[data-testid="mobile-usage-record"]').text()).not.toContain(row.client_ip)
     const mine = mount(UsageTable, { props: { rows: [row], showUser: false, showAccount: false, columnSettingsKey: 'core.usage.self' }, global })
     expect(mine.get('[data-testid="ip-address-filter"]').text()).toBe(row.client_ip)
@@ -93,7 +88,7 @@ describe('usage records layout', () => {
     expect(w.emitted('filter-account-id')).toEqual([[9]])
   })
   it('loads owner-scoped mobile detail only when expanded and keeps admin fields hidden', async () => {
-    const w = mountPhone({ rows: [row], showUser: false, showAccount: false, detailPath: id => `/me/usage/${id}` })
+    const w = mountPinned(UsageTable, { props: { rows: [row], showUser: false, showAccount: false, detailPath: id => `/me/usage/${id}` }, global })
     expect(w.find('[data-testid="usage-detail"]').exists()).toBe(false)
     expect(w.text()).not.toContain('Account nine')
     expect(w.text()).not.toContain('#9')
@@ -126,7 +121,7 @@ describe('usage records layout', () => {
     expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('status_code=403, model not allowed for this group')
   })
   it('shows each request as a card on a phone, with the same fields and filters', async () => {
-    const w = mountPhone({ rows: [row], showClientRequestId: true })
+    const w = mountPinned(UsageTable, { props: { rows: [row], showClientRequestId: true }, global })
     expect(w.find('table').exists()).toBe(false)
     const card = w.get('[data-testid="mobile-usage-record"]')
     expect(card.text()).toContain(row.model)

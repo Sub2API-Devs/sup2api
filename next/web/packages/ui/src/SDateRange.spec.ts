@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SDateRange from './SDateRange.vue'
-import { mountCompact } from './testViewport'
+import { mountPinned } from './testViewport'
 import { rangeBounds, rangeSpanMs } from './timeRange'
 
 enableAutoUnmount(afterEach)
@@ -129,7 +129,7 @@ describe('SDateRange on a phone', () => {
   const sheet = () => document.querySelector<HTMLElement>('[data-testid="range-sheet"]')
 
   it('shows only the preset and opens a sheet with a preset grid', async () => {
-    const w = mountCompact(SDateRange, { range: 'custom', from: local(2026, 10, 21), to: local(2026, 10, 28) })
+    const w = mountPinned(SDateRange, { props: { range: 'custom', from: local(2026, 10, 21), to: local(2026, 10, 28) } })
     const trigger = w.get('[data-testid="date-range-trigger"]')
     expect(trigger.text()).toBe('Custom')
     await trigger.trigger('click')
@@ -142,7 +142,7 @@ describe('SDateRange on a phone', () => {
   })
 
   it('applies a custom span from the sheet', async () => {
-    const w = mountCompact(SDateRange, { range: '7d', from: '', to: '' })
+    const w = mountPinned(SDateRange, { props: { range: '7d', from: '', to: '' } })
     await w.get('[data-testid="date-range-trigger"]').trigger('click')
     const set = (id: string, v: string) => {
       const el = document.querySelector<HTMLInputElement>(`[data-testid="${id}"]`)!

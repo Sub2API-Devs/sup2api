@@ -1,27 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import STable from './STable.vue'
 import SRowAction from './SRowAction.vue'
 import STableColumnSettings from './STableColumnSettings.vue'
 import { useTableColumns } from './tableColumns'
-import { resetViewport } from './viewport'
+import { mountPinned } from './testViewport'
 import type { TableColumn } from './types'
 
 enableAutoUnmount(afterEach)
-function stubMedia(wide: boolean) {
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: wide && query.includes('min-width'),
-    media: query,
-    addEventListener: () => {},
-    removeEventListener: () => {}
-  }))
-  resetViewport()
-}
-beforeEach(() => stubMedia(false))
 afterEach(() => {
-  vi.unstubAllGlobals()
-  resetViewport()
   document.body.innerHTML = ''
   localStorage.clear()
 })
@@ -69,7 +57,7 @@ const cards = (w: ReturnType<typeof mount>) => w.findAll('ul[role="list"] > li')
 
 describe('STable phone cards', () => {
   it('places declared fields in the title, status, subtitle, meta grid, details and footer', async () => {
-    const w = mount(STable, {
+    const w = mountPinned(STable, {
       props: { columns: declared, rows },
       slots: { ...actionsSlot, 'cell-status': '<b class="st">{{ params.value }}/{{ params.layout }}</b>' }
     })
@@ -97,24 +85,23 @@ describe('STable phone cards', () => {
 
   it('infers the layout when no column declares one and passes layout "table" on a wide screen', () => {
     const columns = ['name', 'status', 'region', 'quota', 'owner', 'zone', 'extra'].map(key => ({ key, label: key }))
-    const w = mount(STable, { props: { columns, rows } })
+    const w = mountPinned(STable, { props: { columns, rows } })
     const card = cards(w)[0]
     expect(card.get(`#${card.attributes('aria-labelledby')}`).text()).toBe('Alpha')
     expect(card.findAll('dt').map(dt => dt.text())).toEqual(['region', 'quota', 'owner', 'zone'])
     expect(card.text()).toContain('active')
     expect(card.text()).not.toContain('x1')
-    stubMedia(true)
     const wide = mount(STable, { props: { columns, rows }, slots: { 'cell-name': '<i>{{ params.layout }}</i>' } })
     expect(wide.get('tbody td i').text()).toBe('table')
   })
 
   it('keeps the table on a phone with mobileLayout scroll', () => {
-    const w = mount(STable, { props: { columns: declared, rows, mobileLayout: 'scroll' } })
+    const w = mountPinned(STable, { props: { columns: declared, rows, mobileLayout: 'scroll' } })
     expect(w.find('table').exists()).toBe(true)
   })
 
   it('selects cards one by one or the whole page, and tints selected cards', async () => {
-    const w = mount(STable, { props: { columns: declared, rows, selectable: true, selected: [2] } })
+    const w = mountPinned(STable, { props: { columns: declared, rows, selectable: true, selected: [2] } })
     expect(cards(w)[1].classes()).toContain('ring-primary-400')
     const all = w.get('input[type="checkbox"]')
     expect(all.element.parentElement?.textContent).toContain('Select this page')
@@ -126,7 +113,7 @@ describe('STable phone cards', () => {
   })
 
   it('makes clickable cards focusable and clicks them with Enter / Space', async () => {
-    const w = mount(STable, { props: { columns: declared, rows, clickable: true } })
+    const w = mountPinned(STable, { props: { columns: declared, rows, clickable: true } })
     const card = cards(w)[0]
     expect(card.attributes('tabindex')).toBe('0')
     await card.trigger('keydown', { key: 'Enter' })
@@ -136,21 +123,21 @@ describe('STable phone cards', () => {
   })
 
   it('shows skeletons while loading, the empty slot, and the error with retry', async () => {
-    const loading = mount(STable, { props: { columns: declared, rows: [], loading: true } })
+    const loading = mountPinned(STable, { props: { columns: declared, rows: [], loading: true } })
     expect(loading.findAll('[aria-busy="true"] > div')).toHaveLength(3)
-    expect(mount(STable, { props: { columns: declared, rows: [] }, slots: { empty: 'Nothing here' } }).text()).toBe('Nothing here')
+    expect(mountPinned(STable, { props: { columns: declared, rows: [] }, slots: { empty: 'Nothing here' } }).text()).toBe('Nothing here')
     const onRetry = vi.fn()
-    const failed = mount(STable, { props: { columns: declared, rows: [], error: true, onRetry } })
+    const failed = mountPinned(STable, { props: { columns: declared, rows: [], error: true, onRetry } })
     expect(failed.get('[data-testid="table-error"]').text()).toContain('Failed to load')
     await failed.get('[data-testid="table-error"] button').trigger('click')
     expect(onRetry).toHaveBeenCalledOnce()
-    const stale = mount(STable, { props: { columns: declared, rows, error: true } })
+    const stale = mountPinned(STable, { props: { columns: declared, rows, error: true } })
     expect(stale.get('[data-testid="table-error"]').text()).toContain('Failed to load')
     expect(cards(stale)).toHaveLength(2)
   })
 
   it('divides items inside one card with the card prop and keeps toolbar and footer', () => {
-    const w = mount(STable, {
+    const w = mountPinned(STable, {
       props: { columns: declared, rows, card: true },
       slots: { toolbar: '<span class="tb">T</span>', footer: '<nav class="ft">F</nav>' }
     })
@@ -159,12 +146,12 @@ describe('STable phone cards', () => {
     expect(cards(w)[0].classes()).not.toContain('card')
     expect(w.find('.tb').exists()).toBe(true)
     expect(w.find('.ft').exists()).toBe(true)
-    const separate = mount(STable, { props: { columns: declared, rows } })
+    const separate = mountPinned(STable, { props: { columns: declared, rows } })
     expect(cards(separate)[0].classes()).toContain('card')
   })
 
   it('lets #card replace a card, with selection and expansion handles', async () => {
-    const w = mount(STable, {
+    const w = mountPinned(STable, {
       props: { columns: declared, rows, selectable: true, expandable: true },
       slots: {
         card: `<div class="custom">{{ params.row.name }} {{ params.selected }} {{ params.expanded }}
@@ -185,9 +172,8 @@ describe('STable phone cards', () => {
       { id: 'a', name: 'A' },
       { id: 'b', name: 'B' }
     ]
-    const w = mount(STable, {
-      props: { columns: [{ key: 'name', label: 'Name' }], rows: list, reorderable: true },
-      attachTo: document.body
+    const w = mountPinned(STable, {
+      props: { columns: [{ key: 'name', label: 'Name' }], rows: list, reorderable: true }
     })
     expect(cards(w)[1].attributes('data-reorder-row')).toBe('1')
     await w.get('[data-reorder-handle="0"]').trigger('keydown', { key: 'ArrowDown' })
@@ -199,11 +185,10 @@ describe('STable phone cards', () => {
 
   it('renders SRowAction as an inline ghost button inside a card only', () => {
     const slots = { 'cell-actions': () => h(SRowAction, { icon: 'edit', label: 'Edit' }) }
-    const card = mount(STable, { props: { columns: declared, rows }, slots })
+    const card = mountPinned(STable, { props: { columns: declared, rows }, slots })
     const button = cards(card)[0].get('.justify-end button')
     expect(button.classes()).toEqual(expect.arrayContaining(['btn-ghost', 'btn-sm']))
     expect(button.text()).toBe('Edit')
-    stubMedia(true)
     const table = mount(STable, { props: { columns: declared, rows }, slots })
     expect(table.get('td.s-table-actions button').classes()).toContain('w-[4.5rem]')
   })
@@ -217,7 +202,7 @@ describe('STable phone cards', () => {
           'cell-actions': () => h(SRowAction, { icon: 'edit', label: 'Nested' })
         }
       )
-    const w = mount(STable, { props: { columns: declared, rows, expandable: true }, slots: { expand: inner } })
+    const w = mountPinned(STable, { props: { columns: declared, rows, expandable: true }, slots: { expand: inner } })
     await cards(w)[0].get('button[aria-expanded]').trigger('click')
     expect(w.get('td.s-table-actions button').classes()).toContain('w-[4.5rem]')
   })
@@ -225,7 +210,7 @@ describe('STable phone cards', () => {
   it('re-renders card cells when the page passes new cell slots', async () => {
     const label = ref('one')
     // A page whose render passes new slot closures (or none) without reactive reads inside them.
-    const w = mount({
+    const w = mountPinned({
       render() {
         const text = label.value
         const slots = text === 'none' ? {} : { 'cell-name': () => `slot ${text}` }
@@ -247,7 +232,7 @@ describe('STable phone cards', () => {
       { id: 'a', name: 'A' },
       { id: 'b', name: 'B' }
     ]
-    const w = mount(STable, {
+    const w = mountPinned(STable, {
       props: { columns: [{ key: 'name', label: 'Name' }], rows: list, reorderable: true },
       slots: { card: '<p class="custom">{{ params.row.name }}</p>' }
     })
@@ -266,7 +251,7 @@ describe('STableColumnSettings on a phone', () => {
         return () => h(STableColumnSettings, { state })
       }
     })
-    const w = mount(Host, { attachTo: document.body })
+    const w = mountPinned(Host)
     const trigger = w.get('[data-testid="table-column-settings"]')
     expect(trigger.text()).toBe('Fields')
     await trigger.trigger('click')

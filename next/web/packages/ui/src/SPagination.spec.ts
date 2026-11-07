@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { enableAutoUnmount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SPagination from './SPagination.vue'
-import { mountCompact } from './testViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 
@@ -12,7 +12,7 @@ afterEach(() => {
 
 describe('SPagination on a phone', () => {
   it('shows the total and ‹ page / pages › with 40px arrows', async () => {
-    const w = mountCompact(SPagination, { page: 3, pageSize: 20, total: 240 })
+    const w = mountPinned(SPagination, { props: { page: 3, pageSize: 20, total: 240 } })
     expect(w.text()).toContain('Total 240')
     expect(w.find('button[aria-current="page"]').exists()).toBe(false)
     const label = w.get('[data-testid="page-jump"]')
@@ -25,7 +25,7 @@ describe('SPagination on a phone', () => {
   })
 
   it('jumps to a typed page (clamped) and picks the page size from the sheet', async () => {
-    const w = mountCompact(SPagination, { page: 3, pageSize: 20, total: 240 })
+    const w = mountPinned(SPagination, { props: { page: 3, pageSize: 20, total: 240 } })
     await w.get('[data-testid="page-jump"]').trigger('click')
     const input = document.querySelector<HTMLInputElement>('[data-testid="page-jump-input"]')!
     expect(input.value).toBe('3')

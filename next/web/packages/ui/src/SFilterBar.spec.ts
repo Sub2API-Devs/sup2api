@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { h, nextTick } from 'vue'
 import SFilterBar from './SFilterBar.vue'
-import { mountCompact } from './testViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 
@@ -44,7 +44,7 @@ describe('SFilterBar on a phone', () => {
 
   it('folds into #primary, a Filters button with a badge, and the chips', async () => {
     const onReset = vi.fn()
-    const w = mountCompact(SFilterBar, { activeCount: 2, dirty: true, onReset, ariaLabel: 'Usage filters' }, slots)
+    const w = mountPinned(SFilterBar, { props: { activeCount: 2, dirty: true, onReset, ariaLabel: 'Usage filters' }, slots })
     expect(w.find('#q').exists()).toBe(true)
     expect(w.find('#status').exists()).toBe(false)
     expect(w.find('.chip').exists()).toBe(true)
@@ -67,14 +67,14 @@ describe('SFilterBar on a phone', () => {
   })
 
   it('shows only the Filters button without #primary, and no Reset without @reset', async () => {
-    const w = mountCompact(SFilterBar, {}, { default: () => h('select', { id: 'status' }) })
+    const w = mountPinned(SFilterBar, { slots: { default: () => h('select', { id: 'status' }) } })
     expect(w.get('[data-testid="filter-sheet-open"]').attributes('aria-label')).toBeUndefined()
     await w.get('[data-testid="filter-sheet-open"]').trigger('click')
     expect(document.querySelector('[data-testid="filter-reset"]')).toBeNull()
   })
 
   it('keeps #primary inline when there is nothing else to fold', () => {
-    const w = mountCompact(SFilterBar, {}, { primary: () => h('input', { id: 'q' }) })
+    const w = mountPinned(SFilterBar, { slots: { primary: () => h('input', { id: 'q' }) } })
     expect(w.find('#q').exists()).toBe(true)
     expect(w.find('[data-testid="filter-sheet-open"]').exists()).toBe(false)
   })

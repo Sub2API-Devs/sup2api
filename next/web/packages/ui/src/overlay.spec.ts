@@ -3,7 +3,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { h, nextTick, ref } from 'vue'
 import SModal from './SModal.vue'
 import SDrawer from './SDrawer.vue'
-import { pinViewport } from './internal/pinViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 afterEach(() => {
@@ -14,11 +14,11 @@ afterEach(() => {
 function modal(pin: { compact?: boolean; touch?: boolean }, props: Record<string, unknown> = {}) {
   const open = ref(true)
   const onClose = vi.fn()
-  const w = mount(
-    pinViewport(pin, () =>
-      h(SModal, { open: open.value, title: 'T', ...props, 'onUpdate:open': (v: boolean) => (open.value = v), onClose }, () => h('input'))
-    ),
-    { attachTo: document.body }
+  const w = mountPinned(
+    () =>
+      h(SModal, { open: open.value, title: 'T', ...props, 'onUpdate:open': (v: boolean) => (open.value = v), onClose }, () => h('input')),
+    {},
+    pin
   )
   return { w, open, onClose }
 }

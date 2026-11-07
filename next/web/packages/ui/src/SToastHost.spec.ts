@@ -3,7 +3,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { h } from 'vue'
 import SToastHost from './SToastHost.vue'
 import SDisclosure from './SDisclosure.vue'
-import { pinViewport } from './internal/pinViewport'
+import { mountPinned } from './testViewport'
 
 enableAutoUnmount(afterEach)
 afterEach(() => {
@@ -12,18 +12,12 @@ afterEach(() => {
 
 describe('SToastHost', () => {
   it('stacks top-center below the notch on phones and top-right on wide screens', () => {
-    mount(
-      pinViewport({ compact: true }, () => h(SToastHost)),
-      { attachTo: document.body }
-    )
+    mountPinned(() => h(SToastHost))
     const phone = document.querySelector<HTMLElement>('.z-toast')!
     expect(phone.className).toContain('inset-x-3')
     expect(phone.className).toContain('top-[calc(env(safe-area-inset-top)+12px)]')
     document.body.innerHTML = ''
-    mount(
-      pinViewport({ compact: false }, () => h(SToastHost)),
-      { attachTo: document.body }
-    )
+    mountPinned(() => h(SToastHost), {}, { compact: false })
     expect(document.querySelector<HTMLElement>('.z-toast')!.className).toContain('right-4')
   })
 })

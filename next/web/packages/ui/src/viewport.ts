@@ -50,7 +50,7 @@ export function resetViewport(): void {
   shared = undefined
 }
 
-const VIEWPORT: InjectionKey<Viewport> = Symbol('s-viewport')
+export const VIEWPORT: InjectionKey<Viewport> = Symbol('s-viewport')
 
 export function useViewport(): Viewport {
   return inject(VIEWPORT, null) ?? sharedViewport()
