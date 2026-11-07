@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-07 核心 **0.1.254**（`428d457aa`，北京时间 14:57–14:59；计划 `8253a0fa1f4cb687f118e9cefa70feef` completed/13，约 75 秒，没有暂停；没有迁移，schema 仍 `32b9376d…e2e6`；Host API 仍 9；内置插件与 0.1.253 相同，anthropic 仍 0.2.9，插件和外壳不变）：
+- 内容：next/web 手机布局（UI SDK 3.5.0）：窄顶栏和安全区、列表卡片、筛选底部面板、悬浮新建按钮、弹层底部面板与返回键关闭、触屏控件尺寸。自 0.1.253 起 35 个提交，只有前端改动。
+- 核验：两节点 v0.1.254（sup2api-1 start-primary 06:58:32Z、sup2api-ccp start 06:58:59Z），api.prophey.ai `/readyz` 200，发布后两节点错误日志 0；线上首页引用的 `index-BN1Kvudg.js` 与构建产物一致（`dcaa7762…c499`），含 `data-fab`，`widgets-TG3o3V8s.js` 含 `s-drawer-bottom`。iPhone 13 视口（390px）打开线上登录页：无横向滚动，输入框 16px，viewport 带 `viewport-fit=cover`，无页面错误；登录后页面没有在线上检查。
+- 回滚：回 0.1.253 不涉及 schema。
+- 脚本 `stage/0.1.254/`（照 0.1.253 只改版本、提交和 PREV）；manifest `8a544a4c…45a2`；备份 `backups/core-0.1.254`（`ea47443a…877e`，814 项）；工作树 `~/sup2api/release-0.1.254`；观察日志 `upgrade-20261107T065754.log`。
+
 2026-11-07 核心 **0.1.253**（`cd505b30d`，北京时间 01:21；计划 `af96da18b10d4483f4e32a3d3978d6d5` completed/13，约 57 秒，没有暂停；没有迁移，schema 仍 `32b9376d…e2e6`；Host API 仍 9；内置插件与 0.1.252 相同，anthropic 仍 0.2.9）：
 - 内容：插件执行（platform.execute）的请求在 attempt 内提交用量前先写入粘性规则名和是否命中（`stampSticky`），usage_logs 的 `sticky_rule`/`sticky_hit` 不再恒为空。
 - 核验：两节点 v0.1.253（sup2api-1 start-primary 17:21:22Z、sup2api-ccp start 17:21:37Z），`/readyz` 200，发布后两节点错误日志 0；17:22Z 起 sup2api-ccp 上 anthropic 成功请求 48 条 `claude-code-session`/命中、1 条新绑定（未命中）、1 条无会话（无 metadata.user_id）。sup2api-1 发布后暂无 anthropic 流量（近 3 小时 237 vs ccp 8148），同一代码路径。
