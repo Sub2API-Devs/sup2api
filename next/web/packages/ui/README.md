@@ -253,7 +253,7 @@ export function register(host: PluginHost) {
 
 ## 手机形态 / Phone forms（UI SDK 3.5）
 
-屏幕窄于 768px（Tailwind `md`）时组件自己换成手机形态，页面通常不用改；宽屏（含鼠标）渲染保持不变。判断统一用 `useViewport()`：`compact`（窄屏）、`touch`（粗指针，控件加高到 40px），不要在页面里自己调用 `matchMedia`；CSS 用 `md:` / `max-md:`，触屏用 `touch:`。`provideViewport({ compact, touch })` 为子树固定取值（预览、测试）。原生插件用到下列新增属性时声明 `hostUICompat: "^3.5"`。
+屏幕窄于 768px（Tailwind `md`）时组件自己换成手机形态，页面通常不用改；宽屏（含鼠标）渲染保持不变。判断统一用 `useViewport()`，返回 `Viewport`（两个只读 ref：`compact` 窄屏、`touch` 粗指针，控件加高到 40px），不要在页面里自己调用 `matchMedia`；CSS 用 `md:` / `max-md:`，触屏用 `touch:`。`provideViewport({ compact, touch })` 为子树固定取值（预览、测试）。原生插件用到下列新增属性时声明 `hostUICompat: "^3.5"`。
 
 **表格变卡片。** `STable` 在手机上每行一张卡片：标题、状态、副标题、标签／值网格、“详情”折叠和操作行。列用 `TableColumn` 声明位置：
 
@@ -273,9 +273,9 @@ const columns: TableColumn[] = [
 - 单元格插槽多一个 `layout`（`'table'` / `'card'`），同一插槽可按形态微调（例如开关从操作列移到状态位）；`#card` 插槽整体替换卡片内容（`{ row, index, selected, toggle, expanded, toggleExpand }`）。`STable` 的 `mobile: 'scroll'` 保留横向滚动的表格（默认 `'card'`）。
 - 卡片里的 `SRowAction` 变成小号文字按钮；卡片底部的操作宜不超过三个，其余放进该行的“更多” `SDropdown`。选择、展开、拖动排序在卡片上照常可用，列设置变成“字段”底部抽屉。
 
-**筛选与页头。** `SFilterBar` 的默认插槽收进“筛选”按钮（`active-count` 角标）打开的底部抽屉，里面还有 `#end` 和重置，筛选随 v-model 即时生效；`#primary`（如搜索框）留在按钮旁、宽屏时排在最前。`SPageHeader` 对应 `#filters-primary` 与 `filters-active-count`，手机上页头操作留在页面里。
+**筛选与页头。** `SFilterBar` 的默认插槽收进“筛选”按钮（`active-count` 角标）打开的底部抽屉，里面还有 `#end` 和重置，筛选随 v-model 即时生效；按“搜索”才生效的草稿式筛选监听 `@done`（点“完成”或在抽屉字段里回车时触发并关闭抽屉）。`#primary`（如搜索框）留在按钮旁、宽屏时排在最前。`SPageHeader` 对应 `#filters-primary` 与 `filters-active-count`，手机上页头操作留在页面里。
 
-**弹层。** 弹层都基于 `SDrawer side="bottom"`（底部抽屉，可下滑关闭，避开 Home 指示条）：`SModal` 与 `SFormModal` 的 `mobile`（类型 `ModalMobile`）为 `auto`（默认，sm/md 宽度为抽屉、lg 以上为整页）、`sheet`、`fullscreen`、`center`；左右 `SDrawer` 变成整页；`SDropdown` 为底部操作表（`mobile="popover"` 保留浮动菜单）；可搜索的 `SSelect`、`SDateRange`、`STimeRange` 以抽屉选择。手机或触屏上浏览器“返回”关闭最上层弹层：`dismissTopLayer()` 关闭在手机或触屏上打开的最上层（持久层除外）并返回 `true`；没有弹层、宽屏鼠标下打开的弹层或持久层返回 `false`，照常导航。控制台路由在“返回／前进”时调用它。
+**弹层。** `SDrawer` 新增 `side="bottom"`：底部抽屉（全宽、最高 92dvh、顶部拖动条，可下滑关闭，避开 Home 指示条），手机上的弹层都基于它：`SModal` 与 `SFormModal` 的 `mobile`（类型 `ModalMobile`）为 `auto`（默认，sm/md 宽度为抽屉、lg 以上为整页）、`sheet`、`fullscreen`、`center`；左右 `SDrawer` 变成整页；`SDropdown` 为底部操作表（`mobile="popover"` 保留浮动菜单）；可搜索的 `SSelect`、`SDateRange`、`STimeRange` 以抽屉选择。手机或触屏上浏览器“返回”关闭最上层弹层：`dismissTopLayer()` 关闭在手机或触屏上打开的最上层（持久层除外）并返回 `true`；没有弹层、宽屏鼠标下打开的弹层或持久层返回 `false`，照常导航。控制台路由在“返回／前进”时调用它。
 
-**其他组件。** `SPagination` 为「共 N 条 + ‹ 3 / 12 ›」，点页码跳页、选每页条数；`SBulkBar` 有选择时固定在屏幕底部并在页面流中留出同样高度；`SAutoRefresh` 是带运行点的图标按钮，绑定 `@refresh` 时菜单里有“立即刷新”；`SButton fab`（需 `icon`）是右下角 56px 圆形按钮，带 `data-fab`，控制台据此在页面底部留出空间；`SGrid variant="stats"` 保持两列统计卡片；`SSegmented` 横向滚动；`STooltip` 在触屏上点按切换；`SSteps` 默认竖排；`SChart` 默认 220px 高并使用手机图例；Toast 在顶部居中。
+**其他组件。** `SPagination` 为「共 N 条 + ‹ 3 / 12 ›」，点页码跳页、选每页条数；`SBulkBar` 有选择时固定在屏幕底部并在页面流中留出同样高度；`SAutoRefresh` 是带运行点的图标按钮，绑定 `@refresh` 时菜单里有“立即刷新”；`SButton fab`（需 `icon`）是右下角 56px 圆形按钮，带 `data-fab`，控制台据此在页面底部留出空间；`SGrid variant="stats"` 保持两列统计卡片；`SSegmented` 横向滚动；`STooltip` 在触屏上点按切换；`SSteps` 的 `direction` 默认改为 `'auto'`（手机竖排、宽屏横排，宽屏与以前一致）；`SChart` 默认 220px 高并使用手机图例；Toast 在顶部居中。
 

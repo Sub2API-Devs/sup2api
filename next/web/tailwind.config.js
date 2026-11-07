@@ -89,7 +89,6 @@ export default {
         control: 'var(--control-h)',
         'control-lg': '2.5rem'
       },
-
       boxShadow: {
         glass: '0 8px 32px rgba(0, 0, 0, 0.08)',
         card: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',

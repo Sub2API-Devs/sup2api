@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as ui from './index'
 import { HOST_UI_VERSION, satisfiesRange } from '@sub2api/host'
 
@@ -22,6 +22,15 @@ describe('host UI 3 contract', () => {
     expect(satisfiesRange('3.3.0', '^3.4')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^3.5')).toBe(true)
     expect(satisfiesRange('3.4.0', '^3.5')).toBe(false)
+  })
+  it('exports the phone forms (UI 3.5), keeping the media queries internal', () => {
+    expect(ui.useViewport).toBeTypeOf('function')
+    expect(ui.provideViewport).toBeTypeOf('function')
+    expect(ui.dismissTopLayer).toBeTypeOf('function')
+    expectTypeOf<ui.Viewport['compact']['value']>().toEqualTypeOf<boolean>()
+    expectTypeOf<ui.ModalMobile>().toEqualTypeOf<'auto' | 'sheet' | 'fullscreen' | 'center'>()
+    expect('WIDE_QUERY' in ui).toBe(false)
+    expect('TOUCH_QUERY' in ui).toBe(false)
   })
   it('exports the shared page building blocks (UI 3.4)', () => {
     for (const name of ['SStatusBadge', 'statusTone', 'SFormModal', 'SFilterBar', 'SAutoRefresh', 'useAutoRefresh', 'useNow', 'lazyPage'] as const) {
