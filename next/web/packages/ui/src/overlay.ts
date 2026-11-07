@@ -12,6 +12,7 @@
 // keyboard. useSheetSwipe: swipe down to close a sheet.
 import { computed, nextTick, onBeforeUnmount, shallowRef, watch, type Ref } from 'vue'
 import { useViewport } from './viewport'
+import type { ModalMobile } from './types'
 
 interface Layer {
   id: number
@@ -143,8 +144,8 @@ function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined
   return depth
 }
 
-/** Shapes of the dialog surface (internal/OverlaySurface.vue). */
-export type OverlayForm = 'center' | 'right' | 'left' | 'sheet' | 'fullscreen' | 'page'
+/** Shapes of the dialog surface (internal/OverlaySurface.vue): the modal forms and the side panels / page. */
+export type OverlayForm = Exclude<ModalMobile, 'auto'> | 'right' | 'left' | 'page'
 
 const BASE_Z = 50
 const TOP_Z = 60

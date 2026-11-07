@@ -93,6 +93,7 @@ export type {
   MenuAction,
   Tone,
   StatusTone,
+  ModalMobile,
   ChoiceOption,
   DescItem,
   StepItem,

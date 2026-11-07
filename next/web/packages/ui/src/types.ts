@@ -33,7 +33,7 @@ export interface TableColumn {
   /** IP cells: clicking the address emits STable's filter event (default false). */
   filterable?: boolean
   /**
-   * Place on the phone card (STable mobileLayout 'card'): 'title' / 'status'
+   * Place on the phone card (STable `mobile` 'card'): 'title' / 'status'
    * in the header, 'subtitle' under it, 'meta' in the label/value grid,
    * 'detail' behind the details toggle, 'hidden' left out. When no column
    * declares it, the card infers places (see tableCard.ts).
@@ -79,6 +79,9 @@ export type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'gray' | 'purp
 
 /** Status tones of SAlert / SChip / SStatusDot / SProgress. */
 export type StatusTone = 'neutral' | 'primary' | 'info' | 'success' | 'warning' | 'danger' | 'accent'
+
+/** SModal / SFormModal `mobile`: their form on phones; `auto` picks a sheet or a full-screen dialog by width. */
+export type ModalMobile = 'auto' | 'sheet' | 'fullscreen' | 'center'
 
 export interface ChoiceOption {
   value: string | number | boolean | null

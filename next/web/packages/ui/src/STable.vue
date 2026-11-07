@@ -20,7 +20,7 @@
 // - error (truthy = the last load failed, e.g. useList's `error`): an empty
 //   table says the load failed instead of "No data" (#error slot), a filled
 //   one keeps its rows under a failure notice; @retry adds a Retry button.
-// - mobileLayout 'card' (default) / 'scroll': on a phone (useViewport
+// - mobile 'card' (default) / 'scroll': on a phone (useViewport
 //   compact) rows become cards — columns placed by their `mobile` field (see
 //   tableCard.ts), cells through the same `cell-<key>` slots with slot prop
 //   `layout` 'card' (else 'table'), a Details toggle for detail fields and
@@ -82,9 +82,9 @@ const props = withDefaults(
     /** Declared as a prop so the Retry button shows only when someone listens. */
     onRetry?: () => void
     /** Phone form: rows as cards (default) or the scrolling table. */
-    mobileLayout?: 'card' | 'scroll'
+    mobile?: 'card' | 'scroll'
   }>(),
-  { rowKey: 'id', selected: () => [], swipeSelect: true, mobileLayout: 'card', emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined, error: undefined, errorText: undefined, onRetry: undefined }
+  { rowKey: 'id', selected: () => [], swipeSelect: true, mobile: 'card', emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined, error: undefined, errorText: undefined, onRetry: undefined }
 )
 const emit = defineEmits<{
   (e: 'row-click', row: T): void
@@ -99,7 +99,7 @@ const columnState = useTableColumns(() => props.columns, () => props.columnSetti
 const visibleColumns = computed(() => props.columnSettingsKey ? columnState.visibleColumns.value : props.columns)
 const expanded = ref(new Set<unknown>())
 const { compact } = useViewport()
-const cardLayout = computed(() => compact.value && props.mobileLayout === 'card')
+const cardLayout = computed(() => compact.value && props.mobile === 'card')
 const rootClass = computed(() => {
   if (props.card) return 'card overflow-hidden'
   if (cardLayout.value) return undefined

@@ -16,6 +16,7 @@
 import { computed } from 'vue'
 import OverlaySurface from './internal/OverlaySurface.vue'
 import { useViewport } from './viewport'
+import type { ModalMobile } from './types'
 
 const props = withDefaults(
   defineProps<{
@@ -29,7 +30,7 @@ const props = withDefaults(
     /** Accessible description: id of an element inside the body. */
     describedby?: string
     /** Form on phones (compact viewport). */
-    mobile?: 'auto' | 'sheet' | 'fullscreen' | 'center'
+    mobile?: ModalMobile
   }>(),
   { width: 'md', closable: true, mobile: 'auto' }
 )

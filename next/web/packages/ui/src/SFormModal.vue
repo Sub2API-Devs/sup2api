@@ -18,6 +18,7 @@
 import { useUiT } from './i18n'
 import SButton from './SButton.vue'
 import SModal from './SModal.vue'
+import type { ModalMobile } from './types'
 
 const props = withDefaults(
   defineProps<{
@@ -38,7 +39,7 @@ const props = withDefaults(
     persistent?: boolean
     describedby?: string
     /** SModal's form on phones. */
-    mobile?: 'auto' | 'sheet' | 'fullscreen' | 'center'
+    mobile?: ModalMobile
   }>(),
   { width: 'md', submitVariant: 'primary', enterSubmit: true, submitText: undefined, cancelText: undefined, title: undefined, describedby: undefined, mobile: 'auto' }
 )

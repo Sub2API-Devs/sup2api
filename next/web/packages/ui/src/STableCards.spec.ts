@@ -95,8 +95,8 @@ describe('STable phone cards', () => {
     expect(wide.get('tbody td i').text()).toBe('table')
   })
 
-  it('keeps the table on a phone with mobileLayout scroll', () => {
-    const w = mountPinned(STable, { props: { columns: declared, rows, mobileLayout: 'scroll' } })
+  it('keeps the table on a phone with mobile scroll', () => {
+    const w = mountPinned(STable, { props: { columns: declared, rows, mobile: 'scroll' } })
     expect(w.find('table').exists()).toBe(true)
   })
 
@@ -197,7 +197,7 @@ describe('STable phone cards', () => {
     const inner = () =>
       h(
         STable,
-        { columns: [{ key: 'actions', label: 'Actions' }], rows: [{ id: 9 }], mobileLayout: 'scroll' },
+        { columns: [{ key: 'actions', label: 'Actions' }], rows: [{ id: 9 }], mobile: 'scroll' },
         {
           'cell-actions': () => h(SRowAction, { icon: 'edit', label: 'Nested' })
         }
