@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAutoRefresh, SBadge, SBulkBar, SButton, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, STooltip, confirm, toast, useAutoRefresh, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountType } from '@/api/types'
-import { useList } from '@/composables/useList'
+import { activeFilterCount, useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
@@ -534,14 +534,14 @@ const typeOptions = computed<SelectOption[]>(() => [
 const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('accounts.allGroups') }, ...groups.value.map((g) => ({ value: g.id, label: g.name }))])
 const advancedFilters = ref(false)
 const denseRows = ref(true)
-const filterCount = computed(() => Object.entries(list.filters).filter(([key, value]) => key !== 'plugin_key' && value !== '').length)
+const filterCount = computed(() => activeFilterCount(list.filters, ['plugin_key']))
 const hasAdvancedFilters = computed(() => !!list.filters.model || !!list.filters.created_by || onlyMine.value || showOrphaned.value)
 function resetFilters() { for (const key of Object.keys(list.filters)) list.filters[key] = '' }
 </script>
 
 <template>
   <div>
-    <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')" :filters-active-count="filterCount - (list.filters.q ? 1 : 0)">
+    <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')" :filters-active-count="activeFilterCount(list.filters, ['q', 'plugin_key'])">
       <template #filters-primary>
         <SInput v-model="list.filters.q" icon="search" clearable class="w-44 2xl:w-56" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
       </template>

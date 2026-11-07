@@ -21,7 +21,7 @@ vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ slotEntries: () =>
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useGroupsLookup: () => ({ groups: ref([]) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
 vi.mock('@/composables/useOwnership', async (original) => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ scopeOf: () => 'all', can: (_a: Account, keys: readonly string[]) => keys.includes('account:update') && mocks.canUpdate }) }))
 vi.mock('./accountTypes', () => ({ typeKey: () => '', useAccountTypes: () => ({ load: vi.fn(), find: mocks.findType, grouped: ref([]), types: ref([]), pluginFacts: () => [] }) }))
-vi.mock('@/composables/useList', () => ({ useList: () => list }))
+vi.mock('@/composables/useList', async (original) => ({ ...await original<object>(), useList: () => list }))
 
 const list = { items: ref<Account[]>([]), total: ref(1), page: ref(1), pageSize: ref(20), loading: ref(false), error: ref(''), filters: {}, reload: mocks.reload }
 enableAutoUnmount(afterEach)

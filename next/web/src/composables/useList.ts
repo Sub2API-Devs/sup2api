@@ -18,10 +18,11 @@ export function useList<T>(
 }
 
 /**
- * The Filters button badge on a phone (SPageHeader `filters-active-count`,
- * SFilterBar `active-count`): how many list filters are set, leaving out the
- * ones kept in sight beside the button (`primary`, the search box by default).
+ * How many list filters are set (not '', null, undefined or false), leaving
+ * out the keys in `ignore` — for the Filters button badge on a phone
+ * (SPageHeader `filters-active-count`, SFilterBar `active-count`), the ones
+ * kept in sight beside the button: the search box `q` by default.
  */
-export function activeFilterCount(filters: Record<string, unknown>, primary: readonly string[] = ['q']): number {
-  return Object.entries(filters).filter(([key, value]) => !primary.includes(key) && value !== '' && value != null && value !== false).length
+export function activeFilterCount(filters: Record<string, unknown>, ignore: readonly string[] = ['q']): number {
+  return Object.entries(filters).filter(([key, value]) => !ignore.includes(key) && value !== '' && value != null && value !== false).length
 }
