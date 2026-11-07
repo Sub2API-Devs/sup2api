@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import SDateRange from './SDateRange.vue'
+import { mountCompact } from './testViewport'
 import { rangeBounds, rangeSpanMs } from './timeRange'
+
+enableAutoUnmount(afterEach)
 
 function local(y: number, m: number, d: number) {
   return new Date(y, m - 1, d).toISOString()
@@ -115,5 +119,43 @@ describe('SDateRange', () => {
   it('labels the trigger without a field label', () => {
     const w = mount(SDateRange, { props: { range: 'today', from: '', to: '', label: false } })
     expect(w.get('[data-testid="date-range-trigger"]').attributes('aria-label')).toBe('Time')
+  })
+})
+
+describe('SDateRange on a phone', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+  const sheet = () => document.querySelector<HTMLElement>('[data-testid="range-sheet"]')
+
+  it('shows only the preset and opens a sheet with a preset grid', async () => {
+    const w = mountCompact(SDateRange, { range: 'custom', from: local(2026, 10, 21), to: local(2026, 10, 28) })
+    const trigger = w.get('[data-testid="date-range-trigger"]')
+    expect(trigger.text()).toBe('Custom')
+    await trigger.trigger('click')
+    expect(sheet()?.className).toContain('grid-cols-3')
+    expect(document.querySelector('[data-testid="date-range-panel"]')).toBeNull()
+    sheet()!.querySelector<HTMLButtonElement>('[data-key="yesterday"]')!.click()
+    await nextTick()
+    expect(w.emitted('update:range')).toEqual([['yesterday']])
+    expect(sheet()).toBeNull()
+  })
+
+  it('applies a custom span from the sheet', async () => {
+    const w = mountCompact(SDateRange, { range: '7d', from: '', to: '' })
+    await w.get('[data-testid="date-range-trigger"]').trigger('click')
+    const set = (id: string, v: string) => {
+      const el = document.querySelector<HTMLInputElement>(`[data-testid="${id}"]`)!
+      el.value = v
+      el.dispatchEvent(new Event('input'))
+    }
+    set('date-range-start', '2026-10-21')
+    set('date-range-end', '2026-10-27')
+    await nextTick()
+    document.querySelector<HTMLButtonElement>('[data-testid="date-range-apply"]')!.click()
+    await nextTick()
+    expect(w.emitted('update:from')).toEqual([[local(2026, 10, 21)]])
+    expect(w.emitted('update:to')).toEqual([[local(2026, 10, 28)]])
+    expect(sheet()).toBeNull()
   })
 })

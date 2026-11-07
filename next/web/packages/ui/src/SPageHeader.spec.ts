@@ -60,3 +60,36 @@ describe('page header actions', () => {
     expect(w.text()).toContain('新建')
   })
 })
+
+describe('page header filters on a phone', () => {
+  it('folds #filters behind a Filters button, keeping #filters-primary in the row', async () => {
+    stubMedia(false)
+    const slots = { 'filters-primary': () => h('input', { id: 'q' }), filters: () => h('select', { id: 'status' }) }
+    const w = mount(SPageHeader, { props: { title: '分组', filtersActiveCount: 1 }, slots, attachTo: document.body })
+    await nextTick()
+    expect(w.find('#q').exists()).toBe(true)
+    expect(document.querySelector('#status')).toBeNull()
+    const open = w.get('[data-testid="filter-sheet-open"]')
+    expect(open.attributes('aria-label')).toBe('Filters, 1 active')
+    await open.trigger('click')
+    expect(document.querySelector('[data-testid="filter-sheet"] #status')).not.toBeNull()
+  })
+
+  it('keeps #filters-primary inline when there is nothing else to fold', async () => {
+    stubMedia(false)
+    const w = mount(SPageHeader, { props: { title: '分组' }, slots: { 'filters-primary': () => h('input', { id: 'q' }) } })
+    await nextTick()
+    expect(w.find('#q').exists()).toBe(true)
+    expect(w.find('[data-testid="filter-sheet-open"]').exists()).toBe(false)
+  })
+
+  it('puts #filters-primary before #filters on a wide screen', async () => {
+    stubMedia(true)
+    const w = mount(SPageHeader, {
+      props: { title: '分组' },
+      slots: { filters: () => h('select', { id: 'status' }), 'filters-primary': () => h('input', { id: 'q' }) }
+    })
+    await nextTick()
+    expect(w.findAll('input, select').map(e => e.attributes('id'))).toEqual(['q', 'status'])
+  })
+})

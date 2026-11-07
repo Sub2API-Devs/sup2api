@@ -115,6 +115,14 @@ export default {
     rowDetails: 'Details',
     hideRowDetails: 'Hide details',
     columnFields: 'Fields',
+    // Phone forms (filter sheet, simple pager, auto refresh)
+    filters: 'Filters',
+    filtersActive: 'Filters, {n} active',
+    done: 'Done',
+    pageOf: 'Page {n} of {total}',
+    goToPage: 'Go to page',
+    go: 'Go',
+    refreshNow: 'Refresh now',
     // SchemaForm / SchemaField
     schema: {
       secretKeep: 'A value is stored. Leave empty to keep it.',
@@ -254,6 +262,14 @@ export default {
     rowDetails: '详情',
     hideRowDetails: '收起详情',
     columnFields: '显示字段',
+    // Phone forms (filter sheet, simple pager, auto refresh)
+    filters: '筛选',
+    filtersActive: '筛选，已启用 {n} 项',
+    done: '完成',
+    pageOf: '第 {n} 页，共 {total} 页',
+    goToPage: '跳转到页',
+    go: '跳转',
+    refreshNow: '立即刷新',
     // SchemaForm / SchemaField
     schema: {
       secretKeep: '已保存值，留空表示不修改。',

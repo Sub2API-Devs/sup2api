@@ -1,0 +1,37 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
+import { nextTick } from 'vue'
+import SAutoRefresh from './SAutoRefresh.vue'
+import { mountCompact } from './testViewport'
+
+enableAutoUnmount(afterEach)
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
+
+describe('SAutoRefresh on a phone', () => {
+  it('is an icon button with a running dot whose menu offers Refresh now', async () => {
+    const onRefresh = vi.fn()
+    const w = mountCompact(SAutoRefresh, { modelValue: 30, onRefresh })
+    const button = w.get('[data-testid="auto-refresh"]')
+    expect(button.text()).toBe('')
+    expect(button.attributes('aria-label')).toBe('Auto refresh: Every 30s')
+    expect(w.find('[data-testid="auto-refresh-dot"]').exists()).toBe(true)
+    await button.trigger('click')
+    await nextTick()
+    const items = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')]
+    expect(items.map(b => b.textContent?.trim())).toEqual(['Refresh now', 'Off', 'Every 10s', 'Every 30s', 'Every 60s'])
+    items[0].click()
+    expect(onRefresh).toHaveBeenCalledOnce()
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('has no dot while off and no Refresh now without @refresh', async () => {
+    const w = mountCompact(SAutoRefresh, { modelValue: 0 })
+    expect(w.find('[data-testid="auto-refresh-dot"]').exists()).toBe(false)
+    await w.get('[data-testid="auto-refresh"]').trigger('click')
+    await nextTick()
+    expect(document.body.textContent).not.toContain('Refresh now')
+  })
+})

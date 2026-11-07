@@ -6,10 +6,19 @@
 // take that row, so on a wide screen they move into the top bar beside the
 // title instead. Otherwise (detail pages, nested scopes) it is a title block
 // with the actions beside it and the filters below.
+// `#filters-primary` holds the filters that stay in sight on a phone; on
+// wide screens they come before #filters. On a compact screen #filters fold
+// behind a Filters button (badge `filtersActiveCount`) that opens a bottom
+// sheet with them.
 import { computed, onBeforeUnmount, useSlots, watchEffect } from 'vue'
 import { useActionsTarget, useDescriptionSink, useTitleVisibility } from './titleContext'
 import { useViewport } from './viewport'
-const props = defineProps<{ title: string; description?: string }>()
+import FilterSheet from './internal/FilterSheet.vue'
+
+const props = withDefaults(defineProps<{ title: string; description?: string; filtersActiveCount?: number }>(), {
+  description: undefined,
+  filtersActiveCount: 0
+})
 const slots = useSlots()
 const showTitle = useTitleVisibility(() => props.title)
 const sink = useDescriptionSink()
@@ -19,7 +28,8 @@ const headed = computed(() => showTitle.value || !!slots.before || !!slots['titl
 
 // The top bar hides the description on a compact screen; the actions stay in the page there too.
 const { compact } = useViewport()
-const actionsUp = computed(() => !!actionsTarget && lifted.value && !headed.value && !slots.filters && !!slots.actions && !compact.value)
+const hasFilters = computed(() => !!slots.filters || !!slots['filters-primary'])
+const actionsUp = computed(() => !!actionsTarget && lifted.value && !headed.value && !hasFilters.value && !!slots.actions && !compact.value)
 
 let owned = ''
 watchEffect(() => {
@@ -76,14 +86,30 @@ onBeforeUnmount(() => {
     </div>
   </Teleport>
   <div
-    v-else-if="$slots.filters || (!headed && $slots.actions)"
+    v-else-if="hasFilters || (!headed && $slots.actions)"
     class="mb-3 flex flex-wrap items-end gap-2"
   >
     <div
-      v-if="$slots.filters"
+      v-if="hasFilters"
       class="flex min-w-0 flex-1 flex-wrap items-end gap-2"
     >
-      <slot name="filters" />
+      <FilterSheet
+        :collapse="compact"
+        :active-count="filtersActiveCount"
+      >
+        <template
+          v-if="$slots['filters-primary']"
+          #primary
+        >
+          <slot name="filters-primary" />
+        </template>
+        <template
+          v-if="$slots.filters"
+          #default
+        >
+          <slot name="filters" />
+        </template>
+      </FilterSheet>
     </div>
     <div
       v-if="!headed && $slots.actions"

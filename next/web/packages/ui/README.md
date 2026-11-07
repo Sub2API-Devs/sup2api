@@ -237,6 +237,10 @@ useAutoRefresh(list.reload, () => seconds.value * 1000, { enabled: () => !editor
 
 绑定 `@reset` 时显示“重置”，`dirty` 为假时禁用；`:card="false"` 去掉卡片外框，用于卡片内部。
 
+手机（<768px）上默认插槽里的筛选收进一个“筛选”按钮（`active-count` 显示角标），点开是底部抽屉，里面还有 `#end` 和重置，筛选仍随 v-model 即时生效；`#primary` 插槽里的常用筛选（如搜索框）留在按钮旁，宽屏时排在最前；`#chips` 在手机上的按钮行下方显示已生效的筛选。`SPageHeader` 对应 `#filters-primary` 与 `filters-active-count`。
+
+手机上的其他形态：`SPagination` 为「共 N 条 + ‹ 3 / 12 ›」，点页码打开跳页与每页条数；`SBulkBar` 有选择时固定在屏幕底部（页面流中留出同样高度）；`SDateRange` / `STimeRange` 以底部抽屉选择；`SAutoRefresh` 是带运行点的图标按钮，绑定 `@refresh` 时菜单里有“立即刷新”；`SButton fab` 是右下角 56px 圆形按钮（需 `icon`）。
+
 ### 插件页懒加载：`lazyPage`
 
 ```ts
