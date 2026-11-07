@@ -7,6 +7,7 @@ import UsageFilters from './UsageFilters.vue'
 import UsageOverviewView from './UsageOverviewView.vue'
 import UsageView from './UsageView.vue'
 import UsageIPPanel from './UsageIPPanel.vue'
+import { mountPinned } from '../../../packages/ui/src/testViewport'
 
 const get = vi.hoisted(() => vi.fn(async () => []))
 const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))
@@ -114,5 +115,26 @@ describe('shared usage search', () => {
     const full = mount(UsageFilters, { props: { modelValue: {} }, slots: { stats: '<span>stats</span>' }, global })
     expect(full.get('.mt-3').find('[data-testid="search-usage"]').exists()).toBe(true)
     expect(full.findAll('[data-testid="search-usage"]')).toHaveLength(1)
+  })
+
+  it('keeps the range and the text searches in sight on a phone and folds the rest into the Filters sheet', async () => {
+    const logTypes = [{ value: 'records', label: 'Records' }, { value: 'errors', label: 'Errors' }]
+    const w = mountPinned(UsageFilters, {
+      props: { modelValue: { protocol: 'openai.chat', stream: 'true' }, logTypes, logType: 'errors' },
+      slots: { range: '<button class="range">Today</button>', stats: '<span>stats</span>' },
+      global
+    })
+    for (const key of ['model_contains', 'api_key_name', 'client_ip']) expect(w.find(`[data-testid="filter-${key}"]`).exists()).toBe(true)
+    expect(w.find('.range').exists()).toBe(true)
+    expect(w.find('[data-testid="filter-protocol"]').exists()).toBe(false)
+    // log type, request type and stream are set
+    expect(w.get('[data-testid="filter-sheet-open"]').text()).toContain('3')
+    await w.get('[data-testid="filter-sheet-open"]').trigger('click')
+    await flushPromises()
+    // the More filters fields come along, with no toggle
+    const sheet = document.querySelector('[data-testid="filter-sheet"]')!
+    expect(sheet.querySelector('[data-testid="filter-protocol"]')).not.toBeNull()
+    expect(sheet.querySelector('[data-testid="filter-request_id"]')).not.toBeNull()
+    document.body.innerHTML = ''
   })
 })

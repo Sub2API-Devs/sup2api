@@ -74,7 +74,8 @@ const badges = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-2" data-testid="usage-live-stats">
+  <!-- One line that scrolls sideways on a phone. -->
+  <div class="flex flex-wrap items-center gap-2 max-md:w-full max-md:flex-nowrap max-md:overflow-x-auto max-md:[scrollbar-width:none] max-md:*:shrink-0" data-testid="usage-live-stats">
     <span
       v-for="b in badges"
       :key="b.key"
