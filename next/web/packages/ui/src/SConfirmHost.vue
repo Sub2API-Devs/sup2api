@@ -7,7 +7,8 @@ import { confirmState, settleConfirm } from './feedback'
 
 // Mounted once by the console. Focus starts on the confirm button (on
 // Cancel for dangerous confirmations), so Enter confirms a safe action and
-// a dangerous one needs a deliberate choice; Escape cancels.
+// a dangerous one needs a deliberate choice; Escape cancels. On phones it
+// stays a centered dialog whose two buttons share the width.
 const t = useUiT()
 const open = computed({
   get: () => !!confirmState.current,
@@ -19,7 +20,7 @@ const danger = computed(() => !!confirmState.current?.danger)
 </script>
 
 <template>
-  <SModal v-model:open="open" :title="confirmState.current?.title || t('ui.confirmTitle')" width="sm" top>
+  <SModal v-model:open="open" :title="confirmState.current?.title || t('ui.confirmTitle')" width="sm" mobile="center" top>
     <p class="whitespace-pre-line text-sm text-gray-600 dark:text-gray-300">{{ confirmState.current?.message }}</p>
     <template #footer>
       <SButton :data-autofocus="danger ? '' : undefined" data-testid="confirm-cancel" @click="settleConfirm(false)">{{ confirmState.current?.cancelText || t('ui.cancel') }}</SButton>

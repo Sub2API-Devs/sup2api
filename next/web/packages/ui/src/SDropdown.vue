@@ -8,17 +8,31 @@
 // (aria-haspopup / aria-expanded / aria-controls) and call `toggle` from
 // your own button. #header renders above the items. `align` end (default:
 // the menu's right edge at the trigger's) or start; `width` any CSS width
-// (default 11rem).
-import { computed, nextTick, onBeforeUnmount, ref, useId } from 'vue'
+// (default 11rem). On phones (`mobile` sheet, default) the menu opens as a
+// bottom action sheet instead: 48px items, #header above them and a Cancel
+// row at the end; `mobile` popover keeps the floating menu.
+import { Teleport, computed, nextTick, onBeforeUnmount, ref, useId } from 'vue'
 import type { MenuAction } from './types'
 import SIcon from './SIcon.vue'
+import OverlaySurface from './internal/OverlaySurface.vue'
 import { useUiT } from './i18n'
 import { useFloating } from './floating'
 import { navIndex } from './keyboard'
+import { useViewport } from './viewport'
 
 const props = withDefaults(
-  defineProps<{ actions: MenuAction[]; label?: string; ariaLabel?: string; align?: 'start' | 'end'; width?: string; maxHeight?: string; disabled?: boolean; closeOnSelect?: boolean }>(),
-  { align: 'end', width: '11rem', closeOnSelect: true }
+  defineProps<{
+    actions: MenuAction[]
+    label?: string
+    ariaLabel?: string
+    align?: 'start' | 'end'
+    width?: string
+    maxHeight?: string
+    disabled?: boolean
+    closeOnSelect?: boolean
+    mobile?: 'sheet' | 'popover'
+  }>(),
+  { align: 'end', width: '11rem', closeOnSelect: true, mobile: 'sheet' }
 )
 const emit = defineEmits<{ (e: 'select', key: string): void; (e: 'open'): void; (e: 'close'): void }>()
 const t = useUiT()
@@ -28,6 +42,14 @@ const menu = ref<HTMLElement>()
 const menuId = useId()
 const floating = useFloating(anchor, menu, { align: props.align, onLost: () => close(false) })
 const visible = computed(() => props.actions.filter((a) => !a.hidden))
+const { compact } = useViewport()
+const sheet = computed(() => compact.value && props.mobile === 'sheet')
+// The menu's container: the action sheet on phones, else <body> next to the trigger.
+const host = computed(() =>
+  sheet.value
+    ? { is: OverlaySurface, props: { open: open.value, form: 'sheet' as const, flush: true, closeButton: false, onClose: () => close() } }
+    : { is: Teleport, props: { to: 'body' } }
+)
 
 function onDoc(e: MouseEvent) {
   const target = e.target as Node
@@ -41,9 +63,9 @@ function show(focus: 'first' | 'last' = 'first') {
   if (props.disabled || open.value) return
   open.value = true
   emit('open')
-  document.addEventListener('mousedown', onDoc)
+  if (!sheet.value) document.addEventListener('mousedown', onDoc)
   nextTick(() => {
-    floating.start()
+    if (!sheet.value) floating.start()
     items().at(focus === 'first' ? 0 : -1)?.focus({ preventScroll: true })
   })
 }
@@ -111,17 +133,19 @@ defineExpose({ open: () => show(), close: () => close(false) })
         </slot>
       </button>
     </slot>
-    <Teleport to="body">
+    <component :is="host.is" v-bind="host.props">
       <div
-        v-if="open"
+        v-if="open || sheet"
         :id="menuId"
         ref="menu"
         role="menu"
-        class="dropdown fixed"
-        :style="{ ...floating.style.value, width, maxHeight, overflowY: maxHeight ? 'auto' : undefined }"
+        :class="sheet ? 'py-1' : 'dropdown fixed'"
+        :style="sheet ? undefined : { ...floating.style.value, width, maxHeight, overflowY: maxHeight ? 'auto' : undefined }"
         @keydown="onMenuKey"
       >
-        <div v-if="$slots.header" class="border-b border-line px-4 pb-2 pt-1.5 text-xs text-fg-muted" role="presentation"><slot name="header" /></div>
+        <div v-if="$slots.header" class="border-b border-line pb-2 pt-1.5 text-xs text-fg-muted" :class="sheet ? 'px-5' : 'px-4'" role="presentation">
+          <slot name="header" />
+        </div>
         <template v-for="a in visible" :key="a.key">
           <div v-if="a.divider" class="my-1 border-t border-line" role="separator" />
           <button
@@ -130,16 +154,25 @@ defineExpose({ open: () => show(), close: () => close(false) })
             :aria-checked="a.checked"
             tabindex="-1"
             class="dropdown-item"
-            :class="a.danger ? '!text-red-600 dark:!text-red-400' : ''"
+            :class="[sheet ? 'min-h-12 gap-3 px-5 text-base' : '', a.danger ? '!text-red-600 dark:!text-red-400' : '']"
             :disabled="a.disabled"
             @click="pick(a)"
           >
-            <SIcon v-if="a.icon" :name="a.icon" class="h-4 w-4 shrink-0 opacity-70" />
+            <SIcon v-if="a.icon" :name="a.icon" class="shrink-0 opacity-70" :class="sheet ? 'h-5 w-5' : 'h-4 w-4'" />
             <span class="min-w-0 flex-1 truncate">{{ a.label }}</span>
             <SIcon v-if="a.checked" name="check" class="h-4 w-4 shrink-0 text-primary-600" />
           </button>
         </template>
       </div>
-    </Teleport>
+      <button
+        v-if="sheet"
+        type="button"
+        class="dropdown-item min-h-12 justify-center border-t border-line px-5 text-base font-medium"
+        data-overlay-close
+        @click="close()"
+      >
+        {{ t('ui.cancel') }}
+      </button>
+    </component>
   </span>
 </template>

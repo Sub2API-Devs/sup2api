@@ -6,8 +6,13 @@
 // pointing at the tooltip while it is shown. `disabled` (or no content)
 // renders only the slot. `variant="card"` draws it as a light card, for
 // richer #content (a small table of figures).
+// On touch screens a tap on a trigger that is not itself interactive toggles
+// the tooltip, which hides again on a tap elsewhere or after 4 s; buttons,
+// links and fields keep their own tap (focus still shows it). The box always
+// fits on the screen.
 import { nextTick, onBeforeUnmount, ref, useId, useSlots, computed } from 'vue'
 import { useFloating, type Placement } from './floating'
+import { useViewport } from './viewport'
 
 const props = withDefaults(defineProps<{ content?: string; placement?: Placement; delay?: number; disabled?: boolean; maxWidth?: string; variant?: 'dark' | 'card' }>(), {
   placement: 'top',
@@ -23,6 +28,9 @@ const id = useId()
 const active = computed(() => !props.disabled && (!!props.content || !!slots.content))
 const floating = useFloating(anchor, tip, { placement: props.placement, align: 'center', offset: 6, onLost: () => hide() })
 let timer: ReturnType<typeof setTimeout> | null = null
+const { touch } = useViewport()
+const INTERACTIVE = 'a[href], button, input, select, textarea, label, summary, [role="button"], [tabindex]:not([tabindex="-1"])'
+const TAP_HIDE_MS = 4000
 
 function show(immediate = false) {
   if (!active.value) return
@@ -39,6 +47,20 @@ function hide() {
   timer = null
   shown.value = false
   floating.stop()
+  document.removeEventListener('pointerdown', onOutside, true)
+}
+function onOutside(e: PointerEvent) {
+  if (!anchor.value?.contains(e.target as Node)) hide()
+}
+function onTap(e: MouseEvent) {
+  if (!touch.value) return
+  const control = (e.target as Element).closest(INTERACTIVE)
+  if (control && anchor.value?.contains(control)) return
+  if (shown.value) return hide()
+  show(true)
+  if (!shown.value) return
+  document.addEventListener('pointerdown', onOutside, true)
+  timer = setTimeout(hide, TAP_HIDE_MS)
 }
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape' && shown.value) {
@@ -54,8 +76,9 @@ onBeforeUnmount(hide)
     ref="anchor"
     class="inline-flex max-w-full"
     :aria-describedby="shown ? id : undefined"
-    @mouseenter="show()"
-    @mouseleave="hide"
+    @mouseenter="touch || show()"
+    @mouseleave="touch || hide()"
+    @click="onTap"
     @focusin="show(true)"
     @focusout="hide"
     @keydown="onKey"
@@ -69,7 +92,7 @@ onBeforeUnmount(hide)
         role="tooltip"
         class="pointer-events-none fixed z-popover whitespace-pre-line break-words rounded-lg text-xs leading-5 shadow-popover"
         :class="variant === 'card' ? 'border border-line bg-surface p-3 text-fg' : 'bg-gray-900 px-2.5 py-1.5 text-white dark:bg-dark-600'"
-        :style="{ ...floating.style.value, maxWidth }"
+        :style="{ ...floating.style.value, maxWidth: `min(${maxWidth}, calc(100vw - 16px))` }"
       >
         <slot name="content">{{ content }}</slot>
       </div>

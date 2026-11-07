@@ -3,6 +3,7 @@ import { session } from '@sub2api/host'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_PAGE_PERMS, PROXY_PAGE_PERMS } from '@/composables/useOwnership'
 import AppLayout from '@/layouts/AppLayout.vue'
+import { closeLayersOnBack } from './layerBack'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -97,6 +98,7 @@ export const router = createRouter({
   routes,
   scrollBehavior: () => ({ top: 0 })
 })
+closeLayersOnBack(router)
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()

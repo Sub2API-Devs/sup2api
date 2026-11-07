@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { h } from 'vue'
 import SFormModal from './SFormModal.vue'
+import { pinViewport } from './internal/pinViewport'
 
 const render = (props: Record<string, unknown> = {}) =>
   mount(SFormModal, {
@@ -46,5 +47,19 @@ describe('SFormModal', () => {
     expect(w.emitted('submit')).toBeUndefined()
     await w.findAll('.modal-footer button')[1].trigger('click')
     expect(w.emitted('submit')).toHaveLength(1)
+  })
+
+  it('on phones puts Cancel and Submit side by side under #footer-start, without a wrapper', () => {
+    const w = mount(
+      pinViewport({ compact: true }, () =>
+        h(SFormModal, { open: true, title: 'Edit' }, { default: () => h('input'), 'footer-start': () => h('span', { class: 'hint' }, 'Hint') })
+      ),
+      { global: { stubs: { Teleport: true } } }
+    )
+    expect(w.find('.s-drawer-bottom').exists()).toBe(true)
+    const footer = w.get('form').element.closest('[role="dialog"]')!.lastElementChild!
+    expect(footer.className).toContain('max-md:*:flex-1')
+    expect(Array.from(footer.children).map((c) => c.textContent?.trim())).toEqual(['Hint', 'Cancel', 'Save'])
+    expect(footer.firstElementChild!.className).toContain('max-md:!basis-full')
   })
 })

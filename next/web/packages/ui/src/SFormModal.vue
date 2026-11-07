@@ -13,6 +13,8 @@
 // `#footer` replaces the whole footer, `#footer-start` adds content on its
 // left (a hint, a secondary action). `#header` is SModal's. Other attributes
 // (data-testid, …) land on the <form>.
+// On phones it takes SModal's `mobile` form; Cancel and Submit share the
+// footer width, with #footer-start on its own row above them.
 import { useUiT } from './i18n'
 import SButton from './SButton.vue'
 import SModal from './SModal.vue'
@@ -35,8 +37,10 @@ const props = withDefaults(
     cancelAttrs?: Record<string, unknown>
     persistent?: boolean
     describedby?: string
+    /** SModal's form on phones. */
+    mobile?: 'auto' | 'sheet' | 'fullscreen' | 'center'
   }>(),
-  { width: 'md', submitVariant: 'primary', enterSubmit: true, submitText: undefined, cancelText: undefined, title: undefined, describedby: undefined }
+  { width: 'md', submitVariant: 'primary', enterSubmit: true, submitText: undefined, cancelText: undefined, title: undefined, describedby: undefined, mobile: 'auto' }
 )
 defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'submit'): void; (e: 'close'): void }>()
@@ -61,6 +65,7 @@ function submit() {
     :persistent="persistent || loading"
     :closable="!loading"
     :describedby="describedby"
+    :mobile="mobile"
     @update:open="emit('update:open', $event)"
     @close="emit('close')"
   >
@@ -72,7 +77,7 @@ function submit() {
     </form>
     <template #footer>
       <slot name="footer">
-        <div v-if="$slots['footer-start']" class="mr-auto flex min-w-0 items-center gap-2"><slot name="footer-start" /></div>
+        <div v-if="$slots['footer-start']" class="mr-auto flex min-w-0 items-center gap-2 max-md:!basis-full"><slot name="footer-start" /></div>
         <SButton :disabled="loading" v-bind="cancelAttrs" @click="cancel">{{ cancelText || t('ui.cancel') }}</SButton>
         <SButton :variant="submitVariant" :loading="loading" :disabled="submitDisabled" v-bind="submitAttrs" @click="submit">
           {{ submitText || t('ui.save') }}

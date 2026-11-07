@@ -1,21 +1,47 @@
-// Modal layer stack shared by SModal and SDrawer: only the topmost layer
-// handles Escape and traps Tab; body scrolling is locked while any layer is
-// open; focus moves into a layer when it opens and back to the element that
-// had it when it closes. Layers stack from z-index 50 (Tailwind z-overlay),
-// two steps per open layer; `top` layers start at 60. Popovers (z-popover,
-// 70) stay above them.
+// Modal layer stack shared by SModal and SDrawer (and the phone sheets built
+// on them): only the topmost layer handles Escape and traps Tab; body
+// scrolling is locked while any layer is open; focus moves into a layer when
+// it opens and back to the element that had it when it closes. Layers stack
+// from z-index 50 (Tailwind z-overlay), two steps per open layer; `top`
+// layers start at 60. Popovers (z-popover, 70) stay above them.
+// dismissTopLayer() lets the console's router turn the browser Back button /
+// Android back gesture into closing the topmost layer. On phones and touch
+// screens the visual viewport's height and top are kept in the CSS variables
+// --s-vvh / --s-vvt while a layer is open, so sheets stay above the soft
+// keyboard. useSheetSwipe: swipe down to close a sheet.
 import { computed, nextTick, onBeforeUnmount, shallowRef, watch, type Ref } from 'vue'
+import { useViewport } from './viewport'
 
 interface Layer {
   id: number
   panel: Ref<HTMLElement | undefined>
-  onEscape: () => void
+  /** Closes the layer unless it is persistent. */
+  dismiss: () => void
 }
 
 const stack = shallowRef<Layer[]>([])
 let seq = 0
 let listening = false
 let savedOverflow = ''
+let trackingViewport = false
+
+function writeVisualViewport() {
+  const vv = window.visualViewport
+  if (!vv) return
+  document.documentElement.style.setProperty('--s-vvh', `${vv.height}px`)
+  document.documentElement.style.setProperty('--s-vvt', `${vv.offsetTop}px`)
+}
+
+function trackVisualViewport(on: boolean) {
+  if (on === trackingViewport) return
+  trackingViewport = on
+  const listen = on ? 'addEventListener' : 'removeEventListener'
+  window.visualViewport?.[listen]('resize', writeVisualViewport)
+  window.visualViewport?.[listen]('scroll', writeVisualViewport)
+  if (on) return writeVisualViewport()
+  document.documentElement.style.removeProperty('--s-vvh')
+  document.documentElement.style.removeProperty('--s-vvt')
+}
 
 const FOCUSABLE =
   'a[href],area[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"]),[contenteditable="true"]'
@@ -31,7 +57,7 @@ function onKeydown(e: KeyboardEvent) {
     if (e.defaultPrevented) return
     e.preventDefault()
     e.stopPropagation()
-    top.onEscape()
+    top.dismiss()
     return
   }
   if (e.key !== 'Tab') return
@@ -65,6 +91,7 @@ function sync() {
   } else if (!open && listening) {
     document.removeEventListener('keydown', onKeydown)
     document.body.style.overflow = savedOverflow
+    trackVisualViewport(false)
     listening = false
   }
 }
@@ -74,15 +101,17 @@ function sync() {
  * (gets focus when nothing inside is focusable). Returns the stacking depth
  * (0 = first open layer).
  */
-function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined>, onEscape: () => void) {
+function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined>, dismiss: () => void) {
   const id = ++seq
+  const { compact, touch } = useViewport()
   let returnTo: HTMLElement | null = null
 
   function push() {
     if (stack.value.some((l) => l.id === id)) return
     returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    stack.value = [...stack.value, { id, panel, onEscape }]
+    stack.value = [...stack.value, { id, panel, dismiss }]
     sync()
+    if (compact.value || touch.value) trackVisualViewport(true)
     nextTick(() => {
       const el = panel.value
       if (!el || el.contains(document.activeElement)) return
@@ -109,6 +138,9 @@ function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined
   return depth
 }
 
+/** Shapes of the dialog surface (internal/OverlaySurface.vue). */
+export type OverlayForm = 'center' | 'right' | 'left' | 'sheet' | 'fullscreen' | 'page'
+
 const BASE_Z = 50
 const TOP_Z = 60
 
@@ -134,7 +166,55 @@ export function useDialog(
   return { dismissible, close, zIndex }
 }
 
+/**
+ * Closes the topmost layer unless it is persistent (the console's router
+ * calls it on Back). False when no layer is open, so Back navigates.
+ */
+export function dismissTopLayer(): boolean {
+  const top = stack.value.at(-1)
+  top?.dismiss()
+  return !!top
+}
+
 /** Number of open layers (tests / hosts). */
 export function openLayerCount(): number {
   return stack.value.length
+}
+
+/**
+ * Swipe down to close a bottom sheet: returns the pointerdown handler of its
+ * grab handle and header. A drag that starts there (not on a control) while
+ * the body is scrolled to the top moves the panel with the finger; let go
+ * past a quarter of its height, or flicked, it closes, otherwise it springs
+ * back. Does nothing while `enabled` is false (persistent sheets).
+ */
+export function useSheetSwipe(panel: Ref<HTMLElement | undefined>, body: Ref<HTMLElement | undefined>, enabled: () => boolean, close: () => void) {
+  return (e: PointerEvent) => {
+    const sheet = panel.value
+    const grip = e.currentTarget as HTMLElement
+    if (!sheet || !enabled() || e.button !== 0 || (body.value?.scrollTop ?? 0) > 0) return
+    if ((e.target as Element).closest('button, a, input, select, textarea, [contenteditable="true"]')) return
+    const startY = e.clientY
+    const startAt = e.timeStamp
+    let dy = 0
+    grip.setPointerCapture?.(e.pointerId)
+    sheet.style.transition = 'none'
+    const move = (ev: PointerEvent) => {
+      dy = Math.max(0, ev.clientY - startY)
+      sheet.style.transform = dy ? `translateY(${dy}px)` : ''
+    }
+    const end = (ev: PointerEvent) => {
+      grip.removeEventListener('pointermove', move)
+      grip.removeEventListener('pointerup', end)
+      grip.removeEventListener('pointercancel', end)
+      const flicked = dy > 24 && dy / Math.max(1, ev.timeStamp - startAt) > 0.5
+      const closing = ev.type === 'pointerup' && (dy > sheet.offsetHeight / 4 || flicked)
+      sheet.style.transition = 'transform 0.2s ease'
+      sheet.style.transform = closing ? 'translateY(100%)' : ''
+      if (closing) close()
+    }
+    grip.addEventListener('pointermove', move)
+    grip.addEventListener('pointerup', end)
+    grip.addEventListener('pointercancel', end)
+  }
 }

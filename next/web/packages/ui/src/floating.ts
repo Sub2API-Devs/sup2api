@@ -30,10 +30,14 @@ function flip(side: Placement, a: DOMRect, w: number, h: number, gap: number): P
   return room[side] < 0 && room[OPPOSITE[side]] > 0 ? OPPOSITE[side] : side
 }
 
-/** Start of a panel of `size` aligned along an anchor edge (start, len), kept inside [MARGIN, viewport - MARGIN]. */
-function along(align: Align, start: number, len: number, size: number, viewport: number): number {
-  const v = align === 'end' ? start + len - size : align === 'center' ? start + len / 2 - size / 2 : start
+/** Start of a panel of `size` at `v`, kept inside [MARGIN, viewport - MARGIN]. */
+function inside(v: number, size: number, viewport: number): number {
   return Math.min(Math.max(MARGIN, v), Math.max(MARGIN, viewport - size - MARGIN))
+}
+
+/** Start of a panel of `size` aligned along an anchor edge (start, len), kept inside the viewport. */
+function along(align: Align, start: number, len: number, size: number, viewport: number): number {
+  return inside(align === 'end' ? start + len - size : align === 'center' ? start + len / 2 - size / 2 : start, size, viewport)
 }
 
 /** True when a laid-out anchor is fully outside the viewport (a zero-size rect — no layout, test DOMs — is not). */
@@ -62,7 +66,8 @@ export function useFloating(anchor: Ref<HTMLElement | undefined>, panel: Ref<HTM
       top = side === 'bottom' ? a.bottom + gap : a.top - gap - h
       left = along(align, a.left, a.width, opts.matchWidth ? Math.max(w, a.width) : w, window.innerWidth)
     } else {
-      left = side === 'right' ? a.right + gap : a.left - gap - w
+      // A panel that fits on neither side overlaps the anchor rather than leaving the screen.
+      left = inside(side === 'right' ? a.right + gap : a.left - gap - w, w, window.innerWidth)
       top = along(align, a.top, a.height, h, window.innerHeight)
     }
     const s: Record<string, string> = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }

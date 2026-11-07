@@ -8,12 +8,14 @@
 // persistent (the parent closes it). `top` stacks it above everything else
 // (confirmations asked from inside a modal; later modals stack above earlier
 // ones anyway).
-import { ref, useId } from 'vue'
-import { useUiT } from './i18n'
-import SIcon from './SIcon.vue'
-import { useDialog } from './overlay'
-import { resetTitleContext } from './titleContext'
-resetTitleContext()
+// `mobile` is its form on phones: `sheet` a bottom sheet, `fullscreen` a
+// full-height page, `center` the floating dialog of wide screens; `auto`
+// (default) is a sheet for width sm / md and a page for lg and wider. The
+// footer stays at the bottom, clear of the home indicator, and the
+// browser Back button closes it.
+import { computed } from 'vue'
+import OverlaySurface from './internal/OverlaySurface.vue'
+import { useViewport } from './viewport'
 
 const props = withDefaults(
   defineProps<{
@@ -26,75 +28,35 @@ const props = withDefaults(
     top?: boolean
     /** Accessible description: id of an element inside the body. */
     describedby?: string
+    /** Form on phones (compact viewport). */
+    mobile?: 'auto' | 'sheet' | 'fullscreen' | 'center'
   }>(),
-  { width: 'md', closable: true }
+  { width: 'md', closable: true, mobile: 'auto' }
 )
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'close'): void }>()
-const t = useUiT()
-const titleId = useId()
-const panel = ref<HTMLElement>()
-
-const widths: Record<string, string> = {
-  sm: 'max-w-sm',
-  md: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
-  '2xl': 'max-w-6xl'
-}
-
-const { dismissible, close, zIndex } = useDialog(props, emit, panel)
+const { compact } = useViewport()
+const form = computed(() => {
+  if (!compact.value) return 'center'
+  if (props.mobile !== 'auto') return props.mobile
+  return props.width === 'sm' || props.width === 'md' ? 'sheet' : 'fullscreen'
+})
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="s-modal">
-      <div v-if="open" class="modal-overlay" :style="{ zIndex }" @mousedown.self="dismissible && close()">
-        <div
-          ref="panel"
-          class="modal-content flex flex-col"
-          :class="widths[width]"
-          role="dialog"
-          aria-modal="true"
-          tabindex="-1"
-          :aria-labelledby="title || $slots.header ? titleId : undefined"
-          :aria-describedby="describedby"
-        >
-          <div v-if="title || $slots.header || closable" class="modal-header">
-            <div :id="titleId" class="min-w-0 flex-1">
-              <slot name="header">
-                <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ title }}</h3>
-              </slot>
-            </div>
-            <button
-              v-if="closable"
-              type="button"
-              class="btn btn-ghost btn-sm w-8 shrink-0 px-0"
-              data-overlay-close
-              :aria-label="t('ui.close')"
-              @click="close"
-            >
-              <SIcon name="x" class="h-5 w-5" />
-            </button>
-          </div>
-          <div class="modal-body flex-1 overflow-y-auto">
-            <slot />
-          </div>
-          <div v-if="$slots.footer" class="modal-footer">
-            <slot name="footer" />
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <OverlaySurface
+    :open="open"
+    :form="form"
+    :title="title"
+    :width="width"
+    :closable="closable"
+    :persistent="persistent"
+    :top="top"
+    :describedby="describedby"
+    @update:open="emit('update:open', $event)"
+    @close="emit('close')"
+  >
+    <template v-if="$slots.header" #header><slot name="header" /></template>
+    <slot />
+    <template v-if="$slots.footer" #footer><slot name="footer" /></template>
+  </OverlaySurface>
 </template>
-
-<style scoped>
-.s-modal-enter-active,
-.s-modal-leave-active {
-  transition: opacity 0.15s ease;
-}
-.s-modal-enter-from,
-.s-modal-leave-to {
-  opacity: 0;
-}
-</style>
