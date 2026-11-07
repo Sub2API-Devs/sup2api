@@ -60,6 +60,8 @@ const SIZE = { xs: 'btn-xs', sm: 'btn-sm', md: 'btn-md', lg: 'btn-lg' }
 const SQUARE = 'aspect-square px-0'
 const ICON: Record<string, string> = { xs: 'h-3.5 w-3.5', sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5' }
 // Under the bulk selection dock (z-30), which covers it while rows are selected.
+// The console layout pads a page holding a fab by 5.5rem (+ the safe area) at the bottom:
+// the 3.5rem button plus its 1rem offset and a 1rem gap. Change them together.
 const FAB = {
   button: 'fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-20 h-14 w-14 rounded-full px-0 shadow-lg',
   icon: 'h-6 w-6'
