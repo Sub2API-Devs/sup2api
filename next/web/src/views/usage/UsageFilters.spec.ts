@@ -14,7 +14,7 @@ const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))
 vi.mock('@sub2api/host', () => ({ api: { get, list: async () => ({ items: [], page: {} }) } }))
 vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (permission: string) => permission === 'usage:all:read' }) }))
-vi.mock('@/composables/useList', () => ({ useList: (_path: string, filters: Record<string, unknown>) => ({ items: ref([]), loading: ref(false), page: ref(1), pageSize: ref(20), total: ref(0), filters: reactive(filters), reload: vi.fn() }) }))
+vi.mock('@/composables/useList', async importOriginal => ({ ...(await importOriginal<object>()), useList: (_path: string, filters: Record<string, unknown>) => ({ items: ref([]), loading: ref(false), page: ref(1), pageSize: ref(20), total: ref(0), filters: reactive(filters), reload: vi.fn() }) }))
 
 enableAutoUnmount(afterEach)
 const global = { plugins: [i18n] }
@@ -117,24 +117,31 @@ describe('shared usage search', () => {
     expect(full.findAll('[data-testid="search-usage"]')).toHaveLength(1)
   })
 
-  it('keeps the range and the text searches in sight on a phone and folds the rest into the Filters sheet', async () => {
+  it('keeps the range, the log type and the text searches in sight on a phone, folds the rest into the Filters sheet and applies it on Done', async () => {
     const logTypes = [{ value: 'records', label: 'Records' }, { value: 'errors', label: 'Errors' }]
     const w = mountPinned(UsageFilters, {
-      props: { modelValue: { protocol: 'openai.chat', stream: 'true' }, logTypes, logType: 'errors' },
+      props: { modelValue: { protocol: 'openai.chat', stream: 'true', success: 'false' }, logTypes, logType: 'errors' },
       slots: { range: '<button class="range">Today</button>', stats: '<span>stats</span>' },
       global
     })
-    for (const key of ['model_contains', 'api_key_name', 'client_ip']) expect(w.find(`[data-testid="filter-${key}"]`).exists()).toBe(true)
+    for (const key of ['log-type', 'model_contains', 'api_key_name', 'client_ip']) expect(w.find(`[data-testid="filter-${key}"]`).exists()).toBe(true)
     expect(w.find('.range').exists()).toBe(true)
     expect(w.find('[data-testid="filter-protocol"]').exists()).toBe(false)
-    // log type, request type and stream are set
-    expect(w.get('[data-testid="filter-sheet-open"]').text()).toContain('3')
+    // request type and stream are set; the status of failed requests is not a sheet filter
+    expect(w.get('[data-testid="filter-sheet-open"]').text()).toContain('2')
     await w.get('[data-testid="filter-sheet-open"]').trigger('click')
     await flushPromises()
     // the More filters fields come along, with no toggle
     const sheet = document.querySelector('[data-testid="filter-sheet"]')!
     expect(sheet.querySelector('[data-testid="filter-protocol"]')).not.toBeNull()
-    expect(sheet.querySelector('[data-testid="filter-request_id"]')).not.toBeNull()
+    const requestId = sheet.querySelector<HTMLInputElement>('input[data-testid="filter-request_id"]')!
+    requestId.value = 'req-1'
+    requestId.dispatchEvent(new Event('input'))
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+    document.querySelector<HTMLButtonElement>('[data-testid="filter-sheet-done"]')!.click()
+    await flushPromises()
+    expect(w.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ request_id: 'req-1', protocol: 'openai.chat', stream: 'true' })
+    expect(document.querySelector('[data-testid="filter-sheet"]')).toBeNull()
     document.body.innerHTML = ''
   })
 })

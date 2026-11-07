@@ -8,13 +8,15 @@
 // With `logTypes` the first filter picks what the page lists, as new-api's log
 // type does; it applies at once, with any filter typed so far. A type these
 // fields do not search (`searchable` = false) brings its own in #filters.
-// The selects sit in an SFilterBar: on a phone the three text searches stay
-// in sight beside its Filters button and the selects fold into its sheet,
-// together with the More filters fields (kept under the first row on a wide
-// screen, where the Teleport puts them).
+// The filters sit in an SFilterBar: on a phone the log type and the three
+// text searches stay in sight beside its Filters button, and the selects and
+// the More filters fields (UsageAdvancedFilters, under the first row on a
+// wide screen) fold into its sheet, whose Done applies the search.
 import { computed, reactive, ref, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SButton, SFilterBar, SIcon, SInput, SSelect, useViewport } from '@sub2api/ui'
+import { activeFilterCount } from '@/composables/useList'
+import UsageAdvancedFilters from './UsageAdvancedFilters.vue'
 
 const props = withDefaults(defineProps<{
   modelValue: Record<string, unknown>
@@ -33,8 +35,6 @@ const emit = defineEmits<{ 'update:modelValue': [value: Record<string, string>];
 const { t } = useI18n()
 const expanded = ref(false)
 const { compact } = useViewport()
-/** Where the More filters fields go on a wide screen: under the first row. */
-const advancedSpot = ref<HTMLElement>()
 const slots = useSlots()
 /** The stats and actions row; without either the reset and search buttons end the filter row. */
 const bottomRow = computed(() => !!slots.stats || !!slots.actions)
@@ -55,10 +55,6 @@ watch(() => props.modelValue, value => {
   for (const key of keys.value) draft[key] = String(value[key] ?? '')
 }, { deep: true, immediate: true })
 // Without field labels the empty choice names the filter, like a placeholder.
-const groupChoices = computed(() => [
-  { value: '', label: t('usage.search.group_id') },
-  ...(props.groupOptions?.filter(option => option.value !== '').map(option => ({ ...option, value: String(option.value) })) || [])
-])
 const successOptions = computed(() => [{ value: '', label: t('common.status') }, { value: 'true', label: t('usage.success.ok') }, { value: 'false', label: t('usage.success.failed') }])
 // A type preset by a link or an earlier search stays selectable even when the
 // current range no longer has it.
@@ -68,16 +64,13 @@ const protocolChoices = computed(() => {
   if (current && !values.includes(current)) values.push(current)
   return [{ value: '', label: t('usage.search.protocol') }, ...values.map(value => ({ value, label: value }))]
 })
-const streamOptions = computed(() => [{ value: '', label: t('usage.search.stream') }, { value: 'true', label: t('usage.stream') }, { value: 'false', label: t('usage.nonStream') }])
-const billingOptions = computed(() => [
-  { value: '', label: t('usage.billing.statusLabel') },
-  ...['billed', 'free', 'pending', 'failed'].map(value => ({ value, label: t(`usage.billing.status.${value}`) }))
-])
-const isSet = (key: string) => props.modelValue[key] !== undefined && props.modelValue[key] !== ''
-const advancedCount = computed(() => [...advanced.value, 'stream', 'billing_status'].filter(isSet).length)
-/** The Filters badge on a phone: what is set in its sheet. */
-const sheetCount = computed(
-  () => (props.searchable ? advancedCount.value + ['protocol', 'success'].filter(isSet).length : 0) + (props.logTypes.length && props.logType !== props.logTypes[0].value ? 1 : 0)
+/** How many of `fields` the applied search sets. */
+const setCount = (fields: string[]) => activeFilterCount(Object.fromEntries(fields.map(key => [key, props.modelValue[key]])))
+const advancedFields = computed(() => [...advanced.value, 'stream', 'billing_status'])
+const advancedCount = computed(() => setCount(advancedFields.value))
+/** The Filters badge on a phone: what is set in its sheet (the status select is not there for failed requests). */
+const sheetCount = computed(() =>
+  props.searchable ? setCount(['protocol', ...(props.logType === 'errors' ? [] : ['success']), ...advancedFields.value]) : 0
 )
 function apply() {
   emit('update:modelValue', Object.fromEntries(keys.value.map(key => [key, String(draft[key] ?? '').trim()])))
@@ -105,111 +98,78 @@ function pickLogType(value: unknown) {
       >
         <slot name="range" />
       </div>
-      <SFilterBar
-        :card="false"
-        class="grid min-w-[16rem] flex-1 grid-cols-1 items-stretch gap-2"
+      <div
+        class="grid min-w-[16rem] flex-1 grid-cols-1 gap-2"
         :class="searchable ? 'sm:grid-cols-[repeat(auto-fit,minmax(8rem,1fr))]' : 'sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))]'"
-        :aria-label="t('stats.filters')"
-        :active-count="sheetCount"
       >
-        <template
-          v-if="searchable"
-          #primary
+        <!-- On a wide screen the bar's box drops out (contents): its controls are cells of this grid. -->
+        <SFilterBar
+          :card="false"
+          class="md:contents"
+          :aria-label="t('stats.filters')"
+          :active-count="sheetCount"
+          @done="apply"
         >
-          <!-- Grid cells on a wide screen; two columns beside the Filters button on a phone. -->
-          <div class="grid grid-cols-2 gap-2 md:contents">
-            <SInput
-              v-for="p in primary"
-              :key="p.key"
-              v-model="draft[p.key]"
-              size="sm"
-              :class="p.key === 'client_ip' ? 'max-md:col-span-2' : ''"
-              :icon="p.icon"
-              :placeholder="t(`usage.search.${p.key}`)"
-              :title="t(`usage.search.${p.key}`)"
-              :aria-label="t(`usage.search.${p.key}`)"
-              :maxlength="256"
-              :mono="p.key === 'client_ip'"
-              :data-testid="`filter-${p.key}`"
-            />
-          </div>
-        </template>
-        <SSelect
-          v-if="logTypes.length"
-          :model-value="logType"
-          size="sm"
-          class="order-first"
-          :aria-label="t('usage.search.logType')"
-          :options="logTypes"
-          data-testid="filter-log-type"
-          @update:model-value="pickLogType"
-        />
-        <template v-if="searchable">
-          <SSelect
-            v-model="draft.protocol"
-            size="sm"
-            :aria-label="t('usage.search.protocol')"
-            :options="protocolChoices"
-            data-testid="filter-protocol"
-          />
-          <!-- The failed requests are a log type: the status is settled there. -->
-          <SSelect
-            v-if="logType !== 'errors'"
-            v-model="draft.success"
-            size="sm"
-            :aria-label="t('common.status')"
-            :options="successOptions"
-            data-testid="filter-success"
-          />
-        </template>
-        <slot name="filters" />
-        <!-- In the Filters sheet on a phone (no toggle there), under the first row on a wide screen. -->
-        <Teleport
-          v-if="searchable && advancedSpot && (expanded || compact)"
-          :to="advancedSpot"
-          :disabled="compact"
-        >
-          <div
-            class="grid grid-cols-1 gap-2 md:mt-2 md:border-t md:border-dashed md:border-line md:pt-2 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]"
-            data-testid="usage-advanced-filters"
+          <template
+            v-if="logTypes.length || searchable"
+            #primary
           >
-            <template
-              v-for="key in advanced"
-              :key="key"
-            >
+            <!-- Two columns beside the Filters button on a phone, an odd last field taking the row. -->
+            <div class="grid grid-cols-2 gap-2 md:contents max-md:[&>:last-child:nth-child(odd)]:col-span-2">
               <SSelect
-                v-if="key === 'group_id' && groupOptions?.length"
-                v-model="draft[key]"
+                v-if="logTypes.length"
+                :model-value="logType"
                 size="sm"
-                :aria-label="t(`usage.search.${key}`)"
-                :options="groupChoices"
+                :aria-label="t('usage.search.logType')"
+                :options="logTypes"
+                data-testid="filter-log-type"
+                @update:model-value="pickLogType"
               />
-              <SInput
-                v-else
-                v-model="draft[key]"
-                size="sm"
-                :placeholder="t(`usage.search.${key}`)"
-                :title="t(`usage.search.${key}`)"
-                :aria-label="t(`usage.search.${key}`)"
-                :maxlength="256"
-                :data-testid="`filter-${key}`"
-              />
-            </template>
+              <template v-if="searchable">
+                <SInput
+                  v-for="p in primary"
+                  :key="p.key"
+                  v-model="draft[p.key]"
+                  size="sm"
+                  :icon="p.icon"
+                  :placeholder="t(`usage.search.${p.key}`)"
+                  :title="t(`usage.search.${p.key}`)"
+                  :aria-label="t(`usage.search.${p.key}`)"
+                  :maxlength="256"
+                  :mono="p.key === 'client_ip'"
+                  :data-testid="`filter-${p.key}`"
+                />
+              </template>
+            </div>
+          </template>
+          <template v-if="searchable">
             <SSelect
-              v-model="draft.stream"
+              v-model="draft.protocol"
               size="sm"
-              :aria-label="t('usage.search.stream')"
-              :options="streamOptions"
+              :aria-label="t('usage.search.protocol')"
+              :options="protocolChoices"
+              data-testid="filter-protocol"
             />
+            <!-- The failed requests are a log type: the status is settled there. -->
             <SSelect
-              v-model="draft.billing_status"
+              v-if="logType !== 'errors'"
+              v-model="draft.success"
               size="sm"
-              :aria-label="t('usage.billing.statusLabel')"
-              :options="billingOptions"
+              :aria-label="t('common.status')"
+              :options="successOptions"
+              data-testid="filter-success"
             />
-          </div>
-        </Teleport>
-      </SFilterBar>
+          </template>
+          <slot name="filters" />
+          <UsageAdvancedFilters
+            v-if="compact && searchable"
+            :fields="advanced"
+            :values="draft"
+            :group-options="groupOptions"
+            @update="(key, value) => (draft[key] = value)"
+          />
+        </SFilterBar>
+      </div>
       <div
         v-if="!searchable"
         class="ms-auto flex flex-wrap items-center justify-end gap-2"
@@ -262,7 +222,14 @@ function pickLogType(value: unknown) {
         </SButton>
       </div>
     </div>
-    <div ref="advancedSpot" />
+    <UsageAdvancedFilters
+      v-if="!compact && expanded && searchable"
+      class="mt-2 border-t border-dashed border-line pt-2"
+      :fields="advanced"
+      :values="draft"
+      :group-options="groupOptions"
+      @update="(key, value) => (draft[key] = value)"
+    />
     <div
       v-if="searchable && bottomRow"
       class="mt-3 flex flex-wrap items-center gap-2"

@@ -8,7 +8,8 @@ import UsageRecords from './UsageRecords.vue'
 // the log type in the URL and the search bar, and the failed requests being the
 // list with success=false.
 const lists: Array<{ path: string; filters: Record<string, unknown>; reload: ReturnType<typeof vi.fn>; immediate: boolean }> = []
-vi.mock('@/composables/useList', () => ({
+vi.mock('@/composables/useList', async importOriginal => ({
+  ...(await importOriginal<object>()),
   useList: (path: string, init: Record<string, unknown>, opts: { immediate?: boolean } = {}) => {
     const l = { items: ref([]), loading: ref(false), page: ref(1), pageSize: ref(20), total: ref(0), filters: reactive({ ...init }), reload: vi.fn() }
     lists.push({ path, filters: l.filters, reload: l.reload, immediate: opts.immediate !== false })
