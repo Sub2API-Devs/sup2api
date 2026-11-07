@@ -27,8 +27,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'close'): void }>()
 const { compact } = useViewport()
-const paged = computed(() => compact.value && props.side !== 'bottom')
-const form = computed(() => (props.side === 'bottom' ? 'sheet' : paged.value ? 'fullscreen' : props.side))
+const form = computed(() => (props.side === 'bottom' ? 'sheet' : compact.value ? 'page' : props.side))
 </script>
 
 <template>
@@ -40,7 +39,6 @@ const form = computed(() => (props.side === 'bottom' ? 'sheet' : paged.value ? '
     :width="width"
     :closable="closable"
     :persistent="persistent"
-    :close-button="paged ? 'back' : 'x'"
     @update:open="emit('update:open', $event)"
     @close="emit('close')"
   >

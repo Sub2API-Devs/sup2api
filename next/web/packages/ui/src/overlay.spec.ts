@@ -23,63 +23,35 @@ function modal(pin: { compact?: boolean; touch?: boolean }, props: Record<string
   return { w, open, onClose }
 }
 
-describe('layer history on phones', () => {
-  it('Back closes the topmost layer without the router seeing it', async () => {
-    const before = history.length
-    const { open } = modal({ compact: true })
-    await flushPromises()
-    expect(history.length).toBe(before + 1)
-    expect(history.state?.sLayer).toBeTypeOf('number')
-    const router = vi.fn()
-    window.addEventListener('popstate', router)
-    history.back()
-    await vi.waitUntil(() => !open.value)
-    expect(router).not.toHaveBeenCalled()
-    window.removeEventListener('popstate', router)
-  })
-
-  it('removes its entry when closed another way, and stays open on Back while persistent', async () => {
-    const { open } = modal({ touch: true })
-    await flushPromises()
-    const back = vi.spyOn(history, 'back')
-    document.querySelector<HTMLButtonElement>('[data-overlay-close]')!.click()
-    await flushPromises()
-    expect(open.value).toBe(false)
-    expect(back).toHaveBeenCalledTimes(1)
-    await vi.waitUntil(() => history.state?.sLayer === undefined)
-
-    const p = modal({ compact: true }, { persistent: true })
-    await flushPromises()
-    const id = history.state?.sLayer
-    const push = vi.spyOn(history, 'pushState')
-    history.back()
-    await vi.waitUntil(() => push.mock.calls.length > 0)
-    expect(p.open.value).toBe(true)
-    expect(history.state?.sLayer).toBe(id)
-  })
-
-  it('takes no history entry with a mouse on a wide screen', async () => {
-    const before = history.length
-    modal({ compact: false, touch: false })
-    await flushPromises()
-    expect(history.length).toBe(before)
-  })
-})
-
-describe('visual viewport height', () => {
-  it('is kept in --s-vvh while a layer is open', async () => {
-    const vv = Object.assign(new EventTarget(), { height: 500 })
+describe('visual viewport', () => {
+  function stubViewport() {
+    const vv = Object.assign(new EventTarget(), { height: 500, offsetTop: 0 })
     vi.stubGlobal('visualViewport', vv)
-    const { open } = modal({ compact: false })
+    return vv
+  }
+
+  it('is kept in --s-vvh / --s-vvt while a layer is open on a phone', async () => {
+    const vv = stubViewport()
+    const { open } = modal({ compact: true })
     await flushPromises()
     const root = document.documentElement.style
     expect(root.getPropertyValue('--s-vvh')).toBe('500px')
     vv.height = 320
+    vv.offsetTop = 120
     vv.dispatchEvent(new Event('resize'))
     expect(root.getPropertyValue('--s-vvh')).toBe('320px')
+    expect(root.getPropertyValue('--s-vvt')).toBe('120px')
     open.value = false
     await flushPromises()
     expect(root.getPropertyValue('--s-vvh')).toBe('')
+    expect(root.getPropertyValue('--s-vvt')).toBe('')
+  })
+
+  it('is not tracked with a mouse on a wide screen', async () => {
+    stubViewport()
+    modal({ compact: false, touch: false })
+    await flushPromises()
+    expect(document.documentElement.style.getPropertyValue('--s-vvh')).toBe('')
   })
 })
 

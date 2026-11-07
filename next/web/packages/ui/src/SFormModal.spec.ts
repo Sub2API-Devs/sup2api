@@ -49,7 +49,7 @@ describe('SFormModal', () => {
     expect(w.emitted('submit')).toHaveLength(1)
   })
 
-  it('on phones puts Cancel and Submit side by side under #footer-start', () => {
+  it('on phones puts Cancel and Submit side by side under #footer-start, without a wrapper', () => {
     const w = mount(
       pinViewport({ compact: true }, () =>
         h(SFormModal, { open: true, title: 'Edit' }, { default: () => h('input'), 'footer-start': () => h('span', { class: 'hint' }, 'Hint') })
@@ -57,12 +57,9 @@ describe('SFormModal', () => {
       { global: { stubs: { Teleport: true } } }
     )
     expect(w.find('.s-drawer-bottom').exists()).toBe(true)
-    const row = w.get('form').element.closest('[role="dialog"]')!.lastElementChild!.firstElementChild!
-    expect(row.className).toContain('flex-wrap')
-    expect(row.firstElementChild!.className).toContain('w-full')
-    expect(row.firstElementChild!.textContent).toBe('Hint')
-    const buttons = Array.from(row.querySelectorAll('button'))
-    expect(buttons.map((b) => b.textContent?.trim())).toEqual(['Cancel', 'Save'])
-    expect(buttons.every((b) => b.classList.contains('flex-1') && b.classList.contains('h-11'))).toBe(true)
+    const footer = w.get('form').element.closest('[role="dialog"]')!.lastElementChild!
+    expect(footer.className).toContain('max-md:*:flex-1')
+    expect(Array.from(footer.children).map((c) => c.textContent?.trim())).toEqual(['Hint', 'Cancel', 'Save'])
+    expect(footer.firstElementChild!.className).toContain('max-md:!basis-full')
   })
 })

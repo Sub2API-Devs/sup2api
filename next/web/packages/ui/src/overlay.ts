@@ -4,60 +4,43 @@
 // it opens and back to the element that had it when it closes. Layers stack
 // from z-index 50 (Tailwind z-overlay), two steps per open layer; `top`
 // layers start at 60. Popovers (z-popover, 70) stay above them.
-// On phones and touch screens a layer also takes a same-URL history entry, so
-// the browser Back button / Android back gesture closes the topmost layer
-// instead of leaving the page; the entry is removed when the layer closes
-// another way, and the router never sees these steps. While a layer is open
-// the visual viewport height is kept in the CSS variable --s-vvh, so sheets
-// can stay above the soft keyboard. useSheetSwipe: swipe down to close a sheet.
+// dismissTopLayer() lets the console's router turn the browser Back button /
+// Android back gesture into closing the topmost layer. On phones and touch
+// screens the visual viewport's height and top are kept in the CSS variables
+// --s-vvh / --s-vvt while a layer is open, so sheets stay above the soft
+// keyboard. useSheetSwipe: swipe down to close a sheet.
 import { computed, nextTick, onBeforeUnmount, shallowRef, watch, type Ref } from 'vue'
 import { useViewport } from './viewport'
 
 interface Layer {
   id: number
   panel: Ref<HTMLElement | undefined>
-  /** Closes the layer unless it is persistent; false when it stays open. */
-  dismiss: () => boolean
-  /** URL of the history entry taken for the layer, null without one. */
-  entry: string | null
+  /** Closes the layer unless it is persistent. */
+  dismiss: () => void
 }
 
 const stack = shallowRef<Layer[]>([])
 let seq = 0
 let listening = false
 let savedOverflow = ''
+let trackingViewport = false
 
-const ENTRY_KEY = 'sLayer'
-let historyBound = false
-/** history.back() calls of this module whose popstate is still to come. */
-let ownPops = 0
-
-function pushEntry(layer: Layer) {
-  if (!historyBound) {
-    // Capture: runs before the router's popstate listener so it can be hidden from it.
-    window.addEventListener('popstate', onPopstate, true)
-    historyBound = true
-  }
-  history.pushState({ ...history.state, [ENTRY_KEY]: layer.id }, '')
-  layer.entry = location.href
-}
-
-function onPopstate(e: PopStateEvent) {
-  if (ownPops > 0) {
-    ownPops--
-    e.stopImmediatePropagation()
-    return
-  }
-  const top = stack.value.filter((l) => l.entry).at(-1)
-  if (!top || location.href !== top.entry || history.state?.[ENTRY_KEY] === top.id) return
-  e.stopImmediatePropagation()
-  top.entry = null
-  if (!top.dismiss()) pushEntry(top)
-}
-
-function trackVisualViewport() {
+function writeVisualViewport() {
   const vv = window.visualViewport
-  if (vv) document.documentElement.style.setProperty('--s-vvh', `${vv.height}px`)
+  if (!vv) return
+  document.documentElement.style.setProperty('--s-vvh', `${vv.height}px`)
+  document.documentElement.style.setProperty('--s-vvt', `${vv.offsetTop}px`)
+}
+
+function trackVisualViewport(on: boolean) {
+  if (on === trackingViewport) return
+  trackingViewport = on
+  const listen = on ? 'addEventListener' : 'removeEventListener'
+  window.visualViewport?.[listen]('resize', writeVisualViewport)
+  window.visualViewport?.[listen]('scroll', writeVisualViewport)
+  if (on) return writeVisualViewport()
+  document.documentElement.style.removeProperty('--s-vvh')
+  document.documentElement.style.removeProperty('--s-vvt')
 }
 
 const FOCUSABLE =
@@ -104,14 +87,11 @@ function sync() {
     document.addEventListener('keydown', onKeydown)
     savedOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    window.visualViewport?.addEventListener('resize', trackVisualViewport)
-    trackVisualViewport()
     listening = true
   } else if (!open && listening) {
     document.removeEventListener('keydown', onKeydown)
     document.body.style.overflow = savedOverflow
-    window.visualViewport?.removeEventListener('resize', trackVisualViewport)
-    document.documentElement.style.removeProperty('--s-vvh')
+    trackVisualViewport(false)
     listening = false
   }
 }
@@ -121,7 +101,7 @@ function sync() {
  * (gets focus when nothing inside is focusable). Returns the stacking depth
  * (0 = first open layer).
  */
-function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined>, dismiss: () => boolean) {
+function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined>, dismiss: () => void) {
   const id = ++seq
   const { compact, touch } = useViewport()
   let returnTo: HTMLElement | null = null
@@ -129,10 +109,9 @@ function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined
   function push() {
     if (stack.value.some((l) => l.id === id)) return
     returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const layer: Layer = { id, panel, dismiss, entry: null }
-    stack.value = [...stack.value, layer]
-    if (compact.value || touch.value) pushEntry(layer)
+    stack.value = [...stack.value, { id, panel, dismiss }]
     sync()
+    if (compact.value || touch.value) trackVisualViewport(true)
     nextTick(() => {
       const el = panel.value
       if (!el || el.contains(document.activeElement)) return
@@ -141,13 +120,8 @@ function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined
     })
   }
   function pop() {
-    const layer = stack.value.find((l) => l.id === id)
-    if (!layer) return
-    stack.value = stack.value.filter((l) => l !== layer)
-    if (layer.entry && history.state?.[ENTRY_KEY] === id) {
-      ownPops++
-      history.back()
-    }
+    if (!stack.value.some((l) => l.id === id)) return
+    stack.value = stack.value.filter((l) => l.id !== id)
     sync()
     const el = returnTo
     returnTo = null
@@ -165,7 +139,7 @@ function useOverlayLayer(open: () => boolean, panel: Ref<HTMLElement | undefined
 }
 
 /** Shapes of the dialog surface (internal/OverlaySurface.vue). */
-export type OverlayForm = 'center' | 'right' | 'left' | 'sheet' | 'fullscreen'
+export type OverlayForm = 'center' | 'right' | 'left' | 'sheet' | 'fullscreen' | 'page'
 
 const BASE_Z = 50
 const TOP_Z = 60
@@ -186,12 +160,20 @@ export function useDialog(
     emit('close')
   }
   const depth = useOverlayLayer(() => props.open, panel, () => {
-    if (!dismissible.value) return false
-    close()
-    return true
+    if (dismissible.value) close()
   })
   const zIndex = computed(() => (props.top ? TOP_Z : BASE_Z) + depth.value * 2)
   return { dismissible, close, zIndex }
+}
+
+/**
+ * Closes the topmost layer unless it is persistent (the console's router
+ * calls it on Back). False when no layer is open, so Back navigates.
+ */
+export function dismissTopLayer(): boolean {
+  const top = stack.value.at(-1)
+  top?.dismiss()
+  return !!top
 }
 
 /** Number of open layers (tests / hosts). */

@@ -49,7 +49,7 @@ describe('SModal forms', () => {
 })
 
 describe('SDrawer on phones', () => {
-  it('turns a side panel into a full-screen page with a back arrow', async () => {
+  it('turns a side panel into a full-screen page sliding from the right, with a back arrow', async () => {
     const panel = await panelOf(true, () => h(SDrawer, { open: true, title: 'Details', side: 'left' }))
     expect(panel.className).toContain('s-drawer-right')
     expect(panel.className).toContain('h-full')
@@ -68,8 +68,8 @@ describe('SConfirmHost on phones', () => {
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
     expect(dialog.classList.contains('modal-content')).toBe(true)
     expect(dialog.className).toContain('max-md:w-[calc(100vw-32px)]')
+    expect(dialog.querySelector('.modal-footer')!.className).toContain('max-md:*:flex-1')
     const buttons = dialog.querySelectorAll('.modal-footer button')
-    expect(Array.from(buttons).every(b => b.classList.contains('flex-1'))).toBe(true)
     ;(buttons[1] as HTMLButtonElement).click()
     expect(await answer).toBe(true)
   })

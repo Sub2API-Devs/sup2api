@@ -14,11 +14,10 @@
 // left (a hint, a secondary action). `#header` is SModal's. Other attributes
 // (data-testid, …) land on the <form>.
 // On phones it takes SModal's `mobile` form; Cancel and Submit share the
-// footer width at full touch height, with #footer-start above them.
+// footer width, with #footer-start on its own row above them.
 import { useUiT } from './i18n'
 import SButton from './SButton.vue'
 import SModal from './SModal.vue'
-import { useViewport } from './viewport'
 
 const props = withDefaults(
   defineProps<{
@@ -51,7 +50,6 @@ function cancel() {
   emit('close')
 }
 const t = useUiT()
-const { compact } = useViewport()
 
 function submit() {
   if (props.loading || props.submitDisabled) return
@@ -79,13 +77,11 @@ function submit() {
     </form>
     <template #footer>
       <slot name="footer">
-        <div :class="compact ? 'flex w-full flex-wrap gap-3' : 'contents'">
-          <div v-if="$slots['footer-start']" class="flex min-w-0 items-center gap-2" :class="compact ? 'w-full' : 'mr-auto'"><slot name="footer-start" /></div>
-          <SButton :class="compact ? 'h-11 flex-1' : ''" :disabled="loading" v-bind="cancelAttrs" @click="cancel">{{ cancelText || t('ui.cancel') }}</SButton>
-          <SButton :class="compact ? 'h-11 flex-1' : ''" :variant="submitVariant" :loading="loading" :disabled="submitDisabled" v-bind="submitAttrs" @click="submit">
-            {{ submitText || t('ui.save') }}
-          </SButton>
-        </div>
+        <div v-if="$slots['footer-start']" class="mr-auto flex min-w-0 items-center gap-2 max-md:!basis-full"><slot name="footer-start" /></div>
+        <SButton :disabled="loading" v-bind="cancelAttrs" @click="cancel">{{ cancelText || t('ui.cancel') }}</SButton>
+        <SButton :variant="submitVariant" :loading="loading" :disabled="submitDisabled" v-bind="submitAttrs" @click="submit">
+          {{ submitText || t('ui.save') }}
+        </SButton>
       </slot>
     </template>
   </SModal>

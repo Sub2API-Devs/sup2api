@@ -47,7 +47,7 @@ const sheet = computed(() => compact.value && props.mobile === 'sheet')
 // The menu's container: the action sheet on phones, else <body> next to the trigger.
 const host = computed(() =>
   sheet.value
-    ? { is: OverlaySurface, props: { open: open.value, form: 'sheet' as const, flush: true, closeButton: 'none' as const, onClose: () => close() } }
+    ? { is: OverlaySurface, props: { open: open.value, form: 'sheet' as const, flush: true, closeButton: false, onClose: () => close() } }
     : { is: Teleport, props: { to: 'body' } }
 )
 
