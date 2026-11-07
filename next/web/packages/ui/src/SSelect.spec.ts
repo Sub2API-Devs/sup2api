@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { h } from 'vue'
 import SSelect from './SSelect.vue'
+import type { SelectOption } from './types'
+import { pinViewport } from './internal/pinViewport'
 
 enableAutoUnmount(afterEach)
 const options = [{ label: 'en-US · English', value: 'en-US' }, { label: 'zh-CN · 中文', value: 'zh-CN' }]
@@ -48,5 +51,45 @@ describe('searchable select', () => {
     const w = mount(SSelect, { props: { modelValue: 'en-US', options } })
     await w.get('select').setValue('1')
     expect(w.emitted('update:modelValue')).toEqual([['zh-CN']])
+  })
+})
+
+describe('searchable select on phones', () => {
+  const grouped: SelectOption[] = [{ label: 'Europe', value: null, options: [{ label: 'Paris', value: 'par' }, { label: 'Berlin', value: 'ber' }] }, { label: 'Tokyo', value: 'tyo' }]
+
+  it('opens a bottom sheet with a search field and large checked rows', async () => {
+    const picked: unknown[] = []
+    const w = mount(
+      pinViewport({ compact: true }, () => h(SSelect, { modelValue: 'ber', options: grouped, searchable: true, 'onUpdate:modelValue': (v: unknown) => picked.push(v) })),
+      { attachTo: document.body }
+    )
+    const trigger = w.get('input')
+    expect(trigger.attributes('readonly')).toBeDefined()
+    await trigger.trigger('focus')
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    await trigger.trigger('click')
+    await flushPromises()
+    const sheet = document.querySelector<HTMLElement>('[role="dialog"]')!
+    expect(sheet.className).toContain('h-[calc(var(--s-vvh,100dvh)*0.92)]')
+    const search = sheet.querySelector<HTMLInputElement>('input[role="combobox"]')!
+    expect(document.activeElement).toBe(search)
+    expect(sheet.querySelector('[role="presentation"]')!.textContent).toContain('Europe')
+    const rows = Array.from(sheet.querySelectorAll<HTMLElement>('[role="option"]'))
+    expect(rows.every((r) => r.classList.contains('min-h-11'))).toBe(true)
+    expect(rows[1].querySelector('svg')).not.toBeNull()
+    expect(rows[0].querySelector('svg')).toBeNull()
+    search.value = 'tok'
+    search.dispatchEvent(new Event('input'))
+    await flushPromises()
+    expect(Array.from(sheet.querySelectorAll('[role="option"]')).map((o) => o.textContent?.trim())).toEqual(['Tokyo'])
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await flushPromises()
+    expect(picked).toEqual(['tyo'])
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('leaves the native select alone', () => {
+    const w = mount(pinViewport({ compact: true }, () => h(SSelect, { modelValue: 'en-US', options })))
+    expect(w.find('select').exists()).toBe(true)
   })
 })

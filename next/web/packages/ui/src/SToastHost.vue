@@ -2,13 +2,16 @@
 // Mounted once by the console. Errors are announced assertively
 // (role="alert"), other kinds politely (role="status"); hovering or focusing
 // a toast pauses its countdown. Toasts float over content, so they keep
-// stronger backgrounds than SAlert's TONE_BLOCK.
+// stronger backgrounds than SAlert's TONE_BLOCK. On phones they stack at the
+// top center, 12px from the edges and clear of the notch.
 import { dismissToast, pauseToast, resumeToast, toastState } from './feedback'
 import { useUiT } from './i18n'
 import SIcon from './SIcon.vue'
 import { TONE_ICON, toneOf } from './tones'
+import { useViewport } from './viewport'
 
 const t = useUiT()
+const { compact } = useViewport()
 const tone: Record<string, string> = {
   success: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-900/40 dark:text-emerald-200',
   error: 'border-red-200 bg-red-50 text-red-800 dark:border-red-800/50 dark:bg-red-900/40 dark:text-red-200',
@@ -19,8 +22,11 @@ const tone: Record<string, string> = {
 
 <template>
   <Teleport to="body">
-    <div class="pointer-events-none fixed right-4 top-4 z-toast flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
-      <TransitionGroup name="s-toast">
+    <div
+      class="pointer-events-none fixed z-toast flex flex-col gap-2"
+      :class="compact ? 'inset-x-3 top-[calc(env(safe-area-inset-top)+12px)]' : 'right-4 top-4 w-80 max-w-[calc(100vw-2rem)]'"
+    >
+      <TransitionGroup :name="compact ? 's-toast-top' : 's-toast'">
         <div
           v-for="item in toastState.items"
           :key="item.id"
@@ -58,5 +64,14 @@ const tone: Record<string, string> = {
 .s-toast-leave-to {
   opacity: 0;
   transform: translateX(16px);
+}
+.s-toast-top-enter-active,
+.s-toast-top-leave-active {
+  transition: all 0.2s ease;
+}
+.s-toast-top-enter-from,
+.s-toast-top-leave-to {
+  opacity: 0;
+  transform: translateY(-16px);
 }
 </style>

@@ -4,7 +4,8 @@
 // above a tinted explanation block. variant "section": a full-width header
 // (`label` or #title, optional `description`) with a chevron, for collapsible
 // blocks of a page or form. Its `actions` slot sits outside the toggle. `open` supports v-model:open; uncontrolled
-// (closed, or `defaultOpen`) without it.
+// (closed, or `defaultOpen`) without it. On touch screens the section header
+// is at least 44px high.
 import { useId } from 'vue'
 import { useUiT } from './i18n'
 import SIcon from './SIcon.vue'
@@ -32,7 +33,7 @@ const panelId = useId()
     <div class="flex flex-wrap items-center justify-between gap-3">
       <button
         type="button"
-        class="flex min-w-0 flex-1 items-start justify-between gap-3 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+        class="flex min-w-0 flex-1 items-start justify-between gap-3 rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 touch:min-h-11 touch:items-center"
         :aria-expanded="isOpen"
         :aria-controls="panelId"
         @click="toggle"

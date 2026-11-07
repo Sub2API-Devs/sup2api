@@ -4,7 +4,9 @@ import type { SelectOption } from './types'
 import { useUiT } from './i18n'
 import { splitAttrs, useFieldControl, type ControlSize } from './field'
 import { useFloating } from './floating'
+import { useViewport } from './viewport'
 import SIcon from './SIcon.vue'
+import OverlaySurface from './internal/OverlaySurface.vue'
 
 // Styled native <select>. Values keep their type (number/string/boolean/null).
 // An option with `options` renders an <optgroup>; the <option> value is the
@@ -14,6 +16,8 @@ import SIcon from './SIcon.vue'
 // it. Attrs: on the <select>; when searchable class / style / data-* go to
 // the wrapper and id / name / aria-* to the text input. Inside SField /
 // SSettingRow it takes the frame's id, aria-describedby, aria-invalid, size.
+// On phones a searchable select opens a bottom sheet instead: the search
+// field on top, the options below in 44px rows, the selected one checked.
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(
   defineProps<{
@@ -53,6 +57,14 @@ const root = ref<HTMLElement>()
 const menu = ref<HTMLElement>()
 const teleported = ref(false)
 const floating = useFloating(root, menu, { matchWidth: true, onLost: () => (open.value = false) })
+const { compact } = useViewport()
+const sheet = computed(() => props.searchable && compact.value)
+const floats = computed(() => teleported.value && !sheet.value)
+// The list's container: the sheet on phones, <body> in a live page, inline while detached.
+const listHost = computed(() => {
+  if (sheet.value) return { is: OverlaySurface, props: { open: open.value, form: 'sheet' as const, fill: true, flush: true, onClose: hide } }
+  return teleported.value ? { is: Teleport, props: { to: 'body' } } : { is: 'div', props: {} }
+})
 const choices = computed<Choice[]>(() => (props.placeholder === undefined ? flat.value : [{ value: null, label: props.placeholder }, ...flat.value]))
 const filtered = computed(() => choices.value.filter((o) => o.label.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())))
 const selectedLabel = computed(() => choices.value.find((o) => o.value === props.modelValue)?.label ?? props.modelValue?.toString() ?? '')
@@ -66,7 +78,7 @@ function show() {
   if (active.value < 0) active.value = filtered.value.findIndex((o) => !o.disabled)
   teleported.value = !!root.value?.isConnected
   nextTick(() => {
-    if (open.value && teleported.value) floating.start()
+    if (open.value && floats.value) floating.start()
   })
   scrollActive()
 }
@@ -84,7 +96,7 @@ function search(e: Event) {
   if (!open.value) show()
   query.value = v
   active.value = filtered.value.findIndex((o) => !o.disabled)
-  if (teleported.value) nextTick(() => floating.update())
+  if (floats.value) nextTick(() => floating.update())
 }
 function pick(o: SelectOption) {
   if (props.disabled || o.disabled) return
@@ -149,38 +161,63 @@ const selectedIndex = computed(() => flat.value.findIndex((o) => o.value === pro
       aria-autocomplete="list"
       :aria-expanded="open"
       :aria-controls="listId"
-      :aria-activedescendant="open && active >= 0 ? `${listId}-${active}` : undefined"
-      :value="open ? query : selectedLabel"
+      :aria-activedescendant="open && active >= 0 && !sheet ? `${listId}-${active}` : undefined"
+      :value="open && !sheet ? query : selectedLabel"
       :placeholder="placeholder"
       :disabled="disabled"
+      :readonly="sheet"
       autocomplete="off"
       v-bind="{ ...parts.control, ...a11y }"
-      @focus="show"
+      @focus="sheet || show()"
       @click="show"
       @input="search"
       @keydown="onKey"
-      @blur="hide"
+      @blur="sheet || hide()"
     />
     <SIcon name="chevron-down" class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
     <!-- Teleported in a live page; inline while detached (tests, previews; a
          disabled <Teleport> would still be stubbed away by shallowMount). -->
-    <component :is="teleported ? Teleport : 'div'" :to="teleported ? 'body' : undefined">
+    <component :is="listHost.is" v-bind="listHost.props">
+      <template v-if="sheet" #header>
+        <input
+          class="input"
+          role="combobox"
+          :aria-label="ariaLabel || t('ui.search')"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          :aria-controls="listId"
+          :aria-activedescendant="active >= 0 ? `${listId}-${active}` : undefined"
+          :value="query"
+          :placeholder="t('ui.search')"
+          autocomplete="off"
+          data-autofocus
+          @input="search"
+          @keydown="onKey"
+        />
+      </template>
       <ul
-        v-if="open"
+        v-if="open || sheet"
         :id="listId"
         ref="menu"
         role="listbox"
         :aria-label="ariaLabel"
-        class="max-h-60 overflow-y-auto rounded-control border border-gray-200 bg-white py-1 shadow-popover dark:border-dark-600 dark:bg-dark-800"
-        :class="teleported ? 'fixed z-popover' : 'absolute z-50 mt-1 w-full'"
-        :style="teleported ? floating.style.value : undefined"
+        :class="
+          sheet
+            ? 'py-1'
+            : [
+                'max-h-60 overflow-y-auto rounded-control border border-gray-200 bg-white py-1 shadow-popover dark:border-dark-600 dark:bg-dark-800',
+                teleported ? 'fixed z-popover' : 'absolute z-50 mt-1 w-full'
+              ]
+        "
+        :style="floats ? floating.style.value : undefined"
         @mousedown.prevent
       >
         <template v-for="(o, i) in filtered" :key="i">
           <li
             v-if="o.group && (i === 0 || filtered[i - 1].group !== o.group)"
             role="presentation"
-            class="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle"
+            class="pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle"
+            :class="sheet ? 'px-5' : 'px-3'"
           >
             {{ o.group }}
           </li>
@@ -190,16 +227,17 @@ const selectedIndex = computed(() => flat.value.findIndex((o) => o.value === pro
             :data-index="i"
             :aria-selected="o.value === modelValue"
             :aria-disabled="o.disabled || undefined"
-            class="cursor-pointer py-2 text-sm"
+            class="cursor-pointer py-2"
             :class="[
-              o.group ? 'pl-5 pr-3' : 'px-3',
+              sheet ? 'flex min-h-11 items-center gap-2 px-5 text-base' : ['text-sm', o.group ? 'pl-5 pr-3' : 'px-3'],
               i === active ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-700 dark:text-gray-200',
               o.disabled ? 'cursor-not-allowed opacity-40' : ''
             ]"
             @mouseenter="active = i"
             @click="pick(o)"
           >
-            {{ o.label }}
+            <span class="min-w-0 flex-1">{{ o.label }}</span>
+            <SIcon v-if="sheet && o.value === modelValue" name="check" class="h-4 w-4 shrink-0 text-primary-600" />
           </li>
         </template>
         <li v-if="!filtered.length" role="presentation" class="px-3 py-2 text-sm text-fg-muted">{{ noResults ?? t('ui.noResults') }}</li>

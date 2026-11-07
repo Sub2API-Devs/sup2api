@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { h } from 'vue'
 import SFormModal from './SFormModal.vue'
+import { pinViewport } from './internal/pinViewport'
 
 const render = (props: Record<string, unknown> = {}) =>
   mount(SFormModal, {
@@ -46,5 +47,22 @@ describe('SFormModal', () => {
     expect(w.emitted('submit')).toBeUndefined()
     await w.findAll('.modal-footer button')[1].trigger('click')
     expect(w.emitted('submit')).toHaveLength(1)
+  })
+
+  it('on phones puts Cancel and Submit side by side under #footer-start', () => {
+    const w = mount(
+      pinViewport({ compact: true }, () =>
+        h(SFormModal, { open: true, title: 'Edit' }, { default: () => h('input'), 'footer-start': () => h('span', { class: 'hint' }, 'Hint') })
+      ),
+      { global: { stubs: { Teleport: true } } }
+    )
+    expect(w.find('.s-drawer-bottom').exists()).toBe(true)
+    const row = w.get('form').element.closest('[role="dialog"]')!.lastElementChild!.firstElementChild!
+    expect(row.className).toContain('flex-wrap')
+    expect(row.firstElementChild!.className).toContain('w-full')
+    expect(row.firstElementChild!.textContent).toBe('Hint')
+    const buttons = Array.from(row.querySelectorAll('button'))
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual(['Cancel', 'Save'])
+    expect(buttons.every((b) => b.classList.contains('flex-1') && b.classList.contains('h-11'))).toBe(true)
   })
 })
