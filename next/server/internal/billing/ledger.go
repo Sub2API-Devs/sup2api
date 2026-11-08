@@ -88,77 +88,47 @@ func (s *Service) Apply(ctx context.Context, ch core.LedgerChange) (*core.Ledger
 // ApplyTx applies a change inside the caller's transaction (used by usage
 // settlement to update the usage row atomically). The caller must call
 // CacheBalance after committing when the result is not a duplicate.
+//
+// One batch (create the balance row, then applySQL: find the key or lock the
+// row, write the ledger row and the balance) and one event: two round trips
+// under the user's balance lock instead of six (CONTRACTS §63.7).
 func (s *Service) ApplyTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChange) (*core.LedgerResult, error) {
 	if err := validateChange(&ch); err != nil {
 		return nil, err
 	}
 	ch.Amount = ch.Amount.Round(8)
-	if _, err := tx.Exec(ctx, `INSERT INTO user_balances (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, ch.UserID); err != nil {
+	b := &pgx.Batch{}
+	b.Queue(ensureBalanceSQL, ch.UserID)
+	queueApply(b, ch)
+	br := tx.SendBatch(ctx, b)
+	if _, err := br.Exec(); err != nil {
+		_ = br.Close()
 		if isFKViolation(err) {
 			return nil, core.ErrNotFound.WithMessage("user not found").WithCause(err)
 		}
 		return nil, err
 	}
-	var balance decimal.Decimal
-	if err := tx.QueryRow(ctx, `SELECT balance FROM user_balances WHERE user_id = $1 FOR UPDATE`, ch.UserID).Scan(&balance); err != nil {
+	res, raced, err := scanApply(br.QueryRow(), ch)
+	if err != nil {
+		_ = br.Close()
 		return nil, err
 	}
-	if dup, err := findLedger(ctx, tx, ch.IdempotencyKey); err != nil {
+	if err := br.Close(); err != nil {
 		return nil, err
-	} else if dup != nil {
-		// Idempotency key collision: verify user_id, amount, kind match
+	}
+	if res, err = resolveApply(ctx, tx, res, raced, ch); err != nil || res.Duplicate {
+		return res, err
+	}
+	if s.events != nil {
 		delta := ch.Amount
 		if !ch.Credit {
 			delta = delta.Neg()
 		}
-		if dup.UserID != ch.UserID || !dup.Delta.Equal(delta) || dup.Kind != ch.Kind {
-			return nil, core.ErrConflict.WithMessage("idempotency key reused with different user, amount or kind")
-		}
-		return dup, nil
-	}
-	delta := ch.Amount
-	if !ch.Credit {
-		delta = delta.Neg()
-	}
-	after := balance.Add(delta)
-	var id int64
-	err := tx.QueryRow(ctx, `
-		INSERT INTO balance_ledger (user_id, delta, balance_after, kind, ref_type, ref_id, idempotency_key,
-			operator_id, plugin_key, note)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, ''), $10)
-		ON CONFLICT (idempotency_key) DO NOTHING
-		RETURNING id`,
-		ch.UserID, delta, after, ch.Kind, ch.RefType, ch.RefID, ch.IdempotencyKey,
-		ch.OperatorID, ch.PluginKey, ch.Note).Scan(&id)
-	if store.IsNoRows(err) {
-		// Same key used concurrently: re-fetch and verify consistency
-		dup, err := findLedger(ctx, tx, ch.IdempotencyKey)
-		if err != nil {
-			return nil, err
-		}
-		if dup == nil {
-			return nil, core.ErrInternal.WithMessage("idempotency key vanished during insert")
-		}
-		if dup.UserID != ch.UserID || !dup.Delta.Equal(delta) || dup.Kind != ch.Kind {
-			return nil, core.ErrConflict.WithMessage("idempotency key reused with different user, amount or kind")
-		}
-		return dup, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if _, err := tx.Exec(ctx, `UPDATE user_balances SET balance = $2, updated_at = now() WHERE user_id = $1`, ch.UserID, after); err != nil {
-		return nil, err
-	}
-	if s.events != nil {
-		err := s.events.Emit(ctx, tx, core.Event{Type: core.EventBalanceChanged, Payload: map[string]any{
-			"user_id": ch.UserID, "ledger_id": id, "delta": delta, "balance_after": after, "kind": ch.Kind,
-		}})
-		if err != nil {
+		if err := s.events.Emit(ctx, tx, balanceChanged(ch.UserID, res, delta, ch.Kind)); err != nil {
 			return nil, fmt.Errorf("emit balance.changed: %w", err)
 		}
 	}
-	return &core.LedgerResult{LedgerID: id, BalanceAfter: after}, nil
+	return res, nil
 }
 
 func findLedger(ctx context.Context, q store.Querier, key string) (*core.LedgerResult, error) {

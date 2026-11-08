@@ -31,6 +31,9 @@ type Service struct {
 
 	cacheTTL time.Duration
 
+	slotsOnce      sync.Once
+	prechargeSlots chan struct{}
+
 	mu       sync.Mutex
 	epoch    uint64
 	prices   *priceSnapshot

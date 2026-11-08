@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 func (s *Service) PreConsumeTokens(ctx context.Context) (int64, error) {
@@ -48,10 +48,18 @@ func (s *Service) Precharge(ctx context.Context, r *core.UsageRecord) error {
 		return err
 	}
 	ch.Amount = ch.Amount.Round(8)
+	release, err := s.acquirePrechargeSlot(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	var lr *core.LedgerResult
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
 		var err error
 		if lr, err = s.prechargeTx(ctx, tx, ch, st.MinBalance); err != nil {
+			if isLockTimeout(err) {
+				return core.ErrUnavailable.WithMessage("billing is busy, retry shortly").WithCause(err)
+			}
 			return err
 		}
 		if lr == nil || s.events == nil {
@@ -82,13 +90,21 @@ func (s *Service) Precharge(ctx context.Context, r *core.UsageRecord) error {
 // still charges nothing and reports no error.
 func (s *Service) prechargeTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChange, min decimal.Decimal) (*core.LedgerResult, error) {
 	batch := &pgx.Batch{}
-	batch.Queue(`INSERT INTO user_balances (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, ch.UserID)
+	// The request path must not queue behind a long settlement: past
+	// prechargeLockTimeout the lock wait fails (55P03) and Precharge answers
+	// 503 instead of holding a pool connection.
+	batch.Queue(`SET LOCAL lock_timeout = '` + prechargeLockTimeout + `'`)
+	batch.Queue(ensureBalanceSQL, ch.UserID)
 	batch.Queue(`SELECT user_id FROM user_balances WHERE user_id = $1 FOR UPDATE`, ch.UserID)
 	batch.Queue(prechargeSQL, ch.UserID, ch.RefID, ch.Amount, ch.Kind, ch.RefType, ch.RefID, ch.IdempotencyKey, ch.Note, min)
 	br := tx.SendBatch(ctx, batch)
 	var lockedUser, ledgerID int64
 	var after decimal.Decimal
 	var duplicate, sufficient bool
+	if _, err := br.Exec(); err != nil {
+		_ = br.Close()
+		return nil, err
+	}
 	if _, err := br.Exec(); err != nil {
 		_ = br.Close()
 		return nil, err
@@ -181,25 +197,19 @@ SELECT COALESCE((SELECT id FROM applied), 0),
        EXISTS (SELECT 1 FROM balance_ledger WHERE idempotency_key = $7::varchar),
        COALESCE((SELECT balance - $3::numeric > $9::numeric FROM user_balances WHERE user_id = $1::bigint), false)`
 
+// ReleasePrechargeTx deletes the request's reservation and refunds it, in one
+// statement under the user's balance lock (releaseSQL) plus the event. nil
+// means the request had no reservation.
 func (s *Service) ReleasePrechargeTx(ctx context.Context, tx pgx.Tx, userID int64, requestID string) (*core.LedgerResult, error) {
-	// Match the ledger's user-row lock order before touching the reservation.
-	var exists bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM request_precharges WHERE request_id=$1 AND user_id=$2)`, requestID, userID).Scan(&exists); err != nil || !exists {
-		return nil, err
+	key := releaseKey(requestID)
+	res, amount, err := scanRelease(ctx, tx, tx.QueryRow(ctx, releaseSQL, requestID, userID, key, "release request precharge"), key)
+	if err != nil || res == nil || res.Duplicate || s.events == nil {
+		return res, err
 	}
-	var balance decimal.Decimal
-	if err := tx.QueryRow(ctx, `SELECT balance FROM user_balances WHERE user_id=$1 FOR UPDATE`, userID).Scan(&balance); err != nil {
-		return nil, err
+	if err := s.events.Emit(ctx, tx, balanceChanged(userID, res, amount, KindRefund)); err != nil {
+		return nil, fmt.Errorf("emit balance.changed: %w", err)
 	}
-	var amount decimal.Decimal
-	err := tx.QueryRow(ctx, `DELETE FROM request_precharges WHERE request_id=$1 AND user_id=$2 RETURNING amount`, requestID, userID).Scan(&amount)
-	if store.IsNoRows(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return s.ApplyTx(ctx, tx, core.LedgerChange{UserID: userID, Amount: amount, Credit: true, Kind: KindRefund, RefType: "precharge", RefID: requestID, IdempotencyKey: "precharge_release:" + requestID, Note: "release request precharge"})
+	return res, nil
 }
 
 func (s *Service) ReleaseExpiredPrecharges(ctx context.Context) error {
@@ -247,4 +257,38 @@ func (s *Service) ReleaseExpiredPrecharges(ctx context.Context) error {
 		slog.ErrorContext(ctx, "billing: some expired precharges failed to release", "failed", failedCount, "total", len(entries))
 	}
 	return nil
+}
+
+// prechargeLockTimeout bounds how long one precharge waits for the user's
+// balance lock (PostgreSQL lock_timeout syntax).
+const prechargeLockTimeout = "3s"
+
+// prechargeSlotWait bounds how long a precharge waits for a slot before
+// answering 503.
+const prechargeSlotWait = 3 * time.Second
+
+// acquirePrechargeSlot admits at most half the pool's connections to
+// precharges at once, so a queue of them waiting for one user's balance lock
+// never starves account selection, plugin calls and everything else that
+// shares the pool. The slot is held for the transaction.
+func (s *Service) acquirePrechargeSlot(ctx context.Context) (func(), error) {
+	s.slotsOnce.Do(func() {
+		n := 4
+		if s.db != nil && s.db.Pool != nil {
+			if half := int(s.db.Pool.Config().MaxConns) / 2; half > n {
+				n = half
+			}
+		}
+		s.prechargeSlots = make(chan struct{}, n)
+	})
+	timer := time.NewTimer(prechargeSlotWait)
+	defer timer.Stop()
+	select {
+	case s.prechargeSlots <- struct{}{}:
+		return func() { <-s.prechargeSlots }, nil
+	case <-timer.C:
+		return nil, core.ErrUnavailable.WithMessage("billing is busy, retry shortly")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }

@@ -56,6 +56,9 @@ const (
 type TxLedger interface {
 	core.PrechargeReleaser
 	ApplyTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChange) (*core.LedgerResult, error)
+	// SettleTx releases the request's precharge and applies the final charge
+	// (nil: none) in one batch under the user's balance lock.
+	SettleTx(ctx context.Context, tx pgx.Tx, userID int64, requestID string, charge *core.LedgerChange) (*core.LedgerResult, error)
 	// CacheBalance refreshes the balance cache after commit.
 	CacheBalance(ctx context.Context, userID, ledgerID int64, balance decimal.Decimal)
 }
@@ -575,21 +578,11 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, r reservedRow) (*cor
 	if err != nil {
 		return nil, fmt.Errorf("price reservation: %w", err)
 	}
-	res, err := s.releasePrechargeTx(ctx, tx, p.UserID, p.RequestID)
+	res, err := s.settleLedgerTx(ctx, tx, p.UserID, p.RequestID, total)
 	if err != nil {
 		return nil, err
 	}
 	if total.Sign() > 0 {
-		if s.ledger == nil {
-			return nil, errors.New("no ledger configured")
-		}
-		res, err = s.ledger.ApplyTx(ctx, tx, core.LedgerChange{
-			UserID: p.UserID, Amount: total, Credit: false, Kind: "usage",
-			RefType: "usage", RefID: p.RequestID, IdempotencyKey: "usage:" + p.RequestID,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("ledger: %w", err)
-		}
 		detail.LedgerID = &res.LedgerID
 	}
 	if _, err := tx.Exec(ctx, `
@@ -960,21 +953,11 @@ func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, p *pending, skipLocke
 	if status != StatusPending && status != StatusFailed {
 		return nil, errNotPending
 	}
-	ledgerRes, err = s.releasePrechargeTx(ctx, tx, p.UserID, p.RequestID)
+	ledgerRes, err = s.settleLedgerTx(ctx, tx, p.UserID, p.RequestID, total)
 	if err != nil {
 		return nil, err
 	}
 	if total.Sign() > 0 {
-		if s.ledger == nil {
-			return nil, errors.New("no ledger configured")
-		}
-		ledgerRes, err = s.ledger.ApplyTx(ctx, tx, core.LedgerChange{
-			UserID: p.UserID, Amount: total, Credit: false, Kind: "usage",
-			RefType: "usage", RefID: p.RequestID, IdempotencyKey: "usage:" + p.RequestID,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("ledger: %w", err)
-		}
 		detail.LedgerID = &ledgerRes.LedgerID
 	}
 	var priceID *int64

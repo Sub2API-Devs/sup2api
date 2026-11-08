@@ -45,6 +45,13 @@ func (f *flakyLedger) ApplyTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChan
 	return f.Service.ApplyTx(ctx, tx, ch)
 }
 
+func (f *flakyLedger) SettleTx(ctx context.Context, tx pgx.Tx, userID int64, requestID string, charge *core.LedgerChange) (*core.LedgerResult, error) {
+	if charge != nil && f.fail.Add(-1) >= 0 {
+		return nil, errors.New("ledger unavailable")
+	}
+	return f.Service.SettleTx(ctx, tx, userID, requestID, charge)
+}
+
 type fixture struct {
 	t      *testing.T
 	db     *store.DB
