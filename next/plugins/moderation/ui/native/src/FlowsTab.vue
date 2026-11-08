@@ -12,6 +12,7 @@ import { dt, enumLabel, joinList, ms, num, pct } from './format'
 import { canManage, confirmDelete, deleteFlow, errorMessage, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Group, Spec, TabKey } from './types'
 import { groupCoverage, type GroupOwner } from './flowOps'
+import { exemptGroups } from './bindingOps'
 
 // Flows (CONTRACTS §72.7): the list (groups edited in place, 24 h stats) and
 // the full-width canvas editor of one flow (?flow=<id> or ?flow=new). Flows,
@@ -27,10 +28,11 @@ const rows = computed(() => catalog.state.flows)
 const groups = computed(() => catalog.state.groups)
 const loading = computed(() => catalog.state.loading)
 const error = computed(() => (catalog.state.errors.flows ? errorMessage(catalog.state.errors.flows, t('flows.loadFailed')) : ''))
-const refreshFlows = () => catalog.refresh(['flows'])
+const refreshFlows = () => catalog.refresh(['flows', 'bindings'])
 defineExpose({ reload: () => catalog.refresh() })
 
 const groupLabel = (id: number) => (id === 0 ? t('flows.defaultGroup') : catalog.groupName(id))
+const exempt = computed(() => exemptGroups(catalog.state.bindings))
 
 /** Every group incl. the default; [] when the group list is not readable. */
 const allGroups = computed<Group[]>(() => (groups.value.length ? [{ id: 0, name: t('flows.defaultGroup') }, ...groups.value] : []))
@@ -79,9 +81,9 @@ const columns = computed<TableColumn[]>(() => {
 // group coverage under the table (new-api flows-table.tsx)
 const coverage = computed(() => {
   if (!groups.value.length) return null
-  const c = groupCoverage(groups.value.map((g) => g.id), rows.value)
+  const c = groupCoverage(groups.value.map((g) => g.id), rows.value, exempt.value)
   const names = (ids: number[]) => joinList(ids.map(groupLabel))
-  return { total: groups.value.length, bound: c.own.length, unbound: names(c.unbound), disabled: names(c.inactive), stale: names(c.stale) }
+  return { total: groups.value.length, bound: c.own.length, unbound: names(c.unbound), disabled: names(c.inactive), stale: names(c.stale), exempt: names(c.exempt) }
 })
 
 // ---- versions drawer, simulation
@@ -101,8 +103,8 @@ function openSimulate(f: Flow) {
 /** Groups this flow moderates now and would not once disabled (the default group's flow may take them over). */
 function lostGroups(f: Flow): number[] {
   const ids = groups.value.length ? [0, ...groups.value.map((g) => g.id)] : f.groups
-  const before = new Set(groupCoverage(ids, rows.value).moderated)
-  const after = new Set(groupCoverage(ids, rows.value.map((x) => (x.id === f.id ? { ...x, enabled: false } : x))).moderated)
+  const before = new Set(groupCoverage(ids, rows.value, exempt.value).moderated)
+  const after = new Set(groupCoverage(ids, rows.value.map((x) => (x.id === f.id ? { ...x, enabled: false } : x)), exempt.value).moderated)
   return [...before].filter((id) => !after.has(id))
 }
 
@@ -120,7 +122,7 @@ async function toggle(f: Flow, on: boolean) {
   }
 }
 
-const deleteBlocked = (f: Flow) => f.enabled && f.groups.length > 0
+const deleteBlocked = (f: Flow) => f.enabled && (f.groups.length > 0 || !!f.accounts?.length)
 
 const remove = (f: Flow) =>
   confirmDelete(
@@ -204,6 +206,7 @@ function onCreated(id: number) {
           </template>
           <template #cell-groups="{ row }">
             <FlowGroupsCell :flow="row" :all-groups="allGroups" :owners="owners" :can-write="manage" :group-label="groupLabel" @saved="refreshFlows" />
+            <SLink v-if="row.accounts?.length" as="button" class="mod-sub mod-flow-accounts" @click="emit('go-tab', 'bindings')">{{ t('flows.accountBindings', { n: row.accounts.length }) }}</SLink>
           </template>
           <template #cell-stages="{ row }"><span :title="stagesSummary(row.draft)">{{ stagesSummary(row.published || row.draft) }}</span></template>
           <template #cell-audited="{ row }"><span class="mod-num">{{ row.stats_24h ? num(row.stats_24h.audited) : '—' }}</span></template>
@@ -228,6 +231,7 @@ function onCreated(id: number) {
       <p v-if="coverage" class="mod-sub mod-flows-coverage">
         {{ t('flows.groupsSummary', { total: coverage.total, bound: coverage.bound }) }}
         <template v-if="coverage.disabled">{{ t('flows.disabledGroups', { groups: coverage.disabled }) }}</template>
+        <template v-if="coverage.exempt">{{ t('flows.exemptGroups', { groups: coverage.exempt }) }}</template>
         <span v-if="coverage.unbound" class="mod-text-warning"> · {{ t('flows.unboundGroups', { groups: coverage.unbound }) }}</span>
         <span v-if="coverage.stale" class="mod-text-danger"> · {{ t('flows.staleGroups', { groups: coverage.stale }) }}</span>
         · {{ t('flows.statsNote') }}

@@ -266,16 +266,25 @@ interface GroupCoverage {
   inactive: number[]
   /** bound groups the core does not know (anymore) */
   stale: number[]
+  /** groups bound to "not moderated" (flow 0, §72.17) */
+  exempt: number[]
 }
 
 /**
  * Group coverage (mirrors snapshot.flowFor): a group bound to a flow uses that
- * flow, and only while it is enabled and published; other groups use the
- * flow of the default group 0.
+ * flow, and only while it is enabled and published; a group bound to "not
+ * moderated" (exempt) is not moderated; other groups use the flow of the
+ * default group 0. Account bindings are not counted (the bindings tab).
  */
-export function groupCoverage(groupIds: readonly number[], flows: readonly Pick<Flow, 'groups' | 'enabled' | 'version'>[]): GroupCoverage {
+export function groupCoverage(
+  groupIds: readonly number[],
+  flows: readonly Pick<Flow, 'groups' | 'enabled' | 'version'>[],
+  exempt: readonly number[] = []
+): GroupCoverage {
   const owner = new Map<number, Pick<Flow, 'enabled' | 'version'>>()
   for (const f of flows) for (const g of f.groups) owner.set(g, f)
+  const skipped = new Set(exempt)
+  for (const g of exempt) owner.set(g, { enabled: false, version: 0 })
   const live = (id: number) => {
     const f = owner.get(id)
     return !!f?.enabled && f.version > 0
@@ -286,8 +295,9 @@ export function groupCoverage(groupIds: readonly number[], flows: readonly Pick<
     own: groupIds.filter((id) => owner.has(id)),
     moderated: groupIds.filter((id) => (owner.has(id) ? live(id) : defaultLive)),
     unbound: defaultLive ? [] : groupIds.filter((id) => !owner.has(id)),
-    inactive: [...owner.keys()].filter((id) => (id === 0 || known.has(id)) && !live(id)),
-    stale: [...owner.keys()].filter((id) => id !== 0 && !known.has(id))
+    inactive: [...owner.keys()].filter((id) => (id === 0 || known.has(id)) && !live(id) && !skipped.has(id)),
+    stale: [...owner.keys()].filter((id) => id !== 0 && !known.has(id)),
+    exempt: groupIds.filter((id) => skipped.has(id))
   }
 }
 

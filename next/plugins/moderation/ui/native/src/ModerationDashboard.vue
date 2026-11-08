@@ -6,6 +6,7 @@ import EventsTab from './EventsTab.vue'
 import WatchTab from './WatchTab.vue'
 import BlocksTab from './BlocksTab.vue'
 import FlowsTab from './FlowsTab.vue'
+import BindingsTab from './BindingsTab.vue'
 import AuditorsTab from './AuditorsTab.vue'
 import ChannelsTab from './ChannelsTab.vue'
 import TestTab from './TestTab.vue'
@@ -17,7 +18,7 @@ import { modeTone } from './tones'
 import type { TabKey } from './types'
 
 // Prompt moderation page (CONTRACTS §72.15): overview, records, watch list,
-// bans, flows, auditors, channels, playground and, for those who may edit
+// bans, flows, bindings (§72.17), auditors, channels, playground and, for those who may edit
 // the settings (plugin:manage or moderation:manage, §75.1), all the
 // moderation settings. The plugin has no settings of its own on the plugin
 // page any more (ui.settings mode native, §75.5): the console sends
@@ -34,6 +35,7 @@ const tabs = computed(() => {
     { key: 'watch', label: t('tabs.watch') },
     { key: 'blocks', label: t('tabs.blocks') },
     { key: 'flows', label: t('tabs.flows') },
+    { key: 'bindings', label: t('tabs.bindings') },
     { key: 'auditors', label: t('tabs.auditors') },
     { key: 'channels', label: t('tabs.channels') }
   ]
@@ -142,6 +144,7 @@ function openWatch(userId: number) {
       <WatchTab v-if="visited.has('watch')" v-show="tab === 'watch'" :ref="setRef('watch')" :preset="watchPreset" @show-user="showUser" />
       <BlocksTab v-if="visited.has('blocks')" v-show="tab === 'blocks'" :ref="setRef('blocks')" />
       <FlowsTab v-if="visited.has('flows')" v-show="tab === 'flows'" :ref="setRef('flows')" @go-tab="goTab" />
+      <BindingsTab v-if="visited.has('bindings')" v-show="tab === 'bindings'" :ref="setRef('bindings')" @go-tab="goTab" />
       <AuditorsTab v-if="visited.has('auditors')" v-show="tab === 'auditors'" :ref="setRef('auditors')" />
       <ChannelsTab v-if="visited.has('channels')" v-show="tab === 'channels'" :ref="setRef('channels')" :alert-percent="status.data.value?.error_rate_alert_percent ?? 0" />
       <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-tab="goTab" />

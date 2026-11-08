@@ -119,7 +119,39 @@ function stageTimeoutSum(s: any): number {
     return sum + Math.max(0, ...ms)
   }, 0)
 }
-const flowView = (f: any) => ({ ...f, has_draft_changes: f.dirty, stage_timeout_sum_ms: stageTimeoutSum(f.draft), stats_24h: STATS_24H[f.id] || null })
+// Account bindings (§72.17): group_id 0 = the account in any group; flow_id 0 = not moderated.
+// Groups bound to "not moderated" are kept apart from flows[].groups.
+const accountBindings: Array<{ group_id: number; account_id: number; flow_id: number }> = [
+  { group_id: 0, account_id: 21, flow_id: 0 },
+  { group_id: 2, account_id: 19, flow_id: 3 },
+  { group_id: 0, account_id: 16, flow_id: 1 }
+]
+const exemptGroups: number[] = []
+const flowView = (f: any) => ({
+  ...f,
+  has_draft_changes: f.dirty,
+  stage_timeout_sum_ms: stageTimeoutSum(f.draft),
+  stats_24h: STATS_24H[f.id] || null,
+  accounts: accountBindings.filter((b) => b.flow_id === f.id).map(({ group_id, account_id }) => ({ group_id, account_id }))
+})
+const bindingKind = (g: number, a: number) => (!a ? 'group' : g ? 'group_account' : 'account')
+const bindingsView = () => ({
+  bindings: [
+    ...accountBindings.map((b) => ({ ...b, kind: bindingKind(b.group_id, b.account_id) })),
+    ...flows.flatMap((f) => f.groups.map((g: number) => ({ kind: 'group', group_id: g, account_id: 0, flow_id: f.id }))),
+    ...exemptGroups.map((g) => ({ kind: 'group', group_id: g, account_id: 0, flow_id: 0 }))
+  ],
+  account_bindings_active: true
+})
+const bindingFlow = (g: number, a: number): number | undefined =>
+  a ? accountBindings.find((b) => b.group_id === g && b.account_id === a)?.flow_id : exemptGroups.includes(g) ? 0 : flows.find((f) => f.groups.includes(g))?.id
+function unbind(g: number, a: number) {
+  if (a) accountBindings.splice(0, accountBindings.length, ...accountBindings.filter((b) => !(b.group_id === g && b.account_id === a)))
+  else {
+    for (const f of flows) f.groups = f.groups.filter((x: number) => x !== g)
+    exemptGroups.splice(0, exemptGroups.length, ...exemptGroups.filter((x) => x !== g))
+  }
+}
 const auditorView = (a: any) => {
   const c = channels.find((x) => x.id === a.channel_id)
   const calls = [0, 61, 30, 0, 2][a.id] || 0
@@ -802,9 +834,28 @@ on('PUT', '/p/moderation/flows/:id', (req) => {
 on('DELETE', '/p/moderation/flows/:id', (req) => {
   const f = flowOr404(req.params.id)
   if (!f) return fail(404, 'not_found', 'flow not found')
-  if (f.enabled && f.groups.length) return fail(409, 'flow_in_use', 'the flow is enabled and bound to groups / 流程已启用且绑定了分组')
+  if (f.enabled && (f.groups.length || accountBindings.some((b) => b.flow_id === f.id))) return fail(409, 'flow_in_use', 'the flow is enabled and bound to groups or accounts / 流程已启用且绑定了分组或账号')
   flows.splice(flows.indexOf(f), 1)
   return { deleted: true }
+})
+on('GET', '/p/moderation/bindings', bindingsView)
+on('PUT', '/p/moderation/bindings', (req) => {
+  const { group_id: g = 0, account_id: a = 0, flow_id: fl = 0, replace } = req.body || {}
+  if (fl && !flowOr404(String(fl))) return fail(404, 'not_found', 'flow not found / 流程不存在')
+  const current = bindingFlow(g, a)
+  if (current !== undefined && current !== fl && !replace) return fail(409, 'binding_exists', 'the binding exists with another flow / 该绑定已指向其他流程', { flow_id: current })
+  unbind(g, a)
+  if (a) accountBindings.push({ group_id: g, account_id: a, flow_id: fl })
+  else if (fl) flowOr404(String(fl)).groups.push(g)
+  else exemptGroups.push(g)
+  return bindingsView()
+})
+on('DELETE', '/p/moderation/bindings/:group_id/:account_id', (req) => {
+  const g = Number(req.params.group_id)
+  const a = Number(req.params.account_id)
+  if (bindingFlow(g, a) === undefined) return fail(404, 'not_found', 'binding not found / 绑定不存在')
+  unbind(g, a)
+  return bindingsView()
 })
 on('PUT', '/p/moderation/flows/:id/groups', (req) => {
   const f = flowOr404(req.params.id)

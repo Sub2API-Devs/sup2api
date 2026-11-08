@@ -68,14 +68,42 @@ type moderation struct {
 }
 
 // OnGatewayRequest implements pluginsdk.Hook (CONTRACTS §72.5). The ban
-// hook (every protocol) only refuses banned users.
+// hook (every protocol) only refuses banned users. The moderation hook
+// moderates with the flow of the request's group, unless that flow depends
+// on the account: then it leaves the request to the attempt hook, which
+// moderates with the flow of each attempt's account (§72.17).
 func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {
 	c := p.cfg.Load()
-	if early := p.precheck(c, in); early != nil || in.GetHookId() == HookBan {
+	early := p.precheck(c, in)
+	meta := in.GetMeta()
+	switch in.GetHookId() {
+	case HookBan:
 		if early == nil {
 			early = allowEmpty
 		}
 		return early, nil
+	case HookAttempt:
+		if early != nil {
+			return early, nil
+		}
+		snap := p.snap.Load()
+		return p.moderate(ctx, c, in, snap, p.attemptFlow(snap, meta)), nil
+	}
+	if early == nil {
+		snap := p.snap.Load()
+		if p.attemptHook.Load() && snap.perAccount(meta.GetGroupId()) {
+			p.attempts.leave(meta.GetRequestId())
+			return allow(notePrefix + "per account"), nil
+		}
+		early = p.moderate(ctx, c, in, snap, snap.flowFor(meta.GetGroupId()))
+	}
+	return settled(early), nil
+}
+
+// moderate runs flow on the request (steps 3–10); nil flow = not moderated.
+func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow) *pluginv1.GatewayRequestHookResponse {
+	if flow == nil {
+		return allowEmpty
 	}
 	// The hook request is held until this returns: admit it by its bytes
 	// before reading it, and answer at once when too much is in progress
@@ -84,14 +112,14 @@ func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayReque
 	if !p.admitBytes(c, size) {
 		p.stats.busy.Add(1)
 		if p.watchLevel(in.GetMeta().GetUserId()) == LevelEnforce {
-			return deny(http.StatusServiceUnavailable, DenyBusy, MsgBusy, notePrefix+"busy"), nil
+			return deny(http.StatusServiceUnavailable, DenyBusy, MsgBusy, notePrefix+"busy")
 		}
-		return allow(notePrefix + "busy"), nil
+		return allow(notePrefix + "busy")
 	}
 	defer p.inflightBytes.Add(-size)
-	m, early := p.admit(c, in)
+	m, early := p.admit(c, in, snap, flow)
 	if early != nil {
-		return early, nil
+		return early
 	}
 	if m.timing == TimingPost {
 		m.queued = p.now()
@@ -100,11 +128,11 @@ func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayReque
 		}
 		if !p.enqueue(m) {
 			p.stats.dropped.Add(1)
-			return allow(notePrefix + "dropped (queue full)"), nil
+			return allow(notePrefix + "dropped (queue full)")
 		}
-		return allow(notePrefix + "queued"), nil
+		return allow(notePrefix + "queued")
 	}
-	return p.runPre(ctx, m), nil
+	return p.runPre(ctx, m)
 }
 
 // precheck applies the steps every hook takes (CONTRACTS §72.5 steps 1–2):
@@ -143,16 +171,11 @@ func (p *Plugin) admitBytes(c *config, size int64) bool {
 	return true
 }
 
-// admit applies the remaining preconditions (steps 3–8). A non-nil response
-// ends the hook; otherwise m is ready to run.
-func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest) (*moderation, *pluginv1.GatewayRequestHookResponse) {
+// admit applies the remaining preconditions (steps 4–8) for flow, a flow of
+// snap. A non-nil response ends the hook; otherwise m is ready to run.
+func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow) (*moderation, *pluginv1.GatewayRequestHookResponse) {
 	meta := in.GetMeta()
 	uid := meta.GetUserId()
-	snap := p.snap.Load()
-	flow := snap.flowFor(meta.GetGroupId())
-	if flow == nil {
-		return nil, allowEmpty
-	}
 	fields := in.GetFields()
 	model := fieldString(fields[FieldModel])
 	if model == "" {

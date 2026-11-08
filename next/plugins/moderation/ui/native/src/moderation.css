@@ -537,6 +537,55 @@ p.mod-text-danger {
   margin-top: 0.75rem;
   line-height: 1.6;
 }
+.mod-flow-accounts {
+  display: block;
+  margin-top: 0.125rem;
+}
+
+/* bindings (§72.17) */
+.mod-bindings-toolbar {
+  justify-content: flex-start;
+  align-items: center;
+}
+.mod-bindings-kind {
+  width: 10rem;
+}
+.mod-bindings-search {
+  width: 16rem;
+  max-width: 100%;
+}
+.mod-bindings-scope {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mod-bindings-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.mod-bindings-preview .mod-filter {
+  width: 16rem;
+}
+.mod-bindings-result {
+  margin: 0.75rem 0 0;
+}
+/* the preview sentence can be long: let its badge wrap on narrow screens */
+.mod-bindings-result .badge {
+  white-space: normal;
+  border-radius: 0.75rem;
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  .mod-bindings-kind,
+  .mod-bindings-search,
+  .mod-bindings-preview .mod-filter {
+    width: 100%;
+  }
+  .mod-bindings-toolbar .mod-ml-auto {
+    margin-left: 0;
+  }
+}
 .mod-groups-cell {
   display: inline-flex;
   align-items: center;

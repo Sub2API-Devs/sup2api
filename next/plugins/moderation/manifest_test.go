@@ -37,7 +37,7 @@ func TestManifestServes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range m.Routes {
-		path := strings.NewReplacer(":user_id", "1", ":id", "1", ":version", "1").Replace(r.Path)
+		path := strings.NewReplacer(":user_id", "1", ":id", "1", ":version", "1", ":group_id", "0", ":account_id", "1").Replace(r.Path)
 		if resp := h.Do(r.Method, path, nil, "{}"); strings.Contains(string(resp.GetBody()), "no route for") {
 			t.Errorf("route %s %s has no handler", r.Method, r.Path)
 		}
@@ -65,7 +65,7 @@ func TestManifest(t *testing.T) {
 	if fields, ok := check.Fields(check.Validate(&m, files, check.ValidateOptions{Tooling: true})); ok {
 		t.Fatalf("manifest check: %+v", fields)
 	}
-	if m.Key != "moderation" || m.Version != "0.6.2" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.7.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -96,12 +96,13 @@ func TestManifest(t *testing.T) {
 		"GET /status": "moderation:read", "GET /stats/trend": "moderation:read", "GET /stats/performance": "moderation:read",
 		"GET /stats/categories": "moderation:read", "POST /watchlist/:user_id/seen": "moderation:manage", "POST /auditors/try": "moderation:manage",
 		"GET /users/:user_id": "moderation:read", "GET /users": "moderation:read",
+		"GET /bindings": "moderation:read", "PUT /bindings": "moderation:manage", "DELETE /bindings/:group_id/:account_id": "moderation:manage",
 	} {
 		if routes[route] != perm {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 54 {
+	if len(routes) != 57 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -133,7 +134,7 @@ func TestManifest(t *testing.T) {
 		s.Schema != "forms/settings.schema.json" || s.UISchema != "forms/settings.ui.json" {
 		t.Errorf("ui.settings = %+v", m.UI.Settings)
 	}
-	if len(m.Hooks) != 2 {
+	if len(m.Hooks) != 3 {
 		t.Fatalf("hooks = %+v", m.Hooks)
 	}
 	// The ban hook matches every protocol (an empty match, CONTRACTS §72.3):
@@ -154,6 +155,19 @@ func TestManifest(t *testing.T) {
 	// Responses WebSocket and the volcengine image and video prompts.
 	if !slices.Equal(hook.Match.Protocols, moderation.ModeratedProtocols) {
 		t.Fatalf("hook protocols = %v, want %v", hook.Match.Protocols, moderation.ModeratedProtocols)
+	}
+	// The attempt hook moderates the requests whose flow depends on the
+	// account (CONTRACTS §72.17): same match, fields and limits, at
+	// gateway.attempt, which the gateway.hook scope must list.
+	attempt := m.Hooks[2]
+	if attempt.ID != moderation.HookAttempt || attempt.Point != manifest.HookPointAttempt || attempt.Order != hook.Order ||
+		attempt.TimeoutMs != hook.TimeoutMs || attempt.Failure != "open" || !slices.Equal(attempt.Needs, wantNeeds) ||
+		!slices.Equal(attempt.Match.Protocols, moderation.ModeratedProtocols) {
+		t.Fatalf("attempt hook = %+v", attempt)
+	}
+	points, _ := granted["gateway.hook"].Scope["points"].([]any)
+	if len(points) != 2 || points[0] != manifest.HookPointRequest || points[1] != manifest.HookPointAttempt {
+		t.Fatalf("gateway.hook scope.points = %v", points)
 	}
 	fields, _ := granted["gateway.hook"].Scope["fields"].([]any)
 	if len(fields) != len(wantNeeds) {

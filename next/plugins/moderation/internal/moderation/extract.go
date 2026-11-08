@@ -45,6 +45,10 @@ const (
 	// (CONTRACTS §72.3): embeddings, count_tokens, task queries and the
 	// protocols of platform plugins carry no text the plugin moderates.
 	HookBan = "ban"
+	// HookAttempt (gateway.attempt) moderates the requests whose flow
+	// depends on the account, with the flow of each attempt's account
+	// (CONTRACTS §72.17).
+	HookAttempt = "moderation_attempt"
 )
 
 // Protocol families: which fields carry the client's content (CONTRACTS

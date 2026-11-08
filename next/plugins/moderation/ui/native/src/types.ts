@@ -769,6 +769,8 @@ export interface Flow {
   published_at: string | null
   published_by: number | null
   groups: number[]
+  /** account bindings of the flow (group_id 0 = the account in any group) */
+  accounts?: AccountBinding[]
   /** the draft differs from the published spec */
   dirty: boolean
   /** the published version was drafted with total_timeout_ms 0 (automatic); a discard puts 0 back */
@@ -792,6 +794,39 @@ export interface FlowStats24h {
 export interface GroupConflict {
   group_id: number
   flow_id: number
+}
+
+/** What a binding covers (CONTRACTS §72.17), most specific first. */
+export type BindingKind = 'group_account' | 'account' | 'group'
+
+/**
+ * One binding: account_id 0 = every account of the group (group 0 = the
+ * default), group_id 0 with an account = the account in any group;
+ * flow_id 0 = not moderated.
+ */
+export interface Binding {
+  kind: BindingKind
+  group_id: number
+  account_id: number
+  flow_id: number
+}
+
+export interface BindingsView {
+  bindings: Binding[]
+  /** the core calls the plugin once the account is chosen; false = account bindings are kept but not applied */
+  account_bindings_active: boolean
+}
+
+export interface AccountBinding {
+  group_id: number
+  account_id: number
+}
+
+/** An account of the console (GET /accounts, needs account:read). */
+export interface CoreAccount {
+  id: number
+  name: string
+  group_ids?: number[]
 }
 
 export interface Defaults {
@@ -946,4 +981,4 @@ export interface ImportResult {
 // ---- page
 
 /** Tabs of the moderation page (?tab=). */
-export type TabKey = 'overview' | 'events' | 'watch' | 'blocks' | 'flows' | 'auditors' | 'channels' | 'test' | 'settings'
+export type TabKey = 'overview' | 'events' | 'watch' | 'blocks' | 'flows' | 'bindings' | 'auditors' | 'channels' | 'test' | 'settings'

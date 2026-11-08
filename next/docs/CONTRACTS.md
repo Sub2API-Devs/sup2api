@@ -4967,7 +4967,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
    - **内存与 failure=open 的后果（0.6.0，2026-10-31 团队审核 P1-7）**：插件内存上限 512 MB，一个钩子请求在插件里会被解码、规范化、分块，峰值占用是请求字段的数倍；几个大请求同时到达就可能让插件被内存上限杀掉。0.6.0 的做法：钩子入口按请求字段的字节数做并发准入（`max_inflight_mb`，默认 128 MiB；一个请求单独到达时不论多大都接收），超出时立即回答——一般用户放行（note `moderation: busy`），拦截级用户返回 503 `moderation_busy`；被封禁用户在准入之前就拒绝。图片最多审 `input_max_images` 张（默认 8），单张 base64 超过约 22 MiB（解码后约 16 MiB）的不审；OpenAI 审核器只为选中的那一张图拼 data URL；排队的 post 任务只保留分块后的文字和图片，不持有整个钩子请求。
    - **failure=open 的后果，如实写明**：两个钩子都是 `failure: open`。插件进程不可用、超时、连续失败 10 次触发熔断（30 秒）时，核心不经插件直接放行，**拦截级用户和被封禁用户在这段时间里也会被放行**。核心在插件不可用时无法询问插件，封禁名单也只在插件里，所以插件侧做不到"不可用时拒绝被封禁用户"。改成 `failure: closed` 会在插件故障时拒绝所有用户的请求，代价过大，不改。需要硬性封禁时，应在核心停用该用户或其 API Key（核心鉴权阶段就拒绝，不依赖插件）。
 4. `moderation` 的 `hostCompat` 改为 `>=` 本次核心版本（因为要用 `secrets`）；**发布顺序是先核心、后插件**。
-5. 不改：钩子点（仍然只有 `gateway.request`）、`usage_logs`、权限目录。插件权限在 manifest 里声明。
+5. 不改：钩子点（仍然只有 `gateway.request`）、`usage_logs`、权限目录。插件权限在 manifest 里声明。（0.7.0 起另用通用钩子点 `gateway.attempt`，§85、72.17。）
 6. **钩子覆盖所有协议的写法**（2026-10-31 核实，核心不需要改）：`match.protocols` 写 `["*"]` 或省略（空数组）就匹配所有协议，也可以用 `openai.*` 这类通配（§15.5，运行时 `matchList`、安装时校验语义一致）。核心对经过网关管线的**每个**端点都执行 `gateway.request` 钩子，包括 `anthropic.count_tokens`、`gemini.count_tokens`、`openai.embeddings`、`openai.responses_ws` 的每条 `response.create`，以及插件声明的端点（`volcengine.images`、`volcengine.video_submit`、`volcengine.video_query`；查询是 GET、没有请求体，钩子照样调用，`fields` 为空）。钩子收到的 `meta.protocol` 是客户端端点的协议，插件据此决定做什么（例如所有协议都查封禁，只有生成内容的协议才审核）。
    - 不执行钩子的只有核心自己的资源接口（`/v1/files`、`/v1/skills` 等 `manifest.CoreGatewayPath`）和 `GET /v1/usage`（§62），它们不生成内容。
    - 一个钩子的 `needs` 对所有匹配的协议都一样；请求里没有的字段不出现在 `fields` 里，不报错。
@@ -5044,6 +5044,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 2. 用户被封禁且未过期 → 拒绝 403 `moderation_user_blocked`（行为同 §20.4 第 2 步）。封禁钩子（`ban`，所有协议，72.3）只做第 1、2 步就返回。
    - **准入（0.6.0）**：审核钩子在读取请求之前按请求字段的字节数占用 `max_inflight_mb`；超出时立即回答（一般用户放行，note `moderation: busy`；拦截级用户 503 `moderation_busy`），见 72.2 第 3 条。
 3. 按 `meta.group_id` 找流程：先看该分组的绑定，没有绑定才用 `group_id=0`。分组绑定的流程已停用或未发布 → 放行（不回落到默认流程）；默认流程也没有 → 放行。
+   - **0.7.0**：流程还可以绑定到账号（72.17）。请求所在分组的流程取决于账号时（有账号绑定涉及该分组），这一步和之后的步骤改在 `gateway.attempt` 钩子里按选定的账号执行；其他分组仍在这里执行，与之前完全相同。绑定到 flow 0（“不审核”）的分组放行。
    - 原来的 `group_ids`、`model_patterns` 两个设置删除，转换方法见 72.12。
 4. 流程的 `model_filter`（all / only / exclude，glob，按客户端模型匹配）不匹配 → 放行。
 5. 抽取（72.4）。结果为空 → 放行。是自身请求 → 放行，note `moderation: self`。
@@ -5128,7 +5129,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 草稿和已发布版本分开存；发布时带 `expected_version`（乐观锁）。
 - 每个发布过的版本都写进 `flow_versions`。P1 只做发布；回滚和版本历史放到 P2。
 
-**绑定**：`flow_groups(group_id PK, flow_id)`，一个分组只能属于一个流程，`group_id=0` 是默认流程。
+**绑定**：`flow_groups(group_id PK, flow_id)`，一个分组只能属于一个流程，`group_id=0` 是默认流程。0.7.0 起 `flow_id=0` 表示该分组不审核（免审），另有账号绑定表 `flow_accounts`，见 72.17。
 
 **多节点同步**：保存或发布后广播 `config.changed`，各节点重新加载快照；另外每 30 秒检查一次版本号兜底。
 
@@ -5240,6 +5241,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/auditors`，GET/PUT/DELETE `/auditors/:id`，POST `/auditors/:id/try`，POST `/auditors/try` | read / manage | try 的请求体是 `{text, images?, draft?}`，返回分数和是否命中，不写记录。`draft` 是 `{name, type, channel_id, config}` 中的任意字段，覆盖已保存的审核器，用来试跑未保存的修改。`/auditors/try` 试跑全新的草稿，此时必须带 `draft`。草稿格式错误、渠道类型不符时返回 400 |
 | GET `/jev/default-questions` | read | 内置题集，以及 `jev_default_set` |
 | GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled` | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict` |
+| GET/PUT `/bindings`，DELETE `/bindings/:group_id/:account_id`（0.7.0） | read / manage | 全部绑定（分组、分组下的账号、任意分组的账号），见 72.17 |
 | GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version`、`endpoint`、`session_fp`（都是精确匹配，照 new-api） |
 | GET `/events/:id/input` | read | 原文，按需加载 |
 | POST `/events/review` | manage | 请求体 `{ids, status}`；只处理结果为 hit 或 block 的记录，其他记录不变。改为误报或从误报改回时，按 72.8 调整违规计数 |
@@ -5475,7 +5477,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 72.15 界面（插件 `ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 
-**标签页**：概览、记录、观察名单、封禁、流程、审核器、渠道、测试、设置。设置标签页对核心 `plugin:manage` 或 `moderation:manage`（§75.1）可见，没有设置权限的人看不到设置入口（标签页、概览里的设置链接都不显示）。设置标签页是表单页，自己限宽（约 56rem），页头的模式徽标放在 `#filters`，不用 `#title-extra`（后者会让页面说明留在页内）。
+**标签页**：概览、记录、观察名单、封禁、流程、绑定（0.7.0，72.17）、审核器、渠道、测试、设置。设置标签页对核心 `plugin:manage` 或 `moderation:manage`（§75.1）可见，没有设置权限的人看不到设置入口（标签页、概览里的设置链接都不显示）。设置标签页是表单页，自己限宽（约 56rem），页头的模式徽标放在 `#filters`，不用 `#title-extra`（后者会让页面说明留在页内）。
 
 **设置全部在这里编辑**（0.6.1 起，2026-10-31 用户要求；manifest `ui.settings` 为 `{"mode":"native","page":"dashboard",…}` 并带 schema 和 uiSchema，§75.5）。插件详情页不再有设置标签，`/plugins/moderation/settings` 转到本页 `?tab=settings`；插件页也不再有"完整设置"按钮或链接。存储不变：仍是核心的 `GET/PUT /plugins/moderation/settings`（核心加密保存、按 schema 校验并掩码密钥、改动后通知插件）。
 
@@ -5525,6 +5527,54 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 插件测试覆盖：按协议选字段与假 `messages` 字段（`extract_test.go` TestExtractFollowsProtocol）、全请求覆盖的各种绕过（TestExtractCoversClientControlledContent、`hook06_test.go` TestHookModeratesWholeRequestWithSegmentCache）、片段缓存只送新增内容、分块与块数上限（TestPlanChunksLongContent、TestHookChunksLongContent）、带 NUL 的可疑记录入库并进名单和封禁（`stats_api_test.go` TestSuspiciousRecordWithNULIsStored）、封禁钩子覆盖其他协议、准入、先拒绝后写库、关停排空、出错记录截断、清理顺序、`/users` 不看 `user_daily`、导入的 `analysis_guidelines` 与 `unsupported`、AI 移出的额外条件。
   - 部署：`gateway.hook` 的 `scope.fields` 扩大，升级时管理员要重新批准（72.3）。不需要新核心版本：空 `match` 匹配全部协议、各协议都执行请求钩子，现有核心已支持（重复键由核心统一拒绝是另一项核心修复，与插件版本无关）。没有新迁移。
   - 发布后观察：审核调用数和费用会上升（72.4 剩余限制第 1 条），首日留意 Jev / LLM 渠道的费用和 pre 延迟。
+
+### 72.17 绑定到账号（0.7.0，2026-11-08，用户要求；需要核心 §85）
+
+流程除了绑定到分组，还可以绑定到**分组下的某个账号**和**某个账号（不论分组）**。三种绑定可以同时存在，一个请求只按其中一条审核。
+
+**优先级**（`snapshot.flowForAccount`，与界面的命中预览 `bindingOps.resolveBinding` 一致）：请求分组为 G、发往账号 A 时依次找
+1. 分组 + 账号 `(G, A)`；
+2. 账号 `(0, A)`（任意分组）；
+3. 分组 G；
+4. 默认分组 `group_id=0`。
+
+找到的第一条决定结果；一条都没有就不审核。和分组绑定的规则一样，命中的绑定指向 flow 0（“不审核”，即免审）、已停用或未发布的流程时**不审核，也不回落**到更宽的绑定。
+
+**存储**（迁移 `0009_account_bindings.sql`，幂等）：
+- 分组绑定仍在 `flow_groups`，不迁移、不改写。`flow_id=0` 是新增的“不审核”（免审）：0.6.x 把它读成指向不存在的流程，结果同样是不审核。
+- 账号绑定在新表 `flow_accounts(group_id, account_id, flow_id)`，主键 `(group_id, account_id)`，`group_id=0` 表示任意分组，`flow_id=0` 表示不审核。删除流程时一并删除它的账号绑定；启用且有绑定（分组或账号）的流程不能删除。
+
+**在哪里审核**：账号要等核心调度后才知道，所以：
+- 请求分组的流程**不取决于账号**时（没有 `(0, *)` 绑定，也没有 `(G, *)` 绑定，`snapshot.perAccount`），`gateway.request` 钩子照旧在调度前按分组审核，并回答 `skip_attempt_hooks`，核心不再为这个请求调用本插件的 `gateway.attempt` 钩子。行为和开销与 0.6.x 完全相同。
+- 取决于账号时，请求钩子只做封禁等前置检查（72.5 第 1、2 步），note `moderation: per account`，把审核交给 `gateway.attempt` 钩子 `moderation_attempt`（与审核钩子相同的 `match`、`needs`、超时和 failure）。它在每次尝试选定账号后、发往该账号前，按上面的优先级找流程，再执行 72.5 第 4–11 步（pre 命中即拒绝，核心不再换账号；post 照旧入队）。
+- **换账号不绕过、不重复**：插件按 `request_id` 记下这个请求已执行过的流程（内存，两代、各最多 10 万个请求、10–20 分钟）。换账号后新账号的流程已执行过就跳过，是另一个流程才再审一次；片段放行缓存（72.5 第 8 步）照常命中。记录丢失（插件重启、超过上限）时只会多审一次，不会漏审。WebSocket 的每条 `response.create` 是单独的请求，各审一次。
+
+**授权**：`gateway.hook` 的 `scope.points` 加上 `gateway.attempt`（scope 扩大，**升级到 0.7.0 需要管理员重新批准**；批准前旧版本继续运行）。管理员只批准了 `gateway.request` 时（`Configure` 里看不到该点），账号绑定保留但不生效，所有请求按分组审核，`GET /bindings` 返回 `account_bindings_active: false`，绑定页显示警告。
+
+**接口**：
+- `GET /bindings`（read）：`{bindings:[{kind, group_id, account_id, flow_id}], account_bindings_active}`，账号绑定在前（按账号、再按分组），然后是分组绑定。`kind` 为 `group_account` | `account` | `group`。
+- `PUT /bindings`（manage）：`{group_id, account_id, flow_id, replace?}`，`account_id=0` 写 `flow_groups`，否则写 `flow_accounts`。流程不存在 404；该绑定已指向另一个流程且没带 `replace` 时 409 `binding_exists`（`details.flow_id` 是现在的流程）。保存后立即生效，不产生流程版本，广播 `config.changed`。
+- `DELETE /bindings/:group_id/:account_id`（manage）：不存在时 404。
+- 流程接口的 `FlowView` 加 `accounts:[{group_id, account_id}]`。`PUT /flows/:id/groups` 不变。
+
+**界面**：新标签页“绑定”（`BindingsTab.vue`），位于“流程”之后。
+- 列出全部绑定，按优先级排序；可按类型筛选、按账号 / 分组 / 流程搜索。手机上每条显示为卡片。
+- 新增或编辑在弹窗里进行（`BindingEditModal.vue`）：选类型，再选分组和账号（选“分组 + 账号”时只列出该分组的账号）和流程（含“不审核（免审）”）。读不到核心账号列表时改为填 ID。编辑只能改流程。
+- “命中预览”：选分组和账号，显示请求会按哪一条绑定审核。
+- 流程列表的分组单元格显示“另有 N 个账号绑定”，可跳到绑定页；分组冲突的对方为 flow 0 时显示“不审核”。
+
+**升级兼容**：
+- 现有的分组绑定（包括默认分组 0）一条不动，没有账号绑定时每个请求的审核范围、时机、流程和开销都与 0.6.2 相同：请求钩子同样回答，只多带 `skip_attempt_hooks`。
+- 回滚到 0.6.x 时 `flow_accounts` 被忽略，只有分组绑定生效；免审分组（flow 0）在旧版本里也不审核。
+- 测试：`TestUpgradeKeepsGroupBindings`。默认分组、单独绑定的分组、绑定到停用流程的分组的结果都与之前相同，且请求钩子都带 `skip_attempt_hooks`；即使核心照样调用 attempt 钩子，也不会再审一次。
+
+**取舍**（如实写明）：
+- 流程取决于账号的分组改在调度后审核。pre（同步）审核期间占着该账号的并发名额；在发往账号之前就失败的请求（没有可用账号、余额不足）不会被这类分组审核。
+- 封禁检查仍在请求钩子里，与以前一样在调度前执行。
+
+**发布**：先发含 §85 的核心（`hostCompat >=0.1.258`，`check.AttemptHookFirstCore`），再发插件 0.7.0。
+
+测试：`account_binding_test.go`（`TestFlowForAccount` 与界面的 `bindingOps.spec.ts` 用同一组用例；还有 `TestAttemptRuns`、`TestAttemptHookGranted`、`TestUpgradeKeepsGroupBindings`、`TestAccountBindingsModerateEachAttempt`）、`manifest_test.go`。
 
 ## 73. 账号成功率、用量、原始倍率计费与用量限制（2026-10-31，用户要求参照 new-api）
 

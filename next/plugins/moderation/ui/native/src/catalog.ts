@@ -1,9 +1,9 @@
 import { reactive } from 'vue'
-import { fetchAuditors, fetchChannels, fetchFlows, fetchGroups, useModHost } from './host'
+import { fetchAuditors, fetchBindings, fetchChannels, fetchFlows, fetchGroups, useModHost } from './host'
 import { onSessionEnd } from './session'
-import type { Auditor, Channel, Flow, Group } from './types'
+import type { Auditor, Binding, Channel, Flow, Group } from './types'
 
-// Flows, auditors, channels and groups, shared by every tab: the CRUD tabs
+// Flows, bindings, auditors, channels and groups, shared by every tab: the CRUD tabs
 // list them and refresh the lists a change touches, the other views take
 // names and filters from them. useCatalog() loads what is missing (ensure);
 // the header refresh and the overview's auto refresh reload them. A list
@@ -12,16 +12,31 @@ import type { Auditor, Channel, Flow, Group } from './types'
 // dropped when the session ends (session.ts), and answers of a load started
 // before are ignored.
 
-export type ListKey = 'flows' | 'auditors' | 'channels' | 'groups'
-const ALL: readonly ListKey[] = ['flows', 'auditors', 'channels', 'groups']
-const FETCH: Record<ListKey, () => Promise<unknown>> = { flows: fetchFlows, auditors: fetchAuditors, channels: fetchChannels, groups: fetchGroups }
+export type ListKey = 'flows' | 'bindings' | 'auditors' | 'channels' | 'groups'
+const ALL: readonly ListKey[] = ['flows', 'bindings', 'auditors', 'channels', 'groups']
+const FETCH: Record<ListKey, () => Promise<unknown>> = {
+  flows: fetchFlows,
+  bindings: async () => {
+    const v = await fetchBindings()
+    state.accountBindingsActive = v.account_bindings_active
+    return v.bindings
+  },
+  auditors: fetchAuditors,
+  channels: fetchChannels,
+  groups: fetchGroups
+}
+const noErrors = (): Record<ListKey, unknown> => ({ flows: null, bindings: null, auditors: null, channels: null, groups: null })
 
 const state = reactive({
   flows: [] as Flow[],
+  /** every binding of flows to groups and accounts (§72.17) */
+  bindings: [] as Binding[],
+  /** account bindings apply (the gateway.attempt hook is granted) */
+  accountBindingsActive: true,
   auditors: [] as Auditor[],
   channels: [] as Channel[],
   groups: [] as Group[],
-  errors: { flows: null, auditors: null, channels: null, groups: null } as Record<ListKey, unknown>,
+  errors: noErrors(),
   /** every list loaded once */
   loaded: false,
   loading: false
@@ -73,8 +88,8 @@ function refresh(keys: readonly ListKey[] = ALL): Promise<void> {
 /** Drops every list (session end); the next useCatalog() loads them again. */
 function reset() {
   gen++
-  Object.assign(state, { flows: [], auditors: [], channels: [], groups: [], loaded: false, loading: false })
-  state.errors = { flows: null, auditors: null, channels: null, groups: null }
+  Object.assign(state, { flows: [], bindings: [], accountBindingsActive: true, auditors: [], channels: [], groups: [], loaded: false, loading: false })
+  state.errors = noErrors()
   loadedKeys.clear()
   queued.clear()
   inflight = new Set()

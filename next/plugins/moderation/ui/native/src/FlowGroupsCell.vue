@@ -74,7 +74,9 @@ async function save(force: boolean) {
 }
 
 const conflictLines = computed(() =>
-  (conflicts.value || []).map((c) => t('flows.moveItem', { group: props.groupLabel(c.group_id), flow: props.owners.get(c.group_id)?.flowName ?? `#${c.flow_id}` }))
+  (conflicts.value || []).map((c) =>
+    t('flows.moveItem', { group: props.groupLabel(c.group_id), flow: c.flow_id ? (props.owners.get(c.group_id)?.flowName ?? `#${c.flow_id}`) : t('bindings.exempt') })
+  )
 )
 </script>
 

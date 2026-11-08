@@ -48,6 +48,10 @@ type Plugin struct {
 
 	snap   atomic.Pointer[snapshot]
 	snapMu sync.Mutex
+	// attemptHook: the core calls the gateway.attempt hook (granted), so
+	// account bindings apply; attempts tracks the requests left to it.
+	attemptHook atomic.Bool
+	attempts    *attemptRuns
 
 	watch        atomic.Pointer[map[int64]watchEntry]
 	watchMu      sync.Mutex
@@ -124,6 +128,7 @@ func New() *Plugin {
 		notices:      make(chan notice, 256),
 		priceCache:   map[string]priceStateEntry{},
 	}
+	p.attempts = newAttemptRuns(func() time.Time { return p.now() })
 	p.bg, p.cancel = context.WithCancel(context.Background())
 	p.postCtx, p.postCancel = context.WithCancel(context.Background())
 	c := compile(DefaultSettings())
@@ -182,6 +187,7 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 	}
 	c := compile(s)
 	c.settingsHash = settingsDigest(cfg.JSON)
+	p.attemptHook.Store(attemptHookGranted(cfg))
 	old := p.cfg.Swap(c)
 	if old == nil || old.MaxConcurrency != c.MaxConcurrency {
 		p.sem.Store(newSemaphore(c.MaxConcurrency))

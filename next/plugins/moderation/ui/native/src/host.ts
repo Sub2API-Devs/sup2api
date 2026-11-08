@@ -6,10 +6,13 @@ import type {
   AnalysisTool,
   Auditor,
   AuditorDraft,
+  Binding,
+  BindingsView,
   Block,
   Channel,
   ChannelTestResult,
   CategoryStats,
+  CoreAccount,
   CoreUser,
   Costs,
   Defaults,
@@ -159,6 +162,10 @@ export const saveFlow = (id: number | null, body: { name: string; draft: Spec })
   id ? api().put<Flow>(`/flows/${id}`, body) : api().post<Flow>('/flows', body)
 export const deleteFlow = (id: number) => api().del(`/flows/${id}`)
 export const setFlowGroups = (id: number, groups: number[], force = false) => api().put<Flow>(`/flows/${id}/groups`, { groups, force })
+/** Every binding (GET /bindings); put replaces a binding of another flow only with `replace`. */
+export const fetchBindings = () => api().get<BindingsView>('/bindings')
+export const putBinding = (b: Omit<Binding, 'kind'>, replace = false) => api().put<BindingsView>('/bindings', { ...b, replace })
+export const deleteBinding = (b: Pick<Binding, 'group_id' | 'account_id'>) => api().del<BindingsView>(`/bindings/${b.group_id}/${b.account_id}`)
 export const publishFlow = (id: number, expected: number) => api().post<Flow>(`/flows/${id}/publish`, { expected_version: expected })
 export const setFlowEnabled = (id: number, enabled: boolean) => api().put<Flow>(`/flows/${id}/enabled`, { enabled })
 
@@ -261,6 +268,11 @@ export const savePluginSettings = (values: Record<string, unknown>) => useModHos
 
 /** A setting as stored, else its schema default; undefined when neither is known. */
 export const settingValue = (s: PluginSettings | null | undefined, key: string): unknown => s?.values?.[key] ?? s?.schema?.properties?.[key]?.default
+
+/** Accounts of the console (needs account:read); [] when not readable. */
+export async function fetchAccounts(): Promise<CoreAccount[]> {
+  return listAll<CoreAccount>(useModHost().api, '/accounts').catch(() => [])
+}
 
 /** Groups of the console (needs group:read); [] when not readable. */
 export async function fetchGroups(): Promise<Group[]> {

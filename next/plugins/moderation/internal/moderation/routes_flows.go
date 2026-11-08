@@ -28,6 +28,8 @@ type FlowView struct {
 	PublishedAt *time.Time      `json:"published_at"`
 	PublishedBy *int64          `json:"published_by"`
 	Groups      []int64         `json:"groups"`
+	// Accounts are the account bindings of the flow (§72.17).
+	Accounts []AccountBinding `json:"accounts"`
 	// Dirty: the draft differs from the published spec (a draft total
 	// timeout of 0 means "computed at publish" and matches any value).
 	Dirty bool `json:"dirty"`
@@ -49,6 +51,8 @@ type querier interface {
 func (p *Plugin) flowViews(ctx context.Context, q querier, where string, args ...any) ([]FlowView, error) {
 	rows, err := q.Query(ctx, `SELECT f.id, f.name, f.enabled, f.draft, f.published, f.version, f.published_at, f.published_by,
 			coalesce((SELECT array_agg(group_id ORDER BY group_id) FROM flow_groups g WHERE g.flow_id = f.id), '{}'),
+			coalesce((SELECT jsonb_agg(jsonb_build_object('group_id', a.group_id, 'account_id', a.account_id) ORDER BY a.account_id, a.group_id)
+				FROM flow_accounts a WHERE a.flow_id = f.id), '[]'),
 			coalesce((SELECT v.auto_timeout FROM flow_versions v WHERE v.flow_id = f.id AND v.version = f.version), false),
 			f.created_at, f.updated_at
 		FROM flows f WHERE f.deleted_at IS NULL `+where+` ORDER BY f.id`, args...)
@@ -58,7 +62,7 @@ func (p *Plugin) flowViews(ctx context.Context, q querier, where string, args ..
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (FlowView, error) {
 		var f FlowView
 		err := r.Scan(&f.ID, &f.Name, &f.Enabled, &f.Draft, &f.Published, &f.Version, &f.PublishedAt, &f.PublishedBy,
-			&f.Groups, &f.PublishedAutoTimeout, &f.CreatedAt, &f.UpdatedAt)
+			&f.Groups, &f.Accounts, &f.PublishedAutoTimeout, &f.CreatedAt, &f.UpdatedAt)
 		f.CreatedAt, f.UpdatedAt, f.PublishedAt = f.CreatedAt.UTC(), f.UpdatedAt.UTC(), utcPtr(f.PublishedAt)
 		f.Dirty = draftChanged(f.Draft, f.Published)
 		return f, err
@@ -253,10 +257,11 @@ func (p *Plugin) deleteFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	var resp *pluginv1.HTTPResponse
 	err := p.configTx(ctx, func(tx pgx.Tx) error {
 		var inUse bool
-		if err := tx.QueryRow(ctx, `SELECT f.enabled AND EXISTS(SELECT 1 FROM flow_groups g WHERE g.flow_id = f.id)
+		if err := tx.QueryRow(ctx, `SELECT f.enabled AND (EXISTS(SELECT 1 FROM flow_groups g WHERE g.flow_id = f.id)
+				OR EXISTS(SELECT 1 FROM flow_accounts a WHERE a.flow_id = f.id))
 			FROM flows f WHERE f.id = $1 AND f.deleted_at IS NULL FOR UPDATE`, id).Scan(&inUse); err == nil && inUse {
 			resp = pluginsdk.ErrorResponse(http.StatusConflict, "flow_in_use",
-				"an enabled flow bound to groups cannot be deleted; disable it or unbind its groups first / 启用且已绑定分组的流程不能删除，请先停用或解绑分组")
+				"an enabled flow bound to groups or accounts cannot be deleted; disable it or unbind it first / 启用且已绑定分组或账号的流程不能删除，请先停用或解绑")
 			return errRollback
 		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -269,7 +274,10 @@ func (p *Plugin) deleteFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM flow_groups WHERE flow_id = $1`, id)
+		if _, err = tx.Exec(ctx, `DELETE FROM flow_groups WHERE flow_id = $1`, id); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM flow_accounts WHERE flow_id = $1`, id)
 		return err
 	})
 	if resp != nil {
