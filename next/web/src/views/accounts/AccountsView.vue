@@ -33,7 +33,7 @@ import AccountDeleteDialog from './AccountDeleteDialog.vue'
 import LastTestCell from './AccountLastTest.vue'
 import { pluginAccountActionKey, rowActions, runRowAction, type RowActionDeps } from './accountRowActions'
 import { usePluginAccountActions } from './usePluginAccountActions'
-import { accountStatusKey, accountStatusKeys, accountStatusTone } from './accountStatus'
+import { accountEnabled, accountStatusKey, accountStatusKeys, accountStatusTone, enabledPatch } from './accountStatus'
 import { useBatchTest } from './useBatchTest'
 import { useSelection } from '@/composables/useSelection'
 import { useBulkRun } from '@/composables/useBulkRun'
@@ -143,7 +143,7 @@ const columns = computed<TableColumn[]>(() => [
   // only when a row of this page has either.
   ...(list.items.value.some((a) => hasQuota(a.quota) || hasBalance(a.balance)) ? [{ key: 'quota', label: t('accounts.balance.column') }] : []),
   { key: 'last_test', label: t('accounts.lastTest.column') },
-  { key: 'actions', label: t('common.actions'), align: 'right', width: '210px' }
+  { key: 'actions', label: t('common.actions'), align: 'right', width: '170px' }
 ])
 
 function groupName(id: number, refs?: Array<{ id: number; name: string }>) {
@@ -327,11 +327,13 @@ const { batchTesting, batchRunning, batchDone, batchTotal, batchTest, stopBatch 
 const bulk = useBulkRun(4)
 const declaredActions = usePluginAccountActions(list.reload)
 const bulkBusy = computed(() => batchRunning.value || bulk.running.value || declaredActions.running.value)
+// Same request and same rows as the row switch: enable takes every account that is not enabled (an automatic
+// disable included), disable every one not disabled by hand.
 async function bulkToggle(enable: boolean) {
-  const rows = picked.value.toggle.filter((a) => (a.status !== 'disabled') !== enable)
+  const rows = picked.value.toggle.filter((a) => (enable ? !accountEnabled(a) : a.status !== 'disabled'))
   if (!rows.length) return toast(t('accounts.bulk.nothingToChange'), 'info')
   const out = await bulk.run(rows, async (a, signal) => {
-    patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, { status: enable ? 'active' : 'disabled', schedulable: enable }, { signal, query: todayQuery() }))
+    patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, enabledPatch(enable), { signal, query: todayQuery() }))
   })
   bulkToast(out.ok.length, out.failed)
 }
@@ -489,21 +491,36 @@ async function refreshCreds(a: Account) {
     refreshingCreds.value.delete(a.id)
   }
 }
-// ---------------------------------------------------------------- row actions
+// ---------------------------------------------------------------- enable switch (status column)
+// The switch shows the new state at once and puts the old one back when the
+// request fails. On is the manual enable (see enabledPatch): it also recovers
+// an automatically disabled account, whose switch reads off; the row menu
+// offers such an account a manual disable.
 const togglingEnabled = ref(new Set<number>())
-async function toggleEnabled(a: Account, v: boolean) {
-  if (togglingEnabled.value.has(a.id) || !canUpdate(a) || !accountControl(typeOf(a), 'schedulable').configurable) return
+async function toggleEnabled(a: Account, on: boolean) {
+  if (togglingEnabled.value.has(a.id) || !toggleable(a)) return
   togglingEnabled.value.add(a.id)
+  const before = { status: a.status, schedulable: a.schedulable, status_reason: a.status_reason, auto_disabled_until: a.auto_disabled_until }
+  patchAccount(a.id, { ...enabledPatch(on), ...(on ? { status_reason: '', auto_disabled_until: null } : {}) })
   try {
-    const updated = await api.patch<Account>(`/accounts/${a.id}`, { status: v ? 'active' : 'disabled', schedulable: v }, { query: todayQuery() })
-    patchAccount(a.id, updated)
+    patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, enabledPatch(on), { query: todayQuery() }))
+    toast(t(on ? 'accounts.listUi.enabledDone' : 'accounts.listUi.disabledDone', { name: a.name }), 'success')
   } catch (e) {
+    patchAccount(a.id, before)
     notifyError(e)
   } finally {
     togglingEnabled.value.delete(a.id)
   }
 }
+/** Hover text of a row's switch: what turning it over does. */
+function enabledSwitchTitle(a: Account) {
+  if (!accountControl(typeOf(a), 'schedulable').configurable) return t('accounts.editorUi.commonControlFixed')
+  if (accountEnabled(a)) return t('accounts.listUi.switchDisable')
+  return t(a.status === 'disabled' ? 'accounts.listUi.switchEnable' : 'accounts.listUi.switchEnableAuto')
+}
+const canDisable = (a: Account) => toggleable(a) && a.status !== 'disabled' && !accountEnabled(a)
 
+// ---------------------------------------------------------------- row actions
 const deleteOpen = ref(false)
 const deleteTarget = ref<Account | null>(null)
 const deleteRetentionDays = computed(() => typeOf(deleteTarget.value)?.lifecycle?.deletion?.retentionDays ?? 0)
@@ -544,6 +561,7 @@ async function runPluginAction(a: Account, action: AccountAction) {
 const rowActionDeps: RowActionDeps = {
   canReveal,
   canResetStatus,
+  canDisable,
   canRefreshCreds,
   canUpdate,
   canDelete,
@@ -551,6 +569,7 @@ const rowActionDeps: RowActionDeps = {
   openDetail,
   reveal,
   resetStatus,
+  disable: (a) => toggleEnabled(a, false),
   refreshCreds,
   remove,
   runPluginAction,
@@ -677,6 +696,18 @@ function resetFilters() {
         <SHint v-else inline>-</SHint>
       </template>
       <template #cell-status="{ row }">
+        <!-- The enable switch sits before the badge it changes; readers and orphaned accounts get the badge only. -->
+        <span v-if="editable(row)" class="mr-1.5 inline-flex align-middle" @click.stop>
+          <SSwitch
+            size="sm"
+            :model-value="accountEnabled(row)"
+            :disabled="togglingEnabled.has(row.id) || !toggleable(row)"
+            :aria-label="t('accounts.listUi.enabledSwitch', { name: row.name })"
+            :title="enabledSwitchTitle(row)"
+            data-testid="account-schedulable-switch"
+            @update:model-value="toggleEnabled(row, $event)"
+          />
+        </span>
         <STooltip :content="statusOf(row).detail" :disabled="!statusOf(row).detail" placement="bottom" :delay="150" max-width="24rem">
           <!-- Focusable when there is a reason: keyboard focus shows it too, not only hover (§73.4); the detail drawer lists it for touch. -->
           <span :tabindex="statusOf(row).detail ? 0 : undefined" class="inline-flex rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40" data-testid="account-status-tip">
@@ -716,15 +747,6 @@ function resetFilters() {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
-          <SSwitch
-            v-if="canUpdate(row) && !row.orphaned"
-            :model-value="row.status !== 'disabled'"
-            :disabled="togglingEnabled.has(row.id) || !accountControl(typeOf(row), 'schedulable').configurable"
-            :aria-label="t(row.status === 'disabled' ? 'common.enable' : 'common.disable')"
-            :title="t(row.status === 'disabled' ? 'common.enable' : 'common.disable')"
-            data-testid="account-schedulable-switch"
-            @update:model-value="toggleEnabled(row, $event)"
-          />
           <SButton v-if="canTest(row) && !row.orphaned" size="sm" variant="ghost" @click="openTest(row)">{{ t('common.test') }}</SButton>
           <SButton v-if="canUpdate(row) && !row.orphaned" size="sm" variant="ghost" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
           <SDropdown :actions="actionsFor(row)" @select="onAction(row, $event)" />

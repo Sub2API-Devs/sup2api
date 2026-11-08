@@ -12,6 +12,8 @@ const t = (key: string) => i18n.global.t(key)
 export interface RowActionDeps {
   canReveal: (a: Account) => boolean
   canResetStatus: (a: Account) => boolean
+  /** An automatically disabled account the caller may disable by hand (its switch is off, so the menu offers it). */
+  canDisable: (a: Account) => boolean
   canRefreshCreds: (a: Account) => boolean
   canUpdate: (a: Account) => boolean
   canDelete: (a: Account) => boolean
@@ -20,6 +22,7 @@ export interface RowActionDeps {
   openDetail: (a: Account) => unknown
   reveal: (a: Account) => unknown
   resetStatus: (a: Account) => unknown
+  disable: (a: Account) => unknown
   refreshCreds: (a: Account) => unknown
   remove: (a: Account) => unknown
   runPluginAction: (a: Account, action: AccountAction) => unknown
@@ -37,6 +40,7 @@ export function rowActions(a: Account, deps: RowActionDeps) {
     { key: 'detail', label: t('common.detail') },
     { key: 'reveal', label: t('accounts.revealCredentials'), hidden: !deps.canReveal(a) || a.orphaned },
     { key: 'reset-status', label: t('accounts.resetStatus'), hidden: !deps.canResetStatus(a) },
+    { key: 'disable', label: t('accounts.listUi.disableByHand'), hidden: !deps.canDisable(a) },
     { key: 'refresh-credentials', label: t('accounts.credRefresh.action'), hidden: !deps.canRefreshCreds(a) },
     ...(a.actions || []).map((x) => ({ key: `plugin:${x.plugin_key}:${x.id}`, label: lt(x.label) || x.id, hidden: !deps.canUpdate(a) || a.orphaned || deps.running(a) })),
     // Declared actions show on editable rows, or on every row with visibleFor "all"; never on orphaned accounts.
@@ -50,6 +54,7 @@ const HANDLERS: Record<string, (a: Account, deps: RowActionDeps) => unknown> = {
   detail: (a, deps) => deps.openDetail(a),
   reveal: (a, deps) => deps.reveal(a),
   'reset-status': (a, deps) => deps.resetStatus(a),
+  disable: (a, deps) => deps.disable(a),
   'refresh-credentials': (a, deps) => deps.refreshCreds(a),
   delete: (a, deps) => deps.remove(a)
 }

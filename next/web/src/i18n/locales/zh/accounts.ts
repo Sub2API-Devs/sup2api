@@ -11,7 +11,11 @@ export default {
     clear: '清除筛选（{count}）', compact: '紧凑显示', refresh: '刷新账号列表',
     loadFailed: '刷新失败，正在显示上次加载的数据',
     emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', limitsColumn: '并发 / RPM / TPM / 会话',
-    numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存', clearIds: '清除账号 ID 筛选', idsTruncated: '{label}（前 {n} 个）'
+    numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存', clearIds: '清除账号 ID 筛选', idsTruncated: '{label}（前 {n} 个）',
+    enabledSwitch: '启用：{name}', switchDisable: '关闭即禁用账号',
+    switchEnable: '打开即启用账号',
+    switchEnableAuto: '未启用（已自动禁用或关闭了调度）。打开即手动启用：清除自动禁用及原因，并恢复调度；冷却不清除（可用“重置状态”清除）',
+    enabledDone: '已启用「{name}」', disabledDone: '已禁用「{name}」', disableByHand: '转为手动禁用'
   },
   limitsUi: {
     title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',

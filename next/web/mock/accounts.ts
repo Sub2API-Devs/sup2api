@@ -361,6 +361,8 @@ export const accounts: any[] = [
   // ChatGPT subscriptions (codex plugin, native form): device code and Sign in with ChatGPT; edit one to see "Re-authorize".
   { id: 29, name: 'chatgpt-plus', plugin_key: 'codex', type: 'codex_device', created_by: 1, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-1200), created_at: now(-86400 * 5), credentials: { access_token: '******', refresh_token: '******', id_token: '******', expires_at: Math.floor(Date.now() / 1000) + 2400, email: 'owner@example.com', chatgpt_account_id: '5d1c2b9e-7f3a-4e1b-9a0c-2f6d8e4b1a73', plan_type: 'plus' } },
   { id: 30, name: 'chatgpt-siwc', plugin_key: 'codex', type: 'chatgpt_siwc', created_by: 1, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { access_token: '******', refresh_token: '******', id_token: '******', expires_at: Math.floor(Date.now() / 1000) - 600, email: 'owner@example.com', client_id: 'agent_3f9a1c7e5b2d4086', ext_agent_host_id: 'urn:uuid:8b0e6f2a-1c4d-4e9b-a7f3-5d2c9e1b0a64', scopes: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct' } },
+  // Automatically disabled until a release time (yellow badge); the list switch reads off and turning it on enables it by hand.
+  { id: 31, name: 'relay-limited', plugin_key: 'relay', type: 'relay_key', created_by: 1, group_ids: [1], proxy_id: null, priority: 4, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'auto_disabled', status_reason: 'matched auto-disable rule: status 429', auto_disabled_until: now(3 * 3600), in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-1800), created_at: now(-86400 * 8), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
   // Its plugin was uninstalled without purge_accounts: kept as an orphaned account.
   { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', created_by: null, type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, weight: 1, max_concurrency: 5, schedulable: false, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
@@ -868,6 +870,9 @@ on('PATCH', '/accounts/:id', (req) => {
   if (guarded) return guarded
   const proxy = resolveProxy(req, req.body || {})
   if ('__status' in proxy) return proxy
+  // Enabling restores scheduling; a status change clears the release time and words the reason as the core does.
+  if (rest.status === 'active' && rest.schedulable === undefined) rest.schedulable = true
+  if (rest.status !== undefined && rest.status !== a.status) Object.assign(a, { auto_disabled_until: null, status_reason: rest.status === 'disabled' ? 'disabled by administrator' : '' })
   // `models` and `model_mapping` are replaced as a whole (§18.3).
   Object.assign(a, rest)
   if (proxy.proxy_id !== undefined) a.proxy_id = proxy.proxy_id

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountStatusKey, accountStatusKeys, accountStatusTone } from './accountStatus'
+import { accountEnabled, accountStatusKey, accountStatusKeys, accountStatusTone } from './accountStatus'
 
 describe('accountStatus', () => {
   it.each([
@@ -16,6 +16,8 @@ describe('accountStatus', () => {
   ])('maps %o to %s', (a, key, tone) => {
     expect(accountStatusKey(a)).toBe(key)
     expect(accountStatusTone(a)).toBe(tone)
+    // The list switch is on only for an enabled account.
+    expect(accountEnabled(a)).toBe(key === 'active')
   })
 
   it('greys out an orphaned account and keeps three filter keys', () => {

@@ -9,8 +9,8 @@ const account = { id: 7, name: 'a', orphaned: false } as Account
 function deps(over: Partial<RowActionDeps> = {}): RowActionDeps {
   const yes = () => true
   return {
-    canReveal: yes, canResetStatus: yes, canRefreshCreds: yes, canUpdate: yes, canDelete: yes, running: () => false,
-    openDetail: vi.fn(), reveal: vi.fn(), resetStatus: vi.fn(), refreshCreds: vi.fn(), remove: vi.fn(), runPluginAction: vi.fn(),
+    canReveal: yes, canResetStatus: yes, canDisable: yes, canRefreshCreds: yes, canUpdate: yes, canDelete: yes, running: () => false,
+    openDetail: vi.fn(), reveal: vi.fn(), resetStatus: vi.fn(), disable: vi.fn(), refreshCreds: vi.fn(), remove: vi.fn(), runPluginAction: vi.fn(),
     declaredActions: [reset], runPluginAccountAction: vi.fn(),
     ...over
   }

@@ -257,7 +257,10 @@ describe('account status recovery', () => {
     expect(release).toMatch(/自动启用$/)
     expect(w.find('[data-testid="account-status-note"]').exists()).toBe(false)
     expect(w.text()).not.toContain('rate limited until')
-    expect(w.get('[data-testid="account-schedulable-switch"]').attributes('aria-checked')).toBe('true')
+    // Not enabled: the switch is off, and turning it on enables the account by hand.
+    const toggle = w.get('[data-testid="account-schedulable-switch"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(toggle.attributes('title')).toContain('打开即手动启用')
   })
 
   it('says in the status tooltip that a parked account container is stopped', () => {
@@ -369,28 +372,50 @@ describe('account status recovery', () => {
     expect(w.text()).not.toContain('req_ok_1')
   })
 
-  it('shows an enabled unschedulable account as automatically disabled and restores it through manual off/on', async () => {
+  it('turns an enabled unschedulable account back on with one flip, then disables it by hand', async () => {
     Object.assign(list.items.value[0], { status: 'active', schedulable: false, status_reason: '' })
     mocks.patch.mockImplementation(async (_path: string, values: Partial<Account>) => ({ ...list.items.value[0], ...values, status_reason: '' }))
     const w = render()
     const toggle = w.get('[data-testid="account-schedulable-switch"]')
     expect(w.text()).toContain('自动禁用')
-    expect(w.text()).not.toContain('不参与调度')
-    expect(toggle.attributes('aria-checked')).toBe('true')
-    expect(toggle.attributes('aria-label')).toBe('禁用')
-    await flip(toggle)
-    await flushPromises()
-    expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'disabled', schedulable: false }, today)
-    expect(list.items.value[0].status).toBe('disabled')
     expect(toggle.attributes('aria-checked')).toBe('false')
-    expect(w.text()).not.toContain('自动禁用')
+    expect(toggle.attributes('aria-label')).toBe('启用：cc-test')
     await flip(toggle)
     await flushPromises()
     expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'active', schedulable: true }, today)
     expect(list.items.value[0]).toMatchObject({ status: 'active', schedulable: true })
     expect(toggle.attributes('aria-checked')).toBe('true')
     expect(w.text()).not.toContain('自动禁用')
+    expect(mocks.toast).toHaveBeenLastCalledWith('已启用「cc-test」', 'success')
+    await flip(toggle)
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'disabled', schedulable: false }, today)
+    expect(list.items.value[0].status).toBe('disabled')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(mocks.toast).toHaveBeenLastCalledWith('已禁用「cc-test」', 'success')
     expect(mocks.post).not.toHaveBeenCalled()
+  })
+
+  it('shows the new state at once and puts the old one back when the request fails', async () => {
+    Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'matched auto-disable rule: status 401', auto_disabled_until: '2026-10-12T08:00:00Z' })
+    let reject!: (e: unknown) => void
+    mocks.patch.mockReturnValueOnce(new Promise((_, r) => { reject = r }))
+    const w = render()
+    const toggle = w.get('[data-testid="account-schedulable-switch"]')
+    await flip(toggle)
+    await w.vm.$nextTick()
+    // Optimistic: enabled, reason gone, the switch locked until the server answers.
+    expect(list.items.value[0]).toMatchObject({ status: 'active', schedulable: true, status_reason: '', auto_disabled_until: null })
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(toggle.attributes('disabled')).toBeDefined()
+    const error = new Error('enable failed')
+    reject(error)
+    await flushPromises()
+    expect(list.items.value[0]).toMatchObject({ status: 'auto_disabled', schedulable: true, status_reason: 'matched auto-disable rule: status 401', auto_disabled_until: '2026-10-12T08:00:00Z' })
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(toggle.attributes('disabled')).toBeUndefined()
+    expect(mocks.notifyError).toHaveBeenCalledWith(error)
+    expect(mocks.toast).not.toHaveBeenCalled()
   })
 
   it('keeps a manually disabled account off even when scheduling is on, and retains that state if enabling fails', async () => {
@@ -399,13 +424,36 @@ describe('account status recovery', () => {
     const w = render()
     const toggle = w.get('[data-testid="account-schedulable-switch"]')
     expect(toggle.attributes('aria-checked')).toBe('false')
-    expect(toggle.attributes('aria-label')).toBe('启用')
+    expect(toggle.attributes('title')).toBe('打开即启用账号')
     await flip(toggle)
     await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/accounts/23', { status: 'active', schedulable: true }, today)
     expect(toggle.attributes('aria-checked')).toBe('false')
-    expect(list.items.value[0].status).toBe('disabled')
+    expect(list.items.value[0]).toMatchObject({ status: 'disabled', status_reason: 'credentials rejected' })
     expect(mocks.notifyError).toHaveBeenCalledWith(error)
+  })
+
+  it('shows readers and orphaned accounts the badge without a switch', () => {
+    mocks.canUpdate = false
+    expect(render().find('[data-testid="account-schedulable-switch"]').exists()).toBe(false)
+    mocks.canUpdate = true
+    list.items.value[0].orphaned = true
+    const w = render()
+    expect(w.find('[data-testid="account-schedulable-switch"]').exists()).toBe(false)
+    expect(w.get('[data-testid="account-status"]').text()).toBe('禁用')
+  })
+
+  it('offers an automatically disabled account a manual disable in the row menu', async () => {
+    Object.assign(list.items.value[0], { status: 'auto_disabled', auto_disabled_until: '2026-10-12T08:00:00Z' })
+    mocks.patch.mockImplementation(async (_path: string, values: Partial<Account>) => ({ ...list.items.value[0], ...values, status_reason: 'disabled by administrator' }))
+    const w = render({ STable: { props: ['rows'], template: '<div><div v-for="row in rows" :key="row.id"><slot name="cell-actions" :row="row" /></div></div>' } })
+    const menu = w.findAllComponents(SDropdown).at(-1)!
+    expect(menu.props('actions').find((x: { key: string }) => x.key === 'disable')).toMatchObject({ label: '转为手动禁用', hidden: false })
+    menu.vm.$emit('select', 'disable')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'disabled', schedulable: false }, today)
+    expect(list.items.value[0].status).toBe('disabled')
+    expect(menu.props('actions').find((x: { key: string }) => x.key === 'disable')?.hidden).toBe(true)
   })
 })
 
@@ -549,6 +597,25 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
     await none.get('[data-testid="select-rows"]').trigger('click')
     await flushPromises()
     expect(bulkKeys(none)).toEqual(['enable', 'disable', 'reset'])
+  })
+
+  it('bulk enables every selected account that is not enabled, automatic disables included, like the row switch', async () => {
+    list.items.value = [row(29), row(30, { status: 'auto_disabled' }), row(31, { status: 'disabled', schedulable: false }), row(32, { schedulable: false })]
+    mocks.patch.mockImplementation(async (path: string, values: Partial<Account>) => ({ ...list.items.value.find((a) => path.endsWith(`/${a.id}`)), ...values }))
+    const w = render(stubs)
+    await w.get('[data-testid="select-rows"]').trigger('click')
+    await flushPromises()
+    bulkMore(w).vm.$emit('select', 'enable')
+    await flushPromises()
+    expect(mocks.patch.mock.calls.map((c) => c[0]).sort()).toEqual(['/accounts/30', '/accounts/31', '/accounts/32'])
+    for (const c of mocks.patch.mock.calls) expect(c[1]).toEqual({ status: 'active', schedulable: true })
+    expect(list.items.value.every((a) => a.status === 'active' && a.schedulable)).toBe(true)
+    mocks.patch.mockClear()
+    list.items.value[1].status = 'auto_disabled'
+    bulkMore(w).vm.$emit('select', 'disable')
+    await flushPromises()
+    expect(mocks.patch.mock.calls.map((c) => c[0]).sort()).toEqual(['/accounts/29', '/accounts/30', '/accounts/31', '/accounts/32'])
+    for (const c of mocks.patch.mock.calls) expect(c[1]).toEqual({ status: 'disabled', schedulable: false })
   })
 
   it('lets a visibleFor "all" bulk action target every selected non-orphaned row, not just the editable ones', async () => {

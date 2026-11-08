@@ -11,7 +11,11 @@ export default {
     clear: 'Clear filters ({count})', compact: 'Compact rows', refresh: 'Refresh accounts',
     loadFailed: 'Refresh failed; showing the previous results',
     emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', limitsColumn: 'Concurrency / RPM / TPM / Sessions',
-    numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved', clearIds: 'Clear the account id filter', idsTruncated: '{label} (first {n})'
+    numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved', clearIds: 'Clear the account id filter', idsTruncated: '{label} (first {n})',
+    enabledSwitch: 'Enabled: {name}', switchDisable: 'Turn off to disable the account',
+    switchEnable: 'Turn on to enable the account',
+    switchEnableAuto: 'Not enabled (automatically disabled or scheduling off). Turning it on enables the account by hand: the automatic disable and its reason are cleared and scheduling comes back on; a cooldown stays (Reset status clears it)',
+    enabledDone: '"{name}" enabled', disabledDone: '"{name}" disabled', disableByHand: 'Disable by hand'
   },
   limitsUi: {
     title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
