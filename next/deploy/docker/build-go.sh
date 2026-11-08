@@ -181,6 +181,9 @@ ls -l "$OUT/market"
 # account types of their platform (anthropic also a model
 # catalog). moderation is the LLM prompt moderation hook (CONTRACTS §20):
 # enabled at install, but its mode defaults to off until configured.
+# codex adds the ChatGPT subscription account types (Codex device code and
+# Sign in with ChatGPT, docs/PLUGIN-CODEX.md) on the built-in openai platform:
+# enabled at install; it does nothing until an operator authorizes an account.
 #
 # volcengine is install-only: it does nothing until an operator adds an Ark
 # account (per-deployment credentials and base URL), so it ships with every
@@ -194,7 +197,7 @@ ls -l "$OUT/market"
 #
 # Intentionally NOT built in: relay (a market-only account type), guard (an
 # optional gateway hook).
-BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation}
+BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation codex}
 BUILTIN_PLUGINS_INSTALL_ONLY=${BUILTIN_PLUGINS_INSTALL_ONLY:-volcengine ccgateway mailer dynweight}
 for name in $BUILTIN_PLUGINS_INSTALL_ONLY; do
   case " $BUILTIN_PLUGINS " in

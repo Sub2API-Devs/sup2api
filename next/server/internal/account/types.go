@@ -170,15 +170,21 @@ func typePlatforms(g core.Generation, b core.AccountTypeBinding) []TypePlatformV
 
 // servedEndpoints lists the endpoints of the platforms the account type
 // supports (native), plus endpoints of other platforms whose protocol the
-// core can convert to a protocol of a supported, available platform.
+// core can convert to a protocol of a supported, available platform, plus
+// endpoints of a supported platform left out of the type's endpoint subset
+// whose protocol the core converts to a protocol of that platform's subset
+// (CONTRACTS §83.3), as the gateway routes them.
 func servedEndpoints(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolConverters) []EndpointView {
-	// Protocols the type's upstream speaks: those of its available platforms.
+	// Protocols the type's upstream speaks: those of its available platforms,
+	// and per platform for the conversions within one.
 	var upstream []string
+	byPlatform := map[string][]string{}
 	for _, ap := range b.Type.Platforms {
 		if pb, ok := g.Platform(ap.Platform); ok {
 			for _, ep := range pb.Platform.Endpoints {
 				if ap.SupportsEndpoint(ep.ID) {
 					upstream = append(upstream, ep.Protocol)
+					byPlatform[ap.Platform] = append(byPlatform[ap.Platform], ep.Protocol)
 				}
 			}
 		}
@@ -188,6 +194,10 @@ func servedEndpoints(g core.Generation, b core.AccountTypeBinding, conv core.Pro
 		proto := e.Endpoint.Protocol
 		ap, native := b.Supports(e.Platform)
 		if native && !ap.SupportsEndpoint(e.Endpoint.ID) {
+			if convertible(conv, proto, byPlatform[e.Platform]) {
+				out = append(out, EndpointView{Method: e.Endpoint.Method, Path: e.Endpoint.Path, Protocol: proto,
+					Platform: e.Platform, Native: false})
+			}
 			continue
 		}
 		if !native && !convertible(conv, proto, upstream) {

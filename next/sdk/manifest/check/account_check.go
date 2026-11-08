@@ -137,6 +137,7 @@ func (v *validator) accountPlatform(pf string, ap manifest.AccountPlatform, seen
 	seen[ap.Platform] = true
 	own := ownPlatforms[ap.Platform]
 	v.accountEndpoints(pf, ap, own)
+	v.accountStreamOnly(pf, ap, own)
 	for _, proto := range sortedKeys(ap.Usage) {
 		uf := pf + ".usage." + proto
 		if own != nil {
@@ -157,17 +158,7 @@ func (v *validator) accountEndpoints(field string, ap manifest.AccountPlatform, 
 	if len(ap.Endpoints) == 0 {
 		v.add(field+".endpoints", "required", "at least one endpoint is required when endpoints is specified")
 	}
-	p := own
-	for _, builtin := range platforms.Builtin() {
-		if builtin.ID == ap.Platform {
-			p = &builtin
-		}
-	}
-	for _, other := range v.opt.OtherPlatforms {
-		if other.ID == ap.Platform {
-			p = &manifest.Platform{ID: other.ID, Endpoints: other.Endpoints}
-		}
-	}
+	p := v.referencedPlatform(ap.Platform, own)
 	if p == nil && !v.opt.Tooling {
 		v.add(field+".endpoints", "unknown_platform", "platform %q must be installed to validate endpoint references", ap.Platform)
 	}
@@ -183,6 +174,82 @@ func (v *validator) accountEndpoints(field string, ap manifest.AccountPlatform, 
 			v.add(f, "unknown_endpoint", "endpoint %q does not belong to platform %q", id, ap.Platform)
 		}
 		seen[id] = true
+	}
+}
+
+// referencedPlatform resolves the platform an account type entry names: a
+// built-in platform, another installed plugin's platform or this plugin's
+// own (own may be nil). nil when it is none of these.
+func (v *validator) referencedPlatform(id string, own *manifest.Platform) *manifest.Platform {
+	p := own
+	for _, builtin := range platforms.Builtin() {
+		if builtin.ID == id {
+			p = &builtin
+		}
+	}
+	for _, other := range v.opt.OtherPlatforms {
+		if other.ID == id {
+			p = &manifest.Platform{ID: other.ID, Endpoints: other.Endpoints}
+		}
+	}
+	return p
+}
+
+// accountStreamOnly validates accountTypes[].platforms[].streamOnly
+// (CONTRACTS §83): every entry names, once, the protocol of a proxy endpoint
+// of the platform that the account type serves, answers with SSE
+// (response.stream "sse") and carries the client's choice in
+// request.streamPath - the path the host sets to true upstream. Offline
+// packaging that cannot resolve an external platform only checks that the
+// protocol belongs to it; the install check resolves it.
+func (v *validator) accountStreamOnly(field string, ap manifest.AccountPlatform, own *manifest.Platform) {
+	if ap.StreamOnly == nil {
+		return
+	}
+	field += ".streamOnly"
+	if len(ap.StreamOnly) == 0 {
+		v.add(field, "required", "at least one protocol is required when streamOnly is specified")
+		return
+	}
+	p := v.referencedPlatform(ap.Platform, own)
+	if p == nil && !v.opt.Tooling {
+		v.add(field, "unknown_platform", "platform %q must be installed to validate streamOnly protocols", ap.Platform)
+		return
+	}
+	seen := map[string]bool{}
+	for i, proto := range ap.StreamOnly {
+		f := fmt.Sprintf("%s[%d]", field, i)
+		switch {
+		case strings.TrimSpace(proto) == "":
+			v.add(f, "required", "protocol is required")
+			continue
+		case seen[proto]:
+			v.add(f, "duplicate", "protocol %q listed twice", proto)
+			continue
+		}
+		seen[proto] = true
+		if p == nil {
+			if !strings.HasPrefix(proto, ap.Platform+".") {
+				v.add(f, "unknown_protocol", "protocol %q does not belong to platform %q", proto, ap.Platform)
+			}
+			continue
+		}
+		known, streams := false, false
+		for _, e := range p.Endpoints {
+			if e.Protocol != proto || !ap.SupportsEndpoint(e.ID) {
+				continue
+			}
+			known = true
+			if e.Kind == manifest.EndpointKindProxy && e.Response.Stream == "sse" && e.Request.StreamPath != "" {
+				streams = true
+			}
+		}
+		switch {
+		case !known:
+			v.add(f, "unknown_protocol", "protocol %q is not served by an endpoint of platform %q this account type supports", proto, ap.Platform)
+		case !streams:
+			v.add(f, "not_streamable", "protocol %q needs a proxy endpoint with response.stream \"sse\" and request.streamPath", proto)
+		}
 	}
 }
 

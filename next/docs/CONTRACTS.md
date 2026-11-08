@@ -431,7 +431,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 **core**：`EndpointBinding{Plugin, Platform, Endpoint}`；`PlatformBinding{Plugin, Builtin, Platform}`（去掉 `Client`）；`Generation.Platforms()`、`Platform(id)`、`PlatformForProtocol(protocol)`、`AccountTypesForPlatform(platformID)`（取代 `PlatformsForProtocol`、`AccountTypesForProtocol`）；`AccountTypeBinding.Supports(platformID)`（取代 `Protocol()`）。`Generation.Endpoints()` 包含内置平台和已启用插件平台的端点。
 
-**调度**：端点 → 平台 P、协议 X；候选账号类型 = `AccountTypesForPlatform(P)`（原生），加上支持其他平台 Q、且 Q 的某个协议 Y 满足 `CanConvert(X, Y)` 的类型；候选账号 = API Key 所属分组中这些类型的账号。requestFields / passHeaders：账号类型对该平台的覆盖 → 平台默认。用量规则：账号类型 `usage[协议]` → 端点 `usage` → 平台 `usage`（需转换时按上游协议 Y 所属平台和端点取）。内置平台的默认粘性规则写入 `sticky_rules`，`source='builtin'`、`plugin_key` 为空，除名称外都可修改，改过的定义升级不覆盖、可恢复默认（§15.5）。
+**调度**：端点 → 平台 P、协议 X；候选账号类型 = `AccountTypesForPlatform(P)`（原生），加上支持其他平台 Q、且 Q 的某个协议 Y 满足 `CanConvert(X, Y)` 的类型（2026-11-08 起，支持 P 但端点子集不含该端点的类型可转换到 P 上子集内的协议，见 §83.3）；候选账号 = API Key 所属分组中这些类型的账号。requestFields / passHeaders：账号类型对该平台的覆盖 → 平台默认。用量规则：账号类型 `usage[协议]` → 端点 `usage` → 平台 `usage`（需转换时按上游协议 Y 所属平台和端点取）。内置平台的默认粘性规则写入 `sticky_rules`，`source='builtin'`、`plugin_key` 为空，除名称外都可修改，改过的定义升级不覆盖、可恢复默认（§15.5）。
 
 **REST 变更**
 
@@ -6385,3 +6385,96 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 心跳：控制快照（版本、核心 boot、模式、就绪、路由 revision、停止、转移）与上次写入相同时不再向 PG 发 UPDATE，只写 Redis 遥测；最长 60 秒强制重写一次；集群里还有依赖 PG 心跳的旧网关、或读不到节点目录时照旧每次写。节点行被外部直接改动（例如测试里手改 `ready`）最多 60 秒后才被本节点心跳覆盖回来。
 - 空闲时核心“答复但未就绪”不再立刻重启：先记一条 WARN，持续 2 分钟仍未就绪才按持久路由恢复（`Recover`）；核心进程连不上、或本节点不在活动计划内，仍立即恢复。计划进行中的成员在步骤之间本来就未就绪，不算。此前的做法是看到一次未就绪就重新准入，核心进程本身并没有被重启，但每次都生成新的准入 revision 并写一条 WARN。
 - 其余不变：3 秒遥测心跳、`nodeFreshness` 20 秒、锁租约与步骤超时。
+
+## 83. 上游只接受流式的账号类型 `streamOnly`、同平台 chat → Responses 转换（2026-11-08，codex 插件需要，设计见 [PLUGIN-CODEX.md](PLUGIN-CODEX.md) 第 3、4 节）
+
+起因：ChatGPT 账号的两种上游（`chatgpt.com/backend-api/codex/responses`、Sign in with ChatGPT 的 `api.openai.com/v1/responses`）只接受 `stream:true`。核心此前按客户端的 `stream` 原样转发，非流式客户端（包括被转换成该协议的非流式请求）一律被上游拒绝。本节让账号类型声明这一事实，由核心在上游流式、对客户端非流式之间转换。只影响声明了 `streamOnly` 的账号类型，其他插件行为不变。codex 账号类型只声明 openai 的 `responses`、`responses_websocket` 端点，`/v1/chat/completions` 由核心转换成 Responses 服务，所以本节同时新增 `openai.chat → openai.responses` 严格转换器（83.2）和同平台转换的调度规则（83.3），以及两者共用的 hostCompat 下限检查（83.4）。
+
+### 83.1 `streamOnly`
+
+**manifest**：`accountTypes[].platforms[].streamOnly: ["<协议>", ...]`（`manifest.AccountPlatform.StreamOnly`，辅助方法 `StreamsOnly(protocol)`），列出该账号类型在这个平台上“上游只接受流式”的上游协议。codex 两种账号类型填 `["openai.responses"]`。校验（`sdk/manifest/check` `accountStreamOnly`，安装与 `sub2api-plugin` 工具共用）：
+
+- 省略表示没有；显式空数组、空字符串 `required`，重复 `duplicate`。
+- 每项必须是该平台的端点协议，且该端点在账号类型的 `endpoints` 子集内（§13），否则 `unknown_protocol`；这样的端点里至少一个是 `kind: "proxy"`、`response.stream: "sse"` 且声明了 `request.streamPath`（核心要把它置 true），否则 `not_streamable`（WebSocket 端点、只有 JSON 的端点、`request.stream` 固定流式而没有 `streamPath` 的端点都不行）。
+- 平台未安装时 `unknown_platform`；离线打包解析不到外部平台时只核对协议属于 `<平台 id>.`，留到安装时再校验。
+
+**生效条件**（每次尝试按选中的账号判断，`gateway/streamonly.go` `forcesStream`）：账号类型的路由对本次**上游协议**声明了 `streamOnly`（经核心转换时按转换后的上游协议，即 `RequestMeta.protocol` / `usage_logs.upstream_protocol`，不是客户端端点的协议），且客户端非流式（`usage_logs.stream = false`），且不是 WebSocket 端点或异步任务提交端点。原生转发与 `platform.execute.v1`（插件 `Execute` → `ForwardUpstream` 经核心转发）两条路径都生效。流式客户端不受影响，照旧逐条转发。
+
+**请求**：
+
+- 核心在协议转换、账号模型映射、模型与资源引用映射之后，调用 `BuildUpstreamRequest` 之前，把上游请求体的 `request.streamPath`（上游端点的，如 `stream`）置为 `true`：插件在 `fields` 里读到的、`patches` 作用的都是要发往上游的样子。
+- 应用插件 `patches` 之后核心再强制一次 `true`，插件改不回去，最终发往上游的一定是 `true`。
+- `RequestMeta.stream` 仍是客户端视角（`false`），插件凭自己账号类型的声明就知道上游会流式。
+- 等待响应头的超时按流式取，响应体套用流式空闲超时（环境变量 `streaming_idle_timeout_seconds`，§74.3）。
+
+**响应**：非 2xx 与以前完全相同（原样错误正文，§26.6 2026-10-19 规则）。2xx 且 `Content-Type: text/event-stream` 时，核心在写给客户端任何字节之前读完整个 SSE（复用网关的 SSE 行读取；只保留终止事件的 `response` 对象和沿途 `response.output_item.done` 的 `item`，合计上限 32 MiB，不缓存整条流）：
+
+| 事件 | 处理 |
+|---|---|
+| `response.completed`、`response.incomplete`（按 `event:` 行，没有时按 `data.type`） | 其 `response` 对象作为非流式 JSON 响应体（`Content-Type: application/json`，状态码沿用上游的 2xx）。`output` 缺失、为 `null` 或空数组时，用 `response.output_item.done` 的 `item` 按 `output_index` 升序补齐；`output` 非空时原样保留 |
+| `response.failed`、`error` | 当作上游错误：状态码取事件顶层的数值 `status`（400–599），没有则 502；正文改写成 `{"error": <错误对象>}`（`response.failed` 取 `response.error`；`error` 事件取 `error`，是字符串时为 `{"message": ...}`，没有时取顶层的 `type`/`code`/`message`/`param`），`Content-Type` 改为 `application/json`。之后与 HTTP 错误完全相同：交给插件 `ClassifyError`（执行路径由插件在 `Execute` 里分类），按结果冷却、禁用、换号或返回；故障策略（§58、§69）同样适用；返回客户端时状态码与上述正文原样给出 |
+| 终止事件里没有 `response` 对象 | 按上面的上游错误处理，502 |
+| 没有终止事件流就结束、读取出错、空闲或总超时 | 按传输错误交给插件分类（`status = 0`，`transport_error` 为原因，如 `upstream stream ended before response.completed`、`upstream stream exceeded streaming_idle_timeout_seconds`），与连接失败相同 |
+| 保留内容超过 32 MiB | 502 `upstream_error`，不换号 |
+
+上游虽然被要求流式却回了 JSON，照常按 JSON 处理。
+
+**之后**完全走原有非流式路径：按上游协议的 `usage.json` 规则读用量（内置 `openai.responses` 的 `usage.input_tokens` 等，§26.5 响应形态比对按 JSON 计，不会记 `ResponseMismatch`）；经转换的路由由转换器的 `Response` 把 JSON 转成客户端协议（如 chat completion JSON）；插件用量源（`usageSource: "plugin"`）收到的是这份 JSON 正文；使用记录 `stream = false`、`first_token_ms = 0`；按 JSON 用量计费、预扣结算与 TPM 结算不变；执行路径同样先提交记录再把缓冲的 JSON 发给客户端（§31）。
+
+**未覆盖**：账号“测试”（`BuildTestRequest`）不经过本节，插件应自己构造流式测试请求（核心只对 JSON 测试响应读用量）；WebSocket 端点本来就是流式。
+
+### 83.2 `openai.chat → openai.responses` 转换器
+
+`gateway/convert/openai_chat_responses.go`，在 `convert.Default()` 里注册，自己实现（protocol-codec 里的 `ChatCompletionsToResponses` 会静默丢字段、强制 `stream:true`、补 `include`，不复用）。原则同其他内置转换器：有确定等价的字段才映射；改变回答而没有等价的字段返回 400 `unsupported_conversion`（错误信息带字段路径，如 `unsupported_conversion: n: only one completion has an equivalent`），不静默丢弃；显式写成 Chat 默认值的字段（`n: 1`、`logprobs: false`、罚分 0、`logit_bias: {}`、`top_logprobs: 0`、`modalities: ["text"]`）等于没写，接受；任何字段写 `null` 等于没写。
+
+**请求映射**
+
+| Chat Completions | Responses |
+|---|---|
+| `model`（必填） | `model` |
+| `stream` | `stream`（原值；上游只接受流式时由 83.1 改成 true） |
+| `stream_options.include_usage` | 不发往上游，决定流式转换是否在末块带 `usage` |
+| `stream_options.include_obfuscation` | `stream_options.include_obfuscation` |
+| `temperature`、`top_p`、`parallel_tool_calls`、`service_tier`、`user`、`safety_identifier`、`prompt_cache_key`、`prompt_cache_retention`、`metadata` | 同名字段，原样（数字按原文，不经浮点） |
+| `store` | `store`；没写时写 `false`（Chat 默认不存储，Responses 默认存储） |
+| `max_completion_tokens` / `max_tokens` | `max_output_tokens`；两个都写且不同时拒绝 |
+| `reasoning_effort` | `reasoning.effort` |
+| `verbosity` | `text.verbosity` |
+| `response_format` `text` / `json_object` | `text.format: {type}` |
+| `response_format` `json_schema: {name, description?, schema?, strict?}` | `text.format: {type: "json_schema", name, description?, schema?, strict?}` |
+| `tools[]` `{type: "function", function: {name, description?, parameters?, strict?}}` | `{type: "function", name, description?, parameters, strict}`；`strict` 没写时写 `false`（Responses 函数工具默认 strict）；`parameters` 没写时写空对象 schema（Chat 的含义就是无参数） |
+| `tool_choice` `none` / `auto` / `required` / `{type: "function", function: {name}}` | 同值 / `{type: "function", name}` |
+| `messages` 开头连续的 `system`、`developer` 消息 | `instructions`（各条文本按空行拼接） |
+| 之后出现的 `system`、`developer` 消息 | `input` 里同角色的 message（`input_text` 部件） |
+| `user` 消息：字符串或部件 `text`、`image_url {url, detail?}`、`file {file_id? / file_data?, filename?}` | message `role: user`：`input_text`、`input_image {image_url, detail}`（`detail` 没写时 `auto`，Chat 默认值）、`input_file` |
+| `assistant` 消息：文本内容、`tool_calls[] {id, type: "function", function: {name, arguments}}` | 文本为 message `role: assistant` 的 `output_text` 部件；每个工具调用为 `function_call {call_id, name, arguments}`，排在文本之后 |
+| `tool` 消息 `{tool_call_id, content}` | `function_call_output {call_id, output}`；字符串原样，文本部件转成 `input_text` 数组 |
+
+**拒绝**（400）：`n` ≠ 1、`logprobs: true`、`top_logprobs` ≠ 0、非空 `logit_bias`、非 0 的 `presence_penalty`/`frequency_penalty`、`stop`、`seed`、`functions`/`function_call`（旧版函数调用）、`audio`、含非 text 的 `modalities`、`prediction`、`web_search_options`、其他未知字段；非函数工具（`custom` 等）和 `allowed_tools` 等其他 `tool_choice`；`response_format` 的其他类型；消息的 `name`；`function` 角色；`input_audio` 等其他用户部件；`system`/`developer`/`tool` 消息里的非文本部件；`image_url.detail` 不是 auto/low/high；assistant 的非空 `refusal`、`audio`、`function_call`，既无文本也无工具调用的 assistant 消息；`messages` 为空。
+
+**响应（JSON）**：`object: "chat.completion"`，`id`、`model` 取 Responses 的，`created` 取 `created_at`，`service_tier` 原样；单个 choice：`message.content` 为所有 message 项 `output_text` 的拼接（没有时 `null`），`refusal` 部件拼成 `message.refusal`，`function_call` 项按顺序成为 `message.tool_calls`，第一个文本部件上的 `url_citation` 注解成为 `message.annotations`；`reasoning` 项不输出（Chat 本来不返回推理）。`finish_reason`：`completed` 有工具调用为 `tool_calls`，否则 `stop`；`incomplete` 且原因 `max_output_tokens` 为 `length`、`content_filter` 为 `content_filter`。`usage`：`input_tokens → prompt_tokens`、`output_tokens → completion_tokens`、`total_tokens`、`input_tokens_details.cached_tokens → prompt_tokens_details.cached_tokens`、`output_tokens_details.reasoning_tokens → completion_tokens_details.reasoning_tokens`。`failed` 等其他状态、其他输出项类型（`web_search_call` 等）、其他部件或注解类型、其他 incomplete 原因都是转换失败（502 `upstream_error`，§12“转换失败”）。
+
+**响应（SSE）**：每个上游事件转成零或多个 `chat.completion.chunk`（`id`、`model`、`created` 取 `response.created`/终止事件里的 response）：首个内容前发一次 `delta: {role: "assistant", content: ""}`；`response.output_text.delta → delta.content`；`response.refusal.delta → delta.refusal`；`output_item.added` 的 `function_call` 分配 tool 序号（从 0 起）并发 `tool_calls[{index, id, type, function: {name, arguments}}]`；`function_call_arguments.delta → tool_calls[{index, function: {arguments}}]`；`function_call_arguments.done` / `output_item.done` 只补发流式参数缺少的后缀（只发 done 的上游也能拿到完整参数，不一致时转换失败）；`response.completed`/`incomplete` 发 `delta: {}` 加 `finish_reason`（同 JSON），`stream_options.include_usage` 时再发一块 `choices: []` 加 `usage`（之前每块带 `usage: null`），最后 `data: [DONE]`。推理、进度类和其他家族的事件（如 `codex.rate_limits`）不输出；不能表达的输出项（`web_search_call` 等）是转换失败。`response.failed` / `error` 发一块 `{"error": {...}}` 后结束，没有终止事件就结束时 Flush 报转换失败，客户端看到流被截断、没有 `[DONE]`。
+
+### 83.3 同平台转换的调度
+
+§13 的调度原来只把端点协议转换到**其他平台**的协议，支持端点所属平台 P 的账号类型从不转换。现在：账号类型支持 P、但它在 P 上的 `endpoints` 子集不含客户端端点时，若核心有“客户端协议 → P 上子集内某端点协议”的转换器，该类型经转换服务这个端点（`gateway/routing.go` `planRoutes` / `addConvertedRoute(…, samePlatform)`；账号模块 `servedEndpoints` 在 `/account-types` 里把它列为 `native: false`，与网关一致）。
+
+- 原生优先：子集含该端点时照旧原生转发，不转换。
+- 这类类型只在 P 内转换，不会因此转到它的其他平台（原来不服务，现在也不经其他平台服务）；不支持 P 的类型的跨平台转换不变。
+- WebSocket 与异步任务端点仍不转换（§35、§28）。
+- 目前唯一的同平台转换器是 `openai.chat → openai.responses`：codex 账号类型（子集 `responses`、`responses_websocket`）因此服务 `/v1/chat/completions`；非流式 chat 经 83.1 走流式上游再合成 JSON、转回 chat JSON。
+- 使用记录 `protocol = openai.chat`、`upstream_protocol = openai.responses`，用量规则取上游 `openai.responses` 端点的（`usage.json` / `usage.sse` 的 `response.completed` 规则，`inclusive`），计费照常。插件 `BuildUpstreamRequest` 的 `meta.protocol` 为 `openai.responses`、`meta.client_protocol` 为 `openai.chat`。
+
+### 83.4 版本与 hostCompat 下限
+
+没有 proto、Host API（仍为 9）、UI SDK 变化，也没有迁移。旧核心解析 manifest 时忽略未知字段（`plugin/pkg.ParseManifest`），会装上依赖本节的插件却不执行它（非流式请求被上游拒绝、chat 不被调度）。`sdk/manifest/check/corefloor.go` 仿照 `uiFloors` 新增 `coreFloors` 表：manifest 用到表中某项时，`hostCompat` 若仍接受该项首个核心的前一个版本，报 `hostCompat` `below_feature_core`（安装和 `sub2api-plugin` 工具都检查）。目前两项，首个核心都是常量 `check.StreamOnlyFirstCore`：
+
+- 声明了任何 `streamOnly`；
+- 某个账号类型的端点子集漏掉了一个只能经同平台转换服务的端点（对照 `check.SamePlatformConversions`，目前只有 `openai.chat → openai.responses`；`convert` 包的测试保证它与 `convert.Default()` 的同平台转换器一致），例如 openai 只留 `responses`。
+
+**`StreamOnlyFirstCore` 目前是占位值 `0.1.257`，发布包含本节的核心时改成实际版本号**；依赖本节的插件（codex）的 `hostCompat` 下限要随之改成同一个版本。
+
+### 83.5 测试
+
+`sdk/manifest/check/streamonly_test.go`（各类合法/非法声明、hostCompat 下限）；`server/internal/gateway/convert/openai_chat_responses_test.go`（请求映射、各类拒绝、JSON 与 SSE 响应、与 check 的同平台列表一致）；`server/internal/account/samplatform_test.go`（`/account-types` 的可服务端点）；`server/internal/gateway/streamonly_test.go`：Responses 非流式（上游收到 `stream:true`、JSON 正文、用量、记录 `stream=false`）、插件 patch 改回 false 被覆盖、`response.incomplete`、`output` 按 `output_index` 补齐、流式客户端不受影响、未声明 `streamOnly` 或声明了其他协议时不变、`response.failed`（502、插件分类、冷却）、带 `status` 的 `error` 事件（429）与扁平 `error` 事件、无终止事件、经转换的 chat 非流式与流式、`platform.execute.v1` 路径的成功与错误事件、SSE 帧解析与错误正文形状。；同平台转换：非流式 chat 经流式上游合成 JSON 再转回 chat（记录 `openai.chat`/`openai.responses`、用量与计费）、流式 chat（含末块 usage、`[DONE]`）、未声明 `streamOnly` 时直接转换、不可转换字段 400 不发往上游、原生优先与转换范围（不转到其他平台、无转换器不服务）。

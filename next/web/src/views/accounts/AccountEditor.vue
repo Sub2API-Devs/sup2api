@@ -692,7 +692,7 @@ const { save } = useAccountSave({
               <SHint v-else tone="danger">{{ t('accounts.formUnavailable') }}</SHint>
             </template>
             <template v-else-if="mode === 'native'">
-              <component :is="nativeComponent" v-if="nativeComponent" ref="nativeRef" v-model="credentials" :mode="editing ? 'edit' : 'create'" :account="account" :errors="credErrors" />
+              <component :is="nativeComponent" v-if="nativeComponent" ref="nativeRef" v-model="credentials" :mode="editing ? 'edit' : 'create'" :account="account" :account-type="accountType" :errors="credErrors" />
               <SHint v-else tone="danger">{{ plugins.errors[accountType.plugin_key] || t('accounts.formUnavailable') }}</SHint>
             </template>
 

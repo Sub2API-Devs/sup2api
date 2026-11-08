@@ -550,6 +550,14 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if err != nil {
 		return attemptResult{kind: attemptReturn, err: fromCore(core.AsError(err), errTypeInvalidRequest)}
 	}
+	// An upstream that only streams (CONTRACTS §83) gets stream: true before
+	// the plugin sees the request, so the fields it reads and the body its
+	// patches apply to already say what goes upstream.
+	if c.forcesStream(rt) {
+		if upBody, err = forceStreamPath(upBody, rt.streamPath); err != nil {
+			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
+		}
+	}
 	fields := map[string]string{}
 	for _, p := range rt.requestFields {
 		if r := getJSON(upBody, p); r != "" {
@@ -640,6 +648,13 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	body, err := applyPatches(upBody, built.GetPatches())
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
+	}
+	// Whatever the plugin patched, a stream-only upstream gets stream: true.
+	forced := c.forcesStream(rt)
+	if forced {
+		if body, err = forceStreamPath(body, rt.streamPath); err != nil {
+			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
+		}
 	}
 	if kind, err := c.validatePatches(rt, upBody, body); err != nil {
 		return attemptResult{kind: kind, err: err}
@@ -752,7 +767,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 	}
 
-	headerWait := c.g.headerWait(c.stream)
+	headerWait := c.g.headerWait(c.stream || forced)
 	if d := c.env.Duration(core.EnvVarResponseHeaderTimeoutSeconds); d > 0 {
 		headerWait = d
 	}
@@ -794,7 +809,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
-	if c.stream {
+	if c.stream || forced {
 		resp.Body = newIdleBody(resp.Body, c.streamIdle(), ucancel)
 	}
 	defer resp.Body.Close()
@@ -820,28 +835,12 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			}
 			return attemptResult{kind: attemptReturn, err: e}
 		}
-		raw := body.prefix
-		ct := resp.Header.Get("Content-Type")
-		if resp.StatusCode >= 500 {
-			// A server error names no cause in the usage log; who answered
-			// (a proxy on the way or the upstream itself) is in these.
-			slog.WarnContext(ctx, "gateway: upstream server error", "request_id", c.rid, "plugin", rt.binding.Plugin.Key,
-				"account", acc.ID, "status", resp.StatusCode, "content_type", ct, "server", resp.Header.Get("Server"),
-				"upstream_request_id", resp.Header.Get("Request-Id"), "body", truncateUTF8(string(raw), 300))
+		return c.upstreamFailure(ctx, rt, acc, pacct, execution, resp.StatusCode, resp.Header, body)
+	}
+	if forced {
+		if res, failed := c.collectStreamOnly(ctx, uctx, rt, acc, pacct, execution, resp); failed {
+			return res
 		}
-		var res attemptResult
-		if execution != nil {
-			execution.errorBody = body
-			res = execution.classify(ctx, resp.StatusCode, resp.Header, raw, "")
-		} else {
-			res = c.classify(ctx, rt, pacct, resp.StatusCode, resp.Header, raw, "")
-		}
-		if c.ep.TaskSubmit() {
-			c.recordTaskFailure(ctx, resp.StatusCode, raw, "upstream rejected task submission")
-			res.kind = attemptReturn
-		}
-		c.preserveHTTPError(res.err, resp.StatusCode, resp.Header, body)
-		return res
 	}
 	if execution != nil {
 		return execution.forward(ctx, resp)
@@ -850,6 +849,35 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return c.forwardTask(ctx, rt, pacct, resp, upBody)
 	}
 	return c.forward(ctx, rt, pacct, resp, upBody)
+}
+
+// upstreamFailure classifies an upstream error answer - an HTTP error status,
+// or the error event of a stream-only upstream (CONTRACTS §83) - and keeps
+// its body for the client.
+func (c *call) upstreamFailure(ctx context.Context, rt *typeRoute, acc *core.Account, pacct *pluginv1.Account, execution *gatewayExecution,
+	status int, header http.Header, body *upstreamErrorBody) attemptResult {
+	raw := body.prefix
+	ct := header.Get("Content-Type")
+	if status >= 500 {
+		// A server error names no cause in the usage log; who answered
+		// (a proxy on the way or the upstream itself) is in these.
+		slog.WarnContext(ctx, "gateway: upstream server error", "request_id", c.rid, "plugin", rt.binding.Plugin.Key,
+			"account", acc.ID, "status", status, "content_type", ct, "server", header.Get("Server"),
+			"upstream_request_id", header.Get("Request-Id"), "body", truncateUTF8(string(raw), 300))
+	}
+	var res attemptResult
+	if execution != nil {
+		execution.errorBody = body
+		res = execution.classify(ctx, status, header, raw, "")
+	} else {
+		res = c.classify(ctx, rt, pacct, status, header, raw, "")
+	}
+	if c.ep.TaskSubmit() {
+		c.recordTaskFailure(ctx, status, raw, "upstream rejected task submission")
+		res.kind = attemptReturn
+	}
+	c.preserveHTTPError(res.err, status, header, body)
+	return res
 }
 
 // observeQuota hands the response headers to the quota observer when the

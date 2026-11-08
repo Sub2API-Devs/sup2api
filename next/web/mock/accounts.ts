@@ -4,6 +4,7 @@ import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './
 import { activePlatforms, platformById, platformLabel } from './platforms'
 import { caller, filterOwned, hasPerm, inScope, ownerScope, userEmail, type Identity } from './core'
 import { resolveProxyURL, validateProxyURL } from './resources'
+import { codexAccountTypes, codexCredentialErrors } from './codex'
 
 // Mock handlers: accounts, account types (form modes schema + iframe) and
 // GET /platforms (CONTRACTS §13). Ownership (CONTRACTS §21): own-level keys
@@ -131,8 +132,10 @@ interface MockAccountType {
   type: string
   label: { en: string; zh: string }
   description: { en: string; zh: string }
-  form: { mode: string; page?: string }
+  form: { mode: string; page?: string; component?: string }
   sensitive_fields: string[]
+  creation_group?: string
+  auth_method_label?: { en: string; zh: string }
   /** Declared supported platforms (built-in or plugin platforms). */
   supports: string[]
   /** Endpoints of other platforms served through a core converter. */
@@ -271,7 +274,9 @@ const accountTypeDecls: MockAccountType[] = [
     form: { mode: 'iframe', page: 'ui/iframe/account.html' },
     sensitive_fields: ['token'],
     supports: ['foo', 'openai']
-  }
+  },
+  // Native account form (plugins/codex/ui/native, mock/codex.ts): one creation card, two auth methods.
+  ...codexAccountTypes
 ]
 
 function accountTypeOut(d: MockAccountType) {
@@ -347,6 +352,9 @@ export const accounts: any[] = [
   { id: 27, name: 'cc-noproxy', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: null, priority: 6, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-7200), credentials: {} },
   // Disabled for longer than park_after_hours: its container is stopped (mock/ccgateway.ts reports account_parked until started).
   { id: 28, name: 'cc-parked', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 7, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'disabled', status_reason: 'disabled by an operator', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 10), credentials: {}, runtime_parked: true },
+  // ChatGPT subscriptions (codex plugin, native form): device code and Sign in with ChatGPT; edit one to see "Re-authorize".
+  { id: 29, name: 'chatgpt-plus', plugin_key: 'codex', type: 'codex_device', created_by: 1, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-1200), created_at: now(-86400 * 5), credentials: { access_token: '******', refresh_token: '******', id_token: '******', expires_at: Math.floor(Date.now() / 1000) + 2400, email: 'owner@example.com', chatgpt_account_id: '5d1c2b9e-7f3a-4e1b-9a0c-2f6d8e4b1a73', plan_type: 'plus' } },
+  { id: 30, name: 'chatgpt-siwc', plugin_key: 'codex', type: 'chatgpt_siwc', created_by: 1, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { access_token: '******', refresh_token: '******', id_token: '******', expires_at: Math.floor(Date.now() / 1000) - 600, email: 'owner@example.com', client_id: 'agent_3f9a1c7e5b2d4086', ext_agent_host_id: 'urn:uuid:8b0e6f2a-1c4d-4e9b-a7f3-5d2c9e1b0a64', scopes: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct' } },
   // Its plugin was uninstalled without purge_accounts: kept as an orphaned account.
   { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', created_by: null, type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, weight: 1, max_concurrency: 5, schedulable: false, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
@@ -751,6 +759,10 @@ on('POST', '/accounts', (req) => {
   if (!at) return fail(400, 'invalid_argument', 'unknown account type', { fields: [{ field: 'type', code: 'not_found', message: 'Unknown account type' }] })
   const bad = validateScheduling(b) || applyCommonControls(at.plugin_key, at.type, b)
   if (bad) return bad
+  if (b.plugin_key === 'codex') {
+    const invalid = codexCredentialErrors(b.type, creds)
+    if (invalid) return invalid
+  }
   if (b.plugin_key === 'anthropic' && !String(creds.api_key || '').startsWith('sk-')) {
     return fail(400, 'invalid_argument', 'invalid credentials', { fields: [{ field: 'credentials.api_key', code: 'invalid', message: 'API key must start with sk-' }] })
   }
@@ -818,7 +830,8 @@ on('PATCH', '/accounts/:id', (req) => {
   if (proxy.proxy_id !== undefined) a.proxy_id = proxy.proxy_id
   if (credentials) {
     a.credentials ??= {}
-    for (const [k, v] of Object.entries(credentials)) if (v !== '******') a.credentials[k] = k === 'api_key' || k === 'token' ? '******' : v
+    const sensitive = accountTypeDecls.find((x) => x.plugin_key === a.plugin_key && x.type === a.type)?.sensitive_fields ?? []
+    for (const [k, v] of Object.entries(credentials)) if (v !== '******') a.credentials[k] = k === 'api_key' || k === 'token' || (sensitive.includes(k) && v) ? '******' : v
   }
   return { ...withGroups(a), proxy_created: !!proxy.proxy_created }
 })

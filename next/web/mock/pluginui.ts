@@ -4,6 +4,7 @@ import { join, normalize } from 'node:path'
 import { now, on, paginate } from './router'
 import { moderationAsset, moderationUIPlugin } from './moderation'
 import { dynweightAsset, dynweightUIPlugin } from './dynweight'
+import { codexAsset, codexUIPlugin } from './codex'
 
 // Mock handlers: GET /ui/plugins, plugin-owned routes (/p/<key>/...) and the
 // /plugin-ui/<key>/<hash>/... static files (guard native UI from its dist
@@ -14,6 +15,7 @@ const GUARD_DIST = fileURLToPath(new URL('../../plugins/guard/ui/native/dist/', 
 on('GET', '/ui/plugins', () => [
   moderationUIPlugin,
   dynweightUIPlugin,
+  codexUIPlugin,
   {
     key: 'anthropic',
     version: '0.1.0',
@@ -215,6 +217,7 @@ export function pluginAsset(pathname: string): { type: string; body: string | Bu
   const [, key, path] = m
   if (key === 'moderation') return moderationAsset(path)
   if (key === 'dynweight') return dynweightAsset(path)
+  if (key === 'codex') return codexAsset(path)
   if (key === 'guard' && path.startsWith('ui/native/')) {
     const rel = normalize(path.slice('ui/native/'.length))
     if (rel.startsWith('..')) return null

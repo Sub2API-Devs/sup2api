@@ -86,6 +86,7 @@ func NewRegistry(cs ...Converter) *Registry {
 var builtins = []func() Converter{
 	func() Converter { return &openAIAnthropic{protocol: "openai.chat"} },
 	func() Converter { return &openAIAnthropic{protocol: "openai.responses"} },
+	func() Converter { return &chatResponses{} },
 }
 
 // Default returns a new registry with the built-in converters.

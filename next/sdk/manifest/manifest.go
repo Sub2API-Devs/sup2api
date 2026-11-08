@@ -559,6 +559,26 @@ type AccountPlatform struct {
 	PassHeaders   []string `json:"passHeaders,omitempty"`
 	// Usage overrides the usage rules per protocol of the platform.
 	Usage map[string]UsageRules `json:"usage,omitempty"`
+	// StreamOnly lists the upstream protocols of Platform whose upstream
+	// only accepts streaming requests for this account type (CONTRACTS §83).
+	// When the upstream protocol of a non-streaming request is listed, the
+	// host sets the upstream body's request.streamPath to true, reads the
+	// SSE answer and hands the endpoint's non-streaming path the response
+	// object of the terminal event. Each entry is the protocol of a proxy
+	// endpoint of Platform the type serves, with response.stream "sse" and a
+	// request.streamPath.
+	StreamOnly []string `json:"streamOnly,omitempty"`
+}
+
+// StreamsOnly reports whether the upstream of protocol only accepts
+// streaming requests for this account type.
+func (a AccountPlatform) StreamsOnly(protocol string) bool {
+	for _, p := range a.StreamOnly {
+		if p == protocol {
+			return true
+		}
+	}
+	return false
 }
 
 // SupportsEndpoint checks the platform-local endpoint selection.

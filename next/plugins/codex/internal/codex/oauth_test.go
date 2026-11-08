@@ -1,0 +1,552 @@
+package codex
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+)
+
+// fakeIssuer is a scripted auth.openai.com. Each handler answers one
+// endpoint; requests are recorded.
+type fakeIssuer struct {
+	t   *testing.T
+	srv *httptest.Server
+
+	mu       sync.Mutex
+	calls    map[string]int
+	bodies   map[string][]string
+	headers  map[string]http.Header
+	handlers map[string]func(w http.ResponseWriter, body []byte)
+}
+
+func newFakeIssuer(t *testing.T) *fakeIssuer {
+	f := &fakeIssuer{t: t, calls: map[string]int{}, bodies: map[string][]string{}, headers: map[string]http.Header{},
+		handlers: map[string]func(http.ResponseWriter, []byte){}}
+	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		f.mu.Lock()
+		f.calls[r.URL.Path]++
+		f.bodies[r.URL.Path] = append(f.bodies[r.URL.Path], string(body))
+		f.headers[r.URL.Path] = r.Header.Clone()
+		h := f.handlers[r.URL.Path]
+		f.mu.Unlock()
+		if r.Method != http.MethodPost || h == nil {
+			http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusTeapot)
+			return
+		}
+		h(w, body)
+	}))
+	t.Cleanup(f.srv.Close)
+	return f
+}
+
+func (f *fakeIssuer) on(path string, h func(w http.ResponseWriter, body []byte)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.handlers[path] = h
+}
+
+func (f *fakeIssuer) count(path string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls[path]
+}
+
+func (f *fakeIssuer) lastBody(path string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b := f.bodies[path]
+	if len(b) == 0 {
+		return ""
+	}
+	return b[len(b)-1]
+}
+
+func reply(status int, body string) func(http.ResponseWriter, []byte) {
+	return func(w http.ResponseWriter, _ []byte) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, body)
+	}
+}
+
+const (
+	pathUserCode    = "/api/accounts/deviceauth/usercode"
+	pathDeviceToken = "/api/accounts/deviceauth/token"
+	pathOAuthToken  = "/oauth/token"
+	pathSIWCToken   = "/api/accounts/oauth/token"
+)
+
+// clock is a settable test clock.
+type clock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *clock) now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
+func (c *clock) add(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = c.t.Add(d)
+}
+
+type errorBody struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+func decodeError(t *testing.T, r *pluginv1.HTTPResponse) errorBody {
+	t.Helper()
+	var e errorBody
+	mustJSON(t, r.GetBody(), &e)
+	return e
+}
+
+func TestDeviceFlow(t *testing.T) {
+	iss := newFakeIssuer(t)
+	clk := &clock{t: testNow}
+	p := NewWithEndpoints(testEndpoints(iss.srv.URL))
+	p.now = clk.now
+	h := startPlugin(t, p)
+
+	iss.on(pathUserCode, func(w http.ResponseWriter, body []byte) {
+		if string(body) != `{"client_id":"`+CodexClientID+`"}` {
+			t.Errorf("usercode body = %s", body)
+		}
+		reply(200, `{"device_auth_id":"dev-1","usercode":"ABCD-1234","interval":"5"}`)(w, body)
+	})
+	r := h.Do("POST", "/auth/device/start", nil, map[string]any{})
+	if r.GetStatus() != 200 {
+		t.Fatalf("start = %d %s", r.GetStatus(), r.GetBody())
+	}
+	var start DeviceStartResponse
+	mustJSON(t, r.GetBody(), &start)
+	if start.SessionID == "" || start.UserCode != "ABCD-1234" || start.Interval != 5 || start.ExpiresIn != 900 ||
+		start.VerificationURL != iss.srv.URL+"/codex/device" {
+		t.Fatalf("start = %+v", start)
+	}
+	if ua := iss.headers[pathUserCode].Get("User-Agent"); ua != UserAgent {
+		t.Fatalf("issuer saw user agent %q", ua)
+	}
+	poll := func() DevicePollResponse {
+		t.Helper()
+		r := h.Do("POST", "/auth/device/poll", nil, map[string]string{"session_id": start.SessionID})
+		if r.GetStatus() != 200 {
+			t.Fatalf("poll = %d %s", r.GetStatus(), r.GetBody())
+		}
+		var out DevicePollResponse
+		mustJSON(t, r.GetBody(), &out)
+		return out
+	}
+
+	// Not approved yet: 403 and 404 both mean pending.
+	iss.on(pathDeviceToken, reply(403, `{"error":"authorization_pending"}`))
+	if got := poll(); got.Status != "pending" || got.Interval != 5 {
+		t.Fatalf("poll 1 = %+v", got)
+	}
+	if b := iss.lastBody(pathDeviceToken); b != `{"device_auth_id":"dev-1","user_code":"ABCD-1234"}` {
+		t.Fatalf("token poll body = %s", b)
+	}
+	// Too soon after the previous poll: answered without asking OpenAI.
+	clk.add(2 * time.Second)
+	if got := poll(); got.Status != "pending" || iss.count(pathDeviceToken) != 1 {
+		t.Fatalf("early poll = %+v, issuer calls %d", got, iss.count(pathDeviceToken))
+	}
+	clk.add(3 * time.Second)
+	iss.on(pathDeviceToken, reply(404, ``))
+	if got := poll(); got.Status != "pending" || iss.count(pathDeviceToken) != 2 {
+		t.Fatalf("poll 404 = %+v (%d calls)", got, iss.count(pathDeviceToken))
+	}
+	// 429 slows the polling down.
+	clk.add(5 * time.Second)
+	iss.on(pathDeviceToken, reply(429, `{"error":"slow_down"}`))
+	if got := poll(); got.Status != "pending" || got.Interval != 10 {
+		t.Fatalf("poll 429 = %+v", got)
+	}
+	clk.add(5 * time.Second)
+	iss.on(pathDeviceToken, reply(403, ``))
+	if got := poll(); got.Status != "pending" || got.Interval != 10 || iss.count(pathDeviceToken) != 3 {
+		t.Fatalf("poll before the new interval = %+v (%d calls)", got, iss.count(pathDeviceToken))
+	}
+	clk.add(5 * time.Second)
+	if got := poll(); got.Status != "pending" || got.Interval != 10 || iss.count(pathDeviceToken) != 4 {
+		t.Fatalf("poll after slow down = %+v (%d calls)", got, iss.count(pathDeviceToken))
+	}
+
+	// Approved: the code is exchanged once and the session ends.
+	clk.add(10 * time.Second)
+	iss.on(pathDeviceToken, reply(200, `{"authorization_code":"code-1","code_challenge":"ch","code_verifier":"ver-1"}`))
+	tok := idToken("me@example.com", "acct-1", "plus")
+	iss.on(pathOAuthToken, func(w http.ResponseWriter, body []byte) {
+		form, _ := url.ParseQuery(string(body))
+		if form.Get("grant_type") != "authorization_code" || form.Get("code") != "code-1" || form.Get("code_verifier") != "ver-1" ||
+			form.Get("client_id") != CodexClientID || form.Get("redirect_uri") != iss.srv.URL+"/deviceauth/callback" {
+			t.Errorf("token form = %v", form)
+		}
+		reply(200, `{"access_token":"at-1","refresh_token":"rt-1","id_token":"`+tok+`","expires_in":864000}`)(w, body)
+	})
+	got := poll()
+	if got.Status != "done" || got.Credentials == nil {
+		t.Fatalf("done = %+v", got)
+	}
+	c := got.Credentials
+	if c.AccessToken != "at-1" || c.RefreshToken != "rt-1" || c.IDToken != tok || c.ExpiresAt != clk.now().Unix()+864000 ||
+		c.Email != "me@example.com" || c.ChatGPTAccountID != "acct-1" || c.PlanType != "plus" || c.ClientID != "" || c.Scopes != "" {
+		t.Fatalf("credentials = %+v", c)
+	}
+	if ct := iss.headers[pathOAuthToken].Get("Content-Type"); ct != "application/x-www-form-urlencoded" {
+		t.Fatalf("token content type = %q", ct)
+	}
+	// The session is gone.
+	clk.add(10 * time.Second)
+	if got := poll(); got.Status != "expired" {
+		t.Fatalf("after done = %+v", got)
+	}
+}
+
+func TestDeviceStartErrors(t *testing.T) {
+	iss := newFakeIssuer(t)
+	h := startPlugin(t, newTestPlugin(testEndpoints(iss.srv.URL)))
+	iss.on(pathUserCode, reply(404, `{"detail":"Not Found"}`))
+	r := h.Do("POST", "/auth/device/start", nil, nil)
+	if r.GetStatus() != 400 || decodeError(t, r).Error.Code != "device_auth_disabled" || !strings.Contains(string(r.GetBody()), "Device code authorization") {
+		t.Fatalf("404 = %d %s", r.GetStatus(), r.GetBody())
+	}
+	iss.on(pathUserCode, reply(500, `{"error":{"message":"boom"}}`))
+	if r := h.Do("POST", "/auth/device/start", nil, nil); r.GetStatus() != 502 || decodeError(t, r).Error.Code != "upstream_error" {
+		t.Fatalf("500 = %d %s", r.GetStatus(), r.GetBody())
+	}
+	iss.on(pathUserCode, reply(200, `{"interval":"5"}`))
+	if r := h.Do("POST", "/auth/device/start", nil, nil); r.GetStatus() != 502 {
+		t.Fatalf("incomplete = %d %s", r.GetStatus(), r.GetBody())
+	}
+	// A numeric interval and user_code are read too, and clamped.
+	iss.on(pathUserCode, reply(200, `{"device_auth_id":"d","user_code":"WXYZ","interval":600}`))
+	r = h.Do("POST", "/auth/device/start", nil, nil)
+	var start DeviceStartResponse
+	mustJSON(t, r.GetBody(), &start)
+	if start.UserCode != "WXYZ" || start.Interval != maxInterval {
+		t.Fatalf("start = %+v", start)
+	}
+	// The issuer cannot be reached.
+	iss.srv.Close()
+	if r := h.Do("POST", "/auth/device/start", nil, nil); r.GetStatus() != 502 || decodeError(t, r).Error.Code != "upstream_unavailable" {
+		t.Fatalf("down = %d %s", r.GetStatus(), r.GetBody())
+	}
+}
+
+func TestDevicePollStates(t *testing.T) {
+	iss := newFakeIssuer(t)
+	clk := &clock{t: testNow}
+	p := NewWithEndpoints(testEndpoints(iss.srv.URL))
+	p.now = clk.now
+	h := startPlugin(t, p)
+	iss.on(pathUserCode, reply(200, `{"device_auth_id":"dev-1","user_code":"ABCD","interval":"5"}`))
+	start := func() string {
+		r := h.Do("POST", "/auth/device/start", nil, nil)
+		var s DeviceStartResponse
+		mustJSON(t, r.GetBody(), &s)
+		return s.SessionID
+	}
+	poll := func(id string) DevicePollResponse {
+		t.Helper()
+		var out DevicePollResponse
+		mustJSON(t, h.Do("POST", "/auth/device/poll", nil, map[string]string{"session_id": id}).GetBody(), &out)
+		return out
+	}
+
+	if r := h.Do("POST", "/auth/device/poll", nil, map[string]string{}); r.GetStatus() != 400 {
+		t.Fatalf("no session id = %d", r.GetStatus())
+	}
+	if got := poll("unknown"); got.Status != "expired" {
+		t.Fatalf("unknown = %+v", got)
+	}
+	// Past the 15 minutes: expired without asking OpenAI.
+	id := start()
+	clk.add(deviceTTL)
+	if got := poll(id); got.Status != "expired" || iss.count(pathDeviceToken) != 0 {
+		t.Fatalf("expired = %+v", got)
+	}
+	// Any other status ends the login.
+	id = start()
+	iss.on(pathDeviceToken, reply(400, `{"error":{"message":"device code declined"}}`))
+	if got := poll(id); got.Status != "error" || !strings.Contains(got.Message, "device code declined") {
+		t.Fatalf("error = %+v", got)
+	}
+	clk.add(10 * time.Second)
+	if got := poll(id); got.Status != "expired" {
+		t.Fatalf("after error = %+v", got)
+	}
+	// Approved but the exchange fails: error, and the session is gone.
+	id = start()
+	iss.on(pathDeviceToken, reply(200, `{"authorization_code":"c","code_verifier":"v"}`))
+	iss.on(pathOAuthToken, reply(400, `{"error":"invalid_grant","error_description":"code expired"}`))
+	if got := poll(id); got.Status != "error" || !strings.Contains(got.Message, "invalid_grant: code expired") {
+		t.Fatalf("exchange failure = %+v", got)
+	}
+	// Approval answer without a code.
+	id = start()
+	iss.on(pathDeviceToken, reply(200, `{}`))
+	if got := poll(id); got.Status != "error" {
+		t.Fatalf("no code = %+v", got)
+	}
+	// The issuer is unreachable: still pending, the next poll retries.
+	id = start()
+	iss.srv.Close()
+	if got := poll(id); got.Status != "pending" || got.Message == "" {
+		t.Fatalf("unreachable = %+v", got)
+	}
+}
+
+func TestSIWCStart(t *testing.T) {
+	h := startPlugin(t, newTestPlugin(testEndpoints("https://auth.example")))
+	r := h.Do("POST", "/auth/siwc/start", nil, nil)
+	if r.GetStatus() != 200 {
+		t.Fatalf("start = %d %s", r.GetStatus(), r.GetBody())
+	}
+	var s SIWCStartResponse
+	mustJSON(t, r.GetBody(), &s)
+	u, err := url.Parse(s.AuthorizeURL)
+	if err != nil || s.SessionID == "" || u.Scheme+"://"+u.Host+u.Path != "https://auth.example/api/accounts/authorize" {
+		t.Fatalf("start = %+v", s)
+	}
+	q := u.Query()
+	for k, v := range map[string]string{
+		"client_id": SIWCDynamicClient, "agent_name_hint": "sup2api", "response_type": "code", "redirect_uri": SIWCRedirectURI,
+		"scope": SIWCScope, "resource": SIWCResource, "code_challenge_method": "S256",
+	} {
+		if q.Get(k) != v {
+			t.Errorf("%s = %q, want %q", k, q.Get(k), v)
+		}
+	}
+	if !hostIDPattern.MatchString(q.Get("ext_agent_host_id")) || q.Get("ext_agent_host_id")[23] != '4' {
+		t.Errorf("host id = %q (want urn:uuid:<UUIDv4>)", q.Get("ext_agent_host_id"))
+	}
+	if q.Get("state") == "" || q.Get("nonce") == "" || len(q.Get("code_challenge")) != 43 {
+		t.Errorf("state/nonce/challenge = %v", q)
+	}
+	// The stored verifier matches the challenge.
+	var sess siwcSession
+	kv, _ := h.Host.KVGet(context.Background(), &pluginv1.KVGetRequest{Namespace: kvSIWC, Key: s.SessionID})
+	if !kv.GetFound() {
+		t.Fatal("no session stored")
+	}
+	mustJSON(t, kv.GetValue(), &sess)
+	if pkceChallenge(sess.Verifier) != q.Get("code_challenge") || sess.State != q.Get("state") || sess.Nonce != q.Get("nonce") ||
+		sess.HostID != q.Get("ext_agent_host_id") || sess.ClientID != "" {
+		t.Fatalf("session = %+v", sess)
+	}
+
+	// Re-authorization: the issued client, no name hint, the same host.
+	host := "urn:uuid:123e4567-e89b-42d3-a456-426614174000"
+	r = h.Do("POST", "/auth/siwc/start", nil, map[string]string{"client_id": "client-9", "ext_agent_host_id": host})
+	mustJSON(t, r.GetBody(), &s)
+	u, _ = url.Parse(s.AuthorizeURL)
+	q = u.Query()
+	if q.Get("client_id") != "client-9" || q.Has("agent_name_hint") || q.Get("ext_agent_host_id") != host {
+		t.Fatalf("reauth query = %v", q)
+	}
+	for _, body := range []any{
+		map[string]string{"ext_agent_host_id": "host-1"},
+		map[string]string{"client_id": "has space"},
+		"{not json",
+	} {
+		if r := h.Do("POST", "/auth/siwc/start", nil, body); r.GetStatus() != 400 {
+			t.Errorf("%v = %d %s", body, r.GetStatus(), r.GetBody())
+		}
+	}
+}
+
+func TestSIWCExchange(t *testing.T) {
+	iss := newFakeIssuer(t)
+	h := startPlugin(t, newTestPlugin(testEndpoints(iss.srv.URL)))
+	start := func(body any) (string, url.Values) {
+		t.Helper()
+		var s SIWCStartResponse
+		mustJSON(t, h.Do("POST", "/auth/siwc/start", nil, body).GetBody(), &s)
+		u, _ := url.Parse(s.AuthorizeURL)
+		return s.SessionID, u.Query()
+	}
+	exchange := func(id, cb string) *pluginv1.HTTPResponse {
+		return h.Do("POST", "/auth/siwc/exchange", nil, map[string]string{"session_id": id, "callback_url": cb})
+	}
+	tok := idToken("me@example.com", "", "")
+	iss.on(pathSIWCToken, func(w http.ResponseWriter, body []byte) {
+		form, _ := url.ParseQuery(string(body))
+		if form.Get("grant_type") != "authorization_code" || form.Get("client_id") != "client-new" || form.Get("code") != "code-1" ||
+			form.Get("redirect_uri") != SIWCRedirectURI || form.Get("resource") != SIWCResource || form.Get("code_verifier") == "" {
+			t.Errorf("token form = %v", form)
+		}
+		reply(200, `{"access_token":"at-1","refresh_token":"rt-1","id_token":"`+tok+`","expires_in":3600,"scope":"openid profile email offline_access resource.invoke chatgpt.tokens.use.direct"}`)(w, body)
+	})
+
+	// A new registration, the whole address pasted.
+	id, q := start(nil)
+	cb := SIWCRedirectURI + "?code=code-1&state=" + q.Get("state") + "&client_id=client-new&scope=openid"
+	r := exchange(id, cb)
+	if r.GetStatus() != 200 {
+		t.Fatalf("exchange = %d %s", r.GetStatus(), r.GetBody())
+	}
+	var out SIWCExchangeResponse
+	mustJSON(t, r.GetBody(), &out)
+	c := out.Credentials
+	if c.AccessToken != "at-1" || c.RefreshToken != "rt-1" || c.IDToken != tok || c.ExpiresAt != testNow.Unix()+3600 ||
+		c.Email != "me@example.com" || c.ClientID != "client-new" || c.ExtAgentHostID != q.Get("ext_agent_host_id") ||
+		!hasScope(c.Scopes, ScopeDirect) || c.ChatGPTAccountID != "" {
+		t.Fatalf("credentials = %+v", c)
+	}
+	// The verifier sent is the one behind the challenge.
+	form, _ := url.ParseQuery(iss.lastBody(pathSIWCToken))
+	if pkceChallenge(form.Get("code_verifier")) != q.Get("code_challenge") {
+		t.Fatal("code_verifier does not match the challenge")
+	}
+	// The session is used up.
+	if r := exchange(id, cb); r.GetStatus() != 404 || decodeError(t, r).Error.Code != "session_expired" {
+		t.Fatalf("reused session = %d %s", r.GetStatus(), r.GetBody())
+	}
+
+	// Only the query pasted works as well.
+	id, q = start(nil)
+	if r := exchange(id, "code=code-1&state="+q.Get("state")+"&client_id=client-new"); r.GetStatus() != 200 {
+		t.Fatalf("query only = %d %s", r.GetStatus(), r.GetBody())
+	}
+
+	for _, tc := range []struct {
+		name, cb, code string
+		status         int32
+	}{
+		{"state mismatch", "?code=code-1&state=other&client_id=client-new", "state_mismatch", 400},
+		{"access denied", "?error=access_denied&error_description=user+said+no&state=%s", "access_denied", 400},
+		{"other error", "?error=server_error&state=%s", "authorization_failed", 400},
+		{"no client id", "?code=code-1&state=%s", "registration_incomplete", 400},
+		{"dynamic client id", "?code=code-1&state=%s&client_id=dynamic_agent_client", "registration_incomplete", 400},
+		{"no code", "http://127.0.0.1:1455/auth/callback", "invalid_callback", 400},
+		{"empty", "  ", "invalid_callback", 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id, q := start(nil)
+			cb := tc.cb
+			if strings.Contains(cb, "%s") {
+				cb = strings.Replace(cb, "%s", q.Get("state"), 1)
+			}
+			r := exchange(id, cb)
+			if r.GetStatus() != tc.status || decodeError(t, r).Error.Code != tc.code {
+				t.Fatalf("%d %s, want %d %s", r.GetStatus(), r.GetBody(), tc.status, tc.code)
+			}
+		})
+	}
+	if r := exchange("", "?code=x"); r.GetStatus() != 400 {
+		t.Fatalf("no session id = %d", r.GetStatus())
+	}
+
+	// A wrong state keeps the session: the right address still works.
+	id, q = start(nil)
+	if r := exchange(id, "?code=code-1&state=wrong&client_id=client-new"); r.GetStatus() != 400 {
+		t.Fatal("wrong state accepted")
+	}
+	if r := exchange(id, "?code=code-1&state="+q.Get("state")+"&client_id=client-new"); r.GetStatus() != 200 {
+		t.Fatalf("retry = %d %s", r.GetStatus(), r.GetBody())
+	}
+
+	// Re-authorization: the stored client is used; a different one is refused.
+	iss.on(pathSIWCToken, func(w http.ResponseWriter, body []byte) {
+		form, _ := url.ParseQuery(string(body))
+		if form.Get("client_id") != "client-9" {
+			t.Errorf("reauth client = %q", form.Get("client_id"))
+		}
+		reply(200, `{"access_token":"at-2","refresh_token":"rt-2","expires_in":60,"scope":"chatgpt.tokens.use.direct openid"}`)(w, body)
+	})
+	host := "urn:uuid:123e4567-e89b-42d3-a456-426614174000"
+	id, q = start(map[string]string{"client_id": "client-9", "ext_agent_host_id": host})
+	if r := exchange(id, "?code=c&state="+q.Get("state")+"&client_id=client-other"); r.GetStatus() != 400 || decodeError(t, r).Error.Code != "client_mismatch" {
+		t.Fatalf("client mismatch = %d %s", r.GetStatus(), r.GetBody())
+	}
+	r = exchange(id, "?code=c&state="+q.Get("state"))
+	mustJSON(t, r.GetBody(), &out)
+	if r.GetStatus() != 200 || out.Credentials.ClientID != "client-9" || out.Credentials.ExtAgentHostID != host {
+		t.Fatalf("reauth = %d %s", r.GetStatus(), r.GetBody())
+	}
+
+	// The direct-use scope must be granted.
+	iss.on(pathSIWCToken, reply(200, `{"access_token":"at","scope":"openid profile email"}`))
+	id, q = start(nil)
+	if r := exchange(id, "?code=c&state="+q.Get("state")+"&client_id=client-new"); r.GetStatus() != 400 || decodeError(t, r).Error.Code != "scope_missing" {
+		t.Fatalf("scope missing = %d %s", r.GetStatus(), r.GetBody())
+	}
+	// No scope in the token answer: the callback's scope decides.
+	iss.on(pathSIWCToken, reply(200, `{"access_token":"at"}`))
+	id, q = start(nil)
+	if r := exchange(id, "?code=c&state="+q.Get("state")+"&client_id=client-new&scope=openid+chatgpt.tokens.use.direct"); r.GetStatus() != 200 {
+		t.Fatalf("callback scope = %d %s", r.GetStatus(), r.GetBody())
+	}
+	id, q = start(nil)
+	if r := exchange(id, "?code=c&state="+q.Get("state")+"&client_id=client-new"); r.GetStatus() != 400 || decodeError(t, r).Error.Code != "scope_missing" {
+		t.Fatalf("no scope at all = %d %s", r.GetStatus(), r.GetBody())
+	}
+	// The token endpoint refuses the code.
+	iss.on(pathSIWCToken, reply(400, `{"error":"invalid_grant","error_description":"code already used"}`))
+	id, q = start(nil)
+	r = exchange(id, "?code=c&state="+q.Get("state")+"&client_id=client-new")
+	if r.GetStatus() != 502 || decodeError(t, r).Error.Code != "token_exchange_failed" || !strings.Contains(string(r.GetBody()), "code already used") {
+		t.Fatalf("token refused = %d %s", r.GetStatus(), r.GetBody())
+	}
+}
+
+func TestParseCallback(t *testing.T) {
+	for _, tc := range []struct {
+		in, code, state, clientID, scope, errCode string
+	}{
+		{in: "http://127.0.0.1:1455/auth/callback?code=abc&state=s1&client_id=c1&scope=openid+chatgpt.tokens.use.direct",
+			code: "abc", state: "s1", clientID: "c1", scope: "openid chatgpt.tokens.use.direct"},
+		{in: "  \"http://localhost:1455/auth/callback?code=abc&amp;state=s1\"\n", code: "abc", state: "s1"},
+		{in: "127.0.0.1:1455/auth/callback?state=s1&code=a%2Fb", code: "a/b", state: "s1"},
+		{in: "?code=abc&state=s1", code: "abc", state: "s1"},
+		{in: "code=abc&state=s1&code=second", code: "abc", state: "s1"},
+		{in: "http://127.0.0.1:1455/auth/callback#code=abc&state=s1", code: "abc", state: "s1"},
+		{in: "http://127.0.0.1:1455/auth/callback?code=abc&state=s1#frag", code: "abc", state: "s1"},
+		{in: "<http://127.0.0.1:1455/auth/callback?error=access_denied&state=s1>", state: "s1", errCode: "access_denied"},
+	} {
+		cb, err := parseCallback(tc.in)
+		if err != nil {
+			t.Errorf("%q: %v", tc.in, err)
+			continue
+		}
+		if cb.Code != tc.code || cb.State != tc.state || cb.ClientID != tc.clientID || cb.Scope != tc.scope || cb.Error != tc.errCode {
+			t.Errorf("%q = %+v", tc.in, cb)
+		}
+	}
+	for _, in := range []string{"", "   ", "http://127.0.0.1:1455/auth/callback", "http://127.0.0.1:1455/auth/callback?state=s1", "hello world", "%zz=1"} {
+		if _, err := parseCallback(in); err == nil {
+			t.Errorf("%q: want an error", in)
+		}
+	}
+}
+
+// Keep the JSON field names the console relies on (CodexAuthForm).
+func TestRouteJSONNames(t *testing.T) {
+	b, _ := json.Marshal(DevicePollResponse{Status: "done", Credentials: &Credentials{AccessToken: "a", RefreshToken: "r", IDToken: "i", ExpiresAt: 1,
+		Email: "e", PlanType: "p", ChatGPTAccountID: "acc", ClientID: "c", ExtAgentHostID: "h", Scopes: "s"}, Interval: 5})
+	want := `{"status":"done","credentials":{"access_token":"a","refresh_token":"r","id_token":"i","expires_at":1,"email":"e","plan_type":"p","chatgpt_account_id":"acc","client_id":"c","ext_agent_host_id":"h","scopes":"s"},"interval":5}`
+	if string(b) != want {
+		t.Fatalf("poll JSON = %s", b)
+	}
+	b, _ = json.Marshal(DeviceStartResponse{SessionID: "s", VerificationURL: "u", UserCode: "c", Interval: 5, ExpiresIn: 900})
+	if string(b) != `{"session_id":"s","verification_url":"u","user_code":"c","interval":5,"expires_in":900}` {
+		t.Fatalf("start JSON = %s", b)
+	}
+	b, _ = json.Marshal(SIWCStartResponse{SessionID: "s", AuthorizeURL: "u"})
+	if string(b) != `{"session_id":"s","authorize_url":"u"}` {
+		t.Fatalf("siwc start JSON = %s", b)
+	}
+}

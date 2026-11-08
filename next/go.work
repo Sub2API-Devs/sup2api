@@ -12,6 +12,7 @@ use (
 	./plugins/ccgateway/companions/guard
 	./plugins/ccgateway/companions/worker
 	./plugins/claude-oauth
+	./plugins/codex
 	./plugins/dynweight
 	./plugins/gemini
 	./plugins/growth

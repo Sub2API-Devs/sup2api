@@ -246,6 +246,7 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	v.platforms()
 	v.taskPairs(v.m.Platforms)
 	v.accountTypes()
+	v.checkCoreFloors()
 	v.pricing()
 	v.hooks()
 	v.scheduler()

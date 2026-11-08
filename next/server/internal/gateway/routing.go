@@ -51,7 +51,14 @@ type typeRoute struct {
 	respDeclared bool
 	// modelPath is the body path of the model in the upstream protocol
 	// (empty when the model travels in the path).
-	modelPath        string
+	modelPath string
+	// streamOnly is set when the account type declares the upstream protocol
+	// in AccountPlatform.streamOnly (CONTRACTS §83): a non-streaming request
+	// is sent upstream with streamPath set to true and its SSE answer is
+	// collected into the non-streaming response. streamPath is the upstream
+	// endpoint's request.streamPath.
+	streamOnly       bool
+	streamPath       string
 	modelReferences  []manifest.RequestModelReference
 	requiredUsage    []manifest.AdditionalUsageRule
 	requiredAttempts []*manifest.AttemptUsageRule
@@ -65,7 +72,9 @@ type typeRoute struct {
 // planRoutes lists the account types able to serve the endpoint: those
 // supporting the endpoint's platform P (native), then those supporting
 // another platform Q with a protocol Y the core converts the endpoint
-// protocol X to. A type supporting P is never converted.
+// protocol X to. A type supporting P is converted only when its endpoint
+// subset on P leaves the endpoint out, and then only to another endpoint of
+// P in the subset (CONTRACTS §83.3).
 func (c *call) planRoutes() {
 	defer func() {
 		if !c.ep.WebSocket() {
@@ -119,18 +128,28 @@ func (c *call) planRoutes() {
 		if ap, ok := b.Supports(p); ok && p != "" {
 			// Native but not listed by AccountTypesForPlatform; still native.
 			c.addRoute(b, ap, p, x, c.ep, c.pf, nil)
+			if _, added := c.routes[b.Key()]; added {
+				continue
+			}
+			// The endpoint is outside the type's endpoint subset on P
+			// (CONTRACTS §83.3): another endpoint of P in the subset may
+			// serve it through a core converter. The type's other
+			// platforms are not tried, as before.
+			c.addConvertedRoute(b, x, true)
 			continue
 		}
-		c.addConvertedRoute(b, x)
+		c.addConvertedRoute(b, x, false)
 	}
 }
 
 // addConvertedRoute adds the first (platform, protocol) of b the endpoint
-// protocol x converts to. Platforms that are not available (declared by a
-// disabled plugin) are skipped.
-func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string) {
+// protocol x converts to, among the type's other platforms or, with
+// samePlatform, among the endpoints of the endpoint's own platform that the
+// type's subset lists. Platforms that are not available (declared by a
+// disabled plugin) are skipped. It reports whether a route was added.
+func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string, samePlatform bool) bool {
 	for _, ap := range b.Type.Platforms {
-		if ap.Platform == c.platform {
+		if (ap.Platform == c.platform) != samePlatform {
 			continue
 		}
 		pb, ok := c.gen.Platform(ap.Platform)
@@ -147,9 +166,11 @@ func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string) {
 				continue
 			}
 			c.addRoute(b, ap, ap.Platform, y, ep, pb.Platform, conv)
-			return
+			_, added := c.routes[b.Key()]
+			return added
 		}
 	}
+	return false
 }
 
 // addRoute records the route of b to upstream protocol y of platform q:
@@ -175,8 +196,10 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 		resp:               ep.Response,
 		respDeclared:       ep.Protocol != "",
 		modelPath:          ep.Request.ModelPath,
+		streamPath:         ep.Request.StreamPath,
 		modelReferences:    ep.Request.ModelReferences,
 		requiredUsage:      append([]manifest.AdditionalUsageRule(nil), pf.Usage.Additional...)}
+	rt.streamOnly = ap.StreamsOnly(y) && ep.Kind == manifest.EndpointKindProxy && ep.Response.Stream == "sse" && ep.Request.StreamPath != ""
 	if ep.Usage != nil {
 		rt.requiredUsage = append(rt.requiredUsage, ep.Usage.Additional...)
 		rt.requiredAttempts = append(rt.requiredAttempts, ep.Usage.Attempts)

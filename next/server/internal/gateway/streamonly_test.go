@@ -1,0 +1,700 @@
+package gateway
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
+)
+
+// ---------------------------------------------------------------- stream-only upstream (CONTRACTS §83)
+
+const (
+	soInput  = 12
+	soOutput = 5
+	soCached = 3
+)
+
+// responsesUpstream is a Responses API upstream. With streamOnly it refuses
+// non-streaming requests like the ChatGPT backends do.
+type responsesUpstream struct {
+	srv *httptest.Server
+	mu  sync.Mutex
+	// bodies are the request bodies received, in order.
+	bodies     [][]byte
+	streamOnly bool
+	// emptyOutput sends response.completed with "output": [] and two
+	// output_item.done events out of order.
+	emptyOutput bool
+	// terminal replaces the last event: "incomplete", "failed", "error429",
+	// "error_flat", "none" (the stream just ends).
+	terminal string
+}
+
+func newResponsesUpstream(t *testing.T) *responsesUpstream {
+	u := &responsesUpstream{streamOnly: true}
+	u.srv = httptest.NewServer(http.HandlerFunc(u.handle))
+	t.Cleanup(u.srv.Close)
+	return u
+}
+
+func (u *responsesUpstream) last() []byte {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.bodies[len(u.bodies)-1]
+}
+
+func soMessage(id, text string) map[string]any {
+	return map[string]any{"id": id, "type": "message", "role": "assistant", "status": "completed",
+		"content": []any{map[string]any{"type": "output_text", "text": text, "annotations": []any{}}}}
+}
+
+func soResponse(status string, output []any) map[string]any {
+	return map[string]any{"id": "resp_1", "object": "response", "model": "gpt-up", "status": status, "output": output,
+		"usage": map[string]any{"input_tokens": soInput, "output_tokens": soOutput, "total_tokens": soInput + soOutput,
+			"input_tokens_details": map[string]any{"cached_tokens": soCached}}}
+}
+
+func (u *responsesUpstream) handle(w http.ResponseWriter, r *http.Request) {
+	raw, _ := io.ReadAll(r.Body)
+	u.mu.Lock()
+	u.bodies = append(u.bodies, raw)
+	streamOnly, empty, terminal := u.streamOnly, u.emptyOutput, u.terminal
+	u.mu.Unlock()
+	if !gjson.GetBytes(raw, "stream").Bool() {
+		if streamOnly {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(400)
+			_, _ = io.WriteString(w, `{"error":{"message":"Stream must be set to true","type":"invalid_request_error"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(soResponse("completed", []any{soMessage("msg_1", "hello")}))
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	send := func(v map[string]any) {
+		b, _ := json.Marshal(v)
+		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", v["type"], b)
+		w.(http.Flusher).Flush()
+	}
+	send(map[string]any{"type": "response.created", "response": soResponse("in_progress", []any{})})
+	send(map[string]any{"type": "response.output_item.added", "output_index": 0, "item": map[string]any{"id": "msg_1", "type": "message", "role": "assistant", "content": []any{}}})
+	send(map[string]any{"type": "response.output_text.delta", "output_index": 0, "content_index": 0, "delta": "hello"})
+	output := []any{soMessage("msg_1", "hello")}
+	if empty {
+		// Out of order on purpose: output_index decides the position.
+		send(map[string]any{"type": "response.output_item.done", "output_index": 1, "item": soMessage("msg_2", "second")})
+		send(map[string]any{"type": "response.output_item.done", "output_index": 0, "item": soMessage("msg_1", "hello")})
+		output = []any{}
+	} else {
+		send(map[string]any{"type": "response.output_item.done", "output_index": 0, "item": soMessage("msg_1", "hello")})
+	}
+	switch terminal {
+	case "none":
+	case "incomplete":
+		resp := soResponse("incomplete", output)
+		resp["incomplete_details"] = map[string]any{"reason": "max_output_tokens"}
+		send(map[string]any{"type": "response.incomplete", "response": resp})
+	case "failed":
+		resp := soResponse("failed", output)
+		resp["error"] = map[string]any{"code": "server_error", "message": "the model melted"}
+		send(map[string]any{"type": "response.failed", "response": resp})
+	case "error429":
+		send(map[string]any{"type": "error", "status": 429, "error": map[string]any{"type": "usage_limit_reached", "message": "limit reached", "resets_at": 1999999999}})
+	case "error_flat":
+		send(map[string]any{"type": "error", "code": "bad_thing", "message": "flat error", "param": nil, "sequence_number": 4})
+	default:
+		send(map[string]any{"type": "response.completed", "response": soResponse("completed", output)})
+	}
+}
+
+// streamOnlyEnv adds the "codexlike/chatgpt" account type serving the
+// built-in openai responses endpoint, account 10 of the test group, and
+// returns the type's plugin and upstream. sp is the type's openai entry.
+func streamOnlyEnv(t *testing.T, sp manifest.AccountPlatform, opts ...envOpt) (*env, *fakePlatform, *responsesUpstream) {
+	t.Helper()
+	up := newResponsesUpstream(t)
+	e := newEnv(t, opts...)
+	plat := &fakePlatform{route: func(*pluginv1.BuildUpstreamRequestRequest) string { return up.srv.URL + "/v1/responses" }}
+	e.addAccountType("codexlike", "chatgpt", plat, sp)
+	e.accounts.addTyped(testGroup, 10, 0, "codex-10", "codexlike", "chatgpt")
+	return e, plat, up
+}
+
+func openAIStreamOnly() manifest.AccountPlatform {
+	return manifest.AccountPlatform{Platform: manifest.PlatformOpenAI, Endpoints: []string{"responses"},
+		StreamOnly: []string{"openai.responses"}}
+}
+
+func (e *env) responses(stream bool) result {
+	e.t.Helper()
+	return e.do("/v1/responses", map[string]any{"model": testModel, "input": "hi", "stream": stream},
+		map[string]string{"authorization": "Bearer " + testKey, "x-api-key": ""})
+}
+
+func TestStreamOnlyResponsesNonStream(t *testing.T) {
+	e, plat, up := streamOnlyEnv(t, openAIStreamOnly())
+	r := e.responses(false)
+	if r.status != 200 || !strings.HasPrefix(r.header.Get("Content-Type"), "application/json") {
+		t.Fatalf("response: %d %s %s", r.status, r.header.Get("Content-Type"), r.body)
+	}
+	j := r.json()
+	if j.Get("id").String() != "resp_1" || j.Get("status").String() != "completed" ||
+		j.Get("output.0.content.0.text").String() != "hello" || j.Get("usage.output_tokens").Int() != soOutput {
+		t.Fatalf("body %s", r.body)
+	}
+	if got := gjson.GetBytes(up.last(), "stream"); got.Type != gjson.True {
+		t.Fatalf("upstream stream = %s", got.Raw)
+	}
+	// The plugin builds from the body that goes upstream.
+	if b := plat.builds[0]; b.GetMeta().GetStream() || b.GetFields()["model"] == "" {
+		t.Fatalf("build meta stream must stay the client's: %+v %v", b.GetMeta(), b.GetFields())
+	}
+	rec := e.record()
+	if !rec.Success || rec.Stream || rec.StatusCode != 200 || rec.Tokens.Output != soOutput || rec.Tokens.CacheRead != soCached ||
+		rec.UpstreamProtocol != "openai.responses" || rec.FirstTokenMs != 0 || rec.ResponseMismatch != "" || !rec.Billable {
+		t.Fatalf("record %+v", rec)
+	}
+}
+
+// A plugin patch cannot switch the stream off again.
+func TestStreamOnlyOverridesPluginPatch(t *testing.T) {
+	e, plat, up := streamOnlyEnv(t, openAIStreamOnly())
+	plat.patches = []*pluginv1.BodyPatch{{Op: pluginv1.BodyPatch_OP_SET, Path: "stream", ValueJson: "false"}}
+	if r := e.responses(false); r.status != 200 || r.json().Get("output.0.content.0.text").String() != "hello" {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if got := gjson.GetBytes(up.last(), "stream"); got.Type != gjson.True {
+		t.Fatalf("upstream stream = %s", got.Raw)
+	}
+	e.record()
+}
+
+func TestStreamOnlyIncomplete(t *testing.T) {
+	e, _, up := streamOnlyEnv(t, openAIStreamOnly())
+	up.terminal = "incomplete"
+	r := e.responses(false)
+	if r.status != 200 || r.json().Get("status").String() != "incomplete" ||
+		r.json().Get("incomplete_details.reason").String() != "max_output_tokens" {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if rec := e.record(); !rec.Success || rec.Tokens.Output != soOutput {
+		t.Fatalf("record %+v", rec)
+	}
+}
+
+// An empty output is filled from the output_item.done items, by output_index.
+func TestStreamOnlyFillsEmptyOutput(t *testing.T) {
+	e, _, up := streamOnlyEnv(t, openAIStreamOnly())
+	up.emptyOutput = true
+	r := e.responses(false)
+	j := r.json()
+	if r.status != 200 || j.Get("output.#").Int() != 2 || j.Get("output.0.id").String() != "msg_1" ||
+		j.Get("output.1.id").String() != "msg_2" || j.Get("output.1.content.0.text").String() != "second" {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	e.record()
+}
+
+// A streaming client is relayed as before.
+func TestStreamOnlyStreamingClientUnaffected(t *testing.T) {
+	e, _, up := streamOnlyEnv(t, openAIStreamOnly())
+	r := e.responses(true)
+	if r.status != 200 || !strings.HasPrefix(r.header.Get("Content-Type"), "text/event-stream") ||
+		!strings.Contains(string(r.body), "event: response.completed") || !strings.Contains(string(r.body), "response.output_text.delta") {
+		t.Fatalf("response: %d %s %s", r.status, r.header.Get("Content-Type"), r.body)
+	}
+	if !gjson.GetBytes(up.last(), "stream").Bool() {
+		t.Fatal("stream flag lost")
+	}
+	if rec := e.record(); !rec.Success || !rec.Stream || rec.Tokens.Output != soOutput || rec.FirstTokenMs == 0 {
+		t.Fatalf("record %+v", rec)
+	}
+}
+
+// Without the declaration the client's stream flag goes upstream unchanged.
+func TestStreamOnlyUndeclaredTypeUnchanged(t *testing.T) {
+	sp := openAIStreamOnly()
+	sp.StreamOnly = nil
+	e, _, up := streamOnlyEnv(t, sp)
+	up.streamOnly = false
+	r := e.responses(false)
+	if r.status != 200 || r.json().Get("output.0.content.0.text").String() != "hello" {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if got := gjson.GetBytes(up.last(), "stream"); got.Type != gjson.False {
+		t.Fatalf("upstream stream = %s", got.Raw)
+	}
+	if rec := e.record(); !rec.Success || rec.Stream || rec.Tokens.Output != soOutput {
+		t.Fatalf("record %+v", rec)
+	}
+	// And a stream-only upstream then refuses it, as it would without §83.
+	up.streamOnly = true
+	if r := e.responses(false); r.status != 400 {
+		t.Fatalf("undeclared stream-only upstream: %d %s", r.status, r.body)
+	}
+	e.record()
+}
+
+// The declaration names protocols: another protocol of the type is unchanged.
+func TestStreamOnlyOtherProtocolUnchanged(t *testing.T) {
+	sp := openAIStreamOnly()
+	sp.Endpoints = nil
+	sp.StreamOnly = []string{"openai.chat"}
+	e, _, up := streamOnlyEnv(t, sp)
+	up.streamOnly = false
+	if r := e.responses(false); r.status != 200 {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if got := gjson.GetBytes(up.last(), "stream"); got.Type != gjson.False {
+		t.Fatalf("upstream stream = %s", got.Raw)
+	}
+	e.record()
+}
+
+// response.failed is an upstream error: the plugin classifies it with the
+// event's status (502 when it has none) and the error object as the body.
+func TestStreamOnlyResponseFailed(t *testing.T) {
+	e, plat, up := streamOnlyEnv(t, openAIStreamOnly())
+	e.accounts.groups[testGroup] = []int64{10}
+	up.terminal = "failed"
+	r := e.responses(false)
+	if r.status != 502 || r.json().Get("error.code").String() != "server_error" || r.json().Get("error.message").String() != "the model melted" {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if len(plat.classify) != 1 || plat.classify[0].GetStatus() != 502 ||
+		gjson.GetBytes(plat.classify[0].GetBodyPrefix(), "error.message").String() != "the model melted" ||
+		plat.classify[0].GetMeta().GetProtocol() != "openai.responses" {
+		t.Fatalf("classify %+v", plat.classify)
+	}
+	// The fake plugin cools 5xx accounts down.
+	if len(e.accounts.cooldowns) != 1 || e.accounts.cooldowns[0] != 10 {
+		t.Fatalf("cooldowns %v", e.accounts.cooldowns)
+	}
+	rec := e.record()
+	if rec.Success || rec.Stream || rec.StatusCode != 502 || rec.ErrorType != errTypeUpstream || rec.ErrorMessage != "the model melted" {
+		t.Fatalf("record %+v", rec)
+	}
+}
+
+// An error event carrying a status is classified with that status.
+func TestStreamOnlyErrorEventStatus(t *testing.T) {
+	e, plat, up := streamOnlyEnv(t, openAIStreamOnly())
+	up.terminal = "error429"
+	r := e.responses(false)
+	if r.status != 429 || r.json().Get("error.type").String() != "usage_limit_reached" {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if len(plat.classify) != 1 || plat.classify[0].GetStatus() != 429 ||
+		gjson.GetBytes(plat.classify[0].GetBodyPrefix(), "error.resets_at").Int() != 1999999999 {
+		t.Fatalf("classify %+v", plat.classify)
+	}
+	if rec := e.record(); rec.Success || rec.StatusCode != 429 {
+		t.Fatalf("record %+v", rec)
+	}
+
+	// A flat Responses error event without a status: 502, code and message kept.
+	up.terminal = "error_flat"
+	e.accounts.cooldown = map[int64]time.Time{}
+	r = e.responses(false)
+	if r.status != 502 || r.json().Get("error.code").String() != "bad_thing" || r.json().Get("error.message").String() != "flat error" ||
+		r.json().Get("error.type").Exists() {
+		t.Fatalf("flat error: %d %s", r.status, r.body)
+	}
+	e.record()
+}
+
+// A stream that ends without a terminal event is a broken upstream answer:
+// classified like a transport error.
+func TestStreamOnlyUnfinishedStream(t *testing.T) {
+	e, plat, up := streamOnlyEnv(t, openAIStreamOnly())
+	e.accounts.groups[testGroup] = []int64{10}
+	up.terminal = "none"
+	r := e.responses(false)
+	if r.status != 502 {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if len(plat.classify) != 1 || plat.classify[0].GetStatus() != 0 ||
+		!strings.Contains(plat.classify[0].GetTransportError(), "response.completed") {
+		t.Fatalf("classify %+v", plat.classify)
+	}
+	e.record()
+}
+
+// ---------------------------------------------------------------- converted route
+
+// chatToRelay converts openai.chat to the "relayx.responses" protocol of a
+// plugin platform, a minimal stand-in for a chat to Responses conversion.
+type chatToRelay struct{}
+
+func (chatToRelay) From() string { return "openai.chat" }
+func (chatToRelay) To() string   { return "relayx.responses" }
+func (chatToRelay) Request(body []byte) ([]byte, error) {
+	out := []byte(`{}`)
+	out, _ = sjson.SetBytes(out, "model", gjson.GetBytes(body, "model").String())
+	out, _ = sjson.SetBytes(out, "input", gjson.GetBytes(body, "messages.0.content").String())
+	out, _ = sjson.SetBytes(out, "stream", gjson.GetBytes(body, "stream").Bool())
+	return out, nil
+}
+func (chatToRelay) Response(body []byte) ([]byte, error) {
+	var text string
+	for _, item := range gjson.GetBytes(body, "output").Array() {
+		for _, part := range item.Get("content").Array() {
+			text += part.Get("text").String()
+		}
+	}
+	out := []byte(`{"object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant"},"finish_reason":"stop"}]}`)
+	out, _ = sjson.SetBytes(out, "choices.0.message.content", text)
+	out, _ = sjson.SetBytes(out, "usage.prompt_tokens", gjson.GetBytes(body, "usage.input_tokens").Int())
+	out, _ = sjson.SetBytes(out, "usage.completion_tokens", gjson.GetBytes(body, "usage.output_tokens").Int())
+	return out, nil
+}
+func (chatToRelay) NewStream() convert.StreamConverter { return relayStream{} }
+
+type relayStream struct{}
+
+func (relayStream) Event(e convert.Event) ([]convert.Event, error) {
+	if gjson.GetBytes(e.Data, "type").String() != "response.output_text.delta" {
+		return nil, nil
+	}
+	out, _ := sjson.SetBytes([]byte(`{"object":"chat.completion.chunk"}`), "choices.0.delta.content", gjson.GetBytes(e.Data, "delta").String())
+	return []convert.Event{{Data: out}}, nil
+}
+func (relayStream) Flush() ([]convert.Event, error) {
+	return []convert.Event{{Data: []byte("[DONE]")}}, nil
+}
+
+// relayPlatform is a plugin platform whose only endpoint speaks a
+// Responses-like protocol with the built-in Responses usage rules.
+func relayPlatform(t *testing.T) manifest.Platform {
+	ep := endpointOf(t, builtinPlatform(t, manifest.PlatformOpenAI), "openai.responses")
+	ep.ID, ep.Path, ep.Protocol = "responses", "/relayx/v1/responses", "relayx.responses"
+	return manifest.Platform{ID: "relayx", Endpoints: []manifest.Endpoint{ep}, Usage: manifest.UsageRules{Semantics: "inclusive"}}
+}
+
+// The upstream protocol after conversion decides: a non-streaming chat
+// request converted to a stream-only protocol streams upstream and the
+// collected answer is converted back to chat JSON.
+func TestStreamOnlyConvertedRoute(t *testing.T) {
+	up := newResponsesUpstream(t)
+	e := newEnv(t, func(e *env) { e.conv = convert.NewRegistry(chatToRelay{}) })
+	relayInfo := core.PluginInfo{Key: "relayx", Version: "1.0.0", Manifest: &manifest.Manifest{Key: "relayx"}}
+	e.gen.plugins = append(e.gen.plugins, relayInfo)
+	e.gen.addPlatform(relayInfo, relayPlatform(t))
+	plat := &fakePlatform{route: func(*pluginv1.BuildUpstreamRequestRequest) string { return up.srv.URL + "/relayx/v1/responses" }}
+	e.addAccountType("codexlike", "chatgpt", plat, manifest.AccountPlatform{Platform: "relayx", StreamOnly: []string{"relayx.responses"}})
+	e.accounts.addTyped(testGroup, 10, 0, "codex-10", "codexlike", "chatgpt")
+	chat := func(stream bool) result {
+		return e.do("/v1/chat/completions", map[string]any{"model": testModel, "stream": stream,
+			"messages": []any{map[string]any{"role": "user", "content": "hi"}}},
+			map[string]string{"authorization": "Bearer " + testKey, "x-api-key": ""})
+	}
+
+	r := chat(false)
+	if r.status != 200 || r.json().Get("object").String() != "chat.completion" ||
+		r.json().Get("choices.0.message.content").String() != "hello" || r.json().Get("usage.completion_tokens").Int() != soOutput {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if got := gjson.GetBytes(up.last(), "stream"); got.Type != gjson.True || gjson.GetBytes(up.last(), "input").String() != "hi" {
+		t.Fatalf("upstream body %s", up.last())
+	}
+	rec := e.record()
+	if !rec.Success || rec.Stream || rec.Protocol != "openai.chat" || rec.UpstreamProtocol != "relayx.responses" ||
+		rec.Tokens.Output != soOutput || rec.Tokens.CacheRead != soCached {
+		t.Fatalf("record %+v", rec)
+	}
+
+	// A streaming chat client still gets the converted stream.
+	r = chat(true)
+	if r.status != 200 || !strings.Contains(string(r.body), "chat.completion.chunk") || !strings.Contains(string(r.body), "[DONE]") {
+		t.Fatalf("stream: %d %s", r.status, r.body)
+	}
+	if rec := e.record(); !rec.Stream || rec.Tokens.Output != soOutput {
+		t.Fatalf("stream record %+v", rec)
+	}
+}
+
+// ---------------------------------------------------------------- execute path
+
+type streamOnlyExecutionStore struct {
+	*fakeSettler
+	mu      sync.Mutex
+	commits []*core.UsageRecord
+}
+
+func (*streamOnlyExecutionStore) BeginExecution(context.Context, core.ExecutionIntent) error {
+	return nil
+}
+func (*streamOnlyExecutionStore) ObserveExecution(context.Context, string, *core.UsageRecord, []byte) error {
+	return nil
+}
+func (s *streamOnlyExecutionStore) CommitExecution(_ context.Context, c core.ExecutionCommit) (*pluginv1.ExecutionReceipt, error) {
+	s.mu.Lock()
+	s.commits = append(s.commits, c.Record)
+	s.mu.Unlock()
+	return &pluginv1.ExecutionReceipt{}, nil
+}
+
+// A plugin that executes the request itself (platform.execute.v1) forwards
+// through the core, and the core makes the upstream stream there too.
+func TestStreamOnlyExecutePath(t *testing.T) {
+	e, plat, up := streamOnlyEnv(t, openAIStreamOnly())
+	exec := &executeTestPlatform{PlatformPlugin: plat}
+	b := &e.gen.accountTypes[len(e.gen.accountTypes)-1]
+	b.Client = exec
+	b.Plugin.Manifest.Capabilities = append(b.Plugin.Manifest.Capabilities, manifest.Capability{ID: manifest.CapPlatformExecute})
+	store := &streamOnlyExecutionStore{fakeSettler: e.settler}
+	e.gw.d.Settler = store
+
+	r := e.responses(false)
+	if r.status != 200 || r.json().Get("output.0.content.0.text").String() != "hello" ||
+		!strings.HasPrefix(r.header.Get("Content-Type"), "application/json") {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if exec.calls.Load() != 1 || gjson.GetBytes(up.last(), "stream").Type != gjson.True {
+		t.Fatalf("execute calls %d, upstream %s", exec.calls.Load(), up.last())
+	}
+	store.mu.Lock()
+	commits := store.commits
+	store.mu.Unlock()
+	if len(commits) != 1 || commits[0].Stream || !commits[0].Success || commits[0].Tokens.Output != soOutput {
+		t.Fatalf("commits %+v", commits)
+	}
+
+	// An error event goes to the plugin's ClassifyError from Execute.
+	up.terminal = "error429"
+	e.accounts.groups[testGroup] = []int64{10}
+	r = e.responses(false)
+	if r.status != 429 || r.json().Get("error.type").String() != "usage_limit_reached" {
+		t.Fatalf("execute error: %d %s", r.status, r.body)
+	}
+	if len(plat.classify) != 1 || plat.classify[0].GetStatus() != 429 {
+		t.Fatalf("classify %+v", plat.classify)
+	}
+}
+
+func TestReadStreamOnlyFraming(t *testing.T) {
+	// Events named only by their "type", CRLF lines, a split data field and
+	// a terminal event without its blank line.
+	in := "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\r\ndata: \"item\":{\"id\":\"a\"}}\r\n\r\n" +
+		": keep-alive\n\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\",\"output\":null}}"
+	ans := readStreamOnly(strings.NewReader(in))
+	if ans.broken != nil || ans.errBody != nil || gjson.GetBytes(ans.body, "output.0.id").String() != "a" || gjson.GetBytes(ans.body, "id").String() != "r" {
+		t.Fatalf("answer %+v %s", ans, ans.body)
+	}
+	// A full output is kept as the upstream sent it.
+	in = "data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"a\"}}\n\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"id\":\"b\"}]}}\n\n"
+	if ans := readStreamOnly(strings.NewReader(in)); gjson.GetBytes(ans.body, "output.#").Int() != 1 || gjson.GetBytes(ans.body, "output.0.id").String() != "b" {
+		t.Fatalf("full output rewritten: %s", ans.body)
+	}
+	// No terminal event.
+	if ans := readStreamOnly(strings.NewReader("data: {\"type\":\"response.created\"}\n\n")); ans.broken == nil {
+		t.Fatalf("unfinished stream accepted: %+v", ans)
+	}
+	// A terminal event without a response object is an upstream error.
+	if ans := readStreamOnly(strings.NewReader("event: response.completed\ndata: {}\n\n")); ans.status != 502 || ans.errBody == nil {
+		t.Fatalf("empty terminal: %+v", ans)
+	}
+}
+
+func TestStreamOnlyErrorShapes(t *testing.T) {
+	for _, tc := range []struct {
+		name, data string
+		status     int
+		body       string
+	}{
+		{"response.failed", `{"type":"response.failed","response":{"error":{"code":"x","message":"m"}}}`, 502, `{"error":{"code":"x","message":"m"}}`},
+		{"response.failed", `{"type":"response.failed","response":{}}`, 502, `{"error":{"message":"upstream response failed"}}`},
+		{"error", `{"type":"error","status":401,"error":{"message":"m"}}`, 401, `{"error":{"message":"m"}}`},
+		{"error", `{"type":"error","status":200,"error":"plain"}`, 502, `{"error":{"message":"plain"}}`},
+		{"error", `{"type":"error","code":"c","message":"m","param":null}`, 502, `{"error":{"code":"c","message":"m","param":null}}`},
+	} {
+		status, body := streamOnlyError(tc.name, []byte(tc.data))
+		if status != tc.status || string(body) != tc.body {
+			t.Errorf("%s %s: %d %s", tc.name, tc.data, status, body)
+		}
+	}
+}
+
+// ---------------------------------------------------------------- same-platform conversion (CONTRACTS §83.3)
+
+// sameChatEnv is streamOnlyEnv with the built-in converters, the group
+// holding only the type's account.
+func sameChatEnv(t *testing.T, sp manifest.AccountPlatform) (*env, *fakePlatform, *responsesUpstream) {
+	e, plat, up := streamOnlyEnv(t, sp, func(e *env) { e.conv = convert.Default() })
+	e.accounts.groups[testGroup] = []int64{10}
+	return e, plat, up
+}
+
+func (e *env) chat(stream bool, extra ...string) result {
+	e.t.Helper()
+	b := map[string]any{"model": testModel, "stream": stream,
+		"messages": []any{map[string]any{"role": "system", "content": "be brief"}, map[string]any{"role": "user", "content": "hi"}}}
+	if stream {
+		b["stream_options"] = map[string]any{"include_usage": true}
+	}
+	for i := 0; i+1 < len(extra); i += 2 {
+		b[extra[i]] = extra[i+1]
+	}
+	return e.do("/v1/chat/completions", b, map[string]string{"authorization": "Bearer " + testKey, "x-api-key": ""})
+}
+
+// A type serving only the responses endpoint of openai serves chat through
+// the built-in converter: non-streaming chat -> streaming Responses upstream
+// -> collected JSON -> chat completion JSON.
+func TestSamePlatformChatNonStreamThroughStreamOnly(t *testing.T) {
+	e, plat, up := sameChatEnv(t, openAIStreamOnly())
+	r := e.chat(false)
+	j := r.json()
+	if r.status != 200 || j.Get("object").String() != "chat.completion" || j.Get("choices.0.message.content").String() != "hello" ||
+		j.Get("choices.0.finish_reason").String() != "stop" || j.Get("usage.prompt_tokens").Int() != soInput ||
+		j.Get("usage.completion_tokens").Int() != soOutput || j.Get("usage.prompt_tokens_details.cached_tokens").Int() != soCached {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	wire := gjson.ParseBytes(up.last())
+	if wire.Get("stream").Type != gjson.True || wire.Get("store").Type != gjson.False || wire.Get("instructions").String() != "be brief" ||
+		wire.Get("input.0.content.0.text").String() != "hi" || wire.Get("messages").Exists() {
+		t.Fatalf("upstream body %s", up.last())
+	}
+	if b := plat.builds[0]; b.GetMeta().GetProtocol() != "openai.responses" || b.GetMeta().GetClientProtocol() != "openai.chat" {
+		t.Fatalf("build meta %+v", b.GetMeta())
+	}
+	rec := e.record()
+	if !rec.Success || rec.Stream || rec.Platform != "openai" || rec.Protocol != "openai.chat" || rec.UpstreamProtocol != "openai.responses" ||
+		rec.Tokens.Output != soOutput || rec.Tokens.CacheRead != soCached || rec.Tokens.Input != soInput ||
+		rec.UsageSemantics != "inclusive" || !rec.Billable {
+		t.Fatalf("record %+v", rec)
+	}
+}
+
+func TestSamePlatformChatStream(t *testing.T) {
+	e, _, up := sameChatEnv(t, openAIStreamOnly())
+	r := e.chat(true)
+	if r.status != 200 || !strings.HasPrefix(r.header.Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	var content strings.Builder
+	var finish string
+	var usage gjson.Result
+	done := false
+	for _, line := range strings.Split(string(r.body), "\n") {
+		d, ok := strings.CutPrefix(line, "data: ")
+		if !ok {
+			continue
+		}
+		if d == "[DONE]" {
+			done = true
+			continue
+		}
+		j := gjson.Parse(d)
+		if j.Get("object").String() != "chat.completion.chunk" {
+			t.Fatalf("chunk %s", d)
+		}
+		content.WriteString(j.Get("choices.0.delta.content").String())
+		if f := j.Get("choices.0.finish_reason").String(); f != "" {
+			finish = f
+		}
+		if u := j.Get("usage"); u.IsObject() {
+			usage = u
+		}
+	}
+	if content.String() != "hello" || finish != "stop" || !done || usage.Get("completion_tokens").Int() != soOutput {
+		t.Fatalf("stream %q %q %v %s\n%s", content.String(), finish, done, usage.Raw, r.body)
+	}
+	if !gjson.GetBytes(up.last(), "stream").Bool() {
+		t.Fatal("stream flag lost")
+	}
+	if rec := e.record(); !rec.Success || !rec.Stream || rec.Protocol != "openai.chat" || rec.UpstreamProtocol != "openai.responses" ||
+		rec.Tokens.Output != soOutput || !rec.Billable {
+		t.Fatalf("record %+v", rec)
+	}
+}
+
+// Without streamOnly the converted request keeps the client's stream flag
+// and the upstream JSON is converted directly.
+func TestSamePlatformChatWithoutStreamOnly(t *testing.T) {
+	sp := openAIStreamOnly()
+	sp.StreamOnly = nil
+	e, _, up := sameChatEnv(t, sp)
+	up.streamOnly = false
+	r := e.chat(false)
+	if r.status != 200 || r.json().Get("choices.0.message.content").String() != "hello" {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if gjson.GetBytes(up.last(), "stream").Type != gjson.False {
+		t.Fatalf("upstream body %s", up.last())
+	}
+	if rec := e.record(); rec.Stream || rec.UpstreamProtocol != "openai.responses" || rec.Tokens.Output != soOutput {
+		t.Fatalf("record %+v", rec)
+	}
+}
+
+// A chat field without a Responses equivalent is a 400 naming the field;
+// nothing goes upstream.
+func TestSamePlatformChatRejectsUnconvertible(t *testing.T) {
+	e, plat, _ := sameChatEnv(t, openAIStreamOnly())
+	r := e.do("/v1/chat/completions", map[string]any{"model": testModel, "n": 2,
+		"messages": []any{map[string]any{"role": "user", "content": "hi"}}},
+		map[string]string{"authorization": "Bearer " + testKey, "x-api-key": ""})
+	if r.status != 400 || r.json().Get("error.code").String() != "unsupported_conversion" || !strings.Contains(r.json().Get("error.message").String(), "n:") {
+		t.Fatalf("response: %d %s", r.status, r.body)
+	}
+	if plat.buildCount() != 0 {
+		t.Fatal("unconvertible request reached the plugin")
+	}
+	e.record()
+}
+
+// Native wins: a type serving the chat endpoint itself is never converted,
+// and the type's other platforms are not a way around its subset.
+func TestSamePlatformConversionScope(t *testing.T) {
+	e, _, up := sameChatEnv(t, manifest.AccountPlatform{Platform: manifest.PlatformOpenAI})
+	up.streamOnly = false
+	chatUp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"c","object":"chat.completion","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"native"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
+	}))
+	t.Cleanup(chatUp.Close)
+	e.gen.accountTypes[len(e.gen.accountTypes)-1].Client.(*fakePlatform).route = func(*pluginv1.BuildUpstreamRequestRequest) string { return chatUp.URL }
+	if r := e.chat(false); r.status != 200 || r.json().Get("choices.0.message.content").String() != "native" {
+		t.Fatalf("native: %d %s", r.status, r.body)
+	}
+	if rec := e.record(); rec.UpstreamProtocol != "openai.chat" {
+		t.Fatalf("native record %+v", rec)
+	}
+
+	// openai limited to responses, plus anthropic: chat is converted within
+	// openai, not to anthropic.messages.
+	e2, _, _ := sameChatEnv(t, openAIStreamOnly())
+	b := &e2.gen.accountTypes[len(e2.gen.accountTypes)-1]
+	b.Type.Platforms = append(b.Type.Platforms, manifest.AccountPlatform{Platform: manifest.PlatformAnthropic})
+	if r := e2.chat(false); r.status != 200 || r.json().Get("choices.0.message.content").String() != "hello" {
+		t.Fatalf("subset: %d %s", r.status, r.body)
+	}
+	if rec := e2.record(); rec.UpstreamProtocol != "openai.responses" {
+		t.Fatalf("subset record %+v", rec)
+	}
+
+	// openai limited to embeddings: no converter, the endpoint is not served.
+	e3, _, _ := sameChatEnv(t, manifest.AccountPlatform{Platform: manifest.PlatformOpenAI, Endpoints: []string{"embeddings"}})
+	if r := e3.chat(false); r.status != 404 {
+		t.Fatalf("embeddings only: %d %s", r.status, r.body)
+	}
+}
