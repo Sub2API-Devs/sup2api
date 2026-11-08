@@ -6,6 +6,7 @@ package manifest
 import (
 	"encoding/json"
 	"net/mail"
+	"slices"
 	"time"
 )
 
@@ -573,12 +574,7 @@ type AccountPlatform struct {
 // StreamsOnly reports whether the upstream of protocol only accepts
 // streaming requests for this account type.
 func (a AccountPlatform) StreamsOnly(protocol string) bool {
-	for _, p := range a.StreamOnly {
-		if p == protocol {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a.StreamOnly, protocol)
 }
 
 // SupportsEndpoint checks the platform-local endpoint selection.

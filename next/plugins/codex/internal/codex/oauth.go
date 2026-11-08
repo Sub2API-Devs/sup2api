@@ -30,7 +30,11 @@ import (
 // call sends at most one request to OpenAI and never waits in a loop.
 //
 // Sessions live in the plugin KV (shared by every node), keyed by a random
-// session id. Errors are {"error":{"code","message"}} (pluginsdk.ErrorResponse).
+// session id. Answers follow CONTRACTS §3.1: a success is {"data": ...}
+// (pluginsdk.DataResponse); a malformed request is 400 invalid_argument with
+// details.fields (pluginsdk.BadRequest); a refusal of the flow itself keeps
+// its own code ({"error":{"code","message"}}, e.g. device_auth_disabled,
+// state_mismatch). Every message is "English / 中文".
 
 const (
 	kvDevice = "device_session"
@@ -48,6 +52,13 @@ const (
 	slowDownStep = 5
 	// maxAuthBody caps what the plugin reads from the issuer.
 	maxAuthBody = 1 << 20
+	// authTimeout bounds one request to the issuer.
+	authTimeout = 20 * time.Second
+	// pollLockTTL covers one poll under its lock: the status request and the
+	// token exchange, each bounded by authTimeout, plus slack.
+	pollLockTTL = 2*authTimeout + 10*time.Second
+	// lockReleaseTimeout bounds giving the poll lock back.
+	lockReleaseTimeout = 5 * time.Second
 )
 
 // ---------------------------------------------------------------- helpers
@@ -159,9 +170,15 @@ func (p *Plugin) saveSession(ctx context.Context, ns, id string, v any, ttl time
 	return kv.Set(ctx, ns, id, b, ttl)
 }
 
+// deleteSession ends a session. A failure is only logged: the session
+// expires with its ttl, and every code is single-use on OpenAI's side.
 func (p *Plugin) deleteSession(ctx context.Context, ns, id string) {
-	if kv, err := p.kv(); err == nil {
-		_ = kv.Delete(ctx, ns, id)
+	kv, err := p.kv()
+	if err == nil {
+		err = kv.Delete(ctx, ns, id)
+	}
+	if err != nil {
+		p.log.Warn("codex: delete authorization session", "kind", ns, "error", err.Error())
 	}
 }
 
@@ -173,7 +190,18 @@ func decodeOptional(req *pluginv1.HTTPRequest, v any) error {
 	return json.Unmarshal(req.GetBody(), v)
 }
 
-func badRequest(code, msg string) *pluginv1.HTTPResponse {
+// errInvalidJSON and errNoSession are malformed route requests
+// (pluginsdk.BadRequest: 400 invalid_argument with details.fields).
+func errInvalidJSON() *pluginv1.HTTPResponse {
+	return pluginsdk.BadRequest("body", "invalid_json", "the request body is not valid JSON / 请求体不是合法 JSON")
+}
+
+func errNoSession() *pluginv1.HTTPResponse {
+	return pluginsdk.BadRequest("session_id", "required", "session_id is required / 缺少 session_id")
+}
+
+// flowError is a 400 refusal of the authorization flow with its own code.
+func flowError(code, msg string) *pluginv1.HTTPResponse {
 	return pluginsdk.ErrorResponse(http.StatusBadRequest, code, msg)
 }
 
@@ -181,9 +209,16 @@ func upstreamError(code, msg string) *pluginv1.HTTPResponse {
 	return pluginsdk.ErrorResponse(http.StatusBadGateway, code, msg)
 }
 
+// internalError is a 500 for a local failure; msg is "English / 中文".
 func internalError(msg string, err error) *pluginv1.HTTPResponse {
 	return pluginsdk.ErrorResponse(http.StatusInternalServerError, "internal", msg+": "+err.Error())
 }
+
+const (
+	msgSessionID = "cannot create the session id / 无法生成会话 ID"
+	msgRandom    = "cannot generate random values / 无法生成随机数"
+	msgHostID    = "cannot create the host id / 无法生成宿主 ID"
+)
 
 // ---------------------------------------------------------------- credentials
 
@@ -220,10 +255,10 @@ func (p *Plugin) credentialsFrom(tr tokenResponse) Credentials {
 func readToken(a authAnswer) (tokenResponse, error) {
 	var tr tokenResponse
 	if err := json.Unmarshal(a.body, &tr); err != nil {
-		return tr, fmt.Errorf("unreadable token response: %w", err)
+		return tr, fmt.Errorf("unreadable token response / 无法解析令牌响应: %w", err)
 	}
 	if strings.TrimSpace(tr.AccessToken) == "" {
-		return tr, errors.New("token response has no access_token")
+		return tr, errors.New("token response has no access_token / 令牌响应中没有 access_token")
 	}
 	return tr, nil
 }
@@ -280,7 +315,7 @@ func (p *Plugin) handleDeviceStart(ctx context.Context, _ *pluginv1.HTTPRequest)
 		return upstreamError("upstream_unavailable", "cannot reach the OpenAI authorization server / 无法连接 OpenAI 授权服务器: "+err.Error()), nil
 	}
 	if a.status == http.StatusNotFound {
-		return badRequest("device_auth_disabled", "device code login is not enabled for this ChatGPT account or workspace: turn on Device code authorization in ChatGPT Settings → Security (a workspace admin must allow it) / 该 ChatGPT 账号或工作区未开启设备码登录：请在 ChatGPT 设置 → 安全 中开启“设备码授权”（企业工作区需管理员开启）"), nil
+		return flowError("device_auth_disabled", "device code login is not enabled for this ChatGPT account or workspace: turn on Device code authorization in ChatGPT Settings → Security (a workspace admin must allow it) / 该 ChatGPT 账号或工作区未开启设备码登录：请在 ChatGPT 设置 → 安全 中开启“设备码授权”（企业工作区需管理员开启）"), nil
 	}
 	if !a.ok() {
 		return upstreamError("upstream_error", "device code request failed / 申请设备码失败 ("+a.describe()+")"), nil
@@ -295,7 +330,7 @@ func (p *Plugin) handleDeviceStart(ctx context.Context, _ *pluginv1.HTTPRequest)
 	}
 	sessionID, err := randomToken(24)
 	if err != nil {
-		return internalError("session id", err), nil
+		return internalError(msgSessionID, err), nil
 	}
 	s := deviceSession{
 		DeviceAuthID: deviceAuthID, UserCode: userCode,
@@ -305,7 +340,7 @@ func (p *Plugin) handleDeviceStart(ctx context.Context, _ *pluginv1.HTTPRequest)
 	if err := p.saveSession(ctx, kvDevice, sessionID, s, deviceTTL); err != nil {
 		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error()), nil
 	}
-	return pluginsdk.JSONResponse(http.StatusOK, DeviceStartResponse{
+	return pluginsdk.DataResponse(DeviceStartResponse{
 		SessionID: sessionID, VerificationURL: p.ep.Auth + "/codex/device", UserCode: userCode,
 		Interval: s.Interval, ExpiresIn: int(deviceTTL / time.Second),
 	}), nil
@@ -319,60 +354,126 @@ type sessionRequest struct {
 // code. A poll that comes sooner than the interval after the previous one is
 // answered "pending" without asking. On approval it exchanges the code for
 // tokens (a second request, once) and ends the session.
+//
+// The session's read-modify-write runs under a cluster lock per session
+// (Host.Locks), so two polls racing (two tabs, two nodes) cannot both see the
+// approval and both spend the single-use code: the one that finds the lock
+// taken answers "pending" and polls again later.
 func (p *Plugin) handleDevicePoll(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in sessionRequest
-	if err := decodeOptional(req, &in); err != nil || strings.TrimSpace(in.SessionID) == "" {
-		return badRequest("invalid_request", "session_id is required / 缺少 session_id"), nil
+	if err := decodeOptional(req, &in); err != nil {
+		return errInvalidJSON(), nil
 	}
 	id := strings.TrimSpace(in.SessionID)
+	if id == "" {
+		return errNoSession(), nil
+	}
+	if p.host == nil {
+		return pluginsdk.Unavailable("the plugin is not ready / 插件尚未就绪: " + pluginsdk.ErrHostNotReady.Error()), nil
+	}
+	lock, ok, err := p.host.Locks().TryAcquire(ctx, pollLockName(id), pollLockTTL)
+	if err != nil {
+		p.log.Warn("codex: lock the device code session", "error", err.Error())
+		return pluginsdk.Unavailable("lock the session / 锁定会话失败: " + err.Error()), nil
+	}
+	if !ok {
+		return pollAnswer(DevicePollResponse{Status: pollPending}), nil
+	}
+	defer p.releaseLock(ctx, lock)
+	return p.pollDevice(ctx, id), nil
+}
+
+// Device code poll states (DevicePollResponse.Status).
+const (
+	pollPending = "pending"
+	pollDone    = "done"
+	pollExpired = "expired"
+	pollError   = "error"
+)
+
+func pollAnswer(r DevicePollResponse) *pluginv1.HTTPResponse { return pluginsdk.DataResponse(r) }
+
+func pollFailed(msg string) *pluginv1.HTTPResponse {
+	return pollAnswer(DevicePollResponse{Status: pollError, Message: msg})
+}
+
+// pollLockName is the lock of one device code session. The session id is
+// hashed: it is a secret, and base64url ids carry "_", which lock names do
+// not allow.
+func pollLockName(sessionID string) string {
+	sum := sha256.Sum256([]byte(sessionID))
+	return "device_poll:" + hex.EncodeToString(sum[:16])
+}
+
+// releaseLock gives a lock back, even when ctx has ended; a failure is
+// logged and the lock lapses after its ttl.
+func (p *Plugin) releaseLock(ctx context.Context, l *pluginsdk.Lock) {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), lockReleaseTimeout)
+	defer cancel()
+	if err := l.Release(rctx); err != nil {
+		p.log.Warn("codex: release the device code session lock", "error", err.Error())
+	}
+}
+
+// pollDevice is one poll of session id, under its lock.
+func (p *Plugin) pollDevice(ctx context.Context, id string) *pluginv1.HTTPResponse {
 	var s deviceSession
 	found, err := p.loadSession(ctx, kvDevice, id, &s)
 	if err != nil {
-		return pluginsdk.Unavailable("read the session / 读取会话失败: " + err.Error()), nil
+		return pluginsdk.Unavailable("read the session / 读取会话失败: " + err.Error())
 	}
 	now := p.now()
 	if !found || now.Unix() >= s.ExpiresAt {
-		p.deleteSession(ctx, kvDevice, id)
-		return pluginsdk.JSONResponse(http.StatusOK, DevicePollResponse{Status: "expired",
-			Message: "the device code expired; start again / 设备码已过期，请重新开始"}), nil
+		if found {
+			p.deleteSession(ctx, kvDevice, id)
+		}
+		return pollAnswer(DevicePollResponse{Status: pollExpired, Message: "the device code expired; start again / 设备码已过期，请重新开始"})
 	}
 	pending := func(msg string) *pluginv1.HTTPResponse {
-		return pluginsdk.JSONResponse(http.StatusOK, DevicePollResponse{Status: "pending", Interval: s.Interval, Message: msg})
+		return pollAnswer(DevicePollResponse{Status: pollPending, Interval: s.Interval, Message: msg})
 	}
 	// One second of slack for timer jitter in the browser.
 	if s.LastPollMs > 0 && now.UnixMilli()-s.LastPollMs < int64(s.Interval-1)*1000 {
-		return pending(""), nil
+		return pending("")
 	}
 	s.LastPollMs = now.UnixMilli()
 	ttl := max(time.Unix(s.ExpiresAt, 0).Sub(now), time.Second)
 	if err := p.saveSession(ctx, kvDevice, id, s, ttl); err != nil {
-		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error()), nil
+		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error())
 	}
 
 	a, err := p.postJSON(ctx, p.ep.Auth+"/api/accounts/deviceauth/token", map[string]string{"device_auth_id": s.DeviceAuthID, "user_code": s.UserCode})
 	if err != nil {
 		// A network blip must not end the login: the next poll asks again.
-		return pending("cannot reach the OpenAI authorization server, retrying / 暂时无法连接 OpenAI 授权服务器，稍后重试"), nil
+		p.log.Warn("codex: device code status request failed", "error", err.Error())
+		return pending("cannot reach the OpenAI authorization server, retrying / 暂时无法连接 OpenAI 授权服务器，稍后重试")
 	}
 	switch {
 	case a.status == http.StatusForbidden || a.status == http.StatusNotFound:
-		return pending(""), nil
+		return pending("")
 	case a.status == http.StatusTooManyRequests:
 		s.Interval = min(s.Interval+slowDownStep, maxInterval)
-		_ = p.saveSession(ctx, kvDevice, id, s, ttl)
-		return pending(""), nil
+		if err := p.saveSession(ctx, kvDevice, id, s, ttl); err != nil {
+			p.log.Warn("codex: store the slowed-down device code session", "error", err.Error())
+		}
+		return pending("")
 	case !a.ok():
 		p.deleteSession(ctx, kvDevice, id)
-		return pluginsdk.JSONResponse(http.StatusOK, DevicePollResponse{Status: "error",
-			Message: "device code login failed / 设备码登录失败 (" + a.describe() + ")"}), nil
+		p.log.Warn("codex: device code login refused", "status", a.status, "oauth_error", oauthErrorCode(a.body))
+		return pollFailed("device code login failed / 设备码登录失败 (" + a.describe() + ")")
 	}
-	code := strings.TrimSpace(gjson.GetBytes(a.body, "authorization_code").String())
-	verifier := strings.TrimSpace(gjson.GetBytes(a.body, "code_verifier").String())
 	// The code is single-use: whatever happens next, this session is done.
 	p.deleteSession(ctx, kvDevice, id)
+	return p.exchangeDeviceCode(ctx, a)
+}
+
+// exchangeDeviceCode turns an approval answer into credentials (one request).
+func (p *Plugin) exchangeDeviceCode(ctx context.Context, approval authAnswer) *pluginv1.HTTPResponse {
+	code := strings.TrimSpace(gjson.GetBytes(approval.body, "authorization_code").String())
+	verifier := strings.TrimSpace(gjson.GetBytes(approval.body, "code_verifier").String())
 	if code == "" || verifier == "" {
-		return pluginsdk.JSONResponse(http.StatusOK, DevicePollResponse{Status: "error",
-			Message: "the approval answer has no authorization_code or code_verifier / 授权响应缺少 authorization_code 或 code_verifier"}), nil
+		p.log.Warn("codex: device code approval without authorization_code or code_verifier")
+		return pollFailed("the approval answer has no authorization_code or code_verifier / 授权响应缺少 authorization_code 或 code_verifier")
 	}
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
@@ -382,20 +483,21 @@ func (p *Plugin) handleDevicePoll(ctx context.Context, req *pluginv1.HTTPRequest
 	form.Set("code_verifier", verifier)
 	t, err := p.postForm(ctx, p.ep.Auth+"/oauth/token", form)
 	if err != nil {
-		return pluginsdk.JSONResponse(http.StatusOK, DevicePollResponse{Status: "error",
-			Message: "token exchange failed, start again / 换取令牌失败，请重新开始: " + err.Error()}), nil
+		p.log.Warn("codex: device code token exchange failed", "error", err.Error())
+		return pollFailed("token exchange failed, start again / 换取令牌失败，请重新开始: " + err.Error())
 	}
 	if !t.ok() {
-		return pluginsdk.JSONResponse(http.StatusOK, DevicePollResponse{Status: "error",
-			Message: "token exchange failed, start again / 换取令牌失败，请重新开始 (" + t.describe() + ")"}), nil
+		p.log.Warn("codex: device code token exchange refused", "status", t.status, "oauth_error", oauthErrorCode(t.body))
+		return pollFailed("token exchange failed, start again / 换取令牌失败，请重新开始 (" + t.describe() + ")")
 	}
 	tr, err := readToken(t)
 	if err != nil {
-		return pluginsdk.JSONResponse(http.StatusOK, DevicePollResponse{Status: "error", Message: err.Error()}), nil
+		p.log.Warn("codex: device code token answer unusable", "error", err.Error())
+		return pollFailed(err.Error())
 	}
 	c := p.credentialsFrom(tr)
 	c.ChatGPTAccountID = parseIdentity(tr.IDToken, tr.AccessToken).AccountID
-	return pluginsdk.JSONResponse(http.StatusOK, DevicePollResponse{Status: "done", Credentials: &c}), nil
+	return pollAnswer(DevicePollResponse{Status: pollDone, Credentials: &c})
 }
 
 // ---------------------------------------------------------------- Sign in with ChatGPT
@@ -453,37 +555,37 @@ func validClientID(s string) bool {
 func (p *Plugin) handleSIWCStart(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in SIWCStartRequest
 	if err := decodeOptional(req, &in); err != nil {
-		return badRequest("invalid_request", "invalid JSON / 请求体不是合法 JSON"), nil
+		return errInvalidJSON(), nil
 	}
 	clientID := strings.TrimSpace(in.ClientID)
 	if clientID == SIWCDynamicClient {
 		clientID = ""
 	}
 	if clientID != "" && !validClientID(clientID) {
-		return badRequest("invalid_client_id", "client_id is not a valid client id / client_id 格式不正确"), nil
+		return pluginsdk.BadRequest("client_id", "pattern", "client_id is not a valid client id / client_id 格式不正确"), nil
 	}
 	hostID := strings.TrimSpace(in.ExtAgentHostID)
 	if hostID != "" && !hostIDPattern.MatchString(hostID) {
-		return badRequest("invalid_host_id", "ext_agent_host_id must be urn:uuid:<UUID> / ext_agent_host_id 必须是 urn:uuid:<UUID>"), nil
+		return pluginsdk.BadRequest("ext_agent_host_id", "pattern", "ext_agent_host_id must be urn:uuid:<UUID> / ext_agent_host_id 必须是 urn:uuid:<UUID>"), nil
 	}
 	var err error
 	if hostID == "" {
 		if hostID, err = newHostID(); err != nil {
-			return internalError("host id", err), nil
+			return internalError(msgHostID, err), nil
 		}
 	}
 	s := siwcSession{HostID: hostID, ClientID: clientID}
 	for _, f := range []*string{&s.State, &s.Nonce} {
 		if *f, err = randomToken(24); err != nil {
-			return internalError("random", err), nil
+			return internalError(msgRandom, err), nil
 		}
 	}
 	if s.Verifier, err = randomToken(48); err != nil { // 64 characters
-		return internalError("random", err), nil
+		return internalError(msgRandom, err), nil
 	}
 	sessionID, err := randomToken(24)
 	if err != nil {
-		return internalError("session id", err), nil
+		return internalError(msgSessionID, err), nil
 	}
 	if err := p.saveSession(ctx, kvSIWC, sessionID, s, siwcTTL); err != nil {
 		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error()), nil
@@ -504,7 +606,7 @@ func (p *Plugin) handleSIWCStart(ctx context.Context, req *pluginv1.HTTPRequest)
 	q.Set("nonce", s.Nonce)
 	q.Set("code_challenge_method", "S256")
 	q.Set("code_challenge", pkceChallenge(s.Verifier))
-	return pluginsdk.JSONResponse(http.StatusOK, SIWCStartResponse{
+	return pluginsdk.DataResponse(SIWCStartResponse{
 		SessionID: sessionID, AuthorizeURL: p.ep.Auth + "/api/accounts/authorize?" + q.Encode(),
 	}), nil
 }
@@ -570,15 +672,15 @@ func hasScope(scopes, want string) bool {
 func (p *Plugin) handleSIWCExchange(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in SIWCExchangeRequest
 	if err := decodeOptional(req, &in); err != nil {
-		return badRequest("invalid_request", "invalid JSON / 请求体不是合法 JSON"), nil
+		return errInvalidJSON(), nil
 	}
 	id := strings.TrimSpace(in.SessionID)
 	if id == "" {
-		return badRequest("invalid_request", "session_id is required / 缺少 session_id"), nil
+		return errNoSession(), nil
 	}
 	cb, err := parseCallback(in.CallbackURL)
 	if err != nil {
-		return badRequest("invalid_callback", err.Error()), nil
+		return flowError("invalid_callback", err.Error()), nil
 	}
 	var s siwcSession
 	found, err := p.loadSession(ctx, kvSIWC, id, &s)
@@ -593,26 +695,27 @@ func (p *Plugin) handleSIWCExchange(ctx context.Context, req *pluginv1.HTTPReque
 		if cb.ErrorDescription != "" {
 			msg += ": " + cb.ErrorDescription
 		}
+		p.log.Warn("codex: Sign in with ChatGPT authorization failed", "oauth_error", cb.Error)
 		if cb.Error == "access_denied" {
 			p.deleteSession(ctx, kvSIWC, id)
-			return badRequest("access_denied", "authorization was denied / 授权被拒绝 ("+msg+")"), nil
+			return flowError("access_denied", "authorization was denied / 授权被拒绝 ("+msg+")"), nil
 		}
-		return badRequest("authorization_failed", "authorization failed / 授权失败 ("+msg+")"), nil
+		return flowError("authorization_failed", "authorization failed / 授权失败 ("+msg+")"), nil
 	}
 	if cb.State != s.State {
-		return badRequest("state_mismatch", "the callback does not belong to this authorization (state mismatch); paste the address from the latest link / 回调与本次授权不匹配（state 不一致），请粘贴最新链接的回调地址"), nil
+		return flowError("state_mismatch", "the callback does not belong to this authorization (state mismatch); paste the address from the latest link / 回调与本次授权不匹配（state 不一致），请粘贴最新链接的回调地址"), nil
 	}
 	clientID := s.ClientID
 	switch issued := cb.ClientID; {
 	case clientID == "" && (issued == "" || issued == SIWCDynamicClient):
-		return badRequest("registration_incomplete", "the callback has no issued client_id: the registration did not complete; authorize again / 回调中没有发放的 client_id，注册未完成，请重新授权"), nil
+		return flowError("registration_incomplete", "the callback has no issued client_id: the registration did not complete; authorize again / 回调中没有发放的 client_id，注册未完成，请重新授权"), nil
 	case clientID == "":
 		if !validClientID(issued) {
-			return badRequest("invalid_callback", "the callback client_id is not valid / 回调中的 client_id 格式不正确"), nil
+			return flowError("invalid_callback", "the callback client_id is not valid / 回调中的 client_id 格式不正确"), nil
 		}
 		clientID = issued
 	case issued != "" && issued != clientID:
-		return badRequest("client_mismatch", "the callback client_id differs from the account's; re-authorize with the same ChatGPT account / 回调中的 client_id 与账号已有的不同，请用同一个 ChatGPT 账号重新授权"), nil
+		return flowError("client_mismatch", "the callback client_id differs from the account's; re-authorize with the same ChatGPT account / 回调中的 client_id 与账号已有的不同，请用同一个 ChatGPT 账号重新授权"), nil
 	}
 
 	form := url.Values{}
@@ -624,13 +727,16 @@ func (p *Plugin) handleSIWCExchange(ctx context.Context, req *pluginv1.HTTPReque
 	form.Set("resource", SIWCResource)
 	a, err := p.postForm(ctx, p.ep.Auth+"/api/accounts/oauth/token", form)
 	if err != nil {
+		p.log.Warn("codex: Sign in with ChatGPT token exchange failed", "error", err.Error())
 		return upstreamError("upstream_unavailable", "cannot reach the OpenAI authorization server / 无法连接 OpenAI 授权服务器: "+err.Error()), nil
 	}
 	if !a.ok() {
+		p.log.Warn("codex: Sign in with ChatGPT token exchange refused", "status", a.status, "oauth_error", oauthErrorCode(a.body))
 		return upstreamError("token_exchange_failed", "token exchange failed; generate a new link if the code was used / 换取令牌失败，授权码已用过时请重新生成链接 ("+a.describe()+")"), nil
 	}
 	tr, err := readToken(a)
 	if err != nil {
+		p.log.Warn("codex: Sign in with ChatGPT token answer unusable", "error", err.Error())
 		return upstreamError("token_exchange_failed", err.Error()), nil
 	}
 	scopes := strings.TrimSpace(tr.Scope)
@@ -638,12 +744,13 @@ func (p *Plugin) handleSIWCExchange(ctx context.Context, req *pluginv1.HTTPReque
 		scopes = cb.Scope
 	}
 	if !hasScope(scopes, ScopeDirect) {
-		return badRequest("scope_missing", "the authorization did not grant "+ScopeDirect+" (ChatGPT plan usage); authorize again and allow it / 授权未包含 "+ScopeDirect+"（ChatGPT 套餐用量），请重新授权并允许 (granted: "+strconv.Quote(scopes)+")"), nil
+		p.log.Warn("codex: Sign in with ChatGPT authorization lacks the direct-use scope", "scopes", scopes)
+		return flowError("scope_missing", "the authorization did not grant "+ScopeDirect+" (ChatGPT plan usage); authorize again and allow it / 授权未包含 "+ScopeDirect+"（ChatGPT 套餐用量），请重新授权并允许 (granted: "+strconv.Quote(scopes)+")"), nil
 	}
 	p.deleteSession(ctx, kvSIWC, id)
 	c := p.credentialsFrom(tr)
 	c.ClientID = clientID
 	c.ExtAgentHostID = s.HostID
 	c.Scopes = scopes
-	return pluginsdk.JSONResponse(http.StatusOK, SIWCExchangeResponse{Credentials: c}), nil
+	return pluginsdk.DataResponse(SIWCExchangeResponse{Credentials: c}), nil
 }

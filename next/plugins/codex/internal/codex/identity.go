@@ -18,12 +18,23 @@ const authClaim = "https://api.openai.com/auth"
 
 // jwtClaims decodes the payload of a JWT WITHOUT verifying its signature.
 //
-// That is deliberate and safe here: the tokens come straight from OpenAI's
-// token endpoint over TLS in the same exchange, the plugin only copies
-// display fields (email, plan) and the ChatGPT account id that the upstream
-// itself checks against the access token, and it never makes an
-// authorization decision on them. A forged token would only mislabel the
-// operator's own account.
+// It reads tokens from two places:
+//
+//   - the answers of OpenAI's token endpoint (authorization and refresh),
+//     straight over TLS in the same exchange;
+//   - the id_token an administrator submits with the account's credentials
+//     (ValidateCredentials), from which missing email / plan_type and, for
+//     codex_device, chatgpt_account_id are filled in. That account id is
+//     then sent upstream as the chatgpt-account-id header.
+//
+// Not verifying is deliberate and safe in both cases. The credentials are
+// the operator's own (the account owner pastes or authorizes their own
+// ChatGPT login; only administrators with account permissions can submit
+// them), so there is no other party whose claims could be forged against
+// them. The plugin copies display fields (email, plan) and the account id,
+// which the upstream itself checks against the access token: a wrong id only
+// makes the operator's own requests fail. No authorization decision of
+// sup2api is ever made on these claims.
 func jwtClaims(token string) map[string]any {
 	parts := strings.Split(strings.TrimSpace(token), ".")
 	if len(parts) != 3 {

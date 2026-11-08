@@ -141,12 +141,12 @@ func TestManifestShape(t *testing.T) {
 		}
 		perms[perm.ID] = perm
 	}
-	for _, id := range []string{"platform.register", "accounts.credentials", "kv", "routes.admin", "net", "ui.native"} {
+	for _, id := range []string{"platform.register", "accounts.credentials", "kv", "lock", "routes.admin", "net", "ui.native"} {
 		if _, ok := perms[id]; !ok {
 			t.Errorf("host permission %s missing", id)
 		}
 	}
-	if len(perms) != 6 {
+	if len(perms) != 7 {
 		t.Errorf("host permissions = %v", perms)
 	}
 	if c := perms["accounts.credentials"]; c.Scope["types"] != "own" || len(c.Scope) != 1 {

@@ -87,33 +87,63 @@ export function formatCountdown(seconds: number): string {
 
 /**
  * Shape of the callback address pasted back after Sign in with ChatGPT (only
- * a hint: the plugin parses and checks it).
+ * a hint: the plugin parses and checks it). It reads what the plugin's
+ * parseCallback reads: the whole address, the address without its scheme, or
+ * only the query ("?code=..." or "code=..."), with parameters in the fragment
+ * when the query has none; surrounding quotes or angle brackets and
+ * HTML-escaped ampersands are tolerated.
  *   empty    nothing pasted yet
- *   invalid  not an http(s) address
- *   denied   the address carries ?error= (consent refused or failed)
- *   no_code  an address without ?code=
+ *   invalid  the plugin cannot read it (a malformed %-escape or a ";")
+ *   denied   it carries error= (consent refused or failed)
+ *   no_code  no code= parameter
  *   ok       looks like the callback
  */
 export type CallbackShape = 'empty' | 'invalid' | 'denied' | 'no_code' | 'ok'
 
-export function callbackShape(raw: string): CallbackShape {
-  const text = raw.trim()
-  if (!text) return 'empty'
-  let url: URL
-  try {
-    url = new URL(text)
-  } catch {
-    return 'invalid'
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'invalid'
-  if (url.searchParams.get('error')) return 'denied'
-  return url.searchParams.get('code') ? 'ok' : 'no_code'
+/** Characters parseCallback trims around the pasted text. */
+const CALLBACK_TRIM = /^["'<>`\s]+|["'<>`\s]+$/g
+
+/** The query parameters of a pasted callback, or null when the plugin could not read them (Go url.ParseQuery). */
+function callbackParams(query: string): URLSearchParams | null {
+  if (query.includes(';') || /%(?![0-9a-fA-F]{2})/.test(query)) return null
+  return new URLSearchParams(query)
 }
 
-/** Poll delay in ms for an interval in seconds: at least 2 s, 5 s when unusable. */
+export function callbackShape(raw: string): CallbackShape {
+  let text = raw.trim().replace(CALLBACK_TRIM, '').replace(/&amp;/g, '&')
+  if (!text) return 'empty'
+  let fragment = ''
+  const hash = text.indexOf('#')
+  if (hash >= 0) {
+    fragment = text.slice(hash + 1)
+    text = text.slice(0, hash)
+  }
+  const q = text.indexOf('?')
+  let query: string
+  if (q >= 0) query = text.slice(q + 1)
+  else if (text.includes('://') || (!text.includes('=') && text.includes('/'))) query = '' // an address without a query
+  else query = text
+  let params = callbackParams(query)
+  if (!params) return 'invalid'
+  if (!params.get('code') && !params.get('error') && fragment) params = callbackParams(fragment) ?? params
+  if (params.get('error')?.trim()) return 'denied'
+  return params.get('code')?.trim() ? 'ok' : 'no_code'
+}
+
+/** Device code polling: the delay when the plugin gives no usable interval, and the shortest one. */
+export const DEFAULT_POLL_MS = 5000
+export const MIN_POLL_SECONDS = 2
+/** Lifetime of a device code when the start answer has none (Codex: 15 minutes). */
+export const DEFAULT_CODE_TTL_SECONDS = 900
+/** Failed poll requests in a row (a dropped request, a restarting node) before the flow gives up. */
+export const MAX_POLL_FAILURES = 3
+/** How often the countdown ticks. */
+export const COUNTDOWN_TICK_MS = 1000
+
+/** Poll delay in ms for an interval in seconds: at least MIN_POLL_SECONDS, DEFAULT_POLL_MS when unusable. */
 export function pollDelay(interval: unknown): number {
   const n = Number(interval)
-  return Number.isFinite(n) && n > 0 ? Math.max(2, n) * 1000 : 5000
+  return Number.isFinite(n) && n > 0 ? Math.max(MIN_POLL_SECONDS, n) * 1000 : DEFAULT_POLL_MS
 }
 
 /** Plans with a message (plan.<id>); others are shown as given. */

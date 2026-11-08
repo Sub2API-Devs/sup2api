@@ -59,3 +59,16 @@ func mustJSON(t *testing.T, raw []byte, v any) {
 		t.Fatalf("unmarshal %s: %v", raw, err)
 	}
 }
+
+// mustData reads a route answer {"data": v} (pluginsdk.DataResponse).
+func mustData(t *testing.T, raw []byte, v any) {
+	t.Helper()
+	var env struct {
+		Data json.RawMessage `json:"data"`
+	}
+	mustJSON(t, raw, &env)
+	if len(env.Data) == 0 {
+		t.Fatalf("no data in %s", raw)
+	}
+	mustJSON(t, env.Data, v)
+}

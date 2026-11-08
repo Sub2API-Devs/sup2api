@@ -6,7 +6,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { SAlert, SButton, SCopyButton, SHint, SIcon, SLink, SSpinner, SSteps, useNow } from '@sub2api/ui'
 import { errorMessage, pollDevice, startDevice, useCodexHost, type CodexCredentials, type DeviceStart } from './host'
-import { formatCountdown, pollDelay } from './flow'
+import { COUNTDOWN_TICK_MS, DEFAULT_CODE_TTL_SECONDS, DEFAULT_POLL_MS, formatCountdown, MAX_POLL_FAILURES, pollDelay } from './flow'
 
 const emit = defineEmits<{ (e: 'authorized', creds: CodexCredentials): void; (e: 'busy', busy: boolean): void }>()
 const host = useCodexHost()
@@ -17,14 +17,14 @@ const phase = ref<Phase>('idle')
 const session = ref<DeviceStart | null>(null)
 const expiresAt = ref(0)
 const failure = ref('')
-const now = useNow(() => (phase.value === 'waiting' ? 1000 : 0))
+const now = useNow(() => (phase.value === 'waiting' ? COUNTDOWN_TICK_MS : 0))
 const left = computed(() => Math.max(0, Math.round((expiresAt.value - now.value) / 1000)))
 
 // Each start gets a generation; a reply of an older one (after reset,
 // restart or unmount) is dropped.
 let generation = 0
 let timer: ReturnType<typeof setTimeout> | null = null
-let delay = 5000
+let delay = DEFAULT_POLL_MS
 let failures = 0
 
 function setPhase(p: Phase) {
@@ -48,7 +48,7 @@ async function start() {
     const s = await startDevice()
     if (gen !== generation) return
     session.value = s
-    expiresAt.value = Date.now() + (Number(s.expires_in) > 0 ? Number(s.expires_in) : 900) * 1000
+    expiresAt.value = Date.now() + (Number(s.expires_in) > 0 ? Number(s.expires_in) : DEFAULT_CODE_TTL_SECONDS) * 1000
     delay = pollDelay(s.interval)
     failures = 0
     setPhase('waiting')
@@ -92,7 +92,7 @@ async function poll(gen: number) {
   } catch (e) {
     if (gen !== generation) return
     // A dropped request or a restarting node: try again a few times before giving up.
-    if (++failures < 3) return schedule(gen)
+    if (++failures < MAX_POLL_FAILURES) return schedule(gen)
     stop()
     failure.value = errorMessage(e, t('actionFailed'))
     setPhase('error')

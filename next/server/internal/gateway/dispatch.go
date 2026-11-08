@@ -557,16 +557,13 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	// the plugin sees the request, so the fields it reads and the body its
 	// patches apply to already say what goes upstream.
 	if c.forcesStream(rt) {
+		// The body here is the core's own (converted and mapped), not yet
+		// touched by the plugin: failing to set the flag is an internal error.
 		if upBody, err = forceStreamPath(upBody, rt.streamPath); err != nil {
 			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
 		}
 	}
-	fields := map[string]string{}
-	for _, p := range rt.requestFields {
-		if r := getJSON(upBody, p); r != "" {
-			fields[p] = r
-		}
-	}
+	fields := requestFieldValues(upBody, rt.requestFields)
 	meta := c.metaFor(rt)
 	meta.Model = upModel
 	buildRequest := &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: pacct, Fields: fields, InboundHeaders: c.passHeaders(rt.passHeaders), Attempt: int32(n)}
@@ -653,6 +650,11 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
 	// Whatever the plugin patched, a stream-only upstream gets stream: true.
+	// The body is the plugin's patched one now: when the flag cannot be set
+	// on it (a patch replaced the parent of streamPath with a non-object),
+	// the plugin produced the invalid body, so it is charged to the plugin
+	// like a patch that cannot be applied, unlike the ErrInternal before
+	// BuildUpstreamRequest in attempt.
 	forced := c.forcesStream(rt)
 	if forced {
 		if body, err = forceStreamPath(body, rt.streamPath); err != nil {

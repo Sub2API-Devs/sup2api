@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
+	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -48,8 +49,8 @@ func (c *chatResponses) Prepare(body []byte) (Converter, []byte, error) {
 	if err != nil {
 		return nil, nil, &RequestError{Cause: err}
 	}
-	sort.Strings(p.dropped)
-	p.dropped = slicesCompact(p.dropped)
+	slices.Sort(p.dropped)
+	p.dropped = slices.Compact(p.dropped)
 	return p, out, nil
 }
 
@@ -63,16 +64,6 @@ func (c *chatResponses) Request(body []byte) ([]byte, error) {
 func (c *chatResponses) Dropped() []string { return append([]string(nil), c.dropped...) }
 
 func (c *chatResponses) drop(path string) { c.dropped = append(c.dropped, path) }
-
-func slicesCompact(s []string) []string {
-	out := s[:0]
-	for i, v := range s {
-		if i == 0 || v != s[i-1] {
-			out = append(out, v)
-		}
-	}
-	return out
-}
 
 // ---------------------------------------------------------------- helpers
 
@@ -152,13 +143,13 @@ func jnumber(v any, path string) (json.Number, error) {
 	return n, nil
 }
 
-func jint(v any, path string, min, max int64) (int64, error) {
+func jint(v any, path string, lo, hi int64) (int64, error) {
 	n, ok := v.(json.Number)
 	if !ok {
 		return 0, cfail(path, "expected integer")
 	}
 	i, err := strconv.ParseInt(string(n), 10, 64)
-	if err != nil || i < min || i > max {
+	if err != nil || i < lo || i > hi {
 		return 0, cfail(path, "integer out of range")
 	}
 	return i, nil
@@ -172,11 +163,7 @@ func (c *chatResponses) keep(o jobject, path string, names ...string) {
 			delete(o, k)
 			continue
 		}
-		known := false
-		for _, n := range names {
-			known = known || k == n
-		}
-		if !known {
+		if !slices.Contains(names, k) {
 			delete(o, k)
 			c.drop(path + "." + k)
 		}
@@ -255,7 +242,7 @@ var chatPassThrough = map[string]string{
 	"stream":                 "boolean",
 }
 
-func (p *chatResponses) request(raw []byte) ([]byte, error) {
+func (c *chatResponses) request(raw []byte) ([]byte, error) {
 	in, err := decodeJObject(raw, "request")
 	if err != nil {
 		return nil, err
@@ -281,25 +268,23 @@ func (p *chatResponses) request(raw []byte) ([]byte, error) {
 			return nil, cfail("audio", "audio output has no Responses equivalent")
 		case "modalities":
 			mods, _ := v.([]any)
-			for _, m := range mods {
-				if m == "audio" {
-					return nil, cfail("modalities", "audio output has no Responses equivalent")
-				}
+			if slices.Contains(mods, any("audio")) {
+				return nil, cfail("modalities", "audio output has no Responses equivalent")
 			}
-			if !(len(mods) == 1 && mods[0] == "text") {
-				p.drop(k)
+			if len(mods) != 1 || mods[0] != "text" {
+				c.drop(k)
 			}
 			continue
 		}
 		if neutral, ok := chatDropped[k]; ok {
 			if !neutral(v) {
-				p.drop(k)
+				c.drop(k)
 			}
 			continue
 		}
 		typ, ok := chatPassThrough[k]
 		if !ok {
-			p.drop(k)
+			c.drop(k)
 			continue
 		}
 		switch typ {
@@ -324,16 +309,16 @@ func (p *chatResponses) request(raw []byte) ([]byte, error) {
 	if out["model"], err = jnonempty(in["model"], "model"); err != nil {
 		return nil, err
 	}
-	if err = p.maxTokens(in, out); err != nil {
+	if err = c.maxTokens(in, out); err != nil {
 		return nil, err
 	}
-	if err = p.streamOptions(in, out); err != nil {
+	if err = c.streamOptions(in, out); err != nil {
 		return nil, err
 	}
-	if err = p.chatTools(in, out); err != nil {
+	if err = c.chatTools(in, out); err != nil {
 		return nil, err
 	}
-	if err = p.chatTextControls(in, out); err != nil {
+	if err = c.chatTextControls(in, out); err != nil {
 		return nil, err
 	}
 	if v, ok := in["reasoning_effort"]; ok {
@@ -343,7 +328,7 @@ func (p *chatResponses) request(raw []byte) ([]byte, error) {
 		}
 		out["reasoning"] = jobject{"effort": effort}
 	}
-	if err = p.chatMessages(in, out); err != nil {
+	if err = c.chatMessages(in, out); err != nil {
 		return nil, err
 	}
 	return json.Marshal(out)
@@ -352,14 +337,14 @@ func (p *chatResponses) request(raw []byte) ([]byte, error) {
 // maxTokens maps max_completion_tokens (or its deprecated alias max_tokens)
 // to max_output_tokens; when both differ max_completion_tokens wins and
 // max_tokens is dropped.
-func (p *chatResponses) maxTokens(in, out jobject) error {
+func (c *chatResponses) maxTokens(in, out jobject) error {
 	a, hasA := in["max_completion_tokens"]
 	b, hasB := in["max_tokens"]
 	if hasA && hasB {
 		x, _ := json.Marshal(a)
 		y, _ := json.Marshal(b)
 		if !bytes.Equal(x, y) {
-			p.drop("max_tokens")
+			c.drop("max_tokens")
 		}
 	}
 	key, v := "max_completion_tokens", a
@@ -369,7 +354,7 @@ func (p *chatResponses) maxTokens(in, out jobject) error {
 	if !hasA && !hasB {
 		return nil
 	}
-	n, err := jint(v, key, 1, 2147483647)
+	n, err := jint(v, key, 1, math.MaxInt32)
 	if err != nil {
 		return err
 	}
@@ -377,7 +362,7 @@ func (p *chatResponses) maxTokens(in, out jobject) error {
 	return nil
 }
 
-func (p *chatResponses) streamOptions(in, out jobject) error {
+func (c *chatResponses) streamOptions(in, out jobject) error {
 	v, ok := in["stream_options"]
 	if !ok {
 		return nil
@@ -386,9 +371,9 @@ func (p *chatResponses) streamOptions(in, out jobject) error {
 	if err != nil {
 		return err
 	}
-	p.keep(o, "stream_options", "include_usage", "include_obfuscation")
+	c.keep(o, "stream_options", "include_usage", "include_obfuscation")
 	if x, ok := o["include_usage"]; ok {
-		if p.includeUsage, err = jbool(x, "stream_options.include_usage"); err != nil {
+		if c.includeUsage, err = jbool(x, "stream_options.include_usage"); err != nil {
 			return err
 		}
 	}
@@ -406,7 +391,7 @@ func (p *chatResponses) streamOptions(in, out jobject) error {
 // web_search_options, tool_choice and the legacy function_call. Chat
 // function tools are not strict unless they say so; Responses function
 // tools are strict by default, so strict is always written.
-func (p *chatResponses) chatTools(in, out jobject) error {
+func (c *chatResponses) chatTools(in, out jobject) error {
 	mapped := []any{}
 	_, hasTools := in["tools"]
 	if v, ok := in["tools"]; ok {
@@ -423,11 +408,11 @@ func (p *chatResponses) chatTools(in, out jobject) error {
 			var o jobject
 			switch tool["type"] {
 			case "function":
-				p.keep(tool, path, "type", "function")
-				o, err = p.functionTool(tool["function"], path+".function")
+				c.keep(tool, path, "type", "function")
+				o, err = c.functionTool(tool["function"], path+".function")
 			case "custom":
-				p.keep(tool, path, "type", "custom")
-				o, err = p.customTool(tool["custom"], path+".custom")
+				c.keep(tool, path, "type", "custom")
+				o, err = c.customTool(tool["custom"], path+".custom")
 			default:
 				return cfail(path+".type", "only function and custom tools are converted")
 			}
@@ -443,7 +428,7 @@ func (p *chatResponses) chatTools(in, out jobject) error {
 			return err
 		}
 		for i, f := range fns {
-			o, err := p.functionTool(f, jpos("functions", i))
+			o, err := c.functionTool(f, jpos("functions", i))
 			if err != nil {
 				return err
 			}
@@ -452,14 +437,14 @@ func (p *chatResponses) chatTools(in, out jobject) error {
 		// Legacy function calling answers with message.function_call, one
 		// call per message.
 		if !hasTools {
-			p.legacy = true
+			c.legacy = true
 			if _, set := out["parallel_tool_calls"]; !set && len(fns) > 0 {
 				out["parallel_tool_calls"] = false
 			}
 		}
 	}
 	if v, ok := in["web_search_options"]; ok {
-		ws, err := p.webSearchTool(v)
+		ws, err := c.webSearchTool(v)
 		if err != nil {
 			return err
 		}
@@ -469,13 +454,13 @@ func (p *chatResponses) chatTools(in, out jobject) error {
 		out["tools"] = mapped
 	}
 	if v, ok := in["tool_choice"]; ok {
-		tc, err := p.toolChoice(v)
+		tc, err := c.toolChoice(v)
 		if err != nil {
 			return err
 		}
 		out["tool_choice"] = tc
 		if _, legacy := in["function_call"]; legacy {
-			p.drop("function_call")
+			c.drop("function_call")
 		}
 	} else if v, ok := in["function_call"]; ok {
 		if s, isStr := v.(string); isStr {
@@ -488,7 +473,7 @@ func (p *chatResponses) chatTools(in, out jobject) error {
 			if err != nil {
 				return err
 			}
-			p.keep(o, "function_call", "name")
+			c.keep(o, "function_call", "name")
 			name, err := jnonempty(o["name"], "function_call.name")
 			if err != nil {
 				return err
@@ -501,12 +486,12 @@ func (p *chatResponses) chatTools(in, out jobject) error {
 
 // functionTool maps a chat function definition {name, description?,
 // parameters?, strict?} to a Responses function tool.
-func (p *chatResponses) functionTool(v any, path string) (jobject, error) {
+func (c *chatResponses) functionTool(v any, path string) (jobject, error) {
 	fn, err := jobj(v, path)
 	if err != nil {
 		return nil, err
 	}
-	p.keep(fn, path, "name", "description", "parameters", "strict")
+	c.keep(fn, path, "name", "description", "parameters", "strict")
 	name, err := jnonempty(fn["name"], path+".name")
 	if err != nil {
 		return nil, err
@@ -533,12 +518,12 @@ func (p *chatResponses) functionTool(v any, path string) (jobject, error) {
 // customTool maps {name, description?, format?} to a Responses custom tool.
 // The grammar format is nested in Chat ({type: grammar, grammar:
 // {definition, syntax}}) and flat in Responses.
-func (p *chatResponses) customTool(v any, path string) (jobject, error) {
+func (c *chatResponses) customTool(v any, path string) (jobject, error) {
 	ct, err := jobj(v, path)
 	if err != nil {
 		return nil, err
 	}
-	p.keep(ct, path, "name", "description", "format")
+	c.keep(ct, path, "name", "description", "format")
 	name, err := jnonempty(ct["name"], path+".name")
 	if err != nil {
 		return nil, err
@@ -555,15 +540,15 @@ func (p *chatResponses) customTool(v any, path string) (jobject, error) {
 		}
 		switch f["type"] {
 		case "text":
-			p.keep(f, fp, "type")
+			c.keep(f, fp, "type")
 			o["format"] = jobject{"type": "text"}
 		case "grammar":
-			p.keep(f, fp, "type", "grammar")
+			c.keep(f, fp, "type", "grammar")
 			g, err := jobj(f["grammar"], fp+".grammar")
 			if err != nil {
 				return nil, err
 			}
-			p.keep(g, fp+".grammar", "definition", "syntax")
+			c.keep(g, fp+".grammar", "definition", "syntax")
 			def, err := jstr(g["definition"], fp+".grammar.definition")
 			if err != nil {
 				return nil, err
@@ -582,13 +567,13 @@ func (p *chatResponses) customTool(v any, path string) (jobject, error) {
 
 // webSearchTool maps web_search_options to a Responses web_search tool;
 // the chat location nests its fields under approximate, Responses does not.
-func (p *chatResponses) webSearchTool(v any) (jobject, error) {
+func (c *chatResponses) webSearchTool(v any) (jobject, error) {
 	const path = "web_search_options"
 	o, err := jobj(v, path)
 	if err != nil {
 		return nil, err
 	}
-	p.keep(o, path, "search_context_size", "user_location")
+	c.keep(o, path, "search_context_size", "user_location")
 	ws := jobject{"type": "web_search"}
 	if err = optStr(ws, o, "search_context_size", path); err != nil {
 		return nil, err
@@ -599,7 +584,7 @@ func (p *chatResponses) webSearchTool(v any) (jobject, error) {
 		if err != nil {
 			return nil, err
 		}
-		p.keep(loc, lp, "type", "approximate")
+		c.keep(loc, lp, "type", "approximate")
 		if t, ok := loc["type"]; ok && t != "approximate" {
 			return nil, cfail(lp+".type", "expected approximate")
 		}
@@ -610,7 +595,7 @@ func (p *chatResponses) webSearchTool(v any) (jobject, error) {
 			if err != nil {
 				return nil, err
 			}
-			p.keep(a, ap, "city", "country", "region", "timezone")
+			c.keep(a, ap, "city", "country", "region", "timezone")
 			for _, k := range []string{"city", "country", "region", "timezone"} {
 				if err = optStr(ul, a, k, ap); err != nil {
 					return nil, err
@@ -624,7 +609,7 @@ func (p *chatResponses) webSearchTool(v any) (jobject, error) {
 
 // toolChoice maps none/auto/required, a named function or custom tool, and
 // allowed_tools.
-func (p *chatResponses) toolChoice(v any) (any, error) {
+func (c *chatResponses) toolChoice(v any) (any, error) {
 	if s, isStr := v.(string); isStr {
 		switch s {
 		case "none", "auto", "required":
@@ -638,14 +623,14 @@ func (p *chatResponses) toolChoice(v any) (any, error) {
 	}
 	switch o["type"] {
 	case "function", "custom":
-		return p.namedTool(o, "tool_choice")
+		return c.namedTool(o, "tool_choice")
 	case "allowed_tools":
-		p.keep(o, "tool_choice", "type", "allowed_tools")
+		c.keep(o, "tool_choice", "type", "allowed_tools")
 		at, err := jobj(o["allowed_tools"], "tool_choice.allowed_tools")
 		if err != nil {
 			return nil, err
 		}
-		p.keep(at, "tool_choice.allowed_tools", "mode", "tools")
+		c.keep(at, "tool_choice.allowed_tools", "mode", "tools")
 		mode, err := jnonempty(at["mode"], "tool_choice.allowed_tools.mode")
 		if err != nil {
 			return nil, err
@@ -664,7 +649,7 @@ func (p *chatResponses) toolChoice(v any) (any, error) {
 			if to["type"] != "function" && to["type"] != "custom" {
 				return nil, cfail(tp+".type", "only function and custom tools are converted")
 			}
-			named, err := p.namedTool(to, tp)
+			named, err := c.namedTool(to, tp)
 			if err != nil {
 				return nil, err
 			}
@@ -676,14 +661,14 @@ func (p *chatResponses) toolChoice(v any) (any, error) {
 }
 
 // namedTool maps {type: function|custom, <type>: {name}} to {type, name}.
-func (p *chatResponses) namedTool(o jobject, path string) (jobject, error) {
+func (c *chatResponses) namedTool(o jobject, path string) (jobject, error) {
 	typ := o["type"].(string)
-	p.keep(o, path, "type", typ)
+	c.keep(o, path, "type", typ)
 	inner, err := jobj(o[typ], path+"."+typ)
 	if err != nil {
 		return nil, err
 	}
-	p.keep(inner, path+"."+typ, "name")
+	c.keep(inner, path+"."+typ, "name")
 	name, err := jnonempty(inner["name"], path+"."+typ+".name")
 	if err != nil {
 		return nil, err
@@ -693,7 +678,7 @@ func (p *chatResponses) namedTool(o jobject, path string) (jobject, error) {
 
 // chatTextControls maps response_format to text.format and verbosity to
 // text.verbosity.
-func (p *chatResponses) chatTextControls(in, out jobject) error {
+func (c *chatResponses) chatTextControls(in, out jobject) error {
 	text := jobject{}
 	if v, ok := in["verbosity"]; ok {
 		s, err := jnonempty(v, "verbosity")
@@ -709,15 +694,15 @@ func (p *chatResponses) chatTextControls(in, out jobject) error {
 		}
 		switch rf["type"] {
 		case "text", "json_object":
-			p.keep(rf, "response_format", "type")
+			c.keep(rf, "response_format", "type")
 			text["format"] = jobject{"type": rf["type"]}
 		case "json_schema":
-			p.keep(rf, "response_format", "type", "json_schema")
+			c.keep(rf, "response_format", "type", "json_schema")
 			js, err := jobj(rf["json_schema"], "response_format.json_schema")
 			if err != nil {
 				return err
 			}
-			p.keep(js, "response_format.json_schema", "name", "description", "schema", "strict")
+			c.keep(js, "response_format.json_schema", "name", "description", "schema", "strict")
 			f := jobject{"type": "json_schema"}
 			if f["name"], err = jnonempty(js["name"], "response_format.json_schema.name"); err != nil {
 				return err
@@ -759,7 +744,7 @@ type legacyCall struct{ name, id string }
 // chatMessages maps messages to instructions and input. The system and
 // developer messages before the first other message become instructions
 // (joined by a blank line); later ones become developer input messages.
-func (p *chatResponses) chatMessages(in, out jobject) error {
+func (c *chatResponses) chatMessages(in, out jobject) error {
 	msgs, err := jlist(in["messages"], "messages")
 	if err != nil {
 		return err
@@ -781,96 +766,129 @@ func (p *chatResponses) chatMessages(in, out jobject) error {
 		if err != nil {
 			return err
 		}
-		switch role {
-		case "system", "developer":
-			p.keep(msg, path, "role", "content")
-			parts, err := p.chatTextParts(msg["content"], path+".content")
+		if role == "system" || role == "developer" {
+			c.keep(msg, path, "role", "content")
+			parts, err := c.chatTextParts(msg["content"], path+".content")
 			if err != nil {
 				return err
 			}
 			if leading {
-				var b strings.Builder
-				for j, part := range parts {
-					if _, ok := part["prompt_cache_breakpoint"]; ok {
-						p.drop(jpos(path+".content", j) + ".prompt_cache_breakpoint")
-					}
-					b.WriteString(part["text"].(string))
-				}
-				instructions = append(instructions, b.String())
-				continue
-			}
-			input = append(input, jobject{"type": "message", "role": "developer", "content": partsAny(parts)})
-		case "user":
-			leading = false
-			p.keep(msg, path, "role", "content")
-			content, err := p.chatUserContent(msg["content"], path+".content")
-			if err != nil {
-				return err
-			}
-			input = append(input, jobject{"type": "message", "role": "user", "content": content})
-		case "assistant":
-			leading = false
-			items, err := p.chatAssistant(msg, path, i, conv)
-			if err != nil {
-				return err
-			}
-			input = append(input, items...)
-		case "tool":
-			leading = false
-			p.keep(msg, path, "role", "content", "tool_call_id")
-			id, err := jnonempty(msg["tool_call_id"], path+".tool_call_id")
-			if err != nil {
-				return err
-			}
-			typ := "function_call_output"
-			if conv.callKinds[id] == "custom" {
-				typ = "custom_tool_call_output"
-			}
-			item := jobject{"type": typ, "call_id": id}
-			if s, ok := msg["content"].(string); ok {
-				item["output"] = s
+				instructions = append(instructions, c.instructionText(parts, path+".content"))
 			} else {
-				parts, err := p.chatTextParts(msg["content"], path+".content")
-				if err != nil {
-					return err
-				}
-				item["output"] = partsAny(parts)
+				input = append(input, jobject{"type": "message", "role": "developer", "content": partsAny(parts)})
 			}
-			input = append(input, item)
-		case "function":
-			leading = false
-			p.keep(msg, path, "role", "content", "name")
-			name, err := jnonempty(msg["name"], path+".name")
-			if err != nil {
-				return err
-			}
-			id := ""
-			for j := len(conv.legacy) - 1; j >= 0; j-- {
-				if conv.legacy[j].name == name {
-					id = conv.legacy[j].id
-					conv.legacy = append(conv.legacy[:j], conv.legacy[j+1:]...)
-					break
-				}
-			}
-			if id == "" {
-				return cfail(path+".name", "no earlier assistant function_call has this name")
-			}
-			output := ""
-			if c, ok := msg["content"]; ok {
-				if output, err = jstr(c, path+".content"); err != nil {
-					return err
-				}
-			}
-			input = append(input, jobject{"type": "function_call_output", "call_id": id, "output": output})
-		default:
-			return cfail(path+".role", "role "+strconv.Quote(role)+" is not converted")
+			continue
 		}
+		leading = false
+		items, err := c.chatMessage(msg, role, path, i, conv)
+		if err != nil {
+			return err
+		}
+		input = append(input, items...)
 	}
 	if len(instructions) > 0 {
 		out["instructions"] = strings.Join(instructions, "\n\n")
 	}
 	out["input"] = input
 	return nil
+}
+
+// instructionText joins the text parts of a leading system or developer
+// message into instructions, which have no cache breakpoints: one set on a
+// part is dropped.
+func (c *chatResponses) instructionText(parts []jobject, path string) string {
+	var b strings.Builder
+	for j, part := range parts {
+		if _, ok := part["prompt_cache_breakpoint"]; ok {
+			c.drop(jpos(path, j) + ".prompt_cache_breakpoint")
+		}
+		b.WriteString(part["text"].(string))
+	}
+	return b.String()
+}
+
+// chatMessage maps a message other than system and developer to its input
+// items.
+func (c *chatResponses) chatMessage(msg jobject, role, path string, index int, conv *chatConversation) ([]any, error) {
+	switch role {
+	case "user":
+		c.keep(msg, path, "role", "content")
+		content, err := c.chatUserContent(msg["content"], path+".content")
+		if err != nil {
+			return nil, err
+		}
+		return []any{jobject{"type": "message", "role": "user", "content": content}}, nil
+	case "assistant":
+		return c.chatAssistant(msg, path, index, conv)
+	case "tool":
+		item, err := c.chatToolMessage(msg, path, conv)
+		if err != nil {
+			return nil, err
+		}
+		return []any{item}, nil
+	case "function":
+		item, err := c.chatFunctionMessage(msg, path, conv)
+		if err != nil {
+			return nil, err
+		}
+		return []any{item}, nil
+	}
+	return nil, cfail(path+".role", "role "+strconv.Quote(role)+" is not converted")
+}
+
+// chatToolMessage maps a tool message to the output item of the call it
+// answers: custom_tool_call_output for a custom call, function_call_output
+// otherwise.
+func (c *chatResponses) chatToolMessage(msg jobject, path string, conv *chatConversation) (jobject, error) {
+	c.keep(msg, path, "role", "content", "tool_call_id")
+	id, err := jnonempty(msg["tool_call_id"], path+".tool_call_id")
+	if err != nil {
+		return nil, err
+	}
+	typ := "function_call_output"
+	if conv.callKinds[id] == "custom" {
+		typ = "custom_tool_call_output"
+	}
+	item := jobject{"type": typ, "call_id": id}
+	if s, ok := msg["content"].(string); ok {
+		item["output"] = s
+		return item, nil
+	}
+	parts, err := c.chatTextParts(msg["content"], path+".content")
+	if err != nil {
+		return nil, err
+	}
+	item["output"] = partsAny(parts)
+	return item, nil
+}
+
+// chatFunctionMessage maps a legacy function message to the
+// function_call_output of the latest earlier function_call with its name
+// still unanswered.
+func (c *chatResponses) chatFunctionMessage(msg jobject, path string, conv *chatConversation) (jobject, error) {
+	c.keep(msg, path, "role", "content", "name")
+	name, err := jnonempty(msg["name"], path+".name")
+	if err != nil {
+		return nil, err
+	}
+	id := ""
+	for j := len(conv.legacy) - 1; j >= 0; j-- {
+		if conv.legacy[j].name == name {
+			id = conv.legacy[j].id
+			conv.legacy = append(conv.legacy[:j], conv.legacy[j+1:]...)
+			break
+		}
+	}
+	if id == "" {
+		return nil, cfail(path+".name", "no earlier assistant function_call has this name")
+	}
+	output := ""
+	if cv, ok := msg["content"]; ok {
+		if output, err = jstr(cv, path+".content"); err != nil {
+			return nil, err
+		}
+	}
+	return jobject{"type": "function_call_output", "call_id": id, "output": output}, nil
 }
 
 func partsAny(parts []jobject) []any {
@@ -883,7 +901,7 @@ func partsAny(parts []jobject) []any {
 
 // chatTextParts reads a content that is a string or an array of text parts
 // and returns Responses input_text parts.
-func (p *chatResponses) chatTextParts(v any, path string) ([]jobject, error) {
+func (c *chatResponses) chatTextParts(v any, path string) ([]jobject, error) {
 	if s, ok := v.(string); ok {
 		return []jobject{{"type": "input_text", "text": s}}, nil
 	}
@@ -901,7 +919,7 @@ func (p *chatResponses) chatTextParts(v any, path string) ([]jobject, error) {
 		if o["type"] != "text" {
 			return nil, cfail(pp+".type", "only text parts are allowed here")
 		}
-		t, err := p.textPart(o, pp)
+		t, err := c.textPart(o, pp)
 		if err != nil {
 			return nil, err
 		}
@@ -911,8 +929,8 @@ func (p *chatResponses) chatTextParts(v any, path string) ([]jobject, error) {
 }
 
 // textPart maps a chat text part to input_text.
-func (p *chatResponses) textPart(o jobject, path string) (jobject, error) {
-	p.keep(o, path, "type", "text", "prompt_cache_breakpoint")
+func (c *chatResponses) textPart(o jobject, path string) (jobject, error) {
+	c.keep(o, path, "type", "text", "prompt_cache_breakpoint")
 	s, err := jstr(o["text"], path+".text")
 	if err != nil {
 		return nil, err
@@ -928,7 +946,7 @@ func (p *chatResponses) textPart(o jobject, path string) (jobject, error) {
 var chatImageDetail = map[string]bool{"auto": true, "low": true, "high": true, "original": true}
 
 // chatUserContent maps user content: text, images and files.
-func (p *chatResponses) chatUserContent(v any, path string) ([]any, error) {
+func (c *chatResponses) chatUserContent(v any, path string) ([]any, error) {
 	if s, ok := v.(string); ok {
 		return []any{jobject{"type": "input_text", "text": s}}, nil
 	}
@@ -946,16 +964,16 @@ func (p *chatResponses) chatUserContent(v any, path string) ([]any, error) {
 		var item jobject
 		switch o["type"] {
 		case "text":
-			if item, err = p.textPart(o, pp); err != nil {
+			if item, err = c.textPart(o, pp); err != nil {
 				return nil, err
 			}
 		case "image_url":
-			p.keep(o, pp, "type", "image_url", "prompt_cache_breakpoint")
+			c.keep(o, pp, "type", "image_url", "prompt_cache_breakpoint")
 			img, err := jobj(o["image_url"], pp+".image_url")
 			if err != nil {
 				return nil, err
 			}
-			p.keep(img, pp+".image_url", "url", "detail")
+			c.keep(img, pp+".image_url", "url", "detail")
 			u, err := jnonempty(img["url"], pp+".image_url.url")
 			if err != nil {
 				return nil, err
@@ -967,17 +985,17 @@ func (p *chatResponses) chatUserContent(v any, path string) ([]any, error) {
 				if s, _ := d.(string); chatImageDetail[s] {
 					detail = s
 				} else {
-					p.drop(pp + ".image_url.detail")
+					c.drop(pp + ".image_url.detail")
 				}
 			}
 			item = jobject{"type": "input_image", "image_url": u, "detail": detail}
 		case "file":
-			p.keep(o, pp, "type", "file", "prompt_cache_breakpoint")
+			c.keep(o, pp, "type", "file", "prompt_cache_breakpoint")
 			f, err := jobj(o["file"], pp+".file")
 			if err != nil {
 				return nil, err
 			}
-			p.keep(f, pp+".file", "file_id", "file_data", "filename")
+			c.keep(f, pp+".file", "file_id", "file_data", "filename")
 			item = jobject{"type": "input_file"}
 			for _, k := range []string{"file_id", "file_data", "filename"} {
 				if err = optStr(item, f, k, pp+".file"); err != nil {
@@ -1003,14 +1021,45 @@ func (p *chatResponses) chatUserContent(v any, path string) ([]any, error) {
 // chatAssistant maps an assistant message: its text and refusal, then its
 // tool calls (function, custom, legacy function_call). An assistant message
 // with nothing in it is left out.
-func (p *chatResponses) chatAssistant(msg jobject, path string, index int, conv *chatConversation) ([]any, error) {
+func (c *chatResponses) chatAssistant(msg jobject, path string, index int, conv *chatConversation) ([]any, error) {
 	if _, ok := msg["audio"]; ok && msg["audio"] != nil {
 		return nil, cfail(path+".audio", "earlier audio responses have no Responses equivalent")
 	}
-	p.keep(msg, path, "role", "content", "tool_calls", "refusal", "function_call")
+	c.keep(msg, path, "role", "content", "tool_calls", "refusal", "function_call")
+	content, err := c.assistantContent(msg, path)
+	if err != nil {
+		return nil, err
+	}
+	var items []any
+	if len(content) > 0 {
+		items = append(items, jobject{"type": "message", "role": "assistant", "content": content})
+	}
+	if tc, ok := msg["tool_calls"]; ok {
+		calls, err := c.assistantToolCalls(tc, path+".tool_calls", conv)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, calls...)
+	}
+	if fc, ok := msg["function_call"]; ok {
+		call, err := c.assistantFunctionCall(fc, path+".function_call", index, conv)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, call)
+	}
+	if len(items) == 0 {
+		c.drop(path)
+	}
+	return items, nil
+}
+
+// assistantContent maps the content and refusal of an assistant message to
+// output_text and refusal parts; an empty refusal is dropped.
+func (c *chatResponses) assistantContent(msg jobject, path string) ([]any, error) {
 	var content []any
-	if c, ok := msg["content"]; ok {
-		parts, err := p.assistantParts(c, path+".content")
+	if cv, ok := msg["content"]; ok {
+		parts, err := c.assistantParts(cv, path+".content")
 		if err != nil {
 			return nil, err
 		}
@@ -1024,89 +1073,90 @@ func (p *chatResponses) chatAssistant(msg jobject, path string, index int, conv 
 		if s != "" {
 			content = append(content, jobject{"type": "refusal", "refusal": s})
 		} else {
-			p.drop(path + ".refusal")
+			c.drop(path + ".refusal")
 		}
 	}
-	var items []any
-	if len(content) > 0 {
-		items = append(items, jobject{"type": "message", "role": "assistant", "content": content})
+	return content, nil
+}
+
+// assistantToolCalls maps an assistant message's tool_calls (at path) to
+// function_call and custom_tool_call items, remembering the kind of each
+// call for the tool messages answering it.
+func (c *chatResponses) assistantToolCalls(v any, path string, conv *chatConversation) ([]any, error) {
+	calls, err := jlist(v, path)
+	if err != nil {
+		return nil, err
 	}
-	if tc, ok := msg["tool_calls"]; ok {
-		calls, err := jlist(tc, path+".tool_calls")
+	items := make([]any, 0, len(calls))
+	for i, tcv := range calls {
+		cp := jpos(path, i)
+		call, err := jobj(tcv, cp)
 		if err != nil {
 			return nil, err
 		}
-		for i, c := range calls {
-			cp := jpos(path+".tool_calls", i)
-			call, err := jobj(c, cp)
-			if err != nil {
-				return nil, err
-			}
-			typ, _ := call["type"].(string)
-			if typ != "function" && typ != "custom" {
-				return nil, cfail(cp+".type", "only function and custom calls are converted")
-			}
-			p.keep(call, cp, "id", "type", typ)
-			id, err := jnonempty(call["id"], cp+".id")
-			if err != nil {
-				return nil, err
-			}
-			inner, err := jobj(call[typ], cp+"."+typ)
-			if err != nil {
-				return nil, err
-			}
-			field := "arguments"
-			if typ == "custom" {
-				field = "input"
-			}
-			p.keep(inner, cp+"."+typ, "name", field)
-			name, err := jnonempty(inner["name"], cp+"."+typ+".name")
-			if err != nil {
-				return nil, err
-			}
-			arg, err := jstr(inner[field], cp+"."+typ+"."+field)
-			if err != nil {
-				return nil, err
-			}
-			conv.callKinds[id] = typ
-			if typ == "custom" {
-				items = append(items, jobject{"type": "custom_tool_call", "call_id": id, "name": name, "input": arg})
-			} else {
-				items = append(items, jobject{"type": "function_call", "call_id": id, "name": name, "arguments": arg})
-			}
+		typ, _ := call["type"].(string)
+		if typ != "function" && typ != "custom" {
+			return nil, cfail(cp+".type", "only function and custom calls are converted")
 		}
-	}
-	if fc, ok := msg["function_call"]; ok {
-		fp := path + ".function_call"
-		fn, err := jobj(fc, fp)
+		c.keep(call, cp, "id", "type", typ)
+		id, err := jnonempty(call["id"], cp+".id")
 		if err != nil {
 			return nil, err
 		}
-		p.keep(fn, fp, "name", "arguments")
-		name, err := jnonempty(fn["name"], fp+".name")
+		inner, err := jobj(call[typ], cp+"."+typ)
 		if err != nil {
 			return nil, err
 		}
-		args, err := jstr(fn["arguments"], fp+".arguments")
+		field := "arguments"
+		if typ == "custom" {
+			field = "input"
+		}
+		c.keep(inner, cp+"."+typ, "name", field)
+		name, err := jnonempty(inner["name"], cp+"."+typ+".name")
 		if err != nil {
 			return nil, err
 		}
-		// Legacy calls have no id; the function message answering it is
-		// matched by name.
-		id := fmt.Sprintf("call_legacy_%d", index)
-		conv.legacy = append(conv.legacy, legacyCall{name: name, id: id})
-		conv.callKinds[id] = "function"
-		items = append(items, jobject{"type": "function_call", "call_id": id, "name": name, "arguments": args})
-	}
-	if len(items) == 0 {
-		p.drop(path)
+		arg, err := jstr(inner[field], cp+"."+typ+"."+field)
+		if err != nil {
+			return nil, err
+		}
+		conv.callKinds[id] = typ
+		if typ == "custom" {
+			items = append(items, jobject{"type": "custom_tool_call", "call_id": id, "name": name, "input": arg})
+		} else {
+			items = append(items, jobject{"type": "function_call", "call_id": id, "name": name, "arguments": arg})
+		}
 	}
 	return items, nil
 }
 
+// assistantFunctionCall maps the legacy function_call (at path) of the
+// assistant message at index to a function_call item.
+func (c *chatResponses) assistantFunctionCall(v any, path string, index int, conv *chatConversation) (jobject, error) {
+	fn, err := jobj(v, path)
+	if err != nil {
+		return nil, err
+	}
+	c.keep(fn, path, "name", "arguments")
+	name, err := jnonempty(fn["name"], path+".name")
+	if err != nil {
+		return nil, err
+	}
+	args, err := jstr(fn["arguments"], path+".arguments")
+	if err != nil {
+		return nil, err
+	}
+	// Legacy calls have no id; the function message answering it is
+	// matched by name.
+	id := fmt.Sprintf("call_legacy_%d", index)
+	conv.legacy = append(conv.legacy, legacyCall{name: name, id: id})
+	conv.callKinds[id] = "function"
+	return jobject{"type": "function_call", "call_id": id, "name": name, "arguments": args}, nil
+}
+
 // assistantParts maps assistant content (a string, or text and refusal
 // parts) to output_text and refusal parts; empty text is left out.
-func (p *chatResponses) assistantParts(v any, path string) ([]any, error) {
+func (c *chatResponses) assistantParts(v any, path string) ([]any, error) {
 	if s, ok := v.(string); ok {
 		if s == "" {
 			return nil, nil
@@ -1126,7 +1176,7 @@ func (p *chatResponses) assistantParts(v any, path string) ([]any, error) {
 		}
 		switch o["type"] {
 		case "text":
-			p.keep(o, pp, "type", "text")
+			c.keep(o, pp, "type", "text")
 			s, err := jstr(o["text"], pp+".text")
 			if err != nil {
 				return nil, err
@@ -1135,7 +1185,7 @@ func (p *chatResponses) assistantParts(v any, path string) ([]any, error) {
 				out = append(out, jobject{"type": "output_text", "text": s, "annotations": []any{}})
 			}
 		case "refusal":
-			p.keep(o, pp, "type", "refusal")
+			c.keep(o, pp, "type", "refusal")
 			s, err := jstr(o["refusal"], pp+".refusal")
 			if err != nil {
 				return nil, err
@@ -1210,10 +1260,7 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 			return nil, "", err
 		}
 	}
-	var text, refusal strings.Builder
-	textLen := 0 // characters of text so far, for annotation offsets
-	hasText, hasRefusal := false, false
-	annotations := []any{}
+	var content chatContent
 	toolCalls := []any{}
 	var legacyCall jobject
 	for i, it := range output {
@@ -1225,47 +1272,8 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 		typ, _ := item["type"].(string)
 		switch typ {
 		case "message":
-			var parts []any
-			if v, ok := item["content"]; ok && v != nil {
-				if parts, err = jlist(v, path+".content"); err != nil {
-					return nil, "", err
-				}
-			}
-			for j, part := range parts {
-				pp := jpos(path+".content", j)
-				o, err := jobj(part, pp)
-				if err != nil {
-					return nil, "", err
-				}
-				switch o["type"] {
-				case "output_text":
-					s, err := jstr(o["text"], pp+".text")
-					if err != nil {
-						return nil, "", err
-					}
-					if as, ok := o["annotations"].([]any); ok {
-						for k, a := range as {
-							mapped, err := chatAnnotation(a, jpos(pp+".annotations", k), textLen)
-							if err != nil {
-								return nil, "", err
-							}
-							if mapped != nil {
-								annotations = append(annotations, mapped)
-							}
-						}
-					}
-					text.WriteString(s)
-					textLen += len([]rune(s))
-					hasText = true
-				case "refusal":
-					s, err := jstr(o["refusal"], pp+".refusal")
-					if err != nil {
-						return nil, "", err
-					}
-					refusal.WriteString(s)
-					hasRefusal = true
-				}
-				// Other part types have no chat equivalent and are left out.
+			if err := content.addMessage(item, path); err != nil {
+				return nil, "", err
 			}
 		case "function_call", "custom_tool_call":
 			call, err := chatToolCall(item, path)
@@ -1293,13 +1301,7 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 	if err != nil {
 		return nil, "", err
 	}
-	msg := jobject{"role": "assistant", "content": nil, "refusal": nil}
-	if hasText {
-		msg["content"] = text.String()
-	}
-	if hasRefusal {
-		msg["refusal"] = refusal.String()
-	}
+	msg := content.message()
 	if len(toolCalls) > 0 {
 		msg["tool_calls"] = toolCalls
 	}
@@ -1309,10 +1311,89 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 			finish = "function_call"
 		}
 	}
-	if len(annotations) > 0 {
-		msg["annotations"] = annotations
-	}
 	return msg, finish, nil
+}
+
+// chatContent collects the text, refusal and annotations of a response's
+// message items, in output order.
+type chatContent struct {
+	text, refusal       strings.Builder
+	textLen             int // characters of text so far, for annotation offsets
+	hasText, hasRefusal bool
+	annotations         []any
+}
+
+// addMessage adds the output_text and refusal parts of the message item at
+// path. Other part types have no chat equivalent and are left out.
+func (m *chatContent) addMessage(item jobject, path string) error {
+	var parts []any
+	if v, ok := item["content"]; ok && v != nil {
+		var err error
+		if parts, err = jlist(v, path+".content"); err != nil {
+			return err
+		}
+	}
+	for j, part := range parts {
+		pp := jpos(path+".content", j)
+		o, err := jobj(part, pp)
+		if err != nil {
+			return err
+		}
+		switch o["type"] {
+		case "output_text":
+			if err := m.addText(o, pp); err != nil {
+				return err
+			}
+		case "refusal":
+			s, err := jstr(o["refusal"], pp+".refusal")
+			if err != nil {
+				return err
+			}
+			m.refusal.WriteString(s)
+			m.hasRefusal = true
+		}
+	}
+	return nil
+}
+
+// addText adds the output_text part o at path and its annotations, their
+// offsets moved past the text before it.
+func (m *chatContent) addText(o jobject, path string) error {
+	s, err := jstr(o["text"], path+".text")
+	if err != nil {
+		return err
+	}
+	if as, ok := o["annotations"].([]any); ok {
+		for k, a := range as {
+			mapped, err := chatAnnotation(a, jpos(path+".annotations", k), m.textLen)
+			if err != nil {
+				return err
+			}
+			if mapped != nil {
+				m.annotations = append(m.annotations, mapped)
+			}
+		}
+	}
+	m.text.WriteString(s)
+	m.textLen += len([]rune(s))
+	m.hasText = true
+	return nil
+}
+
+// message is the chat assistant message of what was collected, without tool
+// calls: content and refusal are null when absent.
+func (m *chatContent) message() jobject {
+	msg := jobject{"role": "assistant", "content": nil, "refusal": nil}
+	if m.hasText {
+		msg["content"] = m.text.String()
+	}
+	if m.hasRefusal {
+		msg["refusal"] = m.refusal.String()
+	}
+	if len(m.annotations) > 0 {
+		msg["annotations"] = m.annotations
+	}
+	return msg
 }
 
 // chatToolCall maps a function_call or custom_tool_call item to a chat
@@ -1500,6 +1581,29 @@ func (s *chatResponsesStream) Event(ev Event) ([]Event, error) {
 		return s.itemAdded(o)
 	case "response.output_item.done":
 		return s.itemDone(o)
+	case "response.content_part.added", "response.output_text.delta", "response.output_text.annotation.added",
+		"response.refusal.delta":
+		return s.contentEvent(typ, o)
+	case "response.function_call_arguments.delta", "response.custom_tool_call_input.delta",
+		"response.function_call_arguments.done", "response.custom_tool_call_input.done":
+		return s.toolEvent(typ, o)
+	case "response.completed", "response.incomplete":
+		return s.complete(o["response"])
+	case "response.failed", "error":
+		return s.failure(typ, o), nil
+	}
+	// Progress and reasoning events, server-side tool progress
+	// (response.web_search_call.*), and events of other families the
+	// upstream may add (rate-limit notices and the like), carry no chat
+	// content. Content-bearing output items are checked in itemAdded.
+	return nil, nil
+}
+
+// contentEvent maps the events of a message's text and refusal: deltas and
+// annotations become content, refusal and annotations deltas; a new
+// output_text part only marks where its text starts.
+func (s *chatResponsesStream) contentEvent(typ string, o jobject) ([]Event, error) {
+	switch typ {
 	case "response.content_part.added":
 		if part, ok := o["part"].(map[string]any); ok && part["type"] == "output_text" {
 			s.markPart(o)
@@ -1524,66 +1628,65 @@ func (s *chatResponsesStream) Event(ev Event) ([]Event, error) {
 			return nil, err
 		}
 		return append(s.start(), s.chunk(jobject{"annotations": []any{a}}, nil)...), nil
-	case "response.refusal.delta":
-		delta, err := jstr(o["delta"], "stream.delta")
-		if err != nil {
-			return nil, err
-		}
-		return append(s.start(), s.chunk(jobject{"refusal": delta}, nil)...), nil
+	}
+	// response.refusal.delta
+	delta, err := jstr(o["delta"], "stream.delta")
+	if err != nil {
+		return nil, err
+	}
+	return append(s.start(), s.chunk(jobject{"refusal": delta}, nil)...), nil
+}
+
+// toolEvent maps the delta and done events of a function call's arguments
+// or a custom tool call's input.
+func (s *chatResponsesStream) toolEvent(typ string, o jobject) ([]Event, error) {
+	t, err := s.tool(o)
+	if err != nil {
+		return nil, err
+	}
+	switch typ {
 	case "response.function_call_arguments.delta", "response.custom_tool_call_input.delta":
-		t, err := s.tool(o)
-		if err != nil {
-			return nil, err
-		}
 		delta, err := jstr(o["delta"], "stream.delta")
 		if err != nil {
 			return nil, err
 		}
 		t.args.WriteString(delta)
 		return s.toolDelta(t, delta), nil
-	case "response.function_call_arguments.done", "response.custom_tool_call_input.done":
-		t, err := s.tool(o)
-		if err != nil {
-			return nil, err
-		}
-		field := "arguments"
-		if typ == "response.custom_tool_call_input.done" {
-			field = "input"
-		}
-		args, err := jstr(o[field], "stream."+field)
-		if err != nil {
-			return nil, err
-		}
-		return s.finishArguments(t, args)
-	case "response.completed", "response.incomplete":
-		return s.complete(o["response"])
-	case "response.failed":
-		s.failed = true
+	}
+	field := "arguments"
+	if typ == "response.custom_tool_call_input.done" {
+		field = "input"
+	}
+	args, err := jstr(o[field], "stream."+field)
+	if err != nil {
+		return nil, err
+	}
+	return s.finishArguments(t, args)
+}
+
+// failure ends the stream on a response.failed or error event with an error
+// chunk carrying the upstream's error object.
+func (s *chatResponsesStream) failure(typ string, o jobject) []Event {
+	s.failed = true
+	if typ == "response.failed" {
 		e := jobject{"message": "upstream response failed"}
 		if r, ok := o["response"].(map[string]any); ok {
 			if x, ok := r["error"].(map[string]any); ok {
 				e = x
 			}
 		}
-		return s.errorChunk(e), nil
-	case "error":
-		s.failed = true
-		if x, ok := o["error"].(map[string]any); ok {
-			return s.errorChunk(x), nil
-		}
-		e := jobject{}
-		for _, k := range []string{"code", "message", "param"} {
-			if v, ok := o[k]; ok {
-				e[k] = v
-			}
-		}
-		return s.errorChunk(e), nil
+		return s.errorChunk(e)
 	}
-	// Progress and reasoning events, server-side tool progress
-	// (response.web_search_call.*), and events of other families the
-	// upstream may add (rate-limit notices and the like), carry no chat
-	// content. Content-bearing output items are checked in itemAdded.
-	return nil, nil
+	if x, ok := o["error"].(map[string]any); ok {
+		return s.errorChunk(x)
+	}
+	e := jobject{}
+	for _, k := range []string{"code", "message", "param"} {
+		if v, ok := o[k]; ok {
+			e[k] = v
+		}
+	}
+	return s.errorChunk(e)
 }
 
 func partKey(o jobject) [2]int64 {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,7 +24,13 @@ const (
 	// unavailableCooldown is the short backoff of the plan service being
 	// temporarily unavailable.
 	unavailableCooldown = 30 * time.Second
+	// serverErrorCooldown is the cooldown of a 408 / 5xx / transport failure.
+	serverErrorCooldown = 10 * time.Second
 )
+
+// resetsAtMillis: a resets_at above this is Unix milliseconds, not seconds
+// (1e11 seconds is the year 5138; 1e11 milliseconds is 1973).
+const resetsAtMillis = 1e11
 
 // Sign in with ChatGPT error codes (structured Responses errors).
 const (
@@ -37,20 +44,21 @@ const (
 	codeChatpassScope      = "chatpass_v2_scope_not_authorized"
 	codeChatpassInvalidCtx = "chatpass_v2_invalid_authorization_context"
 	codeCodexUsageLimit    = "usage_limit_reached"
-	reauthorizeHint        = "; refresh the token or authorize the account again / 请刷新令牌或重新授权"
+	// reauthorizeHint ends the reason of a refused token. Reasons are plain
+	// English, like the SDK's own (classify).
+	reauthorizeHint = "; refresh the token or authorize the account again"
 )
 
 // hasCode matches an upstream error whose code or type is one of codes (the
 // Codex backend reports usage_limit_reached as the error type).
 func hasCode(codes ...string) classify.Match {
-	return func(in *classify.Input) bool {
-		for _, c := range codes {
-			if in.Error.Code == c || in.Error.Type == c {
-				return true
-			}
-		}
-		return false
-	}
+	return classify.Any(classify.CodeIn(codes...), typeIn(codes...))
+}
+
+// typeIn matches an upstream error whose type is one of types (the SDK
+// matches codes only, classify.CodeIn).
+func typeIn(types ...string) classify.Match {
+	return func(in *classify.Input) bool { return slices.Contains(types, in.Error.Type) }
 }
 
 // Policy classifies the failures of both account types. The first matching
@@ -75,7 +83,7 @@ var Policy = classify.Policy{
 		// Other 403s with a vendor error body: the account may not use this.
 		{When: classify.Status(http.StatusForbidden), Effect: classify.Disable, Reason: "upstream refused the account (%d)"},
 		{When: classify.Status(http.StatusTooManyRequests), Effect: classify.Cooldown, Until: usageReset, Reason: "rate limited"},
-		classify.ServerErrors(10 * time.Second),
+		classify.ServerErrors(serverErrorCooldown),
 	},
 }
 
@@ -139,12 +147,12 @@ func errorType(in *classify.Input) string {
 // usageReset works out when a usage-limited account may be used again:
 // the body's resets_at (Unix seconds, or milliseconds) or resets_in_seconds,
 // in the error object or at the top level; then retry-after(-ms); otherwise
-// 5 minutes.
+// usageCooldown.
 func usageReset(in *classify.Input) (time.Time, string, bool) {
 	for _, path := range []string{"error.resets_at", "resets_at"} {
 		if r := gjson.GetBytes(in.Body, path); r.Exists() {
 			if v := r.Float(); v > 0 {
-				if v > 1e11 {
+				if v > resetsAtMillis {
 					v /= 1000
 				}
 				return time.Unix(int64(v), 0), "resets_at", true
@@ -159,5 +167,5 @@ func usageReset(in *classify.Input) (time.Time, string, bool) {
 	if t, src, ok := classify.RetryAfter(in); ok {
 		return t, src, true
 	}
-	return in.Now.Add(usageCooldown), "default 5m", true
+	return in.Now.Add(usageCooldown), "default " + usageCooldown.String(), true
 }

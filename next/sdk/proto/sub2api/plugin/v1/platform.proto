@@ -754,7 +754,11 @@ message BuildRefreshRequestResponse {
   // it through the account's proxy.
   string url = 2;
   map<string, string> headers = 3;
-  string body_json = 4;            // optional; Content-Type defaults to application/json
+  // Optional request body, sent as is. Despite the name it need not be JSON:
+  // when headers set a Content-Type (e.g. application/x-www-form-urlencoded)
+  // the host keeps it; when they set none and the body is not empty the host
+  // adds Content-Type: application/json.
+  string body_json = 4;
 }
 
 message ParseRefreshResponseRequest {

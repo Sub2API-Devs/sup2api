@@ -10,7 +10,6 @@ const zh = {
   current: {
     title: '当前授权',
     email: '邮箱',
-    plan: '套餐',
     expires: '令牌过期',
     expired: '已过期（会自动刷新）',
     accountId: 'ChatGPT 账号 ID',
@@ -30,12 +29,10 @@ const zh = {
   },
   device: {
     start: '开始',
-    starting: '正在获取验证码…',
     step1: '打开验证页面',
     step2: '输入验证码',
     codeLabel: '验证码',
     copyCode: '复制验证码',
-    openLink: '打开验证页面',
     waiting: '等待授权…',
     expiresIn: '{time} 后过期',
     expired: '验证码已过期，请重新开始。',
@@ -46,7 +43,6 @@ const zh = {
   },
   siwc: {
     generate: '生成授权链接',
-    generating: '正在生成…',
     regenerate: '重新生成链接',
     linkLabel: '授权链接',
     copyLink: '复制链接',
@@ -57,9 +53,8 @@ const zh = {
     callbackLabel: '回调网址',
     callbackPlaceholder: 'http://127.0.0.1:1455/auth/callback?code=…',
     complete: '完成授权',
-    completing: '正在换取令牌…',
     shape: {
-      invalid: '这不像一个网址，请粘贴地址栏里以 http:// 开头的完整网址。',
+      invalid: '无法解析这段内容（含有非法的 % 转义或分号），请粘贴地址栏里的完整网址。',
       denied: '这个网址带有 error 参数：授权被拒绝或失败，请重新生成链接再试。',
       no_code: '网址里没有 code 参数，请确认复制的是同意授权后跳转到的地址。'
     },
@@ -96,7 +91,6 @@ const en: Messages = {
   current: {
     title: 'Current authorization',
     email: 'Email',
-    plan: 'Plan',
     expires: 'Token expires',
     expired: 'Expired (refreshed automatically)',
     accountId: 'Account ID',
@@ -116,12 +110,10 @@ const en: Messages = {
   },
   device: {
     start: 'Start',
-    starting: 'Getting a code…',
     step1: 'Open the verification page',
     step2: 'Enter the code',
     codeLabel: 'Code',
     copyCode: 'Copy code',
-    openLink: 'Open verification page',
     waiting: 'Waiting for approval…',
     expiresIn: 'Expires in {time}',
     expired: 'The code has expired. Start again.',
@@ -132,7 +124,6 @@ const en: Messages = {
   },
   siwc: {
     generate: 'Generate sign-in link',
-    generating: 'Generating…',
     regenerate: 'Generate a new link',
     linkLabel: 'Sign-in link',
     copyLink: 'Copy link',
@@ -143,9 +134,8 @@ const en: Messages = {
     callbackLabel: 'Callback address',
     callbackPlaceholder: 'http://127.0.0.1:1455/auth/callback?code=…',
     complete: 'Complete sign-in',
-    completing: 'Exchanging tokens…',
     shape: {
-      invalid: 'This does not look like an address. Paste the full address from the address bar, starting with http://.',
+      invalid: 'This cannot be read (a malformed % escape or a semicolon). Paste the full address from the address bar.',
       denied: 'This address carries an error parameter: consent was refused or failed. Generate a new link and try again.',
       no_code: 'The address has no code parameter. Make sure you copied the address you landed on after consenting.'
     },

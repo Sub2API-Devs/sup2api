@@ -316,7 +316,7 @@ func TestExecuteForwardsOnce(t *testing.T) {
 		}
 		return &pluginv1.ForwardUpstreamResponse{}, nil
 	}
-	fh.RecordUsageFunc = func(_ context.Context, in *pluginv1.RecordUsageRequest) (*pluginv1.ExecutionReceipt, error) {
+	fh.RecordUsageFunc = func(_ context.Context, _ *pluginv1.RecordUsageRequest) (*pluginv1.ExecutionReceipt, error) {
 		if !stage.CompareAndSwap(1, 2) {
 			t.Error("usage recorded out of order")
 		}

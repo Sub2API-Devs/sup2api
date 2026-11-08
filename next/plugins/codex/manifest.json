@@ -123,6 +123,8 @@
       "reason": { "en": "Read the tokens of its own accounts to build upstream, model list and token refresh requests (the core sends them)", "zh": "读取本插件账号的令牌，用于构造上游、模型列表和令牌刷新请求（由核心发送）" } },
     { "id": "kv",
       "reason": { "en": "Keep the short-lived authorization sessions (device code, PKCE verifier and state) between the console's calls", "zh": "在控制台的多次调用之间保存短期授权会话（设备码、PKCE verifier 与 state）" } },
+    { "id": "lock",
+      "reason": { "en": "Let only one device code poll at a time read and update an authorization session, so two concurrent polls (two tabs or two nodes) never both spend the single-use code", "zh": "同一时间只允许一次设备码轮询读写授权会话，避免两次并发轮询（两个标签页或两个节点）都去使用一次性授权码" } },
     { "id": "routes.admin",
       "reason": { "en": "Authorization endpoints the account form calls (device code start/poll, Sign in with ChatGPT start/exchange)", "zh": "账号表单调用的授权端点（设备码开始/轮询、Sign in with ChatGPT 开始/换取）" } },
     { "id": "net", "scope": { "domains": ["auth.openai.com"] },

@@ -138,6 +138,10 @@ func TestParseRefreshResponse(t *testing.T) {
 			if r.GetErrorType() != tc.want || r.GetCredentialsPatchJson() != "" || !strings.Contains(r.GetErrorMessage(), tc.msg) {
 				t.Fatalf("result = %v, want %v containing %q", r, tc.want, tc.msg)
 			}
+			// The message is shown on the account: English / 中文.
+			if !strings.Contains(r.GetErrorMessage(), " / ") {
+				t.Fatalf("message %q is not bilingual", r.GetErrorMessage())
+			}
 		})
 	}
 }

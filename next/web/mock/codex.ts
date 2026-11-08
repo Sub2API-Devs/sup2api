@@ -14,6 +14,11 @@ import { fail, on } from './router'
 //                 http://127.0.0.1:1455/auth/callback?code=<anything>&state=<state of the link>.
 //                 error=access_denied, a missing code or another state fail
 //                 as the plugin would.
+// Answers have the plugin's shapes (CONTRACTS §3.1): {"data": ...} on
+// success (pluginsdk.DataResponse); 400 invalid_argument with details.fields
+// for a malformed request (pluginsdk.BadRequest); the plugin's own codes
+// (state_mismatch, session_expired, ...) for a refused flow; every message
+// "English / 中文".
 
 const CODEX_DIR = fileURLToPath(new URL('../../plugins/codex/', import.meta.url))
 const CODEX_DIST = join(CODEX_DIR, 'ui/native/dist')
@@ -92,6 +97,27 @@ export function codexCredentialErrors(type: string, creds: Record<string, unknow
   return fail(400, 'invalid_argument', 'invalid credentials', { fields: missing.map((k) => ({ field: `credentials.${k}`, code: 'required', message: k === 'access_token' ? 'Authorize the account first' : `${k} is required for ${type}` })) })
 }
 
+/** pluginsdk.BadRequest: 400 invalid_argument with one field error. */
+const badRequest = (field: string, code: string, message: string) =>
+  fail(400, 'invalid_argument', 'invalid request / 请求参数不正确', { fields: [{ field, code, message }] })
+const noSession = () => badRequest('session_id', 'required', 'session_id is required / 缺少 session_id')
+
+/**
+ * The query of a pasted callback, read like the plugin's parseCallback: the
+ * whole address, the address without its scheme, or only the query
+ * ("?code=..." / "code=..."); the fragment when the query has none.
+ */
+function callbackQuery(raw: string): URLSearchParams {
+  let s = raw.trim().replace(/^["'<>`\s]+|["'<>`\s]+$/g, '').replace(/&amp;/g, '&')
+  let fragment = ''
+  const hash = s.indexOf('#')
+  if (hash >= 0) [s, fragment] = [s.slice(0, hash), s.slice(hash + 1)]
+  const q = s.indexOf('?')
+  const query = q >= 0 ? s.slice(q + 1) : s.includes('://') || (!s.includes('=') && s.includes('/')) ? '' : s
+  const params = new URLSearchParams(query)
+  return !params.get('code') && !params.get('error') && fragment ? new URLSearchParams(fragment) : params
+}
+
 const token = (prefix: string) => `${prefix}.${randomBytes(24).toString('base64url')}`
 const inAnHour = () => Math.floor(Date.now() / 1000) + 3600
 
@@ -104,19 +130,20 @@ on('POST', '/p/codex/auth/device/start', () => {
   deviceSessions.set(session_id, { polls: 0, expires: Date.now() + 900_000 })
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   const pick = () => Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join('')
-  return { session_id, verification_url: 'https://auth.openai.com/codex/device', user_code: `${pick()}-${pick()}`, interval: 2, expires_in: 900 }
+  return { data: { session_id, verification_url: 'https://auth.openai.com/codex/device', user_code: `${pick()}-${pick()}`, interval: 2, expires_in: 900 } }
 })
 
 on('POST', '/p/codex/auth/device/poll', (req) => {
-  const id = String(req.body?.session_id || '')
+  const id = String(req.body?.session_id || '').trim()
+  if (!id) return noSession()
   const s = deviceSessions.get(id)
   if (!s || Date.now() > s.expires) {
     deviceSessions.delete(id)
-    return { status: 'expired' }
+    return { data: { status: 'expired', message: 'the device code expired; start again / 设备码已过期，请重新开始' } }
   }
-  if (++s.polls < 3) return { status: 'pending' }
+  if (++s.polls < 3) return { data: { status: 'pending', interval: 2 } }
   deviceSessions.delete(id)
-  return {
+  return { data: {
     status: 'done',
     credentials: {
       access_token: token('eyJhbGciOiJSUzI1NiJ9.mock-access'),
@@ -127,7 +154,7 @@ on('POST', '/p/codex/auth/device/poll', (req) => {
       chatgpt_account_id: randomUUID(),
       plan_type: 'plus'
     }
-  }
+  } }
 })
 
 // ------------------------------------------------------------------ Sign in with ChatGPT
@@ -153,26 +180,29 @@ on('POST', '/p/codex/auth/siwc/start', (req) => {
     code_challenge_method: 'S256',
     code_challenge: randomBytes(32).toString('base64url')
   })
-  return { session_id, authorize_url: `https://auth.openai.com/api/accounts/authorize?${q}` }
+  return { data: { session_id, authorize_url: `https://auth.openai.com/api/accounts/authorize?${q}` } }
 })
 
 on('POST', '/p/codex/auth/siwc/exchange', (req) => {
-  const s = siwcSessions.get(String(req.body?.session_id || ''))
-  if (!s) return fail(400, 'invalid_argument', 'The sign-in session has expired: generate a new link')
-  let url: URL
-  try {
-    url = new URL(String(req.body?.callback_url || '').trim())
-  } catch {
-    return fail(400, 'invalid_argument', 'callback_url is not an address', { fields: [{ field: 'callback_url', code: 'invalid', message: 'Not an address' }] })
+  const id = String(req.body?.session_id || '').trim()
+  if (!id) return noSession()
+  const p = callbackQuery(String(req.body?.callback_url || ''))
+  if (!p.get('code') && !p.get('error'))
+    return fail(400, 'invalid_callback', 'the callback address has no code: paste the whole address of the page that failed to open / 回调网址中没有 code：请粘贴打不开的那个页面的完整地址')
+  const s = siwcSessions.get(id)
+  if (!s) return fail(404, 'session_expired', 'the authorization session expired; generate a new link / 授权会话已过期，请重新生成链接')
+  if (p.get('error') === 'access_denied') {
+    siwcSessions.delete(id)
+    return fail(400, 'access_denied', `authorization was denied / 授权被拒绝 (${p.get('error')})`)
   }
-  const p = url.searchParams
-  if (p.get('error')) return fail(400, 'invalid_argument', `Sign in with ChatGPT failed: ${p.get('error')}`)
-  if (p.get('state') !== s.state) return fail(400, 'invalid_argument', 'The state of the callback does not match this sign-in (paste the address of the latest link)')
-  if (!p.get('code')) return fail(400, 'invalid_argument', 'The callback has no code')
+  if (p.get('error')) return fail(400, 'authorization_failed', `authorization failed / 授权失败 (${p.get('error')})`)
+  if (p.get('state') !== s.state)
+    return fail(400, 'state_mismatch', 'the callback does not belong to this authorization (state mismatch); paste the address from the latest link / 回调与本次授权不匹配（state 不一致），请粘贴最新链接的回调地址')
   const issued = p.get('client_id') || s.client_id || `agent_${randomBytes(8).toString('hex')}`
-  if (s.client_id && issued !== s.client_id) return fail(400, 'invalid_argument', 'The callback carries another client_id than the account')
-  siwcSessions.delete(String(req.body.session_id))
-  return {
+  if (s.client_id && issued !== s.client_id)
+    return fail(400, 'client_mismatch', "the callback client_id differs from the account's; re-authorize with the same ChatGPT account / 回调中的 client_id 与账号已有的不同，请用同一个 ChatGPT 账号重新授权")
+  siwcSessions.delete(id)
+  return { data: {
     credentials: {
       access_token: token('eyJhbGciOiJSUzI1NiJ9.mock-siwc'),
       refresh_token: token('rt'),
@@ -183,5 +213,5 @@ on('POST', '/p/codex/auth/siwc/exchange', (req) => {
       ext_agent_host_id: s.host,
       scopes: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct'
     }
-  }
+  } }
 })

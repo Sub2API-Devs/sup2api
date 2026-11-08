@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -78,10 +79,10 @@ func unsupportedFields(typ string, ws bool) []string {
 	return out
 }
 
-// headers are the upstream headers of an account: the bearer token, the
-// ChatGPT account (codex_device) and sup2api's own, truthful identification.
-// No client header is forwarded.
-func (p *Plugin) headers(typ string, c credentials) map[string]string {
+// upstreamHeaders are the upstream headers of an account: the bearer token,
+// the ChatGPT account (codex_device) and sup2api's own, truthful
+// identification. No client header is forwarded.
+func upstreamHeaders(typ string, c credentials) map[string]string {
 	h := map[string]string{
 		"authorization": "Bearer " + c.AccessToken,
 		"originator":    Originator,
@@ -112,7 +113,7 @@ func accountCredentials(acc *pluginv1.Account) (string, credentials, error) {
 		return "", c, status.Errorf(codes.InvalidArgument, "account %d: parse credentials: %v", acc.GetId(), err)
 	}
 	if c.AccessToken == "" {
-		return "", c, status.Errorf(codes.FailedPrecondition, "account %d has no access_token; authorize it again", acc.GetId())
+		return "", c, status.Errorf(codes.FailedPrecondition, "account %d has no access_token; authorize it again / 账号没有 access_token，请重新授权", acc.GetId())
 	}
 	return typ, c, nil
 }
@@ -152,9 +153,9 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 		return nil, err
 	}
 	resp := &pluginv1.BuildUpstreamRequestResponse{
-		Method:        "POST",
+		Method:        http.MethodPost,
 		Url:           p.responsesURL(typ),
-		Headers:       p.headers(typ, c),
+		Headers:       upstreamHeaders(typ, c),
 		UpstreamModel: pluginsdk.RequestModel(in),
 	}
 	ws := false
@@ -179,7 +180,7 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 //
 //   - store=false (both upstreams refuse stored responses);
 //   - a string input becomes an array holding one user message (both
-//     require an array; an empty string becomes []);
+//     require an array; a blank (whitespace-only) string becomes []);
 //   - input items with role "system" get role "developer" (Sign in with
 //     ChatGPT refuses system items, asking for instructions or developer
 //     messages; the Codex backend is treated the same);
@@ -240,7 +241,7 @@ func webSocketRequest(resp *pluginv1.BuildUpstreamRequestResponse) error {
 	default:
 		return status.Errorf(codes.Internal, "upstream URL %q has no http(s) scheme", resp.Url)
 	}
-	resp.Method = "GET"
+	resp.Method = http.MethodGet
 	resp.Headers["openai-beta"] = WebSocketBeta
 	return nil
 }
@@ -274,11 +275,11 @@ func (p *Plugin) BuildTestRequest(_ context.Context, in *pluginv1.BuildTestReque
 		body["instructions"] = ""
 	}
 	b, _ := json.Marshal(body)
-	h := p.headers(typ, c)
+	h := upstreamHeaders(typ, c)
 	h["accept"] = "text/event-stream"
 	h["content-type"] = "application/json"
 	return &pluginv1.BuildTestRequestResponse{
-		Method:        "POST",
+		Method:        http.MethodPost,
 		Url:           p.responsesURL(typ),
 		Headers:       h,
 		BodyJson:      string(b),
@@ -303,10 +304,10 @@ func (p *Plugin) BuildModelsRequest(_ context.Context, in *pluginv1.BuildModelsR
 	if typ != TypeSIWC {
 		return nil, status.Error(codes.Unimplemented, "codex_device accounts cannot list models; use the preset list")
 	}
-	h := p.headers(typ, c)
+	h := upstreamHeaders(typ, c)
 	h["accept"] = "application/json"
 	return &pluginv1.BuildModelsRequestResponse{
-		Method:  "GET",
+		Method:  http.MethodGet,
 		Url:     p.ep.API + "/v1/models",
 		Headers: h,
 		IdsPath: SIWCModelsPath,

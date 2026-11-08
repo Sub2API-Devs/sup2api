@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { callbackShape, CODEX_FIELDS, flowsFor, formatCountdown, hasAccessToken, mergeCredentials, pollDelay, summarize, typeOf } from './flow'
+import { callbackShape, CODEX_FIELDS, DEFAULT_POLL_MS, flowsFor, formatCountdown, hasAccessToken, mergeCredentials, MIN_POLL_SECONDS, pollDelay, summarize, typeOf } from './flow'
 
 describe('flowsFor / typeOf', () => {
   it('shows only the flow of a known type, both otherwise', () => {
@@ -74,21 +74,39 @@ describe('callbackShape', () => {
   it('classifies the pasted callback address', () => {
     expect(callbackShape('')).toBe('empty')
     expect(callbackShape('  ')).toBe('empty')
-    expect(callbackShape('code=abc')).toBe('invalid')
-    expect(callbackShape('ftp://127.0.0.1/x?code=1')).toBe('invalid')
+    expect(callbackShape(' "" ')).toBe('empty')
     expect(callbackShape('http://127.0.0.1:1455/auth/callback?error=access_denied&state=s')).toBe('denied')
     expect(callbackShape('http://127.0.0.1:1455/auth/callback?state=s')).toBe('no_code')
+    expect(callbackShape('http://127.0.0.1:1455/auth/callback')).toBe('no_code')
+    expect(callbackShape('hello world')).toBe('no_code')
     expect(callbackShape(' http://127.0.0.1:1455/auth/callback?code=abc&state=s ')).toBe('ok')
+  })
+
+  it('accepts what the plugin parseCallback accepts', () => {
+    expect(callbackShape('code=abc&state=s')).toBe('ok')
+    expect(callbackShape('?code=abc&state=s')).toBe('ok')
+    expect(callbackShape('127.0.0.1:1455/auth/callback?state=s&code=a%2Fb')).toBe('ok')
+    expect(callbackShape('  "http://localhost:1455/auth/callback?code=abc&amp;state=s"\n')).toBe('ok')
+    expect(callbackShape('<http://127.0.0.1:1455/auth/callback?error=access_denied&state=s>')).toBe('denied')
+    expect(callbackShape('http://127.0.0.1:1455/auth/callback#code=abc&state=s')).toBe('ok')
+    expect(callbackShape('http://127.0.0.1:1455/auth/callback?code=abc#frag')).toBe('ok')
+    expect(callbackShape('ftp://127.0.0.1/x?code=1')).toBe('ok')
+  })
+
+  it('flags what the plugin cannot read', () => {
+    expect(callbackShape('%zz=1')).toBe('invalid')
+    expect(callbackShape('http://127.0.0.1:1455/auth/callback?code=a%2&state=s')).toBe('invalid')
+    expect(callbackShape('code=abc;state=s')).toBe('invalid')
   })
 })
 
 describe('pollDelay', () => {
-  it('uses the interval with a 2 s floor and a 5 s default', () => {
+  it('uses the interval with a floor and a default', () => {
     expect(pollDelay(5)).toBe(5000)
     expect(pollDelay('8')).toBe(8000)
-    expect(pollDelay(1)).toBe(2000)
-    expect(pollDelay(0)).toBe(5000)
-    expect(pollDelay('x')).toBe(5000)
-    expect(pollDelay(undefined)).toBe(5000)
+    expect(pollDelay(1)).toBe(MIN_POLL_SECONDS * 1000)
+    expect(pollDelay(0)).toBe(DEFAULT_POLL_MS)
+    expect(pollDelay('x')).toBe(DEFAULT_POLL_MS)
+    expect(pollDelay(undefined)).toBe(DEFAULT_POLL_MS)
   })
 })

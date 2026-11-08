@@ -16,6 +16,7 @@ package codex
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -102,6 +103,9 @@ type Plugin struct {
 	// host's egress tunnel in strict network mode.
 	client *http.Client
 	now    func() time.Time
+	// log is the host log (Init); it discards until then. Never log tokens,
+	// authorization codes, PKCE verifiers, state or session ids.
+	log *slog.Logger
 }
 
 // New returns the plugin talking to the production endpoints.
@@ -116,8 +120,9 @@ func NewWithEndpoints(ep Endpoints) *Plugin {
 			ChatGPT: strings.TrimRight(ep.ChatGPT, "/"),
 			API:     strings.TrimRight(ep.API, "/"),
 		},
-		client: &http.Client{Timeout: 20 * time.Second},
+		client: &http.Client{Timeout: authTimeout},
 		now:    time.Now,
+		log:    slog.New(slog.DiscardHandler),
 	}
 	p.Handle(http.MethodPost, "/auth/device/start", p.handleDeviceStart)
 	p.Handle(http.MethodPost, "/auth/device/poll", p.handleDevicePoll)
@@ -129,6 +134,9 @@ func NewWithEndpoints(ep Endpoints) *Plugin {
 // Init implements pluginsdk.Initializer.
 func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	p.host = h
+	if l := h.Logger(); l != nil {
+		p.log = l
+	}
 	return nil
 }
 
@@ -153,6 +161,7 @@ func parseCredentials(raw string) (credentials, error) {
 	err := json.Unmarshal([]byte(raw), &c)
 	c.AccessToken = strings.TrimSpace(c.AccessToken)
 	c.RefreshToken = strings.TrimSpace(c.RefreshToken)
+	c.IDToken = strings.TrimSpace(c.IDToken)
 	c.ChatGPTAccountID = strings.TrimSpace(c.ChatGPTAccountID)
 	c.ClientID = strings.TrimSpace(c.ClientID)
 	c.ExtAgentHostID = strings.TrimSpace(c.ExtAgentHostID)
@@ -171,16 +180,58 @@ const masked = "******"
 // account without them simply cannot be renewed or shows no email). String
 // fields are trimmed, expires_at becomes a number, and email /
 // chatgpt_account_id / plan_type missing from the credentials are filled in
-// from the id_token payload.
+// from the id_token payload (see jwtClaims for why it is not verified).
 func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCredentialsRequest) (*pluginv1.ValidateCredentialsResponse, error) {
 	typ := in.GetAccountType()
 	if typ != TypeDevice && typ != TypeSIWC {
 		return invalid("account_type", "unsupported", "unsupported account type "+strconv.Quote(typ)+" / 不支持的账号类型"), nil
 	}
-	var m map[string]any
+	var m credMap
 	if err := json.Unmarshal([]byte(orEmptyObject(in.GetCredentialsJson())), &m); err != nil || m == nil {
 		return invalid("access_token", "invalid", "credentials must be a JSON object / 凭证必须是 JSON 对象"), nil
 	}
+	changed := m.trimStrings()
+	if bad := m.checkStrings(); bad != nil {
+		return bad, nil
+	}
+	expChanged, bad := m.normalizeExpiresAt()
+	if bad != nil {
+		return bad, nil
+	}
+	if typ == TypeSIWC {
+		if bad := m.checkSIWC(); bad != nil {
+			return bad, nil
+		}
+	}
+	filled := m.fillIdentity(typ)
+	out := &pluginv1.ValidateCredentialsResponse{}
+	if changed || expChanged || filled {
+		b, _ := json.Marshal(m)
+		out.NormalizedCredentialsJson = string(b)
+	}
+	return out, nil
+}
+
+// credMap is the submitted credential object ValidateCredentials checks and
+// normalizes in place.
+type credMap map[string]any
+
+// stringFields are the optional credential fields that must be strings.
+var stringFields = []string{"refresh_token", "id_token", "email", "chatgpt_account_id", "plan_type", "client_id", "ext_agent_host_id"}
+
+// str reads a string field: ("", true) when absent or null, ok=false when
+// the value is not a string.
+func (m credMap) str(k string) (string, bool) {
+	v, present := m[k]
+	if !present || v == nil {
+		return "", true
+	}
+	s, ok := v.(string)
+	return s, ok
+}
+
+// trimStrings trims every string value and reports whether one changed.
+func (m credMap) trimStrings() bool {
 	changed := false
 	for k, v := range m {
 		if s, ok := v.(string); ok && strings.TrimSpace(s) != s {
@@ -188,68 +239,83 @@ func (p *Plugin) ValidateCredentials(_ context.Context, in *pluginv1.ValidateCre
 			changed = true
 		}
 	}
-	str := func(k string) (string, bool) {
-		v, present := m[k]
-		if !present || v == nil {
-			return "", true
-		}
-		s, ok := v.(string)
-		return s, ok
-	}
-	at, ok := str("access_token")
+	return changed
+}
+
+// checkStrings requires a non-empty access_token and string-typed optional
+// fields.
+func (m credMap) checkStrings() *pluginv1.ValidateCredentialsResponse {
+	at, ok := m.str("access_token")
 	if !ok {
-		return invalid("access_token", "pattern", "access_token must be a string / access_token 必须是字符串"), nil
+		return invalid("access_token", "pattern", "access_token must be a string / access_token 必须是字符串")
 	}
 	if at == "" {
-		return invalid("access_token", "required", "access_token is required: authorize the account first / 请先完成授权以获取 access_token"), nil
+		return invalid("access_token", "required", "access_token is required: authorize the account first / 请先完成授权以获取 access_token")
 	}
-	for _, k := range []string{"refresh_token", "id_token", "email", "chatgpt_account_id", "plan_type", "client_id", "ext_agent_host_id"} {
-		if _, ok := str(k); !ok {
-			return invalid(k, "pattern", k+" must be a string / "+k+" 必须是字符串"), nil
+	for _, k := range stringFields {
+		if _, ok := m.str(k); !ok {
+			return invalid(k, "pattern", k+" must be a string / "+k+" 必须是字符串")
 		}
 	}
+	return nil
+}
+
+// normalizeExpiresAt turns a string expires_at into a number (an empty one is
+// dropped) and refuses anything that is not Unix seconds.
+func (m credMap) normalizeExpiresAt() (changed bool, bad *pluginv1.ValidateCredentialsResponse) {
+	const msg = "expires_at must be Unix seconds / expires_at 必须是 Unix 秒"
 	switch v := m["expires_at"].(type) {
 	case nil, float64:
+		return false, nil
 	case string:
 		if v == "" {
 			delete(m, "expires_at")
-		} else if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
-			m["expires_at"] = n
-		} else {
-			return invalid("expires_at", "pattern", "expires_at must be Unix seconds / expires_at 必须是 Unix 秒"), nil
+			return true, nil
 		}
-		changed = true
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			return false, invalid("expires_at", "pattern", msg)
+		}
+		m["expires_at"] = n
+		return true, nil
 	default:
-		return invalid("expires_at", "pattern", "expires_at must be Unix seconds / expires_at 必须是 Unix 秒"), nil
+		return false, invalid("expires_at", "pattern", msg)
 	}
-	if typ == TypeSIWC {
-		if c, _ := str("client_id"); c == "" {
-			return invalid("client_id", "required", "client_id is required: authorize the account with Sign in with ChatGPT first / 请先通过 Sign in with ChatGPT 完成授权"), nil
-		}
-		if h, _ := str("ext_agent_host_id"); h != "" && !hostIDPattern.MatchString(h) {
-			return invalid("ext_agent_host_id", "pattern", "ext_agent_host_id must be urn:uuid:<UUID> / ext_agent_host_id 必须是 urn:uuid:<UUID>"), nil
+}
+
+// checkSIWC requires the issued client_id and a well-formed host id.
+func (m credMap) checkSIWC() *pluginv1.ValidateCredentialsResponse {
+	if c, _ := m.str("client_id"); c == "" {
+		return invalid("client_id", "required", "client_id is required: authorize the account with Sign in with ChatGPT first / 请先通过 Sign in with ChatGPT 完成授权")
+	}
+	if h, _ := m.str("ext_agent_host_id"); h != "" && !hostIDPattern.MatchString(h) {
+		return invalid("ext_agent_host_id", "pattern", "ext_agent_host_id must be urn:uuid:<UUID> / ext_agent_host_id 必须是 urn:uuid:<UUID>")
+	}
+	return nil
+}
+
+// fillIdentity fills email, plan_type and (codex_device) chatgpt_account_id
+// from the submitted id_token where the credentials leave them empty. A
+// masked id_token ("******", the stored one) is not read.
+func (m credMap) fillIdentity(typ string) bool {
+	idt, _ := m.str("id_token")
+	if idt == "" || idt == masked {
+		return false
+	}
+	id := parseIdentity(idt, "")
+	changed := false
+	fill := func(k, v string) {
+		if cur, _ := m.str(k); cur == "" && v != "" {
+			m[k] = v
+			changed = true
 		}
 	}
-	if idt, _ := str("id_token"); idt != "" && idt != masked {
-		id := parseIdentity(idt, "")
-		fill := func(k, v string) {
-			if cur, _ := str(k); cur == "" && v != "" {
-				m[k] = v
-				changed = true
-			}
-		}
-		fill("email", id.Email)
-		fill("plan_type", id.PlanType)
-		if typ == TypeDevice {
-			fill("chatgpt_account_id", id.AccountID)
-		}
+	fill("email", id.Email)
+	fill("plan_type", id.PlanType)
+	if typ == TypeDevice {
+		fill("chatgpt_account_id", id.AccountID)
 	}
-	out := &pluginv1.ValidateCredentialsResponse{}
-	if changed {
-		b, _ := json.Marshal(m)
-		out.NormalizedCredentialsJson = string(b)
-	}
-	return out, nil
+	return changed
 }
 
 func invalid(field, code, msg string) *pluginv1.ValidateCredentialsResponse {

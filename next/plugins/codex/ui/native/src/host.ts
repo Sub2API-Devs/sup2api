@@ -1,7 +1,14 @@
-import type { PluginHost } from '@sub2api/host'
+import { isApiError, type PluginHost } from '@sub2api/host'
 
 // Plugin-scoped host handed to register(); shared by the codex components.
 // All plugin route shapes (docs/PLUGIN-CODEX.md §4) live in this file.
+//
+// The routes answer CONTRACTS §3.1: a success is {"data": ...}, which
+// pluginApi unwraps (the shapes below are the data member); a failure is
+// {"error": {code, message, details}}, thrown as an ApiError. A malformed
+// request is 400 invalid_argument with details.fields; a refusal of the flow
+// keeps its own code (device_auth_disabled, state_mismatch, ...). Every
+// message is "English / 中文", so the form shows it as given.
 let host: PluginHost | null = null
 
 export function setHost(h: PluginHost | null) {
@@ -17,21 +24,24 @@ const api = () => useCodexHost().pluginApi
 
 // ------------------------------------------------------------------ credentials
 
-/** The credential object both flows return (the account's credentials). */
+/** The credential object both flows return (the account's credentials; Go: codex.Credentials). */
 export interface CodexCredentials {
   access_token: string
-  refresh_token: string
+  /** Left out when the issuer sent none. */
+  refresh_token?: string
   id_token?: string
   /** Unix seconds. */
   expires_at?: number
   email?: string
+  /** ChatGPT plan, read from the tokens; either account type may carry it. */
+  plan_type?: string
   // codex_device
   chatgpt_account_id?: string
-  plan_type?: string
   // chatgpt_siwc
   client_id?: string
   ext_agent_host_id?: string
-  scopes?: string | string[]
+  /** The granted scope, space separated as OAuth sends it. */
+  scopes?: string
 }
 
 // ------------------------------------------------------------------ device code (codex_device)
@@ -52,7 +62,7 @@ export interface DevicePoll {
   status: PollStatus
   credentials?: CodexCredentials
   message?: string
-  /** A new poll interval (seconds), when the plugin asks to slow down. */
+  /** The poll interval (seconds) on pending answers; it grows when OpenAI asks to slow down. */
   interval?: number
 }
 
@@ -78,7 +88,15 @@ export const exchangeSiwc = (sessionId: string, callbackUrl: string) =>
 
 // ------------------------------------------------------------------ helpers
 
-/** Human-readable message of a failed call (ApiError is an Error), else `fallback`. */
+/**
+ * Human-readable message of a failed call, else `fallback`. An
+ * invalid_argument error says which field is wrong in details.fields: its
+ * messages are shown rather than the generic "invalid request".
+ */
 export function errorMessage(e: unknown, fallback: string): string {
+  if (isApiError(e)) {
+    const fields = Object.values(e.fields).filter(Boolean)
+    if (fields.length) return fields.join('; ')
+  }
   return e instanceof Error && e.message ? e.message : fallback
 }

@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { describe, expect, it } from 'vitest'
 import messages from './messages'
 import { KNOWN_PLANS } from './flow'
@@ -22,5 +23,15 @@ describe('messages', () => {
     // {name} placeholders are fine; a lone @ or | would be parsed as syntax.
     const leaves = (o: unknown): string[] => (o && typeof o === 'object' ? Object.values(o).flatMap(leaves) : [String(o)])
     for (const lang of [messages.zh, messages.en]) expect(leaves(lang).filter((s) => /[@|]/.test(s))).toEqual([])
+  })
+
+  it('has no key the components never use', () => {
+    // Keys looked up with a computed suffix: t(`tabs.${f}`), t(`plan.${p}`), t(`siwc.shape.${s}`).
+    const dynamic = ['tabs.', 'plan.', 'siwc.shape.']
+    const files = import.meta.glob<string>(['./*.vue', './*.ts', '!./*.spec.ts', '!./messages.ts'], { query: '?raw', import: 'default', eager: true })
+    const sources = Object.values(files).join('\n')
+    expect(Object.keys(files)).toContain('./DeviceFlow.vue')
+    const unused = keys(messages.en).filter((k) => !dynamic.some((d) => k.startsWith(d)) && !sources.includes(`'${k}'`))
+    expect(unused).toEqual([])
   })
 })

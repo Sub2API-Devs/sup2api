@@ -409,7 +409,7 @@ type pluginCall struct {
 	method, defaultMethod string
 	url                   string
 	headers               map[string]string
-	body                  string // JSON; Content-Type defaults to application/json
+	body                  string // sent as is; Content-Type: application/json unless headers set one
 }
 
 // pluginAnswer is what the plugin is shown of the upstream's answer.

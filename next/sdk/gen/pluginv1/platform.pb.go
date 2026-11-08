@@ -3553,9 +3553,13 @@ type BuildRefreshRequestResponse struct {
 	// Absolute http(s) URL. The host rejects private/loopback/link-local
 	// targets (SSRF guard) unless the account goes through a proxy, and sends
 	// it through the account's proxy.
-	Url      string            `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
-	Headers  map[string]string `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	BodyJson string            `protobuf:"bytes,4,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"` // optional; Content-Type defaults to application/json
+	Url     string            `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	Headers map[string]string `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// Optional request body, sent as is. Despite the name it need not be JSON:
+	// when headers set a Content-Type (e.g. application/x-www-form-urlencoded)
+	// the host keeps it; when they set none and the body is not empty the host
+	// adds Content-Type: application/json.
+	BodyJson string `protobuf:"bytes,4,opt,name=body_json,json=bodyJson,proto3" json:"body_json,omitempty"`
 }
 
 func (x *BuildRefreshRequestResponse) Reset() {

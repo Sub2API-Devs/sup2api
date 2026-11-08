@@ -1373,6 +1373,22 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 - 权限：核心权限用 `host.permissions.has/any/superuser`，插件自己的 `userPermissions` 用 `host.can`；菜单已按权限过滤，页面内的按钮仍要自己判断。
 - 接口：插件自己的 `routes` 走 `host.pluginApi`（相对路径，如 `pluginApi.list('/events', {page})`），核心接口走 `host.api`；不要自己 `fetch`（会丢掉 token 刷新）。
 
+### 23.5 原生账号表单（`form.mode = native`）收到的 props 与 expose
+
+账号类型的 manifest `accountTypes[].form` 为 `{mode: "native", component}` 时，控制台账号编辑器（`web/src/views/accounts/AccountEditor.vue`）把插件在 `register` 里以该名注册的组件渲染在"凭证"卡片里：
+
+| prop / 事件 | 类型 / 说明 |
+|---|---|
+| `v-model`（`modelValue` + `update:modelValue`） | 凭证对象 `Record<string, any>`（`credentials`）。新建时为空对象，编辑时为 `account.credentials` 的浅拷贝（与 schema 表单拿到的相同）。组件通过 `update:modelValue` 交回要保存的完整凭证对象 |
+| `mode` | `'create'` \| `'edit'` |
+| `account` | 编辑时为账号对象（含 `id`、`type`、`credentials` 等）；新建时为 `null` / 未传 |
+| `accountType` | 正在录入或编辑的账号类型（`GET /account-types` 的一项，含 `plugin_key`、`type`、`label`、`form` 等）。同一插件把多个账号类型指向同一个组件时（如 codex 的 `codex_device` 与 `chatgpt_siwc`），靠 `accountType.type` 区分 |
+| `errors` | `Record<string, string>`：保存或拉取模型被服务端拒绝时，`invalid_argument` 的 `details.fields[]`（§3.1）中 `credentials.<字段>` 的那些，键去掉 `credentials.` 前缀（`web/src/views/accounts/editorErrors.ts` `splitFieldErrors`）；用户再改凭证即清空。组件应显示在对应输入旁 |
+
+- **expose**（可选）：组件可以 `defineExpose({ validate })`，`validate(): boolean | Promise<boolean>`。保存时编辑器先调用它，返回 `false` 则不保存（组件自己显示原因）；没有暴露 `validate` 时直接取 `v-model` 的值保存。
+- **兼容**：`accountType` 是后加的 prop（与 codex 内置插件同批加入，未提升 `HOST_UI_VERSION`），旧控制台不传。插件读账号类型时应写成 `accountType?.type || account?.type`：编辑时旧控制台下退回 `account.type`；新建时旧控制台两者都没有，插件需要有不依赖类型的默认行为（或只把该组件用于一个账号类型）。codex 的 `ui/native/src/flow.ts` `typeOf` 即按此实现。
+- 组件同样遵守 §23.4 的约定（用 `@sub2api/ui` 组件、`SField` 显示 `errors` 等）。
+
 ## 24. 插件改写候选账号的调度参数（priority / weight）（2026-09-29，用户要求）
 
 网关调度新增一个插件扩展点：插件可以为**单次请求**改写候选账号的 `priority` 和 `weight`，核心拿改写后的值跑自己原来的调度算法（§18.2）。这**不是"插件接管调度"**——插件只是临时改写账号本来就有的两个调度参数；候选集怎么筛、按什么顺序试、能不能试，仍然由核心决定。它只决定"未命中粘性时在候选里怎么排"；"怎么粘"是核心与管理员的事，插件不参与（§15.5，原 `ResolveAffinityKey` 已于 2026-10-10 删除）。
@@ -2023,8 +2039,10 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 
 | 列表 | 默认值 | 含义 |
 |---|---|---|
-| `BUILTIN_PLUGINS` | `anthropic openai gemini moderation` | 安装，首次安装即启用 |
-| `BUILTIN_PLUGINS_INSTALL_ONLY` | `volcengine` | 安装，**保持未启用**，由管理员在配置好之后手动启用 |
+| `BUILTIN_PLUGINS` | `anthropic openai gemini moderation codex` | 安装，首次安装即启用 |
+| `BUILTIN_PLUGINS_INSTALL_ONLY` | `volcengine ccgateway mailer dynweight` | 安装，**保持未启用**，由管理员在配置好之后手动启用 |
+
+（默认值为 `build-go.sh` 的现值：本节写成时两份列表分别是 `anthropic openai gemini moderation` 与 `volcengine`，`codex` 见 §83，其余只安装插件见各自章节。）
 
 同一个插件同时出现在两份列表里时构建失败。第二份列表写进内建目录的 **`install-only.txt`**（每行一个 key，`#` 注释、空行、CRLF 都容忍），核心的 `EnsureBuiltin`（`server/internal/plugin/install/builtin.go`）读它。
 
@@ -3063,6 +3081,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 - `BuildRefreshRequest(account)` → `{method（默认 POST）, url, headers, body_json}`。
   - 核心经账号代理发送，受 netguard 限制（同 §43.4），响应体最多读 64 KiB。
+  - `body_json` 虽然叫这个名字，核心并不解析也不改写它，原样作为请求体发送（`account/quota.go` `sendPluginCall`，额度查询 §44 共用）：`headers` 里设置了 `Content-Type`（不区分大小写，如 OAuth 令牌端点要的 `application/x-www-form-urlencoded`，codex 插件即如此）时按插件给的发送；没有设置且 `body_json` 非空时核心补 `Content-Type: application/json`；`body_json` 为空时不发请求体，也不补 `Content-Type`。
   - 凭证根本无法续期（例如没有 refresh token）时返回 `FAILED_PRECONDITION`，核心按 `auth_rejected` 处理。
   - 返回 `UNIMPLEMENTED` 表示不支持，记为 `transient`。
 - `ParseRefreshResponse(account, status, headers, body, transport_error, truncated)` → `RefreshResult`：
@@ -6518,11 +6537,11 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **失败**：后续轮调用失败（gRPC 错误、空响应）或任一轮的 patch 无法应用（`value_json` 非法、路径非法等，全部或全不）时，本轮回一条错误事件（503 `plugin_unavailable`，记录 `error_type = plugin_unavailable`），释放该轮的并发位与预占，连接保持，下一轮照常；首轮在建连成功之后才失败的，上游连接同样保留给下一轮。patch 改动了模型引用（端点与路由的 `modelReferences`，与 HTTP `validatePatches` 相同的检查）时本轮以模型引用错误失败。调用受 `platform_call_timeout_ms` 约束。
 - **兼容**：旧插件（WebSocket 协议返回空 `patches`，如 openai 插件 0.3.x）发往上游的消息与以前逐字节相同，只是每个后续轮多一次 `BuildUpstreamRequest` 调用（它与握手时的调用相同，确定性地成功）。没有 manifest 字段或能力变化，`sdk/manifest/check/corefloor.go` 无需登记：依赖本节的插件（codex）已因 `streamOnly` 要求 `hostCompat ≥ StreamOnlyFirstCore`，本节属于同一个未发布核心（占位 0.1.257）。
 
-**`requestFields` 的取值与大小**：核心对单个字段和字段总和都不设上限（HTTP `dispatch.go` 与 WebSocket 相同），只受请求体/消息大小上限（`maxBodyBytes`，默认 128 MiB，WebSocket 为单条消息）和插件 gRPC 接收上限（默认 4 MiB，`pluginsdk.WithMaxRecvMsgSize` 可调；超过时该次调用失败，HTTP 换号、WebSocket 首轮换号、后续轮报该轮错误）约束。插件应使用只返回所需信息的 gjson 查询，不要索取大字段。
+**`requestFields` 的取值与大小**：HTTP（`dispatch.go` `attempt`）与 WebSocket（首轮 `dial`、后续轮 `turnPatches`）都经同一个函数 `requestFieldValues`（`gateway/util.go`）读取，取值方式相同。核心对单个字段和字段总和都不设上限，只受请求体/消息大小上限（`maxBodyBytes`，默认 128 MiB，WebSocket 为单条消息）和插件 gRPC 接收上限（默认 4 MiB，`pluginsdk.WithMaxRecvMsgSize` 可调；超过时该次调用失败，HTTP 换号、WebSocket 首轮换号、后续轮报该轮错误）约束。插件应使用只返回所需信息的 gjson 查询，不要索取大字段。
 
 **codex 插件 0.1.1**：
 
-- WebSocket 协议返回与 HTTP 相同的 body patch：`store=false`；字符串 `input` 转成一条 user 消息的数组（空串转 `[]`）；`role:"system"` 的 input 项改成 `role:"developer"`（见下）；`codex_device` 缺 `instructions` 时补 `""`；删除上游不接受的字段。WebSocket 下不包含 stream 相关字段（不删 `stream_options`，也从不设置 `stream`），`chatgpt_siwc` 不删 `previous_response_id`（同一上游连接内可续接）。
+- WebSocket 协议返回与 HTTP 相同的 body patch：`store=false`；字符串 `input` 转成一条 user 消息的数组（空白字符串，即空串或只含空白字符的串，转 `[]`）；`role:"system"` 的 input 项改成 `role:"developer"`（见下）；`codex_device` 缺 `instructions` 时补 `""`；删除上游不接受的字段。WebSocket 下不包含 stream 相关字段（不删 `stream_options`，也从不设置 `stream`），`chatgpt_siwc` 不删 `previous_response_id`（同一上游连接内可续接）。
 - system → developer（两种账号类型、HTTP 与 WebSocket）：Sign in with ChatGPT 上游拒绝 `role:"system"` 的 input 项。manifest `requestFields` 增加查询 `input.#.[role].#(=="system")#`：`input` 是数组时按项序返回 `["system"]`（角色恰为 `"system"`）或 `[]`（其他角色、无角色、非对象），每项约 3 字节，从不回显其他内容；`input` 是字符串或缺失时字段不存在（字符串由上一条转换成 user 消息，无需改角色）；`input` 是对象时为 `[]`。插件据此为每个 system 项生成 `input.<i>.role` = `"developer"` 的 `OP_SET`，每个请求最多 256 个（每个 patch 在核心是一次整体复制），超出的项保持原样由上游报错。
 - 已知限制：字符串 `input` 的字段 `[input]|#(%"*")` 会回显整段字符串，超过插件 gRPC 接收上限（4 MiB）的字符串输入会使调用失败。
 

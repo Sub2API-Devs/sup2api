@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -49,7 +50,7 @@ func (p *Plugin) BuildRefreshRequest(_ context.Context, in *pluginv1.BuildRefres
 	}
 	c, err := parseCredentials(acc.GetCredentialsJson())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "parse credentials: "+err.Error())
+		return nil, status.Error(codes.InvalidArgument, "cannot read the credentials / 无法解析凭证: "+err.Error())
 	}
 	if c.RefreshToken == "" {
 		return nil, status.Error(codes.FailedPrecondition, "the account has no refresh_token; authorize it again / 账号没有 refresh_token，请重新授权")
@@ -60,7 +61,7 @@ func (p *Plugin) BuildRefreshRequest(_ context.Context, in *pluginv1.BuildRefres
 			"client_id": CodexClientID, "grant_type": "refresh_token", "refresh_token": c.RefreshToken, "scope": RefreshScope,
 		})
 		h["Content-Type"] = "application/json"
-		return &pluginv1.BuildRefreshRequestResponse{Method: "POST", Url: p.ep.Auth + "/oauth/token", Headers: h, BodyJson: string(body)}, nil
+		return &pluginv1.BuildRefreshRequestResponse{Method: http.MethodPost, Url: p.ep.Auth + "/oauth/token", Headers: h, BodyJson: string(body)}, nil
 	}
 	if c.ClientID == "" {
 		return nil, status.Error(codes.FailedPrecondition, "the account has no client_id; authorize it again / 账号没有 client_id，请重新授权")
@@ -71,7 +72,7 @@ func (p *Plugin) BuildRefreshRequest(_ context.Context, in *pluginv1.BuildRefres
 	form.Set("refresh_token", c.RefreshToken)
 	form.Set("resource", SIWCResource)
 	h["Content-Type"] = "application/x-www-form-urlencoded"
-	return &pluginv1.BuildRefreshRequestResponse{Method: "POST", Url: p.ep.Auth + "/api/accounts/oauth/token", Headers: h, BodyJson: form.Encode()}, nil
+	return &pluginv1.BuildRefreshRequestResponse{Method: http.MethodPost, Url: p.ep.Auth + "/api/accounts/oauth/token", Headers: h, BodyJson: form.Encode()}, nil
 }
 
 // tokenResponse is the answer of both token endpoints.
@@ -101,29 +102,29 @@ func (p *Plugin) ParseRefreshResponse(_ context.Context, in *pluginv1.ParseRefre
 	st := in.GetStatus()
 	switch {
 	case in.GetTransportError() != "":
-		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, in.GetTransportError()), nil
+		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, "cannot reach the token endpoint / 无法连接令牌端点: "+in.GetTransportError()), nil
 	case st < 200 || st > 299:
 		code := oauthErrorCode(in.GetBody())
-		msg := fmt.Sprintf("token endpoint status %d: %s", st, textutil.Clip(string(in.GetBody()), 300))
+		msg := fmt.Sprintf("token endpoint status %d / 令牌端点返回状态 %d: %s", st, st, textutil.Clip(string(in.GetBody()), 300))
 		switch {
 		case terminalRefreshCodes[code]:
-			return refreshError(pluginv1.RefreshResult_ERROR_TYPE_AUTH_REJECTED, "refresh token refused ("+code+"); authorize the account again / 需重新授权: "+msg), nil
+			return refreshError(pluginv1.RefreshResult_ERROR_TYPE_AUTH_REJECTED, "refresh token refused ("+code+"); authorize the account again / 刷新令牌被拒绝，需重新授权: "+msg), nil
 		case code == "invalid_client":
 			return refreshError(pluginv1.RefreshResult_ERROR_TYPE_AUTH_REJECTED, "OAuth client refused (invalid_client): configuration error; authorize the account again / 客户端配置错误，请重新授权: "+msg), nil
-		case st == 401:
-			return refreshError(pluginv1.RefreshResult_ERROR_TYPE_AUTH_REJECTED, "refresh token refused; authorize the account again / 需重新授权: "+msg), nil
+		case st == http.StatusUnauthorized:
+			return refreshError(pluginv1.RefreshResult_ERROR_TYPE_AUTH_REJECTED, "refresh token refused; authorize the account again / 刷新令牌被拒绝，需重新授权: "+msg), nil
 		}
 		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, msg), nil
 	case in.GetTruncated():
-		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, "token response too large"), nil
+		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, "token response too large / 令牌响应过大"), nil
 	}
 	var tr tokenResponse
 	if err := json.Unmarshal(in.GetBody(), &tr); err != nil {
-		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, "unreadable token response: "+err.Error()), nil
+		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, "unreadable token response / 无法解析令牌响应: "+err.Error()), nil
 	}
 	tr.AccessToken = strings.TrimSpace(tr.AccessToken)
 	if tr.AccessToken == "" {
-		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, "token response has no access_token"), nil
+		return refreshError(pluginv1.RefreshResult_ERROR_TYPE_TRANSIENT, "token response has no access_token / 令牌响应中没有 access_token"), nil
 	}
 	patch := map[string]any{"access_token": tr.AccessToken}
 	if exp := p.expiresAt(tr); exp > 0 {

@@ -406,8 +406,8 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		return reject(cl, e)
 	}
 	var e *gwError
-	connected := s.up == nil // this turn opens the upstream connection
-	if connected {
+	opensUpstream := s.up == nil // this turn opens the upstream connection
+	if opensUpstream {
 		releaseAccount, e = s.connect(ctx, cl)
 	} else {
 		releaseAccount, e = s.reuse(ctx, cl)
@@ -443,7 +443,7 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 	// handshake's for the turn that opened the connection, a fresh call for
 	// any other. A turn they cannot be had or applied for fails on its own.
 	var patches []*pluginv1.BodyPatch
-	if connected {
+	if opensUpstream {
 		patches, s.handshakePatches = s.handshakePatches, nil
 	} else if patches, e = s.turnPatches(ctx, cl, payload); e != nil {
 		return reject(cl, e)
@@ -668,20 +668,6 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	s.upIn = make(chan wsMessage, 1)
 	go s.read(ctx, up, s.upIn)
 	return attemptResult{kind: attemptDone}
-}
-
-// requestFieldValues reads the route's requestFields (gjson paths or
-// queries) from body: the raw JSON of each one present, nothing for the
-// absent ones. Like HTTP, the core caps neither a value nor their sum; the
-// message size limit and the plugin's gRPC receive limit bound them.
-func requestFieldValues(body []byte, paths []string) map[string]string {
-	fields := make(map[string]string, len(paths))
-	for _, p := range paths {
-		if r := getJSON(body, p); r != "" {
-			fields[p] = r
-		}
-	}
-	return fields
 }
 
 // turnPatches asks the session's plugin for the body patches of a later
