@@ -379,6 +379,9 @@ type Account struct {
 	// HeaderPassthrough lists the client headers copied onto the upstream
 	// request (CONTRACTS §81); empty = none beyond the platform's own.
 	HeaderPassthrough []string
+	// ParamOverride rewrites the upstream body and headers (CONTRACTS §84);
+	// nil = none.
+	ParamOverride *ParamOverride
 }
 
 func (a *Account) PluginAccount(platform string) *pluginv1.Account {
