@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -35,11 +36,16 @@ import (
 // later turn's call only gives its patches. They are applied after the hooks
 // and the model mappings, as on HTTP.
 
-// wsLimits are the session limits. They match the defaults of the session
-// mode this was ported from and are fields only so tests can shorten them.
+// wsLimits are the session limits. They are fields only so tests can
+// shorten them. A session has no idle timeout: it stays open, on its account
+// and upstream connection, until the client disconnects (or the node drains,
+// the upstream closes or a ping goes unanswered); keepalive pings on both
+// connections keep proxies from dropping it and find dead peers.
 type wsLimits struct {
-	firstMessage time.Duration // upgrade to the first client message
-	idle         time.Duration // end of a turn to the next message
+	firstMessage time.Duration // upgrade to the first client message; 0 = none
+	idle         time.Duration // end of a turn to the next message; 0 = none
+	ping         time.Duration // keepalive ping interval on both connections; 0 = none
+	pingTimeout  time.Duration // a ping unanswered this long closes that connection
 	maxPerKey    int           // open sessions per API key, cluster-wide
 	slotWait     time.Duration // later turns wait this long for the account
 	drainGrace   time.Duration // a turn in progress when draining starts
@@ -50,7 +56,7 @@ type wsLimits struct {
 }
 
 func defaultWSLimits() wsLimits {
-	return wsLimits{firstMessage: 30 * time.Second, idle: 300 * time.Second, maxPerKey: 64, slotWait: 10 * time.Second,
+	return wsLimits{ping: 30 * time.Second, pingTimeout: 30 * time.Second, maxPerKey: 64, slotWait: 10 * time.Second,
 		drainGrace: 30 * time.Second, handshake: 30 * time.Second, writeTimeout: time.Minute, upstreamRead: 64 << 20,
 		drainPoll: 500 * time.Millisecond}
 }
@@ -167,8 +173,24 @@ func (s *wsSession) run(ctx context.Context) {
 		}
 	}()
 	asked := false // a response.create arrived
-	idle := time.NewTimer(s.g.ws.firstMessage)
+	idle := time.NewTimer(time.Hour)
+	idle.Stop()
 	defer idle.Stop()
+	// resetIdle arms the idle timer; a zero limit means no timeout.
+	resetIdle := func(d time.Duration) {
+		idle.Stop()
+		if d > 0 {
+			idle.Reset(d)
+		}
+	}
+	resetIdle(s.g.ws.firstMessage)
+	var keepalive <-chan time.Time
+	if s.g.ws.ping > 0 {
+		t := time.NewTicker(s.g.ws.ping)
+		defer t.Stop()
+		keepalive = t.C
+	}
+	var clientPing, upPing atomic.Bool // a ping in flight on that connection
 	poll := time.NewTicker(s.g.ws.drainPoll)
 	defer poll.Stop()
 	var drainDeadline time.Time
@@ -212,7 +234,7 @@ func (s *wsSession) run(ctx context.Context) {
 				end(websocket.StatusInternalError, "upstream connection failed; reconnect")
 				return
 			}
-			idle.Reset(s.g.ws.idle)
+			resetIdle(s.g.ws.idle)
 			if turn != nil {
 				upstreamIdle.Reset(turn.cl.streamIdle())
 			}
@@ -239,7 +261,7 @@ func (s *wsSession) run(ctx context.Context) {
 				s.finish(sctx, turn, out)
 				turn = nil
 				upstreamIdle.Stop()
-				idle.Reset(s.g.ws.idle)
+				resetIdle(s.g.ws.idle)
 				if !drainDeadline.IsZero() {
 					end(wsCloseRestart, "node is draining; reconnect")
 					return
@@ -256,6 +278,11 @@ func (s *wsSession) run(ctx context.Context) {
 			s.finish(sctx, turn, wsOutcome{status: http.StatusGatewayTimeout, errType: errTypeUpstream, msg: errStreamIdleTimeout.Error()})
 			end(websocket.StatusTryAgainLater, "upstream went silent; reconnect")
 			return
+		case <-keepalive:
+			s.keepalive(sctx, s.client, &clientPing)
+			if s.up != nil {
+				s.keepalive(sctx, s.up, &upPing)
+			}
 		case <-idle.C:
 			if turn != nil {
 				continue
@@ -298,6 +325,23 @@ func (s *wsSession) read(ctx context.Context, conn *websocket.Conn, ch chan<- ws
 			return
 		}
 	}
+}
+
+// keepalive pings c in the background unless a ping is already in flight. A
+// ping that fails or goes unanswered for pingTimeout closes c; its reader then
+// reports the error and the session ends the way it does for a disconnect.
+func (s *wsSession) keepalive(ctx context.Context, c *websocket.Conn, inFlight *atomic.Bool) {
+	if !inFlight.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer inFlight.Store(false)
+		pctx, cancel := context.WithTimeout(ctx, s.g.ws.pingTimeout)
+		defer cancel()
+		if err := c.Ping(pctx); err != nil && ctx.Err() == nil {
+			_ = c.CloseNow()
+		}
+	}()
 }
 
 func (s *wsSession) write(ctx context.Context, typ websocket.MessageType, data []byte) error {

@@ -709,3 +709,37 @@ func TestWebSocketTurnPatchFailureKeepsTheConnection(t *testing.T) {
 		t.Fatalf("account slot held after failed turns: %d", n)
 	}
 }
+
+// A session has no idle timeout by default: with neither a first message nor
+// a message between turns for longer than any old limit, it stays open on its
+// connection and serves the next turn. Keepalive pings keep running.
+func TestWebSocketSessionHasNoIdleTimeout(t *testing.T) {
+	e := newWSEnv(t)
+	if d := defaultWSLimits(); d.firstMessage != 0 || d.idle != 0 || d.ping <= 0 || d.pingTimeout <= 0 {
+		t.Fatalf("default limits = %+v", d)
+	}
+	e.gw.ws.ping = 20 * time.Millisecond
+	e.gw.ws.pingTimeout = 5 * time.Second
+	c := e.mustDial()
+	time.Sleep(200 * time.Millisecond) // no first message yet
+	c.send(create(wsModel, "one"))
+	c.until("response.completed")
+	e.record()
+	time.Sleep(200 * time.Millisecond) // idle between turns
+	c.send(create(wsModel, "two"))
+	c.until("response.completed")
+	if r := e.record(); !r.Success || r.AccountID == nil || *r.AccountID != 11 {
+		t.Fatalf("second turn after idling: %+v", r)
+	}
+}
+
+// A client that stops answering pings is treated as disconnected: the session
+// ends and its per-key connection slot is released.
+func TestWebSocketUnansweredPingEndsTheSession(t *testing.T) {
+	e := newWSEnv(t)
+	e.gw.ws.ping = 20 * time.Millisecond
+	e.gw.ws.pingTimeout = 100 * time.Millisecond
+	_ = e.mustDial() // never reads, so it never answers a ping
+	waitFor(t, func() bool { n, _ := e.slots.InUse(context.Background(), "ws", 5); return n == 1 })
+	waitFor(t, func() bool { n, _ := e.slots.InUse(context.Background(), "ws", 5); return n == 0 })
+}
