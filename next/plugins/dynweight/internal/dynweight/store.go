@@ -287,23 +287,28 @@ func (s store) tombstone(ctx context.Context, keys []key, window func(key) int64
 	return err
 }
 
-// weight is the effective weight of a key that is not at its base.
+// weight is the effective weight of a key that is not at its base, and
+// when scheduling last offered its account in its group (the epoch when
+// unknown).
 type weight struct {
-	base int
-	eff  float64
+	base   int
+	eff    float64
+	seenAt time.Time
 }
 
 // loadWeights reads the keys whose effective weight is not their base:
 // everything scheduling needs.
 func (s store) loadWeights(ctx context.Context) (map[key]weight, error) {
-	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model, base, eff FROM state WHERE NOT tombstone AND eff <> base`)
+	rows, err := s.db.Query(ctx, `SELECT s.account_id, s.group_id, s.model, s.base, s.eff, COALESCE(b.seen_at, 'epoch')
+		FROM state s LEFT JOIN bases b ON b.account_id = s.account_id AND b.group_id = s.group_id
+		WHERE NOT s.tombstone AND s.eff <> s.base`)
 	if err != nil {
 		return nil, err
 	}
 	out := map[key]weight{}
 	var k key
 	var w weight
-	_, err = pgx.ForEachRow(rows, []any{&k.AccountID, &k.GroupID, &k.Model, &w.base, &w.eff}, func() error {
+	_, err = pgx.ForEachRow(rows, []any{&k.AccountID, &k.GroupID, &k.Model, &w.base, &w.eff, &w.seenAt}, func() error {
 		out[k] = w
 		return nil
 	})

@@ -74,6 +74,11 @@ func (p *Plugin) putConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
+	// What this save replaces: the save goes through only if it is still the stored one.
+	prev, _, _, err := s.loadConfig(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
 	version, err := s.saveConfig(ctx, body.Config, body.Version, req.GetCaller().GetUserId())
 	if errors.Is(err, errVersionConflict) {
 		return pluginsdk.ErrorResponse(http.StatusConflict, "conflict", "the configuration was changed meanwhile, reload it / 配置已被修改，请刷新后重试"), nil
@@ -82,6 +87,9 @@ func (p *Plugin) putConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	p.publish(ctx, TopicConfig, p.reloadConfig)
+	if prev.Enabled && !body.Config.Enabled {
+		warnings = append(warnings, p.resetOnDisable(ctx)...)
+	}
 	return pluginsdk.DataResponse(configBody{Config: body.Config, Version: version, Warnings: warnings}), nil
 }
 
@@ -313,22 +321,23 @@ type accountWeight struct {
 
 // weightKey is a degraded key of an account: its weights, where it is
 // heading (rules.TrendDegrading / TrendClimbing, "" = unknown) and its last
-// change (RFC 3339, absent = unknown).
+// change (unix seconds as in GET /status, absent = unknown).
 type weightKey struct {
 	GroupID   int64   `json:"group_id"`
 	Model     string  `json:"model"`
 	Eff       float64 `json:"eff"`
 	Base      int     `json:"base"`
 	State     string  `json:"state"`
-	ChangedAt string  `json:"changed_at,omitempty"`
+	ChangedAt int64   `json:"changed_at,omitempty"`
 }
 
 // getWeights answers ?account_ids=1,2,3 for at most manifest.MaxAccountBatch
 // accounts: what the core's account list filters by at once. The degraded
-// keys and their weights are this node's snapshot, what scheduling uses;
-// their trends come from one read of the states. The badges are optional
-// decoration: without the configuration or the states the snapshot is
-// still answered, only without adjust_off or the trends.
+// keys and their weights are this node's snapshot, what scheduling uses
+// (listedWeights); their trends come from one read of the states. The
+// badges are optional decoration: without the configuration or the states
+// the snapshot is still answered, only without adjust_off or the trends.
+// Nothing is listed while the plugin is off.
 func (p *Plugin) getWeights(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	wanted := map[int64]bool{}
 	for _, part := range strings.Split(pluginsdk.Query(req, "account_ids"), ",") {
@@ -341,6 +350,9 @@ func (p *Plugin) getWeights(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if err != nil {
 		p.log.Warn("dynweight: /weights without the configuration", "error", err.Error())
 	}
+	if cfg != nil && !cfg.Enabled {
+		return pluginsdk.DataResponse(out), nil
+	}
 	if cfg != nil {
 		for id, o := range cfg.Accounts {
 			if wanted[id] && o.Enabled != nil && !*o.Enabled {
@@ -349,8 +361,8 @@ func (p *Plugin) getWeights(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 		}
 	}
 	var degraded []int64
-	for k, w := range *p.weights.Load() {
-		if !wanted[k.AccountID] || w.eff >= float64(w.base) {
+	for k, w := range p.listedWeights() {
+		if !wanted[k.AccountID] {
 			continue
 		}
 		a := out[k.AccountID]
@@ -389,9 +401,7 @@ func (p *Plugin) getWeights(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 			if trend := rules.Trend(st, cfg.Resolve(id, k.GroupID).Enabled); trend != rules.TrendNormal {
 				k.State = trend
 			}
-			if st.LastChangeAt > 0 {
-				k.ChangedAt = time.Unix(st.LastChangeAt, 0).UTC().Format(time.RFC3339)
-			}
+			k.ChangedAt = st.LastChangeAt
 		}
 		out[id] = a
 	}
@@ -399,15 +409,39 @@ func (p *Plugin) getWeights(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 }
 
 // getDegraded lists the accounts with a key below its base in this node's
-// snapshot: how many, and the first manifest.MaxAccountBatch ids in order.
+// snapshot (listedWeights): how many, and the first manifest.MaxAccountBatch
+// ids in order. None while the plugin is off.
 func (p *Plugin) getDegraded(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	ids := []int64{}
-	for k, w := range *p.weights.Load() {
-		if w.eff < float64(w.base) {
+	if cfg := p.cfg.Load(); cfg.Enabled || !cfg.loaded {
+		for k := range p.listedWeights() {
 			ids = append(ids, k.AccountID)
 		}
 	}
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
 	return pluginsdk.DataResponse(map[string]any{"count": len(ids), "account_ids": ids[:min(len(ids), manifest.MaxAccountBatch)]}), nil
+}
+
+// listedWeights are the keys of this node's snapshot the account list shows:
+// those below their base, but for the accounts scheduling no longer offers
+// (gone, by the snapshot's seen_at or this node's own newer sighting): a
+// disabled or deleted account is not counted as degraded for the days its
+// state is kept.
+func (p *Plugin) listedWeights() map[key]weight {
+	cfg, now := p.cfg.Load(), p.now().Unix()
+	out := map[key]weight{}
+	for k, w := range *p.weights.Load() {
+		if w.eff >= float64(w.base) {
+			continue
+		}
+		seen := w.seenAt
+		if own := p.bases.seenAt(pair{k.AccountID, k.GroupID}); own.After(seen) {
+			seen = own
+		}
+		if !gone(seen, cfg.GroupLayer(k.GroupID).WindowSeconds, now) {
+			out[k] = w
+		}
+	}
+	return out
 }

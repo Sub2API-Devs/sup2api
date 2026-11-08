@@ -40,6 +40,7 @@ type env struct {
 	h     *pluginsdktest.Harness
 	fh    *pluginsdktest.FakeHost
 	clock atomic.Int64 // unix seconds
+	base  int32        // the weight rank last offered the account with
 
 	mu       sync.Mutex
 	notified []*pluginv1.NotifyRequest
@@ -107,6 +108,7 @@ func (e *env) decode(resp *pluginv1.HTTPResponse, want int, v any) {
 // account (0 = left as it is).
 func (e *env) rank(weight int32) int32 {
 	e.t.Helper()
+	e.base = weight
 	resp, err := e.p.RankAccounts(context.Background(), &pluginv1.RankAccountsRequest{
 		Meta:       &pluginv1.RequestMeta{GroupId: testGroup, Model: testModel},
 		Candidates: []*pluginv1.RankCandidate{{AccountId: testAccount, Name: "main", Priority: 5, Weight: weight}},
@@ -123,12 +125,16 @@ func (e *env) rank(weight int32) int32 {
 	return resp.GetAccounts()[0].GetWeight()
 }
 
-// window records attempts in the current window, then moves the clock past
-// its close and evaluates.
+// window records attempts in the current window (scheduling offered the
+// account for them, with the weight rank last gave), then moves the clock
+// past its close and evaluates.
 func (e *env) window(ok, fail int) string {
 	e.t.Helper()
 	res := e.p.cfg.Load().Resolve(testAccount, testGroup)
 	start := rules.WindowStart(testAccount, e.clock.Load(), res.WindowSeconds)
+	if ok+fail > 0 && e.base > 0 {
+		e.rank(e.base)
+	}
 	e.observe(start+min(10, int64(res.WindowSeconds)-1), ok, fail)
 	e.clock.Store(start + int64(res.WindowSeconds) + rules.CloseGraceSeconds)
 	resp, err := e.p.RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: JobEvaluate})
@@ -221,9 +227,8 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 		Data map[string]accountWeight `json:"data"`
 	}
 	e.decode(e.h.Do("GET", "/weights", map[string]string{"account_ids": "7,8"}, nil), http.StatusOK, &weights)
-	changed := time.Unix(st.ChangedAt, 0).UTC().Format(time.RFC3339)
 	if w := weights.Data["7"]; len(weights.Data) != 1 || w.Degraded != 1 || w.Lowest != 70 || w.Base != 100 || w.AdjustOff || st.ChangedAt == 0 ||
-		!slices.Equal(w.Keys, []weightKey{{GroupID: testGroup, Model: testModel, Eff: 70, Base: 100, State: rules.TrendDegrading, ChangedAt: changed}}) {
+		!slices.Equal(w.Keys, []weightKey{{GroupID: testGroup, Model: testModel, Eff: 70, Base: 100, State: rules.TrendDegrading, ChangedAt: st.ChangedAt}}) {
 		t.Fatalf("weights %+v", weights.Data)
 	}
 
@@ -415,6 +420,111 @@ func TestBaseChangeResets(t *testing.T) {
 	}
 }
 
+// The reset of a base change starts the key over at its last evaluated
+// window: the first window with traffic at the new weight is evaluated
+// (0.5.1 consumed it with the reset), so two bad windows degrade again.
+func TestBaseChangeKeepsNewTraffic(t *testing.T) {
+	e := newEnv(t)
+	e.configure(nil)
+	e.rank(100)
+	e.window(5, 5)
+	e.window(5, 5)
+	e.rank(50)
+	if msg := e.window(5, 5); msg != "evaluated 1 keys, 1 changed" {
+		t.Fatalf("reset: %s", msg)
+	}
+	var status struct {
+		Data []keyStatus `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/status", nil, nil), http.StatusOK, &status)
+	if st := status.Data[0]; st.Base != 50 || st.Effective != 50 || st.Total != 10 || st.Rules[0].Bitmap != "1" {
+		t.Fatalf("the window at the new weight was not evaluated: %+v", st)
+	}
+	e.window(5, 5)
+	if w := e.rank(50); w != 35 {
+		t.Fatalf("weight after two bad windows at the new base %d", w)
+	}
+	kinds := []string{}
+	for _, ev := range e.events(nil) {
+		kinds = append(kinds, ev.Kind+"/"+ev.Reason)
+	}
+	if !slices.Equal(kinds, []string{"affinity_cleared/", "weight_down/", "reset/base_mismatch", "affinity_cleared/", "weight_down/"}) {
+		t.Fatalf("events %v", kinds)
+	}
+}
+
+// With windows shorter than the job's interval, the run that notices a
+// base change evaluates every window closed since the last evaluation on
+// the new base (catch-up), so "2 of 3" fires in that very run.
+func TestBaseChangeCatchUp(t *testing.T) {
+	e := newEnv(t)
+	e.configure(func(c *rules.Config) { c.WindowSeconds = 3 })
+	e.rank(100)
+	e.window(5, 5)
+	e.window(5, 5)
+	if w := e.rank(50); w != 0 {
+		t.Fatalf("stale state applied: %d", w)
+	}
+	start := rules.WindowStart(testAccount, e.clock.Load(), 3)
+	for i, fail := range []int{5, 0, 5} { // 50%, healthy, 50%
+		e.observe(start+int64(i*3)+1, 10-fail, fail)
+	}
+	e.clock.Store(start + 9 + rules.CloseGraceSeconds)
+	if resp, err := e.p.RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: JobEvaluate}); err != nil || resp.GetMessage() != "evaluated 1 keys, 1 changed" {
+		t.Fatalf("catch-up run: %v %v", resp, err)
+	}
+	if w := e.rank(50); w != 35 {
+		t.Fatalf("weight after three windows at the new base %d", w)
+	}
+}
+
+// A degraded key of an account scheduling no longer offers (disabled,
+// deleted, out of the group) is not evaluated: its weight at 0 is not
+// revived and notified, and the account list does not count it. Offered
+// again, it is evaluated again, the windows since caught up.
+func TestGoneAccountNotEvaluated(t *testing.T) {
+	e := newEnv(t)
+	e.configure(func(c *rules.Config) {
+		c.Notify = rules.Notify{Enabled: true, Channel: "email", Recipients: []string{"ops@example.com"}}
+		c.Strategies[0].Actions[0] = rules.Action{Type: rules.ActionWeightDegrade, Mode: rules.ModeCurrentPercent, Value: 100}
+	})
+	e.rank(100)
+	e.window(5, 5)
+	e.window(5, 5)
+	if w := e.rank(100); w != 1 { // the tier at 0 is split evenly
+		t.Fatalf("weight at 0 ranked %d", w)
+	}
+	degraded := func() string {
+		return string(e.h.Do("GET", "/degraded", nil, nil).GetBody())
+	}
+	if got := degraded(); !strings.Contains(got, `"count":1`) {
+		t.Fatalf("degraded %s", got)
+	}
+	// Not offered for the windows the revival takes.
+	for range 4 {
+		e.window(0, 0)
+	}
+	if ev := e.events(map[string]string{"kind": rules.EventWeightRevived}); len(ev) != 0 || len(e.notified) != 1 {
+		t.Fatalf("revived while gone: %+v, %d notified", ev, len(e.notified))
+	}
+	if got := degraded(); !strings.Contains(got, `"count":0`) {
+		t.Fatalf("a gone account counted: %s", got)
+	}
+	if resp := e.h.Do("GET", "/weights", map[string]string{"account_ids": "7"}, nil); string(resp.GetBody()) != `{"data":{}}` {
+		t.Fatalf("a gone account listed: %s", resp.GetBody())
+	}
+	// Offered again: evaluated again, revived on the windows since.
+	e.rank(100)
+	e.p.flush(context.Background())
+	e.window(0, 0)
+	if ev := e.events(map[string]string{"kind": rules.EventWeightRevived}); len(ev) != 1 || e.rank(100) != 10 || len(e.notified) != 2 {
+		t.Fatalf("not revived once offered again: %+v", ev)
+	}
+	if got := degraded(); !strings.Contains(got, `"count":1`) {
+		t.Fatalf("degraded once offered again %s", got)
+	}
+}
+
 func TestConfigRoutes(t *testing.T) {
 	e := newEnv(t)
 	var current struct {
@@ -570,36 +680,93 @@ func TestChannelsWithoutGrant(t *testing.T) {
 	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusBadRequest, nil)
 }
 
-// Turning the plugin off pins the degraded keys to their base, so turning
-// it back on starts from the base; the pinning records no event.
-func TestGlobalDisablePinsToBase(t *testing.T) {
+// Turning the plugin off starts every key over from its base at once, as
+// new-api tombstones every key on a global disable: turning it back on
+// before the key's next window closes, an evaluation in between or not,
+// does not pick up the weight degraded before. While it is off /degraded
+// and /weights list nothing, whatever the snapshot holds. Nothing is
+// recorded: pinning to the base is no change.
+func TestGlobalDisableResetsAtOnce(t *testing.T) {
 	e := newEnv(t)
 	e.configure(nil)
-	e.rank(100)
-	e.window(5, 5)
-	e.window(5, 5)
-	if w := e.rank(100); w != 70 {
-		t.Fatalf("degraded weight %d", w)
+	degrade := func() {
+		t.Helper()
+		e.rank(100)
+		e.window(5, 5)
+		e.window(5, 5)
+		if w := e.rank(100); w != 70 {
+			t.Fatalf("degraded weight %d", w)
+		}
 	}
+	degrade()
+	snapshot := *e.p.weights.Load()
 	e.configure(func(c *rules.Config) { c.Enabled = false })
-	if msg := e.window(0, 0); msg != "evaluated 1 keys, 1 changed" {
-		t.Fatalf("disabled run: %s", msg)
-	}
 	if n := len(*e.p.weights.Load()); n != 0 {
-		t.Fatalf("%d keys still degraded", n)
+		t.Fatalf("%d keys still degraded once off", n)
+	}
+	// Another node may not have reloaded yet: the badges ignore its snapshot.
+	e.p.weights.Store(&snapshot)
+	resp := e.h.Do("GET", "/degraded", nil, nil)
+	if !strings.Contains(string(resp.GetBody()), `"count":0`) {
+		t.Fatalf("degraded while off %s", resp.GetBody())
+	}
+	if resp := e.h.Do("GET", "/weights", map[string]string{"account_ids": "7"}, nil); string(resp.GetBody()) != `{"data":{}}` {
+		t.Fatalf("weights while off %s", resp.GetBody())
+	}
+	if err := e.p.reloadWeights(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Evaluated in the same window, then back on: from the base.
+	if _, err := e.p.RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: JobEvaluate}); err != nil {
+		t.Fatal(err)
 	}
 	e.configure(nil)
 	if w := e.rank(100); w != 0 {
 		t.Fatalf("weight after re-enabling %d", w)
 	}
+	if msg := e.window(0, 0); msg != "evaluated 1 keys, 0 changed" || e.rank(100) != 0 {
+		t.Fatalf("first window back on: %s", msg)
+	}
 	var events struct {
 		Data []eventItem `json:"data"`
 	}
 	e.decode(e.h.Do("GET", "/events", nil, nil), http.StatusOK, &events)
-	// Only the degrade's (newest first, with the default clearing): pinning
-	// to the base is no change.
+	// Only the degrade's (newest first, with the default clearing).
 	if len(events.Data) != 2 || events.Data[0].Kind != rules.EventAffinityClear || events.Data[1].Kind != rules.EventWeightDown {
 		t.Fatalf("events %+v", events.Data)
+	}
+
+	// A degraded state the reset on turning off missed (written by an
+	// evaluation still on the configuration before) is tombstoned by the
+	// next evaluation while off, in the same window.
+	degrade()
+	ctx := context.Background()
+	s, err := e.p.store(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := key{AccountID: testAccount, GroupID: testGroup, Model: testModel}
+	states, err := s.loadStates(ctx, filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.configure(func(c *rules.Config) { c.Enabled = false })
+	cur, err := s.loadStates(ctx, filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.writeState(ctx, k, states[k].State, cur[k].gen, nil); err != nil || !ok {
+		t.Fatalf("write back %v %v", ok, err)
+	}
+	if msg, err := e.p.RunJob(ctx, &pluginv1.RunJobRequest{JobId: JobEvaluate}); err != nil || msg.GetMessage() != "evaluated 1 keys, 1 changed" {
+		t.Fatalf("run while off: %v %v", msg, err)
+	}
+	if n := len(*e.p.weights.Load()); n != 0 {
+		t.Fatalf("%d keys still degraded after the run while off", n)
+	}
+	e.configure(nil)
+	if w := e.rank(100); w != 0 {
+		t.Fatalf("weight after re-enabling again %d", w)
 	}
 }
 
@@ -774,9 +941,10 @@ func TestAccountRoutes(t *testing.T) {
 
 	// /weights details the lowest keys, by effective weight, at most
 	// maxWeightKeys; /degraded counts every account and lists them in order.
-	weights := map[key]weight{{AccountID: 8, GroupID: testGroup, Model: "m"}: {base: 100, eff: 50}}
+	seen := e.p.now()
+	weights := map[key]weight{{AccountID: 8, GroupID: testGroup, Model: "m"}: {base: 100, eff: 50, seenAt: seen}}
 	for i := range maxWeightKeys + 2 {
-		weights[key{AccountID: testAccount, GroupID: testGroup, Model: fmt.Sprintf("m%02d", i)}] = weight{base: 100, eff: float64(maxWeightKeys + 2 - i)}
+		weights[key{AccountID: testAccount, GroupID: testGroup, Model: fmt.Sprintf("m%02d", i)}] = weight{base: 100, eff: float64(maxWeightKeys + 2 - i), seenAt: seen}
 	}
 	e.p.weights.Store(&weights)
 	var listed struct {
@@ -820,6 +988,10 @@ func TestWeightsTrendAndAdjustOff(t *testing.T) {
 			t.Fatalf("write %v: %v %v", k, ok, err)
 		}
 	}
+	// Scheduling offers both accounts (gone accounts are not listed).
+	if err := s.saveBases(ctx, map[pair]base{{testAccount, testGroup}: {Weight: 100, SeenAt: e.p.now()}, {8, testGroup}: {Weight: 100, SeenAt: e.p.now()}}); err != nil {
+		t.Fatal(err)
+	}
 	if err := e.p.reloadWeights(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -830,13 +1002,13 @@ func TestWeightsTrendAndAdjustOff(t *testing.T) {
 	e.decode(resp, http.StatusOK, &listed)
 	w := listed.Data["7"]
 	if len(listed.Data) != 2 || w.Degraded != 2 || w.Lowest != 40 || w.AdjustOff || !slices.Equal(w.Keys, []weightKey{
-		{GroupID: testGroup, Model: "up", Eff: 40.4, Base: 100, State: rules.TrendClimbing, ChangedAt: "2023-11-14T22:18:20Z"},
-		{GroupID: testGroup, Model: "down", Eff: 60, Base: 100, State: rules.TrendDegrading, ChangedAt: "2023-11-14T22:16:40Z"},
+		{GroupID: testGroup, Model: "up", Eff: 40.4, Base: 100, State: rules.TrendClimbing, ChangedAt: 1_700_000_300},
+		{GroupID: testGroup, Model: "down", Eff: 60, Base: 100, State: rules.TrendDegrading, ChangedAt: 1_700_000_200},
 	}) {
 		t.Fatalf("weights %+v", listed.Data)
 	}
 	if o := listed.Data["8"]; !o.AdjustOff || o.Degraded != 1 ||
-		!slices.Equal(o.Keys, []weightKey{{GroupID: testGroup, Model: "off", Eff: 50, Base: 100, ChangedAt: "2023-11-14T22:15:00Z"}}) {
+		!slices.Equal(o.Keys, []weightKey{{GroupID: testGroup, Model: "off", Eff: 50, Base: 100, ChangedAt: 1_700_000_100}}) {
 		t.Fatalf("adjust off %+v", listed.Data)
 	}
 	// /status reads the same trends (rules.Trend).
@@ -861,7 +1033,7 @@ func TestWeightsTrendAndAdjustOff(t *testing.T) {
 
 	// A key of the snapshot without a state (another node's, not stored
 	// yet) has no trend.
-	e.p.weights.Store(&map[key]weight{{AccountID: 8, GroupID: testGroup, Model: "m"}: {base: 3, eff: 1}})
+	e.p.weights.Store(&map[key]weight{{AccountID: 8, GroupID: testGroup, Model: "m"}: {base: 3, eff: 1, seenAt: e.p.now()}})
 	e.decode(e.h.Do("GET", "/weights", map[string]string{"account_ids": "8"}, nil), http.StatusOK, &listed)
 	if o := listed.Data["8"]; !o.AdjustOff || o.Degraded != 1 || o.Lowest != 1 || !slices.Equal(o.Keys, []weightKey{{GroupID: testGroup, Model: "m", Eff: 1, Base: 3}}) {
 		t.Fatalf("snapshot only %+v", listed.Data)

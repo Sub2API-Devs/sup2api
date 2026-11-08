@@ -34,10 +34,10 @@ func (p *Plugin) RankAccounts(_ context.Context, in *pluginv1.RankAccountsReques
 		return resp, nil
 	}
 	cands := in.GetCandidates()
-	p.bases.see(meta.GetGroupId(), cands, p.now())
 	weights := *p.weights.Load()
 	effective := make([]int32, len(cands)) // -1: the candidate's own
-	live := map[int32]bool{}               // tiers with a candidate above 0
+	degraded := make([]bool, len(cands))
+	live := map[int32]bool{} // tiers with a candidate above 0
 	for i, c := range cands {
 		effective[i] = -1
 		if c.GetWeight() <= 0 {
@@ -47,11 +47,13 @@ func (p *Plugin) RankAccounts(_ context.Context, in *pluginv1.RankAccountsReques
 		// A state computed from another base is stale: the evaluation resets it.
 		if ok && w.base == int(c.GetWeight()) {
 			effective[i] = effectiveWeight(w.eff)
+			degraded[i] = w.eff < float64(w.base)
 		}
 		if effective[i] != 0 {
 			live[c.GetPriority()] = true
 		}
 	}
+	p.bases.see(meta.GetGroupId(), cands, degraded, p.now())
 	for i, c := range cands {
 		w := effective[i]
 		if w == 0 && !live[c.GetPriority()] {
@@ -70,8 +72,30 @@ func effectiveWeight(eff float64) int32 {
 }
 
 // seenRefresh is how often an unchanged base is written again, to keep its
-// pair from being pruned as stale.
-const seenRefresh = time.Hour
+// pair from being pruned as stale; degradedSeenRefresh when the candidate's
+// key is degraded, for gone.
+const (
+	seenRefresh         = time.Hour
+	degradedSeenRefresh = 5 * time.Second
+)
+
+// goneMargin covers what gone's seen_at lags behind: the base written every
+// degradedSeenRefresh, the flush, and the snapshot /degraded and /weights
+// read reloaded every refreshEvery.
+const goneMargin = 30
+
+// gone reports whether scheduling has stopped offering an account in a group
+// (disabled, deleted, taken out of the group, cooling down) by when it last
+// did: longer ago than a window, at least 30 s, plus goneMargin. Its degraded
+// keys are then neither evaluated, so a weight at 0 is not revived (and
+// notified) for an account nobody schedules, nor listed by /degraded and
+// /weights, rather than until the cleanup drops the pair after staleAfter.
+// Offered again, its keys are evaluated again, the windows since caught up
+// as usual. Only degraded keys are judged so: the base of a key at its base
+// is written hourly, which says nothing within the hour.
+func gone(seenAt time.Time, windowSeconds int, now int64) bool {
+	return seenAt.Unix() < now-int64(max(windowSeconds, 30))-goneMargin
+}
 
 // baseTracker collects the bases scheduling saw, for the next flush.
 type baseTracker struct {
@@ -84,22 +108,35 @@ func newBaseTracker() *baseTracker {
 	return &baseTracker{known: map[pair]base{}, pending: map[pair]base{}}
 }
 
-// see records the bases of a request's candidates, under one lock. A weight
-// of 0 (an earlier ranker took the account out) is no base.
-func (t *baseTracker) see(groupID int64, candidates []*pluginv1.RankCandidate, now time.Time) {
+// see records the bases of a request's candidates, under one lock; degraded
+// tells the candidates whose key is degraded. A weight of 0 (an earlier
+// ranker took the account out) is no base.
+func (t *baseTracker) see(groupID int64, candidates []*pluginv1.RankCandidate, degraded []bool, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for _, c := range candidates {
+	for i, c := range candidates {
 		if c.GetWeight() <= 0 {
 			continue
 		}
 		p, weight, name := pair{AccountID: c.GetAccountId(), GroupID: groupID}, int(c.GetWeight()), c.GetName()
-		if k, ok := t.known[p]; ok && k.Weight == weight && k.Name == name && now.Sub(k.SeenAt) < seenRefresh {
+		refresh := seenRefresh
+		if degraded[i] {
+			refresh = degradedSeenRefresh
+		}
+		if k, ok := t.known[p]; ok && k.Weight == weight && k.Name == name && now.Sub(k.SeenAt) < refresh {
 			continue
 		}
 		b := base{Weight: weight, Name: name, SeenAt: now}
 		t.pending[p], t.known[p] = b, b
 	}
+}
+
+// seenAt is when this node last recorded scheduling offering the pair (zero
+// = not lately): fresher than the snapshot's until it reloads.
+func (t *baseTracker) seenAt(p pair) time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.known[p].SeenAt
 }
 
 // take hands over the bases to write.

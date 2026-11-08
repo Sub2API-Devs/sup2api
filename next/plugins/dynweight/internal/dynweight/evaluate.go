@@ -101,12 +101,12 @@ type evaluation struct {
 	changed   int
 }
 
-// runEvaluate evaluates every key. It also runs when the plugin is off:
-// the kernel then pins the degraded keys to their base (the adjustment is
-// off), so turning it back on starts from the base, as new-api's reset of
-// every key on a global disable does. It never runs on the factory
-// configuration standing in for one it could not read, which would pin
-// them all the same.
+// runEvaluate evaluates every key. It also runs when the plugin is off: a
+// key still degraded is tombstoned (evaluation.tombstone), the others are
+// pinned to their base by the kernel (the adjustment is off), so turning it
+// back on starts from the base, as new-api's reset of every key on a global
+// disable does. It never runs on the factory configuration standing in for
+// one it could not read, which would pin them all the same.
 func (p *Plugin) runEvaluate(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
 	s, err := p.store(ctx)
 	if err != nil {
@@ -274,6 +274,13 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 	}
 	res := e.cfg.Resolve(k.AccountID, k.GroupID)
 	latest := rules.LatestClosedWindow(k.AccountID, e.now, res.WindowSeconds)
+	degraded := hasState && !row.Tombstone && row.WeightEff < float64(row.WeightBase)
+	if !e.cfg.Enabled && degraded {
+		return e.tombstone(ctx, k, row, max(row.LastEvalWindow, latest)) // off: what resetOnDisable missed
+	}
+	if degraded && gone(b.SeenAt, res.WindowSeconds, e.now) {
+		return nil // nobody schedules the account: nothing to revive it for
+	}
 	var st *rules.State
 	if hasState {
 		st = &row.State
@@ -288,19 +295,22 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 		changed   bool
 		reset     bool
 	)
-windows:
+	// The base changed: the key starts over from it at its last evaluated
+	// window, so the windows since (the traffic at the new weight among
+	// them) are still evaluated, now on the new base.
+	if st != nil && rules.Precheck(&rules.Input{Base: b.Weight, Window: latest, State: st}) == rules.ActionReset {
+		tomb := rules.Tombstone(st.LastEvalWindow)
+		st, reset, changed = &tomb, true, true
+		events = rules.Events(&res, latest, rules.Output{Action: rules.ActionReset})
+	}
 	for _, window := range dueWindows(st, latest, res.WindowSeconds) {
 		out := rules.Evaluate(rules.Input{Base: b.Weight, Window: window, Now: e.now, Obs: e.series(k, window, &res), Cfg: res, State: st})
-		switch out.Action {
-		case rules.ActionSkip:
+		if out.Action == rules.ActionSkip {
+			if reset {
+				break // nothing closed since: the reset alone is written
+			}
 			stats.add(cSkipped, 1)
 			return nil
-		case rules.ActionReset:
-			// The base changed: the first window says so, the rest are consumed.
-			tomb := rules.Tombstone(latest)
-			st, reset, changed = &tomb, true, true
-			events = rules.Events(&res, latest, out)
-			break windows
 		}
 		st = &out.State
 		changed = changed || out.WeightFrom != out.WeightTo
@@ -337,6 +347,27 @@ windows:
 			e.notices = append(e.notices, notice{k: k, name: b.Name, ev: ev})
 		}
 	}
+	return nil
+}
+
+// tombstone starts a degraded key over from its base at the window while
+// the plugin is off. Turning it off does so for every key (resetOnDisable);
+// this catches what that missed (its write failed, or an evaluation still on
+// the configuration before overlapped it), at once rather than when the
+// key's next window closes and the kernel pins it, so turning the plugin
+// back on meanwhile does not pick up the degraded weight. No event, as for
+// turning it off.
+func (e *evaluation) tombstone(ctx context.Context, k key, row stateRow, window int64) error {
+	written, err := e.s.writeState(ctx, k, rules.Tombstone(window), row.gen, nil)
+	if err != nil {
+		return err
+	}
+	if !written {
+		e.p.stats.add(cLost, 1)
+		return nil
+	}
+	e.evaluated++
+	e.changed++
 	return nil
 }
 
@@ -470,28 +501,60 @@ func (p *Plugin) resetKeys(ctx context.Context, f filter, reason string, userID 
 	if err != nil {
 		return 0, err
 	}
-	cfg, err := p.loadedConfig(ctx)
-	if err != nil {
-		return 0, err
-	}
-	now := p.now().Unix()
-	keys, err := s.keys(ctx, f, obsSince(cfg, now))
-	if err != nil {
-		return 0, err
-	}
 	// The weights scheduling used until now, for the events.
 	weights := *p.weights.Load()
-	if len(keys) > 0 {
-		window := func(k key) int64 {
-			return rules.LatestClosedWindow(k.AccountID, now, cfg.GroupLayer(k.GroupID).WindowSeconds)
-		}
-		if err := s.tombstone(ctx, keys, window); err != nil {
-			return 0, err
-		}
+	keys, err := p.tombstoneKeys(ctx, s, f)
+	if err != nil {
+		return 0, err
 	}
 	p.stats.add(cResets, int64(len(keys)))
 	p.record(ctx, s, resetEvents(f, keys, weights, reason, userID), len(keys) > 0)
 	return len(keys), nil
+}
+
+// tombstoneKeys writes a tombstone at its newest closed window for every key
+// matching f with a state or with counters, all of them or none, and lists
+// them.
+func (p *Plugin) tombstoneKeys(ctx context.Context, s store, f filter) ([]key, error) {
+	cfg, err := p.loadedConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := p.now().Unix()
+	keys, err := s.keys(ctx, f, obsSince(cfg, now))
+	if err != nil || len(keys) == 0 {
+		return nil, err
+	}
+	window := func(k key) int64 {
+		return rules.LatestClosedWindow(k.AccountID, now, cfg.GroupLayer(k.GroupID).WindowSeconds)
+	}
+	if err := s.tombstone(ctx, keys, window); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+// resetOnDisable starts every key over from its base when a save turns the
+// plugin off, as new-api tombstones every key on a global disable: turning
+// it back on, even at once, does not pick up the weights degraded before
+// (the evaluation would pin them to the base only once each key's next
+// window closed), nor evaluate the samples counted before again. No events,
+// as in new-api. When it fails, the evaluate job tombstones what is still
+// degraded on its next run (evaluation.tombstone); the warning says so.
+func (p *Plugin) resetOnDisable(ctx context.Context) []string {
+	s, err := p.store(ctx)
+	var keys []key
+	if err == nil {
+		keys, err = p.tombstoneKeys(ctx, s, filter{})
+	}
+	if err != nil {
+		p.log.Warn("dynweight: reset on turning off failed, left to the next evaluation", "error", err.Error())
+		return []string{"the degraded weights could not be reset now; the next evaluation resets them / 降权状态未能立即重置，下一次评估时会重置"}
+	}
+	if len(keys) > 0 {
+		p.publish(ctx, TopicWeights, p.reloadWeights)
+	}
+	return nil
 }
 
 // resetEvents records a reset as new-api does: an event for each key off
