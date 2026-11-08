@@ -2005,7 +2005,7 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
   - **不改写客户端请求体**（不去重、不规范化），只拒绝。
   - 钩子补丁的 `value_json` 里有重复键时，该补丁按 "patch rejected" 处理（计为钩子失败，按 failure 放行或拒绝），所以补丁之后的请求体同样没有重复键。
 - **为什么对所有请求做，而不是只对有钩子的请求**：协议转换路径（`convert`，encoding/json 取最后一个）和插件里用 gjson 读字段的地方（取第一个）同样会对同一个请求体读出不同的值；检查本身很便宜。实测（i5-13600KF，`gateway/jsonscan_test.go` 基准）：40 MB（30 MB base64 图片 + 800 条消息）请求 5 ms、960 B 分配，约为原有 gjson 校验（37 ms）的 1/7；最坏形状（5.5 MB 全是小对象和短字符串）7 ms（约 760 MB/s）。
-- **过深嵌套**：同一次扫描里，容器嵌套超过 10000 层（与 encoding/json 相同）时回答 400 `request body is nested too deeply`。原因：gjson 的校验是递归的，约 11 MB 的 `[` 就能让 goroutine 栈超过 1 GB 上限，这是**整个进程退出**的 fatal error，不是能 recover 的 panic（2026-10-31 用 gjson v1.19.0 实测）；任何持有 API Key 的人在默认 32 MB 的请求体上限内都能做到。所以扫描在 gjson 校验之前执行。插件补丁的 `value_json` 同样先扫描。
+- **过深嵌套**：同一次扫描里，容器嵌套超过 10000 层（与 encoding/json 相同）时回答 400 `request body is nested too deeply`。原因：gjson 的校验是递归的，约 11 MB 的 `[` 就能让 goroutine 栈超过 1 GB 上限，这是**整个进程退出**的 fatal error，不是能 recover 的 panic（2026-10-31 用 gjson v1.19.0 实测）；任何持有 API Key 的人在默认 128 MB（原 32 MB）的请求体上限内都能做到。所以扫描在 gjson 校验之前执行。插件补丁的 `value_json` 同样先扫描。
 - **顺序**：UTF-8 检查 → 结构扫描（过深则拒绝）→ gjson 校验（不合法则 `request body is not valid JSON`）→ 重复键。不合法的 JSON 报"不是合法 JSON"，不报重复键。
 - **实现**：`gateway/jsonscan.go` `scanJSONShape`（单遍，不解码；字符串用 `bytes.IndexByte` 跳过；每个对象 16 个键以内用切片比较，超过换 map），`pipeline.go` `checkBodyJSON`，`websocket.go` `begin`，`hooks.go` `applyPatches`。
 - **没有覆盖的**：资源请求（Files API 等，`resource_http.go`，不执行钩子）不检查。上游返回的 JSON（`usagerules`、`forward.go` 的 SSE 数据）也用 gjson 校验，深度问题理论上存在，但来源是上游，不在本节范围。
@@ -5581,7 +5581,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **值的来源**：按 账号 → 分组 → 全局设置 → 进程环境变量 的顺序取，0 或没设置就看下一层。
 - **已声明的变量**（定义见 `core/environment.go`）：
   - `relay_timeout_seconds`、`response_header_timeout_seconds`、`streaming_idle_timeout_seconds`
-  - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。端点声明了 `request.maxBodyBytes` 时，生效值取两者中较大的那个（只放宽，不收紧端点自己要的上限）；端点没有声明时直接用它，所以运营方仍可把默认的 32 MB 调小。未设置：端点声明的值，否则 32 MB。
+  - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。端点声明了 `request.maxBodyBytes` 时，生效值取两者中较大的那个（只放宽，不收紧端点自己要的上限）；端点没有声明时直接用它，所以运营方仍可把默认的 128 MB 调小。未设置：端点声明的值，否则 128 MB（2026-11-08 起，原为 32 MB；Anthropic Messages API 和 CCGateway 引擎自身仍限 32 MiB）。
   - `task_timeout_minutes`、`task_poll_max_failures`：只有分组层和账号层，全局层就是对账设置（§8 的 `max_reconcile_age_sec`、`max_poll_failures`），没有进程环境变量。只作用于异步任务；普通预扣条目只按对账设置。`task_timeout_minutes` 在任务登记时折算成截止时间，之后修改不影响已登记的任务；例外是管理员手动重新对账（`POST /usage/:id/reconcile`）：截止时间从重试时刻起、按任务所在分组和账号**当前**的变量重新计算。`task_poll_max_failures` 每次查询失败时重新解析。
   - 三个超时只作用于 HTTP 转发；WebSocket 会话是长连接，只用请求体上限（作为单条消息的上限）。
   - 资源请求（Files API 等，`resource_http.go`）不受 `max_request_body_mb` 和三个超时约束，用自己的上限（文件 512 MB、JSON 16 KB）和期限。
