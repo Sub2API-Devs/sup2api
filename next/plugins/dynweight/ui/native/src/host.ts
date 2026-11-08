@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { PluginHost, UseListResult } from '@sub2api/host'
+import { MAX_ACCOUNT_BATCH, type PluginHost, type UseListResult } from '@sub2api/host'
 import type { SelectOption, Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all dynweight components.
@@ -240,8 +240,8 @@ export interface WeightEvent {
 /** Puts the keys of accounts and/or a group (and model) back to their base. */
 export const resetWeights = (k: Key & { account_ids?: number[] }) => api().post<{ reset: number }>('/reset', k)
 
-/** The most accounts one reset takes (POST /reset). */
-export const MAX_RESET_ACCOUNTS = 500
+/** The most accounts one reset takes (POST /reset): the core's batch size. */
+export const MAX_RESET_ACCOUNTS = MAX_ACCOUNT_BATCH
 
 /** Row key of a (account, group, model) in the key tables. */
 export const keyOf = (k: Key) => `${k.account_id}|${k.group_id}|${k.model}`

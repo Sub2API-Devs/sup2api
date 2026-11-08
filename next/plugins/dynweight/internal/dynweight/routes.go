@@ -35,9 +35,6 @@ func (p *Plugin) routes() {
 	p.Handle("GET", "/stats", p.getStats)
 }
 
-// conflictMessage answers a save over a configuration another save changed.
-const conflictMessage = "the configuration was changed meanwhile, reload it / 配置已被修改，请刷新后重试"
-
 type configBody struct {
 	Config   rules.Config `json:"config"`
 	Version  int64        `json:"version"`
@@ -79,7 +76,7 @@ func (p *Plugin) putConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	}
 	version, err := s.saveConfig(ctx, body.Config, body.Version, req.GetCaller().GetUserId())
 	if errors.Is(err, errVersionConflict) {
-		return pluginsdk.ErrorResponse(http.StatusConflict, "conflict", conflictMessage), nil
+		return pluginsdk.ErrorResponse(http.StatusConflict, "conflict", "the configuration was changed meanwhile, reload it / 配置已被修改，请刷新后重试"), nil
 	}
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
@@ -278,20 +275,17 @@ func (p *Plugin) listEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	return pluginsdk.ListResponse(items, pluginsdk.Page{Page: page, PageSize: size, Total: total}), nil
 }
 
-// maxResetAccounts bounds the accounts of one reset: what the console sends
-// per account action request (manifest.json max_batch).
-const maxResetAccounts = manifest.MaxAccountBatch
-
 // reset is POST /reset {account_id?, account_ids?, group_id?, model?}
-// (resetKeys).
+// (resetKeys). It takes at most manifest.MaxAccountBatch accounts, what the
+// console sends per account action request.
 func (p *Plugin) reset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var f filter
 	if err := pluginsdk.DecodeJSON(req, &f); err != nil {
 		return pluginsdk.BadRequest("", "invalid_json", err.Error()), nil
 	}
 	accounts := len(f.accounts())
-	if accounts > maxResetAccounts {
-		return pluginsdk.BadRequest("account_ids", "too_many", fmt.Sprintf("at most %d accounts / 最多 %d 个账号", maxResetAccounts, maxResetAccounts)), nil
+	if accounts > manifest.MaxAccountBatch {
+		return pluginsdk.BadRequest("account_ids", "too_many", fmt.Sprintf("at most %d accounts / 最多 %d 个账号", manifest.MaxAccountBatch, manifest.MaxAccountBatch)), nil
 	}
 	if accounts == 0 && f.GroupID <= 0 {
 		return pluginsdk.BadRequest("account_id", "required", "an account or a group is required / 请指定账号或分组"), nil
@@ -303,13 +297,8 @@ func (p *Plugin) reset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv
 	return pluginsdk.DataResponse(map[string]int{"reset": n}), nil
 }
 
-const (
-	// maxListedAccounts bounds the accounts of GET /weights and GET
-	// /degraded: what the core's account list filters by at once.
-	maxListedAccounts = manifest.MaxAccountBatch
-	// maxWeightKeys bounds the keys GET /weights details per account.
-	maxWeightKeys = 10
-)
+// maxWeightKeys bounds the keys GET /weights details per account.
+const maxWeightKeys = 10
 
 // accountWeight sums up an account's degraded keys for the account list.
 type accountWeight struct {
@@ -327,11 +316,13 @@ type weightKey struct {
 	Base    int     `json:"base"`
 }
 
-// getWeights answers ?account_ids=1,2,3 from this node's weights.
+// getWeights answers ?account_ids=1,2,3 from this node's weights, for at
+// most manifest.MaxAccountBatch accounts: what the core's account list
+// filters by at once.
 func (p *Plugin) getWeights(_ context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	wanted := map[int64]bool{}
 	for _, part := range strings.Split(pluginsdk.Query(req, "account_ids"), ",") {
-		if id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil && id > 0 && len(wanted) < maxListedAccounts {
+		if id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil && id > 0 && len(wanted) < manifest.MaxAccountBatch {
 			wanted[id] = true
 		}
 	}
@@ -360,7 +351,7 @@ func (p *Plugin) getWeights(_ context.Context, req *pluginv1.HTTPRequest) (*plug
 }
 
 // getDegraded lists the accounts with a key below its base in this node's
-// snapshot: how many, and the first maxListedAccounts ids in order.
+// snapshot: how many, and the first manifest.MaxAccountBatch ids in order.
 func (p *Plugin) getDegraded(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	ids := []int64{}
 	for k, w := range *p.weights.Load() {
@@ -370,5 +361,5 @@ func (p *Plugin) getDegraded(context.Context, *pluginv1.HTTPRequest) (*pluginv1.
 	}
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
-	return pluginsdk.DataResponse(map[string]any{"count": len(ids), "account_ids": ids[:min(len(ids), maxListedAccounts)]}), nil
+	return pluginsdk.DataResponse(map[string]any{"count": len(ids), "account_ids": ids[:min(len(ids), manifest.MaxAccountBatch)]}), nil
 }

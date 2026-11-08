@@ -34,7 +34,6 @@ export const dynweightUIPlugin = {
       permission: 'dynweight:manage',
       route: 'POST /reset',
       bulk: true,
-      max_batch: 500,
       confirm: { en: 'Reset the dynamic weight of {n} account(s)?', zh: '重置 {n} 个账号的动态权重？' }
     }
   ],
@@ -266,6 +265,6 @@ on('GET', '/p/dynweight/degraded', () => {
 })
 on('POST', '/p/dynweight/reset', (req) => {
   const b = req.body ?? {}
-  if (!b.account_id && !b.account_ids?.length && !b.group_id) return fail(400, 'invalid_argument', 'an account or a group is required')
+  if (!b.account_id && !b.account_ids?.length && !b.group_id) return fail(400, 'invalid_argument', 'invalid request / 请求参数不正确', { fields: [{ field: 'account_id', code: 'required', message: 'an account or a group is required / 请指定账号或分组' }] })
   return { reset: resetKeys(b) }
 })

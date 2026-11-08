@@ -4,9 +4,10 @@ import { SChip, useAutoRefresh, useViewport } from '@sub2api/ui'
 import { fetchDegraded, useDwHost, type Degraded } from './host'
 
 // account.list.toolbar slot: "N accounts degraded" as a toggle chip that
-// filters the account list to them (setIds) and back. Pressed while the
-// list's id filter is the one this chip set; the core's own filter chip
-// clears it too. Refreshed every 30 s. Phones get the short label.
+// filters the account list to them (setIds) and back. `ids` is the set this
+// plugin gave the core (other plugins' sets narrow the list too); pressed
+// while it is the one this chip set, and the core's own filter chip clears
+// it too. Refreshed every 30 s. Phones get the short label.
 const props = defineProps<{ ids: number[] | null; setIds: (ids: number[] | null, label: string) => void }>()
 const t = useDwHost().t
 const { compact } = useViewport()

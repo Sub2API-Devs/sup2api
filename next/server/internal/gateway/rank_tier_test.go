@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -21,8 +22,7 @@ func tierRanker(e *env) {
 
 // The ranking is computed once and reused by failover: a zeroed account is
 // out of the request for good, so once the weighted account of its tier
-// failed the request drops to the next tier (CONTRACTS §24.3, §74.5,
-// 2026-11-07).
+// failed the request drops to the next tier (CONTRACTS §24.3, §74.5).
 func TestRankZeroWeightSkippedAfterFailover(t *testing.T) {
 	e := newEnv(t)
 	tierRanker(e)
@@ -66,6 +66,68 @@ func TestRankZeroWeightSkippedWhenWeightedLimited(t *testing.T) {
 		t.Fatalf("upstream %s, want acc-3 (acc-1 rate-limited, acc-2 zeroed)", k)
 	}
 	e.record()
+}
+
+// While the weighted account of its tier serves, the zeroed peer is never
+// picked, request after request.
+func TestRankZeroWeightNeverPickedAcrossRequests(t *testing.T) {
+	e := newEnv(t)
+	tierRanker(e)
+	for i := 0; i < 10; i++ {
+		if r := e.messages(body(testModel, false)); r.status != 200 {
+			t.Fatalf("request %d: status %d %s", i, r.status, r.body)
+		}
+		e.record()
+	}
+	if k := e.up.keys(); len(k) != 10 || slices.ContainsFunc(k, func(s string) bool { return s != "acc-1" }) {
+		t.Fatalf("upstream %v, want ten requests on acc-1 alone", k)
+	}
+}
+
+// A tier the plugin zeroed entirely is skipped while a lower tier still has
+// weight: the request lands there, no fallback inside the zeroed tier.
+func TestRankTierAllZeroFallsToNextTier(t *testing.T) {
+	e := newEnv(t)
+	e.addRanker("dyn", manifest.SchedulerRank{}, &fakeRanker{
+		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+			return []*pluginv1.RankedAccount{rank(1, 10, 0), rank(2, 10, 0), rank(3, 90, 1000)}, nil
+		}})
+	if r := e.messages(body(testModel, false)); r.status != 200 {
+		t.Fatalf("status %d %s", r.status, r.body)
+	}
+	if k := strings.Join(e.up.keys(), ","); k != "acc-3" {
+		t.Fatalf("upstream %s, want acc-3 (tier 10 zeroed entirely)", k)
+	}
+	e.record()
+}
+
+// pick skips a zeroed account before it looks at the rate limiter, so a
+// zeroed account's exhausted window never marks the request as limited. With
+// no other candidate, though, zeroing it is "every candidate zeroed" and the
+// rewrite is discarded (§24.3 fail open): the account serves on its own
+// weight, finds its window exhausted, and the client gets 429 rate_limited,
+// not 503 no_available_account.
+func TestRankZeroWeightSoleCandidateLimitedIsRateLimited(t *testing.T) {
+	lim := newFakeLimiter()
+	e := newEnv(t)
+	e.gw.d.Limiter = lim
+	e.accounts.groups[testGroup] = []int64{1}
+	e.accounts.set(1, func(acc *core.Account) { acc.RPMLimit = 1 })
+	lim.exhausted[1] = true
+	dyn := e.addRanker("dyn", manifest.SchedulerRank{}, &fakeRanker{
+		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+			return []*pluginv1.RankedAccount{rank(1, 10, 0)}, nil
+		}})
+	r := e.messages(body(testModel, false))
+	if r.status != 429 || r.json().Get("error.code").String() != core.ErrRateLimited.Code {
+		t.Fatalf("status %d %s, want 429 %s", r.status, r.body, core.ErrRateLimited.Code)
+	}
+	if dyn.count() != 1 || len(e.up.keys()) != 0 {
+		t.Fatalf("ranker calls %d, upstream %v", dyn.count(), e.up.keys())
+	}
+	if rec := e.record(); rec.ErrorType != errTypeNoAccount || len(rec.SchedDecisions) != 0 {
+		t.Fatalf("record %+v", rec)
+	}
 }
 
 // Splitting a tier the plugin lowered entirely is the plugin's job: it

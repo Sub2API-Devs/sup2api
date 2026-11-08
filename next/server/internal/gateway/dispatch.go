@@ -235,7 +235,7 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	// weight 0 takes the account out of this request for good: the ranking is
 	// computed once and reused by failover, so a zeroed account is not tried
 	// when its tier's weighted accounts failed, are rate-limited or busy, the
-	// request moves on to the next tier (§24.3, 2026-11-07). A plugin that
+	// request moves on to the next tier (§24.3). A plugin that
 	// wants a tier it zeroed entirely split evenly gives each account 1.
 	over := c.rankOverrides(ctx, cands)
 	var pool []core.AccountRef

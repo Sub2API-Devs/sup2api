@@ -534,7 +534,7 @@ const MaxDefaultModels = 500
 
 // MaxAccountBatch bounds the accounts of one account action request (UI
 // 3.6) and of one GET /accounts?ids= filter; the console never sends more
-// per request and an AccountAction.MaxBatch may not ask for more.
+// per request and a plugin route need not accept more.
 const MaxAccountBatch = 500
 
 // GuardedSetting is one restricted settings field of an account type
@@ -936,19 +936,21 @@ type Slot struct {
 
 // AccountAction is a declarative account operation. The console calls
 // Route as "POST /api/v1/p/<key><path>" with {"account_ids": [...]}, a
-// one-element array for a single row, at most MaxBatch accounts per request
-// (0 or absent means MaxAccountBatch), looks only at the status code and
-// reloads the list on success.
+// one-element array for a single row, at most MaxAccountBatch accounts per
+// request, looks only at the status code and reloads the list on success.
 type AccountAction struct {
-	ID         string        `json:"id"`                  // unique within the plugin
-	Label      LocalizedText `json:"label"`               // menu text
-	Icon       string        `json:"icon,omitempty"`      // SIcon name
-	Permission string        `json:"permission"`          // required: plugin-local key in userPermissions, equal to the route's
-	Route      string        `json:"route"`               // "POST /path": an admin route declared in routes
-	Bulk       bool          `json:"bulk,omitempty"`      // also offered in the bulk bar
-	Confirm    LocalizedText `json:"confirm,omitempty"`   // confirmation text, {n} = account count; none means no prompt
-	Danger     bool          `json:"danger,omitempty"`    // rendered as a destructive item
-	MaxBatch   int           `json:"max_batch,omitempty"` // accounts per request, 1..MaxAccountBatch; 0 = MaxAccountBatch
+	ID         string        `json:"id"`                // unique within the plugin
+	Label      LocalizedText `json:"label"`             // menu text
+	Icon       string        `json:"icon,omitempty"`    // SIcon name
+	Permission string        `json:"permission"`        // required: plugin-local key in userPermissions, equal to the route's
+	Route      string        `json:"route"`             // "POST /path": an admin route declared in routes
+	Bulk       bool          `json:"bulk,omitempty"`    // also offered in the bulk bar
+	Confirm    LocalizedText `json:"confirm,omitempty"` // confirmation text, {n} = account count; none means no prompt
+	Danger     bool          `json:"danger,omitempty"`  // rendered as a destructive item
+	// VisibleFor says which rows offer the action: "editable" (the default
+	// when empty) only rows the user may update (account:update), "all"
+	// every row the user can see. Orphaned accounts never offer it.
+	VisibleFor string `json:"visibleFor,omitempty"`
 }
 
 type NativeUI struct {

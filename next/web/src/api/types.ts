@@ -1302,15 +1302,16 @@ export interface PluginAccountAction {
   id: string
   label: LText
   icon?: string
-  permission?: string
+  /** Plugin-local permission key, the same as the route's. */
+  permission: string
   /** `POST <path>`, one of the plugin's admin routes. */
   route: string
   bulk?: boolean
   /** Confirmation text; `{n}` is the number of accounts. */
   confirm?: LText
   danger?: boolean
-  /** 1..500, the core sends at most this many ids per request (server fills 500). */
-  max_batch?: number
+  /** Which rows offer it: `editable` (default) only those the caller may update, `all` every row shown; orphaned accounts never. */
+  visibleFor?: 'editable' | 'all'
 }
 
 export interface UIPlugin {

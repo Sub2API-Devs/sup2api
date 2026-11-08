@@ -450,7 +450,7 @@ func TestAPIFlow(t *testing.T) {
 func TestUIPluginsAccountActions(t *testing.T) {
 	h, _ := newHarness(t)
 	reset := manifest.AccountAction{ID: "reset", Label: manifest.LocalizedText{"en": "Reset"}, Permission: "rules:manage", Route: "POST /reset", Bulk: true}
-	stats := manifest.AccountAction{ID: "stats", Label: manifest.LocalizedText{"en": "Stats"}, Permission: "stats:read", Route: "POST /stats", MaxBatch: 50}
+	stats := manifest.AccountAction{ID: "stats", Label: manifest.LocalizedText{"en": "Stats"}, Permission: "stats:read", Route: "POST /stats", VisibleFor: "all"}
 	h.guard.UI = &manifest.UI{AccountActions: []manifest.AccountAction{reset, stats}}
 
 	actions := func(token string) []any {
@@ -464,10 +464,12 @@ func TestUIPluginsAccountActions(t *testing.T) {
 		}
 		return ui[0].(map[string]any)["account_actions"].([]any)
 	}
-	// An action without max_batch is sent with the default filled in.
+	// The declaration is sent as is: visibleFor only when the plugin set it.
 	if got := actions("admin"); len(got) != 2 || got[0].(map[string]any)["route"] != "POST /reset" || got[0].(map[string]any)["bulk"] != true ||
-		got[0].(map[string]any)["max_batch"] != float64(manifest.MaxAccountBatch) || got[1].(map[string]any)["max_batch"] != float64(50) {
+		got[1].(map[string]any)["visibleFor"] != "all" {
 		t.Fatalf("admin actions = %v", got)
+	} else if _, has := got[0].(map[string]any)["visibleFor"]; has {
+		t.Fatalf("an unset visibleFor must be left out: %v", got[0])
 	}
 	// viewer holds only stats:read.
 	if got := actions("viewer"); len(got) != 1 || got[0].(map[string]any)["id"] != "stats" {

@@ -8,12 +8,12 @@ import AccountsView from './AccountsView.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountEditor from './AccountEditor.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
-import type { PluginAccountActionEntry } from '@/stores/plugins'
+import type { PluginAccountActionEntry, SlotEntry } from '@/stores/plugins'
 
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as unknown[]), accountActions: [] as unknown[] }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as SlotEntry[]), accountActions: [] as PluginAccountActionEntry[] }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { get: mocks.get, post: mocks.post, patch: mocks.patch, list: async () => ({ items: [] }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), confirm: mocks.confirm, toast: mocks.toast }))
 vi.mock('@/utils/errors', () => ({ notifyError: mocks.notifyError, errorMessage: String }))
@@ -476,7 +476,7 @@ describe('plugin account actions', () => {
 })
 
 describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3 UI 3.6)', () => {
-  const reset: PluginAccountActionEntry = { pluginKey: 'dynweight', id: 'reset', label: { en: 'Reset dynamic weight', zh: '重置动态权重' }, route: 'POST /reset', bulk: true, danger: true, confirm: { en: 'Reset {n}?', zh: '重置 {n} 个账号的动态权重？' } }
+  const reset: PluginAccountActionEntry = { pluginKey: 'dynweight', id: 'reset', label: { en: 'Reset dynamic weight', zh: '重置动态权重' }, permission: 'dynweight:manage', route: 'POST /reset', bulk: true, danger: true, confirm: { en: 'Reset {n}?', zh: '重置 {n} 个账号的动态权重？' } }
   const row = (id: number, over: Partial<Account> = {}) => ({ id, name: `acc-${id}`, status: 'active', schedulable: true, plugin_key: 'anthropic', type: 'apikey', orphaned: false, ...over }) as Account
   // The bulk bar and the header render their slots; the table offers a button that selects every row.
   const stubs = {
@@ -486,7 +486,15 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
     SChip: { emits: ['close'], template: '<span><slot /><button data-testid="chip-close" @click="$emit(\'close\')" /></span>' }
   }
   const dropdowns = (w: ReturnType<typeof render>) => w.findAllComponents(SDropdown)
-  const bulkMore = (w: ReturnType<typeof render>) => dropdowns(w).find((d) => d.attributes('data-testid') === 'account-bulk-more')!
+  const bulkMore = (w: ReturnType<typeof render>) => dropdowns(w).filter((d) => d.attributes('data-testid') === 'account-bulk-more')[0]
+  const bulkKeys = (w: ReturnType<typeof render>) => (bulkMore(w).props('actions') as Array<{ key: string }>).map((x) => x.key)
+  const posted = (ids: number[]) => expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: ids }, expect.objectContaining({ signal: expect.any(AbortSignal) }))
+  /** The props the toolbar slot hands to plugin `key`'s component. */
+  const slotProps = (w: ReturnType<typeof render>, key: string) => {
+    const p = w.getComponent(PluginSlot).props('props')
+    return (typeof p === 'function' ? p({ pluginKey: key, name: 'DegradedBadge', component: {} }) : p) ?? {}
+  }
+  const chips = (w: ReturnType<typeof render>) => w.findAll('[data-testid="ids-filter"]').map((c) => c.text())
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -503,18 +511,18 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
   it('offers the action in the row menu and posts the account id to the plugin route after confirming', async () => {
     const w = render()
     const items = dropdowns(w)[0].props('actions')
-    expect(items.find((x) => x.key === 'pa:dynweight:reset')).toMatchObject({ label: '重置动态权重', hidden: false })
-    dropdowns(w)[0].vm.$emit('select', 'pa:dynweight:reset')
+    expect(items.find((x) => x.key === 'declared:dynweight:reset')).toMatchObject({ label: '重置动态权重', hidden: false })
+    dropdowns(w)[0].vm.$emit('select', 'declared:dynweight:reset')
     await flushPromises()
     expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: '重置 1 个账号的动态权重？', danger: true }))
-    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [29] })
+    posted([29])
     expect(mocks.toast).toHaveBeenLastCalledWith('「重置动态权重」已完成', 'success')
     expect(mocks.reload).toHaveBeenCalled()
   })
 
   it('hides the action from readers and on orphaned accounts', () => {
     list.items.value = [row(29), row(31, { orphaned: true })]
-    const hidden = (w: ReturnType<typeof render>, i: number) => dropdowns(w)[i].props('actions').find((x) => x.key === 'pa:dynweight:reset')!.hidden
+    const hidden = (w: ReturnType<typeof render>, i: number) => dropdowns(w)[i].props('actions').find((x) => x.key === 'declared:dynweight:reset')?.hidden
     const w = render()
     expect([hidden(w, 0), hidden(w, 1)]).toEqual([false, true])
     mocks.canUpdate = false
@@ -525,57 +533,107 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
     const w = render(stubs)
     await w.get('[data-testid="select-rows"]').trigger('click')
     await flushPromises()
-    expect(bulkMore(w).props('actions')).toContainEqual(expect.objectContaining({ key: 'pa:dynweight:reset', label: '重置动态权重（2）', danger: true, disabled: false }))
-    bulkMore(w).vm.$emit('select', 'pa:dynweight:reset')
+    expect(bulkMore(w).props('actions')).toContainEqual(expect.objectContaining({ key: 'declared:dynweight:reset', label: '重置动态权重（2）', danger: true, disabled: false }))
+    bulkMore(w).vm.$emit('select', 'declared:dynweight:reset')
     await flushPromises()
     expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: '重置 2 个账号的动态权重？' }))
-    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [29, 30] })
+    posted([29, 30])
     expect(mocks.reload).toHaveBeenCalled()
     mocks.accountActions = [{ ...reset, bulk: false }]
     const without = render(stubs)
     await without.get('[data-testid="select-rows"]').trigger('click')
     await flushPromises()
-    expect(bulkMore(without).props('actions').some((x) => x.key.startsWith('pa:'))).toBe(false)
+    expect(bulkKeys(without).some((key) => key.startsWith('declared:'))).toBe(false)
+    mocks.accountActions = []
+    const none = render(stubs)
+    await none.get('[data-testid="select-rows"]').trigger('click')
+    await flushPromises()
+    expect(bulkKeys(none)).toEqual(['enable', 'disable', 'reset'])
   })
 
-  it('mounts the toolbar slot among the primary filters and shows the ids it sets as a closable filter chip', async () => {
-    list.items.value = []
+  it('lets a visibleFor "all" bulk action target every selected non-orphaned row, not just the editable ones', async () => {
+    mocks.accountActions = [{ ...reset, visibleFor: 'all' }]
+    mocks.canUpdate = false
+    list.items.value = [row(29), row(30), row(31, { orphaned: true })]
     const w = render(stubs)
-    const slot = () => w.getComponent(PluginSlot)
-    const slotProps = () => slot().props('props')!
-    expect(slot().props('name')).toBe('account.list.toolbar')
-    expect(slotProps().ids).toBeNull()
-    expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
-    slotProps().setIds([12, 13], '动态权重降权 2')
+    await w.get('[data-testid="select-rows"]').trigger('click')
     await flushPromises()
-    expect(list.filters.ids).toBe('12,13')
-    expect(slotProps().ids).toEqual([12, 13])
-    expect(w.get('[data-testid="ids-filter"]').text()).toBe('动态权重降权 2')
-    await w.get('[data-testid="chip-close"]').trigger('click')
-    expect(list.filters.ids).toBe('')
-    expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
-    slotProps().setIds([12], 'one')
+    expect(bulkMore(w).props('actions')).toContainEqual(expect.objectContaining({ key: 'declared:dynweight:reset', label: '重置动态权重（2）', disabled: false }))
+    bulkMore(w).vm.$emit('select', 'declared:dynweight:reset')
     await flushPromises()
-    w.findAllComponents(SButton).find((b) => b.attributes('data-testid') === 'clear-filters')!.vm.$emit('click')
+    posted([29, 30])
+    // The default visibility keeps the bulk action to editable rows, so a reader has none.
+    mocks.accountActions = [reset]
+    const reader = render(stubs)
+    await reader.get('[data-testid="select-rows"]').trigger('click')
     await flushPromises()
-    expect(list.filters.ids).toBe('')
-    expect(slotProps().ids).toBeNull()
-    expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
+    expect(bulkMore(reader).props('actions')).toContainEqual(expect.objectContaining({ key: 'declared:dynweight:reset', label: '重置动态权重（0）', disabled: true }))
   })
 
-  it('caps setIds at MAX_ACCOUNT_BATCH ids, says so on the chip, and treats an empty array as clearing', async () => {
+  it('keeps only distinct positive integer ids from setIds', async () => {
     list.items.value = []
     const w = render(stubs)
-    const slotProps = () => w.getComponent(PluginSlot).props('props')!
-    slotProps().setIds(Array.from({ length: 600 }, (_, i) => i + 1), '动态权重降权 600')
+    slotProps(w, 'a').setIds([3, 3, 0, -1, 2.5, NaN, 7] as number[], 'A')
     await flushPromises()
-    expect(String(list.filters.ids).split(',')).toHaveLength(500)
-    expect(slotProps().ids).toHaveLength(500)
-    expect(slotProps().ids![499]).toBe(500)
-    expect(w.get('[data-testid="ids-filter"]').text()).toBe('动态权重降权 600（前 500 个）')
-    slotProps().setIds([], 'x')
+    expect(slotProps(w, 'a').ids).toEqual([3, 7])
+    expect(list.filters.ids).toBe('3,7')
+    slotProps(w, 'a').setIds([0, -2], 'A')
+    await flushPromises()
+    expect(slotProps(w, 'a').ids).toBeNull()
+    expect(list.filters.ids).toBe('')
+  })
+
+  it('mounts the toolbar slot among the primary filters and filters the list to the ids common to every plugin, one closable chip each', async () => {
+    list.items.value = []
+    const w = render(stubs)
+    expect(w.getComponent(PluginSlot).props('name')).toBe('account.list.toolbar')
+    expect(slotProps(w, 'a').ids).toBeNull()
+    expect(chips(w)).toEqual([])
+    slotProps(w, 'a').setIds([12, 21], 'A')
+    await flushPromises()
+    expect(list.filters.ids).toBe('12,21')
+    expect(chips(w)).toEqual(['A'])
+    slotProps(w, 'b').setIds([21, 7], 'B')
+    await flushPromises()
+    expect(list.filters.ids).toBe('21')
+    expect(chips(w)).toEqual(['A', 'B'])
+    // Each plugin sees only its own set.
+    expect(slotProps(w, 'a').ids).toEqual([12, 21])
+    expect(slotProps(w, 'b').ids).toEqual([21, 7])
+    await w.findAll('[data-testid="chip-close"]')[0].trigger('click')
+    expect(list.filters.ids).toBe('21,7')
+    expect(chips(w)).toEqual(['B'])
+    expect(slotProps(w, 'a').ids).toBeNull()
+    // Sets without a common id ask for id 0, which no account has.
+    slotProps(w, 'a').setIds([12], 'A')
+    await flushPromises()
+    expect(list.filters.ids).toBe('0')
+    expect(chips(w)).toEqual(['B', 'A'])
+    w.findAllComponents(SButton).filter((b) => b.attributes('data-testid') === 'clear-filters')[0].vm.$emit('click')
     await flushPromises()
     expect(list.filters.ids).toBe('')
-    expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
+    expect(chips(w)).toEqual([])
+    expect(slotProps(w, 'b').ids).toBeNull()
+  })
+
+  it('cuts the common ids at MAX_ACCOUNT_BATCH, says so on the chips, and treats an empty array as clearing', async () => {
+    list.items.value = []
+    const w = render(stubs)
+    slotProps(w, 'a').setIds(Array.from({ length: 600 }, (_, i) => i + 1), '动态权重降权 600')
+    await flushPromises()
+    const sent = String(list.filters.ids).split(',')
+    expect(sent).toHaveLength(500)
+    expect(sent[499]).toBe('500')
+    expect(slotProps(w, 'a').ids).toHaveLength(600)
+    expect(chips(w)).toEqual(['动态权重降权 600（前 500 个）'])
+    // A second plugin's chip carries no suffix: the cut applies to the intersection once.
+    slotProps(w, 'b').setIds(Array.from({ length: 600 }, (_, i) => i + 1), 'B')
+    await flushPromises()
+    expect(chips(w)).toEqual(['动态权重降权 600（前 500 个）', 'B'])
+    slotProps(w, 'b').setIds(null, 'B')
+    slotProps(w, 'a').setIds([], 'x')
+    await flushPromises()
+    expect(list.filters.ids).toBe('')
+    expect(chips(w)).toEqual([])
   })
 })

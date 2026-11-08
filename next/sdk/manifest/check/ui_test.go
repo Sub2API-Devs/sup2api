@@ -499,8 +499,7 @@ func TestAccountActions(t *testing.T) {
 		{"route permission differs", func(a *manifest.AccountAction) { a.Permission = "assets:read" }, "route", "permission_mismatch"},
 		{"param route", func(a *manifest.AccountAction) { a.Route = "POST /assets/:id/reset" }, "route", "parameterized_route"},
 		{"wildcard route", func(a *manifest.AccountAction) { a.Route = "POST /assets/*rest" }, "route", "parameterized_route"},
-		{"max_batch too big", func(a *manifest.AccountAction) { a.MaxBatch = manifest.MaxAccountBatch + 1 }, "max_batch", "out_of_range"},
-		{"max_batch negative", func(a *manifest.AccountAction) { a.MaxBatch = -1 }, "max_batch", "out_of_range"},
+		{"visibleFor bad", func(a *manifest.AccountAction) { a.VisibleFor = "owners" }, "visibleFor", "invalid"},
 	}
 	for _, tc := range cases {
 		act := good
@@ -515,12 +514,12 @@ func TestAccountActions(t *testing.T) {
 	if c := uiCodes(withAccountAction(">=0.1.256 <0.2.0", act)); len(c) > 0 {
 		t.Fatalf("a bare path means POST: %v", c)
 	}
-	// max_batch takes the whole range 1..MaxAccountBatch.
-	for _, n := range []int{1, manifest.MaxAccountBatch} {
+	// visibleFor takes its two values; empty means "editable".
+	for _, vf := range []string{"editable", "all", ""} {
 		act := good
-		act.MaxBatch = n
+		act.VisibleFor = vf
 		if c := uiCodes(withAccountAction(">=0.1.256 <0.2.0", act)); len(c) > 0 {
-			t.Errorf("max_batch %d is in range: %v", n, c)
+			t.Errorf("visibleFor %q is valid: %v", vf, c)
 		}
 	}
 }

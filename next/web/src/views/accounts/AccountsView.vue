@@ -9,7 +9,7 @@ import { activeFilterCount, useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
-import { usePluginStore } from '@/stores/plugins'
+import { usePluginStore, type PluginAccountActionEntry, type SlotEntry } from '@/stores/plugins'
 import { notifyError } from '@/utils/errors'
 import { formatDateTime, formatMoney, formatRelative, formatTime } from '@/utils/format'
 import { lt } from '@/i18n'
@@ -68,19 +68,39 @@ const canReveal = (a: Account) => own.can(a, ACCOUNT_KEYS.reveal)
 // The usage column's "today" is the browser's day (CONTRACTS §73).
 const list = useList<Account>(`/accounts?${new URLSearchParams(todayQuery())}`, { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '', orphaned: '', ids: '' })
 // The account.list.toolbar slot (CONTRACTS §23.3 UI 3.6) narrows the list to
-// the ids a plugin names (`?ids=1,2`, at most MAX_ACCOUNT_BATCH: the rest are
-// dropped and the chip says so); the label it gives shows on a chip. An empty
-// array or null clears the filter.
-const idsLabel = ref('')
-const toolbarProps = computed(() => ({
-  ids: list.filters.ids ? String(list.filters.ids).split(',').map(Number) : null,
+// the ids plugins name. Each plugin keeps its own set and chip label (a
+// plugin's `ids` prop is that set; an empty array or null clears it); the list
+// gets the intersection of every set (`?ids=1,2`, at most MAX_ACCOUNT_BATCH:
+// the rest are dropped and the chips say so). Sets without a common id ask
+// for id 0, which no account has, so the list comes back empty.
+const idsFilters = ref<Record<string, { ids: number[]; label: string }>>({})
+const toolbarProps = (entry: SlotEntry) => ({
+  ids: idsFilters.value[entry.pluginKey]?.ids ?? null,
   setIds(ids: number[] | null, label: string) {
-    const all = ids ?? []
-    const kept = all.slice(0, MAX_ACCOUNT_BATCH)
-    list.filters.ids = kept.length ? kept.join(',') : ''
-    idsLabel.value = !kept.length ? '' : all.length > kept.length ? t('accounts.listUi.idsTruncated', { label, n: MAX_ACCOUNT_BATCH }) : label
+    // Plugin input is clamped on the way in: positive integers only, no repeats.
+    const clean = [...new Set((ids ?? []).filter((id) => Number.isInteger(id) && id > 0))]
+    if (clean.length) idsFilters.value[entry.pluginKey] = { ids: clean, label }
+    else clearIds(entry.pluginKey)
   }
-}))
+})
+/** Clears one plugin's id set, or every set. */
+function clearIds(pluginKey?: string) {
+  if (pluginKey) delete idsFilters.value[pluginKey]
+  else idsFilters.value = {}
+}
+/** The ids common to every plugin's set (null without any), cut to MAX_ACCOUNT_BATCH. */
+const idsCommon = computed(() => {
+  const sets = Object.values(idsFilters.value).map((f) => f.ids)
+  if (!sets.length) return null
+  const common = sets.reduce((acc, ids) => {
+    const own = new Set(ids)
+    return acc.filter((id) => own.has(id))
+  })
+  return { ids: common.slice(0, MAX_ACCOUNT_BATCH), truncated: common.length > MAX_ACCOUNT_BATCH }
+})
+watch(idsCommon, (c) => {
+  list.filters.ids = !c ? '' : c.ids.length ? c.ids.join(',') : '0'
+})
 const onlyMine = computed({
   get: () => list.filters.mine === 'true',
   set: (v: boolean) => {
@@ -294,6 +314,8 @@ watch(() => ({ ...list.filters }), () => selection.clear(), { deep: true })
 const picked = computed(() => ({
   test: selection.rows.value.filter(testable),
   edit: selection.rows.value.filter(editable),
+  // Every selected row a declared action with visibleFor "all" may act on (orphaned accounts never).
+  all: selection.rows.value.filter((a) => !a.orphaned),
   toggle: selection.rows.value.filter(toggleable),
   reset: selection.rows.value.filter(canResetStatus),
   remove: selection.rows.value.filter(canDelete)
@@ -302,15 +324,15 @@ const picked = computed(() => ({
 const { batchTesting, batchRunning, batchDone, batchTotal, batchTest, stopBatch } = useBatchTest({ tested: onTested })
 
 const bulk = useBulkRun(4)
-const pluginActions = usePluginAccountActions(list.reload)
-const bulkBusy = computed(() => batchRunning.value || bulk.running.value || pluginActions.running.value)
+const declaredActions = usePluginAccountActions(list.reload)
+const bulkBusy = computed(() => batchRunning.value || bulk.running.value || declaredActions.running.value)
 async function bulkToggle(enable: boolean) {
   const rows = picked.value.toggle.filter((a) => (a.status !== 'disabled') !== enable)
   if (!rows.length) return toast(t('accounts.bulk.nothingToChange'), 'info')
   const out = await bulk.run(rows, async (a, signal) => {
     patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, { status: enable ? 'active' : 'disabled', schedulable: enable }, { signal, query: todayQuery() }))
   })
-  bulkToast(t, out.ok.length, out.failed)
+  bulkToast(out.ok.length, out.failed)
 }
 async function bulkReset() {
   const rows = picked.value.reset
@@ -319,7 +341,7 @@ async function bulkReset() {
   const out = await bulk.run(rows, async (a) => {
     patchAccount(a.id, await resetAccountStatus(a.id))
   })
-  bulkToast(t, out.ok.length, out.failed)
+  bulkToast(out.ok.length, out.failed)
   list.reload()
 }
 const bulkEditOpen = ref(false)
@@ -333,18 +355,20 @@ function onBulkDeleted(ids: number[]) {
   list.reload()
 }
 const retentionOf = (a: Account) => typeOf(a)?.lifecycle?.deletion?.retentionDays ?? 0
+/** The selected rows a declared bulk action targets: the same rows its row-menu entry shows on (CONTRACTS §23.3). */
+const declaredTargets = (x: PluginAccountActionEntry) => (x.visibleFor === 'all' ? picked.value.all : picked.value.edit)
 const moreBulkActions = computed(() => [
   { key: 'enable', label: t('accounts.bulk.enable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
   { key: 'disable', label: t('accounts.bulk.disable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
   { key: 'reset', label: t('accounts.bulk.reset', { n: picked.value.reset.length }), disabled: !picked.value.reset.length },
-  ...plugins.accountActions.filter((x) => x.bulk).map((x) => ({ key: pluginAccountActionKey(x), label: t('accounts.bulk.pluginAction', { name: lt(x.label) || x.id, n: picked.value.edit.length }), icon: x.icon, danger: x.danger, disabled: !picked.value.edit.length }))
+  ...plugins.accountActions.filter((x) => x.bulk).map((x) => ({ key: pluginAccountActionKey(x), label: t('accounts.bulk.pluginAction', { name: lt(x.label) || x.id, n: declaredTargets(x).length }), icon: x.icon, danger: x.danger, disabled: !declaredTargets(x).length }))
 ])
 function onBulkMore(key: string) {
   if (key === 'enable' || key === 'disable') void bulkToggle(key === 'enable')
   else if (key === 'reset') void bulkReset()
   else {
     const declared = plugins.accountActions.find((x) => pluginAccountActionKey(x) === key)
-    if (declared) void pluginActions.run(declared, picked.value.edit)
+    if (declared) void declaredActions.run(declared, declaredTargets(declared))
   }
 }
 
@@ -530,10 +554,10 @@ const rowActionDeps: RowActionDeps = {
   remove,
   runPluginAction,
   // Read on each menu build: the plugin list may change after a refresh.
-  get pluginActions() {
+  get declaredActions() {
     return plugins.accountActions
   },
-  runPluginAccountAction: (a, entry) => pluginActions.run(entry, [a])
+  runPluginAccountAction: (a, entry) => declaredActions.run(entry, [a])
 }
 const actionsFor = (a: Account) => rowActions(a, rowActionDeps)
 function onAction(a: Account, key: string) {
@@ -560,7 +584,7 @@ const filterCount = computed(() => activeFilterCount(list.filters, ['plugin_key'
 const hasAdvancedFilters = computed(() => !!list.filters.model || !!list.filters.created_by || onlyMine.value || showOrphaned.value)
 function resetFilters() {
   for (const key of Object.keys(list.filters)) list.filters[key] = ''
-  idsLabel.value = ''
+  clearIds()
 }
 </script>
 
@@ -569,9 +593,9 @@ function resetFilters() {
     <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')" :filters-active-count="activeFilterCount(list.filters, ['q', 'plugin_key'])">
       <template #filters-primary>
         <SInput v-model="list.filters.q" icon="search" clearable class="w-44 2xl:w-56" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
-        <!-- Plugin toolbar items and the chip of the ids they set stay in sight on a phone too. -->
+        <!-- Plugin toolbar items and the chips of the ids they set stay in sight on a phone too. -->
         <PluginSlot name="account.list.toolbar" :props="toolbarProps" />
-        <SChip v-if="list.filters.ids" tone="primary" closable :close-label="t('accounts.listUi.clearIds')" data-testid="ids-filter" @close="toolbarProps.setIds(null, '')">{{ idsLabel || list.filters.ids }}</SChip>
+        <SChip v-for="(f, key, i) in idsFilters" :key="key" tone="primary" closable :close-label="t('accounts.listUi.clearIds')" data-testid="ids-filter" @close="clearIds(String(key))">{{ i === 0 && idsCommon?.truncated ? t('accounts.listUi.idsTruncated', { label: f.label, n: MAX_ACCOUNT_BATCH }) : f.label }}</SChip>
       </template>
       <template #filters>
         <SSelect v-model="typeFilter" :options="typeOptions" class="w-36 2xl:w-44" :aria-label="t('accounts.type')" />

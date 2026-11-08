@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({ post: vi.fn(), confirm: vi.fn(), toast: vi.fn(
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<typeof import('@sub2api/host')>()), api: { post: mocks.post } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...(await original<typeof import('@sub2api/ui')>()), confirm: mocks.confirm, toast: mocks.toast }))
 
-const reset = { pluginKey: 'dynweight', id: 'reset', label: { en: 'Reset dynamic weight', zh: '重置动态权重' }, route: 'POST /reset', bulk: true, confirm: { en: 'Reset {n} account(s)?', zh: '重置 {n} 个账号的动态权重？' } }
+const reset = { pluginKey: 'dynweight', id: 'reset', label: { en: 'Reset dynamic weight', zh: '重置动态权重' }, permission: 'dynweight:manage', route: 'POST /reset', bulk: true, confirm: { en: 'Reset {n} account(s)?', zh: '重置 {n} 个账号的动态权重？' } }
 const accounts = (n: number) => Array.from({ length: n }, (_, i) => ({ id: i + 1, name: `acc-${i + 1}` }) as Account)
 
 /** The composable needs a component scope for useI18n. */
@@ -39,7 +39,7 @@ describe('usePluginAccountActions (CONTRACTS §23.3 UI 3.6)', () => {
     const { run } = setup()
     await run(reset, accounts(1))
     expect(mocks.confirm).toHaveBeenCalledWith({ title: '重置动态权重', message: '重置 1 个账号的动态权重？', confirmText: '重置动态权重', danger: undefined })
-    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [1] })
+    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [1] }, expect.objectContaining({ signal: expect.any(AbortSignal) }))
     expect(mocks.toast).toHaveBeenCalledWith('「重置动态权重」已完成', 'success')
     expect(mocks.reload).toHaveBeenCalledOnce()
   })
@@ -52,10 +52,21 @@ describe('usePluginAccountActions (CONTRACTS §23.3 UI 3.6)', () => {
     expect(mocks.reload).not.toHaveBeenCalled()
     await run({ ...reset, confirm: undefined, route: '/reset' }, accounts(2))
     expect(mocks.confirm).toHaveBeenCalledOnce()
-    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [1, 2] })
+    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [1, 2] }, expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 
-  it('sends a selection as account_ids in batches of 500', async () => {
+  it('sends nothing for a route the manifest would have rejected, and says so on the console', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { run } = setup()
+    await run({ ...reset, route: 'reset' }, accounts(2))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('dynweight:reset'))
+    warn.mockRestore()
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    expect(mocks.post).not.toHaveBeenCalled()
+    expect(mocks.reload).not.toHaveBeenCalled()
+  })
+
+  it('sends a selection as account_ids in batches of MAX_ACCOUNT_BATCH', async () => {
     const { run, running } = setup()
     let release!: () => void
     mocks.post.mockImplementationOnce(() => new Promise<void>((resolve) => (release = resolve)))
@@ -69,19 +80,6 @@ describe('usePluginAccountActions (CONTRACTS §23.3 UI 3.6)', () => {
     expect(mocks.post.mock.calls[2][1]).toEqual({ account_ids: accounts(1200).slice(1000).map((a) => a.id) })
     expect(mocks.toast).toHaveBeenCalledWith('已完成 1200 个账号', 'success')
     expect(mocks.reload).toHaveBeenCalledOnce()
-  })
-
-  it('honours max_batch and clamps it to MAX_ACCOUNT_BATCH', async () => {
-    const { run } = setup()
-    const sizes = () => mocks.post.mock.calls.map(([, body]) => (body as { account_ids: number[] }).account_ids.length)
-    await run({ ...reset, max_batch: 300 }, accounts(700))
-    expect(sizes()).toEqual([300, 300, 100])
-    mocks.post.mockClear()
-    await run({ ...reset, max_batch: 9999 }, accounts(600))
-    expect(sizes()).toEqual([500, 100])
-    mocks.post.mockClear()
-    await run({ ...reset, max_batch: 0 }, accounts(600))
-    expect(sizes()).toEqual([500, 100])
   })
 
   it('reports a failed batch like the other bulk actions and still reloads what succeeded', async () => {

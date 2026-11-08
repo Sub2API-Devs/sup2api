@@ -344,19 +344,13 @@ func (v *validator) uiAccountActions(u *manifest.UI) {
 		} else if !v.userPerm(act.Permission) {
 			v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", act.Permission)
 		}
-		if act.MaxBatch < 0 || act.MaxBatch > manifest.MaxAccountBatch {
-			v.add(f+".max_batch", "out_of_range", "max_batch must be 1..%d (0 or absent means %d)", manifest.MaxAccountBatch, manifest.MaxAccountBatch)
+		switch act.VisibleFor {
+		case "", "editable", "all":
+		default:
+			v.add(f+".visibleFor", "invalid", "visibleFor must be \"editable\" or \"all\"")
 		}
 		r := v.routeRef(f+".route", act.Route, "POST")
 		if r == nil {
-			continue
-		}
-		// The console posts {"account_ids": [...]} to the path as declared;
-		// it has nothing to fill a :param or *wildcard segment with.
-		if slices.ContainsFunc(strings.Split(r.Path, "/"), func(s string) bool {
-			return strings.HasPrefix(s, ":") || strings.HasPrefix(s, "*")
-		}) {
-			v.add(f+".route", "parameterized_route", "route %s %s has a path parameter; the console posts {\"account_ids\":[...]} and cannot fill it", r.Method, r.Path)
 			continue
 		}
 		switch {
@@ -367,6 +361,12 @@ func (v *validator) uiAccountActions(u *manifest.UI) {
 		case r.Permission != act.Permission:
 			v.add(f+".route", "permission_mismatch", "route %s %s requires permission %q, the action %q",
 				r.Method, r.Path, r.Permission, act.Permission)
+		case slices.ContainsFunc(strings.Split(r.Path, "/"), func(s string) bool {
+			return strings.HasPrefix(s, ":") || strings.HasPrefix(s, "*")
+		}):
+			// The console posts {"account_ids": [...]} to the path as
+			// declared; it has nothing to fill a :param or *wildcard with.
+			v.add(f+".route", "parameterized_route", "route %s %s has a path parameter; the console posts {\"account_ids\":[...]} and cannot fill it", r.Method, r.Path)
 		}
 	}
 }
@@ -423,14 +423,13 @@ var uiFloors = []uiFloor{
 func (v *validator) uiCoreFloor(u *manifest.UI) {
 	c, _ := semver.NewConstraint(v.m.HostUICompat) // invalid or empty: nil, reported by uiNative
 	for _, fl := range uiFloors {
-		if (fl.uses == nil || !fl.uses(u)) && !fl.needs(c) {
-			continue
+		if fl.needs(c) || (fl.uses != nil && fl.uses(u)) {
+			if ok, err := HostCompatible(v.m.HostCompat, fl.lastCore); err == nil && ok {
+				v.add("hostCompat", "below_ui_core", "hostCompat %q admits core %s, whose UI %s is below the UI 3.%d this manifest needs (UI 3.%d starts at core %s)",
+					v.m.HostCompat, fl.lastCore, fl.lastUI, fl.minor, fl.minor, fl.firstCore)
+			}
+			return
 		}
-		if ok, err := HostCompatible(v.m.HostCompat, fl.lastCore); err == nil && ok {
-			v.add("hostCompat", "below_ui_core", "hostCompat %q admits core %s, whose UI %s is below the UI 3.%d this manifest needs (UI 3.%d starts at core %s)",
-				v.m.HostCompat, fl.lastCore, fl.lastUI, fl.minor, fl.minor, fl.firstCore)
-		}
-		return
 	}
 }
 

@@ -66,15 +66,9 @@ func (a *API) uiPlugins(c *gin.Context) {
 			}
 		}
 		for _, act := range m.UI.AccountActions {
-			if !allowed(act.Permission) {
-				continue
+			if allowed(act.Permission) {
+				item.AccountActions = append(item.AccountActions, act)
 			}
-			// The console batches by max_batch; send the default rather than
-			// leave each client to know it.
-			if act.MaxBatch <= 0 {
-				act.MaxBatch = manifest.MaxAccountBatch
-			}
-			item.AccountActions = append(item.AccountActions, act)
 		}
 		if m.UI.Native != nil && (p.Trust == pkg.TrustOfficial || p.Trust == pkg.TrustVerified) {
 			item.NativeEntry = m.UI.Native.Entry

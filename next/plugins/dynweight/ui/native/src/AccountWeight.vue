@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { SBadge, SLink, STooltip } from '@sub2api/ui'
 import { useCatalog } from './catalog'
 import { dashboardRoute, loadAccountWeight, useDwHost, weightOf, weightTone, type AccountWeight } from './host'
@@ -13,6 +13,8 @@ const props = defineProps<{ account: { id: number; weight?: number } }>()
 const t = useDwHost().t
 const catalog = useCatalog()
 const weight = ref<AccountWeight | null>(null)
+/** Keys listed in the tooltip (a plugin before 0.5.0 sends none). */
+const shown = computed(() => weight.value?.keys?.length ?? 0)
 
 async function load() {
   const id = props.account?.id
@@ -24,8 +26,8 @@ watch(() => [props.account, props.account?.weight], load, { immediate: true })
 </script>
 
 <template>
-  <STooltip v-if="weight" variant="card" placement="bottom" max-width="28rem" :disabled="!weight.keys?.length">
-    <SLink :to="dashboardRoute('status', { account_id: account.id })" :title="weight.keys?.length ? undefined : t('slot.title', { n: weight.degraded })">
+  <STooltip v-if="weight" variant="card" placement="bottom" max-width="28rem" :disabled="!shown">
+    <SLink :to="dashboardRoute('status', { account_id: account.id })" :title="shown ? undefined : t('slot.title', { n: weight.degraded })">
       <SBadge :tone="weightTone(weight.lowest, weight.base)" size="xs">{{ t('slot.label', { w: weight.lowest, n: weight.degraded }) }}</SBadge>
     </SLink>
     <template #content>
@@ -37,7 +39,7 @@ watch(() => [props.account, props.account?.weight], load, { immediate: true })
           <span class="dw-num">{{ weightOf(k.eff) }} · {{ k.base }}</span>
         </template>
       </div>
-      <div v-if="weight.degraded > (weight.keys?.length ?? 0)" class="dw-sub">{{ t('slot.more', { n: weight.degraded - (weight.keys?.length ?? 0) }) }}</div>
+      <div v-if="weight.degraded > shown" class="dw-sub">{{ t('slot.more', { n: weight.degraded - shown }) }}</div>
     </template>
   </STooltip>
 </template>

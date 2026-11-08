@@ -66,8 +66,7 @@ func TestManifestShape(t *testing.T) {
 	if m.Events == nil || !slices.Equal(m.Events.Subscribe, []string{dynweight.EventAccountStatusChanged}) {
 		t.Errorf("events = %+v", m.Events)
 	}
-	// The reset action takes what POST /reset accepts in one request.
-	if len(m.UI.AccountActions) != 1 || m.UI.AccountActions[0].MaxBatch != manifest.MaxAccountBatch {
+	if len(m.UI.AccountActions) != 1 || m.UI.AccountActions[0].Route != "POST /reset" {
 		t.Errorf("account actions = %+v", m.UI.AccountActions)
 	}
 	p := dynweight.New()

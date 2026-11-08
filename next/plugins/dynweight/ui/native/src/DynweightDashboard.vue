@@ -32,8 +32,7 @@ function initialFilter(): Filter | null {
 const preset = initialFilter()
 // The preset is consumed: a cleared filter must not come back on reload.
 if (preset) {
-  const { account: _a, group: _g, model: _m, ...rest } = query
-  void host.router.replace({ query: rest })
+  void host.router.replace({ query: Object.fromEntries(Object.entries(query).filter(([k]) => !['account', 'group', 'model'].includes(k))) })
 }
 
 const tab = ref<TabKey>(initialTab())
