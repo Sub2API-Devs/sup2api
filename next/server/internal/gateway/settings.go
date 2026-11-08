@@ -19,7 +19,7 @@ const (
 	// (CONTRACTS §20.1). The admin default for hooks without timeoutMs has
 	// its own, lower ceiling (maxDefaultHookTimeoutMs).
 	maxHookTimeout      = 30 * time.Second
-	defaultMaxBodyBytes = 32 << 20
+	defaultMaxBodyBytes = 128 << 20
 )
 
 // GatewaySettings is the "gateway" row of the settings table (CONTRACTS §8).

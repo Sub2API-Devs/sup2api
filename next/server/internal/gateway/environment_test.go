@@ -85,7 +85,7 @@ func TestEnvironmentRequestBodyLimit(t *testing.T) {
 	e := newEnv(t, withEnvironment(nil, core.EnvironmentValues{core.EnvVarMaxRequestBodyMB: 1}))
 	big := body(testModel, false, "pad", strings.Repeat("x", 1<<20))
 	r := e.messages(big)
-	require.Equal(t, 413, r.status, "1 MB replaces the 32 MB default: %s", r.body)
+	require.Equal(t, 413, r.status, "1 MB replaces the 128 MB default: %s", r.body)
 
 	e.gen.endpoints[0].Endpoint.Request.MaxBodyBytes = 64
 	e.gw.table.Store(buildRouteTable(e.gen))
