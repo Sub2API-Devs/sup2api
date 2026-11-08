@@ -140,7 +140,7 @@ func run(args []string, out io.Writer) error {
 		return err
 	}
 	digest := hex.EncodeToString(sum.Sum(nil))
-	m := rc.Manifest{ManifestVersion: 1, ReleaseID: *version, CoreVersion: *coreVersion, SourceCommit: *commit, BuildID: *build, CreatedAt: time.Now().UTC(), Platforms: []rc.Platform{{OS: *osName, Arch: *arch, RuntimeABI: *abi, BundleDigest: digest, BundleBytes: stat.Size(), Files: files}}, ShellProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, CoreControlProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, SchemaBefore: *schemaBefore, SchemaAfter: *schema, Strategy: "maintenance", HostAPIVersion: *hostAPI}
+	m := rc.Manifest{ManifestVersion: 1, ReleaseID: *version, CoreVersion: *coreVersion, SourceCommit: *commit, BuildID: *build, CreatedAt: time.Now().UTC(), Platforms: []rc.Platform{{OS: *osName, Arch: *arch, RuntimeABI: *abi, BundleDigest: digest, BundleBytes: stat.Size(), Files: files}}, ShellProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, CoreControlProtocol: rc.Range{Min: rc.Protocol, Max: rc.Protocol}, ClusterProtocol: rc.Range{Min: 1, Max: 1}, TaskProtocol: rc.Range{Min: 1, Max: 1}, SchemaBefore: *schemaBefore, SchemaAfter: *schema, Strategy: releaseStrategy(*schemaBefore, *schema), HostAPIVersion: *hostAPI}
 	payload, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -279,4 +279,15 @@ func publishFile(src, dst string) error {
 		}
 	}
 	return err
+}
+
+// releaseStrategy signs a release that keeps the schema as "rolling": the
+// shells may then restart one node at a time while the others serve
+// (control.Rolling). A release that migrates is "maintenance" and upgrades
+// primary-first.
+func releaseStrategy(schemaBefore, schemaAfter string) string {
+	if schemaBefore != "" && schemaBefore == schemaAfter {
+		return "rolling"
+	}
+	return "maintenance"
 }

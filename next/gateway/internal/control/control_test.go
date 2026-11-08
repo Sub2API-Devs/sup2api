@@ -188,6 +188,13 @@ func integrationStore(t *testing.T) *Store {
 }
 func setupEngines(t *testing.T) (*Store, *Engine, *Engine, Release) {
 	t.Helper()
+	return setupEnginesWith(t, false)
+}
+
+// setupEnginesWith registers two nodes, a (primary) and b, serving the old
+// release; rolling marks them as shells that execute rolling plans.
+func setupEnginesWith(t *testing.T, rolling bool) (*Store, *Engine, *Engine, Release) {
+	t.Helper()
 	s := integrationStore(t)
 	redisServer := miniredis.RunT(t)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
@@ -206,7 +213,7 @@ func setupEngines(t *testing.T) (*Store, *Engine, *Engine, Release) {
 		t.Fatal(err)
 	}
 	mk := func(id string) *Engine {
-		n := Node{Enabled: true, PeerProtocol: PeerProtocol, Strategy: PrimaryFirst, ID: id, PeerURL: "https://" + id, ShellBootID: "boot", OS: "linux", Arch: "amd64", RuntimeABI: "test"}
+		n := Node{Enabled: true, PeerProtocol: PeerProtocol, Strategy: PrimaryFirst, Rolling: rolling, ID: id, PeerURL: "https://" + id, ShellBootID: "boot", OS: "linux", Arch: "amd64", RuntimeABI: "test"}
 		if err := s.Register(ctx, n); err != nil {
 			t.Fatal(err)
 		}
@@ -1004,6 +1011,9 @@ func TestPostgresFollowerResumesForwardingWhenPrimaryServes(t *testing.T) {
 	if redirects() != 0 || br.mode != "maintenance" {
 		t.Fatal("follower forwarded to an unavailable primary")
 	}
+	// The direct edit stands in for a primary that was not ready; its next
+	// heartbeat with a change (here: the periodic rewrite) repairs the row.
+	a.lastWrittenAt = time.Time{}
 	if err := a.Heartbeat(ctx); err != nil {
 		t.Fatal(err)
 	}

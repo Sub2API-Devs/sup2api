@@ -70,7 +70,7 @@ func TestPackSignedImmutableRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(paths[0]) != digest+".json" || m.ReleaseID != "r1" || m.SchemaBefore != "schema-hash" || m.SchemaAfter != "schema-hash" || m.Strategy != "maintenance" {
+	if filepath.Base(paths[0]) != digest+".json" || m.ReleaseID != "r1" || m.SchemaBefore != "schema-hash" || m.SchemaAfter != "schema-hash" || m.Strategy != "rolling" {
 		t.Fatalf("bad manifest: %+v", m)
 	}
 	if !m.ShellProtocol.Contains(rc.Protocol) || !m.CoreControlProtocol.Contains(rc.Protocol) {
@@ -175,5 +175,16 @@ func TestPublishCannotReplaceArtifact(t *testing.T) {
 	got, _ := os.ReadFile(target)
 	if string(got) != "old" {
 		t.Fatal("existing release was modified")
+	}
+}
+
+func TestReleaseStrategyFollowsTheSchema(t *testing.T) {
+	if releaseStrategy("s1", "s1") != "rolling" {
+		t.Fatal("a release that keeps the schema is signed rolling")
+	}
+	for _, c := range [][2]string{{"s1", "s2"}, {"", "s1"}, {"", ""}} {
+		if releaseStrategy(c[0], c[1]) != "maintenance" {
+			t.Fatalf("%q -> %q must be maintenance", c[0], c[1])
+		}
 	}
 }

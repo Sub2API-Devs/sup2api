@@ -42,18 +42,22 @@ type Config struct {
 	// local core (a response, or a transport error); see LazyReady.
 	LocalSucceeded func()
 	LocalFailed    func()
+	// LocalServing reports that a core obtained local serving (SetRoute),
+	// which ends any suspicion left by its predecessor's exit.
+	LocalServing   func()
 	PeerReady      func(Route) bool
 	TrustedProxies []*net.IPNet
 }
 type Router struct {
-	mu      sync.RWMutex
-	route   Route
-	config  Config
-	local   *http.Transport
-	peer    http.RoundTripper
-	active  atomic.Int64
-	offload atomic.Pointer[offloadSet]
-	next    atomic.Uint64
+	mu       sync.RWMutex
+	route    Route
+	config   Config
+	local    *http.Transport
+	peer     http.RoundTripper
+	active   atomic.Int64
+	offload  atomic.Pointer[offloadSet]
+	next     atomic.Uint64
+	draining atomic.Bool
 }
 
 // Target is a serving node that takes new requests while this node's CPU is
@@ -125,8 +129,20 @@ func (r *Router) SetRoute(v Route) error {
 		return errors.New("stale route revision")
 	}
 	r.route = v
+	// A core that just obtained local serving passed admission a moment ago:
+	// a suspicion left by the previous core's exit must not keep answering
+	// "not ready" for it (LazyReady).
+	if v.Mode == "local-serving" && r.config.LocalServing != nil {
+		r.config.LocalServing()
+	}
 	return nil
 }
+
+// SetDraining makes /readyz answer 503 while requests are still served
+// (through the offload targets, or locally), so an ingress health check
+// moves on before this shell restarts. Draining reports the flag.
+func (r *Router) SetDraining(v bool) { r.draining.Store(v) }
+func (r *Router) Draining() bool     { return r.draining.Load() }
 func (r *Router) validPeer(peerURL, boot string) error {
 	u, e := url.Parse(peerURL)
 	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || boot == "" {
@@ -164,9 +180,17 @@ func (r *Router) Offloading() bool { return r.offload.Load().live() }
 // Diverted reports whether new public requests already go to a ready peer
 // instead of the local core: the case in which the core may be drained
 // gracefully (requests in flight finish) without any new request waiting.
+// A follower redirected to the primary and a node offloading (yielding) to
+// serving peers both qualify.
 func (r *Router) Diverted() bool {
 	v := r.Route()
-	return v.Mode == "forward-only" && r.ready(v)
+	return (v.Mode == "forward-only" && r.ready(v)) || (v.Mode == "local-serving" && r.Offloading())
+}
+
+// serving reports whether a new public request can be answered: by the peer
+// this node forwards to, by an offload target, or by the local core.
+func (r *Router) serving(v Route) bool {
+	return r.ready(v) || (v.Mode == "local-serving" && r.Offloading())
 }
 func (s *offloadSet) live() bool {
 	return s != nil && len(s.targets) > 0 && time.Now().Before(s.until)
@@ -192,7 +216,9 @@ func (r *Router) Public() http.Handler {
 			return
 		}
 		if q.URL.Path == "/readyz" || q.URL.Path == "/healthz" {
-			if r.ready(v) {
+			// Draining answers 503 on purpose while requests are still
+			// served: the ingress should stop sending new ones here.
+			if r.serving(v) && !r.draining.Load() {
 				w.WriteHeader(200)
 			} else {
 				unavailable(w)
@@ -203,27 +229,42 @@ func (r *Router) Public() http.Handler {
 			http.NotFound(w, q)
 			return
 		}
-		if !r.ready(v) {
-			unavailable(w)
-			return
-		}
 		clientIP := r.clientIP(q)
 		proto := r.clientScheme(q)
-		q = q.Clone(q.Context())
-		scrub(q.Header)
-		q.Header.Set("X-Forwarded-For", clientIP)
-		q.Header.Set("X-Forwarded-Proto", proto)
-		if v.Mode == "forward-only" {
-			q.Header.Set(revisionHeader, strconv.FormatInt(v.PeerRevision, 10))
-			q.Header.Set(bootHeader, v.CoreBootID)
+		forward := func(peerURL, boot string, revision int64) {
+			q = q.Clone(q.Context())
+			scrub(q.Header)
+			q.Header.Set("X-Forwarded-For", clientIP)
+			q.Header.Set("X-Forwarded-Proto", proto)
+			q.Header.Set(revisionHeader, strconv.FormatInt(revision, 10))
+			q.Header.Set(bootHeader, boot)
 			q.Header.Set(hopHeader, "1")
-			r.serve(w, q, v.PeerURL, true, r.config.NodeID)
-		} else if t, ok := r.offloadTarget(); ok {
-			q.Header.Set(revisionHeader, strconv.FormatInt(t.Revision, 10))
-			q.Header.Set(bootHeader, t.CoreBootID)
-			q.Header.Set(hopHeader, "1")
-			r.serve(w, q, t.PeerURL, true, r.config.NodeID)
-		} else {
+			r.serve(w, q, peerURL, true, r.config.NodeID)
+		}
+		switch {
+		case v.Mode == "forward-only":
+			if !r.ready(v) {
+				unavailable(w)
+				return
+			}
+			forward(v.PeerURL, v.CoreBootID, v.PeerRevision)
+		case v.Mode != "local-serving":
+			unavailable(w)
+		default:
+			// Offload targets come before the local core: a yielding node's
+			// core may be stopped, and a loaded one is being protected.
+			if t, ok := r.offloadTarget(); ok {
+				forward(t.PeerURL, t.CoreBootID, t.Revision)
+				return
+			}
+			if !r.ready(v) {
+				unavailable(w)
+				return
+			}
+			q = q.Clone(q.Context())
+			scrub(q.Header)
+			q.Header.Set("X-Forwarded-For", clientIP)
+			q.Header.Set("X-Forwarded-Proto", proto)
 			r.serve(w, q, v.LocalURL, false, r.config.NodeID)
 		}
 	})

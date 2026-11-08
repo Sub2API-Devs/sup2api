@@ -32,6 +32,10 @@ type Node struct {
 	// Offloading is set before the node sends its new requests elsewhere and
 	// cleared after it stopped; receivers authorize offloaded forwards by it.
 	Offloading bool `json:"offloading"`
+	// Rolling marks a shell that executes rolling-v1 plans: it can yield its
+	// traffic to any serving node while its own core restarts. Older shells
+	// leave it false, and a cluster with one of them upgrades primary-first.
+	Rolling bool `json:"rolling"`
 }
 
 // nodeFreshness is the age beyond which a heartbeat observation is stale. Every
@@ -117,7 +121,22 @@ type LockRunner interface {
 	WithLock(context.Context, string, time.Duration, func(context.Context) error) (bool, error)
 }
 
+// PrimaryFirst stops every follower, migrates and restarts the primary, then
+// restarts the followers: the only strategy for a release that changes the
+// schema, and the fallback whenever a node cannot run Rolling.
 const PrimaryFirst = "primary-first-v1"
+
+// Rolling (2026-11-08) restarts one node at a time while the others keep
+// serving. Each node first yields its new requests to the serving nodes
+// (Node.Offloading, the CPU offload channel), drains and restarts its core
+// on the target release, serves locally again and takes its traffic back.
+// Only a release whose SchemaBefore equals its SchemaAfter and whose signed
+// strategy is "rolling" qualifies, and every enabled node must be a Rolling
+// shell with at least two of them serving (Preflight).
+const Rolling = "rolling-v1"
+
+// KnownStrategy reports a plan strategy this controller executes.
+func KnownStrategy(s string) bool { return s == PrimaryFirst || s == Rolling }
 
 // PeerProtocol 2: Redis registrations carry the SHA-256 of the node key
 // (peer.Protocol); every gateway of a cluster must agree.
@@ -126,15 +145,30 @@ const PeerProtocol = 2
 // Steps are interpreted only for the persisted strategy. Never reinterpret a
 // pre-existing rolling plan's cursor using this stop-the-cluster algorithm.
 func Steps(p Plan) []Step {
-	if p.Strategy != PrimaryFirst || len(p.Nodes) == 0 {
+	if !KnownStrategy(p.Strategy) || len(p.Nodes) == 0 {
 		return nil
 	}
-	out := make([]Step, 0, len(p.Nodes)*6)
+	out := make([]Step, 0, len(p.Nodes)*7)
 	add := func(n, a, peer string) {
 		out = append(out, Step{UpgradeID: p.ID, ID: len(out), NodeID: n, Action: a, TargetDigest: p.ReleaseDigest, PeerNode: peer, Status: "pending"})
 	}
 	for _, n := range p.Nodes {
 		add(n, "prepare", "")
+	}
+	if p.Strategy == Rolling {
+		// Followers first, the primary last: it coordinates the plan and the
+		// plugins, so it is the node whose core restarts with the most
+		// certainty that the target release serves.
+		order := append(append([]string{}, p.Nodes[1:]...), p.Nodes[0])
+		for _, n := range order {
+			add(n, "yield", "")
+			add(n, "stop", "")
+			add(n, "start", "")
+			add(n, "admit", "")
+			add(n, "local", "")
+			add(n, "resume", "")
+		}
+		return out
 	}
 	primary := p.Nodes[0]
 	for _, n := range p.Nodes[1:] {

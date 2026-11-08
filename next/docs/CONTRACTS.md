@@ -2421,7 +2421,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 - 仍共用现有 PG/Redis，不拆数据库。PG 保存批准版本、计划、步骤、节点启禁与启动身份、准入、停止确认和事件；`mode/ready/stopped/core_boot_id/release_digest/route_revision/offloading` 仍为安全控制快照，只有变化时更新节点行。CPU 转移授权仍先持久标记再转流，Redis 心跳过期绝不是停止证明。
 - 网关节点心跳、CPU 和当前错误观察写入 Redis，key 为 `updater:telemetry:<sha256(cluster_id\x00node_id\x00shell_boot_id)>`，最长有效期 20 秒。写前获取 Redis TIME 形成固定截止时间，并扣除本地单调时钟测得的 PG 等待及请求耗时；Lua 拒绝过期和迟到序号，只设置剩余 TTL，拒绝结果返回错误以阻止陈旧 CPU 决策。读取通过 Lua 原子取得 GET/PTTL，折算为读取节点本地单调时间，不比较不同主机壁钟。报告须与 PG 当前启动身份及全部控制快照匹配；不匹配、缺失、过期或 Redis 不可用时，`last_seen` 为零时间、CPU 为 NULL，不以旧 PG 快照冒充新鲜状态。节点不会因丢失遥测直接重启或排空。
 - 网关 schema 增加 `telemetry_boot_id`，与当前 `shell_boot_id` 相等才启用 Redis 新鲜度。旧网关及回退后的新 boot 继续使用 PG 心跳；集群仍有启用的旧 boot 时，新网关每隔至少 5 秒保留 PG 心跳和 CPU 兼容刷新。全部切换后一次清理兼容 CPU 值，稳态遥测不再改写 PG 行；PG 身份与控制状态检查仍然存在，不声称不再访问 PG。
-- `updater:wakeup:<cluster_id>` Pub/Sub 仅发送提交后的唤醒提示，不承载可执行命令或可靠事件。计划创建、操作、启禁及升级状态变更在 PG 提交后通知；节点步骤完成先提交结果并刷新状态，再通知。通知丢失依靠 1 秒轮询补查，重复通知合并，不重放已完成步骤；Redis 断连恢复后重新订阅。
+- `updater:wakeup:<cluster_id>` Pub/Sub 仅发送提交后的唤醒提示，不承载可执行命令或可靠事件。计划创建、操作、启禁及升级状态变更在 PG 提交后通知；节点步骤完成先提交结果并刷新状态，再通知。通知丢失依靠轮询补查（有 running/paused 计划时 1 秒，空闲 30 秒，2026-11-08 起见 §82.4），重复通知合并，不重放已完成步骤；Redis 断连恢复后重新订阅。
 - 每轮最多连续推进 16 次，每次重新取得 Redis 执行锁并读取 PG，空提交不算进展；提示驱动的外循环有 50 ms 让出，避免内部自激忙循环。独立 3 秒心跳在长下载或排空时继续运行。PG 事务内的计划与准入校验、租约丢失取消语义不变。
 - 此变化属于网关二进制，单发核心安装包不会生效；需在无 running/paused 核心计划时逐个更换网关，从节点先、主节点最后，保留状态卷与旧镜像。核心版本无需仅为此变更而升级。控制台仍按既有轮询周期刷新，本次不新增浏览器推送。
 
@@ -6342,3 +6342,41 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 未做：分组 / 全局层的透传、WebSocket 端点（`websocket.go`）的透传。
 - **粘性规则的透传头**（2026-11-06，迁移 0090，参考 new-api 渠道亲和规则模板里的 `pass_headers`）：`sticky_rules.pass_headers text[]`，接口字段 `pass_headers`，manifest `StickyRule.passHeaders`。规则写法、校验和禁止列表与账号透传相同（字段名 `pass_headers`）。请求命中某条粘性规则并取到会话值时（`c.sticky` 非空），核心在账号透传之后再按这条规则补上客户端请求头，同样不覆盖已设置的头；粘性会话关闭、没有命中规则、count_tokens 请求都不透传。内置规则 `claude-code-session` 默认带 `x-claude-code-session-id`、`x-claude-code-agent-id`、`x-claude-code-parent-agent-id`、`x-claude-code-request-class`、`x-claude-code-agent-type`；`pass_headers` 属于规则定义，管理员改过的内置规则升级时不被覆盖，“恢复默认”时重置。
 - **平台默认**：内置 anthropic 平台的 `passHeaders` 和 anthropic 插件（0.2.9）的默认转发同样带上这 5 个头，所以 anthropic API Key 账号不配置也会转发。
+
+## 82. 滚动更新 rolling-v1、节点让出与网关降噪（2026-11-08，用户要求；网关二进制变更）
+
+用户要求：核心升级不要再把整个集群停下来；网关自身换版时也不要先改 Caddy 摘上游；网关不要每秒查库、心跳不要反复写库、核心一时未就绪不要立刻重启。本节在 §34 主节点优先流程之外新增一种策略，并修改网关的空闲行为。全部属于网关二进制（含 `sub2api-release` 签名工具），单发核心安装包不会生效。
+
+### 82.1 策略选择
+
+- 签名工具按是否改库签策略：`schema_before == schema_after` 签 `rolling`，否则 `maintenance`（此前一律 `maintenance`）。
+- 节点登记新增能力标记 `updater.nodes.rolling`（本版本网关为 true，旧网关为 false，schema 幂等加列）。
+- 预检（`POST /system/upgrades/preflight`）返回 `strategy`：目标清单签 `rolling` 且不改库、全部启用节点都是 rolling 网关、且至少两个启用节点本地就绪 → `rolling-v1`；否则仍是 `primary-first-v1`。计划创建时把预检选出的策略写入 `updater.upgrades.strategy`，首条事件说明是哪种。
+- 回退（`rollback`）生成的恢复计划同样选策略，但只要求至少一个节点本地就绪：被打断计划停掉的成员让不出流量也没有流量可让，直接在基线上重启，然后承接另一个节点。
+- 两种策略的步骤、恢复、暂停/继续、准入校验（`admissionAllowed`、`planAuthorizesTx`）都接受；`legacy-rolling` 等旧策略仍只能暂停等人工处理。
+
+### 82.2 rolling-v1 步骤
+
+全部节点 `prepare`（预下载并校验）；然后按从节点在前、主节点最后的顺序，每个节点依次 `yield → stop → start → admit → local → resume`，同一时刻只有一个节点的核心在重启，其他节点照常服务。
+
+- `yield`：节点在 PG 写 `offloading=true`（§34 CPU 转移同一标记与同一授权规则），再把本机新到的公网请求轮流转给其他“启用、本地服务就绪、心跳新鲜、自身未在转移、有服务身份”的节点，版本不限（不改库的两个版本按设计同时服务）。没有可承接的节点时：本机核心仍在服务就失败并让计划暂停（错误 `no other serving node can take this node's traffic`），宁可停住也不让集群黑掉；核心已停或未就绪则视为让出成功（无流量可让）。
+- `stop`：撤销准入记录、排空停止本机核心。因为新请求已经转走，排空是优雅的（进行中的请求在期限内做完，`Router.Diverted` 把“正在转移”算作已分流），不像维护态那样立即取消。
+- `start`/`admit`/`local`：以目标版本启动候选、准入、回本地服务。rolling 下不迁移（`AllowMigration=false`，`expected_schema_before = schema_before`），也不要求主节点先就绪或从节点先停。
+- `resume`：清除让出，心跳写回 `offloading=false`，本机重新服务自己的请求。
+- 路由（`proxy.Router.Public`）：`local-serving` 下先看转移目标再看本机就绪——让出期间本机核心可能已经停了，`/readyz`、`/healthz` 只要有转移目标就 200；维护/候选态不受转移影响仍 503。核心进程退出时网关立刻把本机标记为“存疑”（supervisor `OnExit` → `LazyReady.Failed`），新核心回到本地服务时清除存疑（`Config.LocalServing`），不再有核心重启后最长 30 秒的“本机未就绪”误判。
+- 计划成员重启后的恢复（`recoverRollingMember`）：`local` 已完成的成员直接以目标版本稳定启动（`resume` 未完成则继续让出）；轮到一半（已 `yield`/`stop`，或已 `start` 未 `local`）的成员保持让出并停着，由计划继续；还没轮到的成员核心健在就不动，核心没了就让出并停着等自己的轮次，不会去启动旧版本。
+- 完成条件不变：全部成员本地服务目标版本且心跳新鲜才提交基线。
+- 控制台：新建计划的提示按预检结果显示——rolling 说明逐个重启、服务不中断；primary-first 仍提示主节点更新期间集群不可用。
+
+### 82.3 节点让出接口与网关自身换版
+
+- 本机管理 socket 新增 `GET/POST/DELETE /system/nodes/{id}/yield`（`{id}` 只能是本节点或 `self`，其他节点 404）。`POST` 可带 `{"drain":true}`：让出的同时 `/readyz`、`/healthz` 返回 503 而请求仍经转移目标正常服务，让带健康检查的入口（clicodeplus 的 Caddy `lb_policy first` 每 5 秒查 `/readyz`）把新请求切走。`GET` 返回 `yielding/offloading/draining/active_requests`，`DELETE` 收回。该接口不经核心转发，只给运维脚本用。
+- 网关自身换版的新流程（替代 §34 之后 README 里“先改 Caddy 摘掉上游再重建容器”的做法）：先 `POST …/yield {"drain":true}`，等 `/readyz` 变 503 且 `active_requests` 降到 0 或可接受的数量，再重建容器；新容器就绪后 `/readyz` 自然恢复 200，入口自动切回，Caddyfile 不用动。重建会丢掉让出状态，不需要 `DELETE`。核心处于 running/paused 计划时仍不要换网关。
+- 该让出复用 CPU 转移的 `offloading` 标记，所以接收端的授权与 §34 一致：带标记的来源可以转给任意本地服务的节点，包括主节点转给从节点。
+
+### 82.4 网关降噪
+
+- 引擎轮询：有 running/paused 计划时每秒一轮；空闲时每 30 秒一轮，管理接口的创建/操作/启禁仍经 Redis 唤醒即时处理。此前每个节点全天每秒查 PG（§39 的“1 秒轮询补查”相应修改）。
+- 心跳：控制快照（版本、核心 boot、模式、就绪、路由 revision、停止、转移）与上次写入相同时不再向 PG 发 UPDATE，只写 Redis 遥测；最长 60 秒强制重写一次；集群里还有依赖 PG 心跳的旧网关、或读不到节点目录时照旧每次写。节点行被外部直接改动（例如测试里手改 `ready`）最多 60 秒后才被本节点心跳覆盖回来。
+- 空闲时核心“答复但未就绪”不再立刻重启：先记一条 WARN，持续 2 分钟仍未就绪才按持久路由恢复（`Recover`）；核心进程连不上、或本节点不在活动计划内，仍立即恢复。计划进行中的成员在步骤之间本来就未就绪，不算。此前的做法是看到一次未就绪就重新准入，核心进程本身并没有被重启，但每次都生成新的准入 revision 并写一条 WARN。
+- 其余不变：3 秒遥测心跳、`nodeFreshness` 20 秒、锁租约与步骤超时。

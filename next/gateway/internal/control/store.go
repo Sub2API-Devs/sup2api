@@ -130,8 +130,8 @@ func (s *Store) RegisterLocked(ctx context.Context, n Node) error {
 			if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT id FROM updater.upgrades WHERE cluster_id=$1 AND status IN ('running','paused')),'')`, s.Cluster).Scan(&plan); err != nil {
 				return err
 			}
-			tag, err := tx.Exec(ctx, `INSERT INTO updater.nodes(node_id,cluster_id,peer_url,shell_boot_id,os,arch,runtime_abi,peer_protocol,strategy,joining_plan) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
- ON CONFLICT(node_id) DO UPDATE SET peer_url=EXCLUDED.peer_url,shell_boot_id=EXCLUDED.shell_boot_id,
+			tag, err := tx.Exec(ctx, `INSERT INTO updater.nodes(node_id,cluster_id,peer_url,shell_boot_id,os,arch,runtime_abi,peer_protocol,strategy,joining_plan,rolling) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+ ON CONFLICT(node_id) DO UPDATE SET peer_url=EXCLUDED.peer_url,shell_boot_id=EXCLUDED.shell_boot_id,rolling=EXCLUDED.rolling,
  ready=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.ready ELSE false END,
  stopped=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.stopped ELSE false END,
  mode=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.mode ELSE 'maintenance' END,
@@ -139,7 +139,7 @@ func (s *Store) RegisterLocked(ctx context.Context, n Node) error {
  joining_plan=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.joining_plan ELSE EXCLUDED.joining_plan END,
  cpu_percent=CASE WHEN updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id THEN updater.nodes.cpu_percent END,
  offloading=updater.nodes.offloading AND updater.nodes.shell_boot_id=EXCLUDED.shell_boot_id
- WHERE updater.nodes.cluster_id=EXCLUDED.cluster_id AND updater.nodes.enabled`, n.ID, s.Cluster, n.PeerURL, n.ShellBootID, n.OS, n.Arch, n.RuntimeABI, n.PeerProtocol, n.Strategy, plan)
+ WHERE updater.nodes.cluster_id=EXCLUDED.cluster_id AND updater.nodes.enabled`, n.ID, s.Cluster, n.PeerURL, n.ShellBootID, n.OS, n.Arch, n.RuntimeABI, n.PeerProtocol, n.Strategy, plan, n.Rolling)
 			if err != nil {
 				return err
 			}
@@ -174,7 +174,7 @@ func (s *Store) Heartbeat(ctx context.Context, n Node) error {
 	return s.reportTelemetry(ctx, n, observedLocally)
 }
 func (s *Store) Nodes(ctx context.Context) ([]Node, error) {
-	rows, err := s.DB.Query(ctx, `SELECT node_id,peer_url,shell_boot_id,release_digest,core_boot_id,mode,ready,last_seen,error,os,arch,runtime_abi,route_revision,stopped,enabled,peer_protocol,strategy,joining_plan,cpu_percent,offloading,telemetry_boot_id FROM updater.nodes WHERE cluster_id=$1 ORDER BY node_id`, s.Cluster)
+	rows, err := s.DB.Query(ctx, `SELECT node_id,peer_url,shell_boot_id,release_digest,core_boot_id,mode,ready,last_seen,error,os,arch,runtime_abi,route_revision,stopped,enabled,peer_protocol,strategy,joining_plan,cpu_percent,offloading,telemetry_boot_id,rolling FROM updater.nodes WHERE cluster_id=$1 ORDER BY node_id`, s.Cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (s *Store) Nodes(ctx context.Context) ([]Node, error) {
 	out := []Node{}
 	for rows.Next() {
 		var n Node
-		if err = rows.Scan(&n.ID, &n.PeerURL, &n.ShellBootID, &n.ReleaseDigest, &n.CoreBootID, &n.Mode, &n.Ready, &n.LastSeen, &n.Error, &n.OS, &n.Arch, &n.RuntimeABI, &n.RouteRevision, &n.Stopped, &n.Enabled, &n.PeerProtocol, &n.Strategy, &n.JoiningPlan, &n.CPUPercent, &n.Offloading, &n.TelemetryBootID); err != nil {
+		if err = rows.Scan(&n.ID, &n.PeerURL, &n.ShellBootID, &n.ReleaseDigest, &n.CoreBootID, &n.Mode, &n.Ready, &n.LastSeen, &n.Error, &n.OS, &n.Arch, &n.RuntimeABI, &n.RouteRevision, &n.Stopped, &n.Enabled, &n.PeerProtocol, &n.Strategy, &n.JoiningPlan, &n.CPUPercent, &n.Offloading, &n.TelemetryBootID, &n.Rolling); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -300,6 +300,9 @@ func (s *Store) Preflight(ctx context.Context, digest string) (Preflight, error)
 	if len(p.Nodes) == 0 || p.Nodes[0] != primary {
 		p.Blockers = append(p.Blockers, "primary is not registered")
 	}
+	if rollingEligible(target, nodes, 2) {
+		p.Strategy = Rolling
+	}
 	var active bool
 	err = s.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.upgrades WHERE cluster_id=$1 AND status IN ('running','paused'))`, s.Cluster).Scan(&active)
 	if err != nil {
@@ -309,6 +312,31 @@ func (s *Store) Preflight(ctx context.Context, digest string) (Preflight, error)
 		p.Blockers = append(p.Blockers, "another upgrade is active")
 	}
 	return p, nil
+}
+
+// rollingEligible decides whether a plan for target may restart the nodes
+// one at a time (Rolling). The release must keep the schema and be signed
+// rolling, and every enabled node must be a Rolling shell, with at least two
+// of them serving so that one can take the other's traffic. Anything else
+// upgrades primary-first, as before.
+func rollingEligible(target Release, nodes []Node, minServing int) bool {
+	m := target.Manifest
+	if m.Strategy != "rolling" || m.SchemaBefore == "" || m.SchemaBefore != m.SchemaAfter {
+		return false
+	}
+	serving := 0
+	for _, n := range nodes {
+		if !n.Enabled {
+			continue
+		}
+		if !n.Rolling {
+			return false
+		}
+		if n.ServingLocal(time.Now()) {
+			serving++
+		}
+	}
+	return serving >= minServing
 }
 
 // Compatibility validates the signed migration start and executable protocols.
@@ -451,16 +479,24 @@ func (s *Store) createLocked(ctx context.Context, digest string, revision int64,
 		}
 		id = hex.EncodeToString(random)
 		nodes, _ := json.Marshal(pf.Nodes)
-		_, err = tx.Exec(ctx, `INSERT INTO updater.upgrades(id,cluster_id,release_digest,nodes,actor,idempotency_key,request_hash,strategy,source_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8,(SELECT baseline FROM updater.clusters WHERE cluster_id=$2))`, id, s.Cluster, digest, nodes, actor, key, requestHash, PrimaryFirst)
+		_, err = tx.Exec(ctx, `INSERT INTO updater.upgrades(id,cluster_id,release_digest,nodes,actor,idempotency_key,request_hash,strategy,source_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8,(SELECT baseline FROM updater.clusters WHERE cluster_id=$2))`, id, s.Cluster, digest, nodes, actor, key, requestHash, pf.Strategy)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,'created','primary-first maintenance update approved')`, id)
+		_, err = tx.Exec(ctx, `INSERT INTO updater.events(upgrade_id,kind,message) VALUES($1,'created',$2)`, id, createdMessage(pf.Strategy))
 		return err
 	}); err != nil {
 		return empty, err
 	}
 	return s.Plan(ctx, id)
+}
+
+// createdMessage is the first event of a plan; the console shows it.
+func createdMessage(strategy string) string {
+	if strategy == Rolling {
+		return "rolling update approved: nodes restart one at a time while the others serve"
+	}
+	return "primary-first maintenance update approved"
 }
 func (s *Store) Plan(ctx context.Context, id string) (p Plan, err error) {
 	var nodes []byte
@@ -549,7 +585,7 @@ func (s *Store) Action(ctx context.Context, id, action, actor string) (Plan, err
 			}
 			status = "paused"
 		case "resume":
-			if strategy != PrimaryFirst {
+			if !KnownStrategy(strategy) {
 				return errors.New("legacy upgrade strategy cannot resume with this controller")
 			}
 			if status != "paused" {
@@ -606,7 +642,7 @@ func (s *Store) rollbackWithBarrier(ctx context.Context, id, actor string) (Plan
 	if err != nil {
 		return Plan{}, err
 	}
-	if p.Strategy != PrimaryFirst {
+	if !KnownStrategy(p.Strategy) {
 		return Plan{}, errors.New("legacy upgrade strategy cannot be recovered automatically")
 	}
 	if p.Status == "superseded" {
@@ -725,10 +761,18 @@ func (s *Store) rollbackLocked(ctx context.Context, id, actor string) (Plan, err
 		}
 		planID = hex.EncodeToString(random)
 		encoded, _ := json.Marshal(ordered)
+		// The recovery restarts the members one at a time when the baseline
+		// release qualifies and the nodes can. One serving node is enough:
+		// a member the superseded plan left stopped yields nothing and is
+		// simply restarted on the baseline, then takes the other's traffic.
+		strategy := PrimaryFirst
+		if nodes, err := s.Nodes(ctx); err == nil && rollingEligible(to, nodes, 1) {
+			strategy = Rolling
+		}
 		if _, err = tx.Exec(ctx, `UPDATE updater.upgrades SET status='superseded',error='',updated_at=now() WHERE id=$1`, id); err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO updater.upgrades(id,cluster_id,release_digest,nodes,actor,idempotency_key,request_hash,strategy,source_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8,(SELECT baseline FROM updater.clusters WHERE cluster_id=$2))`, planID, s.Cluster, baseline, encoded, actor, key, fmt.Sprintf("%s:%d", baseline, revision), PrimaryFirst); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO updater.upgrades(id,cluster_id,release_digest,nodes,actor,idempotency_key,request_hash,strategy,source_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8,(SELECT baseline FROM updater.clusters WHERE cluster_id=$2))`, planID, s.Cluster, baseline, encoded, actor, key, fmt.Sprintf("%s:%d", baseline, revision), strategy); err != nil {
 			return err
 		}
 		if _, err = tx.Exec(ctx, `UPDATE updater.clusters SET revision=revision+1 WHERE cluster_id=$1`, s.Cluster); err != nil {

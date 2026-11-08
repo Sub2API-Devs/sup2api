@@ -52,6 +52,9 @@ type Manager struct {
 	cmd   *exec.Cmd
 	done  chan struct{}
 	state State
+	// OnExit, when set, is called after a started core's process exited,
+	// with the final state; the router's readiness uses it (2026-11-08).
+	OnExit func(State)
 }
 
 // New holds an OS process lock until Close. A surviving old process blocks
@@ -153,7 +156,11 @@ func (m *Manager) Start(ctx context.Context, s Spec) (State, error) {
 		}
 		_ = m.persist()
 		close(m.done)
+		final, onExit := m.state, m.OnExit
 		m.mu.Unlock()
+		if onExit != nil {
+			onExit(final)
+		}
 	}()
 	if err != nil {
 		_ = terminateGroup(cmd.Process.Pid)

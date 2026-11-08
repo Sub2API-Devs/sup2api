@@ -143,6 +143,15 @@ func (r *LocalRuntime) SetOffload(nodes []Node) error {
 	}
 	return r.Router.SetOffload(targets, offloadTTL)
 }
+
+// SetDraining makes the readiness probe answer 503 while new requests still
+// go to the offload targets, so an ingress health check moves on before the
+// shell is restarted (Engine.Yield).
+func (r *LocalRuntime) SetDraining(v bool) { r.Router.SetDraining(v) }
+func (r *LocalRuntime) Draining() bool     { return r.Router.Draining() }
+
+// Active is the number of requests this shell is proxying right now.
+func (r *LocalRuntime) Active() int64 { return r.Router.Active() }
 func (r *LocalRuntime) redirectLocked(ctx context.Context, n Node) error {
 	if err := ctx.Err(); err != nil {
 		return err

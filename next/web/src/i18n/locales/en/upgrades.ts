@@ -4,6 +4,8 @@ export default {
   confirmDisableNode: 'Disable node {node}? It stops serving requests until it is allowed to rejoin.',
   title: 'Core updates', description: 'Stop followers, update the primary, then restore followers in sequence.',
   maintenanceWindow: 'The whole cluster will be temporarily unavailable while the primary updates. Service resumes when the primary is ready. Followers resume local service after updating and syncing plugins.',
+  rollingWindow: 'The target keeps the database schema and every node supports rolling updates: nodes restart one at a time, each handing its new requests to the others meanwhile, without interrupting service.',
+  rollingSequence: 'Every node downloads the release first; then, followers before the primary, each node hands its new requests to the others, drains, restarts on the target and takes its traffic back.',
   sequence: 'Forward all followers to the primary and stop their cores. Update the primary, then update followers asynchronously after the primary is ready.',
   recovery: 'Fix the cause and resume this update. Database or protocol changes cannot be undone by restoring an old binary; repair the migration or restore from backup.',
   manageNode: 'Node management', disableNode: 'Disable node', enableNode: 'Allow node to rejoin', disabled: 'Disabled', stopped: 'Core stopped',

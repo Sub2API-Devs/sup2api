@@ -149,6 +149,9 @@ func TestNodeCommandsUseLocalManagementRoutes(t *testing.T) {
 		"disable-node": "POST /system/nodes/node%2Fb/disable local-operator",
 		"enable-node":  "POST /system/nodes/node%2Fb/enable local-operator",
 		"status":       "GET /system/upgrades local-operator",
+		"yield":        "POST /system/nodes/self/yield local-operator",
+		"unyield":      "DELETE /system/nodes/self/yield local-operator",
+		"yield-status": "GET /system/nodes/self/yield local-operator",
 	} {
 		if err = localCommand(command, socket, tokenFile, "node/b"); err != nil {
 			t.Fatal(command, err)

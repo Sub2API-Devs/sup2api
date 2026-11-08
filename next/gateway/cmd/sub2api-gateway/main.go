@@ -110,7 +110,7 @@ type cliOptions struct {
 // parseCLI parses argv into the command and its flags.
 func parseCLI(args []string) (cliOptions, error) {
 	if len(args) < 1 {
-		return cliOptions{}, errors.New("usage: sub2api-gateway init|import|serve|status|pause|resume|cancel|rollback|enable-node|disable-node|set-primary|remove-node")
+		return cliOptions{}, errors.New("usage: sub2api-gateway init|import|serve|status|pause|resume|cancel|rollback|enable-node|disable-node|yield|unyield|yield-status|set-primary|remove-node")
 	}
 	command := args[0]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -153,7 +153,7 @@ func run() error {
 // which case err is the result to return.
 func dispatchConfigCommand(opts cliOptions) (done bool, err error) {
 	switch opts.command {
-	case "status", "pause", "resume", "cancel", "rollback", "enable-node", "disable-node":
+	case "status", "pause", "resume", "cancel", "rollback", "enable-node", "disable-node", "yield", "unyield", "yield-status":
 		socket, tokenFile := opts.socket, opts.tokenFile
 		if socket == "" {
 			c, err := readConfig(opts.configPath)
@@ -454,7 +454,7 @@ func (s *serveSet) build(ctx context.Context) error {
 	if _, err = rand.Read(boot); err != nil {
 		return err
 	}
-	s.ownNode = control.Node{ID: c.NodeID, PeerURL: c.PeerURL, ShellBootID: hex.EncodeToString(boot), OS: runtime.GOOS, Arch: runtime.GOARCH, RuntimeABI: c.RuntimeABI, PeerProtocol: peer.Protocol, Strategy: control.PrimaryFirst}
+	s.ownNode = control.Node{ID: c.NodeID, PeerURL: c.PeerURL, ShellBootID: hex.EncodeToString(boot), OS: runtime.GOOS, Arch: runtime.GOARCH, RuntimeABI: c.RuntimeABI, PeerProtocol: peer.Protocol, Strategy: control.PrimaryFirst, Rolling: true}
 	// Configure structured logging with cluster context
 	handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})
 	logger := slog.New(handler).With(
@@ -541,8 +541,11 @@ func (s *serveSet) buildRuntime(ctx context.Context, peerManager *peer.Manager, 
 			}
 		}
 		return false
-	}, LocalReady: localReady.Ready, LocalSucceeded: localReady.Succeeded, LocalFailed: localReady.Failed})
+	}, LocalReady: localReady.Ready, LocalSucceeded: localReady.Succeeded, LocalFailed: localReady.Failed, LocalServing: localReady.Succeeded})
 	s.router = router
+	// A core that exited is not ready, whatever the last request said; the
+	// next request asks the core instead of being sent to a dead socket.
+	s.supervisor.OnExit = func(supervisor.State) { localReady.Failed() }
 	rt = &control.LocalRuntime{Releases: s.releases, Supervisor: s.supervisor, Router: router, NodeID: c.NodeID, PrimaryNode: c.PrimaryNode, CoreSocket: c.CoreSocket, ManagementSocket: c.ManagementSocket, ManagementTokenFile: c.ManagementTokenFile, CoreURL: c.CoreURL, Root: c.Root, Args: c.CoreArgs, Env: c.coreEnvironment(), InheritEnv: c.CoreEnvInherit}
 	s.rt = rt
 	rt.OnStopped = func(ctx context.Context, coreBoot string) error {
@@ -612,7 +615,7 @@ func (s *serveSet) listen() error {
 	if err = os.Chmod(c.ManagementSocket, 0600); err != nil {
 		return err
 	}
-	s.local = &http.Server{Handler: control.RequireManagementToken(s.managementToken, c.AllowTokenlessManagement, control.ManagementHandler(s.store, s.pluginBlobs)), ReadHeaderTimeout: 5 * time.Second}
+	s.local = &http.Server{Handler: control.RequireManagementToken(s.managementToken, c.AllowTokenlessManagement, control.ManagementHandler(s.store, s.pluginBlobs, s.engine)), ReadHeaderTimeout: 5 * time.Second}
 	s.public = &http.Server{Addr: c.PublicAddr, Handler: s.router.Public(), ReadHeaderTimeout: 15 * time.Second}
 	s.private = &http.Server{Addr: c.PeerAddr, Handler: s.rt.PrivateHandler(), TLSConfig: proxy.ServerTLS(s.cert, s.ca), ReadHeaderTimeout: 15 * time.Second}
 	return nil
@@ -832,7 +835,20 @@ func defaultTokenFile(socket string) string {
 
 func localCommand(command, socket, tokenFile, id string) error {
 	method, path := "GET", "/system/upgrades"
-	if command != "status" {
+	var body io.Reader
+	switch command {
+	case "status":
+	case "yield", "unyield", "yield-status":
+		// This node's traffic handover before a shell restart (CONTRACTS
+		// §82.3): yield drains too, so an ingress health check moves on.
+		path = "/system/nodes/self/yield"
+		switch command {
+		case "yield":
+			method, body = "POST", strings.NewReader(`{"drain":true}`)
+		case "unyield":
+			method = "DELETE"
+		}
+	default:
 		if id == "" {
 			return errors.New("-id is required")
 		}
@@ -850,8 +866,11 @@ func localCommand(command, socket, tokenFile, id string) error {
 	client := &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	}}}
-	req, _ := http.NewRequest(method, "http://shell"+path, nil)
+	req, _ := http.NewRequest(method, "http://shell"+path, body)
 	req.Header.Set("Authorization", "Bearer "+token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("X-Updater-Actor", "local-operator")
 	res, err := client.Do(req)
 	if err != nil {

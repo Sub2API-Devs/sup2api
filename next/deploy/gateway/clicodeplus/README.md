@@ -141,6 +141,28 @@
 
 **上线顺序**：同 0.1.128。18:10:29 UTC 更新 ovh 的 sup2api-1（9 秒就绪）；18:10:59 从 Caddy 摘下 3140（`Caddyfile.bak-gw132`），重建 sup2api-ccp，18:11:24 `/readyz` 200（22 秒），同时恢复 Caddy（与备份逐字节一致）。全程 api.prophey.ai `/readyz` 200。两节点启动后无 WARN/ERROR。核心版本不变。
 
+## 网关换版流程（2026-11-08 起，下一版网关（预计 0.1.133）：节点让出，不再改 Caddy）
+
+下一版网关起（CONTRACTS §82），本机管理 socket 提供 `POST /system/nodes/self/yield`。换网关镜像前先让节点把新请求交给另一个节点并让 `/readyz` 返回 503，Caddy 的健康检查会在 5 秒内把流量切到 ovh；重建容器后新网关就绪、`/readyz` 恢复 200，Caddy 自动切回。**不再需要改 Caddyfile。** 旧网关（≤0.1.132）没有这个接口，换到新版的那一次仍按上面“从 Caddy 摘下 3140”的老办法做。
+
+前提：没有 running/paused 的核心升级计划；另一节点（sup2api-1）本地服务就绪。
+
+```sh
+# clicodeplus：让出并排空（网关 CLI 读容器内的管理 socket 与令牌，与 status 同一套）
+docker exec sup2api-ccp sub2api-shell yield -config /etc/sub2api/shell.json
+# 期望：{"data":{"node_id":"sup2api-ccp","yielding":true,"offloading":true,"draining":true,"active_requests":N}}
+# 没有节点能承接时返回 HTTP 409（no other serving node can take this node's traffic），什么都不改。
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3140/readyz   # 503 即正确
+# 等 Caddy 切走（≥5 秒），看进行中的请求数降到 0（长流最多等一会）：
+docker exec sup2api-ccp sub2api-shell yield-status -config /etc/sub2api/shell.json
+# 然后重建：
+cd /root/sup2api-node && docker compose up -d
+# 新容器就绪后 /readyz 200，Caddy 自动切回；让出状态随旧容器消失，不用 unyield。
+# 中途反悔：docker exec sup2api-ccp sub2api-shell unyield -config /etc/sub2api/shell.json
+```
+
+ovh 的 sup2api-1 同理（它平时只做容灾，流量很少，可以不让出直接重建，但让出更稳妥）。核心升级本身从新版网关起会按 `rolling-v1` 逐节点重启（目标版本不改库、两个节点都是新网关时），控制台预检会显示选中的策略。
+
 ## 已知问题
 
 - **资源余量小**：clicodeplus 6 核、7.7 GB 内存，节点约用 1.8 GB，可用约 3.6 GB；磁盘 158 GB 剩约 20 GB（2026-11-02 曾被占满，大头是同机其他服务；外壳 0.1.130 起旧核心发布包会自动清理）。

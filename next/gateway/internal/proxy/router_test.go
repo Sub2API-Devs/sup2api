@@ -406,6 +406,12 @@ func testPeers(t *testing.T) (*peer.Manager, *peer.Manager) {
 // listener over verified TLS with Redis-authenticated node keys.
 func forwardPair(t *testing.T, upstream http.Handler) (*Router, *peer.Manager, *peer.Manager) {
 	t.Helper()
+	return forwardPairWith(t, upstream, nil)
+}
+
+// forwardPairWith is forwardPair with the forwarding node's Config adjusted.
+func forwardPairWith(t *testing.T, upstream http.Handler, adjust func(*Config)) (*Router, *peer.Manager, *peer.Manager) {
+	t.Helper()
 	sourceAuth, targetAuth := testPeers(t)
 	pub, priv, e := ed25519.GenerateKey(rand.Reader)
 	if e != nil {
@@ -433,7 +439,11 @@ func forwardPair(t *testing.T, upstream http.Handler) (*Router, *peer.Manager, *
 	private.StartTLS()
 	t.Cleanup(private.Close)
 	clientTLS := &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS13}
-	a := New(Config{PeerTLS: clientTLS, PeerTransport: sourceAuth.WrapTransport(PeerTransport(clientTLS), func(context.Context, *url.URL) error { return nil })})
+	config := Config{PeerTLS: clientTLS, PeerTransport: sourceAuth.WrapTransport(PeerTransport(clientTLS), func(context.Context, *url.URL) error { return nil })}
+	if adjust != nil {
+		adjust(&config)
+	}
+	a := New(config)
 	if e = a.SetRoute(Route{Mode: "forward-only", PeerURL: private.URL, Revision: 99, PeerRevision: 7, CoreBootID: "b-boot"}); e != nil {
 		t.Fatal(e)
 	}

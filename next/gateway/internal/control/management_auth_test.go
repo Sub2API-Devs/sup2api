@@ -80,7 +80,7 @@ func TestManagementHandlerRoutesRequireToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	blobs := &pluginblob.Service{Store: &pluginblob.Store{Dir: t.TempDir()}}
-	h := RequireManagementToken(token, false, ManagementHandler(&Store{}, blobs))
+	h := RequireManagementToken(token, false, ManagementHandler(&Store{}, blobs, nil))
 	sum := strings.Repeat("a", 64)
 	for _, tc := range []struct{ method, path string }{
 		{"GET", "/system/upgrades"},

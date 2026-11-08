@@ -417,7 +417,7 @@ func (c *realCluster) startShell(id string) *realNode {
 	if err != nil {
 		t.Fatal(err)
 	}
-	management := &http.Server{Handler: RequireManagementToken(managementToken, os.Getenv("TEST_REQUIRE_UPDATER_TOKEN") != "1", ManagementHandler(store, blobs)), ReadHeaderTimeout: 5 * time.Second}
+	management := &http.Server{Handler: RequireManagementToken(managementToken, os.Getenv("TEST_REQUIRE_UPDATER_TOKEN") != "1", ManagementHandler(store, blobs, nil)), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = management.Serve(managementListener) }()
 	rt.AuthorizePeer = func(ctx context.Context, p peer.Identity, scope, digest string) error {
 		return store.AuthorizePeer(ctx, p.NodeID, p.BootID, id, scope, digest)

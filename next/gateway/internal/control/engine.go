@@ -36,11 +36,42 @@ type Engine struct {
 	lastBlockedAt map[string]time.Time
 	passMu        sync.Mutex
 	passErrors    map[string]passError
+	// yielding sends this node's new requests to the other serving nodes
+	// regardless of CPU load: a rolling plan sets it before the node's core
+	// restarts (yield step) and clears it after (resume step); an operator
+	// sets it before recreating the shell (Yield).
+	yielding atomic.Bool
+	// busy is true while a plan is running or paused, when the loop polls
+	// every second; idle it polls every idlePoll.
+	busy atomic.Bool
+	// lastWritten is the control snapshot the heartbeat last persisted in
+	// PostgreSQL and when; an unchanged snapshot is rewritten only every
+	// heartbeatRewrite, telemetry goes to Redis every beat.
+	lastWritten   Node
+	lastWrittenAt time.Time
+	// notReadySince is when an idle, reachable core was first seen not
+	// ready; Work restarts it only once that lasts notReadyRestart.
+	notReadySince time.Time
 }
 
 const (
 	DefaultStepTimeout    = 10 * time.Minute
 	DefaultPrepareTimeout = 24 * time.Hour
+	// idlePoll is the engine's poll interval while no plan is active. A
+	// plan created or acted on through the management API wakes every
+	// engine over Redis at once, so the interval only bounds how late a
+	// node notices a change it was not told about (2026-11-08: before,
+	// every node asked PostgreSQL every second around the clock).
+	idlePoll = 30 * time.Second
+	// activePoll is the poll interval while a plan is running or paused.
+	activePoll = time.Second
+	// heartbeatRewrite bounds how long an unchanged heartbeat snapshot goes
+	// without a PostgreSQL write; liveness itself is Redis telemetry.
+	heartbeatRewrite = time.Minute
+	// notReadyRestart is how long an idle core may answer status calls but
+	// report not ready before Work restarts it. A momentary blip (a plugin
+	// reconnecting, a slow database) is logged, not restarted.
+	notReadyRestart = 2 * time.Minute
 )
 
 func (e *Engine) stepTimeout() time.Duration {
@@ -73,13 +104,12 @@ func (e *Engine) Run(ctx context.Context) error {
 		}
 	}()
 	wakes := e.Store.upgradeWakeups(ctx)
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		_ = e.Heartbeat(ctx)
+		start := e.progress.Load()
 		for pass := 0; pass < 16 && ctx.Err() == nil; pass++ {
 			before := e.progress.Load()
 			primary, _, _, err := e.Store.ClusterState(ctx)
@@ -101,13 +131,79 @@ func (e *Engine) Run(ctx context.Context) error {
 			return ctx.Err()
 		case <-timer.C:
 		}
+		// A plan in flight, or progress this round, keeps the fast cadence;
+		// an idle cluster is polled rarely and woken over Redis on change.
+		delay := idlePoll
+		if e.busy.Load() || e.progress.Load() != start {
+			delay = activePoll
+		}
+		wait := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
+			wait.Stop()
 			return ctx.Err()
-		case <-ticker.C:
+		case <-wait.C:
 		case <-wakes:
+			wait.Stop()
 		}
 	}
+}
+
+// Yield makes this node send its new requests to the other serving nodes,
+// for an operator who is about to restart the shell (deploy/gateway/*/README):
+// the heartbeat marks the node offloading, the router forwards, and the
+// readiness probe answers 503 when drain is set so that an ingress with a
+// health check moves on. Yield fails, and changes nothing, when no other
+// node can take the traffic. Resume takes the traffic back.
+func (e *Engine) Yield(ctx context.Context, drain bool) error {
+	e.yielding.Store(true)
+	if err := e.Heartbeat(ctx); err != nil {
+		e.yielding.Store(false)
+		return err
+	}
+	e.heartbeat.Lock()
+	shedding := e.offloading
+	e.heartbeat.Unlock()
+	if !shedding {
+		e.yielding.Store(false)
+		return errors.New("no other serving node can take this node's traffic")
+	}
+	if d, ok := e.Runtime.(interface{ SetDraining(bool) }); ok {
+		d.SetDraining(drain)
+	}
+	return nil
+}
+
+// Resume ends a Yield: the node serves its own requests again.
+func (e *Engine) Resume(ctx context.Context) error {
+	e.yielding.Store(false)
+	if d, ok := e.Runtime.(interface{ SetDraining(bool) }); ok {
+		d.SetDraining(false)
+	}
+	return e.Heartbeat(ctx)
+}
+
+// YieldState reports the node's traffic handover for the management API.
+type YieldState struct {
+	NodeID     string `json:"node_id"`
+	Yielding   bool   `json:"yielding"`
+	Offloading bool   `json:"offloading"`
+	Draining   bool   `json:"draining"`
+	Active     int64  `json:"active_requests"`
+}
+
+func (e *Engine) YieldState() YieldState {
+	st := YieldState{NodeID: e.Node.ID, Yielding: e.yielding.Load()}
+	e.heartbeat.Lock()
+	st.Offloading = e.offloading
+	e.heartbeat.Unlock()
+	if d, ok := e.Runtime.(interface{ Draining() bool }); ok {
+		st.Draining = d.Draining()
+	}
+	if a, ok := e.Runtime.(interface{ Active() int64 }); ok {
+		st.Active = a.Active()
+	}
+	return st
 }
 
 // notePassError logs what a coordinate or work pass returned. The loop
@@ -142,6 +238,9 @@ type passError struct {
 }
 
 const passErrorRepeat = 5 * time.Minute
+
+// knownStrategies is KnownStrategy for SQL (= ANY($n)).
+var knownStrategies = []string{PrimaryFirst, Rolling}
 
 // commitProgress never signals an uncommitted result. Every immediate next pass
 // acquires a fresh Redis lease and rereads PG; no command is resumed from memory.
@@ -191,26 +290,31 @@ func (e *Engine) Heartbeat(ctx context.Context) error {
 	}
 	// Receivers accept offloaded requests only from a node marked offloading,
 	// so the mark is stored before shedding starts and cleared after it ends.
+	// A yielding node (rolling restart, shell restart) sheds to every other
+	// serving node whatever the load; otherwise CPU protection decides.
 	shedder, _ := e.Runtime.(interface{ SetOffload([]Node) error })
 	var targets []Node
+	yielding := e.yielding.Load()
 	if shedder != nil && nodesErr == nil {
-		if set, err := e.Store.Offload(ctx); err == nil {
+		if yielding {
+			targets = yieldTargets(n, nodes)
+		} else if set, err := e.Store.Offload(ctx); err == nil {
 			targets = offloadTargets(set, n, nodes, e.offloading)
 		}
 	}
 	if len(targets) == 0 && shedder != nil {
 		_ = shedder.SetOffload(nil)
 		if e.offloading {
-			attrs := []any{"node", n.ID}
+			attrs := []any{"node", n.ID, "yielding", yielding}
 			if n.CPUPercent != nil {
 				attrs = append(attrs, "cpu_percent", *n.CPUPercent)
 			}
-			slog.Info("cpu offload stopped", attrs...)
+			slog.Info("offload stopped", attrs...)
 		}
 		e.offloading = false
 	}
 	n.Offloading = len(targets) > 0
-	if err = e.Store.Heartbeat(ctx, n); err != nil || len(targets) == 0 {
+	if err = e.persistHeartbeat(ctx, n, nodes, nodesErr == nil); err != nil || len(targets) == 0 {
 		return err
 	}
 	if err = shedder.SetOffload(targets); err != nil {
@@ -221,10 +325,57 @@ func (e *Engine) Heartbeat(ctx context.Context) error {
 		for i, t := range targets {
 			ids[i] = t.ID
 		}
-		slog.Warn("cpu offload started", "node", n.ID, "cpu_percent", *n.CPUPercent, "targets", ids)
+		attrs := []any{"node", n.ID, "yielding", yielding, "targets", ids}
+		if n.CPUPercent != nil {
+			attrs = append(attrs, "cpu_percent", *n.CPUPercent)
+		}
+		slog.Warn("offload started", attrs...)
 	}
 	e.offloading = true
 	return nil
+}
+
+// yieldTargets are the nodes a yielding node hands its new requests to:
+// every other enabled node that serves locally, is fresh, has a serving
+// identity and is not shedding itself. The release does not matter: a
+// rolling plan has both releases serving by design.
+func yieldTargets(self Node, nodes []Node) []Node {
+	var out []Node
+	for _, n := range nodes {
+		if n.ID != self.ID && n.Enabled && n.Mode == "local" && n.Ready && !n.Offloading && n.CoreBootID != "" && n.RouteRevision != 0 && n.Fresh(time.Now()) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// persistHeartbeat writes the control snapshot to PostgreSQL when it
+// changed, or every heartbeatRewrite, and reports telemetry to Redis every
+// time. Both happen when the cluster still has a shell that reads liveness
+// from PostgreSQL (telemetry boot differs from its shell boot), or when the
+// node directory could not be read, so nothing is skipped on a guess.
+func (e *Engine) persistHeartbeat(ctx context.Context, n Node, nodes []Node, haveNodes bool) error {
+	legacy := !haveNodes
+	for _, other := range nodes {
+		if other.Enabled && other.TelemetryBootID != other.ShellBootID {
+			legacy = true
+		}
+	}
+	if !legacy && !e.lastWrittenAt.IsZero() && time.Since(e.lastWrittenAt) < heartbeatRewrite && sameControlSnapshot(e.lastWritten, n) {
+		return e.Store.ReportTelemetry(ctx, n)
+	}
+	if err := e.Store.Heartbeat(ctx, n); err != nil {
+		e.lastWrittenAt = time.Time{}
+		return err
+	}
+	e.lastWritten, e.lastWrittenAt = n, time.Now()
+	return nil
+}
+
+// sameControlSnapshot compares the fields Store.Heartbeat persists.
+func sameControlSnapshot(a, b Node) bool {
+	return a.ID == b.ID && a.ShellBootID == b.ShellBootID && a.ReleaseDigest == b.ReleaseDigest && a.CoreBootID == b.CoreBootID &&
+		a.Mode == b.Mode && a.Ready == b.Ready && a.RouteRevision == b.RouteRevision && a.Stopped == b.Stopped && a.Offloading == b.Offloading
 }
 
 // resumeForward lets a follower that fell back to maintenance only because the
@@ -270,7 +421,7 @@ func (e *Engine) Coordinate(ctx context.Context) error {
 	if err = json.Unmarshal(raw, &p.Nodes); err != nil {
 		return err
 	}
-	if p.Strategy != PrimaryFirst {
+	if !KnownStrategy(p.Strategy) {
 		_, err = tx.Exec(ctx, `UPDATE updater.upgrades SET status='paused',error='legacy upgrade strategy requires manual reconciliation' WHERE id=$1`, p.ID)
 		if err != nil {
 			return err
@@ -396,34 +547,54 @@ func (e *Engine) Work(ctx context.Context) error {
 		return err
 	}
 	var st Step
-	err := e.Store.DB.QueryRow(ctx, `SELECT s.upgrade_id,s.step_id,s.node_id,s.action,s.target_digest,s.peer_node,s.status FROM updater.steps s JOIN updater.upgrades u ON u.id=s.upgrade_id WHERE u.cluster_id=$1 AND u.status='running' AND u.strategy='primary-first-v1' AND u.cursor=s.step_id AND s.node_id=$2 AND s.status IN ('pending','running')`, e.Store.Cluster, e.Node.ID).Scan(&st.UpgradeID, &st.ID, &st.NodeID, &st.Action, &st.TargetDigest, &st.PeerNode, &st.Status)
+	err := e.Store.DB.QueryRow(ctx, `SELECT s.upgrade_id,s.step_id,s.node_id,s.action,s.target_digest,s.peer_node,s.status FROM updater.steps s JOIN updater.upgrades u ON u.id=s.upgrade_id WHERE u.cluster_id=$1 AND u.status='running' AND u.strategy=ANY($3) AND u.cursor=s.step_id AND s.node_id=$2 AND s.status IN ('pending','running')`, e.Store.Cluster, e.Node.ID, knownStrategies).Scan(&st.UpgradeID, &st.ID, &st.NodeID, &st.Action, &st.TargetDigest, &st.PeerNode, &st.Status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// When there is no active command, a crashed stable core may restart
 		// only from the persisted route/release, never from a local symlink.
 		state, _, statusErr := e.Runtime.Status(ctx)
-		var outside bool
-		if err := e.Store.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.upgrades WHERE cluster_id=$1 AND status IN ('running','paused') AND NOT nodes ? $2)`, e.Store.Cluster, e.Node.ID).Scan(&outside); err != nil {
+		var active, outside bool
+		if err := e.Store.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.upgrades WHERE cluster_id=$1 AND status IN ('running','paused')),EXISTS(SELECT 1 FROM updater.upgrades WHERE cluster_id=$1 AND status IN ('running','paused') AND NOT nodes ? $2)`, e.Store.Cluster, e.Node.ID).Scan(&active, &outside); err != nil {
 			return err
 		}
-		if outside || statusErr != nil || !state.Ready {
-			// A serving core that stopped being ready is restarted by Recover;
-			// say why, since the core's own reason dies with its boot.
+		e.busy.Store(active)
+		if outside || statusErr != nil {
+			// A core that cannot be reached is restarted by Recover; say why,
+			// since the core's own reason dies with its boot.
 			attrs := []any{"node", e.Node.ID, "outside_plan", outside}
 			if statusErr != nil {
 				attrs = append(attrs, "status_err", statusErr)
-			} else {
-				attrs = append(attrs, "mode", state.Mode, "boot", state.BootID, "blockers", state.Blockers)
 			}
-			slog.Warn("local core not ready; recovering from the persisted route", attrs...)
+			slog.Warn("local core unreachable; recovering from the persisted route", attrs...)
+			e.notReadySince = time.Time{}
 			return e.Recover(ctx, false)
 		}
-		return nil
+		if state.Ready || active {
+			// A member of a plan in flight is not ready between its steps by
+			// design; the plan, not this check, restarts it.
+			e.notReadySince = time.Time{}
+			return nil
+		}
+		// The core answers but is not ready. That used to restart it at once,
+		// and a core that was merely slow lost its in-flight requests. Now it
+		// is logged once, and restarted only when it stays that way.
+		attrs := []any{"node", e.Node.ID, "mode", state.Mode, "boot", state.BootID, "blockers", state.Blockers}
+		if e.notReadySince.IsZero() {
+			e.notReadySince = time.Now()
+			slog.Warn("local core reports not ready; recovering if it stays so", append(attrs, "after", notReadyRestart)...)
+		}
+		if time.Since(e.notReadySince) < notReadyRestart {
+			return nil
+		}
+		slog.Warn("local core not ready for too long; recovering from the persisted route", append(attrs, "since", e.notReadySince.UTC().Format(time.RFC3339))...)
+		e.notReadySince = time.Time{}
+		return e.Recover(ctx, false)
 	}
 	if err != nil {
 		return err
 	}
+	e.busy.Store(true)
 	// Running is a journal state, not an ownership lease: Redis governs execution.
-	started, err := e.Store.DB.Exec(ctx, `UPDATE updater.steps s SET status='running',updated_at=now() FROM updater.upgrades u WHERE s.upgrade_id=$1 AND s.step_id=$2 AND u.id=s.upgrade_id AND u.status='running' AND u.strategy='primary-first-v1' AND u.cursor=s.step_id`, st.UpgradeID, st.ID)
+	started, err := e.Store.DB.Exec(ctx, `UPDATE updater.steps s SET status='running',updated_at=now() FROM updater.upgrades u WHERE s.upgrade_id=$1 AND s.step_id=$2 AND u.id=s.upgrade_id AND u.status='running' AND u.strategy=ANY($3) AND u.cursor=s.step_id`, st.UpgradeID, st.ID, knownStrategies)
 	if err != nil {
 		return err
 	}
@@ -539,6 +710,23 @@ func (e *Engine) Execute(ctx context.Context, st Step) error {
 			return err
 		}
 		return e.Runtime.Maintenance(ctx)
+	case "yield":
+		// A core that is not serving has nothing to hand over; one that is
+		// must have a taker, or the plan pauses here rather than go dark.
+		if err := e.Yield(ctx, false); err != nil {
+			if stopped, _ := e.Runtime.Stopped(ctx); stopped {
+				e.yielding.Store(true)
+				return nil
+			}
+			if status, _, statusErr := e.Runtime.Status(ctx); statusErr != nil || !status.Ready {
+				e.yielding.Store(true)
+				return nil
+			}
+			return err
+		}
+		return nil
+	case "resume":
+		return e.Resume(ctx)
 	case "stop":
 		return e.stop(ctx, fmt.Sprintf("%s-%d", st.UpgradeID, st.ID))
 	case "start", "start-primary":
@@ -761,10 +949,14 @@ func (e *Engine) start(ctx context.Context, planID, digest string, bootstrap boo
 		if err != nil {
 			return err
 		}
-		if p.Strategy != PrimaryFirst || p.Status != "running" {
+		if !KnownStrategy(p.Strategy) || p.Status != "running" {
 			return errors.New("plan is not runnable")
 		}
-		if e.Node.ID == primary {
+		if p.Strategy == Rolling {
+			// The schema is unchanged by construction (rollingEligible), the
+			// other nodes keep serving: no migration, no barrier.
+			opts.ExpectedSchemaBefore = rel.Manifest.SchemaBefore
+		} else if e.Node.ID == primary {
 			if err = e.followersStopped(ctx); err != nil {
 				return err
 			}
@@ -839,7 +1031,7 @@ func activePlan(plans []Plan) *Plan {
 // it. Each branch either forwards to the primary, stops, or resumes stable
 // serving; the durable plan, not memory, decides which.
 func (e *Engine) recoverActivePlan(ctx context.Context, p Plan, primary string) error {
-	if p.Strategy != PrimaryFirst {
+	if !KnownStrategy(p.Strategy) {
 		return e.enterMaintenanceAndStop(ctx, "legacy-plan-recovery")
 	}
 	member := false
@@ -847,6 +1039,9 @@ func (e *Engine) recoverActivePlan(ctx context.Context, p Plan, primary string) 
 		if id == e.Node.ID {
 			member = true
 		}
+	}
+	if p.Strategy == Rolling && member {
+		return e.recoverRollingMember(ctx, p, primary)
 	}
 	stopped, startIssued, localDone, disrupted := scanNodeSteps(p, e.Node.ID)
 	if !member || (stopped && !startIssued) || (startIssued && !localDone) {
@@ -886,6 +1081,53 @@ func (e *Engine) recoverActivePlan(ctx context.Context, p Plan, primary string) 
 		}
 	}
 	return e.enterMaintenanceAndStop(ctx, "active-plan-recovery")
+}
+
+// recoverRollingMember restarts a member of a rolling plan into the state the
+// plan assigns it. A node past its local step serves the target; a node whose
+// turn is under way (yield issued, core stopped or started but not yet
+// serving) yields and stays stopped for the plan to continue; a node whose
+// turn has not come keeps serving its current core, or, if that core is
+// gone, waits stopped for its turn rather than restart an old release.
+func (e *Engine) recoverRollingMember(ctx context.Context, p Plan, primary string) error {
+	var yielded, stopped, startIssued, localDone bool
+	for _, st := range p.Steps {
+		if st.NodeID != e.Node.ID {
+			continue
+		}
+		switch st.Action {
+		case "yield":
+			yielded = true
+		case "stop":
+			stopped = true
+		case "start":
+			startIssued = true
+		case "local":
+			localDone = st.Status == "done"
+		case "resume":
+			if st.Status == "done" {
+				yielded = false
+			}
+		}
+	}
+	if localDone {
+		e.yielding.Store(yielded)
+		return e.startStable(ctx, p.ReleaseDigest, false, e.Node.ID == primary)
+	}
+	if yielded || stopped {
+		e.yielding.Store(true)
+		if startIssued {
+			// The candidate is owned by the plan's start/admit work.
+			return nil
+		}
+		return e.stop(ctx, "active-plan-recovery")
+	}
+	state, _, statusErr := e.Runtime.Status(ctx)
+	if statusErr == nil && state.Ready {
+		return nil
+	}
+	e.yielding.Store(true)
+	return e.stop(ctx, "active-plan-recovery")
 }
 
 // scanNodeSteps reads the plan's steps that concern nodeID.
@@ -991,7 +1233,7 @@ func (e *Engine) admissionAllowed(ctx context.Context, digest string) error {
 	if err != nil {
 		return err
 	}
-	if strategy != PrimaryFirst || digest != target {
+	if !KnownStrategy(strategy) || digest != target {
 		return errors.New("active plan does not authorize this release")
 	}
 	var localDone, started bool
@@ -1004,6 +1246,10 @@ func (e *Engine) admissionAllowed(ctx context.Context, digest string) error {
 	}
 	if status != "running" || !started {
 		return errors.New("node has no runnable first-admission permission")
+	}
+	if strategy == Rolling {
+		// Each node admits on its own turn; the others serve meanwhile.
+		return nil
 	}
 	if e.Node.ID == primary {
 		return e.followersStopped(ctx)
@@ -1066,7 +1312,7 @@ func (e *Engine) planAuthorizesTx(ctx context.Context, tx pgx.Tx, digest string)
 		}
 		return nil
 	}
-	if strategy != PrimaryFirst || digest != target {
+	if !KnownStrategy(strategy) || digest != target {
 		return ErrConflict
 	}
 	var localDone, started bool

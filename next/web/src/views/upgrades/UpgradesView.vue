@@ -112,7 +112,8 @@ onBeforeUnmount(() => { disposed = true })
       </STable>
       <SCard v-if="canExecute" :title="t('upgrades.newPlan')">
         <div class="space-y-4">
-          <SAlert tone="warning" dense>{{ t('upgrades.maintenanceWindow') }}</SAlert>
+          <SAlert v-if="preflight && preflight.strategy === 'rolling-v1' && !preflight.blockers.length" tone="info" dense>{{ t('upgrades.rollingWindow') }}</SAlert>
+          <SAlert v-else tone="warning" dense>{{ t('upgrades.maintenanceWindow') }}</SAlert>
           <SHint>{{ t('upgrades.independentPlugins') }}</SHint>
           <SField :label="t('upgrades.target')"><SSelect v-model="target" :options="options" :placeholder="t('upgrades.choose')" :disabled="busy || active" /></SField>
           <SHint v-if="!releases.length">{{ t('upgrades.noReleases') }}</SHint>
@@ -120,7 +121,7 @@ onBeforeUnmount(() => { disposed = true })
           <div class="flex gap-2"><SButton :disabled="!target || active || stale" :loading="busy" @click="check">{{ t('upgrades.preflight') }}</SButton><SButton variant="primary" :disabled="!readyToCreate" :loading="busy" @click="create">{{ t('upgrades.start') }}</SButton></div>
           <div v-if="preflight" class="space-y-2">
             <p class="text-sm">{{ t('upgrades.order') }}: {{ preflight.nodes.join(' → ') }}</p>
-            <p class="text-sm text-fg-muted">{{ t('upgrades.sequence') }}</p>
+            <p class="text-sm text-fg-muted">{{ t(preflight.strategy === 'rolling-v1' ? 'upgrades.rollingSequence' : 'upgrades.sequence') }}</p>
             <SAlert v-if="!preflight.blockers.length" tone="success" dense>{{ t('upgrades.preflightOK') }}</SAlert>
             <SAlert v-else tone="danger" dense data-testid="upgrade-blockers">
               <ul class="list-disc space-y-1 pl-5"><li v-for="reason in preflight.blockers" :key="reason">{{ reason }}</li></ul>
