@@ -45,20 +45,24 @@ type managedCore struct {
 	// in flight finish before they are cancelled (0: at once).
 	drainGrace time.Duration
 	watch      admissionWatch
-	log        *slog.Logger
+	// alert is the admission watchdog's current finding (empty while the
+	// persisted admission checks out); reported in status.blockers only.
+	alert string
+	log   *slog.Logger
 }
 
 // admissionWatch tunes watchAdmission; zero values take the defaults.
 type admissionWatch struct {
-	Interval time.Duration // between checks (1s)
+	Interval time.Duration // between checks (10s)
 	Timeout  time.Duration // per check (2s)
-	Grace    time.Duration // continuous check failure tolerated before draining (10s)
 }
 
 const (
-	defaultAdmissionInterval = time.Second
+	defaultAdmissionInterval = 10 * time.Second
 	defaultAdmissionTimeout  = 2 * time.Second
-	defaultAdmissionGrace    = 10 * time.Second
+	// admissionAlertRepeat is how often a persisting watchdog finding is
+	// logged again at ERROR level.
+	admissionAlertRepeat = time.Minute
 	// maxDrainGrace caps a graceful drain: the shell already routes new
 	// requests elsewhere, so waiting only lengthens this node's stop.
 	maxDrainGrace = 5 * time.Minute
@@ -70,9 +74,6 @@ func (w admissionWatch) withDefaults() admissionWatch {
 	}
 	if w.Timeout <= 0 {
 		w.Timeout = defaultAdmissionTimeout
-	}
-	if w.Grace <= 0 {
-		w.Grace = defaultAdmissionGrace
 	}
 	return w
 }
@@ -116,9 +117,12 @@ func (m *managedCore) status(ctx context.Context) runtimecontract.Status {
 		s.PendingUsageWrites = -1
 		s.Blockers = append(s.Blockers, "waiting for HTTP, usage and plugin shutdown barriers")
 	}
-	check, active, gate, failure := m.check, m.active, m.gate, m.failure
+	check, active, gate, failure, alert := m.check, m.active, m.gate, m.failure, m.alert
 	s.Ready = m.mode == "serving" && m.admission.ServeHTTP
 	m.mu.Unlock()
+	if alert != "" {
+		s.Blockers = append(s.Blockers, alert)
+	}
 	if gate != nil {
 		s.ActiveHTTP = gate.count()
 	}
@@ -374,17 +378,18 @@ func (m *managedCore) drainLocked() {
 }
 
 // watchAdmission keeps checking PostgreSQL's persisted admission while the
-// core serves. A definite revocation (errAdmissionRevoked) drains at once.
-// A check that merely fails (timeout, no free connection, PostgreSQL away)
-// is logged and tolerated until the failures have lasted watch.Grace: one
-// slow query must not stop a node whose admission is intact, which is what
-// a one-second timeout and a shared, saturated pool did (2026-11-08).
+// core serves, and only reports what it finds: in status.blockers and in the
+// log. It never drains the core (decided 2026-11-08). Stopping a core is the
+// shell's job, and every path that revokes an admission (an upgrade's stop
+// step, disabling a node, identity revocation) tells the shell directly; a
+// watchdog that stopped the core on its own took sup2api-ccp down 16 times
+// in one day on slow queries from a saturated pool.
 func (m *managedCore) watchAdmission(ctx context.Context) {
 	w := m.watch.withDefaults()
 	log := m.logger()
 	ticker := time.NewTicker(w.Interval)
 	defer ticker.Stop()
-	var failing time.Time // zero while checks pass
+	var since, lastLogged time.Time // the current finding's start and last ERROR
 	failures := 0
 	for {
 		select {
@@ -404,43 +409,39 @@ func (m *managedCore) watchAdmission(ctx context.Context) {
 		checkCtx, cancel := context.WithTimeout(ctx, w.Timeout)
 		err := validate(checkCtx, a)
 		cancel()
-		if err == nil {
-			if failures > 0 {
-				log.Info("node admission check recovered", "failures", failures, "after", time.Since(failing).Round(time.Millisecond))
-			}
-			failing, failures = time.Time{}, 0
-			continue
-		}
 		if ctx.Err() != nil {
 			return
 		}
-		revoked := errors.Is(err, errAdmissionRevoked)
-		if !revoked {
-			if failing.IsZero() {
-				failing = time.Now()
+		if err == nil {
+			if failures > 0 {
+				log.Info("node admission check recovered", "failures", failures, "after", time.Since(since).Round(time.Millisecond))
 			}
-			failures++
-			lasted := time.Since(failing)
-			if lasted < w.Grace {
-				log.Warn("node admission check failed; tolerating", "err", err, "failures", failures, "lasted", lasted.Round(time.Millisecond), "grace", w.Grace)
-				continue
-			}
+			since, lastLogged, failures = time.Time{}, time.Time{}, 0
+			m.setAlert("")
+			continue
 		}
-		m.opMu.Lock()
-		m.mu.Lock()
-		if m.mode == "serving" && m.admission == a {
-			if revoked {
-				m.failure = "persisted node admission revoked"
-				log.Error("node admission revoked; draining", "err", err)
-			} else {
-				m.failure = "persisted node admission unavailable for " + w.Grace.String()
-				log.Error("node admission check kept failing; draining", "err", err, "failures", failures, "lasted", time.Since(failing).Round(time.Millisecond))
-			}
-			m.drainLocked()
+		if failures == 0 {
+			since = time.Now()
 		}
-		m.mu.Unlock()
-		m.opMu.Unlock()
+		failures++
+		if errors.Is(err, errAdmissionRevoked) {
+			m.setAlert("persisted node admission revoked; still serving until the shell stops this core")
+			if lastLogged.IsZero() || time.Since(lastLogged) >= admissionAlertRepeat {
+				log.Error("node admission revoked; not stopping (the shell drives stops)", "err", err, "failures", failures, "lasted", time.Since(since).Round(time.Millisecond))
+				lastLogged = time.Now()
+			}
+			continue
+		}
+		m.setAlert("node admission check failing: " + err.Error())
+		log.Warn("node admission check failed; still serving", "err", err, "failures", failures, "lasted", time.Since(since).Round(time.Millisecond))
 	}
+}
+
+// setAlert records the watchdog's current finding for status.blockers.
+func (m *managedCore) setAlert(alert string) {
+	m.mu.Lock()
+	m.alert = alert
+	m.mu.Unlock()
 }
 
 func runManaged(ctx context.Context, cfg *config.Config, version string, log *slog.Logger) error {

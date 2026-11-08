@@ -2221,10 +2221,10 @@ sub2api 按多节点部署设计，**插件的每个实例都跑在每个节点�
 
 受管核心被外壳排空时不等 `SUB2API_SHUTDOWN_DELAY`（外壳已经不再往这个核心送新请求）。进行中的请求等不等，由外壳的排空请求决定（2026-11-08 修订，取代 2026-10-28 的“一律立即取消”）：
 - **已导流的排空**：外壳此时把本节点公网入口的新请求转发给就绪对端（路由 `forward-only` 且对端就绪，`proxy.Router.Diverted()`，即从节点 `redirect` 之后的 `stop`、恢复流程里先转发再停的情形），`DrainRequest.graceful=true`。核心关闸拒新、让在途请求跑完再报 `DrainComplete`，等待上限取外壳截止时间减 15 秒与 5 分钟（`maxDrainGrace`）的较小者，到点仍未结束的才取消。导流后多等只影响这个节点的停止时长，不影响任何新请求。
-- **其他排空**（主节点 `maintenance` 后的 `stop`、候选重启、身份撤销、准入被撤销）没有人承接流量，进行中的请求立即取消，和原来一样。
+- **其他排空**（主节点 `maintenance` 后的 `stop`、候选重启、身份撤销）没有人承接流量，进行中的请求立即取消，和原来一样。
 - 兼容：核心在 `Hello.capabilities` 列出 `drain.graceful` 才收 `graceful` 字段（控制请求拒绝未知字段，外壳只对声明了的核心发），旧核心收到的仍是原请求、立即取消；新核心收到没有该字段的请求也立即取消。被取消的请求照常写用量、结算或退还预扣：处理器结束后才关闭用量队列，账不会丢。SIGTERM 仍按上一段执行。
 
-准入看门狗（`watchAdmission`，2026-11-08 修订）：核心服务期间每秒用**自己的一条 PG 连接**（`store.OpenSingle`，不排在共享连接池后面；开不出来时退回共享池并记 WARN）核对持久化的节点准入，每次 2 秒超时。PG 明确回答“已撤销”（`errAdmissionRevoked`：boot、版本或角色不再获批）立即排空并取消在途请求；查询本身失败（超时、拿不到连接、PG 不可达）记 WARN 并容忍，连续失败持续满 10 秒才排空（ERROR，`status.blockers` 说明原因），期间任一次成功即复位并记 INFO。此前一次 1 秒超时就停内核、不留日志，2026-11-08 使 sup2api-ccp 一天自停 16 次（见 `deploy/gateway/clicodeplus/README.md`）。外壳侧同日补齐：`Work`/`Coordinate` 的错误不再丢弃（同一错误 5 分钟记一次 WARN，恢复记 INFO），`Work` 因本机核心不就绪而走 `Recover` 重拉时记 WARN 并带核心的 mode、boot 与 blockers。
+准入看门狗（`watchAdmission`，2026-11-08 修订）：**只观察，不自停。** 核心服务期间每 10 秒用自己的一条 PG 连接（`store.OpenSingle`，不排在共享连接池后面；开不出来时退回共享池并记 WARN）核对持久化的节点准入，每次 2 秒超时。结果只进 `status.blockers` 和日志，不改 `ready`、不关闸、不排空：PG 明确回答“已撤销”（`errAdmissionRevoked`：boot、版本或角色不再获批）记 ERROR（持续时每分钟重复一次），blocker 为 `persisted node admission revoked; still serving until the shell stops this core`；查询本身失败（超时、拿不到连接、PG 不可达）记 WARN，blocker 为 `node admission check failing: …`；恢复后清除并记 INFO。停核心是外壳的事：撤销准入的每条路（升级 `stop` 步骤、禁用节点、身份撤销）都由外壳直接向核心发排空，不依赖核心自己发现；外壳死了，Caddy 的 `/readyz` 把流量切走。此前看门狗每秒查、1 秒超时、失败一次就停内核且不留日志，2026-11-08 使 sup2api-ccp 一天自停 16 次（见 `deploy/gateway/clicodeplus/README.md`）；用户当日决定核心不得因准入检查自行停服。外壳侧同日补齐：`Work`/`Coordinate` 的错误不再丢弃（同一错误 5 分钟记一次 WARN，恢复记 INFO），`Work` 因本机核心不就绪而走 `Recover` 重拉时记 WARN 并带核心的 mode、boot 与 blockers。
 
 内置插件安装在锁竞争或单个包失败后持续重试。就绪检查要求镜像所需版本已获批准，数据库 active 版本和本地已发布的服务实例均已获批准且不低于镜像要求；没有本地实例、版本过低或授权无效时不就绪。正常升级期间允许旧实例继续服务，不要求本地版本在每个瞬间都与数据库 active 版本相等，具体目标版本的收敛由 rollout 状态表示。管理员主动禁用的插件、尚未启用的 install-only 插件不阻断整节点就绪。进程的 Configure 只有成功应答后才记为已应用，失败会重试；权限撤销的宿主侧检查立即采用新授权，不能因插件 Configure 失败继续使用旧权限。
 
@@ -2337,7 +2337,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 **发布单元。** Ed25519 签名覆盖清单的精确 Payload 字节，清单摘要与压缩包摘要分离；清单包含源提交、构建标识、实际核心版本、目标 OS/架构/运行 ABI、逐文件摘要/大小/权限及协议范围。核心 `version`、`schema-contract` 命令不依赖配置或数据库。后者是嵌入迁移库存的确定性摘要；候选报告的版本及摘要必须等于签名声明。下载来源固定且不跟随重定向，解包拒绝逃逸、链接、特殊文件、未声明内容及超限体积。发布私钥不进入运行节点。
 
-**核心状态。** `candidate → preparing → prepared → serving → draining → drained`。准备失败报告 `failed` 与原因。初始不接收业务或领取后台任务。控制端点为 `/v1/hello`、`/v1/status`、`/v1/prepare`、`/v1/admission`、`/v1/drain`、`/v1/shutdown`。状态绑定 NodeID/BootID/ReleaseDigest；准入还绑定 PG 中的 revision 和 HTTP/后台领取/插件协调三项权限。准备只读检查业务迁移及插件状态；仅显式首次 bootstrap 允许业务迁移和首装。数据库准入被收回或不可验证时关闭新请求与领取并排空。
+**核心状态。** `candidate → preparing → prepared → serving → draining → drained`。准备失败报告 `failed` 与原因。初始不接收业务或领取后台任务。控制端点为 `/v1/hello`、`/v1/status`、`/v1/prepare`、`/v1/admission`、`/v1/drain`、`/v1/shutdown`。状态绑定 NodeID/BootID/ReleaseDigest；准入还绑定 PG 中的 revision 和 HTTP/后台领取/插件协调三项权限。准备只读检查业务迁移及插件状态；仅显式首次 bootstrap 允许业务迁移和首装。准入由外壳撤销并由外壳发起排空；核心的准入看门狗只报告（`status.blockers` 与日志），不自行关闸或排空（2026-11-08 起，见 §29.1）。
 
 排空是不可逆状态；再次服务须重启出新的 BootID。必须等 HTTP、计费用量写入、后台任务和插件关闭屏障完成才能报告 `DrainComplete=true`。`ActiveBackground` 是统一执行器的活动槽数，并非所有内部协程计数；`PendingUsageWrites=-1` 表示仍在等待屏障，不能解释为零。网关不能只凭计数或锁超时强杀核心。
 

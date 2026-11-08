@@ -703,7 +703,7 @@ app.HandleJob("evaluate", func(ctx context.Context, run sdk.JobRun) (sdk.JobResu
 | 12b | app/helper_history.go | 5s | 清空过期 helper 负载 | 无（幂等） | cluster `core.helper.payload_expiry`（0.1.235） |
 | 13 | app/builtin.go 收敛 | 5s 至就绪 | 内置插件检查/安装 | Redis 锁 | 不进框架（§14.3） |
 | 14 | app/builtin.go 升级 | 10s 至完成 | 核心更新后升级内置插件 | Redis 锁 | 不进框架（§14.3） |
-| 15 | app/managed.go `watchAdmission` | 1s | 校验本节点 admission | — | 不进框架（§14.3） |
+| 15 | app/managed.go `watchAdmission` | 10s | 核对本节点 admission，只报告不自停 | — | 不进框架（§14.3） |
 | 16 | audit/plugin_writes.go `writeLoop` | 队列 | 写插件审计 | — | 不进框架（§14.3） |
 | 17 | audit/plugin_writes.go `Run` | 1h | 清理旧插件审计 | 时段锁 | cluster `core.audit.plugin_writes_purge`（0.1.235） |
 | 18 | authz/service.go | 30s | 轮询权限版本 | — | node `core.authz.version_poll`（0.1.235） |

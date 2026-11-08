@@ -205,11 +205,40 @@ func testManagedRuntime(t *testing.T, migrate bool) {
 	if err = db.Pool.QueryRow(ctx, `SELECT coalesce(array_agg(name ORDER BY name), '{}') FROM scheduled_tasks WHERE source = 'core'`).Scan(&gotTasks); err != nil || !slices.Equal(gotTasks, wantTasks) {
 		t.Fatalf("cluster tasks: %v %v", gotTasks, err)
 	}
-	// Revoking the persisted permit closes HTTP and every new background claim,
-	// then waits for the real runtime cleanup before reporting drain complete.
+	// Revoking the persisted permit is only reported: the core keeps serving
+	// until the shell drains it (2026-11-08, CONTRACTS §29.1).
 	_, err = db.Pool.Exec(ctx, `DELETE FROM updater.node_admissions`)
 	if err != nil {
 		t.Fatal(err)
+	}
+	waitAlert := time.Now().Add(15 * time.Second) // the watchdog checks every 10s
+	for {
+		_, b, err := call("GET", runtimecontract.StatusPath, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if json.Unmarshal(b, &s) != nil {
+			t.Fatalf("bad status %s", b)
+		}
+		if slices.ContainsFunc(s.Blockers, func(x string) bool { return strings.Contains(x, "admission revoked") }) {
+			break
+		}
+		if time.Now().After(waitAlert) {
+			t.Fatalf("revocation not reported: %+v", s)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if s.Mode != "serving" || !s.Ready {
+		t.Fatalf("core stopped itself on revocation: %+v", s)
+	}
+	if resp, err = http.Get("http://" + cfg.HTTPAddr + "/readyz"); err != nil || resp.StatusCode != 200 {
+		t.Fatalf("HTTP closed on revocation: %v %v", resp, err)
+	}
+	resp.Body.Close()
+	// The shell's drain closes HTTP and every new background claim, then waits
+	// for the real runtime cleanup before reporting drain complete.
+	if code, b, err := call("POST", runtimecontract.DrainPath, runtimecontract.DrainRequest{OperationID: "shell-stop", Deadline: time.Now().Add(time.Minute)}); err != nil || code != 202 {
+		t.Fatalf("drain: %d %s %v", code, b, err)
 	}
 	revoked := time.Now()
 	s = waitStatus("drained")

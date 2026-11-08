@@ -17,7 +17,7 @@ import (
 func servingCore(validate func(context.Context, runtimecontract.Admission) error) *managedCore {
 	m := &managedCore{hello: runtimecontract.Hello{NodeID: "n", BootID: "boot", ReleaseDigest: "release"}, token: strings.Repeat("t", 32), mode: "serving",
 		admission: runtimecontract.Admission{BootID: "boot", ReleaseDigest: "release", Revision: 1, ServeHTTP: true}, gate: &requestGate{}, shutdown: make(chan struct{}),
-		watch: admissionWatch{Interval: 5 * time.Millisecond, Timeout: 50 * time.Millisecond, Grace: 60 * time.Millisecond}}
+		watch: admissionWatch{Interval: 5 * time.Millisecond, Timeout: 50 * time.Millisecond}}
 	m.liveValidate = validate
 	return m
 }
@@ -40,28 +40,26 @@ func waitMode(t *testing.T, m *managedCore, want string, within time.Duration) {
 	t.Fatalf("mode %q, want %q", m.modeNow(), want)
 }
 
-func TestWatchAdmissionToleratesTransientCheckFailures(t *testing.T) {
-	var calls atomic.Int32
-	// Three failures in a row (15 ms, under the 60 ms grace), then success.
-	m := servingCore(func(context.Context, runtimecontract.Admission) error {
-		if calls.Add(1) <= 3 {
-			return errors.New("timeout: no free connection")
+// waitCalls waits until validate has run at least n times.
+func waitCalls(t *testing.T, calls *atomic.Int32, n int32) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for calls.Load() < n {
+		if time.Now().After(deadline) {
+			t.Fatalf("watchdog ran %d checks, want at least %d", calls.Load(), n)
 		}
-		return nil
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go m.watchAdmission(ctx)
-	time.Sleep(150 * time.Millisecond)
-	if got := m.modeNow(); got != "serving" {
-		t.Fatalf("transient check failures drained the core: mode %q", got)
-	}
-	if calls.Load() < 6 {
-		t.Fatalf("watchdog stopped checking: %d calls", calls.Load())
+		time.Sleep(2 * time.Millisecond)
 	}
 }
 
-func TestWatchAdmissionDrainsAfterSustainedCheckFailure(t *testing.T) {
+func lastBlocker(s runtimecontract.Status) string {
+	if len(s.Blockers) == 0 {
+		return ""
+	}
+	return s.Blockers[len(s.Blockers)-1]
+}
+
+func TestWatchAdmissionNeverDrainsOnCheckFailures(t *testing.T) {
 	var calls atomic.Int32
 	m := servingCore(func(context.Context, runtimecontract.Admission) error {
 		calls.Add(1)
@@ -69,21 +67,18 @@ func TestWatchAdmissionDrainsAfterSustainedCheckFailure(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	start := time.Now()
 	go m.watchAdmission(ctx)
-	waitMode(t, m, "draining", time.Second)
-	if lasted := time.Since(start); lasted < m.watch.Grace {
-		t.Fatalf("drained after %v, before the %v grace", lasted, m.watch.Grace)
+	waitCalls(t, &calls, 20) // far past any former grace
+	st := m.status(ctx)
+	if m.modeNow() != "serving" || !st.Ready || m.gate.isDraining() {
+		t.Fatalf("watchdog stopped the core: mode %q ready %v draining %v", m.modeNow(), st.Ready, m.gate.isDraining())
 	}
-	if calls.Load() < 2 {
-		t.Fatalf("drained on the first failure (%d calls)", calls.Load())
-	}
-	if !strings.Contains(m.status(ctx).Blockers[len(m.status(ctx).Blockers)-1], "unavailable") {
-		t.Fatalf("failure reason not reported: %v", m.status(ctx).Blockers)
+	if !strings.Contains(lastBlocker(st), "check failing") {
+		t.Fatalf("finding not reported: %v", st.Blockers)
 	}
 }
 
-func TestWatchAdmissionDrainsAtOnceWhenRevoked(t *testing.T) {
+func TestWatchAdmissionNeverDrainsWhenRevoked(t *testing.T) {
 	var calls atomic.Int32
 	m := servingCore(func(context.Context, runtimecontract.Admission) error {
 		calls.Add(1)
@@ -92,12 +87,30 @@ func TestWatchAdmissionDrainsAtOnceWhenRevoked(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go m.watchAdmission(ctx)
-	waitMode(t, m, "draining", 40*time.Millisecond) // well inside the grace
-	if calls.Load() != 1 {
-		t.Fatalf("revocation waited for %d checks", calls.Load())
+	waitCalls(t, &calls, 5)
+	st := m.status(ctx)
+	if m.modeNow() != "serving" || !st.Ready || m.gate.isDraining() {
+		t.Fatalf("watchdog stopped the core on revocation: mode %q ready %v draining %v", m.modeNow(), st.Ready, m.gate.isDraining())
 	}
-	if !m.gate.isDraining() {
-		t.Fatal("gate still open after revocation")
+	if !strings.Contains(lastBlocker(st), "revoked") {
+		t.Fatalf("revocation not reported: %v", st.Blockers)
+	}
+}
+
+func TestWatchAdmissionClearsTheAlertOnRecovery(t *testing.T) {
+	var calls atomic.Int32
+	m := servingCore(func(context.Context, runtimecontract.Admission) error {
+		if calls.Add(1) <= 3 {
+			return errors.New("timeout")
+		}
+		return nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go m.watchAdmission(ctx)
+	waitCalls(t, &calls, 6)
+	if st := m.status(ctx); len(st.Blockers) != 0 || !st.Ready {
+		t.Fatalf("alert not cleared after recovery: %v", st.Blockers)
 	}
 }
 
