@@ -169,7 +169,7 @@ func TestGroupNullField(t *testing.T) {
 func TestLoadConfigTolerant(t *testing.T) {
 	c, warnings, err := LoadConfig([]byte(`{"enabled":true,"window_seconds":99999,"min_samples":0,"exempt_status_codes":"x",
 		"min_weight_mode":"fixed","min_weight":-1,
-		"groups":{"7":{"min_weight":null},"8":{"window_seconds":5},"9":{"min_samples":0},"10":{"rules":[{"name":""}]},"11":[]},
+		"groups":{"7":{"min_weight":null},"8":{"window_seconds":2},"9":{"min_samples":0},"10":{"rules":[{"name":""}]},"11":[]},
 		"accounts":{"3":{"min_weight":5},"4":{"enabled":false}},
 		"notify":{"enabled":true,"channel":"","recipients":["a"]}}`))
 	if err != nil {

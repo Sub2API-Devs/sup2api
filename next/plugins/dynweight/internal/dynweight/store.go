@@ -494,6 +494,16 @@ func (f filter) whereFrom(first int, extra ...cond) (string, []any) {
 	return " WHERE " + strings.Join(parts, " AND "), args
 }
 
+// deleteOldObs drops the counters of the windows before $1.
+const deleteOldObs = `DELETE FROM obs WHERE window_start < $1`
+
+// pruneObs drops the counters older than since (obsSince): the evaluate job
+// does it every run, the cleanup again with the rest.
+func (s store) pruneObs(ctx context.Context, since int64) error {
+	_, err := s.db.Exec(ctx, deleteOldObs, since)
+	return err
+}
+
 // prune deletes the counters older than since, the events older than
 // eventsBefore, the states with nothing left to evaluate (at the base or
 // reset, without counters since), the bases and states of pairs scheduling
@@ -506,7 +516,7 @@ func (s store) prune(ctx context.Context, since int64, eventsBefore, staleBefore
 		sql string
 		arg any
 	}{
-		{`DELETE FROM obs WHERE window_start < $1`, since},
+		{deleteOldObs, since},
 		{`DELETE FROM events WHERE created_at < $1`, eventsBefore},
 		{`DELETE FROM state s WHERE (tombstone OR eff = base) AND eval_window < $1 AND NOT EXISTS (
 			SELECT 1 FROM obs o WHERE o.account_id = s.account_id AND o.group_id = s.group_id AND o.model = s.model)`, since},

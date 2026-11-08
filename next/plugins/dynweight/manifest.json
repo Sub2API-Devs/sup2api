@@ -6,7 +6,7 @@
     "en": "Lowers the scheduling weight of an account in a group and model while it fails or slows down, and brings it back once healthy. Each (account, group, client model) is counted per window and judged by configurable rules (error rate, first token and whole attempt percentiles, the weight itself) and strategies (degrade, climb, clear sticky sessions). Turning points can be notified through a core notification channel.",
     "zh": "账号在某个分组和模型下出错或变慢时降低其调度权重，恢复健康后再逐步抬回。每个（账号、分组、客户端模型）按窗口计数，由可配置的规则（错误率、首字与整次耗时分位、权重本身）和策略（降权、回升、清理粘性会话）判定。权重拐点可经核心通知渠道发送通知。"
   },
-  "version": "0.5.1",
+  "version": "0.5.2",
   "publisher": "sub2api",
   "icon": "text:W",
   "runtime": "grpc",
@@ -30,7 +30,7 @@
   "events": { "subscribe": ["account.status_changed"], "batchSize": 100 },
 
   "jobs": [
-    { "id": "evaluate", "schedule": "@every 10s", "timeoutSec": 60 },
+    { "id": "evaluate", "schedule": "@every 5s", "timeoutSec": 60 },
     { "id": "cleanup", "schedule": "17 * * * *", "timeoutSec": 300 }
   ],
 
@@ -148,8 +148,8 @@
     {
       "id": "jobs",
       "reason": {
-        "en": "Evaluate the closed windows every 10 seconds; delete old counters and events hourly",
-        "zh": "每 10 秒评估已关闭的窗口；每小时清理过期的计数和事件"
+        "en": "Evaluate the closed windows every 5 seconds (every 10 seconds when no window is shorter than 10 seconds); delete old counters and events",
+        "zh": "每 5 秒评估已关闭的窗口（没有短于 10 秒的窗口时每 10 秒）；清理过期的计数和事件"
       }
     },
     {

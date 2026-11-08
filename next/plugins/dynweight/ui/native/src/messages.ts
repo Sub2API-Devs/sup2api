@@ -192,7 +192,7 @@ const zh = {
   },
   layer: {
     window: '评估窗口',
-    windowHint: '10 到 3600 秒（评估每 10 秒一次），每个账号的窗口相位不同',
+    windowHint: '3 到 3600 秒（有短于 10 秒的窗口时每 5 秒评估一次，否则每 10 秒），每个账号的窗口相位不同',
     minSamples: '最少样本',
     minSamplesHint: '样本不足时向前累积窗口',
     exempt: '豁免状态码',
@@ -432,7 +432,7 @@ const en: typeof zh = {
   },
   layer: {
     window: 'Window',
-    windowHint: '10 to 3600 seconds (evaluated every 10 s); each account has its own phase',
+    windowHint: '3 to 3600 seconds (evaluated every 5 s while a window is under 10 s, else every 10 s); each account has its own phase',
     minSamples: 'Minimum samples',
     minSamplesHint: 'fewer samples look back over earlier windows',
     exempt: 'Exempt status codes',

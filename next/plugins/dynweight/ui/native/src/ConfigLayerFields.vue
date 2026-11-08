@@ -25,7 +25,7 @@ const floor = computed({
     <h4 class="dw-cfg-group-title">{{ t('cfg.field.stats') }}</h4>
     <div class="dw-cfg-grid">
       <SField :label="t('layer.window')" :hint="t('layer.windowHint')" :error="required(layer.window_seconds)">
-        <SInput v-model="layer.window_seconds" type="number" min="10" max="3600" :suffix="t('unit.second')" :disabled="readonly" />
+        <SInput v-model="layer.window_seconds" type="number" min="3" max="3600" :suffix="t('unit.second')" :disabled="readonly" />
       </SField>
       <SField :label="t('layer.minSamples')" :hint="t('layer.minSamplesHint')" :error="required(layer.min_samples)">
         <SInput v-model="layer.min_samples" type="number" min="1" :suffix="t('cfg.field.samplesUnit')" :disabled="readonly" />

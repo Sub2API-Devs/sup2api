@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	// MinWindowSeconds is the interval of the evaluate job: a shorter window
-	// would close more than once between two runs, and only the newest
-	// closed window is evaluated (new-api evaluates lazily, so it allows 3).
-	MinWindowSeconds = 10
+	// MinWindowSeconds is the shortest window, as in new-api. The evaluate
+	// job runs less often than that (the host's shortest job interval), so
+	// several windows of a key may close between two runs: each run
+	// evaluates them all, oldest first.
+	MinWindowSeconds = 3
 	maxWindowSeconds = 3600
 	maxMinSamples    = 100000
 	maxRecipients    = 20
@@ -25,7 +26,7 @@ type Layer struct {
 	// Enabled turns the adjustment on. On the global layer it is the master
 	// switch: off, nothing is observed or adjusted.
 	Enabled bool `json:"enabled"`
-	// WindowSeconds is the evaluation window, 10..3600. Windows are not
+	// WindowSeconds is the evaluation window, 3..3600. Windows are not
 	// aligned to the epoch: each account rolls its own phase.
 	WindowSeconds int `json:"window_seconds"`
 	// MinSamples is how many attempts a condition accumulates, looking back
@@ -269,8 +270,9 @@ func (l *Layer) WeightFloor(base int) int {
 }
 
 // RaiseWindows lifts the windows below MinWindowSeconds of a stored
-// configuration to it (0.1.0 allowed 3): such a document still loads, while
-// saving a new one below the minimum is refused. It says what it raised.
+// configuration to it: such a document still loads, while saving a new one
+// below the minimum is refused. It says what it raised. (0.2.0 to 0.5.1
+// raised the windows below 10 that 0.1.0 had saved; they load as saved now.)
 func (c *Config) RaiseWindows() []string {
 	var raised []string
 	layers := map[string]*Layer{"": &c.Layer}

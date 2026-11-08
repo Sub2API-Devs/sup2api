@@ -198,6 +198,15 @@ func (c *Compiled) Resolve(accountID, groupID int64) Resolved {
 	return cfg
 }
 
+// ShortestWindow is the shortest window of any layer.
+func (c *Compiled) ShortestWindow() int {
+	n := c.global.cfg.WindowSeconds
+	for _, d := range c.groups {
+		n = min(n, d.cfg.WindowSeconds)
+	}
+	return n
+}
+
 // RetentionSeconds is the longest any layer keeps observations.
 func (c *Compiled) RetentionSeconds() int64 {
 	n := c.global.cfg.retentionSeconds()

@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/dynweight"
-	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/rules"
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
@@ -59,9 +58,9 @@ func TestManifestShape(t *testing.T) {
 	if !slices.Equal(jobs, []string{dynweight.JobEvaluate, dynweight.JobCleanup}) {
 		t.Fatalf("jobs = %v", jobs)
 	}
-	// The shortest window closes once per evaluate run.
-	if want := fmt.Sprintf("@every %ds", rules.MinWindowSeconds); m.Jobs[0].Schedule != want {
-		t.Errorf("evaluate runs %q, the shortest window wants %q", m.Jobs[0].Schedule, want)
+	// The evaluate job runs at the interval its cadence is counted in.
+	if want := fmt.Sprintf("@every %ds", dynweight.EvaluateEverySeconds); m.Jobs[0].Schedule != want {
+		t.Errorf("evaluate runs %q, the plugin counts on %q", m.Jobs[0].Schedule, want)
 	}
 	if m.Events == nil || !slices.Equal(m.Events.Subscribe, []string{dynweight.EventAccountStatusChanged}) {
 		t.Errorf("events = %+v", m.Events)

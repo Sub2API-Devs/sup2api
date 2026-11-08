@@ -129,7 +129,20 @@ func (e *env) window(ok, fail int) string {
 	e.t.Helper()
 	res := e.p.cfg.Load().Resolve(testAccount, testGroup)
 	start := rules.WindowStart(testAccount, e.clock.Load(), res.WindowSeconds)
-	at := time.Unix(start+10, 0).UnixMilli()
+	e.observe(start+min(10, int64(res.WindowSeconds)-1), ok, fail)
+	e.clock.Store(start + int64(res.WindowSeconds) + rules.CloseGraceSeconds)
+	resp, err := e.p.RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: JobEvaluate})
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return resp.GetMessage()
+}
+
+// observe records ok successful and fail failed streaming attempts that
+// ended at the unix second.
+func (e *env) observe(second int64, ok, fail int) {
+	e.t.Helper()
+	at := time.Unix(second, 0).UnixMilli()
 	var batch pluginv1.ObservationBatch
 	for i := range ok + fail {
 		status := int32(http.StatusOK)
@@ -143,12 +156,6 @@ func (e *env) window(ok, fail int) string {
 	if _, err := e.p.OnObservations(context.Background(), &batch); err != nil {
 		e.t.Fatal(err)
 	}
-	e.clock.Store(start + int64(res.WindowSeconds) + rules.CloseGraceSeconds)
-	resp, err := e.p.RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: JobEvaluate})
-	if err != nil {
-		e.t.Fatal(err)
-	}
-	return resp.GetMessage()
 }
 
 func TestDegradeNotifyAndReset(t *testing.T) {
@@ -444,8 +451,9 @@ func TestConfigRoutes(t *testing.T) {
 	e.decode(e.h.Do("POST", "/reset", nil, map[string]any{}), http.StatusBadRequest, nil)
 }
 
-// A stored window below the minimum (0.1.0 allowed 3) still loads, raised
-// to it with a warning; a new one below it is refused.
+// A stored window of 3 (0.1.0 saved it, 0.2.0 to 0.5.1 raised it to 10 on
+// load) loads as saved again; one below the minimum still loads, raised to
+// it with a warning, and a new one below it is refused.
 func TestStoredShortWindowLoads(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -456,7 +464,7 @@ func TestStoredShortWindowLoads(t *testing.T) {
 	c := rules.DefaultConfig()
 	c.Enabled, c.WindowSeconds = true, 3
 	g := rules.DefaultLayer()
-	g.Enabled, g.WindowSeconds = true, 5
+	g.Enabled, g.WindowSeconds = true, 2
 	c.Groups = map[int64]*rules.Layer{testGroup: &g}
 	raw, _ := json.Marshal(c)
 	if _, err := s.db.Exec(ctx, `INSERT INTO config (id, doc, version) VALUES (1, $1, 1)`, raw); err != nil {
@@ -465,19 +473,82 @@ func TestStoredShortWindowLoads(t *testing.T) {
 	if err := e.p.reloadConfig(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if got := e.p.cfg.Load(); got.version != 1 || !got.Enabled || got.WindowSeconds != rules.MinWindowSeconds || got.GroupLayer(testGroup).WindowSeconds != rules.MinWindowSeconds {
+	if got := e.p.cfg.Load(); got.version != 1 || !got.Enabled || got.WindowSeconds != 3 || got.GroupLayer(testGroup).WindowSeconds != rules.MinWindowSeconds {
 		t.Fatalf("config in force: v%d enabled %v window %d", got.version, got.Enabled, got.WindowSeconds)
 	}
 	var current struct {
 		Data configBody `json:"data"`
 	}
 	e.decode(e.h.Do("GET", "/config", nil, nil), http.StatusOK, &current)
-	if current.Data.Config.WindowSeconds != rules.MinWindowSeconds || len(current.Data.Warnings) != 2 {
-		t.Fatalf("GET /config: window %d, warnings %v", current.Data.Config.WindowSeconds, current.Data.Warnings)
+	if current.Data.Config.Groups[testGroup].WindowSeconds != rules.MinWindowSeconds || len(current.Data.Warnings) != 1 {
+		t.Fatalf("GET /config: group window %d, warnings %v", current.Data.Config.Groups[testGroup].WindowSeconds, current.Data.Warnings)
 	}
 	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c, Version: 1}), http.StatusBadRequest, nil)
 	e.decode(e.h.Do("POST", "/config/validate", nil, configBody{Config: c, Version: 1}), http.StatusBadRequest, nil)
 	e.decode(e.h.Do("PUT", "/config", nil, current.Data), http.StatusOK, nil)
+}
+
+// A 3-second window closes more than once between two evaluate runs: one
+// run evaluates every window closed since the last, so failures in two of
+// the last three windows still fire "2 of 3" (evaluating only the newest
+// would pad the others as misses). The job then evaluates every run and
+// drops the counters past the retention; with every window 10 s or longer,
+// it evaluates only the runs on a multiple of 10 s.
+func TestShortWindowCatchUp(t *testing.T) {
+	e := newEnv(t)
+	e.configure(func(c *rules.Config) { c.WindowSeconds = 3 })
+	if w := e.rank(100); w != 0 {
+		t.Fatalf("healthy account rewritten to %d", w)
+	}
+	if msg := e.window(10, 0); msg != "evaluated 1 keys, 0 changed" {
+		t.Fatalf("first window: %s", msg)
+	}
+	start := rules.WindowStart(testAccount, e.clock.Load(), 3)
+	for i, fail := range []int{5, 0, 5} { // 50%, healthy, 50%
+		e.observe(start+int64(i*3)+1, 10-fail, fail)
+	}
+	e.clock.Store(start + 9 + rules.CloseGraceSeconds)
+	run := func(scheduledAt int64) string {
+		t.Helper()
+		resp, err := e.p.RunJob(context.Background(), &pluginv1.RunJobRequest{JobId: JobEvaluate, ScheduledAtUnix: scheduledAt})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp.GetMessage()
+	}
+	if msg := run(1_700_000_105); msg != "evaluated 1 keys, 1 changed" {
+		t.Fatalf("catch-up run: %s", msg)
+	}
+	if w := e.rank(100); w != 70 {
+		t.Fatalf("weight after three windows %d", w)
+	}
+	var status struct {
+		Data []keyStatus `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/status", nil, nil), http.StatusOK, &status)
+	if len(status.Data) != 1 || status.Data[0].EvalWindow != start+6 || status.Data[0].Total != 10 || !status.Data[0].Rules[0].Fired {
+		t.Fatalf("status %+v", status.Data)
+	}
+	// Each run drops the counters past twice the retention (7 windows here),
+	// not only the hourly cleanup.
+	e.clock.Add(2 * 7 * 3)
+	run(0)
+	s, err := e.p.store(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	if err := s.db.QueryRow(context.Background(), `SELECT count(*) FROM obs`).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("counters left after the retention: %d %v", left, err)
+	}
+
+	e.configure(func(c *rules.Config) { c.WindowSeconds = 60 })
+	if msg := run(1_700_000_105); !strings.HasPrefix(msg, "not due") {
+		t.Fatalf("off-cadence run with 60 s windows: %s", msg)
+	}
+	if msg := run(1_700_000_110); strings.HasPrefix(msg, "not due") {
+		t.Fatalf("on-cadence run with 60 s windows: %s", msg)
+	}
 }
 
 // Without the optional notify.send grant there are no channels to pick and

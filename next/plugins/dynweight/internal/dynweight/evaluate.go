@@ -25,6 +25,22 @@ const (
 	JobCleanup  = "cleanup"  // hourly: drop old counters, events and stale keys
 )
 
+// The evaluate job runs every EvaluateEverySeconds, the shortest interval
+// the host gives a job; a window shorter than relaxedEvaluateSeconds needs
+// every run. When no layer has one, every other run is enough: a run reads
+// every state and the counters of the retention, so this halves the reads.
+const (
+	EvaluateEverySeconds   = 5
+	relaxedEvaluateSeconds = 10
+)
+
+// maxCatchUp is how many closed windows of a key one run evaluates. With a
+// window shorter than the job's interval, more than one closes between two
+// runs: each is judged on its own counters, oldest first, as if evaluated
+// on time. A longer gap (the job was late or the plugin down) is padded as
+// skipped windows before the oldest of them.
+const maxCatchUp = 5
+
 const (
 	eventRetention = 30 * 24 * time.Hour
 	// staleAfter drops the keys of an (account, group) scheduling has not
@@ -36,7 +52,7 @@ const (
 func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
 	switch in.GetJobId() {
 	case JobEvaluate:
-		return p.runEvaluate(ctx)
+		return p.runEvaluate(ctx, in)
 	case JobCleanup:
 		return p.runCleanup(ctx)
 	}
@@ -91,7 +107,7 @@ type evaluation struct {
 // every key on a global disable does. It never runs on the factory
 // configuration standing in for one it could not read, which would pin
 // them all the same.
-func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, error) {
+func (p *Plugin) runEvaluate(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
 	s, err := p.store(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
@@ -100,6 +116,9 @@ func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, err
 	if err != nil {
 		p.stats.add(cRunFailures, 1)
 		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	if !evaluateDue(cfg, in) {
+		return &pluginv1.RunJobResponse{Message: fmt.Sprintf("not due: no window is shorter than %d s", relaxedEvaluateSeconds)}, nil
 	}
 	started := time.Now()
 	defer func() {
@@ -134,12 +153,26 @@ func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, err
 	p.record(rctx, s, e.events, e.changed > 0)
 	p.notify(rctx, cfg, e.notices)
 	cancel()
+	// The counters age out every few seconds with short windows: dropping
+	// them here keeps the table at the retention instead of an hour of them.
+	if err := s.pruneObs(ctx, obsSince(cfg, e.now)); err != nil {
+		p.log.Warn("dynweight: drop old counters failed", "error", err.Error())
+	}
 	p.runStickyClears(ctx, s)
 	if errs.n > 0 {
 		p.stats.add(cRunFailures, 1)
 		return nil, status.Errorf(codes.Internal, "%v", errs)
 	}
 	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("evaluated %d keys, %d changed", e.evaluated, e.changed)}, nil
+}
+
+// evaluateDue reports whether a run of the evaluate job evaluates: every
+// run when a window is shorter than relaxedEvaluateSeconds, else the runs
+// scheduled on a multiple of it. A manual run, or one without a scheduled
+// time, always does.
+func evaluateDue(cfg *compiledConfig, in *pluginv1.RunJobRequest) bool {
+	at := in.GetScheduledAtUnix()
+	return in.GetManual() || at <= 0 || cfg.ShortestWindow() < relaxedEvaluateSeconds || at%relaxedEvaluateSeconds < EvaluateEverySeconds
 }
 
 func (e *evaluation) load(ctx context.Context) error {
@@ -211,7 +244,24 @@ func keysOf(states map[key]stateRow, obs map[key]map[int64]rules.Counts) []key {
 	return keys
 }
 
-// evaluate evaluates the newest closed window of a key.
+// dueWindows lists the closed windows of a key to evaluate, oldest first,
+// ending at the newest closed one: those after its last evaluated window,
+// at most maxCatchUp; without a state, or when the newest was evaluated
+// already, just the newest (Evaluate then skips it, or resets a stale base).
+func dueWindows(st *rules.State, latest int64, windowSeconds int) []int64 {
+	w, n := int64(windowSeconds), int64(1)
+	if st != nil && st.LastEvalWindow < latest {
+		n = min((latest-st.LastEvalWindow+w-1)/w, maxCatchUp)
+	}
+	out := make([]int64, n)
+	for i := range out {
+		out[i] = latest - (n-1-int64(i))*w
+	}
+	return out
+}
+
+// evaluate evaluates the closed windows of a key not evaluated yet and
+// writes the resulting state once.
 func (e *evaluation) evaluate(ctx context.Context, k key) error {
 	b, scheduled := e.bases[pair{k.AccountID, k.GroupID}]
 	if !scheduled {
@@ -223,28 +273,49 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 		return nil
 	}
 	res := e.cfg.Resolve(k.AccountID, k.GroupID)
-	window := rules.LatestClosedWindow(k.AccountID, e.now, res.WindowSeconds)
-	in := rules.Input{Base: b.Weight, Window: window, Now: e.now, Obs: e.series(k, window, &res), Cfg: res}
+	latest := rules.LatestClosedWindow(k.AccountID, e.now, res.WindowSeconds)
+	var st *rules.State
 	if hasState {
-		in.State = &row.State
+		st = &row.State
 	}
-	out := rules.Evaluate(in)
-	next := out.State
 	stats := &e.p.stats
 	stats.add(cEvaluations, 1)
-	switch out.Action {
-	case rules.ActionSkip:
-		stats.add(cSkipped, 1)
-		return nil
-	case rules.ActionReset:
-		next = rules.Tombstone(window)
+	var (
+		events    []rules.Event
+		effects   []rules.SideEffect
+		effectsAt int64
+		effectsTo float64
+		changed   bool
+		reset     bool
+	)
+windows:
+	for _, window := range dueWindows(st, latest, res.WindowSeconds) {
+		out := rules.Evaluate(rules.Input{Base: b.Weight, Window: window, Now: e.now, Obs: e.series(k, window, &res), Cfg: res, State: st})
+		switch out.Action {
+		case rules.ActionSkip:
+			stats.add(cSkipped, 1)
+			return nil
+		case rules.ActionReset:
+			// The base changed: the first window says so, the rest are consumed.
+			tomb := rules.Tombstone(latest)
+			st, reset, changed = &tomb, true, true
+			events = rules.Events(&res, latest, out)
+			break windows
+		}
+		st = &out.State
+		changed = changed || out.WeightFrom != out.WeightTo
+		events = append(events, rules.Events(&res, window, out)...)
+		if len(out.SideEffects) > 0 {
+			effects = append(effects, out.SideEffects...)
+			effectsAt, effectsTo = window, out.WeightTo
+		}
 	}
 	e.evaluated++
 	var clear *pendingClear
-	if out.Action == rules.ActionApplied && len(out.SideEffects) > 0 {
-		clear = pendingOf(k, window, out.WeightTo, out.SideEffects)
+	if len(effects) > 0 {
+		clear = pendingOf(k, effectsAt, effectsTo, effects)
 	}
-	written, err := e.s.writeState(ctx, k, next, row.gen, clear)
+	written, err := e.s.writeState(ctx, k, *st, row.gen, clear)
 	if err != nil {
 		return err
 	}
@@ -252,15 +323,15 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 		stats.add(cLost, 1)
 		return nil // lost to a reset or an overlapping run: theirs stands
 	}
-	if out.Action == rules.ActionReset {
+	if reset {
 		stats.add(cBaseResets, 1)
 	} else {
 		stats.add(cApplied, 1)
 	}
-	if out.Action == rules.ActionReset || out.WeightFrom != out.WeightTo {
+	if changed {
 		e.changed++
 	}
-	for _, ev := range rules.Events(&res, window, out) {
+	for _, ev := range events {
 		e.events = append(e.events, eventRow{key: k, Event: ev})
 		if rules.Notified(ev.Kind) {
 			e.notices = append(e.notices, notice{k: k, name: b.Name, ev: ev})
@@ -278,19 +349,19 @@ func (e *evaluation) series(k key, window int64, res *rules.Resolved) []rules.Co
 	return out
 }
 
-// pendingOf is the sticky clear of a key's side effects in a window. The
-// window start is the salt (as in new-api), so successive windows rotate
-// through different bindings, and a retry selects the same ones again.
-// Strategies clearing in the same window share it, so the largest share
-// selects a superset of the others: one call clears for all of them (a
-// weight dropping to 0 clears everything).
+// pendingOf is the sticky clear of a key's side effects in a run, salted
+// with the newest window that had any. The window start is the salt (as in
+// new-api), so successive windows rotate through different bindings, and a
+// retry selects the same ones again. Strategies clearing in the same run
+// share it, so the largest share selects a superset of the others: one call
+// clears for all of them (a weight dropping to 0 clears everything).
 func pendingOf(k key, window int64, weight float64, effects []rules.SideEffect) *pendingClear {
 	c := &pendingClear{key: k, Salt: strconv.FormatInt(window, 10), Weight: weight}
 	var names []string
 	for _, se := range effects {
 		c.Percent = max(c.Percent, se.AffinityPercent)
 		c.Zero = c.Zero || se.Zero
-		if se.Strategy != "" {
+		if se.Strategy != "" && !slices.Contains(names, se.Strategy) {
 			names = append(names, se.Strategy)
 		}
 	}
