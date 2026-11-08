@@ -486,6 +486,30 @@ func TestUIPluginsAccountActions(t *testing.T) {
 	}
 }
 
+// A plugin whose only console extension is its native entry (an account
+// form, form.mode "native", that no menu, page or slot names) is still
+// listed, so the console loads the entry; one without a native entry and
+// nothing else is not (CONTRACTS §15.8).
+func TestUIPluginsNativeEntryOnly(t *testing.T) {
+	h, _ := newHarness(t)
+	h.guard.UI = &manifest.UI{Native: &manifest.NativeUI{Entry: "ui/native/entry.js"}}
+
+	code, out := h.do("GET", "/ui/plugins", "viewer", nil)
+	ui, _ := out["data"].([]any)
+	if code != 200 || len(ui) != 1 {
+		t.Fatalf("native-only plugin = %d %v", code, out)
+	}
+	u := ui[0].(map[string]any)
+	if u["key"] != "guard" || u["native_entry"] != "ui/native/entry.js" || len(u["menus"].([]any)) != 0 || len(u["pages"].(map[string]any)) != 0 {
+		t.Fatalf("native-only item = %v", u)
+	}
+
+	h.guard.UI.Native = nil
+	if code, out := h.do("GET", "/ui/plugins", "viewer", nil); code != 200 || len(out["data"].([]any)) != 0 {
+		t.Fatalf("plugin with no extension = %d %v", code, out)
+	}
+}
+
 func mustExec(t *testing.T, db *store.DB, sql string, args ...any) {
 	t.Helper()
 	if _, err := db.Pool.Exec(context.Background(), sql, args...); err != nil {

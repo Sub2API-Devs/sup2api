@@ -9,7 +9,7 @@ import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import AccountModelsCard from './AccountModelsCard.vue'
 import ModelLimitsEditor from './ModelLimitsEditor.vue'
-import { SSwitch, STagInput } from '@sub2api/ui'
+import { SSpinner, SSwitch, STagInput } from '@sub2api/ui'
 import AccountEditorNav from './AccountEditorNav.vue'
 import ParamOverrideField from './paramOverride/ParamOverrideField.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
@@ -17,7 +17,8 @@ import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }), toast: vi.fn() }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<object>(), api: mocks }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), toast: mocks.toast }))
-vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ plugin: () => null, component: () => null }), assetURL: () => '' }))
+const pluginStore = vi.hoisted(() => ({ listed: true, pending: {} as Record<string, boolean>, errors: {} as Record<string, string>, plugin: () => null, component: (() => null) as (key: string, name?: string) => unknown }))
+vi.mock('@/stores/plugins', () => ({ usePluginStore: () => pluginStore, assetURL: () => '' }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useProxiesLookup: () => ({}) }))
@@ -352,6 +353,54 @@ describe('account container environment', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ settings: { locale: '', timezone: '' } }))
+  })
+})
+
+// A plugin's native account form (form.mode "native", e.g. codex's
+// CodexAuthForm) comes from the plugin store: wait while the plugin list or
+// the plugin's module loads, then show the component or why it is missing.
+describe('native plugin account form', () => {
+  const nativeType = { ...accountType, plugin_key: 'codex', type: 'codex_device', creation_group: 'codex', form: { mode: 'native', component: 'CodexAuthForm' } } as unknown as AccountType
+  const CodexAuthForm = { name: 'CodexAuthForm', props: ['mode'], template: '<div />' }
+  const unavailable = () => i18n.global.t('accounts.formUnavailable')
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    i18n.global.locale.value = 'zh'
+    mocks.get.mockResolvedValue({ enabled: true })
+    Object.assign(pluginStore, { listed: true, pending: {}, errors: {}, component: () => null })
+  })
+
+  it('waits for the plugin list and the plugin module instead of reporting the form unavailable', async () => {
+    pluginStore.listed = false
+    let w = render(undefined, false, nativeType)
+    await flushPromises()
+    expect(w.findComponent(SSpinner).exists()).toBe(true)
+    expect(w.text()).not.toContain(unavailable())
+
+    Object.assign(pluginStore, { listed: true, pending: { codex: true } })
+    w = render(undefined, false, nativeType)
+    await flushPromises()
+    expect(w.findComponent(SSpinner).exists()).toBe(true)
+    expect(w.text()).not.toContain(unavailable())
+  })
+
+  it('shows the registered component, or the load error once loading is over', async () => {
+    pluginStore.component = (key, name) => (key === 'codex' && name === 'CodexAuthForm' ? CodexAuthForm : null)
+    let w = render(undefined, false, nativeType)
+    await flushPromises()
+    expect(w.findComponent(CodexAuthForm).props('mode')).toBe('create')
+
+    pluginStore.component = () => null
+    w = render(undefined, false, nativeType)
+    await flushPromises()
+    expect(w.findComponent(SSpinner).exists()).toBe(false)
+    expect(w.text()).toContain(unavailable())
+
+    pluginStore.errors = { codex: 'entry does not export register(host)' }
+    w = render(undefined, false, nativeType)
+    await flushPromises()
+    expect(w.text()).toContain('entry does not export register(host)')
   })
 })
 

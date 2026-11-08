@@ -10,9 +10,17 @@ import { codexAsset, codexUIPlugin } from './codex'
 // /plugin-ui/<key>/<hash>/... static files (guard native UI from its dist
 // folder, a demo iframe page and a demo iframe account form).
 
+interface MockUIPlugin {
+  menus?: unknown[]
+  pages?: Record<string, unknown>
+  slots?: unknown[]
+  account_actions?: unknown[]
+  native_entry?: string
+}
+
 const GUARD_DIST = fileURLToPath(new URL('../../plugins/guard/ui/native/dist/', import.meta.url))
 
-on('GET', '/ui/plugins', () => [
+const uiPlugins = [
   moderationUIPlugin,
   dynweightUIPlugin,
   codexUIPlugin,
@@ -70,7 +78,14 @@ on('GET', '/ui/plugins', () => [
     native_entry: '',
     trust: 'community'
   }
-])
+]
+
+// Like the server (plugin/api/ui.go): a plugin with no menu, page, slot,
+// account action or native entry is left out, so a plugin that only has a
+// native account form (codex) is listed here exactly when it is in production.
+const hasExtension = (p: MockUIPlugin) =>
+  !!(p.menus?.length || Object.keys(p.pages || {}).length || p.slots?.length || p.account_actions?.length || p.native_entry)
+on('GET', '/ui/plugins', () => uiPlugins.filter(hasExtension))
 
 // The anthropic model catalog is the mock's declarative table. It declares
 // `search: 'q'` and the route below really honours ?q= and really paginates

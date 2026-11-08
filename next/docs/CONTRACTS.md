@@ -709,7 +709,7 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `trust` | |
 | `host_ui_compat` | manifest `hostUICompat`；前端用它和 `HOST_UI_VERSION` 比较，不匹配则不加载原生 UI（§23.1） |
 
-过滤后 `menus`、`slots`、`pages`、`account_actions` 全空的插件不返回。
+过滤后 `menus`、`slots`、`pages`、`account_actions` 全空且 `native_entry` 为空串的插件不返回。只有原生入口的插件（例如只用 `form.mode: "native"` 账号表单、没有菜单/页面/插槽的 codex）照样返回，控制台才会加载它的入口、拿到表单组件；核心 0.1.257 及以前也把这类插件过滤掉，codex 的新建账号表单因此显示“无法加载插件表单”，0.1.258 起修正（`plugin/api/ui.go`）。
 
 ### 15.9 账号（`account/handlers.go`、`account/creds.go`、`account/testreq.go`）
 

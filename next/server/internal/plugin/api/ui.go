@@ -33,6 +33,8 @@ type UIPlugin struct {
 // uiPlugins lists console extensions of active plugins, filtered by the
 // caller's permissions. Pages only reachable through hidden menus are
 // dropped; native entries are only returned for official/verified plugins.
+// A plugin with nothing left for the caller (no menu, page, slot, account
+// action or native entry) is left out.
 func (a *API) uiPlugins(c *gin.Context) {
 	out := []UIPlugin{}
 	if a.d.Registry == nil {
@@ -73,7 +75,9 @@ func (a *API) uiPlugins(c *gin.Context) {
 		if m.UI.Native != nil && (p.Trust == pkg.TrustOfficial || p.Trust == pkg.TrustVerified) {
 			item.NativeEntry = m.UI.Native.Entry
 		}
-		if len(item.Menus) == 0 && len(item.Slots) == 0 && len(item.Pages) == 0 && len(item.AccountActions) == 0 {
+		// A native entry alone is an extension too: it may hold only an
+		// account form (form.mode "native") that no menu, page or slot names.
+		if len(item.Menus) == 0 && len(item.Slots) == 0 && len(item.Pages) == 0 && len(item.AccountActions) == 0 && item.NativeEntry == "" {
 			continue
 		}
 		out = append(out, item)

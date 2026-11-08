@@ -106,6 +106,9 @@ const nativeRef = ref<{ validate?: () => boolean | Promise<boolean> }>()
 const uiPlugin = computed(() => (props.accountType ? plugins.plugin(props.accountType.plugin_key) : undefined))
 const iframeSrc = computed(() => (uiPlugin.value && props.accountType?.form.page ? assetURL(uiPlugin.value, props.accountType.form.page) : ''))
 const nativeComponent = computed(() => (props.accountType ? plugins.component(props.accountType.plugin_key, props.accountType.form.component) : undefined))
+// The plugin list (iframe, native) or the plugin's native module is still
+// loading: show a spinner, not "form unavailable" (as PluginPageView does).
+const pluginFormWaiting = computed(() => !plugins.listed || (props.accountType?.form.mode === 'native' && !!plugins.pending[props.accountType.plugin_key]))
 
 // ---------------------------------------------------------------- common controls (schedulable, automatic disabling)
 
@@ -697,10 +700,12 @@ const { save } = useAccountSave({
                 :min-height="200"
                 @change="credentials = $event || {}"
               />
+              <div v-else-if="pluginFormWaiting" class="flex justify-center py-6"><SSpinner /></div>
               <SHint v-else tone="danger">{{ t('accounts.formUnavailable') }}</SHint>
             </template>
             <template v-else-if="mode === 'native'">
               <component :is="nativeComponent" v-if="nativeComponent" ref="nativeRef" v-model="credentials" :mode="editing ? 'edit' : 'create'" :account="account" :account-type="accountType" :errors="credErrors" />
+              <div v-else-if="pluginFormWaiting" class="flex justify-center py-6"><SSpinner /></div>
               <SHint v-else tone="danger">{{ plugins.errors[accountType.plugin_key] || t('accounts.formUnavailable') }}</SHint>
             </template>
 
