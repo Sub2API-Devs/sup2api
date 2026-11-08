@@ -310,6 +310,25 @@ func (s store) loadWeights(ctx context.Context) (map[key]weight, error) {
 	return out, err
 }
 
+// loadTrends reads what rules.Trend needs of the degraded keys of the
+// accounts, in one query (the partial index on eff <> base): GET /weights
+// asks for a page of the account list at once.
+func (s store) loadTrends(ctx context.Context, accountIDs []int64) (map[key]rules.State, error) {
+	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model, base, eff, COALESCE(data->>'last_change', ''), COALESCE((data->>'last_change_at')::bigint, 0)
+		FROM state WHERE account_id = ANY($1) AND NOT tombstone AND eff <> base`, accountIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := map[key]rules.State{}
+	var k key
+	var st rules.State
+	_, err = pgx.ForEachRow(rows, []any{&k.AccountID, &k.GroupID, &k.Model, &st.WeightBase, &st.WeightEff, &st.LastChange, &st.LastChangeAt}, func() error {
+		out[k] = st
+		return nil
+	})
+	return out, err
+}
+
 // base is the weight an account has in a group, as scheduling saw it.
 type base struct {
 	Weight int

@@ -306,20 +306,30 @@ type accountWeight struct {
 	Lowest   int32       `json:"lowest"`
 	Base     int         `json:"base"`
 	Keys     []weightKey `json:"keys"` // the lowest maxWeightKeys, by effective weight
+	// AdjustOff: the account's override turns adjusting off, so its keys
+	// are only counted. Such an account is listed without degraded keys too.
+	AdjustOff bool `json:"adjust_off,omitempty"`
 }
 
-// weightKey is a degraded key of an account.
+// weightKey is a degraded key of an account: its weights, where it is
+// heading (rules.TrendDegrading / TrendClimbing, "" = unknown) and its last
+// change (RFC 3339, absent = unknown).
 type weightKey struct {
-	GroupID int64   `json:"group_id"`
-	Model   string  `json:"model"`
-	Eff     float64 `json:"eff"`
-	Base    int     `json:"base"`
+	GroupID   int64   `json:"group_id"`
+	Model     string  `json:"model"`
+	Eff       float64 `json:"eff"`
+	Base      int     `json:"base"`
+	State     string  `json:"state"`
+	ChangedAt string  `json:"changed_at,omitempty"`
 }
 
-// getWeights answers ?account_ids=1,2,3 from this node's weights, for at
-// most manifest.MaxAccountBatch accounts: what the core's account list
-// filters by at once.
-func (p *Plugin) getWeights(_ context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+// getWeights answers ?account_ids=1,2,3 for at most manifest.MaxAccountBatch
+// accounts: what the core's account list filters by at once. The degraded
+// keys and their weights are this node's snapshot, what scheduling uses;
+// their trends come from one read of the states. The badges are optional
+// decoration: without the configuration or the states the snapshot is
+// still answered, only without adjust_off or the trends.
+func (p *Plugin) getWeights(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	wanted := map[int64]bool{}
 	for _, part := range strings.Split(pluginsdk.Query(req, "account_ids"), ",") {
 		if id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil && id > 0 && len(wanted) < manifest.MaxAccountBatch {
@@ -327,24 +337,63 @@ func (p *Plugin) getWeights(_ context.Context, req *pluginv1.HTTPRequest) (*plug
 		}
 	}
 	out := map[int64]accountWeight{}
+	cfg, err := p.loadedConfig(ctx)
+	if err != nil {
+		p.log.Warn("dynweight: /weights without the configuration", "error", err.Error())
+		cfg = nil
+	}
+	if cfg != nil {
+		for id, o := range cfg.Accounts {
+			if wanted[id] && o.Enabled != nil && !*o.Enabled {
+				out[id] = accountWeight{Keys: []weightKey{}, AdjustOff: true}
+			}
+		}
+	}
+	var degraded []int64
 	for k, w := range *p.weights.Load() {
 		if !wanted[k.AccountID] || w.eff >= float64(w.base) {
 			continue
 		}
-		a, seen := out[k.AccountID]
+		a := out[k.AccountID]
 		eff := effectiveWeight(w.eff)
-		if !seen || eff < a.Lowest {
+		if a.Degraded == 0 || eff < a.Lowest {
 			a.Lowest, a.Base = eff, w.base
+		}
+		if a.Degraded == 0 {
+			degraded = append(degraded, k.AccountID)
 		}
 		a.Degraded++
 		a.Keys = append(a.Keys, weightKey{GroupID: k.GroupID, Model: k.Model, Eff: w.eff, Base: w.base})
 		out[k.AccountID] = a
+	}
+	var states map[key]rules.State
+	if cfg != nil && len(degraded) > 0 {
+		s, err := p.store(ctx)
+		if err == nil {
+			states, err = s.loadTrends(ctx, degraded)
+		}
+		if err != nil {
+			p.log.Warn("dynweight: /weights without the trends", "error", err.Error())
+		}
 	}
 	for id, a := range out {
 		slices.SortFunc(a.Keys, func(x, y weightKey) int {
 			return cmp.Or(cmp.Compare(x.Eff, y.Eff), cmp.Compare(x.GroupID, y.GroupID), strings.Compare(x.Model, y.Model))
 		})
 		a.Keys = a.Keys[:min(len(a.Keys), maxWeightKeys)]
+		for i := range a.Keys {
+			k := &a.Keys[i]
+			st, ok := states[key{AccountID: id, GroupID: k.GroupID, Model: k.Model}]
+			if !ok {
+				continue
+			}
+			if trend := rules.Trend(st, cfg.Resolve(id, k.GroupID).Enabled); trend != rules.TrendNormal {
+				k.State = trend
+			}
+			if st.LastChangeAt > 0 {
+				k.ChangedAt = time.Unix(st.LastChangeAt, 0).UTC().Format(time.RFC3339)
+			}
+		}
 		out[id] = a
 	}
 	return pluginsdk.DataResponse(out), nil

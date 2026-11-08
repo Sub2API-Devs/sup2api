@@ -214,8 +214,9 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 		Data map[string]accountWeight `json:"data"`
 	}
 	e.decode(e.h.Do("GET", "/weights", map[string]string{"account_ids": "7,8"}, nil), http.StatusOK, &weights)
-	if w := weights.Data["7"]; len(weights.Data) != 1 || w.Degraded != 1 || w.Lowest != 70 || w.Base != 100 ||
-		!slices.Equal(w.Keys, []weightKey{{GroupID: testGroup, Model: testModel, Eff: 70, Base: 100}}) {
+	changed := time.Unix(st.ChangedAt, 0).UTC().Format(time.RFC3339)
+	if w := weights.Data["7"]; len(weights.Data) != 1 || w.Degraded != 1 || w.Lowest != 70 || w.Base != 100 || w.AdjustOff || st.ChangedAt == 0 ||
+		!slices.Equal(w.Keys, []weightKey{{GroupID: testGroup, Model: testModel, Eff: 70, Base: 100, State: rules.TrendDegrading, ChangedAt: changed}}) {
 		t.Fatalf("weights %+v", weights.Data)
 	}
 
@@ -719,5 +720,79 @@ func TestAccountRoutes(t *testing.T) {
 	e.decode(e.h.Do("GET", "/degraded", nil, nil), http.StatusOK, &low)
 	if low.Data.Count != 2 || !slices.Equal(low.Data.AccountIDs, []int64{testAccount, 8}) {
 		t.Fatalf("degraded %+v", low.Data)
+	}
+}
+
+// GET /weights gives each degraded key the direction and time of its last
+// change, read from the states, and lists an account whose override turns
+// adjusting off even without a degraded key.
+func TestWeightsTrendAndAdjustOff(t *testing.T) {
+	e := newEnv(t)
+	// Account 9 only overrides its floor: it keeps adjusting.
+	off, mode, floor := false, rules.ModeFixed, 10
+	e.configure(func(c *rules.Config) {
+		c.Accounts = map[int64]rules.AccountOverride{8: {Enabled: &off}, 9: {MinWeightMode: &mode, MinWeight: &floor}}
+	})
+	ctx := context.Background()
+	s, err := e.p.store(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, st := range map[key]rules.State{
+		{AccountID: testAccount, GroupID: testGroup, Model: "up"}:   {WeightBase: 100, WeightEff: 40.4, LastChange: rules.EventWeightUp, LastChangeAt: 1_700_000_300},
+		{AccountID: testAccount, GroupID: testGroup, Model: "down"}: {WeightBase: 100, WeightEff: 60, LastChange: rules.EventWeightDown, LastChangeAt: 1_700_000_200},
+		{AccountID: testAccount, GroupID: testGroup, Model: "base"}: {WeightBase: 100, WeightEff: 100},
+		// Off adjusting until its next evaluation pins it: normal, as /status says.
+		{AccountID: 8, GroupID: testGroup, Model: "off"}: {WeightBase: 100, WeightEff: 50, LastChange: rules.EventWeightDown, LastChangeAt: 1_700_000_100},
+	} {
+		if ok, err := s.writeState(ctx, k, st, 0, nil); err != nil || !ok {
+			t.Fatalf("write %v: %v %v", k, ok, err)
+		}
+	}
+	if err := e.p.reloadWeights(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var listed struct {
+		Data map[string]accountWeight `json:"data"`
+	}
+	resp := e.h.Do("GET", "/weights", map[string]string{"account_ids": "7,8,9,10"}, nil)
+	e.decode(resp, http.StatusOK, &listed)
+	w := listed.Data["7"]
+	if len(listed.Data) != 2 || w.Degraded != 2 || w.Lowest != 40 || w.AdjustOff || !slices.Equal(w.Keys, []weightKey{
+		{GroupID: testGroup, Model: "up", Eff: 40.4, Base: 100, State: rules.TrendClimbing, ChangedAt: "2023-11-14T22:18:20Z"},
+		{GroupID: testGroup, Model: "down", Eff: 60, Base: 100, State: rules.TrendDegrading, ChangedAt: "2023-11-14T22:16:40Z"},
+	}) {
+		t.Fatalf("weights %+v", listed.Data)
+	}
+	if o := listed.Data["8"]; !o.AdjustOff || o.Degraded != 1 ||
+		!slices.Equal(o.Keys, []weightKey{{GroupID: testGroup, Model: "off", Eff: 50, Base: 100, ChangedAt: "2023-11-14T22:15:00Z"}}) {
+		t.Fatalf("adjust off %+v", listed.Data)
+	}
+	// /status reads the same trends (rules.Trend).
+	var status struct {
+		Data []keyStatus `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/status", map[string]string{"account_id": "7"}, nil), http.StatusOK, &status)
+	trends := map[string]string{}
+	for _, st := range status.Data {
+		trends[st.Model] = st.State
+	}
+	if trends["up"] != rules.TrendClimbing || trends["down"] != rules.TrendDegrading || trends["base"] != rules.TrendNormal {
+		t.Fatalf("status trends %v", trends)
+	}
+
+	// Without degraded keys an account off adjusting is still listed.
+	e.p.weights.Store(&map[key]weight{})
+	resp = e.h.Do("GET", "/weights", map[string]string{"account_ids": "8"}, nil)
+	if !strings.Contains(string(resp.GetBody()), `"8":{"degraded":0,"lowest":0,"base":0,"keys":[],"adjust_off":true}`) {
+		t.Fatalf("adjust off without keys %s", resp.GetBody())
+	}
+
+	// A key of the snapshot without a state (another node's, not stored
+	// yet) has no trend.
+	e.p.weights.Store(&map[key]weight{{AccountID: 8, GroupID: testGroup, Model: "m"}: {base: 3, eff: 1}})
+	e.decode(e.h.Do("GET", "/weights", map[string]string{"account_ids": "8"}, nil), http.StatusOK, &listed)
+	if o := listed.Data["8"]; !o.AdjustOff || o.Degraded != 1 || o.Lowest != 1 || !slices.Equal(o.Keys, []weightKey{{GroupID: testGroup, Model: "m", Eff: 1, Base: 3}}) {
+		t.Fatalf("snapshot only %+v", listed.Data)
 	}
 }

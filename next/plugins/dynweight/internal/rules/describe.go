@@ -57,7 +57,7 @@ type Status struct {
 	Base            int     `json:"base"`
 	Effective       float64 `json:"effective"`
 	WeightMin       int     `json:"weight_min"`
-	State           string  `json:"state"` // normal | degrading | climbing
+	State           string  `json:"state"` // Trend
 	Adjusting       bool    `json:"adjusting"`
 	NoClimbStrategy bool    `json:"no_climb_strategy"`
 	Reset           bool    `json:"reset"`
@@ -90,12 +90,32 @@ func (s *Status) Ratio() float64 {
 	return s.Effective / float64(s.Base)
 }
 
+// Trends of a key's weight (Status.State, GET /weights).
+const (
+	TrendNormal    = "normal"
+	TrendDegrading = "degrading"
+	TrendClimbing  = "climbing"
+)
+
+// Trend is where a key's weight is heading: normal at its base, reset or
+// not adjusting; below it, degrading after a drop and climbing after a rise
+// or a revival. The status table and the account list both read it.
+func Trend(st State, adjusting bool) string {
+	switch {
+	case !adjusting || st.Tombstone || st.WeightEff >= float64(st.WeightBase):
+		return TrendNormal
+	case st.LastChange == EventWeightDown:
+		return TrendDegrading
+	}
+	return TrendClimbing
+}
+
 // Describe is a key's status: its state (nil = none yet) under its resolved
 // configuration, the base weight scheduling last offered (seen = it offered
 // one), and its counters by window start.
 func Describe(accountID int64, st *State, res *Resolved, base int, seen bool, obs map[int64]Counts, now int64) Status {
 	start := WindowStart(accountID, now, res.WindowSeconds)
-	out := Status{Base: base, Effective: float64(base), State: "normal", Adjusting: res.Enabled, NoClimbStrategy: res.NoClimb(),
+	out := Status{Base: base, Effective: float64(base), State: TrendNormal, Adjusting: res.Enabled, NoClimbStrategy: res.NoClimb(),
 		NextEvalAt: start + int64(res.WindowSeconds) + CloseGraceSeconds}
 	out.Current = currentWindow(obs[start], res, start, now)
 	// A tombstone reads as no state; it only keeps its cuts. So does a state
@@ -115,12 +135,8 @@ func Describe(accountID int64, st *State, res *Resolved, base int, seen bool, ob
 	out.WeightMin = res.WeightFloor(out.Base)
 	out.Thresholds = thresholdCounts(res.Thresholds, last.LastCounts)
 	out.LatencyThresholds = thresholdCounts(res.LatencyThresholds, last.LastLatencyCounts)
-	switch {
-	case !res.Enabled || out.Reset || out.Effective >= float64(out.Base):
-	case out.LastChange == EventWeightDown:
-		out.State = "degrading"
-	default:
-		out.State = "climbing"
+	if evaluated {
+		out.State = Trend(*st, res.Enabled)
 	}
 	// The rule results only match the rules the state was evaluated with.
 	out.Rules = ruleResults(res, last, evaluated && res.Enabled && last.RulesSig == res.RulesSig)
