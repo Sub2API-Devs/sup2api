@@ -391,10 +391,11 @@ func TestHostUICompatNeedsMatchingHostCompat(t *testing.T) {
 		{"~3.4.2", ">=0.1.222 <0.2.0", true},
 		{"^3.0", ">=0.1.0 <0.2.0", false},
 		{">=0.1.0 <0.2.0", ">=0.1.0 <0.2.0", false},
-		// UI 3.6 starts at core 0.1.255; 0.1.254 is the last core with 3.5.
+		// UI 3.6 starts at core 0.1.256; 0.1.255 is the last core with 3.5.
 		{"^3.6", ">=0.1.229 <0.2.0", true},
 		{"^3.6", ">=0.1.254 <0.2.0", true},
-		{"^3.6", ">=0.1.255 <0.2.0", false},
+		{"^3.6", ">=0.1.255 <0.2.0", true},
+		{"^3.6", ">=0.1.256 <0.2.0", false},
 		{"~3.6.1", ">=0.1.240 <0.2.0", true},
 		{"^3.5", ">=0.1.229 <0.2.0", false},
 	}
@@ -419,18 +420,18 @@ func uiNativeManifest(uiCompat, hostCompat string) *manifest.Manifest {
 	return m
 }
 
-// account.list.toolbar is a UI 3.6 slot: a core before 0.1.255 would ignore
+// account.list.toolbar is a UI 3.6 slot: a core before 0.1.256 would ignore
 // it, so declaring it holds hostCompat to the 3.6 floor whatever hostUICompat
 // says. Unknown slot names stay rejected.
 func TestSlotNames(t *testing.T) {
 	for _, slot := range []string{"dashboard.widgets", "account.detail.tabs", "account.form.widgets", "account.list.weight", "account.list.toolbar"} {
-		m := uiNativeManifest("^3.3", ">=0.1.255 <0.2.0")
+		m := uiNativeManifest("^3.3", ">=0.1.256 <0.2.0")
 		m.UI.Slots = []manifest.Slot{{Slot: slot, Component: "X", Permission: "assets:read"}}
 		if c := uiCodes(m); len(c) > 0 {
 			t.Errorf("slot %q must be accepted: %v", slot, c)
 		}
 	}
-	m := uiNativeManifest("^3.3", ">=0.1.255 <0.2.0")
+	m := uiNativeManifest("^3.3", ">=0.1.256 <0.2.0")
 	m.UI.Slots = []manifest.Slot{{Slot: "account.list.footer", Component: "X"}}
 	if c := uiCodes(m); c["ui.slots[0].slot"] != "invalid" {
 		t.Fatalf("an unknown slot must be rejected: %v", c)
@@ -438,7 +439,7 @@ func TestSlotNames(t *testing.T) {
 	m = uiNativeManifest("^3.3", ">=0.1.229 <0.2.0")
 	m.UI.Slots = []manifest.Slot{{Slot: "account.list.toolbar", Component: "X"}}
 	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
-		t.Fatalf("account.list.toolbar needs core 0.1.255: %v", c)
+		t.Fatalf("account.list.toolbar needs core 0.1.256: %v", c)
 	}
 	m.UI.Slots[0].Slot = "account.list.weight"
 	if c := uiCodes(m); len(c) > 0 {
@@ -468,14 +469,14 @@ func withAccountAction(hostCompat string, act manifest.AccountAction) *manifest.
 func TestAccountActions(t *testing.T) {
 	good := manifest.AccountAction{ID: "reset", Label: manifest.LocalizedText{"en": "Reset"}, Icon: "refresh",
 		Permission: "assets:manage", Route: "POST /assets/reset", Bulk: true, Confirm: manifest.LocalizedText{"en": "Reset {n}?"}}
-	if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", good)); len(c) > 0 {
+	if c := uiCodes(withAccountAction(">=0.1.256 <0.2.0", good)); len(c) > 0 {
 		t.Fatalf("a valid action was rejected: %v", c)
 	}
 	// Declaring one needs the UI 3.6 core even without ui.native.
 	if c := uiCodes(withAccountAction(">=0.1.229 <0.2.0", good)); c["hostCompat"] != "below_ui_core" {
-		t.Fatalf("an action needs core 0.1.255: %v", c)
+		t.Fatalf("an action needs core 0.1.256: %v", c)
 	}
-	m := withAccountAction(">=0.1.255 <0.2.0", good)
+	m := withAccountAction(">=0.1.256 <0.2.0", good)
 	m.UI.AccountActions = append(m.UI.AccountActions, good)
 	if c := uiCodes(m); c["ui.accountActions[1].id"] != "duplicate" {
 		t.Fatalf("a repeated id must be rejected: %v", c)
@@ -504,21 +505,21 @@ func TestAccountActions(t *testing.T) {
 	for _, tc := range cases {
 		act := good
 		tc.mutate(&act)
-		if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", act)); c["ui.accountActions[0]."+tc.field] != tc.code {
+		if c := uiCodes(withAccountAction(">=0.1.256 <0.2.0", act)); c["ui.accountActions[0]."+tc.field] != tc.code {
 			t.Errorf("%s: want %s = %s, got %v", tc.name, tc.field, tc.code, c)
 		}
 	}
 	// Like a form submit, the method may be left out and means POST.
 	act := good
 	act.Route = "/assets/reset"
-	if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", act)); len(c) > 0 {
+	if c := uiCodes(withAccountAction(">=0.1.256 <0.2.0", act)); len(c) > 0 {
 		t.Fatalf("a bare path means POST: %v", c)
 	}
 	// max_batch takes the whole range 1..MaxAccountBatch.
 	for _, n := range []int{1, manifest.MaxAccountBatch} {
 		act := good
 		act.MaxBatch = n
-		if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", act)); len(c) > 0 {
+		if c := uiCodes(withAccountAction(">=0.1.256 <0.2.0", act)); len(c) > 0 {
 			t.Errorf("max_batch %d is in range: %v", n, c)
 		}
 	}

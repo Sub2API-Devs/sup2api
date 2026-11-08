@@ -405,10 +405,10 @@ type uiFloor struct {
 }
 
 // uiFloors, newest first. Core 0.1.228 is the last that ships UI 3.3
-// (3.4 starts at 0.1.229); 0.1.254 is the last with UI 3.5 (3.6 starts at
-// 0.1.255).
+// (3.4 starts at 0.1.229); 0.1.255 is the last with UI 3.5 (3.6 starts at
+// 0.1.256).
 var uiFloors = []uiFloor{
-	{minor: 6, lastUI: "3.5.0", lastCore: "0.1.254", firstCore: "0.1.255", uses: func(u *manifest.UI) bool {
+	{minor: 6, lastUI: "3.5.0", lastCore: "0.1.255", firstCore: "0.1.256", uses: func(u *manifest.UI) bool {
 		return len(u.AccountActions) > 0 ||
 			slices.ContainsFunc(u.Slots, func(s manifest.Slot) bool { return s.Slot == "account.list.toolbar" })
 	}},

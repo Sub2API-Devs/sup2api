@@ -817,7 +817,7 @@ type UI struct {
 	Settings *Form           `json:"settings,omitempty"`
 	// AccountActions are entries the console adds to every account row's
 	// action menu (and, with Bulk, to the bulk bar); clicking one posts to
-	// Route (UI 3.6, core 0.1.255).
+	// Route (UI 3.6, core 0.1.256).
 	AccountActions []AccountAction `json:"accountActions,omitempty"`
 }
 

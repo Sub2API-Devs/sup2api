@@ -1,6 +1,6 @@
 # 动态权重账号界面扩展点：设计与实施规格（2026-11-07）
 
-本文是核心 0.1.255（UI SDK 3.6）与 dynweight 0.5.0 的实施规格。目标：把 new-api 渠道页上的动态权重操作搬到 sup2api 账号页，方式是核心加两个通用扩展点（声明式账号操作、工具栏插槽；编辑页生命周期已于 2026-11-08 撤回，见 §4）、dynweight 接上；同时把权重 0 的调度语义改成"彻底不选"（用户 2026-11-07 决定）。
+本文是核心 0.1.256（UI SDK 3.6）（原定 0.1.255；该号 2026-11-08 先给了“请求体默认上限 128MB”热修发布）与 dynweight 0.5.0 的实施规格。目标：把 new-api 渠道页上的动态权重操作搬到 sup2api 账号页，方式是核心加两个通用扩展点（声明式账号操作、工具栏插槽；编辑页生命周期已于 2026-11-08 撤回，见 §4）、dynweight 接上；同时把权重 0 的调度语义改成"彻底不选"（用户 2026-11-07 决定）。
 
 所有新开的扩展点都是通用的：核心代码不认识 dynweight。
 
@@ -100,14 +100,14 @@ Go 类型：`manifest.UI.AccountActions []AccountAction`（结构体名 `Account
 | 位置 | 改动 |
 | --- | --- |
 | `sdk/manifest/manifest.go` | `UI.AccountActions`；`Slot` 注释加 `account.list.toolbar` |
-| `sdk/manifest/check/ui.go` | `uiSlots` 白名单加 `account.list.toolbar`；新增 `uiAccountActions`；核心下限表：UI 3.4 → 0.1.229，UI 3.6 → 0.1.255（0.1.254 是最后一个带 UI 3.5 的核心）；用 `ui.accountActions` 或 `account.list.toolbar` 的插件也按 3.6 要求下限；check 测试 |
+| `sdk/manifest/check/ui.go` | `uiSlots` 白名单加 `account.list.toolbar`；新增 `uiAccountActions`；核心下限表：UI 3.4 → 0.1.229，UI 3.6 → 0.1.256（0.1.256 是最后一个带 UI 3.5 的核心）；用 `ui.accountActions` 或 `account.list.toolbar` 的插件也按 3.6 要求下限；check 测试 |
 | `server/internal/plugin/api/ui.go` | `account_actions` |
 | `server/internal/account/handlers.go` | `ids` |
 | `web/src/api/types.ts`、`stores/plugins.ts`、`components/plugin/PluginSlot.vue`、`views/accounts/*` | §2–§4 |
 | `web/packages/host/src/index.ts` | `HOST_UI_VERSION = '3.6.0'`；`PluginHost` 不加方法 |
 | `web/packages/ui/package.json`、`web/packages/host/package.json` | 3.6.0 |
 | `web/mock/pluginui.ts` | dynweight 条目加 `account_actions` 与新插槽（由插件 UI 任务改 `web/mock/dynweight.ts` 中的 `dynweightUIPlugin`） |
-| `docs/CONTRACTS.md` | §23.3 末尾加"UI 3.6 账号界面扩展点（2026-11-07）"段（accountActions、toolbar 插槽、`HOST_UI_VERSION` 3.6.0、核心下限 0.1.255；form.widgets 不参与保存）；`/ui/plugins` 两处表格（约第 210 行、第 703 行）加 `account_actions`；§24.3 第 6 条；§74.5 界面段 |
+| `docs/CONTRACTS.md` | §23.3 末尾加"UI 3.6 账号界面扩展点（2026-11-07）"段（accountActions、toolbar 插槽、`HOST_UI_VERSION` 3.6.0、核心下限 0.1.256；form.widgets 不参与保存）；`/ui/plugins` 两处表格（约第 210 行、第 703 行）加 `account_actions`；§24.3 第 6 条；§74.5 界面段 |
 
 ## 6. dynweight 0.5.0
 
@@ -115,7 +115,7 @@ Go 类型：`manifest.UI.AccountActions []AccountAction`（结构体名 `Account
 
 ### manifest
 
-`version 0.5.0`，`hostUICompat ^3.6`，`hostCompat >=0.1.255 <0.2.0`；`ui.accountActions` 加 `reset`（§2 的例子，`max_batch: 500` = `manifest.MaxAccountBatch`）；`ui.slots` 加 `account.list.toolbar → DynweightDegradedBadge`、`account.detail.tabs → DynweightAccountTab`（权限 `dynweight:read`）；不挂 `account.form.widgets`（见 §4）；`routes` 加 `GET /degraded`。
+`version 0.5.0`，`hostUICompat ^3.6`，`hostCompat >=0.1.256 <0.2.0`；`ui.accountActions` 加 `reset`（§2 的例子，`max_batch: 500` = `manifest.MaxAccountBatch`）；`ui.slots` 加 `account.list.toolbar → DynweightDegradedBadge`、`account.detail.tabs → DynweightAccountTab`（权限 `dynweight:read`）；不挂 `account.form.widgets`（见 §4）；`routes` 加 `GET /degraded`。
 
 ### 路由（`internal/dynweight/routes.go`）
 
@@ -153,4 +153,4 @@ Go 类型：`manifest.UI.AccountActions []AccountAction`（结构体名 `Account
 
 ## 9. 版本与发布
 
-核心 0.1.255 带 UI 3.6；dynweight 0.5.0 的 `hostCompat` 下限指向它。先核心后插件。没有核心迁移，插件没有新表。
+核心 0.1.256 带 UI 3.6；dynweight 0.5.0 的 `hostCompat` 下限指向它。先核心后插件。没有核心迁移，插件没有新表。
