@@ -178,6 +178,7 @@ var inheritedEnv = []string{
 	"SUB2API_PUBLIC_URL", "SUB2API_LOG_LEVEL",
 	"SUB2API_MASTER_KEY", "SUB2API_JWT_SECRET",
 	"SUB2API_ACCESS_TOKEN_TTL", "SUB2API_REFRESH_TOKEN_TTL", "SUB2API_SHUTDOWN_DELAY",
+	"SUB2API_WEBAUTHN_RP_ID",
 	"SUB2API_BOOTSTRAP_ADMIN_EMAIL", "SUB2API_BOOTSTRAP_ADMIN_PASSWORD",
 	"SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM", "SUB2API_TRUSTED_PROXIES", "SUB2API_PG_MAX_CONNS",
 	"SUB2API_PLUGIN_DIR", "SUB2API_PLUGIN_DEV_MODE", "SUB2API_PLUGIN_ALLOW_UNSIGNED",
@@ -253,12 +254,24 @@ func (m *Manager) Wait(ctx context.Context) error {
 		}
 	}
 }
-func (m *Manager) DrainStop(ctx context.Context, control Control, operation string) error {
+
+// DrainStop drains the core and, once it reports DrainComplete, shuts it
+// down. graceful says new requests already go elsewhere, so a core that
+// advertises CapabilityGracefulDrain may let requests in flight finish
+// within the deadline; an older core gets the plain request it understands.
+func (m *Manager) DrainStop(ctx context.Context, control Control, operation string, graceful bool) error {
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		return errors.New("drain requires a deadline")
 	}
-	if err := control.Drain(ctx, rc.DrainRequest{OperationID: operation, Deadline: deadline}); err != nil {
+	if graceful {
+		st, err := control.Status(ctx)
+		if err != nil {
+			return err
+		}
+		graceful = st.Has(rc.CapabilityGracefulDrain)
+	}
+	if err := control.Drain(ctx, rc.DrainRequest{OperationID: operation, Deadline: deadline, Graceful: graceful}); err != nil {
 		return err
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)

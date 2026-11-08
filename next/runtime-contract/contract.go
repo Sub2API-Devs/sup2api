@@ -41,7 +41,27 @@ type Hello struct {
 	ClusterProtocol Range  `json:"cluster_protocol"`
 	TaskProtocol    Range  `json:"task_protocol"`
 	HostAPIVersion  int    `json:"host_api_version"`
+	// Capabilities are optional behaviours of this core within Protocol 2.
+	// A shell sends a request field only when the core lists its
+	// capability: a core strictly rejects unknown control fields.
+	Capabilities []string `json:"capabilities,omitempty"`
 }
+
+// CapabilityGracefulDrain: the core accepts DrainRequest.Graceful and, when
+// it is set, lets requests in flight finish (within the deadline, capped on
+// the core side) instead of cancelling them at once.
+const CapabilityGracefulDrain = "drain.graceful"
+
+// Has reports whether the core listed capability.
+func (h Hello) Has(capability string) bool {
+	for _, c := range h.Capabilities {
+		if c == capability {
+			return true
+		}
+	}
+	return false
+}
+
 type Status struct {
 	Hello
 	Mode               string   `json:"mode"`
@@ -78,6 +98,10 @@ type PrepareRequest struct {
 type DrainRequest struct {
 	OperationID string    `json:"operation_id"`
 	Deadline    time.Time `json:"deadline"`
+	// Graceful says the shell already routes new requests elsewhere, so the
+	// core may let requests in flight finish before it reports DrainComplete.
+	// Send it only to a core whose Hello has CapabilityGracefulDrain.
+	Graceful bool `json:"graceful,omitempty"`
 }
 type File struct {
 	Path   string `json:"path"`

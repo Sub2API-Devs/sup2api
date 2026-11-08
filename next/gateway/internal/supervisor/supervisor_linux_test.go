@@ -52,7 +52,7 @@ func TestExclusiveSupervisorAndDrainDeadlineDoesNotKill(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	deadline, stop := context.WithTimeout(ctx, 40*time.Millisecond)
 	defer stop()
-	if e = m.DrainStop(deadline, blockedControl{}, "op"); e == nil {
+	if e = m.DrainStop(deadline, blockedControl{}, "op", false); e == nil {
 		t.Fatal("incomplete drain accepted")
 	}
 	if !m.Status().Running {

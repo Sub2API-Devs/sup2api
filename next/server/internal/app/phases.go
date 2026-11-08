@@ -73,6 +73,17 @@ func (b *boot) openStorage() error {
 	}
 	b.db = db
 	b.stopper.add("db", func(context.Context) { db.Close() })
+	if b.managed != nil {
+		// The admission watchdog gets its own connection: queued behind a
+		// saturated shared pool, its checks timed out and stopped the node
+		// although nothing had revoked it (2026-11-08).
+		if watch, err := store.OpenSingle(b.ctx, b.cfg.DatabaseURL); err != nil {
+			b.log.Warn("admission watchdog connection unavailable; sharing the pool", "err", err)
+		} else {
+			b.watchDB = watch
+			b.stopper.add("watch-db", func(context.Context) { watch.Close() })
+		}
+	}
 	if b.managed == nil {
 		applied, err := store.Migrate(b.ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
 		if err != nil {
@@ -618,14 +629,16 @@ func (b *boot) startHTTP() error {
 	}
 	// Expose non-readiness before closing the listener, so health-based
 	// balancers can remove this node while existing requests are still alive.
-	// A managed core drained by its shell skips both waits: the shell already
-	// stopped sending it traffic, and a model stream rarely ends within the
-	// grace anyway. Canceled requests still finish their deferred usage Submit
-	// before billing stops (shutdownHTTP waits for every handler).
+	// A managed core drained by its shell skips the delay (the shell already
+	// routes around it) and waits for requests in flight only as long as the
+	// shell's drain request allows: a graceful drain, sent once new requests
+	// go elsewhere, gets up to maxDrainGrace; any other drain cancels them at
+	// once. Canceled requests still finish their deferred usage Submit before
+	// billing stops (shutdownHTTP waits for every handler).
 	b.gate.stop()
 	delay, grace := cfg.ShutdownDelay, 30*time.Second
 	if b.managed != nil && b.managed.draining() {
-		delay, grace = 0, 0
+		delay, grace = 0, b.managed.shutdownGrace()
 	}
 	time.Sleep(delay)
 	return shutdownHTTP(srv, b.gate, cancelRequests, grace)
@@ -643,8 +656,12 @@ func (b *boot) publishManaged() {
 	m.validate = func(c context.Context, a runtimecontract.Admission) error {
 		return verifyAdmission(c, b.db, b.cfg.NodeID, a)
 	}
+	watchDB := b.watchDB
+	if watchDB == nil {
+		watchDB = b.db
+	}
 	m.liveValidate = func(c context.Context, a runtimecontract.Admission) error {
-		return verifyLiveAdmission(c, b.db, b.cfg.NodeID, a)
+		return verifyLiveAdmission(c, watchDB, b.cfg.NodeID, a)
 	}
 	m.check = func(c context.Context) (string, error) {
 		if !b.cl.Registry.Healthy() || !b.sharedAssets.Ready() || !b.builtinReady.Load() {

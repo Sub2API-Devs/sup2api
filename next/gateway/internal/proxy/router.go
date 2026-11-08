@@ -160,6 +160,14 @@ func (r *Router) SetOffload(targets []Target, ttl time.Duration) error {
 
 // Offloading reports whether new requests currently leave this node.
 func (r *Router) Offloading() bool { return r.offload.Load().live() }
+
+// Diverted reports whether new public requests already go to a ready peer
+// instead of the local core: the case in which the core may be drained
+// gracefully (requests in flight finish) without any new request waiting.
+func (r *Router) Diverted() bool {
+	v := r.Route()
+	return v.Mode == "forward-only" && r.ready(v)
+}
 func (s *offloadSet) live() bool {
 	return s != nil && len(s.targets) > 0 && time.Now().Before(s.until)
 }

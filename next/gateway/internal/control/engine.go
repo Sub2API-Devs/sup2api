@@ -34,6 +34,8 @@ type Engine struct {
 	progress      atomic.Uint64
 	lastBlocked   sync.Mutex
 	lastBlockedAt map[string]time.Time
+	passMu        sync.Mutex
+	passErrors    map[string]passError
 }
 
 const (
@@ -82,9 +84,11 @@ func (e *Engine) Run(ctx context.Context) error {
 			before := e.progress.Load()
 			primary, _, _, err := e.Store.ClusterState(ctx)
 			if err == nil && primary == e.Node.ID {
-				_, _ = e.Locks.WithLock(ctx, "system:upgrade:"+e.Store.Cluster, 30*time.Second, e.Coordinate)
+				_, err := e.Locks.WithLock(ctx, "system:upgrade:"+e.Store.Cluster, 30*time.Second, e.Coordinate)
+				e.notePassError("coordinate", err)
 			}
-			_, _ = e.Locks.WithLock(ctx, "system:upgrade-node:"+e.Store.Cluster+":"+e.Node.ID, max(e.StepTimeout, e.PrepareTimeout), e.Work)
+			_, err = e.Locks.WithLock(ctx, "system:upgrade-node:"+e.Store.Cluster+":"+e.Node.ID, max(e.StepTimeout, e.PrepareTimeout), e.Work)
+			e.notePassError("work", err)
 			if before == e.progress.Load() {
 				break
 			}
@@ -105,6 +109,39 @@ func (e *Engine) Run(ctx context.Context) error {
 		}
 	}
 }
+
+// notePassError logs what a coordinate or work pass returned. The loop
+// retries on its own, so the log is deduplicated: a new message at once,
+// the same one again every passErrorRepeat, and a recovery line when a pass
+// succeeds after failures. Before this the errors were dropped and a core
+// restarted by Work left no trace of why (2026-11-08).
+func (e *Engine) notePassError(pass string, err error) {
+	e.passMu.Lock()
+	defer e.passMu.Unlock()
+	if e.passErrors == nil {
+		e.passErrors = map[string]passError{}
+	}
+	last := e.passErrors[pass]
+	if err == nil || errors.Is(err, context.Canceled) {
+		if last.message != "" {
+			slog.Info("upgrade engine pass recovered", "pass", pass, "after", last.message)
+		}
+		delete(e.passErrors, pass)
+		return
+	}
+	now := time.Now()
+	if err.Error() != last.message || now.Sub(last.logged) >= passErrorRepeat {
+		slog.Warn("upgrade engine pass failed", "pass", pass, "node", e.Node.ID, "err", err)
+		e.passErrors[pass] = passError{message: err.Error(), logged: now}
+	}
+}
+
+type passError struct {
+	message string
+	logged  time.Time
+}
+
+const passErrorRepeat = 5 * time.Minute
 
 // commitProgress never signals an uncommitted result. Every immediate next pass
 // acquires a fresh Redis lease and rereads PG; no command is resumed from memory.
@@ -369,6 +406,15 @@ func (e *Engine) Work(ctx context.Context) error {
 			return err
 		}
 		if outside || statusErr != nil || !state.Ready {
+			// A serving core that stopped being ready is restarted by Recover;
+			// say why, since the core's own reason dies with its boot.
+			attrs := []any{"node", e.Node.ID, "outside_plan", outside}
+			if statusErr != nil {
+				attrs = append(attrs, "status_err", statusErr)
+			} else {
+				attrs = append(attrs, "mode", state.Mode, "boot", state.BootID, "blockers", state.Blockers)
+			}
+			slog.Warn("local core not ready; recovering from the persisted route", attrs...)
 			return e.Recover(ctx, false)
 		}
 		return nil

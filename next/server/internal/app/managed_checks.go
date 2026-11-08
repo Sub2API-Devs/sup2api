@@ -184,6 +184,11 @@ func verifyCoreSchema(ctx context.Context, db *store.DB) error {
 	return nil
 }
 
+// errAdmissionRevoked is PostgreSQL's definite answer that this boot may not
+// serve. A query error is not that answer: the watchdog tolerates it for a
+// while (watchAdmission).
+var errAdmissionRevoked = errors.New("node admission revoked")
+
 func verifyAdmission(ctx context.Context, db *store.DB, node string, a runtimecontract.Admission) error {
 	var approved bool
 	err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.node_admissions
@@ -193,7 +198,7 @@ func verifyAdmission(ctx context.Context, db *store.DB, node string, a runtimeco
 		return err
 	}
 	if !approved {
-		return fmt.Errorf("admission not approved")
+		return fmt.Errorf("%w: admission not approved", errAdmissionRevoked)
 	}
 	return nil
 }
@@ -210,7 +215,7 @@ func verifyLiveAdmission(ctx context.Context, db *store.DB, node string, a runti
 		return err
 	}
 	if !valid {
-		return fmt.Errorf("running admission revoked")
+		return fmt.Errorf("%w: running admission revoked", errAdmissionRevoked)
 	}
 	return nil
 }

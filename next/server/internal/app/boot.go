@@ -55,10 +55,13 @@ type boot struct {
 	stopper *teardown
 
 	// storage and cluster
-	db     *store.DB
-	rdb    redis.UniversalClient
-	cipher *secret.Cipher
-	cl     *cluster.Cluster
+	db *store.DB
+	// watchDB is the admission watchdog's own one-connection pool (managed
+	// cores only; nil falls back to db).
+	watchDB *store.DB
+	rdb     redis.UniversalClient
+	cipher  *secret.Cipher
+	cl      *cluster.Cluster
 
 	// core services
 	events  *event.Publisher

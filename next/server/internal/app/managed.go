@@ -41,6 +41,47 @@ type managedCore struct {
 	schemaContract string
 	shutdown       chan struct{}
 	shutdownOnce   sync.Once
+	// drainGrace is how long a shell-requested graceful drain lets requests
+	// in flight finish before they are cancelled (0: at once).
+	drainGrace time.Duration
+	watch      admissionWatch
+	log        *slog.Logger
+}
+
+// admissionWatch tunes watchAdmission; zero values take the defaults.
+type admissionWatch struct {
+	Interval time.Duration // between checks (1s)
+	Timeout  time.Duration // per check (2s)
+	Grace    time.Duration // continuous check failure tolerated before draining (10s)
+}
+
+const (
+	defaultAdmissionInterval = time.Second
+	defaultAdmissionTimeout  = 2 * time.Second
+	defaultAdmissionGrace    = 10 * time.Second
+	// maxDrainGrace caps a graceful drain: the shell already routes new
+	// requests elsewhere, so waiting only lengthens this node's stop.
+	maxDrainGrace = 5 * time.Minute
+)
+
+func (w admissionWatch) withDefaults() admissionWatch {
+	if w.Interval <= 0 {
+		w.Interval = defaultAdmissionInterval
+	}
+	if w.Timeout <= 0 {
+		w.Timeout = defaultAdmissionTimeout
+	}
+	if w.Grace <= 0 {
+		w.Grace = defaultAdmissionGrace
+	}
+	return w
+}
+
+func (m *managedCore) logger() *slog.Logger {
+	if m.log != nil {
+		return m.log
+	}
+	return slog.Default()
 }
 
 func (m *managedCore) backgroundAllowed() bool {
@@ -226,7 +267,9 @@ func (m *managedCore) handleAdmission(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDrain stops admitting work. The deadline is an observation budget,
-// never permission to kill a writer.
+// never permission to kill a writer. A graceful drain (the shell already
+// routes new requests elsewhere) lets requests in flight finish for
+// drainGraceFor(d); any other drain cancels them at once.
 func (m *managedCore) handleDrain(w http.ResponseWriter, r *http.Request) {
 	var d runtimecontract.DrainRequest
 	if !decodeControl(w, r, &d) {
@@ -236,8 +279,48 @@ func (m *managedCore) handleDrain(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "operation_id required", http.StatusBadRequest)
 		return
 	}
-	m.drain()
+	grace := drainGraceFor(d, time.Now())
+	m.opMu.Lock()
+	m.mu.Lock()
+	if m.mode != "drained" && m.mode != "draining" {
+		m.drainGrace = grace
+		m.logger().Info("shell drain requested", "operation", d.OperationID, "graceful", d.Graceful, "grace", grace, "active_http", m.activeHTTPLocked())
+	}
+	m.drainLocked()
+	m.mu.Unlock()
+	m.opMu.Unlock()
 	writeJSON(w, http.StatusAccepted, m.status(r.Context()))
+}
+
+// drainGraceFor is the in-flight budget of a drain request: nothing unless
+// graceful, else the time to the shell's deadline minus a margin for the
+// barriers after HTTP, capped at maxDrainGrace.
+func drainGraceFor(d runtimecontract.DrainRequest, now time.Time) time.Duration {
+	if !d.Graceful {
+		return 0
+	}
+	grace := maxDrainGrace
+	if !d.Deadline.IsZero() {
+		if budget := d.Deadline.Sub(now) - 15*time.Second; budget < grace {
+			grace = budget
+		}
+	}
+	return max(grace, 0)
+}
+
+func (m *managedCore) activeHTTPLocked() int64 {
+	if m.gate == nil {
+		return 0
+	}
+	return m.gate.count()
+}
+
+// shutdownGrace is how long the HTTP shutdown of a core drained by its shell
+// waits for requests in flight.
+func (m *managedCore) shutdownGrace() time.Duration {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.drainGrace
 }
 
 // handleShutdown acknowledges a drain and releases the process.
@@ -290,9 +373,19 @@ func (m *managedCore) drainLocked() {
 	}
 }
 
+// watchAdmission keeps checking PostgreSQL's persisted admission while the
+// core serves. A definite revocation (errAdmissionRevoked) drains at once.
+// A check that merely fails (timeout, no free connection, PostgreSQL away)
+// is logged and tolerated until the failures have lasted watch.Grace: one
+// slow query must not stop a node whose admission is intact, which is what
+// a one-second timeout and a shared, saturated pool did (2026-11-08).
 func (m *managedCore) watchAdmission(ctx context.Context) {
-	ticker := time.NewTicker(time.Second)
+	w := m.watch.withDefaults()
+	log := m.logger()
+	ticker := time.NewTicker(w.Interval)
 	defer ticker.Stop()
+	var failing time.Time // zero while checks pass
+	failures := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -308,19 +401,45 @@ func (m *managedCore) watchAdmission(ctx context.Context) {
 		if mode != "serving" || validate == nil {
 			continue
 		}
-		checkCtx, cancel := context.WithTimeout(ctx, time.Second)
+		checkCtx, cancel := context.WithTimeout(ctx, w.Timeout)
 		err := validate(checkCtx, a)
 		cancel()
-		if err != nil {
-			m.opMu.Lock()
-			m.mu.Lock()
-			if m.mode == "serving" && m.admission == a {
-				m.failure = "persisted node admission changed or became unavailable"
-				m.drainLocked()
+		if err == nil {
+			if failures > 0 {
+				log.Info("node admission check recovered", "failures", failures, "after", time.Since(failing).Round(time.Millisecond))
 			}
-			m.mu.Unlock()
-			m.opMu.Unlock()
+			failing, failures = time.Time{}, 0
+			continue
 		}
+		if ctx.Err() != nil {
+			return
+		}
+		revoked := errors.Is(err, errAdmissionRevoked)
+		if !revoked {
+			if failing.IsZero() {
+				failing = time.Now()
+			}
+			failures++
+			lasted := time.Since(failing)
+			if lasted < w.Grace {
+				log.Warn("node admission check failed; tolerating", "err", err, "failures", failures, "lasted", lasted.Round(time.Millisecond), "grace", w.Grace)
+				continue
+			}
+		}
+		m.opMu.Lock()
+		m.mu.Lock()
+		if m.mode == "serving" && m.admission == a {
+			if revoked {
+				m.failure = "persisted node admission revoked"
+				log.Error("node admission revoked; draining", "err", err)
+			} else {
+				m.failure = "persisted node admission unavailable for " + w.Grace.String()
+				log.Error("node admission check kept failing; draining", "err", err, "failures", failures, "lasted", time.Since(failing).Round(time.Millisecond))
+			}
+			m.drainLocked()
+		}
+		m.mu.Unlock()
+		m.opMu.Unlock()
 	}
 }
 
@@ -347,7 +466,8 @@ func runManaged(ctx context.Context, cfg *config.Config, version string, log *sl
 	runtimeCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	m := &managedCore{hello: runtimecontract.Hello{Protocol: runtimecontract.Protocol, NodeID: cfg.NodeID, BootID: cfg.Managed.BootID, ReleaseDigest: cfg.Managed.ReleaseDigest, CoreVersion: version,
-		ClusterProtocol: runtimecontract.Range{Min: runtimecontract.ClusterProtocolVersion, Max: runtimecontract.ClusterProtocolVersion}, TaskProtocol: runtimecontract.Range{Min: runtimecontract.TaskProtocolVersion, Max: runtimecontract.TaskProtocolVersion}, HostAPIVersion: protocol.HostAPIVersion}, token: cfg.Managed.Token, mode: "candidate", cancel: cancel, shutdown: make(chan struct{})}
+		ClusterProtocol: runtimecontract.Range{Min: runtimecontract.ClusterProtocolVersion, Max: runtimecontract.ClusterProtocolVersion}, TaskProtocol: runtimecontract.Range{Min: runtimecontract.TaskProtocolVersion, Max: runtimecontract.TaskProtocolVersion}, HostAPIVersion: protocol.HostAPIVersion,
+		Capabilities: []string{runtimecontract.CapabilityGracefulDrain}}, token: cfg.Managed.Token, mode: "candidate", cancel: cancel, shutdown: make(chan struct{}), log: log}
 	m.schemaContract, err = SchemaContract()
 	if err != nil {
 		return err

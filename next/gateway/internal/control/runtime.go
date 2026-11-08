@@ -168,6 +168,12 @@ func (r *LocalRuntime) control() (*localapi.Client, error) {
 	}
 	return r.client, nil
 }
+
+// DrainStop drains and stops the local core. When this shell already
+// forwards new requests to a ready peer (a follower after its redirect step),
+// the drain is graceful: requests in flight finish within the deadline. In
+// maintenance or while serving locally nobody else takes the traffic, so the
+// core cancels them at once as before.
 func (r *LocalRuntime) DrainStop(ctx context.Context, operation string) error {
 	if !r.Supervisor.Status().Running {
 		return r.cleanupStopped(ctx)
@@ -176,7 +182,9 @@ func (r *LocalRuntime) DrainStop(ctx context.Context, operation string) error {
 	if err != nil {
 		return err
 	}
-	if err = r.Supervisor.DrainStop(ctx, c, operation); err != nil {
+	graceful := r.Router.Diverted()
+	slog.Info("draining local core", "operation", operation, "graceful", graceful)
+	if err = r.Supervisor.DrainStop(ctx, c, operation, graceful); err != nil {
 		return err
 	}
 	return r.confirmStopped(ctx)
@@ -216,7 +224,7 @@ func (r *LocalRuntime) Start(ctx context.Context, digest string, options rc.Prep
 			}
 			return r.waitPrepared(ctx, c)
 		case "failed", "error", "drained":
-			if err = r.Supervisor.DrainStop(ctx, c, "restart-failed-candidate"); err != nil {
+			if err = r.Supervisor.DrainStop(ctx, c, "restart-failed-candidate", false); err != nil {
 				return st, err
 			}
 		default:
