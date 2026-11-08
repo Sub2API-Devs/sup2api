@@ -54,6 +54,7 @@ type row struct {
 	ModelLimits       []byte
 	Environment       core.EnvironmentValues
 	HeaderPassthrough []string
+	ParamOverride     []byte
 	LastUsedAt        *time.Time
 	CreatedBy         *int64
 	CreatedByEmail    *string
@@ -85,7 +86,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough,a.param_override
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -95,7 +96,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough, &a.ParamOverride)
 	return &a, err
 }
 
@@ -205,8 +206,11 @@ type View struct {
 	Environment core.EnvironmentValues `json:"environment"`
 	// HeaderPassthrough lists the client headers the account copies onto its
 	// upstream requests (CONTRACTS §81).
-	HeaderPassthrough []string       `json:"header_passthrough"`
-	RateUsage         core.RateUsage `json:"rate_usage"`
+	HeaderPassthrough []string `json:"header_passthrough"`
+	// ParamOverride is the account's request parameter override (CONTRACTS
+	// §84); null = none.
+	ParamOverride json.RawMessage `json:"param_override"`
+	RateUsage     core.RateUsage  `json:"rate_usage"`
 	// Outcomes are the successful requests and failed attempts of the last 60
 	// seconds behind the success-rate column (CONTRACTS §73); null when the
 	// statistics are unavailable.
@@ -287,8 +291,8 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(), Environment: a.Environment,
-			HeaderPassthrough: passthrough,
-			Orphaned:          !s.pluginActive(a.PluginKey), Settings: st,
+			HeaderPassthrough: passthrough, ParamOverride: a.ParamOverride,
+			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 			LastTest:         a.lastTest(),
@@ -678,10 +682,13 @@ type input struct {
 	// Environment replaces the account layer as a whole (§74.3).
 	Environment *core.EnvironmentValues `json:"environment"`
 	// HeaderPassthrough replaces the account's header passthrough rules (§81).
-	HeaderPassthrough *[]string       `json:"header_passthrough"`
-	Credentials       json.RawMessage `json:"credentials"`
-	Settings          json.RawMessage `json:"settings"`
-	PreparationKey    *string         `json:"preparation_key"`
+	HeaderPassthrough *[]string `json:"header_passthrough"`
+	// ParamOverride replaces the request parameter override (§84); null or
+	// {} clears it, absent keeps it.
+	ParamOverride  json.RawMessage `json:"param_override"`
+	Credentials    json.RawMessage `json:"credentials"`
+	Settings       json.RawMessage `json:"settings"`
+	PreparationKey *string         `json:"preparation_key"`
 	// CCGatewayRuntime is the draft runtime key a new ccgateway/managed
 	// account adopts (CONTRACTS §49.10); create only. Blank means absent.
 	CCGatewayRuntime *string `json:"ccgateway_runtime"`
@@ -692,6 +699,16 @@ type input struct {
 func (in *input) hasCredentials() bool {
 	creds := strings.TrimSpace(string(in.Credentials))
 	return creds != "" && creds != "null"
+}
+
+// paramOverride is the param_override column value: nil (NULL) when the
+// override is absent or cleared.
+func (in *input) paramOverride() *string {
+	if len(in.ParamOverride) == 0 || string(in.ParamOverride) == "null" {
+		return nil
+	}
+	s := string(in.ParamOverride)
+	return &s
 }
 
 // changedFields lists the request fields present in a PATCH for the audit
@@ -722,6 +739,7 @@ func (in *input) changedFields() []string {
 	set("model_limits", in.ModelLimits != nil)
 	set("environment", in.Environment != nil)
 	set("header_passthrough", in.HeaderPassthrough != nil)
+	set("param_override", len(in.ParamOverride) > 0)
 	set("credentials", in.hasCredentials())
 	set("settings", len(in.Settings) > 0)
 	set("cc_feature_policy", in.CCFeaturePolicy != nil)
@@ -874,6 +892,11 @@ func (in *input) validateScheduling(ctx context.Context) []core.FieldError {
 		rules, errs := core.NormalizeHeaderPassthrough(ctx, "header_passthrough", *in.HeaderPassthrough)
 		fe = append(fe, errs...)
 		in.HeaderPassthrough = &rules
+	}
+	if len(in.ParamOverride) > 0 {
+		p, errs := core.CompileParamOverride(ctx, "param_override", in.ParamOverride)
+		fe = append(fe, errs...)
+		in.ParamOverride = p.Raw()
 	}
 	if in.ModelLimits != nil {
 		limits, errs := normalizeModelLimits(ctx, *in.ModelLimits)
@@ -1194,12 +1217,12 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
-			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models, model_limits, spm_limit, environment, header_passthrough)
+			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models, model_limits, spm_limit, environment, header_passthrough, param_override)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb, $21, $22, $23::text[]) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb, $21, $22, $23::text[], $24::jsonb) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
-			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels, modelLimitsJSON(modelLimits), spm, environment, headerPassthrough).Scan(&id); err != nil {
+			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels, modelLimitsJSON(modelLimits), spm, environment, headerPassthrough, in.paramOverride()).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1470,10 +1493,12 @@ func (s *Service) update(c *gin.Context) {
 			spm_limit = COALESCE($21, spm_limit),
 			environment = COALESCE($22, environment),
 			header_passthrough = COALESCE($23::text[], header_passthrough),
+			param_override = CASE WHEN $24 THEN $25::jsonb ELSE param_override END,
 			updated_at = clock_timestamp()
 			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
 			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
-			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment, in.HeaderPassthrough); err != nil {
+			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment, in.HeaderPassthrough,
+			len(in.ParamOverride) > 0, in.paramOverride()); err != nil {
 			return err
 		}
 		if statusChanged && *in.Status == "active" && limitDisabled(locked.Status, locked.AutoDisabledSource) {

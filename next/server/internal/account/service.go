@@ -145,6 +145,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/settings/account-stats", "settings:read", s.getStatsSettings)
 	r.Perm("PUT", "/settings/account-stats", "settings:manage", s.putStatsSettings)
 	r.PermAny("GET", "/accounts/auto-disable", s.getAutoDisablePolicy, "account:create", "account:own:create", "account:update", "account:own:update")
+	r.PermAny("POST", "/accounts/param-override/preview", s.previewParamOverride, "account:create", "account:own:create", "account:update", "account:own:update")
 	r.PermAny("GET", "/accounts/stats", s.getAccountStats, "account:read", "account:own:read")
 	r.PermAny("GET", "/accounts/:id/stats", s.getAccountStats, "account:read", "account:own:read")
 	r.Perm("POST", "/system/ccgateway/connect", "settings:manage", s.connectCCGateway)

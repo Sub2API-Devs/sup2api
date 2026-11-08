@@ -168,6 +168,7 @@ func (s *Service) Load(ctx context.Context, id int64) (*core.Account, error) {
 		Credentials:       json.RawMessage(plain),
 		Settings:          json.RawMessage(settings),
 		HeaderPassthrough: a.HeaderPassthrough,
+		ParamOverride:     core.LoadParamOverride(a.ParamOverride),
 	}
 	s.cacheMu.Lock()
 	if s.epoch == epoch {

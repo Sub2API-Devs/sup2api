@@ -1343,3 +1343,87 @@ func TestAccountHeaderPassthroughRules(t *testing.T) {
 	require.Equal(t, 201, code, fmt.Sprint(out))
 	require.Equal(t, []any{}, data(out)["header_passthrough"])
 }
+
+// A request parameter override (CONTRACTS §84) is validated on save, stored
+// as given (extra members included), read back in the list and detail,
+// replaced or cleared by PATCH and compiled into the account by Load.
+func TestAccountParamOverride(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	override := map[string]any{"operations": []any{
+		map[string]any{"mode": "set", "path": "temperature", "value": 0.2, "description": "cooler"},
+		map[string]any{"mode": "set_header", "path": "anthropic-beta", "value": map[string]any{"$append": []any{"context-1m-2025-08-07"}}},
+	}}
+	code, out := e.do("POST", "/accounts", map[string]any{"name": "override", "plugin_key": "anthropic", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}, "param_override": override})
+	require.Equal(t, 201, code, fmt.Sprint(out))
+	id := int64(data(out)["id"].(float64))
+	require.Equal(t, override, data(out)["param_override"])
+
+	acc, err := e.svc.Load(ctx, id)
+	require.NoError(t, err)
+	res, err := acc.ParamOverride.Apply([]byte(`{"model":"m"}`), nil)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"model":"m","temperature":0.2}`, string(res.Body))
+	require.Equal(t, "context-1m-2025-08-07", res.Headers.Set["anthropic-beta"])
+
+	_, out = e.do("GET", "/accounts", nil)
+	require.Equal(t, override, out["data"].([]any)[0].(map[string]any)["param_override"])
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"param_override": map[string]any{"operations": []any{
+		map[string]any{"mode": "set"}, map[string]any{"mode": "set_header", "path": "x-api-key", "value": "k"}, map[string]any{"mode": "prune_objects", "path": "a"}}}})
+	require.Equal(t, 400, code, fmt.Sprint(out))
+	require.Equal(t, []string{"param_override:required", "param_override:required", "param_override:blocked", "param_override:unsupported"}, fieldsOf(out))
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"name": "renamed"})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Equal(t, override, data(out)["param_override"], "absent keeps the override")
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"param_override": map[string]any{"temperature": 0.5}})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Equal(t, map[string]any{"temperature": 0.5}, data(out)["param_override"])
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"param_override": map[string]any{}})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Nil(t, data(out)["param_override"])
+	acc, err = e.svc.Load(ctx, id)
+	require.NoError(t, err)
+	require.Nil(t, acc.ParamOverride)
+
+	code, out = e.do("POST", "/accounts", map[string]any{"name": "plain", "plugin_key": "anthropic", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-456"}, "param_override": nil})
+	require.Equal(t, 201, code, fmt.Sprint(out))
+	require.Nil(t, data(out)["param_override"])
+}
+
+// The preview runs an override on a sample request without saving it.
+func TestAccountParamOverridePreview(t *testing.T) {
+	e := setup(t)
+	code, out := e.do("POST", "/accounts/param-override/preview", map[string]any{
+		"param_override": map[string]any{"operations": []any{
+			map[string]any{"mode": "set", "path": "model", "value": "up-2", "conditions": []any{map[string]any{"path": "model", "mode": "full", "value": "client-1"}}},
+			map[string]any{"mode": "copy_header", "from": "x-trace", "to": "x-trace-up"},
+			map[string]any{"mode": "delete_header", "path": "x-drop"},
+		}},
+		"body": map[string]any{"messages": []any{}}, "model": "client-1", "headers": map[string]string{"X-Trace": "t1"}})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Equal(t, map[string]any{"body": map[string]any{"messages": []any{}, "model": "up-2"}, "set_headers": map[string]any{"x-trace-up": "t1"},
+		"delete_headers": []any{"x-drop"}, "return_error": nil, "error": nil}, data(out))
+
+	code, out = e.do("POST", "/accounts/param-override/preview", map[string]any{
+		"param_override": map[string]any{"operations": []any{map[string]any{"mode": "return_error", "value": map[string]any{"message": "no", "status": 429}}}},
+		"body":           map[string]any{"model": "m"}})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Equal(t, map[string]any{"status": 429.0, "code": "invalid_request", "type": "invalid_request_error", "message": "no", "skip_retry": true}, data(out)["return_error"])
+
+	code, out = e.do("POST", "/accounts/param-override/preview", map[string]any{
+		"param_override": map[string]any{"operations": []any{map[string]any{"mode": "to_upper", "path": "n"}}}, "body": map[string]any{"n": 1}})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Contains(t, data(out)["error"], "value is a number, not a string")
+	require.Nil(t, data(out)["body"])
+
+	code, out = e.do("POST", "/accounts/param-override/preview", map[string]any{
+		"param_override": map[string]any{"operations": []any{map[string]any{"mode": "bogus"}}}, "body": []any{}})
+	require.Equal(t, 400, code, fmt.Sprint(out))
+	require.Equal(t, []string{"param_override:unsupported", "body:invalid"}, fieldsOf(out))
+}
