@@ -185,8 +185,7 @@ func verifyCoreSchema(ctx context.Context, db *store.DB) error {
 }
 
 // errAdmissionRevoked is PostgreSQL's definite answer that this boot may not
-// serve. A query error is not that answer: the watchdog tolerates it for a
-// while (watchAdmission).
+// serve, as opposed to a query error.
 var errAdmissionRevoked = errors.New("node admission revoked")
 
 func verifyAdmission(ctx context.Context, db *store.DB, node string, a runtimecontract.Admission) error {
@@ -199,23 +198,6 @@ func verifyAdmission(ctx context.Context, db *store.DB, node string, a runtimeco
 	}
 	if !approved {
 		return fmt.Errorf("%w: admission not approved", errAdmissionRevoked)
-	}
-	return nil
-}
-
-// A supervisor can refresh a serving boot's permit before posting the new
-// revision to its socket. This is not a revocation if identity and all already
-// granted roles remain valid. New roles still require exact ApplyAdmission.
-func verifyLiveAdmission(ctx context.Context, db *store.DB, node string, a runtimecontract.Admission) error {
-	var valid bool
-	err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM updater.node_admissions
-		WHERE node_id=$1 AND core_boot_id=$2 AND release_digest=$3 AND revision >= $4
-		AND (NOT $5 OR serve_http) AND (NOT $6 OR claim_background) AND (NOT $7 OR coordinate_plugins))`, node, a.BootID, a.ReleaseDigest, a.Revision, a.ServeHTTP, a.ClaimBackground, a.CoordinatePlugins).Scan(&valid)
-	if err != nil {
-		return err
-	}
-	if !valid {
-		return fmt.Errorf("%w: running admission revoked", errAdmissionRevoked)
 	}
 	return nil
 }

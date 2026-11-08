@@ -49,26 +49,6 @@ func Open(ctx context.Context, dsn string) (*DB, error) {
 
 func (db *DB) Close() { db.Pool.Close() }
 
-// OpenSingle opens a one-connection pool on the same DSN, for a caller whose
-// queries must not queue behind the shared pool (the managed core's
-// admission watchdog). Pool sizing from the DSN or environment is ignored.
-func OpenSingle(ctx context.Context, dsn string) (*DB, error) {
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		return nil, fmt.Errorf("parse database url: %w", err)
-	}
-	cfg.MaxConns, cfg.MinConns = 1, 1
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("ping database: %w", err)
-	}
-	return &DB{Pool: pool}, nil
-}
-
 // Tx runs fn in a transaction, committing on nil error.
 func (db *DB) Tx(ctx context.Context, fn func(tx pgx.Tx) error) (err error) {
 	tx, err := db.Pool.Begin(ctx)

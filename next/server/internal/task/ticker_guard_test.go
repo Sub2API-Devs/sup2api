@@ -36,7 +36,6 @@ var tickerAllowed = map[string]struct {
 	"notify/worker.go":              {1, "notification delivery consumer (#32a)"},
 	"gateway/websocket.go":          {1, "drain watch of one WebSocket session (#22)"},
 	"plugin/install/uninstall.go":   {1, "wait inside one uninstall request (#22)"},
-	"app/managed.go":                {1, "managed core admission check (#15)"},
 	"cluster/registry.go":           {1, "node heartbeat (#23)"},
 	"cluster/slots.go":              {2, "concurrency slot reclaim and renewal (#24)"},
 	"plugin/rollout/controller.go":  {1, "plugin process reconciliation (#35)"},

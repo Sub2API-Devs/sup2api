@@ -73,17 +73,6 @@ func (b *boot) openStorage() error {
 	}
 	b.db = db
 	b.stopper.add("db", func(context.Context) { db.Close() })
-	if b.managed != nil {
-		// The admission watchdog gets its own connection: queued behind a
-		// saturated shared pool, its checks timed out and stopped the node
-		// although nothing had revoked it (2026-11-08).
-		if watch, err := store.OpenSingle(b.ctx, b.cfg.DatabaseURL); err != nil {
-			b.log.Warn("admission watchdog connection unavailable; sharing the pool", "err", err)
-		} else {
-			b.watchDB = watch
-			b.stopper.add("watch-db", func(context.Context) { watch.Close() })
-		}
-	}
 	if b.managed == nil {
 		applied, err := store.Migrate(b.ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
 		if err != nil {
@@ -655,13 +644,6 @@ func (b *boot) publishManaged() {
 	m.gate, m.start, m.active = b.gate, b.startBackground, b.work.Active
 	m.validate = func(c context.Context, a runtimecontract.Admission) error {
 		return verifyAdmission(c, b.db, b.cfg.NodeID, a)
-	}
-	watchDB := b.watchDB
-	if watchDB == nil {
-		watchDB = b.db
-	}
-	m.liveValidate = func(c context.Context, a runtimecontract.Admission) error {
-		return verifyLiveAdmission(c, watchDB, b.cfg.NodeID, a)
 	}
 	m.check = func(c context.Context) (string, error) {
 		if !b.cl.Registry.Healthy() || !b.sharedAssets.Ready() || !b.builtinReady.Load() {

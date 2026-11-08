@@ -240,17 +240,8 @@ func TestManagedAdmissionUsesPersistedBootAndRoles(t *testing.T) {
 	if _, err = db.Pool.Exec(ctx, `UPDATE updater.node_admissions SET revision=3`); err != nil {
 		t.Fatal(err)
 	}
-	if err = verifyLiveAdmission(ctx, db, "node", a); err != nil {
-		t.Fatal("benign permit refresh revoked serving boot", err)
-	}
 	if err = verifyAdmission(ctx, db, "node", a); err == nil {
 		t.Fatal("stale ApplyAdmission accepted")
-	}
-	if _, err = db.Pool.Exec(ctx, `UPDATE updater.node_admissions SET claim_background=false`); err != nil {
-		t.Fatal(err)
-	}
-	if err = verifyLiveAdmission(ctx, db, "node", a); err == nil {
-		t.Fatal("role revocation ignored")
 	}
 	p, err := g.TryAcquire(ctx)
 	if err != nil {
