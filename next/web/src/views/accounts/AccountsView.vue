@@ -133,7 +133,8 @@ const columns = computed<TableColumn[]>(() => [
   ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
   { key: 'status', label: t('common.status'), mobile: 'status' },
   { key: 'priority', label: t('accounts.priority'), width: '84px', mobile: 'meta' },
-  { key: 'weight', label: t('accounts.weight'), width: '84px', mobile: 'meta' },
+  // A plugin decoration (account.list.weight) sits beside the number on the same line, so the column grows when one is registered.
+  { key: 'weight', label: t('accounts.weight'), width: plugins.slotEntries('account.list.weight').length ? '128px' : '84px', mobile: 'meta' },
   { key: 'limits', label: t('accounts.listUi.limitsColumn'), mobile: 'detail', mobileSpan: 2 },
   { key: 'success_rate', label: t('accounts.successRate.column'), mobile: 'meta' },
   // The core's usage record (CONTRACTS §73), every account type.
@@ -689,8 +690,12 @@ function resetFilters() {
         <SHint v-if="statusOf(row).note" size="xs" class="mt-0.5 block" data-testid="account-status-note">{{ statusOf(row).note }}</SHint>
       </template>
       <template v-for="field in (['priority', 'weight'] as const)" :key="field" #[`cell-${field}`]="{ row }">
-        <AccountNumberCell :account="row" :field="field" :editable="canUpdate(row) && !row.orphaned" @saved="patchAccount(row.id, $event)" />
-        <PluginSlot v-if="field === 'weight'" name="account.list.weight" :props="{ account: row }" item-class="mt-0.5" />
+        <!-- Plugin decorations stay on the number's line: wrapping them below made every decorated row taller. -->
+        <div v-if="field === 'weight'" class="flex items-center gap-1.5 whitespace-nowrap">
+          <AccountNumberCell :account="row" :field="field" :editable="canUpdate(row) && !row.orphaned" @saved="patchAccount(row.id, $event)" />
+          <PluginSlot name="account.list.weight" :props="{ account: row }" item-class="flex shrink-0 items-center" />
+        </div>
+        <AccountNumberCell v-else :account="row" :field="field" :editable="canUpdate(row) && !row.orphaned" @saved="patchAccount(row.id, $event)" />
       </template>
       <template #cell-limits="{ row }">
         <AccountLimitsCell :account="row" />
