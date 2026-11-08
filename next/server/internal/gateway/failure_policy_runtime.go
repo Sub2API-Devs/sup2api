@@ -229,7 +229,7 @@ func (c *call) planFailure(ctx context.Context, ref *core.AccountRef, res attemp
 		return res
 	}
 	s := &c.failureState
-	if s.facts == nil && res.err != nil && res.err.RecordType == errTypeModelAvailability {
+	if s.facts == nil && res.err != nil && (res.err.RecordType == errTypeModelAvailability || res.err.NeutralReason != "") {
 		return c.planAvailabilityFailure(ctx, ref, res, attempts, excluded)
 	}
 	if s.facts == nil {
@@ -263,7 +263,9 @@ func (c *call) planFailure(ctx context.Context, ref *core.AccountRef, res attemp
 // account's health: no account rule runs - a 429 or 503 rule would cool
 // down or disable the whole account - and the same account is never tried
 // again. The request moves to another account unless the usual limits
-// (attempts, committed response, account-bound resources) forbid it.
+// (attempts, committed response, account-bound resources) forbid it. An
+// attempt the account's param override stopped (CONTRACTS §84) is handled
+// the same way.
 func (c *call) planAvailabilityFailure(ctx context.Context, ref *core.AccountRef, res attemptResult, attempts int, excluded map[int64]bool) attemptResult {
 	s := &c.failureState
 	s.facts = &FailureFacts{Source: "core", Status: res.err.Status, Text: res.err.Message, Model: c.model, Protocol: c.ep.Protocol}
@@ -277,7 +279,7 @@ func (c *call) planAvailabilityFailure(ctx context.Context, ref *core.AccountRef
 	s.preserveSticky = true
 	s.sameID = 0
 	excluded[ref.ID] = true
-	c.finishFailureDecision(ref, attempts, errTypeModelAvailability)
+	c.finishFailureDecision(ref, attempts, firstNonEmpty(res.err.NeutralReason, errTypeModelAvailability))
 	res.kind = attemptFailover
 	return res
 }

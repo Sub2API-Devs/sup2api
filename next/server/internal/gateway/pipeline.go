@@ -51,6 +51,9 @@ type call struct {
 	// env is the environment resolved for the current attempt's account
 	// (CONTRACTS §74.3); metaFor hands it to the plugin.
 	env core.Environment
+	// paramOverride is what the account's param override decided for the
+	// current attempt (CONTRACTS §84).
+	paramOverride paramOverrideState
 
 	principal *core.APIKeyPrincipal
 	body      []byte

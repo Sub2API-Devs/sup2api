@@ -563,6 +563,12 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
 		}
 	}
+	// The account's request parameter override (CONTRACTS §84) has the last
+	// word on the body, so the plugin builds what goes upstream.
+	upBody, upModel, failure := c.applyParamOverride(ctx, acc, rt, upBody, upModel, n)
+	if failure != nil {
+		return *failure
+	}
 	fields := requestFieldValues(upBody, rt.requestFields)
 	meta := c.metaFor(rt)
 	meta.Model = upModel
@@ -718,6 +724,9 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			}
 		}
 	}
+	// The account's param override (CONTRACTS §84) sets and removes headers
+	// over the plugin's and the passthrough's; the core's own below still win.
+	c.paramOverride.headers.Apply(req.Header)
 	if req.Header.Get("Content-Type") == "" && reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -752,7 +761,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return attemptResult{kind: attemptFailover, err: failure}
 	}
 	if rt.binding.Type.ModelAvailability {
-		expected := acc.MapModel(c.model)
+		expected := c.upstreamModel(acc)
 		if built.GetUpstreamModel() != "" && built.GetUpstreamModel() != expected {
 			return attemptResult{kind: attemptFailover, err: c.availabilityMismatch(ctx, &acc.AccountRef, expected, built.GetUpstreamModel())}
 		}

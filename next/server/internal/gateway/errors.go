@@ -108,6 +108,10 @@ type gwError struct {
 	// RecordType is not upstream_error, as local_failure so health
 	// statistics leave it out (§74.1, isLocalFailure).
 	LocalFailure bool
+	// NeutralReason is set when the request, not the account, decided the
+	// failure (an account's param override, CONTRACTS §84): a failure
+	// policy runs no account rule for it, as for an availability refusal.
+	NeutralReason string
 }
 
 func fromCore(e *core.Error, recordType string) *gwError {
