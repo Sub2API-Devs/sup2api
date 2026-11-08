@@ -484,8 +484,8 @@ func (s *Service) fullView(ctx context.Context, id int64, scope *int64) (*View, 
 // ---------------------------------------------------------------- list / get
 
 // maxListIDs caps the ids= filter of the list, the size of one bulk request
-// from the console.
-const maxListIDs = 500
+// from the console (UI 3.6 account actions share the bound).
+const maxListIDs = manifest.MaxAccountBatch
 
 func (s *Service) list(c *gin.Context) {
 	ctx := c.Request.Context()

@@ -11,7 +11,7 @@ export default {
     clear: '清除筛选（{count}）', compact: '紧凑显示', refresh: '刷新账号列表',
     loadFailed: '刷新失败，正在显示上次加载的数据',
     emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', limitsColumn: '并发 / RPM / TPM / 会话',
-    numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存', clearIds: '清除账号 ID 筛选'
+    numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存', clearIds: '清除账号 ID 筛选', idsTruncated: '{label}（前 {n} 个）'
   },
   limitsUi: {
     title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',

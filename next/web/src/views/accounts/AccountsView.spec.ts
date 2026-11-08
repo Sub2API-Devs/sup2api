@@ -14,7 +14,7 @@ import type { PluginAccountActionEntry } from '@/stores/plugins'
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as unknown[]), accountActions: [] as unknown[] }))
-vi.mock('@sub2api/host', () => ({ api: { get: mocks.get, post: mocks.post, patch: mocks.patch, list: async () => ({ items: [] }) } }))
+vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { get: mocks.get, post: mocks.post, patch: mocks.patch, list: async () => ({ items: [] }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), confirm: mocks.confirm, toast: mocks.toast }))
 vi.mock('@/utils/errors', () => ({ notifyError: mocks.notifyError, errorMessage: String }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }))
@@ -507,7 +507,7 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
     dropdowns(w)[0].vm.$emit('select', 'pa:dynweight:reset')
     await flushPromises()
     expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: '重置 1 个账号的动态权重？', danger: true }))
-    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_id: 29 })
+    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [29] })
     expect(mocks.toast).toHaveBeenLastCalledWith('「重置动态权重」已完成', 'success')
     expect(mocks.reload).toHaveBeenCalled()
   })
@@ -560,6 +560,22 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
     await flushPromises()
     expect(list.filters.ids).toBe('')
     expect(slotProps().ids).toBeNull()
+    expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
+  })
+
+  it('caps setIds at MAX_ACCOUNT_BATCH ids, says so on the chip, and treats an empty array as clearing', async () => {
+    list.items.value = []
+    const w = render(stubs)
+    const slotProps = () => w.getComponent(PluginSlot).props('props')!
+    slotProps().setIds(Array.from({ length: 600 }, (_, i) => i + 1), '动态权重降权 600')
+    await flushPromises()
+    expect(String(list.filters.ids).split(',')).toHaveLength(500)
+    expect(slotProps().ids).toHaveLength(500)
+    expect(slotProps().ids![499]).toBe(500)
+    expect(w.get('[data-testid="ids-filter"]').text()).toBe('动态权重降权 600（前 500 个）')
+    slotProps().setIds([], 'x')
+    await flushPromises()
+    expect(list.filters.ids).toBe('')
     expect(w.find('[data-testid="ids-filter"]').exists()).toBe(false)
   })
 })

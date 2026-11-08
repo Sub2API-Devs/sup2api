@@ -1309,6 +1309,8 @@ export interface PluginAccountAction {
   /** Confirmation text; `{n}` is the number of accounts. */
   confirm?: LText
   danger?: boolean
+  /** 1..500, the core sends at most this many ids per request (server fills 500). */
+  max_batch?: number
 }
 
 export interface UIPlugin {

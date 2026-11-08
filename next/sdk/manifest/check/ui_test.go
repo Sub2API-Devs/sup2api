@@ -446,8 +446,9 @@ func TestSlotNames(t *testing.T) {
 	}
 }
 
-// withAccountAction adds a POST /assets/reset admin route and one account
-// action over it to the ui fixture (no ui.native: actions need none).
+// withAccountAction adds a POST /assets/reset admin route (plus two
+// parameterized ones) and one account action over it to the ui fixture (no
+// ui.native: actions need none).
 func withAccountAction(hostCompat string, act manifest.AccountAction) *manifest.Manifest {
 	m := uiManifest()
 	m.HostCompat = hostCompat
@@ -455,6 +456,8 @@ func withAccountAction(hostCompat string, act manifest.AccountAction) *manifest.
 	m.UserPermissions = append(m.UserPermissions, manifest.UserPermission{Key: "assets:manage", Label: manifest.LocalizedText{"en": "Manage assets"}})
 	m.Routes = append(m.Routes,
 		manifest.Route{Method: "POST", Path: "/assets/reset", Scope: "admin", Permission: "assets:manage"},
+		manifest.Route{Method: "POST", Path: "/assets/:id/reset", Scope: "admin", Permission: "assets:manage"},
+		manifest.Route{Method: "POST", Path: "/assets/*rest", Scope: "admin", Permission: "assets:manage"},
 		manifest.Route{Method: "POST", Path: "/assets/ping", Scope: "public"})
 	m.UI.AccountActions = []manifest.AccountAction{act}
 	return m
@@ -493,6 +496,10 @@ func TestAccountActions(t *testing.T) {
 		{"GET route", func(a *manifest.AccountAction) { a.Route = "GET /assets" }, "route", "invalid"},
 		{"public route", func(a *manifest.AccountAction) { a.Route = "POST /assets/ping" }, "route", "invalid"},
 		{"route permission differs", func(a *manifest.AccountAction) { a.Permission = "assets:read" }, "route", "permission_mismatch"},
+		{"param route", func(a *manifest.AccountAction) { a.Route = "POST /assets/:id/reset" }, "route", "parameterized_route"},
+		{"wildcard route", func(a *manifest.AccountAction) { a.Route = "POST /assets/*rest" }, "route", "parameterized_route"},
+		{"max_batch too big", func(a *manifest.AccountAction) { a.MaxBatch = manifest.MaxAccountBatch + 1 }, "max_batch", "out_of_range"},
+		{"max_batch negative", func(a *manifest.AccountAction) { a.MaxBatch = -1 }, "max_batch", "out_of_range"},
 	}
 	for _, tc := range cases {
 		act := good
@@ -506,6 +513,14 @@ func TestAccountActions(t *testing.T) {
 	act.Route = "/assets/reset"
 	if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", act)); len(c) > 0 {
 		t.Fatalf("a bare path means POST: %v", c)
+	}
+	// max_batch takes the whole range 1..MaxAccountBatch.
+	for _, n := range []int{1, manifest.MaxAccountBatch} {
+		act := good
+		act.MaxBatch = n
+		if c := uiCodes(withAccountAction(">=0.1.255 <0.2.0", act)); len(c) > 0 {
+			t.Errorf("max_batch %d is in range: %v", n, c)
+		}
 	}
 }
 

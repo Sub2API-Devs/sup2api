@@ -344,8 +344,19 @@ func (v *validator) uiAccountActions(u *manifest.UI) {
 		} else if !v.userPerm(act.Permission) {
 			v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", act.Permission)
 		}
+		if act.MaxBatch < 0 || act.MaxBatch > manifest.MaxAccountBatch {
+			v.add(f+".max_batch", "out_of_range", "max_batch must be 1..%d (0 or absent means %d)", manifest.MaxAccountBatch, manifest.MaxAccountBatch)
+		}
 		r := v.routeRef(f+".route", act.Route, "POST")
 		if r == nil {
+			continue
+		}
+		// The console posts {"account_ids": [...]} to the path as declared;
+		// it has nothing to fill a :param or *wildcard segment with.
+		if slices.ContainsFunc(strings.Split(r.Path, "/"), func(s string) bool {
+			return strings.HasPrefix(s, ":") || strings.HasPrefix(s, "*")
+		}) {
+			v.add(f+".route", "parameterized_route", "route %s %s has a path parameter; the console posts {\"account_ids\":[...]} and cannot fill it", r.Method, r.Path)
 			continue
 		}
 		switch {

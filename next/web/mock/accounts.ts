@@ -717,7 +717,8 @@ on('GET', '/accounts', (req) => {
   // ?model=: accounts that can serve it (empty `models` = all models, §18.3).
   if (q.model) list = list.filter((a) => !(a.models || []).length || (a.models || []).includes(q.model))
   if (q.q) list = list.filter((a) => a.name.includes(q.q))
-  // ?ids=1,2: at most 500 integers (400 otherwise), ANDed with the other filters.
+  // ?ids=1,2: at most 500 integers (MAX_ACCOUNT_BATCH in @sub2api/host, which the
+  // mock does not import; 400 otherwise), ANDed with the other filters.
   if (q.ids) {
     const ids = String(q.ids).split(',').map(Number)
     if (ids.length > 500 || ids.some((id) => !Number.isInteger(id))) return fail(400, 'invalid_argument', 'ids must be up to 500 integers')

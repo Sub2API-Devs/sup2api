@@ -234,6 +234,42 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 	}
 }
 
+// The console posts a one-element account_ids for a single row (UI 3.6);
+// POST /reset treats it exactly like account_id.
+func TestResetOneElementArrayEqualsSingle(t *testing.T) {
+	e := newEnv(t)
+	e.configure(nil)
+	bodies := []map[string]any{
+		{"account_id": testAccount, "model": testModel},
+		{"account_ids": []int64{testAccount}, "model": testModel},
+	}
+	for i, body := range bodies {
+		e.rank(100)
+		e.window(5, 5)
+		e.window(5, 5)
+		if w := e.rank(100); w != 70 {
+			t.Fatalf("body %d: weight before reset %d", i, w)
+		}
+		var reset struct {
+			Data map[string]int `json:"data"`
+		}
+		e.decode(e.h.Do("POST", "/reset", nil, body), http.StatusOK, &reset)
+		if w := e.rank(100); w != 0 || reset.Data["reset"] != 1 {
+			t.Fatalf("body %d: weight after reset %d, %v reset", i, w, reset.Data)
+		}
+		var events struct {
+			Data []eventItem `json:"data"`
+		}
+		e.decode(e.h.Do("GET", "/events", map[string]string{"kind": rules.EventReset}, nil), http.StatusOK, &events)
+		// The event names the caller; "matched" 0 would mean no state was found.
+		ev := events.Data[0]
+		if len(events.Data) != i+1 || ev.AccountID != testAccount || ev.GroupID != testGroup || ev.Model != testModel ||
+			ev.Reason != rules.ReasonManual || ev.From != 70 || ev.To != 100 || ev.Detail["user_id"] != float64(1) || ev.Detail["matched"] != nil {
+			t.Fatalf("body %d: reset events %+v", i, events.Data)
+		}
+	}
+}
+
 // An account that becomes active again starts over from its base; one going
 // into a cooldown keeps its degraded weight. The activations of a batch are
 // reset together.

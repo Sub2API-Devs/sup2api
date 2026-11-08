@@ -278,8 +278,9 @@ func (p *Plugin) listEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	return pluginsdk.ListResponse(items, pluginsdk.Page{Page: page, PageSize: size, Total: total}), nil
 }
 
-// maxResetAccounts bounds the accounts of one reset.
-const maxResetAccounts = 500
+// maxResetAccounts bounds the accounts of one reset: what the console sends
+// per account action request (manifest.json max_batch).
+const maxResetAccounts = manifest.MaxAccountBatch
 
 // reset is POST /reset {account_id?, account_ids?, group_id?, model?}
 // (resetKeys).
@@ -305,7 +306,7 @@ func (p *Plugin) reset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv
 const (
 	// maxListedAccounts bounds the accounts of GET /weights and GET
 	// /degraded: what the core's account list filters by at once.
-	maxListedAccounts = 500
+	maxListedAccounts = manifest.MaxAccountBatch
 	// maxWeightKeys bounds the keys GET /weights details per account.
 	maxWeightKeys = 10
 )

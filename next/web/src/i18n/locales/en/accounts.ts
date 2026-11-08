@@ -11,7 +11,7 @@ export default {
     clear: 'Clear filters ({count})', compact: 'Compact rows', refresh: 'Refresh accounts',
     loadFailed: 'Refresh failed; showing the previous results',
     emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', limitsColumn: 'Concurrency / RPM / TPM / Sessions',
-    numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved', clearIds: 'Clear the account id filter'
+    numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved', clearIds: 'Clear the account id filter', idsTruncated: '{label} (first {n})'
   },
   limitsUi: {
     title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',

@@ -35,11 +35,11 @@ describe('usePluginAccountActions (CONTRACTS §23.3 UI 3.6)', () => {
     mocks.post.mockResolvedValue({})
   })
 
-  it('confirms with the account count and sends one account as account_id', async () => {
+  it('confirms with the account count and sends one account as a one-element account_ids', async () => {
     const { run } = setup()
     await run(reset, accounts(1))
     expect(mocks.confirm).toHaveBeenCalledWith({ title: '重置动态权重', message: '重置 1 个账号的动态权重？', confirmText: '重置动态权重', danger: undefined })
-    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_id: 1 })
+    expect(mocks.post).toHaveBeenCalledWith('/p/dynweight/reset', { account_ids: [1] })
     expect(mocks.toast).toHaveBeenCalledWith('「重置动态权重」已完成', 'success')
     expect(mocks.reload).toHaveBeenCalledOnce()
   })
@@ -69,6 +69,19 @@ describe('usePluginAccountActions (CONTRACTS §23.3 UI 3.6)', () => {
     expect(mocks.post.mock.calls[2][1]).toEqual({ account_ids: accounts(1200).slice(1000).map((a) => a.id) })
     expect(mocks.toast).toHaveBeenCalledWith('已完成 1200 个账号', 'success')
     expect(mocks.reload).toHaveBeenCalledOnce()
+  })
+
+  it('honours max_batch and clamps it to MAX_ACCOUNT_BATCH', async () => {
+    const { run } = setup()
+    const sizes = () => mocks.post.mock.calls.map(([, body]) => (body as { account_ids: number[] }).account_ids.length)
+    await run({ ...reset, max_batch: 300 }, accounts(700))
+    expect(sizes()).toEqual([300, 300, 100])
+    mocks.post.mockClear()
+    await run({ ...reset, max_batch: 9999 }, accounts(600))
+    expect(sizes()).toEqual([500, 100])
+    mocks.post.mockClear()
+    await run({ ...reset, max_batch: 0 }, accounts(600))
+    expect(sizes()).toEqual([500, 100])
   })
 
   it('reports a failed batch like the other bulk actions and still reloads what succeeded', async () => {

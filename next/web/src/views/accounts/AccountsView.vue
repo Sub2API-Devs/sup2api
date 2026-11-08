@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
+import { api, MAX_ACCOUNT_BATCH } from '@sub2api/host'
 import { SAutoRefresh, SBadge, SBulkBar, SButton, SChip, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, STooltip, confirm, toast, useAutoRefresh, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountType } from '@/api/types'
 import { activeFilterCount, useList } from '@/composables/useList'
@@ -68,13 +68,17 @@ const canReveal = (a: Account) => own.can(a, ACCOUNT_KEYS.reveal)
 // The usage column's "today" is the browser's day (CONTRACTS §73).
 const list = useList<Account>(`/accounts?${new URLSearchParams(todayQuery())}`, { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '', orphaned: '', ids: '' })
 // The account.list.toolbar slot (CONTRACTS §23.3 UI 3.6) narrows the list to
-// the ids a plugin names (`?ids=1,2`); the label it gives shows on a chip.
+// the ids a plugin names (`?ids=1,2`, at most MAX_ACCOUNT_BATCH: the rest are
+// dropped and the chip says so); the label it gives shows on a chip. An empty
+// array or null clears the filter.
 const idsLabel = ref('')
 const toolbarProps = computed(() => ({
   ids: list.filters.ids ? String(list.filters.ids).split(',').map(Number) : null,
   setIds(ids: number[] | null, label: string) {
-    list.filters.ids = ids?.length ? ids.join(',') : ''
-    idsLabel.value = ids?.length ? label : ''
+    const all = ids ?? []
+    const kept = all.slice(0, MAX_ACCOUNT_BATCH)
+    list.filters.ids = kept.length ? kept.join(',') : ''
+    idsLabel.value = !kept.length ? '' : all.length > kept.length ? t('accounts.listUi.idsTruncated', { label, n: MAX_ACCOUNT_BATCH }) : label
   }
 }))
 const onlyMine = computed({

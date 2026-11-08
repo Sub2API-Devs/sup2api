@@ -14,6 +14,12 @@ export { useList, type UseListOptions, type UseListResult } from './useList'
 /** Version of the host UI contract; plugins declare hostUICompat against it. */
 export const HOST_UI_VERSION = '3.6.0'
 
+/**
+ * Accounts per plugin account action request and per `GET /accounts?ids=`
+ * (CONTRACTS §23.3 UI 3.6); the Go side is `manifest.MaxAccountBatch`.
+ */
+export const MAX_ACCOUNT_BATCH = 500
+
 /** {"en": "...", "zh": "..."} or a bare string. */
 export type LocalizedText = string | Record<string, string> | null | undefined
 

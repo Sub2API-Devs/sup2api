@@ -532,6 +532,11 @@ const MaxDefaultModelLimits = 50
 // it equals the per-account limit of models and model_mapping (CONTRACTS §18).
 const MaxDefaultModels = 500
 
+// MaxAccountBatch bounds the accounts of one account action request (UI
+// 3.6) and of one GET /accounts?ids= filter; the console never sends more
+// per request and an AccountAction.MaxBatch may not ask for more.
+const MaxAccountBatch = 500
+
 // GuardedSetting is one restricted settings field of an account type
 // (CONTRACTS §21.3). Field must be one of SettingsFields; Allowed is the
 // non-empty list of absolute http(s) URLs the field may take. The host
@@ -930,18 +935,20 @@ type Slot struct {
 }
 
 // AccountAction is a declarative account operation. The console calls
-// Route as "POST /api/v1/p/<key><path>" with {"account_id": n} for one row
-// and {"account_ids": [...]} (at most 500) from the bulk bar, looks only at
-// the status code and reloads the list on success.
+// Route as "POST /api/v1/p/<key><path>" with {"account_ids": [...]}, a
+// one-element array for a single row, at most MaxBatch accounts per request
+// (0 or absent means MaxAccountBatch), looks only at the status code and
+// reloads the list on success.
 type AccountAction struct {
-	ID         string        `json:"id"`                // unique within the plugin
-	Label      LocalizedText `json:"label"`             // menu text
-	Icon       string        `json:"icon,omitempty"`    // SIcon name
-	Permission string        `json:"permission"`        // required: plugin-local key in userPermissions, equal to the route's
-	Route      string        `json:"route"`             // "POST /path": an admin route declared in routes
-	Bulk       bool          `json:"bulk,omitempty"`    // also offered in the bulk bar
-	Confirm    LocalizedText `json:"confirm,omitempty"` // confirmation text, {n} = account count; none means no prompt
-	Danger     bool          `json:"danger,omitempty"`  // rendered as a destructive item
+	ID         string        `json:"id"`                  // unique within the plugin
+	Label      LocalizedText `json:"label"`               // menu text
+	Icon       string        `json:"icon,omitempty"`      // SIcon name
+	Permission string        `json:"permission"`          // required: plugin-local key in userPermissions, equal to the route's
+	Route      string        `json:"route"`               // "POST /path": an admin route declared in routes
+	Bulk       bool          `json:"bulk,omitempty"`      // also offered in the bulk bar
+	Confirm    LocalizedText `json:"confirm,omitempty"`   // confirmation text, {n} = account count; none means no prompt
+	Danger     bool          `json:"danger,omitempty"`    // rendered as a destructive item
+	MaxBatch   int           `json:"max_batch,omitempty"` // accounts per request, 1..MaxAccountBatch; 0 = MaxAccountBatch
 }
 
 type NativeUI struct {

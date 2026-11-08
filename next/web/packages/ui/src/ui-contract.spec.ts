@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as ui from './index'
-import { HOST_UI_VERSION, satisfiesRange } from '@sub2api/host'
+import { HOST_UI_VERSION, MAX_ACCOUNT_BATCH, satisfiesRange } from '@sub2api/host'
 
 describe('host UI 3 contract', () => {
   it('exposes only enhanced STabs without layout aliases', () => {
@@ -24,6 +24,9 @@ describe('host UI 3 contract', () => {
     expect(satisfiesRange('3.4.0', '^3.5')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^3.6')).toBe(true)
     expect(satisfiesRange('3.5.0', '^3.6')).toBe(false)
+  })
+  it('locks the account batch size shared with the core (UI 3.6)', () => {
+    expect(MAX_ACCOUNT_BATCH).toBe(500)
   })
   it('exports the phone forms (UI 3.5), keeping the media queries internal', () => {
     expect(ui.useViewport).toBeTypeOf('function')

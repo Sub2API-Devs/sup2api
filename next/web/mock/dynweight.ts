@@ -34,6 +34,7 @@ export const dynweightUIPlugin = {
       permission: 'dynweight:manage',
       route: 'POST /reset',
       bulk: true,
+      max_batch: 500,
       confirm: { en: 'Reset the dynamic weight of {n} account(s)?', zh: '重置 {n} 个账号的动态权重？' }
     }
   ],
