@@ -92,7 +92,13 @@ describe('request parameter override editor', () => {
   })
 
   it('dry-runs the draft on the server', async () => {
-    mocks.post.mockResolvedValue({ body: { temperature: 0.7 }, set_headers: {}, delete_headers: ['x-foo'], return_error: null })
+    mocks.post.mockResolvedValue({
+      body: { temperature: 0.7 },
+      set_headers: {},
+      delete_headers: ['x-foo'],
+      return_error: null,
+      error: null
+    })
     const w = render()
     await w.get('[data-testid="account-param-override-edit"]').trigger('click')
     await flushPromises()
@@ -104,5 +110,14 @@ describe('request parameter override editor', () => {
     )
     expect(q('po-preview-headers')!.textContent).toContain('x-foo')
     expect(q('po-preview-result')!.textContent).toContain('"temperature": 0.7')
+    mocks.post.mockResolvedValue({
+      body: null,
+      set_headers: {},
+      delete_headers: [],
+      return_error: null,
+      error: 'operations[0] (trim_space): not a string'
+    })
+    await click(q('po-preview-run'))
+    expect(q('po-preview-failed')!.textContent).toContain('not a string')
   })
 })

@@ -312,6 +312,7 @@ export default {
       retry: 'retries on another account',
       resultHeaders: 'Header changes',
       noHeaders: 'No header changes',
+      failed: 'An operation failed; the gateway moves to another account: {error}',
       resultBody: 'Body sent upstream'
     }
   },

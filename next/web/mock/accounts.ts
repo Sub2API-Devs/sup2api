@@ -784,10 +784,10 @@ on('POST', '/accounts/param-override/preview', (req) => {
     else if (op.mode === 'delete_header') del.push(op.path)
     else if (op.mode === 'return_error') {
       const v = typeof op.value === 'string' ? { message: op.value } : op.value || {}
-      return { body: out, set_headers: set, delete_headers: del, return_error: { status: v.status_code ?? 400, code: v.code ?? 'invalid_request', type: v.type ?? 'invalid_request_error', message: v.message, skip_retry: v.skip_retry !== false } }
+      return { body: out, set_headers: set, delete_headers: del, error: null, return_error: { status: v.status_code ?? 400, code: v.code ?? 'invalid_request', type: v.type ?? 'invalid_request_error', message: v.message, skip_retry: v.skip_retry !== false } }
     }
   }
-  return { body: out, set_headers: set, delete_headers: del, return_error: null }
+  return { body: out, set_headers: set, delete_headers: del, return_error: null, error: null }
 })
 on('GET', '/accounts/:id', (req) => {
   const r = scopedAccount(req, 'read')

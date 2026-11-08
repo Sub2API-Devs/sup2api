@@ -18,6 +18,8 @@ interface PreviewResult {
   set_headers: Record<string, string>
   delete_headers: string[]
   return_error: { status: number; code: string; message: string; skip_retry: boolean } | null
+  /** An operation that could not run: the gateway fails over to another account. */
+  error: string | null
 }
 
 const model = ref(props.model)
@@ -100,7 +102,10 @@ async function run() {
         {{ t(`${P}.empty`) }}
       </p>
       <template v-else>
-        <SAlert v-if="result.return_error" tone="warning" dense data-testid="po-preview-error">
+        <SAlert v-if="result.error" tone="danger" dense data-testid="po-preview-failed">{{
+          t(`${P}.failed`, { error: result.error })
+        }}</SAlert>
+        <SAlert v-else-if="result.return_error" tone="warning" dense data-testid="po-preview-error">
           {{ t(`${P}.returns`, { status: result.return_error.status, message: result.return_error.message }) }}
           <span class="text-fg-muted">· {{ result.return_error.skip_retry ? t(`${P}.noRetry`) : t(`${P}.retry`) }}</span>
         </SAlert>

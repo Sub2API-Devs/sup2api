@@ -311,6 +311,7 @@ export default {
       retry: '会换其他账号重试',
       resultHeaders: '请求头变化',
       noHeaders: '不改请求头',
+      failed: '有操作执行失败，网关会换其他账号：{error}',
       resultBody: '发往上游的请求体'
     }
   },
