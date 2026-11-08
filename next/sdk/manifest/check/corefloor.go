@@ -10,17 +10,15 @@ import (
 
 // StreamOnlyFirstCore is the first core that executes
 // accountTypes[].platforms[].streamOnly and converts within one platform
-// (CONTRACTS §83). PLACEHOLDER: set to the real version when that core is
-// released; until then it is the next patch after 0.1.256. The same core
-// first applies plugin body patches to every WebSocket turn (CONTRACTS
-// §83.6); that has no manifest declaration, so it needs no floor of its own.
+// (CONTRACTS §83). The same core first applies plugin body patches to every
+// WebSocket turn (CONTRACTS §83.6); that has no manifest declaration, so it
+// needs no floor of its own.
 const StreamOnlyFirstCore = "0.1.257"
 
 // AttemptHookFirstCore is the first core that runs gateway.attempt hooks and
-// honours skip_attempt_hooks (CONTRACTS §85). PLACEHOLDER: set to the real
-// version when that core is released; until then it is the next patch
-// after 0.1.257. Older cores refuse the hook point at install, so the floor
-// only turns that into a clear hostCompat error.
+// honours skip_attempt_hooks (CONTRACTS §85). Older cores refuse the hook
+// point at install, so the floor only turns that into a clear hostCompat
+// error.
 const AttemptHookFirstCore = "0.1.258"
 
 // SamePlatformConversions are the core's protocol converters whose two
