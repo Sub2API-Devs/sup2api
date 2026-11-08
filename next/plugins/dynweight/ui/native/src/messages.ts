@@ -243,18 +243,6 @@ const zh = {
     events: '查看事件',
     resetAll: '重置本账号全部',
     resetAllConfirm: '把账号 {account} 在全部分组、全部模型下的有效权重重置为基准？历史窗口会被清空。'
-  },
-  override: {
-    title: '动态权重',
-    hint: '账号所在各分组生效的配置层，以及只对本账号生效的覆盖（随账号一起保存）。',
-    source: { global: '全局配置', group: '分组配置' },
-    noLayers: '没有生效的配置层：账号不在任何分组，或插件还没有见过它的调度。',
-    label: '本账号',
-    add: '添加账号覆盖',
-    none: '没有账号覆盖，沿用所在层。',
-    readOnly: '需要“管理动态权重”权限才能修改。',
-    incomplete: '动态权重覆盖选了下限方式却没有填下限',
-    loadFailed: '加载动态权重覆盖失败'
   }
 }
 
@@ -500,18 +488,6 @@ const en: typeof zh = {
     events: 'Events',
     resetAll: 'Reset all of this account',
     resetAllConfirm: 'Reset the effective weights of account {account} in every group and model to their base? Their window history is dropped.'
-  },
-  override: {
-    title: 'Dynamic weight',
-    hint: 'The configuration layer in force for each group of the account, and the override of this account alone (saved with the account).',
-    source: { global: 'global configuration', group: 'group configuration' },
-    noLayers: 'No layer in force: the account is in no group, or the plugin has not seen it scheduled yet.',
-    label: 'This account',
-    add: 'Add account override',
-    none: 'No override; the account follows its layer.',
-    readOnly: 'Changing it takes the "Manage dynamic weight" permission.',
-    incomplete: 'The dynamic weight override picks a floor mode but leaves the floor empty',
-    loadFailed: 'Failed to load the dynamic weight override'
   }
 }
 

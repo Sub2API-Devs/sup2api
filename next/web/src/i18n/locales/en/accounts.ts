@@ -99,7 +99,6 @@ export default {
   subscriptionHint: 'Subscription type the upstream reported after authorization',
   modelsBySubscription: 'Saving adjusts the model list to the account subscription: Pro accounts drop the Fable models (only while the list is still the built-in one).',
   modelsAdjusted: 'Model list adjusted for the {plan} subscription ({n} models)',
-  pluginWidgetSaveFailed: 'The account was saved, but the settings of plugin {plugin} were not: {error}',
   groups: 'Groups',
   proxy: 'Proxy',
   createdBy: 'Created by',

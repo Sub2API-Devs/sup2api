@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { isApiError, type PluginHost, type UseListResult } from '@sub2api/host'
+import type { PluginHost, UseListResult } from '@sub2api/host'
 import type { SelectOption, Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all dynweight components.
@@ -317,31 +317,6 @@ export interface Degraded {
   account_ids: number[]
 }
 export const fetchDegraded = () => api().get<Degraded>('/degraded')
-
-// ------------------------------------------------------------------ account override (edit form slot)
-
-/** The layer in force for one group of an account (named through the catalog), and whether it degrades without climbing back. */
-export interface OverrideLayer {
-  group_id: number
-  source: 'global' | 'group'
-  no_climb: boolean
-}
-
-export interface OverrideBody {
-  override: AccountOverride | null
-  layers: OverrideLayer[]
-}
-
-/** 404 (the plugin has no record of the account yet: never scheduled, no override) reads as no override and no layers. */
-export async function fetchOverride(accountId: number): Promise<OverrideBody> {
-  try {
-    return await api().get<OverrideBody>(`/accounts/${accountId}/override`)
-  } catch (e) {
-    if (isApiError(e) && e.status === 404) return { override: null, layers: [] }
-    throw e
-  }
-}
-export const saveOverride = (accountId: number, override: AccountOverride | null) => api().put<OverrideBody>(`/accounts/${accountId}/override`, { override })
 
 // The account list renders the slot once per row: ids asked for in the same
 // tick are fetched in one GET /weights.

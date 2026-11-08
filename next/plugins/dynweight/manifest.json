@@ -60,8 +60,6 @@
     { "method": "POST", "path": "/reset", "scope": "admin", "permission": "dynweight:manage" },
     { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read" },
     { "method": "GET", "path": "/degraded", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/accounts/:id/override", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "PUT", "path": "/accounts/:id/override", "scope": "admin", "permission": "dynweight:manage" },
     { "method": "GET", "path": "/stats", "scope": "admin", "permission": "dynweight:read" }
   ],
 
@@ -94,8 +92,7 @@
     "slots": [
       { "slot": "account.list.weight", "component": "DynweightAccountWeight", "permission": "dynweight:read" },
       { "slot": "account.list.toolbar", "component": "DynweightDegradedBadge", "permission": "dynweight:read" },
-      { "slot": "account.detail.tabs", "component": "DynweightAccountTab", "permission": "dynweight:read" },
-      { "slot": "account.form.widgets", "component": "DynweightOverrideCard", "permission": "dynweight:read" }
+      { "slot": "account.detail.tabs", "component": "DynweightAccountTab", "permission": "dynweight:read" }
     ],
     "native": { "entry": "ui/native/entry.js" }
   },
@@ -173,8 +170,8 @@
     {
       "id": "ui.native",
       "reason": {
-        "en": "Provide the dynamic weight page, the effective weight and the degraded badge in the account list, and the dynamic weight tab and override card of an account",
-        "zh": "提供动态权重页面，在账号列表中显示有效权重和降权徽标，在账号详情和编辑页中显示动态权重标签页和覆盖卡片"
+        "en": "Provide the dynamic weight page, the effective weight and the degraded badge in the account list, and the dynamic weight tab of an account",
+        "zh": "提供动态权重页面，在账号列表中显示有效权重和降权徽标，在账号详情中显示动态权重标签页"
       }
     }
   ]

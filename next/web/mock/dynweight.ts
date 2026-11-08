@@ -23,8 +23,7 @@ export const dynweightUIPlugin = {
   slots: [
     { slot: 'account.list.weight', component: 'DynweightAccountWeight', permission: 'dynweight:read' },
     { slot: 'account.list.toolbar', component: 'DynweightDegradedBadge', permission: 'dynweight:read' },
-    { slot: 'account.detail.tabs', component: 'DynweightAccountTab', permission: 'dynweight:read' },
-    { slot: 'account.form.widgets', component: 'DynweightOverrideCard', permission: 'dynweight:read' }
+    { slot: 'account.detail.tabs', component: 'DynweightAccountTab', permission: 'dynweight:read' }
   ],
   // manifest ui.accountActions as /ui/plugins hands it down (CONTRACTS §23.3 "UI 3.6").
   account_actions: [
@@ -226,18 +225,6 @@ function resetKeys(body: any): number {
   return n
 }
 
-/** The layers in force for an account's groups (GET /accounts/:id/override). */
-function layersOf(account: any) {
-  return (account.group_ids as number[]).map((gid) => {
-    const layer = layerOf(gid)
-    return {
-      group_id: gid,
-      source: String(gid) in (config.groups ?? {}) ? 'group' : 'global',
-      no_climb: !(layer.strategies as any[]).some((s: any) => s.enabled !== false && s.actions.some((a: any) => a.type === 'weight_climb'))
-    }
-  })
-}
-
 on('GET', '/p/dynweight/config', () => ({ config, version }))
 on('GET', '/p/dynweight/defaults', () => DEFAULT_LAYER)
 on('GET', '/p/dynweight/channels', () => [])
@@ -280,22 +267,4 @@ on('POST', '/p/dynweight/reset', (req) => {
   const b = req.body ?? {}
   if (!b.account_id && !b.account_ids?.length && !b.group_id) return fail(400, 'invalid_argument', 'an account or a group is required')
   return { reset: resetKeys(b) }
-})
-// The plugin answers 404 for an account it has no record of (never scheduled, no
-// override); every mock account counts as scheduled, so only an unknown id is 404.
-on('GET', '/p/dynweight/accounts/:id/override', (req) => {
-  const a = accounts.find((x) => x.id === Number(req.params.id))
-  if (!a) return fail(404, 'not_found', 'no dynamic weight record of this account')
-  return { override: config.accounts?.[String(a.id)] ?? null, layers: layersOf(a) }
-})
-// PUT does not check that the account exists: a new account's override is written right after it is created.
-on('PUT', '/p/dynweight/accounts/:id/override', (req) => {
-  const a = accounts.find((x) => x.id === Number(req.params.id)) ?? { id: Number(req.params.id), group_ids: [] }
-  const o = req.body?.override ?? null
-  if (o && o.min_weight_mode && (o.min_weight === undefined || o.min_weight === null)) return fail(400, 'invalid_argument', 'min_weight is required with min_weight_mode')
-  config.accounts ??= {}
-  if (o) config.accounts[String(a.id)] = o
-  else delete config.accounts[String(a.id)]
-  version++
-  return { override: o, layers: layersOf(a) }
 })

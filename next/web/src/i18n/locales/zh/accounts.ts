@@ -98,7 +98,6 @@ export default {
   subscriptionHint: '账号授权后上游报告的订阅类型',
   modelsBySubscription: '保存时会按账号订阅类型调整模型列表：Pro 账号去掉 Fable 模型（仅当列表仍是内置列表时）。',
   modelsAdjusted: '已按 {plan} 订阅调整模型列表（{n} 个模型）',
-  pluginWidgetSaveFailed: '账号已保存，但插件 {plugin} 的设置保存失败：{error}',
   groups: '分组',
   proxy: '代理',
   createdBy: '创建人',

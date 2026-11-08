@@ -636,9 +636,7 @@ func TestNotifyDigest(t *testing.T) {
 }
 
 // The account page routes: the degraded badge lists the accounts below
-// their base; an account's override is read and written with the layers
-// serving it, over the configuration version; /weights details the lowest
-// keys.
+// their base; /weights details the lowest keys.
 func TestAccountRoutes(t *testing.T) {
 	e := newEnv(t)
 	e.configure(func(c *rules.Config) {
@@ -665,86 +663,6 @@ func TestAccountRoutes(t *testing.T) {
 	if low.Data.Count != 1 || !slices.Equal(low.Data.AccountIDs, []int64{testAccount}) {
 		t.Fatalf("degraded %+v", low.Data)
 	}
-
-	var got struct {
-		Data overrideBody `json:"data"`
-	}
-	groupLayer := []accountLayer{{GroupID: testGroup, Source: "group", NoClimb: true}}
-	e.decode(e.h.Do("GET", "/accounts/7/override", nil, nil), http.StatusOK, &got)
-	if got.Data.Override != nil || !slices.Equal(got.Data.Layers, groupLayer) {
-		t.Fatalf("override %+v", got.Data)
-	}
-	e.decode(e.h.Do("GET", "/accounts/99/override", nil, nil), http.StatusNotFound, nil)
-	e.decode(e.h.Do("GET", "/accounts/x/override", nil, nil), http.StatusBadRequest, nil)
-	// An override that does not validate is refused as PUT /config refuses it.
-	fixed := rules.ModeFixed
-	e.decode(e.h.Do("PUT", "/accounts/7/override", nil, map[string]any{"override": rules.AccountOverride{MinWeightMode: &fixed}}), http.StatusBadRequest, nil)
-	off := false
-	e.decode(e.h.Do("PUT", "/accounts/7/override", nil, map[string]any{"override": rules.AccountOverride{Enabled: &off}}), http.StatusOK, &got)
-	if got.Data.Override == nil || got.Data.Override.Enabled == nil || *got.Data.Override.Enabled || !slices.Equal(got.Data.Layers, groupLayer) {
-		t.Fatalf("override saved %+v", got.Data)
-	}
-	// Saved over the version read, and in force on this node at once.
-	var current struct {
-		Data configBody `json:"data"`
-	}
-	e.decode(e.h.Do("GET", "/config", nil, nil), http.StatusOK, &current)
-	if current.Data.Version != 2 || current.Data.Config.Accounts[testAccount].Enabled == nil || e.p.cfg.Load().Resolve(testAccount, testGroup).Enabled {
-		t.Fatalf("config after the override: v%d %+v", current.Data.Version, current.Data.Config.Accounts)
-	}
-	// A new account's form saves before scheduling ever offered it.
-	e.decode(e.h.Do("PUT", "/accounts/99/override", nil, map[string]any{"override": rules.AccountOverride{Enabled: &off}}), http.StatusOK, &got)
-	if got.Data.Override == nil || len(got.Data.Layers) != 0 {
-		t.Fatalf("override of an unseen account %+v", got.Data)
-	}
-	e.decode(e.h.Do("GET", "/accounts/99/override", nil, nil), http.StatusOK, &got)
-	if got.Data.Override == nil {
-		t.Fatalf("override of an unseen account %+v", got.Data)
-	}
-	// null removes it.
-	e.decode(e.h.Do("PUT", "/accounts/7/override", nil, map[string]any{"override": nil}), http.StatusOK, &got)
-	e.decode(e.h.Do("GET", "/accounts/7/override", nil, nil), http.StatusOK, &got)
-	if got.Data.Override != nil || !slices.Equal(got.Data.Layers, groupLayer) {
-		t.Fatalf("override removed %+v", got.Data)
-	}
-	// (Decoded afresh: json.Unmarshal adds to a map it finds.)
-	var after struct {
-		Data configBody `json:"data"`
-	}
-	e.decode(e.h.Do("GET", "/config", nil, nil), http.StatusOK, &after)
-	if _, kept := after.Data.Config.Accounts[testAccount]; kept || after.Data.Version != 4 || len(after.Data.Config.Accounts) != 1 {
-		t.Fatalf("config after the removal: v%d %+v", after.Data.Version, after.Data.Config.Accounts)
-	}
-
-	// A save another administrator's save got ahead of is redone over the
-	// new version; one that keeps losing (the first attempt and every
-	// retry) is refused.
-	ctx := context.Background()
-	s, err := e.p.store(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	conflicts := 0
-	e.p.beforeSave = func(ctx context.Context) {
-		if conflicts > 0 {
-			conflicts--
-			if _, err := s.db.Exec(ctx, `UPDATE config SET version = version + 1`); err != nil {
-				t.Error(err)
-			}
-		}
-	}
-	conflicts = 1
-	e.decode(e.h.Do("PUT", "/accounts/7/override", nil, map[string]any{"override": rules.AccountOverride{Enabled: &off}}), http.StatusOK, &got)
-	e.decode(e.h.Do("GET", "/config", nil, nil), http.StatusOK, &current)
-	if got.Data.Override == nil || current.Data.Version != 6 || current.Data.Config.Accounts[testAccount].Enabled == nil {
-		t.Fatalf("override after one conflict: v%d %+v", current.Data.Version, got.Data)
-	}
-	conflicts = 1 + overrideRetries
-	e.decode(e.h.Do("PUT", "/accounts/7/override", nil, map[string]any{"override": nil}), http.StatusConflict, nil)
-	if v, err := s.configVersion(ctx); err != nil || v != 6+int64(1+overrideRetries) || conflicts != 0 {
-		t.Fatalf("version %d (%v) after %d conflicts left", v, err, conflicts)
-	}
-	e.p.beforeSave = nil
 
 	// /weights details the lowest keys, by effective weight, at most
 	// maxWeightKeys; /degraded counts every account and lists them in order.

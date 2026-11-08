@@ -91,13 +91,6 @@ export interface AccountSaveDeps {
     /** Saves the limit of the saved account when it changed. */
     save(a: Account): Promise<void>
   }
-  /** The account.form.widgets slot (CONTRACTS §23.3 UI 3.6): checked before the request, saved after it. */
-  widgets?: {
-    /** The first widget error, or null. */
-    validate(): Promise<string | null>
-    /** Saves every widget against the saved account; returns the failures. */
-    save(a: Account): Promise<Array<{ pluginKey: string; error: unknown }>>
-  }
   saved(a: Account): void
 }
 
@@ -136,13 +129,7 @@ export function useAccountSave(deps: AccountSaveDeps) {
     }
     if (deps.usageLimit?.invalid()) return 'scheduling'
     // Pending text-mode / draft edits are committed (and validated) before saving.
-    if (!models.commitPending()) return 'models'
-    const widgetError = await deps.widgets?.validate()
-    if (widgetError) {
-      errors.value = { plugin_widgets: widgetError }
-      return 'connection'
-    }
-    return null
+    return models.commitPending() ? null : 'models'
   }
 
   function requestBody(creds: Record<string, unknown>): Record<string, unknown> {
@@ -255,8 +242,6 @@ export function useAccountSave(deps: AccountSaveDeps) {
           toast(t('accounts.usageLimit.saveFailed', { error: errorMessage(e) }), 'error')
         }
       }
-      // Plugin widgets save on their own routes once the account exists; a failure is reported, the account stays saved.
-      for (const f of (await deps.widgets?.save(result)) || []) toast(t('accounts.pluginWidgetSaveFailed', { plugin: f.pluginKey, error: errorMessage(f.error) }), 'error')
       deps.saved(result)
     } catch (e) {
       showSaveError(e)
