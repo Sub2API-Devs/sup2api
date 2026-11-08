@@ -6578,7 +6578,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 声明了任何 `streamOnly`；
 - 某个账号类型的端点子集漏掉了一个只能经同平台转换服务的端点（对照 `check.SamePlatformConversions`，目前只有 `openai.chat → openai.responses`；`convert` 包的测试保证它与 `convert.Default()` 的同平台转换器一致），例如 openai 只留 `responses`。
 
-**`StreamOnlyFirstCore` 目前是占位值 `0.1.257`，发布包含本节的核心时改成实际版本号**；依赖本节的插件（codex）的 `hostCompat` 下限要随之改成同一个版本。
+`StreamOnlyFirstCore` 是 `0.1.257`（包含本节的核心，2026-11-09 发布）；依赖本节的插件（codex）的 `hostCompat` 下限是同一个版本。
 
 ### 83.5 测试
 
@@ -6595,7 +6595,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **后续轮次**：沿用首轮的账号、连接和建连时加载的账号对象，每轮调用一次，只取 `patches`（以及 `upstream_model`，仅在本轮记录尚未有上游模型时写入记录）；URL、方法、头一律忽略，返回的 URL 与握手不同也**不**重连。
 - **性能**：插件返回空 `patches` 时消息字节不变、不解析、不复制（`applyPatches` 直接返回原切片）；只有非空且确实改变了字节时才对比模型引用。没有 `requestFields` 的路由传空 `fields`。
 - **失败**：后续轮调用失败（gRPC 错误、空响应）或任一轮的 patch 无法应用（`value_json` 非法、路径非法等，全部或全不）时，本轮回一条错误事件（503 `plugin_unavailable`，记录 `error_type = plugin_unavailable`），释放该轮的并发位与预占，连接保持，下一轮照常；首轮在建连成功之后才失败的，上游连接同样保留给下一轮。patch 改动了模型引用（端点与路由的 `modelReferences`，与 HTTP `validatePatches` 相同的检查）时本轮以模型引用错误失败。调用受 `platform_call_timeout_ms` 约束。
-- **兼容**：旧插件（WebSocket 协议返回空 `patches`，如 openai 插件 0.3.x）发往上游的消息与以前逐字节相同，只是每个后续轮多一次 `BuildUpstreamRequest` 调用（它与握手时的调用相同，确定性地成功）。没有 manifest 字段或能力变化，`sdk/manifest/check/corefloor.go` 无需登记：依赖本节的插件（codex）已因 `streamOnly` 要求 `hostCompat ≥ StreamOnlyFirstCore`，本节属于同一个未发布核心（占位 0.1.257）。
+- **兼容**：旧插件（WebSocket 协议返回空 `patches`，如 openai 插件 0.3.x）发往上游的消息与以前逐字节相同，只是每个后续轮多一次 `BuildUpstreamRequest` 调用（它与握手时的调用相同，确定性地成功）。没有 manifest 字段或能力变化，`sdk/manifest/check/corefloor.go` 无需登记：依赖本节的插件（codex）已因 `streamOnly` 要求 `hostCompat ≥ StreamOnlyFirstCore`，本节属于同一个核心 0.1.257。
 
 **`requestFields` 的取值与大小**：HTTP（`dispatch.go` `attempt`）与 WebSocket（首轮 `dial`、后续轮 `turnPatches`）都经同一个函数 `requestFieldValues`（`gateway/util.go`）读取，取值方式相同。核心对单个字段和字段总和都不设上限，只受请求体/消息大小上限（`maxBodyBytes`，默认 128 MiB，WebSocket 为单条消息）和插件 gRPC 接收上限（默认 4 MiB，`pluginsdk.WithMaxRecvMsgSize` 可调；超过时该次调用失败，HTTP 换号、WebSocket 首轮换号、后续轮报该轮错误）约束。插件应使用只返回所需信息的 gjson 查询，不要索取大字段。
 
@@ -6649,7 +6649,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
   - 拒绝时整个请求结束，不再换账号：拒绝针对的是请求，而不是账号。账号不受惩罚，粘性绑定按失败收尾。
 - **`skip_attempt_hooks`**（`GatewayRequestHookResponse` 新字段 7）：插件的 `gateway.request` 钩子放行时可以带上它，表示这个请求已经处理完，核心不再为它调用**这个插件**的任何 `gateway.attempt` 钩子，其他插件不受影响。拒绝时和在 `gateway.attempt` 里带上它都没有作用。请求钩子出错放行或被熔断跳过时没有这个标记，attempt 钩子照常调用。
 - **记录**：`usage_logs.hook_decisions` 的每一项加 `account_id`（只有 attempt 钩子有），按执行顺序与请求钩子的记录排在一起。
-- **授权与校验**：`hooks[].point` 可取 `gateway.request` 或 `gateway.attempt`（`manifest.HookPointRequest` / `HookPointAttempt`），必须列在 `gateway.hook` 的 `scope.points` 里，注册表只登记批准了的点。旧核心在安装时就拒绝这个钩子点；SDK 的版本下限 `check.AttemptHookFirstCore = "0.1.258"` 把它变成明确的 `hostCompat` 错误。**这个值是占位**，核心正式发版时改成实际的版本号。
+- **授权与校验**：`hooks[].point` 可取 `gateway.request` 或 `gateway.attempt`（`manifest.HookPointRequest` / `HookPointAttempt`），必须列在 `gateway.hook` 的 `scope.points` 里，注册表只登记批准了的点。旧核心在安装时就拒绝这个钩子点；SDK 的版本下限 `check.AttemptHookFirstCore = "0.1.258"` 把它变成明确的 `hostCompat` 错误。
 - **其他调用里的 `meta.account_id`**：同一次尝试里核心给插件的其他调用（build、execute、classify、用量提取，`metaFor`）也带上账号 ID。选定账号之前的调用为 0。
 - **代价**：没有插件声明这个点时没有任何开销。声明了的插件每次尝试多一次 RPC，在钩子内同步执行期间占着账号的并发名额，所以插件应该尽量用 `skip_attempt_hooks` 在请求钩子里结束。
 - 测试：`gateway/attempt_hook_test.go`（每次尝试都调用并带账号、拒绝不换账号、`skip_attempt_hooks` 只跳过本插件、补丁被拒、WebSocket 每条消息）、`sdk/manifest/check/attempt_hook_test.go`。
