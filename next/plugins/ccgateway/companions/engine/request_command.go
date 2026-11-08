@@ -291,13 +291,13 @@ func (g *Gateway) checkCapabilities(p *requestPlan) *requestRefusal {
 	return nil
 }
 
-// readRequestBody reads at most 32 MiB.
+// readRequestBody reads at most 128 MiB, the core's default request body limit.
 func readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, *requestRefusal) {
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 32<<20))
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 128<<20))
 	var large *http.MaxBytesError
 	switch {
 	case errors.As(err, &large):
-		return nil, refuse(413, "request_too_large", "Request exceeds 32 MiB")
+		return nil, refuse(413, "request_too_large", "Request exceeds 128 MiB")
 	case err != nil:
 		return nil, refuse(400, "invalid_request_error", "Cannot read body")
 	}

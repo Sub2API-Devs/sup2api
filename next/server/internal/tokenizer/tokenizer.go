@@ -11,8 +11,10 @@ import (
 	bpe "github.com/tiktoken-go/tokenizer"
 )
 
-// MaxTextBytes is the gateway's request body limit: the prompt text of any
-// request it accepts can be counted. Counting is linear in the text (the
+// MaxTextBytes bounds the prompt text the gateway counts locally. It was the
+// request body limit until that default rose to 128 MB (2026-11-08); a body
+// that large is mostly base64 media, so its text still fits, and longer text
+// is counted up to this many bytes. Counting is linear in the text (the
 // library's merge is no longer quadratic in a long run, v0.10.0).
 const MaxTextBytes = 32 << 20
 

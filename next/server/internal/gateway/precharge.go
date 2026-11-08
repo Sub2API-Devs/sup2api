@@ -47,7 +47,7 @@ func (c *call) precharge(ctx context.Context) error {
 	fields, omitted := usageRequestFields(c.ep.UsageRequestFields, c.body)
 	var report *pluginv1.UsageReport
 	if pb, exists := c.gen.Platform(c.platform); exists && pb.Client != nil {
-		// The body limit bounds the prompt, so the local tokenizer counts all of it.
+		// The local tokenizer counts the prompt up to tokenizer.MaxTextBytes.
 		prompt := c.promptText(tokenizer.MaxTextBytes)
 		in := &pluginv1.EstimateUsageRequest{Meta: c.meta(), Fields: fields, FieldsOmitted: omitted, PreConsumeTokens: floor, Prompt: truncateUTF8(prompt, pluginPromptBytes)}
 		estimator, ok := pb.Client.(interface {
