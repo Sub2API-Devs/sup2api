@@ -41,7 +41,6 @@ const zh = {
     modelHint: '客户端请求的模型名，留空为全部',
     resetDone: '已重置 {n} 条'
   },
-  state: { degrading: '降权中', climbing: '回升中' },
   detail: {
     noClimb: '生效配置里有启用的降权策略，却没有启用的回升策略：降下去的权重不会自动恢复。',
     weight: '有效 / 基准',
@@ -130,7 +129,7 @@ const zh = {
   scope: { all: '全部请求', stream: '仅流式', non_stream: '仅非流式' },
   whenEmpty: { fail: '无样本时不成立', pass: '无样本时成立' },
   metric: { error_rate: '错误率', ttfb: '首字耗时', latency: '整次耗时', weight: '有效权重' },
-  unit: { error_rate: '%', ttfb: 'ms', latency: 'ms', weight: '', second: '秒' },
+  unit: { second: '秒' },
   join: { and: '且', or: '或' },
   op: { gt: '>', gte: '≥', lt: '<', lte: '≤' },
   rules: {
@@ -153,7 +152,7 @@ const zh = {
     add: '添加规则',
     newName: '规则 {n}'
   },
-  item: { up: '上移', down: '下移', duplicate: '复制', copyName: '{name} 副本 {n}' },
+  item: { copyName: '{name} 副本 {n}' },
   editMode: { visual: '可视化', json: 'JSON' },
   json: {
     rules: '规则 JSON',
@@ -182,45 +181,22 @@ const zh = {
     newName: '策略 {n}'
   },
   layer: {
-    master: '总开关',
-    masterHint: '关闭时不统计、不调整任何账号。',
-    enabled: '启用调整',
-    enabledHint: '关闭时该分组的权重保持基准。',
     window: '评估窗口',
     windowHint: '10 到 3600 秒（评估每 10 秒一次），每个账号的窗口相位不同',
     minSamples: '最少样本',
     minSamplesHint: '样本不足时向前累积窗口',
     exempt: '豁免状态码',
     exemptHint: '不计入错误率，如 400,500-503',
-    floorMode: '权重下限方式',
     floor: '权重下限',
     floorHint: '0 表示可降到 0，账号暂停调度',
     strict: '样本不足不判定',
     strictHint: '降权和清理用的规则回看到头样本仍不足时不判定；关闭则与 new-api 一样按已有样本判定',
     clearOnZero: '降到 0 时清理粘性会话',
     clearOnZeroHint: '权重降到 0 只拦新会话，已绑定的粘性会话仍会发往该账号',
-    rules: '判定规则',
-    rulesHint: '规则只判定，不动作；策略按规则名引用它们。',
-    restoreRules: '恢复默认规则和策略',
-    strategies: '策略',
-    strategiesHint: '规则触发后执行的动作。',
-    staleRefs: '这些策略引用了已删除或停用的规则，保存前请修改：{names}',
-    required: '请填写',
-    emptyNumbers: '这些规则有未填写的数值，保存前请填写：{names}',
-    emptyStrategyNumbers: '这些策略有未填写的动作幅度或清理比例，保存前请填写：{names}'
+    required: '请填写'
   },
   config: {
     loadFailed: '加载配置失败',
-    global: '全局',
-    globalHint: '未单独配置的分组使用全局配置。',
-    groups: '分组配置',
-    groupsHint: '分组配置整体替换全局配置（总开关除外）。',
-    addGroup: '添加分组配置',
-    accounts: '账号覆盖',
-    accountsHint: '为单个账号覆盖开关、豁免状态码和权重下限，其余沿用所在层。',
-    addAccount: '添加账号覆盖',
-    validate: '校验',
-    valid: '配置校验通过',
     warningsConfirm: '配置有以下警告，仍要保存吗？{warnings}',
     save: '保存',
     discard: '放弃修改',
@@ -228,10 +204,8 @@ const zh = {
     saved: '配置已保存',
     conflict: '配置已被他人修改，请刷新后重试'
   },
-  accounts: { enabled: '调整', inherit: '沿用', on: '开启', off: '关闭', custom: '单独设置', exemptCodes: '账号的豁免状态码', exemptNone: '留空表示不豁免任何状态码' },
-  logEvents: { title: '事件日志', hint: '每条权重事件同时写一行插件日志（每 60 秒最多 5000 行，事件列表不受影响）。' },
+  logEvents: { hint: '每条权重事件同时写一行插件日志（每 60 秒最多 5000 行，事件列表不受影响）。' },
   notify: {
-    title: '通知',
     hint: '权重下调、开始回升、恢复到基准、从 0 复活时发送通知。',
     channel: '通知渠道',
     noChannel: '未选择',
@@ -240,12 +214,9 @@ const zh = {
     recipientsHint: '接收人类型：{kind}，最多 20 个',
     noChannels: '没有已启用的插件提供通知渠道，可启用邮件插件。'
   },
-  slot: { label: '动态 {w}', title: '{n} 个分组/模型已降权，显示最低有效权重；点击查看该账号的全部键', more: '还有 {n} 个键已降权' },
   degraded: { label: '动态权重降权 {n}', short: '降权 {n}', title: '本节点上有分组/模型被降权的账号；点击只看这些账号，再点取消' },
   accountTab: {
     hint: '本账号在各分组、各客户端模型下的有效权重；调度时用它替换账号在该分组的权重。',
-    events: '查看事件',
-    resetAll: '重置本账号全部',
     resetAllConfirm: '把账号 {account} 在全部分组、全部模型下的有效权重重置为基准？历史窗口会被清空。'
   },
   it: itemsMsg.zh,
@@ -289,7 +260,6 @@ const en: typeof zh = {
     modelHint: 'the model the client asked for; empty for every model',
     resetDone: '{n} reset'
   },
-  state: { degrading: 'Degrading', climbing: 'Climbing' },
   detail: {
     noClimb: 'An enabled strategy degrades but none climbs in the configuration in force: a degraded weight never recovers on its own.',
     weight: 'Effective / base',
@@ -378,7 +348,7 @@ const en: typeof zh = {
   scope: { all: 'All requests', stream: 'Streaming only', non_stream: 'Non-streaming only' },
   whenEmpty: { fail: 'False without samples', pass: 'True without samples' },
   metric: { error_rate: 'Error rate', ttfb: 'First token', latency: 'Whole attempt', weight: 'Effective weight' },
-  unit: { error_rate: '%', ttfb: 'ms', latency: 'ms', weight: '', second: 's' },
+  unit: { second: 's' },
   join: { and: 'and', or: 'or' },
   op: { gt: '>', gte: '≥', lt: '<', lte: '≤' },
   rules: {
@@ -401,7 +371,7 @@ const en: typeof zh = {
     add: 'Add rule',
     newName: 'Rule {n}'
   },
-  item: { up: 'Move up', down: 'Move down', duplicate: 'Duplicate', copyName: '{name} copy {n}' },
+  item: { copyName: '{name} copy {n}' },
   editMode: { visual: 'Visual', json: 'JSON' },
   json: {
     rules: 'Rules JSON',
@@ -430,45 +400,22 @@ const en: typeof zh = {
     newName: 'Strategy {n}'
   },
   layer: {
-    master: 'Master switch',
-    masterHint: 'Off: nothing is counted or adjusted.',
-    enabled: 'Adjust',
-    enabledHint: 'Off: the group keeps its base weights.',
     window: 'Window',
     windowHint: '10 to 3600 seconds (evaluated every 10 s); each account has its own phase',
     minSamples: 'Minimum samples',
     minSamplesHint: 'fewer samples look back over earlier windows',
     exempt: 'Exempt status codes',
     exemptHint: 'left out of the error rate, e.g. 400,500-503',
-    floorMode: 'Weight floor',
     floor: 'Floor value',
     floorHint: '0 lets the weight drop to 0, which pauses the account',
     strict: 'Judge only on enough samples',
     strictHint: 'Rules that degrade or clear are not judged while their samples stay short after looking back as far as allowed; off, they are judged on what there is, as in new-api',
     clearOnZero: 'Clear sticky sessions at 0',
     clearOnZeroHint: 'A weight of 0 only keeps new sessions off; bound sticky sessions would keep going to the account',
-    rules: 'Rules',
-    rulesHint: 'Rules only judge; strategies reference them by name.',
-    restoreRules: 'Restore default rules and strategies',
-    strategies: 'Strategies',
-    strategiesHint: 'What happens when rules fire.',
-    staleRefs: 'These strategies reference a removed or disabled rule; fix them before saving: {names}',
-    required: 'Required',
-    emptyNumbers: 'These rules have an empty number; fill it in before saving: {names}',
-    emptyStrategyNumbers: 'These strategies have an empty action amount or share; fill it in before saving: {names}'
+    required: 'Required'
   },
   config: {
     loadFailed: 'Failed to load the configuration',
-    global: 'Global',
-    globalHint: 'Groups without their own configuration use the global one.',
-    groups: 'Group configurations',
-    groupsHint: 'A group configuration replaces the global one entirely (except the master switch).',
-    addGroup: 'Add group configuration',
-    accounts: 'Account overrides',
-    accountsHint: 'Override the switch, exempt status codes and weight floor of one account; the rest follows its layer.',
-    addAccount: 'Add account override',
-    validate: 'Validate',
-    valid: 'The configuration is valid',
     warningsConfirm: 'The configuration has these warnings. Save anyway? {warnings}',
     save: 'Save',
     discard: 'Discard changes',
@@ -476,10 +423,8 @@ const en: typeof zh = {
     saved: 'Configuration saved',
     conflict: 'Someone changed the configuration meanwhile; reload and try again'
   },
-  accounts: { enabled: 'Adjust', inherit: 'Inherit', on: 'On', off: 'Off', custom: 'Override', exemptCodes: 'Account exempt status codes', exemptNone: 'empty: exempt no status code' },
-  logEvents: { title: 'Event log', hint: 'Also writes every weight event as a line of the plugin log (at most 5000 lines per 60 s; the event list is complete either way).' },
+  logEvents: { hint: 'Also writes every weight event as a line of the plugin log (at most 5000 lines per 60 s; the event list is complete either way).' },
   notify: {
-    title: 'Notifications',
     hint: 'Sent when a weight is degraded, starts climbing, is restored to its base or is revived from 0.',
     channel: 'Channel',
     noChannel: 'None',
@@ -488,12 +433,9 @@ const en: typeof zh = {
     recipientsHint: 'recipient kind: {kind}, at most 20',
     noChannels: 'No enabled plugin delivers notifications; enable the mail plugin for email.'
   },
-  slot: { label: 'dynamic {w}', title: '{n} group/model keys degraded; the lowest effective weight is shown. Click for every key of the account', more: '{n} more keys degraded' },
   degraded: { label: 'Dynamic weight: {n} degraded', short: '{n} degraded', title: 'Accounts with a degraded group/model key on this node; click to list only them, again to clear' },
   accountTab: {
     hint: 'The effective weight of this account in each group and client model; scheduling uses it in place of the account weight in the group.',
-    events: 'Events',
-    resetAll: 'Reset all of this account',
     resetAllConfirm: 'Reset the effective weights of account {account} in every group and model to their base? Their window history is dropped.'
   },
   it: itemsMsg.en,

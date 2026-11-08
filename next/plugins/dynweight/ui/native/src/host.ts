@@ -247,7 +247,7 @@ export const MAX_RESET_ACCOUNTS = MAX_ACCOUNT_BATCH
 export const keyOf = (k: Key) => `${k.account_id}|${k.group_id}|${k.model}`
 
 /** Dashboard page of the plugin, at a tab and (optionally) filtered to a key: ?account=&group=&model=. */
-export function dashboardRoute(tab: 'status' | 'events', key?: Partial<Key>) {
+export function dashboardRoute(tab: 'status' | 'events' | 'config', key?: Partial<Key>) {
   const query: Record<string, string> = { tab }
   if (key?.account_id) query.account = String(key.account_id)
   if (key?.group_id) query.group = String(key.group_id)
@@ -301,6 +301,9 @@ export interface WeightKey {
   model: string
   eff: number
   base: number
+  /** 0.5.1: direction of the last weight change ('' = unknown) and when (RFC 3339, absent = unknown). */
+  state?: '' | 'degrading' | 'climbing'
+  changed_at?: string
 }
 
 export interface AccountWeight {
@@ -309,6 +312,23 @@ export interface AccountWeight {
   base: number
   /** The lowest keys (at most 10, eff ascending); absent from a plugin before 0.5.0. */
   keys?: WeightKey[]
+  /** 0.5.1: the account override turns adjusting off (listed even without a degraded key). */
+  adjust_off?: boolean
+}
+
+// account area (0.5.1)
+/** A time in the viewer's zone, short for tight cells: HH:mm today, else MM-DD HH:mm. */
+export function shortTime(at: Date): string {
+  const hm = at.toLocaleTimeString(useDwHost().i18n.locale.value, { hour: '2-digit', minute: '2-digit', hour12: false })
+  if (at.toDateString() === new Date().toDateString()) return hm
+  return `${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')} ${hm}`
+}
+
+/** The configuration tab of the plugin page, opening an account's override when given (?override_account=). */
+export function configRoute(overrideAccount?: number) {
+  const route = dashboardRoute('config')
+  if (overrideAccount) route.query.override_account = String(overrideAccount)
+  return route
 }
 
 /** Accounts with a key below its base on this node (GET /degraded); account_ids holds at most 500. */
@@ -319,7 +339,7 @@ export interface Degraded {
 export const fetchDegraded = () => api().get<Degraded>('/degraded')
 
 // The account list renders the slot once per row: ids asked for in the same
-// tick are fetched in one GET /weights.
+// tick are fetched together, MAX_ACCOUNT_BATCH per GET /weights (its limit).
 type Waiters = Map<number, Array<(w: AccountWeight | null) => void>>
 let pending: Waiters | null = null
 
@@ -336,12 +356,14 @@ export function loadAccountWeight(accountId: number): Promise<AccountWeight | nu
 async function flushWeights() {
   const batch: Waiters = pending ?? new Map()
   pending = null
-  let weights: Record<string, AccountWeight> = {}
-  try {
-    weights = (await api().get<Record<string, AccountWeight> | null>('/weights', { account_ids: [...batch.keys()].join(',') })) ?? {}
-  } catch {
-    /* the slot is optional */
-  }
+  const ids = [...batch.keys()]
+  const chunks = Array.from({ length: Math.ceil(ids.length / MAX_ACCOUNT_BATCH) }, (_, i) => ids.slice(i * MAX_ACCOUNT_BATCH, (i + 1) * MAX_ACCOUNT_BATCH))
+  const answers = await Promise.all(
+    chunks.map((chunk) => api()
+      .get<Record<string, AccountWeight> | null>('/weights', { account_ids: chunk.join(',') })
+      .catch(() => null)) // the slot is optional
+  )
+  const weights: Record<string, AccountWeight> = Object.assign({}, ...answers)
   for (const [id, waiters] of batch) waiters.forEach((resolve) => resolve(weights[id] ?? null))
 }
 
@@ -392,21 +414,6 @@ export const eventKinds = ['weight_down', 'weight_up_start', 'weight_restored', 
 
 /** Deep copy of a JSON value. */
 export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
-
-/** Moves list[i] by `by` places (order is meaningful for rules and strategies). */
-export function moveItem<T>(list: T[], i: number, by: number) {
-  const j = i + by
-  if (j < 0 || j >= list.length) return
-  list.splice(j, 0, ...list.splice(i, 1))
-}
-
-/** Inserts a copy of a named list[i] after it, under a name not taken yet. */
-export function duplicateItem<T extends { name: string }>(list: T[], i: number, copyName: (name: string, n: number) => string) {
-  const taken = new Set(list.map((x) => x.name))
-  let n = 1
-  while (taken.has(copyName(list[i].name, n))) n++
-  list.splice(i + 1, 0, { ...clone(list[i]), name: copyName(list[i].name, n) })
-}
 
 /** Success rate in percent with one decimal ("97.5%"), '—' without samples. */
 export function successRate(total: number, fail: number): string {

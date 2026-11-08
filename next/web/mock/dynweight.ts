@@ -105,7 +105,8 @@ let config: any = {
     '1': { ...clone(DEFAULT_LAYER), window_seconds: 120 },
     '2': { ...clone(DEFAULT_LAYER), strategies: DEFAULT_LAYER.strategies.filter((s) => s.actions.every((a) => a.type !== 'weight_climb')) }
   },
-  accounts: { '13': { enabled: false } },
+  // 13 only counted; 21 overrides the exempt codes to none and the floor (the config tab's bold cells).
+  accounts: { '13': { enabled: false }, '21': { exempt_status_codes: '', min_weight_mode: 'fixed', min_weight: 1 } },
   notify: { enabled: false, channel: '', recipients: [], language: 'zh' },
   log_events: true
 }
@@ -123,13 +124,15 @@ interface MockKey {
   state: 'normal' | 'degrading' | 'climbing'
   hits?: string[]
   fired?: string
+  /** Seconds since the last weight change. */
+  ago?: number
 }
 
 const keys: MockKey[] = [
-  { account_id: 12, group_id: 1, model: 'claude-sonnet-4-5', base: 3, effective: 1.47, state: 'degrading', hits: ['错误率过高'], fired: '错误率过高' },
-  { account_id: 12, group_id: 2, model: 'claude-opus-4-1', base: 3, effective: 0, state: 'degrading', hits: ['首字挂死'] },
+  { account_id: 12, group_id: 1, model: 'claude-sonnet-4-5', base: 3, effective: 1.47, state: 'degrading', hits: ['错误率过高'], fired: '错误率过高', ago: 300 },
+  { account_id: 12, group_id: 2, model: 'claude-opus-4-1', base: 3, effective: 0, state: 'degrading', hits: ['首字挂死'], ago: 540 },
   { account_id: 12, group_id: 1, model: 'claude-haiku-4-5', base: 3, effective: 3, state: 'normal' },
-  { account_id: 21, group_id: 1, model: 'claude-sonnet-4-5', base: 2, effective: 1.2, state: 'climbing' },
+  { account_id: 21, group_id: 1, model: 'claude-sonnet-4-5', base: 2, effective: 1.2, state: 'climbing', ago: 900 },
   { account_id: 13, group_id: 1, model: 'claude-sonnet-4-5', base: 1, effective: 1, state: 'normal' }
 ]
 
@@ -173,7 +176,7 @@ function statusOf(k: MockKey) {
     reset: false,
     verdict: k.state === 'degrading' ? 'bad' : k.state === 'climbing' ? 'good' : 'neutral',
     last_change: k.state === 'degrading' ? 'weight_down' : k.state === 'climbing' ? 'weight_up_start' : '',
-    changed_at: k.state === 'normal' ? 0 : unix(-420),
+    changed_at: k.state === 'normal' ? 0 : unix(-(k.ago ?? 420)),
     next_eval_at: unix(50),
     eval_window: unix(-180),
     total,
@@ -248,14 +251,30 @@ on('GET', '/p/dynweight/events', (req) => {
   return paginate(list, q)
 })
 on('GET', '/p/dynweight/stats', () => ({ enabled: true, config_version: version, node_id: 'mock-1', started_at: Math.floor(Date.now() / 1000), degraded_keys: keys.filter(degraded).length }))
-// Per account: the degraded keys' count, the lowest effective weight and its base, and the lowest keys (0.5.0).
+// Per account: the degraded keys' count, the lowest effective weight and its base, and the lowest keys (0.5.0)
+// with their direction and last change (0.5.1); an account whose override turns adjusting off is listed with
+// adjust_off even without a degraded key (0.5.1).
 on('GET', '/p/dynweight/weights', (req) => {
   const ids = String(req.query.account_ids ?? '').split(',').map(Number)
   const out: Record<string, unknown> = {}
   for (const id of ids) {
     const mine = keys.filter((k) => k.account_id === id && degraded(k)).sort((a, b) => a.effective - b.effective)
-    if (!mine.length) continue
-    out[id] = { degraded: mine.length, lowest: Math.round(mine[0].effective), base: mine[0].base, keys: mine.slice(0, 10).map((k) => ({ group_id: k.group_id, model: k.model, eff: k.effective, base: k.base })) }
+    const adjustOff = config.accounts?.[String(id)]?.enabled === false
+    if (!mine.length && !adjustOff) continue
+    out[id] = {
+      degraded: mine.length,
+      lowest: mine.length ? Math.round(mine[0].effective) : 0,
+      base: mine[0]?.base ?? 0,
+      keys: mine.slice(0, 10).map((k) => ({
+        group_id: k.group_id,
+        model: k.model,
+        eff: k.effective,
+        base: k.base,
+        state: k.state === 'normal' ? '' : k.state,
+        changed_at: new Date(unix(-(k.ago ?? 420)) * 1000).toISOString().replace(/\.\d+Z$/, 'Z')
+      })),
+      ...(adjustOff ? { adjust_off: true } : {})
+    }
   }
   return out
 })

@@ -1,6 +1,235 @@
 // Messages of the config area, merged under its own key in messages.ts.
-const zh = {}
+const zh = {
+  summary: {
+    master: '总开关',
+    on: '动态权重已开启',
+    off: '动态权重已关闭',
+    offHint: '关闭时不统计、不调整任何账号',
+    items: '全局 {n} 个调整项',
+    groups: '{n} 个分组单独配置',
+    accounts: '{n} 个账号覆盖',
+    noClimbGlobal: '全局没有回升项',
+    noClimbGroup: '{group} 没有回升项',
+    noClimbHint: '有启用的降权项却没有启用的回升项：降下去的权重不会自动恢复'
+  },
+  value: { seconds: '{n} 秒', on: '开', off: '关', none: '不豁免' },
+  floorValue: { base_percent: '基准的 {n}%', fixed: '固定 {n}' },
+  field: {
+    stats: '统计与判定',
+    floor: '最低权重',
+    samplesUnit: '次',
+    floorMode: '权重下限方式',
+    // Short names of the layer fields in the group differences.
+    short: {
+      window_seconds: '评估窗口',
+      min_samples: '最少样本',
+      exempt_status_codes: '豁免状态码',
+      min_samples_strict: '样本不足不判定',
+      floor: '权重下限',
+      clear_sticky_on_zero: '降到 0 清理粘性会话'
+    }
+  },
+  global: { title: '全局配置', hint: '没有单独配置的分组都用这一套。' },
+  groups: {
+    title: '分组配置',
+    hint: '单独配置的分组用自己的一套，整体替换全局（总开关、通知和日志除外）；没列出的分组用全局。',
+    add: '添加分组配置',
+    empty: '还没有单独配置的分组，全部分组都用全局配置。',
+    col: { group: '分组', enabled: '调整', diff: '和全局的不同', warn: '提示' },
+    on: '开启',
+    off: '关闭',
+    same: '和全局完全相同',
+    fieldDiff: '{field} {value}（全局 {global}）',
+    itemsSame: '调整项与全局相同',
+    itemsCount: '调整项 {n} 项（全局 {g} 项）',
+    removed: '去掉了 {names}',
+    added: '新增了 {names}',
+    changed: '修改了 {names}',
+    reordered: '调整项顺序不同',
+    noClimb: '没有回升项，降下去不会恢复',
+    noClimbShort: '没有回升项',
+    edit: '编辑',
+    view: '查看',
+    remove: '删除',
+    removeConfirm: '删除分组 {group} 的单独配置？该分组将改用全局配置（保存后生效）。'
+  },
+  groupModal: {
+    add: '添加分组配置',
+    edit: '分组配置 · {group}',
+    group: '分组',
+    groupHint: '新的分组配置从全局复制，再按需修改。',
+    enabled: '启用调整',
+    enabledHint: '关闭时这个分组只统计，权重保持基准。'
+  },
+  accounts: {
+    title: '账号覆盖',
+    hint: '给单个账号改调整开关、豁免状态码和权重下限，其余沿用它所在分组的配置。',
+    add: '添加账号覆盖',
+    empty: '没有账号覆盖。',
+    col: { account: '账号', enabled: '调整', exempt: '豁免状态码', floor: '权重下限' },
+    on: '开启',
+    off: '关闭（只统计）',
+    inheritFrom: '沿用{source}：{value}',
+    varies: '沿用：各分组不同',
+    global: '全局',
+    group: ' {group} 分组',
+    edit: '编辑',
+    view: '查看',
+    remove: '删除',
+    removeConfirm: '删除账号 {account} 的覆盖？该账号将沿用所在分组的配置（保存后生效）。'
+  },
+  accountModal: {
+    add: '添加账号覆盖',
+    edit: '账号覆盖 · {account}',
+    account: '账号',
+    inGroups: '所在分组：{groups}',
+    noGroups: '不在任何分组，沿用全局配置',
+    groupsUnknown: '读不到所在分组，沿用值按全局显示',
+    custom: '单独设置',
+    enabled: '动态权重调整',
+    enabledHint: '开启只表示不额外关闭：分组或全局关闭时仍不调整。',
+    exempt: '豁免状态码',
+    exemptHint: '留空表示不豁免任何状态码，和沿用不同。',
+    floor: '权重下限',
+    nothing: '还没有单独设置任何一项。'
+  },
+  notify: {
+    title: '通知与日志',
+    send: '发送通知',
+    sendHint: '关闭时下面的渠道、语言和接收人不生效。',
+    log: '写入插件日志'
+  },
+  apply: '应用',
+  applyHint: '「应用」只改草稿，回到配置页再保存。',
+  incomplete: '有未填写的数值，填好后才能应用。',
+  close: '关闭',
+  sep: '、',
+  quote: '「{name}」',
+  quoteSep: '',
+  save: {
+    unsaved: '{n} 处未保存：{where}',
+    global: '全局',
+    group: '分组 {name}',
+    account: '账号 {name}',
+    notify: '通知与日志',
+    invalid: '有未填写的数值，填好后才能保存：{where}'
+  }
+}
 
-const en: typeof zh = {}
+const en: typeof zh = {
+  summary: {
+    master: 'Master switch',
+    on: 'Dynamic weight is on',
+    off: 'Dynamic weight is off',
+    offHint: 'Off: nothing is counted or adjusted',
+    items: '{n} global items',
+    groups: '{n} groups configured',
+    accounts: '{n} account overrides',
+    noClimbGlobal: 'Global has no climb item',
+    noClimbGroup: '{group}: no climb item',
+    noClimbHint: 'An enabled degrade item but no enabled climb item: lowered weights never come back by themselves'
+  },
+  value: { seconds: '{n}s', on: 'on', off: 'off', none: 'none' },
+  floorValue: { base_percent: '{n}% of base', fixed: 'fixed {n}' },
+  field: {
+    stats: 'Counting and judging',
+    floor: 'Weight floor',
+    samplesUnit: 'req',
+    floorMode: 'Floor mode',
+    short: {
+      window_seconds: 'Window',
+      min_samples: 'Min samples',
+      exempt_status_codes: 'Exempt codes',
+      min_samples_strict: 'Skip when short of samples',
+      floor: 'Floor',
+      clear_sticky_on_zero: 'Clear sticky at 0'
+    }
+  },
+  global: { title: 'Global', hint: 'Used by every group without a configuration of its own.' },
+  groups: {
+    title: 'Group configurations',
+    hint: 'A configured group uses its own set, replacing the global one entirely (except the master switch, notifications and logging); other groups use the global one.',
+    add: 'Add group',
+    empty: 'No group is configured: every group uses the global configuration.',
+    col: { group: 'Group', enabled: 'Adjust', diff: 'Differs from global', warn: 'Notes' },
+    on: 'On',
+    off: 'Off',
+    same: 'Same as global',
+    fieldDiff: '{field} {value} (global {global})',
+    itemsSame: 'Items same as global',
+    itemsCount: '{n} items (global {g})',
+    removed: 'Removed {names}',
+    added: 'Added {names}',
+    changed: 'Changed {names}',
+    reordered: 'Items in another order',
+    noClimb: 'No climb item: lowered weights stay down',
+    noClimbShort: 'No climb item',
+    edit: 'Edit',
+    view: 'View',
+    remove: 'Delete',
+    removeConfirm: 'Delete the configuration of group {group}? The group then uses the global configuration (once saved).'
+  },
+  groupModal: {
+    add: 'Add group configuration',
+    edit: 'Group · {group}',
+    group: 'Group',
+    groupHint: 'A new group configuration starts as a copy of the global one.',
+    enabled: 'Adjust',
+    enabledHint: 'Off: the group is only counted, its weights stay at base.'
+  },
+  accounts: {
+    title: 'Account overrides',
+    hint: 'Change the switch, exempt status codes and weight floor of one account; the rest follows its group configuration.',
+    add: 'Add account',
+    empty: 'No account override.',
+    col: { account: 'Account', enabled: 'Adjust', exempt: 'Exempt codes', floor: 'Weight floor' },
+    on: 'On',
+    off: 'Off (count only)',
+    inheritFrom: 'Inherits{source}: {value}',
+    varies: 'Inherits: differs by group',
+    global: ' global',
+    group: ' group {group}',
+    edit: 'Edit',
+    view: 'View',
+    remove: 'Delete',
+    removeConfirm: 'Delete the override of account {account}? The account then follows its group configuration (once saved).'
+  },
+  accountModal: {
+    add: 'Add account override',
+    edit: 'Account override · {account}',
+    account: 'Account',
+    inGroups: 'Groups: {groups}',
+    noGroups: 'In no group: inherits the global configuration',
+    groupsUnknown: 'Its groups cannot be read: inherited values are the global ones',
+    custom: 'Override',
+    enabled: 'Dynamic weight adjustment',
+    enabledHint: 'On only means not turned off here: the account is still not adjusted while its group or the master switch is off.',
+    exempt: 'Exempt status codes',
+    exemptHint: 'Empty exempts no status code, which is not the same as inheriting.',
+    floor: 'Weight floor',
+    nothing: 'Nothing is overridden yet.'
+  },
+  notify: {
+    title: 'Notifications and logging',
+    send: 'Send notifications',
+    sendHint: 'Off: the channel, language and recipients below are not used.',
+    log: 'Write to the plugin log'
+  },
+  apply: 'Apply',
+  applyHint: 'Apply only changes the draft: save it on the config page.',
+  incomplete: 'Some numbers are empty; fill them in to apply.',
+  close: 'Close',
+  sep: ', ',
+  quote: '"{name}"',
+  quoteSep: ', ',
+  save: {
+    unsaved: '{n} unsaved: {where}',
+    global: 'global',
+    group: 'group {name}',
+    account: 'account {name}',
+    notify: 'notifications and logging',
+    invalid: 'Some numbers are empty; fill them in to save: {where}'
+  }
+}
 
 export default { zh, en }

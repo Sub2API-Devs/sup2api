@@ -9,7 +9,9 @@ import { useDwHost, type Filter } from './host'
 // Dynamic weight page (CONTRACTS §74.5): effective weights, weight events and
 // the configuration. Tabs are mounted on first visit and synced to ?tab; the
 // account list's links come with ?account= (and group=, model=), which
-// preset the key filter of the status and events tabs (dashboardRoute).
+// preset the key filter of the status and events tabs (dashboardRoute), and
+// the account pages' with ?override_account=, which opens that account's
+// override on the config tab.
 const host = useDwHost()
 const t = host.t
 
@@ -36,6 +38,7 @@ if (preset) {
 }
 
 const tab = ref<TabKey>(initialTab())
+
 const visited = ref(new Set<TabKey>([tab.value]))
 
 watch(tab, (v) => {
@@ -43,6 +46,21 @@ watch(tab, (v) => {
   const route = host.router.currentRoute.value
   if (route.query.tab !== v) host.router.replace({ query: { ...route.query, tab: v } })
 })
+
+// ?override_account= is consumed like the preset, also when it comes while
+// the page is open: the config tab opens the dialog, then clears the ref.
+const overrideAccount = ref<string | null>(null)
+watch(
+  () => host.router.currentRoute.value.query.override_account,
+  (v) => {
+    if (typeof v !== 'string' || !/^\d+$/.test(v)) return
+    overrideAccount.value = v
+    tab.value = 'config'
+    const { override_account: _o, ...rest } = host.router.currentRoute.value.query
+    void host.router.replace({ query: { ...rest, tab: 'config' } })
+  },
+  { immediate: true }
+)
 
 // Tabs with reload(), refreshed by the header button.
 const refs: Partial<Record<TabKey, { reload?: () => unknown } | null>> = {}
@@ -76,7 +94,7 @@ function showEvents(f: Filter) {
     <STabs v-model="tab" :tabs="tabs">
       <StatusTab v-if="visited.has('status')" v-show="tab === 'status'" :ref="setRef('status')" :preset="preset" @show-events="showEvents" />
       <EventsTab v-if="visited.has('events')" v-show="tab === 'events'" :ref="setRef('events')" :preset="eventsPreset" />
-      <ConfigTab v-if="visited.has('config')" v-show="tab === 'config'" :ref="setRef('config')" />
+      <ConfigTab v-if="visited.has('config')" v-show="tab === 'config'" :ref="setRef('config')" v-model:open-account="overrideAccount" />
     </STabs>
   </div>
 </template>

@@ -7,9 +7,18 @@
 
 :root {
   --dw-hit: 217 119 6; /* amber-600 */
+  /* direction colours shared by every area: degrade, climb, sticky clear, error */
+  --dw-down: 217 119 6; /* amber-600 */
+  --dw-up: 5 150 105; /* emerald-600 */
+  --dw-clear: 2 132 199; /* sky-600 */
+  --dw-danger: 220 38 38; /* red-600 */
 }
 html.dark {
   --dw-hit: 251 191 36; /* amber-400 */
+  --dw-down: 251 191 36; /* amber-400 */
+  --dw-up: 52 211 153; /* emerald-400 */
+  --dw-clear: 56 189 248; /* sky-400 */
+  --dw-danger: 248 113 113; /* red-400 */
 }
 
 .dw-block {
@@ -48,20 +57,6 @@ html.dark {
   padding: 0 1rem;
 }
 
-/* account tab (detail drawer) header: hint left, buttons right */
-.dw-toolbar-start {
-  align-items: center;
-  justify-content: flex-start;
-  margin-top: 0;
-}
-
-/* account list badge tooltip: group · model · effective · base */
-.dw-keys {
-  display: grid;
-  grid-template-columns: auto auto auto;
-  gap: 0.125rem 0.75rem;
-}
-
 /* filters */
 .dw-filters {
   display: flex;
@@ -92,87 +87,17 @@ html.dark {
   padding: 0;
   border: 0;
 }
-.dw-layer,
 .dw-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-}
-.dw-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border: 1px solid rgb(var(--line));
-  border-radius: 0.5rem;
-}
-.dw-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.5rem 0.75rem;
-}
-.dw-cond {
-  align-items: center;
-}
-.dw-grow {
-  flex: 1 1 12rem;
-  min-width: 0;
-}
-.dw-end {
-  margin-left: auto;
-}
-.dw-w-6 {
-  width: 6rem;
-}
-.dw-w-8 {
-  width: 8rem;
-}
-.dw-w-10 {
-  width: 10rem;
-}
-.dw-w-12 {
-  width: 12rem;
-}
-.dw-w-16 {
-  width: 16rem;
-}
-.dw-item-actions {
-  display: flex;
-  gap: 0.125rem;
 }
 /* chevron-down turned into "move up" */
 .dw-up {
   transform: rotate(180deg);
 }
 
-/* key detail (status row expansion) */
-.dw-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.5rem 0;
-  font-size: 0.8125rem;
-}
-.dw-detail-grid {
-  display: grid;
-  grid-template-columns: minmax(8rem, max-content) 1fr;
-  gap: 0.25rem 1rem;
-  margin: 0;
-}
-.dw-detail-grid dt {
-  color: rgb(var(--fg-muted));
-}
-.dw-detail-grid dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.dw-rule {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.5rem;
-}
+/* window bitmap of a rule (key detail) */
 .dw-bits {
   display: inline-flex;
   gap: 2px;
@@ -190,23 +115,12 @@ html.dark {
   border: 1px solid rgb(var(--dw-hit));
   background: rgb(var(--dw-hit));
 }
-.dw-when,
-.dw-when-members {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.dw-when-members {
-  padding-left: 1rem;
-  border-left: 2px solid rgb(var(--line));
-}
 
 @media (max-width: 640px) {
   .dw-filter {
     width: calc(50% - 0.375rem);
   }
-  .dw-filter-wide,
-  .dw-grow {
+  .dw-filter-wide {
     flex-basis: 100%;
   }
 }

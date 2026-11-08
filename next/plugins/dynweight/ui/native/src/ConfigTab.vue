@@ -1,33 +1,39 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { isApiError } from '@sub2api/host'
-import { SAlert, SButton, SCard, SDisclosure, SField, SHint, SSegmented, SSelect, SSwitch, STagInput } from '@sub2api/ui'
-import AccountOverrideRow from './AccountOverrideRow.vue'
-import IdPicker from './IdPicker.vue'
-import LayerEditor from './LayerEditor.vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { isApiError, listAll, MAX_ACCOUNT_BATCH } from '@sub2api/host'
+import { SAlert, SCard, SHint } from '@sub2api/ui'
+import ConfigAccountModal from './ConfigAccountModal.vue'
+import ConfigAccountsTable from './ConfigAccountsTable.vue'
+import ConfigGroupModal from './ConfigGroupModal.vue'
+import ConfigGroupsTable from './ConfigGroupsTable.vue'
+import ConfigLayerFields from './ConfigLayerFields.vue'
+import ConfigNotify from './ConfigNotify.vue'
+import ConfigSaveBar from './ConfigSaveBar.vue'
+import ConfigSummary from './ConfigSummary.vue'
+import ItemsTable from './ItemsTable.vue'
 import { useCatalog } from './catalog'
+import { changes as changesOf, sortedIds, type Draft } from './configView'
 import {
-  canManage, clone, errorMessage, fetchChannels, fetchConfig, fetchDefaults, layerIncomplete, overrideIncomplete, saveConfig, useDwHost, validateConfig,
-  type AccountOverride, type Channel, type Config, type ConfigBody, type Layer
+  canManage, errorMessage, fetchChannels, fetchConfig, fetchDefaults, layerIncomplete, overrideIncomplete, saveConfig, useDwHost, validateConfig,
+  type AccountOverride, type Channel, type ConfigBody, type Layer, type Named
 } from './host'
 
 // Configuration: the global layer, group layers that replace it, account
 // overrides that narrow it, and notifications through a core channel. Saved
-// as one document with the version it was read at.
+// as one document with the version it was read at. Groups and accounts are
+// edited in dialogs whose Apply only changes the draft; the bar at the
+// bottom saves it. `openAccount` (?override_account= of the page) opens the
+// override dialog of that account once the config is loaded.
+const props = defineProps<{ openAccount?: string | null }>()
+const emit = defineEmits<{ (e: 'update:openAccount', v: null): void }>()
 const host = useDwHost()
 const t = host.t
 const manage = computed(() => canManage())
 const catalog = useCatalog()
 
-/** The edited config, with groups and accounts always present. */
-interface Draft extends Config {
-  groups: Record<string, Layer>
-  accounts: Record<string, AccountOverride>
-}
-
 const draft = ref<Draft | null>(null)
+const saved = ref<Draft | null>(null) // the draft as read or saved, to tell unsaved edits
 const version = ref(0)
-const pristine = ref('') // the draft as read or saved, to tell unsaved edits
 const defaults = ref<Layer | null>(null)
 const channels = ref<Channel[]>([])
 const loading = ref(false)
@@ -35,29 +41,30 @@ const error = ref('')
 const warnings = ref<string[]>([])
 
 function setDraft(body: ConfigBody) {
-  draft.value = { ...body.config, groups: body.config.groups ?? {}, accounts: body.config.accounts ?? {} }
-  pristine.value = JSON.stringify(draft.value)
+  const c: Draft = { ...body.config, groups: body.config.groups ?? {}, accounts: body.config.accounts ?? {} }
+  draft.value = c
+  saved.value = JSON.parse(JSON.stringify(c))
   version.value = body.version
-  badJson.value = {}
+  void loadAccountGroups(Object.keys(c.accounts))
 }
 
-const dirty = computed(() => !!draft.value && JSON.stringify(draft.value) !== pristine.value)
+const changes = computed(() => (draft.value && saved.value ? changesOf(draft.value, saved.value) : null))
+const dirty = computed(() => {
+  const c = changes.value
+  return !!c && (c.global || c.notify || c.groups.length > 0 || c.accounts.length > 0)
+})
 
-// Layers whose JSON panel holds text that does not parse ('' = the global
-// one, else a group id). Only a mounted editor has such text: collapsing a
-// layer drops it.
-const badJson = ref<Record<string, boolean>>({})
-// Where the draft cannot be validated or saved: unparsed JSON, or a number
-// left empty in a layer (also a collapsed one) or an account override. The
-// plugin would refuse it, or read a group's as the default.
+// Where the draft cannot be validated or saved: a number left empty in a
+// layer (its own, a rule's or an item's) or an account floor. The plugin
+// would refuse it, or read a group's as the default.
 const problems = computed(() => {
   const c = draft.value
   if (!c) return []
-  const out: string[] = []
-  if (badJson.value[''] || layerIncomplete(c)) out.push(t('config.global'))
-  for (const id of groupIds.value) if (badJson.value[id] || layerIncomplete(c.groups[id])) out.push(catalog.groupName(Number(id)))
-  for (const id of accountIds.value) if (overrideIncomplete(c.accounts[id])) out.push(catalog.accountName(Number(id)))
-  return out
+  return [
+    ...(layerIncomplete(c) ? [t('cfg.save.global')] : []),
+    ...sortedIds(c.groups).filter((id) => layerIncomplete(c.groups[id])).map((id) => t('cfg.save.group', { name: catalog.groupName(Number(id)) })),
+    ...sortedIds(c.accounts).filter((id) => overrideIncomplete(c.accounts[id])).map((id) => t('cfg.save.account', { name: catalog.accountName(Number(id)) }))
+  ]
 })
 const invalid = computed(() => problems.value.length > 0)
 
@@ -86,79 +93,78 @@ async function discard() {
 onMounted(reload)
 defineExpose({ reload: discard })
 
-// ---- groups and accounts, keyed by id
+// ---- the groups of the overridden accounts, for the values they inherit
 
-const sortedIds = (m: Record<string, unknown>) => Object.keys(m).sort((a, b) => Number(a) - Number(b))
-const groupIds = computed(() => sortedIds(draft.value?.groups ?? {}))
-const accountIds = computed(() => sortedIds(draft.value?.accounts ?? {}))
+// Read through the core account list (account:read); without it, or for an
+// account it does not return, the inherited values are the global ones. An
+// account is looked up again until a batch that holds it is answered.
+const accountGroups = ref<Record<string, number[]>>({})
+const looked = new Set<string>()
 
-const newGroup = ref('')
-const newAccount = ref('')
-const validId = (v: string) => /^\d+$/.test(v.trim()) && Number(v) > 0
-
-function addGroup() {
-  const c = draft.value
-  const id = newGroup.value.trim()
-  if (!c || !validId(id) || c.groups[id]) return
-  // A new group starts as a copy of the global layer that adjusts: the
-  // master switch and the event log stay the global one's.
-  const { groups: _g, accounts: _a, notify: _n, log_events: _l, ...global } = c
-  c.groups[id] = { ...clone(global), enabled: true }
-  newGroup.value = ''
+async function loadAccountGroups(ids: string[]) {
+  const todo = ids.filter((id) => !looked.has(id))
+  const batches = Array.from({ length: Math.ceil(todo.length / MAX_ACCOUNT_BATCH) }, (_, i) => todo.slice(i * MAX_ACCOUNT_BATCH, (i + 1) * MAX_ACCOUNT_BATCH))
+  await Promise.all(
+    batches.map(async (batch) => {
+      try {
+        const found = await listAll<Named & { group_ids?: number[] }>(host.api, '/accounts', {
+          query: { ids: batch.join(','), orphaned: 'all' },
+          max: batch.length
+        })
+        batch.forEach((id) => looked.add(id))
+        for (const a of found) {
+          accountGroups.value[a.id] = a.group_ids ?? []
+          catalog.state.accounts[a.id] = a.name
+        }
+      } catch {
+        /* this batch is asked again next time */
+      }
+    })
+  )
 }
 
-function removeGroup(id: string) {
+// ---- dialogs: the group or account opened ('' = a new one), null = closed
+
+const groupTarget = ref<string | null>(null)
+const accountTarget = ref<string | null>(null)
+
+function applyGroup(id: string, layer: Layer) {
+  if (draft.value) draft.value.groups[id] = layer
+  groupTarget.value = null
+}
+
+async function removeGroup(id: string) {
+  const message = t('cfg.groups.removeConfirm', { group: catalog.groupName(Number(id)) })
+  if (!(await host.confirm({ message, confirmText: t('cfg.groups.remove'), danger: true }))) return
   delete draft.value?.groups[id]
-  delete badJson.value[id]
 }
 
-function addAccount() {
-  const c = draft.value
-  const id = newAccount.value.trim()
-  if (!c || !validId(id) || c.accounts[id]) return
-  c.accounts[id] = {}
-  newAccount.value = ''
+// An override left with nothing set is removed rather than kept empty.
+function applyAccount(id: string, o: AccountOverride) {
+  if (draft.value && Object.values(o).every((v) => v === undefined)) delete draft.value.accounts[id]
+  else if (draft.value) draft.value.accounts[id] = o
+  accountTarget.value = null
 }
 
-// ---- notifications
+async function removeAccount(id: string) {
+  const message = t('cfg.accounts.removeConfirm', { account: catalog.accountName(Number(id)) })
+  if (!(await host.confirm({ message, confirmText: t('cfg.accounts.remove'), danger: true }))) return
+  delete draft.value?.accounts[id]
+}
 
-const channelOptions = computed(() => [
-  { value: '', label: t('notify.noChannel') },
-  ...channels.value.map((c) => ({ value: c.id, label: host.i18n.text(c.label) }))
-])
-const channel = computed(() => channels.value.find((c) => c.id === draft.value?.notify.channel))
-const languageOptions = computed(() => [
-  { value: 'zh', label: '中文' },
-  { value: 'en', label: 'English' }
-])
+watch(
+  [() => props.openAccount, draft],
+  ([id, c]) => {
+    if (!id || !c) return
+    accountTarget.value = id
+    emit('update:openAccount', null)
+  },
+  { immediate: true }
+)
 
-// ---- validate and save
+// ---- save
 
 const saving = ref(false)
-
-/** Has the plugin check the draft without saving: its warnings, or null and the error shown. */
-async function validate(c: Draft): Promise<string[] | null> {
-  error.value = ''
-  try {
-    const body = await validateConfig({ config: c, version: version.value })
-    warnings.value = body.warnings ?? []
-    return warnings.value
-  } catch (e) {
-    error.value = errorMessage(e, t('actionFailed'))
-    warnings.value = []
-    return null
-  }
-}
-
-async function check() {
-  if (!draft.value || invalid.value) return
-  saving.value = true
-  try {
-    if ((await validate(draft.value))?.length === 0) host.toast(t('config.valid'), 'success')
-  } finally {
-    saving.value = false
-  }
-}
 
 // Saving validates first: an invalid draft is not sent, and its warnings are
 // confirmed.
@@ -166,9 +172,11 @@ async function save() {
   const c = draft.value
   if (!c || invalid.value) return
   saving.value = true
+  error.value = ''
   try {
-    const found = await validate(c)
-    if (found === null) return
+    const checked = await validateConfig({ config: c, version: version.value })
+    const found = checked.warnings ?? []
+    warnings.value = found
     if (found.length && !(await host.confirm({ message: t('config.warningsConfirm', { warnings: found.join('; ') }), confirmText: t('config.save') }))) return
     const body = await saveConfig({ config: c, version: version.value })
     setDraft(body)
@@ -176,6 +184,8 @@ async function save() {
     host.toast(t('config.saved'), 'success')
   } catch (e) {
     const conflict = isApiError(e) && e.status === 409
+    // The plugin's refusal says what to fix: it stays on the page, over the config.
+    if (!conflict) error.value = errorMessage(e, t('actionFailed'))
     host.toast(conflict ? t('config.conflict') : errorMessage(e, t('actionFailed')), 'error')
   } finally {
     saving.value = false
@@ -184,84 +194,42 @@ async function save() {
 </script>
 
 <template>
-  <div>
+  <div class="dw-cfg">
     <SAlert v-if="error" tone="danger" class="dw-block">{{ error }}</SAlert>
     <SAlert v-for="w in warnings" :key="w" tone="warning" class="dw-block">{{ w }}</SAlert>
 
-    <!-- Read-only users get disabled fieldsets around the controls, never
-         around a disclosure, whose toggle must keep working. -->
     <template v-if="draft">
-      <SCard :title="t('config.global')" :subtitle="t('config.globalHint')" class="dw-block">
-        <fieldset class="dw-fieldset" :disabled="!manage">
-          <LayerEditor v-model:invalid="badJson['']" :model-value="draft" :defaults="defaults" master />
-        </fieldset>
-      </SCard>
+      <ConfigSummary v-model="draft" :readonly="!manage" class="dw-block" />
 
-      <SCard :title="t('config.groups')" :subtitle="t('config.groupsHint')" class="dw-block">
-        <div class="dw-list">
-          <SDisclosure v-for="id in groupIds" :key="id" variant="section" :label="catalog.groupName(Number(id))">
-            <template v-if="manage" #actions>
-              <SButton size="sm" variant="ghost" icon="trash" @click="removeGroup(id)">{{ t('remove') }}</SButton>
-            </template>
-            <fieldset class="dw-fieldset" :disabled="!manage">
-              <LayerEditor v-model="draft.groups[id]" v-model:invalid="badJson[id]" :defaults="defaults" />
-            </fieldset>
-          </SDisclosure>
-          <form v-if="manage" class="dw-row" @submit.prevent="addGroup">
-            <IdPicker v-model="newGroup" class="dw-w-16" kind="group" :exclude="groupIds" />
-            <SButton type="submit" icon="plus" :disabled="!validId(newGroup)">{{ t('config.addGroup') }}</SButton>
-          </form>
+      <SCard :title="t('cfg.global.title')" :subtitle="t('cfg.global.hint')" class="dw-block">
+        <ConfigLayerFields v-model="draft" :readonly="!manage" />
+        <div class="dw-cfg-items">
+          <ItemsTable
+            :rules="draft.rules"
+            :strategies="draft.strategies"
+            :defaults="defaults"
+            :readonly="!manage"
+            @change="({ rules, strategies }) => draft && Object.assign(draft, { rules, strategies })"
+          />
         </div>
       </SCard>
 
-      <fieldset class="dw-fieldset" :disabled="!manage">
-        <SCard :title="t('config.accounts')" :subtitle="t('config.accountsHint')" class="dw-block">
-          <div class="dw-list">
-            <AccountOverrideRow
-              v-for="id in accountIds"
-              :key="id"
-              v-model="draft.accounts[id]"
-              :label="catalog.accountName(Number(id))"
-              @remove="delete draft.accounts[id]"
-            />
-            <form class="dw-row" @submit.prevent="addAccount">
-              <IdPicker v-model="newAccount" class="dw-w-16" kind="account" :exclude="accountIds" />
-              <SButton type="submit" icon="plus" :disabled="!validId(newAccount)">{{ t('config.addAccount') }}</SButton>
-            </form>
-          </div>
-        </SCard>
+      <ConfigGroupsTable :draft="draft" :readonly="!manage" @add="groupTarget = ''" @edit="groupTarget = $event" @remove="removeGroup" />
+      <ConfigAccountsTable :draft="draft" :account-groups="accountGroups" :readonly="!manage" @add="accountTarget = ''" @edit="accountTarget = $event" @remove="removeAccount" />
+      <ConfigNotify v-model="draft" :channels="channels" :readonly="!manage" />
 
-        <SCard :title="t('logEvents.title')" :subtitle="t('logEvents.hint')" class="dw-block">
-          <SField :label="t('enabled')">
-            <SSwitch v-model="draft.log_events" />
-          </SField>
-        </SCard>
+      <ConfigSaveBar v-if="manage && changes && (dirty || invalid)" :changes="changes" :problems="problems" :saving="saving" @discard="discard" @save="save" />
 
-        <SCard :title="t('notify.title')" :subtitle="t('notify.hint')" class="dw-block">
-          <div class="dw-row">
-            <SField :label="t('enabled')">
-              <SSwitch v-model="draft.notify.enabled" />
-            </SField>
-            <SField class="dw-w-12" :label="t('notify.channel')" :hint="channel ? host.i18n.text(channel.description) : ''">
-              <SSelect v-model="draft.notify.channel" :options="channelOptions" />
-            </SField>
-            <SField :label="t('notify.language')">
-              <SSegmented v-model="draft.notify.language" :options="languageOptions" size="sm" />
-            </SField>
-          </div>
-          <SField :label="t('notify.recipients')" :hint="channel ? t('notify.recipientsHint', { kind: channel.recipient }) : ''">
-            <STagInput v-model="draft.notify.recipients" :max="20" />
-          </SField>
-          <SHint v-if="!channels.length">{{ t('notify.noChannels') }}</SHint>
-        </SCard>
-      </fieldset>
-
-      <div v-if="manage" class="dw-toolbar">
-        <SButton :disabled="!dirty && !invalid" @click="discard">{{ t('config.discard') }}</SButton>
-        <SHint v-if="invalid" inline>{{ t('json.invalid', { where: problems.join(', ') }) }}</SHint>
-        <SButton :loading="saving" :disabled="invalid" @click="check">{{ t('config.validate') }}</SButton>
-        <SButton variant="primary" icon="check" :loading="saving" :disabled="invalid" @click="save">{{ t('config.save') }}</SButton>
-      </div>
+      <ConfigGroupModal :target="groupTarget" :draft="draft" :defaults="defaults" :readonly="!manage" @close="groupTarget = null" @apply="applyGroup" />
+      <ConfigAccountModal
+        :target="accountTarget"
+        :draft="draft"
+        :account-groups="accountGroups"
+        :readonly="!manage"
+        @close="accountTarget = null"
+        @apply="applyAccount"
+        @pick="loadAccountGroups([$event])"
+      />
     </template>
     <SHint v-else-if="loading">{{ t('loading') }}</SHint>
   </div>

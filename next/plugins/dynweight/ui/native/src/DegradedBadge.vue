@@ -7,7 +7,9 @@ import { fetchDegraded, useDwHost, type Degraded } from './host'
 // filters the account list to them (setIds) and back. `ids` is the set this
 // plugin gave the core (other plugins' sets narrow the list too); pressed
 // while it is the one this chip set, and the core's own filter chip clears
-// it too. Refreshed every 30 s. Phones get the short label.
+// it too. Refreshed every 30 s. Phones get the short label without the
+// icon: the core gives the slot an equal share of the search row, too narrow
+// for both in English ("2 degraded" was cut).
 const props = defineProps<{ ids: number[] | null; setIds: (ids: number[] | null, label: string) => void }>()
 const t = useDwHost().t
 const { compact } = useViewport()
@@ -40,7 +42,7 @@ function toggle() {
 </script>
 
 <template>
-  <SChip v-if="count > 0 || pressed" tone="warning" icon="chart" :pressed="pressed" :title="t('degraded.title')" @click="toggle">
+  <SChip v-if="count > 0 || pressed" tone="warning" :icon="compact ? undefined : 'chart'" :pressed="pressed" :title="t('degraded.title')" @click="toggle">
     {{ t(compact ? 'degraded.short' : 'degraded.label', { n: count }) }}
   </SChip>
 </template>

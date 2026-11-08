@@ -5670,6 +5670,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - `ui.accountActions`：一条 `reset`（`route: "POST /reset"`、`permission: dynweight:manage`、`bulk: true`、带 `{n}` 的确认文案），核心把它渲染进账号行的操作菜单和批量栏，一律以 `{account_ids:[…]}` 调现有的 `POST /reset`（单行也是一个元素；每批固定 `manifest.MaxAccountBatch` 个；不声明 `visibleFor`，按缺省只在可编辑行显示）。
   - `ui.slots` 加 `account.list.toolbar → DynweightDegradedBadge`、`account.detail.tabs → DynweightAccountTab`（都要 `dynweight:read`）。账号编辑页不挂任何动态权重区块：账号覆盖只在配置页改（2026-11-08 决定，避免插件代码进核心保存流程）。
   - 路由加 `GET /degraded`（`dynweight:read`），`GET /weights` 多回 `keys`，见下文"接口"。
+- **0.5.1（2026-11-08）**：只改控制台界面和 `GET /weights` 的响应（多了字段，旧前端照常工作）。`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移。界面按 new-api 的"权重与变量"页重做（2026-11-08 用户要求，嫌原配置页难用），见下文"界面"中标了 0.5.1 的条目。
 - **只安装不启用**（`BUILTIN_PLUGINS_INSTALL_ONLY`）：启用后每次调度都会调用它，所以要由管理员有意打开。
 
 #### 计数
@@ -5768,7 +5769,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 | `GET /events?account_id&group_id&model&kind` | 权重事件，分页。每项带 `account_name`（调度最近一次看到的账号名） |
 | `POST /reset {account_id?, account_ids?, group_id?, model?}` | 至少指定账号或分组，`account_ids` 最多 500 个（0.2.0 起；0.5.0 起上限引用 `manifest.MaxAccountBatch`），`account_id` 与一个元素的 `account_ids` 等价。见上文"重置"；回答 `{reset}` 为重置的键数 |
 | `GET /stats` | 0.2.0 起。本节点的运行指标，见上文 |
-| `GET /weights?account_ids=1,2` | 账号列表的权重组件用，最多 500 个 id（`manifest.MaxAccountBatch`）。回答本节点快照中各账号已降权键的数量、最低有效权重和基准；0.5.0 起每个账号另有 `keys: [{group_id, model, eff, base}]`，按 `eff` 升序最多 10 条（`eff` 是未取整的有效权重，与 `/status` 的 `effective` 一致） |
+| `GET /weights?account_ids=1,2` | 账号列表的权重组件用，最多 500 个 id（`manifest.MaxAccountBatch`）。回答本节点快照中各账号已降权键的数量、最低有效权重和基准；0.5.0 起每个账号另有 `keys: [{group_id, model, eff, base}]`，按 `eff` 升序最多 10 条（`eff` 是未取整的有效权重，与 `/status` 的 `effective` 一致）；0.5.1 起每个键另有 `state`（与 `/status` 的 `state` 同一判断 `rules.Trend`：最近一次变化是降权为 `degrading`，否则为 `climbing`；调整未开启或状态表里读不到时为空串）和 `changed_at`（最近一次权重变化的时间，RFC 3339，没有时省略），由按本次账号 id 的一次状态表查询得出（只读低于基准的键）；读不到配置或状态表时照常回答快照，只是不带 `adjust_off` 或 `state` / `changed_at`；账号覆盖关闭了调整（`accounts.<id>.enabled` 为 false）的账号带 `adjust_off: true`，即使没有已降权的键也列出（`degraded` 为 0、`keys` 为空数组） |
 | `GET /degraded` | 0.5.0 起。本节点快照里有键低于基准的账号：`{count, account_ids}`，`count` 为实际数，`account_ids` 按 id 升序最多 500 个（`manifest.MaxAccountBatch`，也是核心账号列表 `ids` 筛选一次最多接受的数量）。账号列表工具栏的降权徽标用 |
 
 #### 界面（`ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
@@ -5776,13 +5777,16 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **菜单**：网关分组下的"动态权重"，有三个标签页：
   - 有效权重：本节点运行指标（折叠面板）；按名称选账号和分组筛选；展开一行看该键的详情（对应 new-api 的悬浮详情：有效/基准与下限、配置来源、成功率、进行中窗口、上一窗口与阈值计数、每条规则的"N 个窗口命中 M 次"进度和位图、最近变化、最早下次评估、没有回升策略的告警）；单键重置、勾选多行后按账号批量重置（可再限定分组和模型；显示"已选 N 个账号（最多 500）"，超过 500 不能提交；筛选、翻页、刷新都会清空勾选）、按筛选结果批量重置、跳转到该键的事件。
   - 权重事件：账号和分组显示名称。
-  - 配置：全局层、分组层、账号覆盖、事件日志开关、通知。层上有"样本不足不判定"（`min_samples_strict`）和"降到 0 时清理粘性会话"（`clear_sticky_on_zero`）两个开关；样本条件的行内可选条件自己的统计范围（"同规则"即不写）和"无样本时成立 / 不成立"（0.3.0 起）。分组和账号按名称选择。规则和策略可以可视化编辑（上移、下移、复制、删除；顺序有意义），也可以切到 JSON 直接编辑两个数组（解析失败，或条目缺少可视化编辑要用的结构——`conditions`、`actions` 不是对象数组，第二条起的条件 `join` 不是 and / or（0.4.0 起），`when` 不是规则名或 all / any 数组——时提示，不写回，"校验"和"保存"不可用，"放弃修改"可用；缺少的 `conditions`、`actions` 按空数组补上，缺少的 `when` 按未设置；恢复默认、放弃修改和保存后文本跟着配置刷新，输入中的文本不会被重排）。新建分组层复制全局层，但不复制只在全局的 `log_events`。数值框清空（层上的、规则里的、策略动作的幅度和清理比例、账号覆盖选了下限方式后的下限）时标红；是否可以校验和保存按整份草稿判断，折叠起来的分组层同样算，提示里列出是全局、哪个分组还是哪个账号（0.4.0 起；之前只看展开的编辑器，折叠后标记残留，放弃修改也清不掉）。规则重名时规则名标红；改名时只有旧名不再被别的规则使用、新名也没被别的规则占用，策略里的引用才跟着改（0.4.0 起；之前复制规则后把副本改成原名再改走，会把原规则的策略一起带走）。停用的策略引用已删除的规则时同样提示（插件对它也拒绝）。"校验"调 `/config/validate` 只显示错误或警告，"保存"先校验，有警告时确认后再保存。
+  - 配置（0.5.1 起）：从上到下是概况条（总开关、全局调整项数、分组配置数、账号覆盖数，启用了调整的层里有降权项却没有回升项时给出警告芯片）、全局配置（"统计与判定""最低权重"两组字段，下限方式和数值是一个组合输入）、分组配置表、账号覆盖表、"通知与日志"，有改动或有未填数值时出现吸底保存栏（写出改了哪几处：全局 / 分组 / 账号 / 通知与日志）。
+    - **调整项**：编辑单位是"调整项"，即一条策略连同它 `when` 指向的那条规则；规则名不再单独显示。表格每行一项，"什么时候""做什么"两列是生成的句子，行上可切换启用，复制、上移、下移、删除在"⋯"菜单。编辑弹窗左侧是调整项列表，右侧按"当 / 就"编辑：条件行（指标、分位、比较、阈值，行尾"⋯"展开条件级统计范围和"无样本时"，非默认值显示成标签）、规则统计范围、"最近 N 个窗口中至少 M 个命中"、动作（最多一个权重动作加一个清理粘性）、冷却、一句话预览；右上角可切到 JSON 同时编辑两个数组（无效时不能切回和应用）。读写照 new-api：没改过的规则原样写回；被多条策略共用的规则改了就复制一份（名为"调整项名 (2)"）；没有任何策略引用的规则随删除一起去掉并提示；调整项改名时，同名且未被共用的规则跟着改名。`when` 是多条规则组合（all / any、嵌套）、或引用的规则缺失 / 停用的条目在可视化里只读（锁形标签和原因），只能在 JSON 里改（2026-11-08 决定）。
+    - **分组配置**：表格写出和全局不同的字段与调整项增删改，配置缺回升项时标出；弹窗里编辑，新建时复制全局层（不复制只在全局的 `log_events`）。**账号覆盖**：表格里沿用的值用灰字写出实际值（账号所在分组层或全局；账号所在分组经 `GET /accounts?ids=` 批量读取），单独设置的值加粗；弹窗里每个字段一个"单独设置"开关。`?tab=config&override_account=<id>` 直接打开该账号的覆盖弹窗（没有覆盖时以新增模式打开），账号详情的动态权重标签用它跳转。
+    - 弹窗里的"应用"只改草稿，配置仍是一份带版本号的文档，由保存栏的"保存"统一 `PUT /config`（2026-11-08 决定）。保存前先 `/config/validate`，有警告时确认；409 提示已被他人修改。单独的"校验"按钮去掉。改动检测按区域比较、忽略键顺序。只读用户看到的是禁用的控件和只读弹窗，没有保存栏。
   - 分组和账号的名称经核心接口取得，用的是查看者自己的 `group:read` / `account:read`：分组一次读入（`@sub2api/host` 的 `listAll`，最多 1000 个，失败后下次再读）；账号不整表读入，选择框按输入的名称搜索 `GET /accounts?q=`（前 20 个），其他地方要显示的账号名按 id 读 `GET /accounts/:id`。选择框总能直接输入数字 id；选中的 id 不在列表里时显示为名称或 `#id`。没有这些权限时名称显示为 `#id`（状态和事件里的账号名仍来自插件自己记下的名称）。
 - **账号列表**（0.5.0 起接上 UI 3.6 的账号界面扩展点，见 §23.3；核心不认识 dynweight，都是通用插槽和声明）：
-  - 权重徽标：`account.list.weight` 插槽在权重下方显示"动态 N"（N 为最低有效权重，色调按它对基准的比例）。同一帧内所有行的请求合并成一次 `/weights`。徽标是 `SLink`，指向插件页 `/p/dynweight/dashboard?tab=status&account=<id>`；悬停（键盘聚焦、触屏点按）弹出卡片列出 `keys` 里的每个键：分组名（经核心 catalog）、模型、取整后的有效权重 · 基准，`degraded` 多于列出的键时注明"还有 N 个"；插件后端没有 `keys`（0.5.0 之前）时不弹卡。
+  - 权重徽标：`account.list.weight` 插槽在权重下方显示"▼ N"（降权中，N 为最低有效权重，为 0 时红色）或"▲ N"（列出的键都在回升中）；账号覆盖关闭了调整时显示灰色"只统计"（0.5.1 起；之前是"动态 N"）。同一帧内所有行的请求合并成一次 `/weights`。悬停（键盘聚焦、触屏点按）弹出紧凑卡片：标题行是账号名、低于基准的键数和基准，右侧链接"全部键"（插件页 `?tab=status&account=<id>`，核心没有从插槽打开详情标签的能力）和"事件"；下面每个键一行：分组名（经核心 catalog）、模型、有效 / 基准、状态（▼ 降权 / ▲ 回升）、最近变化时间，最多 10 行，其余注明"还有 N 个"；只统计的账号显示"账号覆盖：调整关闭"和去配置页修改的链接。
   - 工具栏降权徽标：`account.list.toolbar` 插槽（`DynweightDegradedBadge`）读 `GET /degraded`，`count > 0` 时显示芯片"动态权重降权 N"（手机形态为"降权 N"；`useAutoRefresh` 每 30 秒刷新，页面隐藏时不跑）；点击 `setIds(account_ids, label)` 把账号列表筛到这些账号，芯片按下态表示核心里它自己那组 `ids` 筛选仍在（`props.ids` 就是它设的那组；核心对应的筛选芯片被关闭或"清除筛选"后自然松开；别的插件同时设了筛选时列表取交集，见 §23.3），再点 `setIds(null, '')` 清除。
   - 行与批量重置：manifest `ui.accountActions` 的 `reset`（权限 `dynweight:manage`，`route: "POST /reset"`，`bulk: true`，带 `{n}` 确认文案），由核心渲染进每行操作菜单和批量栏，调用约定（body 恒为 `{account_ids:[…]}`，每批固定 `manifest.MaxAccountBatch` 个，95 秒超时）、提示和刷新都在核心（§23.3 UI 3.6）；插件只有现成的 `POST /reset`，不写任何前端代码。
-  - 详情标签页：`account.detail.tabs` 插槽（`DynweightAccountTab`，标签文案取 `plugin.dynweight.tabs.DynweightAccountTab`）列出该账号的全部键（`GET /status?account_id=`，不限已降权），表格与"有效权重"标签页共用 `KeyStatusTable`（列、展开 `KeyDetail`、单键重置、"事件"），没有账号列；顶部有"查看事件"（跳插件页 `?tab=events&account=<id>`）和"重置本账号全部"（`POST /reset {account_id}`，确认后执行；只对 `dynweight:manage`）。行上的"事件"跳到 `?tab=events&account=&group=&model=`。
+  - 详情标签页：`account.detail.tabs` 插槽（`DynweightAccountTab`，标签文案取 `plugin.dynweight.tabs.DynweightAccountTab`）列出该账号的全部键（`GET /status?account_id=`，不限已降权），表格与"有效权重"标签页共用 `KeyStatusTable`（展开 `KeyDetail`），没有账号列。0.5.1 起改紧凑：顶部一行摘要（键数、低于基准的键数、最低有效 / 基准、本账号覆盖和"设置"链接到 `?tab=config&override_account=<id>`），说明收进 ⓘ 提示，"事件""重置全部"（`POST /reset {account_id}`，确认后执行；只对 `dynweight:manage`）是同一行的小按钮；表格每键一行，"最近窗口"合成"成功率 · 次数"，"事件""重置"收进行尾菜单，只有一页时不显示分页；展开明细是"标签 · 值"网格加规则迷你表（触发条件、各窗口命中格子、本窗结果、样本数），没有回升项的告警是一行提示加"去配置"链接。行上的"事件"跳到 `?tab=events&account=&group=&model=`。
   - 插件页读 `?account=`（及 `group=`、`model=`）预填"有效权重"和"权重事件"标签页的键筛选；带预填进入"有效权重"时"只看已降权"默认关闭，以便看到该账号的全部键。
 
 ### 74.6 发布
@@ -5792,6 +5796,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - dynweight 0.2.0 新增 `app.events.v1` 能力和 `events` 授权（`account.status_changed`），升级时需要管理员重新确认授权。状态文档新增的 `last_ln`、`last_latency_counts` 字段在旧状态里缺省为空，下一次评估写入；没有迁移。
 - dynweight 0.3.0：能力和授权不变（`sticky.clear` 的说明加上了降到 0 时的清理）。迁移 `0002_sticky_pending_defaults` 新建 `sticky_pending`，并把仍是 0.2.0 出厂默认的规则换成新默认（见 §74.5"0.2.0 的默认规则迁到 0.3.0"）；换过规则的层，键在下一次评估时各记一条 `rules_change`，有效权重保留。`min_samples_strict`、`clear_sticky_on_zero` 在旧配置里按开启读：升级后被降权和清理策略引用的规则，样本不足时不再判定。状态的 `last_rules` 多了字符 `2`（未判定），旧版插件读到时按未命中显示。迁移 0001 第一行注释写成了 §73.5（应为 §74.5），没有改：插件迁移按整个文件的 sha256 记校验和，改注释会让核心把 0001 重跑一遍（幂等，但没有必要）。
 - dynweight 0.4.0：能力和授权不变。（0.4.1 只把控制台页面改成懒加载，`hostCompat` 下限提到 0.1.229，见 §23.1。）默认降权策略加上清理 30% 粘性会话，迁移 `0003_default_affinity_clear` 把仍是 0.3.0 出厂默认的策略换成新默认（见 §74.5"0.3.0 的默认策略迁到 0.4.0"）。控制台配置页的修正见 §74.5"界面"。
+- dynweight 0.5.1：只换控制台界面并给 `GET /weights` 加字段（见 §74.5），能力、授权、迁移都不变，可以单独升级插件，核心不用动。
 
 ## 75. 插件设置权限、插件写操作审计、按 id 查用户（2026-10-31，审计 moderation 与 dynweight 时发现的通用缺口）
 
