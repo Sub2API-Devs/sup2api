@@ -516,6 +516,8 @@ export interface Account {
   environment?: EnvironmentValues
   /** Client headers copied onto upstream requests: "*", "regex:<pattern>" or header names (CONTRACTS §81). */
   header_passthrough?: string[]
+  /** Request parameter override in new-api's param_override format (CONTRACTS §84); null when unset. */
+  param_override?: Record<string, unknown> | null
   /** Read-only usage of the last 60 seconds (0 when Redis is unavailable), with one entry per model list. */
   rate_usage?: { rpm: number; tpm: number; sessions?: number; models?: ModelRateUsage[] }
   /** Successful requests and failed attempts of the last minute (CONTRACTS §73); null when unavailable. */

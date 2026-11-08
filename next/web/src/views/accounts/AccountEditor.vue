@@ -32,6 +32,8 @@ import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
 import AccountEditorNav from './AccountEditorNav.vue'
+import ParamOverrideField from './paramOverride/ParamOverrideField.vue'
+import { operationCount, type Override as ParamOverride } from './paramOverride/model'
 import AccountModelsCard from './AccountModelsCard.vue'
 import FetchedModelsModal from './FetchedModelsModal.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
@@ -80,6 +82,7 @@ const basic = reactive({
   spm_limit: 0,
   environment: {} as EnvironmentValues,
   header_passthrough: [] as string[],
+  param_override: null as ParamOverride | null
 })
 /** 指定模型限速 (CONTRACTS §68), edited as cards and saved as one entry per list. */
 const modelLimitCards = ref<ModelLimitCard[]>([])
@@ -179,15 +182,19 @@ watch(defaultModels, (next, previous) => {
 /** Models and mappings of the section summary (the cards render their own counts). */
 const mappingCount = computed(() => Object.keys(mapping.value).length)
 
-/** The advanced section's summary: header passthrough and the account's own environment values. */
+/** The advanced section's summary: header passthrough, parameter override and the account's own environment values. */
 const forwardingSummary = computed(() => {
   const rules = basic.header_passthrough
+  const overrides = operationCount(basic.param_override)
   const custom = Object.keys(basic.environment).length
-  if (!rules.length && !custom) return t('accounts.forwarding.allDefault')
+  if (!rules.length && !overrides && !custom) return t('accounts.forwarding.allDefault')
   return [
     rules.includes('*') ? t('accounts.forwarding.passAll') : rules.length ? t('accounts.forwarding.passRules', { n: rules.length }) : t('accounts.forwarding.passNone'),
+    overrides && t('accounts.forwarding.override', { n: overrides }),
     custom ? t('accounts.forwarding.envCustom', { n: custom }) : t('accounts.forwarding.envFollow')
-  ].join(' · ')
+  ]
+    .filter(Boolean)
+    .join(' · ')
 })
 
 const editorSections = computed(() => [
@@ -456,6 +463,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   basic.spm_limit = a?.spm_limit ?? 0
   basic.environment = { ...a?.environment }
   basic.header_passthrough = [...(a?.header_passthrough || [])]
+  basic.param_override = a?.param_override ?? null
   modelLimitCards.value = toCards(a?.model_limits)
   if (!a) applyDefaultLimits(at)
   resetEnvironment(a?.settings)
@@ -764,6 +772,7 @@ const { save } = useAccountSave({
             <SSettingRow :label="t('accounts.headerPassthrough.title')" :description="t('accounts.headerPassthrough.hint')" :error="errors.header_passthrough" data-testid="account-header-passthrough">
               <STagInput v-model="basic.header_passthrough" :placeholder="t('accounts.headerPassthrough.placeholder')" :disabled="saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
             </SSettingRow>
+            <ParamOverrideField v-model="basic.param_override" :models="models" :error="errors.param_override" :disabled="saving" />
             <EnvironmentEditor v-if="showEnvironment" v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
           </SSettingsGroup>
         </div>

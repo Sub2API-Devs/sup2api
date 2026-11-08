@@ -11,6 +11,7 @@ import AccountModelsCard from './AccountModelsCard.vue'
 import ModelLimitsEditor from './ModelLimitsEditor.vue'
 import { SSwitch, STagInput } from '@sub2api/ui'
 import AccountEditorNav from './AccountEditorNav.vue'
+import ParamOverrideField from './paramOverride/ParamOverrideField.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }), toast: vi.fn() }))
@@ -75,6 +76,21 @@ describe('account container environment', () => {
     await flushPromises()
     await w.get('form').trigger('submit'); await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ header_passthrough: ['*', 'regex:^x-claude-code-'] }))
+  })
+
+  it('loads, summarizes and saves the parameter override (CONTRACTS §84)', async () => {
+    const override = { operations: [{ mode: 'set', path: 'temperature', value: 0.7 }, { mode: 'delete_header', path: 'x-foo' }] }
+    const w = render({ ...savedAccount(), param_override: override } as Account)
+    await flushPromises()
+    const field = w.getComponent(ParamOverrideField)
+    expect(field.props('modelValue')).toEqual(override)
+    expect(field.element.closest('[data-editor-section]')?.getAttribute('data-editor-section')).toBe('advanced')
+    const advanced = () => w.getComponent(AccountEditorNav).props('sections').find(s => s.key === 'advanced')
+    expect(advanced()?.summary).toBe('不透传 · 覆盖 2 条 · 超时跟随')
+    field.vm.$emit('update:modelValue', null)
+    await flushPromises()
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ param_override: null }))
   })
 
   it('saves a feature draft atomically with account fields and omits unchanged policy', async () => {

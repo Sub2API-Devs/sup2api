@@ -6,8 +6,9 @@ export type EditorSection = 'connection' | 'models' | 'scheduling' | 'advanced' 
 export const CONNECTION_FIELDS = ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone']
 const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit']
 
-/** The advanced section (request forwarding): header passthrough rules (CONTRACTS §81) and the account layer of the environment variables (`environment.<key>`). */
-export const isAdvancedField = (k: string) => k === 'header_passthrough' || k.startsWith('header_passthrough.') || k.startsWith('header_passthrough[') || k === 'environment' || k.startsWith('environment.')
+/** The advanced section (request forwarding): header passthrough rules (CONTRACTS §81), the parameter override (§84) and the account layer of the environment variables (`environment.<key>`). */
+const ADVANCED_PREFIXES = ['header_passthrough', 'param_override', 'environment']
+export const isAdvancedField = (k: string) => ADVANCED_PREFIXES.some(p => k === p || k.startsWith(`${p}.`) || k.startsWith(`${p}[`))
 
 /** Scheduling and limit fields. */
 export const isSchedulingField = (k: string) => SCHEDULING_FIELDS.includes(k)

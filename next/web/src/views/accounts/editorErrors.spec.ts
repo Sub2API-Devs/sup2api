@@ -7,5 +7,6 @@ describe('sectionOfErrors', () => {
     expect(sectionOfErrors({ header_passthrough: 'blocked', rpm_limit: 'invalid' }, {})).toBe('scheduling')
     expect(sectionOfErrors({ name: 'required', header_passthrough: 'blocked' }, {})).toBe('connection')
     expect(sectionOfErrors({ 'environment.relay_timeout_seconds': 'invalid' }, {})).toBe('advanced')
+    expect(sectionOfErrors({ param_override: 'invalid' }, {})).toBe('advanced')
   })
 })

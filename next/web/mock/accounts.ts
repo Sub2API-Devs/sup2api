@@ -332,7 +332,13 @@ function applyCommonControls(pluginKey: string, type: string, body: Record<strin
 const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
 
 export const accounts: any[] = [
-  { id: 12, name: 'claude-main', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, spm_limit: 8, model_limits: [{ models: ['claude-opus-4-1'], max_concurrency: 2, rpm_limit: 10, tpm_limit: 0, spm_limit: 2 }, { models: ['claude-haiku-4-5', 'claude-sonnet-4-5'], max_concurrency: 0, rpm_limit: 0, tpm_limit: 50000 }], status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  { id: 12, name: 'claude-main', param_override: { operations: [
+    { description: '固定 temperature', mode: 'set', path: 'temperature', value: 0.7 },
+    { mode: 'delete', path: 'top_p' },
+    { description: 'claude- 模型设置 max_tokens', mode: 'set', path: 'max_tokens', value: 8192, keep_origin: true, logic: 'OR', conditions: [{ path: 'model', mode: 'prefix', value: 'claude-' }] },
+    { description: 'anthropic-beta 去掉 1M 上下文', mode: 'set_header', path: 'anthropic-beta', value: { 'context-1m-2025-08-07': null } },
+    { mode: 'return_error', value: { message: '该账号不提供 opus', status_code: 400 }, logic: 'OR', conditions: [{ path: 'model', mode: 'contains', value: 'opus' }] }
+  ] }, plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, spm_limit: 8, model_limits: [{ models: ['claude-opus-4-1'], max_concurrency: 2, rpm_limit: 10, tpm_limit: 0, spm_limit: 2 }, { models: ['claude-haiku-4-5', 'claude-sonnet-4-5'], max_concurrency: 0, rpm_limit: 0, tpm_limit: 50000 }], status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
   { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', created_by: 6, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
   { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1], proxy_id: null, priority: 5, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
   { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', created_by: 6, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 20, schedulable: true, models: [], model_mapping: { 'claude-opus-4-1': 'claude-sonnet-4-5' }, rpm_limit: 120, tpm_limit: 0, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
@@ -510,6 +516,7 @@ const withGroups = (a: any) => ({
   model_limits: (a.model_limits || []).map((l: any) => ({ spm_limit: 0, ...l })),
   spm_limit: a.spm_limit ?? 0,
   header_passthrough: a.header_passthrough ?? [],
+  param_override: a.param_override ?? null,
   weight: a.weight ?? 1,
   created_by: a.created_by ?? null,
   created_by_email: userEmail(a.created_by),
@@ -746,6 +753,42 @@ function scopedAccount(req: MockRequest, action: 'read' | 'update' | 'delete' | 
   const a = accounts.find((x) => x.id === Number(req.params.id))
   return a && inScope(scope, who, a) ? { a } : fail(404, 'not_found', 'account not found')
 }
+// Dry run of a parameter override (CONTRACTS §84). The mock only knows the
+// common modes (set, delete, set_header, delete_header, return_error) and
+// conditions on top-level fields; the server runs the real engine.
+on('POST', '/accounts/param-override/preview', (req) => {
+  const { param_override: po, body = {}, model = '', headers = {} } = req.body || {}
+  const out: Record<string, any> = JSON.parse(JSON.stringify(body))
+  const ctx: Record<string, any> = { model, original_model: model, request_headers: headers }
+  const set: Record<string, string> = {}
+  const del: string[] = []
+  const compare = (v: any, mode: string, want: any) => {
+    const s = String(v ?? ''), w = String(want ?? '')
+    return ({ full: s === w, prefix: s.startsWith(w), suffix: s.endsWith(w), contains: s.includes(w), gt: +s > +w, gte: +s >= +w, lt: +s < +w, lte: +s <= +w } as Record<string, boolean>)[mode] ?? false
+  }
+  const holds = (op: any) => {
+    const conds: any[] = op.conditions || []
+    if (!conds.length) return true
+    const results = conds.map(c => {
+      const v = c.path in out ? out[c.path] : ctx[c.path]
+      if (v === undefined) return !!c.pass_missing_key
+      return compare(v, c.mode, c.value) !== !!c.invert
+    })
+    return String(op.logic).toUpperCase() === 'AND' ? results.every(Boolean) : results.some(Boolean)
+  }
+  for (const op of po?.operations || []) {
+    if (!holds(op)) continue
+    if (op.mode === 'set' && !(op.keep_origin && op.path in out)) out[op.path] = op.value
+    else if (op.mode === 'delete') delete out[op.path]
+    else if (op.mode === 'set_header') set[op.path] = typeof op.value === 'string' ? op.value : JSON.stringify(op.value)
+    else if (op.mode === 'delete_header') del.push(op.path)
+    else if (op.mode === 'return_error') {
+      const v = typeof op.value === 'string' ? { message: op.value } : op.value || {}
+      return { body: out, set_headers: set, delete_headers: del, return_error: { status: v.status_code ?? 400, code: v.code ?? 'invalid_request', type: v.type ?? 'invalid_request_error', message: v.message, skip_retry: v.skip_retry !== false } }
+    }
+  }
+  return { body: out, set_headers: set, delete_headers: del, return_error: null }
+})
 on('GET', '/accounts/:id', (req) => {
   const r = scopedAccount(req, 'read')
   return 'a' in r ? withGroups(r.a) : r

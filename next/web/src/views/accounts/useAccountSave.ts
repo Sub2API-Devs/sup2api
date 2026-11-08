@@ -35,6 +35,8 @@ export interface AccountBasics {
   environment: EnvironmentValues
   /** Header passthrough rules (CONTRACTS §81). */
   header_passthrough: string[]
+  /** Request parameter override, new-api's param_override format (CONTRACTS §84); null clears it. */
+  param_override: Record<string, unknown> | null
 }
 
 /** The account editor's model list / mapping editor (useModelEdit: its state and actions). */
@@ -146,7 +148,8 @@ export function useAccountSave(deps: AccountSaveDeps) {
       spm_limit: Number(basic.spm_limit) || 0,
       model_limits: fromCards(deps.modelLimits.value),
       environment: basic.environment,
-      header_passthrough: basic.header_passthrough
+      header_passthrough: basic.header_passthrough,
+      param_override: basic.param_override
     }
     if (schedulingConfigurable.value) body.schedulable = basic.schedulable
     if (ccg.autoDisableEnabled.value === true && autoDisableConfigurable.value) body.auto_disable = basic.auto_disable
