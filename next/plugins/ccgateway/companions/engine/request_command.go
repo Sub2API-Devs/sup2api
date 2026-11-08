@@ -291,13 +291,17 @@ func (g *Gateway) checkCapabilities(p *requestPlan) *requestRefusal {
 	return nil
 }
 
-// readRequestBody reads at most 128 MiB, the core's default request body limit.
+// readRequestBody reads the whole body. The core's max_request_body_mb is
+// the one limit on a client request body: the caller is authenticated as the
+// core (main.go checks the gateway API key first). The engine only keeps a
+// backstop at that setting's ceiling (1024 MB), so it never refuses a body
+// the core accepted, and a bug cannot read gigabytes into the container.
 func readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, *requestRefusal) {
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 128<<20))
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<30))
 	var large *http.MaxBytesError
 	switch {
 	case errors.As(err, &large):
-		return nil, refuse(413, "request_too_large", "Request exceeds 128 MiB")
+		return nil, refuse(413, "request_too_large", "Request exceeds the 1024 MiB backstop; the core's max_request_body_mb sets the request body limit")
 	case err != nil:
 		return nil, refuse(400, "invalid_request_error", "Cannot read body")
 	}
