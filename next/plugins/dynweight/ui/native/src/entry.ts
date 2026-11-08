@@ -16,10 +16,16 @@ import './account.css'
 export function register(host: PluginHost) {
   setHost(host)
   host.addMessages(messages)
-  host.registerComponent('DynweightDashboard', lazyPage(() => import('./DynweightDashboard.vue')))
+  host.registerComponent(
+    'DynweightDashboard',
+    lazyPage(() => import('./DynweightDashboard.vue'))
+  )
   host.registerComponent('DynweightAccountWeight', AccountWeight)
   host.registerComponent('DynweightDegradedBadge', DegradedBadge)
-  host.registerComponent('DynweightAccountTab', lazyPage(() => import('./AccountTab.vue')))
+  host.registerComponent(
+    'DynweightAccountTab',
+    lazyPage(() => import('./AccountTab.vue'))
+  )
 }
 
 export function unregister() {

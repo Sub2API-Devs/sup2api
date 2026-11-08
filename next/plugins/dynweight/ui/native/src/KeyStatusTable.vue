@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { UseListResult } from '@sub2api/host'
-import { SBadge, SCard, SDropdown, SHint, SPagination, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
+import { SBadge, SCard, SDateTime, SDropdown, SHint, SPagination, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
 import KeyDetail from './KeyDetail.vue'
 import { useCatalog } from './catalog'
-import { canManage, keyOf, shortTime, successRate, useDwHost, weightOf, weightTone, type KeyStatus } from './host'
+import { canManage, keyOf, successRate, useDwHost, weightOf, weightTone, type KeyStatus } from './host'
 
 // The keys of a GET /status list with their pager, one line per key: the
 // configuration in force, weight against base and its direction, last
@@ -16,6 +16,11 @@ const props = defineProps<{ list: UseListResult<KeyStatus>; busy: string; select
 const emit = defineEmits<{ (e: 'reset', row: KeyStatus): void; (e: 'show-events', row: KeyStatus): void }>()
 const selected = defineModel<string[]>('selected', { default: () => [] })
 const host = useDwHost()
+// The list is the parent's useList: its page refs are the pager's state, set
+// through the refs themselves rather than by assigning into the prop.
+const setRef = <T,>(r: { value: T }, v: T) => void (r.value = v)
+const setPage = (page: number) => setRef(props.list.page, page)
+const setPageSize = (size: number) => setRef(props.list.pageSize, size)
 const t = host.t
 const manage = computed(() => canManage())
 const catalog = useCatalog()
@@ -38,7 +43,7 @@ const columns = computed<TableColumn[]>(() => {
   ]
 })
 
-const rows = computed(() => props.list.items.value.map((r) => ({ ...r, key: keyOf(r), hits: r.rules.filter((x) => x.hit) })))
+const rows = computed(() => props.list.items.value.map(r => ({ ...r, key: keyOf(r), hits: r.rules.filter(x => x.hit) })))
 
 const menu = (r: KeyStatus): MenuAction[] => [
   { key: 'events', label: t('status.events'), icon: 'chart' },
@@ -49,7 +54,18 @@ const pick = (r: KeyStatus, action: string) => (action === 'reset' ? emit('reset
 
 <template>
   <SCard :padded="false">
-    <STable v-model:selected="selected" :columns="columns" :rows="rows" :loading="list.loading.value" row-key="key" :empty-text="t('status.empty')" :selectable="selectable" expandable fit-expanded-to-container dense>
+    <STable
+      v-model:selected="selected"
+      :columns="columns"
+      :rows="rows"
+      :loading="list.loading.value"
+      row-key="key"
+      :empty-text="t('status.empty')"
+      :selectable="selectable"
+      expandable
+      fit-expanded-to-container
+      dense
+    >
       <template #cell-account="{ row }">
         {{ row.account_name || catalog.accountName(row.account_id) }}
         <span class="dw-acct-id dw-num">#{{ row.account_id }}</span>
@@ -63,30 +79,50 @@ const pick = (r: KeyStatus, action: string) => (action === 'reset' ? emit('reset
       </template>
       <template #cell-weight="{ row }">
         <SBadge v-if="row.reset" tone="gray" size="xs">{{ t('status.resetBadge') }}</SBadge>
-        <SBadge v-else :tone="weightTone(row.effective, row.base)" size="xs" class="dw-num">{{ weightOf(row.effective) }} / {{ row.base }}</SBadge>
+        <SBadge v-else :tone="weightTone(row.effective, row.base)" size="xs" class="dw-num"
+          >{{ weightOf(row.effective) }} / {{ row.base }}</SBadge
+        >
         <SBadge v-if="!row.adjusting" tone="gray" size="xs" class="dw-ml">{{ t('status.paused') }}</SBadge>
-        <span v-else-if="row.state !== 'normal'" :class="`dw-acct-${row.state}`" class="dw-acct-arrow" :title="t(`acct.table.stateAria.${row.state}`)" :aria-label="t(`acct.table.stateAria.${row.state}`)">
+        <span
+          v-else-if="row.state !== 'normal'"
+          :class="`dw-acct-${row.state}`"
+          class="dw-acct-arrow"
+          :title="t(`acct.table.stateAria.${row.state}`)"
+          :aria-label="t(`acct.table.stateAria.${row.state}`)"
+        >
           {{ row.state === 'degrading' ? '▼' : '▲' }}
         </span>
-        <SBadge v-if="row.adjusting && row.no_climb_strategy" tone="danger" size="xs" class="dw-ml" :title="t('acct.detail.noClimb')">!</SBadge>
+        <SBadge v-if="row.adjusting && row.no_climb_strategy" tone="danger" size="xs" class="dw-ml" :title="t('acct.detail.noClimb')"
+          >!</SBadge
+        >
       </template>
       <template #cell-window="{ row }">
-        <span v-if="row.eval_window" class="dw-num" :title="t('status.windowStats', { total: row.total, fail: row.fail, rate: successRate(row.total, row.fail) })">
+        <span
+          v-if="row.eval_window"
+          class="dw-num"
+          :title="t('status.windowStats', { total: row.total, fail: row.fail, rate: successRate(row.total, row.fail) })"
+        >
           {{ t('acct.table.window', { rate: successRate(row.total, row.fail), n: row.total }) }}
         </span>
         <SHint v-else inline>{{ t('acct.table.notEvaluated', { n: row.current.total }) }}</SHint>
       </template>
       <template #cell-rules="{ row }">
         <span class="dw-acct-chips">
-          <SBadge v-for="r in row.hits" :key="r.name" :tone="r.fired ? 'danger' : 'warning'" size="xs" :title="t('status.ruleSamples', { n: r.samples, lookback: r.lookback })">
+          <SBadge
+            v-for="r in row.hits"
+            :key="r.name"
+            :tone="r.fired ? 'danger' : 'warning'"
+            size="xs"
+            :title="t('status.ruleSamples', { n: r.samples, lookback: r.lookback })"
+          >
             {{ r.name }}
           </SBadge>
           <SHint v-if="!row.hits.length" inline>—</SHint>
         </span>
       </template>
-      <template #cell-changed_at="{ row }"
-        ><span class="dw-num" :title="row.changed_at ? host.i18n.formatDateTime(row.changed_at * 1000) : undefined">{{ row.changed_at ? shortTime(new Date(row.changed_at * 1000)) : '—' }}</span></template
-      >
+      <template #cell-changed_at="{ row }">
+        <SDateTime class="dw-num" :value="row.changed_at ? row.changed_at * 1000 : null" mode="time" />
+      </template>
       <template #cell-actions="{ row }">
         <SDropdown :actions="menu(row)" :aria-label="t('acct.table.more')" @select="pick(row, $event)" />
       </template>
@@ -95,7 +131,13 @@ const pick = (r: KeyStatus, action: string) => (action === 'reset' ? emit('reset
       </template>
     </STable>
     <div v-if="list.total.value > list.pageSize.value" class="dw-pager">
-      <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
+      <SPagination
+        :page="list.page.value"
+        :page-size="list.pageSize.value"
+        :total="list.total.value"
+        @update:page="setPage"
+        @update:page-size="setPageSize"
+      />
     </div>
   </SCard>
 </template>

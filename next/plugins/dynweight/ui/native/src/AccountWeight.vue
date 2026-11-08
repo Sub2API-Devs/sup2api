@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { SBadge, SLink, useViewport, type Tone } from '@sub2api/ui'
+import { SBadge, SDateTime, SLink, useViewport, type Tone } from '@sub2api/ui'
 import { useCatalog } from './catalog'
-import { configRoute, dashboardRoute, loadAccountWeight, shortTime, useDwHost, weightOf, weightTone, type AccountWeight } from './host'
+import { configRoute, dashboardRoute, loadAccountWeight, useDwHost, weightOf, weightTone, type AccountWeight } from './host'
 
 // account.list.weight slot, under the weight in the account list: "▼ N"
 // while the account has degraded keys (N = the lowest effective weight),
@@ -32,14 +32,14 @@ watch(() => [props.account, props.account?.weight], load, { immediate: true })
 
 const keys = computed(() => weight.value?.keys ?? [])
 /** The bare group name (the catalog's label adds "#id"): the card is tight. */
-const groupName = (id: number) => catalog.state.groups.find((g) => g.id === id)?.name ?? `#${id}`
+const groupName = (id: number) => catalog.state.groups.find(g => g.id === id)?.name ?? `#${id}`
 const badge = computed<{ tone: Tone; text: string; label: string } | null>(() => {
   const w = weight.value
   if (!w) return null
   if (w.adjust_off) return { tone: 'gray', text: t('acct.badge.statsOnly'), label: t('acct.badge.statsOnlyAria') }
   const params = { w: w.lowest, base: w.base, n: w.degraded }
   // ▲ only when every key below its base is listed and climbing (a plugin before 0.5.1 sends no state).
-  if (keys.value.length === w.degraded && keys.value.every((k) => k.state === 'climbing')) {
+  if (keys.value.length === w.degraded && keys.value.every(k => k.state === 'climbing')) {
     return { tone: 'success', text: `▲ ${w.lowest}`, label: t('acct.badge.climbingAria', params) }
   }
   return { tone: weightTone(w.lowest, w.base), text: `▼ ${w.lowest}`, label: t('acct.badge.degradingAria', params) }
@@ -143,7 +143,14 @@ onBeforeUnmount(hide)
     @keydown.esc="hide"
     @click.capture="onTap"
   >
-    <SLink :to="dashboardRoute('status', { account_id: account.id })" :aria-label="badge.label" aria-haspopup="true" :aria-expanded="open" @keydown.enter="intoCard" @keydown.down="intoCard">
+    <SLink
+      :to="dashboardRoute('status', { account_id: account.id })"
+      :aria-label="badge.label"
+      aria-haspopup="true"
+      :aria-expanded="open"
+      @keydown.enter="intoCard"
+      @keydown.down="intoCard"
+    >
       <SBadge :tone="badge.tone" size="xs" class="dw-num">{{ badge.text }}</SBadge>
     </SLink>
     <Teleport to="body">
@@ -163,7 +170,9 @@ onBeforeUnmount(hide)
         <div class="dw-acct-card-head">
           <span class="dw-acct-card-title">
             <b>{{ account.name || catalog.accountName(account.id) }}</b>
-            <template v-if="weight.degraded"> · {{ t('acct.card.below', { n: weight.degraded }) }} · {{ t('acct.card.base', { n: weight.base }) }}</template>
+            <template v-if="weight.degraded">
+              · {{ t('acct.card.below', { n: weight.degraded }) }} · {{ t('acct.card.base', { n: weight.base }) }}</template
+            >
             <template v-else> · {{ t('acct.card.noneBelow') }}</template>
           </span>
           <SLink :to="dashboardRoute('status', { account_id: account.id })">{{ t('acct.card.allKeys') }}</SLink>
@@ -194,7 +203,7 @@ onBeforeUnmount(hide)
                 {{ k.state ? t(`acct.card.state.${k.state}`) : '—' }}
               </td>
               <td class="dw-num">
-                {{ k.changed_at ? shortTime(new Date(k.changed_at)) : '—' }}
+                <SDateTime :value="k.changed_at" mode="time" />
               </td>
             </tr>
           </tbody>

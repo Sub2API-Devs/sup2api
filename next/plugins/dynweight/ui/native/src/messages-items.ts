@@ -98,7 +98,14 @@ const zh = {
     cooldown: '冷却 {n} 秒',
     and: '{a}，{b}'
   },
-  at: { cond: '条件 {i}：', action: '动作 {i}：', rule: '规则「{name}」：', item: '调整项「{name}」：', ruleN: '第 {i} 条规则：', itemN: '第 {i} 个调整项：' },
+  at: {
+    cond: '条件 {i}：',
+    action: '动作 {i}：',
+    rule: '规则「{name}」：',
+    item: '调整项「{name}」：',
+    ruleN: '第 {i} 条规则：',
+    itemN: '第 {i} 个调整项：'
+  },
   err: {
     required: '请填写',
     nameRequired: '请填写名称',
@@ -183,7 +190,8 @@ const en: typeof zh = {
     itemInvalid: 'This item has errors; fix them to apply',
     jsonInvalid: 'The JSON has errors; fix them to go back to the visual editor or apply',
     openJson: 'Edit in JSON',
-    readonlyHint: 'The visual editor cannot show this trigger; here is what the item does. Its switch, order, copy and delete still work here.'
+    readonlyHint:
+      'The visual editor cannot show this trigger; here is what the item does. Its switch, order, copy and delete still work here.'
   },
   card: {
     name: 'Name',
@@ -234,7 +242,14 @@ const en: typeof zh = {
     cooldown: 'cooldown {n} s',
     and: '{a}, {b}'
   },
-  at: { cond: 'condition {i}: ', action: 'action {i}: ', rule: 'rule “{name}”: ', item: 'item “{name}”: ', ruleN: 'rule {i}: ', itemN: 'item {i}: ' },
+  at: {
+    cond: 'condition {i}: ',
+    action: 'action {i}: ',
+    rule: 'rule “{name}”: ',
+    item: 'item “{name}”: ',
+    ruleN: 'rule {i}: ',
+    itemN: 'item {i}: '
+  },
   err: {
     required: 'required',
     nameRequired: 'name required',

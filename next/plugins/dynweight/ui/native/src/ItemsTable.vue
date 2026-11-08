@@ -3,7 +3,21 @@ import { computed, ref } from 'vue'
 import { SAlert, SBadge, SButton, SDropdown, SIcon, SSwitch, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
 import ItemEditorModal from './ItemEditorModal.vue'
 import { copyNamer, describeDraft, describeReason, describeStored, nameList } from './describe'
-import { duplicateEntry, entryCanEnable, entryEnabled, entryName, MAX_ITEMS, moveEntry, readItems, removeEntry, staleItems, toggleEntry, writeItems, type ItemEntry, type Written } from './items'
+import {
+  duplicateEntry,
+  entryCanEnable,
+  entryEnabled,
+  entryName,
+  MAX_ITEMS,
+  moveEntry,
+  readItems,
+  removeEntry,
+  staleItems,
+  toggleEntry,
+  writeItems,
+  type ItemEntry,
+  type Written
+} from './items'
 import { clone, useDwHost, type Layer, type Rule, type Strategy } from './host'
 
 // Adjustment items of a layer: one row per strategy with its trigger and
@@ -64,7 +78,10 @@ async function onMenu(row: Row, key: string) {
   const i = row.key
   if (key === 'duplicate') commit(duplicateEntry(entries.value, i, copyName))
   else if (key === 'up' || key === 'down') commit(moveEntry(entries.value, i, key === 'up' ? -1 : 1))
-  else if (await host.confirm({ message: t('it.removeConfirm', { name: row.name || t('it.unnamed') }), confirmText: t('it.remove'), danger: true })) commit(removeEntry(entries.value, i))
+  else if (
+    await host.confirm({ message: t('it.removeConfirm', { name: row.name || t('it.unnamed') }), confirmText: t('it.remove'), danger: true })
+  )
+    commit(removeEntry(entries.value, i))
 }
 
 async function restore() {
@@ -81,14 +98,30 @@ const edit = (index: number, append = false) => (editor.value = { open: true, in
 <template>
   <div class="dw-it-table">
     <div class="dw-it-bar">
-      <span class="dw-it-bar-title">{{ t('it.title') }} <SBadge size="xs">{{ strategies.length }}</SBadge></span>
+      <span class="dw-it-bar-title"
+        >{{ t('it.title') }} <SBadge size="xs">{{ strategies.length }}</SBadge></span
+      >
       <span v-if="!readonly" class="dw-it-bar-actions">
         <SButton size="sm" variant="ghost" :disabled="!defaults" @click="restore">{{ t('it.restore') }}</SButton>
-        <SButton size="sm" icon="plus" :disabled="full" :title="full ? t('it.max', { n: MAX_ITEMS }) : undefined" @click="edit(strategies.length, true)">{{ t('it.add') }}</SButton>
+        <SButton
+          size="sm"
+          icon="plus"
+          :disabled="full"
+          :title="full ? t('it.max', { n: MAX_ITEMS }) : undefined"
+          @click="edit(strategies.length, true)"
+          >{{ t('it.add') }}</SButton
+        >
       </span>
     </div>
     <SAlert v-if="stale.length" tone="warning" class="dw-it-alert">{{ t('it.stale', { names: nameList(stale, t) }) }}</SAlert>
-    <STable :columns="columns" :rows="rows" row-key="key" dense :empty-text="t('it.empty')" :row-class="(r: Row) => (r.enabled ? '' : 'dw-it-off')">
+    <STable
+      :columns="columns"
+      :rows="rows"
+      row-key="key"
+      dense
+      :empty-text="t('it.empty')"
+      :row-class="(r: Row) => (r.enabled ? '' : 'dw-it-off')"
+    >
       <template #cell-index="{ row }">
         <span class="dw-num dw-it-muted">{{ row.key + 1 }}</span>
       </template>
@@ -97,7 +130,9 @@ const edit = (index: number, append = false) => (editor.value = { open: true, in
       </template>
       <template #cell-kind="{ row }">
         <span class="dw-chips">
-          <SBadge v-for="ty in row.parts.types" :key="ty" size="xs" :tone="row.enabled ? KIND_TONE[ty] : 'gray'">{{ t(`it.kind.${ty}`) }}</SBadge>
+          <SBadge v-for="ty in row.parts.types" :key="ty" size="xs" :tone="row.enabled ? KIND_TONE[ty] : 'gray'">{{
+            t(`it.kind.${ty}`)
+          }}</SBadge>
         </span>
       </template>
       <template #cell-trigger="{ row }">
@@ -128,7 +163,15 @@ const edit = (index: number, append = false) => (editor.value = { open: true, in
       </template>
       <template #cell-actions="{ row }">
         <span class="dw-it-row-actions">
-          <SButton size="xs" variant="ghost" :icon="readonly ? 'eye' : 'edit'" icon-only :aria-label="t(readonly ? 'it.view' : 'it.edit')" :title="t(readonly ? 'it.view' : 'it.edit')" @click="edit(row.key)" />
+          <SButton
+            size="xs"
+            variant="ghost"
+            :icon="readonly ? 'eye' : 'edit'"
+            icon-only
+            :aria-label="t(readonly ? 'it.view' : 'it.edit')"
+            :title="t(readonly ? 'it.view' : 'it.edit')"
+            @click="edit(row.key)"
+          />
           <SDropdown v-if="!readonly" :actions="menu(row.key)" :aria-label="t('it.more')" @select="onMenu(row, $event)" />
         </span>
       </template>

@@ -14,9 +14,9 @@ const t = host.t
 
 const channelOptions = computed(() => [
   { value: '', label: t('notify.noChannel') },
-  ...props.channels.map((c) => ({ value: c.id, label: host.i18n.text(c.label) }))
+  ...props.channels.map(c => ({ value: c.id, label: host.i18n.text(c.label) }))
 ])
-const channel = computed(() => props.channels.find((c) => c.id === draft.value.notify.channel))
+const channel = computed(() => props.channels.find(c => c.id === draft.value.notify.channel))
 const languageOptions = [
   { value: 'zh', label: '中文' },
   { value: 'en', label: 'English' }
@@ -31,7 +31,10 @@ const languageOptions = [
       </SSettingRow>
       <div class="dw-cfg-fields" :class="{ 'dw-cfg-idle': !draft.notify.enabled }">
         <div class="dw-cfg-grid">
-          <SField :label="t('notify.channel')" :hint="channel ? host.i18n.text(channel.description) : channels.length ? '' : t('notify.noChannels')">
+          <SField
+            :label="t('notify.channel')"
+            :hint="channel ? host.i18n.text(channel.description) : channels.length ? '' : t('notify.noChannels')"
+          >
             <SSelect v-model="draft.notify.channel" :options="channelOptions" :disabled="readonly" />
           </SField>
           <SField :label="t('notify.language')">

@@ -1,17 +1,7 @@
 /*
  * Config tab (ConfigTab and its Config* parts). Layout only: colours are the
- * console's semantic variables, dynweight.css's shared ones and the primary
- * tint of the summary strip.
+ * console's semantic variables and dynweight.css's shared ones.
  */
-
-:root {
-  --dw-cfg-tint: 240 253 250; /* primary-50 */
-  --dw-cfg-tint-line: 153 246 228; /* primary-200 */
-}
-html.dark {
-  --dw-cfg-tint: 19 78 74; /* primary-900 */
-  --dw-cfg-tint-line: 17 94 89; /* primary-800 */
-}
 
 /* ---- summary strip */
 
@@ -21,20 +11,13 @@ html.dark {
   align-items: center;
   gap: 0.375rem 1.25rem;
   padding: 0.5rem 0.875rem;
-  border: 1px solid rgb(var(--dw-cfg-tint-line));
+  border: 1px solid rgb(var(--line));
   border-radius: 0.75rem;
-  background: rgb(var(--dw-cfg-tint) / 0.7);
+  background: rgb(var(--surface));
   font-size: 0.8125rem;
 }
 .dw-cfg-summary-off {
-  border-color: rgb(var(--line));
   background: rgb(var(--surface-2));
-}
-.dw-cfg-summary-master {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
 }
 .dw-cfg-summary-item {
   color: rgb(var(--fg-muted));

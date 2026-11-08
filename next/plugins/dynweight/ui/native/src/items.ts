@@ -1,4 +1,17 @@
-import { clone, opsOf, percentileMetric, type Action, type ActionType, type Condition, type Metric, type Rule, type Scope, type Strategy, type When } from './host'
+import {
+  clone,
+  omit,
+  opsOf,
+  percentileMetric,
+  type Action,
+  type ActionType,
+  type Condition,
+  type Metric,
+  type Rule,
+  type Scope,
+  type Strategy,
+  type When
+} from './host'
 
 // Adjustment items: the unit the configuration page edits, a strategy folded
 // together with the one rule its `when` names (new-api's dynamic weight
@@ -56,7 +69,7 @@ export function whenRefs(w: When | null | undefined): string[] {
 /** The trigger with rule `from` renamed `to`. */
 function renamedWhen(w: When, from: string, to: string): When {
   if (typeof w === 'string') return w === from ? to : w
-  const each = (list: When[]) => list.map((m) => renamedWhen(m, from, to))
+  const each = (list: When[]) => list.map(m => renamedWhen(m, from, to))
   return 'all' in w ? { all: each(w.all) } : { any: each(w.any) }
 }
 
@@ -69,7 +82,8 @@ function singleRef(w: When): string | null {
 
 // ------------------------------------------------------------------ read
 
-const ruleKey = (d: Pick<ItemDraft, 'scope' | 'conditions' | 'periods' | 'hit_periods'>) => JSON.stringify([d.scope, d.conditions, d.periods, d.hit_periods])
+const ruleKey = (d: Pick<ItemDraft, 'scope' | 'conditions' | 'periods' | 'hit_periods'>) =>
+  JSON.stringify([d.scope, d.conditions, d.periods, d.hit_periods])
 
 /** Whether the draft's rule-owned fields differ from what was read: it then writes its own rule. */
 export const isForked = (d: ItemDraft) => d.source === null || ruleKey(d) !== d.origin
@@ -80,7 +94,7 @@ const ruleScope = (s: Rule['scope']): Scope => (s === 'stream' || s === 'non_str
 export function readItems(rules: Rule[], strategies: Strategy[]): ItemEntry[] {
   const byName = new Map<string, Rule>()
   for (const r of rules) if (!byName.has(r.name)) byName.set(r.name, r)
-  const refs = strategies.map((s) => whenRefs(s.when))
+  const refs = strategies.map(s => whenRefs(s.when))
   return strategies.map((strategy, i): ItemEntry => {
     const base = {
       name: strategy.name,
@@ -98,7 +112,12 @@ export function readItems(rules: Rule[], strategies: Strategy[]): ItemEntry[] {
     const rule = byName.get(name)
     if (!rule) return { strategy, draft: null, reason: { kind: 'missing', rule: name } }
     if (rule.enabled === false) return { strategy, draft: null, reason: { kind: 'disabled', rule: name } }
-    const fields = { scope: ruleScope(rule.scope), conditions: clone(rule.conditions), periods: rule.periods ?? 1, hit_periods: rule.hit_periods ?? 1 }
+    const fields = {
+      scope: ruleScope(rule.scope),
+      conditions: clone(rule.conditions),
+      periods: rule.periods ?? 1,
+      hit_periods: rule.hit_periods ?? 1
+    }
     const shared = refs.some((list, j) => j !== i && list.includes(name))
     return { strategy, draft: { ...base, ...fields, source: { rule: name, shared }, origin: ruleKey(fields) } }
   })
@@ -175,7 +194,7 @@ export interface Written {
 export function writeItems(entries: ItemEntry[], rules: Rule[]): Written {
   const byName = new Map<string, Rule>()
   for (const r of rules) if (!byName.has(r.name)) byName.set(r.name, r)
-  const held = entries.map((e) => (e.draft ? (e.draft.source ? [e.draft.source.rule] : []) : whenRefs(e.strategy.when)))
+  const held = entries.map(e => (e.draft ? (e.draft.source ? [e.draft.source.rule] : []) : whenRefs(e.strategy.when)))
   const heldByOthers = (i: number, name: string) => held.some((names, j) => j !== i && names.includes(name))
 
   // Pass 1: which items keep their stored rule, so the names left free are known.
@@ -185,11 +204,11 @@ export function writeItems(entries: ItemEntry[], rules: Rule[]): Written {
   })
   const surviving = new Set<string>()
   entries.forEach((e, i) => {
-    if (!e.draft) held[i].forEach((n) => surviving.add(n))
+    if (!e.draft) held[i].forEach(n => surviving.add(n))
     else if (keeps[i]) surviving.add(e.draft.source!.rule)
   })
 
-  const names = new Set([...surviving].filter((n) => byName.has(n)))
+  const names = new Set([...surviving].filter(n => byName.has(n)))
   const updated = new Map<string, Rule>()
   const strategies: Strategy[] = []
   const generated: Rule[] = []
@@ -241,8 +260,8 @@ export const entryEnabled = (e: ItemEntry) => (e.draft ? e.draft.enabled : e.str
  */
 export function entryCanEnable(e: ItemEntry, rules: Rule[]): boolean {
   if (e.draft) return true
-  const live = new Set(rules.filter((r) => r.enabled !== false).map((r) => r.name))
-  return whenRefs(e.strategy.when).every((r) => live.has(r))
+  const live = new Set(rules.filter(r => r.enabled !== false).map(r => r.name))
+  return whenRefs(e.strategy.when).every(r => live.has(r))
 }
 
 /** Entry `i` with its enabled switch set: the draft's, or the stored strategy's of a read-only entry. Switching on an entry with a missing or disabled rule is refused. */
@@ -251,7 +270,7 @@ export function toggleEntry(entries: ItemEntry[], i: number, enabled: boolean): 
     if (j !== i) return e
     if (enabled && (e.reason?.kind === 'missing' || e.reason?.kind === 'disabled')) return e
     if (e.draft) return { ...e, draft: { ...e.draft, enabled } }
-    const { enabled: _, ...rest } = e.strategy
+    const rest = omit(e.strategy, 'enabled')
     return { ...e, strategy: enabled ? rest : { ...rest, enabled: false } }
   })
 }
@@ -282,7 +301,7 @@ export function uniqueItemName(entries: ItemEntry[], make: (n: number) => string
 export function duplicateEntry(entries: ItemEntry[], i: number, copyName: (name: string, n: number) => string): ItemEntry[] {
   const src = entries[i]
   if (!src) return entries
-  const name = uniqueItemName(entries, (n) => copyName(entryName(src), n))
+  const name = uniqueItemName(entries, n => copyName(entryName(src), n))
   const copy: ItemEntry = src.draft
     ? { strategy: src.strategy, draft: { ...clone({ ...src.draft, source: null }), name } }
     : { ...src, strategy: { ...clone(src.strategy), name } }
@@ -302,7 +321,9 @@ export const removeEntry = (entries: ItemEntry[], i: number): ItemEntry[] => ent
 // ------------------------------------------------------------------ drafts
 
 export const weightAction = (direction: Direction): Action =>
-  direction === 'climb' ? { type: 'weight_climb', mode: 'base_percent', value: 10 } : { type: 'weight_degrade', mode: 'current_percent', value: 30 }
+  direction === 'climb'
+    ? { type: 'weight_climb', mode: 'base_percent', value: 10 }
+    : { type: 'weight_degrade', mode: 'current_percent', value: 30 }
 
 export const newAction = (type: ActionType): Action =>
   type === 'affinity_clear' ? { type, percent: 30 } : weightAction(type === 'weight_climb' ? 'climb' : 'degrade')
@@ -341,24 +362,24 @@ const isWeight = (t: ActionType | string) => t === 'weight_degrade' || t === 'we
 
 /** The direction of a strategy or draft: its weight action's, null without one. */
 export function directionOf(actions: Action[] | undefined): Direction | null {
-  const a = (actions ?? []).find((x) => isWeight(x?.type))
+  const a = (actions ?? []).find(x => isWeight(x?.type))
   if (!a) return null
   return a.type === 'weight_climb' ? 'climb' : 'degrade'
 }
 
 /** Action types the "add action" button can still add: one weight action and one sticky clear at most (as the plugin accepts). */
 export function addableActions(actions: Action[]): ActionType[] {
-  const hasWeight = actions.some((a) => isWeight(a.type))
-  const hasClear = actions.some((a) => a.type === 'affinity_clear')
+  const hasWeight = actions.some(a => isWeight(a.type))
+  const hasClear = actions.some(a => a.type === 'affinity_clear')
   if (actions.length >= MAX_ACTIONS) return []
   return [...(hasWeight ? [] : (['weight_degrade', 'weight_climb'] as const)), ...(hasClear ? [] : (['affinity_clear'] as const))]
 }
 
 /** Types the type select of action `a` offers: its own, the other direction for a weight action, and what could be added. */
 export function actionTypeChoices(actions: Action[], a: Action): ActionType[] {
-  const others = actions.filter((x) => x !== a)
+  const others = actions.filter(x => x !== a)
   const all: ActionType[] = ['weight_degrade', 'weight_climb', 'affinity_clear']
-  return all.filter((t) => t === a.type || (t === 'affinity_clear' ? !others.some((x) => x.type === t) : !others.some((x) => isWeight(x.type))))
+  return all.filter(t => t === a.type || (t === 'affinity_clear' ? !others.some(x => x.type === t) : !others.some(x => isWeight(x.type))))
 }
 
 /** Action `a` turned into `type`: a weight action switching direction keeps its amount, otherwise the type's default. */
@@ -374,8 +395,7 @@ export const remetric = (c: Condition, metric: Metric): Condition => (metric ===
 export function removeCondition(conditions: Condition[], j: number): Condition[] {
   const next = conditions.filter((_, k) => k !== j)
   if (j === 0 && next[0]) {
-    const { join: _, ...first } = next[0]
-    next[0] = first
+    next[0] = omit(next[0], 'join')
   }
   return next
 }
@@ -418,7 +438,8 @@ function checkCondition(c: Condition, j: number, scope: Scope | string): Problem
   } else if (c.p) out.push({ path: at('p'), key: 'pOnly' })
   if (!opsOf(c.metric).includes(c.op)) out.push({ path: at('op'), key: 'op' })
   if (missing(c.value)) out.push({ path: at('value'), key: 'required' })
-  else if (!isInt(c.value) || c.value < limits[0] || c.value > limits[1]) out.push({ path: at('value'), key: 'value', params: { min: limits[0], max: limits[1] } })
+  else if (!isInt(c.value) || c.value < limits[0] || c.value > limits[1])
+    out.push({ path: at('value'), key: 'value', params: { min: limits[0], max: limits[1] } })
   if (c.metric === 'ttfb' && (c.scope || scope) === 'non_stream') out.push({ path: at('scope'), key: 'ttfbNonStream' })
   return out
 }
@@ -427,13 +448,16 @@ function checkCondition(c: Condition, j: number, scope: Scope | string): Problem
 function checkRuleFields(scope: unknown, conditions: Condition[], periods: unknown, hits: unknown, least: 0 | 1): Problem[] {
   const out: Problem[] = []
   if (!SCOPES.includes((scope as string) ?? '')) out.push({ path: 'scope', key: 'scope' })
-  if (conditions.length < 1 || conditions.length > MAX_CONDITIONS) out.push({ path: 'conditions', key: 'conditions', params: { n: MAX_CONDITIONS } })
+  if (conditions.length < 1 || conditions.length > MAX_CONDITIONS)
+    out.push({ path: 'conditions', key: 'conditions', params: { n: MAX_CONDITIONS } })
   conditions.forEach((c, j) => out.push(...checkCondition(c, j, (scope as string) || 'all')))
   if (missing(periods)) out.push({ path: 'periods', key: 'required' })
-  else if (!isInt(periods) || periods < least || periods > MAX_PERIODS) out.push({ path: 'periods', key: 'periods', params: { n: MAX_PERIODS } })
+  else if (!isInt(periods) || periods < least || periods > MAX_PERIODS)
+    out.push({ path: 'periods', key: 'periods', params: { n: MAX_PERIODS } })
   if (missing(hits)) out.push({ path: 'hit_periods', key: 'required' })
   // Against an emptied N only the range is known.
-  else if (!isInt(hits) || hits < least || hits > (isInt(periods) ? Math.max(periods, 1) : MAX_PERIODS)) out.push({ path: 'hit_periods', key: 'hitPeriods' })
+  else if (!isInt(hits) || hits < least || hits > (isInt(periods) ? Math.max(periods, 1) : MAX_PERIODS))
+    out.push({ path: 'hit_periods', key: 'hitPeriods' })
   return out
 }
 
@@ -445,14 +469,15 @@ function checkActions(actions: Action[], cooldown: unknown): Problem[] {
     if (isWeight(a.type)) {
       if (a.mode !== 'base_percent' && a.mode !== 'current_percent' && a.mode !== 'fixed') out.push({ path: at('mode'), key: 'mode' })
       else if (missing(a.value)) out.push({ path: at('value'), key: 'required' })
-      else if (a.mode === 'fixed' ? !isInt(a.value) || a.value < 1 : !isInt(a.value) || a.value < 1 || a.value > 100) out.push({ path: at('value'), key: a.mode === 'fixed' ? 'fixedValue' : 'percentValue' })
+      else if (a.mode === 'fixed' ? !isInt(a.value) || a.value < 1 : !isInt(a.value) || a.value < 1 || a.value > 100)
+        out.push({ path: at('value'), key: a.mode === 'fixed' ? 'fixedValue' : 'percentValue' })
     } else if (a.type === 'affinity_clear') {
       if (missing(a.percent)) out.push({ path: at('percent'), key: 'required' })
       else if (!isInt(a.percent) || a.percent < 1 || a.percent > 100) out.push({ path: at('percent'), key: 'percent' })
     } else out.push({ path: at('type'), key: 'type' })
     const before = actions.slice(0, j)
-    if (before.some((x) => x.type === a.type)) out.push({ path: at('type'), key: 'dupType' })
-    else if (isWeight(a.type) && before.some((x) => isWeight(x.type))) out.push({ path: at('type'), key: 'twoWeights' })
+    if (before.some(x => x.type === a.type)) out.push({ path: at('type'), key: 'dupType' })
+    else if (isWeight(a.type) && before.some(x => isWeight(x.type))) out.push({ path: at('type'), key: 'twoWeights' })
   })
   if (missing(cooldown)) out.push({ path: 'cooldown_seconds', key: 'required' })
   else if (!isInt(cooldown) || cooldown < 0) out.push({ path: 'cooldown_seconds', key: 'cooldown' })
@@ -463,7 +488,7 @@ function checkActions(actions: Action[], cooldown: unknown): Problem[] {
 export function validateDraft(d: ItemDraft, entries: ItemEntry[]): Problem[] {
   const out = checkName(d.name)
   const name = d.name.trim()
-  if (!out.length && entries.some((e) => e.draft !== d && entryName(e) === name)) out.push({ path: 'name', key: 'nameDup' })
+  if (!out.length && entries.some(e => e.draft !== d && entryName(e) === name)) out.push({ path: 'name', key: 'nameDup' })
   return [...out, ...checkRuleFields(d.scope, d.conditions, d.periods, d.hit_periods, 1), ...checkActions(d.actions, d.cooldown_seconds)]
 }
 
@@ -487,7 +512,7 @@ function checkWhen(w: When | null | undefined, rules: Map<string, Rule>, enabled
   const list = (w as Record<string, When[]>)[keys[0]]
   if (keys.length !== 1 || !['all', 'any'].includes(keys[0]) || !Array.isArray(list)) return { path: 'when', key: 'whenShape' }
   if (!list.length) return { path: 'when', key: 'when' }
-  if (depth >= 1 && list.some((m) => typeof m !== 'string')) return { path: 'when', key: 'whenDepth' }
+  if (depth >= 1 && list.some(m => typeof m !== 'string')) return { path: 'when', key: 'whenDepth' }
   for (const m of list) {
     const p = checkWhen(m, rules, enabled, depth + 1)
     if (p) return p
@@ -502,7 +527,8 @@ function checkWhen(w: When | null | undefined, rules: Map<string, Rule>, enabled
  */
 export function validateLists(rules: Rule[], strategies: Strategy[]): ListProblem[] {
   const out: ListProblem[] = []
-  const add = (part: ListProblem['part'], index: number, name: string, ps: Problem[]) => ps.forEach((p) => out.push({ ...p, part, index, name }))
+  const add = (part: ListProblem['part'], index: number, name: string, ps: Problem[]) =>
+    ps.forEach(p => out.push({ ...p, part, index, name }))
   if (rules.length > MAX_ITEMS) add('rules', -1, '', [{ path: '', key: 'maxRules', params: { n: MAX_ITEMS } }])
   if (strategies.length > MAX_ITEMS) add('strategies', -1, '', [{ path: '', key: 'maxItems', params: { n: MAX_ITEMS } }])
   const byName = new Map<string, Rule>()
@@ -515,7 +541,11 @@ export function validateLists(rules: Rule[], strategies: Strategy[]): ListProble
   const seen = new Set<string>()
   strategies.forEach((s, i) => {
     const when = checkWhen(s.when, byName, s.enabled !== false)
-    add('strategies', i, s.name, [...checkName(s.name), ...(when ? [when] : []), ...checkActions(Array.isArray(s.actions) ? s.actions : [], s.cooldown_seconds ?? 0)])
+    add('strategies', i, s.name, [
+      ...checkName(s.name),
+      ...(when ? [when] : []),
+      ...checkActions(Array.isArray(s.actions) ? s.actions : [], s.cooldown_seconds ?? 0)
+    ])
     if (seen.has(s.name.trim())) add('strategies', i, s.name, [{ path: 'name', key: 'nameDup' }])
     seen.add(s.name.trim())
   })
@@ -524,9 +554,9 @@ export function validateLists(rules: Rule[], strategies: Strategy[]): ListProble
 
 /** Names of the strategies whose `when` the plugin refuses as it stands (a removed rule; a disabled one under an enabled strategy). */
 export function staleItems(rules: Rule[], strategies: Strategy[]): string[] {
-  const all = new Set(rules.map((r) => r.name))
-  const live = new Set(rules.filter((r) => r.enabled !== false).map((r) => r.name))
-  return strategies.filter((s) => whenRefs(s.when).some((r) => !(s.enabled !== false ? live : all).has(r))).map((s) => s.name)
+  const all = new Set(rules.map(r => r.name))
+  const live = new Set(rules.filter(r => r.enabled !== false).map(r => r.name))
+  return strategies.filter(s => whenRefs(s.when).some(r => !(s.enabled !== false ? live : all).has(r))).map(s => s.name)
 }
 
 // ------------------------------------------------------------------ page-level checks (agreed interface)
@@ -537,7 +567,7 @@ export function staleItems(rules: Rule[], strategies: Strategy[]): string[] {
  * reads the strategies only, so the rules are not consulted either.
  */
 export function hasDegradeWithoutClimb(_rules: Rule[], strategies: Strategy[]): boolean {
-  const on = strategies.filter((s) => s.enabled !== false).map((s) => directionOf(s.actions))
+  const on = strategies.filter(s => s.enabled !== false).map(s => directionOf(s.actions))
   return on.includes('degrade') && !on.includes('climb')
 }
 

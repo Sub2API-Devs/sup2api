@@ -13,7 +13,7 @@ const t = useDwHost().t
 const required = (v: number | null | undefined) => (v === null || v === undefined ? t('layer.required') : undefined)
 const floor = computed({
   get: () => ({ mode: layer.value.min_weight_mode, value: layer.value.min_weight }),
-  set: (v) => {
+  set: v => {
     layer.value.min_weight_mode = v.mode
     layer.value.min_weight = v.value as number
   }

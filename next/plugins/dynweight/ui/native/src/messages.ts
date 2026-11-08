@@ -21,7 +21,16 @@ const zh = {
     loadFailed: '加载有效权重失败',
     empty: '没有符合条件的记录',
     degradedOnly: '只看已降权',
-    col: { account: '账号', group: '分组', model: '模型', weight: '有效 / 基准', window: '最近窗口', rules: '命中规则', changed: '最近变化', actions: '操作' },
+    col: {
+      account: '账号',
+      group: '分组',
+      model: '模型',
+      weight: '有效 / 基准',
+      window: '最近窗口',
+      rules: '命中规则',
+      changed: '最近变化',
+      actions: '操作'
+    },
     resetBadge: '已重置',
     paused: '未启用调整',
     windowStats: '{total} 次 · 失败 {fail} · 成功率 {rate}',
@@ -156,7 +165,8 @@ const zh = {
   editMode: { visual: '可视化', json: 'JSON' },
   json: {
     rules: '规则 JSON',
-    rulesHint: '数组，每条：name、scope（all / stream / non_stream）、conditions（join、metric、p、op、value，以及可选的 scope、when_empty：fail / pass）、periods、hit_periods、enabled',
+    rulesHint:
+      '数组，每条：name、scope（all / stream / non_stream）、conditions（join、metric、p、op、value，以及可选的 scope、when_empty：fail / pass）、periods、hit_periods、enabled',
     strategies: '策略 JSON',
     strategiesHint: '数组，每条：name、when（规则名，或 all / any 数组）、actions（type、mode、value、percent）、cooldown_seconds、enabled',
     notArray: '必须是一个数组',
@@ -226,7 +236,8 @@ const zh = {
 
 const en: typeof zh = {
   title: 'Dynamic Weight',
-  subtitle: 'Lowers the scheduling weight of an account in a group and model while it fails or slows down, and brings it back once healthy.',
+  subtitle:
+    'Lowers the scheduling weight of an account in a group and model while it fails or slows down, and brings it back once healthy.',
   refresh: 'Refresh',
   loading: 'Loading…',
   enabled: 'Enabled',
@@ -240,7 +251,16 @@ const en: typeof zh = {
     loadFailed: 'Failed to load the effective weights',
     empty: 'Nothing matches',
     degradedOnly: 'Degraded only',
-    col: { account: 'Account', group: 'Group', model: 'Model', weight: 'Effective / base', window: 'Last window', rules: 'Rules hit', changed: 'Last change', actions: 'Actions' },
+    col: {
+      account: 'Account',
+      group: 'Group',
+      model: 'Model',
+      weight: 'Effective / base',
+      window: 'Last window',
+      rules: 'Rules hit',
+      changed: 'Last change',
+      actions: 'Actions'
+    },
     resetBadge: 'Reset',
     paused: 'Adjustment off',
     windowStats: '{total} attempts · {fail} failed · {rate} succeeded',
@@ -251,12 +271,14 @@ const en: typeof zh = {
     events: 'Events',
     reset: 'Reset',
     resetFiltered: 'Reset everything filtered',
-    resetKeyConfirm: 'Reset the effective weight of account {account} in group {group}, model {model} to its base? Its window history is dropped.',
+    resetKeyConfirm:
+      'Reset the effective weight of account {account} in group {group}, model {model} to its base? Its window history is dropped.',
     resetFilterConfirm: 'Reset every (account, group, model) the filter covers to its base? Their window history is dropped.',
     resetSelected: 'Reset the {n} selected accounts',
     selectedAccounts: '{n} accounts selected (max {max})',
     resetSelectedHint: 'Leave the group and the model empty for every group and model of the accounts.',
-    resetSelectedConfirm: 'Reset the effective weights of the {n} selected accounts in the chosen group and model to their base? Their window history is dropped.',
+    resetSelectedConfirm:
+      'Reset the effective weights of the {n} selected accounts in the chosen group and model to their base? Their window history is dropped.',
     modelHint: 'the model the client asked for; empty for every model',
     resetDone: '{n} reset'
   },
@@ -344,7 +366,12 @@ const en: typeof zh = {
     reset: 'Reset'
   },
   verdict: { bad: 'Unhealthy', good: 'Healthy', neutral: 'No verdict' },
-  reason: { base_mismatch: 'Account weight changed', rules_change: 'Rules changed, history dropped', manual: 'Manual reset', status_change: 'Account active again' },
+  reason: {
+    base_mismatch: 'Account weight changed',
+    rules_change: 'Rules changed, history dropped',
+    manual: 'Manual reset',
+    status_change: 'Account active again'
+  },
   scope: { all: 'All requests', stream: 'Streaming only', non_stream: 'Non-streaming only' },
   whenEmpty: { fail: 'False without samples', pass: 'True without samples' },
   metric: { error_rate: 'Error rate', ttfb: 'First token', latency: 'Whole attempt', weight: 'Effective weight' },
@@ -364,9 +391,11 @@ const en: typeof zh = {
     value: 'Threshold',
     condScope: 'Counted requests of the condition',
     condScopeRule: 'Same as the rule',
-    condScopeHint: 'The requests whose counters the condition reads; time the whole attempt of non-streaming requests only (the whole attempt of a stream is the length of its answer)',
+    condScopeHint:
+      'The requests whose counters the condition reads; time the whole attempt of non-streaming requests only (the whole attempt of a stream is the length of its answer)',
     whenEmpty: 'Without samples',
-    whenEmptyHint: 'Whether the condition holds when looking back found no sample at all; in a climb rule, a condition that may have none (no streams, no first token) should be true',
+    whenEmptyHint:
+      'Whether the condition holds when looking back found no sample at all; in a climb rule, a condition that may have none (no streams, no first token) should be true',
     addCondition: 'Add condition',
     add: 'Add rule',
     newName: 'Rule {n}'
@@ -375,9 +404,11 @@ const en: typeof zh = {
   editMode: { visual: 'Visual', json: 'JSON' },
   json: {
     rules: 'Rules JSON',
-    rulesHint: 'An array; each rule: name, scope (all / stream / non_stream), conditions (join, metric, p, op, value, and optionally scope and when_empty: fail / pass), periods, hit_periods, enabled',
+    rulesHint:
+      'An array; each rule: name, scope (all / stream / non_stream), conditions (join, metric, p, op, value, and optionally scope and when_empty: fail / pass), periods, hit_periods, enabled',
     strategies: 'Strategies JSON',
-    strategiesHint: 'An array; each strategy: name, when (a rule name, or an all / any array), actions (type, mode, value, percent), cooldown_seconds, enabled',
+    strategiesHint:
+      'An array; each strategy: name, when (a rule name, or an all / any array), actions (type, mode, value, percent), cooldown_seconds, enabled',
     notArray: 'must be an array',
     invalid: 'Fix the errors (JSON that does not parse, or an empty number) to validate or save: {where}',
     unnamed: 'item {i} must be an object with a name',
@@ -409,7 +440,8 @@ const en: typeof zh = {
     floor: 'Floor value',
     floorHint: '0 lets the weight drop to 0, which pauses the account',
     strict: 'Judge only on enough samples',
-    strictHint: 'Rules that degrade or clear are not judged while their samples stay short after looking back as far as allowed; off, they are judged on what there is, as in new-api',
+    strictHint:
+      'Rules that degrade or clear are not judged while their samples stay short after looking back as far as allowed; off, they are judged on what there is, as in new-api',
     clearOnZero: 'Clear sticky sessions at 0',
     clearOnZeroHint: 'A weight of 0 only keeps new sessions off; bound sticky sessions would keep going to the account',
     required: 'Required'
@@ -423,7 +455,9 @@ const en: typeof zh = {
     saved: 'Configuration saved',
     conflict: 'Someone changed the configuration meanwhile; reload and try again'
   },
-  logEvents: { hint: 'Also writes every weight event as a line of the plugin log (at most 5000 lines per 60 s; the event list is complete either way).' },
+  logEvents: {
+    hint: 'Also writes every weight event as a line of the plugin log (at most 5000 lines per 60 s; the event list is complete either way).'
+  },
   notify: {
     hint: 'Sent when a weight is degraded, starts climbing, is restored to its base or is revived from 0.',
     channel: 'Channel',
@@ -433,10 +467,15 @@ const en: typeof zh = {
     recipientsHint: 'recipient kind: {kind}, at most 20',
     noChannels: 'No enabled plugin delivers notifications; enable the mail plugin for email.'
   },
-  degraded: { label: 'Dynamic weight: {n} degraded', short: '{n} degraded', title: 'Accounts with a degraded group/model key on this node; click to list only them, again to clear' },
+  degraded: {
+    label: 'Dynamic weight: {n} degraded',
+    short: '{n} degraded',
+    title: 'Accounts with a degraded group/model key on this node; click to list only them, again to clear'
+  },
   accountTab: {
     hint: 'The effective weight of this account in each group and client model; scheduling uses it in place of the account weight in the group.',
-    resetAllConfirm: 'Reset the effective weights of account {account} in every group and model to their base? Their window history is dropped.'
+    resetAllConfirm:
+      'Reset the effective weights of account {account} in every group and model to their base? Their window history is dropped.'
   },
   it: itemsMsg.en,
   cfg: configMsg.en,

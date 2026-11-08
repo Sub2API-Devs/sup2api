@@ -5,7 +5,21 @@ import { SAlert, SButton, SIcon, SLink, STooltip } from '@sub2api/ui'
 import KeyStatusTable from './KeyStatusTable.vue'
 import { useCatalog } from './catalog'
 import { floorText, overrideFields } from './configView'
-import { applyQuery, canManage, configRoute, dashboardRoute, errorMessage, fetchConfig, keyOf, loadAccountWeight, useDwHost, useReset, type AccountOverride, type AccountWeight, type KeyStatus } from './host'
+import {
+  applyQuery,
+  canManage,
+  configRoute,
+  dashboardRoute,
+  errorMessage,
+  fetchConfig,
+  keyOf,
+  loadAccountWeight,
+  useDwHost,
+  useReset,
+  type AccountOverride,
+  type AccountWeight,
+  type KeyStatus
+} from './host'
 
 // account.detail.tabs slot: every key of one account (degraded or not) in
 // the status tab's table, under one summary line: how many keys, how many
@@ -49,7 +63,8 @@ const overrideText = computed(() => {
   if (!o) return t('acct.tab.overrideNone')
   const parts: string[] = []
   if (o.enabled !== undefined) parts.push(`${t('cfg.accounts.col.enabled')} ${overrideFields.enabled(t, { enabled: o.enabled })}`)
-  if (o.exempt_status_codes !== undefined) parts.push(`${t('cfg.accounts.col.exempt')} ${overrideFields.exempt(t, { exempt_status_codes: o.exempt_status_codes })}`)
+  if (o.exempt_status_codes !== undefined)
+    parts.push(`${t('cfg.accounts.col.exempt')} ${overrideFields.exempt(t, { exempt_status_codes: o.exempt_status_codes })}`)
   if (o.min_weight_mode) parts.push(`${t('cfg.accounts.col.floor')} ${floorText(t, o.min_weight_mode, o.min_weight)}`)
   return parts.join(' · ') || t('acct.tab.overrideNone')
 })
@@ -57,8 +72,13 @@ const overrideText = computed(() => {
 const { busy, reset } = useReset(() => Promise.all([list.reload(), loadSummary()]))
 const accountLabel = () => catalog.accountName(props.account.id, props.account.name)
 const resetRow = (r: KeyStatus) =>
-  reset({ account_id: r.account_id, group_id: r.group_id, model: r.model }, t('status.resetKeyConfirm', { account: accountLabel(), group: catalog.groupName(r.group_id), model: r.model }), keyOf(r))
-const resetAll = () => reset({ account_id: props.account.id, group_id: 0, model: '' }, t('accountTab.resetAllConfirm', { account: accountLabel() }), 'all')
+  reset(
+    { account_id: r.account_id, group_id: r.group_id, model: r.model },
+    t('status.resetKeyConfirm', { account: accountLabel(), group: catalog.groupName(r.group_id), model: r.model }),
+    keyOf(r)
+  )
+const resetAll = () =>
+  reset({ account_id: props.account.id, group_id: 0, model: '' }, t('accountTab.resetAllConfirm', { account: accountLabel() }), 'all')
 
 const showEvents = (r: KeyStatus) => host.router.push(dashboardRoute('events', r))
 </script>
@@ -85,7 +105,16 @@ const showEvents = (r: KeyStatus) => host.router.push(dashboardRoute('events', r
       </span>
       <span class="dw-acct-summary-actions">
         <SButton size="sm" icon="chart" :to="dashboardRoute('events', { account_id: account.id })">{{ t('acct.tab.events') }}</SButton>
-        <SButton v-if="manage" size="sm" tone="danger" icon="refresh" :loading="busy === 'all'" :disabled="!list.items.value.length" @click="resetAll">{{ t('acct.tab.resetAll') }}</SButton>
+        <SButton
+          v-if="manage"
+          size="sm"
+          tone="danger"
+          icon="refresh"
+          :loading="busy === 'all'"
+          :disabled="!list.items.value.length"
+          @click="resetAll"
+          >{{ t('acct.tab.resetAll') }}</SButton
+        >
       </span>
     </div>
     <SAlert v-if="error" tone="danger" class="dw-section">{{ error }}</SAlert>

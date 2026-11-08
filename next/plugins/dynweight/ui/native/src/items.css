@@ -289,13 +289,10 @@
   background: rgb(var(--surface-2));
   font-size: 0.75rem;
 }
-.dw-it-cond-opts label {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  color: rgb(var(--fg-muted));
+.dw-it-cond-opts > * {
+  flex: 1 1 18rem;
 }
-.dw-it-cond-opts label > :last-child {
+.dw-it-opt-ctl {
   width: 8rem;
 }
 .dw-it-act {

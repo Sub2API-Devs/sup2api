@@ -24,7 +24,7 @@ const isNew = computed(() => props.target === '')
 
 watch(
   () => props.target,
-  (id) => {
+  id => {
     if (id === null) return
     group.value = id
     layer.value = clone(props.draft.groups[id] ?? { ...globalLayer(props.draft), enabled: true })
@@ -34,7 +34,9 @@ watch(
 
 const validId = computed(() => /^\d+$/.test(group.value) && Number(group.value) > 0)
 const incomplete = computed(() => !!layer.value && layerIncomplete(layer.value))
-const title = computed(() => (isNew.value ? t('cfg.groupModal.add') : t('cfg.groupModal.edit', { group: catalog.groupName(Number(props.target)) })))
+const title = computed(() =>
+  isNew.value ? t('cfg.groupModal.add') : t('cfg.groupModal.edit', { group: catalog.groupName(Number(props.target)) })
+)
 
 function apply() {
   if (!layer.value || !validId.value || incomplete.value) return

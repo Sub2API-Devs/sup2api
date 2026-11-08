@@ -4,7 +4,7 @@ import { SButton, SPageHeader, STabs } from '@sub2api/ui'
 import StatusTab from './StatusTab.vue'
 import EventsTab from './EventsTab.vue'
 import ConfigTab from './ConfigTab.vue'
-import { useDwHost, type Filter } from './host'
+import { omit, useDwHost, type Filter } from './host'
 
 // Dynamic weight page (CONTRACTS §74.5): effective weights, weight events and
 // the configuration. Tabs are mounted on first visit and synced to ?tab; the
@@ -17,14 +17,14 @@ const t = host.t
 
 type TabKey = 'status' | 'events' | 'config'
 
-const tabs = computed(() => (['status', 'events', 'config'] as const).map((key) => ({ key, label: t(`tabs.${key}`) })))
+const tabs = computed(() => (['status', 'events', 'config'] as const).map(key => ({ key, label: t(`tabs.${key}`) })))
 
 const query = host.router.currentRoute.value.query
 const param = (k: string) => (typeof query[k] === 'string' ? (query[k] as string) : '')
 
 function initialTab(): TabKey {
   const q = query.tab
-  return tabs.value.some((x) => x.key === q) ? (q as TabKey) : 'status'
+  return tabs.value.some(x => x.key === q) ? (q as TabKey) : 'status'
 }
 
 function initialFilter(): Filter | null {
@@ -41,7 +41,7 @@ const tab = ref<TabKey>(initialTab())
 
 const visited = ref(new Set<TabKey>([tab.value]))
 
-watch(tab, (v) => {
+watch(tab, v => {
   if (!visited.value.has(v)) visited.value = new Set([...visited.value, v])
   const route = host.router.currentRoute.value
   if (route.query.tab !== v) host.router.replace({ query: { ...route.query, tab: v } })
@@ -52,12 +52,11 @@ watch(tab, (v) => {
 const overrideAccount = ref<string | null>(null)
 watch(
   () => host.router.currentRoute.value.query.override_account,
-  (v) => {
+  v => {
     if (typeof v !== 'string' || !/^\d+$/.test(v)) return
     overrideAccount.value = v
     tab.value = 'config'
-    const { override_account: _o, ...rest } = host.router.currentRoute.value.query
-    void host.router.replace({ query: { ...rest, tab: 'config' } })
+    void host.router.replace({ query: { ...omit(host.router.currentRoute.value.query, 'override_account'), tab: 'config' } })
   },
   { immediate: true }
 )
@@ -92,7 +91,13 @@ function showEvents(f: Filter) {
     </SPageHeader>
 
     <STabs v-model="tab" :tabs="tabs">
-      <StatusTab v-if="visited.has('status')" v-show="tab === 'status'" :ref="setRef('status')" :preset="preset" @show-events="showEvents" />
+      <StatusTab
+        v-if="visited.has('status')"
+        v-show="tab === 'status'"
+        :ref="setRef('status')"
+        :preset="preset"
+        @show-events="showEvents"
+      />
       <EventsTab v-if="visited.has('events')" v-show="tab === 'events'" :ref="setRef('events')" :preset="eventsPreset" />
       <ConfigTab v-if="visited.has('config')" v-show="tab === 'config'" :ref="setRef('config')" v-model:open-account="overrideAccount" />
     </STabs>

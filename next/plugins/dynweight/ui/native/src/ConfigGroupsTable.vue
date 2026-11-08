@@ -15,25 +15,30 @@ const emit = defineEmits<{ (e: 'add'): void; (e: 'edit', id: string): void; (e: 
 const t = useDwHost().t
 const catalog = useCatalog()
 
-const quote = (names: string[]) => names.map((name) => t('cfg.quote', { name })).join(t('cfg.quoteSep'))
+const quote = (names: string[]) => names.map(name => t('cfg.quote', { name })).join(t('cfg.quoteSep'))
 
 const rows = computed(() => {
   const c = props.draft
   const global = globalLayer(c)
-  return sortedIds(c.groups).map((id) => {
+  return sortedIds(c.groups).map(id => {
     const g = c.groups[id]
-    const fields = fieldDiffs(g, global).map((f) => ({
+    const fields = fieldDiffs(g, global).map(f => ({
       text: t('cfg.groups.fieldDiff', { field: t(`cfg.field.short.${f}`), value: fieldText(t, g, f), global: fieldText(t, global, f) }),
       title: ''
     }))
     const d = itemDiff(g, global)
     // A changed item reads as its sentence on hover, so the row need not name what changed.
     const sentences = (names: string[]) =>
-      names.map((n) => g.strategies.find((s) => s.name === n)).flatMap((s) => (s ? [describeItemSentence(s, g.rules, t)] : [])).join('\n')
+      names
+        .map(n => g.strategies.find(s => s.name === n))
+        .flatMap(s => (s ? [describeItemSentence(s, g.rules, t)] : []))
+        .join('\n')
     const items = itemsSame(d)
       ? [{ text: t('cfg.groups.itemsSame'), title: '' }]
       : [
-          ...(d.removed.length || d.added.length ? [{ text: t('cfg.groups.itemsCount', { n: g.strategies.length, g: global.strategies.length }), title: '' }] : []),
+          ...(d.removed.length || d.added.length
+            ? [{ text: t('cfg.groups.itemsCount', { n: g.strategies.length, g: global.strategies.length }), title: '' }]
+            : []),
           ...(d.removed.length ? [{ text: t('cfg.groups.removed', { names: quote(d.removed) }), title: '' }] : []),
           ...(d.added.length ? [{ text: t('cfg.groups.added', { names: quote(d.added) }), title: sentences(d.added) }] : []),
           ...(d.changed.length ? [{ text: t('cfg.groups.changed', { names: quote(d.changed) }), title: sentences(d.changed) }] : []),
@@ -74,7 +79,9 @@ const columns = computed<TableColumn[]>(() => [
       <template #cell-diff="{ row }">
         <div v-if="row.same" class="dw-cfg-muted">{{ t('cfg.groups.same') }}</div>
         <!-- The first difference leads, the rest follow in small print. -->
-        <div v-for="(line, i) in row.lines" v-else :key="line.text" :class="{ 'dw-sub': i > 0 }" :title="line.title || undefined">{{ line.text }}</div>
+        <div v-for="(line, i) in row.lines" v-else :key="line.text" :class="{ 'dw-sub': i > 0 }" :title="line.title || undefined">
+          {{ line.text }}
+        </div>
       </template>
       <!-- On a phone card the warning sits in the header, short, beside the switch state. -->
       <template #cell-warn="{ row, layout }">
@@ -85,7 +92,11 @@ const columns = computed<TableColumn[]>(() => [
       </template>
       <template #cell-actions="{ row }">
         <div class="dw-cfg-row-actions">
-          <SRowAction :icon="readonly ? 'eye' : 'edit'" :label="t(readonly ? 'cfg.groups.view' : 'cfg.groups.edit')" @click="emit('edit', row.id)" />
+          <SRowAction
+            :icon="readonly ? 'eye' : 'edit'"
+            :label="t(readonly ? 'cfg.groups.view' : 'cfg.groups.edit')"
+            @click="emit('edit', row.id)"
+          />
           <SRowAction v-if="!readonly" icon="trash" tone="danger" :label="t('cfg.groups.remove')" @click="emit('remove', row.id)" />
         </div>
       </template>

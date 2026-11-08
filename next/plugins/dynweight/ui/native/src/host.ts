@@ -317,13 +317,6 @@ export interface AccountWeight {
 }
 
 // account area (0.5.1)
-/** A time in the viewer's zone, short for tight cells: HH:mm today, else MM-DD HH:mm. */
-export function shortTime(at: Date): string {
-  const hm = at.toLocaleTimeString(useDwHost().i18n.locale.value, { hour: '2-digit', minute: '2-digit', hour12: false })
-  if (at.toDateString() === new Date().toDateString()) return hm
-  return `${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')} ${hm}`
-}
-
 /** The configuration tab of the plugin page, opening an account's override when given (?override_account=). */
 export function configRoute(overrideAccount?: number) {
   const route = dashboardRoute('config')
@@ -344,7 +337,7 @@ type Waiters = Map<number, Array<(w: AccountWeight | null) => void>>
 let pending: Waiters | null = null
 
 export function loadAccountWeight(accountId: number): Promise<AccountWeight | null> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     if (!pending) {
       pending = new Map()
       queueMicrotask(flushWeights)
@@ -357,14 +350,18 @@ async function flushWeights() {
   const batch: Waiters = pending ?? new Map()
   pending = null
   const ids = [...batch.keys()]
-  const chunks = Array.from({ length: Math.ceil(ids.length / MAX_ACCOUNT_BATCH) }, (_, i) => ids.slice(i * MAX_ACCOUNT_BATCH, (i + 1) * MAX_ACCOUNT_BATCH))
+  const chunks = Array.from({ length: Math.ceil(ids.length / MAX_ACCOUNT_BATCH) }, (_, i) =>
+    ids.slice(i * MAX_ACCOUNT_BATCH, (i + 1) * MAX_ACCOUNT_BATCH)
+  )
   const answers = await Promise.all(
-    chunks.map((chunk) => api()
-      .get<Record<string, AccountWeight> | null>('/weights', { account_ids: chunk.join(',') })
-      .catch(() => null)) // the slot is optional
+    chunks.map(chunk =>
+      api()
+        .get<Record<string, AccountWeight> | null>('/weights', { account_ids: chunk.join(',') })
+        .catch(() => null)
+    ) // the slot is optional
   )
   const weights: Record<string, AccountWeight> = Object.assign({}, ...answers)
-  for (const [id, waiters] of batch) waiters.forEach((resolve) => resolve(weights[id] ?? null))
+  for (const [id, waiters] of batch) waiters.forEach(resolve => resolve(weights[id] ?? null))
 }
 
 // ------------------------------------------------------------------ helpers
@@ -402,7 +399,7 @@ export function eventTone(kind: string): Tone {
 /** Options of an enum whose labels are messages under `group`. */
 export function enumOptions(group: string, values: readonly string[]): SelectOption[] {
   const t = useDwHost().t
-  return values.map((v) => ({ value: v, label: t(`${group}.${v}`) }))
+  return values.map(v => ({ value: v, label: t(`${group}.${v}`) }))
 }
 
 export const scopes: readonly Scope[] = ['all', 'stream', 'non_stream']
@@ -415,6 +412,13 @@ export const eventKinds = ['weight_down', 'weight_up_start', 'weight_restored', 
 /** Deep copy of a JSON value. */
 export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
+/** A shallow copy of `o` without `keys`. */
+export function omit<T extends object, K extends keyof T>(o: T, ...keys: K[]): Omit<T, K> {
+  const out = { ...o }
+  for (const k of keys) delete out[k]
+  return out
+}
+
 /** Success rate in percent with one decimal ("97.5%"), '—' without samples. */
 export function successRate(total: number, fail: number): string {
   return total > 0 ? `${Math.round(((total - fail) / total) * 1000) / 10}%` : '—'
@@ -426,18 +430,22 @@ const empty = (v: number | undefined | null) => v === null || v === undefined
 /** Rule names with a number left empty, which the plugin refuses or reads as 0. */
 export function rulesWithEmptyNumbers(rules: Rule[]): string[] {
   return rules
-    .filter((r) => empty(r.periods) || empty(r.hit_periods) || r.conditions.some((c) => empty(c.value) || (percentileMetric(c.metric) && empty(c.p))))
-    .map((r) => r.name)
+    .filter(
+      r => empty(r.periods) || empty(r.hit_periods) || r.conditions.some(c => empty(c.value) || (percentileMetric(c.metric) && empty(c.p)))
+    )
+    .map(r => r.name)
 }
 
 /** Strategy names with an action amount left empty. */
 export function strategiesWithEmptyNumbers(strategies: Strategy[]): string[] {
-  return strategies.filter((s) => s.actions.some((a) => empty(a.type === 'affinity_clear' ? a.percent : a.value))).map((s) => s.name)
+  return strategies.filter(s => s.actions.some(a => empty(a.type === 'affinity_clear' ? a.percent : a.value))).map(s => s.name)
 }
 
 /** Whether a layer has a number left empty: its own, a rule's or a strategy's. */
 export const layerIncomplete = (l: Layer) =>
-  [l.window_seconds, l.min_samples, l.min_weight].some(empty) || rulesWithEmptyNumbers(l.rules).length > 0 || strategiesWithEmptyNumbers(l.strategies).length > 0
+  [l.window_seconds, l.min_samples, l.min_weight].some(empty) ||
+  rulesWithEmptyNumbers(l.rules).length > 0 ||
+  strategiesWithEmptyNumbers(l.strategies).length > 0
 
 /** Whether an account override sets a floor mode but leaves the floor empty. */
 export const overrideIncomplete = (o: AccountOverride) => o.min_weight_mode !== undefined && empty(o.min_weight)

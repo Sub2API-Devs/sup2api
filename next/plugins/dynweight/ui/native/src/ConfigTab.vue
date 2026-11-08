@@ -14,8 +14,21 @@ import ItemsTable from './ItemsTable.vue'
 import { useCatalog } from './catalog'
 import { changes as changesOf, sortedIds, type Draft } from './configView'
 import {
-  canManage, errorMessage, fetchChannels, fetchConfig, fetchDefaults, layerIncomplete, overrideIncomplete, saveConfig, useDwHost, validateConfig,
-  type AccountOverride, type Channel, type ConfigBody, type Layer, type Named
+  canManage,
+  errorMessage,
+  fetchChannels,
+  fetchConfig,
+  fetchDefaults,
+  layerIncomplete,
+  overrideIncomplete,
+  saveConfig,
+  useDwHost,
+  validateConfig,
+  type AccountOverride,
+  type Channel,
+  type ConfigBody,
+  type Layer,
+  type Named
 } from './host'
 
 // Configuration: the global layer, group layers that replace it, account
@@ -62,8 +75,12 @@ const problems = computed(() => {
   if (!c) return []
   return [
     ...(layerIncomplete(c) ? [t('cfg.save.global')] : []),
-    ...sortedIds(c.groups).filter((id) => layerIncomplete(c.groups[id])).map((id) => t('cfg.save.group', { name: catalog.groupName(Number(id)) })),
-    ...sortedIds(c.accounts).filter((id) => overrideIncomplete(c.accounts[id])).map((id) => t('cfg.save.account', { name: catalog.accountName(Number(id)) }))
+    ...sortedIds(c.groups)
+      .filter(id => layerIncomplete(c.groups[id]))
+      .map(id => t('cfg.save.group', { name: catalog.groupName(Number(id)) })),
+    ...sortedIds(c.accounts)
+      .filter(id => overrideIncomplete(c.accounts[id]))
+      .map(id => t('cfg.save.account', { name: catalog.accountName(Number(id)) }))
   ]
 })
 const invalid = computed(() => problems.value.length > 0)
@@ -86,7 +103,11 @@ async function reload() {
 
 /** Reloads, once the user agrees to drop unsaved edits. */
 async function discard() {
-  if ((dirty.value || invalid.value) && !(await host.confirm({ message: t('config.discardConfirm'), confirmText: t('config.discard'), danger: true }))) return
+  if (
+    (dirty.value || invalid.value) &&
+    !(await host.confirm({ message: t('config.discardConfirm'), confirmText: t('config.discard'), danger: true }))
+  )
+    return
   await reload()
 }
 
@@ -102,16 +123,18 @@ const accountGroups = ref<Record<string, number[]>>({})
 const looked = new Set<string>()
 
 async function loadAccountGroups(ids: string[]) {
-  const todo = ids.filter((id) => !looked.has(id))
-  const batches = Array.from({ length: Math.ceil(todo.length / MAX_ACCOUNT_BATCH) }, (_, i) => todo.slice(i * MAX_ACCOUNT_BATCH, (i + 1) * MAX_ACCOUNT_BATCH))
+  const todo = ids.filter(id => !looked.has(id))
+  const batches = Array.from({ length: Math.ceil(todo.length / MAX_ACCOUNT_BATCH) }, (_, i) =>
+    todo.slice(i * MAX_ACCOUNT_BATCH, (i + 1) * MAX_ACCOUNT_BATCH)
+  )
   await Promise.all(
-    batches.map(async (batch) => {
+    batches.map(async batch => {
       try {
         const found = await listAll<Named & { group_ids?: number[] }>(host.api, '/accounts', {
           query: { ids: batch.join(','), orphaned: 'all' },
           max: batch.length
         })
-        batch.forEach((id) => looked.add(id))
+        batch.forEach(id => looked.add(id))
         for (const a of found) {
           accountGroups.value[a.id] = a.group_ids ?? []
           catalog.state.accounts[a.id] = a.name
@@ -141,7 +164,7 @@ async function removeGroup(id: string) {
 
 // An override left with nothing set is removed rather than kept empty.
 function applyAccount(id: string, o: AccountOverride) {
-  if (draft.value && Object.values(o).every((v) => v === undefined)) delete draft.value.accounts[id]
+  if (draft.value && Object.values(o).every(v => v === undefined)) delete draft.value.accounts[id]
   else if (draft.value) draft.value.accounts[id] = o
   accountTarget.value = null
 }
@@ -177,7 +200,11 @@ async function save() {
     const checked = await validateConfig({ config: c, version: version.value })
     const found = checked.warnings ?? []
     warnings.value = found
-    if (found.length && !(await host.confirm({ message: t('config.warningsConfirm', { warnings: found.join('; ') }), confirmText: t('config.save') }))) return
+    if (
+      found.length &&
+      !(await host.confirm({ message: t('config.warningsConfirm', { warnings: found.join('; ') }), confirmText: t('config.save') }))
+    )
+      return
     const body = await saveConfig({ config: c, version: version.value })
     setDraft(body)
     warnings.value = body.warnings ?? []
@@ -215,12 +242,33 @@ async function save() {
       </SCard>
 
       <ConfigGroupsTable :draft="draft" :readonly="!manage" @add="groupTarget = ''" @edit="groupTarget = $event" @remove="removeGroup" />
-      <ConfigAccountsTable :draft="draft" :account-groups="accountGroups" :readonly="!manage" @add="accountTarget = ''" @edit="accountTarget = $event" @remove="removeAccount" />
+      <ConfigAccountsTable
+        :draft="draft"
+        :account-groups="accountGroups"
+        :readonly="!manage"
+        @add="accountTarget = ''"
+        @edit="accountTarget = $event"
+        @remove="removeAccount"
+      />
       <ConfigNotify v-model="draft" :channels="channels" :readonly="!manage" />
 
-      <ConfigSaveBar v-if="manage && changes && (dirty || invalid)" :changes="changes" :problems="problems" :saving="saving" @discard="discard" @save="save" />
+      <ConfigSaveBar
+        v-if="manage && changes && (dirty || invalid)"
+        :changes="changes"
+        :problems="problems"
+        :saving="saving"
+        @discard="discard"
+        @save="save"
+      />
 
-      <ConfigGroupModal :target="groupTarget" :draft="draft" :defaults="defaults" :readonly="!manage" @close="groupTarget = null" @apply="applyGroup" />
+      <ConfigGroupModal
+        :target="groupTarget"
+        :draft="draft"
+        :defaults="defaults"
+        :readonly="!manage"
+        @close="groupTarget = null"
+        @apply="applyGroup"
+      />
       <ConfigAccountModal
         :target="accountTarget"
         :draft="draft"

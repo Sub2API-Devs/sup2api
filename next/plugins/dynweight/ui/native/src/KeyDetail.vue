@@ -16,11 +16,14 @@ const host = useDwHost()
 const t = host.t
 
 const rate = successRate
-const counts = (items: ThresholdCount[], samples: number) => items.map((x) => `≥${formatMs(x.ms)} ${x.count}/${samples}`).join(' · ')
+const counts = (items: ThresholdCount[], samples: number) => items.map(x => `≥${formatMs(x.ms)} ${x.count}/${samples}`).join(' · ')
 const time = (unix: number) => (unix ? host.i18n.formatDateTime(unix * 1000) : '—')
 
 /** A rule's bitmap padded to its N windows: hit, miss, or not judged yet (oldest first). */
-const bits = (bitmap: string, periods: number) => [...Array<string>(Math.max(periods - bitmap.length, 0)).fill(''), ...bitmap.slice(-periods)]
+const bits = (bitmap: string, periods: number) => [
+  ...Array<string>(Math.max(periods - bitmap.length, 0)).fill(''),
+  ...bitmap.slice(-periods)
+]
 
 const cur = computed(() => props.row.current)
 const judged = computed(() => !!props.row.eval_window && props.row.adjusting)
@@ -38,7 +41,8 @@ const judged = computed(() => !!props.row.eval_window && props.row.adjusting)
         <div>
           <dt>{{ t('detail.weight') }}</dt>
           <dd class="dw-num">
-            {{ weightOf(row.effective) }} / {{ row.base }}<template v-if="row.weight_min > 0"> · {{ t('detail.floor', { n: row.weight_min }) }}</template> ·
+            {{ weightOf(row.effective) }} / {{ row.base
+            }}<template v-if="row.weight_min > 0"> · {{ t('detail.floor', { n: row.weight_min }) }}</template> ·
             {{ t(row.group_configured ? 'acct.table.group' : 'acct.table.global') }}
           </dd>
         </div>
@@ -46,7 +50,12 @@ const judged = computed(() => !!props.row.eval_window && props.row.adjusting)
           <dt>{{ t('detail.successRate') }}</dt>
           <dd class="dw-num">
             <template v-if="row.recent.windows">{{
-              t('detail.recent', { n: row.recent.windows, rate: rate(row.recent.total, row.recent.fail), ok: row.recent.total - row.recent.fail, total: row.recent.total })
+              t('detail.recent', {
+                n: row.recent.windows,
+                rate: rate(row.recent.total, row.recent.fail),
+                ok: row.recent.total - row.recent.fail,
+                total: row.recent.total
+              })
             }}</template>
             <template v-else>—</template>
           </dd>
@@ -54,7 +63,15 @@ const judged = computed(() => !!props.row.eval_window && props.row.adjusting)
         <div>
           <dt>{{ t('detail.current', { s: cur.elapsed_seconds }) }}</dt>
           <dd class="dw-num">
-            {{ t('detail.currentCounts', { total: cur.total, stream: cur.stream_total, fail: cur.fail, streamFail: cur.stream_fail, rate: rate(cur.total, cur.fail) }) }}
+            {{
+              t('detail.currentCounts', {
+                total: cur.total,
+                stream: cur.stream_total,
+                fail: cur.fail,
+                streamFail: cur.stream_fail,
+                rate: rate(cur.total, cur.fail)
+              })
+            }}
           </dd>
         </div>
         <div>
@@ -114,19 +131,31 @@ const judged = computed(() => !!props.row.eval_window && props.row.adjusting)
               </td>
               <td>
                 <span class="dw-bits" :title="t('detail.bitmap')">
-                  <i v-for="(b, j) in bits(r.bitmap, r.periods)" :key="j" :class="b === '1' ? 'dw-bit-hit' : b === '0' ? 'dw-bit-miss' : ''" />
+                  <i
+                    v-for="(b, j) in bits(r.bitmap, r.periods)"
+                    :key="j"
+                    :class="b === '1' ? 'dw-bit-hit' : b === '0' ? 'dw-bit-miss' : ''"
+                  />
                 </span>
               </td>
               <td>
                 <template v-if="judged">
                   <span :class="r.fired ? 'dw-acct-danger' : r.hit ? 'dw-acct-degrading' : 'dw-acct-muted'">
-                    {{ r.fired ? t('detail.fired') : t(r.unjudged ? 'acct.detail.unjudged' : r.hit ? 'acct.detail.hit' : 'acct.detail.miss') }}
+                    {{
+                      r.fired ? t('detail.fired') : t(r.unjudged ? 'acct.detail.unjudged' : r.hit ? 'acct.detail.hit' : 'acct.detail.miss')
+                    }}
                   </span>
                 </template>
                 <template v-else>—</template>
               </td>
               <td class="dw-num">
-                {{ !judged || r.no_samples ? '—' : r.lookback > 1 ? t('acct.detail.samplesN', { n: r.samples, lookback: r.lookback }) : r.samples }}
+                {{
+                  !judged || r.no_samples
+                    ? '—'
+                    : r.lookback > 1
+                      ? t('acct.detail.samplesN', { n: r.samples, lookback: r.lookback })
+                      : r.samples
+                }}
               </td>
             </tr>
           </tbody>

@@ -36,7 +36,7 @@ watch(
   { immediate: true }
 )
 
-watchEffect(() => (invalid.value = parts.some((p) => errors.value[p].length > 0)))
+watchEffect(() => (invalid.value = parts.some(p => errors.value[p].length > 0)))
 // The model keeps its last good value once the panel is gone.
 onBeforeUnmount(() => (invalid.value = false))
 
@@ -48,7 +48,9 @@ function isWhen(w: unknown): boolean {
   if (typeof w === 'string') return true
   if (!isItem(w)) return false
   const keys = Object.keys(w)
-  return keys.length === 1 && (keys[0] === 'all' || keys[0] === 'any') && Array.isArray(w[keys[0]]) && (w[keys[0]] as unknown[]).every(isWhen)
+  return (
+    keys.length === 1 && (keys[0] === 'all' || keys[0] === 'any') && Array.isArray(w[keys[0]]) && (w[keys[0]] as unknown[]).every(isWhen)
+  )
 }
 
 /** The malformed field of an item ('' when none), filling a missing list. */
@@ -61,8 +63,8 @@ function listField(x: Item, field: string): string {
 // The shapes the editors read: lists of objects and well-formed triggers; the
 // values themselves are for validateLists.
 const malformed: Record<Part, (x: Item) => string> = {
-  rules: (x) => listField(x, 'conditions'),
-  strategies: (x) => {
+  rules: x => listField(x, 'conditions'),
+  strategies: x => {
     x.when ??= null
     return x.when !== null && !isWhen(x.when) ? 'when' : listField(x, 'actions')
   }
@@ -103,7 +105,14 @@ function edit(part: Part, value: string) {
 <template>
   <div class="dw-it-json">
     <SField v-for="part in parts" :key="part" :label="t(`it.json.${part}`)" :hint="t(`json.${part}Hint`)">
-      <STextarea :model-value="text[part]" :rows="rows" mono size="sm" :error="errors[part].length > 0" @update:model-value="edit(part, $event)" />
+      <STextarea
+        :model-value="text[part]"
+        :rows="rows"
+        mono
+        size="sm"
+        :error="errors[part].length > 0"
+        @update:model-value="edit(part, $event)"
+      />
       <ul v-if="errors[part].length" class="dw-it-errors" role="alert">
         <li v-for="(e, i) in errors[part].slice(0, 5)" :key="i">{{ e }}</li>
       </ul>

@@ -20,7 +20,8 @@ const noClimb = computed(() => {
   if (c.enabled && hasDegradeWithoutClimb(c.rules, c.strategies)) out.push(t('cfg.summary.noClimbGlobal'))
   for (const id of sortedIds(c.groups)) {
     const g = c.groups[id]
-    if (g.enabled && hasDegradeWithoutClimb(g.rules, g.strategies)) out.push(t('cfg.summary.noClimbGroup', { group: catalog.groupName(Number(id)) }))
+    if (g.enabled && hasDegradeWithoutClimb(g.rules, g.strategies))
+      out.push(t('cfg.summary.noClimbGroup', { group: catalog.groupName(Number(id)) }))
   }
   return out
 })
@@ -28,10 +29,16 @@ const noClimb = computed(() => {
 
 <template>
   <div class="dw-cfg-summary" :class="{ 'dw-cfg-summary-off': !draft.enabled }">
-    <label class="dw-cfg-summary-master" :title="draft.enabled ? '' : t('cfg.summary.offHint')">
-      <SSwitch v-model="draft.enabled" :disabled="readonly" :aria-label="t('cfg.summary.master')" />
+    <!-- SSwitch is itself the <label>: the text goes in its slot, not around it. -->
+    <SSwitch
+      v-model="draft.enabled"
+      class="dw-cfg-summary-master"
+      :disabled="readonly"
+      :aria-label="t('cfg.summary.master')"
+      :title="draft.enabled ? '' : t('cfg.summary.offHint')"
+    >
       <strong>{{ t(draft.enabled ? 'cfg.summary.on' : 'cfg.summary.off') }}</strong>
-    </label>
+    </SSwitch>
     <span class="dw-cfg-summary-item dw-num">{{ t('cfg.summary.items', { n: countItems(draft.strategies) }) }}</span>
     <span class="dw-cfg-summary-item dw-num">{{ t('cfg.summary.groups', { n: Object.keys(draft.groups).length }) }}</span>
     <span class="dw-cfg-summary-item dw-num">{{ t('cfg.summary.accounts', { n: Object.keys(draft.accounts).length }) }}</span>

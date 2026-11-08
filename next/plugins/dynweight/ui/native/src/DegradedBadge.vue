@@ -42,7 +42,14 @@ function toggle() {
 </script>
 
 <template>
-  <SChip v-if="count > 0 || pressed" tone="warning" :icon="compact ? undefined : 'chart'" :pressed="pressed" :title="t('degraded.title')" @click="toggle">
+  <SChip
+    v-if="count > 0 || pressed"
+    tone="warning"
+    :icon="compact ? undefined : 'chart'"
+    :pressed="pressed"
+    :title="t('degraded.title')"
+    @click="toggle"
+  >
     {{ t(compact ? 'degraded.short' : 'degraded.label', { n: count }) }}
   </SChip>
 </template>

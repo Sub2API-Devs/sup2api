@@ -1,4 +1,13 @@
-import { directionOf, readItems, whenRefs, type Direction, type ItemDraft, type ListProblem, type Problem, type ReadonlyReason } from './items'
+import {
+  directionOf,
+  readItems,
+  whenRefs,
+  type Direction,
+  type ItemDraft,
+  type ListProblem,
+  type Problem,
+  type ReadonlyReason
+} from './items'
 import { percentileMetric, type Action, type ActionType, type Condition, type Rule, type Scope, type Strategy, type When } from './host'
 
 // Sentences of the adjustment items: the trigger ("错误率 ≥ 30%"), its
@@ -31,7 +40,7 @@ export function describeConditions(conditions: Condition[], scope: Scope, t: Tra
   })
   const and = ` ${t('join.and')} `
   const many = groups.length > 1
-  return groups.map((g) => (many && g.length > 1 ? t('it.paren', { text: g.join(and) }) : g.join(and))).join(` ${t('join.or')} `)
+  return groups.map(g => (many && g.length > 1 ? t('it.paren', { text: g.join(and) }) : g.join(and))).join(` ${t('join.or')} `)
 }
 
 /** "最近 3 个窗口中 2 次", or "当前窗口命中即触发" for 1 / 1. */
@@ -43,7 +52,10 @@ export function describeWindows(periods: number | null, hits: number | null, t: 
 export function describeAction(a: Action, t: Translate): string {
   if (a.type === 'affinity_clear') return t('it.d.clear', { v: a.percent ?? '?' })
   const v = `${a.value ?? '?'}${a.mode === 'fixed' ? '' : '%'}`
-  return t(a.type === 'weight_climb' ? 'it.d.climb' : 'it.d.degrade', { v, basis: a.mode && a.mode !== 'fixed' ? t(`it.d.basis.${a.mode}`) : '' }).trim()
+  return t(a.type === 'weight_climb' ? 'it.d.climb' : 'it.d.degrade', {
+    v,
+    basis: a.mode && a.mode !== 'fixed' ? t(`it.d.basis.${a.mode}`) : ''
+  }).trim()
 }
 
 /** The parts of an item row. */
@@ -66,21 +78,21 @@ function describeWhen(w: When | null, t: Translate, nested = false): string {
   if (w === null || w === undefined) return ''
   if (typeof w === 'string') return w
   const all = 'all' in w
-  const list = (all ? w.all : w.any).map((m) => describeWhen(m, t, true))
+  const list = (all ? w.all : w.any).map(m => describeWhen(m, t, true))
   const text = list.join(` ${t(all ? 'join.and' : 'join.or')} `)
   return nested && list.length > 1 ? t('it.paren', { text }) : text
 }
 
 const actionParts = (actions: Action[], cooldown: number | null | undefined, t: Translate) => ({
   direction: directionOf(actions),
-  types: actions.map((a) => a.type),
-  actions: actions.map((a) => describeAction(a, t)),
+  types: actions.map(a => a.type),
+  actions: actions.map(a => describeAction(a, t)),
   cooldown: cooldown ? t('it.d.cooldown', { n: cooldown }) : ''
 })
 
 /** The row parts of an editable item. */
 export function describeDraft(d: ItemDraft, t: Translate): ItemParts {
-  const pass = d.conditions.filter((c) => c.when_empty === 'pass').length
+  const pass = d.conditions.filter(c => c.when_empty === 'pass').length
   const windows = describeWindows(d.periods, d.hit_periods, t)
   return {
     ...actionParts(d.actions, d.cooldown_seconds, t),
@@ -92,7 +104,12 @@ export function describeDraft(d: ItemDraft, t: Translate): ItemParts {
 
 /** The row parts of a read-only item: its trigger in rule names. */
 export function describeStored(s: Strategy, t: Translate): ItemParts {
-  return { ...actionParts(Array.isArray(s.actions) ? s.actions : [], s.cooldown_seconds, t), trigger: describeWhen(s.when, t), windows: '', scope: '' }
+  return {
+    ...actionParts(Array.isArray(s.actions) ? s.actions : [], s.cooldown_seconds, t),
+    trigger: describeWhen(s.when, t),
+    windows: '',
+    scope: ''
+  }
 }
 
 /** Why an item is read-only. */
@@ -110,7 +127,10 @@ export function partsSentence(p: ItemParts, t: Translate): string {
 /** One sentence of an item (trigger → actions), for the group diff and anywhere else that names an item in a line. */
 export function describeItemSentence(strategy: Strategy, rules: Rule[], t: Translate): string {
   // Read the strategy among the layer's rules (the others only matter for "shared", which a sentence does not say).
-  const entry = readItems(rules.filter((r) => whenRefs(strategy.when).includes(r.name)), [strategy])[0]
+  const entry = readItems(
+    rules.filter(r => whenRefs(strategy.when).includes(r.name)),
+    [strategy]
+  )[0]
   return partsSentence(entry.draft ? describeDraft(entry.draft, t) : describeStored(strategy, t), t)
 }
 
@@ -119,7 +139,9 @@ export function describeProblem(p: Problem | ListProblem, t: Translate): string 
   let where = ''
   if ('part' in p && p.index >= 0) {
     const rule = p.part === 'rules'
-    where = p.name?.trim() ? t(rule ? 'it.at.rule' : 'it.at.item', { name: p.name }) : t(rule ? 'it.at.ruleN' : 'it.at.itemN', { i: p.index + 1 })
+    where = p.name?.trim()
+      ? t(rule ? 'it.at.rule' : 'it.at.item', { name: p.name })
+      : t(rule ? 'it.at.ruleN' : 'it.at.itemN', { i: p.index + 1 })
   }
   const [list, i] = p.path.split('.')
   if (list === 'conditions' && i !== undefined) where += t('it.at.cond', { i: Number(i) + 1 })

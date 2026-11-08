@@ -50,7 +50,7 @@ describe('itemDiff', () => {
   })
 
   it('sees a change in a rule an item reads, not only in the item', () => {
-    const rules = global.rules.map((r) => (r.name === 'slow' ? { ...r, periods: 5 } : r))
+    const rules = global.rules.map(r => (r.name === 'slow' ? { ...r, periods: 5 } : r))
     expect(itemDiff(layer({ rules }), global).changed).toEqual(['down'])
   })
 

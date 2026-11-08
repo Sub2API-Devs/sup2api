@@ -1,4 +1,4 @@
-import type { AccountOverride, Config, Layer, Strategy } from './host'
+import { omit, type AccountOverride, type Config, type Layer, type Strategy } from './host'
 import { whenRefs } from './items'
 
 // What the config page shows about a draft: how a group layer differs from
@@ -15,8 +15,7 @@ type T = (key: string, params?: Record<string, unknown>) => string
 
 /** The global layer alone: what a new group starts as and what groups are compared to. */
 export function globalLayer(c: Config): Layer {
-  const { groups: _g, accounts: _a, notify: _n, log_events: _l, ...layer } = c
-  return layer
+  return omit(c, 'groups', 'accounts', 'notify', 'log_events')
 }
 
 /** Ids of a map sorted as numbers. */
@@ -29,7 +28,14 @@ export function floorText(t: T, mode: Layer['min_weight_mode'], value: number | 
 }
 
 /** The scalar fields a group can set apart from the global layer, in page order. */
-export const layerFields = ['window_seconds', 'min_samples', 'exempt_status_codes', 'min_samples_strict', 'floor', 'clear_sticky_on_zero'] as const
+export const layerFields = [
+  'window_seconds',
+  'min_samples',
+  'exempt_status_codes',
+  'min_samples_strict',
+  'floor',
+  'clear_sticky_on_zero'
+] as const
 export type LayerField = (typeof layerFields)[number]
 
 export function fieldText(t: T, l: Layer, f: LayerField): string {
@@ -58,14 +64,14 @@ const same = (a: unknown, b: unknown) => canonical(a) === canonical(b)
 
 /** The scalar fields where a group differs from the global layer. */
 export function fieldDiffs(group: Layer, global: Layer): LayerField[] {
-  return layerFields.filter((f) =>
+  return layerFields.filter(f =>
     f === 'floor' ? group.min_weight_mode !== global.min_weight_mode || group.min_weight !== global.min_weight : group[f] !== global[f]
   )
 }
 
 /** An item as compared: the strategy and the rules it reads, which may differ by layer under one name. */
 function itemKey(s: Strategy, l: Layer): string {
-  return canonical([s, whenRefs(s.when).map((name) => l.rules.find((r) => r.name === name) ?? null)])
+  return canonical([s, whenRefs(s.when).map(name => l.rules.find(r => r.name === name) ?? null)])
 }
 
 export interface ItemDiff {
@@ -79,12 +85,12 @@ export interface ItemDiff {
 }
 
 export function itemDiff(group: Layer, global: Layer): ItemDiff {
-  const g = new Map(global.strategies.map((s) => [s.name, itemKey(s, global)]))
-  const mine = new Map(group.strategies.map((s) => [s.name, itemKey(s, group)]))
-  const kept = (names: string[], other: Map<string, string>) => names.filter((n) => other.has(n))
+  const g = new Map(global.strategies.map(s => [s.name, itemKey(s, global)]))
+  const mine = new Map(group.strategies.map(s => [s.name, itemKey(s, group)]))
+  const kept = (names: string[], other: Map<string, string>) => names.filter(n => other.has(n))
   return {
-    removed: [...g.keys()].filter((n) => !mine.has(n)),
-    added: [...mine.keys()].filter((n) => !g.has(n)),
+    removed: [...g.keys()].filter(n => !mine.has(n)),
+    added: [...mine.keys()].filter(n => !g.has(n)),
     changed: [...mine].filter(([n, k]) => g.has(n) && g.get(n) !== k).map(([n]) => n),
     reordered: !same(kept([...mine.keys()], g), kept([...g.keys()], mine))
   }
@@ -125,7 +131,12 @@ export type OverrideField = keyof typeof overrideFields
  * "Inherits group vip: 400" for a field an account leaves alone, or "differs
  * by group" with each group's value in `title`.
  */
-export function inheritText(t: T, sources: Array<[string, Layer]>, f: OverrideField, groupName: (id: number) => string): { text: string; title: string } {
+export function inheritText(
+  t: T,
+  sources: Array<[string, Layer]>,
+  f: OverrideField,
+  groupName: (id: number) => string
+): { text: string; title: string } {
   const value = (l: Layer) => overrideFields[f](t, l)
   const name = (source: string) => (source ? t('cfg.accounts.group', { group: groupName(Number(source)) }) : t('cfg.accounts.global'))
   const one = inheritedValue(sources, value)
@@ -144,8 +155,7 @@ export interface Changes {
 
 /** The parts of `draft` that differ from `saved`: the global layer, each group and account, notifications and logging. */
 export function changes(draft: Draft, saved: Draft): Changes {
-  const differing = (a: Record<string, unknown>, b: Record<string, unknown>) =>
-    sortedIds({ ...a, ...b }).filter((id) => !same(a[id], b[id]))
+  const differing = (a: Record<string, unknown>, b: Record<string, unknown>) => sortedIds({ ...a, ...b }).filter(id => !same(a[id], b[id]))
   return {
     global: !same(globalLayer(draft), globalLayer(saved)),
     groups: differing(draft.groups, saved.groups),

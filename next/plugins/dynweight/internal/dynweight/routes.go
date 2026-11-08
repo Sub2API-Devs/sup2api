@@ -340,7 +340,6 @@ func (p *Plugin) getWeights(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	cfg, err := p.loadedConfig(ctx)
 	if err != nil {
 		p.log.Warn("dynweight: /weights without the configuration", "error", err.Error())
-		cfg = nil
 	}
 	if cfg != nil {
 		for id, o := range cfg.Accounts {

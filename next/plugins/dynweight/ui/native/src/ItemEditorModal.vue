@@ -58,17 +58,17 @@ const jsonInvalid = ref(false)
 // Rules a switch to JSON wrote away: they left the lists Apply writes against.
 let dropped: string[] = []
 
-const entries = computed(() => rows.value.map((r) => r.entry))
-const selectedIndex = computed(() => rows.value.findIndex((r) => r.id === selectedId.value))
+const entries = computed(() => rows.value.map(r => r.entry))
+const selectedIndex = computed(() => rows.value.findIndex(r => r.id === selectedId.value))
 const selected = computed(() => rows.value[selectedIndex.value]?.entry ?? null)
 
 function load(rules: Rule[], strategies: Strategy[], select: number) {
   base.value = clone(rules)
-  rows.value = readItems(base.value, clone(strategies)).map((entry) => ({ id: ++seq, entry }))
+  rows.value = readItems(base.value, clone(strategies)).map(entry => ({ id: ++seq, entry }))
   selectedId.value = rows.value[Math.min(select, rows.value.length - 1)]?.id ?? 0
 }
 
-watch(open, (now) => {
+watch(open, now => {
   if (!now) return
   mode.value = 'visual'
   search.value = ''
@@ -81,7 +81,7 @@ watch(open, (now) => {
 const nav = ref<HTMLElement>()
 watch(selectedId, () => nextTick(() => nav.value?.querySelector('.is-on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })))
 
-const problems = computed(() => rows.value.map((r) => (r.entry.draft ? validateDraft(r.entry.draft, entries.value) : [])))
+const problems = computed(() => rows.value.map(r => (r.entry.draft ? validateDraft(r.entry.draft, entries.value) : [])))
 const partsOf = (e: ItemEntry) => (e.draft ? describeDraft(e.draft, t) : describeStored(e.strategy, t))
 
 const filtered = computed(() => {
@@ -93,14 +93,14 @@ const filtered = computed(() => {
 
 /** Takes the result of a list operation, keeping the ids of the entries it kept. */
 function setEntries(next: ItemEntry[], select: number) {
-  const ids = new Map(rows.value.map((r) => [r.entry, r.id]))
-  rows.value = next.map((entry) => ({ id: ids.get(entry) ?? ++seq, entry }))
+  const ids = new Map(rows.value.map(r => [r.entry, r.id]))
+  rows.value = next.map(entry => ({ id: ids.get(entry) ?? ++seq, entry }))
   selectedId.value = rows.value[Math.max(0, Math.min(select, rows.value.length - 1))]?.id ?? 0
 }
 
 function add() {
   if (rows.value.length >= MAX_ITEMS) return host.toast(t('it.max', { n: MAX_ITEMS }), 'warning')
-  const name = uniqueItemName(entries.value, (n) => t('it.newName', { n }))
+  const name = uniqueItemName(entries.value, n => t('it.newName', { n }))
   setEntries([...entries.value, newEntry(newDraft(name))], rows.value.length)
 }
 
@@ -125,7 +125,7 @@ function toJson() {
 // Valid JSON becomes the items (and the rules they write back against).
 watch(
   json,
-  (now) => {
+  now => {
     if (mode.value === 'json') load(now.rules, now.strategies, Math.max(0, selectedIndex.value))
   },
   { deep: true }
@@ -140,7 +140,7 @@ function setMode(next: 'visual' | 'json') {
 
 function apply() {
   if (mode.value === 'json' && jsonInvalid.value) return host.toast(t('it.editor.jsonInvalid'), 'error')
-  const bad = problems.value.findIndex((p) => p.length)
+  const bad = problems.value.findIndex(p => p.length)
   if (bad >= 0) {
     selectedId.value = rows.value[bad].id
     mode.value = 'visual'
@@ -172,7 +172,14 @@ function apply() {
     </fieldset>
     <div v-else class="dw-it-editor">
       <nav ref="nav" class="dw-it-nav" :aria-label="t('it.editor.list')">
-        <SInput v-model="search" class="dw-it-search" size="sm" icon="search" :placeholder="t('it.editor.search')" :aria-label="t('it.editor.search')" />
+        <SInput
+          v-model="search"
+          class="dw-it-search"
+          size="sm"
+          icon="search"
+          :placeholder="t('it.editor.search')"
+          :aria-label="t('it.editor.search')"
+        />
         <div class="dw-it-nav-list">
           <button
             v-for="{ row, i: n, direction } in filtered"
@@ -187,30 +194,90 @@ function apply() {
             <span class="dw-it-dot" :class="direction ? `dw-it-dot--${direction}` : 'dw-it-dot--clear'" aria-hidden="true" />
             <span class="dw-it-nav-name">{{ entryName(row.entry) || t('it.unnamed') }}</span>
             <SIcon v-if="!row.entry.draft" name="lock" class="dw-it-nav-lock" />
-            <span v-if="problems[n].length" class="dw-it-dot dw-it-dot--error" role="img" :aria-label="t('it.hasErrors')" :title="t('it.editor.itemInvalid')" />
+            <span
+              v-if="problems[n].length"
+              class="dw-it-dot dw-it-dot--error"
+              role="img"
+              :aria-label="t('it.hasErrors')"
+              :title="t('it.editor.itemInvalid')"
+            />
           </button>
           <p v-if="!filtered.length" class="dw-it-muted dw-it-nav-empty">{{ rows.length ? t('it.editor.noMatch') : t('it.empty') }}</p>
         </div>
-        <SButton v-if="!readonly" class="dw-it-nav-add" size="xs" variant="ghost" icon="plus" :disabled="rows.length >= MAX_ITEMS" @click="add">{{ t('it.add') }}</SButton>
+        <SButton
+          v-if="!readonly"
+          class="dw-it-nav-add"
+          size="xs"
+          variant="ghost"
+          icon="plus"
+          :disabled="rows.length >= MAX_ITEMS"
+          @click="add"
+          >{{ t('it.add') }}</SButton
+        >
       </nav>
 
       <fieldset v-if="selected" :key="selectedId" class="dw-fieldset dw-it-pane" :disabled="readonly">
         <div class="dw-it-head">
-          <SInput v-if="selected.draft" v-model="selected.draft.name" class="dw-it-head-name" size="sm" :maxlength="MAX_NAME" :aria-label="t('it.card.name')" :error="problems[selectedIndex].some((p) => p.path === 'name')" />
+          <SInput
+            v-if="selected.draft"
+            v-model="selected.draft.name"
+            class="dw-it-head-name"
+            size="sm"
+            :maxlength="MAX_NAME"
+            :aria-label="t('it.card.name')"
+            :error="problems[selectedIndex].some(p => p.path === 'name')"
+          />
           <strong v-else class="dw-it-head-name">{{ entryName(selected) }}</strong>
           <SSwitch
-              :model-value="entryEnabled(selected)"
-              size="sm"
-              :label="t('enabled')"
-              :disabled="!entryEnabled(selected) && !entryCanEnable(selected, base)"
-              :title="!entryEnabled(selected) && !entryCanEnable(selected, base) ? t('it.cantEnable') : undefined"
-              @update:model-value="setEnabled"
-            />
+            :model-value="entryEnabled(selected)"
+            size="sm"
+            :label="t('enabled')"
+            :disabled="!entryEnabled(selected) && !entryCanEnable(selected, base)"
+            :title="!entryEnabled(selected) && !entryCanEnable(selected, base) ? t('it.cantEnable') : undefined"
+            @update:model-value="setEnabled"
+          />
           <span class="dw-it-head-actions">
-            <SButton class="dw-up" size="xs" variant="ghost" icon="chevron-down" icon-only :aria-label="t('it.up')" :title="t('it.up')" :disabled="selectedIndex === 0" @click="move(-1)" />
-            <SButton size="xs" variant="ghost" icon="chevron-down" icon-only :aria-label="t('it.down')" :title="t('it.down')" :disabled="selectedIndex >= rows.length - 1" @click="move(1)" />
-            <SButton size="xs" variant="ghost" icon="copy" icon-only :aria-label="t('it.duplicate')" :title="t('it.duplicate')" :disabled="rows.length >= MAX_ITEMS" @click="duplicate" />
-            <SButton size="xs" variant="ghost" tone="danger" icon="trash" icon-only :aria-label="t('it.remove')" :title="t('it.remove')" @click="remove" />
+            <SButton
+              class="dw-up"
+              size="xs"
+              variant="ghost"
+              icon="chevron-down"
+              icon-only
+              :aria-label="t('it.up')"
+              :title="t('it.up')"
+              :disabled="selectedIndex === 0"
+              @click="move(-1)"
+            />
+            <SButton
+              size="xs"
+              variant="ghost"
+              icon="chevron-down"
+              icon-only
+              :aria-label="t('it.down')"
+              :title="t('it.down')"
+              :disabled="selectedIndex >= rows.length - 1"
+              @click="move(1)"
+            />
+            <SButton
+              size="xs"
+              variant="ghost"
+              icon="copy"
+              icon-only
+              :aria-label="t('it.duplicate')"
+              :title="t('it.duplicate')"
+              :disabled="rows.length >= MAX_ITEMS"
+              @click="duplicate"
+            />
+            <SButton
+              size="xs"
+              variant="ghost"
+              tone="danger"
+              icon="trash"
+              icon-only
+              :aria-label="t('it.remove')"
+              :title="t('it.remove')"
+              @click="remove"
+            />
           </span>
         </div>
         <ItemCard v-if="selected.draft" v-model="selected.draft" :problems="problems[selectedIndex]" />
@@ -218,7 +285,9 @@ function apply() {
           <SAlert tone="info">{{ describeReason(selected.reason!, t) }}</SAlert>
           <p class="dw-it-note">{{ t('it.editor.readonlyHint') }}</p>
           <p class="dw-it-preview">{{ partsSentence(describeStored(selected.strategy, t), t) }}</p>
-          <div><SButton size="sm" icon="code" @click="setMode('json')">{{ t('it.editor.openJson') }}</SButton></div>
+          <div>
+            <SButton size="sm" icon="code" @click="setMode('json')">{{ t('it.editor.openJson') }}</SButton>
+          </div>
         </div>
       </fieldset>
       <p v-else class="dw-it-muted dw-it-pane dw-it-nav-empty">{{ rows.length ? t('it.editor.pick') : t('it.empty') }}</p>
