@@ -6367,7 +6367,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **字段**：`accounts.header_passthrough text[]`（默认空），接口字段 `header_passthrough`（列表、详情返回，`POST`/`PATCH /accounts` 整体替换）。规则三种：`*`（全部）、`regex:<正则>` 或 `re:<正则>`（按请求头名称匹配，不区分大小写，存成 `regex:` 前缀）、其他按名称精确匹配（存小写）。最多 32 条，每条最多 256 字符；去重、去空白。正则编译失败、名称不是合法字段名报 `invalid`，精确名称落在下面的禁止列表报 `blocked`，超过 32 条报 `too_many`。
 - **生效位置**：核心按插件构造的请求发往上游时（`forwardBuilt`，含插件经核心转发的执行请求），把匹配规则的客户端请求头补到上游请求上，所有值原样带上。**插件已设置的头优先**（例如账号自己的 `x-api-key`），核心随后设置的资源头、额度头也会覆盖它。不影响插件收到的 `InboundHeaders`（仍按平台 / 账号类型的 `passHeaders`）。
 - **禁止列表**（任何规则都不透传，`core.HeaderPassthroughBlocked`）：逐跳和分帧头（connection、keep-alive、te、trailer、transfer-encoding、upgrade、expect、host、content-length、content-encoding、accept-encoding），凭证（authorization、x-api-key、x-goog-api-key、api-key、cookie），客户端地址和代理痕迹（x-forwarded-for、x-forwarded-host、x-forwarded-proto、x-forwarded-port、x-real-ip、forwarded、via、cf-connecting-ip、true-client-ip、x-client-ip、x-cluster-client-ip），以及前缀 `proxy-`、`sec-websocket-`、`x-sub2api-`（本网关内部头）、`x-kin-`（vm2api/sakura 的控制头，例如 `x-kin-debug` 会让下游写调试日志并回传槽位和账号）。比 new-api 的跳过列表多了客户端地址和网关控制头，避免客户端伪造 IP 或操控下游。
-- 控制台：账号编辑页“高级”分区（左侧导航第 4 项，ccgateway 账号在 Claude Code 功能之前）的“请求转发”组：请求头透传（标签输入，一条一个规则）和账号层环境变量（各项超时，从“调度与限流”移来）。导航摘要如“透传 * · 超时跟随”，都没配时“全部跟随默认”；`header_passthrough`、`environment.*` 的字段错误定位到这个分区。
+- 控制台：账号编辑页“高级”分区（左侧导航第 4 项，ccgateway 账号在 Claude Code 功能之前）的“请求转发”组：请求头透传（标签输入，一条一个规则）和账号层环境变量（各项超时，从“调度与限流”移来）。导航摘要如“透传 * · 超时跟随”，都没配时“全部跟随默认”；`header_passthrough`、`environment.*` 的字段错误定位到这个分区。这一组也放请求参数覆盖（§84）。
 - 未做：分组 / 全局层的透传、WebSocket 端点（`websocket.go`）的透传。
 - **粘性规则的透传头**（2026-11-06，迁移 0090，参考 new-api 渠道亲和规则模板里的 `pass_headers`）：`sticky_rules.pass_headers text[]`，接口字段 `pass_headers`，manifest `StickyRule.passHeaders`。规则写法、校验和禁止列表与账号透传相同（字段名 `pass_headers`）。请求命中某条粘性规则并取到会话值时（`c.sticky` 非空），核心在账号透传之后再按这条规则补上客户端请求头，同样不覆盖已设置的头；粘性会话关闭、没有命中规则、count_tokens 请求都不透传。内置规则 `claude-code-session` 默认带 `x-claude-code-session-id`、`x-claude-code-agent-id`、`x-claude-code-parent-agent-id`、`x-claude-code-request-class`、`x-claude-code-agent-type`；`pass_headers` 属于规则定义，管理员改过的内置规则升级时不被覆盖，“恢复默认”时重置。
 - **平台默认**：内置 anthropic 平台的 `passHeaders` 和 anthropic 插件（0.2.9）的默认转发同样带上这 5 个头，所以 anthropic API Key 账号不配置也会转发。
@@ -6546,3 +6546,29 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 已知限制：字符串 `input` 的字段 `[input]|#(%"*")` 会回显整段字符串，超过插件 gRPC 接收上限（4 MiB）的字符串输入会使调用失败。
 
 **测试**：`server/internal/gateway/websocket_test.go`——空 patch 时两轮消息逐字节不变且每轮都调用插件；首轮用握手调用的 patch、后续轮各自调用（按该轮 `requestFields`，`instructions` 有无不同、模型映射之后、`meta.protocol = openai.responses_ws`），后续轮返回不同 URL 不重连；首轮 patch 非法与后续轮插件报错都回 503 `plugin_unavailable` 错误事件、记为失败、不发往上游、连接保持且下一轮成功、并发位已释放。`plugins/codex`——WebSocket 两种账号类型的 patch（含 `instructions`、无 stream 字段、保留 `previous_response_id`）、system → developer（HTTP/WS × 两种类型，查询结果经 sjson 应用后的 input、上限 256、各种无需改写的输入）、manifest 的查询结果。
+
+
+## 84. 账号请求参数覆盖（2026-11-08，用户要求，格式兼容 new-api 渠道的 `param_override`；迁移 0091）
+
+- **字段**：`accounts.param_override jsonb`（NULL = 无），接口字段 `param_override`（JSON 对象或 null，列表、详情返回）。`POST`/`PATCH /accounts` 整体替换；PATCH 不带这个字段时不变；`null`、`{}` 以及既没有操作也没有键的对象清空（存 NULL）。保存时校验后原样存储（去掉空白，jsonb 会重排键序），操作上的 `description`（控制台的标签，最多 200 字符）和其他未知成员保留、不参与执行。序列化后最多 64 KiB（`too_large`），最多 100 个操作（`too_many`）。字段错误都在字段 `param_override` 上，消息以位置开头，如 `operations[2].path: 必填`；错误码 `invalid`、`required`、`unsupported`、`blocked`、`too_large`、`too_many`。账号载入目录缓存时编译一次（正则预编译），没配置时没有开销；已存的覆盖若编译不过，这个账号的每次尝试按运行失败处理，而不是不改就发出去。
+- **格式**：
+  - 旧格式平铺对象 `{"temperature":0.7}`：每个顶层键按字面键设置（转义 `.`、`*`、`?`、`\`，不当路径）。
+  - 操作格式 `{"operations":[{mode, path, value, keep_origin, from, to, conditions, logic}]}`，与 `operations` 并列的其他顶层键先按旧格式设置。`logic` 为 `AND`/`OR`（默认 OR，不区分大小写）；`conditions` 为 `[{path, mode, value, invert, pass_missing_key}]`，或对象简写 `{"<path>": <value>}`（mode `full`）。
+  - 路径为 gjson/sjson 点路径；负下标从末尾数（`messages.-1.content`）；路径类模式里的 `*` 段展开为数组的每个元素或对象的每个成员（通配之后父节点不存在的路径跳过，没有匹配就什么都不做）。
+- **模式**（语义同 new-api）：
+  - 路径类：`set`（`keep_origin` 时已存在则跳过）、`delete`、`prepend`/`append`（字符串拼接；数组加元素，值是数组时逐个加入；对象合并成员，`keep_origin` 保留已有的非 null 成员）、`trim_prefix`、`trim_suffix`、`ensure_prefix`、`ensure_suffix`、`trim_space`、`to_lower`、`to_upper`、`replace`（`from` 全部替换为 `to`）、`regex_replace`（`from` 为 Go 正则，`to` 可引用 `$1`）。字符串类模式要求目标是字符串。
+  - `copy`、`move`：`from` → `to`（支持负下标，不支持通配），源不存在是运行失败。
+  - `return_error`：见下。
+  - 请求头：`set_header`（`path` 为头名，`value` 为字符串或令牌映射，结果为空即删除这个头；`keep_origin` 时前面的操作已设置则跳过）、`delete_header`、`copy_header`/`move_header`（`from`/`to` 为空时取 `path`；源头不存在时跳过、不报错；move 同时删除源头）、`pass_headers`（`value` 为头名数组或逗号分隔字符串，逐个把客户端头原样带上）。头的当前值先取前面操作设置的值，再取客户端请求头；被删除的头视为不存在。
+  - 令牌映射（编辑 `anthropic-beta` 这类逗号列表头）：`{"<令牌>": 替换（字符串、数组，null 表示去掉）, "*": 未声明令牌的替换, "$append": [追加的令牌], "$keep_only_declared": true}`，把当前值按逗号拆开逐个映射，去重后用 `,` 连接。
+  - `prune_objects`、`sync_fields` 和未知模式报 `unsupported`（暂不支持）。
+- **条件**：`full`（null 只等于 null，布尔按布尔比较，其余类型不同是运行失败）、`prefix`、`suffix`、`contains`（按字符串）、`gt`、`gte`、`lt`、`lte`（两边都须是数字，否则运行失败）；`invert` 取反；路径取不到时结果就是 `pass_missing_key`（不取反）。条件路径先在请求体里找，找不到再到上下文对象里找。
+- **上下文键**：`model`、`upstream_model`（账号模型映射后的上游模型）、`original_model`（客户端模型）、`request_path`、`request_headers.<小写头名>`（客户端请求头，多个值用 `, ` 连接；禁止列表里的头不出现）、`header_override.<头名>`（前面的头操作已设置的值）、`retry_index`、`is_retry`、`retry.index`、`retry.is_retry`、`user_id`、`group`（分组名）、`account_id`、`stream`（含 streamOnly 强制的流式）。构造在 `core.ParamOverrideContext`，网关和预览共用。
+- **生效位置**：`gateway/dispatch.go` `(*call).attempt`，每次尝试执行一次，在模型映射、`mapReferencedModels`、`mapResourceReferences`、`forceStreamPath` 之后，取 `requestFields` 和 `BuildUpstreamRequest` 之前，所以代理路径和 `platform.execute.v1` 路径都拿到覆盖后的请求体，插件看到的就是发往上游的。`forwardBuilt` 在插件 patch 之后仍重新强制 stream。
+- **请求头优先级**（`forwardBuilt`，含插件经核心转发的执行请求）：插件的头 → 账号透传（§81）和粘性规则透传 → **参数覆盖的设置和删除**（设置覆盖前面的值，删除去掉前面的头）→ 核心的资源头、额度头（仍然最后设置、最优先）。头名须是合法字段名；落在 §81 禁止列表（`core.HeaderPassthroughBlocked`）里的头，不论作为目标还是 copy/move/pass 的源，都报 `blocked`。
+- **模型**：覆盖改了请求体的模型字段（平台的 `modelPath`）时，上游模型以覆盖结果为准：`meta.model`、使用记录的 `upstream_model`、上游用量的主模型身份都用它，`forwardBuilt` 的模型可用性一致性检查也以它为期望值，不会因此报 `upstream_model_mismatch`。计费仍按客户端模型；可用性预检仍按映射后的模型。
+- **return_error**：`value` 为消息字符串，或 `{message|msg, status_code|status, code, type, skip_retry}`；默认 400、`invalid_request`、`invalid_request_error`、`skip_retry: true`，状态码须在 100–599。`skip_retry: true` 直接回给客户端（记录类型 `invalid_request`），false 换下一个账号（所有账号都这样时把最后一个错误回给客户端）。不冷却、不惩罚账号；有失败策略时也不跑账号规则（与可用性拒绝相同）。
+- **运行失败**（类型不符、源路径不存在、条件比较的类型不符等）：WARN 日志带账号 ID，本次尝试换账号（`param_override_failed`，记录类型 `internal`，全都失败时客户端看到“无可用账号”），同样不惩罚账号。
+- **预览**：`POST /accounts/param-override/preview`（权限同建 / 改账号：`account:create`、`account:own:create`、`account:update`、`account:own:update` 任一），请求 `{"param_override": {...}, "body": {...}, "model": "...", "headers": {"名称": "值"}}`。`body` 缺省为 `{}`、须是对象；`model` 缺省取 body 的 `model`，同时作为上下文的 `model`、`upstream_model`、`original_model`；`user_id` 为调用者，`stream` 取 body 的。校验不过照常回 400 字段错误（`param_override`、`body`）；否则 200 `{"body": 结果对象, "set_headers": {...}, "delete_headers": [...], "return_error": null | {"status", "code", "type", "message", "skip_retry"}, "error": null | "运行失败原因"}`，有 `return_error` 或 `error` 时 `body` 为 null。与网关用同一个引擎和上下文构造，不保存任何东西。
+- **未覆盖**：账号测试请求（`BuildTestRequest`）、WebSocket 端点、分组 / 全局层的覆盖、批量编辑。
+- 代码：`core/param_override.go`（校验、编译）、`core/param_override_apply.go`（执行、上下文）、`gateway/param_override.go`（挂接点）、`account/param_override_preview.go`。测试：`core/param_override_test.go`、`account/account_test.go`（`TestAccountParamOverride*`）、`gateway/param_override_test.go`（请求体和头到达上游、改模型不触发可用性不一致、return_error、运行失败换账号、执行路径）。
