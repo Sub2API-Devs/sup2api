@@ -1,6 +1,6 @@
 /*
  * Config tab (ConfigTab and its Config* parts). Layout only: colours are the
- * console's semantic variables and dynweight.css's shared ones.
+ * console's semantic variables, status colours the components' tones.
  */
 
 /* ---- summary strip */
@@ -152,17 +152,8 @@
   margin: 0;
   font-size: 0.8125rem;
 }
-.dw-cfg-savebar-bad {
-  color: rgb(var(--dw-danger));
-}
 .dw-cfg-dot {
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
   margin-right: 0.5rem;
-  border-radius: 9999px;
-  background: rgb(var(--dw-down));
-  vertical-align: 0.0625rem;
 }
 .dw-cfg-savebar-actions {
   display: flex;

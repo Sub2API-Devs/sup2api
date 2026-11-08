@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useList } from '@sub2api/host'
+import { MAX_ACCOUNT_BATCH, useList } from '@sub2api/host'
 import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SInput, SModal, SSwitch } from '@sub2api/ui'
 import IdPicker from './IdPicker.vue'
 import KeyFilters from './KeyFilters.vue'
 import KeyStatusTable from './KeyStatusTable.vue'
 import StatsPanel from './StatsPanel.vue'
 import { useCatalog } from './catalog'
-import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, keyOf, MAX_RESET_ACCOUNTS, useDwHost, useReset, type Filter, type KeyStatus } from './host'
+import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, keyOf, useDwHost, useReset, type Filter, type KeyStatus } from './host'
 
 // Effective weights per (account, group, model), degraded first, each with
 // its evaluation detail. A key, the selected accounts (optionally in one
@@ -56,12 +56,12 @@ const filtered = computed(() => {
 const resetFiltered = () => filtered.value && reset(filtered.value, t('status.resetFilterConfirm'), 'filter')
 
 // Batch reset: the accounts of the selected rows (at most
-// MAX_RESET_ACCOUNTS), in every group and model or in the ones given. The
+// MAX_ACCOUNT_BATCH), in every group and model or in the ones given. The
 // selection is of the rows shown: any load (filter, page, reload) clears it.
 const selected = ref<string[]>([])
 watch(list.items, () => (selected.value = []))
 const selectedAccounts = computed(() => [...new Set(selected.value.map((k) => Number(k.split('|')[0])))])
-const tooMany = computed(() => selectedAccounts.value.length > MAX_RESET_ACCOUNTS)
+const tooMany = computed(() => selectedAccounts.value.length > MAX_ACCOUNT_BATCH)
 const pageKeys = computed(() => list.items.value.map(keyOf))
 const batch = reactive({ open: false, group_id: '', model: '' })
 function openBatch() {
@@ -100,7 +100,7 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
     <SAlert v-if="error" tone="danger" class="dw-section">{{ error }}</SAlert>
 
     <SBulkBar v-if="manage" class="dw-section" :count="selected.length" :page-selected="pageKeys.length > 0 && pageKeys.every((k) => selected.includes(k))" @select-page="selected = pageKeys" @clear="selected = []">
-      <SBadge :tone="tooMany ? 'danger' : 'gray'" size="xs">{{ t('status.selectedAccounts', { n: selectedAccounts.length, max: MAX_RESET_ACCOUNTS }) }}</SBadge>
+      <SBadge :tone="tooMany ? 'danger' : 'gray'" size="xs">{{ t('status.selectedAccounts', { n: selectedAccounts.length, max: MAX_ACCOUNT_BATCH }) }}</SBadge>
       <SButton size="sm" variant="danger" icon="refresh" :disabled="tooMany" @click="openBatch">{{ t('status.resetSelected', { n: selectedAccounts.length }) }}</SButton>
     </SBulkBar>
 

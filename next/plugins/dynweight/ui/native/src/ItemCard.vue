@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { SButton, SChip, SField, SInput, SSegmented, SSelect } from '@sub2api/ui'
+import { SButton, SChip, SField, SHint, SInput, SSegmented, SSelect, SStatusDot } from '@sub2api/ui'
 import { describeDraft, describeProblem, partsSentence } from './describe'
 import {
   actionTypeChoices,
@@ -17,6 +17,7 @@ import {
   type Problem
 } from './items'
 import {
+  directionTone,
   enumOptions,
   metrics,
   opsOf,
@@ -77,8 +78,7 @@ const tags = (c: Condition) => [
 ]
 
 const addable = computed(() => addableActions(draft.value.actions))
-const actionClass = (a: Action) =>
-  `dw-it-act dw-it-act--${a.type === 'affinity_clear' ? 'clear' : a.type === 'weight_climb' ? 'climb' : 'degrade'}`
+const actionTone = (a: Action) => directionTone[a.type === 'affinity_clear' ? 'clear' : a.type === 'weight_climb' ? 'climb' : 'degrade']
 const setType = (j: number, type: ActionType) => draft.value.actions.splice(j, 1, retypedAction(draft.value.actions[j], type))
 
 // The sentences with inputs in place of their numbers.
@@ -243,7 +243,8 @@ const messages = computed(() => props.problems.map(p => describeProblem(p, t)))
         <span class="dw-it-tag">{{ t('it.card.then') }}</span>
         <small class="dw-it-muted">{{ t('it.card.order') }}</small>
       </div>
-      <div v-for="(a, j) in draft.actions" :key="j" :class="actionClass(a)">
+      <div v-for="(a, j) in draft.actions" :key="j" class="dw-it-act">
+        <SStatusDot :tone="actionTone(a)" size="xs" />
         <SSelect
           class="dw-it-w-type"
           size="sm"
@@ -320,7 +321,9 @@ const messages = computed(() => props.problems.map(p => describeProblem(p, t)))
 
     <p class="dw-it-preview">{{ preview }}</p>
     <ul v-if="messages.length" class="dw-it-errors" role="alert">
-      <li v-for="(m, i) in messages" :key="i">{{ m }}</li>
+      <li v-for="(m, i) in messages" :key="i">
+        <SHint inline size="xs" tone="danger">{{ m }}</SHint>
+      </li>
     </ul>
   </div>
 </template>

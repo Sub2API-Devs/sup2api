@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { MAX_ACCOUNT_BATCH, type PluginHost, type UseListResult } from '@sub2api/host'
-import type { SelectOption, Tone } from '@sub2api/ui'
+import type { SelectOption, StatusTone, Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all dynweight components.
 // All API shapes (CONTRACTS §74.5) live in this file.
@@ -240,9 +240,6 @@ export interface WeightEvent {
 /** Puts the keys of accounts and/or a group (and model) back to their base. */
 export const resetWeights = (k: Key & { account_ids?: number[] }) => api().post<{ reset: number }>('/reset', k)
 
-/** The most accounts one reset takes (POST /reset): the core's batch size. */
-export const MAX_RESET_ACCOUNTS = MAX_ACCOUNT_BATCH
-
 /** Row key of a (account, group, model) in the key tables. */
 export const keyOf = (k: Key) => `${k.account_id}|${k.group_id}|${k.model}`
 
@@ -301,9 +298,9 @@ export interface WeightKey {
   model: string
   eff: number
   base: number
-  /** 0.5.1: direction of the last weight change ('' = unknown) and when (RFC 3339, absent = unknown). */
+  /** 0.5.1: direction of the last weight change ('' = unknown) and when (absent = unknown; changedAt reads it). */
   state?: '' | 'degrading' | 'climbing'
-  changed_at?: string
+  changed_at?: number | string
 }
 
 export interface AccountWeight {
@@ -374,6 +371,23 @@ export function errorMessage(e: unknown, fallback: string): string {
 /** Integer effective weight, as the scheduler uses it. */
 export const weightOf = (w: number) => Math.min(1000, Math.max(0, Math.floor(w + 0.5)))
 
+/**
+ * A WeightKey's changed_at as SDateTime takes it: unix seconds since 0.5.2
+ * (as GET /status), an RFC 3339 string from a 0.5.1 node.
+ */
+export const changedAt = (v?: number | string) => (typeof v === 'number' ? v * 1000 || null : v || null)
+
+/** SHint tone of a key's trend (`state` of GET /status and /weights). */
+export const trendTone = (state?: string) => (state === 'degrading' ? 'warning' : state === 'climbing' ? 'success' : 'muted')
+
+/** Tone of an item's direction (its weight action's, `clear` without one), and of an item in error: the items editor's dots. */
+export const directionTone: Record<'degrade' | 'climb' | 'clear' | 'error', StatusTone> = {
+  degrade: 'warning',
+  climb: 'success',
+  clear: 'info',
+  error: 'danger'
+}
+
 /** Tone of an effective weight against its base. */
 export function weightTone(eff: number, base: number): Tone {
   const w = weightOf(eff)
@@ -421,7 +435,7 @@ export function omit<T extends object, K extends keyof T>(o: T, ...keys: K[]): O
 
 /** Success rate in percent with one decimal ("97.5%"), '—' without samples. */
 export function successRate(total: number, fail: number): string {
-  return total > 0 ? `${Math.round(((total - fail) / total) * 1000) / 10}%` : '—'
+  return total > 0 ? `${useDwHost().i18n.formatNumber(((total - fail) / total) * 100, 1)}%` : '—'
 }
 
 /** A number left empty: SInput type="number" gives null. */
@@ -451,4 +465,7 @@ export const layerIncomplete = (l: Layer) =>
 export const overrideIncomplete = (o: AccountOverride) => o.min_weight_mode !== undefined && empty(o.min_weight)
 
 /** "10s" / "1.5s" / "800ms" for a threshold in ms. */
-export const formatMs = (ms: number) => (ms >= 1000 ? `${Math.round(ms / 100) / 10}s` : `${ms}ms`)
+export function formatMs(ms: number): string {
+  const n = useDwHost().i18n.formatNumber
+  return ms >= 1000 ? `${n(ms / 1000, 1)}s` : `${n(ms)}ms`
+}

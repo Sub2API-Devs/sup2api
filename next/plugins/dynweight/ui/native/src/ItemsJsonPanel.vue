@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch, watchEffect } from 'vue'
-import { SField, STextarea } from '@sub2api/ui'
+import { SField, SHint, STextarea } from '@sub2api/ui'
 import { describeProblem } from './describe'
 import { validateLists } from './items'
 import { useDwHost, type Rule, type Strategy } from './host'
@@ -114,7 +114,9 @@ function edit(part: Part, value: string) {
         @update:model-value="edit(part, $event)"
       />
       <ul v-if="errors[part].length" class="dw-it-errors" role="alert">
-        <li v-for="(e, i) in errors[part].slice(0, 5)" :key="i">{{ e }}</li>
+        <li v-for="(e, i) in errors[part].slice(0, 5)" :key="i">
+          <SHint inline size="xs" tone="danger">{{ e }}</SHint>
+        </li>
       </ul>
     </SField>
   </div>

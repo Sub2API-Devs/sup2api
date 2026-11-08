@@ -1,25 +1,9 @@
 /*
  * Dynweight plugin styles (CONTRACTS §23.4). Controls come from @sub2api/ui;
  * only layout lives in these dw- prefixed classes. Colours are the console's
- * semantic variables, which follow the light/dark theme; the bitmap's hit
- * colour is --dw-hit below.
+ * eight contract variables, which follow the light/dark theme; status
+ * colours come from the components' tones (SHint, SStatusDot, SBadge, SChip).
  */
-
-:root {
-  --dw-hit: 217 119 6; /* amber-600 */
-  /* direction colours shared by every area: degrade, climb, sticky clear, error */
-  --dw-down: 217 119 6; /* amber-600 */
-  --dw-up: 5 150 105; /* emerald-600 */
-  --dw-clear: 2 132 199; /* sky-600 */
-  --dw-danger: 220 38 38; /* red-600 */
-}
-html.dark {
-  --dw-hit: 251 191 36; /* amber-400 */
-  --dw-down: 251 191 36; /* amber-400 */
-  --dw-up: 52 211 153; /* emerald-400 */
-  --dw-clear: 56 189 248; /* sky-400 */
-  --dw-danger: 248 113 113; /* red-400 */
-}
 
 .dw-block {
   margin-bottom: 1rem;
@@ -112,8 +96,8 @@ html.dark {
   border-style: solid;
 }
 .dw-bits i.dw-bit-hit {
-  border: 1px solid rgb(var(--dw-hit));
-  background: rgb(var(--dw-hit));
+  border: 1px solid rgb(var(--fg-muted));
+  background: rgb(var(--fg-muted));
 }
 
 @media (max-width: 640px) {

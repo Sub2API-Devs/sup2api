@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { SAlert, SButton, SIcon, SInput, SModal, SSegmented, SSwitch } from '@sub2api/ui'
+import { SAlert, SButton, SIcon, SInput, SModal, SSegmented, SStatusDot, SSwitch } from '@sub2api/ui'
 import ItemCard from './ItemCard.vue'
 import ItemsJsonPanel from './ItemsJsonPanel.vue'
 import { copyNamer, describeDraft, describeProblem, describeReason, describeStored, partsSentence } from './describe'
@@ -25,7 +25,7 @@ import {
   type ItemEntry,
   type Written
 } from './items'
-import { clone, enumOptions, useDwHost, type Rule, type Strategy } from './host'
+import { clone, directionTone, enumOptions, useDwHost, type Rule, type Strategy } from './host'
 
 // The items editor (new-api's layout): the items on the left (search, a dot
 // for the direction, a red dot for errors), the selected one on the right,
@@ -191,14 +191,15 @@ function apply() {
             @click="selectedId = row.id"
           >
             <span class="dw-it-nav-n">{{ n + 1 }}</span>
-            <span class="dw-it-dot" :class="direction ? `dw-it-dot--${direction}` : 'dw-it-dot--clear'" aria-hidden="true" />
+            <SStatusDot :tone="directionTone[direction ?? 'clear']" size="xs" />
             <span class="dw-it-nav-name">{{ entryName(row.entry) || t('it.unnamed') }}</span>
             <SIcon v-if="!row.entry.draft" name="lock" class="dw-it-nav-lock" />
-            <span
+            <SStatusDot
               v-if="problems[n].length"
-              class="dw-it-dot dw-it-dot--error"
-              role="img"
-              :aria-label="t('it.hasErrors')"
+              :tone="directionTone.error"
+              size="xs"
+              :label="t('it.hasErrors')"
+              sr-only
               :title="t('it.editor.itemInvalid')"
             />
           </button>

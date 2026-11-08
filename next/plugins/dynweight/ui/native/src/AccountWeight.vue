@@ -1,8 +1,18 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { SBadge, SDateTime, SLink, useViewport, type Tone } from '@sub2api/ui'
+import { SBadge, SDateTime, SHint, SLink, useViewport, type Tone } from '@sub2api/ui'
 import { useCatalog } from './catalog'
-import { configRoute, dashboardRoute, loadAccountWeight, useDwHost, weightOf, weightTone, type AccountWeight } from './host'
+import {
+  changedAt,
+  configRoute,
+  dashboardRoute,
+  loadAccountWeight,
+  trendTone,
+  useDwHost,
+  weightOf,
+  weightTone,
+  type AccountWeight
+} from './host'
 
 // account.list.weight slot, under the weight in the account list: "▼ N"
 // while the account has degraded keys (N = the lowest effective weight),
@@ -198,12 +208,16 @@ onBeforeUnmount(hide)
               <td class="dw-acct-ellipsis dw-acct-mono" :title="k.model">
                 {{ k.model }}
               </td>
-              <td class="dw-num" :class="weightOf(k.eff) === 0 ? 'dw-acct-danger' : ''">{{ weightOf(k.eff) }} / {{ k.base }}</td>
-              <td :class="k.state ? `dw-acct-${k.state}` : ''">
-                {{ k.state ? t(`acct.card.state.${k.state}`) : '—' }}
+              <td class="dw-num">
+                <SHint v-if="weightOf(k.eff) === 0" inline size="xs" tone="danger">0 / {{ k.base }}</SHint>
+                <template v-else>{{ weightOf(k.eff) }} / {{ k.base }}</template>
+              </td>
+              <td>
+                <SHint v-if="k.state" inline size="xs" :tone="trendTone(k.state)">{{ t(`acct.card.state.${k.state}`) }}</SHint>
+                <template v-else>—</template>
               </td>
               <td class="dw-num">
-                <SDateTime :value="k.changed_at" mode="time" />
+                <SDateTime :value="changedAt(k.changed_at)" mode="time" />
               </td>
             </tr>
           </tbody>

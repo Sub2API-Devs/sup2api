@@ -1,19 +1,21 @@
 import { reactive } from 'vue'
-import { isApiError, listAll } from '@sub2api/host'
+import { isApiError, listAll, MAX_ACCOUNT_BATCH } from '@sub2api/host'
 import { useDwHost, type Named } from './host'
 
 // Names of the core groups and accounts, read through the core API with the
 // viewer's own permissions (group:read, account:read). The groups are few:
 // loaded once, again after a failure. The accounts are searched by name as
-// typed (q=) and looked up by id as they are shown. Without the permissions
-// the pickers still take a typed id and the names read "#id"; after a first
-// refusal no more accounts are looked up by id.
+// typed (q=) and looked up by id as they are shown: the ids asked for in one
+// tick together, MAX_ACCOUNT_BATCH per GET /accounts?ids=. Without the
+// permissions the pickers still take a typed id and the names read "#id";
+// after a first refusal no more accounts are looked up by id.
 const MAX_GROUPS = 1000
 const SEARCH_SIZE = 20
 
 const state = reactive({ groups: [] as Named[], accounts: {} as Record<number, string> })
 let loading: Promise<void> | null = null
 const looked = new Set<number>()
+let queued: number[] | null = null
 let accountsDenied = false
 
 const named = ({ id, name }: Named): Named => ({ id, name })
@@ -30,16 +32,30 @@ function loadGroups() {
   )
 }
 
-/** Fetches the name of an account not seen yet, once. */
+/** Queues the name of an account not seen yet, once. */
 function lookUp(id: number) {
   if (id <= 0 || accountsDenied || looked.has(id)) return
   looked.add(id)
-  useDwHost()
-    .api.get<Named>(`/accounts/${id}`)
-    .then((a) => (state.accounts[id] = a.name))
-    .catch((e) => {
-      if (isApiError(e) && (e.status === 401 || e.status === 403)) accountsDenied = true
-    })
+  if (!queued) {
+    queued = []
+    queueMicrotask(flushLookUps)
+  }
+  queued.push(id)
+}
+
+function flushLookUps() {
+  const ids = queued ?? []
+  queued = null
+  for (let i = 0; i < ids.length; i += MAX_ACCOUNT_BATCH) {
+    const batch = ids.slice(i, i + MAX_ACCOUNT_BATCH)
+    listAll<Named>(useDwHost().api, '/accounts', { query: { ids: batch.join(','), orphaned: 'all' }, max: batch.length })
+      .then((found) => {
+        for (const a of found) state.accounts[a.id] = a.name
+      })
+      .catch((e) => {
+        if (isApiError(e) && (e.status === 401 || e.status === 403)) accountsDenied = true
+      })
+  }
 }
 
 /** The first accounts whose name contains q; [] when not readable. */

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SButton } from '@sub2api/ui'
+import { SButton, SHint, SStatusDot } from '@sub2api/ui'
 import { useCatalog } from './catalog'
 import type { Changes } from './configView'
 import { useDwHost } from './host'
@@ -23,11 +23,13 @@ const where = computed(() => [
 
 <template>
   <div class="dw-cfg-savebar" role="region" :aria-label="t('config.save')">
-    <p v-if="problems.length" class="dw-cfg-savebar-text dw-cfg-savebar-bad">
+    <SHint v-if="problems.length" tone="danger" class="dw-cfg-savebar-text">
       {{ t('cfg.save.invalid', { where: problems.join(t('cfg.sep')) }) }}
-    </p>
+    </SHint>
     <p v-else class="dw-cfg-savebar-text" aria-live="polite">
-      <span class="dw-cfg-dot" aria-hidden="true" />{{ t('cfg.save.unsaved', { n: where.length, where: where.join(t('cfg.sep')) }) }}
+      <SStatusDot tone="warning" size="xs" class="dw-cfg-dot" />{{
+        t('cfg.save.unsaved', { n: where.length, where: where.join(t('cfg.sep')) })
+      }}
     </p>
     <div class="dw-cfg-savebar-actions">
       <SButton :disabled="saving" @click="emit('discard')">{{ t('config.discard') }}</SButton>

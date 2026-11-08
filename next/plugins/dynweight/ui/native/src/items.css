@@ -1,7 +1,7 @@
 /*
  * Adjustment items: the table, the editor modal and its item card. Layout
- * only, from the console's semantic variables and the shared direction
- * colours of dynweight.css (--dw-down / --dw-up / --dw-clear / --dw-danger).
+ * only, from the console's semantic variables; the direction colours are
+ * SStatusDot tones (directionTone).
  */
 
 .dw-it-muted {
@@ -154,7 +154,7 @@
   color: rgb(var(--fg-subtle));
 }
 .dw-it-nav-item:focus-visible {
-  outline: 2px solid rgb(var(--dw-clear) / 0.5);
+  outline: 2px solid rgb(var(--line-strong));
   outline-offset: -2px;
 }
 .dw-it-nav-n {
@@ -185,24 +185,6 @@
 }
 .dw-it-nav-add {
   align-self: flex-start;
-}
-.dw-it-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  flex: none;
-  border-radius: 999px;
-}
-.dw-it-dot--degrade {
-  background: rgb(var(--dw-down));
-}
-.dw-it-dot--climb {
-  background: rgb(var(--dw-up));
-}
-.dw-it-dot--clear {
-  background: rgb(var(--dw-clear));
-}
-.dw-it-dot--error {
-  background: rgb(var(--dw-danger));
 }
 
 .dw-it-pane {
@@ -295,19 +277,6 @@
 .dw-it-opt-ctl {
   width: 8rem;
 }
-.dw-it-act {
-  padding-left: 0.5rem;
-  border-left: 3px solid;
-}
-.dw-it-act--degrade {
-  border-color: rgb(var(--dw-down));
-}
-.dw-it-act--climb {
-  border-color: rgb(var(--dw-up));
-}
-.dw-it-act--clear {
-  border-color: rgb(var(--dw-clear));
-}
 .dw-it-sentence-inputs {
   display: inline-flex;
   flex-wrap: wrap;
@@ -361,7 +330,6 @@
   margin: 0.25rem 0 0;
   padding-left: 1.125rem;
   font-size: 0.75rem;
-  color: rgb(var(--dw-danger));
 }
 .dw-it-alert {
   margin: 0;

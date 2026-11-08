@@ -4,7 +4,7 @@ import type { UseListResult } from '@sub2api/host'
 import { SBadge, SCard, SDateTime, SDropdown, SHint, SPagination, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
 import KeyDetail from './KeyDetail.vue'
 import { useCatalog } from './catalog'
-import { canManage, keyOf, successRate, useDwHost, weightOf, weightTone, type KeyStatus } from './host'
+import { canManage, keyOf, successRate, trendTone, useDwHost, weightOf, weightTone, type KeyStatus } from './host'
 
 // The keys of a GET /status list with their pager, one line per key: the
 // configuration in force, weight against base and its direction, last
@@ -83,15 +83,17 @@ const pick = (r: KeyStatus, action: string) => (action === 'reset' ? emit('reset
           >{{ weightOf(row.effective) }} / {{ row.base }}</SBadge
         >
         <SBadge v-if="!row.adjusting" tone="gray" size="xs" class="dw-ml">{{ t('status.paused') }}</SBadge>
-        <span
+        <SHint
           v-else-if="row.state !== 'normal'"
-          :class="`dw-acct-${row.state}`"
+          inline
+          size="xs"
+          :tone="trendTone(row.state)"
           class="dw-acct-arrow"
           :title="t(`acct.table.stateAria.${row.state}`)"
           :aria-label="t(`acct.table.stateAria.${row.state}`)"
         >
           {{ row.state === 'degrading' ? '▼' : '▲' }}
-        </span>
+        </SHint>
         <SBadge v-if="row.adjusting && row.no_climb_strategy" tone="danger" size="xs" class="dw-ml" :title="t('acct.detail.noClimb')"
           >!</SBadge
         >

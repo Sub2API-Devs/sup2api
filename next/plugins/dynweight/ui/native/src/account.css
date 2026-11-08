@@ -1,18 +1,9 @@
 /*
  * Account area: the account list badge and its card, the account detail tab,
  * the key table and its expansion (shared with the status tab). Direction
- * colours are the shared --dw-down / --dw-up / --dw-danger (dynweight.css).
+ * colours are SHint tones (trendTone).
  */
 
-.dw-acct-degrading {
-  color: rgb(var(--dw-down));
-}
-.dw-acct-climbing {
-  color: rgb(var(--dw-up));
-}
-.dw-acct-danger {
-  color: rgb(var(--dw-danger));
-}
 .dw-acct-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.6875rem;
@@ -163,7 +154,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem 0.375rem;
-  color: rgb(var(--dw-down));
 }
 .dw-acct-noclimb svg {
   width: 0.875rem;

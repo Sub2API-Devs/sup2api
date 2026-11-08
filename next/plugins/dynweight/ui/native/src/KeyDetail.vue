@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SIcon, SLink } from '@sub2api/ui'
+import { SHint, SIcon, SLink } from '@sub2api/ui'
 import { configRoute, formatMs, successRate, useDwHost, weightOf, type KeyStatus, type ThresholdCount } from './host'
 
 // The evaluation detail of a key (new-api's dynamic weight hover section),
@@ -31,11 +31,11 @@ const judged = computed(() => !!props.row.eval_window && props.row.adjusting)
 
 <template>
   <div class="dw-acct-detail">
-    <div v-if="row.adjusting && row.no_climb_strategy" class="dw-acct-noclimb">
+    <SHint v-if="row.adjusting && row.no_climb_strategy" tone="warning" size="xs" class="dw-acct-noclimb">
       <SIcon name="warning" />
       <span>{{ t('acct.detail.noClimb') }}</span>
       <SLink :to="configRoute()">{{ t('acct.detail.toConfig') }}</SLink>
-    </div>
+    </SHint>
     <div class="dw-acct-detail-body">
       <dl class="dw-acct-pairs">
         <div>
@@ -140,11 +140,11 @@ const judged = computed(() => !!props.row.eval_window && props.row.adjusting)
               </td>
               <td>
                 <template v-if="judged">
-                  <span :class="r.fired ? 'dw-acct-danger' : r.hit ? 'dw-acct-degrading' : 'dw-acct-muted'">
+                  <SHint inline size="xs" :tone="r.fired ? 'danger' : r.hit ? 'warning' : 'muted'">
                     {{
                       r.fired ? t('detail.fired') : t(r.unjudged ? 'acct.detail.unjudged' : r.hit ? 'acct.detail.hit' : 'acct.detail.miss')
                     }}
-                  </span>
+                  </SHint>
                 </template>
                 <template v-else>—</template>
               </td>
