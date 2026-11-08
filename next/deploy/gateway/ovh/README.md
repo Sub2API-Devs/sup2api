@@ -4,6 +4,13 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-09 核心 **0.1.257** + codex **0.1.1** + dynweight **0.5.1**（`c2059a408`，北京时间 02:19–02:20；计划 `249c460f1d83ca640f2b9a15c5e8ce7a` primary-first-v1 completed，02:19:37→02:20:38 约 61 秒，没有暂停；迁移 0091，schema `32b9376d…e2e6` → `e726e42f…785f`；Host API 仍 9；网关仍 0.1.133）：
+- 内容：账号请求参数覆盖（CONTRACTS §84）；codex 核心支持（§83 streamOnly、同平台 chat→Responses、§83.6 WebSocket 每轮补丁）；Responses WebSocket 不设空闲超时（30 秒 ping）；2026-11-08 审计的三处安全修复；账号列表权重徽标不换行。内置包 = 0.1.256 那套，dynweight 换成 0.5.1（从 `c2059a408` 重建），新增 codex 0.1.1（安装即启用，不在 install-only）。
+- 停服：maintenance 计划，ovh 3130 `/readyz` 503 约 9 秒（02:19:57–02:20:06），api.prophey.ai 超时约 7 秒（02:20:01–02:20:08）。new-api 渠道 392 02:13:23 关、02:24:32 按备份原样恢复（405/406 指向 api.125837.xyz，不是 sup2api，没动）。
+- 核验：两节点 v0.1.257、`/readyz` 200；`accounts.param_override jsonb` 已建；`GET /accounts` 带 `param_override`，`POST /accounts/param-override/preview` 200；插件 codex 0.1.1、dynweight 0.5.1 两节点 active，其余版本不变；`/account-types` 有 codex_device、chatgpt_siwc，“新建账号”里能看到 ChatGPT（Codex）；dynweight 配置页正常，打开调整项弹窗取消后不出保存栏；临时 Key 经 api.prophey.ai 调 claude-haiku-4-5 回 200 “pong”（Key 已删）；发布后两节点只有重启期间的 “local core unreachable” WARN，没有 `/weights without` 告警；恢复渠道后 10 分钟 sup2api 10 次请求全部 200，new-api 渠道 392 18 次成功、0 次错误（关闭期间亲和会话转到 405/406，流量回升较慢）。
+- 回滚：dynweight 可回 0.5.0；核心回 0.1.256（manifest `4b1ef50f…9250`）要先处理迁移 0091。
+- 脚本 `stage/0.1.257/`（build.sh 要求 schema 必须变化，sign.sh 断言 strategy=maintenance）；manifest `0bb7ee6c…a355`，bundle `1118d82b…0d1a`；不备份数据库；工作树 `~/sup2api/release-0.1.257`；观察与验证工具 `~/rel257/`（observe.py、verify257.py、plugins.py、pw/ui.mjs），日志 `~/rel257/observe.log`。
+
 2026-11-07 核心 **0.1.254**（`428d457aa`，北京时间 14:57–14:59；计划 `8253a0fa1f4cb687f118e9cefa70feef` completed/13，约 75 秒，没有暂停；没有迁移，schema 仍 `32b9376d…e2e6`；Host API 仍 9；内置插件与 0.1.253 相同，anthropic 仍 0.2.9，插件和外壳不变）：
 - 内容：next/web 手机布局（UI SDK 3.5.0）：窄顶栏和安全区、列表卡片、筛选底部面板、悬浮新建按钮、弹层底部面板与返回键关闭、触屏控件尺寸。自 0.1.253 起 35 个提交，只有前端改动。
 - 核验：两节点 v0.1.254（sup2api-1 start-primary 06:58:32Z、sup2api-ccp start 06:58:59Z），api.prophey.ai `/readyz` 200，发布后两节点错误日志 0；线上首页引用的 `index-BN1Kvudg.js` 与构建产物一致（`dcaa7762…c499`），含 `data-fab`，`widgets-TG3o3V8s.js` 含 `s-drawer-bottom`。iPhone 13 视口（390px）打开线上登录页：无横向滚动，输入框 16px，viewport 带 `viewport-fit=cover`，无页面错误；登录后页面没有在线上检查。
