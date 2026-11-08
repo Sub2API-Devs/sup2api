@@ -5,6 +5,9 @@ import DegradedBadge from './DegradedBadge.vue'
 import messages from './messages'
 import { setHost } from './host'
 import './dynweight.css'
+import './items.css'
+import './config.css'
+import './account.css'
 
 // Native UI entry of the dynweight plugin (manifest ui.native.entry). The
 // component names match manifest ui.pages[].component and ui.slots[].component.

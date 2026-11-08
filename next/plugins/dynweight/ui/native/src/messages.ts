@@ -1,3 +1,7 @@
+import itemsMsg from './messages-items'
+import configMsg from './messages-config'
+import accountMsg from './messages-account'
+
 // Dynweight UI messages, registered under plugin.dynweight.* via host.addMessages.
 // vue-i18n syntax: avoid the special characters @ | { } in plain text.
 const zh = {
@@ -243,7 +247,10 @@ const zh = {
     events: '查看事件',
     resetAll: '重置本账号全部',
     resetAllConfirm: '把账号 {account} 在全部分组、全部模型下的有效权重重置为基准？历史窗口会被清空。'
-  }
+  },
+  it: itemsMsg.zh,
+  cfg: configMsg.zh,
+  acct: accountMsg.zh
 }
 
 const en: typeof zh = {
@@ -488,7 +495,10 @@ const en: typeof zh = {
     events: 'Events',
     resetAll: 'Reset all of this account',
     resetAllConfirm: 'Reset the effective weights of account {account} in every group and model to their base? Their window history is dropped.'
-  }
+  },
+  it: itemsMsg.en,
+  cfg: configMsg.en,
+  acct: accountMsg.en
 }
 
 export default { zh, en }
