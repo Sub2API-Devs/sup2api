@@ -6576,3 +6576,23 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **控制台**：账号编辑页“高级 › 请求转发”组，请求头透传之后一行“请求参数覆盖”：摘要（“N 条操作 · 含 M 条请求头操作”和前 3 条的说明）、“编辑”和“清空”；导航摘要加“覆盖 N 条”。编辑弹窗（`web/src/views/accounts/paramOverride/`）沿用 new-api 与动态权重调整项编辑器的布局：左侧操作列表（圆点区分请求体 / 请求头 / 返回错误，带条件的有漏斗、有错的红点，可搜索、上下移、复制、删除，6 个模板），右侧“就”（操作、路径或 from/to、值、keep_origin）与“当”（条件、满足任一 / 全部、取反、缺失视为满足）；“JSON”视图编辑整个覆盖（new-api 旧格式的顶层键读成字面路径的 `set` 操作，写回时统一成 `operations`）；“试运行”视图调用预览接口。“应用”只改账号表单，保存账号才生效。
 - **未覆盖**：账号测试请求（`BuildTestRequest`）、WebSocket 端点、分组 / 全局层的覆盖、批量编辑。
 - 代码：`core/param_override.go`（校验、编译）、`core/param_override_apply.go`（执行、上下文）、`gateway/param_override.go`（挂接点）、`account/param_override_preview.go`。测试：`core/param_override_test.go`、`account/account_test.go`（`TestAccountParamOverride*`）、`gateway/param_override_test.go`（请求体和头到达上游、改模型不触发可用性不一致、return_error、运行失败换账号、执行路径）。
+
+## 85. 钩子点 `gateway.attempt`：选定账号后、发往账号前（2026-11-08，moderation 0.7.0 需要，72.17；核心 0.1.258）
+
+`gateway.request` 在调度前执行，看不到请求会发往哪个账号。有些插件要按账号决定，例如流程绑定到账号的审核。为此新增通用钩子点 `gateway.attempt`，核心不针对任何插件做特殊处理。
+
+- **调用时机**：
+  - HTTP：每次尝试选定账号、通过账号限速之后，发出请求之前（`gateway/dispatch.go`），换账号的每次尝试都调用。
+  - WebSocket：每条 `response.create` 在连接建立或复用之后、发给上游之前调用（`gateway/websocket.go`）。第一条消息在调用前已经完成了与上游的握手。
+- **调用方式**：与 `gateway.request` 同一个 RPC（`HookService.OnGatewayRequest`），同样的 `match`、`needs`、`order`、`timeoutMs`、`failure`、熔断和统计（`HookStats` 列出两个点的钩子）。
+  - `meta.account_id`（`RequestMeta` 新字段 15）是这次尝试的账号，`meta.environment` 含账号层。
+  - `fields` 取自客户端请求体，即 `gateway.request` 钩子打补丁之后的结果，不是账号的模型映射或参数覆盖（§84）之后发往上游的内容。
+- **只能放行或拒绝**：
+  - 回答里带 `patches` 时，这次钩子调用按失败处理，按该钩子的 `failure` 放行或拒绝，并计入熔断。请求体在调度前就定了，计费和路由都基于它。
+  - 拒绝时整个请求结束，不再换账号：拒绝针对的是请求，而不是账号。账号不受惩罚，粘性绑定按失败收尾。
+- **`skip_attempt_hooks`**（`GatewayRequestHookResponse` 新字段 7）：插件的 `gateway.request` 钩子放行时可以带上它，表示这个请求已经处理完，核心不再为它调用**这个插件**的任何 `gateway.attempt` 钩子，其他插件不受影响。拒绝时和在 `gateway.attempt` 里带上它都没有作用。请求钩子出错放行或被熔断跳过时没有这个标记，attempt 钩子照常调用。
+- **记录**：`usage_logs.hook_decisions` 的每一项加 `account_id`（只有 attempt 钩子有），按执行顺序与请求钩子的记录排在一起。
+- **授权与校验**：`hooks[].point` 可取 `gateway.request` 或 `gateway.attempt`（`manifest.HookPointRequest` / `HookPointAttempt`），必须列在 `gateway.hook` 的 `scope.points` 里，注册表只登记批准了的点。旧核心在安装时就拒绝这个钩子点；SDK 的版本下限 `check.AttemptHookFirstCore = "0.1.258"` 把它变成明确的 `hostCompat` 错误。**这个值是占位**，核心正式发版时改成实际的版本号。
+- **其他调用里的 `meta.account_id`**：同一次尝试里核心给插件的其他调用（build、execute、classify、用量提取，`metaFor`）也带上账号 ID。选定账号之前的调用为 0。
+- **代价**：没有插件声明这个点时没有任何开销。声明了的插件每次尝试多一次 RPC，在钩子内同步执行期间占着账号的并发名额，所以插件应该尽量用 `skip_attempt_hooks` 在请求钩子里结束。
+- 测试：`gateway/attempt_hook_test.go`（每次尝试都调用并带账号、拒绝不换账号、`skip_attempt_hooks` 只跳过本插件、补丁被拒、WebSocket 每条消息）、`sdk/manifest/check/attempt_hook_test.go`。

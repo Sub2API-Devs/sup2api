@@ -12,6 +12,14 @@ option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;plugi
 service HookService {
   // Point "gateway.request": after auth and group resolution, before the
   // balance check and scheduling. Synchronous.
+  //
+  // Point "gateway.attempt" (CONTRACTS §85) uses the same call: once the
+  // account is chosen and before the request is sent to it - on every HTTP
+  // attempt, failover attempts included, and on every WebSocket turn - with
+  // meta.account_id set and the account layer in meta.environment. The
+  // fields are read from the final client body (after the gateway.request
+  // hooks). Patches are refused there (the hook fails per its failure mode);
+  // a deny ends the request without trying another account.
   rpc OnGatewayRequest(GatewayRequestHookRequest) returns (GatewayRequestHookResponse);
 }
 
@@ -39,4 +47,8 @@ message GatewayRequestHookResponse {
   repeated BodyPatch patches = 5;
   // Free-form note stored in usage_logs.hook_decisions (<= 1 KiB).
   string note = 6;
+  // gateway.request only: the plugin has decided for the whole request, so
+  // the host does not call any gateway.attempt hook of this plugin for it.
+  // Ignored on a deny and at gateway.attempt.
+  bool skip_attempt_hooks = 7;
 }

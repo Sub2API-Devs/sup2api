@@ -24,6 +24,14 @@ const _ = grpc.SupportPackageIsVersion7
 type HookServiceClient interface {
 	// Point "gateway.request": after auth and group resolution, before the
 	// balance check and scheduling. Synchronous.
+	//
+	// Point "gateway.attempt" (CONTRACTS §85) uses the same call: once the
+	// account is chosen and before the request is sent to it - on every HTTP
+	// attempt, failover attempts included, and on every WebSocket turn - with
+	// meta.account_id set and the account layer in meta.environment. The
+	// fields are read from the final client body (after the gateway.request
+	// hooks). Patches are refused there (the hook fails per its failure mode);
+	// a deny ends the request without trying another account.
 	OnGatewayRequest(ctx context.Context, in *GatewayRequestHookRequest, opts ...grpc.CallOption) (*GatewayRequestHookResponse, error)
 }
 
@@ -50,6 +58,14 @@ func (c *hookServiceClient) OnGatewayRequest(ctx context.Context, in *GatewayReq
 type HookServiceServer interface {
 	// Point "gateway.request": after auth and group resolution, before the
 	// balance check and scheduling. Synchronous.
+	//
+	// Point "gateway.attempt" (CONTRACTS §85) uses the same call: once the
+	// account is chosen and before the request is sent to it - on every HTTP
+	// attempt, failover attempts included, and on every WebSocket turn - with
+	// meta.account_id set and the account layer in meta.environment. The
+	// fields are read from the final client body (after the gateway.request
+	// hooks). Patches are refused there (the hook fails per its failure mode);
+	// a deny ends the request without trying another account.
 	OnGatewayRequest(context.Context, *GatewayRequestHookRequest) (*GatewayRequestHookResponse, error)
 	mustEmbedUnimplementedHookServiceServer()
 }

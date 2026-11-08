@@ -127,6 +127,15 @@ func (c *call) dispatch(ctx context.Context) {
 				continue
 			}
 		}
+		// The account is chosen: plugins that decide per account (e.g. one
+		// exempt from a check another is not) see it before anything is sent
+		// to it, on every attempt (CONTRACTS §85).
+		if e := c.runAttemptHooks(ctx, ref); e != nil {
+			release()
+			c.fail(e)
+			c.finishSticky(ctx, 0, false)
+			return
+		}
 		attempts++
 		c.rec.Attempts = attempts
 		stickyAttempt := c.sticky != nil && c.sticky.hit && c.sticky.bound == ref.ID

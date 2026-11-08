@@ -128,6 +128,9 @@ type call struct {
 	metaPathParams map[string]string
 	metaQuery      map[string]string
 	metaMapsDone   bool
+	// attemptHooksSkipped are the plugins whose gateway.request hook asked
+	// not to run their gateway.attempt hooks for this request (§85).
+	attemptHooksSkipped map[string]bool
 	// sessionFP is RequestMeta.session_fingerprint, derived before the hooks
 	// run (sessionFingerprint); matched is the stickyMatch answer it used.
 	sessionFP string
@@ -769,6 +772,9 @@ func boundMeta(in map[string]string) map[string]string {
 func (c *call) metaFor(rt *typeRoute) *pluginv1.RequestMeta {
 	m := c.meta()
 	m.Protocol, m.Environment = rt.upstream, c.env
+	if c.rec != nil && c.rec.AccountID != nil {
+		m.AccountId = *c.rec.AccountID
+	}
 	return m
 }
 

@@ -460,6 +460,10 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		releaseKey()
 		return reject(cl, e)
 	}
+	// The turn goes to the connection's account (CONTRACTS §85).
+	if e := cl.runAttemptHooks(ctx, s.ref); e != nil {
+		return reject(cl, e)
+	}
 	// Quota observations of this turn go under the connection's generation
 	// only; a connection opened without one never writes any.
 	cl.quotaPinned, cl.quotaPin = true, s.quotaGeneration

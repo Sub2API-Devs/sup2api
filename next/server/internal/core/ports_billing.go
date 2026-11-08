@@ -446,6 +446,8 @@ type HookDecision struct {
 	Decision  string `json:"decision"` // allow | deny | error_open | error_closed | skipped_breaker
 	LatencyMs int    `json:"latency_ms"`
 	Note      string `json:"note,omitempty"`
+	// AccountID is the attempt's account of a gateway.attempt hook (§85).
+	AccountID int64 `json:"account_id,omitempty"`
 }
 
 // SchedDecision is what one scheduler.rank plugin changed while the gateway

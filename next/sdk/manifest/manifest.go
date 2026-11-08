@@ -710,9 +710,19 @@ type StickyKeySource struct {
 
 // ---------------------------------------------------------------- hooks, events, jobs
 
+// Hook points (CONTRACTS §20.1, §85).
+const (
+	// HookPointRequest runs once per request, after auth and group
+	// resolution, before the balance check and scheduling.
+	HookPointRequest = "gateway.request"
+	// HookPointAttempt runs once the account is chosen, before the request
+	// is sent to it: every HTTP attempt and every WebSocket turn.
+	HookPointAttempt = "gateway.attempt"
+)
+
 type Hook struct {
 	ID             string    `json:"id,omitempty"`
-	Point          string    `json:"point"` // gateway.request
+	Point          string    `json:"point"` // HookPointRequest | HookPointAttempt
 	Order          int       `json:"order"`
 	Match          HookMatch `json:"match"`
 	Needs          []string  `json:"needs,omitempty"`

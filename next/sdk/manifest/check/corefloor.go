@@ -16,6 +16,13 @@ import (
 // §83.6); that has no manifest declaration, so it needs no floor of its own.
 const StreamOnlyFirstCore = "0.1.257"
 
+// AttemptHookFirstCore is the first core that runs gateway.attempt hooks and
+// honours skip_attempt_hooks (CONTRACTS §85). PLACEHOLDER: set to the real
+// version when that core is released; until then it is the next patch
+// after 0.1.257. Older cores refuse the hook point at install, so the floor
+// only turns that into a clear hostCompat error.
+const AttemptHookFirstCore = "0.1.258"
+
 // SamePlatformConversions are the core's protocol converters whose two
 // protocols belong to one platform (client, upstream). The gateway's
 // convert.Default() is checked against this list in its tests.
@@ -43,6 +50,9 @@ var coreFloors = []coreFloor{
 	}},
 	{field: "accountTypes[].platforms[].endpoints (served through a same-platform conversion)", firstCore: StreamOnlyFirstCore,
 		uses: (*validator).usesSamePlatformConversion},
+	{field: "hooks[].point " + manifest.HookPointAttempt, firstCore: AttemptHookFirstCore, uses: func(v *validator) bool {
+		return slices.ContainsFunc(v.m.Hooks, func(h manifest.Hook) bool { return h.Point == manifest.HookPointAttempt })
+	}},
 }
 
 // usesSamePlatformConversion reports an account type whose endpoint subset

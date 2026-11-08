@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	pointGatewayRequest = "gateway.request"
+	pointGatewayRequest = manifest.HookPointRequest
+	pointGatewayAttempt = manifest.HookPointAttempt
 	fieldPromptText     = "prompt_text"
 
 	breakerThreshold = 10
@@ -309,10 +310,12 @@ func (g *Gateway) HookStats(ctx context.Context, pluginKey string) ([]core.HookS
 	byID := map[string]*core.HookStat{}
 	if g.d.Registry != nil {
 		if gen := g.d.Registry.Current(); gen != nil {
-			for _, hb := range gen.Hooks(pointGatewayRequest) {
-				if hb.Plugin.Key == pluginKey {
-					id := hookID(hb)
-					byID[id] = &core.HookStat{HookID: id, Point: hb.Hook.Point}
+			for _, point := range []string{pointGatewayRequest, pointGatewayAttempt} {
+				for _, hb := range gen.Hooks(point) {
+					if hb.Plugin.Key == pluginKey {
+						id := hookID(hb)
+						byID[id] = &core.HookStat{HookID: id, Point: hb.Hook.Point}
+					}
 				}
 			}
 		}
@@ -416,15 +419,30 @@ func (c *call) hookMatches(hb core.HookBinding) bool {
 // runHooks executes the matching gateway.request hooks in order. It returns
 // the error to send when a hook denies (or fails closed).
 func (c *call) runHooks(ctx context.Context) *gwError {
+	return c.runPoint(ctx, pointGatewayRequest, nil)
+}
+
+// runAttemptHooks executes the matching gateway.attempt hooks for the
+// account the request is about to be sent to (CONTRACTS §85), except those
+// of plugins whose gateway.request hook settled the request
+// (skip_attempt_hooks). A deny ends the request: it is about the request,
+// not the account, so it never fails over.
+func (c *call) runAttemptHooks(ctx context.Context, ref *core.AccountRef) *gwError {
+	return c.runPoint(ctx, pointGatewayAttempt, ref)
+}
+
+// runPoint runs the hooks of one point in order; ref is the attempt's
+// account (nil for gateway.request).
+func (c *call) runPoint(ctx context.Context, point string, ref *core.AccountRef) *gwError {
 	var hooks []core.HookBinding
-	for _, hb := range c.gen.Hooks(pointGatewayRequest) {
-		if hb.Client != nil && c.hookMatches(hb) {
+	for _, hb := range c.gen.Hooks(point) {
+		if hb.Client != nil && !(ref != nil && c.attemptHooksSkipped[hb.Plugin.Key]) && c.hookMatches(hb) {
 			hooks = append(hooks, hb)
 		}
 	}
 	sort.SliceStable(hooks, func(i, j int) bool { return hooks[i].Hook.Order < hooks[j].Hook.Order })
 	for _, hb := range hooks {
-		dec, deny := c.runHook(ctx, hb)
+		dec, deny := c.runHook(ctx, hb, ref)
 		c.rec.HookDecisions = append(c.rec.HookDecisions, dec)
 		if deny != nil {
 			return deny
@@ -433,11 +451,33 @@ func (c *call) runHooks(ctx context.Context) *gwError {
 	return nil
 }
 
-func (c *call) runHook(ctx context.Context, hb core.HookBinding) (core.HookDecision, *gwError) {
+// hookMeta is the request meta a hook sees: an attempt hook gets the account
+// and its environment layer.
+func (c *call) hookMeta(ref *core.AccountRef) *pluginv1.RequestMeta {
+	m := c.meta()
+	if ref != nil {
+		m.AccountId, m.Environment = ref.ID, c.environment(ref)
+	}
+	return m
+}
+
+// skipAttemptHooks remembers that a plugin's gateway.request hook settled
+// the request for every attempt.
+func (c *call) skipAttemptHooks(plugin string) {
+	if c.attemptHooksSkipped == nil {
+		c.attemptHooksSkipped = map[string]bool{}
+	}
+	c.attemptHooksSkipped[plugin] = true
+}
+
+func (c *call) runHook(ctx context.Context, hb core.HookBinding, ref *core.AccountRef) (core.HookDecision, *gwError) {
 	g := c.g
 	id := hookID(hb)
 	k := hookKey{hb.Plugin.Key, id}
 	dec := core.HookDecision{PluginKey: hb.Plugin.Key, HookID: id}
+	if ref != nil {
+		dec.AccountID = ref.ID
+	}
 	closed := strings.EqualFold(hb.Hook.Failure, "closed")
 	failed := func(decisionNote string) (core.HookDecision, *gwError) {
 		dec.Note = truncateUTF8(decisionNote, maxHookNoteBytes)
@@ -466,7 +506,7 @@ func (c *call) runHook(ctx context.Context, hb core.HookBinding) (core.HookDecis
 	if timeout > maxHookTimeout {
 		timeout = maxHookTimeout
 	}
-	req := &pluginv1.GatewayRequestHookRequest{Meta: c.meta(), HookId: id, Fields: c.hookFields(hb)}
+	req := &pluginv1.GatewayRequestHookRequest{Meta: c.hookMeta(ref), HookId: id, Fields: c.hookFields(hb)}
 	hctx, cancel := context.WithTimeout(ctx, timeout)
 	start := time.Now()
 	resp, err := hb.Client.OnGatewayRequest(hctx, req)
@@ -517,8 +557,13 @@ func (c *call) runHook(ctx context.Context, hb core.HookBinding) (core.HookDecis
 		return dec, &gwError{Status: status, Code: code, Message: msg, RecordType: errTypeBlockedByHook}
 	}
 
-	// ALLOW (or unspecified): apply patches, only on granted paths.
+	// ALLOW (or unspecified): apply patches, only on granted paths. The body
+	// is final once an account is chosen (billing and routing were planned
+	// from it), so an attempt hook may not patch it.
 	body, perr := applyHookPatches(c.body, resp.GetPatches(), hb.GrantedFields)
+	if perr == nil && ref != nil && len(resp.GetPatches()) > 0 {
+		perr = errors.New("gateway.attempt hooks cannot patch the body")
+	}
 	if perr != nil {
 		g.hooks.observe(k, hb.Hook.Point, outcomeError, latency)
 		g.hooks.recordResult(ctx, k, true)
@@ -529,6 +574,9 @@ func (c *call) runHook(ctx context.Context, hb core.HookBinding) (core.HookDecis
 	g.hooks.recordResult(ctx, k, false)
 	if len(resp.GetPatches()) > 0 {
 		c.setBody(body)
+	}
+	if ref == nil && resp.GetSkipAttemptHooks() {
+		c.skipAttemptHooks(hb.Plugin.Key)
 	}
 	dec.Decision = decisionAllow
 	dec.Note = truncateUTF8(resp.GetNote(), maxHookNoteBytes)

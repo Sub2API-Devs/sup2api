@@ -192,6 +192,12 @@ message RequestMeta {
   // value) without the master key. Derived once, before the gateway.request
   // hooks run. Empty when no rule yields a session value.
   string session_fingerprint = 14;
+  // Account of the attempt (CONTRACTS §85): set on gateway.attempt hook
+  // calls and on every call of an attempt on an account (build, execute,
+  // classify, usage extraction); 0 on calls made before an account is
+  // chosen (gateway.request hooks, model resolution, usage estimation,
+  // scheduler.rank).
+  int64 account_id = 15;
 }
 
 // FieldError reports a validation problem on one input field.

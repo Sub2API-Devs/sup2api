@@ -564,7 +564,7 @@ func (v *validator) hooks() {
 			}
 			ids[h.ID] = true
 		}
-		if h.Point != "gateway.request" {
+		if h.Point != manifest.HookPointRequest && h.Point != manifest.HookPointAttempt {
 			v.add(f+".point", "unsupported", "unsupported hook point %q", h.Point)
 		}
 		if h.Failure != "" && h.Failure != "open" && h.Failure != "closed" {
