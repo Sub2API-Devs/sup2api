@@ -4,6 +4,26 @@
 
 每次发布在最前面加一节，写清版本、提交和用户能看到的变化。版本有三条线：核心、网关（外壳）、插件（如 ccgateway）。
 
+## 2026-11-09
+
+### 核心 0.1.257 + dynweight 0.5.1 + codex 0.1.1（`dca8628ef`，迁移 0091）
+
+- 账号新增“请求参数覆盖”（CONTRACTS §84，迁移 0091 `accounts.param_override`）：格式兼容 new-api 渠道的 `param_override`（旧的平铺对象和 `operations` 操作列表），可改请求体（set、delete、追加、替换、正则替换、copy/move 等）和请求头（set_header、delete_header、pass_headers 等），支持条件和 `return_error`。每次尝试在模型映射之后、插件构造上游请求之前执行。账号编辑页“高级 › 请求转发”里编辑，弹窗有模板、JSON 视图和试运行（`POST /accounts/param-override/preview`，试运行会标出执行失败的操作）。
+- 新增内置插件 codex 0.1.1（随核心内置包安装并启用）：ChatGPT 订阅账号，支持 Codex 设备码登录和 Sign in with ChatGPT，提供 /v1/responses（含 WebSocket 模式），经核心转换也能接 /v1/chat/completions。仅供账号所有者自用，请求如实标明来源为 sup2api，不伪装 Codex CLI。
+- 核心配合 codex 的改动（CONTRACTS §83）：账号类型可声明 `streamOnly`，非流式请求在上游强制走流式再合成 JSON 响应；同平台 chat → Responses 转换，只支持 Responses 的账号类型也能接 /v1/chat/completions（旧式 functions、自定义工具、web_search_options 等会转换，没有对应项的参数直接丢弃，只拒绝 n>1 和音频）；WebSocket 每轮都调用插件构造请求并应用补丁（§83.6）。
+- Responses WebSocket 会话不再有空闲超时（去掉首条消息 30 秒、两轮之间 300 秒的限制），客户端断开、节点让出或上游关闭时才结束；两侧每 30 秒 ping 保活，30 秒没有回应就关闭那一侧（`dca8628ef`）。
+- 安全修复（`20419123f`）：用户通过 `PATCH /users/:id` 改自己的密码或邮箱、通过 `DELETE /users/:id/security` 重置自己的二次验证时，必须提供当前密码（开了二次验证还要验证码）；对已禁用用户的权限比较按其角色计算，重新启用也要检查，堵住拿 user:update 接管已禁用管理员的路子；流式响应内容已返回、用量事件前客户端断开时，按预扣的估算计费（`usage_extract=precharge`），不再记成免费。
+- dynweight 0.5.1（内置包自动升级）：配置页仿 new-api 重做，规则和策略合成“调整项”编辑，分组配置和账号覆盖改成表格加弹窗，统一底部保存栏；账号页权重徽标显示升降箭头或“仅统计”，悬浮卡片显示状态和最近变化。`GET /weights` 返回 state、changed_at、adjust_off。
+- 账号列表权重列的插件徽标不再换行到数字下面（`f7a944a37`）。
+
+## 2026-11-08
+
+### 网关 0.1.133 + 核心 0.1.256 + dynweight 0.5.0 + ccgateway 0.1.132（`e8ef5124d`，无迁移）
+
+- 网关 0.1.133：核心升级改为逐个节点滚动（rolling-v1），升级中的节点先让出流量，另一节点继续服务，无迁移的版本不再停机；去掉准入看门狗（`07f9db0f2`）。
+- 核心 0.1.256：默认请求体上限提高到 128 MB，由核心统一限制（ccgateway 0.1.132 的引擎同步放到 128 MiB）；计费在余额锁内批量结算，预扣失败更快返回（`87b79cc76`）；账号页插件扩展点（UI 3.6：账号操作、工具栏插槽、表单挂件保存）。
+- dynweight 0.5.0：动态权重从账号编辑页移出，改用账号页插件扩展点展示和操作。
+
 ## 2026-11-07
 
 ### 核心 0.1.254（`428d457aa`，无迁移）
