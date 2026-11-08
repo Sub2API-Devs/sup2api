@@ -528,6 +528,9 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 		return attemptResult{kind: kind, err: &gwError{Status: http.StatusBadRequest, Code: code,
 			Message: "request cannot be converted to " + rt.upstream + ": " + err.Error(), RecordType: errTypeInvalidRequest}}
 	}
+	if dropped := convert.Dropped(rt.conv); len(dropped) > 0 {
+		slog.DebugContext(ctx, "gateway: request conversion dropped fields", "from", c.ep.Protocol, "to", rt.upstream, "fields", dropped)
+	}
 
 	// The account's model mapping rewrites the model sent upstream
 	// (CONTRACTS §18); billing and hooks saw the client model.

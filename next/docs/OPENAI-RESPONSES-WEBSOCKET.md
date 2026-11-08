@@ -47,7 +47,7 @@
    - 解析价格、检查余额；
    - **首轮**：按 HTTP 请求相同的规则选账号（候选、粘性、排序插件、限额、账号并发位），调用插件构造上游请求，建立上游连接；建连失败交给插件 `ClassifyError`，按结果冷却/禁用账号并在 `max_attempts` 内换号；
    - **后续轮次**：沿用首轮的账号与上游连接；账号并发位或限额暂时不可用时等待最多 10 s，仍不可用则回 429 错误事件；账号已不能服务本轮模型时回错误事件；
-   - 套用账号的模型映射，把消息原样（钩子改写后）发往上游；
+   - 套用账号的模型映射，再应用插件为本轮消息返回的 body patch（首轮取握手那次 `BuildUpstreamRequest` 的，后续轮每轮调用一次、只取 patch、忽略 URL 与头；空 patch 时消息逐字节不变；patch 失败时回错误事件、连接保持。2026-11-08 起，见 CONTRACTS §83.6），发往上游；
    - 逐条转发上游事件，按 `usage.sse` 规则累计；遇到 `response.completed`、`response.incomplete`、`response.failed` 或 `error` 事件即结束本轮；
    - 结束时释放 API Key 与账号并发位，结算账号和 Key 的 token 预占（CONTRACTS §78.3），写一条使用记录（`protocol=openai.responses_ws`、`stream=true`），由结算服务扣费。
 4. **上游错误事件**：带 HTTP 状态的 `error` 事件（例如限流）交给插件 `ClassifyError`，冷却或禁用账号；本轮记为失败，连接保持，下一轮仍用该连接，由上游决定。

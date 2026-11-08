@@ -5,7 +5,10 @@
 // upstream request, and converts the upstream response (JSON or SSE) Q→P on
 // the way back. Conversion never goes through a plugin.
 //
-// Built-in pairs accept only parameters with a verified target equivalent.
+// Built-in cross-platform pairs accept only parameters with a verified
+// target equivalent. The same-platform openai.chat -> openai.responses pair
+// is lenient: it also leaves out parameters whose absence keeps the request
+// correct and reports them through DropReporter (CONTRACTS §83.2).
 package convert
 
 import (

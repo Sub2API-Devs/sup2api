@@ -2380,7 +2380,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 **清单。** `Endpoint.Kind` 新增 `websocket`：必须 `GET`、`response.stream` 为 `websocket`、无 `response.nonStream`/`request.stream`/`request.streamPath`/`modelParam`/`modelSource`/`usageSource: plugin`/`task`，模型只从每条消息的 `request.modelPath` 读；`billing: usage` 时需要非空 `usage.sse`，规则按消息 `type` 匹配。新能力 `platform.websocket.v1`（需 `platform.adapter.v1`）表示插件的 `BuildUpstreamRequest` 能为本平台 WebSocket 协议返回 `GET ws(s)://…` 握手；SDK 在清单声明它时上报该能力。内置 openai 平台新增端点 `GET /v1/responses`，协议 `openai.responses_ws`，用量规则读取 `response.completed`/`response.incomplete`/`response.failed`，粘性规则 `openai-prompt-cache-key` 也匹配该协议。openai 插件 0.3.0 声明该能力，握手带 `OpenAI-Beta: responses_websockets=2026-02-06`（客户端自带版本时保留）。
 
-**会话。** 升级前完成鉴权与连接数限制（每个 API Key 集群范围 64 条，Redis 并发位 `ws:<key id>`）；排空中的节点不接受新会话。每条 `response.create` 是一轮：新请求 ID、模型白名单、钩子、价格与余额、API Key 并发位与限速；首轮按 HTTP 规则调度账号并建立上游连接，握手失败交给插件分类并换号；后续轮次复用同一账号与连接，账号并发位或限额最多等 10 s。只路由到声明了 `platform.websocket.v1` 的插件的原生账号类型，不做协议转换。每轮一条使用记录（`protocol=openai.responses_ws`、`stream=true`）与一次结算，轮次结束即释放 API Key 与账号并发位。带 HTTP 状态的上游 `error` 事件交给插件分类以冷却或禁用账号，连接保持。首条消息超时 30 s（1008）、轮间空闲 300 s（1000）、上游断开（1011）。节点排空时空闲会话立即以 1012 关闭，进行中的一轮最多再等 30 s；核心经 `gateway.Deps.Draining` 观察请求闸门，因为 `http.Server.Shutdown` 不跟踪已升级连接。
+**会话。** 升级前完成鉴权与连接数限制（每个 API Key 集群范围 64 条，Redis 并发位 `ws:<key id>`）；排空中的节点不接受新会话。每条 `response.create` 是一轮：新请求 ID、模型白名单、钩子、价格与余额、API Key 并发位与限速；首轮按 HTTP 规则调度账号并建立上游连接，握手失败交给插件分类并换号；后续轮次复用同一账号与连接，账号并发位或限额最多等 10 s。每轮消息在钩子与模型映射之后应用插件 `BuildUpstreamRequest` 返回的 body patch（首轮取握手那次调用的，后续轮每轮调用一次只取 patch，2026-11-08 起，见 §83.6）。只路由到声明了 `platform.websocket.v1` 的插件的原生账号类型，不做协议转换。每轮一条使用记录（`protocol=openai.responses_ws`、`stream=true`）与一次结算，轮次结束即释放 API Key 与账号并发位。带 HTTP 状态的上游 `error` 事件交给插件分类以冷却或禁用账号，连接保持。首条消息超时 30 s（1008）、轮间空闲 300 s（1000）、上游断开（1011）。节点排空时空闲会话立即以 1012 关闭，进行中的一轮最多再等 30 s；核心经 `gateway.Deps.Draining` 观察请求闸门，因为 `http.Server.Shutdown` 不跟踪已升级连接。
 
 **不在范围。** ChatGPT OAuth/Codex 账号、上游连接池与预热、断线后 `previous_response_id` 恢复和 HTTP 桥接回退未移植；上游断开时由客户端重连。
 
@@ -6393,7 +6393,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ## 83. 上游只接受流式的账号类型 `streamOnly`、同平台 chat → Responses 转换（2026-11-08，codex 插件需要，设计见 [PLUGIN-CODEX.md](PLUGIN-CODEX.md) 第 3、4 节）
 
-起因：ChatGPT 账号的两种上游（`chatgpt.com/backend-api/codex/responses`、Sign in with ChatGPT 的 `api.openai.com/v1/responses`）只接受 `stream:true`。核心此前按客户端的 `stream` 原样转发，非流式客户端（包括被转换成该协议的非流式请求）一律被上游拒绝。本节让账号类型声明这一事实，由核心在上游流式、对客户端非流式之间转换。只影响声明了 `streamOnly` 的账号类型，其他插件行为不变。codex 账号类型只声明 openai 的 `responses`、`responses_websocket` 端点，`/v1/chat/completions` 由核心转换成 Responses 服务，所以本节同时新增 `openai.chat → openai.responses` 严格转换器（83.2）和同平台转换的调度规则（83.3），以及两者共用的 hostCompat 下限检查（83.4）。
+起因：ChatGPT 账号的两种上游（`chatgpt.com/backend-api/codex/responses`、Sign in with ChatGPT 的 `api.openai.com/v1/responses`）只接受 `stream:true`。核心此前按客户端的 `stream` 原样转发，非流式客户端（包括被转换成该协议的非流式请求）一律被上游拒绝。本节让账号类型声明这一事实，由核心在上游流式、对客户端非流式之间转换。只影响声明了 `streamOnly` 的账号类型，其他插件行为不变。codex 账号类型只声明 openai 的 `responses`、`responses_websocket` 端点，`/v1/chat/completions` 由核心转换成 Responses 服务，所以本节同时新增 `openai.chat → openai.responses` 转换器（83.2，2026-11-08 起为宽松转换）和同平台转换的调度规则（83.3），以及两者共用的 hostCompat 下限检查（83.4）。
 
 ### 83.1 `streamOnly`
 
@@ -6430,7 +6430,15 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 83.2 `openai.chat → openai.responses` 转换器
 
-`gateway/convert/openai_chat_responses.go`，在 `convert.Default()` 里注册，自己实现（protocol-codec 里的 `ChatCompletionsToResponses` 会静默丢字段、强制 `stream:true`、补 `include`，不复用）。原则同其他内置转换器：有确定等价的字段才映射；改变回答而没有等价的字段返回 400 `unsupported_conversion`（错误信息带字段路径，如 `unsupported_conversion: n: only one completion has an equivalent`），不静默丢弃；显式写成 Chat 默认值的字段（`n: 1`、`logprobs: false`、罚分 0、`logit_bias: {}`、`top_logprobs: 0`、`modalities: ["text"]`）等于没写，接受；任何字段写 `null` 等于没写。
+`gateway/convert/openai_chat_responses.go`，在 `convert.Default()` 里注册，自己实现（protocol-codec 里的 `ChatCompletionsToResponses` 会静默丢字段、强制 `stream:true`、补 `include`，不复用）。
+
+**宽松原则**（2026-11-08 由严格改为宽松，用户要求 sup2api 作为兼容层兜住客户端差异；其他内置转换器仍是严格的）：
+
+1. 有确定等价的字段一律转换（下表）。
+2. 没有等价、但丢掉后请求语义仍正确的字段**静默丢弃**，不再 400；被丢弃的字段路径（如 `stop`、`messages[1].name`、`messages[0].content[2].image_url.detail`）记在转换结果里（见下文“可观察性”）。
+3. 无法保留其含义的字段返回 400 `unsupported_conversion`，错误信息带字段路径（如 `unsupported_conversion: n: only one completion has an equivalent`）。
+4. 显式写成 Chat 默认值的字段（`n: 1`、`logprobs: false`、罚分 0、`logit_bias: {}`、`top_logprobs: 0`、`stop: []`、`modalities: ["text"]`）等于没写，既不拒绝也不记为丢弃；任何字段写 `null` 等于没写。
+5. 字段类型错误（如 `temperature: "hot"`、`max_tokens: 0`）仍是 400：那是无效请求，不是客户端差异。
 
 **请求映射**
 
@@ -6440,26 +6448,39 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | `stream` | `stream`（原值；上游只接受流式时由 83.1 改成 true） |
 | `stream_options.include_usage` | 不发往上游，决定流式转换是否在末块带 `usage` |
 | `stream_options.include_obfuscation` | `stream_options.include_obfuscation` |
-| `temperature`、`top_p`、`parallel_tool_calls`、`service_tier`、`user`、`safety_identifier`、`prompt_cache_key`、`prompt_cache_retention`、`metadata` | 同名字段，原样（数字按原文，不经浮点） |
+| `temperature`、`top_p`、`parallel_tool_calls`、`service_tier`、`user`、`safety_identifier`、`prompt_cache_key`、`prompt_cache_retention`、`prompt_cache_options`、`moderation`、`metadata` | 同名字段，原样（数字按原文，不经浮点） |
 | `store` | `store`；没写时写 `false`（Chat 默认不存储，Responses 默认存储） |
-| `max_completion_tokens` / `max_tokens` | `max_output_tokens`；两个都写且不同时拒绝 |
+| `max_completion_tokens` / `max_tokens` | `max_output_tokens`；两个都写且不同时以 `max_completion_tokens` 为准，`max_tokens` 记为丢弃 |
 | `reasoning_effort` | `reasoning.effort` |
 | `verbosity` | `text.verbosity` |
 | `response_format` `text` / `json_object` | `text.format: {type}` |
 | `response_format` `json_schema: {name, description?, schema?, strict?}` | `text.format: {type: "json_schema", name, description?, schema?, strict?}` |
 | `tools[]` `{type: "function", function: {name, description?, parameters?, strict?}}` | `{type: "function", name, description?, parameters, strict}`；`strict` 没写时写 `false`（Responses 函数工具默认 strict）；`parameters` 没写时写空对象 schema（Chat 的含义就是无参数） |
-| `tool_choice` `none` / `auto` / `required` / `{type: "function", function: {name}}` | 同值 / `{type: "function", name}` |
+| `tools[]` `{type: "custom", custom: {name, description?, format?}}` | `{type: "custom", name, description?, format?}`；`format` `{type: "text"}` 原样，`{type: "grammar", grammar: {definition, syntax}}` 展平为 `{type: "grammar", syntax, definition}` |
+| 旧式 `functions[]` `{name, description?, parameters?}` | 追加为函数工具（同上，`strict: false`）。只有 `functions` 没有 `tools` 时为“旧式模式”：没写 `parallel_tool_calls` 时写 `false`（旧式一条消息只有一个调用），响应用 `message.function_call`（见下） |
+| `web_search_options: {search_context_size?, user_location?: {type: "approximate", approximate: {city?, country?, region?, timezone?}}}` | `tools` 追加 `{type: "web_search", search_context_size?, user_location?: {type: "approximate", city?, country?, region?, timezone?}}` |
+| `tool_choice` `none` / `auto` / `required` | 同值 |
+| `tool_choice` `{type: "function", function: {name}}` / `{type: "custom", custom: {name}}` | `{type: "function", name}` / `{type: "custom", name}` |
+| `tool_choice` `{type: "allowed_tools", allowed_tools: {mode, tools: [{type: "function", function: {name}} \| {type: "custom", custom: {name}}]}}` | `{type: "allowed_tools", mode, tools: [{type: "function", name} \| {type: "custom", name}]}` |
+| 旧式 `function_call` `none` / `auto` / `{name}` | `tool_choice` 同值 / `{type: "function", name}`；同时写了 `tool_choice` 时以 `tool_choice` 为准，`function_call` 记为丢弃 |
 | `messages` 开头连续的 `system`、`developer` 消息 | `instructions`（各条文本按空行拼接） |
-| 之后出现的 `system`、`developer` 消息 | `input` 里同角色的 message（`input_text` 部件） |
-| `user` 消息：字符串或部件 `text`、`image_url {url, detail?}`、`file {file_id? / file_data?, filename?}` | message `role: user`：`input_text`、`input_image {image_url, detail}`（`detail` 没写时 `auto`，Chat 默认值）、`input_file` |
-| `assistant` 消息：文本内容、`tool_calls[] {id, type: "function", function: {name, arguments}}` | 文本为 message `role: assistant` 的 `output_text` 部件；每个工具调用为 `function_call {call_id, name, arguments}`，排在文本之后 |
-| `tool` 消息 `{tool_call_id, content}` | `function_call_output {call_id, output}`；字符串原样，文本部件转成 `input_text` 数组 |
+| 之后出现的 `system`、`developer` 消息 | `input` 里 `role: "developer"` 的 message（`input_text` 部件；Sign in with ChatGPT 上游拒绝 system 角色的 input 项） |
+| `user` 消息：字符串或部件 `text`、`image_url {url, detail?}`、`file {file_id? / file_data?, filename?}` | message `role: user`：`input_text`、`input_image {image_url, detail}`（`detail` 没写时 `auto`，Chat 默认值；`auto`/`low`/`high`/`original` 以外的值按 `auto` 并记为丢弃）、`input_file`；部件上的 `prompt_cache_breakpoint` 原样保留 |
+| `assistant` 消息：文本内容（字符串或 `text`/`refusal` 部件）、非空 `refusal` | message `role: assistant`：`output_text` 部件、`refusal` 部件；空文本不输出 |
+| `assistant` 的 `tool_calls[]` `{id, type: "function", function: {name, arguments}}` / `{id, type: "custom", custom: {name, input}}` | `function_call {call_id, name, arguments}` / `custom_tool_call {call_id, name, input}`，排在文本之后 |
+| `assistant` 的旧式 `function_call {name, arguments}` | `function_call`，`call_id` 合成为 `call_legacy_<消息序号>` |
+| `tool` 消息 `{tool_call_id, content}` | `tool_call_id` 指向前面的 custom 调用时为 `custom_tool_call_output {call_id, output}`，否则 `function_call_output`；字符串原样，文本部件转成 `input_text` 数组 |
+| `function` 消息 `{name, content}`（旧式） | `function_call_output`，`call_id` 取前面最近一个同名、尚未回应的旧式 `function_call` |
 
-**拒绝**（400）：`n` ≠ 1、`logprobs: true`、`top_logprobs` ≠ 0、非空 `logit_bias`、非 0 的 `presence_penalty`/`frequency_penalty`、`stop`、`seed`、`functions`/`function_call`（旧版函数调用）、`audio`、含非 text 的 `modalities`、`prediction`、`web_search_options`、其他未知字段；非函数工具（`custom` 等）和 `allowed_tools` 等其他 `tool_choice`；`response_format` 的其他类型；消息的 `name`；`function` 角色；`input_audio` 等其他用户部件；`system`/`developer`/`tool` 消息里的非文本部件；`image_url.detail` 不是 auto/low/high；assistant 的非空 `refusal`、`audio`、`function_call`，既无文本也无工具调用的 assistant 消息；`messages` 为空。
+**静默丢弃**（记入 Dropped）：`stop`、`seed`、非 0 的 `presence_penalty`/`frequency_penalty`、非空 `logit_bias`、`logprobs: true`、非 0 `top_logprobs`、`prediction`、不只是 `["text"]` 且不含 audio 的 `modalities`、未知顶层字段；所有消息的 `name`（`function` 消息除外）；assistant 的空 `refusal`；既无文本也无工具调用的 assistant 消息（整条，路径 `messages[i]`）；开头并入 `instructions` 的 system/developer 部件上的 `prompt_cache_breakpoint`；非法的 `image_url.detail`（按 `auto`）；`stream_options`、工具定义、`tool_choice`、`response_format.json_schema`、消息、内容部件、`web_search_options` 等对象里的未知成员（如 Anthropic 风格的 `cache_control`）；同时有 `tool_choice` 时的 `function_call`；与 `max_completion_tokens` 不同的 `max_tokens`。
 
-**响应（JSON）**：`object: "chat.completion"`，`id`、`model` 取 Responses 的，`created` 取 `created_at`，`service_tier` 原样；单个 choice：`message.content` 为所有 message 项 `output_text` 的拼接（没有时 `null`），`refusal` 部件拼成 `message.refusal`，`function_call` 项按顺序成为 `message.tool_calls`，第一个文本部件上的 `url_citation` 注解成为 `message.annotations`；`reasoning` 项不输出（Chat 本来不返回推理）。`finish_reason`：`completed` 有工具调用为 `tool_calls`，否则 `stop`；`incomplete` 且原因 `max_output_tokens` 为 `length`、`content_filter` 为 `content_filter`。`usage`：`input_tokens → prompt_tokens`、`output_tokens → completion_tokens`、`total_tokens`、`input_tokens_details.cached_tokens → prompt_tokens_details.cached_tokens`、`output_tokens_details.reasoning_tokens → completion_tokens_details.reasoning_tokens`。`failed` 等其他状态、其他输出项类型（`web_search_call` 等）、其他部件或注解类型、其他 incomplete 原因都是转换失败（502 `upstream_error`，§12“转换失败”）。
+**拒绝**（400）：`n` ≠ 1；`audio`；含 `audio` 的 `modalities`；`input_audio` 用户部件（Responses 的 input 内容只有 `input_text`/`input_image`/`input_file`，2026-11 的 OpenAPI 规范）及其他未知用户部件；`messages` 为空或缺失；缺 `model`；`function`/`custom` 以外的工具或 `tool_choice`/`allowed_tools` 条目；`response_format` 的其他类型；custom 工具 `format` 的其他类型；`user_location.type` 不是 `approximate`；`function_call` 为 `none`/`auto`/对象以外的值；未知角色；没有 `name` 或找不到对应旧式调用的 `function` 消息；`system`/`developer`/`tool` 消息里的非文本部件；assistant 的 `audio`（引用以前的音频回答）和 `function`/`custom` 以外的 `tool_calls`；`tool` 消息缺 `tool_call_id`；字段类型错误。
 
-**响应（SSE）**：每个上游事件转成零或多个 `chat.completion.chunk`（`id`、`model`、`created` 取 `response.created`/终止事件里的 response）：首个内容前发一次 `delta: {role: "assistant", content: ""}`；`response.output_text.delta → delta.content`；`response.refusal.delta → delta.refusal`；`output_item.added` 的 `function_call` 分配 tool 序号（从 0 起）并发 `tool_calls[{index, id, type, function: {name, arguments}}]`；`function_call_arguments.delta → tool_calls[{index, function: {arguments}}]`；`function_call_arguments.done` / `output_item.done` 只补发流式参数缺少的后缀（只发 done 的上游也能拿到完整参数，不一致时转换失败）；`response.completed`/`incomplete` 发 `delta: {}` 加 `finish_reason`（同 JSON），`stream_options.include_usage` 时再发一块 `choices: []` 加 `usage`（之前每块带 `usage: null`），最后 `data: [DONE]`。推理、进度类和其他家族的事件（如 `codex.rate_limits`）不输出；不能表达的输出项（`web_search_call` 等）是转换失败。`response.failed` / `error` 发一块 `{"error": {...}}` 后结束，没有终止事件就结束时 Flush 报转换失败，客户端看到流被截断、没有 `[DONE]`。
+**可观察性**：网关没有现成的“转换警告”通道（使用记录的 `metrics` 参与计费，不适合）。转换器的 `Prepare` 返回的绑定转换器实现 `convert.DropReporter`（`Dropped() []string`，排序、去重），辅助函数 `convert.Dropped(conv)`；网关在请求转换成功后（`dispatch.go`）有丢弃时记一条 debug 日志 `gateway: request conversion dropped fields`，带 `from`、`to`、`fields`。
+
+**响应（JSON）**：`object: "chat.completion"`，`id`、`model` 取 Responses 的，`created` 取 `created_at`，`service_tier` 原样；单个 choice：`message.content` 为所有 message 项 `output_text` 的拼接（没有时 `null`），`refusal` 部件拼成 `message.refusal`；`function_call` 项按顺序成为 `tool_calls[{id, type: "function", function}]`，`custom_tool_call` 项成为 `tool_calls[{id, type: "custom", custom: {name, input}}]`；旧式模式下唯一的 `function_call` 项成为 `message.function_call {name, arguments}`（多于一个或出现 custom 调用是转换失败）；所有文本部件上的 `url_citation` 注解合并成 `message.annotations`（`start_index`/`end_index` 加上该部件之前的文本字符数）。**忽略**（不输出、不报错）：`reasoning`、`web_search_call` 等服务端执行的工具项、未知输出项、未知的 message 部件（如 `output_audio`）、`url_citation` 以外的注解。**无法表示**而转换失败（502 `upstream_error`，§12“转换失败”）：需要客户端执行而 Chat 没有对应工具的调用（`computer_call`、`local_shell_call`、`shell_call`、`apply_patch_call`、`mcp_approval_request`）和 `image_generation_call`（图片就是答案）；`failed` 等 completed/incomplete 以外的状态。`finish_reason`：`completed` 有工具调用为 `tool_calls`（旧式模式为 `function_call`），否则 `stop`；`incomplete` 原因为 `content_filter` 时为 `content_filter`，`max_output_tokens`、其他或缺失的原因一律为 `length`（输出被截断，Chat 客户端据此判断）。`usage`：`input_tokens → prompt_tokens`、`output_tokens → completion_tokens`、`total_tokens`、`input_tokens_details.cached_tokens → prompt_tokens_details.cached_tokens`、`output_tokens_details.reasoning_tokens → completion_tokens_details.reasoning_tokens`。
+
+**响应（SSE）**：每个上游事件转成零或多个 `chat.completion.chunk`（`id`、`model`、`created` 取 `response.created`/终止事件里的 response）：首个内容前发一次 `delta: {role: "assistant", content: ""}`；`response.output_text.delta → delta.content`；`response.refusal.delta → delta.refusal`；`response.output_text.annotation.added` 的 `url_citation` → `delta.annotations: [{type: "url_citation", url_citation}]`（偏移加上该部件之前已发的文本字符数，其他注解忽略）；`output_item.added` 的 `function_call` / `custom_tool_call` 分配 tool 序号（从 0 起）并发 `tool_calls[{index, id, type: "function", function: {name, arguments}}]` / `tool_calls[{index, id, type: "custom", custom: {name, input}}]`；`function_call_arguments.delta → tool_calls[{index, function: {arguments}}]`，`custom_tool_call_input.delta → tool_calls[{index, custom: {input}}]`；`function_call_arguments.done`、`custom_tool_call_input.done`、`output_item.done` 只补发流式参数缺少的后缀（只发 done 的上游也能拿到完整参数；没有 added 只有 done 的调用在 done 时一次发出；不一致时转换失败）；旧式模式下改发 `delta.function_call {name, arguments}` / `{arguments}`，第二个调用是转换失败；`response.completed`/`incomplete` 发 `delta: {}` 加 `finish_reason`（同 JSON），`stream_options.include_usage` 时再发一块 `choices: []` 加 `usage`（之前每块带 `usage: null`），最后 `data: [DONE]`。推理、进度类、服务端工具（`response.web_search_call.*`）、未知输出项和其他家族的事件（如 `codex.rate_limits`）不输出；只有上面“无法表示”的输出项是转换失败。`response.failed` / `error` 发一块 `{"error": {...}}` 后结束，没有终止事件就结束时 Flush 报转换失败，客户端看到流被截断、没有 `[DONE]`。Chat 流式块的 `delta.annotations` 与 custom `tool_calls` 不在 OpenAPI 的 chunk schema 里，形状取自非流式消息的对应字段。
 
 ### 83.3 同平台转换的调度
 
@@ -6482,4 +6503,27 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 83.5 测试
 
-`sdk/manifest/check/streamonly_test.go`（各类合法/非法声明、hostCompat 下限）；`server/internal/gateway/convert/openai_chat_responses_test.go`（请求映射、各类拒绝、JSON 与 SSE 响应、与 check 的同平台列表一致）；`server/internal/account/samplatform_test.go`（`/account-types` 的可服务端点）；`server/internal/gateway/streamonly_test.go`：Responses 非流式（上游收到 `stream:true`、JSON 正文、用量、记录 `stream=false`）、插件 patch 改回 false 被覆盖、`response.incomplete`、`output` 按 `output_index` 补齐、流式客户端不受影响、未声明 `streamOnly` 或声明了其他协议时不变、`response.failed`（502、插件分类、冷却）、带 `status` 的 `error` 事件（429）与扁平 `error` 事件、无终止事件、经转换的 chat 非流式与流式、`platform.execute.v1` 路径的成功与错误事件、SSE 帧解析与错误正文形状。；同平台转换：非流式 chat 经流式上游合成 JSON 再转回 chat（记录 `openai.chat`/`openai.responses`、用量与计费）、流式 chat（含末块 usage、`[DONE]`）、未声明 `streamOnly` 时直接转换、不可转换字段 400 不发往上游、原生优先与转换范围（不转到其他平台、无转换器不服务）。
+`sdk/manifest/check/streamonly_test.go`（各类合法/非法声明、hostCompat 下限）；`server/internal/gateway/convert/openai_chat_responses_test.go`（请求映射、旧式 functions、custom 工具与 allowed_tools、web_search_options、共有参数与 cache breakpoint、各类丢弃及 Dropped 列表、各类拒绝、JSON 与 SSE 响应含 custom 调用、跨部件注解、被忽略与无法表示的输出项、未知 incomplete 原因为 length、与 check 的同平台列表一致）；`server/internal/account/samplatform_test.go`（`/account-types` 的可服务端点）；`server/internal/gateway/streamonly_test.go`：Responses 非流式（上游收到 `stream:true`、JSON 正文、用量、记录 `stream=false`）、插件 patch 改回 false 被覆盖、`response.incomplete`、`output` 按 `output_index` 补齐、流式客户端不受影响、未声明 `streamOnly` 或声明了其他协议时不变、`response.failed`（502、插件分类、冷却）、带 `status` 的 `error` 事件（429）与扁平 `error` 事件、无终止事件、经转换的 chat 非流式与流式、`platform.execute.v1` 路径的成功与错误事件、SSE 帧解析与错误正文形状。；同平台转换：非流式 chat 经流式上游合成 JSON 再转回 chat（记录 `openai.chat`/`openai.responses`、用量与计费）、流式 chat（含末块 usage、`[DONE]`）、未声明 `streamOnly` 时直接转换、无法转换的字段（`n: 2`）400 不发往上游、可丢弃字段（`stop`、`seed`、罚分、冲突的 `max_tokens`、消息 `name`、未知字段）在非流式与流式下都被丢弃且返回 200、原生优先与转换范围（不转到其他平台、无转换器不服务）。
+
+### 83.6 WebSocket 每轮消息的插件 body patch（2026-11-08，用户要求兼容层兜住客户端差异；codex 插件 0.1.1）
+
+起因：§35 的 WebSocket 模式只在首轮握手时调用插件 `BuildUpstreamRequest`，取 URL 与头；每轮 `response.create` 消息由核心原样（钩子改写、模型映射后）发往上游，插件返回的 `patches` 被忽略。codex 的两种上游要求 `store:false`、`input` 为数组、不带若干字段（`codex_device` 还要求有 `instructions`），客户端只能自己带齐。现在核心对每一轮都取插件的 body patch。
+
+**核心**（`gateway/websocket.go`）：
+
+- 每一轮的消息在钩子改写（§20）、账号模型映射（§18）与引用模型映射之后，按该轮消息读出路由的 `requestFields`（与 HTTP 相同：账号类型对平台的覆盖 → 平台默认；每项是 gjson 路径或查询，取原始 JSON，缺失则不放），调用该账号类型插件的 `BuildUpstreamRequest`（`meta.protocol = openai.responses_ws`、`meta.stream = true`、`meta.model` 为映射后的模型、`attempt` 为该轮的尝试序号），把返回的 `patches` 应用到消息上再发往上游。顺序与 HTTP 路径一致（钩子 → 模型映射 → 插件 patch → 发送）；WebSocket 不做协议转换、资源引用映射，也没有 `streamPath`，这几步不适用。
+- **首轮**：选号时的那次调用（§35）既用于握手（URL、头、建连失败分类与换号照旧），它的 `patches` 也用于首轮消息；为此其 `requestFields` 现在也在引用模型映射之后读取（映射失败仍由该轮报错，不影响换号）。不为首轮再调用一次。
+- **后续轮次**：沿用首轮的账号、连接和建连时加载的账号对象，每轮调用一次，只取 `patches`（以及 `upstream_model`，仅在本轮记录尚未有上游模型时写入记录）；URL、方法、头一律忽略，返回的 URL 与握手不同也**不**重连。
+- **性能**：插件返回空 `patches` 时消息字节不变、不解析、不复制（`applyPatches` 直接返回原切片）；只有非空且确实改变了字节时才对比模型引用。没有 `requestFields` 的路由传空 `fields`。
+- **失败**：后续轮调用失败（gRPC 错误、空响应）或任一轮的 patch 无法应用（`value_json` 非法、路径非法等，全部或全不）时，本轮回一条错误事件（503 `plugin_unavailable`，记录 `error_type = plugin_unavailable`），释放该轮的并发位与预占，连接保持，下一轮照常；首轮在建连成功之后才失败的，上游连接同样保留给下一轮。patch 改动了模型引用（端点与路由的 `modelReferences`，与 HTTP `validatePatches` 相同的检查）时本轮以模型引用错误失败。调用受 `platform_call_timeout_ms` 约束。
+- **兼容**：旧插件（WebSocket 协议返回空 `patches`，如 openai 插件 0.3.x）发往上游的消息与以前逐字节相同，只是每个后续轮多一次 `BuildUpstreamRequest` 调用（它与握手时的调用相同，确定性地成功）。没有 manifest 字段或能力变化，`sdk/manifest/check/corefloor.go` 无需登记：依赖本节的插件（codex）已因 `streamOnly` 要求 `hostCompat ≥ StreamOnlyFirstCore`，本节属于同一个未发布核心（占位 0.1.257）。
+
+**`requestFields` 的取值与大小**：核心对单个字段和字段总和都不设上限（HTTP `dispatch.go` 与 WebSocket 相同），只受请求体/消息大小上限（`maxBodyBytes`，默认 128 MiB，WebSocket 为单条消息）和插件 gRPC 接收上限（默认 4 MiB，`pluginsdk.WithMaxRecvMsgSize` 可调；超过时该次调用失败，HTTP 换号、WebSocket 首轮换号、后续轮报该轮错误）约束。插件应使用只返回所需信息的 gjson 查询，不要索取大字段。
+
+**codex 插件 0.1.1**：
+
+- WebSocket 协议返回与 HTTP 相同的 body patch：`store=false`；字符串 `input` 转成一条 user 消息的数组（空串转 `[]`）；`role:"system"` 的 input 项改成 `role:"developer"`（见下）；`codex_device` 缺 `instructions` 时补 `""`；删除上游不接受的字段。WebSocket 下不包含 stream 相关字段（不删 `stream_options`，也从不设置 `stream`），`chatgpt_siwc` 不删 `previous_response_id`（同一上游连接内可续接）。
+- system → developer（两种账号类型、HTTP 与 WebSocket）：Sign in with ChatGPT 上游拒绝 `role:"system"` 的 input 项。manifest `requestFields` 增加查询 `input.#.[role].#(=="system")#`：`input` 是数组时按项序返回 `["system"]`（角色恰为 `"system"`）或 `[]`（其他角色、无角色、非对象），每项约 3 字节，从不回显其他内容；`input` 是字符串或缺失时字段不存在（字符串由上一条转换成 user 消息，无需改角色）；`input` 是对象时为 `[]`。插件据此为每个 system 项生成 `input.<i>.role` = `"developer"` 的 `OP_SET`，每个请求最多 256 个（每个 patch 在核心是一次整体复制），超出的项保持原样由上游报错。
+- 已知限制：字符串 `input` 的字段 `[input]|#(%"*")` 会回显整段字符串，超过插件 gRPC 接收上限（4 MiB）的字符串输入会使调用失败。
+
+**测试**：`server/internal/gateway/websocket_test.go`——空 patch 时两轮消息逐字节不变且每轮都调用插件；首轮用握手调用的 patch、后续轮各自调用（按该轮 `requestFields`，`instructions` 有无不同、模型映射之后、`meta.protocol = openai.responses_ws`），后续轮返回不同 URL 不重连；首轮 patch 非法与后续轮插件报错都回 503 `plugin_unavailable` 错误事件、记为失败、不发往上游、连接保持且下一轮成功、并发位已释放。`plugins/codex`——WebSocket 两种账号类型的 patch（含 `instructions`、无 stream 字段、保留 `previous_response_id`）、system → developer（HTTP/WS × 两种类型，查询结果经 sjson 应用后的 input、上限 256、各种无需改写的输入）、manifest 的查询结果。

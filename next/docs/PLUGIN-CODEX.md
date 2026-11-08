@@ -1,6 +1,6 @@
 # codex 插件：ChatGPT 账号（Codex 设备码 / Sign in with ChatGPT）
 
-日期：2026-11-08。状态：已实现（插件 0.1.0，需核心 ≥0.1.257，未发布）。核心契约见 CONTRACTS §83。
+日期：2026-11-08。状态：已实现（插件 0.1.1，需核心 ≥0.1.257，未发布）。核心契约见 CONTRACTS §83（WebSocket 每轮 patch 见 §83.6）。
 
 ## 1. 目标与边界
 
@@ -53,7 +53,7 @@
 
 - 目录 `next/plugins/codex`，key `codex`，runtime grpc，能力 `platform.adapter.v1`、`platform.execute.v1`、`platform.websocket.v1`、`http.routes.v1`。
 - 两个账号类型都挂内置 `openai` 平台，`endpoints: ["responses", "responses_websocket"]`（chat 由核心转换成 Responses），`streamOnly: ["openai.responses"]`，`refresh: {}`，`sensitiveFields: ["access_token","refresh_token","id_token"]`，`settingsFields: ["proxy_id"]`，表单 `mode: "native"`、组件 `CodexAuthForm`。
-- `BuildUpstreamRequest`：按账号类型选 URL 和头；patch `store=false`；`codex_device` 缺 `instructions` 时补空串；`chatgpt_siwc` 删除不支持字段；WebSocket 协议换成 `wss` + `GET` + `openai-beta`。
+- `BuildUpstreamRequest`：按账号类型选 URL 和头；patch `store=false`；字符串 `input` 转数组；`role:"system"` 的 input 项改成 `developer`；`codex_device` 缺 `instructions` 时补空串；删除不支持字段；WebSocket 协议换成 `wss` + `GET` + `openai-beta`，并对每轮 `response.create` 消息返回同样的 patch（不含 stream 相关字段，`chatgpt_siwc` 保留 `previous_response_id`；核心每轮应用，CONTRACTS §83.6）。
 - `ClassifyError`：401 → 冷却并提示重新授权（刷新由核心按 `refresh` 声明处理）；429 / `subscription_sharing_usage_limit_exceeded` / `usage_limit_reached` → 冷却（有 `resets_at`/`retry-after` 用之，否则 5 分钟）；403 资格类错误 → 禁用；400 原样返回。
 - 刷新：`BuildRefreshRequest` / `ParseRefreshResponse`，按账号类型选端点和格式；轮换后的 refresh token 一并保存。
 - 管理路由（`scope: admin`，权限 `codex:manage`）：
@@ -74,6 +74,13 @@
 
 ## 6. 实现记录（2026-11-08）
 
-- 核心 §83：`streamOnly`（非流式请求强制上游流式、合成 JSON）；同平台严格转换 `openai.chat → openai.responses`（不能确定等价的参数如 `stop`、`seed`、非 0 罚分、`n>1`、logprobs 返回 400 `unsupported_conversion`）；manifest 校验对用到这两项的插件要求 hostCompat ≥ `StreamOnlyFirstCore`（占位 0.1.257，发布时定号）。
+- 核心 §83：`streamOnly`（非流式请求强制上游流式、合成 JSON）；同平台转换 `openai.chat → openai.responses`（2026-11-08 改为宽松：旧式 functions、custom 工具、allowed_tools、web_search_options 等能等价的都转换；`stop`、`seed`、罚分、logprobs、消息 `name`、未知字段等静默丢弃并在网关 debug 日志记下字段路径；只有 `n>1`、音频输出/输入、空 `messages` 等无法保留含义的返回 400 `unsupported_conversion`；对话中间的 system/developer 消息转成 `developer` 角色。详见 CONTRACTS §83.2）；manifest 校验对用到这两项的插件要求 hostCompat ≥ `StreamOnlyFirstCore`（占位 0.1.257，发布时定号）。
 - 插件：`codex_device` 也删除 Codex 后端已知不接受的字段（`max_output_tokens`、`temperature`、`top_p`、`user`、`metadata`、`stream_options`、`truncation`）；`chatgpt_siwc` 必须有 `client_id`。net 权限只给 `auth.openai.com`（上游与刷新由核心发出）。
-- 已知限制：WebSocket 消息核心不做 patch，客户端需自带 `store:false`（device 还需 `instructions`）；SIWC 下对话中间的 system/developer 消息会被上游拒绝；device 账号无在线模型列表；授权请求不走账号代理；路由要求 `codex:manage` 权限。
+- 已知限制：~~WebSocket 消息核心不做 patch，客户端需自带 `store:false`（device 还需 `instructions`）；SIWC 下对话中间的 system/developer 消息会被上游拒绝；~~（0.1.1 已解决，见下）device 账号无在线模型列表；授权请求不走账号代理；路由要求 `codex:manage` 权限。
+
+## 7. 0.1.1（2026-11-08，用户要求 sup2api 兜住客户端差异）
+
+- 核心 CONTRACTS §83.6：WebSocket 每轮消息都调用插件 `BuildUpstreamRequest` 取 body patch（首轮复用握手那次调用，后续轮只取 patch、忽略 URL/头），在钩子与模型映射之后应用；空 patch 时消息逐字节不变；patch 失败回该轮错误事件、不断开。属于同一未发布核心（占位 0.1.257），`hostCompat` 不变。
+- 插件：WebSocket 返回与 HTTP 相同的 patch（`store=false`、删除不支持字段、device 补 `instructions`、字符串 input 转数组），不含 stream 相关字段，SIWC 保留 `previous_response_id`。客户端不再需要自带 `store:false`/`instructions`。
+- 插件：两种账号类型、HTTP 与 WebSocket 都把 `role:"system"` 的 input 项改成 `role:"developer"`；`requestFields` 新增 `input.#.[role].#(=="system")#`（按项序 `["system"]`/`[]`，每项约 3 字节），据此生成 `input.<i>.role` 的 `OP_SET`，每请求最多 256 个。
+- 仍有限制：字符串 input 字段回显整段字符串，超过插件 gRPC 接收上限（4 MiB）会使调用失败；device 账号无在线模型列表；授权请求不走账号代理；路由要求 `codex:manage` 权限。

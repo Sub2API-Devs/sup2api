@@ -34,3 +34,20 @@ func Prepare(c Converter, body []byte) (Converter, []byte, error) {
 	}
 	return bound, out, nil
 }
+
+// DropReporter is implemented by a prepared converter that leaves out
+// request fields without an equivalent, instead of rejecting them, when
+// their absence keeps the request correct (CONTRACTS §83.2).
+type DropReporter interface {
+	// Dropped lists the request paths left out, sorted.
+	Dropped() []string
+}
+
+// Dropped returns the request paths a prepared converter left out, nil
+// when it reports none.
+func Dropped(c Converter) []string {
+	if d, ok := c.(DropReporter); ok {
+		return d.Dropped()
+	}
+	return nil
+}

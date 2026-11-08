@@ -28,6 +28,12 @@ import (
 // upstream WebSocket and account the first turn chose, metered with the
 // usage.sse rules (matched by the message "type") and recorded and billed on
 // its own, exactly like a streaming HTTP request.
+//
+// Every turn's message also goes through the account type's
+// BuildUpstreamRequest (CONTRACTS §83.6): the first turn's call opens the
+// upstream connection (URL, headers) and gives that turn's body patches; a
+// later turn's call only gives its patches. They are applied after the hooks
+// and the model mappings, as on HTTP.
 
 // wsLimits are the session limits. They match the defaults of the session
 // mode this was ported from and are fields only so tests can shorten them.
@@ -122,6 +128,10 @@ type wsSession struct {
 	session         string
 	upIn            chan wsMessage
 	quotaGeneration int64
+	// handshakePatches are the body patches the handshake's
+	// BuildUpstreamRequest returned for the first turn's message; that turn
+	// takes them, later turns ask the plugin again.
+	handshakePatches []*pluginv1.BodyPatch
 }
 
 type wsMessage struct {
@@ -396,7 +406,8 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		return reject(cl, e)
 	}
 	var e *gwError
-	if s.up == nil {
+	connected := s.up == nil // this turn opens the upstream connection
+	if connected {
 		releaseAccount, e = s.connect(ctx, cl)
 	} else {
 		releaseAccount, e = s.reuse(ctx, cl)
@@ -427,6 +438,18 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 	payload, err = cl.mapReferencedModels(payload, s.ref, s.rt)
 	if err != nil {
 		return reject(cl, invalidModelReference(err.Error()))
+	}
+	// The plugin's body patches for this message (CONTRACTS §83.6): the
+	// handshake's for the turn that opened the connection, a fresh call for
+	// any other. A turn they cannot be had or applied for fails on its own.
+	var patches []*pluginv1.BodyPatch
+	if connected {
+		patches, s.handshakePatches = s.handshakePatches, nil
+	} else if patches, e = s.turnPatches(ctx, cl, payload); e != nil {
+		return reject(cl, e)
+	}
+	if payload, e = cl.applyTurnPatches(s.rt, payload, patches); e != nil {
+		return reject(cl, e)
 	}
 	if failure := cl.guardAvailability(ctx, s.ref); failure != nil {
 		return reject(cl, failure)
@@ -557,12 +580,13 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	if upModel != cl.model && rt.modelPath != "" {
 		body, _ = sjson.SetBytes(body, rt.modelPath, upModel)
 	}
-	fields := map[string]string{}
-	for _, p := range rt.requestFields {
-		if r := getJSON(body, p); r != "" {
-			fields[p] = r
-		}
+	// The fields describe the message as it goes upstream, as on HTTP and
+	// in later turns: after the referenced models' mapping too. A mapping
+	// that fails is the turn's to report (begin), not this account's.
+	if mapped, err := cl.mapReferencedModels(body, ref, rt); err == nil {
+		body = mapped
 	}
+	fields := requestFieldValues(body, rt.requestFields)
 	cl.env = cl.environment(&acc.AccountRef)
 	meta := cl.metaFor(rt)
 	meta.Model = upModel
@@ -640,9 +664,86 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	}
 	up.SetReadLimit(s.g.ws.upstreamRead)
 	s.up, s.rt, s.pacct = up, rt, pacct
+	s.handshakePatches = built.GetPatches()
 	s.upIn = make(chan wsMessage, 1)
 	go s.read(ctx, up, s.upIn)
 	return attemptResult{kind: attemptDone}
+}
+
+// requestFieldValues reads the route's requestFields (gjson paths or
+// queries) from body: the raw JSON of each one present, nothing for the
+// absent ones. Like HTTP, the core caps neither a value nor their sum; the
+// message size limit and the plugin's gRPC receive limit bound them.
+func requestFieldValues(body []byte, paths []string) map[string]string {
+	fields := make(map[string]string, len(paths))
+	for _, p := range paths {
+		if r := getJSON(body, p); r != "" {
+			fields[p] = r
+		}
+	}
+	return fields
+}
+
+// turnPatches asks the session's plugin for the body patches of a later
+// turn's message (CONTRACTS §83.6): BuildUpstreamRequest with the turn's
+// request fields, meta.protocol the WebSocket protocol, the account loaded
+// when the connection opened. Only the patches (and the upstream model, for
+// the record) are used; the URL and headers already opened the connection,
+// and a different URL does not open another.
+func (s *wsSession) turnPatches(ctx context.Context, cl *call, payload []byte) ([]*pluginv1.BodyPatch, *gwError) {
+	rt := s.rt
+	if rt.binding.Client == nil {
+		return nil, fromCore(core.ErrPluginUnavailable.WithMessage("account type not enabled"), errTypePluginUnavailable)
+	}
+	meta := cl.metaFor(rt)
+	meta.Model = s.ref.MapModel(cl.model)
+	bctx, cancel := context.WithTimeout(ctx, cl.gw.platformTimeout())
+	built, err := rt.binding.Client.BuildUpstreamRequest(bctx, &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: s.pacct,
+		Fields: requestFieldValues(payload, rt.requestFields), InboundHeaders: cl.passHeaders(rt.passHeaders),
+		Attempt: int32(cl.rec.Attempts - 1)})
+	cancel()
+	if ctx.Err() != nil {
+		return nil, canceledErr()
+	}
+	if err == nil && built == nil {
+		err = errors.New("empty response")
+	}
+	if err != nil {
+		slog.WarnContext(ctx, "gateway: websocket turn patches failed", "request_id", cl.rid, "plugin", rt.binding.Plugin.Key,
+			"account", s.ref.ID, "err", err)
+		return nil, fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)
+	}
+	if up := built.GetUpstreamModel(); up != "" && up != cl.model && cl.rec.UpstreamModel == "" {
+		cl.rec.UpstreamModel = up
+	}
+	return built.GetPatches(), nil
+}
+
+// applyTurnPatches applies the plugin's body patches to a turn's message.
+// No patch leaves the message as it is (same bytes, nothing parsed); patches
+// that cannot be applied, or that change a model reference, fail the turn,
+// as they fail an HTTP attempt (validatePatches). WebSocket messages carry
+// no resource references and are not converted, so those guards do not
+// apply here.
+func (c *call) applyTurnPatches(rt *typeRoute, payload []byte, patches []*pluginv1.BodyPatch) ([]byte, *gwError) {
+	if len(patches) == 0 {
+		return payload, nil
+	}
+	out, err := applyPatches(payload, patches)
+	if err != nil {
+		return nil, fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)
+	}
+	if bytes.Equal(out, payload) {
+		return payload, nil
+	}
+	before, after := c.rootFor(payload), gjson.ParseBytes(out)
+	if err := modelReferencePatches(before, after, c.ep.Request.ModelReferences); err != nil {
+		return nil, invalidModelReference(err.Error())
+	}
+	if err := modelReferencePatches(before, after, rt.modelReferences); err != nil {
+		return nil, invalidModelReference(err.Error())
+	}
+	return out, nil
 }
 
 // checkURL applies the gateway's SSRF guard to the ws(s) address the plugin

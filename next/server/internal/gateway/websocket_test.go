@@ -122,15 +122,37 @@ func (u *wsUpstream) snapshot() (keys, messages []string) {
 type wsPlatform struct {
 	*fakePlatform
 	up *wsUpstream
+	// wsPatch answers the body patches of a call (CONTRACTS §83.6); nil
+	// returns none, like the openai plugin.
+	wsPatch func(in *pluginv1.BuildUpstreamRequestRequest) ([]*pluginv1.BodyPatch, error)
+	// laterURL, when set, is the URL every call after the first answers.
+	laterURL string
 }
 
 func (p *wsPlatform) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
 	p.mu.Lock()
 	p.builds = append(p.builds, in)
+	n, patch := len(p.builds), p.wsPatch
 	p.mu.Unlock()
 	key := gjson.Get(in.GetAccount().GetCredentialsJson(), "api_key").String()
-	return &pluginv1.BuildUpstreamRequestResponse{Method: "GET", Url: "ws" + strings.TrimPrefix(p.up.srv.URL, "http") + "/v1/responses",
-		Headers: map[string]string{"authorization": "Bearer " + key, "openai-beta": "responses_websockets=2026-02-06"}}, nil
+	resp := &pluginv1.BuildUpstreamRequestResponse{Method: "GET", Url: "ws" + strings.TrimPrefix(p.up.srv.URL, "http") + "/v1/responses",
+		Headers: map[string]string{"authorization": "Bearer " + key, "openai-beta": "responses_websockets=2026-02-06"}}
+	if n > 1 && p.laterURL != "" {
+		resp.Url = p.laterURL
+	}
+	if patch != nil {
+		var err error
+		if resp.Patches, err = patch(in); err != nil {
+			return nil, err
+		}
+	}
+	return resp, nil
+}
+
+func (p *wsPlatform) buildCalls() []*pluginv1.BuildUpstreamRequestRequest {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]*pluginv1.BuildUpstreamRequestRequest(nil), p.builds...)
 }
 
 type wsEnv struct {
@@ -280,8 +302,16 @@ func TestWebSocketTurnsShareOneUpstreamAndAreBilledEach(t *testing.T) {
 	if gjson.Get(msgs[0], "type").String() != "response.create" || gjson.Get(msgs[0], "store").Bool() {
 		t.Fatalf("message not relayed as sent: %s", msgs[0])
 	}
-	if b := e.wsPlat.builds; len(b) != 1 || b[0].GetMeta().GetProtocol() != "openai.responses_ws" || !b[0].GetMeta().GetStream() {
+	// The handshake's call, then one call per later turn for its patches
+	// (CONTRACTS §83.6).
+	b := e.wsPlat.buildCalls()
+	if len(b) != 2 {
 		t.Fatalf("plugin asked %d times: %v", len(b), b)
+	}
+	for _, in := range b {
+		if in.GetMeta().GetProtocol() != "openai.responses_ws" || !in.GetMeta().GetStream() {
+			t.Fatalf("plugin call: %v", in)
+		}
 	}
 	// Every slot is free between turns.
 	if n, _ := e.slots.InUse(context.Background(), "account", 11); n != 0 {
@@ -548,5 +578,134 @@ func TestWebSocketUpstreamOutlivesTheHandshakeAndMapsModels(t *testing.T) {
 	keys, msgs := e.wsUp.snapshot()
 	if len(keys) != 1 || len(msgs) != 2 || gjson.Get(msgs[1], "model").String() != "gpt-5-upstream" {
 		t.Fatalf("upstream connections %v, messages %v", keys, msgs)
+	}
+}
+
+// sendRaw sends the message bytes as they are.
+func (c *wsClient) sendRaw(msg string) {
+	c.t.Helper()
+	if err := c.conn.Write(context.Background(), websocket.MessageText, []byte(msg)); err != nil {
+		c.t.Fatal(err)
+	}
+}
+
+// A plugin that returns no patch leaves every message byte for byte as the
+// client sent it, although it is asked every turn.
+func TestWebSocketNoPatchesRelayMessagesUnchanged(t *testing.T) {
+	e := newWSEnv(t)
+	c := e.mustDial()
+	sent := []string{
+		`{"type":"response.create",  "model":"` + wsModel + `", "input":"one","store":true}`,
+		`{ "model":"` + wsModel + `","type":"response.create","input":"two","temperature":0.30}`,
+	}
+	for _, m := range sent {
+		c.sendRaw(m)
+		c.until("response.completed")
+		if r := e.record(); !r.Success {
+			t.Fatalf("turn: %+v", r)
+		}
+	}
+	if _, msgs := e.wsUp.snapshot(); len(msgs) != 2 || msgs[0] != sent[0] || msgs[1] != sent[1] {
+		t.Fatalf("messages changed: %q", msgs)
+	}
+	if b := e.wsPlat.buildCalls(); len(b) != 2 {
+		t.Fatalf("plugin calls: %d", len(b))
+	}
+}
+
+// Every turn's message is patched as the plugin says for that message: the
+// first turn with the handshake's patches, later turns with their own call,
+// after the account's model mapping. A later call's different URL does not
+// open another connection.
+func TestWebSocketPluginPatchesEveryTurn(t *testing.T) {
+	e := newWSEnv(t)
+	const hasInstructions = "[instructions]|#"
+	e.gen.accountTypes[len(e.gen.accountTypes)-1].Type.Platforms[0].RequestFields = []string{"model", hasInstructions}
+	e.accounts.mu.Lock()
+	e.accounts.accounts[11].ModelMapping = map[string]string{wsModel: "gpt-5-upstream"}
+	e.accounts.mu.Unlock()
+	e.wsPlat.laterURL = "ws://127.0.0.1:1/elsewhere"
+	e.wsPlat.wsPatch = func(in *pluginv1.BuildUpstreamRequestRequest) ([]*pluginv1.BodyPatch, error) {
+		ps := []*pluginv1.BodyPatch{
+			{Op: pluginv1.BodyPatch_OP_SET, Path: "store", ValueJson: "false"},
+			{Op: pluginv1.BodyPatch_OP_DELETE, Path: "temperature"},
+		}
+		if in.GetFields()[hasInstructions] == "0" {
+			ps = append(ps, &pluginv1.BodyPatch{Op: pluginv1.BodyPatch_OP_SET, Path: "instructions", ValueJson: `""`})
+		}
+		return ps, nil
+	}
+	c := e.mustDial()
+	c.send(map[string]any{"type": "response.create", "model": wsModel, "input": "one", "store": true, "temperature": 0.5})
+	c.until("response.completed")
+	c.send(map[string]any{"type": "response.create", "model": wsModel, "input": "two", "store": true, "instructions": "keep"})
+	c.until("response.completed")
+	for i := 0; i < 2; i++ {
+		if r := e.record(); !r.Success || r.UpstreamModel != "gpt-5-upstream" {
+			t.Fatalf("turn %d: %+v", i, r)
+		}
+	}
+	keys, msgs := e.wsUp.snapshot()
+	if len(keys) != 1 || len(msgs) != 2 {
+		t.Fatalf("upstream connections %v, messages %v", keys, msgs)
+	}
+	for i, m := range msgs {
+		if gjson.Get(m, "store").Raw != "false" || gjson.Get(m, "temperature").Exists() || gjson.Get(m, "model").String() != "gpt-5-upstream" ||
+			gjson.Get(m, "type").String() != "response.create" {
+			t.Fatalf("message %d not patched: %s", i, m)
+		}
+	}
+	if gjson.Get(msgs[0], "instructions").Raw != `""` || gjson.Get(msgs[1], "instructions").String() != "keep" {
+		t.Fatalf("instructions: %s / %s", msgs[0], msgs[1])
+	}
+	b := e.wsPlat.buildCalls()
+	if len(b) != 2 {
+		t.Fatalf("plugin calls: %d", len(b))
+	}
+	for i, want := range []string{"0", "1"} {
+		f := b[i].GetFields()
+		if f[hasInstructions] != want || f["model"] != `"gpt-5-upstream"` || b[i].GetMeta().GetProtocol() != "openai.responses_ws" ||
+			b[i].GetMeta().GetModel() != "gpt-5-upstream" || b[i].GetAccount().GetId() != 11 {
+			t.Fatalf("call %d: fields %v meta %v", i, f, b[i].GetMeta())
+		}
+	}
+}
+
+// Patches that cannot be had or applied fail their turn with an error event;
+// the connection, opened by the first of them, serves the next turn.
+func TestWebSocketTurnPatchFailureKeepsTheConnection(t *testing.T) {
+	e := newWSEnv(t)
+	e.gen.accountTypes[len(e.gen.accountTypes)-1].Type.Platforms[0].RequestFields = []string{"input"}
+	e.wsPlat.wsPatch = func(in *pluginv1.BuildUpstreamRequestRequest) ([]*pluginv1.BodyPatch, error) {
+		switch in.GetFields()["input"] {
+		case `"bad-patch"`:
+			return []*pluginv1.BodyPatch{{Op: pluginv1.BodyPatch_OP_SET, Path: "store", ValueJson: "{not json"}}, nil
+		case `"plugin-down"`:
+			return nil, errors.New("plugin crashed")
+		}
+		return []*pluginv1.BodyPatch{{Op: pluginv1.BodyPatch_OP_SET, Path: "store", ValueJson: "false"}}, nil
+	}
+	c := e.mustDial()
+	for _, input := range []string{"bad-patch", "plugin-down"} {
+		c.send(create(wsModel, input))
+		ev := c.until("error")
+		if ev[0].Get("status").Int() != http.StatusServiceUnavailable || ev[0].Get("error.code").String() != "plugin_unavailable" {
+			t.Fatalf("%s: %v", input, ev)
+		}
+		if r := e.record(); r.Success || r.ErrorType != errTypePluginUnavailable || r.AccountID == nil || *r.AccountID != 11 {
+			t.Fatalf("%s record: %+v", input, r)
+		}
+	}
+	c.send(map[string]any{"type": "response.create", "model": wsModel, "input": "ok", "store": true})
+	c.until("response.completed")
+	if r := e.record(); !r.Success {
+		t.Fatalf("turn after failed patches: %+v", r)
+	}
+	keys, msgs := e.wsUp.snapshot()
+	if len(keys) != 1 || len(msgs) != 1 || gjson.Get(msgs[0], "store").Raw != "false" {
+		t.Fatalf("upstream connections %v, messages %v", keys, msgs)
+	}
+	if n, _ := e.slots.InUse(context.Background(), "account", 11); n != 0 {
+		t.Fatalf("account slot held after failed turns: %d", n)
 	}
 }

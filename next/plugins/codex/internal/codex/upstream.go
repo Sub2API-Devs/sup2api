@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -19,11 +20,23 @@ import (
 //   - FieldHasInstructions is 1 when the body has an instructions field,
 //     0 when not (codex_device only: the Codex backend requires one);
 //   - FieldStringInput is the input when it is a JSON string, and absent
-//     when it is an array (both upstreams require an array).
+//     when it is an array (both upstreams require an array);
+//   - FieldSystemRoles has one entry per item of an array input, in order:
+//     ["system"] for an item whose role is "system", [] for any other item
+//     (another role, no role, not an object). It is absent when the input is
+//     not an array. Only "system" is ever echoed, so the field stays at about
+//     three bytes per item whatever the items hold.
 const (
 	FieldHasInstructions = "[instructions]|#"
 	FieldStringInput     = `[input]|#(%"*")`
+	FieldSystemRoles     = `input.#.[role].#(=="system")#`
 )
+
+// maxRoleRewrites caps the role patches of one request. Each patch is a copy
+// of the body in the core, so a body made of thousands of system items would
+// cost thousands of copies; real requests carry a few. Items past the cap are
+// left as they are (the upstream answers its own error).
+const maxRoleRewrites = 256
 
 // unsupportedDevice are body fields the ChatGPT Codex backend rejects
 // ("Unsupported parameter"); they are removed, not reinterpreted.
@@ -37,8 +50,33 @@ var unsupportedDevice = []string{
 // unsupportedSIWC are body fields Sign in with ChatGPT's Responses API does
 // not accept (docs/PLUGIN-CODEX.md §2.2.6). previous_response_id is only
 // refused over HTTP; in the WebSocket mode it continues a turn on the same
-// connection (and WebSocket messages are never patched anyway).
+// connection, so WebSocket messages keep it (httpOnlyUnsupported).
 var unsupportedSIWC = []string{"temperature", "top_p", "max_output_tokens", "metadata", "user", "truncation", "previous_response_id"}
+
+// httpOnlyUnsupported are fields of the lists above that a WebSocket message
+// keeps: stream fields (a response.create has no stream; the plugin leaves
+// stream settings alone there) and previous_response_id (valid within one
+// upstream connection).
+var httpOnlyUnsupported = map[string]bool{"stream_options": true, "previous_response_id": true}
+
+// unsupportedFields are the fields removed from a request of the account
+// type, over HTTP or in a WebSocket message.
+func unsupportedFields(typ string, ws bool) []string {
+	list := unsupportedSIWC
+	if typ == TypeDevice {
+		list = unsupportedDevice
+	}
+	if !ws {
+		return list
+	}
+	out := make([]string, 0, len(list))
+	for _, f := range list {
+		if !httpOnlyUnsupported[f] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
 
 // headers are the upstream headers of an account: the bearer token, the
 // ChatGPT account (codex_device) and sup2api's own, truthful identification.
@@ -99,14 +137,15 @@ func userMessage(text string) string {
 // BuildUpstreamRequest implements pluginsdk.Platform.
 //
 // HTTP (openai.responses): POST to the account type's Responses endpoint
-// with store=false, input made an array, and the fields the upstream refuses
-// removed; codex_device also gets instructions "" when the body has none.
-// stream is not touched: both upstreams only stream, and the core turns a
-// non-streaming request into a streaming one for account types that declare
-// streamOnly (CONTRACTS §83).
+// with the body patches of bodyPatches. stream is not touched: both
+// upstreams only stream, and the core turns a non-streaming request into a
+// streaming one for account types that declare streamOnly (CONTRACTS §83).
 //
-// WebSocket (openai.responses_ws): GET on the wss URL with the beta header;
-// no body, so no patches.
+// WebSocket (openai.responses_ws): GET on the wss URL with the beta header.
+// The core calls this for every turn's response.create message (the first
+// call also opens the connection, CONTRACTS §83.6), so the same patches are
+// returned for that message, without the stream fields and keeping
+// previous_response_id.
 func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstreamRequestRequest) (*pluginv1.BuildUpstreamRequestResponse, error) {
 	typ, c, err := accountCredentials(in.GetAccount())
 	if err != nil {
@@ -118,53 +157,92 @@ func (p *Plugin) BuildUpstreamRequest(_ context.Context, in *pluginv1.BuildUpstr
 		Headers:       p.headers(typ, c),
 		UpstreamModel: pluginsdk.RequestModel(in),
 	}
+	ws := false
 	switch proto := in.GetMeta().GetProtocol(); proto {
 	case ProtocolResponsesWS:
-		return webSocketRequest(resp)
+		if err := webSocketRequest(resp); err != nil {
+			return nil, err
+		}
+		ws = true
 	case ProtocolResponses:
+		resp.Headers["accept"] = "text/event-stream"
+		resp.Headers["content-type"] = "application/json"
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unsupported upstream protocol %q", proto)
 	}
-	resp.Headers["accept"] = "text/event-stream"
-	resp.Headers["content-type"] = "application/json"
-	fields := in.GetFields()
-	resp.Patches = append(resp.Patches, set("store", "false"))
+	resp.Patches = bodyPatches(typ, ws, in.GetFields())
+	return resp, nil
+}
+
+// bodyPatches make a Responses body (an HTTP request or a WebSocket
+// response.create message) one the account type's upstream accepts:
+//
+//   - store=false (both upstreams refuse stored responses);
+//   - a string input becomes an array holding one user message (both
+//     require an array; an empty string becomes []);
+//   - input items with role "system" get role "developer" (Sign in with
+//     ChatGPT refuses system items, asking for instructions or developer
+//     messages; the Codex backend is treated the same);
+//   - codex_device: instructions "" when the body has none (the Codex
+//     backend requires the field);
+//   - the fields the upstream refuses are removed (unsupportedFields).
+func bodyPatches(typ string, ws bool, fields map[string]string) []*pluginv1.BodyPatch {
+	patches := []*pluginv1.BodyPatch{set("store", "false")}
 	if raw, ok := fields[FieldStringInput]; ok && raw != "" {
 		var s string
 		if json.Unmarshal([]byte(raw), &s) == nil {
 			if strings.TrimSpace(s) == "" {
-				resp.Patches = append(resp.Patches, set("input", "[]"))
+				patches = append(patches, set("input", "[]"))
 			} else {
-				resp.Patches = append(resp.Patches, set("input", userMessage(s)))
+				patches = append(patches, set("input", userMessage(s)))
 			}
 		}
 	}
-	unsupported := unsupportedSIWC
-	if typ == TypeDevice {
-		if fields[FieldHasInstructions] == "0" {
-			resp.Patches = append(resp.Patches, set("instructions", `""`))
+	patches = append(patches, systemToDeveloper(fields[FieldSystemRoles])...)
+	if typ == TypeDevice && fields[FieldHasInstructions] == "0" {
+		patches = append(patches, set("instructions", `""`))
+	}
+	for _, f := range unsupportedFields(typ, ws) {
+		patches = append(patches, del(f))
+	}
+	return patches
+}
+
+// systemToDeveloper turns the FieldSystemRoles value into input.<i>.role
+// patches, one per system item, at most maxRoleRewrites.
+func systemToDeveloper(raw string) []*pluginv1.BodyPatch {
+	if raw == "" {
+		return nil
+	}
+	var items [][]string
+	if json.Unmarshal([]byte(raw), &items) != nil {
+		return nil
+	}
+	var out []*pluginv1.BodyPatch
+	for i, roles := range items {
+		if len(roles) == 1 && roles[0] == "system" {
+			out = append(out, set("input."+strconv.Itoa(i)+".role", `"developer"`))
+			if len(out) == maxRoleRewrites {
+				break
+			}
 		}
-		unsupported = unsupportedDevice
 	}
-	for _, f := range unsupported {
-		resp.Patches = append(resp.Patches, del(f))
-	}
-	return resp, nil
+	return out
 }
 
 // webSocketRequest turns the HTTP request into the WebSocket handshake.
-func webSocketRequest(resp *pluginv1.BuildUpstreamRequestResponse) (*pluginv1.BuildUpstreamRequestResponse, error) {
+func webSocketRequest(resp *pluginv1.BuildUpstreamRequestResponse) error {
 	switch {
 	case strings.HasPrefix(resp.Url, "https://"):
 		resp.Url = "wss://" + strings.TrimPrefix(resp.Url, "https://")
 	case strings.HasPrefix(resp.Url, "http://"):
 		resp.Url = "ws://" + strings.TrimPrefix(resp.Url, "http://")
 	default:
-		return nil, status.Errorf(codes.Internal, "upstream URL %q has no http(s) scheme", resp.Url)
+		return status.Errorf(codes.Internal, "upstream URL %q has no http(s) scheme", resp.Url)
 	}
 	resp.Method = "GET"
 	resp.Headers["openai-beta"] = WebSocketBeta
-	return resp, nil
+	return nil
 }
 
 // Execute implements pluginsdk.Executor with the shared SDK flow: build the

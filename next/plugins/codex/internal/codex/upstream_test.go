@@ -2,13 +2,16 @@ package codex
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -169,11 +172,47 @@ func TestBuildUpstreamRequestWebSocket(t *testing.T) {
 		}
 		hd := r.GetHeaders()
 		if r.GetMethod() != "GET" || r.GetUrl() != tc.url || hd["openai-beta"] != WebSocketBeta || hd["user-agent"] != UserAgent ||
-			hd["originator"] != Originator || hd["content-type"] != "" || hd["accept"] != "" || len(r.GetPatches()) != 0 {
-			t.Fatalf("%s: %s %s %v patches=%v", tc.typ, r.GetMethod(), r.GetUrl(), hd, r.GetPatches())
+			hd["originator"] != Originator || hd["content-type"] != "" || hd["accept"] != "" {
+			t.Fatalf("%s: %s %s %v", tc.typ, r.GetMethod(), r.GetUrl(), hd)
 		}
 		if (hd["chatgpt-account-id"] == "acct-1") != (tc.typ == TypeDevice) {
 			t.Fatalf("%s account header = %q", tc.typ, hd["chatgpt-account-id"])
+		}
+		// Every turn's message gets the HTTP patches (CONTRACTS §83.6),
+		// without stream fields and keeping previous_response_id.
+		sets, dels := patchMap(r)
+		if sets["store"] != "false" || len(sets["input"]) == 0 {
+			t.Fatalf("%s ws sets = %v", tc.typ, sets)
+		}
+		if _, ok := sets["instructions"]; ok != (tc.typ == TypeDevice) {
+			t.Fatalf("%s ws instructions = %v", tc.typ, sets)
+		}
+		for path := range sets {
+			if strings.HasPrefix(path, "stream") {
+				t.Fatalf("%s ws patches a stream field: %v", tc.typ, sets)
+			}
+		}
+		for _, d := range dels {
+			if strings.HasPrefix(d, "stream") || d == "previous_response_id" {
+				t.Fatalf("%s ws deletes %s: %v", tc.typ, d, dels)
+			}
+		}
+		want := unsupportedSIWC
+		if tc.typ == TypeDevice {
+			want = unsupportedDevice
+		}
+		if len(dels) != len(want)-countHTTPOnly(want) || !slices.Contains(dels, "temperature") {
+			t.Fatalf("%s ws deletes = %v", tc.typ, dels)
+		}
+		// The same body over HTTP deletes those fields too.
+		r, err = h.Platform.BuildUpstreamRequest(context.Background(), &pluginv1.BuildUpstreamRequestRequest{
+			Meta: &pluginv1.RequestMeta{Protocol: ProtocolResponses, Model: "gpt-5.4"}, Account: account(tc.typ, tc.creds),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, httpDels := patchMap(r); !slices.Equal(httpDels, sorted(want)) {
+			t.Fatalf("%s http deletes = %v", tc.typ, httpDels)
 		}
 	}
 	// A test server root keeps its scheme family.
@@ -359,5 +398,81 @@ func TestIdentity(t *testing.T) {
 	}
 	if parseIdentity("not.a.jwt!", "x") != (identity{}) {
 		t.Fatal("garbage token must yield nothing")
+	}
+}
+
+func countHTTPOnly(list []string) int {
+	n := 0
+	for _, f := range list {
+		if httpOnlyUnsupported[f] {
+			n++
+		}
+	}
+	return n
+}
+
+// System input items become developer items for both account types, over
+// HTTP and in WebSocket messages; the patch paths come from the roles field
+// as the core reads it (gjson over the body) and apply as the core applies
+// them (sjson).
+func TestSystemItemsBecomeDeveloper(t *testing.T) {
+	h := startPlugin(t, NewWithEndpoints(DefaultEndpoints))
+	body := `{"model":"gpt-5.4","input":[{"role":"system","content":"be brief"},{"type":"function_call","call_id":"c","name":"f","arguments":"{}"},` +
+		`{"role":"user","content":"hi"},{"type":"message","role":"system","content":[{"type":"input_text","text":"x"}]},{"role":"developer","content":"d"},"odd",{"role":{"nested":"system"}}]}`
+	roles := gjson.Get(body, FieldSystemRoles).Raw
+	if roles != `[["system"],[],[],["system"],[],[],[]]` {
+		t.Fatalf("roles field = %s", roles)
+	}
+	for _, typ := range []string{TypeDevice, TypeSIWC} {
+		for _, proto := range []string{ProtocolResponses, ProtocolResponsesWS} {
+			creds := deviceCreds
+			if typ == TypeSIWC {
+				creds = siwcCreds
+			}
+			r, err := h.Platform.BuildUpstreamRequest(context.Background(), &pluginv1.BuildUpstreamRequestRequest{
+				Meta: &pluginv1.RequestMeta{Protocol: proto, Model: "gpt-5.4"}, Account: account(typ, creds),
+				Fields: map[string]string{"model": `"gpt-5.4"`, FieldHasInstructions: "1", FieldSystemRoles: roles},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			sets, _ := patchMap(r)
+			if sets["input.0.role"] != `"developer"` || sets["input.3.role"] != `"developer"` {
+				t.Fatalf("%s %s sets = %v", typ, proto, sets)
+			}
+			out := body
+			for _, p := range r.GetPatches() {
+				if p.GetOp() == pluginv1.BodyPatch_OP_SET {
+					out, err = sjson.SetRaw(out, p.GetPath(), p.GetValueJson())
+				} else {
+					out, err = sjson.Delete(out, p.GetPath())
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			got := gjson.Get(out, "input.#.role").Raw
+			if got != `["developer","user","developer","developer",{"nested":"system"}]` || gjson.Get(out, "input.1.type").String() != "function_call" ||
+				gjson.Get(out, "input.5").String() != "odd" || gjson.Get(out, "input.0.content").String() != "be brief" {
+				t.Fatalf("%s %s patched input = %s", typ, proto, gjson.Get(out, "input").Raw)
+			}
+		}
+	}
+	// Absent (string or missing input), malformed or system-free fields
+	// patch no role.
+	for _, raw := range []string{"", "[]", `[[],[]]`, `{}`, `"system"`, `[["user"]]`} {
+		if ps := systemToDeveloper(raw); len(ps) != 0 {
+			t.Errorf("systemToDeveloper(%s) = %v", raw, ps)
+		}
+	}
+	for _, b := range []string{`{"input":"system"}`, `{}`, `{"input":{"role":"system"}}`} {
+		if ps := systemToDeveloper(gjson.Get(b, FieldSystemRoles).Raw); len(ps) != 0 {
+			t.Errorf("%s: %v", b, ps)
+		}
+	}
+	// At most maxRoleRewrites patches.
+	many := "[" + strings.TrimSuffix(strings.Repeat(`["system"],`, maxRoleRewrites+10), ",") + "]"
+	if ps := systemToDeveloper(many); len(ps) != maxRoleRewrites || ps[len(ps)-1].GetPath() != fmt.Sprintf("input.%d.role", maxRoleRewrites-1) {
+		t.Fatalf("capped patches = %d", len(ps))
 	}
 }

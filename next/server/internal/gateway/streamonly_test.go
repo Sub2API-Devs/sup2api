@@ -646,6 +646,37 @@ func TestSamePlatformChatWithoutStreamOnly(t *testing.T) {
 	}
 }
 
+// Chat fields without a Responses equivalent whose absence keeps the
+// request correct are left out (CONTRACTS §83.2): non-streaming and
+// streaming requests are served and the upstream body has none of them.
+func TestSamePlatformChatDropsUnconvertible(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		e, _, up := sameChatEnv(t, openAIStreamOnly())
+		b := map[string]any{"model": testModel, "stream": stream, "stop": []any{"\n"}, "seed": 7, "presence_penalty": 0.5,
+			"max_tokens": 10, "max_completion_tokens": 20, "made_up": true,
+			"messages": []any{map[string]any{"role": "user", "name": "bob", "content": "hi"}}}
+		r := e.do("/v1/chat/completions", b, map[string]string{"authorization": "Bearer " + testKey, "x-api-key": ""})
+		if r.status != 200 || !strings.Contains(string(r.body), "hello") {
+			t.Fatalf("stream=%v response: %d %s", stream, r.status, r.body)
+		}
+		if stream != strings.HasPrefix(r.header.Get("Content-Type"), "text/event-stream") {
+			t.Fatalf("stream=%v content type %q", stream, r.header.Get("Content-Type"))
+		}
+		wire := gjson.ParseBytes(up.last())
+		for _, absent := range []string{"stop", "seed", "presence_penalty", "max_tokens", "max_completion_tokens", "made_up", "input.0.name"} {
+			if wire.Get(absent).Exists() {
+				t.Errorf("stream=%v: %s sent upstream: %s", stream, absent, up.last())
+			}
+		}
+		if wire.Get("max_output_tokens").Int() != 20 || wire.Get("input.0.content.0.text").String() != "hi" || !wire.Get("stream").Bool() {
+			t.Errorf("stream=%v upstream body %s", stream, up.last())
+		}
+		if rec := e.record(); !rec.Success || rec.Stream != stream || rec.UpstreamProtocol != "openai.responses" {
+			t.Errorf("stream=%v record %+v", stream, rec)
+		}
+	}
+}
+
 // A chat field without a Responses equivalent is a 400 naming the field;
 // nothing goes upstream.
 func TestSamePlatformChatRejectsUnconvertible(t *testing.T) {

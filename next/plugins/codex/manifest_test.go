@@ -101,9 +101,9 @@ func TestManifestShape(t *testing.T) {
 			!slices.Equal(ap.StreamOnly, []string{codex.ProtocolResponses}) || len(ap.PassHeaders) != 0 {
 			t.Errorf("%s platform = %+v", at.ID, ap)
 		}
-		wantFields := []string{"model", codex.FieldStringInput}
+		wantFields := []string{"model", codex.FieldStringInput, codex.FieldSystemRoles}
 		if at.ID == codex.TypeDevice {
-			wantFields = []string{"model", codex.FieldHasInstructions, codex.FieldStringInput}
+			wantFields = []string{"model", codex.FieldHasInstructions, codex.FieldStringInput, codex.FieldSystemRoles}
 		}
 		if !slices.Equal(ap.RequestFields, wantFields) {
 			t.Errorf("%s requestFields = %v, want %v", at.ID, ap.RequestFields, wantFields)
@@ -120,6 +120,11 @@ func TestManifestShape(t *testing.T) {
 		{`{"input":"hello"}`, codex.FieldStringInput, `"hello"`},
 		{`{"input":[{"role":"user","content":"hello"}]}`, codex.FieldStringInput, ""},
 		{`{}`, codex.FieldStringInput, ""},
+		{`{"input":[{"role":"system","content":"s"},{"type":"function_call"},{"role":"user","content":"u"}]}`, codex.FieldSystemRoles, `[["system"],[],[]]`},
+		{`{"input":[{"role":"user","content":"` + strings.Repeat("x", 1000) + `"}]}`, codex.FieldSystemRoles, `[[]]`},
+		{`{"input":"system"}`, codex.FieldSystemRoles, ""},
+		{`{"input":{"role":"system"}}`, codex.FieldSystemRoles, `[]`}, // not an array: no item to patch
+		{`{}`, codex.FieldSystemRoles, ""},
 	} {
 		if got := gjson.Get(tc.body, tc.query).Raw; got != tc.want {
 			t.Errorf("gjson(%s, %s) = %q, want %q", tc.body, tc.query, got, tc.want)

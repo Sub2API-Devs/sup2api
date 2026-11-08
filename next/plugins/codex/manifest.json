@@ -6,7 +6,7 @@
     "en": "Serves /v1/responses (including its WebSocket mode) and, through the core's conversion, /v1/chat/completions from your own ChatGPT subscription: Codex device code login or Sign in with ChatGPT. Only for the account owner's own use with their own ChatGPT subscription; do not pool several people's accounts or resell access (this violates OpenAI's terms). Requests identify themselves truthfully as sup2api (originator: sup2api, User-Agent: sup2api-codex/<version>); the plugin does not imitate the Codex CLI and adds no Codex system prompt.",
     "zh": "用你自己的 ChatGPT 订阅提供 /v1/responses（含 WebSocket 模式），并经核心转换提供 /v1/chat/completions；支持 Codex 设备码登录与 Sign in with ChatGPT。仅用于账号所有者用自己的 ChatGPT 订阅自用；不得把多人账号做成号池对外出售（违反 OpenAI 条款）。请求如实标明来源为 sup2api（originator: sup2api，User-Agent: sup2api-codex/<版本>），不伪装 Codex CLI，也不注入 Codex 系统提示词。"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "sub2api",
   "icon": "assets/openai.svg",
   "runtime": "grpc",
@@ -51,7 +51,7 @@
         {
           "platform": "openai",
           "endpoints": ["responses", "responses_websocket"],
-          "requestFields": ["model", "[instructions]|#", "[input]|#(%\"*\")"],
+          "requestFields": ["model", "[instructions]|#", "[input]|#(%\"*\")", "input.#.[role].#(==\"system\")#"],
           "streamOnly": ["openai.responses"]
         }
       ]
@@ -85,7 +85,7 @@
         {
           "platform": "openai",
           "endpoints": ["responses", "responses_websocket"],
-          "requestFields": ["model", "[input]|#(%\"*\")"],
+          "requestFields": ["model", "[input]|#(%\"*\")", "input.#.[role].#(==\"system\")#"],
           "streamOnly": ["openai.responses"]
         }
       ]
