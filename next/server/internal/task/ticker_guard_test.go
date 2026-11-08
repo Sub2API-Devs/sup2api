@@ -34,7 +34,7 @@ var tickerAllowed = map[string]struct {
 	// Consumers, requests and process control (§14.3 #15, #22-#24, #32a,
 	// #35-#37).
 	"notify/worker.go":              {1, "notification delivery consumer (#32a)"},
-	"gateway/websocket.go":          {1, "drain watch of one WebSocket session (#22)"},
+	"gateway/websocket.go":          {2, "drain watch and keepalive ping of one WebSocket session (#22, CONTRACTS §83)"},
 	"plugin/install/uninstall.go":   {1, "wait inside one uninstall request (#22)"},
 	"cluster/registry.go":           {1, "node heartbeat (#23)"},
 	"cluster/slots.go":              {2, "concurrency slot reclaim and renewal (#24)"},
