@@ -4496,7 +4496,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - `github.com/tiktoken-go/tokenizer` 升级到 v0.10.0：v0.8.0 的合并步骤对单个长片段是平方时间（80 KB 不含分隔符的同类字符要 2–3 秒），v0.10.0 为线性，计数不变。
 - 去掉全局锁：编码器的 `Count` 只读，并发请求并行计数。
-- 预扣（§25.8）的本地 tokenizer 统计全部提示文本，上限为请求体上限 32 MiB（`tokenizer.MaxTextBytes`），此前超过 1 MiB 的提示直接拒绝请求。传给插件 `EstimateUsage` 的 `prompt` 只取前 1 MiB（`pluginPromptBytes`，按 UTF-8 边界截断），gRPC 消息远低于 4 MiB 上限。
+- 预扣（§25.8）的本地 tokenizer 统计全部提示文本，上限 32 MiB（`tokenizer.MaxTextBytes`；原与请求体上限相同，2026-11-08 请求体默认上限改为 128 MB 后保持 32 MiB，超出部分不计），此前超过 1 MiB 的提示直接拒绝请求。传给插件 `EstimateUsage` 的 `prompt` 只取前 1 MiB（`pluginPromptBytes`，按 UTF-8 边界截断），gRPC 消息远低于 4 MiB 上限。
 
 ### 63.3 客户端 IP
 
@@ -5581,7 +5581,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **值的来源**：按 账号 → 分组 → 全局设置 → 进程环境变量 的顺序取，0 或没设置就看下一层。
 - **已声明的变量**（定义见 `core/environment.go`）：
   - `relay_timeout_seconds`、`response_header_timeout_seconds`、`streaming_idle_timeout_seconds`
-  - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。端点声明了 `request.maxBodyBytes` 时，生效值取两者中较大的那个（只放宽，不收紧端点自己要的上限）；端点没有声明时直接用它，所以运营方仍可把默认的 128 MB 调小。未设置：端点声明的值，否则 128 MB（2026-11-08 起，原为 32 MB；Anthropic Messages API 和 CCGateway 引擎自身仍限 32 MiB）。
+  - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。端点声明了 `request.maxBodyBytes` 时，生效值取两者中较大的那个（只放宽，不收紧端点自己要的上限）；端点没有声明时直接用它，所以运营方仍可把默认的 128 MB 调小。未设置：端点声明的值，否则 128 MB（2026-11-08 起，原为 32 MB；CCGateway 引擎 `readRequestBody` 同步改为 128 MiB。Anthropic 官方 Messages API 仍限 32 MB）。
   - `task_timeout_minutes`、`task_poll_max_failures`：只有分组层和账号层，全局层就是对账设置（§8 的 `max_reconcile_age_sec`、`max_poll_failures`），没有进程环境变量。只作用于异步任务；普通预扣条目只按对账设置。`task_timeout_minutes` 在任务登记时折算成截止时间，之后修改不影响已登记的任务；例外是管理员手动重新对账（`POST /usage/:id/reconcile`）：截止时间从重试时刻起、按任务所在分组和账号**当前**的变量重新计算。`task_poll_max_failures` 每次查询失败时重新解析。
   - 三个超时只作用于 HTTP 转发；WebSocket 会话是长连接，只用请求体上限（作为单条消息的上限）。
   - 资源请求（Files API 等，`resource_http.go`）不受 `max_request_body_mb` 和三个超时约束，用自己的上限（文件 512 MB、JSON 16 KB）和期限。
