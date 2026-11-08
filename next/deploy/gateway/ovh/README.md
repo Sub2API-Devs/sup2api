@@ -4,6 +4,13 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-09 核心 **0.1.258** + moderation **0.7.0** + dynweight **0.5.2**（`a41336eff`，首次从 touwaeriol/sup2api 构建；北京时间 04:30–04:31；计划 `8540ba6e15f920b2707cfb960f394caf` rolling-v1 completed，04:30:27→04:31:32 约 65 秒，没有暂停，两节点轮流让出，ovh 3130 和 api.prophey.ai `/readyz` 全程 200；无核心迁移，schema 仍 `e726e42f…785f`；Host API 仍 9；网关仍 0.1.133）：
+- 内容：钩子点 `gateway.attempt`（CONTRACTS §85）；`/ui/plugins` 列出只有原生入口的插件（修 Codex 新建账号“无法加载插件表单”）；账号列表状态列启停开关。内置包 = 0.1.257 那套，dynweight 换成 0.5.2、moderation 换成 0.7.0（插件迁移 0009 `plg_moderation.flow_accounts`），codex 0.1.1 不变。
+- new-api 渠道 392 04:26:45 关、04:34:42 按备份原样恢复（只关 392）。
+- 核验：两节点 v0.1.258、`/readyz` 200；插件 moderation 0.7.0、dynweight 0.5.2 两节点 active，其余版本不变；moderation 0.7.0 的授权（含 `gateway.hook` points `gateway.request`、`gateway.attempt`）随内置升级自动授予（20:31:52Z），钩子 `moderation_attempt` 已登记，`GET /p/moderation/bindings` 只有原来的分组 0 → 流程 1（行为同 0.6.2）；`/ui/plugins` 含 codex，新建 ChatGPT（Codex）账号的凭证表单能加载；dynweight 配置 PUT `window_seconds=3` 成功（版本 2→3），随即改回原值 10（版本 4，内容与改前一致），总开关保持关闭；账号 #126（手动禁用）在列表里开关开→关，恢复禁用；临时 Key 经 api.prophey.ai 调 claude-haiku-4-5 回 200 “pong”（Key 已删）；发布后两节点只有让出/重启时的 WARN。恢复渠道后 10 分钟内没有错误，但 392 流量回升很慢（04:34–04:45 sup2api 0 次请求，04:44:59 起才有新请求；cc-max 同期约 970 次大多落在 406，推测是关闭期间亲和会话转走未回）。
+- 回滚：先把 moderation 回退到 0.6.2，再回核心 0.1.257（manifest `0bb7ee6c…a355`，无迁移）；dynweight 可回 0.5.1。
+- 脚本 `stage/0.1.258/`（build.sh 记录 schema 变化与否，sign.sh 按 schema 推出 strategy）；manifest `1f4f121b…5315`，bundle `c71e21ed…1839`；不备份数据库；工作树 `~/sup2api/release-0.1.258`；工具 `~/rel258/`（observe.py、verify257.py、plugins.py、mod.py、pw/ui258.mjs）。
+
 2026-11-09 核心 **0.1.257** + codex **0.1.1** + dynweight **0.5.1**（`c2059a408`，北京时间 02:19–02:20；计划 `249c460f1d83ca640f2b9a15c5e8ce7a` primary-first-v1 completed，02:19:37→02:20:38 约 61 秒，没有暂停；迁移 0091，schema `32b9376d…e2e6` → `e726e42f…785f`；Host API 仍 9；网关仍 0.1.133）：
 - 内容：账号请求参数覆盖（CONTRACTS §84）；codex 核心支持（§83 streamOnly、同平台 chat→Responses、§83.6 WebSocket 每轮补丁）；Responses WebSocket 不设空闲超时（30 秒 ping）；2026-11-08 审计的三处安全修复；账号列表权重徽标不换行。内置包 = 0.1.256 那套，dynweight 换成 0.5.1（从 `c2059a408` 重建），新增 codex 0.1.1（安装即启用，不在 install-only）。
 - 停服：maintenance 计划，ovh 3130 `/readyz` 503 约 9 秒（02:19:57–02:20:06），api.prophey.ai 超时约 7 秒（02:20:01–02:20:08）。new-api 渠道 392 02:13:23 关、02:24:32 按备份原样恢复（405/406 指向 api.125837.xyz，不是 sup2api，没动）。
