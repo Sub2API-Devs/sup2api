@@ -314,8 +314,14 @@ func (s *Service) handleResetSecurity(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := s.ResetSecurity(audit.Context(c), actor(c), id); err != nil {
-		httpapi.Fail(c, err)
+	// The body is optional: an operator resetting someone else sends none; a
+	// user resetting their own factors sends their confirmation.
+	var confirm SelfConfirmation
+	if c.Request.Body != nil && c.Request.ContentLength != 0 && !httpapi.BindJSON(c, &confirm) {
+		return
+	}
+	if err := s.ResetSecurity(audit.Context(c), actor(c), id, confirm, c.ClientIP()); err != nil {
+		failLogin(c, err)
 		return
 	}
 	httpapi.NoContent(c)

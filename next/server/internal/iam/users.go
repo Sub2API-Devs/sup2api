@@ -241,6 +241,60 @@ type UpdateUserInput struct {
 	DisplayName *string `json:"display_name"`
 	Status      *string `json:"status"`
 	Password    *string `json:"password"`
+	// SelfConfirmation is required when a user changes their own email or
+	// password through this operator route (SEC-H3).
+	SelfConfirmation
+}
+
+// SelfConfirmation re-authenticates a user who changes their own sign-in
+// through an operator route (PATCH /users/:id, DELETE /users/:id/security):
+// the current password, and a verification code (TOTP or backup code) when
+// two-factor authentication is enabled - the same proof /me/password and
+// /me/two-factor/disable ask for. Without it a stolen access token, or an
+// access key granted only user:update, could set a new password and drop the
+// second factor, and so turn into a full session (SEC-H3).
+type SelfConfirmation struct {
+	CurrentPassword *string `json:"current_password"`
+	Code            string  `json:"code"`
+}
+
+var (
+	errCurrentPasswordRequired = core.InvalidFields(core.FieldError{Field: "current_password", Code: "required", Message: "enter your current password to change your own sign-in"})
+	errSecondFactorRequired    = core.InvalidFields(core.FieldError{Field: "code", Code: "required", Message: "enter a verification code: two-factor authentication is enabled"})
+)
+
+// confirmSelf checks a SelfConfirmation for userID: the password under the
+// login rate limit, then the second factor when one is enrolled (a wrong
+// code counts towards the TOTP lockout, as everywhere else).
+func (s *Service) confirmSelf(ctx context.Context, userID int64, in SelfConfirmation, ip string) error {
+	if in.CurrentPassword == nil || *in.CurrentPassword == "" {
+		return errCurrentPasswordRequired
+	}
+	if _, err := s.confirmPassword(ctx, userID, *in.CurrentPassword, ip); err != nil {
+		return err
+	}
+	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+		if err := lockRefreshUser(ctx, tx, userID); err != nil {
+			return err
+		}
+		var enrolled bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_totp WHERE user_id = $1)`, userID).Scan(&enrolled); err != nil {
+			return err
+		}
+		if !enrolled {
+			return nil
+		}
+		if strings.TrimSpace(in.Code) == "" {
+			return errSecondFactorRequired
+		}
+		return s.checkSecondFactor(ctx, tx, userID, in.Code)
+	})
+	if isBadSecondFactor(err) {
+		if ferr := s.recordSecondFactorFailure(ctx, userID); ferr != nil {
+			return ferr
+		}
+	}
+	return err
 }
 
 var (
@@ -294,21 +348,16 @@ func validateUpdate(in UpdateUserInput) (email string, fields []core.FieldError)
 }
 
 // assertTargetPermissionsWithinActor is SEC-H2: the actor may not touch a
-// target that holds any permission the actor does not hold.
+// target whose roles grant any permission the actor does not hold. The roles
+// are measured, not the effective set, so that a disabled target (whose
+// effective set is empty) stays as protected as an active one.
 func (s *Service) assertTargetPermissionsWithinActor(ctx context.Context, actorID, id int64) error {
-	target, err := s.authz.PermissionSet(ctx, id)
-	if err != nil {
-		return err
-	}
-	targetPerms := make([]string, 0, len(target.Keys))
-	for k := range target.Keys {
-		targetPerms = append(targetPerms, k)
-	}
-	return s.authz.CanActOn(ctx, actorID, targetPerms)
+	return s.authz.CanActOnUser(ctx, actorID, id)
 }
 
-// UpdateUser applies a partial update.
-func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput) (*User, error) {
+// UpdateUser applies a partial update. ip is the caller's address, for the
+// login rate limit when a user confirms a change to their own sign-in.
+func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput, ip string) (*User, error) {
 	email, fields := validateUpdate(in)
 	if len(fields) > 0 {
 		return nil, core.InvalidFields(fields...)
@@ -320,6 +369,15 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	// SEC-H1: check authorization to modify target user
 	if actorID != id {
 		if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
+			return nil, err
+		}
+	}
+
+	// SEC-H3: a user's own email or password changes only with proof of the
+	// current sign-in, as on /me/password; this route must not be the way
+	// around it for an access key or a stolen token.
+	if actorID == id && (in.Password != nil || in.Email != nil) {
+		if err := s.confirmSelf(ctx, id, in.SelfConfirmation, ip); err != nil {
 			return nil, err
 		}
 	}
@@ -387,16 +445,20 @@ func (s *Service) applyUpdateTx(ctx context.Context, tx pgx.Tx, actorID, id int6
 		return 0, nil, err
 	}
 	statusChange := in.Status != nil && *in.Status != cur.Status
-	if statusChange && *in.Status == StatusDisabled {
+	if statusChange {
 		if actorID == id {
 			return 0, nil, errSelfDisable
 		}
-		// SEC-H2: target permissions must not exceed actor's
+		// SEC-H2: target permissions must not exceed actor's - in both
+		// directions. Re-enabling a disabled account hands its holder every
+		// permission its roles grant, so it is as sensitive as disabling.
 		if err := s.assertTargetPermissionsWithinActor(ctx, actorID, id); err != nil {
 			return 0, nil, err
 		}
-		if err := s.authz.EnsureNotLastSuperAdmin(ctx, tx, id); err != nil {
-			return 0, nil, err
+		if *in.Status == StatusDisabled {
+			if err := s.authz.EnsureNotLastSuperAdmin(ctx, tx, id); err != nil {
+				return 0, nil, err
+			}
 		}
 	}
 

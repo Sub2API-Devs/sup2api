@@ -464,6 +464,9 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 - **SSRF 拨号时校验**：`proxy` 模块给**直连**（不经代理）的上游 HTTP 客户端设置拨号检查，拒绝回环、私有、链路本地、未指定地址，防 DNS 重绑定；`SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` 时放行（`proxy.Options.AllowPrivate`）。经代理的连接不检查（由代理解析）。
 - **插件新外部域名告警**：出口隧道每次连接 upsert `plugin_egress_domains`；首次出现的 host 记 WARN 日志并写事件 `plugin.egress_new_domain`。`GET /plugins/:key/egress` 增加 `domains:[{host, first_seen_at, last_seen_at, connections, new}]`（`new` = 24 小时内首次出现）。
 - **出口日志长连接**：连接建立时即写一行（`result='open'`），关闭时更新 `result/duration_ms/bytes/closed_at`，控制台立即可见。
+- **操作员路由上改自己的登录方式要二次验证（SEC-H3，2026-11-08 审计）**：`PATCH /users/:id` 改**自己**的 `password` 或 `email`、`DELETE /users/:id/security` 重置**自己**的因子时，请求体必须带 `current_password`（走登录限速），已启用两步验证的用户还要带 `code`（TOTP 或备份码，错码计入 TOTP 锁定），与 `/me/password`、`/me/two-factor/disable` 要求一致；缺少时 400 `invalid_argument`，`details.fields[{field:"current_password"|"code", code:"required"}]`。此前这两条路由对本人不做任何校验，只持 `user:update` 的访问密钥或被盗的 access token 可以借此改密码、清两步验证，换成完整会话。改别人仍不需要（操作员没有对方的密码），`display_name`、`status` 也不需要。
+- **SEC-H2 以角色衡量目标，而不是生效权限（2026-11-08 审计）**：`CanActOnUser` 及 `PATCH /users/:id`（含 `status` 由 disabled 改回 active）、`DELETE /users/:id`、`PUT /users/:id/roles`、`DELETE /users/:id/security` 比较的是目标**角色所授予**的权限。此前用的是生效权限：被禁用用户的生效权限为空集，任何持 `user:update`（+ `user:password:reset`）的人都能给一个被禁用的管理员设密码再启用，接管该账号。`DELETE /users/:id/security` 此前也缺这项检查。
+- **客户端在 usage 事件前断开按预扣估算计费（§25.8，2026-11-08 审计）**：见 §25.8 末尾。
 
 ### 14.3 插件运行时完善
 
@@ -1990,6 +1993,8 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 2. `TestEstimateUsageUnimplementedTaskSubmitReturnsError`：task.submit 端点，Unimplemented → 报错，不预扣。
 
 **日志**：Unimplemented 触发本地 tokenizer 回退时，记录 `slog.Info("plugin EstimateUsage unimplemented, using local tokenizer", "plugin", pluginKey)`，方便排查。
+
+**客户端在 usage 事件前断开，按预扣估算计费（2026-11-08 审计）**：所有流式协议的 usage 都在流末尾（Anthropic `message_delta`、OpenAI 最后一个 chunk / `response.completed`），此前客户端收完内容再挂断，记录无 usage → `billing_status=free` → 预扣原样退回，输出白送。现在 `UsageRecord.ErrorType=client_canceled` 且上游**已经开始应答**（`call.upstreamResponded`，`forward()` 收到响应、WebSocket 轮次收到第一条上游消息时置位）的请求，按 `precharge()` 保存的估算计费：每项 token 取「响应已报告的数」与「估算」的较大值（估算的输出项即 `output_reserve_tokens`），`Additional`/`Metrics`/`UsageSemantics` 为空时也取估算；`per_request` 价格同样计费；记录 `usage_logs.anomalies.usage_extract = "precharge"`，统计口径与 `reconcile=estimated` 一样算"估算行"。不适用于：排队时就离开（没有上游应答，预扣照旧释放）、端点 `billing=free`、插件自带结算（`Replacement` 或 `Reservation`）、上游错误。单测 `gateway/precharge_cancel_test.go`。
 
 ### 25.9 请求体里重复的对象键与过深嵌套一律拒绝（2026-10-31，团队审核 P1）
 

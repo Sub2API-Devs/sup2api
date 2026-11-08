@@ -212,12 +212,12 @@ func (s *Service) handleUpdateUser(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	u, err := s.UpdateUser(c.Request.Context(), actor(c), id, in)
+	u, err := s.UpdateUser(c.Request.Context(), actor(c), id, in, c.ClientIP())
 	if err == nil {
 		err = s.redactBalance(c, u)
 	}
 	if err != nil {
-		httpapi.Fail(c, err)
+		failLogin(c, err) // Retry-After when the self-confirmation is rate limited
 		return
 	}
 	httpapi.OK(c, u)

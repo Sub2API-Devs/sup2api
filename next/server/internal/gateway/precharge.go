@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/tokenizer"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usagerules"
 )
@@ -136,5 +137,18 @@ func (c *call) precharge(ctx context.Context) error {
 	}
 	pctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	return gate.Precharge(pctx, &rec)
+	if err := gate.Precharge(pctx, &rec); err != nil {
+		return err
+	}
+	c.precharged = &prechargeEstimate{tokens: rec.Tokens, semantics: rec.UsageSemantics, additional: rec.Additional, metrics: rec.Metrics}
+	return nil
+}
+
+// prechargeEstimate is what precharge reserved money for: the usage a client
+// that hangs up before the usage event is billed instead (CONTRACTS §25.8).
+type prechargeEstimate struct {
+	tokens     core.UsageTokens
+	semantics  string
+	additional []core.PricedUsage
+	metrics    map[string]any
 }

@@ -367,19 +367,11 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 		return 0, core.InvalidFields(core.FieldError{Field: "role_keys", Code: "unknown", Message: "unknown roles: " + strings.Join(unknown, ", ")})
 	}
 
-	// SEC-H2: Actor must be able to act on the target user (target's permissions must not exceed actor's)
-	if actorID != 0 && actorID != userID {
-		targetPerms, err := s.PermissionSet(ctx, userID)
-		if err != nil {
-			return 0, err
-		}
-		targetKeys := make([]string, 0, len(targetPerms.Keys))
-		for k := range targetPerms.Keys {
-			targetKeys = append(targetKeys, k)
-		}
-		if err := s.CanActOn(ctx, actorID, targetKeys); err != nil {
-			return 0, err
-		}
+	// SEC-H2: Actor must be able to act on the target user (what the target's
+	// roles grant must not exceed the actor's; a disabled target is measured
+	// by its roles too, see CanActOnUser).
+	if err := s.CanActOnUser(ctx, actorID, userID); err != nil {
+		return 0, err
 	}
 
 	// Current superuser role ids of the user.

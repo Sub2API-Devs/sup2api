@@ -148,8 +148,14 @@ type call struct {
 	queueWaited bool
 	// accountHold and keyHold are the holds of the account last admitted by
 	// the limiter and of the API key, until their tokens settle (CONTRACTS §78).
-	accountHold, keyHold     *core.RateHold
-	rateEstimate             rateEstimate
+	accountHold, keyHold *core.RateHold
+	rateEstimate         rateEstimate
+	// precharged is the estimate the request was pre-charged for (nil before
+	// precharge, or when the endpoint bills nothing); upstreamResponded says
+	// an upstream answer started to be relayed. Together they decide what a
+	// client that hangs up early is billed (billCanceledFromPrecharge).
+	precharged               *prechargeEstimate
+	upstreamResponded        bool
 	task                     *core.TaskSnapshot
 	taskPublicID             string
 	taskPersisted            bool
@@ -867,17 +873,66 @@ func (c *call) finishSubmit(ctx context.Context, rec *core.UsageRecord, billing 
 }
 
 func (c *call) finalizeBillability(ctx context.Context, rec *core.UsageRecord, billing string) {
+	// completed: the upstream did the work this record is priced for - it
+	// answered, or the client left while it was answering and is billed the
+	// estimate (a per_request price is owed in both cases).
+	completed := rec.Success || c.billCanceledFromPrecharge(rec, billing)
 	hasUsage := rec.Tokens != (core.UsageTokens{}) || len(rec.Metrics) > 0
-	priced := rec.Price != nil && (hasUsage || (rec.Success && rec.Price.Mode == "per_request"))
+	priced := rec.Price != nil && (hasUsage || (completed && rec.Price.Mode == "per_request"))
 	for _, item := range append(append([]core.PricedUsage(nil), rec.Additional...), rec.Replacement...) {
 		itemUsage := item.Tokens != (core.UsageTokens{}) || len(item.Metrics) > 0
 		hasUsage = hasUsage || itemUsage
-		priced = priced || (item.Price != nil && (itemUsage || (rec.Success && item.Price.Mode == "per_request")))
+		priced = priced || (item.Price != nil && (itemUsage || (completed && item.Price.Mode == "per_request")))
 	}
 	rec.Billable = !strings.EqualFold(billing, "free") && (priced || rec.BillingError != "")
 	if !rec.Billable {
 		c.dropReservation(ctx, rec, billing, hasUsage)
 		rec.Price = nil
+	}
+}
+
+// billCanceledFromPrecharge makes a request the client abandoned while the
+// upstream was answering pay the estimate it was pre-charged for, instead of
+// the nothing the cut-off stream reported (CONTRACTS §25.8): the usage event
+// comes last in every streaming protocol, so hanging up just before it would
+// otherwise release the hold and give the output away. Each token count is
+// the larger of what the response had shown and the estimate, so a response
+// that did report more than estimated is still billed in full. It reports
+// whether it filled the record.
+//
+// Not applied when the client left before any upstream answer (nothing was
+// consumed), when the endpoint bills nothing, or when a plugin accounted for
+// the work itself (Replacement attempts, a Reservation).
+func (c *call) billCanceledFromPrecharge(rec *core.UsageRecord, billing string) bool {
+	est := c.precharged
+	if est == nil || rec.ErrorType != errTypeClientCanceled || !c.upstreamResponded {
+		return false
+	}
+	if strings.EqualFold(billing, "free") || rec.Price == nil || rec.Reservation != nil || len(rec.Replacement) > 0 {
+		return false
+	}
+	rec.Tokens = maxTokens(rec.Tokens, est.tokens)
+	if len(rec.Additional) == 0 {
+		rec.Additional = est.additional
+	}
+	if len(rec.Metrics) == 0 && len(est.metrics) > 0 {
+		rec.Metrics = est.metrics
+	}
+	if rec.UsageSemantics == "" {
+		rec.UsageSemantics = est.semantics
+	}
+	rec.UsageExtract = core.UsageExtractPrecharge
+	return true
+}
+
+// maxTokens is the field-wise maximum of two token counts.
+func maxTokens(a, b core.UsageTokens) core.UsageTokens {
+	return core.UsageTokens{
+		Input:           max(a.Input, b.Input),
+		Output:          max(a.Output, b.Output),
+		CacheRead:       max(a.CacheRead, b.CacheRead),
+		CacheCreation:   max(a.CacheCreation, b.CacheCreation),
+		CacheCreation1h: max(a.CacheCreation1h, b.CacheCreation1h),
 	}
 }
 

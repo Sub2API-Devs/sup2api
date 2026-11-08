@@ -765,6 +765,7 @@ func (s *wsSession) observe(ctx context.Context, t *wsTurn, data []byte) (bool, 
 		status = int(gjson.GetBytes(data, "status").Int())
 	}
 	if cl.rec.FirstTokenMs == 0 {
+		cl.upstreamResponded = true
 		cl.rec.FirstTokenMs = max(1, int(s.g.now().Sub(cl.start)/time.Millisecond))
 		// A turn has no status of its own: its first message is the
 		// upstream's answer.

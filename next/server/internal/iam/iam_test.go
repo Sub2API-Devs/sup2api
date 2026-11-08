@@ -255,7 +255,7 @@ func TestUserLifecycle(t *testing.T) {
 	// Disable: login and access tokens stop working.
 	pair := mustLogin(t, s, "alice@example.com", "password-1")
 	disabled := StatusDisabled
-	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &disabled}); err != nil || u.Status != StatusDisabled {
+	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &disabled}, testIP); err != nil || u.Status != StatusDisabled {
 		t.Fatalf("disable: %+v %v", u, err)
 	}
 	if _, err := s.Login(ctx, "alice@example.com", "password-1", testIP); !isCode(err, "permission_denied") {
@@ -272,13 +272,13 @@ func TestUserLifecycle(t *testing.T) {
 	}
 	active := StatusActive
 	name := "Alice B"
-	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &active, DisplayName: &name}); err != nil || u.DisplayName != "Alice B" {
+	if u, err = s.UpdateUser(ctx, root, u.ID, UpdateUserInput{Status: &active, DisplayName: &name}, testIP); err != nil || u.DisplayName != "Alice B" {
 		t.Fatalf("enable: %+v %v", u, err)
 	}
 	mustLogin(t, s, "alice@example.com", "password-1")
 
 	// Super admin protections.
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}); !isCode(err, "conflict") {
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}, testIP); !isCode(err, "conflict") {
 		t.Fatalf("self disable: %v", err)
 	}
 	if err := s.DeleteUser(ctx, root, root); !isCode(err, "conflict") {
@@ -288,7 +288,7 @@ func TestUserLifecycle(t *testing.T) {
 		t.Fatalf("admin deletes root: %v", err)
 	}
 	pw := "hijacked-password"
-	if _, err := s.UpdateUser(ctx, admin.ID, root, UpdateUserInput{Password: &pw}); !isCode(err, "permission_denied") {
+	if _, err := s.UpdateUser(ctx, admin.ID, root, UpdateUserInput{Password: &pw}, testIP); !isCode(err, "permission_denied") {
 		t.Fatalf("admin resets root password: %v", err)
 	}
 	if _, err := s.SetUserRoles(ctx, admin.ID, admin.ID, []string{authz.RoleSuperAdmin}); !isCode(err, "permission_denied") {

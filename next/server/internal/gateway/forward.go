@@ -55,6 +55,7 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	u.WithPrimaryModel(c.upstreamPrimaryModel)
 	u.WithAttemptAccounting(c.hasRequestedAttemptUsage(rt, upBody))
 	cap := newUsageCapture(rt)
+	c.upstreamResponded = true
 	c.rec.StatusCode = resp.StatusCode
 	c.rec.Success = true
 	c.rec.ErrorType = ""

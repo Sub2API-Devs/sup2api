@@ -268,6 +268,12 @@ const (
 	// marker is the difference between under-billing and *silent*
 	// under-billing.
 	UsageExtractFallback = "fallback"
+	// UsageExtractPrecharge: the client hung up before the upstream reported
+	// its usage, and the request was billed from the pre-upstream estimate it
+	// had been pre-charged for (never less than what the response had shown
+	// by then). The upstream did the work; without this the hold would have
+	// been released and the output given away (CONTRACTS §25.8).
+	UsageExtractPrecharge = "precharge"
 )
 
 // MaxPluginDetailBytes caps UsageReport.detail_json.

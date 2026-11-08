@@ -22,6 +22,7 @@ import (
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/hotp"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
@@ -215,22 +216,139 @@ func TestOperatorResetProtectsSuperusers(t *testing.T) {
 	e := setupAdmin(t)
 	s, ctx := e.svc, context.Background()
 	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
-	enableTwoFactor(t, s, root)
+	secret, _ := enableTwoFactor(t, s, root)
+	clearLastStep(t, s, root)
 	staff, err := s.CreateUser(ctx, root, CreateUserInput{Email: "staff@example.com", DisplayName: "Staff", Password: "staff-password-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ResetSecurity(ctx, staff.ID, root); err == nil {
+	if err := s.ResetSecurity(ctx, staff.ID, root, SelfConfirmation{}, testIP); err == nil {
 		t.Fatal("a non-superuser reset a superuser")
 	}
 	if st, _ := s.TwoFactor(ctx, root); !st.Enabled {
 		t.Fatal("the refused reset removed the factor")
 	}
-	if err := s.ResetSecurity(ctx, root, root); err != nil {
+	// SEC-H3: one's own factors go only with the password and a code.
+	rootPassword := adminPassword
+	if err := s.ResetSecurity(ctx, root, root, SelfConfirmation{}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("self reset without confirmation: %v", err)
+	}
+	if err := s.ResetSecurity(ctx, root, root, SelfConfirmation{CurrentPassword: &rootPassword}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("self reset without a code: %v", err)
+	}
+	if err := s.ResetSecurity(ctx, root, root, SelfConfirmation{CurrentPassword: &rootPassword, Code: "000000"}, testIP); !isBadSecondFactor(err) {
+		t.Fatalf("self reset with a wrong code: %v", err)
+	}
+	if st, _ := s.TwoFactor(ctx, root); !st.Enabled {
+		t.Fatal("a refused self reset removed the factor")
+	}
+	if err := s.ResetSecurity(ctx, root, root, SelfConfirmation{CurrentPassword: &rootPassword, Code: codeAt(t, secret, time.Now())}, testIP); err != nil {
 		t.Fatal(err)
 	}
 	if st, _ := s.TwoFactor(ctx, root); st.Enabled {
 		t.Fatal("still enabled after the reset")
+	}
+}
+
+// SEC-H3: a user changing their own password or email through the operator
+// route proves the current sign-in, as on /me/password; an operator changing
+// someone else's needs no such proof (they do not have it).
+func TestSelfUpdateRequiresConfirmation(t *testing.T) {
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	newPassword, rootPassword, wrongPassword := "root-password-2", adminPassword, "not-the-password"
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Password: &newPassword}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("own password without confirmation: %v", err)
+	}
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Password: &newPassword, SelfConfirmation: SelfConfirmation{CurrentPassword: &wrongPassword}}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("own password with a wrong current password: %v", err)
+	}
+	if _, err := s.Login(ctx, adminEmail, newPassword, testIP); err == nil {
+		t.Fatal("the refused change took effect")
+	}
+	email := "root2@example.com"
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Email: &email}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("own email without confirmation: %v", err)
+	}
+	name := "Root"
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+		t.Fatalf("own display name needs no confirmation: %v", err)
+	}
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Password: &newPassword, SelfConfirmation: SelfConfirmation{CurrentPassword: &rootPassword}}, testIP); err != nil {
+		t.Fatal(err)
+	}
+	mustLogin(t, s, adminEmail, newPassword)
+	// Back to the password the two-factor helpers below sign in with.
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Password: &rootPassword, SelfConfirmation: SelfConfirmation{CurrentPassword: &newPassword}}, testIP); err != nil {
+		t.Fatal(err)
+	}
+
+	// With two-factor authentication on, the password alone is not enough.
+	secret, _ := enableTwoFactor(t, s, root)
+	clearLastStep(t, s, root)
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Email: &email, SelfConfirmation: SelfConfirmation{CurrentPassword: &rootPassword}}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("own email without a code: %v", err)
+	}
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Email: &email, SelfConfirmation: SelfConfirmation{CurrentPassword: &rootPassword, Code: "000000"}}, testIP); !isBadSecondFactor(err) {
+		t.Fatalf("own email with a wrong code: %v", err)
+	}
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Email: &email, SelfConfirmation: SelfConfirmation{CurrentPassword: &rootPassword, Code: codeAt(t, secret, time.Now())}}, testIP); err != nil {
+		t.Fatal(err)
+	}
+	mustLogin(t, s, email, rootPassword)
+
+	// Operators still reset other users without any confirmation.
+	staff, err := s.CreateUser(ctx, root, CreateUserInput{Email: "staff2@example.com", Password: "staff-password-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpdateUser(ctx, root, staff.ID, UpdateUserInput{Password: &newPassword}, testIP); err != nil {
+		t.Fatalf("operator reset: %v", err)
+	}
+}
+
+// SEC-H2: a disabled user is measured by what its roles grant, so a lesser
+// operator can neither set the password of a disabled admin nor re-enable
+// it, which would otherwise hand them the admin's permissions.
+func TestDisabledAdminStaysOutOfReach(t *testing.T) {
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	admin, err := s.CreateUser(ctx, root, CreateUserInput{Email: "admin2@example.com", Password: "admin-password-1", RoleKeys: []string{authz.RoleAdmin}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operator, err := s.CreateUser(ctx, root, CreateUserInput{Email: "operator@example.com", Password: "operator-password-1", RoleKeys: []string{authz.RoleOperator}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pw := "taken-over-1"
+	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Password: &pw}, testIP); !isCode(err, "permission_denied") {
+		t.Fatalf("operator set an active admin's password: %v", err)
+	}
+	disabled, active := StatusDisabled, StatusActive
+	if _, err := s.UpdateUser(ctx, root, admin.ID, UpdateUserInput{Status: &disabled}, testIP); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Password: &pw}, testIP); !isCode(err, "permission_denied") {
+		t.Fatalf("operator set a disabled admin's password: %v", err)
+	}
+	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Status: &active}, testIP); !isCode(err, "permission_denied") {
+		t.Fatalf("operator re-enabled a disabled admin: %v", err)
+	}
+	if err := s.ResetSecurity(ctx, operator.ID, admin.ID, SelfConfirmation{}, testIP); !isCode(err, "permission_denied") {
+		t.Fatalf("operator reset a disabled admin's factors: %v", err)
+	}
+	if err := s.DeleteUser(ctx, operator.ID, admin.ID); !isCode(err, "permission_denied") {
+		t.Fatalf("operator deleted a disabled admin: %v", err)
+	}
+	if _, err := s.Login(ctx, "admin2@example.com", pw, testIP); err == nil {
+		t.Fatal("the disabled admin was taken over")
+	}
+	// The superuser, who outranks the admin, still can.
+	if _, err := s.UpdateUser(ctx, root, admin.ID, UpdateUserInput{Status: &active}, testIP); err != nil {
+		t.Fatal(err)
 	}
 }
 

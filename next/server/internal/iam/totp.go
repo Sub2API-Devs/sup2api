@@ -376,9 +376,22 @@ func removeTwoFactor(ctx context.Context, tx pgx.Tx, userID int64) error {
 
 // ResetSecurity is the operator's way back in for a user who lost their
 // factors: it removes the user's two-factor and passkeys. A non-superuser
-// cannot do this to a superuser.
-func (s *Service) ResetSecurity(ctx context.Context, actorID, targetID int64) error {
+// cannot do this to a superuser, nor to a user whose roles grant more than
+// the operator holds; a user resetting their own factors proves them first
+// (confirm, under the login rate limit for ip).
+func (s *Service) ResetSecurity(ctx context.Context, actorID, targetID int64, confirm SelfConfirmation, ip string) error {
 	if err := s.guardTarget(ctx, actorID, targetID); err != nil {
+		return err
+	}
+	if actorID == targetID {
+		// SEC-H3: one's own factors go only with proof of them, as on
+		// /me/two-factor/disable; a user who lost them needs an operator.
+		if err := s.confirmSelf(ctx, targetID, confirm, ip); err != nil {
+			return err
+		}
+	} else if err := s.authz.CanActOnUser(ctx, actorID, targetID); err != nil {
+		// SEC-H2: removing the factors of a user with higher privileges
+		// would leave that account one password away from takeover.
 		return err
 	}
 	return s.db.Tx(ctx, func(tx pgx.Tx) error {

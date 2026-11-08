@@ -103,7 +103,7 @@ function rowActions(u: User): MenuAction[] {
     { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:manage') },
     { key: 'groups', label: t('users.assignGroups'), hidden: !auth.has('group:manage') },
     { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
-    { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:update') },
+    { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:update') || u.id === auth.me?.id },
     { key: 'balance', label: t('users.adjustBalance'), hidden: !auth.has('balance:adjust') },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('user:delete') || u.id === auth.me?.id }
   ]
