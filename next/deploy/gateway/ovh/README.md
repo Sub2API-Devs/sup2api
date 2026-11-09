@@ -4,6 +4,15 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-09 核心 **0.1.262**（`f90042656`；北京时间 11-09 23:52–23:54；计划 `e1d42babb801530aaa79b2214bf4a0bb` primary-first-v1 completed，23:52:53→23:54:17 约 84 秒；迁移 0092（usage_hourly）、0093（conversion_loss_policy、usage_logs.conversion），schema `e726e42f…785f` → `d403141a…29ad`）
+- 内容：协议层三期（§86 声明式上游与 custom、§87 通用配置项与 UI 3.7、§88 四协议互转），§84 参数覆盖先于插件，优先级越大越优先，账号界面文字按钮/四色/默认并发 0，固定尺寸编辑窗口，仪表盘读小时汇总表。见 CHANGELOG。
+- 停服：new-api 渠道 392 于 23:48:41 关闭、00:06:48 按备份原样恢复（只有 392 指向 sup2api，405/406 指向 api.125837.xyz 未动；备份 `/home/erio/rc/tmp/release-0.1.262/`）。ovh 3130 `/readyz` 503 约 26 秒（23:53:15–23:53:41），api.prophey.ai 503/超时约 26 秒。
+- 内置插件：openai 0.4.0、gemini 0.3.0、custom 0.1.0（新，启用）为 runtime none；anthropic 0.3.0、dynweight 0.5.3、moderation 0.7.1 重建；ccgateway 0.1.132、codex 0.1.2、mailer 0.1.1、volcengine 0.12.6 原样；计划完成后全部 active、无 pending。
+- 核验：两节点 0.1.262；`verify262.py`：readyz、`/usage/overview`、账号/账号类型（custom 三类、openai/anthropic/gemini 带 upstream）、插件版本、临时 key claude-sonnet-5-5 真实请求 200、`/v1/models` 200；控制台截图无错误（`/home/erio/rc/tmp/release-0.1.262/shots/`）；恢复后 10 分钟 34/34 成功、无 5xx。
+- 期间发现（与发布无关）：账号 124（sakura-api.prophey.ai）自 23:46:47 起 502，该域名 TLS 握手失败、ovh Caddy 无该站点配置，haiku 只走 124 因而失败，需 sakura 侧处理。
+- 回滚：先把插件退回 0.1.261 时的版本、停用 custom，再撤 0092/0093 新增对象和 schema_migrations 行，用 0.1.261 清单（3ee1df23…）建反向计划（见 stage/0.1.262/CHECKLIST.md 第 5 步）。
+- 脚本 `stage/0.1.262/`（build.sh 断言迁移恰为 0092、0093、schema 必须变化；插件测试 SUB2API_TESTPG=off；sign.sh 断言 maintenance）；manifest `cb3db8234453849cf5e55f582e0f5129d46aaabdddd1d2bd2652f837d5b34d18`，bundle `d4617d42…dda3`；不备份数据库；工作树 `~/sup2api/release-0.1.262`；工具 `~/rel262/`（observe.py 需 sudo、verify262.py、pw/ui262.mjs）。
+
 2026-11-09 核心 **0.1.261**（`56efabffd`；北京时间 16:23–16:27；计划 `1650fe8246bb0b4d01a70ce31276e79c` rolling-v1 completed，16:23:32→16:26:58 约 3 分 26 秒，没有暂停，两节点轮流让出，ovh 3130 和 api.prophey.ai `/readyz` 全程 200；stop 等在途请求排空 ccp 88 秒、ovh 65 秒；无核心迁移，schema 仍 `e726e42f…785f`；Host API 仍 9；网关仍 0.1.133）：
 - 内容：`GET /accounts/:id/rate-models` 不再查 usage_logs，TPD 与模型名单改从 Redis 小时哈希 `rl:account:<id>:tpd:<UTC 整点 unix 秒>`（field = 模型，TTL 26 小时）读取；网关结算时多一次 HINCRBY + EXPIRE（CONTRACTS §68.7）。只改 next/server 和两条中英文提示文案。内置包与 0.1.260 stage 逐字节相同（`diff -r`，codex 0.1.2），插件都不重建。升级当天 TPD 从升级时刻起算。
 - new-api 渠道没有关（用户授权滚动更新不停服）；不备份数据库。
