@@ -15,12 +15,13 @@ const router = useRouter()
 const tabs = computed(() => (['failure', 'balance'] as const).map(key => ({ key, label: t(`settings.scheduling.tabs.${key}`) })))
 const sub = computed({
   get: () => (route.query.sub === 'balance' ? 'balance' : 'failure'),
-  set: (value: string) => router.replace({ query: { ...route.query, sub: value } })
+  // The default tab keeps the URL as it was before the tabs existed.
+  set: (value: string) => void router.replace({ query: { ...route.query, sub: value === 'failure' ? undefined : value } })
 })
 </script>
 
 <template>
-  <STabs v-model="sub" :tabs="tabs" :aria-label="t('settings.scheduling.tabsLabel')" data-testid="scheduling-tabs">
+  <STabs v-model="sub" :tabs="tabs" :aria-label="t('failurePolicy.title')" data-testid="scheduling-tabs">
     <FailurePolicySettings v-if="sub === 'failure'" />
     <LoadBalanceSettingsCard v-else />
   </STabs>

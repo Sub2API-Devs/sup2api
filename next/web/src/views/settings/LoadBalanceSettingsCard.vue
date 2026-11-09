@@ -12,7 +12,7 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('settings:manage'))
 
-const { form, loading, saving, dirty, isLoaded, load, save, reset } = useSettingsForm<SchedulingSettings>({
+const { form, loading, saving, dirty, errors, isLoaded, load, save, reset } = useSettingsForm<SchedulingSettings>({
   path: '/settings/scheduling',
   defaults: { mode: 'default', metric: 'rpm', limit_load: false, model_limits: false }
 })
@@ -29,13 +29,17 @@ onMounted(load)
 </script>
 
 <template>
-  <SSettingsGroup :title="t('settings.balance.title')" :description="t('settings.balance.subtitle')" data-testid="balance-settings">
-    <template v-if="canManage" #actions
-      ><SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset"
-    /></template>
+  <SSettingsGroup
+    :title="t('settings.scheduling.tabs.balance')"
+    :description="t('settings.balance.subtitle')"
+    data-testid="balance-settings"
+  >
+    <template v-if="canManage" #actions>
+      <SettingsSaveBar :dirty="dirty" :saving="saving" :can-manage="canManage" @save="save" @reset="reset" />
+    </template>
     <SSpinner v-if="loading && !isLoaded" block />
     <template v-else>
-      <SSettingRow :label="t('settings.balance.mode')" :description="t(`settings.balance.modeHints.${form.mode}`)">
+      <SSettingRow :label="t('settings.balance.mode')" :description="t(`settings.balance.modeHints.${form.mode}`)" :error="errors.mode">
         <SSegmented v-model="form.mode" :options="modes" :disabled="!canManage" data-testid="balance-mode" />
       </SSettingRow>
       <SSettingRow :label="t('settings.balance.limitLoad')" :description="t('settings.balance.limitLoadHint')">
@@ -46,7 +50,7 @@ onMounted(load)
           data-testid="balance-limit-load"
         />
       </SSettingRow>
-      <SSettingRow :label="t('settings.balance.metric')" :description="t('settings.balance.metricHint')">
+      <SSettingRow :label="t('settings.balance.metric')" :description="t('settings.balance.metricHint')" :error="errors.metric">
         <SSegmented v-model="form.metric" :options="metrics" :disabled="metricOff" data-testid="balance-metric" />
       </SSettingRow>
       <SSettingRow :label="t('settings.balance.modelLimits')" :description="t('settings.balance.modelLimitsHint')">

@@ -18,11 +18,9 @@ export default {
     offload: 'CPU 保护'
   },
   scheduling: {
-    tabsLabel: '调度策略',
     tabs: { failure: '故障策略', balance: '均衡负载' }
   },
   balance: {
-    title: '均衡负载',
     subtitle: '在同一优先级内给新会话选号。只影响新会话和换号，已绑定的会话不会被移走。',
     mode: '均衡策略',
     modes: { default: '默认', traffic: '流量' },

@@ -8,7 +8,11 @@ import { emptyFailurePolicy } from './failurePolicy'
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn() }))
 const permissions = vi.hoisted(() => ({ manage: true }))
 const route = reactive<{ query: Record<string, string> }>({ query: { tab: 'failure' } })
-const router = { replace: vi.fn((to: { query: Record<string, string> }) => { route.query = to.query }) }
+const router = {
+  replace: vi.fn((to: { query: Record<string, string> }) => {
+    route.query = to.query
+  })
+}
 vi.mock('vue-router', async original => ({ ...(await original<object>()), useRoute: () => route, useRouter: () => router }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), api }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => permissions.manage || key.endsWith(':read') }) }))
@@ -21,10 +25,14 @@ beforeEach(() => {
   i18n.global.locale.value = 'zh'
   api.list.mockResolvedValue({ items: [], total: 0 })
   api.put.mockImplementation((_path, body) => Promise.resolve(body))
-  api.get.mockImplementation(path => Promise.resolve({
-    '/settings/failure-policy': { configured: true, policy: emptyFailurePolicy() },
-    '/settings/scheduling': { mode: 'default', metric: 'rpm', limit_load: false, model_limits: false }
-  }[path as string] ?? {}))
+  api.get.mockImplementation(path =>
+    Promise.resolve(
+      {
+        '/settings/failure-policy': { configured: true, policy: emptyFailurePolicy() },
+        '/settings/scheduling': { mode: 'default', metric: 'rpm', limit_load: false, model_limits: false }
+      }[path as string] ?? {}
+    )
+  )
 })
 
 async function render() {
@@ -34,8 +42,11 @@ async function render() {
 }
 
 // Switches carry the test id on their input, segmented controls on the group.
-const disabled = (w: Awaited<ReturnType<typeof render>>, id: string) =>
-  w.findAll(`input[data-testid="${id}"], [data-testid="${id}"] input`).every(el => (el.element as HTMLInputElement).disabled)
+const disabled = (w: Awaited<ReturnType<typeof render>>, id: string) => {
+  const inputs = w.findAll(`input[data-testid="${id}"], [data-testid="${id}"] input`)
+  expect(inputs.length).toBeGreaterThan(0)
+  return inputs.every(el => (el.element as HTMLInputElement).disabled)
+}
 
 describe('scheduling policy tabs (CONTRACTS §89)', () => {
   it('opens the failure policy by default and keeps the balance tab in ?sub=', async () => {
@@ -46,6 +57,15 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
     expect(router.replace).toHaveBeenCalledWith({ query: { tab: 'failure', sub: 'balance' } })
     await flushPromises()
     expect(w.find('[data-testid="balance-settings"]').exists()).toBe(true)
+    // Back to the default tab: the URL loses ?sub= again.
+    await w.findAll('[role="tab"]')[0].trigger('click')
+    expect(router.replace).toHaveBeenLastCalledWith({ query: { tab: 'failure', sub: undefined } })
+  })
+
+  it('falls back to the failure policy for an unknown ?sub=', async () => {
+    route.query = { tab: 'failure', sub: 'nope' }
+    const w = await render()
+    expect(w.find('[data-testid="balance-settings"]').exists()).toBe(false)
   })
 
   it('greys the metric until something balances on it, and model limits until the limit load is on', async () => {
@@ -61,7 +81,12 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
     await w.get('[data-testid="balance-metric"] input[value="concurrency"]').setValue(true)
     await w.get('[data-testid="settings-save"]').trigger('click')
     await flushPromises()
-    expect(api.put).toHaveBeenCalledWith('/settings/scheduling', { mode: 'traffic', metric: 'concurrency', limit_load: true, model_limits: false })
+    expect(api.put).toHaveBeenCalledWith('/settings/scheduling', {
+      mode: 'traffic',
+      metric: 'concurrency',
+      limit_load: true,
+      model_limits: false
+    })
   })
 
   it('is read only without settings:manage', async () => {
