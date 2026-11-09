@@ -4833,7 +4833,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 67.5 记录
 
-`load` 不单独进入 `usage_logs.sched_decisions`；`sched_decisions` 记录的是 effective_weight 之后的最终 weight 值（折减已体现其中）。
+插件那一条 `sched_decisions` 的每个账号带插件返回的 `weight`（基线，未折减）和 `load`；折减后的有效权重只在核心均衡改变了占比时出现在 `"plugin":"core"` 那一条（§89.4，2026-11-09 更正）。
 
 ### 67.6 实现位置
 
@@ -6892,11 +6892,11 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - 和权重一样只作用于粘性不命中的挑选（新会话、无粘性规则的请求、绑定账号失败后的换号）；粘性命中、`count_tokens` 不读不算；已绑定的会话不迁移。
 - 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其模型列表的近 60 秒窗口），并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`）。没设 TPM 上限的账号，TPM 在请求结束时才计入，有滞后。
-- 读失败记 WARN，本次按插件的值调度（仍套用插件负载），不拒绝请求。
+- 读失败记 WARN，本次按插件的值调度（仍套用插件负载），不拒绝请求；换号时出现首次读数没覆盖到的账号，它保持插件权重、不参与流量均衡。
 
 ### 89.4 记录
 
-核心改变了权重的账号写进 `usage_logs.sched_decisions` 的一条 `plugin_key = "core"`：`weight` 为有效权重 ×100 取整，`load` 为合并后的负载；只记第一次排序，最多 100 个账号。
+核心改变了权重、因而改变了层内占比的账号，写进 `usage_logs.sched_decisions` 的一条 `"plugin":"core"`：`weight` 为有效权重 ×100 取整（至少 1，0 表示“本次不用”），`load` 为合并后的负载；只记一个请求的第一次挑选（失败换号不再追加），最多 100 个账号。整层同比例缩放（如单账号层）不记。
 
 ### 89.5 控制台
 

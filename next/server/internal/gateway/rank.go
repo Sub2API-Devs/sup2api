@@ -39,8 +39,8 @@ const (
 // (balance.go), the one place the §67 formula lives.
 type rankValues struct{ priority, weight, load int }
 
-// normWeight is the weight the plugins see and the gateway schedules with:
-// weightedOrder counts weight <= 0 as 1, and the documented range is 1-1000.
+// normWeight is the weight the plugins see: the gateway schedules weight <= 0
+// as 1 (tierWeights), and the documented range is 1-1000.
 func normWeight(w int) int {
 	switch {
 	case w <= 0:

@@ -1,11 +1,14 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/rand"
 	"testing"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -225,5 +228,62 @@ func TestBalanceNotReadOnStickyHit(t *testing.T) {
 	}
 	if lim.usageCalls != 1 {
 		t.Fatalf("usage read %d times, want once (the unbound first request)", lim.usageCalls)
+	}
+}
+
+// Failover reuses the first read, and only the first pick writes the core
+// entry.
+func TestBalanceFailoverReusesRead(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM}
+	e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}})
+	e.gw.randFloat = func() float64 { return 0 } // the first account of the tier first
+	e.up.set("acc-1", &upstreamRule{status: 500})
+	_, recs := serve(t, e, 1)
+	if lim.usageCalls != 1 {
+		t.Fatalf("usage read %d times across failover, want once", lim.usageCalls)
+	}
+	n := 0
+	for _, d := range recs[0].SchedDecisions {
+		if d.PluginKey == "core" {
+			n++
+		}
+	}
+	if n != 1 || len(coreDecision(recs[0]).Changed) != 3 {
+		t.Fatalf("sched decisions %+v", recs[0].SchedDecisions)
+	}
+}
+
+// A token count reads nothing.
+func TestBalanceNotReadForTokenCounting(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, LimitLoad: true}
+	e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}})
+	if r := e.do("/v1/messages/count_tokens", body(testModel, false), nil); r.status != 200 {
+		t.Fatalf("status %d %s", r.status, r.body)
+	}
+	e.record()
+	if lim.usageCalls != 0 {
+		t.Fatalf("usage read %d times for a token count", lim.usageCalls)
+	}
+}
+
+// A plugin's load and the limit load merge by the larger and apply once; an
+// account the core does not change is not recorded by it.
+func TestBalanceMergesPluginLoad(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true}
+	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 90}, 2: {RPM: 10}})
+	e.accounts.set(1, func(a *core.Account) { a.RPMLimit = 100 })
+	e.accounts.set(2, func(a *core.Account) { a.RPMLimit = 100 })
+	e.addRanker("load", manifest.SchedulerRank{}, &fakeRanker{
+		fn: func(_ context.Context, in *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+			return []*pluginv1.RankedAccount{
+				{AccountId: 1, Priority: 10, Weight: 1, Load: 50},
+				{AccountId: 2, Priority: 10, Weight: 1, Load: 50},
+			}, nil
+		}})
+	_, recs := serve(t, e, 1)
+	d := coreDecision(recs[0])
+	// acc-1: max(50, 90) = 90 → 0.1; acc-2: max(50, 10) = 50, the plugin's own.
+	if d == nil || len(d.Changed) != 1 || d.Changed[0].AccountID != 1 || d.Changed[0].Load != 90 || d.Changed[0].Weight != 10 {
+		t.Fatalf("core decision %+v", d)
 	}
 }

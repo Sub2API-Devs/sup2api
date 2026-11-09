@@ -91,10 +91,7 @@ func loadedWeight(w, load float64) float64 {
 // over the share its weight gives it of the tier's usage (plus
 // trafficSmoothing). An idle tier keeps the weights.
 func trafficWeights(w, used []float64) []float64 {
-	var sumW, sumU float64
-	for i := range w {
-		sumW, sumU = sumW+w[i], sumU+used[i]
-	}
+	sumW, sumU := sumOf(w), sumOf(used)
 	out := slices.Clone(w)
 	if sumU <= 0 || sumW <= 0 {
 		return out
@@ -108,13 +105,17 @@ func trafficWeights(w, used []float64) []float64 {
 
 // readBalance reads, once per request and at the first pick the binding does
 // not serve, the usage the scheduling settings balance on. Nothing is read
-// when they are off or the request counts tokens.
+// when they are off or the request counts tokens. A later pick (failover)
+// reuses the read and orders without adding to the sched_decisions entry.
 func (c *call) readBalance(ctx context.Context, cands []core.AccountRef) {
 	if c.balanceDone {
+		if c.balance != nil {
+			c.balance.recorded = true
+		}
 		return
 	}
 	c.balanceDone = true
-	cfg := c.scheduling.normalized()
+	cfg := c.scheduling
 	if !cfg.active() || c.tokenCounting() {
 		return
 	}
@@ -141,7 +142,7 @@ func (c *call) readUsage(ctx context.Context, cfg SchedulingSettings, refs []cor
 	for i := range refs {
 		lists[i] = -1
 		if cfg.LimitLoad && cfg.ModelLimits {
-			lists[i] = modelListIndex(&refs[i], c.model)
+			lists[i] = refs[i].ModelLimitIndex(c.model)
 		}
 	}
 	out := make(map[int64]accountUsage, len(refs))
@@ -210,14 +211,6 @@ func (c *call) readSlotUsage(ctx context.Context, refs []core.AccountRef, lists 
 	return nil
 }
 
-// modelListIndex is the index of the account's model list holding model, or -1.
-func modelListIndex(a *core.AccountRef, model string) int {
-	if model == "" {
-		return -1
-	}
-	return slices.IndexFunc(a.ModelLimits, func(l core.ModelLimit) bool { return slices.Contains(l.Models, model) })
-}
-
 // tierWeights are the weights one (priority, grade) tier is drawn with: the
 // scheduler.rank plugins' weight with the higher of their load and the core's
 // limit load applied, then the traffic balance (CONTRACTS §67, §89). Without
@@ -227,39 +220,61 @@ func (c *call) tierWeights(tier []core.AccountRef) []float64 {
 	base := make([]float64, len(tier)) // with the plugins' load only
 	w := make([]float64, len(tier))
 	loads := make([]float64, len(tier))
-	used := make([]float64, len(tier))
 	for i := range tier {
 		a := &tier[i]
 		weight := float64(max(a.Weight, 1))
 		loads[i] = float64(c.ranked[a.ID].load)
 		base[i] = loadedWeight(weight, loads[i])
-		if b != nil {
-			u := b.usage[a.ID]
-			used[i] = u.used
-			if b.cfg.LimitLoad {
-				loads[i] = max(loads[i], u.load())
-			}
+		if u, ok := b.usageOf(a.ID); ok && b.cfg.LimitLoad {
+			loads[i] = max(loads[i], u.load())
 		}
 		w[i] = loadedWeight(weight, loads[i])
 	}
 	if b != nil && b.cfg.Mode == balanceModeTraffic {
-		w = trafficWeights(w, used)
+		b.applyTraffic(tier, w)
 	}
 	c.recordBalance(tier, base, w, loads)
 	return w
 }
 
-// recordBalance adds the accounts whose weight the core balancing changed to
-// the core's entry in usage_logs.sched_decisions: the effective weight ×100
-// and the load. Only the first ordering of a request records (sealRecord).
+// usageOf is the read usage of account id; false when nothing was read for it
+// (balancing off, failed read, or an account the read did not cover).
+func (b *balanceState) usageOf(id int64) (accountUsage, bool) {
+	if b == nil {
+		return accountUsage{}, false
+	}
+	u, ok := b.usage[id]
+	return u, ok
+}
+
+// applyTraffic balances the accounts of the tier the read covered among
+// themselves; an account without a reading keeps its weight (fail open).
+func (b *balanceState) applyTraffic(tier []core.AccountRef, w []float64) {
+	var idx []int
+	var known, used []float64
+	for i := range tier {
+		if u, ok := b.usage[tier[i].ID]; ok {
+			idx, known, used = append(idx, i), append(known, w[i]), append(used, u.used)
+		}
+	}
+	for k, v := range trafficWeights(known, used) {
+		w[idx[k]] = v
+	}
+}
+
+// recordBalance adds the accounts whose weight, and with it their share of the
+// tier, the core balancing changed to the core's entry in usage_logs.sched_decisions: the effective
+// weight ×100 (at least 1, as 0 reads as excluded) and the load. Only the
+// first pick of a request records (readBalance).
 func (c *call) recordBalance(tier []core.AccountRef, base, w, loads []float64) {
 	b := c.balance
 	if b == nil || b.recorded || c.rec == nil {
 		return
 	}
+	sumBase, sumW := sumOf(base), sumOf(w)
 	for i := range tier {
-		if w[i] == base[i] {
-			continue
+		if w[i] == base[i] || math.Abs(w[i]/sumW-base[i]/sumBase) < 1e-9 {
+			continue // untouched, or scaled with the whole tier: same chance
 		}
 		if b.entry < 0 {
 			c.rec.SchedDecisions = append(c.rec.SchedDecisions, core.SchedDecision{PluginKey: "core"})
@@ -270,14 +285,14 @@ func (c *call) recordBalance(tier []core.AccountRef, base, w, loads []float64) {
 			return
 		}
 		d.Changed = append(d.Changed, core.RankChange{AccountID: tier[i].ID, Priority: tier[i].Priority,
-			Weight: int(math.Round(w[i] * 100)), Load: int(math.Round(loads[i]))})
+			Weight: max(1, int(math.Round(w[i]*100))), Load: int(math.Round(loads[i]))})
 	}
 }
 
-// sealRecord ends the recording after the first ordering: failover orders
-// the remaining accounts again without adding to the entry.
-func (b *balanceState) sealRecord() {
-	if b != nil {
-		b.recorded = true
+func sumOf(v []float64) float64 {
+	t := 0.0
+	for _, x := range v {
+		t += x
 	}
+	return t
 }
