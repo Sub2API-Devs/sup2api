@@ -50,8 +50,8 @@ func taskDraftEnv(t *testing.T, tasks core.AsyncTasks, noAccounts bool) (*env, *
 		pf := manifest.Platform{ID: "task-draft", Endpoints: []manifest.Endpoint{submit, query}}
 		info := e.addAccountType("task-draft", "apikey", pp, manifest.AccountPlatform{Platform: "task-draft"})
 		e.gen.addPlatform(info, pf, pp)
-		e.accounts.addTyped(testGroup, 9, 0, "task-account-9", "task-draft", "apikey")
-		e.accounts.addTyped(testGroup, 10, 1, "task-account-10", "task-draft", "apikey")
+		e.accounts.addTyped(testGroup, 9, 100, "task-account-9", "task-draft", "apikey")
+		e.accounts.addTyped(testGroup, 10, 99, "task-account-10", "task-draft", "apikey")
 		e.accounts.groups[testGroup] = []int64{9, 10}
 		if noAccounts {
 			e.accounts.groups[testGroup] = nil

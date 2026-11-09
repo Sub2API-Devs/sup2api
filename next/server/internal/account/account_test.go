@@ -1120,9 +1120,9 @@ func TestDirectory(t *testing.T) {
 		}
 		return int64(out["data"].(map[string]any)["id"].(float64))
 	}
-	a1 := mk("a1", 2, "anthropic", "apikey")
-	a2 := mk("a2", 1, "anthropic", "apikey")
-	a3 := mk("a3", 1, "relay", "relay_key")
+	a1 := mk("a1", 1, "anthropic", "apikey")
+	a2 := mk("a2", 2, "anthropic", "apikey")
+	a3 := mk("a3", 2, "relay", "relay_key")
 
 	ids := func(refs []core.AccountRef) string {
 		var s []string

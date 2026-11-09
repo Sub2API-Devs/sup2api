@@ -14,8 +14,8 @@ func TestAccountReservationFollowsTheAttempts(t *testing.T) {
 	lim := newFakeLimiter()
 	e := newEnv(t, func(e *env) {})
 	e.gw.d.Limiter = lim
-	e.accounts.set(1, func(acc *core.Account) { acc.TPMLimit = 100000; acc.Priority = 1 })
-	e.accounts.set(2, func(acc *core.Account) { acc.TPMLimit = 100000; acc.Priority = 2 })
+	e.accounts.set(1, func(acc *core.Account) { acc.TPMLimit = 100000; acc.Priority = 99 })
+	e.accounts.set(2, func(acc *core.Account) { acc.TPMLimit = 100000; acc.Priority = 98 })
 	e.up.set("acc-1", &upstreamRule{status: 503})
 	if r := e.messages(body(testModel, false)); r.status != 200 {
 		t.Fatalf("status %d %s", r.status, r.body)

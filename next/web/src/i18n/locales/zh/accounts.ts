@@ -120,7 +120,7 @@ export default {
   proxyAutoCreated: '已自动创建代理',
   priority: '优先级',
   priorityShort: '优先',
-  priorityHint: '数值越小越先使用',
+  priorityHint: '数值越大越先使用',
   scheduling: '调度',
   weight: '权重',
   weightHint: '1–1000；同优先级内按权重加权随机',

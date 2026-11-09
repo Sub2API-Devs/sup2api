@@ -35,7 +35,7 @@ func resolveEnv(t *testing.T, req manifest.EndpointRequest, withClient bool) (*e
 		} else {
 			e.gen.addPlatform(info, pf)
 		}
-		e.accounts.addTyped(testGroup, 9, 0, "rm-9", "rm", "rm_key")
+		e.accounts.addTyped(testGroup, 9, 100, "rm-9", "rm", "rm_key")
 		e.accounts.groups[testGroup] = []int64{9}
 	})
 	return e, rp

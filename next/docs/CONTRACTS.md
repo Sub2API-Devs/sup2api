@@ -533,7 +533,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/users` | 分页 | `q`（邮箱或显示名 ILIKE）、`status`（`active`\|`disabled`）、`role`（角色 key） | `id` 升序 | `iam/users.go` |
 | GET `/groups` | 分页 | `q`（名称 ILIKE）、`status` | `id` 升序 | `group/group.go` |
 | GET `/me/groups` | 不分页 | 无（只返回 `active` 且对当前用户可用的分组；字段 `{id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms}`） | `id` 升序 | `group/group.go` |
-| GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `priority` 升序，再 `id` 升序 | `account/handlers.go` |
+| GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `created_at` 倒序，再 `id` 倒序（§18.3；与调度顺序无关） | `account/handlers.go` |
 | GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
 | GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model` 或 `note` ILIKE） | `model`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
 | GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`request_id`、`account_type`（精确匹配）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
@@ -843,7 +843,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 |---|---|---|
 | `models` | `string[]`，每项是完整模型 ID（§16 规则，禁止通配符），去重，最多 500 项；默认 `[]` | 账号可服务的模型；**空表示所有模型**。调度时请求模型（映射前的客户端模型）不在列表里的账号不作为候选 |
 | `model_mapping` | `{from: to}`，键和值都是完整模型 ID，最多 500 项；默认 `{}` | 请求模型 → 上游模型。核心在调用插件 `BuildUpstreamRequest` **之前**改写请求（body 的 `request.modelPath`、路径参数 `request.modelParam`、`RequestMeta.model` 都换成映射后的模型），`usage_logs.upstream_model` 记录映射后的模型；计费、分组白名单、粘性会话、钩子都按映射前的客户端模型 |
-| `priority` | 0–1000000，默认 10 | 不变：**数值越小越先用**；只有更小优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级。插件可为单次请求临时改写（§24） |
+| `priority` | 0–1000000，默认 10 | **数值越大越先用**（2026-11-09 起，用户要求，与 new-api 一致；此前是越小越先用）；只有更大优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级。插件可为单次请求临时改写（§24） |
 | `weight` | 1–1000，默认 1 | 同一优先级内按权重加权随机排序（不放回的加权抽样：权重 3 的账号被先选中的概率是权重 1 的三倍）。插件可为单次请求临时改写（§24） |
 | `rpm_limit` | 0–10000000，默认 0 | 每分钟请求数上限，0 = 不限。每次在该账号上准入一次尝试计 1 次（切换到别的账号时各账号各计各的）。在 `TryHit` 时计入，之后的本地失败（读账号、路由、协议转换）没有发到上游也不退（§78.1） |
 | `tpm_limit` | 0–10^12，默认 0 | 每分钟 token 数上限，0 = 不限 |
@@ -857,7 +857,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 ### 18.2 调度顺序（ARCHITECTURE 6.2 更新）
 
-候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/spm 上限（含模型列表，§68.2、§71.3）。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
+候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/spm 上限（含模型列表，§68.2、§71.3）。粘性绑定的账号仍然优先；其余按 `priority` 降序（数值大的先用），同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
 
 排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：粘性绑定不服务的挑选（未命中，或绑定账号失败后的切换）会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
@@ -1434,7 +1434,7 @@ message RankCandidate {
   string name            = 2;
   string account_type    = 3;
   string type_plugin_key = 4;           // 声明该账号类型的插件 key
-  int32  priority        = 5;           // 账号当前的 priority（0–1000000，越小越先用）
+  int32  priority        = 5;           // 账号当前的 priority（0–1000000，越大越先用）
   int32  weight          = 6;           // 账号当前的 weight，宿主保证已归一化到 1–1000
 }
 

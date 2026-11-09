@@ -317,7 +317,7 @@ func TestStickyRulesFromDBDriveScheduling(t *testing.T) {
 	e.messages(sess)
 	e.record()
 	e.accounts.mu.Lock()
-	e.accounts.accounts[3].Priority = 0
+	e.accounts.accounts[3].Priority = 100
 	e.accounts.mu.Unlock()
 	e.messages(sess)
 	if rec := e.record(); !rec.StickyHit || rec.StickyRule != "claude-code-session" || e.up.last().key != "acc-1" {

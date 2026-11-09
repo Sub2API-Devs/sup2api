@@ -40,7 +40,7 @@ func managedCCGatewayEnv(t *testing.T, configured bool) *env {
 			return ccgateway.VirtualURL
 		}
 		e.accounts = newFakeAccounts()
-		e.accounts.addTyped(testGroup, 1, 1, "", "ccgateway", "managed")
+		e.accounts.addTyped(testGroup, 1, 99, "", "ccgateway", "managed")
 		e.accounts.accounts[1].Credentials = json.RawMessage(`{}`)
 	})
 	// The managed transport checks the authoritative account type before

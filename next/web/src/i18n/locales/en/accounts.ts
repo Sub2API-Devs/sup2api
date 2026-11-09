@@ -121,7 +121,7 @@ export default {
   proxyAutoCreated: 'A proxy was created automatically',
   priority: 'Priority',
   priorityShort: 'Prio.',
-  priorityHint: 'Lower is used first',
+  priorityHint: 'Higher is used first',
   scheduling: 'Scheduling',
   weight: 'Weight',
   weightHint: '1–1000; weighted random inside one priority',

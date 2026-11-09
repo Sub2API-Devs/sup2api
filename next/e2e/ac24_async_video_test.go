@@ -57,9 +57,9 @@ func TestAC24_ManagedVideoAcrossNodes(t *testing.T) {
 			// Make the other account preferable to ordinary scheduling. Monitoring
 			// must still use the submission's original account, on either host.
 			for _, a := range tn.Accounts {
-				priority := 100
+				priority := 1
 				if a.ID != v.Account.ID {
-					priority = 1
+					priority = 100
 				}
 				admin.OK(t, http.MethodPatch, fmt.Sprintf("/accounts/%d", a.ID), map[string]any{"priority": priority})
 			}

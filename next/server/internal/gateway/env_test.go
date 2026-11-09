@@ -561,7 +561,7 @@ func (a *fakeAccounts) Candidates(_ context.Context, group int64, types []core.A
 			out = append(out, acc.AccountRef)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Priority < out[j].Priority })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Priority > out[j].Priority })
 	return out, nil
 }
 
@@ -879,9 +879,9 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 	e.conv = convert.NewRegistry()
 
 	e.accounts = newFakeAccounts()
-	e.accounts.add(testGroup, 1, 1, "acc-1")
+	e.accounts.add(testGroup, 1, 99, "acc-1")
 	e.accounts.add(testGroup, 2, 50, "acc-2")
-	e.accounts.add(testGroup, 3, 90, "acc-3")
+	e.accounts.add(testGroup, 3, 10, "acc-3")
 	e.slots = &fakeSlots{inUse: map[string]int{}, limits: map[string]int{}}
 	e.settler = &fakeSettler{ch: make(chan *core.UsageRecord, 64)}
 	e.pricer = &fakePricer{rules: map[string]*core.PriceRule{
