@@ -73,6 +73,11 @@ func (p *chatParser) member(k string, v any) (err error) {
 		}
 	case "parallel_tool_calls":
 		err = c.boolParam(k, k, v)
+	case "seed", "presence_penalty", "frequency_penalty":
+		// Gemini takes them; a penalty of 0 is the default.
+		if !isZero(v) || k == "seed" {
+			err = c.numberParam(k, k, v)
+		}
 	case "store":
 		// Chat does not store by default.
 		if b, e := jbool(v, k); e != nil || b {
@@ -604,7 +609,7 @@ func buildChatRequest(maxField string) canonBuild {
 
 func (b *chatBuilder) params(out jobject) {
 	c := b.c
-	takeOpenAIParams(c, out, append(openAIShared, "verbosity")...)
+	takeOpenAIParams(c, out, append(openAIShared, "verbosity", "seed", "presence_penalty", "frequency_penalty")...)
 	if p, ok := c.take("top_logprobs"); ok {
 		out["logprobs"] = true
 		out["top_logprobs"] = p.value
