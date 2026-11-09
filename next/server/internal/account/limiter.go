@@ -30,7 +30,8 @@ func NewLimiter(rdb redis.UniversalClient) *Limiter {
 func listSub(key string) string { return "m:" + key }
 
 // modelSub names the uncapped counters of one client model within the
-// account's: what the list's hover breaks the account's figures down by.
+// account's: what the list's hover breaks the account's figures down by, and
+// what the traffic balance by model compares (CONTRACTS §89).
 // List keys are base-36 hashes, so the prefixes never meet.
 func modelSub(model string) string { return "md:" + model }
 
@@ -108,15 +109,18 @@ func (l *Limiter) Usage(ctx context.Context, refs []core.AccountRef) (map[int64]
 }
 
 func (l *Limiter) ModelUsage(ctx context.Context, refs []core.AccountRef, model string) (map[int64]core.RateUsage, error) {
+	out := make(map[int64]core.RateUsage, len(refs))
+	if model == "" {
+		return out, nil
+	}
 	sets := make([]ratelimit.Limits, len(refs))
 	for i, r := range refs {
 		sets[i] = ratelimit.Limits{ID: r.ID, Sub: modelSub(model)}
 	}
 	used, err := l.w.UsageOf(ctx, sets)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
-	out := make(map[int64]core.RateUsage, len(refs))
 	for i, r := range refs {
 		out[r.ID] = used[i]
 	}

@@ -379,10 +379,13 @@ type AccountLimiter interface {
 	// AddTokens adds the tokens of a finished response to the account and,
 	// when list is not "", to the model list of that key (ModelLimit.Key).
 	AddTokens(ctx context.Context, id int64, list string, n int64)
-	// Usage returns the counters of the accounts and of their model lists.
+	// Usage returns the counters of the accounts and of their model lists:
+	// RateUsage.Models[i] is refs[k].ModelLimits[i], so ModelLimitIndex finds
+	// a model's list (CONTRACTS §89 limit load).
 	Usage(ctx context.Context, refs []AccountRef) (map[int64]RateUsage, error)
 	// ModelUsage returns the uncapped counters of the (client) model on each
-	// account (Models left empty).
+	// account (Models left empty), what the traffic balance by model compares
+	// (CONTRACTS §89); model "" reads nothing and returns an empty map.
 	ModelUsage(ctx context.Context, refs []AccountRef, model string) (map[int64]RateUsage, error)
 	// CountModelTokens adds the tokens of a finished response to today's
 	// tokens of the client model on account id (CONTRACTS §68.7).

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { reactive } from 'vue'
+import { ApiError } from '@sub2api/host'
 import { i18n } from '@/i18n'
 import SchedulingPolicyView from './SchedulingPolicyView.vue'
 import { emptyFailurePolicy } from './failurePolicy'
@@ -66,6 +67,8 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
     route.query = { tab: 'failure', sub: 'nope' }
     const w = await render()
     expect(w.find('[data-testid="balance-settings"]').exists()).toBe(false)
+    expect(w.find('[data-testid="failure-policy-settings"]').exists()).toBe(true)
+    expect(w.findAll('[role="tab"]')[0].attributes('aria-selected')).toBe('true')
   })
 
   it('greys the metric and balancing by model until something balances', async () => {
@@ -73,6 +76,12 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
     const w = await render()
     expect(disabled(w, 'balance-metric')).toBe(true)
     expect(disabled(w, 'balance-model-limits')).toBe(true)
+    // Limit-aware load alone, strategy still default, enables both.
+    await w.get('[data-testid="balance-limit-load"]').setValue(true)
+    expect(disabled(w, 'balance-metric')).toBe(false)
+    expect(disabled(w, 'balance-model-limits')).toBe(false)
+    await w.get('[data-testid="balance-limit-load"]').setValue(false)
+    expect(disabled(w, 'balance-metric')).toBe(true)
     await w.get('[data-testid="balance-mode"] input[value="traffic"]').setValue(true)
     expect(disabled(w, 'balance-metric')).toBe(false)
     expect(disabled(w, 'balance-model-limits')).toBe(false)
@@ -87,6 +96,22 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
       limit_load: true,
       model_limits: true
     })
+  })
+
+  it('shows server field errors on their rows', async () => {
+    route.query = { tab: 'failure', sub: 'balance' }
+    const w = await render()
+    await w.get('[data-testid="balance-mode"] input[value="traffic"]').setValue(true)
+    api.put.mockRejectedValueOnce(
+      new ApiError(400, {
+        code: 'invalid_argument',
+        message: 'invalid',
+        details: { fields: [{ field: 'mode', code: 'invalid', message: '取值无效' }] }
+      })
+    )
+    await w.get('[data-testid="settings-save"]').trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('取值无效')
   })
 
   it('is read only without settings:manage', async () => {

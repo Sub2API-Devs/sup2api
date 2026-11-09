@@ -314,6 +314,9 @@ func (c *call) orderPool(pool []core.AccountRef) {
 		weightedOrder(pool[i:j], c.tierWeights(pool[i:j]), c.g.randFloat)
 		i = j
 	}
+	if c.balance != nil {
+		c.balance.recorded = true // failover orders again without recording
+	}
 }
 
 // finishPick settles an account picked outside the binding: a session without

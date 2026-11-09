@@ -743,3 +743,24 @@ func TestWebSocketUnansweredPingEndsTheSession(t *testing.T) {
 	waitFor(t, func() bool { n, _ := e.slots.InUse(context.Background(), "ws", 5); return n == 1 })
 	waitFor(t, func() bool { n, _ := e.slots.InUse(context.Background(), "ws", 5); return n == 0 })
 }
+
+// A WebSocket turn is balanced like any other pick (CONTRACTS §89.3).
+func TestWebSocketTurnsAreBalanced(t *testing.T) {
+	e := newWSEnv(t)
+	e.accounts.set(11, func(a *core.Account) {
+		a.Priority = 98
+		a.RPMLimit = 100
+	})
+	lim := newFakeLimiter()
+	lim.usage = map[int64]core.RateUsage{11: {RPM: 90}}
+	e.gw.d.Limiter = lim
+	e.setScheduling(SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true})
+	// Weights 1:1 would take oa-11 at 0.4; its load of 90 leaves it 0.1:1.
+	e.gw.randFloat = func() float64 { return 0.4 }
+	c := e.mustDial()
+	c.send(create(wsModel, "hi"))
+	c.until("response.completed")
+	if r := e.record(); r.AccountID == nil || *r.AccountID != 12 || coreDecision(r) == nil {
+		t.Fatalf("record: account %v, decisions %+v", r.AccountID, r.SchedDecisions)
+	}
+}

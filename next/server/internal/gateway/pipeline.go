@@ -115,7 +115,7 @@ type call struct {
 	// (0 = unknown, nothing is written).
 	quotaPinned bool
 	quotaPin    int64
-	// ranked holds the per-request priority/weight the scheduler.rank
+	// ranked holds the per-request priority/weight/load the scheduler.rank
 	// plugins asked for (CONTRACTS §24); rankDone marks the single call, so
 	// failover attempts reuse the same result. nil = the accounts' own values.
 	ranked   map[int64]rankValues

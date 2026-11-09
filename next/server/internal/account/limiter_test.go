@@ -192,8 +192,11 @@ func TestLimiterModelUsage(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 	l := NewLimiter(rdb)
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	l.w.Now = func() time.Time { return now }
 	ctx := context.Background()
-	refs := []core.AccountRef{{ID: 7}, {ID: 8}}
+	// A model list on acc-8 does not change what the model's own counters hold.
+	refs := []core.AccountRef{{ID: 7}, {ID: 8, ModelLimits: []core.ModelLimit{{Models: []string{"a", "b"}, RPMLimit: 100}}}}
 	for _, hit := range []struct {
 		ref   core.AccountRef
 		model string
@@ -208,5 +211,12 @@ func TestLimiterModelUsage(t *testing.T) {
 	want := map[int64]core.RateUsage{7: {RPM: 2, TPM: 10}, 8: {}}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, %v; want %+v", got, err, want)
+	}
+	if got, err := l.ModelUsage(ctx, refs, ""); err != nil || len(got) != 0 {
+		t.Fatalf("model \"\": got %+v, %v", got, err)
+	}
+	got, err = NewLimiter(nil).ModelUsage(ctx, refs, "a")
+	if want := (map[int64]core.RateUsage{7: {}, 8: {}}); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("nil redis: got %+v, %v", got, err)
 	}
 }

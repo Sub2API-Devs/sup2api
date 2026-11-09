@@ -411,17 +411,25 @@ func TestSchedulingSettingsAPIDB(t *testing.T) {
 	if code != 200 || res.Get("data").Raw != `{"mode":"default","metric":"rpm","limit_load":false,"model_limits":false}` {
 		t.Fatalf("defaults: %d %s", code, res.Raw)
 	}
+	if sc := e.gw.settings.get(context.Background()).scheduling; sc != defaultSchedulingSettings() { // primes the cache
+		t.Fatalf("cached defaults %+v", sc)
+	}
 	if code, res := e.api("PUT", "/settings/scheduling", map[string]any{"mode": "least", "metric": "sessions"}); code != 400 ||
+		res.Get("error.code").String() != "invalid_argument" || res.Get("error.details.fields.0.code").String() != "invalid" ||
 		res.Get("error.details.fields.0.field").String() != "mode" || res.Get("error.details.fields.1.field").String() != "metric" {
 		t.Fatalf("invalid: %d %s", code, res.Raw)
 	}
-	// The row is replaced: absent fields take their defaults.
+	if code, res := e.api("PUT", "/settings/scheduling", map[string]any{"metric": "tpm", "model_limits": true}); code != 200 {
+		t.Fatalf("first put: %d %s", code, res.Raw)
+	}
+	// The row is replaced, not merged: absent fields take their defaults.
 	code, res = e.api("PUT", "/settings/scheduling", map[string]any{"mode": "traffic", "limit_load": true})
-	if code != 200 || res.Get("data.mode").String() != "traffic" || res.Get("data.metric").String() != "rpm" || !res.Get("data.limit_load").Bool() {
+	if code != 200 || res.Get("data.mode").String() != "traffic" || res.Get("data.metric").String() != "rpm" || !res.Get("data.limit_load").Bool() ||
+		res.Get("data.model_limits").Bool() {
 		t.Fatalf("put: %d %s", code, res.Raw)
 	}
 	sc := e.gw.settings.get(context.Background()).scheduling
-	if sc.Mode != balanceModeTraffic || !sc.LimitLoad || sc.ModelLimits {
+	if sc.Mode != balanceModeTraffic || sc.Metric != balanceMetricRPM || !sc.LimitLoad || sc.ModelLimits {
 		t.Fatalf("settings cache not refreshed: %+v", sc)
 	}
 	var by *int64
