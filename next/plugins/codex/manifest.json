@@ -6,7 +6,7 @@
     "en": "Serves /v1/responses (including its WebSocket mode) and, through the core's conversion, /v1/chat/completions from your own ChatGPT subscription: Codex device code login or Sign in with ChatGPT. Only for the account owner's own use with their own ChatGPT subscription; do not pool several people's accounts or resell access (this violates OpenAI's terms). Requests identify themselves truthfully as sup2api (originator: sup2api, User-Agent: sup2api-codex/<version>); the plugin does not imitate the Codex CLI and adds no Codex system prompt.",
     "zh": "用你自己的 ChatGPT 订阅提供 /v1/responses（含 WebSocket 模式），并经核心转换提供 /v1/chat/completions；支持 Codex 设备码登录与 Sign in with ChatGPT。仅用于账号所有者用自己的 ChatGPT 订阅自用；不得把多人账号做成号池对外出售（违反 OpenAI 条款）。请求如实标明来源为 sup2api（originator: sup2api，User-Agent: sup2api-codex/<版本>），不伪装 Codex CLI，也不注入 Codex 系统提示词。"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "sub2api",
   "icon": "assets/openai.svg",
   "runtime": "grpc",
@@ -35,6 +35,14 @@
       "sensitiveFields": ["access_token", "refresh_token", "id_token"],
       "settingsFields": ["proxy_id"],
       "refresh": {},
+      "quota": {
+        "query": true,
+        "autoRefresh": true,
+        "windows": [
+          { "key": "5h", "label": { "en": "5-hour usage", "zh": "5 小时用量" }, "shortLabel": { "en": "5h", "zh": "5 小时" } },
+          { "key": "7d", "label": { "en": "Weekly usage", "zh": "周用量" }, "shortLabel": { "en": "7d", "zh": "7 天" } }
+        ]
+      },
       "defaultModels": [
         "gpt-5.4",
         "gpt-5.3-codex",
@@ -120,7 +128,7 @@
     { "id": "platform.register",
       "reason": { "en": "Register the ChatGPT (Codex) account types (device code, Sign in with ChatGPT) for the built-in openai platform", "zh": "为内置 openai 平台注册 ChatGPT（Codex）账号类型（设备码登录、Sign in with ChatGPT）" } },
     { "id": "accounts.credentials", "scope": { "types": "own" },
-      "reason": { "en": "Read the tokens of its own accounts to build upstream, model list and token refresh requests (the core sends them)", "zh": "读取本插件账号的令牌，用于构造上游、模型列表和令牌刷新请求（由核心发送）" } },
+      "reason": { "en": "Read the tokens of its own accounts to build upstream, model list, usage and token refresh requests (the core sends them)", "zh": "读取本插件账号的令牌，用于构造上游、模型列表、用量查询和令牌刷新请求（由核心发送）" } },
     { "id": "kv",
       "reason": { "en": "Keep the short-lived authorization sessions (device code, PKCE verifier and state) between the console's calls", "zh": "在控制台的多次调用之间保存短期授权会话（设备码、PKCE verifier 与 state）" } },
     { "id": "lock",
@@ -128,7 +136,7 @@
     { "id": "routes.admin",
       "reason": { "en": "Authorization endpoints the account form calls (device code start/poll, Sign in with ChatGPT start/exchange)", "zh": "账号表单调用的授权端点（设备码开始/轮询、Sign in with ChatGPT 开始/换取）" } },
     { "id": "net", "scope": { "domains": ["auth.openai.com"] },
-      "reason": { "en": "Talk to OpenAI's authorization server while an account is authorized (device code, token exchange); upstream requests and token refreshes are sent by the core", "zh": "授权账号时访问 OpenAI 授权服务器（设备码、换取令牌）；上游请求与令牌刷新由核心发送" } },
+      "reason": { "en": "Talk to OpenAI's authorization server while an account is authorized (device code, token exchange); upstream requests, usage queries and token refreshes are sent by the core", "zh": "授权账号时访问 OpenAI 授权服务器（设备码、换取令牌）；上游请求、用量查询与令牌刷新由核心发送" } },
     { "id": "ui.native",
       "reason": { "en": "The account form (CodexAuthForm) that runs the device code and Sign in with ChatGPT flows", "zh": "执行设备码登录与 Sign in with ChatGPT 流程的账号表单（CodexAuthForm）" } }
   ],
