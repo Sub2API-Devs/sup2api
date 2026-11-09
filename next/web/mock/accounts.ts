@@ -967,6 +967,29 @@ on('GET', '/accounts/:id/usage', (req) => {
   const u = usageOf(r.a)
   return { ...u, last_7_days: usageFigures(r.a, 2), last_30_days: usageFigures(r.a, 7) }
 })
+// Figures by client model (CONTRACTS §68.7): the account's rate_usage split
+// over its models by a fixed share, jittered so the open card visibly polls.
+on('GET', '/accounts/:id/rate-models', (req) => {
+  const r = scopedAccount(req, 'read')
+  if (!('a' in r)) return r
+  const a = r.a
+  const u = a.rate_usage || { rpm: 0, tpm: 0, sessions: 0 }
+  const models: string[] = a.models?.length ? a.models.slice(0, 6) : ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']
+  const jitter = () => 0.9 + Math.random() * 0.2
+  const rows = models.map((model, i) => {
+    const share = 1 / 2 ** (i + 1)
+    return {
+      model,
+      in_use: Math.round((a.in_use || 0) * share),
+      rpm: Math.round(u.rpm * share * jitter()),
+      tpm: Math.round(u.tpm * share * jitter()),
+      tpd: Math.round(u.tpm * 600 * share),
+      sessions: Math.round((u.sessions || 0) * share)
+    }
+  })
+  const sum = (k: 'tpd') => rows.reduce((n, row) => n + row[k], 0)
+  return { total: { in_use: a.in_use || 0, rpm: u.rpm, tpm: u.tpm, tpd: sum('tpd'), sessions: u.sessions || 0 }, models: rows }
+})
 on('GET', '/accounts/:id/usage-limit', (req) => {
   const r = scopedAccount(req, 'read')
   if (!('a' in r)) return r

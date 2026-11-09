@@ -18,8 +18,10 @@ export default {
     enabledDone: '已启用「{name}」', disabledDone: '已禁用「{name}」', disableByHand: '转为手动禁用'
   },
   limitsUi: {
-    title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',
-    windowHint: 'RPM、TPM、会话都是精确的近 60 秒用量。RPM 在请求开始时计入，长流不会重复计，所以并发可以高于 RPM。TPM 是非缓存输入加输出，设了上限时包含进行中请求的预占，结束后换成实际值。会话是近 60 秒内开始过请求的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。'
+    title: '并发 / RPM / TPM / TPD / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',
+    model: '模型', capsTitle: '限额', noModels: '近 1 小时和今日没有请求', modelsFailed: '按模型明细加载失败',
+    cols: { in_use: '并发', rpm: 'RPM', tpm: 'TPM', tpd: 'TPD', sessions: '会话' },
+    windowHint: 'RPM、TPM、会话都是精确的近 60 秒用量。RPM 在请求开始时计入，长流不会重复计，所以并发可以高于 RPM。TPM 是非缓存输入加输出，设了上限时包含进行中请求的预占，结束后换成实际值。会话是近 60 秒内开始过请求的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。TPD 是今日（浏览器所在时区）累计的非缓存输入加输出，来自使用记录。按模型的会话和并发相加不等于全部模型：一个会话可能用多个模型。'
   },
   usage: {
     column: '用量', title: '账号用量', raw: '原始', rawHint: '按原始倍率计费：分组倍率视为 1',

@@ -24,12 +24,21 @@ func NewLimiter(rdb redis.UniversalClient) *Limiter {
 // listSub names the counters of a model list within the account's.
 func listSub(key string) string { return "m:" + key }
 
+// modelSub names the uncapped counters of one client model within the
+// account's: what the list's hover breaks the account's figures down by.
+// List keys are base-36 hashes, so the prefixes never meet.
+func modelSub(model string) string { return "md:" + model }
+
 // limitsOf returns the sets of caps a request for model is checked against:
-// the account's own, then the model list holding model.
+// the account's own, then the model list holding model, then the model's
+// own counters, which have no caps and so never refuse.
 func limitsOf(ref core.AccountRef, model string) []ratelimit.Limits {
 	out := []ratelimit.Limits{{ID: ref.ID, RPM: ref.RPMLimit, TPM: ref.TPMLimit, SPM: ref.SPMLimit}}
 	if l := ref.ModelLimitFor(model); l != nil {
 		out = append(out, ratelimit.Limits{ID: ref.ID, Sub: listSub(l.Key()), RPM: l.RPMLimit, TPM: l.TPMLimit, SPM: l.SPMLimit})
+	}
+	if model != "" {
+		out = append(out, ratelimit.Limits{ID: ref.ID, Sub: modelSub(model)})
 	}
 	return out
 }
@@ -91,6 +100,17 @@ func (l *Limiter) Usage(ctx context.Context, refs []core.AccountRef) (map[int64]
 		out[r.ID] = u
 	}
 	return out, err
+}
+
+// ModelUsage returns the counters of the account and of each of models, in
+// order after the account's.
+func (l *Limiter) ModelUsage(ctx context.Context, id int64, models []string) ([]core.RateUsage, error) {
+	sets := make([]ratelimit.Limits, 0, 1+len(models))
+	sets = append(sets, ratelimit.Limits{ID: id})
+	for _, m := range models {
+		sets = append(sets, ratelimit.Limits{ID: id, Sub: modelSub(m)})
+	}
+	return l.w.UsageOf(ctx, sets)
 }
 
 func mappingJSON(m map[string]string) string {

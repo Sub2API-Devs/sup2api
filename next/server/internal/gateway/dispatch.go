@@ -444,35 +444,49 @@ func (c *call) tokenCounting() bool {
 	return strings.HasSuffix(c.ep.Protocol, ".count_tokens")
 }
 
-// acquireAccount takes a concurrency slot of the account and, when the
-// request's model is in one of the account's model lists, one of that list
-// (CONTRACTS §68); either being full makes the account busy.
+// slotSpec is one concurrency slot a request takes on an account.
+type slotSpec struct {
+	kind  string
+	limit int // 0 = uncapped
+}
+
+// accountSlots are the slots a request for the call's model takes on ref:
+// the account's, that of the model list holding the model (CONTRACTS §68),
+// and the model's own, uncapped, which only counts it for the per-model
+// breakdown of GET /accounts/:id/rate-models.
+func (c *call) accountSlots(ref *core.AccountRef) []slotSpec {
+	out := []slotSpec{{kind: "account", limit: ref.MaxConcurrency}}
+	if l := ref.ModelLimitFor(c.model); l != nil {
+		out = append(out, slotSpec{kind: core.ModelLimitSlots(l.Key()), limit: l.MaxConcurrency})
+	}
+	if c.model != "" {
+		out = append(out, slotSpec{kind: core.ModelSlots(c.model)})
+	}
+	return out
+}
+
+// acquireAccount takes every slot of accountSlots, in order; one being full
+// makes the account busy and gives back those already taken. The release
+// gives them back in reverse order.
 func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func(), bool) {
 	if c.tokenCounting() {
 		c.slotCtx = ctx
 		return func() {}, true
 	}
-	leaseCtx, release, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, "account", ref.ID, ref.MaxConcurrency, c.rid)
-	if err != nil {
-		slog.WarnContext(ctx, "gateway: acquire account slot", "account", ref.ID, "err", err)
-		return nil, false
-	}
-	if !ok {
-		return nil, false
-	}
-	if l := ref.ModelLimitFor(c.model); l != nil {
-		listCtx, releaseList, ok, err := core.AcquireSlot(leaseCtx, c.g.d.Slots, core.ModelLimitSlots(l.Key()), ref.ID, l.MaxConcurrency, c.rid)
+	release := func() {}
+	for _, spec := range c.accountSlots(ref) {
+		leaseCtx, releaseSlot, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, spec.kind, ref.ID, spec.limit, c.rid)
 		if err != nil {
-			slog.WarnContext(ctx, "gateway: acquire model list slot", "account", ref.ID, "err", err)
+			slog.WarnContext(ctx, "gateway: acquire account slot", "account", ref.ID, "slot", spec.kind, "err", err)
 		}
 		if err != nil || !ok {
 			release()
 			return nil, false
 		}
-		releaseAccount := release
-		leaseCtx, release = listCtx, func() { releaseList(); releaseAccount() }
+		releaseOuter := release
+		ctx, release = leaseCtx, func() { releaseSlot(); releaseOuter() }
 	}
-	c.slotCtx = leaseCtx
+	c.slotCtx = ctx
 	return release, true
 }
 

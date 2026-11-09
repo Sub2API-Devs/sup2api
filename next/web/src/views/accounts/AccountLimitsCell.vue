@@ -3,15 +3,17 @@
 // RPM / TPM / SPM column of new-api's channel table): each figure is
 // "used/cap", or only the usage when there is no cap, with the used share as
 // the pill's fill. The totals are the account's own; hovering (or focusing)
-// the cell shows the breakdown by model list (CONTRACTS §68, §71).
+// the cell shows them by client model, live (CONTRACTS §68.7), then the caps
+// by model list when there are any (§68, §71).
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { STooltip } from '@sub2api/ui'
 import type { Account } from '@/api/types'
 import { formatCompact } from '@/utils/format'
-import { figureTone, limitRows, usedShare, type LimitFigure } from './accountLimits'
+import { figureTone, hasLimits, limitRows, usedShare, type LimitFigure } from './accountLimits'
 import { LEVEL_TEXT } from './usageLevel'
 import AccountLimitsTable from './AccountLimitsTable.vue'
+import AccountModelRates from './AccountModelRates.vue'
 
 const props = defineProps<{ account: Account }>()
 const { t } = useI18n()
@@ -28,7 +30,7 @@ const pillText = (f: LimitFigure) => {
 </script>
 
 <template>
-  <STooltip variant="card" placement="bottom" :delay="150" max-width="30rem">
+  <STooltip variant="card" placement="bottom" :delay="150" max-width="36rem">
     <span class="inline-flex items-center gap-1 whitespace-nowrap rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40" tabindex="0" data-testid="account-limits">
       <span
         v-for="f in total"
@@ -45,7 +47,12 @@ const pillText = (f: LimitFigure) => {
     </span>
     <template #content>
       <div class="mb-2 font-semibold">{{ t('accounts.limitsUi.title') }}</div>
-      <AccountLimitsTable :account="account" />
+      <AccountModelRates :account-id="account.id" />
+      <template v-if="hasLimits(account)">
+        <div class="mb-1 mt-3 font-semibold">{{ t('accounts.limitsUi.capsTitle') }}</div>
+        <AccountLimitsTable :account="account" />
+      </template>
+      <p v-else class="mt-2 text-xxs leading-4 text-fg-muted">{{ t('accounts.limitsUi.windowHint') }}</p>
     </template>
   </STooltip>
 </template>
