@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -286,17 +287,17 @@ func TestGatewaySettingsValidation(t *testing.T) {
 	// Stored values outside the ranges are clamped on read.
 	n := GatewaySettings{MaxAttempts: 50, PlatformCallTimeoutMs: 10, DefaultHookTimeoutMs: 9000,
 		PlatformHotpathTimeoutMs: 9000}.normalized()
-	if n != (GatewaySettings{MaxAttempts: 10, PlatformCallTimeoutMs: 100, DefaultHookTimeoutMs: 2000,
-		PlatformHotpathTimeoutMs: 2000}) {
+	if !reflect.DeepEqual(n, GatewaySettings{MaxAttempts: 10, PlatformCallTimeoutMs: 100, DefaultHookTimeoutMs: 2000,
+		PlatformHotpathTimeoutMs: 2000, ClaudeDefaultMaxTokens: map[string]int{"default": 8192}, MediaDownloadMaxMB: 64}) {
 		t.Fatalf("normalized %+v", n)
 	}
 	// The queue numbers are the exception: 0 turns a queue off, and a stored
 	// row lacking them reads as the defaults because it decodes over them.
-	if (GatewaySettings{}).normalized() != (func() GatewaySettings {
+	if !reflect.DeepEqual((GatewaySettings{}).normalized(), (func() GatewaySettings {
 		d := defaultGatewaySettings()
 		d.QueueStickyMaxWaiting, d.QueueStickyWaitSeconds, d.QueueFallbackMaxWaiting, d.QueueFallbackWaitSecond = 0, 0, 0, 0
 		return d
-	})() {
+	})()) {
 		t.Fatal("zero value must yield the defaults, with the queues off")
 	}
 }
@@ -367,9 +368,10 @@ func TestGatewaySettingsAPI(t *testing.T) {
 		res.Get("data.platform_hotpath_timeout_ms").Int() != 300 {
 		t.Fatalf("put: %d %s", code, res.Raw)
 	}
-	if store.v == nil || *store.v != (GatewaySettings{MaxAttempts: 5, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 800,
+	if store.v == nil || !reflect.DeepEqual(*store.v, GatewaySettings{MaxAttempts: 5, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 800,
 		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 8, QueueStickyWaitSeconds: 120,
-		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30}) || store.by != 7 {
+		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30,
+		ClaudeDefaultMaxTokens: map[string]int{"default": 8192}, MediaDownloadMaxMB: 64}) || store.by != 7 {
 		t.Fatalf("stored %+v by %d", store.v, store.by)
 	}
 	g.settings.mu.Lock()
@@ -394,5 +396,39 @@ func TestGatewaySettingsAPI(t *testing.T) {
 	g.gwStore = dbGatewaySettings{}
 	if code, res := api("GET", nil); code != 503 || res.Get("error.code").String() != "unavailable" {
 		t.Fatalf("no db: %d %s", code, res.Raw)
+	}
+}
+
+// The conversion settings (CONVERT-MATRIX §6.1): claude_default_max_tokens
+// keeps a "default" key and bounded values, media_download_max_mb its range.
+func TestConversionGatewaySettings(t *testing.T) {
+	n := GatewaySettings{ClaudeDefaultMaxTokens: map[string]int{"claude-x": 64000, "neg": -5}, MediaDownloadMaxMB: 5000}.normalized()
+	if !reflect.DeepEqual(n.ClaudeDefaultMaxTokens, map[string]int{"claude-x": 64000, "neg": 0, "default": 8192}) || n.MediaDownloadMaxMB != 1024 {
+		t.Fatalf("normalized %+v", n)
+	}
+	if n.claudeMaxTokens("claude-x") != 64000 || n.claudeMaxTokens("other") != 8192 || n.mediaDownloadMaxBytes() != 1024<<20 {
+		t.Fatal("lookups")
+	}
+	m := func(v map[string]int) *map[string]int { return &v }
+	i := func(v int) *int { return &v }
+	for _, tc := range []struct {
+		in   gatewaySettingsInput
+		code string
+	}{
+		{gatewaySettingsInput{MediaDownloadMaxMB: i(0)}, "out_of_range"},
+		{gatewaySettingsInput{MediaDownloadMaxMB: i(1025)}, "out_of_range"},
+		{gatewaySettingsInput{ClaudeDefaultMaxTokens: m(map[string]int{"default": -1})}, "out_of_range"},
+		{gatewaySettingsInput{ClaudeDefaultMaxTokens: m(map[string]int{" x": 1})}, "invalid_model"},
+		{gatewaySettingsInput{ClaudeDefaultMaxTokens: m(map[string]int{"x": 1, "default": 0}), MediaDownloadMaxMB: i(1)}, ""},
+	} {
+		fe := tc.in.validate(context.Background())
+		if tc.code == "" && len(fe) != 0 || tc.code != "" && (len(fe) != 1 || fe[0].Code != tc.code) {
+			t.Errorf("%+v: %+v", tc.in, fe)
+		}
+	}
+	v := defaultGatewaySettings()
+	(&gatewaySettingsInput{ClaudeDefaultMaxTokens: m(map[string]int{"x": 1})}).applyTo(&v)
+	if got := v.normalized().ClaudeDefaultMaxTokens; !reflect.DeepEqual(got, map[string]int{"x": 1, "default": 8192}) {
+		t.Fatalf("replaced map %v", got)
 	}
 }
