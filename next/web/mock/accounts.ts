@@ -144,6 +144,8 @@ interface MockAccountType {
   default_models?: string[]
   default_model_mapping?: Record<string, string>
   extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
+  /** Client headers the type receives (GET /account-types never sends null). */
+  pass_headers?: string[]
   /** Resolved upstream declaration of a declarative type (mock/custom.ts). */
   upstream?: unknown
 }
@@ -299,7 +301,7 @@ function accountTypeOut(d: MockAccountType) {
     const e = platformById(c.platform)?.endpoints.find((x) => x.path === c.path)
     if (e) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: c.platform, native: false })
   }
-  return { ...rest, ...defaults, platforms, endpoints }
+  return { pass_headers: [], ...rest, ...defaults, platforms, endpoints }
 }
 
 /**

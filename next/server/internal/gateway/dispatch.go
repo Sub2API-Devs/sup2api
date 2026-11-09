@@ -642,10 +642,11 @@ func writeDeclaredAuth(h http.Header, rt *typeRoute, pacct *pluginv1.Account, bu
 // validatePatches runs the guards that a plugin-built upstream request must
 // pass before it is sent: the plugin's patches (upBody to body) must keep
 // resource and model references consistent with the original body, and the
-// account's usage rules must be able to meter the operation and its
-// attempts of sent, the body that goes upstream. The kind differs per guard
-// on purpose: an unaddressable resource reference is the client's mistake
-// and is returned (attemptReturn), everything else fails over.
+// account's usage rules must be able to meter the operation and attempts of
+// sent, the body that goes upstream (body after the account's override).
+// The kind differs per guard on purpose: an unaddressable resource reference
+// is the client's mistake and is returned (attemptReturn), everything else
+// fails over.
 func (c *call) validatePatches(rt *typeRoute, upBody, body, sent []byte) (attemptKind, *gwError) {
 	// applyPatches returns upBody itself when the plugin asked for no patch,
 	// and then the three comparisons below compare the request with itself:

@@ -119,8 +119,11 @@ func (c *checker) auth() {
 	case manifest.UpstreamAuthHeader:
 		// Unlike every other header, auth may write a credential header:
 		// it is the one place the account's credential is sent from.
-		if n := strings.ToLower(a.Name); !paramoverride.ValidHeaderName(a.Name) || n != a.Name {
+		switch {
+		case !paramoverride.ValidHeaderName(a.Name) || strings.ToLower(a.Name) != a.Name:
 			c.add("auth.name", "invalid", "auth.name must be a lower-case header name")
+		case paramoverride.HeaderBlocked(a.Name) && !paramoverride.CredentialHeader(a.Name):
+			c.add("auth.name", "blocked", "header %s cannot carry the credential (hop-by-hop, client address or gateway control header)", a.Name)
 		}
 		c.template("auth.value", a.Value, placeAuth, true)
 	case manifest.UpstreamAuthQuery:

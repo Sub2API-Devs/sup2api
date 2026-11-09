@@ -46,6 +46,14 @@ export const customAccountTypes = (manifest.accountTypes || []).map((d: any) => 
   form: { mode: 'schema' },
   sensitive_fields: d.sensitiveFields || [],
   supports: (d.platforms || []).map((p: any) => p.platform),
+  // The type's own passHeaders for each platform, else the platform's (manifest.AccountType.PassHeaders).
+  pass_headers: [
+    ...new Set(
+      (d.platforms || []).flatMap((p: any) =>
+        p.passHeaders?.length ? p.passHeaders : read(`sdk/platforms/${p.platform}.json`).passHeaders || []
+      )
+    )
+  ],
   upstream: merge(read(`sdk/platforms/upstream/${d.upstream.preset}.json`), d.upstream)
 }))
 

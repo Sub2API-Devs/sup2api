@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/dbschema"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
@@ -121,5 +123,78 @@ func TestRuntimeNoneStaticInstance(t *testing.T) {
 	})
 	if launcher.Commands != 0 {
 		t.Fatalf("launched %d processes", launcher.Commands)
+	}
+}
+
+// A plugin switches between runtimes with an ordinary upgrade: from a plugin
+// process to runtime "none" (the core serves the declared account type and
+// the process is drained away) and back again (a rollback to the old
+// version starts a process once more).
+func TestUpgradeBetweenGRPCAndNone(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	h.bin = registrytest.TestPlugin(t)
+	registrytest.Install(t, h.db, h.manifest("1.0.0"), h.pkg("1.0.0"), registrytest.DefaultGrants(), "installed")
+	t.Cleanup(func() { _ = dbschema.New(h.db, "", nil, false).Drop(context.Background(), h.key) })
+
+	mk := make([]byte, 32)
+	cipher, _ := secret.New(mk)
+	nd := &registrytest.Node{RDB: h.rdb, ID: "solo", Boot: "boot-solo"}
+	nd.Heartbeat(ctx)
+	launcher := &registrytest.Launcher{}
+	grt, err := grpcruntime.New(grpcruntime.Options{DB: h.db, Redis: h.rdb, Cipher: cipher, Node: nd,
+		Launcher: launcher, DataDir: t.TempDir(), DrainTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkgs := registry.NewPackages(h.db, t.TempDir(), registry.WithSource(registrytest.Source()))
+	t.Cleanup(pkgs.Close)
+	reg := registry.New()
+	ctl, err := rollout.New(rollout.Options{DB: h.db, Node: nd, Bus: registrytest.Bus{RDB: h.rdb}, Packages: pkgs,
+		Registry: reg, Runtime: rollout.FromGRPC(grt),
+		Schemas:           dbschema.New(h.db, h.db.Pool.Config().ConnString(), mk, false),
+		ReconcileInterval: 200 * time.Millisecond, LeaseTTL: 8 * time.Second, LeaseRenew: time.Second,
+		CoordinatorTick: 100 * time.Millisecond, DrainTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctl.Start(ctx)
+	t.Cleanup(func() { ctl.Stop(context.Background()) })
+
+	served := func(version string, declared bool) func() bool {
+		return func() bool {
+			s, act, _ := h.plugin()
+			p, _ := reg.Current().Plugin(h.key)
+			b, ok := reg.Current().AccountType(h.key, "apikey")
+			_, isDeclared := b.Client.(core.DeclaredUpstream)
+			return s == "enabled" && act == version && p.Version == version && ok && isDeclared == declared
+		}
+	}
+	if _, err := ctl.Enable(ctx, h.key, 0); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "1.0.0 served by its process", served("1.0.0", false))
+	started := launcher.Commands
+
+	m := declaredManifest(h.key, "2.0.0")
+	registrytest.AddVersion(t, h.db, m, registrytest.Package(t, m, nil, nil))
+	if _, err := ctl.Upgrade(ctx, h.key, "2.0.0", 0); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "2.0.0 served by the core", served("2.0.0", true))
+	waitFor(t, "1.0.0 released", func() bool {
+		refs := pkgs.Cached()
+		return len(refs) == 1 && refs[0].Version == "2.0.0"
+	})
+	if launcher.Commands != started {
+		t.Fatalf("runtime none started %d processes", launcher.Commands-started)
+	}
+
+	if _, err := ctl.Upgrade(ctx, h.key, "1.0.0", 0); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "1.0.0 served by a process again", served("1.0.0", false))
+	if launcher.Commands == started {
+		t.Fatal("the rollback started no process")
 	}
 }

@@ -359,6 +359,8 @@ export interface AccountType {
   platforms: AccountTypePlatform[]
   /** Endpoints of available supported platforms (native) plus converted ones. */
   endpoints: AccountTypeEndpoint[]
+  /** Client headers the type receives: the names an upstream template may read as {client_header.<name>}. */
+  pass_headers: string[]
   /** Resolved upstream declaration of a declarative type (docs/UPSTREAM-DECLARATIVE.md §4.4; without the account layer). */
   upstream?: Upstream
 }

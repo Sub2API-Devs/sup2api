@@ -39,7 +39,8 @@ type paramOverrideState struct {
 type overrideRun func(body []byte, in *core.ParamOverrideContext) (core.ParamOverrideResult, error)
 
 // overrideBody runs a rewrite on the upstream body of attempt n whose
-// upstream model so far is upModel. When it changes the body's model, that
+// upstream model so far is upModel. When the rewrite itself changes the
+// body's model (a model a plugin patch wrote is not the rewrite's), that
 // model goes upstream and is recorded; billing keeps the client's. It
 // returns the body, the upstream model and the header decisions, or the
 // attempt's end; what names the rewrite in errors.
@@ -49,7 +50,8 @@ func (c *call) overrideBody(ctx context.Context, acc *core.Account, rt *typeRout
 		return nil, "", core.HeaderOverride{}, c.paramOverrideFailure(ctx, acc, what, err)
 	}
 	if rt.modelPath != "" {
-		if m := gjson.GetBytes(out.Body, rt.modelPath); m.Type == gjson.String && m.Str != upModel {
+		m := gjson.GetBytes(out.Body, rt.modelPath)
+		if m.Type == gjson.String && m.Str != upModel && m.Str != gjson.GetBytes(body, rt.modelPath).Str {
 			upModel = m.Str
 			c.paramOverride.model = upModel
 			c.rec.UpstreamModel, c.upstreamPrimaryModel = upModel, upModel

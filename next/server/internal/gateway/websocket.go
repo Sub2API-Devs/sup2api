@@ -691,6 +691,10 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	if h := built.GetHeaders()["host"]; h != "" {
 		header.Set("Host", h)
 	}
+	// As on HTTP (forwardBuilt): the declared paramOverride's header
+	// decisions, then the declaration's auth header over them.
+	cl.paramOverride.declared.Apply(header)
+	writeDeclaredAuth(header, rt, pacct, built)
 	// The handshake gets its own deadline; the connection itself lives as
 	// long as the session.
 	if failure := cl.guardAvailability(ctx, ref); failure != nil {

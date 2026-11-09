@@ -106,6 +106,8 @@ func TestAccountLayer(t *testing.T) {
 		"new route":       {`{"routes":{"openai.audio":{"path":"/a"}}}`, "upstream.routes.openai.audio"},
 		"allow unknown":   {`{"allowFields":["temperature"]}`, "upstream.allowFields"},
 		"blocked header":  {`{"headers":{"cookie":{"set":"a"}}}`, "upstream.headers.cookie"},
+		"auth on host":    {`{"auth":{"name":"host"}}`, "upstream.auth.name"},
+		"auth on control": {`{"auth":{"name":"x-sub2api-user"}}`, "upstream.auth.name"},
 		"not an object":   {`[]`, SettingsField},
 	} {
 		resp := p.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "custom", CredentialsJson: `{"api_key":"sk-123456789"}`,

@@ -53,40 +53,25 @@ func (v *validator) upstream(f string, at manifest.AccountType, own map[string]*
 }
 
 // servedProtocols lists the protocols of the endpoints the account type
-// serves and the client headers it receives (the account platform's
-// passHeaders, else the platform's). complete is false when a platform is
-// not known here (offline packaging against another plugin's platform):
-// the routes are then not compared.
+// serves and the client headers it receives (AccountType.PassHeaders).
+// complete is false when a platform is not known here (offline packaging
+// against another plugin's platform): the routes are then not compared.
 func (v *validator) servedProtocols(at manifest.AccountType, own map[string]*manifest.Platform) (protocols, passHeaders []string, complete bool) {
+	lookup := func(id string) *manifest.Platform { return v.referencedPlatform(id, own[id]) }
 	complete = true
 	for _, ap := range at.Platforms {
-		p := v.referencedPlatform(ap.Platform, own[ap.Platform])
-		headers := ap.PassHeaders
+		p := lookup(ap.Platform)
 		if p == nil {
 			complete = false
-		} else if headers == nil {
-			headers = p.PassHeaders
-		}
-		passHeaders = appendNew(passHeaders, headers...)
-		if p == nil {
 			continue
 		}
 		for _, e := range p.Endpoints {
-			if ap.SupportsEndpoint(e.ID) {
-				protocols = appendNew(protocols, e.Protocol)
+			if ap.SupportsEndpoint(e.ID) && !slices.Contains(protocols, e.Protocol) {
+				protocols = append(protocols, e.Protocol)
 			}
 		}
 	}
-	return protocols, passHeaders, complete
-}
-
-func appendNew(list []string, items ...string) []string {
-	for _, s := range items {
-		if !slices.Contains(list, s) {
-			list = append(list, s)
-		}
-	}
-	return list
+	return protocols, at.PassHeaders(lookup), complete
 }
 
 // noProcessCapabilities are the capabilities a runtime "none" package may

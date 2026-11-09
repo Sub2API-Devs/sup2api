@@ -191,22 +191,35 @@ export function resetSection(d: Draft, up: Upstream, s?: Section) {
 // ---------------------------------------------------------------- hints
 
 export type HintCode =
-  'required' | 'not_here' | 'unknown_var' | 'not_field' | 'header_name' | 'header_blocked' | 'auth_header' | 'duplicate' | 'path_slash'
+  | 'required'
+  | 'not_here'
+  | 'unknown_var'
+  | 'not_field'
+  | 'not_passed'
+  | 'header_name'
+  | 'header_blocked'
+  | 'auth_blocked'
+  | 'auth_header'
+  | 'duplicate'
+  | 'path_slash'
 export interface Hint {
   code: HintCode
   name?: string
 }
 
-/** Headers no ordinary header may write (sdk/paramoverride HeaderBlocked); only auth sends a credential. */
+/** The blocked headers carrying a credential (sdk/paramoverride CredentialHeader): only auth may write them. */
+const CREDENTIAL_HEADERS = new Set('authorization x-api-key x-goog-api-key api-key cookie'.split(' '))
+/** Headers no ordinary header may write (sdk/paramoverride HeaderBlocked). */
 const BLOCKED_HEADERS = new Set(
   [
     'connection keep-alive te trailer transfer-encoding upgrade expect host content-length content-encoding accept-encoding',
-    'authorization x-api-key x-goog-api-key api-key cookie',
     'x-forwarded-for x-forwarded-host x-forwarded-proto x-forwarded-port x-real-ip forwarded via cf-connecting-ip true-client-ip x-client-ip x-cluster-client-ip'
   ].flatMap(group => group.split(' '))
 )
 const BLOCKED_PREFIXES = ['proxy-', 'sec-websocket-', 'x-sub2api-', 'x-kin-']
-export const headerBlocked = (n: string) => BLOCKED_HEADERS.has(n) || BLOCKED_PREFIXES.some(p => n.startsWith(p))
+/** A blocked header that is no credential: not even auth may write it. */
+const transportHeader = (n: string) => BLOCKED_HEADERS.has(n) || BLOCKED_PREFIXES.some(p => n.startsWith(p))
+export const headerBlocked = (n: string) => CREDENTIAL_HEADERS.has(n) || transportHeader(n)
 
 type Place = 'auth' | 'header' | 'path' | 'query'
 /** Where each template variable (or `prefix.`) may be written (template.go place.allowed). */
@@ -220,8 +233,12 @@ const VAR_PLACES: Record<string, Place[]> = {
 const VAR_RE = /\{([a-z_]+(?:\.[A-Za-z0-9_-]+)?)\}/g
 const REQUIRED: Hint = { code: 'required' }
 
-/** The first problem of a template written at place. */
-export function templateHint(tpl: string, place: Place, up: Upstream): Hint | undefined {
+/**
+ * The first problem of a template written at place. passHeaders are the
+ * client headers the account type receives (AccountType.pass_headers), the
+ * only ones {client_header.<name>} may read.
+ */
+export function templateHint(tpl: string, place: Place, up: Upstream, passHeaders: string[] = []): Hint | undefined {
   for (const [, name] of tpl.matchAll(VAR_RE)) {
     const dot = name.indexOf('.')
     const prefix = dot < 0 ? name : name.slice(0, dot + 1)
@@ -231,6 +248,7 @@ export function templateHint(tpl: string, place: Place, up: Upstream): Hint | un
     if (!VAR_PLACES[prefix].includes(place)) return { code: 'not_here', name: shown }
     if (prefix === 'credentials.' && !up.credentials?.fields?.includes(key)) return { code: 'not_field', name: shown }
     if (prefix === 'client_header.' && headerBlocked(key)) return { code: 'header_blocked', name: key }
+    if (prefix === 'client_header.' && !passHeaders.includes(key)) return { code: 'not_passed', name: key }
   }
   return undefined
 }
@@ -241,18 +259,25 @@ function authHeader(a: AuthDraft, up: Upstream): string {
   return authName(a) || (a.type === baseAuth(up).type ? baseAuth(up).name : '')
 }
 
+function authNameHint(type: AuthType, name: string): Hint | undefined {
+  if (!name) return REQUIRED
+  if (type !== 'header') return undefined
+  if (!HEADER_NAME.test(name)) return { code: 'header_name' }
+  return transportHeader(name) ? { code: 'auth_blocked', name } : undefined
+}
+
 export function authHints(a: AuthDraft, up: Upstream): { name?: Hint; value?: Hint } {
   if (a.type === 'none') return {}
   const inherit = a.type === baseAuth(up).type
   const name = authName(a) || (inherit ? baseAuth(up).name : '')
   const value = a.value || (inherit ? baseAuth(up).value : '')
   return {
-    name: !name ? REQUIRED : a.type === 'header' && !HEADER_NAME.test(name) ? { code: 'header_name' } : undefined,
+    name: authNameHint(a.type, name),
     value: value ? templateHint(value, 'auth', up) : REQUIRED
   }
 }
 
-export function headerHint(r: HeaderRow, d: Draft, up: Upstream): Hint | undefined {
+export function headerHint(r: HeaderRow, d: Draft, up: Upstream, passHeaders: string[] = []): Hint | undefined {
   const name = headerName(r)
   if (r.removed || (!name && !r.value)) return undefined
   if (!r.base) {
@@ -263,7 +288,7 @@ export function headerHint(r: HeaderRow, d: Draft, up: Upstream): Hint | undefin
   if (headerBlocked(name)) return { code: 'header_blocked', name }
   if (name === authHeader(d.auth, up)) return { code: 'auth_header', name }
   const value = r.value || r.base?.value || ''
-  return value ? templateHint(value, 'header', up) : REQUIRED
+  return value ? templateHint(value, 'header', up, passHeaders) : REQUIRED
 }
 
 export function pathHint(path: string, up: Upstream): Hint | undefined {

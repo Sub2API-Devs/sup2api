@@ -151,7 +151,7 @@ export default {
   },
   paramOverride: {
     title: 'Request parameter override',
-    hint: 'Rewrites the body and headers sent upstream, conditionally, after model mapping and before the plugin builds the request. Same format as a new-api channel\'s param override, which can be pasted as is',
+    hint: 'Rewrites the body and headers sent upstream, conditionally, last: after model mapping and the plugin\'s rewrites, right before sending. Same format as a new-api channel\'s param override, which can be pasted as is',
     none: 'Not set',
     count: '{n} operations',
     headerCount: '{n} on headers',
@@ -387,8 +387,10 @@ export default {
       not_here: '{name} cannot be used here',
       unknown_var: 'Unknown variable {name}',
       not_field: '{name} is not a credential field of the account type',
+      not_passed: '{name} is not a client header this account type receives',
       header_name: 'Not a valid header name',
       header_blocked: '{name} is a credential, hop-by-hop or gateway control header and cannot be set here; credentials go in authentication',
+      auth_blocked: '{name} is a hop-by-hop, client address or gateway control header and cannot carry the credential',
       auth_header: '{name} is written by authentication',
       duplicate: 'Header {name} is duplicated',
       path_slash: 'A path starts with /'

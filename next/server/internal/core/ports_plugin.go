@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"encoding/json"
-	"slices"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -199,25 +198,16 @@ func (b AccountTypeBinding) Key() AccountTypeKey {
 	return AccountTypeKey{PluginKey: b.Plugin.Key, Type: b.Type.ID}
 }
 
-// PassHeaders are the client headers the account type receives: for each
-// platform it serves, its own list for that platform, else the platform's
-// (as the gateway forwards them). platform looks a platform up (a
-// Generation's Platform); an unknown one contributes the type's list only.
+// PassHeaders are the client headers the account type receives
+// (manifest.AccountType.PassHeaders) with platform, a Generation's Platform,
+// looking the platforms up.
 func (b AccountTypeBinding) PassHeaders(platform func(id string) (PlatformBinding, bool)) []string {
-	out := []string{}
-	for _, ap := range b.Type.Platforms {
-		names := ap.PassHeaders
-		if len(names) == 0 {
-			pb, _ := platform(ap.Platform)
-			names = pb.Platform.PassHeaders
+	return b.Type.PassHeaders(func(id string) *manifest.Platform {
+		if pb, ok := platform(id); ok {
+			return &pb.Platform
 		}
-		for _, n := range names {
-			if !slices.Contains(out, n) {
-				out = append(out, n)
-			}
-		}
-	}
-	return out
+		return nil
+	})
 }
 
 // Supports returns the account type's entry for platform, if it serves it.

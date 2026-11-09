@@ -126,7 +126,9 @@ describe('upstream hints', () => {
     expect(templateHint('Bearer {api_key}', 'auth', up)).toBeUndefined()
     expect(templateHint('{api_key}', 'header', up)).toEqual({ code: 'not_here', name: '{api_key}' })
     expect(templateHint('{client_header.x-a}', 'auth', up)).toEqual({ code: 'not_here', name: '{client_header.x-a}' })
-    expect(templateHint('{client_header.cookie}', 'header', up)).toEqual({ code: 'header_blocked', name: 'cookie' })
+    expect(templateHint('{client_header.cookie}', 'header', up, ['cookie'])).toEqual({ code: 'header_blocked', name: 'cookie' })
+    expect(templateHint('{client_header.x-a}', 'header', up)).toEqual({ code: 'not_passed', name: 'x-a' })
+    expect(templateHint('{client_header.x-a}', 'header', up, ['x-a'])).toBeUndefined()
     expect(templateHint('{credentials.nope}', 'header', up)).toEqual({ code: 'not_field', name: '{credentials.nope}' })
     expect(templateHint('{credentials.org} {model} {base_url}', 'header', up)).toBeUndefined()
     expect(templateHint('{foo}', 'header', up)).toEqual({ code: 'unknown_var', name: '{foo}' })
@@ -139,6 +141,13 @@ describe('upstream hints', () => {
     expect(authHints({ type: 'header', name: 'bad name', value: '{client_header.a}' }, up)).toEqual({
       name: { code: 'header_name' },
       value: { code: 'not_here', name: '{client_header.a}' }
+    })
+    // A credential header can carry the key, a transport or gateway control header cannot.
+    expect(authHints({ type: 'header', name: 'x-api-key', value: '{api_key}' }, up).name).toBeUndefined()
+    expect(authHints({ type: 'header', name: 'host', value: '{api_key}' }, up).name).toEqual({ code: 'auth_blocked', name: 'host' })
+    expect(authHints({ type: 'header', name: 'x-sub2api-key', value: '{api_key}' }, up).name).toEqual({
+      code: 'auth_blocked',
+      name: 'x-sub2api-key'
     })
   })
 
@@ -156,6 +165,8 @@ describe('upstream hints', () => {
     expect(headerHint(add('x-empty', ''), d, up)).toEqual({ code: 'required' })
     expect(headerHint(add(''), d, up)).toEqual({ code: 'required' })
     expect(headerHint(newHeader(), d, up)).toBeUndefined()
+    expect(headerHint(add('x-agent', '{client_header.x-agent-id}'), d, up)).toEqual({ code: 'not_passed', name: 'x-agent-id' })
+    expect(headerHint(d.headers.at(-1)!, d, up, ['x-agent-id'])).toBeUndefined()
     d.auth = { type: 'header', name: 'x-custom-auth', value: '{api_key}' }
     expect(headerHint(add('x-custom-auth'), d, up)).toEqual({ code: 'auth_header', name: 'x-custom-auth' })
     expect(headerHint(d.headers[0], d, up)).toBeUndefined()

@@ -150,7 +150,7 @@ export default {
   },
   paramOverride: {
     title: '请求参数覆盖',
-    hint: '按条件改写发往上游的请求体和请求头，在模型映射之后、插件构造请求之前执行。格式兼容 new-api 渠道的参数覆盖，可以直接粘贴',
+    hint: '按条件改写发往上游的请求体和请求头，在模型映射和插件改写之后、发往上游之前最后执行。格式兼容 new-api 渠道的参数覆盖，可以直接粘贴',
     none: '未设置',
     count: '{n} 条操作',
     headerCount: '含 {n} 条请求头操作',
@@ -385,8 +385,10 @@ export default {
       not_here: '{name} 不能用在这里',
       unknown_var: '未知变量 {name}',
       not_field: '{name} 不是账号类型声明的凭证字段',
+      not_passed: '{name} 不是该账号类型收到的客户端请求头',
       header_name: '不是有效的请求头名称',
       header_blocked: '{name} 是凭证、逐跳或网关控制头，不能在这里设置；凭证请放在鉴权里',
+      auth_blocked: '{name} 是逐跳、客户端地址或网关控制头，不能用来发送凭证',
       auth_header: '{name} 由鉴权写入，不能另外设置',
       duplicate: '请求头 {name} 重复',
       path_slash: '路径须以 / 开头'

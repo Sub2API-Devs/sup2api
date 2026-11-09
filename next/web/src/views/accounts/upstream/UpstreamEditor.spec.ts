@@ -101,6 +101,19 @@ describe('upstream editor widget', () => {
     expect(w.get('[data-testid="upstream-headers"]').text()).toContain('cookie 是凭证、逐跳或网关控制头')
   })
 
+  it('lets a header read only the client headers the type receives', async () => {
+    const w = render(undefined, {}, { ...accountType, pass_headers: ['anthropic-beta'] })
+    await w.get('[data-testid="upstream-header-add"]').trigger('click')
+    await typeIn(w, 'upstream-header-new', 'x-beta')
+    const value = w.findAll('[data-testid="upstream-header-new"] input').at(-1)!
+    await value.setValue('{client_header.anthropic-beta}')
+    await flushPromises()
+    expect(w.get('[data-testid="upstream-headers"]').text()).not.toContain('不是该账号类型收到的客户端请求头')
+    await value.setValue('{client_header.x-other}')
+    await flushPromises()
+    expect(w.get('[data-testid="upstream-headers"]').text()).toContain('x-other 不是该账号类型收到的客户端请求头')
+  })
+
   it('shows server errors on their inputs', async () => {
     const w = render(
       { routes: { 'anthropic.count_tokens': { path: '/count' } } },

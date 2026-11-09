@@ -6669,7 +6669,9 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - manifest `accountTypes[].upstream`（`sdk/manifest/upstream.go`）：`preset`（`openai`/`anthropic`/`gemini`，预设在 `sdk/platforms/upstream/*.json`）、`extend`、`accountConfig`、`baseURL{default,required,stripSuffixes}`、`credentials{keyValidator,texts,fields}`、`auth{type: header|query|none, name, value}`、`headers`（头名 → `{set|default|append: 模板}`）、`routes`（上游协议 → `{method, path, transport, headers, patches, model}`）、`defaultProtocol`、`filterFields`、`paramOverride`（§84 格式）、`classify`、`test`、`models{path, idPath, stripPrefix}`。
 - 合并：预设 → 清单 → 账号层（只有 `accountConfig` 类型），按 JSON merge patch，`headers` 按头名、`routes` 按协议合并，`null` 删除；未知字段拒绝。
-- 模板变量：`{api_key}`（只能在 auth 值和路径查询串）、`{base_url}`（auth 和请求头）、`{model}`（映射和参数覆盖之后的上游模型）、`{credentials.<k>}`（k 须在 `credentials.fields`，不能是 api_key/base_url）、`{client_header.<名>}`（须在该类型的 passHeaders 里、不在 §81 禁止列表，只能用在普通请求头）。
+- 模板变量：`{api_key}`（只能在 auth 值和路径查询串）、`{base_url}`（auth 和请求头）、`{model}`（映射后的上游模型；账号参数覆盖改了模型时只重算 URL，请求头和查询值不变）、`{credentials.<k>}`（k 须在 `credentials.fields`，不能是 api_key/base_url）、`{client_header.<名>}`（须在该类型的 passHeaders 里、不在 §81 禁止列表，只能用在普通请求头）。
+- `auth.name` 只能是凭证头（authorization、x-api-key、x-goog-api-key、api-key、cookie）或普通头名，不能是逐跳、分帧、客户端地址或网关控制头。
+- passHeaders：账号类型 `platforms[]` 的列表为空（缺省或空数组）时用平台的（`manifest.AccountType.PassHeaders`，核心、校验、网关共用）。
 - 可服务的端点 = routes 列出的协议（须与 `platforms[].endpoints` 一致）加核心能转换到它们的协议；调度不变。
 - 校验：`sdk/manifest/check/upstream.go`（打包、安装、核心加载共用）；引擎 `sdk/upstream`（`Resolve` → `Profile.Validate/Build/URL/Test/Models/Classify/AuthHeader/PrepareBody/ForAccount`）。
 
@@ -6697,14 +6699,14 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | anthropic | 0.3.0 | 账号类型声明 preset anthropic；只保留模型目录（/models 路由、插件库） |
 | custom（新） | 0.1.0 | runtime none，内置启用；`custom_openai`、`custom_anthropic`、`custom_gemini`，`creationGroup: "custom"` |
 
-- 四个老插件的行为由黄金样例保证（`sdk/upstream/testdata/golden`，旧插件代码对约 1500 个输入采集，新引擎逐项回放一致）。唯一差异：relay 的测试请求现在带 `model` 和 `usage_protocol`。
+- 四个老插件的行为由黄金样例保证（`sdk/upstream/testdata/golden`，旧插件代码对约 1500 个输入采集，新引擎逐项回放一致）。样例已冻结，旧代码和采集器已删除，不再重新生成。唯一差异：relay 的测试请求现在带 `model` 和 `usage_protocol`。
 - 自定义上游：base_url 必填、Key 任意 8–512 个可见字符、`accountConfig: true`、默认过滤 `filterFields`（预设的 service_tier、safety_identifier、inference_geo、speed 中该协议适用的）；表单字段 `api_key`、`base_url`、`upstream`（`ui:widget: upstream-editor`）。账号层只能改 auth、headers、已声明协议的 path 和 `allowFields`（放开默认过滤字段）。暂不能按账号关掉单个协议。
 - `custom` 加入保留的官方插件名。
 
 ### 86.5 请求构造顺序
 
 - 请求体：模型映射、引用与资源映射、强制流式 → 协议转换 → 过滤字段（账号没放开的）→ 预设和清单的 paramOverride → 路由 patches → 插件（extend、老插件 BuildUpstreamRequest、执行路径转发）的 patch → **账号参数覆盖（§84）** → 改了模型时声明式类型重算 URL → 再次强制 stream。
-- 请求头：inbound（按 passHeaders 过滤）→ 预设、清单、路由的头 → 插件的头 → 声明的 paramOverride 头 → 账号透传与粘性透传（只补没有的）→ 账号参数覆盖的头 → **鉴权头按 auth 模板重写**（声明不产生值时删除）→ 核心资源头、额度头。鉴权头只能由 auth 模板写，请求头覆盖、透传、插件头都改不了它。
+- 请求头：inbound（按 passHeaders 过滤）→ 预设、清单、路由的头 → 插件的头 → 声明的 paramOverride 头 → 账号透传与粘性透传（只补没有的）→ 账号参数覆盖的头 → **鉴权头按 auth 模板重写**（声明不产生值时删除）→ 核心资源头、额度头。WebSocket 握手同样带声明的 paramOverride 头并重写鉴权头。鉴权头只能由 auth 模板写，请求头覆盖、透传、插件头都改不了它。
 
 ### 86.6 控制台
 

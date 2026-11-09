@@ -45,6 +45,7 @@ const P = 'accounts.upstream'
 const form = inject(ACCOUNT_FORM_KEY, null)
 
 const up = computed(() => form?.accountType.value?.upstream)
+const passHeaders = computed(() => form?.accountType.value?.pass_headers ?? [])
 const serverErrors = computed(() => layerErrors(form?.errors.value ?? {}))
 const draft = ref<Draft | null>(null)
 /** JSON of the layer last read or emitted: an echo of our own value does not reload the draft. */
@@ -103,7 +104,9 @@ const view = computed(() => {
     notes: {
       'auth.name': note('auth.name', authHint.name),
       'auth.value': note('auth.value', authHint.value),
-      ...Object.fromEntries(d.headers.map(r => [`header.${r.id}`, note(`headers.${headerName(r)}`, headerHint(r, d, u))])),
+      ...Object.fromEntries(
+        d.headers.map(r => [`header.${r.id}`, note(`headers.${headerName(r)}`, headerHint(r, d, u, passHeaders.value))])
+      ),
       ...Object.fromEntries(protocols.map(p => [`route.${p}`, note(`routes.${p}`, pathHint(d.paths[p] ?? '', u))]))
     } as Record<string, ReturnType<typeof note>>
   }

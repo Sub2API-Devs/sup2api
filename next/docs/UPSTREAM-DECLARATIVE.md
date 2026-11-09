@@ -105,7 +105,7 @@ server/internal/plugin/declarative   core.PlatformPlugin 适配器（含 extend 
 
 ### 2.4 模板
 
-可用变量：`{api_key}`、`{base_url}`、`{model}`（映射和参数覆盖之后的上游模型）、`{credentials.<k>}`（k 必须在 `credentials.fields` 里）、`{client_header.<name>}`（name 必须在该账号类型的 passHeaders 里，且不在 §81 禁止列表；只能用在普通请求头）。未知变量 → 校验失败（manifest check / 账号保存时）。运行时变量取不到值 → 该头不写。`{api_key}` 只允许出现在 auth.value 和路径查询串里；`{client_header.*}` 不允许出现在 auth。
+可用变量：`{api_key}`、`{base_url}`、`{model}`（映射后的上游模型；账号参数覆盖改了模型时只重算 URL）、`{credentials.<k>}`（k 必须在 `credentials.fields` 里）、`{client_header.<name>}`（name 必须在该账号类型的 passHeaders 里，且不在 §81 禁止列表；只能用在普通请求头）。未知变量 → 校验失败（manifest check / 账号保存时）。运行时变量取不到值 → 该头不写。`{api_key}` 只允许出现在 auth.value 和路径查询串里；`{client_header.*}` 不允许出现在 auth。
 
 ### 2.5 默认过滤字段
 

@@ -104,6 +104,20 @@ func TestDeclaredOverrideModelRendersTheURL(t *testing.T) {
 	assert.Equal(t, "claude-override", e.record().UpstreamModel)
 }
 
+// A model a patch wrote is not the override's: an override leaving the
+// model alone changes neither the URL nor the recorded upstream model.
+func TestOverrideKeepsAPatchedModel(t *testing.T) {
+	e := newEnv(t)
+	e.declare(`"routes":{"anthropic.messages":{"path":"/v1/models/{model}/messages","patches":[{"op":"set","path":"model","value":"claude-patched"}]}}`, nil)
+	setParamOverride(t, e, 1, `{"operations":[{"mode":"set","path":"temperature","value":0.3}]}`)
+	require.Equal(t, 200, e.messages(body(testModel, false)).status)
+	got := e.up.last()
+	assert.Equal(t, "/v1/models/"+testModel+"/messages", got.path, "the URL Build rendered")
+	assert.Equal(t, "claude-patched", gjson.GetBytes(got.body, "model").String())
+	assert.Equal(t, 0.3, gjson.GetBytes(got.body, "temperature").Float())
+	assert.Equal(t, testModel, e.record().UpstreamModel)
+}
+
 // Only the declaration decides the credential: under a custom auth header
 // name neither an extending plugin, the passthrough nor the account's
 // override can replace or remove it.
@@ -213,4 +227,43 @@ func TestWebSocketAccountOverrideAfterPatches(t *testing.T) {
 		assert.Equal(t, "true", gjson.Get(m, "store").Raw)
 		assert.Equal(t, "override", gjson.Get(m, "metadata.src").String())
 	}
+}
+
+// A declared type on a WebSocket: the handshake carries the declaration's
+// headers, its paramOverride's and its auth; each turn's message gets the
+// declaration's part of the body (filtered fields, the manifest's rewrite).
+func TestWebSocketDeclaredUpstream(t *testing.T) {
+	e := newWSEnv(t)
+	var up manifest.Upstream
+	require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"preset":"openai","baseURL":{"default":%q},"filterFields":["service_tier"],
+		"paramOverride":{"operations":[{"mode":"set_header","path":"x-declared","value":"v"},{"mode":"set","path":"metadata.src","value":"declared"}]}}`,
+		e.wsUp.srv.URL), &up))
+	i := len(e.gen.accountTypes) - 1
+	at := e.gen.accountTypes[i].Type
+	at.Upstream = &up
+	p, err := sdkupstream.Resolve(&at, builtinPlatform(t, "openai").PassHeaders, nil)
+	require.NoError(t, err)
+	e.gen.accountTypes[i].Type, e.gen.accountTypes[i].Client = at, declarative.New(p, nil)
+
+	c := e.mustDial()
+	for _, input := range []string{"one", "two"} {
+		m := create(wsModel, input)
+		m["service_tier"] = "priority"
+		c.send(m)
+		c.until("response.completed")
+		e.record()
+	}
+	keys, msgs := e.wsUp.snapshot()
+	require.Len(t, keys, 1)
+	require.Len(t, msgs, 2)
+	e.wsUp.mu.Lock()
+	h := e.wsUp.headers[0]
+	e.wsUp.mu.Unlock()
+	assert.Equal(t, "v", h.Get("x-declared"))
+	assert.Contains(t, h.Get("openai-beta"), "responses_websockets=")
+	for _, m := range msgs {
+		assert.False(t, gjson.Get(m, "service_tier").Exists(), "filtered")
+		assert.Equal(t, "declared", gjson.Get(m, "metadata.src").String())
+	}
+	assert.Zero(t, e.wsPlat.buildCount(), "no plugin call")
 }
