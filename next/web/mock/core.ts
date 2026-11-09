@@ -323,7 +323,18 @@ on('GET', '/me/menus', (req) => {
 // Mirrors server/internal/authz/menus.go (sections and their order) with the
 // bundled plugins' menus placed where their manifests put them.
 const MENUS = [
-  { section: 'overview', items: [{ id: 'dashboard', label: { en: 'Dashboard', zh: '仪表盘' }, icon: 'dashboard', path: '/dashboard' }] },
+  {
+    section: 'overview',
+    items: [
+      { id: 'dashboard', label: { en: 'Dashboard', zh: '仪表盘' }, icon: 'dashboard', path: '/dashboard' },
+      { id: 'my-api-keys', label: { en: 'API keys', zh: 'API 密钥' }, icon: 'key', path: '/me/api-keys' },
+      { id: 'my-models', label: { en: 'Models & prices', zh: '模型与价格' }, icon: 'price', path: '/me/models' },
+      { id: 'my-usage-overview', label: { en: 'Usage overview', zh: '用量概览' }, icon: 'chart', path: '/me/usage/overview' },
+      { id: 'my-usage', label: { en: 'Usage logs', zh: '使用日志' }, icon: 'usage', path: '/me/usage' },
+      { id: 'usage-overview', label: { en: 'Site overview', zh: '全站概览' }, icon: 'chart', path: '/usage/overview' },
+      { id: 'usage', label: { en: 'Site usage logs', zh: '全站日志' }, icon: 'usage', path: '/usage' }
+    ]
+  },
   {
     section: 'gateway',
     items: [
@@ -332,8 +343,6 @@ const MENUS = [
       { id: 'platforms', label: { en: 'Platforms', zh: '平台' }, icon: 'globe', path: '/platforms' },
       { id: 'proxies', label: { en: 'Proxies', zh: '代理' }, icon: 'proxy', path: '/proxies' },
       { id: 'prices', label: { en: 'Model prices', zh: '模型价格' }, icon: 'price', path: '/prices' },
-      { id: 'usage-overview', label: { en: 'Usage overview', zh: '概览' }, icon: 'chart', path: '/usage/overview' },
-      { id: 'usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/usage' },
       { id: 'anthropic:anthropic-models', label: { en: 'Model catalog', zh: '模型目录' }, icon: 'list', path: '/p/anthropic/models', plugin_key: 'anthropic' }
     ]
   },
@@ -370,12 +379,8 @@ const MENUS = [
   {
     section: 'me',
     items: [
-      { id: 'my-api-keys', label: { en: 'API keys', zh: 'API 密钥' }, icon: 'key', path: '/me/api-keys' },
-      { id: 'my-models', label: { en: 'Models & prices', zh: '模型与价格' }, icon: 'price', path: '/me/models' },
       { id: 'my-wallet', label: { en: 'Wallet', zh: '钱包' }, icon: 'balance', path: '/me/wallet' },
-      { id: 'my-usage-overview', label: { en: 'Usage overview', zh: '概览' }, icon: 'chart', path: '/me/usage/overview' },
-      { id: 'my-usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/me/usage' },
-      { id: 'my-profile', label: { en: 'Account', zh: '个人中心' }, icon: 'user', path: '/me/profile' }
+      { id: 'my-profile', label: { en: 'Profile', zh: '个人设置' }, icon: 'user', path: '/me/profile' }
     ]
   }
 ]

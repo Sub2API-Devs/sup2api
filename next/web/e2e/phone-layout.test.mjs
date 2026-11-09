@@ -72,6 +72,8 @@ for (const name of DEVICES) {
       await page.click('button[type=submit]')
       await page.waitForURL(url => !url.pathname.startsWith('/login'))
       await page.waitForSelector('aside nav a[href]', { state: 'attached' })
+      // The admin submenus start folded; open them all to list every page.
+      await page.$$eval('aside nav [aria-expanded="false"]', buttons => buttons.forEach(b => b.click()))
       menu = await page.$$eval('aside nav a[href]', links => links.map(a => a.getAttribute('href')))
     })
     after(() => browser?.close())

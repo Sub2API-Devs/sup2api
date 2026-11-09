@@ -1155,16 +1155,16 @@ type ProxyResolver interface {
 
 | 区 | order | 核心项 | 内置插件菜单 |
 | --- | --- | --- | --- |
-| overview 概览 | 100 | 仪表盘 | |
-| gateway 网关 | 200 | 分组、账号、平台、代理、模型价格、使用记录 | 模型目录（anthropic 0.2.9）、动态权重 |
+| overview 概览（§90 起叫“控制台”） | 100 | 仪表盘（§90 起还有 API 密钥、模型与价格、用量概览、使用日志、全站概览、全站日志） | |
+| gateway 网关 | 200 | 分组、账号、平台、代理、模型价格（§90 起使用记录移到控制台） | 模型目录（anthropic 0.2.9）、动态权重 |
 | security 安全 | 300 | 无（空区不返回） | 请求守卫（guard 0.2.7）、提示词审核（moderation 0.6.2） |
 | finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
 | users 用户与权限 | 500 | 用户、角色与权限 | |
 | plugins 插件 | 600 | 已安装插件、插件市场、发布者；`section:"plugins"` 的插件菜单接在后面 | |
 | system 系统 | 700 | 集群节点、核心升级、审计日志、设置 | |
-| me 我的账户 | 800 | API 密钥、使用记录 | 我的邀请、每日签到 |
+| me 我的账户（§90 起叫“个人中心”） | 800 | API 密钥、使用记录（§90 起只剩钱包、个人设置） | 我的邀请、每日签到 |
 
-- 只有概览和我的账户的用户（没有 gateway/security/finance/users/system 任何一区），控制台把"我的账户"排到仪表盘之后并且不画它的标题；插件区照常有标题。
+- ~~只有概览和我的账户的用户，控制台把"我的账户"排到仪表盘之后并且不画它的标题~~（§90 起所有人都按三组显示）。
 - 侧栏收起时分区标题隐藏，各区之间画一条分隔线。
 - 用到 `security`、`users` 的插件需要核心 0.1.229 或更高（guard 0.2.7、moderation 0.6.2 的 `hostCompat`）。
 - `security`、`users` 是本次新增的核心区 id，从此是保留 id：插件在 `ui.sections` 里声明 id 为 `security` 或 `users` 的自有区，上传/安装时校验失败 `ui.sections[i].id / invalid`（"reserved for the core sidebar"）。校验只在上传/安装时做，已经装好的这类插件照常加载：它的菜单 `section:"security"`/`"users"` 在运行时按核心区处理，并入核心的"安全"/"用户与权限"区，自己声明的 `label` 和 `order` 被忽略。
@@ -6908,3 +6908,20 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 计算：`server/internal/gateway/balance.go`（`readBalance`、`tierWeights`、`trafficWeights`、`loadedWeight`），接入 `dispatch.go` `pick` / `orderPool`
 - 读数：`core.AccountLimiter.ModelUsage`（`account/limiter.go`），`core.AccountRef.ModelLimitIndex`（`core/ports_identity.go`）
 - 前端：`web/src/views/settings/SchedulingPolicyView.vue`、`LoadBalanceSettingsCard.vue`
+
+## 90. 侧栏三组：控制台、个人中心、管理员（2026-11-10，用户要求：参考 new-api 的菜单，分三类；无迁移）
+
+侧栏按三组显示，接口 `GET /me/menus` 的形状和区 id 不变，插件不用改：
+
+| 组 | 来自哪个区 | 内容 |
+| --- | --- | --- |
+| 控制台 | `overview`（标签改为“控制台 / Console”） | 仪表盘、API 密钥、模型与价格、用量概览（`/me/usage/overview`）、使用日志（`/me/usage`），以及有 `usage:all:read` 才有的全站概览（`/usage/overview`）、全站日志（`/usage`） |
+| 个人中心 | `me`（标签改为“个人中心 / Personal”） | 钱包、个人设置（`/me/profile`，原“个人中心”）；`section:"me"` 的插件菜单（我的邀请、每日签到）接在后面 |
+| 管理员 | 其余所有区，核心区和插件区都算，按服务端顺序 | 有两项及以上的区折叠成一个可展开的子菜单（区名、区图标）；只有一项的区直接显示这一项 |
+
+- 所有角色都有控制台，看到哪些项按权限过滤；用户使用记录拆成两个菜单：使用日志（自己的）和全站日志（全站，仅 `usage:all:read`）。
+- “管理员”标题只在调用者有 gateway/security/finance/users/system 任一区时显示；只有公开插件页的普通用户，这些页排在个人中心之后、没有组标题。
+- 子菜单展开状态存在浏览器 `localStorage` 的 `s2a.navOpen`；当前页面所在的子菜单自动展开。
+- 侧栏收起（只剩图标）时没有组标题和子菜单：所有项按区平铺成图标，区与区之间画分隔线。
+- 服务端仍按 `CoreMenuSections()` 的 order 返回各区（`me` 是 800），三组的排列由控制台决定。
+- 代码：`server/internal/authz/menus.go`（`coreMenus`），`web/src/layouts/sidebarGroups.ts`（分组、子菜单、展开状态）、`AppSidebar.vue`、`SidebarLink.vue`、`SidebarSubmenu.vue`。

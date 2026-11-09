@@ -41,13 +41,23 @@ type coreMenuSection struct {
 	items []coreMenuItem
 }
 
-// coreMenus follows ARCHITECTURE appendix A.1. Each section stays short:
-// gateway resources, security, finance, users and permissions, the plugin
-// ecosystem and cluster operations are separate groups so plugins can join the
-// one their pages belong to.
+// coreMenus follows CONTRACTS §22.1 and §90. The console shows three groups:
+// overview (the console every role has), me (personal) and, under one admin
+// header, the operator sections - gateway resources, security, finance, users
+// and permissions, the plugin ecosystem and cluster operations - kept apart so
+// plugins can join the one their pages belong to.
 var coreMenus = []coreMenuSection{
-	{"overview", lt("Overview", "概览"), []coreMenuItem{
+	// Own usage for everyone, site-wide usage beside it for those who may
+	// read it; the old usage statistics page (/me/stats) redirects to the
+	// usage overview.
+	{"overview", lt("Console", "控制台"), []coreMenuItem{
 		{"dashboard", lt("Dashboard", "仪表盘"), "dashboard", "/dashboard", nil},
+		{"my-api-keys", lt("API keys", "API 密钥"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
+		{"my-models", lt("Models & prices", "模型与价格"), "price", "/me/models", []string{"apikey:self:manage"}},
+		{"my-usage-overview", lt("Usage overview", "用量概览"), "chart", "/me/usage/overview", []string{"usage:self:read"}},
+		{"my-usage", lt("Usage logs", "使用日志"), "usage", "/me/usage", []string{"usage:self:read"}},
+		{"usage-overview", lt("Site overview", "全站概览"), "chart", "/usage/overview", []string{"usage:all:read"}},
+		{"usage", lt("Site usage logs", "全站日志"), "usage", "/usage", []string{"usage:all:read"}},
 	}},
 	{"gateway", lt("Gateway", "网关"), []coreMenuItem{
 		{"groups", lt("Groups", "分组"), "group", "/groups", []string{"group:read"}},
@@ -56,8 +66,6 @@ var coreMenus = []coreMenuSection{
 		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read", "account:own:read", "account:own:create"}},
 		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}},
 		{"prices", lt("Model prices", "模型价格"), "price", "/prices", []string{"price:read"}},
-		{"usage-overview", lt("Usage overview", "概览"), "chart", "/usage/overview", []string{"usage:all:read"}},
-		{"usage", lt("Usage records", "使用记录"), "usage", "/usage", []string{"usage:all:read"}},
 	}},
 	// No core items: request guards and moderation are plugins and join it.
 	{"security", lt("Security", "安全"), nil},
@@ -81,14 +89,9 @@ var coreMenus = []coreMenuSection{
 		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"audit:read"}},
 		{"settings", lt("Settings", "设置"), "settings", "/settings", []string{"settings:read", "sticky:read"}},
 	}},
-	// The old usage statistics page (/me/stats) redirects to the overview.
-	{"me", lt("My account", "我的账户"), []coreMenuItem{
-		{"my-api-keys", lt("API keys", "API 密钥"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
-		{"my-models", lt("Models & prices", "模型与价格"), "price", "/me/models", []string{"apikey:self:manage"}},
+	{"me", lt("Personal", "个人中心"), []coreMenuItem{
 		{"my-wallet", lt("Wallet", "钱包"), "balance", "/me/wallet", []string{"balance:self:read"}},
-		{"my-usage-overview", lt("Usage overview", "概览"), "chart", "/me/usage/overview", []string{"usage:self:read"}},
-		{"my-usage", lt("Usage records", "使用记录"), "usage", "/me/usage", []string{"usage:self:read"}},
-		{"my-profile", lt("Account", "个人中心"), "user", "/me/profile", nil},
+		{"my-profile", lt("Profile", "个人设置"), "user", "/me/profile", nil},
 	}},
 }
 

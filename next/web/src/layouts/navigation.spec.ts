@@ -62,34 +62,50 @@ describe('sidebar', () => {
   }
   const labels = (w: ReturnType<typeof mount>) => w.findAll('nav a').map(a => a.text())
 
-  it('lists my account right after the dashboard for a user without operator sections', async () => {
+  it('shows a user the console and personal groups, a public plugin page untitled after them', async () => {
     const { wrapper } = await mountSidebar([
-      { section: 'overview', items: [item('dashboard', '/dashboard')] },
+      { section: 'overview', items: [item('dashboard', '/dashboard'), item('keys', '/me/api-keys')] },
       { section: 'plugins', items: [item('info', '/p/guard/info')] },
-      { section: 'me', items: [item('keys', '/me/api-keys'), item('usage', '/me/usage')] }
+      { section: 'me', items: [item('wallet', '/me/wallet')] }
     ])
-    expect(labels(wrapper)).toEqual(['dashboard', 'keys', 'usage', 'info'])
-    expect(wrapper.text()).not.toContain('我的账户')
-    expect(wrapper.text()).toContain('插件')
+    expect(labels(wrapper)).toEqual(['dashboard', 'keys', 'wallet', 'info'])
+    expect(wrapper.get('[data-testid="nav-group-overview"]').text()).toContain('控制台')
+    expect(wrapper.get('[data-testid="nav-group-me"]').text()).toContain('个人中心')
+    expect(wrapper.get('[data-testid="nav-group-admin"]').text()).toBe('info')
   })
 
-  it('keeps the server order and labels the new core sections for operators', async () => {
-    const { wrapper, app } = await mountSidebar([
-      { section: 'overview', items: [item('dashboard', '/dashboard')] },
-      { section: 'gateway', items: [item('groups', '/groups')] },
-      { section: 'security', items: [item('guard', '/p/guard/dashboard')] },
-      { section: 'users', items: [item('users', '/users')] },
-      { section: 'me', items: [item('keys', '/me/api-keys')] }
-    ])
-    expect(labels(wrapper)).toEqual(['dashboard', 'groups', 'guard', 'users', 'keys'])
-    expect(wrapper.text()).toContain('安全')
-    expect(wrapper.text()).toContain('用户与权限')
-    expect(wrapper.text()).toContain('我的账户')
+  const operatorMenu = [
+    { section: 'overview', items: [item('dashboard', '/dashboard')] },
+    { section: 'gateway', items: [item('groups', '/groups'), item('accounts', '/accounts')] },
+    { section: 'security', items: [item('guard', '/p/guard/dashboard')] },
+    { section: 'users', items: [item('users', '/users'), item('roles', '/roles')] },
+    { section: 'me', items: [item('wallet', '/me/wallet')] }
+  ]
+
+  it('folds the operator sections into admin submenus, a one-entry section stays a plain entry', async () => {
+    const { wrapper, app } = await mountSidebar(operatorMenu)
+    const admin = wrapper.get('[data-testid="nav-group-admin"]')
+    expect(admin.text()).toContain('管理员')
+    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'guard'])
+    expect(admin.findAll('button').map(b => b.text())).toEqual(['网关', '用户与权限'])
+    await wrapper.get('[data-testid="nav-submenu-gateway"]').trigger('click')
+    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'groups', 'accounts', 'guard'])
+    expect(wrapper.get('[data-testid="nav-submenu-gateway"]').attributes('aria-expanded')).toBe('true')
+    expect(JSON.parse(localStorage.getItem('s2a.navOpen') || '[]')).toEqual(['gateway'])
     app.sidebarCollapsed = true
     await flushPromises()
-    // Collapsed: no headers, a rule between every two groups.
-    expect(wrapper.text()).not.toContain('安全')
+    // Collapsed: no titles or submenus, every entry an icon, a rule between every two sections.
+    expect(wrapper.text()).not.toContain('管理员')
+    expect(wrapper.findAll('nav a')).toHaveLength(7)
     expect(wrapper.findAll('nav hr')).toHaveLength(4)
+  })
+
+  it('opens the submenu of the current page and remembers the ones opened before', async () => {
+    localStorage.setItem('s2a.navOpen', JSON.stringify(['users']))
+    const { wrapper } = await mountSidebar(operatorMenu, '/accounts')
+    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'groups', 'accounts', 'guard', 'users', 'roles'])
+    await wrapper.get('[data-testid="nav-submenu-gateway"]').trigger('click')
+    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'guard', 'users', 'roles'])
   })
 
   it('lights up the menu entry of the page, else of its nearest parent page', async () => {
@@ -166,7 +182,7 @@ describe('top bar', () => {
     await wrapper.get('[aria-label="账号菜单"]').trigger('click')
     await flushPromises()
     const items = Array.from(document.querySelectorAll<HTMLElement>('[role^="menuitem"]'))
-    expect(items.map(i => i.textContent?.trim())).toEqual(['个人中心', '修改密码', '语言 · 中文', '深色模式', '退出登录'])
+    expect(items.map(i => i.textContent?.trim())).toEqual(['个人设置', '修改密码', '语言 · 中文', '深色模式', '退出登录'])
     items[2].click()
     await flushPromises()
     expect(i18n.global.locale.value).toBe('en')
