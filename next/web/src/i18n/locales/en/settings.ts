@@ -17,6 +17,27 @@ export default {
     sticky: 'Sticky sessions',
     offload: 'CPU protection'
   },
+  scheduling: {
+    tabsLabel: 'Scheduling policy',
+    tabs: { failure: 'Failure policy', balance: 'Load balancing' }
+  },
+  balance: {
+    title: 'Load balancing',
+    subtitle: 'How new sessions pick an account within one priority. Only new sessions and failover are affected; bound sessions stay where they are.',
+    mode: 'Balancing',
+    modes: { default: 'Default', traffic: 'Traffic' },
+    modeHints: {
+      default: 'Accounts of one priority are drawn at random by weight.',
+      traffic: "Accounts using less than their weight's share come first, so traffic follows the weight ratio."
+    },
+    limitLoad: 'Load from limits',
+    limitLoadHint: 'The closer an account is to its limit, the lower its weight. E.g. RPM limit 100 with 90 used: weight ×10%. Accounts without a limit are not affected.',
+    metric: 'Metric',
+    metricHint: 'Both the traffic balance and the limit load use this metric. Without a TPM limit, tokens count when a request ends, so TPM lags slightly.',
+    metrics: { rpm: 'RPM', concurrency: 'Concurrency', tpm: 'TPM' },
+    modelLimits: 'Per-model limits',
+    modelLimitsHint: "When the requested model has a per-model limit on the account, that list's usage and limit count too, whichever is higher. Needs load from limits on."
+  },
   offload: {
     nodesTitle: 'Node load',
     title: 'CPU protection',
