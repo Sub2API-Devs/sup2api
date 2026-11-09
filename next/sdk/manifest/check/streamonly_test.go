@@ -95,6 +95,7 @@ func TestCoreFloors(t *testing.T) {
 	}
 	streamOnly := manifest.AccountPlatform{Platform: "openai", StreamOnly: []string{"openai.responses"}}
 	responsesOnly := manifest.AccountPlatform{Platform: "openai", Endpoints: []string{"responses"}}
+	chatOnly := manifest.AccountPlatform{Platform: "openai", Endpoints: []string{"chat_completions"}}
 	for _, tc := range []struct {
 		name, hostCompat string
 		ap               manifest.AccountPlatform
@@ -105,6 +106,9 @@ func TestCoreFloors(t *testing.T) {
 		{"streamOnly first core", ">=" + StreamOnlyFirstCore + " <0.2.0", streamOnly, false},
 		{"same-platform conversion old range", ">=0.1.0 <0.2.0", responsesOnly, true},
 		{"same-platform conversion first core", ">=" + StreamOnlyFirstCore + " <0.2.0", responsesOnly, false},
+		// responses -> chat came with the conversion matrix (§88).
+		{"responses via chat before the matrix", ">=" + StreamOnlyFirstCore + " <0.2.0", chatOnly, true},
+		{"responses via chat matrix core", ">=" + ConvertMatrixFirstCore + " <0.2.0", chatOnly, false},
 		{"chat kept", ">=0.1.0 <0.2.0", manifest.AccountPlatform{Platform: "openai", Endpoints: []string{"responses", "chat_completions"}}, false},
 		{"no subset", ">=0.1.0 <0.2.0", manifest.AccountPlatform{Platform: "openai"}, false},
 		{"no converter", ">=0.1.0 <0.2.0", manifest.AccountPlatform{Platform: "openai", Endpoints: []string{"embeddings"}}, false},
