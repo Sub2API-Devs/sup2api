@@ -304,6 +304,11 @@ func (v *validator) uiSlots(u *manifest.UI) {
 		f := fmt.Sprintf("ui.slots[%d]", i)
 		switch s.Slot {
 		case "dashboard.widgets", "account.detail.tabs", "account.form.widgets", "account.list.weight", "account.list.toolbar":
+			if len(s.Label) > 0 || s.Icon != "" || len(s.AccountTypes) > 0 {
+				v.add(f, "unsupported", "label, icon and accountTypes are only honoured on %s", manifest.SlotAccountEditorSection)
+			}
+		case manifest.SlotAccountEditorSection:
+			v.editorSection(f, s)
 		default:
 			v.add(f+".slot", "invalid", "unknown slot %q", s.Slot)
 		}
@@ -317,6 +322,22 @@ func (v *validator) uiSlots(u *manifest.UI) {
 		if s.Permission != "" && !v.userPerm(s.Permission) {
 			v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", s.Permission)
 		}
+	}
+}
+
+// editorSection validates the navigation entry of an account editor section
+// (UI 3.7): a label, a known icon and account type ids without repeats.
+func (v *validator) editorSection(f string, s manifest.Slot) {
+	if firstText(s.Label) == "" {
+		v.add(f+".label", "required", "label is required")
+	}
+	v.menuIcon(f+".icon", s.Icon)
+	seen := map[string]bool{}
+	for i, id := range s.AccountTypes {
+		if !accountTypeIDRe.MatchString(id) || seen[id] {
+			v.add(fmt.Sprintf("%s.accountTypes[%d]", f, i), "invalid", "account type id %q is invalid or repeated", id)
+		}
+		seen[id] = true
 	}
 }
 
@@ -406,8 +427,11 @@ type uiFloor struct {
 
 // uiFloors, newest first. Core 0.1.228 is the last that ships UI 3.3
 // (3.4 starts at 0.1.229); 0.1.255 is the last with UI 3.5 (3.6 starts at
-// 0.1.256).
+// 0.1.256); 0.1.262 is the last with UI 3.6 (3.7 starts at 0.1.263).
 var uiFloors = []uiFloor{
+	{minor: 7, lastUI: "3.6.0", lastCore: "0.1.262", firstCore: CommonControlsFirstCore, uses: func(u *manifest.UI) bool {
+		return slices.ContainsFunc(u.Slots, func(s manifest.Slot) bool { return s.Slot == manifest.SlotAccountEditorSection })
+	}},
 	{minor: 6, lastUI: "3.5.0", lastCore: "0.1.255", firstCore: "0.1.256", uses: func(u *manifest.UI) bool {
 		return len(u.AccountActions) > 0 ||
 			slices.ContainsFunc(u.Slots, func(s manifest.Slot) bool { return s.Slot == "account.list.toolbar" })

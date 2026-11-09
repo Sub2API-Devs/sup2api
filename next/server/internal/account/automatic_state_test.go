@@ -1,6 +1,7 @@
 package account
 
 import (
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -19,8 +20,8 @@ func TestAccountCommonControls(t *testing.T) {
 	off := false
 	legacy := e.mkRawAccount("anthropic", "apikey", "legacy", "unused", true)
 	e.gen.types[0].Type.CommonControls = map[string]manifest.AccountCommonControl{
-		"auto_disable": {Configurable: &off, Default: &off},
-		"schedulable":  {Configurable: &off, Default: &off},
+		"auto_disable": {Configurable: &off, Default: json.RawMessage(`false`)},
+		"schedulable":  {Configurable: &off, Default: json.RawMessage(`false`)},
 	}
 	status, result := e.do("GET", "/account-types", nil)
 	require.Equal(t, 200, status)
@@ -51,7 +52,7 @@ func TestAccountCommonControls(t *testing.T) {
 	require.Equal(t, true, data(result)["auto_disable"])
 	require.Equal(t, true, data(result)["schedulable"])
 	require.Equal(t, "disabled", data(result)["status"])
-	e.gen.types[0].Type.CommonControls["auto_disable"] = manifest.AccountCommonControl{Default: &off}
+	e.gen.types[0].Type.CommonControls["auto_disable"] = manifest.AccountCommonControl{Default: json.RawMessage(`false`)}
 	status, result = e.do("PATCH", "/accounts/"+itoa(id), map[string]any{"auto_disable": true})
 	require.Equal(t, 200, status)
 	require.Equal(t, true, data(result)["auto_disable"])

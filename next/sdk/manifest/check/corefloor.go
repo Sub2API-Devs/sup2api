@@ -21,6 +21,12 @@ const StreamOnlyFirstCore = "0.1.257"
 // error.
 const AttemptHookFirstCore = "0.1.258"
 
+// CommonControlsFirstCore is the first core that knows the common controls
+// besides schedulable and auto_disable and the visible, locked and required
+// fields (CONTRACTS §87). Older cores refuse the names at install and ignore
+// the fields, which would leave a locked setting editable.
+const CommonControlsFirstCore = "0.1.263"
+
 // SamePlatformConversions are the core's protocol converters whose two
 // protocols belong to one platform (client, upstream). The gateway's
 // convert.Default() is checked against this list in its tests.
@@ -51,6 +57,22 @@ var coreFloors = []coreFloor{
 	{field: "hooks[].point " + manifest.HookPointAttempt, firstCore: AttemptHookFirstCore, uses: func(v *validator) bool {
 		return slices.ContainsFunc(v.m.Hooks, func(h manifest.Hook) bool { return h.Point == manifest.HookPointAttempt })
 	}},
+	{field: "accountTypes[].commonControls (new controls or visible, locked, required)", firstCore: CommonControlsFirstCore,
+		uses: (*validator).usesNewCommonControls},
+}
+
+// usesNewCommonControls reports a common control an older core does not
+// know: a name besides the legacy ones or a field besides configurable and
+// default.
+func (v *validator) usesNewCommonControls() bool {
+	for _, at := range v.m.AccountTypes {
+		for name, c := range at.CommonControls {
+			if !slices.Contains(manifest.LegacyCommonControls, name) || c.Visible != nil || c.Locked || c.Required {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // usesSamePlatformConversion reports an account type whose endpoint subset

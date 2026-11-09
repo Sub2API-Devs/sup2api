@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -49,9 +50,9 @@ const (
 	usagePeriodMonth = "month"
 	// usagePeriodNone is a lifetime limit: no reset, the account stays
 	// disabled until the limit is raised or turned off.
-	usagePeriodNone = "none"
+	usagePeriodNone = manifest.UsagePeriodNone
 
-	maxUsageLimitAmount = 1_000_000_000
+	maxUsageLimitAmount = manifest.MaxUsageLimitAmount
 	// usageFoldBatch is how many journal rows one fold statement takes.
 	usageFoldBatch = 5000
 )
@@ -61,9 +62,7 @@ const (
 // lifetime limit has no periods: its period_count is always stored as 1
 // (normalizeUsageLimit), whatever was submitted. The database checks only
 // the widest bound (1-8784, 0064).
-var maxPeriodCount = map[string]int{
-	usagePeriodHour: 366 * 24, usagePeriodDay: 366, usagePeriodWeek: 52, usagePeriodMonth: 12, usagePeriodNone: 1,
-}
+var maxPeriodCount = manifest.UsageLimitMaxPeriodCount
 
 // Anchors are accepted in [2000, 2100) so window math never nears the
 // limits of time.Duration.
@@ -594,7 +593,7 @@ func validateUsageLimit(ctx context.Context, l UsageLimit, fields ...core.FieldE
 		add("period_count", fmt.Sprintf("period count must be 1-%d (one period lasts at most 366 days)", maxCount),
 			fmt.Sprintf("周期长度必须为 1-%d（单个周期最长 366 天）", maxCount))
 	}
-	if l.Amount.IsNegative() || l.Amount.GreaterThan(decimal.NewFromInt(maxUsageLimitAmount)) || !l.Amount.Equal(l.Amount.Truncate(8)) {
+	if l.Amount.IsNegative() || l.Amount.GreaterThan(decimal.NewFromInt(maxUsageLimitAmount)) || !l.Amount.Equal(l.Amount.Truncate(manifest.UsageLimitAmountDecimals)) {
 		add("amount", "amount must be 0-1000000000 USD with at most 8 decimals", "限额必须为 0-1000000000 美元，最多 8 位小数")
 	}
 	if l.Enabled && !l.Amount.IsPositive() {
@@ -631,6 +630,83 @@ func usageLimitWriteError(ctx context.Context, err error) error {
 	return core.InvalidFields(core.FieldError{Field: field, Code: "invalid", Message: t(ctx, "value out of range", "取值超出范围")})
 }
 
+// normalized validates the submitted configuration and floors its anchor to
+// the hour.
+func (in usageLimitInput) normalized(ctx context.Context) (UsageLimit, error) {
+	l, fields := in.limit(ctx)
+	if err := validateUsageLimit(ctx, l, fields...); err != nil {
+		return l, err
+	}
+	if l.Anchor != nil {
+		a := l.anchorStart()
+		l.Anchor = &a
+	}
+	return l, nil
+}
+
+// parseUsageLimit reads a usage limit in the PUT body shape, e.g. a declared
+// default (commonControls.usage_limit).
+func parseUsageLimit(ctx context.Context, raw []byte) (UsageLimit, error) {
+	body := usageLimitInput{UsageLimit: defaultUsageLimit()}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return body.UsageLimit, core.InvalidFields(core.FieldError{Field: "usage_limit", Code: "invalid",
+			Message: t(ctx, "invalid usage limit", "用量限制配置无效")})
+	}
+	return body.normalized(ctx)
+}
+
+// same reports whether two configurations are equal.
+func (l UsageLimit) same(o UsageLimit) bool {
+	return l.RawCost == o.RawCost && l.Enabled == o.Enabled && l.Amount.Equal(o.Amount) && l.Period == o.Period &&
+		l.PeriodCount == o.PeriodCount && sameTime(l.Anchor, o.Anchor) && l.Timezone == o.Timezone
+}
+
+// saveUsageLimit stores the configuration of an account, clearing an early
+// release.
+func saveUsageLimit(ctx context.Context, q store.Querier, id int64, l UsageLimit) error {
+	_, err := q.Exec(ctx, `INSERT INTO account_usage_limits (account_id, `+usageLimitColumns+`, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, clock_timestamp())
+		ON CONFLICT (account_id) DO UPDATE SET raw_cost = EXCLUDED.raw_cost, enabled = EXCLUDED.enabled, amount = EXCLUDED.amount,
+			period = EXCLUDED.period, period_count = EXCLUDED.period_count, anchor = EXCLUDED.anchor, timezone = EXCLUDED.timezone,
+			waived_window = NULL, updated_at = clock_timestamp()`,
+		id, l.RawCost, l.Enabled, l.Amount, l.Period, l.PeriodCount, l.Anchor, l.Timezone)
+	return usageLimitWriteError(ctx, err)
+}
+
+// checkUsageLimitControl refuses a configuration the account type's
+// usage_limit control does not let the caller choose.
+func (s *Service) checkUsageLimitControl(ctx context.Context, q store.Querier, a *row, in UsageLimit) error {
+	bt, _ := s.accountType(a.PluginKey, a.Type)
+	decl := bt.Type.CommonControls["usage_limit"]
+	if !decl.Fixed() {
+		return nil
+	}
+	expected, err := fixedUsageLimit(ctx, q, a.ID, decl)
+	if err != nil {
+		return err
+	}
+	if !in.same(expected) {
+		return core.InvalidFields(readOnlyControl(ctx, "usage_limit"))
+	}
+	return nil
+}
+
+// fixedUsageLimit is the only configuration a fixed usage_limit control
+// accepts: the default when locked, else the current configuration.
+func fixedUsageLimit(ctx context.Context, q store.Querier, id int64, decl manifest.AccountCommonControl) (UsageLimit, error) {
+	if decl.Locked && decl.HasDefault() {
+		return parseUsageLimit(ctx, decl.Default)
+	}
+	limits, err := usageLimits(ctx, q, []int64{id})
+	if err != nil {
+		return UsageLimit{}, err
+	}
+	if l, ok := limits[id]; ok {
+		return l, nil
+	}
+	return defaultUsageLimit(), nil
+}
+
 // putUsageLimit is PUT /accounts/:id/usage-limit. Saving clears an early
 // release ("reset status") and applies the limit at once: an account over the
 // new limit is disabled, one disabled by the old limit and now under it is
@@ -645,28 +721,23 @@ func (s *Service) putUsageLimit(c *gin.Context) {
 	if !httpapi.BindJSON(c, &body) {
 		return
 	}
-	in, fields := body.limit(ctx)
-	if err := validateUsageLimit(ctx, in, fields...); err != nil {
+	in, err := body.normalized(ctx)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	if in.Anchor != nil {
-		a := in.anchorStart()
-		in.Anchor = &a
-	}
 	scope := core.OwnerScope(ctx, "account:update")
 	uid, _ := core.UserID(ctx)
-	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		if _, err := s.loadRow(ctx, tx, id, scope, true); err != nil {
+	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
+		a, err := s.loadRow(ctx, tx, id, scope, true)
+		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO account_usage_limits (account_id, `+usageLimitColumns+`, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, clock_timestamp())
-			ON CONFLICT (account_id) DO UPDATE SET raw_cost = EXCLUDED.raw_cost, enabled = EXCLUDED.enabled, amount = EXCLUDED.amount,
-				period = EXCLUDED.period, period_count = EXCLUDED.period_count, anchor = EXCLUDED.anchor, timezone = EXCLUDED.timezone,
-				waived_window = NULL, updated_at = clock_timestamp()`,
-			id, in.RawCost, in.Enabled, in.Amount, in.Period, in.PeriodCount, in.Anchor, in.Timezone); err != nil {
-			return usageLimitWriteError(ctx, err)
+		if err := s.checkUsageLimitControl(ctx, tx, a, in); err != nil {
+			return err
+		}
+		if err := saveUsageLimit(ctx, tx, id, in); err != nil {
+			return err
 		}
 		return audit.Audit(ctx, tx, uid, "account.usage_limit", "account", itoa(id), map[string]any{
 			"raw_cost_accounting": in.RawCost, "enabled": in.Enabled, "amount": in.Amount.String(), "period": in.Period,

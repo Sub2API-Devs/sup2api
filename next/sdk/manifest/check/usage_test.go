@@ -1,6 +1,7 @@
 package check
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"testing"
@@ -349,7 +350,7 @@ func TestAccountTypeDefaultModels(t *testing.T) {
 		t.Fatalf("valid defaults rejected: %v", codes(err))
 	}
 	off := false
-	control := manifest.AccountCommonControl{Configurable: &off, Default: &off}
+	control := manifest.AccountCommonControl{Configurable: &off, Default: json.RawMessage(`false`)}
 	require.False(t, control.IsConfigurable())
 	require.False(t, control.DefaultValue())
 	require.True(t, (manifest.AccountCommonControl{}).IsConfigurable())
