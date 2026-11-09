@@ -1,0 +1,229 @@
+package gateway
+
+import (
+	"errors"
+	"math"
+	"math/rand"
+	"testing"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+)
+
+// share is the first-draw probability of account i under weights w.
+func share(w []float64, i int) float64 {
+	sum := 0.0
+	for _, v := range w {
+		sum += v
+	}
+	return w[i] / sum
+}
+
+// The examples of CONTRACTS §88: 40 to 0 goes 98.8% to the idle account, 100
+// to 90 goes 54% to the lighter one, usage in the weight ratio keeps it, and
+// an idle tier keeps the weights.
+func TestTrafficWeights(t *testing.T) {
+	cases := []struct {
+		name    string
+		w, used []float64
+		i       int
+		want    float64
+	}{
+		{"idle account", []float64{1, 1}, []float64{40, 0}, 1, 0.988},
+		{"close usage", []float64{1, 1}, []float64{100, 90}, 1, 0.542},
+		{"weight ratio kept", []float64{2, 1}, []float64{60, 30}, 0, 2.0 / 3},
+		{"idle tier", []float64{3, 1}, []float64{0, 0}, 0, 0.75},
+	}
+	for _, tc := range cases {
+		if got := share(trafficWeights(tc.w, tc.used), tc.i); math.Abs(got-tc.want) > 0.001 {
+			t.Errorf("%s: share %.4f, want %.3f", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestLoadedWeightAndUsageLoad(t *testing.T) {
+	if got := loadedWeight(3, 0); got != 3 {
+		t.Fatalf("no load: %v", got)
+	}
+	if got := loadedWeight(1, 90); math.Abs(got-0.1) > 1e-9 {
+		t.Fatalf("load 90: %v", got)
+	}
+	// A full account keeps the §67 floor: max(1, w×0) over the ×100 scale.
+	if got := loadedWeight(1000, 100); got != minLoadedWeight {
+		t.Fatalf("load 100: %v", got)
+	}
+	cases := []struct {
+		u    accountUsage
+		want float64
+	}{
+		{accountUsage{used: 90, limit: 100}, 90},
+		{accountUsage{used: 90}, 0},                                           // no limit
+		{accountUsage{used: 300, limit: 100}, 100},                            // capped
+		{accountUsage{used: 30, limit: 100, listUsed: 18, listLimit: 20}, 90}, // the list is tighter
+		{accountUsage{used: 80, limit: 100, listUsed: 1, listLimit: 20}, 80},  // the account is tighter
+		{accountUsage{used: 0, limit: 100, listUsed: 5, listLimit: 0}, 0},     // a list without that limit
+	}
+	for _, tc := range cases {
+		if got := tc.u.load(); math.Abs(got-tc.want) > 1e-9 {
+			t.Errorf("%+v: load %v, want %v", tc.u, got, tc.want)
+		}
+	}
+}
+
+// balanceEnv is the test env with the three accounts in one tier, a limiter
+// reporting usage and the given scheduling settings.
+func balanceEnv(t *testing.T, cfg SchedulingSettings, usage map[int64]core.RateUsage) (*env, *fakeLimiter) {
+	e := newEnv(t)
+	samePriority(e)
+	lim := newFakeLimiter()
+	lim.usage = usage
+	e.gw.d.Limiter = lim
+	e.setScheduling(cfg)
+	e.gw.randFloat = rand.New(rand.NewSource(7)).Float64
+	return e, lim
+}
+
+// setScheduling replaces the scheduling settings, keeping the others.
+func (e *env) setScheduling(cfg SchedulingSettings) {
+	e.gw.settings.mu.Lock()
+	defer e.gw.settings.mu.Unlock()
+	o := *e.gw.settings.override
+	o.scheduling = cfg
+	e.gw.settings.override = &o
+}
+
+// serve sends n requests and counts the accounts that served them.
+func serve(t *testing.T, e *env, n int) (map[string]int, []*core.UsageRecord) {
+	t.Helper()
+	served := map[string]int{}
+	var recs []*core.UsageRecord
+	for range n {
+		if r := e.messages(body(testModel, false)); r.status != 200 {
+			t.Fatalf("status %d %s", r.status, r.body)
+		}
+		recs = append(recs, e.record())
+		served[e.up.last().key]++
+	}
+	return served, recs
+}
+
+func coreDecision(rec *core.UsageRecord) *core.SchedDecision {
+	for i := range rec.SchedDecisions {
+		if rec.SchedDecisions[i].PluginKey == "core" {
+			return &rec.SchedDecisions[i]
+		}
+	}
+	return nil
+}
+
+// The defaults read nothing and change nothing.
+func TestBalanceOffReadsNothing(t *testing.T) {
+	e, lim := balanceEnv(t, defaultSchedulingSettings(), map[int64]core.RateUsage{1: {RPM: 60}})
+	_, recs := serve(t, e, 5)
+	if lim.usageCalls != 0 {
+		t.Fatalf("usage read %d times with the balancing off", lim.usageCalls)
+	}
+	if d := coreDecision(recs[0]); d != nil {
+		t.Fatalf("core decision with the balancing off: %+v", d)
+	}
+}
+
+// Traffic mode sends new sessions away from the busy account of the tier.
+func TestBalanceTrafficFavoursIdleAccounts(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM}
+	e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}})
+	served, recs := serve(t, e, 200)
+	// r = 3 against 0 and 0: acc-1 keeps 0.3% of the draws.
+	if served["acc-1"] > 6 || served["acc-2"] < 70 || served["acc-3"] < 70 {
+		t.Fatalf("served %v", served)
+	}
+	if lim.usageCalls != 200 {
+		t.Fatalf("usage read %d times for 200 requests", lim.usageCalls)
+	}
+	d := coreDecision(recs[0])
+	if d == nil || len(d.Changed) != 3 {
+		t.Fatalf("core decision %+v", d)
+	}
+}
+
+// The limit load lowers the weight in proportion to the use of the limit and
+// is recorded; the traffic balance is off.
+func TestBalanceLimitLoad(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true}
+	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 90}, 2: {RPM: 90}})
+	e.accounts.set(1, func(a *core.Account) { a.RPMLimit = 100 })
+	served, recs := serve(t, e, 300)
+	// 0.1 : 1 : 1 is about 14, 143 and 143; acc-2 has no limit.
+	if served["acc-1"] > 35 || served["acc-2"] < 110 || served["acc-3"] < 110 {
+		t.Fatalf("served %v", served)
+	}
+	d := coreDecision(recs[0])
+	if d == nil || len(d.Changed) != 1 || d.Changed[0].AccountID != 1 || d.Changed[0].Load != 90 || d.Changed[0].Weight != 10 {
+		t.Fatalf("core decision %+v", d)
+	}
+}
+
+// With model limits on, the model list holding the request's model counts
+// when it is tighter than the account.
+func TestBalanceLimitLoadModelList(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true, ModelLimits: true}
+	usage := map[int64]core.RateUsage{1: {RPM: 30, Models: []core.ModelRateUsage{{Models: []string{testModel}, RPM: 18}}}}
+	e, _ := balanceEnv(t, cfg, usage)
+	e.accounts.set(1, func(a *core.Account) {
+		a.RPMLimit = 100
+		a.ModelLimits = []core.ModelLimit{{Models: []string{testModel}, RPMLimit: 20}}
+	})
+	_, recs := serve(t, e, 1)
+	d := coreDecision(recs[0])
+	if d == nil || d.Changed[0].Load != 90 {
+		t.Fatalf("core decision %+v", d)
+	}
+}
+
+// Concurrency is read from the account slots.
+func TestBalanceConcurrencyFromSlots(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricConcurrency, LimitLoad: true}
+	e, lim := balanceEnv(t, cfg, nil)
+	e.slots.mu.Lock()
+	e.slots.inUse["account:1"] = 4 // of MaxConcurrency 5
+	e.slots.mu.Unlock()
+	_, recs := serve(t, e, 1)
+	d := coreDecision(recs[0])
+	if d == nil || d.Changed[0].AccountID != 1 || d.Changed[0].Load != 80 {
+		t.Fatalf("core decision %+v", d)
+	}
+	if lim.usageCalls != 0 {
+		t.Fatalf("the rate usage was read for the concurrency metric")
+	}
+}
+
+// A failed read never refuses the request: it is scheduled by the plain
+// weights and nothing is recorded.
+func TestBalanceReadFailureFailsOpen(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, LimitLoad: true}
+	e, lim := balanceEnv(t, cfg, nil)
+	lim.usageErr = errors.New("redis down")
+	_, recs := serve(t, e, 3)
+	if d := coreDecision(recs[0]); d != nil {
+		t.Fatalf("core decision after a failed read: %+v", d)
+	}
+}
+
+// A sticky hit is served by its binding: no usage is read.
+func TestBalanceNotReadOnStickyHit(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM}
+	e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}})
+	e.enableSticky(onFailureFailover)
+	e.setScheduling(cfg)
+	sess := withSession(body(testModel, false), "balance-sess")
+	for i := range 2 {
+		if r := e.messages(sess); r.status != 200 {
+			t.Fatalf("status %d %s", r.status, r.body)
+		}
+		if rec := e.record(); i == 1 && !rec.StickyHit {
+			t.Fatalf("expected a sticky hit: %+v", rec)
+		}
+	}
+	if lim.usageCalls != 1 {
+		t.Fatalf("usage read %d times, want once (the unbound first request)", lim.usageCalls)
+	}
+}
