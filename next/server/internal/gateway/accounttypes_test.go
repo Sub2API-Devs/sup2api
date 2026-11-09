@@ -43,9 +43,9 @@ func TestMixedAccountTypesServeOneEndpoint(t *testing.T) {
 	relay := &fakePlatform{base: e.up.srv.URL}
 	e.addAccountType("relay", "relay_key", relay,
 		manifest.AccountPlatform{Platform: "anthropic", PassHeaders: []string{"x-relay-hint"}})
-	e.accounts.addTyped(testGroup, 4, 0, "relay-4", "relay", "relay_key")
+	e.accounts.addTyped(testGroup, 4, 100, "relay-4", "relay", "relay_key")
 
-	// Priority: the relay account (priority 0) goes first.
+	// Priority: the relay account (priority 100) goes first.
 	r := e.do("/v1/messages", body(testModel, false), map[string]string{"x-relay-hint": "h1"})
 	if r.status != 200 || strings.Join(e.up.keys(), ",") != "relay-4" {
 		t.Fatalf("relay first: %d %v %s", r.status, e.up.keys(), r.body)
@@ -102,7 +102,7 @@ func TestUnsupportedAccountTypeNotScheduled(t *testing.T) {
 	e := newEnv(t)
 	other := &fakePlatform{base: e.up.srv.URL}
 	e.addAccountType("gem", "gem_key", other, manifest.AccountPlatform{Platform: "gemini"})
-	e.accounts.addTyped(testGroup, 5, 0, "gem-5", "gem", "gem_key")
+	e.accounts.addTyped(testGroup, 5, 100, "gem-5", "gem", "gem_key")
 
 	if r := e.messages(body(testModel, false)); r.status != 200 || strings.Join(e.up.keys(), ",") != "acc-1" {
 		t.Fatalf("status %d keys %v", r.status, e.up.keys())
@@ -349,7 +349,7 @@ func convEnv(t *testing.T, conv *fakeConv) (*env, *qUpstream, *fakePlatform) {
 			ID: "chat", Method: "POST", Path: "/q/chat", Protocol: "q.chat", Kind: "proxy",
 			Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}, Request: manifest.EndpointRequest{ModelPath: "q_model"},
 			ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"}}}})
-		e.accounts.addTyped(testGroup, 6, 0, "q-6", "qplug", "q_key")
+		e.accounts.addTyped(testGroup, 6, 100, "q-6", "qplug", "q_key")
 	})
 	return e, q, qp
 }
@@ -457,7 +457,7 @@ func TestConvertedErrors(t *testing.T) {
 
 func TestConvertRequestFailureSkipsType(t *testing.T) {
 	e, q, qp := convEnv(t, &fakeConv{reqErr: errors.New("unsupported block")})
-	e.accounts.addTyped(testGroup, 7, 0, "q-7", "qplug", "q_key")
+	e.accounts.addTyped(testGroup, 7, 100, "q-7", "qplug", "q_key")
 	if r := e.messages(body(testModel, false)); r.status != 200 || strings.Join(e.up.keys(), ",") != "acc-1" {
 		t.Fatalf("status %d keys %v", r.status, e.up.keys())
 	}
@@ -504,7 +504,7 @@ func TestPluginPlatformEndpoints(t *testing.T) {
 	vp := &fakePlatform{base: e.up.srv.URL}
 	info := e.addAccountType("video", "video_key", vp, manifest.AccountPlatform{Platform: "myvideo", RequestFields: []string{"model"}})
 	e.gen.addPlatform(info, manifest.Platform{ID: "myvideo", Usage: anth.Usage, Endpoints: []manifest.Endpoint{ep}})
-	e.accounts.addTyped(testGroup, 8, 0, "video-8", "video", "video_key")
+	e.accounts.addTyped(testGroup, 8, 100, "video-8", "video", "video_key")
 	e.reg.set(e.gen)
 
 	r := e.do("/v1/video/generations", body(testModel, false), nil)

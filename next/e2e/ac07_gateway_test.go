@@ -124,7 +124,7 @@ func TestAC07_GatewayGroupScheduling(t *testing.T) {
 func TestGatewayFailoverAndCooldown(t *testing.T) {
 	e := Setup(t)
 	admin := e.Admin()
-	tn := e.NewTenant(admin, TenantOpts{Accounts: 2, Priorities: []int{1, 50}})
+	tn := e.NewTenant(admin, TenantOpts{Accounts: 2, Priorities: []int{50, 1}})
 	primary, backup := tn.Accounts[0], tn.Accounts[1]
 	m := e.Mock()
 

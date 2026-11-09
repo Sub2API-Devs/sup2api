@@ -100,12 +100,11 @@ const paramOpOptions = computed(() => [
               size="sm"
               class="ml-auto"
               :disabled="disabled"
-              :title="t('common.remove')"
-              :aria-label="t('common.remove')"
-              icon-only
-              icon="x"
+              tone="danger"
               @click="removeTier(i)"
-            />
+            >
+              {{ t('common.remove') }}
+            </SButton>
           </div>
           <SGrid :cols-base="2" :cols="3" :lg-cols="6" :gap="2">
             <label v-for="k in priceKeys" :key="k" class="text-xs">
@@ -157,7 +156,7 @@ const paramOpOptions = computed(() => [
           </template>
           <SHint inline class="ml-2">{{ t('prices.visual.multiplier') }}</SHint>
           <SInput size="sm" v-model.number="r.multiplier" type="number" min="0" step="any" class="w-24" :disabled="disabled" />
-          <SButton variant="ghost" size="sm" :disabled="disabled" :title="t('common.remove')" :aria-label="t('common.remove')" icon-only icon="x" @click="model.rules.splice(i, 1)" />
+          <SButton variant="ghost" size="sm" tone="danger" :disabled="disabled" @click="model.rules.splice(i, 1)">{{ t('common.remove') }}</SButton>
         </div>
       </div>
     </section>

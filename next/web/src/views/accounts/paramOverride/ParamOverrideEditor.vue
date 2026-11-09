@@ -214,48 +214,18 @@ function apply() {
             :aria-label="t(`${P}.description`)"
             data-testid="po-description"
           />
-          <SButton
-            size="xs"
-            variant="ghost"
-            icon="chevron-down"
-            icon-only
-            class="rotate-180"
-            :aria-label="t(`${P}.up`)"
-            :title="t(`${P}.up`)"
-            :disabled="selectedIndex === 0"
-            @click="move(-1)"
-          />
-          <SButton
-            size="xs"
-            variant="ghost"
-            icon="chevron-down"
-            icon-only
-            :aria-label="t(`${P}.down`)"
-            :title="t(`${P}.down`)"
-            :disabled="selectedIndex >= drafts.length - 1"
-            @click="move(1)"
-          />
-          <SButton
-            size="xs"
-            variant="ghost"
-            icon="copy"
-            icon-only
-            :aria-label="t(`${P}.duplicate`)"
-            :title="t(`${P}.duplicate`)"
-            :disabled="drafts.length >= MAX_OPERATIONS"
-            @click="duplicate"
-          />
-          <SButton
-            size="xs"
-            variant="ghost"
-            tone="danger"
-            icon="trash"
-            icon-only
-            :aria-label="t(`${P}.remove`)"
-            :title="t(`${P}.remove`)"
-            data-testid="po-remove"
-            @click="remove"
-          />
+          <SButton size="xs" variant="ghost" :disabled="selectedIndex === 0" @click="move(-1)">
+            {{ t(`${P}.up`) }}
+          </SButton>
+          <SButton size="xs" variant="ghost" :disabled="selectedIndex >= drafts.length - 1" @click="move(1)">
+            {{ t(`${P}.down`) }}
+          </SButton>
+          <SButton size="xs" variant="ghost" :disabled="drafts.length >= MAX_OPERATIONS" @click="duplicate">
+            {{ t(`${P}.duplicate`) }}
+          </SButton>
+          <SButton size="xs" variant="ghost" tone="danger" data-testid="po-remove" @click="remove">
+            {{ t(`${P}.remove`) }}
+          </SButton>
         </div>
         <OperationPane v-model="drafts[selectedIndex]" :problems="problems[selectedIndex]" :context-list-id="contextListId" />
       </div>

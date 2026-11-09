@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
@@ -184,4 +185,27 @@ func TestRealtime(t *testing.T) {
 	require.Equal(t, map[string]any{"rpm": float64(4), "tpm": float64(480), "recent_failures": float64(2)}, got("/usage/realtime"))
 	require.Equal(t, map[string]any{"rpm": float64(1), "tpm": float64(120), "recent_failures": float64(0)}, got("/usage/realtime?model_contains=haiku"))
 	f.get(f.user, "/usage/realtime?user_id=x", 400)
+}
+
+// An operator's cached load gets the longer timeout and the room to hash day
+// buckets; the caller's own query keeps the short timeout and the default
+// work_mem (CONTRACTS §66.3).
+func TestStatsLimits(t *testing.T) {
+	f := newFixture(t)
+	show := func(lim statsLimits) (timeout, workMem string) {
+		require.NoError(t, f.svc.statsTx(t.Context(), lim, func(tx pgx.Tx) error {
+			return tx.QueryRow(t.Context(), `SELECT current_setting('statement_timeout'), current_setting('work_mem')`).Scan(&timeout, &workMem)
+		}))
+		return timeout, workMem
+	}
+	var defaultWorkMem string
+	require.NoError(t, f.svc.db.Pool.QueryRow(t.Context(), `SHOW work_mem`).Scan(&defaultWorkMem))
+
+	timeout, workMem := show(statsLimitsFor(nil))
+	require.Equal(t, "25s", timeout)
+	require.Equal(t, "128MB", workMem)
+	uid := int64(1)
+	timeout, workMem = show(statsLimitsFor(&uid))
+	require.Equal(t, "5s", timeout)
+	require.Equal(t, defaultWorkMem, workMem)
 }

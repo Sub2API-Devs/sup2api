@@ -533,7 +533,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/users` | 分页 | `q`（邮箱或显示名 ILIKE）、`status`（`active`\|`disabled`）、`role`（角色 key） | `id` 升序 | `iam/users.go` |
 | GET `/groups` | 分页 | `q`（名称 ILIKE）、`status` | `id` 升序 | `group/group.go` |
 | GET `/me/groups` | 不分页 | 无（只返回 `active` 且对当前用户可用的分组；字段 `{id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms}`） | `id` 升序 | `group/group.go` |
-| GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `priority` 升序，再 `id` 升序 | `account/handlers.go` |
+| GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `created_at` 倒序，再 `id` 倒序（§18.3；与调度顺序无关） | `account/handlers.go` |
 | GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
 | GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model` 或 `note` ILIKE） | `model`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
 | GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`request_id`、`account_type`（精确匹配）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
@@ -736,7 +736,7 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `last_used_at`、`created_at`、`updated_at` | |
 
 创建与修改（每条路由也接受对应的 `account:own:*` key，只作用于 `created_by` = 调用者的账号，越权 404，§21）：
-- POST `/accounts`（`account:create` / `account:own:create`）：`{name, plugin_key, type, group_ids?, proxy_id?, proxy_url?, priority?, max_concurrency?, schedulable?, status?, credentials}`；默认 `priority=10`、`max_concurrency=10`、`schedulable=true`、`status=active`。`priority` 0–1000000；`max_concurrency` 0–100000；`proxy_id`、`group_ids` 必须存在（`details.fields[].code = "not_found"`；自己级下 `proxy_id` 还必须在调用者可见的代理范围内，§21.4）；`proxy_url` 见 §21.4；账号类型未注册返回 `field:"type", code:"unknown"`。凭证先按表单 Schema 校验，再调插件 `ValidateCredentials`（字段错误路径为 `credentials.<a>.<b>`），插件可规范化凭证，最后做受限设置校验（§21.3）。写审计 `account.create`。
+- POST `/accounts`（`account:create` / `account:own:create`）：`{name, plugin_key, type, group_ids?, proxy_id?, proxy_url?, priority?, max_concurrency?, schedulable?, status?, credentials}`；默认 `priority=10`、`max_concurrency=0`（不限；自己级调用者只能设 1–1000，默认 10；2026-11-09 起，此前一律 10。控制台新建表单同此默认）、`schedulable=true`、`status=active`。`priority` 0–1000000；`max_concurrency` 0–100000；`proxy_id`、`group_ids` 必须存在（`details.fields[].code = "not_found"`；自己级下 `proxy_id` 还必须在调用者可见的代理范围内，§21.4）；`proxy_url` 见 §21.4；账号类型未注册返回 `field:"type", code:"unknown"`。凭证先按表单 Schema 校验，再调插件 `ValidateCredentials`（字段错误路径为 `credentials.<a>.<b>`），插件可规范化凭证，最后做受限设置校验（§21.3）。写审计 `account.create`。
 - PATCH `/accounts/:id`（`account:update` / `account:own:update`）：同上字段均可选，`plugin_key`/`type` 不可修改（忽略）。`proxy_id: null` 改为直连；`proxy_url` 见 §21.4；`group_ids` 整体替换。`credentials` 给出时为**完整对象**（省略的键会被删除），敏感字段传 `"******"` 保留原值；插件未启用时修改凭证返回 503 `plugin_unavailable`；并发修改凭证返回 409。修改 `status` 会发 `account.status_changed` 事件。写审计 `account.update`。
 - DELETE `/accounts/:id`（`account:delete` / `account:own:delete`）：软删除，清除分组关系与冷却，204。写审计 `account.delete`。
 - POST `/accounts/:id/credentials/reveal`（`account:credential:view` / `account:own:credential:view`）：→ `{credentials:{...}}`（合并后的明文），写审计日志 `account.credentials.reveal`。
@@ -843,7 +843,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 |---|---|---|
 | `models` | `string[]`，每项是完整模型 ID（§16 规则，禁止通配符），去重，最多 500 项；默认 `[]` | 账号可服务的模型；**空表示所有模型**。调度时请求模型（映射前的客户端模型）不在列表里的账号不作为候选 |
 | `model_mapping` | `{from: to}`，键和值都是完整模型 ID，最多 500 项；默认 `{}` | 请求模型 → 上游模型。核心在调用插件 `BuildUpstreamRequest` **之前**改写请求（body 的 `request.modelPath`、路径参数 `request.modelParam`、`RequestMeta.model` 都换成映射后的模型），`usage_logs.upstream_model` 记录映射后的模型；计费、分组白名单、粘性会话、钩子都按映射前的客户端模型 |
-| `priority` | 0–1000000，默认 10 | 不变：**数值越小越先用**；只有更小优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级。插件可为单次请求临时改写（§24） |
+| `priority` | 0–1000000，默认 10 | **数值越大越先用**（2026-11-09 起，用户要求，与 new-api 一致；此前是越小越先用）；只有更大优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级。插件可为单次请求临时改写（§24） |
 | `weight` | 1–1000，默认 1 | 同一优先级内按权重加权随机排序（不放回的加权抽样：权重 3 的账号被先选中的概率是权重 1 的三倍）。插件可为单次请求临时改写（§24） |
 | `rpm_limit` | 0–10000000，默认 0 | 每分钟请求数上限，0 = 不限。每次在该账号上准入一次尝试计 1 次（切换到别的账号时各账号各计各的）。在 `TryHit` 时计入，之后的本地失败（读账号、路由、协议转换）没有发到上游也不退（§78.1） |
 | `tpm_limit` | 0–10^12，默认 0 | 每分钟 token 数上限，0 = 不限 |
@@ -857,7 +857,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 ### 18.2 调度顺序（ARCHITECTURE 6.2 更新）
 
-候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/spm 上限（含模型列表，§68.2、§71.3）。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
+候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/spm 上限（含模型列表，§68.2、§71.3）。粘性绑定的账号仍然优先；其余按 `priority` 降序（数值大的先用），同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
 
 排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：粘性绑定不服务的挑选（未命中，或绑定账号失败后的切换）会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
@@ -1259,8 +1259,8 @@ type ProxyResolver interface {
 | `STable<T>` | 表格 | `columns: TableColumn[]`、`rows: T[]`、`loading`、`rowKey`（`'id'`）、`expandable`、`fitExpandedToContainer`（展开内容限制在可见宽度内）、`emptyText`、`dense`、`selectable` + `selected: unknown[]`（`v-model:selected`，行 key 数组；表头全选/半选，只作用于当前 `rows`）、`rowSelectable(row) → boolean`（禁用个别行的勾选框）、`clickable`（行可聚焦、`cursor-pointer`，Enter/空格也发 `row-click`）、`rowClass(row, index)`、`rowAttrs(row, index) → Record`（如 `data-testid`）、`card`（表格放进卡片，去掉双边框） | emits `row-click(row)`（鼠标点击总会发）、`expand(row, open)`、`update:selected(keys)`；slots `cell-<key>`（`{row, value, index}`）、`head-<key>`（`{column}`，替代表头文字）、`expand`（`{row}`）、`empty`、`toolbar`（仅 `card`，表格上方工具条）、`footer`（仅 `card`，放分页）；`key` 支持 `a.b` 路径，空值显示 `—`；`key === 'actions'` 的列粘在右侧，有列被它遮住时才显示左侧分隔阴影 |
 | `SPagination` | 分页（`<nav>`，当前页 `aria-current="page"`） | `page`、`pageSize`、`total`（必填）、`pageSizes`（`[20,50,100]`）、`hideSizes`（不显示每页条数）、`size`（`sm`/`md`，sm） | emits `update:page`、`update:pageSize`（改每页数时 `page` 回 1） |
 | `STabs` | 标签和内容容器，统一同名标题去重、键盘切换与可访问面板关联；增强入口从核心 0.1.154 提供 | `tabs: TabItem[]`、`modelValue: string`、`showTabs`、`showSingle`、`idPrefix`、`size`、`ariaLabel` | emits `update:modelValue`；default slot `{active}`，必须将对应内容放入容器；底层标签栏不公开 |
-| `SButton` | 按钮；给 `to` 渲染 `RouterLink`、给 `href` 渲染 `<a>`（同样的 `.btn` 类），否则原生 `<button>` | `variant`（`primary`/`secondary`/`ghost`/`danger`/`success`/`warning`，secondary）、`size`（`xs`/`sm`/`md`/`lg`，md；xs 为表格内的紧凑按钮）、`loading`（spinner + 禁用 + `aria-busy`）、`disabled`、`type`（`button`/`submit`/`reset`，button）、`block`、`to`（`string \| RouteLocationRaw`）、`href`、`icon` / `iconRight`（SIcon 名）、`iconOnly`（只显示图标的方形按钮，**必须**配 `ariaLabel`）、`square`（方形）、`ariaLabel`、`tone`（`default`/`danger`：ghost/secondary 按钮的红色文字，用于删除） | 原生 `click`；slot 默认。`to`/`href` 形态 `disabled`/`loading` 时渲染无 `href` 的 `<a aria-disabled="true">` |
-| `SRowAction` | 表格行操作：图标在上、短文字在下，宽度固定（4.5rem），各行操作因此对齐 | `icon`、`label`（必填）、`tone`（`default`/`danger`）、`disabled`、`loading`（图标换成加载圈）、`title`（默认 `label`） | emits `click`（已 `stop`）；其余属性落到 `<button>`，可作 `SDropdown` 的 `#trigger` |
+| `SButton` | 按钮；给 `to` 渲染 `RouterLink`、给 `href` 渲染 `<a>`（同样的 `.btn` 类），否则原生 `<button>` | `variant`（`primary`/`secondary`/`ghost`/`danger`/`success`/`warning`，secondary）、`size`（`xs`/`sm`/`md`/`lg`，md；xs 为表格内的紧凑按钮）、`loading`（spinner + 禁用 + `aria-busy`）、`disabled`、`type`（`button`/`submit`/`reset`，button）、`block`、`to`（`string \| RouteLocationRaw`）、`href`、`icon` / `iconRight`（SIcon 名）、`iconOnly`（只显示图标的方形按钮，**必须**配 `ariaLabel`）、`square`（方形）、`ariaLabel`、`tone`（`default`/`danger`/`info`：ghost/secondary 按钮的红色 / 蓝色文字，用于删除、禁用 / 启用；`info` 2026-11-09 起） | 原生 `click`；slot 默认。`to`/`href` 形态 `disabled`/`loading` 时渲染无 `href` 的 `<a aria-disabled="true">` |
+| `SRowAction` | 表格行操作：纯文字小按钮（`secondary` + `xs`，参照 new-api 的「测试 / 禁用 / 编辑」），手机卡片里是 `ghost` + `sm`。2026-11-09 起不再画图标（`icon` 改为可选，仍接受、不显示，老插件不用改） | `label`（必填）、`icon`（可选，不显示）、`tone`（`default`/`danger`/`info`，与 `SButton` 相同：danger 文字红色、info 蓝色）、`disabled`、`loading`（文字前加载圈）、`title`（默认 `label`） | emits `click`（已 `stop`）；其余属性落到 `<button>`，可作 `SDropdown` 的 `#trigger` |
 | `SDropdown` | 操作菜单（Teleport 到 body，自动定位/翻转）。菜单项是 `<button role="menuitem">`：↑/↓/Home/End 移动，Enter/空格选择，Esc 关闭并把焦点还给触发按钮，Tab 关闭 | `actions: MenuAction[]`（必填）、`label`、`ariaLabel`（只有图标时默认 `ui.moreActions`）、`align`（`end`/`start`，end）、`width`（CSS 宽度，`'11rem'`）、`disabled` | emits `select(key)`、`open`、`close`；slot 默认为触发按钮内容（缺省显示 `label` 或 `more` 图标）；slot `trigger`（`{open, toggle, attrs}`：整个替换触发按钮，自己的按钮要 `v-bind="attrs"`（`aria-haspopup`/`aria-expanded`/`aria-controls`）并 `@click="toggle"`）；slot `header`（菜单顶部说明） |
 | `SBadge` | 徽标 | `tone: Tone`（gray；`purple` 与 `accent` 同色）、`dot`、`size`（`xs`/`sm`，sm） | slot 默认 |
 | `SChip` | 小标签 / 筛选芯片 | `tone: StatusTone`（neutral）、`icon`、`size`（`xs`/`sm`，sm）、`closable` + `closeLabel`（默认 `ui.remove`）、`pressed`（boolean：切换按钮，`aria-pressed`，`v-model:pressed`）、`clickable`（普通按钮）、`disabled` | emits `close`、`click`、`update:pressed`；slot 默认 |
@@ -1277,7 +1277,7 @@ type ProxyResolver interface {
 | `SCopyButton` | 复制按钮（`navigator.clipboard`，失败回退 `execCommand`；成功显示对勾 1.5 秒） | `text`（必填；空时禁用）、`label`（`ui.copy`）、`iconOnly`（label 变成 `aria-label`/`title`）、`size`（`sm`/`md`，sm）、`variant`（`ghost`/`secondary`，ghost）、`toast`（true：提示 `ui.copied`/`ui.copyFailed`）、`disabled` | emits `copied(text)`、`error` |
 | `STooltip` | 提示气泡（悬停 `delay` 后、键盘聚焦立即显示；Esc 隐藏；Teleport 到 body，`role="tooltip"`，显示时触发区 `aria-describedby` 指向它） | `content`、`placement`（`top`/`bottom`/`left`/`right`，top，放不下自动翻转）、`delay`（300）、`disabled`、`maxWidth`（`'20rem'`） | slot 默认为触发内容（包在 inline `<span>` 里）、`content` |
 | `SChoiceCards` | 大卡片单选/多选（账号类型、方案、模式） | `modelValue`（单选为值；`multiple` 时为数组）、`options: ChoiceOption[]`（`{value, label, description?, icon?, disabled?, tone?}`）、`cols`（1–4，2；手机一列）、`multiple`、`name`、`disabled`、`ariaLabel`、`error` | emits `update:modelValue`；slot `option-<value>`（`{option, checked}`）；单选 `role="radiogroup"`（方向键），多选 `role="group"` |
-| `SModal` | 弹窗（Teleport 到 body；层栈、焦点陷阱、锁滚动见上） | `open`（必填，`v-model:open`）、`title`（对话框的 `aria-labelledby`）、`width`（`sm`/`md`/`lg`/`xl`/`2xl`，md）、`closable`（true；false 时隐藏 × 且 Esc/遮罩不关）、`persistent`（true 时 Esc 和点遮罩不关闭，× 仍可关）、`top`（叠在其他弹窗之上；确认框用）、`describedby`（主体内描述元素的 id） | emits `update:open`、`close`；slots 默认、`header`、`footer` |
+| `SModal` | 弹窗（Teleport 到 body；层栈、焦点陷阱、锁滚动见上） | `open`（必填，`v-model:open`）、`title`（对话框的 `aria-labelledby`）、`width`（`sm`/`md`/`lg`/`xl`/`2xl`，md）、`closable`（true；false 时隐藏 × 且 Esc/遮罩不关）、`persistent`（true 时 Esc 和点遮罩不关闭，× 仍可关）、`top`（叠在其他弹窗之上；确认框用）、`describedby`（主体内描述元素的 id）、`fixed`（2026-11-09：尺寸不随内容变，宽屏取满宽度和最大高度、主体内滚动并保留滚动条位置，手机底部抽屉取满高度；多步编辑器用，如账号新建/编辑；只加属性，老核心忽略，不改 `hostUICompat`） | emits `update:open`、`close`；slots 默认、`header`、`footer` |
 | `SDrawer` | 侧滑面板（与 `SModal` 同一层栈） | `open`（必填，`v-model:open`）、`title`、`description`、`side`（`right`/`left`，right）、`width`（`sm` 24rem / `md` 32rem / `lg` 42rem / `xl` 56rem 或任意 CSS 宽度，md）、`closable`（true）、`persistent` | emits `update:open`、`close`；slots 默认、`header`、`footer` |
 | `SField` | 表单项外框：label / hint / error / 必填星号（关联规则见上） | `label`、`hint`、`error`（有则替代 hint）、`required`、`inline`（label 与控件同行）、`for`（显式指定控件 id）、`size`（`sm`：小号标签，内部控件默认 sm） | slot 默认放控件；slots `label`、`hint`、`error`（替代同名 prop，可放富内容）、`details`（长说明，收在「查看说明」后）；其他 attrs 落到根 `<div>` |
 | `SInput` | 输入框 | `modelValue: string \| number \| null`、`type`（`text`/`password`/`number`/`url`/`email`/`search`/`tel`/`datetime-local`/`date`/`time`/`file`/`color`，text）、`placeholder`、`disabled`、`readonly`、`size`（`sm`/`md`）、`mono`、`error`、`maxlength`、`min`/`max`/`step`、`inputmode`、`autocomplete`、`lazy`（true 时在 `change` 而非 `input` 时发出；`datetime-local`/`date`/`time` 默认 true）、`icon`（框内左侧 SIcon）、`suffix`（框内右侧单位文字，如 `ms`）、`clearable`（有值时显示清空按钮）、`revealable`（`type=password` 时显示/隐藏切换）、`ariaLabel` | emits `update:modelValue`（string；`type=number` 时为 number，空或非法为 null；`type=file` 时为 `FileList \| null`，只在 `change` 时发出）、`clear`；slots `prefix`、`suffix`（有任一修饰时渲染成 `.input.input-group` 外框，`class`/`style` 落到外框）；expose `focus()`、`el` |
@@ -1365,7 +1365,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 - 插件 CSS 里需要与控制台一致的颜色时，用控制台的 CSS 变量（RGB 三元组，亮/暗色自动切换），写成 `rgb(var(--name))` 或带透明度 `rgb(var(--name) / 0.5)`：`--bg`（页面底色）、`--surface`（卡片/输入框底色）、`--surface-2`（次级底色、表头）、`--line`（边框/分隔线）、`--line-strong`（悬停边框、复选框边）、`--fg`（正文）、`--fg-muted`（次要文字）、`--fg-subtle`（占位/图标）。只有这 8 个是契约；主色、状态色等没有 CSS 变量，需要时用组件的 `tone`。
 - 颜色语义：`SBadge` 的 `tone` 为 `Tone`（`purple` 与 `accent` 等价，新代码写 `accent`）；`SAlert` `SChip` `SStatusDot` `SProgress` `SChoiceCards` 为 `StatusTone`（`neutral` 代替 `gray`）。
 - 输入控件外面用 `SField`（或设置页用 `SSettingRow`）放 label / hint / error / 必填标记，控件不必写 `id`；服务端字段错误从 `ApiError.fields[field]` 取，塞给 `SField` 的 `error`（控件会自动 `aria-invalid` 并显示红框）。
-- 只有图标的按钮用 `SButton icon="…" icon-only aria-label="…"`；所有按钮默认 `type="button"`。
+- 操作按钮写文字（2026-11-09 定，参照 new-api）：表格行操作用 `SRowAction`，其余用带文字的 `SButton`（删除/移除类加 `tone="danger"`）。只有一眼就懂的图标才单独成按钮：关闭 ×、更多 ···、菜单、主题切换、紧挨值的复制、提示信息 ⓘ、芯片/缩略图上的移除 ×；这类用 `SButton icon="…" icon-only aria-label="…"`。所有按钮默认 `type="button"`。
 - 数字、金额、时间用 `host.i18n.formatNumber` / `formatMoney` / `formatDateTime` 或 `SDateTime`，不自己拼；多语言文本（`{en,zh}`）用 `host.i18n.text`；插件文案走 `host.addMessages` + `host.t`。
 - 提示和确认用 `host.toast` / `host.confirm`（或 `@sub2api/ui` 的同名函数），不自己弹。弹窗、侧滑面板用 `SModal` / `SDrawer`，不要自己写遮罩（否则 Esc、焦点和滚动锁不在同一层栈里）。
 - 需要感知暗色时读 `host.theme`（`Ref<'light'|'dark'>`），不要自己查 `document.documentElement.classList`；组件本身已自动适配。
@@ -1434,7 +1434,7 @@ message RankCandidate {
   string name            = 2;
   string account_type    = 3;
   string type_plugin_key = 4;           // 声明该账号类型的插件 key
-  int32  priority        = 5;           // 账号当前的 priority（0–1000000，越小越先用）
+  int32  priority        = 5;           // 账号当前的 priority（0–1000000，越大越先用）
   int32  weight          = 6;           // 账号当前的 weight，宿主保证已归一化到 1–1000
 }
 
@@ -4697,6 +4697,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 统计查询（summary、overview）在只读事务里执行，`SET LOCAL statement_timeout = '5s'`。超时回 503 `unavailable`（「statistics query timed out; narrow the time range or filters」），界面显示错误与重试，不显示成 0。
 
+**管理员缓存加载放宽（2026-11-09，线上仪表盘超时）**：管理员的 overview、summary（走下文缓存的那条路）改为 `statement_timeout = '25s'`（小于缓存单次加载的 30 秒），并 `SET LOCAL work_mem = '128MB'`；自己的 `/me/usage/*` 和 `/usage/realtime` 仍是 5 秒、默认 work_mem。实现：`usage/stats.go` 的 `statsLimits`。
+- 原因：11-07 起 usage_logs 每天 4–6 万行，近 30 天约 20 万行（每行约 2KB）。sup2api 库在共享的 Supabase 实例上，页常被挤出缓存：热缓存时 overview 2.2s、7 天按天 summary 2.6s，冷缓存时只扫一遍 30 天就要 10s；仪表盘打开时同时发 5 条统计，一起超过 5 秒。
+- work_mem：规划器把 `to_char(created_at AT TIME ZONE …)` 的分组数估成和行数一样多（约 17 万，实际 7 个），work_mem 小时就把宽行排序写进约 160MB 临时文件；128MB（`hash_mem_multiplier` 2）时改走 HashAggregate，实际只用约 3MB，耗时少约 40%。64MB 不够。
+- 这只是止血：明细仍是实时扫描，行数再涨几倍还会超时，根治要小时级汇总表（需迁移）。
+
 **缓存（2026-11-05，用户要求，参考旧版 sub2api 的仪表盘）**：管理员接口扫描全部用户的行，所以在进程内缓存，响应头 `X-Snapshot-Cache: hit|miss`。实现：`usage/snapshot_cache.go`。
 
 - `GET /usage/overview`：按「时区 + 两个权限」缓存。15 秒内直接返回；15 到 30 秒返回旧值并在后台刷新；超过 30 秒等待重新查询。
@@ -4848,6 +4853,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 账号列表：
   - 优先级、权重分成两列，有编辑权限时显示为输入框，在表格里直接修改：回车或移出输入框时保存（`PATCH /accounts/:id` 只带这一个字段），Esc 恢复，超出范围不提交。
   - "并发 / RPM / TPM"合成一列，三个数字依次排列。设了上限的显示 `已用/上限`，并按占用比例着色（80% 起警告，到达上限为红色）；没设上限的只显示用量，不再显示 `∞`。数字都是账号总量。
+  - 2026-11-09 起（用户要求参照 new-api）：四个数字（并发 / RPM / TPM / 会话）各用一种颜色（紫 / 玫红 / 蓝 / 绿，`accountLimits.ts` `FIGURE_COLOR`，悬停明细的列标题同色），到 80% 起文字和填充改为警告色、到上限为红色并加描边。行操作改为文字按钮"测试 / 禁用（红）或启用（蓝）/ 编辑 / ···"，启用开关从状态列移到这里。
   - 账号有模型列表时，后面标出"N 组模型"。悬停或键盘聚焦这一列，会弹出明细卡片，列出"全部模型"和每个列表的并发 / RPM / TPM。
 - 账号详情：用同一张明细表。
 - 编辑表单"调度与限流"一节：

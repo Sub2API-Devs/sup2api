@@ -11,12 +11,12 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-// tierRanker puts acc-1 (weighted) and acc-2 (zeroed) in tier 10 and acc-3
-// in tier 90, as dynweight does when it lowers one account of a tier.
+// tierRanker puts acc-1 (weighted) and acc-2 (zeroed) in tier 90 and acc-3
+// in tier 10, as dynweight does when it lowers one account of a tier.
 func tierRanker(e *env) {
 	e.addRanker("dyn", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(1, 10, 1000), rank(2, 10, 0), rank(3, 90, 1000)}, nil
+			return []*pluginv1.RankedAccount{rank(1, 90, 1000), rank(2, 90, 0), rank(3, 10, 1000)}, nil
 		}})
 }
 
@@ -90,13 +90,13 @@ func TestRankTierAllZeroFallsToNextTier(t *testing.T) {
 	e := newEnv(t)
 	e.addRanker("dyn", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(1, 10, 0), rank(2, 10, 0), rank(3, 90, 1000)}, nil
+			return []*pluginv1.RankedAccount{rank(1, 90, 0), rank(2, 90, 0), rank(3, 10, 1000)}, nil
 		}})
 	if r := e.messages(body(testModel, false)); r.status != 200 {
 		t.Fatalf("status %d %s", r.status, r.body)
 	}
 	if k := strings.Join(e.up.keys(), ","); k != "acc-3" {
-		t.Fatalf("upstream %s, want acc-3 (tier 10 zeroed entirely)", k)
+		t.Fatalf("upstream %s, want acc-3 (tier 90 zeroed entirely)", k)
 	}
 	e.record()
 }
@@ -116,7 +116,7 @@ func TestRankZeroWeightSoleCandidateLimitedIsRateLimited(t *testing.T) {
 	lim.exhausted[1] = true
 	dyn := e.addRanker("dyn", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(1, 10, 0)}, nil
+			return []*pluginv1.RankedAccount{rank(1, 90, 0)}, nil
 		}})
 	r := e.messages(body(testModel, false))
 	if r.status != 429 || r.json().Get("error.code").String() != core.ErrRateLimited.Code {
@@ -136,7 +136,7 @@ func TestRankTierEvenlySplitByPlugin(t *testing.T) {
 	e := newEnv(t)
 	e.addRanker("dyn", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(1, 10, 1), rank(2, 10, 1), rank(3, 90, 1000)}, nil
+			return []*pluginv1.RankedAccount{rank(1, 90, 1), rank(2, 90, 1), rank(3, 10, 1000)}, nil
 		}})
 	e.up.set("acc-1", &upstreamRule{status: 500})
 	e.up.set("acc-2", &upstreamRule{status: 500})
@@ -145,7 +145,7 @@ func TestRankTierEvenlySplitByPlugin(t *testing.T) {
 	}
 	k := strings.Join(e.up.keys(), ",")
 	if k != "acc-1,acc-2,acc-3" && k != "acc-2,acc-1,acc-3" {
-		t.Fatalf("upstream order %s, want both tier-10 accounts before acc-3", k)
+		t.Fatalf("upstream order %s, want both tier-90 accounts before acc-3", k)
 	}
 	e.record()
 }
@@ -156,7 +156,7 @@ func TestRankAllZeroFallsBackToOwnWeights(t *testing.T) {
 	e := newEnv(t)
 	e.addRanker("dyn", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(1, 10, 0), rank(2, 10, 0), rank(3, 90, 0)}, nil
+			return []*pluginv1.RankedAccount{rank(1, 90, 0), rank(2, 90, 0), rank(3, 10, 0)}, nil
 		}})
 	e.up.set("acc-1", &upstreamRule{status: 500})
 	if r := e.messages(body(testModel, false)); r.status != 200 {

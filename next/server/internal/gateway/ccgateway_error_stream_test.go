@@ -20,7 +20,7 @@ func TestCCGatewayInterruptedStreamReachesClientWithoutCleanEOF(t *testing.T) {
 				e.gen.plugins = []core.PluginInfo{info}
 				e.gen.accountTypes = []core.AccountTypeBinding{{Plugin: info, Type: typ, Client: e.plat}}
 				e.accounts = newFakeAccounts()
-				e.accounts.addTyped(testGroup, 1, 1, "acc-1", "ccgateway", typ.ID)
+				e.accounts.addTyped(testGroup, 1, 99, "acc-1", "ccgateway", typ.ID)
 			})
 			e.up.set("acc-1", &upstreamRule{breakStream: interrupted})
 			raw, _ := json.Marshal(body(testModel, true))

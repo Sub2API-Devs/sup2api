@@ -57,7 +57,7 @@ onMounted(load)
 
     <SCard :title="t('plugins.events.subscribed')">
       <template #actions>
-        <SButton size="sm" variant="ghost" :loading="loading" :aria-label="t('common.refresh')" :title="t('common.refresh')" icon="refresh" icon-only @click="load" />
+        <SButton size="sm" variant="ghost" :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
       </template>
       <div v-if="data.subscribe?.length" class="flex flex-wrap gap-2">
         <SCode v-for="s in data.subscribe" :key="s" inline :text="s" />

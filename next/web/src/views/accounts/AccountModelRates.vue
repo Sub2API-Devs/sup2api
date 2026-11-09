@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { SHint, SSpinner } from '@sub2api/ui'
 import type { AccountRateFigures, AccountRateModels } from '@/api/types'
 import { formatCompact } from '@/utils/format'
-import { fetchRateModels } from './accountLimits'
+import { FIGURE_COLOR, fetchRateModels } from './accountLimits'
 
 const props = defineProps<{ accountId: number }>()
 const { t } = useI18n()
@@ -35,6 +35,14 @@ onBeforeUnmount(() => {
 })
 
 const COLUMNS = ['in_use', 'rpm', 'tpm', 'tpd', 'sessions'] as const
+// Headings in the colours of the list cell's pills; TPD has no pill.
+const HEAD: Record<(typeof COLUMNS)[number], string> = {
+  in_use: FIGURE_COLOR.concurrency.fg,
+  rpm: FIGURE_COLOR.rpm.fg,
+  tpm: FIGURE_COLOR.tpm.fg,
+  tpd: '',
+  sessions: FIGURE_COLOR.sessions.fg
+}
 const cell = (r: AccountRateFigures, key: (typeof COLUMNS)[number]) => formatCompact(r[key])
 </script>
 
@@ -44,7 +52,9 @@ const cell = (r: AccountRateFigures, key: (typeof COLUMNS)[number]) => formatCom
       <thead class="text-fg-muted">
         <tr>
           <th class="pb-1 pr-3 text-left font-normal">{{ t('accounts.limitsUi.model') }}</th>
-          <th v-for="c in COLUMNS" :key="c" class="pb-1 pr-3 text-right font-normal last:pr-0">{{ t(`accounts.limitsUi.cols.${c}`) }}</th>
+          <th v-for="c in COLUMNS" :key="c" class="pb-1 pr-3 text-right font-normal last:pr-0" :class="HEAD[c]">
+            {{ t(`accounts.limitsUi.cols.${c}`) }}
+          </th>
         </tr>
       </thead>
       <tbody>

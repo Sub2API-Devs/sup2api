@@ -304,7 +304,7 @@ watch(() => list.items.value, () => (checked.value = []))
         </template>
         <template #cell-user_id="{ row }">
           <UserRef :user-id="row.user_id" link :title="t('events.openUser')" @click="openUser" />
-          <SButton size="xs" variant="ghost" icon="filter" icon-only :aria-label="t('events.filterUser')" :title="t('events.filterUser')" @click.stop="filterUser(row.user_id)" />
+          <SButton size="xs" variant="ghost" :title="t('events.filterUser')" @click.stop="filterUser(row.user_id)">{{ t('filter') }}</SButton>
         </template>
         <template #cell-model="{ row }">
           <span :title="row.model">{{ row.model || '—' }}</span>

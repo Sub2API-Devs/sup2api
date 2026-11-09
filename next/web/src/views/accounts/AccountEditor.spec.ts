@@ -17,10 +17,11 @@ import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }), toast: vi.fn() }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<object>(), api: mocks }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), toast: mocks.toast }))
+const ownership = vi.hoisted(() => ({ scope: 'all' as 'all' | 'own' }))
 const pluginStore = vi.hoisted(() => ({ listed: true, pending: {} as Record<string, boolean>, errors: {} as Record<string, string>, plugin: () => null, component: (() => null) as (key: string, name?: string) => unknown }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => pluginStore, assetURL: () => '' }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
-vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true }) }))
+vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true, scopeOf: () => ownership.scope }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useProxiesLookup: () => ({}) }))
 
 enableAutoUnmount(afterEach)
@@ -515,6 +516,13 @@ describe('account model limits', () => {
     expect(w.getComponent(ModelLimitsEditor).props('errors')).toEqual({ model_limits: 'm-a 已在另一个列表中' })
   })
 
+  it.each([['all', '0'], ['own', '10']] as const)('starts a new account of an %s-level caller with max concurrency %s', async (scope, value) => {
+    ownership.scope = scope
+    const w = render(undefined)
+    await flushPromises()
+    expect((w.get('input[data-testid="account-max_concurrency"]').element as HTMLInputElement).value).toBe(value)
+    ownership.scope = 'all'
+  })
   it('starts a new account from the limits its plugin suggests', async () => {
     const type = { ...accountType, default_limits: { priority: 3, spm_limit: 6, model_limits: [{ models: ['m-a'], ...caps, max_concurrency: 2 }] } } as AccountType
     const w = render(undefined, false, type)

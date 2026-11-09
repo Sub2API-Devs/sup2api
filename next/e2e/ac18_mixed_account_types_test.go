@@ -72,14 +72,14 @@ func TestAC18_MixedAccountTypesServeOneEndpoint(t *testing.T) {
 		}
 	}
 
-	// One group, two account types: anthropic/apikey (priority 1) and
-	// relay/relay_key (priority 50), both backed by the mock upstream.
-	tn := e.NewTenant(admin, TenantOpts{Accounts: 1, Priorities: []int{1}, Balance: "20"})
+	// One group, two account types: anthropic/apikey (priority 50) and
+	// relay/relay_key (priority 1), both backed by the mock upstream.
+	tn := e.NewTenant(admin, TenantOpts{Accounts: 1, Priorities: []int{50}, Balance: "20"})
 	anth := tn.Accounts[0]
 	relayKey := fmt.Sprintf("sk-relay-mock-%s-%d", e.RunID, nextSeq())
 	relayID := e.CreateAccount(admin, AccountSpec{
 		PluginKey: RelayPlugin, Type: RelayKey, GroupIDs: []int64{tn.GroupID},
-		APIKey: relayKey, BaseURL: e.MockInternalURL, Priority: 50,
+		APIKey: relayKey, BaseURL: e.MockInternalURL, Priority: 1,
 	})
 	defer m.ClearRule(t, anth.Key)
 	defer m.ClearRule(t, relayKey)

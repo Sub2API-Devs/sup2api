@@ -76,11 +76,6 @@
   flex-direction: column;
   gap: 0.75rem;
 }
-/* chevron-down turned into "move up" */
-.dw-up {
-  transform: rotate(180deg);
-}
-
 /* window bitmap of a rule (key detail) */
 .dw-bits {
   display: inline-flex;

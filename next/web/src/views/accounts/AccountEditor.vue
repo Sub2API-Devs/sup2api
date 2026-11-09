@@ -42,6 +42,7 @@ import ModelLimitsEditor from './ModelLimitsEditor.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 import { useUsageLimitEdit } from './useUsageLimitEdit'
 import { toCards, type ModelLimitCard } from './modelLimits'
+import { newAccountConcurrency } from './accountLimits'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import { containerLocales, containerTimezones, environmentOptions } from './containerEnvironment'
 import { useContainerEnvironment } from './useContainerEnvironment'
@@ -75,7 +76,7 @@ const basic = reactive({
   proxy_id: null as number | null,
   priority: 10,
   weight: 1,
-  max_concurrency: 10,
+  max_concurrency: 0,
   schedulable: true,
   auto_disable: true,
   rpm_limit: 0,
@@ -460,7 +461,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   proxyUrl.value = ''
   basic.priority = a?.priority ?? 10
   basic.weight = a?.weight ?? 1
-  basic.max_concurrency = a?.max_concurrency ?? 10
+  basic.max_concurrency = a?.max_concurrency ?? newAccountConcurrency(own.scopeOf(ACCOUNT_KEYS.create))
   basic.schedulable = a?.schedulable ?? schedulingControl.value.default
   basic.auto_disable = a?.auto_disable ?? autoDisableControl.value.default
   basic.rpm_limit = a?.rpm_limit ?? 0
@@ -594,11 +595,11 @@ const { save } = useAccountSave({
 </script>
 
 <template>
-  <form ref="formEl" class="space-y-5" novalidate @submit.prevent="save">
+  <form ref="formEl" class="flex min-h-full scroll-mt-4 flex-col gap-5" novalidate @submit.prevent="save">
     <div class="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
       <AccountEditorNav v-model="activeSection" :account-type="accountType" :sections="editorSections" :errors="sectionErrors" />
 
-      <div class="min-w-0 md:min-h-[30rem]">
+      <div class="min-w-0">
         <!-- ============================================================ connection -->
         <div v-show="activeSection === 'connection'" data-editor-section="connection" class="space-y-4">
           <SCard :title="t('accounts.basic')" :subtitle="t('accounts.editorUi.basicHint')">
@@ -748,7 +749,7 @@ const { save } = useAccountSave({
               <SInput v-model.number="basic.weight" type="number" min="1" max="1000" class="w-full sm:w-40" />
             </SSettingRow>
             <SSettingRow :label="t('accounts.maxConcurrency')" :description="t('accounts.zeroUnlimited')" :error="errors.max_concurrency">
-              <SInput v-model.number="basic.max_concurrency" type="number" min="0" class="w-full sm:w-40" />
+              <SInput v-model.number="basic.max_concurrency" type="number" min="0" class="w-full sm:w-40" data-testid="account-max_concurrency" />
             </SSettingRow>
             <SSettingRow :label="t('accounts.schedulable')" :description="t(schedulingControl.configurable ? 'accounts.editorUi.schedulableHint' : 'accounts.editorUi.commonControlFixed')">
               <SSwitch v-model="basic.schedulable" :disabled="!schedulingControl.configurable || saving" data-testid="account-scheduling-control" />
@@ -788,7 +789,7 @@ const { save } = useAccountSave({
 
     <FetchedModelsModal v-model:open="fetchOpen" :models="fetched.models" :skipped="fetched.skipped" :existing="models" @apply="applyFetched" />
 
-    <div class="sticky -bottom-5 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-white py-4 dark:bg-dark-800">
+    <div class="sticky -bottom-5 z-10 mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-line bg-white py-4 dark:bg-dark-800">
       <SButton v-if="!editing" class="mr-auto" variant="ghost" icon="arrow-left" @click="emit('back')">{{ t('common.previous') }}</SButton>
       <SButton v-if="canTestAccount" class="mr-auto" icon="play" @click="emit('test', account!)">{{ t('accounts.testConnection') }}</SButton>
       <SHint v-if="editing && prefilled" inline size="xs" tone="warning" class="inline-flex flex-wrap items-center gap-x-2" data-testid="footer-prefilled">

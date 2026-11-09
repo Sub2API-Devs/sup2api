@@ -67,7 +67,7 @@ onMounted(load)
       <span class="text-sm font-semibold">{{ t('plugins.detail.tabs.jobs') }}</span>
     </template>
     <template #actions>
-      <SButton size="sm" variant="ghost" :loading="loading" :aria-label="t('common.refresh')" :title="t('common.refresh')" icon="refresh" icon-only @click="load" />
+      <SButton size="sm" variant="ghost" :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
     </template>
     <STable :columns="columns" :rows="jobs" :loading="loading">
       <template #cell-id="{ row }">

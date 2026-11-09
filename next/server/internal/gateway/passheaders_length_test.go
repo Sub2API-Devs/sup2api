@@ -29,7 +29,7 @@ func TestPassHeaderOf8192BytesReachesThePluginUnchanged(t *testing.T) {
 	cc := &fakePlatform{base: e.up.srv.URL}
 	e.addAccountType("ccgateway", "cc_account", cc,
 		manifest.AccountPlatform{Platform: "anthropic", PassHeaders: []string{"x-claude-code-session-id", header}})
-	e.accounts.addTyped(testGroup, 4, 0, "cc-4", "ccgateway", "cc_account")
+	e.accounts.addTyped(testGroup, 4, 100, "cc-4", "ccgateway", "cc_account")
 
 	r := e.do("/v1/messages", body(testModel, false), map[string]string{header: value, "X-Claude-Code-Session-Id": "s1"})
 	if r.status != 200 {

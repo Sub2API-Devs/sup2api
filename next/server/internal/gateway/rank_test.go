@@ -118,7 +118,7 @@ func TestRankCalledOnStickyFailover(t *testing.T) {
 	e.record()
 	r.mu.Lock()
 	r.fn = func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-		return []*pluginv1.RankedAccount{rank(3, 0, 1)}, nil
+		return []*pluginv1.RankedAccount{rank(3, 100, 1)}, nil
 	}
 	r.mu.Unlock()
 	e.up.set("acc-1", &upstreamRule{status: 500})
@@ -163,7 +163,7 @@ func TestRankCalledOncePerRequest(t *testing.T) {
 	}
 	c0 := in.GetCandidates()[0]
 	if c0.GetAccountId() != 1 || c0.GetName() != "acc-1" || c0.GetAccountType() != "apikey" ||
-		c0.GetTypePluginKey() != "anthropic" || c0.GetPriority() != 1 || c0.GetWeight() != 1 {
+		c0.GetTypePluginKey() != "anthropic" || c0.GetPriority() != 99 || c0.GetWeight() != 1 {
 		t.Fatalf("candidate %+v: weight must be normalized to 1-1000", c0)
 	}
 }
@@ -185,7 +185,7 @@ func TestRankWeightChangesTheDraw(t *testing.T) {
 
 	e.addRanker("guard", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(3, 10, 1000)}, nil
+			return []*pluginv1.RankedAccount{rank(3, 90, 1000)}, nil
 		}})
 	if r := e.messages(body(testModel, false)); r.status != 200 {
 		t.Fatalf("status %d %s", r.status, r.body)
@@ -195,7 +195,7 @@ func TestRankWeightChangesTheDraw(t *testing.T) {
 		t.Fatalf("with ranking: %v, want acc-3 last", k)
 	}
 	if len(rec.SchedDecisions) != 1 || rec.SchedDecisions[0].PluginKey != "guard" ||
-		len(rec.SchedDecisions[0].Changed) != 1 || rec.SchedDecisions[0].Changed[0] != (core.RankChange{AccountID: 3, Priority: 10, Weight: 1000}) {
+		len(rec.SchedDecisions[0].Changed) != 1 || rec.SchedDecisions[0].Changed[0] != (core.RankChange{AccountID: 3, Priority: 90, Weight: 1000}) {
 		t.Fatalf("sched decisions %+v", rec.SchedDecisions)
 	}
 }
@@ -205,7 +205,7 @@ func TestRankWeightZeroExcludesAccount(t *testing.T) {
 	e := newEnv(t)
 	e.addRanker("guard", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(1, 1, 0)}, nil
+			return []*pluginv1.RankedAccount{rank(1, 99, 0)}, nil
 		}})
 	if r := e.messages(body(testModel, false)); r.status != 200 {
 		t.Fatalf("status %d %s", r.status, r.body)
@@ -298,7 +298,7 @@ func TestRankPluginsRunSerially(t *testing.T) {
 	samePriority(e)
 	first := e.addRanker("first", manifest.SchedulerRank{Order: 10}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(3, 0, 700)}, nil
+			return []*pluginv1.RankedAccount{rank(3, 100, 700)}, nil
 		}})
 	var seenPriority, seenWeight int32
 	second := e.addRanker("second", manifest.SchedulerRank{Order: 20}, &fakeRanker{
@@ -308,7 +308,7 @@ func TestRankPluginsRunSerially(t *testing.T) {
 					seenPriority, seenWeight = c.GetPriority(), c.GetWeight()
 				}
 			}
-			return []*pluginv1.RankedAccount{rank(3, 0, 900)}, nil
+			return []*pluginv1.RankedAccount{rank(3, 100, 900)}, nil
 		}})
 	broken := e.addRanker("broken", manifest.SchedulerRank{Order: 30}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
@@ -322,10 +322,10 @@ func TestRankPluginsRunSerially(t *testing.T) {
 	if first.count() != 1 || second.count() != 1 || broken.count() != 1 {
 		t.Fatalf("calls %d %d %d", first.count(), second.count(), broken.count())
 	}
-	if seenPriority != 0 || seenWeight != 700 {
-		t.Fatalf("the second plugin saw %d/%d, want the first plugin's 0/700", seenPriority, seenWeight)
+	if seenPriority != 100 || seenWeight != 700 {
+		t.Fatalf("the second plugin saw %d/%d, want the first plugin's 100/700", seenPriority, seenWeight)
 	}
-	// acc-3 alone in priority 0: the whole rewrite survived the broken plugin.
+	// acc-3 alone in priority 100: the whole rewrite survived the broken plugin.
 	if k := strings.Join(e.up.keys(), ","); k != "acc-3" {
 		t.Fatalf("upstream %s, want acc-3", k)
 	}
@@ -345,15 +345,15 @@ func TestRankClampsAndIgnoresUnknownAccounts(t *testing.T) {
 			return []*pluginv1.RankedAccount{
 				rank(1, -5, 99999), // clamped to 0 / 1000
 				rank(2, 1<<30, 1),  // priority clamped to 1000000
-				rank(3, 90, 1),     // unchanged: not recorded
+				rank(3, 10, 1),     // unchanged: not recorded
 				rank(404, 0, 1000), // not a candidate: ignored
 			}, nil
 		}})
 	if r := e.messages(body(testModel, false)); r.status != 200 {
 		t.Fatalf("status %d %s", r.status, r.body)
 	}
-	if k := strings.Join(e.up.keys(), ","); k != "acc-1" {
-		t.Fatalf("upstream %s, want acc-1 (priority 0)", k)
+	if k := strings.Join(e.up.keys(), ","); k != "acc-2" {
+		t.Fatalf("upstream %s, want acc-2 (priority 1000000)", k)
 	}
 	rec := e.record()
 	if len(rec.SchedDecisions) != 1 {

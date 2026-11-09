@@ -222,7 +222,7 @@ type AccountRef struct {
 	Name           string
 	PluginKey      string // declaring plugin of the account type
 	Type           string
-	Priority       int // lower first
+	Priority       int // higher first
 	Weight         int // within a priority, 1-1000
 	MaxConcurrency int
 	ProxyID        *int64

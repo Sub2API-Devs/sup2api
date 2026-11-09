@@ -87,7 +87,7 @@ type RankCandidate struct {
 	AccountType string `protobuf:"bytes,3,opt,name=account_type,json=accountType,proto3" json:"account_type,omitempty"`
 	// Plugin key declaring the account type.
 	TypePluginKey string `protobuf:"bytes,4,opt,name=type_plugin_key,json=typePluginKey,proto3" json:"type_plugin_key,omitempty"`
-	// The account's current priority, lower is picked first (0-1000000).
+	// The account's current priority, higher is picked first (0-1000000).
 	Priority int32 `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
 	// The account's current weight; the host guarantees it is normalized to
 	// 1-1000.

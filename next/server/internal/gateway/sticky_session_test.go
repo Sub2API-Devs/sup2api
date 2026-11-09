@@ -86,9 +86,9 @@ func TestStickySessionStaysTogether(t *testing.T) {
 	t.Run("a new session is not bound to an account being queued for", func(t *testing.T) {
 		e := newEnv(t)
 		e.enableSticky(onFailureFailover)
-		e.accounts.set(1, func(acc *core.Account) { acc.Priority = 1 })
-		e.accounts.set(2, func(acc *core.Account) { acc.Priority = 2 })
-		e.accounts.set(3, func(acc *core.Account) { acc.Priority = 3 })
+		e.accounts.set(1, func(acc *core.Account) { acc.Priority = 99 })
+		e.accounts.set(2, func(acc *core.Account) { acc.Priority = 98 })
+		e.accounts.set(3, func(acc *core.Account) { acc.Priority = 97 })
 		e.setSlots(core.AccountWaitSlots+":1", 1, 0)
 		if r := e.messages(sess); r.status != 200 {
 			t.Fatalf("%d %s", r.status, r.body)

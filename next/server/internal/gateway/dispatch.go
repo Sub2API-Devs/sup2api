@@ -224,7 +224,7 @@ func (c *call) sessionIdentity() string {
 }
 
 // pick chooses the next account: the sticky binding first (when usable),
-// then by priority with weighted random order inside a priority (CONTRACTS
+// then by priority, higher first, with weighted random order inside a priority (CONTRACTS
 // §18), over the priority/weight the scheduler.rank plugins left for this
 // request (CONTRACTS §24). Accounts whose rate-limit window is exhausted are
 // skipped. It returns busy when candidates exist but none could be used
@@ -269,8 +269,8 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	if len(pool) == 0 {
 		return nil, nil, limited
 	}
-	// Each tier in weighted random order.
-	sort.SliceStable(pool, func(i, j int) bool { return pool[i].Priority < pool[j].Priority })
+	// Higher priority first, each tier in weighted random order.
+	sort.SliceStable(pool, func(i, j int) bool { return pool[i].Priority > pool[j].Priority })
 	for i := 0; i < len(pool); {
 		j := i
 		for j < len(pool) && pool[j].Priority == pool[i].Priority {
