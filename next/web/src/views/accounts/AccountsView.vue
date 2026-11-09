@@ -58,6 +58,8 @@ const { groups } = useGroupsLookup()
 // only the caller's (the server filters; row actions follow the same rule).
 const readScope = computed(() => own.scopeOf(ACCOUNT_KEYS.read))
 const showOwner = computed(() => readScope.value === 'all')
+// One creator on the whole page says nothing per row: the column only shows when creators differ.
+const mixedOwners = computed(() => new Set(list.items.value.map((a) => a.created_by)).size > 1)
 const canCreate = computed(() => auth.has([...ACCOUNT_KEYS.create]))
 const canUpdate = (a: Account) => own.can(a, ACCOUNT_KEYS.update)
 const canTest = (a: Account) => own.can(a, ACCOUNT_KEYS.test)
@@ -128,13 +130,13 @@ const typeFilter = computed({
 })
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'name', label: t('accounts.listUi.identity'), width: '320px', mobile: 'title' },
+  { key: 'name', label: t('accounts.listUi.identity'), width: '280px', mobile: 'title' },
   { key: 'groups', label: t('accounts.groups'), mobile: 'meta', mobileSpan: 2 },
-  ...(showOwner.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
+  ...(showOwner.value && mixedOwners.value ? [{ key: 'created_by', label: t('accounts.createdBy') }] : []),
   { key: 'status', label: t('common.status'), mobile: 'status' },
-  { key: 'priority', label: t('accounts.priority'), width: '84px', mobile: 'meta' },
+  { key: 'priority', label: t('accounts.priority'), width: '72px', mobile: 'meta' },
   // A plugin decoration (account.list.weight) sits beside the number on the same line, so the column grows when one is registered.
-  { key: 'weight', label: t('accounts.weight'), width: plugins.slotEntries('account.list.weight').length ? '128px' : '84px', mobile: 'meta' },
+  { key: 'weight', label: t('accounts.weight'), width: plugins.slotEntries('account.list.weight').length ? '116px' : '72px', mobile: 'meta' },
   { key: 'limits', label: t('accounts.listUi.limitsColumn'), mobile: 'detail', mobileSpan: 2 },
   { key: 'success_rate', label: t('accounts.successRate.column'), mobile: 'meta' },
   // The core's usage record (CONTRACTS §73), every account type.
@@ -143,7 +145,7 @@ const columns = computed<TableColumn[]>(() => [
   // only when a row of this page has either.
   ...(list.items.value.some((a) => hasQuota(a.quota) || hasBalance(a.balance)) ? [{ key: 'quota', label: t('accounts.balance.column') }] : []),
   { key: 'last_test', label: t('accounts.lastTest.column') },
-  { key: 'actions', label: t('common.actions'), align: 'right', width: '170px' }
+  { key: 'actions', label: t('common.actions'), align: 'right', width: '108px' }
 ])
 
 function groupName(id: number, refs?: Array<{ id: number; name: string }>) {
@@ -152,6 +154,8 @@ function groupName(id: number, refs?: Array<{ id: number; name: string }>) {
 function groupNames(ids: number[] | undefined, refs?: Array<{ id: number; name: string }>) {
   return ids?.length ? ids.map((id) => groupName(id, refs)).join(', ') : '—'
 }
+/** Read-only plugin facts of a row, without the ones repeating its name (e.g. a login email used as the name). */
+const rowFacts = (a: Account) => accountTypes.pluginFacts(a.plugin_key, a.type, a.settings).filter((fact) => fact.value !== a.name)
 const groupTags = (a: Account) => (a.group_ids || []).map((id) => ({ id, name: groupName(id, a.groups) }))
 
 /** Applies a server change to the list row and the open detail of the same account. */
@@ -683,10 +687,10 @@ function resetFilters() {
         <LastTestCell :last="row.last_test" :testing="batchTesting.has(row.id)" />
       </template>
       <template #cell-name="{ row }">
-        <div class="min-w-64 max-w-sm space-y-0.5">
+        <div class="min-w-56 max-w-[17rem] space-y-0.5">
           <div class="flex items-center gap-2"><span class="shrink-0 font-mono text-xxs text-fg-subtle">#{{ row.id }}</span><SLink as="button" class="min-w-0 truncate font-semibold" :title="row.name" @click="openDetail(row)">{{ row.name }}</SLink></div>
           <div class="flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-muted"><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span><SBadge v-if="row.subscription_type" size="xs" tone="purple" class="shrink-0" :title="t('accounts.subscriptionHint')" data-testid="account-subscription">{{ subscriptionLabel(row.subscription_type) }}</SBadge><span v-if="row.last_used_at" class="shrink-0 text-xxs text-fg-subtle">· {{ formatRelative(row.last_used_at, t) }}</span></div>
-          <div v-for="fact in accountTypes.pluginFacts(row.plugin_key, row.type, row.settings)" :key="fact.key" class="truncate text-xs text-fg-muted" :title="`${fact.label}: ${fact.value}`" :data-testid="'account-fact-' + fact.key">{{ fact.label }} <span class="text-fg">{{ fact.value }}</span></div>
+          <div v-for="fact in rowFacts(row)" :key="fact.key" class="truncate text-xs text-fg-muted" :title="`${fact.label}: ${fact.value}`" :data-testid="'account-fact-' + fact.key">{{ fact.label }} <span class="text-fg">{{ fact.value }}</span></div>
         </div>
       </template>
       <template #cell-groups="{ row }"><div class="flex max-w-56 gap-1" :title="groupNames(row.group_ids, row.groups)"><SBadge v-for="group in groupTags(row).slice(0, 2)" :key="group.id" tone="gray" class="max-w-40 truncate">{{ group.name }}</SBadge><SBadge v-if="groupTags(row).length > 2" tone="gray">+{{ groupTags(row).length - 2 }}</SBadge><SHint v-if="!row.group_ids?.length" size="xs">—</SHint></div></template>
@@ -739,7 +743,7 @@ function resetFilters() {
       </template>
       <template #cell-quota="{ row }">
         <div v-if="hasQuota(row.quota) || hasBalance(row.balance)" class="space-y-2">
-          <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
+          <AccountQuotaCell v-if="hasQuota(row.quota)" compact :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
           <AccountBalanceCell v-if="hasBalance(row.balance)" :balance="row.balance" :refreshing="balanceRefresh.refreshing.has(row.id)" @refresh="balanceRefresh.refresh(row.id, row.balance)" />
         </div>
         <!-- nothing from the upstream (API keys): show nothing, not even the table's "—" fallback -->
@@ -747,8 +751,9 @@ function resetFilters() {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
-          <SButton v-if="canTest(row) && !row.orphaned" size="sm" variant="ghost" @click="openTest(row)">{{ t('common.test') }}</SButton>
-          <SButton v-if="canUpdate(row) && !row.orphaned" size="sm" variant="ghost" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
+          <!-- Icons keep the sticky actions column narrow; the names stay in the tooltip and aria-label. -->
+          <SButton v-if="canTest(row) && !row.orphaned" size="sm" variant="ghost" icon="play" icon-only :aria-label="t('common.test')" :title="t('common.test')" data-testid="account-test" @click="openTest(row)" />
+          <SButton v-if="canUpdate(row) && !row.orphaned" size="sm" variant="ghost" icon="edit" icon-only :aria-label="t('common.edit')" :title="t('common.edit')" data-testid="account-edit" @click="openEdit(row)" />
           <SDropdown :actions="actionsFor(row)" @select="onAction(row, $event)" />
         </div>
       </template>
@@ -863,8 +868,9 @@ function resetFilters() {
 .account-table :deep(td) {
   white-space: nowrap;
 }
-.account-table :deep(.table-dense td) {
-  padding-top: 0.375rem;
-  padding-bottom: 0.375rem;
+/* Compact rows are a dozen columns wide: tighter side padding keeps them on screen. */
+.account-table :deep(.table-dense td),
+.account-table :deep(.table-dense th) {
+  padding: 0.375rem 0.5rem;
 }
 </style>

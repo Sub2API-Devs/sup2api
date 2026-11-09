@@ -19,7 +19,7 @@ const title = computed(() => {
 </script>
 
 <template>
-  <div class="min-w-[6.5rem] text-xs" data-testid="account-last-test">
+  <div class="min-w-[4.5rem] text-xs" data-testid="account-last-test">
     <span v-if="testing" class="inline-flex items-center gap-1.5 text-fg-muted"><SSpinner size="sm" />{{ t('accounts.lastTest.testing') }}</span>
     <div v-else-if="last" :title="title">
       <div class="flex items-center gap-1.5">

@@ -6,6 +6,8 @@
 // rejected window shows a full red bar and a red name, no extra text. The
 // snapshot comes from the list row — this cell never fetches;
 // clicking the cell emits "refresh"; the page coalesces in-flight requests.
+// `compact` (the list row) keeps to one line per window: a query error becomes
+// a warning icon on the first window and the observed time goes to the tooltip.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SIcon } from '@sub2api/ui'
@@ -14,9 +16,10 @@ import { formatDateTime, formatRelative } from '@/utils/format'
 import { lt } from '@/i18n'
 import { formatPercent, quotaCountdown, quotaLevel, sortWindows, useQuotaClock, type QuotaLevel } from './accountQuota'
 
-const props = withDefaults(defineProps<{ quota: QuotaSnapshot; refreshing?: boolean; refreshable?: boolean }>(), {
+const props = withDefaults(defineProps<{ quota: QuotaSnapshot; refreshing?: boolean; refreshable?: boolean; compact?: boolean }>(), {
   refreshing: false,
-  refreshable: true
+  refreshable: true,
+  compact: false
 })
 const emit = defineEmits<{ (e: 'refresh'): void }>()
 const { t } = useI18n()
@@ -100,6 +103,16 @@ const updated = computed(() => {
   void clock.value // re-evaluate the relative time with the shared clock
   return props.quota.updated_at ? formatRelative(props.quota.updated_at, t) : ''
 })
+
+/** Compact with windows to show: the error becomes an icon, the footer joins each window's tooltip. */
+const folded = computed(() => props.compact && rows.value.length > 0)
+const foldedNote = computed(() =>
+  folded.value
+    ? [props.quota.source === 'passive' ? t('accounts.quota.passive') : '', updated.value ? t('accounts.quota.lastObserved', { time: updated.value }) : '']
+        .filter(Boolean)
+        .join(' · ')
+    : ''
+)
 </script>
 
 <template>
@@ -116,7 +129,7 @@ const updated = computed(() => {
     @click="refresh"
   >
     <p
-      v-if="queryError"
+      v-if="queryError && !folded"
       class="max-w-[14rem] truncate text-warning-600 dark:text-warning-400"
       :title="queryError"
       data-testid="quota-error"
@@ -126,16 +139,18 @@ const updated = computed(() => {
     <p
       v-if="pending"
       class="text-fg-subtle"
+      :class="compact ? 'max-w-[12rem] truncate' : ''"
+      :title="compact ? pending : undefined"
       data-testid="quota-pending"
     >
       {{ pending }}
     </p>
-    <div class="space-y-1">
+    <div :class="folded ? 'space-y-0.5' : 'space-y-1'">
       <div
-        v-for="r in rows"
+        v-for="(r, i) in rows"
         :key="r.key"
         class="flex items-center gap-1.5"
-        :title="r.title"
+        :title="foldedNote ? `${r.title}\n${foldedNote}` : r.title"
         :data-testid="`quota-window-${r.key}`"
         :data-level="r.level"
       >
@@ -158,6 +173,10 @@ const updated = computed(() => {
         </div>
         <span class="w-9 shrink-0 text-right font-medium tabular-nums" :class="TEXT[r.level]">{{ r.percent }}</span>
         <span v-if="r.reset" class="shrink-0 whitespace-nowrap tabular-nums text-fg-subtle">{{ r.reset }}</span>
+        <template v-if="folded && i === 0">
+          <span v-if="refreshing" role="status" class="inline-flex shrink-0"><SIcon name="refresh" class="h-3 w-3 animate-spin text-fg-subtle" :label="t('accounts.quota.refreshing')" /></span>
+          <span v-else-if="queryError" class="inline-flex shrink-0 text-warning-600 dark:text-warning-400" :title="queryError" data-testid="quota-error"><SIcon name="warning" class="h-3 w-3" :label="queryError" /></span>
+        </template>
       </div>
     </div>
     <p
@@ -167,7 +186,7 @@ const updated = computed(() => {
     >
       {{ t('accounts.quota.noData') }}
     </p>
-    <div class="flex items-center gap-1.5 text-fg-subtle">
+    <div v-if="!folded" class="flex items-center gap-1.5 text-fg-subtle">
       <span v-if="quota.source === 'passive'" class="italic" :title="t('accounts.quota.passiveHint')">{{
         t('accounts.quota.passive')
       }}</span>

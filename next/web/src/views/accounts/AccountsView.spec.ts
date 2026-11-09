@@ -13,7 +13,7 @@ import type { PluginAccountActionEntry, SlotEntry } from '@/stores/plugins'
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as SlotEntry[]), accountActions: [] as PluginAccountActionEntry[] }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), pluginFacts: vi.fn((): { key: string; label: string; value: string }[] => []), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as SlotEntry[]), accountActions: [] as PluginAccountActionEntry[] }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { get: mocks.get, post: mocks.post, patch: mocks.patch, list: async () => ({ items: [] }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), confirm: mocks.confirm, toast: mocks.toast }))
 vi.mock('@/utils/errors', () => ({ notifyError: mocks.notifyError, errorMessage: String }))
@@ -22,7 +22,7 @@ vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ slotEntries: mocks.slotEntries, get accountActions() { return mocks.accountActions }, plugin: () => undefined, component: () => undefined }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useGroupsLookup: () => ({ groups: ref([]) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
 vi.mock('@/composables/useOwnership', async (original) => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ scopeOf: () => 'all', can: (_a: Account, keys: readonly string[]) => keys.includes('account:update') && mocks.canUpdate }) }))
-vi.mock('./accountTypes', () => ({ typeKey: () => '', useAccountTypes: () => ({ load: vi.fn(), find: mocks.findType, grouped: ref([]), types: ref([]), pluginFacts: () => [] }) }))
+vi.mock('./accountTypes', () => ({ typeKey: () => '', useAccountTypes: () => ({ load: vi.fn(), find: mocks.findType, grouped: ref([]), types: ref([]), pluginFacts: () => mocks.pluginFacts(), pluginName: (key: string) => key, typeLabel: (_key: string, type: string) => type }) }))
 vi.mock('@/composables/useList', async (original) => ({ ...await original<object>(), useList: () => list }))
 
 const list = { items: ref<Account[]>([]), total: ref(1), page: ref(1), pageSize: ref(20), loading: ref(false), error: ref(''), filters: reactive<Record<string, string>>({}), reload: mocks.reload }
@@ -702,5 +702,26 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
     await flushPromises()
     expect(list.filters.ids).toBe('')
     expect(chips(w)).toEqual([])
+  })
+})
+
+describe('account list layout', () => {
+  const row = (id: number, over: Partial<Account> = {}) => ({ id, name: 'a@example.com', plugin_key: 'ccgateway', type: 'oauth', status: 'active', schedulable: true, created_by: 1, settings: {}, ...over }) as unknown as Account
+  const renderLayout = () => render({ STable: { props: ['rows', 'columns'], template: '<div><i data-testid="cols">{{ columns.map((c) => c.key).join() }}</i><div v-for="row in rows" :key="row.id"><slot name="cell-name" :row="row" /></div></div>' } })
+  beforeEach(() => mocks.pluginFacts.mockReset().mockReturnValue([]))
+
+  it('shows the creator column only when the page has more than one creator', () => {
+    list.items.value = [row(1), row(2)]
+    expect(renderLayout().get('[data-testid="cols"]').text()).not.toContain('created_by')
+    list.items.value = [row(1), row(2, { created_by: 2 })]
+    expect(renderLayout().get('[data-testid="cols"]').text()).toContain('created_by')
+  })
+
+  it('leaves out a plugin fact that repeats the account name', () => {
+    mocks.pluginFacts.mockReturnValue([{ key: 'email', label: '登录邮箱', value: 'a@example.com' }, { key: 'org', label: '组织', value: 'acme' }])
+    list.items.value = [row(1)]
+    const w = renderLayout()
+    expect(w.find('[data-testid="account-fact-email"]').exists()).toBe(false)
+    expect(w.get('[data-testid="account-fact-org"]').text()).toContain('acme')
   })
 })
