@@ -3,6 +3,7 @@ package convert
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -83,6 +84,9 @@ func chatLossCategory(path string) LossCategory {
 }
 
 // ---------------------------------------------------------------- helpers
+
+// errUnprepared fails a response conversion on the registry entry.
+var errUnprepared = errors.New("convert: response requires a prepared request")
 
 type jobject = map[string]any
 
