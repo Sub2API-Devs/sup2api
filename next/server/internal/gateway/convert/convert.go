@@ -10,10 +10,8 @@
 // the request cannot be expressed at all; the gateway decides per account
 // whether the losses are acceptable (docs/CONVERT-MATRIX.md §2).
 //
-// Built-in cross-platform pairs still accept only parameters with a verified
-// target equivalent. The same-platform openai.chat -> openai.responses pair
-// is lenient: it also leaves out parameters whose absence keeps the request
-// correct and reports them through DropReporter (CONTRACTS §83.2).
+// A pair without a converter of its own is served through openai.responses
+// when both hops exist (compose.go).
 package convert
 
 import (
@@ -214,12 +212,15 @@ type PairInfo struct {
 
 type pair struct{ from, to string }
 
-// Registry holds converters keyed by (client protocol, upstream protocol).
-// The zero value and a nil *Registry are empty registries. Registry
-// implements core.ProtocolConverters.
+// Registry holds converters keyed by (client protocol, upstream protocol),
+// and the compositions of two of them through openai.responses for the
+// pairs without a converter of their own. The zero value and a nil
+// *Registry are empty registries. Registry implements
+// core.ProtocolConverters.
 type Registry struct {
-	mu sync.RWMutex
-	m  map[pair]Converter
+	mu       sync.RWMutex
+	m        map[pair]Converter
+	composed map[pair]Converter
 }
 
 var _ core.ProtocolConverters = (*Registry)(nil)
@@ -279,46 +280,82 @@ func (r *Registry) Register(c Converter) error {
 		return fmt.Errorf("%w: %s -> %s", ErrDuplicate, from, to)
 	}
 	r.m[k] = c
+	r.compose()
 	return nil
 }
 
 // Resolve returns the converter serving a clientProtocol endpoint with an
-// upstreamProtocol account. Identical protocols need no converter and
-// report false.
-//
-// TODO(convert-matrix T1): fall back to a cached composition through
-// openai.responses (CONVERT-MATRIX §4); only registered pairs resolve yet.
+// upstreamProtocol account: the registered one, else the composition
+// through openai.responses (CONVERT-MATRIX §4). Identical protocols need no
+// converter and report false.
 func (r *Registry) Resolve(clientProtocol, upstreamProtocol string) (Converter, bool) {
 	if r == nil || clientProtocol == upstreamProtocol {
 		return nil, false
 	}
+	k := pair{clientProtocol, upstreamProtocol}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	c, ok := r.m[pair{clientProtocol, upstreamProtocol}]
+	if c, ok := r.m[k]; ok {
+		return c, true
+	}
+	c, ok := r.composed[k]
 	return c, ok
 }
 
-// CanConvert implements core.ProtocolConverters.
+// CanConvert reports whether Resolve finds a converter.
 func (r *Registry) CanConvert(clientProtocol, upstreamProtocol string) bool {
 	_, ok := r.Resolve(clientProtocol, upstreamProtocol)
 	return ok
 }
 
-// Pairs lists the convertible pairs, sorted by From then To.
+// Conversion implements core.ProtocolConverters.
+func (r *Registry) Conversion(clientProtocol, upstreamProtocol string) (core.Conversion, bool) {
+	c, ok := r.Resolve(clientProtocol, upstreamProtocol)
+	if !ok {
+		return core.Conversion{}, false
+	}
+	return core.Conversion{Rank: int(c.Grade()), Grade: c.Grade().String(), Hops: Hops(c)}, true
+}
+
+// Pairs lists the convertible pairs, compositions included, sorted by From
+// then To.
 func (r *Registry) Pairs() []PairInfo {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
-	out := make([]PairInfo, 0, len(r.m))
-	for _, c := range r.m {
-		out = append(out, PairInfo{From: c.From(), To: c.To(), Grade: c.Grade(), Hops: Hops(c)})
+	out := make([]PairInfo, 0, len(r.m)+len(r.composed))
+	for _, m := range []map[pair]Converter{r.m, r.composed} {
+		for _, c := range m {
+			out = append(out, PairInfo{From: c.From(), To: c.To(), Grade: c.Grade(), Hops: Hops(c)})
+		}
 	}
 	r.mu.RUnlock()
 	slices.SortFunc(out, func(a, b PairInfo) int {
 		return cmp.Or(cmp.Compare(a.From, b.From), cmp.Compare(a.To, b.To))
 	})
 	return out
+}
+
+// compose rebuilds the compositions: from -> relay -> to for every pair of
+// registered hops whose (from, to) has no converter of its own. Called with
+// r.mu held.
+func (r *Registry) compose() {
+	r.composed = map[pair]Converter{}
+	for k1, a := range r.m {
+		if k1.to != relay {
+			continue
+		}
+		for k2, b := range r.m {
+			k := pair{k1.from, k2.to}
+			if k2.from != relay || k.from == k.to {
+				continue
+			}
+			if _, direct := r.m[k]; !direct {
+				r.composed[k] = &composed{a: a, b: b}
+			}
+		}
+	}
 }
 
 // AppendSSE appends ev in wire format ("event: ...", one "data:" line per

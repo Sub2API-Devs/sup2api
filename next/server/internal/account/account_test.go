@@ -383,9 +383,21 @@ func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 // (unused, the platform is unavailable) openai.embeddings to ghost.embed.
 type fakeConverters struct{}
 
-func (fakeConverters) CanConvert(client, upstream string) bool {
+func (f fakeConverters) Conversion(client, upstream string) (core.Conversion, bool) {
+	return fairConversion(client, upstream, f.canConvert(client, upstream))
+}
+
+func (fakeConverters) canConvert(client, upstream string) bool {
 	return client == "openai.chat" && upstream == "anthropic.messages" ||
 		client == "openai.embeddings" && upstream == "ghost.embed"
+}
+
+// fairConversion is a one-hop fair conversion when ok.
+func fairConversion(client, upstream string, ok bool) (core.Conversion, bool) {
+	if !ok {
+		return core.Conversion{}, false
+	}
+	return core.Conversion{Rank: 2, Grade: "fair", Hops: []string{client, upstream}}, true
 }
 
 func ep(method, path, protocol, billing string) manifest.Endpoint {
@@ -444,15 +456,14 @@ func testGen(plat core.PlatformPlugin) *fakeGen {
 	}
 }
 
-// endpointList renders endpoints as "METHOD path platform native|converted".
+// endpointList renders endpoints as "METHOD path platform grade".
 func endpointList(eps []EndpointView) string {
 	var s []string
 	for _, e := range eps {
-		how := "converted"
-		if e.Native {
-			how = "native"
+		if e.Native != (e.Grade == "native") {
+			return "native flag disagrees with grade " + e.Grade
 		}
-		s = append(s, e.Method+" "+e.Path+" "+e.Platform+" "+how)
+		s = append(s, e.Method+" "+e.Path+" "+e.Platform+" "+e.Grade)
 	}
 	return strings.Join(s, "; ")
 }
@@ -477,7 +488,7 @@ func TestTypeViewEndpoints(t *testing.T) {
 		t.Fatalf("platforms: %s", got)
 	}
 	want := "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic native; " +
-		"POST /v1/chat/completions openai converted"
+		"POST /v1/chat/completions openai fair"
 	if got := endpointList(v.Endpoints); got != want {
 		t.Fatalf("endpoints:\n got %s\nwant %s", got, want)
 	}
@@ -499,7 +510,7 @@ func TestTypeViewEndpoints(t *testing.T) {
 	}
 	v = typeView(g, g.types[1], fakeConverters{})
 	if got := endpointList(v.Endpoints); got != "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic native; "+
-		"POST /v1/chat/completions openai converted" {
+		"POST /v1/chat/completions openai fair" {
 		t.Fatalf("relay endpoints with converters: %s", got)
 	}
 	// A plugin platform.
@@ -581,7 +592,8 @@ func TestTypeViewEndpointSubset(t *testing.T) {
 	}
 	b.Type.Platforms[0].Endpoints = []string{"messages"}
 	got = endpointList(typeView(g, b, fakeConverters{}).Endpoints)
-	if got != "POST /v1/messages anthropic native; POST /v1/chat/completions openai converted" {
+	// count_tokens left out of the subset is estimated locally (CONVERT-MATRIX §8).
+	if got != "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic local; POST /v1/chat/completions openai fair" {
 		t.Fatalf("selected endpoint and its conversion: %s", got)
 	}
 }

@@ -319,7 +319,8 @@ func ActivePluginKeys(reg PluginRegistry) []string {
 
 // ProtocolConverters (owner: gateway) reports which protocol pairs the core
 // can convert (ARCHITECTURE 6.6): a client endpoint speaking clientProtocol
-// can be served by an account type whose upstream speaks upstreamProtocol.
+// can be served by an account type whose upstream speaks upstreamProtocol,
+// with the quality and through the protocols Conversion describes.
 type ProtocolConverters interface {
-	CanConvert(clientProtocol, upstreamProtocol string) bool
+	Conversion(clientProtocol, upstreamProtocol string) (Conversion, bool)
 }

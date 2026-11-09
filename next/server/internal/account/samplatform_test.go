@@ -10,7 +10,11 @@ import (
 // chatResponsesConverters is the core's openai.chat -> openai.responses pair.
 type chatResponsesConverters struct{}
 
-func (chatResponsesConverters) CanConvert(client, upstream string) bool {
+func (f chatResponsesConverters) Conversion(client, upstream string) (core.Conversion, bool) {
+	return fairConversion(client, upstream, f.canConvert(client, upstream))
+}
+
+func (chatResponsesConverters) canConvert(client, upstream string) bool {
 	return client == "openai.chat" && upstream == "openai.responses"
 }
 
@@ -32,7 +36,7 @@ func TestServedEndpointsSamePlatformConversion(t *testing.T) {
 	}
 	b := core.AccountTypeBinding{Plugin: core.PluginInfo{Key: "codex"}, Type: manifest.AccountType{ID: "chatgpt",
 		Platforms: []manifest.AccountPlatform{{Platform: "openai", Endpoints: []string{"responses"}}}}}
-	want := "POST /v1/responses openai native; POST /v1/chat/completions openai converted"
+	want := "POST /v1/responses openai native; POST /v1/chat/completions openai fair"
 	if got := endpointList(servedEndpoints(g, b, chatResponsesConverters{})); got != want {
 		t.Fatalf("endpoints:\n got %s\nwant %s", got, want)
 	}
