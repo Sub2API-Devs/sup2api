@@ -240,7 +240,13 @@ func TestRollupSealWaitsForOpenWrites(t *testing.T) {
 	require.NoError(t, tx.QueryRow(ctx, `SELECT xact_start FROM pg_stat_activity WHERE pid = pg_backend_pid()`).Scan(&started))
 	var held time.Time
 	require.NoError(t, f.db.Pool.QueryRow(ctx, sealedSQL).Scan(&held))
-	require.Equal(t, started.Add(-15*time.Minute).Truncate(time.Hour), held)
+	// The bound is the earlier of the usual seal and the open transaction's
+	// start (less its 15 minute grace), both truncated to the hour.
+	want := started.Add(-15 * time.Minute)
+	if seal := time.Now().Add(-rollupSeal); seal.Before(want) {
+		want = seal
+	}
+	require.Equal(t, want.Truncate(time.Hour), held)
 }
 
 // The rollup answers day and hour buckets only where the zone is whole hours
