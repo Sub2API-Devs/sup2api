@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as ui from './index'
-import { HOST_UI_VERSION, MAX_ACCOUNT_BATCH, satisfiesRange } from '@sub2api/host'
+import { HOST_COMPONENT_NAMES, HOST_UI_VERSION, MAX_ACCOUNT_BATCH, satisfiesRange } from '@sub2api/host'
 
 describe('host UI 3 contract', () => {
   it('exposes only enhanced STabs without layout aliases', () => {
@@ -9,7 +9,7 @@ describe('host UI 3 contract', () => {
     expect('TabBar' in ui).toBe(false)
   })
   it('rejects unported UI 1 plugins and accepts the migrated compatibility range', () => {
-    expect(HOST_UI_VERSION).toBe('3.6.0')
+    expect(HOST_UI_VERSION).toBe('3.7.0')
     expect(satisfiesRange(HOST_UI_VERSION, '^1.0')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^2.0')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^3.0')).toBe(true)
@@ -24,6 +24,11 @@ describe('host UI 3 contract', () => {
     expect(satisfiesRange('3.4.0', '^3.5')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^3.6')).toBe(true)
     expect(satisfiesRange('3.5.0', '^3.6')).toBe(false)
+    expect(satisfiesRange(HOST_UI_VERSION, '^3.7')).toBe(true)
+    expect(satisfiesRange('3.6.0', '^3.7')).toBe(false)
+  })
+  it('names the core editors handed to plugins (UI 3.7)', () => {
+    expect(HOST_COMPONENT_NAMES).toEqual(['ParamOverrideEditor', 'RateLimitEditor', 'ModelLimitsEditor', 'HeaderPassthroughEditor', 'ProxyPicker', 'ModelMappingEditor', 'UpstreamEditor'])
   })
   it('locks the account batch size shared with the core (UI 3.6)', () => {
     expect(MAX_ACCOUNT_BATCH).toBe(500)

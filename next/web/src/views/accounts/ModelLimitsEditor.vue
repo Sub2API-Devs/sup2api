@@ -59,14 +59,14 @@ function removeCard(i: number) {
     <div v-for="(card, ci) in cards" :key="ci" class="space-y-2 rounded-lg border border-line p-3" data-testid="model-limit-card">
       <div v-for="(list, li) in card.lists" :key="li" class="flex items-start gap-2">
         <ModelTagSelect class="min-w-0 flex-1" :model-value="list" :options="options" :placeholder="t('accounts.modelLimits.placeholder')" :readonly="disabled" @update:model-value="setList(card, li, $event)" @invalid="toast(t('accounts.modelInvalid', { model: $event }), 'warning')" />
-        <SButton v-if="card.lists.length > 1" size="sm" variant="ghost" icon="x" icon-only :aria-label="t('accounts.modelLimits.removeList')" :disabled="disabled" @click="removeList(card, li)" />
+        <SButton v-if="card.lists.length > 1" size="sm" variant="ghost" tone="danger" :disabled="disabled" @click="removeList(card, li)">{{ t('accounts.modelLimits.removeList') }}</SButton>
       </div>
       <SLink as="button" class="inline-flex items-center gap-1 text-xs" :disabled="disabled" data-testid="model-limit-add-list" @click="card.lists.push([])"><SIcon name="plus" class="h-3.5 w-3.5" />{{ t('accounts.modelLimits.addList') }}</SLink>
       <div class="flex flex-wrap items-end gap-2">
         <SField v-for="f in FIELDS" :key="f.key" :label="f.label()" class="w-36">
           <SInput v-model.number="card[f.key]" type="number" min="0" :max="f.max" size="sm" :disabled="disabled" :data-testid="`model-limit-${f.key}`" />
         </SField>
-        <SButton class="ms-auto" size="sm" variant="ghost" tone="danger" icon="trash" icon-only :aria-label="t('accounts.modelLimits.removeCard')" :title="t('accounts.modelLimits.removeCard')" :disabled="disabled" data-testid="model-limit-remove" @click="removeCard(ci)" />
+        <SButton class="ms-auto" size="sm" variant="ghost" tone="danger" :disabled="disabled" data-testid="model-limit-remove" @click="removeCard(ci)">{{ t('accounts.modelLimits.removeCard') }}</SButton>
       </div>
       <SHint v-for="msg in cardErrors[ci]" :key="msg" tone="danger" size="xs">{{ msg }}</SHint>
     </div>

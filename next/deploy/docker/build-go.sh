@@ -184,6 +184,11 @@ ls -l "$OUT/market"
 # codex adds the ChatGPT subscription account types (Codex device code and
 # Sign in with ChatGPT, docs/PLUGIN-CODEX.md) on the built-in openai platform:
 # enabled at install; it does nothing until an operator authorizes an account.
+# custom adds the custom upstream account types (any OpenAI-, Anthropic- or
+# Gemini-compatible API, docs/UPSTREAM-DECLARATIVE.md §5): enabled at install;
+# it does nothing until an operator adds such an account. Like openai, gemini
+# and relay it is a runtime "none" package: no binaries, the core serves its
+# declared upstreams (build skips it, pack carries no runtimes).
 #
 # volcengine is install-only: it does nothing until an operator adds an Ark
 # account (per-deployment credentials and base URL), so it ships with every
@@ -197,7 +202,7 @@ ls -l "$OUT/market"
 #
 # Intentionally NOT built in: relay (a market-only account type), guard (an
 # optional gateway hook).
-BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation codex}
+BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation codex custom}
 BUILTIN_PLUGINS_INSTALL_ONLY=${BUILTIN_PLUGINS_INSTALL_ONLY:-volcengine ccgateway mailer dynweight}
 for name in $BUILTIN_PLUGINS_INSTALL_ONLY; do
   case " $BUILTIN_PLUGINS " in

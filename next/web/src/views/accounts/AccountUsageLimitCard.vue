@@ -13,10 +13,12 @@ import { anchorFloor, PERIOD_COUNT_MAX } from './accountUsage'
 import type { UsageLimitStatus } from './useUsageLimitEdit'
 
 const model = defineModel<AccountUsageLimit>({ required: true })
-const props = withDefaults(defineProps<{ usage?: AccountUsage | null; status?: UsageLimitStatus; loadError?: string; disabled?: boolean; errors?: Record<string, string> }>(), {
+// `reason` (a fixed common control) replaces the description.
+const props = withDefaults(defineProps<{ usage?: AccountUsage | null; status?: UsageLimitStatus; loadError?: string; disabled?: boolean; reason?: string; errors?: Record<string, string> }>(), {
   usage: null,
   status: 'ready',
   loadError: '',
+  reason: '',
   errors: () => ({})
 })
 const emit = defineEmits<{ (e: 'retry'): void }>()
@@ -41,7 +43,7 @@ const current = computed(() => props.usage?.limit ?? null)
 </script>
 
 <template>
-  <SSettingsGroup :title="t('accounts.usageLimit.title')" :description="t('accounts.usageLimit.description')" data-testid="account-usage-limit">
+  <SSettingsGroup :title="t('accounts.usageLimit.title')" :description="reason || t('accounts.usageLimit.description')" data-testid="account-usage-limit">
     <div v-if="status === 'failed'" class="px-4 py-3">
       <SAlert tone="danger" dense data-testid="usage-limit-load-failed">
         {{ t('accounts.usageLimit.loadFailed', { error: loadError }) }}

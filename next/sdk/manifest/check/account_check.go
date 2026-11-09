@@ -79,7 +79,9 @@ func (v *validator) accountTypes() {
 	}
 	v.needCap("accountTypes", manifest.CapPlatformAdapter)
 	v.needPerm("accountTypes", "platform.register", "account types")
-	v.needPerm("accountTypes", "accounts.credentials", "account types")
+	if needsCredentials(ats) {
+		v.needPerm("accountTypes", "accounts.credentials", "account types the plugin implements or extends")
+	}
 	ownPlatforms := map[string]*manifest.Platform{}
 	for i := range v.m.Platforms {
 		ownPlatforms[v.m.Platforms[i].ID] = &v.m.Platforms[i]
@@ -104,14 +106,13 @@ func (v *validator) accountTypes() {
 		v.accountLifecycle(f, at)
 		v.defaultModels(f, at)
 		v.defaultLimits(f+".defaultLimits", at.DefaultLimits)
-		for _, name := range sortedKeys(at.CommonControls) {
-			if name != "auto_disable" && name != "schedulable" {
-				v.add(f+".commonControls."+name, "unsupported", "unknown common account control %q", name)
-			}
-		}
+		v.commonControls(f, at)
 		v.quota(f, at.Quota)
 		v.balance(f, at.Balance)
 		v.refresh(f, at)
+		if at.Upstream != nil {
+			v.upstream(f, at, ownPlatforms)
+		}
 		if len(at.Platforms) == 0 {
 			v.add(f+".platforms", "required", "at least one platform is required")
 		}
@@ -286,56 +287,19 @@ func (v *validator) defaultLimits(f string, d *manifest.AccountDefaultLimits) {
 	if d == nil {
 		return
 	}
-	bad := func(field string, value, lo, hi int64) {
-		if value < lo || value > hi {
-			v.add(f+"."+field, "invalid", "%s must be %d-%d", field, lo, hi)
+	for _, x := range []struct {
+		control string
+		value   *int64
+	}{
+		{"priority", widen(d.Priority)}, {"weight", widen(d.Weight)}, {"max_concurrency", widen(d.MaxConcurrency)},
+		{"rpm_limit", widen(d.RPMLimit)}, {"tpm_limit", d.TPMLimit}, {"spm_limit", widen(d.SPMLimit)},
+	} {
+		if x.value != nil {
+			v.controlRange(f+"."+camelLimitNames[x.control], x.control, *x.value)
 		}
 	}
-	if d.Priority != nil {
-		bad("priority", int64(*d.Priority), 0, 1_000_000)
-	}
-	if d.Weight != nil {
-		bad("weight", int64(*d.Weight), 1, 1000)
-	}
-	if d.MaxConcurrency != nil {
-		bad("maxConcurrency", int64(*d.MaxConcurrency), 0, 100_000)
-	}
-	if d.RPMLimit != nil {
-		bad("rpmLimit", int64(*d.RPMLimit), 0, 10_000_000)
-	}
-	if d.TPMLimit != nil {
-		bad("tpmLimit", *d.TPMLimit, 0, 1_000_000_000_000)
-	}
-	if d.SPMLimit != nil {
-		bad("spmLimit", int64(*d.SPMLimit), 0, 10_000_000)
-	}
-	if len(d.ModelLimits) > manifest.MaxDefaultModelLimits {
-		v.add(f+".modelLimits", "too_many", "at most %d model lists", manifest.MaxDefaultModelLimits)
-	}
-	owner := map[string]bool{}
-	for i, l := range d.ModelLimits {
-		lf := fmt.Sprintf("%s.modelLimits[%d]", f, i)
-		if len(l.Models) == 0 {
-			v.add(lf+".models", "required", "a model list needs at least one model")
-		}
-		if len(l.Models) > manifest.MaxDefaultModels {
-			v.add(lf+".models", "too_many", "at most %d models per list", manifest.MaxDefaultModels)
-		}
-		for j, m := range l.Models {
-			mf := fmt.Sprintf("%s.models[%d]", lf, j)
-			switch {
-			case !manifest.ValidModelID(m):
-				v.add(mf, "invalid", "%q is not a complete model id", m)
-			case owner[m]:
-				v.add(mf, "duplicate", "model %q is in more than one list", m)
-			}
-			owner[m] = true
-		}
-		bad(fmt.Sprintf("modelLimits[%d].maxConcurrency", i), int64(l.MaxConcurrency), 0, 100_000)
-		bad(fmt.Sprintf("modelLimits[%d].rpmLimit", i), int64(l.RPMLimit), 0, 10_000_000)
-		bad(fmt.Sprintf("modelLimits[%d].tpmLimit", i), l.TPMLimit, 0, 1_000_000_000_000)
-		bad(fmt.Sprintf("modelLimits[%d].spmLimit", i), int64(l.SPMLimit), 0, 10_000_000)
-	}
+	lists, _ := d.ControlDefaults()["model_limits"].([]manifest.ModelLimitValue)
+	v.modelLimitLists(f+".modelLimits", lists, camelLimitNames)
 }
 
 // defaultModels validates accountTypes[].defaultModels and

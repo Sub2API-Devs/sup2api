@@ -1,7 +1,19 @@
 // Server field errors of the account editor (ApiError.fields) and the section
-// that holds each field.
+// that holds each field; the common controls of each section.
+import type { CommonControlName } from '@/api/types'
 
-export type EditorSection = 'connection' | 'models' | 'scheduling' | 'advanced' | 'cc_features'
+/** The core sections and the plugin ones (`plugin:<plugin>:<component>`, account.editor.section). */
+export type EditorSection = 'connection' | 'models' | 'scheduling' | 'advanced' | 'cc_features' | `plugin:${string}`
+export const pluginSection = (key: string): EditorSection => `plugin:${key}`
+
+/** Rows of the scheduling group and of the limits group. */
+export const SCHEDULING_ROWS: readonly CommonControlName[] = ['priority', 'weight', 'max_concurrency', 'schedulable', 'auto_disable']
+export const RATE_LIMITS: readonly CommonControlName[] = ['rpm_limit', 'tpm_limit', 'spm_limit']
+/** Sections made only of common controls: hidden when every one of them is. */
+export const SECTION_CONTROLS: Partial<Record<EditorSection, readonly CommonControlName[]>> = {
+  scheduling: [...SCHEDULING_ROWS, ...RATE_LIMITS, 'usage_limit', 'model_limits'],
+  advanced: ['header_passthrough', 'param_override', 'environment']
+}
 
 export const CONNECTION_FIELDS = ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone']
 const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit']

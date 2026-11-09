@@ -1,179 +1,96 @@
-package main
+package relay
 
 import (
 	"bytes"
 	"encoding/json"
-	"io/fs"
 	"os"
-	"path/filepath"
+	"path"
+	"reflect"
 	"slices"
-	"strings"
 	"testing"
 
-	"github.com/Sub2API-Devs/sup2api/next/plugins/relay/internal/relay"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
-	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/upstream"
 )
 
-// TestManifestPassesCoreChecks runs manifest.json through the very checks the
-// server runs before it installs a plugin: sdk/manifest/check holds the one
-// implementation of those rules, and server/internal/plugin/pkg only wraps it
-// (CONTRACTS §13). Tooling mode drops the three checks that need an
-// installing host or a finished build - hostCompat against a host version,
-// the runtime binaries and the native UI entry - and nothing else, so a
-// manifest that passes here installs.
-func TestManifestPassesCoreChecks(t *testing.T) {
-	var m manifest.Manifest
-	if err := json.Unmarshal(manifestJSON, &m); err != nil {
-		t.Fatalf("manifest.json: %v", err)
+// declaration is the upstream of relay_key: the anthropic preset with a
+// required base URL of its own wording and no default protocol.
+// sdk/upstream's golden replay (TestGolden) proves it answers exactly like
+// the plugin code it replaced, so keep the two in step.
+const declaration = `{
+	"preset": "anthropic",
+	"baseURL": {"default": null, "required": true},
+	"credentials": {"texts": {"baseURLRequired": "Base URL of the relay is required / 请填写中转站的 Base URL"}},
+	"defaultProtocol": null,
+	"filterFields": []
+}`
+
+// TestManifest runs manifest.json through the checks the core runs before
+// it installs a package (sdk/manifest/check in tooling mode, which also
+// resolves the upstream declaration with the core's engine) and pins what
+// the move to runtime "none" keeps: an account-type-only package
+// (ARCHITECTURE 6.6) whose relay_key serves the built-in anthropic platform
+// with its own client headers and the replayed declaration.
+func TestManifest(t *testing.T) {
+	m := load(t)
+	if m.Key != "relay" || m.Version != "0.3.0" || m.Publisher != "sub2api" || m.Runtime != manifest.RuntimeNone {
+		t.Fatalf("identity = %s %s %s %s", m.Key, m.Version, m.Publisher, m.Runtime)
 	}
-	fields, _ := check.Fields(check.Validate(&m, packageFiles(t), check.ValidateOptions{Tooling: true}))
-	for _, f := range fields {
-		t.Errorf("%s: %s (%s)", f.Field, f.Message, f.Code)
+	if len(m.Platforms) != 0 || len(m.AccountTypes) != 1 {
+		t.Fatalf("platforms = %+v accountTypes = %+v, want one account type only", m.Platforms, m.AccountTypes)
+	}
+	at := m.AccountTypes[0]
+	if at.ID != "relay_key" || len(at.Platforms) != 1 || at.Platforms[0].Platform != "anthropic" {
+		t.Fatalf("account type %s platforms = %+v, want relay_key on anthropic", at.ID, at.Platforms)
+	}
+	passHeaders := at.Platforms[0].PassHeaders
+	if !slices.Equal(passHeaders, []string{"anthropic-version", "anthropic-beta"}) {
+		t.Fatalf("passHeaders = %v", passHeaders)
+	}
+	assertJSON(t, at.Upstream.Layer(), declaration)
+	if _, err := upstream.Resolve(&at, passHeaders, nil); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// packageFiles is what `sub2api-plugin pack` would put in the package, minus
-// the built artifacts: every file of the plugin directory, keyed by its slash
-// path, so the checks that resolve manifest paths (form schemas, migrations,
-// icon) see the real tree.
-func packageFiles(t *testing.T) map[string][]byte {
+// load decodes manifest.json strictly and checks it with the files a
+// package carries.
+func load(t *testing.T) manifest.Manifest {
 	t.Helper()
-	files := map[string][]byte{}
-	err := filepath.WalkDir(".", func(p string, d fs.DirEntry, err error) error {
-		switch {
-		case err != nil:
-			return err
-		case p == ".":
-			return nil
-		case strings.HasPrefix(d.Name(), "."):
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		case d.IsDir() || !d.Type().IsRegular() || strings.HasSuffix(p, ".go"):
-			return nil
-		}
-		b, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		files[filepath.ToSlash(p)] = b
-		return nil
-	})
+	raw, err := os.ReadFile("manifest.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return files
-}
-
-// TestManifest checks manifest.json against the SDK types (no unknown
-// fields), the files it references and the shape of an account-type-only
-// plugin (ARCHITECTURE 6.6): no platform, no endpoints, no prices.
-func TestManifest(t *testing.T) {
-	dec := json.NewDecoder(bytes.NewReader(manifestJSON))
-	dec.DisallowUnknownFields()
 	var m manifest.Manifest
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "relay" || m.Version != "0.2.2" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
-		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
+	files := map[string][]byte{"manifest.json": raw}
+	for _, dir := range []string{"forms", "assets"} {
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			p := path.Join(dir, e.Name())
+			if files[p], err = os.ReadFile(p); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
-	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
-		t.Fatal("name and description need en and zh")
-	}
-	if len(m.Platforms) != 0 || m.Database != nil {
-		t.Fatal("relay declares only an account type: no platforms or database")
-	}
-	if len(m.Capabilities) != 2 || m.Capabilities[0].ID != manifest.CapPlatformAdapter || m.Capabilities[1].ID != manifest.CapPlatformExecute {
-		t.Fatalf("capabilities = %v", m.Capabilities)
-	}
-
-	if len(m.AccountTypes) != 1 {
-		t.Fatalf("accountTypes = %+v", m.AccountTypes)
-	}
-	at := m.AccountTypes[0]
-	if at.ID != relay.AccountTypeRelayKey || at.Label["en"] == "" || at.Label["zh"] == "" {
-		t.Fatalf("account type = %+v", at)
-	}
-	if !slices.Equal(at.SensitiveFields, []string{"api_key"}) {
-		t.Fatalf("sensitiveFields = %v", at.SensitiveFields)
-	}
-	var schema struct {
-		Required   []string       `json:"required"`
-		Properties map[string]any `json:"properties"`
-	}
-	if err := json.Unmarshal(mustJSONFile(t, at.Form.Schema), &schema); err != nil {
+	if err := check.Validate(&m, files, check.ValidateOptions{Tooling: true}); err != nil {
 		t.Fatal(err)
 	}
-	mustJSONFile(t, at.Form.UISchema)
-	if !slices.Contains(schema.Required, "base_url") || !slices.Contains(schema.Required, "api_key") {
-		t.Fatalf("form schema: required %v, properties %v", schema.Required, schema.Properties)
-	}
-	// Model mapping is a core account field (CONTRACTS §18): neither a
-	// settings field nor a form property.
-	if slices.Contains(at.SettingsFields, "model_mapping") {
-		t.Fatalf("settingsFields = %v: model_mapping must not be a settings field", at.SettingsFields)
-	}
-	if _, bad := schema.Properties["model_mapping"]; bad {
-		t.Fatal("form schema still declares model_mapping")
-	}
-	if len(at.Platforms) != 1 {
-		t.Fatalf("platforms = %+v, want [anthropic]", at.Platforms)
-	}
-	ap := at.Platforms[0]
-	if ap.Platform != relay.PlatformID {
-		t.Fatalf("platform = %q, want %q", ap.Platform, relay.PlatformID)
-	}
-	// relay_key overrides the platform defaults (demo of the override).
-	if !slices.Equal(ap.PassHeaders, relay.PassHeaders) {
-		t.Errorf("passHeaders = %v, want %v", ap.PassHeaders, relay.PassHeaders)
-	}
-	if !slices.Equal(ap.RequestFields, []string{"model"}) {
-		t.Errorf("requestFields = %v, want [model]", ap.RequestFields)
-	}
-	// The account type serves the core's built-in anthropic platform: it must
-	// implement exactly its protocols.
-	for _, p := range platforms.Builtin() {
-		if p.ID != relay.PlatformID {
-			continue
-		}
-		if !slices.Equal(p.Protocols(), relay.Protocols) {
-			t.Fatalf("built-in anthropic protocols %v, implemented %v", p.Protocols(), relay.Protocols)
-		}
-	}
-
-	perms := map[string]manifest.HostPermission{}
-	for _, p := range m.HostPermissions {
-		if _, ok := manifest.HostPermissionRisk[p.ID]; !ok {
-			t.Errorf("unknown host permission %q", p.ID)
-		}
-		if p.Reason["en"] == "" || p.Reason["zh"] == "" {
-			t.Errorf("host permission %s needs an en and zh reason", p.ID)
-		}
-		perms[p.ID] = p
-	}
-	if len(perms) != 2 {
-		t.Fatalf("host permissions = %v", m.HostPermissions)
-	}
-	if _, ok := perms["platform.register"]; !ok {
-		t.Fatal("platform.register missing")
-	}
-	if c, ok := perms["accounts.credentials"]; !ok || c.Scope["types"] != "own" || len(c.Scope) != 1 {
-		t.Fatalf("accounts.credentials scope = %v", c.Scope)
-	}
+	return m
 }
 
-func mustJSONFile(t *testing.T, p string) []byte {
+// assertJSON compares two JSON documents by value.
+func assertJSON(t *testing.T, got json.RawMessage, want string) {
 	t.Helper()
-	b, err := os.ReadFile(filepath.FromSlash(p))
-	if err != nil {
-		t.Fatalf("read %s: %v", p, err)
+	var g, w any
+	_ = json.Unmarshal(got, &g)
+	_ = json.Unmarshal([]byte(want), &w)
+	if g == nil || !reflect.DeepEqual(g, w) {
+		t.Fatalf("upstream = %s, want %s", got, want)
 	}
-	if !json.Valid(b) {
-		t.Fatalf("%s is not valid JSON", p)
-	}
-	return b
 }

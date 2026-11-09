@@ -86,7 +86,7 @@ function showEvents(f: Filter) {
   <div>
     <SPageHeader :title="t('title')" :description="t('subtitle')">
       <template #actions>
-        <SButton icon="refresh" icon-only :aria-label="t('refresh')" :title="t('refresh')" :loading="refreshing" @click="refresh" />
+        <SButton icon="refresh" :loading="refreshing" @click="refresh">{{ t('refresh') }}</SButton>
       </template>
     </SPageHeader>
 

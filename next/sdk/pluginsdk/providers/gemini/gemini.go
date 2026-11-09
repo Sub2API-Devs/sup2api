@@ -4,6 +4,7 @@
 package gemini
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +28,19 @@ var Policy = classify.Policy{
 		classify.RateLimit(rateLimitReset),
 		classify.ServerErrors(0), // no account effect: usually per request/model
 	},
+}
+
+// GenerateContentPingBody is the body of a minimal generateContent call: one
+// user turn asking the upstream to answer "ping", at most maxTokens output
+// tokens (the model is in the URL, not the body). Account tests of every
+// Gemini-compatible upstream probe this shape. The result is deterministic
+// JSON: encoding/json sorts map keys.
+func GenerateContentPingBody(maxTokens int) string {
+	body, _ := json.Marshal(map[string]any{
+		"contents":         []any{map[string]any{"role": "user", "parts": []any{map[string]string{"text": "ping"}}}},
+		"generationConfig": map[string]any{"maxOutputTokens": maxTokens},
+	})
+	return string(body)
 }
 
 func parseError(body []byte) classify.Error {

@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pkgsig"
 )
 
@@ -174,6 +175,31 @@ func Anthropic(key, version, publisher string) *manifest.Manifest {
 	}
 }
 
+// Declared returns a manifest of runtime "none" modelled on the openai
+// plugin (docs/UPSTREAM-DECLARATIVE.md §6): no process, an account type
+// serving the built-in openai platform from its upstream declaration
+// (preset openai), so it needs no accounts.credentials grant.
+func Declared(key, version, publisher string) *manifest.Manifest {
+	return &manifest.Manifest{
+		APIVersion:   1,
+		Key:          key,
+		Name:         manifest.LocalizedText{"en": "OpenAI"},
+		Version:      version,
+		Publisher:    publisher,
+		Runtime:      manifest.RuntimeNone,
+		HostCompat:   ">=" + check.UpstreamFirstCore + " <0.2.0",
+		Capabilities: []manifest.Capability{{ID: manifest.CapPlatformAdapter}, {ID: manifest.CapPlatformWebSocket}},
+		AccountTypes: []manifest.AccountType{{
+			ID: "apikey", Label: manifest.LocalizedText{"en": "API Key"},
+			Form:            manifest.Form{Mode: "schema", Schema: "forms/apikey.schema.json", UISchema: "forms/apikey.ui.json"},
+			SensitiveFields: []string{"api_key"},
+			Platforms:       []manifest.AccountPlatform{{Platform: manifest.PlatformOpenAI}},
+			Upstream:        &manifest.Upstream{Preset: "openai"},
+		}},
+		HostPermissions: []manifest.HostPermission{{ID: "platform.register"}},
+	}
+}
+
 // SettingsSchema is the default forms/settings.schema.json.
 const SettingsSchema = `{
   "type": "object",
@@ -191,10 +217,12 @@ func Files(m *manifest.Manifest) map[string][]byte {
 		panic(err)
 	}
 	files := map[string][]byte{
-		pkgsig.ManifestFile:           mb,
-		"runtimes/linux-amd64/plugin": []byte("\x7fELF amd64"),
-		"runtimes/linux-arm64/plugin": []byte("\x7fELF arm64"),
-		"i18n/en.json":                []byte(`{}`),
+		pkgsig.ManifestFile: mb,
+		"i18n/en.json":      []byte(`{}`),
+	}
+	if m.Runtime != manifest.RuntimeNone {
+		files["runtimes/linux-amd64/plugin"] = []byte("\x7fELF amd64")
+		files["runtimes/linux-arm64/plugin"] = []byte("\x7fELF arm64")
 	}
 	if m.Database != nil {
 		files[m.Database.Migrations+"0001_init.sql"] = []byte("CREATE TABLE rules (id bigserial PRIMARY KEY);")

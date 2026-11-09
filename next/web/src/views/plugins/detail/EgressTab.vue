@@ -268,7 +268,7 @@ onMounted(load)
             :aria-label="t('plugins.egress.range')"
             @update:model-value="(v) => (range = v as '1h' | '24h' | '7d')"
           />
-          <SButton size="sm" variant="ghost" :loading="loading" :aria-label="t('common.refresh')" :title="t('common.refresh')" icon="refresh" icon-only @click="load" />
+          <SButton size="sm" variant="ghost" :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
         </template>
         <STable :columns="summaryColumns" :rows="summaryRows" :loading="loading" row-key="_k">
           <template #cell-host="{ row }">

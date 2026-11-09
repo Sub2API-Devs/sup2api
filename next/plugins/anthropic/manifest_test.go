@@ -4,26 +4,33 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/Sub2API-Devs/sup2api/next/plugins/anthropic/internal/anthropic"
+	"github.com/Masterminds/semver/v3"
+
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
-	"github.com/Sub2API-Devs/sup2api/next/sdk/platforms"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/upstream"
 )
 
-// TestManifest checks manifest.json against the SDK types (no unknown
-// fields) and that every package path it references exists.
+// declaration is the upstream of the apikey account type. sdk/upstream's
+// golden replay (TestGolden) proves it answers exactly like the plugin code
+// it replaced, so keep the two in step.
+const declaration = `{"preset":"anthropic","filterFields":[]}`
+
+// TestManifest runs manifest.json through the checks the core runs before
+// it installs a package (sdk/manifest/check in tooling mode, which also
+// resolves the upstream declaration with the core's engine) and checks what
+// the plugin keeps: the declared apikey account type of the built-in
+// anthropic platform, the model catalog and its upgrade fixture.
 func TestManifest(t *testing.T) {
-	dec := json.NewDecoder(bytes.NewReader(manifestJSON))
-	dec.DisallowUnknownFields()
-	var m manifest.Manifest
-	if err := dec.Decode(&m); err != nil {
-		t.Fatalf("manifest.json: %v", err)
-	}
-	if m.Key != "anthropic" || m.Version != "0.2.9" || m.APIVersion != manifest.APIVersion {
+	m := load(t)
+	if m.Key != "anthropic" || m.Version != "0.3.0" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("key/version = %s %s", m.Key, m.Version)
 	}
 	if m.Database == nil || m.Database.Schema != "plg_"+m.Key {
@@ -35,66 +42,49 @@ func TestManifest(t *testing.T) {
 	if len(m.Platforms) != 0 {
 		t.Fatalf("platforms = %+v, want none (anthropic is built in)", m.Platforms)
 	}
-	builtin := builtinAnthropic(t)
-
-	// Top-level account types with the platforms they serve.
-	if len(m.AccountTypes) != 1 || m.AccountTypes[0].ID != anthropic.AccountTypeAPIKey {
+	if len(m.AccountTypes) != 1 {
 		t.Fatalf("accountTypes = %+v", m.AccountTypes)
 	}
-	for _, at := range m.AccountTypes {
-		for _, p := range []string{at.Form.Schema, at.Form.UISchema} {
-			mustJSONFile(t, p)
-		}
-		if len(at.Platforms) != 1 || at.Platforms[0].Platform != anthropic.PlatformID {
-			t.Fatalf("account type %s platforms = %+v, want [anthropic]", at.ID, at.Platforms)
-		}
-		// No overrides: the built-in platform defaults apply.
-		if ap := at.Platforms[0]; len(ap.RequestFields)+len(ap.PassHeaders)+len(ap.Usage) != 0 {
-			t.Fatalf("account type %s overrides the platform defaults: %+v", at.ID, ap)
-		}
-		if !slices.Contains(at.SensitiveFields, "api_key") {
-			t.Fatalf("account type %s: api_key must be sensitive", at.ID)
-		}
-		// Model mapping is a core account field (CONTRACTS §18): neither a
-		// settings field nor a form property.
-		if slices.Contains(at.SettingsFields, "model_mapping") {
-			t.Fatalf("account type %s: model_mapping must not be a settings field", at.ID)
-		}
-		// base_url is guarded (CONTRACTS §21.3): callers without
-		// account:settings:custom may only use the official endpoint, which
-		// is also the plugin default.
-		if !slices.Contains(at.SettingsFields, "base_url") {
-			t.Fatalf("account type %s: base_url must be a settings field", at.ID)
-		}
-		if len(at.GuardedSettings) != 1 || at.GuardedSettings[0].Field != "base_url" ||
-			!slices.Equal(at.GuardedSettings[0].Allowed, []string{anthropic.DefaultBaseURL}) {
-			t.Fatalf("account type %s: guardedSettings = %+v, want base_url -> [%s]", at.ID, at.GuardedSettings, anthropic.DefaultBaseURL)
-		}
-		var schema struct {
-			Properties map[string]json.RawMessage `json:"properties"`
-		}
-		_ = json.Unmarshal(mustJSONFile(t, at.Form.Schema), &schema)
-		if _, bad := schema.Properties["model_mapping"]; bad {
-			t.Fatalf("account type %s: form schema still declares model_mapping", at.ID)
-		}
+	at := m.AccountTypes[0]
+	if at.ID != "apikey" || len(at.Platforms) != 1 || at.Platforms[0].Platform != "anthropic" {
+		t.Fatalf("account type %s platforms = %+v, want apikey on anthropic", at.ID, at.Platforms)
 	}
-	if builtin != nil {
-		if got := builtin.Protocols(); !slices.Equal(got, anthropic.Protocols) {
-			t.Fatalf("built-in anthropic protocols %v, implemented %v", got, anthropic.Protocols)
-		}
-		for _, h := range anthropic.ForwardHeaders() {
-			if !slices.Contains(builtin.PassHeaders, h) {
-				t.Errorf("forwarded header %q is not in the built-in platform passHeaders", h)
-			}
-		}
+	// No overrides: the built-in platform defaults apply.
+	if ap := at.Platforms[0]; len(ap.RequestFields)+len(ap.PassHeaders)+len(ap.Usage) != 0 {
+		t.Fatalf("account type %s overrides the platform defaults: %+v", at.ID, ap)
+	}
+	if !slices.Contains(at.SensitiveFields, "api_key") {
+		t.Fatal("api_key must be sensitive")
+	}
+	// Model mapping is a core account field (CONTRACTS §18): neither a
+	// settings field nor a form property.
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	_ = json.Unmarshal(mustJSONFile(t, at.Form.Schema), &schema)
+	if _, bad := schema.Properties["model_mapping"]; bad || slices.Contains(at.SettingsFields, "model_mapping") {
+		t.Fatal("model_mapping must be neither a settings field nor a form property")
+	}
+	assertJSON(t, at.Upstream.Layer(), declaration)
+	p, err := upstream.Resolve(&at, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// base_url is guarded (CONTRACTS §21.3): without account:settings:custom
+	// only the default upstream may be used.
+	if gs := at.GuardedSettings; len(gs) != 1 || gs[0].Field != "base_url" || len(gs[0].Allowed) != 1 || gs[0].Allowed[0] != p.Upstream().BaseURL.Default {
+		t.Fatalf("guardedSettings = %+v, want base_url -> [%s]", gs, p.Upstream().BaseURL.Default)
 	}
 
 	caps := map[string]bool{}
 	for _, c := range m.Capabilities {
 		caps[c.ID] = true
 	}
-	if !caps[manifest.CapPlatformAdapter] || !caps[manifest.CapPlatformExecute] {
-		t.Fatal("account types need platform.adapter.v1 and platform.execute.v1")
+	// The process serves the catalog route only: platform.adapter.v1 is the
+	// account type's (manifest/check), platform.execute.v1 would promise a
+	// Platform the plugin no longer implements.
+	if !caps[manifest.CapPlatformAdapter] || !caps[manifest.CapHTTPRoutes] || caps[manifest.CapPlatformExecute] {
+		t.Fatalf("capabilities = %v, want platform.adapter.v1 and http.routes.v1", m.Capabilities)
 	}
 	perms := map[string]manifest.HostPermission{}
 	for _, perm := range m.HostPermissions {
@@ -112,8 +102,9 @@ func TestManifest(t *testing.T) {
 	if _, ok := perms["gateway.endpoint"]; ok {
 		t.Error("gateway.endpoint is only for plugins that declare platforms")
 	}
-	if c, ok := perms["accounts.credentials"]; !ok || c.Scope["types"] != "own" || len(c.Scope) != 1 {
-		t.Errorf("accounts.credentials scope = %v, want {\"types\":\"own\"}", c.Scope)
+	// The credentials stay inside the core, which builds the requests.
+	if _, ok := perms["accounts.credentials"]; ok {
+		t.Error("a declared account type needs no accounts.credentials")
 	}
 	for _, r := range m.Routes {
 		found := false
@@ -128,10 +119,13 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("migrations dir: %v", err)
 	}
 	var patch map[string]any
-	raw := mustJSONFile(t, "testdata/v0.3.0-test/manifest.patch.json")
+	raw := mustJSONFile(t, "testdata/upgrade/manifest.patch.json")
 	_ = json.Unmarshal(raw, &patch)
-	if patch["version"] != "0.3.0-test" || patch["version"] == m.Version {
-		t.Fatalf("upgrade fixture must have a distinct version: %v", patch["version"])
+	// The fixture upgrades the release (e2e AC05, deploy/ci/check.sh): its
+	// version must stay above the manifest's.
+	fixture, _ := patch["version"].(string)
+	if v, err := semver.StrictNewVersion(fixture); err != nil || !v.GreaterThan(semver.MustParse(m.Version)) {
+		t.Fatalf("upgrade fixture version %q must be above the release %s", fixture, m.Version)
 	}
 	// The overlay must not bring back the pre-6.6 layouts.
 	for _, k := range []string{"platform", "gateway", "platforms"} {
@@ -149,22 +143,48 @@ func TestManifest(t *testing.T) {
 	}
 }
 
-// builtinAnthropic is the core's built-in anthropic platform definition,
-// which the SDK carries so plugins can check themselves against it.
-func builtinAnthropic(t *testing.T) *manifest.Platform {
-	t.Helper()
-	for _, p := range platforms.Builtin() {
-		if p.ID == anthropic.PlatformID {
-			return &p
-		}
-	}
-	t.Fatalf("no built-in platform %q", anthropic.PlatformID)
-	return nil
-}
-
 func asSlice(v any) []any {
 	s, _ := v.([]any)
 	return s
+}
+
+// load decodes manifest.json strictly and checks it with the files a
+// package carries.
+func load(t *testing.T) manifest.Manifest {
+	t.Helper()
+	var m manifest.Manifest
+	dec := json.NewDecoder(bytes.NewReader(manifestJSON))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&m); err != nil {
+		t.Fatalf("manifest.json: %v", err)
+	}
+	files := map[string][]byte{"manifest.json": manifestJSON}
+	for _, dir := range []string{"forms", "assets", "migrations"} {
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			p := path.Join(dir, e.Name())
+			b, err := os.ReadFile(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[p] = b
+		}
+	}
+	if err := check.Validate(&m, files, check.ValidateOptions{Tooling: true}); err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// assertJSON compares two JSON documents by value.
+func assertJSON(t *testing.T, got json.RawMessage, want string) {
+	t.Helper()
+	var g, w any
+	_ = json.Unmarshal(got, &g)
+	_ = json.Unmarshal([]byte(want), &w)
+	if g == nil || !reflect.DeepEqual(g, w) {
+		t.Fatalf("upstream = %s, want %s", got, want)
+	}
 }
 
 func mustJSONFile(t *testing.T, p string) []byte {

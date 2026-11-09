@@ -165,7 +165,7 @@ func TestAllFullQueuesOnTheLeastLoaded(t *testing.T) {
 	e := newEnv(t)
 	e.setSettings(queueSettings(nil), StickySettings{})
 	for id, c := range map[int64]int{1: 2, 2: 1, 3: 2} {
-		e.accounts.set(id, func(acc *core.Account) { acc.MaxConcurrency, acc.Priority = c, 1 })
+		e.accounts.set(id, func(acc *core.Account) { acc.MaxConcurrency, acc.Priority = c, 99 })
 		e.setSlots("account:"+itoa(id), c, 0)
 	}
 	// Account 1 and 3 have someone waiting; all are at their cap.

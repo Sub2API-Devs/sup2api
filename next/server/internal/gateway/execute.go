@@ -25,6 +25,7 @@ type gatewayExecution struct {
 	rt                       *typeRoute
 	account                  *core.Account
 	acct                     *pluginv1.Account
+	request                  *pluginv1.BuildUpstreamRequestRequest // the request Execute was given
 	body                     []byte
 	id                       string
 	records                  core.ExecutionRecords
@@ -69,7 +70,7 @@ func (c *call) canExecute(rt *typeRoute) bool {
 }
 
 func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Account, acct *pluginv1.Account, body []byte, request *pluginv1.BuildUpstreamRequestRequest) attemptResult {
-	x := &gatewayExecution{c: c, rt: rt, account: acc, acct: acct, body: body, id: uuid.NewString(), network: ctx, records: c.g.d.Settler.(core.ExecutionRecords)}
+	x := &gatewayExecution{c: c, rt: rt, account: acc, acct: acct, request: request, body: body, id: uuid.NewString(), network: ctx, records: c.g.d.Settler.(core.ExecutionRecords)}
 	defer func() {
 		if x.spool != nil {
 			x.spool.close()
@@ -177,7 +178,7 @@ func (x *gatewayExecution) forwardCallback(ctx context.Context, in *pluginv1.For
 	if err != nil {
 		return nil, err
 	}
-	x.result = c.forwardBuilt(nctx, x.rt, x.account, x.acct, x.body, in.Request, x)
+	x.result = c.forwardBuilt(nctx, x.rt, x.account, x.request, x.body, in.Request, x)
 	// Keep the network facts in x for the core. Returning an error terminates
 	// the default Execute flow before it invokes the plugin's ClassifyError.
 	if c.failurePolicy != nil && x.response.GetError() != nil {

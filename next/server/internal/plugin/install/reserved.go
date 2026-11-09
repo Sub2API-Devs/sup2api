@@ -23,7 +23,7 @@ import (
 // TestReservedCoverRepo keeps the lists in step with next/plugins.
 var (
 	reservedKeys = map[string]bool{
-		"anthropic": true, "ccgateway": true, "claude_oauth": true, "codex": true, "dynweight": true, "gemini": true, "growth": true,
+		"anthropic": true, "ccgateway": true, "claude_oauth": true, "codex": true, "custom": true, "dynweight": true, "gemini": true, "growth": true,
 		"guard": true, "mailer": true, "moderation": true, "openai": true, "payment": true, "relay": true, "volcengine": true,
 	}
 	// reservedPlatforms maps a platform id to the plugin it belongs to.

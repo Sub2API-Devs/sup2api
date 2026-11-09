@@ -1,11 +1,31 @@
-import type { Account, ModelLimit } from '@/api/types'
+import { api } from '@sub2api/host'
+import type { Account, AccountRateModels, ModelLimit } from '@/api/types'
+import type { OwnerScope } from '@/composables/useOwnership'
+import { todayQuery } from './accountUsage'
 import { usageLevel, type UsageLevel } from './usageLevel'
+
+/** Max concurrency of a new account: unlimited, or 10 for an own-level caller, who may only set 1–1000 (as the server, CONTRACTS §15.9). */
+export const newAccountConcurrency = (scope: OwnerScope) => (scope === 'own' ? 10 : 0)
 
 /** One figure of an account's limits: what is used now and the cap (0 = none). */
 export interface LimitFigure {
   key: 'concurrency' | 'rpm' | 'tpm' | 'sessions'
   used: number
   limit: number
+}
+
+type FigureKey = LimitFigure['key']
+
+/**
+ * Colour of each figure, one hue apiece as new-api's channel RPM / TPM / SPM
+ * tags: `bg` the pill, `fg` its text (and the figure's column heading),
+ * `fill` its used share under a cap. Literal classes: Tailwind scans this file.
+ */
+export const FIGURE_COLOR: Record<FigureKey, { bg: string; fg: string; fill: string }> = {
+  concurrency: { bg: 'bg-violet-50 dark:bg-violet-900/30', fg: 'text-violet-700 dark:text-violet-300', fill: 'bg-violet-500/20' },
+  rpm: { bg: 'bg-rose-50 dark:bg-rose-900/30', fg: 'text-rose-700 dark:text-rose-300', fill: 'bg-rose-500/20' },
+  tpm: { bg: 'bg-sky-50 dark:bg-sky-900/30', fg: 'text-sky-700 dark:text-sky-300', fill: 'bg-sky-500/20' },
+  sessions: { bg: 'bg-emerald-50 dark:bg-emerald-900/30', fg: 'text-emerald-700 dark:text-emerald-300', fill: 'bg-emerald-500/20' }
 }
 
 /** A row of the limits breakdown: the account itself, then each model list (CONTRACTS §68). */
@@ -38,3 +58,11 @@ export const usedShare = (f: LimitFigure) => (f.limit > 0 ? Math.min(f.used / f.
 
 /** Tone of a capped figure: danger at the cap, warning from 80 %; 'none' without a cap. */
 export const figureTone = (f: LimitFigure): UsageLevel | 'none' => (f.limit > 0 ? usageLevel(f.used / f.limit) : 'none')
+
+/** The account's figures by client model (CONTRACTS §68.7); TPD counts the browser's day. */
+export function fetchRateModels(id: number): Promise<AccountRateModels> {
+  return api.get<AccountRateModels>(`/accounts/${id}/rate-models`, todayQuery())
+}
+
+/** Whether the account has a cap or a model list: only then is the limits table more than the totals. */
+export const hasLimits = (a: Account) => limitRows(a).some(r => r.models.length > 0 || r.figures.some(f => f.limit > 0))

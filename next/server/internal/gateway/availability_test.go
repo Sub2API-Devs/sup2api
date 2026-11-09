@@ -331,7 +331,7 @@ func TestAvailabilityBatchesByOwnerAndOptionalAccountSource(t *testing.T) {
 	b := e.gen.accountTypes[0]
 	b.Plugin.Key, b.Client = "second", second
 	e.gen.accountTypes = append(e.gen.accountTypes, b)
-	e.accounts.addTyped(testGroup, 4, 2, "second-key", "second", "apikey")
+	e.accounts.addTyped(testGroup, 4, 98, "second-key", "second", "apikey")
 	e.gw.d.Quota = nil
 	e.gw.d.Accounts = &availabilityAccounts{fakeAccounts: e.accounts, availabilitySource: source}
 	cl := &call{g: e.gw, gen: e.gen, platform: "anthropic", ep: endpointOf(t, builtinPlatform(t, "anthropic"), "anthropic.messages"), model: testModel}

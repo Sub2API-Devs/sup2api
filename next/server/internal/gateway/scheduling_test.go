@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tidwall/gjson"
 
@@ -22,6 +23,7 @@ type fakeLimiter struct {
 	hits       []string       // "<id>:<model>"
 	tokens     map[int64]int64
 	listTokens map[string]int64 // "<id>:<list key>"
+	modelTkns  map[string]int64 // "<id>:<model>" of CountModelTokens
 	models     []string         // model of each Exhausted call
 	sessions   []string         // session of each Exhausted and TryHit call
 	released   []string         // "<id>:<session>" of each ReleaseSession call
@@ -30,7 +32,7 @@ type fakeLimiter struct {
 }
 
 func newFakeLimiter() *fakeLimiter {
-	return &fakeLimiter{exhausted: map[int64]bool{}, tokens: map[int64]int64{}, listTokens: map[string]int64{}}
+	return &fakeLimiter{exhausted: map[int64]bool{}, tokens: map[int64]int64{}, listTokens: map[string]int64{}, modelTkns: map[string]int64{}}
 }
 
 func (l *fakeLimiter) Exhausted(_ context.Context, refs []core.AccountRef, model, session string) (map[int64]bool, error) {
@@ -98,6 +100,16 @@ func (l *fakeLimiter) AddTokens(_ context.Context, id int64, list string, n int6
 
 func (l *fakeLimiter) Usage(context.Context, []core.AccountRef) (map[int64]core.RateUsage, error) {
 	return map[int64]core.RateUsage{}, nil
+}
+
+func (l *fakeLimiter) CountModelTokens(_ context.Context, id int64, model string, n int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.modelTkns[itoa(id)+":"+model] += n
+}
+
+func (l *fakeLimiter) ModelRates(context.Context, int64, time.Time) ([]core.ModelRates, error) {
+	return []core.ModelRates{{}}, nil
 }
 
 func (a *fakeAccounts) set(id int64, fn func(acc *core.Account)) {
@@ -224,11 +236,13 @@ func TestModelLimitsSlotsAndTokens(t *testing.T) {
 		t.Fatalf("status %d %s", r.status, r.body)
 	}
 	rec := e.record()
-	if n, _ := e.slots.InUse(context.Background(), kind, 1); n != 0 {
-		t.Fatal("model list slot not released", n)
+	for _, k := range []string{kind, core.ModelSlots(testModel)} {
+		if n, _ := e.slots.InUse(context.Background(), k, 1); n != 0 {
+			t.Fatal("slot not released", k, n)
+		}
 	}
-	if n := rec.Tokens.Throughput(rec.UsageSemantics); lim.listTokens["1:"+list.Key()] != n || lim.tokens[1] != n {
-		t.Fatalf("tokens account %d list %v, record %d", lim.tokens[1], lim.listTokens, n)
+	if n := rec.Tokens.Throughput(rec.UsageSemantics); lim.listTokens["1:"+list.Key()] != n || lim.tokens[1] != n || lim.modelTkns["1:"+testModel] != n {
+		t.Fatalf("tokens account %d list %v model %v, record %d", lim.tokens[1], lim.listTokens, lim.modelTkns, n)
 	}
 	if lim.hits[len(lim.hits)-1] != "1:"+testModel {
 		t.Fatalf("hits %v", lim.hits)

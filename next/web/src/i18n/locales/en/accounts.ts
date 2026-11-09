@@ -12,15 +12,17 @@ export default {
     loadFailed: 'Refresh failed; showing the previous results',
     emptyFiltered: 'No accounts match these filters. Adjust or clear the filters.', empty: 'No visible accounts.', limitsColumn: 'Concurrency / RPM / TPM / Sessions',
     numberRange: '{label} must be a whole number from {min} to {max}', saved: 'Saved', clearIds: 'Clear the account id filter', idsTruncated: '{label} (first {n})',
-    enabledSwitch: 'Enabled: {name}', switchDisable: 'Turn off to disable the account',
-    switchEnable: 'Turn on to enable the account',
-    switchEnableAuto: 'Not enabled (automatically disabled or scheduling off). Turning it on enables the account by hand: the automatic disable and its reason are cleared and scheduling comes back on; a cooldown stays (Reset status clears it)',
+    enableAccount: 'Enable: {name}', disableAccount: 'Disable: {name}', disableHint: 'Disable the account: it is no longer scheduled',
+    enableHint: 'Enable the account',
+    enableAutoHint: 'Not enabled (automatically disabled or scheduling off). Enabling it by hand clears the automatic disable and its reason and turns scheduling back on; a cooldown stays (Reset status clears it)',
     enabledDone: '"{name}" enabled', disabledDone: '"{name}" disabled', disableByHand: 'Disable by hand'
   },
   limitsUi: {
-    title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
+    title: 'Concurrency / RPM / TPM / TPD / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
+    model: 'Model', capsTitle: 'Caps', noModels: 'No requests in the last hour or today', modelsFailed: 'Could not load the figures by model',
+    cols: { in_use: 'Conc.', rpm: 'RPM', tpm: 'TPM', tpd: 'TPD', sessions: 'Sessions' },
     waiting: '{n} waiting',
-    windowHint: 'RPM, TPM and sessions are the exact usage of the last 60 seconds. RPM counts a request when it starts, so a long stream counts once and concurrency can exceed RPM. TPM is the input outside any cache plus the output; with a cap it includes what requests in flight reserved, replaced by their real usage when they finish. Sessions are those that started a request in that time (by sticky session key; a request matching no sticky rule counts as one). Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
+    windowHint: 'RPM, TPM and sessions are the exact usage of the last 60 seconds. RPM counts a request when it starts, so a long stream counts once and concurrency can exceed RPM. TPM is the input outside any cache plus the output; with a cap it includes what requests in flight reserved, replaced by their real usage when they finish. Sessions are those that started a request in that time (by sticky session key; a request matching no sticky rule counts as one). Without a cap only the usage is shown. A request for a listed model counts on the account and on its list. TPD is the input outside any cache plus the output since midnight in the browser time zone, counted as TPM is, by the hour in Redis. Sessions and requests in flight by model need not add up to the row of all models: a session can use several models.'
   },
   usage: {
     column: 'Usage', title: 'Account usage', raw: 'Raw', rawHint: 'Counted at the raw ratio: group multiplier taken as 1',
@@ -72,7 +74,7 @@ export default {
     addModels: 'Add',
     groupModelHint: 'Account models and group allowlists apply separately. The API Key group must also allow the request model.',
  authMethod: 'Authentication method', connection: 'Connection', connectionHint: 'Name, groups and credentials', models: 'Models', modelsHint: 'Available models and aliases', scheduling: 'Scheduling & limits', schedulingHint: 'Priority, concurrency and usage', advanced: 'Advanced', navigation: 'Account configuration', searchTypes: 'Search providers or account types',
-    unnamed: 'No name yet', allModels: 'All models', modelsSummary: '{n} models', mappingSummary: '{n} mappings', schedulingSummary: 'Priority {p} · weight {w} · concurrency {c}', sectionHasErrors: 'Something here needs fixing',
+    unnamed: 'No name yet', allModels: 'All models', modelsSummary: '{n} models', mappingSummary: '{n} mappings', summaryPriority: 'Priority {n}', summaryWeight: 'Weight {n}', summaryConcurrency: 'Concurrency {n}', pluginSectionAfterSave: 'Available after the account is saved', sectionHasErrors: 'Something here needs fixing',
     basicHint: 'Account name, groups and egress proxy', namePlaceholder: 'e.g. claude-main', groupsHint: 'Accounts outside every group are never scheduled', credentialsHint: 'Credentials are validated and stored by the {plugin} plugin',
     modelsCardHint: 'Request models the account serves; empty means no restriction', mappingCardHint: 'Rewrites request models to upstream models; billing and allowlists still use the request model', prefilled: 'Prefilled with the plugin preset: {what}. Save as is or adjust; an empty model list serves every model.',
     prefilledEdit: "This account served all models; it has been prefilled with the plugin preset ({what}), which takes effect when you save. To keep it unrestricted, click 'Clear'.", prefillWhat: '{models} models', prefillWhatMapping: '{models} models and {mapping} mappings', prefilledFooter: 'Models prefilled with the plugin preset; saved on Save', prefilledView: 'Review',
@@ -81,7 +83,7 @@ export default {
     copyModels: 'Copy', copied: '{n} models copied', clearModels: 'Clear', unrestricted: 'Unrestricted: the account serves every request model', mappedTo: 'Mapped to {model}',
     mappingEmpty: 'No mapping: request models go upstream unchanged', mappingAdd: 'Add mapping', mappingRowNotInModels: 'Not in the model list: the account is never scheduled for this model', mappingNotInModels: '{n} request models are not in the model list, so the account is never scheduled for them: {models}', mappingAddToModels: 'Add to model list',
     schedulingCardHint: 'Decides the order accounts are picked in and how many requests each handles at once', schedulableHint: 'When off the account is kept but receives no requests', autoDisableHint: 'Disable the account when the upstream reports invalid credentials, exhausted quota and similar errors (rules under Settings → Scheduling policy → Automatic disabling). When off the account is only cooled down for 60 seconds', limitsHint: 'Counted over the last 60 seconds: once any limit is reached the account is skipped until its usage falls back; 0 means unlimited',
-    commonControlFixed: 'The plugin makes this control read-only. Existing accounts keep their current setting.',
+    commonControlFixed: 'The plugin makes this read-only. Existing accounts keep their current setting.', commonControlLocked: 'The plugin fixes this to its preset value.', commonControlLockedPending: 'The plugin fixes this to its preset value; saving changes it to {value}.',
     autoDisableGlobalOff: 'Automatic disabling is globally off. This switch has no effect and cannot be changed; the account preference is preserved.', autoDisableUnavailable: 'Unable to load the global automatic disabling setting. This switch cannot be changed for now; the account preference is preserved.',
     unitRpm: 'req / min', unitTpm: 'tokens / min', unitTpd: 'tokens / day', unitSpm: 'sessions / min', create: 'Create account', noCredentials: 'This account type has no credential fields to fill in here.', modelsInputHint: 'Type or pick a model, Enter or comma adds it, paste comma or line separated lists; click a tag to copy it, mapped models show → target' },
   title: 'Accounts',
@@ -105,6 +107,7 @@ export default {
   modelsAdjusted: 'Model list adjusted for the {plan} subscription ({n} models)',
   groups: 'Groups',
   proxy: 'Proxy',
+  proxyRequired: 'This account type needs a proxy',
   createdBy: 'Created by',
   proxyPickExisting: 'Pick existing',
   proxyPasteUrl: 'Paste proxy URL',
@@ -119,7 +122,7 @@ export default {
   proxyAutoCreated: 'A proxy was created automatically',
   priority: 'Priority',
   priorityShort: 'Prio.',
-  priorityHint: 'Lower is used first',
+  priorityHint: 'Higher is used first',
   scheduling: 'Scheduling',
   weight: 'Weight',
   weightHint: '1–1000; weighted random inside one priority',
@@ -149,7 +152,7 @@ export default {
   },
   paramOverride: {
     title: 'Request parameter override',
-    hint: 'Rewrites the body and headers sent upstream, conditionally, after model mapping and before the plugin builds the request. Same format as a new-api channel\'s param override, which can be pasted as is',
+    hint: 'Rewrites the body and headers sent upstream, conditionally, after model mapping and before the plugin\'s rewrites, which may change the result. Same format as a new-api channel\'s param override, which can be pasted as is',
     none: 'Not set',
     count: '{n} operations',
     headerCount: '{n} on headers',
@@ -349,6 +352,51 @@ export default {
   editTitle: 'Edit account',
   newStep1: 'New account · choose a type',
   newTitle: 'New account',
+  upstream: {
+    hint: 'Only what differs from the account type is stored; leave a field empty to keep the default (the grey text)',
+    resetAll: 'Reset all',
+    reset: 'Reset',
+    noDefaults: 'The account type provides no upstream defaults; editing is unavailable',
+    auth: {
+      title: 'Authentication',
+      hint: "How the upstream identifies this account; the value is a template, {'{api_key}'} is the API key",
+      types: { header: 'Header', query: 'Query parameter', none: 'None' },
+      name: 'Name',
+      value: 'Value',
+      namePlaceholder: { header: 'Header name, e.g. x-api-key', query: 'Parameter name, e.g. key' }
+    },
+    headers: {
+      title: 'Headers',
+      hint: "Headers sent upstream. Set: always written; Default: only when the client sent none; Append: added to the existing value after a comma. Values may use {'{model}'}, {'{base_url}'}, {'{credentials.<field>}'}, {'{client_header.<name>}'}",
+      modes: { set: 'Set', default: 'Default', append: 'Append' },
+      name: 'Header name',
+      value: 'Value',
+      add: 'Add header',
+      remove: 'Remove',
+      restore: 'Restore'
+    },
+    routes: {
+      title: 'Paths',
+      hint: "Path appended to the base URL per protocol, a query string allowed; {'{model}'} is the upstream model"
+    },
+    allow: {
+      title: 'Allowed fields',
+      hint: 'These body fields are not sent upstream by default; checked ones are forwarded'
+    },
+    hints: {
+      required: 'Required',
+      not_here: '{name} cannot be used here',
+      unknown_var: 'Unknown variable {name}',
+      not_field: '{name} is not a credential field of the account type',
+      not_passed: '{name} is not a client header this account type receives',
+      header_name: 'Not a valid header name',
+      header_blocked: '{name} is a credential, hop-by-hop or gateway control header and cannot be set here; credentials go in authentication',
+      auth_blocked: '{name} is a hop-by-hop, client address or gateway control header and cannot carry the credential',
+      auth_header: '{name} is written by authentication',
+      duplicate: 'Header {name} is duplicated',
+      path_slash: 'A path starts with /'
+    }
+  },
   deleteResources: {
     label: 'Runtime resources',
     now: 'Delete all runtime resources now',
@@ -426,7 +474,7 @@ export default {
     groupModeLabel: 'How to change groups', groupMode: { replace: 'Replace with', add: 'Add', remove: 'Remove' },
     groupModeHint: { replace: 'Each account gets exactly the chosen groups (none clears them)', add: 'The chosen groups are added to each account\'s groups', remove: 'The chosen groups are removed from each account; others stay' },
     proxyHint: 'None means no proxy; a Claude Code account without a proxy has no internet access',
-    autoDisableFixed: '{n} accounts have this fixed by their type and are skipped',
+    controlFixed: '{n} selected accounts have a type that does not allow changing this',
     editDone: '{ok} accounts updated ({skipped} needed no change)', editPartial: '{ok} succeeded, {fail} failed, {skipped} skipped',
     failures: '{n} accounts not completed',
     deleteTitle: 'Delete {n} accounts', deleteConfirm: 'Delete the {n} selected accounts? This cannot be undone.', andMore: 'and {n} more',

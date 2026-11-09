@@ -1009,6 +1009,7 @@ func (c *call) countTokens(ctx context.Context, accountID int64) {
 		} else if n > 0 {
 			lim.AddTokens(ctx, accountID, "", n)
 		}
+		lim.CountModelTokens(ctx, accountID, c.model, n)
 	}
 	if w := c.g.d.KeyWindows; w != nil && c.principal != nil {
 		if h := c.keyHold; h != nil {

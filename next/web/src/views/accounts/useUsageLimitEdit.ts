@@ -76,6 +76,11 @@ export function useUsageLimitEdit(accountId: () => number | undefined, shown: ()
     { immediate: true }
   )
 
+  /** Shows a value (a declared default) as the unchanged one: saving sends it only once edited. */
+  function prefill(v: Partial<AccountUsageLimit>) {
+    reset({ ...defaultUsageLimit(), ...v }, status.value)
+  }
+
   /** Shows the card's errors and reports whether they block saving; a limit that never loaded is not checked. */
   function invalid(): boolean {
     const field = status.value === 'ready' ? usageLimitError(value.value) : null
@@ -97,5 +102,5 @@ export function useUsageLimitEdit(accountId: () => number | undefined, shown: ()
     return l.enabled ? t('accounts.usageLimit.summary', { amount: formatMoney(l.amount, 2), period: usagePeriodLabel(t, l.period, l.period_count) }) : ''
   })
 
-  return { limit, status, loadError, errors, summary, load, invalid, save }
+  return { limit, status, loadError, errors, summary, load, prefill, invalid, save }
 }

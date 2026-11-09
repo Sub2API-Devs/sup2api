@@ -5,6 +5,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -147,5 +148,39 @@ func TestLimiterSessions(t *testing.T) {
 		if !mr.Exists(k) {
 			t.Fatal("session key missing", k, mr.Keys())
 		}
+	}
+}
+
+// Each client model is counted apart, uncapped, beside the account and its
+// model list: ModelRates breaks the account's figures down by model.
+func TestLimiterModelRates(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	l := NewLimiter(rdb)
+	l.w.Now = func() time.Time { return now }
+	ctx := context.Background()
+	ref := core.AccountRef{ID: 7, RPMLimit: 3, ModelLimits: []core.ModelLimit{{Models: []string{"a", "b"}, RPMLimit: 3}}}
+	for _, hit := range []struct{ model, session string }{{"a", "s1"}, {"a", "s2"}, {"b", "s1"}} {
+		hold, ok, err := l.Reserve(ctx, ref, hit.model, hit.session, 0)
+		if err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+		l.Settle(ctx, hold, 10)
+		l.CountModelTokens(ctx, 7, hit.model, 10)
+	}
+	// Uncapped model counters never refuse: the account's own cap does.
+	if ok, err := l.TryHit(ctx, ref, "c", ""); err != nil || ok {
+		t.Fatal("the account cap of 3 must refuse a fourth request", ok, err)
+	}
+	got, err := l.ModelRates(ctx, 7, now.Truncate(24*time.Hour))
+	want := []core.ModelRates{
+		{RPM: 3, TPM: 30, TPD: 30, Sessions: 2},
+		{Model: "a", RPM: 2, TPM: 20, TPD: 20, Sessions: 2},
+		{Model: "b", RPM: 1, TPM: 10, TPD: 10, Sessions: 1},
+	}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, %v; want %+v", got, err, want)
 	}
 }

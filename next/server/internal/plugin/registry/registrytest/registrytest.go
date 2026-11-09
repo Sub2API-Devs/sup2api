@@ -131,18 +131,20 @@ func DefaultGrants() map[string]string {
 	}
 }
 
-// Package builds a .s2plugin zip with the test binary for this platform and
-// the given extra files (migrations, ui ...).
+// Package builds a .s2plugin zip with the test binary for this platform
+// (none when bin is nil) and the given extra files (migrations, ui ...).
 func Package(t testing.TB, m *manifest.Manifest, bin []byte, extra map[string][]byte) []byte {
 	t.Helper()
 	files := map[string][]byte{}
 	mj, _ := json.Marshal(m)
 	files["manifest.json"] = mj
-	name := "runtimes/" + goruntime.GOOS + "-" + goruntime.GOARCH + "/plugin"
-	if goruntime.GOOS == "windows" {
-		name += ".exe"
+	if bin != nil { // nil: a runtime "none" package carries no runtimes
+		name := "runtimes/" + goruntime.GOOS + "-" + goruntime.GOARCH + "/plugin"
+		if goruntime.GOOS == "windows" {
+			name += ".exe"
+		}
+		files[name] = bin
 	}
-	files[name] = bin
 	files["forms/apikey.schema.json"] = []byte(`{"type":"object","properties":{"api_key":{"type":"string"}}}`)
 	files["forms/apikey.ui.json"] = []byte(`{"api_key":{"ui:widget":"password"}}`)
 	files["ui/index.html"] = []byte(`<!doctype html><title>t</title>`)

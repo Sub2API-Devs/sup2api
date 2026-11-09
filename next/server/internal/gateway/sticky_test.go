@@ -42,7 +42,7 @@ func TestStickyHitAndRebind(t *testing.T) {
 	}
 	first := e.up.last().key
 	e.accounts.mu.Lock()
-	e.accounts.accounts[2].Priority = 0 // would win without the binding
+	e.accounts.accounts[2].Priority = 100 // would win without the binding
 	e.accounts.mu.Unlock()
 	for i := 0; i < 3; i++ {
 		e.messages(sess)

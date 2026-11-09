@@ -224,7 +224,7 @@ func (c *call) sessionIdentity() string {
 }
 
 // pick chooses the next account: the sticky binding first (when usable),
-// then by priority with weighted random order inside a priority (CONTRACTS
+// then by priority, higher first, with weighted random order inside a priority (CONTRACTS
 // §18), over the priority/weight the scheduler.rank plugins left for this
 // request (CONTRACTS §24). Accounts whose rate-limit window is exhausted are
 // skipped. It returns busy when candidates exist but none could be used
@@ -269,8 +269,8 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	if len(pool) == 0 {
 		return nil, nil, limited
 	}
-	// Each tier in weighted random order.
-	sort.SliceStable(pool, func(i, j int) bool { return pool[i].Priority < pool[j].Priority })
+	// Higher priority first, each tier in weighted random order.
+	sort.SliceStable(pool, func(i, j int) bool { return pool[i].Priority > pool[j].Priority })
 	for i := 0; i < len(pool); {
 		j := i
 		for j < len(pool) && pool[j].Priority == pool[i].Priority {
@@ -444,35 +444,49 @@ func (c *call) tokenCounting() bool {
 	return strings.HasSuffix(c.ep.Protocol, ".count_tokens")
 }
 
-// acquireAccount takes a concurrency slot of the account and, when the
-// request's model is in one of the account's model lists, one of that list
-// (CONTRACTS §68); either being full makes the account busy.
+// slotSpec is one concurrency slot a request takes on an account.
+type slotSpec struct {
+	kind  string
+	limit int // 0 = uncapped
+}
+
+// accountSlots are the slots a request for the call's model takes on ref:
+// the account's, that of the model list holding the model (CONTRACTS §68),
+// and the model's own, uncapped, which only counts it for the per-model
+// breakdown of GET /accounts/:id/rate-models.
+func (c *call) accountSlots(ref *core.AccountRef) []slotSpec {
+	out := []slotSpec{{kind: "account", limit: ref.MaxConcurrency}}
+	if l := ref.ModelLimitFor(c.model); l != nil {
+		out = append(out, slotSpec{kind: core.ModelLimitSlots(l.Key()), limit: l.MaxConcurrency})
+	}
+	if c.model != "" {
+		out = append(out, slotSpec{kind: core.ModelSlots(c.model)})
+	}
+	return out
+}
+
+// acquireAccount takes every slot of accountSlots, in order; one being full
+// makes the account busy and gives back those already taken. The release
+// gives them back in reverse order.
 func (c *call) acquireAccount(ctx context.Context, ref *core.AccountRef) (func(), bool) {
 	if c.tokenCounting() {
 		c.slotCtx = ctx
 		return func() {}, true
 	}
-	leaseCtx, release, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, "account", ref.ID, ref.MaxConcurrency, c.rid)
-	if err != nil {
-		slog.WarnContext(ctx, "gateway: acquire account slot", "account", ref.ID, "err", err)
-		return nil, false
-	}
-	if !ok {
-		return nil, false
-	}
-	if l := ref.ModelLimitFor(c.model); l != nil {
-		listCtx, releaseList, ok, err := core.AcquireSlot(leaseCtx, c.g.d.Slots, core.ModelLimitSlots(l.Key()), ref.ID, l.MaxConcurrency, c.rid)
+	release := func() {}
+	for _, spec := range c.accountSlots(ref) {
+		leaseCtx, releaseSlot, ok, err := core.AcquireSlot(ctx, c.g.d.Slots, spec.kind, ref.ID, spec.limit, c.rid)
 		if err != nil {
-			slog.WarnContext(ctx, "gateway: acquire model list slot", "account", ref.ID, "err", err)
+			slog.WarnContext(ctx, "gateway: acquire account slot", "account", ref.ID, "slot", spec.kind, "err", err)
 		}
 		if err != nil || !ok {
 			release()
 			return nil, false
 		}
-		releaseAccount := release
-		leaseCtx, release = listCtx, func() { releaseList(); releaseAccount() }
+		releaseOuter := release
+		ctx, release = leaseCtx, func() { releaseSlot(); releaseOuter() }
 	}
-	c.slotCtx = leaseCtx
+	c.slotCtx = ctx
 	return release, true
 }
 
@@ -572,9 +586,11 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
 		}
 	}
-	// The account's request parameter override (CONTRACTS §84) has the last
-	// word on the body, so the plugin builds what goes upstream.
-	upBody, upModel, failure := c.applyParamOverride(ctx, acc, rt, upBody, upModel, n)
+	// A declared type's own part of the body, then the account's request
+	// parameter override (CONTRACTS §84), precede the build: the plugin
+	// builds from, and may still patch, what the account decided
+	// (param_override.go).
+	upBody, upModel, failure := c.rewriteBody(ctx, acc, rt, pacct, upBody, upModel, n)
 	if failure != nil {
 		return *failure
 	}
@@ -600,15 +616,85 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
-	return c.forwardBuilt(ctx, rt, acc, pacct, upBody, built, nil)
+	return c.forwardBuilt(ctx, rt, acc, buildRequest, upBody, built, nil)
+}
+
+// splitHeaders separates built's headers into the declaration's and the
+// plugin's; a code plugin's are all its own.
+func splitHeaders(rt *typeRoute, in *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse) (declared, plugin map[string]string) {
+	if d, ok := rt.binding.Client.(core.DeclaredUpstream); ok {
+		return d.SplitHeaders(in, built)
+	}
+	return nil, built.GetHeaders()
+}
+
+// setBuiltHeaders writes built headers onto req; host goes to req.Host and
+// the framing headers stay the transport's (transparent gzip, framing).
+func setBuiltHeaders(req *http.Request, h map[string]string) {
+	for k, v := range h {
+		switch strings.ToLower(k) {
+		case "host":
+			req.Host = v
+		case "content-length", "accept-encoding", "connection", "transfer-encoding":
+		default:
+			req.Header.Set(k, v)
+		}
+	}
+}
+
+// passthroughHeaders fills in the client headers the account's passthrough
+// (CONTRACTS §81) and the matched sticky rule (§5.6; the built-in Claude
+// Code rule forwards the session and sub-agent headers) forward, where h
+// has none yet.
+func (c *call) passthroughHeaders(h http.Header, acc *core.Account) {
+	if c.c == nil || c.c.Request == nil {
+		return
+	}
+	var rules [][]string
+	if acc != nil {
+		rules = append(rules, acc.HeaderPassthrough)
+	}
+	if c.sticky != nil {
+		rules = append(rules, c.sticky.rule.PassHeaders)
+	}
+	for _, r := range rules {
+		for k, vs := range core.PassthroughHeaders(r, c.c.Request.Header) {
+			if _, set := h[k]; !set {
+				h[k] = vs
+			}
+		}
+	}
+}
+
+// writeDeclaredAuth writes a declared account type's auth header once more,
+// last of the request's own headers (docs/UPSTREAM-DECLARATIVE.md §4.3): only
+// the declaration decides the credential the upstream receives, so neither
+// the plugin (extend), the passthrough (§81) nor the account's override
+// (§84) can replace or remove it under a custom header name.
+func writeDeclaredAuth(h http.Header, rt *typeRoute, pacct *pluginv1.Account, built *pluginv1.BuildUpstreamRequestResponse) {
+	d, ok := rt.binding.Client.(core.DeclaredUpstream)
+	if !ok {
+		return
+	}
+	name := d.AuthHeader(pacct)
+	if name == "" {
+		return
+	}
+	if v := built.GetHeaders()[name]; v != "" {
+		h.Set(name, v)
+	} else {
+		h.Del(name)
+	}
 }
 
 // validatePatches runs the guards that a plugin-built upstream request must
-// pass before it is sent: resource and model references must stay consistent
-// with the original body, and the account's usage rules must be able to meter
-// the operation and its attempts. The kind differs per guard on purpose: an
-// unaddressable resource reference is the client's mistake and is returned
-// (attemptReturn), everything else fails over.
+// pass before it is sent: the plugin's patches (upBody to body) must keep
+// resource and model references consistent with the original body, and the
+// account's usage rules must be able to meter the operation and attempts of
+// body, the one that goes upstream.
+// The kind differs per guard on purpose: an unaddressable resource reference
+// is the client's mistake and is returned (attemptReturn), everything else
+// fails over.
 func (c *call) validatePatches(rt *typeRoute, upBody, body []byte) (attemptKind, *gwError) {
 	// applyPatches returns upBody itself when the plugin asked for no patch,
 	// and then the three comparisons below compare the request with itself:
@@ -638,7 +724,13 @@ func (c *call) validatePatches(rt *typeRoute, upBody, body []byte) (attemptKind,
 	return attemptDone, nil
 }
 
-func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, pacct *pluginv1.Account, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, execution *gatewayExecution) attemptResult {
+// forwardBuilt sends built, the plugin's answer to request (from
+// BuildUpstreamRequest, or forwarded by a plugin executing request,
+// execution set), with upBody, the body the plugin built from (already
+// rewritten by the declaration and the account's override): its patches
+// apply to upBody.
+func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, request *pluginv1.BuildUpstreamRequestRequest, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, execution *gatewayExecution) attemptResult {
+	pacct := request.GetAccount()
 	prepareCtx := ctx
 	if execution != nil {
 		var cancel context.CancelFunc
@@ -648,21 +740,25 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if built.GetUpstreamModel() != "" {
 		c.rec.UpstreamModel = built.GetUpstreamModel()
 	}
-	managedCCG := ccgateway.IsManaged(acc.PluginKey, acc.Type, built.GetUrl()) && c.g.d.CCGateway != nil
+	patched, err := applyPatches(upBody, built.GetPatches())
+	if err != nil {
+		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
+	}
+	body, builtModel := patched, built.GetUpstreamModel()
+	rawURL, failure := c.declaredTarget(rt, request, built, body)
+	if failure != nil {
+		return *failure
+	}
+	managedCCG := ccgateway.IsManaged(acc.PluginKey, acc.Type, rawURL) && c.g.d.CCGateway != nil
 	var target *url.URL
-	var err error
 	if managedCCG {
-		target, err = url.Parse(built.GetUrl())
+		target, err = url.Parse(rawURL)
 	} else {
-		target, err = c.g.checkUpstreamURL(prepareCtx, built.GetUrl())
+		target, err = c.g.checkUpstreamURL(prepareCtx, rawURL)
 	}
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: upstream url rejected", "plugin", rt.binding.Plugin.Key, "account", acc.ID, "err", err)
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrUnavailable.WithMessage("upstream address rejected"), errTypeInternal)}
-	}
-	body, err := applyPatches(upBody, built.GetPatches())
-	if err != nil {
-		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
 	// Whatever the plugin patched, a stream-only upstream gets stream: true.
 	// The body is the plugin's patched one now: when the flag cannot be set
@@ -705,37 +801,18 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
 	}
-	for k, v := range built.GetHeaders() {
-		switch strings.ToLower(k) {
-		case "host":
-			req.Host = v
-		case "content-length", "accept-encoding", "connection", "transfer-encoding":
-			// Managed by the transport (transparent gzip, framing).
-		default:
-			req.Header.Set(k, v)
-		}
-	}
-	// The account's header passthrough (CONTRACTS §81) fills in client
-	// headers the plugin did not set; the core's own headers below still win.
-	if acc != nil && len(acc.HeaderPassthrough) > 0 && c.c != nil && c.c.Request != nil {
-		for k, vs := range core.PassthroughHeaders(acc.HeaderPassthrough, c.c.Request.Header) {
-			if _, set := req.Header[k]; !set {
-				req.Header[k] = vs
-			}
-		}
-	}
-	// So does the matched sticky rule's (CONTRACTS §5.6): the built-in
-	// Claude Code rule forwards the session and sub-agent headers.
-	if s := c.sticky; s != nil && len(s.rule.PassHeaders) > 0 && c.c != nil && c.c.Request != nil {
-		for k, vs := range core.PassthroughHeaders(s.rule.PassHeaders, c.c.Request.Header) {
-			if _, set := req.Header[k]; !set {
-				req.Header[k] = vs
-			}
-		}
-	}
-	// The account's param override (CONTRACTS §84) sets and removes headers
-	// over the plugin's and the passthrough's; the core's own below still win.
+	// Headers in layers (CONTRACTS §86.5), each over the one before: the
+	// declaration's and its paramOverride's, the passthrough (fills only
+	// what is unset), the account's parameter override, the plugin's (it
+	// knows the override ran and may change its result), then the declared
+	// auth header and the core's own below.
+	declared, plugin := splitHeaders(rt, request, built)
+	setBuiltHeaders(req, declared)
+	c.paramOverride.declared.Apply(req.Header)
+	c.passthroughHeaders(req.Header, acc)
 	c.paramOverride.headers.Apply(req.Header)
+	setBuiltHeaders(req, plugin)
+	writeDeclaredAuth(req.Header, rt, pacct, built)
 	if req.Header.Get("Content-Type") == "" && reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -771,8 +848,8 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	}
 	if rt.binding.Type.ModelAvailability {
 		expected := c.upstreamModel(acc)
-		if built.GetUpstreamModel() != "" && built.GetUpstreamModel() != expected {
-			return attemptResult{kind: attemptFailover, err: c.availabilityMismatch(ctx, &acc.AccountRef, expected, built.GetUpstreamModel())}
+		if builtModel != "" && builtModel != expected {
+			return attemptResult{kind: attemptFailover, err: c.availabilityMismatch(ctx, &acc.AccountRef, expected, builtModel)}
 		}
 		if rt.modelPath != "" {
 			actual := gjson.GetBytes(body, rt.modelPath)

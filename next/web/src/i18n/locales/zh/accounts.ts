@@ -12,14 +12,16 @@ export default {
     loadFailed: '刷新失败，正在显示上次加载的数据',
     emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', limitsColumn: '并发 / RPM / TPM / 会话',
     numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存', clearIds: '清除账号 ID 筛选', idsTruncated: '{label}（前 {n} 个）',
-    enabledSwitch: '启用：{name}', switchDisable: '关闭即禁用账号',
-    switchEnable: '打开即启用账号',
-    switchEnableAuto: '未启用（已自动禁用或关闭了调度）。打开即手动启用：清除自动禁用及原因，并恢复调度；冷却不清除（可用“重置状态”清除）',
+    enableAccount: '启用：{name}', disableAccount: '禁用：{name}', disableHint: '禁用账号，不再参与调度',
+    enableHint: '启用账号',
+    enableAutoHint: '未启用（已自动禁用或关闭了调度）。点击即手动启用：清除自动禁用及原因，并恢复调度；冷却不清除（可用“重置状态”清除）',
     enabledDone: '已启用「{name}」', disabledDone: '已禁用「{name}」', disableByHand: '转为手动禁用'
   },
   limitsUi: {
-    title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',
-    windowHint: 'RPM、TPM、会话都是精确的近 60 秒用量。RPM 在请求开始时计入，长流不会重复计，所以并发可以高于 RPM。TPM 是非缓存输入加输出，设了上限时包含进行中请求的预占，结束后换成实际值。会话是近 60 秒内开始过请求的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。'
+    title: '并发 / RPM / TPM / TPD / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',
+    model: '模型', capsTitle: '限额', noModels: '近 1 小时和今日没有请求', modelsFailed: '按模型明细加载失败',
+    cols: { in_use: '并发', rpm: 'RPM', tpm: 'TPM', tpd: 'TPD', sessions: '会话' },
+    windowHint: 'RPM、TPM、会话都是精确的近 60 秒用量。RPM 在请求开始时计入，长流不会重复计，所以并发可以高于 RPM。TPM 是非缓存输入加输出，设了上限时包含进行中请求的预占，结束后换成实际值。会话是近 60 秒内开始过请求的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。TPD 是今日（浏览器所在时区）0 点起累计的非缓存输入加输出，与 TPM 同口径，按小时记在 Redis。按模型的会话和并发相加不等于全部模型：一个会话可能用多个模型。'
   },
   usage: {
     column: '用量', title: '账号用量', raw: '原始', rawHint: '按原始倍率计费：分组倍率视为 1',
@@ -71,7 +73,7 @@ export default {
     addModels: '添加',
     groupModelHint: '账号模型与分组白名单分别生效；API Key 所属分组也必须允许请求模型。',
  authMethod: '认证方式', connection: '接入配置', connectionHint: '名称、分组与连接凭证', models: '模型配置', modelsHint: '可用模型与名称映射', scheduling: '调度与限流', schedulingHint: '优先级、并发与用量限制', advanced: '高级', navigation: '账号配置导航', searchTypes: '搜索服务商或账号类型',
-    unnamed: '尚未填写名称', allModels: '全部模型', modelsSummary: '{n} 个模型', mappingSummary: '{n} 条映射', schedulingSummary: '优先级 {p} · 权重 {w} · 并发 {c}', sectionHasErrors: '此处有待修正的内容',
+    unnamed: '尚未填写名称', allModels: '全部模型', modelsSummary: '{n} 个模型', mappingSummary: '{n} 条映射', summaryPriority: '优先级 {n}', summaryWeight: '权重 {n}', summaryConcurrency: '并发 {n}', pluginSectionAfterSave: '保存账号后可配置', sectionHasErrors: '此处有待修正的内容',
     basicHint: '账号名称、所属分组与出口代理', namePlaceholder: '例如 claude-main', groupsHint: '未加入分组的账号不会被调度', credentialsHint: '连接凭证由插件「{plugin}」校验与保存',
     modelsCardHint: '账号可服务的请求模型；留空表示不限制', mappingCardHint: '把请求模型改写为上游模型；计费、白名单仍按请求模型', prefilled: '已按插件预设填入 {what}，可直接保存，也可按需增删；清空模型列表表示可服务所有模型。',
     prefilledEdit: "该账号原为不限模型，已按插件预设填充 {what}，保存后生效；如需保持不限请点'清空'。", prefillWhat: '{models} 个模型', prefillWhatMapping: '{models} 个模型与 {mapping} 条映射', prefilledFooter: '模型已按插件预设填充，保存后生效', prefilledView: '查看',
@@ -80,7 +82,7 @@ export default {
     copyModels: '复制', copied: '已复制 {n} 个模型', clearModels: '清空', unrestricted: '未限制：账号可服务所有请求模型', mappedTo: '映射到 {model}',
     mappingEmpty: '未配置映射：请求模型原样发往上游', mappingAdd: '添加映射', mappingRowNotInModels: '不在模型列表中，账号不会因此模型被调度', mappingNotInModels: '{n} 个请求模型不在模型列表中，账号不会因它们被调度：{models}', mappingAddToModels: '加入模型列表',
     schedulingCardHint: '决定账号被选中的先后顺序，以及同时处理的请求数', schedulableHint: '关闭后账号保留，但不再被分配请求', autoDisableHint: '上游返回凭证失效、额度耗尽等错误时自动禁用该账号（规则见 设置 → 调度策略 → 自动禁用）。关闭后只冷却 60 秒，不会禁用', limitsHint: '按近 60 秒统计，达到任一上限后暂停调度该账号，用量回落后自动恢复；0 表示不限',
-    commonControlFixed: '该通用开关由插件设为不可配置，已有账号保留当前设置。',
+    commonControlFixed: '插件将此项设为不可修改，已有账号保留当前设置。', commonControlLocked: '插件将此项固定为预设值，不可修改。', commonControlLockedPending: '插件将此项固定为预设值，保存后改为锁定值 {value}。',
     autoDisableGlobalOff: '全局自动禁用已关闭，此开关暂不生效且不可修改；账号原有设置会保留。', autoDisableUnavailable: '无法读取全局自动禁用设置，暂时无法修改此开关；账号原有设置会保留。',
     unitRpm: '次 / 分钟', unitTpm: 'tokens / 分钟', unitTpd: 'tokens / 天', unitSpm: '会话 / 分钟', create: '创建账号', noCredentials: '此账号类型没有需要在这里填写的凭证字段。', modelsInputHint: '输入或从下拉中选择模型，回车或逗号添加，可粘贴逗号或换行分隔的列表；点击标签复制，已映射的模型显示 → 目标' },
   title: '账号',
@@ -104,6 +106,7 @@ export default {
   modelsAdjusted: '已按 {plan} 订阅调整模型列表（{n} 个模型）',
   groups: '分组',
   proxy: '代理',
+  proxyRequired: '此账号类型必须配置代理',
   createdBy: '创建人',
   proxyPickExisting: '选择已有',
   proxyPasteUrl: '粘贴代理串',
@@ -118,7 +121,7 @@ export default {
   proxyAutoCreated: '已自动创建代理',
   priority: '优先级',
   priorityShort: '优先',
-  priorityHint: '数值越小越先使用',
+  priorityHint: '数值越大越先使用',
   scheduling: '调度',
   weight: '权重',
   weightHint: '1–1000；同优先级内按权重加权随机',
@@ -148,7 +151,7 @@ export default {
   },
   paramOverride: {
     title: '请求参数覆盖',
-    hint: '按条件改写发往上游的请求体和请求头，在模型映射之后、插件构造请求之前执行。格式兼容 new-api 渠道的参数覆盖，可以直接粘贴',
+    hint: '按条件改写发往上游的请求体和请求头，在模型映射之后、插件改写之前执行，插件还可以再改。格式兼容 new-api 渠道的参数覆盖，可以直接粘贴',
     none: '未设置',
     count: '{n} 条操作',
     headerCount: '含 {n} 条请求头操作',
@@ -347,6 +350,51 @@ export default {
   editTitle: '编辑账号',
   newStep1: '新建账号 · 选择类型',
   newTitle: '新建账号',
+  upstream: {
+    hint: '只存与账号类型默认不同的部分；留空沿用默认（输入框里的灰字）',
+    resetAll: '全部恢复默认',
+    reset: '恢复默认',
+    noDefaults: '账号类型没有提供上游默认值，暂时无法编辑',
+    auth: {
+      title: '鉴权',
+      hint: "上游如何识别这个账号；值是模板，{'{api_key}'} 代表 API Key",
+      types: { header: '请求头', query: '查询参数', none: '不鉴权' },
+      name: '名称',
+      value: '值',
+      namePlaceholder: { header: '请求头名称，如 x-api-key', query: '参数名，如 key' }
+    },
+    headers: {
+      title: '请求头',
+      hint: "发往上游的请求头。覆盖：总是写入；缺省：客户端没带时才写；追加：用逗号接在已有值后。值可用 {'{model}'}、{'{base_url}'}、{'{credentials.字段}'}、{'{client_header.名称}'}",
+      modes: { set: '覆盖', default: '缺省', append: '追加' },
+      name: '请求头名称',
+      value: '值',
+      add: '添加请求头',
+      remove: '删除',
+      restore: '恢复'
+    },
+    routes: {
+      title: '接口路径',
+      hint: "各协议拼在接口地址后的路径，可带查询串；{'{model}'} 代表上游模型"
+    },
+    allow: {
+      title: '放行字段',
+      hint: '这些请求体字段默认不发给上游，勾选的照常转发'
+    },
+    hints: {
+      required: '必填',
+      not_here: '{name} 不能用在这里',
+      unknown_var: '未知变量 {name}',
+      not_field: '{name} 不是账号类型声明的凭证字段',
+      not_passed: '{name} 不是该账号类型收到的客户端请求头',
+      header_name: '不是有效的请求头名称',
+      header_blocked: '{name} 是凭证、逐跳或网关控制头，不能在这里设置；凭证请放在鉴权里',
+      auth_blocked: '{name} 是逐跳、客户端地址或网关控制头，不能用来发送凭证',
+      auth_header: '{name} 由鉴权写入，不能另外设置',
+      duplicate: '请求头 {name} 重复',
+      path_slash: '路径须以 / 开头'
+    }
+  },
   deleteResources: {
     label: '运行资源',
     now: '立即删除全部运行资源',
@@ -424,7 +472,7 @@ export default {
     groupModeLabel: '分组修改方式', groupMode: { replace: '替换为', add: '追加', remove: '移除' },
     groupModeHint: { replace: '各账号的分组改为所选分组（不选即清空分组）', add: '在各账号原有分组上追加所选分组', remove: '从各账号移除所选分组，其余分组保留' },
     proxyHint: '不选即不使用代理；Claude Code 账号没有代理时容器无法联网',
-    autoDisableFixed: '{n} 个账号的类型固定了此项，会跳过',
+    controlFixed: '{n} 个所选账号的类型不允许修改此项',
     editDone: '已更新 {ok} 个账号（{skipped} 个无需修改）', editPartial: '成功 {ok}，失败 {fail}，跳过 {skipped}',
     failures: '{n} 个账号未完成',
     deleteTitle: '删除 {n} 个账号', deleteConfirm: '确定删除所选 {n} 个账号？此操作不可撤销。', andMore: '等 {n} 个',

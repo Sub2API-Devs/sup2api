@@ -1,5 +1,6 @@
 export default {
   rotate: 'Regenerate key',
+  rotateShort: 'Regenerate',
   rotateConfirm: 'Regenerate the key for "{name}"? The old key will stop working immediately. Update clients with the new key.',
   rotated: 'Key regenerated. Copy the new key and update your clients.',
   legacyCopyHint: 'This legacy key is hash-only and cannot be recovered. New keys can be copied at any time.',

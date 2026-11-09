@@ -187,7 +187,7 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 		return
 	}
 	rt := &typeRoute{binding: b, platform: q, upstream: y, conv: conv,
-		requestFields: ap.RequestFields, passHeaders: ap.PassHeaders,
+		requestFields: ap.RequestFields, passHeaders: ap.ClientHeaders(&pf),
 		usage:              usagerules.For(ap, &ep, &pf, y),
 		pluginUsage:        ep.PluginUsage(),
 		usageEvents:        ep.UsageStreamEvents,
@@ -207,9 +207,6 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 	rt.requiredAttempts = append(rt.requiredAttempts, pf.Usage.Attempts)
 	if len(rt.requestFields) == 0 {
 		rt.requestFields = pf.RequestFields
-	}
-	if len(rt.passHeaders) == 0 {
-		rt.passHeaders = pf.PassHeaders
 	}
 	c.routes[k] = rt
 	c.routeKeys = append(c.routeKeys, k)

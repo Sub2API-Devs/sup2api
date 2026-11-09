@@ -6,7 +6,8 @@
 // `icon` / `iconRight` are SIcon names; `iconOnly` drops the text padding
 // (square button) and needs `ariaLabel`; `square` makes any button square.
 // `size` xs is the compact variant for table cells.
-// `tone="danger"` colours a ghost / secondary button red.
+// `tone="danger"` / `"info"` colours a ghost / secondary button's text red /
+// blue: a text action that stops or starts something (disable / enable).
 // `fab` (with an `icon`): on a compact screen a 56px round button floating
 // bottom-right above the home indicator, its text visually hidden (kept for
 // screen readers), marked `data-fab` so the page layout can keep room for it
@@ -33,7 +34,7 @@ const props = withDefaults(
     iconOnly?: boolean
     square?: boolean
     ariaLabel?: string
-    tone?: 'default' | 'danger'
+    tone?: 'default' | 'danger' | 'info'
     fab?: boolean
   }>(),
   { variant: 'secondary', size: 'md', type: 'button', tone: 'default' }
@@ -54,6 +55,11 @@ const VARIANT = {
   danger: 'btn-danger',
   success: 'btn-success',
   warning: 'btn-warning'
+}
+const TONE = {
+  default: '',
+  danger: '!text-red-600 hover:!bg-red-50 dark:!text-red-400 dark:hover:!bg-red-900/20',
+  info: '!text-blue-600 hover:!bg-blue-50 dark:!text-blue-400 dark:hover:!bg-blue-900/20'
 }
 const SIZE = { xs: 'btn-xs', sm: 'btn-sm', md: 'btn-md', lg: 'btn-lg' }
 // Square = as wide as tall, so icon buttons stay square when touch screens raise the control height.
@@ -77,7 +83,7 @@ const cls = computed(() => [
   props.block ? 'w-full' : '',
   props.iconOnly || props.square ? SQUARE : '',
   fab.value ? FAB.button : '',
-  props.tone === 'danger' ? '!text-red-600 hover:!bg-red-50 dark:!text-red-400 dark:hover:!bg-red-900/20' : '',
+  TONE[props.tone],
   isLink.value && inactive.value ? 'pointer-events-none cursor-not-allowed opacity-50' : ''
 ])
 // Element and its own attributes: a disabled / loading link is an <a> without href.
@@ -90,7 +96,14 @@ const target = computed(() => {
 </script>
 
 <template>
-  <component :is="target.is" v-bind="target.attrs" :class="cls" :aria-label="ariaLabel" :aria-busy="loading || undefined" :data-fab="fab || undefined">
+  <component
+    :is="target.is"
+    v-bind="target.attrs"
+    :class="cls"
+    :aria-label="ariaLabel"
+    :aria-busy="loading || undefined"
+    :data-fab="fab || undefined"
+  >
     <SSpinner v-if="loading" size="sm" decorative />
     <SIcon v-else-if="icon" :name="icon" :class="fab ? FAB.icon : ICON[size]" />
     <span v-if="fab && !iconOnly && !square" class="sr-only"><slot /></span>

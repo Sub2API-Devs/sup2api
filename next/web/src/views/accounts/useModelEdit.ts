@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
 import type { AccountType, Price } from '@/api/types'
+import { defaultMappingOf } from './commonControls'
 import { mappingProblem } from './modelIds'
 import { useModelList } from './useModelList'
 
@@ -39,7 +40,7 @@ export function useModelEdit(accountType: () => AccountType | null | undefined, 
   const defaultsFor = (at: AccountType | null | undefined) =>
     at?.default_models_by_subscription?.[subscription() || ''] ?? at?.default_models ?? []
   const defaultModels = computed(() => defaultsFor(accountType()))
-  const defaultMapping = computed<Mapping>(() => accountType()?.default_model_mapping || {})
+  const defaultMapping = computed<Mapping>(() => defaultMappingOf(accountType()))
   /** "12 models" (+ "and 3 mappings" only when the preset has a mapping; most have none). */
   const prefillWhat = computed(() => {
     const n = Object.keys(defaultMapping.value).length
@@ -128,10 +129,10 @@ export function useModelEdit(accountType: () => AccountType | null | undefined, 
     prefilled.value = false
   }
   const sameDefaults = (at: AccountType | null | undefined) =>
-    JSON.stringify(models.value) === JSON.stringify(defaultsFor(at)) && JSON.stringify(mapping.value) === JSON.stringify(at?.default_model_mapping || {})
+    JSON.stringify(models.value) === JSON.stringify(defaultsFor(at)) && JSON.stringify(mapping.value) === JSON.stringify(defaultMappingOf(at))
   function applyDefaults(at: AccountType | null | undefined) {
     models.value = [...defaultsFor(at)]
-    mapping.value = { ...(at?.default_model_mapping || {}) }
+    mapping.value = { ...defaultMappingOf(at) }
     prefilled.value = models.value.length > 0 || Object.keys(mapping.value).length > 0
   }
   /** The account's saved list and mapping. */

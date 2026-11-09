@@ -12,7 +12,9 @@
 // full-height page, `center` the floating dialog of wide screens; `auto`
 // (default) is a sheet for width sm / md and a page for lg and wider. The
 // footer stays at the bottom, clear of the home indicator, and the
-// browser Back button closes it.
+// browser Back button closes it. `fixed` keeps one size whatever the content
+// (multi-step editors): the full width and height on wide screens, the full
+// height as a phone sheet; the body scrolls inside.
 import { computed } from 'vue'
 import OverlaySurface from './internal/OverlaySurface.vue'
 import { useViewport } from './viewport'
@@ -31,6 +33,8 @@ const props = withDefaults(
     describedby?: string
     /** Form on phones (compact viewport). */
     mobile?: ModalMobile
+    /** One size whatever the content: the body scrolls instead of the dialog resizing. */
+    fixed?: boolean
   }>(),
   { width: 'md', closable: true, mobile: 'auto' }
 )
@@ -53,6 +57,7 @@ const form = computed(() => {
     :persistent="persistent"
     :top="top"
     :describedby="describedby"
+    :fill="fixed"
     @update:open="emit('update:open', $event)"
     @close="emit('close')"
   >

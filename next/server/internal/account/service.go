@@ -174,6 +174,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/accounts/:id/reset-status", s.resetStatus, "account:update", "account:own:update")
 	// Usage and usage limits (CONTRACTS §73).
 	r.PermAny("GET", "/accounts/:id/usage", s.getUsage, "account:read", "account:own:read")
+	// Requests in flight and rates by client model (CONTRACTS §68.7).
+	r.PermAny("GET", "/accounts/:id/rate-models", s.getRateModels, "account:read", "account:own:read")
 	r.PermAny("GET", "/accounts/:id/usage-limit", s.getUsageLimit, "account:read", "account:own:read")
 	r.PermAny("PUT", "/accounts/:id/usage-limit", s.putUsageLimit, "account:update", "account:own:update")
 	// Credential refresh (CONTRACTS §48).

@@ -352,13 +352,69 @@ export interface AccountType {
   default_models_by_subscription?: Record<string, string[]>
   default_model_mapping?: Record<string, string>
   default_limits?: AccountDefaultLimits
-  common_controls?: Partial<Record<'auto_disable' | 'schedulable', { configurable?: boolean; default?: boolean }>>
+  /** How the editor shows the common controls (docs/COMMON-CONTROLS.md §1); absent names keep the core behaviour. */
+  common_controls?: Partial<Record<CommonControlName, CommonControlDecl>>
   extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
   lifecycle?: AccountLifecycle
   /** Platforms the type supports (built-in or plugin platforms). */
   platforms: AccountTypePlatform[]
   /** Endpoints of available supported platforms (native) plus converted ones. */
   endpoints: AccountTypeEndpoint[]
+  /** Client headers the type receives: the names an upstream template may read as {client_header.<name>}. */
+  pass_headers: string[]
+  /** Resolved upstream declaration of a declarative type (docs/UPSTREAM-DECLARATIVE.md §4.4; without the account layer). */
+  upstream?: Upstream
+}
+
+/** manifest.HeaderWrite: exactly one mode, its value a template. */
+export type UpstreamHeaderWrite = Partial<Record<'set' | 'default' | 'append', string>>
+
+/** manifest.UpstreamAuth: a header or query parameter carrying the credential, or none. */
+export interface UpstreamAuth {
+  type?: 'header' | 'query' | 'none'
+  name?: string
+  value?: string
+}
+
+/** manifest.UpstreamRoute: the upstream request of one protocol. */
+export interface UpstreamRoute {
+  method?: string
+  path?: string
+  transport?: 'http' | 'websocket'
+  headers?: Record<string, UpstreamHeaderWrite | null>
+  patches?: Array<{ op: string; path: string; value?: unknown; when?: string }>
+  model?: { from?: string; trimPrefix?: string; required?: boolean }
+}
+
+/** manifest.Upstream (docs/UPSTREAM-DECLARATIVE.md §2): how the core builds an account type's upstream requests. */
+export interface Upstream {
+  preset?: string
+  extend?: boolean
+  accountConfig?: boolean
+  baseURL?: { default?: string; required?: boolean; stripSuffixes?: string[] }
+  credentials?: { keyValidator?: { prefixes?: string[]; minLength?: number }; texts?: Record<string, string>; fields?: string[] }
+  auth?: UpstreamAuth
+  headers?: Record<string, UpstreamHeaderWrite | null>
+  routes?: Record<string, UpstreamRoute | null>
+  defaultProtocol?: string
+  filterFields?: string[]
+  paramOverride?: unknown
+  classify?: string
+  test?: { protocol?: string; model?: string; body?: string }
+  models?: { path?: string; idPath?: string; stripPrefix?: string } | null
+}
+
+/**
+ * The account layer of a type declaring accountConfig (settings field
+ * `upstream`, docs/UPSTREAM-DECLARATIVE.md §2.3): merged over the type's
+ * declaration like a JSON merge patch, null deletes.
+ */
+export interface UpstreamAccountLayer {
+  auth?: { type?: UpstreamAuth['type']; name?: string | null; value?: string | null }
+  headers?: Record<string, UpstreamHeaderWrite | null>
+  routes?: Record<string, { path: string }>
+  /** filterFields the account lets through. */
+  allowFields?: string[]
 }
 
 /** manifest.AccountLifecycle: preparation, required lifecycle, row actions and deletion. */
@@ -398,6 +454,25 @@ export interface ModelRateUsage {
   rpm: number
   tpm: number
   sessions?: number
+}
+
+/** Account fields an account type may declare a common control for (manifest accountTypes[].commonControls). */
+export type CommonControlName =
+  | 'schedulable' | 'auto_disable' | 'priority' | 'weight' | 'max_concurrency' | 'rpm_limit' | 'tpm_limit' | 'spm_limit'
+  | 'model_limits' | 'usage_limit' | 'model_mapping' | 'param_override' | 'header_passthrough' | 'environment' | 'proxy'
+
+/** One common control declaration; every field is optional. */
+export interface CommonControlDecl {
+  /** false: the editor hides it (the API still accepts it). Default true. */
+  visible?: boolean
+  /** false: read-only (a new account gets `default`, a saved one keeps its value). Default true. */
+  configurable?: boolean
+  /** A new account's value (same shape as the account field). */
+  default?: unknown
+  /** true: always `default`, for new and saved accounts. */
+  locked?: boolean
+  /** `proxy` only: the account must have a proxy. */
+  required?: boolean
 }
 
 /** Scheduling and limits a plugin suggests for a new account (CONTRACTS §68.5); absent fields keep the console defaults. */
@@ -447,6 +522,23 @@ export interface AccountUsage {
   limit: AccountUsageLimitState | null
   /** The account is auto-disabled by its usage limit. */
   limit_disabled: boolean
+}
+
+/** One row of GET /accounts/:id/rate-models (CONTRACTS §68.7); no model on the account's own row. */
+export interface AccountRateFigures {
+  model?: string
+  in_use: number
+  rpm: number
+  tpm: number
+  /** Throughput tokens today. */
+  tpd: number
+  sessions: number
+}
+
+/** GET /accounts/:id/rate-models: the account's figures, then each client model's, the busiest first. */
+export interface AccountRateModels {
+  total: AccountRateFigures
+  models: AccountRateFigures[]
 }
 
 /** GET /accounts/:id/usage: the details behind the usage cell. */
@@ -1316,6 +1408,18 @@ export interface PluginAccountAction {
   visibleFor?: 'editable' | 'all'
 }
 
+/** manifest ui.slots[] as GET /ui/plugins hands it down. */
+export interface UIPluginSlot {
+  slot: string
+  component: string
+  permission?: string
+  /** account.editor.section: the navigation entry. */
+  label?: LText
+  icon?: string
+  /** account.editor.section: only for these account types of the plugin (all when absent). */
+  accountTypes?: string[]
+}
+
 export interface UIPlugin {
   key: string
   version: string
@@ -1323,7 +1427,7 @@ export interface UIPlugin {
   asset_base: string
   menus: Array<{ id: string; section: string; label: LText; icon?: string; page: string; permission?: string; order?: number }>
   pages: Record<string, UIPluginPage>
-  slots: Array<{ slot: string; component: string; permission?: string }>
+  slots: UIPluginSlot[]
   account_actions?: PluginAccountAction[]
   native_entry: string
   trust: Trust

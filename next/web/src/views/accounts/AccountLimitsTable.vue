@@ -6,7 +6,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/api/types'
 import { formatCompact } from '@/utils/format'
-import { figureTone, limitRows, type LimitFigure } from './accountLimits'
+import { FIGURE_COLOR, figureTone, limitRows, type LimitFigure } from './accountLimits'
 
 const props = defineProps<{ account: Account }>()
 const { t } = useI18n()
@@ -22,10 +22,10 @@ const scopeLabel = (models: string[]) => (models.length > 2 ? `${models.slice(0,
       <thead class="text-fg-muted">
         <tr>
           <th class="pb-1 pr-3 text-left font-normal">{{ t('accounts.limitsUi.scope') }}</th>
-          <th class="pb-1 pr-3 text-right font-normal">{{ t('accounts.concurrency') }}</th>
-          <th class="pb-1 pr-3 text-right font-normal">RPM</th>
-          <th class="pb-1 pr-3 text-right font-normal">TPM</th>
-          <th class="pb-1 text-right font-normal">{{ t('accounts.limitsUi.sessions') }}</th>
+          <th class="pb-1 pr-3 text-right font-normal" :class="FIGURE_COLOR.concurrency.fg">{{ t('accounts.concurrency') }}</th>
+          <th class="pb-1 pr-3 text-right font-normal" :class="FIGURE_COLOR.rpm.fg">RPM</th>
+          <th class="pb-1 pr-3 text-right font-normal" :class="FIGURE_COLOR.tpm.fg">TPM</th>
+          <th class="pb-1 text-right font-normal" :class="FIGURE_COLOR.sessions.fg">{{ t('accounts.limitsUi.sessions') }}</th>
         </tr>
       </thead>
       <tbody>

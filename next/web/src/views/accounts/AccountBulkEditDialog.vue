@@ -5,6 +5,7 @@
 // PATCH /accounts/:id per account (the same checks, plugin hooks and audit as
 // a single edit), a few at a time; a stop keeps the rest unchanged. Failures
 // stay listed in the dialog; the saved rows are reported through `saved`.
+// A field some selected account's type fixes (common controls) is disabled.
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
@@ -14,9 +15,9 @@ import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import { useBulkRun, type BulkFailure } from '@/composables/useBulkRun'
 import { errorMessage } from '@/utils/errors'
-import { accountControl } from './accountTypeChoices'
+import { fixedCount } from './commonControls'
 import { todayQuery } from './accountUsage'
-import { buildBulkPatch, BULK_LIMITS, type BulkFields, type GroupMode } from './bulkEdit'
+import { buildBulkPatch, BULK_LIMITS, type BulkFields, type GroupMode, type NumberField } from './bulkEdit'
 
 const props = defineProps<{ open: boolean; accounts: Account[]; typeOf: (a: Account) => AccountType | undefined }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved', rows: Account[]): void }>()
@@ -25,6 +26,8 @@ const { t } = useI18n()
 const on = reactive({ priority: false, weight: false, max_concurrency: false, tpm_limit: false, rpm_limit: false, spm_limit: false, groups: false, proxy: false, auto_disable: false })
 const values = reactive<BulkFields>({ priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true })
 const failures = ref<BulkFailure<Account>[]>([])
+/** The fields that are common controls. */
+const FIXABLE = ['auto_disable', ...(Object.keys(BULK_LIMITS) as NumberField[])] as const
 const bulk = useBulkRun(4)
 
 watch(() => props.open, (open) => {
@@ -56,8 +59,9 @@ const invalid = computed(() => numberFields.value.filter((f) => {
 }).map((f) => f.key))
 const groupModes = computed(() => (['replace', 'add', 'remove'] as GroupMode[]).map((m) => ({ value: m, label: t(`accounts.bulk.groupMode.${m}`) })))
 const anyOn = computed(() => Object.values(on).some(Boolean))
-// auto_disable is skipped for account types that fix it.
-const autoDisableFixed = computed(() => props.accounts.filter((a) => !accountControl(props.typeOf(a), 'auto_disable').configurable).length)
+/** Selected accounts whose type fixes the field (common controls); such a field is not applied. */
+const fixed = computed(() => Object.fromEntries(FIXABLE.map((k) => [k, fixedCount(props.accounts, props.typeOf, k)])) as Record<(typeof FIXABLE)[number], number>)
+watch(fixed, (f) => (Object.keys(f) as Array<keyof typeof f>).forEach((k) => f[k] && (on[k] = false)), { immediate: true })
 
 async function apply() {
   if (!anyOn.value || invalid.value.length || bulk.running.value) return
@@ -65,7 +69,7 @@ async function apply() {
   const saved: Account[] = []
   let unchanged = 0
   const out = await bulk.run(props.accounts, async (a, signal) => {
-    const body = buildBulkPatch(a, values, { ...on, auto_disable: on.auto_disable && accountControl(props.typeOf(a), 'auto_disable').configurable })
+    const body = buildBulkPatch(a, values, on)
     if (!body) {
       unchanged++
       return
@@ -90,14 +94,15 @@ async function apply() {
       <SHint>{{ t('accounts.bulk.editInfo', { n: accounts.length }) }}</SHint>
       <fieldset class="grid gap-x-4 gap-y-3 sm:grid-cols-2" :disabled="bulk.running.value">
         <div v-for="f in numberFields" :key="f.key" class="space-y-1" :data-testid="`bulk-field-${f.key}`">
-          <SCheckbox v-model="on[f.key]" size="sm">{{ f.label }}</SCheckbox>
-          <SInput type="number" :model-value="values[f.key]" :min="BULK_LIMITS[f.key][0]" :max="BULK_LIMITS[f.key][1]" :aria-label="f.label" :class="on[f.key] ? '' : 'opacity-60'" :error="invalid.includes(f.key)" @update:model-value="set(f.key, $event as number | null, f.key)" />
-          <SHint size="xs">{{ f.hint }}</SHint>
+          <SCheckbox v-model="on[f.key]" size="sm" :disabled="!!fixed[f.key]">{{ f.label }}</SCheckbox>
+          <SInput type="number" :model-value="values[f.key]" :min="BULK_LIMITS[f.key][0]" :max="BULK_LIMITS[f.key][1]" :aria-label="f.label" :class="on[f.key] ? '' : 'opacity-60'" :error="invalid.includes(f.key)" :disabled="!!fixed[f.key]" @update:model-value="set(f.key, $event as number | null, f.key)" />
+          <SHint v-if="fixed[f.key]" size="xs" tone="warning">{{ t('accounts.bulk.controlFixed', { n: fixed[f.key] }) }}</SHint>
+          <SHint v-else size="xs">{{ f.hint }}</SHint>
         </div>
         <div class="space-y-1" data-testid="bulk-field-auto_disable">
-          <SCheckbox v-model="on.auto_disable" size="sm">{{ t('accounts.autoDisable') }}</SCheckbox>
-          <SSwitch :model-value="values.auto_disable" :label="values.auto_disable ? t('common.yes') : t('common.no')" @update:model-value="set('auto_disable', $event, 'auto_disable')" />
-          <SHint v-if="autoDisableFixed" size="xs" tone="warning">{{ t('accounts.bulk.autoDisableFixed', { n: autoDisableFixed }) }}</SHint>
+          <SCheckbox v-model="on.auto_disable" size="sm" :disabled="!!fixed.auto_disable">{{ t('accounts.autoDisable') }}</SCheckbox>
+          <SSwitch :model-value="values.auto_disable" :label="values.auto_disable ? t('common.yes') : t('common.no')" :disabled="!!fixed.auto_disable" @update:model-value="set('auto_disable', $event, 'auto_disable')" />
+          <SHint v-if="fixed.auto_disable" size="xs" tone="warning">{{ t('accounts.bulk.controlFixed', { n: fixed.auto_disable }) }}</SHint>
         </div>
         <div class="space-y-1 sm:col-span-2" data-testid="bulk-field-groups">
           <SCheckbox v-model="on.groups" size="sm">{{ t('accounts.groups') }}</SCheckbox>

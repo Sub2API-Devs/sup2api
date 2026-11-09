@@ -447,6 +447,53 @@ func TestSlotNames(t *testing.T) {
 	}
 }
 
+// account.editor.section (UI 3.7) carries a label, a known icon and
+// optional account type ids, and holds hostCompat to core 0.1.263; the other
+// slots take none of these fields.
+func TestEditorSectionSlot(t *testing.T) {
+	section := manifest.Slot{Slot: manifest.SlotAccountEditorSection, Component: "X", Label: manifest.LocalizedText{"en": "Extras"}, Icon: "refresh"}
+	m := uiNativeManifest("^3.7", ">=0.1.263 <0.2.0")
+	m.UI.Slots = []manifest.Slot{section}
+	if c := uiCodes(m); len(c) > 0 {
+		t.Fatalf("a valid editor section must be accepted: %v", c)
+	}
+	m.HostCompat = ">=0.1.262 <0.2.0"
+	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
+		t.Fatalf("an editor section needs core 0.1.263: %v", c)
+	}
+	m.HostUICompat = "^3.3"
+	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
+		t.Fatalf("an editor section needs core 0.1.263 whatever hostUICompat says: %v", c)
+	}
+	m = uiNativeManifest("^3.7", ">=0.1.263 <0.2.0")
+	m.UI.Slots = []manifest.Slot{{Slot: manifest.SlotAccountEditorSection, Component: "X", Icon: "no-such-icon", AccountTypes: []string{"apikey"}}}
+	c := uiCodes(m)
+	if c["ui.slots[0].label"] != "required" || c["ui.slots[0].icon"] != "unknown_icon" || c["ui.slots[0].accountTypes[0]"] != "invalid" {
+		t.Fatalf("editor section fields (apikey is not an account type of this plugin): %v", c)
+	}
+	// accountTypes name the plugin's own types, once each.
+	m = controlsManifest(nil)
+	m.HostUICompat = "^3.7"
+	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "ui.native"})
+	section.AccountTypes = []string{"apikey"}
+	m.UI = &manifest.UI{Native: &manifest.NativeUI{Entry: "ui/native/entry.js"}, Slots: []manifest.Slot{section}}
+	if c := controlCodes(m); len(c) > 0 {
+		t.Fatalf("a section for an own account type must be accepted: %v", c)
+	}
+	m.UI.Slots[0].AccountTypes = []string{"apikey", "apikey"}
+	if c := controlCodes(m); c["ui.slots[0].accountTypes[1]"] != "invalid" || len(c) != 1 {
+		t.Fatalf("a repeated account type must be refused: %v", c)
+	}
+	m.UI.Slots = []manifest.Slot{{Slot: "account.detail.tabs", Component: "X", Label: manifest.LocalizedText{"en": "Tab"}}}
+	if c := uiCodes(m); c["ui.slots[0]"] != "unsupported" {
+		t.Fatalf("label on another slot must be refused: %v", c)
+	}
+	m = uiNativeManifest("^3.7", ">=0.1.262 <0.2.0")
+	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
+		t.Fatalf("hostUICompat ^3.7 needs core 0.1.263: %v", c)
+	}
+}
+
 // withAccountAction adds a POST /assets/reset admin route (plus two
 // parameterized ones) and one account action over it to the ui fixture (no
 // ui.native: actions need none).

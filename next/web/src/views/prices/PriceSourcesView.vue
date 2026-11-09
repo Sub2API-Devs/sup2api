@@ -88,7 +88,7 @@ function viewPrices(s: PriceSource) {
   <div>
     <SPageHeader :title="t('prices.sources.title')" :description="t('prices.sources.description')">
       <template #before>
-        <SButton variant="ghost" size="sm" :title="t('prices.sources.back')" :aria-label="t('prices.sources.back')" icon-only icon="arrow-left" @click="router.push('/prices')" />
+        <SButton variant="ghost" size="sm" icon="arrow-left" :title="t('prices.sources.back')" @click="router.push('/prices')">{{ t('common.back') }}</SButton>
       </template>
       <template #actions>
         <SButton :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>

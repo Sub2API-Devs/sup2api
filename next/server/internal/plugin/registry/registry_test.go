@@ -653,3 +653,49 @@ func (stub) BuildRefreshRequest(context.Context, *pluginv1.BuildRefreshRequestRe
 func (stub) ParseRefreshResponse(context.Context, *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error) {
 	return nil, nil
 }
+
+// An account type declaring its upstream is served by the core: it needs
+// neither platform.adapter.v1 nor the accounts.credentials grant, unless it
+// extends (the plugin then amends each request and sees credentials). A
+// declaration that does not resolve drops the type.
+func TestDeclaredAccountTypes(t *testing.T) {
+	declared := func(key string) *manifest.Manifest {
+		m := registrytest.Manifest(key, "1.0.0")
+		m.Platforms = nil
+		m.AccountTypes = nil
+		for _, at := range []struct {
+			id string
+			up *manifest.Upstream
+		}{
+			{"plain", &manifest.Upstream{Preset: "openai"}},
+			{"extended", &manifest.Upstream{Preset: "openai", Extend: true}},
+			{"broken", &manifest.Upstream{Preset: "nope"}},
+		} {
+			m.AccountTypes = append(m.AccountTypes, manifest.AccountType{ID: at.id, Label: manifest.LocalizedText{"en": at.id},
+				Form: manifest.Form{Mode: "native", Component: "X"}, Upstream: at.up,
+				Platforms: []manifest.AccountPlatform{{Platform: manifest.PlatformOpenAI}}})
+		}
+		return m
+	}
+	creds := registry.Grants{"accounts.credentials": []byte(`{"types":"own"}`)}
+	g := registry.New().Publish([]registry.Extension{
+		ext{pkg: load(t, declared("bare")), noPlatform: true},
+		ext{pkg: load(t, declared("full")), grants: creds},
+	})
+	var keys []string
+	for _, b := range g.AccountTypes() {
+		keys = append(keys, b.Plugin.Key+"/"+b.Type.ID)
+		if _, ok := b.Client.(core.DeclaredUpstream); !ok {
+			t.Fatalf("%v: client %T is not the declarative client", b.Key(), b.Client)
+		}
+		if _, ok := b.Client.(core.ExecutePlugin); ok {
+			t.Fatalf("%v: the declarative client must not execute requests", b.Key())
+		}
+	}
+	if want := "bare/plain full/plain full/extended"; strings.Join(keys, " ") != want {
+		t.Fatalf("account types = %v, want %s", keys, want)
+	}
+	if b, ok := g.AccountType("full", "plain"); !ok || len(g.AccountTypesForPlatform(manifest.PlatformOpenAI)) != 3 || b.Client.(core.DeclaredUpstream).Upstream().Classify != "openai" {
+		t.Fatalf("full/plain = %+v %v", b, ok)
+	}
+}

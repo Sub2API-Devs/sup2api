@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -24,8 +25,9 @@ func setParamOverride(t *testing.T, e *env, id int64, raw string) {
 }
 
 // An account's request parameter override (CONTRACTS §84) rewrites the body
-// the plugin builds from and sets or removes headers over the plugin's and
-// the passthrough's; the account key stays the plugin's.
+// before the plugin builds and sets or removes headers over the
+// passthrough's; the plugin's own headers (here the anthropic-beta it
+// forwards) and the account key stay the plugin's (CONTRACTS §86.5).
 func TestAccountParamOverrideReachesUpstream(t *testing.T) {
 	const override = `{"metadata":{"src":"legacy"},"operations":[
 		{"mode":"set","path":"temperature","value":0.3},
@@ -55,7 +57,7 @@ func TestAccountParamOverrideReachesUpstream(t *testing.T) {
 		assert.Equal(t, "hello there!", up.Get("messages.0.content").String())
 		assert.Equal(t, "acc-1", got.header.Get("x-api-key"))
 		assert.Equal(t, "v1", got.header.Get("X-Custom"))
-		assert.Equal(t, "beta-b,beta-c", got.header.Get("Anthropic-Beta"))
+		assert.Equal(t, "beta-a,beta-b", got.header.Get("Anthropic-Beta"), "the plugin's header wins over the override")
 		assert.Empty(t, got.header.Get("X-Trace"), "the passthrough's header is removed")
 		assert.Equal(t, "gold", got.header.Get("X-Tier"))
 
@@ -94,16 +96,24 @@ func TestAccountParamOverrideStops(t *testing.T) {
 	}
 }
 
-// A plugin's Execute forwards through the core as well: the override's body
-// and headers reach upstream there too.
+// A plugin's Execute forwards through the core as well: there too the
+// plugin builds from the overridden body, with the override's model, and
+// its patches and headers come after the override.
 func TestAccountParamOverrideExecutePath(t *testing.T) {
 	db := testutil.DB(t)
 	bill := billing.New(db, nil, nil, nil, nil)
 	e, p := executeFixture(t, usage.New(db, bill, bill, nil, usage.Options{}))
-	setParamOverride(t, e, 1, `{"operations":[{"mode":"set","path":"temperature","value":0.3},{"mode":"set_header","path":"x-custom","value":"v1"}]}`)
+	e.plat.patches = []*pluginv1.BodyPatch{{Op: pluginv1.BodyPatch_OP_SET, Path: "temperature", ValueJson: "0.9"}}
+	setParamOverride(t, e, 1, `{"operations":[{"mode":"set","path":"temperature","value":0.3},{"mode":"set","path":"top_k","value":4},
+		{"mode":"set_header","path":"x-custom","value":"v1"},{"mode":"set","path":"model","value":"claude-override"}]}`)
 	require.Equal(t, 200, e.messages(body(testModel, false)).status)
 	require.Equal(t, int64(1), p.calls.Load())
 	got := e.up.last()
-	assert.Equal(t, 0.3, gjson.GetBytes(got.body, "temperature").Float())
+	assert.Equal(t, 0.9, gjson.GetBytes(got.body, "temperature").Float(), "the plugin's patch wins over the override")
+	assert.Equal(t, int64(4), gjson.GetBytes(got.body, "top_k").Int())
+	assert.Equal(t, "claude-override", gjson.GetBytes(got.body, "model").String())
 	assert.Equal(t, "v1", got.header.Get("X-Custom"))
+	b := e.plat.builds[0]
+	assert.Equal(t, "claude-override", b.GetMeta().GetModel())
+	assert.Equal(t, `"claude-override"`, b.GetFields()["model"])
 }

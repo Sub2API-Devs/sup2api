@@ -95,7 +95,7 @@ func TestUnpackLimits(t *testing.T) {
 }
 
 func opts() ValidateOptions {
-	return ValidateOptions{HostVersion: "0.1.0-dev", MaxMemoryMB: 1024}
+	return ValidateOptions{HostVersion: testHostVersion, MaxMemoryMB: 1024}
 }
 
 func fieldCodes(err error) map[string]string {
@@ -661,6 +661,25 @@ func TestBuiltinPlatformsValid(t *testing.T) {
 		for _, fe := range check.CheckPlatform(p) {
 			t.Errorf("%s: %s %s %s", p.ID, fe.Field, fe.Code, fe.Message)
 		}
+	}
+}
+
+// A runtime "none" package validates without runtimes or accounts.credentials;
+// carrying a binary, or a capability that needs a process, is rejected.
+func TestValidateRuntimeNone(t *testing.T) {
+	m := pkgtest.Declared("openai", "0.4.0", "sub2api")
+	files := pkgtest.Files(m)
+	if err := Validate(m, files, opts()); err != nil {
+		t.Fatalf("validate: %v %v", err, fieldCodes(err))
+	}
+	files["runtimes/linux-amd64/plugin"] = []byte("\x7fELF amd64")
+	if err := Validate(m, files, opts()); err == nil {
+		t.Fatal("runtime none with a binary validated")
+	}
+	hooked := pkgtest.Declared("openai", "0.4.0", "sub2api")
+	hooked.Capabilities = append(hooked.Capabilities, manifest.Capability{ID: manifest.CapGatewayHook})
+	if err := Validate(hooked, pkgtest.Files(hooked), opts()); err == nil {
+		t.Fatal("runtime none with gateway.hook validated")
 	}
 }
 

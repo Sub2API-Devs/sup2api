@@ -9,8 +9,7 @@
 //   md 32rem, lg 42rem, xl 56rem, 2xl 72rem or any CSS width; also the
 //   center dialog's width);
 // - sheet: a bottom sheet with a grab handle, swipe down closes it (unless
-//   persistent); `fill` gives it its full height (pickers whose list changes
-//   length);
+//   persistent);
 // - fullscreen: a full-screen dialog sliding up, with a ×;
 // - page: a full-screen page sliding in from the right, with a back arrow
 //   before the title.
@@ -19,7 +18,10 @@
 // share its width (two buttons side by side). `closeButton` false hides the
 // × / arrow (the layer still closes on the backdrop, Escape, Back or a
 // swipe); `closable` false hides it and implies persistent. `flush` drops
-// the body padding (full-width lists).
+// the body padding (full-width lists). `fill` keeps one size whatever the
+// content: a sheet or the center dialog takes its full height (pickers whose
+// list changes length, multi-step editors) and the body keeps its scrollbar
+// gutter, so neither the dialog nor the content width moves.
 import { computed, ref, useId } from 'vue'
 import { useUiT } from '../i18n'
 import SIcon from '../SIcon.vue'
@@ -101,12 +103,14 @@ const FORMS: Record<OverlayForm, { overlay: string; panel: string; sized: boolea
     sized: false
   }
 }
+// The height a `fill` panel takes: its form's maximum (the others are full height already).
+const FILL_HEIGHT: Partial<Record<OverlayForm, string>> = {
+  center: 'h-[95vh] sm:h-[90vh]',
+  sheet: 'h-[calc(var(--s-vvh,100dvh)*0.92)]'
+}
 const parts = computed(() => (props.form === 'center' ? CENTER : PANEL))
-const panelClass = computed(() => [
-  parts.value.panel,
-  FORMS[props.form].panel,
-  props.form === 'sheet' && props.fill ? 'h-[calc(var(--s-vvh,100dvh)*0.92)]' : ''
-])
+const panelClass = computed(() => [parts.value.panel, FORMS[props.form].panel, props.fill ? FILL_HEIGHT[props.form] : ''])
+const bodyClass = computed(() => [parts.value.body, props.flush ? '' : parts.value.pad, props.fill ? '[scrollbar-gutter:stable]' : ''])
 const panelStyle = computed(() => (FORMS[props.form].sized ? { maxWidth: WIDTHS[props.width] ?? props.width } : undefined))
 const showClose = computed(() => props.closable && props.closeButton)
 const closer = computed(() =>
@@ -150,7 +154,7 @@ const closer = computed(() =>
               <SIcon :name="closer.icon" class="h-5 w-5" />
             </button>
           </div>
-          <div ref="body" :class="[parts.body, flush ? '' : parts.pad]">
+          <div ref="body" :class="bodyClass">
             <slot />
           </div>
           <div v-if="$slots.footer" :class="parts.footer">

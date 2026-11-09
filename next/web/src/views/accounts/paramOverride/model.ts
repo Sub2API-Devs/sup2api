@@ -321,7 +321,8 @@ export interface Problem {
   detail?: string
 }
 
-const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+/** An HTTP field name (RFC 9110 token). */
+export const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 
 function regexError(pattern: string): string {
   try {

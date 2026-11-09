@@ -510,9 +510,6 @@ p.mod-text-danger {
   margin: 0;
   font-size: 0.75rem;
 }
-.mod-flip {
-  transform: scaleX(-1);
-}
 .mod-inline {
   display: inline-flex;
   align-items: center;

@@ -533,7 +533,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/users` | 分页 | `q`（邮箱或显示名 ILIKE）、`status`（`active`\|`disabled`）、`role`（角色 key） | `id` 升序 | `iam/users.go` |
 | GET `/groups` | 分页 | `q`（名称 ILIKE）、`status` | `id` 升序 | `group/group.go` |
 | GET `/me/groups` | 不分页 | 无（只返回 `active` 且对当前用户可用的分组；字段 `{id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms}`） | `id` 升序 | `group/group.go` |
-| GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `priority` 升序，再 `id` 升序 | `account/handlers.go` |
+| GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `created_at` 倒序，再 `id` 倒序（§18.3；与调度顺序无关） | `account/handlers.go` |
 | GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
 | GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model` 或 `note` ILIKE） | `model`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
 | GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`request_id`、`account_type`（精确匹配）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
@@ -736,7 +736,7 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `last_used_at`、`created_at`、`updated_at` | |
 
 创建与修改（每条路由也接受对应的 `account:own:*` key，只作用于 `created_by` = 调用者的账号，越权 404，§21）：
-- POST `/accounts`（`account:create` / `account:own:create`）：`{name, plugin_key, type, group_ids?, proxy_id?, proxy_url?, priority?, max_concurrency?, schedulable?, status?, credentials}`；默认 `priority=10`、`max_concurrency=10`、`schedulable=true`、`status=active`。`priority` 0–1000000；`max_concurrency` 0–100000；`proxy_id`、`group_ids` 必须存在（`details.fields[].code = "not_found"`；自己级下 `proxy_id` 还必须在调用者可见的代理范围内，§21.4）；`proxy_url` 见 §21.4；账号类型未注册返回 `field:"type", code:"unknown"`。凭证先按表单 Schema 校验，再调插件 `ValidateCredentials`（字段错误路径为 `credentials.<a>.<b>`），插件可规范化凭证，最后做受限设置校验（§21.3）。写审计 `account.create`。
+- POST `/accounts`（`account:create` / `account:own:create`）：`{name, plugin_key, type, group_ids?, proxy_id?, proxy_url?, priority?, max_concurrency?, schedulable?, status?, credentials}`；默认 `priority=10`、`max_concurrency=0`（不限；自己级调用者只能设 1–1000，默认 10；2026-11-09 起，此前一律 10。控制台新建表单同此默认）、`schedulable=true`、`status=active`。`priority` 0–1000000；`max_concurrency` 0–100000；`proxy_id`、`group_ids` 必须存在（`details.fields[].code = "not_found"`；自己级下 `proxy_id` 还必须在调用者可见的代理范围内，§21.4）；`proxy_url` 见 §21.4；账号类型未注册返回 `field:"type", code:"unknown"`。凭证先按表单 Schema 校验，再调插件 `ValidateCredentials`（字段错误路径为 `credentials.<a>.<b>`），插件可规范化凭证，最后做受限设置校验（§21.3）。写审计 `account.create`。
 - PATCH `/accounts/:id`（`account:update` / `account:own:update`）：同上字段均可选，`plugin_key`/`type` 不可修改（忽略）。`proxy_id: null` 改为直连；`proxy_url` 见 §21.4；`group_ids` 整体替换。`credentials` 给出时为**完整对象**（省略的键会被删除），敏感字段传 `"******"` 保留原值；插件未启用时修改凭证返回 503 `plugin_unavailable`；并发修改凭证返回 409。修改 `status` 会发 `account.status_changed` 事件。写审计 `account.update`。
 - DELETE `/accounts/:id`（`account:delete` / `account:own:delete`）：软删除，清除分组关系与冷却，204。写审计 `account.delete`。
 - POST `/accounts/:id/credentials/reveal`（`account:credential:view` / `account:own:credential:view`）：→ `{credentials:{...}}`（合并后的明文），写审计日志 `account.credentials.reveal`。
@@ -843,7 +843,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 |---|---|---|
 | `models` | `string[]`，每项是完整模型 ID（§16 规则，禁止通配符），去重，最多 500 项；默认 `[]` | 账号可服务的模型；**空表示所有模型**。调度时请求模型（映射前的客户端模型）不在列表里的账号不作为候选 |
 | `model_mapping` | `{from: to}`，键和值都是完整模型 ID，最多 500 项；默认 `{}` | 请求模型 → 上游模型。核心在调用插件 `BuildUpstreamRequest` **之前**改写请求（body 的 `request.modelPath`、路径参数 `request.modelParam`、`RequestMeta.model` 都换成映射后的模型），`usage_logs.upstream_model` 记录映射后的模型；计费、分组白名单、粘性会话、钩子都按映射前的客户端模型 |
-| `priority` | 0–1000000，默认 10 | 不变：**数值越小越先用**；只有更小优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级。插件可为单次请求临时改写（§24） |
+| `priority` | 0–1000000，默认 10 | **数值越大越先用**（2026-11-09 起，用户要求，与 new-api 一致；此前是越小越先用）；只有更大优先级的账号都不可用（无空闲并发、限流、冷却、失败切换）时才轮到下一级。插件可为单次请求临时改写（§24） |
 | `weight` | 1–1000，默认 1 | 同一优先级内按权重加权随机排序（不放回的加权抽样：权重 3 的账号被先选中的概率是权重 1 的三倍）。插件可为单次请求临时改写（§24） |
 | `rpm_limit` | 0–10000000，默认 0 | 每分钟请求数上限，0 = 不限。每次在该账号上准入一次尝试计 1 次（切换到别的账号时各账号各计各的）。在 `TryHit` 时计入，之后的本地失败（读账号、路由、协议转换）没有发到上游也不退（§78.1） |
 | `tpm_limit` | 0–10^12，默认 0 | 每分钟 token 数上限，0 = 不限 |
@@ -857,7 +857,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 ### 18.2 调度顺序（ARCHITECTURE 6.2 更新）
 
-候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/spm 上限（含模型列表，§68.2、§71.3）。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
+候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm/spm 上限（含模型列表，§68.2、§71.3）。粘性绑定的账号仍然优先；其余按 `priority` 降序（数值大的先用），同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
 
 排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：粘性绑定不服务的挑选（未命中，或绑定账号失败后的切换）会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
@@ -1179,7 +1179,7 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.5.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.7.0`，§87.3；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
 - 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 dynweight、growth、guard、moderation 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；`sdk/manifest`：声明了 `ui.native` 时必填）。
@@ -1259,8 +1259,8 @@ type ProxyResolver interface {
 | `STable<T>` | 表格 | `columns: TableColumn[]`、`rows: T[]`、`loading`、`rowKey`（`'id'`）、`expandable`、`fitExpandedToContainer`（展开内容限制在可见宽度内）、`emptyText`、`dense`、`selectable` + `selected: unknown[]`（`v-model:selected`，行 key 数组；表头全选/半选，只作用于当前 `rows`）、`rowSelectable(row) → boolean`（禁用个别行的勾选框）、`clickable`（行可聚焦、`cursor-pointer`，Enter/空格也发 `row-click`）、`rowClass(row, index)`、`rowAttrs(row, index) → Record`（如 `data-testid`）、`card`（表格放进卡片，去掉双边框） | emits `row-click(row)`（鼠标点击总会发）、`expand(row, open)`、`update:selected(keys)`；slots `cell-<key>`（`{row, value, index}`）、`head-<key>`（`{column}`，替代表头文字）、`expand`（`{row}`）、`empty`、`toolbar`（仅 `card`，表格上方工具条）、`footer`（仅 `card`，放分页）；`key` 支持 `a.b` 路径，空值显示 `—`；`key === 'actions'` 的列粘在右侧，有列被它遮住时才显示左侧分隔阴影 |
 | `SPagination` | 分页（`<nav>`，当前页 `aria-current="page"`） | `page`、`pageSize`、`total`（必填）、`pageSizes`（`[20,50,100]`）、`hideSizes`（不显示每页条数）、`size`（`sm`/`md`，sm） | emits `update:page`、`update:pageSize`（改每页数时 `page` 回 1） |
 | `STabs` | 标签和内容容器，统一同名标题去重、键盘切换与可访问面板关联；增强入口从核心 0.1.154 提供 | `tabs: TabItem[]`、`modelValue: string`、`showTabs`、`showSingle`、`idPrefix`、`size`、`ariaLabel` | emits `update:modelValue`；default slot `{active}`，必须将对应内容放入容器；底层标签栏不公开 |
-| `SButton` | 按钮；给 `to` 渲染 `RouterLink`、给 `href` 渲染 `<a>`（同样的 `.btn` 类），否则原生 `<button>` | `variant`（`primary`/`secondary`/`ghost`/`danger`/`success`/`warning`，secondary）、`size`（`xs`/`sm`/`md`/`lg`，md；xs 为表格内的紧凑按钮）、`loading`（spinner + 禁用 + `aria-busy`）、`disabled`、`type`（`button`/`submit`/`reset`，button）、`block`、`to`（`string \| RouteLocationRaw`）、`href`、`icon` / `iconRight`（SIcon 名）、`iconOnly`（只显示图标的方形按钮，**必须**配 `ariaLabel`）、`square`（方形）、`ariaLabel`、`tone`（`default`/`danger`：ghost/secondary 按钮的红色文字，用于删除） | 原生 `click`；slot 默认。`to`/`href` 形态 `disabled`/`loading` 时渲染无 `href` 的 `<a aria-disabled="true">` |
-| `SRowAction` | 表格行操作：图标在上、短文字在下，宽度固定（4.5rem），各行操作因此对齐 | `icon`、`label`（必填）、`tone`（`default`/`danger`）、`disabled`、`loading`（图标换成加载圈）、`title`（默认 `label`） | emits `click`（已 `stop`）；其余属性落到 `<button>`，可作 `SDropdown` 的 `#trigger` |
+| `SButton` | 按钮；给 `to` 渲染 `RouterLink`、给 `href` 渲染 `<a>`（同样的 `.btn` 类），否则原生 `<button>` | `variant`（`primary`/`secondary`/`ghost`/`danger`/`success`/`warning`，secondary）、`size`（`xs`/`sm`/`md`/`lg`，md；xs 为表格内的紧凑按钮）、`loading`（spinner + 禁用 + `aria-busy`）、`disabled`、`type`（`button`/`submit`/`reset`，button）、`block`、`to`（`string \| RouteLocationRaw`）、`href`、`icon` / `iconRight`（SIcon 名）、`iconOnly`（只显示图标的方形按钮，**必须**配 `ariaLabel`）、`square`（方形）、`ariaLabel`、`tone`（`default`/`danger`/`info`：ghost/secondary 按钮的红色 / 蓝色文字，用于删除、禁用 / 启用；`info` 2026-11-09 起） | 原生 `click`；slot 默认。`to`/`href` 形态 `disabled`/`loading` 时渲染无 `href` 的 `<a aria-disabled="true">` |
+| `SRowAction` | 表格行操作：纯文字小按钮（`secondary` + `xs`，参照 new-api 的「测试 / 禁用 / 编辑」），手机卡片里是 `ghost` + `sm`。2026-11-09 起不再画图标（`icon` 改为可选，仍接受、不显示，老插件不用改） | `label`（必填）、`icon`（可选，不显示）、`tone`（`default`/`danger`/`info`，与 `SButton` 相同：danger 文字红色、info 蓝色）、`disabled`、`loading`（文字前加载圈）、`title`（默认 `label`） | emits `click`（已 `stop`）；其余属性落到 `<button>`，可作 `SDropdown` 的 `#trigger` |
 | `SDropdown` | 操作菜单（Teleport 到 body，自动定位/翻转）。菜单项是 `<button role="menuitem">`：↑/↓/Home/End 移动，Enter/空格选择，Esc 关闭并把焦点还给触发按钮，Tab 关闭 | `actions: MenuAction[]`（必填）、`label`、`ariaLabel`（只有图标时默认 `ui.moreActions`）、`align`（`end`/`start`，end）、`width`（CSS 宽度，`'11rem'`）、`disabled` | emits `select(key)`、`open`、`close`；slot 默认为触发按钮内容（缺省显示 `label` 或 `more` 图标）；slot `trigger`（`{open, toggle, attrs}`：整个替换触发按钮，自己的按钮要 `v-bind="attrs"`（`aria-haspopup`/`aria-expanded`/`aria-controls`）并 `@click="toggle"`）；slot `header`（菜单顶部说明） |
 | `SBadge` | 徽标 | `tone: Tone`（gray；`purple` 与 `accent` 同色）、`dot`、`size`（`xs`/`sm`，sm） | slot 默认 |
 | `SChip` | 小标签 / 筛选芯片 | `tone: StatusTone`（neutral）、`icon`、`size`（`xs`/`sm`，sm）、`closable` + `closeLabel`（默认 `ui.remove`）、`pressed`（boolean：切换按钮，`aria-pressed`，`v-model:pressed`）、`clickable`（普通按钮）、`disabled` | emits `close`、`click`、`update:pressed`；slot 默认 |
@@ -1277,7 +1277,7 @@ type ProxyResolver interface {
 | `SCopyButton` | 复制按钮（`navigator.clipboard`，失败回退 `execCommand`；成功显示对勾 1.5 秒） | `text`（必填；空时禁用）、`label`（`ui.copy`）、`iconOnly`（label 变成 `aria-label`/`title`）、`size`（`sm`/`md`，sm）、`variant`（`ghost`/`secondary`，ghost）、`toast`（true：提示 `ui.copied`/`ui.copyFailed`）、`disabled` | emits `copied(text)`、`error` |
 | `STooltip` | 提示气泡（悬停 `delay` 后、键盘聚焦立即显示；Esc 隐藏；Teleport 到 body，`role="tooltip"`，显示时触发区 `aria-describedby` 指向它） | `content`、`placement`（`top`/`bottom`/`left`/`right`，top，放不下自动翻转）、`delay`（300）、`disabled`、`maxWidth`（`'20rem'`） | slot 默认为触发内容（包在 inline `<span>` 里）、`content` |
 | `SChoiceCards` | 大卡片单选/多选（账号类型、方案、模式） | `modelValue`（单选为值；`multiple` 时为数组）、`options: ChoiceOption[]`（`{value, label, description?, icon?, disabled?, tone?}`）、`cols`（1–4，2；手机一列）、`multiple`、`name`、`disabled`、`ariaLabel`、`error` | emits `update:modelValue`；slot `option-<value>`（`{option, checked}`）；单选 `role="radiogroup"`（方向键），多选 `role="group"` |
-| `SModal` | 弹窗（Teleport 到 body；层栈、焦点陷阱、锁滚动见上） | `open`（必填，`v-model:open`）、`title`（对话框的 `aria-labelledby`）、`width`（`sm`/`md`/`lg`/`xl`/`2xl`，md）、`closable`（true；false 时隐藏 × 且 Esc/遮罩不关）、`persistent`（true 时 Esc 和点遮罩不关闭，× 仍可关）、`top`（叠在其他弹窗之上；确认框用）、`describedby`（主体内描述元素的 id） | emits `update:open`、`close`；slots 默认、`header`、`footer` |
+| `SModal` | 弹窗（Teleport 到 body；层栈、焦点陷阱、锁滚动见上） | `open`（必填，`v-model:open`）、`title`（对话框的 `aria-labelledby`）、`width`（`sm`/`md`/`lg`/`xl`/`2xl`，md）、`closable`（true；false 时隐藏 × 且 Esc/遮罩不关）、`persistent`（true 时 Esc 和点遮罩不关闭，× 仍可关）、`top`（叠在其他弹窗之上；确认框用）、`describedby`（主体内描述元素的 id）、`fixed`（2026-11-09：尺寸不随内容变，宽屏取满宽度和最大高度、主体内滚动并保留滚动条位置，手机底部抽屉取满高度；多步编辑器用，如账号新建/编辑；只加属性，老核心忽略，不改 `hostUICompat`） | emits `update:open`、`close`；slots 默认、`header`、`footer` |
 | `SDrawer` | 侧滑面板（与 `SModal` 同一层栈） | `open`（必填，`v-model:open`）、`title`、`description`、`side`（`right`/`left`，right）、`width`（`sm` 24rem / `md` 32rem / `lg` 42rem / `xl` 56rem 或任意 CSS 宽度，md）、`closable`（true）、`persistent` | emits `update:open`、`close`；slots 默认、`header`、`footer` |
 | `SField` | 表单项外框：label / hint / error / 必填星号（关联规则见上） | `label`、`hint`、`error`（有则替代 hint）、`required`、`inline`（label 与控件同行）、`for`（显式指定控件 id）、`size`（`sm`：小号标签，内部控件默认 sm） | slot 默认放控件；slots `label`、`hint`、`error`（替代同名 prop，可放富内容）、`details`（长说明，收在「查看说明」后）；其他 attrs 落到根 `<div>` |
 | `SInput` | 输入框 | `modelValue: string \| number \| null`、`type`（`text`/`password`/`number`/`url`/`email`/`search`/`tel`/`datetime-local`/`date`/`time`/`file`/`color`，text）、`placeholder`、`disabled`、`readonly`、`size`（`sm`/`md`）、`mono`、`error`、`maxlength`、`min`/`max`/`step`、`inputmode`、`autocomplete`、`lazy`（true 时在 `change` 而非 `input` 时发出；`datetime-local`/`date`/`time` 默认 true）、`icon`（框内左侧 SIcon）、`suffix`（框内右侧单位文字，如 `ms`）、`clearable`（有值时显示清空按钮）、`revealable`（`type=password` 时显示/隐藏切换）、`ariaLabel` | emits `update:modelValue`（string；`type=number` 时为 number，空或非法为 null；`type=file` 时为 `FileList \| null`，只在 `change` 时发出）、`clear`；slots `prefix`、`suffix`（有任一修饰时渲染成 `.input.input-group` 外框，`class`/`style` 落到外框）；expose `focus()`、`el` |
@@ -1365,7 +1365,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 - 插件 CSS 里需要与控制台一致的颜色时，用控制台的 CSS 变量（RGB 三元组，亮/暗色自动切换），写成 `rgb(var(--name))` 或带透明度 `rgb(var(--name) / 0.5)`：`--bg`（页面底色）、`--surface`（卡片/输入框底色）、`--surface-2`（次级底色、表头）、`--line`（边框/分隔线）、`--line-strong`（悬停边框、复选框边）、`--fg`（正文）、`--fg-muted`（次要文字）、`--fg-subtle`（占位/图标）。只有这 8 个是契约；主色、状态色等没有 CSS 变量，需要时用组件的 `tone`。
 - 颜色语义：`SBadge` 的 `tone` 为 `Tone`（`purple` 与 `accent` 等价，新代码写 `accent`）；`SAlert` `SChip` `SStatusDot` `SProgress` `SChoiceCards` 为 `StatusTone`（`neutral` 代替 `gray`）。
 - 输入控件外面用 `SField`（或设置页用 `SSettingRow`）放 label / hint / error / 必填标记，控件不必写 `id`；服务端字段错误从 `ApiError.fields[field]` 取，塞给 `SField` 的 `error`（控件会自动 `aria-invalid` 并显示红框）。
-- 只有图标的按钮用 `SButton icon="…" icon-only aria-label="…"`；所有按钮默认 `type="button"`。
+- 操作按钮写文字（2026-11-09 定，参照 new-api）：表格行操作用 `SRowAction`，其余用带文字的 `SButton`（删除/移除类加 `tone="danger"`）。只有一眼就懂的图标才单独成按钮：关闭 ×、更多 ···、菜单、主题切换、紧挨值的复制、提示信息 ⓘ、芯片/缩略图上的移除 ×；这类用 `SButton icon="…" icon-only aria-label="…"`。所有按钮默认 `type="button"`。
 - 数字、金额、时间用 `host.i18n.formatNumber` / `formatMoney` / `formatDateTime` 或 `SDateTime`，不自己拼；多语言文本（`{en,zh}`）用 `host.i18n.text`；插件文案走 `host.addMessages` + `host.t`。
 - 提示和确认用 `host.toast` / `host.confirm`（或 `@sub2api/ui` 的同名函数），不自己弹。弹窗、侧滑面板用 `SModal` / `SDrawer`，不要自己写遮罩（否则 Esc、焦点和滚动锁不在同一层栈里）。
 - 需要感知暗色时读 `host.theme`（`Ref<'light'|'dark'>`），不要自己查 `document.documentElement.classList`；组件本身已自动适配。
@@ -1434,7 +1434,7 @@ message RankCandidate {
   string name            = 2;
   string account_type    = 3;
   string type_plugin_key = 4;           // 声明该账号类型的插件 key
-  int32  priority        = 5;           // 账号当前的 priority（0–1000000，越小越先用）
+  int32  priority        = 5;           // 账号当前的 priority（0–1000000，越大越先用）
   int32  weight          = 6;           // 账号当前的 weight，宿主保证已归一化到 1–1000
 }
 
@@ -2039,10 +2039,10 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 
 | 列表 | 默认值 | 含义 |
 |---|---|---|
-| `BUILTIN_PLUGINS` | `anthropic openai gemini moderation codex` | 安装，首次安装即启用 |
+| `BUILTIN_PLUGINS` | `anthropic openai gemini moderation codex custom` | 安装，首次安装即启用 |
 | `BUILTIN_PLUGINS_INSTALL_ONLY` | `volcengine ccgateway mailer dynweight` | 安装，**保持未启用**，由管理员在配置好之后手动启用 |
 
-（默认值为 `build-go.sh` 的现值：本节写成时两份列表分别是 `anthropic openai gemini moderation` 与 `volcengine`，`codex` 见 §83，其余只安装插件见各自章节。）
+（默认值为 `build-go.sh` 的现值：本节写成时两份列表分别是 `anthropic openai gemini moderation` 与 `volcengine`，`codex` 见 §83，`custom`（自定义上游，runtime none）见 docs/UPSTREAM-DECLARATIVE.md §5，其余只安装插件见各自章节。）
 
 同一个插件同时出现在两份列表里时构建失败。第二份列表写进内建目录的 **`install-only.txt`**（每行一个 key，`#` 注释、空行、CRLF 都容忍），核心的 `EnsureBuiltin`（`server/internal/plugin/install/builtin.go`）读它。
 
@@ -4697,6 +4697,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 统计查询（summary、overview）在只读事务里执行，`SET LOCAL statement_timeout = '5s'`。超时回 503 `unavailable`（「statistics query timed out; narrow the time range or filters」），界面显示错误与重试，不显示成 0。
 
+**管理员缓存加载放宽（2026-11-09，线上仪表盘超时）**：管理员的 overview、summary（走下文缓存的那条路）改为 `statement_timeout = '25s'`（小于缓存单次加载的 30 秒），并 `SET LOCAL work_mem = '128MB'`；自己的 `/me/usage/*` 和 `/usage/realtime` 仍是 5 秒、默认 work_mem。实现：`usage/stats.go` 的 `statsLimits`。
+- 原因：11-07 起 usage_logs 每天 4–6 万行，近 30 天约 20 万行（每行约 2KB）。sup2api 库在共享的 Supabase 实例上，页常被挤出缓存：热缓存时 overview 2.2s、7 天按天 summary 2.6s，冷缓存时只扫一遍 30 天就要 10s；仪表盘打开时同时发 5 条统计，一起超过 5 秒。
+- work_mem：规划器把 `to_char(created_at AT TIME ZONE …)` 的分组数估成和行数一样多（约 17 万，实际 7 个），work_mem 小时就把宽行排序写进约 160MB 临时文件；128MB（`hash_mem_multiplier` 2）时改走 HashAggregate，实际只用约 3MB，耗时少约 40%。64MB 不够。
+- 这只是止血：明细仍是实时扫描，行数再涨几倍还会超时。根治方案是小时汇总表，见 §66.8。
+
 **缓存（2026-11-05，用户要求，参考旧版 sub2api 的仪表盘）**：管理员接口扫描全部用户的行，所以在进程内缓存，响应头 `X-Snapshot-Cache: hit|miss`。实现：`usage/snapshot_cache.go`。
 
 - `GET /usage/overview`：按「时区 + 两个权限」缓存。15 秒内直接返回；15 到 30 秒返回旧值并在后台刷新；超过 30 秒等待重新查询。
@@ -4759,6 +4764,39 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 错误请求就是列表加 `success=false`，所以合计和导出也只算失败的请求，这时不显示状态筛选。RPM、TPM、成功率不传状态，不受影响。
 - 调用 IP、用户排行沿用同一组筛选，不显示导出，因为导出的是请求列表。
 - 余额变动不走用量筛选：时间范围和流水类型放在筛选栏里，默认本月，可选全部时间，切换日志类型时保留；不显示六项统计、更多筛选、重置、搜索和导出。
+
+### 66.8 小时汇总表（2026-11-09，用户要求根治仪表盘超时；迁移 0092，不能滚动更新）
+
+统计原来每次都实时扫 `usage_logs`（§66.3）。现在新增汇总表 `usage_hourly`，按 UTC 小时 × `user_id, api_key_id, group_id, account_id, model, upstream_model, protocol, platform` 汇总。汇总的值是可以直接相加的量：请求数、成功数、四类 token、`total_cost`、`standard_cost`、`prompt_rows/prompt_tokens`（能算出 prompt 的行数和它们的和）、`anomalous_rows`、`estimated_rows/estimated_cost`、`latency_sum/latency_rows`、`first_token_sum/first_token_rows`。每个量对一行明细怎么算，只写在 `usage/rollup.go` 的 `statMeasures` 里，汇总和实时扫描都用这一份。
+
+**读取**：summary 和 overview 的 FROM 是四段 UNION ALL：
+- 汇总表覆盖范围内的整小时读 `usage_hourly`，但跳过还在 `usage_hourly_dirty` 里、没重算的小时；
+- 这些被标记的小时改读 `usage_logs`；
+- 覆盖范围之前和之后的部分读 `usage_logs`，各是一段 `created_at` 区间。
+
+外层再把各个量相加，算出合计和平均值。标记和明细的改动在同一个事务里提交，又在同一条语句里读，所以不管刷新有没有跟上，结果都和实时扫描逐项相同。测试 `TestRollupMatchesLive` 会逐个接口比对。
+
+- 能用汇总表的：分组是 day、hour、none、model、upstream_model、user、api_key、group、protocol、platform；筛选只用了 from、to、tz、order、limit、user_id、api_key_id、group_id、account_id、model、upstream_model、protocol、platform。day、hour 分组和 overview 还要求时区在整个范围内都和 UTC 相差整小时（按 `ZoneBounds` 逐段检查）。Asia/Kolkata 就不行；Australia/Lord_Howe 跨越 +10:30 的那段时间也不行。
+- 其他情况（ip、endpoint 分组，按状态、IP、模糊名称等筛选）照旧只扫 `usage_logs`。
+- `/usage/realtime` 不变，只看最近一小时，始终实时。
+
+**刷新**：集群任务 `core.usage.rollup`，每分钟一次，每条语句最长 60 秒，每个事务都持有 advisory 锁 `usage_hourly`。`usage_hourly_state` 记录已汇总的小时范围 [low, high)。每次运行做下面三件事，三步互相独立，一步出错不影响另外两步：
+
+1. 往前补，每个事务最多 6 小时。可汇总的边界按数据库时钟算（`sealedSQL`），取两者中更早的那个：
+   - 小时结束满 30 分钟；
+   - 本角色在本库里还没结束的写事务中，最早的开始时间往前推 15 分钟。
+
+   这样，一个还没提交、又没被触发器标记的写入，它所在的小时不会被提前汇总。
+2. 重算被标记的小时。`usage_logs` 上的触发器 `usage_hourly_mark_*` 只对所属小时已结束 15 分钟以上的行生效：这样的行被插入、删除，或者修改了统计用到的列（`UPDATE OF` 列出了汇总键和各个量读到的列；改 `created_at` 时，新旧两个小时都标记），就往 `usage_hourly_dirty` 记一条。刷新任务每个事务重算最多 24 个小时，再按 id 删掉这次读到的标记。最近的行（结算热路径）不会触发。
+3. 往回补历史，每次运行只补一块（24 小时），一直补到最早一行明细所在的小时，免得集中冷读挤占共享库的缓存。
+
+同一小时总是先删后插，在一个事务里重算，所以重复运行没有影响。汇总表的范围只会变大不会缩小。读取时先读一次范围，再算 UNION 的边界，所以中途有刷新提交也不会重复计算或漏算。
+
+**上线**：迁移只建表和触发器，触发器用 `CREATE OR REPLACE TRIGGER`，不需要 ACCESS EXCLUSIVE 锁。迁移不回填数据；第一次运行就从最近往回补，线上数据从 9 月 25 日开始，每分钟补一天，大约 45 分钟补完。补完之前，没覆盖到的部分仍然实时扫，结果一样，只是慢一些。回滚到没有这部分代码的版本时，表和触发器会留下来，触发器仍会往 `usage_hourly_dirty` 写少量标记（只有迟到的写入才会），这不影响任何功能，以后可以删掉。
+
+**线上数据量**（2026-11-09 只读统计）：近 30 天有 202,026 行明细，按小时和 8 个键去重后是 4,895 组，压缩比约 41:1。汇总表每行约 200 字节，明细每行约 2KB。
+
+**本地实测**（25 万行明细，每行约 2KB）：overview 从 780ms 降到 83ms，7 天按天趋势从 162ms 降到 23ms，按模型和用户的排行从约 180ms 降到 60–70ms。
 
 ## §67 账号负载信号（2026-10-29）
 
@@ -4848,6 +4886,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 账号列表：
   - 优先级、权重分成两列，有编辑权限时显示为输入框，在表格里直接修改：回车或移出输入框时保存（`PATCH /accounts/:id` 只带这一个字段），Esc 恢复，超出范围不提交。
   - "并发 / RPM / TPM"合成一列，三个数字依次排列。设了上限的显示 `已用/上限`，并按占用比例着色（80% 起警告，到达上限为红色）；没设上限的只显示用量，不再显示 `∞`。数字都是账号总量。
+  - 2026-11-09 起（用户要求参照 new-api）：四个数字（并发 / RPM / TPM / 会话）各用一种颜色（紫 / 玫红 / 蓝 / 绿，`accountLimits.ts` `FIGURE_COLOR`，悬停明细的列标题同色），到 80% 起文字和填充改为警告色、到上限为红色并加描边。行操作改为文字按钮"测试 / 禁用（红）或启用（蓝）/ 编辑 / ···"，启用开关从状态列移到这里。
   - 账号有模型列表时，后面标出"N 组模型"。悬停或键盘聚焦这一列，会弹出明细卡片，列出"全部模型"和每个列表的并发 / RPM / TPM。
 - 账号详情：用同一张明细表。
 - 编辑表单"调度与限流"一节：
@@ -4856,6 +4895,13 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 同一模型出现在两个列表里时，不允许保存。
   - 新建账号时，按账号类型的 `default_limits` 预填。
 - 批量编辑里 RPM 排到 TPM 前面。
+
+### 68.7 按模型明细（2026-11-09，用户要求参照 new-api 渠道 RPM / TPM / TPD / SPM 悬浮明细）
+
+- **计数**（全部在 Redis）：请求的客户端模型（`model` 非空）除了计入账号和所在模型列表，还单独计一组不设上限的计数：近 60 秒窗口 sub `md:<model>`（RPM / TPM / 会话，和账号同一次 admit 脚本写入，结算时随 hold 一起换成实际 token），并发槽位 kind `account-md:<model>`（`core.ModelSlots`，limit 0，只计数不拒绝），以及当天 token：结算时把与 TPM 同口径的 token 加到哈希 `rl:account:<id>:tpd:<UTC 整点 unix 秒>`（field = 模型，TTL 26 小时，`AccountLimiter.CountModelTokens`）。不设上限，所以永远不会因为按模型计数而拒绝请求；代价是每次尝试多一次槽位登记、结算多一次 HINCRBY。`model` 为空的请求（任务、下载、资源回源）只计账号。
+- **接口**：`GET /accounts/:id/rate-models?tz=`（`account:read` / `account:own:read`）返回 `{total, models: [{model, in_use, rpm, tpm, tpd, sessions}]}`，不查数据库。`total` 是账号自身的计数，`total.tpd` 是所有模型当天 token 之和。模型名单取当天 0 点和 1 小时前两者中较早的整点之后各小时哈希里出现过的模型（1 小时前的用来覆盖跨午夜的长请求，只计名不计 TPD），按 TPD 取前 100 个；结果按并发、RPM、TPM、TPD 倒序。`tpd` 按 `tz` 的当天 0 点所在整点起累计：整点时区准确，半点时区多算 0 点前不到一小时。按模型的会话和并发相加不一定等于账号的（一个会话可以用多个模型）。Redis 读失败返回 503；没有 Redis 时全为 0。
+- **控制台**：账号列表"并发 / RPM / TPM / 会话"列的悬浮卡片先显示按模型明细（全部模型 + 各模型的并发 / RPM / TPM / TPD / 会话），卡片打开期间每 2 秒刷新一次（上一次返回后再发下一次），关闭即停；账号设了上限或有模型列表时，下面再显示原来的限额表（§68.6）。
+- 0.1.260 的 TPD 曾查 usage_logs；0.1.261 改为上面的 Redis 小时哈希，升级当天的 TPD 从升级时刻起算。
 
 ## 69. 故障策略下仍执行插件的临时自动禁用（2026-10-30，用户要求）
 
@@ -6624,15 +6670,15 @@ node 任务（可工作节点各跑，`RequireWork`）：
   - `prune_objects`、`sync_fields` 和未知模式报 `unsupported`（暂不支持）。
 - **条件**：`full`（null 只等于 null，布尔按布尔比较，其余类型不同是运行失败）、`prefix`、`suffix`、`contains`（按字符串）、`gt`、`gte`、`lt`、`lte`（两边都须是数字，否则运行失败）；`invert` 取反；路径取不到时结果就是 `pass_missing_key`（不取反）。条件路径先在请求体里找，找不到再到上下文对象里找。
 - **上下文键**：`model`、`upstream_model`（账号模型映射后的上游模型）、`original_model`（客户端模型）、`request_path`、`request_headers.<小写头名>`（客户端请求头，多个值用 `, ` 连接；禁止列表里的头不出现）、`header_override.<头名>`（前面的头操作已设置的值）、`retry_index`、`is_retry`、`retry.index`、`retry.is_retry`、`user_id`、`group`（分组名）、`account_id`、`stream`（含 streamOnly 强制的流式）。构造在 `core.ParamOverrideContext`，网关和预览共用。
-- **生效位置**：`gateway/dispatch.go` `(*call).attempt`，每次尝试执行一次，在模型映射、`mapReferencedModels`、`mapResourceReferences`、`forceStreamPath` 之后，取 `requestFields` 和 `BuildUpstreamRequest` 之前，所以代理路径和 `platform.execute.v1` 路径都拿到覆盖后的请求体，插件看到的就是发往上游的。`forwardBuilt` 在插件 patch 之后仍重新强制 stream。
-- **请求头优先级**（`forwardBuilt`，含插件经核心转发的执行请求）：插件的头 → 账号透传（§81）和粘性规则透传 → **参数覆盖的设置和删除**（设置覆盖前面的值，删除去掉前面的头）→ 核心的资源头、额度头（仍然最后设置、最优先）。头名须是合法字段名；落在 §81 禁止列表（`core.HeaderPassthroughBlocked`）里的头，不论作为目标还是 copy/move/pass 的源，都报 `blocked`。
+- **生效位置**（§86.5）：每次尝试执行一次，在模型映射、`mapReferencedModels`、`mapResourceReferences`、`forceStreamPath`、声明式上游的过滤字段与清单 paramOverride **之后**，取 `requestFields` 和 BuildUpstreamRequest / `platform.execute.v1` 的 Execute **之前**（`gateway/param_override.go` `rewriteBody`）。插件看到的就是覆盖后的请求体，`meta.model` 是覆盖后的模型，插件的 patch 还可以再改覆盖的结果：插件改写是插件自己的内部特殊逻辑，插件知道前面已经执行过账号参数覆盖，所以排在覆盖之后，看到覆盖结果再改（用户 2026-11-09 定）。WebSocket 每轮 `response.create` 同样在插件 patch 之前执行请求体部分。`forwardBuilt` 在插件 patch 之后仍重新强制 stream。
+- **请求头优先级**（`forwardBuilt`，含插件经核心转发的执行请求，后面的盖前面的）：声明构造的头（inbound、预设、清单、路由）和声明的 paramOverride 头 → 账号透传（§81）和粘性规则透传（只补没有的）→ **参数覆盖的设置和删除** → 插件的头（老插件构造的头、extend 追加的头；理由同请求体）→ 声明式类型的鉴权头重写（§86.5）→ 核心的资源头、额度头（仍然最后设置、最优先）。WebSocket 握手同样分层（没有透传）。头名须是合法字段名；落在 §81 禁止列表（`core.HeaderPassthroughBlocked`）里的头，不论作为目标还是 copy/move/pass 的源，都报 `blocked`。
 - **模型**：覆盖改了请求体的模型字段（平台的 `modelPath`）时，上游模型以覆盖结果为准：`meta.model`、使用记录的 `upstream_model`、上游用量的主模型身份都用它，`forwardBuilt` 的模型可用性一致性检查也以它为期望值，不会因此报 `upstream_model_mismatch`。计费仍按客户端模型；可用性预检仍按映射后的模型。
 - **return_error**：`value` 为消息字符串，或 `{message|msg, status_code|status, code, type, skip_retry}`；默认 400、`invalid_request`、`invalid_request_error`、`skip_retry: true`，状态码须在 100–599。`skip_retry: true` 直接回给客户端（记录类型 `invalid_request`），false 换下一个账号（所有账号都这样时把最后一个错误回给客户端）。不冷却、不惩罚账号；有失败策略时也不跑账号规则（与可用性拒绝相同）。
 - **运行失败**（类型不符、源路径不存在、条件比较的类型不符等）：WARN 日志带账号 ID，本次尝试换账号（`param_override_failed`，记录类型 `internal`，全都失败时客户端看到“无可用账号”），同样不惩罚账号。
 - **预览**：`POST /accounts/param-override/preview`（权限同建 / 改账号：`account:create`、`account:own:create`、`account:update`、`account:own:update` 任一），请求 `{"param_override": {...}, "body": {...}, "model": "...", "headers": {"名称": "值"}}`。`body` 缺省为 `{}`、须是对象；`model` 缺省取 body 的 `model`，同时作为上下文的 `model`、`upstream_model`、`original_model`；`user_id` 为调用者，`stream` 取 body 的。校验不过照常回 400 字段错误（`param_override`、`body`）；否则 200 `{"body": 结果对象, "set_headers": {...}, "delete_headers": [...], "return_error": null | {"status", "code", "type", "message", "skip_retry"}, "error": null | "运行失败原因"}`，有 `return_error` 或 `error` 时 `body` 为 null。与网关用同一个引擎和上下文构造，不保存任何东西。
 - **控制台**：账号编辑页“高级 › 请求转发”组，请求头透传之后一行“请求参数覆盖”：摘要（“N 条操作 · 含 M 条请求头操作”和前 3 条的说明）、“编辑”和“清空”；导航摘要加“覆盖 N 条”。编辑弹窗（`web/src/views/accounts/paramOverride/`）沿用 new-api 与动态权重调整项编辑器的布局：左侧操作列表（圆点区分请求体 / 请求头 / 返回错误，带条件的有漏斗、有错的红点，可搜索、上下移、复制、删除，6 个模板），右侧“就”（操作、路径或 from/to、值、keep_origin）与“当”（条件、满足任一 / 全部、取反、缺失视为满足）；“JSON”视图编辑整个覆盖（new-api 旧格式的顶层键读成字面路径的 `set` 操作，写回时统一成 `operations`）；“试运行”视图调用预览接口。“应用”只改账号表单，保存账号才生效。
-- **未覆盖**：账号测试请求（`BuildTestRequest`）、WebSocket 端点、分组 / 全局层的覆盖、批量编辑。
-- 代码：`core/param_override.go`（校验、编译）、`core/param_override_apply.go`（执行、上下文）、`gateway/param_override.go`（挂接点）、`account/param_override_preview.go`。测试：`core/param_override_test.go`、`account/account_test.go`（`TestAccountParamOverride*`）、`gateway/param_override_test.go`（请求体和头到达上游、改模型不触发可用性不一致、return_error、运行失败换账号、执行路径）。
+- **未覆盖**：账号测试请求（`BuildTestRequest`）、WebSocket 端点的请求头、分组 / 全局层的覆盖、批量编辑。
+- 代码：`sdk/paramoverride`（校验、编译、执行，2026-11-09 从 core 迁出，供清单校验共用；`core/param_override.go` 保留别名）、`gateway/param_override.go`（挂接点）、`account/param_override_preview.go`。测试：`core/param_override_test.go`、`account/account_test.go`（`TestAccountParamOverride*`）、`gateway/param_override_test.go`（请求体和头到达上游、改模型不触发可用性不一致、return_error、运行失败换账号、执行路径）。
 
 ## 85. 钩子点 `gateway.attempt`：选定账号后、发往账号前（2026-11-08，moderation 0.7.0 需要，72.17；核心 0.1.258）
 
@@ -6653,3 +6699,93 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **其他调用里的 `meta.account_id`**：同一次尝试里核心给插件的其他调用（build、execute、classify、用量提取，`metaFor`）也带上账号 ID。选定账号之前的调用为 0。
 - **代价**：没有插件声明这个点时没有任何开销。声明了的插件每次尝试多一次 RPC，在钩子内同步执行期间占着账号的并发名额，所以插件应该尽量用 `skip_attempt_hooks` 在请求钩子里结束。
 - 测试：`gateway/attempt_hook_test.go`（每次尝试都调用并带账号、拒绝不换账号、`skip_attempt_hooks` 只跳过本插件、补丁被拒、WebSocket 每条消息）、`sdk/manifest/check/attempt_hook_test.go`。
+
+## 86. 声明式上游、只有清单的插件与自定义上游（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”第 1 期，规格见 [UPSTREAM-DECLARATIVE.md](UPSTREAM-DECLARATIVE.md)）
+
+起因：三个 API Key 插件和 relay 的代码几乎是同一套模板（上游路径、鉴权头、固定头、base_url 规范化、错误归类各写一遍）；接一个兼容站点也得写插件。改为核心按清单声明构造上游请求，并新增不用写插件的“自定义上游”账号类型。
+
+### 86.1 上游声明
+
+- manifest `accountTypes[].upstream`（`sdk/manifest/upstream.go`）：`preset`（`openai`/`anthropic`/`gemini`，预设在 `sdk/platforms/upstream/*.json`）、`extend`、`accountConfig`、`baseURL{default,required,stripSuffixes}`、`credentials{keyValidator,texts,fields}`、`auth{type: header|query|none, name, value}`、`headers`（头名 → `{set|default|append: 模板}`）、`routes`（上游协议 → `{method, path, transport, headers, patches, model}`）、`defaultProtocol`、`filterFields`、`paramOverride`（§84 格式）、`classify`、`test`、`models{path, idPath, stripPrefix}`。
+- 合并：预设 → 清单 → 账号层（只有 `accountConfig` 类型），按 JSON merge patch，`headers` 按头名、`routes` 按协议合并，`null` 删除；未知字段拒绝。
+- 模板变量：`{api_key}`（只能在 auth 值和路径查询串）、`{base_url}`（auth 和请求头）、`{model}`（映射和账号参数覆盖之后的上游模型；插件 patch 改了模型时只重算 URL，请求头和查询值不变）、`{credentials.<k>}`（k 须在 `credentials.fields`，不能是 api_key/base_url）、`{client_header.<名>}`（须在该类型的 passHeaders 里、不在 §81 禁止列表，只能用在普通请求头）。
+- `auth.name` 只能是凭证头（authorization、x-api-key、x-goog-api-key、api-key、cookie）或普通头名，不能是逐跳、分帧、客户端地址或网关控制头。
+- passHeaders：账号类型 `platforms[]` 的列表为空（缺省或空数组）时用平台的（`manifest.AccountType.PassHeaders`，核心、校验、网关共用）。
+- 可服务的端点 = routes 列出的协议（须与 `platforms[].endpoints` 一致）加核心能转换到它们的协议；调度不变。
+- 校验：`sdk/manifest/check/upstream.go`（打包、安装、核心加载共用）；引擎 `sdk/upstream`（`Resolve` → `Profile.Validate/Build/URL/Test/Models/Classify/AuthHeader/PrepareBody/ForAccount`）。
+
+### 86.2 核心
+
+- `server/internal/plugin/declarative`：声明了 upstream 的账号类型由核心本地实现校验凭证、构造请求、错误归类、测试请求、模型列表，不走 gRPC；按账号缓存 Profile（设置和凭证的 sha256，上限 1024，随注册代际重建）。不实现 `core.ExecutePlugin`，走 BuildUpstreamRequest + `forwardBuilt`。账号生命周期、模型可用性等可选接口在插件实现时转给插件，否则 Unimplemented。
+- 网关只通过可选接口 `core.DeclaredUpstream`（`Upstream`、`PrepareBody`、`UpstreamURL`、`AuthHeader`）感知声明式类型。
+- `registry.addAccountTypes`：声明了 upstream 的类型绑定声明式客户端，不再要求插件实现 platform adapter，也不要求 `accounts.credentials` 授权（凭证只在核心内使用）；`extend` 仍要求两者。声明解析失败的类型丢弃并记 ERROR。
+- `extend: true`：核心先按声明构造，再调插件 BuildUpstreamRequest，请求带 `base`（`BuildUpstreamRequestRequest` 字段 6）；插件的头覆盖声明的头（鉴权头除外），patches 接在声明的之后，url、upstream_model 非空时替换。
+- 接口：`GET /account-types` 对声明式类型返回 `upstream`（解析到清单层的声明，形状同 manifest）；所有类型返回 `pass_headers`。账号层 `settings.upstream` 经 ValidateCredentials 校验，字段错误为 `credentials.upstream.<路径>`。
+
+### 86.3 只有清单的插件（`runtime: "none"`）
+
+- 包里没有 runtimes、没有 entry；能力只允许 `platform.adapter.v1`、`platform.websocket.v1`，其余（钩子、路由、任务、调度、观测、通知、数据库、生命周期、额度、余额、刷新、没有 upstream 的账号类型、extend 等）报 `needs_runtime`。
+- 核心加载为常驻 ready 的静态实例（`grpcruntime/static.go`），读授权方式与 gRPC 实例相同，迁移、drain、stop 为空操作；`PUT /plugins/:key/resources` 对它返回 400（字段 `runtime`、`unsupported`）。
+- grpc 插件的账号类型全部声明 upstream 且不 extend、自己也不声明平台时，进程不需要报告 `platform.adapter.v1`（anthropic 0.3.0）。
+
+### 86.4 插件
+
+| 插件 | 版本 | 变化 |
+|---|---|---|
+| openai | 0.4.0 | runtime none，`{"preset":"openai","filterFields":[]}` |
+| gemini | 0.3.0 | runtime none，`{"preset":"gemini","filterFields":[]}` |
+| relay | 0.3.0 | runtime none，preset anthropic、base_url 必填、不设默认协议 |
+| anthropic | 0.3.0 | 账号类型声明 preset anthropic；只保留模型目录（/models 路由、插件库） |
+| custom（新） | 0.1.0 | runtime none，内置启用；`custom_openai`、`custom_anthropic`、`custom_gemini`，`creationGroup: "custom"` |
+
+- 四个老插件的行为由黄金样例保证（`sdk/upstream/testdata/golden`，旧插件代码对约 1500 个输入采集，新引擎逐项回放一致）。样例已冻结，旧代码和采集器已删除，不再重新生成。唯一差异：relay 的测试请求现在带 `model` 和 `usage_protocol`。
+- 自定义上游：base_url 必填、Key 任意 8–512 个可见字符、`accountConfig: true`、默认过滤 `filterFields`（预设的 service_tier、safety_identifier、inference_geo、speed 中该协议适用的）；表单字段 `api_key`、`base_url`、`upstream`（`ui:widget: upstream-editor`）。账号层只能改 auth、headers、已声明协议的 path 和 `allowFields`（放开默认过滤字段）。暂不能按账号关掉单个协议。
+- `custom` 加入保留的官方插件名。
+
+### 86.5 请求构造顺序
+
+原则：账号参数覆盖（§84）先执行，插件在它之后。插件改写是插件自己的内部特殊逻辑，插件知道前面已经执行过账号参数覆盖，所以排在覆盖之后，看到覆盖结果再改；请求体和请求头一致，鉴权头除外（用户 2026-11-09 定）。
+
+- 请求体：模型映射、引用与资源映射、强制流式 → 协议转换 → 过滤字段（账号没放开的）→ 预设和清单的 paramOverride → **账号参数覆盖（§84）** → BuildUpstreamRequest（`meta.model` 为覆盖后的模型）：路由 patches、插件（extend、老插件、执行路径转发）的 patch → 插件 patch 改了模型时声明式类型按最终请求体的模型重算 URL → 再次强制 stream。普通转发、插件执行路径、WebSocket 每轮一致。
+- 请求头（后面的盖前面的）：声明构造的头（inbound 按 passHeaders 过滤、预设、清单、路由）→ 声明的 paramOverride 头 → 账号透传与粘性透传（只补没有的）→ 账号参数覆盖的头 → 插件的头（老插件构造的、extend 追加的，`core.DeclaredUpstream.SplitHeaders` 区分）→ **鉴权头按 auth 模板重写**（声明不产生值时删除）→ 核心资源头、额度头。WebSocket 握手同样分层（没有透传）。鉴权头只能由 auth 模板写，请求头覆盖、透传、插件头都改不了它。
+
+### 86.6 控制台
+
+- `web/src/views/accounts/upstream/`：`upstream-editor` 表单控件。默认值取账号类型的 `upstream`，可按项和整体恢复默认；只写和默认不同的项，全部默认时不存。服务端字段错误显示在对应输入上；客户端提示与服务端规则一致，只提示不拦截。
+- 请求参数覆盖的提示文字为“在模型映射之后、插件改写之前执行，插件还可以再改”。
+
+### 86.7 兼容与上线
+
+- 账号类型 id、plugin_key 不变，现有账号和数据不迁移；没声明 upstream 的插件不受影响。
+- 参数覆盖的请求体位置与 0.1.262 之前相同（插件之前）；请求头改为插件的头盖过参数覆盖的头：老插件自己构造的头（如 codex 的头、代码插件转发的客户端头）不能再被账号参数覆盖改掉，声明式类型的头仍可以。
+- 第一个带本节功能的核心是 0.1.262：声明了 `upstream` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.UpstreamFirstCore`，低了报 `below_feature_core`），openai 0.4.0、gemini/relay/anthropic 0.3.0、custom 0.1.0 已定为 `>=0.1.262 <0.2.0`。旧核心会忽略 `upstream` 字段，所以这几个只有清单的插件必须随 0.1.262 一起发；内置插件在核心计划完成、所有节点都换上新核心后才升级（§37）。
+
+## 87. 账号通用配置项按类型声明、核心编辑器开放给插件（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”第 2 期，规格见 [COMMON-CONTROLS.md](COMMON-CONTROLS.md)；核心 0.1.263）
+
+起因：限流、参数覆盖、请求头、代理、模型映射等账号通用配置由核心实现界面和执行，但插件能影响的只有 `commonControls` 的 `auto_disable`、`schedulable` 两项和新建时的 `defaultLimits`；插件自己的页面也用不了核心的编辑器。
+
+### 87.1 commonControls
+
+- `accountTypes[].commonControls.<名>`：`{visible?, configurable?, default?, locked?, required?}`；名称与取值类型见 `sdk/manifest/common_controls.go` 的 `CommonControlSpecs`（schedulable、auto_disable、priority、weight、max_concurrency、rpm_limit、tpm_limit、spm_limit、model_limits、usage_limit、model_mapping、param_override、header_passthrough、environment、proxy）。`default` 是账号接口该字段的 JSON，范围与账号接口相同（常量在 sdk，核心、校验共用）。老的 `{"configurable":…, "default":…}` 写法照旧有效。
+- 语义：新账号缺省值取 `default`（再缺省取核心默认，自己级用户的并发默认 10 照旧，有声明时声明优先）；`configurable: false` 新建只接受默认值、更新只接受原值；`locked` 新老账号都只接受 `default`；不符报 `read_only`。值按 JSON 比较（格式、键序、数字写法、null 与空不影响）。`proxy` 只能写 `required`：新建没有代理、或更新清掉了代理时报 `proxy_id: required`，老账号没代理时其他修改照常。`visible` 只影响界面。
+- 执行点：`account/common_controls.go`，更新在锁行之后；`PUT /accounts/:id/usage-limit` 同样检查（`usage_limit: read_only`）；插件生命周期返回的 `account_patch` 不能改固定项（固定项从可改字段中移除，可改的照常）。
+- 校验（`sdk/manifest/check/common_controls.go`）：未知名称、类型或范围不符、`required` 用在 proxy 之外、proxy 写了 `required` 以外的字段、`locked` 没有 `default` 或同时写 `configurable: true`、与 `defaultLimits` 的值冲突（`conflict`）。用到新名称或 `visible`/`locked`/`required` 的插件 `hostCompat` 下限须 ≥0.1.263（`check.CommonControlsFirstCore`）。
+- 锁定值收敛：更新账号时，请求没带锁定字段而存储值与锁定值不同，就写入锁定值（锁定的用量限制同样在更新事务里写入）；老账号在下次保存时收敛，不做后台迁移。控制台对已保存账号显示存储值，不同于锁定值时提示“保存后改为锁定值 X”。
+- 自己级用户：新建时，省略的字段或等于预填默认值（声明的、否则 `default_limits`）的字段收进自己级上限（priority 0–100、weight 1–100、并发 1–1000，0 变 10）；其他越界值仍报 `restricted`；固定项（不可改或锁定）以声明为准、不收。更新时不收。控制台预填同样的收后值。
+- `GET /account-types` 返回 `common_controls`，`default` 按核心存储的形式规范化（例如头名小写），便于和账号存储值比较。
+
+### 87.2 控制台
+
+- 账号编辑页按声明渲染每个通用项（`web/src/views/accounts/commonControls.ts`）：隐藏、置灰并说明原因、新建预填（声明优先于 `default_limits`）、代理必填；只有隐藏项的分区不显示，导航摘要跳过隐藏项；保存时不发固定项。没有声明的类型与之前一致，只有两处小变化：英文调度摘要的“Weight”“Concurrency”首字母大写；切换认证方式时，没改过的 `default_limits` 值跟着换成新类型的。
+- 批量编辑：所选账号里有类型把某项固定时，该项置灰并显示数量（原来 `auto_disable` 会跳过固定的账号照样改其他账号）。
+- 编辑器不认识具体插件；ccgateway 的核心内集成（CC 授权、CC 特性、语言、自动模型）本期不动。
+
+### 87.3 核心编辑器开放给插件（UI 3.7）
+
+- `HOST_UI_VERSION` 3.7.0；`host.components`（只读）：`ParamOverrideEditor`、`RateLimitEditor`（`{rpm_limit, tpm_limit, spm_limit}`）、`ModelLimitsEditor`、`HeaderPassthroughEditor`、`ProxyPicker`、`ModelMappingEditor`、`UpstreamEditor`，v-model 即账号接口字段，都接受 `disabled`；较重的编辑器首次使用时加载。用到的插件声明 `hostUICompat: "^3.7"`，核心下限 ≥0.1.263（0.1.262 是最后一个带 UI 3.6 的核心）。
+- schema 表单控件：`param-override`、`header-passthrough`、`rate-limits`、`model-limits`、`model-mapping`（另有 `proxy-select`、`upstream-editor`）。数据格式即核心执行格式，插件在自己的设置接口里用 SDK 同一套规则校验。
+
+### 87.4 编辑页分区插槽 `account.editor.section`
+
+- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（只能是本插件自己的账号类型 id，唯一，校验强制）；这三个字段只能用在这个插槽上；需要核心 ≥0.1.263。
+- 账号编辑页在核心分区之后追加，props `{account, accountType, readonly}`，各插件分区独立隔离错误；新建账号显示“保存账号后可配置”。按 §23.3，插件分区不进核心保存流程，由插件自己的接口保存。

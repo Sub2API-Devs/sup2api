@@ -16,7 +16,7 @@ import (
 )
 
 // Candidates returns active, schedulable accounts of the group whose account
-// type is in types (all types when empty), in priority order, excluding
+// type is in types (all types when empty), highest priority first, excluding
 // accounts that are cooling down.
 func (s *Service) Candidates(ctx context.Context, groupID int64, types []core.AccountTypeKey) ([]core.AccountRef, error) {
 	snap, err := s.groupSnapshot(ctx, groupID)
@@ -95,7 +95,7 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) (groupSnap, 
 			FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
 			WHERE ag.group_id = $1 AND a.deleted_at IS NULL AND a.schedulable
 				AND (a.status = 'active' OR a.status = 'auto_disabled' AND a.auto_disabled_until IS NOT NULL)
-			ORDER BY a.priority, a.id`, groupID)
+			ORDER BY a.priority DESC, a.id`, groupID)
 		if err != nil {
 			return nil, err
 		}

@@ -78,7 +78,7 @@ func usageEnvEP(t *testing.T, rules manifest.UsageRules, mut func(*manifest.Endp
 		pf := manifest.Platform{ID: "pu", Usage: rules, Endpoints: []manifest.Endpoint{ep}}
 		info := e.addAccountType("pu", "pu_key", pp, manifest.AccountPlatform{Platform: "pu"})
 		e.gen.addPlatform(info, pf, pp)
-		e.accounts.addTyped(testGroup, 9, 0, "pu-9", "pu", "pu_key")
+		e.accounts.addTyped(testGroup, 9, 100, "pu-9", "pu", "pu_key")
 		e.accounts.groups[testGroup] = []int64{9}
 	})
 	return e, pp
@@ -552,7 +552,7 @@ func TestPluginUsageWithoutPlatformClient(t *testing.T) {
 		pf := manifest.Platform{ID: "pu", Usage: pluginUsageRules(), Endpoints: []manifest.Endpoint{ep}}
 		info := e.addAccountType("pu", "pu_key", pp, manifest.AccountPlatform{Platform: "pu"})
 		e.gen.addPlatform(info, pf) // no client
-		e.accounts.addTyped(testGroup, 9, 0, "pu-9", "pu", "pu_key")
+		e.accounts.addTyped(testGroup, 9, 100, "pu-9", "pu", "pu_key")
 		e.accounts.groups[testGroup] = []int64{9}
 	})
 	res := e.do("/pu/v1/chat", body(testModel, false), nil)

@@ -101,11 +101,9 @@ function setN(v: unknown) {
       <strong class="mod-stage-card-title">{{ t('trace.stageN', { n: index + 1 }) }} · {{ t(`flows.role.${role}`) }}</strong>
       <SBadge :tone="multi ? 'info' : 'gray'" size="xs">{{ multi ? t('flows.parallel', { n: stage.auditors.length }) : t('flows.single') }}</SBadge>
       <span v-if="!disabled" class="mod-ml-auto mod-stage-card-tools">
-        <SButton size="xs" variant="ghost" square :aria-label="t('flows.moveEarlier')" :title="t('flows.moveEarlier')" :disabled="index === 0" @click="emit('move-stage', index - 1)">
-          <SIcon name="chevron-right" class="mod-icon mod-flip" />
-        </SButton>
-        <SButton size="xs" variant="ghost" icon="chevron-right" icon-only :aria-label="t('flows.moveLater')" :title="t('flows.moveLater')" :disabled="last" @click="emit('move-stage', index + 1)" />
-        <SButton size="xs" variant="ghost" icon="x" icon-only :aria-label="t('flows.removeStage')" :title="t('flows.removeStage')" @click="emit('remove-stage')" />
+        <SButton size="xs" variant="ghost" :disabled="index === 0" @click="emit('move-stage', index - 1)">{{ t('flows.moveEarlier') }}</SButton>
+        <SButton size="xs" variant="ghost" :disabled="last" @click="emit('move-stage', index + 1)">{{ t('flows.moveLater') }}</SButton>
+        <SButton size="xs" variant="ghost" tone="danger" @click="emit('remove-stage')">{{ t('flows.removeStage') }}</SButton>
       </span>
     </header>
 

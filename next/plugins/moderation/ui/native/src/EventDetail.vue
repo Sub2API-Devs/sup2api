@@ -235,7 +235,7 @@ const fields = computed<DescItem[]>(() => {
         <template #item-flow><FlowRef :flow-id="ev.flow_id" :version="ev.flow_version" :name="ev.flow_name" :current="ev.flow_current_version" /></template>
         <template #item-endpoint>
           {{ ev.endpoint || '—' }}
-          <SButton v-if="filterable && ev.endpoint" size="xs" variant="ghost" icon="filter" icon-only :aria-label="t('detail.endpointRecords')" :title="t('detail.endpointRecords')" @click="filterBy({ endpoint: ev.endpoint })" />
+          <SButton v-if="filterable && ev.endpoint" size="xs" variant="ghost" :title="t('detail.endpointRecords')" @click="filterBy({ endpoint: ev.endpoint })">{{ t('filter') }}</SButton>
         </template>
         <template #item-session>
           {{ ev.session_fp }}

@@ -132,7 +132,7 @@ func streamOnlyEnv(t *testing.T, sp manifest.AccountPlatform, opts ...envOpt) (*
 	e := newEnv(t, opts...)
 	plat := &fakePlatform{route: func(*pluginv1.BuildUpstreamRequestRequest) string { return up.srv.URL + "/v1/responses" }}
 	e.addAccountType("codexlike", "chatgpt", plat, sp)
-	e.accounts.addTyped(testGroup, 10, 0, "codex-10", "codexlike", "chatgpt")
+	e.accounts.addTyped(testGroup, 10, 100, "codex-10", "codexlike", "chatgpt")
 	return e, plat, up
 }
 
@@ -398,7 +398,7 @@ func TestStreamOnlyConvertedRoute(t *testing.T) {
 	e.gen.addPlatform(relayInfo, relayPlatform(t))
 	plat := &fakePlatform{route: func(*pluginv1.BuildUpstreamRequestRequest) string { return up.srv.URL + "/relayx/v1/responses" }}
 	e.addAccountType("codexlike", "chatgpt", plat, manifest.AccountPlatform{Platform: "relayx", StreamOnly: []string{"relayx.responses"}})
-	e.accounts.addTyped(testGroup, 10, 0, "codex-10", "codexlike", "chatgpt")
+	e.accounts.addTyped(testGroup, 10, 100, "codex-10", "codexlike", "chatgpt")
 	chat := func(stream bool) result {
 		return e.do("/v1/chat/completions", map[string]any{"model": testModel, "stream": stream,
 			"messages": []any{map[string]any{"role": "user", "content": "hi"}}},

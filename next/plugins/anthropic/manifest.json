@@ -6,16 +6,15 @@
     "en": "Anthropic API key account type and a model catalog. The anthropic platform and its endpoints are built into the core; model prices are set by administrators in the core.",
     "zh": "Anthropic API Key 账号类型与模型目录（anthropic 平台及其端点由核心内置；模型价格由管理员在核心中配置）。"
   },
-  "version": "0.2.9",
+  "version": "0.3.0",
   "publisher": "sub2api",
   "icon": "assets/anthropic.svg",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
-  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostCompat": ">=0.1.262 <0.2.0",
 
   "capabilities": [
     { "id": "platform.adapter.v1" },
-    { "id": "platform.execute.v1" },
     { "id": "http.routes.v1" }
   ],
 
@@ -59,7 +58,8 @@
       ],
       "platforms": [
         { "platform": "anthropic" }
-      ]
+      ],
+      "upstream": { "preset": "anthropic", "filterFields": [] }
     }
   ],
 
@@ -110,8 +110,6 @@
   "hostPermissions": [
     { "id": "platform.register",
       "reason": { "en": "Register the Anthropic API key account type for the built-in anthropic platform", "zh": "为内置 anthropic 平台注册 Anthropic API Key 账号类型" } },
-    { "id": "accounts.credentials", "scope": { "types": "own" },
-      "reason": { "en": "Read the API key of accounts of its own account type (Anthropic API Key) to call the upstream API", "zh": "读取本插件账号类型（Anthropic API Key）账号的 API Key 以调用上游接口" } },
     { "id": "db.schema",
       "reason": { "en": "Store the model catalog", "zh": "保存模型目录" } },
     { "id": "routes.admin",

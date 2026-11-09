@@ -208,9 +208,9 @@ async function submit() {
               <SInput v-else-if="ks.type === 'header'" v-model="ks.name" class="w-64" size="sm" mono placeholder="x-session-id" />
               <SHint v-else inline size="xs">{{ t(`sticky.keyTypeHint.${ks.type}`) }}</SHint>
               <div class="ml-auto flex gap-1">
-                <SButton variant="ghost" size="sm" square :disabled="i === 0" :title="t('common.moveUp')" :aria-label="t('common.moveUp')" @click="move(i, -1)">↑</SButton>
-                <SButton variant="ghost" size="sm" square :disabled="i === form.key_sources.length - 1" :title="t('common.moveDown')" :aria-label="t('common.moveDown')" @click="move(i, 1)">↓</SButton>
-                <SButton variant="ghost" size="sm" :title="t('common.remove')" :aria-label="t('common.remove')" icon-only icon="x" @click="form.key_sources.splice(i, 1)" />
+                <SButton variant="ghost" size="sm" :disabled="i === 0" @click="move(i, -1)">{{ t('common.moveUp') }}</SButton>
+                <SButton variant="ghost" size="sm" :disabled="i === form.key_sources.length - 1" @click="move(i, 1)">{{ t('common.moveDown') }}</SButton>
+                <SButton variant="ghost" size="sm" tone="danger" @click="form.key_sources.splice(i, 1)">{{ t('common.remove') }}</SButton>
               </div>
             </div>
             <SHint v-if="errors[`key_sources.${i}`]" tone="danger" size="xs" class="ml-7 mt-1">{{ errors[`key_sources.${i}`] }}</SHint>

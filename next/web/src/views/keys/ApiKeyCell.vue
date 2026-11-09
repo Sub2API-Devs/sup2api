@@ -42,6 +42,6 @@ async function copy() {
   <div class="inline-flex items-center gap-0.5 whitespace-nowrap">
     <SCode inline class="mr-1" :text="`${apiKey.key_prefix}…`" />
     <SButton v-if="allowed" variant="ghost" size="xs" :disabled="copying || rotating || !apiKey.copyable" :title="t(apiKey.copyable ? 'common.copy' : 'apikeys.legacyCopyHint')" :aria-label="t('common.copy')" icon-only icon="copy" data-testid="copy-api-key" @click.stop="copy" />
-    <SButton v-if="allowed" variant="ghost" size="xs" :disabled="rotating || copying" :title="t('apikeys.rotate')" :aria-label="t('apikeys.rotate')" icon-only icon="refresh" data-testid="rotate-api-key" @click.stop="rotate" />
+    <SButton v-if="allowed" variant="ghost" size="xs" :disabled="rotating || copying" :title="t('apikeys.rotate')" data-testid="rotate-api-key" @click.stop="rotate">{{ t('apikeys.rotateShort') }}</SButton>
   </div>
 </template>

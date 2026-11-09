@@ -69,6 +69,34 @@ type PlatformPlugin interface {
 	ParseRefreshResponse(ctx context.Context, in *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error)
 }
 
+// DeclaredUpstream is implemented by the PlatformPlugin of an account type
+// declaring its upstream (manifest accountTypes[].upstream,
+// docs/UPSTREAM-DECLARATIVE.md §4): the core builds its requests from the
+// declaration, and the gateway takes from it the parts of sending around
+// BuildUpstreamRequest. A code plugin's client does not implement it.
+type DeclaredUpstream interface {
+	// Upstream is the resolved declaration without an account layer: the
+	// defaults of the account layer the console edits.
+	Upstream() manifest.Upstream
+	// PrepareBody is the declaration's part of the body before
+	// BuildUpstreamRequest: the filtered fields the account does not allow
+	// are removed, then the declared paramOverride runs.
+	PrepareBody(acc *pluginv1.Account, body []byte, in *ParamOverrideContext) (ParamOverrideResult, error)
+	// UpstreamURL is the URL of built once the plugin's patches (extend)
+	// changed the upstream model to model: the declaration's URL rendered
+	// again, so a model in the path follows the model really sent, or
+	// built's own URL when the plugin replaced it.
+	UpstreamURL(in *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse, model string) (string, error)
+	// SplitHeaders separates built's headers into the declaration's and the
+	// plugin's (extend), which the gateway layers around the passthrough and
+	// the account's parameter override (§86.5).
+	SplitHeaders(in *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse) (declared, plugin map[string]string)
+	// AuthHeader is the lower-case name of the header the declaration
+	// authenticates with for acc (empty for query or no auth). The gateway
+	// writes built's value of it after every other header source.
+	AuthHeader(acc *pluginv1.Account) string
+}
+
 // ExecutionHTTP is the one-request network capability supplied by the current
 // offline execution. The closure binds the account, proxy, limits and lifetime.
 type ExecutionHTTP func(context.Context, *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error)
@@ -171,6 +199,18 @@ type AccountTypeBinding struct {
 // Key returns the account type key.
 func (b AccountTypeBinding) Key() AccountTypeKey {
 	return AccountTypeKey{PluginKey: b.Plugin.Key, Type: b.Type.ID}
+}
+
+// PassHeaders are the client headers the account type receives
+// (manifest.AccountType.PassHeaders) with platform, a Generation's Platform,
+// looking the platforms up.
+func (b AccountTypeBinding) PassHeaders(platform func(id string) (PlatformBinding, bool)) []string {
+	return b.Type.PassHeaders(func(id string) *manifest.Platform {
+		if pb, ok := platform(id); ok {
+			return &pb.Platform
+		}
+		return nil
+	})
 }
 
 // Supports returns the account type's entry for platform, if it serves it.

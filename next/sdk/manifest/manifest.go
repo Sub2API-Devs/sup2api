@@ -26,7 +26,7 @@ type Manifest struct {
 	Version      string        `json:"version"` // semver
 	Publisher    string        `json:"publisher"`
 	Icon         string        `json:"icon,omitempty"` // path inside the package or "text:<label>"
-	Runtime      string        `json:"runtime"`        // "grpc" ("js" reserved)
+	Runtime      string        `json:"runtime"`        // RuntimeGRPC or RuntimeNone ("js" reserved)
 	Entry        Entry         `json:"entry"`
 	HostCompat   string        `json:"hostCompat"`             // semver range, e.g. ">=0.1.0 <0.2.0"
 	HostUICompat string        `json:"hostUICompat,omitempty"` // required when ui.native is set
@@ -357,7 +357,10 @@ type AccountType struct {
 	// of this type in the console (CONTRACTS §68.5), like DefaultModels:
 	// suggestions only. To set them on the account itself the plugin answers
 	// before_create / before_update with an account_patch.
-	DefaultLimits     *AccountDefaultLimits           `json:"defaultLimits,omitempty"`
+	DefaultLimits *AccountDefaultLimits `json:"defaultLimits,omitempty"`
+	// CommonControls declare, per common account setting the core edits and
+	// enforces (CommonControlSpecs), its default and whether an operator may
+	// see and change it (CONTRACTS §87).
 	CommonControls    map[string]AccountCommonControl `json:"commonControls,omitempty"`
 	ExtensionsSchema  json.RawMessage                 `json:"extensionsSchema,omitempty"`
 	Lifecycle         *AccountLifecycle               `json:"lifecycle,omitempty"`
@@ -375,6 +378,10 @@ type AccountType struct {
 	// plugin implements BuildRefreshRequest / ParseRefreshResponse to renew
 	// them (CONTRACTS §48). nil: the host never refreshes them.
 	Refresh *AccountRefresh `json:"refresh,omitempty"`
+	// Upstream declares the upstream so the core builds its requests itself
+	// (docs/UPSTREAM-DECLARATIVE.md). nil: the plugin implements the
+	// platform calls.
+	Upstream *Upstream `json:"upstream,omitempty"`
 }
 
 type AccountLifecycle struct {
@@ -403,19 +410,6 @@ type AccountLifecycleAction struct {
 	ID    string        `json:"id"`
 	Label LocalizedText `json:"label"`
 	Icon  string        `json:"icon,omitempty"`
-}
-
-type AccountCommonControl struct {
-	Configurable *bool `json:"configurable,omitempty"`
-	Default      *bool `json:"default,omitempty"`
-}
-
-func (c AccountCommonControl) IsConfigurable() bool {
-	return c.Configurable == nil || *c.Configurable
-}
-
-func (c AccountCommonControl) DefaultValue() bool {
-	return c.Default == nil || *c.Default
 }
 
 // AccountRefresh tells the host when to renew the credentials of an
@@ -527,11 +521,11 @@ type DefaultModelLimit struct {
 
 // MaxDefaultModelLimits bounds AccountDefaultLimits.ModelLimits; it equals
 // the per-account limit of model lists.
-const MaxDefaultModelLimits = 50
+const MaxDefaultModelLimits = MaxAccountModelLimits
 
 // MaxDefaultModels bounds AccountType.DefaultModels and DefaultModelMapping;
 // it equals the per-account limit of models and model_mapping (CONTRACTS §18).
-const MaxDefaultModels = 500
+const MaxDefaultModels = MaxAccountModels
 
 // MaxAccountBatch bounds the accounts of one account action request (UI
 // 3.6) and of one GET /accounts?ids= filter; the console never sends more
@@ -575,6 +569,32 @@ type AccountPlatform struct {
 // streaming requests for this account type.
 func (a AccountPlatform) StreamsOnly(protocol string) bool {
 	return slices.Contains(a.StreamOnly, protocol)
+}
+
+// ClientHeaders are the client headers the account type receives on p, the
+// platform of a: its own passHeaders, else p's (nil p: its own only), as the
+// gateway forwards them.
+func (a AccountPlatform) ClientHeaders(p *Platform) []string {
+	if len(a.PassHeaders) == 0 && p != nil {
+		return p.PassHeaders
+	}
+	return a.PassHeaders
+}
+
+// PassHeaders are the client headers the account type receives over all
+// the platforms it serves (AccountPlatform.ClientHeaders), each once:
+// the names an upstream template may read as {client_header.<name>}.
+// platform looks a platform up, nil when unknown.
+func (at *AccountType) PassHeaders(platform func(id string) *Platform) []string {
+	out := []string{}
+	for _, ap := range at.Platforms {
+		for _, n := range ap.ClientHeaders(platform(ap.Platform)) {
+			if !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
 }
 
 // SupportsEndpoint checks the platform-local endpoint selection.
@@ -955,10 +975,19 @@ type Column struct {
 }
 
 type Slot struct {
-	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight | account.list.toolbar
+	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight | account.list.toolbar | account.editor.section
 	Component  string `json:"component"`
 	Permission string `json:"permission,omitempty"`
+	// Label, Icon and AccountTypes describe an account.editor.section slot
+	// (UI 3.7) only: the navigation entry the account editor appends, and the
+	// account type ids it is shown for (all types when empty).
+	Label        LocalizedText `json:"label,omitempty"`
+	Icon         string        `json:"icon,omitempty"`
+	AccountTypes []string      `json:"accountTypes,omitempty"`
 }
+
+// SlotAccountEditorSection is the account editor section slot (UI 3.7).
+const SlotAccountEditorSection = "account.editor.section"
 
 // AccountAction is a declarative account operation. The console calls
 // Route as "POST /api/v1/p/<key><path>" with {"account_ids": [...]}, a

@@ -156,8 +156,8 @@ func apiEnv(t *testing.T) (*env, *apiUpstream, *fakePlatform, *fakePlatform) {
 	e := newEnv(t, func(e *env) {
 		e.addAccountType("openai", "apikey", op, manifest.AccountPlatform{Platform: "openai"})
 		e.addAccountType("gemini", "apikey", gp, manifest.AccountPlatform{Platform: "gemini"})
-		e.accounts.addTyped(testGroup, 11, 1, "oai-11", "openai", "apikey")
-		e.accounts.addTyped(testGroup, 21, 1, "gem-21", "gemini", "apikey")
+		e.accounts.addTyped(testGroup, 11, 99, "oai-11", "openai", "apikey")
+		e.accounts.addTyped(testGroup, 21, 99, "gem-21", "gemini", "apikey")
 		for _, m := range []string{"gpt-4o", "gpt-5", "text-embedding-3-small", "gemini-2.5-pro"} {
 			e.pricer.rules[m] = &core.PriceRule{ID: 10, Model: m, Mode: "per_token"}
 		}
@@ -277,7 +277,7 @@ func TestMixedPluginTypesServeBuiltinEndpoint(t *testing.T) {
 	}
 	e.addAccountType("relay", "relay_key", relay,
 		manifest.AccountPlatform{Platform: "anthropic"}, manifest.AccountPlatform{Platform: "openai"})
-	e.accounts.addTyped(testGroup, 12, 0, "relay-12", "relay", "relay_key")
+	e.accounts.addTyped(testGroup, 12, 100, "relay-12", "relay", "relay_key")
 
 	r := e.post("/v1/chat/completions", chatBody(false), bearer())
 	if r.status != 200 || strings.Join(u.keys(), ",") != "relay-12" {

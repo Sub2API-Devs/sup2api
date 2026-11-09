@@ -54,7 +54,7 @@ const items = computed(() => {
 <template>
   <SDisclosure variant="section" :label="t('stats.title')" :description="t('stats.hint')" :open="open" @update:open="toggle">
     <template #actions>
-      <SButton v-if="open" size="sm" variant="ghost" icon="refresh" icon-only :aria-label="t('refresh')" @click="reload" />
+      <SButton v-if="open" size="sm" variant="ghost" icon="refresh" @click="reload">{{ t('refresh') }}</SButton>
     </template>
     <p v-if="error" class="dw-sub">{{ error }}</p>
     <SDescriptions :items="items" :columns="3" dense />

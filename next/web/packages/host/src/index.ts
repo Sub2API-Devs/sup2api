@@ -12,7 +12,7 @@ export * from './bridge-protocol'
 export { useList, type UseListOptions, type UseListResult } from './useList'
 
 /** Version of the host UI contract; plugins declare hostUICompat against it. */
-export const HOST_UI_VERSION = '3.6.0'
+export const HOST_UI_VERSION = '3.7.0'
 
 /**
  * Accounts per plugin account action request and per `GET /accounts?ids=`
@@ -52,8 +52,26 @@ export interface HostPermissions {
   any(...keys: string[]): boolean
 }
 
+/**
+ * Core account editors handed to plugins (UI 3.7, docs/COMMON-CONTROLS.md §3).
+ * Each v-model is the account API field as the core executes it; all take
+ * `disabled`:
+ * - ParamOverrideEditor: `param_override` object | null; `models?: string[]` (preview suggestions)
+ * - RateLimitEditor: `{ rpm_limit, tpm_limit, spm_limit }`; `errors?: Record<string, string>`
+ * - ModelLimitsEditor: `model_limits` array; `options?: string[]` (model suggestions), `errors?`
+ * - HeaderPassthroughEditor: `header_passthrough` string[]
+ * - ProxyPicker: `proxy_id` number | null
+ * - ModelMappingEditor: `model_mapping` object; `models?: string[]` (the account's model list)
+ * - UpstreamEditor: the account layer of `upstream`; `accountType` (its resolved declaration), `errors?`
+ */
+export const HOST_COMPONENT_NAMES = ['ParamOverrideEditor', 'RateLimitEditor', 'ModelLimitsEditor', 'HeaderPassthroughEditor', 'ProxyPicker', 'ModelMappingEditor', 'UpstreamEditor'] as const
+export type HostComponentName = (typeof HOST_COMPONENT_NAMES)[number]
+export type HostComponents = Readonly<Record<HostComponentName, Component>>
+
 export interface HostContext {
   version: string
+  /** Core editors (UI 3.7): see HOST_COMPONENT_NAMES. */
+  components: HostComponents
   api: ApiClient
   router: Router
   i18n: HostI18n
