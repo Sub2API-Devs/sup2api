@@ -1,6 +1,6 @@
 # codex 插件：ChatGPT 账号（Codex 设备码 / Sign in with ChatGPT）
 
-日期：2026-11-08。状态：已实现（插件 0.1.1，需核心 ≥0.1.257，未发布）。核心契约见 CONTRACTS §83（WebSocket 每轮 patch 见 §83.6）。
+日期：2026-11-08（额度窗口 2026-11-09）。状态：已实现（插件 0.1.1 已上线；0.1.2 增加 `codex_device` 的 5h / 周额度窗口，见第 9 节，需核心 ≥0.1.257）。核心契约见 CONTRACTS §83（WebSocket 每轮 patch 见 §83.6），额度见 §44、§69。
 
 ## 1. 目标与边界
 
@@ -11,7 +11,7 @@
 - 守线（写进插件说明，不做技术强制）：
   - 请求如实标明来源：`originator: sup2api`、`User-Agent: sup2api-codex/<版本>`；**不**伪装 Codex CLI 的 UA、TLS 指纹、`x-codex-*` 头，**不**注入 Codex 官方系统提示词。
   - 仅供账号所有者自用；把多人 ChatGPT 账号做成号池对外出售违反 OpenAI 条款（付费/托管应用需先通过 OpenAI 的 Sign in with ChatGPT 候补审批）。
-- 不做：Codex 账号的用量面板（`x-codex-*` 额度头）、连接池/预热、`previous_response_id` 跨连接恢复。
+- 不做：连接池/预热、`previous_response_id` 跨连接恢复、`chatgpt_siwc` 的额度窗口（见第 9 节）。
 
 ## 2. 官方协议事实
 
@@ -54,7 +54,7 @@
 - 目录 `next/plugins/codex`，key `codex`，runtime grpc，能力 `platform.adapter.v1`、`platform.execute.v1`、`platform.websocket.v1`、`http.routes.v1`。
 - 两个账号类型都挂内置 `openai` 平台，`endpoints: ["responses", "responses_websocket"]`（chat 由核心转换成 Responses），`streamOnly: ["openai.responses"]`，`refresh: {}`，`sensitiveFields: ["access_token","refresh_token","id_token"]`，`settingsFields: ["proxy_id"]`，表单 `mode: "native"`、组件 `CodexAuthForm`。
 - `BuildUpstreamRequest`：按账号类型选 URL 和头；patch `store=false`；字符串 `input` 转数组（空白字符串转 `[]`，其余包成一条 user 消息）；`role:"system"` 的 input 项改成 `developer`；`codex_device` 缺 `instructions` 时补空串；删除不支持字段；WebSocket 协议换成 `wss` + `GET` + `openai-beta`，并对每轮 `response.create` 消息返回同样的 patch（不含 stream 相关字段，`chatgpt_siwc` 保留 `previous_response_id`；核心每轮应用，CONTRACTS §83.6）。
-- `ClassifyError`：reason 一律纯英文（与 SDK `classify` 一致）；401 → 冷却并提示重新授权（刷新由核心按 `refresh` 声明处理）；429 / `subscription_sharing_usage_limit_exceeded` / `usage_limit_reached` → 冷却（有 `resets_at`/`retry-after` 用之，否则 5 分钟）；403 资格类错误 → 禁用；400 原样返回。
+- `ClassifyError`：reason 一律纯英文（与 SDK `classify` 一致）；401 → 冷却并提示重新授权（刷新由核心按 `refresh` 声明处理）；`subscription_sharing_usage_limit_exceeded` → 冷却（有 `resets_at`/`retry-after` 用之，否则 5 分钟）；额度窗口用满（`usage_limit_reached`，或 429 且 `x-codex-*` 头显示 5h/周窗口 ≥100%）→ 自动禁用到窗口重置（0.1.2 起，见第 9 节）；其他 429 原样返回客户端、不冷却不禁用（0.1.2 起；0.1.1 为冷却）；403 资格类错误 → 禁用；400 原样返回。
 - 刷新：`BuildRefreshRequest` / `ParseRefreshResponse`，按账号类型选端点和格式；轮换后的 refresh token 一并保存。
 - 管理路由（`scope: admin`，权限 `codex:manage`）。响应按 CONTRACTS §3.1：成功为 `{"data": ...}`（`pluginsdk.DataResponse`，下面写的是 `data` 的内容，控制台 `pluginApi` 自动解包）；请求本身不合法（缺 `session_id`、请求体不是合法 JSON、`client_id` / `ext_agent_host_id` 格式不对）为 400 `invalid_argument`，`details.fields = [{field, code, message}]`（`pluginsdk.BadRequest`；field 为 `session_id` / `body` / `client_id` / `ext_agent_host_id`，code 为 `required` / `invalid_json` / `pattern`）；授权流程本身的拒绝保留各自的错误码（`device_auth_disabled`、`invalid_callback`、`state_mismatch`、`access_denied`、`authorization_failed`、`registration_incomplete`、`client_mismatch`、`scope_missing` 为 400，`session_expired` 为 404，`upstream_unavailable` / `upstream_error` / `token_exchange_failed` 为 502）。所有 message 为“English / 中文”双语（CONTRACTS §10）。
   - `POST /auth/device/start` → `{session_id, verification_url, user_code, interval, expires_in}`；会话存 KV（含 device_auth_id，15 分钟过期）。
@@ -65,7 +65,7 @@
   - 共有：`access_token`、`refresh_token`、`id_token`、`expires_at`（Unix 秒）、`email`、`plan_type`（从令牌读出，两种类型都可能有）；除 `access_token` 外缺值时省略。
   - `codex_device`：`chatgpt_account_id`。
   - `chatgpt_siwc`：`client_id`、`ext_agent_host_id`、`scopes`（空格分隔的字符串，与 OAuth 返回一致）。
-- 网络权限（与 manifest 一致）：`net` 只有 `auth.openai.com`（插件自己只在授权时访问授权服务器）；`chatgpt.com`、`api.openai.com` 只列在 `externalServices`，上游请求、模型列表与令牌刷新都由核心发出。
+- 网络权限（与 manifest 一致）：`net` 只有 `auth.openai.com`（插件自己只在授权时访问授权服务器）；`chatgpt.com`、`api.openai.com` 只列在 `externalServices`，上游请求、模型列表、额度查询（0.1.2）与令牌刷新都由核心发出。
 - 其他宿主权限：`platform.register`、`accounts.credentials`（`types: own`）、`kv`（授权会话）、`lock`（设备码轮询的会话锁，见上）、`routes.admin`、`ui.native`。
 - 日志：`Init` 取 `Host.Logger()`；授权失败、令牌换取失败、删除会话失败、锁获取/释放失败记 warn，只记状态码、OAuth 错误码、错误文本；绝不记录令牌、授权码、PKCE verifier、state 或会话 id。
 - `ValidateCredentials` 会解析调用方提交的 `id_token`（不验签），用来补缺的 `email`、`plan_type` 与（`codex_device`）`chatgpt_account_id`，后者会作为上游头 `chatgpt-account-id` 发送。凭证是运营者自己的（只有有账号权限的管理员能提交），上游会用 access token 校验账号 id，填错只会让运营者自己的请求失败，sup2api 也不据此做任何授权判断，所以不验签（`identity.go` `jwtClaims` 注释）。
@@ -93,3 +93,52 @@
 - 用户可见文案一律“English / 中文”：路由错误、`readToken`、`internalError`、刷新结果（令牌端点状态、响应过大、无法解析、缺 `access_token`、连接失败）。`ClassifyError` 的 reason 改为纯英文。
 - 路由：成功统一 `{"data": ...}`；请求参数错误统一 400 `invalid_argument` + `details.fields`（替换原自定义 `invalid_request`、`invalid_client_id`、`invalid_host_id`）；流程业务码不变（见 §4）。web mock（`web/mock/codex.ts`）同步为相同的响应格式与错误码（为便于试用，回调缺 `client_id` 时 mock 仍代发一个，不报 `registration_incomplete`）。
 - 设备码轮询加会话锁（新增宿主权限 `lock`），授权失败等记 warn 日志（不含敏感值），见 §4。
+
+## 9. 0.1.2：`codex_device` 的 5 小时 / 周额度窗口（2026-11-09，用户要求）
+
+目标：和 Claude 账号一样在控制台显示 5 小时窗口（key `5h`）和周窗口（key `7d`）的用量与重置时间；窗口真满时按项目规则自动禁用到重置，其他上游 429 原路返回（CONTRACTS §69 末两条，CCGateway 0.1.127 同一规则）。
+
+### 9.1 协议事实
+
+- 响应头：`x-codex-primary-used-percent`（百分比）、`x-codex-primary-window-minutes`、`x-codex-primary-reset-at`（Unix 秒，新后端）或 `x-codex-primary-reset-after-seconds`（旧后端），`secondary` 同名三项。
+- 用量接口：`GET https://chatgpt.com/backend-api/wham/usage` → `{"plan_type", "rate_limit": {"allowed", "limit_reached", "primary_window": {"used_percent", "limit_window_seconds", "reset_after_seconds", "reset_at"} | null, "secondary_window": … | null} | null, "credits", "additional_rate_limits"}`。未使用的槽位为 `null`。
+- **primary / secondary 与 5h / 周的对应关系不固定**（旧版 sub2api 注释写 primary = 周、secondary = 5h，Codex CLI 里 primary 通常是 300 分钟），所以插件一律按窗口时长定 key（`windowKey`）：300 分钟 ±5% → `5h`，10080 分钟 ±5% → `7d`；其他时长按实际长度给 key（整天 `<n>d`、整小时 `<n>h`，否则 `<n>m`，控制台按 key 原样显示）；没有时长或时长不可信（≤0 或超过一年）的窗口忽略。两个窗口时长相同时保留用得多的那个。
+- `reset-at` / `reset_at` 优先（大于 1e11 视为毫秒），没有时用 `reset-after-seconds` / `reset_after_seconds` 加当前时间；都没有时重置时间未知（0）。没有用量百分比的窗口记为 `utilization_unknown`。用量 ≥100% 的窗口状态记 `rejected`，其他不写状态（后端不报）。
+- `additional_rate_limits`（按功能的额外限额，如 Codex Spark）与 SSE 里的 `codex.rate_limits` 事件不读：前者不是账号级窗口，后者核心不交给插件。
+
+### 9.2 manifest（只给 `codex_device`）
+
+```json
+"quota": {
+  "query": true,
+  "autoRefresh": true,
+  "windows": [
+    { "key": "5h", "label": { "en": "5-hour usage", "zh": "5 小时用量" }, "shortLabel": { "en": "5h", "zh": "5 小时" } },
+    { "key": "7d", "label": { "en": "Weekly usage", "zh": "周用量" }, "shortLabel": { "en": "7d", "zh": "7 天" } }
+  ]
+}
+```
+
+- 不声明 `quota.headers`：声明式被动采样把固定的头映射到固定的 key（CONTRACTS §44.2），表达不了“按 window-minutes 选 key”，而核心目前没有让插件在成功响应上解析额度头的钩子（只有 `ClassifyError` 的 `quota`，见 9.4）。所以数据来自主动查询：`autoRefresh` 让核心后台每 30 分钟查一次（新账号录入后立即查一次，升级后已有账号由核心的补建扫描建立查询计划），点击控制台用量单元格强制刷新。窗口重置时间在 30 分钟内时，插件建议在重置后 1 分钟复查（`next_check_at_unix`）。
+- `chatgpt_siwc` 不声明额度：Sign in with ChatGPT 官方文档没有额度头，并且禁止调用 `backend-api`，只靠 `subscription_sharing_usage_limit_exceeded` 冷却。`BuildQuotaRequest` 对它回 `Unimplemented`。
+- 不声明 `modelAvailability`：额度窗口不参与调度准入（同 CCGateway 0.1.112 起的做法），真满时由下面的自动禁用把账号拿出调度。
+- `autoRefresh` 需要 Host API 7（SDK 在旧核心上拒绝初始化）；`hostCompat` 仍为 `>=0.1.257 <0.2.0`，所用能力（`quota.query/autoRefresh/windows`、`automatic_state`、Host API 7）0.1.257 都有。控制台已认识 `5h` / `7d`，前端不用改。
+
+### 9.3 查询（插件描述、核心发送）
+
+- `BuildQuotaRequest`：`GET <chatgpt>/backend-api/wham/usage`，头 `authorization: Bearer <access_token>`、`chatgpt-account-id`（凭证里有时）、`originator: sup2api`、`user-agent: sup2api-codex/<版本>`、`accept: application/json`。不发任何伪装 Codex 客户端的头（`openai-beta`、`oai-language`、`sec-fetch-*` 等旧版用过的都不发）。凭证无 `access_token` → `FailedPrecondition`，凭证不是 JSON → `InvalidArgument`。
+- 核心经账号代理发送，所以插件 `net` 权限不变（仍只有 `auth.openai.com`），`chatgpt.com` 已在 `externalServices`。
+- `ParseQuotaResponse`：401/403 → `auth_rejected`；连接失败、其他非 2xx、响应过大、无法解析 → `transient`（只记录在快照上，不冷却、不禁用账号）；`rate_limit` 为 `null` 或两个窗口都为 `null` → 成功、没有窗口。
+
+### 9.4 `ClassifyError`：窗口用满才禁用
+
+- **窗口用满**（`windowFull`）：上游错误 type/code 为 `usage_limit_reached`（任何状态码），或 429 且 `x-codex-*` 头里 `5h` / `7d` 窗口用量 ≥100%。其他时长的窗口满、只有重置时间或 `retry-after`，都不算。
+- 用满时：`action = FAILOVER`，`automatic_state = DISABLE`、`until_unix` = 重置时刻，reason `Codex usage limit reached until <时间> (<来源>)`。重置时刻依次取：错误体 `resets_at`（秒或毫秒）/ `resets_in_seconds`（错误对象内或顶层）→ 头里已满的 5h/周窗口中最晚的重置时刻 → `retry-after(-ms)` → 5 分钟；限定在 [现在+1 秒, 现在+7 天]。核心不论是否发布了故障策略都执行这个临时禁用，到点自动恢复（CONTRACTS §69）；账号不允许自动禁用时，核心退回冷却到同一时刻（`cooldown_until_unix`，仅无故障策略时）。
+- **其他 429**（包括带窗口头但都没满的）：`action = RETURN_TO_CLIENT`，不冷却、不禁用，reason `upstream 429 without a used-up usage window`，上游错误码照常作为 `client_error_code` 返回。0.1.1 对所有 429 冷却（默认 5 分钟），这是行为变化。
+- 错误响应带 `x-codex-*` 窗口头时，`ClassifyErrorResponse.quota` 附上这些窗口（已满的标 `rejected`）。注意：核心只在声明了 `modelAvailability` 的类型上保存这份观测（准入时要有快照 generation，CONTRACTS §44.7），本插件不声明，所以目前不会写入快照，控制台的用量仍以查询为准。
+- `subscription_sharing_usage_limit_exceeded`（`chatgpt_siwc`）保持冷却，不推断重置时间、不自动禁用。发布了故障策略时核心不采用插件给的冷却（§69），这类账号的处理由策略决定。
+
+### 9.5 上线
+
+- 只需在线升级插件到 0.1.2；不需要升级核心（线上 0.1.258 ≥ 0.1.257）。
+- 测试：`quota_test.go`（时长 → key、两种窗口顺序、reset-at 与 reset-after、毫秒、缺字段、null 窗口、错误映射、查询请求构造、经 SDK 服务端调用）、`classify_test.go`（`usage_limit_reached` 与头部判满的自动禁用和观测、其他 429 原样返回、SIWC 仍为冷却）、`manifest_test.go`（只有 `codex_device` 有额度声明、窗口标签中英文、`net` 不变）。
