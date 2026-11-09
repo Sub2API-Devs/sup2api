@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 func TestResolveEnvironmentNearestLayerWins(t *testing.T) {
@@ -41,4 +43,16 @@ func TestValidateEnvironmentValues(t *testing.T) {
 		fields[f.Field] = true
 	}
 	require.Equal(t, map[string]bool{"environment.max_request_body_mb": true, "environment.nope": true, "environment.relay_timeout_seconds": true}, fields)
+}
+
+// protocol.AccountEnvVars is what manifest/check accepts as a declared
+// environment default; it must be exactly the account layer declared here.
+func TestAccountEnvVarsMatchSDK(t *testing.T) {
+	got := map[string]protocol.EnvVarRange{}
+	for _, v := range EnvironmentVariables {
+		if v.AllowedOn(EnvLayerAccount) {
+			got[v.Key] = protocol.EnvVarRange{Min: v.Min, Max: v.Max}
+		}
+	}
+	require.Equal(t, protocol.AccountEnvVars, got)
 }

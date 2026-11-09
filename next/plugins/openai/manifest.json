@@ -10,7 +10,7 @@
   "publisher": "sub2api",
   "icon": "assets/openai.svg",
   "runtime": "none",
-  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostCompat": ">=0.1.262 <0.2.0",
 
   "capabilities": [
     { "id": "platform.adapter.v1" },

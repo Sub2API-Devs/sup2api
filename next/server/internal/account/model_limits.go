@@ -14,7 +14,7 @@ import (
 )
 
 // maxModelLimits bounds the model lists of an account (CONTRACTS §68).
-const maxModelLimits = 50
+const maxModelLimits = manifest.MaxAccountModelLimits
 
 func parseModelLimits(raw []byte) []core.ModelLimit {
 	out := []core.ModelLimit{}

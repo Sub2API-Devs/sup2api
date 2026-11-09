@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import { computed, markRaw, reactive, ref, type Component } from 'vue'
 import { api, createPluginHost, HOST_UI_VERSION, satisfiesRange, useHost, type NativePluginModule } from '@sub2api/host'
-import type { PluginAccountAction, UIPlugin, UIPluginPage } from '@/api/types'
+import type { PluginAccountAction, UIPlugin, UIPluginPage, UIPluginSlot } from '@/api/types'
 
 const TRUSTED = new Set(['official', 'verified'])
 
-export interface SlotEntry {
+export interface SlotEntry extends Pick<UIPluginSlot, 'label' | 'icon' | 'accountTypes'> {
   pluginKey: string
   name: string
   component: Component
@@ -174,14 +174,14 @@ export const usePluginStore = defineStore('plugins', () => {
   /** The account actions of every listed plugin (manifest `ui.accountActions`, CONTRACTS §23.3 UI 3.6), in list order. */
   const accountActions = computed<PluginAccountActionEntry[]>(() => uiPlugins.value.flatMap((p) => (p.account_actions || []).map((a) => ({ pluginKey: p.key, ...a }))))
 
-  /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets, account.list.weight, account.list.toolbar). */
+  /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets, account.list.weight, account.list.toolbar, account.editor.section). */
   function slotEntries(slot: string): SlotEntry[] {
     const out: SlotEntry[] = []
     for (const p of uiPlugins.value) {
       for (const s of p.slots || []) {
         if (s.slot !== slot) continue
         const c = component(p.key, s.component)
-        if (c) out.push({ pluginKey: p.key, name: s.component, component: c })
+        if (c) out.push({ pluginKey: p.key, name: s.component, component: c, label: s.label, icon: s.icon, accountTypes: s.accountTypes })
       }
     }
     return out

@@ -14,6 +14,7 @@ func declared(t *testing.T, upstream string) (*manifest.Manifest, map[string][]b
 	t.Helper()
 	m := minimal()
 	m.Runtime, m.Entry = manifest.RuntimeNone, manifest.Entry{}
+	m.HostCompat = ">=" + UpstreamFirstCore + " <0.2.0"
 	m.Capabilities = []manifest.Capability{{ID: manifest.CapPlatformAdapter}, {ID: manifest.CapPlatformWebSocket}}
 	m.HostPermissions = []manifest.HostPermission{{ID: "platform.register"}}
 	at := manifest.AccountType{
@@ -35,6 +36,15 @@ func declared(t *testing.T, upstream string) (*manifest.Manifest, map[string][]b
 func hasCode(err error, field, code string) bool {
 	fields, _ := Fields(err)
 	return slices.ContainsFunc(fields, func(f FieldError) bool { return f.Field == field && f.Code == code })
+}
+
+// An older core ignores accountTypes[].upstream, so hostCompat must keep it out.
+func TestUpstreamCoreFloor(t *testing.T) {
+	m, files := declared(t, `{"preset":"openai"}`)
+	m.HostCompat = ">=0.1.0 <0.2.0"
+	if err := Validate(m, files, ValidateOptions{Tooling: true}); !hasCode(err, "hostCompat", "below_feature_core") {
+		t.Fatalf("hostCompat below %s: %v", UpstreamFirstCore, err)
+	}
 }
 
 func TestUpstreamDeclaration(t *testing.T) {

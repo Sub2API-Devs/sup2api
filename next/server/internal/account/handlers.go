@@ -756,44 +756,18 @@ func (in *input) changedFields() []string {
 	return out
 }
 
-func (in *input) applyCommonControls(ctx context.Context, at manifest.AccountType, current *row) []core.FieldError {
-	var fields []core.FieldError
-	for _, field := range []struct {
-		name  string
-		value **bool
-	}{
-		{"auto_disable", &in.AutoDisable}, {"schedulable", &in.Schedulable},
-	} {
-		control := at.CommonControls[field.name]
-		expected := control.DefaultValue()
-		if current != nil {
-			if field.name == "auto_disable" {
-				expected = current.AutoDisable
-			} else {
-				expected = current.Schedulable
-			}
-		}
-		if *field.value != nil && !control.IsConfigurable() && **field.value != expected {
-			fields = append(fields, core.FieldError{Field: field.name, Code: "read_only",
-				Message: t(ctx, "this account control is not configurable for this account type", "该账号类型不允许修改此通用开关")})
-		}
-		if current == nil && *field.value == nil {
-			*field.value = &expected
-		}
-	}
-	return fields
-}
-
 const (
-	maxModels      = 500
-	maxRPMLimit    = 10_000_000
-	maxTokenLimit  = 1_000_000_000_000
-	maxWeight      = 1000
-	maxPriority    = 1_000_000
-	maxConcurrency = 100_000
+	maxModels      = manifest.MaxAccountModels
+	maxRPMLimit    = manifest.MaxAccountRateLimit
+	maxTokenLimit  = manifest.MaxAccountTokenLimit
+	maxWeight      = manifest.MaxAccountWeight
+	maxPriority    = manifest.MaxAccountPriority
+	maxConcurrency = manifest.MaxAccountConcurrency
 	// ownMaxConcurrency is the cap an own-level user may set (H3.2) and the
 	// default of their new accounts; other new accounts default to unlimited.
 	ownMaxConcurrency     = 1000
+	ownMaxPriority        = 100
+	ownMaxWeight          = 100
 	ownDefaultConcurrency = 10
 )
 
@@ -1023,11 +997,11 @@ func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, i
 		}
 	}
 	// H3.2: Scheduling fields restricted for own-level users
-	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > 100) {
+	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > ownMaxPriority) {
 		return core.InvalidFields(core.FieldError{Field: "priority", Code: "restricted",
 			Message: t(ctx, "own-level users can only set priority between 0-100", "own 级用户只能设置 0-100 的优先级")})
 	}
-	if in.Weight != nil && (*in.Weight < 1 || *in.Weight > 100) {
+	if in.Weight != nil && (*in.Weight < 1 || *in.Weight > ownMaxWeight) {
 		return core.InvalidFields(core.FieldError{Field: "weight", Code: "restricted",
 			Message: t(ctx, "own-level users can only set weight between 1-100", "own 级用户只能设置 1-100 的权重")})
 	}
@@ -1151,7 +1125,13 @@ func (s *Service) create(c *gin.Context) {
 			Message: t(ctx, "unknown account type (is its plugin enabled?)", "未知的账号类型（插件是否已启用？）")}))
 		return
 	}
-	if fields := in.applyCommonControls(ctx, bt.Type, nil); len(fields) > 0 {
+	scope := core.OwnerScope(ctx, "account:create")
+	controls, err := planControls(ctx, bt.Type)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if fields := controls.check(ctx, &in, nil, scope); len(fields) > 0 {
 		httpapi.Fail(c, core.InvalidFields(fields...))
 		return
 	}
@@ -1169,7 +1149,7 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	scope := core.OwnerScope(ctx, "account:create")
+	controls.clampOwnDefaults(&in, bt.Type.DefaultLimits, scope)
 	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, len(bt.Type.GuardedSettings) == 0); err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1188,20 +1168,16 @@ func (s *Service) create(c *gin.Context) {
 			return
 		}
 	}
+	// Declared defaults apply after the own-level restrictions: the
+	// declaration, not the caller, chose them.
+	controls.fillDefaults(&in, scope)
 	status := core.ValueOr(in.Status, "active")
-	sched := core.ValueOr(in.Schedulable, true)
-	autoDisable := core.ValueOr(in.AutoDisable, true)
-	prio := core.ValueOr(in.Priority, 10)
-	maxc := core.ValueOr(in.MaxConcurrency, defaultConcurrency(scope))
-	weight := core.ValueOr(in.Weight, 1)
+	sched, autoDisable := *in.Schedulable, *in.AutoDisable
+	prio, maxc, weight := *in.Priority, *in.MaxConcurrency, *in.Weight
 	models := core.ValueOr(in.Models, []string{})
-	mapping := core.ValueOr(in.ModelMapping, map[string]string{})
-	rpm := core.ValueOr(in.RPMLimit, 0)
-	tpm := core.ValueOr(in.TPMLimit, int64(0))
-	spm := core.ValueOr(in.SPMLimit, 0)
-	modelLimits := core.ValueOr(in.ModelLimits, []core.ModelLimit{})
-	environment := core.ValueOr(in.Environment, core.EnvironmentValues{})
-	headerPassthrough := core.ValueOr(in.HeaderPassthrough, []string{})
+	mapping := *in.ModelMapping
+	rpm, tpm, spm := *in.RPMLimit, *in.TPMLimit, *in.SPMLimit
+	modelLimits, environment, headerPassthrough := *in.ModelLimits, *in.Environment, *in.HeaderPassthrough
 	uid, _ := core.UserID(ctx)
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
 		Name: *in.Name, Type: bt.Type.ID, SettingsJson: string(p.settings), Properties: &pluginv1.AccountProperties{
@@ -1216,8 +1192,8 @@ func (s *Service) create(c *gin.Context) {
 	}
 	// The plugin may adjust the account before it is saved (CONTRACTS §59),
 	// and set its read-only extensions from the observed facts.
-	patched, err := applyAccountPatch(ctx, before, patchTarget{Models: &models, Mapping: &mapping,
-		Priority: &prio, Weight: &weight, MaxConcurrency: &maxc, RPMLimit: &rpm, TPMLimit: &tpm, SPMLimit: &spm, ModelLimits: &modelLimits})
+	patched, err := applyAccountPatch(ctx, before, controls.guardPatch(patchTarget{Models: &models, Mapping: &mapping,
+		Priority: &prio, Weight: &weight, MaxConcurrency: &maxc, RPMLimit: &rpm, TPMLimit: &tpm, SPMLimit: &spm, ModelLimits: &modelLimits}))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1254,6 +1230,11 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
 			return err
+		}
+		if controls.usageLimit != nil {
+			if err := saveUsageLimit(ctx, tx, id, *controls.usageLimit); err != nil {
+				return err
+			}
 		}
 		if _, err := s.initializeQuota(ctx, tx, id, bt); err != nil {
 			return err
@@ -1369,6 +1350,14 @@ func (s *Service) update(c *gin.Context) {
 		}
 	}
 	bt, _ := s.accountType(cur.PluginKey, cur.Type)
+	controls, err := planControls(ctx, bt.Type)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	// The controls judge what the caller asked for, before the plugin's
+	// account_patch is merged into in.
+	requested := in
 	var extensionSettings *string
 	if len(in.Settings) > 0 {
 		base := cur.Settings
@@ -1388,6 +1377,7 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	controls.converge(&in, cur)
 	lifecycleSettings := extensionSettings
 	if lifecycleSettings == nil && p != nil {
 		value := string(p.settings)
@@ -1409,7 +1399,7 @@ func (s *Service) update(c *gin.Context) {
 		Priority: new(int(props.GetPriority())), Weight: new(int(props.GetWeight())), MaxConcurrency: new(int(props.GetMaxConcurrency())),
 		RPMLimit: new(int(props.GetRpmLimit())), TPMLimit: new(props.GetTpmLimit()), SPMLimit: new(int(props.GetSpmLimit())),
 		ModelLimits: new(core.ValueOr(in.ModelLimits, cur.modelLimits()))}
-	patched, err := applyAccountPatch(ctx, before, target)
+	patched, err := applyAccountPatch(ctx, before, controls.guardPatch(target))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1451,14 +1441,17 @@ func (s *Service) update(c *gin.Context) {
 	}
 	statusChanged := in.Status != nil && *in.Status != cur.Status
 	uid, _ := core.UserID(ctx)
-	setProxy, proxyCreated := in.ProxyID.Set, false
+	setProxy, proxyCreated, usageLimitConverged := in.ProxyID.Set, false, false
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		locked, err := s.loadRow(ctx, tx, id, scope, true)
 		if err != nil {
 			return err
 		}
-		if fields := in.applyCommonControls(ctx, bt.Type, locked); len(fields) > 0 {
+		if fields := controls.check(ctx, &requested, locked, scope); len(fields) > 0 {
 			return core.InvalidFields(fields...)
+		}
+		if usageLimitConverged, err = controls.convergeUsageLimit(ctx, tx, id); err != nil {
+			return err
 		}
 		if (p != nil || extensionSettings != nil || bt.Type.Lifecycle != nil) && !locked.UpdatedAt.Equal(cur.UpdatedAt) {
 			return core.ErrConflict.WithMessage(t(ctx, "the account was modified concurrently, please retry",
@@ -1581,6 +1574,11 @@ func (s *Service) update(c *gin.Context) {
 	if p != nil || extensionSettings != nil || setProxy {
 		s.quota.forget(id)
 		s.evictQuotaCache(ctx, id)
+	}
+	if usageLimitConverged {
+		if err := s.EnforceUsageLimits(ctx, []int64{id}); err != nil {
+			slog.WarnContext(ctx, "account: apply usage limit", "account", id, "err", err)
+		}
 	}
 	s.changed(ctx, id)
 	if !featureOnly {

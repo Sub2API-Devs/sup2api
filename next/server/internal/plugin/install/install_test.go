@@ -153,7 +153,7 @@ func newEnv(t *testing.T) *env {
 		DB: db, Trust: ts, Authz: e.authz, Permissions: e.perms,
 		Defaults: NewDefaultsApplier(e.perms),
 		Rollout:  e.rollout, Schemas: e.schemas, Accounts: e.accounts, Nodes: emptyNodes{}, Packages: registrytest.Source(),
-	}, Options{HostVersion: "0.1.0", Plugins: config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}})
+	}, Options{HostVersion: testHostVersion, Plugins: config.PluginConfig{MaxPackageBytes: 10 << 20, MaxMemoryMB: 1024}})
 	return e
 }
 

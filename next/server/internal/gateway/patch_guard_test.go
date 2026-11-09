@@ -14,11 +14,11 @@ func TestValidatePatchesComparesOnlyWhenBytesDiffer(t *testing.T) {
 	}
 	rt := &typeRoute{upstream: "openai.chat"}
 	before := []byte(`{"fallbacks":[{"model":"a"}]}`)
-	if kind, e := newCall().validatePatches(rt, before, before, before); kind != attemptDone || e != nil {
+	if kind, e := newCall().validatePatches(rt, before, before); kind != attemptDone || e != nil {
 		t.Fatalf("self-comparison: kind %v err %v", kind, e)
 	}
 	after := []byte(`{"fallbacks":[{"model":"b"}]}`)
-	if kind, e := newCall().validatePatches(rt, before, after, after); kind != attemptFailover || e == nil {
+	if kind, e := newCall().validatePatches(rt, before, after); kind != attemptFailover || e == nil {
 		t.Fatalf("changed references accepted: kind %v err %v", kind, e)
 	}
 }

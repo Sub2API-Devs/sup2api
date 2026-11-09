@@ -600,10 +600,11 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
 		}
 	}
-	// A declared type's own part of the body precedes the build; the
-	// account's request parameter override (CONTRACTS §84) follows it, in
-	// forwardBuilt (param_override.go).
-	upBody, upModel, failure := c.prepareDeclared(ctx, acc, rt, pacct, upBody, upModel, n)
+	// A declared type's own part of the body, then the account's request
+	// parameter override (CONTRACTS §84), precede the build: the plugin
+	// builds from, and may still patch, what the account decided
+	// (param_override.go).
+	upBody, upModel, failure := c.rewriteBody(ctx, acc, rt, pacct, upBody, upModel, n)
 	if failure != nil {
 		return *failure
 	}
@@ -632,6 +633,53 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	return c.forwardBuilt(ctx, rt, acc, buildRequest, upBody, built, nil)
 }
 
+// splitHeaders separates built's headers into the declaration's and the
+// plugin's; a code plugin's are all its own.
+func splitHeaders(rt *typeRoute, in *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse) (declared, plugin map[string]string) {
+	if d, ok := rt.binding.Client.(core.DeclaredUpstream); ok {
+		return d.SplitHeaders(in, built)
+	}
+	return nil, built.GetHeaders()
+}
+
+// setBuiltHeaders writes built headers onto req; host goes to req.Host and
+// the framing headers stay the transport's (transparent gzip, framing).
+func setBuiltHeaders(req *http.Request, h map[string]string) {
+	for k, v := range h {
+		switch strings.ToLower(k) {
+		case "host":
+			req.Host = v
+		case "content-length", "accept-encoding", "connection", "transfer-encoding":
+		default:
+			req.Header.Set(k, v)
+		}
+	}
+}
+
+// passthroughHeaders fills in the client headers the account's passthrough
+// (CONTRACTS §81) and the matched sticky rule (§5.6; the built-in Claude
+// Code rule forwards the session and sub-agent headers) forward, where h
+// has none yet.
+func (c *call) passthroughHeaders(h http.Header, acc *core.Account) {
+	if c.c == nil || c.c.Request == nil {
+		return
+	}
+	var rules [][]string
+	if acc != nil {
+		rules = append(rules, acc.HeaderPassthrough)
+	}
+	if c.sticky != nil {
+		rules = append(rules, c.sticky.rule.PassHeaders)
+	}
+	for _, r := range rules {
+		for k, vs := range core.PassthroughHeaders(r, c.c.Request.Header) {
+			if _, set := h[k]; !set {
+				h[k] = vs
+			}
+		}
+	}
+}
+
 // writeDeclaredAuth writes a declared account type's auth header once more,
 // last of the request's own headers (docs/UPSTREAM-DECLARATIVE.md §4.3): only
 // the declaration decides the credential the upstream receives, so neither
@@ -657,11 +705,11 @@ func writeDeclaredAuth(h http.Header, rt *typeRoute, pacct *pluginv1.Account, bu
 // pass before it is sent: the plugin's patches (upBody to body) must keep
 // resource and model references consistent with the original body, and the
 // account's usage rules must be able to meter the operation and attempts of
-// sent, the body that goes upstream (body after the account's override).
+// body, the one that goes upstream.
 // The kind differs per guard on purpose: an unaddressable resource reference
 // is the client's mistake and is returned (attemptReturn), everything else
 // fails over.
-func (c *call) validatePatches(rt *typeRoute, upBody, body, sent []byte) (attemptKind, *gwError) {
+func (c *call) validatePatches(rt *typeRoute, upBody, body []byte) (attemptKind, *gwError) {
 	// applyPatches returns upBody itself when the plugin asked for no patch,
 	// and then the three comparisons below compare the request with itself:
 	// they cannot fail, yet each walks the whole body (four scans and two
@@ -681,10 +729,10 @@ func (c *call) validatePatches(rt *typeRoute, upBody, body, sent []byte) (attemp
 			return attemptFailover, invalidModelReference(err.Error())
 		}
 	}
-	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, sent) {
+	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, body) {
 		return attemptFailover, invalidModelReference("account usage rules cannot meter the requested operation")
 	}
-	if c.ep.Billing != "free" && !c.routeHasRequiredAttempts(rt, sent) {
+	if c.ep.Billing != "free" && !c.routeHasRequiredAttempts(rt, body) {
 		return attemptFailover, invalidModelReference("account usage rules cannot meter the requested attempts")
 	}
 	return attemptDone, nil
@@ -692,8 +740,9 @@ func (c *call) validatePatches(rt *typeRoute, upBody, body, sent []byte) (attemp
 
 // forwardBuilt sends built, the plugin's answer to request (from
 // BuildUpstreamRequest, or forwarded by a plugin executing request,
-// execution set), with upBody, the body the plugin built from: its patches
-// apply to upBody, then the account's parameter override.
+// execution set), with upBody, the body the plugin built from (already
+// rewritten by the declaration and the account's override): its patches
+// apply to upBody.
 func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, request *pluginv1.BuildUpstreamRequestRequest, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, execution *gatewayExecution) attemptResult {
 	pacct := request.GetAccount()
 	prepareCtx := ctx
@@ -709,7 +758,8 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
-	body, rawURL, builtModel, failure := c.overrideBuilt(ctx, acc, rt, request, built, patched)
+	body, builtModel := patched, built.GetUpstreamModel()
+	rawURL, failure := c.declaredTarget(rt, request, built, body)
 	if failure != nil {
 		return *failure
 	}
@@ -736,7 +786,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 		}
 	}
-	if kind, err := c.validatePatches(rt, upBody, patched, body); err != nil {
+	if kind, err := c.validatePatches(rt, upBody, body); err != nil {
 		return attemptResult{kind: kind, err: err}
 	}
 	var client *http.Client
@@ -765,40 +815,17 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
 	}
-	for k, v := range built.GetHeaders() {
-		switch strings.ToLower(k) {
-		case "host":
-			req.Host = v
-		case "content-length", "accept-encoding", "connection", "transfer-encoding":
-			// Managed by the transport (transparent gzip, framing).
-		default:
-			req.Header.Set(k, v)
-		}
-	}
-	// The declared paramOverride's header decisions belong with the
-	// declaration's headers.
+	// Headers in layers (CONTRACTS §86.5), each over the one before: the
+	// declaration's and its paramOverride's, the passthrough (fills only
+	// what is unset), the account's parameter override, the plugin's (it
+	// knows the override ran and may change its result), then the declared
+	// auth header and the core's own below.
+	declared, plugin := splitHeaders(rt, request, built)
+	setBuiltHeaders(req, declared)
 	c.paramOverride.declared.Apply(req.Header)
-	// The account's header passthrough (CONTRACTS §81) fills in client
-	// headers the plugin did not set; the core's own headers below still win.
-	if acc != nil && len(acc.HeaderPassthrough) > 0 && c.c != nil && c.c.Request != nil {
-		for k, vs := range core.PassthroughHeaders(acc.HeaderPassthrough, c.c.Request.Header) {
-			if _, set := req.Header[k]; !set {
-				req.Header[k] = vs
-			}
-		}
-	}
-	// So does the matched sticky rule's (CONTRACTS §5.6): the built-in
-	// Claude Code rule forwards the session and sub-agent headers.
-	if s := c.sticky; s != nil && len(s.rule.PassHeaders) > 0 && c.c != nil && c.c.Request != nil {
-		for k, vs := range core.PassthroughHeaders(s.rule.PassHeaders, c.c.Request.Header) {
-			if _, set := req.Header[k]; !set {
-				req.Header[k] = vs
-			}
-		}
-	}
-	// The account's param override (CONTRACTS §84) sets and removes headers
-	// over the plugin's and the passthrough's; the core's own below still win.
+	c.passthroughHeaders(req.Header, acc)
 	c.paramOverride.headers.Apply(req.Header)
+	setBuiltHeaders(req, plugin)
 	writeDeclaredAuth(req.Header, rt, pacct, built)
 	if req.Header.Get("Content-Type") == "" && reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")

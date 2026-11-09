@@ -357,7 +357,10 @@ type AccountType struct {
 	// of this type in the console (CONTRACTS §68.5), like DefaultModels:
 	// suggestions only. To set them on the account itself the plugin answers
 	// before_create / before_update with an account_patch.
-	DefaultLimits     *AccountDefaultLimits           `json:"defaultLimits,omitempty"`
+	DefaultLimits *AccountDefaultLimits `json:"defaultLimits,omitempty"`
+	// CommonControls declare, per common account setting the core edits and
+	// enforces (CommonControlSpecs), its default and whether an operator may
+	// see and change it (CONTRACTS §87).
 	CommonControls    map[string]AccountCommonControl `json:"commonControls,omitempty"`
 	ExtensionsSchema  json.RawMessage                 `json:"extensionsSchema,omitempty"`
 	Lifecycle         *AccountLifecycle               `json:"lifecycle,omitempty"`
@@ -407,19 +410,6 @@ type AccountLifecycleAction struct {
 	ID    string        `json:"id"`
 	Label LocalizedText `json:"label"`
 	Icon  string        `json:"icon,omitempty"`
-}
-
-type AccountCommonControl struct {
-	Configurable *bool `json:"configurable,omitempty"`
-	Default      *bool `json:"default,omitempty"`
-}
-
-func (c AccountCommonControl) IsConfigurable() bool {
-	return c.Configurable == nil || *c.Configurable
-}
-
-func (c AccountCommonControl) DefaultValue() bool {
-	return c.Default == nil || *c.Default
 }
 
 // AccountRefresh tells the host when to renew the credentials of an
@@ -531,11 +521,11 @@ type DefaultModelLimit struct {
 
 // MaxDefaultModelLimits bounds AccountDefaultLimits.ModelLimits; it equals
 // the per-account limit of model lists.
-const MaxDefaultModelLimits = 50
+const MaxDefaultModelLimits = MaxAccountModelLimits
 
 // MaxDefaultModels bounds AccountType.DefaultModels and DefaultModelMapping;
 // it equals the per-account limit of models and model_mapping (CONTRACTS §18).
-const MaxDefaultModels = 500
+const MaxDefaultModels = MaxAccountModels
 
 // MaxAccountBatch bounds the accounts of one account action request (UI
 // 3.6) and of one GET /accounts?ids= filter; the console never sends more
@@ -985,10 +975,19 @@ type Column struct {
 }
 
 type Slot struct {
-	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight | account.list.toolbar
+	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight | account.list.toolbar | account.editor.section
 	Component  string `json:"component"`
 	Permission string `json:"permission,omitempty"`
+	// Label, Icon and AccountTypes describe an account.editor.section slot
+	// (UI 3.7) only: the navigation entry the account editor appends, and the
+	// account type ids it is shown for (all types when empty).
+	Label        LocalizedText `json:"label,omitempty"`
+	Icon         string        `json:"icon,omitempty"`
+	AccountTypes []string      `json:"accountTypes,omitempty"`
 }
+
+// SlotAccountEditorSection is the account editor section slot (UI 3.7).
+const SlotAccountEditorSection = "account.editor.section"
 
 // AccountAction is a declarative account operation. The console calls
 // Route as "POST /api/v1/p/<key><path>" with {"account_ids": [...]}, a

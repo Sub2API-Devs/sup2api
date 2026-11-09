@@ -3,16 +3,16 @@
 // POST / PATCH (submit) and the error routing (showSaveError) in one place.
 // AccountEditor keeps the template and only wires the state below.
 import type { ComputedRef, Ref } from 'vue'
-import { computed, nextTick } from 'vue'
+import { nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
-import type { Account, AccountType, ConversionLossPolicy, EnvironmentValues } from '@/api/types'
+import type { Account, AccountType, CommonControlName, ConversionLossPolicy, EnvironmentValues } from '@/api/types'
 import { useProxiesLookup } from '@/composables/lookups'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { savedOverrides, validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
-import { accountControl } from './accountTypeChoices'
+import { accountControl, withoutFixed } from './commonControls'
 import { sectionOfErrors, splitFieldErrors, type EditorSection } from './editorErrors'
 import { subscriptionLabel } from './subscription'
 import type { useModelEdit } from './useModelEdit'
@@ -101,9 +101,7 @@ export interface AccountSaveDeps {
 export function useAccountSave(deps: AccountSaveDeps) {
   const { t } = useI18n()
   const { account, accountType, editing, basic, errors, credErrors, saving, activeSection, models, ccg } = deps
-  // Both decisions are the account type's (accountControl), not the editor's state.
-  const schedulingConfigurable = computed(() => accountControl(accountType.value, 'schedulable').configurable)
-  const autoDisableConfigurable = computed(() => accountControl(accountType.value, 'auto_disable').configurable)
+  const control = (name: CommonControlName) => accountControl(accountType.value, name)
 
   /** Checks done before the request; the section to show when one fails. */
   async function invalidSection(form: HTMLFormElement): Promise<EditorSection | 'native' | 'ccg' | null> {
@@ -123,6 +121,11 @@ export function useAccountSave(deps: AccountSaveDeps) {
     }
     if (!basic.name.trim()) {
       errors.value = { name: t('ui.schema.v.required') }
+      return 'connection'
+    }
+    if (control('proxy').required && basic.proxy_id == null && !ccg.proxyUrlToSend.value) {
+      const message = t('accounts.proxyRequired')
+      errors.value = { proxy_id: message, proxy_url: message }
       return 'connection'
     }
     if (ccg.saveBlocked.value) return 'ccg'
@@ -152,10 +155,10 @@ export function useAccountSave(deps: AccountSaveDeps) {
       environment: basic.environment,
       header_passthrough: basic.header_passthrough,
       param_override: basic.param_override,
-      conversion_loss_policy: basic.conversion_loss_policy
+      conversion_loss_policy: basic.conversion_loss_policy,
+      schedulable: basic.schedulable
     }
-    if (schedulingConfigurable.value) body.schedulable = basic.schedulable
-    if (ccg.autoDisableEnabled.value === true && autoDisableConfigurable.value) body.auto_disable = basic.auto_disable
+    if (ccg.autoDisableEnabled.value === true) body.auto_disable = basic.auto_disable
     if (ccgNeeded()) {
       body.settings = { locale: deps.settings.locale, timezone: deps.settings.timezone }
       body.auto_models = automaticModels()
@@ -168,7 +171,8 @@ export function useAccountSave(deps: AccountSaveDeps) {
     if (ccg.proxyUrlToSend.value) body.proxy_url = ccg.proxyUrlToSend.value
     else body.proxy_id = basic.proxy_id
     if (accountType.value && !account.value?.orphaned) body.credentials = creds
-    return body
+    // Fields the type fixes are left to the server (docs/COMMON-CONTROLS.md §1).
+    return withoutFixed(body, accountType.value)
   }
 
   /** CCGateway accounts (managed and apikey) carry settings and need a proxy. */
@@ -239,7 +243,7 @@ export function useAccountSave(deps: AccountSaveDeps) {
         useProxiesLookup(true)
         if (result?.proxy_created) toast(t('accounts.proxyAutoCreated'), 'info')
       }
-      if (deps.usageLimit && result?.id) {
+      if (deps.usageLimit && result?.id && control('usage_limit').configurable) {
         // The account is saved either way: a refused limit is reported, not retried
         // (re-submitting a new account would create it twice).
         try {

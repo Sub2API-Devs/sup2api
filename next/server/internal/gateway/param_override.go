@@ -13,15 +13,13 @@ import (
 )
 
 // Rewrites in the format of the request parameter override (CONTRACTS §84)
-// run at two points of an attempt (docs/UPSTREAM-DECLARATIVE.md §4.3):
-//
-//   - before BuildUpstreamRequest, the account type's declared upstream
-//     (core.DeclaredUpstream.PrepareBody: filtered fields, the manifest's
-//     paramOverride);
-//   - after the declaration's and the plugin's patches, the account's own
-//     override (forwardBuilt, also for each request an executing plugin
-//     forwards): it has the last word on the body, and the plugin builds
-//     from the body before it, with meta.model the mapped model.
+// run before BuildUpstreamRequest (docs/UPSTREAM-DECLARATIVE.md §4.3): the
+// account type's declared upstream first (core.DeclaredUpstream.PrepareBody:
+// filtered fields, the manifest's paramOverride), then the account's own
+// override. The plugin builds from the result, with meta.model the model the
+// override settled on, and its patches may still change it (user decision,
+// 2026-11-09). The account override's header decisions still apply over the
+// plugin's headers (forwardBuilt).
 
 // paramOverrideState is what the rewrites decided for the current attempt:
 // the headers forwardBuilt applies and, when a rewrite changed the body's
@@ -76,53 +74,55 @@ func (c *call) prepareDeclared(ctx context.Context, acc *core.Account, rt *typeR
 	return body, upModel, failure
 }
 
-// overrideBuilt runs the account's override on the body the declaration's
-// and the plugin's patches produced. When it changes the model, a declared
-// type's URL is rendered again for it (core.DeclaredUpstream.UpstreamURL)
-// so a model in the path follows the body; a code plugin's URL is kept and
-// only the body changes. It returns the body, the URL and the upstream
-// model to send.
-func (c *call) overrideBuilt(ctx context.Context, acc *core.Account, rt *typeRoute, request *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse, body []byte) ([]byte, string, string, *attemptResult) {
-	c.paramOverride.headers = core.HeaderOverride{}
-	target, model := built.GetUrl(), built.GetUpstreamModel()
-	if acc.ParamOverride == nil {
-		return body, target, model, nil
+// rewriteBody runs the rewrites of an attempt's body before
+// BuildUpstreamRequest: the declaration's part, then the account's override.
+func (c *call) rewriteBody(ctx context.Context, acc *core.Account, rt *typeRoute, pacct *pluginv1.Account, body []byte, upModel string, n int) ([]byte, string, *attemptResult) {
+	body, upModel, failure := c.prepareDeclared(ctx, acc, rt, pacct, body, upModel, n)
+	if failure != nil {
+		return nil, "", failure
 	}
-	// The model the plugin was given: every request an executing plugin
-	// forwards is compared with it, not with an earlier one's override.
-	before := request.GetMeta().GetModel()
-	body, after, headers, failure := c.overrideBody(ctx, acc, rt, body, before, int(request.GetAttempt()), acc.ParamOverride.Apply, accountOverride)
-	c.paramOverride.headers = headers
-	if failure != nil || after == before {
-		return body, target, model, failure
-	}
-	if d, ok := rt.binding.Client.(core.DeclaredUpstream); ok {
-		var err error
-		if target, err = d.UpstreamURL(request, built, after); err != nil {
-			return nil, "", "", &attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
-		}
-	}
-	return body, target, after, nil
+	return c.overrideAccount(ctx, acc, rt, body, upModel, n)
 }
 
-// overrideTurn runs the account's override on a WebSocket turn's message,
-// after the plugin's patches. Its header decisions do not apply: the
-// connection's headers were sent with the handshake.
-func (c *call) overrideTurn(ctx context.Context, acc *core.Account, rt *typeRoute, payload []byte, n int) ([]byte, *gwError) {
+// overrideAccount runs the account's override on body; its header
+// decisions are kept for forwardBuilt.
+func (c *call) overrideAccount(ctx context.Context, acc *core.Account, rt *typeRoute, body []byte, upModel string, n int) ([]byte, string, *attemptResult) {
 	if acc == nil || acc.ParamOverride == nil {
-		return payload, nil
+		return body, upModel, nil
 	}
-	payload, _, _, failure := c.overrideBody(ctx, acc, rt, payload, c.upstreamModel(acc), n, acc.ParamOverride.Apply, accountOverride)
-	return payload, failureErr(failure)
+	var failure *attemptResult
+	body, upModel, c.paramOverride.headers, failure = c.overrideBody(ctx, acc, rt, body, upModel, n, acc.ParamOverride.Apply, accountOverride)
+	return body, upModel, failure
 }
 
-// prepareTurn runs the declaration's part of a WebSocket turn's message of
-// a declared account type, before the plugin's patches.
-func (c *call) prepareTurn(ctx context.Context, acc *core.Account, rt *typeRoute, pacct *pluginv1.Account, payload []byte, n int) ([]byte, *gwError) {
+// declaredTarget is the URL to send: a declared type's URL is rendered
+// again when the plugin's patches changed the body's model away from the
+// one it was built for, so a model in the path follows the body; a code
+// plugin's URL is its own.
+func (c *call) declaredTarget(rt *typeRoute, request *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse, body []byte) (string, *attemptResult) {
+	d, ok := rt.binding.Client.(core.DeclaredUpstream)
+	if !ok || rt.modelPath == "" {
+		return built.GetUrl(), nil
+	}
+	m := gjson.GetBytes(body, rt.modelPath)
+	if m.Type != gjson.String || m.Str == request.GetMeta().GetModel() {
+		return built.GetUrl(), nil
+	}
+	target, err := d.UpstreamURL(request, built, m.Str)
+	if err != nil {
+		return "", &attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
+	}
+	return target, nil
+}
+
+// rewriteTurn runs the rewrites of a WebSocket turn's message before the
+// plugin's patches, as on HTTP. The account override's header decisions do
+// not apply: the connection's headers were sent with the handshake.
+func (c *call) rewriteTurn(ctx context.Context, acc *core.Account, rt *typeRoute, pacct *pluginv1.Account, payload []byte, n int) ([]byte, *gwError) {
 	if acc == nil {
 		return payload, nil
 	}
-	payload, _, failure := c.prepareDeclared(ctx, acc, rt, pacct, payload, c.upstreamModel(acc), n)
+	payload, _, failure := c.rewriteBody(ctx, acc, rt, pacct, payload, c.upstreamModel(acc), n)
 	return payload, failureErr(failure)
 }
 

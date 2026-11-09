@@ -42,9 +42,17 @@ func CompileParamOverride(ctx context.Context, field string, raw []byte) (*Param
 	if len(errs) == 0 {
 		return p, nil
 	}
+	return nil, fieldErrors(errs)
+}
+
+// fieldErrors converts the field errors of sdk/paramoverride; nil for none.
+func fieldErrors(errs []paramoverride.FieldError) []FieldError {
+	if len(errs) == 0 {
+		return nil
+	}
 	out := make([]FieldError, len(errs))
 	for i, e := range errs {
 		out[i] = FieldError(e)
 	}
-	return nil, out
+	return out
 }

@@ -6,6 +6,7 @@ import { caller, filterOwned, hasPerm, inScope, ownerScope, userEmail, type Iden
 import { resolveProxyURL, validateProxyURL } from './resources'
 import { codexAccountTypes, codexCredentialErrors } from './codex'
 import { customAccountTypes, customCredentialErrors, customForm } from './custom'
+import { checkControls, controlsAccountTypes, controlsForm } from './controls'
 
 // Mock handlers: accounts, account types (form modes schema + iframe) and
 // GET /platforms (CONTRACTS §13). Ownership (CONTRACTS §21): own-level keys
@@ -148,6 +149,9 @@ interface MockAccountType {
   pass_headers?: string[]
   /** Resolved upstream declaration of a declarative type (mock/custom.ts). */
   upstream?: unknown
+  default_limits?: Record<string, unknown>
+  /** Declared common controls (mock/controls.ts); others come from the plugin manifest. */
+  common_controls?: Record<string, any>
 }
 
 // Built-in model list of the Claude Code account types (plugins/ccgateway/manifest.json).
@@ -283,7 +287,9 @@ const accountTypeDecls: MockAccountType[] = [
   // Native account form (plugins/codex/ui/native, mock/codex.ts): one creation card, two auth methods.
   ...codexAccountTypes,
   // Custom upstream (built-in plugin `custom`, mock/custom.ts): the upstream-editor widget.
-  ...customAccountTypes
+  ...customAccountTypes,
+  // Declared common controls and an editor section (mock/controls.ts).
+  ...controlsAccountTypes
 ]
 
 function accountTypeOut(d: MockAccountType) {
@@ -301,7 +307,7 @@ function accountTypeOut(d: MockAccountType) {
     const e = platformById(c.platform)?.endpoints.find((x) => x.path === c.path)
     if (e) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: c.platform, native: false, grade: 'good', via: [e.protocol, platformById(supports[0])?.endpoints[0]?.protocol].filter(Boolean) })
   }
-  return { pass_headers: [], ...rest, ...defaults, platforms, endpoints }
+  return { pass_headers: [], ...rest, ...defaults, common_controls: d.common_controls ?? defaults.common_controls, platforms, endpoints }
 }
 
 /**
@@ -324,6 +330,11 @@ function pluginDefaults(pluginKey: string, type: string) {
 }
 
 function applyCommonControls(pluginKey: string, type: string, body: Record<string, any>, current?: Record<string, any>) {
+  const declared = accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.common_controls
+  if (declared) {
+    const bad = checkControls(declared, body, current)
+    return bad ? fail(400, 'invalid_argument', 'Invalid common control', { fields: [{ ...bad, message: bad.code === 'required' ? 'This account type needs a proxy' : 'This account type does not allow changing this field' }] }) : undefined
+  }
   const controls = pluginDefaults(pluginKey, type).common_controls
   for (const field of ['auto_disable', 'schedulable']) {
     const control = controls[field]
@@ -668,6 +679,7 @@ on('GET', '/account-types/:plugin_key/:type/form', (req) => {
   if (k === 'gemini') return guardForm(who, k, geminiForm)
   if (k === 'ccgateway') return { schema: { type: 'object', properties: {} }, ui_schema: {} }
   if (k === 'custom') return customForm()
+  if (k === 'controls_demo') return controlsForm
   if (k === 'claude_oauth') {
     // The real plugin form (plugins/claude-oauth/forms).
     const file = req.params.type === 'claude_setup_token' ? 'setup_token' : 'oauth'

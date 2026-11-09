@@ -12,7 +12,7 @@ import type { EditorSection } from './editorErrors'
 defineProps<{
   accountType: AccountType | null
   sections: Array<{ key: EditorSection; icon: string; label: string; summary: string }>
-  errors: Record<EditorSection, boolean>
+  errors: Partial<Record<EditorSection, boolean>>
 }>()
 const active = defineModel<EditorSection>({ required: true })
 const { t } = useI18n()

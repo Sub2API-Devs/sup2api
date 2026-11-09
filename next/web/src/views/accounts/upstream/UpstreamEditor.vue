@@ -3,11 +3,12 @@
 // account layer of a custom upstream type (auth, headers, route paths, the
 // filtered fields let through) over the type's resolved declaration. The
 // account editor provides the type and the server's field errors
-// (ACCOUNT_FORM_KEY); the value is undefined while everything is default.
+// (ACCOUNT_FORM_KEY); a plugin (`host.components.UpstreamEditor`) passes
+// them as props. The value is undefined while everything is default.
 import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SButton, SCheckbox, SHint, SInput, SSegmented, SSelect, SSettingsGroup } from '@sub2api/ui'
-import type { UpstreamAccountLayer } from '@/api/types'
+import type { AccountType, UpstreamAccountLayer } from '@/api/types'
 import { ACCOUNT_FORM_KEY } from '@/components/schema/accountForm'
 import {
   AUTH_TYPES,
@@ -38,15 +39,16 @@ import UpstreamSection from './UpstreamSection.vue'
 
 // Extra widget props (schema, ui, multiple) must not land on the root.
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ modelValue: UpstreamAccountLayer | null | undefined; disabled?: boolean }>()
+const props = defineProps<{ modelValue: UpstreamAccountLayer | null | undefined; disabled?: boolean; accountType?: AccountType | null; errors?: Record<string, string> }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: UpstreamAccountLayer | undefined): void }>()
 const { t } = useI18n()
 const P = 'accounts.upstream'
 const form = inject(ACCOUNT_FORM_KEY, null)
 
-const up = computed(() => form?.accountType.value?.upstream)
-const passHeaders = computed(() => form?.accountType.value?.pass_headers ?? [])
-const serverErrors = computed(() => layerErrors(form?.errors.value ?? {}))
+const accountType = computed(() => props.accountType ?? form?.accountType.value)
+const up = computed(() => accountType.value?.upstream)
+const passHeaders = computed(() => accountType.value?.pass_headers ?? [])
+const serverErrors = computed(() => layerErrors(props.errors ?? form?.errors.value ?? {}))
 const draft = ref<Draft | null>(null)
 /** JSON of the layer last read or emitted: an echo of our own value does not reload the draft. */
 let current = ''

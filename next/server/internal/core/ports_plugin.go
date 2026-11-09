@@ -82,12 +82,15 @@ type DeclaredUpstream interface {
 	// BuildUpstreamRequest: the filtered fields the account does not allow
 	// are removed, then the declared paramOverride runs.
 	PrepareBody(acc *pluginv1.Account, body []byte, in *ParamOverrideContext) (ParamOverrideResult, error)
-	// UpstreamURL is the URL of built once the account's parameter override
-	// (§84, applied after BuildUpstreamRequest) changed the upstream model to
-	// model: the declaration's URL rendered again, so a model in the path
-	// follows the model really sent, or built's own URL when the plugin
-	// (extend) replaced it.
+	// UpstreamURL is the URL of built once the plugin's patches (extend)
+	// changed the upstream model to model: the declaration's URL rendered
+	// again, so a model in the path follows the model really sent, or
+	// built's own URL when the plugin replaced it.
 	UpstreamURL(in *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse, model string) (string, error)
+	// SplitHeaders separates built's headers into the declaration's and the
+	// plugin's (extend), which the gateway layers around the passthrough and
+	// the account's parameter override (§86.5).
+	SplitHeaders(in *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse) (declared, plugin map[string]string)
 	// AuthHeader is the lower-case name of the header the declaration
 	// authenticates with for acc (empty for query or no auth). The gateway
 	// writes built's value of it after every other header source.

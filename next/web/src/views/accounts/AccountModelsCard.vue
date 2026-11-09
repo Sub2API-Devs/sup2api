@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SIcon, SSettingRow, SSegmented, SSwitch, STextarea } from '@sub2api/ui'
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import ModelMappingEditor from './ModelMappingEditor.vue'
+import type { ControlView } from './commonControls'
 import { mappingErrorText, modelsErrorText } from './editorErrors'
 import type { useModelEdit } from './useModelEdit'
 
@@ -26,6 +27,8 @@ const props = defineProps<{
   errors: Record<string, string>
   /** Merge ticked models into the list; the editor's guard (automatic models) stays in AccountEditor. */
   mergeModels: (ids: string[]) => number
+  /** The model_mapping common control: hides or fixes the mapping card. */
+  mappingControl?: ControlView
 }>()
 const emit = defineEmits<{ (e: 'fetch'): void }>()
 /** "Automatic models": both transitions start from the preset (see the card's switch). */
@@ -109,26 +112,28 @@ function setAutoModels(value: boolean) {
       </datalist>
     </SCard>
 
-    <SCard :subtitle="t('accounts.editorUi.mappingCardHint')">
-      <template #title>
-        <h3 class="flex items-center gap-2 text-sm font-semibold text-fg">{{ t('accounts.modelMapping') }}<SBadge v-if="mappingCount" tone="accent">{{ mappingCount }}</SBadge></h3>
-      </template>
-      <template #actions>
-        <SSegmented size="sm" :options="editModes" :model-value="mappingJsonMode ? 'json' : 'visual'" :aria-label="t('accounts.modelMapping')" data-testid="mapping-mode" @update:model-value="setMappingJsonMode($event === 'json')" />
-      </template>
-
-      <SField :error="mappingError || serverMappingError">
-        <STextarea v-if="mappingJsonMode" v-model="mappingText" mono :rows="10" :placeholder="mappingPlaceholder" data-testid="mapping-json" @blur="syncMappingText()" />
-        <ModelMappingEditor v-else v-model="mapping" :models="models" list-id="account-model-options" @add-models="mergeModels($event)" />
-        <template #hint>{{ t('accounts.editorUi.mappingKeyHint') }}</template>
-      </SField>
-      <div class="mt-3 flex flex-wrap items-center gap-2">
-        <SButton v-if="defaultMappingCount" size="sm" icon="download" data-testid="mapping-fill-defaults" @click="fillDefaultMapping()">{{ t('accounts.editorUi.fillDefaultMapping', { n: defaultMappingCount }) }}</SButton>
-        <template v-if="mappingJsonMode">
-          <SButton size="sm" variant="ghost" icon="list" data-testid="mapping-template" @click="fillMappingTemplate()">{{ t('accounts.editorUi.fillTemplate') }}</SButton>
-          <SButton size="sm" variant="ghost" icon="code" data-testid="mapping-format" @click="formatMappingText()">{{ t('accounts.editorUi.formatJson') }}</SButton>
+    <fieldset v-if="mappingControl?.visible !== false" :disabled="mappingControl?.disabled" class="min-w-0">
+      <SCard :subtitle="mappingControl?.reason || t('accounts.editorUi.mappingCardHint')">
+        <template #title>
+          <h3 class="flex items-center gap-2 text-sm font-semibold text-fg">{{ t('accounts.modelMapping') }}<SBadge v-if="mappingCount" tone="accent">{{ mappingCount }}</SBadge></h3>
         </template>
-      </div>
-    </SCard>
+        <template #actions>
+          <SSegmented size="sm" :options="editModes" :model-value="mappingJsonMode ? 'json' : 'visual'" :aria-label="t('accounts.modelMapping')" data-testid="mapping-mode" @update:model-value="setMappingJsonMode($event === 'json')" />
+        </template>
+
+        <SField :error="mappingError || serverMappingError">
+          <STextarea v-if="mappingJsonMode" v-model="mappingText" mono :rows="10" :placeholder="mappingPlaceholder" data-testid="mapping-json" @blur="syncMappingText()" />
+          <ModelMappingEditor v-else v-model="mapping" :models="models" list-id="account-model-options" :disabled="mappingControl?.disabled" @add-models="mergeModels($event)" />
+          <template #hint>{{ t('accounts.editorUi.mappingKeyHint') }}</template>
+        </SField>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <SButton v-if="defaultMappingCount" size="sm" icon="download" data-testid="mapping-fill-defaults" @click="fillDefaultMapping()">{{ t('accounts.editorUi.fillDefaultMapping', { n: defaultMappingCount }) }}</SButton>
+          <template v-if="mappingJsonMode">
+            <SButton size="sm" variant="ghost" icon="list" data-testid="mapping-template" @click="fillMappingTemplate()">{{ t('accounts.editorUi.fillTemplate') }}</SButton>
+            <SButton size="sm" variant="ghost" icon="code" data-testid="mapping-format" @click="formatMappingText()">{{ t('accounts.editorUi.formatJson') }}</SButton>
+          </template>
+        </div>
+      </SCard>
+    </fieldset>
   </div>
 </template>
