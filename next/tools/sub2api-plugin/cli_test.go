@@ -301,7 +301,7 @@ func TestPackAccountTypes(t *testing.T) {
 func TestRuntimeNone(t *testing.T) {
 	const m = `{
   "apiVersion": 1, "key": "decl", "name": {"en": "Declared"}, "version": "0.1.0",
-  "publisher": "tester", "runtime": "none", "hostCompat": ">=0.1.0 <0.2.0",
+  "publisher": "tester", "runtime": "none", "hostCompat": ">=0.1.262 <0.2.0",
   "capabilities": [{"id": "platform.adapter.v1"}],
   "accountTypes": [{"id": "apikey", "label": {"en": "Key"}, "form": {"mode": "schema", "schema": "forms/k.json"},
     "sensitiveFields": ["api_key"], "settingsFields": ["base_url"], "platforms": [{"platform": "anthropic"}],
