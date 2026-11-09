@@ -4,9 +4,9 @@ export default {
     gateway: '网关',
     security: '安全',
     finance: '财务',
-    users: '用户与权限',
+    users: '用户',
     plugins: '插件',
-    system: '系统设置',
+    system: '系统',
     me: '个人中心',
     admin: '管理员'
   },
@@ -35,6 +35,8 @@ export default {
     myWallet: '钱包',
     myProfile: '个人设置'
   },
+  label: '控制台菜单',
+  backToConsole: '返回控制台',
   crumbs: {
     pluginDetail: '插件详情',
     pluginRollout: '发布进度',
