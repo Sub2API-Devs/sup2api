@@ -1,0 +1,5 @@
+{
+  "reasoning": [
+    "response.output[0].encrypted_content"
+  ]
+}

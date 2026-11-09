@@ -1,0 +1,29 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "Hello! How can I help you today?",
+        "refusal": null,
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "resp_<hex>",
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 9,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 14,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 23
+  }
+}

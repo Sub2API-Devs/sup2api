@@ -1,0 +1,47 @@
+{
+  "choices": [
+    {
+      "finish_reason": "tool_calls",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": null,
+        "refusal": null,
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"city\": \"Paris\"}",
+              "name": "get_weather"
+            },
+            "id": "call_unLAR8MvFNptuiZK6K6HCy5k",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"city\": \"Tokyo\"}",
+              "name": "get_weather"
+            },
+            "id": "call_Y8bM5OVq3uhHHh5KY9jjCNdc",
+            "type": "function"
+          }
+        ]
+      }
+    }
+  ],
+  "created": 0,
+  "id": "resp_<hex>",
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 46,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 62,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 108
+  }
+}

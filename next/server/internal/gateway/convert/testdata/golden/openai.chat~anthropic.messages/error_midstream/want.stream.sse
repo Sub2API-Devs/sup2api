@@ -1,0 +1,6 @@
+data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"msg_013Zva2CMHLNnXjNJJKqJ2EF","model":"claude-sonnet-4-5-20250929","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":"Once upon"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"msg_013Zva2CMHLNnXjNJJKqJ2EF","model":"claude-sonnet-4-5-20250929","object":"chat.completion.chunk","usage":null}
+
+data: {"error":{"code":null,"message":"Overloaded","type":"overloaded_error"}}
+

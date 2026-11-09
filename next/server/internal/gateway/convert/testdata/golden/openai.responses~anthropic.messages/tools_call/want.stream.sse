@@ -1,0 +1,66 @@
+event: response.created
+data: {"response":{"created_at":0,"error":null,"id":"resp_msg_013Zva2CMHLNnXjNJJKqJ2EF","incomplete_details":null,"model":"claude-sonnet-4-5-20250929","object":"response","output":[],"status":"in_progress","usage":null},"sequence_number":0,"type":"response.created"}
+
+event: response.in_progress
+data: {"response":{"created_at":0,"error":null,"id":"resp_msg_013Zva2CMHLNnXjNJJKqJ2EF","incomplete_details":null,"model":"claude-sonnet-4-5-20250929","object":"response","output":[],"status":"in_progress","usage":null},"sequence_number":1,"type":"response.in_progress"}
+
+event: response.output_item.added
+data: {"item":{"content":[],"id":"msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0","role":"assistant","status":"in_progress","type":"message"},"output_index":0,"sequence_number":2,"type":"response.output_item.added"}
+
+event: response.content_part.added
+data: {"content_index":0,"item_id":"msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0","output_index":0,"part":{"annotations":[],"text":"","type":"output_text"},"sequence_number":3,"type":"response.content_part.added"}
+
+event: response.output_text.delta
+data: {"content_index":0,"delta":"I'll check","item_id":"msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0","logprobs":[],"output_index":0,"sequence_number":4,"type":"response.output_text.delta"}
+
+event: response.output_text.delta
+data: {"content_index":0,"delta":" both cities.","item_id":"msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0","logprobs":[],"output_index":0,"sequence_number":5,"type":"response.output_text.delta"}
+
+event: response.output_text.done
+data: {"content_index":0,"item_id":"msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0","logprobs":[],"output_index":0,"sequence_number":6,"text":"I'll check both cities.","type":"response.output_text.done"}
+
+event: response.content_part.done
+data: {"content_index":0,"item_id":"msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0","output_index":0,"part":{"annotations":[],"text":"I'll check both cities.","type":"output_text"},"sequence_number":7,"type":"response.content_part.done"}
+
+event: response.output_item.done
+data: {"item":{"content":[{"annotations":[],"text":"I'll check both cities.","type":"output_text"}],"id":"msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0","role":"assistant","status":"completed","type":"message"},"output_index":0,"sequence_number":8,"type":"response.output_item.done"}
+
+event: response.output_item.added
+data: {"item":{"arguments":"","call_id":"toolu_01T1x1fJ34qAmk2tNTrN7Up6","id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_1","name":"get_weather","status":"in_progress","type":"function_call"},"output_index":1,"sequence_number":9,"type":"response.output_item.added"}
+
+event: response.function_call_arguments.delta
+data: {"delta":"{\"ci","item_id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_1","output_index":1,"sequence_number":10,"type":"response.function_call_arguments.delta"}
+
+event: response.function_call_arguments.delta
+data: {"delta":"ty\": \"Pa","item_id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_1","output_index":1,"sequence_number":11,"type":"response.function_call_arguments.delta"}
+
+event: response.function_call_arguments.delta
+data: {"delta":"ris\"}","item_id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_1","output_index":1,"sequence_number":12,"type":"response.function_call_arguments.delta"}
+
+event: response.function_call_arguments.done
+data: {"arguments":"{\"city\": \"Paris\"}","item_id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_1","output_index":1,"sequence_number":13,"type":"response.function_call_arguments.done"}
+
+event: response.output_item.done
+data: {"item":{"arguments":"{\"city\": \"Paris\"}","call_id":"toolu_01T1x1fJ34qAmk2tNTrN7Up6","id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_1","name":"get_weather","status":"completed","type":"function_call"},"output_index":1,"sequence_number":14,"type":"response.output_item.done"}
+
+event: response.output_item.added
+data: {"item":{"arguments":"","call_id":"toolu_01KkV6nBQfcxBxNc5zNm4mVd","id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_2","name":"get_weather","status":"in_progress","type":"function_call"},"output_index":2,"sequence_number":15,"type":"response.output_item.added"}
+
+event: response.function_call_arguments.delta
+data: {"delta":"{\"ci","item_id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_2","output_index":2,"sequence_number":16,"type":"response.function_call_arguments.delta"}
+
+event: response.function_call_arguments.delta
+data: {"delta":"ty\": \"To","item_id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_2","output_index":2,"sequence_number":17,"type":"response.function_call_arguments.delta"}
+
+event: response.function_call_arguments.delta
+data: {"delta":"kyo\"}","item_id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_2","output_index":2,"sequence_number":18,"type":"response.function_call_arguments.delta"}
+
+event: response.function_call_arguments.done
+data: {"arguments":"{\"city\": \"Tokyo\"}","item_id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_2","output_index":2,"sequence_number":19,"type":"response.function_call_arguments.done"}
+
+event: response.output_item.done
+data: {"item":{"arguments":"{\"city\": \"Tokyo\"}","call_id":"toolu_01KkV6nBQfcxBxNc5zNm4mVd","id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_2","name":"get_weather","status":"completed","type":"function_call"},"output_index":2,"sequence_number":20,"type":"response.output_item.done"}
+
+event: response.completed
+data: {"response":{"created_at":0,"error":null,"id":"resp_msg_013Zva2CMHLNnXjNJJKqJ2EF","incomplete_details":null,"model":"claude-sonnet-4-5-20250929","object":"response","output":[{"content":[{"annotations":[],"text":"I'll check both cities.","type":"output_text"}],"id":"msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0","role":"assistant","status":"completed","type":"message"},{"arguments":"{\"city\": \"Paris\"}","call_id":"toolu_01T1x1fJ34qAmk2tNTrN7Up6","id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_1","name":"get_weather","status":"completed","type":"function_call"},{"arguments":"{\"city\": \"Tokyo\"}","call_id":"toolu_01KkV6nBQfcxBxNc5zNm4mVd","id":"fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_2","name":"get_weather","status":"completed","type":"function_call"}],"status":"completed","usage":{"input_tokens":380,"input_tokens_details":{"cached_tokens":0},"output_tokens":96,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":476}},"sequence_number":21,"type":"response.completed"}
+

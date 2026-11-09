@@ -1,0 +1,37 @@
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "incomplete_details": {
+    "reason": "max_output_tokens"
+  },
+  "model": "gpt-4o-2024-08-06",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "The lighthouse stood alone on the",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "incomplete",
+  "usage": {
+    "input_tokens": 15,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 8,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 23
+  }
+}

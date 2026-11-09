@@ -1,0 +1,30 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "No. 391 = 17 × 23.",
+        "reasoning_content": "**Factoring 391**\n\n391 = 17 x 23.\n\n**Answer**\n\nSo it is not prime.",
+        "refusal": null,
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "resp_<hex>",
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 140,
+    "completion_tokens_details": {
+      "reasoning_tokens": 128
+    },
+    "prompt_tokens": 12,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 152
+  }
+}
