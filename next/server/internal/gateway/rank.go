@@ -96,7 +96,7 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 	loads := map[int64]int{}
 	for i := range cands {
 		a := &cands[i]
-		if !c.usable(a) {
+		if !c.routed(a) {
 			continue // cannot serve this request anyway
 		}
 		rc := &pluginv1.RankCandidate{AccountId: a.ID, Name: a.Name, AccountType: a.Type, TypePluginKey: a.PluginKey,

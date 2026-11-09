@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
@@ -10,7 +11,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
-	"sort"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -103,6 +104,10 @@ func (c *call) dispatch(ctx context.Context) {
 					last = canceledErr()
 				} else if busy {
 					last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy or rate limited, please retry later"), errTypeNoAccount)
+				} else if e := c.unsupportedConversion(); e != nil {
+					// Every candidate was of a type the request does not
+					// convert to, or refused by its loss policy (§88).
+					last = e
 				} else {
 					last = fromCore(core.ErrNoAvailableAccount, errTypeNoAccount)
 				}
@@ -224,11 +229,13 @@ func (c *call) sessionIdentity() string {
 }
 
 // pick chooses the next account: the sticky binding first (when usable),
-// then by priority, higher first, with weighted random order inside a priority (CONTRACTS
-// §18), over the priority/weight the scheduler.rank plugins left for this
-// request (CONTRACTS §24). Accounts whose rate-limit window is exhausted are
-// skipped. It returns busy when candidates exist but none could be used
-// right now.
+// then by priority, higher first, and within a priority by route grade,
+// native first (CONVERT-MATRIX §5.2), with weighted random order inside a
+// (priority, grade) tier (CONTRACTS §18), over the priority/weight the
+// scheduler.rank plugins left for this request (CONTRACTS §24). Accounts
+// whose rate-limit window is exhausted are skipped, and a converting route
+// converts the request only when one of its accounts comes up (usable). It
+// returns busy when candidates exist but none could be used right now.
 func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[int64]bool) (*core.AccountRef, func(), bool) {
 	exhausted := c.exhausted(ctx, cands, excluded)
 	if ref, release, _ := c.tryStickyBinding(ctx, cands, excluded, exhausted); ref != nil {
@@ -247,10 +254,9 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	// request moves on to the next tier (§24.3). A plugin that
 	// wants a tier it zeroed entirely split evenly gives each account 1.
 	over := c.rankOverrides(ctx, cands)
-	var pool []core.AccountRef
-	limited := false
+	var pool, limited []core.AccountRef
 	for i := range cands {
-		if excluded[cands[i].ID] || !c.usable(&cands[i]) {
+		if excluded[cands[i].ID] || !c.routed(&cands[i]) {
 			continue
 		}
 		ref := cands[i]
@@ -261,33 +267,25 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 			ref.Priority, ref.Weight = o.priority, o.weight
 		}
 		if exhausted[ref.ID] {
-			limited = true
+			limited = append(limited, ref)
 			continue
 		}
 		pool = append(pool, ref)
 	}
-	if len(pool) == 0 {
-		return nil, nil, limited
-	}
-	// Higher priority first, each tier in weighted random order.
-	sort.SliceStable(pool, func(i, j int) bool { return pool[i].Priority > pool[j].Priority })
-	for i := 0; i < len(pool); {
-		j := i
-		for j < len(pool) && pool[j].Priority == pool[i].Priority {
-			j++
-		}
-		weightedOrder(pool[i:j], c.g.randFloat)
-		i = j
-	}
+	c.orderPool(pool)
 	queued := c.queuedAccounts(ctx, pool)
 	for i := range pool {
 		ref := pool[i]
-		if queued[ref.ID] {
+		if queued[ref.ID] || !c.usable(ctx, &ref) {
 			continue
 		}
 		if release, ok := c.acquireAccount(ctx, &ref); ok {
 			return c.finishPick(ctx, &ref, release, cands, excluded)
 		}
+	}
+	unusable := func(r core.AccountRef) bool { return !c.usable(ctx, &r) }
+	if pool = slices.DeleteFunc(pool, unusable); len(pool) == 0 {
+		return nil, nil, slices.ContainsFunc(limited, func(r core.AccountRef) bool { return !unusable(r) })
 	}
 	if ref := c.queueTarget(ctx, pool); ref != nil {
 		if release, ok := c.waitForAccount(ctx, ref, c.gw.QueueFallbackMaxWaiting, c.gw.queueFallbackWait()); ok {
@@ -295,6 +293,23 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 		}
 	}
 	return nil, nil, true
+}
+
+// orderPool sorts the pool by priority, higher first, then by route grade,
+// better first, each (priority, grade) tier in weighted random order.
+func (c *call) orderPool(pool []core.AccountRef) {
+	grade := func(r *core.AccountRef) convert.Grade { return c.route(r).grade }
+	slices.SortStableFunc(pool, func(a, b core.AccountRef) int {
+		return cmp.Or(cmp.Compare(b.Priority, a.Priority), cmp.Compare(grade(&a), grade(&b)))
+	})
+	for i := 0; i < len(pool); {
+		j := i + 1
+		for j < len(pool) && pool[j].Priority == pool[i].Priority && grade(&pool[j]) == grade(&pool[i]) {
+			j++
+		}
+		weightedOrder(pool[i:j], c.g.randFloat)
+		i = j
+	}
 }
 
 // finishPick settles an account picked outside the binding: a session without
@@ -355,9 +370,10 @@ func (c *call) tryStickyBinding(ctx context.Context, cands []core.AccountRef, ex
 			continue
 		}
 		bound := &cands[i]
-		// An unusable type (request not convertible) keeps the binding; an
-		// exhausted rate window counts as "no free slot".
-		if c.usable(bound) {
+		// An unusable type (request not convertible, or refused by the
+		// account's loss policy) keeps the binding; an exhausted rate window
+		// counts as "no free slot".
+		if c.usable(ctx, bound) {
 			if !exhausted[bound.ID] {
 				release, ok := c.acquireAccount(ctx, bound)
 				if !ok {
@@ -539,20 +555,18 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	}
 	pacct := acc.PluginAccount(c.platform)
 
-	// Convert the request body to the upstream protocol when needed.
-	upBody, err := rt.upstreamBody(c.body)
-	if err != nil {
-		slog.InfoContext(ctx, "gateway: request conversion failed", "from", c.ep.Protocol, "to", rt.upstream, "err", err)
-		kind, code := attemptFailover, core.ErrInvalidArgument.Code
-		var admission *convert.RequestError
-		if errors.As(err, &admission) {
-			kind, code = attemptReturn, "unsupported_conversion"
-		}
-		return attemptResult{kind: kind, err: &gwError{Status: http.StatusBadRequest, Code: code,
-			Message: "request cannot be converted to " + rt.upstream + ": " + err.Error(), RecordType: errTypeInvalidRequest}}
+	c.serveRoute(rt, ref)
+	if rt.local {
+		return localCount(c, ctx, rt)
 	}
-	if dropped := convert.Dropped(rt.conv); len(dropped) > 0 {
-		slog.DebugContext(ctx, "gateway: request conversion dropped fields", "from", c.ep.Protocol, "to", rt.upstream, "fields", dropped)
+	// The request was converted for the route when the account was picked;
+	// the body is final by then, so this only reads that result.
+	upBody := c.body
+	if rt.conv != nil {
+		if !c.prepareRoute(ctx, rt) {
+			return unavailable("request conversion failed", rt.prepared.err)
+		}
+		upBody = rt.body
 	}
 
 	// The account's model mapping rewrites the model sent upstream

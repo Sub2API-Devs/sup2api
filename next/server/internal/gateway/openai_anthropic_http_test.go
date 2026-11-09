@@ -131,7 +131,7 @@ func TestOpenAIConversionRejectsSemanticLossBeforeProvider(t *testing.T) {
 		if res.status != 400 || res.json().Get("error.code").String() != "unsupported_conversion" || len(e.up.keys()) != 0 || e.plat.buildCount() != 0 {
 			t.Fatalf("unknown generation requirement silently ignored: %d %s", res.status, res.body)
 		}
-		if rec := e.record(); rec.Attempts != 1 || rec.Success {
+		if rec := e.record(); rec.Attempts != 0 || rec.Success {
 			t.Fatalf("admission retried: %+v", rec)
 		}
 	}

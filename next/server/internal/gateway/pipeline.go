@@ -80,6 +80,9 @@ type call struct {
 	// scheduling: account types able to serve the endpoint protocol
 	routes    map[core.AccountTypeKey]*typeRoute
 	routeKeys []core.AccountTypeKey
+	// conversion: the converting routes' refusals and the served route
+	// (convert_policy.go)
+	conversion conversionState
 
 	// billing: the model's global price (nil = free policy or free endpoint)
 	price                *core.PriceRule
@@ -821,6 +824,7 @@ func (c *call) submit() {
 	if rec == nil || c.g.d.Settler == nil {
 		return
 	}
+	rec.Conversion = c.conversionTrace()
 	c.statsCompletedAt = c.g.now()
 	c.statsCanceled = c.c.Request.Context().Err() != nil
 	c.observeRequest(observation.Completed, rec)

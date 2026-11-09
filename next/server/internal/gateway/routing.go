@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"context"
+
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
@@ -9,17 +11,28 @@ import (
 
 // typeRoute is how the current request reaches accounts of one account type
 // (ARCHITECTURE 6.6, CONTRACTS §13): natively (the type supports the
-// endpoint's platform) or through a core protocol converter to a protocol of
-// another platform the type supports.
+// endpoint's platform), through a core protocol converter to a protocol of
+// a platform the type supports, or - for a count_tokens request - answered
+// by the core itself (local).
 type typeRoute struct {
 	binding core.AccountTypeBinding
 	// platform is the platform served upstream: the endpoint's platform
 	// when native, else the platform owning the upstream protocol.
 	platform string
-	// upstream is the protocol sent upstream; equals the endpoint protocol
-	// when native.
+	// upstream is the protocol sent upstream (the last hop); equals the
+	// endpoint protocol when native, upstreamLocal on a local route.
 	upstream string
-	conv     convert.Converter // nil when native
+	// conv is nil when native or local. It is the registry's converter
+	// until the request is prepared for the route, then the converter bound
+	// to the request (convert_policy.go).
+	conv convert.Converter
+	// grade orders the routes within a priority (CONVERT-MATRIX §5.2): native,
+	// the converter's grade, or local.
+	grade convert.Grade
+	// hops are the protocols a converted route passes through, client first.
+	hops []string
+	// local answers a count_tokens request without an upstream (§8).
+	local bool
 
 	requestFields []string
 	passHeaders   []string
@@ -63,18 +76,29 @@ type typeRoute struct {
 	requiredUsage    []manifest.AdditionalUsageRule
 	requiredAttempts []*manifest.AttemptUsageRule
 
-	// Lazily converted request body (conversion path only).
-	converted bool
-	body      []byte
-	bodyErr   error
+	// prepared is the request converted for this route, at pick time and
+	// only when an account of the type is considered (convert_policy.go).
+	prepared preparedConversion
+	// body is the converted request; kept here so releaseBodies frees it.
+	body []byte
 }
 
+// upstreamLocal is the upstream protocol recorded for a local route.
+const upstreamLocal = "local"
+
+// localCount answers a count_tokens request on a local route, without an
+// upstream (CONVERT-MATRIX §8). count_local.go sets it; while it is nil no
+// local route is planned.
+var localCount func(c *call, ctx context.Context, rt *typeRoute) attemptResult
+
 // planRoutes lists the account types able to serve the endpoint: those
-// supporting the endpoint's platform P (native), then those supporting
-// another platform Q with a protocol Y the core converts the endpoint
-// protocol X to. A type supporting P is converted only when its endpoint
-// subset on P leaves the endpoint out, and then only to another endpoint of
-// P in the subset (CONTRACTS §83.3).
+// supporting the endpoint's platform P (native), then those reaching it
+// through a core converter to a protocol of another platform they support.
+// A type supporting P is converted only when its endpoint subset on P
+// leaves the endpoint out, and then only to another endpoint of P in the
+// subset (CONTRACTS §83.3). A count_tokens request is never converted: the
+// types without a native route estimate it locally when they serve the
+// generation protocol of its family (CONVERT-MATRIX §8).
 func (c *call) planRoutes() {
 	defer func() {
 		if !c.ep.WebSocket() {
@@ -82,31 +106,17 @@ func (c *call) planRoutes() {
 		}
 		// A WebSocket session is relayed as is: only account types whose
 		// plugin builds upstream WebSocket requests, and never converted.
-		keys := c.routeKeys[:0]
-		for _, key := range c.routeKeys {
-			rt := c.routes[key]
-			if rt.conv != nil || !hasCapability(rt.binding.Plugin.Manifest, manifest.CapPlatformWebSocket) {
-				delete(c.routes, key)
-				continue
-			}
-			keys = append(keys, key)
-		}
-		c.routeKeys = keys
+		c.keepRoutes(func(rt *typeRoute) bool {
+			return rt.grade == convert.GradeNative && hasCapability(rt.binding.Plugin.Manifest, manifest.CapPlatformWebSocket)
+		})
 	}()
 	defer func() {
 		if !c.ep.TaskSubmit() {
 			return
 		}
-		keys := c.routeKeys[:0]
-		for _, key := range c.routeKeys {
-			rt := c.routes[key]
-			if key.PluginKey != c.plugin.Key || rt.upstream != c.ep.Protocol || rt.conv != nil {
-				delete(c.routes, key)
-				continue
-			}
-			keys = append(keys, key)
-		}
-		c.routeKeys = keys
+		c.keepRoutes(func(rt *typeRoute) bool {
+			return rt.binding.Plugin.Key == c.plugin.Key && rt.upstream == c.ep.Protocol && rt.grade == convert.GradeNative
+		})
 	}()
 	p, x := c.platform, c.ep.Protocol
 	c.routes = map[core.AccountTypeKey]*typeRoute{}
@@ -125,52 +135,75 @@ func (c *call) planRoutes() {
 		if _, done := c.routes[b.Key()]; done {
 			continue
 		}
-		if ap, ok := b.Supports(p); ok && p != "" {
+		ap, native := b.Supports(p)
+		native = native && p != ""
+		if native {
 			// Native but not listed by AccountTypesForPlatform; still native.
 			c.addRoute(b, ap, p, x, c.ep, c.pf, nil)
-			if _, added := c.routes[b.Key()]; added {
-				continue
-			}
-			// The endpoint is outside the type's endpoint subset on P
-			// (CONTRACTS §83.3): another endpoint of P in the subset may
-			// serve it through a core converter. The type's other
-			// platforms are not tried, as before.
-			c.addConvertedRoute(b, x, true)
-			continue
 		}
-		c.addConvertedRoute(b, x, false)
+		_, added := c.routes[b.Key()]
+		switch {
+		case added:
+		case c.tokenCounting():
+			// Token counting endpoints are never converted.
+			c.addLocalCountRoute(b)
+		default:
+			// Natively: the endpoint is outside the type's endpoint subset on
+			// P (CONTRACTS §83.3), so only another endpoint of P in the subset
+			// may serve it; the type's other platforms are not tried.
+			c.addConvertedRoute(b, x, native)
+		}
 	}
 }
 
-// addConvertedRoute adds the first (platform, protocol) of b the endpoint
-// protocol x converts to, among the type's other platforms or, with
-// samePlatform, among the endpoints of the endpoint's own platform that the
-// type's subset lists. Platforms that are not available (declared by a
-// disabled plugin) are skipped. It reports whether a route was added.
-func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string, samePlatform bool) bool {
-	for _, ap := range b.Type.Platforms {
-		if (ap.Platform == c.platform) != samePlatform {
+// keepRoutes drops the routes keep refuses.
+func (c *call) keepRoutes(keep func(*typeRoute) bool) {
+	keys := c.routeKeys[:0]
+	for _, key := range c.routeKeys {
+		if !keep(c.routes[key]) {
+			delete(c.routes, key)
 			continue
 		}
-		pb, ok := c.gen.Platform(ap.Platform)
-		if !ok {
-			continue
-		}
-		for _, ep := range pb.Platform.Endpoints {
-			if !ap.SupportsEndpoint(ep.ID) {
-				continue
-			}
-			y := ep.Protocol
-			conv, ok := c.g.conv.Resolve(x, y)
-			if !ok {
-				continue
-			}
-			c.addRoute(b, ap, ap.Platform, y, ep, pb.Platform, conv)
-			_, added := c.routes[b.Key()]
-			return added
-		}
+		keys = append(keys, key)
 	}
-	return false
+	c.routeKeys = keys
+}
+
+// addConvertedRoute adds the route of b to the endpoint of its platforms
+// the endpoint protocol x converts to best (core.BestConvertTarget), among
+// the type's other platforms or, with samePlatform, among the endpoints of
+// the endpoint's own platform in the type's subset. The target must answer
+// in the request's stream mode: an SSE endpoint for a stream; for a
+// non-stream request an endpoint answering JSON without being always
+// streaming, or one the type declares streamOnly (CONTRACTS §83.1).
+func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string, samePlatform bool) {
+	t, ok := core.BestConvertTarget(c.gen, b, c.g.conv, x, func(ap manifest.AccountPlatform, ep manifest.Endpoint) bool {
+		if (ap.Platform == c.platform) != samePlatform {
+			return false
+		}
+		if c.stream {
+			return ep.Response.Stream == "sse"
+		}
+		return !ep.Request.Stream && ep.Response.NonStream == "json" || ap.StreamsOnly(ep.Protocol)
+	})
+	if !ok {
+		return
+	}
+	conv, _ := c.g.conv.Resolve(x, t.Endpoint.Protocol)
+	c.addRoute(b, t.Platform, t.Platform.Platform, t.Endpoint.Protocol, t.Endpoint, t.Definition, conv)
+}
+
+// addLocalCountRoute adds the local route of b for a count_tokens request
+// when the type serves the generation protocol of the request's family.
+func (c *call) addLocalCountRoute(b core.AccountTypeBinding) {
+	family := core.CountTokensFamily(c.ep.Protocol)
+	if family == "" || localCount == nil || !core.ServesProtocol(c.gen, b, c.g.conv, family) {
+		return
+	}
+	k := b.Key()
+	c.routes[k] = &typeRoute{binding: b, platform: c.platform, upstream: upstreamLocal, grade: convert.GradeLocal,
+		hops: []string{c.ep.Protocol}, local: true}
+	c.routeKeys = append(c.routeKeys, k)
 }
 
 // addRoute records the route of b to upstream protocol y of platform q:
@@ -186,7 +219,7 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 	if _, dup := c.routes[k]; dup {
 		return
 	}
-	rt := &typeRoute{binding: b, platform: q, upstream: y, conv: conv,
+	rt := &typeRoute{binding: b, platform: q, upstream: y, conv: conv, grade: convert.GradeNative,
 		requestFields: ap.RequestFields, passHeaders: ap.ClientHeaders(&pf),
 		usage:              usagerules.For(ap, &ep, &pf, y),
 		pluginUsage:        ep.PluginUsage(),
@@ -208,6 +241,9 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 	if len(rt.requestFields) == 0 {
 		rt.requestFields = pf.RequestFields
 	}
+	if conv != nil {
+		rt.grade, rt.hops = conv.Grade(), convert.Hops(conv)
+	}
 	c.routes[k] = rt
 	c.routeKeys = append(c.routeKeys, k)
 }
@@ -216,25 +252,6 @@ func (c *call) addRoute(b core.AccountTypeBinding, ap manifest.AccountPlatform, 
 // this request.
 func (c *call) route(ref *core.AccountRef) *typeRoute {
 	return c.routes[core.AccountTypeKey{PluginKey: ref.PluginKey, Type: ref.Type}]
-}
-
-// usable reports whether ref can still be tried (its type has a route and,
-// when converting, the request converted).
-func (c *call) usable(ref *core.AccountRef) bool {
-	rt := c.route(ref)
-	return rt != nil && rt.bodyErr == nil
-}
-
-// upstreamBody returns the request body for the route's upstream protocol.
-func (rt *typeRoute) upstreamBody(body []byte) ([]byte, error) {
-	if rt.conv == nil {
-		return body, nil
-	}
-	if !rt.converted {
-		rt.converted = true
-		rt.conv, rt.body, rt.bodyErr = convert.Prepare(rt.conv, body)
-	}
-	return rt.body, rt.bodyErr
 }
 
 func hasCapability(m *manifest.Manifest, id string) bool {
