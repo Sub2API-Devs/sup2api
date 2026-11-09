@@ -204,7 +204,7 @@ function apply() {
       </nav>
 
       <div v-if="selected" :key="selectedId" class="min-w-0 space-y-3">
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <SInput
             v-model="selected.description"
             class="min-w-0 flex-1"

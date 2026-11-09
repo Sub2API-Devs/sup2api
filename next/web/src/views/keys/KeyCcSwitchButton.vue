@@ -36,7 +36,7 @@ async function importTo(client?: KeyClient) {
   <SDropdown v-if="clients.length > 1" :actions="clients.map((c) => ({ key: c.id, label: c.label }))" :disabled="disabled" @select="importTo(clients.find((c) => c.id === $event))">
     <template #header>{{ t('apikeys.ccSwitch.pick') }}</template>
     <template #trigger="{ toggle, attrs }">
-      <SRowAction icon="upload" label="CC Switch" :title="title" :loading="busy" :disabled="disabled" v-bind="attrs" data-testid="key-ccswitch" @click="toggle" />
+      <SRowAction label="CC Switch" :title="title" :loading="busy" :disabled="disabled" v-bind="attrs" data-testid="key-ccswitch" @click="toggle" />
     </template>
   </SDropdown>
   <SRowAction v-else icon="upload" label="CC Switch" :title="title" :loading="busy" :disabled="disabled" data-testid="key-ccswitch" @click="importTo(clients[0])" />

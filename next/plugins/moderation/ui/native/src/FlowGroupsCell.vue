@@ -87,7 +87,7 @@ const conflictLines = computed(() =>
     </span>
     <SBadge v-else tone="warning">{{ t('flows.noGroups') }}</SBadge>
     <span v-if="canWrite" class="mod-inline">
-      <SButton size="xs" variant="ghost" :title="t('flows.editGroups', { name: flow.name })" @click="show">{{ t('edit') }}</SButton>
+      <SButton size="xs" variant="ghost" :aria-label="t('flows.editGroups', { name: flow.name })" :title="t('flows.editGroups', { name: flow.name })" @click="show">{{ t('edit') }}</SButton>
     </span>
 
     <SModal v-model:open="open" :title="t('flows.editGroups', { name: flow.name })" width="sm">

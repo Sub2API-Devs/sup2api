@@ -867,6 +867,7 @@ p.mod-text-danger {
 }
 .mod-stage-card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.375rem;
 }
