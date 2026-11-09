@@ -151,7 +151,7 @@ export default {
   },
   paramOverride: {
     title: 'Request parameter override',
-    hint: 'Rewrites the body and headers sent upstream, conditionally, last: after model mapping and the plugin\'s rewrites, right before sending. Same format as a new-api channel\'s param override, which can be pasted as is',
+    hint: 'Rewrites the body and headers sent upstream, conditionally, after model mapping and before the plugin\'s rewrites, which may change the result. Same format as a new-api channel\'s param override, which can be pasted as is',
     none: 'Not set',
     count: '{n} operations',
     headerCount: '{n} on headers',

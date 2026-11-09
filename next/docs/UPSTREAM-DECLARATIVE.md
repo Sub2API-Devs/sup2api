@@ -4,7 +4,7 @@
 
 ## 0. 定案（用户 2026-11-09 确认）
 
-1. 账号参数覆盖（§84）改到最后生效：模型映射 → 预设/清单声明改写 → 插件 extend 补丁 → 账号参数覆盖。请求头顺序：预设 → 清单 → 插件 → 透传 §81 → 参数覆盖。
+1. 账号参数覆盖（§84）先于插件执行（用户 2026-11-09 改定）：模型映射 → 预设/清单声明改写 → 账号参数覆盖 → 路由与插件补丁。请求头顺序：预设/清单 → 透传 §81 → 参数覆盖 → 插件 → 鉴权。理由：插件改写是插件自己的内部特殊逻辑，插件知道前面已经执行过账号参数覆盖，所以排在覆盖之后，看到覆盖结果再改。
 2. 鉴权头只能由路由的 auth 模板决定：普通请求头（清单 headers、插件头、透传、参数覆盖）都改不了它，核心在最后写入。
 3. 支持 `runtime: "none"`（只有清单、没有进程的插件）。
 4. extend 模式这次一起做。
@@ -105,7 +105,7 @@ server/internal/plugin/declarative   core.PlatformPlugin 适配器（含 extend 
 
 ### 2.4 模板
 
-可用变量：`{api_key}`、`{base_url}`、`{model}`（映射后的上游模型；账号参数覆盖改了模型时只重算 URL）、`{credentials.<k>}`（k 必须在 `credentials.fields` 里）、`{client_header.<name>}`（name 必须在该账号类型的 passHeaders 里，且不在 §81 禁止列表；只能用在普通请求头）。未知变量 → 校验失败（manifest check / 账号保存时）。运行时变量取不到值 → 该头不写。`{api_key}` 只允许出现在 auth.value 和路径查询串里；`{client_header.*}` 不允许出现在 auth。
+可用变量：`{api_key}`、`{base_url}`、`{model}`（映射和账号参数覆盖之后的上游模型；插件 patch 改了模型时只重算 URL）、`{credentials.<k>}`（k 必须在 `credentials.fields` 里）、`{client_header.<name>}`（name 必须在该账号类型的 passHeaders 里，且不在 §81 禁止列表；只能用在普通请求头）。未知变量 → 校验失败（manifest check / 账号保存时）。运行时变量取不到值 → 该头不写。`{api_key}` 只允许出现在 auth.value 和路径查询串里；`{client_header.*}` 不允许出现在 auth。
 
 ### 2.5 默认过滤字段
 
@@ -147,11 +147,9 @@ func (p *Profile) AuthHeader() string   // header 型返回小写头名，供核
 
 ### 4.3 发送顺序（gateway）
 
-请求体：模型映射 → 协议转换 → filterFields（账号没放开的）→ 预设/清单 paramOverride（声明的固定改写）→ Build 的路由 patches → 插件 extend patches → **账号 §84 覆盖**（从 Build 之前挪到这里）→ streamOnly 强制。
-- 账号 §84 改了 model：Build 已用旧 model 拼了 URL。声明式类型由核心按新 model 重新渲染 URL（Profile 可重算）；代码插件的 URL 不变，只改请求体（文档注明）。
-- WebSocket 每轮消息路径同样调整。
+请求体：模型映射 → 协议转换 → filterFields（账号没放开的）→ 预设/清单 paramOverride（声明的固定改写）→ **账号 §84 覆盖** → Build（`meta.model` 为覆盖后的模型）的路由 patches → 插件 extend / 老插件 patches → streamOnly 强制。插件 patch 改了 model 时，声明式类型按最终请求体的 model 重新渲染 URL（`core.DeclaredUpstream.UpstreamURL`）；代码插件的 URL 是它自己的。WebSocket 每轮同样。
 
-请求头：Build 结果（inbound → 预设/清单 → auth）→ 插件 extend 头 → 透传 §81 与粘性规则（只补没设的）→ 账号 §84 头 → **鉴权头重写**（声明式类型：把 `AuthHeader()` 重设为 Profile 计算的值；§81/§84 本来就禁止凭证头，这一步覆盖自定义鉴权头名）→ 核心资源头、额度头。
+请求头：声明构造的头（inbound → 预设/清单 → 路由）→ 声明的 paramOverride 头 → 透传 §81 与粘性规则（只补没设的）→ 账号 §84 头 → 插件头（`SplitHeaders` 区分声明和插件的）→ **鉴权头重写** → 核心资源头、额度头。
 
 ### 4.4 接口
 
@@ -198,4 +196,4 @@ func (p *Profile) AuthHeader() string   // header 型返回小写头名，供核
 - **runtime none**：能力只允许 `platform.adapter.v1`、`platform.websocket.v1`（responses_ws 需要后者）。
 - **表单控件**：schema 表单用 uiSchema 的 `"ui:widget": "upstream-editor"`（不是上文早期写的 `x-widget`）。
 - **字段错误**：账号层每个问题一个字段错误，`credentials.upstream.<路径>`。
-- **执行路径**：`platform.execute.v1` 插件经核心转发的每个请求也在插件 patch 之后执行账号参数覆盖；插件拿到的 ExecuteRequest 与 BuildUpstreamRequest 路径一致（映射后的模型）。
+- **执行路径**：`platform.execute.v1` 插件拿到的是覆盖后的请求体和模型，经核心转发的请求不再重复执行覆盖。
