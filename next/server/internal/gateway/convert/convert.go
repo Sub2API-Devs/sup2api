@@ -240,22 +240,9 @@ func NewRegistry(cs ...Converter) *Registry {
 	return r
 }
 
-var builtins = []func() Converter{
-	func() Converter { return &openAIAnthropic{protocol: "openai.chat"} },
-	func() Converter { return &openAIAnthropic{protocol: "openai.responses"} },
-	func() Converter { return &chatResponses{} },
-}
-
-// Default returns a new registry with the built-in converters.
-func Default() *Registry {
-	r := &Registry{}
-	for _, mk := range builtins {
-		if err := r.Register(mk()); err != nil {
-			panic(err)
-		}
-	}
-	return r
-}
+// Default returns a new registry with the built-in converters
+// (builtins.go).
+func Default() *Registry { return NewRegistry(builtinConverters()...) }
 
 // Register adds c. From and To must be non-empty and different, and Grade
 // one a converter may report.

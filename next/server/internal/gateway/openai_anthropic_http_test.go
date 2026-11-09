@@ -53,11 +53,14 @@ func conversionFixture(w http.ResponseWriter, stream bool, reason string, trunca
 	for _, delta := range []string{"he", "llo"} {
 		emit("content_block_delta", map[string]any{"index": 0, "delta": map[string]any{"type": "text_delta", "text": delta}})
 	}
+	// message_delta carries the stop reason, the end of an Anthropic reply
+	// (CONVERT-MATRIX §3.1): a truncated stream stops before it.
+	if truncate {
+		return
+	}
 	emit("content_block_stop", map[string]any{"index": 0})
 	emit("message_delta", map[string]any{"delta": map[string]any{"stop_reason": reason, "stop_sequence": nil}, "usage": usage})
-	if !truncate {
-		emit("message_stop", map[string]any{})
-	}
+	emit("message_stop", map[string]any{})
 }
 
 func TestOpenAIAnthropicHTTPConversion(t *testing.T) {
@@ -90,12 +93,14 @@ func TestOpenAIAnthropicHTTPConversion(t *testing.T) {
 						!strings.Contains(actual.Get("system").Raw, "keep this system") {
 						t.Fatalf("conversion or model mapping changed request: %s", actual.Raw)
 					}
+					// A refusal is a content filter finish; its text stays text
+					// (CONVERT-MATRIX §9.5).
 					if !stream && reason == "refusal" {
-						field := "choices.0.message.refusal"
+						field, want := "choices.0.finish_reason", "content_filter"
 						if protocol == "openai.responses" {
-							field = "output.0.content.0.refusal"
+							field = "incomplete_details.reason"
 						}
-						if res.json().Get(field).String() != "hello" {
+						if res.json().Get(field).String() != want {
 							t.Fatalf("refusal lost: %s", res.body)
 						}
 					}
@@ -103,7 +108,7 @@ func TestOpenAIAnthropicHTTPConversion(t *testing.T) {
 						terminal := "data: [DONE]"
 						if protocol == "openai.responses" {
 							terminal = "event: response.completed"
-							if reason == "max_tokens" {
+							if reason != "end_turn" {
 								terminal = "event: response.incomplete"
 							}
 						}
@@ -122,14 +127,24 @@ func TestOpenAIAnthropicHTTPConversion(t *testing.T) {
 	}
 }
 
+// An unknown member is an "other" loss: allowed by default, refused before
+// any provider under the strict policy (CONVERT-MATRIX D1, §2.4).
 func TestOpenAIConversionRejectsSemanticLossBeforeProvider(t *testing.T) {
 	for _, protocol := range []string{"openai.chat", "openai.responses"} {
 		e := newEnv(t, func(e *env) { e.conv = convert.Default() })
 		path, input := openAIConversionInput(protocol, false)
 		input["future_generation_feature"] = true
+		if res := e.do(path, input, map[string]string{"authorization": "Bearer " + testKey}); res.status != 200 {
+			t.Fatalf("allow: %d %s", res.status, res.body)
+		}
+		if rec := e.record(); rec.Conversion == nil || len(rec.Conversion.Lost["other"]) == 0 {
+			t.Fatalf("loss not recorded: %+v", rec.Conversion)
+		}
+		e.auth.keys[testKey].Group.ConversionLossPolicy = core.LossPolicyStrict
+		builds := e.plat.buildCount()
 		res := e.do(path, input, map[string]string{"authorization": "Bearer " + testKey})
-		if res.status != 400 || res.json().Get("error.code").String() != "unsupported_conversion" || len(e.up.keys()) != 0 || e.plat.buildCount() != 0 {
-			t.Fatalf("unknown generation requirement silently ignored: %d %s", res.status, res.body)
+		if res.status != 400 || res.json().Get("error.code").String() != "unsupported_conversion" || e.plat.buildCount() != builds {
+			t.Fatalf("strict: unknown generation requirement silently ignored: %d %s", res.status, res.body)
 		}
 		if rec := e.record(); rec.Attempts != 0 || rec.Success {
 			t.Fatalf("admission retried: %+v", rec)

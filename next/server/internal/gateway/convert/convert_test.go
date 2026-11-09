@@ -20,7 +20,13 @@ func TestRegistry(t *testing.T) {
 	if nilReg.CanConvert("a", "b") || len(nilReg.Pairs()) != 0 {
 		t.Fatal("nil registry must be empty")
 	}
-	if len(Default().Pairs()) != len(builtins) {
+	direct := 0
+	for _, p := range Default().Pairs() {
+		if len(p.Hops) == 2 {
+			direct++
+		}
+	}
+	if direct != len(builtinConverters()) {
 		t.Fatal("default registry must hold the builtins")
 	}
 
