@@ -183,6 +183,8 @@ type cached struct {
 	AllowedIPs       []string               `json:"allowed_ips"`
 	KeyLimits        core.KeyLimits
 	KeyQuota         core.KeyQuota
+	// GroupLossPolicy is the group's conversion loss policy (§88).
+	GroupLossPolicy string `json:"group_loss_policy,omitempty"`
 }
 
 // Authenticate resolves a raw client key into a principal.
@@ -233,13 +235,14 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 		KeyLimits: e.KeyLimits,
 		KeyQuota:  e.KeyQuota,
 		Group: core.GroupInfo{
-			ID:              e.GroupID,
-			Name:            e.GroupName,
-			Status:          e.GroupStatus,
-			RateMultiplier:  rate,
-			ModelAllowlist:  allow,
-			ModelFilterMode: e.ModelFilterMode,
-			Environment:     e.GroupEnvironment,
+			ID:                   e.GroupID,
+			Name:                 e.GroupName,
+			Status:               e.GroupStatus,
+			RateMultiplier:       rate,
+			ModelAllowlist:       allow,
+			ModelFilterMode:      e.ModelFilterMode,
+			Environment:          e.GroupEnvironment,
+			ConversionLossPolicy: e.GroupLossPolicy,
 		},
 	}, nil
 }
@@ -252,14 +255,14 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 			COALESCE(g.id, 0), COALESCE(g.name, ''), COALESCE(g.status, 'deleted'), COALESCE(g.rate_multiplier, 1)::text,
 			COALESCE(g.model_allowlist, '[]'), COALESCE(g.model_filter_mode, 'blacklist'), COALESCE(g.environment, '{}'),
 			COALESCE(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id), false), k.allowed_ips,
-			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used
+			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used, COALESCE(g.conversion_loss_policy, '')
 		FROM api_keys k
 		JOIN users u ON u.id = k.user_id
 		LEFT JOIN groups g ON g.id = k.group_id
 		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
 		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive,
 		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupEnvironment, &e.GroupAvailable, &e.AllowedIPs,
-		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency, &e.KeyQuota.Limit, &e.KeyQuota.Used)
+		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency, &e.KeyQuota.Limit, &e.KeyQuota.Used, &e.GroupLossPolicy)
 	switch {
 	case store.IsNoRows(err):
 		e = &cached{Found: false}

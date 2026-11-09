@@ -251,3 +251,41 @@ func TestHideUpstreamKeepsErrorMessage(t *testing.T) {
 	require.Empty(t, r.UpstreamModel)
 	require.Equal(t, "model availability could not be verified, please retry later", r.ErrorMessage)
 }
+
+// usage_logs.conversion (CONTRACTS §88): written as recorded, NULL when
+// native, filtered by grade or loss, hidden from self-service views.
+func TestUsageConversionTraceAndFilter(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	native := f.record("conv-native", false)
+	fair := f.record("conv-fair", false)
+	fair.Conversion = &core.ConversionTrace{V: 1, Grade: "fair", Hops: []string{"openai.chat", "anthropic.messages"},
+		Policy: "allow", Lost: map[string][]string{"other": {"top_k"}}}
+	refused := f.record("conv-refused", false)
+	refused.Conversion = &core.ConversionTrace{V: 1, Grade: "native", Rejected: []core.ConversionRejection{{Type: "p/k", Policy: "safe", Category: "tool", Path: "tools[0]"}}}
+	f.svc.process(ctx, []*core.UsageRecord{native, fair, refused})
+
+	ids := func(query string) []string {
+		var out []string
+		for _, r := range f.get(f.user, "/usage?"+query, 200)["data"].([]any) {
+			out = append(out, r.(map[string]any)["request_id"].(string))
+		}
+		return out
+	}
+	require.ElementsMatch(t, []string{"conv-native", "conv-refused"}, ids("conversion=native"))
+	require.Equal(t, []string{"conv-fair"}, ids("conversion=converted"))
+	require.Equal(t, []string{"conv-fair"}, ids("conversion=fair"))
+	require.Equal(t, []string{"conv-fair"}, ids("conversion=lossy"))
+	require.Empty(t, ids("conversion=local"))
+	f.get(f.user, "/usage?conversion=bogus", 400)
+
+	row := f.get(f.user, "/usage?request_id=conv-fair", 200)["data"].([]any)[0].(map[string]any)
+	conv := row["conversion"].(map[string]any)
+	require.Equal(t, "fair", conv["grade"])
+	require.Equal(t, map[string]any{"other": []any{"top_k"}}, conv["lost"])
+	require.Nil(t, f.get(f.user, "/usage?request_id=conv-native", 200)["data"].([]any)[0].(map[string]any)["conversion"])
+	mine := f.get(f.user, "/me/usage?request_id=conv-fair", 200)["data"].([]any)[0].(map[string]any)
+	require.Nil(t, mine["conversion"])
+	detail := f.get(f.user, "/usage/"+strconv.FormatInt(int64(row["id"].(float64)), 10), 200)["data"].(map[string]any)
+	require.Equal(t, "allow", detail["conversion"].(map[string]any)["policy"])
+}

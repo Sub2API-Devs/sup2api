@@ -40,3 +40,27 @@ func TestGroupEnvironment(t *testing.T) {
 		t.Fatalf("clear: %v", out)
 	}
 }
+
+// conversion_loss_policy (CONTRACTS §88): allow, safe, strict or null
+// (accounts decide); absent keeps it, an unknown value is a field error.
+func TestGroupConversionLossPolicy(t *testing.T) {
+	e := setup(t)
+	if code, out := e.do(e.admin, "POST", "/groups", map[string]any{"name": "Loss", "conversion_loss_policy": "lax"}); code != 400 ||
+		fmt.Sprint(out["error"].(map[string]any)["details"]) != "map[fields:[map[code:invalid field:conversion_loss_policy message:conversion loss policy must be allow, safe, strict or null]]]" {
+		t.Fatalf("invalid: %d %v", code, out)
+	}
+	code, out := e.do(e.admin, "POST", "/groups", map[string]any{"name": "Loss", "conversion_loss_policy": "safe"})
+	if code != 201 || out["data"].(map[string]any)["conversion_loss_policy"] != "safe" {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	path := fmt.Sprintf("/groups/%d", int64(out["data"].(map[string]any)["id"].(float64)))
+	if _, out = e.do(e.admin, "PATCH", path, map[string]any{"name": "Loss2"}); out["data"].(map[string]any)["conversion_loss_policy"] != "safe" {
+		t.Fatalf("absent changed it: %v", out)
+	}
+	if _, out = e.do(e.admin, "PATCH", path, map[string]any{"conversion_loss_policy": nil}); out["data"].(map[string]any)["conversion_loss_policy"] != nil {
+		t.Fatalf("null did not clear: %v", out)
+	}
+	if _, out = e.do(e.admin, "PATCH", path, map[string]any{"conversion_loss_policy": "strict"}); out["data"].(map[string]any)["conversion_loss_policy"] != "strict" {
+		t.Fatalf("set: %v", out)
+	}
+}

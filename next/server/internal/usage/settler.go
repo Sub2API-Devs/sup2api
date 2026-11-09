@@ -374,6 +374,16 @@ func jsonOr(v any, empty string) []byte {
 	return b
 }
 
+// conversionJSON is the usage_logs.conversion value: NULL for a native
+// request nothing was refused for.
+func conversionJSON(t *core.ConversionTrace) []byte {
+	if t == nil {
+		return nil
+	}
+	b, _ := json.Marshal(t) // plain fields: cannot fail
+	return b
+}
+
 // lockUsageRow locks the usage row inside the caller's transaction and reads
 // its billing status. Every settlement path takes this lock first, so the
 // SQL and the lock order live here once.
@@ -453,9 +463,9 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 					cache_creation_1h_tokens, metrics, sticky_rule, sticky_hit, hook_decisions, rate_multiplier,
 					price_id, expr_hash, billing_mode, billing_detail, billing_status, latency_ms, first_token_ms,
 					client_ip, user_agent, node_id, created_at, account_type, upstream_protocol, client_request_id,
-					sched_decisions, plugin_detail, anomalies, upload_ms)
+					sched_decisions, plugin_detail, anomalies, upload_ms, conversion)
 				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
-					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46)
+					$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47)
 				ON CONFLICT (request_id) DO NOTHING
 				RETURNING id`,
 				trunc(rec.RequestID, 64), rec.UserID, rec.APIKeyID, rec.GroupID, rec.AccountID,
@@ -467,7 +477,7 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 				rate, priceID, exprHash, mode, detail, status, rec.LatencyMs, rec.FirstTokenMs,
 				trunc(rec.ClientIP, 64), trunc(rec.UserAgent, 500), trunc(rec.NodeID, 100), created,
 				trunc(rec.AccountType, 50), trunc(rec.UpstreamProtocol, 100), trunc(rec.ClientRequestID, 128),
-				jsonOr(rec.SchedDecisions, "[]"), pluginDetailJSON(rec.PluginDetail), anomalies, rec.UploadMs)
+				jsonOr(rec.SchedDecisions, "[]"), pluginDetailJSON(rec.PluginDetail), anomalies, rec.UploadMs, conversionJSON(rec.Conversion))
 		}
 		br := tx.SendBatch(ctx, b)
 		var free []core.Event

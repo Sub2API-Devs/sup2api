@@ -1442,3 +1442,35 @@ func TestAccountParamOverridePreview(t *testing.T) {
 	require.Equal(t, 400, code, fmt.Sprint(out))
 	require.Equal(t, []string{"param_override:unsupported", "body:invalid"}, fieldsOf(out))
 }
+
+// conversion_loss_policy (CONTRACTS §88) is saved, cleared with null and
+// reaches the scheduler through the group snapshot and Load; an unknown
+// value is a field error.
+func TestAccountConversionLossPolicy(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	g := e.exec1(`INSERT INTO groups (name) VALUES ('loss') RETURNING id`)
+	code, out := e.do("POST", "/accounts", map[string]any{"name": "loss", "plugin_key": "anthropic", "type": "apikey",
+		"group_ids": []int64{g}, "credentials": map[string]any{"api_key": "sk-good-key-123"}, "conversion_loss_policy": "safe"})
+	require.Equal(t, 201, code, fmt.Sprint(out))
+	require.Equal(t, "safe", data(out)["conversion_loss_policy"])
+	id := int64(data(out)["id"].(float64))
+	cands, err := e.svc.Candidates(ctx, g, nil)
+	require.NoError(t, err)
+	require.Len(t, cands, 1)
+	require.Equal(t, "safe", cands[0].ConversionLossPolicy)
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"conversion_loss_policy": "lax"})
+	require.Equal(t, 400, code, fmt.Sprint(out))
+	require.Equal(t, []string{"conversion_loss_policy:invalid"}, fieldsOf(out))
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"priority": 2})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Equal(t, "safe", data(out)["conversion_loss_policy"], "absent keeps it")
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"conversion_loss_policy": nil})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Nil(t, data(out)["conversion_loss_policy"])
+	acc, err := e.svc.Load(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "", acc.ConversionLossPolicy)
+}

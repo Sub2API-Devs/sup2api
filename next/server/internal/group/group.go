@@ -61,9 +61,12 @@ type Group struct {
 	ModelAllowlist  []string `json:"model_allowlist"`
 	ModelFilterMode string   `json:"model_filter_mode"`
 	// Environment is the group layer of the environment variables (§74.3).
-	Environment  core.EnvironmentValues `json:"environment"`
-	AccountCount int64                  `json:"account_count"`
-	APIKeyCount  int64                  `json:"api_key_count"`
+	Environment core.EnvironmentValues `json:"environment"`
+	// ConversionLossPolicy is the group's conversion loss policy (§88);
+	// null leaves it to the accounts (default allow).
+	ConversionLossPolicy *string `json:"conversion_loss_policy"`
+	AccountCount         int64   `json:"account_count"`
+	APIKeyCount          int64   `json:"api_key_count"`
 	// Platforms the group serves: those of its accounts' types (CONTRACTS §13).
 	Platforms []string  `json:"platforms"`
 	CreatedAt time.Time `json:"created_at"`
@@ -86,7 +89,7 @@ type MyGroup struct {
 // no filter).
 func selectGroup(keys string) string {
 	return `SELECT g.id, g.name, g.description, g.status, g.rate_multiplier::text, g.visibility,
-	g.model_allowlist, g.model_filter_mode, g.environment, g.created_at, g.updated_at,
+	g.model_allowlist, g.model_filter_mode, g.environment, g.conversion_loss_policy, g.created_at, g.updated_at,
 	(SELECT count(*) FROM account_groups ag JOIN accounts a ON a.id = ag.account_id
 	  WHERE ag.group_id = g.id AND a.deleted_at IS NULL AND (` + keys + `::text[] IS NULL OR a.plugin_key = ANY(` + keys + `))),
 	(SELECT count(*) FROM api_keys k WHERE k.group_id = g.id AND k.deleted_at IS NULL)
@@ -97,7 +100,7 @@ func scanGroup(row pgx.Row) (*Group, error) {
 	var g Group
 	var rate string
 	if err := row.Scan(&g.ID, &g.Name, &g.Description, &g.Status, &rate, &g.Visibility,
-		&g.ModelAllowlist, &g.ModelFilterMode, &g.Environment, &g.CreatedAt, &g.UpdatedAt, &g.AccountCount, &g.APIKeyCount); err != nil {
+		&g.ModelAllowlist, &g.ModelFilterMode, &g.Environment, &g.ConversionLossPolicy, &g.CreatedAt, &g.UpdatedAt, &g.AccountCount, &g.APIKeyCount); err != nil {
 		return nil, err
 	}
 	g.RateMultiplier = normRate(rate)
@@ -208,6 +211,8 @@ type groupInput struct {
 	ModelFilterMode *string   `json:"model_filter_mode"`
 	// Environment replaces the group layer as a whole.
 	Environment *core.EnvironmentValues `json:"environment"`
+	// ConversionLossPolicy sets or, with null, clears the policy (§88).
+	ConversionLossPolicy core.LossPolicyInput `json:"conversion_loss_policy"`
 }
 
 // validate checks the provided fields; create requires name.
@@ -264,6 +269,7 @@ func (in *groupInput) validate(ctx context.Context, create bool) error {
 		fe = append(fe, errs...)
 		in.Environment = &values
 	}
+	fe = append(fe, in.ConversionLossPolicy.Validate(ctx, "conversion_loss_policy")...)
 	if len(fe) > 0 {
 		return core.InvalidFields(fe...)
 	}
@@ -308,9 +314,10 @@ func (s *Service) create(c *gin.Context) {
 	env := core.ValueOr(in.Environment, core.EnvironmentValues{})
 	allowJSON, _ := json.Marshal(allow)
 	var id int64
-	err := s.db.Pool.QueryRow(ctx, `INSERT INTO groups (name, description, status, rate_multiplier, visibility, model_allowlist, model_filter_mode, environment)
-		VALUES ($1, $2, $3, $4::numeric, $5, $6::jsonb, $7, $8) RETURNING id`,
-		*in.Name, desc, status, rate, vis, string(allowJSON), mode, env).Scan(&id)
+	err := s.db.Pool.QueryRow(ctx, `INSERT INTO groups (name, description, status, rate_multiplier, visibility, model_allowlist, model_filter_mode, environment,
+		conversion_loss_policy)
+		VALUES ($1, $2, $3, $4::numeric, $5, $6::jsonb, $7, $8, $9) RETURNING id`,
+		*in.Name, desc, status, rate, vis, string(allowJSON), mode, env, in.ConversionLossPolicy.Stored()).Scan(&id)
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, dupName(ctx))
 		return
@@ -356,8 +363,10 @@ func (s *Service) update(c *gin.Context) {
 		model_allowlist = COALESCE($7::jsonb, model_allowlist),
 		model_filter_mode = COALESCE($8, model_filter_mode),
 		environment = COALESCE($9, environment),
+		conversion_loss_policy = CASE WHEN $10 THEN $11 ELSE conversion_loss_policy END,
 		updated_at = now()
-		WHERE id = $1`, id, in.Name, in.Description, in.Status, in.RateMultiplier, in.Visibility, allowJSON, in.ModelFilterMode, in.Environment)
+		WHERE id = $1`, id, in.Name, in.Description, in.Status, in.RateMultiplier, in.Visibility, allowJSON, in.ModelFilterMode, in.Environment,
+		in.ConversionLossPolicy.Set, in.ConversionLossPolicy.Stored())
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, dupName(ctx))
 		return

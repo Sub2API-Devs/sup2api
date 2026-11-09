@@ -55,6 +55,7 @@ type row struct {
 	Environment       core.EnvironmentValues
 	HeaderPassthrough []string
 	ParamOverride     []byte
+	LossPolicy        *string
 	LastUsedAt        *time.Time
 	CreatedBy         *int64
 	CreatedByEmail    *string
@@ -86,7 +87,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough,a.param_override
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough,a.param_override,a.conversion_loss_policy
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -96,7 +97,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough, &a.ParamOverride)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough, &a.ParamOverride, &a.LossPolicy)
 	return &a, err
 }
 
@@ -210,7 +211,10 @@ type View struct {
 	// ParamOverride is the account's request parameter override (CONTRACTS
 	// §84); null = none.
 	ParamOverride json.RawMessage `json:"param_override"`
-	RateUsage     core.RateUsage  `json:"rate_usage"`
+	// ConversionLossPolicy is the account's conversion loss policy (§88);
+	// null inherits the group's.
+	ConversionLossPolicy *string        `json:"conversion_loss_policy"`
+	RateUsage            core.RateUsage `json:"rate_usage"`
 	// Outcomes are the successful requests and failed attempts of the last 60
 	// seconds behind the success-rate column (CONTRACTS §73); null when the
 	// statistics are unavailable.
@@ -291,7 +295,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(), Environment: a.Environment,
-			HeaderPassthrough: passthrough, ParamOverride: a.ParamOverride,
+			HeaderPassthrough: passthrough, ParamOverride: a.ParamOverride, ConversionLossPolicy: a.LossPolicy,
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
@@ -687,10 +691,13 @@ type input struct {
 	HeaderPassthrough *[]string `json:"header_passthrough"`
 	// ParamOverride replaces the request parameter override (§84); null or
 	// {} clears it, absent keeps it.
-	ParamOverride  json.RawMessage `json:"param_override"`
-	Credentials    json.RawMessage `json:"credentials"`
-	Settings       json.RawMessage `json:"settings"`
-	PreparationKey *string         `json:"preparation_key"`
+	ParamOverride json.RawMessage `json:"param_override"`
+	// ConversionLossPolicy sets (allow, safe, strict) or, with null, clears
+	// the conversion loss policy (§88); absent keeps it.
+	ConversionLossPolicy core.LossPolicyInput `json:"conversion_loss_policy"`
+	Credentials          json.RawMessage      `json:"credentials"`
+	Settings             json.RawMessage      `json:"settings"`
+	PreparationKey       *string              `json:"preparation_key"`
 	// CCGatewayRuntime is the draft runtime key a new ccgateway/managed
 	// account adopts (CONTRACTS §49.10); create only. Blank means absent.
 	CCGatewayRuntime *string `json:"ccgateway_runtime"`
@@ -742,6 +749,7 @@ func (in *input) changedFields() []string {
 	set("environment", in.Environment != nil)
 	set("header_passthrough", in.HeaderPassthrough != nil)
 	set("param_override", len(in.ParamOverride) > 0)
+	set("conversion_loss_policy", in.ConversionLossPolicy.Set)
 	set("credentials", in.hasCredentials())
 	set("settings", len(in.Settings) > 0)
 	set("cc_feature_policy", in.CCFeaturePolicy != nil)
@@ -914,6 +922,7 @@ func (in *input) validateScheduling(ctx context.Context) []core.FieldError {
 		fe = append(fe, errs...)
 		in.ParamOverride = p.Raw()
 	}
+	fe = append(fe, in.ConversionLossPolicy.Validate(ctx, "conversion_loss_policy")...)
 	if in.ModelLimits != nil {
 		limits, errs := normalizeModelLimits(ctx, *in.ModelLimits)
 		fe = append(fe, errs...)
@@ -1233,12 +1242,14 @@ func (s *Service) create(c *gin.Context) {
 		}
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
-			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models, model_limits, spm_limit, environment, header_passthrough, param_override)
+			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models, model_limits, spm_limit, environment, header_passthrough, param_override,
+			conversion_loss_policy)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb, $21, $22, $23::text[], $24::jsonb) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb, $21, $22, $23::text[], $24::jsonb, $25) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
-			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels, modelLimitsJSON(modelLimits), spm, environment, headerPassthrough, in.paramOverride()).Scan(&id); err != nil {
+			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels, modelLimitsJSON(modelLimits), spm, environment, headerPassthrough, in.paramOverride(),
+			in.ConversionLossPolicy.Stored()).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1510,11 +1521,12 @@ func (s *Service) update(c *gin.Context) {
 			environment = COALESCE($22, environment),
 			header_passthrough = COALESCE($23::text[], header_passthrough),
 			param_override = CASE WHEN $24 THEN $25::jsonb ELSE param_override END,
+			conversion_loss_policy = CASE WHEN $26 THEN $27 ELSE conversion_loss_policy END,
 			updated_at = clock_timestamp()
 			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
 			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
 			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment, in.HeaderPassthrough,
-			len(in.ParamOverride) > 0, in.paramOverride()); err != nil {
+			len(in.ParamOverride) > 0, in.paramOverride(), in.ConversionLossPolicy.Set, in.ConversionLossPolicy.Stored()); err != nil {
 			return err
 		}
 		if statusChanged && *in.Status == "active" && limitDisabled(locked.Status, locked.AutoDisabledSource) {
