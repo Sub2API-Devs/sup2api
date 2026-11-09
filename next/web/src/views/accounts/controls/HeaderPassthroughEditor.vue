@@ -11,5 +11,10 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <STagInput :model-value="model ?? []" :placeholder="t('accounts.headerPassthrough.placeholder')" :disabled="disabled" @update:model-value="model = $event" />
+  <STagInput
+    :model-value="model ?? []"
+    :placeholder="t('accounts.headerPassthrough.placeholder')"
+    :disabled="disabled"
+    @update:model-value="model = $event"
+  />
 </template>

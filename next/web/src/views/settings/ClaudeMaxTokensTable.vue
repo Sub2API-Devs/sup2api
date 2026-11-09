@@ -26,12 +26,17 @@ const remove = (i: number) =>
 
 <template>
   <div class="space-y-2" data-testid="claude-max-tokens">
-    <div class="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs text-fg-subtle" aria-hidden="true">
+    <div class="grid grid-cols-[1fr_1fr_4.5rem] gap-2 text-xs text-fg-subtle" aria-hidden="true">
       <span>{{ t('settings.gateway.maxTokens.model') }}</span>
       <span>{{ t('settings.gateway.maxTokens.tokens') }}</span>
-      <span class="w-8" />
+      <span />
     </div>
-    <div v-for="(r, i) in modelValue" :key="i" class="grid grid-cols-[1fr_1fr_auto] items-center gap-2" data-testid="claude-max-tokens-row">
+    <div
+      v-for="(r, i) in modelValue"
+      :key="i"
+      class="grid grid-cols-[1fr_1fr_4.5rem] items-center gap-2"
+      data-testid="claude-max-tokens-row"
+    >
       <SInput
         :model-value="r.model"
         size="sm"
@@ -60,16 +65,15 @@ const remove = (i: number) =>
       <SButton
         v-if="i > 0"
         variant="ghost"
+        tone="danger"
         size="sm"
-        icon="x"
-        icon-only
         :disabled="disabled"
         :aria-label="t('settings.gateway.maxTokens.remove', { model: r.model || i + 1 })"
-        :title="t('common.delete')"
         data-testid="claude-max-tokens-remove"
         @click="remove(i)"
-      />
-      <span v-else class="w-8" :title="t('settings.gateway.maxTokens.defaultLocked')" />
+        >{{ t('common.remove') }}</SButton
+      >
+      <span v-else :title="t('settings.gateway.maxTokens.defaultLocked')" />
     </div>
     <SButton
       size="sm"

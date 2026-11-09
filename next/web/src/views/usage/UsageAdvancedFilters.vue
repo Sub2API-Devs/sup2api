@@ -23,7 +23,10 @@ const groupChoices = computed(() => [
 /** Fields chosen from a list instead of typed. */
 const selects = computed<Record<string, Array<{ value: string; label: string }>>>(() => ({
   ...(props.groupOptions.length ? { group_id: groupChoices.value } : {}),
-  conversion: [{ value: '', label: t('usage.search.conversion') }, ...CONVERSION_FILTERS.map(value => ({ value, label: t(conversionFilterLabel(value)) }))]
+  conversion: [
+    { value: '', label: t('usage.search.conversion') },
+    ...CONVERSION_FILTERS.map(value => ({ value, label: t(conversionFilterLabel(value)) }))
+  ]
 }))
 const streamOptions = computed(() => [
   { value: '', label: t('usage.search.stream') },

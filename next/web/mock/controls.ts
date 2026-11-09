@@ -43,7 +43,15 @@ export const controlsUIPlugin = {
   asset_base: '/plugin-ui/controls_demo/0.1.0-dev',
   menus: [],
   pages: {},
-  slots: [{ slot: 'account.editor.section', component: 'ControlsDemoSection', label: { en: 'Demo section', zh: '演示分区' }, icon: 'puzzle', accountTypes: ['apikey'] }],
+  slots: [
+    {
+      slot: 'account.editor.section',
+      component: 'ControlsDemoSection',
+      label: { en: 'Demo section', zh: '演示分区' },
+      icon: 'puzzle',
+      accountTypes: ['apikey']
+    }
+  ],
   native_entry: 'ui/native/entry.js',
   trust: 'official',
   host_ui_compat: '^3.7'
@@ -79,7 +87,7 @@ export function checkControls(controls: Record<string, any> | undefined, body: R
     if (fixed && body[field] !== undefined && JSON.stringify(body[field]) !== JSON.stringify(expected)) return { field, code: 'read_only' }
     if (body[field] === undefined && !current && c.default !== undefined) body[field] = c.default
   }
-  const proxy = 'proxy_id' in body || 'proxy_url' in body ? body.proxy_id ?? body.proxy_url : current?.proxy_id
+  const proxy = 'proxy_id' in body || 'proxy_url' in body ? (body.proxy_id ?? body.proxy_url) : current?.proxy_id
   if (controls?.proxy?.required && proxy == null) return { field: 'proxy_id', code: 'required' }
   return null
 }

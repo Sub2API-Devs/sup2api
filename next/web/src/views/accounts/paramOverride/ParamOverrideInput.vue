@@ -41,9 +41,7 @@ const summary = computed(() =>
       }}</SButton>
     </div>
     <ol v-if="drafts.length" class="space-y-0.5 text-xs text-fg-muted">
-      <li v-for="(d, i) in drafts.slice(0, 3)" :key="d.id" class="truncate">
-        {{ i + 1 }}. {{ d.description || describeOperation(d, t) }}
-      </li>
+      <li v-for="(d, i) in drafts.slice(0, 3)" :key="d.id" class="truncate">{{ i + 1 }}. {{ d.description || describeOperation(d, t) }}</li>
       <li v-if="drafts.length > 3">…</li>
     </ol>
     <ParamOverrideEditor v-model:open="open" :value="model ?? null" :models="models" @apply="model = $event" />

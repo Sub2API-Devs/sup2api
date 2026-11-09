@@ -502,9 +502,11 @@ export interface ModelRateUsage {
 }
 
 /** Account fields an account type may declare a common control for (manifest accountTypes[].commonControls). */
-export type CommonControlName =
-  | 'schedulable' | 'auto_disable' | 'priority' | 'weight' | 'max_concurrency' | 'rpm_limit' | 'tpm_limit' | 'spm_limit'
-  | 'model_limits' | 'usage_limit' | 'model_mapping' | 'param_override' | 'header_passthrough' | 'environment' | 'proxy'
+export const COMMON_CONTROL_NAMES = [
+  'schedulable', 'auto_disable', 'priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit',
+  'model_limits', 'usage_limit', 'model_mapping', 'param_override', 'header_passthrough', 'environment', 'proxy'
+] as const
+export type CommonControlName = (typeof COMMON_CONTROL_NAMES)[number]
 
 /** One common control declaration; every field is optional. */
 export interface CommonControlDecl {

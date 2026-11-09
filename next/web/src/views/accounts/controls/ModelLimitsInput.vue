@@ -9,7 +9,10 @@ import ModelLimitsEditor from '../ModelLimitsEditor.vue'
 import { fromCards, toCards, type ModelLimitCard } from '../modelLimits'
 
 const model = defineModel<ModelLimit[]>({ required: true })
-withDefaults(defineProps<{ options?: string[]; errors?: Record<string, string>; disabled?: boolean }>(), { options: () => [], errors: () => ({}) })
+withDefaults(defineProps<{ options?: string[]; errors?: Record<string, string>; disabled?: boolean }>(), {
+  options: () => [],
+  errors: () => ({})
+})
 
 const cards = ref<ModelLimitCard[]>([])
 /** JSON of the value last read or emitted: our own echo does not reload the cards. */

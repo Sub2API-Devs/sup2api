@@ -39,7 +39,12 @@ import UpstreamSection from './UpstreamSection.vue'
 
 // Extra widget props (schema, ui, multiple) must not land on the root.
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ modelValue: UpstreamAccountLayer | null | undefined; disabled?: boolean; accountType?: AccountType | null; errors?: Record<string, string> }>()
+const props = defineProps<{
+  modelValue: UpstreamAccountLayer | null | undefined
+  disabled?: boolean
+  accountType?: AccountType | null
+  errors?: Record<string, string>
+}>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: UpstreamAccountLayer | undefined): void }>()
 const { t } = useI18n()
 const P = 'accounts.upstream'

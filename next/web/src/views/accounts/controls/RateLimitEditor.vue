@@ -36,12 +36,23 @@ function current(key: RateLimitField): number | null {
 }
 
 function set(key: RateLimitField, v: unknown) {
-  emit('update:modelValue', { rpm_limit: current('rpm_limit'), tpm_limit: current('tpm_limit'), spm_limit: current('spm_limit'), [key]: v as number | null })
+  emit('update:modelValue', {
+    rpm_limit: current('rpm_limit'),
+    tpm_limit: current('tpm_limit'),
+    spm_limit: current('spm_limit'),
+    [key]: v as number | null
+  })
 }
 </script>
 
 <template>
-  <SSettingRow v-for="f in fields" :key="f.key" :label="f.label" :description="controls?.[f.key]?.reason || f.hint" :error="errors?.[f.key]">
+  <SSettingRow
+    v-for="f in fields"
+    :key="f.key"
+    :label="f.label"
+    :description="controls?.[f.key]?.reason || f.hint"
+    :error="errors?.[f.key]"
+  >
     <SInput
       :model-value="modelValue?.[f.key]"
       type="number"

@@ -7,7 +7,8 @@ const SCHEMA_PROPS = new Set(['schema', 'ui', 'multiple'])
 
 /** A component as a widget: the SchemaForm-only props are not passed on. */
 function widget(component: Component): FunctionalComponent {
-  const w: FunctionalComponent = (_, { attrs }) => h(component, Object.fromEntries(Object.entries(attrs).filter(([k]) => !SCHEMA_PROPS.has(k))))
+  const w: FunctionalComponent = (_, { attrs }) =>
+    h(component, Object.fromEntries(Object.entries(attrs).filter(([k]) => !SCHEMA_PROPS.has(k))))
   w.inheritAttrs = false
   return w
 }

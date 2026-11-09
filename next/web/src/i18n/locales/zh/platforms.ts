@@ -26,7 +26,5 @@ export default {
   keyEndpoints: '此分组的 Key 可以调用',
   keyNoPlatforms: '该分组暂时无法提供服务（没有可用账号）。',
   moreEndpoints: '另有 {n} 个',
-  unknownEndpoints: '该平台的端点见"平台"页面。',
-  converted: '经转换',
-  convertedHint: '经核心协议转换后服务（端点协议 {protocol}）'
+  unknownEndpoints: '该平台的端点见"平台"页面。'
 }
