@@ -1,0 +1,51 @@
+{
+  "max_tokens": 512,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Weather in Paris and Tokyo?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-sonnet-4-5",
+  "stream": true,
+  "tools": [
+    {
+      "description": "Current weather",
+      "input_schema": {
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "name": "get_weather"
+    },
+    {
+      "description": "Current time",
+      "input_schema": {
+        "properties": {
+          "tz": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "tz"
+        ],
+        "type": "object"
+      },
+      "name": "get_time"
+    }
+  ]
+}

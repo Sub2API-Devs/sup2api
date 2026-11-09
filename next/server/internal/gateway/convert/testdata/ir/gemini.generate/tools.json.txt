@@ -1,0 +1,122 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "tool_calls",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": null,
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"city\":\"Paris\"}",
+              "name": "get_weather"
+            },
+            "id": "call_0a7c58053892cdba",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"city\":\"Tokyo\"}",
+              "name": "get_weather"
+            },
+            "id": "call_a873794201d81e12",
+            "type": "function"
+          }
+        ]
+      }
+    }
+  ],
+  "created": 0,
+  "id": "Ws0QacGWJdiVz7IPuv6E8Qo",
+  "model": "gemini-2.5-flash",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 110,
+    "completion_tokens_details": {
+      "reasoning_tokens": 80
+    },
+    "prompt_tokens": 60,
+    "total_tokens": 170
+  }
+}
+--- losses: {"reasoning":["response.candidates[0].content.parts[0]"]}
+
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "incomplete_details": null,
+  "model": "gemini-2.5-flash",
+  "object": "response",
+  "output": [
+    {
+      "arguments": "{\"city\":\"Paris\"}",
+      "call_id": "call_0a7c58053892cdba",
+      "id": "fc_Ws0QacGWJdiVz7IPuv6E8Qo_0",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    },
+    {
+      "arguments": "{\"city\":\"Tokyo\"}",
+      "call_id": "call_a873794201d81e12",
+      "id": "fc_Ws0QacGWJdiVz7IPuv6E8Qo_1",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 60,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 110,
+    "output_tokens_details": {
+      "reasoning_tokens": 80
+    },
+    "total_tokens": 170
+  }
+}
+--- losses: {"reasoning":["response.candidates[0].content.parts[0]"]}
+
+=== anthropic.messages
+{
+  "content": [
+    {
+      "id": "call_0a7c58053892cdba",
+      "input": {
+        "city": "Paris"
+      },
+      "name": "get_weather",
+      "type": "tool_use"
+    },
+    {
+      "id": "call_a873794201d81e12",
+      "input": {
+        "city": "Tokyo"
+      },
+      "name": "get_weather",
+      "type": "tool_use"
+    }
+  ],
+  "id": "msg_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "model": "gemini-2.5-flash",
+  "role": "assistant",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 60,
+    "output_tokens": 110
+  }
+}
+--- losses: {"reasoning":["response.candidates[0].content.parts[0]"]}
+

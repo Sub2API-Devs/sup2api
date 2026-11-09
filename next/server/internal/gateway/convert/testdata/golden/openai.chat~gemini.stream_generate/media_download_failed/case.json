@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": true
+  },
+  "note": "A failed download makes the request impossible for Gemini (D6)."
+}

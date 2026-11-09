@@ -1,0 +1,24 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Hello."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "claude-sonnet-4-5-20250929",
+  "responseId": "resp_msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "usageMetadata": {
+    "cachedContentTokenCount": 1024,
+    "candidatesTokenCount": 4,
+    "promptTokenCount": 1290,
+    "totalTokenCount": 1294
+  }
+}

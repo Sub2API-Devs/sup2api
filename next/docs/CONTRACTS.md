@@ -392,7 +392,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 **数据库（0005）**：`accounts.platform` 删除（账号类型 = `plugin_key` + `type`）；`model_prices.platform` 删除，唯一约束改为：管理员价格每个模型一条，插件默认价格每个 `(plugin_key, 模型)` 一条（0007 起列名为 `model`）；`usage_logs` 新增 `account_type`、`upstream_protocol`。
 
-**调度**：端点协议 P → 候选账号类型 = 原生支持 P 的，加上支持 Q 且核心有 `P→Q` 转换器的（原生优先）→ 分组内这些类型的账号。请求由账号类型所属插件构造；需转换时核心转换请求体和响应（含 SSE）。用量规则：账号类型为该协议声明的 `usage`，否则取声明该协议端点的平台的 `usage`；`requestFields`、`passHeaders` 同理。错误格式始终是端点的 `errorFormat`。
+**调度**：端点协议 P → 候选账号类型 = 原生支持 P 的，加上支持 Q 且核心有 `P→Q` 转换器的（转换目标、等级与同一优先级内的先后见 §88）→ 分组内这些类型的账号。请求由账号类型所属插件构造；需转换时核心转换请求体和响应（含 SSE）。用量规则：账号类型为该协议声明的 `usage`，否则取声明该协议端点的平台的 `usage`；`requestFields`、`passHeaders` 同理。错误格式始终是端点的 `errorFormat`。
 
 **计费**：`Resolve(model)` 只按模型匹配：管理员价格优先，其次插件默认价格；按完整模型 ID 精确匹配（0007 起不支持通配符，见 §16），同一模型有多个插件默认价格时取最早安装的插件；表达式结果为基础价格 × 分组倍率。
 
@@ -1182,7 +1182,7 @@ type ProxyResolver interface {
 - 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.7.0`，§87.3；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
-- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 dynweight、growth、guard、moderation 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；`sdk/manifest`：声明了 `ui.native` 时必填）。
+- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard、moderation 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 用 `^3.6`；`sdk/manifest`：声明了 `ui.native` 时必填）。
 - 插件的 `package.json` 只需 devDependencies：`@sub2api/vite-preset`、`@vitejs/plugin-vue`、`vite`、`vue`（类型用）；`@sub2api/ui`、`@sub2api/host` 通过 import map 在运行时解析，本地开发用 tsconfig `paths` 指到 `web/packages/*/src` 取类型。
 
 ### 23.2 `@sub2api/host`
@@ -1260,7 +1260,7 @@ type ProxyResolver interface {
 | `SPagination` | 分页（`<nav>`，当前页 `aria-current="page"`） | `page`、`pageSize`、`total`（必填）、`pageSizes`（`[20,50,100]`）、`hideSizes`（不显示每页条数）、`size`（`sm`/`md`，sm） | emits `update:page`、`update:pageSize`（改每页数时 `page` 回 1） |
 | `STabs` | 标签和内容容器，统一同名标题去重、键盘切换与可访问面板关联；增强入口从核心 0.1.154 提供 | `tabs: TabItem[]`、`modelValue: string`、`showTabs`、`showSingle`、`idPrefix`、`size`、`ariaLabel` | emits `update:modelValue`；default slot `{active}`，必须将对应内容放入容器；底层标签栏不公开 |
 | `SButton` | 按钮；给 `to` 渲染 `RouterLink`、给 `href` 渲染 `<a>`（同样的 `.btn` 类），否则原生 `<button>` | `variant`（`primary`/`secondary`/`ghost`/`danger`/`success`/`warning`，secondary）、`size`（`xs`/`sm`/`md`/`lg`，md；xs 为表格内的紧凑按钮）、`loading`（spinner + 禁用 + `aria-busy`）、`disabled`、`type`（`button`/`submit`/`reset`，button）、`block`、`to`（`string \| RouteLocationRaw`）、`href`、`icon` / `iconRight`（SIcon 名）、`iconOnly`（只显示图标的方形按钮，**必须**配 `ariaLabel`）、`square`（方形）、`ariaLabel`、`tone`（`default`/`danger`/`info`：ghost/secondary 按钮的红色 / 蓝色文字，用于删除、禁用 / 启用；`info` 2026-11-09 起） | 原生 `click`；slot 默认。`to`/`href` 形态 `disabled`/`loading` 时渲染无 `href` 的 `<a aria-disabled="true">` |
-| `SRowAction` | 表格行操作：纯文字小按钮（`secondary` + `xs`，参照 new-api 的「测试 / 禁用 / 编辑」），手机卡片里是 `ghost` + `sm`。2026-11-09 起不再画图标（`icon` 改为可选，仍接受、不显示，老插件不用改） | `label`（必填）、`icon`（可选，不显示）、`tone`（`default`/`danger`/`info`，与 `SButton` 相同：danger 文字红色、info 蓝色）、`disabled`、`loading`（文字前加载圈）、`title`（默认 `label`） | emits `click`（已 `stop`）；其余属性落到 `<button>`，可作 `SDropdown` 的 `#trigger` |
+| `SRowAction` | 表格行操作：纯文字小按钮（`secondary` + `xs`，参照 new-api 的「测试 / 禁用 / 编辑」），手机卡片里是 `ghost` + `sm`。UI 3.7 起不再画图标（`icon` 改为可选，仍接受、不显示，老插件不用改；`hostUICompat` 低于 `^3.7` 的插件仍应传 `icon`，装在老核心上才有图标） | `label`（必填）、`icon`（可选，不显示）、`tone`（`default`/`danger`/`info`，与 `SButton` 相同：danger 文字红色、info 蓝色）、`disabled`、`loading`（文字前加载圈）、`title`（默认 `label`） | emits `click`（已 `stop`）；其余属性落到 `<button>`，可作 `SDropdown` 的 `#trigger` |
 | `SDropdown` | 操作菜单（Teleport 到 body，自动定位/翻转）。菜单项是 `<button role="menuitem">`：↑/↓/Home/End 移动，Enter/空格选择，Esc 关闭并把焦点还给触发按钮，Tab 关闭 | `actions: MenuAction[]`（必填）、`label`、`ariaLabel`（只有图标时默认 `ui.moreActions`）、`align`（`end`/`start`，end）、`width`（CSS 宽度，`'11rem'`）、`disabled` | emits `select(key)`、`open`、`close`；slot 默认为触发按钮内容（缺省显示 `label` 或 `more` 图标）；slot `trigger`（`{open, toggle, attrs}`：整个替换触发按钮，自己的按钮要 `v-bind="attrs"`（`aria-haspopup`/`aria-expanded`/`aria-controls`）并 `@click="toggle"`）；slot `header`（菜单顶部说明） |
 | `SBadge` | 徽标 | `tone: Tone`（gray；`purple` 与 `accent` 同色）、`dot`、`size`（`xs`/`sm`，sm） | slot 默认 |
 | `SChip` | 小标签 / 筛选芯片 | `tone: StatusTone`（neutral）、`icon`、`size`（`xs`/`sm`，sm）、`closable` + `closeLabel`（默认 `ui.remove`）、`pressed`（boolean：切换按钮，`aria-pressed`，`v-model:pressed`）、`clickable`（普通按钮）、`disabled` | emits `close`、`click`、`update:pressed`；slot 默认 |
@@ -1277,7 +1277,7 @@ type ProxyResolver interface {
 | `SCopyButton` | 复制按钮（`navigator.clipboard`，失败回退 `execCommand`；成功显示对勾 1.5 秒） | `text`（必填；空时禁用）、`label`（`ui.copy`）、`iconOnly`（label 变成 `aria-label`/`title`）、`size`（`sm`/`md`，sm）、`variant`（`ghost`/`secondary`，ghost）、`toast`（true：提示 `ui.copied`/`ui.copyFailed`）、`disabled` | emits `copied(text)`、`error` |
 | `STooltip` | 提示气泡（悬停 `delay` 后、键盘聚焦立即显示；Esc 隐藏；Teleport 到 body，`role="tooltip"`，显示时触发区 `aria-describedby` 指向它） | `content`、`placement`（`top`/`bottom`/`left`/`right`，top，放不下自动翻转）、`delay`（300）、`disabled`、`maxWidth`（`'20rem'`） | slot 默认为触发内容（包在 inline `<span>` 里）、`content` |
 | `SChoiceCards` | 大卡片单选/多选（账号类型、方案、模式） | `modelValue`（单选为值；`multiple` 时为数组）、`options: ChoiceOption[]`（`{value, label, description?, icon?, disabled?, tone?}`）、`cols`（1–4，2；手机一列）、`multiple`、`name`、`disabled`、`ariaLabel`、`error` | emits `update:modelValue`；slot `option-<value>`（`{option, checked}`）；单选 `role="radiogroup"`（方向键），多选 `role="group"` |
-| `SModal` | 弹窗（Teleport 到 body；层栈、焦点陷阱、锁滚动见上） | `open`（必填，`v-model:open`）、`title`（对话框的 `aria-labelledby`）、`width`（`sm`/`md`/`lg`/`xl`/`2xl`，md）、`closable`（true；false 时隐藏 × 且 Esc/遮罩不关）、`persistent`（true 时 Esc 和点遮罩不关闭，× 仍可关）、`top`（叠在其他弹窗之上；确认框用）、`describedby`（主体内描述元素的 id）、`fixed`（2026-11-09：尺寸不随内容变，宽屏取满宽度和最大高度、主体内滚动并保留滚动条位置，手机底部抽屉取满高度；多步编辑器用，如账号新建/编辑；只加属性，老核心忽略，不改 `hostUICompat`） | emits `update:open`、`close`；slots 默认、`header`、`footer` |
+| `SModal` | 弹窗（Teleport 到 body；层栈、焦点陷阱、锁滚动见上） | `open`（必填，`v-model:open`）、`title`（对话框的 `aria-labelledby`）、`width`（`sm`/`md`/`lg`/`xl`/`2xl`，md）、`closable`（true；false 时隐藏 × 且 Esc/遮罩不关）、`persistent`（true 时 Esc 和点遮罩不关闭，× 仍可关）、`top`（叠在其他弹窗之上；确认框用）、`describedby`（主体内描述元素的 id）、`fixed`（UI 3.7：尺寸不随内容变，宽屏取最大高度（宽度本来就按 `width`）、手机底部抽屉取满高度，主体内滚动并保留滚动条位置；多步编辑器用，如账号新建/编辑；`SFormModal` 同名属性转发；更早的核心忽略它，弹窗照旧随内容变高，所以插件用它不必提高 `hostUICompat`） | emits `update:open`、`close`；slots 默认、`header`、`footer` |
 | `SDrawer` | 侧滑面板（与 `SModal` 同一层栈） | `open`（必填，`v-model:open`）、`title`、`description`、`side`（`right`/`left`，right）、`width`（`sm` 24rem / `md` 32rem / `lg` 42rem / `xl` 56rem 或任意 CSS 宽度，md）、`closable`（true）、`persistent` | emits `update:open`、`close`；slots 默认、`header`、`footer` |
 | `SField` | 表单项外框：label / hint / error / 必填星号（关联规则见上） | `label`、`hint`、`error`（有则替代 hint）、`required`、`inline`（label 与控件同行）、`for`（显式指定控件 id）、`size`（`sm`：小号标签，内部控件默认 sm） | slot 默认放控件；slots `label`、`hint`、`error`（替代同名 prop，可放富内容）、`details`（长说明，收在「查看说明」后）；其他 attrs 落到根 `<div>` |
 | `SInput` | 输入框 | `modelValue: string \| number \| null`、`type`（`text`/`password`/`number`/`url`/`email`/`search`/`tel`/`datetime-local`/`date`/`time`/`file`/`color`，text）、`placeholder`、`disabled`、`readonly`、`size`（`sm`/`md`）、`mono`、`error`、`maxlength`、`min`/`max`/`step`、`inputmode`、`autocomplete`、`lazy`（true 时在 `change` 而非 `input` 时发出；`datetime-local`/`date`/`time` 默认 true）、`icon`（框内左侧 SIcon）、`suffix`（框内右侧单位文字，如 `ms`）、`clearable`（有值时显示清空按钮）、`revealable`（`type=password` 时显示/隐藏切换）、`ariaLabel` | emits `update:modelValue`（string；`type=number` 时为 number，空或非法为 null；`type=file` 时为 `FileList \| null`，只在 `change` 时发出）、`clear`；slots `prefix`、`suffix`（有任一修饰时渲染成 `.input.input-group` 外框，`class`/`style` 落到外框）；expose `focus()`、`el` |
@@ -6601,7 +6601,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 **拒绝**（400）：`n` ≠ 1；`audio`；含 `audio` 的 `modalities`；`input_audio` 用户部件（Responses 的 input 内容只有 `input_text`/`input_image`/`input_file`，2026-11 的 OpenAPI 规范）及其他未知用户部件；`messages` 为空或缺失；缺 `model`；`function`/`custom` 以外的工具或 `tool_choice`/`allowed_tools` 条目；`response_format` 的其他类型；custom 工具 `format` 的其他类型；`user_location.type` 不是 `approximate`；`function_call` 为 `none`/`auto`/对象以外的值；未知角色；没有 `name` 或找不到对应旧式调用的 `function` 消息；`system`/`developer`/`tool` 消息里的非文本部件；assistant 的 `audio`（引用以前的音频回答）和 `function`/`custom` 以外的 `tool_calls`；`tool` 消息缺 `tool_call_id`；字段类型错误。
 
-**可观察性**：网关没有现成的“转换警告”通道（使用记录的 `metrics` 参与计费，不适合）。转换器的 `Prepare` 返回的绑定转换器实现 `convert.DropReporter`（`Dropped() []string`，排序、去重），辅助函数 `convert.Dropped(conv)`；网关在请求转换成功后（`dispatch.go`）有丢弃时记一条 debug 日志 `gateway: request conversion dropped fields`，带 `from`、`to`、`fields`。
+**可观察性**：网关没有现成的“转换警告”通道（使用记录的 `metrics` 参与计费，不适合）。转换器的 `Prepare` 返回的绑定转换器实现 `convert.DropReporter`（`Dropped() []string`，排序、去重），辅助函数 `convert.Dropped(conv)`；网关在请求转换成功后（`dispatch.go`）有丢弃时记一条 debug 日志 `gateway: request conversion dropped fields`，带 `from`、`to`、`fields`。（2026-11-09 起由 §88 取代：丢弃改为带类别的 `convert.Loss`，记入使用记录 `conversion`，同名 debug 日志的 `fields` 为 `类别:路径`。）
 
 **响应（JSON）**：`object: "chat.completion"`，`id`、`model` 取 Responses 的，`created` 取 `created_at`，`service_tier` 原样；单个 choice：`message.content` 为所有 message 项 `output_text` 的拼接（没有时 `null`），`refusal` 部件拼成 `message.refusal`；`function_call` 项按顺序成为 `tool_calls[{id, type: "function", function}]`，`custom_tool_call` 项成为 `tool_calls[{id, type: "custom", custom: {name, input}}]`；旧式模式下唯一的 `function_call` 项成为 `message.function_call {name, arguments}`（多于一个或出现 custom 调用是转换失败）；所有文本部件上的 `url_citation` 注解合并成 `message.annotations`（`start_index`/`end_index` 加上该部件之前的文本字符数）。**忽略**（不输出、不报错）：`reasoning`、`web_search_call` 等服务端执行的工具项、未知输出项、未知的 message 部件（如 `output_audio`）、`url_citation` 以外的注解。**无法表示**而转换失败（502 `upstream_error`，§12“转换失败”）：需要客户端执行而 Chat 没有对应工具的调用（`computer_call`、`local_shell_call`、`shell_call`、`apply_patch_call`、`mcp_approval_request`）和 `image_generation_call`（图片就是答案）；`failed` 等 completed/incomplete 以外的状态。`finish_reason`：`completed` 有工具调用为 `tool_calls`（旧式模式为 `function_call`），否则 `stop`；`incomplete` 原因为 `content_filter` 时为 `content_filter`，`max_output_tokens`、其他或缺失的原因一律为 `length`（输出被截断，Chat 客户端据此判断）。`usage`：`input_tokens → prompt_tokens`、`output_tokens → completion_tokens`、`total_tokens`、`input_tokens_details.cached_tokens → prompt_tokens_details.cached_tokens`、`output_tokens_details.reasoning_tokens → completion_tokens_details.reasoning_tokens`。
 
@@ -6760,7 +6760,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 参数覆盖的请求体位置与 0.1.262 之前相同（插件之前）；请求头改为插件的头盖过参数覆盖的头：老插件自己构造的头（如 codex 的头、代码插件转发的客户端头）不能再被账号参数覆盖改掉，声明式类型的头仍可以。
 - 第一个带本节功能的核心是 0.1.262：声明了 `upstream` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.UpstreamFirstCore`，低了报 `below_feature_core`），openai 0.4.0、gemini/relay/anthropic 0.3.0、custom 0.1.0 已定为 `>=0.1.262 <0.2.0`。旧核心会忽略 `upstream` 字段，所以这几个只有清单的插件必须随 0.1.262 一起发；内置插件在核心计划完成、所有节点都换上新核心后才升级（§37）。
 
-## 87. 账号通用配置项按类型声明、核心编辑器开放给插件（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”第 2 期，规格见 [COMMON-CONTROLS.md](COMMON-CONTROLS.md)；核心 0.1.263）
+## 87. 账号通用配置项按类型声明、核心编辑器开放给插件（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”第 2 期，规格见 [COMMON-CONTROLS.md](COMMON-CONTROLS.md)；核心 0.1.262）
 
 起因：限流、参数覆盖、请求头、代理、模型映射等账号通用配置由核心实现界面和执行，但插件能影响的只有 `commonControls` 的 `auto_disable`、`schedulable` 两项和新建时的 `defaultLimits`；插件自己的页面也用不了核心的编辑器。
 
@@ -6769,7 +6769,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - `accountTypes[].commonControls.<名>`：`{visible?, configurable?, default?, locked?, required?}`；名称与取值类型见 `sdk/manifest/common_controls.go` 的 `CommonControlSpecs`（schedulable、auto_disable、priority、weight、max_concurrency、rpm_limit、tpm_limit、spm_limit、model_limits、usage_limit、model_mapping、param_override、header_passthrough、environment、proxy）。`default` 是账号接口该字段的 JSON，范围与账号接口相同（常量在 sdk，核心、校验共用）。老的 `{"configurable":…, "default":…}` 写法照旧有效。
 - 语义：新账号缺省值取 `default`（再缺省取核心默认，自己级用户的并发默认 10 照旧，有声明时声明优先）；`configurable: false` 新建只接受默认值、更新只接受原值；`locked` 新老账号都只接受 `default`；不符报 `read_only`。值按 JSON 比较（格式、键序、数字写法、null 与空不影响）。`proxy` 只能写 `required`：新建没有代理、或更新清掉了代理时报 `proxy_id: required`，老账号没代理时其他修改照常。`visible` 只影响界面。
 - 执行点：`account/common_controls.go`，更新在锁行之后；`PUT /accounts/:id/usage-limit` 同样检查（`usage_limit: read_only`）；插件生命周期返回的 `account_patch` 不能改固定项（固定项从可改字段中移除，可改的照常）。
-- 校验（`sdk/manifest/check/common_controls.go`）：未知名称、类型或范围不符、`required` 用在 proxy 之外、proxy 写了 `required` 以外的字段、`locked` 没有 `default` 或同时写 `configurable: true`、与 `defaultLimits` 的值冲突（`conflict`）。用到新名称或 `visible`/`locked`/`required` 的插件 `hostCompat` 下限须 ≥0.1.263（`check.CommonControlsFirstCore`）。
+- 校验（`sdk/manifest/check/common_controls.go`）：未知名称、类型或范围不符、`required` 用在 proxy 之外、proxy 写了 `required` 以外的字段、`locked` 没有 `default` 或同时写 `configurable: true`、与 `defaultLimits` 的值冲突（`conflict`）。用到新名称或 `visible`/`locked`/`required` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.CommonControlsFirstCore`）。
 - 锁定值收敛：更新账号时，请求没带锁定字段而存储值与锁定值不同，就写入锁定值（锁定的用量限制同样在更新事务里写入）；老账号在下次保存时收敛，不做后台迁移。控制台对已保存账号显示存储值，不同于锁定值时提示“保存后改为锁定值 X”。
 - 自己级用户：新建时，省略的字段或等于预填默认值（声明的、否则 `default_limits`）的字段收进自己级上限（priority 0–100、weight 1–100、并发 1–1000，0 变 10）；其他越界值仍报 `restricted`；固定项（不可改或锁定）以声明为准、不收。更新时不收。控制台预填同样的收后值。
 - `GET /account-types` 返回 `common_controls`，`default` 按核心存储的形式规范化（例如头名小写），便于和账号存储值比较。
@@ -6782,10 +6782,73 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 87.3 核心编辑器开放给插件（UI 3.7）
 
-- `HOST_UI_VERSION` 3.7.0；`host.components`（只读）：`ParamOverrideEditor`、`RateLimitEditor`（`{rpm_limit, tpm_limit, spm_limit}`）、`ModelLimitsEditor`、`HeaderPassthroughEditor`、`ProxyPicker`、`ModelMappingEditor`、`UpstreamEditor`，v-model 即账号接口字段，都接受 `disabled`；较重的编辑器首次使用时加载。用到的插件声明 `hostUICompat: "^3.7"`，核心下限 ≥0.1.263（0.1.262 是最后一个带 UI 3.6 的核心）。
+- `HOST_UI_VERSION` 3.7.0；`host.components`（只读）：`ParamOverrideEditor`、`RateLimitEditor`（`{rpm_limit, tpm_limit, spm_limit}`）、`ModelLimitsEditor`、`HeaderPassthroughEditor`、`ProxyPicker`、`ModelMappingEditor`、`UpstreamEditor`，v-model 即账号接口字段，都接受 `disabled`；较重的编辑器首次使用时加载。用到的插件声明 `hostUICompat: "^3.7"`，核心下限 ≥0.1.262（0.1.261 是最后一个带 UI 3.6 的核心）。
 - schema 表单控件：`param-override`、`header-passthrough`、`rate-limits`、`model-limits`、`model-mapping`（另有 `proxy-select`、`upstream-editor`）。数据格式即核心执行格式，插件在自己的设置接口里用 SDK 同一套规则校验。
+- `SModal` / `SFormModal` 新增 `fixed`（只是新增属性，更早的核心忽略、平稳降级，见 §23 组件表）。
 
 ### 87.4 编辑页分区插槽 `account.editor.section`
 
-- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（只能是本插件自己的账号类型 id，唯一，校验强制）；这三个字段只能用在这个插槽上；需要核心 ≥0.1.263。
+- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（只能是本插件自己的账号类型 id，唯一，校验强制）；这三个字段只能用在这个插槽上；需要核心 ≥0.1.262。
 - 账号编辑页在核心分区之后追加，props `{account, accountType, readonly}`，各插件分区独立隔离错误；新建账号显示“保存账号后可配置”。按 §23.3，插件分区不进核心保存流程，由插件自己的接口保存。
+
+## 88. 协议转换矩阵（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”的“协议转换矩阵”一节，规格与转换器开发说明见 [CONVERT-MATRIX.md](CONVERT-MATRIX.md)；迁移 0093；核心 0.1.262，与第 1、2 期同版发布）
+
+起因：四种文本协议（`openai.chat`、`openai.responses`、`anthropic.messages`、`gemini.generate`/`gemini.stream_generate`）两两互转，原生与转换由管理员用优先级控制，转换的损失由账号或分组的策略决定能否接受。§83.2 的 chat → Responses 转换器保留（丢弃改为带类别的损失）；原来 chat/Responses → Anthropic 的严格转换改为宽松（D1）。
+
+### 88.1 转换器与注册表（`server/internal/gateway/convert`）
+
+- `Converter`：`From`、`To`、`Grade`（good / fair / discouraged）、`Prepare(body, Options)` 返回绑定本请求的转换器与上游请求体、`Response`、`NewStream`。`Options`：`Ctx`、`Model`（客户端模型）、`Stream`、`Fetch`（媒体下载，网关提供）、`ClaudeDefaultMaxTokens`。
+- 转换器不判断策略：每个请求成员要么映射，要么记一条 `Loss{Category, Path, Hop}`（类别 `tool`、`reasoning`、`image`、`other`，判定规则见 CONVERT-MATRIX §2.3），要么返回 `RequestError`（请求无法表达）。绑定的转换器实现 `LossReporter`：Prepare 后列请求侧损失，Response / 流 Flush 后追加响应侧损失（路径以 `response.` 开头）。
+- 注册表 `Resolve(from, to)`：有直接转换器就用它，否则 `from → openai.responses` 与 `openai.responses → to` 都有时用二者的组合（`compose.go`）：等级 discouraged，`Hops` 为三项，第二跳的损失 `Hop = 1`，任一跳的 `RequestError` 原样返回，流式逐事件串接。两端属于同一平台（协议名第一个 `.` 之前相同，如 `gemini.generate` 与 `gemini.stream_generate`）时不组合。组合在注册时生成；`Pairs()` 含组合。
+- `core.ProtocolConverters.Conversion(client, upstream)` 返回 `core.Conversion{Rank, Grade, Hops}`（取代 `CanConvert`）。
+
+### 88.2 路由
+
+- 原生路由不变。其他账号类型：`core.BestConvertTarget` 在类型子集内可接收转换的端点（proxy、非计数端点）中取 (等级, 跳数, 声明顺序) 最小者；声明顺序为类型的 `platforms` 顺序、平台的 `endpoints` 顺序（等级相同即原来的“第一个匹配”）。支持端点平台但子集不含该端点的类型只看同平台子集内的端点（§83.3 不变）。
+- 流式相容：客户端流式要求端点 `response.stream = "sse"`；非流式要求 `request.stream` 不为 true 且 `response.nonStream = "json"`，或类型对该协议声明了 `streamOnly`（§83.1）。所以 chat 流式到 Gemini 走 `gemini.stream_generate`，非流式走 `gemini.generate`。
+- 计数端点（`*.count_tokens`）从不转换。没有原生计数路由、但能服务同族生成协议（`anthropic.count_tokens` → `anthropic.messages`，`gemini.count_tokens` → `gemini.generate`，原生或经转换）的类型得到一条 `local` 路由：选中该类型的账号时不发上游，由核心本地估算（CONVERT-MATRIX §8；`gateway/count_local.go`），使用记录 `upstream_protocol = "local"`。
+- WebSocket、异步任务提交端点仍只走原生。
+
+### 88.3 调度
+
+- 粘性绑定照旧优先；绑定账号的类型无法转换或被策略拒绝时按“类型不可用”处理，保留绑定。
+- 其余候选按 **priority 降序**，同一 priority 内按路由等级 native → good → fair → discouraged → local，每个 (priority, 等级) 层内照旧加权随机（D2）。要让转换账号先于原生账号，管理员调高其优先级。失败切换与故障策略共用这套顺序。
+- 转换在挑选时惰性进行：考察到某类型的账号时才用本请求的 `Options` 转换（每个请求体版本一次，结果留在该类型的路由上），没考察到的类型不转换、不下载媒体。调度插件（§24）看到的候选不再先行转换。
+
+### 88.4 丢失策略
+
+- `allow`（默认，照常服务并记录损失）、`safe`（请求侧有 `tool` 损失时拒绝）、`strict`（任何请求侧损失都拒绝）。生效策略 = 账号的 `conversion_loss_policy`，为 null 时取分组的，再为 null 时 `allow`。判定只看请求侧损失；响应侧损失从不拒绝，只记录。
+- 被拒绝的账号与转换失败（`RequestError` 或转换器的其他错误，后者另记 warn）的类型一样：跳过，不占并发槽、不计 `attempts`、不触发失败切换。
+- 所有候选都因此不可用、且没有更早的失败或“忙/限流”原因时，请求以 400 `unsupported_conversion` 结束，记录类型 `invalid_request`，网关计数 `attempts = 0`（结算写库时 `attempts` 仍按既有规则不低于 1），消息为第一条原因：`request cannot be converted to <协议>: <路径> would be lost (<类别>, policy <策略>)` 或转换错误原文。**与此前不同**：`RequestError` 不再在第一次尝试后直接 400，而是跳过该类型试其他类型（有原生账号时由原生账号服务）。
+
+### 88.5 存储与接口
+
+- 迁移 `0093_conversion_loss_policy.sql`：`accounts.conversion_loss_policy`、`groups.conversion_loss_policy`（`allow|safe|strict`，NULL 继承）、`usage_logs.conversion`（jsonb，NULL = 原生且无拒绝）。均为可空无默认值的列。
+- `GET/POST/PATCH /accounts`、`/accounts/:id` 与 `/groups`、`/groups/:id`：`conversion_loss_policy`：`"allow"|"safe"|"strict"|null`；PATCH 缺省保持、null 清除；非法值 400 `invalid_argument`，`details.fields[{field: "conversion_loss_policy", code: "invalid"}]`。权限与该资源的其他字段相同。账号的策略经调度快照（`core.AccountRef`）、分组的经 API Key 认证（`core.GroupInfo`）到达网关，随既有缓存失效。
+- `GET /account-types`：`endpoints[]` 增加 `grade`（native / good / fair / discouraged / local）与 `via`（经过的协议，客户端在前；组合时三项；原生与 local 省略）；`native` 保留（等于 grade 为 native）。按 88.2 计算，不区分流式（同等级的兄弟端点由网关按请求选）。
+- `GET/PUT /settings/gateway`：`claude_default_max_tokens`（对象，模型名 → 整数 0–1048576，默认 `{"default": 8192}`；PUT 整体替换，缺 `default` 时补 8192，最多 200 个模型，模型名 1–200 字符且首尾无空格）——转换到 Anthropic 且客户端没给输出上限时按客户端模型取值，否则取 `default`（D5）；`media_download_max_mb`（1–1024，默认 64）——转换到 Gemini 时下载单个媒体文件的上限（D6）。
+- 使用记录列表与详情：`conversion`（`/me/usage` 为 null，与 `upstream_protocol` 一致）；筛选 `conversion=native|converted|good|fair|discouraged|local|lossy`（`native` 含 NULL 与 grade native；`converted` 为三个转换等级；`lossy` 为有请求或响应侧损失），只对管理员视图。
+
+### 88.6 使用记录 `conversion`
+
+```json
+{"v":1,"grade":"fair","hops":["anthropic.messages","openai.responses"],"policy":"allow",
+ "lost":{"tool":["tools[3]"],"other":["top_k"]},
+ "response_lost":{"reasoning":["response.output[0].encrypted_content"]},
+ "omitted":0,
+ "rejected":[{"type":"anthropic/apikey","policy":"safe","category":"tool","path":"tools[1]"},
+             {"type":"gemini/apikey","error":"..."}]}
+```
+
+- 写入条件：最后一次尝试的路由是转换或 local，或有类型拒绝了请求。最后路由原生时 `grade` 为 `native`、无 `hops`；没有任何尝试（全部拒绝）时省略 `grade`。
+- `policy` 是最后服务账号的生效策略（local 路由不写）；`lost` / `response_lost` 按类别列路径，第二跳的路径前加 `1:`（Responses 请求里的路径）；路径合计最多 40 条（超出计入 `omitted`）、每条及 `rejected[].path`/`error` 截到 160 字节；`rejected` 最多 5 条，每个 (类型, 策略) 一条，转换失败记 `error`。
+- 用量与计费照旧按最后一跳（上游协议）的用量规则从上游响应读取，不受转换影响。
+
+### 88.7 版本与兼容
+
+- `sdk/manifest/check`：`SamePlatformConversions` 增加 `openai.responses → openai.chat`，hostCompat 下限 `ConvertMatrixFirstCore = "0.1.262"`（子集保留 chat_completions 而不含 responses 的 openai 账号类型依赖它）；原有的 chat → responses 仍为 `StreamOnlyFirstCore`。
+- 行为变化（发布说明）：转换“不可能”时跳过该类型而不是立即 400，都不行才 400 且不计尝试；同一优先级内原生先于转换先于 local；`/account-types` 多出转换端点、`grade`、`via`；chat → Anthropic 等原来被拒的请求改为有损成功（需要原行为的账号或分组设为 `strict`）；codex 的 chat 路径响应多出 `reasoning_content`；Responses 客户端经 Anthropic 上游不再收到 `sup2api-anthropic-thinking-v1:` 推理信封。
+
+### 88.8 控制台
+
+账号编辑器“高级”分区的“协议转换丢失策略”（继承分组 / 允许 / 安全 / 严格，提示各分组的生效值）；分组表单同一选项（默认 = 允许）与详情；系统设置网关卡片的 Claude 默认 max_tokens 键值表（`default` 行不可删）与媒体下载上限；使用记录的上游协议列转换徽标（等级，悬停显示步骤，有损时加标记）、详情的“协议转换”块（等级、步骤、策略、按类别的损失、被拒绝的类型）、`conversion` 筛选；账号类型端点列表的等级徽标。

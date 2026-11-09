@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": true
+  },
+  "note": "Gemini takes no image/gif."
+}

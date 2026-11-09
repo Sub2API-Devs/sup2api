@@ -1,0 +1,93 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "annotations": [
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "end_index": 23,
+              "start_index": 0,
+              "title": "Paris weather today",
+              "url": "https://example.com/paris-weather"
+            }
+          }
+        ],
+        "content": "Paris is sunny, 21 °C, according to forecasts.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "resp_<hex>",
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 24,
+    "prompt_tokens": 320,
+    "total_tokens": 344
+  }
+}
+--- losses: {"tool":["response.output[0]"]}
+
+=== anthropic.messages
+{
+  "content": [
+    {
+      "citations": [
+        {
+          "cited_text": "Paris is sunny, 21 °C, ",
+          "title": "Paris weather today",
+          "type": "web_search_result_location",
+          "url": "https://example.com/paris-weather"
+        }
+      ],
+      "text": "Paris is sunny, 21 °C, according to forecasts.",
+      "type": "text"
+    }
+  ],
+  "id": "msg_resp_<hex>",
+  "model": "gpt-4o-2024-08-06",
+  "role": "assistant",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 320,
+    "output_tokens": 24
+  }
+}
+--- losses: {"tool":["response.output[0]"]}
+
+=== gemini.generate
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Paris is sunny, 21 °C, according to forecasts."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "gpt-4o-2024-08-06",
+  "responseId": "resp_<hex>",
+  "usageMetadata": {
+    "candidatesTokenCount": 24,
+    "promptTokenCount": 320,
+    "totalTokenCount": 344
+  }
+}
+--- losses: {"other":["response.output[1].content[0].annotations"],"tool":["response.output[0]"]}
+

@@ -1,0 +1,18 @@
+{
+  "image": [
+    "messages[0].content[1].image_url.detail"
+  ],
+  "other": [
+    "logit_bias",
+    "messages[2]",
+    "parallel_tool_calls",
+    "web_search_options.search_context_size",
+    "web_search_options.user_location"
+  ],
+  "reasoning": [
+    "messages[1].reasoning_content"
+  ],
+  "tool": [
+    "tool_choice"
+  ]
+}

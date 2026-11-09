@@ -1,0 +1,14 @@
+{
+  "model": "gemini-2.5-flash",
+  "n": 2,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Two answers."
+    }
+  ],
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

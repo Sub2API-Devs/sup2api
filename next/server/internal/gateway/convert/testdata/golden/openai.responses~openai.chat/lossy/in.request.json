@@ -1,0 +1,68 @@
+{
+  "model": "gpt-5",
+  "max_output_tokens": 128,
+  "truncation": "auto",
+  "include": [
+    "reasoning.encrypted_content"
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Current weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      },
+      "strict": false
+    },
+    {
+      "type": "file_search",
+      "vector_store_ids": [
+        "vs_1"
+      ]
+    }
+  ],
+  "input": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "Look."
+        },
+        {
+          "type": "input_image",
+          "file_id": "file_1"
+        }
+      ]
+    },
+    {
+      "type": "reasoning",
+      "id": "rs_1",
+      "summary": [],
+      "encrypted_content": "sup2api-anthropic-thinking-v1:eyJ9"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Seen."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "More."
+    }
+  ]
+}

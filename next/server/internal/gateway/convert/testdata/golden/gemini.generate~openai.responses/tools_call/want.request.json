@@ -1,0 +1,56 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Weather in Paris and Tokyo?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "gpt-5-mini",
+  "store": false,
+  "tool_choice": "required",
+  "tools": [
+    {
+      "description": "Current weather",
+      "name": "get_weather",
+      "parameters": {
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    },
+    {
+      "description": "Current time",
+      "name": "get_time",
+      "parameters": {
+        "properties": {
+          "tz": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "tz"
+        ],
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    }
+  ]
+}

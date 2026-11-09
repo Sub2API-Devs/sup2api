@@ -27,7 +27,5 @@ export default {
   keyEndpoints: 'Keys in this group can call',
   keyNoPlatforms: 'This group cannot serve requests yet (no usable accounts).',
   moreEndpoints: '+{n} more',
-  unknownEndpoints: 'Endpoints of this platform are listed on the Platforms page.',
-  converted: 'converted',
-  convertedHint: 'Served through a core protocol converter (endpoint protocol {protocol})'
+  unknownEndpoints: 'Endpoints of this platform are listed on the Platforms page.'
 }

@@ -1,0 +1,14 @@
+{
+  "model": "gpt-4o",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Is 391 prime?"
+    }
+  ],
+  "reasoning_effort": "medium",
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

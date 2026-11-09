@@ -1,0 +1,15 @@
+{
+  "max_completion_tokens": 256,
+  "messages": [
+    {
+      "content": "Be brief.",
+      "role": "system"
+    },
+    {
+      "content": "Say hello.",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5",
+  "temperature": 0.5
+}

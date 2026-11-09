@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "x",
+    "stream": true
+  },
+  "note": "inputs strict accepted: store false, instructions, message items with id/status, refusal history, a call and its output, a named function choice; identical to the strict output"
+}

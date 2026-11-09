@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Hello!"}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"Ws0QacGWJdiVz7IPuv6E8Qo"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" How can I help"}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"Ws0QacGWJdiVz7IPuv6E8Qo"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" you today?"}],"role":"model"},"index":0,"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":8,"candidatesTokenCount":9,"totalTokenCount":17,"promptTokensDetails":[{"modality":"TEXT","tokenCount":8}]},"modelVersion":"gemini-2.5-flash","responseId":"Ws0QacGWJdiVz7IPuv6E8Qo"}
+

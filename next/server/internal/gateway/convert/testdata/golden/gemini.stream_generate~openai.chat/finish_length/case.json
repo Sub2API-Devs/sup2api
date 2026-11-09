@@ -1,0 +1,10 @@
+{
+  "options": {
+    "model": "gpt-5-mini",
+    "stream": true
+  },
+  "upstream": [
+    "recorded/openai.chat/finish_length.response.json",
+    "recorded/openai.chat/finish_length.stream.sse"
+  ]
+}

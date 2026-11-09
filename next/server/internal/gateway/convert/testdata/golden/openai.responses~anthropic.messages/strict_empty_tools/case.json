@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "x",
+    "stream": false
+  },
+  "note": "strict TestStrictEmptyToolsListStaysOnWire; equivalent, except that an empty tools list is not sent"
+}

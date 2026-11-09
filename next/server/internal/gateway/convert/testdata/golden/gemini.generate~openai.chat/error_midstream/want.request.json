@@ -1,0 +1,10 @@
+{
+  "max_tokens": 64,
+  "messages": [
+    {
+      "content": "Write a story.",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5-mini"
+}

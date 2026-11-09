@@ -1,0 +1,32 @@
+{
+  "model": "gpt-5",
+  "max_tokens": 32000,
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 16000
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Is 9973 prime?"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Check divisors up to 99.",
+          "signature": "EqQB-redacted"
+        },
+        {
+          "type": "text",
+          "text": "Yes."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "And 9971?"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "incomplete_details": null,
+  "model": "gpt-4o-2024-08-06",
+  "object": "response",
+  "output": [
+    {
+      "arguments": "{\"city\": \"Paris\"}",
+      "call_id": "call_FthC9qRpsL5kBpwwyw6c7j4k",
+      "id": "fc_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    },
+    {
+      "arguments": "{\"city\": \"Tokyo\"}",
+      "call_id": "call_RpEDoB8O0FTL9JoKTuCVFOyR",
+      "id": "fc_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_1",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 62,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 46,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 108
+  }
+}

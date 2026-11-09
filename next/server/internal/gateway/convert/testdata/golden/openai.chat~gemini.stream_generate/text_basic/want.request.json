@@ -1,0 +1,29 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Say hello."
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "maxOutputTokens": 256,
+    "presencePenalty": 0.5,
+    "seed": 7,
+    "stopSequences": [
+      "END"
+    ],
+    "temperature": 0.5,
+    "topP": 0.9
+  },
+  "systemInstruction": {
+    "parts": [
+      {
+        "text": "Be brief."
+      }
+    ]
+  }
+}

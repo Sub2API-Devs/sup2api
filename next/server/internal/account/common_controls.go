@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"slices"
 
@@ -274,21 +275,40 @@ func (p controlPlan) convergeUsageLimit(ctx context.Context, q store.Querier, id
 	return true, saveUsageLimit(ctx, q, id, *p.usageLimit)
 }
 
-// ownCapped are the fields an own-level caller is capped on (H3.2), with
-// the clamp into the caps.
-var ownCapped = []struct {
-	name  string
-	field func(*input) **int
-	clamp func(int) int
-}{
-	{"priority", func(in *input) **int { return &in.Priority }, func(v int) int { return min(max(v, 0), ownMaxPriority) }},
-	{"weight", func(in *input) **int { return &in.Weight }, func(v int) int { return min(max(v, 1), ownMaxWeight) }},
-	{"max_concurrency", func(in *input) **int { return &in.MaxConcurrency }, func(v int) int {
-		if v <= 0 {
-			return ownDefaultConcurrency
-		}
-		return min(v, ownMaxConcurrency)
-	}},
+// ownCap is a field an own-level caller is capped on (H3.2): they may set
+// it within [min, max].
+type ownCap struct {
+	name, zh string // the field, and its name in the Chinese message
+	field    func(*input) **int
+	min, max int
+	// below is what a default under min clamps to: min, or for
+	// max_concurrency (0 = unlimited, which own-level callers cannot set)
+	// ownDefaultConcurrency.
+	below int
+}
+
+var ownCapped = []ownCap{
+	{"priority", "优先级", func(in *input) **int { return &in.Priority }, 0, ownMaxPriority, 0},
+	{"weight", "权重", func(in *input) **int { return &in.Weight }, 1, ownMaxWeight, 1},
+	{"max_concurrency", "最大并发", func(in *input) **int { return &in.MaxConcurrency }, 1, ownMaxConcurrency, ownDefaultConcurrency},
+}
+
+// clamp fits v into the cap.
+func (f ownCap) clamp(v int) int {
+	if v < f.min {
+		return f.below
+	}
+	return min(v, f.max)
+}
+
+// restricted is the error of a sent value outside the cap, nil otherwise.
+func (f ownCap) restricted(ctx context.Context, in *input) error {
+	if v := *f.field(in); v == nil || (*v >= f.min && *v <= f.max) {
+		return nil
+	}
+	return core.InvalidFields(core.FieldError{Field: f.name, Code: "restricted",
+		Message: t(ctx, fmt.Sprintf("own-level users can only set %s between %d-%d", f.name, f.min, f.max),
+			fmt.Sprintf("own 级用户只能设置 %d-%d 的%s", f.min, f.max, f.zh))})
 }
 
 // clampOwnDefaults fits the type's defaults of a new account into an

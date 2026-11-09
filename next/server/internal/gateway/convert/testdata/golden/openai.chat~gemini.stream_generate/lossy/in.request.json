@@ -1,0 +1,78 @@
+{
+  "model": "gemini-2.5-flash",
+  "max_tokens": 128,
+  "logit_bias": {
+    "50256": -100
+  },
+  "parallel_tool_calls": false,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Current weather",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ]
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "function",
+    "function": {
+      "name": "get_time"
+    }
+  },
+  "web_search_options": {
+    "search_context_size": "high",
+    "user_location": {
+      "type": "approximate",
+      "approximate": {
+        "city": "Paris"
+      }
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Look."
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "detail": "high"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "Seen.",
+      "reasoning_content": "It is a pixel."
+    },
+    {
+      "role": "system",
+      "content": "Answer in French."
+    },
+    {
+      "role": "user",
+      "content": "More."
+    }
+  ],
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

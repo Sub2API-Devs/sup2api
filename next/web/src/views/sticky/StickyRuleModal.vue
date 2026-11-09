@@ -2,7 +2,24 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCheckbox, SChoiceCards, SField, SGrid, SHint, SInput, SFormModal, SSectionTitle, SSelect, SSettingRow, SSwitch, STagInput, toast, type ChoiceOption } from '@sub2api/ui'
+import {
+  SAlert,
+  SButton,
+  SCheckbox,
+  SChoiceCards,
+  SField,
+  SGrid,
+  SHint,
+  SInput,
+  SFormModal,
+  SSectionTitle,
+  SSelect,
+  SSettingRow,
+  SSwitch,
+  STagInput,
+  toast,
+  type ChoiceOption
+} from '@sub2api/ui'
 import type { StickyRule } from '@/api/types'
 import { applyFormError } from '@/utils/formErrors'
 import StickyProtocolPicker from './StickyProtocolPicker.vue'
@@ -20,9 +37,9 @@ type KeySource = { type: string; path?: string; name?: string }
 const KEY_TYPES = ['body', 'header', 'api_key', 'user'] as const
 const INCLUDES = ['group', 'model', 'rule'] as const
 const onFailureOptions = computed<ChoiceOption[]>(() =>
-  (['failover', 'stick'] as const).map((f) => ({ value: f, label: t(`sticky.onFailure.${f}`), description: t(`sticky.onFailureHint.${f}`) }))
+  (['failover', 'stick'] as const).map(f => ({ value: f, label: t(`sticky.onFailure.${f}`), description: t(`sticky.onFailureHint.${f}`) }))
 )
-const keyTypeOptions = computed(() => KEY_TYPES.map((k) => ({ value: k, label: t(`sticky.keyTypes.${k}`) })))
+const keyTypeOptions = computed(() => KEY_TYPES.map(k => ({ value: k, label: t(`sticky.keyTypes.${k}`) })))
 
 const form = reactive({
   name: '',
@@ -44,12 +61,16 @@ const busy = ref(false)
 const isEdit = computed(() => !!props.rule && !props.copy)
 const builtin = computed(() => isEdit.value && props.rule?.source !== 'admin')
 const title = computed(() =>
-  props.copy ? t('sticky.modal.copyTitle') : isEdit.value ? t('sticky.modal.editTitle', { name: props.rule?.name || '' }) : t('sticky.modal.createTitle')
+  props.copy
+    ? t('sticky.modal.copyTitle')
+    : isEdit.value
+      ? t('sticky.modal.editTitle', { name: props.rule?.name || '' })
+      : t('sticky.modal.createTitle')
 )
 
 watch(
   () => props.open,
-  (v) => {
+  v => {
     if (!v) return
     errors.value = {}
     const r = props.rule
@@ -60,7 +81,7 @@ watch(
       protocols: [...(r?.match?.protocols || [])],
       models: [...(r?.match?.models || [])],
       userAgentContains: [...(r?.match?.user_agent_contains || [])],
-      key_sources: (r?.key_sources || []).map((k) => ({ ...k })),
+      key_sources: (r?.key_sources || []).map(k => ({ ...k })),
       value_regex: r?.value_regex || '',
       ttl_seconds: r ? r.ttl_seconds : 3600,
       key_includes: r ? [...(r.key_includes || [])] : ['group', 'model', 'rule'],
@@ -94,7 +115,7 @@ function toggleInclude(k: string, on: boolean) {
   const set = new Set(form.key_includes)
   if (on) set.add(k)
   else set.delete(k)
-  form.key_includes = INCLUDES.filter((x) => set.has(x))
+  form.key_includes = INCLUDES.filter(x => set.has(x))
 }
 
 function validRegex(s: string) {
@@ -113,7 +134,7 @@ function body() {
     enabled: form.enabled,
     priority: Number(form.priority) || 0,
     match: { protocols: form.protocols, models: form.models, user_agent_contains: form.userAgentContains },
-    key_sources: form.key_sources.map((k) => {
+    key_sources: form.key_sources.map(k => {
       const o: KeySource = { type: k.type }
       if (k.type === 'body') o.path = (k.path || '').trim()
       if (k.type === 'header') o.name = (k.name || '').trim()
@@ -159,7 +180,15 @@ async function submit() {
 </script>
 
 <template>
-  <SFormModal :open="open" :title="title" width="xl" :loading="busy" :enter-submit="false" @update:open="emit('update:open', $event)" @submit="submit">
+  <SFormModal
+    :open="open"
+    :title="title"
+    width="xl"
+    :loading="busy"
+    :enter-submit="false"
+    @update:open="emit('update:open', $event)"
+    @submit="submit"
+  >
     <div class="space-y-5">
       <SAlert v-if="builtin" tone="accent" dense>{{ t('sticky.modal.limitedHint') }}</SAlert>
 
@@ -203,13 +232,22 @@ async function submit() {
           <div v-for="(ks, i) in form.key_sources" :key="i">
             <div class="flex flex-wrap items-center gap-2">
               <SHint inline size="xs" class="w-5 text-right">{{ i + 1 }}.</SHint>
-              <SSelect class="w-32" size="sm" :aria-label="t('sticky.modal.keySources')" :model-value="ks.type" :options="keyTypeOptions" @update:model-value="setType(ks, String($event))" />
+              <SSelect
+                class="w-32"
+                size="sm"
+                :aria-label="t('sticky.modal.keySources')"
+                :model-value="ks.type"
+                :options="keyTypeOptions"
+                @update:model-value="setType(ks, String($event))"
+              />
               <SInput v-if="ks.type === 'body'" v-model="ks.path" class="w-64" size="sm" mono placeholder="metadata.user_id" />
               <SInput v-else-if="ks.type === 'header'" v-model="ks.name" class="w-64" size="sm" mono placeholder="x-session-id" />
               <SHint v-else inline size="xs">{{ t(`sticky.keyTypeHint.${ks.type}`) }}</SHint>
               <div class="ml-auto flex gap-1">
                 <SButton variant="ghost" size="sm" :disabled="i === 0" @click="move(i, -1)">{{ t('common.moveUp') }}</SButton>
-                <SButton variant="ghost" size="sm" :disabled="i === form.key_sources.length - 1" @click="move(i, 1)">{{ t('common.moveDown') }}</SButton>
+                <SButton variant="ghost" size="sm" :disabled="i === form.key_sources.length - 1" @click="move(i, 1)">{{
+                  t('common.moveDown')
+                }}</SButton>
                 <SButton variant="ghost" size="sm" tone="danger" @click="form.key_sources.splice(i, 1)">{{ t('common.remove') }}</SButton>
               </div>
             </div>

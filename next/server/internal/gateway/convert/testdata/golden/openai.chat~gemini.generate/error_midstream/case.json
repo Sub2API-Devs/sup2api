@@ -1,0 +1,9 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": true
+  },
+  "upstream": [
+    "recorded/gemini.stream_generate/error_midstream.stream.sse"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "x",
+    "stream": false
+  },
+  "note": "strict TestStrictToolRunAdjacency; equivalent, except that the trailing user text joins the tool results' user message (strict kept two consecutive user messages, which Anthropic merges itself)"
+}

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SHint } from '@sub2api/ui'
+import { SHint } from '@sub2api/ui'
 import type { AccountTypeEndpoint } from '@/api/types'
+import ConversionGradeBadge from '@/components/ConversionGradeBadge.vue'
 import { usePlatforms } from '@/composables/platforms'
+import { isConvertedGrade } from '@/utils/conversion'
 
 // Endpoints an account type can currently serve, grouped by platform;
-// converted ones (native=false) are marked.
+// converted ones (and local estimates) are marked with their grade.
 const props = defineProps<{ endpoints: AccountTypeEndpoint[]; compact?: boolean }>()
 const { t } = useI18n()
 const platforms = usePlatforms()
@@ -35,7 +37,7 @@ const byPlatform = computed(() => {
         <li v-for="e in g.items" :key="`${e.method} ${e.path}`" class="flex flex-wrap items-center gap-1.5 text-xs">
           <code class="font-mono text-gray-700 dark:text-gray-200">{{ e.method }} {{ e.path }}</code>
           <SHint v-if="!compact" inline size="xs" class="font-mono">{{ e.protocol }}</SHint>
-          <SBadge v-if="!e.native" tone="warning" :title="t('platforms.convertedHint', { protocol: e.protocol })">{{ t('platforms.converted') }}</SBadge>
+          <ConversionGradeBadge v-if="isConvertedGrade(e.grade)" :grade="e.grade" :via="e.via" />
         </li>
       </ul>
     </div>

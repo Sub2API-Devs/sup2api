@@ -1,0 +1,26 @@
+{
+  "model": "gemini-2.5-flash",
+  "max_completion_tokens": 256,
+  "temperature": 0.5,
+  "top_p": 0.9,
+  "stop": [
+    "END"
+  ],
+  "seed": 7,
+  "presence_penalty": 0.5,
+  "frequency_penalty": 0,
+  "messages": [
+    {
+      "role": "system",
+      "content": "Be brief."
+    },
+    {
+      "role": "user",
+      "content": "Say hello."
+    }
+  ],
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

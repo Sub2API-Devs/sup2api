@@ -3,7 +3,27 @@ import { computed, ref, shallowRef, triggerRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SGrid, SHint, SIcon, SInput, SModal, SPageHeader, SPagination, SSectionTitle, SSpinner, SStatCard, STable, STabs, confirm, type TabItem, type TableColumn, type Tone } from '@sub2api/ui'
+import {
+  SBadge,
+  SButton,
+  SCard,
+  SGrid,
+  SHint,
+  SIcon,
+  SInput,
+  SModal,
+  SPageHeader,
+  SPagination,
+  SSectionTitle,
+  SSpinner,
+  SStatCard,
+  STable,
+  STabs,
+  confirm,
+  type TabItem,
+  type TableColumn,
+  type Tone
+} from '@sub2api/ui'
 import type { PriceSource, PriceSyncAction, PriceSyncItem, PriceSyncPreview, PriceSyncResult } from '@/api/types'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatDateTime, formatNumber } from '@/utils/format'
@@ -43,7 +63,7 @@ const sourceName = computed(() => source.value?.name || `#${sourceId.value}`)
 async function loadSource() {
   try {
     const list = await api.get<PriceSource[]>('/price-sources')
-    source.value = (Array.isArray(list) ? list : []).find((s) => s.id === sourceId.value) || null
+    source.value = (Array.isArray(list) ? list : []).find(s => s.id === sourceId.value) || null
   } catch (e) {
     notifyError(e)
   }
@@ -58,7 +78,7 @@ async function fetchPreview() {
     const items = Array.isArray(r?.items) ? r.items : []
     preview.value = { ...r, items }
     // Default selection: new and updated synced prices; manual ones stay unticked.
-    selected.value = new Set(items.filter((x) => x.action === 'create' || x.action === 'update').map((x) => x.model))
+    selected.value = new Set(items.filter(x => x.action === 'create' || x.action === 'update').map(x => x.model))
   } catch (e) {
     preview.value = null
     selected.value = new Set()
@@ -110,7 +130,7 @@ const tabs = computed<TabItem[]>(() => [
 const filtered = computed(() => {
   const s = q.value.trim().toLowerCase()
   const want = tab.value
-  return items.value.filter((x) => {
+  return items.value.filter(x => {
     if (want === 'pending' ? x.action === 'unchanged' : x.action !== want) return false
     return !s || x.model.toLowerCase().includes(s)
   })
@@ -126,7 +146,7 @@ const filteredSelectable = computed(() => filtered.value.filter(selectable))
 
 const filteredSomeSelected = computed(() => {
   const s = selected.value
-  return filteredSelectable.value.some((x) => s.has(x.model))
+  return filteredSelectable.value.some(x => s.has(x.model))
 })
 
 const selectedCount = computed(() => selected.value.size)
@@ -182,7 +202,7 @@ const previewColumns = computed<TableColumn[]>(() => [
 ])
 const selectedKeys = computed<unknown[]>({
   get: () => [...selected.value],
-  set: (keys) => {
+  set: keys => {
     selected.value = new Set(keys as string[])
   }
 })
@@ -198,16 +218,25 @@ const result = ref<PriceSyncResult | null>(null)
 const resultOpen = ref(false)
 const resultCounts = computed(() => {
   const r = result.value
-  return r ? ([['created', r.created], ['updated', r.updated], ['unchanged', r.unchanged], ['skipped', r.skipped.length]] as const) : []
+  return r
+    ? ([
+        ['created', r.created],
+        ['updated', r.updated],
+        ['unchanged', r.unchanged],
+        ['skipped', r.skipped.length]
+      ] as const)
+    : []
 })
 
 async function apply() {
-  const models = items.value.filter((x) => selected.value.has(x.model) && selectable(x)).map((x) => x.model)
+  const models = items.value.filter(x => selected.value.has(x.model) && selectable(x)).map(x => x.model)
   if (!models.length) return
   const manual = selectedManual.value
   const ok = await confirm({
     title: t('prices.sync.applyConfirmTitle'),
-    message: manual ? t('prices.sync.applyConfirmManual', { n: models.length, m: manual }) : t('prices.sync.applyConfirm', { n: models.length }),
+    message: manual
+      ? t('prices.sync.applyConfirmManual', { n: models.length, m: manual })
+      : t('prices.sync.applyConfirm', { n: models.length }),
     danger: manual > 0
   })
   if (!ok) return
@@ -240,7 +269,9 @@ async function apply() {
         <SBadge v-if="source" tone="gray">{{ t(`prices.sources.kind.${source.kind}`) }}</SBadge>
       </template>
       <template #actions>
-        <SButton :loading="fetching" data-testid="price-sync-refetch" icon="refresh" @click="fetchPreview">{{ t('prices.sync.refetch') }}</SButton>
+        <SButton :loading="fetching" data-testid="price-sync-refetch" icon="refresh" @click="fetchPreview">{{
+          t('prices.sync.refetch')
+        }}</SButton>
       </template>
     </SPageHeader>
 
@@ -301,11 +332,21 @@ async function apply() {
           @row-click="toggle"
         >
           <template #toolbar>
-            <SInput v-model="q" class="w-64" icon="search" clearable :aria-label="t('common.search')" :placeholder="t('prices.sync.searchPlaceholder')" data-testid="price-sync-search" />
+            <SInput
+              v-model="q"
+              class="w-64"
+              icon="search"
+              clearable
+              :aria-label="t('common.search')"
+              :placeholder="t('prices.sync.searchPlaceholder')"
+              data-testid="price-sync-search"
+            />
             <SButton size="sm" :disabled="!filteredSelectable.length" data-testid="price-sync-select-all" @click="selectAll">
               {{ t('prices.sync.selectAll', { n: formatNumber(filteredSelectable.length) }) }}
             </SButton>
-            <SButton size="sm" :disabled="!filteredSomeSelected" data-testid="price-sync-select-none" @click="selectNone">{{ t('prices.sync.selectNone') }}</SButton>
+            <SButton size="sm" :disabled="!filteredSomeSelected" data-testid="price-sync-select-none" @click="selectNone">{{
+              t('prices.sync.selectNone')
+            }}</SButton>
             <SHint inline size="xs">{{ t('prices.sync.selectScope') }}</SHint>
             <div class="ml-auto flex flex-wrap items-center gap-3">
               <span class="text-sm" data-testid="price-sync-selected">
@@ -317,9 +358,15 @@ async function apply() {
               </SButton>
             </div>
           </template>
-          <template #cell-model="{ row }"><span class="font-mono text-xs">{{ row.model }}</span></template>
+          <template #cell-model="{ row }"
+            ><span class="font-mono text-xs">{{ row.model }}</span></template
+          >
           <template #cell-action="{ row }">
-            <SBadge :tone="ACTION_TONE[row.action as PriceSyncAction]" :title="row.action === 'unchanged' ? t('prices.sync.unchangedHint') : undefined">{{ t(`prices.sync.action.${row.action}`) }}</SBadge>
+            <SBadge
+              :tone="ACTION_TONE[row.action as PriceSyncAction]"
+              :title="row.action === 'unchanged' ? t('prices.sync.unchangedHint') : undefined"
+              >{{ t(`prices.sync.action.${row.action}`) }}</SBadge
+            >
             <SHint v-if="row.action === 'manual'" tone="warning" size="xs" class="mt-0.5 flex items-center gap-1">
               <SIcon name="warning" class="h-3.5 w-3.5 shrink-0" />{{ t('prices.sync.manualWarn') }}
             </SHint>
@@ -332,7 +379,9 @@ async function apply() {
             <template v-else>
               <PriceDefSummary :def="row.current" muted />
               <div class="mt-0.5 flex gap-1">
-                <SHint inline size="xs">{{ row.current.source === 'sync' ? t('prices.sync.currentSync') : t('prices.sync.currentManual') }}</SHint>
+                <SHint inline size="xs">{{
+                  row.current.source === 'sync' ? t('prices.sync.currentSync') : t('prices.sync.currentManual')
+                }}</SHint>
                 <SHint v-if="!row.current.enabled" inline size="xs">· {{ t('prices.sync.currentDisabled') }}</SHint>
               </div>
             </template>
@@ -349,15 +398,25 @@ async function apply() {
         <SGrid :cols-base="2" :cols="4" :gap="3">
           <div v-for="[k, n] in resultCounts" :key="k" class="rounded-lg bg-surface-2 px-3 py-2">
             <SHint size="xs">{{ t(`prices.sync.result.${k}`) }}</SHint>
-            <p class="text-xl font-semibold tabular-nums" :class="k === 'skipped' && n ? 'text-warning-600 dark:text-warning-400' : ''" :data-result="k">{{ n }}</p>
+            <p
+              class="text-xl font-semibold tabular-nums"
+              :class="k === 'skipped' && n ? 'text-warning-600 dark:text-warning-400' : ''"
+              :data-result="k"
+            >
+              {{ n }}
+            </p>
           </div>
         </SGrid>
         <div v-if="result.skipped.length">
           <SSectionTitle tag="p">{{ t('prices.sync.skippedList') }}</SSectionTitle>
           <div class="max-h-60 overflow-y-auto">
             <STable :columns="skippedColumns" :rows="result.skipped" row-key="model" dense data-testid="price-sync-skipped">
-              <template #cell-model="{ row }"><span class="font-mono text-xs">{{ row.model }}</span></template>
-              <template #cell-reason="{ row }"><span class="text-xs">{{ row.reason }}</span></template>
+              <template #cell-model="{ row }"
+                ><span class="font-mono text-xs">{{ row.model }}</span></template
+              >
+              <template #cell-reason="{ row }"
+                ><span class="text-xs">{{ row.reason }}</span></template
+              >
             </STable>
           </div>
         </div>

@@ -1,0 +1,89 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "Hello.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "Ws0QacGWJdiVz7IPuv6E8Qo",
+  "model": "gemini-2.5-flash",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 2,
+    "prompt_tokens": 1290,
+    "prompt_tokens_details": {
+      "cached_tokens": 1152
+    },
+    "total_tokens": 1292
+  }
+}
+--- losses: {}
+
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "incomplete_details": null,
+  "model": "gemini-2.5-flash",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "Hello.",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_Ws0QacGWJdiVz7IPuv6E8Qo_0",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 1290,
+    "input_tokens_details": {
+      "cached_tokens": 1152
+    },
+    "output_tokens": 2,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 1292
+  }
+}
+--- losses: {}
+
+=== anthropic.messages
+{
+  "content": [
+    {
+      "text": "Hello.",
+      "type": "text"
+    }
+  ],
+  "id": "msg_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "model": "gemini-2.5-flash",
+  "role": "assistant",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 1152,
+    "input_tokens": 138,
+    "output_tokens": 2
+  }
+}
+--- losses: {}
+

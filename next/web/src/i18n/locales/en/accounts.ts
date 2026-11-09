@@ -143,12 +143,26 @@ export default {
     passNone: 'No passthrough',
     envFollow: 'Timeouts follow',
     envCustom: '{n} custom',
-    override: '{n} overrides'
+    override: '{n} overrides',
+    conversion: 'Conversion: {policy}'
   },
   headerPassthrough: {
     title: 'Header passthrough',
     hint: 'Copies client request headers onto the upstream request; headers the plugin sets win. * passes every header; regex:<pattern> matches names (case insensitive); anything else is an exact name. Press Enter to add, at most 32; empty forwards only the platform\'s default headers. Credentials (Authorization, x-api-key, Cookie), hop-by-hop headers, client addresses (X-Forwarded-For, X-Real-IP …) and gateway control headers (x-sub2api-*, x-kin-*) never pass, whatever the rules',
     placeholder: '*, regex:^x-claude-code- or a header name'
+  },
+  conversion: {
+    title: 'Conversion loss policy',
+    hint: 'What happens when a request converted to another upstream protocol would lose content. Allow: serve it and record the losses; Safe: skip this account when a tool definition, tool choice or tool call would be lost; Strict: skip it on any loss. A skipped account does not count as a failover attempt',
+    inherit: 'Inherit from groups',
+    hintOwn: 'Effective: {policy} (overrides the groups)',
+    hintGroups: 'Inherited from groups: {groups}',
+    hintDefault: 'Effective: {policy} (default)',
+    policies: { allow: 'Allow', safe: 'Safe', strict: 'Strict' },
+    grades: { native: 'native', good: 'good', fair: 'fair', discouraged: 'discouraged', local: 'local estimate' },
+    gradeHints: { local: 'Estimated by the core without an upstream request' },
+    convertedGrade: 'Converted · {grade}',
+    categories: { tool: 'Tools', reasoning: 'Reasoning', image: 'Images', other: 'Other' }
   },
   paramOverride: {
     title: 'Request parameter override',

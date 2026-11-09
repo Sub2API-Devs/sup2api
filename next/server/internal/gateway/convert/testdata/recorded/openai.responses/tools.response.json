@@ -1,0 +1,44 @@
+{
+  "id": "resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b",
+  "object": "response",
+  "created_at": 1741476542,
+  "status": "completed",
+  "error": null,
+  "incomplete_details": null,
+  "model": "gpt-4o-2024-08-06",
+  "output": [
+    {
+      "type": "function_call",
+      "id": "fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0",
+      "call_id": "call_unLAR8MvFNptuiZK6K6HCy5k",
+      "name": "get_weather",
+      "arguments": "{\"city\": \"Paris\"}",
+      "status": "completed"
+    },
+    {
+      "type": "function_call",
+      "id": "fc_67ca09c6f3c88190a7abfec07b1a1332096610f474011cc0",
+      "call_id": "call_Y8bM5OVq3uhHHh5KY9jjCNdc",
+      "name": "get_weather",
+      "arguments": "{\"city\": \"Tokyo\"}",
+      "status": "completed"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "store": false,
+  "temperature": 1.0,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": 1.0,
+  "usage": {
+    "input_tokens": 62,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 46,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 108
+  }
+}

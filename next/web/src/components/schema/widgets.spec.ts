@@ -6,7 +6,10 @@ import ModelLimitsEditor from '@/views/accounts/ModelLimitsEditor.vue'
 import { hostComponents } from '@/components/plugin/hostComponents'
 import { schemaWidgets } from './widgets'
 
-vi.mock('@/composables/lookups', () => ({ useProxiesLookup: () => ({ proxies: { value: [] } }), useGroupsLookup: () => ({ groups: { value: [] } }) }))
+vi.mock('@/composables/lookups', () => ({
+  useProxiesLookup: () => ({ proxies: { value: [] } }),
+  useGroupsLookup: () => ({ groups: { value: [] } })
+}))
 
 const schema = {
   type: 'object',
@@ -28,7 +31,13 @@ const uiSchema = {
 
 async function render(value: Record<string, unknown>) {
   const w = mount(SchemaForm, {
-    props: { schema, uiSchema, modelValue: value, widgets: schemaWidgets, 'onUpdate:modelValue': (v: Record<string, unknown>) => w.setProps({ modelValue: v }) },
+    props: {
+      schema,
+      uiSchema,
+      modelValue: value,
+      widgets: schemaWidgets,
+      'onUpdate:modelValue': (v: Record<string, unknown>) => w.setProps({ modelValue: v })
+    },
     global: { plugins: [i18n] }
   })
   await flushPromises()
@@ -37,10 +46,19 @@ async function render(value: Record<string, unknown>) {
 
 describe('core editor widgets (docs/COMMON-CONTROLS.md §3)', () => {
   // The editors load on first use: load them before rendering.
-  beforeAll(() => Promise.all(Object.values(hostComponents).map((c) => (c as { __asyncLoader?: () => Promise<unknown> }).__asyncLoader?.())))
+  beforeAll(() => Promise.all(Object.values(hostComponents).map(c => (c as { __asyncLoader?: () => Promise<unknown> }).__asyncLoader?.())))
 
   it('registers the core editors next to the existing widgets', () => {
-    expect(Object.keys(schemaWidgets)).toEqual(['proxy-select', 'group-select', 'upstream-editor', 'param-override', 'header-passthrough', 'rate-limits', 'model-limits', 'model-mapping'])
+    expect(Object.keys(schemaWidgets)).toEqual([
+      'proxy-select',
+      'group-select',
+      'upstream-editor',
+      'param-override',
+      'header-passthrough',
+      'rate-limits',
+      'model-limits',
+      'model-mapping'
+    ])
   })
 
   it('edits each field in the account API format, without the schema props on the controls', async () => {
@@ -54,7 +72,9 @@ describe('core editor widgets (docs/COMMON-CONTROLS.md §3)', () => {
     w.getComponent(STagInput).vm.$emit('update:modelValue', ['x-a', '*'])
     await flushPromises()
     await w.get('input[data-testid="account-tpm_limit"]').setValue('5')
-    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a'], []], max_concurrency: 2, rpm_limit: 0, tpm_limit: 0, spm_limit: 0 }])
+    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [
+      { lists: [['m-a'], []], max_concurrency: 2, rpm_limit: 0, tpm_limit: 0, spm_limit: 0 }
+    ])
     await flushPromises()
     expect(w.props('modelValue')).toMatchObject({
       headers: ['x-a', '*'],

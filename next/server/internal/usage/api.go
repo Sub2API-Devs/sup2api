@@ -63,6 +63,10 @@ type Record struct {
 	FirstTokenMs          int             `json:"first_token_ms"`
 	UploadMs              int             `json:"upload_ms"`
 	StickyHit             bool            `json:"sticky_hit"`
+	// Conversion is usage_logs.conversion (CONTRACTS §88): how the core
+	// converted the request, null when native and nothing was refused.
+	// Hidden from self-service views like upstream_protocol.
+	Conversion json.RawMessage `json:"conversion"`
 }
 
 // PriceRef identifies the price rule used for a record.
@@ -138,7 +142,7 @@ const recordColumns = `u.id, u.request_id, u.client_request_id, u.created_at, u.
 	u.status_code, u.success,
 	u.error_type, u.error_message, u.attempts, u.input_tokens, u.output_tokens, u.cache_read_tokens,
 	u.cache_creation_tokens, u.cache_creation_1h_tokens, u.total_cost, u.rate_multiplier, u.billing_status,
-	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.upload_ms, u.sticky_hit, u.client_ip`
+	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.upload_ms, u.sticky_hit, u.client_ip, u.conversion`
 
 const recordJoins = ` FROM usage_logs u
 	LEFT JOIN users us ON us.id = u.user_id
@@ -153,14 +157,15 @@ func (r *Record) scanTargets() []any {
 		&r.Endpoint, &r.Model, &r.UpstreamModel, &r.Stream, &r.StatusCode, &r.Success, &r.ErrorType,
 		&r.ErrorMessage, &r.Attempts, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens,
 		&r.CacheCreationTokens, &r.CacheCreation1hTokens, &r.TotalCost, &r.RateMultiplier, &r.BillingStatus,
-		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.UploadMs, &r.StickyHit, &r.ClientIP}
+		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.UploadMs, &r.StickyHit, &r.ClientIP, &r.Conversion}
 }
 
 // hideUpstream removes upstream account details (account, account type,
-// upstream protocol and the account's model mapping) from self-service views.
+// upstream protocol and conversion, the account's model mapping) from
+// self-service views.
 func (r *Record) hideUpstream() {
 	r.hideAccount()
-	r.AccountType, r.UpstreamProtocol, r.UpstreamModel = "", "", ""
+	r.AccountType, r.UpstreamProtocol, r.UpstreamModel, r.Conversion = "", "", "", nil
 	// The error message is shown as recorded, 5xx included: self-service
 	// views hide fields, they never rewrite values (user rule, 2026-11-02;
 	// replaces SEC-L3's 5xx blanking).
@@ -271,6 +276,14 @@ func parseFilter(c *gin.Context, self *int64, accounts bool) (*store.Filter, err
 				f.And("u."+name+" = ?", v)
 			}
 		}
+		if v := c.Query("conversion"); v != "" {
+			cond, ok := conversionFilters[v]
+			if !ok {
+				return nil, core.InvalidFields(core.FieldError{Field: "conversion", Code: "invalid",
+					Message: "conversion must be native, converted, good, fair, discouraged, local or lossy"})
+			}
+			f.And(cond)
+		}
 	}
 	if err := addContainsFilters(c, &f, contains); err != nil {
 		return nil, err
@@ -279,6 +292,19 @@ func parseFilter(c *gin.Context, self *int64, accounts bool) (*store.Filter, err
 		return nil, err
 	}
 	return &f, nil
+}
+
+// conversionFilters are the conditions of the conversion= filter
+// (CONTRACTS §88): by usage_logs.conversion's grade, or lossy for a request
+// that lost anything.
+var conversionFilters = map[string]string{
+	"native":      "(u.conversion IS NULL OR u.conversion->>'grade' = 'native')",
+	"converted":   "u.conversion->>'grade' IN ('good', 'fair', 'discouraged')",
+	"good":        "u.conversion->>'grade' = 'good'",
+	"fair":        "u.conversion->>'grade' = 'fair'",
+	"discouraged": "u.conversion->>'grade' = 'discouraged'",
+	"local":       "u.conversion->>'grade' = 'local'",
+	"lossy":       "(u.conversion->'lost' IS NOT NULL OR u.conversion->'response_lost' IS NOT NULL)",
 }
 
 // addContainsFilters adds the ILIKE filters. Each value is trimmed, capped and

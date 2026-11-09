@@ -3,9 +3,11 @@
 // danger / info turns the word red / blue), so every action reads at a
 // glance: the console's row actions are words, not icons. Inside an STable
 // phone card (TABLE_CARD) it is a small ghost button instead. `icon` is
-// accepted for callers built against older versions and not drawn. `loading`
-// shows a spinner before the label. Attrs (aria-haspopup, data-testid, ...)
-// go to the <button>.
+// declared and not drawn (UI 3.7): undeclared, it would fall through to
+// SButton's own `icon` and draw again. Plugins whose hostUICompat is below
+// 3.7 still pass it, so older hosts keep their icon. `loading` shows a
+// spinner before the label. Attrs (aria-haspopup, data-testid, ...) go to
+// the <button>.
 import { inject } from 'vue'
 import SButton from './SButton.vue'
 import { TABLE_CARD } from './tableCard'

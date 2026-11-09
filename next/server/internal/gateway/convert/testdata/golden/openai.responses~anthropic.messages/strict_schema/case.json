@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "alias",
+    "stream": false
+  },
+  "note": "strict TestStrictSchemaAndToolResponsesKeepIDs; identical to the strict output"
+}

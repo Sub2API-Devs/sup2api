@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": true
+  },
+  "note": "Calls without ids get ids from their position; responses pair with calls by name in order; the thoughtSignature is reasoning history."
+}

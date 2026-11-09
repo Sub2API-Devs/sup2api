@@ -1,0 +1,7 @@
+{
+  "other": [
+    "generationConfig.presencePenalty",
+    "generationConfig.seed",
+    "generationConfig.stopSequences"
+  ]
+}

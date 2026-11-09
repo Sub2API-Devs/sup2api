@@ -1,0 +1,63 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Look.",
+          "type": "input_text"
+        },
+        {
+          "detail": "auto",
+          "image_url": "https://example.com/cat.png",
+          "type": "input_image"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "Seen.",
+          "type": "output_text"
+        }
+      ],
+      "role": "assistant",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "text": "More.",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 128,
+  "model": "gpt-5",
+  "store": false,
+  "tool_choice": "auto",
+  "tools": [
+    {
+      "description": "Current weather",
+      "name": "get_weather",
+      "parameters": {
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    }
+  ]
+}

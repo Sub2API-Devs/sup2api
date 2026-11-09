@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
 import { i18n } from '@/i18n'
-import type { Account, AccountType } from '@/api/types'
+import type { Account, AccountType, Group } from '@/api/types'
+import { useGroupsLookup } from '@/composables/lookups'
 import AccountEditor from './AccountEditor.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import CCGatewayAccountAuth from '@/views/ccgateway/CCGatewayAccountAuth.vue'
@@ -97,6 +98,31 @@ describe('account container environment', () => {
     await flushPromises()
     await w.get('form').trigger('submit'); await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ param_override: null }))
+  })
+
+  it('loads, explains and saves the conversion loss policy (CONVERT-MATRIX §6.3)', async () => {
+    const w = render({ ...savedAccount(), group_ids: [1, 2] } as Account)
+    await flushPromises()
+    const { groups } = useGroupsLookup()
+    const hint = () => w.get('[data-testid="account-conversion-policy-hint"]').text()
+    expect(hint()).toBe('生效：允许（默认）')
+    groups.value = [{ id: 1, name: 'default' }, { id: 2, name: 'vip', conversion_loss_policy: 'safe' }, { id: 3, name: 'other', conversion_loss_policy: 'strict' }] as Group[]
+    await flushPromises()
+    expect(hint()).toBe('继承分组：default=允许, vip=安全')
+    expect(w.get('[data-testid="account-conversion-policy"]').element.closest('[data-editor-section]')?.getAttribute('data-editor-section')).toBe('advanced')
+    await w.get('[data-testid="account-conversion-policy-select"]').setValue('strict')
+    expect(hint()).toBe('生效：严格（覆盖分组设置）')
+    expect(w.getComponent(AccountEditorNav).props('sections').find(s => s.key === 'advanced')?.summary).toBe('不透传 · 转换：严格 · 超时跟随')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ conversion_loss_policy: 'strict' }))
+    groups.value = []
+  })
+
+  it('keeps an inherited conversion loss policy as null', async () => {
+    const w = render(savedAccount())
+    await flushPromises()
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ conversion_loss_policy: null }))
   })
 
   it('saves a feature draft atomically with account fields and omits unchanged policy', async () => {
@@ -732,7 +758,9 @@ describe('common controls of the account type (docs/COMMON-CONTROLS.md §2)', ()
     expect(input(w, 'tpm_limit').attributes('disabled')).toBeUndefined()
     expect(w.get('[data-testid="account-scheduling"]').html()).toContain('插件将此项固定为预设值')
     expect(w.find('[data-testid="account-header-passthrough"]').exists()).toBe(false)
-    expect(sections(w).map(s => s.key)).toEqual(['connection', 'models', 'scheduling'])
+    // The advanced section keeps the conversion loss policy, which is no common control.
+    expect(sections(w).map(s => s.key)).toEqual(['connection', 'models', 'scheduling', 'advanced'])
+    expect(w.find('[data-testid="account-conversion-policy"]').exists()).toBe(true)
     expect(sections(w).find(s => s.key === 'scheduling')!.summary).toBe('权重 5 · 并发 ∞')
     expect(w.getComponent(ModelMappingEditor).props('modelValue')).toEqual({ a: 'b' })
     expect(w.get('[data-testid="proxy-field"]').text()).toContain('*')

@@ -79,6 +79,22 @@ describe('shared usage search', () => {
     expect(w.find('[data-testid="filter-account_name"]').exists()).toBe(true)
   })
 
+  it('filters operators by protocol conversion (CONVERT-MATRIX §6.2)', async () => {
+    i18n.global.locale.value = 'zh'
+    const w = mount(UsageFilters, { props: { modelValue: { conversion: 'lossy' }, admin: true }, global })
+    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
+    const select = w.get('[data-testid="filter-conversion"]')
+    const options = select.findAll('option')
+    expect(options.map(option => option.text())).toEqual(['协议转换', '原生', '已转换', '良好', '一般', '不推荐', '本地估算', '有丢失'])
+    expect(options[(select.element as HTMLSelectElement).selectedIndex].text()).toBe('有丢失')
+    await select.setValue('4')
+    await w.get('form').trigger('submit')
+    expect(w.emitted('update:modelValue')![0]![0]).toMatchObject({ conversion: 'fair' })
+    const self = mount(UsageFilters, { props: { modelValue: {} }, global })
+    await self.get('[data-testid="toggle-usage-filters"]').trigger('click')
+    expect(self.find('[data-testid="filter-conversion"]').exists()).toBe(false)
+  })
+
   it('selects the request type on the first row from the types under the search, keeping a preset one', async () => {
     const w = mount(UsageFilters, { props: { modelValue: { protocol: 'vid.gen' }, protocolOptions: ['anthropic.messages', 'openai.chat'] }, global })
     const select = w.get('[data-testid="filter-protocol"]')

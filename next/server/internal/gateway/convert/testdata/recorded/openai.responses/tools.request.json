@@ -1,0 +1,24 @@
+{
+  "model": "gpt-4o",
+  "input": "What is the weather in Paris and Tokyo?",
+  "store": false,
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Current weather for a city",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      }
+    }
+  ],
+  "stream": true
+}

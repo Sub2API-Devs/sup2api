@@ -142,12 +142,26 @@ export default {
     passNone: '不透传',
     envFollow: '超时跟随',
     envCustom: '{n} 项自定义',
-    override: '覆盖 {n} 条'
+    override: '覆盖 {n} 条',
+    conversion: '转换：{policy}'
   },
   headerPassthrough: {
     title: '请求头透传',
     hint: '把客户端的请求头原样带给上游，插件自己设置的请求头优先。* 表示全部；regex:正则 按名称匹配（不区分大小写）；其他按名称精确匹配。回车添加，最多 32 条，留空只转发平台默认的请求头。凭证（Authorization、x-api-key、Cookie）、逐跳头、客户端地址（X-Forwarded-For、X-Real-IP 等）和网关控制头（x-sub2api-*、x-kin-*）任何规则都不会透传',
     placeholder: '*、regex:^x-claude-code- 或请求头名称'
+  },
+  conversion: {
+    title: '协议转换丢失策略',
+    hint: '请求要转换成上游的另一种协议时，内容丢失怎么处理。允许：照常服务并记录丢失；安全：工具定义、工具选择或工具调用会丢失时不用此账号；严格：有任何丢失都不用此账号。不用的账号直接跳过，不计失败切换',
+    inherit: '继承分组',
+    hintOwn: '生效：{policy}（覆盖分组设置）',
+    hintGroups: '继承分组：{groups}',
+    hintDefault: '生效：{policy}（默认）',
+    policies: { allow: '允许', safe: '安全', strict: '严格' },
+    grades: { native: '原生', good: '良好', fair: '一般', discouraged: '不推荐', local: '本地估算' },
+    gradeHints: { local: '由核心本地估算，不请求上游' },
+    convertedGrade: '转换·{grade}',
+    categories: { tool: '工具', reasoning: '推理', image: '图片', other: '其他' }
   },
   paramOverride: {
     title: '请求参数覆盖',

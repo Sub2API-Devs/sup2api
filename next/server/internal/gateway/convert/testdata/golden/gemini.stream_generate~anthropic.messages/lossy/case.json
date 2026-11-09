@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": true
+  },
+  "note": "One loss of each category: codeExecution (tool), thought part, gs:// image, safetySettings and topK (other)."
+}

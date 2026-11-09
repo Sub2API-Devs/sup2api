@@ -144,8 +144,8 @@ func TestPlanRoutes(t *testing.T) {
 	xp := manifest.Platform{ID: "x", RequestFields: []string{"xf"}, PassHeaders: []string{"x-h"},
 		Usage: manifest.UsageRules{Semantics: "platform"},
 		Endpoints: []manifest.Endpoint{
-			{ID: "plain", Method: "POST", Path: "/x/plain", Protocol: "x.plain"},
-			{ID: "up", Method: "POST", Path: "/x/up", Protocol: "x.up", Usage: epUsage},
+			{ID: "plain", Method: "POST", Path: "/x/plain", Protocol: "x.plain", Response: sseOrJSON},
+			{ID: "up", Method: "POST", Path: "/x/up", Protocol: "x.up", Usage: epUsage, Response: sseOrJSON},
 		}}
 	mk := func(key, id string, client core.PlatformPlugin, ps ...manifest.AccountPlatform) core.AccountTypeBinding {
 		return core.AccountTypeBinding{Plugin: core.PluginInfo{Key: key}, Type: manifest.AccountType{ID: id, Platforms: ps}, Client: client}
@@ -219,20 +219,27 @@ type fakeConv struct {
 	from, to string
 	reqErr   error
 	respErr  error
+	losses   []convert.Loss // reported by every bound converter
+	prepares int
 }
 
-func (f *fakeConv) From() string { return f.from }
-func (f *fakeConv) To() string   { return f.to }
+func (f *fakeConv) From() string         { return f.from }
+func (f *fakeConv) To() string           { return f.to }
+func (f *fakeConv) Grade() convert.Grade { return convert.GradeFair }
 
-func (f *fakeConv) Request(b []byte) ([]byte, error) {
+func (f *fakeConv) Losses() []convert.Loss { return f.losses }
+
+func (f *fakeConv) Prepare(b []byte, _ convert.Options) (convert.Converter, []byte, error) {
+	f.prepares++
 	if f.reqErr != nil {
-		return nil, f.reqErr
+		return nil, nil, f.reqErr
 	}
-	return json.Marshal(map[string]any{
+	out, err := json.Marshal(map[string]any{
 		"q_model":  gjson.GetBytes(b, "model").String(),
 		"q_stream": gjson.GetBytes(b, "stream").Bool(),
 		"q_prompt": gjson.GetBytes(b, "messages.0.content").String(),
 	})
+	return f, out, err
 }
 
 func (f *fakeConv) Response(b []byte) ([]byte, error) {
@@ -278,6 +285,9 @@ func (s *fakeConvStream) Event(in convert.Event) ([]convert.Event, error) {
 func (s *fakeConvStream) Flush() ([]convert.Event, error) {
 	return []convert.Event{ev("message_stop", map[string]any{"type": "message_stop"})}, nil
 }
+
+// sseOrJSON is the response of an endpoint answering a stream or JSON.
+var sseOrJSON = manifest.EndpointResp{Stream: "sse", NonStream: "json"}
 
 // qUpstream speaks the toy "q" protocol.
 type qUpstream struct {
@@ -346,7 +356,7 @@ func convEnv(t *testing.T, conv *fakeConv) (*env, *qUpstream, *fakePlatform) {
 		}
 		info := e.addAccountType("qplug", "q_key", qp, manifest.AccountPlatform{Platform: "q", RequestFields: []string{"q_model"}})
 		e.gen.addPlatform(info, manifest.Platform{ID: "q", Usage: *qUsage, Endpoints: []manifest.Endpoint{{
-			ID: "chat", Method: "POST", Path: "/q/chat", Protocol: "q.chat", Kind: "proxy",
+			ID: "chat", Method: "POST", Path: "/q/chat", Protocol: "q.chat", Kind: "proxy", Response: sseOrJSON,
 			Auth: manifest.EndpointAuth{Headers: []string{"x-api-key"}}, Request: manifest.EndpointRequest{ModelPath: "q_model"},
 			ErrorFormat: "plain", Billing: "usage", BillingTypes: []string{"per_request", "per_token", "expression"}}}})
 		e.accounts.addTyped(testGroup, 6, 100, "q-6", "qplug", "q_key")
@@ -356,7 +366,7 @@ func convEnv(t *testing.T, conv *fakeConv) (*env, *qUpstream, *fakePlatform) {
 
 func TestConvertedNonStream(t *testing.T) {
 	e, q, qp := convEnv(t, nil)
-	if !e.gw.CanConvert("anthropic.messages", "q.chat") || e.gw.CanConvert("q.chat", "anthropic.messages") {
+	if conv := e.gw.Converters(); !conv.CanConvert("anthropic.messages", "q.chat") || conv.CanConvert("q.chat", "anthropic.messages") {
 		t.Fatal("CanConvert")
 	}
 	r := e.messages(body(testModel, false))
@@ -464,8 +474,8 @@ func TestConvertRequestFailureSkipsType(t *testing.T) {
 	if qp.buildCount() != 0 || len(q.bodies) != 0 {
 		t.Fatal("unconvertible request sent upstream")
 	}
-	// One attempt for the failed conversion, the other q account skipped.
-	if rec := e.record(); rec.Attempts != 2 || *rec.AccountID != 1 {
+	// The type is skipped without an attempt (CONVERT-MATRIX §2.4).
+	if rec := e.record(); rec.Attempts != 1 || *rec.AccountID != 1 {
 		t.Fatalf("record %+v", rec)
 	}
 	// Only q accounts: the conversion error reaches the client.
@@ -474,7 +484,7 @@ func TestConvertRequestFailureSkipsType(t *testing.T) {
 	if r.status != 400 || !strings.Contains(r.json().Get("error.message").String(), "unsupported block") {
 		t.Fatalf("conversion error: %d %s", r.status, r.body)
 	}
-	if rec := e.record(); rec.ErrorType != errTypeInvalidRequest || rec.Attempts != 1 {
+	if rec := e.record(); rec.ErrorType != errTypeInvalidRequest || rec.Attempts != 0 {
 		t.Fatalf("record %+v", rec)
 	}
 }

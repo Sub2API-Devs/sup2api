@@ -1,0 +1,12 @@
+data: {"choices":[{"delta":{"content":"","refusal":null,"role":"assistant"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":"Hello!"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":" How can I"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"content":" help you today?"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop","index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk"}
+
+data: [DONE]
+

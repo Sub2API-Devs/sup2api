@@ -1,0 +1,39 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Compare: "
+        },
+        {
+          "inlineData": {
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "inlineData": {
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "inlineData": {
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "inlineData": {
+            "data": "JVBERi0xLjQKMSAwIG9iajw8Pj5lbmRvYmoKdHJhaWxlcjw8Pj4KJSVFT0YK",
+            "mimeType": "application/pdf"
+          }
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "maxOutputTokens": 256
+  }
+}

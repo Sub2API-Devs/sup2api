@@ -49,7 +49,7 @@ const advanced = computed(() => [
   'api_key_id', 'group_id', 'group_name', 'request_id', 'client_request_id', 'platform', 'endpoint', 'status_code', 'error_type',
   ...(props.admin ? ['user_id', 'user_email'] : []),
   ...(props.admin && props.accounts ? ['account_id', 'account_name'] : []),
-  ...(props.admin ? ['plugin_key', 'account_type', 'node_id', 'upstream_model', 'upstream_protocol'] : [])
+  ...(props.admin ? ['plugin_key', 'account_type', 'node_id', 'upstream_model', 'upstream_protocol', 'conversion'] : [])
 ])
 const keys = computed(() => [...primary.map(p => p.key), 'protocol', ...advanced.value, 'success', 'stream', 'billing_status'])
 watch(() => props.modelValue, value => {

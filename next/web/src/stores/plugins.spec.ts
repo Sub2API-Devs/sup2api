@@ -5,7 +5,7 @@ import { watch } from 'vue'
 import type { UIPlugin } from '@/api/types'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn() }))
-vi.mock('@sub2api/host', async (importOriginal) => {
+vi.mock('@sub2api/host', async importOriginal => {
   const real = await importOriginal<typeof import('@sub2api/host')>()
   const ctx = { i18n: { t: (k: string) => k, addMessages: () => undefined }, permissions: { has: () => true } }
   return { ...real, api: { ...real.api, get: mocks.get }, useHost: () => ctx }
@@ -20,11 +20,22 @@ const SLOW = 'slow'
 const CHANGED = 'changed'
 const OLD = 'old'
 const plugin = (key: string, entry: string): UIPlugin =>
-  ({ key, version: '1.0.0', name: key, asset_base: fixtures, native_entry: entry, trust: 'official', host_ui_compat: '*', menus: [], pages: {}, slots: [] }) as unknown as UIPlugin
+  ({
+    key,
+    version: '1.0.0',
+    name: key,
+    asset_base: fixtures,
+    native_entry: entry,
+    trust: 'official',
+    host_ui_compat: '*',
+    menus: [],
+    pages: {},
+    slots: []
+  }) as unknown as UIPlugin
 
 const release = () => (globalThis as { __releaseSlowPlugin?: () => void }).__releaseSlowPlugin
 const until = async (cond: () => unknown) => {
-  for (let i = 0; i < 300 && !cond(); i++) await new Promise((r) => setTimeout(r, 10))
+  for (let i = 0; i < 300 && !cond(); i++) await new Promise(r => setTimeout(r, 10))
 }
 
 describe('plugin store loading', () => {
@@ -41,7 +52,7 @@ describe('plugin store loading', () => {
 
     await until(() => store.listed)
     expect(store.listed).toBe(true)
-    expect(store.uiPlugins.map((p) => p.key)).toEqual([FAST, SLOW])
+    expect(store.uiPlugins.map(p => p.key)).toEqual([FAST, SLOW])
 
     await until(() => store.component(FAST, 'FastPage') && release())
     expect(store.component(FAST, 'FastPage')).toBeTruthy()
@@ -78,7 +89,11 @@ describe('plugin store loading', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const g = globalThis as { __throwPluginUnregistered?: number }
     delete g.__throwPluginUnregistered
-    mocks.get.mockResolvedValue([plugin('missing', 'missing-plugin.ts'), plugin('throws', 'throw-plugin.ts'), plugin(FAST, 'fast-plugin.ts')])
+    mocks.get.mockResolvedValue([
+      plugin('missing', 'missing-plugin.ts'),
+      plugin('throws', 'throw-plugin.ts'),
+      plugin(FAST, 'fast-plugin.ts')
+    ])
     const store = usePluginStore()
     await store.refresh()
 
@@ -105,7 +120,7 @@ describe('plugin store loading', () => {
     const pendingWhenGone: unknown[] = []
     watch(
       () => store.components[CHANGED],
-      (c) => !c && pendingWhenGone.push(store.pending[CHANGED]),
+      c => !c && pendingWhenGone.push(store.pending[CHANGED]),
       { flush: 'sync' }
     )
     mocks.get.mockResolvedValueOnce([plugin(CHANGED, 'slow-plugin.ts')])
@@ -119,19 +134,19 @@ describe('plugin store loading', () => {
 
   it('keeps the newer list when an older GET /ui/plugins answers last', async () => {
     let answerOld: (v: UIPlugin[]) => void = () => {}
-    mocks.get.mockReturnValueOnce(new Promise((r) => (answerOld = r))).mockResolvedValueOnce([plugin(FAST, 'fast-plugin.ts')])
+    mocks.get.mockReturnValueOnce(new Promise(r => (answerOld = r))).mockResolvedValueOnce([plugin(FAST, 'fast-plugin.ts')])
     const store = usePluginStore()
     const older = store.refresh()
     await store.refresh()
     answerOld([plugin(OLD, 'fast-plugin.ts')])
     await older
-    expect(store.uiPlugins.map((p) => p.key)).toEqual([FAST])
+    expect(store.uiPlugins.map(p => p.key)).toEqual([FAST])
     expect(store.component(OLD, 'FastPage')).toBeUndefined()
   })
 
   it('stays empty when reset (logout) lands while the list is loading', async () => {
     let answer: (v: UIPlugin[]) => void = () => {}
-    mocks.get.mockReturnValueOnce(new Promise((r) => (answer = r)))
+    mocks.get.mockReturnValueOnce(new Promise(r => (answer = r)))
     const store = usePluginStore()
     const done = store.refresh()
     await store.reset()
@@ -161,11 +176,20 @@ describe('plugin store slots', () => {
 
   it('hands down the navigation entry of an account editor section (UI 3.7)', async () => {
     const section = { slot: 'account.editor.section', component: 'FastPage', label: { en: 'Demo' }, icon: 'chart', accountTypes: ['t'] }
-    mocks.get.mockResolvedValue([{ ...plugin(FAST, 'fast-plugin.ts'), slots: [section, { slot: 'account.editor.section', component: 'Missing' }] }])
+    mocks.get.mockResolvedValue([
+      { ...plugin(FAST, 'fast-plugin.ts'), slots: [section, { slot: 'account.editor.section', component: 'Missing' }] }
+    ])
     const store = usePluginStore()
     await store.refresh()
     expect(store.slotEntries('account.editor.section')).toEqual([
-      { pluginKey: FAST, name: 'FastPage', component: store.component(FAST, 'FastPage'), label: { en: 'Demo' }, icon: 'chart', accountTypes: ['t'] }
+      {
+        pluginKey: FAST,
+        name: 'FastPage',
+        component: store.component(FAST, 'FastPage'),
+        label: { en: 'Demo' },
+        icon: 'chart',
+        accountTypes: ['t']
+      }
     ])
   })
 })

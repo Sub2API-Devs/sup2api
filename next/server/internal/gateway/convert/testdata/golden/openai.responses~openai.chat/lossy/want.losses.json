@@ -1,0 +1,15 @@
+{
+  "image": [
+    "input[0].content[1]"
+  ],
+  "other": [
+    "include",
+    "truncation"
+  ],
+  "reasoning": [
+    "input[1]"
+  ],
+  "tool": [
+    "tools[1]"
+  ]
+}

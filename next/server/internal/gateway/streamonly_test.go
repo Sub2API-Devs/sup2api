@@ -342,14 +342,15 @@ func TestStreamOnlyUnfinishedStream(t *testing.T) {
 // plugin platform, a minimal stand-in for a chat to Responses conversion.
 type chatToRelay struct{}
 
-func (chatToRelay) From() string { return "openai.chat" }
-func (chatToRelay) To() string   { return "relayx.responses" }
-func (chatToRelay) Request(body []byte) ([]byte, error) {
+func (chatToRelay) From() string         { return "openai.chat" }
+func (chatToRelay) To() string           { return "relayx.responses" }
+func (chatToRelay) Grade() convert.Grade { return convert.GradeGood }
+func (c chatToRelay) Prepare(body []byte, _ convert.Options) (convert.Converter, []byte, error) {
 	out := []byte(`{}`)
 	out, _ = sjson.SetBytes(out, "model", gjson.GetBytes(body, "model").String())
 	out, _ = sjson.SetBytes(out, "input", gjson.GetBytes(body, "messages.0.content").String())
 	out, _ = sjson.SetBytes(out, "stream", gjson.GetBytes(body, "stream").Bool())
-	return out, nil
+	return c, out, nil
 }
 func (chatToRelay) Response(body []byte) ([]byte, error) {
 	var text string

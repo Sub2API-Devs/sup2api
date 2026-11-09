@@ -1,0 +1,14 @@
+{
+  "max_tokens": 16,
+  "messages": [
+    {
+      "content": "Write a long story about a lighthouse.",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5-mini",
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

@@ -1,0 +1,86 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "Hello! How can I help you today?",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "Ws0QacGWJdiVz7IPuv6E8Qo",
+  "model": "gemini-2.5-flash",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 9,
+    "prompt_tokens": 8,
+    "total_tokens": 17
+  }
+}
+--- losses: {}
+
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "incomplete_details": null,
+  "model": "gemini-2.5-flash",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "Hello! How can I help you today?",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_Ws0QacGWJdiVz7IPuv6E8Qo_0",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 8,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 9,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 17
+  }
+}
+--- losses: {}
+
+=== anthropic.messages
+{
+  "content": [
+    {
+      "text": "Hello! How can I help you today?",
+      "type": "text"
+    }
+  ],
+  "id": "msg_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "model": "gemini-2.5-flash",
+  "role": "assistant",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 8,
+    "output_tokens": 9
+  }
+}
+--- losses: {}
+

@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": false
+  },
+  "note": "One loss of each category: the forced tool is not declared (tool), reasoning history, image detail, logit_bias / web search options / late system message / parallel_tool_calls false (other)."
+}

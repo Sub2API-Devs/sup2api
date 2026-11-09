@@ -16,7 +16,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref,
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, toast } from '@sub2api/ui'
-import type { Account, AccountType, EnvironmentValues, ProxyProbeResult } from '@/api/types'
+import type { Account, AccountType, ConversionLossPolicy, EnvironmentValues, ProxyProbeResult } from '@/api/types'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import { schemaWidgets } from '@/components/schema/widgets'
 import { ACCOUNT_FORM_KEY } from '@/components/schema/accountForm'
@@ -32,10 +32,11 @@ import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue
 import type { AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
-import { useEnvironmentLayer, useProxiesLookup } from '@/composables/lookups'
+import { useEnvironmentLayer, useGroupsLookup, useProxiesLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
+import { groupPolicies, policyLabel, policyOptions, policySourceHint } from '@/utils/conversion'
 import AccountEditorNav from './AccountEditorNav.vue'
 import ParamOverrideField from './paramOverride/ParamOverrideField.vue'
 import { operationCount, type Override as ParamOverride } from './paramOverride/model'
@@ -91,7 +92,8 @@ const basic = reactive({
   spm_limit: 0,
   environment: {} as EnvironmentValues,
   header_passthrough: [] as string[],
-  param_override: null as ParamOverride | null
+  param_override: null as ParamOverride | null,
+  conversion_loss_policy: null as ConversionLossPolicy | null
 })
 /** 指定模型限速 (CONTRACTS §68), edited as cards and saved as one entry per list. */
 const modelLimitCards = ref<ModelLimitCard[]>([])
@@ -163,10 +165,14 @@ const usageLimit = useUsageLimitEdit(() => props.account?.id, () => activeSectio
 /** The environment card shows only when the caller may read the declared variables (403 for some roles) and the account layer has any. */
 const showEnvironment = useEnvironmentLayer('account')
 const { limit: usageLimitModel, status: usageLimitStatus, loadError: usageLimitLoadError, errors: usageLimitErrors } = usageLimit
-// Each section starts at its top: the modal body keeps the previous scroll
-// offset otherwise. Post-flush, so save() still scrolls to an invalid field.
+// The editor and each section start at the top: the modal body keeps the
+// previous scroll offset otherwise (the type picker's, the last section's).
+// The form's scroll-mt-4 keeps the body's top padding in view. Post-flush, so
+// save() still scrolls to an invalid field.
 const formEl = ref<HTMLFormElement>()
-watch(activeSection, () => formEl.value?.scrollIntoView({ block: 'start' }), { flush: 'post' })
+const toTop = () => formEl.value?.scrollIntoView({ block: 'start' })
+onMounted(toTop)
+watch(activeSection, toTop, { flush: 'post' })
 
 const autoModels = ref(true)
 const ccgState = ref<{ key: string | null; authorized: boolean; subscription_type?: string }>({ key: null, authorized: false })
@@ -200,18 +206,28 @@ const mappingCount = computed(() => Object.keys(mapping.value).length)
 /** Summary parts of the shown controls (falsy parts dropped). */
 const summaryOf = (parts: Array<[CommonControlName, string | number | false]>) => parts.filter(([n, v]) => v && controls.value[n].visible).map(([, v]) => v)
 
-/** The advanced section's summary: header passthrough, parameter override and the account's own environment values. */
+/** The advanced section's summary: header passthrough, parameter override, the account's own conversion loss policy and environment values. */
 const forwardingSummary = computed(() => {
   const rules = basic.header_passthrough
   const overrides = operationCount(basic.param_override)
   const custom = Object.keys(basic.environment).length
-  if (!summaryOf([['header_passthrough', rules.length], ['param_override', overrides], ['environment', custom]]).length) return t('accounts.forwarding.allDefault')
-  return summaryOf([
-    ['header_passthrough', rules.includes('*') ? t('accounts.forwarding.passAll') : rules.length ? t('accounts.forwarding.passRules', { n: rules.length }) : t('accounts.forwarding.passNone')],
-    ['param_override', overrides && t('accounts.forwarding.override', { n: overrides })],
-    ['environment', custom ? t('accounts.forwarding.envCustom', { n: custom }) : t('accounts.forwarding.envFollow')]
-  ]).join(' · ')
+  const policy = basic.conversion_loss_policy
+  const policyPart = policy ? [t('accounts.forwarding.conversion', { policy: policyLabel(t, policy) })] : []
+  if (!summaryOf([['header_passthrough', rules.length], ['param_override', overrides], ['environment', custom]]).length && !policy) return t('accounts.forwarding.allDefault')
+  return [
+    ...summaryOf([
+      ['header_passthrough', rules.includes('*') ? t('accounts.forwarding.passAll') : rules.length ? t('accounts.forwarding.passRules', { n: rules.length }) : t('accounts.forwarding.passNone')],
+      ['param_override', overrides && t('accounts.forwarding.override', { n: overrides })]
+    ]),
+    ...policyPart,
+    ...summaryOf([['environment', custom ? t('accounts.forwarding.envCustom', { n: custom }) : t('accounts.forwarding.envFollow')]])
+  ].join(' · ')
 })
+
+// Conversion loss policy (CONVERT-MATRIX §6.3): null inherits each group's, the hint shows what applies.
+const { groups: groupList } = useGroupsLookup()
+const conversionOptions = computed(() => policyOptions(t, t('accounts.conversion.inherit')))
+const conversionHint = computed(() => policySourceHint(t, basic.conversion_loss_policy, groupPolicies(basic.group_ids, groupList.value)))
 
 /** Plugin sections declared for this account type (docs/COMMON-CONTROLS.md §4). */
 const pluginSections = computed(() => plugins.slotEntries('account.editor.section').filter(e => sectionFor(e, props.accountType)))
@@ -483,6 +499,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   // Editing defaults to "pick existing" with the current proxy selected.
   proxyMode.value = 'existing'
   proxyUrl.value = ''
+  basic.conversion_loss_policy = a?.conversion_loss_policy ?? null
   resetEnvironment(a?.settings)
   if (a) editorModels.setSaved(a.models, a.model_mapping)
   if (!a || (at?.plugin_key === 'ccgateway' ? autoModels.value : shouldPrefillOnEdit(a, at))) editorModels.applyDefaults(at)
@@ -809,6 +826,12 @@ const { save } = useAccountSave({
               <HeaderPassthroughEditor v-model="basic.header_passthrough" :disabled="controls.header_passthrough.disabled || saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
             </SSettingRow>
             <ParamOverrideField v-if="controls.param_override.visible" v-model="basic.param_override" :models="models" :error="errors.param_override" :disabled="controls.param_override.disabled || saving" :reason="controls.param_override.reason" />
+            <SSettingRow :label="t('accounts.conversion.title')" :description="t('accounts.conversion.hint')" :error="errors.conversion_loss_policy" data-testid="account-conversion-policy">
+              <div class="w-full space-y-1 sm:w-64">
+                <SSelect v-model="basic.conversion_loss_policy" :options="conversionOptions" :disabled="saving" data-testid="account-conversion-policy-select" />
+                <SHint size="xs" data-testid="account-conversion-policy-hint">{{ conversionHint }}</SHint>
+              </div>
+            </SSettingRow>
             <template v-if="showEnvironment && controls.environment.visible">
               <SHint v-if="controls.environment.reason" size="xs" class="py-3">{{ controls.environment.reason }}</SHint>
               <EnvironmentEditor v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="controls.environment.disabled || saving" />
@@ -826,7 +849,7 @@ const { save } = useAccountSave({
 
     <FetchedModelsModal v-model:open="fetchOpen" :models="fetched.models" :skipped="fetched.skipped" :existing="models" @apply="applyFetched" />
 
-    <div class="sticky -bottom-5 z-10 mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-line bg-white py-4 dark:bg-dark-800">
+    <div class="modal-sticky-footer flex flex-wrap items-center justify-end gap-2">
       <SButton v-if="!editing" class="mr-auto" variant="ghost" icon="arrow-left" @click="emit('back')">{{ t('common.previous') }}</SButton>
       <SButton v-if="canTestAccount" class="mr-auto" icon="play" @click="emit('test', account!)">{{ t('accounts.testConnection') }}</SButton>
       <SHint v-if="editing && prefilled" inline size="xs" tone="warning" class="inline-flex flex-wrap items-center gap-x-2" data-testid="footer-prefilled">

@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "alias",
+    "stream": false
+  },
+  "note": "strict TestStrictRefusalJSONSSEAndHistoryAgree; identical to the strict output"
+}

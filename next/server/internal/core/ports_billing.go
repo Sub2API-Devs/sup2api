@@ -124,7 +124,8 @@ type UsageRecord struct {
 	Protocol        string // protocol of the client endpoint
 	AccountType     string // type id of the account (declared by PluginKey)
 	// UpstreamProtocol is the protocol sent upstream; differs from Protocol
-	// when the core converted the request (ARCHITECTURE 6.6).
+	// when the core converted the request (ARCHITECTURE 6.6), "local" when
+	// the core answered a count_tokens request itself.
 	UpstreamProtocol string
 	Endpoint         string
 	Model            string
@@ -135,6 +136,9 @@ type UsageRecord struct {
 	ErrorType        string // see usage_logs.error_type
 	ErrorMessage     string
 	Attempts         int
+	// Conversion is usage_logs.conversion (§88); nil for a native request
+	// no account type refused.
+	Conversion *ConversionTrace
 	// FailurePolicy contains bounded core-only decisions, persisted in anomalies.
 	FailurePolicy string
 	// Availability is the model availability precheck's account of this

@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "The lighthouse stood alone on the"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "MAX_TOKENS",
+      "index": 0
+    }
+  ],
+  "modelVersion": "claude-sonnet-4-5-20250929",
+  "responseId": "resp_msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "usageMetadata": {
+    "candidatesTokenCount": 8,
+    "promptTokenCount": 15,
+    "totalTokenCount": 23
+  }
+}

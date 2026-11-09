@@ -1,0 +1,23 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "No. 391 = 17 × 23.",
+        "reasoning_content": "391 = 17 x 23, so it is not prime.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "model": "claude-sonnet-4-5-20250929",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 60,
+    "prompt_tokens": 40,
+    "total_tokens": 100
+  }
+}

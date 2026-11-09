@@ -15,14 +15,18 @@ const rotating = ref(false)
 const emit = defineEmits<{ (e: 'rotated'): void }>()
 async function rotate() {
   if (rotating.value || !props.allowed) return
-  if (!await confirm({ title: t('apikeys.rotate'), message: t('apikeys.rotateConfirm', { name: props.apiKey.name }), danger: true })) return
+  if (!(await confirm({ title: t('apikeys.rotate'), message: t('apikeys.rotateConfirm', { name: props.apiKey.name }), danger: true })))
+    return
   rotating.value = true
   try {
     await api.post(`/me/api-keys/${props.apiKey.id}/rotate`, {})
     toast(t('apikeys.rotated'), 'success')
     emit('rotated')
-  } catch (e) { notifyError(e) }
-  finally { rotating.value = false }
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    rotating.value = false
+  }
 }
 async function copy() {
   if (copying.value || !props.allowed || !props.apiKey.copyable) return
@@ -41,7 +45,27 @@ async function copy() {
 <template>
   <div class="inline-flex items-center gap-0.5 whitespace-nowrap">
     <SCode inline class="mr-1" :text="`${apiKey.key_prefix}…`" />
-    <SButton v-if="allowed" variant="ghost" size="xs" :disabled="copying || rotating || !apiKey.copyable" :title="t(apiKey.copyable ? 'common.copy' : 'apikeys.legacyCopyHint')" :aria-label="t('common.copy')" icon-only icon="copy" data-testid="copy-api-key" @click.stop="copy" />
-    <SButton v-if="allowed" variant="ghost" size="xs" :disabled="rotating || copying" :title="t('apikeys.rotate')" data-testid="rotate-api-key" @click.stop="rotate">{{ t('apikeys.rotateShort') }}</SButton>
+    <SButton
+      v-if="allowed"
+      variant="ghost"
+      size="xs"
+      :disabled="copying || rotating || !apiKey.copyable"
+      :title="t(apiKey.copyable ? 'common.copy' : 'apikeys.legacyCopyHint')"
+      :aria-label="t('common.copy')"
+      icon-only
+      icon="copy"
+      data-testid="copy-api-key"
+      @click.stop="copy"
+    />
+    <SButton
+      v-if="allowed"
+      variant="ghost"
+      size="xs"
+      :disabled="rotating || copying"
+      :title="t('apikeys.rotate')"
+      data-testid="rotate-api-key"
+      @click.stop="rotate"
+      >{{ t('apikeys.rotateShort') }}</SButton
+    >
   </div>
 </template>

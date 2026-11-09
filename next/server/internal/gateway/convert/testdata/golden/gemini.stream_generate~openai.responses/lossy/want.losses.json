@@ -1,0 +1,15 @@
+{
+  "image": [
+    "contents[0].parts[1]"
+  ],
+  "other": [
+    "generationConfig.topK",
+    "safetySettings"
+  ],
+  "reasoning": [
+    "contents[1].parts[0]"
+  ],
+  "tool": [
+    "tools[1].codeExecution"
+  ]
+}

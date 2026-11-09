@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gemini-3-flash-preview",
+    "stream": false
+  },
+  "note": "Consecutive call items share one model turn, their outputs one user turn; Gemini 3 thinkingLevel."
+}

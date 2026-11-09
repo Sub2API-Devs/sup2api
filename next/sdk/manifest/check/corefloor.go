@@ -30,12 +30,21 @@ const UpstreamFirstCore = "0.1.262"
 // besides schedulable and auto_disable and the visible, locked and required
 // fields (CONTRACTS §87). Older cores refuse the names at install and ignore
 // the fields, which would leave a locked setting editable.
-const CommonControlsFirstCore = "0.1.263"
+const CommonControlsFirstCore = "0.1.262"
+
+// ConvertMatrixFirstCore is the first core of the protocol conversion
+// matrix (CONTRACTS §88), which adds the openai.responses -> openai.chat
+// conversion within the openai platform.
+const ConvertMatrixFirstCore = "0.1.262"
 
 // SamePlatformConversions are the core's protocol converters whose two
 // protocols belong to one platform (client, upstream). The gateway's
 // convert.Default() is checked against this list in its tests.
-var SamePlatformConversions = [][2]string{{"openai.chat", "openai.responses"}}
+var SamePlatformConversions = [][2]string{{"openai.chat", "openai.responses"}, {"openai.responses", "openai.chat"}}
+
+// samePlatformFirstCore is the first core converting a pair of
+// SamePlatformConversions; StreamOnlyFirstCore when not listed.
+var samePlatformFirstCore = map[[2]string]string{{"openai.responses", "openai.chat"}: ConvertMatrixFirstCore}
 
 // coreFloor is a manifest declaration an older core accepts and ignores
 // (plugin/pkg.ParseManifest tolerates unknown fields), so a plugin relying on
@@ -58,7 +67,9 @@ var coreFloors = []coreFloor{
 		return false
 	}},
 	{field: "accountTypes[].platforms[].endpoints (served through a same-platform conversion)", firstCore: StreamOnlyFirstCore,
-		uses: (*validator).usesSamePlatformConversion},
+		uses: usesSamePlatformConversion(StreamOnlyFirstCore)},
+	{field: "accountTypes[].platforms[].endpoints (served through the openai.responses -> openai.chat conversion)", firstCore: ConvertMatrixFirstCore,
+		uses: usesSamePlatformConversion(ConvertMatrixFirstCore)},
 	{field: "accountTypes[].upstream", firstCore: UpstreamFirstCore, uses: func(v *validator) bool {
 		return slices.ContainsFunc(v.m.AccountTypes, func(at manifest.AccountType) bool { return at.Upstream != nil })
 	}},
@@ -83,11 +94,19 @@ func (v *validator) usesNewCommonControls() bool {
 	return false
 }
 
-// usesSamePlatformConversion reports an account type whose endpoint subset
-// on a platform leaves out an endpoint that only a same-platform conversion
-// can serve from an endpoint it keeps, e.g. responses without
-// chat_completions on openai.
-func (v *validator) usesSamePlatformConversion() bool {
+// usesSamePlatformConversion reports, for the conversions firstCore brings,
+// an account type whose endpoint subset on a platform leaves out an
+// endpoint that only such a same-platform conversion can serve from an
+// endpoint it keeps, e.g. responses without chat_completions on openai.
+func usesSamePlatformConversion(firstCore string) func(*validator) bool {
+	brings := func(pair [2]string) bool {
+		c, ok := samePlatformFirstCore[pair]
+		return c == firstCore || !ok && firstCore == StreamOnlyFirstCore
+	}
+	return func(v *validator) bool { return v.usesSamePlatformConversion(brings) }
+}
+
+func (v *validator) usesSamePlatformConversion(brings func([2]string) bool) bool {
 	own := map[string]*manifest.Platform{}
 	for i := range v.m.Platforms {
 		own[v.m.Platforms[i].ID] = &v.m.Platforms[i]
@@ -111,7 +130,9 @@ func (v *validator) usesSamePlatformConversion() bool {
 				if ap.SupportsEndpoint(e.ID) || kept[e.Protocol] {
 					continue
 				}
-				if slices.ContainsFunc(SamePlatformConversions, func(pair [2]string) bool { return pair[0] == e.Protocol && kept[pair[1]] }) {
+				if slices.ContainsFunc(SamePlatformConversions, func(pair [2]string) bool {
+					return pair[0] == e.Protocol && kept[pair[1]] && brings(pair)
+				}) {
 					return true
 				}
 			}

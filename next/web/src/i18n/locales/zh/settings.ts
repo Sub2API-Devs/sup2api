@@ -81,7 +81,7 @@ export default {
   },
   gateway: {
     title: '网关',
-    subtitle: '网关请求的失败切换与超时。修改后各节点对新请求生效。',
+    subtitle: '网关请求的失败切换、超时与协议转换。修改后各节点对新请求生效。',
     fields: {
       max_attempts: '最大尝试次数',
       platform_call_timeout_ms: '平台调用超时',
@@ -90,7 +90,9 @@ export default {
       queue_sticky_max_waiting: '粘性账号最多排队数',
       queue_sticky_wait_seconds: '粘性账号最长等待',
       queue_fallback_max_waiting: '全部账号满时每账号最多排队数',
-      queue_fallback_wait_seconds: '全部账号满时最长等待'
+      queue_fallback_wait_seconds: '全部账号满时最长等待',
+      media_download_max_mb: '媒体下载上限',
+      claude_default_max_tokens: 'Claude 默认 max_tokens'
     },
     hints: {
       max_attempts: '每个请求最多尝试的账号数（含首次，用于失败切换）。',
@@ -100,7 +102,23 @@ export default {
       queue_fallback_wait_seconds: '所有候选账号都满时的最长等待，超时返回 429。0 表示不排队。',
       platform_call_timeout_ms: '请求路径上调用插件平台接口（构造上游请求、解析用量）的超时。',
       default_hook_timeout_ms: 'manifest 未设置超时的钩子使用此值。',
-      platform_hotpath_timeout_ms: '每个请求中不属于钩子的平台调用超时：调度前解析模型、响应发完后提取用量。'
+      platform_hotpath_timeout_ms: '每个请求中不属于钩子的平台调用超时：调度前解析模型、响应发完后提取用量。',
+      media_download_max_mb: '请求转换到 Gemini 时下载 http(s) 图片等媒体，单个文件的大小上限（MB）。',
+      claude_default_max_tokens: '请求转换到 Anthropic 时客户端没给输出上限，按客户端模型名精确匹配取 max_tokens，没有匹配用 default 行。default 行不能删除或改名，最多 200 行，取值 0–1048576。'
+    },
+    maxTokens: {
+      model: '模型',
+      tokens: 'max_tokens',
+      modelPlaceholder: '客户端模型名',
+      add: '添加模型',
+      remove: '删除 {model}',
+      defaultLocked: 'default 行不能删除或改名',
+      errors: {
+        value: '每行都要填 0 到 {max} 之间的整数',
+        model: '模型名不能为空，最长 200 个字符',
+        duplicate: '模型名重复',
+        too_many: '最多 {n} 行'
+      }
     },
     range: '范围 {min}–{max}。',
     notInteger: '请输入整数'

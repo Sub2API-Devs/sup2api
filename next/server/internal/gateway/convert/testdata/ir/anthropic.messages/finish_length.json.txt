@@ -1,0 +1,91 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "length",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "The lighthouse stood alone on the",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "model": "claude-sonnet-4-5-20250929",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 8,
+    "prompt_tokens": 15,
+    "total_tokens": 23
+  }
+}
+--- losses: {}
+
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "incomplete_details": {
+    "reason": "max_output_tokens"
+  },
+  "model": "claude-sonnet-4-5-20250929",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "The lighthouse stood alone on the",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "incomplete",
+  "usage": {
+    "input_tokens": 15,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 8,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 23
+  }
+}
+--- losses: {}
+
+=== gemini.generate
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "The lighthouse stood alone on the"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "MAX_TOKENS",
+      "index": 0
+    }
+  ],
+  "modelVersion": "claude-sonnet-4-5-20250929",
+  "responseId": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "usageMetadata": {
+    "candidatesTokenCount": 8,
+    "promptTokenCount": 15,
+    "totalTokenCount": 23
+  }
+}
+--- losses: {}
+

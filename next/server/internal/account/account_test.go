@@ -383,9 +383,21 @@ func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 // (unused, the platform is unavailable) openai.embeddings to ghost.embed.
 type fakeConverters struct{}
 
-func (fakeConverters) CanConvert(client, upstream string) bool {
+func (f fakeConverters) Conversion(client, upstream string) (core.Conversion, bool) {
+	return fairConversion(client, upstream, f.canConvert(client, upstream))
+}
+
+func (fakeConverters) canConvert(client, upstream string) bool {
 	return client == "openai.chat" && upstream == "anthropic.messages" ||
 		client == "openai.embeddings" && upstream == "ghost.embed"
+}
+
+// fairConversion is a one-hop fair conversion when ok.
+func fairConversion(client, upstream string, ok bool) (core.Conversion, bool) {
+	if !ok {
+		return core.Conversion{}, false
+	}
+	return core.Conversion{Rank: 2, Grade: "fair", Hops: []string{client, upstream}}, true
 }
 
 func ep(method, path, protocol, billing string) manifest.Endpoint {
@@ -444,15 +456,14 @@ func testGen(plat core.PlatformPlugin) *fakeGen {
 	}
 }
 
-// endpointList renders endpoints as "METHOD path platform native|converted".
+// endpointList renders endpoints as "METHOD path platform grade".
 func endpointList(eps []EndpointView) string {
 	var s []string
 	for _, e := range eps {
-		how := "converted"
-		if e.Native {
-			how = "native"
+		if e.Native != (e.Grade == "native") {
+			return "native flag disagrees with grade " + e.Grade
 		}
-		s = append(s, e.Method+" "+e.Path+" "+e.Platform+" "+how)
+		s = append(s, e.Method+" "+e.Path+" "+e.Platform+" "+e.Grade)
 	}
 	return strings.Join(s, "; ")
 }
@@ -477,7 +488,7 @@ func TestTypeViewEndpoints(t *testing.T) {
 		t.Fatalf("platforms: %s", got)
 	}
 	want := "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic native; " +
-		"POST /v1/chat/completions openai converted"
+		"POST /v1/chat/completions openai fair"
 	if got := endpointList(v.Endpoints); got != want {
 		t.Fatalf("endpoints:\n got %s\nwant %s", got, want)
 	}
@@ -499,7 +510,7 @@ func TestTypeViewEndpoints(t *testing.T) {
 	}
 	v = typeView(g, g.types[1], fakeConverters{})
 	if got := endpointList(v.Endpoints); got != "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic native; "+
-		"POST /v1/chat/completions openai converted" {
+		"POST /v1/chat/completions openai fair" {
 		t.Fatalf("relay endpoints with converters: %s", got)
 	}
 	// A plugin platform.
@@ -581,7 +592,8 @@ func TestTypeViewEndpointSubset(t *testing.T) {
 	}
 	b.Type.Platforms[0].Endpoints = []string{"messages"}
 	got = endpointList(typeView(g, b, fakeConverters{}).Endpoints)
-	if got != "POST /v1/messages anthropic native; POST /v1/chat/completions openai converted" {
+	// count_tokens left out of the subset is estimated locally (CONVERT-MATRIX §8).
+	if got != "POST /v1/messages anthropic native; POST /v1/messages/count_tokens anthropic local; POST /v1/chat/completions openai fair" {
 		t.Fatalf("selected endpoint and its conversion: %s", got)
 	}
 }
@@ -1429,4 +1441,36 @@ func TestAccountParamOverridePreview(t *testing.T) {
 		"param_override": map[string]any{"operations": []any{map[string]any{"mode": "bogus"}}}, "body": []any{}})
 	require.Equal(t, 400, code, fmt.Sprint(out))
 	require.Equal(t, []string{"param_override:unsupported", "body:invalid"}, fieldsOf(out))
+}
+
+// conversion_loss_policy (CONTRACTS §88) is saved, cleared with null and
+// reaches the scheduler through the group snapshot and Load; an unknown
+// value is a field error.
+func TestAccountConversionLossPolicy(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	g := e.exec1(`INSERT INTO groups (name) VALUES ('loss') RETURNING id`)
+	code, out := e.do("POST", "/accounts", map[string]any{"name": "loss", "plugin_key": "anthropic", "type": "apikey",
+		"group_ids": []int64{g}, "credentials": map[string]any{"api_key": "sk-good-key-123"}, "conversion_loss_policy": "safe"})
+	require.Equal(t, 201, code, fmt.Sprint(out))
+	require.Equal(t, "safe", data(out)["conversion_loss_policy"])
+	id := int64(data(out)["id"].(float64))
+	cands, err := e.svc.Candidates(ctx, g, nil)
+	require.NoError(t, err)
+	require.Len(t, cands, 1)
+	require.Equal(t, "safe", cands[0].ConversionLossPolicy)
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"conversion_loss_policy": "lax"})
+	require.Equal(t, 400, code, fmt.Sprint(out))
+	require.Equal(t, []string{"conversion_loss_policy:invalid"}, fieldsOf(out))
+
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"priority": 2})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Equal(t, "safe", data(out)["conversion_loss_policy"], "absent keeps it")
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id), map[string]any{"conversion_loss_policy": nil})
+	require.Equal(t, 200, code, fmt.Sprint(out))
+	require.Nil(t, data(out)["conversion_loss_policy"])
+	acc, err := e.svc.Load(ctx, id)
+	require.NoError(t, err)
+	require.Equal(t, "", acc.ConversionLossPolicy)
 }

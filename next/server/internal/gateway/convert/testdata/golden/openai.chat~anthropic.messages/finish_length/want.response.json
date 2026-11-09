@@ -1,0 +1,22 @@
+{
+  "choices": [
+    {
+      "finish_reason": "length",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "The lighthouse stood alone on the",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "model": "claude-sonnet-4-5-20250929",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 8,
+    "prompt_tokens": 15,
+    "total_tokens": 23
+  }
+}

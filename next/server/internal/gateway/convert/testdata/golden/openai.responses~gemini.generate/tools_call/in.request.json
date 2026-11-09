@@ -1,0 +1,44 @@
+{
+  "model": "gemini-2.5-flash",
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Current weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      }
+    },
+    {
+      "type": "function",
+      "name": "get_time",
+      "description": "Current time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tz"
+        ]
+      }
+    }
+  ],
+  "tool_choice": "required",
+  "input": [
+    {
+      "role": "user",
+      "content": "Weather in Paris and Tokyo?"
+    }
+  ]
+}

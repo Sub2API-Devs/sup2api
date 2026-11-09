@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gpt-5",
+    "stream": false
+  },
+  "note": "One loss of each category."
+}

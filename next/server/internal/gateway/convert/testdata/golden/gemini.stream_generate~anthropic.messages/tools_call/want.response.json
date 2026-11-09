@@ -1,0 +1,41 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "I'll check both cities."
+          },
+          {
+            "functionCall": {
+              "args": {
+                "city": "Paris"
+              },
+              "id": "toolu_01T1x1fJ34qAmk2tNTrN7Up6",
+              "name": "get_weather"
+            }
+          },
+          {
+            "functionCall": {
+              "args": {
+                "city": "Tokyo"
+              },
+              "id": "toolu_01KkV6nBQfcxBxNc5zNm4mVd",
+              "name": "get_weather"
+            }
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "claude-sonnet-4-5-20250929",
+  "responseId": "resp_msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "usageMetadata": {
+    "candidatesTokenCount": 96,
+    "promptTokenCount": 380,
+    "totalTokenCount": 476
+  }
+}

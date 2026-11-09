@@ -41,13 +41,18 @@ describe('SModal forms', () => {
 
   it('keeps one size whatever the content when fixed', async () => {
     const center = await panelOf(false, () => h(SModal, { open: true, title: 'T', width: '2xl', fixed: true }, { default: () => 'b' }))
-    expect(center.className).toContain('h-[95vh]')
+    expect(center.className).toContain('h-full')
     expect(center.style.maxWidth).toBe('72rem')
     expect(center.querySelector('.modal-body')!.className).toContain('[scrollbar-gutter:stable]')
     document.body.innerHTML = ''
     const loose = await panelOf(false, () => h(SModal, { open: true, title: 'T', width: '2xl' }, { default: () => 'b' }))
-    expect(loose.className).not.toContain('h-[95vh]')
+    expect(loose.className).not.toContain('h-full')
     expect(loose.querySelector('.modal-body')!.className).not.toContain('scrollbar-gutter')
+    document.body.innerHTML = ''
+    const sheet = await panelOf(true, () => h(SModal, { open: true, title: 'T', fixed: true }, { default: () => 'b' }))
+    expect(sheet.className).toContain('s-drawer-bottom')
+    expect(sheet.className).toContain('h-full')
+    expect(sheet.lastElementChild!.className).toContain('[scrollbar-gutter:stable]')
   })
 
   it('follows an explicit mobile form', async () => {

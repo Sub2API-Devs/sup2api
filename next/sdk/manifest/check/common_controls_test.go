@@ -131,7 +131,7 @@ func TestCommonControlsCoreFloor(t *testing.T) {
 		{"hidden legacy name", map[string]manifest.AccountCommonControl{"auto_disable": {Visible: &off}}, true},
 	} {
 		m := controlsManifest(tc.controls)
-		m.HostCompat = ">=0.1.262 <0.2.0" // the release before CommonControlsFirstCore
+		m.HostCompat = ">=0.1.261 <0.2.0" // the release before CommonControlsFirstCore
 		if got := controlCodes(m)["hostCompat"] == "below_feature_core"; got != tc.floor {
 			t.Errorf("%s: below_feature_core = %v, want %v", tc.name, got, tc.floor)
 		}

@@ -1,0 +1,19 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Say hello.",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "instructions": "Be brief.",
+  "max_output_tokens": 256,
+  "model": "gpt-5",
+  "store": false,
+  "temperature": 0.5
+}

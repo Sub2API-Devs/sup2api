@@ -1,0 +1,11 @@
+{
+  "options": {
+    "model": "gpt-5-mini",
+    "stream": false
+  },
+  "upstream": [
+    "recorded/openai.chat/tools.response.json",
+    "recorded/openai.chat/tools.stream.sse"
+  ],
+  "note": "A Gemini Schema (parameters) becomes JSON Schema."
+}

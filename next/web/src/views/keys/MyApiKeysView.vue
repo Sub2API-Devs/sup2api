@@ -188,10 +188,10 @@ function remove(k: ApiKey) {
       <template #cell-actions="{ row, layout }">
         <div class="flex items-center justify-end gap-0.5">
           <KeyEnabledSwitch v-if="layout === 'table'" :api-key="row" :disabled="updating.has(row.id)" class="mr-2" @change="setEnabled(row, $event)" />
-          <SRowAction icon="code" :label="t('apikeys.actions.use')" :title="t('apikeys.use.open')" data-testid="use-key" @click="useKey = row" />
+          <SRowAction :label="t('apikeys.actions.use')" :title="t('apikeys.use.open')" data-testid="use-key" @click="useKey = row" />
           <KeyCcSwitchButton :api-key="row" :platforms="groupCell(row).platforms" />
-          <SRowAction icon="edit" :label="t('common.edit')" data-testid="edit-key" @click="openEditor(row)" />
-          <SRowAction icon="trash" :label="t('common.delete')" tone="danger" data-testid="delete-key" @click="remove(row)" />
+          <SRowAction :label="t('common.edit')" data-testid="edit-key" @click="openEditor(row)" />
+          <SRowAction :label="t('common.delete')" tone="danger" data-testid="delete-key" @click="remove(row)" />
         </div>
       </template>
       <template #empty>

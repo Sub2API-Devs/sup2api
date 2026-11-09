@@ -78,6 +78,23 @@ describe('usage records layout', () => {
     await w.get('[data-testid="client-request-id"]').trigger('click')
     expect(w.emitted('filter-client-request-id')).toEqual([['client-request-one']])
   })
+  it('marks a converted request with its grade, protocol chain and losses (CONVERT-MATRIX §7)', () => {
+    i18n.global.locale.value = 'zh'
+    const conversion = { v: 1, grade: 'fair', hops: ['anthropic.messages', 'openai.responses'], lost: { tool: ['tools[3]'] }, response_lost: { reasoning: ['response.output[0]'] } } as const
+    const w = mount(UsageTable, { props: { rows: [
+      { ...row, upstream_protocol: 'openai.responses', conversion },
+      { ...row, id: 2, conversion: { v: 1, grade: 'local', hops: ['anthropic.count_tokens'] } },
+      { ...row, id: 3, upstream_protocol: 'openai.chat' },
+      { ...row, id: 4, conversion: { v: 1, grade: 'native', rejected: [{ type: 'x/y', error: 'no' }] } }
+    ] as UsageRow[] }, global })
+    const grades = w.findAll('[data-testid="conversion-grade"]')
+    expect(grades.map(g => g.text())).toEqual(['转换·一般', '本地估算'])
+    expect(grades[0].attributes('title')).toBe('anthropic.messages → openai.responses')
+    expect(w.findAll('[data-testid="usage-conversion-loss"]').map(l => l.attributes('title'))).toEqual(['转换有丢失：工具、推理'])
+    // a record without a conversion trace keeps the plain badge; a native route shows none
+    expect(w.findAll('tbody tr')[2].text()).toContain('已转换')
+    expect(w.findAll('tbody tr')[3].text()).not.toContain('转换')
+  })
   it('shows the upstream account as "#id name" and filters by it on click', async () => {
     const w = mount(UsageTable, { props: { rows: [row, { ...row, id: 2, account_id: null, account_name: '' }] }, global })
     const accounts = w.findAll('[data-testid="usage-account"]')

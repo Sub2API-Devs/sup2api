@@ -1,0 +1,51 @@
+{
+  "max_completion_tokens": 512,
+  "messages": [
+    {
+      "content": "Weather and local time in Paris?",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5",
+  "tool_choice": "auto",
+  "tools": [
+    {
+      "function": {
+        "description": "Current weather",
+        "name": "get_weather",
+        "parameters": {
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ],
+          "type": "object"
+        },
+        "strict": false
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "Current time",
+        "name": "get_time",
+        "parameters": {
+          "properties": {
+            "tz": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tz"
+          ],
+          "type": "object"
+        },
+        "strict": false
+      },
+      "type": "function"
+    }
+  ]
+}

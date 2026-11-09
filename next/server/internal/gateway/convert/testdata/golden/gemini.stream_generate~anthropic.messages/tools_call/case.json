@@ -1,0 +1,11 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": true
+  },
+  "upstream": [
+    "recorded/anthropic.messages/tools.response.json",
+    "recorded/anthropic.messages/tools.stream.sse"
+  ],
+  "note": "A Gemini Schema (parameters) becomes JSON Schema."
+}

@@ -1,0 +1,7 @@
+{
+  "model": "gpt-5",
+  "instructions": "Be brief.",
+  "max_output_tokens": 256,
+  "temperature": 0.5,
+  "input": "Say hello."
+}

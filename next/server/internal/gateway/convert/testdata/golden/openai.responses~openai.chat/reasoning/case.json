@@ -1,0 +1,11 @@
+{
+  "options": {
+    "model": "gpt-5",
+    "stream": false
+  },
+  "upstream": [
+    "recorded/openai.chat/reasoning.response.json",
+    "recorded/openai.chat/reasoning.stream.sse"
+  ],
+  "note": "History reasoning is dropped (reasoning loss)."
+}

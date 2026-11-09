@@ -1,0 +1,98 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Weather and local time in Paris?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    },
+    {
+      "arguments": "{\"city\":\"Paris\"}",
+      "call_id": "call_6d68f3ed665770e5",
+      "name": "get_weather",
+      "type": "function_call"
+    },
+    {
+      "arguments": "{\"tz\":\"Europe/Paris\"}",
+      "call_id": "call_6629bce30ed280dc",
+      "name": "get_time",
+      "type": "function_call"
+    },
+    {
+      "call_id": "call_6d68f3ed665770e5",
+      "output": "{\"sky\":\"cloudy\",\"temp_c\":18}",
+      "type": "function_call_output"
+    },
+    {
+      "call_id": "call_6629bce30ed280dc",
+      "output": "14:05",
+      "type": "function_call_output"
+    },
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "18C and cloudy; 14:05.",
+          "type": "output_text"
+        }
+      ],
+      "role": "assistant",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "text": "Thanks. Tomorrow?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "model": "gpt-5-mini",
+  "store": false,
+  "tools": [
+    {
+      "description": "Current weather",
+      "name": "get_weather",
+      "parameters": {
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    },
+    {
+      "description": "Current time",
+      "name": "get_time",
+      "parameters": {
+        "properties": {
+          "tz": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "tz"
+        ],
+        "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+    }
+  ]
+}

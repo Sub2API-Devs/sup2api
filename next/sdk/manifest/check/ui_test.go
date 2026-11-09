@@ -448,24 +448,24 @@ func TestSlotNames(t *testing.T) {
 }
 
 // account.editor.section (UI 3.7) carries a label, a known icon and
-// optional account type ids, and holds hostCompat to core 0.1.263; the other
+// optional account type ids, and holds hostCompat to core 0.1.262; the other
 // slots take none of these fields.
 func TestEditorSectionSlot(t *testing.T) {
 	section := manifest.Slot{Slot: manifest.SlotAccountEditorSection, Component: "X", Label: manifest.LocalizedText{"en": "Extras"}, Icon: "refresh"}
-	m := uiNativeManifest("^3.7", ">=0.1.263 <0.2.0")
+	m := uiNativeManifest("^3.7", ">=0.1.262 <0.2.0")
 	m.UI.Slots = []manifest.Slot{section}
 	if c := uiCodes(m); len(c) > 0 {
 		t.Fatalf("a valid editor section must be accepted: %v", c)
 	}
-	m.HostCompat = ">=0.1.262 <0.2.0"
+	m.HostCompat = ">=0.1.261 <0.2.0"
 	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
-		t.Fatalf("an editor section needs core 0.1.263: %v", c)
+		t.Fatalf("an editor section needs core 0.1.262: %v", c)
 	}
 	m.HostUICompat = "^3.3"
 	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
-		t.Fatalf("an editor section needs core 0.1.263 whatever hostUICompat says: %v", c)
+		t.Fatalf("an editor section needs core 0.1.262 whatever hostUICompat says: %v", c)
 	}
-	m = uiNativeManifest("^3.7", ">=0.1.263 <0.2.0")
+	m = uiNativeManifest("^3.7", ">=0.1.262 <0.2.0")
 	m.UI.Slots = []manifest.Slot{{Slot: manifest.SlotAccountEditorSection, Component: "X", Icon: "no-such-icon", AccountTypes: []string{"apikey"}}}
 	c := uiCodes(m)
 	if c["ui.slots[0].label"] != "required" || c["ui.slots[0].icon"] != "unknown_icon" || c["ui.slots[0].accountTypes[0]"] != "invalid" {
@@ -488,9 +488,9 @@ func TestEditorSectionSlot(t *testing.T) {
 	if c := uiCodes(m); c["ui.slots[0]"] != "unsupported" {
 		t.Fatalf("label on another slot must be refused: %v", c)
 	}
-	m = uiNativeManifest("^3.7", ">=0.1.262 <0.2.0")
+	m = uiNativeManifest("^3.7", ">=0.1.261 <0.2.0")
 	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
-		t.Fatalf("hostUICompat ^3.7 needs core 0.1.263: %v", c)
+		t.Fatalf("hostUICompat ^3.7 needs core 0.1.262: %v", c)
 	}
 }
 

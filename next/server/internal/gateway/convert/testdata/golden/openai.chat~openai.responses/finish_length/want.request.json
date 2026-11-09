@@ -1,0 +1,17 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Write a long story.",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 16,
+  "model": "gpt-5",
+  "store": false
+}

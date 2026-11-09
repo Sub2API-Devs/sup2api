@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gpt-5",
+    "stream": true
+  },
+  "upstream": "recorded/openai.responses/error_midstream.stream.sse"
+}

@@ -1,0 +1,14 @@
+{
+  "model": "gemini-2.5-flash",
+  "max_tokens": 8,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write a long story about a lighthouse."
+    }
+  ],
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

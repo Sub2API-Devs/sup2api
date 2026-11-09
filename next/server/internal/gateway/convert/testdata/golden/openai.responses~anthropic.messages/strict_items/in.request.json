@@ -1,0 +1,70 @@
+{
+  "model": "x",
+  "max_output_tokens": 12,
+  "store": false,
+  "instructions": "sys",
+  "stream": true,
+  "tools": [
+    {
+      "type": "function",
+      "name": "f",
+      "parameters": {
+        "type": "object"
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "function",
+    "name": "f"
+  },
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "a"
+        },
+        {
+          "type": "input_image",
+          "image_url": "https://example.com/cat.png",
+          "detail": "auto"
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "id": "msg_1",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "b",
+          "annotations": []
+        },
+        {
+          "type": "refusal",
+          "refusal": "r"
+        }
+      ]
+    },
+    {
+      "type": "function_call",
+      "call_id": "c1",
+      "name": "f",
+      "arguments": "{\"n\":9007199254740993}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "c1",
+      "output": "done"
+    },
+    {
+      "type": "message",
+      "role": "user",
+      "content": "next"
+    }
+  ]
+}

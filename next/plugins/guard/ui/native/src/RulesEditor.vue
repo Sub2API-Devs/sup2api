@@ -129,7 +129,7 @@ async function save() {
         </template>
         <template #cell-enabled="{ row }"><SSwitch v-model="row.enabled" size="sm" :disabled="!canManage" :aria-label="t('rules.enabled')" /></template>
         <template #cell-actions="{ index }">
-          <SRowAction tone="danger" :label="t('rules.remove')" @click="remove(index)" />
+          <SRowAction icon="trash" tone="danger" :label="t('rules.remove')" @click="remove(index)" />
         </template>
       </STable>
       <SHint size="xs" class="guard-hint">{{ t('rules.regexHint') }}</SHint>

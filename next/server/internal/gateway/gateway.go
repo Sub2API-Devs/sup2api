@@ -73,7 +73,7 @@ type Deps struct {
 	Config *config.Config
 	// Converters are the core's protocol converters (ARCHITECTURE 6.6);
 	// nil means convert.Default(). Hand the same registry (or the Gateway,
-	// see Converters/CanConvert) to the account module as
+	// see Converters/Conversion) to the account module as
 	// core.ProtocolConverters.
 	Converters *convert.Registry
 	// Health reports whether this node may serve (self-fencing, CONTRACTS
@@ -146,9 +146,9 @@ var (
 // Converters returns the gateway's converter registry.
 func (g *Gateway) Converters() *convert.Registry { return g.conv }
 
-// CanConvert implements core.ProtocolConverters (for the account module).
-func (g *Gateway) CanConvert(clientProtocol, upstreamProtocol string) bool {
-	return g.conv.CanConvert(clientProtocol, upstreamProtocol)
+// Conversion implements core.ProtocolConverters (for the account module).
+func (g *Gateway) Conversion(clientProtocol, upstreamProtocol string) (core.Conversion, bool) {
+	return g.conv.Conversion(clientProtocol, upstreamProtocol)
 }
 
 // New builds the gateway, subscribes to registry and bus notifications and

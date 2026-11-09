@@ -24,6 +24,8 @@ export default {
   restrictedHint: 'Only users assigned on the Users page can use this group.',
   rateMultiplier: 'Rate multiplier',
   multiplierHint: 'Cost × multiplier is charged, e.g. 0.8 for a 20% discount.',
+  conversionDefault: 'Default (allow)',
+  conversionHint: 'What happens when a converted request of this group\'s accounts would lose content; an account\'s own setting wins. Allow: serve it and record the losses; Safe: skip the account when tools would be lost; Strict: skip it on any loss.',
   multiplierInvalid: 'Enter a non-negative number',
   modelAllowlist: 'Model allowlist',
   allowlistHint: 'Empty = unlimited. Wildcards such as claude-* are supported.',

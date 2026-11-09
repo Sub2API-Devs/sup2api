@@ -1,0 +1,7 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_output_tokens": 64,
+  "prompt_cache_key": "conv-42",
+  "instructions": "You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. ",
+  "input": "Hi."
+}

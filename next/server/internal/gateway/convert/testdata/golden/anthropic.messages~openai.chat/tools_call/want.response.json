@@ -1,0 +1,32 @@
+{
+  "content": [
+    {
+      "id": "call_FthC9qRpsL5kBpwwyw6c7j4k",
+      "input": {
+        "city": "Paris"
+      },
+      "name": "get_weather",
+      "type": "tool_use"
+    },
+    {
+      "id": "call_RpEDoB8O0FTL9JoKTuCVFOyR",
+      "input": {
+        "city": "Tokyo"
+      },
+      "name": "get_weather",
+      "type": "tool_use"
+    }
+  ],
+  "id": "msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "model": "gpt-4o-2024-08-06",
+  "role": "assistant",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 62,
+    "output_tokens": 46
+  }
+}

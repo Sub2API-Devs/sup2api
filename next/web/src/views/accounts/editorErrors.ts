@@ -9,24 +9,26 @@ export const pluginSection = (key: string): EditorSection => `plugin:${key}`
 /** Rows of the scheduling group and of the limits group. */
 export const SCHEDULING_ROWS: readonly CommonControlName[] = ['priority', 'weight', 'max_concurrency', 'schedulable', 'auto_disable']
 export const RATE_LIMITS: readonly CommonControlName[] = ['rpm_limit', 'tpm_limit', 'spm_limit']
-/** Sections made only of common controls: hidden when every one of them is. */
-export const SECTION_CONTROLS: Partial<Record<EditorSection, readonly CommonControlName[]>> = {
-  scheduling: [...SCHEDULING_ROWS, ...RATE_LIMITS, 'usage_limit', 'model_limits'],
-  advanced: ['header_passthrough', 'param_override', 'environment']
-}
+const SCHEDULING_CONTROLS: readonly CommonControlName[] = [...SCHEDULING_ROWS, ...RATE_LIMITS, 'usage_limit', 'model_limits']
+/**
+ * Sections made only of common controls: hidden when every one of them is.
+ * The advanced section is not: its conversion loss policy is always shown.
+ */
+export const SECTION_CONTROLS: Partial<Record<EditorSection, readonly CommonControlName[]>> = { scheduling: SCHEDULING_CONTROLS }
 
 export const CONNECTION_FIELDS = ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone']
-const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit']
 
-/** The advanced section (request forwarding): header passthrough rules (CONTRACTS §81), the parameter override (§84) and the account layer of the environment variables (`environment.<key>`). */
-const ADVANCED_PREFIXES = ['header_passthrough', 'param_override', 'environment']
-export const isAdvancedField = (k: string) => ADVANCED_PREFIXES.some(p => k === p || k.startsWith(`${p}.`) || k.startsWith(`${p}[`))
+/** Whether the field (or a part of it: `field.x`, `field[0]`) is one of these. */
+const fieldOf = (fields: readonly string[]) => (k: string) => fields.some(p => k === p || k.startsWith(`${p}.`) || k.startsWith(`${p}[`))
 
-/** Scheduling and limit fields. */
-export const isSchedulingField = (k: string) => SCHEDULING_FIELDS.includes(k)
+/** The advanced section (request forwarding): header passthrough rules (CONTRACTS §81), the parameter override (§84), the conversion loss policy (CONVERT-MATRIX §6.3) and the account layer of the environment variables (`environment.<key>`). */
+export const isAdvancedField = fieldOf(['header_passthrough', 'param_override', 'conversion_loss_policy', 'environment'])
+
+/** Scheduling and limit fields: the scheduling section's controls (a model list's limits included). */
+export const isSchedulingField = fieldOf(SCHEDULING_CONTROLS)
 
 const CREDENTIAL_RE = /^credentials[.[]?(.*?)]?$/
-const isModelsField = (k: string) => k === 'models' || k.startsWith('models.') || k.startsWith('models[') || k.startsWith('model_mapping')
+const isModelsField = fieldOf(['models', 'model_mapping'])
 
 /** The server's error of the model list / mapping, as `field: text` ('' when there is none). */
 export function modelsErrorText(errors: Record<string, string>): string {
@@ -53,7 +55,7 @@ export function splitFieldErrors(all: Record<string, string>): { cred: Record<st
 
 /** The first section holding one of these errors, or null. */
 export function sectionOfErrors(base: Record<string, string>, cred: Record<string, string>): EditorSection | null {
-  if (Object.keys(cred).length || CONNECTION_FIELDS.some((k) => k in base)) return 'connection'
+  if (Object.keys(cred).length || CONNECTION_FIELDS.some(k => k in base)) return 'connection'
   if (Object.keys(base).some(isModelsField)) return 'models'
   if (Object.keys(base).some(k => k.startsWith('cc_feature_policy'))) return 'cc_features'
   if (Object.keys(base).some(isAdvancedField) && !Object.keys(base).some(isSchedulingField)) return 'advanced'

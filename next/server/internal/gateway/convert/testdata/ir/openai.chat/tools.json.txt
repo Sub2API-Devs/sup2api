@@ -1,0 +1,117 @@
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "incomplete_details": null,
+  "model": "gpt-4o-2024-08-06",
+  "object": "response",
+  "output": [
+    {
+      "arguments": "{\"city\": \"Paris\"}",
+      "call_id": "call_FthC9qRpsL5kBpwwyw6c7j4k",
+      "id": "fc_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    },
+    {
+      "arguments": "{\"city\": \"Tokyo\"}",
+      "call_id": "call_RpEDoB8O0FTL9JoKTuCVFOyR",
+      "id": "fc_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_1",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 62,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 46,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 108
+  }
+}
+--- losses: {}
+
+=== anthropic.messages
+{
+  "content": [
+    {
+      "id": "call_FthC9qRpsL5kBpwwyw6c7j4k",
+      "input": {
+        "city": "Paris"
+      },
+      "name": "get_weather",
+      "type": "tool_use"
+    },
+    {
+      "id": "call_RpEDoB8O0FTL9JoKTuCVFOyR",
+      "input": {
+        "city": "Tokyo"
+      },
+      "name": "get_weather",
+      "type": "tool_use"
+    }
+  ],
+  "id": "msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "model": "gpt-4o-2024-08-06",
+  "role": "assistant",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 62,
+    "output_tokens": 46
+  }
+}
+--- losses: {}
+
+=== gemini.generate
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "args": {
+                "city": "Paris"
+              },
+              "id": "call_FthC9qRpsL5kBpwwyw6c7j4k",
+              "name": "get_weather"
+            }
+          },
+          {
+            "functionCall": {
+              "args": {
+                "city": "Tokyo"
+              },
+              "id": "call_RpEDoB8O0FTL9JoKTuCVFOyR",
+              "name": "get_weather"
+            }
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "gpt-4o-2024-08-06",
+  "responseId": "chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "usageMetadata": {
+    "candidatesTokenCount": 46,
+    "promptTokenCount": 62,
+    "totalTokenCount": 108
+  }
+}
+--- losses: {}
+

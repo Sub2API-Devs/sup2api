@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gpt-5-mini",
+    "stream": true
+  },
+  "note": "One loss of each category: codeExecution (tool), thought part, gs:// image, safetySettings and topK (other)."
+}

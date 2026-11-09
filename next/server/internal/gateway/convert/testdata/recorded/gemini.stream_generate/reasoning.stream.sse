@@ -1,0 +1,8 @@
+data: {"candidates":[{"content":{"parts":[{"text":"**Factoring**\n\n391 = 17 x 23,","thought":true}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"Ws0QacGWJdiVz7IPuv6E8Qo"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" so it is not prime.","thought":true}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"Ws0QacGWJdiVz7IPuv6E8Qo"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"No. 391","thoughtSignature":"CiQB0e2Kb7VYzF3dHNnhh4Rbe9PnKb3Y8Pb2zZo3T8yhqgTyrSoKXQHR7YpvQ8m1Zk0="}],"role":"model"},"index":0}],"modelVersion":"gemini-2.5-flash","responseId":"Ws0QacGWJdiVz7IPuv6E8Qo"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" = 17 × 23."}],"role":"model"},"index":0,"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":9,"candidatesTokenCount":12,"totalTokenCount":141,"promptTokensDetails":[{"modality":"TEXT","tokenCount":9}],"thoughtsTokenCount":120},"modelVersion":"gemini-2.5-flash","responseId":"Ws0QacGWJdiVz7IPuv6E8Qo"}
+

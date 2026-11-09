@@ -1,0 +1,45 @@
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b","object":"response","created_at":1741476542,"status":"in_progress","error":null,"incomplete_details":null,"model":"gpt-4o-2024-08-06","output":[],"parallel_tool_calls":true,"store":false,"temperature":1.0,"tool_choice":"auto","tools":[],"top_p":1.0,"usage":null}}
+
+event: response.in_progress
+data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b","object":"response","created_at":1741476542,"status":"in_progress","error":null,"incomplete_details":null,"model":"gpt-4o-2024-08-06","output":[],"parallel_tool_calls":true,"store":false,"temperature":1.0,"tool_choice":"auto","tools":[],"top_p":1.0,"usage":null}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"function_call","id":"fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0","call_id":"call_unLAR8MvFNptuiZK6K6HCy5k","name":"get_weather","arguments":"","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":3,"item_id":"fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0","output_index":0,"delta":"{\"ci"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":4,"item_id":"fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0","output_index":0,"delta":"ty\": \"Pa"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":5,"item_id":"fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0","output_index":0,"delta":"ris\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","sequence_number":6,"item_id":"fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0","output_index":0,"arguments":"{\"city\": \"Paris\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":7,"output_index":0,"item":{"type":"function_call","id":"fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0","call_id":"call_unLAR8MvFNptuiZK6K6HCy5k","name":"get_weather","arguments":"{\"city\": \"Paris\"}","status":"completed"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":8,"output_index":1,"item":{"type":"function_call","id":"fc_67ca09c6f3c88190a7abfec07b1a1332096610f474011cc0","call_id":"call_Y8bM5OVq3uhHHh5KY9jjCNdc","name":"get_weather","arguments":"","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":9,"item_id":"fc_67ca09c6f3c88190a7abfec07b1a1332096610f474011cc0","output_index":1,"delta":"{\"ci"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":10,"item_id":"fc_67ca09c6f3c88190a7abfec07b1a1332096610f474011cc0","output_index":1,"delta":"ty\": \"To"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":11,"item_id":"fc_67ca09c6f3c88190a7abfec07b1a1332096610f474011cc0","output_index":1,"delta":"kyo\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","sequence_number":12,"item_id":"fc_67ca09c6f3c88190a7abfec07b1a1332096610f474011cc0","output_index":1,"arguments":"{\"city\": \"Tokyo\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":13,"output_index":1,"item":{"type":"function_call","id":"fc_67ca09c6f3c88190a7abfec07b1a1332096610f474011cc0","call_id":"call_Y8bM5OVq3uhHHh5KY9jjCNdc","name":"get_weather","arguments":"{\"city\": \"Tokyo\"}","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":14,"response":{"id":"resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b","object":"response","created_at":1741476542,"status":"completed","error":null,"incomplete_details":null,"model":"gpt-4o-2024-08-06","output":[{"type":"function_call","id":"fc_67ca09c6bedc8190a7abfec07b1a1332096610f474011cc0","call_id":"call_unLAR8MvFNptuiZK6K6HCy5k","name":"get_weather","arguments":"{\"city\": \"Paris\"}","status":"completed"},{"type":"function_call","id":"fc_67ca09c6f3c88190a7abfec07b1a1332096610f474011cc0","call_id":"call_Y8bM5OVq3uhHHh5KY9jjCNdc","name":"get_weather","arguments":"{\"city\": \"Tokyo\"}","status":"completed"}],"parallel_tool_calls":true,"store":false,"temperature":1.0,"tool_choice":"auto","tools":[],"top_p":1.0,"usage":{"input_tokens":62,"input_tokens_details":{"cached_tokens":0},"output_tokens":46,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":108}}}
+

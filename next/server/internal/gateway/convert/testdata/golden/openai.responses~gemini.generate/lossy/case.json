@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": false
+  },
+  "note": "One loss of each category: file_search (tool), reasoning item, image detail, truncation and the search location (other)."
+}

@@ -3,7 +3,20 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SDateTime, SBadge, SButton, SCode, SDropdown, SHint, SLink, SPageHeader, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
+import {
+  SDateTime,
+  SBadge,
+  SButton,
+  SCode,
+  SDropdown,
+  SHint,
+  SLink,
+  SPageHeader,
+  SSwitch,
+  STable,
+  type TableColumn,
+  type Tone
+} from '@sub2api/ui'
 import type { PriceSource } from '@/api/types'
 import { deleteWithConfirm, useRowSwitch } from '@/composables/crud'
 import { useAuthStore } from '@/stores/auth'
@@ -48,7 +61,8 @@ const columns = computed<TableColumn[]>(() => {
 const KIND_TONE: Record<string, Tone> = { sup2api: 'accent', models_dev: 'success' }
 
 function optionText(s: PriceSource): string {
-  if (s.kind === 'sup2api') return s.options?.apply_multiplier === false ? t('prices.sources.multiplierOff') : t('prices.sources.multiplierOn')
+  if (s.kind === 'sup2api')
+    return s.options?.apply_multiplier === false ? t('prices.sources.multiplierOff') : t('prices.sources.multiplierOn')
   const p = Array.isArray(s.options?.providers) ? s.options.providers : []
   return p.join(', ')
 }
@@ -88,11 +102,13 @@ function viewPrices(s: PriceSource) {
   <div>
     <SPageHeader :title="t('prices.sources.title')" :description="t('prices.sources.description')">
       <template #before>
-        <SButton variant="ghost" size="sm" icon="arrow-left" :title="t('prices.sources.back')" @click="router.push('/prices')">{{ t('common.back') }}</SButton>
+        <SButton variant="ghost" size="sm" icon="arrow-left" @click="router.push('/prices')">{{ t('common.back') }}</SButton>
       </template>
       <template #actions>
         <SButton :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
-        <SButton v-if="canManage" variant="primary" data-testid="price-source-new" icon="plus" @click="openEditor(null)">{{ t('prices.sources.create') }}</SButton>
+        <SButton v-if="canManage" variant="primary" data-testid="price-source-new" icon="plus" @click="openEditor(null)">{{
+          t('prices.sources.create')
+        }}</SButton>
       </template>
     </SPageHeader>
 
@@ -112,22 +128,39 @@ function viewPrices(s: PriceSource) {
         </SHint>
       </template>
       <template #cell-enabled="{ row }">
-        <SSwitch :model-value="row.enabled" :disabled="!canManage || toggling.has(row.id)" :aria-label="t('common.enabled') + ' · ' + row.name" @update:model-value="toggle(row, $event)" />
+        <SSwitch
+          :model-value="row.enabled"
+          :disabled="!canManage || toggling.has(row.id)"
+          :aria-label="t('common.enabled') + ' · ' + row.name"
+          @update:model-value="toggle(row, $event)"
+        />
       </template>
       <template #cell-last_synced_at="{ row }">
         <SDateTime muted :value="row.last_synced_at" mode="relative" :empty="t('prices.sources.never')" class="text-xs" />
       </template>
       <template #cell-last_error="{ row }">
-        <SHint v-if="row.last_error" tone="danger" size="xs" class="max-w-[11rem] truncate" :title="row.last_error" data-testid="price-source-error">{{ row.last_error }}</SHint>
+        <SHint
+          v-if="row.last_error"
+          tone="danger"
+          size="xs"
+          class="max-w-[11rem] truncate"
+          :title="row.last_error"
+          data-testid="price-source-error"
+          >{{ row.last_error }}</SHint
+        >
         <SHint v-else inline>—</SHint>
       </template>
       <template #cell-price_count="{ row }">
-        <SLink v-if="row.price_count" as="button" class="text-sm" :title="t('prices.sources.viewPrices')" @click="viewPrices(row)">{{ row.price_count }}</SLink>
+        <SLink v-if="row.price_count" as="button" class="text-sm" :title="t('prices.sources.viewPrices')" @click="viewPrices(row)">{{
+          row.price_count
+        }}</SLink>
         <SHint v-else inline>0</SHint>
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
-          <SButton size="sm" variant="ghost" data-testid="price-source-preview" @click="preview(row)">{{ t('prices.sources.preview') }}</SButton>
+          <SButton size="sm" variant="ghost" data-testid="price-source-preview" @click="preview(row)">{{
+            t('prices.sources.preview')
+          }}</SButton>
           <SDropdown
             :actions="[
               { key: 'edit', label: t('common.edit') },

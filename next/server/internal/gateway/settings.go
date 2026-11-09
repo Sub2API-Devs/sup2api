@@ -45,6 +45,13 @@ type GatewaySettings struct {
 	QueueStickyWaitSeconds  int `json:"queue_sticky_wait_seconds"`
 	QueueFallbackMaxWaiting int `json:"queue_fallback_max_waiting"`
 	QueueFallbackWaitSecond int `json:"queue_fallback_wait_seconds"`
+	// ClaudeDefaultMaxTokens is the max_tokens of a request converted to
+	// Anthropic without an output limit, by client model, else under
+	// "default" (CONVERT-MATRIX §9.4, like new-api's claude.default_max_tokens).
+	ClaudeDefaultMaxTokens map[string]int `json:"claude_default_max_tokens"`
+	// MediaDownloadMaxMB caps one media file the core downloads to inline it
+	// into a request converted to Gemini (CONVERT-MATRIX §9.2).
+	MediaDownloadMaxMB int `json:"media_download_max_mb"`
 }
 
 // StickySettings is the "sticky" row of the settings table.
@@ -57,7 +64,8 @@ type StickySettings struct {
 func defaultGatewaySettings() GatewaySettings {
 	return GatewaySettings{MaxAttempts: 3, PlatformCallTimeoutMs: 2000, DefaultHookTimeoutMs: 300,
 		PlatformHotpathTimeoutMs: 300, QueueStickyMaxWaiting: 8, QueueStickyWaitSeconds: 120,
-		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30}
+		QueueFallbackMaxWaiting: 100, QueueFallbackWaitSecond: 30,
+		ClaudeDefaultMaxTokens: map[string]int{claudeDefaultKey: defaultClaudeMaxTokens}, MediaDownloadMaxMB: 64}
 }
 
 // Accepted ranges of the gateway settings (CONTRACTS §14.4).
@@ -75,6 +83,14 @@ const (
 	maxPlatformHotpathTimeoutMs = 2000
 	maxQueueWaiting             = 10000
 	maxQueueWaitSeconds         = 600
+	minMediaDownloadMaxMB       = 1
+	maxMediaDownloadMaxMB       = 1024
+	// claude_default_max_tokens: the fallback key, its default value, and
+	// the caps on the map (models) and on a value.
+	claudeDefaultKey         = "default"
+	defaultClaudeMaxTokens   = 8192
+	maxClaudeMaxTokensModels = 200
+	maxClaudeMaxTokens       = 1 << 20
 )
 
 func defaultStickySettings() StickySettings {
@@ -110,7 +126,43 @@ func (s GatewaySettings) normalized() GatewaySettings {
 	s.QueueStickyWaitSeconds = bound(s.QueueStickyWaitSeconds, maxQueueWaitSeconds)
 	s.QueueFallbackMaxWaiting = bound(s.QueueFallbackMaxWaiting, maxQueueWaiting)
 	s.QueueFallbackWaitSecond = bound(s.QueueFallbackWaitSecond, maxQueueWaitSeconds)
+	s.MediaDownloadMaxMB = clamp(s.MediaDownloadMaxMB, d.MediaDownloadMaxMB, minMediaDownloadMaxMB, maxMediaDownloadMaxMB)
+	s.ClaudeDefaultMaxTokens = normalizedClaudeMaxTokens(s.ClaudeDefaultMaxTokens)
 	return s
+}
+
+// normalizedClaudeMaxTokens copies m with the values bounded and the
+// "default" key present.
+func normalizedClaudeMaxTokens(m map[string]int) map[string]int {
+	out := make(map[string]int, len(m)+1)
+	for k, v := range m {
+		out[k] = min(max(v, 0), maxClaudeMaxTokens)
+	}
+	if _, ok := out[claudeDefaultKey]; !ok {
+		out[claudeDefaultKey] = defaultClaudeMaxTokens
+	}
+	return out
+}
+
+// claudeMaxTokens is the max_tokens for a request of the client model
+// converted to Anthropic without an output limit.
+func (s GatewaySettings) claudeMaxTokens(model string) int {
+	if v, ok := s.ClaudeDefaultMaxTokens[model]; ok {
+		return v
+	}
+	if v, ok := s.ClaudeDefaultMaxTokens[claudeDefaultKey]; ok {
+		return v
+	}
+	return defaultClaudeMaxTokens
+}
+
+// mediaDownloadMaxBytes caps one media download (CONVERT-MATRIX §9.2).
+func (s GatewaySettings) mediaDownloadMaxBytes() int64 {
+	mb := s.MediaDownloadMaxMB
+	if mb <= 0 {
+		mb = defaultGatewaySettings().MediaDownloadMaxMB
+	}
+	return int64(mb) << 20
 }
 
 func (s GatewaySettings) platformTimeout() time.Duration {

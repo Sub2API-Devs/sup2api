@@ -1,0 +1,60 @@
+{
+  "max_tokens": 128,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Look.",
+          "type": "text"
+        },
+        {
+          "source": {
+            "type": "url",
+            "url": "https://example.com/cat.png"
+          },
+          "type": "image"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "Seen.",
+          "type": "text"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "text": "More.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-sonnet-4-5",
+  "tool_choice": {
+    "type": "auto"
+  },
+  "tools": [
+    {
+      "description": "Current weather",
+      "input_schema": {
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "name": "get_weather"
+    }
+  ]
+}

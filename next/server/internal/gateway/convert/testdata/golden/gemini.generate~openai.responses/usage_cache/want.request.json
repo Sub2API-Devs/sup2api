@@ -1,0 +1,18 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Hi.",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "instructions": "You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. ",
+  "max_output_tokens": 64,
+  "model": "gpt-5-mini",
+  "store": false
+}

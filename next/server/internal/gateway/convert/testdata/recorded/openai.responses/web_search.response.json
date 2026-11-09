@@ -1,0 +1,58 @@
+{
+  "id": "resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b",
+  "object": "response",
+  "created_at": 1741476542,
+  "status": "completed",
+  "error": null,
+  "incomplete_details": null,
+  "model": "gpt-4o-2024-08-06",
+  "output": [
+    {
+      "type": "web_search_call",
+      "id": "ws_67c9fa0502748190b7dd390736892e100be649c1a5ff9609",
+      "status": "completed",
+      "action": {
+        "type": "search",
+        "query": "Paris weather"
+      }
+    },
+    {
+      "id": "msg_67ccd2bf17f0819081ff3bb2cf6508e60bb6a6b452d3795b",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Paris is sunny, 21 °C, according to forecasts.",
+          "annotations": [
+            {
+              "type": "url_citation",
+              "url": "https://example.com/paris-weather",
+              "title": "Paris weather today",
+              "start_index": 0,
+              "end_index": 23
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "parallel_tool_calls": true,
+  "store": false,
+  "temperature": 1.0,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": 1.0,
+  "usage": {
+    "input_tokens": 320,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 24,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 344
+  }
+}

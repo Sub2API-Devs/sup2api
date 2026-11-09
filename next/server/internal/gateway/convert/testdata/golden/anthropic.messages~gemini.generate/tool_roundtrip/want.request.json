@@ -1,0 +1,101 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Weather and local time in Paris?"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "args": {
+              "city": "Paris"
+            },
+            "id": "toolu_w1",
+            "name": "get_weather"
+          },
+          "thoughtSignature": "context_engineering_is_the_way_to_go"
+        },
+        {
+          "functionCall": {
+            "args": {
+              "tz": "Europe/Paris"
+            },
+            "id": "toolu_t1",
+            "name": "get_time"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionResponse": {
+            "id": "toolu_w1",
+            "name": "get_weather",
+            "response": {
+              "output": "18C, cloudy"
+            }
+          }
+        },
+        {
+          "functionResponse": {
+            "id": "toolu_t1",
+            "name": "get_time",
+            "response": {
+              "output": "14:05"
+            }
+          }
+        },
+        {
+          "text": "Thanks. Tomorrow?"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "maxOutputTokens": 512
+  },
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "description": "Current weather",
+          "name": "get_weather",
+          "parametersJsonSchema": {
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "description": "Current time",
+          "name": "get_time",
+          "parametersJsonSchema": {
+            "properties": {
+              "tz": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tz"
+            ],
+            "type": "object"
+          }
+        }
+      ]
+    }
+  ]
+}

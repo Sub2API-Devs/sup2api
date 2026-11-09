@@ -44,7 +44,12 @@ onMounted(load)
 <template>
   <div class="space-y-4">
     <SGrid variant="stats" :cols="3">
-      <SStatCard :label="t('plugins.events.cursor')" :value="data.cursor != null ? '#' + formatNumber(data.cursor) : '—'" icon="bolt" :loading="loading" />
+      <SStatCard
+        :label="t('plugins.events.cursor')"
+        :value="data.cursor != null ? '#' + formatNumber(data.cursor) : '—'"
+        icon="bolt"
+        :loading="loading"
+      />
       <SStatCard
         :label="t('plugins.events.backlog')"
         :value="formatNumber(data.backlog ?? 0)"
@@ -52,7 +57,13 @@ onMounted(load)
         :tone="(data.backlog ?? 0) > 1000 ? 'warning' : 'primary'"
         :loading="loading"
       />
-      <SStatCard :label="t('plugins.events.deadletters')" :value="formatNumber(deadCount)" icon="warning" :tone="deadCount > 0 ? 'danger' : 'success'" :loading="loading" />
+      <SStatCard
+        :label="t('plugins.events.deadletters')"
+        :value="formatNumber(deadCount)"
+        icon="warning"
+        :tone="deadCount > 0 ? 'danger' : 'success'"
+        :loading="loading"
+      />
     </SGrid>
 
     <SCard :title="t('plugins.events.subscribed')">
@@ -73,7 +84,9 @@ onMounted(load)
         </template>
         <template #cell-attempts="{ row }">{{ display(pick(row, 'attempts', 'retries')) }}</template>
         <template #cell-error="{ row }">
-          <SHint inline size="xs" tone="danger" class="line-clamp-2 max-w-lg">{{ display(pick(row, 'error', 'last_error', 'message')) }}</SHint>
+          <SHint inline size="xs" tone="danger" class="line-clamp-2 max-w-lg">{{
+            display(pick(row, 'error', 'last_error', 'message'))
+          }}</SHint>
         </template>
         <template #cell-at="{ row }">
           <span class="whitespace-nowrap text-xs">{{ formatDateTime(pick(row, 'failed_at', 'created_at', 'at')) }}</span>

@@ -1,0 +1,11 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_tokens": 8,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write a long story about a lighthouse."
+    }
+  ],
+  "stream": true
+}

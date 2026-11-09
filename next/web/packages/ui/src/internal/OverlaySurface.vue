@@ -19,9 +19,9 @@
 // × / arrow (the layer still closes on the backdrop, Escape, Back or a
 // swipe); `closable` false hides it and implies persistent. `flush` drops
 // the body padding (full-width lists). `fill` keeps one size whatever the
-// content: a sheet or the center dialog takes its full height (pickers whose
-// list changes length, multi-step editors) and the body keeps its scrollbar
-// gutter, so neither the dialog nor the content width moves.
+// content: the panel is as tall as its form's max-height allows (pickers
+// whose list changes length, multi-step editors) and the body keeps its
+// scrollbar gutter, so neither the dialog nor the content width moves.
 import { computed, ref, useId } from 'vue'
 import { useUiT } from '../i18n'
 import SIcon from '../SIcon.vue'
@@ -103,13 +103,8 @@ const FORMS: Record<OverlayForm, { overlay: string; panel: string; sized: boolea
     sized: false
   }
 }
-// The height a `fill` panel takes: its form's maximum (the others are full height already).
-const FILL_HEIGHT: Partial<Record<OverlayForm, string>> = {
-  center: 'h-[95vh] sm:h-[90vh]',
-  sheet: 'h-[calc(var(--s-vvh,100dvh)*0.92)]'
-}
 const parts = computed(() => (props.form === 'center' ? CENTER : PANEL))
-const panelClass = computed(() => [parts.value.panel, FORMS[props.form].panel, props.fill ? FILL_HEIGHT[props.form] : ''])
+const panelClass = computed(() => [parts.value.panel, FORMS[props.form].panel, props.fill ? 'h-full' : ''])
 const bodyClass = computed(() => [parts.value.body, props.flush ? '' : parts.value.pad, props.fill ? '[scrollbar-gutter:stable]' : ''])
 const panelStyle = computed(() => (FORMS[props.form].sized ? { maxWidth: WIDTHS[props.width] ?? props.width } : undefined))
 const showClose = computed(() => props.closable && props.closeButton)

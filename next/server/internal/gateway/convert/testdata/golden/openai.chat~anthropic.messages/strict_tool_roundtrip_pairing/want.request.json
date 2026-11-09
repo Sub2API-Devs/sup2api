@@ -1,0 +1,59 @@
+{
+  "max_tokens": 12,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "call",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "id": "id1",
+          "input": {
+            "big": 9007199254740993
+          },
+          "name": "f",
+          "type": "tool_use"
+        },
+        {
+          "id": "id2",
+          "input": {},
+          "name": "f",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": [
+            {
+              "text": "a",
+              "type": "text"
+            }
+          ],
+          "tool_use_id": "id1",
+          "type": "tool_result"
+        },
+        {
+          "content": [
+            {
+              "text": "b",
+              "type": "text"
+            }
+          ],
+          "tool_use_id": "id2",
+          "type": "tool_result"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "x"
+}

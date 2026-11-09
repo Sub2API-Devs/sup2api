@@ -1,0 +1,66 @@
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b","object":"response","created_at":1741476542,"status":"in_progress","error":null,"incomplete_details":null,"model":"gpt-4o-2024-08-06","output":[],"parallel_tool_calls":true,"store":false,"temperature":1.0,"tool_choice":"auto","tools":[],"top_p":1.0,"usage":null}}
+
+event: response.in_progress
+data: {"type":"response.in_progress","sequence_number":1,"response":{"id":"resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b","object":"response","created_at":1741476542,"status":"in_progress","error":null,"incomplete_details":null,"model":"gpt-4o-2024-08-06","output":[],"parallel_tool_calls":true,"store":false,"temperature":1.0,"tool_choice":"auto","tools":[],"top_p":1.0,"usage":null}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","type":"reasoning","summary":[]}}
+
+event: response.reasoning_summary_part.added
+data: {"type":"response.reasoning_summary_part.added","sequence_number":3,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":0,"part":{"type":"summary_text","text":""}}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","sequence_number":4,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":0,"delta":"**Factoring 391*"}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","sequence_number":5,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":0,"delta":"*\n\n391 = 17 x 23."}
+
+event: response.reasoning_summary_text.done
+data: {"type":"response.reasoning_summary_text.done","sequence_number":6,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":0,"text":"**Factoring 391**\n\n391 = 17 x 23."}
+
+event: response.reasoning_summary_part.done
+data: {"type":"response.reasoning_summary_part.done","sequence_number":7,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":0,"part":{"type":"summary_text","text":"**Factoring 391**\n\n391 = 17 x 23."}}
+
+event: response.reasoning_summary_part.added
+data: {"type":"response.reasoning_summary_part.added","sequence_number":8,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":1,"part":{"type":"summary_text","text":""}}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","sequence_number":9,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":1,"delta":"**Answer**\n\nSo "}
+
+event: response.reasoning_summary_text.delta
+data: {"type":"response.reasoning_summary_text.delta","sequence_number":10,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":1,"delta":"it is not prime."}
+
+event: response.reasoning_summary_text.done
+data: {"type":"response.reasoning_summary_text.done","sequence_number":11,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":1,"text":"**Answer**\n\nSo it is not prime."}
+
+event: response.reasoning_summary_part.done
+data: {"type":"response.reasoning_summary_part.done","sequence_number":12,"item_id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","output_index":0,"summary_index":1,"part":{"type":"summary_text","text":"**Answer**\n\nSo it is not prime."}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":13,"output_index":0,"item":{"id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","type":"reasoning","summary":[{"type":"summary_text","text":"**Factoring 391**\n\n391 = 17 x 23."},{"type":"summary_text","text":"**Answer**\n\nSo it is not prime."}],"encrypted_content":"gAAAAABoIPOHuJ0yzmX7oYaXjo2r8x0ZuGSiSMqoN6ZkdjjSC7MSHNBDO5BMUI1KrIAr2E-yEsigBlwXF0rhgq6Y"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":14,"output_index":1,"item":{"id":"msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7","type":"message","status":"in_progress","role":"assistant","content":[]}}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","sequence_number":15,"item_id":"msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7","output_index":1,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":16,"item_id":"msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7","output_index":1,"content_index":0,"delta":"No. 391","logprobs":[]}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":17,"item_id":"msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7","output_index":1,"content_index":0,"delta":" = 17 × 23.","logprobs":[]}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","sequence_number":18,"item_id":"msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7","output_index":1,"content_index":0,"text":"No. 391 = 17 × 23.","logprobs":[]}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","sequence_number":19,"item_id":"msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7","output_index":1,"content_index":0,"part":{"type":"output_text","text":"No. 391 = 17 × 23.","annotations":[]}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":20,"output_index":1,"item":{"id":"msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"No. 391 = 17 × 23.","annotations":[]}]}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":21,"response":{"id":"resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b","object":"response","created_at":1741476542,"status":"completed","error":null,"incomplete_details":null,"model":"gpt-4o-2024-08-06","output":[{"id":"rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7","type":"reasoning","summary":[{"type":"summary_text","text":"**Factoring 391**\n\n391 = 17 x 23."},{"type":"summary_text","text":"**Answer**\n\nSo it is not prime."}],"encrypted_content":"gAAAAABoIPOHuJ0yzmX7oYaXjo2r8x0ZuGSiSMqoN6ZkdjjSC7MSHNBDO5BMUI1KrIAr2E-yEsigBlwXF0rhgq6Y"},{"id":"msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7","type":"message","status":"completed","role":"assistant","content":[{"type":"output_text","text":"No. 391 = 17 × 23.","annotations":[]}]}],"parallel_tool_calls":true,"store":false,"temperature":1.0,"tool_choice":"auto","tools":[],"top_p":1.0,"usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0},"output_tokens":140,"output_tokens_details":{"reasoning_tokens":128},"total_tokens":152}}}
+

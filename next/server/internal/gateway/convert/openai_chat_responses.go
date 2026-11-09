@@ -3,6 +3,7 @@ package convert
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -19,8 +20,7 @@ import (
 //     functions, custom tools, allowed_tools, web_search_options, ...);
 //   - a field without an equivalent whose absence leaves the request
 //     semantically correct (stop, seed, penalties, logprobs, participant
-//     names, unknown fields, ...) is left out and its path recorded, see
-//     Dropped;
+//     names, unknown fields, ...) is left out and recorded as a Loss;
 //   - a field whose meaning cannot be kept at all (n > 1, audio output,
 //     audio input, an empty conversation, ...) is rejected
 //     (400 unsupported_conversion);
@@ -28,44 +28,72 @@ import (
 //     logprobs: false, a zero penalty, ...) means the same as leaving it
 //     out and is neither rejected nor recorded.
 //
+// The reply's reasoning summary reaches the client as reasoning_content
+// (CONVERT-MATRIX D4); encrypted reasoning does not (a response loss).
+//
 // The registry entry is stateless; Prepare returns a per-request copy that
 // remembers what the response conversion needs (stream_options.include_usage,
-// legacy function calling) and which fields it dropped.
+// legacy function calling) and what the conversion lost.
 type chatResponses struct {
 	includeUsage bool
 	// legacy: the request used functions without tools, so the response
 	// returns message.function_call instead of tool_calls.
 	legacy   bool
 	prepared bool
-	dropped  []string
+	lost     losses
+	// reqLosses is how many entries of lost the request has; the rest are
+	// the latest response's.
+	reqLosses int
 }
 
 func (c *chatResponses) From() string { return "openai.chat" }
 func (c *chatResponses) To() string   { return "openai.responses" }
+func (c *chatResponses) Grade() Grade { return GradeGood }
 
-func (c *chatResponses) Prepare(body []byte) (Converter, []byte, error) {
+func (c *chatResponses) Prepare(body []byte, _ Options) (Converter, []byte, error) {
 	p := &chatResponses{prepared: true}
 	out, err := p.request(body)
 	if err != nil {
 		return nil, nil, &RequestError{Cause: err}
 	}
-	slices.Sort(p.dropped)
-	p.dropped = slices.Compact(p.dropped)
+	p.reqLosses = len(p.lost.list)
 	return p, out, nil
 }
 
-func (c *chatResponses) Request(body []byte) ([]byte, error) {
-	_, out, err := c.Prepare(body)
-	return out, err
+// Losses implements LossReporter: the request losses, then those of the
+// latest response or stream.
+func (c *chatResponses) Losses() []Loss { return c.lost.sorted() }
+
+// resetResponseLosses forgets the losses of an earlier response or stream.
+func (c *chatResponses) resetResponseLosses() { c.lost.list = c.lost.list[:c.reqLosses] }
+
+// drop records a request path left out, with the category its place in the
+// request implies (CONVERT-MATRIX §9.9).
+func (c *chatResponses) drop(path string) { c.lost.add(chatLossCategory(path), path) }
+
+// chatToolMembers are the request members whose content is tool
+// definitions or a tool choice.
+var chatToolMembers = []string{"tools", "functions", "function_call", "tool_choice", "web_search_options"}
+
+// chatLossCategory is the loss category of a chat request path.
+func chatLossCategory(path string) LossCategory {
+	root, _, _ := strings.Cut(path, ".")
+	root, _, _ = strings.Cut(root, "[")
+	switch {
+	case slices.Contains(chatToolMembers, root), strings.Contains(path, ".tool_calls"):
+		return LossTool
+	case strings.HasSuffix(path, ".image_url.detail"):
+		return LossImage
+	case strings.HasSuffix(path, ".reasoning_content"), strings.HasSuffix(path, ".reasoning"):
+		return LossReasoning
+	}
+	return LossOther
 }
 
-// Dropped implements DropReporter: the request paths left out because
-// Responses has no equivalent, sorted.
-func (c *chatResponses) Dropped() []string { return append([]string(nil), c.dropped...) }
-
-func (c *chatResponses) drop(path string) { c.dropped = append(c.dropped, path) }
-
 // ---------------------------------------------------------------- helpers
+
+// errUnprepared fails a response conversion on the registry entry.
+var errUnprepared = errors.New("convert: response requires a prepared request")
 
 type jobject = map[string]any
 
@@ -158,16 +186,7 @@ func jint(v any, path string, lo, hi int64) (int64, error) {
 // keep removes the null members of o (null means "not set") and the
 // members not listed, recording each removed non-null member as dropped.
 func (c *chatResponses) keep(o jobject, path string, names ...string) {
-	for k, v := range o {
-		if v == nil {
-			delete(o, k)
-			continue
-		}
-		if !slices.Contains(names, k) {
-			delete(o, k)
-			c.drop(path + "." + k)
-		}
-	}
+	dropUnknown(o, path, c.drop, names...)
 }
 
 // optStr copies the string member k of src to dst when present.
@@ -1216,6 +1235,7 @@ func (c *chatResponses) Response(body []byte) ([]byte, error) {
 	if !c.prepared {
 		return nil, errUnprepared
 	}
+	c.resetResponseLosses()
 	r, err := decodeJObject(body, "response")
 	if err != nil {
 		return nil, err
@@ -1261,6 +1281,7 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 		}
 	}
 	var content chatContent
+	var reasoning []string
 	toolCalls := []any{}
 	var legacyCall jobject
 	for i, it := range output {
@@ -1275,6 +1296,8 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 			if err := content.addMessage(item, path); err != nil {
 				return nil, "", err
 			}
+		case "reasoning":
+			reasoning = append(reasoning, c.reasoningText(item, path)...)
 		case "function_call", "custom_tool_call":
 			call, err := chatToolCall(item, path)
 			if err != nil {
@@ -1292,9 +1315,9 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 			if chatUnrepresentable[typ] {
 				return nil, "", cfail(path+".type", "output item has no chat equivalent")
 			}
-			// Reasoning (Chat Completions does not return it either),
-			// server-side tool calls whose results are in the text, and
-			// unknown items are left out.
+			// Server-side tool calls whose results are in the text, and
+			// unknown items, are left out.
+			c.lost.add(responsesItemLoss(typ), path)
 		}
 	}
 	finish, err := chatFinish(r, len(toolCalls) > 0 || legacyCall != nil)
@@ -1302,6 +1325,9 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 		return nil, "", err
 	}
 	msg := content.message()
+	if len(reasoning) > 0 {
+		msg["reasoning_content"] = strings.Join(reasoning, reasoningSeparator)
+	}
 	if len(toolCalls) > 0 {
 		msg["tool_calls"] = toolCalls
 	}
@@ -1312,6 +1338,31 @@ func (c *chatResponses) chatMessageFromResponse(r jobject) (jobject, string, err
 		}
 	}
 	return msg, finish, nil
+}
+
+// reasoningSeparator separates the reasoning parts (summary parts, items)
+// in reasoning_content.
+const reasoningSeparator = "\n\n"
+
+// reasoningText returns the non-empty summary and reasoning texts of a
+// reasoning item; its encrypted reasoning cannot reach a chat client (a
+// response loss).
+func (c *chatResponses) reasoningText(item jobject, path string) []string {
+	if s, _ := item["encrypted_content"].(string); s != "" {
+		c.lost.add(LossReasoning, path+".encrypted_content")
+	}
+	var out []string
+	for _, k := range []string{"summary", "content"} {
+		parts, _ := item[k].([]any)
+		for _, p := range parts {
+			if o, ok := p.(map[string]any); ok {
+				if t, _ := o["text"].(string); t != "" {
+					out = append(out, t)
+				}
+			}
+		}
+	}
+	return out
 }
 
 // chatContent collects the text, refusal and annotations of a response's
@@ -1516,6 +1567,9 @@ func chatUsage(v any) (jobject, error) {
 // ---------------------------------------------------------------- stream
 
 func (c *chatResponses) NewStream() StreamConverter {
+	if c.prepared {
+		c.resetResponseLosses()
+	}
 	return &chatResponsesStream{p: c, created: time.Now().Unix(), tools: map[int64]*chatStreamTool{},
 		partBase: map[[2]int64]int{}}
 }
@@ -1540,18 +1594,20 @@ type chatResponsesStream struct {
 	// annotation offsets.
 	textLen  int
 	partBase map[[2]int64]int
+	// reasoningPart is the reasoning part last streamed (output index,
+	// event type, summary or content index); nil before any.
+	reasoningPart *[3]any
 }
 
 // chatStreamIgnored are Responses events with nothing to add to a chat
-// stream: progress, reasoning (Chat Completions does not stream it) and
-// "done" events whose content already went out as deltas.
+// stream: progress and "done" events whose content already went out as
+// deltas.
 var chatStreamIgnored = map[string]bool{
 	"response.queued": true, "response.in_progress": true,
 	"response.content_part.done": true,
 	"response.output_text.done":  true, "response.refusal.done": true,
 	"response.reasoning_summary_part.added": true, "response.reasoning_summary_part.done": true,
-	"response.reasoning_summary_text.delta": true, "response.reasoning_summary_text.done": true,
-	"response.reasoning_text.delta": true, "response.reasoning_text.done": true,
+	"response.reasoning_summary_text.done": true, "response.reasoning_text.done": true,
 }
 
 func (s *chatResponsesStream) Event(ev Event) ([]Event, error) {
@@ -1587,12 +1643,14 @@ func (s *chatResponsesStream) Event(ev Event) ([]Event, error) {
 	case "response.function_call_arguments.delta", "response.custom_tool_call_input.delta",
 		"response.function_call_arguments.done", "response.custom_tool_call_input.done":
 		return s.toolEvent(typ, o)
+	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
+		return s.reasoningDelta(typ, o)
 	case "response.completed", "response.incomplete":
 		return s.complete(o["response"])
 	case "response.failed", "error":
 		return s.failure(typ, o), nil
 	}
-	// Progress and reasoning events, server-side tool progress
+	// Progress events, server-side tool progress
 	// (response.web_search_call.*), and events of other families the
 	// upstream may add (rate-limit notices and the like), carry no chat
 	// content. Content-bearing output items are checked in itemAdded.
@@ -1618,7 +1676,7 @@ func (s *chatResponsesStream) contentEvent(typ string, o jobject) ([]Event, erro
 		s.textLen += len([]rune(delta))
 		return append(s.start(), s.chunk(jobject{"content": delta}, nil)...), nil
 	case "response.output_text.annotation.added":
-		k := partKey(o)
+		k := chatPartKey(o)
 		base, ok := s.partBase[k]
 		if !ok {
 			base = s.textLen
@@ -1664,6 +1722,25 @@ func (s *chatResponsesStream) toolEvent(typ string, o jobject) ([]Event, error) 
 	return s.finishArguments(t, args)
 }
 
+// reasoningDelta streams reasoning summary or reasoning text as
+// reasoning_content, parts separated as in a JSON reply.
+func (s *chatResponsesStream) reasoningDelta(typ string, o jobject) ([]Event, error) {
+	delta, err := jstr(o["delta"], "stream.delta")
+	if err != nil || delta == "" {
+		return nil, err
+	}
+	index := o["summary_index"]
+	if typ == "response.reasoning_text.delta" {
+		index = o["content_index"]
+	}
+	part := [3]any{o["output_index"], typ, index}
+	if s.reasoningPart != nil && *s.reasoningPart != part {
+		delta = reasoningSeparator + delta
+	}
+	s.reasoningPart = &part
+	return append(s.start(), s.chunk(jobject{"reasoning_content": delta}, nil)...), nil
+}
+
 // failure ends the stream on a response.failed or error event with an error
 // chunk carrying the upstream's error object.
 func (s *chatResponsesStream) failure(typ string, o jobject) []Event {
@@ -1689,7 +1766,7 @@ func (s *chatResponsesStream) failure(typ string, o jobject) []Event {
 	return s.errorChunk(e)
 }
 
-func partKey(o jobject) [2]int64 {
+func chatPartKey(o jobject) [2]int64 {
 	oi, _ := jint(o["output_index"], "", 0, 1<<31)
 	ci, _ := jint(o["content_index"], "", 0, 1<<31)
 	return [2]int64{oi, ci}
@@ -1697,14 +1774,17 @@ func partKey(o jobject) [2]int64 {
 
 // markPart remembers where the text part of o starts.
 func (s *chatResponsesStream) markPart(o jobject) {
-	k := partKey(o)
+	k := chatPartKey(o)
 	if _, ok := s.partBase[k]; !ok {
 		s.partBase[k] = s.textLen
 	}
 }
 
+// Flush fails a stream that ended without its terminal event. After an
+// upstream failure the client already has the error chunk (and the gateway
+// records the failure from the upstream events), as with the IR writers.
 func (s *chatResponsesStream) Flush() ([]Event, error) {
-	if s.failed || !s.done {
+	if !s.failed && !s.done {
 		return nil, cfail("stream", "upstream ended without response.completed")
 	}
 	return nil, nil
@@ -1753,18 +1833,21 @@ func (s *chatResponsesStream) itemAdded(o jobject) ([]Event, error) {
 		return nil, err
 	}
 	typ, _ := item["type"].(string)
+	idx, err := jint(o["output_index"], "stream.output_index", 0, 1<<31)
+	if err != nil {
+		return nil, err
+	}
 	switch {
 	case typ == "function_call" || typ == "custom_tool_call":
 	case chatUnrepresentable[typ]:
 		return nil, cfail("stream.item.type", "output item has no chat equivalent")
-	default:
-		// Messages stream as text deltas; reasoning, server-side tool
-		// calls and unknown items are left out.
+	case typ == "message" || typ == "reasoning":
+		// Their text streams as deltas.
 		return nil, nil
-	}
-	idx, err := jint(o["output_index"], "stream.output_index", 0, 1<<31)
-	if err != nil {
-		return nil, err
+	default:
+		// Server-side tool calls and unknown items are left out.
+		s.p.lost.add(responsesItemLoss(typ), jpos("response.output", int(idx)))
+		return nil, nil
 	}
 	if _, dup := s.tools[idx]; dup {
 		return nil, cfail("stream.output_index", "tool call added twice")
@@ -1804,17 +1887,23 @@ func (s *chatResponsesStream) itemDone(o jobject) ([]Event, error) {
 	if err != nil {
 		return nil, err
 	}
+	idx, err := jint(o["output_index"], "stream.output_index", 0, 1<<31)
+	if err != nil {
+		return nil, err
+	}
 	field := "arguments"
 	switch item["type"] {
 	case "function_call":
 	case "custom_tool_call":
 		field = "input"
+	case "reasoning":
+		// Its text streamed as deltas; only the encrypted state is lost.
+		if enc, _ := item["encrypted_content"].(string); enc != "" {
+			s.p.lost.add(LossReasoning, jpos("response.output", int(idx))+".encrypted_content")
+		}
+		return nil, nil
 	default:
 		return nil, nil
-	}
-	idx, err := jint(o["output_index"], "stream.output_index", 0, 1<<31)
-	if err != nil {
-		return nil, err
 	}
 	t, ok := s.tools[idx]
 	if !ok {

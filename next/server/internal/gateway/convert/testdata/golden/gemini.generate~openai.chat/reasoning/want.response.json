@@ -1,0 +1,28 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "391 = 17 x 23, so it is not prime.",
+            "thought": true
+          },
+          {
+            "text": "No. 391 = 17 × 23."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "gpt-4o-2024-08-06",
+  "responseId": "chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "usageMetadata": {
+    "candidatesTokenCount": 16,
+    "promptTokenCount": 12,
+    "thoughtsTokenCount": 24,
+    "totalTokenCount": 52
+  }
+}

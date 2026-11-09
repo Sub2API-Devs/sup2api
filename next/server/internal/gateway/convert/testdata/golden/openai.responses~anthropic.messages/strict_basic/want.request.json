@@ -1,0 +1,15 @@
+{
+  "max_tokens": 20,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "hello",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "alias"
+}

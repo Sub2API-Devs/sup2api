@@ -1,0 +1,56 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Weather in Paris and Tokyo?"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "maxOutputTokens": 512
+  },
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "ANY"
+    }
+  },
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "description": "Current weather",
+          "name": "get_weather",
+          "parametersJsonSchema": {
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "description": "Current time",
+          "name": "get_time",
+          "parametersJsonSchema": {
+            "properties": {
+              "tz": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tz"
+            ],
+            "type": "object"
+          }
+        }
+      ]
+    }
+  ]
+}

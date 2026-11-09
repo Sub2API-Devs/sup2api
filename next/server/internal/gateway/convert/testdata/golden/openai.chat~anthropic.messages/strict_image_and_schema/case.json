@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "x",
+    "stream": false
+  },
+  "note": "inputs strict accepted: n 1, top_p 1, a named function choice, strict:false tools, a strict schema, a base64 image with detail auto, an assistant refusal; equivalent, except that strict: false (the default) is not sent on the tool"
+}

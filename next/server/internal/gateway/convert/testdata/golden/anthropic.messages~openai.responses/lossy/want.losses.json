@@ -1,0 +1,14 @@
+{
+  "image": [
+    "messages[0].content[1]"
+  ],
+  "other": [
+    "top_k"
+  ],
+  "reasoning": [
+    "messages[1].content[0]"
+  ],
+  "tool": [
+    "tools[1]"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "model": "gemini-2.5-flash",
+  "instructions": "Be brief.",
+  "input": "Say hello.",
+  "max_output_tokens": 256,
+  "temperature": 0.5
+}

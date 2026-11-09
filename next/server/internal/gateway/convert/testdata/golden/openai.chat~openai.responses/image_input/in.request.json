@@ -1,0 +1,28 @@
+{
+  "model": "gpt-5",
+  "max_tokens": 256,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Compare these images."
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "https://example.com/cat.png"
+          }
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "detail": "auto"
+          }
+        }
+      ]
+    }
+  ]
+}

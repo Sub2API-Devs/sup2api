@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gpt-5",
+    "stream": false
+  },
+  "note": "An empty conversation cannot be converted."
+}

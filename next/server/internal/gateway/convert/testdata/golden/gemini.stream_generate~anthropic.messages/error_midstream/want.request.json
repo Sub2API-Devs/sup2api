@@ -1,0 +1,16 @@
+{
+  "max_tokens": 64,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Write a story.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-sonnet-4-5",
+  "stream": true
+}

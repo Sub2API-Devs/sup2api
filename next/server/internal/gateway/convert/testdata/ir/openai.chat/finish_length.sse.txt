@@ -1,0 +1,66 @@
+=== openai.responses
+event: response.created
+data: {"response":{"created_at":0,"error":null,"id":"resp_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG","incomplete_details":null,"model":"gpt-4o-2024-08-06","object":"response","output":[],"status":"in_progress","usage":null},"sequence_number":0,"type":"response.created"}
+
+event: response.in_progress
+data: {"response":{"created_at":0,"error":null,"id":"resp_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG","incomplete_details":null,"model":"gpt-4o-2024-08-06","object":"response","output":[],"status":"in_progress","usage":null},"sequence_number":1,"type":"response.in_progress"}
+
+event: response.output_item.added
+data: {"item":{"content":[],"id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0","role":"assistant","status":"in_progress","type":"message"},"output_index":0,"sequence_number":2,"type":"response.output_item.added"}
+
+event: response.content_part.added
+data: {"content_index":0,"item_id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0","output_index":0,"part":{"annotations":[],"text":"","type":"output_text"},"sequence_number":3,"type":"response.content_part.added"}
+
+event: response.output_text.delta
+data: {"content_index":0,"delta":"The lighthouse","item_id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0","logprobs":[],"output_index":0,"sequence_number":4,"type":"response.output_text.delta"}
+
+event: response.output_text.delta
+data: {"content_index":0,"delta":" stood alone on the","item_id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0","logprobs":[],"output_index":0,"sequence_number":5,"type":"response.output_text.delta"}
+
+event: response.output_text.done
+data: {"content_index":0,"item_id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0","logprobs":[],"output_index":0,"sequence_number":6,"text":"The lighthouse stood alone on the","type":"response.output_text.done"}
+
+event: response.content_part.done
+data: {"content_index":0,"item_id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0","output_index":0,"part":{"annotations":[],"text":"The lighthouse stood alone on the","type":"output_text"},"sequence_number":7,"type":"response.content_part.done"}
+
+event: response.output_item.done
+data: {"item":{"content":[{"annotations":[],"text":"The lighthouse stood alone on the","type":"output_text"}],"id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0","role":"assistant","status":"completed","type":"message"},"output_index":0,"sequence_number":8,"type":"response.output_item.done"}
+
+event: response.incomplete
+data: {"response":{"created_at":0,"error":null,"id":"resp_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG","incomplete_details":{"reason":"max_output_tokens"},"model":"gpt-4o-2024-08-06","object":"response","output":[{"content":[{"annotations":[],"text":"The lighthouse stood alone on the","type":"output_text"}],"id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0","role":"assistant","status":"completed","type":"message"}],"status":"incomplete","usage":{"input_tokens":15,"input_tokens_details":{"cached_tokens":0},"output_tokens":8,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":23}},"sequence_number":9,"type":"response.incomplete"}
+
+--- losses: {}
+
+=== anthropic.messages
+event: message_start
+data: {"message":{"content":[],"id":"msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG","model":"gpt-4o-2024-08-06","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"text":"","type":"text"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"text":"The lighthouse","type":"text_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_delta
+data: {"delta":{"text":" stood alone on the","type":"text_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"max_tokens","stop_sequence":null},"type":"message_delta","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":15,"output_tokens":8}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+--- losses: {}
+
+=== gemini.generate
+data: {"candidates":[{"content":{"parts":[{"text":"The lighthouse"}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" stood alone on the"}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG"}
+
+data: {"candidates":[{"finishReason":"MAX_TOKENS","index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG","usageMetadata":{"candidatesTokenCount":8,"promptTokenCount":15,"totalTokenCount":23}}
+
+--- losses: {}
+

@@ -1,0 +1,45 @@
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "incomplete_details": null,
+  "model": "gpt-4o-2024-08-06",
+  "object": "response",
+  "output": [
+    {
+      "id": "rs_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0",
+      "summary": [
+        {
+          "text": "391 = 17 x 23, so it is not prime.",
+          "type": "summary_text"
+        }
+      ],
+      "type": "reasoning"
+    },
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "No. 391 = 17 × 23.",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_1",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 12,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 40,
+    "output_tokens_details": {
+      "reasoning_tokens": 24
+    },
+    "total_tokens": 52
+  }
+}

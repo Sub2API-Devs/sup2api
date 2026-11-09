@@ -1,0 +1,22 @@
+{
+  "max_tokens": 64,
+  "messages": [
+    {
+      "content": "You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. ",
+      "role": "system"
+    },
+    {
+      "content": [
+        {
+          "cache_control": {
+            "type": "ephemeral"
+          },
+          "text": "Hi.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5"
+}

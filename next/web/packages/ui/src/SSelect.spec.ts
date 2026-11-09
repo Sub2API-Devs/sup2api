@@ -69,7 +69,7 @@ describe('searchable select on phones', () => {
     await trigger.trigger('click')
     await flushPromises()
     const sheet = document.querySelector<HTMLElement>('[role="dialog"]')!
-    expect(sheet.className).toContain('h-[calc(var(--s-vvh,100dvh)*0.92)]')
+    expect(sheet.className).toContain('h-full')
     const search = sheet.querySelector<HTMLInputElement>('input[role="combobox"]')!
     expect(document.activeElement).toBe(search)
     expect(sheet.querySelector('[role="presentation"]')!.textContent).toContain('Europe')

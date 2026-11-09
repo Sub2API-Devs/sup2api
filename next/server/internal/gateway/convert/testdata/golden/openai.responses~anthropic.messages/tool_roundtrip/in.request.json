@@ -1,0 +1,82 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_output_tokens": 512,
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Current weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      },
+      "strict": false
+    },
+    {
+      "type": "function",
+      "name": "get_time",
+      "description": "Current time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tz"
+        ]
+      },
+      "strict": false
+    }
+  ],
+  "input": [
+    {
+      "role": "user",
+      "content": "Weather and local time in Paris?"
+    },
+    {
+      "type": "function_call",
+      "call_id": "call_w1",
+      "name": "get_weather",
+      "arguments": "{\"city\":\"Paris\"}"
+    },
+    {
+      "type": "function_call",
+      "call_id": "call_t1",
+      "name": "get_time",
+      "arguments": "{\"tz\":\"Europe/Paris\"}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_w1",
+      "output": "18C, cloudy"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_t1",
+      "output": "14:05"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "It is 18C and cloudy; local time 14:05."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "Thanks. Tomorrow?"
+    }
+  ]
+}

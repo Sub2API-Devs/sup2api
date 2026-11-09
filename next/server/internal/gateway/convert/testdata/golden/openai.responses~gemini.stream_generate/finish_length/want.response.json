@@ -1,0 +1,37 @@
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "incomplete_details": {
+    "reason": "max_output_tokens"
+  },
+  "model": "gemini-2.5-flash",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "The lighthouse stood alone on the",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_Ws0QacGWJdiVz7IPuv6E8Qo_0",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "incomplete",
+  "usage": {
+    "input_tokens": 10,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 8,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 18
+  }
+}

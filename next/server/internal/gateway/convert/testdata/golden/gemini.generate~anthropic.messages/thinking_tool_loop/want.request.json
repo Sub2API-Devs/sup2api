@@ -1,0 +1,96 @@
+{
+  "max_tokens": 32000,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Weather and local time in Paris?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "id": "call_6d68f3ed665770e5",
+          "input": {
+            "city": "Paris"
+          },
+          "name": "get_weather",
+          "type": "tool_use"
+        },
+        {
+          "id": "call_6629bce30ed280dc",
+          "input": {
+            "tz": "Europe/Paris"
+          },
+          "name": "get_time",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": [
+            {
+              "text": "{\"sky\":\"cloudy\",\"temp_c\":18}",
+              "type": "text"
+            }
+          ],
+          "tool_use_id": "call_6d68f3ed665770e5",
+          "type": "tool_result"
+        },
+        {
+          "content": [
+            {
+              "text": "14:05",
+              "type": "text"
+            }
+          ],
+          "tool_use_id": "call_6629bce30ed280dc",
+          "type": "tool_result"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-sonnet-4-5",
+  "tools": [
+    {
+      "description": "Current weather",
+      "input_schema": {
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "name": "get_weather"
+    },
+    {
+      "description": "Current time",
+      "input_schema": {
+        "properties": {
+          "tz": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "tz"
+        ],
+        "type": "object"
+      },
+      "name": "get_time"
+    }
+  ]
+}

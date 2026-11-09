@@ -14,7 +14,7 @@ import (
 
 func chatResponsesPrepared(t *testing.T, body string) (*chatResponses, string) {
 	t.Helper()
-	conv, out, err := Prepare(&chatResponses{}, []byte(body))
+	conv, out, err := (&chatResponses{}).Prepare([]byte(body), Options{})
 	if err != nil {
 		t.Fatalf("prepare %s: %v", body, err)
 	}
@@ -22,7 +22,7 @@ func chatResponsesPrepared(t *testing.T, body string) (*chatResponses, string) {
 }
 
 func TestChatResponsesRegistered(t *testing.T) {
-	c, ok := Default().Lookup("openai.chat", "openai.responses")
+	c, ok := Default().Resolve("openai.chat", "openai.responses")
 	if !ok || c.From() != "openai.chat" || c.To() != "openai.responses" {
 		t.Fatal("openai.chat -> openai.responses is not a built-in pair")
 	}
@@ -137,7 +137,7 @@ func TestChatResponsesRequestRejections(t *testing.T) {
 		{`{"model":"m","messages":[{"role":"assistant","tool_calls":[{"id":"c","type":"mcp"}]}]}`, "messages[0].tool_calls[0].type"},
 		{`{"model":"m","messages":[{"role":"tool","content":"x"}]}`, "messages[0].tool_call_id"},
 	} {
-		_, _, err := Prepare(&chatResponses{}, []byte(tc.body))
+		_, _, err := (&chatResponses{}).Prepare([]byte(tc.body), Options{})
 		var re *RequestError
 		var ce *conversionError
 		if !errors.As(err, &re) || !errors.As(err, &ce) || ce.path != tc.path {
@@ -149,7 +149,7 @@ func TestChatResponsesRequestRejections(t *testing.T) {
 // Fields without an equivalent whose absence keeps the request correct are
 // left out, and each left-out path is reported.
 func TestChatResponsesRequestDropped(t *testing.T) {
-	conv, out, err := Prepare(&chatResponses{}, []byte(`{"model":"m","max_tokens":10,"max_completion_tokens":20,
+	conv, out, err := (&chatResponses{}).Prepare([]byte(`{"model":"m","max_tokens":10,"max_completion_tokens":20,
 		"stop":["\n"],"seed":7,"presence_penalty":0.5,"frequency_penalty":-1,"logit_bias":{"50256":-100},
 		"logprobs":true,"top_logprobs":3,"prediction":{"type":"content","content":"x"},"made_up":1,
 		"modalities":["text","image"],"stream_options":{"include_usage":true,"other":true},
@@ -163,19 +163,20 @@ func TestChatResponsesRequestDropped(t *testing.T) {
 			{"role":"assistant","name":"bot","content":"","refusal":""},
 			{"role":"assistant","content":"ok","refusal":""},
 			{"role":"user","content":"again"}
-		]}`))
+		]}`), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"frequency_penalty", "function_call", "logit_bias", "logprobs", "made_up", "max_tokens",
-		"messages[0].content[0].prompt_cache_breakpoint", "messages[0].name",
-		"messages[1].content[0].cache_control", "messages[1].content[1].image_url.detail", "messages[1].name",
-		"messages[2]", "messages[2].name", "messages[2].refusal", "messages[3].refusal",
-		"modalities", "prediction", "presence_penalty",
-		"response_format.json_schema.extra", "seed", "stop", "stream_options.other",
-		"tools[0].cache_control", "tools[0].function.extra", "top_logprobs"}
-	if got := Dropped(conv); !slices.Equal(got, want) {
-		t.Errorf("dropped:\n got %q\nwant %q", got, want)
+	want := []string{"other:frequency_penalty", "tool:function_call", "other:logit_bias", "other:logprobs",
+		"other:made_up", "other:max_tokens",
+		"other:messages[0].content[0].prompt_cache_breakpoint", "other:messages[0].name",
+		"other:messages[1].content[0].cache_control", "image:messages[1].content[1].image_url.detail",
+		"other:messages[1].name", "other:messages[2]", "other:messages[2].name", "other:messages[2].refusal",
+		"other:messages[3].refusal", "other:modalities", "other:prediction", "other:presence_penalty",
+		"other:response_format.json_schema.extra", "other:seed", "other:stop", "other:stream_options.other",
+		"tool:tools[0].cache_control", "tool:tools[0].function.extra", "other:top_logprobs"}
+	if got := lossStrings(Losses(conv)); !slices.Equal(got, want) {
+		t.Errorf("losses:\n got %q\nwant %q", got, want)
 	}
 	j := gjson.ParseBytes(out)
 	for _, absent := range []string{"stop", "seed", "presence_penalty", "frequency_penalty", "logit_bias", "logprobs",
@@ -194,16 +195,19 @@ func TestChatResponsesRequestDropped(t *testing.T) {
 		}
 	}
 	// Neutral values mean "not set" and are not reported.
-	conv, _, err = Prepare(&chatResponses{}, []byte(`{"model":"m","n":1,"logprobs":false,"top_logprobs":0,"presence_penalty":0,
-		"frequency_penalty":0.0,"logit_bias":{},"stop":[],"modalities":["text"],"seed":null,"messages":[{"role":"user","content":"hi"}]}`))
-	if err != nil || len(Dropped(conv)) != 0 {
-		t.Errorf("neutral values: %v %q", err, Dropped(conv))
+	conv, _, err = (&chatResponses{}).Prepare([]byte(`{"model":"m","n":1,"logprobs":false,"top_logprobs":0,"presence_penalty":0,
+		"frequency_penalty":0.0,"logit_bias":{},"stop":[],"modalities":["text"],"seed":null,"messages":[{"role":"user","content":"hi"}]}`), Options{})
+	if err != nil || len(Losses(conv)) != 0 {
+		t.Errorf("neutral values: %v %v", err, Losses(conv))
 	}
-	if len(Dropped(&chatResponses{})) != 0 {
-		t.Error("unprepared converter reports drops")
+	if len(Losses(&chatResponses{})) != 0 {
+		t.Error("unprepared converter reports losses")
 	}
-	if Dropped(&openAIAnthropic{protocol: "openai.chat"}) != nil {
-		t.Error("strict converter reports drops")
+	// Reasoning history is a reasoning loss.
+	conv, _, err = (&chatResponses{}).Prepare([]byte(`{"model":"m","messages":[{"role":"user","content":"hi"},
+		{"role":"assistant","content":"a","reasoning_content":"thought"},{"role":"user","content":"more"}]}`), Options{})
+	if got := lossStrings(Losses(conv)); err != nil || !slices.Equal(got, []string{"reasoning:messages[1].reasoning_content"}) {
+		t.Errorf("reasoning history: %v %q", err, got)
 	}
 }
 
@@ -371,15 +375,15 @@ func TestChatResponsesSharedParameters(t *testing.T) {
 			t.Errorf("%s = %q, want %q (%s)", path, got, want, out)
 		}
 	}
-	if len(c.Dropped()) != 0 {
-		t.Errorf("dropped %q", c.Dropped())
+	if len(c.Losses()) != 0 {
+		t.Errorf("losses %v", c.Losses())
 	}
 }
 
 func TestChatResponsesJSON(t *testing.T) {
 	c, _ := chatResponsesPrepared(t, `{"model":"m","messages":[{"role":"user","content":"hi"}]}`)
 	out, err := c.Response([]byte(`{"id":"resp_1","object":"response","created_at":1700000000,"model":"gpt-5","status":"completed","service_tier":"default",
-		"output":[{"type":"reasoning","id":"rs","summary":[]},
+		"output":[{"type":"reasoning","id":"rs","summary":[{"type":"summary_text","text":"Plan."},{"type":"summary_text","text":"Act."}],"encrypted_content":"gAAA"},
 			{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Hello ","annotations":[{"type":"url_citation","start_index":0,"end_index":5,"url":"https://a","title":"A"}]},{"type":"output_text","text":"world"}]},
 			{"type":"function_call","call_id":"call_9","name":"get","arguments":"{}"}],
 		"usage":{"input_tokens":12,"output_tokens":5,"total_tokens":17,"input_tokens_details":{"cached_tokens":3},"output_tokens_details":{"reasoning_tokens":2}}}`))
@@ -391,6 +395,7 @@ func TestChatResponsesJSON(t *testing.T) {
 		"id": "resp_1", "object": "chat.completion", "created": "1700000000", "model": "gpt-5", "service_tier": "default",
 		"choices.0.index": "0", "choices.0.finish_reason": "tool_calls", "choices.0.message.role": "assistant",
 		"choices.0.message.content": "Hello world", "choices.0.message.tool_calls.0.id": "call_9",
+		"choices.0.message.reasoning_content": "Plan.\n\nAct.",
 		"choices.0.message.tool_calls.0.type": "function", "choices.0.message.tool_calls.0.function.name": "get",
 		"choices.0.message.tool_calls.0.function.arguments": "{}",
 		"choices.0.message.annotations.0.type":              "url_citation", "choices.0.message.annotations.0.url_citation.url": "https://a",
@@ -469,6 +474,9 @@ func TestChatResponsesJSONLenient(t *testing.T) {
 	if j.Get("choices.0.message.tool_calls.0.function").Exists() {
 		t.Errorf("custom call has a function: %s", out)
 	}
+	if got, want := lossStrings(c.Losses()), []string{"tool:response.output[0]", "other:response.output[1]"}; !slices.Equal(got, want) {
+		t.Errorf("response losses = %q, want %q", got, want)
+	}
 }
 
 func TestChatResponsesStreamLenient(t *testing.T) {
@@ -529,6 +537,46 @@ func TestChatResponsesStreamLenient(t *testing.T) {
 		gjson.Get(out[7], "choices.0.delta.tool_calls.0.function.name").String() != "get" {
 		t.Errorf("done-only call: %s", out[7])
 	}
+	if got, want := lossStrings(c.Losses()), []string{"tool:response.output[0]", "other:response.output[1]"}; !slices.Equal(got, want) {
+		t.Errorf("response losses = %q, want %q", got, want)
+	}
+}
+
+// Reasoning streams as reasoning_content, parts separated by a blank line;
+// encrypted reasoning is a response loss.
+func TestChatResponsesStreamReasoning(t *testing.T) {
+	c, _ := chatResponsesPrepared(t, `{"model":"m","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	out, err := chatStreamRun(t, c,
+		`{"type":"response.created","response":{"id":"resp_1","model":"gpt-5"}}`,
+		`{"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning","id":"rs"}}`,
+		`{"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":0,"delta":"Pl"}`,
+		`{"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":0,"delta":"an."}`,
+		`{"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":1,"delta":"Act."}`,
+		`{"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning","id":"rs","encrypted_content":"gAAA"}}`,
+		`{"type":"response.output_text.delta","output_index":1,"content_index":0,"delta":"ok"}`,
+		`{"type":"response.completed","response":{"status":"completed"}}`)
+	if err != nil {
+		t.Fatalf("stream: %v (%v)", err, out)
+	}
+	var reasoning string
+	for _, o := range out {
+		reasoning += gjson.Get(o, "choices.0.delta.reasoning_content").String()
+	}
+	if reasoning != "Plan.\n\nAct." {
+		t.Errorf("reasoning_content = %q", reasoning)
+	}
+	if got := lossStrings(c.Losses()); !slices.Equal(got, []string{"reasoning:response.output[0].encrypted_content"}) {
+		t.Errorf("response losses = %q", got)
+	}
+	// Like a pair converter, the losses are those of the latest stream.
+	if _, err := chatStreamRun(t, c, `{"type":"response.created","response":{"id":"resp_2","model":"gpt-5"}}`,
+		`{"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"ok"}`,
+		`{"type":"response.completed","response":{"status":"completed"}}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Losses(); len(got) != 0 {
+		t.Errorf("losses of an earlier stream kept: %v", got)
+	}
 }
 
 func chatStreamRun(t *testing.T, c *chatResponses, events ...string) ([]string, error) {
@@ -577,6 +625,7 @@ func TestChatResponsesStream(t *testing.T) {
 	}
 	want := []string{
 		`choices.0.delta.role=assistant`,
+		`choices.0.delta.reasoning_content=thinking`,
 		`choices.0.delta.content=Hel`,
 		`choices.0.delta.content=lo`,
 		`choices.0.delta.tool_calls.0.id=call_1`,
@@ -600,9 +649,9 @@ func TestChatResponsesStream(t *testing.T) {
 			t.Errorf("chunk %d identity: %s", i, out[i])
 		}
 	}
-	if gjson.Get(out[9], "choices.#").Int() != 0 || gjson.Get(out[9], "usage.prompt_tokens_details.cached_tokens").Int() != 3 ||
+	if gjson.Get(out[10], "choices.#").Int() != 0 || gjson.Get(out[10], "usage.prompt_tokens_details.cached_tokens").Int() != 3 ||
 		gjson.Get(out[1], "usage").Type != gjson.Null || !gjson.Get(out[1], "usage").Exists() {
-		t.Errorf("usage chunks: %s / %s", out[9], out[1])
+		t.Errorf("usage chunks: %s / %s", out[10], out[1])
 	}
 
 	// Without include_usage: no usage chunk and no usage field; length.
@@ -614,14 +663,14 @@ func TestChatResponsesStream(t *testing.T) {
 		t.Fatalf("incomplete stream: %v %v", out, err)
 	}
 
-	// A failed response ends the stream with an error chunk; Flush reports it.
+	// A failed response ends the stream with an error chunk.
 	out, err = chatStreamRun(t, c,
 		`{"type":"response.output_text.delta","output_index":0,"delta":"x"}`,
 		`{"type":"response.failed","response":{"status":"failed","error":{"code":"server_error","message":"boom"}}}`)
-	if err == nil || len(out) != 3 || gjson.Get(out[2], "error.message").String() != "boom" {
+	if err != nil || len(out) != 3 || gjson.Get(out[2], "error.message").String() != "boom" {
 		t.Fatalf("failed stream: %v %v", out, err)
 	}
-	// So does a truncated stream.
+	// A truncated stream fails at Flush.
 	if _, err = chatStreamRun(t, c, `{"type":"response.output_text.delta","output_index":0,"delta":"x"}`); err == nil {
 		t.Fatal("truncated stream flushed cleanly")
 	}
@@ -652,7 +701,8 @@ func TestChatResponsesNumbersVerbatim(t *testing.T) {
 // sdk/manifest/check keeps its own list of same-platform pairs for the
 // hostCompat floor (CONTRACTS §83.4); it must name every built-in one.
 func TestSamePlatformPairsKnownToManifestCheck(t *testing.T) {
-	for _, pair := range Default().Pairs() {
+	for _, p := range Default().Pairs() {
+		pair := [2]string{p.From, p.To}
 		from, _, _ := strings.Cut(pair[0], ".")
 		to, _, _ := strings.Cut(pair[1], ".")
 		if from != to {

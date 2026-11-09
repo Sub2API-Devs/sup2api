@@ -1,0 +1,43 @@
+{
+  "model": "gemini-2.5-flash",
+  "max_tokens": 512,
+  "system": "Be brief.",
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Current weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      }
+    },
+    {
+      "name": "get_time",
+      "description": "Current time",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tz"
+        ]
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Weather in Paris and Tokyo?"
+    }
+  ]
+}

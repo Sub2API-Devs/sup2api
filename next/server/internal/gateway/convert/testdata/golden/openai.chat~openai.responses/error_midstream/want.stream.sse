@@ -1,0 +1,6 @@
+data: {"choices":[{"delta":{"content":"","refusal":null,"role":"assistant"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":"Once upon"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"error":{"code":"server_error","message":"An error occurred while processing your request."}}
+

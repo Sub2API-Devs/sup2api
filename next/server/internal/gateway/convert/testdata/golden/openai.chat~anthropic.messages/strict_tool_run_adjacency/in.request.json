@@ -1,0 +1,46 @@
+{
+  "model": "x",
+  "max_tokens": 12,
+  "messages": [
+    {
+      "role": "user",
+      "content": "call two"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "type": "function",
+          "id": "id1",
+          "function": {
+            "name": "f",
+            "arguments": "{}"
+          }
+        },
+        {
+          "type": "function",
+          "id": "id2",
+          "function": {
+            "name": "f",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "id1",
+      "content": "a"
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "id2",
+      "content": "b"
+    },
+    {
+      "role": "user",
+      "content": "next"
+    }
+  ]
+}

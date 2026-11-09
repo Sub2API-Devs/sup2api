@@ -1,0 +1,57 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Paris is sunny and 21 °C today."
+          }
+        ],
+        "role": "model"
+      },
+      "index": 0,
+      "finishReason": "STOP",
+      "groundingMetadata": {
+        "webSearchQueries": [
+          "Paris weather"
+        ],
+        "groundingChunks": [
+          {
+            "web": {
+              "uri": "https://example.com/paris-weather",
+              "title": "example.com"
+            }
+          }
+        ],
+        "groundingSupports": [
+          {
+            "segment": {
+              "startIndex": 0,
+              "endIndex": 25,
+              "text": "Paris is sunny and 21 °C"
+            },
+            "groundingChunkIndices": [
+              0
+            ],
+            "confidenceScores": [
+              0.9
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 12,
+    "candidatesTokenCount": 10,
+    "totalTokenCount": 22,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 12
+      }
+    ]
+  },
+  "modelVersion": "gemini-2.5-flash",
+  "responseId": "Ws0QacGWJdiVz7IPuv6E8Qo"
+}

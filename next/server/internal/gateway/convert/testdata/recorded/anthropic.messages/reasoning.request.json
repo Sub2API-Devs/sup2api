@@ -1,0 +1,15 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_tokens": 4096,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Is 391 prime?"
+    }
+  ],
+  "thinking": {
+    "type": "enabled",
+    "budget_tokens": 2048
+  },
+  "stream": true
+}

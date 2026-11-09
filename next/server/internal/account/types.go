@@ -99,13 +99,18 @@ type FormView struct {
 
 // EndpointView is a gateway endpoint an account type can serve. Native is
 // false when the core converts the endpoint protocol to a protocol of one of
-// the type's platforms.
+// the type's platforms, or estimates a count_tokens request itself. Grade is
+// native, the conversion's grade (good, fair, discouraged) or local; Via
+// lists the protocols a conversion passes through, client first
+// (CONVERT-MATRIX §5.3).
 type EndpointView struct {
-	Method   string `json:"method"`
-	Path     string `json:"path"`
-	Protocol string `json:"protocol"`
-	Platform string `json:"platform"`
-	Native   bool   `json:"native"`
+	Method   string   `json:"method"`
+	Path     string   `json:"path"`
+	Protocol string   `json:"protocol"`
+	Platform string   `json:"platform"`
+	Native   bool     `json:"native"`
+	Grade    string   `json:"grade"`
+	Via      []string `json:"via,omitempty"`
 }
 
 func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolConverters) AccountTypeView {
@@ -180,43 +185,34 @@ func typePlatforms(g core.Generation, b core.AccountTypeBinding) []TypePlatformV
 	return out
 }
 
-// servedEndpoints lists the endpoints of the platforms the account type
-// supports (native), plus endpoints of other platforms whose protocol the
-// core can convert to a protocol of a supported, available platform, plus
-// endpoints of a supported platform left out of the type's endpoint subset
-// whose protocol the core converts to a protocol of that platform's subset
-// (CONTRACTS §83.3), as the gateway routes them.
+// servedEndpoints lists the endpoints the gateway routes to the account
+// type: those of its platforms in its endpoint subset (native); the others
+// it reaches through the best core conversion (core.BestConvertTarget) -
+// to another platform of the type, or, for an endpoint of a supported
+// platform left out of the subset, to an endpoint of that platform in the
+// subset (CONTRACTS §83.3); and the count_tokens endpoints it serves
+// neither way, estimated locally when it serves their family's generation
+// protocol (CONVERT-MATRIX §8). The stream mode is not known here; the
+// gateway may pick a sibling endpoint of the same grade per request.
 func servedEndpoints(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolConverters) []EndpointView {
-	// Protocols the type's upstream speaks: those of its available platforms,
-	// and per platform for the conversions within one.
-	var upstream []string
-	byPlatform := map[string][]string{}
-	for _, ap := range b.Type.Platforms {
-		if pb, ok := g.Platform(ap.Platform); ok {
-			for _, ep := range pb.Platform.Endpoints {
-				if ap.SupportsEndpoint(ep.ID) {
-					upstream = append(upstream, ep.Protocol)
-					byPlatform[ap.Platform] = append(byPlatform[ap.Platform], ep.Protocol)
-				}
-			}
-		}
-	}
 	out := []EndpointView{}
 	for _, e := range g.Endpoints() {
-		proto := e.Endpoint.Protocol
+		v := EndpointView{Method: e.Endpoint.Method, Path: e.Endpoint.Path, Protocol: e.Endpoint.Protocol, Platform: e.Platform}
 		ap, native := b.Supports(e.Platform)
-		if native && !ap.SupportsEndpoint(e.Endpoint.ID) {
-			if convertible(conv, proto, byPlatform[e.Platform]) {
-				out = append(out, EndpointView{Method: e.Endpoint.Method, Path: e.Endpoint.Path, Protocol: proto,
-					Platform: e.Platform, Native: false})
-			}
+		t, converted := core.BestConvertTarget(g, b, conv, v.Protocol, func(p manifest.AccountPlatform, _ manifest.Endpoint) bool {
+			return (p.Platform == e.Platform) == native
+		})
+		switch family := core.CountTokensFamily(v.Protocol); {
+		case native && ap.SupportsEndpoint(e.Endpoint.ID):
+			v.Native, v.Grade = true, "native"
+		case converted:
+			v.Grade, v.Via = t.Grade, t.Hops
+		case family != "" && core.ServesProtocol(g, b, conv, family):
+			v.Grade = "local"
+		default:
 			continue
 		}
-		if !native && !convertible(conv, proto, upstream) {
-			continue
-		}
-		out = append(out, EndpointView{Method: e.Endpoint.Method, Path: e.Endpoint.Path, Protocol: proto,
-			Platform: e.Platform, Native: native})
+		out = append(out, v)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i], out[j]
@@ -232,20 +228,6 @@ func servedEndpoints(g core.Generation, b core.AccountTypeBinding, conv core.Pro
 		return a.Method < b.Method
 	})
 	return out
-}
-
-// convertible reports whether the core can convert the client protocol to
-// one of the upstream protocols.
-func convertible(conv core.ProtocolConverters, client string, upstream []string) bool {
-	if conv == nil {
-		return false
-	}
-	for _, y := range upstream {
-		if y != client && conv.CanConvert(client, y) {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *Service) listTypes(c *gin.Context) {

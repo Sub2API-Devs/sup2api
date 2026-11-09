@@ -1,0 +1,19 @@
+{
+  "max_tokens": 32000,
+  "messages": [
+    {
+      "content": "Is 9973 prime?",
+      "role": "user"
+    },
+    {
+      "content": "Yes.",
+      "role": "assistant"
+    },
+    {
+      "content": "And 9971?",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5",
+  "reasoning_effort": "high"
+}

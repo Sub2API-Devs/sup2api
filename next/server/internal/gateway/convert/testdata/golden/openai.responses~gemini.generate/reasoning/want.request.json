@@ -1,0 +1,35 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Is 9973 prime?"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "text": "Yes.",
+          "thoughtSignature": "context_engineering_is_the_way_to_go"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "And 391?"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "thinkingConfig": {
+      "includeThoughts": true,
+      "thinkingBudget": 24576
+    }
+  }
+}

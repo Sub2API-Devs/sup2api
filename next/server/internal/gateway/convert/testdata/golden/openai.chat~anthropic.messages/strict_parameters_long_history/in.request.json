@@ -1,0 +1,357 @@
+{
+  "model": "client-alias",
+  "max_tokens": 12,
+  "temperature": 0.25,
+  "stop": [
+    "END"
+  ],
+  "parallel_tool_calls": false,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "Read",
+        "description": "exact ...\n",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 9007199254740993
+            }
+          }
+        }
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "system",
+      "content": "  exact system\n"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "user"
+    },
+    {
+      "role": "assistant",
+      "content": "assistant"
+    },
+    {
+      "role": "user",
+      "content": "next"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "max_tokens": 24577,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Prove it.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-sonnet-4-5",
+  "thinking": {
+    "budget_tokens": 24576,
+    "type": "enabled"
+  }
+}

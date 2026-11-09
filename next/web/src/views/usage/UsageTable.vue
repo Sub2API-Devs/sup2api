@@ -9,7 +9,8 @@ import UsageErrorText from './UsageErrorText.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageTiming from './UsageTiming.vue'
 import UsageTokens from './UsageTokens.vue'
-import { accountLabel, billingTone, hashColor, isConverted, type UsageRow } from './usage'
+import UsageConversionBadges from './UsageConversionBadges.vue'
+import { accountLabel, billingTone, hashColor, type UsageRow } from './usage'
 
 // The usage list: one row per request, its detail (billing trace, request
 // facts) expanded under it; cards on narrow screens. Clicking a client IP, a
@@ -119,7 +120,7 @@ function rate(row: UsageRow) {
           </span>
           <div class="flex max-w-full items-center gap-1.5 text-xxs text-fg-subtle">
             <span class="truncate font-mono">{{ row.upstream_protocol || row.protocol || '—' }}</span>
-            <SBadge v-if="isConverted(row)" size="xs" tone="warning" :title="t('usage.convertedFrom', { protocol: row.protocol })">{{ t('usage.converted') }}</SBadge>
+            <UsageConversionBadges :row="row" size="xs" />
           </div>
         </div>
       </template>

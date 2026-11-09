@@ -5,15 +5,12 @@
 // only through these helpers; none of them knows a plugin.
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Account, AccountType, CommonControlName } from '@/api/types'
+import { COMMON_CONTROL_NAMES, type Account, type AccountType, type CommonControlName } from '@/api/types'
 import { newAccountConcurrency } from './accountLimits'
 
 export type { CommonControlName } from '@/api/types'
 
-export const COMMON_CONTROLS: readonly CommonControlName[] = [
-  'schedulable', 'auto_disable', 'priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit',
-  'model_limits', 'usage_limit', 'model_mapping', 'param_override', 'header_passthrough', 'environment', 'proxy'
-]
+export const COMMON_CONTROLS: readonly CommonControlName[] = COMMON_CONTROL_NAMES
 
 /** Values of the controls, in the account API's shapes. */
 export type ControlValues = Partial<Record<CommonControlName, unknown>>
@@ -51,7 +48,10 @@ const sortedJSON = (v: unknown): string =>
   Array.isArray(v)
     ? `[${v.map(sortedJSON).join(',')}]`
     : v && typeof v === 'object'
-      ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${sortedJSON((v as Record<string, unknown>)[k])}`).join(',')}}`
+      ? `{${Object.keys(v)
+          .sort()
+          .map(k => `${JSON.stringify(k)}:${sortedJSON((v as Record<string, unknown>)[k])}`)
+          .join(',')}}`
       : JSON.stringify(v ?? null)
 const isEmpty = (v: unknown) => v == null || (typeof v === 'object' && Object.keys(v).length === 0)
 
@@ -76,7 +76,8 @@ export function controlViews(
 ): Record<CommonControlName, ControlView> {
   const view = (name: CommonControlName): ControlView => {
     const c = accountControl(type, name)
-    const pending = !!saved && c.locked && c.default !== undefined && name in saved && !sameControlValue(saved[name as keyof Account], c.default)
+    const pending =
+      !!saved && c.locked && c.default !== undefined && name in saved && !sameControlValue(saved[name as keyof Account], c.default)
     const reason = pending
       ? t('accounts.editorUi.commonControlLockedPending', { value: shown(c.default) })
       : c.locked
@@ -90,16 +91,17 @@ export function controlViews(
 }
 
 /** controlViews of a reactive account type and the saved account being edited. */
-export function useCommonControls(type: MaybeRefOrGetter<AccountType | null | undefined>, saved?: MaybeRefOrGetter<Account | null | undefined>) {
+export function useCommonControls(
+  type: MaybeRefOrGetter<AccountType | null | undefined>,
+  saved?: MaybeRefOrGetter<Account | null | undefined>
+) {
   const { t } = useI18n()
   return computed(() => controlViews(toValue(type), t, toValue(saved)))
 }
 
 /** Declared defaults. */
 const declaredDefaults = (type: AccountType | null | undefined): ControlValues =>
-  Object.fromEntries(
-    COMMON_CONTROLS.map(n => [n, accountControl(type, n).default] as const).filter(([, d]) => d !== undefined)
-  )
+  Object.fromEntries(COMMON_CONTROLS.map(n => [n, accountControl(type, n).default] as const).filter(([, d]) => d !== undefined))
 
 const clamp = (lo: number, hi: number) => (v: unknown) => Math.min(Math.max(Number(v) || 0, lo), hi)
 /** An own-level caller's caps (CONTRACTS §15.9): the server fits the type's defaults of a new account into them, so the form does too. */
@@ -127,7 +129,11 @@ export function newAccountValues(type: AccountType | null | undefined, core: Con
 
 /** A saved account's values: its own, absent ones falling back to `core` (a locked one shows what is stored until saved). */
 export function savedAccountValues(a: Account, core: ControlValues): ControlValues {
-  const own = Object.fromEntries(Object.keys(core).map(n => [n, a[n as keyof Account]]).filter(([, v]) => v != null))
+  const own = Object.fromEntries(
+    Object.keys(core)
+      .map(n => [n, a[n as keyof Account]])
+      .filter(([, v]) => v != null)
+  )
   return { ...core, ...own }
 }
 
@@ -138,7 +144,11 @@ export function defaultMappingOf(type: AccountType | null | undefined): Record<s
 
 /** Drops the request fields the type does not let change: the server fills (create) or keeps (update) them. */
 export function withoutFixed(body: Record<string, unknown>, type: AccountType | null | undefined): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(body).filter(([k]) => !COMMON_CONTROLS.includes(k as CommonControlName) || accountControl(type, k as CommonControlName).configurable))
+  return Object.fromEntries(
+    Object.entries(body).filter(
+      ([k]) => !COMMON_CONTROLS.includes(k as CommonControlName) || accountControl(type, k as CommonControlName).configurable
+    )
+  )
 }
 
 /** How many of the accounts have a type that fixes the control (bulk edit). */

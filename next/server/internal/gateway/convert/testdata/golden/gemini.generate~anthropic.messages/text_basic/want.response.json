@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Hello! How can I help you today?"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "claude-sonnet-4-5-20250929",
+  "responseId": "resp_msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "usageMetadata": {
+    "candidatesTokenCount": 12,
+    "promptTokenCount": 14,
+    "totalTokenCount": 26
+  }
+}

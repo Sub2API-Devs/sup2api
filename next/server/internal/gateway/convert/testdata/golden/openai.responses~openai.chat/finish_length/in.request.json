@@ -1,0 +1,5 @@
+{
+  "model": "gpt-5",
+  "max_output_tokens": 16,
+  "input": "Write a long story."
+}

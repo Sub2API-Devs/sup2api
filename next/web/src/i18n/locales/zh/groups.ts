@@ -24,6 +24,8 @@ export default {
   restrictedHint: '只有在"用户"页面分配过的用户可以使用该分组。',
   rateMultiplier: '倍率',
   multiplierHint: '按 费用 × 倍率 扣费，例如 0.8 表示八折。',
+  conversionDefault: '默认（允许）',
+  conversionHint: '本组账号的请求经协议转换会丢失内容时如何处理；账号自己的设置优先。允许：照常服务并记录丢失；安全：工具会丢失时跳过账号；严格：有任何丢失都跳过账号。',
   multiplierInvalid: '请输入非负数',
   modelAllowlist: '模型白名单',
   allowlistHint: '留空表示不限。支持通配符，例如 claude-*。',

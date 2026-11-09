@@ -1,0 +1,17 @@
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "What is the weather in Paris?"
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "googleSearch": {}
+    }
+  ]
+}

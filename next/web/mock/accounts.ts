@@ -301,11 +301,11 @@ function accountTypeOut(d: MockAccountType) {
   })
   const endpoints: any[] = []
   for (const id of supports) {
-    for (const e of platformById(id)?.endpoints || []) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: id, native: true })
+    for (const e of platformById(id)?.endpoints || []) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: id, native: true, grade: 'native' })
   }
   for (const c of converts || []) {
     const e = platformById(c.platform)?.endpoints.find((x) => x.path === c.path)
-    if (e) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: c.platform, native: false })
+    if (e) endpoints.push({ method: e.method, path: e.path, protocol: e.protocol, platform: c.platform, native: false, grade: 'good', via: [e.protocol, platformById(supports[0])?.endpoints[0]?.protocol].filter(Boolean) })
   }
   return { pass_headers: [], ...rest, ...defaults, common_controls: d.common_controls ?? defaults.common_controls, platforms, endpoints }
 }

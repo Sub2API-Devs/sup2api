@@ -133,6 +133,9 @@ type GroupInfo struct {
 	ModelFilterMode string   // whitelist (default) or blacklist
 	// Environment is the group layer of the environment variables (§74.3).
 	Environment EnvironmentValues
+	// ConversionLossPolicy is the group's conversion loss policy (§88), ""
+	// to leave it to the accounts (default allow).
+	ConversionLossPolicy string
 }
 
 // APIKeyPrincipal is the result of gateway authentication.
@@ -240,6 +243,9 @@ type AccountRef struct {
 	ModelLimits []ModelLimit
 	// Environment is the account layer of the environment variables (§74.3).
 	Environment EnvironmentValues
+	// ConversionLossPolicy is the account's conversion loss policy (§88), ""
+	// to inherit the group's.
+	ConversionLossPolicy string
 }
 
 // ModelLimit caps the requests of a list of models on one account. The

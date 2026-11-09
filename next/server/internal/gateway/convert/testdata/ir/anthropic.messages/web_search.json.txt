@@ -1,0 +1,108 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "annotations": [
+          {
+            "type": "url_citation",
+            "url_citation": {
+              "end_index": 0,
+              "start_index": 0,
+              "title": "Paris weather today",
+              "url": "https://example.com/paris-weather"
+            }
+          }
+        ],
+        "content": "Paris is sunny, 21 °C.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "model": "claude-sonnet-4-5-20250929",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 40,
+    "prompt_tokens": 2100,
+    "total_tokens": 2140
+  }
+}
+--- losses: {"tool":["response.content[0]","response.content[1]"]}
+
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "incomplete_details": null,
+  "model": "claude-sonnet-4-5-20250929",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [
+            {
+              "end_index": 0,
+              "start_index": 0,
+              "title": "Paris weather today",
+              "type": "url_citation",
+              "url": "https://example.com/paris-weather"
+            }
+          ],
+          "text": "Paris is sunny, 21 °C.",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_2",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 2100,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 40,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 2140
+  }
+}
+--- losses: {"tool":["response.content[0]","response.content[1]"]}
+
+=== gemini.generate
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Paris is sunny, 21 °C."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "claude-sonnet-4-5-20250929",
+  "responseId": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "usageMetadata": {
+    "candidatesTokenCount": 40,
+    "promptTokenCount": 2100,
+    "totalTokenCount": 2140
+  }
+}
+--- losses: {"other":["response.content[2].annotations"],"tool":["response.content[0]","response.content[1]"]}
+

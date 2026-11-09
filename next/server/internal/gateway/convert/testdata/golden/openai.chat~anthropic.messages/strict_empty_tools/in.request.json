@@ -1,0 +1,11 @@
+{
+  "model": "x",
+  "max_tokens": 12,
+  "tools": [],
+  "messages": [
+    {
+      "role": "user",
+      "content": "hi"
+    }
+  ]
+}

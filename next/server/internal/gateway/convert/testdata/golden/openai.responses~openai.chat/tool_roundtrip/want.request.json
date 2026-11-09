@@ -1,0 +1,90 @@
+{
+  "max_completion_tokens": 512,
+  "messages": [
+    {
+      "content": "Weather and local time in Paris?",
+      "role": "user"
+    },
+    {
+      "content": null,
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"city\":\"Paris\"}",
+            "name": "get_weather"
+          },
+          "id": "call_w1",
+          "type": "function"
+        },
+        {
+          "function": {
+            "arguments": "{\"tz\":\"Europe/Paris\"}",
+            "name": "get_time"
+          },
+          "id": "call_t1",
+          "type": "function"
+        }
+      ]
+    },
+    {
+      "content": "18C, cloudy",
+      "role": "tool",
+      "tool_call_id": "call_w1"
+    },
+    {
+      "content": "14:05",
+      "role": "tool",
+      "tool_call_id": "call_t1"
+    },
+    {
+      "content": "It is 18C and cloudy; local time 14:05.",
+      "role": "assistant"
+    },
+    {
+      "content": "Thanks. Tomorrow?",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5",
+  "tools": [
+    {
+      "function": {
+        "description": "Current weather",
+        "name": "get_weather",
+        "parameters": {
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ],
+          "type": "object"
+        },
+        "strict": false
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "Current time",
+        "name": "get_time",
+        "parameters": {
+          "properties": {
+            "tz": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tz"
+          ],
+          "type": "object"
+        },
+        "strict": false
+      },
+      "type": "function"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "model": "gpt-5",
+  "n": 2,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Two answers."
+    }
+  ]
+}

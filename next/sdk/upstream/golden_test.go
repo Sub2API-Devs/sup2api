@@ -149,6 +149,9 @@ func TestGolden(t *testing.T) {
 			if err := json.Unmarshal(b, &want); err != nil {
 				t.Fatal(err)
 			}
+			if len(want.Cases) == 0 {
+				t.Fatal("the golden file has no cases")
+			}
 			for _, r := range want.Cases {
 				compareGolden(t, plugin, gt.accountType, p, r)
 			}

@@ -1,0 +1,29 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "The lighthouse stood alone on the"
+          }
+        ],
+        "role": "model"
+      },
+      "index": 0,
+      "finishReason": "MAX_TOKENS"
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 10,
+    "candidatesTokenCount": 8,
+    "totalTokenCount": 18,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 10
+      }
+    ]
+  },
+  "modelVersion": "gemini-2.5-flash",
+  "responseId": "Ws0QacGWJdiVz7IPuv6E8Qo"
+}

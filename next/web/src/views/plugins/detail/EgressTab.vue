@@ -47,7 +47,7 @@ const policy = ref<string>(props.detail.egress_policy || 'allow_all')
 const savingPolicy = ref(false)
 watch(
   () => props.detail.egress_policy,
-  (v) => (policy.value = v || 'allow_all')
+  v => (policy.value = v || 'allow_all')
 )
 
 const policyOptions = computed(() => [
@@ -57,7 +57,7 @@ const policyOptions = computed(() => [
 
 /** Domains approved through the "net" grant (effective in allowlist mode). */
 const allowedDomains = computed(() => {
-  const g = (props.detail.grants || []).find((x) => x.permission === 'net' && x.status !== 'revoked')
+  const g = (props.detail.grants || []).find(x => x.permission === 'net' && x.status !== 'revoked')
   return asArray<string>(pick(g?.scope, 'domains'))
 })
 
@@ -95,11 +95,16 @@ function aggregate(list: EgressLog[]): EgressSummary[] {
 
 function normalizeSummary(x: Record<string, any>): EgressSummary {
   let results = pick<Record<string, number> | Array<{ result: string; count: number }>>(x, 'results', 'by_result') || {}
-  if (Array.isArray(results)) results = Object.fromEntries(results.map((r) => [r.result, r.count]))
+  if (Array.isArray(results)) results = Object.fromEntries(results.map(r => [r.result, r.count]))
   if (!Object.keys(results).length) {
     // Server shape: separate ok / denied / errors (/ open) counters.
     const r: Record<string, number> = {}
-    for (const [k, name] of [['ok', 'ok'], ['denied', 'denied'], ['errors', 'error'], ['open', 'open']] as const) {
+    for (const [k, name] of [
+      ['ok', 'ok'],
+      ['denied', 'denied'],
+      ['errors', 'error'],
+      ['open', 'open']
+    ] as const) {
       const n = Number(x[k] ?? 0)
       if (n > 0) r[name] = n
     }
@@ -144,7 +149,10 @@ async function load() {
   const to = new Date()
   const from = new Date(to.getTime() - hours * 3600_000)
   try {
-    const r = await api.get<any>(`/plugins/${encodeURIComponent(props.detail.key)}/egress`, { from: from.toISOString(), to: to.toISOString() })
+    const r = await api.get<any>(`/plugins/${encodeURIComponent(props.detail.key)}/egress`, {
+      from: from.toISOString(),
+      to: to.toISOString()
+    })
     if (Array.isArray(r)) {
       logs.value = r
       summary.value = aggregate(r)
@@ -156,7 +164,7 @@ async function load() {
       const d = pick<unknown>(r, 'domains')
       domains.value = Array.isArray(d)
         ? d
-            .map((x) => normalizeDomain(x as Record<string, any>))
+            .map(x => normalizeDomain(x as Record<string, any>))
             .sort((a, b) => Number(b.new) - Number(a.new) || b.last_seen_at.localeCompare(a.last_seen_at))
         : null
     }
@@ -182,7 +190,11 @@ async function savePolicy() {
 
 function resultTone(r: string) {
   if (r === 'open') return 'info' as const
-  return r === 'ok' || r === 'success' ? ('success' as const) : r === 'denied' || r === 'blocked' ? ('warning' as const) : ('danger' as const)
+  return r === 'ok' || r === 'success'
+    ? ('success' as const)
+    : r === 'denied' || r === 'blocked'
+      ? ('warning' as const)
+      : ('danger' as const)
 }
 
 /** Localized result label; "open" = connection still alive. */
@@ -198,7 +210,7 @@ const domainColumns = computed<TableColumn[]>(() => [
   { key: 'connections', label: t('plugins.egress.connections'), align: 'right' }
 ])
 const domainRows = computed(() => domains.value || [])
-const newDomainCount = computed(() => domainRows.value.filter((d) => d.new).length)
+const newDomainCount = computed(() => domainRows.value.filter(d => d.new).length)
 
 const summaryColumns = computed<TableColumn[]>(() => [
   { key: 'host', label: t('plugins.egress.destination') },
@@ -217,7 +229,7 @@ const logColumns = computed<TableColumn[]>(() => [
   { key: 'result', label: t('plugins.egress.result') }
 ])
 
-const summaryRows = computed(() => summary.value.map((s) => ({ ...s, _k: `${s.host}:${s.port ?? ''}` })))
+const summaryRows = computed(() => summary.value.map(s => ({ ...s, _k: `${s.host}:${s.port ?? ''}` })))
 const logRows = computed(() => logs.value.slice(0, 500).map((l, i) => ({ ...l, _k: l.id ?? i })))
 
 watch(range, load)
@@ -247,7 +259,7 @@ onMounted(load)
           size="sm"
           :aria-label="t('plugins.egress.policyMode')"
           data-testid="egress-policy-mode"
-          @update:model-value="(v) => (policy = String(v))"
+          @update:model-value="v => (policy = String(v))"
         />
       </SSettingRow>
       <SSettingRow :label="t('plugins.egress.approvedDomainsTitle')" :description="t('plugins.egress.approvedDomainsHint')" stacked dense>
@@ -266,13 +278,15 @@ onMounted(load)
             :options="rangeOptions"
             size="sm"
             :aria-label="t('plugins.egress.range')"
-            @update:model-value="(v) => (range = v as '1h' | '24h' | '7d')"
+            @update:model-value="v => (range = v as '1h' | '24h' | '7d')"
           />
           <SButton size="sm" variant="ghost" :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
         </template>
         <STable :columns="summaryColumns" :rows="summaryRows" :loading="loading" row-key="_k">
           <template #cell-host="{ row }">
-            <span class="font-mono text-sm">{{ row.host }}<SHint v-if="row.port" inline>:{{ row.port }}</SHint></span>
+            <span class="font-mono text-sm"
+              >{{ row.host }}<SHint v-if="row.port" inline>:{{ row.port }}</SHint></span
+            >
             <SBadge v-if="detail.egress_policy === 'allowlist' && !allowedDomains.includes(row.host)" tone="warning" class="ml-2">
               {{ t('plugins.egress.notAllowlisted') }}
             </SBadge>
@@ -283,7 +297,9 @@ onMounted(load)
           </template>
           <template #cell-results="{ row }">
             <div class="flex flex-wrap gap-1">
-              <SBadge v-for="(n, r) in row.results" :key="r" :tone="resultTone(String(r))">{{ resultLabel(String(r)) }} × {{ formatNumber(n) }}</SBadge>
+              <SBadge v-for="(n, r) in row.results" :key="r" :tone="resultTone(String(r))"
+                >{{ resultLabel(String(r)) }} × {{ formatNumber(n) }}</SBadge
+              >
             </div>
           </template>
           <template #cell-last_seen="{ row }">
@@ -292,7 +308,13 @@ onMounted(load)
         </STable>
       </SCard>
 
-      <SCard v-if="domains" :title="t('plugins.egress.domains')" :subtitle="t('plugins.egress.domainsHint')" :padded="false" data-testid="egress-domains">
+      <SCard
+        v-if="domains"
+        :title="t('plugins.egress.domains')"
+        :subtitle="t('plugins.egress.domainsHint')"
+        :padded="false"
+        data-testid="egress-domains"
+      >
         <template #actions>
           <SBadge v-if="newDomainCount" tone="warning">{{ t('plugins.egress.newDomainCount', { n: newDomainCount }) }}</SBadge>
         </template>
@@ -304,25 +326,37 @@ onMounted(load)
               {{ t('plugins.egress.notAllowlisted') }}
             </SBadge>
           </template>
-          <template #cell-first_seen_at="{ row }"><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.first_seen_at) }}</span></template>
-          <template #cell-last_seen_at="{ row }"><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.last_seen_at) }}</span></template>
+          <template #cell-first_seen_at="{ row }"
+            ><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.first_seen_at) }}</span></template
+          >
+          <template #cell-last_seen_at="{ row }"
+            ><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.last_seen_at) }}</span></template
+          >
           <template #cell-connections="{ row }">{{ formatNumber(row.connections) }}</template>
         </STable>
       </SCard>
 
       <SCard v-if="logRows.length" :title="t('plugins.egress.details')" :padded="false">
         <STable :columns="logColumns" :rows="logRows" row-key="_k" dense>
-          <template #cell-started_at="{ row }"><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.started_at) }}</span></template>
+          <template #cell-started_at="{ row }"
+            ><span class="whitespace-nowrap text-xs">{{ formatDateTime(row.started_at) }}</span></template
+          >
           <template #cell-host="{ row }">
-            <span class="font-mono text-xs">{{ row.host }}<SHint v-if="row.port" inline size="xs">:{{ row.port }}</SHint></span>
+            <span class="font-mono text-xs"
+              >{{ row.host }}<SHint v-if="row.port" inline size="xs">:{{ row.port }}</SHint></span
+            >
           </template>
           <template #cell-duration_ms="{ row }">{{ row.result === 'open' ? '—' : formatDuration(row.duration_ms) }}</template>
           <template #cell-bytes="{ row }">
             <SHint v-if="row.result === 'open' && !row.bytes_in && !row.bytes_out" inline>—</SHint>
-            <span v-else class="whitespace-nowrap text-xs">↑{{ formatBytes(row.bytes_out ?? 0) }} ↓{{ formatBytes(row.bytes_in ?? 0) }}</span>
+            <span v-else class="whitespace-nowrap text-xs"
+              >↑{{ formatBytes(row.bytes_out ?? 0) }} ↓{{ formatBytes(row.bytes_in ?? 0) }}</span
+            >
           </template>
           <template #cell-result="{ row }">
-            <SBadge :tone="resultTone(String(row.result))" :title="row.error || undefined" :data-result="row.result">{{ resultLabel(row.result) }}</SBadge>
+            <SBadge :tone="resultTone(String(row.result))" :title="row.error || undefined" :data-result="row.result">{{
+              resultLabel(row.result)
+            }}</SBadge>
           </template>
         </STable>
       </SCard>
