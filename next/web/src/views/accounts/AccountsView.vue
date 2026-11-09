@@ -145,7 +145,7 @@ const columns = computed<TableColumn[]>(() => [
   // only when a row of this page has either.
   ...(list.items.value.some((a) => hasQuota(a.quota) || hasBalance(a.balance)) ? [{ key: 'quota', label: t('accounts.balance.column') }] : []),
   { key: 'last_test', label: t('accounts.lastTest.column') },
-  { key: 'actions', label: t('common.actions'), align: 'right', width: '108px' }
+  { key: 'actions', label: t('common.actions'), align: 'right', width: '176px' }
 ])
 
 function groupName(id: number, refs?: Array<{ id: number; name: string }>) {
@@ -442,7 +442,7 @@ const balanceRefresh = useBalanceRefresh({
   onError: (_id, e) => notifyError(e)
 })
 
-// A manual disable is undone with the switch; Reset status clears what the gateway set.
+// A manual disable is undone with Enable; Reset status clears what the gateway set.
 const canResetStatus = (a: Account) => canUpdate(a) && !a.orphaned && a.status !== 'disabled'
 
 async function resetStatus(a: Account) {
@@ -495,11 +495,11 @@ async function refreshCreds(a: Account) {
     refreshingCreds.value.delete(a.id)
   }
 }
-// ---------------------------------------------------------------- enable switch (status column)
-// The switch shows the new state at once and puts the old one back when the
-// request fails. On is the manual enable (see enabledPatch): it also recovers
-// an automatically disabled account, whose switch reads off; the row menu
-// offers such an account a manual disable.
+// ---------------------------------------------------------------- enable / disable (actions column)
+// The row's enable / disable button shows the new state at once and puts the
+// old one back when the request fails. Enable is the manual enable (see
+// enabledPatch): it also recovers an automatically disabled account, which
+// offers Enable; the row menu offers such an account a manual disable.
 const togglingEnabled = ref(new Set<number>())
 async function toggleEnabled(a: Account, on: boolean) {
   if (togglingEnabled.value.has(a.id) || !toggleable(a)) return
@@ -516,11 +516,11 @@ async function toggleEnabled(a: Account, on: boolean) {
     togglingEnabled.value.delete(a.id)
   }
 }
-/** Hover text of a row's switch: what turning it over does. */
-function enabledSwitchTitle(a: Account) {
+/** Hover text of a row's enable / disable button: what it does. */
+function enabledToggleTitle(a: Account) {
   if (!accountControl(typeOf(a), 'schedulable').configurable) return t('accounts.editorUi.commonControlFixed')
-  if (accountEnabled(a)) return t('accounts.listUi.switchDisable')
-  return t(a.status === 'disabled' ? 'accounts.listUi.switchEnable' : 'accounts.listUi.switchEnableAuto')
+  if (accountEnabled(a)) return t('accounts.listUi.disableHint')
+  return t(a.status === 'disabled' ? 'accounts.listUi.enableHint' : 'accounts.listUi.enableAutoHint')
 }
 const canDisable = (a: Account) => toggleable(a) && a.status !== 'disabled' && !accountEnabled(a)
 
@@ -632,7 +632,7 @@ function resetFilters() {
         <!-- Row density means nothing to phone cards; there the auto-refresh menu holds "Refresh now". -->
         <SSwitch v-model="denseRows" class="max-md:hidden" :label="t('accounts.listUi.compact')" />
         <SAutoRefresh v-model="refreshSeconds" @refresh="list.reload()" />
-        <SButton icon="refresh" icon-only class="max-md:hidden" :loading="list.loading.value" :aria-label="t('accounts.listUi.refresh')" :title="t('accounts.listUi.refresh')" @click="list.reload()" />
+        <SButton class="max-md:hidden" :loading="list.loading.value" :title="t('accounts.listUi.refresh')" data-testid="account-refresh" @click="list.reload()">{{ t('common.refresh') }}</SButton>
         <SButton v-if="canCreate" variant="primary" icon="plus" fab data-testid="account-new" @click="openCreate">{{ t('accounts.new') }}</SButton>
       </template>
     </SPageHeader>
@@ -700,18 +700,6 @@ function resetFilters() {
         <SHint v-else inline>-</SHint>
       </template>
       <template #cell-status="{ row }">
-        <!-- The enable switch sits before the badge it changes; readers and orphaned accounts get the badge only. -->
-        <span v-if="editable(row)" class="mr-1.5 inline-flex align-middle" @click.stop>
-          <SSwitch
-            size="sm"
-            :model-value="accountEnabled(row)"
-            :disabled="togglingEnabled.has(row.id) || !toggleable(row)"
-            :aria-label="t('accounts.listUi.enabledSwitch', { name: row.name })"
-            :title="enabledSwitchTitle(row)"
-            data-testid="account-schedulable-switch"
-            @update:model-value="toggleEnabled(row, $event)"
-          />
-        </span>
         <STooltip :content="statusOf(row).detail" :disabled="!statusOf(row).detail" placement="bottom" :delay="150" max-width="24rem">
           <!-- Focusable when there is a reason: keyboard focus shows it too, not only hover (§73.4); the detail drawer lists it for touch. -->
           <span :tabindex="statusOf(row).detail ? 0 : undefined" class="inline-flex rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40" data-testid="account-status-tip">
@@ -751,9 +739,21 @@ function resetFilters() {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
-          <!-- Icons keep the sticky actions column narrow; the names stay in the tooltip and aria-label. -->
-          <SButton v-if="canTest(row) && !row.orphaned" size="sm" variant="ghost" icon="play" icon-only :aria-label="t('common.test')" :title="t('common.test')" data-testid="account-test" @click="openTest(row)" />
-          <SButton v-if="canUpdate(row) && !row.orphaned" size="sm" variant="ghost" icon="edit" icon-only :aria-label="t('common.edit')" :title="t('common.edit')" data-testid="account-edit" @click="openEdit(row)" />
+          <!-- Text actions, as new-api's channel rows: test, disable (red) / enable (blue), edit, then the menu. Readers and orphaned accounts get the menu only. -->
+          <SButton v-if="canTest(row) && !row.orphaned" size="xs" data-testid="account-test" @click="openTest(row)">{{ t('common.test') }}</SButton>
+          <SButton
+            v-if="editable(row)"
+            size="xs"
+            :tone="accountEnabled(row) ? 'danger' : 'info'"
+            :disabled="togglingEnabled.has(row.id) || !toggleable(row)"
+            :aria-label="t(accountEnabled(row) ? 'accounts.listUi.disableAccount' : 'accounts.listUi.enableAccount', { name: row.name })"
+            :title="enabledToggleTitle(row)"
+            data-testid="account-enable-toggle"
+            @click="toggleEnabled(row, !accountEnabled(row))"
+          >
+            {{ t(accountEnabled(row) ? 'common.disable' : 'common.enable') }}
+          </SButton>
+          <SButton v-if="canUpdate(row) && !row.orphaned" size="xs" data-testid="account-edit" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
           <SDropdown :actions="actionsFor(row)" @select="onAction(row, $event)" />
         </div>
       </template>

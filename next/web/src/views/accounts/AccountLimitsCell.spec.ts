@@ -23,6 +23,16 @@ describe('account limits cell', () => {
     expect(pills.map((p) => p.text())).toEqual(['2/10', '7', '900/1K', '3/4'])
     expect(w.find('[data-testid="account-limit-lists"]').exists()).toBe(false)
   })
+  it('colours each figure with its own hue, and with the level near the cap', () => {
+    const w = mount(AccountLimitsCell, { props: { account: account({ rpm_limit: 10, tpm_limit: 0, spm_limit: 0, rate_usage: { rpm: 10, tpm: 0, sessions: 0 } }) }, global: { plugins: [i18n] } })
+    const pill = (key: string) => w.get(`[data-limit="${key}"]`).classes()
+    expect(pill('concurrency')).toEqual(expect.arrayContaining(['bg-violet-50', 'text-violet-700']))
+    expect(pill('tpm')).toEqual(expect.arrayContaining(['bg-sky-50', 'opacity-60']))
+    // At the cap: the danger text and ring replace the figure's own text colour.
+    expect(pill('rpm')).toEqual(expect.arrayContaining(['bg-rose-50', 'text-danger-700', 'ring-danger-500/60']))
+    expect(pill('rpm')).not.toContain('text-rose-700')
+    expect(pill('sessions')).toEqual(expect.arrayContaining(['bg-emerald-50', 'opacity-60']))
+  })
   it('shows only the active sessions without a cap', () => {
     const w = mount(AccountLimitsCell, { props: { account: account({ spm_limit: 0 }) }, global: { plugins: [i18n] } })
     expect(w.get('[data-limit="sessions"]').text()).toBe('3')

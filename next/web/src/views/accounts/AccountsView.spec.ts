@@ -42,6 +42,8 @@ function render(stubs: Record<string, unknown> = {}) {
 
 /** The reason of the status badge: its tooltip (hover or keyboard focus), CONTRACTS §73.4. */
 const statusTip = (w: ReturnType<typeof render>) => w.get('[data-tip]').attributes('data-tip')
+/** The list with its row buttons rendered (text and attributes), for the enable / disable button. */
+const renderRow = () => render({ SButton: { template: '<button><slot /></button>' } })
 
 describe('account automatic disabling policy', () => {
   const account = { id: 23, name: 'test', auto_disable: true, models: [], model_mapping: {}, credentials: {} } as unknown as Account
@@ -177,10 +179,10 @@ describe('account status recovery', () => {
     list.items.value = [{ id: 23, name: 'cc-test', status: 'disabled', status_reason: 'credentials rejected', schedulable: true, auto_disable: true, plugin_key: 'ccgateway', type: 'managed', orphaned: false, cooldown_until: null } as Account]
   })
 
-  it('locks the list scheduling switch according to the plugin declaration', async () => {
+  it('locks the enable button according to the plugin declaration', async () => {
     mocks.findType.mockReturnValue({ common_controls: { schedulable: { configurable: false } } })
-    const wrapper = render()
-    const toggle = wrapper.get('[data-testid="account-schedulable-switch"]')
+    const wrapper = renderRow()
+    const toggle = wrapper.get('[data-testid="account-enable-toggle"]')
     expect(toggle.attributes('disabled')).toBeDefined()
     await flip(toggle)
     expect(mocks.patch).not.toHaveBeenCalled()
@@ -195,7 +197,7 @@ describe('account status recovery', () => {
     expect(btn.attributes('title')).toContain('重置状态')
   })
 
-  it('leaves a manual disable to the switch', () => {
+  it('leaves a manual disable to Enable', () => {
     Object.assign(list.items.value[0], { status: 'disabled', schedulable: false })
     expect(render().find('[data-testid="account-reset-status"]').exists()).toBe(false)
   })
@@ -247,7 +249,7 @@ describe('account status recovery', () => {
 
   it('shows an automatic disable as a plain badge, with the reason and the enable time in a focusable tooltip', () => {
     Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'rate limited until 2026-10-12T08:00:00Z', auto_disabled_until: '2026-10-12T08:00:00Z' })
-    const w = render()
+    const w = renderRow()
     const badge = w.get('[data-testid="account-status"]')
     expect(badge.text()).toBe('自动禁用')
     expect(badge.attributes('title')).toBeUndefined()
@@ -257,10 +259,10 @@ describe('account status recovery', () => {
     expect(release).toMatch(/自动启用$/)
     expect(w.find('[data-testid="account-status-note"]').exists()).toBe(false)
     expect(w.text()).not.toContain('rate limited until')
-    // Not enabled: the switch is off, and turning it on enables the account by hand.
-    const toggle = w.get('[data-testid="account-schedulable-switch"]')
-    expect(toggle.attributes('aria-checked')).toBe('false')
-    expect(toggle.attributes('title')).toContain('打开即手动启用')
+    // Not enabled: the button offers Enable, which enables the account by hand.
+    const toggle = w.get('[data-testid="account-enable-toggle"]')
+    expect(toggle.text()).toBe('启用')
+    expect(toggle.attributes('title')).toContain('点击即手动启用')
   })
 
   it('says in the status tooltip that a parked account container is stopped', () => {
@@ -372,26 +374,26 @@ describe('account status recovery', () => {
     expect(w.text()).not.toContain('req_ok_1')
   })
 
-  it('turns an enabled unschedulable account back on with one flip, then disables it by hand', async () => {
+  it('turns an enabled unschedulable account back on with one click, then disables it by hand', async () => {
     Object.assign(list.items.value[0], { status: 'active', schedulable: false, status_reason: '' })
     mocks.patch.mockImplementation(async (_path: string, values: Partial<Account>) => ({ ...list.items.value[0], ...values, status_reason: '' }))
-    const w = render()
-    const toggle = w.get('[data-testid="account-schedulable-switch"]')
+    const w = renderRow()
+    const toggle = w.get('[data-testid="account-enable-toggle"]')
     expect(w.text()).toContain('自动禁用')
-    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(toggle.text()).toBe('启用')
     expect(toggle.attributes('aria-label')).toBe('启用：cc-test')
     await flip(toggle)
     await flushPromises()
     expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'active', schedulable: true }, today)
     expect(list.items.value[0]).toMatchObject({ status: 'active', schedulable: true })
-    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(toggle.text()).toBe('禁用')
     expect(w.text()).not.toContain('自动禁用')
     expect(mocks.toast).toHaveBeenLastCalledWith('已启用「cc-test」', 'success')
     await flip(toggle)
     await flushPromises()
     expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'disabled', schedulable: false }, today)
     expect(list.items.value[0].status).toBe('disabled')
-    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(toggle.text()).toBe('启用')
     expect(mocks.toast).toHaveBeenLastCalledWith('已禁用「cc-test」', 'success')
     expect(mocks.post).not.toHaveBeenCalled()
   })
@@ -400,19 +402,19 @@ describe('account status recovery', () => {
     Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'matched auto-disable rule: status 401', auto_disabled_until: '2026-10-12T08:00:00Z' })
     let reject!: (e: unknown) => void
     mocks.patch.mockReturnValueOnce(new Promise((_, r) => { reject = r }))
-    const w = render()
-    const toggle = w.get('[data-testid="account-schedulable-switch"]')
+    const w = renderRow()
+    const toggle = w.get('[data-testid="account-enable-toggle"]')
     await flip(toggle)
     await w.vm.$nextTick()
-    // Optimistic: enabled, reason gone, the switch locked until the server answers.
+    // Optimistic: enabled, reason gone, the button locked until the server answers.
     expect(list.items.value[0]).toMatchObject({ status: 'active', schedulable: true, status_reason: '', auto_disabled_until: null })
-    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(toggle.text()).toBe('禁用')
     expect(toggle.attributes('disabled')).toBeDefined()
     const error = new Error('enable failed')
     reject(error)
     await flushPromises()
     expect(list.items.value[0]).toMatchObject({ status: 'auto_disabled', schedulable: true, status_reason: 'matched auto-disable rule: status 401', auto_disabled_until: '2026-10-12T08:00:00Z' })
-    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(toggle.text()).toBe('启用')
     expect(toggle.attributes('disabled')).toBeUndefined()
     expect(mocks.notifyError).toHaveBeenCalledWith(error)
     expect(mocks.toast).not.toHaveBeenCalled()
@@ -421,25 +423,25 @@ describe('account status recovery', () => {
   it('keeps a manually disabled account off even when scheduling is on, and retains that state if enabling fails', async () => {
     const error = new Error('enable failed')
     mocks.patch.mockRejectedValueOnce(error)
-    const w = render()
-    const toggle = w.get('[data-testid="account-schedulable-switch"]')
-    expect(toggle.attributes('aria-checked')).toBe('false')
-    expect(toggle.attributes('title')).toBe('打开即启用账号')
+    const w = renderRow()
+    const toggle = w.get('[data-testid="account-enable-toggle"]')
+    expect(toggle.text()).toBe('启用')
+    expect(toggle.attributes('title')).toBe('启用账号')
     await flip(toggle)
     await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/accounts/23', { status: 'active', schedulable: true }, today)
-    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(toggle.text()).toBe('启用')
     expect(list.items.value[0]).toMatchObject({ status: 'disabled', status_reason: 'credentials rejected' })
     expect(mocks.notifyError).toHaveBeenCalledWith(error)
   })
 
-  it('shows readers and orphaned accounts the badge without a switch', () => {
+  it('shows readers and orphaned accounts the badge without the enable button', () => {
     mocks.canUpdate = false
-    expect(render().find('[data-testid="account-schedulable-switch"]').exists()).toBe(false)
+    expect(renderRow().find('[data-testid="account-enable-toggle"]').exists()).toBe(false)
     mocks.canUpdate = true
     list.items.value[0].orphaned = true
     const w = render()
-    expect(w.find('[data-testid="account-schedulable-switch"]').exists()).toBe(false)
+    expect(w.find('[data-testid="account-enable-toggle"]').exists()).toBe(false)
     expect(w.get('[data-testid="account-status"]').text()).toBe('禁用')
   })
 

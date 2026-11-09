@@ -41,6 +41,7 @@ import ModelLimitsEditor from './ModelLimitsEditor.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 import { useUsageLimitEdit } from './useUsageLimitEdit'
 import { toCards, type ModelLimitCard } from './modelLimits'
+import { newAccountConcurrency } from './accountLimits'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import { containerLocales, containerTimezones, environmentOptions } from './containerEnvironment'
 import { useContainerEnvironment } from './useContainerEnvironment'
@@ -74,7 +75,7 @@ const basic = reactive({
   proxy_id: null as number | null,
   priority: 10,
   weight: 1,
-  max_concurrency: 10,
+  max_concurrency: 0,
   schedulable: true,
   auto_disable: true,
   rpm_limit: 0,
@@ -458,7 +459,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   proxyUrl.value = ''
   basic.priority = a?.priority ?? 10
   basic.weight = a?.weight ?? 1
-  basic.max_concurrency = a?.max_concurrency ?? 10
+  basic.max_concurrency = a?.max_concurrency ?? newAccountConcurrency(own.scopeOf(ACCOUNT_KEYS.create))
   basic.schedulable = a?.schedulable ?? schedulingControl.value.default
   basic.auto_disable = a?.auto_disable ?? autoDisableControl.value.default
   basic.rpm_limit = a?.rpm_limit ?? 0
@@ -746,7 +747,7 @@ const { save } = useAccountSave({
               <SInput v-model.number="basic.weight" type="number" min="1" max="1000" class="w-full sm:w-40" />
             </SSettingRow>
             <SSettingRow :label="t('accounts.maxConcurrency')" :description="t('accounts.zeroUnlimited')" :error="errors.max_concurrency">
-              <SInput v-model.number="basic.max_concurrency" type="number" min="0" class="w-full sm:w-40" />
+              <SInput v-model.number="basic.max_concurrency" type="number" min="0" class="w-full sm:w-40" data-testid="account-max_concurrency" />
             </SSettingRow>
             <SSettingRow :label="t('accounts.schedulable')" :description="t(schedulingControl.configurable ? 'accounts.editorUi.schedulableHint' : 'accounts.editorUi.commonControlFixed')">
               <SSwitch v-model="basic.schedulable" :disabled="!schedulingControl.configurable || saving" data-testid="account-scheduling-control" />

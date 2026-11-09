@@ -783,7 +783,21 @@ const (
 	maxWeight      = 1000
 	maxPriority    = 1_000_000
 	maxConcurrency = 100_000
+	// ownMaxConcurrency is the cap an own-level user may set (H3.2) and the
+	// default of their new accounts; other new accounts default to unlimited.
+	ownMaxConcurrency     = 1000
+	ownDefaultConcurrency = 10
 )
+
+// defaultConcurrency is the max concurrency of a new account that does not
+// set one: unlimited (0), or ownDefaultConcurrency for an own-level caller,
+// who cannot set unlimited.
+func defaultConcurrency(scope *int64) int {
+	if scope != nil {
+		return ownDefaultConcurrency
+	}
+	return 0
+}
 
 func (in *input) validate(ctx context.Context, create bool) []core.FieldError {
 	var fe []core.FieldError
@@ -1008,7 +1022,7 @@ func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, i
 		return core.InvalidFields(core.FieldError{Field: "weight", Code: "restricted",
 			Message: t(ctx, "own-level users can only set weight between 1-100", "own 级用户只能设置 1-100 的权重")})
 	}
-	if in.MaxConcurrency != nil && (*in.MaxConcurrency < 1 || *in.MaxConcurrency > 1000) {
+	if in.MaxConcurrency != nil && (*in.MaxConcurrency < 1 || *in.MaxConcurrency > ownMaxConcurrency) {
 		return core.InvalidFields(core.FieldError{Field: "max_concurrency", Code: "restricted",
 			Message: t(ctx, "own-level users can only set max_concurrency between 1-1000", "own 级用户只能设置 1-1000 的最大并发")})
 	}
@@ -1169,7 +1183,7 @@ func (s *Service) create(c *gin.Context) {
 	sched := core.ValueOr(in.Schedulable, true)
 	autoDisable := core.ValueOr(in.AutoDisable, true)
 	prio := core.ValueOr(in.Priority, 10)
-	maxc := core.ValueOr(in.MaxConcurrency, 10)
+	maxc := core.ValueOr(in.MaxConcurrency, defaultConcurrency(scope))
 	weight := core.ValueOr(in.Weight, 1)
 	models := core.ValueOr(in.Models, []string{})
 	mapping := core.ValueOr(in.ModelMapping, map[string]string{})

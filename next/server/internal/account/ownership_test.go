@@ -118,7 +118,13 @@ func TestOwnership(t *testing.T) {
 	}
 	aliceID := int64(a1["id"].(float64))
 	bobID := int64(e.createAs(bob, "bob's", nil)["id"].(float64))
-	adminID := int64(e.createAs(admin, "admin's", nil)["id"].(float64))
+	a3 := e.createAs(admin, "admin's", nil)
+	adminID := int64(a3["id"].(float64))
+	// A new account without max_concurrency is unlimited, except for an
+	// own-level caller, who cannot set unlimited.
+	if a1["max_concurrency"] != float64(ownDefaultConcurrency) || a3["max_concurrency"] != float64(0) {
+		t.Fatalf("default max_concurrency: own %v, all %v", a1["max_concurrency"], a3["max_concurrency"])
+	}
 	// A row without creator (before ownership existed).
 	enc, err := e.svc.d.Cipher.Encrypt([]byte(`{"api_key":"legacy-key-1"}`), aad("anthropic"))
 	if err != nil {
