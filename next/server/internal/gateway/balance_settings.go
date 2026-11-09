@@ -15,7 +15,7 @@ import (
 
 const settingsKeyScheduling = "scheduling"
 
-// Values of SchedulingSettings.Mode and SchedulingSettings.Metric (CONTRACTS §88).
+// Values of SchedulingSettings.Mode and SchedulingSettings.Metric (CONTRACTS §89).
 const (
 	balanceModeDefault = "default"
 	balanceModeTraffic = "traffic"
@@ -32,7 +32,7 @@ var (
 
 // SchedulingSettings is the "scheduling" row of the settings table: how the
 // core balances new sessions inside one (priority, route grade) tier
-// (CONTRACTS §88). The defaults change nothing.
+// (CONTRACTS §89). The defaults change nothing.
 type SchedulingSettings struct {
 	// Mode "traffic" favours the accounts using less of Metric than their
 	// weight's share of the tier; "default" keeps the plain weighted draw.

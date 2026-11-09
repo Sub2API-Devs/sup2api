@@ -7,7 +7,7 @@ import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
 import { useSettingsForm } from '@/composables/useSettingsForm'
 import { useAuthStore } from '@/stores/auth'
 
-// Core load balancing of new sessions within a tier (GET/PUT /settings/scheduling, CONTRACTS §88).
+// Core load balancing of new sessions within a tier (GET/PUT /settings/scheduling, CONTRACTS §89).
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('settings:manage'))

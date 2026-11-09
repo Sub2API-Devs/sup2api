@@ -37,7 +37,7 @@ async function render() {
 const disabled = (w: Awaited<ReturnType<typeof render>>, id: string) =>
   w.findAll(`input[data-testid="${id}"], [data-testid="${id}"] input`).every(el => (el.element as HTMLInputElement).disabled)
 
-describe('scheduling policy tabs (CONTRACTS §88)', () => {
+describe('scheduling policy tabs (CONTRACTS §89)', () => {
   it('opens the failure policy by default and keeps the balance tab in ?sub=', async () => {
     const w = await render()
     expect(w.find('[data-testid="balance-settings"]').exists()).toBe(false)

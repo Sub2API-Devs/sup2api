@@ -18,7 +18,7 @@ func share(w []float64, i int) float64 {
 	return w[i] / sum
 }
 
-// The examples of CONTRACTS §88: 40 to 0 goes 98.8% to the idle account, 100
+// The examples of CONTRACTS §89: 40 to 0 goes 98.8% to the idle account, 100
 // to 90 goes 54% to the lighter one, usage in the weight ratio keeps it, and
 // an idle tier keeps the weights.
 func TestTrafficWeights(t *testing.T) {

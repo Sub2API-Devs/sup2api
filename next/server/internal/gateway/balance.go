@@ -11,7 +11,7 @@ import (
 
 // trafficSmoothing keeps an idle account's weight finite in the traffic
 // balance: w ÷ (r + trafficSmoothing)², with r its usage over its weight's
-// share of the tier (CONTRACTS §88). With weights 1:1 an RPM of 40 to 0 sends
+// share of the tier (CONTRACTS §89). With weights 1:1 an RPM of 40 to 0 sends
 // 98.8% of the new sessions to the idle account, 100 to 90 sends 54% to the
 // lighter one, and usage already in the weight ratio keeps the weight ratio.
 const trafficSmoothing = 0.25
@@ -220,7 +220,7 @@ func modelListIndex(a *core.AccountRef, model string) int {
 
 // tierWeights are the weights one (priority, grade) tier is drawn with: the
 // scheduler.rank plugins' weight with the higher of their load and the core's
-// limit load applied, then the traffic balance (CONTRACTS §67, §88). Without
+// limit load applied, then the traffic balance (CONTRACTS §67, §89). Without
 // loads and with the settings off they are the accounts' weights.
 func (c *call) tierWeights(tier []core.AccountRef) []float64 {
 	b := c.balance

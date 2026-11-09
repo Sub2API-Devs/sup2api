@@ -1412,7 +1412,7 @@ on('PUT', '/settings/gateway', (req) => {
   return gatewaySettings
 })
 
-// Core load balancing (CONTRACTS §88): the row is replaced, absent fields take the defaults.
+// Core load balancing (CONTRACTS §89): the row is replaced, absent fields take the defaults.
 const schedulingSettings = { mode: 'default', metric: 'rpm', limit_load: false, model_limits: false }
 on('GET', '/settings/scheduling', () => schedulingSettings)
 on('PUT', '/settings/scheduling', (req) => {

@@ -1274,7 +1274,7 @@ export interface GatewaySettings {
 /** The numeric gateway settings (one value each). */
 export type GatewayNumberSetting = Exclude<keyof GatewaySettings, 'claude_default_max_tokens'>
 
-/** Core load balancing of new sessions within a tier (GET/PUT /settings/scheduling, CONTRACTS §88). */
+/** Core load balancing of new sessions within a tier (GET/PUT /settings/scheduling, CONTRACTS §89). */
 export interface SchedulingSettings {
   /** default: weighted random; traffic: favour accounts using less than their weight's share. */
   mode: 'default' | 'traffic'
