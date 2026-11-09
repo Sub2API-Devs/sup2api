@@ -1179,7 +1179,7 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.5.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.7.0`，§87.3；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
 - 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 dynweight、growth、guard、moderation 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；`sdk/manifest`：声明了 `ui.native` 时必填）。
@@ -6735,11 +6735,13 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 语义：新账号缺省值取 `default`（再缺省取核心默认，自己级用户的并发默认 10 照旧，有声明时声明优先）；`configurable: false` 新建只接受默认值、更新只接受原值；`locked` 新老账号都只接受 `default`；不符报 `read_only`。值按 JSON 比较（格式、键序、数字写法、null 与空不影响）。`proxy` 只能写 `required`：新建没有代理、或更新清掉了代理时报 `proxy_id: required`，老账号没代理时其他修改照常。`visible` 只影响界面。
 - 执行点：`account/common_controls.go`，更新在锁行之后；`PUT /accounts/:id/usage-limit` 同样检查（`usage_limit: read_only`）；插件生命周期返回的 `account_patch` 不能改固定项（固定项从可改字段中移除，可改的照常）。
 - 校验（`sdk/manifest/check/common_controls.go`）：未知名称、类型或范围不符、`required` 用在 proxy 之外、proxy 写了 `required` 以外的字段、`locked` 没有 `default` 或同时写 `configurable: true`、与 `defaultLimits` 的值冲突（`conflict`）。用到新名称或 `visible`/`locked`/`required` 的插件 `hostCompat` 下限须 ≥0.1.263（`check.CommonControlsFirstCore`）。
-- `GET /account-types` 原样返回 `common_controls`。
+- 锁定值收敛：更新账号时，请求没带锁定字段而存储值与锁定值不同，就写入锁定值（锁定的用量限制同样在更新事务里写入）；老账号在下次保存时收敛，不做后台迁移。控制台对已保存账号显示存储值，不同于锁定值时提示“保存后改为锁定值 X”。
+- 自己级用户：新建时，省略的字段或等于预填默认值（声明的、否则 `default_limits`）的字段收进自己级上限（priority 0–100、weight 1–100、并发 1–1000，0 变 10）；其他越界值仍报 `restricted`；固定项（不可改或锁定）以声明为准、不收。更新时不收。控制台预填同样的收后值。
+- `GET /account-types` 返回 `common_controls`，`default` 按核心存储的形式规范化（例如头名小写），便于和账号存储值比较。
 
 ### 87.2 控制台
 
-- 账号编辑页按声明渲染每个通用项（`web/src/views/accounts/commonControls.ts`）：隐藏、置灰并说明原因、新建预填（声明优先于 `default_limits`）、代理必填；只有隐藏项的分区不显示，导航摘要跳过隐藏项；保存时不发固定项。没有声明的类型与之前完全一致。
+- 账号编辑页按声明渲染每个通用项（`web/src/views/accounts/commonControls.ts`）：隐藏、置灰并说明原因、新建预填（声明优先于 `default_limits`）、代理必填；只有隐藏项的分区不显示，导航摘要跳过隐藏项；保存时不发固定项。没有声明的类型与之前一致，只有两处小变化：英文调度摘要的“Weight”“Concurrency”首字母大写；切换认证方式时，没改过的 `default_limits` 值跟着换成新类型的。
 - 批量编辑：所选账号里有类型把某项固定时，该项置灰并显示数量（原来 `auto_disable` 会跳过固定的账号照样改其他账号）。
 - 编辑器不认识具体插件；ccgateway 的核心内集成（CC 授权、CC 特性、语言、自动模型）本期不动。
 
@@ -6750,5 +6752,5 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 87.4 编辑页分区插槽 `account.editor.section`
 
-- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（本插件的账号类型 id，唯一）；这三个字段只能用在这个插槽上；需要核心 ≥0.1.263。
+- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（只能是本插件自己的账号类型 id，唯一，校验强制）；这三个字段只能用在这个插槽上；需要核心 ≥0.1.263。
 - 账号编辑页在核心分区之后追加，props `{account, accountType, readonly}`，各插件分区独立隔离错误；新建账号显示“保存账号后可配置”。按 §23.3，插件分区不进核心保存流程，由插件自己的接口保存。
