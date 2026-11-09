@@ -1,0 +1,89 @@
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "incomplete_details": {
+    "reason": "max_output_tokens"
+  },
+  "model": "gpt-4o-2024-08-06",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "The lighthouse stood alone on the",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG_0",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "incomplete",
+  "usage": {
+    "input_tokens": 15,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 8,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 23
+  }
+}
+--- losses: {}
+
+=== anthropic.messages
+{
+  "content": [
+    {
+      "text": "The lighthouse stood alone on the",
+      "type": "text"
+    }
+  ],
+  "id": "msg_chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "model": "gpt-4o-2024-08-06",
+  "role": "assistant",
+  "stop_reason": "max_tokens",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 15,
+    "output_tokens": 8
+  }
+}
+--- losses: {}
+
+=== gemini.generate
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "The lighthouse stood alone on the"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "MAX_TOKENS",
+      "index": 0
+    }
+  ],
+  "modelVersion": "gpt-4o-2024-08-06",
+  "responseId": "chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "usageMetadata": {
+    "candidatesTokenCount": 8,
+    "promptTokenCount": 15,
+    "totalTokenCount": 23
+  }
+}
+--- losses: {}
+

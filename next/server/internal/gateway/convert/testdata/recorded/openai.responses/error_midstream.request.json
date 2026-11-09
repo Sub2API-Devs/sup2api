@@ -1,0 +1,6 @@
+{
+  "model": "gpt-4o",
+  "input": "Write a long story about a lighthouse.",
+  "store": false,
+  "stream": true
+}

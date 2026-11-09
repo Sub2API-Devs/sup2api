@@ -1,0 +1,104 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "No. 391 = 17 × 23.",
+        "reasoning_content": "**Factoring**\n\n391 = 17 x 23, so it is not prime.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "Ws0QacGWJdiVz7IPuv6E8Qo",
+  "model": "gemini-2.5-flash",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 132,
+    "completion_tokens_details": {
+      "reasoning_tokens": 120
+    },
+    "prompt_tokens": 9,
+    "total_tokens": 141
+  }
+}
+--- losses: {"reasoning":["response.candidates[0].content.parts[1]"]}
+
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "incomplete_details": null,
+  "model": "gemini-2.5-flash",
+  "object": "response",
+  "output": [
+    {
+      "id": "rs_Ws0QacGWJdiVz7IPuv6E8Qo_0",
+      "summary": [
+        {
+          "text": "**Factoring**\n\n391 = 17 x 23, so it is not prime.",
+          "type": "summary_text"
+        }
+      ],
+      "type": "reasoning"
+    },
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "No. 391 = 17 × 23.",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_Ws0QacGWJdiVz7IPuv6E8Qo_1",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 9,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 132,
+    "output_tokens_details": {
+      "reasoning_tokens": 120
+    },
+    "total_tokens": 141
+  }
+}
+--- losses: {"reasoning":["response.candidates[0].content.parts[1]"]}
+
+=== anthropic.messages
+{
+  "content": [
+    {
+      "thinking": "**Factoring**\n\n391 = 17 x 23, so it is not prime.",
+      "type": "thinking"
+    },
+    {
+      "text": "No. 391 = 17 × 23.",
+      "type": "text"
+    }
+  ],
+  "id": "msg_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "model": "gemini-2.5-flash",
+  "role": "assistant",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 9,
+    "output_tokens": 132
+  }
+}
+--- losses: {"reasoning":["response.candidates[0].content.parts[1]"]}
+

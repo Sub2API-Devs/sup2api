@@ -1,0 +1,13 @@
+{
+  "model": "gpt-4o",
+  "input": "Is 391 prime?",
+  "store": false,
+  "reasoning": {
+    "effort": "medium",
+    "summary": "auto"
+  },
+  "include": [
+    "reasoning.encrypted_content"
+  ],
+  "stream": true
+}

@@ -1,0 +1,30 @@
+{
+  "id": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-5-20250929",
+  "content": [
+    {
+      "type": "thinking",
+      "thinking": "391 = 17 x 23, so it is not prime.",
+      "signature": "EqQBCgIYAhIM1gbcDa9GJwZA2b3hGgxBdjrkzLoky3dl1pkiMOYds4mkeTjStGn9QxBiGanKpnmPTaGXd4pOqfQJxhyHuRSEd7w8V9KNIK6Ckj3AYCbaSHo"
+    },
+    {
+      "type": "text",
+      "text": "No. 391 = 17 × 23."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 40,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 60,
+    "service_tier": "standard"
+  }
+}

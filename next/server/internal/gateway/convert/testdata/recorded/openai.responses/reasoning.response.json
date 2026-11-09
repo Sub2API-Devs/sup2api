@@ -1,0 +1,56 @@
+{
+  "id": "resp_67ccd2bed1ec8190b14f964abc0542670bb6a6b452d3795b",
+  "object": "response",
+  "created_at": 1741476542,
+  "status": "completed",
+  "error": null,
+  "incomplete_details": null,
+  "model": "gpt-4o-2024-08-06",
+  "output": [
+    {
+      "id": "rs_6820f383d7c08191846711c5df8233bc0ac5ba57aafcbac7",
+      "type": "reasoning",
+      "summary": [
+        {
+          "type": "summary_text",
+          "text": "**Factoring 391**\n\n391 = 17 x 23."
+        },
+        {
+          "type": "summary_text",
+          "text": "**Answer**\n\nSo it is not prime."
+        }
+      ],
+      "encrypted_content": "gAAAAABoIPOHuJ0yzmX7oYaXjo2r8x0ZuGSiSMqoN6ZkdjjSC7MSHNBDO5BMUI1KrIAr2E-yEsigBlwXF0rhgq6Y"
+    },
+    {
+      "id": "msg_6820f3889a588191a7ffcfb9e81e0bbc0ac5ba57aafcbac7",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "No. 391 = 17 × 23.",
+          "annotations": []
+        }
+      ]
+    }
+  ],
+  "parallel_tool_calls": true,
+  "store": false,
+  "temperature": 1.0,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": 1.0,
+  "usage": {
+    "input_tokens": 12,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 140,
+    "output_tokens_details": {
+      "reasoning_tokens": 128
+    },
+    "total_tokens": 152
+  }
+}

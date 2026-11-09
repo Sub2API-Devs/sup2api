@@ -1,0 +1,109 @@
+=== openai.chat
+data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"reasoning_content":"**Factoring**\n\n391 = 17 x 23,"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"reasoning_content":" so it is not prime."},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":"No. 391"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":" = 17 × 23."},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop","index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":{"completion_tokens":132,"completion_tokens_details":{"reasoning_tokens":120},"prompt_tokens":9,"total_tokens":141}}
+
+data: [DONE]
+
+--- losses: {"reasoning":["response.candidates[0].content.parts[2]"]}
+
+=== openai.responses
+event: response.created
+data: {"response":{"created_at":0,"error":null,"id":"resp_Ws0QacGWJdiVz7IPuv6E8Qo","incomplete_details":null,"model":"gemini-2.5-flash","object":"response","output":[],"status":"in_progress","usage":null},"sequence_number":0,"type":"response.created"}
+
+event: response.in_progress
+data: {"response":{"created_at":0,"error":null,"id":"resp_Ws0QacGWJdiVz7IPuv6E8Qo","incomplete_details":null,"model":"gemini-2.5-flash","object":"response","output":[],"status":"in_progress","usage":null},"sequence_number":1,"type":"response.in_progress"}
+
+event: response.output_item.added
+data: {"item":{"id":"rs_Ws0QacGWJdiVz7IPuv6E8Qo_0","summary":[],"type":"reasoning"},"output_index":0,"sequence_number":2,"type":"response.output_item.added"}
+
+event: response.reasoning_summary_part.added
+data: {"item_id":"rs_Ws0QacGWJdiVz7IPuv6E8Qo_0","output_index":0,"part":{"text":"","type":"summary_text"},"sequence_number":3,"summary_index":0,"type":"response.reasoning_summary_part.added"}
+
+event: response.reasoning_summary_text.delta
+data: {"delta":"**Factoring**\n\n391 = 17 x 23,","item_id":"rs_Ws0QacGWJdiVz7IPuv6E8Qo_0","output_index":0,"sequence_number":4,"summary_index":0,"type":"response.reasoning_summary_text.delta"}
+
+event: response.reasoning_summary_text.delta
+data: {"delta":" so it is not prime.","item_id":"rs_Ws0QacGWJdiVz7IPuv6E8Qo_0","output_index":0,"sequence_number":5,"summary_index":0,"type":"response.reasoning_summary_text.delta"}
+
+event: response.reasoning_summary_text.done
+data: {"item_id":"rs_Ws0QacGWJdiVz7IPuv6E8Qo_0","output_index":0,"sequence_number":6,"summary_index":0,"text":"**Factoring**\n\n391 = 17 x 23, so it is not prime.","type":"response.reasoning_summary_text.done"}
+
+event: response.reasoning_summary_part.done
+data: {"item_id":"rs_Ws0QacGWJdiVz7IPuv6E8Qo_0","output_index":0,"part":{"text":"**Factoring**\n\n391 = 17 x 23, so it is not prime.","type":"summary_text"},"sequence_number":7,"summary_index":0,"type":"response.reasoning_summary_part.done"}
+
+event: response.output_item.done
+data: {"item":{"id":"rs_Ws0QacGWJdiVz7IPuv6E8Qo_0","summary":[{"text":"**Factoring**\n\n391 = 17 x 23, so it is not prime.","type":"summary_text"}],"type":"reasoning"},"output_index":0,"sequence_number":8,"type":"response.output_item.done"}
+
+event: response.output_item.added
+data: {"item":{"content":[],"id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_1","role":"assistant","status":"in_progress","type":"message"},"output_index":1,"sequence_number":9,"type":"response.output_item.added"}
+
+event: response.content_part.added
+data: {"content_index":0,"item_id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_1","output_index":1,"part":{"annotations":[],"text":"","type":"output_text"},"sequence_number":10,"type":"response.content_part.added"}
+
+event: response.output_text.delta
+data: {"content_index":0,"delta":"No. 391","item_id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_1","logprobs":[],"output_index":1,"sequence_number":11,"type":"response.output_text.delta"}
+
+event: response.output_text.delta
+data: {"content_index":0,"delta":" = 17 × 23.","item_id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_1","logprobs":[],"output_index":1,"sequence_number":12,"type":"response.output_text.delta"}
+
+event: response.output_text.done
+data: {"content_index":0,"item_id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_1","logprobs":[],"output_index":1,"sequence_number":13,"text":"No. 391 = 17 × 23.","type":"response.output_text.done"}
+
+event: response.content_part.done
+data: {"content_index":0,"item_id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_1","output_index":1,"part":{"annotations":[],"text":"No. 391 = 17 × 23.","type":"output_text"},"sequence_number":14,"type":"response.content_part.done"}
+
+event: response.output_item.done
+data: {"item":{"content":[{"annotations":[],"text":"No. 391 = 17 × 23.","type":"output_text"}],"id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_1","role":"assistant","status":"completed","type":"message"},"output_index":1,"sequence_number":15,"type":"response.output_item.done"}
+
+event: response.completed
+data: {"response":{"created_at":0,"error":null,"id":"resp_Ws0QacGWJdiVz7IPuv6E8Qo","incomplete_details":null,"model":"gemini-2.5-flash","object":"response","output":[{"id":"rs_Ws0QacGWJdiVz7IPuv6E8Qo_0","summary":[{"text":"**Factoring**\n\n391 = 17 x 23, so it is not prime.","type":"summary_text"}],"type":"reasoning"},{"content":[{"annotations":[],"text":"No. 391 = 17 × 23.","type":"output_text"}],"id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_1","role":"assistant","status":"completed","type":"message"}],"status":"completed","usage":{"input_tokens":9,"input_tokens_details":{"cached_tokens":0},"output_tokens":132,"output_tokens_details":{"reasoning_tokens":120},"total_tokens":141}},"sequence_number":16,"type":"response.completed"}
+
+--- losses: {"reasoning":["response.candidates[0].content.parts[2]"]}
+
+=== anthropic.messages
+event: message_start
+data: {"message":{"content":[],"id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"thinking":"","type":"thinking"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"thinking":"**Factoring**\n\n391 = 17 x 23,","type":"thinking_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_delta
+data: {"delta":{"thinking":" so it is not prime.","type":"thinking_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: content_block_start
+data: {"content_block":{"text":"","type":"text"},"index":1,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"text":"No. 391","type":"text_delta"},"index":1,"type":"content_block_delta"}
+
+event: content_block_delta
+data: {"delta":{"text":" = 17 × 23.","type":"text_delta"},"index":1,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":1,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"end_turn","stop_sequence":null},"type":"message_delta","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":9,"output_tokens":132}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+--- losses: {"reasoning":["response.candidates[0].content.parts[2]"]}
+

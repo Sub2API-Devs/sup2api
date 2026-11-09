@@ -1,0 +1,82 @@
+=== openai.chat
+data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"reasoning_content":"**Factoring 391*"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"reasoning_content":"*\n\n391 = 17 x 23."},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"reasoning_content":"\n\n**Answer**\n\nSo "},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"reasoning_content":"it is not prime."},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":"No. 391"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":" = 17 × 23."},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop","index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":{"completion_tokens":140,"completion_tokens_details":{"reasoning_tokens":128},"prompt_tokens":12,"total_tokens":152}}
+
+data: [DONE]
+
+--- losses: {"reasoning":["response.output[0]"]}
+
+=== anthropic.messages
+event: message_start
+data: {"message":{"content":[],"id":"msg_resp_<hex>","model":"gpt-4o-2024-08-06","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"thinking":"","type":"thinking"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"thinking":"**Factoring 391*","type":"thinking_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_delta
+data: {"delta":{"thinking":"*\n\n391 = 17 x 23.","type":"thinking_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_delta
+data: {"delta":{"thinking":"\n\n**Answer**\n\nSo ","type":"thinking_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_delta
+data: {"delta":{"thinking":"it is not prime.","type":"thinking_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: content_block_start
+data: {"content_block":{"text":"","type":"text"},"index":1,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"text":"No. 391","type":"text_delta"},"index":1,"type":"content_block_delta"}
+
+event: content_block_delta
+data: {"delta":{"text":" = 17 × 23.","type":"text_delta"},"index":1,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":1,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"end_turn","stop_sequence":null},"type":"message_delta","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":12,"output_tokens":140}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+--- losses: {"reasoning":["response.output[0]"]}
+
+=== gemini.generate
+data: {"candidates":[{"content":{"parts":[{"text":"**Factoring 391*","thought":true}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"*\n\n391 = 17 x 23.","thought":true}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"\n\n**Answer**\n\nSo ","thought":true}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"it is not prime.","thought":true}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"No. 391"}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" = 17 × 23."}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>"}
+
+data: {"candidates":[{"finishReason":"STOP","index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>","usageMetadata":{"candidatesTokenCount":12,"promptTokenCount":12,"thoughtsTokenCount":128,"totalTokenCount":152}}
+
+--- losses: {"reasoning":["response.output[0]"]}
+

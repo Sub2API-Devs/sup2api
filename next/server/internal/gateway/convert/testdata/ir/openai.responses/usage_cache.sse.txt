@@ -1,0 +1,41 @@
+=== openai.chat
+data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":"Hello."},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop","index":0,"logprobs":null}],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[],"created":0,"id":"resp_<hex>","model":"gpt-4o-2024-08-06","object":"chat.completion.chunk","usage":{"completion_tokens":3,"prompt_tokens":1290,"prompt_tokens_details":{"cached_tokens":1152},"total_tokens":1293}}
+
+data: [DONE]
+
+--- losses: {}
+
+=== anthropic.messages
+event: message_start
+data: {"message":{"content":[],"id":"msg_resp_<hex>","model":"gpt-4o-2024-08-06","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"text":"","type":"text"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"text":"Hello.","type":"text_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"end_turn","stop_sequence":null},"type":"message_delta","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":1152,"input_tokens":138,"output_tokens":3}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+--- losses: {}
+
+=== gemini.generate
+data: {"candidates":[{"content":{"parts":[{"text":"Hello."}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>"}
+
+data: {"candidates":[{"finishReason":"STOP","index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>","usageMetadata":{"cachedContentTokenCount":1152,"candidatesTokenCount":3,"promptTokenCount":1290,"totalTokenCount":1293}}
+
+--- losses: {}
+

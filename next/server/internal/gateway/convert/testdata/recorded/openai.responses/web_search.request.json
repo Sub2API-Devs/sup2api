@@ -1,0 +1,11 @@
+{
+  "model": "gpt-4o",
+  "input": "What is the weather in Paris?",
+  "store": false,
+  "tools": [
+    {
+      "type": "web_search"
+    }
+  ],
+  "stream": true
+}

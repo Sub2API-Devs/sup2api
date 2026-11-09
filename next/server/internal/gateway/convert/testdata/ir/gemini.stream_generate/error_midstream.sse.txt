@@ -1,0 +1,45 @@
+=== openai.chat
+data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":"Once upon"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"error":{"code":503,"message":"The model is overloaded. Please try again later.","type":"UNAVAILABLE"}}
+
+--- losses: {}
+
+=== openai.responses
+event: response.created
+data: {"response":{"created_at":0,"error":null,"id":"resp_Ws0QacGWJdiVz7IPuv6E8Qo","incomplete_details":null,"model":"gemini-2.5-flash","object":"response","output":[],"status":"in_progress","usage":null},"sequence_number":0,"type":"response.created"}
+
+event: response.in_progress
+data: {"response":{"created_at":0,"error":null,"id":"resp_Ws0QacGWJdiVz7IPuv6E8Qo","incomplete_details":null,"model":"gemini-2.5-flash","object":"response","output":[],"status":"in_progress","usage":null},"sequence_number":1,"type":"response.in_progress"}
+
+event: response.output_item.added
+data: {"item":{"content":[],"id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_0","role":"assistant","status":"in_progress","type":"message"},"output_index":0,"sequence_number":2,"type":"response.output_item.added"}
+
+event: response.content_part.added
+data: {"content_index":0,"item_id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_0","output_index":0,"part":{"annotations":[],"text":"","type":"output_text"},"sequence_number":3,"type":"response.content_part.added"}
+
+event: response.output_text.delta
+data: {"content_index":0,"delta":"Once upon","item_id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_0","logprobs":[],"output_index":0,"sequence_number":4,"type":"response.output_text.delta"}
+
+event: response.failed
+data: {"response":{"created_at":0,"error":{"code":"UNAVAILABLE","message":"The model is overloaded. Please try again later."},"id":"resp_Ws0QacGWJdiVz7IPuv6E8Qo","incomplete_details":null,"model":"gemini-2.5-flash","object":"response","output":[{"content":[{"annotations":[],"text":"Once upon","type":"output_text"}],"id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo_0","role":"assistant","status":"completed","type":"message"}],"status":"failed","usage":null},"sequence_number":5,"type":"response.failed"}
+
+--- losses: {}
+
+=== anthropic.messages
+event: message_start
+data: {"message":{"content":[],"id":"msg_Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"text":"","type":"text"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"text":"Once upon","type":"text_delta"},"index":0,"type":"content_block_delta"}
+
+event: error
+data: {"error":{"message":"The model is overloaded. Please try again later.","type":"overloaded_error"},"type":"error"}
+
+--- losses: {}
+

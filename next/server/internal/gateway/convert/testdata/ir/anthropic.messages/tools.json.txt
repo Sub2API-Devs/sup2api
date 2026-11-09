@@ -1,0 +1,141 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "tool_calls",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "I'll check both cities.",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"city\":\"Paris\"}",
+              "name": "get_weather"
+            },
+            "id": "toolu_01T1x1fJ34qAmk2tNTrN7Up6",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"city\":\"Tokyo\"}",
+              "name": "get_weather"
+            },
+            "id": "toolu_01KkV6nBQfcxBxNc5zNm4mVd",
+            "type": "function"
+          }
+        ]
+      }
+    }
+  ],
+  "created": 0,
+  "id": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "model": "claude-sonnet-4-5-20250929",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 96,
+    "prompt_tokens": 380,
+    "total_tokens": 476
+  }
+}
+--- losses: {}
+
+=== openai.responses
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "incomplete_details": null,
+  "model": "claude-sonnet-4-5-20250929",
+  "object": "response",
+  "output": [
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "I'll check both cities.",
+          "type": "output_text"
+        }
+      ],
+      "id": "msg_msg_013Zva2CMHLNnXjNJJKqJ2EF_0",
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    },
+    {
+      "arguments": "{\"city\":\"Paris\"}",
+      "call_id": "toolu_01T1x1fJ34qAmk2tNTrN7Up6",
+      "id": "fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_1",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    },
+    {
+      "arguments": "{\"city\":\"Tokyo\"}",
+      "call_id": "toolu_01KkV6nBQfcxBxNc5zNm4mVd",
+      "id": "fc_msg_013Zva2CMHLNnXjNJJKqJ2EF_2",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 380,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 96,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 476
+  }
+}
+--- losses: {}
+
+=== gemini.generate
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "I'll check both cities."
+          },
+          {
+            "functionCall": {
+              "args": {
+                "city": "Paris"
+              },
+              "id": "toolu_01T1x1fJ34qAmk2tNTrN7Up6",
+              "name": "get_weather"
+            }
+          },
+          {
+            "functionCall": {
+              "args": {
+                "city": "Tokyo"
+              },
+              "id": "toolu_01KkV6nBQfcxBxNc5zNm4mVd",
+              "name": "get_weather"
+            }
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "claude-sonnet-4-5-20250929",
+  "responseId": "msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "usageMetadata": {
+    "candidatesTokenCount": 96,
+    "promptTokenCount": 380,
+    "totalTokenCount": 476
+  }
+}
+--- losses: {}
+

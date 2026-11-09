@@ -1,0 +1,87 @@
+=== openai.chat
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "No. 391 = 17 × 23.",
+        "reasoning_content": "**Factoring 391**\n\n391 = 17 x 23.\n\n**Answer**\n\nSo it is not prime.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 0,
+  "id": "resp_<hex>",
+  "model": "gpt-4o-2024-08-06",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 140,
+    "completion_tokens_details": {
+      "reasoning_tokens": 128
+    },
+    "prompt_tokens": 12,
+    "total_tokens": 152
+  }
+}
+--- losses: {"reasoning":["response.output[0]"]}
+
+=== anthropic.messages
+{
+  "content": [
+    {
+      "thinking": "**Factoring 391**\n\n391 = 17 x 23.\n\n**Answer**\n\nSo it is not prime.",
+      "type": "thinking"
+    },
+    {
+      "text": "No. 391 = 17 × 23.",
+      "type": "text"
+    }
+  ],
+  "id": "msg_resp_<hex>",
+  "model": "gpt-4o-2024-08-06",
+  "role": "assistant",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "type": "message",
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "input_tokens": 12,
+    "output_tokens": 140
+  }
+}
+--- losses: {"reasoning":["response.output[0]"]}
+
+=== gemini.generate
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "**Factoring 391**\n\n391 = 17 x 23.\n\n**Answer**\n\nSo it is not prime.",
+            "thought": true
+          },
+          {
+            "text": "No. 391 = 17 × 23."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "gpt-4o-2024-08-06",
+  "responseId": "resp_<hex>",
+  "usageMetadata": {
+    "candidatesTokenCount": 12,
+    "promptTokenCount": 12,
+    "thoughtsTokenCount": 128,
+    "totalTokenCount": 152
+  }
+}
+--- losses: {"reasoning":["response.output[0]"]}
+

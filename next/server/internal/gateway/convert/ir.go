@@ -1,6 +1,9 @@
 package convert
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // The response side of a conversion goes through one internal
 // representation (IR, CONVERT-MATRIX §3): a Reader per upstream protocol
@@ -58,6 +61,10 @@ type Block struct {
 	// Raw is a BlockOpaque as the upstream sent it; a writer drops it and
 	// records the loss.
 	Raw json.RawMessage
+	// Src is where the block sits in the upstream reply, without the
+	// "response." prefix ("output[2]", "content[1]"); response loss paths
+	// name it.
+	Src string
 }
 
 // Citation is a url citation in one shape for all protocols. Start and End
@@ -116,7 +123,11 @@ const (
 	DeltaError                         // upstream failed: Err
 )
 
-// Delta is one step of a streamed reply.
+// Delta is one step of a streamed reply. Blocks are sequential: a reader
+// stops the open block before it starts the next, and DeltaText,
+// DeltaReasoning, DeltaArgs and DeltaCitation only name the open block;
+// DeltaReasoningState may name any started block. DeltaText and
+// DeltaReasoning both append to the block's Text.
 type Delta struct {
 	Op DeltaOp
 	// Index numbers blocks from 0 in order of appearance.
@@ -143,9 +154,15 @@ type UpstreamError struct {
 	Message string
 }
 
+func (e *UpstreamError) Error() string {
+	return fmt.Sprintf("upstream error %d %s: %s", e.Status, e.Type, e.Message)
+}
+
 // Reader turns one upstream protocol into IR. A reader emits DeltaUsage as
 // soon as usage is known and DeltaFinish only at the protocol's end point
-// (CONVERT-MATRIX §3.1). One Reader serves one stream or one JSON body.
+// (CONVERT-MATRIX §3.1). One Reader serves one stream or one JSON body. A
+// reader may also be a LossReporter for what the IR cannot hold (unmapped
+// finish reasons, citations without a url).
 type Reader interface {
 	// Event converts one upstream SSE event. ev.Data is only valid during
 	// the call.
