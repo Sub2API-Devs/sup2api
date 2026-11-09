@@ -2,16 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { defineComponent } from 'vue'
+import { defineComponent, h } from 'vue'
 import { i18n } from '@/i18n'
 import { useAppStore } from '@/stores/app'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
+import AppLayout from './AppLayout.vue'
 import DeclarativeTable from '@/components/plugin/DeclarativeTable.vue'
 import { mountPinned } from '@sub2api/ui/testing'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn() }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), api }))
+vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ refresh: () => Promise.resolve() }) }))
 const denied = vi.hoisted(() => new Set<string>())
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
@@ -76,44 +78,65 @@ describe('sidebar', () => {
 
   const operatorMenu = [
     { section: 'overview', items: [item('dashboard', '/dashboard')] },
-    { section: 'gateway', items: [item('groups', '/groups'), item('accounts', '/accounts')] },
+    { section: 'gateway', items: [item('accounts', '/accounts'), item('groups', '/groups')] },
     { section: 'security', items: [item('guard', '/p/guard/dashboard')] },
-    { section: 'users', items: [item('users', '/users'), item('roles', '/roles')] },
+    { section: 'users', items: [item('users', '/users')] },
+    { section: 'vol:ark', label: { zh: '火山方舟' }, items: [item('assets', '/p/vol/assets'), item('sets', '/p/vol/sets')] },
+    { section: 'system', items: [item('settings', '/settings'), item('nodes', '/nodes')] },
     { section: 'me', items: [item('wallet', '/me/wallet')] }
   ]
 
-  it('folds the operator sections into admin submenus, a one-entry section stays a plain entry', async () => {
+  it('lists the admin sections flat, folds a plugin section and ends with system settings', async () => {
     const { wrapper, app } = await mountSidebar(operatorMenu)
     const admin = wrapper.get('[data-testid="nav-group-admin"]')
     expect(admin.text()).toContain('管理员')
-    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'guard'])
-    expect(admin.findAll('button').map(b => b.text())).toEqual(['网关', '用户与权限'])
-    await wrapper.get('[data-testid="nav-submenu-gateway"]').trigger('click')
-    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'groups', 'accounts', 'guard'])
-    expect(wrapper.get('[data-testid="nav-submenu-gateway"]').attributes('aria-expanded')).toBe('true')
-    expect(JSON.parse(localStorage.getItem('s2a.navOpen') || '[]')).toEqual(['gateway'])
+    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'accounts', 'groups', 'guard', 'users', '系统设置'])
+    expect(admin.findAll('button').map(b => b.text())).toEqual(['火山方舟'])
+    await wrapper.get('[data-testid="nav-submenu-vol:ark"]').trigger('click')
+    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'accounts', 'groups', 'guard', 'users', 'assets', 'sets', '系统设置'])
+    expect(wrapper.get('[data-testid="nav-submenu-vol:ark"]').attributes('aria-expanded')).toBe('true')
+    expect(JSON.parse(localStorage.getItem('s2a.navOpen') || '[]')).toEqual(['vol:ark'])
     app.sidebarCollapsed = true
     await flushPromises()
-    // Collapsed: no titles or submenus, every entry an icon, a rule between every two sections.
+    // Collapsed: no titles or submenus, every entry an icon, a rule between every two groups.
     expect(wrapper.text()).not.toContain('管理员')
-    expect(wrapper.findAll('nav a')).toHaveLength(7)
-    expect(wrapper.findAll('nav hr')).toHaveLength(4)
+    expect(wrapper.findAll('nav a')).toHaveLength(9)
+    expect(wrapper.findAll('nav hr')).toHaveLength(2)
   })
 
   it('opens the submenu of the current page and remembers the ones opened before', async () => {
-    localStorage.setItem('s2a.navOpen', JSON.stringify(['users']))
-    const { wrapper } = await mountSidebar(operatorMenu, '/accounts')
-    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'groups', 'accounts', 'guard', 'users', 'roles'])
-    await wrapper.get('[data-testid="nav-submenu-gateway"]').trigger('click')
-    expect(labels(wrapper)).toEqual(['dashboard', 'wallet', 'guard', 'users', 'roles'])
+    localStorage.setItem('s2a.navOpen', JSON.stringify(['other:x']))
+    const { wrapper } = await mountSidebar(operatorMenu, '/p/vol/sets')
+    expect(labels(wrapper)).toContain('sets')
+    await wrapper.get('[data-testid="nav-submenu-vol:ark"]').trigger('click')
+    expect(labels(wrapper)).not.toContain('sets')
+    expect(JSON.parse(localStorage.getItem('s2a.navOpen') || '[]')).toEqual(['other:x'])
+  })
+
+  it("lights up system settings on a page reached from the settings page, such as a plugin's settings", async () => {
+    const menu = [operatorMenu[0], { section: 'system', items: [item('settings', '/settings'), item('plugins', '/plugins')] }]
+    const { wrapper } = await mountSidebar(menu, '/plugins/mailer/settings')
+    expect(wrapper.findAll('nav a').filter(a => a.attributes('aria-current') === 'page').map(a => a.text())).toEqual(['系统设置'])
+  })
+
+  it('opens system settings on its first page and lights it up on every one of its pages', async () => {
+    const vendor = [operatorMenu[0], { section: 'system', items: [item('proxies', '/proxies'), item('nodes', '/nodes')] }]
+    const settings = (w: ReturnType<typeof mount>) => w.findAll('nav a').find(a => a.text() === '系统设置')!
+    const { wrapper } = await mountSidebar(vendor, '/nodes')
+    expect(settings(wrapper).attributes('href')).toBe('/proxies')
+    expect(settings(wrapper).attributes('aria-current')).toBe('page')
   })
 
   it('lights up the menu entry of the page, else of its nearest parent page', async () => {
     const menu = [
       { section: 'overview', items: [item('dashboard', '/dashboard')] },
-      { section: 'system', items: [item('plugins', '/plugins'), item('prices', '/prices'), item('settings', '/settings')] }
+      { section: 'gateway', items: [item('plugins', '/plugins'), item('prices', '/prices'), item('settings', '/settings')] }
     ]
-    const current = (w: ReturnType<typeof mount>) => w.findAll('nav a').filter(a => a.attributes('aria-current') === 'page').map(a => a.text())
+    const current = (w: ReturnType<typeof mount>) =>
+      w
+        .findAll('nav a')
+        .filter(a => a.attributes('aria-current') === 'page')
+        .map(a => a.text())
     // Plugin settings are a child of Settings, not of the plugin list the path starts with.
     expect(current((await mountSidebar(menu, '/plugins/mailer/settings')).wrapper)).toEqual(['settings'])
     expect(current((await mountSidebar(menu, '/prices/sources/3/sync')).wrapper)).toEqual(['prices'])
@@ -142,7 +165,10 @@ describe('sidebar', () => {
     const { wrapper, app } = await mountSidebar(new Error('down'))
     expect(app.menusError).toBe(true)
     expect(labels(wrapper)).toEqual(['仪表盘'])
-    api.get.mockResolvedValue([{ section: 'overview', items: [item('dashboard', '/dashboard')] }, { section: 'gateway', items: [item('groups', '/groups')] }])
+    api.get.mockResolvedValue([
+      { section: 'overview', items: [item('dashboard', '/dashboard')] },
+      { section: 'gateway', items: [item('groups', '/groups')] }
+    ])
     await wrapper.get('[data-testid="menu-retry"]').trigger('click')
     await flushPromises()
     expect(app.menusError).toBe(false)
@@ -157,7 +183,10 @@ describe('top bar', () => {
     await router.push('/prices/sources/3/sync')
     const wrapper = mount(AppTopbar, { global: { plugins: [i18n, router], stubs: { ChangePasswordDialog: true } } })
     const crumbs = wrapper.get('[data-testid="breadcrumbs"]').findAll('a')
-    expect(crumbs.map(a => [a.text(), a.attributes('href')])).toEqual([['模型价格', '/prices'], ['价格同步源', '/prices/sources']])
+    expect(crumbs.map(a => [a.text(), a.attributes('href')])).toEqual([
+      ['模型价格', '/prices'],
+      ['价格同步源', '/prices/sources']
+    ])
     expect(wrapper.get('h1').text()).toBe('同步价格')
     await router.push('/prices')
     await flushPromises()
@@ -209,7 +238,10 @@ describe('declarative table', () => {
   it('opens the create form from a "New" button when the core sends the link', async () => {
     api.list.mockResolvedValue({ items: [], page: { total: 0 }, paged: false })
     const p = plugin({ page: 'new_asset' })
-    const wrapper = mount(DeclarativeTable, { props: { plugin: p as never, page: p.pages.assets as never }, global: { plugins: [i18n, makeRouter()] } })
+    const wrapper = mount(DeclarativeTable, {
+      props: { plugin: p as never, page: p.pages.assets as never },
+      global: { plugins: [i18n, makeRouter()] }
+    })
     await flushPromises()
     const btn = wrapper.get('[data-testid="table-create"]')
     expect(btn.text()).toBe('新建素材')
@@ -219,8 +251,30 @@ describe('declarative table', () => {
   it('has no button without the link', async () => {
     api.list.mockResolvedValue({ items: [], page: { total: 0 }, paged: false })
     const p = plugin()
-    const wrapper = mount(DeclarativeTable, { props: { plugin: p as never, page: p.pages.assets as never }, global: { plugins: [i18n, makeRouter()] } })
+    const wrapper = mount(DeclarativeTable, {
+      props: { plugin: p as never, page: p.pages.assets as never },
+      global: { plugins: [i18n, makeRouter()] }
+    })
     await flushPromises()
     expect(wrapper.find('[data-testid="table-create"]').exists()).toBe(false)
+  })
+})
+
+describe('layout', () => {
+  it('opens a page of system settings inside its navigation at once, without remounting when the menu arrives', async () => {
+    let menus!: (v: unknown) => void
+    api.get.mockImplementation((path: string) => (path === '/me/menus' ? new Promise(r => (menus = r)) : Promise.resolve([])))
+    let mounts = 0
+    const Page = defineComponent({ mounted: () => void mounts++, render: () => h('div', { 'data-testid': 'page' }) })
+    const router = makeRouter()
+    router.addRoute({ path: '/nodes', component: Page, meta: { title: 'nav.items.nodes', parent: '/settings' } })
+    await router.push('/nodes')
+    const wrapper = mount(AppLayout, { global: { plugins: [i18n, router], stubs: { AppSidebar: true, AppTopbar: true } } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="page"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="settings-nav"]').exists()).toBe(true)
+    menus([{ section: 'system', items: [item('settings', '/settings'), item('nodes', '/nodes')] }])
+    await flushPromises()
+    expect(mounts).toBe(1)
   })
 })

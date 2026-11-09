@@ -42,10 +42,10 @@ type coreMenuSection struct {
 }
 
 // coreMenus follows CONTRACTS §22.1 and §90. The console shows three groups:
-// overview (the console every role has), me (personal) and, under one admin
-// header, the operator sections - gateway resources, security, finance, users
-// and permissions, the plugin ecosystem and cluster operations - kept apart so
-// plugins can join the one their pages belong to.
+// overview (the console every role has), me (personal) and admin: the
+// operator sections listed flat, plugin sections folded, and system (system
+// settings) as one entry whose pages share the settings page's navigation.
+// Sections stay apart so plugins can join the one their pages belong to.
 var coreMenus = []coreMenuSection{
 	// Own usage for everyone, site-wide usage beside it for those who may
 	// read it; the old usage statistics page (/me/stats) redirects to the
@@ -60,11 +60,8 @@ var coreMenus = []coreMenuSection{
 		{"usage", lt("Site usage logs", "全站日志"), "usage", "/usage", []string{"usage:all:read"}},
 	}},
 	{"gateway", lt("Gateway", "网关"), []coreMenuItem{
-		{"groups", lt("Groups", "分组"), "group", "/groups", []string{"group:read"}},
 		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read", "account:own:read", "account:own:create"}},
-		// Platforms configure accounts and share their permissions.
-		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read", "account:own:read", "account:own:create"}},
-		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}},
+		{"groups", lt("Groups", "分组"), "group", "/groups", []string{"group:read"}},
 		{"prices", lt("Model prices", "模型价格"), "price", "/prices", []string{"price:read"}},
 	}},
 	// No core items: request guards and moderation are plugins and join it.
@@ -74,20 +71,25 @@ var coreMenus = []coreMenuSection{
 	}},
 	{"users", lt("Users & access", "用户与权限"), []coreMenuItem{
 		{"users", lt("Users", "用户"), "user", "/users", []string{"user:read"}},
-		{"roles", lt("Roles & permissions", "角色与权限"), "role", "/roles", []string{"role:read"}},
 	}},
-	// Plugin menus with section "plugins" are appended after these.
-	{"plugins", lt("Plugins", "插件"), []coreMenuItem{
+	// No core items since plugin management moved to system settings;
+	// plugin menus with section "plugins" (the default) still join it.
+	{"plugins", lt("Plugins", "插件"), nil},
+	// System settings: configuration and operations pages (CONTRACTS §90).
+	// Plugin menus with section "system" join them.
+	{"system", lt("System settings", "系统设置"), []coreMenuItem{
+		{"settings", lt("System settings", "系统设置"), "settings", "/settings", []string{"settings:read", "sticky:read"}},
+		// Platforms configure accounts and share their permissions.
+		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read", "account:own:read", "account:own:create"}},
+		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}},
+		{"roles", lt("Roles & permissions", "角色与权限"), "role", "/roles", []string{"role:read"}},
 		{"plugins", lt("Installed plugins", "已安装插件"), "plugin", "/plugins", []string{"plugin:read"}},
 		{"market", lt("Plugin market", "插件市场"), "market", "/market", []string{"plugin:market:read"}},
 		{"publishers", lt("Publishers", "发布者"), "publisher", "/publishers", []string{"publisher:read"}},
-	}},
-	{"system", lt("System", "系统"), []coreMenuItem{
 		{"nodes", lt("Cluster nodes", "集群节点"), "node", "/nodes", []string{"node:read"}},
 		{"tasks", lt("Scheduled tasks", "定时任务"), "clock", "/system/tasks", []string{"task:read"}},
 		{"upgrades", lt("Core updates", "核心升级"), "refresh", "/system/upgrades", []string{"system:update:read"}},
 		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"audit:read"}},
-		{"settings", lt("Settings", "设置"), "settings", "/settings", []string{"settings:read", "sticky:read"}},
 	}},
 	{"me", lt("Personal", "个人中心"), []coreMenuItem{
 		{"my-wallet", lt("Wallet", "钱包"), "balance", "/me/wallet", []string{"balance:self:read"}},

@@ -4,16 +4,17 @@ export default {
   navLabel: '设置分类',
   groups: {
     gateway: '网关',
-    billing: '计费',
-    notifications: '通知',
-    system: '系统',
-    plugins: '插件设置'
+    billing: '计费与通知',
+    access: '用户与权限',
+    plugins: '插件',
+    pluginSettings: '插件设置',
+    system: '系统'
   },
   tabs: {
     notifications: '通知',
     environment: '环境变量',
     billing: '计费',
-    gateway: '网关',
+    gateway: '网关设置',
     sticky: '粘性会话',
     offload: 'CPU 保护'
   },

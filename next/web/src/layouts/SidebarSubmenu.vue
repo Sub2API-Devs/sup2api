@@ -2,9 +2,9 @@
 import { SIcon } from '@sub2api/ui'
 import type { NavSection } from '@/stores/app'
 import SidebarLink from './SidebarLink.vue'
-import { sectionIcon } from './sidebarGroups'
+import { navItemContext } from './navItem'
 
-/** A section of the admin group folded under one expandable entry. */
+/** A plugin's own section folded under one expandable entry, shown with its first page's icon. */
 defineProps<{ section: NavSection; label: string; open: boolean; activePath?: string }>()
 defineEmits<{ toggle: [] }>()
 </script>
@@ -17,7 +17,11 @@ defineEmits<{ toggle: [] }>()
     :data-testid="`nav-submenu-${section.key}`"
     @click="$emit('toggle')"
   >
-    <SIcon :name="sectionIcon(section)" class="h-5 w-5 shrink-0" />
+    <SIcon
+      :name="section.items[0]?.icon || 'puzzle'"
+      :context="section.items[0] && navItemContext(section.items[0])"
+      class="h-5 w-5 shrink-0"
+    />
     <span class="flex-1 truncate text-left">{{ label }}</span>
     <SIcon name="chevron-right" class="h-4 w-4 shrink-0 text-fg-subtle transition-transform" :class="open ? 'rotate-90' : ''" />
   </button>

@@ -294,7 +294,6 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/prices': 'price:read',
   '/usage': 'usage:all:read',
   '/usage/overview': 'usage:all:read',
-  '/sticky': 'sticky:read',
   '/ledger': 'balance:all:read',
   '/users': 'user:read',
   '/roles': 'role:read',
@@ -308,11 +307,13 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/system/audit': 'audit:read',
   '/system/tasks': 'task:read',
   '/me/api-keys': 'apikey:self:manage',
+  '/me/models': 'apikey:self:manage',
   '/me/usage': 'usage:self:read',
   '/me/usage/overview': 'usage:self:read',
-  '/me/balance': 'balance:self:read',
+  '/me/wallet': 'balance:self:read',
   '/p/anthropic/models': 'plugin.anthropic:model_catalog:read',
-  '/p/guard/dashboard': 'plugin.guard:stats:read'
+  '/p/guard/dashboard': 'plugin.guard:stats:read',
+  '/p/dynweight/dashboard': 'plugin.dynweight:dynweight:read'
 }
 
 on('GET', '/me/menus', (req) => {
@@ -320,67 +321,65 @@ on('GET', '/me/menus', (req) => {
   return MENUS.map((s) => ({ ...s, items: s.items.filter((i) => !MENU_PERMS[i.path] || hasPerm(who, MENU_PERMS[i.path])) })).filter((s) => s.items.length)
 })
 
-// Mirrors server/internal/authz/menus.go (sections and their order) with the
-// bundled plugins' menus placed where their manifests put them.
+// Mirrors server/internal/authz/menus.go (sections, labels and order, CONTRACTS
+// §90) with the bundled plugins' menus placed where their manifests put them.
+const L = (en: string, zh: string) => ({ en, zh })
 const MENUS = [
   {
     section: 'overview',
+    label: L('Console', '控制台'),
     items: [
-      { id: 'dashboard', label: { en: 'Dashboard', zh: '仪表盘' }, icon: 'dashboard', path: '/dashboard' },
-      { id: 'my-api-keys', label: { en: 'API keys', zh: 'API 密钥' }, icon: 'key', path: '/me/api-keys' },
-      { id: 'my-models', label: { en: 'Models & prices', zh: '模型与价格' }, icon: 'price', path: '/me/models' },
-      { id: 'my-usage-overview', label: { en: 'Usage overview', zh: '用量概览' }, icon: 'chart', path: '/me/usage/overview' },
-      { id: 'my-usage', label: { en: 'Usage logs', zh: '使用日志' }, icon: 'usage', path: '/me/usage' },
-      { id: 'usage-overview', label: { en: 'Site overview', zh: '全站概览' }, icon: 'chart', path: '/usage/overview' },
-      { id: 'usage', label: { en: 'Site usage logs', zh: '全站日志' }, icon: 'usage', path: '/usage' }
+      { id: 'dashboard', label: L('Dashboard', '仪表盘'), icon: 'dashboard', path: '/dashboard' },
+      { id: 'my-api-keys', label: L('API keys', 'API 密钥'), icon: 'key', path: '/me/api-keys' },
+      { id: 'my-models', label: L('Models & prices', '模型与价格'), icon: 'price', path: '/me/models' },
+      { id: 'my-usage-overview', label: L('Usage overview', '用量概览'), icon: 'chart', path: '/me/usage/overview' },
+      { id: 'my-usage', label: L('Usage logs', '使用日志'), icon: 'usage', path: '/me/usage' },
+      { id: 'usage-overview', label: L('Site overview', '全站概览'), icon: 'chart', path: '/usage/overview' },
+      { id: 'usage', label: L('Site usage logs', '全站日志'), icon: 'usage', path: '/usage' }
     ]
   },
   {
     section: 'gateway',
+    label: L('Gateway', '网关'),
     items: [
-      { id: 'groups', label: { en: 'Groups', zh: '分组' }, icon: 'group', path: '/groups' },
-      { id: 'accounts', label: { en: 'Accounts', zh: '账号' }, icon: 'account', path: '/accounts' },
-      { id: 'platforms', label: { en: 'Platforms', zh: '平台' }, icon: 'globe', path: '/platforms' },
-      { id: 'proxies', label: { en: 'Proxies', zh: '代理' }, icon: 'proxy', path: '/proxies' },
-      { id: 'prices', label: { en: 'Model prices', zh: '模型价格' }, icon: 'price', path: '/prices' },
-      { id: 'anthropic:anthropic-models', label: { en: 'Model catalog', zh: '模型目录' }, icon: 'list', path: '/p/anthropic/models', plugin_key: 'anthropic' }
+      { id: 'accounts', label: L('Accounts', '账号'), icon: 'account', path: '/accounts' },
+      { id: 'groups', label: L('Groups', '分组'), icon: 'group', path: '/groups' },
+      { id: 'prices', label: L('Model prices', '模型价格'), icon: 'price', path: '/prices' },
+      { id: 'anthropic:anthropic-models', label: L('Model catalog', '模型目录'), icon: 'list', path: '/p/anthropic/models', plugin_key: 'anthropic' }
     ]
   },
   {
     section: 'security',
-    items: [{ id: 'guard:guard', label: { en: 'Guard', zh: '请求守卫' }, icon: 'shield', path: '/p/guard/dashboard', plugin_key: 'guard' }]
+    label: L('Security', '安全'),
+    items: [{ id: 'guard:guard', label: L('Guard', '请求守卫'), icon: 'shield', path: '/p/guard/dashboard', plugin_key: 'guard' }]
   },
-  { section: 'finance', items: [{ id: 'ledger', label: { en: 'Balance ledger', zh: '余额流水' }, icon: 'ledger', path: '/ledger' }] },
-  {
-    section: 'users',
-    items: [
-      { id: 'users', label: { en: 'Users', zh: '用户' }, icon: 'user', path: '/users' },
-      { id: 'roles', label: { en: 'Roles & permissions', zh: '角色与权限' }, icon: 'role', path: '/roles' }
-    ]
-  },
-  {
-    section: 'plugins',
-    items: [
-      { id: 'plugins', label: { en: 'Installed plugins', zh: '已安装插件' }, icon: 'plugin', path: '/plugins' },
-      { id: 'market', label: { en: 'Plugin market', zh: '插件市场' }, icon: 'market', path: '/market' },
-      { id: 'publishers', label: { en: 'Publishers', zh: '发布者' }, icon: 'publisher', path: '/publishers' }
-    ]
-  },
+  { section: 'finance', label: L('Finance', '财务'), items: [{ id: 'ledger', label: L('Balance ledger', '余额流水'), icon: 'ledger', path: '/ledger' }] },
+  { section: 'users', label: L('Users & access', '用户与权限'), items: [{ id: 'users', label: L('Users', '用户'), icon: 'user', path: '/users' }] },
+  // The "plugins" section has no core items; the bundled plugins put no menu there.
   {
     section: 'system',
+    label: L('System settings', '系统设置'),
     items: [
-      { id: 'nodes', label: { en: 'Cluster nodes', zh: '集群节点' }, icon: 'node', path: '/nodes' },
-      { id: 'tasks', label: { en: 'Scheduled tasks', zh: '定时任务' }, icon: 'clock', path: '/system/tasks' },
-      { id: 'upgrades', label: { en: 'Core updates', zh: '核心升级' }, icon: 'refresh', path: '/system/upgrades' },
-      { id: 'audit', label: { en: 'Audit logs', zh: '审计日志' }, icon: 'clock', path: '/system/audit' },
-      { id: 'settings', label: { en: 'Settings', zh: '设置' }, icon: 'settings', path: '/settings' }
+      { id: 'settings', label: L('System settings', '系统设置'), icon: 'settings', path: '/settings' },
+      { id: 'platforms', label: L('Platforms', '平台'), icon: 'globe', path: '/platforms' },
+      { id: 'proxies', label: L('Proxies', '代理'), icon: 'proxy', path: '/proxies' },
+      { id: 'roles', label: L('Roles & permissions', '角色与权限'), icon: 'role', path: '/roles' },
+      { id: 'plugins', label: L('Installed plugins', '已安装插件'), icon: 'plugin', path: '/plugins' },
+      { id: 'market', label: L('Plugin market', '插件市场'), icon: 'market', path: '/market' },
+      { id: 'publishers', label: L('Publishers', '发布者'), icon: 'publisher', path: '/publishers' },
+      { id: 'nodes', label: L('Cluster nodes', '集群节点'), icon: 'node', path: '/nodes' },
+      { id: 'tasks', label: L('Scheduled tasks', '定时任务'), icon: 'clock', path: '/system/tasks' },
+      { id: 'upgrades', label: L('Core updates', '核心升级'), icon: 'refresh', path: '/system/upgrades' },
+      { id: 'audit', label: L('Audit logs', '审计日志'), icon: 'clock', path: '/system/audit' },
+      { id: 'dynweight:dynweight', label: L('Dynamic Weight', '动态权重'), icon: 'chart', path: '/p/dynweight/dashboard', plugin_key: 'dynweight' }
     ]
   },
   {
     section: 'me',
+    label: L('Personal', '个人中心'),
     items: [
-      { id: 'my-wallet', label: { en: 'Wallet', zh: '钱包' }, icon: 'balance', path: '/me/wallet' },
-      { id: 'my-profile', label: { en: 'Profile', zh: '个人设置' }, icon: 'user', path: '/me/profile' }
+      { id: 'my-wallet', label: L('Wallet', '钱包'), icon: 'balance', path: '/me/wallet' },
+      { id: 'my-profile', label: L('Profile', '个人设置'), icon: 'user', path: '/me/profile' }
     ]
   }
 ]

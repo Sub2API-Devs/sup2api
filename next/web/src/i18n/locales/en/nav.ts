@@ -6,7 +6,7 @@ export default {
     finance: 'Finance',
     users: 'Users & access',
     plugins: 'Plugins',
-    system: 'System',
+    system: 'System settings',
     me: 'Personal',
     admin: 'Admin'
   },
@@ -27,7 +27,7 @@ export default {
     publishers: 'Publishers',
     nodes: 'Cluster nodes',
     tasks: 'Scheduled tasks',
-    settings: 'Settings',
+    settings: 'System settings',
     myApiKeys: 'API keys',
     myUsageOverview: 'Usage overview',
     myUsage: 'Usage logs',

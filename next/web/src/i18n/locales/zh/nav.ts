@@ -6,7 +6,7 @@ export default {
     finance: '财务',
     users: '用户与权限',
     plugins: '插件',
-    system: '系统',
+    system: '系统设置',
     me: '个人中心',
     admin: '管理员'
   },
@@ -27,7 +27,7 @@ export default {
     publishers: '发布者',
     nodes: '集群节点',
     tasks: '定时任务',
-    settings: '设置',
+    settings: '系统设置',
     myApiKeys: 'API 密钥',
     myUsageOverview: '用量概览',
     myUsage: '使用日志',
