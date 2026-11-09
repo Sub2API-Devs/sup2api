@@ -63,6 +63,12 @@ func TestComposeThroughResponses(t *testing.T) {
 	if r.CanConvert("gemini.generate", "anthropic.messages") || r.CanConvert("anthropic.messages", "anthropic.messages") {
 		t.Fatal("composition without both hops")
 	}
+	// No composition between two protocols of one platform.
+	same := NewRegistry(&tagConv{from: "gemini.generate", to: relay, name: "a"},
+		&tagConv{from: relay, to: "gemini.stream_generate", name: "b"})
+	if same.CanConvert("gemini.generate", "gemini.stream_generate") || len(same.Pairs()) != 2 {
+		t.Fatalf("same-platform composition %v", same.Pairs())
+	}
 
 	bound, out, err := c.Prepare([]byte("in"), Options{Model: "m"})
 	if err != nil || string(out) != "in|a|b" {

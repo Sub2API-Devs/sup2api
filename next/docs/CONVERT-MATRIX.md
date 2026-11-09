@@ -241,7 +241,7 @@ type Writer interface {
 - 流：`Event(ev)`：`rs := bs.Event(ev)`，对每个 `r` 依次 `out += as.Event(r)`；`Flush`：`bs.Flush()` 的事件喂给 `as.Event`，再加 `as.Flush()`。中间事件的 `Data` 只在本次调用内使用，不需复制。
 - 前提：每个 writer 产出的事件对同协议的 reader 必须是合法输入（responses writer → responses reader）。黄金测试里每个组合对都有专门样例，并断言“组合结果 = 手动两步结果”。
 
-组合在 `Registry.Resolve` 里生成并缓存，不注册；`Pairs()` 列出。
+组合在注册时为每个缺直接转换器的对生成（两端属于同一平台时不组合，如 `gemini.generate` ↔ `gemini.stream_generate`），不注册；`Resolve` 返回它，`Pairs()` 列出。
 
 ## 5. 路由与调度
 

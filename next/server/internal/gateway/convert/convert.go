@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -325,8 +326,9 @@ func (r *Registry) Pairs() []PairInfo {
 }
 
 // compose rebuilds the compositions: from -> relay -> to for every pair of
-// registered hops whose (from, to) has no converter of its own. Called with
-// r.mu held.
+// registered hops whose (from, to) has no converter of its own and spans
+// two platforms (gemini.generate and gemini.stream_generate are one API in
+// two stream modes, not a conversion). Called with r.mu held.
 func (r *Registry) compose() {
 	r.composed = map[pair]Converter{}
 	for k1, a := range r.m {
@@ -335,7 +337,7 @@ func (r *Registry) compose() {
 		}
 		for k2, b := range r.m {
 			k := pair{k1.from, k2.to}
-			if k2.from != relay || k.from == k.to {
+			if k2.from != relay || platformOf(k.from) == platformOf(k.to) {
 				continue
 			}
 			if _, direct := r.m[k]; !direct {
@@ -343,6 +345,12 @@ func (r *Registry) compose() {
 			}
 		}
 	}
+}
+
+// platformOf is the platform of a protocol: the part before the first ".".
+func platformOf(protocol string) string {
+	p, _, _ := strings.Cut(protocol, ".")
+	return p
 }
 
 // AppendSSE appends ev in wire format ("event: ...", one "data:" line per
