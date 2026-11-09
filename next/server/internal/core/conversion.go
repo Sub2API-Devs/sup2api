@@ -183,7 +183,3 @@ type ConversionRejection struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// Lossy reports whether any path was lost.
-func (t *ConversionTrace) Lossy() bool {
-	return t != nil && (len(t.Lost) > 0 || len(t.ResponseLost) > 0 || t.Omitted > 0)
-}
