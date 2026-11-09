@@ -12,12 +12,12 @@ import (
 // canonConvert runs the request side of a built-in canonReq pair.
 func canonConvert(t *testing.T, from, to, body string, opt Options) (gjson.Result, respOpts, []string, error) {
 	t.Helper()
-	i := slices.IndexFunc(canonPairs, func(p canonPair) bool { return p.from == from && p.to == to })
+	i := slices.IndexFunc(builtinPairs, func(p builtinPair) bool { return p.from == from && p.to == to })
 	if i < 0 {
 		t.Fatalf("no canon pair %s -> %s", from, to)
 	}
 	var l losses
-	out, ro, err := canonPairs[i].req([]byte(body), opt, &l)
+	out, ro, err := builtinPairs[i].req([]byte(body), opt, &l)
 	return gjson.ParseBytes(out), ro, lossStrings(l.sorted()), err
 }
 
@@ -74,10 +74,10 @@ const (
 
 func TestBuiltinConvertersAreDistinctPairs(t *testing.T) {
 	r := NewRegistry(builtinConverters()...)
-	if n := len(r.Pairs()); n < len(canonPairs)+1 {
+	if n := len(r.Pairs()); n < len(builtinPairs)+1 {
 		t.Fatalf("pairs = %d", n)
 	}
-	for _, p := range canonPairs {
+	for _, p := range builtinPairs {
 		c, ok := r.Resolve(p.from, p.to)
 		if !ok || c.Grade() != p.grade {
 			t.Errorf("%s -> %s not registered with grade %s", p.from, p.to, p.grade)

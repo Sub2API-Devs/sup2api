@@ -3,5 +3,9 @@
     "model": "gpt-5",
     "stream": false
   },
+  "upstream": [
+    "recorded/openai.chat/usage_cache.response.json",
+    "recorded/openai.chat/usage_cache.stream.sse"
+  ],
   "note": "Message text cache_control reaches a chat upstream as is; system cache_control is lost (D7)."
 }

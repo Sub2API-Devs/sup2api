@@ -2,5 +2,9 @@
   "options": {
     "model": "claude-sonnet-4-5",
     "stream": false
-  }
+  },
+  "upstream": [
+    "recorded/anthropic.messages/text.response.json",
+    "recorded/anthropic.messages/text.stream.sse"
+  ]
 }

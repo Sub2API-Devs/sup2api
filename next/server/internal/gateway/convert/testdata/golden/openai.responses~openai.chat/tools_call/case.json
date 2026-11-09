@@ -2,5 +2,9 @@
   "options": {
     "model": "gpt-5",
     "stream": false
-  }
+  },
+  "upstream": [
+    "recorded/openai.chat/tools.response.json",
+    "recorded/openai.chat/tools.stream.sse"
+  ]
 }

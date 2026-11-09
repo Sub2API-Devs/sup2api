@@ -48,13 +48,13 @@ func goldenRequestConverter(from, to string) goldenConvert {
 			return out, Losses(c), nil
 		}
 	}
-	i := slices.IndexFunc(canonPairs, func(p canonPair) bool { return p.from == from && p.to == to })
+	i := slices.IndexFunc(builtinPairs, func(p builtinPair) bool { return p.from == from && p.to == to })
 	if i < 0 {
 		return nil
 	}
 	return func(body []byte, opt Options) ([]byte, []Loss, error) {
 		var l losses
-		out, _, err := canonPairs[i].req(body, opt, &l)
+		out, _, err := builtinPairs[i].req(body, opt, &l)
 		return out, l.sorted(), err
 	}
 }

@@ -3,5 +3,9 @@
     "model": "claude-sonnet-4-5",
     "stream": false
   },
+  "upstream": [
+    "recorded/anthropic.messages/reasoning.response.json",
+    "recorded/anthropic.messages/reasoning.stream.sse"
+  ],
   "note": "History reasoning is dropped (reasoning loss)."
 }
