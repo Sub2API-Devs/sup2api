@@ -30,7 +30,7 @@ const UpstreamFirstCore = "0.1.262"
 // besides schedulable and auto_disable and the visible, locked and required
 // fields (CONTRACTS §87). Older cores refuse the names at install and ignore
 // the fields, which would leave a locked setting editable.
-const CommonControlsFirstCore = "0.1.263"
+const CommonControlsFirstCore = "0.1.262"
 
 // SamePlatformConversions are the core's protocol converters whose two
 // protocols belong to one platform (client, upstream). The gateway's

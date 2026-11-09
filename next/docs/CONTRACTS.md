@@ -6760,7 +6760,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 参数覆盖的请求体位置与 0.1.262 之前相同（插件之前）；请求头改为插件的头盖过参数覆盖的头：老插件自己构造的头（如 codex 的头、代码插件转发的客户端头）不能再被账号参数覆盖改掉，声明式类型的头仍可以。
 - 第一个带本节功能的核心是 0.1.262：声明了 `upstream` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.UpstreamFirstCore`，低了报 `below_feature_core`），openai 0.4.0、gemini/relay/anthropic 0.3.0、custom 0.1.0 已定为 `>=0.1.262 <0.2.0`。旧核心会忽略 `upstream` 字段，所以这几个只有清单的插件必须随 0.1.262 一起发；内置插件在核心计划完成、所有节点都换上新核心后才升级（§37）。
 
-## 87. 账号通用配置项按类型声明、核心编辑器开放给插件（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”第 2 期，规格见 [COMMON-CONTROLS.md](COMMON-CONTROLS.md)；核心 0.1.263）
+## 87. 账号通用配置项按类型声明、核心编辑器开放给插件（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”第 2 期，规格见 [COMMON-CONTROLS.md](COMMON-CONTROLS.md)；核心 0.1.262）
 
 起因：限流、参数覆盖、请求头、代理、模型映射等账号通用配置由核心实现界面和执行，但插件能影响的只有 `commonControls` 的 `auto_disable`、`schedulable` 两项和新建时的 `defaultLimits`；插件自己的页面也用不了核心的编辑器。
 
@@ -6769,7 +6769,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - `accountTypes[].commonControls.<名>`：`{visible?, configurable?, default?, locked?, required?}`；名称与取值类型见 `sdk/manifest/common_controls.go` 的 `CommonControlSpecs`（schedulable、auto_disable、priority、weight、max_concurrency、rpm_limit、tpm_limit、spm_limit、model_limits、usage_limit、model_mapping、param_override、header_passthrough、environment、proxy）。`default` 是账号接口该字段的 JSON，范围与账号接口相同（常量在 sdk，核心、校验共用）。老的 `{"configurable":…, "default":…}` 写法照旧有效。
 - 语义：新账号缺省值取 `default`（再缺省取核心默认，自己级用户的并发默认 10 照旧，有声明时声明优先）；`configurable: false` 新建只接受默认值、更新只接受原值；`locked` 新老账号都只接受 `default`；不符报 `read_only`。值按 JSON 比较（格式、键序、数字写法、null 与空不影响）。`proxy` 只能写 `required`：新建没有代理、或更新清掉了代理时报 `proxy_id: required`，老账号没代理时其他修改照常。`visible` 只影响界面。
 - 执行点：`account/common_controls.go`，更新在锁行之后；`PUT /accounts/:id/usage-limit` 同样检查（`usage_limit: read_only`）；插件生命周期返回的 `account_patch` 不能改固定项（固定项从可改字段中移除，可改的照常）。
-- 校验（`sdk/manifest/check/common_controls.go`）：未知名称、类型或范围不符、`required` 用在 proxy 之外、proxy 写了 `required` 以外的字段、`locked` 没有 `default` 或同时写 `configurable: true`、与 `defaultLimits` 的值冲突（`conflict`）。用到新名称或 `visible`/`locked`/`required` 的插件 `hostCompat` 下限须 ≥0.1.263（`check.CommonControlsFirstCore`）。
+- 校验（`sdk/manifest/check/common_controls.go`）：未知名称、类型或范围不符、`required` 用在 proxy 之外、proxy 写了 `required` 以外的字段、`locked` 没有 `default` 或同时写 `configurable: true`、与 `defaultLimits` 的值冲突（`conflict`）。用到新名称或 `visible`/`locked`/`required` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.CommonControlsFirstCore`）。
 - 锁定值收敛：更新账号时，请求没带锁定字段而存储值与锁定值不同，就写入锁定值（锁定的用量限制同样在更新事务里写入）；老账号在下次保存时收敛，不做后台迁移。控制台对已保存账号显示存储值，不同于锁定值时提示“保存后改为锁定值 X”。
 - 自己级用户：新建时，省略的字段或等于预填默认值（声明的、否则 `default_limits`）的字段收进自己级上限（priority 0–100、weight 1–100、并发 1–1000，0 变 10）；其他越界值仍报 `restricted`；固定项（不可改或锁定）以声明为准、不收。更新时不收。控制台预填同样的收后值。
 - `GET /account-types` 返回 `common_controls`，`default` 按核心存储的形式规范化（例如头名小写），便于和账号存储值比较。
@@ -6782,10 +6782,10 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 87.3 核心编辑器开放给插件（UI 3.7）
 
-- `HOST_UI_VERSION` 3.7.0；`host.components`（只读）：`ParamOverrideEditor`、`RateLimitEditor`（`{rpm_limit, tpm_limit, spm_limit}`）、`ModelLimitsEditor`、`HeaderPassthroughEditor`、`ProxyPicker`、`ModelMappingEditor`、`UpstreamEditor`，v-model 即账号接口字段，都接受 `disabled`；较重的编辑器首次使用时加载。用到的插件声明 `hostUICompat: "^3.7"`，核心下限 ≥0.1.263（0.1.262 是最后一个带 UI 3.6 的核心）。
+- `HOST_UI_VERSION` 3.7.0；`host.components`（只读）：`ParamOverrideEditor`、`RateLimitEditor`（`{rpm_limit, tpm_limit, spm_limit}`）、`ModelLimitsEditor`、`HeaderPassthroughEditor`、`ProxyPicker`、`ModelMappingEditor`、`UpstreamEditor`，v-model 即账号接口字段，都接受 `disabled`；较重的编辑器首次使用时加载。用到的插件声明 `hostUICompat: "^3.7"`，核心下限 ≥0.1.262（0.1.261 是最后一个带 UI 3.6 的核心）。
 - schema 表单控件：`param-override`、`header-passthrough`、`rate-limits`、`model-limits`、`model-mapping`（另有 `proxy-select`、`upstream-editor`）。数据格式即核心执行格式，插件在自己的设置接口里用 SDK 同一套规则校验。
 
 ### 87.4 编辑页分区插槽 `account.editor.section`
 
-- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（只能是本插件自己的账号类型 id，唯一，校验强制）；这三个字段只能用在这个插槽上；需要核心 ≥0.1.263。
+- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（只能是本插件自己的账号类型 id，唯一，校验强制）；这三个字段只能用在这个插槽上；需要核心 ≥0.1.262。
 - 账号编辑页在核心分区之后追加，props `{account, accountType, readonly}`，各插件分区独立隔离错误；新建账号显示“保存账号后可配置”。按 §23.3，插件分区不进核心保存流程，由插件自己的接口保存。
