@@ -654,14 +654,14 @@ func TestChatResponsesStream(t *testing.T) {
 		t.Fatalf("incomplete stream: %v %v", out, err)
 	}
 
-	// A failed response ends the stream with an error chunk; Flush reports it.
+	// A failed response ends the stream with an error chunk.
 	out, err = chatStreamRun(t, c,
 		`{"type":"response.output_text.delta","output_index":0,"delta":"x"}`,
 		`{"type":"response.failed","response":{"status":"failed","error":{"code":"server_error","message":"boom"}}}`)
-	if err == nil || len(out) != 3 || gjson.Get(out[2], "error.message").String() != "boom" {
+	if err != nil || len(out) != 3 || gjson.Get(out[2], "error.message").String() != "boom" {
 		t.Fatalf("failed stream: %v %v", out, err)
 	}
-	// So does a truncated stream.
+	// A truncated stream fails at Flush.
 	if _, err = chatStreamRun(t, c, `{"type":"response.output_text.delta","output_index":0,"delta":"x"}`); err == nil {
 		t.Fatal("truncated stream flushed cleanly")
 	}

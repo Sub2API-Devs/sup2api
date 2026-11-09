@@ -1765,8 +1765,11 @@ func (s *chatResponsesStream) markPart(o jobject) {
 	}
 }
 
+// Flush fails a stream that ended without its terminal event. After an
+// upstream failure the client already has the error chunk (and the gateway
+// records the failure from the upstream events), as with the IR writers.
 func (s *chatResponsesStream) Flush() ([]Event, error) {
-	if s.failed || !s.done {
+	if !s.failed && !s.done {
 		return nil, cfail("stream", "upstream ended without response.completed")
 	}
 	return nil, nil
