@@ -128,7 +128,7 @@ function apply() {
 </script>
 
 <template>
-  <SModal v-model:open="open" width="2xl" persistent data-testid="po-editor">
+  <SModal v-model:open="open" width="2xl" fixed persistent data-testid="po-editor">
     <template #header>
       <div class="flex w-full flex-wrap items-start gap-3 pr-8">
         <div class="w-full min-w-0 sm:w-auto sm:flex-1">
@@ -163,7 +163,7 @@ function apply() {
       />
     </SField>
 
-    <div v-else class="grid min-h-[26rem] grid-cols-1 gap-4 md:grid-cols-[15rem_minmax(0,1fr)]">
+    <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-[15rem_minmax(0,1fr)]">
       <nav ref="nav" class="flex min-w-0 flex-col gap-2 md:border-r md:border-line md:pr-3" :aria-label="t(`${P}.list`)">
         <SInput v-model="search" size="sm" icon="search" :placeholder="t(`${P}.search`)" :aria-label="t(`${P}.search`)" />
         <div class="flex gap-1 overflow-x-auto md:max-h-[24rem] md:flex-col md:overflow-y-auto" data-testid="po-nav">

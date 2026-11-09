@@ -163,10 +163,14 @@ const usageLimit = useUsageLimitEdit(() => props.account?.id, () => activeSectio
 /** The environment card shows only when the caller may read the declared variables (403 for some roles) and the account layer has any. */
 const showEnvironment = useEnvironmentLayer('account')
 const { limit: usageLimitModel, status: usageLimitStatus, loadError: usageLimitLoadError, errors: usageLimitErrors } = usageLimit
-// Each section starts at its top: the modal body keeps the previous scroll
-// offset otherwise. Post-flush, so save() still scrolls to an invalid field.
+// The editor and each section start at the top: the modal body keeps the
+// previous scroll offset otherwise (the type picker's, the last section's).
+// The form's scroll-mt-4 keeps the body's top padding in view. Post-flush, so
+// save() still scrolls to an invalid field.
 const formEl = ref<HTMLFormElement>()
-watch(activeSection, () => formEl.value?.scrollIntoView({ block: 'start' }), { flush: 'post' })
+const toTop = () => formEl.value?.scrollIntoView({ block: 'start' })
+onMounted(toTop)
+watch(activeSection, toTop, { flush: 'post' })
 
 const autoModels = ref(true)
 const ccgState = ref<{ key: string | null; authorized: boolean; subscription_type?: string }>({ key: null, authorized: false })
@@ -826,7 +830,7 @@ const { save } = useAccountSave({
 
     <FetchedModelsModal v-model:open="fetchOpen" :models="fetched.models" :skipped="fetched.skipped" :existing="models" @apply="applyFetched" />
 
-    <div class="sticky -bottom-5 z-10 mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-line bg-white py-4 dark:bg-dark-800">
+    <div class="modal-sticky-footer flex flex-wrap items-center justify-end gap-2">
       <SButton v-if="!editing" class="mr-auto" variant="ghost" icon="arrow-left" @click="emit('back')">{{ t('common.previous') }}</SButton>
       <SButton v-if="canTestAccount" class="mr-auto" icon="play" @click="emit('test', account!)">{{ t('accounts.testConnection') }}</SButton>
       <SHint v-if="editing && prefilled" inline size="xs" tone="warning" class="inline-flex flex-wrap items-center gap-x-2" data-testid="footer-prefilled">

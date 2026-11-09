@@ -3,7 +3,7 @@ import { enableAutoUnmount, flushPromises, shallowMount, type DOMWrapper } from 
 import { reactive, ref } from 'vue'
 import type { Account, AccountType, QuotaSnapshot } from '@/api/types'
 import { i18n } from '@/i18n'
-import { SButton, SDropdown } from '@sub2api/ui'
+import { SButton, SDropdown, SModal } from '@sub2api/ui'
 import AccountsView from './AccountsView.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountEditor from './AccountEditor.vue'
@@ -168,6 +168,13 @@ describe('account automatic disabling policy', () => {
 })
 
 const today = { query: { tz: Intl.DateTimeFormat().resolvedOptions().timeZone } }
+
+describe('account editor dialog', () => {
+  it('keeps one fixed size for every account type and step', () => {
+    const editor = render().findAllComponents(SModal).find(m => m.props('width') === '2xl' && m.props('persistent'))
+    expect(editor?.props('fixed')).toBe(true)
+  })
+})
 
 describe('account status recovery', () => {
   beforeEach(() => {
