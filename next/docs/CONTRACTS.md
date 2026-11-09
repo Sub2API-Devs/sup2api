@@ -6725,7 +6725,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 参数覆盖改到最后：上线前只读查线上配了参数覆盖的账号，确认没有和插件改写撞字段（主要是 codex）。
 - 新插件的 `hostCompat` 下限在发布时改为第一个带本节功能的核心版本。
 
-## 88. 协议转换矩阵（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”的“协议转换矩阵”一节，规格与转换器开发说明见 [CONVERT-MATRIX.md](CONVERT-MATRIX.md)；迁移 0093；核心 0.1.264）
+## 88. 协议转换矩阵（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”的“协议转换矩阵”一节，规格与转换器开发说明见 [CONVERT-MATRIX.md](CONVERT-MATRIX.md)；迁移 0093；核心 0.1.262，与第 1、2 期同版发布）
 
 起因：四种文本协议（`openai.chat`、`openai.responses`、`anthropic.messages`、`gemini.generate`/`gemini.stream_generate`）两两互转，原生与转换由管理员用优先级控制，转换的损失由账号或分组的策略决定能否接受。§83.2 的 chat → Responses 转换器保留（丢弃改为带类别的损失）；原来 chat/Responses → Anthropic 的严格转换改为宽松（D1）。
 
@@ -6780,7 +6780,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 88.7 版本与兼容
 
-- `sdk/manifest/check`：`SamePlatformConversions` 增加 `openai.responses → openai.chat`，hostCompat 下限 `ConvertMatrixFirstCore = "0.1.264"`（子集保留 chat_completions 而不含 responses 的 openai 账号类型依赖它）；原有的 chat → responses 仍为 `StreamOnlyFirstCore`。
+- `sdk/manifest/check`：`SamePlatformConversions` 增加 `openai.responses → openai.chat`，hostCompat 下限 `ConvertMatrixFirstCore = "0.1.262"`（子集保留 chat_completions 而不含 responses 的 openai 账号类型依赖它）；原有的 chat → responses 仍为 `StreamOnlyFirstCore`。
 - 行为变化（发布说明）：转换“不可能”时跳过该类型而不是立即 400，都不行才 400 且不计尝试；同一优先级内原生先于转换先于 local；`/account-types` 多出转换端点、`grade`、`via`；chat → Anthropic 等原来被拒的请求改为有损成功（需要原行为的账号或分组设为 `strict`）；codex 的 chat 路径响应多出 `reasoning_content`；Responses 客户端经 Anthropic 上游不再收到 `sup2api-anthropic-thinking-v1:` 推理信封。
 
 ### 88.8 控制台

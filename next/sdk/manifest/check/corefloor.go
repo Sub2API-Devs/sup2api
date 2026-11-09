@@ -24,7 +24,7 @@ const AttemptHookFirstCore = "0.1.258"
 // ConvertMatrixFirstCore is the first core of the protocol conversion
 // matrix (CONTRACTS §88), which adds the openai.responses -> openai.chat
 // conversion within the openai platform.
-const ConvertMatrixFirstCore = "0.1.264"
+const ConvertMatrixFirstCore = "0.1.262"
 
 // SamePlatformConversions are the core's protocol converters whose two
 // protocols belong to one platform (client, upstream). The gateway's
