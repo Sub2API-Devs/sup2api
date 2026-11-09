@@ -1,0 +1,58 @@
+{
+  "model": "gpt-5",
+  "max_tokens": 128,
+  "seed": 7,
+  "logit_bias": {
+    "50256": -100
+  },
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Current weather",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "function_call": "none",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Look."
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "https://example.com/cat.png",
+            "detail": "huge"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "Seen.",
+      "reasoning_content": "It is a cat."
+    },
+    {
+      "role": "user",
+      "name": "bob",
+      "content": "More."
+    }
+  ]
+}
