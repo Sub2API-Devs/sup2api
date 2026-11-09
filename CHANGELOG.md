@@ -6,6 +6,20 @@
 
 ## 2026-11-09
 
+### 核心 0.1.262（停服发布，迁移 0092、0093）
+
+协议层三期（设计见“sup2api 核心通用协议层设计”）与同期各线程的改动一起发布。
+
+- **声明式上游与自定义上游**（CONTRACTS §86）：账号类型在清单里用 `upstream` 声明上游（预设 openai/anthropic/gemini，可覆盖路径、鉴权、请求头、过滤字段、固定改写），核心本地构造请求，插件进程拿不到 API Key；只有清单的插件（`runtime: "none"`）；插件可用 `extend` 在声明结果上追加。openai 0.4.0、gemini 0.3.0、relay 0.3.0 改为只有清单，anthropic 0.3.0 只保留模型目录；新内置插件 custom 0.1.0：新建账号里的“自定义上游”（OpenAI / Anthropic / Gemini 兼容三类），账号上可改鉴权、请求头、各协议路径。
+- **参数覆盖与插件的顺序**（§84）：账号参数覆盖先执行，插件在覆盖结果上再改；请求头同样插件的头盖过覆盖的头。鉴权头只由上游声明的 auth 模板写。影响：codex 这类老插件自己构造的请求头不能再被账号参数覆盖改掉。
+- **通用配置项**（§87）：插件可按账号类型声明调度、限流、用量限制、模型映射、参数覆盖、请求头透传、超时、代理各项的显示 / 可改 / 默认 / 锁定（代理可声明必填），核心强制；锁定值在账号下次保存时写入。核心编辑器开放给插件（UI 3.7）；新插槽 `account.editor.section`。
+- **四种协议互转**（§88）：OpenAI chat、OpenAI responses、Anthropic messages、Gemini 两两互转（含流式、工具调用、推理、图片），质量分 good / fair / discouraged（Anthropic ↔ Gemini 经 Responses 两跳）。调度先按优先级，同优先级内原生优先、质量高的先用。转换默认宽松（allow），账号或分组可设 safe / strict；转不了或策略拒绝时跳过该账号类型，都不行才回 400 `unsupported_conversion`。转去 Anthropic 时缺省 `max_tokens` 由网关设置 `claude_default_max_tokens`（默认 8192）给出；发给 Gemini 的图片链接由核心下载（`media_download_max_mb`，默认 64）；没有计数端点的账号类型 count_tokens 本地估算。使用记录新增转换明细（等级、步骤、丢失），可按转换筛选。
+- **调度优先级反转**：`priority` 改为数值越大越先用（与 new-api 一致）。
+- **账号界面**：操作改为文字按钮（全平台按钮统一为文字），限额数字四色显示，新建账号默认并发 0（不限）；账号编辑窗口各步骤固定同一尺寸。
+- **仪表盘**：统计改读小时汇总表 `usage_hourly`（迁移 0092，含 usage_logs 触发器），运营统计查询放宽超时。
+- 内置插件：openai 0.4.0、gemini 0.3.0、anthropic 0.3.0、custom 0.1.0（新，启用）、dynweight 0.5.3、moderation 0.7.1；ccgateway 0.1.132、codex 0.1.2、mailer 0.1.1、volcengine 0.12.6 不变。
+- 回滚：回 0.1.261 前要先把插件退回旧版、停用 custom，再撤掉 0092、0093 新增的表、列、触发器（见 OVH 部署记录）。
+
 ### 核心 0.1.261（`56efabffd`，无迁移）
 
 - 账号限额悬浮卡片的按模型明细全部从 Redis 读取，`GET /accounts/:id/rate-models` 不再查使用记录：网关每次结算时把本次 token（与 TPM 同口径）加到账号按 UTC 整点的哈希 `rl:account:<id>:tpd:<整点 unix 秒>`（field = 客户端模型，TTL 26 小时，仿 new-api 渠道的 TPD 哈希）；TPD 按请求时区的 0 点起累加各小时，模型名单取这些小时和最近一小时出现过的模型（按 TPD 最多 100 个）（CONTRACTS §68.7）。
