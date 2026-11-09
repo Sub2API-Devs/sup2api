@@ -41,7 +41,8 @@ func TestCommonControlEnforcement(t *testing.T) {
 	controls := result["data"].([]any)[0].(map[string]any)["common_controls"].(map[string]any)
 	require.Equal(t, map[string]any{"configurable": false, "default": 5.0}, controls["weight"])
 	require.Equal(t, map[string]any{"locked": true, "default": 100.0}, controls["rpm_limit"])
-	require.Equal(t, map[string]any{"visible": false, "default": []any{"X-Foo"}}, controls["header_passthrough"])
+	// Defaults are served as the core stores them.
+	require.Equal(t, map[string]any{"visible": false, "default": []any{"x-foo"}}, controls["header_passthrough"])
 	require.Equal(t, map[string]any{"required": true}, controls["proxy"])
 
 	proxyID := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('controls','http','proxy.example',3128) RETURNING id`)
@@ -235,4 +236,55 @@ func TestCommonControlStructuredValues(t *testing.T) {
 	status, result = e.do("PATCH", "/accounts/"+id, map[string]any{"name": "renamed"})
 	require.Equal(t, 400, status, result)
 	require.Contains(t, fieldsOf(result), "weight:invalid")
+}
+
+// A locked setting is always its default: an older account holding another
+// value takes it on its next save, whatever that save changes.
+func TestLockedControlsConverge(t *testing.T) {
+	e := setup(t)
+	legacy := e.mkRawAccount("anthropic", "apikey", "legacy", "unused", true)
+	e.exec1(`UPDATE accounts SET rpm_limit = 0, priority = 3 WHERE id = $1 RETURNING id`, legacy)
+	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
+	e.gen.types[0].Type.CommonControls = map[string]manifest.AccountCommonControl{
+		"rpm_limit":      {Locked: true, Default: raw(`100`)},
+		"param_override": {Locked: true, Default: raw(`{"temperature": 0.5}`)},
+		"usage_limit":    {Locked: true, Default: raw(`{"enabled": true, "amount": "5", "period": "day", "timezone": "UTC"}`)},
+	}
+	status, result := e.do("PATCH", "/accounts/"+itoa(legacy), map[string]any{"name": "renamed"})
+	require.Equal(t, 200, status, result)
+	acc := data(result)
+	require.Equal(t, []any{100.0, 3.0, map[string]any{"temperature": 0.5}}, []any{acc["rpm_limit"], acc["priority"], acc["param_override"]})
+	status, result = e.do("GET", "/accounts/"+itoa(legacy)+"/usage-limit", nil)
+	require.Equal(t, 200, status)
+	require.Equal(t, []any{true, "day", "5"}, []any{data(result)["configured"], data(result)["period"], data(result)["amount"]})
+	// Another value stays refused.
+	status, result = e.do("PATCH", "/accounts/"+itoa(legacy), map[string]any{"rpm_limit": 7})
+	require.Equal(t, 400, status)
+	require.Contains(t, fieldsOf(result), "rpm_limit:read_only")
+}
+
+// An own-level caller's new account fits the type's defaults into the
+// own-level caps, omitted or sent back as prefilled; another value outside
+// them is still refused.
+func TestCommonControlOwnLevelClamp(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e := setupWith(t, authz)
+	alice := e.addUser("alice@x.com")
+	authz.keys[e.uid], authz.keys[alice] = adminKeys, supplierKeys
+	weight, maxc := 300, 0
+	e.gen.types[0].Type.DefaultLimits = &manifest.AccountDefaultLimits{Weight: &weight, MaxConcurrency: &maxc}
+	e.gen.types[0].Type.CommonControls = map[string]manifest.AccountCommonControl{"priority": {Default: json.RawMessage(`500`)}}
+	acc := e.createAs(alice, "omitted", nil)
+	require.Equal(t, []any{100.0, 1.0, 10.0}, []any{acc["priority"], acc["weight"], acc["max_concurrency"]})
+	acc = e.createAs(alice, "prefilled", map[string]any{"priority": 500, "weight": 300, "max_concurrency": 0})
+	require.Equal(t, []any{100.0, 100.0, 10.0}, []any{acc["priority"], acc["weight"], acc["max_concurrency"]})
+	require.Equal(t, 500.0, e.createAs(e.uid, "admin", nil)["priority"])
+	for field, v := range map[string]int{"priority": 300, "weight": 200} {
+		code, out := e.doAs(alice, "POST", "/accounts", map[string]any{"name": "explicit", "plugin_key": "anthropic", "type": "apikey",
+			"credentials": map[string]any{"api_key": "sk-good-key-123"}, field: v})
+		require.Equal(t, 400, code, out)
+		require.Contains(t, fieldsOf(out), field+":restricted")
+	}
+	e.gen.types[0].Type.CommonControls = map[string]manifest.AccountCommonControl{"max_concurrency": {Default: json.RawMessage(`5000`)}}
+	require.Equal(t, 1000.0, e.createAs(alice, "big", nil)["max_concurrency"])
 }

@@ -758,6 +758,8 @@ const (
 	// ownMaxConcurrency is the cap an own-level user may set (H3.2) and the
 	// default of their new accounts; other new accounts default to unlimited.
 	ownMaxConcurrency     = 1000
+	ownMaxPriority        = 100
+	ownMaxWeight          = 100
 	ownDefaultConcurrency = 10
 )
 
@@ -986,11 +988,11 @@ func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, i
 		}
 	}
 	// H3.2: Scheduling fields restricted for own-level users
-	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > 100) {
+	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > ownMaxPriority) {
 		return core.InvalidFields(core.FieldError{Field: "priority", Code: "restricted",
 			Message: t(ctx, "own-level users can only set priority between 0-100", "own 级用户只能设置 0-100 的优先级")})
 	}
-	if in.Weight != nil && (*in.Weight < 1 || *in.Weight > 100) {
+	if in.Weight != nil && (*in.Weight < 1 || *in.Weight > ownMaxWeight) {
 		return core.InvalidFields(core.FieldError{Field: "weight", Code: "restricted",
 			Message: t(ctx, "own-level users can only set weight between 1-100", "own 级用户只能设置 1-100 的权重")})
 	}
@@ -1138,6 +1140,7 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	controls.clampOwnDefaults(&in, bt.Type.DefaultLimits, scope)
 	if err := s.checkOwnLevelRestrictions(ctx, scope, &in, len(bt.Type.GuardedSettings) == 0); err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1363,6 +1366,7 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	controls.converge(&in, cur)
 	lifecycleSettings := extensionSettings
 	if lifecycleSettings == nil && p != nil {
 		value := string(p.settings)
@@ -1426,7 +1430,7 @@ func (s *Service) update(c *gin.Context) {
 	}
 	statusChanged := in.Status != nil && *in.Status != cur.Status
 	uid, _ := core.UserID(ctx)
-	setProxy, proxyCreated := in.ProxyID.Set, false
+	setProxy, proxyCreated, usageLimitConverged := in.ProxyID.Set, false, false
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		locked, err := s.loadRow(ctx, tx, id, scope, true)
 		if err != nil {
@@ -1434,6 +1438,9 @@ func (s *Service) update(c *gin.Context) {
 		}
 		if fields := controls.check(ctx, &requested, locked, scope); len(fields) > 0 {
 			return core.InvalidFields(fields...)
+		}
+		if usageLimitConverged, err = controls.convergeUsageLimit(ctx, tx, id); err != nil {
+			return err
 		}
 		if (p != nil || extensionSettings != nil || bt.Type.Lifecycle != nil) && !locked.UpdatedAt.Equal(cur.UpdatedAt) {
 			return core.ErrConflict.WithMessage(t(ctx, "the account was modified concurrently, please retry",
@@ -1555,6 +1562,11 @@ func (s *Service) update(c *gin.Context) {
 	if p != nil || extensionSettings != nil || setProxy {
 		s.quota.forget(id)
 		s.evictQuotaCache(ctx, id)
+	}
+	if usageLimitConverged {
+		if err := s.EnforceUsageLimits(ctx, []int64{id}); err != nil {
+			slog.WarnContext(ctx, "account: apply usage limit", "account", id, "err", err)
+		}
 	}
 	s.changed(ctx, id)
 	if !featureOnly {

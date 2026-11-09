@@ -82,7 +82,7 @@ export default {
     copyModels: '复制', copied: '已复制 {n} 个模型', clearModels: '清空', unrestricted: '未限制：账号可服务所有请求模型', mappedTo: '映射到 {model}',
     mappingEmpty: '未配置映射：请求模型原样发往上游', mappingAdd: '添加映射', mappingRowNotInModels: '不在模型列表中，账号不会因此模型被调度', mappingNotInModels: '{n} 个请求模型不在模型列表中，账号不会因它们被调度：{models}', mappingAddToModels: '加入模型列表',
     schedulingCardHint: '决定账号被选中的先后顺序，以及同时处理的请求数', schedulableHint: '关闭后账号保留，但不再被分配请求', autoDisableHint: '上游返回凭证失效、额度耗尽等错误时自动禁用该账号（规则见 设置 → 调度策略 → 自动禁用）。关闭后只冷却 60 秒，不会禁用', limitsHint: '按近 60 秒统计，达到任一上限后暂停调度该账号，用量回落后自动恢复；0 表示不限',
-    commonControlFixed: '插件将此项设为不可修改，已有账号保留当前设置。', commonControlLocked: '插件将此项固定为预设值，不可修改。',
+    commonControlFixed: '插件将此项设为不可修改，已有账号保留当前设置。', commonControlLocked: '插件将此项固定为预设值，不可修改。', commonControlLockedPending: '插件将此项固定为预设值，保存后改为锁定值 {value}。',
     autoDisableGlobalOff: '全局自动禁用已关闭，此开关暂不生效且不可修改；账号原有设置会保留。', autoDisableUnavailable: '无法读取全局自动禁用设置，暂时无法修改此开关；账号原有设置会保留。',
     unitRpm: '次 / 分钟', unitTpm: 'tokens / 分钟', unitTpd: 'tokens / 天', unitSpm: '会话 / 分钟', create: '创建账号', noCredentials: '此账号类型没有需要在这里填写的凭证字段。', modelsInputHint: '输入或从下拉中选择模型，回车或逗号添加，可粘贴逗号或换行分隔的列表；点击标签复制，已映射的模型显示 → 目标' },
   title: '账号',

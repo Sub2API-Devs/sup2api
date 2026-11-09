@@ -42,7 +42,7 @@ import { operationCount, type Override as ParamOverride } from './paramOverride/
 import AccountModelsCard from './AccountModelsCard.vue'
 import FetchedModelsModal from './FetchedModelsModal.vue'
 import { sameCreationGroup } from './accountTypeChoices'
-import { accountControl, newAccountValues, savedAccountValues, useCommonControls, type CommonControlName, type ControlValues } from './commonControls'
+import { accountControl, newAccountValues, sameControlValue, savedAccountValues, useCommonControls, type CommonControlName, type ControlValues } from './commonControls'
 import HeaderPassthroughEditor from './controls/HeaderPassthroughEditor.vue'
 import RateLimitEditor from './controls/RateLimitEditor.vue'
 import ModelLimitsEditor from './ModelLimitsEditor.vue'
@@ -123,7 +123,7 @@ const pluginFormWaiting = computed(() => !plugins.listed || (props.accountType?.
 // ---------------------------------------------------------------- common controls (docs/COMMON-CONTROLS.md §2)
 
 /** Hidden, fixed (with the reason) or required, per core field. */
-const controls = useCommonControls(() => props.accountType)
+const controls = useCommonControls(() => props.accountType, () => props.account)
 const anyVisible = (names: readonly CommonControlName[]) => names.some(n => controls.value[n].visible)
 
 const autoDisableEnabled = ref<boolean | null>(null)
@@ -486,9 +486,11 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   resetEnvironment(a?.settings)
   if (a) editorModels.setSaved(a.models, a.model_mapping)
   if (!a || (at?.plugin_key === 'ccgateway' ? autoModels.value : shouldPrefillOnEdit(a, at))) editorModels.applyDefaults(at)
-  applyValues(a ? savedAccountValues(a, at, coreValues()) : newAccountValues(at, coreValues()))
+  applyValues(a ? savedAccountValues(a, coreValues()) : newAccountValues(at, coreValues(), ownCaller()))
 }
 
+/** Whether the caller creates own-level accounts (capped scheduling, CONTRACTS §15.9). */
+const ownCaller = () => own.scopeOf(ACCOUNT_KEYS.create) === 'own'
 /** The core's values of the controls (before the plugin's defaults). */
 const coreValues = (): ControlValues => ({
   priority: 10, weight: 1, max_concurrency: newAccountConcurrency(own.scopeOf(ACCOUNT_KEYS.create)), schedulable: true, auto_disable: true,
@@ -513,10 +515,10 @@ function applyValues(values: ControlValues) {
 /** Switching the auth method of a new account: untouched defaults and fixed controls follow the type. */
 function switchAuth(at: AccountType | null, previous: AccountType | null | undefined) {
   if (editorModels.sameDefaults(previous)) editorModels.applyDefaults(at)
-  const before = newAccountValues(previous, coreValues())
-  const untouched = (name: string) => name in basic && JSON.stringify(basic[name as keyof typeof basic]) === JSON.stringify(before[name as CommonControlName])
+  const before = newAccountValues(previous, coreValues(), ownCaller())
+  const untouched = (name: string) => name in basic && sameControlValue(basic[name as keyof typeof basic], before[name as CommonControlName])
   const follows = ([name]: [string, unknown]) => !accountControl(at, name as CommonControlName).configurable || untouched(name)
-  applyValues(Object.fromEntries(Object.entries(newAccountValues(at, coreValues())).filter(follows)))
+  applyValues(Object.fromEntries(Object.entries(newAccountValues(at, coreValues(), ownCaller())).filter(follows)))
 }
 
 /** The plugin's credential form (schema mode). */

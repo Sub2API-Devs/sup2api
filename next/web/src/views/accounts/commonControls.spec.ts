@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Account, AccountType } from '@/api/types'
-import { accountControl, controlViews, defaultMappingOf, fixedCount, newAccountValues, savedAccountValues, withoutFixed } from './commonControls'
+import { accountControl, controlViews, defaultMappingOf, fixedCount, newAccountValues, sameControlValue, savedAccountValues, withoutFixed } from './commonControls'
 
 const type = (common_controls: AccountType['common_controls'], extra: Partial<AccountType> = {}) => ({ plugin_key: 'p', type: 't', common_controls, ...extra }) as AccountType
 const t = (key: string) => key.split('.').pop()!
@@ -28,10 +28,30 @@ describe('common controls', () => {
     expect(newAccountValues(at, { priority: 10, weight: 1, max_concurrency: 0 })).toEqual({ priority: 7, weight: 4, max_concurrency: 0, header_passthrough: ['*'] })
   })
 
-  it('keeps a saved account\'s values except the locked ones', () => {
-    const at = type({ weight: { locked: true, default: 2 }, priority: { configurable: false, default: 1 } })
-    const a = { priority: 50, weight: 9, rpm_limit: null } as unknown as Account
-    expect(savedAccountValues(a, at, { priority: 10, weight: 1, rpm_limit: 0 })).toEqual({ priority: 50, weight: 2, rpm_limit: 0 })
+  it('shows a saved account\'s stored values, saying when saving moves a locked one to its value', () => {
+    const at = type({ weight: { locked: true, default: 2 }, priority: { configurable: false, default: 1 }, model_mapping: { locked: true, default: { a: 'b', c: 'd' } } })
+    const a = { priority: 50, weight: 9, rpm_limit: null, model_mapping: { c: 'd', a: 'b' } } as unknown as Account
+    expect(savedAccountValues(a, { priority: 10, weight: 1, rpm_limit: 0 })).toEqual({ priority: 50, weight: 9, rpm_limit: 0 })
+    const tv = (key: string, v?: Record<string, unknown>) => (v ? `${key.split('.').pop()} ${v.value}` : key.split('.').pop()!)
+    const v = controlViews(at, tv, a)
+    expect([v.weight.reason, v.model_mapping.reason, v.priority.reason]).toEqual(['commonControlLockedPending 2', 'commonControlLocked', 'commonControlFixed'])
+    expect(controlViews(at, tv, { ...a, weight: 2 }).weight.reason).toBe('commonControlLocked')
+  })
+
+  it('fits an own-level caller\'s new account into the own-level caps, except fixed controls', () => {
+    const at = type({ priority: { default: 500 }, rpm_limit: { default: 9 }, weight: { configurable: false, default: 300 } }, { default_limits: { max_concurrency: 0 } })
+    const core = { priority: 10, weight: 1, max_concurrency: 10 }
+    expect(newAccountValues(at, core, true)).toMatchObject({ priority: 100, weight: 300, max_concurrency: 10, rpm_limit: 9 })
+    expect(newAccountValues(at, core)).toMatchObject({ priority: 500, max_concurrency: 0 })
+    expect(newAccountValues(type({ max_concurrency: { default: 5000 } }), core, true).max_concurrency).toBe(1000)
+  })
+
+  it('compares control values as the core does', () => {
+    expect(sameControlValue({ a: 1, b: [1] }, { b: [1], a: 1 })).toBe(true)
+    expect(sameControlValue(null, [])).toBe(true)
+    expect(sameControlValue({}, undefined)).toBe(true)
+    expect(sameControlValue([1, 2], [2, 1])).toBe(false)
+    expect(sameControlValue(0, null)).toBe(false)
   })
 
   it('takes the declared mapping before default_model_mapping', () => {

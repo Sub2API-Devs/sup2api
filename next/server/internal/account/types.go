@@ -127,7 +127,7 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 		DefaultModelsBySubscription: b.Type.DefaultModelsBySubscription,
 		DefaultModelMapping:         b.Type.DefaultModelMapping,
 		DefaultLimits:               defaultLimitsView(b.Type.DefaultLimits),
-		CommonControls:              b.Type.CommonControls,
+		CommonControls:              controlsView(b.Type.CommonControls),
 		ExtensionsSchema:            b.Type.ExtensionsSchema,
 		Lifecycle:                   b.Type.Lifecycle,
 		Platforms:                   typePlatforms(g, b),

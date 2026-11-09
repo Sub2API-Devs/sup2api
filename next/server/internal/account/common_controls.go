@@ -8,6 +8,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 // Common account controls (CONTRACTS §87): an account type declares per
@@ -144,8 +145,10 @@ func (c declaredControl) expected(current *row, scope *int64) any {
 type controlPlan struct {
 	fields        []declaredControl // by name
 	proxyRequired bool
-	// usageLimit is the declared default usage limit, nil without one.
-	usageLimit *UsageLimit
+	// usageLimit is the declared default usage limit, nil without one;
+	// usageLimitLocked pins every account to it.
+	usageLimit       *UsageLimit
+	usageLimitLocked bool
 }
 
 // planControls resolves the declarations of an account type, normalizing
@@ -163,7 +166,7 @@ func planControls(ctx context.Context, at manifest.AccountType) (controlPlan, er
 			if err != nil {
 				return plan, err
 			}
-			plan.usageLimit = &l
+			plan.usageLimit, plan.usageLimitLocked = &l, decl.Locked
 		case ok:
 			c := declaredControl{name: name, control: control, decl: decl}
 			if decl.HasDefault() {
@@ -228,13 +231,93 @@ func (p controlPlan) fillDefaults(in *input, scope *int64) {
 	}
 }
 
+// declared is the declaration of a field control (zero when none).
+func (p controlPlan) declared(name string) declaredControl {
+	if i := slices.IndexFunc(p.fields, func(c declaredControl) bool { return c.name == name }); i >= 0 {
+		return p.fields[i]
+	}
+	return declaredControl{}
+}
+
 // declaredDefault is the normalized default of a field control, nil when
 // none is declared.
-func (p controlPlan) declaredDefault(name string) *input {
-	if i := slices.IndexFunc(p.fields, func(c declaredControl) bool { return c.name == name }); i >= 0 {
-		return p.fields[i].def
+func (p controlPlan) declaredDefault(name string) *input { return p.declared(name).def }
+
+// converge gives each locked field the request leaves out its default when
+// the account holds another value: a locked setting is always its default
+// (CONTRACTS §87), so an older account takes it on its next save. Runs after
+// the own-level restrictions, which judge only what the caller sent.
+func (p controlPlan) converge(in *input, current *row) {
+	for _, c := range p.fields {
+		if _, set := c.control.value(in); set || !c.decl.Locked || c.def == nil {
+			continue
+		}
+		if v, _ := c.control.value(c.def); !manifest.SameControlValue(v, c.control.current(current)) {
+			c.control.copy(in, c.def)
+		}
 	}
-	return nil
+}
+
+// convergeUsageLimit stores a locked usage limit on an account holding
+// another one, reporting whether it did.
+func (p controlPlan) convergeUsageLimit(ctx context.Context, q store.Querier, id int64) (bool, error) {
+	if !p.usageLimitLocked || p.usageLimit == nil {
+		return false, nil
+	}
+	limits, err := usageLimits(ctx, q, []int64{id})
+	if err != nil {
+		return false, err
+	}
+	if l, ok := limits[id]; ok && l.same(*p.usageLimit) {
+		return false, nil
+	}
+	return true, saveUsageLimit(ctx, q, id, *p.usageLimit)
+}
+
+// ownCapped are the fields an own-level caller is capped on (H3.2), with
+// the clamp into the caps.
+var ownCapped = []struct {
+	name  string
+	field func(*input) **int
+	clamp func(int) int
+}{
+	{"priority", func(in *input) **int { return &in.Priority }, func(v int) int { return min(max(v, 0), ownMaxPriority) }},
+	{"weight", func(in *input) **int { return &in.Weight }, func(v int) int { return min(max(v, 1), ownMaxWeight) }},
+	{"max_concurrency", func(in *input) **int { return &in.MaxConcurrency }, func(v int) int {
+		if v <= 0 {
+			return ownDefaultConcurrency
+		}
+		return min(v, ownMaxConcurrency)
+	}},
+}
+
+// clampOwnDefaults fits the type's defaults of a new account into an
+// own-level caller's caps: an omitted field with a declared default, and a
+// sent value equal to the default the console prefills (the declared one,
+// else defaultLimits). Other values stay for the own-level restrictions to
+// judge; fixed controls keep the declaration's value.
+func (p controlPlan) clampOwnDefaults(in *input, limits *manifest.AccountDefaultLimits, scope *int64) {
+	if scope == nil {
+		return
+	}
+	suggested := limits.ControlDefaults()
+	for _, f := range ownCapped {
+		c := p.declared(f.name)
+		if c.decl.Fixed() {
+			continue
+		}
+		var def *int
+		if c.def != nil {
+			def = *f.field(c.def)
+		} else if v, ok := suggested[f.name].(*int); ok {
+			def = v
+		}
+		switch sent := *f.field(in); {
+		case def == nil:
+		case sent == nil && c.def != nil, sent != nil && *sent == *def:
+			*f.field(in) = new(f.clamp(*def))
+		}
+	}
 }
 
 // leavesNoProxy reports a write that leaves the account without a proxy: a
@@ -265,4 +348,31 @@ func (p controlPlan) guardPatch(t patchTarget) patchTarget {
 		}
 	}
 	return t
+}
+
+// controlsView is the declarations as GET /account-types serves them, each
+// default in the shape the core stores it (normalized like a request), so
+// the console compares a saved account's values with it as the core does.
+// A declaration the core refuses is served as declared.
+func controlsView(decls map[string]manifest.AccountCommonControl) map[string]manifest.AccountCommonControl {
+	plan, err := planControls(context.Background(), manifest.AccountType{CommonControls: decls})
+	if err != nil {
+		return decls
+	}
+	out := maps.Clone(decls)
+	normalize := func(name string, v any) {
+		d := out[name]
+		d.Default, _ = json.Marshal(v)
+		out[name] = d
+	}
+	for _, c := range plan.fields {
+		if c.def != nil {
+			v, _ := c.control.value(c.def)
+			normalize(c.name, v)
+		}
+	}
+	if plan.usageLimit != nil {
+		normalize("usage_limit", *plan.usageLimit)
+	}
+	return out
 }

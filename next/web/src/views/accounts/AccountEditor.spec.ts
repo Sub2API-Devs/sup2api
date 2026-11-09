@@ -527,6 +527,13 @@ describe('account model limits', () => {
     expect((w.get('input[data-testid="account-max_concurrency"]').element as HTMLInputElement).value).toBe(value)
     ownership.scope = 'all'
   })
+  it('fits the plugin\'s suggested limits into an own-level caller\'s caps', async () => {
+    ownership.scope = 'own'
+    const w = render(undefined, false, { ...accountType, default_limits: { priority: 500, weight: 300, max_concurrency: 0 } } as AccountType)
+    await flushPromises()
+    expect(['priority', 'weight', 'max_concurrency'].map(k => (w.get(`input[data-testid="account-${k}"]`).element as HTMLInputElement).value)).toEqual(['100', '100', '10'])
+    ownership.scope = 'all'
+  })
   it('starts a new account from the limits its plugin suggests', async () => {
     const type = { ...accountType, default_limits: { priority: 3, spm_limit: 6, model_limits: [{ models: ['m-a'], ...caps, max_concurrency: 2 }] } } as AccountType
     const w = render(undefined, false, type)
@@ -759,10 +766,11 @@ describe('common controls of the account type (docs/COMMON-CONTROLS.md §2)', ()
     expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([])
   })
 
-  it('shows a saved account\'s locked value and keeps its read-only one', async () => {
+  it('shows a saved account\'s stored values, saying saving moves a locked one to its value', async () => {
     const w = render({ ...savedAccount(), weight: 9, rpm_limit: 3 } as Account, false, declared)
     await flushPromises()
-    expect((input(w, 'weight').element as HTMLInputElement).value).toBe('5')
+    expect((input(w, 'weight').element as HTMLInputElement).value).toBe('9')
+    expect(w.get('[data-testid="account-scheduling"]').html()).toContain('保存后改为锁定值 5')
     expect((input(w, 'rpm_limit').element as HTMLInputElement).value).toBe('3')
     await w.get('form').trigger('submit'); await flushPromises()
     expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('weight')

@@ -6,6 +6,7 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account, AccountType, CommonControlName } from '@/api/types'
+import { newAccountConcurrency } from './accountLimits'
 
 export type { CommonControlName } from '@/api/types'
 
@@ -45,45 +46,89 @@ export function accountControl(type: AccountType | null | undefined, name: Commo
   return { visible: d.visible ?? true, configurable: (d.configurable ?? true) && !locked, locked, required: false, default: d.default }
 }
 
-/** The view of every control for a form (pure; `t` resolves the reason). */
-export function controlViews(type: AccountType | null | undefined, t: (key: string) => string): Record<CommonControlName, ControlView> {
+/** JSON with sorted object keys. */
+const sortedJSON = (v: unknown): string =>
+  Array.isArray(v)
+    ? `[${v.map(sortedJSON).join(',')}]`
+    : v && typeof v === 'object'
+      ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${sortedJSON((v as Record<string, unknown>)[k])}`).join(',')}}`
+      : JSON.stringify(v ?? null)
+const isEmpty = (v: unknown) => v == null || (typeof v === 'object' && Object.keys(v).length === 0)
+
+/** Whether two control values are equal as the core compares them: key order does not matter, null equals an empty list or object. */
+export const sameControlValue = (a: unknown, b: unknown) => (isEmpty(a) && isEmpty(b)) || sortedJSON(a) === sortedJSON(b)
+
+/** A value in a short hint. */
+function shown(v: unknown): string {
+  const s = v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v)
+  return s.length > 40 ? `${s.slice(0, 39)}…` : s
+}
+
+/**
+ * The view of every control for a form (pure; `t` resolves the reason). A
+ * saved account showing a locked field with another stored value says that
+ * saving sets the locked value (the server converges it on every save).
+ */
+export function controlViews(
+  type: AccountType | null | undefined,
+  t: (key: string, values?: Record<string, unknown>) => string,
+  saved?: Account | null
+): Record<CommonControlName, ControlView> {
   const view = (name: CommonControlName): ControlView => {
     const c = accountControl(type, name)
-    const reason = c.locked ? t('accounts.editorUi.commonControlLocked') : c.configurable ? '' : t('accounts.editorUi.commonControlFixed')
+    const pending = !!saved && c.locked && c.default !== undefined && name in saved && !sameControlValue(saved[name as keyof Account], c.default)
+    const reason = pending
+      ? t('accounts.editorUi.commonControlLockedPending', { value: shown(c.default) })
+      : c.locked
+        ? t('accounts.editorUi.commonControlLocked')
+        : c.configurable
+          ? ''
+          : t('accounts.editorUi.commonControlFixed')
     return { visible: c.visible, disabled: !c.configurable, required: c.required, reason }
   }
   return Object.fromEntries(COMMON_CONTROLS.map(n => [n, view(n)])) as Record<CommonControlName, ControlView>
 }
 
-/** controlViews of a reactive account type. */
-export function useCommonControls(type: MaybeRefOrGetter<AccountType | null | undefined>) {
+/** controlViews of a reactive account type and the saved account being edited. */
+export function useCommonControls(type: MaybeRefOrGetter<AccountType | null | undefined>, saved?: MaybeRefOrGetter<Account | null | undefined>) {
   const { t } = useI18n()
-  return computed(() => controlViews(toValue(type), t))
+  return computed(() => controlViews(toValue(type), t, toValue(saved)))
 }
-
-const pick = (type: AccountType | null | undefined, keep: (c: AccountControl) => boolean): ControlValues =>
-  Object.fromEntries(
-    COMMON_CONTROLS.map(n => [n, accountControl(type, n)] as const)
-      .filter(([, c]) => c.default !== undefined && keep(c))
-      .map(([n, c]) => [n, c.default])
-  )
 
 /** Declared defaults. */
-const declaredDefaults = (type: AccountType | null | undefined) => pick(type, () => true)
+const declaredDefaults = (type: AccountType | null | undefined): ControlValues =>
+  Object.fromEntries(
+    COMMON_CONTROLS.map(n => [n, accountControl(type, n).default] as const).filter(([, d]) => d !== undefined)
+  )
 
-/** Locked values: what a saved account shows whatever it stored. */
-const lockedValues = (type: AccountType | null | undefined) => pick(type, c => c.locked)
-
-/** A new account's values: core defaults, then the plugin's default_limits (§68.5), then the declared defaults. */
-export function newAccountValues(type: AccountType | null | undefined, core: ControlValues): ControlValues {
-  const limits = Object.fromEntries(Object.entries(type?.default_limits ?? {}).filter(([, v]) => v !== undefined))
-  return { ...core, ...limits, ...declaredDefaults(type) }
+const clamp = (lo: number, hi: number) => (v: unknown) => Math.min(Math.max(Number(v) || 0, lo), hi)
+/** An own-level caller's caps (CONTRACTS §15.9): the server fits the type's defaults of a new account into them, so the form does too. */
+const OWN_CAPS: Partial<Record<CommonControlName, (v: unknown) => number>> = {
+  priority: clamp(0, 100),
+  weight: clamp(1, 100),
+  max_concurrency: v => (Number(v) > 0 ? Math.min(Number(v), 1000) : newAccountConcurrency('own'))
 }
 
-/** A saved account's values: its own (absent ones fall back to `core`), with the locked ones on top. */
-export function savedAccountValues(a: Account, type: AccountType | null | undefined, core: ControlValues): ControlValues {
+/**
+ * A new account's values: core defaults, then the plugin's default_limits
+ * (§68.5), then the declared defaults; for an own-level caller (`own`) fitted
+ * into the own-level caps, except the fixed ones.
+ */
+export function newAccountValues(type: AccountType | null | undefined, core: ControlValues, own = false): ControlValues {
+  const limits = Object.fromEntries(Object.entries(type?.default_limits ?? {}).filter(([, v]) => v !== undefined))
+  const values: ControlValues = { ...core, ...limits, ...declaredDefaults(type) }
+  if (own) {
+    for (const [name, fit] of Object.entries(OWN_CAPS) as Array<[CommonControlName, (v: unknown) => number]>) {
+      if (accountControl(type, name).configurable) values[name] = fit(values[name])
+    }
+  }
+  return values
+}
+
+/** A saved account's values: its own, absent ones falling back to `core` (a locked one shows what is stored until saved). */
+export function savedAccountValues(a: Account, core: ControlValues): ControlValues {
   const own = Object.fromEntries(Object.keys(core).map(n => [n, a[n as keyof Account]]).filter(([, v]) => v != null))
-  return { ...core, ...own, ...lockedValues(type) }
+  return { ...core, ...own }
 }
 
 /** The model mapping a new account starts from: the declared default, else the plugin's default_model_mapping (§41). */
