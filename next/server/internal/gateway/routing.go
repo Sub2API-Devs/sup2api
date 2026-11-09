@@ -161,7 +161,7 @@ func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string, samePlatfo
 				continue
 			}
 			y := ep.Protocol
-			conv, ok := c.g.conv.Lookup(x, y)
+			conv, ok := c.g.conv.Resolve(x, y)
 			if !ok {
 				continue
 			}

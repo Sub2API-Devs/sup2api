@@ -42,8 +42,9 @@ type chatResponses struct {
 
 func (c *chatResponses) From() string { return "openai.chat" }
 func (c *chatResponses) To() string   { return "openai.responses" }
+func (c *chatResponses) Grade() Grade { return GradeGood }
 
-func (c *chatResponses) Prepare(body []byte) (Converter, []byte, error) {
+func (c *chatResponses) Prepare(body []byte, _ Options) (Converter, []byte, error) {
 	p := &chatResponses{prepared: true}
 	out, err := p.request(body)
 	if err != nil {
@@ -52,11 +53,6 @@ func (c *chatResponses) Prepare(body []byte) (Converter, []byte, error) {
 	slices.Sort(p.dropped)
 	p.dropped = slices.Compact(p.dropped)
 	return p, out, nil
-}
-
-func (c *chatResponses) Request(body []byte) ([]byte, error) {
-	_, out, err := c.Prepare(body)
-	return out, err
 }
 
 // Dropped implements DropReporter: the request paths left out because

@@ -1,31 +1,26 @@
 package convert
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
-// RequestError rejects an input whose semantics cannot be expressed by a
-// strict conversion. Trying a different account must not silently weaken it.
+// RequestError rejects a request the conversion cannot express at all
+// (CONVERT-MATRIX §2.2 class 3), whatever the loss policy.
 type RequestError struct{ Cause error }
 
 func (e *RequestError) Error() string { return e.Cause.Error() }
 func (e *RequestError) Unwrap() error { return e.Cause }
 
-// PreparedConverter binds response options to one immutable request plan.
-// Registry entries are shared; they must never store request-specific options.
-// The returned converter belongs only to this request and creates independent
-// stream state on each NewStream call.
-type PreparedConverter interface {
-	Prepare(body []byte) (Converter, []byte, error)
-}
-
-// Prepare preserves the existing stateless Converter contract while allowing
-// protocols with request-dependent response formats to bind their options.
+// Prepare binds c to one request body and checks the bound converter kept
+// the protocol pair. On error it returns c itself, so a failed route keeps a
+// usable converter value.
+//
+// TODO(convert-matrix T1): bridge for the gateway's attempt-time conversion,
+// which has no Options yet; removed when the gateway prepares at pick time
+// with the request's Options (CONVERT-MATRIX §2.4).
 func Prepare(c Converter, body []byte) (Converter, []byte, error) {
-	p, ok := c.(PreparedConverter)
-	if !ok {
-		out, err := c.Request(body)
-		return c, out, err
-	}
-	bound, out, err := p.Prepare(body)
+	bound, out, err := c.Prepare(body, Options{Ctx: context.Background()})
 	if err != nil {
 		return c, nil, err
 	}
@@ -38,6 +33,10 @@ func Prepare(c Converter, body []byte) (Converter, []byte, error) {
 // DropReporter is implemented by a prepared converter that leaves out
 // request fields without an equivalent, instead of rejecting them, when
 // their absence keeps the request correct (CONTRACTS §83.2).
+//
+// TODO(convert-matrix): superseded by LossReporter; removed once
+// chatResponses reports categorized losses (T3) and the gateway logs
+// Losses (T1).
 type DropReporter interface {
 	// Dropped lists the request paths left out, sorted.
 	Dropped() []string

@@ -22,7 +22,7 @@ func chatResponsesPrepared(t *testing.T, body string) (*chatResponses, string) {
 }
 
 func TestChatResponsesRegistered(t *testing.T) {
-	c, ok := Default().Lookup("openai.chat", "openai.responses")
+	c, ok := Default().Resolve("openai.chat", "openai.responses")
 	if !ok || c.From() != "openai.chat" || c.To() != "openai.responses" {
 		t.Fatal("openai.chat -> openai.responses is not a built-in pair")
 	}
@@ -652,7 +652,8 @@ func TestChatResponsesNumbersVerbatim(t *testing.T) {
 // sdk/manifest/check keeps its own list of same-platform pairs for the
 // hostCompat floor (CONTRACTS §83.4); it must name every built-in one.
 func TestSamePlatformPairsKnownToManifestCheck(t *testing.T) {
-	for _, pair := range Default().Pairs() {
+	for _, p := range Default().Pairs() {
+		pair := [2]string{p.From, p.To}
 		from, _, _ := strings.Cut(pair[0], ".")
 		to, _, _ := strings.Cut(pair[1], ".")
 		if from != to {

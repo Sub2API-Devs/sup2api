@@ -13,7 +13,7 @@ type failedPreparedReview struct {
 	err   error
 }
 
-func (c failedPreparedReview) Prepare([]byte) (convert.Converter, []byte, error) {
+func (c failedPreparedReview) Prepare([]byte, convert.Options) (convert.Converter, []byte, error) {
 	*c.calls++
 	return nil, nil, c.err
 }

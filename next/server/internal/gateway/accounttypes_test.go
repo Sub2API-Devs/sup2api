@@ -221,18 +221,20 @@ type fakeConv struct {
 	respErr  error
 }
 
-func (f *fakeConv) From() string { return f.from }
-func (f *fakeConv) To() string   { return f.to }
+func (f *fakeConv) From() string         { return f.from }
+func (f *fakeConv) To() string           { return f.to }
+func (f *fakeConv) Grade() convert.Grade { return convert.GradeFair }
 
-func (f *fakeConv) Request(b []byte) ([]byte, error) {
+func (f *fakeConv) Prepare(b []byte, _ convert.Options) (convert.Converter, []byte, error) {
 	if f.reqErr != nil {
-		return nil, f.reqErr
+		return nil, nil, f.reqErr
 	}
-	return json.Marshal(map[string]any{
+	out, err := json.Marshal(map[string]any{
 		"q_model":  gjson.GetBytes(b, "model").String(),
 		"q_stream": gjson.GetBytes(b, "stream").Bool(),
 		"q_prompt": gjson.GetBytes(b, "messages.0.content").String(),
 	})
+	return f, out, err
 }
 
 func (f *fakeConv) Response(b []byte) ([]byte, error) {

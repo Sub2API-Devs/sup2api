@@ -10,12 +10,10 @@ import (
 
 type requestBoundConverter struct{ option string }
 
-func (c requestBoundConverter) From() string { return "openai.chat" }
-func (c requestBoundConverter) To() string   { return "anthropic.messages" }
-func (c requestBoundConverter) Request([]byte) ([]byte, error) {
-	return nil, fmt.Errorf("shared Request must not be called after Prepare")
-}
-func (c requestBoundConverter) Prepare(body []byte) (convert.Converter, []byte, error) {
+func (c requestBoundConverter) From() string         { return "openai.chat" }
+func (c requestBoundConverter) To() string           { return "anthropic.messages" }
+func (c requestBoundConverter) Grade() convert.Grade { return convert.GradeFair }
+func (c requestBoundConverter) Prepare(body []byte, _ convert.Options) (convert.Converter, []byte, error) {
 	return requestBoundConverter{option: string(body)}, append([]byte(nil), body...), nil
 }
 func (c requestBoundConverter) Response([]byte) ([]byte, error)    { return []byte(c.option), nil }

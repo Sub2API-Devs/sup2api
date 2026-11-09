@@ -11,7 +11,7 @@ type reviewPrepared struct {
 	err   error
 }
 
-func (c reviewPrepared) Prepare([]byte) (Converter, []byte, error) {
+func (c reviewPrepared) Prepare([]byte, Options) (Converter, []byte, error) {
 	return c.bound, []byte("converted"), c.err
 }
 

@@ -5,7 +5,12 @@
 // upstream request, and converts the upstream response (JSON or SSE) Q→P on
 // the way back. Conversion never goes through a plugin.
 //
-// Built-in cross-platform pairs accept only parameters with a verified
+// Converters never apply a policy: each client request member is mapped,
+// left out as a Loss of some category, or rejected with RequestError when
+// the request cannot be expressed at all; the gateway decides per account
+// whether the losses are acceptable (docs/CONVERT-MATRIX.md §2).
+//
+// Built-in cross-platform pairs still accept only parameters with a verified
 // target equivalent. The same-platform openai.chat -> openai.responses pair
 // is lenient: it also leaves out parameters whose absence keeps the request
 // correct and reports them through DropReporter (CONTRACTS §83.2).
@@ -13,9 +18,11 @@ package convert
 
 import (
 	"bytes"
+	"cmp"
+	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -29,21 +36,129 @@ type Event struct {
 	Data []byte
 }
 
+// Grade is the quality of serving a client protocol with an upstream
+// protocol; lower is better. Converters report good, fair or discouraged;
+// native and local only label gateway routes.
+type Grade int8
+
+const (
+	GradeNative      Grade = 0 // no conversion (routes only)
+	GradeGood        Grade = 1
+	GradeFair        Grade = 2
+	GradeDiscouraged Grade = 3 // a composition of two converters
+	GradeLocal       Grade = 9 // count_tokens estimated by the core (routes only)
+)
+
+// String returns native, good, fair, discouraged or local.
+func (g Grade) String() string {
+	switch g {
+	case GradeNative:
+		return "native"
+	case GradeGood:
+		return "good"
+	case GradeFair:
+		return "fair"
+	case GradeDiscouraged:
+		return "discouraged"
+	case GradeLocal:
+		return "local"
+	}
+	return fmt.Sprintf("grade(%d)", int8(g))
+}
+
+// converted reports whether a converter may report g.
+func (g Grade) converted() bool { return g >= GradeGood && g <= GradeDiscouraged }
+
+// LossCategory classifies a Loss for the conversion loss policies
+// (CONVERT-MATRIX §2.3): safe rejects tool losses, strict rejects any.
+type LossCategory string
+
+const (
+	// LossTool: the callable tool set, a forced tool choice or the tool
+	// call history seen upstream differs from the client's.
+	LossTool LossCategory = "tool"
+	// LossReasoning: reasoning configuration ignored, reasoning history
+	// dropped, or upstream signatures/encrypted reasoning not carried back.
+	LossReasoning LossCategory = "reasoning"
+	// LossImage: an input image (or its detail) dropped or replaced by text.
+	LossImage LossCategory = "image"
+	// LossOther: anything else (sampling, stop, metadata, cache marks,
+	// system message position, files, audio, response_format details, ...).
+	LossOther LossCategory = "other"
+)
+
+// Loss is one member of a request or response a conversion left out or
+// altered while keeping the result valid (CONVERT-MATRIX §2.2 class 2).
+type Loss struct {
+	Category LossCategory
+	// Path locates the member in this hop's input protocol: "tools[2]",
+	// "messages[3].content[1]" for a request, "response.content[2]" for a
+	// response.
+	Path string
+	// Hop is the conversion step the loss happened in (0 for a single hop).
+	Hop int
+}
+
+// losses collects the Loss entries of one conversion hop. The zero value is
+// ready to use.
+type losses struct{ list []Loss }
+
+func (l *losses) add(category LossCategory, path string) {
+	l.list = append(l.list, Loss{Category: category, Path: path})
+}
+
+// sorted returns the entries ordered by hop, path and category, without
+// duplicates.
+func (l *losses) sorted() []Loss {
+	out := slices.Clone(l.list)
+	slices.SortFunc(out, func(a, b Loss) int {
+		return cmp.Or(cmp.Compare(a.Hop, b.Hop), cmp.Compare(a.Path, b.Path), cmp.Compare(a.Category, b.Category))
+	})
+	return slices.Compact(out)
+}
+
+// MediaFetcher downloads an http(s) media URL for a conversion that must
+// inline it (to Gemini, CONVERT-MATRIX §9.2) and returns its MIME type and
+// base64 data. The gateway's implementation caches by URL within a request.
+type MediaFetcher func(ctx context.Context, url string) (mime, b64 string, err error)
+
+// Options are the request facts a conversion needs beyond the body.
+type Options struct {
+	Ctx context.Context
+	// Model is the client model (from the body, or the path for Gemini).
+	Model string
+	// Stream reports whether the client asked for a stream.
+	Stream bool
+	// Fetch downloads media URLs; nil makes a conversion that needs a
+	// download fail with RequestError.
+	Fetch MediaFetcher
+	// ClaudeDefaultMaxTokens gives max_tokens for a request converted to
+	// Anthropic without an output limit (gateway setting
+	// claude_default_max_tokens, CONVERT-MATRIX §9.4).
+	ClaudeDefaultMaxTokens func(model string) int
+}
+
 // Converter converts between a client protocol (From) and an upstream
-// protocol (To). Implementations must be safe for concurrent use; per-stream
-// state lives in the StreamConverter returned by NewStream.
+// protocol (To). Registry entries are stateless and safe for concurrent use;
+// Prepare returns a converter bound to one request, and per-stream state
+// lives in the StreamConverter returned by NewStream.
 type Converter interface {
 	// From is the client endpoint protocol, e.g. "anthropic.messages".
 	From() string
 	// To is the upstream protocol, e.g. "openai.chat".
 	To() string
-	// Request converts a client request body (From) to an upstream request
-	// body (To).
-	Request(body []byte) ([]byte, error)
+	// Grade is GradeGood, GradeFair or GradeDiscouraged.
+	Grade() Grade
+	// Prepare converts a client request body (From) to an upstream request
+	// body (To) and returns a converter bound to this request (the response
+	// format may depend on it). The bound converter has the same From and
+	// To; it is unusable when err is non-nil.
+	Prepare(body []byte, opt Options) (Converter, []byte, error)
 	// Response converts a complete non-stream upstream response body (To)
-	// to the client format (From).
+	// to the client format (From). Called on a bound converter only.
 	Response(body []byte) ([]byte, error)
-	// NewStream starts converting one upstream event stream.
+	// NewStream starts converting one upstream event stream, with state
+	// independent of other calls. Called on a bound converter only.
 	NewStream() StreamConverter
 }
 
@@ -57,6 +172,44 @@ type StreamConverter interface {
 	// Flush is called once when the upstream stream ended (normally or
 	// not) and returns any trailing client events.
 	Flush() ([]Event, error)
+}
+
+// LossReporter is implemented by a bound converter. After Prepare it lists
+// the request losses; after Response or a stream's Flush it also lists the
+// response losses (paths starting with "response."). Sorted, without
+// duplicates.
+type LossReporter interface {
+	Losses() []Loss
+}
+
+// HopReporter is implemented by a composed converter: the protocols it
+// passes through, client first.
+type HopReporter interface {
+	Hops() []string
+}
+
+// Losses returns the losses of a bound converter, nil when it reports none.
+func Losses(c Converter) []Loss {
+	if r, ok := c.(LossReporter); ok {
+		return r.Losses()
+	}
+	return nil
+}
+
+// Hops returns the protocols a converter passes through: [From, To] unless
+// it is a HopReporter.
+func Hops(c Converter) []string {
+	if h, ok := c.(HopReporter); ok {
+		return h.Hops()
+	}
+	return []string{c.From(), c.To()}
+}
+
+// PairInfo describes one protocol pair a Registry can convert.
+type PairInfo struct {
+	From, To string
+	Grade    Grade
+	Hops     []string
 }
 
 type pair struct{ from, to string }
@@ -103,7 +256,8 @@ func Default() *Registry {
 	return r
 }
 
-// Register adds c. From and To must be non-empty and different.
+// Register adds c. From and To must be non-empty and different, and Grade
+// one a converter may report.
 func (r *Registry) Register(c Converter) error {
 	if c == nil {
 		return errors.New("convert: nil converter")
@@ -111,6 +265,9 @@ func (r *Registry) Register(c Converter) error {
 	from, to := c.From(), c.To()
 	if from == "" || to == "" || from == to {
 		return fmt.Errorf("convert: invalid converter %q -> %q", from, to)
+	}
+	if g := c.Grade(); !g.converted() {
+		return fmt.Errorf("convert: converter %s -> %s has grade %s", from, to, g)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -125,10 +282,13 @@ func (r *Registry) Register(c Converter) error {
 	return nil
 }
 
-// Lookup returns the converter serving a clientProtocol endpoint with an
+// Resolve returns the converter serving a clientProtocol endpoint with an
 // upstreamProtocol account. Identical protocols need no converter and
 // report false.
-func (r *Registry) Lookup(clientProtocol, upstreamProtocol string) (Converter, bool) {
+//
+// TODO(convert-matrix T1): fall back to a cached composition through
+// openai.responses (CONVERT-MATRIX §4); only registered pairs resolve yet.
+func (r *Registry) Resolve(clientProtocol, upstreamProtocol string) (Converter, bool) {
 	if r == nil || clientProtocol == upstreamProtocol {
 		return nil, false
 	}
@@ -140,26 +300,23 @@ func (r *Registry) Lookup(clientProtocol, upstreamProtocol string) (Converter, b
 
 // CanConvert implements core.ProtocolConverters.
 func (r *Registry) CanConvert(clientProtocol, upstreamProtocol string) bool {
-	_, ok := r.Lookup(clientProtocol, upstreamProtocol)
+	_, ok := r.Resolve(clientProtocol, upstreamProtocol)
 	return ok
 }
 
-// Pairs lists the registered (from, to) pairs, sorted.
-func (r *Registry) Pairs() [][2]string {
+// Pairs lists the convertible pairs, sorted by From then To.
+func (r *Registry) Pairs() []PairInfo {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
-	out := make([][2]string, 0, len(r.m))
-	for k := range r.m {
-		out = append(out, [2]string{k.from, k.to})
+	out := make([]PairInfo, 0, len(r.m))
+	for _, c := range r.m {
+		out = append(out, PairInfo{From: c.From(), To: c.To(), Grade: c.Grade(), Hops: Hops(c)})
 	}
 	r.mu.RUnlock()
-	sort.Slice(out, func(i, j int) bool {
-		if out[i][0] != out[j][0] {
-			return out[i][0] < out[j][0]
-		}
-		return out[i][1] < out[j][1]
+	slices.SortFunc(out, func(a, b PairInfo) int {
+		return cmp.Or(cmp.Compare(a.From, b.From), cmp.Compare(a.To, b.To))
 	})
 	return out
 }

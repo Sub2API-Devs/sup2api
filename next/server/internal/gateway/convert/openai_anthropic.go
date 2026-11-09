@@ -15,18 +15,16 @@ type openAIAnthropic struct {
 
 func (c *openAIAnthropic) From() string { return c.protocol }
 func (c *openAIAnthropic) To() string   { return "anthropic.messages" }
+func (c *openAIAnthropic) Grade() Grade { return GradeFair }
 
-func (c *openAIAnthropic) Prepare(body []byte) (Converter, []byte, error) {
+// Prepare ignores opt: the strict plan needs none. T3 replaces this
+// converter with the lenient one of CONVERT-MATRIX §9.9.
+func (c *openAIAnthropic) Prepare(body []byte, _ Options) (Converter, []byte, error) {
 	plan, out, err := strict.Prepare(c.protocol, body)
 	if err != nil {
 		return nil, nil, &RequestError{Cause: err}
 	}
 	return &openAIAnthropic{protocol: c.protocol, plan: plan}, out, nil
-}
-
-func (c *openAIAnthropic) Request(body []byte) ([]byte, error) {
-	_, out, err := c.Prepare(body)
-	return out, err
 }
 
 func (c *openAIAnthropic) Response(body []byte) ([]byte, error) {
