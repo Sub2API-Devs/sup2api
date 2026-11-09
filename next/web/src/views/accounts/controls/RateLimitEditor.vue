@@ -29,9 +29,14 @@ const fields = computed(() =>
   ].filter(f => props.controls?.[f.key]?.visible !== false)
 )
 
+/** An absent limit is 0; an emptied input stays null. */
+function current(key: RateLimitField): number | null {
+  const v = props.modelValue?.[key]
+  return v === undefined ? 0 : v
+}
+
 function set(key: RateLimitField, v: unknown) {
-  const m = props.modelValue
-  emit('update:modelValue', { rpm_limit: m?.rpm_limit ?? 0, tpm_limit: m?.tpm_limit ?? 0, spm_limit: m?.spm_limit ?? 0, [key]: v as number | null })
+  emit('update:modelValue', { rpm_limit: current('rpm_limit'), tpm_limit: current('tpm_limit'), spm_limit: current('spm_limit'), [key]: v as number | null })
 }
 </script>
 

@@ -514,8 +514,8 @@ function applyValues(values: ControlValues) {
 function switchAuth(at: AccountType | null, previous: AccountType | null | undefined) {
   if (editorModels.sameDefaults(previous)) editorModels.applyDefaults(at)
   const before = newAccountValues(previous, coreValues())
-  const follows = ([name]: [string, unknown]) =>
-    name in basic && (!accountControl(at, name as CommonControlName).configurable || JSON.stringify(basic[name as keyof typeof basic]) === JSON.stringify(before[name as CommonControlName]))
+  const untouched = (name: string) => name in basic && JSON.stringify(basic[name as keyof typeof basic]) === JSON.stringify(before[name as CommonControlName])
+  const follows = ([name]: [string, unknown]) => !accountControl(at, name as CommonControlName).configurable || untouched(name)
   applyValues(Object.fromEntries(Object.entries(newAccountValues(at, coreValues())).filter(follows)))
 }
 

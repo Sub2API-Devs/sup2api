@@ -145,6 +145,15 @@ func TestCommonControlDefaultsOwnLevel(t *testing.T) {
 	e.gen.types[0].Type.CommonControls = map[string]manifest.AccountCommonControl{"max_concurrency": {Default: json.RawMessage(`3`)}}
 	require.Equal(t, 3.0, e.createAs(alice, "declared", nil)["max_concurrency"])
 	require.Equal(t, 3.0, e.createAs(e.uid, "admin", nil)["max_concurrency"])
+	// Fixed without a default, each caller is held to their own core default.
+	off := false
+	e.gen.types[0].Type.CommonControls = map[string]manifest.AccountCommonControl{"max_concurrency": {Configurable: &off}}
+	require.Equal(t, float64(ownDefaultConcurrency), e.createAs(alice, "fixed", map[string]any{"max_concurrency": ownDefaultConcurrency})["max_concurrency"])
+	require.Equal(t, 0.0, e.createAs(e.uid, "fixed-admin", nil)["max_concurrency"])
+	code, out := e.doAs(alice, "POST", "/accounts", map[string]any{"name": "fixed-5", "plugin_key": "anthropic", "type": "apikey",
+		"credentials": map[string]any{"api_key": "sk-good-key-123"}, "max_concurrency": 5})
+	require.Equal(t, 400, code, out)
+	require.Contains(t, fieldsOf(out), "max_concurrency:read_only")
 }
 
 // The plugin's account_patch cannot move a fixed control: a locked field
@@ -175,4 +184,55 @@ func TestCommonControlsGuardAccountPatch(t *testing.T) {
 	require.Equal(t, 200, code, out)
 	acc = data(out)
 	require.Equal(t, []any{4.0, 2.0, 11.0}, []any{acc["priority"], acc["weight"], acc["rpm_limit"]})
+}
+
+// Fixed object and list controls compare as JSON: the current value passes
+// whatever its spelling, another one does not; a configurable default usage
+// limit is saved with the account and stays editable.
+func TestCommonControlStructuredValues(t *testing.T) {
+	e := setup(t)
+	off := false
+	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
+	e.gen.types[0].Type.CommonControls = map[string]manifest.AccountCommonControl{
+		"model_mapping": {Configurable: &off, Default: raw(`{"claude-a": "claude-b", "claude-c": "claude-d"}`)},
+		"model_limits":  {Configurable: &off, Default: raw(`[{"models": ["claude-a"], "rpm_limit": 2}]`)},
+		"environment":   {Locked: true, Default: raw(`{"relay_timeout_seconds": 600}`)},
+		"usage_limit":   {Default: raw(`{"enabled": true, "amount": 3, "period": "week", "timezone": "UTC"}`)},
+	}
+	acc := e.createAs(e.uid, "structured", nil)
+	require.Equal(t, map[string]any{"claude-a": "claude-b", "claude-c": "claude-d"}, acc["model_mapping"])
+	require.Equal(t, map[string]any{"relay_timeout_seconds": 600.0}, acc["environment"])
+	id := itoa(int64(acc["id"].(float64)))
+	for _, tc := range []struct {
+		name  string
+		patch map[string]any
+		field string
+	}{
+		{"same mapping, other order", map[string]any{"model_mapping": raw(`{"claude-c":"claude-d","claude-a":"claude-b"}`)}, ""},
+		{"same limits, zero fields spelled out", map[string]any{"model_limits": raw(`[{"models":["claude-a"],"rpm_limit":2,"tpm_limit":0,"spm_limit":0,"max_concurrency":0}]`)}, ""},
+		{"same environment", map[string]any{"environment": map[string]any{"relay_timeout_seconds": 600}}, ""},
+		{"other mapping", map[string]any{"model_mapping": map[string]any{"claude-a": "claude-d"}}, "model_mapping:read_only"},
+		{"cleared limits", map[string]any{"model_limits": []any{}}, "model_limits:read_only"},
+		{"other environment", map[string]any{"environment": map[string]any{}}, "environment:read_only"},
+	} {
+		status, result := e.do("PATCH", "/accounts/"+id, tc.patch)
+		if tc.field == "" {
+			require.Equal(t, 200, status, "%s: %v", tc.name, result)
+			continue
+		}
+		require.Equal(t, 400, status, tc.name)
+		require.Contains(t, fieldsOf(result), tc.field, tc.name)
+	}
+	status, result := e.do("GET", "/accounts/"+id+"/usage-limit", nil)
+	require.Equal(t, 200, status)
+	require.Equal(t, []any{true, "week", "3"}, []any{data(result)["configured"], data(result)["period"], data(result)["amount"]})
+	status, result = e.do("PUT", "/accounts/"+id+"/usage-limit", map[string]any{"enabled": false, "amount": "3", "period": "day", "period_count": 1, "timezone": "UTC"})
+	require.Equal(t, 200, status, result)
+
+	// A default the core refuses is a broken package: writes of the type fail
+	// instead of skipping the declaration.
+	e.gen.types[0].Type.CommonControls = map[string]manifest.AccountCommonControl{"weight": {Default: raw(`0`)}}
+	status, result = e.do("PATCH", "/accounts/"+id, map[string]any{"name": "renamed"})
+	require.Equal(t, 400, status, result)
+	require.Contains(t, fieldsOf(result), "weight:invalid")
 }

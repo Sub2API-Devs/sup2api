@@ -69,10 +69,10 @@ const pick = (type: AccountType | null | undefined, keep: (c: AccountControl) =>
   )
 
 /** Declared defaults. */
-export const declaredDefaults = (type: AccountType | null | undefined) => pick(type, () => true)
+const declaredDefaults = (type: AccountType | null | undefined) => pick(type, () => true)
 
 /** Locked values: what a saved account shows whatever it stored. */
-export const lockedValues = (type: AccountType | null | undefined) => pick(type, c => c.locked)
+const lockedValues = (type: AccountType | null | undefined) => pick(type, c => c.locked)
 
 /** A new account's values: core defaults, then the plugin's default_limits (§68.5), then the declared defaults. */
 export function newAccountValues(type: AccountType | null | undefined, core: ControlValues): ControlValues {

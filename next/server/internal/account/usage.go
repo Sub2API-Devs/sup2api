@@ -64,13 +64,6 @@ const (
 // the widest bound (1-8784, 0064).
 var maxPeriodCount = manifest.UsageLimitMaxPeriodCount
 
-// Anchors are accepted in [2000, 2100) so window math never nears the
-// limits of time.Duration.
-var (
-	minUsageAnchor = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	maxUsageAnchor = time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
-)
-
 // UsageLimit is the usage-limit configuration of an account.
 type UsageLimit struct {
 	// RawCost counts usage before the group multiplier ("原始倍率计费"), both
@@ -599,7 +592,7 @@ func validateUsageLimit(ctx context.Context, l UsageLimit, fields ...core.FieldE
 	if l.Enabled && !l.Amount.IsPositive() {
 		add("amount", "set an amount above 0 to enable the usage limit", "开启用量限制需要填写大于 0 的限额")
 	}
-	if l.Anchor != nil && (l.Anchor.Before(minUsageAnchor) || !l.Anchor.Before(maxUsageAnchor)) {
+	if l.Anchor != nil && (l.Anchor.Before(manifest.UsageLimitMinAnchor) || !l.Anchor.Before(manifest.UsageLimitMaxAnchor)) {
 		add("anchor", "anchor must be between 2000 and 2100", "周期起点必须在 2000 年到 2100 年之间")
 	}
 	if _, ok := core.LoadTimeZone(l.Timezone); !ok {

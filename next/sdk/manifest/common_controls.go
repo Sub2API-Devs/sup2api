@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"reflect"
+	"time"
 )
 
 // Common account controls (CONTRACTS §87): the account settings the core
@@ -123,6 +124,14 @@ const (
 var UsageLimitMaxPeriodCount = map[string]int{
 	"hour": 366 * 24, "day": 366, "week": 52, "month": 12, UsagePeriodNone: 1,
 }
+
+// Usage limit anchors are accepted in [UsageLimitMinAnchor,
+// UsageLimitMaxAnchor), so window math never nears the limits of
+// time.Duration.
+var (
+	UsageLimitMinAnchor = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	UsageLimitMaxAnchor = time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+)
 
 // CommonControlSpecs are the known controls by name; the name is the account
 // API field (usage_limit: the usage limit endpoint; proxy: proxy_id and

@@ -326,16 +326,20 @@ func (v *validator) uiSlots(u *manifest.UI) {
 }
 
 // editorSection validates the navigation entry of an account editor section
-// (UI 3.7): a label, a known icon and account type ids without repeats.
+// (UI 3.7): a label, a known icon and ids of the plugin's own account types
+// without repeats (the console shows the section for no other type).
 func (v *validator) editorSection(f string, s manifest.Slot) {
 	if firstText(s.Label) == "" {
 		v.add(f+".label", "required", "label is required")
 	}
 	v.menuIcon(f+".icon", s.Icon)
+	own := func(id string) bool {
+		return slices.ContainsFunc(v.m.AccountTypes, func(at manifest.AccountType) bool { return at.ID == id })
+	}
 	seen := map[string]bool{}
 	for i, id := range s.AccountTypes {
-		if !accountTypeIDRe.MatchString(id) || seen[id] {
-			v.add(fmt.Sprintf("%s.accountTypes[%d]", f, i), "invalid", "account type id %q is invalid or repeated", id)
+		if !own(id) || seen[id] {
+			v.add(fmt.Sprintf("%s.accountTypes[%d]", f, i), "invalid", "%q is not an account type of this plugin, or is repeated", id)
 		}
 		seen[id] = true
 	}

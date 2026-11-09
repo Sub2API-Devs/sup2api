@@ -247,18 +247,21 @@ func (in *input) leavesNoProxy(current *row) bool {
 	return current == nil || in.ProxyID.Set
 }
 
+// patchFields drop the field of a control from an account_patch target.
+var patchFields = map[string]func(*patchTarget){
+	"model_mapping": func(t *patchTarget) { t.Mapping = nil }, "priority": func(t *patchTarget) { t.Priority = nil },
+	"weight": func(t *patchTarget) { t.Weight = nil }, "max_concurrency": func(t *patchTarget) { t.MaxConcurrency = nil },
+	"rpm_limit": func(t *patchTarget) { t.RPMLimit = nil }, "tpm_limit": func(t *patchTarget) { t.TPMLimit = nil },
+	"spm_limit": func(t *patchTarget) { t.SPMLimit = nil }, "model_limits": func(t *patchTarget) { t.ModelLimits = nil },
+}
+
 // guardPatch keeps the plugin's account_patch off the fixed controls: their
 // fields leave the target, so a locked or non-configurable field keeps the
 // value the caller was held to.
 func (p controlPlan) guardPatch(t patchTarget) patchTarget {
-	drop := map[string]func(){
-		"model_mapping": func() { t.Mapping = nil }, "priority": func() { t.Priority = nil }, "weight": func() { t.Weight = nil },
-		"max_concurrency": func() { t.MaxConcurrency = nil }, "rpm_limit": func() { t.RPMLimit = nil },
-		"tpm_limit": func() { t.TPMLimit = nil }, "spm_limit": func() { t.SPMLimit = nil }, "model_limits": func() { t.ModelLimits = nil },
-	}
 	for _, c := range p.fields {
-		if f, ok := drop[c.name]; ok && c.decl.Fixed() {
-			f()
+		if drop, ok := patchFields[c.name]; ok && c.decl.Fixed() {
+			drop(&t)
 		}
 	}
 	return t

@@ -216,11 +216,6 @@ type usageLimitValue struct {
 	Timezone    string      `json:"timezone"`
 }
 
-var (
-	minUsageAnchor = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	maxUsageAnchor = time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
-)
-
 // usageLimit checks a usage limit with the rules of the account API.
 func (v *validator) usageLimit(f string, raw json.RawMessage) {
 	l := usageLimitValue{Period: "month", PeriodCount: 1}
@@ -236,7 +231,7 @@ func (v *validator) usageLimit(f string, raw json.RawMessage) {
 		v.add(f+".period_count", "invalid", "period count must be 1-%d", maxCount)
 	}
 	v.usageAmount(f+".amount", string(l.Amount), l.Enabled)
-	if l.Anchor != nil && (l.Anchor.Before(minUsageAnchor) || !l.Anchor.Before(maxUsageAnchor)) {
+	if l.Anchor != nil && (l.Anchor.Before(manifest.UsageLimitMinAnchor) || !l.Anchor.Before(manifest.UsageLimitMaxAnchor)) {
 		v.add(f+".anchor", "invalid", "anchor must be between 2000 and 2100")
 	}
 	if _, err := time.LoadLocation(l.Timezone); err != nil || l.Timezone == "" || l.Timezone == "Local" || len(l.Timezone) > 64 {

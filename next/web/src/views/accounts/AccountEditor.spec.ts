@@ -746,6 +746,19 @@ describe('common controls of the account type (docs/COMMON-CONTROLS.md §2)', ()
     expect(body).not.toHaveProperty('rpm_limit')
   })
 
+  it('switching the auth method applies the new type\'s fixed controls and untouched defaults, keeping edits', async () => {
+    const group = { ...accountType, plugin_key: 'demo', creation_group: 'demo' }
+    const w = render(undefined, false, { ...group, type: 'a' } as unknown as AccountType)
+    await flushPromises()
+    await input(w, 'priority').setValue('42')
+    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-1']], max_concurrency: 0, rpm_limit: 3, tpm_limit: 0, spm_limit: 0 }])
+    await w.setProps({ accountType: { ...group, type: 'b', default_limits: { weight: 6, priority: 1 }, common_controls: { model_limits: { configurable: false } } } as unknown as AccountType })
+    await flushPromises()
+    expect((input(w, 'priority').element as HTMLInputElement).value).toBe('42')
+    expect((input(w, 'weight').element as HTMLInputElement).value).toBe('6')
+    expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([])
+  })
+
   it('shows a saved account\'s locked value and keeps its read-only one', async () => {
     const w = render({ ...savedAccount(), weight: 9, rpm_limit: 3 } as Account, false, declared)
     await flushPromises()
