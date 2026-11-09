@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"slices"
 	"testing"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -293,10 +294,25 @@ func TestBalanceMergesPluginLoad(t *testing.T) {
 func TestBalanceTrafficByModel(t *testing.T) {
 	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, ModelLimits: true}
 	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}}) // acc-1 busy with other models
-	e.gw.d.Limiter.(*fakeLimiter).modelUsage = map[int64]core.RateUsage{2: {RPM: 60}}
+	lim := e.gw.d.Limiter.(*fakeLimiter)
+	lim.modelUsage = map[string]map[int64]core.RateUsage{testModel: {2: {RPM: 60}}}
 	served, _ := serve(t, e, 200)
 	if served["acc-2"] > 6 || served["acc-1"] < 70 || served["acc-3"] < 70 {
 		t.Fatalf("served %v", served)
+	}
+	if !slices.Contains(lim.modelAsked, testModel) {
+		t.Fatalf("model usage asked for %v, want %s", lim.modelAsked, testModel)
+	}
+}
+
+// A failed read of the model's usage fails open like any other read.
+func TestBalanceTrafficByModelReadFailure(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, ModelLimits: true}
+	e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}})
+	lim.modelErr = errors.New("redis down")
+	_, recs := serve(t, e, 2)
+	if d := coreDecision(recs[0]); d != nil {
+		t.Fatalf("core decision after a failed read: %+v", d)
 	}
 }
 

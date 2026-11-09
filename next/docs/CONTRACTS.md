@@ -6891,7 +6891,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 ### 89.3 生效范围与读数
 
 - 和权重一样只作用于粘性不命中的挑选（新会话、无粘性规则的请求、绑定账号失败后的换号）；粘性命中、`count_tokens` 不读不算；已绑定的会话不迁移。
-- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其模型列表的近 60 秒窗口），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`）。没设 TPM 上限的账号，TPM 在请求结束时才计入，有滞后。
+- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其模型列表的近 60 秒窗口），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`）。没设 TPM 上限的账号，以及按模型比较时（`md:<model>` 不设上限、不预留），TPM 在请求结束时才计入，有滞后。
 - 读失败记 WARN，本次按插件的值调度（仍套用插件负载），不拒绝请求；换号时出现首次读数没覆盖到的账号，它保持插件权重、不参与流量均衡。
 
 ### 89.4 记录

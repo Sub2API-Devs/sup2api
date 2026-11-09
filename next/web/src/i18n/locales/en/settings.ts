@@ -31,10 +31,10 @@ export default {
     limitLoad: 'Limit-aware load',
     limitLoadHint: 'The closer an account is to its limit, the lower its weight. E.g. RPM limit 100 with 90 used: weight ×10%. Accounts without a limit are not affected.',
     metric: 'Metric',
-    metricHint: 'Both the traffic balance and the limit load use this metric. For accounts without a TPM limit, tokens are counted only when a request finishes, so TPM lags slightly.',
+    metricHint: 'Both the traffic balance and the limit load use this metric. For accounts without a TPM limit, and always when balancing by model, tokens are counted only when a request finishes, so TPM lags slightly.',
     metrics: { rpm: 'RPM', concurrency: 'Concurrency', tpm: 'TPM' },
     modelLimits: 'Per-model limits',
-    modelLimitsHint: "Balance by the requested model: the traffic balance compares that model's own usage on each account, and when the model is in one of the account's per-model limit lists, the limit-aware load also uses that list's usage and limit, whichever load is higher."
+    modelLimitsHint: "Balance by the requested model: the traffic balance compares that model's own usage on each account, and when the model is in one of the account's per-model limit lists, the limit-aware load also uses that list's usage and limit, and the higher load wins."
   },
   offload: {
     nodesTitle: 'Node load',

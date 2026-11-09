@@ -195,10 +195,10 @@ func TestLimiterModelUsage(t *testing.T) {
 	ctx := context.Background()
 	refs := []core.AccountRef{{ID: 7}, {ID: 8}}
 	for _, hit := range []struct {
-		id    int
+		ref   core.AccountRef
 		model string
-	}{{0, "a"}, {0, "a"}, {0, "b"}, {1, "b"}} {
-		hold, ok, err := l.Reserve(ctx, refs[hit.id], hit.model, "", 0)
+	}{{refs[0], "a"}, {refs[0], "a"}, {refs[0], "b"}, {refs[1], "b"}} {
+		hold, ok, err := l.Reserve(ctx, hit.ref, hit.model, "", 0)
 		if err != nil || !ok {
 			t.Fatal(ok, err)
 		}
