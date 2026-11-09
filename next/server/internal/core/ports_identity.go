@@ -281,15 +281,19 @@ func ModelSlots(model string) string { return "account-md:" + model }
 
 // ModelLimitFor returns the list holding the (client) model, or nil.
 func (a *AccountRef) ModelLimitFor(model string) *ModelLimit {
-	if model == "" {
-		return nil
-	}
-	for i := range a.ModelLimits {
-		if slices.Contains(a.ModelLimits[i].Models, model) {
-			return &a.ModelLimits[i]
-		}
+	if i := a.ModelLimitIndex(model); i >= 0 {
+		return &a.ModelLimits[i]
 	}
 	return nil
+}
+
+// ModelLimitIndex returns the index of the list holding the (client) model
+// in ModelLimits, or -1.
+func (a *AccountRef) ModelLimitIndex(model string) int {
+	if model == "" {
+		return -1
+	}
+	return slices.IndexFunc(a.ModelLimits, func(l ModelLimit) bool { return slices.Contains(l.Models, model) })
 }
 
 // ServesModel reports whether the account may serve the (client) model.
@@ -377,6 +381,9 @@ type AccountLimiter interface {
 	AddTokens(ctx context.Context, id int64, list string, n int64)
 	// Usage returns the counters of the accounts and of their model lists.
 	Usage(ctx context.Context, refs []AccountRef) (map[int64]RateUsage, error)
+	// ModelUsage returns the uncapped counters of the (client) model on each
+	// account (Models left empty).
+	ModelUsage(ctx context.Context, refs []AccountRef, model string) (map[int64]RateUsage, error)
 	// CountModelTokens adds the tokens of a finished response to today's
 	// tokens of the client model on account id (CONTRACTS §68.7).
 	CountModelTokens(ctx context.Context, id int64, model string, n int64)

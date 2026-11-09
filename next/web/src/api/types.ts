@@ -1274,6 +1274,18 @@ export interface GatewaySettings {
 /** The numeric gateway settings (one value each). */
 export type GatewayNumberSetting = Exclude<keyof GatewaySettings, 'claude_default_max_tokens'>
 
+/** Core load balancing of new sessions within a tier (GET/PUT /settings/scheduling, CONTRACTS §89). */
+export interface SchedulingSettings {
+  /** default: weighted random; traffic: favour accounts using less than their weight's share. */
+  mode: 'default' | 'traffic'
+  /** The usage both the traffic balance and the limit load are computed on. */
+  metric: 'rpm' | 'concurrency' | 'tpm'
+  /** Lower the weight as the metric nears the account's limit. */
+  limit_load: boolean
+  /** With limit_load, also count the model list holding the request's model. */
+  model_limits: boolean
+}
+
 /** Limits of claude_default_max_tokens, mirrored from the server. */
 export const CLAUDE_MAX_TOKENS = { fallbackKey: 'default', fallback: 8192, max: 1048576, models: 200, nameLength: 200 } as const
 

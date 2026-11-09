@@ -254,6 +254,7 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	// request moves on to the next tier (§24.3). A plugin that
 	// wants a tier it zeroed entirely split evenly gives each account 1.
 	over := c.rankOverrides(ctx, cands)
+	c.readBalance(ctx, cands)
 	var pool, limited []core.AccountRef
 	for i := range cands {
 		if excluded[cands[i].ID] || !c.routed(&cands[i]) {
@@ -298,7 +299,8 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 }
 
 // orderPool sorts the pool by priority, higher first, then by route grade,
-// better first, each (priority, grade) tier in weighted random order.
+// better first, each (priority, grade) tier in weighted random order over the
+// weights the loads and the core balancing give it (balance.go).
 func (c *call) orderPool(pool []core.AccountRef) {
 	grade := func(r *core.AccountRef) convert.Grade { return c.route(r).grade }
 	slices.SortStableFunc(pool, func(a, b core.AccountRef) int {
@@ -309,7 +311,7 @@ func (c *call) orderPool(pool []core.AccountRef) {
 		for j < len(pool) && pool[j].Priority == pool[i].Priority && grade(&pool[j]) == grade(&pool[i]) {
 			j++
 		}
-		weightedOrder(pool[i:j], c.g.randFloat)
+		weightedOrder(pool[i:j], c.tierWeights(pool[i:j]), c.g.randFloat)
 		i = j
 	}
 }
@@ -428,24 +430,19 @@ func (c *call) exhausted(ctx context.Context, cands []core.AccountRef, excluded 
 
 // weightedOrder reorders grp by weighted random sampling without
 // replacement: an account is drawn first with probability proportional to
-// its weight (weight <= 0 counts as 1). rnd yields [0,1).
-func weightedOrder(grp []core.AccountRef, rnd func() float64) {
-	w := func(a *core.AccountRef) float64 {
-		if a.Weight <= 0 {
-			return 1
-		}
-		return float64(a.Weight)
-	}
+// its weight w[i] (> 0, reordered along with grp). rnd yields [0,1).
+func weightedOrder(grp []core.AccountRef, w []float64, rnd func() float64) {
 	for i := 0; i < len(grp)-1; i++ {
 		total := 0.0
 		for j := i; j < len(grp); j++ {
-			total += w(&grp[j])
+			total += w[j]
 		}
 		r := rnd() * total
 		for j := i; j < len(grp); j++ {
-			r -= w(&grp[j])
+			r -= w[j]
 			if r < 0 || j == len(grp)-1 {
 				grp[i], grp[j] = grp[j], grp[i]
+				w[i], w[j] = w[j], w[i]
 				break
 			}
 		}

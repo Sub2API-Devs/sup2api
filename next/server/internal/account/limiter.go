@@ -107,6 +107,22 @@ func (l *Limiter) Usage(ctx context.Context, refs []core.AccountRef) (map[int64]
 	return out, err
 }
 
+func (l *Limiter) ModelUsage(ctx context.Context, refs []core.AccountRef, model string) (map[int64]core.RateUsage, error) {
+	sets := make([]ratelimit.Limits, len(refs))
+	for i, r := range refs {
+		sets[i] = ratelimit.Limits{ID: r.ID, Sub: modelSub(model)}
+	}
+	used, err := l.w.UsageOf(ctx, sets)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]core.RateUsage, len(refs))
+	for i, r := range refs {
+		out[r.ID] = used[i]
+	}
+	return out, nil
+}
+
 func (l *Limiter) CountModelTokens(ctx context.Context, id int64, model string, n int64) {
 	l.tokens.add(ctx, id, model, n, l.now())
 }

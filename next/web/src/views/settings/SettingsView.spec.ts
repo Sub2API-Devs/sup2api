@@ -8,7 +8,7 @@ import { emptyFailurePolicy } from './failurePolicy'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn() }))
 const permissions = vi.hoisted(() => ({ manage: true }))
-const route = reactive({ query: { tab: 'billing' } })
+const route = reactive<{ query: { tab: string; sub?: string } }>({ query: { tab: 'billing' } })
 const router = { replace: vi.fn((to: { query: { tab: string } }) => { route.query.tab = to.query.tab }) }
 vi.mock('vue-router', async original => ({ ...(await original<object>()), useRoute: () => route, useRouter: () => router }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), api }))
@@ -18,7 +18,7 @@ enableAutoUnmount(afterEach)
 beforeEach(() => {
   vi.clearAllMocks()
   permissions.manage = true
-  route.query.tab = 'billing'
+  route.query = { tab: 'billing' }
   i18n.global.locale.value = 'zh'
   api.list.mockResolvedValue({ items: [], total: 0 })
   api.put.mockImplementation((_path, body) => Promise.resolve(body))
@@ -47,6 +47,14 @@ describe('system settings use platform title ownership', () => {
       expect(panel.findAll('h1,h2,h3,h4,h5,h6').map(el => el.text())).not.toContain(title)
       if (tab === 'failure') expect(panel.findAll('h5').map(el => el.text())).toEqual(['自动重试', '自动禁用'])
     }
+  })
+
+  it('drops the scheduling page sub-tab when switching pages', async () => {
+    route.query = { tab: 'failure', sub: 'balance' }
+    const wrapper = mount(SettingsView, { global: { plugins: [i18n, createPinia()] } })
+    await flushPromises()
+    await wrapper.get('[data-testid="settings-nav-gateway"]').trigger('click')
+    expect(router.replace.mock.calls[0][0].query).toStrictEqual({ tab: 'gateway', sub: undefined })
   })
 
   it('groups the sections and lists enabled plugins with settings', async () => {

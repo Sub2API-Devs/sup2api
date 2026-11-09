@@ -861,6 +861,8 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：粘性绑定不服务的挑选（未命中，或绑定账号失败后的切换）会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
+同一（优先级，路由等级）层内的加权随机用的是“有效权重”：插件权重套用负载（§67）后，再按系统设置“均衡负载”调整（§89，默认不调整）。
+
 ### 18.3 接口变化
 
 - `Account` 对象新增 `models`、`model_mapping`、`weight`、`rpm_limit`、`tpm_limit`、`rate_usage`；`settings` 不再含 `model_mapping`。
@@ -4809,7 +4811,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 `RankedAccount` 新增字段 `int32 load = 4`：
 
 - 含义：当前账号的利用率百分比，0 = 空闲（默认），100 = 完全占用。
-- 核心应用公式（2026-11-04 改）：所有插件答完后，`effective_weight = max(1, weight × (100 − load))`，本次请求的全部候选都乘同一个 100，所以默认权重 1 也能按比例分，不会被整数除法降成 0。负载只降低概率，不把账号移出请求（load=100 仍是最小权重 1），移出只能用 `weight=0`。多个插件给同一账号负载时取最大值。
+- 核心应用公式（2026-11-04 改；2026-11-09 起由核心均衡步骤统一套用，见 §89，按 ×100 刻度的浮点计算，比例不变）：所有插件答完后，`effective_weight = max(1, weight × (100 − load))`，本次请求的全部候选都乘同一个 100，所以默认权重 1 也能按比例分，不会被整数除法降成 0。负载只降低概率，不把账号移出请求（load=100 仍是最小权重 1），移出只能用 `weight=0`。多个插件给同一账号负载时取最大值。
 - 范围 `[0, 100]`；核心将越界值静默截断（负数→0，>100→100），并记 WARN 日志。
 - 未设置时默认 0，与旧插件完全兼容。
 
@@ -4831,13 +4833,13 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 67.5 记录
 
-`load` 不单独进入 `usage_logs.sched_decisions`；`sched_decisions` 记录的是 effective_weight 之后的最终 weight 值（折减已体现其中）。
+插件那一条 `sched_decisions` 的每个账号带插件返回的 `weight`（基线，未折减）和 `load`；折减后的有效权重只在核心均衡改变了占比时出现在 `"plugin":"core"` 那一条（§89.4，2026-11-09 更正）。
 
 ### 67.6 实现位置
 
 - Proto：`sdk/proto/sub2api/plugin/v1/scheduler.proto` `RankedAccount.load`
 - 生成：`sdk/gen/pluginv1/scheduler.pb.go`
-- 核心：`server/internal/gateway/rank.go` `rankOverrides()`，常量 `maxRankLoad = 100`
+- 核心：`server/internal/gateway/rank.go` `rankOverrides()` 收集负载（常量 `maxRankLoad = 100`），`balance.go` `loadedWeight()` 套用公式（2026-11-09 起；与 §89 的上限负载取较大值后只套一次）
 
 ## 68. 指定模型限速与近 60 秒窗口（2026-10-30，用户要求参照 new-api 渠道限速）
 
@@ -6852,3 +6854,57 @@ node 任务（可工作节点各跑，`RequireWork`）：
 ### 88.8 控制台
 
 账号编辑器“高级”分区的“协议转换丢失策略”（继承分组 / 允许 / 安全 / 严格，提示各分组的生效值）；分组表单同一选项（默认 = 允许）与详情；系统设置网关卡片的 Claude 默认 max_tokens 键值表（`default` 行不可删）与媒体下载上限；使用记录的上游协议列转换徽标（等级，悬停显示步骤，有损时加标记）、详情的“协议转换”块（等级、步骤、策略、按类别的损失、被拒绝的类型）、`conversion` 筛选；账号类型端点列表的等级徽标。
+
+## 89. 同优先级均衡负载（2026-11-09，用户要求：粘性长会话让同权重账号流量悬殊；设计文档“均衡负载调度：设计文档与任务规划”；无迁移）
+
+### 89.1 设置行 `scheduling`
+
+`settings` 表新增一行 `scheduling`（缺行 = 默认值，不需要迁移）：
+
+```json
+{"mode":"default","metric":"rpm","limit_load":false,"model_limits":false}
+```
+
+| 字段 | 取值 | 默认 | 含义 |
+|------|------|------|------|
+| `mode` | `default` / `traffic` | `default` | 均衡策略：默认 = 按权重随机；流量 = 见 89.3 |
+| `metric` | `rpm` / `concurrency` / `tpm` | `rpm` | 均衡指标，流量均衡和上限负载共用 |
+| `limit_load` | 布尔 | `false` | 基于上限负载调度，见 89.2 |
+| `model_limits` | 布尔 | `false` | 根据模型限速（按模型调度，2026-11-10 定）：流量均衡比较请求模型在各账号上自己的用量；上限负载也算请求模型所在的指定模型限速列表（§68） |
+
+读入网关设置快照（10 秒 TTL，`config:changed` 广播失效）；读到未知枚举值按默认值处理。默认值下不读 Redis、调度结果与之前完全一致。
+
+- `GET /settings/scheduling`（`settings:read`）：返回生效值。
+- `PUT /settings/scheduling`（`settings:manage`）：整行替换，缺省字段取默认值；非法枚举 400 `invalid_argument`，`details.fields[{field:"mode"|"metric", code:"invalid"}]`；写入记 `updated_by`，广播 `config:changed`（key `settings.scheduling`）。
+
+### 89.2 计算
+
+核心均衡夹在 `rankOverrides`（§24）之后、`orderPool` 层内加权随机之前，只在同一（优先级，路由等级）层内比较；层的划分、权重 0 的排除、筛选、槽位与限流都不变。`w` 为插件处理后的权重（≤0 按 1）：
+
+1. 上限负载（`limit_load`）：`账号用量 ÷ 账号该指标上限 × 100`（上限是账号级的，始终用整个账号的用量），上限 0 时为 0；`model_limits` 开且请求模型在账号某个指定模型限速列表里时，再算“列表用量 ÷ 列表上限”，取较大值；截到 0–100。指标对应的上限：RPM → `rpm_limit`，并发 → `max_concurrency`，TPM → `tpm_limit`（列表同名字段）。
+2. 负载 = max(上限负载, 插件负载)；`w1 = max(0.01, w × (100 − 负载) / 100)`（即 §67 公式）。
+3. 流量（`mode=traffic`）：`u` 为整个账号的用量；`model_limits` 开且请求带模型时，为请求模型在该账号上的用量（和 dynweight 一样按模型）。层内 `r = u ÷ (Σu × w1 ÷ Σw1)`，`w_eff = w1 ÷ (r + 0.25)²`；层内 Σu = 0 时不调整。指数 2、平滑 0.25 为常量。
+4. 层内按 `w_eff` 不放回加权随机。
+
+例：权重 1:1、RPM 40 比 0 时 98.8% 的新会话去空闲号；100 比 90 时 54% 去 90 的那个；用量已按权重比分布时维持权重比。
+
+### 89.3 生效范围与读数
+
+- 和权重一样只作用于粘性不命中的挑选（新会话、无粘性规则的请求、绑定账号失败后的换号）；粘性命中、`count_tokens` 不读不算；已绑定的会话不迁移。
+- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其模型列表的近 60 秒窗口），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`）。没设 TPM 上限的账号，以及按模型比较时（`md:<model>` 不设上限、不预留），TPM 在请求结束时才计入，有滞后。
+- 读失败记 WARN，本次按插件的值调度（仍套用插件负载），不拒绝请求；换号时出现首次读数没覆盖到的账号，它保持插件权重、不参与流量均衡。
+
+### 89.4 记录
+
+核心改变了权重、因而改变了层内占比的账号，写进 `usage_logs.sched_decisions` 的一条 `"plugin":"core"`：`weight` 为有效权重 ×100 取整（至少 1，0 表示“本次不用”），`load` 为合并后的负载；只记一个请求的第一次挑选（失败换号不再追加），最多 100 个账号。整层同比例缩放（如单账号层）不记。
+
+### 89.5 控制台
+
+系统设置“调度策略”页分为“故障策略 / 均衡负载”两个标签（`?tab=failure&sub=balance`，默认故障策略，旧链接不变；切换设置页时去掉 `sub`）。均衡负载四项：均衡策略（默认 / 流量）、基于上限负载调度（开关）、均衡指标（RPM / 并发 / TPM，两项都关时置灰）、根据模型限速（开关，和均衡指标一样两项都关时置灰）。没有 `settings:manage` 时只读、不显示保存栏。
+
+### 89.6 实现位置
+
+- 设置与接口：`server/internal/gateway/balance_settings.go`，快照 `settings.go`
+- 计算：`server/internal/gateway/balance.go`（`readBalance`、`tierWeights`、`trafficWeights`、`loadedWeight`），接入 `dispatch.go` `pick` / `orderPool`
+- 读数：`core.AccountLimiter.ModelUsage`（`account/limiter.go`），`core.AccountRef.ModelLimitIndex`
+- 前端：`web/src/views/settings/SchedulingPolicyView.vue`、`LoadBalanceSettingsCard.vue`

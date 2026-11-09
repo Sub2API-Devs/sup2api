@@ -1412,6 +1412,19 @@ on('PUT', '/settings/gateway', (req) => {
   return gatewaySettings
 })
 
+// Core load balancing (CONTRACTS §89): the row is replaced, absent fields take the defaults.
+const SCHEDULING_DEFAULTS = { mode: 'default', metric: 'rpm', limit_load: false, model_limits: false }
+const schedulingSettings = { ...SCHEDULING_DEFAULTS }
+on('GET', '/settings/scheduling', () => schedulingSettings)
+on('PUT', '/settings/scheduling', (req) => {
+  const b = { ...SCHEDULING_DEFAULTS, ...(req.body || {}) }
+  const fields: Array<{ field: string; code: string; message: string }> = []
+  if (!['default', 'traffic'].includes(b.mode)) fields.push({ field: 'mode', code: 'invalid', message: 'invalid value' })
+  if (!['rpm', 'concurrency', 'tpm'].includes(b.metric)) fields.push({ field: 'metric', code: 'invalid', message: 'invalid value' })
+  if (fields.length) return fail(400, 'invalid_argument', 'invalid scheduling settings', { fields })
+  return Object.assign(schedulingSettings, { mode: b.mode, metric: b.metric, limit_load: !!b.limit_load, model_limits: !!b.model_limits })
+})
+
 // ------------------------------------------------------------------ sticky rules
 
 const stickyRules: any[] = [

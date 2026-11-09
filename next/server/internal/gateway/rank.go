@@ -33,12 +33,14 @@ const (
 )
 
 // rankValues is the priority/weight one candidate account has for this
-// request after the scheduler.rank plugins ran. Weight 0 means the account is
-// not used for this request.
-type rankValues struct{ priority, weight int }
+// request after the scheduler.rank plugins ran, and the highest load (0-100)
+// they reported for it. Weight 0 means the account is not used for this
+// request. The load is applied to the weight by the core balancing step
+// (balance.go), the one place the §67 formula lives.
+type rankValues struct{ priority, weight, load int }
 
-// normWeight is the weight the plugins see and the gateway schedules with:
-// weightedOrder counts weight <= 0 as 1, and the documented range is 1-1000.
+// normWeight is the weight the plugins see: the gateway schedules weight <= 0
+// as 1 (tierWeights), and the documented range is 1-1000.
 func normWeight(w int) int {
 	switch {
 	case w <= 0:
@@ -63,8 +65,8 @@ func clampRank(ctx context.Context, plugin, field string, id int64, v, max int32
 	return int(v)
 }
 
-// rankOverrides returns the priority/weight the scheduler.rank plugins gave
-// the candidates of this request (CONTRACTS §24), nil when nothing changed.
+// rankOverrides returns the priority/weight/load the scheduler.rank plugins
+// gave the candidates of this request (CONTRACTS §24), nil when nothing changed.
 //
 // The plugins are called once per request, at the first pick the sticky
 // binding does not serve (including the failover after a failed bound
@@ -188,14 +190,7 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 
 	out := make(map[int64]rankValues, len(list))
 	for _, rc := range list {
-		weight := int(rc.Weight)
-		// Scaled by 100 for every candidate, so a default weight of 1 still
-		// divides in proportion to the load. A load lowers an account's chance
-		// and never takes it out; a plugin's weight 0 does that.
-		if len(loads) > 0 && weight > 0 {
-			weight = max(1, weight*(maxRankLoad-loads[rc.AccountId]))
-		}
-		out[rc.AccountId] = rankValues{priority: int(rc.Priority), weight: weight}
+		out[rc.AccountId] = rankValues{priority: int(rc.Priority), weight: int(rc.Weight), load: loads[rc.AccountId]}
 	}
 	c.ranked = out
 	return out

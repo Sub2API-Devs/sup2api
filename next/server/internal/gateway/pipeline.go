@@ -46,6 +46,7 @@ type call struct {
 	gw            GatewaySettings
 	stickyCfg     StickySettings
 	autoDisable   AutoDisableSettings
+	scheduling    SchedulingSettings
 	failurePolicy *FailurePolicy
 	failureState  failureState
 	// env is the environment resolved for the current attempt's account
@@ -119,6 +120,10 @@ type call struct {
 	// failover attempts reuse the same result. nil = the accounts' own values.
 	ranked   map[int64]rankValues
 	rankDone bool
+	// balance is the core balancing's usage read for this request (balance.go),
+	// read at the same moment as the ranking and reused by failover.
+	balance     *balanceState
+	balanceDone bool
 	// session is the request's session for the limiter's SPM caps
 	// (sessionIdentity): the sticky session key, else the request's own.
 	session string
@@ -206,7 +211,7 @@ func (g *Gateway) serve(c *gin.Context, gen core.Generation, b core.EndpointBind
 		writeError(c, cl.format, fromCore(core.ErrUnavailable.WithMessage("failure policy unavailable"), errTypeInternal))
 		return
 	}
-	cl.gw, cl.stickyCfg, cl.autoDisable = set.gateway, set.sticky, set.autoDisable
+	cl.gw, cl.stickyCfg, cl.autoDisable, cl.scheduling = set.gateway, set.sticky, set.autoDisable, set.scheduling
 	if !cl.tokenCounting() {
 		cl.failurePolicy = set.failurePolicy
 	}
