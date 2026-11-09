@@ -4697,6 +4697,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 统计查询（summary、overview）在只读事务里执行，`SET LOCAL statement_timeout = '5s'`。超时回 503 `unavailable`（「statistics query timed out; narrow the time range or filters」），界面显示错误与重试，不显示成 0。
 
+**管理员缓存加载放宽（2026-11-09，线上仪表盘超时）**：管理员的 overview、summary（走下文缓存的那条路）改为 `statement_timeout = '25s'`（小于缓存单次加载的 30 秒），并 `SET LOCAL work_mem = '128MB'`；自己的 `/me/usage/*` 和 `/usage/realtime` 仍是 5 秒、默认 work_mem。实现：`usage/stats.go` 的 `statsLimits`。
+- 原因：11-07 起 usage_logs 每天 4–6 万行，近 30 天约 20 万行（每行约 2KB）。sup2api 库在共享的 Supabase 实例上，页常被挤出缓存：热缓存时 overview 2.2s、7 天按天 summary 2.6s，冷缓存时只扫一遍 30 天就要 10s；仪表盘打开时同时发 5 条统计，一起超过 5 秒。
+- work_mem：规划器把 `to_char(created_at AT TIME ZONE …)` 的分组数估成和行数一样多（约 17 万，实际 7 个），work_mem 小时就把宽行排序写进约 160MB 临时文件；128MB（`hash_mem_multiplier` 2）时改走 HashAggregate，实际只用约 3MB，耗时少约 40%。64MB 不够。
+- 这只是止血：明细仍是实时扫描，行数再涨几倍还会超时，根治要小时级汇总表（需迁移）。
+
 **缓存（2026-11-05，用户要求，参考旧版 sub2api 的仪表盘）**：管理员接口扫描全部用户的行，所以在进程内缓存，响应头 `X-Snapshot-Cache: hit|miss`。实现：`usage/snapshot_cache.go`。
 
 - `GET /usage/overview`：按「时区 + 两个权限」缓存。15 秒内直接返回；15 到 30 秒返回旧值并在后台刷新；超过 30 秒等待重新查询。

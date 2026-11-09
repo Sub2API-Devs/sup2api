@@ -25,10 +25,36 @@ import (
 // query runs under a statement timeout, and a timeout is an error the console
 // shows as one, never as zeros.
 
-// statsTimeout bounds one statistics query. They scan usage_logs live (there
-// is no rollup table); a range too large to answer in time is refused rather
-// than left to hold a connection.
-const statsTimeout = "5s"
+// statsLimits are the settings of one statistics transaction. The queries
+// scan usage_logs live (there is no rollup table); a range too large to answer
+// in time is refused rather than left to hold a connection.
+type statsLimits struct {
+	// timeout is the statement timeout.
+	timeout string
+	// workMem, when set, is the transaction's work_mem. PostgreSQL guesses a
+	// day or hour bucket has as many groups as there are rows and would sort
+	// the wide rows on disk; with enough room it hashes the few real groups.
+	workMem string
+}
+
+var (
+	// directStats: a caller waits on the query alone (their own rows, the
+	// realtime figures).
+	directStats = statsLimits{timeout: "5s"}
+	// snapshotStats: an operator's cached load (snapshot_cache.go) scans
+	// everyone's rows, runs once per key however many callers wait, and must
+	// end inside statsLoadTimeout.
+	snapshotStats = statsLimits{timeout: "25s", workMem: "128MB"}
+)
+
+// statsLimitsFor gives the limits of a summary or overview: an operator's
+// (self nil) is cached, the caller's own is not.
+func statsLimitsFor(self *int64) statsLimits {
+	if self == nil {
+		return snapshotStats
+	}
+	return directStats
+}
 
 // maxHourSpan caps group_by=hour: 31 days is 744 buckets.
 const maxHourSpan = 31 * 24 * time.Hour
@@ -44,14 +70,18 @@ func parseTZ(c *gin.Context) (string, *time.Location, error) {
 	return name, loc, nil
 }
 
-// statsTx runs fn in a read-only transaction with the statistics timeout.
-func (s *Service) statsTx(ctx context.Context, fn func(pgx.Tx) error) error {
+// statsTx runs fn in a read-only transaction under lim.
+func (s *Service) statsTx(ctx context.Context, lim statsLimits, fn func(pgx.Tx) error) error {
 	tx, err := s.db.Pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, `SET LOCAL statement_timeout = '`+statsTimeout+`'`); err != nil {
+	set := `SET LOCAL statement_timeout = '` + lim.timeout + `'`
+	if lim.workMem != "" {
+		set += `; SET LOCAL work_mem = '` + lim.workMem + `'`
+	}
+	if _, err := tx.Exec(ctx, set); err != nil {
 		return err
 	}
 	if err := fn(tx); err != nil {
@@ -184,7 +214,7 @@ func (s *Service) overview(c *gin.Context, self *int64) {
 func (s *Service) loadOverview(ctx context.Context, tz string, loc *time.Location, self *int64, users, accounts bool) (Overview, error) {
 	w := overviewWindows(time.Now(), loc)
 	out := Overview{TZ: tz}
-	err := s.statsTx(ctx, func(tx pgx.Tx) error {
+	err := s.statsTx(ctx, statsLimitsFor(self), func(tx pgx.Tx) error {
 		targets := append(append(append(out.Today.scanTargets(), out.Yesterday.scanTargets()...), out.Last30d.scanTargets()...),
 			&out.Last5m.Requests, &out.Last5m.Tokens)
 		where, args := `u.created_at >= least($1, $2)`, []any{w.yesterday, w.last30d, w.today, w.last5m}
@@ -297,7 +327,7 @@ func (s *Service) realtime(c *gin.Context, self *int64) {
 	// Token counting is free and takes no part in rate limits (§18).
 	f.And("u.protocol NOT LIKE '%.count_tokens'")
 	var out Realtime
-	err = s.statsTx(ctx, func(tx pgx.Tx) error {
+	err = s.statsTx(ctx, directStats, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE u.success),
 			COALESCE(sum(`+realtimeTokens+`) FILTER (WHERE u.success), 0),
 			count(*) FILTER (WHERE `+realtimeFailure+`)

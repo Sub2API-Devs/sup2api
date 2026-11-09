@@ -762,7 +762,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	rankOrder, rankLimit := c.Query("order"), c.Query("limit")
 	load := func(ctx context.Context) ([]SummaryRow, error) {
 		out := []SummaryRow{}
-		err := s.statsTx(ctx, func(tx pgx.Tx) error {
+		err := s.statsTx(ctx, statsLimitsFor(self), func(tx pgx.Tx) error {
 			rows, err := tx.Query(ctx, `
 				SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),
 				       COALESCE(sum(u.input_tokens), 0), COALESCE(sum(u.output_tokens), 0),
