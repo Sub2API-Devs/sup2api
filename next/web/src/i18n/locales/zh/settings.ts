@@ -34,7 +34,7 @@ export default {
     metricHint: '流量均衡和上限负载都按这个指标计算。没设 TPM 上限时，TPM 在请求结束后才计入，会稍有滞后。',
     metrics: { rpm: 'RPM', concurrency: '并发', tpm: 'TPM' },
     modelLimits: '根据模型限速',
-    modelLimitsHint: '请求的模型设了指定模型限速时，也按该列表的用量和上限算负载，取较高的一个。需先打开基于上限负载调度。'
+    modelLimitsHint: '按请求的模型调度：流量均衡比较各账号上这个模型自己的用量；上限负载在该模型设了指定模型限速时，也按该列表的用量和上限算，取较高的一个。'
   },
   offload: {
     nodesTitle: '节点负载',

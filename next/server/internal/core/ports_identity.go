@@ -381,6 +381,9 @@ type AccountLimiter interface {
 	AddTokens(ctx context.Context, id int64, list string, n int64)
 	// Usage returns the counters of the accounts and of their model lists.
 	Usage(ctx context.Context, refs []AccountRef) (map[int64]RateUsage, error)
+	// ModelUsage returns the uncapped counters of the (client) model on each
+	// account (Models left empty).
+	ModelUsage(ctx context.Context, refs []AccountRef, model string) (map[int64]RateUsage, error)
 	// CountModelTokens adds the tokens of a finished response to today's
 	// tokens of the client model on account id (CONTRACTS §68.7).
 	CountModelTokens(ctx context.Context, id int64, model string, n int64)

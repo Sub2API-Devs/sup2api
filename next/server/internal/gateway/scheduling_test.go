@@ -31,6 +31,7 @@ type fakeLimiter struct {
 	reserved   []int64          // tokens of each Reserve call
 	settled    []string         // "<id>:<actual>" of each Settle call
 	usage      map[int64]core.RateUsage
+	modelUsage map[int64]core.RateUsage // of every model ModelUsage is asked for
 	usageErr   error
 	usageCalls int
 }
@@ -110,6 +111,12 @@ func (l *fakeLimiter) Usage(context.Context, []core.AccountRef) (map[int64]core.
 		return nil, l.usageErr
 	}
 	return maps.Clone(l.usage), nil
+}
+
+func (l *fakeLimiter) ModelUsage(context.Context, []core.AccountRef, string) (map[int64]core.RateUsage, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return maps.Clone(l.modelUsage), nil
 }
 
 func (l *fakeLimiter) CountModelTokens(_ context.Context, id int64, model string, n int64) {

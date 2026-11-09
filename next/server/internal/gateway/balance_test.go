@@ -287,3 +287,43 @@ func TestBalanceMergesPluginLoad(t *testing.T) {
 		t.Fatalf("core decision %+v", d)
 	}
 }
+
+// With model limits on, the traffic balance compares the request's model's
+// own usage, not the account's.
+func TestBalanceTrafficByModel(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, ModelLimits: true}
+	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}}) // acc-1 busy with other models
+	e.gw.d.Limiter.(*fakeLimiter).modelUsage = map[int64]core.RateUsage{2: {RPM: 60}}
+	served, _ := serve(t, e, 200)
+	if served["acc-2"] > 6 || served["acc-1"] < 70 || served["acc-3"] < 70 {
+		t.Fatalf("served %v", served)
+	}
+}
+
+// By model with the concurrency metric reads the model's slots.
+func TestBalanceTrafficByModelSlots(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricConcurrency, ModelLimits: true}
+	e, _ := balanceEnv(t, cfg, nil)
+	e.slots.mu.Lock()
+	e.slots.inUse["account:1"] = 4
+	e.slots.inUse[core.ModelSlots(testModel)+":2"] = 4
+	e.slots.mu.Unlock()
+	_, recs := serve(t, e, 1)
+	d := coreDecision(recs[0])
+	if d == nil {
+		t.Fatal("no core decision")
+	}
+	var w2, w1 int
+	for _, ch := range d.Changed {
+		switch ch.AccountID {
+		case 1:
+			w1 = ch.Weight
+		case 2:
+			w2 = ch.Weight
+		}
+	}
+	// acc-2 carries the model's load; acc-1's other traffic does not count.
+	if w2 >= w1 {
+		t.Fatalf("core decision %+v", d)
+	}
+}

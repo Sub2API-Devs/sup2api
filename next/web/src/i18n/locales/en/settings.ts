@@ -34,7 +34,7 @@ export default {
     metricHint: 'Both the traffic balance and the limit load use this metric. For accounts without a TPM limit, tokens are counted only when a request finishes, so TPM lags slightly.',
     metrics: { rpm: 'RPM', concurrency: 'Concurrency', tpm: 'TPM' },
     modelLimits: 'Per-model limits',
-    modelLimitsHint: "If the requested model is in one of the account's per-model limit lists, that list's usage and limit are also used, and the higher load wins. Requires limit-aware load."
+    modelLimitsHint: "Balance by the requested model: the traffic balance compares that model's own usage on each account, and when the model is in one of the account's per-model limit lists, the limit-aware load also uses that list's usage and limit, whichever load is higher."
   },
   offload: {
     nodesTitle: 'Node load',

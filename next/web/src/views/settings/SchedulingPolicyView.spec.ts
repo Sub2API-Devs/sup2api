@@ -68,16 +68,16 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
     expect(w.find('[data-testid="balance-settings"]').exists()).toBe(false)
   })
 
-  it('greys the metric until something balances on it, and model limits until the limit load is on', async () => {
+  it('greys the metric and balancing by model until something balances', async () => {
     route.query = { tab: 'failure', sub: 'balance' }
     const w = await render()
     expect(disabled(w, 'balance-metric')).toBe(true)
     expect(disabled(w, 'balance-model-limits')).toBe(true)
     await w.get('[data-testid="balance-mode"] input[value="traffic"]').setValue(true)
     expect(disabled(w, 'balance-metric')).toBe(false)
-    expect(disabled(w, 'balance-model-limits')).toBe(true)
-    await w.get('[data-testid="balance-limit-load"]').setValue(true)
     expect(disabled(w, 'balance-model-limits')).toBe(false)
+    await w.get('[data-testid="balance-limit-load"]').setValue(true)
+    await w.get('[data-testid="balance-model-limits"]').setValue(true)
     await w.get('[data-testid="balance-metric"] input[value="concurrency"]').setValue(true)
     await w.get('[data-testid="settings-save"]').trigger('click')
     await flushPromises()
@@ -85,7 +85,7 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
       mode: 'traffic',
       metric: 'concurrency',
       limit_load: true,
-      model_limits: false
+      model_limits: true
     })
   })
 

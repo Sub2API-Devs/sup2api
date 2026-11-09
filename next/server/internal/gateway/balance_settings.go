@@ -40,8 +40,9 @@ type SchedulingSettings struct {
 	Metric string `json:"metric"`
 	// LimitLoad lowers an account's weight as Metric nears its limit.
 	LimitLoad bool `json:"limit_load"`
-	// ModelLimits also counts the model list holding the request's model,
-	// when the account has one, in LimitLoad.
+	// ModelLimits balances by the request's model: the traffic balance
+	// compares the model's own usage on each account, and LimitLoad also
+	// counts the model list holding it when the account has one.
 	ModelLimits bool `json:"model_limits"`
 }
 

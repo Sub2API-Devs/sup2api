@@ -21,9 +21,8 @@ const modes = computed(() => (['default', 'traffic'] as const).map(value => ({ v
 const metrics = computed(() =>
   (['rpm', 'concurrency', 'tpm'] as const).map(value => ({ value, label: t(`settings.balance.metrics.${value}`) }))
 )
-/** The metric only matters once something balances on it; per-model limits only refine the limit load. */
-const metricOff = computed(() => !canManage.value || (form.mode === 'default' && !form.limit_load))
-const modelLimitsOff = computed(() => !canManage.value || !form.limit_load)
+/** The metric and balancing by model only matter once something balances. */
+const balanceOff = computed(() => !canManage.value || (form.mode === 'default' && !form.limit_load))
 
 onMounted(load)
 </script>
@@ -51,12 +50,12 @@ onMounted(load)
         />
       </SSettingRow>
       <SSettingRow :label="t('settings.balance.metric')" :description="t('settings.balance.metricHint')" :error="errors.metric">
-        <SSegmented v-model="form.metric" :options="metrics" :disabled="metricOff" data-testid="balance-metric" />
+        <SSegmented v-model="form.metric" :options="metrics" :disabled="balanceOff" data-testid="balance-metric" />
       </SSettingRow>
       <SSettingRow :label="t('settings.balance.modelLimits')" :description="t('settings.balance.modelLimitsHint')">
         <SSwitch
           v-model="form.model_limits"
-          :disabled="modelLimitsOff"
+          :disabled="balanceOff"
           :aria-label="t('settings.balance.modelLimits')"
           data-testid="balance-model-limits"
         />

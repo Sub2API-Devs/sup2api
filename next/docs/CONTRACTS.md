@@ -6870,7 +6870,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | `mode` | `default` / `traffic` | `default` | 均衡策略：默认 = 按权重随机；流量 = 见 89.3 |
 | `metric` | `rpm` / `concurrency` / `tpm` | `rpm` | 均衡指标，流量均衡和上限负载共用 |
 | `limit_load` | 布尔 | `false` | 基于上限负载调度，见 89.2 |
-| `model_limits` | 布尔 | `false` | 根据模型限速：上限负载也算请求模型所在的指定模型限速列表（§68） |
+| `model_limits` | 布尔 | `false` | 根据模型限速（按模型调度，2026-11-10 定）：流量均衡比较请求模型在各账号上自己的用量；上限负载也算请求模型所在的指定模型限速列表（§68） |
 
 读入网关设置快照（10 秒 TTL，`config:changed` 广播失效）；读到未知枚举值按默认值处理。默认值下不读 Redis、调度结果与之前完全一致。
 
@@ -6879,11 +6879,11 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 89.2 计算
 
-核心均衡夹在 `rankOverrides`（§24）之后、`orderPool` 层内加权随机之前，只在同一（优先级，路由等级）层内比较；层的划分、权重 0 的排除、筛选、槽位与限流都不变。`w` 为插件处理后的权重（≤0 按 1），`u` 为所选指标的当前用量：
+核心均衡夹在 `rankOverrides`（§24）之后、`orderPool` 层内加权随机之前，只在同一（优先级，路由等级）层内比较；层的划分、权重 0 的排除、筛选、槽位与限流都不变。`w` 为插件处理后的权重（≤0 按 1）：
 
-1. 上限负载（`limit_load`）：`u ÷ 账号该指标上限 × 100`，上限 0 时为 0；`model_limits` 开且请求模型在账号某个指定模型限速列表里时，再算“列表用量 ÷ 列表上限”，取较大值；截到 0–100。指标对应的上限：RPM → `rpm_limit`，并发 → `max_concurrency`，TPM → `tpm_limit`（列表同名字段）。
+1. 上限负载（`limit_load`）：`账号用量 ÷ 账号该指标上限 × 100`（上限是账号级的，始终用整个账号的用量），上限 0 时为 0；`model_limits` 开且请求模型在账号某个指定模型限速列表里时，再算“列表用量 ÷ 列表上限”，取较大值；截到 0–100。指标对应的上限：RPM → `rpm_limit`，并发 → `max_concurrency`，TPM → `tpm_limit`（列表同名字段）。
 2. 负载 = max(上限负载, 插件负载)；`w1 = max(0.01, w × (100 − 负载) / 100)`（即 §67 公式）。
-3. 流量（`mode=traffic`）：层内 `r = u ÷ (Σu × w1 ÷ Σw1)`，`w_eff = w1 ÷ (r + 0.25)²`；层内 Σu = 0 时不调整。指数 2、平滑 0.25 为常量。
+3. 流量（`mode=traffic`）：`u` 为整个账号的用量；`model_limits` 开且请求带模型时，为请求模型在该账号上的用量（和 dynweight 一样按模型）。层内 `r = u ÷ (Σu × w1 ÷ Σw1)`，`w_eff = w1 ÷ (r + 0.25)²`；层内 Σu = 0 时不调整。指数 2、平滑 0.25 为常量。
 4. 层内按 `w_eff` 不放回加权随机。
 
 例：权重 1:1、RPM 40 比 0 时 98.8% 的新会话去空闲号；100 比 90 时 54% 去 90 的那个；用量已按权重比分布时维持权重比。
@@ -6891,7 +6891,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 ### 89.3 生效范围与读数
 
 - 和权重一样只作用于粘性不命中的挑选（新会话、无粘性规则的请求、绑定账号失败后的换号）；粘性命中、`count_tokens` 不读不算；已绑定的会话不迁移。
-- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其模型列表的近 60 秒窗口），并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`）。没设 TPM 上限的账号，TPM 在请求结束时才计入，有滞后。
+- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其模型列表的近 60 秒窗口），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`）。没设 TPM 上限的账号，TPM 在请求结束时才计入，有滞后。
 - 读失败记 WARN，本次按插件的值调度（仍套用插件负载），不拒绝请求；换号时出现首次读数没覆盖到的账号，它保持插件权重、不参与流量均衡。
 
 ### 89.4 记录
@@ -6900,10 +6900,11 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 89.5 控制台
 
-系统设置“调度策略”页分为“故障策略 / 均衡负载”两个标签（`?tab=failure&sub=balance`，默认故障策略，旧链接不变；切换设置页时去掉 `sub`）。均衡负载四项：均衡策略（默认 / 流量）、基于上限负载调度（开关）、均衡指标（RPM / 并发 / TPM，两项都关时置灰）、根据模型限速（开关，上限负载关时置灰）。没有 `settings:manage` 时只读、不显示保存栏。
+系统设置“调度策略”页分为“故障策略 / 均衡负载”两个标签（`?tab=failure&sub=balance`，默认故障策略，旧链接不变；切换设置页时去掉 `sub`）。均衡负载四项：均衡策略（默认 / 流量）、基于上限负载调度（开关）、均衡指标（RPM / 并发 / TPM，两项都关时置灰）、根据模型限速（开关，和均衡指标一样两项都关时置灰）。没有 `settings:manage` 时只读、不显示保存栏。
 
 ### 89.6 实现位置
 
 - 设置与接口：`server/internal/gateway/balance_settings.go`，快照 `settings.go`
 - 计算：`server/internal/gateway/balance.go`（`readBalance`、`tierWeights`、`trafficWeights`、`loadedWeight`），接入 `dispatch.go` `pick` / `orderPool`
+- 读数：`core.AccountLimiter.ModelUsage`（`account/limiter.go`），`core.AccountRef.ModelLimitIndex`
 - 前端：`web/src/views/settings/SchedulingPolicyView.vue`、`LoadBalanceSettingsCard.vue`
