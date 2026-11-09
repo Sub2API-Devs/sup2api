@@ -95,7 +95,7 @@ func TestUnpackLimits(t *testing.T) {
 }
 
 func opts() ValidateOptions {
-	return ValidateOptions{HostVersion: "0.1.0-dev", MaxMemoryMB: 1024}
+	return ValidateOptions{HostVersion: testHostVersion, MaxMemoryMB: 1024}
 }
 
 func fieldCodes(err error) map[string]string {

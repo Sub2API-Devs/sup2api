@@ -6723,4 +6723,4 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - 账号类型 id、plugin_key 不变，现有账号和数据不迁移；没声明 upstream 的插件不受影响。
 - 参数覆盖改到最后：上线前只读查线上配了参数覆盖的账号，确认没有和插件改写撞字段（主要是 codex）。
-- 新插件的 `hostCompat` 下限在发布时改为第一个带本节功能的核心版本。
+- 第一个带本节功能的核心是 0.1.262：声明了 `upstream` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.UpstreamFirstCore`，低了报 `below_feature_core`），openai 0.4.0、gemini/relay/anthropic 0.3.0、custom 0.1.0 已定为 `>=0.1.262 <0.2.0`。旧核心会忽略 `upstream` 字段，所以这几个只有清单的插件必须随 0.1.262 一起发；内置插件在核心计划完成、所有节点都换上新核心后才升级（§37）。

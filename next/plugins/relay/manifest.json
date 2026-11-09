@@ -10,7 +10,7 @@
   "publisher": "sub2api",
   "icon": "text:R",
   "runtime": "none",
-  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostCompat": ">=0.1.262 <0.2.0",
 
   "capabilities": [
     { "id": "platform.adapter.v1" }

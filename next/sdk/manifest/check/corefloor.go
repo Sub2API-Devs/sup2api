@@ -21,6 +21,11 @@ const StreamOnlyFirstCore = "0.1.257"
 // error.
 const AttemptHookFirstCore = "0.1.258"
 
+// UpstreamFirstCore is the first core that builds upstream requests from
+// accountTypes[].upstream (CONTRACTS §86). An older core ignores the
+// declaration and would serve a manifest-only plugin with no client at all.
+const UpstreamFirstCore = "0.1.262"
+
 // SamePlatformConversions are the core's protocol converters whose two
 // protocols belong to one platform (client, upstream). The gateway's
 // convert.Default() is checked against this list in its tests.
@@ -48,6 +53,9 @@ var coreFloors = []coreFloor{
 	}},
 	{field: "accountTypes[].platforms[].endpoints (served through a same-platform conversion)", firstCore: StreamOnlyFirstCore,
 		uses: (*validator).usesSamePlatformConversion},
+	{field: "accountTypes[].upstream", firstCore: UpstreamFirstCore, uses: func(v *validator) bool {
+		return slices.ContainsFunc(v.m.AccountTypes, func(at manifest.AccountType) bool { return at.Upstream != nil })
+	}},
 	{field: "hooks[].point " + manifest.HookPointAttempt, firstCore: AttemptHookFirstCore, uses: func(v *validator) bool {
 		return slices.ContainsFunc(v.m.Hooks, func(h manifest.Hook) bool { return h.Point == manifest.HookPointAttempt })
 	}},
