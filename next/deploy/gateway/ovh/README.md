@@ -4,6 +4,15 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-09 插件 **codex 0.1.2**（`7f1f0b733`，经 touwaeriol develop 合并 `8c3ed1347` 构建；北京时间 14:52:55 上传并升级；核心 0.1.259、外壳和其他插件不变；没关 new-api 渠道，用户决定，codex 无账号无流量）
+- 内容：`codex_device` 账号的 5 小时 / 周额度窗口（manifest `quota`，查询由核心发送）；`accounts.credentials`、`net` 的说明文字更新，权限本身不变，review `consent_status` approved，无需重新授权。
+- 包：`codex-0.1.2.s2plugin` SHA256 `b35822eb5621a48c23deb53447ee60dc9179569484c1a48d2e85fe48477b1a15`，签名摘要 `7eecc1bc…a28a`（sup2api-plugins-2026，verify valid）；native UI 由 Dockerfile `--target ui` 构建，包内 `ui/native/entry.js`、`entry.css`；`go vet`、`go test` 通过。
+- 升级：rollout 243，14:52:55 → 14:52:58 两节点 active（sup2api-1、sup2api-ccp 都 serving 0.1.2、instance ready、restarts 0），旧 0.1.1 进程 14:53:00 退出。
+- 核验：插件列表 codex 0.1.2 enabled，其余 8 个插件版本不变；`/ui/plugins` 有 codex 0.1.2、`native_entry` `ui/native/entry.js`；控制台 新建账号 → ChatGPT（Codex）→ 设备码登录 表单正常（截图 `~/rel259/pw/codex-012-form.png`，无控制台错误）；升级前后各 5 分钟 usage_logs 每分钟 33–47 次，无 5xx，只有一次 499（升级前也有）。
+- 内置包：核心 0.1.259 内置的 codex 仍是 0.1.1，内置同步只升不降，不会覆盖 0.1.2；下一个核心版本应把 `stage/codex-0.1.2/packages/codex-0.1.2.s2plugin` 放进 builtin。
+- 回滚：`python3 -I rollout.py rollback`（升级回 0.1.1，包仍在插件存储）。
+- 脚本 `stage/codex-0.1.2/`（build.sh、rollout.py、traffic.sql）；工作树 `~/sup2api/release-codex-0.1.2`；不备份数据库。
+
 2026-11-09 核心 **0.1.259**（`84f6121ed`；北京时间 14:19–14:22；计划 `88c2d974a9faedf6ea36fddd21c6329e` rolling-v1 completed，14:19:12→14:22:13 约 3 分钟，没有暂停，两节点轮流让出，ovh 3130 和 api.prophey.ai `/readyz` 全程 200；比 0.1.258 慢是因为两次 stop 等在途请求排空，ccp 73 秒、ovh 53 秒；无核心迁移，schema 仍 `e726e42f…785f`；Host API 仍 9；网关仍 0.1.133）：
 - 内容：`GET /accounts` 按 `created_at DESC, id DESC` 排序；账号列表布局压缩（只改 next/web）。内置包与 0.1.258 逐字节相同，插件都不重建。
 - new-api 渠道没有关（用户决定，rolling 不停机）。
