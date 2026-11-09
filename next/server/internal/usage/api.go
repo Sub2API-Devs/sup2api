@@ -1,10 +1,11 @@
 package usage
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -674,31 +675,36 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		httpapi.Fail(c, err)
 		return
 	}
-	tz, _, err := parseTZ(c)
+	tz, loc, err := parseTZ(c)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	from, to := summaryRange(c)
 	if c.Query("from") == "" {
-		f.And("u.created_at >= ?", time.Now().AddDate(0, 0, -30))
+		f.And("u.created_at >= ?", from)
 	}
-	// The estimate markers, the usage_extract value and (for day and hour)
-	// the time zone are appended after the filter's own arguments, and their
-	// text uses a placeholder more than once, so the numbers come from Len.
-	base := f.Len()
-	tzArg := fmt.Sprintf("$%d", base+4)
-	useTZ := false
+	end := cmp.Or(to, time.Now())
+	groupKey := c.DefaultQuery("group_by", "day")
+	// The time zone of day and hour buckets is appended after the filter's
+	// own arguments; spanTZ says the rollup must be aligned with it.
+	args := f.Args()
+	var spanTZ *time.Location
+	inTZ := func() string {
+		spanTZ = loc
+		return `u.created_at AT TIME ZONE ` + addArg(&args, tz) + `::text`
+	}
 	var key, join, extra string
 	order, lastAt, groupBy := ` ORDER BY k`, `NULL::timestamptz`, ` GROUP BY k`
-	switch c.DefaultQuery("group_by", "day") {
+	switch groupKey {
 	case "day":
-		key, useTZ = `to_char(u.created_at AT TIME ZONE `+tzArg+`::text, 'YYYY-MM-DD')`, true
+		key = `to_char(` + inTZ() + `, 'YYYY-MM-DD')`
 	case "hour":
-		if span, ok := summarySpan(c); !ok || span > maxHourSpan {
+		if end.Sub(from) > maxHourSpan {
 			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by=hour covers at most 31 days"))
 			return
 		}
-		key, useTZ = `to_char(date_trunc('hour', u.created_at AT TIME ZONE `+tzArg+`::text), 'YYYY-MM-DD HH24:00')`, true
+		key = `to_char(date_trunc('hour', ` + inTZ() + `), 'YYYY-MM-DD HH24:00')`
 	case "none":
 		key, groupBy = `''`, ``
 	case "model":
@@ -718,8 +724,8 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		key = `u.platform`
 	case "ip":
 		key = `u.client_ip`
-		lastAt = `max(u.created_at)`
-		order = ` ORDER BY count(*) DESC, k LIMIT ` + strconv.Itoa(maxIPGroups)
+		lastAt = `max(u.at)`
+		order = ` ORDER BY sum(u.requests) DESC, k LIMIT ` + strconv.Itoa(maxIPGroups)
 	case "user":
 		if self != nil {
 			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, api_key, group, endpoint, platform, protocol or ip"))
@@ -727,7 +733,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		}
 		key = `u.user_id::text`
 		join = ` LEFT JOIN users us ON us.id = u.user_id`
-		extra = `, COALESCE(max(us.email), '')`
+		extra = `us.email`
 	case "upstream_model":
 		// The model the upstream was asked for is upstream-side detail
 		// (hideUpstream): operators only.
@@ -741,42 +747,29 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		return
 	}
 	if extra == "" {
-		extra = `, ''`
+		extra = `''`
 	}
-	// The estimate markers are matched by value, not by key: 'reconcile' also
-	// takes "retrying" (the row is reserved again, not final) and "refunded"
-	// (the row is free), neither of which is an estimate in the revenue.
-	est := fmt.Sprintf(`u.anomalies->>'%s' IN ($%d, $%d)`, core.AnomalyReconcile, base+1, base+2)
-	// One value in the column is a fact, not an anomaly: usage_extract
-	// "plugin" says the plugin answered, which on a plugin-metered platform is
-	// every request. Counting it would make this column read "everything is
-	// wrong" exactly where nothing is; "fallback" (the plugin did not answer)
-	// still counts. The failure policy and availability traces describe how
-	// the request was routed, not the record: they never count.
-	anomalous := fmt.Sprintf(`(u.anomalies - '%s' - 'failure_policy' - '%s') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
-		core.AnomalyUsageExtract, core.AnomalyAvailability, core.AnomalyUsageExtract, core.AnomalyUsageExtract, base+3)
-	args := append(f.Args(), core.ReconcileAbandoned, core.ReconcileEstimated, core.UsageExtractPlugin)
-	if useTZ {
-		args = append(args, tz)
+	outKey := `u.k`
+	if groupBy == "" {
+		outKey = `''` // one row, also over no rows
 	}
+	rollable := summaryRollable(c, groupKey)
 	rankOrder, rankLimit := c.Query("order"), c.Query("limit")
 	load := func(ctx context.Context) ([]SummaryRow, error) {
 		out := []SummaryRow{}
 		err := s.statsTx(ctx, statsLimitsFor(self), func(tx pgx.Tx) error {
+			args := slices.Clone(args)
+			var span *hourSpan
+			if rollable {
+				var err error
+				if span, err = rollupSpan(ctx, tx, from, end, spanTZ); err != nil {
+					return err
+				}
+			}
 			rows, err := tx.Query(ctx, `
-				SELECT `+key+` AS k`+extra+`, count(*), count(*) FILTER (WHERE u.success),
-				       COALESCE(sum(u.input_tokens), 0), COALESCE(sum(u.output_tokens), 0),
-				       COALESCE(sum(u.cache_read_tokens), 0),
-				       COALESCE(sum(u.cache_creation_tokens + u.cache_creation_1h_tokens), 0),
-				       COALESCE(sum(u.total_cost), 0),
-				       count(*) FILTER (WHERE `+anomalous+`),
-				       count(*) FILTER (WHERE `+est+`),
-				       COALESCE(sum(u.total_cost) FILTER (WHERE `+est+`), 0), `+lastAt+`,
-				       CASE WHEN count(*) = count(`+promptTokens+`) THEN sum(`+promptTokens+`) END,
-				       COALESCE(sum(`+standardCost+`), 0),
-				       COALESCE(round(avg(u.latency_ms) FILTER (WHERE u.success AND u.latency_ms > 0)), 0)::bigint,
-				       COALESCE(round(avg(u.first_token_ms) FILTER (WHERE u.success AND u.first_token_ms > 0)), 0)::bigint
-				FROM usage_logs u`+join+f.Cond()+groupBy+order, args...)
+				SELECT `+outKey+` AS k, COALESCE(max(u.e), ''), `+totalsColumns("", true)+`,
+				       `+sumOf("u.anomalous_rows", "")+`, `+sumOf("u.estimated_rows", "")+`, `+sumOf("u.estimated_cost", "")+`, `+lastAt+`
+				FROM `+statRows(key+` AS k, `+extra+` AS e, u.created_at AS at`, join, f.Cond(), span, &args)+groupBy+order, args...)
 			if err != nil {
 				return err
 			}
@@ -784,8 +777,8 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 			for rows.Next() {
 				var r SummaryRow
 				if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
-					&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt, &r.PromptTokens,
-					&r.StandardCost, &r.LatencyMsAvg, &r.FirstTokenMsAvg); err != nil {
+					&r.CacheReadTokens, &r.CacheCreationTokens, &r.PromptTokens, &r.TotalCost, &r.StandardCost, &r.LatencyMsAvg, &r.FirstTokenMsAvg,
+					&r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt); err != nil {
 					return err
 				}
 				r.TotalTokens = r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheCreationTokens
@@ -816,23 +809,39 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	httpapi.OK(c, out)
 }
 
-// summarySpan is the length of the summary's range: from (default 30 days
-// ago) to to (default now). ok is false when either bound is unreadable;
-// parseFilter has already refused that, so it does not happen in practice.
-func summarySpan(c *gin.Context) (time.Duration, bool) {
-	now := time.Now()
-	from, to := now.AddDate(0, 0, -30), now
-	for _, x := range []struct {
-		q string
-		t *time.Time
-	}{{"from", &from}, {"to", &to}} {
-		if v := c.Query(x.q); v != "" {
-			t, err := time.Parse(time.RFC3339, v)
-			if err != nil {
-				return 0, false
-			}
-			*x.t = t
+// summaryRange is the summary's range: from (default 30 days ago) to to
+// (zero when open). parseFilter has already refused unreadable bounds.
+func summaryRange(c *gin.Context) (from, to time.Time) {
+	from = time.Now().AddDate(0, 0, -30)
+	if v := c.Query("from"); v != "" {
+		from, _ = time.Parse(time.RFC3339, v)
+	}
+	if v := c.Query("to"); v != "" {
+		to, _ = time.Parse(time.RFC3339, v)
+	}
+	return from, to
+}
+
+// summaryRollableParams are the query parameters the hourly rollup can
+// answer: its columns and the range. Any other filter reads usage_logs only.
+var summaryRollableParams = map[string]bool{
+	"from": true, "to": true, "tz": true, "group_by": true, "order": true, "limit": true,
+	"user_id": true, "api_key_id": true, "group_id": true, "account_id": true,
+	"model": true, "upstream_model": true, "protocol": true, "platform": true,
+}
+
+// summaryRollable says whether the hourly rollup can answer this summary:
+// its grouping is one of the rollup's columns or a time bucket, and every
+// filter given is in summaryRollableParams.
+func summaryRollable(c *gin.Context, groupBy string) bool {
+	switch groupBy {
+	case "ip", "endpoint":
+		return false
+	}
+	for name, vs := range c.Request.URL.Query() {
+		if !summaryRollableParams[name] && slices.ContainsFunc(vs, func(v string) bool { return v != "" }) {
+			return false
 		}
 	}
-	return to.Sub(from), true
+	return true
 }

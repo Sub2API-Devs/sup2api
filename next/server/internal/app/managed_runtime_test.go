@@ -200,7 +200,7 @@ func testManagedRuntime(t *testing.T, migrate bool) {
 	// Every module registered its cluster tasks (TASK-FRAMEWORK-DESIGN §14.1).
 	wantTasks := []string{"core.account.automatic_recovery", "core.account.credential_refresh", "core.account.lifecycle_status", "core.account.preparation_cleanup", "core.account.usage_limits",
 		"core.audit.plugin_writes_purge", "core.ccgateway.draft_sweep", "core.ccgateway.park_runtimes", "core.ccgateway.runtime_sync", "core.egress.logs_prune",
-		"core.events.retention", "core.helper.payload_expiry", "core.helper.usage_replay", "core.jobs.retention", "core.notify.purge", "core.task.housekeeping", "core.usage.reconcile"}
+		"core.events.retention", "core.helper.payload_expiry", "core.helper.usage_replay", "core.jobs.retention", "core.notify.purge", "core.task.housekeeping", "core.usage.reconcile", "core.usage.rollup"}
 	var gotTasks []string
 	if err = db.Pool.QueryRow(ctx, `SELECT coalesce(array_agg(name ORDER BY name), '{}') FROM scheduled_tasks WHERE source = 'core'`).Scan(&gotTasks); err != nil || !slices.Equal(gotTasks, wantTasks) {
 		t.Fatalf("cluster tasks: %v %v", gotTasks, err)
