@@ -64,7 +64,7 @@ function onEscape(e: KeyboardEvent) {
     :min="RANGE[field][0]"
     :max="RANGE[field][1]"
     step="1"
-    class="s-number-cell h-7 w-16 rounded-md border border-transparent bg-surface-2 px-2 text-center text-xs tabular-nums text-fg transition-colors hover:border-line focus:border-primary-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
+    class="s-number-cell h-7 w-12 rounded-md border border-transparent bg-surface-2 px-2 text-center text-xs tabular-nums text-fg transition-colors hover:border-line focus:border-primary-500 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
     :aria-label="label"
     :title="label"
     :disabled="busy"
@@ -74,7 +74,7 @@ function onEscape(e: KeyboardEvent) {
     @keydown.esc.prevent="onEscape"
     @blur="commit"
   >
-  <span v-else class="inline-flex h-7 min-w-16 items-center justify-center rounded-md bg-surface-2 px-2 text-xs tabular-nums text-fg-muted" :data-testid="`account-${field}`">{{ saved }}</span>
+  <span v-else class="inline-flex h-7 min-w-12 items-center justify-center rounded-md bg-surface-2 px-2 text-xs tabular-nums text-fg-muted" :data-testid="`account-${field}`">{{ saved }}</span>
 </template>
 
 <style scoped>

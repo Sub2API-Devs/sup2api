@@ -83,10 +83,10 @@ func TestAccountModelsAndLimits(t *testing.T) {
 		t.Fatalf("settings must not contain model_mapping: %v", acc["settings"])
 	}
 
-	// List order: priority, weight DESC, id; ?model= filter.
+	// List order: newest first, whatever the priority; ?model= filter.
 	_, out = e.do("GET", "/accounts", nil)
 	items := out["data"].([]any)
-	if len(items) != 2 || items[0].(map[string]any)["name"] != "limited" {
+	if len(items) != 2 || items[0].(map[string]any)["id"] != float64(id2) {
 		t.Fatalf("order: %v", items)
 	}
 	_, out = e.do("GET", "/accounts?model=claude-opus-4-1", nil)

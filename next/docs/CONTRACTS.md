@@ -865,7 +865,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 - `Account` 对象新增 `models`、`model_mapping`、`weight`、`rpm_limit`、`tpm_limit`、`rate_usage`；`settings` 不再含 `model_mapping`。
 - POST/PATCH `/accounts`：以上字段都可选；PATCH 时 `models`、`model_mapping` 整体替换。字段错误：`models[i]`（`invalid` / `duplicate` / `too_many`）、`model_mapping.<from>`（`invalid`）、`model_mapping`（`too_many`）、`weight`、`rpm_limit`、`tpm_limit`（`invalid`）。
-- GET `/accounts` 新增筛选 `?model=<完整模型 ID>`：只列出能服务该模型的账号（`models` 为空或包含它）。列表排序改为 `priority, weight DESC, id`。
+- GET `/accounts` 新增筛选 `?model=<完整模型 ID>`：只列出能服务该模型的账号（`models` 为空或包含它）。列表按添加时间倒序（`created_at DESC, id DESC`，新账号在最前；以前是 `priority, weight DESC, id`，改优先级或权重会让行换位置，控制台自动刷新时看起来像乱排；调度顺序见 §18.2，与列表顺序无关）。
 - POST `/accounts/:id/test {model?}`：模型先经该账号的 `model_mapping` 映射再交给插件。
 - Redis key（§7 补充）：`rl:account:{id}:rpm`、`rl:account:{id}:tpm`（ZSET，TTL 2 分钟，格式见 §68.3），由 `account` 模块实现 `core.AccountLimiter`。
 - `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`；端口 `core.AccountLimiter` 包含 `Exhausted(ctx, refs, model, session)` 预检查、`TryHit(ctx, ref, model, session) (bool, error)` 原子准入、`Reserve(ctx, ref, model, session, tokens) (RateHold, bool, error)` 准入并预占、`Settle(ctx, hold, actual)` 结算、`ReleaseSession(ctx, ref, model, session)`、`AddTokens(ctx, id, list, n)` 与 `Usage(ctx, refs)`（§68.2、§71、§78.3）。网关用 `Reserve`，托管任务轮询和资源下载用 `TryHit`。网关 `Deps.Limiter` 为 nil 时不限流。

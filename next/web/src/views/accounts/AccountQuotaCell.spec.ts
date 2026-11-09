@@ -284,6 +284,24 @@ describe('AccountQuotaCell', () => {
     expect(w.emitted('refresh')).toHaveLength(2)
   })
 
+  it('compact: one line per window, the error as an icon on the first one and the observed time in each tooltip', async () => {
+    const w = render(snap({ source: 'passive', refresh_status: 'error', error: 'upstream 503', windows: [win('5h', 10), win('7d', 20)] }), { compact: true })
+    const error = w.get('[data-testid="quota-window-5h"] [data-testid="quota-error"]')
+    expect(error.attributes('title')).toContain('upstream 503')
+    expect(w.findAll('[data-testid="quota-error"]')).toHaveLength(1)
+    expect(w.find('[data-testid="quota-observed"]').exists()).toBe(false)
+    expect(w.get('[data-testid="quota-window-7d"]').attributes('title')).toContain('被动采样 · 最近观测')
+    await w.setProps({ refreshing: true })
+    expect(w.find('[data-testid="quota-error"]').exists()).toBe(false)
+    expect(w.find('[data-testid="quota-window-5h"] [role="status"]').exists()).toBe(true)
+  })
+
+  it('compact without windows keeps the error and footer lines', () => {
+    const w = render(snap({ refresh_status: 'error', error: 'upstream 503' }), { compact: true })
+    expect(w.get('[data-testid="quota-error"]').text()).toContain('upstream 503')
+    expect(w.get('[data-testid="quota-observed"]').text()).toContain('最近观测')
+  })
+
   it('keeps non-refreshable quotas as non-interactive content', async () => {
     const w = render(snap(), { refreshable: false })
     expect(w.element.tagName).toBe('DIV')
