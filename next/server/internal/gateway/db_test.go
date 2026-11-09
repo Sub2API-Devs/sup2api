@@ -404,3 +404,35 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 		t.Fatalf("reset admin rule: %d", code)
 	}
 }
+
+func TestSchedulingSettingsAPIDB(t *testing.T) {
+	e := newDBEnv(t)
+	code, res := e.api("GET", "/settings/scheduling", nil)
+	if code != 200 || res.Get("data").Raw != `{"mode":"default","metric":"rpm","limit_load":false,"model_limits":false}` {
+		t.Fatalf("defaults: %d %s", code, res.Raw)
+	}
+	if code, res := e.api("PUT", "/settings/scheduling", map[string]any{"mode": "least", "metric": "sessions"}); code != 400 ||
+		res.Get("error.details.fields.0.field").String() != "mode" || res.Get("error.details.fields.1.field").String() != "metric" {
+		t.Fatalf("invalid: %d %s", code, res.Raw)
+	}
+	// The row is replaced: absent fields take their defaults.
+	code, res = e.api("PUT", "/settings/scheduling", map[string]any{"mode": "traffic", "limit_load": true})
+	if code != 200 || res.Get("data.mode").String() != "traffic" || res.Get("data.metric").String() != "rpm" || !res.Get("data.limit_load").Bool() {
+		t.Fatalf("put: %d %s", code, res.Raw)
+	}
+	sc := e.gw.settings.get(context.Background()).scheduling
+	if sc.Mode != balanceModeTraffic || !sc.LimitLoad || sc.ModelLimits {
+		t.Fatalf("settings cache not refreshed: %+v", sc)
+	}
+	var by *int64
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT updated_by FROM settings WHERE key = 'scheduling'`).Scan(&by); err != nil || by == nil || *by != e.uid {
+		t.Fatalf("updated_by %v %v", by, err)
+	}
+	// A hand-edited row with an unknown value reads as the default.
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE settings SET value = '{"mode":"x","metric":"tpm"}' WHERE key = 'scheduling'`); err != nil {
+		t.Fatal(err)
+	}
+	if code, res := e.api("GET", "/settings/scheduling", nil); code != 200 || res.Get("data.mode").String() != "default" || res.Get("data.metric").String() != "tpm" {
+		t.Fatalf("normalized: %d %s", code, res.Raw)
+	}
+}

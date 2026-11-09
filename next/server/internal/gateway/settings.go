@@ -194,11 +194,12 @@ type settingsSnapshot struct {
 	gateway          GatewaySettings
 	sticky           StickySettings
 	autoDisable      AutoDisableSettings
+	scheduling       SchedulingSettings
 	failurePolicy    *FailurePolicy
 	failurePolicyErr error
 }
 
-// settingsCache reads the gateway, sticky and auto-disable rows with a short
+// settingsCache reads the gateway, sticky, auto-disable and scheduling rows with a short
 // TTL; the config:changed broadcast invalidates it immediately.
 type settingsCache struct {
 	db    *store.DB
@@ -223,7 +224,7 @@ func (c *settingsCache) get(ctx context.Context) settingsSnapshot {
 	if c.override != nil {
 		o := *c.override
 		c.mu.Unlock()
-		o.gateway = o.gateway.normalized()
+		o.gateway, o.scheduling = o.gateway.normalized(), o.scheduling.normalized()
 		return o
 	}
 	snap := c.snap
@@ -241,11 +242,11 @@ func (c *settingsCache) get(ctx context.Context) settingsSnapshot {
 	return s
 }
 
-// load reads the three rows. On read errors it keeps the defaults of the rows
+// load reads the rows. On read errors it keeps the defaults of the rows
 // not read and leaves at zero so the result is not cached.
 func (c *settingsCache) load(ctx context.Context) settingsSnapshot {
 	s := settingsSnapshot{gateway: defaultGatewaySettings(), sticky: defaultStickySettings(),
-		autoDisable: defaultAutoDisableSettings()}
+		autoDisable: defaultAutoDisableSettings(), scheduling: defaultSchedulingSettings()}
 	if c.db == nil {
 		s.at = time.Now()
 		return s
@@ -268,7 +269,12 @@ func (c *settingsCache) load(ctx context.Context) settingsSnapshot {
 	if err != nil {
 		return s
 	}
-	s.autoDisable, s.at = ad, time.Now()
+	s.autoDisable = ad
+	sc, err := loadSchedulingSettings(ctx, c.db.Pool)
+	if err != nil {
+		return s
+	}
+	s.scheduling, s.at = sc, time.Now()
 	return s
 }
 
