@@ -599,14 +599,14 @@ func (s *Service) list(c *gin.Context) {
 var listSelectRow = strings.Replace(selectRow, "a.credentials_enc", "NULL::bytea", 1)
 
 // listPage reads the total and one page of the filtered accounts in a single
-// round trip (one batch, two statements, unchanged SQL). Rows come in id
-// order: editing priority or weight never moves a row, so the console's
+// round trip (one batch, two statements, unchanged SQL). Newest accounts
+// come first; editing priority or weight never moves a row, so the console's
 // auto-refresh keeps every account in place.
 func (s *Service) listPage(ctx context.Context, where string, args []any, page, size int) (int64, []*row, error) {
 	n := len(args)
 	batch := &pgx.Batch{}
 	batch.Queue(`SELECT count(*) FROM accounts a`+where, args...)
-	batch.Queue(listSelectRow+where+fmt.Sprintf(` ORDER BY a.id LIMIT $%d OFFSET $%d`, n+1, n+2),
+	batch.Queue(listSelectRow+where+fmt.Sprintf(` ORDER BY a.created_at DESC, a.id DESC LIMIT $%d OFFSET $%d`, n+1, n+2),
 		append(slices.Clip(args), size, (page-1)*size)...)
 	br := s.d.DB.Pool.SendBatch(ctx, batch)
 	defer br.Close()

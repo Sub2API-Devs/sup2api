@@ -741,8 +741,8 @@ on('GET', '/accounts', (req) => {
     if (ids.length > 500 || ids.some((id) => !Number.isInteger(id))) return fail(400, 'invalid_argument', 'ids must be up to 500 integers')
     list = list.filter((a) => ids.includes(a.id))
   }
-  // id ASC (§18.3).
-  list = [...list].sort((x, y) => x.id - y.id)
+  // Newest first (§18.3).
+  list = [...list].sort((x, y) => y.created_at.localeCompare(x.created_at) || y.id - x.id)
   return paginate(list.map(({ credentials: _c, ...a }) => withGroups(a)), q)
 })
 /**
