@@ -59,10 +59,10 @@ func TestDeclaredUpstreamSendsTheBuiltRequest(t *testing.T) {
 	assert.True(t, e.record().Success)
 }
 
-// The account's override (§84) runs after the plugin's patches and has the
-// last word on the body; the plugin builds from the body before it, with
-// the mapped model, and keeps its URL when the override changes the model.
-func TestAccountOverrideRunsAfterPluginPatches(t *testing.T) {
+// The account's override (§84) runs before BuildUpstreamRequest: the plugin
+// builds from the overridden body, with the override's model, and its
+// patches may still change the result (CONTRACTS §86.5).
+func TestPluginPatchesFollowAccountOverride(t *testing.T) {
 	e := newEnv(t)
 	e.plat.patches = []*pluginv1.BodyPatch{
 		{Op: pluginv1.BodyPatch_OP_SET, Path: "temperature", ValueJson: "0.9"},
@@ -76,13 +76,13 @@ func TestAccountOverrideRunsAfterPluginPatches(t *testing.T) {
 	require.Equal(t, 200, r.status, string(r.body))
 	got := e.up.last()
 	up := gjson.ParseBytes(got.body)
-	assert.Equal(t, 0.3, up.Get("temperature").Float(), "the override wins over the plugin's patch")
+	assert.Equal(t, 0.9, up.Get("temperature").Float(), "the plugin's patch wins over the override")
 	assert.Equal(t, int64(5), up.Get("top_k").Int())
 	assert.Equal(t, "claude-override", up.Get("model").String())
-	assert.Equal(t, "/v1/messages?built_for="+testModel, got.path, "a code plugin's URL is kept")
+	assert.Equal(t, "/v1/messages?built_for=claude-override", got.path, "the plugin built for the override's model")
 	b := e.plat.builds[0]
-	assert.Equal(t, testModel, b.GetMeta().GetModel())
-	assert.Equal(t, `"`+testModel+`"`, b.GetFields()["model"], "the plugin saw the body before the override")
+	assert.Equal(t, "claude-override", b.GetMeta().GetModel())
+	assert.Equal(t, `"claude-override"`, b.GetFields()["model"], "the plugin saw the overridden body")
 	rec := e.record()
 	assert.Equal(t, testModel, rec.Model)
 	assert.Equal(t, "claude-override", rec.UpstreamModel)
@@ -104,18 +104,18 @@ func TestDeclaredOverrideModelRendersTheURL(t *testing.T) {
 	assert.Equal(t, "claude-override", e.record().UpstreamModel)
 }
 
-// A model a patch wrote is not the override's: an override leaving the
-// model alone changes neither the URL nor the recorded upstream model.
-func TestOverrideKeepsAPatchedModel(t *testing.T) {
+// A declared route naming {model} follows the final body: when a patch
+// after the build changes the model, the URL is rendered again for it.
+func TestPatchedModelRendersTheURL(t *testing.T) {
 	e := newEnv(t)
 	e.declare(`"routes":{"anthropic.messages":{"path":"/v1/models/{model}/messages","patches":[{"op":"set","path":"model","value":"claude-patched"}]}}`, nil)
 	setParamOverride(t, e, 1, `{"operations":[{"mode":"set","path":"temperature","value":0.3}]}`)
 	require.Equal(t, 200, e.messages(body(testModel, false)).status)
 	got := e.up.last()
-	assert.Equal(t, "/v1/models/"+testModel+"/messages", got.path, "the URL Build rendered")
+	assert.Equal(t, "/v1/models/claude-patched/messages", got.path)
 	assert.Equal(t, "claude-patched", gjson.GetBytes(got.body, "model").String())
 	assert.Equal(t, 0.3, gjson.GetBytes(got.body, "temperature").Float())
-	assert.Equal(t, testModel, e.record().UpstreamModel)
+	e.record()
 }
 
 // Only the declaration decides the credential: under a custom auth header
@@ -140,8 +140,8 @@ func TestDeclaredAuthHeaderIsWrittenLast(t *testing.T) {
 }
 
 // The body goes through, in order: the filtered fields the account did not
-// allow are removed, the manifest's paramOverride, the route's patches, the
-// account's override.
+// allow are removed, the manifest's paramOverride, the account's override,
+// the route's patches (CONTRACTS §86.5).
 func TestDeclaredBodyRewriteOrder(t *testing.T) {
 	const layer = `"accountConfig":true,
 		"paramOverride":{"operations":[{"mode":"set","path":"temperature","value":0.1},{"mode":"set","path":"top_k","value":1}]},
@@ -157,9 +157,28 @@ func TestDeclaredBodyRewriteOrder(t *testing.T) {
 	assert.Equal(t, int64(1), up.Get("top_k").Int())
 	e.record()
 
-	setParamOverride(t, e, 1, `{"operations":[{"mode":"set","path":"temperature","value":0.3}]}`)
-	require.Equal(t, 200, e.messages(body(testModel, false)).status)
-	assert.Equal(t, 0.3, gjson.GetBytes(e.up.last().body, "temperature").Float(), "the account's override comes last")
+	setParamOverride(t, e, 1, `{"operations":[{"mode":"set","path":"top_k","value":9},{"mode":"set","path":"temperature","value":0.3},{"mode":"set","path":"service_tier","value":"flex"}]}`)
+	require.Equal(t, 200, e.messages(body(testModel, false, "service_tier", "priority")).status)
+	up = gjson.ParseBytes(e.up.last().body)
+	assert.Equal(t, int64(9), up.Get("top_k").Int(), "the account's override follows the manifest's")
+	assert.Equal(t, 0.2, up.Get("temperature").Float(), "the route's patch follows the account's override")
+	assert.Equal(t, "flex", up.Get("service_tier").String(), "the override may add back a filtered field")
+}
+
+// Headers in layers: the passthrough, then the account's override, then the
+// plugin's headers, then the declared auth (CONTRACTS §86.5).
+func TestHeaderLayers(t *testing.T) {
+	e := newEnv(t)
+	plugin := &amendingPlatform{fakePlatform: &fakePlatform{}, headers: map[string]string{"x-layer": "plugin"}}
+	e.declare(`"extend":true`, plugin)
+	e.setAccount(1, func(a *core.Account) { a.HeaderPassthrough = []string{"x-layer", "x-other"} })
+	setParamOverride(t, e, 1, `{"operations":[{"mode":"set_header","path":"x-layer","value":"override"},{"mode":"set_header","path":"x-other","value":"override"}]}`)
+	r := e.do("/v1/messages", body(testModel, false), map[string]string{"X-Layer": "client", "X-Other": "client"})
+	require.Equal(t, 200, r.status, string(r.body))
+	h := e.up.last().header
+	assert.Equal(t, "plugin", h.Get("X-Layer"), "the plugin's header wins over the override")
+	assert.Equal(t, "override", h.Get("X-Other"), "the override wins over the passthrough")
+	assert.Equal(t, "acc-1", h.Get("X-Api-Key"))
 }
 
 // A failing declared paramOverride ends the attempt like a failing account
@@ -191,7 +210,7 @@ func (p *amendingPlatform) BuildUpstreamRequest(_ context.Context, in *pluginv1.
 
 // Extend: the plugin amends the built request; its headers and patches
 // reach upstream, the auth header stays the declaration's, and the
-// account's override still comes after its patches.
+// account's override (before the build) keeps what the plugin left alone.
 func TestDeclaredExtendAmendsTheRequest(t *testing.T) {
 	e := newEnv(t)
 	plugin := &amendingPlatform{fakePlatform: &fakePlatform{}, headers: map[string]string{"X-Api-Key": "stolen", "x-extra": "1"}}
@@ -207,9 +226,9 @@ func TestDeclaredExtendAmendsTheRequest(t *testing.T) {
 	assert.Equal(t, e.up.srv.URL+"/v1/messages", plugin.bases[0].GetUrl())
 }
 
-// On a WebSocket, each turn's message gets the account's override after
+// On a WebSocket, each turn's message gets the account's override before
 // the plugin's patches, as an HTTP body does.
-func TestWebSocketAccountOverrideAfterPatches(t *testing.T) {
+func TestWebSocketPluginPatchesFollowAccountOverride(t *testing.T) {
 	e := newWSEnv(t)
 	e.wsPlat.wsPatch = func(*pluginv1.BuildUpstreamRequestRequest) ([]*pluginv1.BodyPatch, error) {
 		return []*pluginv1.BodyPatch{{Op: pluginv1.BodyPatch_OP_SET, Path: "store", ValueJson: "false"}}, nil
@@ -224,7 +243,7 @@ func TestWebSocketAccountOverrideAfterPatches(t *testing.T) {
 	_, msgs := e.wsUp.snapshot()
 	require.Len(t, msgs, 2)
 	for _, m := range msgs {
-		assert.Equal(t, "true", gjson.Get(m, "store").Raw)
+		assert.Equal(t, "false", gjson.Get(m, "store").Raw, "the plugin's patch wins")
 		assert.Equal(t, "override", gjson.Get(m, "metadata.src").String())
 	}
 }

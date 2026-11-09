@@ -489,10 +489,9 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		return reject(cl, invalidModelReference(err.Error()))
 	}
 	// The message goes through the rewrites of an HTTP body
-	// (param_override.go): the declaration's before the plugin's patches,
-	// the account's override after them.
+	// (param_override.go) before the plugin's patches.
 	n := max(0, cl.rec.Attempts-1)
-	if payload, e = cl.prepareTurn(ctx, s.acc, s.rt, s.pacct, payload, n); e != nil {
+	if payload, e = cl.rewriteTurn(ctx, s.acc, s.rt, s.pacct, payload, n); e != nil {
 		return reject(cl, e)
 	}
 	// The plugin's body patches for this message (CONTRACTS §83.6): the
@@ -505,9 +504,6 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		return reject(cl, e)
 	}
 	if payload, e = cl.applyTurnPatches(s.rt, payload, patches); e != nil {
-		return reject(cl, e)
-	}
-	if payload, e = cl.overrideTurn(ctx, s.acc, s.rt, payload, n); e != nil {
 		return reject(cl, e)
 	}
 	if failure := cl.guardAvailability(ctx, s.ref); failure != nil {
@@ -645,9 +641,9 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	if mapped, err := cl.mapReferencedModels(body, ref, rt); err == nil {
 		body = mapped
 	}
-	// And after a declared type's own part of the body (param_override.go),
-	// whose failure is the turn's to report too.
-	if prepared, m, failure := cl.prepareDeclared(ctx, acc, rt, pacct, body, upModel, max(0, cl.rec.Attempts-1)); failure == nil {
+	// And after the rewrites before the plugin (param_override.go), whose
+	// failure is the turn's to report too.
+	if prepared, m, failure := cl.rewriteBody(ctx, acc, rt, pacct, body, upModel, max(0, cl.rec.Attempts-1)); failure == nil {
 		body, upModel = prepared, m
 	}
 	fields := requestFieldValues(body, rt.requestFields)
@@ -655,8 +651,9 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	meta := cl.metaFor(rt)
 	meta.Model = upModel
 	bctx, cancel := context.WithTimeout(ctx, cl.gw.platformTimeout())
-	built, err := rt.binding.Client.BuildUpstreamRequest(bctx, &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: pacct,
-		Fields: fields, InboundHeaders: cl.passHeaders(rt.passHeaders), Attempt: int32(cl.rec.Attempts - 1)})
+	request := &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: pacct,
+		Fields: fields, InboundHeaders: cl.passHeaders(rt.passHeaders), Attempt: int32(cl.rec.Attempts - 1)}
+	built, err := rt.binding.Client.BuildUpstreamRequest(bctx, request)
 	cancel()
 	if err == nil && built == nil {
 		err = errors.New("empty response")
@@ -679,21 +676,15 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	hc := *client
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	hc.Timeout = 0
+	// The handshake's headers in the layers of an HTTP request (forwardBuilt,
+	// without the passthrough): the declaration's and its paramOverride's,
+	// the account's parameter override, the plugin's, then the declared auth.
+	declared, plugin := splitHeaders(rt, request, built)
 	header := http.Header{}
-	for k, v := range built.GetHeaders() {
-		switch strings.ToLower(k) {
-		case "host", "content-length", "content-type", "accept-encoding", "connection", "transfer-encoding", "upgrade",
-			"sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-accept":
-		default:
-			header.Set(k, v)
-		}
-	}
-	if h := built.GetHeaders()["host"]; h != "" {
-		header.Set("Host", h)
-	}
-	// As on HTTP (forwardBuilt): the declared paramOverride's header
-	// decisions, then the declaration's auth header over them.
+	setHandshakeHeaders(header, declared)
 	cl.paramOverride.declared.Apply(header)
+	cl.paramOverride.headers.Apply(header)
+	setHandshakeHeaders(header, plugin)
 	writeDeclaredAuth(header, rt, pacct, built)
 	// The handshake gets its own deadline; the connection itself lives as
 	// long as the session.
@@ -1013,4 +1004,19 @@ func (s *wsSession) finish(ctx context.Context, t *wsTurn, out wsOutcome) {
 func strconvQuote(s string) string {
 	b, _ := json.Marshal(truncateUTF8(s, 100))
 	return string(bytes.TrimSpace(b))
+}
+
+// setHandshakeHeaders writes built headers onto a WebSocket handshake; the
+// transport owns framing and the WebSocket handshake headers, host is kept.
+func setHandshakeHeaders(h http.Header, m map[string]string) {
+	for k, v := range m {
+		switch strings.ToLower(k) {
+		case "host":
+			h.Set("Host", v)
+		case "content-length", "content-type", "accept-encoding", "connection", "transfer-encoding", "upgrade",
+			"sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-accept":
+		default:
+			h.Set(k, v)
+		}
+	}
 }

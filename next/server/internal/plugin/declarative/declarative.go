@@ -136,6 +136,31 @@ func merge(base, amended *pluginv1.BuildUpstreamRequestResponse, auth string) *p
 	return out
 }
 
+// SplitHeaders implements core.DeclaredUpstream: without extend every built
+// header is the declaration's; in extend mode the declaration's are built
+// again (deterministic) and a header the plugin added or changed is the
+// plugin's. A plugin header equal to the declared value counts as declared.
+func (c *Client) SplitHeaders(in *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse) (declared, plugin map[string]string) {
+	if c.plugin == nil {
+		return built.GetHeaders(), nil
+	}
+	p, err := c.forAccount(in.GetAccount())
+	if err != nil {
+		return built.GetHeaders(), nil
+	}
+	base, err := p.Build(in)
+	if err != nil {
+		return built.GetHeaders(), nil
+	}
+	declared, plugin = base.GetHeaders(), map[string]string{}
+	for k, v := range built.GetHeaders() {
+		if bv, ok := declared[k]; !ok || bv != v {
+			plugin[k] = v
+		}
+	}
+	return declared, plugin
+}
+
 // ClassifyError classifies with the declared provider policy (an account
 // layer cannot change it).
 func (c *Client) ClassifyError(_ context.Context, in *pluginv1.ClassifyErrorRequest) (*pluginv1.ClassifyErrorResponse, error) {

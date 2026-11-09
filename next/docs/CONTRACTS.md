@@ -4700,7 +4700,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **管理员缓存加载放宽（2026-11-09，线上仪表盘超时）**：管理员的 overview、summary（走下文缓存的那条路）改为 `statement_timeout = '25s'`（小于缓存单次加载的 30 秒），并 `SET LOCAL work_mem = '128MB'`；自己的 `/me/usage/*` 和 `/usage/realtime` 仍是 5 秒、默认 work_mem。实现：`usage/stats.go` 的 `statsLimits`。
 - 原因：11-07 起 usage_logs 每天 4–6 万行，近 30 天约 20 万行（每行约 2KB）。sup2api 库在共享的 Supabase 实例上，页常被挤出缓存：热缓存时 overview 2.2s、7 天按天 summary 2.6s，冷缓存时只扫一遍 30 天就要 10s；仪表盘打开时同时发 5 条统计，一起超过 5 秒。
 - work_mem：规划器把 `to_char(created_at AT TIME ZONE …)` 的分组数估成和行数一样多（约 17 万，实际 7 个），work_mem 小时就把宽行排序写进约 160MB 临时文件；128MB（`hash_mem_multiplier` 2）时改走 HashAggregate，实际只用约 3MB，耗时少约 40%。64MB 不够。
-- 这只是止血：明细仍是实时扫描，行数再涨几倍还会超时，根治要小时级汇总表（需迁移）。
+- 这只是止血：明细仍是实时扫描，行数再涨几倍还会超时。根治方案是小时汇总表，见 §66.8。
 
 **缓存（2026-11-05，用户要求，参考旧版 sub2api 的仪表盘）**：管理员接口扫描全部用户的行，所以在进程内缓存，响应头 `X-Snapshot-Cache: hit|miss`。实现：`usage/snapshot_cache.go`。
 
@@ -4764,6 +4764,39 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 错误请求就是列表加 `success=false`，所以合计和导出也只算失败的请求，这时不显示状态筛选。RPM、TPM、成功率不传状态，不受影响。
 - 调用 IP、用户排行沿用同一组筛选，不显示导出，因为导出的是请求列表。
 - 余额变动不走用量筛选：时间范围和流水类型放在筛选栏里，默认本月，可选全部时间，切换日志类型时保留；不显示六项统计、更多筛选、重置、搜索和导出。
+
+### 66.8 小时汇总表（2026-11-09，用户要求根治仪表盘超时；迁移 0092，不能滚动更新）
+
+统计原来每次都实时扫 `usage_logs`（§66.3）。现在新增汇总表 `usage_hourly`，按 UTC 小时 × `user_id, api_key_id, group_id, account_id, model, upstream_model, protocol, platform` 汇总。汇总的值是可以直接相加的量：请求数、成功数、四类 token、`total_cost`、`standard_cost`、`prompt_rows/prompt_tokens`（能算出 prompt 的行数和它们的和）、`anomalous_rows`、`estimated_rows/estimated_cost`、`latency_sum/latency_rows`、`first_token_sum/first_token_rows`。每个量对一行明细怎么算，只写在 `usage/rollup.go` 的 `statMeasures` 里，汇总和实时扫描都用这一份。
+
+**读取**：summary 和 overview 的 FROM 是四段 UNION ALL：
+- 汇总表覆盖范围内的整小时读 `usage_hourly`，但跳过还在 `usage_hourly_dirty` 里、没重算的小时；
+- 这些被标记的小时改读 `usage_logs`；
+- 覆盖范围之前和之后的部分读 `usage_logs`，各是一段 `created_at` 区间。
+
+外层再把各个量相加，算出合计和平均值。标记和明细的改动在同一个事务里提交，又在同一条语句里读，所以不管刷新有没有跟上，结果都和实时扫描逐项相同。测试 `TestRollupMatchesLive` 会逐个接口比对。
+
+- 能用汇总表的：分组是 day、hour、none、model、upstream_model、user、api_key、group、protocol、platform；筛选只用了 from、to、tz、order、limit、user_id、api_key_id、group_id、account_id、model、upstream_model、protocol、platform。day、hour 分组和 overview 还要求时区在整个范围内都和 UTC 相差整小时（按 `ZoneBounds` 逐段检查）。Asia/Kolkata 就不行；Australia/Lord_Howe 跨越 +10:30 的那段时间也不行。
+- 其他情况（ip、endpoint 分组，按状态、IP、模糊名称等筛选）照旧只扫 `usage_logs`。
+- `/usage/realtime` 不变，只看最近一小时，始终实时。
+
+**刷新**：集群任务 `core.usage.rollup`，每分钟一次，每条语句最长 60 秒，每个事务都持有 advisory 锁 `usage_hourly`。`usage_hourly_state` 记录已汇总的小时范围 [low, high)。每次运行做下面三件事，三步互相独立，一步出错不影响另外两步：
+
+1. 往前补，每个事务最多 6 小时。可汇总的边界按数据库时钟算（`sealedSQL`），取两者中更早的那个：
+   - 小时结束满 30 分钟；
+   - 本角色在本库里还没结束的写事务中，最早的开始时间往前推 15 分钟。
+
+   这样，一个还没提交、又没被触发器标记的写入，它所在的小时不会被提前汇总。
+2. 重算被标记的小时。`usage_logs` 上的触发器 `usage_hourly_mark_*` 只对所属小时已结束 15 分钟以上的行生效：这样的行被插入、删除，或者修改了统计用到的列（`UPDATE OF` 列出了汇总键和各个量读到的列；改 `created_at` 时，新旧两个小时都标记），就往 `usage_hourly_dirty` 记一条。刷新任务每个事务重算最多 24 个小时，再按 id 删掉这次读到的标记。最近的行（结算热路径）不会触发。
+3. 往回补历史，每次运行只补一块（24 小时），一直补到最早一行明细所在的小时，免得集中冷读挤占共享库的缓存。
+
+同一小时总是先删后插，在一个事务里重算，所以重复运行没有影响。汇总表的范围只会变大不会缩小。读取时先读一次范围，再算 UNION 的边界，所以中途有刷新提交也不会重复计算或漏算。
+
+**上线**：迁移只建表和触发器，触发器用 `CREATE OR REPLACE TRIGGER`，不需要 ACCESS EXCLUSIVE 锁。迁移不回填数据；第一次运行就从最近往回补，线上数据从 9 月 25 日开始，每分钟补一天，大约 45 分钟补完。补完之前，没覆盖到的部分仍然实时扫，结果一样，只是慢一些。回滚到没有这部分代码的版本时，表和触发器会留下来，触发器仍会往 `usage_hourly_dirty` 写少量标记（只有迟到的写入才会），这不影响任何功能，以后可以删掉。
+
+**线上数据量**（2026-11-09 只读统计）：近 30 天有 202,026 行明细，按小时和 8 个键去重后是 4,895 组，压缩比约 41:1。汇总表每行约 200 字节，明细每行约 2KB。
+
+**本地实测**（25 万行明细，每行约 2KB）：overview 从 780ms 降到 83ms，7 天按天趋势从 162ms 降到 23ms，按模型和用户的排行从约 180ms 降到 60–70ms。
 
 ## §67 账号负载信号（2026-10-29）
 
@@ -6637,8 +6670,8 @@ node 任务（可工作节点各跑，`RequireWork`）：
   - `prune_objects`、`sync_fields` 和未知模式报 `unsupported`（暂不支持）。
 - **条件**：`full`（null 只等于 null，布尔按布尔比较，其余类型不同是运行失败）、`prefix`、`suffix`、`contains`（按字符串）、`gt`、`gte`、`lt`、`lte`（两边都须是数字，否则运行失败）；`invert` 取反；路径取不到时结果就是 `pass_missing_key`（不取反）。条件路径先在请求体里找，找不到再到上下文对象里找。
 - **上下文键**：`model`、`upstream_model`（账号模型映射后的上游模型）、`original_model`（客户端模型）、`request_path`、`request_headers.<小写头名>`（客户端请求头，多个值用 `, ` 连接；禁止列表里的头不出现）、`header_override.<头名>`（前面的头操作已设置的值）、`retry_index`、`is_retry`、`retry.index`、`retry.is_retry`、`user_id`、`group`（分组名）、`account_id`、`stream`（含 streamOnly 强制的流式）。构造在 `core.ParamOverrideContext`，网关和预览共用。
-- **生效位置**（2026-11-09 起改为最后执行，§86.5）：每次尝试执行一次，在模型映射、`mapReferencedModels`、`mapResourceReferences`、`forceStreamPath`、声明式上游的过滤字段与清单 paramOverride、插件（BuildUpstreamRequest、extend 或 `platform.execute.v1` 经核心转发的请求）的 patch **之后**，`forwardBuilt` 再次强制 stream 之前（`gateway/param_override.go`）。插件看到的是覆盖前的请求体，`meta.model` 是映射后的模型；管理员的覆盖盖过预设、清单和插件的改写。覆盖改了模型时，声明式类型按新模型重新渲染 URL，代码插件的 URL 不变、只改请求体。WebSocket 每轮 `response.create` 同样在插件 patch 之后执行请求体部分（请求头在握手时已发出，不再适用）。
-- **请求头优先级**（`forwardBuilt`，含插件经核心转发的执行请求）：插件或声明构造的头 → 声明的 paramOverride 头 → 账号透传（§81）和粘性规则透传（只补没有的）→ **参数覆盖的设置和删除**（设置覆盖前面的值，删除去掉前面的头）→ 声明式类型的鉴权头重写（§86.5）→ 核心的资源头、额度头（仍然最后设置、最优先）。头名须是合法字段名；落在 §81 禁止列表（`core.HeaderPassthroughBlocked`）里的头，不论作为目标还是 copy/move/pass 的源，都报 `blocked`。
+- **生效位置**（§86.5）：每次尝试执行一次，在模型映射、`mapReferencedModels`、`mapResourceReferences`、`forceStreamPath`、声明式上游的过滤字段与清单 paramOverride **之后**，取 `requestFields` 和 BuildUpstreamRequest / `platform.execute.v1` 的 Execute **之前**（`gateway/param_override.go` `rewriteBody`）。插件看到的就是覆盖后的请求体，`meta.model` 是覆盖后的模型，插件的 patch 还可以再改覆盖的结果：插件改写是插件自己的内部特殊逻辑，插件知道前面已经执行过账号参数覆盖，所以排在覆盖之后，看到覆盖结果再改（用户 2026-11-09 定）。WebSocket 每轮 `response.create` 同样在插件 patch 之前执行请求体部分。`forwardBuilt` 在插件 patch 之后仍重新强制 stream。
+- **请求头优先级**（`forwardBuilt`，含插件经核心转发的执行请求，后面的盖前面的）：声明构造的头（inbound、预设、清单、路由）和声明的 paramOverride 头 → 账号透传（§81）和粘性规则透传（只补没有的）→ **参数覆盖的设置和删除** → 插件的头（老插件构造的头、extend 追加的头；理由同请求体）→ 声明式类型的鉴权头重写（§86.5）→ 核心的资源头、额度头（仍然最后设置、最优先）。WebSocket 握手同样分层（没有透传）。头名须是合法字段名；落在 §81 禁止列表（`core.HeaderPassthroughBlocked`）里的头，不论作为目标还是 copy/move/pass 的源，都报 `blocked`。
 - **模型**：覆盖改了请求体的模型字段（平台的 `modelPath`）时，上游模型以覆盖结果为准：`meta.model`、使用记录的 `upstream_model`、上游用量的主模型身份都用它，`forwardBuilt` 的模型可用性一致性检查也以它为期望值，不会因此报 `upstream_model_mismatch`。计费仍按客户端模型；可用性预检仍按映射后的模型。
 - **return_error**：`value` 为消息字符串，或 `{message|msg, status_code|status, code, type, skip_retry}`；默认 400、`invalid_request`、`invalid_request_error`、`skip_retry: true`，状态码须在 100–599。`skip_retry: true` 直接回给客户端（记录类型 `invalid_request`），false 换下一个账号（所有账号都这样时把最后一个错误回给客户端）。不冷却、不惩罚账号；有失败策略时也不跑账号规则（与可用性拒绝相同）。
 - **运行失败**（类型不符、源路径不存在、条件比较的类型不符等）：WARN 日志带账号 ID，本次尝试换账号（`param_override_failed`，记录类型 `internal`，全都失败时客户端看到“无可用账号”），同样不惩罚账号。
@@ -6675,7 +6708,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - manifest `accountTypes[].upstream`（`sdk/manifest/upstream.go`）：`preset`（`openai`/`anthropic`/`gemini`，预设在 `sdk/platforms/upstream/*.json`）、`extend`、`accountConfig`、`baseURL{default,required,stripSuffixes}`、`credentials{keyValidator,texts,fields}`、`auth{type: header|query|none, name, value}`、`headers`（头名 → `{set|default|append: 模板}`）、`routes`（上游协议 → `{method, path, transport, headers, patches, model}`）、`defaultProtocol`、`filterFields`、`paramOverride`（§84 格式）、`classify`、`test`、`models{path, idPath, stripPrefix}`。
 - 合并：预设 → 清单 → 账号层（只有 `accountConfig` 类型），按 JSON merge patch，`headers` 按头名、`routes` 按协议合并，`null` 删除；未知字段拒绝。
-- 模板变量：`{api_key}`（只能在 auth 值和路径查询串）、`{base_url}`（auth 和请求头）、`{model}`（映射后的上游模型；账号参数覆盖改了模型时只重算 URL，请求头和查询值不变）、`{credentials.<k>}`（k 须在 `credentials.fields`，不能是 api_key/base_url）、`{client_header.<名>}`（须在该类型的 passHeaders 里、不在 §81 禁止列表，只能用在普通请求头）。
+- 模板变量：`{api_key}`（只能在 auth 值和路径查询串）、`{base_url}`（auth 和请求头）、`{model}`（映射和账号参数覆盖之后的上游模型；插件 patch 改了模型时只重算 URL，请求头和查询值不变）、`{credentials.<k>}`（k 须在 `credentials.fields`，不能是 api_key/base_url）、`{client_header.<名>}`（须在该类型的 passHeaders 里、不在 §81 禁止列表，只能用在普通请求头）。
 - `auth.name` 只能是凭证头（authorization、x-api-key、x-goog-api-key、api-key、cookie）或普通头名，不能是逐跳、分帧、客户端地址或网关控制头。
 - passHeaders：账号类型 `platforms[]` 的列表为空（缺省或空数组）时用平台的（`manifest.AccountType.PassHeaders`，核心、校验、网关共用）。
 - 可服务的端点 = routes 列出的协议（须与 `platforms[].endpoints` 一致）加核心能转换到它们的协议；调度不变。
@@ -6711,19 +6744,21 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 86.5 请求构造顺序
 
-- 请求体：模型映射、引用与资源映射、强制流式 → 协议转换 → 过滤字段（账号没放开的）→ 预设和清单的 paramOverride → 路由 patches → 插件（extend、老插件 BuildUpstreamRequest、执行路径转发）的 patch → **账号参数覆盖（§84）** → 改了模型时声明式类型重算 URL → 再次强制 stream。
-- 请求头：inbound（按 passHeaders 过滤）→ 预设、清单、路由的头 → 插件的头 → 声明的 paramOverride 头 → 账号透传与粘性透传（只补没有的）→ 账号参数覆盖的头 → **鉴权头按 auth 模板重写**（声明不产生值时删除）→ 核心资源头、额度头。WebSocket 握手同样带声明的 paramOverride 头并重写鉴权头。鉴权头只能由 auth 模板写，请求头覆盖、透传、插件头都改不了它。
+原则：账号参数覆盖（§84）先执行，插件在它之后。插件改写是插件自己的内部特殊逻辑，插件知道前面已经执行过账号参数覆盖，所以排在覆盖之后，看到覆盖结果再改；请求体和请求头一致，鉴权头除外（用户 2026-11-09 定）。
+
+- 请求体：模型映射、引用与资源映射、强制流式 → 协议转换 → 过滤字段（账号没放开的）→ 预设和清单的 paramOverride → **账号参数覆盖（§84）** → BuildUpstreamRequest（`meta.model` 为覆盖后的模型）：路由 patches、插件（extend、老插件、执行路径转发）的 patch → 插件 patch 改了模型时声明式类型按最终请求体的模型重算 URL → 再次强制 stream。普通转发、插件执行路径、WebSocket 每轮一致。
+- 请求头（后面的盖前面的）：声明构造的头（inbound 按 passHeaders 过滤、预设、清单、路由）→ 声明的 paramOverride 头 → 账号透传与粘性透传（只补没有的）→ 账号参数覆盖的头 → 插件的头（老插件构造的、extend 追加的，`core.DeclaredUpstream.SplitHeaders` 区分）→ **鉴权头按 auth 模板重写**（声明不产生值时删除）→ 核心资源头、额度头。WebSocket 握手同样分层（没有透传）。鉴权头只能由 auth 模板写，请求头覆盖、透传、插件头都改不了它。
 
 ### 86.6 控制台
 
 - `web/src/views/accounts/upstream/`：`upstream-editor` 表单控件。默认值取账号类型的 `upstream`，可按项和整体恢复默认；只写和默认不同的项，全部默认时不存。服务端字段错误显示在对应输入上；客户端提示与服务端规则一致，只提示不拦截。
-- 请求参数覆盖的提示文字改为“在模型映射和插件改写之后、发往上游之前最后执行”。
+- 请求参数覆盖的提示文字为“在模型映射之后、插件改写之前执行，插件还可以再改”。
 
 ### 86.7 兼容与上线
 
 - 账号类型 id、plugin_key 不变，现有账号和数据不迁移；没声明 upstream 的插件不受影响。
-- 参数覆盖改到最后：上线前只读查线上配了参数覆盖的账号，确认没有和插件改写撞字段（主要是 codex）。
-- 新插件的 `hostCompat` 下限在发布时改为第一个带本节功能的核心版本。
+- 参数覆盖的请求体位置与 0.1.262 之前相同（插件之前）；请求头改为插件的头盖过参数覆盖的头：老插件自己构造的头（如 codex 的头、代码插件转发的客户端头）不能再被账号参数覆盖改掉，声明式类型的头仍可以。
+- 第一个带本节功能的核心是 0.1.262：声明了 `upstream` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.UpstreamFirstCore`，低了报 `below_feature_core`），openai 0.4.0、gemini/relay/anthropic 0.3.0、custom 0.1.0 已定为 `>=0.1.262 <0.2.0`。旧核心会忽略 `upstream` 字段，所以这几个只有清单的插件必须随 0.1.262 一起发；内置插件在核心计划完成、所有节点都换上新核心后才升级（§37）。
 
 ## 87. 账号通用配置项按类型声明、核心编辑器开放给插件（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”第 2 期，规格见 [COMMON-CONTROLS.md](COMMON-CONTROLS.md)；核心 0.1.263）
 

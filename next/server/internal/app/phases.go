@@ -170,6 +170,9 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	if err := b.tasks.Register(b.settler.RetryTaskSpec()); err != nil {
 		return nil, fmt.Errorf("settlement retry task: %w", err)
 	}
+	if err := b.tasks.Register(b.settler.RollupTaskSpec()); err != nil {
+		return nil, fmt.Errorf("usage rollup task: %w", err)
+	}
 	b.ntf = notify.New(b.db, b.reg, notify.Options{CanRun: b.canWork})
 	if err := b.tasks.Register(b.ntf.PurgeTaskSpec()); err != nil {
 		return nil, fmt.Errorf("notify purge task: %w", err)
