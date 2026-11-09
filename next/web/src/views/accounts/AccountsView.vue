@@ -761,7 +761,7 @@ function resetFilters() {
     <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
 
     <!-- create / edit -->
-    <SModal v-model:open="editorOpen" :title="editorTitle" width="2xl" persistent>
+    <SModal v-model:open="editorOpen" :title="editorTitle" width="2xl" fixed persistent>
       <SSpinner v-if="editorLoading" block />
       <AccountTypePicker v-else-if="!editing && step === 1" @pick="pick" />
       <AccountEditor

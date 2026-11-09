@@ -593,11 +593,11 @@ const { save } = useAccountSave({
 </script>
 
 <template>
-  <form ref="formEl" class="space-y-5" novalidate @submit.prevent="save">
+  <form ref="formEl" class="flex min-h-full scroll-mt-4 flex-col gap-5" novalidate @submit.prevent="save">
     <div class="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
       <AccountEditorNav v-model="activeSection" :account-type="accountType" :sections="editorSections" :errors="sectionErrors" />
 
-      <div class="min-w-0 md:min-h-[30rem]">
+      <div class="min-w-0">
         <!-- ============================================================ connection -->
         <div v-show="activeSection === 'connection'" data-editor-section="connection" class="space-y-4">
           <SCard :title="t('accounts.basic')" :subtitle="t('accounts.editorUi.basicHint')">
@@ -787,7 +787,7 @@ const { save } = useAccountSave({
 
     <FetchedModelsModal v-model:open="fetchOpen" :models="fetched.models" :skipped="fetched.skipped" :existing="models" @apply="applyFetched" />
 
-    <div class="sticky -bottom-5 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-white py-4 dark:bg-dark-800">
+    <div class="sticky -bottom-5 z-10 mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-line bg-white py-4 dark:bg-dark-800">
       <SButton v-if="!editing" class="mr-auto" variant="ghost" icon="arrow-left" @click="emit('back')">{{ t('common.previous') }}</SButton>
       <SButton v-if="canTestAccount" class="mr-auto" icon="play" @click="emit('test', account!)">{{ t('accounts.testConnection') }}</SButton>
       <SHint v-if="editing && prefilled" inline size="xs" tone="warning" class="inline-flex flex-wrap items-center gap-x-2" data-testid="footer-prefilled">
