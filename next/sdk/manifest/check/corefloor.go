@@ -68,7 +68,7 @@ var coreFloors = []coreFloor{
 	}},
 	{field: "accountTypes[].platforms[].endpoints (served through a same-platform conversion)", firstCore: StreamOnlyFirstCore,
 		uses: usesSamePlatformConversion(StreamOnlyFirstCore)},
-	{field: "accountTypes[].platforms[].endpoints (served through a same-platform conversion)", firstCore: ConvertMatrixFirstCore,
+	{field: "accountTypes[].platforms[].endpoints (served through the openai.responses -> openai.chat conversion)", firstCore: ConvertMatrixFirstCore,
 		uses: usesSamePlatformConversion(ConvertMatrixFirstCore)},
 	{field: "accountTypes[].upstream", firstCore: UpstreamFirstCore, uses: func(v *validator) bool {
 		return slices.ContainsFunc(v.m.AccountTypes, func(at manifest.AccountType) bool { return at.Upstream != nil })

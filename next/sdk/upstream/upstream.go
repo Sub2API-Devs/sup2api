@@ -150,7 +150,8 @@ func (p *Profile) Upstream() manifest.Upstream { return p.up }
 // (empty for query or no auth). The core writes it last, after every other
 // header source, so nothing but the declaration decides the credential the
 // upstream receives (§0.2, §4.3). It takes the account because an account
-// layer may rename it.
+// layer may rename it; an invalid account layer gives "" (Build refuses
+// that account).
 func (p *Profile) AuthHeader(acc *pluginv1.Account) string {
 	ap, err := p.forAccount(acc)
 	if err != nil || ap.up.Auth == nil || ap.up.Auth.Type != manifest.UpstreamAuthHeader {

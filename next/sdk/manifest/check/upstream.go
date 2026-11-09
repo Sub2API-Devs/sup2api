@@ -19,8 +19,11 @@ func (v *validator) upstream(f string, at manifest.AccountType, own map[string]*
 	f += ".upstream"
 	protocols, passHeaders, complete := v.servedProtocols(at, own)
 	p, err := upstream.Resolve(&at, passHeaders, nil)
-	var probs upstream.Problems
-	if errors.As(err, &probs) {
+	if err != nil {
+		var probs upstream.Problems
+		if !errors.As(err, &probs) {
+			probs = upstream.Problems{{Code: "invalid", Message: err.Error()}}
+		}
 		for _, pr := range probs {
 			v.add(strings.TrimSuffix(f+"."+pr.Path, "."), pr.Code, "%s", pr.Message)
 		}

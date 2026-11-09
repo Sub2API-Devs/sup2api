@@ -3,9 +3,9 @@ package upstream
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -294,11 +294,4 @@ func (c *checker) models() {
 	}
 }
 
-func sortedKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
+func sortedKeys[V any](m map[string]V) []string { return slices.Sorted(maps.Keys(m)) }

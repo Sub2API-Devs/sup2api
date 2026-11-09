@@ -22,6 +22,9 @@ type call struct {
 	p   *Profile // with the account layer applied
 	cfg *apikey.Config
 	acc *pluginv1.Account
+	// fields are the decoded credentials and settings {credentials.<k>}
+	// reads, decoded on first use.
+	fields []map[string]any
 }
 
 // newCall resolves the account: its type, its account layer and its
@@ -65,9 +68,13 @@ func (c *call) values(model string, inbound map[string]string) *values {
 // field reads {credentials.<k>}: credentials first, then settings; a
 // string as it is, a number or boolean as its JSON text.
 func (c *call) field(k string) (string, bool) {
-	creds, _ := apikey.DecodeObject(c.acc.GetCredentialsJson())
-	settings, _ := apikey.DecodeObject(c.acc.GetSettingsJson())
-	v, ok := apikey.Lookup(k, creds, settings)
+	if c.fields == nil {
+		// Both decoded already in newCall (apikey.Spec.FromAccount).
+		creds, _ := apikey.DecodeObject(c.acc.GetCredentialsJson())
+		settings, _ := apikey.DecodeObject(c.acc.GetSettingsJson())
+		c.fields = []map[string]any{creds, settings}
+	}
+	v, ok := apikey.Lookup(k, c.fields...)
 	switch v := v.(type) {
 	case string:
 		return v, v != ""
