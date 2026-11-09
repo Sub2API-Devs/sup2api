@@ -295,6 +295,36 @@ func TestPackAccountTypes(t *testing.T) {
 	}
 }
 
+// A runtime "none" package (declared upstreams only) builds nothing, packs
+// without runtimes and verifies like any other package; runtimes it would
+// carry are refused.
+func TestRuntimeNone(t *testing.T) {
+	const m = `{
+  "apiVersion": 1, "key": "decl", "name": {"en": "Declared"}, "version": "0.1.0",
+  "publisher": "tester", "runtime": "none", "hostCompat": ">=0.1.0 <0.2.0",
+  "capabilities": [{"id": "platform.adapter.v1"}],
+  "accountTypes": [{"id": "apikey", "label": {"en": "Key"}, "form": {"mode": "schema", "schema": "forms/k.json"},
+    "sensitiveFields": ["api_key"], "settingsFields": ["base_url"], "platforms": [{"platform": "anthropic"}],
+    "upstream": {"preset": "anthropic", "filterFields": []}}],
+  "hostPermissions": [{"id": "platform.register"}]
+}`
+	dir, out, keys := t.TempDir(), t.TempDir(), t.TempDir()
+	writeFile(t, filepath.Join(dir, "manifest.json"), m)
+	writeFile(t, filepath.Join(dir, "forms", "k.json"), `{}`)
+	if got := runOK(t, "build", "--dir", dir); got != "" {
+		t.Fatalf("build printed binaries: %s", got)
+	}
+	pkg := strings.TrimSpace(runOK(t, "pack", "--dir", dir, "--out-dir", out))
+	runOK(t, "keygen", "--key-id", "k1", "--out", keys)
+	runOK(t, "sign", "--key", filepath.Join(keys, "k1.key"), "--key-id", "k1", pkg)
+	runOK(t, "verify", "--pub", filepath.Join(keys, "k1.pub"), pkg)
+
+	writeFile(t, filepath.Join(dir, "runtimes", "linux-amd64", "plugin"), "ELF")
+	if msg := runFail(t, "pack", "--dir", dir, "--out", filepath.Join(out, "x.s2plugin")); !strings.Contains(msg, "carry no runtimes") {
+		t.Fatalf("msg = %s", msg)
+	}
+}
+
 // Plugin platforms declare their endpoints (ARCHITECTURE 6.6, CONTRACTS 13).
 func TestPackPlatforms(t *testing.T) {
 	const m = `{

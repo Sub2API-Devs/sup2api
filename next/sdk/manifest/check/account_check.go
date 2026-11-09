@@ -79,7 +79,9 @@ func (v *validator) accountTypes() {
 	}
 	v.needCap("accountTypes", manifest.CapPlatformAdapter)
 	v.needPerm("accountTypes", "platform.register", "account types")
-	v.needPerm("accountTypes", "accounts.credentials", "account types")
+	if needsCredentials(ats) {
+		v.needPerm("accountTypes", "accounts.credentials", "account types the plugin implements or extends")
+	}
 	ownPlatforms := map[string]*manifest.Platform{}
 	for i := range v.m.Platforms {
 		ownPlatforms[v.m.Platforms[i].ID] = &v.m.Platforms[i]
@@ -112,6 +114,9 @@ func (v *validator) accountTypes() {
 		v.quota(f, at.Quota)
 		v.balance(f, at.Balance)
 		v.refresh(f, at)
+		if at.Upstream != nil {
+			v.upstream(f, at, ownPlatforms)
+		}
 		if len(at.Platforms) == 0 {
 			v.add(f+".platforms", "required", "at least one platform is required")
 		}

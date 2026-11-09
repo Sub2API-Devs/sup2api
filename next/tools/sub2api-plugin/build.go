@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
 // sdkPkg is the package whose build-time variables carry key and version.
@@ -53,6 +55,11 @@ func cmdBuild(args []string, stdout, stderr io.Writer) error {
 	_, m, err := effectiveManifest(absDir, ov)
 	if err != nil {
 		return err
+	}
+	if m.Runtime == manifest.RuntimeNone {
+		// Everything such a package declares is served by the core.
+		fmt.Fprintf(stderr, "%s: runtime %q has no binaries to build\n", m.Key, manifest.RuntimeNone)
+		return nil
 	}
 	outDir := *out
 	if outDir == "" {

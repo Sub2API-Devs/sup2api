@@ -1,4 +1,4 @@
-package core
+package paramoverride
 
 import (
 	"encoding/json"
@@ -13,9 +13,9 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-// ParamOverrideContext are the request facts the conditions of an override
+// Context are the request facts the conditions of an override
 // can read next to the body (CONTRACTS §84).
-type ParamOverrideContext struct {
+type Context struct {
 	// Model is the upstream model after the account's model mapping;
 	// OriginalModel the client's.
 	Model, OriginalModel string
@@ -29,14 +29,14 @@ type ParamOverrideContext struct {
 
 // document is the context object conditions read: the keys new-api offers
 // a channel's override, plus account_id and stream.
-func (in *ParamOverrideContext) document(headerOverride map[string]string) []byte {
+func (in *Context) document(headerOverride map[string]string) []byte {
 	if in == nil {
-		in = &ParamOverrideContext{}
+		in = &Context{}
 	}
 	headers := map[string]string{}
 	for name, values := range in.Headers {
 		lower := strings.ToLower(name)
-		if v := strings.TrimSpace(strings.Join(values, ", ")); v != "" && !HeaderPassthroughBlocked(lower) {
+		if v := strings.TrimSpace(strings.Join(values, ", ")); v != "" && !HeaderBlocked(lower) {
 			headers[lower] = v
 		}
 	}
@@ -67,27 +67,27 @@ func (o HeaderOverride) Apply(h http.Header) {
 	}
 }
 
-// ParamOverrideResult is the overridden body and the header decisions.
-type ParamOverrideResult struct {
+// Result is the overridden body and the header decisions.
+type Result struct {
 	Body    []byte
 	Headers HeaderOverride
 }
 
 // Apply runs the override on a JSON request body. A return_error operation
-// ends it with a *ParamOverrideError; any other error is an operation that
+// ends it with a *Error; any other error is an operation that
 // could not run on this body (a type mismatch, a missing source). A nil
 // override returns the body unchanged.
-func (p *ParamOverride) Apply(body []byte, in *ParamOverrideContext) (ParamOverrideResult, error) {
+func (p *Override) Apply(body []byte, in *Context) (Result, error) {
 	if p == nil {
-		return ParamOverrideResult{Body: body}, nil
+		return Result{Body: body}, nil
 	}
 	if p.broken != "" {
-		return ParamOverrideResult{}, errors.New(p.broken)
+		return Result{}, errors.New(p.broken)
 	}
 	r := &overrideRun{body: body, in: in, set: map[string]string{}, deleted: map[string]bool{}}
 	for _, s := range p.legacy {
 		if err := r.setRaw(s.path, s.raw); err != nil {
-			return ParamOverrideResult{}, fmt.Errorf("set %s: %w", s.path, err)
+			return Result{}, fmt.Errorf("set %s: %w", s.path, err)
 		}
 	}
 	for i := range p.ops {
@@ -96,21 +96,21 @@ func (p *ParamOverride) Apply(body []byte, in *ParamOverrideContext) (ParamOverr
 		if err == nil && ok {
 			err = op.run(r)
 		}
-		var returned *ParamOverrideError
+		var returned *Error
 		if errors.As(err, &returned) {
-			return ParamOverrideResult{}, returned
+			return Result{}, returned
 		}
 		if err != nil {
-			return ParamOverrideResult{}, fmt.Errorf("%s: %w", op.label, err)
+			return Result{}, fmt.Errorf("%s: %w", op.label, err)
 		}
 	}
-	return ParamOverrideResult{Body: r.body, Headers: r.headerResult()}, nil
+	return Result{Body: r.body, Headers: r.headerResult()}, nil
 }
 
 // overrideRun is one run of an override over a body.
 type overrideRun struct {
 	body []byte
-	in   *ParamOverrideContext
+	in   *Context
 	// ctx is the context document, built when a condition first needs it
 	// and again after a header operation changed header_override.
 	ctx     []byte

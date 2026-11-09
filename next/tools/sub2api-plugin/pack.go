@@ -251,7 +251,9 @@ func checkPackage(files map[string][]byte, m *manifest.Manifest, allowMissingUI 
 		sort.Strings(missing)
 		return nil, fmt.Errorf("missing package files: %s", strings.Join(missing, ", "))
 	}
-	if m.Runtime == "grpc" {
+	// A runtime "none" package has no binaries; manifest/check rejects any
+	// runtimes/ it would carry.
+	if m.Runtime == manifest.RuntimeGRPC {
 		tmpl := "runtimes/{os}-{arch}/plugin"
 		if m.Entry.GRPC != nil && m.Entry.GRPC.Binaries != "" {
 			tmpl = m.Entry.GRPC.Binaries

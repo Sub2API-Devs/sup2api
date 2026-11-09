@@ -239,6 +239,14 @@ message BuildUpstreamRequestRequest {
   map<string, string> inbound_headers = 4;
   // 0 for the first attempt, incremented on failover.
   int32 attempt = 5;
+  // Extend mode (manifest accountTypes[].upstream.extend,
+  // docs/UPSTREAM-DECLARATIVE.md §4.1): the request the core already built
+  // from the account type's upstream declaration. The plugin only amends
+  // it: the headers it returns are written over base's (except the auth
+  // header, which the declaration alone decides), its patches run after
+  // base's, and a non-empty url replaces base's. Unset for account types
+  // without a declaration.
+  BuildUpstreamRequestResponse base = 6;
 }
 
 message BuildUpstreamRequestResponse {

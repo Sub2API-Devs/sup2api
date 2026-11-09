@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/paramoverride"
 )
 
 // Header passthrough (CONTRACTS §81) copies client request headers onto the
@@ -27,63 +29,10 @@ const (
 	headerPassthroughRegexV2 = "re:"
 )
 
-// headerPassthroughSkip are the headers no rule forwards: credentials (the
-// account's own are set by its plugin), hop-by-hop and framing headers the
-// transport owns, and client addresses a client could forge.
-var headerPassthroughSkip = map[string]struct{}{
-	// RFC 9110 / 7230 hop-by-hop and framing.
-	"connection":        {},
-	"keep-alive":        {},
-	"te":                {},
-	"trailer":           {},
-	"transfer-encoding": {},
-	"upgrade":           {},
-	"expect":            {},
-	"host":              {},
-	"content-length":    {},
-	"content-encoding":  {},
-	"accept-encoding":   {},
-	// Credentials.
-	"authorization":  {},
-	"x-api-key":      {},
-	"x-goog-api-key": {},
-	"api-key":        {},
-	"cookie":         {},
-	// Client addresses and proxy trails.
-	"x-forwarded-for":     {},
-	"x-forwarded-host":    {},
-	"x-forwarded-proto":   {},
-	"x-forwarded-port":    {},
-	"x-real-ip":           {},
-	"forwarded":           {},
-	"via":                 {},
-	"cf-connecting-ip":    {},
-	"true-client-ip":      {},
-	"x-client-ip":         {},
-	"x-cluster-client-ip": {},
-}
-
-// headerPassthroughSkipPrefixes are header families no rule forwards:
-// proxy credentials, WebSocket handshakes, and the control headers of this
-// gateway and of the gateways it fronts (x-kin-* steers vm2api/sakura).
-var headerPassthroughSkipPrefixes = []string{"proxy-", "sec-websocket-", "x-sub2api-", "x-kin-"}
-
 // HeaderPassthroughBlocked reports whether no rule may forward the header.
-func HeaderPassthroughBlocked(name string) bool {
-	n := strings.ToLower(strings.TrimSpace(name))
-	if n == "" {
-		return true
-	}
-	if _, ok := headerPassthroughSkip[n]; ok {
-		return true
-	}
-	for _, p := range headerPassthroughSkipPrefixes {
-		if strings.HasPrefix(n, p) {
-			return true
-		}
-	}
-	return false
-}
+// The list is shared with the §84 override and declared upstreams
+// (sdk/paramoverride).
+func HeaderPassthroughBlocked(name string) bool { return paramoverride.HeaderBlocked(name) }
 
 // headerPassthroughPattern returns the regular expression of a regex rule.
 func headerPassthroughPattern(rule string) (string, bool) {
@@ -108,23 +57,6 @@ func compileHeaderPassthrough(pattern string) (*regexp.Regexp, error) {
 	}
 	v, _ := headerPassthroughRegexps.LoadOrStore(pattern, re)
 	return v.(*regexp.Regexp), nil
-}
-
-// validHeaderName reports whether s is an HTTP field name (RFC 9110 token).
-func validHeaderName(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
-		case strings.IndexByte("!#$%&'*+-.^_`|~", c) >= 0:
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 // NormalizeHeaderPassthrough trims, validates and de-duplicates the rules of
@@ -157,7 +89,7 @@ func NormalizeHeaderPassthrough(ctx context.Context, field string, rules []strin
 			}
 			rule = headerPassthroughRegex + pattern
 		} else if rule != headerPassthroughAll {
-			if !validHeaderName(rule) {
+			if !paramoverride.ValidHeaderName(rule) {
 				add("invalid", "invalid header name: "+rule, "请求头名称无效："+rule)
 				continue
 			}

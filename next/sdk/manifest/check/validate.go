@@ -346,11 +346,14 @@ func (v *validator) basics() {
 	if strings.TrimSpace(m.Publisher) == "" {
 		v.add("publisher", "required", "publisher is required")
 	}
-	if m.Runtime != "grpc" {
-		v.add("runtime", "unsupported", "runtime must be \"grpc\"")
-	} else if m.Entry.GRPC == nil || m.Entry.GRPC.Binaries == "" {
+	switch {
+	case m.Runtime == manifest.RuntimeNone:
+		v.runtimeNone()
+	case m.Runtime != manifest.RuntimeGRPC:
+		v.add("runtime", "unsupported", "runtime must be %q or %q", manifest.RuntimeGRPC, manifest.RuntimeNone)
+	case m.Entry.GRPC == nil || m.Entry.GRPC.Binaries == "":
 		v.add("entry.grpc.binaries", "required", "entry.grpc.binaries is required")
-	} else if !v.opt.Tooling {
+	case !v.opt.Tooling:
 		tpl := m.Entry.GRPC.Binaries
 		targets := [][2]string{{"linux", "amd64"}, {"linux", "arm64"}}
 		if v.opt.DevMode {

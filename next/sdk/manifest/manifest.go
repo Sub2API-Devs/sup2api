@@ -26,7 +26,7 @@ type Manifest struct {
 	Version      string        `json:"version"` // semver
 	Publisher    string        `json:"publisher"`
 	Icon         string        `json:"icon,omitempty"` // path inside the package or "text:<label>"
-	Runtime      string        `json:"runtime"`        // "grpc" ("js" reserved)
+	Runtime      string        `json:"runtime"`        // RuntimeGRPC or RuntimeNone ("js" reserved)
 	Entry        Entry         `json:"entry"`
 	HostCompat   string        `json:"hostCompat"`             // semver range, e.g. ">=0.1.0 <0.2.0"
 	HostUICompat string        `json:"hostUICompat,omitempty"` // required when ui.native is set
@@ -375,6 +375,10 @@ type AccountType struct {
 	// plugin implements BuildRefreshRequest / ParseRefreshResponse to renew
 	// them (CONTRACTS §48). nil: the host never refreshes them.
 	Refresh *AccountRefresh `json:"refresh,omitempty"`
+	// Upstream declares the upstream so the core builds its requests itself
+	// (docs/UPSTREAM-DECLARATIVE.md). nil: the plugin implements the
+	// platform calls.
+	Upstream *Upstream `json:"upstream,omitempty"`
 }
 
 type AccountLifecycle struct {
