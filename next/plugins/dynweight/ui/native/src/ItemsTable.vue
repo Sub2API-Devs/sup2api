@@ -163,7 +163,7 @@ const edit = (index: number, append = false) => (editor.value = { open: true, in
       </template>
       <template #cell-actions="{ row }">
         <span class="dw-it-row-actions">
-          <SRowAction :label="t(readonly ? 'it.view' : 'it.edit')" @click="edit(row.key)" />
+          <SRowAction :icon="readonly ? 'eye' : 'edit'" :label="t(readonly ? 'it.view' : 'it.edit')" @click="edit(row.key)" />
           <SDropdown v-if="!readonly" :actions="menu(row.key)" :aria-label="t('it.more')" @select="onMenu(row, $event)" />
         </span>
       </template>

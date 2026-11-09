@@ -64,7 +64,15 @@ export interface HostPermissions {
  * - ModelMappingEditor: `model_mapping` object; `models?: string[]` (the account's model list)
  * - UpstreamEditor: the account layer of `upstream`; `accountType` (its resolved declaration), `errors?`
  */
-export const HOST_COMPONENT_NAMES = ['ParamOverrideEditor', 'RateLimitEditor', 'ModelLimitsEditor', 'HeaderPassthroughEditor', 'ProxyPicker', 'ModelMappingEditor', 'UpstreamEditor'] as const
+export const HOST_COMPONENT_NAMES = [
+  'ParamOverrideEditor',
+  'RateLimitEditor',
+  'ModelLimitsEditor',
+  'HeaderPassthroughEditor',
+  'ProxyPicker',
+  'ModelMappingEditor',
+  'UpstreamEditor'
+] as const
 export type HostComponentName = (typeof HOST_COMPONENT_NAMES)[number]
 export type HostComponents = Readonly<Record<HostComponentName, Component>>
 
@@ -129,8 +137,8 @@ export function createPluginHost(
     registerComponent,
     asset: (path: string) => plugin.assetBase.replace(/\/$/, '') + '/' + path.replace(/^\//, ''),
     t: (key, params) => base.i18n.t(`${ns}.${key}`, params),
-    addMessages: (messages) => base.i18n.addMessages(ns, messages),
-    can: (perm) => base.permissions.has(`plugin.${plugin.key}:${perm}`)
+    addMessages: messages => base.i18n.addMessages(ns, messages),
+    can: perm => base.permissions.has(`plugin.${plugin.key}:${perm}`)
   }
 }
 
@@ -139,12 +147,12 @@ export function satisfiesRange(version: string, range: string | undefined | null
   if (!range || range.trim() === '' || range.trim() === '*') return true
   const v = parse(version)
   if (!v) return false
-  return range.split('||').some((alt) =>
+  return range.split('||').some(alt =>
     alt
       .trim()
       .split(/\s+/)
       .filter(Boolean)
-      .every((cmp) => check(v, cmp))
+      .every(cmp => check(v, cmp))
   )
 }
 
@@ -170,7 +178,10 @@ function check(v: [number, number, number], c: string): boolean {
   const parts = raw.replace(/^v/, '').split('.')
   switch (op) {
     case '^':
-      return cmpV(v, b) >= 0 && (b[0] > 0 ? v[0] === b[0] : b[1] > 0 ? v[0] === 0 && v[1] === b[1] : cmpV(v, b) === 0 || (v[0] === 0 && v[1] === 0))
+      return (
+        cmpV(v, b) >= 0 &&
+        (b[0] > 0 ? v[0] === b[0] : b[1] > 0 ? v[0] === 0 && v[1] === b[1] : cmpV(v, b) === 0 || (v[0] === 0 && v[1] === 0))
+      )
     case '~':
       return cmpV(v, b) >= 0 && v[0] === b[0] && (parts.length < 2 || v[1] === b[1])
     case '>=':
@@ -183,7 +194,7 @@ function check(v: [number, number, number], c: string): boolean {
       return cmpV(v, b) < 0
     default: {
       // "1", "1.x", "1.2.x" match prefixes; full versions match exactly
-      const fixed = parts.filter((p) => p !== 'x' && p !== '*').length
+      const fixed = parts.filter(p => p !== 'x' && p !== '*').length
       return v.slice(0, fixed).every((x, i) => x === b[i])
     }
   }

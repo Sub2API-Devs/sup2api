@@ -74,9 +74,15 @@ onMounted(load)
         <div v-if="jobTitle(row)" class="font-medium text-fg">{{ jobTitle(row) }}</div>
         <div class="flex items-center gap-1.5">
           <span class="font-mono" :class="jobTitle(row) ? 'text-xs text-fg-muted' : 'font-medium'">{{ row.id }}</span>
-          <SBadge v-if="row.scope" :tone="row.scope === 'node' ? 'info' : 'gray'">{{ t(row.scope === 'node' ? 'plugins.jobs.scopeNode' : 'plugins.jobs.scopeCluster') }}</SBadge>
+          <SBadge v-if="row.scope" :tone="row.scope === 'node' ? 'info' : 'gray'">{{
+            t(row.scope === 'node' ? 'plugins.jobs.scopeNode' : 'plugins.jobs.scopeCluster')
+          }}</SBadge>
         </div>
-        <router-link v-if="row.task && auth.has('task:read')" :to="{ path: '/system/tasks', query: row.scope === 'node' ? { tab: 'nodes' } : {} }" class="text-xs text-primary-600 hover:underline dark:text-primary-400">
+        <router-link
+          v-if="row.task && auth.has('task:read')"
+          :to="{ path: '/system/tasks', query: row.scope === 'node' ? { tab: 'nodes' } : {} }"
+          class="text-xs text-primary-600 hover:underline dark:text-primary-400"
+        >
           {{ t('plugins.jobs.viewInTasks') }}
         </router-link>
       </template>
@@ -86,13 +92,7 @@ onMounted(load)
       </template>
       <template #cell-timeout="{ row }">
         <span class="whitespace-nowrap">{{ row.effective_timeout_sec ? formatDuration(row.effective_timeout_sec * 1000) : '—' }}</span>
-        <SBadge
-          v-if="row.adjusted?.length"
-          tone="warning"
-          class="ml-1"
-          :title="row.adjusted.join('; ')"
-          data-testid="job-adjusted"
-        >
+        <SBadge v-if="row.adjusted?.length" tone="warning" class="ml-1" :title="row.adjusted.join('; ')" data-testid="job-adjusted">
           {{ t('plugins.jobs.adjusted') }}
         </SBadge>
       </template>

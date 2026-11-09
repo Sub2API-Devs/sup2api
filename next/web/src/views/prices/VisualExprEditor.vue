@@ -53,10 +53,8 @@ function setKind(i: number, kind: MarkupRule['kind']) {
 }
 
 const hours = Array.from({ length: 25 }, (_, i) => i)
-const hourOptions = computed(() => hours.map((h) => ({ value: h, label: t('prices.visual.hour', { h }) })))
-const kindOptions = computed(() =>
-  (['header', 'param', 'time'] as const).map((k) => ({ value: k, label: t(`prices.visual.kind.${k}`) }))
-)
+const hourOptions = computed(() => hours.map(h => ({ value: h, label: t('prices.visual.hour', { h }) })))
+const kindOptions = computed(() => (['header', 'param', 'time'] as const).map(k => ({ value: k, label: t(`prices.visual.kind.${k}`) })))
 const headerOpOptions = computed(() => [
   { value: 'contains', label: t('prices.visual.op.contains') },
   { value: 'eq', label: t('prices.visual.op.eq') }
@@ -79,11 +77,7 @@ const paramOpOptions = computed(() => [
         <SButton size="sm" :disabled="disabled" icon="plus" @click="addTier">{{ t('prices.visual.addTier') }}</SButton>
       </div>
       <div class="space-y-3">
-        <div
-          v-for="(tier, i) in model.tiers"
-          :key="i"
-          class="rounded-xl border border-line p-3"
-        >
+        <div v-for="(tier, i) in model.tiers" :key="i" class="rounded-xl border border-line p-3">
           <div class="mb-2 flex flex-wrap items-center gap-3">
             <label class="flex items-center gap-2 text-sm">
               <SHint inline>{{ t('prices.visual.tierName') }}</SHint>
@@ -109,7 +103,8 @@ const paramOpOptions = computed(() => [
           <SGrid :cols-base="2" :cols="3" :lg-cols="6" :gap="2">
             <label v-for="k in priceKeys" :key="k" class="text-xs">
               <SHint inline size="xs">{{ t(`prices.vars.${k}`) }}</SHint>
-              <SInput size="sm"
+              <SInput
+                size="sm"
                 v-model.number="tier[k]"
                 type="number"
                 min="0"
@@ -137,7 +132,14 @@ const paramOpOptions = computed(() => [
       <div class="space-y-2">
         <div v-for="(r, i) in model.rules" :key="i" class="flex flex-wrap items-center gap-2 text-sm">
           <SHint inline>{{ t('prices.visual.when') }}</SHint>
-          <SSelect class="w-28" size="sm" :model-value="r.kind" :options="kindOptions" :disabled="disabled" @update:model-value="setKind(i, $event as MarkupRule['kind'])" />
+          <SSelect
+            class="w-28"
+            size="sm"
+            :model-value="r.kind"
+            :options="kindOptions"
+            :disabled="disabled"
+            @update:model-value="setKind(i, $event as MarkupRule['kind'])"
+          />
           <template v-if="r.kind === 'header'">
             <SInput size="sm" v-model="r.name" class="w-44" mono :placeholder="t('prices.visual.headerName')" :disabled="disabled" />
             <SSelect v-model="r.op" class="w-28" size="sm" :options="headerOpOptions" :disabled="disabled" />
@@ -156,7 +158,9 @@ const paramOpOptions = computed(() => [
           </template>
           <SHint inline class="ml-2">{{ t('prices.visual.multiplier') }}</SHint>
           <SInput size="sm" v-model.number="r.multiplier" type="number" min="0" step="any" class="w-24" :disabled="disabled" />
-          <SButton variant="ghost" size="sm" tone="danger" :disabled="disabled" @click="model.rules.splice(i, 1)">{{ t('common.remove') }}</SButton>
+          <SButton variant="ghost" size="sm" tone="danger" :disabled="disabled" @click="model.rules.splice(i, 1)">{{
+            t('common.remove')
+          }}</SButton>
         </div>
       </div>
     </section>

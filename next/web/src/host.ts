@@ -15,7 +15,7 @@ export function setupHost(router: Router) {
   configureHttp({
     // baseURL stays at @sub2api/host's API_BASE; see packages/host/src/routes.ts.
     locale: () => currentLocale(),
-    onUnauthenticated: (reason) => {
+    onUnauthenticated: reason => {
       // "expired": the refresh token was rejected (expired, revoked or reused);
       // the login page then asks the user to sign in again.
       if (reason === 'expired') auth.sessionExpired = true
@@ -42,7 +42,7 @@ export function setupHost(router: Router) {
     },
     permissions: {
       superuser: () => !!auth.me?.superuser,
-      has: (k) => auth.has(k),
+      has: k => auth.has(k),
       any: (...keys) => auth.has(keys)
     },
     theme: computed(() => app.theme) as any,

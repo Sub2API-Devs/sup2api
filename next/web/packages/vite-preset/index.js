@@ -18,7 +18,7 @@ export const SHARED_MODULES = ['vue', 'vue-router', 'pinia', 'vue-i18n', '@sub2a
 export const HOST_UI_VERSION = '3.7.0'
 
 function isShared(id) {
-  return SHARED_MODULES.some((m) => id === m || id.startsWith(m + '/'))
+  return SHARED_MODULES.some(m => id === m || id.startsWith(m + '/'))
 }
 
 // Makes entry.js add <link rel="stylesheet"> for the extracted CSS, relative
@@ -29,14 +29,14 @@ function cssLink() {
     apply: 'build',
     enforce: 'post',
     generateBundle(_, bundle) {
-      const css = Object.values(bundle).filter((f) => f.type === 'asset' && f.fileName.endsWith('.css'))
-      const entry = Object.values(bundle).find((f) => f.type === 'chunk' && f.isEntry)
+      const css = Object.values(bundle).filter(f => f.type === 'asset' && f.fileName.endsWith('.css'))
+      const entry = Object.values(bundle).find(f => f.type === 'chunk' && f.isEntry)
       if (!entry || css.length === 0) return
       const loader =
         `(function(){if(typeof document==='undefined')return;` +
         css
           .map(
-            (c) =>
+            c =>
               `{var h=new URL(${JSON.stringify('./' + c.fileName)},import.meta.url).href;` +
               `if(!document.querySelector('link[href="'+h+'"]')){var l=document.createElement('link');l.rel='stylesheet';l.href=h;document.head.appendChild(l);}}`
           )
@@ -77,7 +77,7 @@ export function sub2apiPlugin(options = {}) {
         external: isShared,
         output: {
           chunkFileNames: 'chunks/[name]-[hash].js',
-          assetFileNames: (info) => {
+          assetFileNames: info => {
             const name = (info.names && info.names[0]) || info.name || ''
             return name.endsWith('.css') ? 'entry.css' : 'assets/[name]-[hash][extname]'
           }

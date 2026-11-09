@@ -127,15 +127,15 @@ export const usePluginStore = defineStore('plugins', () => {
     // A plugin still loading from an overlapping refresh is left to that call.
     // New and changed plugins are marked pending before the old modules are
     // unloaded, so their pages wait instead of briefly showing a missing component.
-    const todo = list.filter((p) => p.native_entry && nativeURL(p) !== loaded.get(p.key)?.url && !pending[p.key])
+    const todo = list.filter(p => p.native_entry && nativeURL(p) !== loaded.get(p.key)?.url && !pending[p.key])
     for (const p of todo) pending[p.key] = true
     for (const key of [...loaded.keys()]) {
-      const p = list.find((x) => x.key === key)
+      const p = list.find(x => x.key === key)
       if (!p || nativeURL(p) !== loaded.get(key)?.url) await unload(key)
     }
     if (g === seq) listed.value = true
     // Each plugin finishes on its own: a slow or failing one holds up only its own pages and slots.
-    await Promise.all(todo.map((p) => loadLatest(p).finally(() => delete pending[p.key])))
+    await Promise.all(todo.map(p => loadLatest(p).finally(() => delete pending[p.key])))
   }
 
   /** Loads p, then follows a refresh that removed or changed it meanwhile (that refresh skipped it). */
@@ -157,7 +157,7 @@ export const usePluginStore = defineStore('plugins', () => {
   }
 
   function plugin(key: string): UIPlugin | undefined {
-    return uiPlugins.value.find((p) => p.key === key)
+    return uiPlugins.value.find(p => p.key === key)
   }
 
   function page(key: string, pageId: string): { plugin: UIPlugin; page: UIPluginPage } | null {
@@ -172,7 +172,9 @@ export const usePluginStore = defineStore('plugins', () => {
   }
 
   /** The account actions of every listed plugin (manifest `ui.accountActions`, CONTRACTS §23.3 UI 3.6), in list order. */
-  const accountActions = computed<PluginAccountActionEntry[]>(() => uiPlugins.value.flatMap((p) => (p.account_actions || []).map((a) => ({ pluginKey: p.key, ...a }))))
+  const accountActions = computed<PluginAccountActionEntry[]>(() =>
+    uiPlugins.value.flatMap(p => (p.account_actions || []).map(a => ({ pluginKey: p.key, ...a })))
+  )
 
   /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets, account.list.weight, account.list.toolbar, account.editor.section). */
   function slotEntries(slot: string): SlotEntry[] {
@@ -187,5 +189,19 @@ export const usePluginStore = defineStore('plugins', () => {
     return out
   }
 
-  return { uiPlugins, components, errors, pending, listed, accountActions, refresh, reset, plugin, page, component, slotEntries, nativeAllowed }
+  return {
+    uiPlugins,
+    components,
+    errors,
+    pending,
+    listed,
+    accountActions,
+    refresh,
+    reset,
+    plugin,
+    page,
+    component,
+    slotEntries,
+    nativeAllowed
+  }
 })

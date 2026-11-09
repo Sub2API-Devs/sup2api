@@ -3,7 +3,31 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiError, api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SCode, SDescItem, SDescriptions, SField, SGrid, SHint, SInput, SLink, SPageHeader, SRadioGroup, SSectionTitle, SSegmented, SSettingRow, SSpinner, SSwitch, STextarea, confirm, toast, type SelectOption } from '@sub2api/ui'
+import {
+  SAlert,
+  SBadge,
+  SButton,
+  SCard,
+  SCode,
+  SDescItem,
+  SDescriptions,
+  SField,
+  SGrid,
+  SHint,
+  SInput,
+  SLink,
+  SPageHeader,
+  SRadioGroup,
+  SSectionTitle,
+  SSegmented,
+  SSettingRow,
+  SSpinner,
+  SSwitch,
+  STextarea,
+  confirm,
+  toast,
+  type SelectOption
+} from '@sub2api/ui'
 import type { Price } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -65,7 +89,7 @@ const historyOpen = ref(false)
 
 const readonly = computed(() => !auth.has('price:manage'))
 const MODES = ['per_request', 'per_token', 'expression'] as const
-const modeOptions = computed(() => MODES.map((m) => ({ value: m, label: t(`prices.mode.${m}`) })))
+const modeOptions = computed(() => MODES.map(m => ({ value: m, label: t(`prices.mode.${m}`) })))
 const isSynced = computed(() => price.value?.source === 'sync')
 const syncedNotice = computed(() => {
   const p = price.value
@@ -103,9 +127,9 @@ function applyPrice(p: Price) {
   const cfg = p.config || {}
   const parsed = parseExpression(p.expression)
   if (p.mode === 'per_request') {
-    perRequest.value = cfg.price !== undefined ? num(cfg.price) : parsed?.tiers[0]?.flat ?? 0
+    perRequest.value = cfg.price !== undefined ? num(cfg.price) : (parsed?.tiers[0]?.flat ?? 0)
   } else if (p.mode === 'per_token') {
-    const src = TOKEN_VARS.some((k) => cfg[k] !== undefined) ? cfg : parsed?.tiers[0]
+    const src = TOKEN_VARS.some(k => cfg[k] !== undefined) ? cfg : parsed?.tiers[0]
     Object.assign(perToken, tokenPricesFrom(src))
   } else if (cfg.video) {
     video.value = readVideoPrice(cfg.video)
@@ -154,7 +178,7 @@ const payload = computed<PricePayload & { mode: PriceMode }>(() => {
 })
 
 const localIssues = computed<string[]>(() => {
-  if (mode.value === 'expression' && exprView.value === 'visual') return checkVisual(visual.value).map((x) => t(x.key, x.params || {}))
+  if (mode.value === 'expression' && exprView.value === 'visual') return checkVisual(visual.value).map(x => t(x.key, x.params || {}))
   if (!payload.value.expression.trim()) return [t('prices.local.emptyExpr')]
   return []
 })
@@ -285,7 +309,11 @@ const title = computed(() => {
       </template>
       <template #title-extra>
         <SBadge v-if="price" :tone="isSynced ? 'info' : 'primary'" data-testid="price-edit-source">
-          {{ isSynced && price.sync_source_name ? t('prices.sourceSync', { name: price.sync_source_name }) : t(`prices.source.${isSynced ? 'sync' : 'manual'}`) }}
+          {{
+            isSynced && price.sync_source_name
+              ? t('prices.sourceSync', { name: price.sync_source_name })
+              : t(`prices.source.${isSynced ? 'sync' : 'manual'}`)
+          }}
         </SBadge>
       </template>
       <template #actions>
@@ -312,14 +340,21 @@ const title = computed(() => {
           </SField>
         </SGrid>
         <SSettingRow :label="t('common.status')" dense flush class="mt-2" for="price-enabled">
-          <SSwitch id="price-enabled" v-model="form.enabled" :disabled="readonly" :label="form.enabled ? t('common.enabled') : t('common.disabled')" />
+          <SSwitch
+            id="price-enabled"
+            v-model="form.enabled"
+            :disabled="readonly"
+            :label="form.enabled ? t('common.enabled') : t('common.disabled')"
+          />
         </SSettingRow>
         <SDescriptions v-if="price" class="mt-4 border-t border-line pt-4" dense>
-          <SDescItem :label="t('prices.exprHash')"><div class="flex flex-wrap items-center gap-2">
-            <SCode inline :text="price.expr_hash || '—'" />
-            <SHint inline size="xs">v{{ price.expr_version || 1 }}</SHint>
-            <SLink v-if="price.expr_hash" as="button" class="text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</SLink>
-          </div></SDescItem>
+          <SDescItem :label="t('prices.exprHash')"
+            ><div class="flex flex-wrap items-center gap-2">
+              <SCode inline :text="price.expr_hash || '—'" />
+              <SHint inline size="xs">v{{ price.expr_version || 1 }}</SHint>
+              <SLink v-if="price.expr_hash" as="button" class="text-xs" @click="historyOpen = true">{{ t('prices.viewHistory') }}</SLink>
+            </div></SDescItem
+          >
           <SDescItem v-if="price.updated_at" :label="t('common.updatedAt')">{{ formatDateTime(price.updated_at) }}</SDescItem>
         </SDescriptions>
       </SCard>
@@ -337,7 +372,14 @@ const title = computed(() => {
             @update:model-value="onExprView"
           />
         </template>
-        <SRadioGroup :model-value="mode" :options="modeOptions" inline :disabled="readonly" class="mb-4" @update:model-value="mode = $event as PriceMode" />
+        <SRadioGroup
+          :model-value="mode"
+          :options="modeOptions"
+          inline
+          :disabled="readonly"
+          class="mb-4"
+          @update:model-value="mode = $event as PriceMode"
+        />
         <SHint size="xs" class="mb-4">{{ t(`prices.modeHint.${mode}`) }}</SHint>
 
         <div v-if="mode === 'per_request'" class="max-w-xs">
@@ -370,14 +412,7 @@ const title = computed(() => {
           <VideoPriceEditor v-if="exprView === 'video'" v-model="video" :disabled="readonly" />
           <VisualExprEditor v-else-if="exprView === 'visual'" v-model="visual" :disabled="readonly" />
           <SField v-else :label="t('prices.expression')" :error="errors.expression" :hint="t('prices.sourceHint')">
-            <STextarea
-              v-model="sourceText"
-              :rows="8"
-              spellcheck="false"
-              class="text-xs"
-              mono
-              :readonly="readonly"
-            />
+            <STextarea v-model="sourceText" :rows="8" spellcheck="false" class="text-xs" mono :readonly="readonly" />
           </SField>
         </template>
 
