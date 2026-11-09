@@ -261,12 +261,6 @@ const (
 	realtimeScan = time.Hour
 )
 
-// realtimeTokens is core.UsageTokens.Throughput in SQL: the input outside any
-// cache plus the output.
-const realtimeTokens = `CASE WHEN u.billing_detail->'inputs'->>'semantics' = 'inclusive'
-		THEN GREATEST(u.input_tokens - u.cache_read_tokens - u.cache_creation_tokens - u.cache_creation_1h_tokens, 0)
-		ELSE u.input_tokens END + u.output_tokens`
-
 // realtimeFailure leaves out what says nothing about the service, as new-api
 // does: a 400, the client going away, and a request the gateway itself turned
 // down before trying an account (gateway/errors.go).
@@ -299,7 +293,7 @@ func (s *Service) realtime(c *gin.Context, self *int64) {
 	var out Realtime
 	err = s.statsTx(ctx, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE u.success),
-			COALESCE(sum(`+realtimeTokens+`) FILTER (WHERE u.success), 0),
+			COALESCE(sum(`+core.ThroughputSQL+`) FILTER (WHERE u.success), 0),
 			count(*) FILTER (WHERE `+realtimeFailure+`)
 			FROM usage_logs u`+f.Cond(), f.Args()...).Scan(&out.RPM, &out.TPM, &out.RecentFailures)
 	})

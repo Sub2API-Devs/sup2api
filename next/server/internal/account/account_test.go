@@ -333,6 +333,9 @@ func (fakeSlots) Acquire(context.Context, string, int64, int, string) (func(), b
 	return func() {}, true, nil
 }
 func (fakeSlots) InUse(_ context.Context, kind string, id int64) (int, error) {
+	if strings.HasPrefix(kind, core.ModelSlots("")) {
+		return 1, nil
+	}
 	if kind != "account" {
 		return 0, fmt.Errorf("kind %s", kind)
 	}

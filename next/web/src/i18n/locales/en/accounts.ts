@@ -18,9 +18,11 @@ export default {
     enabledDone: '"{name}" enabled', disabledDone: '"{name}" disabled', disableByHand: 'Disable by hand'
   },
   limitsUi: {
-    title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
+    title: 'Concurrency / RPM / TPM / TPD / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
+    model: 'Model', capsTitle: 'Caps', noModels: 'No requests in the last hour or today', modelsFailed: 'Could not load the figures by model',
+    cols: { in_use: 'Conc.', rpm: 'RPM', tpm: 'TPM', tpd: 'TPD', sessions: 'Sessions' },
     waiting: '{n} waiting',
-    windowHint: 'RPM, TPM and sessions are the exact usage of the last 60 seconds. RPM counts a request when it starts, so a long stream counts once and concurrency can exceed RPM. TPM is the input outside any cache plus the output; with a cap it includes what requests in flight reserved, replaced by their real usage when they finish. Sessions are those that started a request in that time (by sticky session key; a request matching no sticky rule counts as one). Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
+    windowHint: 'RPM, TPM and sessions are the exact usage of the last 60 seconds. RPM counts a request when it starts, so a long stream counts once and concurrency can exceed RPM. TPM is the input outside any cache plus the output; with a cap it includes what requests in flight reserved, replaced by their real usage when they finish. Sessions are those that started a request in that time (by sticky session key; a request matching no sticky rule counts as one). Without a cap only the usage is shown. A request for a listed model counts on the account and on its list. TPD is the input outside any cache plus the output since midnight in the browser time zone, from the usage records. Sessions and requests in flight by model need not add up to the row of all models: a session can use several models.'
   },
   usage: {
     column: 'Usage', title: 'Account usage', raw: 'Raw', rawHint: 'Counted at the raw ratio: group multiplier taken as 1',

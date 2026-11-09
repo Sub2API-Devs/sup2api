@@ -1,4 +1,6 @@
-import type { Account, ModelLimit } from '@/api/types'
+import { api } from '@sub2api/host'
+import type { Account, AccountRateModels, ModelLimit } from '@/api/types'
+import { todayQuery } from './accountUsage'
 import { usageLevel, type UsageLevel } from './usageLevel'
 
 /** One figure of an account's limits: what is used now and the cap (0 = none). */
@@ -38,3 +40,11 @@ export const usedShare = (f: LimitFigure) => (f.limit > 0 ? Math.min(f.used / f.
 
 /** Tone of a capped figure: danger at the cap, warning from 80 %; 'none' without a cap. */
 export const figureTone = (f: LimitFigure): UsageLevel | 'none' => (f.limit > 0 ? usageLevel(f.used / f.limit) : 'none')
+
+/** The account's figures by client model (CONTRACTS §68.7); TPD counts the browser's day. */
+export function fetchRateModels(id: number): Promise<AccountRateModels> {
+  return api.get<AccountRateModels>(`/accounts/${id}/rate-models`, todayQuery())
+}
+
+/** Whether the account has a cap or a model list: only then is the limits table more than the totals. */
+export const hasLimits = (a: Account) => limitRows(a).some(r => r.models.length > 0 || r.figures.some(f => f.limit > 0))

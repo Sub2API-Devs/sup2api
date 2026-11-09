@@ -100,6 +100,10 @@ func (l *fakeLimiter) Usage(context.Context, []core.AccountRef) (map[int64]core.
 	return map[int64]core.RateUsage{}, nil
 }
 
+func (l *fakeLimiter) ModelUsage(context.Context, int64, []string) ([]core.RateUsage, error) {
+	return nil, nil
+}
+
 func (a *fakeAccounts) set(id int64, fn func(acc *core.Account)) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

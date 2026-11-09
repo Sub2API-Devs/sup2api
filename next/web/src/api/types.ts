@@ -449,6 +449,23 @@ export interface AccountUsage {
   limit_disabled: boolean
 }
 
+/** One row of GET /accounts/:id/rate-models (CONTRACTS §68.7); no model on the account's own row. */
+export interface AccountRateFigures {
+  model?: string
+  in_use: number
+  rpm: number
+  tpm: number
+  /** Throughput tokens today. */
+  tpd: number
+  sessions: number
+}
+
+/** GET /accounts/:id/rate-models: the account's figures, then each client model's, the busiest first. */
+export interface AccountRateModels {
+  total: AccountRateFigures
+  models: AccountRateFigures[]
+}
+
 /** GET /accounts/:id/usage: the details behind the usage cell. */
 export interface AccountUsageDetail {
   raw_cost_accounting: boolean
