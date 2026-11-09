@@ -382,7 +382,7 @@ func (s *wsSession) newCall(body []byte) *call {
 	b := s.base
 	cl := &call{g: s.g, c: b.c, gen: b.gen, ep: b.ep, plugin: b.plugin, platform: b.platform, pf: b.pf, params: b.params,
 		format: b.format, rid: httpapi.NewRequestID(), clientRID: b.clientRID, start: s.g.now(), gw: b.gw, stickyCfg: b.stickyCfg,
-		autoDisable: b.autoDisable, failurePolicy: b.failurePolicy, principal: b.principal, body: body, stream: true}
+		autoDisable: b.autoDisable, scheduling: b.scheduling, failurePolicy: b.failurePolicy, principal: b.principal, body: body, stream: true}
 	cl.rec = cl.newRecord()
 	cl.rec.Stream = true
 	return cl

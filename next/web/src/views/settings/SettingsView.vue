@@ -13,8 +13,8 @@ import BillingSettingsCard from './BillingSettingsCard.vue'
 import EnvironmentSettingsCard from './EnvironmentSettingsCard.vue'
 import GatewaySettingsCard from './GatewaySettingsCard.vue'
 import NotificationsSettingsCard from './NotificationsSettingsCard.vue'
-import FailurePolicySettings from './FailurePolicySettings.vue'
 import OffloadSettingsCard from './OffloadSettingsCard.vue'
+import SchedulingPolicyView from './SchedulingPolicyView.vue'
 import UpdateSourceCard from './UpdateSourceCard.vue'
 
 const PluginSettings = defineAsyncComponent(() => import('@/views/plugins/PluginSettingsView.vue'))
@@ -107,7 +107,8 @@ const options = computed(() => groups.value.flatMap((g) => g.items.map((x) => ({
 
 function select(key: string) {
   if (key === active.value) return
-  router.replace({ query: { ...route.query, tab: key } })
+  // A page's own sub-tab (?sub=) does not carry over to another page.
+  router.replace({ query: { ...route.query, tab: key, sub: undefined } })
 }
 </script>
 
@@ -150,7 +151,7 @@ function select(key: string) {
         <GatewaySettingsCard v-else-if="active === 'gateway'" />
         <EnvironmentSettingsCard v-else-if="active === 'environment'" />
         <NotificationsSettingsCard v-else-if="active === 'notifications'" />
-        <FailurePolicySettings v-else-if="active === 'failure'" />
+        <SchedulingPolicyView v-else-if="active === 'failure'" />
         <StickyView v-else-if="active === 'sticky'" />
         <OffloadSettingsCard v-else-if="active === 'offload'" />
         <UpdateSourceCard v-else-if="active === 'updates'" />

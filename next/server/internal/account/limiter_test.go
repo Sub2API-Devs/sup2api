@@ -184,3 +184,39 @@ func TestLimiterModelRates(t *testing.T) {
 		t.Fatalf("got %+v, %v; want %+v", got, err, want)
 	}
 }
+
+// ModelUsage reads one model's counters on many accounts at once (the core
+// balancing by model, CONTRACTS §89).
+func TestLimiterModelUsage(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	l := NewLimiter(rdb)
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	l.w.Now = func() time.Time { return now }
+	ctx := context.Background()
+	// A model list on acc-8 does not change what the model's own counters hold.
+	refs := []core.AccountRef{{ID: 7}, {ID: 8, ModelLimits: []core.ModelLimit{{Models: []string{"a", "b"}, RPMLimit: 100}}}}
+	for _, hit := range []struct {
+		ref   core.AccountRef
+		model string
+	}{{refs[0], "a"}, {refs[0], "a"}, {refs[0], "b"}, {refs[1], "b"}} {
+		hold, ok, err := l.Reserve(ctx, hit.ref, hit.model, "", 0)
+		if err != nil || !ok {
+			t.Fatal(ok, err)
+		}
+		l.Settle(ctx, hold, 5)
+	}
+	got, err := l.ModelUsage(ctx, refs, "a")
+	want := map[int64]core.RateUsage{7: {RPM: 2, TPM: 10}, 8: {}}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, %v; want %+v", got, err, want)
+	}
+	if got, err := l.ModelUsage(ctx, refs, ""); err != nil || len(got) != 0 {
+		t.Fatalf("model \"\": got %+v, %v", got, err)
+	}
+	got, err = NewLimiter(nil).ModelUsage(ctx, refs, "a")
+	if want := (map[int64]core.RateUsage{7: {}, 8: {}}); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("nil redis: got %+v, %v", got, err)
+	}
+}

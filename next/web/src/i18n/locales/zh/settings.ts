@@ -17,6 +17,25 @@ export default {
     sticky: '粘性会话',
     offload: 'CPU 保护'
   },
+  scheduling: {
+    tabs: { failure: '故障策略', balance: '均衡负载' }
+  },
+  balance: {
+    subtitle: '在同一优先级内给新会话选号。只影响新会话和换号，已绑定的会话不会被移走。',
+    mode: '均衡策略',
+    modes: { default: '默认', traffic: '流量' },
+    modeHints: {
+      default: '同优先级内按权重随机选号。',
+      traffic: '同优先级内优先选用量低于权重份额的账号，让流量按权重比分配。'
+    },
+    limitLoad: '基于上限负载调度',
+    limitLoadHint: '用量越接近上限，权重越低。例：RPM 上限 100、已用 90，权重 ×10%。没设上限（按模型调度时也没给该模型设指定模型限速）的账号不受影响。',
+    metric: '均衡指标',
+    metricHint: '流量均衡和上限负载都按这个指标计算。没设 TPM 上限或按模型调度时，TPM 在请求结束后才计入，会稍有滞后。仅在流量策略或基于上限负载调度开启时生效。',
+    metrics: { rpm: 'RPM', concurrency: '并发', tpm: 'TPM' },
+    modelLimits: '根据模型限速',
+    modelLimitsHint: '按请求的模型调度：流量均衡比较各账号上这个模型自己的用量；上限负载在该模型设了指定模型限速时，也按该列表的用量和上限算，取较高的一个。仅在流量策略或基于上限负载调度开启时生效。'
+  },
   offload: {
     nodesTitle: '节点负载',
     title: 'CPU 保护',

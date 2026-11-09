@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +30,12 @@ type fakeLimiter struct {
 	released   []string         // "<id>:<session>" of each ReleaseSession call
 	reserved   []int64          // tokens of each Reserve call
 	settled    []string         // "<id>:<actual>" of each Settle call
+	usage      map[int64]core.RateUsage
+	modelUsage map[string]map[int64]core.RateUsage // model -> account -> usage
+	modelErr   error
+	modelAsked []string // model of each ModelUsage call
+	usageErr   error
+	usageCalls int
 }
 
 func newFakeLimiter() *fakeLimiter {
@@ -99,7 +106,23 @@ func (l *fakeLimiter) AddTokens(_ context.Context, id int64, list string, n int6
 }
 
 func (l *fakeLimiter) Usage(context.Context, []core.AccountRef) (map[int64]core.RateUsage, error) {
-	return map[int64]core.RateUsage{}, nil
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.usageCalls++
+	if l.usageErr != nil {
+		return nil, l.usageErr
+	}
+	return maps.Clone(l.usage), nil
+}
+
+func (l *fakeLimiter) ModelUsage(_ context.Context, _ []core.AccountRef, model string) (map[int64]core.RateUsage, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.modelAsked = append(l.modelAsked, model)
+	if l.modelErr != nil {
+		return nil, l.modelErr
+	}
+	return maps.Clone(l.modelUsage[model]), nil
 }
 
 func (l *fakeLimiter) CountModelTokens(_ context.Context, id int64, model string, n int64) {
@@ -262,25 +285,25 @@ func TestWeightedOrder(t *testing.T) {
 	}
 	// rnd=0 keeps the input order (used by the test env).
 	g := refs()
-	weightedOrder(g, func() float64 { return 0 })
+	weightedOrder(g, refWeights(g), func() float64 { return 0 })
 	if ids(g) != "1,2,3" {
 		t.Fatalf("rnd=0: %s", ids(g))
 	}
 	// rnd just below 1 picks the last of the remaining accounts each time.
 	g = refs()
-	weightedOrder(g, func() float64 { return 0.999 })
+	weightedOrder(g, refWeights(g), func() float64 { return 0.999 })
 	if ids(g) != "3,1,2" {
 		t.Fatalf("rnd=0.999: %s", ids(g))
 	}
 	// 0.5*10=5 lands in account 3's [4,10) range; then 0.5*4=2 in account 2's [1,4).
 	g = refs()
-	weightedOrder(g, func() float64 { return 0.5 })
+	weightedOrder(g, refWeights(g), func() float64 { return 0.5 })
 	if ids(g) != "3,2,1" {
 		t.Fatalf("rnd=0.5: %s", ids(g))
 	}
 	// 0.15*10=1.5 lands in account 2's range first, then 0.15*7=1.05 in account 3's.
 	g = refs()
-	weightedOrder(g, func() float64 { return 0.15 })
+	weightedOrder(g, refWeights(g), func() float64 { return 0.15 })
 	if ids(g) != "2,3,1" {
 		t.Fatalf("rnd=0.15: %s", ids(g))
 	}
@@ -291,7 +314,7 @@ func TestWeightedOrder(t *testing.T) {
 	rnd := func() float64 { seq += 0.6180339887; seq -= float64(int(seq)); return seq }
 	for i := 0; i < n; i++ {
 		g = refs()
-		weightedOrder(g, rnd)
+		weightedOrder(g, refWeights(g), rnd)
 		first[g[0].ID]++
 	}
 	if p := float64(first[3]) / float64(n); p < 0.55 || p > 0.65 {
@@ -342,3 +365,7 @@ func TestSessionsPerMinuteFollowStickySessions(t *testing.T) {
 		t.Fatal(u, err)
 	}
 }
+
+// refWeights are the accounts' own weights, as tierWeights gives them
+// without loads or balancing.
+func refWeights(g []core.AccountRef) []float64 { return (&call{}).tierWeights(g) }

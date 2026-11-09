@@ -4,6 +4,13 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-10 核心 **0.1.263**（`3c89d9f12`；北京时间 01:42–01:44；计划 `ed9aeda271d944778c0bff1efe02ffc5` rolling-v1 completed，01:42:42→01:44:09 约 87 秒，没有暂停，两节点轮流让出（先 ccp 后 ovh），ovh 3130 和 api.prophey.ai `/readyz` 全程 200；stop 等在途请求排空 ccp 约 16 秒、ovh 约 7 秒；无核心迁移，schema 仍 `d403141a…29ad`；Host API 仍 9；网关仍 0.1.133）：
+- 内容：同优先级均衡负载（CONTRACTS §89）：系统设置 → 调度策略 → 均衡负载，`settings` 新行 `scheduling`（缺行 = 默认，全部关闭、调度行为不变），`GET/PUT /settings/scheduling`。只改 next/server、next/web、next/docs。内置包与 0.1.262 stage 逐字节相同（`diff -r`），插件都不重建。
+- new-api 渠道没有关（用户授权滚动更新不停服）；不备份数据库。
+- 核验：两节点 `sub2api version` 0.1.263（release digest `d0d455ff`）、`/readyz` 200；10 个内置插件版本不变、enabled，没有 pending；管理员 `GET /settings/scheduling` 200 `{"mode":"default","metric":"rpm","limit_load":false,"model_limits":false}`。Playwright 打开 https://api.prophey.ai/settings?tab=failure&sub=balance（1920 宽、deviceScaleFactor 2、只导航不点击不保存）：标签“故障策略 / 均衡负载”，四项设置（均衡策略、基于上限负载调度、均衡指标、根据模型限速）都在，控制台没有报错（截图 `~/rel263/pw/263-balance.png`）。usage_logs：发布前 15 分钟（01:27:42–01:42:42）279 次，发布期间到发布后 10 分钟（01:42:42–01:54:09）159 次（ccp 144、ovh 15），两段都没有 5xx/499/4xx。
+- 回滚：回核心 0.1.262（manifest `cb3db823…4d18`，无迁移，rolling；`scheduling` 行旧核心不读）。
+- 脚本 `stage/0.1.263/`（env.sh；build.sh 不重建插件、断言 sdk/migrations/plugins 自 0.1.262 未变且 schema 仍 `d403141a…29ad`；sign.sh 断言 rolling）；manifest `d0d455ff982891e6d270729cac68a5986aa9c785d6fbc5c9507414cb2828b200`，bundle `52f3207392ed3700467983e7a2ffbf3c7428c68c060f2f1a06c76a0c9e23d6cc`；工作树 `~/sup2api/release-0.1.263`；工具 `~/rel263/`（observe.py 需 sudo、plugins.py、sched.py、errs.sh、codes.sh、pw/ui263.mjs）。
+
 2026-11-09 核心 **0.1.262**（`f90042656`；北京时间 11-09 23:52–23:54；计划 `e1d42babb801530aaa79b2214bf4a0bb` primary-first-v1 completed，23:52:53→23:54:17 约 84 秒；迁移 0092（usage_hourly）、0093（conversion_loss_policy、usage_logs.conversion），schema `e726e42f…785f` → `d403141a…29ad`）
 - 内容：协议层三期（§86 声明式上游与 custom、§87 通用配置项与 UI 3.7、§88 四协议互转），§84 参数覆盖先于插件，优先级越大越优先，账号界面文字按钮/四色/默认并发 0，固定尺寸编辑窗口，仪表盘读小时汇总表。见 CHANGELOG。
 - 停服：new-api 渠道 392 于 23:48:41 关闭、00:06:48 按备份原样恢复（只有 392 指向 sup2api，405/406 指向 api.125837.xyz 未动；备份 `/home/erio/rc/tmp/release-0.1.262/`）。ovh 3130 `/readyz` 503 约 26 秒（23:53:15–23:53:41），api.prophey.ai 503/超时约 26 秒。
