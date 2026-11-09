@@ -218,14 +218,14 @@ function setAllowed(field: string, on: boolean) {
           <SButton
             size="sm"
             variant="ghost"
-            icon-only
             class="max-sm:col-start-3 max-sm:row-start-1 sm:order-last"
-            :icon="r.removed ? 'refresh' : 'trash'"
-            :aria-label="t(`${P}.headers.${r.removed ? 'restore' : 'remove'}`)"
+            :tone="r.removed ? 'default' : 'danger'"
             :disabled="disabled"
             data-testid="upstream-header-toggle"
             @click="toggleHeader(r)"
-          />
+          >
+            {{ t(`${P}.headers.${r.removed ? 'restore' : 'remove'}`) }}
+          </SButton>
           <SSelect
             v-model="r.mode"
             size="sm"

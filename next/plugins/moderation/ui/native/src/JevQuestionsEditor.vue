@@ -29,7 +29,7 @@ const addRow = () => model.value.items.push({ category: 'custom/', label: '', qu
         <SField :label="t('auditors.category')" size="sm"><SInput v-model="q.category" size="sm" :maxlength="64" /></SField>
         <SField :label="t('auditors.label')" size="sm"><SInput v-model="q.label" size="sm" :maxlength="64" :placeholder="categoryLabel(q.category)" /></SField>
         <SField :label="t('auditors.threshold')" size="sm"><SInput v-model="q.threshold" type="number" min="0.01" max="1" step="0.01" size="sm" /></SField>
-        <SButton size="sm" variant="ghost" icon="trash" :aria-label="t('delete')" @click="model.items.splice(i, 1)" />
+        <SButton size="sm" variant="ghost" tone="danger" @click="model.items.splice(i, 1)">{{ t('delete') }}</SButton>
       </div>
       <STextarea v-model="q.question" :rows="2" :maxlength="2000" :placeholder="t('auditors.question')" />
       <div class="mod-form-row">

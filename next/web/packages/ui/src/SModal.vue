@@ -13,8 +13,9 @@
 // (default) is a sheet for width sm / md and a page for lg and wider. The
 // footer stays at the bottom, clear of the home indicator, and the
 // browser Back button closes it. `fixed` keeps one size whatever the content
-// (multi-step editors): the dialog takes its full `width` and height on wide
-// screens, the full height as a phone sheet; the body scrolls inside.
+// (multi-step editors): its maximum height on wide screens (the width already
+// follows `width`), the full height as a phone sheet; the body scrolls inside
+// and keeps its scrollbar gutter.
 import { computed } from 'vue'
 import OverlaySurface from './internal/OverlaySurface.vue'
 import { useViewport } from './viewport'

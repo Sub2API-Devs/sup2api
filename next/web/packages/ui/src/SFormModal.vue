@@ -40,6 +40,8 @@ const props = withDefaults(
     describedby?: string
     /** SModal's form on phones. */
     mobile?: ModalMobile
+    /** SModal's `fixed`: one size whatever the content. */
+    fixed?: boolean
   }>(),
   { width: 'md', submitVariant: 'primary', enterSubmit: true, submitText: undefined, cancelText: undefined, title: undefined, describedby: undefined, mobile: 'auto' }
 )
@@ -67,6 +69,7 @@ function submit() {
     :closable="!loading"
     :describedby="describedby"
     :mobile="mobile"
+    :fixed="fixed"
     @update:open="emit('update:open', $event)"
     @close="emit('close')"
   >

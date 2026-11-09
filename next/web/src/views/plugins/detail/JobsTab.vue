@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SCode, SHint, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SCode, SHint, SLink, STable, toast, type TableColumn } from '@sub2api/ui'
 import PluginStatusBadge from '../parts/PluginStatusBadge.vue'
 import { formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
@@ -78,13 +78,13 @@ onMounted(load)
             t(row.scope === 'node' ? 'plugins.jobs.scopeNode' : 'plugins.jobs.scopeCluster')
           }}</SBadge>
         </div>
-        <router-link
+        <SLink
           v-if="row.task && auth.has('task:read')"
           :to="{ path: '/system/tasks', query: row.scope === 'node' ? { tab: 'nodes' } : {} }"
-          class="text-xs text-primary-600 hover:underline dark:text-primary-400"
+          class="text-xs"
         >
           {{ t('plugins.jobs.viewInTasks') }}
-        </router-link>
+        </SLink>
       </template>
       <template #cell-schedule="{ row }">
         <SCode inline :text="row.adjusted?.length && row.effective_schedule ? row.effective_schedule : row.schedule" />
