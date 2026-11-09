@@ -4769,21 +4769,32 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 统计原来每次都实时扫 `usage_logs`（§66.3）。现在新增汇总表 `usage_hourly`，按 UTC 小时 × `user_id, api_key_id, group_id, account_id, model, upstream_model, protocol, platform` 汇总。汇总的值是可以直接相加的量：请求数、成功数、四类 token、`total_cost`、`standard_cost`、`prompt_rows/prompt_tokens`（能算出 prompt 的行数和它们的和）、`anomalous_rows`、`estimated_rows/estimated_cost`、`latency_sum/latency_rows`、`first_token_sum/first_token_rows`。每个量对一行明细怎么算，只写在 `usage/rollup.go` 的 `statMeasures` 里，汇总和实时扫描都用这一份。
 
-**读取**：summary 和 overview 的 FROM 是三段 UNION ALL：汇总表覆盖范围内的整小时读 `usage_hourly`，范围之前和之后的部分读 `usage_logs`（各是一段 `created_at` 区间）。外层再把各个量相加，算出合计和平均值。所以结果和实时扫描逐项相同，测试 `TestRollupMatchesLive` 会逐个接口比对。
+**读取**：summary 和 overview 的 FROM 是四段 UNION ALL：
+- 汇总表覆盖范围内的整小时读 `usage_hourly`，但跳过还在 `usage_hourly_dirty` 里、没重算的小时；
+- 这些被标记的小时改读 `usage_logs`；
+- 覆盖范围之前和之后的部分读 `usage_logs`，各是一段 `created_at` 区间。
 
-- 能用汇总表的：分组是 day、hour、none、model、upstream_model、user、api_key、group、protocol、platform；筛选只用了 from、to、tz、order、limit、user_id、api_key_id、group_id、account_id、model、upstream_model、protocol、platform。day、hour 分组和 overview 还要求时区和 UTC 相差整小时（如 Asia/Kolkata 就不行）。
+外层再把各个量相加，算出合计和平均值。标记和明细的改动在同一个事务里提交，又在同一条语句里读，所以不管刷新有没有跟上，结果都和实时扫描逐项相同。测试 `TestRollupMatchesLive` 会逐个接口比对。
+
+- 能用汇总表的：分组是 day、hour、none、model、upstream_model、user、api_key、group、protocol、platform；筛选只用了 from、to、tz、order、limit、user_id、api_key_id、group_id、account_id、model、upstream_model、protocol、platform。day、hour 分组和 overview 还要求时区在整个范围内都和 UTC 相差整小时（按 `ZoneBounds` 逐段检查）。Asia/Kolkata 就不行；Australia/Lord_Howe 跨越 +10:30 的那段时间也不行。
 - 其他情况（ip、endpoint 分组，按状态、IP、模糊名称等筛选）照旧只扫 `usage_logs`。
 - `/usage/realtime` 不变，只看最近一小时，始终实时。
 
-**刷新**：集群任务 `core.usage.rollup`，每分钟一次，单次最长 2 分钟，每条语句最长 60 秒，每个事务都持有 advisory 锁 `usage_hourly`。`usage_hourly_state` 记录已汇总的小时范围 [low, high)。每次运行按顺序做三件事：
+**刷新**：集群任务 `core.usage.rollup`，每分钟一次，每条语句最长 60 秒，每个事务都持有 advisory 锁 `usage_hourly`。`usage_hourly_state` 记录已汇总的小时范围 [low, high)。每次运行做下面三件事，三步互相独立，一步出错不影响另外两步：
 
-1. 往前补：一个小时结束满 30 分钟后汇总，high 推到 `floor(now − 30min)`，每个事务最多 6 小时。
-2. 重算被标记的小时：`usage_logs` 上的触发器 `usage_hourly_mark_*` 只对所属小时已结束 15 分钟以上的行生效，这样的行被写入、修改或删除时，会往 `usage_hourly_dirty` 记一条。刷新任务重算这些小时，再按 id 删掉这次处理过的标记。触发和汇总之间有 15 分钟差，所以没被标记的写入有 15 分钟提交时间。最近的行（结算热路径）不会触发。
-3. 往回补历史：low 每个事务往前推 24 小时，直到最早一行明细所在的小时。
+1. 往前补，每个事务最多 6 小时。可汇总的边界按数据库时钟算（`sealedSQL`），取两者中更早的那个：
+   - 小时结束满 30 分钟；
+   - 本角色在本库里还没结束的写事务中，最早的开始时间往前推 15 分钟。
+
+   这样，一个还没提交、又没被触发器标记的写入，它所在的小时不会被提前汇总。
+2. 重算被标记的小时。`usage_logs` 上的触发器 `usage_hourly_mark_*` 只对所属小时已结束 15 分钟以上的行生效：这样的行被插入、删除，或者修改了统计用到的列（`UPDATE OF` 列出了汇总键和各个量读到的列；改 `created_at` 时，新旧两个小时都标记），就往 `usage_hourly_dirty` 记一条。刷新任务每个事务重算最多 24 个小时，再按 id 删掉这次读到的标记。最近的行（结算热路径）不会触发。
+3. 往回补历史，每次运行只补一块（24 小时），一直补到最早一行明细所在的小时，免得集中冷读挤占共享库的缓存。
 
 同一小时总是先删后插，在一个事务里重算，所以重复运行没有影响。汇总表的范围只会变大不会缩小。读取时先读一次范围，再算 UNION 的边界，所以中途有刷新提交也不会重复计算或漏算。
 
-**上线**：迁移只建表和触发器，不回填数据；第一次运行就从最近往回补。回填完之前，没覆盖到的部分仍然实时扫，结果一样，只是慢一些。回滚到没有这部分代码的版本时，表和触发器会留下来，触发器仍会往 `usage_hourly_dirty` 写少量标记（只有迟到的写入才会），这不影响任何功能，以后可以删掉。
+**上线**：迁移只建表和触发器，触发器用 `CREATE OR REPLACE TRIGGER`，不需要 ACCESS EXCLUSIVE 锁。迁移不回填数据；第一次运行就从最近往回补，线上数据从 9 月 25 日开始，每分钟补一天，大约 45 分钟补完。补完之前，没覆盖到的部分仍然实时扫，结果一样，只是慢一些。回滚到没有这部分代码的版本时，表和触发器会留下来，触发器仍会往 `usage_hourly_dirty` 写少量标记（只有迟到的写入才会），这不影响任何功能，以后可以删掉。
+
+**线上数据量**（2026-11-09 只读统计）：近 30 天有 202,026 行明细，按小时和 8 个键去重后是 4,895 组，压缩比约 41:1。汇总表每行约 200 字节，明细每行约 2KB。
 
 **本地实测**（25 万行明细，每行约 2KB）：overview 从 780ms 降到 83ms，7 天按天趋势从 162ms 降到 23ms，按模型和用户的排行从约 180ms 降到 60–70ms。
 

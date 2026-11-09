@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,9 +30,9 @@ const (
 	// transaction rolls up going forward and filling the history.
 	rollupForwardChunk  = 6 * time.Hour
 	rollupBackfillChunk = 24 * time.Hour
-	// rollupDirtyBatch bounds the marks one transaction recomputes.
-	rollupDirtyBatch = 1000
-	// rollupBudget bounds one run; the history is filled over several.
+	// rollupDirtyHours bounds the marked hours one transaction recomputes.
+	rollupDirtyHours = 24
+	// rollupBudget bounds the forward and dirty stages of one run.
 	rollupBudget = 2 * time.Minute
 	// rollupStatementTimeout bounds each statement of a run.
 	rollupStatementTimeout = "60s"
@@ -42,10 +43,11 @@ const (
 var rollupDims = []string{"user_id", "api_key_id", "group_id", "account_id", "model", "upstream_model", "protocol", "platform"}
 
 // statMeasure is one additive column of the statistics: row is a usage_logs
-// row's share, and usage_hourly keeps the sum of its hour under name.
+// row's share, and usage_hourly keeps the sum of its hour under name. A
+// column row reads must be in the update trigger's column list (0092).
 type statMeasure struct{ name, row string }
 
-// rowIf is 1 for a row where cond holds, else 0 (NULL included).
+// rowIf is then for a row where cond holds, else 0 (a NULL cond included).
 func rowIf(cond, then string) string { return "CASE WHEN " + cond + " THEN " + then + " ELSE 0 END" }
 
 var (
@@ -98,25 +100,31 @@ func measureList(f func(statMeasure) string) string {
 // hourSpan is the whole hours [from, to) a query reads from the rollup.
 type hourSpan struct{ from, to time.Time }
 
-// rollupSpan is the part of [from, to) (zero to: open) the rollup holds, or
-// nil when it holds none of it.
-func (s *Service) rollupSpan(ctx context.Context, tx pgx.Tx, from, to time.Time) (*hourSpan, error) {
-	var low, high *time.Time
-	if err := tx.QueryRow(ctx, `SELECT low, high FROM usage_hourly_state`).Scan(&low, &high); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if low == nil || high == nil {
+// readRollupState reads the hours [low, high) the rollup holds (nil before
+// the first refresh).
+func readRollupState(ctx context.Context, tx pgx.Tx) (low, high *time.Time, err error) {
+	err = tx.QueryRow(ctx, `SELECT low, high FROM usage_hourly_state`).Scan(&low, &high)
+	return low, high, err
+}
+
+// rollupSpan is the part of [from, end) the rollup holds, or nil when it
+// holds none of it. With a time zone (day and hour buckets, the overview's
+// days) it is nil unless the zone is whole hours from UTC all along the
+// range, so that its buckets are made of whole UTC hours.
+func rollupSpan(ctx context.Context, tx pgx.Tx, from, end time.Time, loc *time.Location) (*hourSpan, error) {
+	if loc != nil && !hourAligned(loc, from, end) {
 		return nil, nil
 	}
-	span := hourSpan{from: ceilHour(from), to: *high}
+	low, high, err := readRollupState(ctx, tx)
+	if err != nil || low == nil {
+		return nil, err
+	}
+	span := hourSpan{from: ceilHour(from), to: end.Truncate(time.Hour)}
 	if span.from.Before(*low) {
 		span.from = *low
 	}
-	if !to.IsZero() && to.Truncate(time.Hour).Before(span.to) {
-		span.to = to.Truncate(time.Hour)
+	if span.to.After(*high) {
+		span.to = *high
 	}
 	if !span.from.Before(span.to) {
 		return nil, nil
@@ -131,35 +139,46 @@ func ceilHour(t time.Time) time.Time {
 	return t
 }
 
-// hourAligned says whether loc is a whole number of hours from UTC at each
-// of ts, so that its days and hours are made of whole UTC hours.
-func hourAligned(loc *time.Location, ts ...time.Time) bool {
-	for _, t := range ts {
-		if _, off := t.In(loc).Zone(); off%3600 != 0 {
+// hourAligned says whether loc is a whole number of hours from UTC
+// throughout [from, end), walking its offset changes.
+func hourAligned(loc *time.Location, from, end time.Time) bool {
+	for t := from; t.Before(end); {
+		l := t.In(loc)
+		if _, off := l.Zone(); off%3600 != 0 {
 			return false
 		}
+		_, next := l.ZoneBounds()
+		if next.IsZero() {
+			return true
+		}
+		t = next
 	}
 	return true
 }
 
 // statRows is a FROM item named u: the usage_logs rows matching where, each
-// measure being the row's share, and with span the rollup rows of span
-// (outside it for usage_logs), each measure being its hour's sum. cols are
-// the other output columns, expressions over u that hold on both tables.
-// args takes the span's bounds. The usage_logs rows before and after span
-// are read apart, each a plain range of the created_at index.
+// measure being the row's share, and with span the rollup rows of span, each
+// measure being its hour's sum. Hours of span marked dirty, not recomputed
+// yet, are read from usage_logs too, in the same snapshot as their marks.
+// cols are the other output columns, expressions over u that hold on both
+// tables; args takes the span's bounds. Each usage_logs part is a plain
+// range of the created_at index.
 func statRows(cols, joins, where string, span *hourSpan, args *[]any) string {
-	live := `SELECT ` + cols + `, ` + measureList(func(m statMeasure) string { return m.row + ` AS ` + m.name }) +
-		` FROM usage_logs u` + joins
+	live := func(from string) string {
+		return `SELECT ` + cols + `, ` + measureList(func(m statMeasure) string { return m.row + ` AS ` + m.name }) + ` FROM ` + from + joins
+	}
 	if span == nil {
-		return `(` + live + where + `) u`
+		return `(` + live(`usage_logs u`) + where + `) u`
 	}
 	from, to := addArg(args, span.from), addArg(args, span.to)
-	rolled := `SELECT ` + cols + `, ` + measureList(func(m statMeasure) string { return `u.` + m.name }) +
-		` FROM usage_hourly u` + joins
-	return `(` + live + andWhere(where, `u.created_at < `+from) +
-		` UNION ALL ` + rolled + andWhere(where, `u.created_at >= `+from+` AND u.created_at < `+to) +
-		` UNION ALL ` + live + andWhere(where, `u.created_at >= `+to) + `) u`
+	rolled := `SELECT ` + cols + `, ` + measureList(func(m statMeasure) string { return `u.` + m.name }) + ` FROM usage_hourly u` + joins
+	dirty := `(SELECT DISTINCT hour FROM usage_hourly_dirty WHERE hour >= ` + from + ` AND hour < ` + to + `) d
+		JOIN usage_logs u ON u.created_at >= d.hour AND u.created_at < d.hour + interval '1 hour'`
+	return `(` + live(`usage_logs u`) + andWhere(where, `u.created_at < `+from) +
+		` UNION ALL ` + rolled + andWhere(where, `u.created_at >= `+from+` AND u.created_at < `+to+
+		` AND NOT EXISTS (SELECT 1 FROM usage_hourly_dirty d WHERE d.hour = u.created_at)`) +
+		` UNION ALL ` + live(dirty) + where +
+		` UNION ALL ` + live(`usage_logs u`) + andWhere(where, `u.created_at >= `+to) + `) u`
 }
 
 // addArg appends v and returns its placeholder.
@@ -209,7 +228,7 @@ func (s *Service) RollupTaskSpec() core.TaskSpec {
 		Every:   time.Minute,
 		Timeout: rollupBudget + time.Minute,
 		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
-			n, err := s.RefreshRollup(ctx, time.Now())
+			n, err := s.refreshRollup(ctx)
 			return core.TaskResult{Count: n}, err
 		},
 	}
@@ -218,48 +237,33 @@ func (s *Service) RollupTaskSpec() core.TaskSpec {
 // rollupState is usage_hourly_state: the hours [low, high) held.
 type rollupState struct{ low, high *time.Time }
 
-// RefreshRollup brings the rollup up to now: it rolls up the hours that ended
-// rollupSeal ago, recomputes the hours marked since, then fills in the
-// history within the budget. It returns the hours rolled up.
-func (s *Service) RefreshRollup(ctx context.Context, now time.Time) (int, error) {
-	deadline := now.Add(rollupBudget)
-	sealed := now.Add(-rollupSeal).Truncate(time.Hour)
+// rollupStep does one transaction's share of a refresh stage and says
+// whether more is left.
+type rollupStep func(context.Context, pgx.Tx, *rollupState) (hours int, more bool, err error)
+
+// refreshRollup brings the rollup up to date: it rolls up the sealed hours,
+// recomputes the marked ones, then fills in one chunk of the history. Each
+// stage runs whatever the others did; it returns the hours (re)computed.
+func (s *Service) refreshRollup(ctx context.Context) (int, error) {
+	deadline := time.Now().Add(rollupBudget)
 	total := 0
-	step := func(fn func(context.Context, pgx.Tx, *rollupState) (int, bool, error)) error {
+	run := func(step rollupStep, repeat bool) error {
 		for {
 			var n int
 			var more bool
 			err := s.rollupTx(ctx, func(tx pgx.Tx, st *rollupState) (err error) {
-				n, more, err = fn(ctx, tx, st)
+				n, more, err = step(ctx, tx, st)
 				return err
 			})
 			total += n
-			if err != nil || !more || time.Now().After(deadline) {
+			if err != nil || !more || !repeat || time.Now().After(deadline) {
 				return err
 			}
 		}
 	}
-	err := step(func(ctx context.Context, tx pgx.Tx, st *rollupState) (int, bool, error) {
-		if st.high == nil {
-			st.low, st.high = &sealed, &sealed
-		}
-		if !st.high.Before(sealed) {
-			return 0, false, nil
-		}
-		to := st.high.Add(rollupForwardChunk)
-		if to.After(sealed) {
-			to = sealed
-		}
-		n, err := rollupHours(ctx, tx, *st.high, to)
-		st.high = &to
-		return n, to.Before(sealed), err
-	})
-	if err == nil {
-		err = step(rollupDirty)
-	}
-	if err == nil {
-		err = step(rollupBackfill)
-	}
+	// History last and one chunk a run: a cold read of a day is what the
+	// shared database feels.
+	err := errors.Join(run(rollupForward, true), run(rollupDirty, true), run(rollupBackfill, false))
 	if total > 0 {
 		slog.InfoContext(ctx, "usage: rolled up hours", "hours", total)
 	}
@@ -273,33 +277,61 @@ func (s *Service) rollupTx(ctx context.Context, fn func(pgx.Tx, *rollupState) er
 			return err
 		}
 		var st rollupState
-		if err := tx.QueryRow(ctx, `SELECT low, high FROM usage_hourly_state`).Scan(&st.low, &st.high); err != nil {
+		var err error
+		if st.low, st.high, err = readRollupState(ctx, tx); err != nil {
 			return err
 		}
 		if err := fn(tx, &st); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `UPDATE usage_hourly_state SET low = $1, high = $2`, st.low, st.high)
+		_, err = tx.Exec(ctx, `UPDATE usage_hourly_state SET low = $1, high = $2`, st.low, st.high)
 		return err
 	})
 }
 
-// rollupDirty recomputes the held hours of a batch of marks and clears them;
-// marks outside the held hours are cleared alone, the hours being rolled up
-// from scratch when they are reached.
-func rollupDirty(ctx context.Context, tx pgx.Tx, st *rollupState) (int, bool, error) {
+// sealedSQL is the end of the hours that may be rolled up, by the database's
+// clock: rollupSeal after an hour ends, and none a write transaction of ours
+// still open may have written without marking (it marks rows of hours that
+// ended 15 minutes before its statement; it started before that).
+var sealedSQL = `SELECT date_trunc('hour', LEAST(now() - interval '` + strconv.Itoa(int(rollupSeal/time.Minute)) + ` minutes',
+	COALESCE((SELECT min(xact_start) FROM pg_stat_activity WHERE datname = current_database() AND usename = current_user
+		AND backend_xid IS NOT NULL AND pid <> pg_backend_pid()), 'infinity') - interval '15 minutes'), 'UTC')`
+
+// rollupForward rolls up a chunk of the sealed hours after the held ones.
+func rollupForward(ctx context.Context, tx pgx.Tx, st *rollupState) (int, bool, error) {
+	var sealed time.Time
+	if err := tx.QueryRow(ctx, sealedSQL).Scan(&sealed); err != nil {
+		return 0, false, err
+	}
 	if st.high == nil {
+		st.low, st.high = &sealed, &sealed
+	}
+	if !st.high.Before(sealed) {
 		return 0, false, nil
 	}
+	to := st.high.Add(rollupForwardChunk)
+	if to.After(sealed) {
+		to = sealed
+	}
+	n, err := rollupHours(ctx, tx, *st.high, to)
+	st.high = &to
+	return n, to.Before(sealed), err
+}
+
+// rollupDirty recomputes the first marked hours and clears the marks read
+// for them; marks outside the held hours are cleared alone, those hours
+// being rolled up from scratch when they are reached.
+func rollupDirty(ctx context.Context, tx pgx.Tx, st *rollupState) (int, bool, error) {
 	var ids []int64
 	var hours []time.Time
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(id), '{}'), COALESCE(array_agg(DISTINCT hour), '{}')
-		FROM (SELECT id, hour FROM usage_hourly_dirty ORDER BY id LIMIT $1) d`, rollupDirtyBatch).Scan(&ids, &hours); err != nil {
+	if err := tx.QueryRow(ctx, `WITH h AS (SELECT DISTINCT hour FROM usage_hourly_dirty ORDER BY hour LIMIT $1)
+		SELECT COALESCE(array_agg(d.id), '{}'), COALESCE(array_agg(DISTINCT d.hour), '{}')
+		FROM usage_hourly_dirty d JOIN h ON h.hour = d.hour`, rollupDirtyHours).Scan(&ids, &hours); err != nil {
 		return 0, false, err
 	}
 	n := 0
 	for _, h := range hours {
-		if h.Before(*st.low) || !h.Before(*st.high) {
+		if st.high == nil || h.Before(*st.low) || !h.Before(*st.high) {
 			continue
 		}
 		k, err := rollupHours(ctx, tx, h, h.Add(time.Hour))
@@ -309,7 +341,7 @@ func rollupDirty(ctx context.Context, tx pgx.Tx, st *rollupState) (int, bool, er
 		n += k
 	}
 	_, err := tx.Exec(ctx, `DELETE FROM usage_hourly_dirty WHERE id = ANY($1)`, ids)
-	return n, len(ids) == rollupDirtyBatch, err
+	return n, len(hours) == rollupDirtyHours, err
 }
 
 // rollupBackfill rolls up the chunk of history below the held hours, down to

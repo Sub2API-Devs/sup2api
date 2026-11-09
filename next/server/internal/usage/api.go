@@ -684,28 +684,27 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	if c.Query("from") == "" {
 		f.And("u.created_at >= ?", from)
 	}
+	end := cmp.Or(to, time.Now())
 	groupKey := c.DefaultQuery("group_by", "day")
-	// The time zone is appended after the filter's own arguments; its text
-	// uses the placeholder more than once.
+	// The time zone of day and hour buckets is appended after the filter's
+	// own arguments; spanTZ says the rollup must be aligned with it.
 	args := f.Args()
-	tzArg := ""
-	inTZ := func(col string) string {
-		if tzArg == "" {
-			tzArg = addArg(&args, tz)
-		}
-		return col + ` AT TIME ZONE ` + tzArg + `::text`
+	var spanTZ *time.Location
+	inTZ := func() string {
+		spanTZ = loc
+		return `u.created_at AT TIME ZONE ` + addArg(&args, tz) + `::text`
 	}
 	var key, join, extra string
 	order, lastAt, groupBy := ` ORDER BY k`, `NULL::timestamptz`, ` GROUP BY k`
 	switch groupKey {
 	case "day":
-		key = `to_char(` + inTZ(`u.created_at`) + `, 'YYYY-MM-DD')`
+		key = `to_char(` + inTZ() + `, 'YYYY-MM-DD')`
 	case "hour":
-		if cmp.Or(to, time.Now()).Sub(from) > maxHourSpan {
+		if end.Sub(from) > maxHourSpan {
 			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by=hour covers at most 31 days"))
 			return
 		}
-		key = `to_char(date_trunc('hour', ` + inTZ(`u.created_at`) + `), 'YYYY-MM-DD HH24:00')`
+		key = `to_char(date_trunc('hour', ` + inTZ() + `), 'YYYY-MM-DD HH24:00')`
 	case "none":
 		key, groupBy = `''`, ``
 	case "model":
@@ -754,7 +753,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	if groupBy == "" {
 		outKey = `''` // one row, also over no rows
 	}
-	rollable := summaryRollable(c, groupKey) && (tzArg == "" || hourAligned(loc, from, cmp.Or(to, time.Now())))
+	rollable := summaryRollable(c, groupKey)
 	rankOrder, rankLimit := c.Query("order"), c.Query("limit")
 	load := func(ctx context.Context) ([]SummaryRow, error) {
 		out := []SummaryRow{}
@@ -763,19 +762,13 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 			var span *hourSpan
 			if rollable {
 				var err error
-				if span, err = s.rollupSpan(ctx, tx, from, to); err != nil {
+				if span, err = rollupSpan(ctx, tx, from, end, spanTZ); err != nil {
 					return err
 				}
 			}
 			rows, err := tx.Query(ctx, `
-				SELECT `+outKey+` AS k, COALESCE(max(u.e), ''), `+sumOf("u.requests", "")+`, `+sumOf("u.success", "")+`,
-				       `+sumOf("u.input_tokens", "")+`, `+sumOf("u.output_tokens", "")+`,
-				       `+sumOf("u.cache_read_tokens", "")+`, `+sumOf("u.cache_write_tokens", "")+`,
-				       `+sumOf("u.total_cost", "")+`, `+sumOf("u.anomalous_rows", "")+`,
-				       `+sumOf("u.estimated_rows", "")+`, `+sumOf("u.estimated_cost", "")+`, `+lastAt+`,
-				       CASE WHEN `+sumOf("u.requests", "")+` = `+sumOf("u.prompt_rows", "")+` THEN sum(u.prompt_tokens) END,
-				       `+sumOf("u.standard_cost", "")+`,
-				       `+avgOf("u.latency_sum", "u.latency_rows", "")+`, `+avgOf("u.first_token_sum", "u.first_token_rows", "")+`
+				SELECT `+outKey+` AS k, COALESCE(max(u.e), ''), `+totalsColumns("", true)+`,
+				       `+sumOf("u.anomalous_rows", "")+`, `+sumOf("u.estimated_rows", "")+`, `+sumOf("u.estimated_cost", "")+`, `+lastAt+`
 				FROM `+statRows(key+` AS k, `+extra+` AS e, u.created_at AS at`, join, f.Cond(), span, &args)+groupBy+order, args...)
 			if err != nil {
 				return err
@@ -784,8 +777,8 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 			for rows.Next() {
 				var r SummaryRow
 				if err := rows.Scan(&r.Key, &r.UserEmail, &r.Requests, &r.Success, &r.InputTokens, &r.OutputTokens,
-					&r.CacheReadTokens, &r.CacheCreationTokens, &r.TotalCost, &r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt, &r.PromptTokens,
-					&r.StandardCost, &r.LatencyMsAvg, &r.FirstTokenMsAvg); err != nil {
+					&r.CacheReadTokens, &r.CacheCreationTokens, &r.PromptTokens, &r.TotalCost, &r.StandardCost, &r.LatencyMsAvg, &r.FirstTokenMsAvg,
+					&r.Anomalies, &r.Estimated, &r.EstimatedCost, &r.LastAt); err != nil {
 					return err
 				}
 				r.TotalTokens = r.InputTokens + r.OutputTokens + r.CacheReadTokens + r.CacheCreationTokens

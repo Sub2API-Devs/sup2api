@@ -26,9 +26,8 @@ import (
 // query runs under a statement timeout, and a timeout is an error the console
 // shows as one, never as zeros.
 
-// statsLimits are the settings of one statistics transaction. The queries
-// scan usage_logs live (there is no rollup table); a range too large to answer
-// in time is refused rather than left to hold a connection.
+// statsLimits are the settings of one statistics transaction. A range too
+// large to answer in time is refused rather than left to hold a connection.
 type statsLimits struct {
 	// timeout is the statement timeout.
 	timeout string
@@ -155,13 +154,19 @@ type Overview struct {
 	} `json:"accounts,omitempty"`
 }
 
-// totalsColumns are the aggregates of Totals over the statRows matching cond.
-func totalsColumns(cond string) string {
+// totalsColumns are the aggregates of Totals over the statRows matching cond
+// ("": all). The prompt tokens are known when every row has them; over no
+// rows they are null with nullPrompt (the summary), else 0 (the overview).
+func totalsColumns(cond string, nullPrompt bool) string {
+	promptSum := sumOf("u.prompt_tokens", cond)
+	if nullPrompt {
+		promptSum = `sum(u.prompt_tokens)` + filterWhere(cond)
+	}
 	return strings.Join([]string{
 		sumOf("u.requests", cond), sumOf("u.success", cond),
 		sumOf("u.input_tokens", cond), sumOf("u.output_tokens", cond),
 		sumOf("u.cache_read_tokens", cond), sumOf("u.cache_write_tokens", cond),
-		`CASE WHEN ` + sumOf("u.requests", cond) + ` = ` + sumOf("u.prompt_rows", cond) + ` THEN ` + sumOf("u.prompt_tokens", cond) + ` END`,
+		`CASE WHEN ` + sumOf("u.requests", cond) + ` = ` + sumOf("u.prompt_rows", cond) + ` THEN ` + promptSum + ` END`,
 		sumOf("u.total_cost", cond), sumOf("u.standard_cost", cond),
 		avgOf("u.latency_sum", "u.latency_rows", cond), avgOf("u.first_token_sum", "u.first_token_rows", cond),
 	}, ", ")
@@ -222,20 +227,17 @@ func (s *Service) loadOverview(ctx context.Context, tz string, loc *time.Locatio
 			f.And("u.user_id = ?", *self)
 		}
 		args := f.Args()
-		var span *hourSpan
-		if hourAligned(loc, w.last30d, w.today) {
-			var err error
-			if span, err = s.rollupSpan(ctx, tx, w.last30d, time.Time{}); err != nil {
-				return err
-			}
+		span, err := rollupSpan(ctx, tx, w.last30d, time.Now(), loc)
+		if err != nil {
+			return err
 		}
 		yesterday, today, last5m := addArg(&args, w.yesterday), addArg(&args, w.today), addArg(&args, w.last5m)
 		targets := append(append(append(out.Today.scanTargets(), out.Yesterday.scanTargets()...), out.Last30d.scanTargets()...),
 			&out.Last5m.Requests, &out.Last5m.Tokens, &activeToday)
 		if err := tx.QueryRow(ctx, `SELECT `+
-			totalsColumns(`u.at >= `+today)+`, `+
-			totalsColumns(`u.at >= `+yesterday+` AND u.at < `+today)+`, `+
-			totalsColumns(``)+`, `+
+			totalsColumns(`u.at >= `+today, false)+`, `+
+			totalsColumns(`u.at >= `+yesterday+` AND u.at < `+today, false)+`, `+
+			totalsColumns(``, false)+`, `+
 			sumOf(`u.requests`, `u.at >= `+last5m)+`, `+
 			sumOf(`u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_write_tokens`, `u.at >= `+last5m)+`,
 			count(DISTINCT u.user_id) FILTER (WHERE u.at >= `+today+`)

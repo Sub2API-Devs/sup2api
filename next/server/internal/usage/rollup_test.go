@@ -139,9 +139,14 @@ func TestRollupMatchesLive(t *testing.T) {
 		_, err = f.db.Pool.Exec(ctx, `TRUNCATE usage_hourly, usage_hourly_dirty`)
 		require.NoError(t, err)
 		want := live()
-		hours, err := f.svc.RefreshRollup(ctx, now)
-		require.NoError(t, err)
-		require.Positive(t, hours, stage)
+		for runs := 0; ; runs++ {
+			hours, err := f.svc.refreshRollup(ctx)
+			require.NoError(t, err)
+			if hours == 0 {
+				require.Greater(t, runs, 1, stage) // one chunk of history a run
+				break
+			}
+		}
 		f.compareRollup(stage, now, want)
 	}
 	check("history")
@@ -166,7 +171,9 @@ func TestRollupMatchesLive(t *testing.T) {
 	var low, high time.Time
 	require.NoError(t, f.db.Pool.QueryRow(ctx, `SELECT low, high FROM usage_hourly_state`).Scan(&low, &high))
 	require.Equal(t, now.Add(-40*24*time.Hour).Truncate(time.Hour), low)
-	require.Equal(t, now.Add(-rollupSeal).Truncate(time.Hour), high)
+	var sealed time.Time
+	require.NoError(t, f.db.Pool.QueryRow(ctx, sealedSQL).Scan(&sealed))
+	require.Equal(t, sealed, high)
 
 	// Changes to rolled-up hours mark them; the next refresh recomputes them.
 	_, err = f.db.Pool.Exec(ctx, `UPDATE usage_logs SET total_cost = total_cost + 1, success = NOT success
@@ -183,7 +190,8 @@ func TestRollupMatchesLive(t *testing.T) {
 	want := live()
 	_, err = f.db.Pool.Exec(ctx, `UPDATE usage_hourly_state SET low = $1, high = $2`, low, high)
 	require.NoError(t, err)
-	_, err = f.svc.RefreshRollup(ctx, now)
+	f.compareRollup("marked", now, want) // marked hours are read live until recomputed
+	_, err = f.svc.refreshRollup(ctx)
 	require.NoError(t, err)
 	require.NoError(t, f.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_hourly_dirty`).Scan(&marks))
 	require.Zero(t, marks)
@@ -208,4 +216,53 @@ func TestRollupTriggerSkipsRecentRows(t *testing.T) {
 	var marks int
 	require.NoError(t, f.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_hourly_dirty`).Scan(&marks))
 	require.Zero(t, marks)
+}
+
+// No hour is sealed that a write transaction still open may have written
+// without marking.
+func TestRollupSealWaitsForOpenWrites(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	var free time.Time
+	require.NoError(t, f.db.Pool.QueryRow(ctx, sealedSQL).Scan(&free))
+	require.Equal(t, time.Now().Add(-rollupSeal).Truncate(time.Hour), free.Truncate(time.Hour))
+
+	tx, err := f.db.Pool.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback(ctx) }()
+	var started time.Time
+	_, err = tx.Exec(ctx, `SELECT txid_current()`) // a write transaction has an xid
+	require.NoError(t, err)
+	require.NoError(t, tx.QueryRow(ctx, `SELECT xact_start FROM pg_stat_activity WHERE pid = pg_backend_pid()`).Scan(&started))
+	var held time.Time
+	require.NoError(t, f.db.Pool.QueryRow(ctx, sealedSQL).Scan(&held))
+	require.Equal(t, started.Add(-15*time.Minute).Truncate(time.Hour), held)
+}
+
+// The rollup answers day and hour buckets only where the zone is whole hours
+// from UTC all along the range.
+func TestHourAligned(t *testing.T) {
+	zone := func(name string) *time.Location {
+		loc, err := time.LoadLocation(name)
+		require.NoError(t, err)
+		return loc
+	}
+	at := func(s string) time.Time {
+		v, err := time.Parse(time.RFC3339, s)
+		require.NoError(t, err)
+		return v
+	}
+	for _, c := range []struct {
+		zone, from, to string
+		want           bool
+	}{
+		{"Asia/Shanghai", "2026-01-01T00:00:00Z", "2026-12-01T00:00:00Z", true},
+		{"America/New_York", "2026-01-01T00:00:00Z", "2026-12-01T00:00:00Z", true},
+		{"Asia/Kolkata", "2026-11-01T00:00:00Z", "2026-11-02T00:00:00Z", false},
+		// +11 at both ends, +10:30 in between.
+		{"Australia/Lord_Howe", "2026-02-01T00:00:00Z", "2026-11-01T00:00:00Z", false},
+		{"Australia/Lord_Howe", "2026-11-01T00:00:00Z", "2026-12-01T00:00:00Z", true},
+	} {
+		require.Equal(t, c.want, hourAligned(zone(c.zone), at(c.from), at(c.to)), "%s %s", c.zone, c.from)
+	}
 }
