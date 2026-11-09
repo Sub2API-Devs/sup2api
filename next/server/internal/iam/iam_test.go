@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -393,11 +394,10 @@ func TestHTTP(t *testing.T) {
 	if code, out = c.do("GET", "/me", tok, nil); code != 200 || out["data"].(map[string]any)["superuser"] != true {
 		t.Fatalf("me: %d %v", code, out)
 	}
-	// A superuser sees every core section that has items: overview,
-	// gateway, finance, users, plugins, system, me. security has no core
-	// item (only plugins join it) and authz.Menus() drops empty sections,
-	// so the count is 7.
-	if code, out = c.do("GET", "/me/menus", tok, nil); code != 200 || len(out["data"].([]any)) != 7 {
+	// A superuser sees every core section that has items. security and
+	// plugins have no core item (only plugins join them, CONTRACTS §90) and
+	// empty sections are dropped.
+	if code, out = c.do("GET", "/me/menus", tok, nil); code != 200 || sectionKeys(out["data"]) != "overview,gateway,finance,users,system,me" {
 		t.Fatalf("menus: %d %v", code, out)
 	}
 	if code, out = c.do("GET", "/permissions", tok, nil); code != 200 {
@@ -473,4 +473,13 @@ func TestHTTP(t *testing.T) {
 	if code, out = c.do("PUT", "/me/password", tok, map[string]any{"old_password": adminPassword, "new_password": "another-pass-1"}); code != 204 {
 		t.Fatalf("change password: %d %v", code, out)
 	}
+}
+
+// sectionKeys lists the section keys of a /me/menus response, in order.
+func sectionKeys(data any) string {
+	var keys []string
+	for _, sec := range data.([]any) {
+		keys = append(keys, sec.(map[string]any)["section"].(string))
+	}
+	return strings.Join(keys, ",")
 }

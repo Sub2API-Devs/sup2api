@@ -1,45 +1,27 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { SIcon, SSkeleton } from '@sub2api/ui'
-import { useAppStore, type NavItem, type NavSection } from '@/stores/app'
+import { useAppStore, type NavSection } from '@/stores/app'
 import { lt } from '@/i18n'
 import VersionBadge from '@/components/VersionBadge.vue'
+import SidebarLink from './SidebarLink.vue'
+import SidebarSubmenu from './SidebarSubmenu.vue'
+import { groupLinks, groupMenus, showGroupTitle, useOpenSections, type NavLink } from './sidebarGroups'
+import { useActiveMenuPath } from './useActiveMenu'
 
 const app = useAppStore()
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
 
 function sectionLabel(s: NavSection): string {
-  if (s.label) return lt(s.label)
-  return t(`nav.sections.${s.key}`)
+  return s.label ? lt(s.label) : t(`nav.sections.${s.key}`)
 }
 
-function itemLabel(i: NavItem): string {
-  if (i.labelKey) return t(i.labelKey)
-  return lt(i.label)
-}
-
-/**
- * The menu entry of the current page: the page itself, else the nearest page
- * above it (meta.parent, as the breadcrumbs follow), else a path prefix. So
- * /plugins/x/settings, a child of the settings page, lights up Settings.
- */
-const activePath = computed(() => {
-  const paths = app.menus.flatMap((s) => s.items.map((i) => i.path))
-  let p: string | undefined = route.path
-  const seen = new Set<string>()
-  while (p && !seen.has(p)) {
-    if (paths.includes(p)) return p
-    seen.add(p)
-    p = p === route.path ? route.meta.parent : router.resolve(p).meta.parent
-  }
-  return paths.filter((x) => x !== '/' && route.path.startsWith(x + '/')).sort((a, b) => b.length - a.length)[0]
-})
-function active(i: NavItem): boolean {
-  return i.path === activePath.value
+const activePath = useActiveMenuPath()
+function active(l: NavLink): boolean {
+  return !!activePath.value && l.paths.includes(activePath.value)
 }
 
 // The drawer closes on any navigation, not only on a menu click (links in pages, Back).
@@ -51,31 +33,11 @@ watch(
 /** The desktop collapse does not apply to the mobile drawer, which has no expand button. */
 const collapsed = computed(() => app.sidebarCollapsed && !app.mobileNavOpen)
 
-/** Attribution for SIcon's unknown-name warning: which menu entry declared it. */
-function iconContext(i: NavItem): string {
-  return i.pluginKey ? `plugin "${i.pluginKey}" menu "${i.id}"` : `menu "${i.id}"`
-}
-
-// A user without any operator section gets one flat list, as in sub2api:
-// Dashboard / API keys / Usage records without the "My account" header, my
-// account right after the dashboard (the server orders it last, after the
-// plugin sections an operator scrolls past). Plugin sections keep theirs.
-const OPERATOR_SECTIONS = ['gateway', 'security', 'finance', 'users', 'system']
-const flat = computed(() => !app.menus.some((s) => OPERATOR_SECTIONS.includes(s.key)))
-const sections = computed<NavSection[]>(() => {
-  if (!flat.value) return app.menus
-  const me = app.menus.filter((s) => s.key === 'me')
-  const rest = app.menus.filter((s) => s.key !== 'me')
-  const at = rest.findIndex((s) => s.key === 'overview') + 1
-  return [...rest.slice(0, at), ...me, ...rest.slice(at)]
-})
-function showHeader(s: NavSection): boolean {
-  return !collapsed.value && s.key !== 'overview' && !(flat.value && s.key === 'me')
-}
-/** Collapsed, the section headers are gone; a rule keeps the groups apart. */
-function showDivider(s: NavSection, index: number): boolean {
-  return collapsed.value && index > 0 && !(flat.value && (s.key === 'me' || sections.value[index - 1]?.key === 'overview'))
-}
+const groups = computed(() => groupMenus(app.menus))
+const activeSubmenu = computed(
+  () => groups.value.flatMap(g => g.entries).find(e => e.section?.items.some(i => i.path === activePath.value))?.section?.key
+)
+const { isOpen, toggle } = useOpenSections(activeSubmenu)
 </script>
 
 <template>
@@ -97,33 +59,30 @@ function showDivider(s: NavSection, index: number): boolean {
       <div v-if="!app.menusLoaded" class="space-y-2 px-2">
         <SSkeleton v-for="i in 8" :key="i" height="2rem" />
       </div>
-      <div v-for="(s, index) in sections" :key="s.key" :class="flat && s.key === 'overview' ? 'mb-0.5' : 'mb-3'">
-        <hr v-if="showDivider(s, index)" class="mx-2 mb-3 border-line" aria-hidden="true" />
-        <div
-          v-if="showHeader(s)"
-          class="mb-1 px-3 text-xxs font-semibold uppercase tracking-wider text-fg-subtle"
-        >
-          {{ sectionLabel(s) }}
+      <template v-if="collapsed">
+        <div v-for="(g, index) in groups" :key="g.key" class="mb-3">
+          <hr v-if="index > 0" class="mx-2 mb-3 border-line" aria-hidden="true" />
+          <SidebarLink v-for="l in groupLinks(g)" :key="l.key" :item="l.item" :active="active(l)" collapsed />
         </div>
-        <RouterLink
-          v-for="i in s.items"
-          :key="i.id"
-          :to="i.path"
-          :title="collapsed ? itemLabel(i) : undefined"
-          :aria-label="collapsed ? itemLabel(i) : undefined"
-          :aria-current="active(i) ? 'page' : undefined"
-          class="mb-0.5 flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors"
-          :class="
-            active(i)
-              ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
-              : 'text-fg-muted hover:bg-surface-2 hover:text-fg'
-          "
-          @click="app.mobileNavOpen = false"
-        >
-          <SIcon :name="i.icon || 'puzzle'" :context="iconContext(i)" class="h-5 w-5 shrink-0" />
-          <span v-if="!collapsed" class="truncate">{{ itemLabel(i) }}</span>
-        </RouterLink>
-      </div>
+      </template>
+      <template v-else>
+        <div v-for="g in groups" :key="g.key" class="mb-3" :data-testid="`nav-group-${g.key}`">
+          <div v-if="showGroupTitle(g, app.menus)" class="mb-1 px-3 text-xxs font-semibold uppercase tracking-wider text-fg-subtle">
+            {{ t(`nav.sections.${g.key}`) }}
+          </div>
+          <template v-for="e in g.entries" :key="e.key">
+            <SidebarSubmenu
+              v-if="e.section"
+              :section="e.section"
+              :label="sectionLabel(e.section)"
+              :open="isOpen(e.section.key)"
+              :active-path="activePath"
+              @toggle="toggle(e.section.key)"
+            />
+            <SidebarLink v-else :item="e.item" :active="active(e)" />
+          </template>
+        </div>
+      </template>
       <button
         v-if="app.menusError"
         type="button"

@@ -1,13 +1,14 @@
 export default {
   sections: {
-    overview: '概览',
+    overview: '控制台',
     gateway: '网关',
     security: '安全',
     finance: '财务',
     users: '用户与权限',
     plugins: '插件',
-    system: '系统',
-    me: '我的账户'
+    system: '系统设置',
+    me: '个人中心',
+    admin: '管理员'
   },
   items: {
     dashboard: '仪表盘',
@@ -15,8 +16,8 @@ export default {
     accounts: '账号',
     proxies: '代理',
     prices: '模型价格',
-    usageOverview: '概览',
-    usage: '使用记录',
+    usageOverview: '全站概览',
+    usage: '全站日志',
     ledger: '余额流水',
     users: '用户',
     roles: '角色与权限',
@@ -26,13 +27,13 @@ export default {
     publishers: '发布者',
     nodes: '集群节点',
     tasks: '定时任务',
-    settings: '设置',
+    settings: '系统设置',
     myApiKeys: 'API 密钥',
-    myUsageOverview: '概览',
-    myUsage: '使用记录',
+    myUsageOverview: '用量概览',
+    myUsage: '使用日志',
     myModels: '模型与价格',
     myWallet: '钱包',
-    myProfile: '个人中心'
+    myProfile: '个人设置'
   },
   crumbs: {
     pluginDetail: '插件详情',

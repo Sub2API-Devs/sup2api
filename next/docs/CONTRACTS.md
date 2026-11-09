@@ -1155,17 +1155,17 @@ type ProxyResolver interface {
 
 | 区 | order | 核心项 | 内置插件菜单 |
 | --- | --- | --- | --- |
-| overview 概览 | 100 | 仪表盘 | |
-| gateway 网关 | 200 | 分组、账号、平台、代理、模型价格、使用记录 | 模型目录（anthropic 0.2.9）、动态权重 |
+| overview 概览（§90 起叫“控制台”） | 100 | 仪表盘（§90 起还有 API 密钥、模型与价格、用量概览、使用日志、全站概览、全站日志） | |
+| gateway 网关 | 200 | 分组、账号、平台、代理、模型价格（§90 起使用记录移到控制台，平台、代理移到系统设置） | 模型目录（anthropic 0.2.9）、动态权重（dynweight 0.5.4 起移到系统设置） |
 | security 安全 | 300 | 无（空区不返回） | 请求守卫（guard 0.2.7）、提示词审核（moderation 0.6.2） |
 | finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
-| users 用户与权限 | 500 | 用户、角色与权限 | |
-| plugins 插件 | 600 | 已安装插件、插件市场、发布者；`section:"plugins"` 的插件菜单接在后面 | |
-| system 系统 | 700 | 集群节点、核心升级、审计日志、设置 | |
-| me 我的账户 | 800 | API 密钥、使用记录 | 我的邀请、每日签到 |
+| users 用户与权限 | 500 | 用户、角色与权限（§90 起角色与权限移到系统设置） | |
+| plugins 插件 | 600 | 已安装插件、插件市场、发布者（§90 起移到系统设置）；`section:"plugins"` 的插件菜单接在后面 | |
+| system 系统（§90 起叫“系统设置”） | 700 | 集群节点、定时任务、核心升级、审计日志、设置（§90 起还有平台、代理、角色与权限、已安装插件、插件市场、发布者，侧栏只显示为一项） | （§90 起）动态权重 |
+| me 我的账户（§90 起叫“个人中心”） | 800 | API 密钥、使用记录（§90 起只剩钱包、个人设置） | 我的邀请、每日签到 |
 
-- 只有概览和我的账户的用户（没有 gateway/security/finance/users/system 任何一区），控制台把"我的账户"排到仪表盘之后并且不画它的标题；插件区照常有标题。
-- 侧栏收起时分区标题隐藏，各区之间画一条分隔线。
+- ~~只有概览和我的账户的用户，控制台把"我的账户"排到仪表盘之后并且不画它的标题~~（§90 起所有人都按三组显示）。
+- 侧栏收起时分区标题隐藏，各区之间画一条分隔线（§90 起分隔线画在三组之间）。
 - 用到 `security`、`users` 的插件需要核心 0.1.229 或更高（guard 0.2.7、moderation 0.6.2 的 `hostCompat`）。
 - `security`、`users` 是本次新增的核心区 id，从此是保留 id：插件在 `ui.sections` 里声明 id 为 `security` 或 `users` 的自有区，上传/安装时校验失败 `ui.sections[i].id / invalid`（"reserved for the core sidebar"）。校验只在上传/安装时做，已经装好的这类插件照常加载：它的菜单 `section:"security"`/`"users"` 在运行时按核心区处理，并入核心的"安全"/"用户与权限"区，自己声明的 `label` 和 `order` 被忽略。
 - 用其他 id 声明的旧自有区不受影响，仍作为插件自己的区显示，例如 moderation 0.1.1–0.6.1 的 `safety`（order 350，排在 security 与 finance 之间，区名取声明的 label）；升级到 moderation 0.6.2 后它的菜单进入核心 `security` 区。
@@ -1173,7 +1173,7 @@ type ProxyResolver interface {
 
 **表格页的"新建"按钮**：manifest `ui.pages.<id>.create: {page, permission?}` 只能写在 `type:"table"` 的页面上，`page` 必须是同一插件的 `type:"form"` 页面，`permission` 是 `userPermissions` 里的 key。控制台在表格上方画一个主按钮，文字取目标页的 `title`，点击打开 `/p/<插件>/<page>`。`GET /ui/plugins` 对没有该权限的调用者去掉 `create`，表单页如果没有可见菜单指向它也一并去掉；表格页本身因菜单权限对调用者不可见时，它的 `create` 链接同样不算可用，只靠这条链接到达的表单页也去掉（即使链接不要求权限）。校验错误：`ui.pages.<id>.create` invalid（非表格页）、`.create.page` unknown / invalid（不存在 / 不是表单）、`.create.permission` unknown。volcengine 0.12.6 用它替代了"新建素材组""新建素材"两个菜单项，需要核心 0.1.229。
 
-**控制台布局**：路由 `meta.parent` 指向上级页面，顶栏在标题前显示面包屑（价格详情、价格同步源、同步预览、插件详情、发布进度、安装授权、插件设置）。设置页改为左侧二级导航（网关 / 计费 / 通知 / 系统 / 插件设置），页面仍用 `?tab=` 选择；"插件设置"列出已启用且有设置表单的插件（以及 ccgateway），选中为 `?tab=plugin:<key>`，内容即插件设置页。
+**控制台布局**：路由 `meta.parent` 指向上级页面，顶栏在标题前显示面包屑（价格详情、价格同步源、同步预览、插件详情、发布进度、安装授权、插件设置）。设置页改为左侧二级导航（网关 / 计费 / 通知 / 系统 / 插件设置；§90 起分组见 90.2），页面仍用 `?tab=` 选择；"插件设置"列出已启用且有设置表单的插件（以及 ccgateway），选中为 `?tab=plugin:<key>`，内容即插件设置页。
 
 ## 23. 原生插件 UI 的共享库：`@sub2api/ui`、`@sub2api/host`、`@sub2api/vite-preset`（2026-09-27，用户要求）
 
@@ -5795,6 +5795,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 账号权重被修改后的重置从键上次评估的窗口算起，新权重下第一个有流量的窗口不再被重置吞掉。见下文"基准权重"。
   - `GET /weights` 的 `changed_at` 改为 unix 秒，与 `/status` 一致（控制台两种格式都认）。
   - 控制台：状态色全部改用 `@sub2api/ui` 组件的 `tone`，去掉插件自造的色板和对 `html.dark` 的依赖（§23.4；规则位图的命中格改为中性色实心，调整项动作行的方向色从左边框改为 `SStatusDot`）；按 id 读账号名改为批量 `GET /accounts?ids=`；百分比和毫秒数用 `host.i18n.formatNumber`。
+- **0.5.4（2026-11-10）**：manifest 只把菜单的 `section` 从 `gateway` 改成 `system`，随 §90 进系统设置的导航（插件设置组）；`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。装在 §90 之前的核心上时菜单进旧的“系统”区。（0.5.3 只把控制台的操作按钮改成文字，同样可单独升级。）
 - **只安装不启用**（`BUILTIN_PLUGINS_INSTALL_ONLY`）：启用后每次调度都会调用它，所以要由管理员有意打开。
 
 #### 计数
@@ -6908,3 +6909,52 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 计算：`server/internal/gateway/balance.go`（`readBalance`、`tierWeights`、`trafficWeights`、`loadedWeight`），接入 `dispatch.go` `pick` / `orderPool`
 - 读数：`core.AccountLimiter.ModelUsage`（`account/limiter.go`），`core.AccountRef.ModelLimitIndex`（`core/ports_identity.go`）
 - 前端：`web/src/views/settings/SchedulingPolicyView.vue`、`LoadBalanceSettingsCard.vue`
+
+## 90. 侧栏三组：控制台、个人中心、管理员；系统设置（2026-11-10，用户要求：参考 new-api 的菜单，分三类；无迁移）
+
+侧栏按三组显示，接口 `GET /me/menus` 的形状和区 id 不变，存储不变：
+
+| 组 | 来自哪个区 | 内容 |
+| --- | --- | --- |
+| 控制台 | `overview`（标签“控制台 / Console”） | 仪表盘、API 密钥、模型与价格、用量概览（`/me/usage/overview`）、使用日志（`/me/usage`），以及有 `usage:all:read` 才有的全站概览（`/usage/overview`）、全站日志（`/usage`） |
+| 个人中心 | `me`（标签“个人中心 / Personal”） | 钱包、个人设置（`/me/profile`）；`section:"me"` 的插件菜单（我的邀请、每日签到）接在后面 |
+| 管理员 | 其余所有区，按服务端顺序 | 核心区的项平铺、不画区标题；插件自己的区（`<插件>:<id>`）有两项及以上时折叠成子菜单（区名、首项图标），只有一项时直接显示这一项；`system` 区整体显示为最后一项“系统设置” |
+
+### 90.1 区的内容
+
+| 区 | 核心项 | 内置插件菜单 |
+| --- | --- | --- |
+| gateway 网关 | 账号、分组、模型价格 | 模型目录（anthropic） |
+| security 安全 | 无 | 请求守卫、提示词审核 |
+| finance 财务 | 余额流水 | 增长管理 |
+| users 用户与权限 | 用户 | |
+| plugins 插件 | 无（核心项移到系统设置）；`section:"plugins"`（默认）的插件菜单仍进这里 | |
+| system 系统设置（标签“系统设置 / System settings”） | 设置 `/settings`、平台、代理、角色与权限、已安装插件、插件市场、发布者、集群节点、定时任务、核心升级、审计日志 | 动态权重（dynweight 0.5.4 起，`section` 由 `gateway` 改为 `system`） |
+
+`section:"system"` 的插件菜单并入系统设置。各区仍按 `CoreMenuSections()` 的 order 返回（`me` 是 800），三组的排列由控制台决定。
+
+### 90.2 系统设置
+
+- 侧栏的“系统设置”一项代表整个 `system` 区：点击打开调用者能看到的第一页（区内第一项），当前页是区内任一页时它高亮。
+- 区内各页地址不变，路由 `meta.parent` 为 `/settings`，顶栏面包屑为“系统设置 › 页面”；这些页和设置页都显示在同一个外壳里：宽屏左侧二级导航，窄屏页面上方一个下拉框（`SSelect`）。页面所属的区由它自己或 `meta.parent` 链上第一个菜单项决定（如 `/plugins/:key/settings` 属于系统设置）；菜单加载失败时 `/settings` 仍带外壳。
+- 二级导航分组（设置页自己的页仍用 `?tab=<key>`，其余页用自己的地址，按权限显示，空组不显示）：
+  - 网关：网关设置、调度策略、粘性会话、CPU 保护、平台、代理
+  - 计费与通知：计费、通知
+  - 用户与权限：角色与权限
+  - 插件：已安装插件、插件市场、发布者
+  - 插件设置：已启用且有设置的插件（`?tab=plugin:<key>`），以及 `system` 区的插件页（如动态权重）
+  - 系统：集群节点、定时任务、核心升级、在线更新、审计日志、环境变量；`system` 区里没有指定位置的核心页排在这里
+- 只有 `account:own:*` / `proxy:own:*` 的调用者（供应商）：管理员组里有“账号”，系统设置里有“平台”“代理”，侧栏的“系统设置”直接打开平台页。
+
+### 90.3 侧栏
+
+- 所有角色都有控制台，看到哪些项按权限过滤。
+- “管理员”标题只在调用者有 gateway/security/finance/users/system 任一区时显示；只有公开插件页的普通用户，这些页排在个人中心之后、没有组标题。
+- 插件子菜单展开状态存在浏览器 `localStorage` 的 `s2a.navOpen`；当前页面所在的子菜单自动展开。
+- 侧栏收起（只剩图标）时没有组标题和子菜单：所有项按组平铺成图标（插件子菜单展开，系统设置仍是一个图标），三组之间画分隔线。
+
+### 90.4 实现位置
+
+- 服务端：`server/internal/authz/menus.go`（`coreMenus`）；`plugins/dynweight/manifest.json`
+- 侧栏：`web/src/layouts/sidebarGroups.ts`（分组、系统设置一项、子菜单、展开状态）、`AppSidebar.vue`、`SidebarLink.vue`、`SidebarSubmenu.vue`、`useActiveMenu.ts`（当前页对应的菜单项与区）
+- 系统设置：`web/src/layouts/SettingsShell.vue`、`AppLayout.vue`（套外壳），`web/src/views/settings/settingsNav.ts`（二级导航）、`SettingsView.vue`；面包屑见 `web/src/router/index.ts`

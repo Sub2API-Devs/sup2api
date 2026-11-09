@@ -1,13 +1,14 @@
 export default {
   sections: {
-    overview: 'Overview',
+    overview: 'Console',
     gateway: 'Gateway',
     security: 'Security',
     finance: 'Finance',
     users: 'Users & access',
     plugins: 'Plugins',
-    system: 'System',
-    me: 'My account'
+    system: 'System settings',
+    me: 'Personal',
+    admin: 'Admin'
   },
   items: {
     dashboard: 'Dashboard',
@@ -15,8 +16,8 @@ export default {
     accounts: 'Accounts',
     proxies: 'Proxies',
     prices: 'Model prices',
-    usageOverview: 'Usage overview',
-    usage: 'Usage records',
+    usageOverview: 'Site overview',
+    usage: 'Site usage logs',
     ledger: 'Balance ledger',
     users: 'Users',
     roles: 'Roles & permissions',
@@ -26,13 +27,13 @@ export default {
     publishers: 'Publishers',
     nodes: 'Cluster nodes',
     tasks: 'Scheduled tasks',
-    settings: 'Settings',
+    settings: 'System settings',
     myApiKeys: 'API keys',
     myUsageOverview: 'Usage overview',
-    myUsage: 'Usage records',
+    myUsage: 'Usage logs',
     myModels: 'Models & prices',
     myWallet: 'Wallet',
-    myProfile: 'Account'
+    myProfile: 'Profile'
   },
   crumbs: {
     pluginDetail: 'Plugin details',
