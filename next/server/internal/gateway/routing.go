@@ -1,8 +1,6 @@
 package gateway
 
 import (
-	"context"
-
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway/convert"
@@ -85,11 +83,6 @@ type typeRoute struct {
 
 // upstreamLocal is the upstream protocol recorded for a local route.
 const upstreamLocal = "local"
-
-// localCount answers a count_tokens request on a local route, without an
-// upstream (CONVERT-MATRIX §8). count_local.go sets it; while it is nil no
-// local route is planned.
-var localCount func(c *call, ctx context.Context, rt *typeRoute) attemptResult
 
 // planRoutes lists the account types able to serve the endpoint: those
 // supporting the endpoint's platform P (native), then those reaching it
@@ -197,7 +190,7 @@ func (c *call) addConvertedRoute(b core.AccountTypeBinding, x string, samePlatfo
 // when the type serves the generation protocol of the request's family.
 func (c *call) addLocalCountRoute(b core.AccountTypeBinding) {
 	family := core.CountTokensFamily(c.ep.Protocol)
-	if family == "" || localCount == nil || !core.ServesProtocol(c.gen, b, c.g.conv, family) {
+	if family == "" || !core.ServesProtocol(c.gen, b, c.g.conv, family) {
 		return
 	}
 	k := b.Key()

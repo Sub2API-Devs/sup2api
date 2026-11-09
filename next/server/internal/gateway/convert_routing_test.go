@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"context"
 	"slices"
 	"testing"
 
@@ -117,17 +116,10 @@ func TestConvertedRouteStreamMode(t *testing.T) {
 // types serving its family's generation protocol (§8); token counting
 // endpoints are never conversion targets.
 func TestLocalCountRoute(t *testing.T) {
-	saved := localCount
-	t.Cleanup(func() { localCount = saved })
 	const count = "anthropic.count_tokens"
 	types := []core.AccountTypeBinding{xType("gen", []string{"fair"}), xType("none", []string{"json"})}
 	convs := []convert.Converter{conv("anthropic.messages", "x.fair", convert.GradeFair), conv(count, "x.json", convert.GradeFair)}
 
-	localCount = nil
-	if c := routingCall(t, false, count, types, convs...); len(c.routes) != 0 {
-		t.Fatalf("local routes without an estimator: %v", c.routeKeys)
-	}
-	localCount = func(*call, context.Context, *typeRoute) attemptResult { return attemptResult{} }
 	c := routingCall(t, false, count, types, convs...)
 	if rt := routeOf(c, "gen"); rt == nil || !rt.local || rt.conv != nil || rt.grade != convert.GradeLocal ||
 		rt.upstream != upstreamLocal || !slices.Equal(rt.hops, []string{count}) {

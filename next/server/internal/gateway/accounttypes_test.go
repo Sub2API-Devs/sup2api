@@ -366,7 +366,7 @@ func convEnv(t *testing.T, conv *fakeConv) (*env, *qUpstream, *fakePlatform) {
 
 func TestConvertedNonStream(t *testing.T) {
 	e, q, qp := convEnv(t, nil)
-	if !e.gw.CanConvert("anthropic.messages", "q.chat") || e.gw.CanConvert("q.chat", "anthropic.messages") {
+	if conv := e.gw.Converters(); !conv.CanConvert("anthropic.messages", "q.chat") || conv.CanConvert("q.chat", "anthropic.messages") {
 		t.Fatal("CanConvert")
 	}
 	r := e.messages(body(testModel, false))

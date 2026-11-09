@@ -283,9 +283,11 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 			return c.finishPick(ctx, &ref, release, cands, excluded)
 		}
 	}
-	unusable := func(r core.AccountRef) bool { return !c.usable(ctx, &r) }
-	if pool = slices.DeleteFunc(pool, unusable); len(pool) == 0 {
-		return nil, nil, slices.ContainsFunc(limited, func(r core.AccountRef) bool { return !unusable(r) })
+	// Busy only when an account that could serve the request is full or
+	// rate limited, not when every one was refused for its conversion.
+	usable := func(r core.AccountRef) bool { return c.usable(ctx, &r) }
+	if pool = slices.DeleteFunc(pool, func(r core.AccountRef) bool { return !usable(r) }); len(pool) == 0 {
+		return nil, nil, slices.ContainsFunc(limited, usable)
 	}
 	if ref := c.queueTarget(ctx, pool); ref != nil {
 		if release, ok := c.waitForAccount(ctx, ref, c.gw.QueueFallbackMaxWaiting, c.gw.queueFallbackWait()); ok {
@@ -557,7 +559,7 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 
 	c.serveRoute(rt, ref)
 	if rt.local {
-		return localCount(c, ctx, rt)
+		return c.countLocally(ctx)
 	}
 	// The request was converted for the route when the account was picked;
 	// the body is final by then, so this only reads that result.

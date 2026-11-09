@@ -377,6 +377,23 @@ func (c *canonReq) maxTokensParam(path string, v any) error {
 	return nil
 }
 
+// isHTTPURL reports whether a media reference is an http(s) URL.
+func isHTTPURL(url string) bool {
+	return strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://")
+}
+
+// dataURL is "data:<mime>;base64,<data>".
+func dataURL(mime, data string) string { return "data:" + mime + ";base64," + data }
+
+// parseDataURL splits "data:<mime>;base64,<data>".
+func parseDataURL(url string) (mime, data string, ok bool) {
+	meta, data, found := strings.Cut(url, ",")
+	if !found || !strings.HasPrefix(meta, "data:") || !strings.HasSuffix(meta, ";base64") {
+		return "", "", false
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(meta, "data:"), ";base64"), data, true
+}
+
 // textPart is a text part.
 func textPart(text, path string) canonPart { return canonPart{kind: partText, text: text, path: path} }
 

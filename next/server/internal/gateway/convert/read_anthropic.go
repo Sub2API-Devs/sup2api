@@ -94,11 +94,13 @@ var anthropicStopReasons = map[string]FinishReason{
 type anthropicReader struct {
 	readerBase
 	usageAcc anthropicUsageJSON
-	tools    map[string]string // tool blocks: input given at start, until arguments stream
+	// startInput is the input of the tool blocks given at their start,
+	// until their arguments stream.
+	startInput map[string]string
 }
 
 func newAnthropicReader(respOpts) Reader {
-	return &anthropicReader{tools: map[string]string{}}
+	return &anthropicReader{startInput: map[string]string{}}
 }
 
 func (r *anthropicReader) JSON(body []byte) (*Msg, error) {
@@ -112,7 +114,7 @@ func (r *anthropicReader) JSON(body []byte) (*Msg, error) {
 		if err := decodeUpstream(raw, &b, "anthropic content block"); err != nil {
 			return nil, err
 		}
-		blk := r.block(&b, raw, fmt.Sprintf("content[%d]", i))
+		blk := r.blockOf(&b, raw, fmt.Sprintf("content[%d]", i))
 		if blk.Kind == BlockToolCall {
 			blk.Args = compactJSON(b.Input)
 		}
@@ -125,8 +127,8 @@ func (r *anthropicReader) JSON(body []byte) (*Msg, error) {
 	return out, nil
 }
 
-// block maps a content block, without tool input.
-func (r *anthropicReader) block(b *anthropicBlockJSON, raw json.RawMessage, src string) Block {
+// blockOf maps a content block, without tool input.
+func (r *anthropicReader) blockOf(b *anthropicBlockJSON, raw json.RawMessage, src string) Block {
 	switch b.Type {
 	case "text":
 		return Block{Kind: BlockText, Text: b.Text, Annotations: r.citations(b.Citations, src), Src: src}
@@ -220,7 +222,7 @@ func (r *anthropicReader) event(e *anthropicEvent, data []byte) error {
 		}
 	case "content_block_stop":
 		if r.open == key {
-			if input, ok := r.tools[key]; ok {
+			if input, ok := r.startInput[key]; ok {
 				r.add(key, Block{}, DeltaArgs, input)
 			}
 			r.stop()
@@ -252,7 +254,7 @@ func (r *anthropicReader) blockStart(key string, e *anthropicEvent) error {
 	if err := decodeUpstream(e.ContentBlock, &b, "anthropic content block"); err != nil {
 		return err
 	}
-	blk := r.block(&b, e.ContentBlock, fmt.Sprintf("content[%d]", e.Index))
+	blk := r.blockOf(&b, e.ContentBlock, fmt.Sprintf("content[%d]", e.Index))
 	if blk.Kind == BlockOpaque {
 		r.emitBlock(key, blk)
 		return nil
@@ -268,7 +270,7 @@ func (r *anthropicReader) blockStart(key string, e *anthropicEvent) error {
 		r.state(key)
 	}
 	if blk.Kind == BlockToolCall {
-		r.tools[key] = compactJSON(b.Input)
+		r.startInput[key] = compactJSON(b.Input)
 	}
 	return nil
 }
@@ -283,7 +285,7 @@ func (r *anthropicReader) delta(key string, e *anthropicEvent) {
 		r.state(key)
 	case "input_json_delta":
 		if e.Delta.PartialJSON != "" {
-			delete(r.tools, key)
+			delete(r.startInput, key)
 		}
 		r.add(key, Block{}, DeltaArgs, e.Delta.PartialJSON)
 	case "citations_delta":

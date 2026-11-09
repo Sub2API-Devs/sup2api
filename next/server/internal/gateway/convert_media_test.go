@@ -171,7 +171,7 @@ func TestMediaConversionToGemini(t *testing.T) {
 	if !errors.As(err, &re) || !strings.Contains(err.Error(), `"text/html" is not supported`) {
 		t.Fatalf("unsupported type: %v", err)
 	}
-	if mediaFetcher == nil {
+	if (&call{}).convertOptions(context.Background()).Fetch == nil {
 		t.Fatal("the gateway gives conversions no fetcher")
 	}
 }

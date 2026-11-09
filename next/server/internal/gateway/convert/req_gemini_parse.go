@@ -269,7 +269,7 @@ func (p *geminiParser) inlineData(o jobject, path string) (canonPart, bool, erro
 		return canonPart{}, false, err
 	}
 	mt = mediaType(mt)
-	url := "data:" + mt + ";base64," + data
+	url := dataURL(mt, data)
 	switch {
 	case strings.HasPrefix(mt, "image/"):
 		return canonPart{kind: partImage, path: path, url: url}, true, nil

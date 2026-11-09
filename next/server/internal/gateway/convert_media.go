@@ -27,14 +27,13 @@ import (
 // mediaDownloadTimeout bounds one download (a variable for tests).
 var mediaDownloadTimeout = 60 * time.Second
 
-func init() {
-	// The downloader is set up on the first download: most requests have
-	// nothing to download.
-	mediaFetcher = func(c *call) convert.MediaFetcher {
-		return cachedMedia(func(ctx context.Context, url string) (string, string, error) {
-			return c.g.mediaDownloader(c.gw.mediaDownloadMaxBytes()).download(ctx, url)
-		})
-	}
+// mediaFetcher is the MediaFetcher of the request, which caches the
+// downloads by URL. The downloader is set up on the first download: most
+// requests have nothing to download.
+func (c *call) mediaFetcher() convert.MediaFetcher {
+	return cachedMedia(func(ctx context.Context, url string) (string, string, error) {
+		return c.g.mediaDownloader(c.gw.mediaDownloadMaxBytes()).download(ctx, url)
+	})
 }
 
 // mediaClients are the guarded HTTP clients, without and with private

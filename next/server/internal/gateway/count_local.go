@@ -22,8 +22,6 @@ import (
 // reply is only the count in the client protocol's shape, without further
 // headers.
 
-func init() { localCount = countLocally }
-
 // Fixed token counts of media.
 const (
 	anthropicImageTokens = 1373 // resized into 1568 px, 28 px tiles + 4
@@ -34,7 +32,7 @@ const (
 )
 
 // countLocally answers a count_tokens request on a local route.
-func countLocally(c *call, ctx context.Context, _ *typeRoute) attemptResult {
+func (c *call) countLocally(ctx context.Context) attemptResult {
 	n, err := estimateTokens(ctx, c.ep.Protocol, c.body)
 	if err != nil {
 		return attemptResult{kind: attemptReturn, err: &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,

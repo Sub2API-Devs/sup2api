@@ -41,6 +41,9 @@ type chatResponses struct {
 	legacy   bool
 	prepared bool
 	lost     losses
+	// reqLosses is how many entries of lost the request has; the rest are
+	// the latest response's.
+	reqLosses int
 }
 
 func (c *chatResponses) From() string { return "openai.chat" }
@@ -53,12 +56,16 @@ func (c *chatResponses) Prepare(body []byte, _ Options) (Converter, []byte, erro
 	if err != nil {
 		return nil, nil, &RequestError{Cause: err}
 	}
+	p.reqLosses = len(p.lost.list)
 	return p, out, nil
 }
 
-// Losses implements LossReporter: request losses, then the losses of the
-// responses converted so far.
+// Losses implements LossReporter: the request losses, then those of the
+// latest response or stream.
 func (c *chatResponses) Losses() []Loss { return c.lost.sorted() }
+
+// resetResponseLosses forgets the losses of an earlier response or stream.
+func (c *chatResponses) resetResponseLosses() { c.lost.list = c.lost.list[:c.reqLosses] }
 
 // drop records a request path left out, with the category its place in the
 // request implies (CONVERT-MATRIX §9.9).
@@ -1228,6 +1235,7 @@ func (c *chatResponses) Response(body []byte) ([]byte, error) {
 	if !c.prepared {
 		return nil, errUnprepared
 	}
+	c.resetResponseLosses()
 	r, err := decodeJObject(body, "response")
 	if err != nil {
 		return nil, err
@@ -1559,6 +1567,9 @@ func chatUsage(v any) (jobject, error) {
 // ---------------------------------------------------------------- stream
 
 func (c *chatResponses) NewStream() StreamConverter {
+	if c.prepared {
+		c.resetResponseLosses()
+	}
 	return &chatResponsesStream{p: c, created: time.Now().Unix(), tools: map[int64]*chatStreamTool{},
 		partBase: map[[2]int64]int{}}
 }

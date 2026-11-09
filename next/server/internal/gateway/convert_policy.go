@@ -27,11 +27,6 @@ const (
 	maxTraceRejected  = 5
 )
 
-// mediaFetcher returns the MediaFetcher of a request, which caches the
-// downloads by URL (convert_media.go); while it is nil, conversions that
-// need a download fail with RequestError.
-var mediaFetcher func(c *call) convert.MediaFetcher
-
 // conversionState is the request's side of the conversions.
 type conversionState struct {
 	opts *convert.Options
@@ -120,11 +115,8 @@ func (c *call) prepareRoute(ctx context.Context, rt *typeRoute) bool {
 // shares, built once.
 func (c *call) convertOptions(ctx context.Context) convert.Options {
 	if c.conversion.opts == nil {
-		o := convert.Options{Ctx: ctx, Model: c.model, Stream: c.stream, ClaudeDefaultMaxTokens: c.gw.claudeMaxTokens}
-		if mediaFetcher != nil {
-			o.Fetch = mediaFetcher(c)
-		}
-		c.conversion.opts = &o
+		c.conversion.opts = &convert.Options{Ctx: ctx, Model: c.model, Stream: c.stream, Fetch: c.mediaFetcher(),
+			ClaudeDefaultMaxTokens: c.gw.claudeMaxTokens}
 	}
 	return *c.conversion.opts
 }

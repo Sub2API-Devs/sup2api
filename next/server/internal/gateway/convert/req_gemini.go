@@ -242,10 +242,6 @@ func mediaType(mt string) string {
 	return strings.ToLower(strings.TrimSpace(mt))
 }
 
-func isHTTPURL(url string) bool {
-	return strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://")
-}
-
 // media writes an image or a file as inline data, nil when it is left
 // out: a file id names an OpenAI file Gemini does not know. A filename is
 // a label Gemini has no field for, not content; it is not kept.

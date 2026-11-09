@@ -568,6 +568,15 @@ func TestChatResponsesStreamReasoning(t *testing.T) {
 	if got := lossStrings(c.Losses()); !slices.Equal(got, []string{"reasoning:response.output[0].encrypted_content"}) {
 		t.Errorf("response losses = %q", got)
 	}
+	// Like a pair converter, the losses are those of the latest stream.
+	if _, err := chatStreamRun(t, c, `{"type":"response.created","response":{"id":"resp_2","model":"gpt-5"}}`,
+		`{"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"ok"}`,
+		`{"type":"response.completed","response":{"status":"completed"}}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Losses(); len(got) != 0 {
+		t.Errorf("losses of an earlier stream kept: %v", got)
+	}
 }
 
 func chatStreamRun(t *testing.T, c *chatResponses, events ...string) ([]string, error) {

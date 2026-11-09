@@ -282,7 +282,7 @@ func (b *anthropicBuilder) image(p canonPart) jobject {
 // mediaSource returns the Anthropic source of an http(s) URL or a data URL
 // of an accepted media type, nil otherwise.
 func mediaSource(url string, types map[string]bool) jobject {
-	if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") {
+	if isHTTPURL(url) {
 		return jobject{"type": "url", "url": url}
 	}
 	mime, data, ok := parseDataURL(url)
@@ -290,15 +290,6 @@ func mediaSource(url string, types map[string]bool) jobject {
 		return nil
 	}
 	return jobject{"type": "base64", "media_type": mime, "data": data}
-}
-
-// parseDataURL splits "data:<mime>;base64,<data>".
-func parseDataURL(url string) (mime, data string, ok bool) {
-	meta, data, found := strings.Cut(url, ",")
-	if !found || !strings.HasPrefix(meta, "data:") || !strings.HasSuffix(meta, ";base64") {
-		return "", "", false
-	}
-	return strings.TrimSuffix(strings.TrimPrefix(meta, "data:"), ";base64"), data, true
 }
 
 // document writes a file part: a PDF (data or URL) or plain text data; a
@@ -1075,7 +1066,7 @@ func (p *anthropicParser) mediaRef(src jobject, path string) (string, error) {
 			return "", err
 		}
 		data, err := jnonempty(src["data"], path+".data")
-		return "data:" + mime + ";base64," + data, err
+		return dataURL(mime, data), err
 	case "url":
 		keepOther(src, path, p.l, "type", "url")
 		return jnonempty(src["url"], path+".url")
