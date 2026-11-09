@@ -226,7 +226,7 @@ func (s *Service) RollupTaskSpec() core.TaskSpec {
 		},
 		Scope:   core.TaskCluster,
 		Every:   time.Minute,
-		Timeout: rollupBudget + time.Minute,
+		Timeout: rollupBudget + 2*time.Minute, // a last chunk past the budget, then one of history
 		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
 			n, err := s.refreshRollup(ctx)
 			return core.TaskResult{Count: n}, err
