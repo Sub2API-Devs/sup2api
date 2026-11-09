@@ -1,0 +1,15 @@
+{
+  "image": [
+    "input[0].content[1].detail"
+  ],
+  "other": [
+    "tools[2].user_location",
+    "truncation"
+  ],
+  "reasoning": [
+    "input[1]"
+  ],
+  "tool": [
+    "tools[1]"
+  ]
+}

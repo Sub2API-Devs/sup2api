@@ -1,0 +1,99 @@
+{
+  "model": "gemini-3-flash-preview",
+  "reasoning_effort": "medium",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Current weather",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_time",
+        "description": "Current time",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "tz": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tz"
+          ]
+        }
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Weather and local time in Paris?"
+    },
+    {
+      "role": "assistant",
+      "content": "Checking.",
+      "tool_calls": [
+        {
+          "id": "call_w1",
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"city\":\"Paris\"}"
+          }
+        },
+        {
+          "id": "call_t1",
+          "type": "function",
+          "function": {
+            "name": "get_time",
+            "arguments": "{\"tz\":\"Europe/Paris\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_w1",
+      "content": "{\"temp_c\":18,\"sky\":\"cloudy\"}"
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_t1",
+      "content": [
+        {
+          "type": "text",
+          "text": "14:05"
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": "18C and cloudy; 14:05."
+    },
+    {
+      "role": "user",
+      "content": "Thanks. Tomorrow?"
+    }
+  ]
+}

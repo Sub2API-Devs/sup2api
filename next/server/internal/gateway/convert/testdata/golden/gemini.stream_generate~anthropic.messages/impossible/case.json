@@ -1,0 +1,6 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": true
+  }
+}

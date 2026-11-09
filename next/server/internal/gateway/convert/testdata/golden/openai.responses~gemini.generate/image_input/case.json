@@ -1,0 +1,11 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": false
+  },
+  "media": {
+    "https://example.com/cat.png": "golden/openai.responses~gemini.generate/image_input/cat.png",
+    "https://example.com/doc.pdf": "golden/openai.responses~gemini.generate/image_input/doc.pdf"
+  },
+  "note": "URL image and file are downloaded and inlined; the markdown data URL image is split out."
+}

@@ -1,0 +1,72 @@
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "Look."
+        },
+        {
+          "fileData": {
+            "mimeType": "image/png",
+            "fileUri": "gs://bucket/cat.png"
+          }
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "A pixel.",
+          "thought": true
+        },
+        {
+          "text": "Seen."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "More."
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "name": "get_weather",
+          "description": "Current weather",
+          "parametersJsonSchema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codeExecution": {}
+    }
+  ],
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_HARASSMENT",
+      "threshold": "BLOCK_NONE"
+    }
+  ],
+  "generationConfig": {
+    "maxOutputTokens": 128,
+    "topK": 40
+  }
+}

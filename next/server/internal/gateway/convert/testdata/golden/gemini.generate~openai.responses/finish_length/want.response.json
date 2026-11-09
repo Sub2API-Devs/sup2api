@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "The lighthouse stood alone on the"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "MAX_TOKENS",
+      "index": 0
+    }
+  ],
+  "modelVersion": "gpt-4o-2024-08-06",
+  "responseId": "resp_<hex>",
+  "usageMetadata": {
+    "candidatesTokenCount": 16,
+    "promptTokenCount": 15,
+    "totalTokenCount": 31
+  }
+}

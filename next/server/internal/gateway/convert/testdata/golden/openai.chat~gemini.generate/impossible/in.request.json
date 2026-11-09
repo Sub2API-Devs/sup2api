@@ -1,0 +1,10 @@
+{
+  "model": "gemini-2.5-flash",
+  "n": 2,
+  "messages": [
+    {
+      "role": "user",
+      "content": "Two answers."
+    }
+  ]
+}

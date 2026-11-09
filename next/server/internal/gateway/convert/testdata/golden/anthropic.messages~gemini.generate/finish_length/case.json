@@ -1,0 +1,10 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": false
+  },
+  "upstream": [
+    "recorded/gemini.generate/finish_length.response.json",
+    "recorded/gemini.stream_generate/finish_length.stream.sse"
+  ]
+}

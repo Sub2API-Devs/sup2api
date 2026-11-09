@@ -1,0 +1,4 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Once upon"}],"role":"model"},"index":0}],"modelVersion":"claude-sonnet-4-5-20250929","responseId":"resp_msg_013Zva2CMHLNnXjNJJKqJ2EF"}
+
+data: {"error":{"code":500,"message":"Overloaded","status":"INTERNAL"}}
+

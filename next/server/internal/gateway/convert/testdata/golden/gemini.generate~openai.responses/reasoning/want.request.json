@@ -1,0 +1,42 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Is 9973 prime?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "annotations": [],
+          "text": "Yes.",
+          "type": "output_text"
+        }
+      ],
+      "role": "assistant",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "text": "And 391?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "max_output_tokens": 32000,
+  "model": "gpt-5-mini",
+  "reasoning": {
+    "effort": "medium",
+    "summary": "auto"
+  },
+  "store": false
+}

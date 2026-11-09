@@ -1,0 +1,5 @@
+{
+  "reasoning": [
+    "1:response.candidates[0].content.parts[0]"
+  ]
+}

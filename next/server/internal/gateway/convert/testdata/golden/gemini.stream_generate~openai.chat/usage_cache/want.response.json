@@ -1,0 +1,24 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Hello."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "gpt-4o-2024-08-06",
+  "responseId": "chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG",
+  "usageMetadata": {
+    "cachedContentTokenCount": 1152,
+    "candidatesTokenCount": 3,
+    "promptTokenCount": 1290,
+    "totalTokenCount": 1293
+  }
+}

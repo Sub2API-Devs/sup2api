@@ -1,0 +1,27 @@
+{
+  "model": "gemini-2.5-flash",
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "answer",
+      "strict": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "n": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n"
+        ]
+      }
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Give me a number."
+    }
+  ]
+}

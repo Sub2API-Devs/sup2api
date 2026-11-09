@@ -1,0 +1,9 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": false
+  },
+  "media": {
+    "https://example.com/cat.png": "golden/anthropic.messages~gemini.generate/image_input/cat.png"
+  }
+}

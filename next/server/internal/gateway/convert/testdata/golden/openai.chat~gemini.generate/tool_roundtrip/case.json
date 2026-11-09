@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gemini-3-flash-preview",
+    "stream": false
+  },
+  "note": "Gemini 3: thinkingLevel; the image of a tool result goes inline into functionResponse.parts; model turns carry the bypass thoughtSignature."
+}

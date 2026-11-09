@@ -1,0 +1,4 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Once upon"}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"resp_<hex>"}
+
+data: {"error":{"code":500,"message":"An error occurred while processing your request.","status":"INTERNAL"}}
+

@@ -1,0 +1,8 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Hello!"}],"role":"model"},"index":0}],"modelVersion":"claude-sonnet-4-5-20250929","responseId":"resp_msg_013Zva2CMHLNnXjNJJKqJ2EF"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" How can I"}],"role":"model"},"index":0}],"modelVersion":"claude-sonnet-4-5-20250929","responseId":"resp_msg_013Zva2CMHLNnXjNJJKqJ2EF"}
+
+data: {"candidates":[{"content":{"parts":[{"text":" help you today?"}],"role":"model"},"index":0}],"modelVersion":"claude-sonnet-4-5-20250929","responseId":"resp_msg_013Zva2CMHLNnXjNJJKqJ2EF"}
+
+data: {"candidates":[{"finishReason":"STOP","index":0}],"modelVersion":"claude-sonnet-4-5-20250929","responseId":"resp_msg_013Zva2CMHLNnXjNJJKqJ2EF","usageMetadata":{"candidatesTokenCount":12,"promptTokenCount":14,"totalTokenCount":26}}
+

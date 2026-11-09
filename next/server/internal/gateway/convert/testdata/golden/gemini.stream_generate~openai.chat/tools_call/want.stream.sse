@@ -1,0 +1,4 @@
+data: {"candidates":[{"content":{"parts":[{"functionCall":{"args":{"city":"Paris"},"id":"call_FthC9qRpsL5kBpwwyw6c7j4k","name":"get_weather"}}],"role":"model"},"index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG"}
+
+data: {"candidates":[{"content":{"parts":[{"functionCall":{"args":{"city":"Tokyo"},"id":"call_RpEDoB8O0FTL9JoKTuCVFOyR","name":"get_weather"}}],"role":"model"},"finishReason":"STOP","index":0}],"modelVersion":"gpt-4o-2024-08-06","responseId":"chatcmpl-B9MHDbslfkBeAs8l4bebGdFOJ6PeG","usageMetadata":{"candidatesTokenCount":46,"promptTokenCount":62,"totalTokenCount":108}}
+

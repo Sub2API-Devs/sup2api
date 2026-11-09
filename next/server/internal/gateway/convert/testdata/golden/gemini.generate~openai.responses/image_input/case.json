@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gpt-5-mini",
+    "stream": false
+  },
+  "note": "snake_case members read like camelCase; an http(s) fileData image is an image URL, inline PDF a file."
+}

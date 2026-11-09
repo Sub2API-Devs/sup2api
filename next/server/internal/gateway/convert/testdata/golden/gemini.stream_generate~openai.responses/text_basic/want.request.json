@@ -1,0 +1,21 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Say hello.",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ],
+  "instructions": "Be brief.",
+  "max_output_tokens": 256,
+  "model": "gpt-5-mini",
+  "store": false,
+  "stream": true,
+  "temperature": 0.5,
+  "top_p": 0.9
+}

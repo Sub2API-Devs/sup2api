@@ -1,0 +1,13 @@
+{
+  "cachedContent": "cachedContents/abc",
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "Hi."
+        }
+      ]
+    }
+  ]
+}

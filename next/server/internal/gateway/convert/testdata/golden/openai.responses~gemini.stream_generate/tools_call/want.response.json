@@ -1,0 +1,38 @@
+{
+  "created_at": 0,
+  "error": null,
+  "id": "resp_Ws0QacGWJdiVz7IPuv6E8Qo",
+  "incomplete_details": null,
+  "model": "gemini-2.5-flash",
+  "object": "response",
+  "output": [
+    {
+      "arguments": "{\"city\":\"Paris\"}",
+      "call_id": "call_0a7c58053892cdba",
+      "id": "fc_Ws0QacGWJdiVz7IPuv6E8Qo_0",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    },
+    {
+      "arguments": "{\"city\":\"Tokyo\"}",
+      "call_id": "call_a873794201d81e12",
+      "id": "fc_Ws0QacGWJdiVz7IPuv6E8Qo_1",
+      "name": "get_weather",
+      "status": "completed",
+      "type": "function_call"
+    }
+  ],
+  "status": "completed",
+  "usage": {
+    "input_tokens": 60,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 110,
+    "output_tokens_details": {
+      "reasoning_tokens": 80
+    },
+    "total_tokens": 170
+  }
+}

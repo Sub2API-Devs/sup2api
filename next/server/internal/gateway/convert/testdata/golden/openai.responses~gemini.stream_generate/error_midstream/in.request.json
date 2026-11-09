@@ -1,0 +1,5 @@
+{
+  "model": "gemini-2.5-flash",
+  "stream": true,
+  "input": "Write a story."
+}

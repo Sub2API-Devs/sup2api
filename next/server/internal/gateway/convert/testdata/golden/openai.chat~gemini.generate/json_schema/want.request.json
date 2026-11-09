@@ -1,0 +1,26 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Give me a number."
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "responseJsonSchema": {
+      "properties": {
+        "n": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n"
+      ],
+      "type": "object"
+    },
+    "responseMimeType": "application/json"
+  }
+}

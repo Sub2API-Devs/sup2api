@@ -1,0 +1,5 @@
+{
+  "model": "gemini-2.5-flash",
+  "max_tokens": 64,
+  "messages": []
+}

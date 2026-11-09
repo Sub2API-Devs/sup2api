@@ -1,0 +1,11 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": true
+  },
+  "upstream": [
+    "recorded/anthropic.messages/tools.response.json",
+    "recorded/anthropic.messages/tools.stream.sse"
+  ],
+  "note": "The composition equals the two hops run one after the other."
+}

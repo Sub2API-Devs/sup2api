@@ -1,0 +1,126 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Weather and local time in Paris?"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "functionCall": {
+            "args": {
+              "city": "Paris"
+            },
+            "id": "call_w1",
+            "name": "get_weather"
+          },
+          "thoughtSignature": "context_engineering_is_the_way_to_go"
+        },
+        {
+          "functionCall": {
+            "args": {
+              "tz": "Europe/Paris"
+            },
+            "id": "call_t1",
+            "name": "get_time"
+          }
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionResponse": {
+            "id": "call_w1",
+            "name": "get_weather",
+            "response": {
+              "output": "18C, cloudy"
+            }
+          }
+        },
+        {
+          "functionResponse": {
+            "id": "call_t1",
+            "name": "get_time",
+            "parts": [
+              {
+                "inlineData": {
+                  "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                  "mimeType": "image/png"
+                }
+              }
+            ],
+            "response": {
+              "output": "14:05"
+            }
+          }
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "text": "18C and cloudy; 14:05.",
+          "thoughtSignature": "context_engineering_is_the_way_to_go"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "Thanks. Tomorrow?"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "thinkingConfig": {
+      "includeThoughts": true,
+      "thinkingLevel": "low"
+    }
+  },
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "description": "Current weather",
+          "name": "get_weather",
+          "parametersJsonSchema": {
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "description": "Current time",
+          "name": "get_time",
+          "parametersJsonSchema": {
+            "properties": {
+              "tz": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tz"
+            ],
+            "type": "object"
+          }
+        }
+      ]
+    }
+  ]
+}

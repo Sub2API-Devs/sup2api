@@ -1,0 +1,62 @@
+{
+  "model": "gemini-2.5-flash",
+  "max_tokens": 128,
+  "top_k": 40,
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Current weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      }
+    },
+    {
+      "type": "bash_20250124",
+      "name": "bash"
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Look."
+        },
+        {
+          "type": "image",
+          "source": {
+            "type": "file",
+            "file_id": "file_1"
+          }
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "redacted_thinking",
+          "data": "EmwK-redacted"
+        },
+        {
+          "type": "text",
+          "text": "Seen."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "More."
+    }
+  ],
+  "stream": true
+}

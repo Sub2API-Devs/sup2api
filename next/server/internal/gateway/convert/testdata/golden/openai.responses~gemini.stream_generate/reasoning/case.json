@@ -1,0 +1,10 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": true
+  },
+  "upstream": [
+    "recorded/gemini.generate/reasoning.response.json",
+    "recorded/gemini.stream_generate/reasoning.stream.sse"
+  ]
+}

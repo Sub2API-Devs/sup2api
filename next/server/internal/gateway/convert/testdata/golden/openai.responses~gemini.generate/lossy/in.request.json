@@ -1,0 +1,69 @@
+{
+  "model": "gemini-2.5-flash",
+  "truncation": "auto",
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Current weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      }
+    },
+    {
+      "type": "file_search",
+      "vector_store_ids": [
+        "vs_1"
+      ]
+    },
+    {
+      "type": "web_search",
+      "user_location": {
+        "type": "approximate",
+        "city": "Paris"
+      }
+    }
+  ],
+  "input": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "Look."
+        },
+        {
+          "type": "input_image",
+          "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+          "detail": "high"
+        }
+      ]
+    },
+    {
+      "type": "reasoning",
+      "id": "rs_1",
+      "summary": []
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Seen."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "More."
+    }
+  ]
+}

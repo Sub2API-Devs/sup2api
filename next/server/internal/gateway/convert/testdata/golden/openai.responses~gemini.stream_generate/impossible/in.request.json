@@ -1,0 +1,6 @@
+{
+  "model": "gemini-2.5-flash",
+  "previous_response_id": "resp_1",
+  "input": "Continue.",
+  "stream": true
+}

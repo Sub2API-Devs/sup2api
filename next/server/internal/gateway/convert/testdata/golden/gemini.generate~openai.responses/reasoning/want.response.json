@@ -1,0 +1,28 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "**Factoring 391**\n\n391 = 17 x 23.\n\n**Answer**\n\nSo it is not prime.",
+            "thought": true
+          },
+          {
+            "text": "No. 391 = 17 × 23."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "gpt-4o-2024-08-06",
+  "responseId": "resp_<hex>",
+  "usageMetadata": {
+    "candidatesTokenCount": 12,
+    "promptTokenCount": 12,
+    "thoughtsTokenCount": 128,
+    "totalTokenCount": 152
+  }
+}

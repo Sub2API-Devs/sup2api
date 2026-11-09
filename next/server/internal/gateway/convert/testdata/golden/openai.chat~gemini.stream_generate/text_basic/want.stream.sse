@@ -1,0 +1,14 @@
+data: {"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":"Hello!"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":" How can I help"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{"content":" you today?"},"finish_reason":null,"index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop","index":0,"logprobs":null}],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":null}
+
+data: {"choices":[],"created":0,"id":"Ws0QacGWJdiVz7IPuv6E8Qo","model":"gemini-2.5-flash","object":"chat.completion.chunk","usage":{"completion_tokens":9,"prompt_tokens":8,"total_tokens":17}}
+
+data: [DONE]
+

@@ -1,0 +1,10 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": true
+  },
+  "upstream": [
+    "recorded/anthropic.messages/reasoning.response.json",
+    "recorded/anthropic.messages/reasoning.stream.sse"
+  ]
+}

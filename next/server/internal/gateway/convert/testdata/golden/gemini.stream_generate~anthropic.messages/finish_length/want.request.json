@@ -1,0 +1,16 @@
+{
+  "max_tokens": 16,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Write a long story about a lighthouse.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-sonnet-4-5",
+  "stream": true
+}

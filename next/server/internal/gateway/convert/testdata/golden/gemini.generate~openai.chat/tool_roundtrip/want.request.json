@@ -1,0 +1,90 @@
+{
+  "messages": [
+    {
+      "content": "Weather and local time in Paris?",
+      "role": "user"
+    },
+    {
+      "content": null,
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"city\":\"Paris\"}",
+            "name": "get_weather"
+          },
+          "id": "call_6d68f3ed665770e5",
+          "type": "function"
+        },
+        {
+          "function": {
+            "arguments": "{\"tz\":\"Europe/Paris\"}",
+            "name": "get_time"
+          },
+          "id": "call_6629bce30ed280dc",
+          "type": "function"
+        }
+      ]
+    },
+    {
+      "content": "{\"sky\":\"cloudy\",\"temp_c\":18}",
+      "role": "tool",
+      "tool_call_id": "call_6d68f3ed665770e5"
+    },
+    {
+      "content": "14:05",
+      "role": "tool",
+      "tool_call_id": "call_6629bce30ed280dc"
+    },
+    {
+      "content": "18C and cloudy; 14:05.",
+      "role": "assistant"
+    },
+    {
+      "content": "Thanks. Tomorrow?",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5-mini",
+  "tools": [
+    {
+      "function": {
+        "description": "Current weather",
+        "name": "get_weather",
+        "parameters": {
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "Current time",
+        "name": "get_time",
+        "parameters": {
+          "properties": {
+            "tz": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "tz"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ]
+}

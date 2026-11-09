@@ -1,0 +1,11 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": true
+  },
+  "upstream": [
+    "recorded/gemini.generate/tools.response.json",
+    "recorded/gemini.stream_generate/tools.stream.sse"
+  ],
+  "note": "The composition equals the two hops run one after the other."
+}

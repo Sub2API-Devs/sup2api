@@ -1,0 +1,51 @@
+{
+  "messages": [
+    {
+      "content": "Weather in Paris and Tokyo?",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5-mini",
+  "tool_choice": "required",
+  "tools": [
+    {
+      "function": {
+        "description": "Current weather",
+        "name": "get_weather",
+        "parameters": {
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "Current time",
+        "name": "get_time",
+        "parameters": {
+          "properties": {
+            "tz": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "tz"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": true
+  },
+  "upstream": [
+    "recorded/anthropic.messages/error_midstream.stream.sse"
+  ]
+}

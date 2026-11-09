@@ -1,0 +1,27 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "391 = 17 x 23, so it is not prime.",
+            "thought": true
+          },
+          {
+            "text": "No. 391 = 17 × 23."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "modelVersion": "claude-sonnet-4-5-20250929",
+  "responseId": "resp_msg_013Zva2CMHLNnXjNJJKqJ2EF",
+  "usageMetadata": {
+    "candidatesTokenCount": 60,
+    "promptTokenCount": 40,
+    "totalTokenCount": 100
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "options": {
+    "model": "gemini-2.5-flash",
+    "stream": false
+  },
+  "media": {
+    "https://example.com/cat.png": "golden/openai.chat~gemini.generate/image_input/cat.png"
+  },
+  "note": "The URL image is downloaded and inlined; the markdown data URL image in the text is split out (CONVERT-MATRIX §9.2)."
+}

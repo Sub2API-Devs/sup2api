@@ -1,0 +1,53 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Look."
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "text": "Seen.",
+          "thoughtSignature": "context_engineering_is_the_way_to_go"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "text": "More."
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "maxOutputTokens": 128
+  },
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "description": "Current weather",
+          "name": "get_weather",
+          "parametersJsonSchema": {
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        }
+      ]
+    }
+  ]
+}

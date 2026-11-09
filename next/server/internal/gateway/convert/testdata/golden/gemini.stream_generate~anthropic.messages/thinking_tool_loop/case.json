@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": true
+  },
+  "note": "The last model turn calls tools without a signed thinking block: thinking is off (reasoning loss)."
+}
