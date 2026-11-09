@@ -8,5 +8,6 @@ describe('sectionOfErrors', () => {
     expect(sectionOfErrors({ name: 'required', header_passthrough: 'blocked' }, {})).toBe('connection')
     expect(sectionOfErrors({ 'environment.relay_timeout_seconds': 'invalid' }, {})).toBe('advanced')
     expect(sectionOfErrors({ param_override: 'invalid' }, {})).toBe('advanced')
+    expect(sectionOfErrors({ conversion_loss_policy: 'invalid' }, {})).toBe('advanced')
   })
 })

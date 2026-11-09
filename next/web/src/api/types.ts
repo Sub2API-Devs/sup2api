@@ -140,7 +140,48 @@ export interface Group {
   platforms?: string[]
   /** The group layer of the environment variables (CONTRACTS §74.3). */
   environment?: EnvironmentValues
+  /** Loss policy for its accounts' converted requests; null leaves it to the accounts (effective default allow). */
+  conversion_loss_policy?: ConversionLossPolicy | null
   created_at?: string
+}
+
+// ------------------------------------------------------------------ protocol conversion (CONVERT-MATRIX §2.3, §2.4, §7)
+
+/** What a converted request may lose: allow serves and records losses; safe refuses the account when a
+ *  tool definition, tool choice or tool call would be lost; strict refuses it on any loss. */
+export type ConversionLossPolicy = 'allow' | 'safe' | 'strict'
+
+/** Route grade: native, a converted grade, or local (count_tokens estimated by the core without an upstream). */
+export type ConversionGrade = 'native' | 'good' | 'fair' | 'discouraged' | 'local'
+
+export type ConversionLossCategory = 'tool' | 'reasoning' | 'image' | 'other'
+
+/** Paths lost per category; a path prefixed "1:" belongs to the second hop. */
+export type ConversionLosses = Partial<Record<ConversionLossCategory, string[]>>
+
+/** An account type refused for the request: by policy (policy, category, path) or not convertible (error). */
+export interface ConversionRejection {
+  type: string
+  policy?: ConversionLossPolicy
+  category?: ConversionLossCategory
+  path?: string
+  error?: string
+}
+
+/** usage_logs.conversion: how the request was converted, what was lost and which account types were refused. */
+export interface ConversionTrace {
+  v: number
+  /** Absent when no account served (all refused). */
+  grade?: ConversionGrade
+  /** Protocols passed through, client first. */
+  hops?: string[]
+  /** Effective policy of the serving account. */
+  policy?: ConversionLossPolicy
+  lost?: ConversionLosses
+  response_lost?: ConversionLosses
+  /** Paths left out over the record's cap. */
+  omitted?: number
+  rejected?: ConversionRejection[]
 }
 
 // ------------------------------------------------------------------ environment variables (CONTRACTS §74.3)
@@ -318,6 +359,10 @@ export interface AccountTypeEndpoint {
   platform: string
   /** true: the type supports the platform; false: served through a core protocol converter. */
   native: boolean
+  /** Route grade (native iff native). */
+  grade: ConversionGrade
+  /** Protocols passed through when converted, client first (three for a two-hop composition). */
+  via?: string[]
 }
 
 /** A platform an account type declares support for. */
@@ -590,6 +635,8 @@ export interface Account {
   header_passthrough?: string[]
   /** Request parameter override in new-api's param_override format (CONTRACTS §84); null when unset. */
   param_override?: Record<string, unknown> | null
+  /** Loss policy for converted requests; null inherits the group's. */
+  conversion_loss_policy?: ConversionLossPolicy | null
   /** Read-only usage of the last 60 seconds (0 when Redis is unavailable), with one entry per model list. */
   rate_usage?: { rpm: number; tpm: number; sessions?: number; models?: ModelRateUsage[] }
   /** Successful requests and failed attempts of the last minute (CONTRACTS §73); null when unavailable. */
@@ -1077,6 +1124,8 @@ export interface UsageLog {
   protocol: string
   /** Protocol sent upstream; differs from protocol when converted. */
   upstream_protocol?: string
+  /** Conversion record (operators only); null when native and nothing was refused. */
+  conversion?: ConversionTrace | null
   endpoint: string
   model: string
   upstream_model?: string
@@ -1194,10 +1243,20 @@ export interface GatewaySettings {
   queue_fallback_max_waiting: number
   /** Longest wait in that queue, 0–600 s (default 30). */
   queue_fallback_wait_seconds: number
+  /** max_tokens of a request converted to Anthropic without an output limit: model name -> tokens, always with "default". */
+  claude_default_max_tokens: Record<string, number>
+  /** Size cap of one http(s) media file downloaded for Gemini, 1–1024 MB (default 64). */
+  media_download_max_mb: number
 }
 
+/** The numeric gateway settings (one value each). */
+export type GatewayNumberSetting = Exclude<keyof GatewaySettings, 'claude_default_max_tokens'>
+
+/** Limits of claude_default_max_tokens, mirrored from the server. */
+export const CLAUDE_MAX_TOKENS = { fallbackKey: 'default', fallback: 8192, max: 1048576, models: 200, nameLength: 200 } as const
+
 /** Validation ranges of GatewaySettings, mirrored from the server. */
-export const GATEWAY_SETTINGS_RANGES: Record<keyof GatewaySettings, [number, number]> = {
+export const GATEWAY_SETTINGS_RANGES: Record<GatewayNumberSetting, [number, number]> = {
   max_attempts: [1, 10],
   platform_call_timeout_ms: [100, 30000],
   default_hook_timeout_ms: [50, 2000],
@@ -1205,7 +1264,8 @@ export const GATEWAY_SETTINGS_RANGES: Record<keyof GatewaySettings, [number, num
   queue_sticky_max_waiting: [0, 10000],
   queue_sticky_wait_seconds: [0, 600],
   queue_fallback_max_waiting: [0, 10000],
-  queue_fallback_wait_seconds: [0, 600]
+  queue_fallback_wait_seconds: [0, 600],
+  media_download_max_mb: [1, 1024]
 }
 
 // ------------------------------------------------------------------ sticky

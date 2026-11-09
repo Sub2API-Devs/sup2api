@@ -13,7 +13,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref,
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, STagInput, toast } from '@sub2api/ui'
-import type { Account, AccountType, EnvironmentValues, ProxyProbeResult } from '@/api/types'
+import type { Account, AccountType, ConversionLossPolicy, EnvironmentValues, ProxyProbeResult } from '@/api/types'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import { schemaWidgets } from '@/components/schema/widgets'
 import { ACCOUNT_FORM_KEY } from '@/components/schema/accountForm'
@@ -28,10 +28,11 @@ import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue
 import type { AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
-import { useEnvironmentLayer, useProxiesLookup } from '@/composables/lookups'
+import { useEnvironmentLayer, useGroupsLookup, useProxiesLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
+import { groupPolicies, policyLabel, policyOptions, policySourceHint } from '@/utils/conversion'
 import AccountEditorNav from './AccountEditorNav.vue'
 import ParamOverrideField from './paramOverride/ParamOverrideField.vue'
 import { operationCount, type Override as ParamOverride } from './paramOverride/model'
@@ -84,7 +85,8 @@ const basic = reactive({
   spm_limit: 0,
   environment: {} as EnvironmentValues,
   header_passthrough: [] as string[],
-  param_override: null as ParamOverride | null
+  param_override: null as ParamOverride | null,
+  conversion_loss_policy: null as ConversionLossPolicy | null
 })
 /** 指定模型限速 (CONTRACTS §68), edited as cards and saved as one entry per list. */
 const modelLimitCards = ref<ModelLimitCard[]>([])
@@ -188,20 +190,27 @@ watch(defaultModels, (next, previous) => {
 /** Models and mappings of the section summary (the cards render their own counts). */
 const mappingCount = computed(() => Object.keys(mapping.value).length)
 
-/** The advanced section's summary: header passthrough, parameter override and the account's own environment values. */
+/** The advanced section's summary: header passthrough, parameter override, the account's own conversion loss policy and environment values. */
 const forwardingSummary = computed(() => {
   const rules = basic.header_passthrough
   const overrides = operationCount(basic.param_override)
   const custom = Object.keys(basic.environment).length
-  if (!rules.length && !overrides && !custom) return t('accounts.forwarding.allDefault')
+  const policy = basic.conversion_loss_policy
+  if (!rules.length && !overrides && !custom && !policy) return t('accounts.forwarding.allDefault')
   return [
     rules.includes('*') ? t('accounts.forwarding.passAll') : rules.length ? t('accounts.forwarding.passRules', { n: rules.length }) : t('accounts.forwarding.passNone'),
     overrides && t('accounts.forwarding.override', { n: overrides }),
+    policy && t('accounts.forwarding.conversion', { policy: policyLabel(t, policy) }),
     custom ? t('accounts.forwarding.envCustom', { n: custom }) : t('accounts.forwarding.envFollow')
   ]
     .filter(Boolean)
     .join(' · ')
 })
+
+// Conversion loss policy (CONVERT-MATRIX §6.3): null inherits each group's, the hint shows what applies.
+const { groups: groupList } = useGroupsLookup()
+const conversionOptions = computed(() => policyOptions(t, t('accounts.conversion.inherit')))
+const conversionHint = computed(() => policySourceHint(t, basic.conversion_loss_policy, groupPolicies(basic.group_ids, groupList.value)))
 
 const editorSections = computed(() => [
   { key: 'connection' as const, icon: 'key', label: t('accounts.editorUi.connection'), summary: basic.name.trim() || t('accounts.editorUi.unnamed') },
@@ -470,6 +479,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   basic.environment = { ...a?.environment }
   basic.header_passthrough = [...(a?.header_passthrough || [])]
   basic.param_override = a?.param_override ?? null
+  basic.conversion_loss_policy = a?.conversion_loss_policy ?? null
   modelLimitCards.value = toCards(a?.model_limits)
   if (!a) applyDefaultLimits(at)
   resetEnvironment(a?.settings)
@@ -781,6 +791,12 @@ const { save } = useAccountSave({
               <STagInput v-model="basic.header_passthrough" :placeholder="t('accounts.headerPassthrough.placeholder')" :disabled="saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
             </SSettingRow>
             <ParamOverrideField v-model="basic.param_override" :models="models" :error="errors.param_override" :disabled="saving" />
+            <SSettingRow :label="t('accounts.conversion.title')" :description="t('accounts.conversion.hint')" :error="errors.conversion_loss_policy" data-testid="account-conversion-policy">
+              <div class="w-full space-y-1 sm:w-64">
+                <SSelect v-model="basic.conversion_loss_policy" :options="conversionOptions" :disabled="saving" data-testid="account-conversion-policy-select" />
+                <SHint size="xs" data-testid="account-conversion-policy-hint">{{ conversionHint }}</SHint>
+              </div>
+            </SSettingRow>
             <EnvironmentEditor v-if="showEnvironment" v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
           </SSettingsGroup>
         </div>

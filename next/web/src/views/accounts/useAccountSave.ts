@@ -7,7 +7,7 @@ import { computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
-import type { Account, AccountType, EnvironmentValues } from '@/api/types'
+import type { Account, AccountType, ConversionLossPolicy, EnvironmentValues } from '@/api/types'
 import { useProxiesLookup } from '@/composables/lookups'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { savedOverrides, validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
@@ -37,6 +37,8 @@ export interface AccountBasics {
   header_passthrough: string[]
   /** Request parameter override, new-api's param_override format (CONTRACTS §84); null clears it. */
   param_override: Record<string, unknown> | null
+  /** Loss policy of converted requests (CONVERT-MATRIX §2.4); null inherits the groups'. */
+  conversion_loss_policy: ConversionLossPolicy | null
 }
 
 /** The account editor's model list / mapping editor (useModelEdit: its state and actions). */
@@ -149,7 +151,8 @@ export function useAccountSave(deps: AccountSaveDeps) {
       model_limits: fromCards(deps.modelLimits.value),
       environment: basic.environment,
       header_passthrough: basic.header_passthrough,
-      param_override: basic.param_override
+      param_override: basic.param_override,
+      conversion_loss_policy: basic.conversion_loss_policy
     }
     if (schedulingConfigurable.value) body.schedulable = basic.schedulable
     if (ccg.autoDisableEnabled.value === true && autoDisableConfigurable.value) body.auto_disable = basic.auto_disable

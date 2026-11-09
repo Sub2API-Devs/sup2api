@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SStatusBadge, SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SFormModal, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
-import type { EnvironmentValues, Group } from '@/api/types'
+import type { ConversionLossPolicy, EnvironmentValues, Group } from '@/api/types'
 import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import { formatNumber } from '@/utils/format'
+import { policyLabel, policyOptions } from '@/utils/conversion'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
@@ -120,7 +121,8 @@ const form = reactive({
   visibility: 'public' as Group['visibility'],
   model_allowlist: [] as string[],
   model_filter_mode: 'blacklist' as 'whitelist' | 'blacklist',
-  environment: {} as EnvironmentValues
+  environment: {} as EnvironmentValues,
+  conversion_loss_policy: null as ConversionLossPolicy | null
 })
 
 const visibilityOptions = computed(() => [
@@ -128,11 +130,14 @@ const visibilityOptions = computed(() => [
   { value: 'restricted', label: t('groups.restricted') }
 ])
 const statusOptions = useStatusOptions()
+// Conversion loss policy (CONVERT-MATRIX §6.3): null leaves it to the accounts, effectively allow.
+const conversionOptions = computed(() => policyOptions(t, t('groups.conversionDefault')))
+const conversionText = (g: Group) => (g.conversion_loss_policy ? policyLabel(t, g.conversion_loss_policy) : t('groups.conversionDefault'))
 
 function openCreate() {
   loadModels(null)
   editing.value = null
-  Object.assign(form, { name: '', description: '', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], model_filter_mode: 'blacklist', environment: {} })
+  Object.assign(form, { name: '', description: '', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], model_filter_mode: 'blacklist', environment: {}, conversion_loss_policy: null })
   errors.value = {}
   open.value = true
 }
@@ -148,7 +153,8 @@ function openEdit(g: Group) {
     visibility: g.visibility,
     model_allowlist: [...(g.model_allowlist || [])],
     model_filter_mode: g.model_filter_mode || 'whitelist',
-    environment: { ...g.environment }
+    environment: { ...g.environment },
+    conversion_loss_policy: g.conversion_loss_policy ?? null
   })
   errors.value = {}
   open.value = true
@@ -170,7 +176,8 @@ async function submit() {
     visibility: form.visibility,
     model_allowlist: form.model_allowlist,
     model_filter_mode: form.model_filter_mode,
-    environment: form.environment
+    environment: form.environment,
+    conversion_loss_policy: form.conversion_loss_policy
   }
   saving.value = true
   try {
@@ -297,6 +304,9 @@ async function onAction(listed: Group, key: string) {
         <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="currentModelSource.models" :loading="modelsLoading" :unrestricted-accounts="currentModelSource.unrestricted_accounts" />
         <SHint v-if="modelLoadError" tone="danger" size="xs">{{ modelLoadError }}</SHint>
       </SField>
+      <SField :label="t('accounts.conversion.title')" :hint="t('groups.conversionHint')" :error="errors.conversion_loss_policy">
+        <SSelect v-model="form.conversion_loss_policy" :options="conversionOptions" data-testid="group-conversion-policy" />
+      </SField>
       <SField v-if="editing" :label="t('platforms.served')">
         <GroupPlatforms :group="editing" hint />
       </SField>
@@ -320,6 +330,7 @@ async function onAction(listed: Group, key: string) {
           <SDescItem :label="t('groups.visibility')">{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</SDescItem>
           <SDescItem :label="t('groups.rateMultiplier')"><span class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</span></SDescItem>
           <SDescItem><template #label>{{ t('groups.modelRules') }} · {{ t(detail.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</template>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</SDescItem>
+          <SDescItem :label="t('accounts.conversion.title')"><span data-testid="group-detail-conversion">{{ conversionText(detail) }}</span></SDescItem>
           <SDescItem :label="t('groups.accountCount')">{{ formatNumber(detail.account_count) }}</SDescItem>
           <SDescItem :label="t('groups.keyCount')">{{ formatNumber(keyCount(detail)) }}</SDescItem>
           <SDescItem :label="t('platforms.served')"><GroupPlatforms :group="detail" hint /></SDescItem>

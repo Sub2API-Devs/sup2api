@@ -967,6 +967,11 @@ for (let i = 0; i < 90; i++) {
     platform: native?.platform ?? (viaOpenAI ? 'openai' : 'anthropic'),
     protocol: native?.protocol ?? (viaOpenAI ? 'openai.chat' : 'anthropic.messages'),
     upstream_protocol: blocked ? '' : account.upstream,
+    // Converted requests carry their conversion record (CONVERT-MATRIX §7); operators only.
+    conversion: viaOpenAI && !blocked ? {
+      v: 1, grade: i % 4 ? 'good' : 'fair', hops: ['openai.chat', 'anthropic.messages'], policy: 'allow',
+      ...(i % 3 ? {} : { lost: { other: ['seed'], ...(i % 4 ? {} : { tool: ['tools[2]'] }) } })
+    } : null,
     endpoint: native?.endpoint ?? (viaOpenAI ? '/v1/chat/completions' : '/v1/messages'),
     model,
     upstream_model: model,
@@ -1101,8 +1106,17 @@ function publicUsage(u: any, self = false) {
   if (self) {
     delete rest.account_id
     delete rest.account_name
+    rest.conversion = null
   }
   return rest
+}
+
+/** The conversion= filter: by grade, any converted grade, or with losses. */
+function conversionMatch(c: any, want: string) {
+  if (want === 'lossy') return !!(c?.lost || c?.response_lost)
+  if (want === 'native') return !c || c.grade === 'native'
+  if (want === 'converted') return ['good', 'fair', 'discouraged'].includes(c?.grade)
+  return c?.grade === want
 }
 
 function usageFilter(rows: any[], q: Record<string, string>) {
@@ -1120,6 +1134,7 @@ function usageFilter(rows: any[], q: Record<string, string>) {
     if (q.api_key_name && !u.api_key_name.toLowerCase().includes(q.api_key_name.toLowerCase())) return false
     if (q.stream && String(u.stream) !== q.stream) return false
     if (q.billing_status && u.billing_status !== q.billing_status) return false
+    if (q.conversion && !conversionMatch(u.conversion, q.conversion)) return false
     if (q.model) {
       const pat = q.model
       if (pat.endsWith('*') ? !u.model.startsWith(pat.slice(0, -1)) : !u.model.includes(pat)) return false

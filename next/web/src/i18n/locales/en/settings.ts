@@ -82,7 +82,7 @@ export default {
   },
   gateway: {
     title: 'Gateway',
-    subtitle: 'Failover and timeouts of gateway requests. Changes apply to new requests on every node.',
+    subtitle: 'Failover, timeouts and protocol conversion of gateway requests. Changes apply to new requests on every node.',
     fields: {
       max_attempts: 'Max attempts',
       platform_call_timeout_ms: 'Platform call timeout',
@@ -91,7 +91,9 @@ export default {
       queue_sticky_max_waiting: 'Max queued for a bound account',
       queue_sticky_wait_seconds: 'Longest wait for a bound account',
       queue_fallback_max_waiting: 'Max queued per account when all are full',
-      queue_fallback_wait_seconds: 'Longest wait when all accounts are full'
+      queue_fallback_wait_seconds: 'Longest wait when all accounts are full',
+      media_download_max_mb: 'Media download cap',
+      claude_default_max_tokens: 'Claude default max_tokens'
     },
     hints: {
       max_attempts: 'Accounts tried per request, including the first attempt (failover).',
@@ -102,7 +104,23 @@ export default {
       platform_call_timeout_ms: 'Timeout of plugin platform calls on the request path (building the upstream request, parsing usage).',
       default_hook_timeout_ms: 'Used by hooks whose manifest sets no timeout.',
       platform_hotpath_timeout_ms:
-        'Timeout of the per-request platform calls that are not hooks: resolving the model before scheduling, and reading usage after the response was sent.'
+        'Timeout of the per-request platform calls that are not hooks: resolving the model before scheduling, and reading usage after the response was sent.',
+      media_download_max_mb: 'Size cap of one http(s) image or other media file downloaded for a request converted to Gemini (MB).',
+      claude_default_max_tokens: 'max_tokens of a request converted to Anthropic when the client sets no output limit: by exact client model name, else the default row. The default row cannot be removed or renamed; at most 200 rows, values 0–1048576.'
+    },
+    maxTokens: {
+      model: 'Model',
+      tokens: 'max_tokens',
+      modelPlaceholder: 'Client model name',
+      add: 'Add model',
+      remove: 'Remove {model}',
+      defaultLocked: 'The default row cannot be removed or renamed',
+      errors: {
+        value: 'Every row needs a whole number from 0 to {max}',
+        model: 'Model names must be 1–200 characters',
+        duplicate: 'Duplicate model name',
+        too_many: 'At most {n} rows'
+      }
     },
     range: 'Range {min}–{max}.',
     notInteger: 'Enter a whole number'

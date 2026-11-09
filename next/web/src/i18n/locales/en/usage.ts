@@ -55,6 +55,7 @@ export default {
     node_id: 'Node ID',
     upstream_model: 'Upstream model',
     upstream_protocol: 'Upstream protocol',
+    conversion: 'Protocol conversion',
     stream: 'Response mode'
   },
   filters: {
@@ -112,6 +113,21 @@ export default {
       unknown: 'TTL allocation is unknown. Missing buckets were not inferred.',
       inconsistent: 'Reported cache counters are inconsistent; TTL allocation cannot be determined.'
     }
+  },
+  conversion: {
+    title: 'Protocol conversion',
+    grade: 'Grade',
+    policy: 'Effective policy',
+    hops: 'Steps',
+    omitted: 'Paths not recorded',
+    requestLost: 'Lost from the request',
+    responseLost: 'Lost from the response',
+    rejected: 'Account types refused',
+    allRejected: 'All refused',
+    secondHop: 'Paths prefixed 1: belong to the second hop ({hops})',
+    lossy: 'Conversion lost content: {categories}',
+    separator: ', ',
+    filters: { converted: 'Converted', lossy: 'With losses' }
   },
   converted: 'converted',
   convertedFrom: 'Converted from endpoint protocol {protocol}',

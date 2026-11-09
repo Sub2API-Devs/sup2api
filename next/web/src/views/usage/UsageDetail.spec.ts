@@ -75,6 +75,34 @@ describe('model availability trace', () => {
   })
 })
 
+describe('protocol conversion', () => {
+  it('shows grade, steps, policy, losses by side and category, refused types and omitted paths', () => {
+    const conversion = {
+      v: 1, grade: 'fair', hops: ['anthropic.messages', 'openai.responses', 'openai.chat'], policy: 'safe', omitted: 3,
+      lost: { other: ['top_k'], tool: ['tools[3]', '1:tools[0]'] }, response_lost: { reasoning: ['response.output[0].encrypted_content'] },
+      rejected: [{ type: 'anthropic/apikey', policy: 'strict', category: 'tool', path: 'tools[1]' }, { type: 'x/y', error: 'previous_response_id is not supported' }]
+    }
+    const card = render({ ...row, conversion } as unknown as UsageRow).get('[data-testid="usage-conversion"]')
+    expect(card.get('[data-testid="conversion-grade"]').text()).toBe('一般')
+    expect(card.get('[data-testid="conversion-hops"]').text()).toBe('anthropic.messages → openai.responses → openai.chat')
+    expect(card.get('[data-testid="conversion-policy"]').text()).toBe('安全')
+    // categories in their fixed order, request and response apart
+    expect(card.get('[data-testid="conversion-lost"]').text()).toMatch(/工具\s*tools\[3\]\s*1:tools\[0\]\s*其他\s*top_k/)
+    expect(card.get('[data-testid="conversion-response-lost"]').text()).toContain('推理')
+    expect(card.text()).toContain('第 2 跳（openai.responses → openai.chat）')
+    expect(card.text()).toContain('3')
+    const rejected = card.get('[data-testid="conversion-rejected"]').findAll('li').map(li => li.text())
+    expect(rejected[0]).toMatch(/anthropic\/apikey\s*严格\s*工具\s*tools\[1\]/)
+    expect(rejected[1]).toContain('previous_response_id is not supported')
+  })
+
+  it('marks a request every account type refused, and shows nothing without a record', () => {
+    const refused = render({ ...row, conversion: { v: 1, rejected: [{ type: 'x/y', policy: 'strict', category: 'other', path: 'seed' }] } } as unknown as UsageRow)
+    expect(refused.get('[data-testid="conversion-all-rejected"]').text()).toBe('全部拒绝')
+    expect(render({ ...row, conversion: null } as unknown as UsageRow).find('[data-testid="usage-conversion"]').exists()).toBe(false)
+  })
+})
+
 describe('known partial usage in failed request details', () => {
   it('shows client IP, client agent and upstream attempts from detail', async () => {
     get.mockResolvedValueOnce({ ...row, client_ip: '192.0.2.9', user_agent: 'fixture-client', attempts: 2, api_key_name: 'my-laptop', node_id: '' })

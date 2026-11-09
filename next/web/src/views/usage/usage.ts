@@ -1,4 +1,5 @@
 import type { UsageLog } from '@/api/types'
+import { isConvertedGrade } from '@/utils/conversion'
 
 /** Usage row/detail with the extra fields the billing module returns. */
 export type UsageRow = UsageLog & {
@@ -163,6 +164,12 @@ export function availabilityReasonLabel(tr: OptionalT, reason: string): string {
 /** True when the core converted the request to another upstream protocol. */
 export function isConverted(u: Pick<UsageLog, 'protocol' | 'upstream_protocol'>): boolean {
   return !!u.upstream_protocol && !!u.protocol && u.upstream_protocol !== u.protocol
+}
+
+/** The recorded grade of a converted or locally estimated request; '' when native or not recorded. */
+export function convertedGrade(u: Pick<UsageLog, 'conversion'>): string {
+  const g = u.conversion?.grade
+  return isConvertedGrade(g) ? g : ''
 }
 
 export type SpeedTone = 'success' | 'warning' | 'danger'

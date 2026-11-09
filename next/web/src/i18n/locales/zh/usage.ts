@@ -55,6 +55,7 @@ export default {
     node_id: '节点 ID',
     upstream_model: '上游模型',
     upstream_protocol: '上游协议',
+    conversion: '协议转换',
     stream: '响应方式'
   },
   filters: {
@@ -112,6 +113,21 @@ export default {
       unknown: 'TTL 归属未知，未推算缺失细分。',
       inconsistent: '已报告的缓存计数不一致，无法确定 TTL 分配。'
     }
+  },
+  conversion: {
+    title: '协议转换',
+    grade: '等级',
+    policy: '生效策略',
+    hops: '转换步骤',
+    omitted: '未记录的路径',
+    requestLost: '请求侧丢失',
+    responseLost: '响应侧丢失',
+    rejected: '被拒绝的账号类型',
+    allRejected: '全部拒绝',
+    secondHop: '带 1: 前缀的路径属于第 2 跳（{hops}）',
+    lossy: '转换有丢失：{categories}',
+    separator: '、',
+    filters: { converted: '已转换', lossy: '有丢失' }
   },
   converted: '已转换',
   convertedFrom: '由端点协议 {protocol} 转换',

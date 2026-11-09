@@ -13,6 +13,12 @@ export function baseUsageFilters(range: RangeKey) {
   }
 }
 
+/** Values of the operators' conversion filter (CONVERT-MATRIX §6.2): by grade, any converted grade, or with losses. */
+export const CONVERSION_FILTERS = ['native', 'converted', 'good', 'fair', 'discouraged', 'local', 'lossy'] as const
+
+/** Label key of a conversion filter value: the grade's, or the filter's own. */
+export const conversionFilterLabel = (v: string) => (v === 'converted' || v === 'lossy' ? `usage.conversion.filters.${v}` : `accounts.conversion.grades.${v}`)
+
 const QUERY_FILTERS = ['user_id', 'group_name', 'model_contains', 'api_key_id', 'from', 'to'] as const
 
 /** The filters a link presets (?user_id=…&from=…&to=…); a user cannot preset another user. */

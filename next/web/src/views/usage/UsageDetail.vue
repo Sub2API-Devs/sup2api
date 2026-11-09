@@ -10,6 +10,8 @@ import { errorMessage } from '@/utils/errors'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
 import { accountLabel, availabilityTrace, factText, hookTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
 import UsageAvailabilityTrace from './UsageAvailabilityTrace.vue'
+import UsageConversionBadges from './UsageConversionBadges.vue'
+import UsageConversionTrace from './UsageConversionTrace.vue'
 import UsageBillingFacts from './UsageBillingFacts.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageTokenFacts from './UsageTokenFacts.vue'
@@ -156,7 +158,7 @@ const availabilityHint = computed(() => u.value.error_type === 'model_availabili
         </SDescItem>
         <SDescItem :label="t('usage.cols.upstreamProtocol')"><div class="flex flex-wrap items-center gap-2">
           <span class="font-mono text-xs">{{ u.upstream_protocol || u.protocol || '—' }}</span>
-          <SBadge v-if="isConverted(u)" tone="warning">{{ t('usage.converted') }}</SBadge>
+          <UsageConversionBadges :row="u" />
           <SHint v-if="isConverted(u)" inline size="xs">{{ t('usage.convertedFrom', { protocol: u.protocol }) }}</SHint>
         </div></SDescItem>
         <SDescItem v-if="u.upstream_model && u.upstream_model !== u.model" :label="t('usage.request.upstreamModel')"><span class="font-mono text-xs">{{ u.upstream_model }}</span></SDescItem>
@@ -205,6 +207,7 @@ const availabilityHint = computed(() => u.value.error_type === 'model_availabili
       </SCard>
     </SGrid>
     <UsageAvailabilityTrace :row="u" />
+    <UsageConversionTrace :row="u" />
     <SCard v-if="failureDecisions.length" variant="flat" data-testid="failure-decisions">
       <SDisclosure variant="section" :label="t('failurePolicy.decisions')" default-open>
         <FailureDecisionDetails v-for="(decision, index) in failureDecisions" :key="index" :decision="decision" />
