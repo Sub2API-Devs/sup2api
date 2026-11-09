@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -12,13 +13,17 @@ import (
 
 // Limiter enforces the accounts' RPM, TPM and SPM, and those of their model
 // lists (CONTRACTS §68, §71), in the shared windows of scope "account". With
-// no Redis client, limiting is disabled.
-type Limiter struct{ w *ratelimit.Minute }
+// no Redis client, limiting is disabled. It also counts each client model
+// apart, uncapped, with its tokens today (CONTRACTS §68.7).
+type Limiter struct {
+	w      *ratelimit.Minute
+	tokens modelTokens
+}
 
 var _ core.AccountLimiter = (*Limiter)(nil)
 
 func NewLimiter(rdb redis.UniversalClient) *Limiter {
-	return &Limiter{w: ratelimit.NewMinute(rdb, "account")}
+	return &Limiter{w: ratelimit.NewMinute(rdb, "account"), tokens: modelTokens{rdb: rdb}}
 }
 
 // listSub names the counters of a model list within the account's.
@@ -102,15 +107,38 @@ func (l *Limiter) Usage(ctx context.Context, refs []core.AccountRef) (map[int64]
 	return out, err
 }
 
-// ModelUsage returns the counters of the account and of each of models, in
-// order after the account's.
-func (l *Limiter) ModelUsage(ctx context.Context, id int64, models []string) ([]core.RateUsage, error) {
-	sets := make([]ratelimit.Limits, 0, 1+len(models))
-	sets = append(sets, ratelimit.Limits{ID: id})
-	for _, m := range models {
-		sets = append(sets, ratelimit.Limits{ID: id, Sub: modelSub(m)})
+func (l *Limiter) CountModelTokens(ctx context.Context, id int64, model string, n int64) {
+	l.tokens.add(ctx, id, model, n, l.now())
+}
+
+func (l *Limiter) ModelRates(ctx context.Context, id int64, midnight time.Time) ([]core.ModelRates, error) {
+	models, tpd, err := l.tokens.today(ctx, id, midnight, l.now())
+	if err != nil {
+		return nil, err
 	}
-	return l.w.UsageOf(ctx, sets)
+	sets := []ratelimit.Limits{{ID: id}}
+	out := []core.ModelRates{{TPD: tpd}}
+	for _, m := range models {
+		sets = append(sets, ratelimit.Limits{ID: id, Sub: modelSub(m.model)})
+		out = append(out, core.ModelRates{Model: m.model, TPD: m.tokens})
+	}
+	used, err := l.w.UsageOf(ctx, sets)
+	if err != nil {
+		return nil, err
+	}
+	for i, u := range used {
+		out[i].RPM, out[i].TPM, out[i].Sessions = u.RPM, u.TPM, u.Sessions
+	}
+	return out, nil
+}
+
+// now is the windows' test clock, else the local one: the hourly token
+// hashes need no shared clock to the second.
+func (l *Limiter) now() time.Time {
+	if l.w.Now != nil {
+		return l.w.Now()
+	}
+	return time.Now()
 }
 
 func mappingJSON(m map[string]string) string {

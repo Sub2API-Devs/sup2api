@@ -4859,9 +4859,10 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 68.7 按模型明细（2026-11-09，用户要求参照 new-api 渠道 RPM / TPM / TPD / SPM 悬浮明细）
 
-- **计数**：请求的客户端模型（`model` 非空）除了计入账号和所在模型列表，还单独计一组不设上限的计数：近 60 秒窗口 sub `md:<model>`（RPM / TPM / 会话，和账号同一次 admit 脚本写入，结算时随 hold 一起换成实际 token），并发槽位 kind `account-md:<model>`（`core.ModelSlots`，limit 0，只计数不拒绝）。不设上限，所以永远不会因为按模型计数而拒绝请求；代价是每次尝试多一次槽位登记。`model` 为空的请求（任务、下载、资源回源）只计账号。
-- **接口**：`GET /accounts/:id/rate-models?tz=`（`account:read` / `account:own:read`）返回 `{total, models: [{model, in_use, rpm, tpm, tpd, sessions}]}`。`total` 是账号自身的计数；`tpd` 是浏览器时区当天 0 点起使用记录的吞吐 token（非缓存输入 + 输出，`core.ThroughputSQL`，与 TPM 同口径），`total.tpd` 为各模型之和。模型名单来自使用记录：当天 0 点和 1 小时前两者中较早的时间之后出现过的模型，按 TPD 取前 100 个；结果按并发、RPM、TPM、TPD 倒序。按模型的会话和并发相加不一定等于账号的（一个会话可以用多个模型）。Redis 读失败返回 503；没有 Redis 时只有 TPD。
+- **计数**（全部在 Redis）：请求的客户端模型（`model` 非空）除了计入账号和所在模型列表，还单独计一组不设上限的计数：近 60 秒窗口 sub `md:<model>`（RPM / TPM / 会话，和账号同一次 admit 脚本写入，结算时随 hold 一起换成实际 token），并发槽位 kind `account-md:<model>`（`core.ModelSlots`，limit 0，只计数不拒绝），以及当天 token：结算时把与 TPM 同口径的 token 加到哈希 `rl:account:<id>:tpd:<UTC 整点 unix 秒>`（field = 模型，TTL 26 小时，`AccountLimiter.CountModelTokens`）。不设上限，所以永远不会因为按模型计数而拒绝请求；代价是每次尝试多一次槽位登记、结算多一次 HINCRBY。`model` 为空的请求（任务、下载、资源回源）只计账号。
+- **接口**：`GET /accounts/:id/rate-models?tz=`（`account:read` / `account:own:read`）返回 `{total, models: [{model, in_use, rpm, tpm, tpd, sessions}]}`，不查数据库。`total` 是账号自身的计数，`total.tpd` 是所有模型当天 token 之和。模型名单取当天 0 点和 1 小时前两者中较早的整点之后各小时哈希里出现过的模型（1 小时前的用来覆盖跨午夜的长请求，只计名不计 TPD），按 TPD 取前 100 个；结果按并发、RPM、TPM、TPD 倒序。`tpd` 按 `tz` 的当天 0 点所在整点起累计：整点时区准确，半点时区多算 0 点前不到一小时。按模型的会话和并发相加不一定等于账号的（一个会话可以用多个模型）。Redis 读失败返回 503；没有 Redis 时全为 0。
 - **控制台**：账号列表"并发 / RPM / TPM / 会话"列的悬浮卡片先显示按模型明细（全部模型 + 各模型的并发 / RPM / TPM / TPD / 会话），卡片打开期间每 2 秒刷新一次（上一次返回后再发下一次），关闭即停；账号设了上限或有模型列表时，下面再显示原来的限额表（§68.6）。
+- 0.1.260 的 TPD 曾查 usage_logs；0.1.261 改为上面的 Redis 小时哈希，升级当天的 TPD 从升级时刻起算。
 
 ## 69. 故障策略下仍执行插件的临时自动禁用（2026-10-30，用户要求）
 

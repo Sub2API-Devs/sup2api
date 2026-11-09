@@ -152,8 +152,8 @@ func TestLimiterSessions(t *testing.T) {
 }
 
 // Each client model is counted apart, uncapped, beside the account and its
-// model list: ModelUsage breaks the account's figures down by model.
-func TestLimiterModelUsage(t *testing.T) {
+// model list: ModelRates breaks the account's figures down by model.
+func TestLimiterModelRates(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -168,19 +168,19 @@ func TestLimiterModelUsage(t *testing.T) {
 			t.Fatal(ok, err)
 		}
 		l.Settle(ctx, hold, 10)
+		l.CountModelTokens(ctx, 7, hit.model, 10)
 	}
 	// Uncapped model counters never refuse: the account's own cap does.
 	if ok, err := l.TryHit(ctx, ref, "c", ""); err != nil || ok {
 		t.Fatal("the account cap of 3 must refuse a fourth request", ok, err)
 	}
-	used, err := l.ModelUsage(ctx, 7, []string{"a", "b", "c"})
-	if err != nil || len(used) != 4 {
-		t.Fatal(used, err)
+	got, err := l.ModelRates(ctx, 7, now.Truncate(24*time.Hour))
+	want := []core.ModelRates{
+		{RPM: 3, TPM: 30, TPD: 30, Sessions: 2},
+		{Model: "a", RPM: 2, TPM: 20, TPD: 20, Sessions: 2},
+		{Model: "b", RPM: 1, TPM: 10, TPD: 10, Sessions: 1},
 	}
-	want := []core.RateUsage{{RPM: 3, TPM: 30, Sessions: 2}, {RPM: 2, TPM: 20, Sessions: 2}, {RPM: 1, TPM: 10, Sessions: 1}, {}}
-	for i, w := range want {
-		if !reflect.DeepEqual(used[i], w) {
-			t.Fatalf("set %d: got %+v, want %+v", i, used[i], w)
-		}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, %v; want %+v", got, err, want)
 	}
 }

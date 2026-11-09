@@ -522,8 +522,3 @@ func (t UsageTokens) Throughput(semantics string) int64 {
 	}
 	return input + t.Output
 }
-
-// ThroughputSQL is Throughput of a usage_logs row aliased u, in SQL.
-const ThroughputSQL = `CASE WHEN u.billing_detail->'inputs'->>'semantics' = 'inclusive'
-		THEN GREATEST(u.input_tokens - u.cache_read_tokens - u.cache_creation_tokens - u.cache_creation_1h_tokens, 0)
-		ELSE u.input_tokens END + u.output_tokens`
