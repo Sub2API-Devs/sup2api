@@ -4,16 +4,17 @@ export default {
   navLabel: 'Settings sections',
   groups: {
     gateway: 'Gateway',
-    billing: 'Billing',
-    notifications: 'Notifications',
-    system: 'System',
-    plugins: 'Plugin settings'
+    billing: 'Billing & notifications',
+    access: 'Users & access',
+    plugins: 'Plugins',
+    pluginSettings: 'Plugin settings',
+    system: 'System'
   },
   tabs: {
     notifications: 'Notifications',
     environment: 'Environment variables',
     billing: 'Billing',
-    gateway: 'Gateway',
+    gateway: 'Gateway settings',
     sticky: 'Sticky sessions',
     offload: 'CPU protection'
   },

@@ -621,6 +621,7 @@ func TestMenus(t *testing.T) {
 				{ID: "dash", Section: "safety", Label: manifest.LocalizedText{"en": "Moderation"}, Page: "dashboard", Permission: "mod:read"},
 				{ID: "rules", Section: "gateway", Label: manifest.LocalizedText{"en": "Mod rules"}, Page: "rules", Permission: "mod:read"},
 				{ID: "audit", Section: "security", Label: manifest.LocalizedText{"en": "Mod audit"}, Page: "audit", Permission: "mod:read"},
+				{ID: "weights", Section: "system", Label: manifest.LocalizedText{"en": "Mod weights"}, Page: "weights", Permission: "mod:read"},
 			}}},
 	}}}}
 	s := newService(t, db, newMemBus(), reg)
@@ -646,10 +647,18 @@ func TestMenus(t *testing.T) {
 	for _, m := range menus {
 		sections = append(sections, m.Section)
 	}
-	// The server orders plugins (600) before my account (800); the console
-	// lists my account first when the caller has no operator section.
+	// The server orders plugins (600) before personal (800); the console
+	// shows overview and personal first and the other sections after them
+	// (CONTRACTS §90).
 	if got := join(sections); got != "overview,plugins,me" {
 		t.Fatalf("user sections = %s", got)
+	}
+	// The console of a user: its own keys, models and usage, no site-wide usage.
+	if got := menuPaths(menus[0]); got != "/dashboard,/me/api-keys,/me/models,/me/usage/overview,/me/usage" {
+		t.Fatalf("user console = %s", got)
+	}
+	if got := menuPaths(menus[2]); got != "/me/wallet,/me/profile" {
+		t.Fatalf("user personal = %s", got)
 	}
 	if p := menus[1].Items; len(p) != 1 || p[0].Path != "/p/guard/info" || p[0].PluginKey != "guard" {
 		t.Fatalf("user plugin menus = %+v", p)
@@ -672,8 +681,8 @@ func TestMenus(t *testing.T) {
 	for _, m := range menus {
 		byKey[m.Section] = m
 	}
-	// Core items first, then the plugin menus of the shared section by order.
-	if p := byKey["plugins"].Items; len(p) != 5 || p[0].Path != "/plugins" || p[3].Path != "/p/guard/info" || p[4].Path != "/p/guard/dashboard" || p[4].Label.Get("zh") != "请求守卫" {
+	// No core item is left in the shared plugin section: plugin menus by order.
+	if p := byKey["plugins"].Items; len(p) != 2 || p[0].Path != "/p/guard/info" || p[1].Path != "/p/guard/dashboard" || p[1].Label.Get("zh") != "请求守卫" {
 		t.Fatalf("admin plugin menus = %+v", p)
 	}
 	if sec := byKey["mod:safety"]; sec.Label.Get("zh") != "安全" || len(sec.Items) != 1 || sec.Items[0].Path != "/p/mod/dashboard" {
@@ -682,12 +691,68 @@ func TestMenus(t *testing.T) {
 	if sec := byKey["security"]; sec.Label.Get("zh") != "安全" || len(sec.Items) != 1 || sec.Items[0].Path != "/p/mod/audit" {
 		t.Fatalf("security section = %+v", sec)
 	}
-	if gw := byKey["gateway"].Items; gw[len(gw)-1].Path != "/p/mod/rules" || gw[0].Path != "/groups" || gw[2].Path != "/platforms" {
-		t.Fatalf("core section with plugin item = %+v", gw)
+	// Site-wide usage sits in the console beside the caller's own.
+	if got := menuPaths(byKey["overview"]); got != "/dashboard,/me/api-keys,/me/models,/me/usage/overview,/me/usage,/usage/overview,/usage" {
+		t.Fatalf("admin console = %s", got)
+	}
+	if got := menuPaths(byKey["gateway"]); got != "/accounts,/groups,/prices,/p/mod/rules" {
+		t.Fatalf("core section with plugin item = %s", got)
+	}
+	if got := menuPaths(byKey["users"]); got != "/users" {
+		t.Fatalf("users = %s", got)
+	}
+	// Configuration and operations pages make up system settings, its own page first, plugin pages after the core's.
+	if got := menuPaths(byKey["system"]); got != "/settings,/platforms,/proxies,/roles,/plugins,/market,/publishers,/nodes,/system/tasks,/system/upgrades,/system/audit,/p/mod/weights" {
+		t.Fatalf("system settings = %s", got)
 	}
 	if f := byKey["finance"].Items; len(f) != 1 || f[0].Path != "/ledger" {
 		t.Fatalf("finance = %+v", f)
 	}
+
+	// A caller who only manages its own accounts: its accounts in the admin
+	// group, platforms and proxies in system settings without the settings page.
+	role, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "vendor", Name: core.LocalizedText{"en": "Vendor"},
+		PermissionKeys: []string{"account:own:read", "proxy:own:read", "proxy:own:manage"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vendor := addUser(t, s, "v@x.com", role.Key)
+	menus, err = s.Menus(ctx, vendor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byKey = map[string]MenuSection{}
+	for _, m := range menus {
+		byKey[m.Section] = m
+	}
+	if got := menuPaths(byKey["gateway"]) + " | " + menuPaths(byKey["system"]); got != "/accounts | /platforms,/proxies" {
+		t.Fatalf("vendor menus = %s", got)
+	}
+
+	// Sticky sessions alone open the settings page and nothing else of system settings.
+	role, err = s.CreateRole(ctx, admin, CreateRoleInput{Key: "sticky", Name: core.LocalizedText{"en": "Sticky"}, PermissionKeys: []string{"sticky:read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	menus, err = s.Menus(ctx, addUser(t, s, "st@x.com", role.Key))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range menus {
+		if m.Section == "system" {
+			if got := menuPaths(m); got != "/settings" {
+				t.Fatalf("sticky-only system settings = %s", got)
+			}
+		}
+	}
+}
+
+func menuPaths(sec MenuSection) string {
+	paths := make([]string, len(sec.Items))
+	for i, it := range sec.Items {
+		paths[i] = it.Path
+	}
+	return join(paths)
 }
 
 func join(s []string) string {

@@ -19,6 +19,8 @@ declare module 'vue-router' {
     public?: boolean
     /** Where a caller without `perm` goes instead of /forbidden, if anywhere. */
     deniedRedirect?: (to: RouteLocationNormalized) => string | undefined
+    /** The settings-page tab this page stands for in the system settings navigation (CONTRACTS §90). */
+    settingsTab?: (to: RouteLocationNormalized) => string
   }
 }
 
@@ -27,13 +29,13 @@ const children: RouteRecordRaw[] = [
   { path: 'dashboard', component: () => import('@/views/dashboard/DashboardView.vue'), meta: { title: 'nav.items.dashboard' } },
 
   { path: 'users', component: () => import('@/views/users/UsersView.vue'), meta: { perm: 'user:read', title: 'nav.items.users' } },
-  { path: 'roles', component: () => import('@/views/roles/RolesView.vue'), meta: { perm: 'role:read', title: 'nav.items.roles' } },
+  { path: 'roles', component: () => import('@/views/roles/RolesView.vue'), meta: { perm: 'role:read', title: 'nav.items.roles', parent: '/settings' } },
   { path: 'api-keys', redirect: '/me/api-keys' },
   { path: 'me/api-keys', component: () => import('@/views/keys/MyApiKeysView.vue'), meta: { perm: 'apikey:self:manage', title: 'nav.items.myApiKeys' } },
   { path: 'groups', component: () => import('@/views/groups/GroupsView.vue'), meta: { perm: 'group:read', title: 'nav.items.groups' } },
-  { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: PROXY_PAGE_PERMS, title: 'nav.items.proxies' } },
+  { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: PROXY_PAGE_PERMS, title: 'nav.items.proxies', parent: '/settings' } },
   { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.accounts' } },
-  { path: 'platforms', component: () => import('@/views/platforms/PlatformsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.platforms' } },
+  { path: 'platforms', component: () => import('@/views/platforms/PlatformsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.platforms', parent: '/settings' } },
 
   { path: 'prices', component: () => import('@/views/prices/PricesView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices' } },
   { path: 'prices/new', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:manage', title: 'prices.newTitle', parent: '/prices' } },
@@ -56,7 +58,7 @@ const children: RouteRecordRaw[] = [
   { path: 'settings', component: () => import('@/views/settings/SettingsView.vue'), meta: { perm: ['settings:read', 'sticky:read'], title: 'nav.items.settings' } },
 
   { path: 'system/ccgateway', redirect: '/plugins/ccgateway?tab=settings' },
-  { path: 'plugins', component: () => import('@/views/plugins/PluginsView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
+  { path: 'plugins', component: () => import('@/views/plugins/PluginsView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins', parent: '/settings' } },
   {
     path: 'plugins/:key/versions/:version/consent',
     component: () => import('@/views/plugins/ConsentView.vue'),
@@ -75,13 +77,17 @@ const children: RouteRecordRaw[] = [
     }
   },
   // Access is the plugin's settings permission or plugin:read, checked by the core.
-  { path: 'plugins/:key/settings', component: () => import('@/views/plugins/PluginSettingsView.vue'), meta: { title: 'nav.crumbs.pluginSettings', parent: '/settings' } },
-  { path: 'market', component: () => import('@/views/plugins/MarketView.vue'), meta: { perm: 'plugin:market:read', title: 'nav.items.market' } },
-  { path: 'publishers', component: () => import('@/views/plugins/PublishersView.vue'), meta: { perm: 'publisher:read', title: 'nav.items.publishers' } },
-  { path: 'nodes', component: () => import('@/views/nodes/NodesView.vue'), meta: { perm: 'node:read', title: 'nav.items.nodes' } },
-  { path: 'system/tasks', component: () => import('@/views/tasks/TasksView.vue'), meta: { perm: 'task:read', title: 'nav.items.tasks' } },
-  { path: 'system/upgrades', component: () => import('@/views/upgrades/UpgradesView.vue'), meta: { perm: 'system:update:read', title: 'upgrades.title' } },
-  { path: 'system/audit', component: () => import('@/views/upgrades/AuditView.vue'), meta: { perm: 'audit:read', title: 'observe.audit' } },
+  {
+    path: 'plugins/:key/settings',
+    component: () => import('@/views/plugins/PluginSettingsView.vue'),
+    meta: { title: 'nav.crumbs.pluginSettings', parent: '/settings', settingsTab: (to) => `plugin:${String(to.params.key)}` }
+  },
+  { path: 'market', component: () => import('@/views/plugins/MarketView.vue'), meta: { perm: 'plugin:market:read', title: 'nav.items.market', parent: '/settings' } },
+  { path: 'publishers', component: () => import('@/views/plugins/PublishersView.vue'), meta: { perm: 'publisher:read', title: 'nav.items.publishers', parent: '/settings' } },
+  { path: 'nodes', component: () => import('@/views/nodes/NodesView.vue'), meta: { perm: 'node:read', title: 'nav.items.nodes', parent: '/settings' } },
+  { path: 'system/tasks', component: () => import('@/views/tasks/TasksView.vue'), meta: { perm: 'task:read', title: 'nav.items.tasks', parent: '/settings' } },
+  { path: 'system/upgrades', component: () => import('@/views/upgrades/UpgradesView.vue'), meta: { perm: 'system:update:read', title: 'upgrades.title', parent: '/settings' } },
+  { path: 'system/audit', component: () => import('@/views/upgrades/AuditView.vue'), meta: { perm: 'audit:read', title: 'observe.audit', parent: '/settings' } },
 
   { path: 'p/:plugin/:page', component: () => import('@/views/plugin-host/PluginPageView.vue') },
   { path: 'forbidden', component: () => import('@/views/errors/ForbiddenView.vue') },
