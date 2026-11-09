@@ -182,3 +182,20 @@ func (p *Profile) AuthHeader() string   // header 型返回小写头名，供核
 - 黄金样例：在改动前用旧插件代码对输入矩阵生成 `sdk/upstream/testdata/golden/<plugin>.json`（每种协议 × 有无 base_url × 有无 inbound 头 × stream × gemini models/ 前缀 × anthropic-version 传与不传 × ws；测试请求；模型列表；校验的合法/非法凭证；classify 的现有测试数据），新引擎逐项比对。
 - 引擎单测、check 单测、registry/rollout 单测（runtime none、extend）、gateway 单测（§84 位置、鉴权头重写、model 改写后 URL 重算）。
 - `go test -race` 全量（容器内），web 单测，控制台截图（新建自定义上游、编辑路由）。
+
+## 8. 实现记录（与上文不同或上文没写的地方）
+
+契约以 CONTRACTS §86 为准，这里记实现时定下的细节。
+
+- **合并**：各层按 JSON merge patch 合并原始 JSON；一个请求头的写法和 `paramOverride` 整体替换。路由里写 `null` 的头只对该路由删除共用头。`manifest.Upstream` 保留解码时的原始字节（`Layer()`），所以 Go 里构造的声明表达不了 `null`。未知字段拒绝。
+- **账号层**：只能写 `auth`、`headers`、已声明协议的 `path`、`allowFields`；`baseURL` 由账号的 `base_url` 设置给出，账号层不能写。先读设置，再读凭证。账号层能改鉴权头名，所以 `AuthHeader` 带账号参数。
+- **inbound 头**：引擎自己按 passHeaders 过滤（小写精确匹配、去空白、空值跳过），与旧插件的 `apikey.ForwardHeaders` 一致。
+- **模型**：只有路由设了 `trimPrefix`（gemini）时 Build 才去空白和前缀；测试模型总是去前缀。“model is required” 的文案由路由路径推出，与旧 gemini 一致。
+- **append**：值是 `key=version` 时，已有同 key 的任意版本就不追加（openai-beta 的规则）。
+- **模板位置**：`{base_url}` 只能用在 auth 和请求头；`{credentials.api_key}`、`{credentials.base_url}` 拒绝，免得绕过 `{api_key}` 只能放 auth 的规则。
+- **新增字段**：`models.stripPrefix`（gemini 的 `models/`）；`providers/gemini.GenerateContentPingBody`。
+- **`accounts.credentials`**：只有存在没声明 upstream 或声明了 extend 的账号类型时才需要。
+- **runtime none**：能力只允许 `platform.adapter.v1`、`platform.websocket.v1`（responses_ws 需要后者）。
+- **表单控件**：schema 表单用 uiSchema 的 `"ui:widget": "upstream-editor"`（不是上文早期写的 `x-widget`）。
+- **字段错误**：账号层每个问题一个字段错误，`credentials.upstream.<路径>`。
+- **执行路径**：`platform.execute.v1` 插件经核心转发的每个请求也在插件 patch 之后执行账号参数覆盖；插件拿到的 ExecuteRequest 与 BuildUpstreamRequest 路径一致（映射后的模型）。

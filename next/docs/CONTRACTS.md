@@ -6631,15 +6631,15 @@ node 任务（可工作节点各跑，`RequireWork`）：
   - `prune_objects`、`sync_fields` 和未知模式报 `unsupported`（暂不支持）。
 - **条件**：`full`（null 只等于 null，布尔按布尔比较，其余类型不同是运行失败）、`prefix`、`suffix`、`contains`（按字符串）、`gt`、`gte`、`lt`、`lte`（两边都须是数字，否则运行失败）；`invert` 取反；路径取不到时结果就是 `pass_missing_key`（不取反）。条件路径先在请求体里找，找不到再到上下文对象里找。
 - **上下文键**：`model`、`upstream_model`（账号模型映射后的上游模型）、`original_model`（客户端模型）、`request_path`、`request_headers.<小写头名>`（客户端请求头，多个值用 `, ` 连接；禁止列表里的头不出现）、`header_override.<头名>`（前面的头操作已设置的值）、`retry_index`、`is_retry`、`retry.index`、`retry.is_retry`、`user_id`、`group`（分组名）、`account_id`、`stream`（含 streamOnly 强制的流式）。构造在 `core.ParamOverrideContext`，网关和预览共用。
-- **生效位置**：`gateway/dispatch.go` `(*call).attempt`，每次尝试执行一次，在模型映射、`mapReferencedModels`、`mapResourceReferences`、`forceStreamPath` 之后，取 `requestFields` 和 `BuildUpstreamRequest` 之前，所以代理路径和 `platform.execute.v1` 路径都拿到覆盖后的请求体，插件看到的就是发往上游的。`forwardBuilt` 在插件 patch 之后仍重新强制 stream。
-- **请求头优先级**（`forwardBuilt`，含插件经核心转发的执行请求）：插件的头 → 账号透传（§81）和粘性规则透传 → **参数覆盖的设置和删除**（设置覆盖前面的值，删除去掉前面的头）→ 核心的资源头、额度头（仍然最后设置、最优先）。头名须是合法字段名；落在 §81 禁止列表（`core.HeaderPassthroughBlocked`）里的头，不论作为目标还是 copy/move/pass 的源，都报 `blocked`。
+- **生效位置**（2026-11-09 起改为最后执行，§86.5）：每次尝试执行一次，在模型映射、`mapReferencedModels`、`mapResourceReferences`、`forceStreamPath`、声明式上游的过滤字段与清单 paramOverride、插件（BuildUpstreamRequest、extend 或 `platform.execute.v1` 经核心转发的请求）的 patch **之后**，`forwardBuilt` 再次强制 stream 之前（`gateway/param_override.go`）。插件看到的是覆盖前的请求体，`meta.model` 是映射后的模型；管理员的覆盖盖过预设、清单和插件的改写。覆盖改了模型时，声明式类型按新模型重新渲染 URL，代码插件的 URL 不变、只改请求体。WebSocket 每轮 `response.create` 同样在插件 patch 之后执行请求体部分（请求头在握手时已发出，不再适用）。
+- **请求头优先级**（`forwardBuilt`，含插件经核心转发的执行请求）：插件或声明构造的头 → 声明的 paramOverride 头 → 账号透传（§81）和粘性规则透传（只补没有的）→ **参数覆盖的设置和删除**（设置覆盖前面的值，删除去掉前面的头）→ 声明式类型的鉴权头重写（§86.5）→ 核心的资源头、额度头（仍然最后设置、最优先）。头名须是合法字段名；落在 §81 禁止列表（`core.HeaderPassthroughBlocked`）里的头，不论作为目标还是 copy/move/pass 的源，都报 `blocked`。
 - **模型**：覆盖改了请求体的模型字段（平台的 `modelPath`）时，上游模型以覆盖结果为准：`meta.model`、使用记录的 `upstream_model`、上游用量的主模型身份都用它，`forwardBuilt` 的模型可用性一致性检查也以它为期望值，不会因此报 `upstream_model_mismatch`。计费仍按客户端模型；可用性预检仍按映射后的模型。
 - **return_error**：`value` 为消息字符串，或 `{message|msg, status_code|status, code, type, skip_retry}`；默认 400、`invalid_request`、`invalid_request_error`、`skip_retry: true`，状态码须在 100–599。`skip_retry: true` 直接回给客户端（记录类型 `invalid_request`），false 换下一个账号（所有账号都这样时把最后一个错误回给客户端）。不冷却、不惩罚账号；有失败策略时也不跑账号规则（与可用性拒绝相同）。
 - **运行失败**（类型不符、源路径不存在、条件比较的类型不符等）：WARN 日志带账号 ID，本次尝试换账号（`param_override_failed`，记录类型 `internal`，全都失败时客户端看到“无可用账号”），同样不惩罚账号。
 - **预览**：`POST /accounts/param-override/preview`（权限同建 / 改账号：`account:create`、`account:own:create`、`account:update`、`account:own:update` 任一），请求 `{"param_override": {...}, "body": {...}, "model": "...", "headers": {"名称": "值"}}`。`body` 缺省为 `{}`、须是对象；`model` 缺省取 body 的 `model`，同时作为上下文的 `model`、`upstream_model`、`original_model`；`user_id` 为调用者，`stream` 取 body 的。校验不过照常回 400 字段错误（`param_override`、`body`）；否则 200 `{"body": 结果对象, "set_headers": {...}, "delete_headers": [...], "return_error": null | {"status", "code", "type", "message", "skip_retry"}, "error": null | "运行失败原因"}`，有 `return_error` 或 `error` 时 `body` 为 null。与网关用同一个引擎和上下文构造，不保存任何东西。
 - **控制台**：账号编辑页“高级 › 请求转发”组，请求头透传之后一行“请求参数覆盖”：摘要（“N 条操作 · 含 M 条请求头操作”和前 3 条的说明）、“编辑”和“清空”；导航摘要加“覆盖 N 条”。编辑弹窗（`web/src/views/accounts/paramOverride/`）沿用 new-api 与动态权重调整项编辑器的布局：左侧操作列表（圆点区分请求体 / 请求头 / 返回错误，带条件的有漏斗、有错的红点，可搜索、上下移、复制、删除，6 个模板），右侧“就”（操作、路径或 from/to、值、keep_origin）与“当”（条件、满足任一 / 全部、取反、缺失视为满足）；“JSON”视图编辑整个覆盖（new-api 旧格式的顶层键读成字面路径的 `set` 操作，写回时统一成 `operations`）；“试运行”视图调用预览接口。“应用”只改账号表单，保存账号才生效。
-- **未覆盖**：账号测试请求（`BuildTestRequest`）、WebSocket 端点、分组 / 全局层的覆盖、批量编辑。
-- 代码：`core/param_override.go`（校验、编译）、`core/param_override_apply.go`（执行、上下文）、`gateway/param_override.go`（挂接点）、`account/param_override_preview.go`。测试：`core/param_override_test.go`、`account/account_test.go`（`TestAccountParamOverride*`）、`gateway/param_override_test.go`（请求体和头到达上游、改模型不触发可用性不一致、return_error、运行失败换账号、执行路径）。
+- **未覆盖**：账号测试请求（`BuildTestRequest`）、WebSocket 端点的请求头、分组 / 全局层的覆盖、批量编辑。
+- 代码：`sdk/paramoverride`（校验、编译、执行，2026-11-09 从 core 迁出，供清单校验共用；`core/param_override.go` 保留别名）、`gateway/param_override.go`（挂接点）、`account/param_override_preview.go`。测试：`core/param_override_test.go`、`account/account_test.go`（`TestAccountParamOverride*`）、`gateway/param_override_test.go`（请求体和头到达上游、改模型不触发可用性不一致、return_error、运行失败换账号、执行路径）。
 
 ## 85. 钩子点 `gateway.attempt`：选定账号后、发往账号前（2026-11-08，moderation 0.7.0 需要，72.17；核心 0.1.258）
 
@@ -6660,3 +6660,59 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **其他调用里的 `meta.account_id`**：同一次尝试里核心给插件的其他调用（build、execute、classify、用量提取，`metaFor`）也带上账号 ID。选定账号之前的调用为 0。
 - **代价**：没有插件声明这个点时没有任何开销。声明了的插件每次尝试多一次 RPC，在钩子内同步执行期间占着账号的并发名额，所以插件应该尽量用 `skip_attempt_hooks` 在请求钩子里结束。
 - 测试：`gateway/attempt_hook_test.go`（每次尝试都调用并带账号、拒绝不换账号、`skip_attempt_hooks` 只跳过本插件、补丁被拒、WebSocket 每条消息）、`sdk/manifest/check/attempt_hook_test.go`。
+
+## 86. 声明式上游、只有清单的插件与自定义上游（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”第 1 期，规格见 [UPSTREAM-DECLARATIVE.md](UPSTREAM-DECLARATIVE.md)）
+
+起因：三个 API Key 插件和 relay 的代码几乎是同一套模板（上游路径、鉴权头、固定头、base_url 规范化、错误归类各写一遍）；接一个兼容站点也得写插件。改为核心按清单声明构造上游请求，并新增不用写插件的“自定义上游”账号类型。
+
+### 86.1 上游声明
+
+- manifest `accountTypes[].upstream`（`sdk/manifest/upstream.go`）：`preset`（`openai`/`anthropic`/`gemini`，预设在 `sdk/platforms/upstream/*.json`）、`extend`、`accountConfig`、`baseURL{default,required,stripSuffixes}`、`credentials{keyValidator,texts,fields}`、`auth{type: header|query|none, name, value}`、`headers`（头名 → `{set|default|append: 模板}`）、`routes`（上游协议 → `{method, path, transport, headers, patches, model}`）、`defaultProtocol`、`filterFields`、`paramOverride`（§84 格式）、`classify`、`test`、`models{path, idPath, stripPrefix}`。
+- 合并：预设 → 清单 → 账号层（只有 `accountConfig` 类型），按 JSON merge patch，`headers` 按头名、`routes` 按协议合并，`null` 删除；未知字段拒绝。
+- 模板变量：`{api_key}`（只能在 auth 值和路径查询串）、`{base_url}`（auth 和请求头）、`{model}`（映射和参数覆盖之后的上游模型）、`{credentials.<k>}`（k 须在 `credentials.fields`，不能是 api_key/base_url）、`{client_header.<名>}`（须在该类型的 passHeaders 里、不在 §81 禁止列表，只能用在普通请求头）。
+- 可服务的端点 = routes 列出的协议（须与 `platforms[].endpoints` 一致）加核心能转换到它们的协议；调度不变。
+- 校验：`sdk/manifest/check/upstream.go`（打包、安装、核心加载共用）；引擎 `sdk/upstream`（`Resolve` → `Profile.Validate/Build/URL/Test/Models/Classify/AuthHeader/PrepareBody/ForAccount`）。
+
+### 86.2 核心
+
+- `server/internal/plugin/declarative`：声明了 upstream 的账号类型由核心本地实现校验凭证、构造请求、错误归类、测试请求、模型列表，不走 gRPC；按账号缓存 Profile（设置和凭证的 sha256，上限 1024，随注册代际重建）。不实现 `core.ExecutePlugin`，走 BuildUpstreamRequest + `forwardBuilt`。账号生命周期、模型可用性等可选接口在插件实现时转给插件，否则 Unimplemented。
+- 网关只通过可选接口 `core.DeclaredUpstream`（`Upstream`、`PrepareBody`、`UpstreamURL`、`AuthHeader`）感知声明式类型。
+- `registry.addAccountTypes`：声明了 upstream 的类型绑定声明式客户端，不再要求插件实现 platform adapter，也不要求 `accounts.credentials` 授权（凭证只在核心内使用）；`extend` 仍要求两者。声明解析失败的类型丢弃并记 ERROR。
+- `extend: true`：核心先按声明构造，再调插件 BuildUpstreamRequest，请求带 `base`（`BuildUpstreamRequestRequest` 字段 6）；插件的头覆盖声明的头（鉴权头除外），patches 接在声明的之后，url、upstream_model 非空时替换。
+- 接口：`GET /account-types` 对声明式类型返回 `upstream`（解析到清单层的声明，形状同 manifest）；所有类型返回 `pass_headers`。账号层 `settings.upstream` 经 ValidateCredentials 校验，字段错误为 `credentials.upstream.<路径>`。
+
+### 86.3 只有清单的插件（`runtime: "none"`）
+
+- 包里没有 runtimes、没有 entry；能力只允许 `platform.adapter.v1`、`platform.websocket.v1`，其余（钩子、路由、任务、调度、观测、通知、数据库、生命周期、额度、余额、刷新、没有 upstream 的账号类型、extend 等）报 `needs_runtime`。
+- 核心加载为常驻 ready 的静态实例（`grpcruntime/static.go`），读授权方式与 gRPC 实例相同，迁移、drain、stop 为空操作；`PUT /plugins/:key/resources` 对它返回 400（字段 `runtime`、`unsupported`）。
+- grpc 插件的账号类型全部声明 upstream 且不 extend、自己也不声明平台时，进程不需要报告 `platform.adapter.v1`（anthropic 0.3.0）。
+
+### 86.4 插件
+
+| 插件 | 版本 | 变化 |
+|---|---|---|
+| openai | 0.4.0 | runtime none，`{"preset":"openai","filterFields":[]}` |
+| gemini | 0.3.0 | runtime none，`{"preset":"gemini","filterFields":[]}` |
+| relay | 0.3.0 | runtime none，preset anthropic、base_url 必填、不设默认协议 |
+| anthropic | 0.3.0 | 账号类型声明 preset anthropic；只保留模型目录（/models 路由、插件库） |
+| custom（新） | 0.1.0 | runtime none，内置启用；`custom_openai`、`custom_anthropic`、`custom_gemini`，`creationGroup: "custom"` |
+
+- 四个老插件的行为由黄金样例保证（`sdk/upstream/testdata/golden`，旧插件代码对约 1500 个输入采集，新引擎逐项回放一致）。唯一差异：relay 的测试请求现在带 `model` 和 `usage_protocol`。
+- 自定义上游：base_url 必填、Key 任意 8–512 个可见字符、`accountConfig: true`、默认过滤 `filterFields`（预设的 service_tier、safety_identifier、inference_geo、speed 中该协议适用的）；表单字段 `api_key`、`base_url`、`upstream`（`ui:widget: upstream-editor`）。账号层只能改 auth、headers、已声明协议的 path 和 `allowFields`（放开默认过滤字段）。暂不能按账号关掉单个协议。
+- `custom` 加入保留的官方插件名。
+
+### 86.5 请求构造顺序
+
+- 请求体：模型映射、引用与资源映射、强制流式 → 协议转换 → 过滤字段（账号没放开的）→ 预设和清单的 paramOverride → 路由 patches → 插件（extend、老插件 BuildUpstreamRequest、执行路径转发）的 patch → **账号参数覆盖（§84）** → 改了模型时声明式类型重算 URL → 再次强制 stream。
+- 请求头：inbound（按 passHeaders 过滤）→ 预设、清单、路由的头 → 插件的头 → 声明的 paramOverride 头 → 账号透传与粘性透传（只补没有的）→ 账号参数覆盖的头 → **鉴权头按 auth 模板重写**（声明不产生值时删除）→ 核心资源头、额度头。鉴权头只能由 auth 模板写，请求头覆盖、透传、插件头都改不了它。
+
+### 86.6 控制台
+
+- `web/src/views/accounts/upstream/`：`upstream-editor` 表单控件。默认值取账号类型的 `upstream`，可按项和整体恢复默认；只写和默认不同的项，全部默认时不存。服务端字段错误显示在对应输入上；客户端提示与服务端规则一致，只提示不拦截。
+- 请求参数覆盖的提示文字改为“在模型映射和插件改写之后、发往上游之前最后执行”。
+
+### 86.7 兼容与上线
+
+- 账号类型 id、plugin_key 不变，现有账号和数据不迁移；没声明 upstream 的插件不受影响。
+- 参数覆盖改到最后：上线前只读查线上配了参数覆盖的账号，确认没有和插件改写撞字段（主要是 codex）。
+- 新插件的 `hostCompat` 下限在发布时改为第一个带本节功能的核心版本。
