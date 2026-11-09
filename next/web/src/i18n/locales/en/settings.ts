@@ -29,12 +29,12 @@ export default {
       traffic: "Accounts using less than their weight's share are preferred, so traffic follows the weight ratio."
     },
     limitLoad: 'Limit-aware load',
-    limitLoadHint: 'The closer an account is to its limit, the lower its weight. E.g. RPM limit 100 with 90 used: weight ×10%. Accounts without a limit are not affected.',
+    limitLoadHint: 'The closer an account is to its limit, the lower its weight. E.g. RPM limit 100 with 90 used: weight ×10%. Accounts without a limit (nor, when balancing by model, a per-model limit for the requested model) are not affected.',
     metric: 'Metric',
-    metricHint: 'Both the traffic balance and the limit load use this metric. For accounts without a TPM limit, and always when balancing by model, tokens are counted only when a request finishes, so TPM lags slightly.',
+    metricHint: 'Both the traffic balance and the limit load use this metric. For accounts without a TPM limit, and always when balancing by model, tokens are counted only when a request finishes, so TPM lags slightly. Only used with the Traffic strategy or Limit-aware load.',
     metrics: { rpm: 'RPM', concurrency: 'Concurrency', tpm: 'TPM' },
-    modelLimits: 'Per-model limits',
-    modelLimitsHint: "Balance by the requested model: the traffic balance compares that model's own usage on each account, and when the model is in one of the account's per-model limit lists, the limit-aware load also uses that list's usage and limit, and the higher load wins."
+    modelLimits: 'Balance by model',
+    modelLimitsHint: "Balance by the requested model: the traffic balance compares that model's own usage on each account, and when the model is in one of the account's per-model limit lists, the limit-aware load also uses that list's usage and limit, and the higher load wins. Only used with the Traffic strategy or Limit-aware load."
   },
   offload: {
     nodesTitle: 'Node load',

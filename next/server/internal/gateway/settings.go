@@ -199,8 +199,8 @@ type settingsSnapshot struct {
 	failurePolicyErr error
 }
 
-// settingsCache reads the gateway, sticky, auto-disable and scheduling rows with a short
-// TTL; the config:changed broadcast invalidates it immediately.
+// settingsCache reads the gateway, sticky, auto-disable and scheduling rows
+// with a short TTL; the config:changed broadcast invalidates it immediately.
 type settingsCache struct {
 	db    *store.DB
 	mu    sync.Mutex

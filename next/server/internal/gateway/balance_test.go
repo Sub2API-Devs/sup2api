@@ -183,6 +183,53 @@ func TestBalanceLimitLoadModelList(t *testing.T) {
 	}
 }
 
+// Without model limits the model list is ignored: only the account's own
+// limit loads it.
+func TestBalanceLimitLoadIgnoresListWithoutModelLimits(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true}
+	usage := map[int64]core.RateUsage{1: {RPM: 30, Models: []core.ModelRateUsage{{Models: []string{testModel}, RPM: 18}}}}
+	e, _ := balanceEnv(t, cfg, usage)
+	e.accounts.set(1, func(a *core.Account) {
+		a.RPMLimit = 100
+		a.ModelLimits = []core.ModelLimit{{Models: []string{testModel}, RPMLimit: 20}}
+	})
+	_, recs := serve(t, e, 1)
+	d := coreDecision(recs[0])
+	if d == nil || d.Changed[0].Load != 30 {
+		t.Fatalf("core decision %+v", d)
+	}
+}
+
+// The same load on every account of the tier keeps everyone's chance: nothing
+// is recorded (CONTRACTS §89.4).
+func TestBalanceWholeTierScaledNotRecorded(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true}
+	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 50}, 2: {RPM: 50}, 3: {RPM: 50}})
+	for id := int64(1); id <= 3; id++ {
+		e.accounts.set(id, func(a *core.Account) { a.RPMLimit = 100 })
+	}
+	_, recs := serve(t, e, 1)
+	if d := coreDecision(recs[0]); d != nil {
+		t.Fatalf("core decision %+v", d)
+	}
+}
+
+// The concurrency of a model list is read from its own slots.
+func TestBalanceConcurrencyModelListSlots(t *testing.T) {
+	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricConcurrency, LimitLoad: true, ModelLimits: true}
+	e, _ := balanceEnv(t, cfg, nil)
+	list := core.ModelLimit{Models: []string{testModel}, MaxConcurrency: 4}
+	e.accounts.set(1, func(a *core.Account) { a.ModelLimits = []core.ModelLimit{list} })
+	e.slots.mu.Lock()
+	e.slots.inUse[core.ModelLimitSlots(list.Key())+":1"] = 3
+	e.slots.mu.Unlock()
+	_, recs := serve(t, e, 1)
+	d := coreDecision(recs[0])
+	if d == nil || d.Changed[0].AccountID != 1 || d.Changed[0].Load != 75 {
+		t.Fatalf("core decision %+v", d)
+	}
+}
+
 // Concurrency is read from the account slots.
 func TestBalanceConcurrencyFromSlots(t *testing.T) {
 	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricConcurrency, LimitLoad: true}
@@ -240,6 +287,9 @@ func TestBalanceFailoverReusesRead(t *testing.T) {
 	e.gw.randFloat = func() float64 { return 0 } // the first account of the tier first
 	e.up.set("acc-1", &upstreamRule{status: 500})
 	_, recs := serve(t, e, 1)
+	if keys := e.up.keys(); len(keys) != 2 || keys[0] != "acc-1" {
+		t.Fatalf("upstream calls %v, want acc-1 then a failover", keys)
+	}
 	if lim.usageCalls != 1 {
 		t.Fatalf("usage read %d times across failover, want once", lim.usageCalls)
 	}
@@ -293,8 +343,7 @@ func TestBalanceMergesPluginLoad(t *testing.T) {
 // own usage, not the account's.
 func TestBalanceTrafficByModel(t *testing.T) {
 	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, ModelLimits: true}
-	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}}) // acc-1 busy with other models
-	lim := e.gw.d.Limiter.(*fakeLimiter)
+	e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}}) // acc-1 busy with other models
 	lim.modelUsage = map[string]map[int64]core.RateUsage{testModel: {2: {RPM: 60}}}
 	served, _ := serve(t, e, 200)
 	if served["acc-2"] > 6 || served["acc-1"] < 70 || served["acc-3"] < 70 {
@@ -302,6 +351,9 @@ func TestBalanceTrafficByModel(t *testing.T) {
 	}
 	if !slices.Contains(lim.modelAsked, testModel) {
 		t.Fatalf("model usage asked for %v, want %s", lim.modelAsked, testModel)
+	}
+	if lim.usageCalls != 0 { // without limit load the account's own use is not needed
+		t.Fatalf("account usage read %d times", lim.usageCalls)
 	}
 }
 

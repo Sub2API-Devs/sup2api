@@ -1282,7 +1282,7 @@ export interface SchedulingSettings {
   metric: 'rpm' | 'concurrency' | 'tpm'
   /** Lower the weight as the metric nears the account's limit. */
   limit_load: boolean
-  /** With limit_load, also count the model list holding the request's model. */
+  /** Balance by the request's model: the traffic balance compares that model's own usage; with limit_load, also count the model list holding it. */
   model_limits: boolean
 }
 

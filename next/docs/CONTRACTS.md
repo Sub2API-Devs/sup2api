@@ -6867,10 +6867,10 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 | 字段 | 取值 | 默认 | 含义 |
 |------|------|------|------|
-| `mode` | `default` / `traffic` | `default` | 均衡策略：默认 = 按权重随机；流量 = 见 89.3 |
+| `mode` | `default` / `traffic` | `default` | 均衡策略：默认 = 按权重随机；流量 = 见 89.2 |
 | `metric` | `rpm` / `concurrency` / `tpm` | `rpm` | 均衡指标，流量均衡和上限负载共用 |
 | `limit_load` | 布尔 | `false` | 基于上限负载调度，见 89.2 |
-| `model_limits` | 布尔 | `false` | 根据模型限速（按模型调度，2026-11-10 定）：流量均衡比较请求模型在各账号上自己的用量；上限负载也算请求模型所在的指定模型限速列表（§68） |
+| `model_limits` | 布尔 | `false` | 根据模型限速（按模型调度）：流量均衡比较请求模型在各账号上自己的用量；上限负载也算请求模型所在的指定模型限速列表（§68） |
 
 读入网关设置快照（10 秒 TTL，`config:changed` 广播失效）；读到未知枚举值按默认值处理。默认值下不读 Redis、调度结果与之前完全一致。
 
@@ -6890,8 +6890,8 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 89.3 生效范围与读数
 
-- 和权重一样只作用于粘性不命中的挑选（新会话、无粘性规则的请求、绑定账号失败后的换号）；粘性命中、`count_tokens` 不读不算；已绑定的会话不迁移。
-- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其模型列表的近 60 秒窗口），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`）。没设 TPM 上限的账号，以及按模型比较时（`md:<model>` 不设上限、不预留），TPM 在请求结束时才计入，有滞后。
+- 和权重一样只作用于粘性不命中的挑选（新会话、无粘性规则的请求、绑定账号失败后的换号，HTTP 与 WebSocket 每一轮相同）；粘性命中、`count_tokens` 不读不算；已绑定的会话不迁移。
+- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其命中的模型列表的近 60 秒窗口；只按模型比较且未开上限负载时不读），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`，几种并行读）。没设 TPM 上限的账号，以及按模型比较时（`md:<model>` 不设上限、不预留），TPM 在请求结束时才计入，有滞后。
 - 读失败记 WARN，本次按插件的值调度（仍套用插件负载），不拒绝请求；换号时出现首次读数没覆盖到的账号，它保持插件权重、不参与流量均衡。
 
 ### 89.4 记录
@@ -6904,7 +6904,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 89.6 实现位置
 
-- 设置与接口：`server/internal/gateway/balance_settings.go`，快照 `settings.go`
+- 设置与接口：`server/internal/gateway/balance_settings.go`，路由 `sticky_api.go` `RegisterRoutes`，快照 `settings.go`
 - 计算：`server/internal/gateway/balance.go`（`readBalance`、`tierWeights`、`trafficWeights`、`loadedWeight`），接入 `dispatch.go` `pick` / `orderPool`
-- 读数：`core.AccountLimiter.ModelUsage`（`account/limiter.go`），`core.AccountRef.ModelLimitIndex`
+- 读数：`core.AccountLimiter.ModelUsage`（`account/limiter.go`），`core.AccountRef.ModelLimitIndex`（`core/ports_identity.go`）
 - 前端：`web/src/views/settings/SchedulingPolicyView.vue`、`LoadBalanceSettingsCard.vue`

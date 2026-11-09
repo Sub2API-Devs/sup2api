@@ -6,6 +6,8 @@ import (
 	"math"
 	"slices"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -118,12 +120,9 @@ func trafficWeights(w, used []float64) []float64 {
 // readBalance reads, once per request and at the first pick the binding does
 // not serve, the usage the scheduling settings balance on. Nothing is read
 // when they are off or the request counts tokens. A later pick (failover)
-// reuses the read and orders without adding to the sched_decisions entry.
+// reuses the read.
 func (c *call) readBalance(ctx context.Context, cands []core.AccountRef) {
 	if c.balanceDone {
-		if c.balance != nil {
-			c.balance.recorded = true
-		}
 		return
 	}
 	c.balanceDone = true
@@ -138,118 +137,152 @@ func (c *call) readBalance(ctx context.Context, cands []core.AccountRef) {
 		}
 	}
 	byModel := cfg.Mode == balanceModeTraffic && cfg.ModelLimits && c.model != ""
-	model := ""
+	trafficModel := ""
 	if byModel {
-		model = c.model
+		trafficModel = c.model
 	}
-	usage, err := c.readUsage(ctx, cfg, refs, model)
+	usage, err := c.readUsage(ctx, cfg, refs, trafficModel)
 	if err != nil {
 		// Fail open: the request is scheduled by the plugins' values alone.
 		slog.WarnContext(ctx, "gateway: read usage for balancing, using the plain weights", "err", err)
-		usage = nil
 	}
 	c.balance = &balanceState{cfg: cfg, usage: usage, byModel: byModel, entry: -1}
 }
 
-// readUsage reads the configured metric of refs and, with model limits on, of
-// the model list each account has for the request's model (limit load) and,
-// when model is not "", of that model itself (traffic balance by model).
-func (c *call) readUsage(ctx context.Context, cfg SchedulingSettings, refs []core.AccountRef, model string) (map[int64]accountUsage, error) {
-	m := balanceMetricTable[cfg.Metric]
-	lists := make([]int, len(refs))
-	for i := range refs {
-		lists[i] = -1
-		if cfg.LimitLoad && cfg.ModelLimits {
-			lists[i] = refs[i].ModelLimitIndex(c.model)
-		}
+// usageQuery is what readUsage asks of the limiter or the slots: the metric
+// of refs, the account's own use when account is set, that of the model list
+// lists[i] (-1 = none) and, when trafficModel is not "", that model's own use.
+type usageQuery struct {
+	metric       balanceMetric
+	refs         []core.AccountRef
+	lists        []int
+	account      bool
+	trafficModel string
+}
+
+// readUsage reads what the settings balance on: the account's own use (limit
+// load, or the traffic balance by account), with model limits on that of the
+// model list each account has for the request's model (limit load) and, when
+// trafficModel is not "", that model's own use (traffic balance by model).
+func (c *call) readUsage(ctx context.Context, cfg SchedulingSettings, refs []core.AccountRef, trafficModel string) (map[int64]accountUsage, error) {
+	metric, ok := balanceMetricTable[cfg.Metric]
+	if !ok { // settings are normalized; a stray value must not take the request down
+		metric = balanceMetricTable[balanceMetricRPM]
 	}
+	q := usageQuery{metric: metric, refs: refs, lists: make([]int, len(refs)),
+		account: cfg.LimitLoad || trafficModel == "", trafficModel: trafficModel}
 	out := make(map[int64]accountUsage, len(refs))
 	for i := range refs {
-		u := accountUsage{limit: m.limit(&refs[i])}
-		if l := lists[i]; l >= 0 {
-			u.listLimit = m.listLimit(&refs[i].ModelLimits[l])
+		q.lists[i] = -1
+		if cfg.LimitLoad && cfg.ModelLimits {
+			q.lists[i] = refs[i].ModelLimitIndex(c.model)
+		}
+		u := accountUsage{limit: q.metric.limit(&refs[i])}
+		if l := q.lists[i]; l >= 0 {
+			u.listLimit = q.metric.listLimit(&refs[i].ModelLimits[l])
 		}
 		out[refs[i].ID] = u
 	}
-	var err error
-	if m.rate == nil {
-		err = c.readSlotUsage(ctx, refs, lists, model, out)
-	} else {
-		err = c.readRateUsage(ctx, m, refs, lists, model, out)
+	read := c.readRateUsage
+	if q.metric.rate == nil {
+		read = c.readSlotUsage
 	}
-	if err != nil {
+	if err := read(ctx, q, out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *call) readRateUsage(ctx context.Context, m balanceMetric, refs []core.AccountRef, lists []int, model string, out map[int64]accountUsage) error {
+func (c *call) readRateUsage(ctx context.Context, q usageQuery, out map[int64]accountUsage) error {
 	lim := c.g.d.Limiter
 	if lim == nil {
 		return nil
 	}
-	rates, err := lim.Usage(ctx, refs)
-	if err != nil {
-		return err
-	}
-	for i := range refs {
-		r, u := rates[refs[i].ID], out[refs[i].ID]
-		u.used = float64(m.rate(r))
-		if l := lists[i]; l >= 0 && l < len(r.Models) {
-			u.listUsed = float64(m.listRate(r.Models[l]))
+	if q.account {
+		// Only the model list that counts is read: Models[0] when there is one.
+		refs := make([]core.AccountRef, len(q.refs))
+		for i, r := range q.refs {
+			r.ModelLimits = nil
+			if l := q.lists[i]; l >= 0 {
+				r.ModelLimits = q.refs[i].ModelLimits[l : l+1]
+			}
+			refs[i] = r
 		}
-		out[refs[i].ID] = u
+		rates, err := lim.Usage(ctx, refs)
+		if err != nil {
+			return err
+		}
+		for i := range refs {
+			r, u := rates[refs[i].ID], out[refs[i].ID]
+			u.used = float64(q.metric.rate(r))
+			if q.lists[i] >= 0 && len(r.Models) > 0 {
+				u.listUsed = float64(q.metric.listRate(r.Models[0]))
+			}
+			out[refs[i].ID] = u
+		}
 	}
-	if model == "" {
+	if q.trafficModel == "" {
 		return nil
 	}
-	rates, err = lim.ModelUsage(ctx, refs, model)
+	rates, err := lim.ModelUsage(ctx, q.refs, q.trafficModel)
 	if err != nil {
 		return err
 	}
-	for i := range refs {
-		id := refs[i].ID
+	for i := range q.refs {
+		id := q.refs[i].ID
 		u := out[id]
-		u.modelUsed = float64(m.rate(rates[id]))
+		u.modelUsed = float64(q.metric.rate(rates[id]))
 		out[id] = u
 	}
 	return nil
 }
 
-func (c *call) readSlotUsage(ctx context.Context, refs []core.AccountRef, lists []int, model string, out map[int64]accountUsage) error {
-	ids := make([]int64, len(refs))
-	byList := map[string][]int64{}
-	for i := range refs {
-		ids[i] = refs[i].ID
-		if l := lists[i]; l >= 0 {
-			key := core.ModelLimitSlots(refs[i].ModelLimits[l].Key())
-			byList[key] = append(byList[key], refs[i].ID)
-		}
-	}
-	if err := c.readSlots(ctx, "account", ids, out, func(u *accountUsage, n float64) { u.used = n }); err != nil {
-		return err
-	}
-	for kind, ids := range byList {
-		if err := c.readSlots(ctx, kind, ids, out, func(u *accountUsage, n float64) { u.listUsed = n }); err != nil {
-			return err
-		}
-	}
-	if model == "" {
-		return nil
-	}
-	return c.readSlots(ctx, core.ModelSlots(model), ids, out, func(u *accountUsage, n float64) { u.modelUsed = n })
+// slotRead is one Slots.InUseMany read of readSlotUsage and where it goes.
+type slotRead struct {
+	kind string
+	ids  []int64
+	set  func(*accountUsage, float64)
 }
 
-// readSlots reads the slots of kind in use by ids into out through set.
-func (c *call) readSlots(ctx context.Context, kind string, ids []int64, out map[int64]accountUsage, set func(*accountUsage, float64)) error {
-	inUse, err := c.g.d.Slots.InUseMany(ctx, kind, ids)
-	if err != nil {
+// readSlotUsage reads the slots in use of the accounts, of their model lists
+// and of the traffic model, all at once.
+func (c *call) readSlotUsage(ctx context.Context, q usageQuery, out map[int64]accountUsage) error {
+	ids := make([]int64, len(q.refs))
+	byList := map[string][]int64{}
+	for i := range q.refs {
+		ids[i] = q.refs[i].ID
+		if l := q.lists[i]; l >= 0 {
+			key := core.ModelLimitSlots(q.refs[i].ModelLimits[l].Key())
+			byList[key] = append(byList[key], q.refs[i].ID)
+		}
+	}
+	var reads []slotRead
+	if q.account {
+		reads = append(reads, slotRead{"account", ids, func(u *accountUsage, n float64) { u.used = n }})
+	}
+	for kind, ids := range byList {
+		reads = append(reads, slotRead{kind, ids, func(u *accountUsage, n float64) { u.listUsed = n }})
+	}
+	if q.trafficModel != "" {
+		reads = append(reads, slotRead{core.ModelSlots(q.trafficModel), ids, func(u *accountUsage, n float64) { u.modelUsed = n }})
+	}
+	inUse := make([]map[int64]int, len(reads))
+	g, gctx := errgroup.WithContext(ctx)
+	for i, r := range reads {
+		g.Go(func() (err error) {
+			inUse[i], err = c.g.d.Slots.InUseMany(gctx, r.kind, r.ids)
+			return err
+		})
+	}
+	if err := g.Wait(); err != nil {
 		return err
 	}
-	for _, id := range ids {
-		u := out[id]
-		set(&u, float64(inUse[id]))
-		out[id] = u
+	for i, r := range reads {
+		for _, id := range r.ids {
+			u := out[id]
+			r.set(&u, float64(inUse[i][id]))
+			out[id] = u
+		}
 	}
 	return nil
 }
@@ -260,6 +293,13 @@ func (c *call) readSlots(ctx context.Context, kind string, ids []int64, out map[
 // loads and with the settings off they are the accounts' weights.
 func (c *call) tierWeights(tier []core.AccountRef) []float64 {
 	b := c.balance
+	if b == nil && c.ranked == nil {
+		w := make([]float64, len(tier))
+		for i := range tier {
+			w[i] = float64(max(tier[i].Weight, 1))
+		}
+		return w
+	}
 	base := make([]float64, len(tier)) // with the plugins' load only
 	w := make([]float64, len(tier))
 	loads := make([]float64, len(tier))
@@ -305,10 +345,10 @@ func (b *balanceState) applyTraffic(tier []core.AccountRef, w []float64) {
 	}
 }
 
-// recordBalance adds the accounts whose weight, and with it their share of the
-// tier, the core balancing changed to the core's entry in usage_logs.sched_decisions: the effective
-// weight ×100 (at least 1, as 0 reads as excluded) and the load. Only the
-// first pick of a request records (readBalance).
+// recordBalance records, in the core's usage_logs.sched_decisions entry, each
+// account whose weight the core changed and whose share of the tier changed
+// with it: the effective weight ×100 (at least 1, as 0 reads as excluded) and
+// the load. Only the first ordering of a request records (orderPool).
 func (c *call) recordBalance(tier []core.AccountRef, base, w, loads []float64) {
 	b := c.balance
 	if b == nil || b.recorded || c.rec == nil {

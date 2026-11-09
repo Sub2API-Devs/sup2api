@@ -368,10 +368,4 @@ func TestSessionsPerMinuteFollowStickySessions(t *testing.T) {
 
 // refWeights are the accounts' own weights, as tierWeights gives them
 // without loads or balancing.
-func refWeights(g []core.AccountRef) []float64 {
-	w := make([]float64, len(g))
-	for i := range g {
-		w[i] = float64(max(g[i].Weight, 1))
-	}
-	return w
-}
+func refWeights(g []core.AccountRef) []float64 { return (&call{}).tierWeights(g) }
