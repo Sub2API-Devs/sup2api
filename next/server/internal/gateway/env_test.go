@@ -707,6 +707,7 @@ type upstreamRule struct {
 
 type upstreamCall struct {
 	key    string
+	path   string // request URI
 	body   []byte
 	header http.Header
 }
@@ -760,7 +761,7 @@ func (u *upstream) handle(w http.ResponseWriter, r *http.Request) {
 	key := r.Header.Get("x-api-key")
 	body, _ := io.ReadAll(r.Body)
 	u.mu.Lock()
-	u.calls = append(u.calls, upstreamCall{key: key, body: body, header: r.Header.Clone()})
+	u.calls = append(u.calls, upstreamCall{key: key, path: r.URL.RequestURI(), body: body, header: r.Header.Clone()})
 	rule := u.rules[key]
 	u.mu.Unlock()
 	if rule == nil {

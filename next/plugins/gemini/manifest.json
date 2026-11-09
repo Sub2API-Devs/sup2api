@@ -6,16 +6,14 @@
     "en": "Gemini API key account type. The gemini platform and its endpoints (/v1beta/models/{model}:generateContent, :streamGenerateContent, :countTokens) are built into the core; model prices are set by administrators in the core.",
     "zh": "Gemini API Key 账号类型（gemini 平台及其端点 /v1beta/models/{model}:generateContent、:streamGenerateContent、:countTokens 由核心内置；模型价格由管理员在核心中配置）。"
   },
-  "version": "0.2.6",
+  "version": "0.3.0",
   "publisher": "sub2api",
   "icon": "assets/gemini-color.svg",
-  "runtime": "grpc",
-  "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
+  "runtime": "none",
   "hostCompat": ">=0.1.0 <0.2.0",
 
   "capabilities": [
-    { "id": "platform.adapter.v1" },
-    { "id": "platform.execute.v1" }
+    { "id": "platform.adapter.v1" }
   ],
 
   "accountTypes": [
@@ -66,17 +64,14 @@
       ],
       "platforms": [
         { "platform": "gemini" }
-      ]
+      ],
+      "upstream": { "preset": "gemini", "filterFields": [] }
     }
   ],
 
-  "resources": { "memoryMB": 32, "cpu": 0.1, "maxThreads": 32, "maxOpenFiles": 64 },
-
   "hostPermissions": [
     { "id": "platform.register",
-      "reason": { "en": "Register the Gemini API key account type for the built-in gemini platform", "zh": "为内置 gemini 平台注册 Gemini API Key 账号类型" } },
-    { "id": "accounts.credentials", "scope": { "types": "own" },
-      "reason": { "en": "Read the API key of accounts of its own account type (Gemini API Key) to call the upstream API", "zh": "读取本插件账号类型（Gemini API Key）账号的 API Key 以调用上游接口" } }
+      "reason": { "en": "Register the Gemini API key account type for the built-in gemini platform", "zh": "为内置 gemini 平台注册 Gemini API Key 账号类型" } }
   ],
 
   "externalServices": ["generativelanguage.googleapis.com"]

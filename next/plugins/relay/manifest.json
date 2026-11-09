@@ -6,16 +6,14 @@
     "en": "Adds the \"Relay key\" account type: accounts of an Anthropic-compatible relay (your own Base URL and key) that serve the built-in anthropic platform (/v1/messages and /v1/messages/count_tokens) together with the other account types of a group. Declares no platform, no endpoints and no prices.",
     "zh": "新增\"中转 Key\"账号类型：Anthropic 兼容中转站的账号（自定义 Base URL 和 Key），与分组里其他类型的账号一起为内置 anthropic 平台（/v1/messages 和 /v1/messages/count_tokens）提供服务。不声明平台、端点和价格。"
   },
-  "version": "0.2.2",
+  "version": "0.3.0",
   "publisher": "sub2api",
   "icon": "text:R",
-  "runtime": "grpc",
-  "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
+  "runtime": "none",
   "hostCompat": ">=0.1.0 <0.2.0",
 
   "capabilities": [
-    { "id": "platform.adapter.v1" },
-    { "id": "platform.execute.v1" }
+    { "id": "platform.adapter.v1" }
   ],
 
   "accountTypes": [
@@ -59,16 +57,19 @@
           "requestFields": ["model"],
           "passHeaders": ["anthropic-version", "anthropic-beta"]
         }
-      ]
+      ],
+      "upstream": {
+        "preset": "anthropic",
+        "baseURL": { "default": null, "required": true },
+        "credentials": { "texts": { "baseURLRequired": "Base URL of the relay is required / 请填写中转站的 Base URL" } },
+        "defaultProtocol": null,
+        "filterFields": []
+      }
     }
   ],
 
-  "resources": { "memoryMB": 32, "cpu": 0.1, "maxThreads": 32, "maxOpenFiles": 64 },
-
   "hostPermissions": [
     { "id": "platform.register",
-      "reason": { "en": "Register the \"Relay key\" account type for the built-in anthropic platform", "zh": "为内置 anthropic 平台注册\"中转 Key\"账号类型" } },
-    { "id": "accounts.credentials", "scope": { "types": "own" },
-      "reason": { "en": "Read the Base URL and key of relay key accounts to build upstream requests", "zh": "读取中转 Key 账号的 Base URL 与 Key 以构造上游请求" } }
+      "reason": { "en": "Register the \"Relay key\" account type for the built-in anthropic platform", "zh": "为内置 anthropic 平台注册\"中转 Key\"账号类型" } }
   ]
 }

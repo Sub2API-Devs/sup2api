@@ -100,18 +100,25 @@ func TestAccountLayer(t *testing.T) {
 		t.Errorf("body %s, %v", res.Body, err)
 	}
 
-	for name, bad := range map[string]string{
-		"credentials":     `{"credentials":{"fields":["x"]}}`,
-		"route transport": `{"routes":{"openai.chat":{"transport":"websocket"}}}`,
-		"new route":       `{"routes":{"openai.audio":{"path":"/a"}}}`,
-		"allow unknown":   `{"allowFields":["temperature"]}`,
-		"blocked header":  `{"headers":{"cookie":{"set":"a"}}}`,
+	for name, tc := range map[string]struct{ bad, field string }{
+		"credentials":     {`{"credentials":{"fields":["x"]}}`, "upstream.credentials"},
+		"route transport": {`{"routes":{"openai.chat":{"transport":"websocket"}}}`, "upstream.routes.openai.chat"},
+		"new route":       {`{"routes":{"openai.audio":{"path":"/a"}}}`, "upstream.routes.openai.audio"},
+		"allow unknown":   {`{"allowFields":["temperature"]}`, "upstream.allowFields"},
+		"blocked header":  {`{"headers":{"cookie":{"set":"a"}}}`, "upstream.headers.cookie"},
+		"not an object":   {`[]`, SettingsField},
 	} {
 		resp := p.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "custom", CredentialsJson: `{"api_key":"sk-123456789"}`,
-			SettingsJson: `{"base_url":"https://x.example.com","upstream":` + bad + `}`})
-		if len(resp.Errors) == 0 || resp.Errors[0].Field != SettingsField {
-			t.Errorf("%s: errors %v", name, resp.Errors)
+			SettingsJson: `{"base_url":"https://x.example.com","upstream":` + tc.bad + `}`})
+		if len(resp.Errors) == 0 || resp.Errors[0].Field != tc.field {
+			t.Errorf("%s: errors %v, want field %s", name, resp.Errors, tc.field)
 		}
+	}
+	// Every problem is its own field error.
+	resp := p.Validate(&pluginv1.ValidateCredentialsRequest{AccountType: "custom", CredentialsJson: `{"api_key":"sk-123456789"}`,
+		SettingsJson: `{"base_url":"https://x.example.com","upstream":{"classify":"openai","models":null}}`})
+	if len(resp.Errors) != 2 {
+		t.Errorf("errors %v, want one per problem", resp.Errors)
 	}
 }
 

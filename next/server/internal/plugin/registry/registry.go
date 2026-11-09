@@ -18,8 +18,10 @@ import (
 	"sync/atomic"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/upstream"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/platforms"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/declarative"
 	pluginpkg "github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg"
 )
 
@@ -355,20 +357,27 @@ func (g *generation) addPluginPlatforms(info core.PluginInfo, pkg *Package, pf c
 	return conflicts
 }
 
-// addAccountTypes registers the account types the plugin declares. They are
-// served by the declaring plugin, which must implement platform.adapter.v1
-// (ARCHITECTURE 6.6) and hold the accounts.credentials grant: without it the
-// plugin never receives credentials, so its account types are not offered or
-// scheduled.
+// addAccountTypes registers the account types the plugin declares. A type
+// without an upstream declaration is served by the declaring plugin, which
+// must implement platform.adapter.v1 (ARCHITECTURE 6.6) and hold the
+// accounts.credentials grant: without it the plugin never receives
+// credentials, so its account types are not offered or scheduled. A type
+// declaring its upstream is served by the core (bindDeclared) and needs
+// neither, unless it extends: the plugin then amends every request it builds.
 func (g *generation) addAccountTypes(info core.PluginInfo, pkg *Package, pf core.PlatformPlugin, grants Grants) {
-	if pf == nil || !grants.Has("accounts.credentials") {
-		return
+	if !grants.Has("accounts.credentials") {
+		pf = nil
 	}
 	for i, at := range pkg.Manifest.AccountTypes {
 		key := core.AccountTypeKey{PluginKey: pkg.Key, Type: at.ID}
 		if _, dup := g.atByKey[key]; dup {
 			continue
 		}
+		if pf == nil && (at.Upstream == nil || at.Upstream.Extend) {
+			continue
+		}
+		// A declared type's Client is the plugin (or nil) until bindDeclared
+		// wraps it, once every platform it serves is registered.
 		atb := core.AccountTypeBinding{Plugin: info, Type: at, DeclIndex: i, Client: pf}
 		if at.Form.Mode == "schema" {
 			atb.FormSchema = readJSON(pkg, at.Form.Schema)
@@ -377,6 +386,31 @@ func (g *generation) addAccountTypes(info core.PluginInfo, pkg *Package, pf core
 		g.atByKey[key] = atb
 		g.accTypes = append(g.accTypes, atb)
 	}
+}
+
+// bindDeclared gives each account type declaring its upstream its
+// declarative client (docs/UPSTREAM-DECLARATIVE.md §4.1). It runs after
+// every plugin is added because the declaration reads the client headers of
+// the platforms the type serves, which another plugin may declare. A type
+// whose declaration no longer resolves (it was checked at install; a newer
+// core may judge it differently) is dropped like a type without a client.
+func (g *generation) bindDeclared() {
+	kept := g.accTypes[:0]
+	for _, atb := range g.accTypes {
+		if atb.Type.Upstream != nil {
+			profile, err := upstream.Resolve(&atb.Type, atb.PassHeaders(g.Platform), nil)
+			if err != nil {
+				slog.Error("plugin registry: account type skipped, its upstream declaration does not resolve",
+					"plugin", atb.Plugin.Key, "version", atb.Plugin.Version, "accountType", atb.Type.ID, "err", err)
+				delete(g.atByKey, atb.Key())
+				continue
+			}
+			atb.Client = declarative.New(profile, atb.Client)
+			g.atByKey[atb.Key()] = atb
+		}
+		kept = append(kept, atb)
+	}
+	g.accTypes = kept
 }
 
 // addHooks registers the plugin's hooks, restricted to the granted points and
@@ -511,6 +545,7 @@ func (g *generation) addJobsAndEvents(ext Extension, info core.PluginInfo, m *ma
 // finish sorts the collections and warns about declarations that name
 // resources no plugin of this generation provides.
 func (g *generation) finish() {
+	g.bindDeclared()
 	for point, hs := range g.hooks {
 		sort.SliceStable(hs, func(i, j int) bool {
 			if hs[i].Hook.Order != hs[j].Hook.Order {

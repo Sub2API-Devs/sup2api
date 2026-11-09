@@ -351,6 +351,49 @@ export default {
   editTitle: 'Edit account',
   newStep1: 'New account · choose a type',
   newTitle: 'New account',
+  upstream: {
+    hint: 'Only what differs from the account type is stored; leave a field empty to keep the default (the grey text)',
+    resetAll: 'Reset all',
+    reset: 'Reset',
+    noDefaults: 'The account type provides no upstream defaults; editing is unavailable',
+    auth: {
+      title: 'Authentication',
+      hint: "How the upstream identifies this account; the value is a template, {'{api_key}'} is the API key",
+      types: { header: 'Header', query: 'Query parameter', none: 'None' },
+      name: 'Name',
+      value: 'Value',
+      namePlaceholder: { header: 'Header name, e.g. x-api-key', query: 'Parameter name, e.g. key' }
+    },
+    headers: {
+      title: 'Headers',
+      hint: "Headers sent upstream. Set: always written; Default: only when the client sent none; Append: added to the existing value after a comma. Values may use {'{model}'}, {'{base_url}'}, {'{credentials.<field>}'}, {'{client_header.<name>}'}",
+      modes: { set: 'Set', default: 'Default', append: 'Append' },
+      name: 'Header name',
+      value: 'Value',
+      add: 'Add header',
+      remove: 'Remove',
+      restore: 'Restore'
+    },
+    routes: {
+      title: 'Paths',
+      hint: "Path appended to the base URL per protocol, a query string allowed; {'{model}'} is the upstream model"
+    },
+    allow: {
+      title: 'Allowed fields',
+      hint: 'These body fields are not sent upstream by default; checked ones are forwarded'
+    },
+    hints: {
+      required: 'Required',
+      not_here: '{name} cannot be used here',
+      unknown_var: 'Unknown variable {name}',
+      not_field: '{name} is not a credential field of the account type',
+      header_name: 'Not a valid header name',
+      header_blocked: '{name} is a credential, hop-by-hop or gateway control header and cannot be set here; credentials go in authentication',
+      auth_header: '{name} is written by authentication',
+      duplicate: 'Header {name} is duplicated',
+      path_slash: 'A path starts with /'
+    }
+  },
   deleteResources: {
     label: 'Runtime resources',
     now: 'Delete all runtime resources now',

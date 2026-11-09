@@ -175,11 +175,8 @@ func New(o Options) (*Runtime, error) {
 func (r *Runtime) Load(ctx context.Context, pkg *registry.Package) (*Instance, error) {
 	// Validate before ExtractBinary/Init: an incompatible plugin may already
 	// have side effects by the time a post-start health check rejects it.
-	if pkg.Manifest != nil && r.o.HostVersion != "" {
-		compatible, err := check.HostCompatible(pkg.Manifest.HostCompat, r.o.HostVersion)
-		if err != nil || !compatible {
-			return nil, fmt.Errorf("plugin %s@%s is incompatible with host %s", pkg.Key, pkg.Version, r.o.HostVersion)
-		}
+	if err := r.checkHostCompat(pkg); err != nil {
+		return nil, err
 	}
 	binPath, sum, err := pkg.ExtractBinary(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
@@ -196,6 +193,17 @@ func (r *Runtime) Load(ctx context.Context, pkg *registry.Package) (*Instance, e
 	}
 	go inst.supervise()
 	return inst, nil
+}
+
+// checkHostCompat rejects a package whose hostCompat excludes this host.
+func (r *Runtime) checkHostCompat(pkg *registry.Package) error {
+	if pkg.Manifest == nil || r.o.HostVersion == "" {
+		return nil
+	}
+	if compatible, err := check.HostCompatible(pkg.Manifest.HostCompat, r.o.HostVersion); err != nil || !compatible {
+		return fmt.Errorf("plugin %s@%s is incompatible with host %s", pkg.Key, pkg.Version, r.o.HostVersion)
+	}
+	return nil
 }
 
 // settings is the host-side configuration of one plugin, re-read on refresh.

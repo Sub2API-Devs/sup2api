@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -67,6 +68,31 @@ type PlatformPlugin interface {
 	// Unimplemented and nothing is refreshed.
 	BuildRefreshRequest(ctx context.Context, in *pluginv1.BuildRefreshRequestRequest) (*pluginv1.BuildRefreshRequestResponse, error)
 	ParseRefreshResponse(ctx context.Context, in *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error)
+}
+
+// DeclaredUpstream is implemented by the PlatformPlugin of an account type
+// declaring its upstream (manifest accountTypes[].upstream,
+// docs/UPSTREAM-DECLARATIVE.md §4): the core builds its requests from the
+// declaration, and the gateway takes from it the parts of sending around
+// BuildUpstreamRequest. A code plugin's client does not implement it.
+type DeclaredUpstream interface {
+	// Upstream is the resolved declaration without an account layer: the
+	// defaults of the account layer the console edits.
+	Upstream() manifest.Upstream
+	// PrepareBody is the declaration's part of the body before
+	// BuildUpstreamRequest: the filtered fields the account does not allow
+	// are removed, then the declared paramOverride runs.
+	PrepareBody(acc *pluginv1.Account, body []byte, in *ParamOverrideContext) (ParamOverrideResult, error)
+	// UpstreamURL is the URL of built once the account's parameter override
+	// (§84, applied after BuildUpstreamRequest) changed the upstream model to
+	// model: the declaration's URL rendered again, so a model in the path
+	// follows the model really sent, or built's own URL when the plugin
+	// (extend) replaced it.
+	UpstreamURL(in *pluginv1.BuildUpstreamRequestRequest, built *pluginv1.BuildUpstreamRequestResponse, model string) (string, error)
+	// AuthHeader is the lower-case name of the header the declaration
+	// authenticates with for acc (empty for query or no auth). The gateway
+	// writes built's value of it after every other header source.
+	AuthHeader(acc *pluginv1.Account) string
 }
 
 // ExecutionHTTP is the one-request network capability supplied by the current
@@ -171,6 +197,27 @@ type AccountTypeBinding struct {
 // Key returns the account type key.
 func (b AccountTypeBinding) Key() AccountTypeKey {
 	return AccountTypeKey{PluginKey: b.Plugin.Key, Type: b.Type.ID}
+}
+
+// PassHeaders are the client headers the account type receives: for each
+// platform it serves, its own list for that platform, else the platform's
+// (as the gateway forwards them). platform looks a platform up (a
+// Generation's Platform); an unknown one contributes the type's list only.
+func (b AccountTypeBinding) PassHeaders(platform func(id string) (PlatformBinding, bool)) []string {
+	out := []string{}
+	for _, ap := range b.Type.Platforms {
+		names := ap.PassHeaders
+		if len(names) == 0 {
+			pb, _ := platform(ap.Platform)
+			names = pb.Platform.PassHeaders
+		}
+		for _, n := range names {
+			if !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
 }
 
 // Supports returns the account type's entry for platform, if it serves it.

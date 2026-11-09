@@ -161,7 +161,7 @@ func (p *Profile) AuthHeader() string   // header 型返回小写头名，供核
 
 - runtime none，内置随核心安装并启用。
 - 三个账号类型，`creationGroup: "custom"`（新建账号时归在同一组“自定义上游”）：`custom_openai`（preset openai，platforms openai 全部端点）、`custom_anthropic`（preset anthropic）、`custom_gemini`（preset gemini）。都 `accountConfig: true`、`baseURL.required: true`、key 任意，`filterFields` 用预设的默认过滤（service_tier、inference_geo、speed、safety_identifier 中该协议适用的）。
-- 表单 schema：`api_key`、`base_url`、`upstream`（`"x-widget": "upstream"`，可选）；settingsFields `base_url`、`proxy_id`、`upstream`。凭证加密不回显，其余是设置。
+- 表单 schema：`api_key`、`base_url`、`upstream`（object，可选；uiSchema `"ui:widget": "upstream-editor"`）；settingsFields `base_url`、`proxy_id`、`upstream`。凭证加密不回显，其余是设置。
 - 控制台 `UpstreamEditor` 组件（schema 表单的 `upstream` 控件）：编辑 auth（方式、名称、模板）、headers、按协议的 path、放开哪些默认过滤字段；默认值来自账号类型 Resolve 后的 `upstream`，可一键恢复；保存的数据就是 §2.3 账号层结构，核心用同一份校验。
 - 模型和测试：“获取模型”走 models，“测试”走 test；只服务部分模型用账号的模型列表。
 - 不做：路由上选转换器（核心自动选）、按模型分路由、账号上关掉单个协议（第 3 期 count_tokens 本地估算兜底）。

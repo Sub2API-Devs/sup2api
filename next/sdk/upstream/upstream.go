@@ -49,6 +49,9 @@ type Profile struct {
 	override *paramoverride.Override
 	// allow are the filterFields the account layer lets through.
 	allow []string
+	// layered marks a profile with an account layer applied: forAccount
+	// applies no further one.
+	layered bool
 }
 
 // Resolve merges the preset named by at.Upstream, the declaration itself
@@ -156,10 +159,17 @@ func (p *Profile) AuthHeader(acc *pluginv1.Account) string {
 	return strings.ToLower(ap.up.Auth.Name)
 }
 
+// ForAccount is the profile of acc: p with the account layer stored in
+// acc's settings (or credentials) applied when the declaration takes one,
+// otherwise p itself. The result applies no further layer, so a caller may
+// keep it for as long as acc's settings and credentials are unchanged and
+// call it with acc instead of resolving the layer on every call.
+func (p *Profile) ForAccount(acc *pluginv1.Account) (*Profile, error) { return p.forAccount(acc) }
+
 // forAccount applies the account layer stored in acc's settings (or
 // credentials) when the declaration takes one; otherwise it is p itself.
 func (p *Profile) forAccount(acc *pluginv1.Account) (*Profile, error) {
-	if !p.up.AccountConfig || acc == nil {
+	if !p.up.AccountConfig || acc == nil || p.layered {
 		return p, nil
 	}
 	raw, err := accountLayer(acc.GetCredentialsJson(), acc.GetSettingsJson())
@@ -210,7 +220,7 @@ func (p *Profile) withAccount(raw json.RawMessage) (*Profile, error) {
 	if len(probs) > 0 {
 		return nil, probs
 	}
-	ap.override, ap.allow = p.override, allow
+	ap.override, ap.allow, ap.layered = p.override, allow, true
 	return ap, nil
 }
 

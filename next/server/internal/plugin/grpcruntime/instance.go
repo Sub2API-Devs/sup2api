@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -116,8 +117,24 @@ func newInstance(rt *Runtime, pkg *registry.Package, binPath, sum string, st *se
 	for _, c := range pkg.Manifest.Capabilities {
 		i.caps[c.ID] = true
 	}
+	if !servesPlatform(pkg.Manifest) {
+		delete(i.caps, manifest.CapPlatformAdapter)
+	}
 	i.settings.Store(st)
 	return i
+}
+
+// servesPlatform reports whether the process implements platform.adapter.v1
+// when the manifest declares it: for platforms of its own, or for an account
+// type its upstream declaration does not fully cover (none, or extend). A
+// plugin whose account types all declare their upstream keeps the
+// capability in its manifest (manifest check requires it with account
+// types), but the core serves those types (docs/UPSTREAM-DECLARATIVE.md §6):
+// the process is neither expected to report it nor called for it.
+func servesPlatform(m *manifest.Manifest) bool {
+	return len(m.Platforms) > 0 || slices.ContainsFunc(m.AccountTypes, func(at manifest.AccountType) bool {
+		return at.Upstream == nil || at.Upstream.Extend
+	})
 }
 
 // ------------------------------------------------------------------ accessors

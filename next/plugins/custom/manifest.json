@@ -1,0 +1,91 @@
+{
+  "apiVersion": 1,
+  "key": "custom",
+  "name": { "en": "Custom upstream", "zh": "自定义上游" },
+  "description": {
+    "en": "Adds account types for any OpenAI-, Anthropic- or Gemini-compatible API: your own Base URL and key, served by the core on the built-in openai, anthropic and gemini platforms. Each account can change how the key is sent, add headers, change the path of each protocol and let through request fields filtered by default. Declares no platform, no endpoints and no prices.",
+    "zh": "为任意 OpenAI、Anthropic 或 Gemini 兼容接口新增账号类型：自定义 Base URL 和 Key，由核心在内置的 openai、anthropic、gemini 平台上提供服务。每个账号可以修改 Key 的发送方式、追加请求头、修改各协议的路径，并放开默认过滤的请求字段。不声明平台、端点和价格。"
+  },
+  "version": "0.1.0",
+  "publisher": "sub2api",
+  "icon": "assets/custom.svg",
+  "runtime": "none",
+  "hostCompat": ">=0.1.0 <0.2.0",
+
+  "capabilities": [
+    { "id": "platform.adapter.v1" },
+    { "id": "platform.websocket.v1" }
+  ],
+
+  "accountTypes": [
+    {
+      "id": "custom_openai",
+      "label": { "en": "Custom upstream (OpenAI-compatible)", "zh": "自定义上游（OpenAI 兼容）" },
+      "description": {
+        "en": "Any OpenAI-compatible API. Serves /v1/chat/completions, /v1/responses (including its WebSocket mode) and /v1/embeddings; the key is sent as Authorization: Bearer unless the account changes it.",
+        "zh": "任意 OpenAI 兼容接口，提供 /v1/chat/completions、/v1/responses（含 WebSocket 模式）和 /v1/embeddings；Key 默认以 Authorization: Bearer 发送，账号可修改。"
+      },
+      "form": { "mode": "schema", "schema": "forms/custom.schema.json", "uiSchema": "forms/custom.ui.json" },
+      "creationGroup": "custom",
+      "authMethodLabel": { "en": "OpenAI-compatible", "zh": "OpenAI 兼容" },
+      "sensitiveFields": ["api_key"],
+      "settingsFields": ["base_url", "proxy_id", "upstream"],
+      "platforms": [
+        { "platform": "openai" }
+      ],
+      "upstream": {
+        "preset": "openai",
+        "accountConfig": true,
+        "baseURL": { "default": null, "required": true },
+        "credentials": { "keyValidator": null }
+      }
+    },
+    {
+      "id": "custom_anthropic",
+      "label": { "en": "Custom upstream (Anthropic-compatible)", "zh": "自定义上游（Anthropic 兼容）" },
+      "description": {
+        "en": "Any Anthropic-compatible API. Serves /v1/messages and /v1/messages/count_tokens; the key is sent as x-api-key unless the account changes it.",
+        "zh": "任意 Anthropic 兼容接口，提供 /v1/messages 和 /v1/messages/count_tokens；Key 默认以 x-api-key 发送，账号可修改。"
+      },
+      "form": { "mode": "schema", "schema": "forms/custom.schema.json", "uiSchema": "forms/custom.ui.json" },
+      "creationGroup": "custom",
+      "authMethodLabel": { "en": "Anthropic-compatible", "zh": "Anthropic 兼容" },
+      "sensitiveFields": ["api_key"],
+      "settingsFields": ["base_url", "proxy_id", "upstream"],
+      "platforms": [
+        { "platform": "anthropic" }
+      ],
+      "upstream": {
+        "preset": "anthropic",
+        "accountConfig": true,
+        "baseURL": { "default": null, "required": true }
+      }
+    },
+    {
+      "id": "custom_gemini",
+      "label": { "en": "Custom upstream (Gemini-compatible)", "zh": "自定义上游（Gemini 兼容）" },
+      "description": {
+        "en": "Any Gemini-compatible API. Serves /v1beta/models/{model}:generateContent, :streamGenerateContent and :countTokens; the key is sent as x-goog-api-key unless the account changes it.",
+        "zh": "任意 Gemini 兼容接口，提供 /v1beta/models/{model}:generateContent、:streamGenerateContent 和 :countTokens；Key 默认以 x-goog-api-key 发送，账号可修改。"
+      },
+      "form": { "mode": "schema", "schema": "forms/custom.schema.json", "uiSchema": "forms/custom.ui.json" },
+      "creationGroup": "custom",
+      "authMethodLabel": { "en": "Gemini-compatible", "zh": "Gemini 兼容" },
+      "sensitiveFields": ["api_key"],
+      "settingsFields": ["base_url", "proxy_id", "upstream"],
+      "platforms": [
+        { "platform": "gemini" }
+      ],
+      "upstream": {
+        "preset": "gemini",
+        "accountConfig": true,
+        "baseURL": { "default": null, "required": true }
+      }
+    }
+  ],
+
+  "hostPermissions": [
+    { "id": "platform.register",
+      "reason": { "en": "Register the custom upstream account types for the built-in openai, anthropic and gemini platforms", "zh": "为内置 openai、anthropic、gemini 平台注册自定义上游账号类型" } }
+  ]
+}

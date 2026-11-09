@@ -9,13 +9,14 @@
 // draft flow and saving sends the authorized draft as `ccgateway_runtime`. A
 // saved one shows its login and can be re-authorized (docs/CCGATEWAY-REAUTH.md):
 // the swap is committed by itself and reported with `reauthorized`.
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, STagInput, toast } from '@sub2api/ui'
 import type { Account, AccountType, EnvironmentValues, ProxyProbeResult } from '@/api/types'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import { schemaWidgets } from '@/components/schema/widgets'
+import { ACCOUNT_FORM_KEY } from '@/components/schema/accountForm'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
@@ -93,6 +94,7 @@ const formLoading = ref(false)
 const formError = ref('')
 const errors = ref<Record<string, string>>({})
 const credErrors = ref<Record<string, string>>({})
+provide(ACCOUNT_FORM_KEY, { accountType: computed(() => props.accountType), errors: credErrors })
 const saving = ref(false)
 const ccFeaturePolicy = ref<AccountFeaturePolicy>()
 const ccFeatureSaved = ref('')

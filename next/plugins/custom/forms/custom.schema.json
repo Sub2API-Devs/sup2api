@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "title": "Custom upstream",
+  "required": ["base_url", "api_key"],
+  "additionalProperties": false,
+  "properties": {
+    "base_url": {
+      "type": "string",
+      "title": "Base URL",
+      "minLength": 1,
+      "pattern": "^https?://[^\\s?#]+$"
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "minLength": 8,
+      "maxLength": 512,
+      "pattern": "^[!-~]+$"
+    },
+    "upstream": {
+      "type": "object",
+      "title": "Upstream"
+    }
+  }
+}

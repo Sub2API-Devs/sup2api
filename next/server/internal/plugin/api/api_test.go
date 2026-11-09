@@ -602,3 +602,19 @@ func mustJSON(t *testing.T, v any) []byte {
 	require.NoError(t, err)
 	return b
 }
+
+// A runtime "none" plugin runs no process: resource limits are refused with
+// a field error instead of being stored without effect.
+func TestResourcesRefusedForRuntimeNone(t *testing.T) {
+	h, root := newHarness(t)
+	code, out := h.do("POST", "/plugins/upload", "admin", fileBody(t, pkgtest.Build(pkgtest.Declared("decl", "0.1.0", "sub2api"), root)))
+	require.Equal(t, 200, code, out)
+	consent := install.ConsentRequest{Grants: []install.GrantInput{{Permission: "platform.register"}}}
+	code, out = h.do("POST", "/plugins/decl/versions/0.1.0/consent", "admin", consent)
+	require.Equal(t, 200, code, out)
+	code, out = h.do("PUT", "/plugins/decl/resources", "admin", map[string]any{"memory_mb": 256})
+	require.Equal(t, http.StatusBadRequest, code, out)
+	fields, _ := out["error"].(map[string]any)["details"].(map[string]any)["fields"].([]any)
+	require.Len(t, fields, 1, out)
+	assert.Equal(t, "runtime", fields[0].(map[string]any)["field"])
+}

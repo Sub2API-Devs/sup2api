@@ -33,7 +33,9 @@ var pings = map[string]func(model string) string{
 
 // Validate implements ValidateCredentials: apikey.Spec.Validate, and for an
 // accountConfig type the account layer in settings "upstream", checked the
-// way requests will use it.
+// way requests will use it. Each problem of the layer is one field error at
+// "upstream.<path in the layer>" ("upstream" when it has no path), so a
+// form shows it next to the part it is about.
 func (p *Profile) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.ValidateCredentialsResponse {
 	resp := p.spec.Validate(in)
 	if !p.up.AccountConfig || len(resp.GetErrors()) > 0 {
@@ -48,11 +50,11 @@ func (p *Profile) Validate(in *pluginv1.ValidateCredentialsRequest) *pluginv1.Va
 	}
 	var errs pluginsdk.FieldErrors
 	for _, pr := range asProblems(err) {
-		msg := pr.Message
+		field := SettingsField
 		if pr.Path != "" {
-			msg = pr.Path + ": " + msg
+			field += "." + pr.Path
 		}
-		errs = errs.Add(SettingsField, pr.Code, msg)
+		errs = errs.Add(field, pr.Code, pr.Message)
 	}
 	return &pluginv1.ValidateCredentialsResponse{Errors: errs}
 }

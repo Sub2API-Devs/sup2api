@@ -586,9 +586,10 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrInternal.WithCause(err), errTypeInternal)}
 		}
 	}
-	// The account's request parameter override (CONTRACTS §84) has the last
-	// word on the body, so the plugin builds what goes upstream.
-	upBody, upModel, failure := c.applyParamOverride(ctx, acc, rt, upBody, upModel, n)
+	// A declared type's own part of the body precedes the build; the
+	// account's request parameter override (CONTRACTS §84) follows it, in
+	// forwardBuilt (param_override.go).
+	upBody, upModel, failure := c.prepareDeclared(ctx, acc, rt, pacct, upBody, upModel, n)
 	if failure != nil {
 		return *failure
 	}
@@ -614,16 +615,38 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
-	return c.forwardBuilt(ctx, rt, acc, pacct, upBody, built, nil)
+	return c.forwardBuilt(ctx, rt, acc, buildRequest, upBody, built, nil)
+}
+
+// writeDeclaredAuth writes a declared account type's auth header once more,
+// last of the request's own headers (docs/UPSTREAM-DECLARATIVE.md §4.3): only
+// the declaration decides the credential the upstream receives, so neither
+// the plugin (extend), the passthrough (§81) nor the account's override
+// (§84) can replace or remove it under a custom header name.
+func writeDeclaredAuth(h http.Header, rt *typeRoute, pacct *pluginv1.Account, built *pluginv1.BuildUpstreamRequestResponse) {
+	d, ok := rt.binding.Client.(core.DeclaredUpstream)
+	if !ok {
+		return
+	}
+	name := d.AuthHeader(pacct)
+	if name == "" {
+		return
+	}
+	if v := built.GetHeaders()[name]; v != "" {
+		h.Set(name, v)
+	} else {
+		h.Del(name)
+	}
 }
 
 // validatePatches runs the guards that a plugin-built upstream request must
-// pass before it is sent: resource and model references must stay consistent
-// with the original body, and the account's usage rules must be able to meter
-// the operation and its attempts. The kind differs per guard on purpose: an
-// unaddressable resource reference is the client's mistake and is returned
-// (attemptReturn), everything else fails over.
-func (c *call) validatePatches(rt *typeRoute, upBody, body []byte) (attemptKind, *gwError) {
+// pass before it is sent: the plugin's patches (upBody to body) must keep
+// resource and model references consistent with the original body, and the
+// account's usage rules must be able to meter the operation and its
+// attempts of sent, the body that goes upstream. The kind differs per guard
+// on purpose: an unaddressable resource reference is the client's mistake
+// and is returned (attemptReturn), everything else fails over.
+func (c *call) validatePatches(rt *typeRoute, upBody, body, sent []byte) (attemptKind, *gwError) {
 	// applyPatches returns upBody itself when the plugin asked for no patch,
 	// and then the three comparisons below compare the request with itself:
 	// they cannot fail, yet each walks the whole body (four scans and two
@@ -643,16 +666,21 @@ func (c *call) validatePatches(rt *typeRoute, upBody, body []byte) (attemptKind,
 			return attemptFailover, invalidModelReference(err.Error())
 		}
 	}
-	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, body) {
+	if c.ep.Billing != "free" && !c.routeHasRequiredPrimaryUsageFor(rt, sent) {
 		return attemptFailover, invalidModelReference("account usage rules cannot meter the requested operation")
 	}
-	if c.ep.Billing != "free" && !c.routeHasRequiredAttempts(rt, body) {
+	if c.ep.Billing != "free" && !c.routeHasRequiredAttempts(rt, sent) {
 		return attemptFailover, invalidModelReference("account usage rules cannot meter the requested attempts")
 	}
 	return attemptDone, nil
 }
 
-func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, pacct *pluginv1.Account, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, execution *gatewayExecution) attemptResult {
+// forwardBuilt sends built, the plugin's answer to request (from
+// BuildUpstreamRequest, or forwarded by a plugin executing request,
+// execution set), with upBody, the body the plugin built from: its patches
+// apply to upBody, then the account's parameter override.
+func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, request *pluginv1.BuildUpstreamRequestRequest, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, execution *gatewayExecution) attemptResult {
+	pacct := request.GetAccount()
 	prepareCtx := ctx
 	if execution != nil {
 		var cancel context.CancelFunc
@@ -662,21 +690,24 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if built.GetUpstreamModel() != "" {
 		c.rec.UpstreamModel = built.GetUpstreamModel()
 	}
-	managedCCG := ccgateway.IsManaged(acc.PluginKey, acc.Type, built.GetUrl()) && c.g.d.CCGateway != nil
+	patched, err := applyPatches(upBody, built.GetPatches())
+	if err != nil {
+		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
+	}
+	body, rawURL, builtModel, failure := c.overrideBuilt(ctx, acc, rt, request, built, patched)
+	if failure != nil {
+		return *failure
+	}
+	managedCCG := ccgateway.IsManaged(acc.PluginKey, acc.Type, rawURL) && c.g.d.CCGateway != nil
 	var target *url.URL
-	var err error
 	if managedCCG {
-		target, err = url.Parse(built.GetUrl())
+		target, err = url.Parse(rawURL)
 	} else {
-		target, err = c.g.checkUpstreamURL(prepareCtx, built.GetUrl())
+		target, err = c.g.checkUpstreamURL(prepareCtx, rawURL)
 	}
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: upstream url rejected", "plugin", rt.binding.Plugin.Key, "account", acc.ID, "err", err)
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrUnavailable.WithMessage("upstream address rejected"), errTypeInternal)}
-	}
-	body, err := applyPatches(upBody, built.GetPatches())
-	if err != nil {
-		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
 	// Whatever the plugin patched, a stream-only upstream gets stream: true.
 	// The body is the plugin's patched one now: when the flag cannot be set
@@ -690,7 +721,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 		}
 	}
-	if kind, err := c.validatePatches(rt, upBody, body); err != nil {
+	if kind, err := c.validatePatches(rt, upBody, patched, body); err != nil {
 		return attemptResult{kind: kind, err: err}
 	}
 	var client *http.Client
@@ -729,6 +760,9 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			req.Header.Set(k, v)
 		}
 	}
+	// The declared paramOverride's header decisions belong with the
+	// declaration's headers.
+	c.paramOverride.declared.Apply(req.Header)
 	// The account's header passthrough (CONTRACTS §81) fills in client
 	// headers the plugin did not set; the core's own headers below still win.
 	if acc != nil && len(acc.HeaderPassthrough) > 0 && c.c != nil && c.c.Request != nil {
@@ -750,6 +784,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	// The account's param override (CONTRACTS §84) sets and removes headers
 	// over the plugin's and the passthrough's; the core's own below still win.
 	c.paramOverride.headers.Apply(req.Header)
+	writeDeclaredAuth(req.Header, rt, pacct, built)
 	if req.Header.Get("Content-Type") == "" && reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -785,8 +820,8 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	}
 	if rt.binding.Type.ModelAvailability {
 		expected := c.upstreamModel(acc)
-		if built.GetUpstreamModel() != "" && built.GetUpstreamModel() != expected {
-			return attemptResult{kind: attemptFailover, err: c.availabilityMismatch(ctx, &acc.AccountRef, expected, built.GetUpstreamModel())}
+		if builtModel != "" && builtModel != expected {
+			return attemptResult{kind: attemptFailover, err: c.availabilityMismatch(ctx, &acc.AccountRef, expected, builtModel)}
 		}
 		if rt.modelPath != "" {
 			actual := gjson.GetBytes(body, rt.modelPath)

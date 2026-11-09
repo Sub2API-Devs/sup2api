@@ -28,7 +28,7 @@ func getModels(t *testing.T, h *pluginsdktest.Harness, q map[string]string) mode
 }
 
 // TestModelCatalogUpgrade applies 0001, checks GET /models, then applies the
-// 0.3.0-test migration and checks the backfilled family column is served.
+// upgrade fixture's migration and checks the backfilled family column is served.
 func TestModelCatalogUpgrade(t *testing.T) {
 	dsn, schema := pluginsdktest.NewSchema(t, "plg_anthropic_t")
 	root := filepath.Join("..", "..")
@@ -53,7 +53,7 @@ func TestModelCatalogUpgrade(t *testing.T) {
 		t.Fatalf("paged = %+v", paged)
 	}
 
-	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join(root, "testdata", "v0.3.0-test", "migrations"))
+	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join(root, "testdata", "upgrade", "migrations"))
 	all = getModels(t, h, nil)
 	fam := map[string]string{}
 	for _, m := range all.Data {
@@ -67,8 +67,7 @@ func TestModelCatalogUpgrade(t *testing.T) {
 }
 
 func TestModelsWithoutDB(t *testing.T) {
-	_, h := start(t)
-	resp := h.Do("GET", "/models", nil, nil)
+	resp := start(t).Do("GET", "/models", nil, nil)
 	if resp.GetStatus() != 503 {
 		t.Fatalf("status = %d", resp.GetStatus())
 	}

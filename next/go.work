@@ -13,6 +13,7 @@ use (
 	./plugins/ccgateway/companions/worker
 	./plugins/claude-oauth
 	./plugins/codex
+	./plugins/custom
 	./plugins/dynweight
 	./plugins/gemini
 	./plugins/growth

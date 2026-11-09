@@ -1,0 +1,29 @@
+{
+  "ui:order": ["base_url", "api_key", "upstream"],
+  "base_url": {
+    "ui:widget": "url-presets",
+    "ui:title": { "en": "Base URL", "zh": "Base URL" },
+    "ui:placeholder": "https://api.example.com",
+    "ui:help": {
+      "en": "Address of the upstream; the request paths of each protocol are appended to it (see Upstream below). A trailing /v1 is removed.",
+      "zh": "上游地址，各协议的请求路径拼在它后面（见下方“上游配置”）；末尾的 /v1 会被去掉。"
+    }
+  },
+  "api_key": {
+    "ui:widget": "secret",
+    "ui:title": { "en": "API key", "zh": "API Key" },
+    "ui:placeholder": "sk-...",
+    "ui:help": {
+      "en": "Key issued by the upstream, any 8-512 printable characters; how it is sent is set under Upstream. Stored encrypted and never shown again.",
+      "zh": "上游发放的 Key，8-512 个可见字符即可，发送方式在“上游配置”里设置；加密保存，保存后不再明文显示。"
+    }
+  },
+  "upstream": {
+    "ui:widget": "upstream-editor",
+    "ui:title": { "en": "Upstream", "zh": "上游配置" },
+    "ui:help": {
+      "en": "Optional: how the key is sent, extra headers, the path of each protocol and the request fields let through. Empty keeps the defaults of the account type.",
+      "zh": "可选：Key 的发送方式、附加请求头、各协议的路径，以及放开哪些默认过滤的请求字段。留空即使用账号类型的默认值。"
+    }
+  }
+}

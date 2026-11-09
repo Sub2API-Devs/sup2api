@@ -359,6 +359,59 @@ export interface AccountType {
   platforms: AccountTypePlatform[]
   /** Endpoints of available supported platforms (native) plus converted ones. */
   endpoints: AccountTypeEndpoint[]
+  /** Resolved upstream declaration of a declarative type (docs/UPSTREAM-DECLARATIVE.md §4.4; without the account layer). */
+  upstream?: Upstream
+}
+
+/** manifest.HeaderWrite: exactly one mode, its value a template. */
+export type UpstreamHeaderWrite = Partial<Record<'set' | 'default' | 'append', string>>
+
+/** manifest.UpstreamAuth: a header or query parameter carrying the credential, or none. */
+export interface UpstreamAuth {
+  type?: 'header' | 'query' | 'none'
+  name?: string
+  value?: string
+}
+
+/** manifest.UpstreamRoute: the upstream request of one protocol. */
+export interface UpstreamRoute {
+  method?: string
+  path?: string
+  transport?: 'http' | 'websocket'
+  headers?: Record<string, UpstreamHeaderWrite | null>
+  patches?: Array<{ op: string; path: string; value?: unknown; when?: string }>
+  model?: { from?: string; trimPrefix?: string; required?: boolean }
+}
+
+/** manifest.Upstream (docs/UPSTREAM-DECLARATIVE.md §2): how the core builds an account type's upstream requests. */
+export interface Upstream {
+  preset?: string
+  extend?: boolean
+  accountConfig?: boolean
+  baseURL?: { default?: string; required?: boolean; stripSuffixes?: string[] }
+  credentials?: { keyValidator?: { prefixes?: string[]; minLength?: number }; texts?: Record<string, string>; fields?: string[] }
+  auth?: UpstreamAuth
+  headers?: Record<string, UpstreamHeaderWrite | null>
+  routes?: Record<string, UpstreamRoute | null>
+  defaultProtocol?: string
+  filterFields?: string[]
+  paramOverride?: unknown
+  classify?: string
+  test?: { protocol?: string; model?: string; body?: string }
+  models?: { path?: string; idPath?: string; stripPrefix?: string } | null
+}
+
+/**
+ * The account layer of a type declaring accountConfig (settings field
+ * `upstream`, docs/UPSTREAM-DECLARATIVE.md §2.3): merged over the type's
+ * declaration like a JSON merge patch, null deletes.
+ */
+export interface UpstreamAccountLayer {
+  auth?: { type?: UpstreamAuth['type']; name?: string | null; value?: string | null }
+  headers?: Record<string, UpstreamHeaderWrite | null>
+  routes?: Record<string, { path: string }>
+  /** filterFields the account lets through. */
+  allowFields?: string[]
 }
 
 /** manifest.AccountLifecycle: preparation, required lifecycle, row actions and deletion. */

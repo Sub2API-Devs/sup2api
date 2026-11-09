@@ -15,7 +15,15 @@ func TestBrandAssetsPackWithAccountTypes(t *testing.T) {
 	}
 	for _, key := range []string{"anthropic", "openai", "gemini", "ccgateway", "volcengine"} {
 		t.Run(key, func(t *testing.T) {
-			pkg := strings.TrimSpace(runOK(t, "pack", "--dir", filepath.Join("..", "..", "plugins", key), "--runtimes", runtimes, "--out-dir", t.TempDir()))
+			dir := filepath.Join("..", "..", "plugins", key)
+			args := []string{"pack", "--dir", dir, "--out-dir", t.TempDir()}
+			// A runtime "none" package carries no runtimes.
+			if _, m, err := effectiveManifest(dir, ""); err != nil {
+				t.Fatal(err)
+			} else if m.Runtime != manifest.RuntimeNone {
+				args = append(args, "--runtimes", runtimes)
+			}
+			pkg := strings.TrimSpace(runOK(t, args...))
 			files, err := readPackage(pkg)
 			if err != nil {
 				t.Fatal(err)

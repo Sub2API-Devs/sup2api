@@ -128,6 +128,7 @@ type wsSession struct {
 	// later turn of the session uses them.
 	up              *websocket.Conn
 	ref             *core.AccountRef
+	acc             *core.Account
 	rt              *typeRoute
 	pacct           *pluginv1.Account
 	routes          map[core.AccountTypeKey]*typeRoute
@@ -487,6 +488,13 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 	if err != nil {
 		return reject(cl, invalidModelReference(err.Error()))
 	}
+	// The message goes through the rewrites of an HTTP body
+	// (param_override.go): the declaration's before the plugin's patches,
+	// the account's override after them.
+	n := max(0, cl.rec.Attempts-1)
+	if payload, e = cl.prepareTurn(ctx, s.acc, s.rt, s.pacct, payload, n); e != nil {
+		return reject(cl, e)
+	}
 	// The plugin's body patches for this message (CONTRACTS §83.6): the
 	// handshake's for the turn that opened the connection, a fresh call for
 	// any other. A turn they cannot be had or applied for fails on its own.
@@ -497,6 +505,9 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		return reject(cl, e)
 	}
 	if payload, e = cl.applyTurnPatches(s.rt, payload, patches); e != nil {
+		return reject(cl, e)
+	}
+	if payload, e = cl.overrideTurn(ctx, s.acc, s.rt, payload, n); e != nil {
 		return reject(cl, e)
 	}
 	if failure := cl.guardAvailability(ctx, s.ref); failure != nil {
@@ -634,6 +645,11 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 	if mapped, err := cl.mapReferencedModels(body, ref, rt); err == nil {
 		body = mapped
 	}
+	// And after a declared type's own part of the body (param_override.go),
+	// whose failure is the turn's to report too.
+	if prepared, m, failure := cl.prepareDeclared(ctx, acc, rt, pacct, body, upModel, max(0, cl.rec.Attempts-1)); failure == nil {
+		body, upModel = prepared, m
+	}
 	fields := requestFieldValues(body, rt.requestFields)
 	cl.env = cl.environment(&acc.AccountRef)
 	meta := cl.metaFor(rt)
@@ -711,7 +727,7 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 		return cl.classify(ctx, rt, pacct, 0, nil, nil, err.Error())
 	}
 	up.SetReadLimit(s.g.ws.upstreamRead)
-	s.up, s.rt, s.pacct = up, rt, pacct
+	s.up, s.acc, s.rt, s.pacct = up, acc, rt, pacct
 	s.handshakePatches = built.GetPatches()
 	s.upIn = make(chan wsMessage, 1)
 	go s.read(ctx, up, s.upIn)

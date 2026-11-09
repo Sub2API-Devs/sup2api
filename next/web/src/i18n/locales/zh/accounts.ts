@@ -349,6 +349,49 @@ export default {
   editTitle: '编辑账号',
   newStep1: '新建账号 · 选择类型',
   newTitle: '新建账号',
+  upstream: {
+    hint: '只存与账号类型默认不同的部分；留空沿用默认（输入框里的灰字）',
+    resetAll: '全部恢复默认',
+    reset: '恢复默认',
+    noDefaults: '账号类型没有提供上游默认值，暂时无法编辑',
+    auth: {
+      title: '鉴权',
+      hint: "上游如何识别这个账号；值是模板，{'{api_key}'} 代表 API Key",
+      types: { header: '请求头', query: '查询参数', none: '不鉴权' },
+      name: '名称',
+      value: '值',
+      namePlaceholder: { header: '请求头名称，如 x-api-key', query: '参数名，如 key' }
+    },
+    headers: {
+      title: '请求头',
+      hint: "发往上游的请求头。覆盖：总是写入；缺省：客户端没带时才写；追加：用逗号接在已有值后。值可用 {'{model}'}、{'{base_url}'}、{'{credentials.字段}'}、{'{client_header.名称}'}",
+      modes: { set: '覆盖', default: '缺省', append: '追加' },
+      name: '请求头名称',
+      value: '值',
+      add: '添加请求头',
+      remove: '删除',
+      restore: '恢复'
+    },
+    routes: {
+      title: '接口路径',
+      hint: "各协议拼在接口地址后的路径，可带查询串；{'{model}'} 代表上游模型"
+    },
+    allow: {
+      title: '放行字段',
+      hint: '这些请求体字段默认不发给上游，勾选的照常转发'
+    },
+    hints: {
+      required: '必填',
+      not_here: '{name} 不能用在这里',
+      unknown_var: '未知变量 {name}',
+      not_field: '{name} 不是账号类型声明的凭证字段',
+      header_name: '不是有效的请求头名称',
+      header_blocked: '{name} 是凭证、逐跳或网关控制头，不能在这里设置；凭证请放在鉴权里',
+      auth_header: '{name} 由鉴权写入，不能另外设置',
+      duplicate: '请求头 {name} 重复',
+      path_slash: '路径须以 / 开头'
+    }
+  },
   deleteResources: {
     label: '运行资源',
     now: '立即删除全部运行资源',

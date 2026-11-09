@@ -48,6 +48,13 @@ type AccountTypeView struct {
 	Platforms []TypePlatformView `json:"platforms"`
 	// Endpoints lists the gateway endpoints this type can serve now.
 	Endpoints []EndpointView `json:"endpoints"`
+	// PassHeaders are the client headers the type receives (the names an
+	// upstream template may read as {client_header.<name>}); never null.
+	PassHeaders []string `json:"pass_headers"`
+	// Upstream is the resolved upstream declaration of a type declaring one
+	// (docs/UPSTREAM-DECLARATIVE.md §4.4), without an account layer: the
+	// defaults the console's upstream editor starts from and restores.
+	Upstream *manifest.Upstream `json:"upstream,omitempty"`
 }
 
 // DefaultLimitsView is manifest.AccountDefaultLimits with the names of the
@@ -125,6 +132,11 @@ func typeView(g core.Generation, b core.AccountTypeBinding, conv core.ProtocolCo
 		Lifecycle:                   b.Type.Lifecycle,
 		Platforms:                   typePlatforms(g, b),
 		Endpoints:                   servedEndpoints(g, b, conv),
+		PassHeaders:                 b.PassHeaders(g.Platform),
+	}
+	if d, ok := b.Client.(core.DeclaredUpstream); ok {
+		up := d.Upstream()
+		v.Upstream = &up
 	}
 	if b.Plugin.Manifest != nil {
 		v.PluginName = b.Plugin.Manifest.Name
