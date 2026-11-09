@@ -9,6 +9,8 @@ import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import AccountModelsCard from './AccountModelsCard.vue'
 import ModelLimitsEditor from './ModelLimitsEditor.vue'
+import ModelMappingEditor from './ModelMappingEditor.vue'
+import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import { SSpinner, SSwitch, STagInput } from '@sub2api/ui'
 import AccountEditorNav from './AccountEditorNav.vue'
 import ParamOverrideField from './paramOverride/ParamOverrideField.vue'
@@ -18,7 +20,7 @@ const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), p
 vi.mock('@sub2api/host', async (original) => ({ ...await original<object>(), api: mocks }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), toast: mocks.toast }))
 const ownership = vi.hoisted(() => ({ scope: 'all' as 'all' | 'own' }))
-const pluginStore = vi.hoisted(() => ({ listed: true, pending: {} as Record<string, boolean>, errors: {} as Record<string, string>, plugin: () => null, component: (() => null) as (key: string, name?: string) => unknown }))
+const pluginStore = vi.hoisted(() => ({ listed: true, pending: {} as Record<string, boolean>, errors: {} as Record<string, string>, plugin: () => null, component: (() => null) as (key: string, name?: string) => unknown, slotEntries: (() => []) as (slot: string) => unknown[] }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => pluginStore, assetURL: () => '' }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true, scopeOf: () => ownership.scope }) }))
@@ -32,6 +34,8 @@ function render(account?: Account, realSelect = false, type: AccountType = accou
   return shallowMount(AccountEditor, { props: { accountType: type, account }, global: { plugins: [i18n], stubs: {
     // The models card is rendered (not stubbed) so its tag select is reachable.
     AccountModelsCard: false,
+    RateLimitEditor: false,
+    HeaderPassthroughEditor: false,
     SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' },
     SSettingRow: { template: '<div><slot /></div>' },
     SSettingsGroup: { template: '<div><slot /></div>' },
@@ -681,5 +685,116 @@ describe('account usage limit', () => {
     await submit(w)
     expect(mocks.patch).toHaveBeenCalledOnce()
     expect(mocks.put).toHaveBeenCalledWith('/accounts/1/usage-limit', { ...saved, amount: '0.12345678' })
+  })
+})
+
+describe('common controls of the account type (docs/COMMON-CONTROLS.md §2)', () => {
+  const declared = {
+    ...accountType, plugin_key: 'demo', type: 'controls', creation_group: undefined,
+    default_limits: { weight: 4, tpm_limit: 8 },
+    common_controls: {
+      priority: { visible: false },
+      weight: { locked: true, default: 5 },
+      rpm_limit: { configurable: false, default: 7 },
+      header_passthrough: { visible: false }, param_override: { visible: false }, environment: { visible: false },
+      model_mapping: { default: { a: 'b' } },
+      proxy: { required: true }
+    }
+  } as unknown as AccountType
+  const input = (w: ReturnType<typeof render>, key: string) => w.get(`input[data-testid="account-${key}"]`)
+  const sections = (w: ReturnType<typeof render>) => w.getComponent(AccountEditorNav).props('sections')
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    i18n.global.locale.value = 'zh'
+    mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
+    mocks.post.mockResolvedValue(savedAccount())
+    mocks.patch.mockResolvedValue(savedAccount())
+  })
+
+  it('hides, fixes and prefills a new account\'s controls as declared', async () => {
+    const w = render(undefined, false, declared)
+    await flushPromises()
+    expect(w.find('[data-testid="account-priority"]').exists()).toBe(false)
+    expect((input(w, 'weight').element as HTMLInputElement).value).toBe('5')
+    expect(input(w, 'weight').attributes('disabled')).toBeDefined()
+    expect((input(w, 'rpm_limit').element as HTMLInputElement).value).toBe('7')
+    expect(input(w, 'rpm_limit').attributes('disabled')).toBeDefined()
+    // default_limits still applies where nothing is declared.
+    expect((input(w, 'tpm_limit').element as HTMLInputElement).value).toBe('8')
+    expect(input(w, 'tpm_limit').attributes('disabled')).toBeUndefined()
+    expect(w.get('[data-testid="account-scheduling"]').html()).toContain('插件将此项固定为预设值')
+    expect(w.find('[data-testid="account-header-passthrough"]').exists()).toBe(false)
+    expect(sections(w).map(s => s.key)).toEqual(['connection', 'models', 'scheduling'])
+    expect(sections(w).find(s => s.key === 'scheduling')!.summary).toBe('权重 5 · 并发 ∞')
+    expect(w.getComponent(ModelMappingEditor).props('modelValue')).toEqual({ a: 'b' })
+    expect(w.get('[data-testid="proxy-field"]').text()).toContain('*')
+  })
+
+  it('requires the declared proxy and leaves the fixed fields to the server', async () => {
+    const w = render(undefined, false, declared)
+    await flushPromises()
+    await w.get('[data-editor-section="connection"] input').setValue('demo')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.post).not.toHaveBeenCalledWith('/accounts', expect.anything())
+    expect(w.get('[data-testid="proxy-field"]').text()).toContain('此账号类型必须配置代理')
+    await chooseProxy(w, 3)
+    await w.get('form').trigger('submit'); await flushPromises()
+    const body = mocks.post.mock.calls.find(c => c[0] === '/accounts')![1]
+    expect(body).toMatchObject({ proxy_id: 3, priority: 10, tpm_limit: 8, model_mapping: { a: 'b' } })
+    expect(body).not.toHaveProperty('weight')
+    expect(body).not.toHaveProperty('rpm_limit')
+  })
+
+  it('shows a saved account\'s locked value and keeps its read-only one', async () => {
+    const w = render({ ...savedAccount(), weight: 9, rpm_limit: 3 } as Account, false, declared)
+    await flushPromises()
+    expect((input(w, 'weight').element as HTMLInputElement).value).toBe('5')
+    expect((input(w, 'rpm_limit').element as HTMLInputElement).value).toBe('3')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('weight')
+    expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('rpm_limit')
+  })
+})
+
+describe('plugin sections (account.editor.section)', () => {
+  const entries = [
+    { pluginKey: 'demo', name: 'DemoSection', component: {}, label: { zh: '演示分区', en: 'Demo' }, icon: 'chart', accountTypes: ['controls'] },
+    { pluginKey: 'other', name: 'OtherSection', component: {}, label: '其他', accountTypes: ['controls'] },
+    { pluginKey: 'any', name: 'AnySection', component: {} }
+  ]
+  const type = { ...accountType, plugin_key: 'demo', type: 'controls', creation_group: undefined } as unknown as AccountType
+  const plugin = (w: ReturnType<typeof render>) => w.getComponent(AccountEditorNav).props('sections').filter(s => s.key.startsWith('plugin:'))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    i18n.global.locale.value = 'zh'
+    mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
+    pluginStore.slotEntries = (slot: string) => (slot === 'account.editor.section' ? entries : [])
+  })
+  afterEach(() => {
+    pluginStore.slotEntries = () => []
+  })
+
+  it('appends the sections declared for the type, configurable once the account is saved', async () => {
+    const w = render(undefined, false, type)
+    await flushPromises()
+    expect(plugin(w)).toEqual([
+      { key: 'plugin:demo:DemoSection', icon: 'chart', label: '演示分区', summary: '保存账号后可配置' },
+      { key: 'plugin:any:AnySection', icon: 'puzzle', label: 'AnySection', summary: '保存账号后可配置' }
+    ])
+    expect(w.findAll('[data-testid="plugin-section-after-save"]')).toHaveLength(2)
+  })
+
+  it('renders each section with the account, its type and whether it is read-only', async () => {
+    const account = savedAccount()
+    const w = render(account, false, type)
+    await flushPromises()
+    const slots = w.findAllComponents(PluginSlot).filter(s => s.props('name') === 'account.editor.section')
+    expect(slots).toHaveLength(2)
+    expect(slots[0].props('props')).toEqual({ account, accountType: type, readonly: false })
+    const only = slots[0].props('only') as (e: unknown) => boolean
+    expect(entries.map(only)).toEqual([true, false, false])
+    expect(slots[0].element.closest('[data-editor-section]')?.getAttribute('data-editor-section')).toBe('plugin:demo:DemoSection')
   })
 })

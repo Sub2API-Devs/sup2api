@@ -5,7 +5,7 @@
 import type { Account } from '@/api/types'
 
 export type GroupMode = 'replace' | 'add' | 'remove'
-type NumberField = 'priority' | 'weight' | 'max_concurrency' | 'rpm_limit' | 'tpm_limit' | 'spm_limit'
+export type NumberField = 'priority' | 'weight' | 'max_concurrency' | 'rpm_limit' | 'tpm_limit' | 'spm_limit'
 export type BulkFields = Record<NumberField, number | null> & {
   group_ids: number[]
   groupMode: GroupMode

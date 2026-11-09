@@ -352,7 +352,8 @@ export interface AccountType {
   default_models_by_subscription?: Record<string, string[]>
   default_model_mapping?: Record<string, string>
   default_limits?: AccountDefaultLimits
-  common_controls?: Partial<Record<'auto_disable' | 'schedulable', { configurable?: boolean; default?: boolean }>>
+  /** How the editor shows the common controls (docs/COMMON-CONTROLS.md §1); absent names keep the core behaviour. */
+  common_controls?: Partial<Record<CommonControlName, CommonControlDecl>>
   extensions_schema?: { type: 'object'; properties: Record<string, unknown> }
   lifecycle?: AccountLifecycle
   /** Platforms the type supports (built-in or plugin platforms). */
@@ -453,6 +454,25 @@ export interface ModelRateUsage {
   rpm: number
   tpm: number
   sessions?: number
+}
+
+/** Account fields an account type may declare a common control for (manifest accountTypes[].commonControls). */
+export type CommonControlName =
+  | 'schedulable' | 'auto_disable' | 'priority' | 'weight' | 'max_concurrency' | 'rpm_limit' | 'tpm_limit' | 'spm_limit'
+  | 'model_limits' | 'usage_limit' | 'model_mapping' | 'param_override' | 'header_passthrough' | 'environment' | 'proxy'
+
+/** One common control declaration; every field is optional. */
+export interface CommonControlDecl {
+  /** false: the editor hides it (the API still accepts it). Default true. */
+  visible?: boolean
+  /** false: read-only (a new account gets `default`, a saved one keeps its value). Default true. */
+  configurable?: boolean
+  /** A new account's value (same shape as the account field). */
+  default?: unknown
+  /** true: always `default`, for new and saved accounts. */
+  locked?: boolean
+  /** `proxy` only: the account must have a proxy. */
+  required?: boolean
 }
 
 /** Scheduling and limits a plugin suggests for a new account (CONTRACTS §68.5); absent fields keep the console defaults. */
@@ -1388,6 +1408,18 @@ export interface PluginAccountAction {
   visibleFor?: 'editable' | 'all'
 }
 
+/** manifest ui.slots[] as GET /ui/plugins hands it down. */
+export interface UIPluginSlot {
+  slot: string
+  component: string
+  permission?: string
+  /** account.editor.section: the navigation entry. */
+  label?: LText
+  icon?: string
+  /** account.editor.section: only for these account types of the plugin (all when absent). */
+  accountTypes?: string[]
+}
+
 export interface UIPlugin {
   key: string
   version: string
@@ -1395,7 +1427,7 @@ export interface UIPlugin {
   asset_base: string
   menus: Array<{ id: string; section: string; label: LText; icon?: string; page: string; permission?: string; order?: number }>
   pages: Record<string, UIPluginPage>
-  slots: Array<{ slot: string; component: string; permission?: string }>
+  slots: UIPluginSlot[]
   account_actions?: PluginAccountAction[]
   native_entry: string
   trust: Trust

@@ -30,6 +30,11 @@ describe('PluginSlot', () => {
     expect(w.findAll('i').map((x) => x.text())).toEqual(['a:1+2', 'b:none'])
   })
 
+  it('keeps only the entries `only` accepts', () => {
+    const w = mount(PluginSlot, { props: { name: 'account.editor.section', only: (e: SlotEntry) => e.pluginKey === 'b' } })
+    expect(w.findAll('[data-plugin-slot]').map((x) => x.attributes('data-plugin-slot'))).toEqual(['b:Shows'])
+  })
+
   it('renders the components without props too', () => {
     const w = mount(PluginSlot, { props: { name: 'dashboard.widgets' } })
     expect(w.findAll('i').map((x) => x.text())).toEqual([':none', ':none'])

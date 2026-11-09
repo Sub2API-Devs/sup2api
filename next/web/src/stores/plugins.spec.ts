@@ -152,3 +152,20 @@ describe('plugin store loading', () => {
     expect(store.uiPlugins).toEqual([])
   })
 })
+
+describe('plugin store slots', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mocks.get.mockReset()
+  })
+
+  it('hands down the navigation entry of an account editor section (UI 3.7)', async () => {
+    const section = { slot: 'account.editor.section', component: 'FastPage', label: { en: 'Demo' }, icon: 'chart', accountTypes: ['t'] }
+    mocks.get.mockResolvedValue([{ ...plugin(FAST, 'fast-plugin.ts'), slots: [section, { slot: 'account.editor.section', component: 'Missing' }] }])
+    const store = usePluginStore()
+    await store.refresh()
+    expect(store.slotEntries('account.editor.section')).toEqual([
+      { pluginKey: FAST, name: 'FastPage', component: store.component(FAST, 'FastPage'), label: { en: 'Demo' }, icon: 'chart', accountTypes: ['t'] }
+    ])
+  })
+})

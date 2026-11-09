@@ -9,16 +9,20 @@
 // draft flow and saving sends the authorized draft as `ccgateway_runtime`. A
 // saved one shows its login and can be re-authorized (docs/CCGATEWAY-REAUTH.md):
 // the swap is committed by itself and reported with `reauthorized`.
+// Every core field follows the account type's common controls (hidden, fixed,
+// a default, a required proxy: commonControls.ts); plugin sections declared
+// for the type (account.editor.section) come after the core ones.
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, STagInput, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, toast } from '@sub2api/ui'
 import type { Account, AccountType, EnvironmentValues, ProxyProbeResult } from '@/api/types'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import { schemaWidgets } from '@/components/schema/widgets'
 import { ACCOUNT_FORM_KEY } from '@/components/schema/accountForm'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
+import { sectionFor, slotKey } from '@/components/plugin/slots'
 import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import { lt } from '@/i18n'
@@ -37,7 +41,10 @@ import ParamOverrideField from './paramOverride/ParamOverrideField.vue'
 import { operationCount, type Override as ParamOverride } from './paramOverride/model'
 import AccountModelsCard from './AccountModelsCard.vue'
 import FetchedModelsModal from './FetchedModelsModal.vue'
-import { accountControl, sameCreationGroup } from './accountTypeChoices'
+import { sameCreationGroup } from './accountTypeChoices'
+import { accountControl, newAccountValues, savedAccountValues, useCommonControls, type CommonControlName, type ControlValues } from './commonControls'
+import HeaderPassthroughEditor from './controls/HeaderPassthroughEditor.vue'
+import RateLimitEditor from './controls/RateLimitEditor.vue'
 import ModelLimitsEditor from './ModelLimitsEditor.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 import { useUsageLimitEdit } from './useUsageLimitEdit'
@@ -48,7 +55,7 @@ import { containerLocales, containerTimezones, environmentOptions } from './cont
 import { useContainerEnvironment } from './useContainerEnvironment'
 import { useModelEdit } from './useModelEdit'
 import { useAccountSave } from './useAccountSave'
-import { CONNECTION_FIELDS, isAdvancedField, isSchedulingField, mappingErrorText, modelsErrorText, splitFieldErrors, type EditorSection } from './editorErrors'
+import { CONNECTION_FIELDS, isAdvancedField, isSchedulingField, mappingErrorText, modelsErrorText, pluginSection, RATE_LIMITS, SCHEDULING_ROWS, SECTION_CONTROLS, splitFieldErrors, type EditorSection } from './editorErrors'
 
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
@@ -113,16 +120,18 @@ const nativeComponent = computed(() => (props.accountType ? plugins.component(pr
 // loading: show a spinner, not "form unavailable" (as PluginPageView does).
 const pluginFormWaiting = computed(() => !plugins.listed || (props.accountType?.form.mode === 'native' && !!plugins.pending[props.accountType.plugin_key]))
 
-// ---------------------------------------------------------------- common controls (schedulable, automatic disabling)
+// ---------------------------------------------------------------- common controls (docs/COMMON-CONTROLS.md §2)
+
+/** Hidden, fixed (with the reason) or required, per core field. */
+const controls = useCommonControls(() => props.accountType)
+const anyVisible = (names: readonly CommonControlName[]) => names.some(n => controls.value[n].visible)
 
 const autoDisableEnabled = ref<boolean | null>(null)
 const autoDisablePolicyFailed = ref(false)
 let autoDisablePolicyRequest = 0
-const autoDisableControl = computed(() => accountControl(props.accountType, 'auto_disable'))
-const schedulingControl = computed(() => accountControl(props.accountType, 'schedulable'))
 const autoDisableHint = computed(() => {
   if (autoDisableEnabled.value === false) return t('accounts.editorUi.autoDisableGlobalOff')
-  if (!autoDisableControl.value.configurable) return t('accounts.editorUi.commonControlFixed')
+  if (controls.value.auto_disable.reason) return controls.value.auto_disable.reason
   if (autoDisableEnabled.value === true) return t('accounts.editorUi.autoDisableHint')
   return autoDisablePolicyFailed.value ? t('accounts.editorUi.autoDisableUnavailable') : t('common.loading')
 })
@@ -188,41 +197,47 @@ watch(defaultModels, (next, previous) => {
 /** Models and mappings of the section summary (the cards render their own counts). */
 const mappingCount = computed(() => Object.keys(mapping.value).length)
 
+/** Summary parts of the shown controls (falsy parts dropped). */
+const summaryOf = (parts: Array<[CommonControlName, string | number | false]>) => parts.filter(([n, v]) => v && controls.value[n].visible).map(([, v]) => v)
+
 /** The advanced section's summary: header passthrough, parameter override and the account's own environment values. */
 const forwardingSummary = computed(() => {
   const rules = basic.header_passthrough
   const overrides = operationCount(basic.param_override)
   const custom = Object.keys(basic.environment).length
-  if (!rules.length && !overrides && !custom) return t('accounts.forwarding.allDefault')
-  return [
-    rules.includes('*') ? t('accounts.forwarding.passAll') : rules.length ? t('accounts.forwarding.passRules', { n: rules.length }) : t('accounts.forwarding.passNone'),
-    overrides && t('accounts.forwarding.override', { n: overrides }),
-    custom ? t('accounts.forwarding.envCustom', { n: custom }) : t('accounts.forwarding.envFollow')
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  if (!summaryOf([['header_passthrough', rules.length], ['param_override', overrides], ['environment', custom]]).length) return t('accounts.forwarding.allDefault')
+  return summaryOf([
+    ['header_passthrough', rules.includes('*') ? t('accounts.forwarding.passAll') : rules.length ? t('accounts.forwarding.passRules', { n: rules.length }) : t('accounts.forwarding.passNone')],
+    ['param_override', overrides && t('accounts.forwarding.override', { n: overrides })],
+    ['environment', custom ? t('accounts.forwarding.envCustom', { n: custom }) : t('accounts.forwarding.envFollow')]
+  ]).join(' · ')
 })
 
+/** Plugin sections declared for this account type (docs/COMMON-CONTROLS.md §4). */
+const pluginSections = computed(() => plugins.slotEntries('account.editor.section').filter(e => sectionFor(e, props.accountType)))
+
 const editorSections = computed(() => [
-  { key: 'connection' as const, icon: 'key', label: t('accounts.editorUi.connection'), summary: basic.name.trim() || t('accounts.editorUi.unnamed') },
+  { key: 'connection' as EditorSection, icon: 'key', label: t('accounts.editorUi.connection'), summary: basic.name.trim() || t('accounts.editorUi.unnamed') },
   {
     key: 'models' as const,
     icon: 'cpu',
     label: t('accounts.editorUi.models'),
     summary: [
       models.value.length ? t('accounts.editorUi.modelsSummary', { n: models.value.length }) : t('accounts.editorUi.allModels'),
-      ...(mappingCount.value ? [t('accounts.editorUi.mappingSummary', { n: mappingCount.value })] : [])
+      ...summaryOf([['model_mapping', mappingCount.value && t('accounts.editorUi.mappingSummary', { n: mappingCount.value })]])
     ].join(' · ')
   },
   {
     key: 'scheduling' as const,
     icon: 'bolt',
     label: t('accounts.editorUi.scheduling'),
-    summary: [
-      t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' }),
-      ...(modelLimitCards.value.length ? [t('accounts.modelLimits.summary', { n: modelLimitCards.value.length })] : []),
-      ...(usageLimit.summary.value ? [usageLimit.summary.value] : [])
-    ].join(' · ')
+    summary: summaryOf([
+      ['priority', t('accounts.editorUi.summaryPriority', { n: basic.priority })],
+      ['weight', t('accounts.editorUi.summaryWeight', { n: basic.weight })],
+      ['max_concurrency', t('accounts.editorUi.summaryConcurrency', { n: basic.max_concurrency || '∞' })],
+      ['model_limits', modelLimitCards.value.length && t('accounts.modelLimits.summary', { n: modelLimitCards.value.length })],
+      ['usage_limit', usageLimit.summary.value]
+    ]).join(' · ')
   },
   {
     key: 'advanced' as const,
@@ -230,18 +245,27 @@ const editorSections = computed(() => [
     label: t('accounts.editorUi.advanced'),
     summary: forwardingSummary.value
   },
-  ...(props.accountType?.plugin_key === 'ccgateway' ? [{ key: 'cc_features' as const, icon: 'settings', label: t('ccgateway.features.ccTitle'), summary: t('ccgateway.layers.' + (ccFeaturePolicy.value?.mode === 'custom' ? 'custom' : 'follow')) }] : [])
-])
-const limitFields = computed(() => [
-  { key: 'rpm_limit' as const, label: t('accounts.rpmLimit'), unit: t('accounts.editorUi.unitRpm'), hint: t('accounts.zeroUnlimited') },
-  { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), unit: t('accounts.editorUi.unitTpm'), hint: t('accounts.zeroUnlimited') },
-  { key: 'spm_limit' as const, label: t('accounts.spmLimit'), unit: t('accounts.editorUi.unitSpm'), hint: t('accounts.spmHint') }
-])
+  ...(props.accountType?.plugin_key === 'ccgateway' ? [{ key: 'cc_features' as const, icon: 'settings', label: t('ccgateway.features.ccTitle'), summary: t('ccgateway.layers.' + (ccFeaturePolicy.value?.mode === 'custom' ? 'custom' : 'follow')) }] : []),
+  ...pluginSections.value.map(e => ({
+    key: pluginSection(slotKey(e)),
+    icon: e.icon || 'puzzle',
+    label: lt(e.label) || e.name,
+    summary: editing.value ? lt(plugins.plugin(e.pluginKey)?.name) || e.pluginKey : t('accounts.editorUi.pluginSectionAfterSave')
+  }))
+].filter(s => !SECTION_CONTROLS[s.key]?.length || anyVisible(SECTION_CONTROLS[s.key]!)))
+/** Priority, weight and concurrency rows of the scheduling group. */
+const schedulingFields = computed(() =>
+  [
+    { key: 'priority' as const, label: t('accounts.priority'), hint: t('accounts.priorityHint'), min: 0, max: 1_000_000 },
+    { key: 'weight' as const, label: t('accounts.weight'), hint: t('accounts.weightHint'), min: 1, max: 1000 },
+    { key: 'max_concurrency' as const, label: t('accounts.maxConcurrency'), hint: t('accounts.zeroUnlimited'), min: 0, max: undefined }
+  ].filter(f => controls.value[f.key].visible)
+)
 /** Server field errors of the model list / mapping, shown under the editor. */
 const serverModelsError = computed(() => modelsErrorText(errors.value))
 const serverMappingError = computed(() => mappingErrorText(errors.value))
 /** Sections holding an error, marked in the navigation. */
-const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
+const sectionErrors = computed<Partial<Record<EditorSection, boolean>>>(() => ({
   connection: CONNECTION_FIELDS.some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
   models: !!(modelsError.value || serverModelsError.value || mappingError.value || serverMappingError.value),
   scheduling: Object.keys(errors.value).some(isSchedulingField) || Object.keys(usageLimitErrors.value).length > 0,
@@ -459,41 +483,40 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   // Editing defaults to "pick existing" with the current proxy selected.
   proxyMode.value = 'existing'
   proxyUrl.value = ''
-  basic.priority = a?.priority ?? 10
-  basic.weight = a?.weight ?? 1
-  basic.max_concurrency = a?.max_concurrency ?? newAccountConcurrency(own.scopeOf(ACCOUNT_KEYS.create))
-  basic.schedulable = a?.schedulable ?? schedulingControl.value.default
-  basic.auto_disable = a?.auto_disable ?? autoDisableControl.value.default
-  basic.rpm_limit = a?.rpm_limit ?? 0
-  basic.tpm_limit = a?.tpm_limit ?? 0
-  basic.spm_limit = a?.spm_limit ?? 0
-  basic.environment = { ...a?.environment }
-  basic.header_passthrough = [...(a?.header_passthrough || [])]
-  basic.param_override = a?.param_override ?? null
-  modelLimitCards.value = toCards(a?.model_limits)
-  if (!a) applyDefaultLimits(at)
   resetEnvironment(a?.settings)
   if (a) editorModels.setSaved(a.models, a.model_mapping)
   if (!a || (at?.plugin_key === 'ccgateway' ? autoModels.value : shouldPrefillOnEdit(a, at))) editorModels.applyDefaults(at)
+  applyValues(a ? savedAccountValues(a, at, coreValues()) : newAccountValues(at, coreValues()))
 }
 
-/** A new account starts from the scheduling and limits its plugin suggests (CONTRACTS §68.5). */
-function applyDefaultLimits(at: AccountType | null) {
-  const d = at?.default_limits
-  if (!d) return
-  for (const field of ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit'] as const) {
-    if (d[field] !== undefined) basic[field] = d[field]!
+/** The core's values of the controls (before the plugin's defaults). */
+const coreValues = (): ControlValues => ({
+  priority: 10, weight: 1, max_concurrency: newAccountConcurrency(own.scopeOf(ACCOUNT_KEYS.create)), schedulable: true, auto_disable: true,
+  rpm_limit: 0, tpm_limit: 0, spm_limit: 0, environment: {}, header_passthrough: [], param_override: null, model_limits: []
+})
+/** Controls kept outside `basic`. */
+const setControl: Partial<Record<CommonControlName, (v: any) => void>> = {
+  model_limits: v => (modelLimitCards.value = toCards(v)),
+  model_mapping: v => (mapping.value = v),
+  usage_limit: v => usageLimit.prefill(v)
+}
+/** Puts control values (copies) into the form. */
+function applyValues(values: ControlValues) {
+  for (const [name, v] of Object.entries(values)) {
+    const value = v == null ? v : JSON.parse(JSON.stringify(v))
+    const set = setControl[name as CommonControlName]
+    if (set) set(value)
+    else if (name in basic) Object.assign(basic, { [name]: value })
   }
-  if (d.model_limits) modelLimitCards.value = toCards(d.model_limits)
 }
 
-/** Switching the auth method of a new account: untouched defaults and common controls follow the type. */
+/** Switching the auth method of a new account: untouched defaults and fixed controls follow the type. */
 function switchAuth(at: AccountType | null, previous: AccountType | null | undefined) {
   if (editorModels.sameDefaults(previous)) editorModels.applyDefaults(at)
-  for (const field of ['auto_disable', 'schedulable'] as const) {
-    const control = accountControl(at, field)
-    if (!control.configurable || basic[field] === accountControl(previous, field).default) basic[field] = control.default
-  }
+  const before = newAccountValues(previous, coreValues())
+  const follows = ([name]: [string, unknown]) =>
+    name in basic && (!accountControl(at, name as CommonControlName).configurable || JSON.stringify(basic[name as keyof typeof basic]) === JSON.stringify(before[name as CommonControlName]))
+  applyValues(Object.fromEntries(Object.entries(newAccountValues(at, coreValues())).filter(follows)))
 }
 
 /** The plugin's credential form (schema mode). */
@@ -612,7 +635,7 @@ const { save } = useAccountSave({
               </SField>
               <div ref="proxyFieldEl" class="md:col-span-2" data-testid="proxy-field">
                 <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <span class="text-sm font-medium text-fg">{{ t('accounts.proxy') }}</span>
+                  <span class="text-sm font-medium text-fg">{{ t('accounts.proxy') }}<span v-if="controls.proxy.required" class="ml-0.5 text-red-500" aria-hidden="true">*</span></span>
                   <SSegmented :model-value="proxyMode" :options="proxyModeOptions" size="sm" :aria-label="t('accounts.proxy')" data-testid="proxy-mode" @update:model-value="setProxyMode(String($event))" />
                 </div>
                 <SField :error="proxyError">
@@ -731,6 +754,7 @@ const { save } = useAccountSave({
             :fetching="fetching"
             :errors="errors"
             :merge-models="mergeModels"
+            :mapping-control="controls.model_mapping"
             @fetch="fetchModels"
           />
         </div>
@@ -741,35 +765,37 @@ const { save } = useAccountSave({
           <SHint v-else>{{ t('ccgateway.layers.newAccount') }}</SHint>
         </div>
         <div v-show="activeSection === 'scheduling'" data-editor-section="scheduling" class="space-y-4">
-          <SSettingsGroup :title="t('accounts.scheduling')" :description="t('accounts.editorUi.schedulingCardHint')" data-testid="account-scheduling">
-            <SSettingRow :label="t('accounts.priority')" :description="t('accounts.priorityHint')" :error="errors.priority">
-              <SInput v-model.number="basic.priority" type="number" min="0" max="1000000" class="w-full sm:w-40" />
+          <SSettingsGroup v-if="anyVisible(SCHEDULING_ROWS)" :title="t('accounts.scheduling')" :description="t('accounts.editorUi.schedulingCardHint')" data-testid="account-scheduling">
+            <SSettingRow v-for="f in schedulingFields" :key="f.key" :label="f.label" :description="controls[f.key].reason || f.hint" :error="errors[f.key]">
+              <SInput v-model.number="basic[f.key]" type="number" :min="f.min" :max="f.max" :disabled="controls[f.key].disabled" class="w-full sm:w-40" :data-testid="`account-${f.key}`" />
             </SSettingRow>
-            <SSettingRow :label="t('accounts.weight')" :description="t('accounts.weightHint')" :error="errors.weight">
-              <SInput v-model.number="basic.weight" type="number" min="1" max="1000" class="w-full sm:w-40" />
+            <SSettingRow v-if="controls.schedulable.visible" :label="t('accounts.schedulable')" :description="controls.schedulable.reason || t('accounts.editorUi.schedulableHint')">
+              <SSwitch v-model="basic.schedulable" :disabled="controls.schedulable.disabled || saving" data-testid="account-scheduling-control" />
             </SSettingRow>
-            <SSettingRow :label="t('accounts.maxConcurrency')" :description="t('accounts.zeroUnlimited')" :error="errors.max_concurrency">
-              <SInput v-model.number="basic.max_concurrency" type="number" min="0" class="w-full sm:w-40" data-testid="account-max_concurrency" />
-            </SSettingRow>
-            <SSettingRow :label="t('accounts.schedulable')" :description="t(schedulingControl.configurable ? 'accounts.editorUi.schedulableHint' : 'accounts.editorUi.commonControlFixed')">
-              <SSwitch v-model="basic.schedulable" :disabled="!schedulingControl.configurable || saving" data-testid="account-scheduling-control" />
-            </SSettingRow>
-            <SSettingRow :label="t('accounts.autoDisable')" :description="autoDisableHint">
-              <SSwitch v-model="basic.auto_disable" :disabled="autoDisableEnabled !== true || !autoDisableControl.configurable || saving" data-testid="account-auto-disable" />
+            <SSettingRow v-if="controls.auto_disable.visible" :label="t('accounts.autoDisable')" :description="autoDisableHint">
+              <SSwitch v-model="basic.auto_disable" :disabled="autoDisableEnabled !== true || controls.auto_disable.disabled || saving" data-testid="account-auto-disable" />
             </SSettingRow>
           </SSettingsGroup>
 
-          <SSettingsGroup :title="t('accounts.limits')" :description="t('accounts.editorUi.limitsHint')" data-testid="account-limits">
-            <SSettingRow v-for="f in limitFields" :key="f.key" :label="f.label" :description="f.hint" :error="errors[f.key]">
-              <SInput v-model.number="basic[f.key]" type="number" :min="0" :suffix="f.unit" class="w-full sm:w-48" :data-testid="`account-${f.key}`" />
-            </SSettingRow>
+          <SSettingsGroup v-if="anyVisible(RATE_LIMITS)" :title="t('accounts.limits')" :description="t('accounts.editorUi.limitsHint')" data-testid="account-limits">
+            <RateLimitEditor :model-value="basic" :errors="errors" :controls="controls" @update:model-value="Object.assign(basic, $event)" />
           </SSettingsGroup>
 
-          <AccountUsageLimitCard v-model="usageLimitModel" :status="usageLimitStatus" :load-error="usageLimitLoadError" :usage="account?.usage" :disabled="saving" :errors="usageLimitErrors" @retry="usageLimit.load" />
+          <AccountUsageLimitCard
+            v-if="controls.usage_limit.visible"
+            v-model="usageLimitModel"
+            :status="usageLimitStatus"
+            :load-error="usageLimitLoadError"
+            :usage="account?.usage"
+            :disabled="controls.usage_limit.disabled || saving"
+            :reason="controls.usage_limit.reason"
+            :errors="usageLimitErrors"
+            @retry="usageLimit.load"
+          />
 
-          <SSettingsGroup :title="t('accounts.modelLimits.title')" :description="t('accounts.modelLimits.hint')" data-testid="account-model-limits">
+          <SSettingsGroup v-if="controls.model_limits.visible" :title="t('accounts.modelLimits.title')" :description="controls.model_limits.reason || t('accounts.modelLimits.hint')" data-testid="account-model-limits">
             <div class="p-4">
-              <ModelLimitsEditor v-model="modelLimitCards" :options="modelLimitOptions" :errors="errors" :disabled="saving" />
+              <ModelLimitsEditor v-model="modelLimitCards" :options="modelLimitOptions" :errors="errors" :disabled="controls.model_limits.disabled || saving" />
             </div>
           </SSettingsGroup>
         </div>
@@ -777,12 +803,21 @@ const { save } = useAccountSave({
         <!-- ============================================================ advanced -->
         <div v-show="activeSection === 'advanced'" data-editor-section="advanced" class="space-y-4">
           <SSettingsGroup :title="t('accounts.forwarding.title')" :description="t('accounts.forwarding.hint')" data-testid="account-forwarding">
-            <SSettingRow :label="t('accounts.headerPassthrough.title')" :description="t('accounts.headerPassthrough.hint')" :error="errors.header_passthrough" data-testid="account-header-passthrough">
-              <STagInput v-model="basic.header_passthrough" :placeholder="t('accounts.headerPassthrough.placeholder')" :disabled="saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
+            <SSettingRow v-if="controls.header_passthrough.visible" :label="t('accounts.headerPassthrough.title')" :description="controls.header_passthrough.reason || t('accounts.headerPassthrough.hint')" :error="errors.header_passthrough" data-testid="account-header-passthrough">
+              <HeaderPassthroughEditor v-model="basic.header_passthrough" :disabled="controls.header_passthrough.disabled || saving" class="w-full sm:w-96" data-testid="account-header-passthrough-rules" />
             </SSettingRow>
-            <ParamOverrideField v-model="basic.param_override" :models="models" :error="errors.param_override" :disabled="saving" />
-            <EnvironmentEditor v-if="showEnvironment" v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
+            <ParamOverrideField v-if="controls.param_override.visible" v-model="basic.param_override" :models="models" :error="errors.param_override" :disabled="controls.param_override.disabled || saving" :reason="controls.param_override.reason" />
+            <template v-if="showEnvironment && controls.environment.visible">
+              <SHint v-if="controls.environment.reason" size="xs" class="py-3">{{ controls.environment.reason }}</SHint>
+              <EnvironmentEditor v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="controls.environment.disabled || saving" />
+            </template>
           </SSettingsGroup>
+        </div>
+
+        <!-- ============================================================ plugin sections (account.editor.section) -->
+        <div v-for="e in pluginSections" v-show="activeSection === pluginSection(slotKey(e))" :key="slotKey(e)" :data-editor-section="pluginSection(slotKey(e))" class="space-y-4">
+          <PluginSlot v-if="editing" name="account.editor.section" :only="x => slotKey(x) === slotKey(e)" :props="{ account, accountType, readonly: !canEditAccount }" />
+          <SHint v-else data-testid="plugin-section-after-save">{{ t('accounts.editorUi.pluginSectionAfterSave') }}</SHint>
         </div>
       </div>
     </div>

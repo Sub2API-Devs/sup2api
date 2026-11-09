@@ -34,19 +34,34 @@ describe('bulk account dialogs', () => {
     await w.setProps({ open: true })
     expect(w.get('[data-testid="bulk-edit-apply"]').attributes('disabled')).toBeDefined()
     await w.get('[data-testid="bulk-field-priority"] input[type="number"]').setValue('3')
-    await w.get('[data-testid="bulk-field-auto_disable"] [role="switch"]').setValue(false)
-    expect(w.text()).toContain('1 个账号的类型固定了此项')
+    // A field one selected account's type fixes (common controls) is disabled.
+    expect(w.get('[data-testid="bulk-field-auto_disable"] [role="switch"]').attributes('disabled')).toBeDefined()
+    expect(w.get('[data-testid="bulk-field-auto_disable"]').text()).toContain('1 个所选账号的类型不允许修改此项')
+    expect(w.get('[data-testid="bulk-field-weight"] input').attributes('disabled')).toBeUndefined()
     await w.get('[data-testid="bulk-edit-apply"]').trigger('click')
     await flushPromises()
 
     expect(mocks.patch.mock.calls.map((c) => [c[0], c[1]])).toEqual([
-      ['/accounts/1', { priority: 3, auto_disable: false }],
-      ['/accounts/2', { priority: 3, auto_disable: false }]
+      ['/accounts/1', { priority: 3 }],
+      ['/accounts/2', { priority: 3 }]
     ])
     expect(w.get('[data-testid="bulk-failures"]').text()).toContain('a2')
-    expect(w.emitted('saved')![0][0]).toEqual([{ id: 1, priority: 3, auto_disable: false }])
+    expect(w.emitted('saved')![0][0]).toEqual([{ id: 1, priority: 3 }])
     expect(w.emitted('update:open')).toBeUndefined()
     expect(mocks.toast).toHaveBeenCalledWith('成功 1，失败 1，跳过 1', 'warning')
+  })
+
+  it('disables every number field a selected type fixes or locks', async () => {
+    const types: Record<number, AccountType> = {
+      1: { common_controls: { weight: { locked: true, default: 2 } } } as unknown as AccountType,
+      2: { common_controls: { rpm_limit: { configurable: false }, priority: { visible: false } } } as unknown as AccountType
+    }
+    const w = mount(AccountBulkEditDialog, {
+      props: { open: true, accounts: [acc(1), acc(2)], typeOf: (a: Account) => types[a.id] },
+      global: { plugins: [i18n], stubs: { SModal } }
+    })
+    const disabled = (k: string) => w.get(`[data-testid="bulk-field-${k}"] input[type="number"]`).attributes('disabled') !== undefined
+    expect(['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit'].filter(disabled)).toEqual(['weight', 'rpm_limit'])
   })
 
   it('deletes every selected account, keeping resources only where the type allows it', async () => {

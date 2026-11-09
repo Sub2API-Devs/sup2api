@@ -6,14 +6,16 @@ import { SAlert, SButton, SKeyValue } from '@sub2api/ui'
 // Editor of an account's model_mapping (request model -> upstream model,
 // CONTRACTS §18) on SKeyValue. A row whose request model is missing from a
 // non-empty model list is flagged, because the account would never be
-// scheduled for it. Values are trimmed when the account is saved.
-const props = defineProps<{
+// scheduled for it. Values are trimmed when the account is saved. Plugins get
+// it as `host.components.ModelMappingEditor`.
+const props = withDefaults(defineProps<{
   modelValue: Record<string, string>
   /** The account's model list; empty means "every model". */
-  models: string[]
+  models?: string[]
   /** id of a <datalist> with model suggestions. */
   listId?: string
-}>()
+  disabled?: boolean
+}>(), { models: () => [], listId: undefined })
 const emit = defineEmits<{ (e: 'update:modelValue', v: Record<string, string>): void; (e: 'add-models', models: string[]): void }>()
 const { t } = useI18n()
 
@@ -40,13 +42,14 @@ const rowWarn = (row: { key: string }) => (notScheduled(row.key) ? t('accounts.e
         size="sm"
         :row-warn="rowWarn"
         :add-label="t('accounts.editorUi.mappingAdd')"
+        :disabled="disabled"
         @update:model-value="emit('update:modelValue', $event)"
       />
     </div>
     <SAlert v-if="unscheduled.length" tone="warning" dense data-testid="mapping-unscheduled">
       {{ t('accounts.editorUi.mappingNotInModels', { n: unscheduled.length, models: unscheduled.slice(0, 3).join(', ') + (unscheduled.length > 3 ? ' …' : '') }) }}
       <template #actions>
-        <SButton size="sm" variant="ghost" @click="emit('add-models', unscheduled)">{{ t('accounts.editorUi.mappingAddToModels') }}</SButton>
+        <SButton size="sm" variant="ghost" :disabled="disabled" @click="emit('add-models', unscheduled)">{{ t('accounts.editorUi.mappingAddToModels') }}</SButton>
       </template>
     </SAlert>
   </div>

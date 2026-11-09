@@ -5,6 +5,7 @@ import { confirm, toast } from '@sub2api/ui'
 import { addMessages, currentLocale, i18n, lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
+import { hostComponents } from '@/components/plugin/hostComponents'
 import { formatDateTime, formatMoney, formatNumber } from '@/utils/format'
 
 /** Wires the HTTP client and publishes the host context for plugins. */
@@ -27,6 +28,7 @@ export function setupHost(router: Router) {
 
   const ctx: HostContext = {
     version: HOST_UI_VERSION,
+    components: hostComponents,
     api,
     router,
     i18n: {
