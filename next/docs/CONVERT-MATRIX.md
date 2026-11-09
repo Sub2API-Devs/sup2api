@@ -155,7 +155,7 @@ type HopReporter interface{ Hops() []string }
 
 ## 3. 响应侧中间表示（IR）
 
-文件：`convert/ir.go`（类型）、`convert/read_{chat,responses,anthropic,gemini}.go`、`convert/write_{chat,responses,anthropic,gemini}.go`、`convert/pair.go`（通用对转换器）。
+文件：`convert/ir.go`（类型）、`convert/read.go`（reader 共用部分）与 `convert/read_{chat,responses,anthropic,gemini}.go`、`convert/write.go`（writer 共用部分）与 `convert/write_{chat,responses,anthropic,gemini}.go`、`convert/pair.go`（通用对转换器）。
 
 ### 3.1 类型
 
@@ -179,6 +179,7 @@ type Block struct {
 	Annotations []Citation // url_citation 统一形状 {url, title, start, end}
 	MIME, Data  string     // Image：base64
 	Raw         json.RawMessage // Opaque：原样保留，writer 决定丢弃并记损失
+	Src         string          // 块在上游回复里的位置（不带 "response." 前缀，如 "output[2]"、"content[1]"），响应侧损失路径用它
 }
 type FinishReason uint8 // Stop | ToolUse | Length | Filter | Pause | Error
 type Finish struct{ Reason FinishReason; Raw, StopSequence string }
@@ -217,6 +218,8 @@ type Writer interface {
 ```
 
 规则：reader 在知道用量时就发 `Usage`，只在协议的终止点发 `Finish`（chat：`[DONE]` 或流结束且见过 `finish_reason`；responses：`response.completed/incomplete`；anthropic：`message_delta` 带 `stop_reason`；gemini：带 `finishReason` 的块）。writer 在 `Finish` 时写终止事件，之后的增量丢弃；`End` 时没收到 `Finish` → 报转换失败（客户端看到截断，同 §83.2）。`Error` 立即按客户端协议写错误事件并结束。`ReasoningState` 只表示“这个推理块带了签名/加密状态”，内容不传。
+
+增量顺序（reader 保证，writer 依赖）：`Start` 最先且只有一次；块按出现顺序从 0 编号，同一时刻最多一个打开的块，开始新块前先发上一块的 `BlockStop`；`Usage` 可出现在任何位置（累计值）；`Finish` 或 `Error` 之后不再有增量。reader 也可以实现 `LossReporter`，报告 IR 装不下的内容（无法映射的结束原因、没有 url 的引用）。
 
 `pair.go`：`pairConverter{from, to, grade, req func(body, opt, *losses) ([]byte, respOpts, error), reader func() Reader, writer func(respOpts) Writer}`。`Prepare` 调 `req`，绑定 `respOpts`（客户端模型、`include_usage`、旧式 functions 模式、custom 工具名表等）；`Response` = `reader.JSON` → `writer.JSON`；`NewStream` = reader → writer 串接。新增 8 对都用它声明，不再各写状态机。
 
@@ -497,18 +500,20 @@ NULL 表示继承：账号 NULL → 分组；分组 NULL → `allow`。三列都
 ```
 testdata/recorded/<protocol>/<case>.{request.json,response.json,stream.sse}   真实上游录制（原生），脱敏
 testdata/golden/<from>~<to>/<case>/
-    case.json            {options:{model, stream}, upstream:"recorded/gemini.stream_generate/tools.sse" | 本目录文件, media:{"<url>":"fixtures/x.png"}, note}
+    case.json            {options:{model, stream}, upstream:"recorded/gemini.stream_generate/tools.sse" 或路径列表（相对本目录或 testdata）,
+                          media:{"<url>":"fixtures/x.png"}, claude_default_max_tokens:{"default":8192,"<model>":n}, note}
     in.request.json      客户端请求
-    want.request.json    期望的上游请求
+    want.request.json    期望的上游请求；转换应失败时改为 want.request_error.txt（RequestError 原文）
     want.losses.json     {"tool":[...],"reasoning":[...],"image":[...],"other":[...]}（请求侧）
-    upstream.response.json / upstream.stream.sse   （不引用录制时）
-    want.response.json / want.stream.sse           客户端看到的输出
-    want.response_losses.json
+    upstream.response.json / upstream.stream.sse   （不引用录制时；本目录的上游文件总是使用）
+    want.response.json / want.stream.sse           客户端看到的输出；响应转换应失败时为 want.response_error.txt / want.stream_error.txt
+    want.response_losses.json                      非流式与流式两边的响应侧损失合并
+testdata/ir/<upstream protocol>/<case>.{json,sse}.txt   reader 输出的 IR 快照（read_test.go），-update 重写
 ```
 
 - 驱动 `golden_test.go`：遍历目录，跑 `Prepare` / `Response` / `NewStream`（逐事件喂），比对；`-update` 重写 `want.*`（人工审阅后提交）。规范化：32 位以上十六进制 id、`created`/`created_at` 等时间戳。媒体下载用 `case.json` 的 `media` 映射到本地文件的假 `MediaFetcher`，不联网。
 - 每对必备样例（缺一项测试失败，由 `golden_coverage_test.go` 按清单检查）：`text_basic`、`image_input`（到 gemini 的对含 URL 图片下载）、`tools_call`（两个并行调用、参数分 ≥3 个增量）、`tool_roundtrip`（历史里有调用和结果）、`reasoning`（请求推理 + 响应推理文本 + 响应侧签名丢失记录 + 历史推理丢弃）、`finish_length`、`usage_cache`、`error_midstream`、`lossy`（每个类别至少一条）、`impossible`。到 anthropic 的对另有 `max_tokens_default`（含 thinking 时抬高）与 `thinking_tool_loop`；组合对另有 `compose_equals_chain`。
-- 录制工具 `next/tools/convert-record`（Go）：按 `recorded/<protocol>/<case>.request.json` 用测试环境账号（环境变量给 base_url/key）请求真实上游，写 `response.json`/`stream.sse`；脱敏 id、签名换成固定假值。手动运行，不进 CI。`-live <from>~<to>` 模式把转换后的请求发给真实上游，只断言 2xx 与流完整：发布前在测试环境跑一遍（尤其 anthropic 工具循环 + thinking、Gemini 3 functionCall 的旁路签名）。
+- 录制工具 `next/server/cmd/convert-record`（Go；放在 server 模块里才能引用 `internal/` 包）：按 `recorded/<protocol>/<case>.request.json` 用测试环境账号（环境变量给 base_url/key）请求真实上游，写 `response.json`/`stream.sse`；脱敏 id、签名换成固定假值。手动运行，不进 CI。`-live <from>~<to>` 模式把转换后的请求发给真实上游，只断言 2xx 与流完整：发布前在测试环境跑一遍（尤其 anthropic 工具循环 + thinking、Gemini 3 functionCall 的旁路签名）。
 - strict 等价：`protocol-codec/strict/*_test.go` 里 strict 接受的输入（推理信封相关的除外）全部移植，新 chat/responses → anthropic 在 `strict` 策略下零损失、`want.request.json` 与 strict 输出语义等价（差异逐条写进样例的 `note`）。
 - 模糊测试：每个 reader `FuzzRead<P>`（任意事件序列不 panic、不死循环）。
 
@@ -530,9 +535,9 @@ testdata/golden/<from>~<to>/<case>/
 | 子任务 | 内容 | 拥有的文件（只有拥有者改；别人需要时提给拥有者） |
 |---|---|---|
 | **T1 框架、调度、存储、设置、控制台、文档** | 接口与注册表实现、组合、路由等级与流式相容、priority 内按等级排序、惰性转换与策略判定、拒绝错误、使用记录、迁移、账号/分组/账号类型接口、网关设置两项、corefloor、控制台、CONTRACTS §88、ARCHITECTURE 6.6；最后把注册表切到新转换器并删除 `openai_anthropic.go` 的接入 | `server/internal/gateway/convert/{convert,prepared,compose,registry_test,compose_test}.go`；`server/internal/gateway/{routing,dispatch,forward,resource_response,streamonly,settings,sticky_api}.go`、新文件 `gateway/{convert_policy,convert_routing_test,convert_policy_test}.go`、`gateway/accounttypes_test.go`（fakeConv）、`gateway/strict_conversion_admission_test.go`；`server/internal/core/{ports_identity,ports_billing}.go`；`server/internal/account/{directory,handlers,types}.go`；`server/internal/group/group.go`；`server/internal/apikey/apikey.go`；`server/internal/usage/{settler,api,reconcile}.go`；`server/internal/migrations/0093_conversion_loss_policy.sql`；`sdk/manifest/check/corefloor.go`；`web/src/views/accounts/AccountEditor.vue`、`web/src/views/groups/GroupsView.vue`、`web/src/views/settings/GatewaySettingsCard.vue`、`web/src/views/usage/{UsageTable,UsageDetail,UsageFilters,usageFilters,usage}.*`、`web/src/api/types.ts`、`web/src/i18n/locales/{zh,en}/{accounts,groups,settings,usage}.ts`；`next/docs/{CONTRACTS,ARCHITECTURE}.md` |
-| **T2 响应侧 IR 与测试框架** | 4 个 reader、4 个 writer（JSON + SSE）、通用对转换器、黄金样例驱动与覆盖检查、fuzz、录制工具 | `convert/{ir,pair}.go`（第 0 步之后）、`convert/read_{chat,responses,anthropic,gemini}.go`、`convert/write_{chat,responses,anthropic,gemini}.go` 及其 `_test.go`、`convert/{golden_test,golden_coverage_test,fuzz_test}.go`、`convert/testdata/recorded/`、`convert/testdata/fixtures/`、`next/tools/convert-record/` |
+| **T2 响应侧 IR 与测试框架** | 4 个 reader、4 个 writer（JSON + SSE）、通用对转换器、黄金样例驱动与覆盖检查、fuzz、录制工具 | `convert/{ir,pair,read,write}.go`（第 0 步之后）、`convert/read_{chat,responses,anthropic,gemini}.go`、`convert/write_{chat,responses,anthropic,gemini}.go` 及其 `_test.go`、`convert/{pair_test,read_test,write_test,golden_test,golden_coverage_test,fuzz_test}.go`、`convert/testdata/{recorded,fixtures,ir}/`、`next/server/cmd/convert-record/` |
 | **T3 OpenAI/Anthropic 请求侧** | chat/responses → anthropic 重写（含 max_tokens 缺省、thinking 规则）、anthropic → chat、anthropic → responses、responses → chat、chat → responses 的损失类别与 `reasoning_content` 输出；内置注册表清单；对应黄金样例；本期末删除 `convert/openai_anthropic.go` 与 `next/protocol-codec`（含 `go.work`、`server/go.mod` 引用；先把 strict 用例移植成样例） | `convert/req_openai_anthropic.go`、`convert/req_anthropic_chat.go`、`convert/req_anthropic_responses.go`、`convert/req_responses_chat.go`、`convert/openai_chat_responses.go`、`convert/openai_chat_responses_test.go`、`convert/builtins.go`（内置清单，T4 往里加 gemini 项时提给 T3）、`convert/testdata/golden/{openai.chat~anthropic.messages,openai.responses~anthropic.messages,anthropic.messages~openai.chat,anthropic.messages~openai.responses,openai.responses~openai.chat,openai.chat~openai.responses}/`；删除 `convert/openai_anthropic.go`、`next/protocol-codec/`、`next/go.work` 与 `server/go.mod` 中的引用 |
-| **T4 Gemini 请求侧、媒体下载、count_tokens** | chat/responses → gemini（两个上游协议）、gemini（两个客户端协议）→ chat/responses、推理档位、schema 互转、thoughtSignature 旁路值、markdown 内联图片拆分；`MediaFetcher` 实现；count_tokens local 路由的估算与响应（T1 在 routing 里留 `localCount` 钩子）；Gemini 与组合对黄金样例 | `convert/req_chat_gemini.go`、`convert/req_responses_gemini.go`、`convert/req_gemini_chat.go`、`convert/req_gemini_responses.go`、`convert/gemini_{thinking,schema}.go` 及测试、`gateway/convert_media.go`、`gateway/convert_media_test.go`、`gateway/count_local.go`、`gateway/count_local_test.go`、`convert/testdata/golden/` 下所有含 `gemini.` 的目录与 `anthropic.messages~gemini.*`、`gemini.*~anthropic.messages` |
+| **T4 Gemini 请求侧、媒体下载、count_tokens** | chat/responses → gemini（两个上游协议）、gemini（两个客户端协议）→ chat/responses、推理档位、schema 互转、thoughtSignature 旁路值、markdown 内联图片拆分；`MediaFetcher` 实现；count_tokens local 路由的估算与响应（T1 留的接缝：`gateway/routing.go` 的包变量 `localCount func(c *call, ctx context.Context, rt *typeRoute) attemptResult`，为 nil 时不规划 local 路由；`gateway/convert_policy.go` 的 `mediaFetcher func(c *call) convert.MediaFetcher`，每个请求调用一次、结果供该请求所有转换共用，为 nil 时 `Options.Fetch` 为 nil；下载上限取 `c.gw.mediaDownloadMaxBytes()`；两个包变量由 T4 的文件在 `init()` 里赋值，或日后改为直接调用）；Gemini 与组合对黄金样例 | `convert/req_chat_gemini.go`、`convert/req_responses_gemini.go`、`convert/req_gemini_chat.go`、`convert/req_gemini_responses.go`、`convert/gemini_{thinking,schema}.go` 及测试、`gateway/convert_media.go`、`gateway/convert_media_test.go`、`gateway/count_local.go`、`gateway/count_local_test.go`、`convert/testdata/golden/` 下所有含 `gemini.` 的目录与 `anthropic.messages~gemini.*`、`gemini.*~anthropic.messages` |
 
 依赖与顺序：第 0 步后四路并行。T3/T4 的请求侧与请求样例不依赖 T2；响应样例在 T2 的 reader/writer 合入后补。T1 的“注册表切换”在 T3 完成 anthropic 重写后做；count_tokens 的端到端在 T1 路由钩子与 T4 估算都合入后测。每个子任务末尾按编码规范自审，合入前 `go test -race` 全量与 web 单测。
 
