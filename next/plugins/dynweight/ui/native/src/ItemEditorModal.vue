@@ -238,47 +238,10 @@ function apply() {
             @update:model-value="setEnabled"
           />
           <span class="dw-it-head-actions">
-            <SButton
-              class="dw-up"
-              size="xs"
-              variant="ghost"
-              icon="chevron-down"
-              icon-only
-              :aria-label="t('it.up')"
-              :title="t('it.up')"
-              :disabled="selectedIndex === 0"
-              @click="move(-1)"
-            />
-            <SButton
-              size="xs"
-              variant="ghost"
-              icon="chevron-down"
-              icon-only
-              :aria-label="t('it.down')"
-              :title="t('it.down')"
-              :disabled="selectedIndex >= rows.length - 1"
-              @click="move(1)"
-            />
-            <SButton
-              size="xs"
-              variant="ghost"
-              icon="copy"
-              icon-only
-              :aria-label="t('it.duplicate')"
-              :title="t('it.duplicate')"
-              :disabled="rows.length >= MAX_ITEMS"
-              @click="duplicate"
-            />
-            <SButton
-              size="xs"
-              variant="ghost"
-              tone="danger"
-              icon="trash"
-              icon-only
-              :aria-label="t('it.remove')"
-              :title="t('it.remove')"
-              @click="remove"
-            />
+            <SButton size="xs" variant="ghost" :disabled="selectedIndex === 0" @click="move(-1)">{{ t('it.up') }}</SButton>
+            <SButton size="xs" variant="ghost" :disabled="selectedIndex >= rows.length - 1" @click="move(1)">{{ t('it.down') }}</SButton>
+            <SButton size="xs" variant="ghost" :disabled="rows.length >= MAX_ITEMS" @click="duplicate">{{ t('it.duplicate') }}</SButton>
+            <SButton size="xs" variant="ghost" tone="danger" @click="remove">{{ t('it.remove') }}</SButton>
           </span>
         </div>
         <ItemCard v-if="selected.draft" v-model="selected.draft" :problems="problems[selectedIndex]" />

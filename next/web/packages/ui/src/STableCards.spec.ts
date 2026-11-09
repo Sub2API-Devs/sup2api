@@ -190,10 +190,10 @@ describe('STable phone cards', () => {
     expect(button.classes()).toEqual(expect.arrayContaining(['btn-ghost', 'btn-sm']))
     expect(button.text()).toBe('Edit')
     const table = mount(STable, { props: { columns: declared, rows }, slots })
-    expect(table.get('td.s-table-actions button').classes()).toContain('w-[4.5rem]')
+    expect(table.get('td.s-table-actions button').classes()).toEqual(expect.arrayContaining(['btn-secondary', 'btn-xs']))
   })
 
-  it('keeps SRowAction a tile in a scrolling table nested inside a card', async () => {
+  it('keeps SRowAction a table button in a scrolling table nested inside a card', async () => {
     const inner = () =>
       h(
         STable,
@@ -204,7 +204,7 @@ describe('STable phone cards', () => {
       )
     const w = mountPinned(STable, { props: { columns: declared, rows, expandable: true }, slots: { expand: inner } })
     await cards(w)[0].get('button[aria-expanded]').trigger('click')
-    expect(w.get('td.s-table-actions button').classes()).toContain('w-[4.5rem]')
+    expect(w.get('td.s-table-actions button').classes()).toContain('btn-xs')
   })
 
   it('re-renders card cells when the page passes new cell slots', async () => {

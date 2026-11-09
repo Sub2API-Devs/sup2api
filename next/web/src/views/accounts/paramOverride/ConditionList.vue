@@ -66,7 +66,7 @@ const remove = (i: number) => draft.value.conditions.splice(i, 1)
       <div class="flex items-center gap-3 sm:h-8">
         <SCheckbox v-model="c.invert" size="xs" :label="t(`${P}.invert`)" />
         <SCheckbox v-model="c.passMissing" size="xs" :label="t(`${P}.passMissing`)" />
-        <SButton size="xs" variant="ghost" icon="x" icon-only :aria-label="t(`${P}.removeCondition`)" @click="remove(i)" />
+        <SButton size="xs" variant="ghost" tone="danger" @click="remove(i)">{{ t(`${P}.removeCondition`) }}</SButton>
       </div>
     </div>
     <SButton size="xs" variant="ghost" icon="plus" data-testid="po-add-condition" @click="add">{{ t(`${P}.addCondition`) }}</SButton>

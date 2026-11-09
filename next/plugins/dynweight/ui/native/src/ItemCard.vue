@@ -173,12 +173,13 @@ const messages = computed(() => props.problems.map(p => describeProblem(p, t)))
             <SButton
               size="xs"
               variant="ghost"
-              icon="x"
-              icon-only
-              :aria-label="t('it.card.removeCond')"
+              tone="danger"
+              :title="t('it.card.removeCond')"
               :disabled="draft.conditions.length <= 1"
               @click="dropCondition(j)"
-            />
+            >
+              {{ t('it.remove') }}
+            </SButton>
           </span>
         </div>
         <div v-if="open.has(j) && c.metric !== 'weight'" class="dw-it-cond-opts">
@@ -290,12 +291,13 @@ const messages = computed(() => props.problems.map(p => describeProblem(p, t)))
           class="dw-it-blk-end"
           size="xs"
           variant="ghost"
-          icon="x"
-          icon-only
-          :aria-label="t('it.card.removeAction')"
+          tone="danger"
+          :title="t('it.card.removeAction')"
           :disabled="draft.actions.length <= 1"
           @click="draft.actions.splice(j, 1)"
-        />
+        >
+          {{ t('it.remove') }}
+        </SButton>
       </div>
       <div class="dw-it-blk-f">
         <SButton size="xs" variant="ghost" icon="plus" :disabled="!addable.length" @click="draft.actions.push(newAction(addable[0]))">{{

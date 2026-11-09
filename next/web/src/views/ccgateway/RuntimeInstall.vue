@@ -237,7 +237,7 @@ onMounted(async () => {
     <SCard :title="t('ccgateway.runtimeInstall.title')" :subtitle="t(controller ? 'ccgateway.runtimeInstall.subtitleController' : 'ccgateway.runtimeInstall.subtitle')">
       <template #actions>
         <SBadge v-if="info" :tone="STATE_TONES[state]" dot data-testid="ccgateway-runtime-state" :data-state="state">{{ t(`ccgateway.runtimeInstall.state.${state}`) }}</SBadge>
-        <SButton size="sm" icon="refresh" icon-only :loading="loading" :disabled="installing" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="load" />
+        <SButton size="sm" icon="refresh" :loading="loading" :disabled="installing" @click="load">{{ t('common.refresh') }}</SButton>
       </template>
       <div class="space-y-4 text-sm">
         <SSettingsGroup :title="t('ccgateway.runtimeInstall.componentsTitle')" data-testid="ccgateway-runtime-components">

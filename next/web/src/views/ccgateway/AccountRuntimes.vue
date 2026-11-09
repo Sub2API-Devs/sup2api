@@ -416,7 +416,7 @@ async function refreshAuth(r: Row) {
   <SCard :title="t('ccgateway.runtimes.title')" :subtitle="t('ccgateway.runtimes.hint')">
     <template #actions>
       <SButton v-if="auth.has('settings:manage')" size="sm" :loading="cleaning" :disabled="loading" data-testid="ccgateway-cleanup" @click="cleanupOrphans">{{ t('ccgateway.cleanup.action') }}</SButton>
-      <SButton size="sm" icon="refresh" icon-only :loading="loading" :title="t('common.refresh')" :aria-label="t('common.refresh')" @click="reload" />
+      <SButton size="sm" icon="refresh" :loading="loading" @click="reload">{{ t('common.refresh') }}</SButton>
       <SButton v-if="canAccounts" size="sm" variant="primary" to="/accounts">{{ t('ccgateway.runtimes.openAccounts') }}</SButton>
     </template>
     <div class="space-y-3">
@@ -489,7 +489,7 @@ async function refreshAuth(r: Row) {
           <div class="flex items-center justify-end gap-2">
             <SButton v-if="parked(row) && canStart" size="sm" icon="play" :loading="starting === row.id" :disabled="starting !== null" :data-testid="`ccgateway-runtime-start-${row.id}`" @click="start(row)">{{ t('ccgateway.runtimes.start') }}</SButton>
             <CLISettings v-if="auth.has('settings:read')" :account-id="row.id" :disabled="row.phase !== 'ready'" @changed="inspect(row)" />
-            <SButton v-if="row.type === 'managed' && canAccounts" size="sm" variant="ghost" icon="refresh" icon-only :title="t('ccgateway.runtimes.refreshAuth')" :aria-label="t('ccgateway.runtimes.refreshAuth')" @click="refreshAuth(row)" />
+            <SButton v-if="row.type === 'managed' && canAccounts" size="sm" variant="ghost" @click="refreshAuth(row)">{{ t('ccgateway.runtimes.refreshAuth') }}</SButton>
             <SButton v-if="canAccounts" size="sm" :variant="needsAuth(row) ? 'primary' : 'ghost'" :to="editLink(row)" data-testid="ccgateway-runtime-edit">
               {{ needsAuth(row) ? t('ccgateway.runtimes.goAuthorize') : t('ccgateway.runtimes.goEdit') }}
             </SButton>

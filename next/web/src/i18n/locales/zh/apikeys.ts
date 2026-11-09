@@ -8,6 +8,7 @@ export default {
   ipAllowlistHint: '每行一个 IPv4、IPv6 地址或 CIDR 网段，最多 256 条。留空表示不限；设置后仅匹配的调用 IP 可使用此密钥。',
   ipAllowlistCount: '允许 {n} 个 IP / 网段',
   rotate: '重新生成密钥',
+  rotateShort: '重新生成',
   rotateConfirm: '确定重新生成 "{name}" 的密钥？旧密钥会立即失效，使用它的客户端需要更新。',
   rotated: '密钥已重新生成，请复制新密钥并更新客户端。',
   namePlaceholder: '例如 my-laptop',

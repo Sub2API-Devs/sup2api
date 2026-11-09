@@ -80,7 +80,7 @@ const recentColumns = computed<TableColumn[]>(() => [
     <SPageHeader :title="t('title')" :description="t('subtitle')">
       <template #actions>
         <STimeRange v-model:range="range" from="" to="" :keys="rangeKeys" variant="segmented" size="sm" :label="false" />
-        <SButton icon="refresh" icon-only :aria-label="t('refresh')" :title="t('refresh')" :loading="loading" @click="load" />
+        <SButton icon="refresh" :loading="loading" @click="load">{{ t('refresh') }}</SButton>
         <SButton v-if="host.can('rules:read')" variant="primary" icon="shield" @click="rulesOpen = true">{{ t('manageRules') }}</SButton>
       </template>
     </SPageHeader>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { SAlert, SBadge, SButton, SDropdown, SIcon, SSwitch, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SDropdown, SIcon, SRowAction, SSwitch, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
 import ItemEditorModal from './ItemEditorModal.vue'
 import { copyNamer, describeDraft, describeReason, describeStored, nameList } from './describe'
 import {
@@ -163,15 +163,7 @@ const edit = (index: number, append = false) => (editor.value = { open: true, in
       </template>
       <template #cell-actions="{ row }">
         <span class="dw-it-row-actions">
-          <SButton
-            size="xs"
-            variant="ghost"
-            :icon="readonly ? 'eye' : 'edit'"
-            icon-only
-            :aria-label="t(readonly ? 'it.view' : 'it.edit')"
-            :title="t(readonly ? 'it.view' : 'it.edit')"
-            @click="edit(row.key)"
-          />
+          <SRowAction :label="t(readonly ? 'it.view' : 'it.edit')" @click="edit(row.key)" />
           <SDropdown v-if="!readonly" :actions="menu(row.key)" :aria-label="t('it.more')" @select="onMenu(row, $event)" />
         </span>
       </template>

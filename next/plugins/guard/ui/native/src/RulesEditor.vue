@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { SButton, SEmpty, SField, SHint, SInput, SModal, SSelect, SSpinner, SSwitch, STable, type TableColumn } from '@sub2api/ui'
+import { SButton, SEmpty, SField, SHint, SInput, SModal, SRowAction, SSelect, SSpinner, SSwitch, STable, type TableColumn } from '@sub2api/ui'
 import { isApiError } from '@sub2api/host'
 import { errorMessage, fetchRules, saveRules, useGuardHost, type Rule } from './host'
 
@@ -129,7 +129,7 @@ async function save() {
         </template>
         <template #cell-enabled="{ row }"><SSwitch v-model="row.enabled" size="sm" :disabled="!canManage" :aria-label="t('rules.enabled')" /></template>
         <template #cell-actions="{ index }">
-          <SButton variant="ghost" tone="danger" size="sm" icon="trash" icon-only :aria-label="t('rules.remove')" :title="t('rules.remove')" @click="remove(index)" />
+          <SRowAction tone="danger" :label="t('rules.remove')" @click="remove(index)" />
         </template>
       </STable>
       <SHint size="xs" class="guard-hint">{{ t('rules.regexHint') }}</SHint>
