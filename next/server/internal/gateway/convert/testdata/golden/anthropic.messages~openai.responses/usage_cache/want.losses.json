@@ -1,0 +1,6 @@
+{
+  "other": [
+    "messages[0].content[0].cache_control",
+    "system[0].cache_control"
+  ]
+}

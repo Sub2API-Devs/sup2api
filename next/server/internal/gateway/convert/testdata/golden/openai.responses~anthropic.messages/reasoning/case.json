@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": false
+  },
+  "note": "History reasoning is dropped (reasoning loss)."
+}

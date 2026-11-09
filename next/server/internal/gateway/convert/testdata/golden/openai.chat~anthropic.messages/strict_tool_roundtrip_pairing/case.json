@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "x",
+    "stream": false
+  },
+  "note": "strict TestStrictToolRoundtripPairing; identical to the strict output"
+}

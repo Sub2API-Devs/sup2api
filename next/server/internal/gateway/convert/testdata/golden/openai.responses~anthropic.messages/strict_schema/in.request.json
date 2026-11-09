@@ -1,0 +1,24 @@
+{
+  "model": "alias",
+  "max_output_tokens": 20,
+  "input": "hello",
+  "text": {
+    "format": {
+      "type": "json_schema",
+      "name": "result",
+      "strict": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "a"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_output_tokens": 512,
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Current weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      },
+      "strict": false
+    },
+    {
+      "type": "function",
+      "name": "get_time",
+      "description": "Current time",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tz"
+        ]
+      },
+      "strict": false
+    }
+  ],
+  "tool_choice": "auto",
+  "input": [
+    {
+      "role": "user",
+      "content": "Weather and local time in Paris?"
+    }
+  ]
+}

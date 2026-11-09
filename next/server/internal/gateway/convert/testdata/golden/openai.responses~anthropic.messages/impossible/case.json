@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": false
+  },
+  "note": "previous_response_id cannot be converted."
+}

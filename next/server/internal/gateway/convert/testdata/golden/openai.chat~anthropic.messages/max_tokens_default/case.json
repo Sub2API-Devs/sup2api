@@ -1,0 +1,11 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": false
+  },
+  "claude_default_max_tokens": {
+    "default": 8192,
+    "claude-sonnet-4-5": 16000
+  },
+  "note": "No output limit: claude_default_max_tokens for the model, raised to budget+1 for thinking."
+}

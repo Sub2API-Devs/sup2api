@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gpt-5",
+    "stream": false
+  },
+  "note": "previous_response_id cannot be converted."
+}

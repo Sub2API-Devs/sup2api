@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "client-alias",
+    "stream": false
+  },
+  "note": "strict TestStrictRequestPreservesParametersToolsAndLongHistory; identical to the strict output"
+}

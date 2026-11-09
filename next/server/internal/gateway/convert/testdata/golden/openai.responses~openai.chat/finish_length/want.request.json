@@ -1,0 +1,10 @@
+{
+  "max_completion_tokens": 16,
+  "messages": [
+    {
+      "content": "Write a long story.",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5"
+}

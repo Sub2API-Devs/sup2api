@@ -1,0 +1,7 @@
+{
+  "model": "claude-sonnet-4-5",
+  "reasoning": {
+    "effort": "high"
+  },
+  "input": "Prove it."
+}

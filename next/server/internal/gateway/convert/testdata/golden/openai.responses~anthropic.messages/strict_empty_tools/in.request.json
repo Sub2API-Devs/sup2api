@@ -1,0 +1,6 @@
+{
+  "model": "x",
+  "max_output_tokens": 12,
+  "tools": [],
+  "input": "hi"
+}

@@ -1,0 +1,45 @@
+{
+  "model": "gpt-5",
+  "max_tokens": 512,
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Current weather",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      }
+    },
+    {
+      "name": "get_time",
+      "description": "Current time",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tz"
+        ]
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "auto"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Weather and local time in Paris?"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "max_tokens": 20,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "see",
+          "type": "text"
+        },
+        {
+          "source": {
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+            "media_type": "image/png",
+            "type": "base64"
+          },
+          "type": "image"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "no",
+          "type": "text"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "text": "please",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "x",
+  "output_config": {
+    "format": {
+      "schema": {
+        "type": "object"
+      },
+      "type": "json_schema"
+    }
+  },
+  "tool_choice": {
+    "name": "f",
+    "type": "tool"
+  },
+  "tools": [
+    {
+      "input_schema": {
+        "type": "object"
+      },
+      "name": "f"
+    }
+  ],
+  "top_p": 1
+}

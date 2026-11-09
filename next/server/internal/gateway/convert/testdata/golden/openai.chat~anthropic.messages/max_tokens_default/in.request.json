@@ -1,0 +1,10 @@
+{
+  "model": "claude-sonnet-4-5",
+  "reasoning_effort": "high",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Prove it."
+    }
+  ]
+}

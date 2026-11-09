@@ -1,0 +1,111 @@
+{
+  "max_tokens": 512,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Weather and local time in Paris?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "id": "call_w1",
+          "input": {
+            "city": "Paris"
+          },
+          "name": "get_weather",
+          "type": "tool_use"
+        },
+        {
+          "id": "call_t1",
+          "input": {
+            "tz": "Europe/Paris"
+          },
+          "name": "get_time",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": [
+            {
+              "text": "18C, cloudy",
+              "type": "text"
+            }
+          ],
+          "tool_use_id": "call_w1",
+          "type": "tool_result"
+        },
+        {
+          "content": [
+            {
+              "text": "14:05",
+              "type": "text"
+            }
+          ],
+          "tool_use_id": "call_t1",
+          "type": "tool_result"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "It is 18C and cloudy; local time 14:05.",
+          "type": "text"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "text": "Thanks. Tomorrow?",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-sonnet-4-5",
+  "tools": [
+    {
+      "description": "Current weather",
+      "input_schema": {
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "name": "get_weather"
+    },
+    {
+      "description": "Current time",
+      "input_schema": {
+        "properties": {
+          "tz": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tz"
+        ],
+        "type": "object"
+      },
+      "name": "get_time"
+    }
+  ]
+}

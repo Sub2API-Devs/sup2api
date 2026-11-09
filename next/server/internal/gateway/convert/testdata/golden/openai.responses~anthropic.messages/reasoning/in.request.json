@@ -1,0 +1,39 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_output_tokens": 32000,
+  "reasoning": {
+    "effort": "high",
+    "summary": "auto"
+  },
+  "input": [
+    {
+      "role": "user",
+      "content": "Is 9973 prime?"
+    },
+    {
+      "type": "reasoning",
+      "id": "rs_1",
+      "summary": [
+        {
+          "type": "summary_text",
+          "text": "Check divisors up to 99."
+        }
+      ],
+      "encrypted_content": "gAAAAB-redacted"
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Yes."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "And 9971?"
+    }
+  ]
+}

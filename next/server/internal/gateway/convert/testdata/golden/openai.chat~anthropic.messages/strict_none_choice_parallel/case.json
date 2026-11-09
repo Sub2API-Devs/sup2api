@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "fixture",
+    "stream": false
+  },
+  "note": "strict TestReviewNoneChoiceDoesNotEmitInvalidAnthropicParallelField; equivalent, except that without tools no tool_choice is sent (strict sent {type: none})"
+}

@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": false
+  },
+  "note": "One loss of each category; tool_choice wins over the legacy function_call (a tool loss)."
+}

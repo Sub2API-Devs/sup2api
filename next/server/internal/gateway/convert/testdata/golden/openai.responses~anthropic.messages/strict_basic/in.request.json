@@ -1,0 +1,5 @@
+{
+  "model": "alias",
+  "max_output_tokens": 20,
+  "input": "hello"
+}

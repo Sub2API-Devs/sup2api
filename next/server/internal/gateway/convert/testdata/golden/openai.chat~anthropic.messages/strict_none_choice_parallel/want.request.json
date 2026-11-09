@@ -1,0 +1,15 @@
+{
+  "max_tokens": 12,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "hello",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "fixture"
+}

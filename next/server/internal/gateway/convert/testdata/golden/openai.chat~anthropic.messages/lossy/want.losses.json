@@ -1,0 +1,16 @@
+{
+  "image": [
+    "messages[0].content[1].image_url.detail"
+  ],
+  "other": [
+    "logit_bias",
+    "messages[2].name",
+    "seed"
+  ],
+  "reasoning": [
+    "messages[1].reasoning_content"
+  ],
+  "tool": [
+    "function_call"
+  ]
+}

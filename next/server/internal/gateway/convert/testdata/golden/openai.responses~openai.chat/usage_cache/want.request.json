@@ -1,0 +1,15 @@
+{
+  "max_completion_tokens": 64,
+  "messages": [
+    {
+      "content": "You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. You are a meticulous assistant. ",
+      "role": "system"
+    },
+    {
+      "content": "Hi.",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5",
+  "prompt_cache_key": "conv-42"
+}

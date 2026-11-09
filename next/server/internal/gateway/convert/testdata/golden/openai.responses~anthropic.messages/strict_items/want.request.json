@@ -1,0 +1,81 @@
+{
+  "max_tokens": 12,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "a",
+          "type": "text"
+        },
+        {
+          "source": {
+            "type": "url",
+            "url": "https://example.com/cat.png"
+          },
+          "type": "image"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "b",
+          "type": "text"
+        },
+        {
+          "text": "r",
+          "type": "text"
+        },
+        {
+          "id": "c1",
+          "input": {
+            "n": 9007199254740993
+          },
+          "name": "f",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "tool_use_id": "c1",
+          "type": "tool_result"
+        },
+        {
+          "text": "next",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "x",
+  "stream": true,
+  "system": [
+    {
+      "text": "sys",
+      "type": "text"
+    }
+  ],
+  "tool_choice": {
+    "name": "f",
+    "type": "tool"
+  },
+  "tools": [
+    {
+      "input_schema": {
+        "type": "object"
+      },
+      "name": "f"
+    }
+  ]
+}

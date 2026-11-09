@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "gpt-5",
+    "stream": false
+  },
+  "note": "Message text cache_control reaches a chat upstream as is; system cache_control is lost (D7)."
+}

@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "x",
+    "stream": true
+  },
+  "note": "strict TestStrictSSETerminalAndIndependentStreams; identical to the strict output"
+}

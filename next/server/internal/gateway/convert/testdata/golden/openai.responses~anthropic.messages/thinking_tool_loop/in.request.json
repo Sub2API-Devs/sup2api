@@ -1,0 +1,43 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_output_tokens": 4096,
+  "reasoning": {
+    "effort": "medium"
+  },
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Current weather",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ]
+      },
+      "strict": false
+    }
+  ],
+  "input": [
+    {
+      "role": "user",
+      "content": "Weather in Paris?"
+    },
+    {
+      "type": "function_call",
+      "call_id": "call_w1",
+      "name": "get_weather",
+      "arguments": "{\"city\":\"Paris\"}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_w1",
+      "output": "18C"
+    }
+  ]
+}

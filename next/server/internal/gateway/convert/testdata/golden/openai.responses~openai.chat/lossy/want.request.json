@@ -1,0 +1,44 @@
+{
+  "max_completion_tokens": 128,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Look.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": "Seen.",
+      "role": "assistant"
+    },
+    {
+      "content": "More.",
+      "role": "user"
+    }
+  ],
+  "model": "gpt-5",
+  "tools": [
+    {
+      "function": {
+        "description": "Current weather",
+        "name": "get_weather",
+        "parameters": {
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ],
+          "type": "object"
+        },
+        "strict": false
+      },
+      "type": "function"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "model": "fixture",
+  "max_tokens": 12,
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello"
+    }
+  ],
+  "tool_choice": "none",
+  "parallel_tool_calls": false
+}

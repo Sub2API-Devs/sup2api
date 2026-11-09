@@ -1,0 +1,20 @@
+{
+  "model": "claude-sonnet-4-5",
+  "max_completion_tokens": 32000,
+  "reasoning_effort": "high",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Is 9973 prime?"
+    },
+    {
+      "role": "assistant",
+      "content": "Yes.",
+      "reasoning_content": "Check divisors up to 99."
+    },
+    {
+      "role": "user",
+      "content": "And 9971?"
+    }
+  ]
+}

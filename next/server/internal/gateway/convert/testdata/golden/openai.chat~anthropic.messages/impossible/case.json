@@ -1,0 +1,7 @@
+{
+  "options": {
+    "model": "claude-sonnet-4-5",
+    "stream": false
+  },
+  "note": "n > 1 cannot be converted."
+}
