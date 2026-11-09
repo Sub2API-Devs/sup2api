@@ -18,6 +18,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 // Console statistics (CONTRACTS §66): the summary's day and hour buckets and
@@ -154,17 +155,16 @@ type Overview struct {
 	} `json:"accounts,omitempty"`
 }
 
-// totalsColumns are the aggregates of Totals over the rows matching cond.
+// totalsColumns are the aggregates of Totals over the statRows matching cond.
 func totalsColumns(cond string) string {
-	w := ` FILTER (WHERE ` + cond + `)`
-	return `count(*)` + w + `, count(*) FILTER (WHERE u.success AND ` + cond + `),
-		COALESCE(sum(u.input_tokens)` + w + `, 0), COALESCE(sum(u.output_tokens)` + w + `, 0),
-		COALESCE(sum(u.cache_read_tokens)` + w + `, 0),
-		COALESCE(sum(u.cache_creation_tokens + u.cache_creation_1h_tokens)` + w + `, 0),
-		CASE WHEN count(*)` + w + ` = count(` + promptTokens + `)` + w + ` THEN COALESCE(sum(` + promptTokens + `)` + w + `, 0) END,
-		COALESCE(sum(u.total_cost)` + w + `, 0), COALESCE(sum(` + standardCost + `)` + w + `, 0),
-		COALESCE(round(avg(u.latency_ms) FILTER (WHERE u.success AND u.latency_ms > 0 AND ` + cond + `)), 0)::bigint,
-		COALESCE(round(avg(u.first_token_ms) FILTER (WHERE u.success AND u.first_token_ms > 0 AND ` + cond + `)), 0)::bigint`
+	return strings.Join([]string{
+		sumOf("u.requests", cond), sumOf("u.success", cond),
+		sumOf("u.input_tokens", cond), sumOf("u.output_tokens", cond),
+		sumOf("u.cache_read_tokens", cond), sumOf("u.cache_write_tokens", cond),
+		`CASE WHEN ` + sumOf("u.requests", cond) + ` = ` + sumOf("u.prompt_rows", cond) + ` THEN ` + sumOf("u.prompt_tokens", cond) + ` END`,
+		sumOf("u.total_cost", cond), sumOf("u.standard_cost", cond),
+		avgOf("u.latency_sum", "u.latency_rows", cond), avgOf("u.first_token_sum", "u.first_token_rows", cond),
+	}, ", ")
 }
 
 func (t *Totals) scanTargets() []any {
@@ -214,21 +214,32 @@ func (s *Service) overview(c *gin.Context, self *int64) {
 func (s *Service) loadOverview(ctx context.Context, tz string, loc *time.Location, self *int64, users, accounts bool) (Overview, error) {
 	w := overviewWindows(time.Now(), loc)
 	out := Overview{TZ: tz}
+	var activeToday int64
 	err := s.statsTx(ctx, statsLimitsFor(self), func(tx pgx.Tx) error {
-		targets := append(append(append(out.Today.scanTargets(), out.Yesterday.scanTargets()...), out.Last30d.scanTargets()...),
-			&out.Last5m.Requests, &out.Last5m.Tokens)
-		where, args := `u.created_at >= least($1, $2)`, []any{w.yesterday, w.last30d, w.today, w.last5m}
+		var f store.Filter
+		f.And("u.created_at >= ?", w.last30d)
 		if self != nil {
-			where, args = where+` AND u.user_id = $5`, append(args, *self)
+			f.And("u.user_id = ?", *self)
 		}
+		args := f.Args()
+		var span *hourSpan
+		if hourAligned(loc, w.last30d, w.today) {
+			var err error
+			if span, err = s.rollupSpan(ctx, tx, w.last30d, time.Time{}); err != nil {
+				return err
+			}
+		}
+		yesterday, today, last5m := addArg(&args, w.yesterday), addArg(&args, w.today), addArg(&args, w.last5m)
+		targets := append(append(append(out.Today.scanTargets(), out.Yesterday.scanTargets()...), out.Last30d.scanTargets()...),
+			&out.Last5m.Requests, &out.Last5m.Tokens, &activeToday)
 		if err := tx.QueryRow(ctx, `SELECT `+
-			totalsColumns(`u.created_at >= $3`)+`, `+
-			totalsColumns(`u.created_at >= $1 AND u.created_at < $3`)+`, `+
-			totalsColumns(`u.created_at >= $2`)+`,
-			count(*) FILTER (WHERE u.created_at >= $4),
-			COALESCE(sum(u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_creation_tokens + u.cache_creation_1h_tokens)
-				FILTER (WHERE u.created_at >= $4), 0)
-			FROM usage_logs u WHERE `+where, args...).Scan(targets...); err != nil {
+			totalsColumns(`u.at >= `+today)+`, `+
+			totalsColumns(`u.at >= `+yesterday+` AND u.at < `+today)+`, `+
+			totalsColumns(``)+`, `+
+			sumOf(`u.requests`, `u.at >= `+last5m)+`, `+
+			sumOf(`u.input_tokens + u.output_tokens + u.cache_read_tokens + u.cache_write_tokens`, `u.at >= `+last5m)+`,
+			count(DISTINCT u.user_id) FILTER (WHERE u.at >= `+today+`)
+			FROM `+statRows(`u.created_at AS at, u.user_id`, ``, f.Cond(), span, &args), args...).Scan(targets...); err != nil {
 			return err
 		}
 		if self != nil {
@@ -246,9 +257,9 @@ func (s *Service) loadOverview(ctx context.Context, tz string, loc *time.Locatio
 				NewToday    int64 `json:"new_today"`
 				ActiveToday int64 `json:"active_today"`
 			}{}
-			if err := tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE created_at >= $1),
-				(SELECT count(DISTINCT user_id) FROM usage_logs WHERE created_at >= $1)
-				FROM users WHERE deleted_at IS NULL`, w.today).Scan(&out.Users.Total, &out.Users.NewToday, &out.Users.ActiveToday); err != nil {
+			out.Users.ActiveToday = activeToday
+			if err := tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE created_at >= $1)
+				FROM users WHERE deleted_at IS NULL`, w.today).Scan(&out.Users.Total, &out.Users.NewToday); err != nil {
 				return err
 			}
 		}
