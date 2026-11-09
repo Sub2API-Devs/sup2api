@@ -997,17 +997,10 @@ func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, i
 		}
 	}
 	// H3.2: Scheduling fields restricted for own-level users
-	if in.Priority != nil && (*in.Priority < 0 || *in.Priority > ownMaxPriority) {
-		return core.InvalidFields(core.FieldError{Field: "priority", Code: "restricted",
-			Message: t(ctx, "own-level users can only set priority between 0-100", "own 级用户只能设置 0-100 的优先级")})
-	}
-	if in.Weight != nil && (*in.Weight < 1 || *in.Weight > ownMaxWeight) {
-		return core.InvalidFields(core.FieldError{Field: "weight", Code: "restricted",
-			Message: t(ctx, "own-level users can only set weight between 1-100", "own 级用户只能设置 1-100 的权重")})
-	}
-	if in.MaxConcurrency != nil && (*in.MaxConcurrency < 1 || *in.MaxConcurrency > ownMaxConcurrency) {
-		return core.InvalidFields(core.FieldError{Field: "max_concurrency", Code: "restricted",
-			Message: t(ctx, "own-level users can only set max_concurrency between 1-1000", "own 级用户只能设置 1-1000 的最大并发")})
+	for _, f := range ownCapped {
+		if err := f.restricted(ctx, in); err != nil {
+			return err
+		}
 	}
 	// H3.3: Relay type accounts require account:relay permission
 	if isRelay && !s.can(ctx, "account:relay") {

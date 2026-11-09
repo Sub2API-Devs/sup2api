@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
 )
 
 // rollupRow is one usage_logs row of the rollup tests.
@@ -264,5 +268,26 @@ func TestHourAligned(t *testing.T) {
 		{"Australia/Lord_Howe", "2026-11-01T00:00:00Z", "2026-12-01T00:00:00Z", true},
 	} {
 		require.Equal(t, c.want, hourAligned(zone(c.zone), at(c.from), at(c.to)), "%s %s", c.zone, c.from)
+	}
+}
+
+// An update of a rolled-up hour marks it only through the columns the update
+// trigger of 0092 lists: every column the rollup's keys and measures read
+// must be among them, or such a change would stay out of the statistics.
+func TestRollupTriggerCoversMeasures(t *testing.T) {
+	sql, err := migrations.FS.ReadFile("0092_usage_hourly.sql")
+	require.NoError(t, err)
+	m := regexp.MustCompile(`(?s)AFTER UPDATE OF(.*?)ON usage_logs`).FindSubmatch(sql)
+	require.NotNil(t, m)
+	listed := map[string]bool{}
+	for _, c := range strings.Split(string(m[1]), ",") {
+		listed[strings.TrimSpace(c)] = true
+	}
+	read := append([]string{"created_at"}, rollupDims...)
+	for _, c := range regexp.MustCompile(`\bu\.([a-z_0-9]+)`).FindAllStringSubmatch(measureList(func(m statMeasure) string { return m.row }), -1) {
+		read = append(read, c[1])
+	}
+	for _, c := range read {
+		require.True(t, listed[c], "column %s is read by the rollup but not listed in the update trigger", c)
 	}
 }
