@@ -720,9 +720,11 @@ var errKVDown = errors.New("kv unavailable")
 
 // kvFake stands between a node and the KV of its host (withKV): it counts
 // the writes (Set, Delete) that reach it by key, fails every call while
-// fail is set, and can hold writes back (hold).
+// fail is set and the reads of some keys while noRead is, and can hold writes
+// back (hold).
 type kvFake struct {
 	fail    atomic.Bool
+	noRead  atomic.Pointer[string] // reads of the keys with this prefix fail
 	mu      sync.Mutex
 	writes  map[string]int
 	held    func(key string) bool // the writes that wait; nil = none
@@ -804,6 +806,9 @@ type kvFakeKV struct {
 
 func (k kvFakeKV) Get(ctx context.Context, ns, key string) ([]byte, bool, error) {
 	if k.kv.fail.Load() {
+		return nil, false, errKVDown
+	}
+	if prefix := k.kv.noRead.Load(); prefix != nil && strings.HasPrefix(key, *prefix) {
 		return nil, false, errKVDown
 	}
 	return k.KV.Get(ctx, ns, key)
@@ -1495,21 +1500,21 @@ func TestStoredHitReachesOtherNodes(t *testing.T) {
 		first = `{"system":"alpha rule","messages":[{"role":"user","content":"a harmless sentence"}]}`
 		last  = `{"messages":[{"role":"user","content":"beta ask"}]}`
 	)
-	// Two more nodes, each with a clock of its own. Both moderate the two
+	// Three more nodes, each with a clock of its own that only the test moves
+	// (a clock that ran with the wall clock made "not yet due" depend on how
+	// long the test took). All moderate the two
 	// parts one by one while they cannot reach the KV: the passes of A and B
 	// are in their memory only, as on a node whose writes were lost or that
 	// stored them before the hit existed.
 	type other struct {
 		p     *Plugin
 		h     *pluginsdktest.Harness
-		clock atomic.Int64 // ahead of the wall clock, in nanoseconds
+		clock atomic.Int64 // ahead of the node's start, in nanoseconds
 	}
 	start := func() *other {
 		o, kv := &other{}, &kvFake{}
 		kv.fail.Store(true)
-		o.p, o.h = secondNode(t, fh, cfg, withKV(kv), func(n *node) {
-			n.now = func() time.Time { return time.Now().Add(time.Duration(o.clock.Load())) }
-		})
+		o.p, o.h = secondNode(t, fh, cfg, withKV(kv), withClock(&o.clock))
 		for i, body := range []string{first, last} {
 			if r := mustHook(t, o.h, rawReq(3, "", proto, body)); denied(r) || r.GetNote() == notePrefix+"pass (cached)" {
 				t.Fatalf("part %d = %+v", i, r)
@@ -1559,7 +1564,7 @@ func TestStoredHitReachesOtherNodes(t *testing.T) {
 	// Its own passes are not lost for that: each part alone still passes
 	// from the cache (the KV has no pass of them; memory was only asked to
 	// read the keys again).
-	if tomb := told.p.cache.Load().tombstoned(stored0Key(t, stored[0]), time.Now()); tomb {
+	if tomb := told.p.cache.Load().tombstoned(stored0Key(t, stored[0]), told.p.now()); tomb {
 		t.Fatal("a stored hit tombstoned the segment keys of the node that was told")
 	}
 
@@ -1596,6 +1601,15 @@ func TestStoredHitReachesOtherNodes(t *testing.T) {
 	}
 	if calls.Load() != 7 {
 		t.Fatalf("calls = %d", calls.Load())
+	}
+}
+
+// withClock gives a node a clock that stands still at the time of the call
+// plus ahead (nanoseconds): only the test moves it.
+func withClock(ahead *atomic.Int64) nodeOpt {
+	start := time.Now()
+	return func(n *node) {
+		n.now = func() time.Time { return start.Add(time.Duration(ahead.Load())) }
 	}
 }
 
@@ -1893,5 +1907,287 @@ func TestReviewSyncOrderAndBudget(t *testing.T) {
 	}
 	if _, found := kvValue(t, fh, hitKey); !found {
 		t.Fatal("the hit is gone although the review was not synced")
+	}
+}
+
+// imageMod is an upstream for both auditor types: the moderation API finds
+// every image violating (and no text), Jev finds nothing; it counts the Jev
+// calls that came with an image.
+func imageMod(t *testing.T) (base string, jevImages *atomic.Int64) {
+	jevImages = new(atomic.Int64)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/moderations" {
+			scores := map[string]float64{}
+			for _, c := range OpenAICategories {
+				scores[c] = 0.01
+			}
+			if strings.Contains(string(body), "image_url") {
+				scores["sexual"] = 0.99
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"model": "omni-mock", "results": []any{map[string]any{"category_scores": scores}}})
+			return
+		}
+		var req struct {
+			Questions map[string]json.RawMessage `json:"questions"`
+			Assets    map[string]json.RawMessage `json:"assets"`
+		}
+		_ = json.Unmarshal(body, &req)
+		if len(req.Assets) > 0 {
+			jevImages.Add(1)
+		}
+		answers := map[string]any{}
+		for c := range req.Questions {
+			answers[c] = map[string]any{"type": "noul", "noul": 0.01}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-mock", "answers": answers, "usage": map[string]int{"input_tokens": 10}})
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL, jevImages
+}
+
+// A pass is stored for an image only when an auditor that itself passed had
+// received it. Here the OpenAI auditor receives the image and hits, while Jev
+// has no redraw slot, judges the text alone and passes: the run passes, and
+// the image Jev never saw must not be answered "pass (cached)" afterwards.
+func TestImagePassNeedsAPassingAuditor(t *testing.T) {
+	base, jevImages := imageMod(t)
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	// Group 9: OpenAI, then Jev reviews its hits. Group 10: both in one
+	// stage, a hit of both needed.
+	flows := map[int64]int64{
+		9:  setupFlow(t, h, base, []int64{9}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe}),
+		10: setupFlow(t, h, base, []int64{10}, CombineAll, []string{AuditorOpenAI, AuditorTypeSafe}),
+	}
+	// The Jev channels have 2 s: their redraws get one of them.
+	for _, ch := range decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil)) {
+		if ch.Type == ChannelTypeSafe {
+			decodeData[ChannelView](t, h.Do("PUT", fmt.Sprintf("/channels/%d", ch.ID), nil, map[string]any{"type": ch.Type, "name": ch.Name,
+				"base_url": ch.BaseURL, "timeout_ms": 2000}))
+		}
+	}
+	const cachedPass = notePrefix + "pass (cached)"
+	for _, tc := range []struct {
+		name   string
+		group  int64
+		result string
+	}{{"overturned by a stage that did not get the image", 9, ResultOverturned}, {"one stage, all", 10, ResultPass}} {
+		t.Run(tc.name, func(t *testing.T) {
+			b, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{"role": "user", "content": []any{
+				map[string]any{"type": "text", "text": "a harmless caption " + tc.name},
+				map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png",
+					"data": encodePNG(t, filled(100, 100+int(tc.group), red))}},
+			}}}})
+			send := func(rid string) *pluginv1.GatewayRequestHookResponse {
+				t.Helper()
+				req := rawReq(3, rid, "anthropic.messages", string(b))
+				req.Meta.GroupId = tc.group
+				return mustHook(t, h, req)
+			}
+			// Both redraw slots are busy: Jev sends the text alone.
+			for range cap(jevNormalizeSlots) {
+				jevNormalizeSlots <- struct{}{}
+			}
+			free := sync.OnceFunc(func() {
+				for range cap(jevNormalizeSlots) {
+					<-jevNormalizeSlots
+				}
+			})
+			defer free()
+			images := jevImages.Load()
+			rid := fmt.Sprintf("busy-%d", tc.group)
+			if r := send(rid); denied(r) || r.GetNote() == cachedPass || jevImages.Load() != images {
+				t.Fatalf("with the slots busy = %+v (%d Jev calls with an image)", r, jevImages.Load()-images)
+			}
+			ev := waitEvents(t, h, map[string]string{"request_id": rid}, 1)[0]
+			if ev.Result != tc.result {
+				t.Fatalf("record with the slots busy = %s %s", ev.Result, ev.Trace)
+			}
+			// The text is a cached pass, the image is not.
+			written(t, p)
+			segs := 0
+			for key := range segValues(t, fh) {
+				if strings.HasPrefix(key, fmt.Sprintf("s:e0:%d:", flows[tc.group])) {
+					segs++
+				}
+			}
+			if segs != 1 {
+				t.Fatalf("%d segment keys of the flow after the run without the image", segs)
+			}
+			// With a slot the image is sent to Jev too: the request is not
+			// answered from the cache.
+			free()
+			if r := send(""); denied(r) || r.GetNote() == cachedPass || jevImages.Load() != images+1 {
+				t.Fatalf("with a free slot = %+v (%d Jev calls with an image)", r, jevImages.Load()-images)
+			}
+			// Now a passing auditor has received it.
+			written(t, p)
+			if r := send(""); r.GetNote() != cachedPass || jevImages.Load() != images+1 {
+				t.Fatalf("after Jev passed the image = %+v (%d Jev calls with an image)", r, jevImages.Load()-images)
+			}
+		})
+	}
+}
+
+// kvDelete removes a verdict cache key from the KV behind the nodes' backs.
+func kvDelete(t *testing.T, fh *pluginsdktest.FakeHost, key string) {
+	t.Helper()
+	if _, err := fh.KVDelete(context.Background(), &pluginv1.KVDeleteRequest{Namespace: kvNamespace, Key: key}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A review on one node reaches a node its broadcast never got to: once the
+// values in that node's memory are verdictRecheck old, what the KV holds
+// replaces them - the pointer and the hit entry a review removed do not stay
+// until they expire.
+func TestReviewReachesNodeWithoutBroadcast(t *testing.T) {
+	mod := newFakeMod(t)
+	cfg := map[string]any{"mode": ModeEnforce}
+	_, h, fh := startDB(t, nil, cfg)
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	calls := func() int64 { return mod.count("/v1/moderations") }
+	var clock atomic.Int64
+	p2, h2 := secondNode(t, fh, cfg, withClock(&clock))
+	snap := p2.snap.Load()
+	scope := snap.scopeOf(snap.flows[flow])
+	// The first node hits the three texts, the second replays them: pointer
+	// and hit entry are in its memory.
+	texts := map[string]string{"fp": "MOD-HIT-sexual false positive", "pend": "MOD-HIT-sexual pending", "post": "MOD-HIT-sexual post timing", "gone": "MOD-HIT-sexual entry gone"}
+	ids := map[string]int64{}
+	hitKeys := map[string]string{}
+	segs := map[string][][32]byte{}
+	for _, rid := range []string{"fp", "pend", "post", "gone"} {
+		if r := mustHook(t, h, hookReqAs(3, rid, texts[rid])); !denied(r) || replayed(r) {
+			t.Fatalf("%s = %+v", rid, r)
+		}
+		rec := recordOf(t, h, rid)
+		c := traceOf(t, rec).Cache
+		ids[rid], hitKeys[rid], segs[rid] = rec.ID, hitKeyOf(scope, c.Key), [][32]byte{hashOf(t, c.Segs[0])}
+	}
+	waitKV(t, fh, "h:", 4)
+	waitSegs(t, fh, "pointing to a hit", 4, pointed)
+	for rid, text := range texts {
+		if r := mustHook(t, h2, hookReq(text)); !replayed(r) {
+			t.Fatalf("second node, %s = %+v", rid, r)
+		}
+	}
+	review := func(rid, status string) {
+		t.Helper()
+		out := decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": []int64{ids[rid]}, "status": status}))
+		if out["cache_synced"] != float64(1) {
+			t.Fatalf("review of %s = %v", rid, out)
+		}
+	}
+	review("fp", "false_positive")
+	review("post", "false_positive")
+	review("pend", "pending")
+	// The hit entry of the fourth is gone from the KV while a pointer still
+	// names it (a review whose segment writes failed).
+	kvDelete(t, fh, hitKeys["gone"])
+	n := calls()
+
+	// No broadcast is delivered. Before the recheck the second node decides
+	// by its memory.
+	clock.Store(int64(verdictRecheck - 30*time.Second))
+	for rid, text := range texts {
+		if r := mustHook(t, h2, hookReq(text)); !replayed(r) {
+			t.Fatalf("second node before the recheck, %s = %+v", rid, r)
+		}
+	}
+	// At the recheck it follows the reviews, and stays there.
+	for _, ahead := range []time.Duration{verdictRecheck + time.Second, 2*verdictRecheck + 2*time.Second} {
+		clock.Store(int64(ahead))
+		if r := mustHook(t, h2, hookReq(texts["fp"])); r.GetNote() != notePrefix+"pass (cached)" {
+			t.Fatalf("false positive, %v after = %+v", ahead, r)
+		}
+	}
+	// Memory alone (the hook under post timing): the lookup that finds the
+	// value due still answers from memory, the next one follows the review.
+	if v := p2.lookupVerdicts(scope, segs["post"], false); v.hit == nil {
+		t.Fatalf("memory alone at the recheck time = %+v", v)
+	}
+	waitFor(t, "the background read", func() bool { return !p2.rechecking.Load() })
+	if v := p2.lookupVerdicts(scope, segs["post"], false); v.hit != nil || len(v.passed) != 1 {
+		t.Fatalf("memory alone after the background read = %+v", v)
+	}
+	if calls() != n {
+		t.Fatalf("%d upstream calls for the false positives", calls()-n)
+	}
+	// Pending: moderated again. The deleted entry: not replayed from memory,
+	// moderated again (the pointer is stale).
+	for _, rid := range []string{"pend", "gone"} {
+		n = calls()
+		if r := mustHook(t, h2, hookReq(texts[rid])); !denied(r) || replayed(r) || calls() != n+1 {
+			t.Fatalf("%s after the recheck = %+v (%d calls)", rid, r, calls()-n)
+		}
+	}
+}
+
+// A pointer whose hit entry cannot be read is not a stale pointer: the passes
+// of its segments do not answer the request. The hit set {A, B} is cached,
+// and A and B each passed in other requests.
+func TestUnreadableHitEntryIsUnknown(t *testing.T) {
+	base, calls := newPairMod(t)
+	kv := &kvFake{}
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	flow := setupFlow(t, h, base, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	const (
+		proto = "anthropic.messages"
+		whole = `{"system":"alpha rule","messages":[{"role":"user","content":"beta ask"}]}`
+		first = `{"system":"alpha rule","messages":[{"role":"user","content":"a harmless sentence"}]}`
+		last  = `{"messages":[{"role":"user","content":"beta ask"}]}`
+	)
+	if r := mustHook(t, h, rawReq(3, "pair", proto, whole)); !denied(r) || replayed(r) {
+		t.Fatalf("the pair = %+v", r)
+	}
+	for _, body := range []string{first, last} {
+		if r := mustHook(t, h, rawReq(3, "", proto, body)); denied(r) {
+			t.Fatalf("a part = %+v", r)
+		}
+	}
+	written(t, p)
+	passedSeg := func(v segValue) bool { return v.pass > 0 && pointed(v) }
+	waitSegs(t, fh, "with a pass and a pointer", 2, passedSeg)
+	c := traceOf(t, recordOf(t, h, "pair")).Cache
+	keys := [][32]byte{hashOf(t, c.Segs[0]), hashOf(t, c.Segs[1])}
+	snap := p.snap.Load()
+	scope := snap.scopeOf(snap.flows[flow])
+	hitKey := hitKeyOf(scope, c.Key)
+
+	// Memory alone, the hit entry evicted: unknown, not two passes. With the
+	// KV the entry is found.
+	p.cache.Load().forget([]string{hitKey})
+	if v := p.lookupVerdicts(scope, keys, false); v.hit != nil || len(v.passed) != 0 {
+		t.Fatalf("memory alone without the hit entry = %+v", v)
+	}
+	if v := p.lookupVerdicts(scope, keys, true); v.hit == nil {
+		t.Fatalf("with the KV = %+v", v)
+	}
+
+	// Only the KV knows, and the reads of the hit entries fail: the pair is
+	// moderated again (and refused), not answered by the passes.
+	p.cache.Store(newLRU(1000))
+	prefix := "h:"
+	kv.noRead.Store(&prefix)
+	n := calls.Load()
+	if r := mustHook(t, h, rawReq(3, "", proto, whole)); !denied(r) || replayed(r) || calls.Load() != n+1 {
+		t.Fatalf("while the hit entries cannot be read = %+v (%d calls)", r, calls.Load()-n)
+	}
+	// A part alone is unknown as well while its pointer cannot be followed.
+	p.cache.Store(newLRU(1000))
+	if r := mustHook(t, h, rawReq(3, "", proto, last)); denied(r) || r.GetNote() == notePrefix+"pass (cached)" || calls.Load() != n+2 {
+		t.Fatalf("a part while the hit entries cannot be read = %+v (%d calls)", r, calls.Load()-n)
+	}
+	kv.noRead.Store(nil)
+	written(t, p)
+
+	// An entry the KV says is not there leaves a stale pointer: the passes
+	// count, as before.
+	kvDelete(t, fh, hitKey)
+	p.cache.Store(newLRU(1000))
+	if v := p.lookupVerdicts(scope, keys, true); v.hit != nil || len(v.passed) != 2 {
+		t.Fatalf("with the entry deleted = %+v", v)
 	}
 }

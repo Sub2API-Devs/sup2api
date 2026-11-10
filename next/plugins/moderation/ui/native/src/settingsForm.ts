@@ -13,9 +13,10 @@ import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@su
 //   allowlist_user_ids  ← exempt_user_ids
 //   verdict_cache_days  ← cache_ttl_seconds (0 = cache off, else whole days, rounded up, 1–30)
 // A new key is never removed while its retired key would be read again
-// (sentSetting), and a saved allowlist is written to the retired
-// exempt_user_ids too (withRetiredMirrored): nodes still on 0.7.2 read only
-// that key and leave exactly the allowlisted users unmoderated.
+// (sentSetting), and a save of the allowlist or of the blocklist writes "the
+// allowlist without the blocklisted users" to the retired exempt_user_ids
+// too (withRetiredMirrored): nodes still on 0.7.2 read only that key and do
+// not moderate its users at all.
 
 /** Keys with their own editor on the settings tab instead of the schema widget. */
 export const CUSTOM_KEYS = ['analysis_channel_id', 'notify_webhook_url', 'notify_webhook_secret', 'jev_default_set'] as const
@@ -67,6 +68,7 @@ export const schemaKeys = (keys: readonly string[]) => keys.filter((k) => k !== 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
 const ALLOWLIST_KEY = 'allowlist_user_ids'
+const BLOCKLIST_KEY = 'blocklist_user_ids'
 export const CACHE_DAYS_KEY = 'verdict_cache_days'
 const RETIRED_ALLOWLIST = 'exempt_user_ids'
 const RETIRED_CACHE_TTL = 'cache_ttl_seconds'
@@ -129,18 +131,34 @@ export function sentSetting(schema: JSONSchema | undefined, stored: Record<strin
 }
 
 /**
- * The values to PUT (mergeSettings) with the retired exempt_user_ids made a
- * copy of the allowlist when this save changes the allowlist: nodes still on
- * 0.7.2 (a rollout in progress, or after a rollback) read only the retired
- * list and do not moderate its users at all, so it must hold the allowlisted
- * users and nobody taken off the allowlist. An allowlist removed by this
- * save (its default, empty) empties a stored retired list and adds none.
+ * The values to PUT (mergeSettings) with the retired exempt_user_ids made
+ * "the allowlist without the blocklisted users" when this save changes
+ * either list: nodes still on 0.7.2 (a rollout in progress, or after a
+ * rollback) read only the retired list and do not moderate its users at
+ * all, so it must hold the allowlisted users, nobody taken off the
+ * allowlist and nobody on the blocklist (whom 0.8.0 moderates before the
+ * request is sent on, allowlisted or not).
+ * - An allowlist removed by this save (its default, empty) empties a stored
+ *   retired list and adds none.
+ * - A blocklist saved while allowlist_user_ids was never stored: the
+ *   allowlist is the retired list itself. When a blocklisted user is on it,
+ *   the list is stored as allowlist_user_ids as it is (0.8.0 keeps reading
+ *   the same allowlist) and the retired key gets it without those users.
  */
 export function withRetiredMirrored(values: Record<string, unknown>, changed: readonly string[]): Record<string, unknown> {
-  if (!changed.includes(ALLOWLIST_KEY)) return values
-  const list = values[ALLOWLIST_KEY]
-  if (!Array.isArray(list) && values[RETIRED_ALLOWLIST] === undefined) return values
-  return { ...values, [RETIRED_ALLOWLIST]: Array.isArray(list) ? [...list] : [] }
+  const allowSaved = changed.includes(ALLOWLIST_KEY)
+  if (!allowSaved && !changed.includes(BLOCKLIST_KEY)) return values
+  const retired = values[RETIRED_ALLOWLIST]
+  const stored = values[ALLOWLIST_KEY]
+  // the allowlist 0.8.0 reads: the new key, else (never stored) the retired one
+  const allow: unknown[] = Array.isArray(stored) ? stored : !allowSaved && Array.isArray(retired) ? retired : []
+  if (!Array.isArray(stored) && retired === undefined) return values
+  const block = values[BLOCKLIST_KEY]
+  const blocked = new Set((Array.isArray(block) ? block : []).map(String))
+  const mirror = allow.filter((id) => !blocked.has(String(id)))
+  if (Array.isArray(stored) || allowSaved) return { ...values, [RETIRED_ALLOWLIST]: mirror }
+  if (mirror.length === allow.length) return values
+  return { ...values, [ALLOWLIST_KEY]: [...allow], [RETIRED_ALLOWLIST]: mirror }
 }
 
 /** The settings key of an API field path: "values.<key>[.<path>]", "values/<key>/…" or "<key>". */

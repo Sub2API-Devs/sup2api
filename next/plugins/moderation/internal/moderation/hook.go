@@ -362,19 +362,23 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 		// singleflight hands a panic of this function to a goroutine of its
 		// own (go panic), where neither the SDK's recover around the hook nor
 		// anything else can catch it: it would end the plugin process. So it
-		// is caught here, and the waiters get a run that errored - counted
-		// and recorded as one, the request passes (the error path).
+		// is caught here. A panic before the chunks have run leaves a run
+		// that errored - counted and recorded as one, the request passes (the
+		// error path). After that the runs stand: what the auditors decided,
+		// a hit above all, is the result although storing it in the cache
+		// (which is best effort) did not work out (afterPanic).
+		var runs []Trace
 		defer func() {
 			if v := recover(); v != nil {
 				p.log.Error("moderation: pre run panicked", "request_id", m.rec.RequestID, "panic", fmt.Sprint(v), "stack", string(debug.Stack()))
-				r = &sharedRun{tr: panickedRun()}
+				r = &sharedRun{tr: m.afterPanic(runs)}
 			}
 		}()
 		// The shared run has its own deadline, so a waiter that gives up
 		// does not cancel it for the others.
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 		defer cancel()
-		runs := p.runChunks(rctx, m)
+		runs = p.runChunks(rctx, m)
 		// Stored here and not by the waiters: once for all of them, and
 		// also when every one of them has left.
 		p.settleVerdicts(m, runs)
@@ -411,6 +415,30 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 
 // panickedRun is the trace of a run that panicked: nothing judged, an error.
 func panickedRun() Trace { return Trace{Final: Pass, Decider: -1, Errored: true} }
+
+// afterPanic is the trace of a shared pre run that panicked. runs are the
+// runs of its chunks, nil when the panic came before they returned: then
+// nothing judged (panickedRun). With them the panic came while the verdicts
+// were stored or the runs combined, and the result is the combined runs as
+// without the panic. Should combining them panic (again), the first run that
+// hit stands alone: a hit the auditors decided is never turned into a pass.
+func (m *moderation) afterPanic(runs []Trace) (tr Trace) {
+	if runs == nil {
+		return panickedRun()
+	}
+	defer func() {
+		if recover() != nil {
+			tr = panickedRun()
+			for i := range runs {
+				if runs[i].Final == Hit {
+					tr = runs[i]
+					break
+				}
+			}
+		}
+	}()
+	return m.combine(runs)
+}
 
 // concludePre counts the request (with the latency moderation added) and the
 // shared run, and records the result; a hit is a refusal. It never waits
@@ -535,12 +563,16 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 // one) counts for the chunk's segments unless a whole stage was skipped. A
 // segment is stored as a pass when every chunk holding it passed.
 //
-// An image counts only when an auditor that judged received it (unreceived):
-// one that was skipped - not redrawn in time, too large, undecodable, beyond
-// the request budget, left out of a retry, not the one image the OpenAI
-// auditor picked - is neither stored as a pass nor part of the hit set. It
-// is moderated again with the next request that holds it, by then usually on
-// its own, the text around it having passed.
+// An image counts only when an auditor received it in a call that judged: one
+// that was skipped - not redrawn in time, too large, undecodable, beyond the
+// request budget, left out of a retry, unusable for the OpenAI auditor - is
+// neither stored as a pass nor part of the hit set. For the set of a hit any
+// judging auditor of the run will do (Trace.receivedImages); for a pass the
+// image must have been received by an auditor that itself passed, in a stage
+// that passed (Trace.passedImages) - not by one that hit while another
+// auditor, which never got the image, passed the text. An image that does not
+// count is moderated again with the next request that holds it, by then
+// usually on its own, the text around it having passed.
 //
 // It is called once per run (the shared pre run, the post worker), not per
 // request. The scope carries the clear counter of now, not of the snapshot
@@ -562,7 +594,7 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 				hits = append(hits, newStoredHit(m.rec.RequestID, hexKeys(keys), *run, now))
 			}
 		case !run.stageSkipped():
-			skipped := m.unreceived(ch, run)
+			skipped := m.unreceived(ch, run.passedImages)
 			for _, s := range ch.segs {
 				if !skipped[s] {
 					passed[s]++
@@ -579,24 +611,25 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 	p.storeVerdicts(m.cfg, cacheScope(p.snap.Load().cacheEpoch, m.flow), passes, hits)
 }
 
-// unreceived are the request segments of the images of ch that no auditor
-// received in a call that judged during run, the run of ch
-// (Trace.receivedImages): nothing was decided about them. The images of a
-// chunk are its image parts, in order. The images a flow without an image
-// auditor dropped (dropImages) are no parts and not among them: such a flow
-// has nothing to say about an image, and they pass with their chunk (admit).
-func (m *moderation) unreceived(ch *chunk, run *Trace) map[int]bool {
+// unreceived are the request segments of the images of ch that are not among
+// received(), the images of its run that count (Trace.receivedImages for a
+// hit, Trace.passedImages for a pass): nothing was decided about them. The
+// images of a chunk are its image parts, in order. The images a flow without
+// an image auditor dropped (dropImages) are no parts and not among them: such
+// a flow has nothing to say about an image, and they pass with their chunk
+// (admit).
+func (m *moderation) unreceived(ch *chunk, received func() map[int]bool) map[int]bool {
 	var out map[int]bool
-	var received map[int]bool
+	var got map[int]bool
 	image := 0
 	for _, part := range ch.parts {
 		if part.img == nil {
 			continue
 		}
-		if received == nil {
-			received, out = run.receivedImages(), map[int]bool{}
+		if got == nil {
+			got, out = received(), map[int]bool{}
 		}
-		if !received[image] {
+		if !got[image] {
 			out[part.seg] = true
 		}
 		image++
@@ -610,7 +643,7 @@ func (m *moderation) unreceived(ch *chunk, run *Trace) map[int]bool {
 // image auditor dropped (dropImages) are not among them either, so the hit
 // set of the chunk is what was judged and nothing else.
 func (m *moderation) sentKeys(ch *chunk, run *Trace) [][32]byte {
-	skipped := m.unreceived(ch, run)
+	skipped := m.unreceived(ch, run.receivedImages)
 	var keys [][32]byte
 	last := -1
 	for _, part := range ch.parts {

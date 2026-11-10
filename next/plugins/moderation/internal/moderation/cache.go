@@ -53,33 +53,57 @@ import (
 // lose one of the edits. A lost pass costs an audit. A lost pointer costs a
 // replay, and the hit stays reachable through its other segments.
 //
-// Memory is a front of the KV, so a node can hold a segment value that lacks
-// a pointer another node wrote since: the passes of A and B, while the hit of
-// {A, B} is in the KV. Two things bound how long such a value decides:
+// Memory is a front of the KV, so a node can hold a segment value the KV no
+// longer holds like that: one that lacks a pointer another node wrote since
+// (the passes of A and B, while the hit of {A, B} is in the KV), or one that
+// still has what a review on another node removed (the pointer to a hit
+// reviewed as a false positive). Two things bound how long such a value
+// decides:
 //
 //   - a node that stored a hit in the KV publishes verdict.changed with the
-//     segment keys it pointed to the hit ("stored": true); the nodes that get
-//     it drop those keys from memory and read them from the KV the next time
-//     (storeVerdicts, onVerdictChanged). That is the normal case: the hit
-//     counts on the other nodes from the delivery of the broadcast on;
+//     segment keys it pointed to the hit ("stored": true), a node that synced
+//     a review publishes the keys the review changed; the nodes that get it
+//     drop those keys from memory and read them from the KV the next time
+//     (storeVerdicts, syncReviewed, onVerdictChanged). That is the normal
+//     case: the change counts on the other nodes from the delivery of the
+//     broadcast on;
 //   - a broadcast can be lost, so a segment value in memory is used for
 //     verdictRecheck (5 minutes) after it was last read from the KV; then
 //     the next lookup reads it again, at most kvLookupMax such keys per
-//     lookup, the longest unread first (lookup.segments): a lookup that asks
-//     the KV before it decides, a lookup of memory alone (the hook under
-//     post timing, which never waits for the KV) in the background
+//     lookup, the longest unread first (lookup.segments), and what the KV
+//     holds REPLACES the value in memory (lru.resyncSeg) - a merge would
+//     keep the pointer or the pass a review removed until it expires. The
+//     hit entries the old value pointed to leave memory with it and are read
+//     from the KV again when a pointer still names them. A lookup that asks
+//     the KV does this before it decides, a lookup of memory alone (the hook
+//     under post timing, which never waits for the KV) in the background
 //     (recheckSoon) - the request that finds the value due is then still
 //     answered from memory, the next one is not.
 //
-// So without the broadcast a hit stored on one node decides on every other
-// node at most verdictRecheck after its pointers reached the KV, as long as
-// the KV answers - under post timing one request later. Three cases are
-// outside that bound, each ending with the lookup that reads the key: a
-// request with more than kvLookupMax values due (the rest are used once more
-// and are first in line in the next lookup), a KV read that fails or runs
-// out of its budget (the value in memory is used), and a segment this node
-// stored itself without having been able to read it from the KV (the 5
-// minutes count from that store).
+// So without the broadcast a hit stored on one node, and a review synced on
+// one node, decide on every other node at most verdictRecheck after that
+// node last read the segment keys from the KV (for a value it never read:
+// after it made it), as long as the KV answers - under post timing one
+// request later. The cases outside that bound, each ending with the lookup
+// that reads the key: a request with more than kvLookupMax values due (the
+// rest are used once more and are first in line in the next lookup), a KV
+// read that fails or runs out of its budget (the value in memory is used),
+// and a segment this node stored itself without having been able to read it
+// from the KV (the 5 minutes count from that store).
+//
+// The replace would also drop what a run on this node stored a moment ago
+// and whose background write has not reached the KV yet (the value in memory
+// keeps the time of its last read when a run edits it). So the parts written
+// within tombstoneTTL - longer than a background write can take - stay; they
+// are judged by the KV with the next recheck. What a node stored in memory
+// and could not write to the KV is therefore gone with the first recheck
+// that reads the key: the KV decides.
+//
+// A pointer whose hit entry cannot be read - a KV error, the budget, the
+// limit of kvLookupMax entries, or under a lookup of memory alone an entry
+// that is not in memory - is not a stale pointer: its segment is unknown for
+// that lookup, whatever pass it has (lookup.hits, decide). Only an entry the
+// KV answered "not there" for leaves the segment to its pass.
 
 // kvNamespace holds the verdict cache. The namespace of the pass cache
 // before 0.8.0, "pass", is no longer used by the cache.
@@ -482,6 +506,55 @@ func (c *lru) syncSeg(key string, now time.Time, ttl time.Duration, kv segValue)
 	return parseSeg(e.val)
 }
 
+// resyncSeg replaces the value of a segment key in memory by kv, what the KV
+// holds now, for a value that was due for another read (verdictRecheck), and
+// marks it as read now: what the KV no longer holds - a pointer or a pass a
+// review on another node removed - is gone from memory too. Two things are
+// kept or dropped beside it:
+//
+//   - the parts of the old value written within tombstoneTTL stay: a run on
+//     this node stored them and their write to the KV may still be under way
+//     (only a run puts so young a part into a value that is due);
+//   - the hit entries (under scope) the old value pointed to, those young
+//     ones apart, are dropped from memory: the next lookup reads them from
+//     the KV if a pointer still names them, so a hit that was deleted there
+//     is not replayed from memory.
+//
+// It returns the value to decide with, as syncSeg does (kv alone while the
+// key is tombstoned).
+func (c *lru) resyncSeg(key, scope string, now time.Time, ttl time.Duration, kv segValue) segValue {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.isDead(key, now) {
+		return kv
+	}
+	young := now.Add(-tombstoneTTL).Unix()
+	var old []hitRef
+	e := c.update(key, now, ttl, func(v *segValue) {
+		var own segValue
+		if v.pass >= young {
+			own.pass = v.pass
+		}
+		for _, h := range v.hits {
+			if h.at >= young {
+				own.hits = append(own.hits, h)
+			} else {
+				old = append(old, h)
+			}
+		}
+		*v = kv
+		v.merge(own)
+	})
+	for _, h := range old {
+		c.drop(hitKeyOf(scope, h.id))
+	}
+	if e == nil {
+		return segValue{}
+	}
+	e.synced = now
+	return parseSeg(e.val)
+}
+
 // forget drops the keys: their next read is from the KV.
 func (c *lru) forget(keys []string) {
 	c.mu.Lock()
@@ -663,10 +736,19 @@ func (p *Plugin) lookupVerdicts(scope string, keys [][32]byte, useKV bool) verdi
 	}
 	ctx, cancel := context.WithTimeout(p.bg, kvLookupBudget)
 	defer cancel()
-	l := &lookup{p: p, cache: p.cache.Load(), ctx: ctx, scope: scope, now: p.now(), ttl: ttl, kv: useKV && p.host != nil}
+	// The reads of one lookup: up to kvLookupMax misses, kvLookupMax values
+	// that are due and kvLookupMax hit entries, kvLookupWorkers at a time,
+	// all within kvLookupBudget. The misses and the hit entries decide
+	// whether content is known; the values that are due can wait for the
+	// next lookup. So those get the first half of the budget only: the hit
+	// entries are not left without time by them (a pointer whose entry was
+	// not read makes its segment unknown, decide).
+	due, cancelDue := context.WithTimeout(ctx, kvLookupBudget/2)
+	defer cancelDue()
+	l := &lookup{p: p, cache: p.cache.Load(), ctx: ctx, due: due, scope: scope, now: p.now(), ttl: ttl, kv: useKV && p.host != nil}
 	segs := l.segments(keys)
-	ids, hits := l.hits(segs)
-	return l.decide(keys, segs, ids, hits)
+	ids, hits, unread := l.hits(segs)
+	return l.decide(keys, segs, ids, hits, unread)
 }
 
 // lookup is one lookupVerdicts call.
@@ -674,6 +756,7 @@ type lookup struct {
 	p     *Plugin
 	cache *lru
 	ctx   context.Context // the KV budget
+	due   context.Context // the part of it for the values due for another read
 	scope string
 	now   time.Time
 	ttl   time.Duration
@@ -683,8 +766,9 @@ type lookup struct {
 // segments loads the values of the segments: from memory, and with the KV
 // also from there (and into memory) - the misses, the newest kvLookupMax of
 // them, and the values in memory that are due for another read
-// (verdictRecheck), the kvLookupMax longest unread. A value that is due and
-// was not read (beyond the limit, a KV error, the budget) is used as it is.
+// (verdictRecheck), the kvLookupMax longest unread, which what the KV holds
+// replaces (resyncSeg). A value that is due and was not read (beyond the
+// limit, a KV error, the budget) is used as it is.
 // Without the KV every value in memory is used, and the ones that are due
 // are read in the background.
 func (l *lookup) segments(keys [][32]byte) []segValue {
@@ -726,15 +810,22 @@ func (l *lookup) segments(keys [][32]byte) []segValue {
 	if len(misses) > kvLookupMax {
 		misses = misses[len(misses)-kvLookupMax:] // the newest content
 	}
-	asked := append(misses, due...)
-	if len(asked) == 0 {
-		return segs
+	if len(misses) > 0 {
+		asked := names(misses)
+		raws, ok := l.p.kvGet(l.ctx, asked)
+		for j, i := range misses {
+			if ok[j] {
+				segs[i] = l.cache.syncSeg(asked[j], l.now, l.ttl, parseSeg(raws[j]))
+			}
+		}
 	}
-	askedNames := names(asked)
-	raws, ok := l.p.kvGet(l.ctx, askedNames)
-	for j, i := range asked {
-		if ok[j] {
-			segs[i] = l.cache.syncSeg(askedNames[j], l.now, l.ttl, parseSeg(raws[j]))
+	if len(due) > 0 {
+		asked := names(due)
+		raws, ok := l.p.kvGet(l.due, asked)
+		for j, i := range due {
+			if ok[j] {
+				segs[i] = l.cache.resyncSeg(asked[j], l.scope, l.now, l.ttl, parseSeg(raws[j]))
+			}
 		}
 	}
 	return segs
@@ -752,14 +843,15 @@ func (l *lookup) recheckSoon(names []string) {
 	}
 	go func() {
 		defer p.rechecking.Store(false)
+		defer p.recoverTracked() // nothing else recovers in this goroutine
 		ctx, cancel := context.WithTimeout(p.bg, kvWriteBudget)
 		defer cancel()
-		bg := &lookup{p: p, cache: l.cache, ctx: ctx, scope: l.scope, now: p.now(), ttl: l.ttl, kv: true}
+		bg := &lookup{p: p, cache: l.cache, ctx: ctx, due: ctx, scope: l.scope, now: p.now(), ttl: l.ttl, kv: true}
 		raws, ok := p.kvGet(ctx, names)
 		var segs []segValue
 		for j, name := range names {
 			if ok[j] {
-				segs = append(segs, bg.cache.syncSeg(name, bg.now, bg.ttl, parseSeg(raws[j])))
+				segs = append(segs, bg.cache.resyncSeg(name, bg.scope, bg.now, bg.ttl, parseSeg(raws[j])))
 			}
 		}
 		bg.hits(segs)
@@ -768,9 +860,13 @@ func (l *lookup) recheckSoon(names []string) {
 
 // hits loads the cached hits the segments point to: ids in request order,
 // the newest first within a segment; a hit that is not in memory comes from
-// the KV (at most kvLookupMax of them) and is nil when it is nowhere.
-func (l *lookup) hits(segs []segValue) (ids []string, hits map[string]*storedHit) {
-	hits = map[string]*storedHit{}
+// the KV (at most kvLookupMax of them). A hit is nil when it is nowhere - the
+// KV answered that the entry is not there, or holds one that does not read
+// or has expired: the pointer is stale. unread are the ids whose entry could
+// not be read at all: a KV error, the budget, beyond kvLookupMax, or, for a
+// lookup of memory alone, not in memory. Those hits may well exist.
+func (l *lookup) hits(segs []segValue) (ids []string, hits map[string]*storedHit, unread map[string]bool) {
+	hits, unread = map[string]*storedHit{}, map[string]bool{}
 	var missing []string
 	for i := range segs {
 		for _, ref := range segs[i].hits {
@@ -788,27 +884,45 @@ func (l *lookup) hits(segs []segValue) (ids []string, hits map[string]*storedHit
 			}
 		}
 	}
-	if !l.kv || len(missing) == 0 {
-		return ids, hits
+	if len(missing) == 0 {
+		return ids, hits, unread
 	}
-	missing = missing[:min(len(missing), kvLookupMax)]
+	asked := 0
+	if l.kv {
+		asked = min(len(missing), kvLookupMax)
+	}
+	for _, id := range missing[asked:] {
+		unread[id] = true
+	}
+	if asked == 0 {
+		return ids, hits, unread
+	}
+	missing = missing[:asked]
 	names := make([]string, len(missing))
 	for j, id := range missing {
 		names[j] = hitKeyOf(l.scope, id)
 	}
-	raws, _ := l.p.kvGet(l.ctx, names)
+	raws, ok := l.p.kvGet(l.ctx, names)
 	for j, raw := range raws {
+		if !ok[j] {
+			unread[missing[j]] = true
+			continue
+		}
 		if hit := decodeHit(raw, l.now, l.ttl); hit != nil {
 			hits[missing[j]] = hit
 			l.cache.putHit(names[j], hit, len(raw), hit.expires(l.ttl), l.now)
 		}
 	}
-	return ids, hits
+	return ids, hits, unread
 }
 
 // decide: the first hit whose whole segment set is among keys, else the
-// segments with a live pass.
-func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map[string]*storedHit) verdicts {
+// segments with a live pass - without the segments that point to a hit whose
+// entry could not be read (unread): that hit may hold the request's content,
+// so the pass of such a segment does not count in this lookup and the
+// segment is moderated again (or, under post timing, queued, and the worker
+// looks it up with the KV).
+func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map[string]*storedHit, unread map[string]bool) verdicts {
 	v := verdicts{passed: map[[32]byte]bool{}}
 	if len(ids) > 0 {
 		have := make(map[string]bool, len(keys))
@@ -824,9 +938,13 @@ func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map
 		}
 	}
 	for i := range segs {
-		if liveAt(segs[i].pass, l.now, l.ttl) {
-			v.passed[keys[i]] = true
+		if !liveAt(segs[i].pass, l.now, l.ttl) {
+			continue
 		}
+		if len(unread) > 0 && slices.ContainsFunc(segs[i].hits, func(h hitRef) bool { return unread[h.id] && liveAt(h.at, l.now, l.ttl) }) {
+			continue
+		}
+		v.passed[keys[i]] = true
 	}
 	return v
 }
@@ -1038,6 +1156,7 @@ func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits 
 	p.stats.kvWriting.Add(1)
 	go func() {
 		defer p.stats.kvWriting.Add(-1)
+		defer p.recoverTracked() // nothing else recovers in this goroutine
 		p.writeVerdicts(ttl, writes, passKeys, at)
 	}()
 }
@@ -1367,6 +1486,16 @@ func (p *Plugin) publishVerdictChanged(ctx context.Context, msg verdictChanged) 
 // value before the review nor a run in progress stores it again. Keys that
 // got a pointer to a stored hit are only dropped - a tombstone would keep
 // this node's own runs from writing to a segment many hits share.
+//
+// Dropping does not hold against what is under way at that moment: a lookup
+// that read a key from the KV before the pointer was written puts the old
+// value into memory after the drop (syncSeg), and a run that ends right
+// after it makes a value of its pass alone (update) - both marked as read
+// now. Such a value is then one the broadcast never reached: it decides
+// until its next read, verdictRecheck later (the bound at the top of the
+// file). Closing the window would take a mark per dropped key that outlives
+// the reads under way, as the tombstones of a review do, with the cost named
+// above; it is left open.
 func (p *Plugin) onVerdictChanged(_ context.Context, b pluginsdk.Broadcast) error {
 	var msg verdictChanged
 	if err := json.Unmarshal(b.Payload, &msg); err != nil {

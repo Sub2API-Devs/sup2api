@@ -42,8 +42,9 @@ import type { JevQuestions } from './types'
 // 0.8.0: `mode` is the switch and the default level; the allowlist starts
 // from the retired exempt_user_ids until it is saved, and the verdict cache
 // days from the retired cache_ttl_seconds (settingsForm.ts). Of the retired
-// keys only exempt_user_ids is written: a saved allowlist is mirrored to it
-// for nodes still on 0.7.2 (withRetiredMirrored). Under the cache days,
+// keys only exempt_user_ids is written: a save of the allowlist or of the
+// blocklist puts the allowlist without the blocklisted users there, for
+// nodes still on 0.7.2 (withRetiredMirrored). Under the cache days,
 // moderation:manage users can empty the verdict cache of every node
 // (VerdictCacheRow).
 //

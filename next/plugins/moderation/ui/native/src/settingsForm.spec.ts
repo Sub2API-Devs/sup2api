@@ -150,6 +150,35 @@ describe('the save of the settings tab', () => {
       expect(withRetiredMirrored(stored, ['allowlist_user_ids'])).toBe(stored)
     })
 
+    it('keeps a blocklisted user out of the retired key, whichever of the two lists is saved', () => {
+      // on both lists: moderated before sending on 0.8.0, so not exempt on a 0.7.2 node
+      const both = { ...stored, allowlist_user_ids: ['7', '8'], blocklist_user_ids: ['8'], exempt_user_ids: ['7', '8'] }
+      expect(withRetiredMirrored(both, ['allowlist_user_ids']).exempt_user_ids).toEqual(['7'])
+      // only the blocklist is saved: the retired key is rewritten all the same, the allowlist stays
+      const blocked = withRetiredMirrored(both, ['blocklist_user_ids'])
+      expect(blocked).toEqual({ ...both, exempt_user_ids: ['7'] })
+      // taken off the blocklist again: exempt again
+      expect(withRetiredMirrored({ ...both, blocklist_user_ids: [], exempt_user_ids: ['7'] }, ['blocklist_user_ids']).exempt_user_ids).toEqual(['7', '8'])
+      // ids compare as text (a list stored as numbers)
+      expect(withRetiredMirrored({ ...both, blocklist_user_ids: [8] }, ['blocklist_user_ids']).exempt_user_ids).toEqual(['7'])
+      // no retired key stored yet: a saved blocklist adds the mirror too
+      expect(withRetiredMirrored({ ...stored, allowlist_user_ids: ['7', '8'], blocklist_user_ids: ['8'] }, ['blocklist_user_ids']).exempt_user_ids).toEqual(['7'])
+    })
+
+    it('saving the blocklist while the allowlist is still the retired list', () => {
+      // a blocklisted user on it: the list becomes allowlist_user_ids as it is, the retired key loses the user
+      const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, blocklist_user_ids: ['9'] }))
+      expect(m.changed).toEqual(['blocklist_user_ids'])
+      expect(withRetiredMirrored(m.values, m.changed)).toEqual({ ...old, blocklist_user_ids: ['9'], allowlist_user_ids: ['5', '9'], exempt_user_ids: ['5'] })
+      expect(m.values.exempt_user_ids).toEqual(['5', '9'])
+      // nobody on both: nothing else is written
+      const other = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, blocklist_user_ids: ['12'] }))
+      expect(withRetiredMirrored(other.values, other.changed)).toBe(other.values)
+      // neither an allowlist nor a retired list: nothing to mirror
+      const none = { ...stored, blocklist_user_ids: ['12'] }
+      expect(withRetiredMirrored(none, ['blocklist_user_ids'])).toBe(none)
+    })
+
     it('stores an emptied allowlist as [], so the retired list is not read again', () => {
       for (const emptied of [[], undefined, null]) {
         const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: emptied }))

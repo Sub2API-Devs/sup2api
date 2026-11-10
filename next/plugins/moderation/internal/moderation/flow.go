@@ -270,12 +270,54 @@ func (t Trace) ownRun() Trace {
 
 // receivedImages are the images of the run's input (indexes in Input.Images)
 // that an auditor received in a call that judged (EngineResult.received): the
-// images the run decided something about.
+// images the run decided something about, whatever it decided. It is the
+// image part of the set of a hit (sentKeys).
 func (t *Trace) receivedImages() map[int]bool {
 	out := map[int]bool{}
 	for _, st := range t.Stages {
 		for _, o := range st.Outcomes {
 			if o.Err != nil || o.Skipped {
+				continue
+			}
+			for _, i := range o.received {
+				out[i] = true
+			}
+		}
+	}
+	return out
+}
+
+// passedImages are the images of the run's input a pass of the run may be
+// stored for. The rule: an image counts when it was received
+// (EngineResult.received) by an auditor whose own outcome is a pass (it
+// judged, and did not hit), in a stage whose result is Pass. An auditor that
+// hit says nothing in favour of what it received, and an auditor that passed
+// without the image said nothing about it.
+//
+// In a run that ends in a pass the stages with the result Pass are exactly
+// the stages the pass rests on (runFlow):
+//
+//   - one stage, any: every judging auditor passed, each counts;
+//   - one stage, all / at_least: the stage passed although some auditors
+//     hit; only the ones that passed count, so an image only the hitting
+//     auditors received is not stored;
+//   - an overturned run (hit, ..., pass): the one stage that overturned. The
+//     stages that hit do not count: the image the first stage received and
+//     hit, and the overturning stage did not get, is not stored;
+//   - a chain that passed in its first judging stage, then the fallback
+//     stages: every one of them ended in Pass (a hit there is the final
+//     hit), each counts - the image needs a passing auditor in one of them;
+//   - a stage that failed or was skipped has no result Pass and adds
+//     nothing (settleVerdicts stores nothing at all for such a run: it is
+//     errored, or has a skipped stage).
+func (t *Trace) passedImages() map[int]bool {
+	out := map[int]bool{}
+	for _, st := range t.Stages {
+		if st.Result != Pass {
+			continue
+		}
+		for _, o := range st.Outcomes {
+			if o.Err != nil || o.Skipped || o.Hit {
 				continue
 			}
 			for _, i := range o.received {

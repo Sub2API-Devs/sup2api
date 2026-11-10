@@ -1263,9 +1263,11 @@ func logged(fh *pluginsdktest.FakeHost, message string) int {
 }
 
 // A panic in the shared run of the pre path does not end the plugin process
-// either (singleflight would hand it to a goroutine nothing recovers in):
-// the waiters get a run that errored, so the request passes and is recorded
-// as an error.
+// either (singleflight would hand it to a goroutine nothing recovers in).
+// Before the chunks have run the waiters get a run that errored: the request
+// passes and is recorded as an error. Once the auditors have decided, their
+// decision stands: a hit is refused and recorded as a block although storing
+// it in the cache panicked.
 func TestPreRunSurvivesPanic(t *testing.T) {
 	mod := newFakeMod(t)
 	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_errors": true})
@@ -1279,21 +1281,40 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 	// While the chunks run.
 	running := job("panics-running")
 	running.chunks = []*chunk{nil}
-	// While the verdicts are stored: the hit names a segment the plan does
-	// not have.
+	r := p.runPre(context.Background(), running)
+	if denied(r) || !strings.HasPrefix(r.GetNote(), notePrefix+"error ") {
+		t.Fatalf("panic while running = %+v", r)
+	}
+	ev := recordOf(t, h, "panics-running")
+	if tr := traceOf(t, ev); ev.Result != ResultError || !tr.Errored || tr.Final != Pass {
+		t.Fatalf("record of the panic while running = %s %s", ev.Result, ev.Trace)
+	}
+	waitFor(t, "the panic in the log", func() bool { return logged(fh, "pre run panicked") == 1 })
+
+	// While the verdicts are stored (the node has no memory cache to store
+	// them in), after the upstream judged the text a hit.
 	storing := job("panics-storing")
-	storing.chunks = []*chunk{{in: &Input{Text: "MOD-HIT-sexual words"}, segs: []int{7}, parts: []chunkPart{{seg: 7, role: RoleUser, text: "MOD-HIT-sexual words"}}}}
+	storing.chunks = []*chunk{{in: &Input{Text: "MOD-HIT-sexual words"}, segs: []int{0}, parts: []chunkPart{{seg: 0, role: RoleUser, text: "MOD-HIT-sexual words"}}}}
 	storing.plan = &plan{keys: [][32]byte{{1}}, pieces: []int{1}}
-	for i, m := range []*moderation{running, storing} {
-		r := p.runPre(context.Background(), m)
-		if denied(r) || !strings.HasPrefix(r.GetNote(), notePrefix+"error ") {
-			t.Fatalf("%s = %+v", m.rec.RequestID, r)
-		}
-		ev := recordOf(t, h, m.rec.RequestID)
-		if tr := traceOf(t, ev); ev.Result != ResultError || !tr.Errored || tr.Final != Pass {
-			t.Fatalf("record of %s = %s %s", m.rec.RequestID, ev.Result, ev.Trace)
-		}
-		waitFor(t, "the panic in the log", func() bool { return logged(fh, "pre run panicked") == i+1 })
+	cache := p.cache.Swap(nil)
+	r = p.runPre(context.Background(), storing)
+	p.cache.Store(cache)
+	if !denied(r) || r.GetDenyCode() != DenyBlocked || !strings.HasPrefix(r.GetNote(), notePrefix+"hit flow=") {
+		t.Fatalf("panic while storing a hit = %+v", r)
+	}
+	ev = recordOf(t, h, "panics-storing")
+	if tr := traceOf(t, ev); ev.Result != ResultBlock || tr.Final != Hit || tr.Cache == nil || len(tr.Cache.Segs) != 1 {
+		t.Fatalf("record of the panic while storing = %s %s", ev.Result, ev.Trace)
+	}
+	waitFor(t, "the second panic in the log", func() bool { return logged(fh, "pre run panicked") == 2 })
+	// Nothing judged and combining impossible: an error. With a hit among the
+	// runs the hit stands.
+	if tr := (&moderation{}).afterPanic(nil); tr.Final != Pass || !tr.Errored {
+		t.Fatalf("no runs = %+v", tr)
+	}
+	broken := &moderation{plan: nil}
+	if tr := broken.afterPanic([]Trace{{Final: Pass, Decider: -1}, {Final: Hit}}); tr.Final != Hit || tr.Chunk != 2 {
+		t.Fatalf("runs with a hit = %+v", tr)
 	}
 	if n := mod.count("/v1/moderations"); n != 1 { // the second job reached the upstream
 		t.Fatalf("upstream calls = %d", n)
@@ -1303,7 +1324,7 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 		t.Fatalf("after the panics = %+v", r)
 	}
 	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
-	if st.Today.Errors != 2 || st.Today.Audited != 3 {
+	if st.Today.Errors != 1 || st.Today.Audited != 3 {
 		t.Fatalf("today = %+v", st.Today)
 	}
 }
