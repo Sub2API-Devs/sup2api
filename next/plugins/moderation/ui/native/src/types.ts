@@ -786,6 +786,7 @@ export interface JevQuestions {
 export interface AuditorConfig {
   thresholds?: Record<string, number>
   questions?: JevQuestions | null
+  /** typesafe: review images; llm_verdict and llm_questions: the model supports images (off = text only). Absent = on. */
   review_images?: boolean | null
   system_prompt?: string
   categories?: Category[]
@@ -991,8 +992,9 @@ export interface AuditorDraft {
 export interface AuditorTryTarget {
   id: number | null
   name: string
-  /** llm_questions moderates text only: the try takes no images */
   type?: AuditorType
+  /** the stored config of a try without a draft: an LLM auditor with review_images off takes no images */
+  config?: AuditorConfig
   draft?: AuditorDraft
 }
 

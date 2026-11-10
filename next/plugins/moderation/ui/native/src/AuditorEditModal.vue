@@ -4,16 +4,18 @@ import { SAlert, SBadge, SButton, SField, SHint, SInput, SModal, SSegmented, SSe
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import { useCatalog } from './catalog'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
+import { auditorConfig, auditorFormOf } from './auditorForm'
 import { AUDITOR_TYPES, hasQuestions as typeHasQuestions } from './flowOps'
-import { THRESHOLD_PRESETS, YES_NO_THRESHOLD, presetThresholds, thresholdOverrides, thresholdPresetOf } from './thresholdPresets'
+import { THRESHOLD_PRESETS, presetThresholds, thresholdOverrides, thresholdPresetOf } from './thresholdPresets'
 import { categoryLabel, enumLabel, enumOptions } from './format'
-import { fetchAuditor, jevPayload, saveAuditor, useModHost } from './host'
-import type { Auditor, AuditorConfig, AuditorDraft, AuditorTryTarget, AuditorType, Defaults, JevQuestions } from './types'
+import { fetchAuditor, saveAuditor, useModHost } from './host'
+import type { Auditor, AuditorDraft, AuditorTryTarget, AuditorType, Defaults } from './types'
 
 // Creates or edits an auditor (auditor null = new): OpenAI moderation
 // thresholds with presets, Jev questions, an LLM verdict prompt, or an LLM
-// question table (the Jev question editor without thresholds; text only);
-// bound to one channel of its type. "Try" runs the unsaved edits. `readonly` shows
+// question table (the Jev question editor without thresholds); bound to one
+// channel of its type. Jev and both LLM types have an image switch (the LLM
+// model may not support images; off = text only). "Try" runs the unsaved edits. `readonly` shows
 // the auditor without saving or trying (read users). The list row is shown
 // at once and replaced by GET /auditors/:id unless the form was edited.
 const props = defineProps<{ auditor: Auditor | null; defaults: Defaults | null; readonly?: boolean }>()
@@ -27,23 +29,7 @@ const CHANNEL_TYPE: Record<AuditorType, string> = { openai_moderation: 'openai_m
 const typeOptions = computed(() => enumOptions('auditorType', AUDITOR_TYPES))
 const toolChoiceOptions = ['required', 'function', 'auto'].map((v) => ({ value: v, label: v }))
 
-const form = reactive({
-  name: '',
-  type: 'openai_moderation' as AuditorType,
-  channel_id: 0 as number,
-  /** per category: the typed value (SInput type=number gives a number, null when cleared) */
-  thresholds: {} as Record<string, string | number | null>,
-  ownQuestions: false,
-  questions: { preamble: '', items: [] } as JevQuestions,
-  review_images: true,
-  system_prompt: '',
-  categories: '',
-  tool_choice: 'required',
-  max_turns: 3 as number | null,
-  temperature: 0 as number | null,
-  max_tokens: 512 as number | null,
-  flag_as_hit: false
-})
+const form = reactive(auditorFormOf(null))
 const errs = reactive<FieldErrors>({})
 const saving = ref(false)
 
@@ -58,23 +44,7 @@ const channelOptions = computed(() =>
 const firstChannel = () => Number(channelOptions.value[0]?.value || 0)
 
 function fill(a: Auditor | null) {
-  const c: AuditorConfig = a?.config || {}
-  Object.assign(form, {
-    name: a?.name || '',
-    type: a?.type || 'openai_moderation',
-    channel_id: a?.channel_id || 0,
-    thresholds: Object.fromEntries(Object.entries(c.thresholds || {}).map(([k, v]) => [k, String(v)])),
-    ownQuestions: !!c.questions,
-    questions: { preamble: c.questions?.preamble || '', items: (c.questions?.items || []).map((q) => ({ ...q })) },
-    review_images: c.review_images !== false,
-    system_prompt: c.system_prompt || '',
-    categories: (c.categories || []).map((x) => `${x.id}: ${x.description}`).join('\n'),
-    tool_choice: c.tool_choice || 'required',
-    max_turns: c.max_turns || 3,
-    temperature: c.temperature ?? 0,
-    max_tokens: c.max_tokens || 512,
-    flag_as_hit: !!c.flag_as_hit
-  })
+  Object.assign(form, auditorFormOf(a))
   form.channel_id ||= firstChannel()
 }
 const snapshot = () => JSON.stringify(form)
@@ -97,11 +67,7 @@ function copyDefault() {
   form.questions = { preamble: d.preamble, items: d.items.map((q) => ({ ...q })) }
 }
 
-/**
- * The OpenAI overrides of the form. A cleared input (null or '') is not
- * sent, so its default applies (engine.go compileAuditor starts from the
- * default thresholds and only overrides the categories given).
- */
+/** The OpenAI overrides of the form (a cleared input is not an override), for the preset shown. */
 const formThresholds = computed(() => thresholdOverrides(form.thresholds))
 const presetOptions = computed(() => enumOptions('auditors.preset', THRESHOLD_PRESETS.map((p) => p.id)))
 const formPreset = computed(() => (props.defaults ? thresholdPresetOf(props.defaults, formThresholds.value) : null))
@@ -111,29 +77,7 @@ function applyPreset(id: unknown) {
   form.thresholds = Object.fromEntries(Object.entries(presetThresholds(props.defaults, p.factor)).map(([k, v]) => [k, String(v)]))
 }
 
-function config(): AuditorConfig {
-  if (form.type === 'openai_moderation') return { thresholds: formThresholds.value }
-  if (form.type === 'typesafe') return { review_images: form.review_images, questions: form.ownQuestions ? jevPayload(form.questions) : null }
-  // the table's thresholds are not used (YES_NO_THRESHOLD)
-  if (form.type === 'llm_questions') return { questions: form.ownQuestions ? { preamble: form.questions.preamble, items: form.questions.items.map((q) => ({ ...q, threshold: YES_NO_THRESHOLD })) } : null }
-  const categories = form.categories
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((l) => {
-      const i = l.search(/[:：]/)
-      return i < 0 ? { id: l, description: '' } : { id: l.slice(0, i).trim(), description: l.slice(i + 1).trim() }
-    })
-  return {
-    system_prompt: form.system_prompt,
-    categories,
-    tool_choice: form.tool_choice,
-    max_turns: Number(form.max_turns) || 3,
-    temperature: Number(form.temperature) || 0,
-    max_tokens: Number(form.max_tokens) || 512,
-    flag_as_hit: form.flag_as_hit
-  }
-}
+const config = () => auditorConfig(form)
 const draft = (): AuditorDraft => ({ name: form.name, type: form.type, channel_id: Number(form.channel_id), config: config() })
 const hasQuestions = computed(() => typeHasQuestions(form.type))
 
@@ -192,7 +136,7 @@ async function save() {
 
         <template v-else-if="hasQuestions">
           <SHint v-if="form.type === 'llm_questions'" size="xs">{{ t('auditors.llmQuestionsHint') }}</SHint>
-          <SField v-else :label="t('auditors.reviewImages')" :hint="t('auditors.reviewImagesHint')">
+          <SField :label="t(form.type === 'typesafe' ? 'auditors.reviewImages' : 'auditors.modelImages')" :hint="t(form.type === 'typesafe' ? 'auditors.reviewImagesHint' : 'auditors.modelImagesHint')">
             <SSwitch v-model="form.review_images" />
           </SField>
           <SField :label="t('auditors.ownQuestions')" :hint="form.ownQuestions ? '' : t('auditors.useDefault', { v: defaults?.default_version || '' })">
@@ -221,6 +165,9 @@ async function save() {
           </div>
           <SField :label="t('auditors.flagAsHitLabel')" :hint="t('auditors.flagAsHitHint')">
             <SSwitch v-model="form.flag_as_hit" />
+          </SField>
+          <SField :label="t('auditors.modelImages')" :hint="t('auditors.modelImagesHint')">
+            <SSwitch v-model="form.review_images" />
           </SField>
         </template>
       </fieldset>

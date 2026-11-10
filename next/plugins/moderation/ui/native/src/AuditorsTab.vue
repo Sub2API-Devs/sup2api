@@ -4,6 +4,7 @@ import { SAlert, SBadge, SButton, SCard, SHint, STable, type TableColumn } from 
 import AuditorEditModal from './AuditorEditModal.vue'
 import AuditorTryModal from './AuditorTryModal.vue'
 import EnabledBadge from './EnabledBadge.vue'
+import { llmTextOnly } from './auditorForm'
 import { useCatalog } from './catalog'
 import { hasQuestions } from './flowOps'
 import { enumLabel, money, num } from './format'
@@ -52,10 +53,12 @@ function summary(a: Auditor): string {
     const preset = d && thresholdPresetOf(d, c.thresholds || {})
     return preset ? t(`auditors.preset.${preset}`) : t('auditors.overrides', { n: Object.keys(c.thresholds || {}).length })
   }
+  // an LLM auditor reviews images unless its switch is off
+  const textOnly = llmTextOnly(a.type, c) && t('auditors.textOnly')
   if (hasQuestions(a.type)) {
-    return [a.rules_version, t('auditors.questions', { n: c.questions?.items?.length || d?.default.items.length || 0 })].filter(Boolean).join(' · ')
+    return [a.rules_version, t('auditors.questions', { n: c.questions?.items?.length || d?.default.items.length || 0 }), textOnly].filter(Boolean).join(' · ')
   }
-  return c.flag_as_hit ? t('auditors.flagAsHit') : t('auditors.blockOnly')
+  return [c.flag_as_hit ? t('auditors.flagAsHit') : t('auditors.blockOnly'), textOnly].filter(Boolean).join(' · ')
 }
 
 const editOpen = ref(false)
@@ -106,7 +109,7 @@ const remove = (a: Auditor) => confirmDelete(t('auditors.deleteConfirm', { name:
         </template>
         <template #cell-actions="{ row }">
           <template v-if="manage">
-            <SButton size="sm" variant="ghost" @click="openTry({ id: row.id, name: row.name, type: row.type })">{{ t('auditors.try') }}</SButton>
+            <SButton size="sm" variant="ghost" @click="openTry({ id: row.id, name: row.name, type: row.type, config: row.config })">{{ t('auditors.try') }}</SButton>
             <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
             <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
           </template>
