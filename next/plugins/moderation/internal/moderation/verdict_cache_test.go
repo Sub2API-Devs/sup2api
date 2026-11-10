@@ -720,10 +720,13 @@ var errKVDown = errors.New("kv unavailable")
 
 // kvFake stands between a node and the KV of its host (withKV): it counts
 // the writes (Set, Delete) that reach it by key, fails every call while
-// fail is set and the reads of some keys while noRead is, and can hold writes
-// back (hold).
+// fail is set, the reads of some keys while noRead is and every write while
+// noWrite is, keeps the TTL of the last Set of a key, and can hold writes back
+// (hold).
 type kvFake struct {
 	fail    atomic.Bool
+	noWrite atomic.Bool
+	ttls    sync.Map               // key -> time.Duration of its last Set
 	noRead  atomic.Pointer[string] // reads of the keys with this prefix fail
 	mu      sync.Mutex
 	writes  map[string]int
@@ -771,7 +774,7 @@ func (k *kvFake) open() {
 
 // write is called before a write of key reaches the KV.
 func (k *kvFake) write(key string) error {
-	if k.fail.Load() {
+	if k.fail.Load() || k.noWrite.Load() {
 		return errKVDown
 	}
 	k.mu.Lock()
@@ -818,6 +821,7 @@ func (k kvFakeKV) Set(ctx context.Context, ns, key string, val []byte, ttl time.
 	if err := k.kv.write(key); err != nil {
 		return err
 	}
+	k.kv.ttls.Store(key, ttl)
 	return k.KV.Set(ctx, ns, key, val, ttl)
 }
 
@@ -1912,10 +1916,11 @@ func TestReviewSyncOrderAndBudget(t *testing.T) {
 
 // imageMod is an upstream for both auditor types: the moderation API finds
 // every image violating (and no text), Jev finds nothing; it counts the Jev
-// calls that came with an image.
-func imageMod(t *testing.T) (base string, jevImages *atomic.Int64) {
-	jevImages = new(atomic.Int64)
+// calls that came with an image, and all calls.
+func imageMod(t *testing.T) (base string, jevImages, calls *atomic.Int64) {
+	jevImages, calls = new(atomic.Int64), new(atomic.Int64)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
 		body, _ := io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/moderations" {
@@ -1944,18 +1949,15 @@ func imageMod(t *testing.T) (base string, jevImages *atomic.Int64) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-mock", "answers": answers, "usage": map[string]int{"input_tokens": 10}})
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL, jevImages
+	return srv.URL, jevImages, calls
 }
 
-// A pass is stored for an image only when an auditor that itself passed had
-// received it. Here the OpenAI auditor receives the image and hits, while Jev
-// has no redraw slot, judges the text alone and passes: the run passes, and
-// the image Jev never saw must not be answered "pass (cached)" afterwards.
-func TestImagePassNeedsAPassingAuditor(t *testing.T) {
-	base, jevImages := imageMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
-	// Group 9: OpenAI, then Jev reviews its hits. Group 10: both in one
-	// stage, a hit of both needed.
+// imageFlows sets up the two flows in which the OpenAI auditor gets an image
+// and Jev, while its redraw slots are busy, does not. Group 9: OpenAI, then
+// Jev reviews its hits. Group 10: both in one stage, a hit of both needed.
+// It returns the flow ids by group.
+func imageFlows(t *testing.T, h *pluginsdktest.Harness, base string) map[int64]int64 {
+	t.Helper()
 	flows := map[int64]int64{
 		9:  setupFlow(t, h, base, []int64{9}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe}),
 		10: setupFlow(t, h, base, []int64{10}, CombineAll, []string{AuditorOpenAI, AuditorTypeSafe}),
@@ -1967,6 +1969,17 @@ func TestImagePassNeedsAPassingAuditor(t *testing.T) {
 				"base_url": ch.BaseURL, "timeout_ms": 2000}))
 		}
 	}
+	return flows
+}
+
+// A pass is stored for an image only when an auditor that itself passed had
+// received it. Here the OpenAI auditor receives the image and hits, while Jev
+// has no redraw slot, judges the text alone and passes: the run passes, and
+// the image Jev never saw must not be answered "pass (cached)" afterwards.
+func TestImagePassNeedsAPassingAuditor(t *testing.T) {
+	base, jevImages, _ := imageMod(t)
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	flows := imageFlows(t, h, base)
 	const cachedPass = notePrefix + "pass (cached)"
 	for _, tc := range []struct {
 		name   string
@@ -2004,15 +2017,10 @@ func TestImagePassNeedsAPassingAuditor(t *testing.T) {
 			if ev.Result != tc.result {
 				t.Fatalf("record with the slots busy = %s %s", ev.Result, ev.Trace)
 			}
-			// The text is a cached pass, the image is not.
+			// Nothing of the chunk is a cached pass: not the image, and not
+			// the text beside an image only the hitting auditor received.
 			written(t, p)
-			segs := 0
-			for key := range segValues(t, fh) {
-				if strings.HasPrefix(key, fmt.Sprintf("s:e0:%d:", flows[tc.group])) {
-					segs++
-				}
-			}
-			if segs != 1 {
+			if segs := flowSegs(t, fh, flows[tc.group]); segs != 0 {
 				t.Fatalf("%d segment keys of the flow after the run without the image", segs)
 			}
 			// With a slot the image is sent to Jev too: the request is not
@@ -2027,6 +2035,255 @@ func TestImagePassNeedsAPassingAuditor(t *testing.T) {
 				t.Fatalf("after Jev passed the image = %+v (%d Jev calls with an image)", r, jevImages.Load()-images)
 			}
 		})
+	}
+}
+
+// flowSegs counts the segment keys of a flow in the KV.
+func flowSegs(t *testing.T, fh *pluginsdktest.FakeHost, flow int64) (n int) {
+	t.Helper()
+	for key := range segValues(t, fh) {
+		if strings.HasPrefix(key, fmt.Sprintf("s:e0:%d:", flow)) {
+			n++
+		}
+	}
+	return n
+}
+
+// Fourth round, F1: a request with an image only a hitting auditor received,
+// which a reviewer that did not get the image lets through, is let through
+// every time. Were its text stored as a pass, the second request would send
+// the image alone: the auditor that got it hits, the reviewer has nothing to
+// judge, and the request that was allowed is refused, counted as a violation
+// and replayed as a hit from then on. So nothing of such a chunk is cached,
+// and the same request is judged as a whole each time.
+func TestImageOnlyAHittingAuditorSawGetsTheSameVerdict(t *testing.T) {
+	base, jevImages, calls := imageMod(t)
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	flows := imageFlows(t, h, base)
+	// Both redraw slots stay busy: Jev always sends the text alone.
+	for range cap(jevNormalizeSlots) {
+		jevNormalizeSlots <- struct{}{}
+	}
+	defer func() {
+		for range cap(jevNormalizeSlots) {
+			<-jevNormalizeSlots
+		}
+	}()
+	for _, tc := range []struct {
+		name   string
+		group  int64
+		result string
+	}{{"overturned by a stage that did not get the image", 9, ResultOverturned}, {"one stage, all", 10, ResultPass}} {
+		t.Run(tc.name, func(t *testing.T) {
+			b, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{"role": "user", "content": []any{
+				map[string]any{"type": "text", "text": "the same caption " + tc.name},
+				map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png",
+					"data": encodePNG(t, filled(100, 120+int(tc.group), red))}},
+			}}}})
+			var first string
+			for i := range 3 {
+				rid := fmt.Sprintf("same-%d-%d", tc.group, i)
+				req := rawReq(3, rid, "anthropic.messages", string(b))
+				req.Meta.GroupId = tc.group
+				n := calls.Load()
+				r := mustHook(t, h, req)
+				if i == 0 {
+					first = r.GetNote()
+				}
+				// Both auditors were called: the one with the image and the one
+				// without.
+				if denied(r) || r.GetNote() != first || !strings.HasPrefix(first, notePrefix+tc.result+" flow=") || calls.Load() != n+2 {
+					t.Fatalf("request %d = %+v, first note %q (%d upstream calls)", i, r, first, calls.Load()-n)
+				}
+				if ev := recordOf(t, h, rid); ev.Result != tc.result || ev.Replayed {
+					t.Fatalf("record %d = %s replayed %v %s", i, ev.Result, ev.Replayed, ev.Trace)
+				}
+				written(t, p)
+			}
+			// Nothing of the chunk was stored as a pass, the text neither.
+			if segs := flowSegs(t, fh, flows[tc.group]); segs != 0 {
+				t.Fatalf("%d segment keys of the flow", segs)
+			}
+		})
+	}
+	if jevImages.Load() != 0 {
+		t.Fatalf("%d Jev calls with an image", jevImages.Load())
+	}
+	// No hit was stored or recorded, and no violation counted.
+	if keys := kvKeys(t, fh, "h:"); len(keys) != 0 {
+		t.Fatalf("cached hits: %v", keys)
+	}
+	ctx := context.Background()
+	p.flushStats(ctx)
+	db, _ := p.db(ctx)
+	var records, suspicious, violations int64
+	if err := db.QueryRow(ctx, `SELECT (SELECT count(*) FROM events), (SELECT count(*) FROM events WHERE `+suspiciousResult+`),
+		(SELECT coalesce(sum(suspicious), 0) FROM user_daily)`).Scan(&records, &suspicious, &violations); err != nil || records != 6 || suspicious != 0 || violations != 0 {
+		t.Fatalf("%d records, %d suspicious, %d violations counted (%v)", records, suspicious, violations, err)
+	}
+}
+
+// Fourth round, F2: a hit whose write to the KV failed is not lost with the
+// recheck of its segments. Its parts pass one by one on another node; at the
+// recheck the node that judged the hit keeps it, although the KV holds only
+// the passes, and writes it to the KV again - with the TTL of its first
+// write. Once it has landed it is the KV's: a review that deletes it there
+// is followed, and the hit is not written back.
+func TestUnlandedHitIsWrittenAgain(t *testing.T) {
+	base, calls := newPairMod(t)
+	cfg := map[string]any{"mode": ModeEnforce}
+	kv := &kvFake{}
+	var clock atomic.Int64
+	p, h, fh := startDB(t, nil, cfg, withKV(kv), withClock(&clock))
+	flow := setupFlow(t, h, base, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	const (
+		proto      = "anthropic.messages"
+		whole      = `{"system":"alpha rule","messages":[{"role":"user","content":"beta ask"}]}`
+		first      = `{"system":"alpha rule","messages":[{"role":"user","content":"a harmless sentence"}]}`
+		last       = `{"messages":[{"role":"user","content":"beta ask"}]}`
+		cachedPass = notePrefix + "pass (cached)"
+	)
+	// The node judges the pair a hit while the KV takes no writes.
+	kv.noWrite.Store(true)
+	if r := mustHook(t, h, rawReq(3, "pair", proto, whole)); !denied(r) || replayed(r) {
+		t.Fatalf("the pair = %+v", r)
+	}
+	rec := recordOf(t, h, "pair")
+	c := traceOf(t, rec).Cache
+	snap := p.snap.Load()
+	hitKey := hitKeyOf(snap.scopeOf(snap.flows[flow]), c.Key)
+	written(t, p)
+	if keys := append(kvKeys(t, fh, "h:"), kvKeys(t, fh, "s:")...); len(keys) != 0 {
+		t.Fatalf("KV after the failed write: %v", keys)
+	}
+	// Each part passes alone on another node: the KV holds two passes and no
+	// pointer.
+	p2, h2 := secondNode(t, fh, cfg)
+	for _, body := range []string{first, last} {
+		if r := mustHook(t, h2, rawReq(4, "", proto, body)); denied(r) {
+			t.Fatalf("a part = %+v", r)
+		}
+	}
+	written(t, p2)
+	waitSegs(t, fh, "that passed", 2, func(v segValue) bool { return v.pass > 0 && !pointed(v) })
+	n := calls.Load()
+	whenRechecked := func(recheck int, what string, check func(r *pluginv1.GatewayRequestHookResponse) bool) {
+		t.Helper()
+		clock.Store(int64(recheck) * int64(verdictRecheck+time.Second))
+		if r := mustHook(t, h, rawReq(3, "", proto, whole)); !check(r) || calls.Load() != n {
+			t.Fatalf("the pair at recheck %d, %s = %+v (%d calls)", recheck, what, r, calls.Load()-n)
+		}
+		written(t, p)
+	}
+	isReplay := func(r *pluginv1.GatewayRequestHookResponse) bool { return denied(r) && replayed(r) }
+
+	// The first recheck: the node still decides by its hit. The write fails
+	// again.
+	whenRechecked(1, "the KV without the hit", isReplay)
+	if keys := kvKeys(t, fh, "h:"); len(keys) != 0 {
+		t.Fatalf("hit entries while the KV takes no writes: %v", keys)
+	}
+	// The second: the KV takes the hit and its pointers, for what is left of
+	// the TTL of the hit.
+	kv.noWrite.Store(false)
+	kv.counts()
+	whenRechecked(2, "the KV writable again", isReplay)
+	waitSegs(t, fh, "with a pass and a pointer", 2, func(v segValue) bool { return v.pass > 0 && pointed(v) })
+	if writes := kv.counts(); len(writes) != 3 || writes[hitKey] != 1 {
+		t.Fatalf("writes of the second recheck = %v", writes)
+	}
+	ttl, _ := kv.ttls.Load(hitKey)
+	if want := p.cfg.Load().cacheTTL - 2*(verdictRecheck+time.Second); ttl != want {
+		t.Fatalf("TTL of the hit entry written again = %v, want %v", ttl, want)
+	}
+	// A node that never knew the hit decides by it now.
+	_, h3 := secondNode(t, fh, cfg)
+	if r := mustHook(t, h3, rawReq(5, "", proto, whole)); !isReplay(r) || calls.Load() != n {
+		t.Fatalf("the pair on a third node = %+v (%d calls)", r, calls.Load()-n)
+	}
+	// The third: it has landed, nothing is written again.
+	whenRechecked(3, "the hit landed", isReplay)
+	if writes := kv.counts(); len(writes) != 0 {
+		t.Fatalf("writes of the third recheck = %v", writes)
+	}
+
+	// A review on another node deletes the hit; its broadcast never arrives.
+	// The node that judged the hit follows the KV at its next recheck and does
+	// not write the hit back.
+	out := decodeData[map[string]any](t, h2.Do("POST", "/events/review", nil, map[string]any{"ids": []int64{rec.ID}, "status": "false_positive"}))
+	if out["cache_synced"] != float64(1) {
+		t.Fatalf("review = %v", out)
+	}
+	for _, recheck := range []int{4, 5} {
+		whenRechecked(recheck, "after the review", func(r *pluginv1.GatewayRequestHookResponse) bool { return r.GetNote() == cachedPass })
+		if keys := kvKeys(t, fh, "h:"); len(keys) != 0 {
+			t.Fatalf("the reviewed hit is back in the KV at recheck %d: %v", recheck, keys)
+		}
+		if writes := kv.counts(); len(writes) != 0 {
+			t.Fatalf("writes at recheck %d after the review = %v", recheck, writes)
+		}
+	}
+}
+
+// Fourth round, F3: a pointer to a hit entry the KV says is not there does
+// not make a lookup of memory alone (the hook under post timing) queue the
+// request every time: the lookup with the KV that learns it removes the
+// pointer from the values in memory.
+func TestStalePointerLeavesMemory(t *testing.T) {
+	base, calls := newPairMod(t)
+	var clock atomic.Int64
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve}, withClock(&clock))
+	flow := setupFlow(t, h, base, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	const (
+		proto      = "anthropic.messages"
+		whole      = `{"system":"alpha rule","messages":[{"role":"user","content":"beta ask"}]}`
+		last       = `{"messages":[{"role":"user","content":"beta ask"}]}`
+		cachedPass = notePrefix + "pass (cached)"
+		queued     = notePrefix + "queued"
+	)
+	// The pair is a cached hit, its last part a cached pass.
+	if r := mustHook(t, h, rawReq(3, "pair", proto, whole)); r.GetNote() != queued {
+		t.Fatalf("the pair = %+v", r)
+	}
+	c := traceOf(t, recordOf(t, h, "pair")).Cache
+	written(t, p)
+	if r := mustHook(t, h, rawReq(3, "", proto, last)); r.GetNote() != queued {
+		t.Fatalf("the part = %+v", r)
+	}
+	waitSegs(t, fh, "with a pass and a pointer", 1, func(v segValue) bool { return v.pass > 0 && pointed(v) })
+	if r := mustHook(t, h, rawReq(3, "", proto, last)); r.GetNote() != cachedPass {
+		t.Fatalf("the part again = %+v", r)
+	}
+	// The hit entry is gone, from the KV and from memory, and the pointers
+	// are no longer young.
+	snap := p.snap.Load()
+	hitKey := hitKeyOf(snap.scopeOf(snap.flows[flow]), c.Key)
+	kvDelete(t, fh, hitKey)
+	p.cache.Load().forget([]string{hitKey})
+	clock.Store(int64(2 * tombstoneTTL))
+	n, known := calls.Load(), p.stats.cacheHits.Load()
+	// The first request cannot tell from memory: queued, and the worker asks
+	// the KV. The second and the third are answered from memory.
+	if r := mustHook(t, h, rawReq(3, "", proto, last)); r.GetNote() != queued {
+		t.Fatalf("the part with a pointer to an entry that is not in memory = %+v", r)
+	}
+	waitFor(t, "the worker's lookup", func() bool { return p.stats.cacheHits.Load() == known+1 })
+	for i := range 2 {
+		if r := mustHook(t, h, rawReq(3, "", proto, last)); r.GetNote() != cachedPass {
+			t.Fatalf("request %d after the KV said the entry is not there = %+v", i+2, r)
+		}
+	}
+	if calls.Load() != n {
+		t.Fatalf("%d upstream calls", calls.Load()-n)
+	}
+	// The KV was not written for it.
+	if v := segValues(t, fh); len(v) != 2 {
+		t.Fatalf("segment keys = %v", v)
+	}
+	for key, v := range segValues(t, fh) {
+		if !pointed(v) {
+			t.Fatalf("%s lost its pointer in the KV: %+v", key, v)
+		}
 	}
 }
 

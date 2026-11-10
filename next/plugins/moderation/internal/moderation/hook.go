@@ -304,7 +304,7 @@ func (p *Plugin) planUncached(m *moderation, req *request) (*plan, *pluginv1.Gat
 		// Under post timing such a conversation is recorded as a replayed
 		// hit on every turn and its new content is never sent to an
 		// auditor; under pre timing the request is refused anyway.
-		return nil, p.replay(m, req, cached.hit, cached.hitID)
+		return nil, p.replaySafely(m, req, cached.hit, cached.hitID)
 	}
 	pl := req.makePlan(m.cfg.limits, func(h [32]byte) bool { return cached.passed[h] })
 	if len(pl.chunks) > 0 {
@@ -371,7 +371,7 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 		defer func() {
 			if v := recover(); v != nil {
 				p.log.Error("moderation: pre run panicked", "request_id", m.rec.RequestID, "panic", fmt.Sprint(v), "stack", string(debug.Stack()))
-				r = &sharedRun{tr: m.afterPanic(runs)}
+				r = &sharedRun{tr: afterPanic(runs, m.combine)}
 			}
 		}()
 		// The shared run has its own deadline, so a waiter that gives up
@@ -406,11 +406,43 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 	if ctx.Err() != nil && !refused {
 		return allow(traceNote(m, r.tr))
 	}
-	p.concludePre(m, r, start)
+	p.concludeSafely(m, r, start)
 	if refused {
 		return deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, traceNote(m, r.tr))
 	}
 	return allow(traceNote(m, r.tr))
+}
+
+// concludeSafely is concludePre on the goroutine of the hook. A panic while
+// the request is counted or its record handed over is logged and ends there:
+// the answer is the one the run decided. Left to the SDK's recover the hook
+// would fail, and the core lets a request through whose hook failed
+// (manifest: failure "open") - also one the auditors judged a hit.
+func (p *Plugin) concludeSafely(m *moderation, r *sharedRun, start time.Time) {
+	defer func() {
+		if v := recover(); v != nil {
+			p.log.Error("moderation: concluding the pre run panicked; the verdict stands", "request_id", m.rec.RequestID,
+				"final", r.tr.Final, "panic", fmt.Sprint(v), "stack", string(debug.Stack()))
+		}
+	}()
+	p.concludePre(m, r, start)
+}
+
+// replaySafely is replay on the goroutine of the hook: a panic while the
+// replayed hit is counted or recorded is logged, and the answer is the one of
+// the replay - a refusal under pre timing (concludeSafely has the reason).
+func (p *Plugin) replaySafely(m *moderation, req *request, hit *storedHit, id string) (resp *pluginv1.GatewayRequestHookResponse) {
+	defer func() {
+		if v := recover(); v != nil {
+			p.log.Error("moderation: replaying a cached hit panicked; the verdict stands", "request_id", m.rec.RequestID,
+				"panic", fmt.Sprint(v), "stack", string(debug.Stack()))
+			resp = allow(notePrefix + "hit (replay)")
+			if m.timing == TimingPre {
+				resp = deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, notePrefix+"hit replay")
+			}
+		}
+	}()
+	return p.replay(m, req, hit, id)
 }
 
 // panickedRun is the trace of a run that panicked: nothing judged, an error.
@@ -419,10 +451,14 @@ func panickedRun() Trace { return Trace{Final: Pass, Decider: -1, Errored: true}
 // afterPanic is the trace of a shared pre run that panicked. runs are the
 // runs of its chunks, nil when the panic came before they returned: then
 // nothing judged (panickedRun). With them the panic came while the verdicts
-// were stored or the runs combined, and the result is the combined runs as
-// without the panic. Should combining them panic (again), the first run that
-// hit stands alone: a hit the auditors decided is never turned into a pass.
-func (m *moderation) afterPanic(runs []Trace) (tr Trace) {
+// were stored or the runs combined, and the result is the combined runs
+// (combine, moderation.combine) as without the panic. Should combining them
+// panic (again), the first run that hit stands alone: a hit the auditors
+// decided is never turned into a pass. It is its chunk's own run, with the
+// number of the chunk when there are several (as combineTraces numbers them;
+// the record names the hit set of that chunk, finish) and without the other
+// runs and the request's input; without a hit nothing judged (panickedRun).
+func afterPanic(runs []Trace, combine func([]Trace) Trace) (tr Trace) {
 	if runs == nil {
 		return panickedRun()
 	}
@@ -432,12 +468,15 @@ func (m *moderation) afterPanic(runs []Trace) (tr Trace) {
 			for i := range runs {
 				if runs[i].Final == Hit {
 					tr = runs[i]
+					if len(runs) > 1 {
+						tr.Chunk = i + 1
+					}
 					break
 				}
 			}
 		}
 	}()
-	return m.combine(runs)
+	return combine(runs)
 }
 
 // concludePre counts the request (with the latency moderation added) and the
@@ -570,9 +609,24 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 // judging auditor of the run will do (Trace.receivedImages); for a pass the
 // image must have been received by an auditor that itself passed, in a stage
 // that passed (Trace.passedImages) - not by one that hit while another
-// auditor, which never got the image, passed the text. An image that does not
-// count is moderated again with the next request that holds it, by then
+// auditor, which never got the image, passed the text. An image nobody
+// received is moderated again with the next request that holds it, by then
 // usually on its own, the text around it having passed.
+//
+// A chunk whose run ends in a pass while it holds an image that some auditor
+// received and no passing auditor did (Trace.judgedUnpassedImage: the first
+// stage hit because of the image and a text-only reviewer overturned it, or
+// one all / at_least stage whose passing auditors did not get the image)
+// stores no pass for ANY of its segments, the text included (the owner's
+// decision of 2026-11-10). With the text cached the next request would send
+// the image alone: the auditor that got it hits again, the reviewer has
+// nothing to judge and is skipped, and the same request that was let through
+// is refused, counted as a violation and replayed as a hit from then on. So
+// such content is judged as a whole every time and gets the same result every
+// time: it is let through, like an audit that reached no conclusion. The
+// cost: these requests are never answered from the cache, every one of them
+// calls the auditors again. (new-api refuses them: there an image is a block
+// of its own, which a text-only auditor cannot overturn.)
 //
 // It is called once per run (the shared pre run, the post worker), not per
 // request. The scope carries the clear counter of now, not of the snapshot
@@ -593,6 +647,8 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 			if keys := m.sentKeys(ch, run); len(keys) > 0 {
 				hits = append(hits, newStoredHit(m.rec.RequestID, hexKeys(keys), *run, now))
 			}
+		case run.judgedUnpassedImage():
+			// Nothing is stored: judged as a whole again the next time.
 		case !run.stageSkipped():
 			skipped := m.unreceived(ch, run.passedImages)
 			for _, s := range ch.segs {

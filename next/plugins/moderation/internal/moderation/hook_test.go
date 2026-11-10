@@ -1307,14 +1307,29 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 		t.Fatalf("record of the panic while storing = %s %s", ev.Result, ev.Trace)
 	}
 	waitFor(t, "the second panic in the log", func() bool { return logged(fh, "pre run panicked") == 2 })
-	// Nothing judged and combining impossible: an error. With a hit among the
-	// runs the hit stands.
-	if tr := (&moderation{}).afterPanic(nil); tr.Final != Pass || !tr.Errored {
+	// Nothing judged: an error. With the runs the result is their combination.
+	two := &moderation{chunks: []*chunk{{}, {}}}
+	if tr := afterPanic(nil, two.combine); tr.Final != Pass || !tr.Errored {
 		t.Fatalf("no runs = %+v", tr)
 	}
-	broken := &moderation{plan: nil}
-	if tr := broken.afterPanic([]Trace{{Final: Pass, Decider: -1}, {Final: Hit}}); tr.Final != Hit || tr.Chunk != 2 {
+	runs := []Trace{{Final: Pass, Decider: -1}, {Final: Hit}, {Final: Hit, Errored: true}}
+	if tr := afterPanic(runs, two.combine); tr.Final != Hit || tr.Chunk != 2 || len(tr.Chunks) != 2 {
 		t.Fatalf("runs with a hit = %+v", tr)
+	}
+	// Combining panics as well: the first run that hit stands alone, with the
+	// number of its chunk - the record names the hit set of that chunk, not of
+	// the first one. Without a hit nothing judged.
+	combined := 0
+	panics := func([]Trace) Trace { combined++; panic("combining panicked") }
+	tr := afterPanic(runs, panics)
+	if combined != 1 || tr.Final != Hit || tr.Errored || tr.Chunk != 2 || len(tr.Chunks) != 0 || two.chunkOf(tr) != two.chunks[1] {
+		t.Fatalf("combining panicked, runs with a hit = %+v (combine called %d times)", tr, combined)
+	}
+	if tr := afterPanic(runs[1:2], panics); tr.Final != Hit || tr.Chunk != 0 {
+		t.Fatalf("combining panicked, one run = %+v", tr)
+	}
+	if tr := afterPanic(runs[:1], panics); tr.Final != Pass || !tr.Errored || tr.Chunk != 0 {
+		t.Fatalf("combining panicked, no hit = %+v", tr)
 	}
 	if n := mod.count("/v1/moderations"); n != 1 { // the second job reached the upstream
 		t.Fatalf("upstream calls = %d", n)
@@ -1326,6 +1341,57 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
 	if st.Today.Errors != 1 || st.Today.Audited != 3 {
 		t.Fatalf("today = %+v", st.Today)
+	}
+}
+
+// Fourth round, F4: a panic while the result of a pre run is counted or
+// recorded does not change the answer. Left to the SDK the hook would fail,
+// and the core lets a request through whose hook failed - also one the
+// auditors judged a hit, or a cached hit decides.
+func TestHitStandsWhenRecordingPanics(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	// Without its event writer the plugin panics where a record is handed
+	// over (finish, replay).
+	setWriter := func(w *batch.Writer[eventRec]) {
+		p.poolMu.Lock()
+		p.eventWriter = w
+		p.poolMu.Unlock()
+	}
+	writer := p.eventWriter
+	setWriter(nil)
+	defer setWriter(writer)
+	const text = "MOD-HIT-sexual while recording panics"
+	r := mustHook(t, h, hookReqAs(3, "hit", text))
+	if !denied(r) || replayed(r) || r.GetDenyCode() != DenyBlocked || !strings.HasPrefix(r.GetNote(), notePrefix+"hit flow=") {
+		t.Fatalf("a hit whose record panics = %+v", r)
+	}
+	if n := logged(fh, "concluding the pre run panicked"); n != 1 {
+		t.Fatalf("%d panics logged", n)
+	}
+	// The cached hit, replayed.
+	r = mustHook(t, h, hookReqAs(3, "replay", text))
+	if !denied(r) || !replayed(r) || r.GetDenyCode() != DenyBlocked || mod.count("/v1/moderations") != 1 {
+		t.Fatalf("a replay whose record panics = %+v", r)
+	}
+	if n := logged(fh, "replaying a cached hit panicked"); n != 1 {
+		t.Fatalf("%d replay panics logged", n)
+	}
+	// A pass stays a pass.
+	if r := mustHook(t, h, hookReqAs(3, "pass", "a harmless text while recording panics")); denied(r) || !strings.HasPrefix(r.GetNote(), notePrefix+"pass flow=") {
+		t.Fatalf("a pass whose record panics = %+v", r)
+	}
+	if n := logged(fh, "concluding the pre run panicked"); n != 2 {
+		t.Fatalf("%d panics logged", n)
+	}
+	// With the writer back the hook records again.
+	setWriter(writer)
+	if r := mustHook(t, h, hookReqAs(3, "after", "MOD-HIT-sexual after the panics")); !denied(r) {
+		t.Fatalf("after the panics = %+v", r)
+	}
+	if ev := recordOf(t, h, "after"); ev.Result != ResultBlock {
+		t.Fatalf("record after the panics = %s", ev.Result)
 	}
 }
 

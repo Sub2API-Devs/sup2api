@@ -328,6 +328,21 @@ func (t *Trace) passedImages() map[int]bool {
 	return out
 }
 
+// judgedUnpassedImage reports whether the run's input holds an image some
+// auditor received in a call that judged (receivedImages) and no passing
+// auditor did (passedImages): in a run that ends in a pass, an image a hit
+// was decided about while the pass rests on auditors that never got it
+// (settleVerdicts).
+func (t *Trace) judgedUnpassedImage() bool {
+	passed := t.passedImages()
+	for i := range t.receivedImages() {
+		if !passed[i] {
+			return true
+		}
+	}
+	return false
+}
+
 // runs returns the trace's own run and the other chunks' runs.
 func (t *Trace) runs() []*Trace {
 	out := []*Trace{t}

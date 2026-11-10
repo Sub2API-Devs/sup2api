@@ -802,7 +802,7 @@ func TestLRUByteBudget(t *testing.T) {
 	// and expiring free.
 	hit := &storedHit{Keys: []string{"k"}}
 	c.maxBytes = 1 << 20
-	if !c.putHit("h", hit, 1000, exp, now) || c.getHit("h", now) != hit || c.size() != 2*one+pointer+1+hitDecodedFactor*1000+cacheEntryOverhead {
+	if !c.putHit("h", hit, 1000, exp, now, false) || c.getHit("h", now) != hit || c.size() != 2*one+pointer+1+hitDecodedFactor*1000+cacheEntryOverhead {
 		t.Fatalf("with a hit: %d bytes", c.size())
 	}
 	if _, _, ok := c.seg("h", now); ok || c.getHit("a", now) != nil {
@@ -816,7 +816,7 @@ func TestLRUByteBudget(t *testing.T) {
 	}
 	// An entry larger than the whole budget is not kept.
 	c.maxBytes = one
-	c.putHit("big", hit, int(one), exp, now)
+	c.putHit("big", hit, int(one), exp, now, false)
 	if c.len() != 0 || c.size() != 0 {
 		t.Fatalf("an entry beyond the budget: %d entries, %d bytes", c.len(), c.size())
 	}
@@ -833,13 +833,13 @@ func TestLRUTombstone(t *testing.T) {
 	stone := int64(1 + tombstoneOverhead) // of a one-letter key
 	c := newLRU(10)
 	c.editSeg("s", now, ttl, passAt(at))
-	c.putHit("h", &storedHit{}, 10, exp, now)
+	c.putHit("h", &storedHit{}, 10, exp, now, false)
 	c.kill([]string{"s", "h"}, now.Add(time.Second), now)
 	if c.len() != 0 || c.size() != 2*stone || !c.tombstoned("s", now) || c.tombstoned("other", now) {
 		t.Fatalf("killed: %d entries, %d bytes", c.len(), c.size())
 	}
 	c.editSeg("s", now, ttl, passAt(at))
-	if c.putHit("h", &storedHit{}, 10, exp, now) || c.len() != 0 {
+	if c.putHit("h", &storedHit{}, 10, exp, now, false) || c.len() != 0 {
 		t.Fatal("a tombstoned key was stored")
 	}
 	// What the KV holds for a tombstoned key decides the lookup that read it
@@ -857,7 +857,7 @@ func TestLRUTombstone(t *testing.T) {
 		t.Fatalf("tombstones after their time: %v, %d bytes", c.dead, c.size())
 	}
 	c.editSeg("s", later, ttl, passAt(at))
-	if !c.putHit("h", &storedHit{}, 10, exp, later) || c.len() != 2 {
+	if !c.putHit("h", &storedHit{}, 10, exp, later, false) || c.len() != 2 {
 		t.Fatal("a key could not be stored after its tombstone")
 	}
 	// Each tombstone goes at its own time.
