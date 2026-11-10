@@ -42,7 +42,7 @@ export function useKeyBulk(on: KeyBulkHooks) {
     if (!lines.length) return report(out)
     if (!(await copyText(lines.join('\n')))) return toast(t('common.copyFailed'), 'error')
     const skipped = keys.length - copyable.length
-    toast(t(skipped ? 'apikeys.bulk.copiedSkipped' : 'apikeys.bulk.copied', { n: lines.length, skipped }), 'success')
+    toast(t(skipped ? 'apikeys.bulk.copiedSkipped' : 'apikeys.bulk.copied', { skipped }, lines.length), 'success')
     if (out.failed.length) report(out)
   }
 
@@ -61,8 +61,7 @@ export function useKeyBulk(on: KeyBulkHooks) {
   }
 
   async function remove(keys: ApiKey[]) {
-    if (!(await confirm({ title: t('apikeys.bulk.delete'), message: t('apikeys.bulk.confirmDelete', { n: keys.length }), danger: true })))
-      return
+    if (!(await confirm({ title: t('apikeys.bulk.delete'), message: t('apikeys.bulk.confirmDelete', keys.length), danger: true }))) return
     const out = await bulk.run(keys, k => api.del(`/me/api-keys/${k.id}`))
     report(out)
     on.removed(out.ok)

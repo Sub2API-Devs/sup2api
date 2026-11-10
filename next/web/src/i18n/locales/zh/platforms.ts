@@ -10,5 +10,6 @@ export default {
   keyNoPlatforms: '该分组暂时无法提供服务（没有可用账号）。',
   moreEndpoints: '另有 {n} 个',
   unknownEndpoints: '暂时无法获取该平台的端点。',
-  converted: '经协议转换'
+  converted: '经协议转换',
+  convertedAlso: '经协议转换还可调用：{platforms}'
 }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { i18n } from '@/i18n'
 import type { ApiKey } from '@/api/types'
+import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 import KeyUseGuide from './KeyUseGuide.vue'
 import { gatewayBase } from './keyClients'
 
@@ -10,7 +11,7 @@ vi.mock('@sub2api/host', () => ({ api: { post } }))
 vi.mock('./openApp', () => ({ useOpenApp: () => open }))
 vi.mock('@/utils/errors', () => ({ notifyError }))
 vi.mock('@/composables/platforms', () => ({
-  usePlatforms: () => ({ load: vi.fn(), endpointsOf: () => [], label: (v: string) => v, find: () => undefined })
+  usePlatforms: () => ({ platforms: { value: [] }, load: vi.fn(), endpointsOf: () => [], label: (v: string) => v, find: () => undefined })
 }))
 enableAutoUnmount(afterEach)
 const key = (k: Partial<ApiKey> = {}) =>
@@ -62,15 +63,15 @@ describe('API key use guide', () => {
     await w.get('[data-testid="guide-import-magpie"]').trigger('click')
     expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'magpie' }), 'sk-s2a-full-secret')
   })
-  it("lists what to fill into Magpie: the key, each protocol's address and the balance query", async () => {
+  it("lists what to fill into Magpie under the names of Magpie's own form: the key, each protocol's address and the balance query", async () => {
     const w = await guide({ platforms: ['anthropic', 'openai', 'gemini'] })
     await pickTab(w, 'Magpie')
     expect(imports(w)).toEqual(['导入 Magpie'])
     expect(blocks(w)).toEqual([
-      ['API Key', 'sk-s2a-full-secret', true],
-      ['Anthropic Messages 地址（网关根地址，不带 /v1）', base, true],
-      ['OpenAI Chat Completions 地址', `${base}/v1`, true],
-      ['OpenAI Responses 地址', `${base}/v1`, true],
+      ['API 密钥', 'sk-s2a-full-secret', true],
+      ['Anthropic 地址（网关根地址，不带 /v1）', base, true],
+      ['OpenAI 地址（Chat Completions）', `${base}/v1`, true],
+      ['Responses 地址', `${base}/v1`, true],
       ['Gemini 地址', `${base}/v1beta`, true],
       ['余额查询地址（Magpie 用这个 Key 请求）', `${base}/v1/usage`, true],
       ['余额字段', 'remaining', true]
@@ -82,9 +83,9 @@ describe('API key use guide', () => {
     await pickTab(w, 'Magpie')
     expect(blocks(w).map(([caption]) => caption)).toEqual([
       'API key',
-      'Anthropic Messages base URL (the gateway root, without /v1)',
+      'Anthropic URL (the gateway root, without /v1)',
       'Balance URL (Magpie asks it with this key)',
-      'Balance path'
+      'Balance field'
     ])
   })
   it('shows a legacy key by its prefix without revealing or importing it', async () => {
@@ -109,6 +110,11 @@ describe('API key use guide', () => {
     expect(notifyError).toHaveBeenCalledWith(failure)
     expect(w.get('[data-testid="key-use-snippet"]').text()).toContain('sk-s2a-abcd…')
     expect(imports(w)).toEqual([])
+  })
+  it("lists the endpoints the key can call by its group's platforms, unfolded", async () => {
+    const w = await guide({ platforms: ['anthropic'] })
+    expect(w.getComponent(PlatformEndpointsPreview).props()).toEqual({ ids: ['anthropic'], max: undefined, fold: false })
+    expect((await guide({ platforms: [] })).findComponent(PlatformEndpointsPreview).exists()).toBe(false)
   })
   it('has no client or app to set up for other platforms', async () => {
     const w = await guide({ platforms: ['volcengine'] })

@@ -8,10 +8,12 @@
 // Hidden while nothing is selected unless `persistent`; the #idle slot then
 // replaces the count (e.g. a hint).
 // On a compact screen a selection shows as a bar fixed to the bottom of the
-// screen (its height reserved in the page flow, so the last rows and the
-// pager can scroll clear of it): the count opens a menu with the select /
-// clear choices, the action buttons sit on the right; the idle `persistent`
-// strip is not shown there.
+// screen: the count opens a menu with the select / clear choices, the action
+// buttons sit on the right; the idle `persistent` strip is not shown there.
+// The bar takes no room where the component stands (`contents`: the caller's
+// margin classes are meant for the wide bar); its height is kept free at the
+// end of the element holding it (see the style below), so place it beside
+// the list it acts on.
 import { computed } from 'vue'
 import { useUiT } from './i18n'
 import SLink from './SLink.vue'
@@ -56,7 +58,7 @@ function choose(key: string) {
 </script>
 
 <template>
-  <div v-if="compact && count > 0" class="h-[calc(4rem+env(safe-area-inset-bottom))]" data-testid="bulk-dock-space">
+  <div v-if="compact && count > 0" class="contents" data-bulk-dock>
     <BulkDock :label="label" :actions="choices" @select="choose">
       <slot />
     </BulkDock>
@@ -76,3 +78,14 @@ function choose(key: string) {
     <div class="ms-auto flex flex-wrap items-center gap-2"><slot /></div>
   </div>
 </template>
+
+<style>
+/* The docked bar covers the bottom of the screen. The element holding it ends
+   with that much empty room, so its last rows and the pager can scroll clear. */
+:has(> [data-bulk-dock])::after {
+  content: '';
+  display: block;
+  flex: none;
+  height: calc(4rem + env(safe-area-inset-bottom));
+}
+</style>

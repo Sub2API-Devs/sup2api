@@ -266,7 +266,7 @@ function remove(k: ApiKey) {
       <template #cell-key_prefix="{ row }"><ApiKeyCell :api-key="row" /></template>
       <template #cell-models="{ row }"><KeyModelsCell :group="groupOf(row)" /></template>
       <template #cell-ips="{ row }">
-        <KeyListChip :items="row.allowed_ips" :empty-label="t('apikeys.unlimited')" :label="t('apikeys.ipAllowlistShort', { n: row.allowed_ips?.length ?? 0 })" data-testid="key-ip-restricted" />
+        <KeyListChip :items="row.allowed_ips" :empty-label="t('apikeys.unlimited')" :label="t('apikeys.ipAllowlistShort', row.allowed_ips?.length ?? 0)" data-testid="key-ip-restricted" />
       </template>
       <template #cell-usage="{ row }">
         <button type="button" class="-m-1 rounded-md p-1 text-left hover:bg-surface-2" :title="t('stats.key.open')" data-testid="open-key-usage" @click="usageKey = row">

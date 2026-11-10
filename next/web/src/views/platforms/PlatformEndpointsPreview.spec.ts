@@ -31,13 +31,11 @@ describe('platform endpoints preview', () => {
   })
 
   it('lists the endpoints of each platform under its brand badge, free ones marked', () => {
-    const w = render({ ids: ['anthropic', 'myvideo'] })
-    expect(ids(w)).toEqual(['anthropic', 'myvideo'])
-    const [anthropic, video] = sections(w)
+    const [anthropic, video] = sections(render({ ids: ['anthropic', 'myvideo'] }))
     expect(anthropic.get('[data-testid="platform-badge"]').text()).toBe('Anthropic')
     expect(anthropic.findAll('li').map(li => li.text())).toEqual(['POST /v1/messages', 'POST /v1/messages/count_tokens(不计费)'])
     expect(video.get('[data-testid="platform-badge"]').text()).toBe('MMyVideo 视频')
-    expect(w.text()).not.toContain('经协议转换')
+    expect(video.findAll('li').map(li => li.text())).toEqual(['POST /v1/video/generations'])
   })
 
   it('cuts each platform at `max` endpoints and counts the rest', () => {
@@ -53,8 +51,8 @@ describe('platform endpoints preview', () => {
     expect(gone.text()).toContain('暂时无法获取该平台的端点。')
   })
 
-  it('adds, when asked, the endpoints of other platforms reached through conversion, marked as such', () => {
-    const w = render({ ids: ['anthropic'], converted: true })
+  it('adds the endpoints of other platforms reached through conversion, marked as such', () => {
+    const w = render({ ids: ['anthropic'] })
     expect(ids(w)).toEqual(['anthropic', 'openai', 'gemini'])
     const [anthropic, openai] = sections(w)
     expect(anthropic.attributes('data-converted')).toBeUndefined()
@@ -63,6 +61,27 @@ describe('platform endpoints preview', () => {
     expect(openai.text()).toContain('经协议转换')
     expect(openai.findAll('li').map(li => li.text())).toEqual(['POST /v1/chat/completions', 'POST /v1/responses'])
     // A platform without a text endpoint converts to nothing.
-    expect(ids(render({ ids: ['myvideo'], converted: true }))).toEqual(['myvideo'])
+    expect(ids(render({ ids: ['myvideo'] }))).toEqual(['myvideo'])
+  })
+
+  it('keeps the converted platforms behind a toggle that names them when folded', async () => {
+    const w = render({ ids: ['anthropic'], max: 2, fold: true })
+    expect(ids(w)).toEqual(['anthropic'])
+    const fold = w.get('[data-testid="converted-endpoints"]')
+    expect(fold.text()).toBe('经协议转换还可调用：OpenAI、Gemini')
+    expect(fold.find('[data-platform]').exists()).toBe(false)
+    await fold.get('button').trigger('click')
+    expect(fold.findAll('div[data-platform]').map(s => s.attributes('data-platform'))).toEqual(['openai', 'gemini'])
+    expect(fold.findAll('div[data-platform="gemini"] li').map(li => li.text())).toEqual([
+      'POST /v1beta/models/:model:generateContent',
+      'POST /v1beta/models/:model:streamGenerateContent',
+      '另有 1 个'
+    ])
+    // Nothing converted, nothing to unfold.
+    expect(
+      render({ ids: ['myvideo'], fold: true })
+        .find('[data-testid="converted-endpoints"]')
+        .exists()
+    ).toBe(false)
   })
 })

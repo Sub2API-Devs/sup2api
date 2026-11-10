@@ -35,7 +35,7 @@ vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string) => moc
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ theme: 'light' }) }))
 vi.mock('@/composables/lookups', () => ({ fetchMyGroups: async () => GROUPS }))
 vi.mock('@/composables/platforms', () => ({
-  usePlatforms: () => ({ load: vi.fn(), label: (value: string) => value, endpointsOf: () => [] })
+  usePlatforms: () => ({ platforms: { value: [] }, load: vi.fn(), label: (value: string) => value, endpointsOf: () => [] })
 }))
 vi.mock('@/utils/errors', () => ({ fieldErrors: () => ({}), errorMessage: (e: Error) => e.message, notifyError: mocks.notifyError }))
 vi.mock('@/utils/format', async original => ({ ...(await original<typeof import('@/utils/format')>()), copyText: mocks.copyText }))

@@ -22,7 +22,7 @@ const { t } = useI18n()
       <SHint v-if="!group.platforms.length" tone="warning" size="xs">{{ t('platforms.keyNoPlatforms') }}</SHint>
       <div v-else>
         <div class="mb-1">{{ t('platforms.keyEndpoints') }}:</div>
-        <PlatformEndpointsPreview :ids="group.platforms" :max="3" />
+        <PlatformEndpointsPreview :ids="group.platforms" :max="3" fold />
       </div>
     </template>
   </div>

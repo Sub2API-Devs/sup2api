@@ -15,6 +15,9 @@
 //   emulation, so it is not the yardstick);
 // - list pages show their rows as STable cards, with no visible <table> in main;
 // - on the main list pages the first card starts within the first screen.
+// - ticking a card docks the bulk bar at the bottom without moving the list:
+//   the first card stays where it was, the fab hides and the end of the page
+//   scrolls clear of the dock.
 import { createRequire } from 'node:module'
 import { after, before, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -56,6 +59,9 @@ const FIRST_SCREEN_PAGES = [
   '/me/api-keys',
   '/me/usage'
 ]
+
+/** List pages with a bulk bar: ticking a card docks it at the bottom of the screen. */
+const BULK_PAGES = ['/accounts', '/me/api-keys']
 
 /** Pages without a menu entry: the balance ledger is opened from a row of the users list. */
 const LINKED_PAGES = ['/ledger']
@@ -131,6 +137,34 @@ for (const name of DEVICES) {
           assert.equal(m.tables, 0, `${path} shows a table`)
           if (FIRST_SCREEN_PAGES.includes(path))
             assert.ok(m.cardTop < device.viewport.height, `${path}: the first card starts at ${m.cardTop}px`)
+        })
+      }
+    })
+
+    test('ticking a card docks the bulk bar without moving the list; the page end scrolls clear of it', async t => {
+      for (const path of BULK_PAGES) {
+        await t.test(path, async () => {
+          await page.goto(`${BASE}${path}`)
+          const first = page.locator('main ul[role="list"] > li').first()
+          await first.waitFor()
+          const fab = page.locator('[data-fab]')
+          await fab.waitFor()
+          const topBefore = (await first.boundingBox()).y
+          await first.locator('input[type="checkbox"]').first().check({ force: true })
+          await page.locator('[data-bulk-dock] [role="region"]').waitFor()
+          assert.equal((await first.boundingBox()).y, topBefore, `${path}: the first card moved`)
+          assert.equal(await fab.isVisible(), false, `${path}: the fab shows over the dock`)
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+          const m = await page.evaluate(() => {
+            const main = document.querySelector('main')
+            const dock = document.querySelector('[data-bulk-dock] [role="region"]')
+            const content = Array.from(main.querySelectorAll('ul[role="list"] > li, nav')).filter(el => el.checkVisibility())
+            return {
+              dockTop: dock.getBoundingClientRect().top,
+              contentBottom: Math.max(...content.map(el => el.getBoundingClientRect().bottom))
+            }
+          })
+          assert.ok(m.contentBottom <= m.dockTop, `${path}: the page ends at ${m.contentBottom}px under the dock at ${m.dockTop}px`)
         })
       }
     })

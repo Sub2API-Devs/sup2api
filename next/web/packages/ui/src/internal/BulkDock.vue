@@ -2,7 +2,7 @@
 // Phone form of SBulkBar while rows are selected: a bar fixed to the bottom
 // of the screen (clear of the home indicator) with the selection `label` as
 // a menu of `actions` on the left and the action buttons (default slot) on
-// the right. It stacks above a floating action button (SButton fab).
+// the right. A floating action button (SButton fab) is hidden meanwhile.
 import type { MenuAction } from '../types'
 import SButton from '../SButton.vue'
 import SDropdown from '../SDropdown.vue'

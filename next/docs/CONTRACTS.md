@@ -7103,16 +7103,17 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 
 ### 92.3 快捷配置
 
-行操作“快捷配置”是一个下拉菜单：“一键导入到”下每个受支持的应用一项，最后是“手动配置说明”。应用清单由 `keyAppsFor(platforms)`（`keyApps.ts`）按 Key 可达的平台给出，链接里的名称取控制台主机名，网关地址取 `window.location.origin`：
+行操作“快捷配置”是一个下拉菜单：“一键导入到”下每个受支持的应用一项，最后是“手动配置说明”。应用清单由 `keyAppsFor(platforms)`（`keyApps.ts`）按 Key 所在分组自己的平台（`Group.platforms`）给出，链接里的名称取控制台主机名，网关地址取 `window.location.origin`：
 
 | 应用 | 条件 | 链接 |
 |---|---|---|
 | CC Switch（每个客户端一项） | 平台有对应客户端（`keyClients.ts` 的 `CLIENTS`） | `ccswitch://v1/import?resource=provider&app&name&homepage&endpoint&apiKey&configFormat=json&usageEnabled=true&usageScript=<base64>&usageAutoInterval=30`，与 §62 相同 |
-| Magpie | Key 可达 anthropic、openai、gemini 中至少一个 | `magpie://import?name&key&anthropic=<网关>&chat=<网关>/v1&responses=<网关>/v1&gemini=<网关>/v1beta&website=<网关>&balance=<网关>/v1/usage&balance_path=remaining`，只带可达平台的协议参数，不带模型列表，空格编码为 `%20` |
+| Magpie | 分组自己的平台里有 anthropic、openai、gemini 中至少一个 | `magpie://import?name&key&anthropic=<网关>&chat=<网关>/v1&responses=<网关>/v1&gemini=<网关>/v1beta&website=<网关>&balance=<网关>/v1/usage&balance_path=remaining`，只带分组自己平台的协议参数，不带模型列表，空格编码为 `%20` |
 
 - 点应用项时先 `reveal` 取明文，再把页面地址设为该链接；1.5 秒后页面仍有焦点就提示“没有打开？请先安装客户端”。明文只进这个自定义协议链接，不进任何 HTTP 请求的查询串。
 - 只保存了哈希的旧 Key：应用项全部禁用，菜单头部说明原因，仍可打开手动配置说明（说明里用前缀占位，含占位密钥的代码块不可复制，没有导入按钮）。
-- 手动配置说明（`KeyUseGuide.vue`）在各客户端页签之后多一个 Magpie 页签，逐项列出 API Key、各协议地址、余额查询地址（`/v1/usage`）和余额字段（`remaining`）。
+- 应用清单和客户端页签不含经协议转换可达的平台（92.5）：协议能转换不等于模型可用，给 Claude 分组的 Key 生成 Codex 配置会因模型名对不上而失败。接入地址的展示才包含转换端点。
+- 手动配置说明（`KeyUseGuide.vue`）在各客户端页签之后多一个 Magpie 页签，逐项列出 API 密钥、各协议地址、余额查询地址（`/v1/usage`）和余额字段（`remaining`）。字段名照 Magpie 自定义供应商表单的界面文案（`internal/gui/assets/app.js`、`i18n.js`，2026-11-10 核对）：API key / API 密钥、Anthropic URL / Anthropic 地址、OpenAI URL / OpenAI 地址（Chat Completions）、Responses URL / Responses 地址、Gemini URL / Gemini 地址、Balance URL / 余额查询地址、Balance field / 余额字段；表单的“Base URL”一栏填所选协议的地址，其余协议地址在“更多端点”里，余额两项在“高级”里。说明末尾的“可调用的接口”包含经协议转换可达的端点（92.5）。
 
 ### 92.4 平台品牌色（控制台 `web/src/components/platform/`）
 
@@ -7126,11 +7127,12 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 
 - 列表、编辑窗口、详情都不再显示“可服务的平台”：核心对四种文本协议互转（§88），一个分组能接哪些协议不取决于它的账号属于哪个平台。`Group.platforms` 字段照常返回，控制台只用它给分组徽章着色和算接入地址。“有账号但不支持任何已启用平台”的警告随之取消。
 - 没有账号的分组在“账号数”前显示警告图标（`ProblemIcon`，`data-testid="group-no-accounts"`），列表、手机卡片和详情都有。
-- 详情的“接入地址”包含经协议转换可达的端点（`views/platforms/convertedEndpoints.ts`）：分组自己的平台里只要有一个文本协议端点（`anthropic.messages`、`openai.chat`、`openai.responses`、`gemini.generate`、`gemini.stream_generate`），就额外列出其它平台上这些协议以及两个 count_tokens 的端点，标“经协议转换”；embeddings、视频等不可转换的端点只列在自己平台下。这是按平台级端点做的近似，不看各账号类型声明的端点子集；这张协议清单与 `server/internal/convert` 的内置转换对一致，新增转换对时两处一起改。密钥页的接入地址仍只列分组自己平台的端点。
+- 接入地址（`views/platforms/PlatformEndpointsPreview.vue`：分组详情、密钥页的手动配置说明、密钥编辑窗口里的分组说明）一律包含经协议转换可达的端点（`views/platforms/convertedEndpoints.ts`）：分组自己的平台里只要有一个文本协议端点（`anthropic.messages`、`openai.chat`、`openai.responses`、`gemini.generate`、`gemini.stream_generate`），就额外列出其它平台上这些协议以及两个 count_tokens 的端点，标“经协议转换”；embeddings、视频等不可转换的端点只列在自己平台下。这是按平台级端点做的近似，不看各账号类型声明的端点子集；这张协议清单与 `server/internal/convert` 的内置转换对一致，新增转换对时两处一起改。密钥编辑窗口里的分组说明（`KeyGroupDetails.vue`）是个小框：每个平台最多列 3 个端点，转换端点收在“经协议转换还可调用：<平台名>”的展开项里（`fold`），默认收起；另两处直接列出。
 
 ### 92.6 兼容与混跑
 
-- 没有迁移；Host API、`HOST_UI_VERSION` 不变，`web/packages/ui`、`web/packages/host`、SDK、网关、内置插件都没改，按 rolling-v1 滚动更新（§82）。
+- 没有迁移；Host API、`HOST_UI_VERSION` 不变，`web/packages/host`、SDK、网关、内置插件都没改（0.1.270 也没改 `web/packages/ui`；0.1.271 的改动见本节末条），按 rolling-v1 滚动更新（§82）。
 - 新控制台遇到旧核心（滚动窗口内）：旧核心忽略 `q`、`status`、`group_id`，返回 200 和未筛选的全部 Key。列表会暂时显示未筛选的结果；跨页全选的结果在控制台按当前筛选再过一遍（92.2），批量操作不会作用到筛选之外的 Key。其余用到的接口和字段在 0.1.269 都已存在。
 - 旧控制台遇到新核心：不带这些参数，结果与之前相同。
+- 核心 0.1.271 的后续修补（仍无迁移、契约版本不变）：密钥页的接入地址也包含转换端点（92.5）；Magpie 手动填写说明的字段名改成 Magpie 界面上的叫法（92.3）；`SBulkBar` 手机停靠条的占位从组件原位置挪到它父元素的末尾，停靠期间 `fab` 按钮隐藏、控制台不再为它留底部空间（`web/packages/ui/README.md`“手机形态”；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，原生插件经 import map 用控制台这一份，不用重建；停靠时根元素带 `data-bulk-dock`，控制台布局据此让出 `fab` 的留白，原来占位元素的 `data-testid="bulk-dock-space"` 取消）。
 - 删除的控制台组件与标识：`KeyCcSwitchButton`、`KeyEnabledSwitch`、`ccSwitch.ts`、`GroupPlatforms`、`PlatformBadges`、`platformTheme.ts`；`data-testid` `key-enabled-switch`、`key-ccswitch`、`guide-ccswitch`、`use-key`、`group-platforms`、`platform-badges`。

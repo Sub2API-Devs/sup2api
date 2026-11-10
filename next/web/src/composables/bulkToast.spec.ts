@@ -28,9 +28,13 @@ describe('bulk result toast', () => {
     expect(toast).toHaveBeenLastCalledWith('成功 0 个，失败 1 个；acc-1：down', 'warning')
   })
 
-  it('speaks the language in use', () => {
+  it('speaks the language in use, with its plural forms', () => {
     i18n.global.locale.value = 'en'
     bulkToast('apikeys.bulk', 1, [failure('laptop', 'forbidden')])
     expect(toast).toHaveBeenLastCalledWith('1 succeeded, 1 failed (laptop: forbidden)', 'warning')
+    bulkToast('apikeys.bulk', 1, [])
+    expect(toast).toHaveBeenLastCalledWith('Processed 1 key', 'success')
+    bulkToast('apikeys.bulk', 2, [])
+    expect(toast).toHaveBeenLastCalledWith('Processed 2 keys', 'success')
   })
 })

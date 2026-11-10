@@ -72,11 +72,11 @@ export default {
     noClient: '这个 Key 所在分组的平台没有内置的客户端配置，可直接调用下方接口。',
     endpoints: '可调用的接口（地址前加 {base}）：',
     magpie: {
-      intro: '在 Magpie 里添加自定义提供商，按下面逐项填写；没有列出的协议地址留空。',
-      key: 'API Key',
-      anthropic: 'Anthropic Messages 地址（网关根地址，不带 /v1）',
-      chat: 'OpenAI Chat Completions 地址',
-      responses: 'OpenAI Responses 地址',
+      intro: '在 Magpie 里点“添加供应商”，选“自定义供应商”，按下面逐项填写：“Base URL”一栏选一种协议并填它的地址，其余协议的地址在“更多端点”里，余额两项在“高级”里；这里没有列出的地址留空。',
+      key: 'API 密钥',
+      anthropic: 'Anthropic 地址（网关根地址，不带 /v1）',
+      chat: 'OpenAI 地址（Chat Completions）',
+      responses: 'Responses 地址',
       gemini: 'Gemini 地址',
       balance: '余额查询地址（Magpie 用这个 Key 请求）',
       balance_path: '余额字段'

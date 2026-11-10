@@ -1,22 +1,22 @@
 export default {
   state: { active: 'Enabled', disabled: 'Disabled', expired: 'Expired', exhausted: 'Quota used up' },
   filter: { search: 'Search name or key', allStatus: 'All statuses', allGroups: 'All groups' },
-  models: { title: 'Models', allowed: '{n} entries', blocked: 'Excludes {n}' },
+  models: { title: 'Models', allowed: '{n} entry | {n} entries', blocked: 'Excludes {n}' },
   ipLimit: 'IP limit',
   unlimited: 'Unlimited',
   listMore: '{n} more',
-  ipAllowlistShort: '{n} entries',
+  ipAllowlistShort: '{n} entry | {n} entries',
   showKey: 'Show key',
   hideKey: 'Hide key',
   rotateHint: 'The old key stops working at once; the new key is shown once generated, and can be viewed and copied from the list later.',
   bulk: {
     copy: 'Copy keys',
-    copied: 'Copied {n} keys (one "name<TAB>key" per line)',
-    copiedSkipped: 'Copied {n} keys (one "name<TAB>key" per line); skipped {skipped} legacy keys that cannot be copied',
+    copied: 'Copied {n} key (as "name<TAB>key") | Copied {n} keys (one "name<TAB>key" per line)',
+    copiedSkipped: 'Copied {n} of the selected keys (one "name<TAB>key" per line); {skipped} skipped: legacy keys cannot be copied',
     nothingToCopy: 'The selected keys are all legacy keys and cannot be copied',
     delete: 'Delete selected keys',
-    confirmDelete: 'Delete the {n} selected API keys? Clients using them stop working at once.',
-    done: 'Processed {ok} keys',
+    confirmDelete: 'Delete the selected API key? Clients using it stop working at once. | Delete the {n} selected API keys? Clients using them stop working at once.',
+    done: 'Processed {ok} key | Processed {ok} keys',
     doneWithErrors: '{ok} succeeded, {fail} failed ({name}: {error})',
     nothingToChange: 'The selected keys are already in that state'
   },
@@ -57,14 +57,14 @@ export default {
     noClient: 'No built-in client configuration for the platforms of this key; call the endpoints below directly.',
     endpoints: 'Endpoints it can call (prefix them with {base}):',
     magpie: {
-      intro: 'Add a custom provider in Magpie and fill in the fields below; leave the address of a protocol not listed here empty.',
+      intro: 'In Magpie, choose "Add a provider", then "Custom provider", and fill in the fields below. Under "Base URL", pick one API and enter its address; the other addresses go under "More endpoints" and the two balance fields under "Advanced". Leave an address not listed here empty.',
       key: 'API key',
-      anthropic: 'Anthropic Messages base URL (the gateway root, without /v1)',
-      chat: 'OpenAI Chat Completions base URL',
-      responses: 'OpenAI Responses base URL',
-      gemini: 'Gemini base URL',
+      anthropic: 'Anthropic URL (the gateway root, without /v1)',
+      chat: 'OpenAI URL (Chat Completions)',
+      responses: 'Responses URL',
+      gemini: 'Gemini URL',
       balance: 'Balance URL (Magpie asks it with this key)',
-      balance_path: 'Balance path'
+      balance_path: 'Balance field'
     }
   },
   apps: {

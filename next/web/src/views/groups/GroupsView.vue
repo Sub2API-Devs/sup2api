@@ -327,7 +327,7 @@ async function onAction(listed: Group, key: string) {
           <SDescItem :label="t('accounts.conversion.title')"><span data-testid="group-detail-conversion">{{ conversionText(detail) }}</span></SDescItem>
           <SDescItem :label="t('groups.accountCount')"><GroupAccountCount :count="detail.account_count" /></SDescItem>
           <SDescItem :label="t('groups.keyCount')">{{ formatNumber(keyCount(detail)) }}</SDescItem>
-          <SDescItem v-if="detail.platforms?.length && detail.account_count !== 0" :label="t('platforms.endpoints')"><PlatformEndpointsPreview :ids="detail.platforms" converted /></SDescItem>
+          <SDescItem v-if="detail.platforms?.length && detail.account_count !== 0" :label="t('platforms.endpoints')"><PlatformEndpointsPreview :ids="detail.platforms" /></SDescItem>
         </SDescriptions>
       </template>
       <template #footer>

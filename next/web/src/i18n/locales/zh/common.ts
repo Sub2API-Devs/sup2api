@@ -65,6 +65,7 @@ export default {
   thisMonth: '本月',
   more: '更多',
   unlimited: '不限',
+  listSeparator: '、',
   never: '从未',
   source: '来源',
   version: '版本',

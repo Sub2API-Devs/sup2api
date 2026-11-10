@@ -203,6 +203,29 @@ describe('API key bulk actions', () => {
     })
   })
 
+  it('speaks of one key in the singular in English, of several in the plural', async () => {
+    i18n.global.locale.value = 'en'
+    confirm.mockResolvedValue(false)
+    const { bulk } = setup()
+    await bulk.copy([laptop])
+    expect(toast).toHaveBeenLastCalledWith('Copied 1 key (as "name<TAB>key")', 'success')
+    await bulk.copy([laptop, runner])
+    expect(toast).toHaveBeenLastCalledWith('Copied 2 keys (one "name<TAB>key" per line)', 'success')
+    await bulk.copy([laptop, legacy])
+    expect(toast).toHaveBeenLastCalledWith(
+      'Copied 1 of the selected keys (one "name<TAB>key" per line); 1 skipped: legacy keys cannot be copied',
+      'success'
+    )
+    await bulk.remove([laptop])
+    expect(confirm).toHaveBeenLastCalledWith(
+      expect.objectContaining({ message: 'Delete the selected API key? Clients using it stop working at once.' })
+    )
+    await bulk.remove([laptop, runner])
+    expect(confirm).toHaveBeenLastCalledWith(
+      expect.objectContaining({ message: 'Delete the 2 selected API keys? Clients using them stop working at once.' })
+    )
+  })
+
   it('is running while its requests are in flight', async () => {
     let finish!: () => void
     patch.mockImplementation(() => new Promise<void>(resolve => (finish = resolve)))
