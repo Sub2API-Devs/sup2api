@@ -1,6 +1,7 @@
 # 附录：new-api 内容审核与 moderation 插件的功能差异清单（2026-10-31）
 
 > **进度（2026-10-31 按代码核对后更新）**：
+> - **0.8.0（2026-11-10，分支 `feat/moderation-newapi-parity`，已实现、未发布）**：new-api 在 2026-11-01 至 11-08 之间改了流程引擎、缓存、审核时机和 Jev 引擎，并新增题表式 LLM 审核器；插件已跟进到 new-api 提交 `207797b76`（cp.294）。对齐了：失败级跳过与前面的命中保留、总超时保留命中、分母扣除出错的审核器、补审级、初审命中传给后级、结果映射；题表式 LLM 审核器（插件里叫 `llm_questions`）；判定缓存（放行和命中都缓存、命中重放、清空接口、人工处理同步缓存）；默认级别、白名单、黑名单；Jev 长上下文、图片重画、旧题集版本号；`record_pass_input_message`；绑定回落。设计和审核后的修改见 `DESIGN-2026-11-10-MODERATION-PARITY.md`，契约见 CONTRACTS §72（各小节已按 0.8.0 改写），发布与回滚见 `RELEASE-MODERATION-0.8.0.md`。对齐后仍然有意不同的地方和这次没有处理的差异，见本文末尾新增的第 6 节。
 > - 第 1 节的状态已按插件现有代码（0.4.0 及之后的修补）逐条核对：原先标"缺失""部分"的大多已经实现，表里写的是现在的状态。
 > - 实现情况、有意保留的差异、仍缺的核心接口，见 CONTRACTS §72.14；界面见 §72.15。
 > - 2026-10-31 补上的几项：记录保存 endpoint 和会话指纹并可筛选（核心 `RequestMeta` 新增字段，迁移 0007），AI 分析工具恢复 `session_fp`；缩短保留期立即生效（按当前保留期删除已有记录，保存后马上清理一次）；试跑、测试、模拟可上传或粘贴图片；`/costs` 的按天分桶改按浏览器时区；分析渠道不是大模型渠道时在 `/status` 和设置页提示。
@@ -15,7 +16,7 @@
 > - `P:` = `next/plugins/moderation`
 > - `FE:` = `N:web/default/src/features/content-moderation`
 >
-> CONTRACTS §72 里写明的取舍不算缺口：放行缓存、名单两级 observe/enforce、保留封禁表、设置用 schema 表单、分组用数字 id、`llm_verdict` 可以进流程、flows.enabled 单独一列、费用以美元计。
+> CONTRACTS §72 里写明的取舍不算缺口：缓存的键和单位（0.8.0 起是判定缓存，§72.5 第 8 步）、名单两级 observe/enforce、保留封禁表、设置用 schema 表单、分组用数字 id、`llm_verdict` 可以进流程、flows.enabled 单独一列、费用以美元计。
 >
 > 状态列：**已有** = 已实现；**有意不同** = §72 写明的取舍；**等核心** = 需要核心先提供接口。
 
@@ -24,7 +25,7 @@
 - 统计（小时统计表、延迟分桶、漏斗、健康度、性能）、通知告警、流程画布、记录详情、观察名单详情和筛选排序都已实现。
 - 原"已知 bug"（发布流程时把自动算出的总超时写回草稿）已修：草稿保持 0，发布的版本存算出的值（`stats_api_test.go` TestFlowDraftTimeoutAndDelete）。
 - 剩下要等核心的只有按权限通知管理员；用户校验、管理审计、设置页权限已由核心 §75 补上。
-- 有意不同：统计里用户每日计数（`user_daily`）按 UTC 日期；手动分析排队、不返回 503。
+- 有意不同：统计里用户每日计数（`user_daily`）按 UTC 日期；手动分析排队、不返回 503。0.8.0 对齐 new-api 11 月的改动之后剩下的有意不同见第 6 节。
 - 0.6.0（2026-10-31 团队审核后）：不再只审"结尾连续 user 消息、最多 16 条"，改为审请求里客户端可控的全部内容，按内容片段缓存、超长分块（§72.4）；new-api 仍只审结尾的 user 消息，这一点现在是有意不同。
 
 ## 1. 各区域对照
@@ -53,7 +54,7 @@
 | 筛选 group、token、用户名、request id | 已有（用户名经核心 `/users?q=` 换成 id，**需要查看者有核心 `user:read` 权限**；只有 `moderation:read` 的审核员不能按用户名筛选，只能按用户 id；q 搜 request id、原因和原文） | `EventsTab.vue`、`users.ts` |
 | 筛选 endpoint、session_fp；详情显示端点和粘性会话，可点击只看同一会话 | 已有（`RequestMeta.endpoint`、`session_fingerprint`，迁移 `0007_endpoint_session.sql`）；new-api 的会话规则名 `session_rule` 没有（核心只给指纹） | `routes.go` eventFilter；`EventsTab.vue`、`EventDetail.vue` |
 | 列表列：流程名@版本（旧版本提示"现为 vN"）、各级路径、接近阈值的分数、后台排队耗时 | 已有 | `FlowRef.vue`、`StagePath.vue`、`ScoreChips.vue` |
-| 详情：同一请求的其他记录、流程快照、名单状态、豁免、是否管理员、AI 结论及分析时间 | 已有 | `GET /events/:id`（related、flow_snapshot、user_state、ai_analyzed_at）；`EventDetail.vue` |
+| 详情：同一请求的其他记录、流程快照、名单状态、白名单 / 黑名单（0.8.0；此前是"豁免"）、是否管理员、AI 结论及分析时间 | 已有 | `GET /events/:id`（related、flow_snapshot、user_state、ai_analyzed_at）；`EventDetail.vue` |
 | 原文结构化展示：文字分段、图片缩略图、raw JSON、`input_text` 全文、`input_message_dropped` 原因 | 已有 | `InputMessage.vue`、`TraceView.vue` |
 | 在记录详情里直接操作名单 | 已有 | `UserStateSection.vue`、`WatchActions.vue` |
 | 批量人工处理 | 已有 | `useBulkReview.ts` |
@@ -65,7 +66,7 @@
 | 列表筛选：level、只看有新记录、AI 趋势（含"未分析"）、类别、用户；排序 new、last_hit、severity、total | 已有 | `watch_list.go` watchFilter |
 | 每行聚合：分组、当前流程@版本、可疑总数、各严重度、前 3 类别及"其他 N"、其他分组、最近分析的 ai_counts、过期标记 | 已有（用户显示名由界面经插件 `GET /users` 批量查询；邮箱只在有 `user:read` 时从核心取） | `watch_list.go` WatchItem；`users.go` |
 | 表头计数：watching、with_new、blocking，以及 analysis_every_violations | 已有 | `GET /watchlist` 的 meta |
-| 手动加入时校验：不是管理员、不在白名单 | 已有 | `watch.go`（isStaff、exempt） |
+| 手动加入时校验：不是管理员；白名单用户只能设为观察级 | 已有（0.8.0 与 new-api 一致：白名单用户设拦截级返回 400 `level/allowlisted`，可以以观察级加入；0.7.x 是拒绝 `exempt_user_ids` 里的用户加入） | `watch.go`（staffUser、allowlistedEnforce） |
 | 手动加入时校验用户存在 | 已有：不存在返回 404 `user_not_found`（封禁同样）；未授予 `users.read` 时跳过校验 | `users.go` missingUser；`watch.go`、`routes.go` createBlock |
 | 手动修改：reason、analysis_id、绝对时间 expires_at | 已有 | `watch.go` watchInput |
 | 详情抽屉：用户卡、摘要、上下文条（可只看某来源）、时间线批量处理、历史里的操作人、分析进度 | 已有 | `WatchDetail.vue`、`WatchSummary.vue`、`UserTimeline.vue`、`WatchHistory.vue`、`UserAnalysisBar.vue` |
@@ -109,6 +110,9 @@
 |---|---|---|
 | `error_rate_alert_percent`、`ttft_timeout_ms`、`stats_retention_days` | 已有 | §72.14 |
 | `record_input_message` | 有意不同：并入 `store_text` | §72.14 |
+| `record_pass_input_message` | 已有（0.8.0，默认开）；出错记录不保存原始消息这一点有意不同 | §72.9、§72.10 |
+| `default_level`、`allowlist_user_ids`、`blocklist_user_ids` | 已有（0.8.0）；`default_level` 由 `mode` 的三个值表达，有意不同 | §72.5 第 6 步、§72.10 |
+| `verdict_cache_days`、清空判定缓存 | 已有（0.8.0） | §72.5 第 8 步、§72.11 |
 | `worker_count`、`post_concurrency` | 有意不同：合并为 `max_concurrency` | §72.14 |
 | 缩短保留期后立刻清理一次 | 已有：清理按当前保留期删除已有记录；保留期缩短时各节点在应用设置后尝试清理，只有取到 advisory lock 的节点执行，分批删除（每天的 `cleanup` 任务走同一条路径） | `routes_misc.go` purgeRetention、deleteBatches；`plugin.go` Configure；§72.10 |
 | 拦截响应预览（OpenAI、Claude、Gemini 和流式错误） | 已有 | `SettingsTab.vue`、`blockPreview.ts` |
@@ -377,3 +381,63 @@
 | 渠道代理 | 渠道 proxy 字段 | 已实现（`proxy.go`）：Transport 从 SDK 装好之后的 `http.DefaultTransport` Clone 出来，继续走出口隧道 |
 | 设置页的权限 | new-api 的设置页只要有写权限就能改 | 已有：manifest `ui.settings.permission`（§75.1），插件设为 `moderation:manage` |
 | 保存设置前让插件校验 | 分析渠道必须是已有的 llm 渠道（`controller:229-239`） | 核心保存设置不问插件；Configure 拒绝只记日志（启动时拒绝会让插件起不来），所以插件只能在应用时把错误的渠道当作未配置，并在 `/status` 和设置页提示 |
+
+## 6. 0.8.0 对齐 new-api（cp.294）之后
+
+### 6.1 这次对齐的功能
+
+| new-api 功能（2026-11-01 至 11-08） | 插件现状 | 插件实现位置 |
+|---|---|---|
+| 失败级跳过、前面的命中保留；总超时保留命中；分母扣除出错的审核器；结果映射 | 已有 | `flow.go` runFlow、runStage、verdict |
+| 补审级（`stages[].fallback`） | 已有 | `flow.go` runFallback；`flowOps.ts` setFallback；`StageCard.vue` |
+| 初审命中传给后级 | 已有 | `flow.go` auditFunc 的 `prior`；`engine_llmq.go` |
+| 题表式 LLM 审核器（new-api 的 `llm`） | 已有，类型名 `llm_questions` | `engine_llmq.go`；`AuditorEditModal.vue` |
+| 缓存放行和命中，命中重放；重放不算新的违规 | 已有（单位是片段集合，见 6.2） | `cache.go`；`hook.go` replay、settleVerdicts |
+| `POST /verdict-cache/clear` | 已有 | `cache.go` clearVerdictCache |
+| 人工处理同步缓存 | 已有 | `cache.go` syncReviewed |
+| 默认级别、白名单、黑名单；自动条目以默认级别加入；默认拦截时拦截级也计违规；AI 结论受名单限制 | 已有 | `hook.go` preModerated；`store.go`；`analysis_queue.go` decideEscalation |
+| Jev 长上下文、图片重画、同内容图片只发一次、旧题集版本号 | 已有（重画另有限制，见 6.2） | `engine.go`；`jev_image.go` |
+| `record_pass_input_message` | 已有 | `hook.go` finish |
+| 绑定回落（指向停用或未发布流程的绑定视为不存在） | 已有 | `snapshot.go` bindGroup、bindAccount |
+
+### 6.2 对齐后仍然有意不同
+
+原因详见设计文档第 10 节；CONTRACTS §72.14"与 new-api 不同"里有同一份清单。
+
+| 方面 | new-api | 插件 |
+|---|---|---|
+| 审核单位 | 一个内容块一次运行 | 片段装块，一块一次运行（§72.4） |
+| 缓存键 | 只按内容，改配置后靠人清空 | 清空纪元、流程、判定指纹、片段；改配置自动失效；代码里的判定默认值由 `judgingVersion` 带进指纹 |
+| 命中的缓存单位 | 内容块 | 块里实际送审的片段集合，整个集合都在请求里才重放；片段键同时存通过和最多 8 个命中指针，命中优先 |
+| 缓存有效期 | Redis TTL | 值里带写入时间，按当前 `verdict_cache_days` 判断，读到不续期 |
+| 误报写放行、确认重写命中 | 无条件 | 只在流程的判定指纹没变时；误报在指纹已变时只删命中 |
+| 缓存写入 | 同步 | 运行结果：内存同步、KV 后台；人工处理：KV 同步，内存立墓碑后从 KV 重读 |
+| 清空缓存 | Redis 模式下立即删除 | 换纪元，旧键等到期 |
+| 设置键 | `enabled` + `default_level` | `mode` 三个值；白名单兼容旧键 `exempt_user_ids` |
+| 出错记录的原始消息 | 开关开着时保存 | 不保存，原文截到 `error_text_max_chars` |
+| Jev 图片重画的限制 | 5000 万像素 | 1200 万像素；解码内存按文件头估算、合计 112 MiB；重画最多用一次调用剩余时间的一半且不超过 5 秒，超出的图跳过、文字照审 |
+| 题表式 LLM | 类型 `llm`；题表必填；提示词写"系统提示词或用户消息中的一段" | 类型 `llm_questions`（保留 `llm_verdict`）；题表可为空；提示词说明各段的角色前缀；用户消息带自身请求标记 |
+| 多块请求的流程行 `errors` | 按代表块 | 按所有块的"或" |
+| 客户端断开 | 取消运行，前面的命中保留 | pre 运行不被客户端取消（singleflight） |
+| 封禁（`blocks`） | 没有 | 保留；重放不计入封禁；白名单用户不封禁 |
+| AI 对拦截级用户的"移出"建议 | 直接移出 | 只降级（§72.13.4） |
+| 默认分组 | 没有 | `group_id = 0` 是回落的最后一级；绑定到 flow 0 是免审，不回落 |
+| 繁忙准入 | 没有 | `max_inflight_mb`：本应先审的用户 503，其余放行 |
+| 升级时的名单转换、`watch.blocking_with_new`、告警状态的 KV 命名空间 | — | 插件自己的升级和展示需要（§72.8、§72.14） |
+
+与 new-api **相同**、容易被当成缺陷的两点：重放不分用户；后审的请求被重放时，命中集合之外新增的内容这一次不审（§72.4 剩余限制第 8、9 条）。
+
+### 6.3 这次没有处理的差异
+
+已核实存在，0.8.0 没有设计也没有实现（设计文档附录 A）：
+
+1. 记录列表接口返回的字段（new-api 的 `Top`、`Thresholds`、`Labels`、各级分数等）。
+2. `review_status` 的默认值。
+3. 人工处理撤销后的计数规则（两边都只在观察级的当前窗口里退回计数；默认拦截下拦截级计的违规两边都不退）。
+4. 流程启用开关是否产生版本（new-api 的 `enabled` 在 spec 里，插件是单独一列）。
+5. 只读权限的规则。
+6. 统计口径的其他定义（例如全部命中缓存时 new-api 只在先审或请求以 user 消息结尾时计数；"今日审核数"的组成）。0.8.0 只改了流程行 `errors` 和 `replayed` 两处。
+7. 告警阈值为 0 的含义。
+8. 拦截响应的格式和错误码。
+9. 队列设置（new-api 的 `worker_count`、`post_concurrency`、`queue_size`；插件的 `max_concurrency`、`queue_size`）。
+10. 渠道字段的校验。

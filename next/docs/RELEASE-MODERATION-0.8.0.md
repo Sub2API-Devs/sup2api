@@ -1,0 +1,364 @@
+# 提示词审核 0.8.0：发布与回滚说明
+
+> 日期：2026-11-10。适用：把插件 `moderation` 从 0.7.2 升级到 0.8.0，以及从 0.8.0 回滚到 0.7.2。
+> 分支 `feat/moderation-newapi-parity`。设计见 `DESIGN-2026-11-10-MODERATION-PARITY.md`，契约见 CONTRACTS §72。
+> 本文给执行发布的人用。里面的 SQL 都是只读查询，在核心的数据库上执行；插件的表在 schema `plg_moderation` 里。接口路径：插件接口是 `/api/v1/p/moderation/*`，核心的插件设置接口是 `/api/v1/plugins/moderation/settings`。
+> 构建和上线照以往插件版本的做法（`stage/moderation-<version>/{build.sh,rollout.py}`），本文不给服务器上的命令。
+> 本分支没有在真实数据的副本上演练过升级；第 2、4 节的核对结果请在发布时记录下来。
+
+## 0. 要点
+
+- 不改核心，`hostCompat` 不变，没有新的宿主权限，scope 不变：**升级不需要管理员重新批准**。
+- 有一个新迁移 `0010_newapi_parity.sql`，幂等，回滚后不用撤销。
+- **不改任何设置，下面这些行为在升级后就变了**（第 1 节）。发布前要让负责人知道，尤其是第 1.1、1.2、1.3、1.4 条。
+- 滚动升级期间有两件事不能做（第 3 节）：发布带补审级的流程、创建 `llm_questions` 审核器。
+- 回滚有顺序要求（第 5 节）：先撤掉补审级和 `llm_questions` 审核器，再通过核心设置接口去掉四个新设置键，最后才降级插件。
+
+## 1. 现有配置升级后的变化
+
+### 1.1 复核出错或超时不再放行
+
+0.7.2：流程里任何一级出错或超时，整个请求放行，记为 `error`。
+
+0.8.0：没有结论的级跳过，前面的命中保留。
+
+- 初审命中、复核出错或超时 → **命中**。先审的请求被拒绝，用户按违规处理（进名单、计违规）。
+- 流程总超时到点时前面已有命中 → 命中，不再放行。先审请求的预算是 min(流程总超时, 29 秒)。
+- 一级里有的审核器出错、有的判了：出错的不参与表决。例：两个审核器、组合方式"全部命中"，一个出错、一个命中 → 这一级命中（0.7.2：无结论）。
+- 只有所有级都没有结论时才放行，记为 `error`。
+
+后果：审核渠道不稳定时，以前被放行的请求现在会被拒绝；`error` 记录变少。
+
+### 1.2 `mode = enforce` 的含义变了
+
+0.7.2：`enforce` = 所有人先审。
+
+0.8.0：`enforce` = 开启，**默认级别为拦截**。时机依次按：
+
+1. 黑名单（`blocklist_user_ids`）→ 先审；
+2. 白名单（`allowlist_user_ids`）→ 只后审，永不被拒绝；
+3. 有未过期的观察名单条目 → 按条目的级别：拦截级先审，**观察级只后审**；
+4. 没有条目 → 按默认级别（`enforce` 先审，`observe` 后审）。
+
+对 `mode = enforce` 的部署：
+
+- 没有名单条目的用户：不变，仍然先审。
+- **观察级条目的用户从先审变成只后审。** 为了不让自动进名单的用户因此"降级"，插件首次以 0.8.0 运行时把未过期的、自动加入（`source = auto`）的观察级条目改成拦截级（每条写一条名单历史）。管理员手动设成观察级的（`manual`）和 AI 降到观察级的（`analysis`）不改，这些用户升级后只后审。第 2.2 节的查询数出各有多少。
+- 之后自动加入的条目以拦截级加入，有效期 `watch_days`；拦截级条目也计违规，但命中不延长有效期。
+
+对 `mode = observe` 的部署：时机规则与以前相同（只有拦截级条目的用户先审），新增黑名单和白名单。
+
+### 1.3 "豁免用户"变成白名单
+
+`exempt_user_ids` 退役，读作白名单。原来列在里面的用户，0.7.2 下完全不审核；0.8.0 下**后台审核、有记录、可能自动进观察名单、永不被拒绝、不会被封禁**。0.8.0 没有"完全不审核的用户"。
+
+设置页里它显示为"白名单"；第一次保存白名单时写入新键 `allowlist_user_ids`，并把 `exempt_user_ids` 清空。
+
+### 1.4 绑定到停用或未发布流程的分组和账号，从不审核变成审核
+
+0.7.2：绑定指向已停用或未发布的流程 → 这个分组（或账号）不审核。
+
+0.8.0：这样的绑定视为不存在，请求按更宽的绑定审核，通常是默认分组 0 的流程。绑定到"不审核（免审）"（flow 0）的不变，仍然不审核。
+
+有人可能就是用"绑一个停用的流程"来让某个分组不审核。**升级前必须跑第 2.1 节的查询并逐条处理。**
+
+### 1.5 繁忙时得到 503 的用户范围变大
+
+处理中的钩子请求合计超过 `max_inflight_mb`（默认 128）时，新请求立即回答：本应先审的用户得到 503 `moderation_busy`，其余放行、不审核。
+
+- 0.7.2："本应先审"只算观察名单上拦截级的用户。
+- 0.8.0：按第 1.2 节的规则。**`mode = enforce` 时，是白名单和观察级条目之外的所有用户。**
+- 分组没有流程、绑定为免审、或模型被流程的模型过滤排除的请求，不会得到 503。
+
+`mode = enforce` 且流量大、请求体大的部署，升级后留意 503 `moderation_busy` 的数量（插件健康指标 `busy`）；需要时调大 `max_inflight_mb`，但插件进程的内存上限是 512 MB。
+
+### 1.6 缓存在第一天全部重建，审核调用和费用上升
+
+0.8.0 的判定缓存用新的键和新的 KV 命名空间，0.7.2 的缓存全部作废。升级后所有内容重新审一遍（Claude Code 的系统提示词和工具定义每次几万字），**第一天审核调用数和费用会明显上升**，之后回落。
+
+- 缓存保留 `verdict_cache_days` 天，默认 7。没保存过这个键时：旧键 `cache_ttl_seconds` 也没保存过 → 7 天；旧键保存过 → 按它换算，0 表示缓存关闭（保持关闭，直到在设置页填了天数），其他值向上取整到整天（例如存的是 86400 秒 → 1 天）。想要 7 天而旧键存的是别的值，升级后在设置页填上天数。
+- 0.8.0 也缓存命中：一段内容被判命中后，之后包含这段内容的请求直接按原结论处理（先审的被拒绝），不再调用审核渠道，记为"重放"。重放不算新的违规。
+- 改了流程的级、审核器、题集、阈值或渠道模型，该流程的缓存自动失效（又是一轮重审）。改流程名、模型过滤、抽样比例、超时、渠道密钥不影响缓存。
+
+### 1.7 Jev（TypeSafe）：每次调用都开长上下文，送审更多图片
+
+- 每次调用带长上下文请求头。按上游文档，更慢、准确度略低、单价不变。Jev 渠道的超时（默认 8000 ms）是否够用，升级后看渠道健康度的延迟。
+- 以前跳过的图片现在重画后送审：GIF（第一帧）、WebP、尺寸不合规格的 PNG / JPEG。一次调用能带的图片也更多（预算从 24k token 提高到 200k token）。**Jev 的 token 用量和费用上升，可能出现新的命中。**
+- 重画在请求路径上进行，先审请求的延迟会增加；每次调用里重画最多占 5 秒，超时的图跳过，文字照常审。
+- 仍然不送审：URL 图片、超过 16 MiB、超过 1200 万像素、解码内存估算超过 112 MiB 的图片（例如很大的渐进式 JPEG）。
+
+### 1.8 更多记录带原始消息
+
+新设置 `record_pass_input_message` 没保存过时取默认值"开"。`store_text` 开着的部署升级后：
+
+- 被推翻的记录（默认会写）开始带原始消息，包括其中的图片。`events` 表会变大，留存期是 `overturned_retention_days`（默认 30 天）。
+- 开了 `record_pass` 的部署，通过的记录也带原始消息，量可能很大。
+- 命中过的记录的保存条件也放宽了：只要运行里有任何一级判过命中就保存（0.7.2 只在第一级命中时保存）。
+- 出错记录仍然不保存原始消息。
+
+不想要就在升级后把这个开关关掉。
+
+### 1.9 记录结果和异常率的含义变了
+
+- **记录结果**：有失败的级、但别的级判过的运行，结果从 `error` 变成 `hit`、`overturned` 或 `pass`。`error` 只表示这次什么都没判出来。`error` 记录变少，`record_errors`、`error_retention_days` 管到的记录相应减少。
+- **流程异常率**（概览、趋势、告警）：分子从"结果为 error 的运行"变成"有审核器出错或有级失败的运行"。同样的流量下数值变大或持平，**升级前后的异常率不能直接比较**；`error_rate_alert_percent` 的阈值按新的数值重新看一下，同样的阈值下告警更容易触发。
+- 多块请求全部通过时，记录显示的是最后一块（以前是第一块）。
+- 概览的"可疑"里包含重放，另有"其中缓存重放 N"。
+
+### 1.10 其他
+
+- 已存的、内容等于 new-api 旧内置题集的 Jev 审核器，题集版本号的显示从 `custom-…` 变为 `content-audit-13-zh-v1` 或 `-en-v1`。判定不变。
+- 模拟流程时"未标记"的用户按默认级别决定时机（以前固定为后审）。
+- 白名单用户不能被手动封禁，也不能手动设为拦截级（接口返回 400）。
+
+## 2. 升级前的核对
+
+### 2.1 绑定到停用或未发布流程的绑定
+
+```sql
+SELECT 'group' AS kind, g.group_id, 0 AS account_id, g.flow_id, f.name, f.enabled, f.published IS NOT NULL AS published
+FROM plg_moderation.flow_groups g LEFT JOIN plg_moderation.flows f ON f.id = g.flow_id AND f.deleted_at IS NULL
+WHERE g.flow_id <> 0 AND (f.id IS NULL OR NOT f.enabled OR f.published IS NULL)
+UNION ALL
+SELECT 'account', a.group_id, a.account_id, a.flow_id, f.name, f.enabled, f.published IS NOT NULL
+FROM plg_moderation.flow_accounts a LEFT JOIN plg_moderation.flows f ON f.id = a.flow_id AND f.deleted_at IS NULL
+WHERE a.flow_id <> 0 AND (f.id IS NULL OR NOT f.enabled OR f.published IS NULL);
+```
+
+结果为空：没有受影响的绑定。
+
+结果不为空：每一行是一条升级后会回落的绑定（第 1.4 节）。由管理员逐条决定：
+
+- 要继续不审核 → 升级前在"绑定"页把它改成"不审核（免审）"。0.7.2 已支持，改了之后新旧版本都不审核。
+- 接受按默认流程审核 → 不用改，记下来。
+
+迁移不会自动改这些绑定：它分不清"有意不审"和"流程临时停用"。
+
+### 2.2 观察级条目的来源
+
+```sql
+SELECT source, count(*) FROM plg_moderation.watchlist
+WHERE level = 'observe' AND (expires_at IS NULL OR expires_at > now()) GROUP BY source;
+```
+
+记下结果。`mode = enforce` 的部署：
+
+- `auto` 的条数 = 升级后会被转成拦截级的条目数（第 4.2 节核对）。
+- `manual`、`analysis` 的条数 = 升级后从先审变成只后审的用户数。其中有需要继续先审的，升级后把他们改成拦截级，或加进黑名单。
+
+`mode = observe` 的部署不转换，这一步只作记录。
+
+### 2.3 设置
+
+设置由核心加密保存，没有 SQL 可查。在设置页或 `GET /api/v1/plugins/moderation/settings` 里看并记下：
+
+| 设置 | 为什么看 |
+|---|---|
+| `mode` | 决定第 1.2、1.5 节对这个部署的影响，以及名单转换是否发生 |
+| `exempt_user_ids` | 不为空时，这些用户升级后开始被后审（第 1.3 节） |
+| `ban_threshold` | 大于 0 表示开着自动封禁。升级本身不受影响；**回滚时**要看第 5 节第 4 步 |
+| `cache_ttl_seconds` | 决定升级后缓存保留几天（第 1.6 节）；为 0 时缓存在 0.8.0 下保持关闭 |
+| `store_text`、`record_pass`、`record_overturned` | 决定第 1.8 节多存多少原始消息 |
+| `max_inflight_mb` | 第 1.5 节 |
+| `error_rate_alert_percent` | 第 1.9 节 |
+
+### 2.4 渠道与构建
+
+- 记下各流程升级前的异常率和 Jev 渠道近 1 小时的延迟，作为升级后对比的基线（异常率的含义会变，见第 1.9 节）。
+- 插件新增了两个 Go 依赖：`golang.org/x/image`（v0.41.0）和 `golang.org/x/sync`。**在构建机上先确认能拉到这两个模块**；这一点在开发环境之外没有验证过。
+- 界面的 dist 不入库，照以往在构建时生成。
+
+## 3. 升级
+
+顺序照以往只改插件的版本：构建 0.8.0 的包 → 上传并升级。没有新增或扩大的权限，核心自动沿用现有授权，不需要在控制台批准。迁移 `0010` 由核心在切换到新版本的过程中执行（一个迁移文件一个事务）：给 `auditors` 重建类型约束，给 `config_state`、`events`、`stats_hourly` 加列，都不重写表，`events` 上只短暂持锁。
+
+**滚动升级期间（还有节点在跑 0.7.2 时）不要做：**
+
+1. **不要发布带补审级的流程。** 0.7.2 的节点读不了带 `fallback` 的流程（未知字段），会跳过整个流程，绑定它的分组在这些节点上不审核。
+2. **不要创建 `llm_questions`（"LLM 题表"）审核器，更不要把它放进流程。** 0.7.2 的节点不认识这个类型，引用它的那一级在这些节点上出错，而 0.7.2 的规则是出错放行。
+
+这两件事等所有节点都在 0.8.0 上之后再做。
+
+滚动期间还会看到的现象，都在滚动结束后消失：
+
+- 新旧节点对同一请求的判断不同：复核出错时一个拒绝一个放行；`mode = enforce` 下观察级条目的用户一个后审一个先审；绑定到停用流程的分组一个审一个不审；同一张图一个送审一个跳过。
+- 新旧节点各用各的缓存，同一内容可能两边各审一次。
+- 旧节点在转换之后自动加入的观察级条目，由 0.8.0 的节点在首次转换后的 24 小时内继续转成拦截级。所以**滚动升级要在 24 小时内完成**；拖得更久，之后旧节点加的观察级条目不会被转换，需要手动改。
+- 在 0.8.0 的设置页保存过白名单后，`exempt_user_ids` 被清空，旧节点不再把这些用户当豁免用户，会按普通用户审核。
+
+## 4. 升级后的核对
+
+### 4.1 迁移
+
+```sql
+SELECT migration_id, applied_at FROM public.plugin_migrations
+WHERE plugin_key = 'moderation' AND migration_id = '0010_newapi_parity.sql';
+
+SELECT pg_get_constraintdef(oid) FROM pg_constraint
+WHERE conname = 'auditors_type_check' AND conrelid = 'plg_moderation.auditors'::regclass;
+
+SELECT cache_epoch, parity_converted, parity_converted_at FROM plg_moderation.config_state WHERE id = 1;
+```
+
+期望：第一条有一行；第二条的约束里有 `llm_questions`；第三条能执行（三列都存在），`cache_epoch` 为 0。
+
+### 4.2 名单转换
+
+插件拿到设置后的几秒内做首次转换，日志里有一行：
+
+```
+moderation: 0.8.0 watch list conversion  mode=<mode> converted=<条数> first_run=true
+```
+
+- `mode = enforce`：`converted` 应等于第 2.2 节 `auto` 的条数（期间过期或被改动的条目会有出入）。
+- `mode` 不是 `enforce`：`converted=0`。
+
+之后 24 小时内如果又转换了条目（滚动期间旧节点加的），会再出现这一行，`first_run=false`。
+
+```sql
+SELECT parity_converted, parity_converted_at FROM plg_moderation.config_state WHERE id = 1;
+
+SELECT count(*) FROM plg_moderation.watch_events
+WHERE action = 'set_level' AND reason LIKE '0.8.0 升级%';
+
+SELECT source, count(*) FROM plg_moderation.watchlist
+WHERE level = 'observe' AND (expires_at IS NULL OR expires_at > now()) GROUP BY source;
+```
+
+期望：`parity_converted` 为真，`parity_converted_at` 是首次转换的时间；第二条等于转换的总条数；`mode = enforce` 时第三条里不再有 `auto` 一行（滚动期间可能短暂出现，下一轮会被转换）。
+
+日志里出现 `converting the watch list for 0.8.0 failed, retrying later` 表示某一步失败，插件每 5 秒重试；持续出现要查原因。
+
+### 4.3 `/status` 的新字段
+
+`GET /api/v1/p/moderation/status` 应有：
+
+| 字段 | 期望 |
+|---|---|
+| `default_level` | `mode = enforce` 时为 `enforce`，否则 `observe` |
+| `watch.blocking_with_new` | 存在（数字）。拦截级条目里有新命中的个数 |
+| `today.replayed` | 存在。升级后一段时间内为 0，出现第一次缓存命中重放后增加 |
+| `runtime.cache_epoch` | 0（没清空过缓存） |
+| `runtime.cache_bytes`、`runtime.cache_entries` | 随流量增长；`cache_bytes` 不超过约 64 MiB |
+
+所有节点都升级后，各节点回答里的这些字段都应存在；缺字段的回答来自还在 0.7.2 的节点。
+
+### 4.4 模拟一次流程
+
+在"流程"页对默认流程用"模拟"各跑一次（或 `POST /api/v1/p/moderation/flows/<id>/simulate`，请求体 `{"text": "...", "source": "published", "user_state": "none"}`）：
+
+1. 一段正常文本 → 通过；返回的时机在 `mode = enforce` 时是先审（pre），否则后审（post）。
+2. 一段确定会命中的文本 → 命中；trace 里每一级带 `stage`。
+
+模拟不读写缓存、不写记录、不计违规，费用记在来源 `simulate` 下。
+
+### 4.5 头一两天要看的
+
+- 审核调用数和费用（第 1.6、1.7 节）：第一天高，之后回落。没有回落时看是否有人反复改流程配置或清空缓存。
+- Jev 渠道的延迟和错误率（第 1.7 节）；先审请求的延迟。
+- 被拒绝的请求数：第 1.1 节会让它在渠道不稳定时上升。
+- 503 `moderation_busy`（第 1.5 节）。
+- 流程异常率告警（第 1.9 节）。
+- `events` 表的大小（第 1.8 节）。
+- 记录页筛选"缓存重放"，看重放记录是否符合预期。
+
+## 5. 回滚到 0.7.2
+
+回滚不需要改数据库。但 0.7.2 读不了 0.8.0 才有的三样东西：带补审级的流程、`llm_questions` 审核器、设置里的四个新键。**按下面的顺序做，前三步都在 0.8.0 还在运行时完成。**
+
+### 第 1 步：去掉补审级
+
+```sql
+SELECT id, name, enabled FROM plg_moderation.flows
+WHERE deleted_at IS NULL
+  AND (published::text LIKE '%"fallback"%' OR draft::text LIKE '%"fallback"%');
+```
+
+对查到的每个流程：在流程画布里删掉补审级，或关掉它的"补审级"开关，然后**发布**。草稿和已发布版本里都不能留 `fallback`。做完再跑一次查询，结果应为空。
+
+注意两种做法的结果不同。删掉：流程回到没有补审的样子。关掉开关：这一级变成排在最后的普通级，也就是对前面命中的再一次复核——它判通过会**推翻**前面的命中，这通常不是想要的。拿不准就删掉。
+
+不做的后果：0.7.2 把这个流程整个跳过，绑定它的分组和账号不审核。
+
+### 第 2 步：换掉 `llm_questions` 审核器
+
+```sql
+SELECT id, name, channel_id FROM plg_moderation.auditors
+WHERE type = 'llm_questions' AND deleted_at IS NULL;
+```
+
+对查到的每个审核器：在所有引用它的流程里换成别的审核器（或去掉）并发布，然后删除这个审核器。做完再跑一次查询，结果应为空。
+
+不做的后果：0.7.2 不认识这个类型，引用它的那一级出错；0.7.2 的规则是出错即放行。
+
+### 第 3 步：去掉四个新设置键
+
+0.7.2 的设置 schema 不认识 `allowlist_user_ids`、`blocklist_user_ids`、`verdict_cache_days`、`record_pass_input_message`（它是 `additionalProperties: false`）。0.7.2 读设置时会忽略它们，但核心保存设置时按当前安装版本的 schema 校验整份文档：**这四个键只要还存着，降级后 0.7.2 的设置页就保存不了任何设置。** 0.8.0 的设置页不能把这四个键都删掉（开关和名单只能改值），所以要直接调核心的设置接口。在降级之前做，这样 0.7.2 的设置页一开始就能用；漏了的话，降级后用同一个接口提交去掉这四个键的文档也可以（那时按 0.7.2 的 schema 校验，去掉之后能通过）。
+
+1. `GET /api/v1/plugins/moderation/settings`，取出响应里的 `values`（整份设置）。
+2. 从 `values` 里删掉这四个键。其他键原样保留；密钥类的值读到的是 `******`，原样回传表示沿用。
+3. **需要让白名单继续生效的**：把原来 `allowlist_user_ids` 里的 id 写进 `values.exempt_user_ids`。注意 0.7.2 下这个名单的含义是**完全不审核**（没有记录），不是"只后审"。不需要的话把 `exempt_user_ids` 留空，这些用户在 0.7.2 下按普通用户审核（`mode = enforce` 时先审）。
+4. `PUT /api/v1/plugins/moderation/settings`，请求体 `{"values": { …修改后的整份设置… }}`。PUT 是整体替换，所以必须带上全部其他键。用持有核心 `plugin:manage` 的账号做；只有 `moderation:manage` 的账号改设置时要重填所有已存的密钥。
+5. 再 `GET` 一次，确认四个键都不在了。
+
+这一步做完到降级之前，0.8.0 的节点按旧键工作：白名单取 `exempt_user_ids`；黑名单为空（原黑名单用户按名单条目或默认级别处理）；缓存天数取 `cache_ttl_seconds` 的换算值（没有则 7 天，为 0 则缓存关闭）；`record_pass_input_message` 取默认值"开"。这段时间**不要在 0.8.0 的设置页改白名单、黑名单、缓存天数和"通过的记录也保存原始消息"这四项**，否则键又被写回去。
+
+回滚后黑名单没有对应物：需要继续先审的用户，把他们在观察名单里设为拦截级。
+
+### 第 4 步：开着自动封禁时，看一下重放记录
+
+0.7.2 的封禁计数不认识 `replayed`，会把重放记录当普通的可疑记录计入。`ban_threshold > 0` 时，回滚前看有没有用户因此接近或超过阈值：
+
+```sql
+SELECT user_id,
+       count(DISTINCT CASE WHEN request_id = '' THEN id::text ELSE request_id END) AS replayed_requests
+FROM plg_moderation.events
+WHERE replayed AND result IN ('hit', 'block') AND review_status <> 'false_positive'
+  AND created_at >= now() - interval '24 hours'   -- 换成 ban_window_hours 的值
+GROUP BY user_id ORDER BY replayed_requests DESC LIMIT 50;
+```
+
+数字大的用户，回滚后下一次命中就可能被自动封禁。可以先把 `ban_threshold` 调高或暂时设为 0，等这些记录滑出封禁窗口再恢复。`ban_threshold = 0`（默认）时跳过这一步。
+
+### 第 5 步：降级插件
+
+照上线 0.7.2 时的做法把插件切回 0.7.2 的包。0.7.2 与 0.8.0 申请的宿主权限和 scope 相同。
+
+### 第 6 步：降级后的核对
+
+- 在 0.7.2 的设置页随便改一项再改回来，保存两次都成功（验证第 3 步）。保存失败并提示有未知字段，说明还有新键没去掉：回到第 3 步，这时用同样的接口在 0.7.2 下提交去掉新键的文档即可。
+- 插件日志里没有 `moderation: published flow is invalid`（第 1 步漏了）和 `moderation: auditor config is invalid`（第 2 步漏了）。
+- 概览页正常，流程数与回滚前相同。
+
+### 回滚后的状态
+
+- **缓存**：0.7.2 读不到 0.8.0 的缓存，从空缓存开始，又是一轮重审（费用再上升一天）。KV 里 0.8.0 的键到期自动消失（最长 30 天）。
+- **时机**：`mode = enforce` 恢复为所有人先审。升级时被转成拦截级的条目保持拦截级；0.7.2 不给拦截级计违规、不延期，它们到 `expires_at` 后过期。
+- **绑定**：指向停用或未发布流程的绑定恢复为不审核。
+- **记录**：0.8.0 期间写下的记录都还在。重放记录在 0.7.2 的界面上显示为普通的命中记录，AI 分析也把它们当普通记录。trace 里的 `failed`、`fallback`、`stage`、`cache` 是 0.7.2 的界面不认识的键，不显示。
+- **出错行为**：恢复为出错即放行。
+
+### 迁移留下了什么，为什么不用撤销
+
+| 留下的东西 | 0.7.2 下 |
+|---|---|
+| `auditors` 的类型约束多允许一个值 `llm_questions` | 约束只是放宽了，0.7.2 写入的三种类型照常通过 |
+| `config_state.cache_epoch`、`parity_converted`、`parity_converted_at` | 0.7.2 不读这三列；都有默认值或可空 |
+| `events.replayed`（默认 false） | 0.7.2 的写入语句逐列写明列名，不写这一列，取默认值；读取也逐列写明，不受多出的列影响 |
+| `stats_hourly.replayed`（默认 0） | 同上 |
+| 核心迁移记录 `public.plugin_migrations` 里 `0010_newapi_parity.sql` 一行 | 核心只对包里有的迁移文件逐个比对，多出来的记录不看 |
+| 名单历史里"0.8.0 升级"的记录、被转成拦截级的条目 | 普通的名单数据 |
+
+所以回滚不执行任何 SQL。再次升级到 0.8.0 时迁移不会重跑（内容没变）；名单转换只在距首次转换不到 24 小时内继续，超过后不再转换。
+
+## 6. 已知限制
+
+1. **后审的请求被缓存命中重放时，这个请求里新增的内容不审。** 一个对话的历史里有过一次命中并进了缓存，之后这个对话的每一轮请求都包含那段内容：先审的用户每一轮都被拒绝；后审的用户每一轮只记一条重放记录（不算新的违规），**这一轮新写的内容不会送到审核渠道**，直到命中条目过期（`verdict_cache_days`）、那条记录被标为误报或缓存被清空。这与 new-api 的行为相同，是有意保留的。要拦住这类用户，靠把他们升为拦截级或加进黑名单。
+2. **重放不分用户。** 一段内容被判命中并缓存后，别的用户第一次发同样的内容也是重放：会被记录，先审时会被拒绝，但不进名单、不计违规。广为流传的越狱提示词在缓存期内不会让后来的用户进名单。与 new-api 相同。
+3. **人工处理后的缓存同步是尽力而为的。** 把记录标为误报、确认或改回待处理，会同步更新缓存（处理结果提示里的"已同步判定缓存 N 条"；N 小于处理的条数表示有的没写成功，再处理一次即可）。个别节点可能在缓存到期前仍沿用旧结论；设置页的"清空判定缓存"可以兜底，代价是又一轮重审。
+4. **清空缓存最多 5 秒后在所有节点生效。** KV 里的旧键不删除，到期消失。
+5. **改配置会让缓存失效。** 改流程的级、审核器、题集、阈值或渠道模型之后，该流程的内容全部重审，费用随之上升。
+6. **图片**：超过 1200 万像素、解码内存估算超过 112 MiB、或在重画时间预算内画不完的图片不送审（记为未送审的图片数）。
+7. **KV 故障看不到计数。** 缓存读写 KV 失败时内容照常送审（不会放行未审的内容），但失败次数只在进程内计数，目前没有输出到健康指标或 `/status`。
+8. **插件不可用时一律放行**（钩子是 `failure: open`，与以前相同）：本应先审的用户和被封禁的用户在这段时间里也会被放行。
+9. 界面的改动没有在浏览器里走查过（开发环境没有浏览器）：发布后请走一遍——建一个带补审级的流程并发布、建一个"LLM 题表"审核器并试跑、看一条重放记录的详情、清空缓存、对白名单用户做名单操作、看一条停用流程的绑定。前两项要等所有节点都在 0.8.0 上之后再做（第 3 节）。

@@ -1,5 +1,14 @@
 # sub2api-next 开发进度与交接记录
 
+> **2026-11-10 提示词审核 0.8.0：与 new-api 内容审核对齐**（分支 `feat/moderation-newapi-parity`，从 `c31b3c4cb` 起；已实现并通过代码审核，**未发布、未合并**）：
+> - **内容**：跟进 new-api 2026-11-01 至 11-08 的改动（参照提交 `207797b76`，cp.294）。流程引擎（失败级跳过、前面的命中保留；补审级；初审命中传给后级；结果映射）；新审核器类型 `llm_questions`（题表式 LLM）；判定缓存（放行和命中都缓存、命中重放、`POST /verdict-cache/clear`、人工处理同步缓存）；审核时机（`mode` 兼作默认级别、白名单、黑名单；`exempt_user_ids` 退役）；Jev 长上下文和图片重画；`record_pass_input_message`；绑定回落。
+> - **提交**：设计 `26b90a1fa`；T1 `6e326492e`、T2 `52c25d6cd`、T3 `007c00fb3`、T5 `bceec0ac0`、T4 `aa7341999`；代码审核后的修改 `cb5a1c2c5`（界面）、`25a383f17`（后端）、`6c032357a`（判定缓存）；T6（本条）文档、版本号 0.8.0、发布说明。
+> - **不改核心**，没有新的宿主权限，scope 不变：**升级不需要管理员重新批准**。一个新迁移 `0010_newapi_parity.sql`（幂等，回滚后无害）。
+> - **现有配置下就会变的行为**（上线前必须告知）：复核出错或超时不再放行已命中的请求；`mode=enforce` 从"所有人先审"变为"默认级别为拦截"；绑定到停用或未发布流程的分组和账号回落到默认流程；繁忙时得到 503 的用户范围变大；升级后第一天缓存重建、Jev 送审更多图片，审核调用和费用上升；流程异常率的含义变了。
+> - **有意保留的限制**：后审的请求被缓存命中重放时，命中集合之外的新内容这一次不审（与 new-api 相同）；存过新设置键之后回滚到 0.7.2，要先通过核心设置接口去掉四个新键。
+> - **还没做**：在 0.7.2 数据副本上的升级演练、构建机拉取 `golang.org/x/image` 的确认、界面的浏览器走查（开发环境没有浏览器）、发布。
+> - **文档**：设计与审核后的修改 [DESIGN-2026-11-10-MODERATION-PARITY.md](DESIGN-2026-11-10-MODERATION-PARITY.md)；契约 CONTRACTS §72；发布与回滚 [RELEASE-MODERATION-0.8.0.md](RELEASE-MODERATION-0.8.0.md)；与 new-api 的差异清单 [HANDOFF-2026-10-31-MODERATION-GAPS.md](HANDOFF-2026-10-31-MODERATION-GAPS.md) 第 6 节。
+
 > **2026-10-05 取消二次验证、账号测试记录、CC OAuth 在账号页授权、预设映射留空**（未提交时的工作区状态，由主控统一提交）：
 > - **取消二次验证**（用户决定）：删除 `POST /auth/step-up`、`X-Step-Up-Token`、`step_up_required`、`Authorizer.IsSensitive`、`Router.PermStepUp`；调整余额、删除、查看凭证、角色授权、插件安装卸载、系统更新只看登录态 + RBAC。`sensitive` 只剩展示标记。CONTRACTS §3.3。下文历史记录里的 step-up 描述均已失效。
 > - **账号测试**：迁移 0031 给 `accounts` 加 `last_test_*` 可空列；每次 `POST /accounts/:id/test` 后记录，账号 JSON 新增 `last_test`；TestResult 新增 `requested_model`。测试仍不改变账号状态。控制台模型测试弹窗（测试单个/全部/所选模型、批量测试账号）由前端并发调用单模型测试实现。CONTRACTS §15.9、§50。

@@ -1,9 +1,10 @@
 # 提示词审核 0.8.0：与 new-api 内容审核对齐（设计文档）
 
-> 日期：2026-11-10。状态：待评审，尚未实现。
-> 分支：`feat/moderation-newapi-parity`（插件现为 0.7.2，提交 `c31b3c4cb`）。
+> 日期：2026-11-10。状态：已实现（T1–T6），并按代码审核的结果修改；本文已改为与代码一致，审核后的改动汇总在第 14 节。尚未发布。
+> 分支：`feat/moderation-newapi-parity`（从 0.7.2 的提交 `c31b3c4cb` 起；插件版本 0.8.0）。
+> 发布与回滚步骤见 `docs/RELEASE-MODERATION-0.8.0.md`。
 > 参照实现：new-api 提交 `207797b76`（cp.294），只读。
-> 本文是实现依据。按第 12 节的任务顺序改，按各节"测试"补用例。第 13 节的未决问题需要负责人先确认，括号里是推荐的默认做法；没有答复时按推荐做法实现。
+> 本文是实现依据，也是实现后的说明：正文与代码不一致时以代码为准，并应改正本文。各节里的"P 现在的行为"指 0.7.2。第 13 节的未决问题都已按推荐做法实现。
 >
 > 路径缩写：
 > - `N:` = `/home/cvp/rc/new-api`（如 `N:service/moderation/flow.go:160`）
@@ -48,7 +49,7 @@
 - 不改 `blocks` 表的封禁功能（N 没有，P 保留）。
 - 不改核心，不新增宿主权限，不改钩子的 scope。升级到 0.8.0 **不需要管理员重新批准**（第 11.2 节）。
 - 附录 A 列出的差异这次不处理。
-- 本文只做设计：不改代码、不提交、不动服务器。
+- 发布（构建、上线、线上核对）不在本文和本分支的范围内，步骤见发布说明。
 
 ---
 
@@ -158,7 +159,10 @@
 
 `fallback` 用 `omitempty`：不是补审级的不写这个键，所以没用到补审的流程，草稿和已发布的 JSON 与 0.7.2 逐字节相同。
 
-trace（`events.trace`）多出的键：`stages[].failed`、`stages[].fallback`，都是 `omitempty`。
+trace（`events.trace`）多出的键：`stages[].stage`、`stages[].failed`、`stages[].fallback`，都是 `omitempty`。
+
+- `stages[].stage` 是这一级在 spec 里的序号（从 1 起）。trace 的 `stages` 只收录实际运行过的级：普通级链提前结束后运行的补审级，它在 `stages` 里的位置不等于它在 spec 里的序号。0.8.0 之前的记录没有这个键，读的时候按位置算（`Trace.stageNo`）。
+- `decider` 的含义不变，但要写明：它是 `stages` 数组的下标（最后一个判定命中的级；没有则为 -1），不是 spec 的级序号。命中类别里的 `stage`、统计表的级行、漏斗、AI 分析工具返回的级号都用 spec 的级序号。
 
 ### 3.5 Go 改动
 
@@ -173,6 +177,7 @@ type Stage struct {
 }
 
 type StageTrace struct {
+    Stage    int       `json:"stage,omitempty"`    // spec 里的级序号（从 1 起）；旧记录没有
     Outcomes []Outcome `json:"outcomes"`
     Result   string    `json:"result"`
     Errored  bool      `json:"errored,omitempty"`
@@ -191,6 +196,7 @@ func (t *Trace) judged() bool        // 有任何一级 Result 是 Hit 或 Pass
 func (t *Trace) keepsMessage() bool  // Final == Hit，或任何一级 Result == Hit
 func (t *Trace) stageSkipped() bool  // 有任何一级整级跳过（第 5 节用）
 func (t *Trace) verdict() string     // ResultHit | ResultOverturned | ResultError | ResultPass，照 N:result.go:73-83
+func (t *Trace) stageNo(i int) int   // Stages[i] 在 spec 里的级序号；旧记录按位置
 ```
 
 - `Spec.Validate`：加两条规则，报错文字照 N（`N:spec.go:112-119`）：第一级是补审级 → `the first stage cannot be a fallback stage`；补审级后面出现普通级 → `stage %d: fallback stages must come after every review stage`。`maxStages = 8` 把补审级算在内。
@@ -206,6 +212,9 @@ func (t *Trace) verdict() string     // ResultHit | ResultOverturned | ResultErr
       return tr
   ```
 
+  命中的级把 `Decider` 设为 `len(tr.Stages) - 1`（它在 trace 里的下标），并给该级写上 `Stage = i + 1`；`runFallback` 里同样用 trace 的下标，`Stage = base + j + 1`。`decidingStage()` 忽略越界的 `Decider`（损坏的或外来的 trace）。
+- `runFlow` 带 `recover`：运行中出现 panic 时这次运行按"没有任何一级判定"处理（`Final = Pass`、`Decider = -1`、`Errored = true`）。单个审核器调用另有 `auditSafely`。
+
   每一级开始前调用 `runStage(ctx, st, audit, tr.HitCategories())`：`Decider < 0` 且没有命中过的级时 `HitCategories()` 返回 nil，与 N 的"第一级拿到 nil"一致。
 - `runStage`：按 `N:flow.go:217-268` 重写（`failed` 变量、ctx 结束时返回 failed、`need(len-skipped-errored)`、结尾"全部跳过才是 Skipped，否则 Failed"）。
 - `combineTraces`：挑选顺序改为 命中 → 出错 → 推翻 → 最后一块。
@@ -220,7 +229,9 @@ default:                        r.Result = v
 }
 ```
 
-**`stats.go`** `countRun`：去掉 `case ResultError: fc.errors++`，改为在 switch 之后 `if tr.Errored { fc.errors++ }`。级行、审核器行不变。
+**`stats.go`** `countRun`：去掉 `case ResultError: fc.errors++`，改为在 switch 之后 `if tr.Errored { fc.errors++ }`。级行、审核器行的键用 `run.stageNo(i)`（spec 的级序号），所以补审级的统计和漏斗落在它自己的级号上，不会记到普通级的行里。
+
+**`plugin.go`** `runPostSafely`：post 工作协程对每个任务加 `recover`。pre 路径由 SDK 在钩子外层兜住，工作协程没有；任务运行或写记录时 panic，这个任务记为一次出错的运行（没有计过数的补计一次），进程和其他任务不受影响。
 
 **`hook.go`**
 - `runChunk` 的闭包加 `prior` 参数，传给 `p.audit`。
@@ -303,6 +314,7 @@ Go（`unit_test.go` 扩充 `TestRunFlow`，表驱动，每条写明输入的各�
 
 - `TestSpecValidate` 加：第一级补审被拒绝；补审后接普通级被拒绝；合法顺序通过；`ParseSpec` 接受 `fallback`。
 - `TestCombineTraces` 改期望：命中 → 出错 → 推翻 → 最后一块。
+- `review_fixes_test.go`（代码审核后补）：`TestFallbackDeciderIndexesTheTrace`、`TestFallbackStageHitEndToEnd`（补审级命中时请求被拒绝，记录和统计显示 spec 的级号）、`TestPostWorkerSurvivesPanic`。
 - 新增 `TestRecordResultOfTrace`：对 `fillFromTrace` 断言 3.1 第 6 条的四种映射，外加 pre 命中 → block。
 - `hook_test.go` `TestTwoStageFlowCacheAndFailOpen`：现有"复核出错 → 放行"的断言改为"命中并拒绝"；保留"所有级出错 → 放行，记 error"。
 - `stats_api_test.go` `TestStatsAPIs` 加：一次"初审命中、复核失败"的运行，流程行 `hit=1` 且 `errors=1`。
@@ -539,72 +551,89 @@ P 的一次运行审的是一个块，块里有多个片段。块命中时不知
 - 每个被引用的审核器：id、类型、`channel_id`、`config` 的原始 JSON 文本（库里读出的 jsonb 文本，各节点一致）；审核器不存在时写 `missing`。
 - 该审核器的渠道：类型、协议、`base_url`、`model`；渠道不可用时写 `-`。
 - `typesafe` 或 `llm_questions` 审核器没有自己的题表时：当前默认题集的 JSON（`preamble` 和各行，含阈值）。
+- 常量 `judgingVersion`（`snapshot.go`，现为 1）：代表"决定判定结果、但写在代码里而不在已存配置里"的东西，包括 OpenAI 各类别的默认阈值和类别表、`llm_verdict` 的默认类别和提示词模板、`llm_questions` 的提示词模板和答案读法、内置 Jev 题集及其发送和计分方式、片段的切分和渲染方式。以后的版本改了其中任何一项，就把这个常量加一，旧版本代码下缓存的结论不会被新代码沿用（`TestFingerprintJudgingVersion`）。
 
 不进指纹的：流程名、`model_filter`、`sample_rate`、`total_timeout_ms`、渠道的名称、密钥、代理、超时、计费模型。
 
 #### 5.3.3 存储
 
-仍然是内存 LRU 加宿主 KV。KV 换用新的命名空间 **`verdict`**；旧命名空间 `pass` 不再读写，里面的键到期自动消失。
+仍然是内存 LRU 加宿主 KV。KV 换用新的命名空间 **`verdict`**；旧命名空间 `pass` 里 0.7.x 的缓存键不再读写，到期自动消失。流程异常率告警的状态（`notify.go`）仍放在 `pass` 命名空间（常量 `alertNamespace`）：滚动升级期间新旧节点共用同一份告警状态，一段正在持续的告警不会因为升级再发一次。
 
 | 键 | 值 | 说明 |
 |---|---|---|
-| `s:{scope}:{片段哈希 hex}` | `p` | 这个片段干净通过 |
-| | `h{命中 id hex}` | 这个片段属于一个命中集合，指向命中条目 |
+| `s:{scope}:{片段哈希 hex}` | 以空格分隔的若干项：`p<unix 秒>`、`h<命中 id hex>@<unix 秒>` | 片段键。`p…` 表示这个片段干净通过，数字是写入时间；每个 `h…` 是一个指针，指向这个片段所属的一个命中集合，数字是该命中的写入时间 |
 | `h:{scope}:{命中 id hex}` | `storedHit` 的 JSON | 命中条目 |
+
+片段键的值举例：
+
+```
+p1762770000 h9f2c…@1762770000 h41aa…@1762683600
+```
 
 命中 id = `sha256(K 的片段哈希按字节序排序后拼接)`。
 
 ```go
-// storedHit is a cached hit of one chunk: the segments it held, the run that
+// storedHit is a cached hit of one chunk: the segments it sent, the run that
 // decided it and the request it came from.
 type storedHit struct {
     RequestID string   `json:"r"`
-    Keys      []string `json:"k"` // 片段哈希 hex，按请求顺序
+    Keys      []string `json:"k"` // 这一块实际送审的片段的哈希 hex，按请求顺序
     Trace     Trace    `json:"t"` // 这一块自己的运行；Chunk、Chunks、Input、Cache、InputMessageDropped 清空
     At        int64    `json:"at"`
 }
 ```
 
-- 一个片段键只有一个值，后写覆盖。一个片段先后属于两个命中集合时，指针指向后一个；前一个集合仍能通过它其他成员的指针找到。指针丢失的后果只是少一次重放、多审一次。
-- KV 的值上限是 64 KiB。`storedHit` 序列化后超过 60 KiB 就不存这个命中（照常写记录）。
-- TTL：`verdict_cache_days` 天，写入时定，不续期。内存里的条目用同一个到期时间。
-- 内存 LRU 的值从"存在与否"改为字节串（`p`、`h…` 或命中条目的 JSON），容量仍是 `cache_entries`。
+规则（`cache.go` `segValue`）：
+
+- **通过不抹掉指针**。一个片段键同时保存"通过"和指针。命中集合 K 的各个片段在别的请求里可能各自单独通过（例如 K 里的系统提示词片段）；如果通过把指针覆盖掉，K 的命中就会被逐个片段的通过"洗"成放行。所以写通过时保留已有指针，查的时候先看有没有完整的命中集合，再看通过（5.3.4）。
+- **每个片段最多 8 个指针**（`maxSegHits`），保留写入时间最新的 8 个。被很多命中集合共用的片段（系统提示词）会丢掉较旧的指针，那些集合仍能通过它们别的片段找到；一个命中只有在它的每个片段此后都进了 8 个以上更新的命中集合时才找不到。
+- **值里带写入时间，不续期**。片段键里的每一项、命中条目的 `at` 都是各自的写入时间；读到的任何一项，只要距写入超过 `verdict_cache_days` 就不用（`liveAt`），不论是从内存还是从 KV 读到的。从 KV 读进内存的值按原来的写入时间算到期，不重新计时。KV 键的 TTL 取值里最新一项的到期时间。
+- 读不懂的项忽略，对应的片段按未知处理、重新送审。
+- KV 的值上限是 64 KiB。`storedHit` 序列化后超过 60 KiB（`maxHitBytes`）就不存这个命中（照常写记录）。
+- KV 没有比较并交换：改片段键是"读出、修改、写回"。同一节点内按键串行（`kvLock`，64 把锁）；不同节点在几毫秒内同时改同一个键时可能丢掉其中一方的修改。丢一个通过的后果是多审一次；丢一个指针的后果是少一次重放，命中仍能通过集合里别的片段找到。
+- **内存 LRU**：条数上限 `cache_entries`，另有字节上限 64 MiB（`cacheMaxBytes`，按键长加值长加每条约 128 字节的开销估算）。任一上限超出时从最久未用的开始丢。片段条目约 250 字节，64 MiB 约 25 万条：`cache_entries` 设得更大时实际由字节上限约束。命中条目在内存里保存解码后的结构（不在每次查询时重新解析 JSON），占用按 JSON 长度的两倍估算。64 MiB 的由来：插件内存上限 512 MB，处理中的请求默认占 128 MB（`max_inflight_mb`），图片解码占 112 MB（7.3），其余留给队列和垃圾回收。`GET /status` 的 `runtime.cache_entries`、`runtime.cache_bytes` 给出当前条数和估算字节数。
 
 #### 5.3.4 查
 
-`admit` 里取代 `cachedSegments` 的调用（`P:hook.go:217`）。对请求的全部片段：
+`admit` 里取代 `cachedSegments` 的调用，函数是 `lookupVerdicts(scope, keys, useKV)`。对请求的全部片段：
 
-1. 取每个片段键的值：先内存；pre 时未命中的再查 KV（沿用现在的上限：最多 64 个、8 路并发、总共 200 ms，`P:cache.go:25-29`）。
-2. 值为 `h…` 的片段：取对应的命中条目（内存，没有再查 KV，计入同一个 200 ms）。条目存在、且它的 `Keys` 全部在本请求的片段集合里 → 这是一个可重放的命中。按请求顺序取第一个。
-3. 有可重放的命中 → 走重放（5.3.6），不再分块。
-4. 没有 → 值为 `p` 的片段算已放行，其余（包括指针失效、集合不完整的）送审。之后与现在相同：`makePlan`，全部已放行则计 `cache_skipped`。
+1. 取每个片段键的值：先内存；`useKV` 时未命中的再查 KV（沿用原来的上限：最多 64 个、取请求里最靠后的 64 个，8 路并发，总共 200 ms）。从 KV 读到的值并入内存（保留各项的写入时间；这个键刚被人工处理改过、还在墓碑期内时不并入，见 5.3.8）。
+2. 收集各片段的指针（按请求顺序，每个片段内新的在前），取对应的命中条目（内存，没有再查 KV，最多 64 个，计入同一个 200 ms）。
+3. **先找命中**：按上面的顺序，第一个"条目存在、未过期、且 `Keys` 全部在本请求的片段集合里"的命中决定这个请求，走重放（5.3.6），不再分块。这一步在看任何"通过"之前。
+4. 没有可重放的命中 → 带有未过期 `p…` 的片段算已放行，其余（包括指针失效、集合不完整的）送审。之后与以前相同：`makePlan`，全部已放行则计 `cache_skipped`，note 为 `moderation: pass (cached)`。
 
-KV 出错或超时：相关片段按未知处理，照常送审，`kv_errors` 加一。
+KV 出错或超时：相关片段按未知处理，照常送审，进程内的计数器 `kvErrors` 加一（这个计数器从 0.7.x 起就只在进程内累加，健康指标和 `/status` 都没有输出它，目前看不到）。
 
-post 的请求在 `admit` 里只看内存（与现在相同，`useKV = false`）；出队执行前（`runPost`，取代 `allCached`）再带 KV 查一次：可重放 → 重放；全部已放行 → 计 `cache_skipped`；否则按入队时的分块运行。
+post 的请求在 `admit` 里只看内存（`useKV = false`）；出队执行前（`runPost`）再带 KV 查一次：可重放 → 重放；送审的片段全部已放行 → 计 `cache_skipped`；否则按入队时的分块运行。**入队之后缓存被清空过的任务**（当前快照的 `cache_epoch` 与入队时不同）跳过这次查询直接运行：它的范围是已被清空的那个，不能用里面的结论回答（`TestQueuedJobAfterClear`）。
 
-试跑、测试、模拟不读也不写缓存（与现在相同，这些路径的 `m.plan` 为 nil）。
+试跑、测试、模拟不读也不写缓存（这些路径的 `m.plan` 为 nil）。
 
 #### 5.3.5 写
 
-`finish` 里取代 `cachePasses`。对这次请求的每个块，按它自己那次运行：
+`settleVerdicts` 取代 `cachePasses`。对这次运行的每个块，按它自己那次运行：
 
 | 该块的运行 | 写入 |
 |---|---|
 | 块里有 URL 图片，或 `Errored` | 不写 |
-| `Final == Hit` | 写命中条目，并把块里每个片段的键写成指向它的指针 |
+| `Final == Hit` | 写命中条目，并在该块**实际送审的**每个片段的键里加上指向它的指针 |
 | 通过（含被推翻），且没有任何一级整级跳过（`stageSkipped()`） | 这个块给它的每个片段记一次"通过" |
 | 其他 | 不写 |
 
-片段写 `p` 的条件不变：包含它的每一块（含抽样没跑的块，`plan.pieces`）都记了"通过"（`P:hook.go:444-449`）。
+片段写 `p…` 的条件不变：包含它的每一块（含抽样没跑的块，`plan.pieces`）都记了"通过"。
 
-与现在的差别：
+与 0.7.2 的差别：
 - 命中会写入。
 - "有审核器跳过"从"任何一个审核器跳过"（`anySkipped`）放宽为"有一整级跳过"（`stageSkipped`），照 N。例：一级里 Jev 判了、只读文字的 LLM 因为块里只有图片而跳过，这一级算判过。
 
-写入时机：内存立即写；KV 在后台协程里写（与现在相同，钩子不等 KV）。N 是同步写。差别只在别的节点可能晚几十毫秒看到（第 10 节第 6 条）。
+实现后定下的几点：
 
-记录的 trace 上，判定块为命中且不含 URL 图片时写：
+- **命中集合只列实际送审的片段**（`sentKeys`）。流程里没有收图片的审核器时，块里的图片在送审前被丢掉（`dropImages`）；这些图片的片段不进命中集合，否则集合里会有"没人看过"的内容。它们仍随块一起记"通过"：这个流程对图片没有意见，流程里加进收图片的审核器时指纹会变。
+- **每次运行只结算一次，不是每个请求一次**。pre 的共享运行（singleflight）在运行函数里结算：不论有几个请求在等它、也不论等的请求是否都已离开，都只写一次（`TestPreRunStoresVerdictsOnce`）；post 由工作协程结算。
+- **范围用结算时的清空纪元**，不是运行开始时快照里的：缓存在运行期间被清空时，结论写到现在会被读到的范围里，已清空的范围不再写入。
+- 写入时机：内存立即写；KV 在后台协程里写，预算 2 秒（钩子不等 KV）。N 是同步写，差别只在别的节点可能晚几十毫秒看到（第 10 节第 6 条）。每次运行写进 KV 的通过最多 64 个（最靠后的），每个命中最多写 64 个片段的指针；命中条目没写成功时不写指向它的指针。
+- 被人工处理改过、还在墓碑期内的键不写（5.3.8）。
+
+记录的 trace 上，判定块为命中、不含 URL 图片、且有送审的片段时写：
 
 ```json
 "cache": {"key": "<命中 id hex>", "segs": ["<片段哈希 hex>", …], "fp": "<指纹>"}
@@ -639,29 +668,33 @@ func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, hitID strin
 2. 本节点换一个空的内存 LRU，调 `configChanged`（重新加载快照，读到新的 `cache_epoch`，并广播 `config.changed`）。
 3. 返回 `{"epoch": <新值>}`。
 
-`config_version` 一起加一，是为了复用现有的"广播加每 5 秒轮询版本号"来传播，不用新增轮询。新键不含 `config_version`，所以这不会产生别的影响。KV 里的旧键不逐个删除（一次清空可能有几十万个键，逐个走 gRPC 太慢），等 TTL 过期。
+`config_version` 一起加一，是为了复用现有的"广播加每 5 秒轮询版本号"来传播，不用新增轮询。新键不含 `config_version`，所以这不会产生别的影响。正在进行的运行和排队的任务在读写缓存时看到新的纪元（5.3.4、5.3.5）。KV 里的旧键不逐个删除（一次清空可能有几十万个键，逐个走 gRPC 太慢），等 TTL 过期。
 
 #### 5.3.8 人工处理同步缓存
 
-`POST /events/review` 成功后，对本次处理的、`trace.cache.key` 非空的可疑记录执行（新函数 `syncReviewed`）。范围用记录的 `flow_id` 在**当前快照**里的流程算；该流程现在不存在或已停用 → 跳过这条记录。
+`POST /events/review` 成功后，对本次处理的、`trace.cache` 里 `key` 和 `segs` 都是合法哈希的可疑记录执行（`syncReviewed`）。范围用记录的 `flow_id` 在**当前快照**里的流程算；该流程现在不存在、已停用或未发布 → 跳过这条记录。
 
 | 处理结果 | 动作 |
 |---|---|
-| 误报 | 删除命中条目；把 `segs` 里每个片段的键写成 `p` |
-| 确认 | 仅当记录的 `fp` 等于流程当前的指纹：用记录的 trace 重建命中条目（来源请求取 `cache.source_request_id`，没有则取记录自己的 `request_id`；去掉 `cache`、`chunks`、`input`、`input_message_dropped`），并把每个片段的键写成指针 |
-| 待处理 | 删除命中条目和 `segs` 里每个片段的键 |
+| 误报 | 删除命中条目，去掉 `segs` 里每个片段指向它的指针。记录的 `fp` 等于流程当前的指纹时，再把每个片段写成通过；指纹不同时**只删命中，不写通过** |
+| 确认 | 仅当记录的 `fp` 等于流程当前的指纹：用记录的 trace 重建命中条目（来源请求取 `cache.source_request_id`，没有则取记录自己的 `request_id`；去掉 `cache`、`chunks`、`input`、`input_message_dropped`），给每个片段加上指针，并去掉这些片段的"通过"。指纹不同的记录跳过，不计入 `cache_synced` |
+| 待处理 | 删除命中条目，去掉每个片段指向它的指针和"通过"，下次重新审 |
 
-- 误报时把每个片段都写成放行：管理员认定这些片段合起来没问题，那么其中每一个单独出现也没问题。
-- "确认"要求指纹相同：配置变了之后，不能把旧配置下的命中写成新配置的结论。指纹不同的记录跳过。
-- 写 KV 是同步的，总共最多 1 秒；失败只计 `kv_errors`，不影响处理结果。
-- 其他节点的内存里可能还留着旧值：处理后广播新主题 `verdict.changed`，负载是 `{"keys": [...]}`（受影响的片段键和命中键，每条消息不超过 64 KiB，多了分几条发），收到的节点从内存里删掉这些键，下次读就落到 KV。广播是尽力而为的；漏收的节点上旧值最多保留到该条目到期，管理员可以清空缓存来兜底。写进界面的提示。
-- 响应加 `cache_synced`：同步了缓存的记录数。
+- 误报时把每个片段都写成放行：管理员认定这些片段合起来没问题，那么其中每一个单独出现也没问题。但只在指纹没变时写：当前配置从没审过这段内容，而且 `segs` 是当时那次运行送审的片段，换了配置后未必是同一批（例如当时没有审核器收的图片）。
+- "确认"要求指纹相同：配置变了之后，不能把旧配置下的命中写成新配置的结论。
+- **去重**：一次处理里指向同一个命中的多条记录（一次命中和它的若干次重放）只改一次缓存，按 id 顺序最后一条决定内容；每个键只读写一次。
+- **以 KV 为准**。KV 是各节点共用的，所以先同步写 KV：每 64 个键 1 秒预算，最多 10 秒。先写命中条目，再改片段键；命中条目没写成功的，不写指向它的指针，也不在删不掉的命中旁边写通过。
+- **内存不写新值，只立墓碑**。本节点在写 KV 之前把涉及的键从内存里删掉并立墓碑（期限 = 写预算加 4 秒），写完后再立一次（4 秒，`tombstoneTTL` = 后台写预算的两倍）；其他节点收到广播 `verdict.changed`（负载 `{"keys": [...]}`，每条消息的键合计不超过 48 KiB，多了分几条发）后同样删键并立 4 秒墓碑。墓碑期内这个键不从 KV 并入内存、也不被运行结果写入（内存和本节点的 KV 写都跳过）。这样处理之前读到旧值的查询、处理前后刚结束的运行，都不会把旧结论写回来。墓碑过后各节点从 KV 重新读，KV 里是什么就是什么：某次写失败时，所有节点一致地沿用旧结论，而不是处理的那个节点用新的、其他节点用旧的。
+- 响应的 `cache_synced`：缓存改动**全部写成功**的记录数。部分失败的记录不计入；对它再处理一次会重做这些写入。失败计入同一个 `kvErrors` 计数器（同样没有对外输出；能看到的是 `cache_synced` 小于处理的记录数），不影响处理结果本身。
+- 广播是尽力而为的。漏收的节点上，内存里的旧值最多保留到它到期；另外，本节点某次运行的后台写如果恰好落在"别的节点处理完、而它的广播还没到本节点"之间，会把命中写回 KV，直到到期。两种情况管理员都可以用清空缓存兜底，界面提示里写了这一点。
 
 #### 5.3.9 如实写明的限制
 
-1. **重放不分用户**（与 N 相同）。A 用户的违规内容进了缓存后，B 用户第一次发同样的内容也是重放：会被记录，pre 时会被拒绝，但不进名单、不计违规。广为流传的越狱提示词在缓存期内不会让后来的用户进名单。见未决问题 Q7。
+1. **重放不分用户**（与 N 相同）。A 用户的违规内容进了缓存后，B 用户第一次发同样的内容也是重放：会被记录，pre 时会被拒绝，但不进名单、不计违规。广为流传的越狱提示词在缓存期内不会让后来的用户进名单。见 Q7。
 2. 重放只对"包含整个命中集合"的请求生效。客户端改动集合里任何一个片段（哪怕一个字），就不重放，这段内容会重新送审，结果由审核器决定。
-3. 清空和人工处理的同步在多节点下有短暂延迟（清空最多 5 秒；人工处理依赖广播）。
+3. **重放决定整个请求，请求里命中集合之外的内容这次不审**（与 N 相同，`N:gate.go` `planAudit`：缓存命中即结束计划；有意保留）。后果在 post 时机下才有：一个对话的历史里有一条已缓存的命中时，之后每一轮都被记为一次重放（不算新的违规），**这一轮新增的内容不会送审**，直到命中条目过期、被标为误报或缓存被清空。pre 时机下请求反正被拒绝，没有这个问题。也就是说，后审的用户在一个已经命中过的对话里继续发新的违规内容，不会产生新的命中记录和违规计数；要让这类用户被拦下，靠的是名单升级为拦截级（那时每一轮都被拒绝）。
+4. 清空和人工处理的同步在多节点下有短暂延迟（清空最多 5 秒；人工处理依赖广播，见 5.3.8 末条）。
+5. 片段键的并发修改可能丢一方的改动（5.3.3），后果限于多审一次或少重放一次。
 
 ### 5.4 数据模型与迁移
 
@@ -708,7 +741,7 @@ ALTER TABLE stats_hourly ADD COLUMN IF NOT EXISTS replayed    bigint  NOT NULL D
 | `POST /events/review` | manage | 响应加 `cache_synced` |
 | `GET /events` | read | 每行加 `replayed`；新过滤参数 `replayed=true\|false` |
 | `GET /events/:id` | read | `replayed`；`trace.cache` 原样返回 |
-| `GET /status` | read | `today.replayed`（已包含在 `today.suspicious` 里）；`runtime.cache_epoch` |
+| `GET /status` | read | `today.replayed`（已包含在 `today.suspicious` 里）；`runtime.cache_epoch`；`runtime.cache_bytes`（内存缓存的估算字节数） |
 | `GET /stats/trend` | read | `flows[].points[].replayed`（已包含在 `hit` 里） |
 | AI 分析工具 `list_suspicious_records`、`get_record` | — | 记录加 `replayed`；三个工具的说明加 N 的那句话（`N:analysis_tools.go:38-50`） |
 
@@ -725,11 +758,20 @@ ALTER TABLE stats_hourly ADD COLUMN IF NOT EXISTS replayed    bigint  NOT NULL D
 ```go
 const kvNamespace = "verdict"
 
-func (c *lru) get(key string, now time.Time) ([]byte, bool)
-func (c *lru) put(key string, val []byte, expires time.Time)
-func (c *lru) del(key string)
+// 片段键的值
+type segValue struct { pass int64; hits []hitRef } // parseSeg / encode / addHit / dropHit / merge / prune
+type segEdit func(*segValue)                       // passAt、dropPass、pointTo、unpoint
 
-func (s *snapshot) scopeOf(f *liveFlow) string             // "e3:7:9f2c…"
+// 内存 LRU：条数和字节两个上限；命中条目保存解码后的结构；墓碑
+func (c *lru) get(key string, now time.Time) ([]byte, bool)
+func (c *lru) getHit(key string, now time.Time) *storedHit
+func (c *lru) putHit(key string, hit *storedHit, bodyLen int, expires, now time.Time) bool
+func (c *lru) editSeg(key string, now time.Time, ttl time.Duration, edit segEdit)
+func (c *lru) kill(keys []string, until, now time.Time)
+func (c *lru) size() int64
+
+func cacheScope(epoch int64, f *liveFlow) string           // "e3:7:9f2c…"
+func (s *snapshot) scopeOf(f *liveFlow) string
 func segKeyOf(scope string, h [32]byte) string             // "s:" + scope + ":" + hex
 func hitKeyOf(scope, id string) string                     // "h:" + scope + ":" + id
 func hitID(keys [][32]byte) string
@@ -741,8 +783,10 @@ type verdicts struct {
     hitID  string
 }
 
-func (p *Plugin) lookupVerdicts(s *snapshot, f *liveFlow, keys [][32]byte, useKV bool) verdicts
-func (p *Plugin) storeVerdicts(c *config, s *snapshot, f *liveFlow, passes [][32]byte, hits []storedHit)
+func (p *Plugin) lookupVerdicts(scope string, keys [][32]byte, useKV bool) verdicts
+func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits []storedHit)
+func (p *Plugin) kvEditSeg(ctx context.Context, key string, edits []segEdit, ttl time.Duration, guarded bool) error
+func (p *Plugin) kvSetHit(ctx context.Context, key string, body []byte, ttl time.Duration, guarded bool) (bool, error)
 func (p *Plugin) clearVerdictCache(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error)
 func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) int
 func (p *Plugin) onVerdictChanged(ctx context.Context, b pluginsdk.Broadcast) error
@@ -750,15 +794,14 @@ func (p *Plugin) onVerdictChanged(ctx context.Context, b pluginsdk.Broadcast) er
 
 删除 `segKey`、`cachedSegments`、`putSegments`。
 
-**`snapshot.go`**：`snapshot` 加 `cacheEpoch int64`（和 `config_version` 同一条查询读出）；`liveFlow` 加 `fp string`；`loadSnapshot` 在审核器和流程都读完后算指纹（审核器的 `config` 原文要留到这一步）；新主题常量 `TopicVerdictChanged = "verdict.changed"`。
+**`snapshot.go`**：`snapshot` 加 `cacheEpoch int64`（和 `config_version` 同一条查询读出）；`liveFlow` 加 `fp string`；`loadSnapshot` 在审核器和流程都读完后算指纹（审核器的 `config` 原文要留到这一步；`fingerprint` 的输入含常量 `judgingVersion`）；新主题常量 `TopicVerdictChanged = "verdict.changed"`。
 
 **`hook.go`**
-- `moderation` 结构加 `req *request`（重放要用片段），post 入队时只保留片段的哈希（`m.plan.keys` 已有），不保留 `req`。
-- `admit`：`cachedSegments` 换成 `lookupVerdicts`；有可重放的命中时返回 `p.replay(...)`。
+- `admit`：`cachedSegments` 换成 `lookupVerdicts`；有可重放的命中时返回 `p.replay(m, req, …)`。`replay` 的 `req` 参数是请求的片段；post 任务出队时重放传 nil（入队时只保留了片段的哈希和各块的内容）。
 - `runKey`：改用 `scopeOf` 拼键。
-- `runPost`：`allCached` 换成一次带 KV 的 `lookupVerdicts(m.snap, m.flow, m.plan.keys, true)`。重放需要片段文字：post 任务在入队时已经复制了各块的文字，但 K 里可能有当时已放行、没进块的片段；这时记录的 `text` 和 `input_message` 只含块里有的那部分，trace 里的 `segs` 仍是完整的。
-- `cachePasses` 改名 `settleVerdicts`，按 5.3.5。
-- `finish`：先给 trace 填 `cache`，再 `fillFromTrace`。
+- `runPost`：`allCached` 换成一次带 KV 的 `lookupVerdicts(m.snap.scopeOf(m.flow), m.plan.keys, true)`（入队后缓存被清空过则跳过，5.3.4）。重放需要片段文字：post 任务在入队时已经复制了各块的文字，但 K 里可能有当时已放行、没进块的片段；这时记录的 `text` 和 `input_message` 只含块里有的那部分，trace 里的 `segs` 仍是完整的。
+- `cachePasses` 改名 `settleVerdicts`，按 5.3.5；由 `runPre` 的共享运行函数和 `runPost` 调用，不再由 `finish` 调用。
+- `finish`：先给 trace 填 `cache`，再 `fillFromTrace`；原始消息只在确定要写记录之后才拼（带图片时有几兆字节，而大多数请求通过后不写记录）。
 
 **`store.go`**：`eventRec` 加 `Replayed bool`；`writeEvents` 的 INSERT 加这一列；`afterWrite` 跳过 `e.Replayed`；`countViolations` 加 `AND NOT replayed`。
 
@@ -776,8 +819,8 @@ type CacheInfo struct {
 
 **`stats.go`**：`counters` 加 `replayed`（`merge`、`writeStats` 的 INSERT 和 ON CONFLICT 都带上）；新增 `countReplay(m *moderation)`。
 **`stats_api.go`**：`loadStats` 读这一列；`TodayCounts.Replayed`、`FlowPoint.Replayed`。
-**`routes.go`**：注册路由；`Event` 加 `replayed`，`eventColumns` 加列；`eventFilter` 加 `replayed`；`reviewEvents` 末尾调 `syncReviewed`；`Runtime` 加 `CacheEpoch`。
-**`plugin.go`**：`OnTopic(TopicVerdictChanged, p.onVerdictChanged)`；`Configure` 里缓存容量变化时照旧重建 LRU。
+**`routes.go`**：注册路由；`Event` 加 `replayed`，`eventColumns` 加列；`eventFilter` 加 `replayed`；`reviewEvents` 末尾调 `syncReviewed`；`Runtime` 加 `CacheEpoch`、`CacheBytes`。
+**`plugin.go`**：`OnTopic(TopicVerdictChanged, p.onVerdictChanged)`；`Configure` 里缓存容量变化时照旧重建 LRU（墓碑随之清掉）；`kvMu [64]sync.Mutex`。
 **`settings.go`**：`VerdictCacheDays`，`cacheTTL` 按 5.5 的规则算。
 **`analysis_tools.go`**：`toolRecord.Replayed`（取自 `events.replayed`）；工具说明。
 
@@ -812,9 +855,10 @@ type CacheInfo struct {
 | `TestClearVerdictCache` | 清空后同一内容重新送审；`cache_epoch` 加一；第二个插件实例（同一库和 KV）在一次 `pollVersions` 后也重新送审 |
 | `TestReviewSyncsVerdictCache` | 误报 → 同一内容下次不送审、直接放行；改为确认 → 重放；改为待处理 → 重新送审；流程指纹已变时"确认"不写缓存，`cache_synced = 0` |
 | `TestVerdictChangedBroadcastDropsMemory` | 收到 `verdict.changed` 的实例删掉内存里的对应键 |
-| `TestVerdictCacheTTLSettings` | `DecodeSettings`：只有 `cache_ttl_seconds = 0` → 关闭；`= 86400` → 1 天；`= 200000` → 3 天；两个键都没有 → 7 天；`verdict_cache_days = 40` → 30 |
+| `TestVerdictCacheTTLSettings`（在 `unit_test.go`） | `DecodeSettings`：只有 `cache_ttl_seconds = 0` → 关闭；`= 86400` → 1 天；`= 200000` → 3 天；两个键都没有 → 7 天；`verdict_cache_days = 40` → 30 |
 | `TestKVFailureAuditsAgain` | KV 报错时照常送审，不放行、不重放 |
 
+- `verdict_cache_fixes_test.go`（代码审核后补）：`TestHitSurvivesPassesOfItsSegments`、`TestSegValue`、`TestReviewSyncWritesEachKeyOnce`、`TestReviewSyncKVFailure`、`TestKVRunStopsWithItsContext`、`TestFalsePositiveUnderAnotherFingerprint`、`TestKVValueKeepsItsWriteTime`、`TestQueuedJobAfterClear`、`TestLRUByteBudget`、`TestHitKeptDecoded`、`TestPreRunStoresVerdictsOnce`、`TestFingerprintJudgingVersion`、`TestLRUTombstone`、`TestReviewIsNotUndoneByLateWrites`；`verdict_cache_test.go` 另有 `TestFingerprint`、`TestStoredHitLimits`。
 - 现有 `hook06_test.go` `TestHookModeratesWholeRequestWithSegmentCache`、`extract_test.go` `TestPlanSkipsCachedSegments`：按新接口改写，断言不变。
 - `stats_api_test.go`：`/status` 的 `today.replayed`、趋势点的 `replayed`。
 - `manifest_test.go`：新路由在 manifest 里且权限是 manage（现有的路由对照测试会自动覆盖）。
@@ -915,20 +959,21 @@ P 独有的封禁与两个名单的关系（决定）：
 1. **设置不用改**。`mode = enforce` 直接读成"默认级别为拦截"。
 2. **名单里自动加入的观察级条目要转成拦截级**，否则这些用户升级后从先审变成后审。原因：线上 `mode = enforce` 期间自动加入的条目都是观察级（0.7.2 总是观察级），在 N 的规则下它们本该以默认级别（拦截）加入。
 
-   一次性转换（新文件 `parity.go`，`convertParityOnce`，写法照 `legacy.go` 的 `convertLegacyOnce`：在 `refreshLoop` 里、`Configure` 收到真实设置之后调用；用 `config_state` 的行锁保证只有一个节点执行）：
+   转换（新文件 `parity.go`，`convertParityOnce`；在 `refreshLoop` 里、`Configure` 收到真实设置之后调用，每 5 秒一轮）：
 
-   - 读 `config_state.parity_converted`（新列）；已为真则返回。
-   - 当前 `mode = enforce` 时：
+   - **第一次运行**（`config_state.parity_converted` 为假）：当前 `mode = enforce` 时，转换所有未过期的、`source = 'auto'` 的观察级条目；`mode` 不是 `enforce` 时不改条目。然后把 `parity_converted` 置为真，并在新列 `parity_converted_at` 记下时间（两个节点同时做时以先写入的为准）。
+   - **之后的 24 小时内**（`parityWindow`，从 `parity_converted_at` 算起）每一轮都再查一次：`since_at >= parity_converted_at` 的、未过期的自动观察级条目也转换，按当时的 `mode` 判断。原因：滚动升级期间仍在跑 0.7.x 的节点会继续以观察级自动加入条目（之后每次命中还会延期），只转一次会漏掉它们。第一次运行之前就存在的条目不再回头看：第一次运行时 `mode = observe` 的部署，那些条目保持观察级。
+   - 24 小时过后，或 `parity_converted` 为真但没有 `parity_converted_at`（由不记时间的早期构建转换过）时，不再做任何事。
+   - **每个条目一个事务**，锁的顺序与其他名单改动相同（用户锁 `lockBlockSubject` → 名单行 → `config_state` 的 `bumpWatch`），不会和并发的名单操作死锁；`UPDATE` 重复写出条件（仍是未过期的自动观察级），两个节点同时转换时每个条目只改一次：
 
      ```sql
      UPDATE watchlist SET level = 'enforce', updated_at = $1
-     WHERE level = 'observe' AND source = 'auto' AND (expires_at IS NULL OR expires_at > $1)
-     RETURNING user_id
+     WHERE user_id = $2 AND level = 'observe' AND source = 'auto' AND (expires_at IS NULL OR expires_at > $1)
      ```
 
-     每个用户写一条 `watch_events`：`action = 'set_level'`，`from_level = 'observe'`，`to_level = 'enforce'`，`reason = '0.8.0 升级：默认级别为拦截，自动加入的条目改为拦截级 / upgrade to 0.8.0'`，没有操作人。`expires_at`、`violation_count`、`violation_epoch` 不动。然后 `bumpWatch`，事务提交后 `watchChanged`。
-   - 不论 `mode` 是什么，都把 `parity_converted` 置为真（只在升级那一刻判断一次）。
-   - 日志记一条：转换了多少条。
+     改到的条目各写一条 `watch_events`：`action = 'set_level'`，`from_level = 'observe'`，`to_level = 'enforce'`，`reason = '0.8.0 升级：默认级别为拦截，自动加入的条目改为拦截级 / upgrade to 0.8.0: the default level is enforce, automatic entries become enforce'`，没有操作人。`expires_at`、`violation_count`、`violation_epoch` 不动。有改动时 `watchChanged`。
+   - 某一步失败时记警告，下一轮重试；已经转换的条目不受影响。
+   - 日志（第一次运行，以及之后每次有条目被转换时）：`moderation: 0.8.0 watch list conversion`，带 `mode`、`converted`、`first_run`。
 
    只转 `source = 'auto'` 的条目：管理员手动设成观察级的（`source = 'manual'`）和 AI 降到观察级的（`source = 'analysis'`）是有意的选择，保持观察级；这些用户升级后变为只后审，这正是 N 的规则。发布前用一条查询数出这类条目有多少，写进发布记录：
 
@@ -943,6 +988,7 @@ P 独有的封禁与两个名单的关系（决定）：
 
 ```sql
 ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted boolean NOT NULL DEFAULT false;
+ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted_at timestamptz;
 ```
 
 `watchlist.level` 的 CHECK 约束不变（`observe`、`enforce`）。
@@ -956,7 +1002,7 @@ ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted boolean NOT N
 "blocklist_user_ids": {"type": "array", "default": [], "maxItems": 1000, "items": {"type": "string", "pattern": "^[0-9]{1,18}$"}}
 ```
 
-`items` 的写法以现有 `exempt_user_ids` 的定义为准（实现时照抄它，再加 `maxItems`）。`mode` 的定义不变（三个枚举值、默认 `off`）。
+三个名单键（含旧键 `exempt_user_ids`）的 `items` 都是 1–18 位数字，`maxItems` 1000。`mode` 的定义不变（三个枚举值、默认 `off`）。
 
 `settings.ui.json`：
 
@@ -971,7 +1017,7 @@ ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted boolean NOT N
 
 | 方法 路径 | 变化 |
 |---|---|
-| `GET /status` | 加 `default_level`（`observe` \| `enforce`，`mode = off` 时为 `observe`） |
+| `GET /status` | 加 `default_level`（`observe` \| `enforce`，`mode = off` 时为 `observe`）；`watch` 加 `blocking_with_new`（拦截级条目里有新命中的个数；默认拦截时新条目以拦截级加入，有新命中的用户出现在这里，N 没有这个数） |
 | `GET /events/:id`、`GET /users/:user_id` | `user_state` 去掉 `exempt`，加 `allowlisted`、`blocklisted` |
 | `GET /watchlist` | 每行加 `allowlisted`、`blocklisted` |
 | `POST /watchlist`、`PATCH /watchlist/:user_id` | 白名单用户设为 `enforce` → 400；豁免用户不再被拒绝（可以以观察级加入） |
@@ -980,11 +1026,11 @@ ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted boolean NOT N
 
 ### 6.8 Go 改动
 
-**`settings.go`**：`Settings` 加 `AllowlistUserIDs`、`BlocklistUserIDs`；`config` 把 `exempt` 换成 `allow`、`block`，加 `defaultLevel`；新方法 `(d decoder) userList(key string) []string`；`compile` 里 `defaultLevel = LevelEnforce` 当且仅当 `Mode == ModeEnforce`。
+**`settings.go`**：`Settings` 加 `AllowlistUserIDs`、`BlocklistUserIDs`；`config` 把 `exempt` 换成 `allow`、`block`，加 `defaultLevel`；新方法 `(d decoder) userList(key)`（返回 id 列表、键是否存在、是否被截到 1000 项、丢掉了几项不是用户 id 的条目；`Configure` 对截断和丢弃各记一条警告，因为被丢掉的条目意味着名单没有覆盖到那个用户）；`compile` 里 `defaultLevel = LevelEnforce` 当且仅当 `Mode == ModeEnforce`。
 
 **`hook.go`**
 - `precheck`：删掉豁免放行那一段（白名单用户继续往下，按后审处理）。
-- `moderate`：繁忙时改用 `p.preModerated(c, uid)` 决定返回 503 还是放行。
+- `moderate`：先看不用读请求体就能知道的两件事——这个请求没有流程（分组没有绑定，或绑定为免审），或流程的模型过滤把请求的模型排除在外——这两种请求直接放行，不占 `max_inflight_mb`，繁忙时也不会被回 503。之后才按字节数准入；超出时用 `p.preModerated(c, uid)` 决定：本应先审的用户返回 503 `moderation_busy`，其余放行（note `moderation: busy`）。默认拦截下，"本应先审的用户"是白名单和观察级名单之外的所有人，所以繁忙时 503 的范围比 0.7.2（只有名单上拦截级的用户）大得多，发布说明里写明。
 - `admit`：`if p.preModerated(c, uid) { m.timing = TimingPre }`。`rec.WatchLevel` 仍是名单条目的级别。
 
 **`store.go`**
@@ -1010,7 +1056,7 @@ case ActionAutoRemove:    allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 
 `escalationOf` 不动（P 在拦截级只降级不移出的规则保留，§72.13.4）。
 
-**`routes.go`**：`UserState` 改字段；`userState` 填两个名单标记。**`watch_list.go`**：`WatchItem` 加两个标记。**`stats_api.go`**：`Status.DefaultLevel`。**`flow_versions.go`** `simulateFlow`：`none` 按 `c.defaultLevel`。**`notify.go`**：不变。**新文件 `parity.go`**：`convertParityOnce`。**`plugin.go`**：加 `parityDone atomic.Bool`。**`store.go` `refreshLoop`**：调用 `convertParityOnce`。
+**`routes.go`**：`UserState` 改字段；`userState` 填两个名单标记。**`watch_list.go`**：`WatchItem` 加两个标记。**`stats_api.go`**：`Status.DefaultLevel`。**`flow_versions.go`** `simulateFlow`：`none` 按 `c.defaultLevel`。**`notify.go`**：不变。**新文件 `parity.go`**：`convertParityOnce`。**`plugin.go`**：加 `parityDone atomic.Bool`、`parityEnd atomic.Int64`（转换窗口结束的时间）。**`store.go` `refreshLoop`**：调用 `convertParityOnce`。
 
 ### 6.9 界面
 
@@ -1025,11 +1071,12 @@ case ActionAutoRemove:    allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 ### 6.10 回滚与混跑
 
 - 混跑期间旧节点按旧规则：`mode = enforce` 时所有人先审；`exempt_user_ids` 里的用户不审。新节点按新规则。同一用户的请求落到不同节点时结果可能不同，持续到滚动结束。
-- 一次性转换可能在旧节点还在运行时执行：转换成拦截级的条目在旧节点上同样是先审，无影响。
+- 转换可能在旧节点还在运行时执行：转换成拦截级的条目在旧节点上同样是先审，无影响。旧节点在此之后自动加入的观察级条目由 24 小时窗口内的后续几轮转换（6.4）。
 - 回滚到 0.7.2：
   - `allowlist_user_ids`、`blocklist_user_ids` 被忽略。黑名单用户按普通用户处理；白名单用户按普通用户处理（`mode = enforce` 时会被先审）。需要保持免拦截的，回滚前把这些 id 写回 `exempt_user_ids`（0.7.2 下是完全不审）。
   - 转换过的名单条目保持拦截级；0.7.2 不给拦截级计违规、不延期，它们到 `expires_at` 后过期。
-  - `parity_converted` 列被忽略；再次升级时不会重复转换。
+  - `parity_converted`、`parity_converted_at` 两列被忽略；再次升级时，如果距第一次转换不到 24 小时，回滚期间 0.7.2 自动加入的观察级条目会被转换，超过 24 小时则不再转换。
+  - 设置文档里存着四个新键时，0.7.2 的设置页无法保存（它的 schema 是 `additionalProperties: false`，核心按当前安装版本的 schema 校验整份文档）。回滚前要先通过核心设置接口去掉这四个键，步骤见发布说明。
 
 ### 6.11 测试
 
@@ -1043,8 +1090,10 @@ case ActionAutoRemove:    allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 | `TestEnforceEntriesCountOnlyUnderDefaultEnforce` | 默认观察时拦截级条目的命中只加 `hit_count`，不计违规 |
 | `TestAllowlistedCannotBeEnforcedByHand` | `POST /watchlist` 和 `PATCH` 把白名单用户设为 `enforce` → 400 `level/allowlisted`；设为 `observe` 成功 |
 | `TestAnalysisRespectsLists` | `decideEscalation`：白名单用户的升级 → `auto_not_allowed`；黑名单用户的降级、移出 → `auto_not_allowed`；不在名单的照开关 |
-| `TestBusyUsesPreModerated` | 超出 `max_inflight_mb` 时：黑名单用户 503；默认拦截下的普通用户 503；白名单用户放行 |
+| `TestBusyUsesPreModerated` | 超出 `max_inflight_mb` 时：黑名单用户 503；默认拦截下的普通用户 503；白名单用户放行；没有流程或被模型过滤排除的请求不回 503 |
 | `TestExemptBecomesAllowlist` | `DecodeSettings`：只有 `exempt_user_ids` → 白名单等于它；两个键都有 → 用 `allowlist_user_ids`；超过 1000 项截断 |
+| `TestParityConversionWindow`、`TestParityConversionLockOrder`（`review_fixes_test.go`） | 第一次转换后 24 小时内新加入的自动观察级条目被转换，之后不再转换；转换与并发的名单改动按同一顺序取锁，等待而不死锁 |
+| `TestUserIDListsPatternAndDrops`、`TestStatusBlockingWithNew`、`TestSimulateNoneFollowsDefaultLevel` | 名单项 1–18 位数字，丢弃的项有计数；`watch.blocking_with_new`；模拟时 `user_state = none` 按默认级别 |
 | `TestParityConversionOnce` | `mode = enforce` 的库：自动的观察级条目变拦截级并各有一条历史；手动和 AI 的观察级条目不变；已过期的不变；再跑一次不再改动；`mode = observe` 的库不改条目但标记置真；两个实例并发只转换一次 |
 
 说明：照 N，自动条目一律以默认级别加入，白名单用户也一样（N 的 `ApplyWatchHit` 不看名单）；白名单用户即使有拦截级条目，`preModerated` 仍返回假。
@@ -1084,14 +1133,26 @@ case ActionAutoRemove:    allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 
 ### 7.3 P 的目标行为
 
-与 7.1 相同，两个数值按 P 的内存上限收紧（决定）：
+与 7.1 相同，但图片重画这一部分按 P 的内存上限和时间预算另外加了限制（插件进程内存上限 512 MB，§72.2 第 3 条）：
 
-| 常量 | N | P | 原因 |
+| 项 | N | P | 原因 |
 |---|---|---|---|
-| `jevImageMaxSourcePixels` | 50,000,000 | **12,000,000** | 插件进程内存上限 512 MB（§72.2 第 3 条）。5000 万像素的图解码成 RGBA 要 200 MB，16 位 PNG 要 400 MB；两张同时解码就会让插件被杀。1200 万像素覆盖手机照片和 4K 截图，最坏情况每张约 48–96 MB |
-| `jevNormalizeSlots` | 2 | 2 | 相同 |
+| 像素上限 `jevImageMaxSourcePixels` | 50,000,000 | **12,000,000** | 文件头声称超过的不解码，跳过。1200 万像素覆盖手机照片和 4K 截图 |
+| 解码内存预算 `jevNormalizeMemory` | 没有 | **112 MiB**，所有正在重画的图片共用 | 像素数管不住内存：同样 1200 万像素，灰度 PNG 解码约 12 MB，16 位 RGBA PNG 约 96 MB，不做色度抽样的渐进式 JPEG 约 180 MB（解码器要保留全部系数，每个采样 4 字节），而这样一张 JPEG 文件本身可以只有 70 KB |
+| 同时重画的张数 `jevNormalizeSlots` | 2 | 2 | 相同 |
+| 重画的时间预算 | 没有（等名额时只看 ctx） | 一次调用剩余时间的一半，最多 5 秒 | 图片不能耗掉文字的审核时间 |
 
-超过 1200 万像素的图在 P 里跳过（计入 `skipped_images`），在 N 里会被重画送审。
+**解码内存预算**（`jevDecodeCost`，只读文件头估算，拿不准时往高估）：
+
+- PNG：像素数 × 每像素字节数（灰度或调色板 1、16 位灰度 2、8 位彩色 4、16 位彩色 8），隔行扫描的再加一半。
+- JPEG：读帧头，各分量的采样数合计（按抽样因子），每个采样 1 字节；渐进式（SOF2 等非基线帧）每个采样再加 4 字节；四分量（CMYK）再加每像素 4 字节。帧头读不出来时按最坏情况（每像素 24 字节）。
+- GIF：每像素 1 字节（第一帧）。WebP：有损 3–4 字节，无损 8 字节。
+- 估算超过 112 MiB 的图**单独也不解码**，跳过；其余的图等到预算里放得下才开始解码。结果：1200 万像素的 16 位 PNG 只能单独重画；不抽样的渐进式 JPEG 约 780 万像素以上就被跳过。
+- 缩放分带进行（每 64 行目标行一带，`jevScaleBandRows`）：`draw.BiLinear.Scale` 一次调用要为每个目标列和源行分配缓冲，1200 万像素的方图要约 174 MB。
+
+**重画的时间预算**（`jevNormalizeBudget`）：一次 Jev 调用里，重画图片最多用这次调用剩余时间（渠道超时）的一半，且不超过 5 秒。到点时还没画好的那张图跳过，它后面需要重画的图也都跳过；**文字总是送审**，已经准备好的图片和不需要重画的图片照常随文字发出。解码器停不下来，所以被放弃的重画在后台自己跑完，结束时才归还名额和内存预算。
+
+被跳过的图片计入 `skipped_images`。超过上面任何一项限制的图在 P 里跳过，在 N 里会被重画送审（第 10 节第 9 条）。
 
 其他常量照抄：`jevImagePNGMax = 2 << 20`、`jevImageJPEGQuality = 85`、`jevRequestTokenLimit = 200_000`、`jevLongContextHeader`。
 
@@ -1121,25 +1182,29 @@ P 的块最多 `input_max_chars`（上限 100000）字，文字本身不会超�
 
 ```go
 func jevAssets(ctx context.Context, in *Input) []typesafeAsset
+func jevNormalizeBudget(ctx context.Context) time.Duration      // 剩余时间的一半，最多 5 秒
 func jevAsset(ctx context.Context, raw string) *typesafeAsset
+func jevDecodeCost(format string, cfg image.Config, r io.Reader) int64
+func jevRedraw(ctx context.Context, raw string, cost int64) *typesafeAsset
 func jevNormalizeImage(data []byte) *typesafeAsset
 var jevNormalizeSlots = make(chan struct{}, 2)
+var jevNormalizeBytes = semaphore.NewWeighted(jevNormalizeMemory) // golang.org/x/sync
 var jevImageFormats = []string{"png", "jpeg", "gif", "webp"}
 ```
 
 `jevAsset` 保留 P 现在"先用流式解码只读文件头"的做法（规格内的图不分配整张图的内存）；只有需要重画时才把 base64 整体解码。
 
-**`go.mod`**：新增依赖 `golang.org/x/image`（`draw`、`webp`）。整个 `next/` 工作区目前没有这个模块；`go.sum` 和 `go.work.sum` 要一并更新，构建机要能拉到它（见 Q9）。标准库另加 `image/gif`（只注册解码器）。
+**`go.mod`**：新增依赖 `golang.org/x/image`（`draw`、`webp`，v0.41.0）和 `golang.org/x/sync`（`semaphore`）。构建机要能拉到这两个模块（见 Q9）。标准库另加 `image/gif`（只注册解码器）。
 
 ### 7.5 界面
 
-- `AuditorEditModal.vue`：Jev 图片开关的说明改为"内联的 PNG、JPEG、GIF（第一帧）、WebP 会送审；尺寸不合规格的自动缩放或补白后发送。URL 图片、超过 16 MiB 或 1200 万像素的图片不送审。"
+- `AuditorEditModal.vue`：Jev 图片开关的说明改为"内联的 PNG、JPEG、GIF（第一帧）、WebP 会送审；尺寸不合规格的自动缩放或补白后发送。URL 图片、超过 16 MiB 或 1200 万像素的图片不送审。"（解码内存和重画时间两项限制没有写进这句说明。）
 - 设置里 `input_max_images` 等说明不变。
 
 ### 7.6 对现有配置的行为变化
 
 1. **每次 Jev 调用都带长上下文请求头**。按 N 文档的说法会变慢、准确度略低。线上 Jev 渠道的超时（默认 8000 ms）是否够用，上线后看渠道健康度的延迟分布。
-2. 以前被跳过的图片（GIF、WebP、过大或过小的 PNG / JPEG）现在会被送审：`sent_images` 增加，Jev 的 token 用量和费用增加，可能出现新的命中。
+2. 以前被跳过的图片（GIF、WebP、过大或过小的 PNG / JPEG）现在会被送审：`sent_images` 增加，Jev 的 token 用量和费用增加，可能出现新的命中。重画占用请求路径上的 CPU 和时间（每次调用最多 5 秒，7.3），pre 请求的延迟会相应增加。
 3. 一次调用能带的图片从约 4 张（1024² 的图，文字占满一块时）增加到 `input_max_images` 允许的全部。
 4. 已存的、内容等于旧内置题集的 Jev 审核器，`rules_version` 的显示从 `custom-…` 变为 `content-audit-13-zh-v1` 或 `-en-v1`。判定不变；因为版本号不进缓存指纹（指纹用配置原文），缓存也不受影响。
 
@@ -1164,6 +1229,8 @@ var jevImageFormats = []string{"png", "jpeg", "gif", "webp"}
 | `TestJevAssetsDedupeAndBudget` | 两张规格化后相同的图只发一次；预算 200000：文字 12000 字加 8 张 1024² 的图全部入选 |
 | `TestJevNormalizeSlotsHonourContext` | 名额占满且 ctx 已取消 → nil，不阻塞 |
 | `TestRulesVersionLegacyHashes` | `builtinVersions` 含两条旧哈希；`RulesVersionOf(内置题集)` 仍是 `content-audit-v2-zh` |
+| `TestJevNormalizeMemory`、`TestJevDecodeCost` | 解码内存预算：估算值、单张超预算的跳过、合计超预算的等待 |
+| `TestJevRedrawDoesNotStarveText`、`TestJevRedrawStopsWithContext`（`review_image_test.go`） | 重画很慢的图片不占用文字的审核时间：到预算时跳过，文字和已就绪的图片照发；ctx 结束后不再重画并立即返回 |
 
 ---
 
@@ -1295,7 +1362,7 @@ s.addAccountBinding(accountKey{gid, acct}, s.flows[fid])
 
 一个附带结果：某分组的账号绑定全部指向停用流程时，`perAccount(分组)` 为假，这个分组回到在请求钩子里按分组审核，不再推迟到 `gateway.attempt`。
 
-`flowFor`、`flowForAccount` 的代码不用改，注释改写。`routes_bindings.go`：`GET /bindings` 的每行加 `inactive: true`（绑定的流程不为 0，且停用、未发布或不存在），供界面显示。
+`flowFor`、`flowForAccount` 的代码不用改，注释改写。`routes_bindings.go`：`GET /bindings` 的每行加 `inactive: true`，供界面显示。它按**本节点当前的快照**判断：绑定的流程不为 0，且快照里没有这个流程（停用、未发布、已删除，或已发布并启用但本节点读不了它的 spec）。这样界面显示的与本节点实际执行的一致（`TestBindingInactiveFollowsSnapshot`）。上面的片段在代码里是 `snapshot.bindGroup`、`snapshot.bindAccount` 两个方法。
 
 ### 9.5 界面
 
@@ -1348,12 +1415,12 @@ WHERE a.flow_id <> 0 AND (f.id IS NULL OR NOT f.enabled OR f.published IS NULL);
 | 1 | 审核单位 | 一个内容块一次运行 | 片段装块，一块一次运行 | 任务规定抽取不变（§72.4）。P 审的范围更大（各角色、工具、文档），按块可以把大量小片段合并成少数几次调用 |
 | 2 | 缓存键 | 只按内容 | 清空纪元、流程、判定指纹、片段 | 5.3.2：P 有按账号换流程重审；指纹让改配置后自动失效，N 靠人清空 |
 | 3 | 命中的缓存单位 | 内容块 | 块里的片段集合，整个集合都在才重放 | 5.3.1：块命中时分不出是哪个片段 |
-| 4 | 误报写放行 | 判定块 | 命中集合里的每个片段 | 同上；整体没问题则各部分没问题 |
+| 4 | 误报写放行 | 判定块，无条件 | 命中集合里的每个片段，且仅当流程的判定指纹没变；指纹变了只删命中 | 同上；整体没问题则各部分没问题。当前配置没审过的内容不写成放行 |
 | 5 | "确认"重写命中 | 无条件 | 仅当流程的判定指纹没变 | 不把旧配置的结论写到新配置下 |
-| 6 | 缓存写入 | 同步 | 内存同步、KV 后台 | P 的钩子不等外部存储（§72.5 第 10 条）；别的节点最多晚几十毫秒 |
+| 6 | 缓存写入 | 同步 | 运行结果：内存同步、KV 后台。人工处理：KV 同步，内存只立墓碑、之后从 KV 重读 | P 的钩子不等外部存储（§72.5 第 10 条）；别的节点最多晚几十毫秒。人工处理以各节点共用的 KV 为准 |
 | 7 | 设置键 | `enabled` + `default_level`、`allowlist_user_ids` | `mode`（三值）；白名单新键并兼容旧键 `exempt_user_ids` | 6.3：已存设置不用迁移，可回滚 |
 | 8 | 出错记录的原始消息 | `record_pass_input_message` 开着时保存 | 不保存，原文截到 `error_text_max_chars` | §72.9，渠道故障时的存储保护 |
-| 9 | Jev 图片解码上限 | 5000 万像素 | 1200 万像素 | 插件内存上限 512 MB |
+| 9 | Jev 图片重画的限制 | 5000 万像素 | 1200 万像素；解码内存按文件头估算，合计 112 MiB，单张超出的跳过（大的渐进式 JPEG、16 位 PNG）；重画最多用一次调用剩余时间的一半且不超过 5 秒，超时的图跳过、文字照审 | 插件内存上限 512 MB；图片不能耗掉文字的审核时间（7.3） |
 | 10 | 题表式 LLM 的提示词 | "系统提示词或用户消息中的一段" | 改为说明各段的角色前缀；用户消息带自身请求标记 | P 的块含多种角色；`llm` 渠道可以指回本网关 |
 | 11 | 题表式 LLM 的题表 | 必填 | 可为空（用默认题集） | 与 P 的 Jev 审核器一致 |
 | 12 | 审核器类型名 | `llm` | `llm_questions`（`llm_verdict` 保留） | 任务规定保留 `llm_verdict` |
@@ -1363,6 +1430,15 @@ WHERE a.flow_id <> 0 AND (f.id IS NULL OR NOT f.enabled OR f.published IS NULL);
 | 16 | AI 在拦截级的"移出"建议 | 直接移出 | 只降级（§72.13.4） | P 既有决定，不在本次范围 |
 | 17 | 默认分组 | 没有 | `group_id = 0` 是回落的最后一级 | P 既有设计（§72.5） |
 | 18 | 清空缓存 | Redis 模式下立即删除 | 换纪元，旧键等 TTL 过期 | 宿主 KV 只能逐键删除 |
+| 19 | 片段键的内容 | 一个块一个值（放行或命中） | 一个片段键同时存放行时间和最多 8 个命中指针，查的时候命中优先 | 5.3.3：P 的命中记在片段集合上，集合的成员可以各自在别处通过 |
+| 20 | 缓存条目的有效期 | Redis TTL | 值里带写入时间，读时按当前的 `verdict_cache_days` 判断，读进内存不续期 | 内存和 KV 两层，条目不能因为被读到而延寿；缩短天数立即生效 |
+| 21 | 代码里的判定默认值变了 | 靠人清空 | 指纹里有 `judgingVersion`，发版时加一即失效 | 5.3.2 |
+| 22 | 繁忙（`max_inflight_mb`） | 没有这个准入 | 本应先审的用户 503，其余放行；没有流程或被模型过滤排除的请求不受影响 | P 既有的内存保护（§72.2 第 3 条），按新的时机规则决定谁失败关闭 |
+| 23 | 流程异常率告警的状态 | — | 仍在 KV 命名空间 `pass` | 滚动升级时新旧节点共用，正在持续的告警不重复发 |
+| 24 | 升级时的名单转换 | 没有（N 一开始就是这套规则） | 默认拦截下把自动加入的观察级条目转成拦截级，首次之后再持续 24 小时 | 6.4 |
+| 25 | `watch.blocking_with_new` | 没有 | 拦截级条目里有新命中的个数 | 默认拦截下新条目是拦截级，N 的 `watching_with_new` 看不到它们 |
+
+与 N **相同**、但值得在这里再写一遍的两点：重放不分用户（5.3.9 第 1 条）；post 时机下重放决定整个请求，新增内容不审（5.3.9 第 3 条）。
 
 ---
 
@@ -1377,7 +1453,7 @@ WHERE a.flow_id <> 0 AND (f.id IS NULL OR NOT f.enabled OR f.published IS NULL);
 - `routes` 加 `POST /verdict-cache/clear`（5.6）。
 - **不新增宿主权限，不改 `gateway.hook` 的 scope（`points`、`fields` 都不变），不新增用户权限。升级不需要管理员重新批准。** 逐项核对：
   - 题表式 LLM、Jev 长上下文：走现有的 `net` 出口。
-  - 判定缓存：现有的 `kv`。`kv` 权限的说明文字建议从"共享审核通过缓存"改为"共享审核判定缓存"；只改 `reason` 文案。实现时先确认核心是否把 `reason` 变化当作需要重新批准（按 §72.3 的先例只有 scope 变化才需要）；如果会触发，就不改这段文案。
+  - 判定缓存：现有的 `kv`。`kv` 权限的说明文字已从"在节点之间共享审核通过缓存"改为"在节点之间共享审核判定缓存"（英文 `Share the verdict cache between nodes`）；只改了 `reason` 文案。已按核心代码确认 `reason` 的变化不触发重新批准：授权记录（`install.Grant`，`server/internal/plugin/install/review.go`）只有权限 id、scope 和状态，不存 `reason`；升级时的比较（同文件 `diffGrants`）只看"是否已授予"和 `pkg.ScopeWithin(请求的 scope, 已授予的 scope)`；`Added`、`Widened` 都为空时 `carryOverConsent`（`upload.go`）自动沿用全部授权。`reason` 只用于在审批页上展示。
   - 广播 `verdict.changed`：现有的 `broadcast`。
   - 一次性转换、迁移：现有的 `db.schema`。
 - 钩子、任务（`cleanup`、`analysis`、`alerts`）不变。
@@ -1400,9 +1476,11 @@ ALTER TABLE stats_hourly ADD COLUMN IF NOT EXISTS replayed    bigint  NOT NULL D
 
 -- One-time conversion of auto-added watch entries (parity.go).
 ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted boolean NOT NULL DEFAULT false;
+-- When it first ran: entries added by 0.7.x nodes in the day after it are converted too.
+ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted_at timestamptz;
 ```
 
-核心在事务里执行插件迁移（§72.10）。四条 `ADD COLUMN` 都是常量默认值，不重写表；`ADD CONSTRAINT … CHECK` 会全表扫描 `auditors`（几十行）。`events` 上只需要很短的排他锁。
+核心在事务里执行插件迁移（§72.10）。前四条 `ADD COLUMN` 都是常量默认值，第五条是可空列，都不重写表；`ADD CONSTRAINT … CHECK` 会全表扫描 `auditors`（几十行）。`events` 上只需要很短的排他锁。
 
 ### 11.4 CONTRACTS §72 要改写的段落
 
@@ -1429,11 +1507,16 @@ ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted boolean NOT N
 
 ### 11.5 发布说明要写的事（汇总各节）
 
+发布说明已成文：`docs/RELEASE-MODERATION-0.8.0.md`。它覆盖：
+
 1. 升级前：跑 9.6 的查询处理"绑定到停用流程"的绑定；跑 6.4 的查询记下观察级条目的来源分布；核对线上 `ban_threshold`。
-2. 行为变化：3.8（复核出错不再放行等六条）、6.3（`mode = enforce` 的新含义、豁免变白名单）、7.6（Jev 长上下文和更多图片）、8.6（更多记录带原始消息）、9.6（绑定回落）。
+2. 行为变化：3.8（复核出错不再放行等六条）、6.3（`mode = enforce` 的新含义、豁免变白名单）、6.8（繁忙时 503 的范围）、7.6（Jev 长上下文和更多图片）、8.6（更多记录带原始消息）、9.6（绑定回落）。
 3. 升级后第一天缓存全部重建，审核调用量和费用上升（5.9）。
 4. 滚动升级期间不要发布带补审级的流程、不要创建 `llm_questions` 审核器；回滚前先撤掉它们（3.7、4.7）。
-5. 不需要管理员重新批准权限。
+5. 不需要管理员重新批准权限（11.2）。
+6. 升级后的核对：迁移、名单转换的日志、`/status` 的新字段、模拟一次流程。
+7. 回滚到 0.7.2 的步骤，包括先通过核心设置接口去掉四个新设置键（6.10）。
+8. 已知限制（5.3.9）。
 
 ---
 
@@ -1482,25 +1565,91 @@ ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted boolean NOT N
 
 ## 13. 未决问题
 
-每条后面是推荐的默认做法；本文正文已按推荐做法写。
+全部已按推荐做法实现，状态如下。
 
-| # | 问题 | 推荐 |
+| # | 问题 | 结论 |
 |---|---|---|
-| Q1 | 默认级别用现有的 `mode` 三个值表达（6.3 决定 1），还是新增独立的 `default_level` 键加一个开关？后者与 N 的键名一致，但要处理已存设置的转换，回滚后旧版本读不到新键 | 沿用 `mode` |
-| Q2 | `exempt_user_ids` 直接读成白名单（升级后这些用户开始被后审、有记录），还是保留"完全不审核"作为 P 独有的第三种名单？线上为空，两种做法对线上都没有影响 | 读成白名单，不保留"完全不审核"（一比一） |
-| Q3 | 升级时把 `mode = enforce` 下自动加入的观察级条目转成拦截级（6.4）。不转的话这些用户升级后只后审 | 转换；手动和 AI 设的观察级不动 |
-| Q4 | 绑定到停用流程的绑定（9.6）：迁移时自动改成免审，还是只给查询、由管理员决定？ | 不自动改；发布前跑查询并人工处理 |
-| Q5 | 缓存键用判定指纹（5.3.2），还是保持现在的 `config_version + flow_version`（实现更少，但任何配置写入都清空缓存，长 TTL 实际用不上）？ | 判定指纹 |
-| Q6 | 出错记录是否也按 `record_pass_input_message` 保存原始消息（N 会存）？ | 不存，保留 §72.9 的保护 |
-| Q7 | 重放不分用户（5.3.9 第 1 条）：B 用户第一次发 A 用户已被缓存的违规内容，不进名单、不计违规。可以在 `storedHit` 里记来源用户，来源用户不同时按新的违规处理（约十行代码），但这与 N 不同 | 先与 N 相同；负责人要更严时再加 |
-| Q8 | Jev 每次调用都开长上下文（N 文档写明更慢、准确度略低）。P 的块最多 100000 字，本来就不需要长上下文来放文字，只是为了多放图片 | 照 N 一律开；上线后看 Jev 渠道的延迟和命中率，有问题再改成"只在超过默认上下文时开" |
-| Q9 | 新增依赖 `golang.org/x/image`（7.4）。构建在 ovh 上进行，需要确认构建环境能拉到这个模块，或需要预先放进模块缓存 | 加依赖；T2 开始前先在构建机上验证 |
-| Q10 | 图片解码上限 1200 万像素（7.3）是按 512 MB 内存上限估的，没有实测 | 先用 1200 万；T2 里加一个内存基准测试（两张 1200 万像素的 16 位 PNG 同时重画）确认峰值 |
-| Q11 | 新审核器类型的名字 `llm_questions` 和界面名称"LLM 题表" | 采用 |
-| Q12 | `kv` 权限的说明文字要不要改（11.2） | 核心不因 `reason` 变化要求重新批准时才改 |
-| Q13 | 白名单用户不被自动封禁、不能手动封禁（6.3）。N 没有封禁，无从对照 | 采用（白名单 = 永不被拦截） |
-| Q14 | `auditors` 的 CHECK 约束名（4.4） | 已核对（2026-11-10 线上库）：约束名是 `auditors_type_check`，迁移照 11.3 写 |
-| Q15 | 清空缓存后 KV 里的旧键不删除，最多占用到 TTL（30 天）到期（5.3.7）。按 N 的估算一周约 25–45 MB | 接受；真有压力时再加一个后台按前缀删除的任务 |
+| Q1 | 默认级别用现有的 `mode` 三个值表达（6.3 决定 1），还是新增独立的 `default_level` 键加一个开关 | **已定**：沿用 `mode`；`GET /status` 返回派生的 `default_level` |
+| Q2 | `exempt_user_ids` 直接读成白名单，还是保留"完全不审核"作为第三种名单 | **已定**：读成白名单，不保留"完全不审核"。界面保存白名单时把旧键清空（第 14 节） |
+| Q3 | 升级时把 `mode = enforce` 下自动加入的观察级条目转成拦截级 | **已定**：转换，手动和 AI 设的观察级不动；审核后加了 24 小时窗口（6.4） |
+| Q4 | 绑定到停用流程的绑定：迁移时自动改成免审，还是只给查询、由管理员决定 | **已定**：不自动改；发布说明给出查询 |
+| Q5 | 缓存键用判定指纹，还是保持 `config_version + flow_version` | **已定**：判定指纹，另加 `judgingVersion`（5.3.2） |
+| Q6 | 出错记录是否也按 `record_pass_input_message` 保存原始消息 | **已定**：不存 |
+| Q7 | 重放不分用户 | **已定**：与 N 相同，不记来源用户。负责人要更严时再加 |
+| Q8 | Jev 每次调用都开长上下文 | **已定**：一律开。上线后看 Jev 渠道的延迟和命中率（发布说明的升级后核对），这一项要到上线后才有数据 |
+| Q9 | 新增依赖 `golang.org/x/image` | **代码已加**（`go.mod`：`golang.org/x/image v0.41.0`，另有 `golang.org/x/sync`）。**构建机能否拉到这两个模块还没有在构建机上验证**，发布前要先确认（发布说明"升级前"） |
+| Q10 | 图片解码上限 1200 万像素是按 512 MB 估的，没有实测 | **已解决，做法有变**：保留 1200 万像素，另加按文件头估算的解码内存预算（合计 112 MiB）和分带缩放（7.3），不再只靠像素数；`TestJevNormalizeMemory`、`TestJevDecodeCost` 覆盖估算和排队。没有做真实进程内存峰值的基准测试 |
+| Q11 | 新审核器类型的名字 `llm_questions` 和界面名称"LLM 题表" | **已定**：采用 |
+| Q12 | `kv` 权限的说明文字要不要改 | **已解决**：改了；核心不比较 `reason`（11.2） |
+| Q13 | 白名单用户不被自动封禁、不能手动封禁 | **已定**：采用 |
+| Q14 | `auditors` 的 CHECK 约束名 | 已核对（2026-11-10 线上库）：约束名是 `auditors_type_check`，迁移照 11.3 写 |
+| Q15 | 清空缓存后 KV 里的旧键不删除，最多占用到 TTL（30 天）到期 | **已定**：接受；真有压力时再加一个后台按前缀删除的任务 |
+
+T6 完成标准里的"在一个 0.7.2 数据的副本上实际升级一次并记录结果"**没有做**：本分支的工作不接触服务器和线上数据。迁移由 Go 测试在测试库上执行；真实数据上的演练留给发布时按发布说明执行并记录。
+
+---
+
+## 14. 代码审核后的修改（2026-11-10）
+
+T1–T5 完成后做了一轮代码审核，问题在三个提交里修掉：`cb5a1c2c5`（界面）、`25a383f17`（后端）、`6c032357a`（判定缓存）。本文前面各节已按修改后的代码改写；这里列出审核发现了什么、怎么处理的。
+
+**流程引擎与统计**
+
+| 发现 | 处理 |
+|---|---|
+| 补审级命中时 `Decider` 写的是 spec 的级下标，而 trace 的 `stages` 只有实际运行过的级；普通级链提前结束时下标越界，取命中类别时 panic | `Decider` 定为 trace `stages` 的下标；每一级带 `stage`（spec 级序号）；`decidingStage()` 忽略越界值（3.4、3.5） |
+| 统计的级行、漏斗、分析工具按 trace 里的位置记级号，补审级的数字记到了别的级上 | 都改用 spec 级序号（`stageNo`）；旧记录没有 `stage` 时按位置 |
+| post 工作协程里的 panic 会结束插件进程 | `runPostSafely`：记为一次出错的运行，进程继续（3.5） |
+
+**Jev 图片**
+
+| 发现 | 处理 |
+|---|---|
+| 图片重画没有时间上限，几张慢图可以把渠道超时耗光，文字也审不成 | 重画有独立预算（剩余时间的一半，最多 5 秒），超时的图跳过，文字总是送审（7.3） |
+| 1200 万像素的上限管不住内存：渐进式 JPEG、16 位 PNG 的解码内存是像素数的十几倍；`Scale` 一次调用另要上百 MB | 按文件头估算解码内存，合计 112 MiB，单张超出的跳过；缩放分带进行（7.3） |
+
+**名单、时机、设置**
+
+| 发现 | 处理 |
+|---|---|
+| 名单转换只做一次，滚动升级期间旧节点之后自动加入的观察级条目被漏掉 | 首次转换后 24 小时内每轮再查（`parity_converted_at`，6.4） |
+| 转换在一个事务里先锁 `config_state` 再改名单行，与其他名单操作的取锁顺序相反，可能死锁 | 每个条目一个事务，按通用顺序取锁（6.4） |
+| 繁忙准入发生在模型过滤之前：流程不审的模型的请求也会被回 503 | 先看流程和模型过滤，再准入（6.8） |
+| 默认拦截下，繁忙时所有本应先审的用户都得到 503，范围比 0.7.2 大得多，设置说明没写 | 行为不变（失败关闭是有意的），在 `max_inflight_mb` 的说明、§72 和发布说明里写明 |
+| 默认拦截下新条目是拦截级，概览的"有新命中"只数观察级，看不到它们 | `GET /status` 的 `watch.blocking_with_new`，概览显示 |
+| `GET /bindings` 的 `inactive` 按数据库里的流程状态算，与本节点实际加载的快照可能不一致（已发布、已启用但 spec 读不了的流程） | 按当前快照算（9.4） |
+| 判定缓存换了 KV 命名空间后，告警状态如果跟着换，升级期间正在持续的告警会重发 | 告警状态留在原命名空间 `pass`（5.3.3） |
+| 每个请求都拼原始消息（带图片时几兆字节），而多数请求不写记录 | 只在确定写记录后才拼（5.7） |
+| 名单里不是用户 id 的条目被静默丢弃 | 丢弃和截断各记一条警告；schema 的 `pattern` 放宽为 1–18 位数字（6.6） |
+
+**判定缓存**
+
+| 发现 | 处理 |
+|---|---|
+| 片段键只存一个值：命中集合的片段在别的请求里单独通过后，"通过"覆盖了指针，命中被洗成放行 | 片段键同时存通过时间和最多 8 个指针；查询时完整的命中集合优先于通过（5.3.3、5.3.4） |
+| 命中集合包含了没有送审的片段（流程没有收图片的审核器时被丢掉的图片） | 命中集合只列实际送审的片段（5.3.5） |
+| 人工处理：同一命中的多条记录重复写缓存；`cache_synced` 把写失败的也算进去；处理的节点用内存里的新值、其他节点用 KV 里的旧值；处理前后结束的运行会把旧结论写回 | 按键去重；`cache_synced` 只数全部写成功的记录；KV 同步写，内存只立墓碑（4 秒），各节点之后从 KV 重读（5.3.8） |
+| 指纹已变的记录标为误报时，把片段写成了当前配置下的"通过"，而当前配置没审过它 | 只删命中，不写通过（5.3.8） |
+| 从 KV 读进内存的值得到一个全新的 TTL，热点条目永不过期 | 值里带写入时间，按写入时间判断是否过期（5.3.3） |
+| 清空缓存前入队的 post 任务，出队时用旧范围查缓存、把结论写进已清空的范围 | 查询跳过，结论写到当前纪元（5.3.4、5.3.5） |
+| 内存 LRU 只限条数；命中条目最大 60 KiB，按条数上限算可以远超进程的内存上限；每次查询都重新解析命中的 JSON | 加 64 MiB 字节上限；命中条目保存解码后的结构；`runtime.cache_bytes`（5.3.3） |
+| pre 的共享运行由每个等待的请求各结算一次；等待的请求都离开时不结算 | 在共享运行里结算一次（5.3.5） |
+| 代码里的判定默认值（内置题集、默认阈值、提示词模板）变了，指纹不变，旧结论继续被沿用 | 指纹加 `judgingVersion`（5.3.2） |
+
+**界面**
+
+| 发现 | 处理 |
+|---|---|
+| 保存白名单后旧键 `exempt_user_ids` 还留着原值；仍在跑 0.7.2 的节点（滚动升级、回滚）继续完全不审已从白名单移出的用户 | 白名单有改动的保存同时把 `exempt_user_ids` 写成空数组（`withRetiredCleared`） |
+| 清空"判定缓存天数"会把新键删掉；库里还存着旧键 `cache_ttl_seconds` 时，后端又按旧键取值 | 旧键还在时，清空改为写入默认值 7（`sentSetting`） |
+| 把第一级之外的级都删掉或移动后，补审级可能成为第一级，流程无法发布也没有入口改回 | 成为第一级的级自动变回普通级；拖放和移动保持普通级在前 |
+| 级路径和 trace 视图按位置显示级号；0.8.0 之前"出错即放行"的旧记录被显示成通过 | 按 `stage` 显示级号；旧记录里没有审核器判过的出错级仍显示为出错 |
+| 概览的"有新命中"没有包括拦截级条目 | 加上 `blocking_with_new` |
+
+**写明但不改的两项**
+
+1. **post 时机下，历史里带着已缓存命中的请求被重放，新增内容不审**（5.3.9 第 3 条）。这与 N 的行为相同（缓存命中即结束这个请求的审核计划），本次移植的目标是一比一，所以保留，并在代码注释（`hook.go` `admit`）、§72.5 和发布说明里写明。要改的话方向是：post 重放之后继续把命中集合之外的未知片段送审。
+2. **设置的回滚**。0.8.0 保存过设置后，文档里有四个 0.7.2 的 schema 不认识的键（`allowlist_user_ids`、`blocklist_user_ids`、`verdict_cache_days`、`record_pass_input_message`）。0.7.2 读设置时忽略它们，但它的设置页保存时会被核心按 `additionalProperties: false` 拒绝。没有改代码去规避（要么放宽 0.7.2 的 schema，那是改已发布的版本；要么 0.8.0 不存新键，那就没有新功能）；回滚步骤写在发布说明里：回滚前在 0.8.0 下通过核心设置接口去掉这四个键，需要保持免拦截的用户写回 `exempt_user_ids`。
 
 ---
 
