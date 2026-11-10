@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,6 +21,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/batch"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
 
@@ -83,6 +85,29 @@ type fakeMod struct {
 	delay atomic.Int64 // nanoseconds before answering
 	mu    sync.Mutex
 	texts []string // request bodies of /v1/moderations
+	// hold: the requests wait on gate before they are answered, each
+	// reported on arrived.
+	gate    chan struct{}
+	arrived chan string
+}
+
+// hold makes the requests that come in from now on wait until release is
+// called (the end of the test at the latest); arrived gets the path of each
+// as it comes in.
+func (f *fakeMod) hold(t *testing.T) (arrived <-chan string, release func()) {
+	gate := make(chan struct{})
+	f.mu.Lock()
+	f.gate, f.arrived = gate, make(chan string, 256)
+	arrived = f.arrived
+	f.mu.Unlock()
+	release = sync.OnceFunc(func() {
+		f.mu.Lock()
+		f.gate = nil
+		f.mu.Unlock()
+		close(gate)
+	})
+	t.Cleanup(release)
+	return arrived, release
 }
 
 // moderated returns the /v1/moderations request bodies so far.
@@ -101,6 +126,13 @@ func newFakeMod(t *testing.T) *fakeMod {
 		n.(*atomic.Int64).Add(1)
 		if d := time.Duration(f.delay.Load()); d > 0 {
 			time.Sleep(d)
+		}
+		f.mu.Lock()
+		gate, arrived := f.gate, f.arrived
+		f.mu.Unlock()
+		if gate != nil {
+			arrived <- r.URL.Path
+			<-gate
 		}
 		body, _ := io.ReadAll(r.Body)
 		text := string(body)
@@ -156,7 +188,46 @@ func (f *fakeMod) count(path string) int64 {
 	return 0
 }
 
-func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, beforeInit ...func(*Plugin)) (*Plugin, *pluginsdktest.Harness, *pluginsdktest.FakeHost) {
+// node is a plugin instance under test. Its Init can put a fake between the
+// plugin and the KV of its host (kv).
+type node struct {
+	*Plugin
+	kv *kvFake
+}
+
+func (n *node) Init(ctx context.Context, h pluginsdk.Host) error {
+	if n.kv != nil {
+		h = kvFakeHost{Host: h, kv: n.kv}
+	}
+	return n.Plugin.Init(ctx, h)
+}
+
+// nodeOpt changes a node before it is initialised.
+type nodeOpt func(*node)
+
+// withKV puts kv between the node and the KV of its host.
+func withKV(kv *kvFake) nodeOpt { return func(n *node) { n.kv = kv } }
+
+// noRefreshTicks stops the periodic refresh of a node: only a kick (the
+// start, a change of the settings) runs it, so the conversions it makes
+// cannot fall into the middle of a test that makes them by hand.
+func noRefreshTicks(n *node) { n.refreshEvery = 24 * time.Hour }
+
+// startNode starts a plugin instance on the host fh: every test instance of
+// the plugin starts here.
+func startNode(t *testing.T, fh *pluginsdktest.FakeHost, cfg any, opts ...nodeOpt) (*Plugin, *pluginsdktest.Harness) {
+	t.Helper()
+	n := &node{Plugin: New()}
+	for _, opt := range opts {
+		opt(n)
+	}
+	return n.Plugin, pluginsdktest.Start(t, n, pluginsdktest.Options{Host: fh, SDK: sdkOpts(), Config: cfg})
+}
+
+// startDB starts a plugin instance on a host of its own with a fresh
+// database. With llm the settings are the 0.1 single-model setup on it
+// (settingsMap), extra added.
+func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, opts ...nodeOpt) (*Plugin, *pluginsdktest.Harness, *pluginsdktest.FakeHost) {
 	t.Helper()
 	dsn, schema := pluginsdktest.NewSchema(t, "plg_moderation_t")
 	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
@@ -169,15 +240,11 @@ func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, beforeInit ...fun
 	for id := int64(1); id <= 100; id++ {
 		fh.Users[id] = &pluginv1.UserInfo{Id: id, DisplayName: fmt.Sprintf("user %d", id), Status: "active"}
 	}
-	p := New()
-	for _, configure := range beforeInit {
-		configure(p)
-	}
 	var cfg any = extra
 	if llm != nil {
 		cfg = settingsMap(llm.srv.URL, ModeEnforce, extra)
 	}
-	h := pluginsdktest.Start(t, p, pluginsdktest.Options{Host: fh, SDK: sdkOpts(), Config: cfg})
+	p, h := startNode(t, fh, cfg, opts...)
 	return p, h, fh
 }
 
@@ -216,26 +283,31 @@ func waitEvents(t *testing.T, h *pluginsdktest.Harness, q map[string]string, n i
 	return items
 }
 
-// setupFlow creates channels, auditors and a published flow bound to groups
-// through the API. stages lists auditor types per stage; returns the flow id.
-func setupFlow(t *testing.T, h *pluginsdktest.Harness, base string, groups []int64, combine string, stages ...[]string) int64 {
+// newAuditor creates an auditor of typ through the API, on the channel of its
+// channel type in channels - created at base when it is not there yet.
+func newAuditor(t *testing.T, h *pluginsdktest.Harness, base, typ string, channels map[string]int64) int64 {
 	t.Helper()
-	channels := map[string]int64{}
-	var spec Spec
-	spec.ModelFilter.Type = FilterAll
+	chType := channelTypeOf[typ]
+	if channels[chType] == 0 {
+		ch := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": chType, "name": chType, "base_url": base, "api_key": "key-" + chType}))
+		channels[chType] = ch.ID
+	}
+	return decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": typ, "type": typ, "channel_id": channels[chType]})).ID
+}
+
+// stageOf is a stage of the auditors ids (any of them decides).
+func stageOf(fallback bool, ids ...int64) Stage {
+	return Stage{Auditors: ids, Combine: CombineAny, Fallback: fallback}
+}
+
+// publishFlow creates the flow of spec through the API (every request; every
+// model unless spec has a filter), binds it to groups and publishes it;
+// returns the flow id.
+func publishFlow(t *testing.T, h *pluginsdktest.Harness, spec Spec, groups ...int64) int64 {
+	t.Helper()
 	spec.SampleRate = 100
-	for _, st := range stages {
-		var ids []int64
-		for _, typ := range st {
-			chType := channelTypeOf[typ]
-			if channels[chType] == 0 {
-				ch := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": chType, "name": chType, "base_url": base, "api_key": "key-" + chType}))
-				channels[chType] = ch.ID
-			}
-			a := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": typ, "type": typ, "channel_id": channels[chType]}))
-			ids = append(ids, a.ID)
-		}
-		spec.Stages = append(spec.Stages, Stage{Auditors: ids, Combine: combine})
+	if spec.ModelFilter.Type == "" {
+		spec.ModelFilter.Type = FilterAll
 	}
 	f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": spec}))
 	decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/groups", f.ID), nil, map[string]any{"groups": groups}))
@@ -244,6 +316,23 @@ func setupFlow(t *testing.T, h *pluginsdktest.Harness, base string, groups []int
 		t.Fatalf("published = %+v", pub)
 	}
 	return f.ID
+}
+
+// setupFlow creates channels (one per type, at base), auditors and a
+// published flow bound to groups. stages lists the auditor types of each
+// stage; returns the flow id.
+func setupFlow(t *testing.T, h *pluginsdktest.Harness, base string, groups []int64, combine string, stages ...[]string) int64 {
+	t.Helper()
+	channels := map[string]int64{}
+	var spec Spec
+	for _, types := range stages {
+		st := Stage{Combine: combine}
+		for _, typ := range types {
+			st.Auditors = append(st.Auditors, newAuditor(t, h, base, typ, channels))
+		}
+		spec.Stages = append(spec.Stages, st)
+	}
+	return publishFlow(t, h, spec, groups...)
 }
 
 func TestLegacyConversion(t *testing.T) {
@@ -282,8 +371,7 @@ func TestLegacyConversion(t *testing.T) {
 	// A second node on the same database does not convert again.
 	fh2 := pluginsdktest.NewFakeHost()
 	fh2.SetDSN(fh.DSNValue, fh.SchemaValue)
-	p2 := New()
-	pluginsdktest.Start(t, p2, pluginsdktest.Options{Host: fh2, SDK: sdkOpts(), Config: settingsMap(llm.srv.URL, ModeEnforce, nil)})
+	p2, _ := startNode(t, fh2, settingsMap(llm.srv.URL, ModeEnforce, nil))
 	waitFor(t, "second node snapshot", func() bool { return p2.snap.Load().bound() })
 	if n := len(decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))); n != 1 {
 		t.Fatalf("channels after second start = %d", n)
@@ -788,7 +876,7 @@ func TestCleanupAndImport(t *testing.T) {
 }
 
 func TestConfigureRejectsNonObject(t *testing.T) {
-	h := pluginsdktest.Start(t, New(), pluginsdktest.Options{SDK: sdkOpts()})
+	_, h := startNode(t, nil, nil)
 	if errs := h.Configure(json.RawMessage(`[1]`), nil); len(errs) == 0 {
 		t.Fatal("array settings accepted")
 	}
@@ -908,5 +996,378 @@ func TestMigration0010Idempotent(t *testing.T) {
 	}
 	if _, err := conn.Exec(ctx, insert, "llm", chID); err == nil {
 		t.Fatal("an unknown auditor type was stored")
+	}
+}
+
+// A fallback stage that hits after the chain ended early: the request is
+// refused (no panic), the record shows the spec stage, and the statistics
+// count the stages by their number in the spec.
+func TestFallbackStageHitEndToEnd(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	channels := map[string]int64{}
+	auditor := func(typ string) int64 { return newAuditor(t, h, mod.srv.URL, typ, channels) }
+	// Group 9: Jev, Jev, then OpenAI as a fallback stage. "hate" is an
+	// OpenAI category only: stage 1 passes (stage 2 never runs) and the
+	// fallback stage hits.
+	jev1, jev2, oai := auditor(AuditorTypeSafe), auditor(AuditorTypeSafe), auditor(AuditorOpenAI)
+	first := publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, jev1), stageOf(false, jev2), stageOf(true, oai)}}, 9)
+	// Group 10: OpenAI, Jev, then OpenAI as a fallback stage. Stage 1 hits,
+	// stage 2 fails (JEV-500): the hit stands and the fallback does not run.
+	oai1, jev3, oai2 := auditor(AuditorOpenAI), auditor(AuditorTypeSafe), auditor(AuditorOpenAI)
+	second := publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, oai1), stageOf(false, jev3), stageOf(true, oai2)}}, 10)
+
+	r := mustHook(t, h, requestReq("fallback-hit", 9, "MOD-HIT-hate fallback words"))
+	if !denied(r) || r.GetDenyCode() != DenyBlocked || !strings.Contains(r.GetNote(), "[hate]") {
+		t.Fatalf("fallback hit = %+v", r)
+	}
+	r = mustHook(t, h, requestReq("failed-review", 10, "MOD-HIT-sexual JEV-500 words"))
+	if !denied(r) || r.GetDenyCode() != DenyBlocked {
+		t.Fatalf("hit with a failed review stage = %+v", r)
+	}
+
+	ev := recordOf(t, h, "fallback-hit")
+	tr := traceOf(t, ev)
+	if ev.Result != ResultBlock || tr.Decider != 1 || len(tr.Stages) != 2 || tr.Stages[0].Stage != 1 || tr.Stages[1].Stage != 3 || !tr.Stages[1].Fallback {
+		t.Fatalf("record %s, trace %s", ev.Result, ev.Trace)
+	}
+	// The analysis tools show the stage of the spec as well.
+	tc := &toolCtx{p: p, snap: p.snap.Load()}
+	rec := tc.recordOf(&toolRow{ID: ev.ID, Trace: ev.Trace}, 100, true)
+	if len(rec.Stages) != 2 || rec.Stages[0].Stage != 1 || rec.Stages[1].Stage != 3 || rec.Stages[1].Role != stageRoleNames[RoleFallback] ||
+		len(rec.Stages[1].Hits) != 1 || rec.Stages[1].Hits[0].Stage != 3 || len(rec.HitCategories) != 1 || rec.HitCategories[0].Stage != 3 {
+		t.Fatalf("tool record = %+v", rec)
+	}
+	ev = recordOf(t, h, "failed-review")
+	tr = traceOf(t, ev)
+	if ev.Result != ResultBlock || tr.Decider != 0 || !tr.Errored || len(tr.Stages) != 2 || tr.Stages[1].Stage != 2 || !tr.Stages[1].Failed {
+		t.Fatalf("record %s, trace %s", ev.Result, ev.Trace)
+	}
+
+	// The test route runs the same flow without a panic.
+	res := decodeData[TestResult](t, h.Do("POST", "/test", nil, map[string]any{"text": "MOD-HIT-hate once more", "flow_id": first}))
+	if res.Result != ResultHit || len(res.Categories) != 1 || res.Categories[0].Stage != 3 || res.Categories[0].Auditor != oai {
+		t.Fatalf("test result = %+v", res)
+	}
+
+	// Funnel rows by spec stage: flow 1 has stages 1 and 3 (2 never ran),
+	// flow 2 has stages 1 and 2.
+	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
+	funnel := map[int64]map[int]FunnelStage{}
+	for _, f := range st.Funnels {
+		funnel[f.FlowID] = map[int]FunnelStage{}
+		for _, fs := range f.Stages {
+			funnel[f.FlowID][fs.Stage] = fs
+		}
+	}
+	if f := funnel[first]; len(f) != 2 || f[1].Received != 1 || f[1].Hit != 0 || f[3].Received != 1 || f[3].Hit != 1 {
+		t.Fatalf("funnel of the fallback flow = %+v", f)
+	}
+	if f := funnel[second]; len(f) != 2 || f[1].Received != 1 || f[1].Hit != 1 || f[2].Received != 1 || f[2].Hit != 0 {
+		t.Fatalf("funnel of the failed-review flow = %+v", f)
+	}
+	// The auditor rows are on the same stages: the fallback auditor on 3.
+	trend := decodeData[TrendResult](t, h.Do("GET", "/stats/trend", map[string]string{"granularity": "hour"}, nil))
+	stages := map[int64]int{}
+	for _, at := range trend.Auditors {
+		stages[at.AuditorID] = at.Stage
+	}
+	if stages[jev1] != 1 || stages[oai] != 3 || stages[oai1] != 1 || stages[jev3] != 2 || stages[jev2] != 0 || stages[oai2] != 0 {
+		t.Fatalf("auditor rows by stage = %v", stages)
+	}
+}
+
+// A panic while a queued job runs or is recorded does not end the plugin
+// process: the job is recorded as an error and the workers go on.
+func TestPostWorkerSurvivesPanic(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true, "record_errors": true})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	snap := p.snap.Load()
+	m := &moderation{cfg: p.cfg.Load(), flow: snap.flows[flow], snap: snap, timing: TimingPost, queued: p.now(),
+		chunks: []*chunk{nil}, // running it panics outside the flow's own recover
+		rec: eventRec{At: p.now().UTC(), RequestID: "panics", UserID: 3, GroupID: 9, Timing: TimingPost, FlowID: flow, FlowVersion: 1,
+			Protocol: "anthropic.messages", Mode: ModeObserve}}
+	if !p.enqueue(m) {
+		t.Fatal("job not queued")
+	}
+	ev := recordOf(t, h, "panics")
+	if tr := traceOf(t, ev); ev.Result != ResultError || !tr.Errored || tr.Final != Pass {
+		t.Fatalf("record of the panicked job = %s %s", ev.Result, ev.Trace)
+	}
+	// The workers still moderate, and the run was counted once.
+	mustHook(t, h, hookReqAs(3, "after", "MOD-HIT-sexual after the panic"))
+	if ev := recordOf(t, h, "after"); ev.Result != ResultHit {
+		t.Fatalf("record after the panic = %s", ev.Result)
+	}
+	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
+	if st.Today.Errors != 1 || st.Today.Audited != 2 {
+		t.Fatalf("today = %+v", st.Today)
+	}
+	// A background task that panics is contained as well.
+	done := make(chan struct{})
+	p.goTracked(func() {
+		defer close(done)
+		panic("boom")
+	})
+	<-done
+	mustHook(t, h, hookReqAs(3, "after-task", "clean text after the task"))
+	recordOf(t, h, "after-task")
+}
+
+// The raw input message of a request is built only for a record that is
+// written: a pass without a record costs none of it.
+func TestFinishBuildsInputMessageOnlyForRecords(t *testing.T) {
+	mod := newFakeMod(t)
+	settings := func(recordPass bool) map[string]any {
+		return map[string]any{"mode": ModeEnforce, "store_text": true, "record_pass_input_message": true, "record_pass": recordPass}
+	}
+	p, h, _ := startDB(t, nil, settings(false))
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	// One user message with a 3 MiB inline image, different for each request
+	// (the first one's pass is cached).
+	const imgSize = 4 << 20 // of base64
+	admit := func(rid string) *moderation {
+		t.Helper()
+		data := make([]byte, imgSize/4*3)
+		copy(data, rid)
+		img := b64(data)
+		msgs, _ := json.Marshal([]any{map[string]any{"role": "user", "content": []any{
+			map[string]any{"type": "text", "text": "a harmless picture for " + rid},
+			map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": img}},
+		}}})
+		in := hookReqAs(3, rid, "")
+		in.Fields[FieldMessages] = string(msgs)
+		snap := p.snap.Load()
+		m, early := p.admit(p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
+		if early != nil || len(m.chunks) != 1 || len(m.chunks[0].in.Images) != 1 {
+			t.Fatalf("admit = %+v, %+v", m, early)
+		}
+		if got := len(m.chunks[0].messages()); got < imgSize {
+			t.Fatalf("input message of %d bytes for an image of %d", got, imgSize)
+		}
+		return m
+	}
+	pass := Trace{Final: Pass, Decider: -1, Stages: []StageTrace{{Stage: 1, Result: Pass}}}
+	allocated := func(fn func()) uint64 {
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		fn()
+		runtime.ReadMemStats(&after)
+		return after.TotalAlloc - before.TotalAlloc
+	}
+	m := admit("no-record")
+	finish := func(m *moderation) { // what a run does once it has its traces
+		p.settleVerdicts(m, []Trace{pass})
+		p.finish(m, pass, false)
+	}
+	if got := allocated(func() { finish(m) }); got > imgSize/4 {
+		t.Fatalf("finishing a pass without a record allocated %d KiB (the image is %d KiB)", got>>10, imgSize>>10)
+	}
+	// With the record on, the same pass keeps its input message.
+	if errs := h.Configure(settings(true), nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	m = admit("with-record")
+	finish(m)
+	ev := recordOf(t, h, "with-record")
+	if ev.Result != ResultPass || ev.InputMessageSize < imgSize {
+		t.Fatalf("record = %s with an input message of %d bytes", ev.Result, ev.InputMessageSize)
+	}
+	if list := decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "no-record"}, nil)); len(list) != 0 {
+		t.Fatalf("a pass was recorded with record_pass off: %+v", list)
+	}
+}
+
+// The verdicts of a pre run are stored by the run - also when its client has
+// left, and once however many requests wait for it.
+func TestPreRunStoresVerdictsOnce(t *testing.T) {
+	mod := newFakeMod(t)
+	kv := &kvFake{}
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	calls := func() int64 { return mod.count("/v1/moderations") }
+	passed := func(v segValue) bool { return v.pass > 0 }
+
+	// The client leaves while its run waits for the upstream: the pass is
+	// cached all the same.
+	arrived, release := mod.hold(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	answer := make(chan *pluginv1.GatewayRequestHookResponse, 1)
+	go func() {
+		r, _ := p.OnGatewayRequest(ctx, hookReqAs(3, "left", "clean and left behind"))
+		answer <- r
+	}()
+	within(t, "the upstream call of the run", arrived)
+	cancel()
+	if r := within(t, "the answer to the client that left", answer); r == nil || denied(r) || r.GetNote() != notePrefix+"error canceled" {
+		t.Fatalf("canceled request = %+v", r)
+	}
+	release()
+	waitSegs(t, fh, "that passed", 1, passed)
+	if r := mustHook(t, h, hookReqAs(3, "", "clean and left behind")); r.GetNote() != notePrefix+"pass (cached)" || calls() != 1 {
+		t.Fatalf("after the client left = %+v, calls %d", r, calls())
+	}
+
+	// Five requests share one run: its verdict is written once. The run is
+	// held at the upstream until all five wait for it.
+	waitFor(t, "the write of the first run", func() bool { return p.stats.kvWriting.Load() == 0 })
+	kv.counts()
+	arrived, release = mod.hold(t)
+	notes := make(chan string, 5)
+	for range 5 {
+		go func() {
+			note := "failed"
+			if r, err := h.Hook.OnGatewayRequest(context.Background(), hookReqAs(3, "", "clean and asked five times")); err == nil {
+				note = r.GetNote()
+			}
+			notes <- note
+		}()
+	}
+	within(t, "the upstream call of the shared run", arrived)
+	waitFor(t, "five requests waiting for one run", func() bool { return p.stats.preWaiting.Load() == 5 })
+	release()
+	for i := range 5 {
+		if note := within(t, "the answers of the shared run", notes); !strings.HasPrefix(note, notePrefix+"pass flow=") {
+			t.Fatalf("request %d = %q", i, note)
+		}
+	}
+	if calls() != 2 {
+		t.Fatalf("the five requests made %d runs", calls()-1)
+	}
+	// Every write of the run and of its waiters has been started by now.
+	waitFor(t, "the verdict writes", func() bool { return p.stats.kvWriting.Load() == 0 })
+	writes := kv.counts()
+	if len(writes) != 1 {
+		t.Fatalf("writes = %v", writes)
+	}
+	for key, n := range writes {
+		if n != 1 {
+			t.Fatalf("%s written %d times", key, n)
+		}
+	}
+	waitSegs(t, fh, "that passed", 2, passed)
+}
+
+// logged reports whether the host got a log line with the message.
+func logged(fh *pluginsdktest.FakeHost, message string) int {
+	n := 0
+	for _, e := range fh.Logs() {
+		if strings.Contains(e.Message, message) {
+			n++
+		}
+	}
+	return n
+}
+
+// A panic in the shared run of the pre path does not end the plugin process
+// either (singleflight would hand it to a goroutine nothing recovers in):
+// the waiters get a run that errored, so the request passes and is recorded
+// as an error.
+func TestPreRunSurvivesPanic(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_errors": true})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	snap := p.snap.Load()
+	job := func(rid string) *moderation {
+		return &moderation{cfg: p.cfg.Load(), flow: snap.flows[flow], snap: snap, timing: TimingPre, key: "r:" + rid,
+			rec: eventRec{At: p.now().UTC(), RequestID: rid, UserID: 3, GroupID: 9, Timing: TimingPre, FlowID: flow, FlowVersion: 1,
+				Protocol: "anthropic.messages", Mode: ModeEnforce}}
+	}
+	// While the chunks run.
+	running := job("panics-running")
+	running.chunks = []*chunk{nil}
+	// While the verdicts are stored: the hit names a segment the plan does
+	// not have.
+	storing := job("panics-storing")
+	storing.chunks = []*chunk{{in: &Input{Text: "MOD-HIT-sexual words"}, segs: []int{7}, parts: []chunkPart{{seg: 7, role: RoleUser, text: "MOD-HIT-sexual words"}}}}
+	storing.plan = &plan{keys: [][32]byte{{1}}, pieces: []int{1}}
+	for i, m := range []*moderation{running, storing} {
+		r := p.runPre(context.Background(), m)
+		if denied(r) || !strings.HasPrefix(r.GetNote(), notePrefix+"error ") {
+			t.Fatalf("%s = %+v", m.rec.RequestID, r)
+		}
+		ev := recordOf(t, h, m.rec.RequestID)
+		if tr := traceOf(t, ev); ev.Result != ResultError || !tr.Errored || tr.Final != Pass {
+			t.Fatalf("record of %s = %s %s", m.rec.RequestID, ev.Result, ev.Trace)
+		}
+		waitFor(t, "the panic in the log", func() bool { return logged(fh, "pre run panicked") == i+1 })
+	}
+	if n := mod.count("/v1/moderations"); n != 1 { // the second job reached the upstream
+		t.Fatalf("upstream calls = %d", n)
+	}
+	// The hook still moderates.
+	if r := mustHook(t, h, hookReqAs(3, "after", "MOD-HIT-sexual after the panics")); !denied(r) {
+		t.Fatalf("after the panics = %+v", r)
+	}
+	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
+	if st.Today.Errors != 2 || st.Today.Audited != 3 {
+		t.Fatalf("today = %+v", st.Today)
+	}
+}
+
+// A queued job that panics is counted once, whenever the panic comes: after
+// the job was counted (while its record is written) nothing is counted or
+// recorded again, and a panic while the error itself is recorded is
+// contained and logged too.
+func TestPostPanicIsCountedOnce(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true, "record_errors": true})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	ctx := context.Background()
+	job := func(rid string) *moderation {
+		t.Helper()
+		snap := p.snap.Load()
+		in := hookReqAs(3, rid, "MOD-HIT-sexual "+rid)
+		m, early := p.admit(p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
+		if early != nil || m.timing != TimingPost {
+			t.Fatalf("admit = %+v, %+v", m, early)
+		}
+		m.queued = p.now()
+		return m
+	}
+	// Without its event writer the plugin panics where a record is handed
+	// over: in finish, after the request was counted on the user's day.
+	setWriter := func(w *batch.Writer[eventRec]) {
+		p.poolMu.Lock()
+		p.eventWriter = w
+		p.poolMu.Unlock()
+	}
+	writer := p.eventWriter
+	setWriter(nil)
+	defer setWriter(writer)
+	counted := job("counted")
+	p.runPostSafely(counted)
+	if !counted.counted || !counted.userCounted {
+		t.Fatalf("the job panicked before it was counted: run %v, user %v", counted.counted, counted.userCounted)
+	}
+	// A job that panics before anything is counted, and again while its
+	// error is recorded.
+	uncounted := job("uncounted")
+	uncounted.chunks = []*chunk{nil}
+	p.runPostSafely(uncounted)
+	setWriter(writer)
+
+	// One hit and one error: on the flow and on the user's day.
+	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
+	if st.Today.Audited != 2 || st.Today.Errors != 1 {
+		t.Fatalf("today = %+v", st.Today)
+	}
+	p.flushStats(ctx)
+	db, _ := p.db(ctx)
+	var audited, suspicious, errored int64
+	if err := db.QueryRow(ctx, `SELECT coalesce(sum(audited), 0), coalesce(sum(suspicious), 0), coalesce(sum(errors), 0) FROM user_daily WHERE user_id = 3`).
+		Scan(&audited, &suspicious, &errored); err != nil || audited != 2 || suspicious != 1 || errored != 1 {
+		t.Fatalf("user day: audited %d, suspicious %d, errors %d (%v)", audited, suspicious, errored, err)
+	}
+	waitFor(t, "the panics in the log", func() bool {
+		return logged(fh, "post run panicked") == 2 && logged(fh, "recording the panicked post run failed") == 1
+	})
+	// The workers go on.
+	mustHook(t, h, hookReqAs(4, "after", "MOD-HIT-sexual after the panics"))
+	if ev := recordOf(t, h, "after"); ev.Result != ResultHit {
+		t.Fatalf("record after the panics = %s", ev.Result)
 	}
 }

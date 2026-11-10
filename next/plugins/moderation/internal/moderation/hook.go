@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -66,9 +67,11 @@ type moderation struct {
 	key    string // singleflight key
 	size   int64  // bytes held while queued
 	queued time.Time
-	// counted: the post run is on the statistics (runPostSafely does not
-	// count it again when recording it panics).
-	counted bool
+	// counted: the post run is on the statistics; userCounted: finish has
+	// counted the request on the user's day. A job that panics after either
+	// is not counted again (postPanicked).
+	counted     bool
+	userCounted bool
 }
 
 // OnGatewayRequest implements pluginsdk.Hook (CONTRACTS §72.5). The ban
@@ -110,7 +113,11 @@ func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRe
 	// (flow == nil: its group has none, or the binding exempts it) and a
 	// model the flow's filter leaves out are not moderated whatever is in
 	// progress, so they are never answered busy.
-	if flow == nil || !flow.Spec.ModelFilter.Allows(requestModel(in)) {
+	if flow == nil {
+		return allowEmpty
+	}
+	model := requestModel(in)
+	if !flow.Spec.ModelFilter.Allows(model) {
 		return allowEmpty
 	}
 	// The hook request is held until this returns: admit it by its bytes
@@ -127,7 +134,7 @@ func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRe
 		return allow(notePrefix + "busy")
 	}
 	defer p.inflightBytes.Add(-size)
-	m, early := p.admit(c, in, snap, flow)
+	m, early := p.admit(c, in, snap, flow, model)
 	if early != nil {
 		return early
 	}
@@ -210,20 +217,16 @@ func (p *Plugin) admitBytes(c *config, size int64) bool {
 }
 
 // admit applies the remaining preconditions (steps 4–8) for flow, a flow of
-// snap. A non-nil response ends the hook; otherwise m is ready to run.
-func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow) (*moderation, *pluginv1.GatewayRequestHookResponse) {
+// snap whose model filter takes model, the request's model. A non-nil
+// response ends the hook; otherwise m is ready to run.
+func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow, model string) (*moderation, *pluginv1.GatewayRequestHookResponse) {
 	meta := in.GetMeta()
 	uid := meta.GetUserId()
-	fields := in.GetFields()
-	model := requestModel(in)
-	if !flow.Spec.ModelFilter.Allows(model) {
-		return nil, allowEmpty
-	}
 	protocol := meta.GetClientProtocol()
 	if protocol == "" {
 		protocol = meta.GetProtocol()
 	}
-	pieces, moderated := extractPieces(protocol, fields)
+	pieces, moderated := extractPieces(protocol, in.GetFields())
 	if !moderated {
 		return nil, allowEmpty
 	}
@@ -251,32 +254,9 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 		Timing: m.timing, FlowID: flow.ID, FlowVersion: flow.Version, InputFormat: protocol,
 		TextHash: hex.EncodeToString(req.hash[:]), WatchLevel: p.watchLevel(uid),
 	}
-	hashes := make([][32]byte, len(req.segs))
-	for i := range req.segs {
-		hashes[i] = req.segs[i].key
-	}
-	// The cached verdicts (post: memory only, the worker asks the KV): a
-	// cached hit whose whole segment set is in the request decides it at
-	// once; the segments that passed are not sent again.
-	cached := p.lookupVerdicts(snap.scopeOf(flow), hashes, m.timing == TimingPre)
-	if cached.hit != nil {
-		// Known limitation, kept as in new-api (gate.go planAudit: a cached
-		// hit ends the plan): the replay decides the whole request, so what
-		// the request holds beside the hit set - new content after a hit in
-		// the history of a conversation - is not moderated in this request.
-		// Under post timing such a conversation is recorded as a replayed
-		// hit on every turn and its new content is never sent to an
-		// auditor; under pre timing the request is refused anyway.
-		return nil, p.replay(m, req, cached.hit, cached.hitID)
-	}
-	pl := req.makePlan(c.limits, func(h [32]byte) bool { return cached.passed[h] })
-	if len(pl.chunks) == 0 {
-		if pl.trace.Cached == 0 {
-			return nil, allowEmpty // only images beyond input_max_images
-		}
-		p.stats.cacheHits.Add(1)
-		p.countCacheHit(m, uid, meta.GetGroupId())
-		return nil, allow(notePrefix + "pass (cached)")
+	pl, early := p.planUncached(m, req)
+	if early != nil {
+		return nil, early
 	}
 	if pl.trace.Sampled && c.InputOverflow == OverflowBlock && m.timing == TimingPre {
 		return nil, deny(c.BlockStatus, DenyInputTooLarge, MsgInputTooLarge,
@@ -303,6 +283,39 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 		m.size += ch.size()
 	}
 	return m, nil
+}
+
+// planUncached asks the verdict cache about the segments of the request
+// (post: memory only, the worker asks the KV) and plans the chunks of what
+// is left to moderate. A non-nil response ends the hook: a cached hit whose
+// whole segment set is in the request decides it at once (replay), and a
+// request whose segments have all passed is not sent again.
+func (p *Plugin) planUncached(m *moderation, req *request) (*plan, *pluginv1.GatewayRequestHookResponse) {
+	hashes := make([][32]byte, len(req.segs))
+	for i := range req.segs {
+		hashes[i] = req.segs[i].key
+	}
+	cached := p.lookupVerdicts(m.snap.scopeOf(m.flow), hashes, m.timing == TimingPre)
+	if cached.hit != nil {
+		// Known limitation, kept as in new-api (gate.go planAudit: a cached
+		// hit ends the plan): the replay decides the whole request, so what
+		// the request holds beside the hit set - new content after a hit in
+		// the history of a conversation - is not moderated in this request.
+		// Under post timing such a conversation is recorded as a replayed
+		// hit on every turn and its new content is never sent to an
+		// auditor; under pre timing the request is refused anyway.
+		return nil, p.replay(m, req, cached.hit, cached.hitID)
+	}
+	pl := req.makePlan(m.cfg.limits, func(h [32]byte) bool { return cached.passed[h] })
+	if len(pl.chunks) > 0 {
+		return pl, nil
+	}
+	if pl.trace.Cached == 0 {
+		return nil, allowEmpty // only images beyond input_max_images
+	}
+	p.stats.cacheHits.Add(1)
+	p.countCacheHit(m, m.rec.UserID, m.rec.GroupID)
+	return nil, allow(notePrefix + "pass (cached)")
 }
 
 // text is the moderated text of every chunk (the record text).
@@ -345,7 +358,18 @@ type sharedRun struct {
 func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
 	start := p.now()
 	budget := min(m.flow.timeout, preBudget)
-	ch := p.sf.DoChan(m.key, func() (any, error) {
+	ch := p.sf.DoChan(m.key, func() (r any, _ error) {
+		// singleflight hands a panic of this function to a goroutine of its
+		// own (go panic), where neither the SDK's recover around the hook nor
+		// anything else can catch it: it would end the plugin process. So it
+		// is caught here, and the waiters get a run that errored - counted
+		// and recorded as one, the request passes (the error path).
+		defer func() {
+			if v := recover(); v != nil {
+				p.log.Error("moderation: pre run panicked", "request_id", m.rec.RequestID, "panic", fmt.Sprint(v), "stack", string(debug.Stack()))
+				r = &sharedRun{tr: panickedRun()}
+			}
+		}()
 		// The shared run has its own deadline, so a waiter that gives up
 		// does not cancel it for the others.
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
@@ -357,10 +381,13 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 		return &sharedRun{tr: m.combine(runs)}, nil
 	})
 	var r *sharedRun
+	p.stats.preWaiting.Add(1)
 	select {
 	case res := <-ch:
+		p.stats.preWaiting.Add(-1)
 		r = res.Val.(*sharedRun)
 	case <-ctx.Done():
+		p.stats.preWaiting.Add(-1)
 		// The client is gone or the hook timed out: the shared run goes on
 		// and only a hit is concluded once it returns.
 		p.goTracked(func() {
@@ -381,6 +408,9 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 	}
 	return allow(traceNote(m, r.tr))
 }
+
+// panickedRun is the trace of a run that panicked: nothing judged, an error.
+func panickedRun() Trace { return Trace{Final: Pass, Decider: -1, Errored: true} }
 
 // concludePre counts the request (with the latency moderation added) and the
 // shared run, and records the result; a hit is a refusal. It never waits
@@ -505,6 +535,13 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 // one) counts for the chunk's segments unless a whole stage was skipped. A
 // segment is stored as a pass when every chunk holding it passed.
 //
+// An image counts only when an auditor that judged received it (unreceived):
+// one that was skipped - not redrawn in time, too large, undecodable, beyond
+// the request budget, left out of a retry, not the one image the OpenAI
+// auditor picked - is neither stored as a pass nor part of the hit set. It
+// is moderated again with the next request that holds it, by then usually on
+// its own, the text around it having passed.
+//
 // It is called once per run (the shared pre run, the post worker), not per
 // request. The scope carries the clear counter of now, not of the snapshot
 // the run started with: after a clear the verdicts are stored where they
@@ -521,14 +558,15 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 		switch {
 		case ch.in.HasURLImage, run.Errored:
 		case run.Final == Hit:
-			tr := *run
-			tr.Chunk, tr.Chunks, tr.Input, tr.Cache, tr.InputMessageDropped = 0, nil, nil, nil, ""
-			if keys := m.sentKeys(ch); len(keys) > 0 {
-				hits = append(hits, storedHit{RequestID: m.rec.RequestID, Keys: hexKeys(keys), Trace: tr, At: now})
+			if keys := m.sentKeys(ch, run); len(keys) > 0 {
+				hits = append(hits, newStoredHit(m.rec.RequestID, hexKeys(keys), *run, now))
 			}
 		case !run.stageSkipped():
+			skipped := m.unreceived(ch, run)
 			for _, s := range ch.segs {
-				passed[s]++
+				if !skipped[s] {
+					passed[s]++
+				}
 			}
 		}
 	}
@@ -541,15 +579,42 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 	p.storeVerdicts(m.cfg, cacheScope(p.snap.Load().cacheEpoch, m.flow), passes, hits)
 }
 
-// sentKeys are the hashes of the segments a chunk sent to the auditors, in
-// request order: the segments with a part in it. The images a flow without
-// an image auditor dropped (dropImages) are not among them, so the hit set
-// of the chunk is what was judged and nothing else.
-func (m *moderation) sentKeys(ch *chunk) [][32]byte {
+// unreceived are the request segments of the images of ch that no auditor
+// received in a call that judged during run, the run of ch
+// (Trace.receivedImages): nothing was decided about them. The images of a
+// chunk are its image parts, in order. The images a flow without an image
+// auditor dropped (dropImages) are no parts and not among them: such a flow
+// has nothing to say about an image, and they pass with their chunk (admit).
+func (m *moderation) unreceived(ch *chunk, run *Trace) map[int]bool {
+	var out map[int]bool
+	var received map[int]bool
+	image := 0
+	for _, part := range ch.parts {
+		if part.img == nil {
+			continue
+		}
+		if received == nil {
+			received, out = run.receivedImages(), map[int]bool{}
+		}
+		if !received[image] {
+			out[part.seg] = true
+		}
+		image++
+	}
+	return out
+}
+
+// sentKeys are the hashes of the segments of a chunk the auditors of run,
+// its run, judged, in request order: the segments with a part in it, without
+// the images no auditor received (unreceived). The images a flow without an
+// image auditor dropped (dropImages) are not among them either, so the hit
+// set of the chunk is what was judged and nothing else.
+func (m *moderation) sentKeys(ch *chunk, run *Trace) [][32]byte {
+	skipped := m.unreceived(ch, run)
 	var keys [][32]byte
 	last := -1
 	for _, part := range ch.parts {
-		if part.seg != last {
+		if part.seg != last && !skipped[part.seg] {
 			keys = append(keys, m.plan.keys[part.seg])
 			last = part.seg
 		}
@@ -608,8 +673,8 @@ func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, id string) 
 	}
 	text := strings.Join(texts, "\n")
 
-	tr := hit.Trace
-	tr.LatencyMs, tr.Chunk, tr.Chunks, tr.InputMessageDropped = 0, 0, nil, ""
+	tr := hit.Trace.ownRun()
+	tr.LatencyMs = 0
 	tr.Input = &InputTrace{Segments: segments, Chars: utf8.RuneCountInString(text), Images: images}
 	tr.Cache = &CacheInfo{Hit: true, SourceRequestID: hit.RequestID, Key: id, Segs: hit.Keys, FP: m.flow.fp}
 	refused := m.timing == TimingPre
@@ -621,15 +686,11 @@ func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, id string) 
 		t := textutil.TruncateRunes(text, textMaxChars)
 		rec.Text = &t
 		if len(shown.parts) > 0 {
-			s := string(shown.messages())
-			rec.InputMessage, rec.InputMessageSize = &s, len(s)
+			rec.setInputMessage(shown)
 		}
 	}
-	rec.KeepUntil = rec.At.Add(m.cfg.retention[rec.Result])
 	p.countReplay(m)
-	if !p.sendEvent(rec) {
-		p.storeSuspicious(rec)
-	}
+	p.record(m.cfg, rec)
 	if refused {
 		return deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, traceNote(m, tr)+" replay")
 	}
@@ -654,7 +715,7 @@ func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 	// A hit names the hit set of its verdict chunk, also when the run errored
 	// and nothing was cached: confirming the record stores it (syncReviewed).
 	if ch := m.chunkOf(tr); m.plan != nil && ch != nil && tr.Final == Hit && !ch.in.HasURLImage {
-		if keys := m.sentKeys(ch); len(keys) > 0 {
+		if keys := m.sentKeys(ch, &tr); len(keys) > 0 {
 			tr.Cache = &CacheInfo{Key: hitID(keys), Segs: hexKeys(keys), FP: m.flow.fp}
 		}
 	}
@@ -664,6 +725,7 @@ func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 	if m.source == "" {
 		p.countUser(rec.UserID, rec.GroupID, rec.Result, rec.Severity)
 	}
+	m.userCounted = true
 	if rec.Result == ResultError && rec.Text != nil {
 		// Records of a channel outage keep only the start of the text
 		// (error_text_max_chars, CONTRACTS §72.9).
@@ -694,18 +756,28 @@ func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 	// images it is megabytes, and most requests pass without a record.
 	if m.cfg.StoreText && rec.Result != ResultError && (tr.keepsMessage() || m.cfg.RecordPassInputMessage) {
 		if ch := m.chunkOf(tr); ch != nil {
-			s := string(ch.messages())
-			rec.InputMessage, rec.InputMessageSize = &s, len(s)
+			rec.setInputMessage(ch)
 		}
 	}
-	rec.KeepUntil = rec.At.Add(m.cfg.retention[rec.Result])
+	p.record(m.cfg, rec)
+}
+
+// setInputMessage gives the record the raw messages of a chunk.
+func (r *eventRec) setInputMessage(ch *chunk) {
+	s := string(ch.messages())
+	r.InputMessage, r.InputMessageSize = &s, len(s)
+}
+
+// record hands a record to the event writer, kept for the retention of its
+// result. When the writer cannot take it (its queue is full, or it is
+// stopped), a suspicious record - it drives the watch list, the violation
+// count and the ban - is stored in the background with retries (new-api
+// worker.go enqueue); anything else is dropped and counted.
+func (p *Plugin) record(c *config, rec eventRec) {
+	rec.KeepUntil = rec.At.Add(c.retention[rec.Result])
 	if p.sendEvent(rec) {
 		return
 	}
-	// The queue is full or the writer stopped. A suspicious record drives
-	// the watch list, the violation count and the ban, so it is stored in
-	// the background with retries (new-api worker.go enqueue); anything else
-	// is dropped.
 	if rec.suspicious() {
 		p.storeSuspicious(rec)
 		return

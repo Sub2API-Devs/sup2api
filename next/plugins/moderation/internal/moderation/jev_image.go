@@ -6,14 +6,18 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"image"
 	"image/color"
 	_ "image/gif" // first frame only
 	"image/jpeg"
 	"image/png"
 	"io"
+	"log/slog"
+	"runtime/debug"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -59,6 +63,19 @@ const (
 	jevImagePNGMax      = 2 << 20
 	jevImageJPEGQuality = 85
 	jevScaleBandRows    = 64
+	// jevNormalizeWorkers is the number of images decoded and redrawn at
+	// once (jevNormalizeSlots).
+	jevNormalizeWorkers = 2
+	// What the JPEG decoder holds (jpegDecodeCost): a byte per sample in
+	// the planes, jpegCoefficientBytes more per sample of a progressive
+	// frame, jpegCMYKBytes per pixel for the image four components are
+	// converted into; the planes are rounded up to whole MCUs, which adds at
+	// most one sample in jpegMCUSlack per pixel. The worst case is four
+	// components without subsampling, progressive.
+	jpegCoefficientBytes   = 4
+	jpegCMYKBytes          = 4
+	jpegMCUSlack           = 16
+	jpegWorstBytesPerPixel = 4*(1+jpegCoefficientBytes) + jpegCMYKBytes
 )
 
 // jevImageFormats are the formats jevAsset decodes; anything else is skipped
@@ -69,8 +86,16 @@ var jevImageFormats = []string{"png", "jpeg", "gif", "webp"}
 // normalization takes on the request path), jevNormalizeBytes the memory
 // their decoders hold (jevNormalizeMemory).
 var (
-	jevNormalizeSlots = make(chan struct{}, 2)
+	jevNormalizeSlots = make(chan struct{}, jevNormalizeWorkers)
 	jevNormalizeBytes = xsemaphore.NewWeighted(jevNormalizeMemory)
+)
+
+// jevRedrawPanics counts the redraws in which a decoder panicked (the image
+// is skipped); jevLogger gets a line for each, the plugin's logger once it
+// is initialised.
+var (
+	jevRedrawPanics atomic.Int64
+	jevLogger       atomic.Pointer[slog.Logger]
 )
 
 // jevNormalize redraws one image (a variable for the tests).
@@ -84,13 +109,18 @@ func jevImageTokens(w, h int) int { return w*h/250 + 100 }
 // ends is skipped, like every image after it that needs redrawing, and the
 // call goes out with the text and the images that are ready. Images sent as
 // they are cost no time and are still packed.
+//
+// Every asset names the images it stands for (from). An image of the input
+// that no asset names was not sent, whatever the reason - a URL, too large,
+// undecodable, not redrawn in time, beyond the request budget - and nothing
+// is decided about it.
 func jevAssets(ctx context.Context, in *Input) []typesafeAsset {
 	nctx, cancel := context.WithTimeout(ctx, jevNormalizeBudget(ctx))
 	defer cancel()
 	tokens, size := utf8.RuneCountInString(in.Text), 0
-	seen := map[[32]byte]bool{}
+	seen := map[[32]byte]int{} // content -> its asset in out
 	var out []typesafeAsset
-	for _, img := range in.Images {
+	for i, img := range in.Images {
 		if ctx.Err() != nil {
 			break // the call is over: nothing will be sent
 		}
@@ -102,14 +132,16 @@ func jevAssets(ctx context.Context, in *Input) []typesafeAsset {
 			continue
 		}
 		sum := sha256.Sum256([]byte(a.DataBase64))
-		if seen[sum] {
+		if j, ok := seen[sum]; ok {
+			out[j].from = append(out[j].from, i)
 			continue
 		}
 		if tokens+a.tokens > jevRequestTokenLimit || size+len(a.DataBase64) > jevRequestBase64Max {
 			break
 		}
-		seen[sum] = true
+		seen[sum] = len(out)
 		tokens, size = tokens+a.tokens, size+len(a.DataBase64)
+		a.from = []int{i}
 		out = append(out, *a)
 	}
 	return out
@@ -166,7 +198,8 @@ func jevAsset(ctx context.Context, raw string) *typesafeAsset {
 // it waits for a slot and for the memory only while ctx lasts, and when ctx
 // ends during the redraw it returns nil at once - a decoder cannot be
 // stopped, so the redraw finishes on its own and frees its slot and memory
-// then. nil = skipped.
+// then. A decoder that panics on the image is counted and logged
+// (jevRedrawPanics), and the image is skipped. nil = skipped.
 func jevRedraw(ctx context.Context, raw string, cost int64) *typesafeAsset {
 	if ctx.Err() != nil {
 		return nil
@@ -191,8 +224,14 @@ func jevRedraw(ctx context.Context, raw string, cost int64) *typesafeAsset {
 	go func() {
 		var a *typesafeAsset
 		defer func() {
-			if recover() != nil {
+			if r := recover(); r != nil {
 				a = nil // a decoder panicked on the image: skipped
+				jevRedrawPanics.Add(1)
+				if log := jevLogger.Load(); log != nil {
+					// The sizes only: never the image.
+					log.Error("moderation: image decoder panicked, the image is skipped", "base64_bytes", len(raw),
+						"decoder_bytes", cost, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+				}
 			}
 			jevNormalizeBytes.Release(cost)
 			<-jevNormalizeSlots
@@ -259,7 +298,7 @@ func jevDecodeCost(format string, cfg image.Config, r io.Reader) int64 {
 // sample. Four components (CMYK) are converted into a second image. A
 // header that cannot be read costs the worst case.
 func jpegDecodeCost(px int64, r io.Reader) int64 {
-	worst := px * (4*5 + 4)
+	worst := px * jpegWorstBytesPerPixel
 	br := bufio.NewReader(r)
 	var b [2]byte
 	if _, err := io.ReadFull(br, b[:]); err != nil || b[0] != 0xff || b[1] != 0xd8 {
@@ -313,13 +352,13 @@ func jpegDecodeCost(px int64, r io.Reader) int64 {
 			return worst
 		}
 		// Planes are rounded up to whole MCUs: a little over px.
-		samples := px*units/(hmax*vmax) + px/16
+		samples := px*units/(hmax*vmax) + px/jpegMCUSlack
 		cost := samples
 		if marker != 0xc0 && marker != 0xc1 { // progressive (or a kind the decoder refuses)
-			cost += samples * 4
+			cost += samples * jpegCoefficientBytes
 		}
 		if comps == 4 {
-			cost += px * 4
+			cost += px * jpegCMYKBytes
 		}
 		return cost
 	}

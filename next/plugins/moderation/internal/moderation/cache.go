@@ -52,6 +52,34 @@ import (
 // (kvLock); between nodes two writers of one key within milliseconds can
 // lose one of the edits. A lost pass costs an audit. A lost pointer costs a
 // replay, and the hit stays reachable through its other segments.
+//
+// Memory is a front of the KV, so a node can hold a segment value that lacks
+// a pointer another node wrote since: the passes of A and B, while the hit of
+// {A, B} is in the KV. Two things bound how long such a value decides:
+//
+//   - a node that stored a hit in the KV publishes verdict.changed with the
+//     segment keys it pointed to the hit ("stored": true); the nodes that get
+//     it drop those keys from memory and read them from the KV the next time
+//     (storeVerdicts, onVerdictChanged). That is the normal case: the hit
+//     counts on the other nodes from the delivery of the broadcast on;
+//   - a broadcast can be lost, so a segment value in memory is used for
+//     verdictRecheck (5 minutes) after it was last read from the KV; then
+//     the next lookup reads it again, at most kvLookupMax such keys per
+//     lookup, the longest unread first (lookup.segments): a lookup that asks
+//     the KV before it decides, a lookup of memory alone (the hook under
+//     post timing, which never waits for the KV) in the background
+//     (recheckSoon) - the request that finds the value due is then still
+//     answered from memory, the next one is not.
+//
+// So without the broadcast a hit stored on one node decides on every other
+// node at most verdictRecheck after its pointers reached the KV, as long as
+// the KV answers - under post timing one request later. Three cases are
+// outside that bound, each ending with the lookup that reads the key: a
+// request with more than kvLookupMax values due (the rest are used once more
+// and are first in line in the next lookup), a KV read that fails or runs
+// out of its budget (the value in memory is used), and a segment this node
+// stored itself without having been able to read it from the KV (the 5
+// minutes count from that store).
 
 // kvNamespace holds the verdict cache. The namespace of the pass cache
 // before 0.8.0, "pass", is no longer used by the cache.
@@ -67,8 +95,10 @@ const (
 	kvWriteBudget   = 2 * time.Second
 	// A review sync gets kvSyncBudget for every kvLookupMax keys it changes,
 	// at most kvSyncBudgetMax.
-	kvSyncBudget    = time.Second
 	kvSyncBudgetMax = 10 * time.Second
+	// verdictRecheck: how long a segment value in memory is used without
+	// reading the KV again (see the top of the file).
+	verdictRecheck = 5 * time.Minute
 	// maxHitBytes: a cached hit larger than this is not stored (the KV takes
 	// values up to 64 KiB).
 	maxHitBytes = 60 << 10
@@ -78,8 +108,10 @@ const (
 	// hit is lost to the cache only when every segment of its set was since
 	// part of more than maxSegHits newer hit sets.
 	maxSegHits = 8
-	// verdictBroadcastBytes caps the keys of one verdict.changed broadcast.
+	// verdictBroadcastBytes caps the keys of one verdict.changed broadcast;
+	// in its JSON a key takes jsonStringOverhead bytes more (quotes, comma).
 	verdictBroadcastBytes = 48 << 10
+	jsonStringOverhead    = 3
 	// cacheMaxBytes bounds the memory cache beside cache_entries (a cached
 	// hit is up to maxHitBytes of JSON, and larger decoded). The plugin
 	// process is limited to 512 MB (CONTRACTS §72.2), of which the requests
@@ -90,13 +122,21 @@ const (
 	// 250,000 entries: a larger cache_entries is bounded by the bytes.
 	cacheMaxBytes = 64 << 20
 	// cacheEntryOverhead is the memory of an entry beside its key and value
-	// (list element, map slot, headers), roughly.
+	// (list element, map slot, headers), roughly; tombstoneOverhead that of
+	// a tombstone beside its key. A decoded hit takes about hitDecodedFactor
+	// times its JSON.
 	cacheEntryOverhead = 128
+	tombstoneOverhead  = 64
+	hitDecodedFactor   = 2
 	// tombstoneTTL: how long a key a review changed is neither loaded into
 	// memory nor written by a run (lru.kill): longer than any lookup or
 	// background write that started before the review can last.
 	tombstoneTTL = 2 * kvWriteBudget
 )
+
+// kvSyncBudget is the time a review sync gets for every kvLookupMax keys (a
+// variable for the tests).
+var kvSyncBudget = time.Second
 
 // ---------------------------------------------------------------- segment values
 
@@ -245,21 +285,33 @@ func (o *segOps) add(key string, edits ...segEdit) {
 
 // cacheEntry is a segment key with its value (val, the form the KV holds) or
 // a hit key with the decoded hit, which is never modified once stored.
+// synced is when a segment value was last read from the KV, or made on this
+// node: verdictRecheck later it is read again.
 type cacheEntry struct {
 	key     string
 	val     []byte
 	hit     *storedHit
 	size    int64
 	expires time.Time
+	synced  time.Time
 }
 
+// entrySize estimates the memory of an entry whose value takes payload bytes.
+func entrySize(key string, payload int) int64 {
+	return int64(len(key) + payload + cacheEntryOverhead)
+}
+
+func tombstoneSize(key string) int64 { return int64(len(key) + tombstoneOverhead) }
+
 // lru is the memory cache: at most max entries and maxBytes bytes (the
-// estimate of entrySize), the least recently used dropped first.
+// estimate of entrySize, the tombstones included), the least recently used
+// dropped first.
 //
 // dead holds the tombstones of the keys a review changed (kill): until its
-// time nothing is stored under the key except through put, so a lookup that
-// read the old value from the KV, or a run that finished meanwhile, cannot
-// bring it back.
+// time nothing is stored under the key, so a lookup that read the old value
+// from the KV, or a run that finished meanwhile, cannot bring it back. A
+// tombstone is dropped once its time is over (reap); deadNext is the first
+// time one is.
 type lru struct {
 	mu       sync.Mutex
 	max      int
@@ -268,6 +320,7 @@ type lru struct {
 	ll       *list.List
 	items    map[string]*list.Element
 	dead     map[string]time.Time
+	deadNext time.Time
 }
 
 func newLRU(max int) *lru {
@@ -312,16 +365,46 @@ func (c *lru) remove(el *list.Element) {
 	c.bytes -= e.size
 }
 
-func (c *lru) isDead(key string, now time.Time) bool { return now.Before(c.dead[key]) }
+// drop removes the entry of key, if there is one. c.mu is held.
+func (c *lru) drop(key string) {
+	if el, ok := c.items[key]; ok {
+		c.remove(el)
+	}
+}
 
-// get returns the value of a segment key.
-func (c *lru) get(key string, now time.Time) ([]byte, bool) {
+// reap drops the tombstones whose time is over. It costs nothing until the
+// first of them is due. c.mu is held.
+func (c *lru) reap(now time.Time) {
+	if len(c.dead) == 0 || now.Before(c.deadNext) {
+		return
+	}
+	c.deadNext = time.Time{}
+	for k, until := range c.dead {
+		if !now.Before(until) {
+			delete(c.dead, k)
+			c.bytes -= tombstoneSize(k)
+		} else if c.deadNext.IsZero() || until.Before(c.deadNext) {
+			c.deadNext = until
+		}
+	}
+}
+
+// isDead reports whether key is tombstoned. c.mu is held.
+func (c *lru) isDead(key string, now time.Time) bool {
+	c.reap(now)
+	_, dead := c.dead[key]
+	return dead
+}
+
+// seg returns the value of a segment key and when it was last read from the
+// KV.
+func (c *lru) seg(key string, now time.Time) (v segValue, synced time.Time, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if e := c.entry(key, now); e != nil {
-		return e.val, true
+	if e := c.entry(key, now); e != nil && e.hit == nil {
+		return parseSeg(e.val), e.synced, true
 	}
-	return nil, false
+	return v, synced, false
 }
 
 // getHit returns the hit of a hit key; nil when there is none.
@@ -334,55 +417,77 @@ func (c *lru) getHit(key string, now time.Time) *storedHit {
 	return nil
 }
 
-// put stores val, which is not modified afterwards.
-func (c *lru) put(key string, val []byte, expires time.Time) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.set(&cacheEntry{key: key, val: val, size: int64(len(key) + len(val) + cacheEntryOverhead), expires: expires})
-}
-
-// putHit stores a decoded hit whose JSON has bodyLen bytes (decoded it takes
-// about twice that); false while the key is tombstoned.
+// putHit stores a decoded hit whose JSON has bodyLen bytes; false while the
+// key is tombstoned.
 func (c *lru) putHit(key string, hit *storedHit, bodyLen int, expires, now time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.isDead(key, now) {
 		return false
 	}
-	c.set(&cacheEntry{key: key, hit: hit, size: int64(len(key) + 2*bodyLen + cacheEntryOverhead), expires: expires})
+	c.set(&cacheEntry{key: key, hit: hit, size: entrySize(key, hitDecodedFactor*bodyLen), expires: expires})
 	return true
 }
 
-// editSeg applies edit to the value of a segment key (empty when there is
-// none) and stores the result, or removes the key when nothing is left.
-// Nothing happens while the key is tombstoned.
-func (c *lru) editSeg(key string, now time.Time, ttl time.Duration, edit segEdit) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// update applies edit to the value of a segment key (empty when there is
+// none) and stores the result, or removes the key when nothing is left. It
+// returns the entry as stored; nil when nothing is left or the key is
+// tombstoned (then nothing happens). c.mu is held.
+func (c *lru) update(key string, now time.Time, ttl time.Duration, edit segEdit) *cacheEntry {
 	if c.isDead(key, now) {
-		return
+		return nil
 	}
 	var v segValue
+	synced := now
 	if e := c.entry(key, now); e != nil {
-		v = parseSeg(e.val)
+		v, synced = parseSeg(e.val), e.synced
 	}
 	edit(&v)
 	v.prune(now, ttl)
 	if v.empty() {
-		if el, ok := c.items[key]; ok {
-			c.remove(el)
-		}
-		return
+		c.drop(key)
+		return nil
 	}
 	val := v.encode()
-	c.set(&cacheEntry{key: key, val: val, size: int64(len(key) + len(val) + cacheEntryOverhead), expires: v.expires(ttl)})
+	e := &cacheEntry{key: key, val: val, size: entrySize(key, len(val)), expires: v.expires(ttl), synced: synced}
+	c.set(e)
+	return e
 }
 
-func (c *lru) del(key string) {
+// editSeg applies what a run on this node decided to the value of a segment
+// key. Nothing happens while the key is tombstoned.
+func (c *lru) editSeg(key string, now time.Time, ttl time.Duration, edit segEdit) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if el, ok := c.items[key]; ok {
-		c.remove(el)
+	c.update(key, now, ttl, edit)
+}
+
+// syncSeg takes what the KV holds for a segment key into memory, with the
+// times of its writes (not a fresh TTL) and beside what a run on this node
+// stored meanwhile, and marks the key as read from the KV now. It returns
+// the value to decide with: the one in memory, or kv alone while the key is
+// tombstoned (a review changed it since this lookup read it; memory is left
+// alone).
+func (c *lru) syncSeg(key string, now time.Time, ttl time.Duration, kv segValue) segValue {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.isDead(key, now) {
+		return kv
+	}
+	e := c.update(key, now, ttl, func(v *segValue) { v.merge(kv) })
+	if e == nil {
+		return segValue{}
+	}
+	e.synced = now
+	return parseSeg(e.val)
+}
+
+// forget drops the keys: their next read is from the KV.
+func (c *lru) forget(keys []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, k := range keys {
+		c.drop(k)
 	}
 }
 
@@ -390,16 +495,26 @@ func (c *lru) del(key string) {
 func (c *lru) kill(keys []string, until, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for k, t := range c.dead {
-		if !now.Before(t) {
-			delete(c.dead, k)
-		}
+	c.reap(now)
+	for _, k := range keys {
+		c.drop(k)
+	}
+	if !now.Before(until) {
+		return
 	}
 	for _, k := range keys {
-		if el, ok := c.items[k]; ok {
-			c.remove(el)
+		if _, dead := c.dead[k]; !dead {
+			c.bytes += tombstoneSize(k)
 		}
 		c.dead[k] = until
+	}
+	// The earliest time of all: a key tombstoned again may have moved later,
+	// then reap looks once too early and finds the next.
+	if c.deadNext.IsZero() || until.Before(c.deadNext) {
+		c.deadNext = until
+	}
+	for c.ll.Len() > 0 && c.bytes > c.maxBytes {
+		c.remove(c.ll.Back())
 	}
 }
 
@@ -416,7 +531,7 @@ func (c *lru) len() int {
 	return c.ll.Len()
 }
 
-// size is the estimated memory of the entries, in bytes.
+// size is the estimated memory of the entries and tombstones, in bytes.
 func (c *lru) size() int64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -489,7 +604,7 @@ func hitIDOf(segs []string) string {
 type storedHit struct {
 	RequestID string   `json:"r"`
 	Keys      []string `json:"k"` // segment hashes (hex), in request order
-	Trace     Trace    `json:"t"` // the chunk's own run; Chunk, Chunks, Input, Cache and InputMessageDropped cleared
+	Trace     Trace    `json:"t"` // the chunk's own run (Trace.ownRun)
 	At        int64    `json:"at"`
 }
 
@@ -504,6 +619,12 @@ func decodeHit(raw []byte, now time.Time, ttl time.Duration) *storedHit {
 }
 
 func (h *storedHit) expires(ttl time.Duration) time.Time { return time.Unix(h.At, 0).Add(ttl) }
+
+// newStoredHit is the cached hit of a chunk: the request it ran in, the
+// segments (hex hashes) it sent and its own run, written at the unix time at.
+func newStoredHit(requestID string, segs []string, run Trace, at int64) storedHit {
+	return storedHit{RequestID: requestID, Keys: segs, Trace: run.ownRun(), At: at}
+}
 
 // encodeHit is the id and the stored JSON of a hit; "" when its segments are
 // not hashes or it is too large to store.
@@ -529,63 +650,135 @@ type verdicts struct {
 
 // lookupVerdicts reads the cached verdicts of the segments of a request (in
 // request order) under scope: memory first, then (useKV) the KV for the
-// misses within the lookup budget. The first cached hit whose whole segment
-// set is in the request is returned for replay - before any pass is looked
-// at, so a hit set whose segments passed one by one elsewhere is still a
-// hit; otherwise the segments that passed. Anything the cache cannot answer
-// is unknown and moderated again.
+// misses and for the values due for another read, within the lookup budget;
+// without the KV the values that are due are read in the background.
+// The first cached hit whose whole segment set is in the request is returned
+// for replay - before any pass is looked at, so a hit set whose segments
+// passed one by one elsewhere is still a hit; otherwise the segments that
+// passed. Anything the cache cannot answer is unknown and moderated again.
 func (p *Plugin) lookupVerdicts(scope string, keys [][32]byte, useKV bool) verdicts {
 	ttl := p.cfg.Load().cacheTTL
-	v := verdicts{passed: map[[32]byte]bool{}}
 	if ttl <= 0 || len(keys) == 0 {
-		return v
+		return verdicts{passed: map[[32]byte]bool{}}
 	}
-	now := p.now()
-	cache := p.cache.Load()
-	useKV = useKV && p.host != nil
-	kctx, cancel := context.WithTimeout(p.bg, kvLookupBudget)
+	ctx, cancel := context.WithTimeout(p.bg, kvLookupBudget)
 	defer cancel()
+	l := &lookup{p: p, cache: p.cache.Load(), ctx: ctx, scope: scope, now: p.now(), ttl: ttl, kv: useKV && p.host != nil}
+	segs := l.segments(keys)
+	ids, hits := l.hits(segs)
+	return l.decide(keys, segs, ids, hits)
+}
 
+// lookup is one lookupVerdicts call.
+type lookup struct {
+	p     *Plugin
+	cache *lru
+	ctx   context.Context // the KV budget
+	scope string
+	now   time.Time
+	ttl   time.Duration
+	kv    bool // ask the KV
+}
+
+// segments loads the values of the segments: from memory, and with the KV
+// also from there (and into memory) - the misses, the newest kvLookupMax of
+// them, and the values in memory that are due for another read
+// (verdictRecheck), the kvLookupMax longest unread. A value that is due and
+// was not read (beyond the limit, a KV error, the budget) is used as it is.
+// Without the KV every value in memory is used, and the ones that are due
+// are read in the background.
+func (l *lookup) segments(keys [][32]byte) []segValue {
 	segs := make([]segValue, len(keys))
-	var misses []int
+	var misses, due []int
+	var read map[int]time.Time // due: when the value was last read
 	for i, h := range keys {
-		if raw, ok := cache.get(segKeyOf(scope, h), now); ok {
-			segs[i] = parseSeg(raw)
-		} else {
+		v, synced, ok := l.cache.seg(segKeyOf(l.scope, h), l.now)
+		if !ok {
 			misses = append(misses, i)
+			continue
 		}
-	}
-	if useKV && len(misses) > 0 {
-		if len(misses) > kvLookupMax {
-			misses = misses[len(misses)-kvLookupMax:] // the newest content
-		}
-		names := make([]string, len(misses))
-		for j, i := range misses {
-			names[j] = segKeyOf(scope, keys[i])
-		}
-		for j, raw := range p.kvGet(kctx, names) {
-			if raw == nil {
-				continue
+		segs[i] = v
+		if l.now.Sub(synced) >= verdictRecheck {
+			if read == nil {
+				read = map[int]time.Time{}
 			}
-			loaded := parseSeg(raw)
-			segs[misses[j]] = loaded
-			// Into memory with the times of its writes (not a fresh TTL),
-			// beside what a run on this node stored meanwhile; not at all
-			// when a review changed the key since this lookup read it.
-			cache.editSeg(names[j], now, ttl, func(v *segValue) { v.merge(loaded) })
+			due = append(due, i)
+			read[i] = synced
 		}
 	}
+	if len(due) > kvLookupMax {
+		slices.SortStableFunc(due, func(a, b int) int { return read[a].Compare(read[b]) })
+		due = due[:kvLookupMax]
+	}
+	names := func(asked []int) []string {
+		out := make([]string, len(asked))
+		for j, i := range asked {
+			out[j] = segKeyOf(l.scope, keys[i])
+		}
+		return out
+	}
+	if !l.kv {
+		if len(due) > 0 {
+			l.recheckSoon(names(due))
+		}
+		return segs
+	}
+	if len(misses) > kvLookupMax {
+		misses = misses[len(misses)-kvLookupMax:] // the newest content
+	}
+	asked := append(misses, due...)
+	if len(asked) == 0 {
+		return segs
+	}
+	askedNames := names(asked)
+	raws, ok := l.p.kvGet(l.ctx, askedNames)
+	for j, i := range asked {
+		if ok[j] {
+			segs[i] = l.cache.syncSeg(askedNames[j], l.now, l.ttl, parseSeg(raws[j]))
+		}
+	}
+	return segs
+}
 
-	// The hits the segments point to, in request order, the newest first.
-	var ids, missing []string
-	hits := map[string]*storedHit{}
+// recheckSoon reads the segment keys names from the KV into memory in the
+// background, with the hits they point to, for a lookup that does not wait
+// for the KV and found their values due (verdictRecheck). One batch at a
+// time on a node: a call that finds another under way does nothing, and the
+// next lookup that still finds its keys due asks again.
+func (l *lookup) recheckSoon(names []string) {
+	p := l.p
+	if p.host == nil || len(names) == 0 || !p.rechecking.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer p.rechecking.Store(false)
+		ctx, cancel := context.WithTimeout(p.bg, kvWriteBudget)
+		defer cancel()
+		bg := &lookup{p: p, cache: l.cache, ctx: ctx, scope: l.scope, now: p.now(), ttl: l.ttl, kv: true}
+		raws, ok := p.kvGet(ctx, names)
+		var segs []segValue
+		for j, name := range names {
+			if ok[j] {
+				segs = append(segs, bg.cache.syncSeg(name, bg.now, bg.ttl, parseSeg(raws[j])))
+			}
+		}
+		bg.hits(segs)
+	}()
+}
+
+// hits loads the cached hits the segments point to: ids in request order,
+// the newest first within a segment; a hit that is not in memory comes from
+// the KV (at most kvLookupMax of them) and is nil when it is nowhere.
+func (l *lookup) hits(segs []segValue) (ids []string, hits map[string]*storedHit) {
+	hits = map[string]*storedHit{}
+	var missing []string
 	for i := range segs {
 		for _, ref := range segs[i].hits {
-			if _, seen := hits[ref.id]; seen || !liveAt(ref.at, now, ttl) {
+			if _, seen := hits[ref.id]; seen || !liveAt(ref.at, l.now, l.ttl) {
 				continue
 			}
-			hit := cache.getHit(hitKeyOf(scope, ref.id), now)
-			if hit != nil && !liveAt(hit.At, now, ttl) {
+			hit := l.cache.getHit(hitKeyOf(l.scope, ref.id), l.now)
+			if hit != nil && !liveAt(hit.At, l.now, l.ttl) {
 				hit = nil
 			}
 			hits[ref.id] = hit
@@ -595,19 +788,28 @@ func (p *Plugin) lookupVerdicts(scope string, keys [][32]byte, useKV bool) verdi
 			}
 		}
 	}
-	if useKV && len(missing) > 0 {
-		missing = missing[:min(len(missing), kvLookupMax)]
-		names := make([]string, len(missing))
-		for j, id := range missing {
-			names[j] = hitKeyOf(scope, id)
-		}
-		for j, raw := range p.kvGet(kctx, names) {
-			if hit := decodeHit(raw, now, ttl); hit != nil {
-				hits[missing[j]] = hit
-				cache.putHit(names[j], hit, len(raw), hit.expires(ttl), now)
-			}
+	if !l.kv || len(missing) == 0 {
+		return ids, hits
+	}
+	missing = missing[:min(len(missing), kvLookupMax)]
+	names := make([]string, len(missing))
+	for j, id := range missing {
+		names[j] = hitKeyOf(l.scope, id)
+	}
+	raws, _ := l.p.kvGet(l.ctx, names)
+	for j, raw := range raws {
+		if hit := decodeHit(raw, l.now, l.ttl); hit != nil {
+			hits[missing[j]] = hit
+			l.cache.putHit(names[j], hit, len(raw), hit.expires(l.ttl), l.now)
 		}
 	}
+	return ids, hits
+}
+
+// decide: the first hit whose whole segment set is among keys, else the
+// segments with a live pass.
+func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map[string]*storedHit) verdicts {
+	v := verdicts{passed: map[[32]byte]bool{}}
 	if len(ids) > 0 {
 		have := make(map[string]bool, len(keys))
 		for _, k := range keys {
@@ -622,7 +824,7 @@ func (p *Plugin) lookupVerdicts(scope string, keys [][32]byte, useKV bool) verdi
 		}
 	}
 	for i := range segs {
-		if liveAt(segs[i].pass, now, ttl) {
+		if liveAt(segs[i].pass, l.now, l.ttl) {
 			v.passed[keys[i]] = true
 		}
 	}
@@ -662,54 +864,93 @@ func (p *Plugin) kvRun(ctx context.Context, n int, fn func(i int) error) (ok []b
 	return ok
 }
 
-// kvGet reads keys from the KV until ctx ends; out[i] is nil for a key that
-// is absent or was not read: the keys involved stay unknown.
-func (p *Plugin) kvGet(ctx context.Context, keys []string) [][]byte {
-	out := make([][]byte, len(keys))
-	p.kvRun(ctx, len(keys), func(i int) error {
+// kvGet reads keys from the KV until ctx ends. ok[i] reports that key i was
+// read; out[i] is nil for a key that is absent or was not read - what was
+// not read stays unknown.
+func (p *Plugin) kvGet(ctx context.Context, keys []string) (out [][]byte, ok []bool) {
+	out = make([][]byte, len(keys))
+	ok = p.kvRun(ctx, len(keys), func(i int) error {
 		val, found, err := p.host.KV().Get(ctx, kvNamespace, keys[i])
 		if err == nil && found {
 			out[i] = val
 		}
 		return err
 	})
-	return out
+	return out, ok
 }
 
 // kvLock serializes this node's changes of a cache key in the KV.
 func (p *Plugin) kvLock(key string) *sync.Mutex {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(key))
-	return &p.kvMu[h.Sum32()%uint32(len(p.kvMu))]
+	return &p.kvMu[h.Sum32()%kvLockStripes]
 }
 
-// kvSetHit stores a hit entry (body nil deletes it). guarded: not while a
-// review tombstoned the key on this node; stored reports whether it was
-// written.
-func (p *Plugin) kvSetHit(ctx context.Context, key string, body []byte, ttl time.Duration, guarded bool) (stored bool, err error) {
+// kvChange runs one change of a cache key in the KV, one at a time per key
+// on this node (kvLock). A change whose ctx ended while it waited for its
+// turn is not made.
+func (p *Plugin) kvChange(ctx context.Context, key string, change func() error) error {
 	mu := p.kvLock(key)
 	mu.Lock()
 	defer mu.Unlock()
-	if guarded && p.cache.Load().tombstoned(key, p.now()) {
-		return false, nil
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	if body == nil {
-		return true, p.host.KV().Delete(ctx, kvNamespace, key)
-	}
-	err = p.host.KV().Set(ctx, kvNamespace, key, body, ttl)
-	return err == nil, err
+	return change()
+}
+
+// reviewed reports whether a review changed the key on this node a moment
+// ago (as far as this node knows): what a run decided before is not written
+// over it. Asked inside kvChange, so a review that follows waits for the
+// write.
+func (p *Plugin) reviewed(key string) bool {
+	return p.cache.Load().tombstoned(key, p.now())
+}
+
+// kvSetHit stores a hit entry.
+func (p *Plugin) kvSetHit(ctx context.Context, key string, body []byte, ttl time.Duration) error {
+	return p.kvChange(ctx, key, func() error { return p.host.KV().Set(ctx, kvNamespace, key, body, ttl) })
+}
+
+// kvDeleteHit deletes a hit entry.
+func (p *Plugin) kvDeleteHit(ctx context.Context, key string) error {
+	return p.kvChange(ctx, key, func() error { return p.host.KV().Delete(ctx, kvNamespace, key) })
+}
+
+// kvSetRunHit stores the hit entry of a run unless the key was reviewed;
+// stored reports whether it was written.
+func (p *Plugin) kvSetRunHit(ctx context.Context, key string, body []byte, ttl time.Duration) (stored bool, err error) {
+	err = p.kvChange(ctx, key, func() error {
+		if p.reviewed(key) {
+			return nil
+		}
+		stored = true
+		return p.host.KV().Set(ctx, kvNamespace, key, body, ttl)
+	})
+	return stored && err == nil, err
 }
 
 // kvEditSeg reads a segment key, applies the edits and writes it back (or
-// deletes it when nothing is left). guarded as in kvSetHit.
-func (p *Plugin) kvEditSeg(ctx context.Context, key string, edits []segEdit, ttl time.Duration, guarded bool) error {
-	mu := p.kvLock(key)
-	mu.Lock()
-	defer mu.Unlock()
+// deletes it when nothing is left).
+func (p *Plugin) kvEditSeg(ctx context.Context, key string, edits []segEdit, ttl time.Duration) error {
+	return p.kvChange(ctx, key, func() error { return p.kvRewriteSeg(ctx, key, edits, ttl) })
+}
+
+// kvEditRunSeg is kvEditSeg for what a run decided: not when the key was
+// reviewed.
+func (p *Plugin) kvEditRunSeg(ctx context.Context, key string, edits []segEdit, ttl time.Duration) error {
+	return p.kvChange(ctx, key, func() error {
+		if p.reviewed(key) {
+			return nil
+		}
+		return p.kvRewriteSeg(ctx, key, edits, ttl)
+	})
+}
+
+// kvRewriteSeg is the read, edit and write of a segment key (inside
+// kvChange).
+func (p *Plugin) kvRewriteSeg(ctx context.Context, key string, edits []segEdit, ttl time.Duration) error {
 	now := p.now()
-	if guarded && p.cache.Load().tombstoned(key, now) {
-		return nil
-	}
 	raw, found, err := p.host.KV().Get(ctx, kvNamespace, key)
 	if err != nil {
 		return err
@@ -732,6 +973,15 @@ func (p *Plugin) kvEditSeg(ctx context.Context, key string, edits []segEdit, ttl
 
 // ---------------------------------------------------------------- store
 
+// hitWrite is a hit of a run on its way to the KV: its entry and the
+// segment keys that get a pointer to it.
+type hitWrite struct {
+	key, id string
+	body    []byte
+	at      int64
+	segs    []string
+}
+
 // storeVerdicts stores the verdicts of a run under scope: the segments that
 // passed and the chunks that hit, in memory at once and in the KV in the
 // background (the hook never waits for the KV). The KV gets, per run, the
@@ -753,31 +1003,25 @@ func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits 
 	}
 	now := p.now()
 	cache := p.cache.Load()
-	type entry struct {
-		key, id string
-		body    []byte
-		at      int64
-		segs    []string
-	}
-	var entries []entry
+	var writes []hitWrite
 	for i := range hits {
 		hit := &hits[i]
 		id, body := encodeHit(hit)
 		if id == "" {
 			continue
 		}
-		e := entry{key: hitKeyOf(scope, id), id: id, body: body, at: hit.At}
-		if !cache.putHit(e.key, hit, len(body), hit.expires(ttl), now) {
+		w := hitWrite{key: hitKeyOf(scope, id), id: id, body: body, at: hit.At}
+		if !cache.putHit(w.key, hit, len(body), hit.expires(ttl), now) {
 			continue
 		}
 		for j, seg := range hit.Keys {
 			key := segKeyHex(scope, seg)
 			cache.editSeg(key, now, ttl, pointTo(id, hit.At))
 			if j >= len(hit.Keys)-kvLookupMax {
-				e.segs = append(e.segs, key)
+				w.segs = append(w.segs, key)
 			}
 		}
-		entries = append(entries, e)
+		writes = append(writes, w)
 	}
 	at := now.Unix()
 	var passKeys []string
@@ -788,32 +1032,55 @@ func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits 
 			passKeys = append(passKeys, key)
 		}
 	}
-	if p.host == nil || len(entries)+len(passKeys) == 0 {
+	if p.host == nil || len(writes)+len(passKeys) == 0 {
 		return
 	}
+	p.stats.kvWriting.Add(1)
 	go func() {
-		kctx, cancel := context.WithTimeout(context.Background(), kvWriteBudget)
-		defer cancel()
-		stored := make([]bool, len(entries))
-		p.kvRun(kctx, len(entries), func(i int) (err error) {
-			stored[i], err = p.kvSetHit(kctx, entries[i].key, entries[i].body, ttl, true)
-			return err
-		})
-		var ops segOps
-		for i, e := range entries {
-			if stored[i] {
-				for _, key := range e.segs {
-					ops.add(key, pointTo(e.id, e.at))
-				}
+		defer p.stats.kvWriting.Add(-1)
+		p.writeVerdicts(ttl, writes, passKeys, at)
+	}()
+}
+
+// writeVerdicts is the KV part of storeVerdicts: the hit entries, then the
+// segment keys (a pointer for every entry that was written, the passes),
+// within kvWriteBudget. The segment keys that now point to a hit are
+// published (verdict.changed, "stored"): the other nodes may hold them in
+// memory without the pointer and read them again.
+func (p *Plugin) writeVerdicts(ttl time.Duration, hits []hitWrite, passKeys []string, at int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), kvWriteBudget)
+	defer cancel()
+	stored := make([]bool, len(hits))
+	p.kvRun(ctx, len(hits), func(i int) (err error) {
+		stored[i], err = p.kvSetRunHit(ctx, hits[i].key, hits[i].body, ttl)
+		return err
+	})
+	var ops segOps
+	for i, w := range hits {
+		if stored[i] {
+			for _, key := range w.segs {
+				ops.add(key, pointTo(w.id, w.at))
 			}
 		}
-		for _, key := range passKeys {
-			ops.add(key, passAt(at))
+	}
+	pointed := len(ops.keys)
+	for _, key := range passKeys {
+		ops.add(key, passAt(at))
+	}
+	ok := p.kvRun(ctx, len(ops.keys), func(i int) error {
+		return p.kvEditRunSeg(ctx, ops.keys[i], ops.edits[ops.keys[i]], ttl)
+	})
+	var changed []string
+	for i, key := range ops.keys[:pointed] {
+		if ok[i] {
+			changed = append(changed, key)
 		}
-		p.kvRun(kctx, len(ops.keys), func(i int) error {
-			return p.kvEditSeg(kctx, ops.keys[i], ops.edits[ops.keys[i]], ttl, true)
-		})
-	}()
+	}
+	if len(changed) > 0 {
+		pctx, cancel := context.WithTimeout(context.Background(), kvSyncBudget)
+		defer cancel()
+		p.publishVerdictChanged(pctx, verdictChanged{Keys: changed, Stored: true})
+	}
 }
 
 // ---------------------------------------------------------------- clear
@@ -887,20 +1154,52 @@ type reviewedHit struct {
 // record whose writes failed in part is not counted; reviewing it again
 // repeats them.
 func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) int {
-	c := p.cfg.Load()
-	ttl := c.cacheTTL
-	if ttl <= 0 || len(ids) == 0 || p.host == nil {
+	ttl := p.cfg.Load().cacheTTL
+	if ttl <= 0 || len(ids) == 0 || p.host == nil || !slices.Contains(reviewStatuses, status) {
 		return 0
+	}
+	hits := p.reviewedHits(ctx, ids, status)
+	if len(hits) == 0 {
+		return 0
+	}
+	keys := reviewedKeys(hits)
+	budget := min(kvSyncBudget*time.Duration(1+len(keys)/kvLookupMax), kvSyncBudgetMax)
+	cache := p.cache.Load()
+	cache.kill(keys, p.now().Add(budget+tombstoneTTL), p.now())
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
+	defer cancel()
+	p.writeReviewed(wctx, hits, status, ttl)
+	synced := 0
+	for _, h := range hits {
+		if !h.failed {
+			synced += h.records
+		}
+	}
+	cache.kill(keys, p.now().Add(tombstoneTTL), p.now())
+	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), kvSyncBudget)
+	defer cancel()
+	p.publishVerdictChanged(pctx, verdictChanged{Keys: keys})
+	return synced
+}
+
+// reviewedHits loads the cached hits the reviewed records name, each once
+// (the last record naming a hit decides what is stored). A record without a
+// usable hit set, or of a flow this node does not run, names none; neither
+// does a confirmed record judged under another fingerprint.
+func (p *Plugin) reviewedHits(ctx context.Context, ids []int64, status string) []*reviewedHit {
+	fail := func(err error) {
+		p.log.Warn("moderation: review cache sync failed", "error", err.Error())
 	}
 	db, err := p.db(ctx)
 	if err != nil {
-		return 0
+		fail(err)
+		return nil
 	}
 	rows, err := db.Query(ctx, `SELECT request_id, flow_id, trace FROM events
 		WHERE id = ANY($1) AND `+suspiciousResult+` AND trace IS NOT NULL ORDER BY id`, ids)
 	if err != nil {
-		p.log.Warn("moderation: review cache sync failed", "error", err.Error())
-		return 0
+		fail(err)
+		return nil
 	}
 	snap := p.snap.Load()
 	at := p.now().Unix()
@@ -923,18 +1222,15 @@ func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) i
 		}
 		ci, scope := tr.Cache, snap.scopeOf(flow)
 		var body []byte
-		if status == "confirmed" {
+		if status == ReviewConfirmed {
 			if ci.FP != flow.fp {
 				return nil // judged under another configuration
 			}
 			// A replayed record ran in its source request.
-			hit := storedHit{RequestID: cmp.Or(ci.SourceRequestID, rid), Keys: ci.Segs, Trace: tr, At: at}
-			hit.Trace.Chunk, hit.Trace.Chunks, hit.Trace.Input, hit.Trace.Cache, hit.Trace.InputMessageDropped = 0, nil, nil, nil, ""
-			b, err := json.Marshal(hit)
-			if err != nil || len(b) > maxHitBytes {
+			hit := newStoredHit(cmp.Or(ci.SourceRequestID, rid), ci.Segs, tr, at)
+			if _, body = encodeHit(&hit); body == nil {
 				return nil
 			}
-			body = b
 		}
 		key := hitKeyOf(scope, ci.Key)
 		h := byKey[key]
@@ -944,7 +1240,7 @@ func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) i
 			hits = append(hits, h)
 		}
 		h.body, h.at, h.records = body, at, h.records+1
-		h.pass = h.pass || (status == "false_positive" && ci.FP == flow.fp)
+		h.pass = h.pass || (status == ReviewFalsePositive && ci.FP == flow.fp)
 		h.segs = h.segs[:0]
 		for _, seg := range ci.Segs {
 			h.segs = append(h.segs, segKeyHex(scope, seg))
@@ -952,57 +1248,76 @@ func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) i
 		return nil
 	})
 	if err != nil {
-		p.log.Warn("moderation: review cache sync failed", "error", err.Error())
+		fail(err)
 	}
-	if len(hits) == 0 {
-		return 0
-	}
-	// Every key once.
+	return hits
+}
+
+// reviewedKeys are the cache keys the review of hits changes, every key
+// once: each hit entry followed by its segment keys.
+func reviewedKeys(hits []*reviewedHit) []string {
 	var keys []string
-	users := map[string][]*reviewedHit{} // segment key -> the hits it belongs to
+	seen := map[string]bool{}
 	for _, h := range hits {
 		keys = append(keys, h.key)
 		for _, seg := range h.segs {
-			if users[seg] == nil {
+			if !seen[seg] {
+				seen[seg] = true
 				keys = append(keys, seg)
 			}
-			users[seg] = append(users[seg], h)
 		}
 	}
-	budget := min(kvSyncBudget*time.Duration(1+len(keys)/kvLookupMax), kvSyncBudgetMax)
-	cache := p.cache.Load()
-	cache.kill(keys, p.now().Add(budget+tombstoneTTL), p.now())
-	kctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
-	defer cancel()
+	return keys
+}
 
-	// The hit entries first: no pointer is written to an entry that is not
-	// there, and no pass beside a hit that could not be deleted.
-	for i, ok := range p.kvRun(kctx, len(hits), func(i int) error {
-		_, err := p.kvSetHit(kctx, hits[i].key, hits[i].body, ttl, false)
-		return err
-	}) {
-		hits[i].failed = !ok
-	}
+// reviewOps are the edits of the segment keys of the reviewed hits whose
+// entry was written (not failed), every key once.
+func reviewOps(hits []*reviewedHit, status string) segOps {
 	var ops segOps
 	for _, h := range hits {
 		if h.failed {
 			continue
 		}
 		for _, seg := range h.segs {
-			switch {
-			case status == "confirmed":
+			switch status {
+			case ReviewConfirmed:
 				ops.add(seg, pointTo(h.id, h.at), dropPass)
-			case status != "false_positive":
+			case ReviewPending:
 				ops.add(seg, unpoint(h.id), dropPass)
-			case h.pass:
-				ops.add(seg, unpoint(h.id), passAt(h.at))
-			default:
-				ops.add(seg, unpoint(h.id))
+			case ReviewFalsePositive:
+				if h.pass {
+					ops.add(seg, unpoint(h.id), passAt(h.at))
+				} else {
+					ops.add(seg, unpoint(h.id))
+				}
 			}
 		}
 	}
-	for i, ok := range p.kvRun(kctx, len(ops.keys), func(i int) error {
-		return p.kvEditSeg(kctx, ops.keys[i], ops.edits[ops.keys[i]], ttl, false)
+	return ops
+}
+
+// writeReviewed writes the reviewed hits to the KV and marks the ones a
+// write failed for (failed). The hit entries come first: no pointer is
+// written to an entry that is not there, and no pass beside a hit that could
+// not be deleted.
+func (p *Plugin) writeReviewed(ctx context.Context, hits []*reviewedHit, status string, ttl time.Duration) {
+	for i, ok := range p.kvRun(ctx, len(hits), func(i int) error {
+		if status == ReviewConfirmed {
+			return p.kvSetHit(ctx, hits[i].key, hits[i].body, ttl)
+		}
+		return p.kvDeleteHit(ctx, hits[i].key)
+	}) {
+		hits[i].failed = !ok
+	}
+	ops := reviewOps(hits, status)
+	users := map[string][]*reviewedHit{} // segment key -> the hits it belongs to
+	for _, h := range hits {
+		for _, seg := range h.segs {
+			users[seg] = append(users[seg], h)
+		}
+	}
+	for i, ok := range p.kvRun(ctx, len(ops.keys), func(i int) error {
+		return p.kvEditSeg(ctx, ops.keys[i], ops.edits[ops.keys[i]], ttl)
 	}) {
 		if !ok {
 			for _, h := range users[ops.keys[i]] {
@@ -1010,42 +1325,36 @@ func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) i
 			}
 		}
 	}
-	synced := 0
-	for _, h := range hits {
-		if !h.failed {
-			synced += h.records
-		}
-	}
-	cache.kill(keys, p.now().Add(tombstoneTTL), p.now())
-	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), kvSyncBudget)
-	defer cancel()
-	p.publishVerdictChanged(pctx, keys)
-	return synced
 }
 
-// verdictChanged is the payload of TopicVerdictChanged.
+// verdictChanged is the payload of TopicVerdictChanged: cache keys another
+// node changed in the KV. Without Stored a review changed them (syncReviewed);
+// with it they are segment keys that got a pointer to a hit a run stored
+// (writeVerdicts).
 type verdictChanged struct {
-	Keys []string `json:"keys"`
+	Keys   []string `json:"keys"`
+	Stored bool     `json:"stored,omitempty"`
 }
 
-// publishVerdictChanged tells the other nodes which keys changed, in
+// publishVerdictChanged tells the other nodes which keys changed (msg), in
 // messages below the broadcast payload limit.
-func (p *Plugin) publishVerdictChanged(ctx context.Context, changed []string) {
+func (p *Plugin) publishVerdictChanged(ctx context.Context, msg verdictChanged) {
 	send := func(keys []string) {
-		payload, _ := json.Marshal(verdictChanged{Keys: keys})
+		payload, _ := json.Marshal(verdictChanged{Keys: keys, Stored: msg.Stored})
 		if err := p.host.Publish(ctx, TopicVerdictChanged, payload); err != nil {
-			p.log.Warn("moderation: broadcast failed; other nodes may keep a reviewed verdict until it expires", "topic", TopicVerdictChanged, "error", err.Error())
+			p.log.Warn("moderation: broadcast failed; other nodes keep the verdicts in their memory until they read the KV again or the entries expire",
+				"topic", TopicVerdictChanged, "stored", msg.Stored, "error", err.Error())
 		}
 	}
 	var keys []string
 	size := 0
-	for _, key := range changed {
+	for _, key := range msg.Keys {
 		if size+len(key) > verdictBroadcastBytes && len(keys) > 0 {
 			send(keys)
 			keys, size = nil, 0
 		}
 		keys = append(keys, key)
-		size += len(key) + 3 // quotes and comma
+		size += len(key) + jsonStringOverhead
 	}
 	if len(keys) > 0 {
 		send(keys)
@@ -1053,15 +1362,23 @@ func (p *Plugin) publishVerdictChanged(ctx context.Context, changed []string) {
 }
 
 // onVerdictChanged drops the keys another node changed from this node's
-// memory and tombstones them for tombstoneTTL: the next reads take them from
-// the KV, and neither a lookup that read the old value before the review
-// nor a run in progress stores it again.
+// memory, so the next reads take them from the KV. Keys a review changed are
+// tombstoned for tombstoneTTL as well: neither a lookup that read the old
+// value before the review nor a run in progress stores it again. Keys that
+// got a pointer to a stored hit are only dropped - a tombstone would keep
+// this node's own runs from writing to a segment many hits share.
 func (p *Plugin) onVerdictChanged(_ context.Context, b pluginsdk.Broadcast) error {
 	var msg verdictChanged
 	if err := json.Unmarshal(b.Payload, &msg); err != nil {
+		p.log.Warn("moderation: unreadable broadcast ignored", "topic", TopicVerdictChanged, "error", err.Error())
 		return nil // nothing to retry
 	}
+	cache := p.cache.Load()
+	if msg.Stored {
+		cache.forget(msg.Keys)
+		return nil
+	}
 	now := p.now()
-	p.cache.Load().kill(msg.Keys, now.Add(tombstoneTTL), now)
+	cache.kill(msg.Keys, now.Add(tombstoneTTL), now)
 	return nil
 }

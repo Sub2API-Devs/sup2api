@@ -6,10 +6,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
+	"io"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -604,11 +609,85 @@ func TestJevAssetsAndOpenAIImages(t *testing.T) {
 		t.Fatalf("redrawn image = %+v %v", cfg, err)
 	}
 	urls := []string{}
-	for _, img := range openAIUsableImages([]Image{{Data: ok}, {URL: "https://x/y.png"}, {Data: "bm90IGFuIGltYWdl"}}) {
-		urls = append(urls, openAIImageURL(img))
+	var from []int
+	for _, img := range openAIUsableImages([]Image{{Data: "bm90IGFuIGltYWdl"}, {Data: ok}, {URL: "https://x/y.png"}}) {
+		urls = append(urls, openAIImageURL(img.Image))
+		from = append(from, img.index)
 	}
-	if len(urls) != 2 || !strings.HasPrefix(urls[0], "data:image/png;base64,") || urls[1] != "https://x/y.png" {
-		t.Fatalf("urls = %v", urls)
+	if len(urls) != 2 || !strings.HasPrefix(urls[0], "data:image/png;base64,") || urls[1] != "https://x/y.png" || !slices.Equal(from, []int{1, 2}) {
+		t.Fatalf("urls = %v, of the images %v", urls, from)
+	}
+	// Every asset names the image it was made of.
+	if !slices.Equal(a[0].from, []int{0}) || !slices.Equal(a[1].from, []int{1}) {
+		t.Fatalf("assets of the images %v and %v", a[0].from, a[1].from)
+	}
+}
+
+// An engine names the images its upstream took in the call the scores come
+// from: after a retry without them, none (OpenAI) or the first (Jev).
+func TestEnginesNameReceivedImages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Questions map[string]json.RawMessage `json:"questions"`
+			Assets    map[string]json.RawMessage `json:"assets"`
+		}
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &req)
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/v1/moderations" && strings.Contains(string(body), "refuse-images") && strings.Contains(string(body), "image_url"):
+			w.WriteHeader(http.StatusBadRequest)
+		case r.URL.Path == "/v1/moderations":
+			scores := map[string]float64{}
+			for _, c := range OpenAICategories {
+				scores[c] = 0.01
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"model": "m", "results": []any{map[string]any{"category_scores": scores}}})
+		case len(req.Assets) > 1:
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+		default:
+			answers := map[string]any{}
+			for c := range req.Questions {
+				answers[c] = map[string]any{"type": "noul", "noul": 0.01}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"model": "m", "answers": answers})
+		}
+	}))
+	defer srv.Close()
+	ctx := context.Background()
+	one, two := pngBase64(t, 300, 300), pngBase64(t, 320, 320)
+	images := []Image{{Data: "bm90IGFuIGltYWdl"}, {MediaType: "image/png", Data: one}, {MediaType: "image/png", Data: two}}
+
+	oai := &liveChannel{Type: ChannelOpenAI, BaseURL: srv.URL, Key: "k", Model: "m"}
+	res, err := openAIAudit(ctx, oai, &Input{Text: "t", Images: images})
+	if err != nil || res.Calls != 1 || res.SentImages != 1 || res.SkippedImages != 2 || len(res.received) != 1 || (res.received[0] != 1 && res.received[0] != 2) {
+		t.Fatalf("openai = %+v (received %v), %v", res, res.received, err)
+	}
+	// The image is refused (400): the scores are of the text alone.
+	res, err = openAIAudit(ctx, oai, &Input{Text: "refuse-images", Images: images})
+	if err != nil || res.Calls != 2 || res.SentImages != 0 || res.SkippedImages != 3 || len(res.received) != 0 {
+		t.Fatalf("openai after the retry without the image = %+v (received %v), %v", res, res.received, err)
+	}
+
+	def, _ := DefaultQuestions(nil)
+	a, err := compileAuditor(1, "j", AuditorTypeSafe, 1, AuditorConfig{}, nil, &def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jev := &liveChannel{Type: ChannelTypeSafe, BaseURL: srv.URL, Key: "k", Model: "m"}
+	// The first image cannot be read; the request with the other two is too
+	// large and goes again with the first of them (and its duplicate).
+	res, err = typesafeAudit(ctx, jev, a.questions, true, &Input{Text: "t", Images: append(images, Image{Data: one})})
+	if err != nil || res.Calls != 2 || res.SentImages != 1 || res.SkippedImages != 3 || !slices.Equal(res.received, []int{1, 3}) {
+		t.Fatalf("jev after the retry with one image = %+v (received %v), %v", res, res.received, err)
+	}
+	res, err = typesafeAudit(ctx, jev, a.questions, true, &Input{Text: "t", Images: images[:2]})
+	if err != nil || res.Calls != 1 || res.SentImages != 1 || res.SkippedImages != 1 || !slices.Equal(res.received, []int{1}) {
+		t.Fatalf("jev = %+v (received %v), %v", res, res.received, err)
+	}
+	// With the image switch off nothing is received.
+	if res, err = typesafeAudit(ctx, jev, a.questions, false, &Input{Text: "t", Images: images}); err != nil || len(res.received) != 0 {
+		t.Fatalf("jev without images = %+v (received %v), %v", res, res.received, err)
 	}
 }
 
@@ -641,31 +720,211 @@ func TestSelfMarker(t *testing.T) {
 
 func TestLRU(t *testing.T) {
 	c := newLRU(2)
-	now := time.Now()
+	now := time.Unix(1_700_000_000, 0)
+	const ttl = time.Minute
+	at := now.Unix()
 	has := func(key string) bool {
-		_, ok := c.get(key, now)
+		_, _, ok := c.seg(key, now)
 		return ok
 	}
-	c.put("a", []byte("1"), now.Add(time.Minute))
-	c.put("b", []byte("2"), now.Add(time.Minute))
-	c.get("a", now)
-	c.put("c", []byte("3"), now.Add(time.Minute))
+	pass := func(key string, at int64) { c.editSeg(key, now, ttl, passAt(at)) }
+	pass("a", at)
+	pass("b", at)
+	c.seg("a", now)
+	pass("c", at)
 	if !has("a") || has("b") || !has("c") || c.len() != 2 {
 		t.Fatal("eviction")
 	}
-	c.put("d", []byte("4"), now)
-	if has("d") {
-		t.Fatal("expired entry returned")
+	// A value written longer ago than the TTL is not kept.
+	pass("d", now.Add(-ttl).Unix())
+	if has("d") || c.len() != 2 {
+		t.Fatal("expired value stored")
 	}
-	// A value is replaced in place, and a deleted key is gone.
-	c.put("a", []byte("5"), now.Add(time.Minute))
-	if v, ok := c.get("a", now); !ok || string(v) != "5" {
-		t.Fatalf("replaced value = %q %v", v, ok)
+	// A value is edited in place, and a forgotten key is gone.
+	id := strings.Repeat("ab", 32)
+	c.editSeg("a", now, ttl, pointTo(id, at))
+	if v, _, ok := c.seg("a", now); !ok || v.pass != at || len(v.hits) != 1 || v.hits[0].id != id {
+		t.Fatalf("edited value = %+v %v", v, ok)
 	}
-	c.del("a")
-	c.del("missing")
+	c.forget([]string{"a", "missing"})
 	if has("a") || c.len() != 1 {
-		t.Fatalf("after delete: len %d", c.len())
+		t.Fatalf("after forget: len %d", c.len())
+	}
+	// A value made on this node counts as read from the KV then; an edit of
+	// this node keeps that time, reading the KV renews it and adds what the
+	// KV holds to what is there.
+	later := now.Add(10 * time.Second)
+	c.editSeg("c", later, ttl, pointTo(id, at))
+	if _, synced, _ := c.seg("c", later); !synced.Equal(now) {
+		t.Fatalf("an edit moved the time of the last read: %v, want %v", synced, now)
+	}
+	got := c.syncSeg("c", later, ttl, parseSeg([]byte("p"+strconv.FormatInt(at+5, 10))))
+	if v, synced, _ := c.seg("c", later); !synced.Equal(later) || got.pass != at+5 || len(got.hits) != 1 || v.pass != at+5 || len(v.hits) != 1 {
+		t.Fatalf("after reading the KV: %+v, read %v, returned %+v", v, synced, got)
+	}
+	// A value is gone the TTL after its newest write.
+	if _, _, ok := c.seg("c", time.Unix(at+5, 0).Add(ttl)); ok || c.len() != 0 {
+		t.Fatal("a value outlived the TTL of its write")
+	}
+}
+
+// The memory cache is bounded by bytes as well as entries.
+func TestLRUByteBudget(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	const ttl = time.Hour
+	at, exp := now.Unix(), now.Add(ttl)
+	c := newLRU(1000)
+	if c.maxBytes != cacheMaxBytes {
+		t.Fatalf("default budget = %d", c.maxBytes)
+	}
+	pass := func(key string) { c.editSeg(key, now, ttl, passAt(at)) }
+	one := int64(1 + len("p1700000000") + cacheEntryOverhead) // a one-letter key with a pass
+	c.maxBytes = 3 * one
+	for _, k := range []string{"a", "b", "c"} {
+		pass(k)
+	}
+	if c.len() != 3 || c.size() != 3*one {
+		t.Fatalf("%d entries, %d bytes", c.len(), c.size())
+	}
+	c.seg("a", now)
+	pass("d") // over the budget: the least recently used goes
+	if _, _, ok := c.seg("b", now); ok || c.len() != 3 || c.size() != 3*one {
+		t.Fatalf("after the fourth: %d entries, %d bytes", c.len(), c.size())
+	}
+	// A value that grows is charged its new size.
+	id := strings.Repeat("ab", 32)
+	pointer := int64(len(" h" + id + "@1700000000"))
+	c.editSeg("a", now, ttl, pointTo(id, at))
+	if _, _, ok := c.seg("c", now); ok || c.len() != 2 || c.size() != 2*one+pointer {
+		t.Fatalf("after growing a: %d entries, %d bytes", c.len(), c.size())
+	}
+	// A decoded hit is charged hitDecodedFactor times its JSON; forgetting
+	// and expiring free.
+	hit := &storedHit{Keys: []string{"k"}}
+	c.maxBytes = 1 << 20
+	if !c.putHit("h", hit, 1000, exp, now) || c.getHit("h", now) != hit || c.size() != 2*one+pointer+1+hitDecodedFactor*1000+cacheEntryOverhead {
+		t.Fatalf("with a hit: %d bytes", c.size())
+	}
+	if _, _, ok := c.seg("h", now); ok || c.getHit("a", now) != nil {
+		t.Fatal("a hit read as a segment value, or a segment value as a hit")
+	}
+	c.forget([]string{"h"})
+	c.seg("a", exp)
+	c.seg("d", exp)
+	if c.len() != 0 || c.size() != 0 {
+		t.Fatalf("emptied: %d entries, %d bytes", c.len(), c.size())
+	}
+	// An entry larger than the whole budget is not kept.
+	c.maxBytes = one
+	c.putHit("big", hit, int(one), exp, now)
+	if c.len() != 0 || c.size() != 0 {
+		t.Fatalf("an entry beyond the budget: %d entries, %d bytes", c.len(), c.size())
+	}
+}
+
+// A key a review changed is tombstoned for a while - nothing a lookup read
+// or a run decided before the review is stored under it. The tombstones are
+// charged to the byte budget and go when their time is over, with the next
+// look at them and without another review.
+func TestLRUTombstone(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	const ttl = time.Hour
+	at, exp := now.Unix(), now.Add(ttl)
+	stone := int64(1 + tombstoneOverhead) // of a one-letter key
+	c := newLRU(10)
+	c.editSeg("s", now, ttl, passAt(at))
+	c.putHit("h", &storedHit{}, 10, exp, now)
+	c.kill([]string{"s", "h"}, now.Add(time.Second), now)
+	if c.len() != 0 || c.size() != 2*stone || !c.tombstoned("s", now) || c.tombstoned("other", now) {
+		t.Fatalf("killed: %d entries, %d bytes", c.len(), c.size())
+	}
+	c.editSeg("s", now, ttl, passAt(at))
+	if c.putHit("h", &storedHit{}, 10, exp, now) || c.len() != 0 {
+		t.Fatal("a tombstoned key was stored")
+	}
+	// What the KV holds for a tombstoned key decides the lookup that read it
+	// and stays out of memory.
+	if got := c.syncSeg("s", now, ttl, parseSeg([]byte("p1700000000"))); got.pass != at || c.len() != 0 {
+		t.Fatalf("a tombstoned key read from the KV: %+v, %d entries", got, c.len())
+	}
+	// Killed again, a key is charged once.
+	c.kill([]string{"s"}, now.Add(time.Second), now)
+	if c.size() != 2*stone {
+		t.Fatalf("a key killed twice: %d bytes", c.size())
+	}
+	later := now.Add(time.Second)
+	if c.tombstoned("s", later) || len(c.dead) != 0 || c.size() != 0 {
+		t.Fatalf("tombstones after their time: %v, %d bytes", c.dead, c.size())
+	}
+	c.editSeg("s", later, ttl, passAt(at))
+	if !c.putHit("h", &storedHit{}, 10, exp, later) || c.len() != 2 {
+		t.Fatal("a key could not be stored after its tombstone")
+	}
+	// Each tombstone goes at its own time.
+	c.kill([]string{"x"}, later.Add(time.Second), later)
+	c.kill([]string{"y"}, later.Add(3*time.Second), later)
+	if !c.tombstoned("y", later.Add(2*time.Second)) || len(c.dead) != 1 {
+		t.Fatalf("tombstones two seconds on = %v", c.dead)
+	}
+	if c.tombstoned("y", later.Add(3*time.Second)) || len(c.dead) != 0 {
+		t.Fatalf("tombstones three seconds on = %v", c.dead)
+	}
+	// Tombstones take room in the byte budget: entries make way for them.
+	c.maxBytes = c.size() + stone
+	c.kill([]string{"p", "q"}, exp, later)
+	if c.len() != 1 || c.size() > c.maxBytes {
+		t.Fatalf("with two more tombstones: %d entries, %d of %d bytes", c.len(), c.size(), c.maxBytes)
+	}
+}
+
+// A segment key holds a pass and the newest pointers, each with the time of
+// its write.
+func TestSegValue(t *testing.T) {
+	id := func(i int) string { return fmt.Sprintf("%064x", i) }
+	var v segValue
+	passAt(100)(&v)
+	pointTo(id(1), 90)(&v)
+	pointTo(id(2), 120)(&v)
+	passAt(80)(&v) // an older pass does not replace a newer one
+	if got, want := string(v.encode()), fmt.Sprintf("p100 h%s@120 h%s@90", id(2), id(1)); got != want {
+		t.Fatalf("value = %q, want %q", got, want)
+	}
+	if back := parseSeg(v.encode()); back.pass != 100 || len(back.hits) != 2 || back.hits[0] != (hitRef{id(2), 120}) || back.hits[1] != (hitRef{id(1), 90}) {
+		t.Fatalf("read back = %+v", back)
+	}
+	// A pass leaves the pointers alone; dropping a pointer leaves the rest.
+	unpoint(id(2))(&v)
+	dropPass(&v)
+	if string(v.encode()) != fmt.Sprintf("h%s@90", id(1)) || v.empty() {
+		t.Fatalf("after the drops = %q", v.encode())
+	}
+	// The newest maxSegHits pointers are kept; a pointer written again moves up.
+	v = segValue{}
+	for i := 1; i <= maxSegHits+3; i++ {
+		pointTo(id(i), int64(1000+i))(&v)
+	}
+	pointTo(id(4), 2000)(&v)
+	if len(v.hits) != maxSegHits || v.hits[0].id != id(4) || v.hits[1].id != id(maxSegHits+3) || v.hits[maxSegHits-1].id != id(5) {
+		t.Fatalf("kept pointers = %+v", v.hits)
+	}
+	// Merging keeps the newer of each part.
+	a, b := parseSeg([]byte("p50 h"+id(1)+"@60")), parseSeg([]byte("p70 h"+id(1)+"@40 h"+id(2)+"@55"))
+	a.merge(b)
+	if string(a.encode()) != fmt.Sprintf("p70 h%s@60 h%s@55", id(1), id(2)) {
+		t.Fatalf("merged = %q", a.encode())
+	}
+	// Every part expires on its own, the TTL after its write.
+	now := time.Unix(1000, 0)
+	a.prune(now, 942*time.Second) // kept: written after 58
+	if string(a.encode()) != fmt.Sprintf("p70 h%s@60", id(1)) || !a.expires(942*time.Second).Equal(time.Unix(70+942, 0)) {
+		t.Fatalf("pruned = %q, expires %v", a.encode(), a.expires(942*time.Second))
+	}
+	// Values without a write time (the first builds of 0.8.0) and anything
+	// else that does not read are unknown.
+	for _, raw := range []string{"", "p", "h" + id(1), "px", "h" + id(1) + "@", "hzz@5", "x9", "p-4"} {
+		if got := parseSeg([]byte(raw)); !got.empty() {
+			t.Errorf("%q read as %+v", raw, got)
+		}
 	}
 }
 
@@ -771,5 +1030,86 @@ func TestFallbackAndFailedStageViews(t *testing.T) {
 	out, _ := json.Marshal(tc.recordOf(&toolRow{Trace: raw}, 10, false))
 	if strings.Contains(string(raw), `"failed"`) || strings.Contains(string(raw), `"fallback"`) || strings.Contains(string(out), "stage_failed") {
 		t.Fatalf("trace = %s, tool record = %s", raw, out)
+	}
+}
+
+// A trace holds only the stages that ran, so the deciding stage is an index
+// in it and every stage carries its number in the spec.
+func TestFallbackDeciderIndexesTheTrace(t *testing.T) {
+	pass, fail := Outcome{}, Outcome{Err: fmt.Errorf("boom")}
+	one := func(id int64) Stage { return Stage{Auditors: []int64{id}, Combine: CombineAny} }
+	spec := &Spec{Stages: []Stage{one(1), one(2), {Auditors: []int64{3}, Combine: CombineAny, Fallback: true}}}
+	numbers := func(tr Trace) []int {
+		var out []int
+		for _, st := range tr.Stages {
+			out = append(out, st.Stage)
+		}
+		return out
+	}
+
+	// Stage 1 passes, so stage 2 never runs; the fallback stage (stage 3 of
+	// the spec) hits as the second stage of the trace.
+	var log auditLog
+	tr := runFlow(context.Background(), spec, 5*time.Second, log.wrap(scripted(map[int64]Outcome{1: pass, 2: pass, 3: hit("a", 0.95)}, nil)))
+	if tr.Final != Hit || tr.Decider != 1 || stagesOf(tr) != "pass hit+fallback" || !slices.Equal(numbers(tr), []int{1, 3}) ||
+		!slices.Equal(log.called(), []int64{1, 3}) {
+		t.Fatalf("trace = %+v, called %v", tr, log.called())
+	}
+	want := []HitCategory{{Category: "a", Score: 0.95, Threshold: 0.5, Stage: 3, Auditor: 3}}
+	if got := tr.HitCategories(); !slices.Equal(got, want) {
+		t.Fatalf("hit categories = %+v, want %+v", got, want)
+	}
+	var rec eventRec
+	rec.fillFromTrace(tr, true)
+	if rec.Result != ResultBlock || rec.HighestCategory != "a" || rec.Severity != "high" {
+		t.Fatalf("record = %+v", rec)
+	}
+	// The stored trace carries the numbers and reads back the same.
+	if !strings.Contains(string(rec.Trace), `"stage":3`) || !strings.Contains(string(rec.Trace), `"decider":1`) {
+		t.Fatalf("stored trace = %s", rec.Trace)
+	}
+	var back Trace
+	if err := json.Unmarshal(rec.Trace, &back); err != nil || !slices.Equal(back.HitCategories(), want) {
+		t.Fatalf("read back: %+v %v", back.HitCategories(), err)
+	}
+
+	// Stage 1 hits and stage 2 fails: the hit stands, the fallback stage
+	// does not run, and the hits are stage 1's.
+	log = auditLog{}
+	tr = runFlow(context.Background(), spec, 5*time.Second, log.wrap(scripted(map[int64]Outcome{1: hit("b", 0.8), 2: fail, 3: hit("a", 1)}, nil)))
+	if tr.Final != Hit || tr.Decider != 0 || !tr.Errored || stagesOf(tr) != "hit failed" || !slices.Equal(numbers(tr), []int{1, 2}) ||
+		!slices.Equal(log.called(), []int64{1, 2}) {
+		t.Fatalf("trace = %+v, called %v", tr, log.called())
+	}
+	if got := tr.HitCategories(); len(got) != 1 || got[0].Stage != 1 || got[0].Category != "b" {
+		t.Fatalf("hit categories = %+v", got)
+	}
+	// When every stage of the chain ran (and failed), the fallback stage is
+	// the third stage of the trace as well.
+	tr = runFlow(context.Background(), spec, 5*time.Second, scripted(map[int64]Outcome{1: fail, 2: fail, 3: hit("a", 1)}, nil))
+	if tr.Final != Hit || tr.Decider != 2 || !slices.Equal(numbers(tr), []int{1, 2, 3}) || tr.HitCategories()[0].Stage != 3 {
+		t.Fatalf("trace = %+v", tr)
+	}
+
+	// Traces written before stages had a number: the position is the number.
+	old := Trace{Final: Hit, Decider: 1, Stages: []StageTrace{{Result: Hit, Outcomes: []Outcome{hit("x", 0.6)}}, {Result: Hit, Outcomes: []Outcome{hit("y", 0.7)}}}}
+	if got := old.HitCategories(); len(got) != 1 || got[0].Stage != 2 || got[0].Category != "y" {
+		t.Fatalf("old trace: %+v", got)
+	}
+	// A decider outside the stages (a trace of the first 0.8.0 builds, whose
+	// fallback decider was the spec index) never panics: the last stage
+	// that hit is shown.
+	broken := Trace{Final: Hit, Decider: 2, Stages: []StageTrace{{Result: Pass, Stage: 1}, {Result: Hit, Stage: 3, Fallback: true, Outcomes: []Outcome{hit("a", 0.95)}}}}
+	if got := broken.HitCategories(); len(got) != 1 || got[0].Stage != 3 {
+		t.Fatalf("out-of-range decider: %+v", got)
+	}
+	rec = eventRec{}
+	rec.fillFromTrace(broken, false)
+	if rec.Result != ResultHit || rec.HighestCategory != "a" {
+		t.Fatalf("out-of-range decider record = %+v", rec)
+	}
+	none := Trace{Final: Hit, Decider: 7}
+	if got := none.HitCategories(); got != nil {
+		t.Fatalf("decider without stages: %+v", got)
 	}
 }

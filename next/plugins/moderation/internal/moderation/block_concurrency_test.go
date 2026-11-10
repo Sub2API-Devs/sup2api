@@ -18,10 +18,9 @@ func TestUnblockCannotBeOvertakenByAnOldAutoBan(t *testing.T) {
 	llm := mockLLM(t)
 	settings := map[string]any{"ban_threshold": 2, "ban_window_hours": 1, "ban_duration_hours": 0}
 	p, _, fh := startDB(t, llm, settings)
-	p2 := New()
 	fh2 := pluginsdktest.NewFakeHost()
 	fh2.SetDSN(fh.DSNValue, fh.SchemaValue)
-	pluginsdktest.Start(t, p2, pluginsdktest.Options{Host: fh2, SDK: sdkOpts(), Config: settingsMap(llm.srv.URL, ModeEnforce, settings)})
+	p2, _ := startNode(t, fh2, settingsMap(llm.srv.URL, ModeEnforce, settings))
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	db, err := p.db(ctx)

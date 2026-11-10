@@ -282,16 +282,8 @@ func TestInputMessageKeptPerSetting(t *testing.T) {
 	oai := auditors[0].ID
 	jevCh := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelTypeSafe, "name": "jev", "base_url": mod.srv.URL, "api_key": "key-jev"}))
 	jev := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": "jev", "type": AuditorTypeSafe, "channel_id": jevCh.ID})).ID
-	publish := func(name string, group int64, stages ...Stage) {
-		t.Helper()
-		spec := Spec{SampleRate: 100, Stages: stages}
-		spec.ModelFilter.Type = FilterAll
-		f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": name, "draft": spec}))
-		decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/groups", f.ID), nil, map[string]any{"groups": []int64{group}}))
-		decodeData[FlowView](t, h.Do("POST", fmt.Sprintf("/flows/%d/publish", f.ID), nil, map[string]any{"expected_version": 0}))
-	}
-	publish("two stages", 10, Stage{Auditors: []int64{oai}, Combine: CombineAny}, Stage{Auditors: []int64{jev}, Combine: CombineAny})
-	publish("fallback", 11, Stage{Auditors: []int64{oai}, Combine: CombineAny}, Stage{Auditors: []int64{jev}, Combine: CombineAny, Fallback: true})
+	publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, oai), stageOf(false, jev)}}, 10) // two stages
+	publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, oai), stageOf(true, jev)}}, 11)  // a fallback stage
 	db, _ := p.db(context.Background())
 	const on, off = true, false
 	for i, tc := range []struct {

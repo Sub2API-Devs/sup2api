@@ -261,6 +261,31 @@ type CacheInfo struct {
 	FP              string   `json:"fp,omitempty"`
 }
 
+// ownRun is the run of the trace's chunk alone, without what belongs to the
+// request it was part of: the form a cached hit keeps (storedHit).
+func (t Trace) ownRun() Trace {
+	t.Chunk, t.Chunks, t.Input, t.Cache, t.InputMessageDropped = 0, nil, nil, nil, ""
+	return t
+}
+
+// receivedImages are the images of the run's input (indexes in Input.Images)
+// that an auditor received in a call that judged (EngineResult.received): the
+// images the run decided something about.
+func (t *Trace) receivedImages() map[int]bool {
+	out := map[int]bool{}
+	for _, st := range t.Stages {
+		for _, o := range st.Outcomes {
+			if o.Err != nil || o.Skipped {
+				continue
+			}
+			for _, i := range o.received {
+				out[i] = true
+			}
+		}
+	}
+	return out
+}
+
 // runs returns the trace's own run and the other chunks' runs.
 func (t *Trace) runs() []*Trace {
 	out := []*Trace{t}

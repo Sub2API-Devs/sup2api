@@ -433,3 +433,45 @@ func TestAccountBindingsModerateEachAttempt(t *testing.T) {
 		t.Fatal("account bindings reported active without the grant")
 	}
 }
+
+// GET /bindings reports a binding as inactive when this node does not run
+// its flow, also for a published and enabled flow whose spec it cannot read.
+func TestBindingInactiveFollowsSnapshot(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	inactive := func() bool {
+		t.Helper()
+		v := decodeData[BindingsView](t, h.Do("GET", "/bindings", nil, nil))
+		if len(v.Bindings) != 1 || v.Bindings[0].FlowID != flow || v.Bindings[0].GroupID != 9 {
+			t.Fatalf("bindings = %+v", v.Bindings)
+		}
+		return v.Bindings[0].Inactive
+	}
+	if inactive() {
+		t.Fatal("binding to a running flow is inactive")
+	}
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual words")); !denied(r) {
+		t.Fatalf("not moderated: %+v", r)
+	}
+	// The published spec has a field this version does not know: the flow
+	// is dropped from the snapshot (still published and enabled in the
+	// table), the request is not moderated and the binding says so.
+	ctx := context.Background()
+	db, _ := p.db(ctx)
+	if _, err := db.Exec(ctx, `UPDATE flows SET published = published || '{"from_a_later_version": 1}'::jsonb WHERE id = $1`, flow); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.reloadConfig(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if p.snap.Load().flows[flow] != nil {
+		t.Fatal("the flow with an unreadable spec is still in the snapshot")
+	}
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual words again")); denied(r) {
+		t.Fatalf("moderated by a flow that is not running: %+v", r)
+	}
+	if !inactive() {
+		t.Fatal("binding to a flow the node does not run is reported active")
+	}
+}

@@ -5136,23 +5136,25 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
      - 片段键 `s:{范围}:{片段哈希}`，值是以空格分隔的若干项：`p<unix 秒>`（这个片段通过，数字是写入时间）和 `h<命中 id>@<unix 秒>`（指向一个命中条目）。一个片段最多保留 8 个指针（最新的）。**写入通过不抹掉指针**。
      - 命中键 `h:{范围}:{命中 id}`，值是 JSON `{r: 来源请求 id, k: [片段哈希…], t: 那一块的 trace, at: 写入时间}`；命中 id 是集合里片段哈希排序后的 sha256。超过 60 KiB 的命中不存（记录照写）。
      - 有效期 `verdict_cache_days` 天，从写入时算，**不续期**：值里带写入时间，读到的任何一项超过期限就不用，从 KV 读进内存时也按原写入时间算。旧设置 `cache_ttl_seconds = 0` 且没保存过新键时缓存关闭（72.10）。
-   - **查**：先内存；pre 时内存里没有的片段再查 KV，每个请求最多 64 个片段（取最靠后的）、8 路并发、连同命中条目总共 200 ms。post 的请求在钩子里只看内存，工作协程出队执行前再带 KV 查一次。
+   - **查**：先内存；pre 时内存里没有的片段再查 KV，每个请求最多 64 个片段（取最靠后的）、8 路并发、连同命中条目总共 200 ms。post 的请求在钩子里只看内存，工作协程出队执行前再带 KV 查一次。内存里的片段值自上次从 KV 读出（或在本节点写入）起只用 5 分钟（`verdictRecheck`）：到期后，带 KV 的查询先把它重读一遍并入内存再判断（每次查询另计最多 64 个，最久没读的在前，同一个 200 ms）；只看内存的查询（post 的钩子）照用内存里的值，同时在后台重读，下一个请求用上读回来的值。
      1. **先找命中**：按请求顺序看各片段的指针，第一个"命中条目存在、未过期、且它的片段全部在本请求里"的命中决定这个请求 → 重放（见下）。这一步在看"通过"之前：命中集合的片段即使各自在别的请求里通过过，集合完整出现时仍然是命中。
      2. 没有可重放的命中时，带未过期"通过"的片段不再送审。全部片段都已通过 → 放行，记为 `cache_skipped`（只计数，不写记录），note `moderation: pass (cached)`；部分通过时只审其余片段。
-     - KV 出错或超时：相关片段按未知处理，照常送审，进程内的计数器 `kvErrors` 加一（这个计数器从 0.7.x 起就只在进程内累加，健康指标和 `/status` 都没有输出它，目前看不到）。缓存的任何故障都不会放行未审的内容。
+     - KV 出错或超时：没读到的片段按未知处理（到期重读没读到的沿用内存里的值），照常送审，计数器 `kvErrors` 加一，在 `GET /status` 的 `runtime.kv_errors` 和健康指标 `kv_errors` 里输出（本节点启动以来的累计值；一批 KV 调用里有失败或被预算截断算一次）。缓存的故障不会放行从未审过的内容。
    - **写**：每次运行结束时写一次（pre 的共享运行写一次，不论有几个请求在等它、等的请求是否已离开；post 由工作协程写），每个块按它自己那次运行：
 
      | 该块的运行 | 写入 |
      |---|---|
      | 块里有 URL 图片（同一地址后面的内容可以变），或运行出过错（`errored`，不论最终是命中还是通过） | 不写 |
      | 最终命中 | 写命中条目，并在该块实际送审的每个片段的键里加上指针 |
-     | 通过（含被推翻的通过，72.14），且没有任何一级整级跳过 | 这一块给它的每个片段记一次"通过" |
+     | 通过（含被推翻的通过，72.14），且没有任何一级整级跳过 | 这一块给它的每个片段记一次"通过"；没有任何审核器实际收到的图片除外 |
      | 其他（通过，但有一级整级被跳过） | 不写 |
 
      - 出过错的命中不写，是因为那个命中可能只是后面的级失败后沿用的初审结果，下次应当重审。
      - 片段记为"通过"的条件：包含它的每一块（含抽样没跑的块）都记了通过。一级里个别审核器跳过、其他审核器判了，这一级算判过。
      - 命中集合只列实际送审的片段：流程里没有收图片的审核器时，图片不送审，也不进命中集合（它们随块记"通过"）。
-     - 内存立即写，KV 在后台写（预算 2 秒；钩子不等 KV），其他节点可能晚几十毫秒看到。写的范围用结算时的清空纪元。
+     - **没有审核器实际收到的图片不缓存**：流程里有收图片的审核器，但这张图这次没有发给任何一个做出判断的审核器（Jev：没等到重画名额或重画时间预算、解码内存不够、太大、解不了、超出请求的 token 或体积预算、请求过大重试时只带第一张；OpenAI：每次调用只随机带一张，没选中的其余图片），它既不记"通过"也不进命中集合；同一块的文字照常缓存。带这张图的下一个请求会再送它一次（通常只送它）。没收到的原因一直存在的图片永远不进缓存。
+     - 内存立即写，KV 在后台写（预算 2 秒；钩子不等 KV）。写的范围用结算时的清空纪元。
+     - **其他节点何时看到一个新命中**：内存里没有这些片段的节点，KV 写完后的下一次查询就读到。内存里已有这些片段"通过"的节点：写入节点在 KV 写完后广播 `verdict.changed`（72.8"多节点同步"），收到即从内存里删掉这些键、下次从 KV 读；广播丢失时，靠上面的 5 分钟重读，**最迟在指针进入 KV 5 分钟后生效**（KV 可读的前提下；post 时机下再晚一个请求；一个请求里到期的值超过 64 个时多出的部分顺延到下一次查询；本节点自己写入而当时没能读到 KV 的片段，5 分钟从写入时算）。
    - **重放**（缓存命中，照 new-api `replayHit`）：不调用审核渠道，不占并发名额。
      - 写一条记录：trace 是存下的那次运行的 trace，`latency_ms = 0`，`trace.cache = {hit: true, source_request_id, key, segs, fp}`，新列 `replayed = true`（72.9）；pre 的结果是 `block`，post 是 `hit`；`text` 和 `input_message`（`store_text` 开）是命中集合那些片段的内容。
      - pre：拒绝（`block_status`、`moderation_blocked`、`block_message`）。post：请求放行。
@@ -5206,6 +5208,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
     - System One 的规格：每边 280–1568 px、总像素 78,400–2,458,624、单张解码后 ≤16 MiB。内联的 PNG / JPEG 在规格内 → 原样发送，只读文件头，不解码像素。
     - 其他内联的 PNG、JPEG、GIF（取第一帧）、WebP → **重画后发送**：等比缩小到长边不超过 1568 px（从不放大），居中放到白色画布上、画布每边至少 280 px，透明部分铺白；结果是 PNG，超过 2 MiB 时改用 JPEG（质量 85）。0.7.2 及以前这些图片一律跳过。
     - 不送审（计入 `skipped_images`）：URL 图片（不下载）；解码后超过 16 MiB；无法识别的格式；文件头声称超过 1200 万像素；按文件头估算的解码内存超过 112 MiB（例如不做色度抽样的渐进式 JPEG 约 780 万像素以上；16 位彩色 PNG 接近 1200 万像素时只能单独重画）。
+    - 没送审的图片（上面这些，以及没等到重画名额、超出重画时间预算或请求预算的）**不进判定缓存**（72.4）。解码器在某张图上 panic 时只跳过这张图，`runtime.redraw_panics` 加一并记一条不含图片内容的 error 日志。
     - 重画的限制：同时最多 2 张，所有正在重画的图片的估算解码内存合计不超过 112 MiB（放不下的等待）；一次调用里重画最多用这次调用剩余时间的一半、且不超过 5 秒，到点时没画好的图和它后面需要重画的图都跳过。**文字总是送审**，不会因为图片慢而审不成。new-api 的上限是 5000 万像素，没有内存和时间这两项限制；插件进程内存上限是 512 MB（72.2 第 3 条）。
     - 规格化之后内容相同的图片只发一次；按顺序装，装不下预算的图片及其后的不发。
   - 上游返回 413 或 `max_tokens_exceeded` 且带了多张图时，只保留第一张图重试一次。
@@ -5268,7 +5271,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **绑定**：`flow_groups(group_id PK, flow_id)`，一个分组只能属于一个流程，`group_id=0` 是默认流程。0.7.0 起 `flow_id=0` 表示该分组不审核（免审），另有账号绑定表 `flow_accounts`，见 72.17。**0.8.0**：指向已停用、未发布或已删除流程的绑定视为不存在，请求按更宽的绑定审核（72.5 第 3 步、72.17）；免审（flow 0）不回落。
 
-**多节点同步**：保存或发布后广播 `config.changed`，各节点重新加载快照；另外每 5 秒检查一次版本号兜底（`refreshEvery`；此前这里写的 30 秒与代码不符）。0.8.0 另有广播 `verdict.changed`（人工处理后让其他节点丢掉内存里的缓存键，72.9）。
+**多节点同步**：保存或发布后广播 `config.changed`，各节点重新加载快照；另外每 5 秒检查一次版本号兜底（`refreshEvery`；此前这里写的 30 秒与代码不符）。0.8.0 另有广播 `verdict.changed`，负载 `{"keys": [缓存键…], "stored"?: true}`（每条消息的键合计不超过 48 KiB）：不带 `stored` 的是人工处理后发的，其他节点删掉内存里的这些键并立 4 秒墓碑（72.9）；带 `stored: true` 的是一次运行把命中写进 KV 后发的，`keys` 是得到指针的片段键，其他节点只删键、下次从 KV 读（72.4）。
 
 ### 72.8 观察名单与封禁
 
@@ -5416,7 +5419,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议。`seen` 把新命中清零。0.8.0：列表每行带 `allowlisted`、`blocklisted`；把白名单用户设为 `enforce` 返回 400（`level` / `allowlisted`，72.8） |
 | POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`observe` 按 post 执行，`enforce` 按 pre 执行，`none`（或不带）是没有名单条目的用户，按默认级别决定（0.8.0；此前固定为 post）；返回时机和"是否会被拒绝" |
 | POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认。0.8.0：new-api 的 `llm` 审核器导入为 `llm_questions` |
-| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes` |
+| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（KV 调用失败的累计次数）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）；后两个是本节点启动以来的计数 |
 | POST `/blocks`（改） | manage | 0.8.0：白名单用户不能封禁，字段错误码 `allowlisted`（取代 `exempt`） |
 | POST `/test`（改） | manage | 请求体 `{text, images?, flow_id?}`：不带 flow_id 时按默认流程执行，返回每级的 trace |
 
@@ -5741,11 +5744,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - **0.8.0（2026-11-10，与 new-api 对齐）**：
   - 测试（都在 `internal/moderation/`，界面在 `ui/native/src/`）：
-    - 流程引擎：`unit_test.go` 的 `TestRunFlow`（失败级、总超时保留命中、分母、补审级、初审命中）、`TestSpecValidate`、`TestRecordResultOfTrace`，`extract_test.go` 的 `TestCombineTraces`；`hook_test.go` `TestTwoStageFlowCacheAndFailOpen`（复核出错 → 命中并拒绝；所有级出错 → 放行、记 error）；`review_fixes_test.go` `TestFallbackDeciderIndexesTheTrace`、`TestFallbackStageHitEndToEnd`、`TestPostWorkerSurvivesPanic`。
+    - 流程引擎：`unit_test.go` 的 `TestRunFlow`（失败级、总超时保留命中、分母、补审级、初审命中）、`TestSpecValidate`、`TestRecordResultOfTrace`，`extract_test.go` 的 `TestCombineTraces`；`hook_test.go` `TestTwoStageFlowCacheAndFailOpen`（复核出错 → 命中并拒绝；所有级出错 → 放行、记 error）；`unit_test.go` `TestFallbackDeciderIndexesTheTrace`；`hook_test.go` `TestFallbackStageHitEndToEnd`、`TestPostWorkerSurvivesPanic`、`TestPostPanicIsCountedOnce`、`TestPreRunSurvivesPanic`（先审的共享运行或后审任务 panic 时进程不退出，按出错计一次）。
     - 题表式 LLM：`engine_llmq_test.go`（请求体、边界、初审命中、自身请求标记、读结果、只审文字、在流程里）。
-    - Jev：`jev_image_test.go`（长上下文请求头、原样发送、缩小、补白、透明、GIF 和 WebP、JPEG 回退、各种跳过、去重与预算、名额、解码内存估算、旧题集版本号）、`review_image_test.go`（重画不占用文字的审核时间）。
-    - 判定缓存：`verdict_cache_test.go`（命中并重放、整个集合才重放、重放不是违规、post 时机、不缓存的情况、范围与指纹、清空、人工处理同步、广播、KV 故障、命中条目上限）、`verdict_cache_fixes_test.go`（命中不被片段的通过覆盖、片段值格式、人工处理去重与 KV 失败、指纹已变的误报、写入时间、清空前入队的任务、内存字节上限、共享运行只结算一次、`judgingVersion`、墓碑）。
-    - 时机与名单：`lists_test.go`（`TestPreModerated` 的全部组合、白名单是观察而不是不审、自动条目用默认级别、拦截级计数、手动设拦截级被拒、AI 受名单限制、繁忙、旧键读作白名单、名单转换、模拟）；`review_fixes_test.go`（转换窗口、取锁顺序、名单项格式、`blocking_with_new`、告警状态的命名空间、`inactive`）。
+    - Jev：`jev_image_test.go`（长上下文请求头、原样发送、缩小、补白、透明、GIF 和 WebP、JPEG 回退、各种跳过、去重与预算、名额、解码内存估算、旧题集版本号、重画不占用文字的审核时间、等名额和等内存时 ctx 结束、解码器 panic）。
+    - 判定缓存：`verdict_cache_test.go`（命中并重放、整个集合才重放、重放不是违规、post 时机、不缓存的情况、范围与指纹、清空、人工处理同步、广播、KV 故障、命中条目上限）；同一文件里还有：命中不被片段的通过覆盖、人工处理去重与 KV 失败、指纹已变的误报、写入时间、清空前入队的任务、`judgingVersion`、晚到的后台写不撤销人工处理（可阻塞的假 KV）、没收到的图片不缓存、新命中传到其他节点（广播与 5 分钟重读）、同键修改串行、人工处理先立墓碑并遵守预算。片段值格式、内存字节上限、墓碑在 `unit_test.go`；共享运行只结算一次在 `hook_test.go`。
+    - 时机与名单：`lists_test.go`（`TestPreModerated` 的全部组合、白名单是观察而不是不审、自动条目用默认级别、拦截级计数、手动设拦截级被拒、AI 受名单限制、繁忙、旧键读作白名单、名单转换、模拟）、名单项格式）；`parity_test.go`（一次性转换、转换窗口、取锁顺序）；`stats_api_test.go`（`blocking_with_new`、告警状态的命名空间）；`account_binding_test.go`（`inactive`）。
     - 原始消息：`hook06_test.go` `TestInputMessageKeptPerSetting`；绑定回落：`account_binding_test.go`（72.17）。
     - 界面（vitest）：`flowOps.spec.ts`、`bindingOps.spec.ts`、`settingsForm.spec.ts`、`messages.spec.ts`、`fixes.spec.ts`。
   - 部署：不需要新核心版本，**不需要管理员重新批准**（72.3）；有一个新迁移 `0010`（72.10）。升级前的核对、滚动升级期间的禁忌、升级后的核对和回滚步骤见 `docs/RELEASE-MODERATION-0.8.0.md`。要点：
@@ -5805,7 +5808,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **发布**：先发含 §85 的核心（`hostCompat >=0.1.258`，`check.AttemptHookFirstCore`），再发插件 0.7.0。
 
-测试：`account_binding_test.go`（`TestFlowForAccount` 与界面的 `bindingOps.spec.ts` 用同一组用例；还有 `TestAttemptRuns`、`TestAttemptHookGranted`、`TestUpgradeKeepsGroupBindings`、`TestAccountBindingsModerateEachAttempt`，0.8.0 加 `TestInactiveAccountBindingDoesNotDeferToAttempt` 和 `review_fixes_test.go` 的 `TestBindingInactiveFollowsSnapshot`）、`manifest_test.go`。
+测试：`account_binding_test.go`（`TestFlowForAccount` 与界面的 `bindingOps.spec.ts` 用同一组用例；还有 `TestAttemptRuns`、`TestAttemptHookGranted`、`TestUpgradeKeepsGroupBindings`、`TestAccountBindingsModerateEachAttempt`，0.8.0 加 `TestInactiveAccountBindingDoesNotDeferToAttempt` 和 `TestBindingInactiveFollowsSnapshot`）、`manifest_test.go`。
 
 ## 73. 账号成功率、用量、原始倍率计费与用量限制（2026-10-31，用户要求参照 new-api）
 

@@ -78,6 +78,12 @@ type EngineResult struct {
 	SkippedImages int                `json:"skipped_images,omitempty"`
 	Reason        string             `json:"reason,omitempty"` // llm_verdict, llm_questions
 	Calls         int                `json:"calls"`
+	// received lists the images (indexes in Input.Images) the upstream took
+	// in the call the scores come from; an image whose content went under
+	// another index (a duplicate) counts. Only these images were judged: the
+	// verdict cache stores nothing about the others (settleVerdicts). Not
+	// part of the stored trace.
+	received []int
 }
 
 // ---------------------------------------------------------------- auditor
@@ -346,14 +352,14 @@ func openAIAudit(ctx context.Context, ch *liveChannel, in *Input) (EngineResult,
 		if n, err := rand.Int(rand.Reader, big.NewInt(int64(len(usable)))); err == nil {
 			pick = usable[n.Int64()]
 		}
-		img = openAIImageURL(pick)
-		res.SentImages, res.SkippedImages = 1, res.SkippedImages-1
+		img = openAIImageURL(pick.Image)
+		res.SentImages, res.SkippedImages, res.received = 1, res.SkippedImages-1, []int{pick.index}
 	}
 	res.Calls = 1
 	scores, model, err := callModerations(ctx, ch, in.Text, img)
 	var up *UpstreamError
 	if img != "" && errors.As(err, &up) && up.Status == http.StatusBadRequest {
-		res.SentImages, res.SkippedImages = 0, res.SkippedImages+1
+		res.SentImages, res.SkippedImages, res.received = 0, res.SkippedImages+1, nil
 		if in.Text == "" {
 			return res, ErrNoInput
 		}
@@ -388,14 +394,20 @@ func callModerations(ctx context.Context, ch *liveChannel, text, img string) (ma
 	return out.Results[0].CategoryScores, out.Model, nil
 }
 
+// openAIImage is an image the API can take and its index in the input.
+type openAIImage struct {
+	Image
+	index int
+}
+
 // openAIUsableImages are the images the API can take, with the MIME type of
 // bare base64 sniffed when the client gave none: URLs as they are, inline
 // data of a known image type.
-func openAIUsableImages(images []Image) []Image {
-	out := make([]Image, 0, len(images))
-	for _, img := range images {
+func openAIUsableImages(images []Image) []openAIImage {
+	out := make([]openAIImage, 0, len(images))
+	for i, img := range images {
 		if img.URL != "" {
-			out = append(out, img)
+			out = append(out, openAIImage{img, i})
 			continue
 		}
 		if img.MediaType == "" {
@@ -405,7 +417,7 @@ func openAIUsableImages(images []Image) []Image {
 			}
 		}
 		if img.MediaType != "" {
-			out = append(out, img)
+			out = append(out, openAIImage{img, i})
 		}
 	}
 	return out
@@ -440,6 +452,9 @@ type typesafeAsset struct {
 	Format     string `json:"format"`
 	DataBase64 string `json:"data_base64"`
 	tokens     int
+	// from lists the images of the input (indexes in Input.Images) the
+	// asset stands for: the image it was made of and its duplicates.
+	from []int
 }
 
 // typesafeAudit calls POST {base}/v1/systemone with {model, state, questions}
@@ -465,6 +480,9 @@ func typesafeAudit(ctx context.Context, ch *liveChannel, qs *JevQuestions, image
 		out, err = callSystemOne(ctx, ch, qs, in.Text, assets)
 	}
 	res.SentImages = len(assets)
+	for _, a := range assets {
+		res.received = append(res.received, a.from...)
+	}
 	if err != nil {
 		return res, err
 	}

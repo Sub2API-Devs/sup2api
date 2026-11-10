@@ -29,6 +29,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/batch"
 )
 
+// kvLockStripes is the number of locks the verdict cache keys share for
+// their changes in the KV (kvLock): two keys on one stripe wait for each
+// other, which costs time and nothing else.
+const kvLockStripes = 64
+
 // Plugin is the moderation plugin. It implements pluginsdk.Hook,
 // pluginsdk.JobRunner, pluginsdk.HTTP, pluginsdk.BroadcastHandler and the
 // lifecycle interfaces.
@@ -43,12 +48,15 @@ type Plugin struct {
 	httpClient *http.Client
 	proxies    proxyClients
 
-	agent  *agent
-	cache  atomic.Pointer[lru]
-	kvMu   [64]sync.Mutex // this node's changes of a verdict cache key in the KV, one at a time (kvLock)
-	sf     singleflight.Group
-	sem    atomic.Pointer[semaphore] // background (post) calls
-	preSem atomic.Pointer[semaphore] // calls a request waits for
+	agent *agent
+	cache atomic.Pointer[lru]
+	// rechecking: a background read of verdict cache keys that are due for
+	// one is under way (recheckSoon).
+	rechecking atomic.Bool
+	kvMu       [kvLockStripes]sync.Mutex // this node's changes of a verdict cache key in the KV, one at a time (kvLock)
+	sf         singleflight.Group
+	sem        atomic.Pointer[semaphore] // background (post) calls
+	preSem     atomic.Pointer[semaphore] // calls a request waits for
 
 	snap   atomic.Pointer[snapshot]
 	snapMu sync.Mutex
@@ -116,6 +124,10 @@ type Plugin struct {
 		inflight, latencyMsSum                                     atomic.Int64
 		droppedNotices, noticeErrors                               atomic.Int64
 		busy, shutdownDropped, suspiciousRetries                   atomic.Int64
+		// preWaiting: the requests waiting for their run (runPre);
+		// kvWriting: the runs whose verdicts are on their way to the KV
+		// (storeVerdicts).
+		preWaiting, kvWriting atomic.Int64
 	}
 
 	bg     context.Context
@@ -165,6 +177,7 @@ func New() *Plugin {
 func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	p.host = h
 	p.log = h.Logger()
+	jevLogger.Store(p.log)
 	// A batch that fails is dropped; drops are counted here and by finish
 	// (the writer's own drop count would also see a full queue whose
 	// suspicious record finish then writes itself). Only Shutdown stops it,
@@ -260,6 +273,8 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 		"cache_hits":       float64(p.stats.cacheHits.Load()),
 		"inflight":         float64(p.stats.inflight.Load()),
 		"inflight_bytes":   float64(p.inflightBytes.Load()),
+		"kv_errors":        float64(p.stats.kvErrors.Load()),
+		"redraw_panics":    float64(jevRedrawPanics.Load()),
 		"busy":             float64(p.stats.busy.Load()),
 		"shutdown_dropped": float64(p.stats.shutdownDropped.Load()),
 		"blocked_users":    float64(p.blockedCount()),
@@ -485,24 +500,42 @@ func (p *Plugin) postWorker(pool *workerPool) {
 }
 
 // runPostSafely runs one queued job and keeps a panic in it from ending the
-// plugin process (the pre path is covered by the SDK's recover around the
-// hook; a worker goroutine is not). The job is then counted and recorded as
-// a run that errored, like a run in which nothing judged.
+// plugin process: nothing else recovers in a worker goroutine. (On the pre
+// path the SDK recovers a panic of the hook itself; the shared run, which
+// singleflight executes, recovers its own - runPre.)
 func (p *Plugin) runPostSafely(m *moderation) {
 	defer func() {
-		r := recover()
-		if r == nil {
-			return
+		if r := recover(); r != nil {
+			p.postPanicked(m, r)
 		}
-		p.log.Error("moderation: post run panicked", "request_id", m.rec.RequestID, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
-		defer func() { _ = recover() }() // recording it must not panic either
-		tr := Trace{Final: Pass, Decider: -1, Errored: true}
-		if !m.counted {
-			p.countRun(m, tr)
-		}
-		p.finish(m, tr, false)
 	}()
 	p.runPost(m)
+}
+
+// postPanicked concludes a queued job that panicked with r: it is counted
+// and recorded as a run that errored, like a run in which nothing judged.
+// What the job had counted before the panic is not counted again: the run
+// (m.counted), and the request on its user's day (m.userCounted) - then the
+// panic came from writing the record, the statistics already have the job
+// with its real result, and it is only logged. A panic while the error is
+// recorded is logged as well.
+func (p *Plugin) postPanicked(m *moderation, r any) {
+	p.log.Error("moderation: post run panicked", "request_id", m.rec.RequestID, "counted", m.counted, "user_counted", m.userCounted,
+		"panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+	if m.userCounted {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			p.log.Error("moderation: recording the panicked post run failed", "request_id", m.rec.RequestID,
+				"panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+		}
+	}()
+	tr := panickedRun()
+	if !m.counted {
+		p.countRun(m, tr)
+	}
+	p.finish(m, tr, false)
 }
 
 // Background store of suspicious records the event writer could not take

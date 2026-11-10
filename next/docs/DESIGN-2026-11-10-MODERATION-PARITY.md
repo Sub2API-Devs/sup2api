@@ -314,7 +314,7 @@ Go（`unit_test.go` 扩充 `TestRunFlow`，表驱动，每条写明输入的各�
 
 - `TestSpecValidate` 加：第一级补审被拒绝；补审后接普通级被拒绝；合法顺序通过；`ParseSpec` 接受 `fallback`。
 - `TestCombineTraces` 改期望：命中 → 出错 → 推翻 → 最后一块。
-- `review_fixes_test.go`（代码审核后补）：`TestFallbackDeciderIndexesTheTrace`、`TestFallbackStageHitEndToEnd`（补审级命中时请求被拒绝，记录和统计显示 spec 的级号）、`TestPostWorkerSurvivesPanic`。
+- 代码审核后补的测试（按功能放在各自的测试文件里，没有单独的"审核修复"文件）：`unit_test.go` 的 `TestFallbackDeciderIndexesTheTrace`；`hook_test.go` 的 `TestFallbackStageHitEndToEnd`（补审级命中时请求被拒绝，记录和统计显示 spec 的级号）、`TestPostWorkerSurvivesPanic`、`TestPostPanicIsCountedOnce`（后审任务在计数之后 panic 时不重复计数）、`TestPreRunSurvivesPanic`（先审的共享运行 panic 时进程不退出，请求按出错放行）。
 - 新增 `TestRecordResultOfTrace`：对 `fillFromTrace` 断言 3.1 第 6 条的四种映射，外加 pre 命中 → block。
 - `hook_test.go` `TestTwoStageFlowCacheAndFailOpen`：现有"复核出错 → 放行"的断言改为"命中并拒绝"；保留"所有级出错 → 放行，记 error"。
 - `stats_api_test.go` `TestStatsAPIs` 加：一次"初审命中、复核失败"的运行，流程行 `hit=1` 且 `errors=1`。
@@ -590,19 +590,24 @@ type storedHit struct {
 - **值里带写入时间，不续期**。片段键里的每一项、命中条目的 `at` 都是各自的写入时间；读到的任何一项，只要距写入超过 `verdict_cache_days` 就不用（`liveAt`），不论是从内存还是从 KV 读到的。从 KV 读进内存的值按原来的写入时间算到期，不重新计时。KV 键的 TTL 取值里最新一项的到期时间。
 - 读不懂的项忽略，对应的片段按未知处理、重新送审。
 - KV 的值上限是 64 KiB。`storedHit` 序列化后超过 60 KiB（`maxHitBytes`）就不存这个命中（照常写记录）。
-- KV 没有比较并交换：改片段键是"读出、修改、写回"。同一节点内按键串行（`kvLock`，64 把锁）；不同节点在几毫秒内同时改同一个键时可能丢掉其中一方的修改。丢一个通过的后果是多审一次；丢一个指针的后果是少一次重放，命中仍能通过集合里别的片段找到。
-- **内存 LRU**：条数上限 `cache_entries`，另有字节上限 64 MiB（`cacheMaxBytes`，按键长加值长加每条约 128 字节的开销估算）。任一上限超出时从最久未用的开始丢。片段条目约 250 字节，64 MiB 约 25 万条：`cache_entries` 设得更大时实际由字节上限约束。命中条目在内存里保存解码后的结构（不在每次查询时重新解析 JSON），占用按 JSON 长度的两倍估算。64 MiB 的由来：插件内存上限 512 MB，处理中的请求默认占 128 MB（`max_inflight_mb`），图片解码占 112 MB（7.3），其余留给队列和垃圾回收。`GET /status` 的 `runtime.cache_entries`、`runtime.cache_bytes` 给出当前条数和估算字节数。
+- KV 没有比较并交换：改片段键是"读出、修改、写回"。同一节点内按键串行（`kvLock`，64 把锁，`kvLockStripes`）；不同节点在几毫秒内同时改同一个键时可能丢掉其中一方的修改。丢一个通过的后果是多审一次；丢一个指针的后果是少一次重放，命中仍能通过集合里别的片段找到。
+- **内存是 KV 的前端，别的节点新写的指针要能传到**。节点 X 的内存里可能只有片段 A、B 各自的"通过"，而节点 Y 刚把 {A, B} 合在一起审出命中并写进了 KV；X 只看内存就会把 {A, B} 答成 `pass (cached)`。两条措施限定这种状态持续的时间：
+  1. **广播**。一次运行把命中写进 KV 之后，把它写了指针的那些片段键用 `verdict.changed` 广播出去（负载带 `"stored": true`）；收到的节点把这些键从内存里删掉，下一次查询从 KV 读（只删不立墓碑：立墓碑会让本节点正在进行的运行写不进被很多命中共用的片段，例如系统提示词）。这是正常路径：从广播送达起，这个命中在其他节点上就生效。
+  2. **到期重读**。广播可能丢。内存里的片段值自上次从 KV 读出（或在本节点写入）起只用 5 分钟（`verdictRecheck`）；到期后，下一次查询把它重新读一遍并入内存，每次查询最多重读 64 个这样的键，最久没读的在前。带 KV 的查询（pre 时机下的钩子、post 的工作协程）先读再判断；只看内存的查询（post 时机下的钩子，它从不等 KV）在后台读（`recheckSoon`，连同这些值指向的命中条目一起读进内存；一个节点同时只有一批）：发现到期的那个请求仍按内存里的值回答，下一个请求就用上读回来的值。
+  
+  所以**广播丢失时，一个节点写入的命中最迟在它的指针进入 KV 5 分钟后在其他节点上生效**（前提是 KV 可读；post 时机下再晚一个请求）。三种情况不受这个时限约束，都在读到该键的那次查询结束：一个请求里到期的值超过 64 个（多出来的本次照旧使用，下次查询排在最前）；KV 读失败或超出 200 ms 的查询预算（用内存里的值）；本节点自己写入、当时没能从 KV 读到的片段（5 分钟从写入时算）。重读只把 KV 里有的并进来，不删内存里有而 KV 里没有的项，所以人工处理造成的"删除"仍然靠广播和墓碑传播（5.3.8）。
+- **内存 LRU**：条数上限 `cache_entries`，另有字节上限 64 MiB（`cacheMaxBytes`，按键长加值长加每条约 128 字节的开销估算）。任一上限超出时从最久未用的开始丢。片段条目约 250 字节，64 MiB 约 25 万条：`cache_entries` 设得更大时实际由字节上限约束。命中条目在内存里保存解码后的结构（不在每次查询时重新解析 JSON），占用按 JSON 长度的两倍估算。墓碑（5.3.8）也计入字节数（键长加约 64 字节），到期后在下一次查看墓碑时清掉，不用等下一次人工处理。64 MiB 的由来：插件内存上限 512 MB，处理中的请求默认占 128 MB（`max_inflight_mb`），图片解码占 112 MB（7.3），其余留给队列和垃圾回收。`GET /status` 的 `runtime.cache_entries`、`runtime.cache_bytes` 给出当前条数和估算字节数。
 
 #### 5.3.4 查
 
 `admit` 里取代 `cachedSegments` 的调用，函数是 `lookupVerdicts(scope, keys, useKV)`。对请求的全部片段：
 
-1. 取每个片段键的值：先内存；`useKV` 时未命中的再查 KV（沿用原来的上限：最多 64 个、取请求里最靠后的 64 个，8 路并发，总共 200 ms）。从 KV 读到的值并入内存（保留各项的写入时间；这个键刚被人工处理改过、还在墓碑期内时不并入，见 5.3.8）。
+1. 取每个片段键的值：先内存；`useKV` 时未命中的再查 KV（沿用原来的上限：最多 64 个、取请求里最靠后的 64 个，8 路并发，总共 200 ms），内存里已满 5 分钟没从 KV 读过的值也在这一步重读（另计最多 64 个，最久没读的在前，同一个 200 ms；见 5.3.3 的"到期重读"）。从 KV 读到的值并入内存（保留各项的写入时间；这个键刚被人工处理改过、还在墓碑期内时不并入，见 5.3.8）。不带 KV 的查询照用内存里的值，到期的那些在后台重读。
 2. 收集各片段的指针（按请求顺序，每个片段内新的在前），取对应的命中条目（内存，没有再查 KV，最多 64 个，计入同一个 200 ms）。
 3. **先找命中**：按上面的顺序，第一个"条目存在、未过期、且 `Keys` 全部在本请求的片段集合里"的命中决定这个请求，走重放（5.3.6），不再分块。这一步在看任何"通过"之前。
 4. 没有可重放的命中 → 带有未过期 `p…` 的片段算已放行，其余（包括指针失效、集合不完整的）送审。之后与以前相同：`makePlan`，全部已放行则计 `cache_skipped`，note 为 `moderation: pass (cached)`。
 
-KV 出错或超时：相关片段按未知处理，照常送审，进程内的计数器 `kvErrors` 加一（这个计数器从 0.7.x 起就只在进程内累加，健康指标和 `/status` 都没有输出它，目前看不到）。
+KV 出错或超时：没读到的片段按未知处理（到期重读没读到的沿用内存里的值），照常送审，计数器 `kvErrors` 加一。这个计数器在 `GET /status` 的 `runtime.kv_errors` 和健康指标 `kv_errors` 里输出（本节点启动以来的累计值）：一批 KV 调用里有失败或被预算截断算一次，告警状态的读写失败各算一次。
 
 post 的请求在 `admit` 里只看内存（`useKV = false`）；出队执行前（`runPost`）再带 KV 查一次：可重放 → 重放；送审的片段全部已放行 → 计 `cache_skipped`；否则按入队时的分块运行。**入队之后缓存被清空过的任务**（当前快照的 `cache_epoch` 与入队时不同）跳过这次查询直接运行：它的范围是已被清空的那个，不能用里面的结论回答（`TestQueuedJobAfterClear`）。
 
@@ -616,7 +621,7 @@ post 的请求在 `admit` 里只看内存（`useKV = false`）；出队执行前
 |---|---|
 | 块里有 URL 图片，或 `Errored` | 不写 |
 | `Final == Hit` | 写命中条目，并在该块**实际送审的**每个片段的键里加上指向它的指针 |
-| 通过（含被推翻），且没有任何一级整级跳过（`stageSkipped()`） | 这个块给它的每个片段记一次"通过" |
+| 通过（含被推翻），且没有任何一级整级跳过（`stageSkipped()`） | 这个块给它的每个片段记一次"通过"；**没有任何审核器实际收到的图片除外**（见下） |
 | 其他 | 不写 |
 
 片段写 `p…` 的条件不变：包含它的每一块（含抽样没跑的块，`plan.pieces`）都记了"通过"。
@@ -628,9 +633,10 @@ post 的请求在 `admit` 里只看内存（`useKV = false`）；出队执行前
 实现后定下的几点：
 
 - **命中集合只列实际送审的片段**（`sentKeys`）。流程里没有收图片的审核器时，块里的图片在送审前被丢掉（`dropImages`）；这些图片的片段不进命中集合，否则集合里会有"没人看过"的内容。它们仍随块一起记"通过"：这个流程对图片没有意见，流程里加进收图片的审核器时指纹会变。
+- **没有审核器实际收到的图片不记"通过"，也不进命中集合**（`unreceived`）。流程里有收图片的审核器，但这张图这次没有发给任何一个做出了判断的审核器——没等到重画名额或重画时间预算、解码内存预算不够、图片太大或解不了、超出一次请求的 token 或体积预算、请求过大重试时只带第一张、OpenAI 审核器每次只随机带一张而没选中它——那么这次运行对它没有结论。每次引擎调用在结果里记下上游实际收到的是输入里的第几张图（`EngineResult.received`，不进存下来的 trace；内容相同的重复图片算收到），`settleVerdicts` 只给收到过的图片记"通过"。同一块里的文字照常记"通过"，所以带这张图的下一个请求通常只送这张图。没收到的原因一直存在时（例如图片解不了），这张图永远不会被缓存，每次请求都会为它走一次运行（没有可发的内容时不产生上游调用）。在此之前，这样的图片随块一起被记成"通过"并写进 KV：占满两个重画名额后发"无害文字加违规图片"，图片被跳过、文字通过，图片片段在所有节点上被当作已放行 `verdict_cache_days` 天（`TestSkippedImageIsNotCachedAsPassed`）。
 - **每次运行只结算一次，不是每个请求一次**。pre 的共享运行（singleflight）在运行函数里结算：不论有几个请求在等它、也不论等的请求是否都已离开，都只写一次（`TestPreRunStoresVerdictsOnce`）；post 由工作协程结算。
 - **范围用结算时的清空纪元**，不是运行开始时快照里的：缓存在运行期间被清空时，结论写到现在会被读到的范围里，已清空的范围不再写入。
-- 写入时机：内存立即写；KV 在后台协程里写，预算 2 秒（钩子不等 KV）。N 是同步写，差别只在别的节点可能晚几十毫秒看到（第 10 节第 6 条）。每次运行写进 KV 的通过最多 64 个（最靠后的），每个命中最多写 64 个片段的指针；命中条目没写成功时不写指向它的指针。
+- 写入时机：内存立即写；KV 在后台协程里写，预算 2 秒（钩子不等 KV）。N 是同步写。别的节点什么时候看到：内存里没有这些片段的节点，在 KV 写完后的下一次查询就读到；内存里已有这些片段（只有"通过"）的节点，在收到写入节点的 `verdict.changed` 广播后读到，广播丢失时最迟 5 分钟后读到（5.3.3"内存是 KV 的前端"一条；第 10 节第 6 条）。每次运行写进 KV 的通过最多 64 个（最靠后的），每个命中最多写 64 个片段的指针；命中条目没写成功时不写指向它的指针。
 - 被人工处理改过、还在墓碑期内的键不写（5.3.8）。
 
 记录的 trace 上，判定块为命中、不含 URL 图片、且有送审的片段时写：
@@ -684,8 +690,8 @@ func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, hitID strin
 - "确认"要求指纹相同：配置变了之后，不能把旧配置下的命中写成新配置的结论。
 - **去重**：一次处理里指向同一个命中的多条记录（一次命中和它的若干次重放）只改一次缓存，按 id 顺序最后一条决定内容；每个键只读写一次。
 - **以 KV 为准**。KV 是各节点共用的，所以先同步写 KV：每 64 个键 1 秒预算，最多 10 秒。先写命中条目，再改片段键；命中条目没写成功的，不写指向它的指针，也不在删不掉的命中旁边写通过。
-- **内存不写新值，只立墓碑**。本节点在写 KV 之前把涉及的键从内存里删掉并立墓碑（期限 = 写预算加 4 秒），写完后再立一次（4 秒，`tombstoneTTL` = 后台写预算的两倍）；其他节点收到广播 `verdict.changed`（负载 `{"keys": [...]}`，每条消息的键合计不超过 48 KiB，多了分几条发）后同样删键并立 4 秒墓碑。墓碑期内这个键不从 KV 并入内存、也不被运行结果写入（内存和本节点的 KV 写都跳过）。这样处理之前读到旧值的查询、处理前后刚结束的运行，都不会把旧结论写回来。墓碑过后各节点从 KV 重新读，KV 里是什么就是什么：某次写失败时，所有节点一致地沿用旧结论，而不是处理的那个节点用新的、其他节点用旧的。
-- 响应的 `cache_synced`：缓存改动**全部写成功**的记录数。部分失败的记录不计入；对它再处理一次会重做这些写入。失败计入同一个 `kvErrors` 计数器（同样没有对外输出；能看到的是 `cache_synced` 小于处理的记录数），不影响处理结果本身。
+- **内存不写新值，只立墓碑**。本节点在写 KV 之前把涉及的键从内存里删掉并立墓碑（期限 = 写预算加 4 秒），写完后再立一次（4 秒，`tombstoneTTL` = 后台写预算的两倍）；其他节点收到广播 `verdict.changed`（负载 `{"keys": [...]}`，每条消息的键合计不超过 48 KiB，多了分几条发；负载里带 `"stored": true` 的是运行写入命中后的广播，只删键不立墓碑，见 5.3.3）后同样删键并立 4 秒墓碑。墓碑期内这个键不从 KV 并入内存、也不被运行结果写入（内存和本节点的 KV 写都跳过）。这样处理之前读到旧值的查询、处理前后刚结束的运行，都不会把旧结论写回来。墓碑过后各节点从 KV 重新读，KV 里是什么就是什么：某次写失败时，所有节点一致地沿用旧结论，而不是处理的那个节点用新的、其他节点用旧的。
+- 响应的 `cache_synced`：缓存改动**全部写成功**的记录数。部分失败的记录不计入；对它再处理一次会重做这些写入。失败计入同一个 `kvErrors` 计数器（`runtime.kv_errors`；一次同步里有写失败或超出预算算一次），不影响处理结果本身。同步在预算用完时停下：还在等同一个键的锁的写入不再发出（`kvChange` 拿到锁后先看预算），对应的记录不计入 `cache_synced`。
 - 广播是尽力而为的。漏收的节点上，内存里的旧值最多保留到它到期；另外，本节点某次运行的后台写如果恰好落在"别的节点处理完、而它的广播还没到本节点"之间，会把命中写回 KV，直到到期。两种情况管理员都可以用清空缓存兜底，界面提示里写了这一点。
 
 #### 5.3.9 如实写明的限制
@@ -693,8 +699,9 @@ func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, hitID strin
 1. **重放不分用户**（与 N 相同）。A 用户的违规内容进了缓存后，B 用户第一次发同样的内容也是重放：会被记录，pre 时会被拒绝，但不进名单、不计违规。广为流传的越狱提示词在缓存期内不会让后来的用户进名单。见 Q7。
 2. 重放只对"包含整个命中集合"的请求生效。客户端改动集合里任何一个片段（哪怕一个字），就不重放，这段内容会重新送审，结果由审核器决定。
 3. **重放决定整个请求，请求里命中集合之外的内容这次不审**（与 N 相同，`N:gate.go` `planAudit`：缓存命中即结束计划；有意保留）。后果在 post 时机下才有：一个对话的历史里有一条已缓存的命中时，之后每一轮都被记为一次重放（不算新的违规），**这一轮新增的内容不会送审**，直到命中条目过期、被标为误报或缓存被清空。pre 时机下请求反正被拒绝，没有这个问题。也就是说，后审的用户在一个已经命中过的对话里继续发新的违规内容，不会产生新的命中记录和违规计数；要让这类用户被拦下，靠的是名单升级为拦截级（那时每一轮都被拒绝）。
-4. 清空和人工处理的同步在多节点下有短暂延迟（清空最多 5 秒；人工处理依赖广播，见 5.3.8 末条）。
+4. 清空、人工处理的同步和新命中的传播在多节点下有延迟：清空最多 5 秒；人工处理依赖广播（见 5.3.8 末条）；一个节点新写入的命中，对内存里已有其片段"通过"的其他节点，广播送达即生效，广播丢失时最迟 5 分钟（5.3.3）。
 5. 片段键的并发修改可能丢一方的改动（5.3.3），后果限于多审一次或少重放一次。
+6. **没有审核器实际收到的图片不缓存**（5.3.5）。后果是多审：OpenAI 审核器每次调用只带一张图，一个带 3 张新图的请求要 3 次请求才全部进缓存；Jev 解不了或放不进预算的图每次请求都会再走一次运行。
 
 ### 5.4 数据模型与迁移
 
@@ -741,7 +748,7 @@ ALTER TABLE stats_hourly ADD COLUMN IF NOT EXISTS replayed    bigint  NOT NULL D
 | `POST /events/review` | manage | 响应加 `cache_synced` |
 | `GET /events` | read | 每行加 `replayed`；新过滤参数 `replayed=true\|false` |
 | `GET /events/:id` | read | `replayed`；`trace.cache` 原样返回 |
-| `GET /status` | read | `today.replayed`（已包含在 `today.suspicious` 里）；`runtime.cache_epoch`；`runtime.cache_bytes`（内存缓存的估算字节数） |
+| `GET /status` | read | `today.replayed`（已包含在 `today.suspicious` 里）；`runtime.cache_epoch`；`runtime.cache_bytes`（内存缓存的估算字节数，含墓碑）；`runtime.kv_errors`（本节点启动以来 KV 调用失败的累计次数，5.3.4）；`runtime.redraw_panics`（本节点启动以来因解码器 panic 而跳过的图片数，7.3） |
 | `GET /stats/trend` | read | `flows[].points[].replayed`（已包含在 `hit` 里） |
 | AI 分析工具 `list_suspicious_records`、`get_record` | — | 记录加 `replayed`；三个工具的说明加 N 的那句话（`N:analysis_tools.go:38-50`） |
 
@@ -785,8 +792,15 @@ type verdicts struct {
 
 func (p *Plugin) lookupVerdicts(scope string, keys [][32]byte, useKV bool) verdicts
 func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits []storedHit)
-func (p *Plugin) kvEditSeg(ctx context.Context, key string, edits []segEdit, ttl time.Duration, guarded bool) error
-func (p *Plugin) kvSetHit(ctx context.Context, key string, body []byte, ttl time.Duration, guarded bool) (bool, error)
+// One change of a key at a time on a node; not made when ctx ended while it waited.
+func (p *Plugin) kvChange(ctx context.Context, key string, change func() error) error
+// A review writes unconditionally ...
+func (p *Plugin) kvSetHit(ctx context.Context, key string, body []byte, ttl time.Duration) error
+func (p *Plugin) kvDeleteHit(ctx context.Context, key string) error
+func (p *Plugin) kvEditSeg(ctx context.Context, key string, edits []segEdit, ttl time.Duration) error
+// ... a run does not write a key a review changed a moment ago (tombstone).
+func (p *Plugin) kvSetRunHit(ctx context.Context, key string, body []byte, ttl time.Duration) (stored bool, err error)
+func (p *Plugin) kvEditRunSeg(ctx context.Context, key string, edits []segEdit, ttl time.Duration) error
 func (p *Plugin) clearVerdictCache(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error)
 func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) int
 func (p *Plugin) onVerdictChanged(ctx context.Context, b pluginsdk.Broadcast) error
@@ -858,7 +872,11 @@ type CacheInfo struct {
 | `TestVerdictCacheTTLSettings`（在 `unit_test.go`） | `DecodeSettings`：只有 `cache_ttl_seconds = 0` → 关闭；`= 86400` → 1 天；`= 200000` → 3 天；两个键都没有 → 7 天；`verdict_cache_days = 40` → 30 |
 | `TestKVFailureAuditsAgain` | KV 报错时照常送审，不放行、不重放 |
 
-- `verdict_cache_fixes_test.go`（代码审核后补）：`TestHitSurvivesPassesOfItsSegments`、`TestSegValue`、`TestReviewSyncWritesEachKeyOnce`、`TestReviewSyncKVFailure`、`TestKVRunStopsWithItsContext`、`TestFalsePositiveUnderAnotherFingerprint`、`TestKVValueKeepsItsWriteTime`、`TestQueuedJobAfterClear`、`TestLRUByteBudget`、`TestHitKeptDecoded`、`TestPreRunStoresVerdictsOnce`、`TestFingerprintJudgingVersion`、`TestLRUTombstone`、`TestReviewIsNotUndoneByLateWrites`；`verdict_cache_test.go` 另有 `TestFingerprint`、`TestStoredHitLimits`。
+- 代码审核后补的测试（按功能归位，没有单独的"审核修复"文件）：
+  - `verdict_cache_test.go`：`TestHitSurvivesPassesOfItsSegments`、`TestReviewSyncWritesEachKeyOnce`、`TestReviewSyncKVFailure`、`TestKVRunStopsWithItsContext`、`TestFalsePositiveUnderAnotherFingerprint`、`TestKVValueKeepsItsWriteTime`、`TestQueuedJobAfterClear`、`TestHitKeptDecoded`、`TestFingerprintJudgingVersion`（固定配置的指纹是固定值）、`TestReviewIsNotUndoneByLateWrites`（用可阻塞的假 KV 造出真实的交错：运行的后台写已经拿着值、人工处理完成、后台写再放行）、`TestSkippedImageIsNotCachedAsPassed`（没等到重画名额、解不了、OpenAI 没选中的图片都不记"通过"）、`TestStoredHitReachesOtherNodes`（三个实例共用库和 KV：收到广播的节点立即重放，没收到的节点 5 分钟后重放；只看内存的查询在后台重读）、`TestKVChangesOfAKeyTakeTurns`（同一个键的两次修改串行；等锁期间预算用完的修改不发出）、`TestReviewSyncOrderAndBudget`（先立墓碑再写 KV；同步到预算即停）；另有 `TestFingerprint`、`TestStoredHitLimits`。
+  - `unit_test.go`（`TestLRU` 旁边）：`TestSegValue`、`TestLRUByteBudget`、`TestLRUTombstone`（墓碑计入字节数、到期即清）；`TestEnginesNameReceivedImages`（两个引擎在结果里列出上游实际收到的图：OpenAI 选中的那一张，400 重试后没有；Jev 的各个资产，413 重试后只有第一个）。
+  - `hook_test.go`：`TestPreRunStoresVerdictsOnce`（上游被挂住，等 5 个请求都在等同一次运行后再放行）。
+  - 测试用的假件各只有一份：假 KV `kvFake`（计写入次数、可设失败、可挂住写入），启动实例 `startNode` / `startDB` / `secondNode`，建流程 `publishFlow` / `setupFlow`。
 - 现有 `hook06_test.go` `TestHookModeratesWholeRequestWithSegmentCache`、`extract_test.go` `TestPlanSkipsCachedSegments`：按新接口改写，断言不变。
 - `stats_api_test.go`：`/status` 的 `today.replayed`、趋势点的 `replayed`。
 - `manifest_test.go`：新路由在 manifest 里且权限是 manage（现有的路由对照测试会自动覆盖）。
@@ -1092,7 +1110,7 @@ case ActionAutoRemove:    allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 | `TestAnalysisRespectsLists` | `decideEscalation`：白名单用户的升级 → `auto_not_allowed`；黑名单用户的降级、移出 → `auto_not_allowed`；不在名单的照开关 |
 | `TestBusyUsesPreModerated` | 超出 `max_inflight_mb` 时：黑名单用户 503；默认拦截下的普通用户 503；白名单用户放行；没有流程或被模型过滤排除的请求不回 503 |
 | `TestExemptBecomesAllowlist` | `DecodeSettings`：只有 `exempt_user_ids` → 白名单等于它；两个键都有 → 用 `allowlist_user_ids`；超过 1000 项截断 |
-| `TestParityConversionWindow`、`TestParityConversionLockOrder`（`review_fixes_test.go`） | 第一次转换后 24 小时内新加入的自动观察级条目被转换，之后不再转换；转换与并发的名单改动按同一顺序取锁，等待而不死锁 |
+| `TestParityConversionWindow`、`TestParityConversionLockOrder`、`TestParityConversionOnce`（`parity_test.go`；这些测试关掉了 5 秒一次的定时刷新，转换只由测试自己触发） | 第一次转换后 24 小时内新加入的自动观察级条目被转换，之后不再转换；转换与并发的名单改动按同一顺序取锁，等待而不死锁 |
 | `TestUserIDListsPatternAndDrops`、`TestStatusBlockingWithNew`、`TestSimulateNoneFollowsDefaultLevel` | 名单项 1–18 位数字，丢弃的项有计数；`watch.blocking_with_new`；模拟时 `user_state = none` 按默认级别 |
 | `TestParityConversionOnce` | `mode = enforce` 的库：自动的观察级条目变拦截级并各有一条历史；手动和 AI 的观察级条目不变；已过期的不变；再跑一次不再改动；`mode = observe` 的库不改条目但标记置真；两个实例并发只转换一次 |
 
@@ -1152,7 +1170,9 @@ case ActionAutoRemove:    allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 
 **重画的时间预算**（`jevNormalizeBudget`）：一次 Jev 调用里，重画图片最多用这次调用剩余时间（渠道超时）的一半，且不超过 5 秒。到点时还没画好的那张图跳过，它后面需要重画的图也都跳过；**文字总是送审**，已经准备好的图片和不需要重画的图片照常随文字发出。解码器停不下来，所以被放弃的重画在后台自己跑完，结束时才归还名额和内存预算。
 
-被跳过的图片计入 `skipped_images`。超过上面任何一项限制的图在 P 里跳过，在 N 里会被重画送审（第 10 节第 9 条）。
+被跳过的图片计入 `skipped_images`。超过上面任何一项限制的图在 P 里跳过，在 N 里会被重画送审（第 10 节第 9 条）。**被跳过的图片不进判定缓存**：这次运行没有审核器收到它，它既不记"通过"也不进命中集合，带它的下一个请求会再送一次（5.3.5）。每个资产记着它代表输入里的哪几张图（`typesafeAsset.from`，内容相同的重复图片算在同一个资产上），请求过大重试只带第一张时，其余的图也算没收到。
+
+解码器在某张图上 panic 时只跳过这张图：归还名额和内存预算，`redraw_panics` 加一（`GET /status` 的 `runtime.redraw_panics` 和健康指标），并记一条 error 日志（只有图片的 base64 长度和估算的解码内存，不含图片内容）。
 
 其他常量照抄：`jevImagePNGMax = 2 << 20`、`jevImageJPEGQuality = 85`、`jevRequestTokenLimit = 200_000`、`jevLongContextHeader`。
 
@@ -1230,7 +1250,9 @@ var jevImageFormats = []string{"png", "jpeg", "gif", "webp"}
 | `TestJevNormalizeSlotsHonourContext` | 名额占满且 ctx 已取消 → nil，不阻塞 |
 | `TestRulesVersionLegacyHashes` | `builtinVersions` 含两条旧哈希；`RulesVersionOf(内置题集)` 仍是 `content-audit-v2-zh` |
 | `TestJevNormalizeMemory`、`TestJevDecodeCost` | 解码内存预算：估算值、单张超预算的跳过、合计超预算的等待 |
-| `TestJevRedrawDoesNotStarveText`、`TestJevRedrawStopsWithContext`（`review_image_test.go`） | 重画很慢的图片不占用文字的审核时间：到预算时跳过，文字和已就绪的图片照发；ctx 结束后不再重画并立即返回 |
+| `TestJevRedrawDoesNotStarveText`、`TestJevRedrawStopsWithContext` | 重画很慢的图片不占用文字的审核时间：到预算时跳过，文字和已就绪的图片照发，结果里只列上游收到的图；ctx 结束后不再重画并立即返回。重画由测试挂住和放行，不靠计时 |
+| `TestJevRedrawGivesUpWaiting` | 等重画名额、等解码内存时 ctx 结束：跳过这张图，不解码，名额和内存不泄漏 |
+| `TestJevRedrawDecoderPanic` | 解码器 panic：这张图跳过并计数、记日志（不含图片内容），其余的图照发 |
 
 ---
 
@@ -1417,7 +1439,7 @@ WHERE a.flow_id <> 0 AND (f.id IS NULL OR NOT f.enabled OR f.published IS NULL);
 | 3 | 命中的缓存单位 | 内容块 | 块里的片段集合，整个集合都在才重放 | 5.3.1：块命中时分不出是哪个片段 |
 | 4 | 误报写放行 | 判定块，无条件 | 命中集合里的每个片段，且仅当流程的判定指纹没变；指纹变了只删命中 | 同上；整体没问题则各部分没问题。当前配置没审过的内容不写成放行 |
 | 5 | "确认"重写命中 | 无条件 | 仅当流程的判定指纹没变 | 不把旧配置的结论写到新配置下 |
-| 6 | 缓存写入 | 同步 | 运行结果：内存同步、KV 后台。人工处理：KV 同步，内存只立墓碑、之后从 KV 重读 | P 的钩子不等外部存储（§72.5 第 10 条）；别的节点最多晚几十毫秒。人工处理以各节点共用的 KV 为准 |
+| 6 | 缓存写入 | 同步 | 运行结果：内存同步、KV 后台。人工处理：KV 同步，内存只立墓碑、之后从 KV 重读 | P 的钩子不等外部存储（§72.5 第 10 条）。别的节点：内存里没有这些片段的，KV 写完即可读到；内存里已有其"通过"的，广播送达后读到，广播丢失时最迟 5 分钟（5.3.3）。人工处理以各节点共用的 KV 为准 |
 | 7 | 设置键 | `enabled` + `default_level`、`allowlist_user_ids` | `mode`（三值）；白名单新键并兼容旧键 `exempt_user_ids` | 6.3：已存设置不用迁移，可回滚 |
 | 8 | 出错记录的原始消息 | `record_pass_input_message` 开着时保存 | 不保存，原文截到 `error_text_max_chars` | §72.9，渠道故障时的存储保护 |
 | 9 | Jev 图片重画的限制 | 5000 万像素 | 1200 万像素；解码内存按文件头估算，合计 112 MiB，单张超出的跳过（大的渐进式 JPEG、16 位 PNG）；重画最多用一次调用剩余时间的一半且不超过 5 秒，超时的图跳过、文字照审 | 插件内存上限 512 MB；图片不能耗掉文字的审核时间（7.3） |
@@ -1635,6 +1657,21 @@ T1–T5 完成后做了一轮代码审核，问题在三个提交里修掉：`cb
 | 内存 LRU 只限条数；命中条目最大 60 KiB，按条数上限算可以远超进程的内存上限；每次查询都重新解析命中的 JSON | 加 64 MiB 字节上限；命中条目保存解码后的结构；`runtime.cache_bytes`（5.3.3） |
 | pre 的共享运行由每个等待的请求各结算一次；等待的请求都离开时不结算 | 在共享运行里结算一次（5.3.5） |
 | 代码里的判定默认值（内置题集、默认阈值、提示词模板）变了，指纹不变，旧结论继续被沿用 | 指纹加 `judgingVersion`（5.3.2） |
+
+**第二轮代码审核（Go）**
+
+| 发现 | 处理 |
+|---|---|
+| 因重画时间预算、名额或解码内存而没发出去的图片，随块一起被记成"通过"并写进 KV；其他没发出去的原因（太大、解不了、超出请求预算、重试只带第一张、OpenAI 每次只带一张）同样如此 | 引擎结果记下上游实际收到的图（`received`）；没有审核器收到的图片不记"通过"、不进命中集合，文字照常缓存（5.3.5、7.3） |
+| 查询直接用内存里的片段值：只持有 A、B 各自"通过"的节点看不到别的节点为 {A, B} 写进 KV 的指针，第一轮修掉的"洗成放行"在节点之间仍然存在 | 写入命中后广播片段键（`verdict.changed`，`stored`），收到的节点删键重读；内存里的片段值满 5 分钟重读一次作为兜底（5.3.3、5.3.4） |
+| pre 的共享运行在 singleflight 里执行，其中的 panic 被它用新协程重新抛出，SDK 的 recover 接不住，进程退出 | 共享运行自己 recover，记日志，等待者拿到一次"出错"的运行，请求走出错路径放行（`runPre`） |
+| 后审任务在 `finish` 计完用户的当日统计之后 panic 时，善后又调一次 `finish`：用户多计一次，命中记录变成出错；善后里的第二次 panic 被吞掉 | 已计过用户时只记日志；善后里的 panic 也记日志（`postPanicked`） |
+| 重画协程里解码器的 panic 被吞掉，没有日志也没有计数 | error 日志（不含图片内容）加 `redraw_panics` 计数（7.3） |
+| 墓碑只在下一次人工处理时清理，一次批量处理后一直留在内存里 | 到期后下一次查看时清掉，并计入内存缓存的字节数（5.3.3） |
+| 人工处理的同步拿到键的锁之后不看预算，预算用完后还会发出 KV 调用 | 拿到锁后先看 ctx（5.3.8） |
+| KV 失败的计数器没有任何输出 | `runtime.kv_errors` 和健康指标 `kv_errors`（5.3.4） |
+| 第一轮的若干修复没有有效的测试；若干测试靠墙上时钟的窗口判断，容易在 CI 上偶发失败 | 补测试（5.10、7.8、3.9）；计时窗口改成由测试挂住和放行的假上游、假 KV、假重画，或直接看数据库的锁 |
+| 代码规范：按"审核修复"命名的测试文件；`syncReviewed`、`admit`、`lookupVerdicts`、`convertParityOnce` 过长；清理 trace 的代码写了两遍；处理状态是裸字符串；布尔参数 `guarded`；魔法数字 | 测试按功能归位；这几个函数拆开（`reviewedHits` / `reviewOps` / `writeReviewed`，`planUncached`，`lookup.segments` / `hits` / `decide`，`convertParityEntries` / `convertParityEntry`）；`newStoredHit` / `Trace.ownRun`；`ReviewPending` 等常量；`kvSetRunHit` / `kvEditRunSeg` / `kvDeleteHit`；常量命名。行为不变 |
 
 **界面**
 

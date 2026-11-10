@@ -655,3 +655,86 @@ func TestDayStartIgnoresTimeZoneOfTime(t *testing.T) {
 		}
 	}
 }
+
+// The status counts enforce-level entries with new hits: under the default
+// level enforce that is where users with new hits are.
+func TestStatusBlockingWithNew(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 5, "level": LevelObserve}))
+	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 6, "level": LevelEnforce}))
+	waitFor(t, "watch entries in the hook", func() bool { return p.watchLevel(5) == LevelObserve && p.watchLevel(6) == LevelEnforce })
+	counts := func() WatchCounts {
+		t.Helper()
+		return decodeData[Status](t, h.Do("GET", "/status", nil, nil)).Watch
+	}
+	if got := counts(); got != (WatchCounts{Watching: 1, Blocking: 1}) {
+		t.Fatalf("before the hits: %+v", got)
+	}
+	// User 3 joins at enforce with the hit, user 6 is refused, user 5 hits
+	// at the observe level.
+	for _, uid := range []int64{3, 6, 5} {
+		mustHook(t, h, hookReqAs(uid, "", fmt.Sprintf("MOD-HIT-sexual by user %d", uid)))
+	}
+	want := WatchCounts{Watching: 1, WatchingWithNew: 1, Blocking: 2, BlockingWithNew: 2}
+	waitFor(t, "the hits on the watch list", func() bool { return counts() == want })
+	// Seen entries leave the count.
+	if resp := h.Do("POST", "/watchlist/3/seen", nil, nil); resp.GetStatus() != http.StatusOK {
+		t.Fatalf("mark seen: %d %s", resp.GetStatus(), resp.GetBody())
+	}
+	want.BlockingWithNew = 1
+	if got := counts(); got != want {
+		t.Fatalf("after marking user 3 seen: %+v, want %+v", got, want)
+	}
+	var raw struct {
+		Data struct {
+			Watch map[string]int64 `json:"watch"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(h.Do("GET", "/status", nil, nil).GetBody(), &raw); err != nil || raw.Data.Watch["blocking_with_new"] != 1 {
+		t.Fatalf("status JSON watch = %v (%v)", raw.Data.Watch, err)
+	}
+}
+
+// The alert state of a flow stays in the KV namespace 0.7.x used, so an
+// alert that is going on during an upgrade does not fire again.
+func TestAlertStateKeepsItsNamespace(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	ctx := context.Background()
+	if alertNamespace != "pass" || alertNamespace == kvNamespace {
+		t.Fatalf("alert namespace %q (verdict cache: %q)", alertNamespace, kvNamespace)
+	}
+	// A 0.7.x node alerted for the flow.
+	if err := p.host.KV().Set(ctx, "pass", alertKey(flow), []byte{1}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if was, err := p.alerted(ctx, flow); err != nil || !was {
+		t.Fatalf("alert state of 0.7.x not seen: %v %v", was, err)
+	}
+	// Still over the threshold after the upgrade: no second notice.
+	for i := range minAlertSamples {
+		mustHook(t, h, hookReqAs(3, "", fmt.Sprintf("MOD-500 %d", i)))
+	}
+	waitFor(t, "errors counted", func() bool {
+		return decodeData[Status](t, h.Do("GET", "/status", nil, nil)).Today.Errors == minAlertSamples
+	})
+	resp, err := p.RunJob(ctx, &pluginv1.RunJobRequest{JobId: JobAlerts})
+	if err != nil || !strings.Contains(resp.GetMessage(), " 0 alerts") {
+		t.Fatalf("alert job = %q %v", resp.GetMessage(), err)
+	}
+	// The state is written where the other versions read it.
+	p.setAlerted(ctx, flow, false)
+	if _, found, err := p.host.KV().Get(ctx, "pass", alertKey(flow)); err != nil || found {
+		t.Fatalf("alert state not cleared in the shared namespace: %v %v", found, err)
+	}
+	p.setAlerted(ctx, flow, true)
+	if _, found, _ := p.host.KV().Get(ctx, "pass", alertKey(flow)); !found {
+		t.Fatal("alert state not written to the shared namespace")
+	}
+	if _, found, _ := p.host.KV().Get(ctx, kvNamespace, alertKey(flow)); found {
+		t.Fatal("alert state written to the verdict cache namespace")
+	}
+}

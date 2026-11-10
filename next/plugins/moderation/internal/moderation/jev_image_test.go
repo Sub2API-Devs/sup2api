@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -13,13 +14,16 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -338,6 +342,11 @@ func TestJevAssetsDedupeAndBudget(t *testing.T) {
 	if as[1].DataBase64 != ok || as[0].DataBase64 == as[2].DataBase64 {
 		t.Fatal("order or content of the deduplicated assets")
 	}
+	// An asset stands for the image it was made of and for its duplicates:
+	// the upstream receives their content with it.
+	if !slices.Equal(as[0].from, []int{0, 2}) || !slices.Equal(as[1].from, []int{1, 4}) || !slices.Equal(as[2].from, []int{3}) {
+		t.Fatalf("assets of the images %v, %v, %v", as[0].from, as[1].from, as[2].from)
+	}
 	// Different encodings of the same pixels normalize to one asset.
 	var plain bytes.Buffer
 	if err := (&png.Encoder{CompressionLevel: png.NoCompression}).Encode(&plain, filled(100, 100, red)); err != nil {
@@ -370,8 +379,15 @@ func TestJevAssetsDedupeAndBudget(t *testing.T) {
 	for i := range 21 {
 		images = append(images, Image{Data: encodePNG(t, filled(1568, 1568, color.RGBA{0, uint8(i * 10), 0, 0xff}))})
 	}
-	if as := jevAssets(ctx, &Input{Images: images}); len(as) != 20 {
+	as = jevAssets(ctx, &Input{Images: images})
+	if len(as) != 20 {
 		t.Fatalf("budget: %d assets", len(as))
+	}
+	// The image beyond the budget is named by no asset.
+	for _, a := range as {
+		if slices.Contains(a.from, 20) {
+			t.Fatal("the image beyond the budget counts as sent")
+		}
 	}
 }
 
@@ -601,4 +617,324 @@ func BenchmarkJevNormalizeLargest(b *testing.B) {
 		peak = max(peak, jevNormalizePeak(b, raw, cap(jevNormalizeSlots)))
 	}
 	b.ReportMetric(float64(peak)/(1<<20), "peak-MiB")
+}
+
+// progressiveJPEG is a w×h progressive JPEG (SOF2) without chroma
+// subsampling, written by hand (the standard library only encodes baseline):
+// one DC scan over the three components in which every block codes a zero
+// difference with a one-bit Huffman code, so the file is tiny (one bit per
+// block) while the decoder still allocates the coefficients of every block
+// and the full YCbCr planes. It is the most expensive image to decode per
+// source pixel and per file byte.
+func progressiveJPEG(t testing.TB, w, h int) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	seg := func(marker byte, payload []byte) {
+		b.Write([]byte{0xff, marker})
+		_ = binary.Write(&b, binary.BigEndian, uint16(len(payload)+2))
+		b.Write(payload)
+	}
+	b.Write([]byte{0xff, 0xd8}) // SOI
+	dqt := make([]byte, 65)     // table 0, every factor 1
+	for i := 1; i < len(dqt); i++ {
+		dqt[i] = 1
+	}
+	seg(0xdb, dqt)
+	seg(0xc2, []byte{8, byte(h >> 8), byte(h), byte(w >> 8), byte(w), 3,
+		1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0}) // SOF2: 8 bit, three components at 1×1
+	dht := make([]byte, 18) // DC table 0: one code of one bit for the value 0
+	dht[1], dht[17] = 1, 0
+	seg(0xc4, dht)
+	seg(0xda, []byte{3, 1, 0, 2, 0, 3, 0, 0, 0, 0}) // SOS: DC of all three, first pass
+	blocks := ((w + 7) / 8) * ((h + 7) / 8) * 3
+	b.Write(make([]byte, (blocks+7)/8+2))
+	b.Write([]byte{0xff, 0xd9}) // EOI
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(b.Bytes()))
+	if err != nil || format != "jpeg" || cfg.Width != w || cfg.Height != h {
+		t.Fatalf("progressive JPEG header = %+v %s %v", cfg, format, err)
+	}
+	return b.Bytes()
+}
+
+// setRedraw replaces the redraw of an image until the test ends. The end of
+// the test waits for the redraws still going on (a call that did not wait
+// for its redraw leaves it behind, holding its slot) before the real redraw
+// is put back, so no redraw reads the variable while it changes.
+func setRedraw(t *testing.T, redraw func(data []byte) *typesafeAsset) {
+	t.Helper()
+	jevNormalize = redraw
+	t.Cleanup(func() {
+		waitFor(t, "the redraws left behind", func() bool { return len(jevNormalizeSlots) == 0 })
+		jevNormalize = jevNormalizeImage
+	})
+}
+
+// heldRedraws makes the redraws wait: the first free ones go through, every
+// later one waits until release is called (at the end of the test at the
+// latest). started gets a value for each redraw that starts, count is their
+// number.
+func heldRedraws(t *testing.T, free int64) (started <-chan struct{}, count *atomic.Int64, release func()) {
+	t.Helper()
+	begun := make(chan struct{}, 256)
+	gate := make(chan struct{})
+	release = sync.OnceFunc(func() { close(gate) })
+	count = new(atomic.Int64)
+	setRedraw(t, func(data []byte) *typesafeAsset {
+		n := count.Add(1)
+		begun <- struct{}{}
+		if n > free {
+			<-gate
+		}
+		return jevNormalizeImage(data)
+	})
+	t.Cleanup(release) // registered last, so it runs before setRedraw waits for the redraws
+	return begun, count, release
+}
+
+// within fails the test when ch has nothing to give in time (a guard against
+// hanging, not a measurement).
+func within[T any](t *testing.T, what string, ch <-chan T) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(30 * time.Second):
+		t.Fatalf("timed out waiting for %s", what)
+		panic("unreachable")
+	}
+}
+
+// Images that need a slow redraw never cost the text its audit: redrawing
+// has a share of the channel's time, the images that are not ready by then
+// are skipped and the call goes out with the text and the ones that are.
+func TestJevRedrawDoesNotStarveText(t *testing.T) {
+	mod := newFakeMod(t)
+	var bodies []string
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(body))
+		mu.Unlock()
+		req, _ := http.NewRequest(r.Method, mod.srv.URL+r.URL.Path, bytes.NewReader(body))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			w.WriteHeader(502)
+			return
+		}
+		defer resp.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
+	}))
+	defer srv.Close()
+	def, _ := DefaultQuestions(nil)
+	a, err := compileAuditor(1, "j", AuditorTypeSafe, 1, AuditorConfig{}, nil, &def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	category := def.Items[0].Category
+	ch := &liveChannel{Type: ChannelTypeSafe, BaseURL: srv.URL, Key: "k", Model: "jev"}
+	// The first redraw is ready at once; the second is not ready before the
+	// test lets it go, which is after the call came back.
+	_, redraws, _ := heldRedraws(t, 1)
+	in := &Input{Text: "MOD-HIT-" + category + " violating text"}
+	for i := range 8 { // different pictures, each too small to send as it is
+		in.Images = append(in.Images, Image{Data: encodePNG(t, filled(100, 100, color.RGBA{uint8(i * 30), 0, 0, 0xff}))})
+	}
+	// The channel has 2 s, the redraws half of it. Without that share the
+	// call would wait for the second redraw until its time is over and end
+	// in a timeout before anything is sent.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	res, err := typesafeAudit(ctx, ch, a.questions, true, in)
+	if err != nil || res.Calls != 1 || len(bodies) != 1 {
+		t.Fatalf("result = %+v, %v (%d upstream calls)", res, err, len(bodies))
+	}
+	if res.Scores[category] < 0.9 || !strings.Contains(bodies[0], "violating text") {
+		t.Fatalf("the text was not judged: scores = %v", res.Scores)
+	}
+	// The first image went out, the others were skipped; the result names
+	// the one the upstream received.
+	if res.SentImages != 1 || res.SkippedImages != 7 || !slices.Equal(res.received, []int{0}) {
+		t.Fatalf("sent %d, skipped %d of %d images, received %v", res.SentImages, res.SkippedImages, len(in.Images), res.received)
+	}
+	if n := redraws.Load(); n != 2 {
+		t.Fatalf("%d redraws started, want 2 (none after the budget ended)", n)
+	}
+
+	// Images sent as they are need no redraw and are packed whatever the
+	// budget: here behind eight that are not ready in time.
+	inLimit := encodePNG(t, filled(300, 300, blue))
+	in.Images = append(in.Images, Image{Data: inLimit})
+	short, cancelShort := context.WithTimeout(context.Background(), time.Second)
+	defer cancelShort()
+	if as := jevAssets(short, in); len(as) != 1 || as[0].DataBase64 != inLimit || !slices.Equal(as[0].from, []int{8}) {
+		t.Fatalf("assets = %d, want the in-limits image only", len(as))
+	}
+}
+
+// A context that is done redraws nothing more and returns at once, also
+// while a redraw is running or the slots are free.
+func TestJevRedrawStopsWithContext(t *testing.T) {
+	started, redraws, release := heldRedraws(t, 0)
+	in := &Input{Text: "t"}
+	for i := range 8 {
+		in.Images = append(in.Images, Image{Data: encodePNG(t, filled(100, 100, color.RGBA{0, uint8(i * 30), 0, 0xff}))})
+	}
+	// Done before the call: the slots are free, and still nothing starts
+	// (a select between a free slot and a done context takes either).
+	done, cancel := context.WithCancel(context.Background())
+	cancel()
+	for range 50 {
+		if as := jevAssets(done, in); len(as) != 0 {
+			t.Fatalf("%d assets with a canceled context", len(as))
+		}
+	}
+	if redraws.Load() != 0 || len(jevNormalizeSlots) != 0 {
+		t.Fatalf("%d redraws started with a canceled context", redraws.Load())
+	}
+	// Canceled during the first redraw: the call returns without waiting
+	// for it (it is still held) and starts no other.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan []typesafeAsset, 1)
+	go func() { result <- jevAssets(ctx, in) }()
+	within(t, "the first redraw", started)
+	cancel()
+	if as := within(t, "the call after its context ended", result); len(as) != 0 {
+		t.Fatalf("%d assets after the cancel", len(as))
+	}
+	if n := redraws.Load(); n != 1 {
+		t.Fatalf("%d redraws started, want 1", n)
+	}
+	// The redraw left behind frees its slot and its memory when it is done.
+	if len(jevNormalizeSlots) != 1 {
+		t.Fatalf("%d slots taken while the redraw is held", len(jevNormalizeSlots))
+	}
+	release()
+	waitFor(t, "the abandoned redraw", func() bool { return len(jevNormalizeSlots) == 0 })
+	if !jevNormalizeBytes.TryAcquire(jevNormalizeMemory) {
+		t.Fatal("memory of the abandoned redraw was not released")
+	}
+	jevNormalizeBytes.Release(jevNormalizeMemory)
+	// Without a deadline the budget is the fixed maximum.
+	if got := jevNormalizeBudget(context.Background()); got != jevNormalizeBudgetMax {
+		t.Fatalf("budget without a deadline = %s", got)
+	}
+	long, cancelLong := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelLong()
+	if got := jevNormalizeBudget(long); got != jevNormalizeBudgetMax {
+		t.Fatalf("budget of a long call = %s", got)
+	}
+}
+
+// A redraw waits for a slot and for the decoder memory only while its
+// context lasts: when it ends during the wait, the image is skipped, nothing
+// is decoded and nothing is kept.
+func TestJevRedrawGivesUpWaiting(t *testing.T) {
+	_, redraws, _ := heldRedraws(t, 1<<30) // nothing is held
+	small := encodePNG(t, filled(100, 100, red))
+	const cost = 100 * 100 * 4
+	redraw := func(ctx context.Context) <-chan *typesafeAsset {
+		out := make(chan *typesafeAsset, 1)
+		go func() { out <- jevRedraw(ctx, small, cost) }()
+		return out
+	}
+	waiting := func(what string, out <-chan *typesafeAsset) {
+		t.Helper()
+		select {
+		case a := <-out:
+			t.Fatalf("the redraw did not wait for %s (asset: %v)", what, a != nil)
+		case <-time.After(100 * time.Millisecond): // it waits; a longer look would say no more
+		}
+	}
+
+	// Both slots are taken.
+	for range cap(jevNormalizeSlots) {
+		jevNormalizeSlots <- struct{}{}
+	}
+	freeSlots := sync.OnceFunc(func() {
+		for range cap(jevNormalizeSlots) {
+			<-jevNormalizeSlots
+		}
+	})
+	defer freeSlots()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	out := redraw(ctx)
+	waiting("a slot", out)
+	cancel()
+	if a := within(t, "the redraw that waited for a slot", out); a != nil {
+		t.Fatal("an image was redrawn without a slot")
+	}
+	if len(jevNormalizeSlots) != cap(jevNormalizeSlots) || redraws.Load() != 0 {
+		t.Fatalf("after the wait for a slot: %d slots taken, %d redraws", len(jevNormalizeSlots), redraws.Load())
+	}
+	freeSlots()
+
+	// The slots are free, the decoder memory is taken: the redraw holds a
+	// slot while it waits, and gives it back.
+	if !jevNormalizeBytes.TryAcquire(jevNormalizeMemory) {
+		t.Fatal("decoder memory in use")
+	}
+	freeMemory := sync.OnceFunc(func() { jevNormalizeBytes.Release(jevNormalizeMemory) })
+	defer freeMemory()
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+	out = redraw(ctx)
+	waitFor(t, "the redraw to take a slot", func() bool { return len(jevNormalizeSlots) == 1 })
+	waiting("the memory", out)
+	cancel()
+	if a := within(t, "the redraw that waited for memory", out); a != nil {
+		t.Fatal("an image was redrawn without its memory")
+	}
+	if len(jevNormalizeSlots) != 0 || redraws.Load() != 0 {
+		t.Fatalf("after the wait for memory: %d slots taken, %d redraws", len(jevNormalizeSlots), redraws.Load())
+	}
+	// Nothing of the memory was taken or given back by the redraw that gave up.
+	freeMemory()
+	if !jevNormalizeBytes.TryAcquire(jevNormalizeMemory) {
+		t.Fatal("the redraw that gave up kept decoder memory")
+	}
+	jevNormalizeBytes.Release(jevNormalizeMemory)
+	// With both free the same image is redrawn.
+	if a := jevRedraw(context.Background(), small, cost); a == nil || redraws.Load() != 1 {
+		t.Fatalf("redraw with free slots: %v, %d redraws", a != nil, redraws.Load())
+	}
+}
+
+// A decoder that panics on an image costs that image only: it is skipped,
+// counted and logged without its content, and its slot and memory are free
+// again.
+func TestJevRedrawDecoderPanic(t *testing.T) {
+	setRedraw(t, func([]byte) *typesafeAsset { panic("decoder bug") })
+	var logged bytes.Buffer
+	old := jevLogger.Swap(slog.New(slog.NewTextHandler(&logged, nil)))
+	t.Cleanup(func() { jevLogger.Store(old) })
+	small := encodePNG(t, filled(100, 100, red))
+	ok := encodePNG(t, filled(300, 300, red))
+	before := jevRedrawPanics.Load()
+	as := jevAssets(context.Background(), &Input{Text: "t", Images: []Image{{Data: small}, {Data: ok}}})
+	if len(as) != 1 || as[0].DataBase64 != ok || !slices.Equal(as[0].from, []int{1}) {
+		t.Fatalf("assets = %d, want the image that needs no redraw", len(as))
+	}
+	if n := jevRedrawPanics.Load() - before; n != 1 {
+		t.Fatalf("decoder panics counted = %d", n)
+	}
+	if len(jevNormalizeSlots) != 0 {
+		t.Fatalf("%d slots still taken", len(jevNormalizeSlots))
+	}
+	if !jevNormalizeBytes.TryAcquire(jevNormalizeMemory) {
+		t.Fatal("memory of the panicked redraw was not released")
+	}
+	jevNormalizeBytes.Release(jevNormalizeMemory)
+	line := logged.String()
+	if !strings.Contains(line, "level=ERROR") || !strings.Contains(line, "image decoder panicked") || !strings.Contains(line, "decoder bug") ||
+		!strings.Contains(line, fmt.Sprintf("base64_bytes=%d", len(small))) {
+		t.Fatalf("log = %q", line)
+	}
+	if strings.Contains(line, small[:40]) {
+		t.Fatal("the log holds the image")
+	}
 }

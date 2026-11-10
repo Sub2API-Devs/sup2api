@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -92,27 +93,34 @@ func parseID(req *pluginv1.HTTPRequest, name string) (int64, *pluginv1.HTTPRespo
 
 // Runtime is this node's live state.
 type Runtime struct {
-	Mode          string        `json:"mode"`
-	Configured    bool          `json:"configured"` // a flow is bound
-	SettingsHash  string        `json:"settings_hash"`
-	ConfigVersion int64         `json:"config_version"`
-	CacheEpoch    int64         `json:"cache_epoch"` // clears of the verdict cache
-	Flows         int           `json:"flows"`
-	Auditors      int           `json:"auditors"`
-	QueueLen      int           `json:"queue_len"`
-	QueueCap      int           `json:"queue_cap"`
-	Dropped       int64         `json:"dropped"`
-	Inflight      int64         `json:"inflight"`
-	Calls         int64         `json:"calls"`
-	Errors        int64         `json:"errors"`
-	CacheHits     int64         `json:"cache_hits"`
-	CacheEntries  int           `json:"cache_entries"`
-	CacheBytes    int64         `json:"cache_bytes"` // estimated memory of the verdict cache entries
-	AvgLatencyMs  int64         `json:"avg_latency_ms"`
-	BlockedUsers  int           `json:"blocked_users"`
-	WatchedUsers  int           `json:"watched_users"`
-	Analysis      analysisStats `json:"analysis"`
-	DroppedCosts  int64         `json:"dropped_costs"`
+	Mode          string `json:"mode"`
+	Configured    bool   `json:"configured"` // a flow is bound
+	SettingsHash  string `json:"settings_hash"`
+	ConfigVersion int64  `json:"config_version"`
+	CacheEpoch    int64  `json:"cache_epoch"` // clears of the verdict cache
+	Flows         int    `json:"flows"`
+	Auditors      int    `json:"auditors"`
+	QueueLen      int    `json:"queue_len"`
+	QueueCap      int    `json:"queue_cap"`
+	Dropped       int64  `json:"dropped"`
+	Inflight      int64  `json:"inflight"`
+	Calls         int64  `json:"calls"`
+	Errors        int64  `json:"errors"`
+	CacheHits     int64  `json:"cache_hits"`
+	CacheEntries  int    `json:"cache_entries"`
+	CacheBytes    int64  `json:"cache_bytes"` // estimated memory of the verdict cache entries
+	// KVErrors counts the batches of host KV calls with a failure or cut off
+	// by their budget (verdict cache lookups, writes and review syncs; one
+	// per batch, kvRun) and the failed reads and writes of the alert state.
+	KVErrors int64 `json:"kv_errors"`
+	// RedrawPanics counts the images skipped because their decoder panicked
+	// while they were redrawn for Jev, on this node since it started.
+	RedrawPanics int64         `json:"redraw_panics"`
+	AvgLatencyMs int64         `json:"avg_latency_ms"`
+	BlockedUsers int           `json:"blocked_users"`
+	WatchedUsers int           `json:"watched_users"`
+	Analysis     analysisStats `json:"analysis"`
+	DroppedCosts int64         `json:"dropped_costs"`
 }
 
 func (p *Plugin) runtimeState(ctx context.Context) Runtime {
@@ -129,6 +137,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
+		KVErrors: p.stats.kvErrors.Load(), RedrawPanics: jevRedrawPanics.Load(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}
@@ -264,7 +273,7 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 		f.enum(req, "result", ResultBlock, ResultHit, ResultOverturned, ResultError, ResultPass)
 	}
 	f.enum(req, "severity", "high", "medium", "low")
-	f.enum(req, "review_status", "pending", "false_positive", "confirmed")
+	f.enum(req, "review_status", reviewStatuses...)
 	f.enum(req, "timing", TimingPre, TimingPost)
 	switch v := pluginsdk.Query(req, "replayed"); v {
 	case "":
@@ -619,6 +628,17 @@ func (p *Plugin) deleteEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	return pluginsdk.DataResponse(map[string]any{"id": id, "deleted": true}), nil
 }
 
+// Review statuses of a suspicious record (events.review_status).
+const (
+	ReviewPending       = "pending"
+	ReviewFalsePositive = "false_positive"
+	ReviewConfirmed     = "confirmed"
+	// maxReviewIDs is the number of records one review request may name.
+	maxReviewIDs = 500
+)
+
+var reviewStatuses = []string{ReviewPending, ReviewFalsePositive, ReviewConfirmed}
+
 // reviewEvents sets the review status of suspicious records: {ids, status};
 // other records of ids are left alone. Marking a counted record
 // false_positive takes its violation back from the user's current window;
@@ -635,10 +655,10 @@ func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		return bad, nil
 	}
 	var errs pluginsdk.FieldErrors
-	if len(in.IDs) == 0 || len(in.IDs) > 500 {
-		errs = errs.Add("ids", "invalid", "ids must list 1 to 500 records / ids 需要 1–500 条")
+	if len(in.IDs) == 0 || len(in.IDs) > maxReviewIDs {
+		errs = errs.Add("ids", "invalid", fmt.Sprintf("ids must list 1 to %d records / ids 需要 1–%d 条", maxReviewIDs, maxReviewIDs))
 	}
-	if in.Status != "pending" && in.Status != "false_positive" && in.Status != "confirmed" {
+	if !slices.Contains(reviewStatuses, in.Status) {
 		errs = errs.Add("status", "enum", "status must be pending, false_positive or confirmed / status 取值为 pending、false_positive、confirmed")
 	}
 	if len(errs) > 0 {

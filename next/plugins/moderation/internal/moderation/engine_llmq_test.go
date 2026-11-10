@@ -343,12 +343,7 @@ func TestLLMQuestionsInFlow(t *testing.T) {
 	if def.RulesVersion != RulesVersionZH {
 		t.Fatalf("default set = %+v", def)
 	}
-	var spec Spec
-	spec.ModelFilter.Type, spec.SampleRate = FilterAll, 100
-	spec.Stages = []Stage{{Auditors: []int64{oa.ID}, Combine: CombineAny}, {Auditors: []int64{qa.ID}, Combine: CombineAny}}
-	fl := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": spec}))
-	decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/groups", fl.ID), nil, map[string]any{"groups": []int64{9}}))
-	decodeData[FlowView](t, h.Do("POST", fmt.Sprintf("/flows/%d/publish", fl.ID), nil, map[string]any{"expected_version": 0}))
+	publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, oa.ID), stageOf(false, qa.ID)}}, 9)
 
 	if r := mustHook(t, h, hookReq("MOD-HIT-sexual CONFIRM words")); !denied(r) {
 		t.Fatalf("confirmed hit allowed: %+v", r)

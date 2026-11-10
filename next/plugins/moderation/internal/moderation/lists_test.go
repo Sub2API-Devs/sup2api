@@ -1,17 +1,19 @@
 package moderation
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
 
 // Timing and the user lists (DESIGN-2026-11-10 §6): the default level, the
@@ -184,7 +186,7 @@ func TestAutoWatchUsesDefaultLevel(t *testing.T) {
 		return now
 	}
 	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "watch_days": 10, "analysis_every_violations": 3, "analysis_channel_id": 2},
-		func(p *Plugin) { p.now = clock })
+		func(n *node) { n.now = clock })
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": "llm", "protocol": "anthropic", "name": "ana",
 		"base_url": llm.URL, "api_key": "sk-a", "model": "m"}))
@@ -380,10 +382,11 @@ func TestBusyUsesPreModerated(t *testing.T) {
 		return m
 	}
 	p, h, _ := startDB(t, nil, settings(ModeEnforce))
-	b := &flowBuilder{t: t, h: h, base: mod.srv.URL}
-	b.publish(Spec{Stages: []Stage{stageOf(false, b.auditor(AuditorOpenAI))}}, 9)
+	channels := map[string]int64{}
+	auditor := func() int64 { return newAuditor(t, h, mod.srv.URL, AuditorOpenAI, channels) }
+	publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, auditor())}}, 9)
 	// Group 10: a flow for gpt models only (the requests are claude-opus-5).
-	b.publish(Spec{ModelFilter: ModelFilter{Type: FilterOnly, Models: []string{"gpt-*"}}, Stages: []Stage{stageOf(false, b.auditor(AuditorOpenAI))}}, 10)
+	publishFlow(t, h, Spec{ModelFilter: ModelFilter{Type: FilterOnly, Models: []string{"gpt-*"}}, Stages: []Stage{stageOf(false, auditor())}}, 10)
 	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 5, "level": LevelObserve}))
 	waitFor(t, "watch entry in the hook", func() bool { return p.watchLevel(5) == LevelObserve })
 	p.inflightBytes.Store(17 << 20) // others in progress
@@ -510,182 +513,6 @@ func TestExemptBecomesAllowlist(t *testing.T) {
 	}
 }
 
-// The one-time 0.8.0 conversion: under mode = enforce the live automatic
-// observe entries become enforce entries with a history row each; manual
-// and AI entries, expired entries and enforce entries stay. It runs once per
-// installation, on one node.
-func TestParityConversionOnce(t *testing.T) {
-	ctx := context.Background()
-	prepare := func(t *testing.T, p *Plugin, rows string) {
-		t.Helper()
-		// The start already ran the conversion on the empty list.
-		waitFor(t, "conversion at start", p.parityDone.Load)
-		db, _ := p.db(ctx)
-		if _, err := db.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, expires_at, violation_count) VALUES `+rows); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.Exec(ctx, `UPDATE config_state SET parity_converted = false, parity_converted_at = NULL WHERE id = 1`); err != nil {
-			t.Fatal(err)
-		}
-	}
-	levels := func(t *testing.T, p *Plugin) map[int64]string {
-		t.Helper()
-		db, _ := p.db(ctx)
-		out := map[int64]string{}
-		rows, err := db.Query(ctx, `SELECT user_id, level || '/' || source || '/' || violation_count FROM watchlist`)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var uid int64
-			var v string
-			if err := rows.Scan(&uid, &v); err != nil {
-				t.Fatal(err)
-			}
-			out[uid] = v
-		}
-		return out
-	}
-	converted := func(t *testing.T, p *Plugin) bool {
-		t.Helper()
-		db, _ := p.db(ctx)
-		var done bool
-		if err := db.QueryRow(ctx, `SELECT parity_converted FROM config_state WHERE id = 1`).Scan(&done); err != nil {
-			t.Fatal(err)
-		}
-		return done
-	}
-	const rows = `(21, 'observe', 'auto', now() + interval '5 days', 4),
-		(22, 'observe', 'auto', NULL, 0),
-		(23, 'observe', 'manual', now() + interval '5 days', 1),
-		(24, 'observe', 'analysis', now() + interval '5 days', 2),
-		(25, 'observe', 'auto', now() - interval '1 minute', 3),
-		(26, 'enforce', 'auto', now() + interval '5 days', 6)`
-
-	t.Run("mode enforce, two nodes", func(t *testing.T) {
-		p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce})
-		fh2 := pluginsdktest.NewFakeHost()
-		fh2.SetDSN(fh.DSNValue, fh.SchemaValue)
-		p2 := New()
-		pluginsdktest.Start(t, p2, pluginsdktest.Options{Host: fh2, SDK: sdkOpts(), Config: map[string]any{"mode": ModeEnforce}})
-		waitFor(t, "conversion at start of the second node", p2.parityDone.Load)
-		prepare(t, p, rows)
-		db, _ := p.db(ctx)
-		var expires time.Time
-		if err := db.QueryRow(ctx, `SELECT expires_at FROM watchlist WHERE user_id = 21`).Scan(&expires); err != nil {
-			t.Fatal(err)
-		}
-		// Both nodes convert at the same time: the row lock lets one do it.
-		p.parityDone.Store(false)
-		p2.parityDone.Store(false)
-		var wg sync.WaitGroup
-		for _, node := range []*Plugin{p, p2, p, p2} {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				node.convertParityOnce(ctx)
-			}()
-		}
-		wg.Wait()
-		want := map[int64]string{21: "enforce/auto/4", 22: "enforce/auto/0", 23: "observe/manual/1", 24: "observe/analysis/2",
-			25: "observe/auto/3", 26: "enforce/auto/6"}
-		if got := levels(t, p); fmt.Sprint(got) != fmt.Sprint(want) {
-			t.Fatalf("watch list = %v, want %v", got, want)
-		}
-		if !converted(t, p) || !p.parityDone.Load() || !p2.parityDone.Load() {
-			t.Fatal("conversion not marked done")
-		}
-		// One history row for each converted entry, without an operator; the
-		// expiry is untouched.
-		history := func() string {
-			t.Helper()
-			var out []string
-			rows, err := db.Query(ctx, `SELECT user_id, action, from_level, to_level, operator_id IS NULL, reason FROM watch_events ORDER BY user_id, id`)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer rows.Close()
-			for rows.Next() {
-				var uid int64
-				var action, from, to, reason string
-				var auto bool
-				if err := rows.Scan(&uid, &action, &from, &to, &auto, &reason); err != nil {
-					t.Fatal(err)
-				}
-				if reason != parityReason {
-					t.Fatalf("reason = %q", reason)
-				}
-				out = append(out, fmt.Sprintf("%d %s %s>%s %v", uid, action, from, to, auto))
-			}
-			return strings.Join(out, "; ")
-		}
-		const wantHistory = "21 set_level observe>enforce true; 22 set_level observe>enforce true"
-		if got := history(); got != wantHistory {
-			t.Fatalf("history = %s", got)
-		}
-		var after time.Time
-		if err := db.QueryRow(ctx, `SELECT expires_at FROM watchlist WHERE user_id = 21`).Scan(&after); err != nil || !after.Equal(expires) {
-			t.Fatalf("expiry %v -> %v (%v)", expires, after, err)
-		}
-		// The hooks of both nodes see the new levels.
-		for _, node := range []*Plugin{p, p2} {
-			waitFor(t, "converted levels in the hook", func() bool {
-				_ = node.pollVersions(ctx)
-				return node.watchLevel(21) == LevelEnforce && node.watchLevel(22) == LevelEnforce && node.watchLevel(23) == LevelObserve
-			})
-		}
-		if ev := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/21/events", nil, nil)); len(ev) != 1 || ev[0].OperatorID != nil {
-			t.Fatalf("history of user 21 = %+v", ev)
-		}
-		// Once the day after the conversion is over (TestParityConversionWindow)
-		// it never runs again: a later automatic observe entry stays, also
-		// after a restart (parityDone cleared).
-		if _, err := db.Exec(ctx, `UPDATE config_state SET parity_converted_at = now() - interval '25 hours' WHERE id = 1`); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := db.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, expires_at) VALUES (27, 'observe', 'auto', now() + interval '5 days')`); err != nil {
-			t.Fatal(err)
-		}
-		p.parityDone.Store(false)
-		p.convertParityOnce(ctx)
-		want[27] = "observe/auto/0"
-		if got := levels(t, p); fmt.Sprint(got) != fmt.Sprint(want) || history() != wantHistory || !p.parityDone.Load() {
-			t.Fatalf("second run changed the list: %v; history %s", got, history())
-		}
-	})
-
-	t.Run("mode observe", func(t *testing.T) {
-		p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
-		prepare(t, p, rows)
-		p.parityDone.Store(false)
-		p.convertParityOnce(ctx)
-		want := map[int64]string{21: "observe/auto/4", 22: "observe/auto/0", 23: "observe/manual/1", 24: "observe/analysis/2",
-			25: "observe/auto/3", 26: "enforce/auto/6"}
-		if got := levels(t, p); fmt.Sprint(got) != fmt.Sprint(want) {
-			t.Fatalf("watch list = %v, want %v", got, want)
-		}
-		if !converted(t, p) || !p.parityDone.Load() {
-			t.Fatal("conversion not marked done")
-		}
-		// The mode is only looked at once: switching to enforce later
-		// converts nothing.
-		if errs := h.Configure(map[string]any{"mode": ModeEnforce}, nil); len(errs) > 0 {
-			t.Fatal(errs)
-		}
-		p.parityDone.Store(false)
-		p.convertParityOnce(ctx)
-		if got := levels(t, p); fmt.Sprint(got) != fmt.Sprint(want) {
-			t.Fatalf("watch list after the mode change = %v, want %v", got, want)
-		}
-		db, _ := p.db(ctx)
-		var n int
-		if err := db.QueryRow(ctx, `SELECT count(*) FROM watch_events`).Scan(&n); err != nil || n != 0 {
-			t.Fatalf("history rows = %d %v", n, err)
-		}
-	})
-}
-
 // A simulation without a user state follows the default level; an explicit
 // state decides itself.
 func TestSimulateNoneFollowsDefaultLevel(t *testing.T) {
@@ -716,5 +543,53 @@ func TestSimulateNoneFollowsDefaultLevel(t *testing.T) {
 	}
 	if resp := h.Do("POST", path, nil, map[string]any{"text": "x", "user_state": "blocked"}); resp.GetStatus() != 400 {
 		t.Fatalf("bad user_state = %d", resp.GetStatus())
+	}
+}
+
+// The user id lists take ids of up to 18 digits in the form, and the decoder
+// reports what it drops.
+func TestUserIDListsPatternAndDrops(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "forms", "settings.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Items struct {
+				Pattern string `json:"pattern"`
+			} `json:"items"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	const long = "12345678901234567890" // 20 digits: no int64
+	for _, key := range []string{"allowlist_user_ids", "blocklist_user_ids", "exempt_user_ids"} {
+		pattern := schema.Properties[key].Items.Pattern
+		re, err := regexp.Compile(pattern)
+		if err != nil || pattern == "" {
+			t.Fatalf("%s: pattern %q: %v", key, pattern, err)
+		}
+		if re.MatchString(long) || re.MatchString("1234567890123456789") || !re.MatchString("123456789012345678") || !re.MatchString("7") ||
+			re.MatchString("") || re.MatchString("-7") {
+			t.Errorf("%s: pattern %q does not take exactly 1 to 18 digits", key, pattern)
+		}
+	}
+	// Whatever reaches the decoder all the same is dropped and counted.
+	s, err := DecodeSettings([]byte(`{"allowlist_user_ids": ["8", "` + long + `", "x"], "blocklist_user_ids": ["` + long + `", "9"], "exempt_user_ids": ["` + long + `"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(s.AllowlistUserIDs, []string{"8"}) || !slices.Equal(s.BlocklistUserIDs, []string{"9"}) ||
+		fmt.Sprint(s.droppedIDs) != fmt.Sprint(map[string]int{"allowlist_user_ids": 2, "blocklist_user_ids": 1}) {
+		t.Fatalf("lists = %v %v, dropped = %v", s.AllowlistUserIDs, s.BlocklistUserIDs, s.droppedIDs)
+	}
+	// The retired list counts while it is the allowlist.
+	s, err = DecodeSettings([]byte(`{"exempt_user_ids": ["8", "` + long + `"]}`))
+	if err != nil || !slices.Equal(s.AllowlistUserIDs, []string{"8"}) || s.droppedIDs["exempt_user_ids"] != 1 {
+		t.Fatalf("retired list: %v, dropped = %v (%v)", s.AllowlistUserIDs, s.droppedIDs, err)
+	}
+	if s, err = DecodeSettings([]byte(`{"allowlist_user_ids": ["8"], "blocklist_user_ids": []}`)); err != nil || s.droppedIDs != nil {
+		t.Fatalf("clean lists: dropped = %v (%v)", s.droppedIDs, err)
 	}
 }
