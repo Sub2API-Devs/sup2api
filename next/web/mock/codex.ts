@@ -83,10 +83,12 @@ export const codexUIPlugin = {
   asset_base: `/plugin-ui/codex/${VERSION}-dev`,
   menus: [],
   pages: {},
-  slots: [],
+  slots: manifest.ui?.slots || [],
+  // manifest ui.accountActions as /ui/plugins hands it down (CONTRACTS §23.3, §91b).
+  account_actions: manifest.ui?.accountActions || [],
   native_entry: 'ui/native/entry.js',
   trust: 'official',
-  host_ui_compat: manifest.hostUICompat || '^3.6'
+  host_ui_compat: manifest.hostUICompat || '*'
 }
 
 /** The plugin's ValidateCredentials as far as the mock goes: the tokens of the type's flow. */
@@ -214,4 +216,66 @@ on('POST', '/p/codex/auth/siwc/exchange', (req) => {
       scopes: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct'
     }
   } }
+})
+
+// ------------------------------------------------------------------ official usage resets (codex_device)
+// POST /reset-credits/list, /summary and /consume as the plugin answers
+// them (docs/PLUGIN-CODEX.md, official usage resets). Account 29 starts with
+// two resets and a used-up 5 h window; other codex_device accounts have none.
+
+const day = 86400
+const unix = (offsetSec: number) => Math.floor(Date.now() / 1000) + offsetSec
+const resetCredits = new Map<number, any[]>([
+  [29, [
+    { id: 'rlrc_mock_referral', title: 'Referral reset', description: 'Thanks for inviting a friend to Codex', status: 'available', granted_at: unix(-6 * day), expires_at: unix(20 * day) },
+    { id: 'rlrc_mock_welcome', title: null, description: null, status: 'available', granted_at: unix(-30 * day), expires_at: null },
+    { id: 'rlrc_mock_used', title: 'Full reset', description: null, status: 'redeemed', granted_at: unix(-60 * day), expires_at: null }
+  ]]
+])
+
+// accounts.ts imports this file at load time, so it is imported lazily here.
+const accountsMock = () => import('./accounts')
+
+async function resetAccount(id: number) {
+  const { accounts } = await accountsMock()
+  const a = accounts.find((x) => x.id === id)
+  if (!a || a.plugin_key !== 'codex') return fail(404, 'not_found', 'account not found / 账号不存在')
+  if (a.type !== 'codex_device') return badRequest('account_id', 'unsupported_account_type', 'only device code accounts have official resets / 只有设备码登录的账号有官方重置次数')
+  return a
+}
+
+const available = (list: any[]) => list.filter((c) => c.status === 'available')
+
+on('POST', '/p/codex/reset-credits/list', async (req) => {
+  const a = await resetAccount(Number(req.body?.account_id))
+  if ('__status' in a) return a
+  await new Promise((ok) => setTimeout(ok, 400))
+  const list = resetCredits.get(a.id) || []
+  return { data: { available_count: available(list).length, credits: list } }
+})
+
+// Only the cache: accounts whose count the usage query has seen (here every codex_device account with resets).
+on('POST', '/p/codex/reset-credits/summary', (req) => {
+  const ids: number[] = Array.isArray(req.body?.account_ids) ? req.body.account_ids : []
+  const out: Record<string, { available_count: number; updated_at: number }> = {}
+  for (const id of ids) {
+    const list = resetCredits.get(Number(id))
+    if (list) out[String(id)] = { available_count: available(list).length, updated_at: unix(-300) }
+  }
+  return { data: { accounts: out } }
+})
+
+on('POST', '/p/codex/reset-credits/consume', async (req) => {
+  const ids = Array.isArray(req.body?.account_ids) ? req.body.account_ids : []
+  if (ids.length !== 1) return badRequest('account_ids', 'invalid', 'exactly one account / 只能选择一个账号')
+  const a = await resetAccount(Number(ids[0]))
+  if ('__status' in a) return a
+  await new Promise((ok) => setTimeout(ok, 800))
+  const list = available(resetCredits.get(a.id) || [])
+  const credit = req.body?.credit_id ? list.find((c) => c.id === req.body.credit_id) : list[0]
+  if (!credit) return fail(409, 'no_credit', 'The account has no reset left / 账号没有剩余重置次数')
+  if (a.status !== 'auto_disabled') return fail(409, 'nothing_to_reset', 'No usage window can be reset right now; no reset was used / 当前没有可重置的用量窗口，未消耗次数')
+  credit.status = 'redeemed'
+  const { resetCodexUsage } = await accountsMock()
+  return { data: { outcome: 'reset', windows_reset: resetCodexUsage(a.id), account_restored: true } }
 })

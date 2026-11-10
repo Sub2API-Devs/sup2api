@@ -52,7 +52,7 @@ type Manifest struct {
 	Resources       *Resources       `json:"resources,omitempty"`
 
 	HostPermissions  []HostPermission `json:"hostPermissions,omitempty"`
-	ExternalServices []string         `json:"externalServices,omitempty"` // display only
+	ExternalServices []string         `json:"externalServices,omitempty"` // shown at review; the hosts SendAccountRequest may reach (CONTRACTS §91)
 }
 
 // Entry locates the runtime artifact inside the package.
@@ -975,19 +975,28 @@ type Column struct {
 }
 
 type Slot struct {
-	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight | account.list.toolbar | account.editor.section
+	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight | account.list.toolbar | account.editor.section | account.list.quota
 	Component  string `json:"component"`
 	Permission string `json:"permission,omitempty"`
-	// Label, Icon and AccountTypes describe an account.editor.section slot
-	// (UI 3.7) only: the navigation entry the account editor appends, and the
-	// account type ids it is shown for (all types when empty).
-	Label        LocalizedText `json:"label,omitempty"`
-	Icon         string        `json:"icon,omitempty"`
-	AccountTypes []string      `json:"accountTypes,omitempty"`
+	// Label and Icon describe an account.editor.section slot (UI 3.7) only:
+	// the navigation entry the account editor appends.
+	Label LocalizedText `json:"label,omitempty"`
+	Icon  string        `json:"icon,omitempty"`
+	// AccountTypes are the ids of the plugin's own account types the slot is
+	// shown for (all types when empty), on account.editor.section (UI 3.7),
+	// account.detail.tabs and account.list.quota (UI 3.8) only.
+	AccountTypes []string `json:"accountTypes,omitempty"`
 }
 
 // SlotAccountEditorSection is the account editor section slot (UI 3.7).
 const SlotAccountEditorSection = "account.editor.section"
+
+// SlotAccountDetailTabs is the account detail tab slot.
+const SlotAccountDetailTabs = "account.detail.tabs"
+
+// SlotAccountListQuota is the decoration slot of the account list's quota
+// column (UI 3.8).
+const SlotAccountListQuota = "account.list.quota"
 
 // AccountAction is a declarative account operation. The console calls
 // Route as "POST /api/v1/p/<key><path>" with {"account_ids": [...]}, a
@@ -1006,6 +1015,9 @@ type AccountAction struct {
 	// when empty) only rows the user may update (account:update), "all"
 	// every row the user can see. Orphaned accounts never offer it.
 	VisibleFor string `json:"visibleFor,omitempty"`
+	// AccountTypes limits the action to rows of the plugin's own account
+	// types with these ids (UI 3.8); every row when empty.
+	AccountTypes []string `json:"accountTypes,omitempty"`
 }
 
 type NativeUI struct {

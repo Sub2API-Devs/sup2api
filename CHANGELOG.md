@@ -6,6 +6,14 @@
 
 ## 2026-11-10
 
+### 核心 0.1.269 + codex 0.1.3（`4f8ab5b44`，无迁移）
+
+- **ChatGPT（Codex）官方用量重置次数**（docs/PLUGIN-CODEX.md §10）：Codex 设备码账号可查看 OpenAI 发放的官方重置次数（账号列表“余额”列的徽标、账号详情“官方重置”标签页），并用“使用官方重置”行操作消耗一次来清零已用满的用量窗口（需确认，不能撤回；没有可重置窗口时不扣次数）。新管理权限 `codex:reset`；codex 新增宿主权限 `accounts.auto_state`（重置成功后清除本插件设置的自动停用与冷却）。
+- 核心：宿主接口 `SendAccountRequest` 经账号代理发送插件请求，`CLEAR` 自动状态时顺带清冷却（CONTRACTS §91）；控制台 UI 3.8：插件可声明账号详情标签页、账号行操作和 `account.list.quota` 额度装饰，均可按 `accountTypes` 只对指定账号类型显示（§91b）。Host API 仍 9。
+- 其余 9 个内置插件与 0.1.268 完全相同。codex 0.1.3 要求核心 ≥0.1.269，内置同步等核心计划完成后才升级，两节点同时切换。
+- 北京时间 19:38–19:40 滚动升级，两节点轮流让出，不停服、没关渠道；codex 19:40:40 切到 0.1.3。
+- 回滚：回核心 0.1.268（无迁移），codex 退回 0.1.2。
+
 ### 核心 0.1.268（`b4b2caf0b`，无迁移）
 
 - **插件设置只从已安装插件进入**（CONTRACTS §90）：系统设置视图去掉“插件设置”组，剩网关、分组与定价、计费与通知、运行环境四组。已安装插件列表 CCGateway 一行的“设置”打开 `/system/ccgateway`、邮件等插件打开 `/plugins/<key>?tab=settings`，侧栏停在控制台视图并高亮“已安装插件”，面包屑“已安装插件 > …”。旧地址 `/settings?tab=plugin:<key>` 跳到 `/plugins/<key>/settings`，`/plugins/ccgateway/settings` 跳到 `/system/ccgateway`。

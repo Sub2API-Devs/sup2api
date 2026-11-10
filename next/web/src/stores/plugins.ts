@@ -176,7 +176,7 @@ export const usePluginStore = defineStore('plugins', () => {
     uiPlugins.value.flatMap(p => (p.account_actions || []).map(a => ({ pluginKey: p.key, ...a })))
   )
 
-  /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets, account.list.weight, account.list.toolbar, account.editor.section). */
+  /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets, account.list.weight, account.list.toolbar, account.editor.section, account.list.quota). */
   function slotEntries(slot: string): SlotEntry[] {
     const out: SlotEntry[] = []
     for (const p of uiPlugins.value) {

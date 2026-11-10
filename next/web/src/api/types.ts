@@ -1466,6 +1466,8 @@ export interface PluginAccountAction {
   danger?: boolean
   /** Which rows offer it: `editable` (default) only those the caller may update, `all` every row shown; orphaned accounts never. */
   visibleFor?: 'editable' | 'all'
+  /** Only rows of these account types of the plugin (UI 3.8; every row when absent). */
+  accountTypes?: string[]
 }
 
 /** manifest ui.slots[] as GET /ui/plugins hands it down. */
@@ -1476,7 +1478,7 @@ export interface UIPluginSlot {
   /** account.editor.section: the navigation entry. */
   label?: LText
   icon?: string
-  /** account.editor.section: only for these account types of the plugin (all when absent). */
+  /** account.editor.section, account.detail.tabs and account.list.quota (UI 3.8): only for these account types of the plugin (all when absent). */
   accountTypes?: string[]
 }
 

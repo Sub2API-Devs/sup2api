@@ -359,3 +359,62 @@ func TestAutomaticStateOptOutAndInvalidTime(t *testing.T) {
 		t.Fatalf("global opt-out: %v %v", out, err)
 	}
 }
+
+// A clear confirms the account is usable now: it also drops the runtime
+// cooldown, whatever the status, and reports that as a change; the status
+// branches stay as they were (CONTRACTS §91).
+func TestAutomaticStateClearDropsCooldown(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	clearState := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_CLEAR}
+	disable := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: "quota"}
+	cool := func(id int64) {
+		t.Helper()
+		require.NoError(t, e.mr.Set(cooldownKey(id), "rate limited"))
+	}
+
+	// auto_disabled and cooling down: both go.
+	both := e.mkRawAccount("anthropic", "apikey", "both", "sk-good-key-123", true)
+	_, err := e.svc.ApplyAccountAutomaticState(ctx, both, disable)
+	require.NoError(t, err)
+	cool(both)
+	out, err := e.svc.ApplyPluginAccountAutomaticState(ctx, "anthropic", both, clearState)
+	require.NoError(t, err)
+	assert.True(t, out.GetChanged())
+	assert.Equal(t, "active", out.GetStatus())
+	assert.False(t, e.mr.Exists(cooldownKey(both)))
+
+	// Only a cooldown: it goes, the status stays, and routing is told.
+	cooling := e.mkRawAccount("anthropic", "apikey", "cooling", "sk-good-key-123", true)
+	cool(cooling)
+	audits, sent := len(e.auditRows("account.automatic_state")), e.bus.count()
+	out, err = e.svc.ApplyPluginAccountAutomaticState(ctx, "anthropic", cooling, clearState)
+	require.NoError(t, err)
+	assert.True(t, out.GetChanged())
+	assert.Equal(t, "active", out.GetStatus())
+	assert.False(t, e.mr.Exists(cooldownKey(cooling)))
+	assert.Len(t, e.auditRows("account.automatic_state"), audits, "no status change, no status audit")
+	assert.Greater(t, e.bus.count(), sent, "account:changed published")
+	// Nothing left to clear: no change.
+	out, err = e.svc.ApplyPluginAccountAutomaticState(ctx, "anthropic", cooling, clearState)
+	require.NoError(t, err)
+	assert.False(t, out.GetChanged())
+
+	// An administrator's disable stays; its cooldown goes, which only
+	// matters once the administrator enables the account again.
+	manual := e.mkRawAccount("anthropic", "apikey", "manual", "sk-good-key-123", false)
+	cool(manual)
+	out, err = e.svc.ApplyPluginAccountAutomaticState(ctx, "anthropic", manual, clearState)
+	require.NoError(t, err)
+	assert.True(t, out.GetChanged())
+	assert.Equal(t, "disabled", out.GetStatus())
+	assert.False(t, e.mr.Exists(cooldownKey(manual)))
+
+	// Another plugin cannot clear it, and a disable leaves it alone.
+	cool(cooling)
+	_, err = e.svc.ApplyPluginAccountAutomaticState(ctx, "other", cooling, clearState)
+	assert.Equal(t, "not_found", core.AsError(err).Code)
+	_, err = e.svc.ApplyAccountAutomaticState(ctx, cooling, disable)
+	require.NoError(t, err)
+	assert.True(t, e.mr.Exists(cooldownKey(cooling)))
+}

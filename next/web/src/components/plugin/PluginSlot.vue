@@ -5,7 +5,7 @@ import { slotKey } from './slots'
 
 // Renders every native plugin component registered for `name`
 // (dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight | account.list.toolbar |
-// account.editor.section). `props` is handed to each component; a function gets
+// account.editor.section | account.list.quota). `props` is handed to each component; a function gets
 // the entry, so the page can give every plugin its own values. `only` keeps
 // some entries (a page placing each one on its own). A failing plugin component
 // is hidden instead of breaking the page.

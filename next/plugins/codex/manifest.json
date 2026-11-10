@@ -6,13 +6,13 @@
     "en": "Serves /v1/responses (including its WebSocket mode) and, through the core's conversion, /v1/chat/completions from your own ChatGPT subscription: Codex device code login or Sign in with ChatGPT. Only for the account owner's own use with their own ChatGPT subscription; do not pool several people's accounts or resell access (this violates OpenAI's terms). Requests identify themselves truthfully as sup2api (originator: sup2api, User-Agent: sup2api-codex/<version>); the plugin does not imitate the Codex CLI and adds no Codex system prompt.",
     "zh": "用你自己的 ChatGPT 订阅提供 /v1/responses（含 WebSocket 模式），并经核心转换提供 /v1/chat/completions；支持 Codex 设备码登录与 Sign in with ChatGPT。仅用于账号所有者用自己的 ChatGPT 订阅自用；不得把多人账号做成号池对外出售（违反 OpenAI 条款）。请求如实标明来源为 sup2api（originator: sup2api，User-Agent: sup2api-codex/<版本>），不伪装 Codex CLI，也不注入 Codex 系统提示词。"
   },
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "sub2api",
   "icon": "assets/openai.svg",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
-  "hostCompat": ">=0.1.257 <0.2.0",
-  "hostUICompat": "^3.6",
+  "hostCompat": ">=0.1.269 <0.2.0",
+  "hostUICompat": "^3.8",
 
   "capabilities": [
     { "id": "platform.adapter.v1" },
@@ -108,6 +108,14 @@
         "en": "Run the device code and Sign in with ChatGPT authorizations that create or re-authorize ChatGPT (Codex) accounts",
         "zh": "执行设备码登录与 Sign in with ChatGPT 授权，用于新建或重新授权 ChatGPT（Codex）账号"
       }
+    },
+    {
+      "key": "codex:reset",
+      "label": { "en": "Use the official ChatGPT (Codex) usage resets", "zh": "使用 ChatGPT（Codex）官方用量重置次数" },
+      "description": {
+        "en": "List a Codex device code account's official usage resets and spend one to reset its used-up usage windows. Spending a reset uses up one of the account's resets granted by OpenAI and cannot be undone",
+        "zh": "查看 Codex 设备码账号的官方用量重置次数，并使用一次来重置已用满的用量窗口。使用会消耗该账号由 OpenAI 发放的一次重置次数，且不可撤回"
+      }
     }
   ],
 
@@ -115,10 +123,32 @@
     { "method": "POST", "path": "/auth/device/start", "scope": "admin", "permission": "codex:manage" },
     { "method": "POST", "path": "/auth/device/poll", "scope": "admin", "permission": "codex:manage" },
     { "method": "POST", "path": "/auth/siwc/start", "scope": "admin", "permission": "codex:manage" },
-    { "method": "POST", "path": "/auth/siwc/exchange", "scope": "admin", "permission": "codex:manage" }
+    { "method": "POST", "path": "/auth/siwc/exchange", "scope": "admin", "permission": "codex:manage" },
+    { "method": "POST", "path": "/reset-credits/list", "scope": "admin", "permission": "codex:reset" },
+    { "method": "POST", "path": "/reset-credits/consume", "scope": "admin", "permission": "codex:reset" },
+    { "method": "POST", "path": "/reset-credits/summary", "scope": "admin", "permission": "codex:reset" }
   ],
 
   "ui": {
+    "slots": [
+      { "slot": "account.list.quota", "component": "CodexResetBadge", "permission": "codex:reset", "accountTypes": ["codex_device"] },
+      { "slot": "account.detail.tabs", "component": "CodexResetTab", "permission": "codex:reset", "accountTypes": ["codex_device"] }
+    ],
+    "accountActions": [
+      {
+        "id": "reset-credit",
+        "label": { "en": "Use an official reset", "zh": "使用官方重置" },
+        "icon": "refresh",
+        "permission": "codex:reset",
+        "route": "POST /reset-credits/consume",
+        "accountTypes": ["codex_device"],
+        "danger": true,
+        "confirm": {
+          "en": "Spend 1 official ChatGPT (Codex) usage reset of this account (the one that expires first) and clear its current usage at once? It cannot be taken back; nothing is spent when no window can be reset.",
+          "zh": "消耗该账号 1 次 ChatGPT（Codex）官方重置次数（优先用最早过期的），立即清零当前用量？用掉后不能撤回；没有可重置的窗口时不扣次数。"
+        }
+      }
+    ],
     "native": { "entry": "ui/native/entry.js" }
   },
 
@@ -128,17 +158,19 @@
     { "id": "platform.register",
       "reason": { "en": "Register the ChatGPT (Codex) account types (device code, Sign in with ChatGPT) for the built-in openai platform", "zh": "为内置 openai 平台注册 ChatGPT（Codex）账号类型（设备码登录、Sign in with ChatGPT）" } },
     { "id": "accounts.credentials", "scope": { "types": "own" },
-      "reason": { "en": "Read the tokens of its own accounts to build upstream, model list, usage and token refresh requests (the core sends them)", "zh": "读取本插件账号的令牌，用于构造上游、模型列表、用量查询和令牌刷新请求（由核心发送）" } },
+      "reason": { "en": "Read the tokens of its own accounts to build upstream, model list, usage and token refresh requests, and to list and spend the official usage resets through the account's proxy (the core sends them all)", "zh": "读取本插件账号的令牌，用于构造上游、模型列表、用量查询和令牌刷新请求，以及查询和使用官方重置次数（经账号代理，均由核心发送）" } },
+    { "id": "accounts.auto_state", "scope": { "types": "own" },
+      "reason": { "en": "After an official usage reset succeeds, clear the automatic disable and cool-down this plugin set on the account because a usage window was used up", "zh": "官方用量重置成功后，清除本插件因用量窗口用满而对账号设置的自动停用与冷却" } },
     { "id": "kv",
-      "reason": { "en": "Keep the short-lived authorization sessions (device code, PKCE verifier and state) between the console's calls", "zh": "在控制台的多次调用之间保存短期授权会话（设备码、PKCE verifier 与 state）" } },
+      "reason": { "en": "Keep the short-lived authorization sessions (device code, PKCE verifier and state) between the console's calls, and cache each account's remaining official usage resets so the account list does not ask ChatGPT on every refresh", "zh": "在控制台的多次调用之间保存短期授权会话（设备码、PKCE verifier 与 state），并缓存每个账号剩余的官方用量重置次数，使账号列表刷新时不必每次询问 ChatGPT" } },
     { "id": "lock",
-      "reason": { "en": "Let only one device code poll at a time read and update an authorization session, so two concurrent polls (two tabs or two nodes) never both spend the single-use code", "zh": "同一时间只允许一次设备码轮询读写授权会话，避免两次并发轮询（两个标签页或两个节点）都去使用一次性授权码" } },
+      "reason": { "en": "Let only one device code poll at a time read and update an authorization session, so two concurrent polls (two tabs or two nodes) never both spend the single-use code; likewise let only one usage reset of an account run at a time, so a double click never spends two resets", "zh": "同一时间只允许一次设备码轮询读写授权会话，避免两次并发轮询（两个标签页或两个节点）都去使用一次性授权码；同理同一账号同一时间只允许一次用量重置，避免重复点击消耗两次" } },
     { "id": "routes.admin",
-      "reason": { "en": "Authorization endpoints the account form calls (device code start/poll, Sign in with ChatGPT start/exchange)", "zh": "账号表单调用的授权端点（设备码开始/轮询、Sign in with ChatGPT 开始/换取）" } },
+      "reason": { "en": "Authorization endpoints the account form calls (device code start/poll, Sign in with ChatGPT start/exchange) and the official usage reset endpoints (list, spend, cached counts)", "zh": "账号表单调用的授权端点（设备码开始/轮询、Sign in with ChatGPT 开始/换取）与官方用量重置端点（查询、使用、缓存次数）" } },
     { "id": "net", "scope": { "domains": ["auth.openai.com"] },
       "reason": { "en": "Talk to OpenAI's authorization server while an account is authorized (device code, token exchange); upstream requests, usage queries and token refreshes are sent by the core", "zh": "授权账号时访问 OpenAI 授权服务器（设备码、换取令牌）；上游请求、用量查询与令牌刷新由核心发送" } },
     { "id": "ui.native",
-      "reason": { "en": "The account form (CodexAuthForm) that runs the device code and Sign in with ChatGPT flows", "zh": "执行设备码登录与 Sign in with ChatGPT 流程的账号表单（CodexAuthForm）" } }
+      "reason": { "en": "The account form (CodexAuthForm) that runs the device code and Sign in with ChatGPT flows, and the official usage reset decoration and detail tab of device code accounts (CodexResetBadge, CodexResetTab)", "zh": "执行设备码登录与 Sign in with ChatGPT 流程的账号表单（CodexAuthForm），以及设备码账号的官方重置次数装饰、详情标签页（CodexResetBadge、CodexResetTab）" } }
   ],
 
   "externalServices": ["auth.openai.com", "chatgpt.com", "api.openai.com"]

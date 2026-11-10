@@ -1,7 +1,8 @@
 // Codex UI messages, registered under plugin.codex.* via host.addMessages.
 // vue-i18n syntax: avoid the special characters @ | { } in plain text.
 const zh = {
-  tabs: { device: '设备码登录', siwc: 'Sign in with ChatGPT' },
+  // tabs.CodexResetTab is the account detail tab's label (plugin.codex.tabs.<component>).
+  tabs: { device: '设备码登录', siwc: 'Sign in with ChatGPT', CodexResetTab: '官方重置' },
   tabsLabel: '授权方式',
   intro: {
     device: '在任意设备的浏览器里打开 OpenAI 验证页并输入验证码，授权后自动完成。与 Codex CLI 设备码登录相同。',
@@ -75,6 +76,39 @@ const zh = {
     required: '请先完成授权，拿到令牌后再保存。',
     inProgress: '授权还没完成：完成后再保存。'
   },
+  reset: {
+    available: '次官方重置可用',
+    useNext: '使用一次重置',
+    use: '使用',
+    hint: 'OpenAI 发给你账号的 Codex 用量重置次数：用一次立即清零当前的 5 小时与周用量，账号马上恢复可用；过期作废。只能手动使用。',
+    fullHint: '当前用量已用满，账号被暂停到窗口重置；使用一次重置可立即恢复。',
+    window5h: '5 小时',
+    window7d: '周',
+    resetsAt: '重置于',
+    noUsage: '还没有用量数据',
+    expires: '过期于',
+    noExpiry: '不过期',
+    granted: '发放于',
+    defaultTitle: '完整重置',
+    defaultDescription: '清零当前的用量限制',
+    status: { available: '可用', redeeming: '使用中', redeemed: '已使用' },
+    emptyTitle: '还没有重置卡',
+    emptyText: 'OpenAI 会在推荐好友成功等活动中发放重置次数，发放后会显示在这里。',
+    loadFailed: '读取重置次数失败',
+    confirm: {
+      title: '使用一次官方重置？',
+      body: '将消耗账号 {name} 的 1 次重置次数（{title}），立即清零当前用量窗口。',
+      usage: '当前用量：{usage}',
+      notFull: '当前用量还没用满：OpenAI 可能回复“无需重置”且不扣次数。',
+      final: '次数用掉后不能撤回。'
+    },
+    done: '已重置 {n} 个用量窗口，账号已恢复可用。',
+    doneNotRestored: '重置已生效，但账号的自动暂停没能解除，请在账号列表里点“重置状态”。',
+    failed: '使用重置失败',
+    badge: '重置 ×{n}',
+    badgeTitle: '官方重置次数 {n}，点开查看明细',
+    modalTitle: '官方重置 · {name}'
+  },
   serverErrors: '凭证校验失败',
   actionFailed: '操作失败'
 }
@@ -82,7 +116,7 @@ const zh = {
 type Messages = typeof zh
 
 const en: Messages = {
-  tabs: { device: 'Device code', siwc: 'Sign in with ChatGPT' },
+  tabs: { device: 'Device code', siwc: 'Sign in with ChatGPT', CodexResetTab: 'Official resets' },
   tabsLabel: 'Sign-in method',
   intro: {
     device: 'Open the OpenAI verification page in a browser on any device and enter the code; this form finishes by itself once you approve. Same as the Codex CLI device code login.',
@@ -155,6 +189,39 @@ const en: Messages = {
   validate: {
     required: 'Finish the authorization first: save once the tokens are in.',
     inProgress: 'The authorization is not finished yet: save once it is.'
+  },
+  reset: {
+    available: 'official resets available',
+    useNext: 'Use a reset',
+    use: 'Use',
+    hint: "OpenAI's Codex usage resets granted to your account: one clears the current 5-hour and weekly usage at once and the account is usable again right away. They expire. Only used when you press the button.",
+    fullHint: 'The usage is used up and the account is paused until the window resets; a reset brings it back now.',
+    window5h: '5-hour',
+    window7d: 'Weekly',
+    resetsAt: 'resets',
+    noUsage: 'No usage seen yet',
+    expires: 'Expires',
+    noExpiry: 'Does not expire',
+    granted: 'granted',
+    defaultTitle: 'Full reset',
+    defaultDescription: 'Reset your current usage limits',
+    status: { available: 'Available', redeeming: 'In use', redeemed: 'Used' },
+    emptyTitle: 'No resets yet',
+    emptyText: 'OpenAI grants resets in promotions such as a successful referral; they show up here once granted.',
+    loadFailed: 'Could not read the resets',
+    confirm: {
+      title: 'Use an official reset?',
+      body: 'This spends 1 reset of account {name} ({title}) and clears the current usage windows at once.',
+      usage: 'Current usage: {usage}',
+      notFull: 'The usage is not used up: OpenAI may answer that there is nothing to reset, and then no reset is spent.',
+      final: 'A spent reset cannot be taken back.'
+    },
+    done: '{n} usage window(s) reset; the account is usable again.',
+    doneNotRestored: 'The reset took effect, but the account could not be resumed: use "Reset status" in the account list.',
+    failed: 'Could not use the reset',
+    badge: 'Resets ×{n}',
+    badgeTitle: '{n} official reset(s): open for the details',
+    modalTitle: 'Official resets · {name}'
   },
   serverErrors: 'Credential check failed',
   actionFailed: 'Action failed'

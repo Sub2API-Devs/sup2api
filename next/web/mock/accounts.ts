@@ -377,7 +377,7 @@ export const accounts: any[] = [
   // Disabled for longer than park_after_hours: its container is stopped (mock/ccgateway.ts reports account_parked until started).
   { id: 28, name: 'cc-parked', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 7, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'disabled', status_reason: 'disabled by an operator', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 10), credentials: {}, runtime_parked: true },
   // ChatGPT subscriptions (codex plugin, native form): device code and Sign in with ChatGPT; edit one to see "Re-authorize".
-  { id: 29, name: 'chatgpt-plus', plugin_key: 'codex', type: 'codex_device', created_by: 1, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-1200), created_at: now(-86400 * 5), credentials: { access_token: '******', refresh_token: '******', id_token: '******', expires_at: Math.floor(Date.now() / 1000) + 2400, email: 'owner@example.com', chatgpt_account_id: '5d1c2b9e-7f3a-4e1b-9a0c-2f6d8e4b1a73', plan_type: 'plus' } },
+  { id: 29, name: 'chatgpt-plus', plugin_key: 'codex', type: 'codex_device', created_by: 1, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'auto_disabled', status_reason: 'Codex usage limit reached', auto_disabled_until: now(2 * 3600 + 1200), in_use: 0, cooldown_until: now(2 * 3600 + 1200), orphaned: false, last_used_at: now(-1200), created_at: now(-86400 * 5), credentials: { access_token: '******', refresh_token: '******', id_token: '******', expires_at: Math.floor(Date.now() / 1000) + 2400, email: 'owner@example.com', chatgpt_account_id: '5d1c2b9e-7f3a-4e1b-9a0c-2f6d8e4b1a73', plan_type: 'plus' } },
   { id: 30, name: 'chatgpt-siwc', plugin_key: 'codex', type: 'chatgpt_siwc', created_by: 1, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 3, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-86400), credentials: { access_token: '******', refresh_token: '******', id_token: '******', expires_at: Math.floor(Date.now() / 1000) - 600, email: 'owner@example.com', client_id: 'agent_3f9a1c7e5b2d4086', ext_agent_host_id: 'urn:uuid:8b0e6f2a-1c4d-4e9b-a7f3-5d2c9e1b0a64', scopes: 'openid profile email offline_access resource.invoke chatgpt.tokens.use.direct' } },
   // Automatically disabled until a release time (yellow badge); the list switch reads off and turning it on enables it by hand.
   { id: 31, name: 'relay-limited', plugin_key: 'relay', type: 'relay_key', created_by: 1, group_ids: [1], proxy_id: null, priority: 4, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'auto_disabled', status_reason: 'matched auto-disable rule: status 429', auto_disabled_until: now(3 * 3600), in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-1800), created_at: now(-86400 * 8), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
@@ -403,7 +403,7 @@ seedTest(25, false, 820, 'claude-sonnet-4-5', 'authentication_error: OAuth token
 // Plan windows of subscription accounts (QuotaSnapshot). Types without plan
 // limits (API keys, relays, ...) report quota = null. A window resets every
 // `period` seconds, first at `firstIn` seconds after the mock started.
-const QUOTA_TYPES = new Set(['claude_oauth/claude_oauth', 'claude_oauth/claude_setup_token'])
+const QUOTA_TYPES = new Set(['claude_oauth/claude_oauth', 'claude_oauth/claude_setup_token', 'codex/codex_device'])
 const MOCK_T0 = Date.now()
 const H = 3600
 const D = 86400
@@ -439,8 +439,24 @@ const quotaState = new Map<number, QuotaState>([
     ]
   }],
   // Never queried yet.
-  [24, { source: '', updated_at: null, error: '', activeAt: 0, windows: [] }]
+  [24, { source: '', updated_at: null, error: '', activeAt: 0, windows: [] }],
+  // ChatGPT (Codex): the 5 h window used up, the account paused until it resets (mock/codex.ts resets it).
+  [29, { source: 'active', updated_at: now(-300), error: '', activeAt: 0, windows: [
+    { key: '5h', utilization: 100, status: 'rejected', firstIn: 2 * H + 1200, period: 5 * H },
+    { key: '7d', utilization: 63, status: 'allowed', firstIn: 3 * D + 9 * H, period: 7 * D }
+  ] }]
 ])
+
+/** An official Codex usage reset (mock/codex.ts): every window back to 0 and the paused account resumed. */
+export function resetCodexUsage(id: number): number {
+  const st = quotaState.get(id)
+  const a = accounts.find((x) => x.id === id)
+  if (a?.status === 'auto_disabled') Object.assign(a, { status: 'active', status_reason: '', auto_disabled_until: null, cooldown_until: null })
+  if (!st) return 0
+  for (const w of st.windows) Object.assign(w, { utilization: 0, status: 'allowed' })
+  st.updated_at = now()
+  return st.windows.length
+}
 
 /** Next reset after now: MOCK_T0 + firstIn + k·period. */
 function nextReset(w: QuotaSeed): string {

@@ -86,6 +86,45 @@ export const startSiwc = (body: SiwcStartBody) => api().post<SiwcStart>('/auth/s
 export const exchangeSiwc = (sessionId: string, callbackUrl: string) =>
   api().post<{ credentials: CodexCredentials }>('/auth/siwc/exchange', { session_id: sessionId, callback_url: callbackUrl })
 
+// ------------------------------------------------------------------ official usage resets (codex_device)
+
+/** One reset credit of the account (POST /reset-credits/list); times are Unix seconds. */
+export interface ResetCredit {
+  id: string
+  /** OpenAI's own wording; empty when it sent none. */
+  title: string
+  description: string
+  /** "available", "redeeming", "redeemed" or a newer state. */
+  status: string
+  granted_at: number
+  /** null: does not expire. */
+  expires_at: number | null
+}
+
+export interface ResetCredits {
+  available_count: number
+  /** Sorted by expiry, the soonest first; a credit that does not expire last. */
+  credits: ResetCredit[]
+}
+
+/** A used reset (POST /reset-credits/consume); a refusal (nothing_to_reset, no_credit, ...) is an ApiError. */
+export interface ResetOutcome {
+  outcome: 'reset' | 'already_redeemed'
+  windows_reset: number
+  /** false: the reset was used but the account's automatic disable could not be lifted. */
+  account_restored: boolean
+}
+
+/** Cached counts (POST /reset-credits/summary): read from the usage query, never from OpenAI on the call; accounts without one are left out. */
+export interface ResetSummary {
+  accounts: Record<string, { available_count: number; updated_at: number }>
+}
+
+export const listResetCredits = (accountId: number) => api().post<ResetCredits>('/reset-credits/list', { account_id: accountId })
+export const summarizeResetCredits = (accountIds: number[]) => api().post<ResetSummary>('/reset-credits/summary', { account_ids: accountIds })
+export const redeemResetCredit = (accountId: number, creditId?: string) =>
+  api().post<ResetOutcome>('/reset-credits/consume', { account_ids: [accountId], ...(creditId ? { credit_id: creditId } : {}) })
+
 // ------------------------------------------------------------------ helpers
 
 /**

@@ -77,8 +77,8 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-// newHostID returns urn:uuid:<random UUIDv4>.
-func newHostID() (string, error) {
+// newUUID returns a random UUIDv4.
+func newUUID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", err
@@ -86,7 +86,16 @@ func newHostID() (string, error) {
 	b[6] = b[6]&0x0f | 0x40
 	b[8] = b[8]&0x3f | 0x80
 	h := hex.EncodeToString(b[:])
-	return "urn:uuid:" + h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:], nil
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:], nil
+}
+
+// newHostID returns urn:uuid:<random UUIDv4>.
+func newHostID() (string, error) {
+	id, err := newUUID()
+	if err != nil {
+		return "", err
+	}
+	return "urn:uuid:" + id, nil
 }
 
 // authAnswer is one response of the authorization server.
@@ -170,15 +179,16 @@ func (p *Plugin) saveSession(ctx context.Context, ns, id string, v any, ttl time
 	return kv.Set(ctx, ns, id, b, ttl)
 }
 
-// deleteSession ends a session. A failure is only logged: the session
-// expires with its ttl, and every code is single-use on OpenAI's side.
+// deleteSession deletes a KV entry (an authorization session or a cached
+// reset count). A failure is only logged: the entry expires with its ttl,
+// every code is single-use on OpenAI's side, and a stale count is only shown.
 func (p *Plugin) deleteSession(ctx context.Context, ns, id string) {
 	kv, err := p.kv()
 	if err == nil {
 		err = kv.Delete(ctx, ns, id)
 	}
 	if err != nil {
-		p.log.Warn("codex: delete authorization session", "kind", ns, "error", err.Error())
+		p.log.Warn("codex: delete a KV entry", "namespace", ns, "error", err.Error())
 	}
 }
 
@@ -198,6 +208,11 @@ func errInvalidJSON() *pluginv1.HTTPResponse {
 
 func errNoSession() *pluginv1.HTTPResponse {
 	return pluginsdk.BadRequest("session_id", "required", "session_id is required / 缺少 session_id")
+}
+
+// errNotReady is a 503 for a route called before Init.
+func errNotReady() *pluginv1.HTTPResponse {
+	return pluginsdk.Unavailable("the plugin is not ready / 插件尚未就绪: " + pluginsdk.ErrHostNotReady.Error())
 }
 
 // flowError is a 400 refusal of the authorization flow with its own code.
@@ -369,7 +384,7 @@ func (p *Plugin) handleDevicePoll(ctx context.Context, req *pluginv1.HTTPRequest
 		return errNoSession(), nil
 	}
 	if p.host == nil {
-		return pluginsdk.Unavailable("the plugin is not ready / 插件尚未就绪: " + pluginsdk.ErrHostNotReady.Error()), nil
+		return errNotReady(), nil
 	}
 	lock, ok, err := p.host.Locks().TryAcquire(ctx, pollLockName(id), pollLockTTL)
 	if err != nil {
@@ -411,7 +426,7 @@ func (p *Plugin) releaseLock(ctx context.Context, l *pluginsdk.Lock) {
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), lockReleaseTimeout)
 	defer cancel()
 	if err := l.Release(rctx); err != nil {
-		p.log.Warn("codex: release the device code session lock", "error", err.Error())
+		p.log.Warn("codex: release a lock", "lock", l.Name(), "error", err.Error())
 	}
 }
 

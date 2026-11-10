@@ -161,16 +161,18 @@ func TestManifestShape(t *testing.T) {
 		}
 		perms[perm.ID] = perm
 	}
-	for _, id := range []string{"platform.register", "accounts.credentials", "kv", "lock", "routes.admin", "net", "ui.native"} {
+	for _, id := range []string{"platform.register", "accounts.credentials", "accounts.auto_state", "kv", "lock", "routes.admin", "net", "ui.native"} {
 		if _, ok := perms[id]; !ok {
 			t.Errorf("host permission %s missing", id)
 		}
 	}
-	if len(perms) != 7 {
+	if len(perms) != 8 {
 		t.Errorf("host permissions = %v", perms)
 	}
-	if c := perms["accounts.credentials"]; c.Scope["types"] != "own" || len(c.Scope) != 1 {
-		t.Errorf("accounts.credentials scope = %v", c.Scope)
+	for _, id := range []string{"accounts.credentials", "accounts.auto_state"} {
+		if c := perms[id]; c.Scope["types"] != "own" || len(c.Scope) != 1 {
+			t.Errorf("%s scope = %v", id, c.Scope)
+		}
 	}
 	// The plugin itself only talks to the authorization server; upstream
 	// requests, usage queries and refreshes are sent by the core.
@@ -178,7 +180,13 @@ func TestManifestShape(t *testing.T) {
 		t.Errorf("net domains = %v", perms["net"].Scope)
 	}
 
-	wantRoutes := []string{"/auth/device/start", "/auth/device/poll", "/auth/siwc/start", "/auth/siwc/exchange"}
+	// Route path -> permission: authorization routes, then the usage reset
+	// routes (docs/PLUGIN-CODEX.md §10).
+	wantRoutes := []struct{ path, permission string }{
+		{"/auth/device/start", "codex:manage"}, {"/auth/device/poll", "codex:manage"},
+		{"/auth/siwc/start", "codex:manage"}, {"/auth/siwc/exchange", "codex:manage"},
+		{"/reset-credits/list", "codex:reset"}, {"/reset-credits/consume", "codex:reset"}, {"/reset-credits/summary", "codex:reset"},
+	}
 	if len(m.Routes) != len(wantRoutes) {
 		t.Fatalf("routes = %+v", m.Routes)
 	}
@@ -187,7 +195,7 @@ func TestManifestShape(t *testing.T) {
 	defer issuer.Close()
 	p := codex.NewWithEndpoints(codex.Endpoints{Auth: issuer.URL, ChatGPT: issuer.URL, API: issuer.URL})
 	for i, r := range m.Routes {
-		if r.Method != http.MethodPost || r.Path != wantRoutes[i] || r.Scope != "admin" || r.Permission != "codex:manage" {
+		if r.Method != http.MethodPost || r.Path != wantRoutes[i].path || r.Scope != "admin" || r.Permission != wantRoutes[i].permission {
 			t.Errorf("route %d = %+v", i, r)
 		}
 		// Without a host the routes answer an error, but not "no route".
@@ -196,8 +204,28 @@ func TestManifestShape(t *testing.T) {
 			t.Errorf("route %s %s is not served: %v %s", r.Method, r.Path, err, resp.GetBody())
 		}
 	}
-	if len(m.UserPermissions) != 1 || m.UserPermissions[0].Key != "codex:manage" {
-		t.Errorf("userPermissions = %+v", m.UserPermissions)
+	if len(m.UserPermissions) != 2 || m.UserPermissions[0].Key != "codex:manage" || m.UserPermissions[1].Key != "codex:reset" {
+		t.Fatalf("userPermissions = %+v", m.UserPermissions)
+	}
+	// Spending a reset cannot be undone; the permission says so.
+	if d := m.UserPermissions[1].Description; !strings.Contains(d["en"], "cannot be undone") || !strings.Contains(d["zh"], "不可撤回") {
+		t.Errorf("codex:reset description = %v", d)
+	}
+
+	// The reset entry points show only on device code accounts; the row
+	// action is never bulk (consume takes exactly one account) and confirms.
+	if len(m.UI.AccountActions) != 1 {
+		t.Fatalf("accountActions = %+v", m.UI.AccountActions)
+	}
+	a := m.UI.AccountActions[0]
+	if a.Route != "POST /reset-credits/consume" || a.Permission != "codex:reset" || a.Bulk || !a.Danger ||
+		a.Confirm["en"] == "" || a.Confirm["zh"] == "" || !slices.Equal(a.AccountTypes, []string{codex.TypeDevice}) {
+		t.Errorf("reset action = %+v", a)
+	}
+	for _, sl := range m.UI.Slots {
+		if sl.Permission != "codex:reset" || !slices.Equal(sl.AccountTypes, []string{codex.TypeDevice}) {
+			t.Errorf("slot %s = %+v", sl.Slot, sl)
+		}
 	}
 }
 

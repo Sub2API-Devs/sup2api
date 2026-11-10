@@ -20,6 +20,7 @@ import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 import AccountNumberCell from './AccountNumberCell.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
+import { forAccountType, slotKey } from '@/components/plugin/slots'
 import AccountLimitsCell from './AccountLimitsCell.vue'
 import AccountSuccessRateCell from './AccountSuccessRateCell.vue'
 import AccountUsageCell from './AccountUsageCell.vue'
@@ -32,7 +33,7 @@ import AccountBalanceCell from './AccountBalanceCell.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountDeleteDialog from './AccountDeleteDialog.vue'
 import LastTestCell from './AccountLastTest.vue'
-import { pluginAccountActionKey, rowActions, runRowAction, type RowActionDeps } from './accountRowActions'
+import { actionAppliesTo, pluginAccountActionKey, rowActions, runRowAction, type RowActionDeps } from './accountRowActions'
 import { usePluginAccountActions } from './usePluginAccountActions'
 import { accountEnabled, accountStatusKey, accountStatusKeys, accountStatusTone, enabledPatch } from './accountStatus'
 import { useBatchTest } from './useBatchTest'
@@ -130,6 +131,10 @@ const typeFilter = computed({
   }
 })
 
+// A quota column decoration declaring accountTypes (UI 3.8) is only for those types of its plugin.
+const quotaSlots = computed(() => plugins.slotEntries('account.list.quota'))
+const quotaSlotFor = (a: Account) => quotaSlots.value.some((e) => forAccountType(e, a))
+const hasQuotaCell = (a: Account) => hasQuota(a.quota) || hasBalance(a.balance) || quotaSlotFor(a)
 const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('accounts.listUi.identity'), width: '280px', mobile: 'title' },
   { key: 'groups', label: t('accounts.groups'), mobile: 'meta', mobileSpan: 2 },
@@ -142,9 +147,9 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'success_rate', label: t('accounts.successRate.column'), mobile: 'meta' },
   // The core's usage record (CONTRACTS §73), every account type.
   { key: 'usage', label: t('accounts.usage.column'), mobile: 'meta' },
-  // What the upstream says is left: plan windows (Claude Code) and balance,
-  // only when a row of this page has either.
-  ...(list.items.value.some((a) => hasQuota(a.quota) || hasBalance(a.balance)) ? [{ key: 'quota', label: t('accounts.balance.column') }] : []),
+  // What the upstream says is left: plan windows (Claude Code), balance and
+  // plugin decorations (account.list.quota), only when a row of this page has one.
+  ...(list.items.value.some(hasQuotaCell) ? [{ key: 'quota', label: t('accounts.balance.column') }] : []),
   { key: 'last_test', label: t('accounts.lastTest.column') },
   { key: 'actions', label: t('common.actions'), align: 'right', width: '176px' }
 ])
@@ -320,8 +325,6 @@ watch(() => ({ ...list.filters }), () => selection.clear(), { deep: true })
 const picked = computed(() => ({
   test: selection.rows.value.filter(testable),
   edit: selection.rows.value.filter(editable),
-  // Every selected row a declared action with visibleFor "all" may act on (orphaned accounts never).
-  all: selection.rows.value.filter((a) => !a.orphaned),
   toggle: selection.rows.value.filter(toggleable),
   reset: selection.rows.value.filter(canResetStatus),
   remove: selection.rows.value.filter(canDelete)
@@ -364,7 +367,7 @@ function onBulkDeleted(ids: number[]) {
 }
 const retentionOf = (a: Account) => typeOf(a)?.lifecycle?.deletion?.retentionDays ?? 0
 /** The selected rows a declared bulk action targets: the same rows its row-menu entry shows on (CONTRACTS §23.3). */
-const declaredTargets = (x: PluginAccountActionEntry) => (x.visibleFor === 'all' ? picked.value.all : picked.value.edit)
+const declaredTargets = (x: PluginAccountActionEntry) => selection.rows.value.filter((a) => actionAppliesTo(x, a, canUpdate))
 const moreBulkActions = computed(() => [
   { key: 'enable', label: t('accounts.bulk.enable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
   { key: 'disable', label: t('accounts.bulk.disable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
@@ -397,16 +400,15 @@ const revealedText = computed(() => JSON.stringify(revealed.value, null, 2))
 const detailOpen = ref(false)
 const detail = ref<Account | null>(null)
 const detailTab = ref('overview')
-const detailTabs = computed(() => [
-  { key: 'overview', label: t('accounts.overview') },
-  ...plugins.slotEntries('account.detail.tabs').map((e) => ({ key: `${e.pluginKey}:${e.name}`, label: tabLabel(e.pluginKey, e.name) }))
-])
+// A tab declaring accountTypes (UI 3.8) is only for those types of its plugin; openDetail starts every account on the overview.
+const detailSlots = computed(() => plugins.slotEntries('account.detail.tabs').filter((e) => forAccountType(e, detail.value)))
+const detailTabs = computed(() => [{ key: 'overview', label: t('accounts.overview') }, ...detailSlots.value.map((e) => ({ key: slotKey(e), label: tabLabel(e.pluginKey, e.name) }))])
 function tabLabel(pluginKey: string, name: string) {
   const msgKey = `plugin.${pluginKey}.tabs.${name}`
   const translated = t(msgKey)
   return translated !== msgKey ? translated : `${pluginKey} · ${name}`
 }
-const detailSlot = computed(() => plugins.slotEntries('account.detail.tabs').find((e) => `${e.pluginKey}:${e.name}` === detailTab.value))
+const detailSlot = computed(() => detailSlots.value.find((e) => slotKey(e) === detailTab.value))
 const detailType = computed(() => typeOf(detail.value))
 
 async function openDetail(a: Account) {
@@ -731,9 +733,13 @@ function resetFilters() {
         <AccountUsageCell :account-id="row.id" :usage="row.usage" />
       </template>
       <template #cell-quota="{ row }">
-        <div v-if="hasQuota(row.quota) || hasBalance(row.balance)" class="space-y-2">
+        <div v-if="hasQuotaCell(row)" class="space-y-2">
           <AccountQuotaCell v-if="hasQuota(row.quota)" compact :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
           <AccountBalanceCell v-if="hasBalance(row.balance)" :balance="row.balance" :refreshing="balanceRefresh.refreshing.has(row.id)" @refresh="balanceRefresh.refresh(row.id, row.balance)" />
+          <!-- Plugin decorations share one line under the windows, so a decorated row grows by one line at most. -->
+          <div v-if="quotaSlotFor(row)" class="flex items-center gap-1.5">
+            <PluginSlot name="account.list.quota" :props="{ account: row }" :only="(e) => forAccountType(e, row)" item-class="flex shrink-0 items-center" />
+          </div>
         </div>
         <!-- nothing from the upstream (API keys): show nothing, not even the table's "—" fallback -->
         <span v-else />

@@ -303,10 +303,16 @@ func (v *validator) uiSlots(u *manifest.UI) {
 	for i, s := range u.Slots {
 		f := fmt.Sprintf("ui.slots[%d]", i)
 		switch s.Slot {
-		case "dashboard.widgets", "account.detail.tabs", "account.form.widgets", "account.list.weight", "account.list.toolbar":
+		case "dashboard.widgets", "account.form.widgets", "account.list.weight", "account.list.toolbar":
 			if len(s.Label) > 0 || s.Icon != "" || len(s.AccountTypes) > 0 {
-				v.add(f, "unsupported", "label, icon and accountTypes are only honoured on %s", manifest.SlotAccountEditorSection)
+				v.add(f, "unsupported", "label, icon and accountTypes are only honoured on %s (accountTypes also on %s and %s)",
+					manifest.SlotAccountEditorSection, manifest.SlotAccountDetailTabs, manifest.SlotAccountListQuota)
 			}
+		case manifest.SlotAccountDetailTabs, manifest.SlotAccountListQuota:
+			if len(s.Label) > 0 || s.Icon != "" {
+				v.add(f, "unsupported", "label and icon are only honoured on %s", manifest.SlotAccountEditorSection)
+			}
+			v.ownAccountTypes(f+".accountTypes", s.AccountTypes)
 		case manifest.SlotAccountEditorSection:
 			v.editorSection(f, s)
 		default:
@@ -326,20 +332,27 @@ func (v *validator) uiSlots(u *manifest.UI) {
 }
 
 // editorSection validates the navigation entry of an account editor section
-// (UI 3.7): a label, a known icon and ids of the plugin's own account types
-// without repeats (the console shows the section for no other type).
+// (UI 3.7): a label, a known icon and the account types it is shown for.
 func (v *validator) editorSection(f string, s manifest.Slot) {
 	if firstText(s.Label) == "" {
 		v.add(f+".label", "required", "label is required")
 	}
 	v.menuIcon(f+".icon", s.Icon)
+	v.ownAccountTypes(f+".accountTypes", s.AccountTypes)
+}
+
+// ownAccountTypes checks the accountTypes of a slot (editor section, detail
+// tab, quota decoration) or an account action: ids of the plugin's own
+// account types without repeats (the console shows the extension for no
+// other type).
+func (v *validator) ownAccountTypes(f string, ids []string) {
 	own := func(id string) bool {
 		return slices.ContainsFunc(v.m.AccountTypes, func(at manifest.AccountType) bool { return at.ID == id })
 	}
 	seen := map[string]bool{}
-	for i, id := range s.AccountTypes {
+	for i, id := range ids {
 		if !own(id) || seen[id] {
-			v.add(fmt.Sprintf("%s.accountTypes[%d]", f, i), "invalid", "%q is not an account type of this plugin, or is repeated", id)
+			v.add(fmt.Sprintf("%s[%d]", f, i), "invalid", "%q is not an account type of this plugin, or is repeated", id)
 		}
 		seen[id] = true
 	}
@@ -374,6 +387,7 @@ func (v *validator) uiAccountActions(u *manifest.UI) {
 		default:
 			v.add(f+".visibleFor", "invalid", "visibleFor must be \"editable\" or \"all\"")
 		}
+		v.ownAccountTypes(f+".accountTypes", act.AccountTypes)
 		r := v.routeRef(f+".route", act.Route, "POST")
 		if r == nil {
 			continue
@@ -431,8 +445,10 @@ type uiFloor struct {
 
 // uiFloors, newest first. Core 0.1.228 is the last that ships UI 3.3
 // (3.4 starts at 0.1.229); 0.1.255 is the last with UI 3.5 (3.6 starts at
-// 0.1.256); 0.1.261 is the last with UI 3.6 (3.7 starts at 0.1.262).
+// 0.1.256); 0.1.261 is the last with UI 3.6 (3.7 starts at 0.1.262);
+// 0.1.268 is the last with UI 3.7 (3.8 starts at 0.1.269).
 var uiFloors = []uiFloor{
+	{minor: 8, lastUI: "3.7.0", lastCore: "0.1.268", firstCore: "0.1.269", uses: usesUI38},
 	{minor: 7, lastUI: "3.6.0", lastCore: "0.1.261", firstCore: CommonControlsFirstCore, uses: func(u *manifest.UI) bool {
 		return slices.ContainsFunc(u.Slots, func(s manifest.Slot) bool { return s.Slot == manifest.SlotAccountEditorSection })
 	}},
@@ -441,6 +457,15 @@ var uiFloors = []uiFloor{
 			slices.ContainsFunc(u.Slots, func(s manifest.Slot) bool { return s.Slot == "account.list.toolbar" })
 	}},
 	{minor: 4, lastUI: "3.3.0", lastCore: "0.1.228", firstCore: "0.1.229"},
+}
+
+// usesUI38 reports a UI 3.8 declaration: an account.list.quota slot, which
+// an older console never renders, or a detail tab or an account action
+// limited to some account types, which it would offer on every account.
+func usesUI38(u *manifest.UI) bool {
+	return slices.ContainsFunc(u.Slots, func(s manifest.Slot) bool {
+		return s.Slot == manifest.SlotAccountListQuota || (s.Slot == manifest.SlotAccountDetailTabs && len(s.AccountTypes) > 0)
+	}) || slices.ContainsFunc(u.AccountActions, func(a manifest.AccountAction) bool { return len(a.AccountTypes) > 0 })
 }
 
 // uiCoreFloor checks hostCompat against the newest UI floor the manifest

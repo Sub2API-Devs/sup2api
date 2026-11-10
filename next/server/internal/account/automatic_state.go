@@ -67,6 +67,7 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 	}
 	out := &pluginv1.SetAccountAutomaticStateResponse{}
 	var name, pluginKey, typ string
+	var cooldownCleared bool
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var allowed bool
 		var until, deferredUntil *time.Time
@@ -82,6 +83,15 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 		}
 		if err != nil {
 			return err
+		}
+		// A clear confirms the account is usable now, so its runtime
+		// cooldown goes whatever the status; the branches below still keep
+		// an administrator's, an error's and the usage limit's block
+		// (CONTRACTS §91).
+		if state.GetAction() == pluginv1.AccountAutomaticState_ACTION_CLEAR {
+			if cooldownCleared, err = s.clearCooldown(ctx, id); err != nil {
+				return err
+			}
 		}
 		var release *time.Time
 		switch r := state.GetRelease().(type) {
@@ -164,6 +174,7 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 	if err != nil {
 		return nil, err
 	}
+	out.Changed = out.Changed || cooldownCleared
 	if out.Changed {
 		s.afterStatusChange(ctx, id, pluginKey, typ)
 	}

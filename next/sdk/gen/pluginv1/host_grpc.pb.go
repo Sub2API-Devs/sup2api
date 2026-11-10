@@ -167,6 +167,17 @@ type HostServiceClient interface {
 	// The host enforces cancellation, the account proxy, limits and SSRF checks.
 	// A token permits at most one HTTP request; redirects are not followed.
 	ExecuteHTTP(ctx context.Context, in *ExecutionHTTPRequest, opts ...grpc.CallOption) (*ExecutionHTTPResponse, error)
+	// accounts.credentials {"types":"own"} (Critical): one bounded HTTP request
+	// for ONE account of this plugin's account types, sent by the host through
+	// that account's proxy (behind netguard for a direct connection), the same
+	// way as the quota and refresh requests the plugin describes (CONTRACTS
+	// §91). The URL must be http(s) and its host one of the manifest's
+	// externalServices (or a subdomain of one). Redirects are not followed;
+	// the answer body is capped at 64 KiB (truncated set). A transport failure
+	// is not an RPC error: it comes back in transport_error with status 0.
+	// Audited on every call (account, method, host and path; never headers or
+	// bodies). Hosts before core 0.1.269 answer UNIMPLEMENTED.
+	SendAccountRequest(ctx context.Context, in *SendAccountRequestRequest, opts ...grpc.CallOption) (*ExecutionHTTPResponse, error)
 }
 
 type hostServiceClient struct {
@@ -501,6 +512,15 @@ func (c *hostServiceClient) ExecuteHTTP(ctx context.Context, in *ExecutionHTTPRe
 	return out, nil
 }
 
+func (c *hostServiceClient) SendAccountRequest(ctx context.Context, in *SendAccountRequestRequest, opts ...grpc.CallOption) (*ExecutionHTTPResponse, error) {
+	out := new(ExecutionHTTPResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/SendAccountRequest", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HostServiceServer is the server API for HostService service.
 // All implementations must embed UnimplementedHostServiceServer
 // for forward compatibility
@@ -650,6 +670,17 @@ type HostServiceServer interface {
 	// The host enforces cancellation, the account proxy, limits and SSRF checks.
 	// A token permits at most one HTTP request; redirects are not followed.
 	ExecuteHTTP(context.Context, *ExecutionHTTPRequest) (*ExecutionHTTPResponse, error)
+	// accounts.credentials {"types":"own"} (Critical): one bounded HTTP request
+	// for ONE account of this plugin's account types, sent by the host through
+	// that account's proxy (behind netguard for a direct connection), the same
+	// way as the quota and refresh requests the plugin describes (CONTRACTS
+	// §91). The URL must be http(s) and its host one of the manifest's
+	// externalServices (or a subdomain of one). Redirects are not followed;
+	// the answer body is capped at 64 KiB (truncated set). A transport failure
+	// is not an RPC error: it comes back in transport_error with status 0.
+	// Audited on every call (account, method, host and path; never headers or
+	// bodies). Hosts before core 0.1.269 answer UNIMPLEMENTED.
+	SendAccountRequest(context.Context, *SendAccountRequestRequest) (*ExecutionHTTPResponse, error)
 	mustEmbedUnimplementedHostServiceServer()
 }
 
@@ -764,6 +795,9 @@ func (UnimplementedHostServiceServer) GetAccountCredentials(context.Context, *Ge
 }
 func (UnimplementedHostServiceServer) ExecuteHTTP(context.Context, *ExecutionHTTPRequest) (*ExecutionHTTPResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteHTTP not implemented")
+}
+func (UnimplementedHostServiceServer) SendAccountRequest(context.Context, *SendAccountRequestRequest) (*ExecutionHTTPResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendAccountRequest not implemented")
 }
 func (UnimplementedHostServiceServer) mustEmbedUnimplementedHostServiceServer() {}
 
@@ -1426,6 +1460,24 @@ func _HostService_ExecuteHTTP_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_SendAccountRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendAccountRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).SendAccountRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/SendAccountRequest",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).SendAccountRequest(ctx, req.(*SendAccountRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HostService_ServiceDesc is the grpc.ServiceDesc for HostService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1576,6 +1628,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExecuteHTTP",
 			Handler:    _HostService_ExecuteHTTP_Handler,
+		},
+		{
+			MethodName: "SendAccountRequest",
+			Handler:    _HostService_SendAccountRequest_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
