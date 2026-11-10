@@ -4,7 +4,7 @@ import { SBadge, SButton, SHint, SModal } from '@sub2api/ui'
 import { joinList } from './format'
 import { useModHost } from './host'
 import type { Spec } from './types'
-import { auditorIndex, reviewStageCount, stageRole, type CanvasAuditor } from './flowOps'
+import { auditorIndex, passOutcome, reviewStageCount, stageRole, type CanvasAuditor } from './flowOps'
 
 // Publish confirmation (new-api flow-publish-dialog.tsx): state, groups (and
 // how many account bindings the flow has), timing and where each stage goes:
@@ -37,8 +37,7 @@ const groupsText = computed(() => {
 function outcome(i: number, fallback: boolean): string {
   if (fallback) return t('flows.pubFallback')
   const review = reviewStageCount(props.draft.stages)
-  // only a pass of the first stage reaches the fallback stages: a later pass overturns a hit
-  const pass = i === 0 && review < props.draft.stages.length ? t('flows.passFallback') : t('flows.passAllow')
+  const pass = t(`flows.${passOutcome(i, review, props.draft.stages.length)}`)
   return `${pass} · ${i === review - 1 ? t('flows.hitSuspicious') : t('flows.hitNextN', { n: i + 2 })}`
 }
 

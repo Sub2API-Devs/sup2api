@@ -6,11 +6,13 @@ import { useCatalog } from './catalog'
 import { categoryLabel, enumLabel, ms, score } from './format'
 import { useModHost } from './host'
 import type { Outcome, Trace } from './types'
-import { outcomeState, stageState, type OutcomeState, type StageState } from './trace'
+import { outcomeState, stageNumber, stageState, type OutcomeState, type StageState } from './trace'
 
-// Per-stage trace of a run: one row per auditor call. A stage that reached
-// no verdict is marked failed (it was passed over, earlier hits stand), a
-// fallback stage is named 补审. A replayed cached hit says which request its
+// Per-stage trace of a run: one row per auditor call. Stages carry their
+// number in the flow (the trace holds only the stages that ran). A stage
+// that reached no verdict is marked failed (it was passed over, earlier
+// hits stand; on records written before 0.8.0: error), a fallback stage is
+// named 补审. A replayed cached hit says which request its
 // verdict comes from; requestLink makes that request a filter link
 // (show-request).
 const props = defineProps<{ trace: Trace; requestLink?: boolean }>()
@@ -27,7 +29,7 @@ interface Row extends Outcome {
 
 const rows = computed<Row[]>(() =>
   (props.trace.stages || []).flatMap((st, i) =>
-    (st.outcomes || []).map((o, j) => ({ ...o, key: `${i}-${j}`, stage: i + 1, stageResult: stageState(st), fallback: !!st.fallback }))
+    (st.outcomes || []).map((o, j) => ({ ...o, key: `${i}-${j}`, stage: stageNumber(st, i), stageResult: stageState(st), fallback: !!st.fallback }))
   )
 )
 
@@ -43,7 +45,7 @@ const columns = computed<TableColumn[]>(() => [
 const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warning'> = { hit: 'danger', pass: 'success', skipped: 'gray', error: 'warning' }
 
 /** Failed stages without an auditor call (cut off before any answered): they have no row, so the head names them. */
-const cutStages = computed(() => (props.trace.stages || []).flatMap((st, i) => (stageState(st) === 'failed' && !st.outcomes?.length ? [i + 1] : [])))
+const cutStages = computed(() => (props.trace.stages || []).flatMap((st, i) => (stageState(st) === 'failed' && !st.outcomes?.length ? [stageNumber(st, i)] : [])))
 
 /** The request a replayed hit took its verdict from ('' when the trace does not name it). */
 const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.cache.source_request_id || '' } : null))
@@ -72,7 +74,7 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
     <STable :columns="columns" :rows="rows" row-key="key" dense :empty-text="t('trace.empty')">
       <template #cell-stage="{ row }">
         {{ t('trace.stageN', { n: row.stage }) }}<template v-if="row.fallback"> · {{ t('flows.role.fallback') }}</template>
-        <div v-if="row.stageResult === 'failed'"><SBadge tone="warning" size="xs">{{ t('stageResult.failed') }}</SBadge></div>
+        <div v-if="row.stageResult === 'failed' || row.stageResult === 'error'"><SBadge tone="warning" size="xs">{{ enumLabel('stageResult', row.stageResult) }}</SBadge></div>
         <div v-else class="mod-sub">{{ enumLabel('stageResult', row.stageResult) }}</div>
       </template>
       <template #cell-auditor="{ row }">

@@ -14,6 +14,7 @@ import { useCategoryOptions } from './categories'
 import { applyFilters } from './forms'
 import { dt, enumLabel, enumOptions, joinList, num, withAll } from './format'
 import { analysisState, canManage, errorMessage, useModHost, useWatchList } from './host'
+import { watchNew } from './status'
 import { levelTone, trendTone } from './tones'
 import type { Watch, WatchItem, WatchListMeta } from './types'
 import { useUserFilter } from './users'
@@ -140,7 +141,7 @@ const promptOpen = ref(false)
 
     <div v-if="meta" class="mod-counts mod-section">
       <SBadge tone="info">{{ t('watchList.counts.watching', { n: num(meta.counts.watching) }) }}</SBadge>
-      <SBadge tone="warning">{{ t('watchList.counts.withNew', { n: num(meta.counts.watching_with_new) }) }}</SBadge>
+      <SBadge tone="warning">{{ t('watchList.counts.withNew', { n: num(watchNew(meta.counts).total) }) }}</SBadge>
       <SBadge tone="danger">{{ t('watchList.counts.blocking', { n: num(meta.counts.blocking) }) }}</SBadge>
       <SHint inline size="xs">{{ meta.analysis_every_violations ? t('watchList.every', { n: meta.analysis_every_violations }) : t('watchList.everyOff') }}</SHint>
     </div>

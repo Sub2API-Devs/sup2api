@@ -24,7 +24,7 @@ import { useCatalog } from './catalog'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
-import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, settingSections, settingsKey, verdictCacheOff, type SettingSection } from './settingsForm'
+import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, settingSections, settingsKey, verdictCacheOff, withRetiredCleared, type SettingSection } from './settingsForm'
 import { useAsync } from './useAsync'
 import { canManage, clearVerdictCache, fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, toastError, useModHost } from './host'
 import type { JevQuestions } from './types'
@@ -192,7 +192,7 @@ async function save() {
       const names = joinList(m.conflicts.map((k) => (k === LEGACY_KEY ? t('settingsTab.legacyKey') : label(k))))
       if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys: names }), confirmText: t('settingsTab.overwrite') }))) return
     }
-    await savePluginSettings(m.values)
+    await savePluginSettings(withRetiredCleared(m.values, m.changed))
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {

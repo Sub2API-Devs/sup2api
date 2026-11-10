@@ -50,7 +50,11 @@ const typeOf = (id: number) => lookup.value.typeOf(id)
 const nameOf = (id: number) => lookup.value.nameOf(id)
 const reviewCount = computed(() => reviewStageCount(props.spec.stages))
 
-/** What leads from the stage before into stage i (i > 0). */
+/**
+ * What leads from the stage before into stage i (i > 0). Into the first
+ * fallback stage: the chain ended without any hit (a pass that overturned a
+ * hit ends the run, a hit followed by failed stages stands) or judged nothing.
+ */
 function arrowText(i: number): { text: string; cls: string } {
   if (i < reviewCount.value) return { text: t('flows.hitNext'), cls: 'mod-text-danger' }
   return { text: i === reviewCount.value ? t('flows.toFallback') : t('flows.fallbackNext'), cls: 'mod-text-success' }

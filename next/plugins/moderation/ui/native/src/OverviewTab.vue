@@ -16,7 +16,7 @@ import { provideOverviewTick } from './overview/tick'
 import { useCatalog } from './catalog'
 import { num } from './format'
 import { useModHost } from './host'
-import { useStatus } from './status'
+import { useStatus, watchNew } from './status'
 import type { TabKey } from './types'
 
 // Overview (new-api content-moderation overview): running state, today's
@@ -49,11 +49,13 @@ onBeforeUnmount(() => clearInterval(timer))
 const kpis = computed(() => {
   const s = status.data.value
   if (!s) return []
+  // entries with new hits: under the default level "enforce" they are enforce-level ones
+  const fresh = watchNew(s.watch)
   return [
     { key: 'audited', icon: 'eyeglass', tone: 'primary' as const, value: s.today.audited, sub: t('kpi.auditedSub') },
     { key: 'suspicious', icon: 'warning', tone: 'warning' as const, value: s.today.suspicious, sub: s.today.replayed ? `${t('kpi.suspiciousSub')} · ${t('kpi.replayedSub', { n: num(s.today.replayed) })}` : t('kpi.suspiciousSub') },
-    { key: 'watching', icon: 'eye', tone: 'info' as const, value: s.watch.watching, sub: t('kpi.watchingSub', { n: num(s.watch.watching_with_new) }) },
-    { key: 'blocking', icon: 'shield', tone: 'danger' as const, value: s.watch.blocking, sub: t('kpi.blockingSub') },
+    { key: 'watching', icon: 'eye', tone: 'info' as const, value: s.watch.watching, sub: t('kpi.watchingSub', { n: num(fresh.watching) }) },
+    { key: 'blocking', icon: 'shield', tone: 'danger' as const, value: s.watch.blocking, sub: fresh.blocking === null ? t('kpi.blockingSub') : `${t('kpi.blockingSub')} · ${t('kpi.blockingNewSub', { n: num(fresh.blocking) })}` },
     { key: 'blocked', icon: 'x', tone: 'danger' as const, value: s.today.blocked, sub: t('kpi.blockedSub') }
   ]
 })

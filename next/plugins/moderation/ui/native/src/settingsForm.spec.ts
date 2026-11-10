@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
-import { CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, sentValue, settingSections, settingsKey, verdictCacheOff } from './settingsForm'
+import { CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, sentValue, settingSections, settingsKey, verdictCacheOff, withRetiredCleared } from './settingsForm'
 import { mergeSettings, type PageValues } from './settingsMerge'
 
 const MASK = '******'
@@ -121,10 +121,26 @@ describe('the save of the settings tab', () => {
       expect(displayValues(schema, stored, ['allowlist_user_ids']).allowlist_user_ids).toEqual([])
     })
 
-    it('writes only allowlist_user_ids and leaves the retired key as stored', () => {
-      const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: ['5', '9', '12'] }))
+    it('writes allowlist_user_ids and empties the retired key, so a 0.7.2 node does not keep exempting a removed user', () => {
+      const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: ['9', '12'] }))
       expect(m.changed).toEqual(['allowlist_user_ids'])
-      expect(m.values).toEqual({ ...old, allowlist_user_ids: ['5', '9', '12'] })
+      expect(m.values).toEqual({ ...old, allowlist_user_ids: ['9', '12'] })
+      expect(withRetiredCleared(m.values, m.changed)).toEqual({ ...old, allowlist_user_ids: ['9', '12'], exempt_user_ids: [] })
+      // m.values itself is not mutated
+      expect(m.values.exempt_user_ids).toEqual(['5', '9'])
+    })
+
+    it('leaves the retired key alone when the allowlist is not saved, and adds none', () => {
+      const other = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, mode: 'enforce' }))
+      expect(other.changed).toEqual(['mode'])
+      expect(withRetiredCleared(other.values, other.changed)).toBe(other.values)
+      // no retired list, or an empty one: nothing to add
+      const fresh = { ...stored, allowlist_user_ids: ['7'] }
+      expect(withRetiredCleared(fresh, ['allowlist_user_ids'])).toBe(fresh)
+      const emptied = { ...fresh, exempt_user_ids: [] }
+      expect(withRetiredCleared(emptied, ['allowlist_user_ids'])).toBe(emptied)
+      // the list another admin stored meanwhile (latest) is the one emptied
+      expect(withRetiredCleared({ ...fresh, exempt_user_ids: ['3'] }, ['mode', 'allowlist_user_ids']).exempt_user_ids).toEqual([])
     })
 
     it('stores an emptied allowlist as [], so the retired list is not read again', () => {
@@ -132,7 +148,7 @@ describe('the save of the settings tab', () => {
         const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: emptied }))
         expect(m.changed).toEqual(['allowlist_user_ids'])
         expect(m.values.allowlist_user_ids).toEqual([])
-        expect(m.values.exempt_user_ids).toEqual(['5', '9'])
+        expect(withRetiredCleared(m.values, m.changed).exempt_user_ids).toEqual([])
       }
       // without a retired list an emptied allowlist is simply removed
       expect(sentSetting(schema.properties.allowlist_user_ids, stored, 'allowlist_user_ids', undefined)).toBeUndefined()
@@ -163,6 +179,38 @@ describe('the save of the settings tab', () => {
       const m = mergeSettings(offKeys, off, off, page(off, offForm), page(off, { ...offForm, verdict_cache_days: 7 }))
       expect(m.changed).toEqual(['verdict_cache_days'])
       expect(m.values).toEqual({ ...off, verdict_cache_days: 7 })
+    })
+  })
+
+  // settings.go verdictCache: without verdict_cache_days a stored cache_ttl_seconds is read again.
+  describe('cleared cache days while the retired cache_ttl_seconds is stored', () => {
+    const cleared = (s: Record<string, unknown>) => {
+      const ks = editableKeys(sections, s)
+      const f: Record<string, unknown> = { ...displayValues(schema, s, schemaKeys(ks)), analysis_channel_id: 0, api_key: MASK }
+      return mergeSettings(ks, s, s, page(s, f), page(s, { ...f, verdict_cache_days: '' }))
+    }
+
+    it('sends the schema default instead of removing the key', () => {
+      // the retired key gives 1 day: without the new key the cache would stay at 1 day
+      const hour = { ...stored, cache_ttl_seconds: 3600 }
+      expect(cleared(hour).changed).toEqual(['verdict_cache_days'])
+      expect(cleared(hour).values).toEqual({ ...hour, verdict_cache_days: 7 })
+      // days stored over a retired 0: without the new key the cache would be off
+      const both = { ...stored, cache_ttl_seconds: 0, verdict_cache_days: 3 }
+      expect(cleared(both).values).toEqual({ ...both, verdict_cache_days: 7 })
+      for (const empty of [undefined, null, '', ' ']) expect(sentSetting(schema.properties.verdict_cache_days, hour, 'verdict_cache_days', empty)).toBe(7)
+    })
+
+    it('removes the key without a retired one, and leaves an off cache off while the field was never filled', () => {
+      const days = { ...stored, verdict_cache_days: 3 }
+      expect(cleared(days).changed).toEqual(['verdict_cache_days'])
+      expect(cleared(days).values).toEqual(stored)
+      // the field is empty because the retired 0 keeps the cache off: nothing was cleared, nothing is written
+      const off = { ...stored, cache_ttl_seconds: 0 }
+      expect(cleared(off).changed).toEqual([])
+      expect(cleared(off).values).toEqual(off)
+      // other numbers are still removed
+      expect(sentSetting(schema.properties.cache_entries, { ...stored, cache_ttl_seconds: 3600 }, 'cache_entries', '')).toBeUndefined()
     })
   })
 

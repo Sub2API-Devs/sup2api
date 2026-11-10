@@ -41,6 +41,16 @@ describe('messages', () => {
     for (const old of ['treated as a pass', 'Errors always allow', 'errors allow', 'this stage passes', 'its stage allows', 'the stage allows', 'exempt users']) expect(en).not.toContain(old)
   })
 
+  it('names the fallback arrow and the cache counter as 0.8.0 behaves', () => {
+    // a later review stage that passes overturns the hit and ends the run: "pass → fallback" is wrong
+    expect(messages.zh.flows.toFallback).not.toContain('通过')
+    expect(messages.en.flows.toFallback.toLowerCase()).not.toContain('pass')
+    // hits are cached too (replayed); cache_hits counts requests passed from the cache
+    expect(messages.zh.runtime.cacheHits).not.toContain('通过缓存')
+    expect(messages.en.runtime.cacheHits.toLowerCase()).not.toContain('pass cache')
+    for (const lang of [messages.zh, messages.en]) expect(['passAllow', 'passFallback', 'passOverturn'].filter((k) => !(k in lang.flows))).toEqual([])
+  })
+
   it('has a text for every analysis error code of the backend', () => {
     // internal/moderation: upstream.go ErrType*, analysis.go analysisErr*
     const codes = ['timeout', 'ttft_timeout', 'upstream_error', 'network', 'bad_response', 'no_channel', 'auditor_missing', 'panic', 'canceled', 'no_submit', 'bad_submit', 'disabled', 'stale']

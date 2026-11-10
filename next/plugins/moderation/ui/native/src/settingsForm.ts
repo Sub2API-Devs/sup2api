@@ -9,9 +9,12 @@ import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@su
 //
 // Two keys of 0.8.0 replace a retired one that the plugin still reads until
 // the new key is stored (settings.go DecodeSettings); the page shows what
-// the plugin reads and only ever writes the new key:
+// the plugin reads and writes the new key:
 //   allowlist_user_ids  ← exempt_user_ids
 //   verdict_cache_days  ← cache_ttl_seconds (0 = cache off, else whole days, rounded up, 1–30)
+// A new key is never removed while its retired key would be read again
+// (sentSetting), and a saved allowlist empties the retired exempt_user_ids
+// (withRetiredCleared): nodes still on 0.7.2 do not moderate those users.
 
 /** Keys with their own editor on the settings tab instead of the schema widget. */
 export const CUSTOM_KEYS = ['analysis_channel_id', 'notify_webhook_url', 'notify_webhook_secret', 'jev_default_set'] as const
@@ -103,14 +106,38 @@ export function sentValue(schema: JSONSchema | undefined, v: unknown): unknown {
 }
 
 /**
- * sentValue of a key of the page. An allowlist emptied while the retired
- * exempt_user_ids still holds users is sent as [], not removed: without the
- * key the plugin would read the retired list again.
+ * sentValue of a key of the page. A new key is not removed while the plugin
+ * would then read its retired key again instead of the schema default:
+ * - an allowlist emptied while the retired exempt_user_ids still holds users
+ *   is sent as [];
+ * - cleared cache days are sent as the schema default (7) while a retired
+ *   cache_ttl_seconds is stored (it would give "off" for 0, else its own
+ *   days). The one exception is the field left empty because the retired
+ *   key keeps the cache off (verdictCacheOff: nothing was cleared, the page
+ *   says the cache is off and it stays off).
  */
 export function sentSetting(schema: JSONSchema | undefined, stored: Record<string, unknown>, k: string, v: unknown): unknown {
   const sent = sentValue(schema, v)
-  const retired = stored[RETIRED_ALLOWLIST]
-  return sent === undefined && k === ALLOWLIST_KEY && Array.isArray(retired) && retired.length ? [] : sent
+  if (sent !== undefined) return sent
+  if (k === ALLOWLIST_KEY) {
+    const retired = stored[RETIRED_ALLOWLIST]
+    return Array.isArray(retired) && retired.length ? [] : undefined
+  }
+  if (k === CACHE_DAYS_KEY && stored[RETIRED_CACHE_TTL] !== undefined && !verdictCacheOff(stored)) return schema?.default
+  return undefined
+}
+
+/**
+ * The values to PUT (mergeSettings) with the retired exempt_user_ids emptied
+ * when this save changes the allowlist: nodes still on 0.7.2 (a rollout in
+ * progress, or after a rollback) read only the retired list and do not
+ * moderate its users at all, so a user taken off the allowlist must not stay
+ * on it. Nothing is added when the retired list is absent or empty.
+ */
+export function withRetiredCleared(values: Record<string, unknown>, changed: readonly string[]): Record<string, unknown> {
+  const retired = values[RETIRED_ALLOWLIST]
+  if (!changed.includes(ALLOWLIST_KEY) || !Array.isArray(retired) || !retired.length) return values
+  return { ...values, [RETIRED_ALLOWLIST]: [] }
 }
 
 /** The settings key of an API field path: "values.<key>[.<path>]", "values/<key>/…" or "<key>". */

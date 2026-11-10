@@ -121,6 +121,8 @@ export interface Outcome {
 }
 
 export interface StageTrace {
+  /** 1-based number of the stage in the flow's spec; absent on records written before 0.8.0 (trace.ts stageNumber) */
+  stage?: number
   outcomes: Outcome[] | null
   result: 'hit' | 'pass' | 'skipped'
   errored?: boolean
@@ -275,6 +277,8 @@ export interface WatchCounts {
   watching: number
   watching_with_new: number
   blocking: number
+  /** enforce-level entries with new hits since last seen; absent before 0.8.0 */
+  blocking_with_new?: number
 }
 
 /** Envelope members of GET /watchlist besides data and page. */

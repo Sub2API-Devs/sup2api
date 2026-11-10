@@ -7,6 +7,9 @@ import {
   isAuditorType,
   moveStage,
   newSpec,
+  passOutcome,
+  removeAuditor,
+  removeStage,
   sameSpec,
   setCombine,
   setFallback,
@@ -187,5 +190,59 @@ describe('groupCoverage', () => {
     expect(c.moderated).toEqual([1])
     expect(c.exempt).toEqual([2])
     expect(c.inactive).toEqual([])
+  })
+})
+
+// A removal can leave only fallback stages: the first stage cannot be one
+// (fallback_first blocks publishing and saving, and its card has no switch).
+describe('the first stage stays a review stage when the review stages are removed', () => {
+  const both = () => spec(review(1), { auditors: [2, 3], combine: 'at_least', n: 2, fallback: true }, fallback(4))
+
+  it('removeStage', () => {
+    const s = both()
+    const next = removeStage(s, 0)
+    expect(next.stages).toEqual([{ auditors: [2, 3], combine: 'at_least', n: 2 }, { auditors: [4], combine: 'any', fallback: true }])
+    expect('fallback' in next.stages[0]).toBe(false)
+    expect(codes(next)).toEqual([])
+    // the input is never mutated
+    expect(s.stages[1].fallback).toBe(true)
+    // a review stage is left: nothing else changes
+    expect(order(removeStage(spec(review(1), review(2), fallback(3)), 0))).toBe('2 | 3')
+    expect(removeStage(spec(review(1)), 0).stages).toEqual([])
+  })
+
+  it('removeAuditor', () => {
+    const next = removeAuditor(spec(review(1), fallback(2)), 0, 0)
+    expect(next.stages).toEqual([{ auditors: [2], combine: 'any' }])
+    expect(codes(next)).toEqual([])
+    // the stage keeps an auditor: it stays, and so do the fallback stages
+    expect(order(removeAuditor(spec(review(1, 3), fallback(2)), 0, 0))).toBe('3 | 2')
+    // dropping the auditor on the library removes it the same way
+    expect(applyDrop(spec(review(1), fallback(2)), { kind: 'node', stage: 0, index: 0 }, { kind: 'trash' }, typeOf)).toEqual(next)
+  })
+
+  it('moveAuditor (keyboard → or a drag into the fallback stage)', () => {
+    const next = applyDrop(spec(review(1), fallback(2), fallback(3)), { kind: 'node', stage: 0, index: 0 }, { kind: 'stage', stage: 1 }, typeOf) as Spec
+    expect(next.stages).toEqual([{ auditors: [2, 1], combine: 'any' }, { auditors: [3], combine: 'any', fallback: true }])
+    expect(codes(next)).toEqual([])
+    // the source stage stays: the target stays a fallback stage
+    const kept = applyDrop(spec(review(1, 4), fallback(2)), { kind: 'node', stage: 0, index: 0 }, { kind: 'stage', stage: 1 }, typeOf) as Spec
+    expect(kept.stages).toEqual([{ auditors: [4], combine: 'any' }, { auditors: [2, 1], combine: 'any', fallback: true }])
+    // the only review auditor moved to a new stage is a review stage again
+    const moved = applyDrop(spec(review(1), fallback(2)), { kind: 'node', stage: 0, index: 0 }, { kind: 'new' }, typeOf) as Spec
+    expect(order(moved)).toBe('1 | 2')
+    expect(codes(moved)).toEqual([])
+  })
+})
+
+// flow.go runFlow: a pass ends the chain; the fallback stages run only when no stage hit before it.
+describe('passOutcome', () => {
+  it('names where a pass of a review stage leads', () => {
+    // no fallback stages: a pass allows
+    expect([0, 1, 2].map((i) => passOutcome(i, 3, 3))).toEqual(['passAllow', 'passAllow', 'passAllow'])
+    // the first stage has no earlier hit: its pass goes to the fallback stages
+    expect(passOutcome(0, 1, 2)).toBe('passFallback')
+    // a later stage overturns an earlier hit (no fallback), or had none in front (failed stages)
+    expect([0, 1].map((i) => passOutcome(i, 2, 3))).toEqual(['passFallback', 'passOverturn'])
   })
 })

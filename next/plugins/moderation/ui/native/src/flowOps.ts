@@ -59,6 +59,17 @@ export function newSpec(): Spec {
 
 const withStages = (spec: Spec, stages: Stage[]): Spec => ({ ...spec, stages })
 
+/**
+ * The stages left by a removal: when no review stage is left, the first
+ * stage becomes one (the first stage cannot be a fallback stage, and its
+ * card has no switch to change that).
+ */
+function keepReviewFirst(stages: Stage[]): Stage[] {
+  if (!stages.length || stages.some((s) => !s.fallback)) return stages
+  const { fallback: _drop, ...first } = stages[0]
+  return [first, ...stages.slice(1)]
+}
+
 /** How many review stages lead the list: the index of the first fallback stage (all of them when there is none). */
 export function reviewStageCount(stages: readonly Pick<Stage, 'fallback'>[]): number {
   const first = stages.findIndex((s) => s.fallback)
@@ -73,12 +84,10 @@ export function addStage(spec: Spec, auditor: number, typeOf: AuditorTypeOf, at:
   return withStages(spec, stages)
 }
 
+/** Removes a stage; when only fallback stages are left, the first of them becomes a review stage. */
 export function removeStage(spec: Spec, index: number): Spec {
   if (!spec.stages[index]) return spec
-  return withStages(
-    spec,
-    spec.stages.filter((_, i) => i !== index)
-  )
+  return withStages(spec, keepReviewFirst(spec.stages.filter((_, i) => i !== index)))
 }
 
 /**
@@ -107,7 +116,7 @@ export function addAuditor(spec: Spec, stageIndex: number, auditor: number, type
   )
 }
 
-/** Removes the auditor at `auditorIndex`; a stage left empty is removed too. */
+/** Removes the auditor at `auditorIndex`; a stage left empty is removed too (removeStage). */
 export function removeAuditor(spec: Spec, stageIndex: number, auditorIndex: number): Spec {
   const stage = spec.stages[stageIndex]
   if (!stage || auditorIndex < 0 || auditorIndex >= stage.auditors.length) return spec
@@ -123,8 +132,9 @@ export function removeAuditor(spec: Spec, stageIndex: number, auditorIndex: numb
  * Moves an auditor within or across stages. `to.stage === stages.length`
  * creates a new review stage, the last one before the fallback stages;
  * `to.index` defaults to the end of the target.
- * A source stage left empty is removed. A target that already has the
- * auditor (or is full) is a no-op.
+ * A source stage left empty is removed (when only fallback stages are left
+ * then, the first of them becomes a review stage). A target that already
+ * has the auditor (or is full) is a no-op.
  */
 function moveAuditor(spec: Spec, from: { stage: number; index: number }, to: { stage: number; index?: number }): Spec {
   const auditor = spec.stages[from.stage]?.auditors[from.index]
@@ -142,10 +152,7 @@ function moveAuditor(spec: Spec, from: { stage: number; index: number }, to: { s
     const list = stages[to.stage].auditors
     list.splice(Math.min(to.index ?? list.length, list.length), 0, auditor)
   }
-  return withStages(
-    spec,
-    stages.filter((s) => s.auditors.length > 0)
-  )
+  return withStages(spec, keepReviewFirst(stages.filter((s) => s.auditors.length > 0)))
 }
 
 /**
@@ -228,6 +235,19 @@ export function applyTemplate(spec: Spec, template: FlowTemplate, auditors: read
     spec,
     types.map((type) => ({ auditors: onlyOf(type), combine: 'any' as const }))
   )
+}
+
+/**
+ * Where a pass of review stage `index` leads (flow.go runFlow), as the key
+ * of its outcome line. A pass ends the chain: with an earlier hit it
+ * overturns that hit and allows; without one (the first stage, or every
+ * stage before failed or was skipped) the fallback stages run. So without
+ * fallback stages a pass always allows, the first stage's pass goes to the
+ * fallback stages, and a later stage's pass does either.
+ */
+export function passOutcome(index: number, reviewCount: number, count: number): 'passAllow' | 'passFallback' | 'passOverturn' {
+  if (reviewCount >= count) return 'passAllow'
+  return index === 0 ? 'passFallback' : 'passOverturn'
 }
 
 export type StageRole = 'first' | 'behavior' | 'review' | 'fallback'

@@ -9,6 +9,7 @@ import {
   COMBINES,
   acceptsCanvasDrag,
   leavesInside,
+  passOutcome,
   readCanvasDrag,
   startCanvasDrag,
   type CanvasAuditor,
@@ -52,7 +53,6 @@ const isFallback = computed(() => !!props.stage.fallback)
 /** The first and the last stage of this stage's kind: it does not move past them. */
 const firstOfKind = computed(() => props.index === (isFallback.value ? props.reviewCount : 0))
 const lastOfKind = computed(() => props.index === (isFallback.value ? props.count : props.reviewCount) - 1)
-const hasFallback = computed(() => props.reviewCount < props.count)
 const multi = computed(() => props.stage.auditors.length > 1)
 const combineOptions = computed(() => enumOptions('flows.combineOpt', COMBINES))
 const nameOf = (id: number) => props.byId.get(id)?.name ?? t('flows.auditorN', { id })
@@ -169,7 +169,7 @@ function setN(v: unknown) {
       <span class="mod-text-success">{{ t('flows.fallbackPass') }}</span>
     </div>
     <div v-else class="mod-stage-out">
-      <span class="mod-text-success">{{ index === 0 && hasFallback ? t('flows.passFallback') : t('flows.passAllow') }}</span>
+      <span class="mod-text-success">{{ t(`flows.${passOutcome(index, reviewCount, count)}`) }}</span>
       <span class="mod-text-danger">{{ lastOfKind ? t('flows.hitSuspicious') : t('flows.hitNextN', { n: index + 2 }) }}</span>
     </div>
   </section>
