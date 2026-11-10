@@ -311,3 +311,40 @@ func TestAgentToolChoiceVariants(t *testing.T) {
 		}
 	}
 }
+
+// A model that refuses the temperature parameter is asked again without it,
+// and later calls of the same auditor leave it out from the start.
+func TestAgentDropsRefusedTemperature(t *testing.T) {
+	llm := newFakeLLM(t, func(req fakeReq, _ int) (int, any) {
+		if _, sent := req.Raw["temperature"]; sent {
+			return 400, map[string]any{"type": "error", "error": map[string]any{"type": "invalid_request_error", "message": "`temperature` is deprecated for this model."}}
+		}
+		return 200, toolCallResp("c1", ToolName, verdictFor(req.lastUser()))
+	})
+	c := testConfig(llm.srv.URL, nil)
+	for i, want := range []int{2, 3} {
+		res, err := newAgent().run(context.Background(), c, "please MOD-BLOCK", false)
+		if err != nil || res.Verdict.Verdict != VerdictBlock || res.Turns != 1 {
+			t.Fatalf("run %d: res = %+v, err = %v", i, res, err)
+		}
+		if got := len(llm.reqs()); got != want {
+			t.Fatalf("run %d: %d upstream calls, want %d", i, got, want)
+		}
+	}
+	reqs := llm.reqs()
+	if _, sent := reqs[0].Raw["temperature"]; !sent {
+		t.Fatal("the first call carries the temperature")
+	}
+	for _, r := range reqs[1:] {
+		if _, sent := r.Raw["temperature"]; sent {
+			t.Fatalf("temperature sent again: %s", r.Raw["temperature"])
+		}
+	}
+	// Another 400 is not retried.
+	other := newFakeLLM(t, func(fakeReq, int) (int, any) {
+		return 400, map[string]any{"error": map[string]any{"message": "max_tokens is too large"}}
+	})
+	if _, err := newAgent().run(context.Background(), testConfig(other.srv.URL, nil), "hello", false); err == nil || len(other.reqs()) != 1 {
+		t.Fatalf("err = %v, calls = %d", err, len(other.reqs()))
+	}
+}
