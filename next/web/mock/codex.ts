@@ -83,27 +83,12 @@ export const codexUIPlugin = {
   asset_base: `/plugin-ui/codex/${VERSION}-dev`,
   menus: [],
   pages: {},
-  slots: manifest.ui?.slots || [
-    { slot: 'account.list.quota', component: 'CodexResetBadge', permission: 'codex:reset', accountTypes: ['codex_device'] },
-    { slot: 'account.detail.tabs', component: 'CodexResetTab', permission: 'codex:reset', accountTypes: ['codex_device'] }
-  ],
+  slots: manifest.ui?.slots || [],
   // manifest ui.accountActions as /ui/plugins hands it down (CONTRACTS §23.3, §91b).
-  account_actions: manifest.ui?.accountActions || [
-    {
-      id: 'reset-credit',
-      label: { en: 'Use an official reset', zh: '使用官方重置' },
-      permission: 'codex:reset',
-      route: 'POST /reset-credits/consume',
-      accountTypes: ['codex_device'],
-      confirm: {
-        en: 'Spend 1 official ChatGPT (Codex) usage reset of this account (the one that expires first) and clear its current usage at once? It cannot be taken back; nothing is spent when no window can be reset.',
-        zh: '消耗该账号 1 次 ChatGPT（Codex）官方重置次数（优先用最早过期的），立即清零当前用量？用掉后不能撤回；没有可重置的窗口时不扣次数。'
-      }
-    }
-  ],
+  account_actions: manifest.ui?.accountActions || [],
   native_entry: 'ui/native/entry.js',
   trust: 'official',
-  host_ui_compat: manifest.hostUICompat || '^3.8'
+  host_ui_compat: manifest.hostUICompat || '*'
 }
 
 /** The plugin's ValidateCredentials as far as the mock goes: the tokens of the type's flow. */

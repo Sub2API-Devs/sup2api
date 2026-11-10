@@ -12,7 +12,7 @@
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
   "hostCompat": ">=0.1.269 <0.2.0",
-  "hostUICompat": "^3.6",
+  "hostUICompat": "^3.8",
 
   "capabilities": [
     { "id": "platform.adapter.v1" },
@@ -130,6 +130,25 @@
   ],
 
   "ui": {
+    "slots": [
+      { "slot": "account.list.quota", "component": "CodexResetBadge", "permission": "codex:reset", "accountTypes": ["codex_device"] },
+      { "slot": "account.detail.tabs", "component": "CodexResetTab", "permission": "codex:reset", "accountTypes": ["codex_device"] }
+    ],
+    "accountActions": [
+      {
+        "id": "reset-credit",
+        "label": { "en": "Use an official reset", "zh": "使用官方重置" },
+        "icon": "refresh",
+        "permission": "codex:reset",
+        "route": "POST /reset-credits/consume",
+        "accountTypes": ["codex_device"],
+        "danger": true,
+        "confirm": {
+          "en": "Spend 1 official ChatGPT (Codex) usage reset of this account (the one that expires first) and clear its current usage at once? It cannot be taken back; nothing is spent when no window can be reset.",
+          "zh": "消耗该账号 1 次 ChatGPT（Codex）官方重置次数（优先用最早过期的），立即清零当前用量？用掉后不能撤回；没有可重置的窗口时不扣次数。"
+        }
+      }
+    ],
     "native": { "entry": "ui/native/entry.js" }
   },
 
@@ -151,7 +170,7 @@
     { "id": "net", "scope": { "domains": ["auth.openai.com"] },
       "reason": { "en": "Talk to OpenAI's authorization server while an account is authorized (device code, token exchange); upstream requests, usage queries and token refreshes are sent by the core", "zh": "授权账号时访问 OpenAI 授权服务器（设备码、换取令牌）；上游请求、用量查询与令牌刷新由核心发送" } },
     { "id": "ui.native",
-      "reason": { "en": "The account form (CodexAuthForm) that runs the device code and Sign in with ChatGPT flows", "zh": "执行设备码登录与 Sign in with ChatGPT 流程的账号表单（CodexAuthForm）" } }
+      "reason": { "en": "The account form (CodexAuthForm) that runs the device code and Sign in with ChatGPT flows, and the official usage reset decoration and detail tab of device code accounts (CodexResetBadge, CodexResetTab)", "zh": "执行设备码登录与 Sign in with ChatGPT 流程的账号表单（CodexAuthForm），以及设备码账号的官方重置次数装饰、详情标签页（CodexResetBadge、CodexResetTab）" } }
   ],
 
   "externalServices": ["auth.openai.com", "chatgpt.com", "api.openai.com"]
