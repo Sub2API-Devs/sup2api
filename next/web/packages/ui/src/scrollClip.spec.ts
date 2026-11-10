@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, ref, shallowRef, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
-import { useCentredSelection, useScrollClip, useScrollEdges, useScrollFade } from './scrollClip'
+import { isCutOff, useCentredSelection, useScrollClip, useScrollEdges, useScrollFade } from './scrollClip'
 
 // Mounts a scroller element (500px of content in 300px) watched by `use`.
 function scroller<T>(use: (el: Ref<HTMLElement | undefined>) => T, style = '') {
@@ -52,6 +52,30 @@ describe('useScrollEdges', () => {
   })
 })
 
+// BulkDock does not press a button the scroller shows only a part of.
+describe('isCutOff', () => {
+  const box = (left: number, right: number) => {
+    const el = document.createElement('div')
+    el.getBoundingClientRect = () => ({ left, right, width: right - left }) as DOMRect
+    return el
+  }
+  const scroller = box(100, 300)
+
+  it('is true for an item reaching past either edge', () => {
+    expect(isCutOff(scroller, box(260, 340))).toBe(true)
+    expect(isCutOff(scroller, box(60, 140))).toBe(true)
+  })
+
+  it('is false for an item in full view, to the pixel', () => {
+    expect(isCutOff(scroller, box(100, 300))).toBe(false)
+    expect(isCutOff(scroller, box(100.5, 300.5))).toBe(false)
+  })
+
+  it('is false for an item the scroller can never show in full', () => {
+    expect(isCutOff(scroller, box(50, 350))).toBe(false)
+  })
+})
+
 describe('useScrollFade / useCentredSelection in RTL', () => {
   afterEach(() => vi.restoreAllMocks())
 
@@ -63,7 +87,7 @@ describe('useScrollFade / useCentredSelection in RTL', () => {
     s.w.unmount()
   })
 
-  it('counts scrollLeft from the right edge', async () => {
+  it('centres an item with the same arithmetic as in LTR', async () => {
     const scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
     const item = document.createElement('span')
     Object.defineProperties(item, { offsetLeft: { value: 100 }, offsetWidth: { value: 50 } })
@@ -71,8 +95,8 @@ describe('useScrollFade / useCentredSelection in RTL', () => {
     const s = scroller(el => useCentredSelection(el, () => selected.value), 'direction: rtl')
     selected.value = item
     await nextTick()
-    // 100 - (300 - 50) / 2 = -25 from the left, minus the 200px of overflow.
-    expect(scrollTo).toHaveBeenLastCalledWith({ left: -225, behavior: 'smooth' })
+    // 100 - (300 - 50) / 2: offsetLeft is already negative for items left of the start position.
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: -25, behavior: 'smooth' })
     s.w.unmount()
   })
 })

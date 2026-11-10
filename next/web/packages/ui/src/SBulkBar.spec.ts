@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { h, nextTick, ref } from 'vue'
 import SBulkBar from './SBulkBar.vue'
@@ -9,6 +9,7 @@ enableAutoUnmount(afterEach)
 
 afterEach(() => {
   document.body.innerHTML = ''
+  vi.restoreAllMocks()
 })
 
 // The marked element is what the component's style rule keeps room for, at the end of its parent.
@@ -27,6 +28,47 @@ describe('SBulkBar on a phone', () => {
     expect(items.map(b => b.textContent?.trim())).toEqual(['Select this page', 'Select all 40 results', 'Clear selection'])
     items[1].click()
     expect(w.emitted('select-all')).toHaveLength(1)
+  })
+
+  // The dock's action buttons scroll sideways when they do not fit.
+  const scrollerOf = (button: Element) => button.parentElement!.parentElement!
+  const box = (left: number, right: number) => () => ({ left, right, width: right - left }) as DOMRect
+
+  it('fades the edge of the actions that hides more buttons', async () => {
+    const w = mountPinned(SBulkBar, { props: { count: 1 }, slots: { default: () => h('button', { id: 'delete' }, 'Delete') } })
+    const scroller = scrollerOf(w.get('#delete').element)
+    expect(scroller.className).not.toContain('mask-image')
+    Object.defineProperties(scroller, { scrollWidth: { value: 500 }, clientWidth: { value: 200 } })
+    const scrollTo = async (left: number) => {
+      scroller.scrollLeft = left
+      scroller.dispatchEvent(new Event('scroll'))
+      await nextTick()
+      return scroller.className
+    }
+    expect(await scrollTo(0)).toContain('to_left')
+    expect(await scrollTo(300)).toContain('to_right,transparent,#000_2rem)')
+  })
+
+  it('brings a button only partly in view into view instead of pressing it', () => {
+    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {})
+    const onClick = vi.fn()
+    const w = mountPinned(SBulkBar, { props: { count: 1 }, slots: { default: () => h('button', { id: 'delete', onClick }, 'Delete') } })
+    const button = w.get('#delete').element as HTMLElement
+    const press = (detail: number) => button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }))
+    scrollerOf(button).getBoundingClientRect = box(100, 300)
+
+    button.getBoundingClientRect = box(260, 340)
+    expect(press(1)).toBe(false)
+    expect(onClick).not.toHaveBeenCalled()
+    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }))
+    // A keyboard press: focus has already scrolled the button into view.
+    press(0)
+    expect(onClick).toHaveBeenCalledTimes(1)
+
+    button.getBoundingClientRect = box(220, 300)
+    press(1)
+    expect(onClick).toHaveBeenCalledTimes(2)
+    expect(scroll).toHaveBeenCalledTimes(1)
   })
 
   it('takes no room where it stands, whatever spacing the caller gives the wide bar', () => {

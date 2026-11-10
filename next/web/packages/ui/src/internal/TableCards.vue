@@ -8,6 +8,9 @@
 // stays, floated to the top end). `surface` (STable
 // `card`) = items divided inside one card, else separate cards. Selection,
 // expansion, reordering and clicks are STable's: this list only emits.
+// A cell wider than its card (content that cannot wrap, e.g. a fixed width
+// from the page's own CSS) is cut at the card's edge: it must not make the
+// page scroll sideways.
 // Everything inside a card sees TABLE_CARD. Internal to STable.
 import { h, provide, ref, useId, type Slot } from 'vue'
 import SCheckbox from '../SCheckbox.vue'
@@ -112,6 +115,7 @@ function Cell(p: { column: TableColumn; row: T; index: number; render?: Slot }) 
         v-bind="rowAttrs?.(row, i)"
         :class="[
           surface ? 'p-4' : 'card p-4',
+          'overflow-x-clip',
           loading ? 'opacity-60' : '',
           clickable
             ? 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500/40'

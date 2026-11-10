@@ -2,7 +2,8 @@
 // end edge (left / right in LTR). Kept up to date on scroll and when the
 // element or its `content` resizes; false while the element is not mounted.
 // useScrollFade turns that into an edge fade mask; useCentredSelection keeps
-// the selected item (tab, segment) in the middle of the scroller.
+// the selected item (tab, segment) in the middle of the scroller; isCutOff
+// and scrollToCentre serve a scroller whose items are pressed (BulkDock).
 import { computed, onBeforeUnmount, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 
 export interface ScrollEdges {
@@ -59,11 +60,18 @@ export function useScrollFade(el: Ref<HTMLElement | undefined>, content: Ref<HTM
   })
 }
 
-function scrollToCentre(scroller: HTMLElement | undefined, item: HTMLElement | undefined, behavior: ScrollBehavior) {
+/** Whether the scroller shows only a part of `item` although it has room for all of it. */
+export function isCutOff(scroller: HTMLElement, item: HTMLElement): boolean {
+  const box = scroller.getBoundingClientRect()
+  const rect = item.getBoundingClientRect()
+  return rect.width <= box.width && (rect.left < box.left - 1 || rect.right > box.right + 1)
+}
+
+/** Scrolls `item` to the middle of `scroller`, which must be its offsetParent (position: relative). */
+export function scrollToCentre(scroller: HTMLElement | undefined, item: HTMLElement | undefined, behavior: ScrollBehavior) {
   if (!scroller || !item) return
-  // offsetLeft is physical; an RTL scroller counts scrollLeft from its right edge (0, then negative).
-  const left = item.offsetLeft - (scroller.clientWidth - item.offsetWidth) / 2
-  scroller.scrollTo?.({ left: isRtl(scroller) ? left - (scroller.scrollWidth - scroller.clientWidth) : left, behavior })
+  // Holds in RTL too: offsetLeft and scrollLeft both count from the scroller's start position (negative leftwards).
+  scroller.scrollTo?.({ left: item.offsetLeft - (scroller.clientWidth - item.offsetWidth) / 2, behavior })
 }
 
 /**

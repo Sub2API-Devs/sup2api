@@ -261,8 +261,8 @@ async function revokeKey(p: Publisher, k: PublisherKey) {
           <STable v-else :columns="keyColumns" :rows="row.keys" row-key="key_id" dense data-testid="publisher-keys">
             <template #cell-key_id="{ row: k }"><SCode inline :text="k.key_id" /></template>
             <template #cell-public_key="{ row: k }">
-              <span class="inline-flex items-center gap-1">
-                <code class="max-w-[16rem] truncate font-mono text-xs" :title="k.public_key">{{ k.public_key }}</code>
+              <span class="inline-flex items-center gap-1 max-md:max-w-full">
+                <code class="min-w-0 max-w-[16rem] truncate font-mono text-xs" :title="k.public_key">{{ k.public_key }}</code>
                 <SCopyButton :text="k.public_key" icon-only :label="t('publishers.copyPublicKey', { key: k.key_id })" />
               </span>
             </template>

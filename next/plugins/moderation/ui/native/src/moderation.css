@@ -124,6 +124,15 @@ html.dark {
   max-width: 14rem;
   overflow: hidden;
 }
+/* Below the console's md breakpoint STable rows are cards, with cells narrower
+   than the cap: the chips wrap inside the cell. Not on wide screens, where a
+   percentage would stop the cap from limiting the table column. */
+@media (max-width: 767.98px) {
+  .mod-chips {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+}
 .mod-chips-wrap {
   flex-wrap: wrap;
   max-width: none;
@@ -148,6 +157,7 @@ html.dark {
 }
 .mod-filter-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-self: flex-end;
 }
@@ -597,6 +607,20 @@ p.mod-text-danger {
 }
 .mod-groups-list > * {
   flex-shrink: 0;
+}
+/* The cell of a phone card is narrower than the cap (see .mod-chips): the groups wrap, and so does a
+   name longer than the cell, since a touch screen shows no title. */
+@media (max-width: 767.98px) {
+  .mod-groups-cell {
+    max-width: 100%;
+  }
+  .mod-groups-list {
+    flex-wrap: wrap;
+  }
+  .mod-groups-list > * {
+    flex-shrink: 1;
+    white-space: normal;
+  }
 }
 .mod-groups-pick {
   display: flex;

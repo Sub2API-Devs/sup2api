@@ -9,7 +9,8 @@
 // replaces the count (e.g. a hint).
 // On a compact screen a selection shows as a bar fixed to the bottom of the
 // screen: the count opens a menu with the select / clear choices, the action
-// buttons sit on the right; the idle `persistent` strip is not shown there.
+// buttons sit on the right and scroll sideways when they do not fit (see
+// internal/BulkDock.vue); the idle `persistent` strip is not shown there.
 // The bar takes no room where the component stands (`contents`: the caller's
 // margin classes are meant for the wide bar); its height is kept free at the
 // end of the element holding it (see the style below), so place it beside
