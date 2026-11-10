@@ -26,8 +26,8 @@ describe('messages', () => {
   })
 
   it('has no key the components never use', () => {
-    // Keys looked up with a computed suffix: t(`tabs.${f}`), t(`plan.${p}`), t(`siwc.shape.${s}`).
-    const dynamic = ['tabs.', 'plan.', 'siwc.shape.']
+    // Keys looked up with a computed suffix: t(`tabs.${f}`), t(`plan.${p}`), t(`siwc.shape.${s}`), t(`reset.window${key}`).
+    const dynamic = ['tabs.', 'plan.', 'siwc.shape.', 'reset.window']
     const files = import.meta.glob<string>(['./*.vue', './*.ts', '!./*.spec.ts', '!./messages.ts'], { query: '?raw', import: 'default', eager: true })
     const sources = Object.values(files).join('\n')
     expect(Object.keys(files)).toContain('./DeviceFlow.vue')
