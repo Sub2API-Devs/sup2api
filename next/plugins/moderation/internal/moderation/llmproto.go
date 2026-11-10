@@ -283,21 +283,26 @@ const (
 	llmMaxImages = 20
 	// llmImagesMaxBase64 bounds the images of one call together, and with
 	// them the JSON body (the upstream APIs limit a request to some tens of
-	// megabytes) and the memory of a call. Measured for a call at the bound,
-	// beside the request itself: openai_chat and openai_responses hold the
-	// data URLs (one copy of the base64), what json.Marshal allocates for
-	// the body (up to about three times the base64 on a first call, once
-	// with a warm buffer) and the body - about 83.5 MiB allocated, 4.2
-	// times the base64; anthropic, which sends the base64 without a data
-	// URL, about 63.4 MiB, 3.2 times. Images that came with line breaks
-	// add the copy without them (llmImages), at most once the base64. The
-	// calls themselves are not admitted by their bytes; the requests they
-	// serve are: a hook request holds its bytes of max_inflight_mb (128 MB
-	// by default) while it is handled, and the post jobs hold at most
-	// maxQueueBytes. That leaves about six of the largest requests in
-	// progress at once, each with a call of every LLM auditor of its
-	// stage, which can still exceed the 512 MB of the plugin (known
-	// limitation, DESIGN section 14; the hook then fails open).
+	// megabytes) and the memory of a call. Measured for building the body
+	// of a call at the bound, beside the request itself: it grows with the
+	// number of images. openai_chat and openai_responses hold the data
+	// URLs (one copy of the base64), what json.Marshal allocates (its
+	// buffer is not reliably warm) and the body - about 83 MiB allocated
+	// for 3 images, 126 MiB for 8, 143 MiB for 20, that is 4 to 7 times
+	// the base64; anthropic, which sends the base64 without a data URL,
+	// about 63 to 123 MiB, 3 to 6 times. Images that came with line breaks
+	// add the copies without them (llmImages): what stays is at most the
+	// images sent, what is copied on the way is up to all the wrapped
+	// images of the request, because the total and the count are checked
+	// after the copy. The calls themselves are not admitted by their
+	// bytes; the requests they serve are: a hook request holds its bytes
+	// of max_inflight_mb (128 MB by default) while it is handled, and the
+	// post jobs hold at most maxQueueBytes until they are done. That
+	// leaves about six of the largest requests in progress on the pre
+	// path and about four more in the post queue, each with a call of
+	// every LLM auditor of its stage, which can exceed the 512 MB of the
+	// plugin (known limitation, DESIGN section 14; the hook then fails
+	// open).
 	llmImagesMaxBase64 = 20 << 20
 )
 
@@ -357,17 +362,15 @@ func llmImages(in *Input) (parts []Image, received []int) {
 // bytes long: one copy, which lives as long as the parts of the call that
 // hold it.
 func unwrapBase64(s string, size int) string {
-	var b strings.Builder
-	b.Grow(size)
-	for {
-		i := strings.IndexAny(s, "\r\n")
-		if i < 0 {
-			b.WriteString(s)
-			return b.String()
+	// One pass over the bytes: a text that is mostly line breaks costs no
+	// more than one that has none.
+	out := make([]byte, 0, size)
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c != '\r' && c != '\n' {
+			out = append(out, c)
 		}
-		b.WriteString(s[:i])
-		s = s[i+1:]
 	}
+	return string(out)
 }
 
 // llmImagesRefused is the status of err when it is how an upstream (or a

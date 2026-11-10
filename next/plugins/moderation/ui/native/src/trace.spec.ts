@@ -82,8 +82,8 @@ describe('the note of a call whose images the upstream refused', () => {
   it('says that nothing was reviewed on a skipped outcome: images alone, refused', () => {
     const skipped = { images_refused: true, skipped: true, status: 415 }
     expect(imagesRefusedNote(skipped)).toEqual({ key: 'trace.imagesRefusedSkipped', params: { status: 415 } })
-    expect(text(messages.zh, skipped)).toBe('上游拒收图片（HTTP 415），没有可审的文字，本级跳过')
-    expect(text(messages.en, skipped)).toBe('The upstream refused the images (HTTP 415); there was no text to review, the stage was skipped')
+    expect(text(messages.zh, skipped)).toBe('上游拒收图片（HTTP 415），没有可审的文字，该审核器跳过')
+    expect(text(messages.en, skipped)).toBe('The upstream refused the images (HTTP 415); there was no text to review, the auditor was skipped')
     for (const lang of [messages.zh, messages.en]) {
       expect(text(lang, skipped)).not.toContain(lang === messages.zh ? '只审了文字' : 'only the text was reviewed')
     }

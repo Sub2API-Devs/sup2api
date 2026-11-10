@@ -368,8 +368,8 @@ export default {
       images: '发送 {sent} 张图，跳过 {skipped} 张',
       imagesRefused: '上游拒收图片（HTTP {status}），本次只审了文字',
       imagesRefusedNoStatus: '上游拒收图片，本次只审了文字',
-      imagesRefusedSkipped: '上游拒收图片（HTTP {status}），没有可审的文字，本级跳过',
-      imagesRefusedSkippedNoStatus: '上游拒收图片，没有可审的文字，本级跳过',
+      imagesRefusedSkipped: '上游拒收图片（HTTP {status}），没有可审的文字，该审核器跳过',
+      imagesRefusedSkippedNoStatus: '上游拒收图片，没有可审的文字，该审核器跳过',
       imagesRefusedRetryFailed: '上游拒收图片，只审文字的重试也失败了',
       empty: '没有审核调用'
     },
@@ -1547,8 +1547,8 @@ export default {
       images: '{sent} images sent, {skipped} skipped',
       imagesRefused: 'The upstream refused the images (HTTP {status}); only the text was reviewed',
       imagesRefusedNoStatus: 'The upstream refused the images; only the text was reviewed',
-      imagesRefusedSkipped: 'The upstream refused the images (HTTP {status}); there was no text to review, the stage was skipped',
-      imagesRefusedSkippedNoStatus: 'The upstream refused the images; there was no text to review, the stage was skipped',
+      imagesRefusedSkipped: 'The upstream refused the images (HTTP {status}); there was no text to review, the auditor was skipped',
+      imagesRefusedSkippedNoStatus: 'The upstream refused the images; there was no text to review, the auditor was skipped',
       imagesRefusedRetryFailed: 'The upstream refused the images and the text-only retry failed too',
       empty: 'No auditor calls'
     },
