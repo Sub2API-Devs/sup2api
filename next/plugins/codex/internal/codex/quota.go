@@ -258,16 +258,23 @@ func (p *Plugin) BuildQuotaRequest(_ context.Context, in *pluginv1.BuildQuotaReq
 	if c.AccessToken == "" {
 		return nil, status.Error(codes.FailedPrecondition, "the account has no access_token; authorize it again / 账号没有 access_token，请重新授权")
 	}
+	return &pluginv1.BuildQuotaRequestResponse{Method: http.MethodGet, Url: p.ep.ChatGPT + usagePath, Headers: backendHeaders(c)}, nil
+}
+
+// backendHeaders are the headers of a codex_device request to the ChatGPT
+// backend's JSON endpoints (usage, reset credits).
+func backendHeaders(c credentials) map[string]string {
 	h := upstreamHeaders(TypeDevice, c)
 	h["accept"] = "application/json"
-	return &pluginv1.BuildQuotaRequestResponse{Method: http.MethodGet, Url: p.ep.ChatGPT + usagePath, Headers: h}, nil
+	return h
 }
 
 // ParseQuotaResponse implements pluginsdk.QuotaReader. 401/403 are
 // AUTH_REJECTED, other failures TRANSIENT (recorded on the snapshot only; the
 // account is never cooled down or disabled for a failed query). A null
-// rate_limit or null window is no window.
-func (p *Plugin) ParseQuotaResponse(_ context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
+// rate_limit or null window is no window. A readable answer also caches the
+// account's official reset count (resetcache.go).
+func (p *Plugin) ParseQuotaResponse(ctx context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
 	st := in.GetStatus()
 	switch {
 	case st == 0:
@@ -283,6 +290,7 @@ func (p *Plugin) ParseQuotaResponse(_ context.Context, in *pluginv1.ParseQuotaRe
 	if err := json.Unmarshal(in.GetBody(), &u); err != nil {
 		return quotaError(pluginv1.QuotaResult_ERROR_TYPE_TRANSIENT, "unreadable usage response / 无法解析用量响应: "+err.Error()), nil
 	}
+	p.cacheUsageResetCount(ctx, in.GetAccount().GetId(), in.GetBody())
 	now := p.now()
 	return quotaResult(now, u.windows(now)), nil
 }
