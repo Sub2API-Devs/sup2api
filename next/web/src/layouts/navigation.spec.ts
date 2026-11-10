@@ -31,7 +31,10 @@ function makeRouter() {
     routes: [
       { path: '/dashboard', component: Blank, meta: { title: 'nav.items.dashboard' } },
       { path: '/accounts', component: Blank, meta: { title: 'nav.items.accounts' } },
-      { path: '/prices', component: Blank, meta: { title: 'nav.items.prices' } },
+      { path: '/users', component: Blank, meta: { title: 'nav.items.users' } },
+      { path: '/ledger', component: Blank, meta: { title: 'nav.items.ledger', parent: '/users' } },
+      { path: '/groups', component: Blank, meta: { title: 'nav.items.groups', parent: '/settings' } },
+      { path: '/prices', component: Blank, meta: { title: 'nav.items.prices', parent: '/settings' } },
       { path: '/prices/sources', component: Blank, meta: { title: 'prices.sources.title', parent: '/prices' } },
       { path: '/prices/sources/:id/sync', component: Blank, meta: { title: 'prices.syncPrices', parent: '/prices/sources' } },
       {
@@ -41,7 +44,7 @@ function makeRouter() {
       },
       { path: '/plugins', component: Blank, meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
       { path: '/plugins/:key', component: Blank, meta: { title: 'nav.crumbs.pluginDetail', parent: '/plugins' } },
-      { path: '/plugins/:key/settings', component: Blank, meta: { title: 'nav.crumbs.pluginSettings', parent: '/settings' } },
+      { path: '/plugins/:key/settings', component: Blank, meta: { title: 'nav.crumbs.pluginSettings', parent: '/plugins' } },
       { path: '/forbidden', component: Blank },
       { path: '/:pathMatch(.*)*', component: Blank }
     ]
@@ -94,16 +97,16 @@ describe('sidebar', () => {
   const overview = { section: 'overview', items: [item('dashboard', '/dashboard')] }
   const operatorMenu = [
     overview,
-    { section: 'gateway', items: [item('accounts', '/accounts'), item('groups', '/groups')] },
+    { section: 'gateway', items: [item('accounts', '/accounts'), item('proxies', '/proxies')] },
     { section: 'security', items: [item('guard', '/p/guard/dashboard')] },
-    { section: 'finance', items: [item('ledger', '/ledger')] },
+    { section: 'finance', items: [item('growth', '/p/growth/dashboard')] },
     { section: 'users', items: [item('users', '/users'), item('roles', '/roles')] },
     { section: 'plugins', items: [item('plugins', '/plugins'), item('market', '/market'), item('inbox', '/p/mailer/inbox')] },
     { section: 'vol:ark', label: { zh: '火山方舟' }, items: [item('assets', '/p/vol/assets'), item('sets', '/p/vol/sets')] },
     { section: 'system', items: [item('nodes', '/nodes'), item('tasks', '/system/tasks'), settings] },
     { section: 'me', items: [item('wallet', '/me/wallet')] }
   ]
-  const flat = ['dashboard', 'wallet', 'accounts', 'groups', 'guard', 'ledger']
+  const flat = ['dashboard', 'wallet', 'accounts', 'proxies', 'guard', 'growth']
 
   it('lists gateway, security and finance flat, folds the other admin sections and ends with system settings', async () => {
     const { wrapper, app } = await mountSidebar(operatorMenu)
@@ -156,17 +159,22 @@ describe('sidebar', () => {
   })
 
   it('lights up the installed plugins on a page reached from them, inside the opened plugins submenu', async () => {
-    const { wrapper } = await mountSidebar(operatorMenu, '/plugins/mailer')
-    expect(wrapper.get('[data-testid="nav-submenu-plugins"]').attributes('aria-expanded')).toBe('true')
-    expect(labels(wrapper)).toEqual([...flat, 'plugins', 'market', 'inbox', '系统设置'])
-    expect(current(wrapper)).toEqual(['plugins'])
+    // A plugin's detail page, and its settings on a page of their own.
+    for (const path of ['/plugins/mailer', '/plugins/mailer/settings']) {
+      const { wrapper } = await mountSidebar(operatorMenu, path)
+      expect(wrapper.get('[data-testid="nav-submenu-plugins"]').attributes('aria-expanded')).toBe('true')
+      expect(labels(wrapper)).toEqual([...flat, 'plugins', 'market', 'inbox', '系统设置'])
+      expect(current(wrapper)).toEqual(['plugins'])
+    }
   })
 
   it('lights up the menu entry of the page, else of its nearest parent page, else of a path it starts with', async () => {
-    const menu = [overview, { section: 'gateway', items: [item('accounts', '/accounts'), item('prices', '/prices')] }]
-    expect(current((await mountSidebar(menu, '/prices')).wrapper)).toEqual(['prices'])
-    expect(current((await mountSidebar(menu, '/prices/sources/3/sync')).wrapper)).toEqual(['prices'])
-    expect(current((await mountSidebar(menu, '/accounts/5')).wrapper)).toEqual(['accounts'])
+    expect(current((await mountSidebar(operatorMenu, '/accounts')).wrapper)).toEqual(['accounts'])
+    // The balance ledger has no entry: it is opened from the users list.
+    const ledger = await mountSidebar(operatorMenu, '/ledger?user_id=3')
+    expect(current(ledger.wrapper)).toEqual(['users'])
+    expect(ledger.wrapper.get('[data-testid="nav-submenu-users"]').attributes('aria-expanded')).toBe('true')
+    expect(current((await mountSidebar(operatorMenu, '/accounts/5')).wrapper)).toEqual(['accounts'])
   })
 
   it('keeps the labels in the mobile drawer when collapsed on desktop', async () => {
@@ -193,20 +201,20 @@ describe('sidebar', () => {
     expect(labels(wrapper)).toEqual(['仪表盘'])
     api.get.mockResolvedValue([
       { section: 'overview', items: [item('dashboard', '/dashboard')] },
-      { section: 'gateway', items: [item('groups', '/groups')] }
+      { section: 'gateway', items: [item('accounts', '/accounts')] }
     ])
     await wrapper.get('[data-testid="menu-retry"]').trigger('click')
     await flushPromises()
     expect(app.menusError).toBe(false)
     expect(wrapper.find('[data-testid="menu-retry"]').exists()).toBe(false)
-    expect(labels(wrapper)).toEqual(['dashboard', 'groups'])
+    expect(labels(wrapper)).toEqual(['dashboard', 'accounts'])
   })
 
   describe('settings view', () => {
     const link = (key: string, path: string, active = false) => ({ key, item: item(key, path), active })
     const groups: ViewGroup[] = [
       { key: 'gateway', label: '网关', links: [link('gateway', '/settings?tab=gateway', true), link('sticky', '/settings?tab=sticky')] },
-      { key: 'pluginSettings', label: '插件设置', links: [link('mailer', '/plugins/mailer/settings')] }
+      { key: 'pricing', label: '分组与定价', links: [link('groups', '/groups')] }
     ]
     const view = (w: Sidebar) => w.find('[data-testid="nav-view-settings"]')
     const back = (w: Sidebar) => w.get<HTMLElement>('[data-testid="nav-back"]')
@@ -219,24 +227,26 @@ describe('sidebar', () => {
     it('swaps the console menu for the menu of system settings, under a way back', async () => {
       const { wrapper } = await mountSidebar(operatorMenu, '/settings')
       expect(wrapper.find('[data-testid="nav-group-admin"]').exists()).toBe(false)
-      expect(labels(wrapper)).toEqual(['返回控制台', 'gateway', 'sticky', 'mailer'])
+      expect(labels(wrapper)).toEqual(['返回控制台', 'gateway', 'sticky', 'groups'])
       expect(wrapper.findAll('nav a').map(a => a.attributes('href'))).toEqual([
         '/dashboard',
         '/settings?tab=gateway',
         '/settings?tab=sticky',
-        '/plugins/mailer/settings'
+        '/groups'
       ])
       expect(view(wrapper).text()).toContain('网关')
-      expect(view(wrapper).text()).toContain('插件设置')
+      expect(view(wrapper).text()).toContain('分组与定价')
       expect(current(wrapper)).toEqual(['gateway'])
     })
 
-    it('is chosen by the route: the settings page and the pages under it, not a page of the system section', async () => {
-      const { wrapper, router } = await mountSidebar(operatorMenu, '/plugins/mailer/settings')
+    it('is chosen by the route: the pages of the view and the pages under them, not a page of the system section', async () => {
+      const { wrapper, router } = await mountSidebar(operatorMenu, '/prices')
       expect(view(wrapper).exists()).toBe(true)
-      await router.push('/settings?tab=sticky')
-      await flushPromises()
-      expect(view(wrapper).exists()).toBe(true)
+      for (const path of ['/settings?tab=sticky', '/groups', '/prices/sources/3/sync']) {
+        await router.push(path)
+        await flushPromises()
+        expect([path, view(wrapper).exists()]).toEqual([path, true])
+      }
       // One menu serves the whole stay in the view.
       expect(useGroups).toHaveBeenCalledTimes(1)
       await router.push('/nodes')
@@ -249,16 +259,18 @@ describe('sidebar', () => {
       let menus!: (v: unknown) => void
       api.get.mockReturnValue(new Promise(r => (menus = r)))
       const router = makeRouter()
-      await router.push('/plugins/mailer/settings')
+      await router.push('/groups')
       const loading = useAppStore().loadMenus()
       const wrapper = mount(AppSidebar, { global: { plugins: [i18n, router] } })
       // Until then the route decides, so the settings view does not flash the console menu first.
       expect(view(wrapper).exists()).toBe(true)
-      menus([overview, { section: 'plugins', items: [item('plugins', '/plugins'), item('market', '/market')] }])
+      // An older core lists groups in the console menu and gives their readers no settings entry.
+      menus([overview, { section: 'gateway', items: [item('accounts', '/accounts'), item('groups', '/groups')] }])
       await loading
       await flushPromises()
       expect(view(wrapper).exists()).toBe(false)
-      expect(labels(wrapper)).toEqual(['dashboard', 'plugins', 'market'])
+      expect(labels(wrapper)).toEqual(['dashboard', 'accounts', 'groups'])
+      expect(current(wrapper)).toEqual(['groups'])
     })
 
     it('leads back to the console page the view was opened from, not to an error page', async () => {
@@ -266,7 +278,7 @@ describe('sidebar', () => {
       await router.push('/forbidden?perm=x')
       await router.push('/no/such/page')
       await router.push('/settings')
-      await router.push('/plugins/mailer/settings')
+      await router.push('/groups')
       await flushPromises()
       expect(back(wrapper).attributes('href')).toBe('/accounts?page=2')
       await back(wrapper).trigger('click')
@@ -302,7 +314,7 @@ describe('sidebar', () => {
       app.sidebarCollapsed = true
       await flushPromises()
       expect(view(wrapper).text()).toBe('')
-      expect(wrapper.findAll('nav a').map(a => a.attributes('aria-label'))).toEqual(['返回控制台', 'gateway', 'sticky', 'mailer'])
+      expect(wrapper.findAll('nav a').map(a => a.attributes('aria-label'))).toEqual(['返回控制台', 'gateway', 'sticky', 'groups'])
       expect(back(wrapper).attributes('title')).toBe('返回控制台')
       expect(wrapper.findAll('nav hr')).toHaveLength(2)
     })
@@ -316,23 +328,28 @@ describe('top bar', () => {
     const wrapper = mount(AppTopbar, { global: { plugins: [i18n, router], stubs: { ChangePasswordDialog: true } } })
     const crumbs = wrapper.get('[data-testid="breadcrumbs"]').findAll('a')
     expect(crumbs.map(a => [a.text(), a.attributes('href')])).toEqual([
+      ['系统设置', '/settings'],
       ['模型价格', '/prices'],
       ['价格同步源', '/prices/sources']
     ])
     expect(wrapper.get('h1').text()).toBe('同步价格')
-    await router.push('/prices')
+    await router.push('/accounts')
     await flushPromises()
     expect(wrapper.find('[data-testid="breadcrumbs"]').exists()).toBe(false)
   })
 
   it('does not link a parent page the caller cannot open', async () => {
-    denied.add('settings:read').add('sticky:read')
+    denied.add('settings:read').add('sticky:read').add('plugin:read')
     const router = makeRouter()
-    await router.push('/plugins/mailer/settings')
     const wrapper = mount(AppTopbar, { global: { plugins: [i18n, router], stubs: { ChangePasswordDialog: true } } })
-    const nav = wrapper.get('[data-testid="breadcrumbs"]')
-    expect(nav.findAll('a')).toHaveLength(0)
-    expect(nav.text()).toContain('系统设置')
+    // Groups for the built-in operator, plugin settings for a holder of the plugin's permission alone.
+    for (const [path, parent] of [['/groups', '系统设置'], ['/plugins/mailer/settings', '已安装插件']]) {
+      await router.push(path)
+      await flushPromises()
+      const nav = wrapper.get('[data-testid="breadcrumbs"]')
+      expect([path, nav.findAll('a').length]).toEqual([path, 0])
+      expect(nav.text()).toContain(parent)
+    }
   })
 
   it('keeps the menu button, title and account menu on a phone, language and theme inside the menu', async () => {

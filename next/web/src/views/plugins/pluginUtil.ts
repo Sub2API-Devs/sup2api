@@ -413,8 +413,8 @@ export interface PluginDetail {
 const CORE_SETTINGS_KEY = 'ccgateway'
 
 /**
- * The page of that core view, an entry of the sidebar (CONTRACTS §90). Its
- * first segment is one the SDK reserves for the console
+ * The page of that core view, opened from the installed plugins (CONTRACTS
+ * §90). Its first segment is one the SDK reserves for the console
  * (manifest.ConsoleSegments), so no plugin endpoint can take the address.
  */
 export const CCGATEWAY_PAGE = '/system/ccgateway'
@@ -424,15 +424,16 @@ export function hasCoreSettings(key: string, has: (perm: string) => boolean): bo
   return key === CORE_SETTINGS_KEY && has('settings:read')
 }
 
-/** Whether the console renders the plugin's settings as a form: has_settings is false for native settings (§75.5). */
-export function hasSettingsForm(p: Pick<PluginSummary, 'key' | 'has_settings'>): boolean {
-  return p.key !== CORE_SETTINGS_KEY && !!p.has_settings
-}
-
-/** Where the plugin list opens a plugin's settings: the form on its detail page, or the core view's page; undefined without either. */
+/**
+ * Where the installed plugins list opens a plugin's settings; neither the
+ * sidebar nor system settings lists them (CONTRACTS §90). The page of the
+ * core view, or the settings tab of the detail page for the form the console
+ * renders (has_settings is false for native settings, §75.5); undefined
+ * without either.
+ */
 export function consoleSettingsPath(p: Pick<PluginSummary, 'key' | 'has_settings'>, has: (perm: string) => boolean): string | undefined {
-  if (hasSettingsForm(p)) return `/plugins/${encodeURIComponent(p.key)}?tab=settings`
-  return hasCoreSettings(p.key, has) ? CCGATEWAY_PAGE : undefined
+  if (hasCoreSettings(p.key, has)) return CCGATEWAY_PAGE
+  return p.has_settings && p.key !== CORE_SETTINGS_KEY ? `/plugins/${encodeURIComponent(p.key)}?tab=settings` : undefined
 }
 
 export interface PluginSettings {
@@ -459,7 +460,7 @@ export function consoleSettings(s: PluginSettings | null | undefined): PluginSet
   return s && s.schema && (s.mode ?? 'schema') === 'schema' ? s : null
 }
 
-/** A plugin's settings form on its own page, a page of system settings (CONTRACTS §90). */
+/** A plugin's settings form on a page of its own: for holders of the plugin's settings permission alone, and for old links. */
 export function pluginSettingsPath(key: string): string {
   return `/plugins/${encodeURIComponent(key)}/settings`
 }

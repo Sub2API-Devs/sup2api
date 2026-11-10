@@ -25,7 +25,7 @@ const title = computed(() => (route.meta.title ? t(route.meta.title as string) :
 /**
  * The pages above this one (meta.parent, followed upwards), outermost first.
  * A page the caller may not open stays as plain text: e.g. plugin settings
- * sit under Settings for operators, but their main users only hold the
+ * sit under the installed plugins, but their main users only hold the
  * plugin's own settings permission.
  */
 const crumbs = computed(() => {
@@ -83,7 +83,8 @@ async function logout() {
         </template>
       </nav>
       <h1 class="shrink-0 text-base font-semibold text-fg">{{ title }}</h1>
-      <p v-if="app.pageDescription" class="hidden min-w-0 truncate text-xs text-fg-muted md:block" :title="app.pageDescription" data-testid="page-description">{{ app.pageDescription }}</p>
+      <!-- flex-1: the description takes the room the breadcrumbs and the title leave, so a long one does not squeeze them. -->
+      <p v-if="app.pageDescription" class="hidden min-w-0 flex-1 truncate text-xs text-fg-muted md:block" :title="app.pageDescription" data-testid="page-description">{{ app.pageDescription }}</p>
     </div>
     <div id="s-page-actions" class="flex shrink-0 items-center empty:hidden" />
 

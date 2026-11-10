@@ -5,19 +5,20 @@ import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { hasIcon } from '@sub2api/ui'
 import { i18n } from '@/i18n'
 import type { ViewGroup } from '@/layouts/sidebarViews'
-import { CCGATEWAY_PAGE } from '@/views/plugins/pluginUtil'
 import SettingsView from './SettingsView.vue'
 import { emptyFailurePolicy } from './failurePolicy'
-import { useSettingsMenu, useSettingsNav } from './settingsNav'
+import { settingsLanding, useSettingsMenu, useSettingsNav } from './settingsNav'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn() }))
 const permissions = vi.hoisted(() => ({ manage: true, denied: [] as string[] }))
-const route = reactive<{ path: string; meta: object; query: { tab?: string; sub?: string } }>({
+const route = reactive<{ path: string; meta: { parent?: string }; query: { tab?: string; sub?: string } }>({
   path: '/settings',
   meta: {},
   query: { tab: 'billing' }
 })
-const router = { replace: vi.fn(), push: vi.fn() }
+/** The pages above a page (meta.parent), as the real routes declare them. */
+const PARENTS: Record<string, string> = { '/prices/sources': '/prices', '/prices': '/settings' }
+const router = { replace: vi.fn(), push: vi.fn(), resolve: (path: string) => ({ meta: { parent: PARENTS[path] } }) }
 vi.mock('vue-router', async original => ({ ...(await original<object>()), useRoute: () => route, useRouter: () => router }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), api }))
 vi.mock('@/stores/auth', () => ({
@@ -39,19 +40,6 @@ function setupOf<T>(use: () => T): T {
 /** Groups by header, as the keys of their links. */
 const shape = (groups: ViewGroup[]) => groups.map(g => [g.label, g.links.map(l => l.key)])
 const activeKeys = (groups: ViewGroup[]) => groups.flatMap(g => g.links.filter(l => l.active).map(l => l.key))
-
-const plugin = (key: string, name: string, more: object = {}) => ({
-  key,
-  name: { zh: name },
-  status: 'enabled',
-  has_settings: true,
-  ...more
-})
-/** Answers GET /plugins with whatever `installed` holds at the time. */
-function servePlugins(installed: () => object[]) {
-  api.list.mockImplementation(path => Promise.resolve({ items: path === '/plugins' ? installed() : [], total: 0 }))
-}
-const pluginRequests = () => api.list.mock.calls.filter(([path]) => path === '/plugins')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -112,7 +100,7 @@ describe('the settings page', () => {
   it('makes no request for plugins: their settings open at their own address', async () => {
     mountSettings()
     await flushPromises()
-    expect(pluginRequests()).toHaveLength(0)
+    expect(api.list.mock.calls.filter(([path]) => path === '/plugins')).toHaveLength(0)
   })
 
   it('retains saving and removes the empty billing header for read-only users', async () => {
@@ -166,11 +154,11 @@ describe('useSettingsNav', () => {
 })
 
 describe('useSettingsMenu', () => {
-  it('lists the eight pages in three groups', async () => {
+  it('lists the eight configuration pages, groups and model prices in four groups', () => {
     const groups = setupOf(useSettingsMenu)
-    await flushPromises()
     expect(shape(groups.value)).toEqual([
       ['网关', ['gateway', 'failure', 'sticky', 'offload']],
+      ['分组与定价', ['/groups', '/prices']],
       ['计费与通知', ['billing', 'notifications']],
       ['运行环境', ['updates', 'environment']]
     ])
@@ -179,113 +167,52 @@ describe('useSettingsMenu', () => {
       item: { id: 'settings:sticky', labelKey: 'settings.tabs.sticky', icon: 'sticky', path: '/settings?tab=sticky' },
       active: false
     })
-  })
-
-  it('gives every page an icon of its own that SIcon can draw', async () => {
-    const groups = setupOf(useSettingsMenu)
-    await flushPromises()
-    const icons = groups.value.flatMap(g => g.links.map(l => l.item.icon!))
-    expect(icons.filter(hasIcon)).toHaveLength(8)
-    expect(new Set(icons).size).toBe(8)
-  })
-
-  it('puts the settings of enabled plugins with a form between billing and runtime', async () => {
-    servePlugins(() => [
-      plugin('mailer', '邮件'),
-      plugin('guard', '请求守卫', { status: 'disabled' }),
-      // Native settings live on the plugin's own page: the server reports no form.
-      plugin('moderation', '提示词审核', { has_settings: false }),
-      // Has an entry of its own in the sidebar.
-      plugin('ccgateway', 'Claude Code')
-    ])
-    const groups = setupOf(useSettingsMenu)
-    await flushPromises()
-    expect(shape(groups.value)).toEqual([
-      ['网关', ['gateway', 'failure', 'sticky', 'offload']],
-      ['计费与通知', ['billing', 'notifications']],
-      ['插件设置', ['plugin:mailer']],
-      ['运行环境', ['updates', 'environment']]
-    ])
-    expect(groups.value[2].links[0]).toEqual({
-      key: 'plugin:mailer',
-      item: { id: 'plugin-settings:mailer', label: '邮件', icon: 'puzzle', path: '/plugins/mailer/settings', pluginKey: 'mailer' },
+    // A page with an address of its own keeps it.
+    expect(groups.value[1].links[1]).toEqual({
+      key: '/prices',
+      item: { id: 'settings:/prices', labelKey: 'nav.items.prices', icon: 'price', path: '/prices' },
       active: false
     })
-    expect(groups.value.flatMap(g => g.links.map(l => l.item.path))).not.toContain(CCGATEWAY_PAGE)
   })
 
-  it('leaves out the pages the caller may not open and the groups left empty, not the plugins', async () => {
+  it('gives every page an icon of its own that SIcon can draw', () => {
+    const icons = setupOf(useSettingsMenu).value.flatMap(g => g.links.map(l => l.item.icon!))
+    expect(icons.filter(hasIcon)).toHaveLength(10)
+    expect(new Set(icons).size).toBe(10)
+  })
+
+  it('leaves out the pages the caller may not open and the groups left empty', () => {
     permissions.denied = ['settings:read']
-    servePlugins(() => [plugin('mailer', '邮件')])
-    const groups = setupOf(useSettingsMenu)
-    await flushPromises()
-    expect(shape(groups.value)).toEqual([
+    expect(shape(setupOf(useSettingsMenu).value)).toEqual([
       ['网关', ['sticky']],
-      ['插件设置', ['plugin:mailer']]
+      ['分组与定价', ['/groups', '/prices']]
     ])
   })
 
-  it('lights up the open configuration page on the settings page only', async () => {
+  it('shows a caller with no configuration page, as the built-in operator, the pages that are theirs', () => {
+    permissions.denied = ['settings:read', 'sticky:read']
+    expect(shape(setupOf(useSettingsMenu).value)).toEqual([['分组与定价', ['/groups', '/prices']]])
+    // The settings entry opens the first of them.
+    expect(settingsLanding()).toBe('/groups')
+    permissions.denied.push('group:read')
+    expect(settingsLanding()).toBe('/prices')
+  })
+
+  it('lights up the open configuration page on the settings page only', () => {
     const groups = setupOf(useSettingsMenu)
-    await flushPromises()
     expect(activeKeys(groups.value)).toEqual(['billing'])
     route.path = '/nodes'
     expect(activeKeys(groups.value)).toEqual([])
   })
 
-  it("lights up a plugin's entry on that plugin's settings page, and nothing else", async () => {
-    servePlugins(() => [plugin('mailer', '邮件'), plugin('growth', '增长管理')])
+  it('lights up a page with an address of its own on that page and on the pages below it', () => {
     const groups = setupOf(useSettingsMenu)
-    await flushPromises()
-    expect(activeKeys(groups.value)).toEqual(['billing'])
-    route.path = '/plugins/mailer/settings'
     route.query = {}
-    expect(activeKeys(groups.value)).toEqual(['plugin:mailer'])
-  })
-
-  it('draws the plugins of the last visit at once and refreshes them behind', async () => {
-    servePlugins(() => [plugin('mailer', '邮件')])
-    setupOf(useSettingsMenu)
-    await flushPromises()
-
-    let answer!: (list: object) => void
-    api.list.mockImplementation(() => new Promise(resolve => (answer = resolve)))
-    const again = setupOf(useSettingsMenu)
-    expect(again.value.map(g => g.key)).toEqual(['gateway', 'billing', 'pluginSettings', 'runtime'])
-    answer({ items: [plugin('mailer', '邮件'), plugin('growth', '增长管理')], total: 2 })
-    await flushPromises()
-    expect(again.value[2].links.map(l => l.key)).toEqual(['plugin:mailer', 'plugin:growth'])
-    expect(pluginRequests()).toHaveLength(2)
-  })
-
-  it('drops a late answer to an earlier visit', async () => {
-    const answers: Array<(list: object) => void> = []
-    api.list.mockImplementation(() => new Promise(resolve => answers.push(resolve)))
-    setupOf(useSettingsMenu)
-    const groups = setupOf(useSettingsMenu)
-    answers[1]({ items: [plugin('growth', '增长管理')], total: 1 })
-    answers[0]({ items: [plugin('mailer', '邮件')], total: 1 })
-    await flushPromises()
-    expect(groups.value[2].links.map(l => l.key)).toEqual(['plugin:growth'])
-  })
-
-  it('has no plugin group when the list fails', async () => {
-    api.list.mockRejectedValue(new Error('down'))
-    const groups = setupOf(useSettingsMenu)
-    await flushPromises()
-    expect(groups.value.map(g => g.key)).toEqual(['gateway', 'billing', 'runtime'])
-  })
-
-  it('forgets the plugins shown to an earlier user who could list them', async () => {
-    servePlugins(() => [plugin('mailer', '邮件')])
-    setupOf(useSettingsMenu)
-    await flushPromises()
-
-    api.list.mockClear()
-    permissions.denied = ['plugin:read']
-    const groups = setupOf(useSettingsMenu)
-    await flushPromises()
-    expect(pluginRequests()).toHaveLength(0)
-    expect(groups.value.map(g => g.key)).toEqual(['gateway', 'billing', 'runtime'])
+    route.path = '/groups'
+    route.meta = { parent: '/settings' }
+    expect(activeKeys(groups.value)).toEqual(['/groups'])
+    route.path = '/prices/sources/3/sync'
+    route.meta = { parent: '/prices/sources' }
+    expect(activeKeys(groups.value)).toEqual(['/prices'])
   })
 })

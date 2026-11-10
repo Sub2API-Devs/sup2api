@@ -5,6 +5,7 @@ import { ACCOUNT_PAGE_PERMS, PROXY_PAGE_PERMS } from '@/composables/useOwnership
 import AppLayout from '@/layouts/AppLayout.vue'
 import type { SidebarViewKey } from '@/layouts/sidebarViews'
 import { CCGATEWAY_PAGE, isPluginKey, pluginSettingsPath } from '@/views/plugins/pluginUtil'
+import { settingsLanding } from '@/views/settings/settingsNav'
 import { closeLayersOnBack } from './layerBack'
 
 declare module 'vue-router' {
@@ -20,7 +21,7 @@ declare module 'vue-router' {
     parent?: string
     public?: boolean
     /** Where a caller without `perm` goes instead of /forbidden, if anywhere. */
-    deniedRedirect?: (to: RouteLocationNormalized) => string | undefined
+    deniedRedirect?: (to: RouteLocationNormalized) => RouteLocationRaw | undefined
     /** Where an old address of this page now lives; asked on every navigation, a change of the query alone included. */
     movedTo?: (to: RouteLocationNormalized) => RouteLocationRaw | undefined
     /** The sidebar view this page and the pages under it open in (CONTRACTS §90). */
@@ -48,12 +49,13 @@ const children: RouteRecordRaw[] = [
   { path: 'roles', component: () => import('@/views/roles/RolesView.vue'), meta: { perm: 'role:read', title: 'nav.items.roles' } },
   { path: 'api-keys', redirect: '/me/api-keys' },
   { path: 'me/api-keys', component: () => import('@/views/keys/MyApiKeysView.vue'), meta: { perm: 'apikey:self:manage', title: 'nav.items.myApiKeys' } },
-  { path: 'groups', component: () => import('@/views/groups/GroupsView.vue'), meta: { perm: 'group:read', title: 'nav.items.groups' } },
+  { path: 'groups', component: () => import('@/views/groups/GroupsView.vue'), meta: { perm: 'group:read', title: 'nav.items.groups', parent: '/settings' } },
   { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: PROXY_PAGE_PERMS, title: 'nav.items.proxies' } },
   { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.accounts' } },
-  { path: 'platforms', component: () => import('@/views/platforms/PlatformsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.platforms' } },
+  // The old platforms page.
+  { path: 'platforms', redirect: '/accounts' },
 
-  { path: 'prices', component: () => import('@/views/prices/PricesView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices' } },
+  { path: 'prices', component: () => import('@/views/prices/PricesView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices', parent: '/settings' } },
   { path: 'prices/new', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:manage', title: 'prices.newTitle', parent: '/prices' } },
   { path: 'prices/sources', component: () => import('@/views/prices/PriceSourcesView.vue'), meta: { perm: 'price:read', title: 'prices.sources.title', parent: '/prices' } },
   { path: 'prices/sources/:id/sync', component: () => import('@/views/prices/PriceSyncView.vue'), meta: { perm: 'price:manage', title: 'prices.syncPrices', parent: '/prices/sources' } },
@@ -67,13 +69,25 @@ const children: RouteRecordRaw[] = [
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
   // The old usage statistics page.
   { path: 'me/stats', redirect: '/me/usage/overview' },
-  { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
+  // Opened from a row of the users list.
+  { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger', parent: '/users' } },
   { path: 'me/ledger', redirect: '/me/wallet' },
   { path: 'me/balance', redirect: '/me/wallet' },
   { path: 'sticky', redirect: { path: '/settings', query: { tab: 'sticky' } } },
-  { path: 'settings', component: () => import('@/views/settings/SettingsView.vue'), meta: { perm: ['settings:read', 'sticky:read'], title: 'nav.items.settings', sidebar: 'settings', movedTo: movedSettingsTab } },
+  {
+    path: 'settings',
+    component: () => import('@/views/settings/SettingsView.vue'),
+    meta: {
+      perm: ['settings:read', 'sticky:read'],
+      title: 'nav.items.settings',
+      sidebar: 'settings',
+      movedTo: movedSettingsTab,
+      // The entry of the settings view is also for a caller with none of the configuration pages; a link to one of them stays refused.
+      deniedRedirect: to => (to.query.tab ? undefined : settingsLanding())
+    }
+  },
 
-  { path: CCGATEWAY_PAGE, component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: 'settings:read', title: 'ccgateway.title' } },
+  { path: CCGATEWAY_PAGE, component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: 'settings:read', title: 'ccgateway.title', parent: '/plugins' } },
   { path: 'plugins', component: () => import('@/views/plugins/PluginsView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
   {
     path: 'plugins/:key/versions/:version/consent',
@@ -89,7 +103,7 @@ const children: RouteRecordRaw[] = [
       title: 'nav.crumbs.pluginDetail',
       parent: '/plugins',
       // Plugins link to ?tab=settings; holders of the plugin's settings permission get the settings page.
-      deniedRedirect: to => (to.query.tab === 'settings' ? pluginSettingsPath(String(to.params.key)) : undefined)
+      deniedRedirect: to => (to.query.tab === 'settings' ? { path: pluginSettingsPath(String(to.params.key)), hash: to.hash } : undefined)
     }
   },
   // ccgateway's settings are a core page of its own.
@@ -98,7 +112,7 @@ const children: RouteRecordRaw[] = [
   {
     path: 'plugins/:key/settings',
     component: () => import('@/views/plugins/PluginSettingsView.vue'),
-    meta: { title: 'nav.crumbs.pluginSettings', parent: '/settings' }
+    meta: { title: 'nav.crumbs.pluginSettings', parent: '/plugins' }
   },
   { path: 'market', component: () => import('@/views/plugins/MarketView.vue'), meta: { perm: 'plugin:market:read', title: 'nav.items.market' } },
   { path: 'publishers', component: () => import('@/views/plugins/PublishersView.vue'), meta: { perm: 'publisher:read', title: 'nav.items.publishers' } },

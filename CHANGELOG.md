@@ -6,6 +6,21 @@
 
 ## 2026-11-10
 
+### 核心 0.1.268（`b4b2caf0b`，无迁移）
+
+- **插件设置只从已安装插件进入**（CONTRACTS §90）：系统设置视图去掉“插件设置”组，剩网关、分组与定价、计费与通知、运行环境四组。已安装插件列表 CCGateway 一行的“设置”打开 `/system/ccgateway`、邮件等插件打开 `/plugins/<key>?tab=settings`，侧栏停在控制台视图并高亮“已安装插件”，面包屑“已安装插件 > …”。旧地址 `/settings?tab=plugin:<key>` 跳到 `/plugins/<key>/settings`，`/plugins/ccgateway/settings` 跳到 `/system/ccgateway`。
+- 只改前端与文档；内置插件与 0.1.267 完全相同（anthropic 仍 0.3.1）。
+- 北京时间 15:57–16:09 滚动升级，两节点轮流让出，不停服、没关渠道。
+- 回滚：回核心 0.1.267（无迁移）。
+
+### 核心 0.1.267 + anthropic 0.3.1（`b278765d3`，无迁移）
+
+- **侧栏第四版**（CONTRACTS §90）：分组、模型价格搬进“系统设置”的新组“分组与定价”（`/groups`、`/prices`、`/prices/sources` 打开时侧栏是设置视图，面包屑以“系统设置”开头）；CCGateway 不再占系统菜单，只在系统设置“插件设置”组和已安装插件列表的“设置”按钮进入（`/system/ccgateway`）。管理员组平铺只剩账号、代理、动态权重、提示词审核，然后是用户、插件、火山方舟、系统四个子菜单和系统设置。
+- 去掉“平台”菜单（`/platforms` 跳到 `/accounts`，平台标识一律取 `/me/platforms`）、“余额流水”菜单（用户列表行菜单的“余额流水”仍可打开 `/ledger?user_id=…`）和 anthropic 插件的“模型目录”菜单。
+- anthropic 0.3.1：manifest 去掉 `ui` 与 `ui.menu` 宿主权限（只减不增，升级不需要管理员确认）；`GET /models` 管理接口保留。其余 9 个内置插件与 0.1.266 完全相同。
+- 北京时间 14:55–15:06 滚动升级，两节点轮流让出，不停服、没关渠道。
+- 回滚：回核心 0.1.266（无迁移），anthropic 退回 0.3.0。
+
 ### 核心 0.1.266（`4a34c1e8b`，无迁移）
 
 - **内置会话绑定规则只按协议匹配**（CONTRACTS §15.5）：`claude-code-session`（`anthropic.messages`）去掉 `models:["claude-*"]`，与 `openai-prompt-cache-key`（`openai.chat`、`openai.responses`、`openai.responses_ws`）一样不限模型、不限 User-Agent。无迁移：核心启动时内置同步把未改过（`customized=false`）的内置规则改写为新定义；管理员改过的保持原样，点“恢复默认”后同样不限模型。
