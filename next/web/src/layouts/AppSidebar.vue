@@ -1,27 +1,35 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { SIcon, SSkeleton } from '@sub2api/ui'
 import { useAppStore, type NavSection } from '@/stores/app'
 import { lt } from '@/i18n'
 import VersionBadge from '@/components/VersionBadge.vue'
+import SidebarGroup from './SidebarGroup.vue'
 import SidebarLink from './SidebarLink.vue'
 import SidebarSubmenu from './SidebarSubmenu.vue'
-import { groupLinks, groupMenus, showGroupTitle, useOpenSections, type NavLink } from './sidebarGroups'
+import SidebarViewMenu from './SidebarViewMenu.vue'
+import { groupLinks, groupMenus, showGroupTitle, useOpenSections, type NavGroup, type NavLink } from './sidebarGroups'
+import { useConsoleReturn, useMenuHandover, useSidebarView, useViewEntries } from './sidebarViews'
+import { useNavItemLabel } from './navItem'
 import { useActiveMenuPath } from './useActiveMenu'
 
 const app = useAppStore()
 const route = useRoute()
 const { t } = useI18n()
+const labelOf = useNavItemLabel()
 
 function sectionLabel(s: NavSection): string {
   return s.label ? lt(s.label) : t(`nav.sections.${s.key}`)
 }
+function groupTitle(g: NavGroup): string | undefined {
+  return showGroupTitle(g, app.menus) ? t(`nav.sections.${g.key}`) : undefined
+}
 
 const activePath = useActiveMenuPath()
 function active(l: NavLink): boolean {
-  return !!activePath.value && l.paths.includes(activePath.value)
+  return l.item.path === activePath.value
 }
 
 // The drawer closes on any navigation, not only on a menu click (links in pages, Back).
@@ -33,7 +41,19 @@ watch(
 /** The desktop collapse does not apply to the mobile drawer, which has no expand button. */
 const collapsed = computed(() => app.sidebarCollapsed && !app.mobileNavOpen)
 
-const groups = computed(() => groupMenus(app.menus))
+// A page of a sidebar view (system settings) swaps the console menu for the view's own.
+const view = useSidebarView()
+const backTo = useConsoleReturn(view)
+const nav = ref<HTMLElement>()
+const handover = useMenuHandover(nav)
+/** Names the landmark after the menu it shows: a view's by the entry that opens it. */
+const navLabel = computed(() => {
+  const entry = view.value?.entry(app.menus)
+  return entry ? labelOf(entry) : t('nav.label')
+})
+
+const viewEntries = useViewEntries()
+const groups = computed(() => groupMenus(app.menus, viewEntries.value))
 const activeSubmenu = computed(
   () => groups.value.flatMap(g => g.entries).find(e => e.section?.items.some(i => i.path === activePath.value))?.section?.key
 )
@@ -55,34 +75,48 @@ const { isOpen, toggle } = useOpenSections(activeSubmenu)
         <VersionBadge :compact="collapsed" />
       </div>
     </div>
-    <nav class="flex-1 overflow-y-auto px-3 py-3">
-      <div v-if="!app.menusLoaded" class="space-y-2 px-2">
-        <SSkeleton v-for="i in 8" :key="i" height="2rem" />
-      </div>
-      <template v-if="collapsed">
-        <div v-for="(g, index) in groups" :key="g.key" class="mb-3">
-          <hr v-if="index > 0" class="mx-2 mb-3 border-line" aria-hidden="true" />
-          <SidebarLink v-for="l in groupLinks(g)" :key="l.key" :item="l.item" :active="active(l)" collapsed />
-        </div>
-      </template>
-      <template v-else>
-        <div v-for="g in groups" :key="g.key" class="mb-3" :data-testid="`nav-group-${g.key}`">
-          <div v-if="showGroupTitle(g, app.menus)" class="mb-1 px-3 text-xxs font-semibold uppercase tracking-wider text-fg-subtle">
-            {{ t(`nav.sections.${g.key}`) }}
+    <nav ref="nav" class="flex-1 overflow-y-auto px-3 py-3" :aria-label="navLabel">
+      <Transition
+        mode="out-in"
+        enter-active-class="transition duration-150 ease-out motion-reduce:transition-none"
+        enter-from-class="translate-x-1 opacity-0"
+        leave-active-class="transition duration-75 ease-in motion-reduce:transition-none"
+        leave-to-class="opacity-0"
+        v-bind="handover"
+      >
+        <SidebarViewMenu v-if="view" :key="view.key" :view="view" :back-to="backTo" :collapsed="collapsed" />
+        <div v-else key="console">
+          <div v-if="!app.menusLoaded" class="space-y-2 px-2">
+            <SSkeleton v-for="i in 8" :key="i" height="2rem" />
           </div>
-          <template v-for="e in g.entries" :key="e.key">
-            <SidebarSubmenu
-              v-if="e.section"
-              :section="e.section"
-              :label="sectionLabel(e.section)"
-              :open="isOpen(e.section.key)"
-              :active-path="activePath"
-              @toggle="toggle(e.section.key)"
-            />
-            <SidebarLink v-else :item="e.item" :active="active(e)" />
-          </template>
+          <SidebarGroup
+            v-for="(g, index) in groups"
+            :key="g.key"
+            :title="groupTitle(g)"
+            :collapsed="collapsed"
+            :divided="index > 0"
+            :data-testid="`nav-group-${g.key}`"
+          >
+            <template v-if="collapsed">
+              <SidebarLink v-for="l in groupLinks(g)" :key="l.key" :item="l.item" :active="active(l)" collapsed />
+            </template>
+            <template v-else>
+              <template v-for="e in g.entries" :key="e.key">
+                <div v-if="e.gap" class="h-2" aria-hidden="true" />
+                <SidebarSubmenu
+                  v-if="e.section"
+                  :section="e.section"
+                  :label="sectionLabel(e.section)"
+                  :open="isOpen(e.section.key)"
+                  :active-path="activePath"
+                  @toggle="toggle(e.section.key)"
+                />
+                <SidebarLink v-else :item="e.item" :active="active(e)" />
+              </template>
+            </template>
+          </SidebarGroup>
         </div>
-      </template>
+      </Transition>
       <button
         v-if="app.menusError"
         type="button"

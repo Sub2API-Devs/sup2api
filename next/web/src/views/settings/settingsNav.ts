@@ -1,169 +1,145 @@
-import { computed, inject, onMounted, provide, ref, watch, type InjectionKey } from 'vue'
+import { computed, onMounted, shallowRef, type ComputedRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { api } from '@sub2api/host'
 import type { PluginSummary } from '@/api/types'
+import { fetchFirstPage } from '@/composables/lookups'
 import { lt } from '@/i18n'
-import { useAppStore, type NavItem } from '@/stores/app'
+import type { ViewGroup, ViewLink } from '@/layouts/sidebarViews'
 import { useAuthStore } from '@/stores/auth'
-import { hasConsoleSettings } from '@/views/plugins/pluginUtil'
-import { SETTINGS_SECTION } from '@/layouts/sidebarGroups'
-import { useNavItemLabel } from '@/layouts/navItem'
+import { hasSettingsForm, pluginSettingsPath } from '@/views/plugins/pluginUtil'
 
 /**
- * The navigation of system settings (CONTRACTS §90): the settings page's own
- * pages (?tab=<key> of /settings; plugin settings as ?tab=plugin:<key>) and
- * the pages of the "system" menu section (platforms, plugins, nodes, ...),
- * which keep their own addresses. One list feeds the navigation beside every
- * one of those pages and the settings page's choice of what to show.
+ * System settings (CONTRACTS §90): the configuration pages of the settings
+ * page (?tab=<key>) and, in the sidebar's settings view, the settings forms of
+ * the enabled plugins, which open at their own address.
  */
-export interface SettingsEntry {
-  key: string
+
+/** The settings page: every configuration page is one of its tabs. */
+export const SETTINGS_PAGE = '/settings'
+
+interface Page {
+  tab: string
+  perm: string
+  /** i18n key. */
   label: string
-  /** A page of the settings page (?tab=key) or of its own address. */
-  tab?: string
-  path?: string
+  icon: string
 }
-export interface SettingsGroup {
+
+/** A group of the settings view: configuration pages, or (`plugins`) the settings forms of the plugins. */
+interface Group {
   key: string
-  label: string
-  entries: SettingsEntry[]
+  pages: Page[]
+  plugins?: true
 }
 
-type Slot =
-  | { kind: 'tab'; tab: string; perm: string; label: string }
-  | { kind: 'page'; page: string }
-  /** Enabled plugins' settings, then the plugin pages of the system section. */
-  | { kind: 'pluginSettings' }
-  /** System-section core pages not placed elsewhere. */
-  | { kind: 'otherPages' }
+const page = (tab: string, perm: string, label: string, icon: string): Page => ({ tab, perm, label, icon })
 
-const tab = (key: string, perm: string, label: string): Slot => ({ kind: 'tab', tab: key, perm, label })
-const page = (id: string): Slot => ({ kind: 'page', page: id })
-
-/** Where each page goes. */
-const LAYOUT: Array<{ key: string; slots: Slot[] }> = [
+/** The groups and their pages, in the order shown. */
+const LAYOUT: Group[] = [
   {
     key: 'gateway',
-    slots: [
-      tab('gateway', 'settings:read', 'settings.tabs.gateway'),
-      tab('failure', 'settings:read', 'failurePolicy.title'),
-      tab('sticky', 'sticky:read', 'settings.tabs.sticky'),
-      tab('offload', 'settings:read', 'settings.tabs.offload'),
-      page('platforms'),
-      page('proxies')
+    pages: [
+      page('gateway', 'settings:read', 'settings.tabs.gateway', 'settings'),
+      page('failure', 'settings:read', 'failurePolicy.title', 'filter'),
+      page('sticky', 'sticky:read', 'settings.tabs.sticky', 'sticky'),
+      page('offload', 'settings:read', 'settings.tabs.offload', 'cpu')
     ]
   },
   {
     key: 'billing',
-    slots: [tab('billing', 'settings:read', 'settings.tabs.billing'), tab('notifications', 'settings:read', 'settings.tabs.notifications')]
+    pages: [
+      page('billing', 'settings:read', 'settings.tabs.billing', 'balance'),
+      page('notifications', 'settings:read', 'settings.tabs.notifications', 'inbox')
+    ]
   },
-  { key: 'access', slots: [page('roles')] },
-  { key: 'plugins', slots: [page('plugins'), page('market'), page('publishers')] },
-  { key: 'pluginSettings', slots: [{ kind: 'pluginSettings' }] },
+  { key: 'pluginSettings', pages: [], plugins: true },
   {
-    key: 'system',
-    slots: [
-      page('nodes'),
-      page('tasks'),
-      page('upgrades'),
-      tab('updates', 'settings:read', 'coreUpdates.sourceTitle'),
-      page('audit'),
-      tab('environment', 'settings:read', 'settings.tabs.environment'),
-      { kind: 'otherPages' }
+    key: 'runtime',
+    pages: [
+      page('updates', 'settings:read', 'coreUpdates.sourceTitle', 'download'),
+      page('environment', 'settings:read', 'settings.tabs.environment', 'code')
     ]
   }
 ]
 
-const PLACED = new Set(LAYOUT.flatMap(g => g.slots.flatMap(s => (s.kind === 'page' ? [s.page] : []))))
-
-/** The settings page itself: the system-section page every tab belongs to. */
-export const SETTINGS_PAGE = '/settings'
-
-function createSettingsNav() {
+/** The configuration pages the caller may open and the one the settings page shows. No requests: any number of callers agree. */
+export function useSettingsNav() {
   const { t } = useI18n()
   const auth = useAuthStore()
-  const app = useAppStore()
   const route = useRoute()
-  const labelOf = useNavItemLabel()
 
-  /** Enabled plugins with console settings: a schema form, or the core's ccgateway view. */
-  const plugins = ref<PluginSummary[]>([])
-  const pluginsLoaded = ref(false)
-  async function loadPlugins() {
-    try {
-      if (!auth.has('plugin:read')) return
-      const list = await api.get<PluginSummary[]>('/plugins')
-      plugins.value = (list || []).filter(p => p.status === 'enabled' && hasConsoleSettings(p, perm => auth.has(perm)))
-    } catch {
-      // The plugin group is an index; the plugin list page still reaches them.
-      plugins.value = []
-    } finally {
-      pluginsLoaded.value = true
-    }
-  }
-  onMounted(loadPlugins)
-  // Installing, enabling or removing a plugin refreshes the menu (refreshShell): follow it. The first menu load is not such a change.
-  watch(
-    () => app.menus,
-    (_, before) => {
-      if (before.length > 0) void loadPlugins()
-    }
-  )
-
-  /** The system-section pages the caller may open, from the menu the server filtered. */
-  const pages = computed<NavItem[]>(() =>
-    (app.menus.find(s => s.key === SETTINGS_SECTION)?.items ?? []).filter(i => i.path !== SETTINGS_PAGE)
-  )
-  const pageEntry = (i: NavItem): SettingsEntry => ({ key: `page:${i.id}`, label: labelOf(i), path: i.path })
-
-  function slotEntries(s: Slot): SettingsEntry[] {
-    switch (s.kind) {
-      case 'tab':
-        return auth.has(s.perm) ? [{ key: s.tab, tab: s.tab, label: t(s.label) }] : []
-      case 'page':
-        return pages.value.filter(i => i.id === s.page && !i.pluginKey).map(pageEntry)
-      case 'pluginSettings':
-        return [
-          ...plugins.value.map(p => ({ key: `plugin:${p.key}`, tab: `plugin:${p.key}`, label: lt(p.name) || p.key })),
-          ...pages.value.filter(i => i.pluginKey).map(pageEntry)
-        ]
-      case 'otherPages':
-        return pages.value.filter(i => !i.pluginKey && !PLACED.has(i.id)).map(pageEntry)
-    }
-  }
-
-  const groups = computed<SettingsGroup[]>(() =>
-    LAYOUT.map(g => ({ key: g.key, label: t(`settings.groups.${g.key}`), entries: g.slots.flatMap(slotEntries) })).filter(
-      g => g.entries.length > 0
-    )
-  )
-  const entries = computed(() => groups.value.flatMap(g => g.entries))
-  const tabs = computed(() => entries.value.filter(e => e.tab))
+  const pages = computed(() => LAYOUT.flatMap(g => g.pages).filter(p => auth.has(p.perm)))
 
   const askedTab = computed(() => (typeof route.query.tab === 'string' ? route.query.tab : ''))
-  const known = computed(() => tabs.value.some(e => e.tab === askedTab.value))
-  /** A plugin page asked for by a link waits for the plugin list instead of opening the first page meanwhile. */
-  const waiting = computed(() => askedTab.value.startsWith('plugin:') && !pluginsLoaded.value && !known.value)
-  /** A linked page the user cannot see (plugin disabled, no permission): say so instead of silently showing another one. */
-  const missing = computed(() => !!askedTab.value && !waiting.value && !known.value)
-  /** The settings page's tab: the one asked for when the user may see it, else the first visible one. */
-  const activeTab = computed(() => (waiting.value ? undefined : known.value ? askedTab.value : tabs.value[0]?.tab))
+  const known = computed(() => pages.value.some(p => p.tab === askedTab.value))
+  /** A linked page the user cannot see: the settings page says so instead of silently showing another one. */
+  const missing = computed(() => !!askedTab.value && !known.value)
+  /** The page asked for when the user may see it, else the first visible one. */
+  const activeTab = computed(() => (known.value ? askedTab.value : pages.value[0]?.tab))
+  const activeLabel = computed(() => {
+    const active = pages.value.find(p => p.tab === activeTab.value)
+    return active ? t(active.label) : ''
+  })
 
-  return { groups, entries, activeTab, waiting, missing }
+  return { pages, activeTab, activeLabel, missing }
 }
 
-export type SettingsNav = ReturnType<typeof createSettingsNav>
-const KEY: InjectionKey<SettingsNav> = Symbol('settingsNav')
+/**
+ * Enabled plugins whose settings are a form the console renders. Kept between
+ * visits of the settings view: it draws the last answer at once and refreshes
+ * behind it, so the groups below do not jump every time it opens.
+ */
+const settingsPlugins = shallowRef<PluginSummary[]>([])
+let lastRefresh = 0
 
-/** Creates the navigation for the system settings shell and its pages. */
-export function provideSettingsNav(): SettingsNav {
-  const nav = createSettingsNav()
-  provide(KEY, nav)
-  return nav
+function useSettingsPlugins(): Ref<PluginSummary[]> {
+  const auth = useAuthStore()
+  async function load(): Promise<PluginSummary[]> {
+    // Not this caller's to list: nothing an earlier user was shown stays either.
+    if (!auth.has('plugin:read')) return []
+    try {
+      const list = await fetchFirstPage<PluginSummary>('/plugins')
+      return list.filter(p => p.status === 'enabled' && hasSettingsForm(p))
+    } catch {
+      // The group is an index; the plugin list page still reaches them.
+      return []
+    }
+  }
+  async function refresh() {
+    const mine = ++lastRefresh
+    const list = await load()
+    // A late answer to an earlier visit, an earlier user's even, is dropped.
+    if (mine === lastRefresh) settingsPlugins.value = list
+  }
+  onMounted(refresh)
+  return settingsPlugins
 }
 
-/** The navigation of the enclosing shell; the settings page mounted alone makes its own. */
-export function useSettingsNav(): SettingsNav {
-  return inject(KEY, createSettingsNav, true)
+/** The menu of the sidebar's settings view: the configuration pages and the plugins' settings forms. */
+export function useSettingsMenu(): ComputedRef<ViewGroup[]> {
+  const { t } = useI18n()
+  const route = useRoute()
+  const { pages, activeTab } = useSettingsNav()
+  const plugins = useSettingsPlugins()
+
+  const onSettingsPage = computed(() => route.path === SETTINGS_PAGE)
+  const pageLink = (p: Page): ViewLink => ({
+    key: p.tab,
+    item: { id: `settings:${p.tab}`, labelKey: p.label, icon: p.icon, path: `${SETTINGS_PAGE}?tab=${p.tab}` },
+    active: onSettingsPage.value && activeTab.value === p.tab
+  })
+  const pluginLink = (p: PluginSummary): ViewLink => {
+    const path = pluginSettingsPath(p.key)
+    return {
+      key: `plugin:${p.key}`,
+      item: { id: `plugin-settings:${p.key}`, label: lt(p.name) || p.key, icon: 'puzzle', path, pluginKey: p.key },
+      active: route.path === path
+    }
+  }
+  const linksOf = (g: Group): ViewLink[] =>
+    g.plugins ? plugins.value.map(pluginLink) : g.pages.filter(p => pages.value.includes(p)).map(pageLink)
+
+  return computed(() =>
+    LAYOUT.map(g => ({ key: g.key, label: t(`settings.groups.${g.key}`), links: linksOf(g) })).filter(g => g.links.length > 0)
+  )
 }

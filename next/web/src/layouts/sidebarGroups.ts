@@ -2,60 +2,68 @@ import { ref, watch, type Ref } from 'vue'
 import type { NavItem, NavSection } from '@/stores/app'
 
 /**
- * The sidebar shows three groups (CONTRACTS §90): the console every role has
- * (section "overview"), personal ("me") and admin, which holds every other
- * section in the server's order: core sections listed flat, a plugin's own
- * section folded into a submenu, and system settings as one last entry.
+ * The console menu shows three groups (CONTRACTS §90): the console every role
+ * has (section "overview"), personal ("me") and admin, which holds every other
+ * section in the server's order: gateway, security and finance listed flat,
+ * the sections of FOLDED_SECTIONS and a plugin's own folded into a submenu,
+ * and last the entries that open a sidebar view (system settings), which
+ * the caller passes in (sidebarViews.ts).
  */
 export type NavGroupKey = 'overview' | 'me' | 'admin'
 
-/** A menu entry, lit up by any of `paths`: system settings stands for all of its pages. */
 export interface NavLink {
   key: string
   item: NavItem
-  paths: string[]
 }
 
-/** A row of a group: a menu entry, or a plugin section folded into a submenu. */
-export type NavEntry = (NavLink & { section?: never }) | { key: string; section: NavSection; item?: never }
+type NavRow = (NavLink & { section?: never }) | { key: string; section: NavSection; item?: never }
+
+/** A row of a group: a menu entry, or a section folded into a submenu. `gap` sets it a little apart from the row above. */
+export type NavEntry = NavRow & { gap?: boolean }
 
 export interface NavGroup {
   key: NavGroupKey
   entries: NavEntry[]
 }
 
-/** The core section whose pages live inside the settings page's navigation. */
-export const SETTINGS_SECTION = 'system'
-
 /** Sections that make a caller an operator; only then is the admin group titled. */
-const OPERATOR_SECTIONS = ['gateway', 'security', 'finance', 'users', SETTINGS_SECTION]
+const OPERATOR_SECTIONS = ['gateway', 'security', 'finance', 'users', 'system']
+
+/** Core sections folded into a submenu, as a plugin's own section is. */
+const FOLDED_SECTIONS = ['users', 'plugins', 'system']
+
+/** A flat section that continues the block of another one; the rest start their own. */
+const BLOCK_OF: Record<string, string> = { finance: 'security' }
 
 /** A plugin's own section is keyed "<plugin>:<id>"; core sections are bare ids. */
 const isPluginSection = (s: NavSection) => s.key.includes(':')
 
-const linkOf = (item: NavItem): NavLink => ({ key: `item:${item.id}`, item, paths: [item.path] })
+const folds = (s: NavSection) => isPluginSection(s) || FOLDED_SECTIONS.includes(s.key)
 
-/** System settings as one entry, opening its first page the caller may see. */
-function settingsLink(s: NavSection): NavLink {
-  const item: NavItem = { id: SETTINGS_SECTION, labelKey: 'nav.sections.system', icon: 'settings', path: s.items[0].path }
-  return { key: `item:${SETTINGS_SECTION}`, item, paths: s.items.map(i => i.path) }
+/** The admin group reads as blocks: the gateway, security with finance, the submenus, the view entries. */
+const blockOf = (s: NavSection) => (folds(s) ? 'submenus' : (BLOCK_OF[s.key] ?? s.key))
+
+const linkOf = (item: NavItem): NavLink => ({ key: `item:${item.id}`, item })
+
+/** A section that folds does so with two pages or more; one page stands for itself. */
+const sectionRows = (s: NavSection): NavRow[] =>
+  folds(s) && s.items.length > 1 ? [{ key: `section:${s.key}`, section: s }] : s.items.map(linkOf)
+
+function adminEntries(sections: NavSection[], viewEntries: NavItem[]): NavEntry[] {
+  // A view's entry moves from its section to the end of the group.
+  const stays = (i: NavItem) => !viewEntries.some(v => v.path === i.path)
+  const rowsOf = (s: NavSection) => sectionRows({ ...s, items: s.items.filter(stays) }).map(row => ({ row, block: blockOf(s) }))
+  const rows = [...sections.flatMap(rowsOf), ...viewEntries.map(v => ({ row: linkOf(v), block: 'views' }))]
+  return rows.map(({ row, block }, i) => ({ ...row, gap: i > 0 && rows[i - 1].block !== block }))
 }
 
-function adminEntries(sections: NavSection[]): NavEntry[] {
-  const entries = sections
-    .filter(s => s.key !== SETTINGS_SECTION)
-    .flatMap((s): NavEntry[] =>
-      isPluginSection(s) && s.items.length > 1 ? [{ key: `section:${s.key}`, section: s }] : s.items.map(linkOf)
-    )
-  return [...entries, ...sections.filter(s => s.key === SETTINGS_SECTION).map(settingsLink)]
-}
-
-export function groupMenus(menus: NavSection[]): NavGroup[] {
+export function groupMenus(menus: NavSection[], viewEntries: NavItem[]): NavGroup[] {
   const linksIn = (key: string) => menus.filter(s => s.key === key).flatMap(s => s.items.map(linkOf))
+  const others = menus.filter(s => s.key !== 'overview' && s.key !== 'me')
   const groups: NavGroup[] = [
     { key: 'overview', entries: linksIn('overview') },
     { key: 'me', entries: linksIn('me') },
-    { key: 'admin', entries: adminEntries(menus.filter(s => s.key !== 'overview' && s.key !== 'me')) }
+    { key: 'admin', entries: adminEntries(others, viewEntries) }
   ]
   return groups.filter(g => g.entries.length > 0)
 }
