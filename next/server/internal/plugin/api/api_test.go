@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -475,6 +476,26 @@ func TestUIPluginsAccountActions(t *testing.T) {
 	if got := actions("viewer"); len(got) != 1 || got[0].(map[string]any)["id"] != "stats" {
 		t.Fatalf("viewer actions = %v", got)
 	}
+	// accountTypes (UI 3.8, CONTRACTS §91b) go down as declared, on actions,
+	// detail tabs and quota column decorations alike; the console matches them.
+	stats.AccountTypes = []string{"device", "web"}
+	h.guard.UI.AccountActions = []manifest.AccountAction{reset, stats}
+	h.guard.UI.Slots = []manifest.Slot{
+		{Slot: manifest.SlotAccountDetailTabs, Component: "Quota", Permission: "stats:read", AccountTypes: []string{"device"}},
+		{Slot: manifest.SlotAccountListQuota, Component: "QuotaBadge", AccountTypes: []string{"web"}},
+	}
+	if got := actions("admin"); !reflect.DeepEqual(got[1].(map[string]any)["accountTypes"], []any{"device", "web"}) {
+		t.Fatalf("typed action = %v", got[1])
+	} else if _, has := got[0].(map[string]any)["accountTypes"]; has {
+		t.Fatalf("an unset accountTypes must be left out: %v", got[0])
+	}
+	_, out := h.do("GET", "/ui/plugins", "viewer", nil)
+	if slots := out["data"].([]any)[0].(map[string]any)["slots"].([]any); len(slots) != 2 ||
+		!reflect.DeepEqual(slots[0].(map[string]any)["accountTypes"], []any{"device"}) ||
+		!reflect.DeepEqual(slots[1].(map[string]any)["accountTypes"], []any{"web"}) {
+		t.Fatalf("typed slots = %v", slots)
+	}
+	h.guard.UI.Slots = nil
 	// A plugin whose only extension the caller may use is an action is still
 	// listed; one with nothing left for the caller is not.
 	h.guard.UI.AccountActions = []manifest.AccountAction{reset}
