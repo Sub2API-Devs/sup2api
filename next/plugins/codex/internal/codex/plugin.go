@@ -130,6 +130,7 @@ func NewWithEndpoints(ep Endpoints) *Plugin {
 	p.Handle(http.MethodPost, "/auth/siwc/exchange", p.handleSIWCExchange)
 	p.Handle(http.MethodPost, "/reset-credits/list", p.handleResetList)
 	p.Handle(http.MethodPost, "/reset-credits/consume", p.handleResetConsume)
+	p.Handle(http.MethodPost, "/reset-credits/summary", p.handleResetSummary)
 	return p
 }
 

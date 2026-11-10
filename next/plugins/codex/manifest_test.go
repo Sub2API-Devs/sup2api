@@ -185,7 +185,7 @@ func TestManifestShape(t *testing.T) {
 	wantRoutes := []struct{ path, permission string }{
 		{"/auth/device/start", "codex:manage"}, {"/auth/device/poll", "codex:manage"},
 		{"/auth/siwc/start", "codex:manage"}, {"/auth/siwc/exchange", "codex:manage"},
-		{"/reset-credits/list", "codex:reset"}, {"/reset-credits/consume", "codex:reset"},
+		{"/reset-credits/list", "codex:reset"}, {"/reset-credits/consume", "codex:reset"}, {"/reset-credits/summary", "codex:reset"},
 	}
 	if len(m.Routes) != len(wantRoutes) {
 		t.Fatalf("routes = %+v", m.Routes)

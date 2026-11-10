@@ -209,6 +209,11 @@ func errNoSession() *pluginv1.HTTPResponse {
 	return pluginsdk.BadRequest("session_id", "required", "session_id is required / 缺少 session_id")
 }
 
+// errNotReady is a 503 for a route called before Init.
+func errNotReady() *pluginv1.HTTPResponse {
+	return pluginsdk.Unavailable("the plugin is not ready / 插件尚未就绪: " + pluginsdk.ErrHostNotReady.Error())
+}
+
 // flowError is a 400 refusal of the authorization flow with its own code.
 func flowError(code, msg string) *pluginv1.HTTPResponse {
 	return pluginsdk.ErrorResponse(http.StatusBadRequest, code, msg)
@@ -378,7 +383,7 @@ func (p *Plugin) handleDevicePoll(ctx context.Context, req *pluginv1.HTTPRequest
 		return errNoSession(), nil
 	}
 	if p.host == nil {
-		return pluginsdk.Unavailable("the plugin is not ready / 插件尚未就绪: " + pluginsdk.ErrHostNotReady.Error()), nil
+		return errNotReady(), nil
 	}
 	lock, ok, err := p.host.Locks().TryAcquire(ctx, pollLockName(id), pollLockTTL)
 	if err != nil {

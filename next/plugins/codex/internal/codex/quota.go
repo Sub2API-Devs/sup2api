@@ -272,8 +272,9 @@ func backendHeaders(c credentials) map[string]string {
 // ParseQuotaResponse implements pluginsdk.QuotaReader. 401/403 are
 // AUTH_REJECTED, other failures TRANSIENT (recorded on the snapshot only; the
 // account is never cooled down or disabled for a failed query). A null
-// rate_limit or null window is no window.
-func (p *Plugin) ParseQuotaResponse(_ context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
+// rate_limit or null window is no window. A readable answer also caches the
+// account's official reset count (resetcache.go).
+func (p *Plugin) ParseQuotaResponse(ctx context.Context, in *pluginv1.ParseQuotaResponseRequest) (*pluginv1.QuotaResult, error) {
 	st := in.GetStatus()
 	switch {
 	case st == 0:
@@ -289,6 +290,7 @@ func (p *Plugin) ParseQuotaResponse(_ context.Context, in *pluginv1.ParseQuotaRe
 	if err := json.Unmarshal(in.GetBody(), &u); err != nil {
 		return quotaError(pluginv1.QuotaResult_ERROR_TYPE_TRANSIENT, "unreadable usage response / 无法解析用量响应: "+err.Error()), nil
 	}
+	p.cacheUsageResetCount(ctx, in.GetAccount().GetId(), in.GetBody())
 	now := p.now()
 	return quotaResult(now, u.windows(now)), nil
 }

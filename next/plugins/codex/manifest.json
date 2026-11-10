@@ -125,7 +125,8 @@
     { "method": "POST", "path": "/auth/siwc/start", "scope": "admin", "permission": "codex:manage" },
     { "method": "POST", "path": "/auth/siwc/exchange", "scope": "admin", "permission": "codex:manage" },
     { "method": "POST", "path": "/reset-credits/list", "scope": "admin", "permission": "codex:reset" },
-    { "method": "POST", "path": "/reset-credits/consume", "scope": "admin", "permission": "codex:reset" }
+    { "method": "POST", "path": "/reset-credits/consume", "scope": "admin", "permission": "codex:reset" },
+    { "method": "POST", "path": "/reset-credits/summary", "scope": "admin", "permission": "codex:reset" }
   ],
 
   "ui": {
@@ -142,11 +143,11 @@
     { "id": "accounts.auto_state", "scope": { "types": "own" },
       "reason": { "en": "After an official usage reset succeeds, clear the automatic disable and cool-down this plugin set on the account because a usage window was used up", "zh": "官方用量重置成功后，清除本插件因用量窗口用满而对账号设置的自动停用与冷却" } },
     { "id": "kv",
-      "reason": { "en": "Keep the short-lived authorization sessions (device code, PKCE verifier and state) between the console's calls", "zh": "在控制台的多次调用之间保存短期授权会话（设备码、PKCE verifier 与 state）" } },
+      "reason": { "en": "Keep the short-lived authorization sessions (device code, PKCE verifier and state) between the console's calls, and cache each account's remaining official usage resets so the account list does not ask ChatGPT on every refresh", "zh": "在控制台的多次调用之间保存短期授权会话（设备码、PKCE verifier 与 state），并缓存每个账号剩余的官方用量重置次数，使账号列表刷新时不必每次询问 ChatGPT" } },
     { "id": "lock",
       "reason": { "en": "Let only one device code poll at a time read and update an authorization session, so two concurrent polls (two tabs or two nodes) never both spend the single-use code; likewise let only one usage reset of an account run at a time, so a double click never spends two resets", "zh": "同一时间只允许一次设备码轮询读写授权会话，避免两次并发轮询（两个标签页或两个节点）都去使用一次性授权码；同理同一账号同一时间只允许一次用量重置，避免重复点击消耗两次" } },
     { "id": "routes.admin",
-      "reason": { "en": "Authorization endpoints the account form calls (device code start/poll, Sign in with ChatGPT start/exchange) and the official usage reset endpoints (list, spend)", "zh": "账号表单调用的授权端点（设备码开始/轮询、Sign in with ChatGPT 开始/换取）与官方用量重置端点（查询、使用）" } },
+      "reason": { "en": "Authorization endpoints the account form calls (device code start/poll, Sign in with ChatGPT start/exchange) and the official usage reset endpoints (list, spend, cached counts)", "zh": "账号表单调用的授权端点（设备码开始/轮询、Sign in with ChatGPT 开始/换取）与官方用量重置端点（查询、使用、缓存次数）" } },
     { "id": "net", "scope": { "domains": ["auth.openai.com"] },
       "reason": { "en": "Talk to OpenAI's authorization server while an account is authorized (device code, token exchange); upstream requests, usage queries and token refreshes are sent by the core", "zh": "授权账号时访问 OpenAI 授权服务器（设备码、换取令牌）；上游请求、用量查询与令牌刷新由核心发送" } },
     { "id": "ui.native",

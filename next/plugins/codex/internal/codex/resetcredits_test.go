@@ -102,14 +102,23 @@ func (c *resetClient) clearCalls() []*pluginv1.SetAccountAutomaticStateRequest {
 	return append([]*pluginv1.SetAccountAutomaticStateRequest(nil), c.clears...)
 }
 
-// resetHost is the harness host with the plugin's accounts and resetClient.
+// resetHost is the harness host with the plugin's accounts and resetClient;
+// kv, when set, replaces the harness KV.
 type resetHost struct {
 	pluginsdk.Host
 	client   *resetClient
 	accounts map[int64]pluginsdk.AccountCredentials
+	kv       pluginsdk.KV
 }
 
 func (h *resetHost) Client() pluginv1.HostServiceClient { return h.client }
+
+func (h *resetHost) KV() pluginsdk.KV {
+	if h.kv != nil {
+		return h.kv
+	}
+	return h.Host.KV()
+}
 
 func (h *resetHost) AccountCredentials(_ context.Context, id int64) (*pluginsdk.AccountCredentials, error) {
 	a, ok := h.accounts[id]
@@ -122,6 +131,7 @@ func (h *resetHost) AccountCredentials(_ context.Context, id int64) (*pluginsdk.
 // resetEnv is a running plugin with a fake chatgpt.com whose answers
 // backend sets per test.
 type resetEnv struct {
+	p       *Plugin
 	h       *pluginsdktest.Harness
 	host    *resetHost
 	client  *resetClient
@@ -134,6 +144,7 @@ func newResetEnv(t *testing.T) *resetEnv {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { e.backend(w, r) }))
 	t.Cleanup(srv.Close)
 	p := newTestPlugin(testEndpoints(srv.URL))
+	e.p = p
 	e.h = startPlugin(t, p)
 	e.client = &resetClient{HostServiceClient: p.host.Client()}
 	e.host = &resetHost{Host: p.host, client: e.client, accounts: map[int64]pluginsdk.AccountCredentials{

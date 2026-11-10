@@ -29,7 +29,8 @@ import (
 //
 // The plugin describes each request; the core sends it through the account's
 // proxy (pluginsdk.SendAccountRequest), identified truthfully as sup2api like
-// every other request. Answers follow the authorization routes (oauth.go):
+// every other request. The account list reads cached counts instead
+// (resetcache.go). Answers follow the authorization routes (oauth.go):
 // {"data": ...} on success, {"error":{"code","message"}} otherwise, messages
 // "English / 中文".
 
@@ -120,6 +121,7 @@ func (p *Plugin) handleResetList(ctx context.Context, req *pluginv1.HTTPRequest)
 	if err != nil {
 		return upstreamError("upstream_error", "unreadable reset credits answer / 无法解析重置次数响应: "+err.Error()), nil
 	}
+	p.storeResetCount(ctx, in.AccountID, list.AvailableCount)
 	return pluginsdk.DataResponse(list), nil
 }
 
@@ -154,6 +156,9 @@ func (p *Plugin) handleResetConsume(ctx context.Context, req *pluginv1.HTTPReque
 	}
 	switch outcome {
 	case outcomeReset, outcomeAlreadyRedeemed:
+		// The spent credit makes the cached count stale; the next usage
+		// query or list writes it again.
+		p.dropResetCount(ctx, id)
 		return pluginsdk.DataResponse(ResetConsumeResponse{Outcome: outcome, WindowsReset: windows, AccountRestored: p.restoreAccount(ctx, id)}), nil
 	case outcomeNothingToReset:
 		return pluginsdk.ErrorResponse(http.StatusConflict, outcomeNothingToReset, "No usage window can be reset right now; no reset was used / 当前没有可重置的用量窗口，未消耗次数"), nil
@@ -206,7 +211,7 @@ func resetLockName(id int64) string { return "codex-reset:" + strconv.FormatInt(
 // routes; bad is the route answer when it cannot be used.
 func (p *Plugin) resetAccount(ctx context.Context, id int64) (c credentials, bad *pluginv1.HTTPResponse) {
 	if p.host == nil {
-		return c, pluginsdk.Unavailable("the plugin is not ready / 插件尚未就绪: " + pluginsdk.ErrHostNotReady.Error())
+		return c, errNotReady()
 	}
 	acc, err := p.host.AccountCredentials(ctx, id)
 	if status.Code(err) == codes.NotFound {
