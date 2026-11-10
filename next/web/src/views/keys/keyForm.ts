@@ -1,4 +1,4 @@
-import type { ApiKey } from '@/api/types'
+import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput, toLocalInput } from '@/api/admin'
 import { capsBody, capsForm, type KeyCapsForm } from './keyLimits'
 
@@ -22,6 +22,11 @@ export function keyForm(k?: ApiKey | null, group: number | null = null): KeyForm
     allowed_ips: (k?.allowed_ips ?? []).join('\n'),
     caps: capsForm(k ?? undefined)
   }
+}
+
+/** The groups as select options: each by its name and the platforms its keys reach (`platformLabel` names one). */
+export function groupOptions(groups: readonly Group[], platformLabel: (id: string) => string) {
+  return groups.map((g) => ({ value: g.id, label: g.platforms?.length ? `${g.name} · ${g.platforms.map((p) => platformLabel(p)).join(', ')}` : g.name }))
 }
 
 export const ipEntries = (value: string) => value.split(/[\s,]+/).filter(Boolean)

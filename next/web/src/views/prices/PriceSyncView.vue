@@ -25,6 +25,7 @@ import {
   type Tone
 } from '@sub2api/ui'
 import type { PriceSource, PriceSyncAction, PriceSyncItem, PriceSyncPreview, PriceSyncResult } from '@/api/types'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { formatDateTime, formatNumber } from '@/utils/format'
 import PriceDefSummary from './PriceDefSummary.vue'
@@ -358,9 +359,7 @@ async function apply() {
               </SButton>
             </div>
           </template>
-          <template #cell-model="{ row }"
-            ><span class="font-mono text-xs">{{ row.model }}</span></template
-          >
+          <template #cell-model="{ row }"><ModelBadge :model="row.model" plain /></template>
           <template #cell-action="{ row }">
             <SBadge
               :tone="ACTION_TONE[row.action as PriceSyncAction]"
@@ -411,9 +410,7 @@ async function apply() {
           <SSectionTitle tag="p">{{ t('prices.sync.skippedList') }}</SSectionTitle>
           <div class="max-h-60 overflow-y-auto">
             <STable :columns="skippedColumns" :rows="result.skipped" row-key="model" dense data-testid="price-sync-skipped">
-              <template #cell-model="{ row }"
-                ><span class="font-mono text-xs">{{ row.model }}</span></template
-              >
+              <template #cell-model="{ row }"><ModelBadge :model="row.model" plain /></template>
               <template #cell-reason="{ row }"
                 ><span class="text-xs">{{ row.reason }}</span></template
               >

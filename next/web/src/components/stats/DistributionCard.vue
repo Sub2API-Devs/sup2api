@@ -3,7 +3,9 @@
 // top seven and "other", beside a table of the same rows, switchable between
 // tokens and cost. The table carries the labels, so the colors never stand
 // alone. Colors follow the entity (stats.entityColors). A row click emits
-// `select` with its key ('' for "other" is not emitted).
+// `select` with its key ('' for "other" is not emitted). The optional `label`
+// slot ({ label }) draws the label of a row that has a key (not "other", not
+// a row of no key), e.g. a model with its vendor's mark.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SCard, SChart, SEmpty, SSegmented } from '@sub2api/ui'
@@ -106,7 +108,8 @@ function pct(r: UsageSummaryRow) {
               <td class="max-w-[14rem] py-1.5 pr-2">
                 <span class="flex items-center gap-1.5">
                   <span class="h-2.5 w-2.5 shrink-0 rounded-sm" :style="{ background: i.color }" />
-                  <span class="truncate" :class="i.other ? 'text-fg-muted' : 'font-mono'" :title="i.label">{{ i.label }}</span>
+                  <slot v-if="$slots.label && i.key" name="label" :label="i.label" />
+                  <span v-else class="truncate" :class="i.other ? 'text-fg-muted' : 'font-mono'" :title="i.label">{{ i.label }}</span>
                 </span>
               </td>
               <td class="py-1.5 pr-2 text-right tabular-nums">{{ formatNumber(i.row.requests) }}</td>

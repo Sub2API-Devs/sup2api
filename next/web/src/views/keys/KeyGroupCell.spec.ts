@@ -1,31 +1,50 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { i18n } from '@/i18n'
+import ProblemIcon from '@/components/ProblemIcon.vue'
 import KeyGroupCell from './KeyGroupCell.vue'
 
-vi.mock('@/composables/platforms', () => ({ usePlatforms: () => ({ load: vi.fn(), label: (v: string) => v }) }))
-const render = (props: Record<string, unknown>) => mount(KeyGroupCell, { props: { name: 'vip', ...props }, global: { plugins: [i18n] } })
+const render = (props: Record<string, unknown>) => {
+  i18n.global.locale.value = 'zh'
+  return mount(KeyGroupCell, { props: { name: 'vip', ...props }, global: { plugins: [i18n] } })
+}
+type Cell = ReturnType<typeof render>
+const badge = (w: Cell) => w.find('[data-testid="group-badge"]')
+/** The problem icon's sentence (its tooltip and accessible name) and tone, undefined without a problem. */
+const problem = (w: Cell) => {
+  const icon = w.findComponent(ProblemIcon)
+  return icon.exists() ? { text: icon.props('text'), tone: icon.props('tone') } : undefined
+}
 
 describe('API key group cell', () => {
-  it('shows the group as a badge with its rate, warning when the key reaches no platform', () => {
-    i18n.global.locale.value = 'zh'
-    expect(render({ multiplier: '0.8', platforms: ['anthropic'] }).get('[data-testid="group-badge"]').text()).toBe('anthropicvip0.8x')
-    expect(render({ platforms: [] }).text()).toContain('暂时无法提供服务')
-    expect(render({}).text()).toBe('vip')
+  it('shows the group as a badge of its name and rate, and nothing else while it serves the key', () => {
+    const w = render({ multiplier: '0.8', platforms: ['anthropic'], status: 'active' })
+    expect(badge(w).text()).toBe('vip0.8x')
+    expect(problem(w)).toBeUndefined()
+    // Platforms the server did not report are not a problem either.
+    expect(problem(render({}))).toBeUndefined()
+  })
+
+  it('marks a group without usable accounts with a warning icon, the sentence in its tooltip only', () => {
+    const w = render({ platforms: [], status: 'active' })
+    expect(problem(w)).toEqual({ text: '该分组暂时无法提供服务（没有可用账号）。', tone: 'warning' })
+    expect(w.text()).toBe('vip')
+    expect(w.get('[data-testid="key-group-problem"]').attributes('aria-label')).toBe('该分组暂时无法提供服务（没有可用账号）。')
   })
 
   it('says why the group cannot serve the key: deleted (no badge), disabled or no longer open', () => {
-    i18n.global.locale.value = 'zh'
     const deleted = render({ name: '', platforms: [], status: 'deleted' })
-    expect(deleted.find('[data-testid="group-badge"]').exists()).toBe(false)
-    expect(deleted.get('[data-testid="key-group-problem"]').text()).toBe('分组已删除，请重新选择分组')
-    expect(deleted.text()).not.toContain('暂时无法提供服务')
+    expect(badge(deleted).exists()).toBe(false)
+    expect(problem(deleted)).toEqual({ text: '分组已删除，请重新选择分组', tone: 'danger' })
+    expect(deleted.text()).toBe('')
+
     const disabled = render({ platforms: ['anthropic'], status: 'disabled' })
-    expect(disabled.find('[data-testid="group-badge"]').exists()).toBe(true)
-    expect(disabled.get('[data-testid="key-group-problem"]').text()).toBe('分组已停用')
-    expect(render({ platforms: ['anthropic'], status: 'unavailable' }).text()).toContain('分组已不对你开放')
-    expect(render({ platforms: ['anthropic'], status: 'active' }).find('[data-testid="key-group-problem"]').exists()).toBe(false)
-    // A state added by a newer server shows no hint rather than a raw message key.
-    expect(render({ platforms: ['anthropic'], status: 'paused' }).text()).not.toContain('apikeys.')
+    expect(badge(disabled).exists()).toBe(true)
+    expect(problem(disabled)).toEqual({ text: '分组已停用', tone: 'danger' })
+    expect(problem(render({ platforms: ['anthropic'], status: 'unavailable' }))?.text).toBe('分组已不对你开放')
+  })
+
+  it('shows no problem for a group state added by a newer server', () => {
+    expect(problem(render({ platforms: ['anthropic'], status: 'paused' }))).toBeUndefined()
   })
 })

@@ -9,6 +9,7 @@ import { SCHEMA_WIDGETS_KEY, TABLE_COLUMN_SCOPE_KEY } from '@sub2api/ui'
 import { useAuthStore } from './stores/auth'
 import { schemaWidgets } from './components/schema/widgets'
 import './style.css'
+import './components/platform/brand.css'
 
 const app = createApp(App)
 app.use(createPinia())

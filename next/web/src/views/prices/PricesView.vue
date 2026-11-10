@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SChip, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
 import type { Price } from '@/api/types'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
 import { deleteWithConfirm, useRowSwitch } from '@/composables/crud'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -147,7 +148,7 @@ function remove(p: Price) {
     <SAlert tone="primary" dense class="mb-3" data-testid="price-scope-note">{{ t('prices.scopeNote') }}</SAlert>
     <STable card :columns="columns" :rows="rows" :loading="loading" :error="error" @retry="reload">
       <template #cell-model="{ row }">
-        <SLink :to="`/prices/${row.id}`" class="font-mono text-sm">{{ row.model }}</SLink>
+        <SLink :to="`/prices/${row.id}`" class="inline-flex max-w-full"><ModelBadge :model="row.model" plain /></SLink>
         <SHint v-if="row.note" size="xs" class="truncate">{{ row.note }}</SHint>
       </template>
       <template #cell-mode="{ row }">

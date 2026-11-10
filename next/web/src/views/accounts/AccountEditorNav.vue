@@ -6,7 +6,7 @@ import { SIcon, SStatusDot } from '@sub2api/ui'
 import type { AccountType } from '@/api/types'
 import { lt } from '@/i18n'
 import PluginAvatar from '@/views/plugins/parts/PluginAvatar.vue'
-import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
+import AccountTypePlatforms from './AccountTypePlatforms.vue'
 import type { EditorSection } from './editorErrors'
 
 defineProps<{
@@ -30,9 +30,7 @@ const { t } = useI18n()
           </div>
         </div>
       </div>
-      <div v-if="accountType.platforms.length" class="mt-2.5 flex flex-wrap gap-1 text-xs">
-        <PlatformBadges :items="accountType.platforms" />
-      </div>
+      <AccountTypePlatforms v-if="accountType.platforms.length" :items="accountType.platforms" class="mt-2.5" />
     </div>
 
     <nav :aria-label="t('accounts.editorUi.navigation')" class="flex gap-1.5 overflow-x-auto md:flex-col md:overflow-visible">

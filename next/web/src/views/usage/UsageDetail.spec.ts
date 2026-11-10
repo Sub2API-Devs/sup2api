@@ -8,6 +8,7 @@ const get = vi.hoisted(() => vi.fn())
 vi.mock('@sub2api/host', () => ({ api: { get } }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
 vi.mock('@/views/accounts/accountTypes', () => ({ useAccountTypes: () => ({ load: vi.fn() }) }))
+vi.mock('@/composables/platforms', () => ({ usePlatforms: () => ({ load: vi.fn(), label: (id: string) => id }) }))
 enableAutoUnmount(afterEach)
 
 const row = {
@@ -72,6 +73,39 @@ describe('model availability trace', () => {
     const wrapper = render({ ...rejected, error_type: 'upstream_overloaded', anomalies: { availability: trace } } as unknown as UsageRow)
     expect(wrapper.find('[data-testid="usage-availability"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="usage-availability-hint"]').exists()).toBe(false)
+  })
+})
+
+describe('vendor and platform marks', () => {
+  const served = {
+    ...row, success: true, status_code: 200, billing_status: 'billed', billing_detail: {}, model: 'gpt-4o', upstream_model: 'claude-sonnet-4-5',
+    account_id: 9, account_name: 'Account nine', platform: 'openai', protocol: 'openai.chat', endpoint: '/v1/chat/completions', upstream_protocol: 'anthropic.messages',
+    price: { id: 3, model: 'gpt-4o*', source: 'manual' }
+  } as unknown as UsageRow
+  const brands = (w: { findAll: ReturnType<typeof render>['findAll'] }) => w.findAll('[data-testid="model-badge"] [data-brand]').map(m => m.attributes('data-brand'))
+
+  it('marks the requested, priced and mapped models by vendor, the account by the upstream platform and the endpoint by its own', () => {
+    const w = render(served)
+    expect(brands(w.get('[data-testid="usage-detail-summary"]'))).toEqual(['openai'])
+    expect(w.get('[data-testid="usage-billing-facts"] [data-testid="model-badge"]').text()).toContain('gpt-4o*')
+    const facts = w.get('[data-testid="usage-request-facts"]')
+    expect(brands(facts)).toEqual(['anthropic'])
+    const account = facts.get('[data-testid="detail-account"]')
+    expect(account.text()).toContain('#9 Account nine')
+    expect(account.get('[data-platform]').attributes('data-platform')).toBe('anthropic')
+    expect(facts.get('[data-testid="platform-badge"]').attributes('data-platform')).toBe('openai')
+  })
+
+  it('repeats no upstream model equal to the requested one, guesses no platform the record does not name, and dashes a missing model', () => {
+    const same = render({ ...served, upstream_model: 'gpt-4o', upstream_protocol: 'local' } as unknown as UsageRow)
+    const facts = same.get('[data-testid="usage-request-facts"]')
+    expect(brands(facts)).toEqual([])
+    const account = facts.get('[data-testid="detail-account"]')
+    expect(account.text()).toBe('#9 Account nine')
+    expect(account.find('[data-platform]').exists()).toBe(false)
+    const summary = render({ ...served, model: '' } as unknown as UsageRow).get('[data-testid="usage-detail-summary"]')
+    expect(summary.find('[data-testid="model-badge"]').exists()).toBe(false)
+    expect(summary.get('p').text()).toBe('—')
   })
 })
 

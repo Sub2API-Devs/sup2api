@@ -14,7 +14,7 @@ export default {
   patternInvalid: 'Each model pattern must be at most 200 characters',
 
   title: 'Groups',
-  description: 'A group is a set of accounts (any types mixed) serving together; each API key is bound to one group. The group decides the rate multiplier, allowed models and — through its accounts — the platforms it serves.',
+  description: 'A group is a set of accounts (any types mixed) serving together; each API key is bound to one group. The group decides the rate multiplier and the allowed models.',
   create: 'New group',
   editTitle: 'Edit group {name}',
   visibility: 'Visibility',

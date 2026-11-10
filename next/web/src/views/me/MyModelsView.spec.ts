@@ -37,6 +37,17 @@ describe('models and prices', () => {
     expect(row(w, 'custom')).toContain('按规则计费')
   })
 
+  it('marks each model with its vendor, in the vendor colour', async () => {
+    const named = [{ ...prices[0], model: 'claude-sonnet-4-5' }, { ...prices[1], model: 'seedance-pro' }, prices[3]]
+    get.mockImplementation(async (path: string) => (path === '/me/groups' ? groups : { group: { id: 1 }, rate_multiplier: '1', prices: named }))
+    const w = mount(MyModelsView, { global: { plugins: [i18n] } })
+    await flushPromises()
+    const badges = w.findAll('[data-testid="model-badge"]')
+    expect(badges.map((b) => b.get('.truncate').text())).toEqual(['claude-sonnet-4-5', 'seedance-pro', 'custom'])
+    expect(badges.map((b) => b.get('[data-brand]').attributes('data-brand'))).toEqual(['anthropic', 'doubao', 'custom'])
+    expect(badges.every((b) => b.classes().includes('brand-tint'))).toBe(true)
+  })
+
   it('multiplies by the rate of the chosen group, and searches', async () => {
     const w = mount(MyModelsView, { global: { plugins: [i18n] } })
     await flushPromises()

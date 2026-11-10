@@ -3,6 +3,9 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SDateTime, SBadge, SIcon, SIPAddress, STable, STableColumnSettings, useTableColumns, type TableColumn } from '@sub2api/ui'
 import { formatMoney, formatNumber } from '@/utils/format'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
+import { brandVars, platformBrand } from '@/components/platform/brands'
+import UsageAccountMark from './UsageAccountMark.vue'
 import UsageDetail from './UsageDetail.vue'
 import UsageError from './UsageError.vue'
 import UsageErrorText from './UsageErrorText.vue'
@@ -10,7 +13,7 @@ import UsageStatus from './UsageStatus.vue'
 import UsageTiming from './UsageTiming.vue'
 import UsageTokens from './UsageTokens.vue'
 import UsageConversionBadges from './UsageConversionBadges.vue'
-import { accountLabel, billingTone, hashColor, type UsageRow } from './usage'
+import { accountLabel, accountPlatform, billingTone, hashColor, type UsageRow } from './usage'
 
 // The usage list: one row per request, its detail (billing trace, request
 // facts) expanded under it; cards on narrow screens. Clicking a client IP, a
@@ -54,6 +57,13 @@ defineExpose({ columnState })
 const keyName = (row: UsageRow) => row.api_key_name || (row.api_key_id ? '#' + row.api_key_id : '—')
 const groupName = (row: UsageRow) => row.group_name || (row.group_id ? '#' + row.group_id : '')
 const userName = (row: UsageRow) => row.user_email || row.user_name || '#' + row.user_id
+/** The account chip takes the colour of the platform the request reached the account on; without one it stays neutral. */
+function accountVars(row: UsageRow) {
+  const platform = accountPlatform(row)
+  return platform ? brandVars(platformBrand(platform)) : undefined
+}
+/** "model → upstream model" when the account's mapping sent another model upstream. */
+const mappedModel = (row: UsageRow) => (row.upstream_model && row.upstream_model !== row.model ? `${row.model} → ${row.upstream_model}` : '')
 /** "×1.5" when the group's rate is not 1. */
 function rate(row: UsageRow) {
   const r = Number(row.rate_multiplier)
@@ -110,13 +120,10 @@ function rate(row: UsageRow) {
       </template>
       <template #cell-model="{ row }">
         <div class="flex min-w-0 flex-col items-start gap-1">
-          <span
-            class="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border border-line bg-surface-2/60 px-2 text-xs font-medium"
-            :title="row.upstream_model && row.upstream_model !== row.model ? `${row.model} → ${row.upstream_model}` : row.model"
-          >
-            <span class="h-2 w-2 shrink-0 rounded-full" :class="hashColor(row.model || '')" aria-hidden="true" />
-            <span class="truncate font-mono">{{ row.model || '—' }}</span>
-            <SIcon v-if="row.upstream_model && row.upstream_model !== row.model" name="arrow-left" class="h-3 w-3 shrink-0 rotate-180 text-fg-subtle" />
+          <span class="inline-flex max-w-full items-center gap-1 text-xs" :title="mappedModel(row) || undefined">
+            <ModelBadge v-if="row.model" :model="row.model" :title="mappedModel(row) || row.model" />
+            <span v-else class="text-fg-subtle">—</span>
+            <SIcon v-if="mappedModel(row)" name="arrow-left" class="h-3 w-3 shrink-0 rotate-180 text-fg-subtle" />
           </span>
           <div class="flex max-w-full items-center gap-1.5 text-xxs text-fg-subtle">
             <span class="truncate font-mono">{{ row.upstream_protocol || row.protocol || '—' }}</span>
@@ -128,13 +135,15 @@ function rate(row: UsageRow) {
         <button
           v-if="row.account_id"
           type="button"
-          class="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border border-line bg-surface-2/60 px-2 text-left text-xs hover:border-primary-400 hover:text-primary-600"
+          class="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md px-2 text-left text-xs ring-inset hover:ring-1 hover:ring-current"
+          :class="accountVars(row) ? 'brand-tint' : 'border border-line bg-surface-2/60'"
+          :style="accountVars(row)"
           :title="t('usage.filterByAccount', { account: accountLabel(row) })"
           data-testid="usage-account"
           @click.stop="emit('filter-account-id', row.account_id)"
         >
-          <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="hashColor(String(row.account_id))" aria-hidden="true" />
-          <span class="shrink-0 font-mono text-fg-muted">#{{ row.account_id }}</span>
+          <UsageAccountMark :row="row" />
+          <span class="shrink-0 font-mono opacity-75">#{{ row.account_id }}</span>
           <span v-if="row.account_name" class="truncate">{{ row.account_name }}</span>
         </button>
         <span v-else class="text-xs text-fg-subtle" :title="t('usage.noAccount')">—</span>
@@ -172,10 +181,7 @@ function rate(row: UsageRow) {
         <div data-testid="mobile-usage-record">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <p v-if="isVisible('model')" class="flex items-center gap-1.5 font-mono text-xs font-medium">
-                <span class="h-2 w-2 shrink-0 rounded-full" :class="hashColor(row.model || '')" aria-hidden="true" />
-                <span class="break-all">{{ row.model || '—' }}</span>
-              </p>
+              <ModelBadge v-if="isVisible('model') && row.model" :model="row.model" />
               <p class="mt-1 text-xs text-fg-subtle">
                 <SDateTime muted :value="row.created_at" mode="time" class="tabular-nums" />
               </p>
@@ -215,11 +221,11 @@ function rate(row: UsageRow) {
                 <button
                   v-if="row.account_id"
                   type="button"
-                  class="block max-w-full truncate text-left text-primary-600"
+                  class="inline-flex max-w-full items-center gap-1 text-left text-primary-600"
                   :title="t('usage.filterByAccount', { account: accountLabel(row) })"
                   @click="emit('filter-account-id', row.account_id)"
                 >
-                  {{ accountLabel(row) }}
+                  <UsageAccountMark :row="row" /><span class="truncate">{{ accountLabel(row) }}</span>
                 </button>
                 <span v-else class="text-fg-subtle">—</span>
               </dd>

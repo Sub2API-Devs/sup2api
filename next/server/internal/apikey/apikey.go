@@ -408,7 +408,74 @@ func (s *Service) query(c *gin.Context, where string, args []any, hideEmail bool
 
 func (s *Service) listMine(c *gin.Context) {
 	uid, _ := core.UserID(c.Request.Context())
-	s.query(c, ` WHERE k.deleted_at IS NULL AND k.user_id = $1`, []any{uid}, true)
+	f, err := mineFilter(c, uid)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.query(c, f.Cond(), f.Args(), true)
+}
+
+// keyStatusFilters are the conditions of the status= filter of GET
+// /me/api-keys (CONTRACTS §92.1). They split the keys the way the console's
+// status badge does: a key that is switched off is "disabled" even past its
+// expiry, and "expired" is a key Authenticate rejects for its expiry alone.
+var keyStatusFilters = map[string]string{
+	"active":   "k.status = 'active' AND (k.expires_at IS NULL OR k.expires_at > now())",
+	"disabled": "k.status <> 'active'",
+	"expired":  "k.status = 'active' AND k.expires_at <= now()",
+}
+
+// mineFilter builds the WHERE clause of GET /me/api-keys: the caller's keys,
+// narrowed by q (name or key prefix), status and group_id.
+func mineFilter(c *gin.Context, userID int64) (*store.Filter, error) {
+	ctx := c.Request.Context()
+	var f store.Filter
+	f.And("k.deleted_at IS NULL AND k.user_id = ?", userID)
+	if q := strings.TrimSpace(c.Query("q")); q != "" {
+		// PostgreSQL takes neither as text.
+		if !utf8.ValidString(q) || strings.ContainsRune(q, 0) {
+			return nil, core.InvalidFields(core.FieldError{Field: "q", Code: "invalid",
+				Message: t(ctx, "q must be valid UTF-8 text", "q 须为合法的 UTF-8 文本")})
+		}
+		cond, args := "k.name ILIKE ?", []any{"%" + store.Like(q) + "%"}
+		if prefix := searchedPrefix(q); prefix != "" {
+			cond, args = "(k.name ILIKE ? OR k.key_prefix ILIKE ?)", append(args, store.Like(prefix)+"%")
+		}
+		f.And(cond, args...)
+	}
+	if v := c.Query("status"); v != "" {
+		cond, ok := keyStatusFilters[v]
+		if !ok {
+			return nil, core.InvalidFields(core.FieldError{Field: "status", Code: "invalid",
+				Message: t(ctx, "status must be active, disabled or expired", "状态只能是 active、disabled 或 expired")})
+		}
+		f.And(cond)
+	}
+	if v := c.Query("group_id"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, core.InvalidFields(core.FieldError{Field: "group_id", Code: "invalid",
+				Message: t(ctx, "group_id must be a positive integer", "group_id 须为正整数")})
+		}
+		f.And("k.group_id = ?", id)
+	}
+	return &f, nil
+}
+
+// searchedPrefix is the key prefix the search text q asks for, or "" when q
+// is not the start of a key: KeyPrefix or less starts every key, so it would
+// filter nothing. A pasted key is found by the prefix stored of it: the
+// console sends no more than that, so the key itself stays out of the URL.
+func searchedPrefix(q string) string {
+	if len(q) <= len(KeyPrefix) || !strings.EqualFold(q[:len(KeyPrefix)], KeyPrefix) {
+		return ""
+	}
+	// A cut inside a character is not a key and would not be valid text.
+	if len(q) > displayPrefix && utf8.RuneStart(q[displayPrefix]) {
+		return q[:displayPrefix]
+	}
+	return q
 }
 
 func (s *Service) loadKey(ctx context.Context, id, ownerID int64) (*APIKey, error) {
