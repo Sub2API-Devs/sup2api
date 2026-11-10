@@ -279,6 +279,88 @@ func TestPlanSkipsCachedSegments(t *testing.T) {
 	}
 }
 
+// An image that is sent keeps the cached text of its request in the plan: the
+// chunks, and with them the sample beyond input_max_chunks, are those of the
+// request with an empty cache. Without such an image cached text is left out.
+func TestPlanKeepsCachedTextWithAnUncachedImage(t *testing.T) {
+	r := extractReq(t, "anthropic.messages", `{"system":"sys","messages":[{"role":"user","content":[{"type":"text","text":"look"},
+		{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}},{"type":"text","text":"new"}]}]}`)
+	if len(r.segs) != 4 || r.segs[2].img == nil {
+		t.Fatalf("segments = %+v", r.segs)
+	}
+	cached := map[[32]byte]bool{r.segs[0].key: true, r.segs[1].key: true}
+	isCached := func(h [32]byte) bool { return cached[h] }
+	lim := planLimits{maxChars: 12000, maxChunks: 8, maxImages: 8}
+	textOnly, noImages := lim, lim
+	textOnly.textOnly, noImages.maxImages = true, 0
+	// The image is not cached: the cached text stays, and is not counted as
+	// answered from the cache.
+	pl := r.makePlan(lim, isCached)
+	if len(pl.chunks) != 1 || pl.chunks[0].in.Text != "[system] sys look new" || len(pl.chunks[0].in.Images) != 1 || pl.trace.Cached != 0 {
+		t.Fatalf("an uncached image: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	}
+	if cold := r.makePlan(lim, nil); cold.chunks[0].in.Hash != pl.chunks[0].in.Hash {
+		t.Fatal("the chunk differs from the one of an empty cache")
+	}
+	// An image that is not sent does not keep it: a flow without an image
+	// auditor (its images leave the chunks after planning), no image allowed.
+	if pl := r.makePlan(textOnly, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || pl.trace.Cached != 2 {
+		t.Fatalf("a text-only flow: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	}
+	if pl := r.makePlan(noImages, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || pl.trace.Cached != 2 || pl.trace.DroppedImages != 1 {
+		t.Fatalf("input_max_images 0: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	}
+	// The image is cached: as without an image.
+	cached[r.segs[2].key] = true
+	if pl := r.makePlan(lim, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || len(pl.chunks[0].in.Images) != 0 || pl.trace.Cached != 3 {
+		t.Fatalf("a cached image: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	}
+	cached[r.segs[3].key] = true
+	if pl := r.makePlan(lim, isCached); len(pl.chunks) != 0 || pl.trace.Cached != 4 {
+		t.Fatalf("fully cached = %+v", pl.trace)
+	}
+
+	// A long request: a segment cut into pieces, more chunks than
+	// input_max_chunks, the image in a chunk that is sampled out.
+	var msgs []string
+	for i := 0; i < 20; i++ {
+		msgs = append(msgs, fmt.Sprintf(`{"role":"user","content":"m%02d %s"}`, i, strings.Repeat("x", 90)))
+	}
+	msgs[3] = `{"role":"user","content":[{"type":"text","text":"m03 ` + strings.Repeat("y", 250) + `"},{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0KGgo="}}]}`
+	long := extractReq(t, "openai.chat", `{"messages":[`+strings.Join(msgs, ",")+`]}`)
+	cold := planOf(long, 100, 4, 8, nil)
+	if cold.trace.ChunksTotal != 22 || !cold.trace.Sampled || cold.pieces[3] != 3 || cold.trace.Images != 0 {
+		t.Fatalf("cold = %+v pieces %v", cold.trace, cold.pieces)
+	}
+	// Whatever text is cached - all of it, or every other segment - the plan
+	// is the cold one: the same chunks are sampled.
+	for name, every := range map[string]int{"all text cached": 1, "every other segment cached": 2} {
+		some := map[[32]byte]bool{}
+		for i, s := range long.segs {
+			if s.img == nil && i%every == 0 {
+				some[s.key] = true
+			}
+		}
+		warm := planOf(long, 100, 4, 8, func(h [32]byte) bool { return some[h] })
+		if warm.trace != cold.trace || !slices.Equal(warm.pieces, cold.pieces) || len(warm.chunks) != len(cold.chunks) {
+			t.Fatalf("%s: plan = %+v pieces %v, cold %+v pieces %v", name, warm.trace, warm.pieces, cold.trace, cold.pieces)
+		}
+		for i := range warm.chunks {
+			if warm.chunks[i].in.Hash != cold.chunks[i].in.Hash {
+				t.Fatalf("%s: chunk %d differs from the cold plan", name, i)
+			}
+		}
+	}
+	// With the image cached too, only what is not cached is planned.
+	rest := map[[32]byte]bool{}
+	for _, s := range long.segs[:19] {
+		rest[s.key] = true
+	}
+	if pl := planOf(long, 100, 4, 8, func(h [32]byte) bool { return rest[h] }); pl.trace.ChunksTotal != 2 || pl.trace.Sampled || pl.trace.Cached != 19 {
+		t.Fatalf("the image cached = %+v", pl.trace)
+	}
+}
+
 func TestPlanImageLimit(t *testing.T) {
 	var parts []string
 	for i := 0; i < 5; i++ {

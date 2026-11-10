@@ -93,6 +93,70 @@ func TestHookModeratesWholeRequestWithSegmentCache(t *testing.T) {
 	}
 }
 
+// An image that is not cached as passed is sent together with the text of
+// its request, also the text that is cached (fifth round, makePlan): what an
+// image is judged with does not depend on what other requests cached. Once
+// the image has passed, the request is answered from the cache and cached
+// text is left out again.
+func TestHookSendsCachedTextWithANewImage(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	const cachedPass = notePrefix + "pass (cached)"
+	picture := encodePNG(t, filled(40, 30, red))
+	send := func(content ...any) *pluginv1.GatewayRequestHookResponse {
+		t.Helper()
+		b, _ := json.Marshal(map[string]any{"system": "you describe pictures", "messages": []any{map[string]any{"role": "user", "content": content}}})
+		r := mustHook(t, h, rawReq(3, "", "anthropic.messages", string(b)))
+		written(t, p)
+		return r
+	}
+	text := func(s string) any { return map[string]any{"type": "text", "text": s} }
+	image := map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": picture}}
+	// last is the one call a request made.
+	last := func(calls int) string {
+		t.Helper()
+		sent := mod.moderated()
+		if len(sent) != calls {
+			t.Fatalf("%d upstream calls, want %d", len(sent), calls)
+		}
+		return sent[calls-1]
+	}
+
+	// The text passes and is cached.
+	if r := send(text("what is on this one")); denied(r) || r.GetNote() == cachedPass {
+		t.Fatalf("the text = %+v", r)
+	}
+	last(1)
+	// A request without an image: cached text is not sent again.
+	if r := send(text("what is on this one"), text("and a second question")); denied(r) {
+		t.Fatalf("more text = %+v", r)
+	}
+	if call := last(2); strings.Contains(call, "what is on this one") || strings.Contains(call, "you describe pictures") || !strings.Contains(call, "and a second question") {
+		t.Fatalf("the call for new text sent %s", call)
+	}
+	// A new image: the cached text goes with it, in one call.
+	if r := send(text("what is on this one"), image); denied(r) || r.GetNote() == cachedPass {
+		t.Fatalf("a new image = %+v", r)
+	}
+	if call := last(3); !strings.Contains(call, "what is on this one") || !strings.Contains(call, "you describe pictures") || !strings.Contains(call, picture) {
+		t.Fatalf("the call for the new image sent %.400s", call)
+	}
+	// The image has passed: the same request calls nothing.
+	if r := send(text("what is on this one"), image); r.GetNote() != cachedPass {
+		t.Fatalf("the same request again = %+v", r)
+	}
+	last(3)
+	// With every image of the request cached, cached text is left out as
+	// before: only what is new is sent.
+	if r := send(text("what is on this one"), image, text("and what colour is it")); denied(r) {
+		t.Fatalf("new text beside the cached image = %+v", r)
+	}
+	if call := last(4); strings.Contains(call, "what is on this one") || strings.Contains(call, "you describe pictures") || strings.Contains(call, picture) || !strings.Contains(call, "and what colour is it") {
+		t.Fatalf("the call for new text beside the cached image sent %.400s", call)
+	}
+}
+
 // Content longer than input_max_chars is moderated in chunks; beyond
 // input_max_chunks the request is sampled or, with input_overflow=block,
 // refused before the upstream call.

@@ -287,9 +287,11 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 
 // planUncached asks the verdict cache about the segments of the request
 // (post: memory only, the worker asks the KV) and plans the chunks of what
-// is left to moderate. A non-nil response ends the hook: a cached hit whose
-// whole segment set is in the request decides it at once (replay), and a
-// request whose segments have all passed is not sent again.
+// is left to moderate - with an image that is not cached and is sent, the
+// cached text of the request too (makePlan). A non-nil response ends the
+// hook: a cached hit whose whole segment set is in the request decides it at
+// once (replay), and a request whose segments have all passed is not sent
+// again.
 func (p *Plugin) planUncached(m *moderation, req *request) (*plan, *pluginv1.GatewayRequestHookResponse) {
 	hashes := make([][32]byte, len(req.segs))
 	for i := range req.segs {
@@ -306,7 +308,9 @@ func (p *Plugin) planUncached(m *moderation, req *request) (*plan, *pluginv1.Gat
 		// auditor; under pre timing the request is refused anyway.
 		return nil, p.replaySafely(m, req, cached.hit, cached.hitID)
 	}
-	pl := req.makePlan(m.cfg.limits, func(h [32]byte) bool { return cached.passed[h] })
+	lim := m.cfg.limits
+	lim.textOnly = !m.snap.sendsImages(m.flow)
+	pl := req.makePlan(lim, func(h [32]byte) bool { return cached.passed[h] })
 	if len(pl.chunks) > 0 {
 		return pl, nil
 	}
@@ -610,23 +614,37 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 // image must have been received by an auditor that itself passed, in a stage
 // that passed (Trace.passedImages) - not by one that hit while another
 // auditor, which never got the image, passed the text. An image nobody
-// received is moderated again with the next request that holds it, by then
-// usually on its own, the text around it having passed.
+// received is moderated again with the next request that holds it, together
+// with the text of that request, although that has passed (makePlan).
 //
 // A chunk whose run ends in a pass while it holds an image that some auditor
 // received and no passing auditor did (Trace.judgedUnpassedImage: the first
 // stage hit because of the image and a text-only reviewer overturned it, or
 // one all / at_least stage whose passing auditors did not get the image)
 // stores no pass for ANY of its segments, the text included (the owner's
-// decision of 2026-11-10). With the text cached the next request would send
-// the image alone: the auditor that got it hits again, the reviewer has
-// nothing to judge and is skipped, and the same request that was let through
-// is refused, counted as a violation and replayed as a hit from then on. So
-// such content is judged as a whole every time and gets the same result every
-// time: it is let through, like an audit that reached no conclusion. The
-// cost: these requests are never answered from the cache, every one of them
-// calls the auditors again. (new-api refuses them: there an image is a block
-// of its own, which a text-only auditor cannot overturn.)
+// decision of 2026-11-10): the request is let through, like an audit that
+// reached no conclusion, and it gets that result every time - the same
+// request is not let through first and refused later.
+//
+// Two things make that hold. Nothing is stored here, so the request does not
+// cache its own text. And the plan keeps the text of a request beside an
+// image that is not cached, also text that some OTHER request cached as
+// passed (makePlan, fifth round): were it left out, the image would be alone
+// in its chunk, the auditor that got it would hit again, the reviewer would
+// have nothing to judge and be skipped, and the request that was let through
+// would be refused, counted as a violation and replayed as a hit from then
+// on. So the result of a request does not depend on what other requests
+// cached. The cost: these requests are never answered from the cache, every
+// one of them calls the auditors again, and a request with an image that is
+// not cached sends its text again although it is cached. (new-api refuses
+// them: there an image is a block of its own, which a text-only auditor
+// cannot overturn.)
+//
+// The exception that stays: a request that holds ONLY the image. No reviewer
+// has anything to judge there, the hit of the auditor that got the image
+// stands, and {image} is cached as a hit. From then on every request that
+// holds the image is refused by replay, also one that was let through
+// before. That hit was established by a different request.
 //
 // It is called once per run (the shared pre run, the post worker), not per
 // request. The scope carries the clear counter of now, not of the snapshot

@@ -1358,7 +1358,8 @@ func written(t *testing.T, p *Plugin) {
 
 // An image that no auditor received is not cached as passed - whatever kept
 // it from being sent - while the text of its chunk is: the next request with
-// the image has it moderated, usually on its own.
+// the image has it moderated, together with the text of that request (fifth
+// round: an uncached image keeps the cached text in the plan, makePlan).
 func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 	// A Jev upstream that finds every picture violating and no text.
 	var jevCalls, jevImages atomic.Int64
@@ -1438,16 +1439,17 @@ func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 		if segs := segValues(t, fh); len(segs) != 1 {
 			t.Fatalf("segment keys after the run without the image = %v", segs)
 		}
-		// With a slot the picture is sent - alone, the text has passed - and
-		// refused. Before, the request was answered "pass (cached)" for
-		// verdict_cache_days on every node.
+		// With a slot the picture is sent - with the text of the request,
+		// although that has passed (makePlan) - and refused: the hit set is
+		// the text and the picture. Before the second round, the request was
+		// answered "pass (cached)" for verdict_cache_days on every node.
 		free()
 		r := send(9, "free", request)
 		if !denied(r) || replayed(r) || jevCalls.Load() != 2 || jevImages.Load() != 1 {
 			t.Fatalf("with a free slot = %+v (%d calls, %d with an image)", r, jevCalls.Load(), jevImages.Load())
 		}
 		tr = traceOf(t, recordOf(t, h, "free"))
-		if tr.Input.Cached != 1 || tr.Cache == nil || len(tr.Cache.Segs) != 1 {
+		if tr.Input.Cached != 0 || tr.Cache == nil || len(tr.Cache.Segs) != 2 {
 			t.Fatalf("trace of the run with the image: input %+v, hit set %+v", tr.Input, tr.Cache)
 		}
 		if r := send(9, "", request); !denied(r) || !replayed(r) || jevCalls.Load() != 2 {
@@ -1457,14 +1459,16 @@ func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 
 	t.Run("undecodable", func(t *testing.T) {
 		// Jev cannot read the image at all: it never becomes a pass, and
-		// every request with it is a run (without a call: nothing to send).
+		// every request with it is a run. Each of them sends the text again
+		// (the price of the fifth round: an image that is not cached keeps
+		// the text of its request in the plan, makePlan).
 		request := body("another harmless caption", "iVBORw0KGgo=")
 		calls := jevCalls.Load()
 		if r := send(9, "", request); !passedFresh(r) || jevCalls.Load() != calls+1 {
 			t.Fatalf("first = %+v (%d calls)", r, jevCalls.Load()-calls)
 		}
 		for i := range 2 {
-			if r := send(9, "", request); !passedFresh(r) || r.GetNote() == cachedPass || jevCalls.Load() != calls+1 {
+			if r := send(9, "", request); !passedFresh(r) || r.GetNote() == cachedPass || jevCalls.Load() != calls+2+int64(i) {
 				t.Fatalf("again %d = %+v (%d calls)", i, r, jevCalls.Load()-calls)
 			}
 		}
@@ -1918,10 +1922,26 @@ func TestReviewSyncOrderAndBudget(t *testing.T) {
 // every image violating (and no text), Jev finds nothing; it counts the Jev
 // calls that came with an image, and all calls.
 func imageMod(t *testing.T) (base string, jevImages, calls *atomic.Int64) {
+	base, jevImages, calls, _ = imageModSent(t)
+	return base, jevImages, calls
+}
+
+// imageModSent is imageMod with the request bodies it received, in order.
+func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, sent func() []string) {
 	jevImages, calls = new(atomic.Int64), new(atomic.Int64)
+	var mu sync.Mutex
+	var bodies []string
+	sent = func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(bodies)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(body))
+		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/moderations" {
 			scores := map[string]float64{}
@@ -1949,7 +1969,7 @@ func imageMod(t *testing.T) (base string, jevImages, calls *atomic.Int64) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-mock", "answers": answers, "usage": map[string]int{"input_tokens": 10}})
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL, jevImages, calls
+	return srv.URL, jevImages, calls, sent
 }
 
 // imageFlows sets up the two flows in which the OpenAI auditor gets an image
@@ -2120,6 +2140,119 @@ func TestImageOnlyAHittingAuditorSawGetsTheSameVerdict(t *testing.T) {
 	if err := db.QueryRow(ctx, `SELECT (SELECT count(*) FROM events), (SELECT count(*) FROM events WHERE `+suspiciousResult+`),
 		(SELECT coalesce(sum(suspicious), 0) FROM user_daily)`).Scan(&records, &suspicious, &violations); err != nil || records != 6 || suspicious != 0 || violations != 0 {
 		t.Fatalf("%d records, %d suspicious, %d violations counted (%v)", records, suspicious, violations, err)
+	}
+}
+
+// Fifth round: the verdict of TestImageOnlyAHittingAuditorSawGetsTheSameVerdict
+// does not depend on what other requests cached. The request X = text T and
+// image I is let through (only the hitting auditor received I, the auditor
+// that passed judged T alone) and stores nothing. Then a request with T alone
+// passes, and T is a cached pass. Were T left out of the plan of the next X,
+// I would be alone in its chunk: the auditor that gets it hits, the other one
+// has nothing to judge and is skipped, X is refused, a violation is counted
+// and {I} is replayed as a hit from then on. An image that is not cached
+// keeps the text of its request in the plan (makePlan), so X is judged as a
+// whole and let through every time.
+func TestImageVerdictDoesNotDependOnCachedText(t *testing.T) {
+	base, jevImages, calls, sent := imageModSent(t)
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	flows := imageFlows(t, h, base)
+	// Both redraw slots stay busy: Jev always sends the text alone.
+	for range cap(jevNormalizeSlots) {
+		jevNormalizeSlots <- struct{}{}
+	}
+	defer func() {
+		for range cap(jevNormalizeSlots) {
+			<-jevNormalizeSlots
+		}
+	}()
+	const cachedPass = notePrefix + "pass (cached)"
+	for _, tc := range []struct {
+		name      string
+		group     int64
+		result    string
+		textCalls int64 // upstream calls of the request with the text alone
+	}{{"overturned by a stage that did not get the image", 9, ResultOverturned, 1}, {"one stage, all", 10, ResultPass, 2}} {
+		t.Run(tc.name, func(t *testing.T) {
+			caption := fmt.Sprintf("a caption other requests cache %d", tc.group)
+			text := map[string]any{"type": "text", "text": caption}
+			image := map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png",
+				"data": encodePNG(t, filled(100, 140+int(tc.group), red))}}
+			send := func(rid string, content ...any) *pluginv1.GatewayRequestHookResponse {
+				t.Helper()
+				b, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{"role": "user", "content": content}}})
+				req := rawReq(3, rid, "anthropic.messages", string(b))
+				req.Meta.GroupId = tc.group
+				return mustHook(t, h, req)
+			}
+			// x sends X and checks that it was judged as a whole and let through.
+			var first string
+			x := func(i int) {
+				t.Helper()
+				rid := fmt.Sprintf("x-%d-%d", tc.group, i)
+				n := calls.Load()
+				r := send(rid, text, image)
+				if first == "" {
+					first = r.GetNote()
+				}
+				if denied(r) || r.GetNote() != first || !strings.HasPrefix(first, notePrefix+tc.result+" flow=") || calls.Load() != n+2 {
+					t.Fatalf("request %d = %+v, first note %q (%d upstream calls)", i, r, first, calls.Load()-n)
+				}
+				// Both auditors got the text; the image came with it, once.
+				bodies := sent()
+				withImage := 0
+				for _, body := range bodies[len(bodies)-2:] {
+					if !strings.Contains(body, caption) {
+						t.Fatalf("request %d: a call without the text: %.300s", i, body)
+					}
+					if strings.Contains(body, "image_url") {
+						withImage++
+					}
+				}
+				if withImage != 1 {
+					t.Fatalf("request %d: %d calls with the image", i, withImage)
+				}
+				if ev := recordOf(t, h, rid); ev.Result != tc.result || ev.Replayed {
+					t.Fatalf("record %d = %s replayed %v %s", i, ev.Result, ev.Replayed, ev.Trace)
+				}
+				written(t, p)
+			}
+			x(0)
+			if segs := flowSegs(t, fh, flows[tc.group]); segs != 0 {
+				t.Fatalf("%d segment keys of the flow after the first request", segs)
+			}
+			// Another request caches the text as passed.
+			n := calls.Load()
+			if r := send("", text); denied(r) || !strings.HasPrefix(r.GetNote(), notePrefix+"pass flow=") || calls.Load() != n+tc.textCalls {
+				t.Fatalf("the text alone = %+v (%d upstream calls)", r, calls.Load()-n)
+			}
+			written(t, p)
+			if r := send("", text); r.GetNote() != cachedPass || calls.Load() != n+tc.textCalls {
+				t.Fatalf("the text alone again = %+v (%d upstream calls)", r, calls.Load()-n)
+			}
+			x(1)
+			x(2)
+			// Of the flow only the text is a cached pass (stored by the request
+			// that held it alone), the image is not.
+			if segs := flowSegs(t, fh, flows[tc.group]); segs != 1 {
+				t.Fatalf("%d segment keys of the flow", segs)
+			}
+		})
+	}
+	if jevImages.Load() != 0 {
+		t.Fatalf("%d Jev calls with an image", jevImages.Load())
+	}
+	// No hit was stored or recorded, and no violation counted.
+	if keys := kvKeys(t, fh, "h:"); len(keys) != 0 {
+		t.Fatalf("cached hits: %v", keys)
+	}
+	ctx := context.Background()
+	p.flushStats(ctx)
+	db, _ := p.db(ctx)
+	var suspicious, replays, violations int64
+	if err := db.QueryRow(ctx, `SELECT (SELECT count(*) FROM events WHERE `+suspiciousResult+`), (SELECT count(*) FROM events WHERE replayed),
+		(SELECT coalesce(sum(suspicious), 0) FROM user_daily)`).Scan(&suspicious, &replays, &violations); err != nil || suspicious != 0 || replays != 0 || violations != 0 {
+		t.Fatalf("%d suspicious records, %d replays, %d violations counted (%v)", suspicious, replays, violations, err)
 	}
 }
 
