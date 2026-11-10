@@ -4,10 +4,10 @@ import { anyFull, availableCredits, unixMs, usageWindows } from './resetCredits'
 describe('resetCredits helpers', () => {
   it('keeps only the available credits, in the order the plugin sent', () => {
     const credits = [
-      { id: 'a', title: null, description: null, status: 'redeemed', granted_at: 1, expires_at: null },
-      { id: 'b', title: null, description: null, status: 'available', granted_at: 1, expires_at: 10 },
-      { id: 'c', title: null, description: null, status: 'redeeming', granted_at: 1, expires_at: 5 },
-      { id: 'd', title: null, description: null, status: 'available', granted_at: 1, expires_at: null }
+      { id: 'a', title: '', description: '', status: 'redeemed', granted_at: 1, expires_at: null },
+      { id: 'b', title: '', description: '', status: 'available', granted_at: 1, expires_at: 10 },
+      { id: 'c', title: '', description: '', status: 'redeeming', granted_at: 1, expires_at: 5 },
+      { id: 'd', title: '', description: '', status: 'available', granted_at: 1, expires_at: null }
     ]
     expect(availableCredits({ available_count: 2, credits }).map((c) => c.id)).toEqual(['b', 'd'])
     expect(availableCredits(null)).toEqual([])

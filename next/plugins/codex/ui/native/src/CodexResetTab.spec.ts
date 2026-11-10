@@ -16,7 +16,7 @@ const CREDITS = {
   available_count: 2,
   credits: [
     { id: 'soon', title: 'Referral reset', description: 'Thanks', status: 'available', granted_at: 1700000000, expires_at: 1800000000 },
-    { id: 'never', title: null, description: null, status: 'available', granted_at: 1700000000, expires_at: null }
+    { id: 'never', title: '', description: '', status: 'available', granted_at: 1700000000, expires_at: null }
   ]
 }
 const QUOTA = { windows: [{ key: '5h', utilization: 100, resets_at: '2026-11-10T12:00:00Z' }] }

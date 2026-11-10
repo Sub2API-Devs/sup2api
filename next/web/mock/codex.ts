@@ -83,7 +83,10 @@ export const codexUIPlugin = {
   asset_base: `/plugin-ui/codex/${VERSION}-dev`,
   menus: [],
   pages: {},
-  slots: manifest.ui?.slots || [{ slot: 'account.detail.tabs', component: 'CodexResetTab', permission: 'codex:reset', accountTypes: ['codex_device'] }],
+  slots: manifest.ui?.slots || [
+    { slot: 'account.list.quota', component: 'CodexResetBadge', permission: 'codex:reset', accountTypes: ['codex_device'] },
+    { slot: 'account.detail.tabs', component: 'CodexResetTab', permission: 'codex:reset', accountTypes: ['codex_device'] }
+  ],
   // manifest ui.accountActions as /ui/plugins hands it down (CONTRACTS §23.3, §91b).
   account_actions: manifest.ui?.accountActions || [
     {
@@ -231,7 +234,7 @@ on('POST', '/p/codex/auth/siwc/exchange', (req) => {
 })
 
 // ------------------------------------------------------------------ official usage resets (codex_device)
-// POST /reset-credits/list and /reset-credits/consume as the plugin answers
+// POST /reset-credits/list, /summary and /consume as the plugin answers
 // them (docs/PLUGIN-CODEX.md, official usage resets). Account 29 starts with
 // two resets and a used-up 5 h window; other codex_device accounts have none.
 
@@ -264,6 +267,17 @@ on('POST', '/p/codex/reset-credits/list', async (req) => {
   await new Promise((ok) => setTimeout(ok, 400))
   const list = resetCredits.get(a.id) || []
   return { data: { available_count: available(list).length, credits: list } }
+})
+
+// Only the cache: accounts whose count the usage query has seen (here every codex_device account with resets).
+on('POST', '/p/codex/reset-credits/summary', (req) => {
+  const ids: number[] = Array.isArray(req.body?.account_ids) ? req.body.account_ids : []
+  const out: Record<string, { available_count: number; updated_at: number }> = {}
+  for (const id of ids) {
+    const list = resetCredits.get(Number(id))
+    if (list) out[String(id)] = { available_count: available(list).length, updated_at: unix(-300) }
+  }
+  return { data: { accounts: out } }
 })
 
 on('POST', '/p/codex/reset-credits/consume', async (req) => {

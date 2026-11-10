@@ -91,9 +91,9 @@ export const exchangeSiwc = (sessionId: string, callbackUrl: string) =>
 /** One reset credit of the account (POST /reset-credits/list); times are Unix seconds. */
 export interface ResetCredit {
   id: string
-  /** OpenAI's own wording; null when it sent none. */
-  title: string | null
-  description: string | null
+  /** OpenAI's own wording; empty when it sent none. */
+  title: string
+  description: string
   /** "available", "redeeming", "redeemed" or a newer state. */
   status: string
   granted_at: number
@@ -115,7 +115,13 @@ export interface ResetOutcome {
   account_restored: boolean
 }
 
+/** Cached counts (POST /reset-credits/summary): read from the usage query, never from OpenAI on the call; accounts without one are left out. */
+export interface ResetSummary {
+  accounts: Record<string, { available_count: number; updated_at: number }>
+}
+
 export const listResetCredits = (accountId: number) => api().post<ResetCredits>('/reset-credits/list', { account_id: accountId })
+export const summarizeResetCredits = (accountIds: number[]) => api().post<ResetSummary>('/reset-credits/summary', { account_ids: accountIds })
 export const redeemResetCredit = (accountId: number, creditId?: string) =>
   api().post<ResetOutcome>('/reset-credits/consume', { account_ids: [accountId], ...(creditId ? { credit_id: creditId } : {}) })
 

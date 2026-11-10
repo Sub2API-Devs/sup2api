@@ -10,6 +10,7 @@ import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SDateTime, SEmpty, SHint, SSkeleton } from '@sub2api/ui'
 import { errorMessage, listResetCredits, redeemResetCredit, useCodexHost, type ResetCredit, type ResetCredits } from './host'
 import { anyFull, availableCredits, unixMs, usageWindows, type QuotaLike } from './resetCredits'
+import { setResetCount } from './resetCount'
 
 const props = defineProps<{ account: { id: number; name?: string; quota?: QuotaLike | null } }>()
 const host = useCodexHost()
@@ -37,6 +38,7 @@ async function load() {
   error.value = ''
   try {
     const r = await listResetCredits(id)
+    setResetCount(id, r.available_count)
     if (id === props.account.id) data.value = r
   } catch (e) {
     if (id === props.account.id) error.value = errorMessage(e, t('reset.loadFailed'))

@@ -103,7 +103,10 @@ const zh = {
     },
     done: '已重置 {n} 个用量窗口，账号已恢复可用。',
     doneNotRestored: '重置已生效，但账号的自动暂停没能解除，请在账号列表里点“重置状态”。',
-    failed: '使用重置失败'
+    failed: '使用重置失败',
+    badge: '重置 ×{n}',
+    badgeTitle: '官方重置次数 {n}，点开查看明细',
+    modalTitle: '官方重置 · {name}'
   },
   serverErrors: '凭证校验失败',
   actionFailed: '操作失败'
@@ -213,7 +216,10 @@ const en: Messages = {
     },
     done: '{n} usage window(s) reset; the account is usable again.',
     doneNotRestored: 'The reset took effect, but the account could not be resumed: use "Reset status" in the account list.',
-    failed: 'Could not use the reset'
+    failed: 'Could not use the reset',
+    badge: 'Resets ×{n}',
+    badgeTitle: '{n} official reset(s): open for the details',
+    modalTitle: 'Official resets · {name}'
   },
   serverErrors: 'Credential check failed',
   actionFailed: 'Action failed'
