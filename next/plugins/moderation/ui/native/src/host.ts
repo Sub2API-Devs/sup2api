@@ -113,8 +113,22 @@ export const useEventList = (query: Query) => useList<ModEvent>(api(), EVENTS_PA
 export const fetchEvent = (id: number) => api().get<ModEventDetail>(`${EVENTS_PATH}/${id}`)
 export const fetchEventInput = (id: number) => api().get<EventInput>(`${EVENTS_PATH}/${id}/input`)
 export const deleteEvent = (id: number) => api().del(`${EVENTS_PATH}/${id}`)
+/** What POST /events/review answers: the records updated and, of those, the ones whose cached verdict was brought in line (0.8.0). */
+export interface ReviewResult {
+  updated: number
+  cache_synced?: number
+}
 /** Only records whose result is hit or block are updated (`updated` counts them). */
-export const reviewEvents = (ids: number[], status: ReviewStatus) => api().post<{ updated: number }>(`${EVENTS_PATH}/review`, { ids, status })
+export const reviewEvents = (ids: number[], status: ReviewStatus) => api().post<ReviewResult>(`${EVENTS_PATH}/review`, { ids, status })
+/** The toast of a review: the records updated (else `asked`), and the cached verdicts synced when there are any. */
+export function reviewDoneText(r: ReviewResult | null | undefined, asked: number): string {
+  const h = useModHost()
+  const done = h.t('review.done', { n: r?.updated ?? asked })
+  return r?.cache_synced ? done + h.t('clauseSep') + h.t('review.cacheSynced', { n: r.cache_synced }) : done
+}
+
+/** Empties the verdict cache of every node (POST /verdict-cache/clear, moderation:manage); answers the new cache epoch. */
+export const clearVerdictCache = () => api().post<{ epoch: number }>('/verdict-cache/clear', {})
 
 export async function fetchBlocks(): Promise<Block[]> {
   const r = await api().get<Block[] | null>('/blocks')

@@ -1,4 +1,4 @@
-import type { HitCategory, Outcome, Trace } from './types'
+import type { HitCategory, Outcome, StageTrace, Trace } from './types'
 
 // Pure helpers over a record's per-stage trace (stage path, score chips, trace table).
 
@@ -9,6 +9,11 @@ export function outcomeState(o: Outcome): OutcomeState {
   if (o.skipped) return 'skipped'
   return o.hit ? 'hit' : 'pass'
 }
+
+/** What a stage came to: failed = no verdict, passed over (earlier hits stand); skipped = every auditor skipped. */
+export type StageState = 'failed' | 'skipped' | 'hit' | 'pass'
+
+export const stageState = (st: Pick<StageTrace, 'failed' | 'skipped' | 'result'>): StageState => (st.failed ? 'failed' : st.skipped ? 'skipped' : st.result)
 
 /** A category score of a run; threshold is known for hit categories only. */
 export interface TraceScore {

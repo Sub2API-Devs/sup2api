@@ -6,7 +6,7 @@ export type Result = 'block' | 'hit' | 'overturned' | 'error' | 'pass'
 export type ReviewStatus = 'pending' | 'false_positive' | 'confirmed'
 export type WatchLevel = 'observe' | 'enforce'
 export type ChannelType = 'openai_moderation' | 'typesafe' | 'llm'
-export type AuditorType = 'openai_moderation' | 'typesafe' | 'llm_verdict'
+export type AuditorType = 'openai_moderation' | 'typesafe' | 'llm_verdict' | 'llm_questions'
 
 /** Runtime state of the node that served the request. */
 export interface Runtime {
@@ -25,6 +25,8 @@ export interface Runtime {
   cache_hits: number
   cache_entries: number
   avg_latency_ms: number
+  /** bumped by POST /verdict-cache/clear; absent before 0.8.0 */
+  cache_epoch?: number
   blocked_users: number
   watched_users: number
   /** P2 (§72.13.4); absent on 0.2 */
@@ -34,7 +36,7 @@ export interface Runtime {
 
 /** Row of GET /events (no `text`, has `text_excerpt`). */
 /** Record filters a record detail can set (click-to-filter). */
-export type EventFilter = { endpoint?: string; session_fp?: string }
+export type EventFilter = { endpoint?: string; session_fp?: string; request_id?: string }
 
 export interface ModEvent {
   id: number
@@ -62,6 +64,8 @@ export interface ModEvent {
   reviewed_by: number | null
   reviewed_at: string | null
   counted: boolean
+  /** a cached hit applied again without calling the channels (0.8.0); not a new violation */
+  replayed?: boolean
   input_format: string
   text_chars: number
   image_count: number
@@ -121,6 +125,20 @@ export interface StageTrace {
   result: 'hit' | 'pass' | 'skipped'
   errored?: boolean
   skipped?: boolean
+  /** the stage reached no verdict and was passed over; earlier hits stand (0.8.0) */
+  failed?: boolean
+  /** a fallback stage (Stage.fallback) */
+  fallback?: boolean
+}
+
+/** The verdict cache of a run: set on a replayed hit (hit, source_request_id) and on runs the cache keyed. */
+export interface TraceCache {
+  hit?: boolean
+  /** the request whose verdict is applied again */
+  source_request_id?: string
+  key?: string
+  segs?: string[]
+  fp?: string
 }
 
 export interface Trace {
@@ -134,6 +152,7 @@ export interface Trace {
   /** the input message was not stored ("save_failed") */
   input_message_dropped?: string
   latency_ms: number
+  cache?: TraceCache | null
 }
 
 /** Another record of the same request (GET /events/:id related[]). */
@@ -150,7 +169,10 @@ export interface RelatedEvent {
 /** The record user's moderation state now. */
 export interface UserState {
   watch: Watch | null
-  exempt: boolean
+  /** on the allowlist of the settings: only moderated after the request, never refused or banned */
+  allowlisted: boolean
+  /** on the blocklist of the settings: always moderated first (a user on both lists is blocklisted) */
+  blocklisted: boolean
   staff: boolean
   blocked: boolean
   blocked_until: string | null
@@ -244,6 +266,9 @@ export interface WatchItem extends Watch {
   top_other: number
   /** verdict counts of the latest successful analysis */
   ai_counts: VerdictCounts | null
+  /** the user lists of the settings (a user on both is blocklisted) */
+  allowlisted?: boolean
+  blocklisted?: boolean
 }
 
 export interface WatchCounts {
@@ -406,6 +431,8 @@ export type Granularity = 'hour' | 'day'
 export interface TodayCounts {
   audited: number
   suspicious: number
+  /** replayed cached hits, already counted in suspicious */
+  replayed?: number
   blocked: number
   overturned: number
   errors: number
@@ -464,6 +491,8 @@ export interface Status {
   enabled: boolean
   running: boolean
   mode: Mode
+  /** the level of users without a watch entry (observe while mode is off) */
+  default_level?: WatchLevel
   error_rate_alert_percent: number
   today: TodayCounts
   today_from: string
@@ -482,6 +511,8 @@ export interface FlowPoint {
   audited: number
   cache_skipped: number
   hit: number
+  /** replayed cached hits, already counted in hit */
+  replayed?: number
   blocked: number
   overturned: number
   errors: number
@@ -677,6 +708,7 @@ export interface FlowVersionStage {
   role?: string
   combine?: string
   n?: number
+  fallback?: boolean
   auditors: FlowVersionAuditor[]
 }
 
@@ -750,6 +782,8 @@ export interface Stage {
   auditors: number[]
   combine: 'any' | 'all' | 'at_least'
   n?: number
+  /** a fallback stage: runs after the review stages passed or reached no verdict; its hit is final */
+  fallback?: boolean
 }
 
 export interface Spec {
@@ -809,6 +843,8 @@ export interface Binding {
   group_id: number
   account_id: number
   flow_id: number
+  /** the flow is disabled, unpublished or gone: the binding does not apply and a wider one decides */
+  inactive?: boolean
 }
 
 export interface BindingsView {
@@ -914,6 +950,8 @@ export interface AuditorDraft {
 export interface AuditorTryTarget {
   id: number | null
   name: string
+  /** llm_questions moderates text only: the try takes no images */
+  type?: AuditorType
   draft?: AuditorDraft
 }
 
@@ -934,7 +972,7 @@ export interface SimulateBody {
   event_id?: number
   source: 'draft' | 'published' | 'version'
   version?: number
-  /** none / observe run after the request (post), enforce before it (pre: a hit refuses) */
+  /** none runs at the default level; observe after the request (post), enforce before it (pre: a hit refuses) */
   user_state?: SimUserState
 }
 export type SimUserState = 'none' | 'observe' | 'enforce'

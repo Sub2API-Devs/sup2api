@@ -9,14 +9,20 @@ import type { Watch, WatchLevel } from './types'
 // Inline watch list actions of one user (new-api watch-level-actions): add
 // at a level, switch the level, remove. Each one is confirmed in a dialog
 // that says what changes and takes a reason for the history (new-api
-// WatchActionModal). Emits the new entry (null = removed).
-const props = defineProps<{ userId: number; watch: Pick<Watch, 'level'> | null; size?: 'sm' | 'md' }>()
+// WatchActionModal). Emits the new entry (null = removed). An allowlisted
+// user cannot be set to the enforce level (the backend answers
+// level/allowlisted); for a blocklisted user the dialog says that the level
+// does not change the timing.
+const props = defineProps<{ userId: number; watch: Pick<Watch, 'level'> | null; size?: 'sm' | 'md'; allowlisted?: boolean; blocklisted?: boolean }>()
 const emit = defineEmits<{ (e: 'changed', w: Watch | null): void }>()
 const host = useModHost()
 const t = host.t
 
 const levels: WatchLevel[] = ['observe', 'enforce']
-const levelOptions = computed(() => enumOptions('level', levels))
+/** enforce is not offered to an allowlisted user */
+const refused = (l: WatchLevel) => l === 'enforce' && !!props.allowlisted
+const levelOptions = computed(() => enumOptions('level', levels).map((o) => ({ ...o, disabled: refused(o.value as WatchLevel) })))
+const listHint = computed(() => (props.blocklisted ? t('lists.blockAlwaysPre') : props.allowlisted ? t('lists.allowOnlyObserve') : ''))
 
 /** The action being confirmed: add or set a level, or release (level null). */
 const pending = ref<{ kind: 'add' | 'level' | 'release'; level: WatchLevel | null } | null>(null)
@@ -25,6 +31,7 @@ const busy = ref(false)
 
 function ask(kind: 'add' | 'level' | 'release', level: WatchLevel | null) {
   if (kind === 'level' && level === props.watch?.level) return
+  if (level && refused(level)) return
   reason.value = ''
   pending.value = { kind, level }
 }
@@ -38,7 +45,7 @@ const title = computed(() => {
 })
 const description = computed(() => (pending.value ? t(`watchActions.desc.${pending.value.level ?? 'release'}`) : ''))
 
-/** Field errors of the watch API (staff, exempt) as their message. */
+/** Field errors of the watch API (user_id/staff, level/allowlisted) as their message. */
 function failText(e: unknown): string {
   return (isApiError(e) && (e.fields.user_id || e.fields.level)) || errorMessage(e, t('actionFailed'))
 }
@@ -66,18 +73,19 @@ async function confirm() {
 </script>
 
 <template>
-  <span class="mod-watch-actions">
+  <span class="mod-watch-actions" :title="listHint || undefined">
     <template v-if="watch">
       <SSegmented :model-value="watch.level" :options="levelOptions" size="sm" :disabled="busy" @update:model-value="ask('level', $event as WatchLevel)" />
       <SButton :size="size || 'sm'" variant="ghost" @click="ask('release', null)">{{ t('watch.remove') }}</SButton>
     </template>
     <template v-else>
-      <SButton v-for="l in levels" :key="l" :size="size || 'sm'" @click="ask('add', l)">{{ t(`watchActions.add.${l}`) }}</SButton>
+      <SButton v-for="l in levels" :key="l" :size="size || 'sm'" :disabled="refused(l)" @click="ask('add', l)">{{ t(`watchActions.add.${l}`) }}</SButton>
     </template>
 
     <SModal :open="!!pending" :title="title" width="md" @update:open="!$event && (pending = null)">
       <div class="mod-form">
         <SHint>{{ description }}</SHint>
+        <SHint v-if="listHint" size="xs" tone="warning">{{ listHint }}</SHint>
         <SField :label="t('watchEdit.reason')" :hint="t('watchEdit.reasonHint')">
           <STextarea v-model="reason" :rows="2" :maxlength="500" />
         </SField>

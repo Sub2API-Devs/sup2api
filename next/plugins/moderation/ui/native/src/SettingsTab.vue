@@ -24,9 +24,9 @@ import { useCatalog } from './catalog'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
-import { displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentValue, settingSections, settingsKey, type SettingSection } from './settingsForm'
+import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, settingSections, settingsKey, verdictCacheOff, type SettingSection } from './settingsForm'
 import { useAsync } from './useAsync'
-import { fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, useModHost } from './host'
+import { canManage, clearVerdictCache, fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, toastError, useModHost } from './host'
 import type { JevQuestions } from './types'
 
 // All the moderation settings (CONTRACTS §72.15; the plugin page is where
@@ -37,6 +37,12 @@ import type { JevQuestions } from './types'
 // analysis channel picker, the webhook address and secret ("set" / clear)
 // and the Jev default question set. The converted 0.1 fields are hidden and
 // go back as stored; a stored 0.1 API key can only be cleared.
+//
+// 0.8.0: `mode` is the switch and the default level; the allowlist starts
+// from the retired exempt_user_ids until it is saved, and the verdict cache
+// days from the retired cache_ttl_seconds (settingsForm.ts); the retired
+// keys are never written. Under the cache days, moderation:manage users can
+// empty the verdict cache of every node.
 //
 // A save re-reads the stored values and writes back only the keys of this
 // page edited since it loaded (settingsMerge.ts), so a change made elsewhere
@@ -68,6 +74,8 @@ const opened = reactive<Record<string, boolean>>({})
 const copyQuestions = (q: JevQuestions): JevQuestions => ({ preamble: q.preamble || '', items: q.items.map((x) => ({ ...x })) })
 /** The stored values when the page loaded, and this page's values then (what a save compares with). */
 let loaded: Record<string, unknown> = {}
+/** The stored settings keep the verdict cache off (the retired cache_ttl_seconds = 0). */
+const cacheOff = ref(false)
 const initial = ref<PageValues>({})
 
 const { data, loading, error, reload } = useAsync(() => Promise.all([fetchPluginSettings(), fetchDefaults()]), () => t('settingsTab.loadFailed'))
@@ -108,6 +116,7 @@ watch(data, (v) => {
   jev.value = set ? copyQuestions(set) : null
   clearErrors(errs)
   loaded = { ...stored }
+  cacheOff.value = verdictCacheOff(stored)
   initial.value = pageValues()
 })
 onMounted(reload)
@@ -122,7 +131,7 @@ function webhookValue(k: WebhookKey) {
 /** The keys of this page as sent; undefined = removed (its default applies). */
 function pageValues(): PageValues {
   const out: PageValues = {}
-  for (const k of widgetKeys.value) out[k] = sentValue(prop(k), form[k])
+  for (const k of widgetKeys.value) out[k] = sentSetting(prop(k), loaded, k, form[k])
   if (keys.value.includes('analysis_channel_id')) out.analysis_channel_id = Number(channelId.value) || 0
   for (const k of WEBHOOK) if (keys.value.includes(k)) out[k] = webhookValue(k)
   if (keys.value.includes('jev_default_set')) out.jev_default_set = jev.value ? jevPayload(jev.value) : null
@@ -225,6 +234,23 @@ const channelError = computed(() => {
   return ch.enabled ? '' : t('statusLine.analysisProblem.unusable')
 })
 
+// Emptying the verdict cache (POST /verdict-cache/clear): its own action, not part of the save.
+const canClearCache = computed(() => canManage())
+const clearing = ref(false)
+async function clearCache() {
+  const ok = await host.confirm({ title: t('settingsTab.clearCache'), message: t('settingsTab.clearCacheConfirm'), confirmText: t('settingsTab.clearCache'), danger: true })
+  if (!ok) return
+  clearing.value = true
+  try {
+    await clearVerdictCache()
+    host.toast(t('settingsTab.cacheCleared'), 'success')
+  } catch (e) {
+    toastError(e)
+  } finally {
+    clearing.value = false
+  }
+}
+
 const jevMode = computed({
   get: () => (jev.value ? 'custom' : 'builtin'),
   set: (m: string) => (jev.value = m === 'custom' && defaults.value ? copyQuestions(defaults.value.builtin) : null)
@@ -307,6 +333,12 @@ const jevOptions = computed(() => [
             layout="settings"
             @update:model-value="setField(k, $event)"
           />
+          <SSettingRow v-if="k === CACHE_DAYS_KEY && (canClearCache || cacheOff)" :label="t('settingsTab.clearCache')" :description="t('settingsTab.clearCacheHint')">
+            <div class="mod-form mod-setting-control">
+              <SHint v-if="cacheOff" size="xs" tone="warning">{{ t('settingsTab.cacheOff') }}</SHint>
+              <SButton v-if="canClearCache" size="sm" icon="trash" :loading="clearing" data-testid="mod-clear-cache" @click="clearCache">{{ t('settingsTab.clearCache') }}</SButton>
+            </div>
+          </SSettingRow>
           <SSettingRow v-if="k === 'block_message'" :label="t('settingsTab.preview')" stacked>
             <div class="mod-form mod-setting-wide">
               <SSegmented v-model="format" :options="formatOptions" size="sm" />

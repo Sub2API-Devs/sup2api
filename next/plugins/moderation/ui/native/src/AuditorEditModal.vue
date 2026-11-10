@@ -10,8 +10,9 @@ import { fetchAuditor, jevPayload, saveAuditor, useModHost } from './host'
 import type { Auditor, AuditorConfig, AuditorDraft, AuditorTryTarget, AuditorType, Defaults, JevQuestions } from './types'
 
 // Creates or edits an auditor (auditor null = new): OpenAI moderation
-// thresholds with presets, Jev questions, or an LLM verdict prompt; bound to
-// one channel of its type. "Try" runs the unsaved edits. `readonly` shows
+// thresholds with presets, Jev questions, an LLM verdict prompt, or an LLM
+// question table (the Jev question editor without thresholds; text only);
+// bound to one channel of its type. "Try" runs the unsaved edits. `readonly` shows
 // the auditor without saving or trying (read users). The list row is shown
 // at once and replaced by GET /auditors/:id unless the form was edited.
 const props = defineProps<{ auditor: Auditor | null; defaults: Defaults | null; readonly?: boolean }>()
@@ -21,8 +22,8 @@ const host = useModHost()
 const t = host.t
 const catalog = useCatalog()
 
-const CHANNEL_TYPE: Record<AuditorType, string> = { openai_moderation: 'openai_moderation', typesafe: 'typesafe', llm_verdict: 'llm' }
-const typeOptions = computed(() => enumOptions('auditorType', ['openai_moderation', 'typesafe', 'llm_verdict']))
+const CHANNEL_TYPE: Record<AuditorType, string> = { openai_moderation: 'openai_moderation', typesafe: 'typesafe', llm_verdict: 'llm', llm_questions: 'llm' }
+const typeOptions = computed(() => enumOptions('auditorType', ['openai_moderation', 'typesafe', 'llm_verdict', 'llm_questions']))
 const toolChoiceOptions = ['required', 'function', 'auto'].map((v) => ({ value: v, label: v }))
 
 const form = reactive({
@@ -112,6 +113,8 @@ function applyPreset(id: unknown) {
 function config(): AuditorConfig {
   if (form.type === 'openai_moderation') return { thresholds: formThresholds.value }
   if (form.type === 'typesafe') return { review_images: form.review_images, questions: form.ownQuestions ? jevPayload(form.questions) : null }
+  // a "yes" scores 1 against a threshold of 1: the table's thresholds are not used (engine.go)
+  if (form.type === 'llm_questions') return { questions: form.ownQuestions ? { preamble: form.questions.preamble, items: form.questions.items.map((q) => ({ ...q, threshold: 1 })) } : null }
   const categories = form.categories
     .split('\n')
     .map((l) => l.trim())
@@ -131,6 +134,7 @@ function config(): AuditorConfig {
   }
 }
 const draft = (): AuditorDraft => ({ name: form.name, type: form.type, channel_id: Number(form.channel_id), config: config() })
+const hasQuestions = computed(() => form.type === 'typesafe' || form.type === 'llm_questions')
 
 const title = computed(() => {
   const a = props.auditor
@@ -185,14 +189,15 @@ async function save() {
           </div>
         </template>
 
-        <template v-else-if="form.type === 'typesafe'">
-          <SField :label="t('auditors.reviewImages')" :hint="t('auditors.reviewImagesHint')">
+        <template v-else-if="hasQuestions">
+          <SHint v-if="form.type === 'llm_questions'" size="xs">{{ t('auditors.llmQuestionsHint') }}</SHint>
+          <SField v-else :label="t('auditors.reviewImages')" :hint="t('auditors.reviewImagesHint')">
             <SSwitch v-model="form.review_images" />
           </SField>
           <SField :label="t('auditors.ownQuestions')" :hint="form.ownQuestions ? '' : t('auditors.useDefault', { v: defaults?.default_version || '' })">
             <SSwitch v-model="form.ownQuestions" />
           </SField>
-          <JevQuestionsEditor v-if="form.ownQuestions" v-model="form.questions">
+          <JevQuestionsEditor v-if="form.ownQuestions" v-model="form.questions" :hide-threshold="form.type === 'llm_questions'">
             <template #toolbar><SButton size="sm" @click="copyDefault">{{ t('auditors.copyDefault') }}</SButton></template>
           </JevQuestionsEditor>
           <SHint v-if="auditor?.rules_version" size="xs">{{ t('auditors.rulesVersion', { v: auditor.rules_version }) }}</SHint>
@@ -224,7 +229,7 @@ async function save() {
         <SButton @click="open = false">{{ host.i18n.t('ui.close') }}</SButton>
       </template>
       <template v-else>
-        <SButton icon="play" :disabled="!form.channel_id" @click="emit('try', { id: auditor?.id ?? null, name: form.name || t('auditors.unsaved'), draft: draft() })">{{ t('auditors.tryDraft') }}</SButton>
+        <SButton icon="play" :disabled="!form.channel_id" @click="emit('try', { id: auditor?.id ?? null, name: form.name || t('auditors.unsaved'), type: form.type, draft: draft() })">{{ t('auditors.tryDraft') }}</SButton>
         <SButton @click="open = false">{{ host.i18n.t('ui.cancel') }}</SButton>
         <SButton variant="primary" :loading="saving" @click="save">{{ t('save') }}</SButton>
       </template>

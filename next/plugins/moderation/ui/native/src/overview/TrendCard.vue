@@ -11,8 +11,10 @@ import { fetchTrend, useModHost } from '../host'
 import type { Granularity, StatsQuery } from '../types'
 import { useAsync } from '../useAsync'
 
-// Trend (new-api trend-card): suspicious rate per flow; hit and error rate per
-// auditor node over the range, error rates above the alert threshold in red.
+// Trend (new-api trend-card): suspicious rate per flow (the tooltip adds how
+// many of a bucket's hits were replayed from the verdict cache); hit and
+// error rate per auditor node over the range, error rates above the alert
+// threshold in red.
 const props = defineProps<{ alertPercent: number }>()
 const t = useModHost().t
 const catalog = useCatalog()
@@ -26,14 +28,17 @@ const granularityOptions = computed(() => enumOptions('stats.granularity', ['hou
 const flows = computed(() => trend.data.value?.flows || [])
 
 const chart = computed(() => {
-  const { ts, values } = alignPoints(
-    flows.value.map((f) => f.points),
-    (p) => Number((p.suspicious_rate * 100).toFixed(2))
-  )
+  const groups = flows.value.map((f) => f.points)
+  const { ts, values } = alignPoints(groups, (p) => Number((p.suspicious_rate * 100).toFixed(2)))
+  const replayed = alignPoints(groups, (p) => p.replayed ?? 0).values
   return lineChart(
     ts.map((x) => bucketLabel(x, q.granularity)),
     flows.value.map((f, i) => ({ name: f.name || catalog.flowName(f.flow_id), data: values[i] })),
-    (v) => `${v}%`
+    (v) => `${v}%`,
+    (series, point) => {
+      const n = replayed[series]?.[point] ?? 0
+      return n > 0 ? t('replay.count', { n: num(n) }) : ''
+    }
   )
 })
 

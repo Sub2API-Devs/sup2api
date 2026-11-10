@@ -2,8 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, SLink, SSelect, STable, type TableColumn } from '@sub2api/ui'
 import BindingEditModal from './BindingEditModal.vue'
-import { bindingKey, bindingKind, hasAccountBindings, resolveBinding, sortBindings } from './bindingOps'
+import { bindingKey, bindingKind, fallbackOf, hasAccountBindings, resolveSteps, sortBindings } from './bindingOps'
 import { useCatalog } from './catalog'
+import { joinList } from './format'
 import { canManage, deleteBinding, errorMessage, fetchAccounts, toastError, useModHost } from './host'
 import type { Binding, BindingKind, CoreAccount, TabKey } from './types'
 import { useAsync } from './useAsync'
@@ -11,7 +12,10 @@ import { useAsync } from './useAsync'
 // Bindings of flows to groups and accounts (CONTRACTS §72.17): every
 // binding, most specific first, edited in a dialog; a preview tells which
 // binding a request of a group sent to an account goes by. Group bindings
-// are the same ones the flows list edits.
+// are the same ones the flows list edits. A binding to a disabled,
+// unpublished or deleted flow is inactive (GET /bindings `inactive`): it
+// does not apply, its row says what its requests go by instead, and the
+// preview passes over it.
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
@@ -63,13 +67,19 @@ const columns = computed<TableColumn[]>(() => {
 
 const kindTone = (k: BindingKind) => (k === 'group_account' ? 'accent' : k === 'account' ? 'info' : 'gray')
 const flowText = (id: number) => (id ? catalog.flowName(id) : t('bindings.exempt'))
-/** Why a bound flow moderates nothing; '' when it is live or the binding is an exemption. */
+/** Why the flow of an inactive binding does not run. */
 function flowState(id: number): string {
-  if (!id) return ''
   const f = catalog.flow(id)
-  if (!f) return t('bindings.flowMissing')
-  if (!f.enabled) return t('disabled')
-  return f.version ? '' : t('flows.unpublished')
+  return t(`bindings.flowState.${!f ? 'missing' : !f.enabled ? 'disabled' : 'unpublished'}`)
+}
+/** What a binding leads to: its flow, or "not moderated". */
+const targetText = (b: Binding) => (b.flow_id ? flowText(b.flow_id) : t('bindings.exempt'))
+/** What the requests of an inactive binding go by now (the same lookup as the preview). */
+function fallbackText(b: Binding): string {
+  // an account bound in any group: each request falls back within its own group
+  if (bindingKind(b.group_id, b.account_id) === 'account') return t('bindings.fallbackPerGroup')
+  const next = fallbackOf(rows.value, b)
+  return next ? t('bindings.fallbackBy', { scope: scopeText(next), target: targetText(next) }) : t('bindings.fallbackNone')
 }
 
 async function openFlow(id: number) {
@@ -125,11 +135,10 @@ const previewResult = computed(() => {
   const g = Number(preview.value.group)
   if (!preview.value.group || !Number.isInteger(g)) return null
   const a = Number(preview.value.account) || 0
-  const b = resolveBinding(rows.value, g, a)
-  if (!b) return { text: t('bindings.previewNone'), tone: 'gray' as const }
-  const state = flowState(b.flow_id)
-  const target = b.flow_id ? (state ? t('bindings.previewInactive', { flow: flowText(b.flow_id), state }) : flowText(b.flow_id)) : t('bindings.exempt')
-  return { text: t('bindings.previewBy', { scope: scopeText(b), target }), tone: b.flow_id && !state ? ('success' as const) : ('warning' as const) }
+  const { hit, skipped } = resolveSteps(rows.value, g, a)
+  const note = skipped.length ? t('bindings.previewSkipped', { scopes: joinList(skipped.map(scopeText)) }) : ''
+  if (!hit) return { text: t('bindings.previewNone'), note, tone: 'gray' as const }
+  return { text: t('bindings.previewBy', { scope: scopeText(hit), target: targetText(hit) }), note, tone: hit.flow_id ? ('success' as const) : ('warning' as const) }
 })
 </script>
 
@@ -184,7 +193,10 @@ const previewResult = computed(() => {
           <SBadge v-if="!row.flow_id" tone="warning">{{ t('bindings.exempt') }}</SBadge>
           <template v-else>
             <SLink as="button" @click="openFlow(row.flow_id)">{{ flowText(row.flow_id) }}</SLink>
-            <SBadge v-if="flowState(row.flow_id)" tone="danger" class="mod-ml">{{ flowState(row.flow_id) }}</SBadge>
+            <template v-if="row.inactive">
+              <SBadge tone="gray" class="mod-ml">{{ t('bindings.rowInactive', { state: flowState(row.flow_id) }) }}</SBadge>
+              <div class="mod-sub">{{ fallbackText(row) }}</div>
+            </template>
           </template>
         </template>
         <template #cell-actions="{ row }">
@@ -207,6 +219,7 @@ const previewResult = computed(() => {
       </div>
       <p v-if="previewResult" class="mod-bindings-result">
         <SBadge :tone="previewResult.tone" dot>{{ previewResult.text }}</SBadge>
+        <span v-if="previewResult.note" class="mod-sub mod-ml">{{ previewResult.note }}</span>
       </p>
       <SHint v-else size="xs">{{ t('bindings.previewHint') }}</SHint>
     </SCard>

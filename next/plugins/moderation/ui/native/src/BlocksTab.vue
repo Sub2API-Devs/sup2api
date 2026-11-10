@@ -9,7 +9,9 @@ import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { useAsync } from './useAsync'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
-// manual block (POST /blocks). Actions need the manage permission.
+// manual block (POST /blocks). Actions need the manage permission. A
+// moderator or an allowlisted user cannot be banned: the backend's field
+// error (user_id/staff, user_id/allowlisted) shows at the user id.
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())

@@ -1,24 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
-import { CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentValue, settingSections, settingsKey } from './settingsForm'
+import { CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, sentValue, settingSections, settingsKey, verdictCacheOff } from './settingsForm'
 import { mergeSettings, type PageValues } from './settingsMerge'
 
 const MASK = '******'
-/** The converted 0.1 fields: in the schema (the core validates and masks them), never on the page. */
-const LEGACY = ['base_url', 'api_key', 'model', 'system_prompt', 'categories', 'tool_choice', 'max_turns', 'temperature', 'max_tokens', 'timeout_ms', 'on_error', 'sample_rate', 'group_ids', 'model_patterns', 'retention_days']
+/** The converted 0.1 fields and the keys retired in 0.8.0: in the schema (the core validates and masks them), never on the page. */
+const LEGACY = ['base_url', 'api_key', 'model', 'system_prompt', 'categories', 'tool_choice', 'max_turns', 'temperature', 'max_tokens', 'timeout_ms', 'on_error', 'sample_rate', 'group_ids', 'model_patterns', 'retention_days', 'exempt_user_ids', 'cache_ttl_seconds']
 
 const sections = settingSections(schema, ui)
 const zh = (v: unknown) => (v as { zh: string }).zh
 
 describe('settingSections', () => {
-  it('groups every field but the 0.1 ones by ui:section, in ui:order', () => {
-    expect(sections.map((g) => zh(g.title))).toEqual(['运行模式与豁免', '拦截响应', '观察名单与封禁', 'AI 分析', '记录与保留', '性能与缓存', '输入范围', '告警与通知', 'Jev 默认题集'])
+  it('groups every field but the 0.1 and retired ones by ui:section, in ui:order', () => {
+    expect(sections.map((g) => zh(g.title))).toEqual(['运行模式与用户名单', '拦截响应', '观察名单与封禁', 'AI 分析', '记录与保留', '性能与缓存', '输入范围', '告警与通知', 'Jev 默认题集'])
     const shown = sections.flatMap((g) => g.keys)
     expect(shown).toEqual(ui['ui:order'].filter((k) => !LEGACY.includes(k)))
     expect(new Set(shown).size).toBe(shown.length)
     expect(Object.keys(schema.properties).filter((k) => !shown.includes(k)).sort()).toEqual([...LEGACY].sort())
     expect(sections.filter((g) => g.collapsed).map((g) => g.id)).toEqual(['max_concurrency', 'min_chars'])
+  })
+
+  it('shows the 0.8.0 settings where the design puts them', () => {
+    expect(sections[0].keys).toEqual(['mode', 'allowlist_user_ids', 'blocklist_user_ids'])
+    const shown = sections.flatMap((g) => g.keys)
+    expect(shown[shown.indexOf('store_text') + 1]).toBe('record_pass_input_message')
+    expect(sections.find((g) => g.keys.includes('verdict_cache_days'))?.keys).toContain('cache_entries')
   })
 
   it('keeps api_key a secret of the schema, so the core masks it', () => {
@@ -52,7 +59,7 @@ describe('the save of the settings tab', () => {
   // What the page sends for a key: the widget value, or the mask of a kept secret.
   const page = (stored: Record<string, unknown>, form: Record<string, unknown>): PageValues => {
     const out: PageValues = {}
-    for (const k of schemaKeys(editableKeys(sections, stored))) out[k] = sentValue((schema.properties as Record<string, any>)[k], form[k])
+    for (const k of schemaKeys(editableKeys(sections, stored))) out[k] = sentSetting((schema.properties as Record<string, any>)[k], stored, k, form[k])
     out.analysis_channel_id = (form.analysis_channel_id as number) ?? 0
     out.notify_webhook_url = stored.notify_webhook_url === MASK ? MASK : undefined
     out.notify_webhook_secret = stored.notify_webhook_secret === MASK ? MASK : undefined
@@ -85,9 +92,78 @@ describe('the save of the settings tab', () => {
   })
 
   it('writes only the changed keys and sends the hidden 0.1 fields and kept secrets back as stored', () => {
-    const m = mergeSettings(keys, stored, stored, initial, page(stored, { ...form, mode: 'enforce', cache_ttl_seconds: 600 }))
-    expect(m.changed.sort()).toEqual(['cache_ttl_seconds', 'mode'])
-    expect(m.values).toEqual({ ...stored, mode: 'enforce', cache_ttl_seconds: 600 })
+    const m = mergeSettings(keys, stored, stored, initial, page(stored, { ...form, mode: 'enforce', verdict_cache_days: 3 }))
+    expect(m.changed.sort()).toEqual(['mode', 'verdict_cache_days'])
+    expect(m.values).toEqual({ ...stored, mode: 'enforce', verdict_cache_days: 3 })
+  })
+
+  // The same reading as settings.go DecodeSettings (TestExemptBecomesAllowlist).
+  describe('the allowlist of settings saved before 0.8.0', () => {
+    const old = { ...stored, exempt_user_ids: ['5', '9'] }
+    const oldKeys = editableKeys(sections, old)
+    const oldForm: Record<string, unknown> = { ...displayValues(schema, old, schemaKeys(oldKeys)), analysis_channel_id: 0, api_key: MASK }
+    const oldInitial = page(old, oldForm)
+
+    it('starts from the stored exempt_user_ids while allowlist_user_ids was never stored', () => {
+      expect(oldForm.allowlist_user_ids).toEqual(['5', '9'])
+      expect(oldForm.blocklist_user_ids).toEqual([])
+      expect(oldKeys).not.toContain('exempt_user_ids')
+      // nothing is written while nothing is edited
+      const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, oldForm))
+      expect(m.changed).toEqual([])
+      expect(m.values).toEqual(old)
+    })
+
+    it('uses allowlist_user_ids once it is stored, also when empty', () => {
+      const both = { ...old, allowlist_user_ids: ['7'] }
+      expect(displayValues(schema, both, ['allowlist_user_ids']).allowlist_user_ids).toEqual(['7'])
+      expect(displayValues(schema, { ...old, allowlist_user_ids: [] }, ['allowlist_user_ids']).allowlist_user_ids).toEqual([])
+      expect(displayValues(schema, stored, ['allowlist_user_ids']).allowlist_user_ids).toEqual([])
+    })
+
+    it('writes only allowlist_user_ids and leaves the retired key as stored', () => {
+      const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: ['5', '9', '12'] }))
+      expect(m.changed).toEqual(['allowlist_user_ids'])
+      expect(m.values).toEqual({ ...old, allowlist_user_ids: ['5', '9', '12'] })
+    })
+
+    it('stores an emptied allowlist as [], so the retired list is not read again', () => {
+      for (const emptied of [[], undefined, null]) {
+        const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: emptied }))
+        expect(m.changed).toEqual(['allowlist_user_ids'])
+        expect(m.values.allowlist_user_ids).toEqual([])
+        expect(m.values.exempt_user_ids).toEqual(['5', '9'])
+      }
+      // without a retired list an emptied allowlist is simply removed
+      expect(sentSetting(schema.properties.allowlist_user_ids, stored, 'allowlist_user_ids', undefined)).toBeUndefined()
+      expect(sentSetting(schema.properties.blocklist_user_ids, old, 'blocklist_user_ids', undefined)).toBeUndefined()
+    })
+  })
+
+  describe('the verdict cache of settings saved before 0.8.0', () => {
+    const days = (s: Record<string, unknown>) => displayValues(schema, s, ['verdict_cache_days']).verdict_cache_days
+
+    it('shows the days the retired cache_ttl_seconds gives, rounded up, 1 to 30', () => {
+      expect(days({})).toBe(7)
+      expect(days({ cache_ttl_seconds: 600 })).toBe(1)
+      expect(days({ cache_ttl_seconds: 86400 })).toBe(1)
+      expect(days({ cache_ttl_seconds: 86401 })).toBe(2)
+      expect(days({ cache_ttl_seconds: 604800 })).toBe(7)
+      expect(days({ cache_ttl_seconds: 600, verdict_cache_days: 14 })).toBe(14)
+    })
+
+    it('shows no days while the retired key keeps the cache off, and saving days turns it on', () => {
+      const off = { ...stored, cache_ttl_seconds: 0 }
+      expect(verdictCacheOff(off)).toBe(true)
+      expect(verdictCacheOff({ ...off, verdict_cache_days: 7 })).toBe(false)
+      expect(verdictCacheOff(stored)).toBe(false)
+      expect(days(off)).toBeUndefined()
+      const offKeys = editableKeys(sections, off)
+      const offForm: Record<string, unknown> = { ...displayValues(schema, off, schemaKeys(offKeys)), analysis_channel_id: 0, api_key: MASK }
+      const m = mergeSettings(offKeys, off, off, page(off, offForm), page(off, { ...offForm, verdict_cache_days: 7 }))
+      expect(m.changed).toEqual(['verdict_cache_days'])
+      expect(m.values).toEqual({ ...off, verdict_cache_days: 7 })
+    })
   })
 
   it('removes a number left empty, so its default applies', () => {
@@ -108,7 +184,7 @@ describe('the save of the settings tab', () => {
 
 describe('settingsKey', () => {
   it('maps API field paths to the settings key', () => {
-    expect(settingsKey('values/exempt_user_ids/3')).toBe('exempt_user_ids')
+    expect(settingsKey('values/allowlist_user_ids/3')).toBe('allowlist_user_ids')
     expect(settingsKey('values.jev_default_set.items[0].question')).toBe('jev_default_set')
     expect(settingsKey('block_status')).toBe('block_status')
   })

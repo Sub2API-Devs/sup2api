@@ -10,7 +10,9 @@ import type { GroupOwner } from './flowOps'
 // Bound groups of one flow, edited in a dialog from the cell (new-api
 // flow-groups-cell.tsx; PUT /flows/:id/groups). A group bound to another flow answers 409
 // group_conflict; after confirmation the request is sent again with
-// force = true. Saving takes effect at once and creates no version.
+// force = true. Saving takes effect at once and creates no version. The
+// bindings of a disabled or unpublished flow do not apply (0.8.0): the cell
+// says so.
 const props = defineProps<{
   flow: Flow
   /** every group of the console incl. the default (0); [] when not readable */
@@ -30,6 +32,8 @@ const saving = ref(false)
 const conflicts = ref<GroupConflict[] | null>(null)
 
 const labels = computed(() => props.flow.groups.map(props.groupLabel))
+/** The flow is disabled or unpublished while something is bound to it: those bindings do not apply. */
+const inactive = computed(() => (!props.flow.enabled || !props.flow.version) && (props.flow.groups.length > 0 || !!props.flow.accounts?.length))
 
 function hint(id: number): string {
   const owner = props.owners.get(id)
@@ -86,6 +90,7 @@ const conflictLines = computed(() =>
       <SBadge v-for="(g, i) in labels" :key="flow.groups[i]">{{ g }}</SBadge>
     </span>
     <SBadge v-else tone="warning">{{ t('flows.noGroups') }}</SBadge>
+    <SBadge v-if="inactive" tone="gray" :title="t('flows.bindingsInactiveHint')">{{ t('flows.bindingsInactive') }}</SBadge>
     <span v-if="canWrite" class="mod-inline">
       <SButton size="xs" variant="ghost" :aria-label="t('flows.editGroups', { name: flow.name })" :title="t('flows.editGroups', { name: flow.name })" @click="show">{{ t('edit') }}</SButton>
     </span>
@@ -103,7 +108,8 @@ const conflictLines = computed(() =>
           <SHint size="xs">{{ t('flows.groupIdsHint') }}</SHint>
           <STagInput v-model="idText" placeholder="0" :aria-label="t('flows.col.groups')" />
         </template>
-        <p v-if="!wanted().length" class="mod-text-warning">{{ t('flows.noGroupsWarn') }}</p>
+        <p v-if="!wanted().length" class="mod-text-warning">{{ flow.accounts?.length ? t('flows.accountsOnly', { n: flow.accounts.length }) : t('flows.noGroupsWarn') }}</p>
+        <p v-if="inactive" class="mod-text-warning">{{ t('flows.bindingsInactiveHint') }}</p>
       </div>
       <template #footer>
         <SButton @click="open = false">{{ host.i18n.t('ui.cancel') }}</SButton>

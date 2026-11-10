@@ -22,6 +22,7 @@ function params(a: FlowVersionAuditor): string {
 <template>
   <div v-for="s in stages" :key="s.stage" class="mod-version-stage">
     <strong>{{ t('trace.stageN', { n: s.stage }) }}</strong>
+    <SBadge v-if="s.fallback" tone="info" size="xs">{{ t('flows.role.fallback') }}</SBadge>
     <span v-if="s.combine && s.auditors.length > 1" class="mod-sub">{{ enumLabel('combine', s.combine) }}<template v-if="s.combine === 'at_least'"> {{ s.n }}</template></span>
     <span v-for="a in s.auditors" :key="a.auditor_id" class="mod-version-auditor">
       <SBadge :tone="a.deleted ? 'danger' : 'gray'">

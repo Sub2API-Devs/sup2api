@@ -8,15 +8,18 @@ import type { Auditor, AuditorType, Channel, Flow, Spec, Stage } from './types'
 // unchanged, so callers compare by identity to detect a no-op.
 //
 // Differences from new-api: the spec has no `enabled` (flows.enabled is its
-// own column), three auditor types can be placed, at most 8 stages of at
+// own column), four auditor types can be placed, at most 8 stages of at
 // most 8 auditors (internal/moderation/flow.go).
+//
+// Stage order: the review stages first, then the fallback stages (补审,
+// Stage.fallback). Every operation keeps that order.
 
 export type Combine = Stage['combine']
 
 /** Looks up an auditor's type; undefined when the auditor does not exist. */
 type AuditorTypeOf = (id: number) => string | undefined
 
-const AUDITOR_TYPES: readonly AuditorType[] = ['openai_moderation', 'typesafe', 'llm_verdict']
+const AUDITOR_TYPES: readonly AuditorType[] = ['openai_moderation', 'typesafe', 'llm_verdict', 'llm_questions']
 export const MAX_STAGES = 8
 export const MAX_STAGE_AUDITORS = 8
 export const TOTAL_TIMEOUT_MIN_MS = 1000
@@ -41,7 +44,8 @@ export const DEFAULT_CHANNEL_TIMEOUT_MS: Record<string, number> = {
   openai_moderation: 3000,
   typesafe: 8000,
   llm: 15000,
-  llm_verdict: 15000
+  llm_verdict: 15000,
+  llm_questions: 15000
 }
 
 export function isAuditorType(type: string | undefined): type is AuditorType {
@@ -55,11 +59,17 @@ export function newSpec(): Spec {
 
 const withStages = (spec: Spec, stages: Stage[]): Spec => ({ ...spec, stages })
 
-/** Inserts a stage holding one auditor at `at` (default: last). */
+/** How many review stages lead the list: the index of the first fallback stage (all of them when there is none). */
+export function reviewStageCount(stages: readonly Pick<Stage, 'fallback'>[]): number {
+  const first = stages.findIndex((s) => s.fallback)
+  return first < 0 ? stages.length : first
+}
+
+/** Inserts a review stage holding one auditor at `at` (default: last); it never lands behind a fallback stage. */
 export function addStage(spec: Spec, auditor: number, typeOf: AuditorTypeOf, at: number = spec.stages.length): Spec {
   if (!isAuditorType(typeOf(auditor)) || spec.stages.length >= MAX_STAGES) return spec
   const stages = [...spec.stages]
-  stages.splice(at, 0, { auditors: [auditor], combine: 'any' })
+  stages.splice(Math.min(at, reviewStageCount(stages)), 0, { auditors: [auditor], combine: 'any' })
   return withStages(spec, stages)
 }
 
@@ -71,9 +81,15 @@ export function removeStage(spec: Spec, index: number): Spec {
   )
 }
 
-/** Moves a stage to another position (stage order is the check order). */
+/**
+ * Moves a stage to another position (stage order is the check order). A
+ * review stage stays among the review stages and a fallback stage among the
+ * fallback stages: a target across that border is a no-op (setFallback
+ * changes what a stage is).
+ */
 export function moveStage(spec: Spec, from: number, to: number): Spec {
   if (from === to || !spec.stages[from] || to < 0 || to >= spec.stages.length) return spec
+  if (!!spec.stages[from].fallback !== !!spec.stages[to].fallback) return spec
   const stages = [...spec.stages]
   const [stage] = stages.splice(from, 1)
   stages.splice(to, 0, stage)
@@ -105,7 +121,8 @@ export function removeAuditor(spec: Spec, stageIndex: number, auditorIndex: numb
 
 /**
  * Moves an auditor within or across stages. `to.stage === stages.length`
- * creates a new last stage; `to.index` defaults to the end of the target.
+ * creates a new review stage, the last one before the fallback stages;
+ * `to.index` defaults to the end of the target.
  * A source stage left empty is removed. A target that already has the
  * auditor (or is full) is a no-op.
  */
@@ -120,7 +137,7 @@ function moveAuditor(spec: Spec, from: { stage: number; index: number }, to: { s
 
   const stages: Stage[] = spec.stages.map((s) => ({ ...s, auditors: [...s.auditors] }))
   stages[from.stage].auditors.splice(from.index, 1)
-  if (to.stage === stages.length) stages.push({ auditors: [auditor], combine: 'any' })
+  if (to.stage === stages.length) stages.splice(reviewStageCount(stages), 0, { auditors: [auditor], combine: 'any' })
   else {
     const list = stages[to.stage].auditors
     list.splice(Math.min(to.index ?? list.length, list.length), 0, auditor)
@@ -133,12 +150,32 @@ function moveAuditor(spec: Spec, from: { stage: number; index: number }, to: { s
 
 /**
  * any / all drop `n`; at_least keeps an integer n ≥ 1 (default 1). An `n`
- * above the auditor count is allowed and counts as the auditor count.
+ * above the auditor count is allowed and counts as the auditor count. A
+ * fallback stage stays one.
  */
 function normalizeCombine(stage: Stage): Stage {
-  if (stage.combine !== 'at_least') return { auditors: stage.auditors, combine: stage.combine }
+  const fallback = stage.fallback ? { fallback: true } : {}
+  if (stage.combine !== 'at_least') return { auditors: stage.auditors, combine: stage.combine, ...fallback }
   const n = Math.max(1, Math.floor(Number(stage.n ?? 1)) || 1)
-  return { auditors: stage.auditors, combine: 'at_least', n }
+  return { auditors: stage.auditors, combine: 'at_least', n, ...fallback }
+}
+
+/**
+ * Makes a stage a fallback stage (补审) or a review stage again. A fallback
+ * stage moves behind every review stage and a review stage in front of every
+ * fallback stage, so the spec keeps the order the backend requires. The
+ * first stage cannot be a fallback stage: with no review stage left in front
+ * of it the spec is returned unchanged.
+ */
+export function setFallback(spec: Spec, stageIndex: number, fallback: boolean): Spec {
+  const stage = spec.stages[stageIndex]
+  if (!stage || !!stage.fallback === fallback) return spec
+  const { fallback: _drop, ...rest } = stage
+  const changed: Stage = fallback ? { ...rest, fallback: true } : rest
+  const others = spec.stages.filter((_, i) => i !== stageIndex)
+  const review = others.filter((s) => !s.fallback)
+  if (fallback && !review.length) return spec
+  return withStages(spec, [...review, changed, ...others.filter((s) => s.fallback)])
 }
 
 export function setCombine(spec: Spec, stageIndex: number, combine: Combine, n?: number): Spec {
@@ -151,8 +188,8 @@ export function setCombine(spec: Spec, stageIndex: number, combine: Combine, n?:
 
 /**
  * The draft as it is sent and compared: fixed key order, models always an
- * array, `n` only on at_least. Leaves invalid values as they are so that
- * validation still reports them.
+ * array, `n` only on at_least, `fallback` only when true. Leaves invalid
+ * values as they are so that validation still reports them.
  */
 export function canonicalSpec(spec: Spec): Spec {
   return {
@@ -162,6 +199,7 @@ export function canonicalSpec(spec: Spec): Spec {
     stages: (spec.stages || []).map((s) => {
       const st: Stage = { auditors: [...(s.auditors || [])], combine: s.combine || 'any' }
       if (st.combine === 'at_least') st.n = s.n
+      if (s.fallback) st.fallback = s.fallback
       return st
     })
   }
@@ -192,10 +230,11 @@ export function applyTemplate(spec: Spec, template: FlowTemplate, auditors: read
   )
 }
 
-export type StageRole = 'first' | 'behavior' | 'review'
+export type StageRole = 'first' | 'behavior' | 'review' | 'fallback'
 
-/** Stage 1 = first (初审); a later stage holding a Jev auditor = behavior; else review. */
-export function stageRole(index: number, stage: Pick<Stage, 'auditors'>, typeOf: AuditorTypeOf): StageRole {
+/** A fallback stage = fallback (补审); stage 1 = first (初审); a later stage holding a Jev auditor = behavior; else review (analysis_prompt.go stageRole). */
+export function stageRole(index: number, stage: Pick<Stage, 'auditors' | 'fallback'>, typeOf: AuditorTypeOf): StageRole {
+  if (stage.fallback) return 'fallback'
   if (index === 0) return 'first'
   return stage.auditors.some((id) => typeOf(id) === 'typesafe') ? 'behavior' : 'review'
 }
@@ -209,7 +248,7 @@ export interface CanvasAuditor {
   type: AuditorType
   channelId: number
   channelName: string
-  /** false = disabled or missing: calls fail and the stage passes */
+  /** false = disabled or missing: its calls fail (an errored auditor leaves the stage's count; a stage with no verdict is passed over) */
   channelOk: boolean
   /** effective single-call timeout (type default when the channel stores 0) */
   timeoutMs: number
@@ -262,8 +301,10 @@ interface GroupCoverage {
   moderated: number[]
   /** groups without a flow of their own while the default group has no live flow */
   unbound: number[]
-  /** bound groups whose flow is disabled or unpublished (incl. the default group 0): not moderated */
+  /** bound groups whose flow is disabled or unpublished (incl. the default group 0): the binding does not apply, they go by the default group's flow */
   inactive: number[]
+  /** the default group 0 has a live flow: what unbound groups and groups of an inactive flow fall back to */
+  defaultLive: boolean
   /** bound groups the core does not know (anymore) */
   stale: number[]
   /** groups bound to "not moderated" (flow 0, §72.17) */
@@ -271,9 +312,10 @@ interface GroupCoverage {
 }
 
 /**
- * Group coverage (mirrors snapshot.flowFor): a group bound to a flow uses that
- * flow, and only while it is enabled and published; a group bound to "not
- * moderated" (exempt) is not moderated; other groups use the flow of the
+ * Group coverage (mirrors snapshot.flowFor): a group bound to an enabled and
+ * published flow uses that flow; a group bound to "not moderated" (exempt)
+ * is not moderated; other groups, those bound to a disabled or unpublished
+ * flow included (the binding does not apply, 0.8.0), use the flow of the
  * default group 0. Account bindings are not counted (the bindings tab).
  */
 export function groupCoverage(
@@ -293,11 +335,12 @@ export function groupCoverage(
   const defaultLive = live(0)
   return {
     own: groupIds.filter((id) => owner.has(id)),
-    moderated: groupIds.filter((id) => (owner.has(id) ? live(id) : defaultLive)),
+    moderated: groupIds.filter((id) => !skipped.has(id) && (live(id) || defaultLive)),
     unbound: defaultLive ? [] : groupIds.filter((id) => !owner.has(id)),
     inactive: [...owner.keys()].filter((id) => (id === 0 || known.has(id)) && !live(id) && !skipped.has(id)),
     stale: [...owner.keys()].filter((id) => id !== 0 && !known.has(id)),
-    exempt: groupIds.filter((id) => skipped.has(id))
+    exempt: groupIds.filter((id) => skipped.has(id)),
+    defaultLive
   }
 }
 
@@ -319,6 +362,8 @@ type SpecIssueCode =
   | 'unsupported_auditor_type'
   | 'invalid_combine'
   | 'invalid_n'
+  | 'fallback_first'
+  | 'fallback_order'
 
 export interface SpecIssue {
   code: SpecIssueCode
@@ -330,7 +375,7 @@ export interface SpecIssue {
 
 const SPEC_KEYS = ['model_filter', 'sample_rate', 'total_timeout_ms', 'stages']
 const MODEL_FILTER_KEYS = ['type', 'models']
-const STAGE_KEYS = ['auditors', 'combine', 'n']
+const STAGE_KEYS = ['auditors', 'combine', 'n', 'fallback']
 const MODEL_FILTER_TYPES = new Set(['all', 'only', 'exclude'])
 const COMBINE_VALUES = new Set(['', 'any', 'all', 'at_least'])
 
@@ -362,7 +407,12 @@ export function validateSpec(spec: Spec, typeOf: AuditorTypeOf): SpecIssue[] {
   }
   if (!stages.length) issues.push({ code: 'no_stages' })
   if (stages.length > MAX_STAGES) issues.push({ code: 'too_many_stages' })
-  stages.forEach((st, i) => issues.push(...validateStage(st, i, typeOf)))
+  // The first stage is a review stage and no review stage follows a fallback stage (Spec.Validate).
+  if (stages[0]?.fallback) issues.push({ code: 'fallback_first', stage: 0 })
+  stages.forEach((st, i) => {
+    if (i > 0 && stages[i - 1]?.fallback && !st?.fallback) issues.push({ code: 'fallback_order', stage: i })
+    issues.push(...validateStage(st, i, typeOf))
+  })
   return issues
 }
 
@@ -388,6 +438,7 @@ function validateStage(stage: Stage, index: number, typeOf: AuditorTypeOf): Spec
   if (!COMBINE_VALUES.has(combine)) issues.push({ code: 'invalid_combine', stage: index })
   const n = stage.n ?? 0
   if (!Number.isInteger(n) || (combine === 'at_least' && n < 1)) issues.push({ code: 'invalid_n', stage: index })
+  if (stage.fallback !== undefined && typeof stage.fallback !== 'boolean') issues.push({ code: 'invalid_field', stage: index, field: 'fallback' })
   return issues
 }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SAlert, SBadge, SButton, SLink } from '@sub2api/ui'
+import { exemptGroups } from '../bindingOps'
 import { useCatalog } from '../catalog'
 import { groupCoverage } from '../flowOps'
 import { joinList } from '../format'
@@ -8,8 +9,9 @@ import { canManage, canManageSettings, useModHost } from '../host'
 import { modeTone } from '../tones'
 import type { Status, TabKey } from '../types'
 
-// One-line running state (new-api status-line): switch, enabled flows,
-// bound / unmoderated groups, disabled channels, analysis channel; plus the
+// One-line running state (new-api status-line): switch, the default level
+// (the level of users without a watch entry: `mode` of the settings),
+// enabled flows, bound / unmoderated groups, disabled channels, analysis channel; plus the
 // setup hint when nothing is bound or moderation is off.
 const props = defineProps<{ status: Status }>()
 const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void; (e: 'go-settings'): void }>()
@@ -27,10 +29,12 @@ const disabledFlows = computed(() => catalog.state.flows.length - enabledFlows.v
 const coverage = computed(() => {
   const groups = catalog.state.groups
   if (!groups.length) return null
-  const c = groupCoverage(groups.map((g) => g.id), catalog.state.flows)
+  const c = groupCoverage(groups.map((g) => g.id), catalog.state.flows, exemptGroups(catalog.state.bindings))
   const moderated = new Set(c.moderated)
   return { moderated: moderated.size, unmoderated: groups.filter((g) => !moderated.has(g.id)).map((g) => g.name) }
 })
+/** off, or the default level (GET /status default_level; the mode says the same on a backend without it). */
+const level = computed(() => (!props.status.mode || props.status.mode === 'off' ? 'off' : props.status.default_level || props.status.mode))
 const channelsDown = computed(() => catalog.state.channels.filter((c) => !c.enabled).length)
 const analysisConfigured = computed(() => !!props.status.runtime.analysis?.channel_configured)
 /** why analyses are off: no channel, or the saved one is not a usable llm channel */
@@ -52,7 +56,7 @@ const act = (action: 'flows' | 'settings') => (action === 'settings' ? emit('go-
 <template>
   <div class="mod-status-line">
     <SBadge :tone="state.tone" dot>{{ t(`statusLine.${state.key}`) }}</SBadge>
-    <SBadge :tone="modeTone(status.mode)">{{ t(`mode.${status.mode || 'off'}`) }}</SBadge>
+    <SBadge :tone="modeTone(level)" :title="t(`statusLine.levelHint.${level}`)">{{ t(`statusLine.level.${level}`) }}</SBadge>
     <span>
       {{ t('statusLine.flows', { n: enabledFlows.length }) }}<template v-if="disabledFlows"> · {{ t('statusLine.flowsOff', { n: disabledFlows }) }}</template>
     </span>

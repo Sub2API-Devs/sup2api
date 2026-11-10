@@ -23,7 +23,8 @@ import { useUserFilter } from './users'
 // filter takes a username (resolved to ids through the core) or an id. A row
 // opens the detail modal (?record=<id> opens one directly); a user opens the
 // user detail drawer; selected suspicious rows (hit, block) can be reviewed
-// in bulk.
+// in bulk. A replayed cached hit carries the replay badge and can be
+// filtered in or out.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const host = useModHost()
 const t = host.t
@@ -38,6 +39,7 @@ const emptyForm = () => ({
   verdict: '',
   severity: '',
   watch_level: '',
+  replayed: '',
   category: '',
   flow_id: '' as number | '',
   flow_version: '' as number | '',
@@ -68,6 +70,7 @@ function query() {
     verdict: form.verdict,
     severity: form.severity,
     watch_level: form.watch_level,
+    replayed: form.replayed,
     category: form.category,
     flow_id: form.flow_id,
     flow_version: form.flow_id === '' ? '' : form.flow_version,
@@ -107,6 +110,7 @@ const timingOptions = computed(() => enumOptions('timing', ['pre', 'post'], all)
 const reviewOptions = computed(() => enumOptions('review', ['pending', 'false_positive', 'confirmed'], all))
 const severityOptions = computed(() => enumOptions('severity', ['high', 'medium', 'low'], all))
 const watchOptions = computed(() => withAll([{ value: 'any', label: t('events.watched') }, ...enumOptions('level', ['observe', 'enforce'])]))
+const replayOptions = computed(() => withAll([{ value: 'true', label: t('replay.only') }, { value: 'false', label: t('replay.without') }]))
 const aiVerdictOptions = computed(() => enumOptions('aiVerdict', ['violation', 'false_positive', 'unsure', 'none'], all))
 const verdictOptions = computed(() => withAll([{ value: 'needs_review', label: t('events.needsReview') }, { value: 'disagree', label: t('events.disagree') }]))
 const categories = useCategoryOptions()
@@ -120,7 +124,7 @@ const versionOptions = computed(() => {
 const groupOptions = computed(() => withAll(catalog.groupOptions()))
 
 watch(
-  () => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, form.category, form.flow_id, form.flow_version, form.group_id, from.value, to.value],
+  () => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, form.replayed, form.category, form.flow_id, form.flow_version, form.group_id, from.value, to.value],
   apply
 )
 watch(
@@ -178,8 +182,17 @@ function filterUser(id: number) {
   search()
 }
 
-/** From the record detail: the records of its endpoint or sticky session. */
+/**
+ * From the record detail: the records of its endpoint or sticky session, or
+ * of the request a replayed hit took its verdict from (alone: that request
+ * may be another user's, of any result and time).
+ */
 function filterBy(q: EventFilter) {
+  if (q.request_id) {
+    range.value = 'all'
+    from.value = to.value = ''
+    Object.assign(form, emptyForm(), { result: '' })
+  }
   Object.assign(form, q)
   search()
 }
@@ -222,6 +235,9 @@ watch(() => list.items.value, () => (checked.value = []))
         </SField>
         <SField class="mod-filter" :label="t('events.watch')">
           <SSelect v-model="form.watch_level" :options="watchOptions" />
+        </SField>
+        <SField class="mod-filter" :label="t('replay.filter')">
+          <SSelect v-model="form.replayed" :options="replayOptions" />
         </SField>
         <SField class="mod-filter" :label="t('events.user')" :error="users.error.value">
           <SInput v-model="form.user" type="search" :placeholder="t('events.userPlaceholder')" />
@@ -293,6 +309,7 @@ watch(() => list.items.value, () => (checked.value = []))
         <template #cell-created_at="{ row }">{{ dt(row.created_at) }}</template>
         <template #cell-result="{ row }">
           <ResultBadge :result="row.result" />
+          <SBadge v-if="row.replayed" size="xs" tone="gray" class="mod-ml" :title="t('replay.badgeHint')">{{ t('replay.badge') }}</SBadge>
           <div class="mod-sub">{{ enumLabel('timing', row.timing) }}</div>
         </template>
         <template #cell-scores="{ row }"><ScoreChips :trace="row.trace" /></template>

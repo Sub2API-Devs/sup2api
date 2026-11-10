@@ -94,6 +94,7 @@ const unpublished = computed(() => !saved.value?.version || saved.value.dirty)
 const publishedVersion = computed(() => saved.value?.version ?? 0)
 const autoMs = computed(() => autoTimeoutMs(draft.value, lookup.value.byId))
 const groupNames = computed(() => (saved.value?.groups || []).map(props.groupLabel))
+const accountBindings = computed(() => saved.value?.accounts?.length ?? 0)
 
 function issueText(i: SpecIssue): string {
   const prefix = i.stage === undefined ? '' : t('flows.stagePrefix', { n: i.stage + 1 })
@@ -275,6 +276,7 @@ onBeforeUnmount(() => {
         v-model:draft="draft"
         :enabled="enabled"
         :groups="groupNames"
+        :accounts="accountBindings"
         :auto-ms="autoMs"
         :is-new="isNew"
         :disabled="!manage"
@@ -311,6 +313,7 @@ onBeforeUnmount(() => {
       :enabled="enabled"
       :draft="draft"
       :groups="groupNames"
+      :accounts="accountBindings"
       :auditors="auditors"
       :loading="busy === 'publish'"
       @confirm="publish"

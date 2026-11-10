@@ -884,6 +884,16 @@ p.mod-text-danger {
   color: rgb(var(--fg-subtle));
   cursor: grab;
 }
+/* the "fallback stage" switch of a stage card, under its header */
+.mod-stage-fallback {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+}
+/* the note above the trace of a replayed cached hit */
+.mod-replay-note {
+  margin-bottom: 0.5rem;
+}
 .mod-stage-card .mod-sub,
 .mod-stage-card p {
   margin: 0;

@@ -12,8 +12,8 @@ import { thresholdPresetOf } from './thresholdPresets'
 import { useAsync } from './useAsync'
 
 // Auditors (CONTRACTS §72.6, new-api auditors): OpenAI moderation thresholds
-// (with presets), Jev question tables, LLM verdict prompts; each bound to one
-// channel of its type, with today's calls and cost. Auditors and channels come
+// (with presets), Jev question tables, LLM verdict prompts, LLM question
+// tables; each bound to one channel of its type, with today's calls and cost. Auditors and channels come
 // from the shared catalog; a change refreshes both (an auditor shows its
 // channel, a channel lists its auditors). Read users open an auditor read-only.
 const host = useModHost()
@@ -51,7 +51,9 @@ function summary(a: Auditor): string {
     const preset = d && thresholdPresetOf(d, c.thresholds || {})
     return preset ? t(`auditors.preset.${preset}`) : t('auditors.overrides', { n: Object.keys(c.thresholds || {}).length })
   }
-  if (a.type === 'typesafe') return `${a.rules_version || ''} · ${t('auditors.questions', { n: c.questions?.items?.length || d?.default.items.length || 0 })}`
+  if (a.type === 'typesafe' || a.type === 'llm_questions') {
+    return [a.rules_version, t('auditors.questions', { n: c.questions?.items?.length || d?.default.items.length || 0 })].filter(Boolean).join(' · ')
+  }
   return c.flag_as_hit ? t('auditors.flagAsHit') : t('auditors.blockOnly')
 }
 
@@ -103,7 +105,7 @@ const remove = (a: Auditor) => confirmDelete(t('auditors.deleteConfirm', { name:
         </template>
         <template #cell-actions="{ row }">
           <template v-if="manage">
-            <SButton size="sm" variant="ghost" @click="openTry({ id: row.id, name: row.name })">{{ t('auditors.try') }}</SButton>
+            <SButton size="sm" variant="ghost" @click="openTry({ id: row.id, name: row.name, type: row.type })">{{ t('auditors.try') }}</SButton>
             <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
             <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
           </template>

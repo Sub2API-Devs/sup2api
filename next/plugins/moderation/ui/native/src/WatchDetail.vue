@@ -15,7 +15,7 @@ import type { ReviewStatus, SourceFilter, Watch, WatchItem } from './types'
 import { useUserDetail } from './useUserDetail'
 
 // User detail drawer (§72.13.6, new-api user-detail-drawer), for any user:
-// state and inline watch level, the entry, a summary with the last 30 days
+// state (allowlist / blocklist mark included) and inline watch level, the entry, a summary with the last 30 days
 // and its sources, the analysis state, then the analyses, the suspicious
 // records (filterable by source, bulk review) and the watch history. The
 // record detail opened here links no user (this drawer is the user).

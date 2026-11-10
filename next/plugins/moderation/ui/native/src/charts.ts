@@ -21,10 +21,36 @@ export interface LineSeries {
   dashed?: boolean
 }
 
-/** Line chart over shared x labels; format renders tooltip values and the y axis. */
-export function lineChart(labels: string[], series: LineSeries[], format: (v: number) => string) {
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+/** One series of an axis tooltip, as ECharts hands it to a formatter. */
+interface TooltipItem {
+  seriesIndex: number
+  dataIndex: number
+  seriesName?: string
+  marker?: string
+  axisValueLabel?: string
+  name?: string
+  value?: number | null
+}
+
+/**
+ * Line chart over shared x labels; format renders tooltip values and the y
+ * axis. note(series, point) adds a text behind a tooltip value ('' = none).
+ */
+export function lineChart(labels: string[], series: LineSeries[], format: (v: number) => string, note?: (seriesIndex: number, dataIndex: number) => string) {
+  const value = (v: number | null | undefined) => (v === null || v === undefined ? '—' : format(v))
+  // The tooltip is HTML: names and notes are escaped (the marker is ECharts' own markup).
+  const formatter = (params: TooltipItem | TooltipItem[]) => {
+    const items = Array.isArray(params) ? params : [params]
+    const rows = items.map((p) => {
+      const extra = note?.(p.seriesIndex, p.dataIndex) || ''
+      return `${p.marker || ''}${escapeHtml(p.seriesName || '')}: <b>${escapeHtml(value(p.value))}</b>${extra ? ` · ${escapeHtml(extra)}` : ''}`
+    })
+    return [escapeHtml(items[0]?.axisValueLabel ?? items[0]?.name ?? ''), ...rows].join('<br/>')
+  }
   return {
-    tooltip: { trigger: 'axis', valueFormatter: (v: number) => (v === null || v === undefined ? '—' : format(v)) },
+    tooltip: note ? { trigger: 'axis', formatter } : { trigger: 'axis', valueFormatter: value },
     legend: { data: series.map((s) => s.name), top: 0, type: 'scroll' },
     grid: { left: 56, right: 16, top: 36, bottom: 28 },
     xAxis: { type: 'category', data: labels, boundaryGap: false },

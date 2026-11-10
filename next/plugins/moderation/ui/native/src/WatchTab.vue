@@ -7,6 +7,7 @@ import WatchActions from './WatchActions.vue'
 import AnalysisPromptModal from './AnalysisPromptModal.vue'
 import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
+import UserListBadge from './UserListBadge.vue'
 import UserRef from './UserRef.vue'
 import { useCatalog } from './catalog'
 import { useCategoryOptions } from './categories'
@@ -14,12 +15,15 @@ import { applyFilters } from './forms'
 import { dt, enumLabel, enumOptions, joinList, num, withAll } from './format'
 import { analysisState, canManage, errorMessage, useModHost, useWatchList } from './host'
 import { levelTone, trendTone } from './tones'
-import type { Watch, WatchListMeta } from './types'
+import type { Watch, WatchItem, WatchListMeta } from './types'
 import { useUserFilter } from './users'
 
 // Watch list (new-api watchlist): observe = moderated in the background and
 // counted; enforce = moderated before the upstream call, a hit is refused.
-// Filters, sort, header counts and per-user aggregates come from GET /watchlist.
+// Filters, sort, header counts and per-user aggregates come from GET
+// /watchlist, with each user's allowlist / blocklist mark of the settings:
+// an allowlisted user is never moderated first whatever the level, a
+// blocklisted user always.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const emit = defineEmits<{ (e: 'show-user', userId: number): void }>()
 const host = useModHost()
@@ -63,8 +67,8 @@ const columns = computed<TableColumn[]>(() => [
 
 // ---- add / edit
 const editOpen = ref(false)
-const editing = ref<Watch | null>(null)
-function openEdit(w: Watch | null) {
+const editing = ref<WatchItem | null>(null)
+function openEdit(w: WatchItem | null) {
   editing.value = w
   editOpen.value = true
 }
@@ -147,10 +151,11 @@ const promptOpen = ref(false)
       <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" row-key="user_id" :empty-text="t('watch.empty')" dense clickable @row-click="openDetail($event.user_id)">
         <template #cell-user_id="{ row }">
           <UserRef :user-id="row.user_id" link :title="t('watch.showRecords')" @click="emit('show-user', $event)" />
+          <UserListBadge :allowlisted="row.allowlisted" :blocklisted="row.blocklisted" size="xs" />
           <div v-if="row.hits_since_seen"><SBadge tone="warning" size="xs">{{ t('watchList.newHits', { n: row.hits_since_seen }) }}</SBadge></div>
         </template>
         <template #cell-level="{ row }">
-          <WatchActions v-if="manage" :user-id="row.user_id" :watch="row" @click.stop @changed="onAction(row.user_id, $event)" />
+          <WatchActions v-if="manage" :user-id="row.user_id" :watch="row" :allowlisted="row.allowlisted" :blocklisted="row.blocklisted" @click.stop @changed="onAction(row.user_id, $event)" />
           <SBadge v-else :tone="levelTone(row.level)">{{ enumLabel('level', row.level) }}</SBadge>
         </template>
         <template #cell-group="{ row }">
@@ -192,7 +197,7 @@ const promptOpen = ref(false)
       </div>
     </SCard>
 
-    <WatchEditModal v-model:open="editOpen" :entry="editing" @saved="list.reload" />
+    <WatchEditModal v-model:open="editOpen" :entry="editing" :allowlisted="editing?.allowlisted" :blocklisted="editing?.blocklisted" @saved="list.reload" />
     <WatchDetail v-model:open="detailOpen" :user-id="detailUser" :item="detailItem" @changed="patchRow(detailUser, $event)" @show-user="showUser" />
     <AnalysisPromptModal v-model:open="promptOpen" />
   </div>

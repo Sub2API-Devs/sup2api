@@ -1,27 +1,33 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SCode, SHint, SLink, STable, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import { useCatalog } from './catalog'
 import { categoryLabel, enumLabel, ms, score } from './format'
 import { useModHost } from './host'
 import type { Outcome, Trace } from './types'
-import { outcomeState, type OutcomeState } from './trace'
+import { outcomeState, stageState, type OutcomeState, type StageState } from './trace'
 
-// Per-stage trace of a run: one row per auditor call.
-const props = defineProps<{ trace: Trace }>()
+// Per-stage trace of a run: one row per auditor call. A stage that reached
+// no verdict is marked failed (it was passed over, earlier hits stand), a
+// fallback stage is named 补审. A replayed cached hit says which request its
+// verdict comes from; requestLink makes that request a filter link
+// (show-request).
+const props = defineProps<{ trace: Trace; requestLink?: boolean }>()
+const emit = defineEmits<{ (e: 'show-request', requestId: string): void }>()
 const t = useModHost().t
 const catalog = useCatalog()
 
 interface Row extends Outcome {
   key: string
   stage: number
-  stageResult: string
+  stageResult: StageState
+  fallback: boolean
 }
 
 const rows = computed<Row[]>(() =>
   (props.trace.stages || []).flatMap((st, i) =>
-    (st.outcomes || []).map((o, j) => ({ ...o, key: `${i}-${j}`, stage: i + 1, stageResult: st.skipped ? 'skipped' : st.errored && st.result === 'pass' ? 'error' : st.result }))
+    (st.outcomes || []).map((o, j) => ({ ...o, key: `${i}-${j}`, stage: i + 1, stageResult: stageState(st), fallback: !!st.fallback }))
   )
 )
 
@@ -35,13 +41,29 @@ const columns = computed<TableColumn[]>(() => [
 ])
 
 const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warning'> = { hit: 'danger', pass: 'success', skipped: 'gray', error: 'warning' }
+
+/** Failed stages without an auditor call (cut off before any answered): they have no row, so the head names them. */
+const cutStages = computed(() => (props.trace.stages || []).flatMap((st, i) => (stageState(st) === 'failed' && !st.outcomes?.length ? [i + 1] : [])))
+
+/** The request a replayed hit took its verdict from ('' when the trace does not name it). */
+const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.cache.source_request_id || '' } : null))
 </script>
 
 <template>
   <div>
+    <SAlert v-if="replay" tone="info" dense class="mod-replay-note">
+      <template v-if="replay.source">
+        {{ t('replay.from') }}
+        <SLink v-if="requestLink" as="button" :title="t('replay.showSource')" @click="emit('show-request', replay.source)"><SCode inline :text="replay.source" /></SLink>
+        <SCode v-else inline :text="replay.source" />
+        {{ t('replay.fromTail') }}
+      </template>
+      <template v-else>{{ t('replay.noSource') }}</template>
+    </SAlert>
     <div class="mod-trace-head">
       <SBadge v-if="trace.overturned" tone="info">{{ t('trace.overturned') }}</SBadge>
       <SBadge v-if="trace.errored" tone="warning">{{ t('trace.errored') }}</SBadge>
+      <SBadge v-for="n in cutStages" :key="n" tone="warning">{{ t('trace.stageN', { n }) }} · {{ t('stageResult.failed') }}</SBadge>
       <SBadge v-if="trace.skipped" tone="gray">{{ t('trace.skipped') }}</SBadge>
       <SBadge v-if="trace.truncated_run" tone="gray">{{ t('trace.truncated') }}</SBadge>
       <SBadge v-if="trace.input_message_dropped" tone="warning" :title="trace.input_message_dropped">{{ t('trace.inputDropped') }}</SBadge>
@@ -49,8 +71,9 @@ const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warnin
     </div>
     <STable :columns="columns" :rows="rows" row-key="key" dense :empty-text="t('trace.empty')">
       <template #cell-stage="{ row }">
-        {{ t('trace.stageN', { n: row.stage }) }}
-        <div class="mod-sub">{{ enumLabel('stageResult', row.stageResult) }}</div>
+        {{ t('trace.stageN', { n: row.stage }) }}<template v-if="row.fallback"> · {{ t('flows.role.fallback') }}</template>
+        <div v-if="row.stageResult === 'failed'"><SBadge tone="warning" size="xs">{{ t('stageResult.failed') }}</SBadge></div>
+        <div v-else class="mod-sub">{{ enumLabel('stageResult', row.stageResult) }}</div>
       </template>
       <template #cell-auditor="{ row }">
         {{ catalog.auditorName(row.auditor_id) }}

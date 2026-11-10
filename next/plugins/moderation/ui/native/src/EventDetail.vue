@@ -13,7 +13,7 @@ import UserRef from './UserRef.vue'
 import UserStateSection from './UserStateSection.vue'
 import { useCatalog } from './catalog'
 import { categoryLabel, dt, enumLabel, idText, isSuspicious, ms, num } from './format'
-import { canManage, deleteEvent, fetchEvent, reviewEvents, toastError, useModHost } from './host'
+import { canManage, deleteEvent, fetchEvent, reviewDoneText, reviewEvents, toastError, useModHost } from './host'
 import { aiVerdictTone, modeTone, severityTone } from './tones'
 import type { EventFilter, ModEventDetail, ReviewStatus, Watch } from './types'
 import { useAsync } from './useAsync'
@@ -24,7 +24,8 @@ import { useAsync } from './useAsync'
 // structured input message; manage users review a suspicious record (hit,
 // block) or delete any. userLink=false (the user drawer, already showing
 // the user) leaves the user as plain text. filterable (the records tab)
-// offers to filter the list by the record's endpoint or session (filter).
+// offers to filter the list by the record's endpoint or session, and by the
+// request a replayed hit took its verdict from (filter).
 const props = withDefaults(defineProps<{ open: boolean; eventId: number | null; userLink?: boolean; filterable?: boolean }>(), { userLink: true })
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
@@ -68,10 +69,10 @@ async function review(status: ReviewStatus) {
   if (!e) return
   busy.value = true
   try {
-    await reviewEvents([e.id], status)
+    const r = await reviewEvents([e.id], status)
     e.review_status = status
     emit('reviewed', [e.id], status)
-    host.toast(t('review.done', { n: 1 }), 'success')
+    host.toast(reviewDoneText(r, 1), 'success')
   } catch (err) {
     toastError(err)
   } finally {
@@ -165,6 +166,7 @@ const fields = computed<DescItem[]>(() => {
     <div v-else-if="ev" class="mod-detail">
       <div class="mod-detail-head">
         <ResultBadge :result="ev.result" />
+        <SBadge v-if="ev.replayed" tone="gray" :title="t('replay.badgeHint')">{{ t('replay.badge') }}</SBadge>
         <VerdictBadge :event="ev" />
         <SBadge v-if="ev.timing">{{ enumLabel('timing', ev.timing) }}</SBadge>
         <SBadge v-if="ev.mode" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>
@@ -193,7 +195,7 @@ const fields = computed<DescItem[]>(() => {
 
       <div v-if="ev.trace">
         <SSectionTitle tag="p">{{ t('detail.trace') }}</SSectionTitle>
-        <TraceView :trace="ev.trace" />
+        <TraceView :trace="ev.trace" :request-link="filterable" @show-request="filterBy({ request_id: $event })" />
       </div>
 
       <FlowSnapshotCard v-if="ev.flow_snapshot" :snapshot="ev.flow_snapshot" :name="ev.flow_name" :current="ev.flow_current_version" />

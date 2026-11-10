@@ -5,10 +5,12 @@ import { useCatalog } from './catalog'
 import { categoryLabel, enumLabel, score } from './format'
 import { useModHost } from './host'
 import type { Outcome, Trace } from './types'
-import { outcomeState, type OutcomeState } from './trace'
+import { outcomeState, stageState, type OutcomeState } from './trace'
 
 // Compact stage results of a record: "第 1 级 ✗ → 第 2 级 ✓ ∥ ✗". Hovering a
-// stage lists each auditor's state and top score.
+// stage lists each auditor's state and top score. A fallback stage is named
+// 补审; a stage that reached no verdict is marked failed (it was passed
+// over); a replayed cached hit starts with the replay mark.
 const props = defineProps<{ trace?: Trace | null }>()
 const t = useModHost().t
 const catalog = useCatalog()
@@ -30,22 +32,28 @@ function outcomeTitle(o: Outcome): string {
 const stages = computed(() =>
   (props.trace?.stages || []).map((st, i) => {
     const outcomes = st.outcomes || []
-    return { n: i + 1, outcomes, title: outcomes.map(outcomeTitle).join('\n') }
+    const failed = stageState(st) === 'failed'
+    const name = t('trace.stageN', { n: i + 1 })
+    const head = failed ? [`${name}: ${t('stageResult.failed')}`] : []
+    return { n: i + 1, name: st.fallback ? t('flows.role.fallback') : name, outcomes, failed, title: [...head, ...outcomes.map(outcomeTitle)].join('\n') }
   })
 )
+const replayed = computed(() => !!props.trace?.cache?.hit)
 </script>
 
 <template>
   <span v-if="stages.length" class="mod-stage-path">
+    <span v-if="replayed" class="mod-sub" :title="t('replay.badgeHint')">↻</span>
     <template v-for="(st, i) in stages" :key="st.n">
       <span v-if="i" class="mod-sub">→</span>
       <span class="mod-stage-step" :title="st.title">
-        <span class="mod-sub">{{ t('trace.stageN', { n: st.n }) }}</span>
+        <span class="mod-sub">{{ st.name }}</span>
         <template v-for="(o, j) in st.outcomes" :key="j">
           <span v-if="j" class="mod-sub">∥</span>
           <b :class="MARK[outcomeState(o)].cls">{{ MARK[outcomeState(o)].text }}</b>
         </template>
-        <span v-if="!st.outcomes.length" class="mod-sub">{{ t('trace.skipped') }}</span>
+        <span v-if="st.failed" class="mod-text-warning">{{ t('trace.failedShort') }}</span>
+        <span v-else-if="!st.outcomes.length" class="mod-sub">{{ t('trace.skipped') }}</span>
       </span>
     </template>
   </span>

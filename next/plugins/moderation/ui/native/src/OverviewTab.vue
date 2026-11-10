@@ -20,7 +20,7 @@ import { useStatus } from './status'
 import type { TabKey } from './types'
 
 // Overview (new-api content-moderation overview): running state, today's
-// KPIs, the users most in need of attention, AI review, cost, performance,
+// KPIs (the suspicious count says how many were replayed cached hits), the users most in need of attention, AI review, cost, performance,
 // categories, funnel, trend, health and queues. GET /status (shared with the
 // page header) feeds the page; cards with their own query reload on the
 // shared tick. Refreshes every minute while the tab is shown.
@@ -51,7 +51,7 @@ const kpis = computed(() => {
   if (!s) return []
   return [
     { key: 'audited', icon: 'eyeglass', tone: 'primary' as const, value: s.today.audited, sub: t('kpi.auditedSub') },
-    { key: 'suspicious', icon: 'warning', tone: 'warning' as const, value: s.today.suspicious, sub: t('kpi.suspiciousSub') },
+    { key: 'suspicious', icon: 'warning', tone: 'warning' as const, value: s.today.suspicious, sub: s.today.replayed ? `${t('kpi.suspiciousSub')} · ${t('kpi.replayedSub', { n: num(s.today.replayed) })}` : t('kpi.suspiciousSub') },
     { key: 'watching', icon: 'eye', tone: 'info' as const, value: s.watch.watching, sub: t('kpi.watchingSub', { n: num(s.watch.watching_with_new) }) },
     { key: 'blocking', icon: 'shield', tone: 'danger' as const, value: s.watch.blocking, sub: t('kpi.blockingSub') },
     { key: 'blocked', icon: 'x', tone: 'danger' as const, value: s.today.blocked, sub: t('kpi.blockedSub') }

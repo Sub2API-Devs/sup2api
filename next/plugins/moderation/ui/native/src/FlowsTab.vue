@@ -83,7 +83,7 @@ const coverage = computed(() => {
   if (!groups.value.length) return null
   const c = groupCoverage(groups.value.map((g) => g.id), rows.value, exempt.value)
   const names = (ids: number[]) => joinList(ids.map(groupLabel))
-  return { total: groups.value.length, bound: c.own.length, unbound: names(c.unbound), disabled: names(c.inactive), stale: names(c.stale), exempt: names(c.exempt) }
+  return { total: groups.value.length, bound: c.own.length, unbound: names(c.unbound), disabled: names(c.inactive), defaultLive: c.defaultLive, stale: names(c.stale), exempt: names(c.exempt) }
 })
 
 // ---- versions drawer, simulation
@@ -100,7 +100,7 @@ function openSimulate(f: Flow) {
   simulateOpen.value = true
 }
 
-/** Groups this flow moderates now and would not once disabled (the default group's flow may take them over). */
+/** Groups moderated now that no flow would moderate once this one is disabled (its own groups fall back to the default group's flow when that is live). */
 function lostGroups(f: Flow): number[] {
   const ids = groups.value.length ? [0, ...groups.value.map((g) => g.id)] : f.groups
   const before = new Set(groupCoverage(ids, rows.value, exempt.value).moderated)
@@ -111,7 +111,9 @@ function lostGroups(f: Flow): number[] {
 async function toggle(f: Flow, on: boolean) {
   if (!on) {
     const lost = lostGroups(f)
-    const message = t('flows.disableConfirm', { name: f.name }) + (lost.length ? ' ' + t('flows.disableLoses', { groups: joinList(lost.map(groupLabel)) }) : '')
+    // its bindings stop applying: the groups and accounts fall back to wider bindings
+    const bound = f.groups.length > 0 || !!f.accounts?.length
+    const message = [t('flows.disableConfirm', { name: f.name }), bound ? t('flows.disableFallsBack') : '', lost.length ? t('flows.disableLoses', { groups: joinList(lost.map(groupLabel)) }) : ''].filter(Boolean).join(' ')
     if (!(await host.confirm({ message, danger: lost.length > 0, confirmText: t('flows.disable') }))) return
   }
   try {
@@ -230,7 +232,7 @@ function onCreated(id: number) {
 
       <p v-if="coverage" class="mod-sub mod-flows-coverage">
         {{ t('flows.groupsSummary', { total: coverage.total, bound: coverage.bound }) }}
-        <template v-if="coverage.disabled">{{ t('flows.disabledGroups', { groups: coverage.disabled }) }}</template>
+        <template v-if="coverage.disabled">{{ t(coverage.defaultLive ? 'flows.disabledGroups' : 'flows.disabledGroupsOff', { groups: coverage.disabled }) }}</template>
         <template v-if="coverage.exempt">{{ t('flows.exemptGroups', { groups: coverage.exempt }) }}</template>
         <span v-if="coverage.unbound" class="mod-text-warning"> · {{ t('flows.unboundGroups', { groups: coverage.unbound }) }}</span>
         <span v-if="coverage.stale" class="mod-text-danger"> · {{ t('flows.staleGroups', { groups: coverage.stale }) }}</span>

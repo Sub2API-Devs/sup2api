@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { SBadge, SButton, SIcon, SInput, SSelect } from '@sub2api/ui'
+import { SBadge, SButton, SIcon, SInput, SSelect, SSwitch } from '@sub2api/ui'
 import AuditorPicker from './AuditorPicker.vue'
 import { enumLabel, enumOptions } from './format'
 import { useModHost } from './host'
@@ -19,12 +19,16 @@ import {
 } from './flowOps'
 
 // One stage of the flow canvas: its auditors (drag; keyboard ← → moves
-// between stages, Delete / Backspace removes), an "add auditor" fallback, the
-// combine mode of parallel auditors and the fixed outcome lines.
+// between stages, Delete / Backspace removes), an "add auditor" picker, the
+// combine mode of parallel auditors, the switch that makes a later stage a
+// fallback stage (补审) and the fixed outcome lines. Stages move only among
+// their own kind: review stages come first, fallback stages after them.
 const props = defineProps<{
   stage: Stage
   index: number
   count: number
+  /** how many review stages lead the flow (the fallback stages follow them) */
+  reviewCount: number
   role: StageRole
   byId: ReadonlyMap<number, CanvasAuditor>
   /** auditors that can still be added to this stage */
@@ -38,13 +42,18 @@ const emit = defineEmits<{
   (e: 'move-stage', to: number): void
   (e: 'remove-stage'): void
   (e: 'combine', combine: Combine, n?: number): void
+  (e: 'fallback', fallback: boolean): void
 }>()
 const t = useModHost().t
 const over = ref(false)
 
 const last = computed(() => props.index === props.count - 1)
+const isFallback = computed(() => !!props.stage.fallback)
+/** The first and the last stage of this stage's kind: it does not move past them. */
+const firstOfKind = computed(() => props.index === (isFallback.value ? props.reviewCount : 0))
+const lastOfKind = computed(() => props.index === (isFallback.value ? props.count : props.reviewCount) - 1)
+const hasFallback = computed(() => props.reviewCount < props.count)
 const multi = computed(() => props.stage.auditors.length > 1)
-const neverHits = computed(() => props.stage.combine === 'all' && props.stage.auditors.some((id) => !props.byId.get(id)?.channelOk))
 const combineOptions = computed(() => enumOptions('flows.combineOpt', COMBINES))
 const nameOf = (id: number) => props.byId.get(id)?.name ?? t('flows.auditorN', { id })
 
@@ -101,11 +110,15 @@ function setN(v: unknown) {
       <strong class="mod-stage-card-title">{{ t('trace.stageN', { n: index + 1 }) }} · {{ t(`flows.role.${role}`) }}</strong>
       <SBadge :tone="multi ? 'info' : 'gray'" size="xs">{{ multi ? t('flows.parallel', { n: stage.auditors.length }) : t('flows.single') }}</SBadge>
       <span v-if="!disabled" class="mod-ml-auto mod-stage-card-tools">
-        <SButton size="xs" variant="ghost" :disabled="index === 0" @click="emit('move-stage', index - 1)">{{ t('flows.moveEarlier') }}</SButton>
-        <SButton size="xs" variant="ghost" :disabled="last" @click="emit('move-stage', index + 1)">{{ t('flows.moveLater') }}</SButton>
+        <SButton size="xs" variant="ghost" :disabled="firstOfKind" @click="emit('move-stage', index - 1)">{{ t('flows.moveEarlier') }}</SButton>
+        <SButton size="xs" variant="ghost" :disabled="lastOfKind" @click="emit('move-stage', index + 1)">{{ t('flows.moveLater') }}</SButton>
         <SButton size="xs" variant="ghost" tone="danger" @click="emit('remove-stage')">{{ t('flows.removeStage') }}</SButton>
       </span>
     </header>
+    <!-- the first stage is always a review stage -->
+    <div v-if="index > 0 && (!disabled || isFallback)" class="mod-stage-fallback" :title="t('flows.fallbackSwitchHint')">
+      <SSwitch :model-value="isFallback" size="sm" :disabled="disabled" :label="t('flows.fallbackSwitch')" @update:model-value="emit('fallback', $event)" />
+    </div>
 
     <ul class="mod-lib-list">
       <li
@@ -150,11 +163,14 @@ function setN(v: unknown) {
       </label>
     </div>
 
-    <p v-if="neverHits" class="mod-text-warning">{{ t('flows.neverHits') }}</p>
     <p class="mod-sub">{{ t('flows.errorNote') }}</p>
-    <div class="mod-stage-out">
-      <span class="mod-text-success">{{ t('flows.passAllow') }}</span>
-      <span class="mod-text-danger">{{ last ? t('flows.hitSuspicious') : t('flows.hitNextN', { n: index + 2 }) }}</span>
+    <div v-if="isFallback" class="mod-stage-out">
+      <span class="mod-text-danger">{{ t('flows.fallbackHit') }}</span>
+      <span class="mod-text-success">{{ t('flows.fallbackPass') }}</span>
+    </div>
+    <div v-else class="mod-stage-out">
+      <span class="mod-text-success">{{ index === 0 && hasFallback ? t('flows.passFallback') : t('flows.passAllow') }}</span>
+      <span class="mod-text-danger">{{ lastOfKind ? t('flows.hitSuspicious') : t('flows.hitNextN', { n: index + 2 }) }}</span>
     </div>
   </section>
 </template>

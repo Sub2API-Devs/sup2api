@@ -81,6 +81,7 @@ const toggle = (id: number, on: boolean) => (checked.value = on ? [...checked.va
         <button type="button" class="mod-timeline-item" @click="emit('open-record', r.id)">
           <span class="mod-history-head">
             <ResultBadge :result="r.result" />
+            <SBadge v-if="r.replayed" size="xs" tone="gray" :title="t('replay.badgeHint')">{{ t('replay.badge') }}</SBadge>
             <VerdictBadge :event="r" />
             <CategoryChips :categories="r.hit_categories" />
             <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>
