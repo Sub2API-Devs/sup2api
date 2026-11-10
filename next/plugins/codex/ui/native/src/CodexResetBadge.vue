@@ -5,7 +5,7 @@
 // OpenAI; nothing shows until one is known. A click opens the detail tab's
 // content (CodexResetTab) in a dialog: every reset, its expiry, and "Use".
 import { computed, ref, watch } from 'vue'
-import { SBadge, SModal } from '@sub2api/ui'
+import { SChip, SModal } from '@sub2api/ui'
 import CodexResetTab from './CodexResetTab.vue'
 import { useCodexHost } from './host'
 import { requestResetCount, resetCount } from './resetCount'
@@ -26,9 +26,9 @@ watch(
 
 <template>
   <template v-if="count !== undefined">
-    <button type="button" class="cx-reset-badge" :title="t('reset.badgeTitle', { n: count })" data-testid="codex-reset-badge" @click="open = true">
-      <SBadge size="xs" :tone="count ? 'purple' : 'gray'">{{ t('reset.badge', { n: count }) }}</SBadge>
-    </button>
+    <SChip clickable size="xs" :tone="count ? 'accent' : 'neutral'" :title="t('reset.badgeTitle', { n: count })" data-testid="codex-reset-badge" @click="open = true">{{
+      t('reset.badge', { n: count })
+    }}</SChip>
     <SModal v-model:open="open" :title="t('reset.modalTitle', { name: account.name || `#${account.id}` })" width="lg">
       <CodexResetTab v-if="open" :account="account" />
     </SModal>

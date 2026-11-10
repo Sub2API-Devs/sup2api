@@ -85,7 +85,7 @@ func TestHostSendAccountRequestExternalServicesOnly(t *testing.T) {
 	for _, u := range []string{
 		"https://evilchatgpt.com/x", "https://chatgpt.com.evil.net/x", "https://chatgpt.com@evil.net/x",
 		"https://evil.net/?h=chatgpt.com", "ftp://chatgpt.com/x", "chatgpt.com/x", "https://example.com/x",
-		"https://127.0.0.1/x", "https:///x",
+		"https://127.0.0.1/x", "https:///x", "https://chatgpt.com./x",
 	} {
 		if _, err := h.SendAccountRequest(t.Context(), &pluginv1.SendAccountRequestRequest{AccountId: 1, Url: u}); status.Code(err) != codes.PermissionDenied {
 			t.Fatalf("%s: %v", u, err)

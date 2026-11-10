@@ -172,11 +172,12 @@ func TestResetCacheFollowsListAndConsume(t *testing.T) {
 	if _, ok := e.summary(t, resetDeviceID)[key]; !ok {
 		t.Fatal("a refused consume dropped the count")
 	}
-	// A spent reset drops the stale count.
-	for _, code := range []string{outcomeReset, outcomeAlreadyRedeemed} {
+	// A spent (or, for an unknown code, possibly spent) reset drops the
+	// stale count.
+	for code, want := range map[string]int32{outcomeReset: 200, outcomeAlreadyRedeemed: 200, "brand_new": 502} {
 		list()
 		consumeCode = code
-		if r := e.consume(map[string]any{"account_ids": []int64{resetDeviceID}}); r.GetStatus() != 200 {
+		if r := e.consume(map[string]any{"account_ids": []int64{resetDeviceID}}); r.GetStatus() != want {
 			t.Fatalf("consume %s = %d %s", code, r.GetStatus(), r.GetBody())
 		}
 		if got, ok := e.summary(t, resetDeviceID)[key]; ok {
@@ -184,6 +185,7 @@ func TestResetCacheFollowsListAndConsume(t *testing.T) {
 		}
 	}
 	// A failing KV never fails the consume.
+	consumeCode = outcomeReset
 	e.host.kv = failingKV{}
 	if r := e.consume(map[string]any{"account_ids": []int64{resetDeviceID}}); r.GetStatus() != 200 {
 		t.Fatalf("consume with a failing KV = %d %s", r.GetStatus(), r.GetBody())

@@ -86,6 +86,15 @@ func TestSendPluginAccountRequest(t *testing.T) {
 	if d := rows[2]["detail"].(map[string]any); d["method"] != "GET" || d["status"] != float64(0) {
 		t.Fatalf("transport failure audit = %v", d)
 	}
+	// The path is recorded escaped: a decoded NUL would make the jsonb row
+	// fail, so the request would be sent without its audit row.
+	in.AccountId, in.Url = mine, srv.URL+"/x%00y"
+	if _, err := e.svc.SendPluginAccountRequest(ctx, "anthropic", in); err != nil {
+		t.Fatal(err)
+	}
+	if rows = e.auditRows(AuditPluginAccountRequest); len(rows) != 4 || rows[3]["detail"].(map[string]any)["path"] != "/x%00y" {
+		t.Fatalf("escaped path audit = %v", rows)
+	}
 	raw, _ := json.Marshal(rows)
 	for _, secret := range []string{"sk-header-secret", "body-secret", "query-secret", "resp-secret", "sk-mine"} {
 		if strings.Contains(string(raw), secret) {

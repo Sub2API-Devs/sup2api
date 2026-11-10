@@ -62,17 +62,6 @@ func (p *Plugin) storeResetCount(ctx context.Context, id int64, n int) {
 	}
 }
 
-// dropResetCount forgets the account's count once it is stale.
-func (p *Plugin) dropResetCount(ctx context.Context, id int64) {
-	kv, err := p.kv()
-	if err == nil {
-		err = kv.Delete(ctx, kvResetCount, resetCountKey(id))
-	}
-	if err != nil {
-		p.log.Warn("codex: drop the cached reset count", "account_id", id, "error", err.Error())
-	}
-}
-
 // cacheUsageResetCount caches the count a usage answer reports; an answer
 // without one (missing or null) leaves the cache as it is.
 func (p *Plugin) cacheUsageResetCount(ctx context.Context, id int64, body []byte) {

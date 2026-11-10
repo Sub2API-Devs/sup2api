@@ -179,15 +179,16 @@ func (p *Plugin) saveSession(ctx context.Context, ns, id string, v any, ttl time
 	return kv.Set(ctx, ns, id, b, ttl)
 }
 
-// deleteSession ends a session. A failure is only logged: the session
-// expires with its ttl, and every code is single-use on OpenAI's side.
+// deleteSession deletes a KV entry (an authorization session or a cached
+// reset count). A failure is only logged: the entry expires with its ttl,
+// every code is single-use on OpenAI's side, and a stale count is only shown.
 func (p *Plugin) deleteSession(ctx context.Context, ns, id string) {
 	kv, err := p.kv()
 	if err == nil {
 		err = kv.Delete(ctx, ns, id)
 	}
 	if err != nil {
-		p.log.Warn("codex: delete authorization session", "kind", ns, "error", err.Error())
+		p.log.Warn("codex: delete a KV entry", "namespace", ns, "error", err.Error())
 	}
 }
 

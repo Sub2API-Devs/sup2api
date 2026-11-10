@@ -115,4 +115,12 @@ describe('CodexResetTab', () => {
     expect(w.text()).toContain('reset.emptyTitle')
     expect(w.get('[data-testid="codex-reset-use-next"]').attributes('disabled')).toBeDefined()
   })
+
+  it('shows a failed load as an error, without the empty state or an empty list', async () => {
+    answer = () => new ApiError(502, { code: 'upstream_error', message: 'ChatGPT unreachable / 无法连接 ChatGPT' })
+    const w = await mountTab()
+    expect(w.text()).toContain('ChatGPT unreachable / 无法连接 ChatGPT')
+    expect(w.text()).not.toContain('reset.emptyTitle')
+    expect(w.find('.cx-reset-list').exists()).toBe(false)
+  })
 })

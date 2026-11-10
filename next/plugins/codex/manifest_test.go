@@ -211,6 +211,22 @@ func TestManifestShape(t *testing.T) {
 	if d := m.UserPermissions[1].Description; !strings.Contains(d["en"], "cannot be undone") || !strings.Contains(d["zh"], "不可撤回") {
 		t.Errorf("codex:reset description = %v", d)
 	}
+
+	// The reset entry points show only on device code accounts; the row
+	// action is never bulk (consume takes exactly one account) and confirms.
+	if len(m.UI.AccountActions) != 1 {
+		t.Fatalf("accountActions = %+v", m.UI.AccountActions)
+	}
+	a := m.UI.AccountActions[0]
+	if a.Route != "POST /reset-credits/consume" || a.Permission != "codex:reset" || a.Bulk || !a.Danger ||
+		a.Confirm["en"] == "" || a.Confirm["zh"] == "" || !slices.Equal(a.AccountTypes, []string{codex.TypeDevice}) {
+		t.Errorf("reset action = %+v", a)
+	}
+	for _, sl := range m.UI.Slots {
+		if sl.Permission != "codex:reset" || !slices.Equal(sl.AccountTypes, []string{codex.TypeDevice}) {
+			t.Errorf("slot %s = %+v", sl.Slot, sl)
+		}
+	}
 }
 
 // TestManifestServes runs the plugin with its embedded manifest.

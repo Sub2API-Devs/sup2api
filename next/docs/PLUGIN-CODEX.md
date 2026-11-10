@@ -170,11 +170,11 @@
   - `reset` / `already_redeemed` → 200 `{"outcome": "reset"|"already_redeemed", "windows_reset": n, "account_restored": bool}`。随后调用 `SetAccountAutomaticState(CLEAR)` 清除账号的自动停用与冷却（§9.4 窗口用满时设置的，核心本版起 CLEAR 也清冷却）；CLEAR 失败只记 warn，请求仍为 200，`account_restored: false`（状态到窗口重置时刻自然解除）。
   - `nothing_to_reset` → 409 `nothing_to_reset`（未消耗次数）；`no_credit` → 409 `no_credit`。
 - `POST /reset-credits/summary`，body `{"account_ids": [int, ...]}` → `{"accounts": {"29": {"available_count": 2, "updated_at": 1793491200}}}`（键为账号 id 字符串，`updated_at` 为写入缓存的 Unix 秒）。只读插件 KV、不访问 ChatGPT、不读凭证；没有缓存的账号不出现在结果里（结果可以是 `{}`）。`account_ids` 先只留正整数并去重，之后超过 `manifest.MaxAccountBatch`（500）→ 400（field `account_ids`，code `max`）。供账号列表的次数装饰器使用（列表每 10 秒刷新）。
-- list / consume 共同的错误：账号不存在或不属于本插件 → 404 `account_not_found`；账号类型不是 `codex_device` → 400 `unsupported_account_type`；凭证无 `access_token` 或不是 JSON → 409 `not_authorized`（提示重新授权）；上游 401/403 → 409 `auth_rejected`（提示重新授权）；连接失败、其他非 2xx、响应过大、未知 `code` → 502 `upstream_error`（带状态码和截断到 200 字节的响应片段；片段中出现的 access token 替换为 `[redacted]`，绝不回显令牌）；读账号或发请求的宿主调用失败 → 503 `unavailable`。
+- list / consume 共同的错误：账号不存在或不属于本插件 → 404 `account_not_found`；账号类型不是 `codex_device` → 400 `unsupported_account_type`；凭证无 `access_token` 或不是 JSON → 409 `not_authorized`（提示重新授权）；上游 401/403 → 409 `auth_rejected`（提示重新授权）；连接失败、其他非 2xx、响应过大、未知 `code` → 502 `upstream_error`（带状态码和截断到 200 字节的响应片段；片段中出现的 access token 替换为 `[redacted]`，绝不回显令牌）；读账号或发请求的宿主调用失败 → 503 `unavailable`（只有 `Unimplemented` 才提示需要核心 0.1.269）。
 
 ### 10.4 锁与幂等
 
-- consume 在每账号一把集群锁下进行（`Host.Locks`，锁名 `codex-reset:<account_id>`，ttl 1 分钟，结束即释放，释放失败等 ttl 过期）：双击或两个节点同时提交时，拿不到锁的一方回 409 `busy`，不发请求。锁服务不可用 → 503 `unavailable`。
+- consume 在每账号一把集群锁下进行（`Host.Locks`，锁名 `codex-reset:<account_id>`，ttl 90 秒（两次各至多 30 秒的发送加余量，确保重试仍在进行时锁不会过期），结束即释放，释放失败等 ttl 过期）：双击或两个节点同时提交时，拿不到锁的一方回 409 `busy`，不发请求。锁服务不可用 → 503 `unavailable`。
 - 每次 consume 新生成一个 UUIDv4 作 `redeem_request_id`；传输失败（status 0）时用**同一个** id 重试一次，所以即使第一次其实已到达后端也只扣一次（后端答 `already_redeemed`，按成功处理）。再失败回 502，不再重试；非 0 状态码不重试。
 - list 只读，不加锁、不重试。
 
@@ -182,7 +182,7 @@
 
 - `version` 0.1.3，`hostCompat` `>=0.1.269 <0.2.0`（`SendAccountRequest`）。
 - 新增 userPermission `codex:reset`（说明写明会消耗账号由 OpenAI 发放的重置次数、不可撤回），三条路由（list、consume、summary）都用它，与授权用的 `codex:manage` 分开。
-- 新增宿主权限 `accounts.auto_state`（`types: own`，用于成功后 CLEAR）；`accounts.credentials`、`kv`（次数缓存）、`lock`、`routes.admin` 的 reason 补上本功能。控制台入口（`ui.slots` / `ui.accountActions` / `hostUICompat`）在集成时另加。
+- 新增宿主权限 `accounts.auto_state`（`types: own`，用于成功后 CLEAR）；`accounts.credentials`、`kv`（次数缓存）、`lock`、`routes.admin` 的 reason 补上本功能。控制台入口（UI 3.8，CONTRACTS §91b，`hostUICompat` `^3.8`）：`account.list.quota` 次数装饰 `CodexResetBadge`、`account.detail.tabs` 标签页 `CodexResetTab`、行操作 `reset-credit`（`POST /reset-credits/consume`，`danger`、带确认、不设 `bulk`），都要 `codex:reset` 且只对 `codex_device` 显示。
 - 守线：只由管理员对单个账号手动触发，插件从不自动消耗重置次数；请求如实标 sup2api；只用于账号主人自己的订阅。
 - 测试：`resetcredits_test.go`（假 chatgpt.com + 包一层 harness 宿主 fake `AccountCredentials` / `SendAccountRequest` / `SetAccountAutomaticState`）：list 解析与排序、各 `code` 与状态码的映射、传输失败重试复用同一 `redeem_request_id` 且最多两次、锁被占回 409 且不发请求、SIWC / 无令牌 / 未知账号、`account_ids` 数量不对、reset 后 CLEAR 及 CLEAR 失败仍 200、请求头含 `originator: sup2api` 且无 `x-codex-*`、错误不回显令牌、旧核心回 503；`manifest_test.go`（新权限、路由与权限对应、`accounts.auto_state` 范围）。
 
@@ -192,7 +192,7 @@
 - 写入：
   - `ParseQuotaResponse` 成功解析 `wham/usage` 时（core 每 30 分钟查一次、点用量单元格强制查），如果应答里 `rate_limit_reset_credits.available_count` 是数字就写入（账号 id 取自请求的 `account`）；字段缺失、为 `null` 或不是数字时**不写**（不会覆盖成 0）；查询失败也不写。
   - `/reset-credits/list` 成功时用应答的 `available_count` 写入。
-- 失效：consume 得到 `reset` / `already_redeemed` 后**删除**该账号的缓存键，而不是写“原数 − 1”（原数可能已过时，`already_redeemed` 也未必是这次扣的），也不为此再调一次 list（多一次上游请求）。装饰器在下次额度查询或打开明细（list）后恢复显示。`nothing_to_reset` / `no_credit` 不动缓存。
+- 失效：consume 得到 `reset` / `already_redeemed` 或未知 `code`（可能已扣）后**删除**该账号的缓存键，而不是写“原数 − 1”（原数可能已过时，`already_redeemed` 也未必是这次扣的），也不为此再调一次 list（多一次上游请求）。装饰器在下次额度查询或打开明细（list）后恢复显示。`nothing_to_reset` / `no_credit` 不动缓存。
 - KV 读写失败一律只记 warn：不影响额度解析结果，不让 list / consume 失败；summary 中读失败的账号视为没有缓存（一次请求只记一条 warn，带失败个数）。
 - summary 的 KV 只有单键 `Get`，所以并发读：最多 16 个同时进行，整次请求限时 5 秒（超时后未读到的账号视为没有缓存）。
 - 测试：`resetcache_test.go`：额度解析写缓存（有字段写入、缺失 / null / 非数字不覆盖、失败查询不写、0 照写）、KV 失败时额度结果不变、summary（去重与非正整数过滤、缺失账号不出现、500 个通过、501 个 400、坏 JSON、KV 失败仍 200、不发上游请求）、list 写入与 consume 后删除（拒绝的 consume 不删，KV 失败不影响 consume）。

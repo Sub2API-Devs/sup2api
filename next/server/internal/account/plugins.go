@@ -163,7 +163,9 @@ func (s *Service) SendPluginAccountRequest(ctx context.Context, pluginKey string
 		headers: in.GetHeaders(), body: in.GetBody(), noRedirects: true}, proxyID)
 	detail := map[string]any{"plugin_key": pluginKey, "method": method, "status": ans.status, "via": "host.SendAccountRequest"}
 	if u, err := url.Parse(in.GetUrl()); err == nil {
-		detail["host"], detail["path"] = u.Host, u.Path
+		// Escaped: a decoded %00 would make the jsonb insert fail and leave
+		// the request sent without its row.
+		detail["host"], detail["path"] = u.Host, u.EscapedPath()
 	}
 	if err := audit.Audit(context.WithoutCancel(ctx), s.d.DB.Pool, 0, AuditPluginAccountRequest, "account", itoa(id), detail); err != nil {
 		slog.WarnContext(ctx, "account: audit plugin account request", "plugin", pluginKey, "account", id, "err", err)

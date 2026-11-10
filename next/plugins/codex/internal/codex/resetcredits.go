@@ -38,9 +38,14 @@ const (
 	resetCreditsPath = "/backend-api/wham/rate-limit-reset-credits"
 	resetConsumePath = resetCreditsPath + "/consume"
 
+	// accountRequestTimeout is the core's bound on one SendAccountRequest
+	// (CONTRACTS §91.1).
+	accountRequestTimeout = 30 * time.Second
 	// resetLockTTL covers one consume under its lock: the request and its
-	// single retry, each bounded by the core, plus slack.
-	resetLockTTL = time.Minute
+	// single retry, then CLEAR and the cache drop. It must outlast both sends,
+	// or a second click could start a consume with a new redeem_request_id
+	// while the retry is still in flight.
+	resetLockTTL = 2*accountRequestTimeout + 30*time.Second
 	// maxSnippet bounds the upstream text an error message carries.
 	maxSnippet = 200
 )
@@ -155,17 +160,18 @@ func (p *Plugin) handleResetConsume(ctx context.Context, req *pluginv1.HTTPReque
 		return bad, nil
 	}
 	switch outcome {
-	case outcomeReset, outcomeAlreadyRedeemed:
-		// The spent credit makes the cached count stale; the next usage
-		// query or list writes it again.
-		p.dropResetCount(ctx, id)
-		return pluginsdk.DataResponse(ResetConsumeResponse{Outcome: outcome, WindowsReset: windows, AccountRestored: p.restoreAccount(ctx, id)}), nil
 	case outcomeNothingToReset:
 		return pluginsdk.ErrorResponse(http.StatusConflict, outcomeNothingToReset, "No usage window can be reset right now; no reset was used / 当前没有可重置的用量窗口，未消耗次数"), nil
 	case outcomeNoCredit:
 		return pluginsdk.ErrorResponse(http.StatusConflict, outcomeNoCredit, "The account has no reset left / 账号没有剩余重置次数"), nil
 	}
-	return upstreamError("upstream_error", "unknown reset outcome / 未知的重置结果: "+strconv.Quote(textutil.Clip(outcome, 64))), nil
+	// A credit was (or, for an unknown code, may have been) spent: the
+	// cached count is stale until the next usage query or list writes it.
+	p.deleteSession(ctx, kvResetCount, resetCountKey(id))
+	if outcome != outcomeReset && outcome != outcomeAlreadyRedeemed {
+		return upstreamError("upstream_error", "unknown reset outcome / 未知的重置结果: "+strconv.Quote(textutil.Clip(outcome, 64))), nil
+	}
+	return pluginsdk.DataResponse(ResetConsumeResponse{Outcome: outcome, WindowsReset: windows, AccountRestored: p.restoreAccount(ctx, id)}), nil
 }
 
 // consumeReset sends the consume request. A transport failure (status 0)
@@ -241,9 +247,12 @@ func (p *Plugin) sendBackend(ctx context.Context, id int64, c credentials, metho
 	r, err := pluginsdk.SendAccountRequest(ctx, p.host, &pluginv1.SendAccountRequestRequest{
 		AccountId: id, Method: method, Url: p.ep.ChatGPT + path, Headers: h, Body: body,
 	})
+	if status.Code(err) == codes.Unimplemented {
+		return nil, pluginsdk.Unavailable("the core cannot send account requests; it needs core 0.1.269 or later / 核心不支持代发账号请求，需要核心 0.1.269 或更高版本")
+	}
 	if err != nil {
 		p.log.Warn("codex: send an account request", "account_id", id, "path", path, "error", err.Error())
-		return nil, pluginsdk.Unavailable("the core could not send the request (needs core 0.1.269 or later) / 核心无法发送请求（需要核心 0.1.269 或更高版本）: " + err.Error())
+		return nil, pluginsdk.Unavailable("the core could not send the request / 核心无法发送请求: " + err.Error())
 	}
 	return r, backendFailure(r, c.AccessToken)
 }
@@ -276,13 +285,14 @@ func snippet(s, token string) string {
 
 // parseResetCredits reads the list answer leniently: unknown statuses and
 // reset types pass through, and an unreadable time is 0 (granted_at) or
-// null (expires_at).
+// null (expires_at). Without available_count the count is the credits whose
+// status is available, so the cached count never drops to 0 by omission.
 func parseResetCredits(body []byte) (ResetCreditsResponse, error) {
 	if !gjson.ValidBytes(body) {
 		return ResetCreditsResponse{}, errors.New("not JSON / 不是 JSON")
 	}
 	res := gjson.ParseBytes(body)
-	out := ResetCreditsResponse{AvailableCount: int(res.Get("available_count").Int()), Credits: []ResetCredit{}}
+	out := ResetCreditsResponse{Credits: []ResetCredit{}}
 	res.Get("credits").ForEach(func(_, c gjson.Result) bool {
 		granted, _ := parseTime(c.Get("granted_at").String())
 		cr := ResetCredit{
@@ -296,6 +306,15 @@ func parseResetCredits(body []byte) (ResetCreditsResponse, error) {
 		return true
 	})
 	slices.SortStableFunc(out.Credits, byExpiry)
+	if n := res.Get("available_count"); n.Exists() {
+		out.AvailableCount = int(n.Int())
+	} else {
+		for _, c := range out.Credits {
+			if c.Status == "available" {
+				out.AvailableCount++
+			}
+		}
+	}
 	return out, nil
 }
 

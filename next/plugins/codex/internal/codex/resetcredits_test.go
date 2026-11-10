@@ -312,6 +312,10 @@ func TestResetConsumeOutcomes(t *testing.T) {
 					t.Errorf("answer = %+v", got)
 				}
 			}
+			// Only a transport failure is retried.
+			if n := len(e.client.requests()); n != 1 {
+				t.Errorf("sent %d requests, want 1", n)
+			}
 			clears := e.client.clearCalls()
 			if !tc.wantClear {
 				if len(clears) != 0 {
@@ -487,6 +491,12 @@ func TestResetHostCallFailure(t *testing.T) {
 	if r.GetStatus() != 503 || !strings.Contains(decodeError(t, r).Error.Message, "0.1.269") {
 		t.Errorf("list = %d %s", r.GetStatus(), r.GetBody())
 	}
+	// Any other host failure is 503 without the core version hint.
+	e.client.sendErr = status.Error(codes.Unavailable, "core busy")
+	r = e.h.Do("POST", "/reset-credits/list", nil, map[string]any{"account_id": resetDeviceID})
+	if msg := decodeError(t, r).Error.Message; r.GetStatus() != 503 || strings.Contains(msg, "0.1.269") || !strings.Contains(msg, "core busy") {
+		t.Errorf("list = %d %s", r.GetStatus(), r.GetBody())
+	}
 }
 
 func TestParseResetCreditsRejectsNonJSON(t *testing.T) {
@@ -496,5 +506,16 @@ func TestParseResetCreditsRejectsNonJSON(t *testing.T) {
 	got, err := parseResetCredits([]byte(`{}`))
 	if err != nil || got.AvailableCount != 0 || got.Credits == nil || len(got.Credits) != 0 {
 		t.Fatalf("empty = %+v %v", got, err)
+	}
+}
+
+func TestParseResetCreditsCountsAvailableWithoutCount(t *testing.T) {
+	got, err := parseResetCredits([]byte(`{"credits":[{"id":"a","status":"available"},{"id":"b","status":"redeemed"},{"id":"c","status":"available"}]}`))
+	if err != nil || got.AvailableCount != 2 {
+		t.Fatalf("got %+v %v, want 2 available", got, err)
+	}
+	got, _ = parseResetCredits([]byte(`{"available_count":5,"credits":[]}`))
+	if got.AvailableCount != 5 {
+		t.Fatalf("explicit count = %d, want 5", got.AvailableCount)
 	}
 }

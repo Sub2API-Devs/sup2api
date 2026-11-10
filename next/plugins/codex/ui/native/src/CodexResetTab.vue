@@ -49,7 +49,8 @@ async function load() {
 
 async function refreshQuota(id: number) {
   try {
-    quota.value = await host.api.get(`/accounts/${id}/quota`, { force: true })
+    const q = await host.api.get<QuotaLike>(`/accounts/${id}/quota`, { force: true })
+    if (id === props.account.id) quota.value = q
   } catch {
     // The usage line keeps the old values; the list below is what matters.
   }
@@ -127,7 +128,7 @@ watch(
 
     <SSkeleton v-if="loading && !data" :lines="3" height="2.5rem" />
     <SEmpty v-else-if="!credits.length && !error" size="sm" icon="inbox" :title="t('reset.emptyTitle')" :text="t('reset.emptyText')" />
-    <ul v-else class="cx-reset-list">
+    <ul v-else-if="credits.length" class="cx-reset-list">
       <li v-for="c in credits" :key="c.id" class="cx-reset-item" data-testid="codex-reset-credit">
         <div class="cx-grow">
           <div class="cx-reset-title">{{ c.title || t('reset.defaultTitle') }}</div>
