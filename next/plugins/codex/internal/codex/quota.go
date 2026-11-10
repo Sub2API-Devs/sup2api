@@ -258,9 +258,15 @@ func (p *Plugin) BuildQuotaRequest(_ context.Context, in *pluginv1.BuildQuotaReq
 	if c.AccessToken == "" {
 		return nil, status.Error(codes.FailedPrecondition, "the account has no access_token; authorize it again / 账号没有 access_token，请重新授权")
 	}
+	return &pluginv1.BuildQuotaRequestResponse{Method: http.MethodGet, Url: p.ep.ChatGPT + usagePath, Headers: backendHeaders(c)}, nil
+}
+
+// backendHeaders are the headers of a codex_device request to the ChatGPT
+// backend's JSON endpoints (usage, reset credits).
+func backendHeaders(c credentials) map[string]string {
 	h := upstreamHeaders(TypeDevice, c)
 	h["accept"] = "application/json"
-	return &pluginv1.BuildQuotaRequestResponse{Method: http.MethodGet, Url: p.ep.ChatGPT + usagePath, Headers: h}, nil
+	return h
 }
 
 // ParseQuotaResponse implements pluginsdk.QuotaReader. 401/403 are

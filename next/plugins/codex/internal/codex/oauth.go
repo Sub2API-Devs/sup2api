@@ -77,8 +77,8 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-// newHostID returns urn:uuid:<random UUIDv4>.
-func newHostID() (string, error) {
+// newUUID returns a random UUIDv4.
+func newUUID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", err
@@ -86,7 +86,16 @@ func newHostID() (string, error) {
 	b[6] = b[6]&0x0f | 0x40
 	b[8] = b[8]&0x3f | 0x80
 	h := hex.EncodeToString(b[:])
-	return "urn:uuid:" + h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:], nil
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:], nil
+}
+
+// newHostID returns urn:uuid:<random UUIDv4>.
+func newHostID() (string, error) {
+	id, err := newUUID()
+	if err != nil {
+		return "", err
+	}
+	return "urn:uuid:" + id, nil
 }
 
 // authAnswer is one response of the authorization server.
@@ -411,7 +420,7 @@ func (p *Plugin) releaseLock(ctx context.Context, l *pluginsdk.Lock) {
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), lockReleaseTimeout)
 	defer cancel()
 	if err := l.Release(rctx); err != nil {
-		p.log.Warn("codex: release the device code session lock", "error", err.Error())
+		p.log.Warn("codex: release a lock", "lock", l.Name(), "error", err.Error())
 	}
 }
 
