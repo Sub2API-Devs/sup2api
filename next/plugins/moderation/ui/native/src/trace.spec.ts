@@ -72,19 +72,45 @@ describe('the note of a call whose images the upstream refused', () => {
     expect(imagesRefusedNote({ err: 'upstream_error', status: 400 })).toBeNull()
   })
 
-  it('names the status of the refusal, on a reviewed and on a skipped outcome', () => {
+  it('names the status of the refusal on an outcome whose text was reviewed', () => {
     expect(imagesRefusedNote({ images_refused: true, status: 413 })).toEqual({ key: 'trace.imagesRefused', params: { status: 413 } })
+    expect(imagesRefusedNote({ images_refused: true, status: 413, skipped: false, err: '' })).toEqual({ key: 'trace.imagesRefused', params: { status: 413 } })
     expect(text(messages.zh, { images_refused: true, status: 413 })).toBe('上游拒收图片（HTTP 413），本次只审了文字')
     expect(text(messages.en, { images_refused: true, status: 422 })).toBe('The upstream refused the images (HTTP 422); only the text was reviewed')
   })
 
-  it('has no parenthesis without a status, or when the status is the one of an error of the text call', () => {
-    expect(imagesRefusedNote({ images_refused: true })).toEqual({ key: 'trace.imagesRefusedNoStatus' })
-    expect(imagesRefusedNote({ images_refused: true, err: 'upstream_error', status: 500 })).toEqual({ key: 'trace.imagesRefusedNoStatus' })
+  it('says that nothing was reviewed on a skipped outcome: images alone, refused', () => {
+    const skipped = { images_refused: true, skipped: true, status: 415 }
+    expect(imagesRefusedNote(skipped)).toEqual({ key: 'trace.imagesRefusedSkipped', params: { status: 415 } })
+    expect(text(messages.zh, skipped)).toBe('上游拒收图片（HTTP 415），没有可审的文字，本级跳过')
+    expect(text(messages.en, skipped)).toBe('The upstream refused the images (HTTP 415); there was no text to review, the stage was skipped')
     for (const lang of [messages.zh, messages.en]) {
-      const s = text(lang, { images_refused: true })!
-      expect(s).toBeTruthy()
-      for (const part of ['HTTP', '{', '(', '（']) expect(s).not.toContain(part)
+      expect(text(lang, skipped)).not.toContain(lang === messages.zh ? '只审了文字' : 'only the text was reviewed')
+    }
+  })
+
+  it('says that the retry failed on an outcome with an error, without the status: it is the one of the error', () => {
+    const failed = { images_refused: true, err: 'upstream_error', status: 500 }
+    expect(imagesRefusedNote(failed)).toEqual({ key: 'trace.imagesRefusedRetryFailed' })
+    expect(imagesRefusedNote({ images_refused: true, err: 'timeout' })).toEqual({ key: 'trace.imagesRefusedRetryFailed' })
+    expect(text(messages.zh, failed)).toBe('上游拒收图片，只审文字的重试也失败了')
+    expect(text(messages.en, failed)).toBe('The upstream refused the images and the text-only retry failed too')
+    for (const lang of [messages.zh, messages.en]) {
+      const s = text(lang, failed)!
+      for (const part of ['HTTP', '500', '{', lang === messages.zh ? '只审了文字' : 'only the text was reviewed']) expect(s).not.toContain(part)
+    }
+  })
+
+  it('has no parenthesis without a status', () => {
+    expect(imagesRefusedNote({ images_refused: true })).toEqual({ key: 'trace.imagesRefusedNoStatus' })
+    expect(imagesRefusedNote({ images_refused: true, skipped: true })).toEqual({ key: 'trace.imagesRefusedSkippedNoStatus' })
+    for (const lang of [messages.zh, messages.en]) {
+      for (const o of [{ images_refused: true }, { images_refused: true, skipped: true }]) {
+        const s = text(lang, o)!
+        expect(s).toBeTruthy()
+        for (const part of ['HTTP', '{', '(', '（']) expect(s).not.toContain(part)
+      }
+      expect(text(lang, { images_refused: true, skipped: true })).toBe(text(lang, { images_refused: true, skipped: true, status: 400 })!.replace(/ ?[（(]HTTP 400[）)]/, ''))
     }
   })
 })

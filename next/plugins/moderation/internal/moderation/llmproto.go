@@ -287,10 +287,16 @@ const (
 	// beside the request itself: openai_chat and openai_responses hold the
 	// data URLs (one copy of the base64), what json.Marshal allocates for
 	// the body (up to about three times the base64 on a first call, once
-	// with a warm buffer) and the body - three to four times the base64,
-	// 60-83 MiB; anthropic, which sends the base64 without a data URL, two
-	// to three times. Nothing admits these calls by their bytes: about ten
-	// of the largest at once can exceed the 512 MB of the plugin (known
+	// with a warm buffer) and the body - about 83.5 MiB allocated, 4.2
+	// times the base64; anthropic, which sends the base64 without a data
+	// URL, about 63.4 MiB, 3.2 times. Images that came with line breaks
+	// add the copy without them (llmImages), at most once the base64. The
+	// calls themselves are not admitted by their bytes; the requests they
+	// serve are: a hook request holds its bytes of max_inflight_mb (128 MB
+	// by default) while it is handled, and the post jobs hold at most
+	// maxQueueBytes. That leaves about six of the largest requests in
+	// progress at once, each with a call of every LLM auditor of its
+	// stage, which can still exceed the 512 MB of the plugin (known
 	// limitation, DESIGN section 14; the hook then fails open).
 	llmImagesMaxBase64 = 20 << 20
 )
@@ -299,12 +305,20 @@ const (
 // PNG, JPEG, GIF and WebP inside the limits above, the same content once.
 // URL images are never sent (nor downloaded). The media type is the format
 // of the image's header, whatever the client declared: Anthropic refuses an
-// image whose declared type is not its real one. An image whose base64 is
-// not well-formed all the way (strictBase64) is skipped like one outside the
-// limits: a strict upstream refuses the whole call for it, and the call would
-// go on without any of its images (llmImagesRefused). received lists the images
-// of in (indexes in Input.Images) that parts stand for: every image sent and
-// its duplicates. An image that is not among them was skipped.
+// image whose declared type is not its real one.
+//
+// Base64 that came with line breaks - wrapped at 76 characters, a newline at
+// its end: what many encoders write, and what the other auditors read - is
+// sent without them (unwrapBase64): the limits, the duplicates and the part
+// are of that text, so a wrapped and an unwrapped copy of an image are one
+// image. An image whose base64 is then not well-formed all the way
+// (strictBase64) is skipped like one outside the limits: a strict upstream
+// refuses the whole call for it, and the call would go on without any of its
+// images (llmImagesRefused).
+//
+// received lists the images of in (indexes in Input.Images) that parts stand
+// for: every image sent and its duplicates. An image that is not among them
+// was skipped.
 func llmImages(in *Input) (parts []Image, received []int) {
 	sent := map[string]bool{}
 	size := 0
@@ -312,23 +326,48 @@ func llmImages(in *Input) (parts []Image, received []int) {
 		if img.URL != "" {
 			continue
 		}
-		if sent[img.Data] {
+		data := img.Data
+		if breaks := strings.Count(data, "\r") + strings.Count(data, "\n"); breaks > 0 {
+			// Not copied when it is over the size limit whatever its padding.
+			if base64.StdEncoding.DecodedLen(len(data)-breaks) > llmImageMaxBytes+2 {
+				continue
+			}
+			data = unwrapBase64(data, len(data)-breaks)
+		}
+		if sent[data] {
 			received = append(received, i)
 			continue
 		}
-		if len(parts) == llmMaxImages || decodedLen(img.Data) > llmImageMaxBytes || size+len(img.Data) > llmImagesMaxBase64 {
+		if len(parts) == llmMaxImages || decodedLen(data) > llmImageMaxBytes || size+len(data) > llmImagesMaxBase64 {
 			continue
 		}
-		cfg, format, ok := imageHeader(img.Data)
-		if !ok || min(cfg.Width, cfg.Height) <= 0 || max(cfg.Width, cfg.Height) > llmImageMaxSide || !strictBase64(img.Data) {
+		cfg, format, ok := imageHeader(data)
+		if !ok || min(cfg.Width, cfg.Height) <= 0 || max(cfg.Width, cfg.Height) > llmImageMaxSide || !strictBase64(data) {
 			continue
 		}
-		sent[img.Data] = true
-		size += len(img.Data)
-		parts = append(parts, Image{MediaType: "image/" + format, Data: img.Data})
+		sent[data] = true
+		size += len(data)
+		parts = append(parts, Image{MediaType: "image/" + format, Data: data})
 		received = append(received, i)
 	}
 	return parts, received
+}
+
+// unwrapBase64 is s without its line breaks (CR and LF, nothing else), size
+// bytes long: one copy, which lives as long as the parts of the call that
+// hold it.
+func unwrapBase64(s string, size int) string {
+	var b strings.Builder
+	b.Grow(size)
+	for {
+		i := strings.IndexAny(s, "\r\n")
+		if i < 0 {
+			b.WriteString(s)
+			return b.String()
+		}
+		b.WriteString(s[:i])
+		s = s[i+1:]
+	}
 }
 
 // llmImagesRefused is the status of err when it is how an upstream (or a
@@ -336,7 +375,10 @@ func llmImages(in *Input) (parts []Image, received []int) {
 // body is too large), 415 and 422. A call that carried images and was
 // answered so is made once more with the text alone (llmQuestionsAudit,
 // agent.run). 404, 429 and 5xx say nothing about the images: they stay
-// errors.
+// errors. Nor does one of the four statuses when the call with the text
+// alone is answered with one of them too (a wrong model name, max_tokens,
+// tool_choice): then the images were not what the upstream refused, and the
+// result is the error of that call, without a refusal.
 func llmImagesRefused(err error) int {
 	switch st := upstreamStatus(err); st {
 	case http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity:
@@ -347,10 +389,10 @@ func llmImagesRefused(err error) int {
 
 // strictBase64 reports whether s is base64 as the strictest upstream reads
 // it (RFC 4648 section 4): the standard alphabet, padded to a multiple of
-// four, nothing behind the padding, no line breaks and zero padding bits.
-// The decoders of this package are looser - they skip line breaks, and
-// imageHeader reads the head of an image only. The text is decoded as a
-// stream into nothing: no decoded copy is held.
+// four, nothing behind the padding, no line breaks (llmImages takes them out
+// first) and zero padding bits. The decoders of this package are looser -
+// they skip line breaks, and imageHeader reads the head of an image only.
+// The text is decoded as a stream into nothing: no decoded copy is held.
 func strictBase64(s string) bool {
 	if len(s)%4 != 0 || strings.IndexByte(s, '\n') >= 0 || strings.IndexByte(s, '\r') >= 0 {
 		return false

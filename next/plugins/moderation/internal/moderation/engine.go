@@ -86,9 +86,11 @@ type EngineResult struct {
 	// part of the stored trace.
 	received []int
 	// refused is the status with which the upstream refused the call that
-	// carried the images (llmImagesRefused; 0 = it did not): the scores are
-	// of the text alone, or there are none because there was no text
-	// (ErrNoInput). audit shows it as Outcome.ImagesRefused and Status.
+	// carried the images (llmImagesRefused; 0 = it did not, or it refused
+	// the call with the text alone in the same way, which says nothing about
+	// the images): the scores are of the text alone, or there are none
+	// because there was no text (ErrNoInput). audit shows it as
+	// Outcome.ImagesRefused and Status.
 	refused int
 }
 
@@ -296,7 +298,9 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, prior []H
 	if out.refused != 0 {
 		// Nothing else tells that the images were not reviewed: the call
 		// that followed may well succeed. An error of that call replaces
-		// the status (runStage, tryWith).
+		// the status (runStage, tryWith); when that error is a refusal of
+		// the same kind the engine reports none (llmImagesRefused), so a
+		// wrong model name is not counted or logged as refused images.
 		out.ImagesRefused, out.Status = true, out.refused
 		p.stats.imagesRefused.Add(1)
 		if source == SourceAudit && !a.refusalLogged.Swap(true) {

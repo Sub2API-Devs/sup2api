@@ -46,7 +46,9 @@ var errLLMNoVerdict = errors.New("llm auditor did not submit a verdict")
 // upstream refuses (llmImagesRefused) is made once more with the text only:
 // then no image was received, and with no text there is nothing left to
 // send (ErrNoInput). Either way the result names the status of the refusal
-// (EngineResult.refused).
+// (EngineResult.refused) - unless the call with the text only is refused in
+// the same way: then the images were not the reason, and the result is the
+// error of that call alone.
 func llmQuestionsAudit(ctx context.Context, ch *liveChannel, qs *JevQuestions, images bool, in *Input, prior []HitCategory) (EngineResult, error) {
 	res := EngineResult{RulesVersion: qs.RulesVersion, SkippedImages: len(in.Images)}
 	var parts []Image
@@ -91,6 +93,9 @@ func llmQuestionsAudit(ctx context.Context, ch *liveChannel, qs *JevQuestions, i
 		req.Messages = []any{llmUserMessage(user.String())}
 		res.Calls = 2
 		turn, err = proto.call(ctx, ch, req)
+		if llmImagesRefused(err) != 0 {
+			res.refused = 0
+		}
 	}
 	res.SentImages, res.SkippedImages, res.received = len(parts), len(in.Images)-len(parts), received
 	res.Usage, res.Model = engineUsage(turn.Usage), cmp.Or(turn.Model, ch.Model)

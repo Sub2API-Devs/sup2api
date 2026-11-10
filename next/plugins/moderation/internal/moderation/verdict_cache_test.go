@@ -1930,7 +1930,15 @@ func imageMod(t *testing.T) (base string, jevImages, calls *atomic.Int64) {
 // API at most once: Jev answers after the moderation API has (answered) and
 // settled reports true - the test says there when the plugin has taken that
 // answer. With pair the moderation API in turn answers only when the Jev
-// call has arrived, for a request that calls both at once. Nothing is timed.
+// call has arrived, for a request that calls both at once.
+//
+// No clock is waited for, but the order is not strict either. What settled
+// can see is that the call of the moderation API has returned inside the
+// plugin (audit, which then leaves stats.inflight); its outcome reaches the
+// stage (runStage) a few instructions later. Jev answers in that window at
+// the earliest, and its answer has a way to go through the HTTP client, so
+// the outcome of the moderation API is there first unless its goroutine is
+// held up exactly there.
 type modOrder struct {
 	pair     bool
 	settled  func() bool
@@ -2222,9 +2230,11 @@ func TestImageVerdictDoesNotDependOnCachedText(t *testing.T) {
 	jevWithoutImages(t, h)
 	// Jev answers after the moderation API, as it did while it waited for a
 	// redraw slot: in the stage of both, the hit is there before the pass
-	// decides the stage (and ends the other call). The plugin has taken the
-	// answer of the moderation API when the Jev call is the only one left in
-	// flight. In the stage of both, the moderation API waits for the Jev
+	// decides the stage (and ends the other call). The call of the moderation
+	// API has returned with its answer when the Jev call is the only one left
+	// in flight; the stage takes its outcome a few instructions after that,
+	// which is as close as a test without a seam in the plugin gets
+	// (modOrder). In the stage of both, the moderation API waits for the Jev
 	// call to arrive, so that the call is counted when a pass ends it.
 	ordered := func(group int64) {
 		order.Store(newModOrder(group == 10, func() bool { return p.stats.inflight.Load() <= 1 }))

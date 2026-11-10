@@ -35,10 +35,12 @@ type Result struct {
 	Latency    time.Duration
 	LLMModel   string
 	Transcript []json.RawMessage // only when requested (/test)
-	// ImagesRefused: the upstream refused a call with the images, with the
-	// status RefusedStatus (llmImagesRefused). The run went on with the text
-	// alone (one call more than Turns), or ended with ErrNoInput when there
-	// was no text.
+	// ImagesRefused: the upstream refused a call with the images
+	// (llmImagesRefused). The run went on with the text alone (one call more
+	// than Turns), or ended with ErrNoInput when there was no text.
+	// RefusedStatus is the status of that refusal - or 0 when the call with
+	// the text alone was refused in the same way: the images were not the
+	// reason, and the error of the run says what the upstream answered.
 	ImagesRefused bool
 	RefusedStatus int
 }
@@ -68,7 +70,9 @@ func rawJSON(v any) json.RawMessage {
 // (remembered for the auditor, so once in all), or it refuses a call with
 // images (llmImagesRefused) - then the images are dropped for the rest of
 // the run (ImagesRefused), and without a text there is nothing left to
-// judge (ErrNoInput). So a run makes at most max_turns + 2 calls.
+// judge (ErrNoInput). So a run makes at most max_turns + 2 calls. When the
+// turn that dropped the images is refused without them too, the refusal was
+// not about the images (RefusedStatus 0).
 func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscript bool, images ...Image) (*Result, error) {
 	start := time.Now()
 	res := &Result{LLMModel: c.model}
@@ -92,12 +96,13 @@ func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscrip
 			req.Temperature = &temp
 		}
 		t, err := c.proto.call(ctx, c.channel, req)
+		dropped := false // the images, in this turn
 		for {
 			if req.Temperature != nil && refusesTemperature(err) {
 				c.noTemperature.Store(true)
 				req.Temperature = nil
 			} else if st := llmImagesRefused(err); len(images) > 0 && st != 0 {
-				images, res.ImagesRefused, res.RefusedStatus = nil, true, st
+				images, res.ImagesRefused, res.RefusedStatus, dropped = nil, true, st, true
 				if text == "" {
 					return finish(ErrNoInput)
 				}
@@ -106,6 +111,9 @@ func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscrip
 				break
 			}
 			t, err = c.proto.call(ctx, c.channel, req)
+		}
+		if dropped && llmImagesRefused(err) != 0 {
+			res.RefusedStatus = 0
 		}
 		res.Billing.add(t.Usage)
 		res.Usage.PromptTokens += t.Usage.Input

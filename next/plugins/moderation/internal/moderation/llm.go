@@ -74,7 +74,8 @@ func compileJudge(cfg AuditorConfig, ch *liveChannel) *llmJudge {
 // llmAudit runs the agent on the text and, with the image switch on, the
 // sendable images (llmImages); images alone are an input too. When the
 // upstream refused the images (agent.run) the verdict is of the text alone,
-// no image was received and the result names the status of the refusal.
+// no image was received and the result names the status of the refusal (none
+// when the call with the text alone was refused likewise).
 func (p *Plugin) llmAudit(ctx context.Context, a *liveAuditor, in *Input) (EngineResult, error) {
 	res := EngineResult{SkippedImages: len(in.Images)}
 	var parts []Image

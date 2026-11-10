@@ -12,13 +12,19 @@ export function outcomeState(o: Outcome): OutcomeState {
 
 /**
  * The note of an auditor call whose images the upstream refused (null when
- * it did not): the message key and its parameters. The status is the one of
- * the refusal only on an outcome without an error — an error of the call
- * that followed replaces it — so the note names it only then.
+ * it did not): the message key and its parameters. What it says depends on
+ * what followed the refusal: the text was reviewed alone; there was no text,
+ * so the auditor was skipped; or the call with the text alone failed (an
+ * error), and nothing was reviewed. The status is the one of the refusal
+ * only on an outcome without an error — an error of the call that followed
+ * replaces it, and the error line shows that one — so the note names it
+ * only then.
  */
-export function imagesRefusedNote(o: Pick<Outcome, 'images_refused' | 'err' | 'status'>): { key: string; params?: { status: number } } | null {
+export function imagesRefusedNote(o: Pick<Outcome, 'images_refused' | 'err' | 'skipped' | 'status'>): { key: string; params?: { status: number } } | null {
   if (!o.images_refused) return null
-  return !o.err && o.status ? { key: 'trace.imagesRefused', params: { status: o.status } } : { key: 'trace.imagesRefusedNoStatus' }
+  if (o.err) return { key: 'trace.imagesRefusedRetryFailed' }
+  if (o.skipped) return o.status ? { key: 'trace.imagesRefusedSkipped', params: { status: o.status } } : { key: 'trace.imagesRefusedSkippedNoStatus' }
+  return o.status ? { key: 'trace.imagesRefused', params: { status: o.status } } : { key: 'trace.imagesRefusedNoStatus' }
 }
 
 /**
