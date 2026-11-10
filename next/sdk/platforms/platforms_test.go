@@ -49,6 +49,10 @@ func TestBuiltinPlatforms(t *testing.T) {
 			}
 		}
 		for _, r := range p.StickyRules {
+			// Built-in rules match by protocol only (user requirement 2026-11-10).
+			if len(r.Match.Protocols) == 0 || len(r.Match.Models) > 0 || len(r.Match.UserAgentContains) > 0 {
+				t.Errorf("%s: sticky rule %s must match by protocol only, got %+v", p.ID, r.Name, r.Match)
+			}
 			for _, pr := range r.Match.Protocols {
 				if !slices.Contains(p.Protocols(), pr) {
 					t.Errorf("%s: sticky rule %s matches foreign protocol %s", p.ID, r.Name, pr)

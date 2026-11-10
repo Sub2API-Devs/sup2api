@@ -618,6 +618,8 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | `customized` | 只读；`builtin` 规则的定义被管理员改过为 `true`（迁移 0071），启动同步不再覆盖它，直到恢复默认；`admin` 规则总是 `false` |
 | `updated_by`、`updated_at` | |
 
+内置规则只按协议匹配，`match.models` 一律留空（不限模型，2026-11-10 用户要求）：`claude-code-session` 匹配 `anthropic.messages`，`openai-prompt-cache-key` 匹配 `openai.chat`、`openai.responses`、`openai.responses_ws`。`claude-code-session` 原先带 `models:["claude-*"]`，改动无迁移：未改过的内置规则（`customized=false`）由核心启动时的同步（`SyncBuiltinDefaults`）改写为新定义，管理员改过的规则保持原样，点“恢复默认”后同样变为不限模型。控制台规则编辑框的模型、User-Agent 输入框为空时占位文字是“任意”，有值后退回“输入后按回车”（原先固定是 `claude-*`、`claude-cli` 示例，空字段看着像已填值）。
+
 | 方法 路径 | 权限 | 请求 / 响应 | 约定 |
 |---|---|---|---|
 | GET `/sticky-rules` | `sticky:read` | → `[规则]` | 不分页 |

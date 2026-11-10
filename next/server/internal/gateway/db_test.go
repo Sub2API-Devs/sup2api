@@ -119,7 +119,7 @@ func TestStickyRulesAPI(t *testing.T) {
 	r := findRule(res.Get("data"), "claude-code-session", sourceBuiltin)
 	if code != 200 || !r.Exists() || r.Get("plugin_key").Exists() || !r.Get("enabled").Bool() ||
 		r.Get("ttl_seconds").Int() != 3600 || r.Get("key_sources.0.path").String() != "metadata.user_id" ||
-		r.Get("match.models.0").String() != "claude-*" || r.Get("on_failure").String() != "failover" {
+		!r.Get("match.models").IsArray() || r.Get("match.models.#").Int() != 0 || r.Get("on_failure").String() != "failover" {
 		t.Fatalf("list: %d %s", code, res.Raw)
 	}
 	id := r.Get("id").Int()
@@ -349,6 +349,18 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 	r := findRule(res.Get("data"), want[0], sourceBuiltin)
 	id := r.Get("id").Int()
 	defaultTTL := r.Get("ttl_seconds").Int()
+	// A start rewrites an outdated, unedited definition as a whole: the
+	// models the rule used to carry go away (built-in rules set none).
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE sticky_rules SET match = match || '{"models":["claude-*"]}' WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.gw.SyncBuiltinDefaults(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, res := e.api("GET", "/sticky-rules", nil); !findRule(res.Get("data"), want[0], sourceBuiltin).Get("match.models").IsArray() ||
+		findRule(res.Get("data"), want[0], sourceBuiltin).Get("match.models.#").Int() != 0 {
+		t.Fatalf("outdated builtin definition kept: %s", res.Raw)
+	}
 	if code, _ := e.api("DELETE", "/sticky-rules/"+itoa(id), nil); code != 400 {
 		t.Fatalf("delete builtin: %d", code)
 	}

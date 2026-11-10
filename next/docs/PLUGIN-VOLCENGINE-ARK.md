@@ -851,7 +851,7 @@ token = **帧数 × 输出宽 × 输出高 / 1024**，固定 24fps。以下每�
 
 **4. 用量规则故意不覆盖。** 论证不依赖对上游的猜测：这是协议透传，客户端打 `/v1/messages` 拿回的响应体必须是 Anthropic 形状（否则它的 SDK 解析不了），那么 usage 就在 `usage.input_tokens` / `message_start` / `message_delta` 里，正是平台规则读的地方。**覆盖才是危险动作** —— `usagerules.For` 是整块替换，漏了 SSE 列表就等于每个流式请求静默计零。
 
-**还有一条要知道**：平台级 sticky 规则 `claude-code-session` 匹配 `models:["claude-*"]`，而 `resolveSticky` 用的是**客户端请求的模型**（账号的 model mapping 发生得更晚）。所以客户端打 `claude-sonnet-4-5` 再映射到 `doubao-*` 时**会**命中，把会话钉在一个账号上。无害（就是会话亲和），但排查「为什么总是同一个账号」时要想到它。
+**还有一条要知道**：平台级 sticky 规则 `claude-code-session` 只按协议 `anthropic.messages` 匹配、不限模型（2026-11-10 起，原先是 `models:["claude-*"]`），所以客户端打任何模型（包括映射到 `doubao-*` 的）只要带 `metadata.user_id` 都**会**命中，把会话钉在一个账号上。无害（就是会话亲和），但排查「为什么总是同一个账号」时要想到它。
 
 ### 13.5 为什么没有「视频形状开关」—— 考虑过并拒绝
 

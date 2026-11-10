@@ -211,10 +211,10 @@ async function submit() {
             <StickyProtocolPicker v-model="form.protocols" />
           </SField>
           <SField :label="t('sticky.modal.models')" :hint="t('sticky.modal.modelsHint')">
-            <STagInput v-model="form.models" placeholder="claude-*" />
+            <STagInput v-model="form.models" :placeholder="form.models.length ? undefined : t('sticky.any')" />
           </SField>
           <SField :label="t('sticky.modal.ua')" :hint="t('sticky.modal.emptyAny')">
-            <STagInput v-model="form.userAgentContains" placeholder="claude-cli" />
+            <STagInput v-model="form.userAgentContains" :placeholder="form.userAgentContains.length ? undefined : t('sticky.any')" />
           </SField>
         </SGrid>
       </div>
