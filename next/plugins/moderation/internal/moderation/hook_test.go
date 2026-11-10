@@ -318,11 +318,15 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 	if w[0].Level != LevelObserve || w[0].Source != "auto" || w[0].ExpiresAt == nil {
 		t.Fatalf("watch = %+v", w[0])
 	}
-	// The same request again (a retry) adds a record but not a violation.
+	// The same request again (a retry) adds a record but not a violation:
+	// since 0.8.0 it is decided by the cached hit (a replay), which does not
+	// count as a hit of the watch entry either.
 	mustHook(t, h, hookReqAs(3, "req-a", "MOD-HIT-sexual one"))
-	waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3"}, 2)
+	if evs := waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3"}, 2); !evs[0].Replayed || evs[1].Replayed {
+		t.Fatalf("retry records replayed = %v %v", evs[0].Replayed, evs[1].Replayed)
+	}
 	time.Sleep(200 * time.Millisecond)
-	if w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", nil, nil)); w[0].ViolationCount != 1 || w[0].HitCount != 2 {
+	if w := decodeData[[]Watch](t, h.Do("GET", "/watchlist", nil, nil)); w[0].ViolationCount != 1 || w[0].HitCount != 1 {
 		t.Fatalf("after retry = %+v", w[0])
 	}
 	// enforce level: moderated before the upstream call and refused.

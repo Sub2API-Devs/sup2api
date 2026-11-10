@@ -149,6 +149,7 @@ func New() *Plugin {
 	p.OnTopic(TopicBlocksChanged, p.onBroadcast(p.reloadBlocks))
 	p.OnTopic(TopicConfigChanged, p.onBroadcast(p.reloadConfig))
 	p.OnTopic(TopicWatchChanged, p.onBroadcast(p.reloadWatch))
+	p.OnTopic(TopicVerdictChanged, p.onVerdictChanged)
 	return p
 }
 

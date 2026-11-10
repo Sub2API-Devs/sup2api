@@ -127,6 +127,38 @@ func TestStatsAPIs(t *testing.T) {
 	}
 }
 
+// Replayed hits show in /status and the trend: counted as suspicious (hit)
+// and, of those, as replayed; a refused replay is a refused request without
+// a latency sample.
+func TestStatsCountReplays(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	for i := range 3 {
+		if r := mustHook(t, h, hookReq("MOD-HIT-sexual counted")); !denied(r) || strings.Contains(r.GetNote(), "replay") != (i > 0) {
+			t.Fatalf("request %d = %+v", i, r)
+		}
+	}
+	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
+	if st.Today.Audited != 3 || st.Today.Suspicious != 3 || st.Today.Replayed != 2 || st.Today.Blocked != 3 || st.Today.AuditorCalls != 1 {
+		t.Fatalf("today = %+v", st.Today)
+	}
+	if len(st.Funnels) != 1 || st.Funnels[0].Suspicious != 3 || st.Funnels[0].Blocked != 3 || st.Funnels[0].Stages[0].Received != 1 {
+		t.Fatalf("funnel = %+v", st.Funnels)
+	}
+	tr := decodeData[TrendResult](t, h.Do("GET", "/stats/trend", map[string]string{"granularity": "hour"}, nil))
+	if len(tr.Flows) != 1 || tr.Flows[0].FlowID != flow || len(tr.Flows[0].Points) != 1 {
+		t.Fatalf("trend = %+v", tr.Flows)
+	}
+	if pt := tr.Flows[0].Points[0]; pt.Audited != 3 || pt.Hit != 3 || pt.Replayed != 2 || pt.Blocked != 3 {
+		t.Fatalf("trend point = %+v", pt)
+	}
+	// The replays are requests of the pre path, without a latency sample.
+	if perf := decodeData[PerformanceResult](t, h.Do("GET", "/stats/performance", nil, nil)); perf.Summary.Count != 1 {
+		t.Fatalf("performance = %+v", perf.Summary)
+	}
+}
+
 func TestFlowDraftTimeoutAndDelete(t *testing.T) {
 	mod := newFakeMod(t)
 	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})

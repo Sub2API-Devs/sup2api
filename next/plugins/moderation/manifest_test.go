@@ -97,12 +97,13 @@ func TestManifest(t *testing.T) {
 		"GET /stats/categories": "moderation:read", "POST /watchlist/:user_id/seen": "moderation:manage", "POST /auditors/try": "moderation:manage",
 		"GET /users/:user_id": "moderation:read", "GET /users": "moderation:read",
 		"GET /bindings": "moderation:read", "PUT /bindings": "moderation:manage", "DELETE /bindings/:group_id/:account_id": "moderation:manage",
+		"POST /verdict-cache/clear": "moderation:manage",
 	} {
 		if routes[route] != perm {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 57 {
+	if len(routes) != 58 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}

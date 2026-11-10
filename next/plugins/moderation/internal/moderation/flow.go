@@ -236,6 +236,22 @@ type Trace struct {
 	Chunk  int         `json:"chunk,omitempty"`
 	Chunks []Trace     `json:"chunks,omitempty"`
 	Input  *InputTrace `json:"input,omitempty"`
+	// Cache: the hit set of the verdict chunk of a hit (cache.go), and on a
+	// replayed record where the hit came from.
+	Cache *CacheInfo `json:"cache,omitempty"`
+}
+
+// CacheInfo ties a hit record to the verdict cache. Key, Segs and FP name
+// the cached hit of the verdict chunk: its id, the segment hashes it holds
+// and the flow fingerprint it was judged under (the review of the record
+// updates the cache with them, syncReviewed). Hit marks a replayed cached
+// hit: no auditor ran, the trace is the one of SourceRequestID.
+type CacheInfo struct {
+	Hit             bool     `json:"hit,omitempty"`
+	SourceRequestID string   `json:"source_request_id,omitempty"`
+	Key             string   `json:"key,omitempty"`
+	Segs            []string `json:"segs,omitempty"`
+	FP              string   `json:"fp,omitempty"`
 }
 
 // runs returns the trace's own run and the other chunks' runs.
@@ -450,15 +466,6 @@ func decide(hits, passes, pending, need int) (string, bool) {
 		return Pass, true
 	}
 	return "", false
-}
-
-func (t *Trace) anySkipped() bool {
-	for _, st := range t.Stages {
-		if slices.ContainsFunc(st.Outcomes, func(o Outcome) bool { return o.Skipped }) {
-			return true
-		}
-	}
-	return false
 }
 
 // stageSkipped reports whether a whole stage of the run was skipped

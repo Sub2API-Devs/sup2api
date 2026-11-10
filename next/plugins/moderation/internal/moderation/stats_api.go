@@ -87,7 +87,8 @@ func (p *Plugin) loadStats(ctx context.Context, db *pgxpool.Pool, sf statFilter)
 		f.cond("flow_id = ", sf.flow)
 	}
 	rows, err := db.Query(ctx, `SELECT hour, group_id, flow_id, stage, auditor_id, timing, audited, hit, blocked, overturned, errors, cache_skipped,
-			calls, tokens_in, tokens_out, latency_ms_sum, lat, `+costUnits("cost")+`, priced_calls, unpriced_calls, unpriced_tokens, free_calls
+			calls, tokens_in, tokens_out, latency_ms_sum, lat, `+costUnits("cost")+`, priced_calls, unpriced_calls, unpriced_tokens, free_calls,
+			replayed
 		FROM stats_hourly WHERE `+f.where(), f.args...)
 	if err != nil {
 		return nil, err
@@ -97,7 +98,7 @@ func (p *Plugin) loadStats(ctx context.Context, db *pgxpool.Pool, sf statFilter)
 		var lat []int64
 		err := r.Scan(&s.hour, &s.group, &s.flow, &s.stage, &s.auditor, &s.timing, &s.audited, &s.hit, &s.blocked, &s.overturned,
 			&s.errors, &s.cacheSkipped, &s.calls, &s.tokensIn, &s.tokensOut, &s.latSum, &lat, &s.units, &s.priced, &s.unpriced,
-			&s.unpricedTokens, &s.free)
+			&s.unpricedTokens, &s.free, &s.replayed)
 		s.hour = s.hour.UTC()
 		copy(s.lat[:], lat)
 		return s, err
@@ -226,10 +227,12 @@ func flowCounters(rows []statRow, since time.Time) (all, pre map[int64]*counters
 
 // ---------------------------------------------------------------- GET /status
 
-// TodayCounts are today's totals of the overview.
+// TodayCounts are today's totals of the overview. Replayed counts the
+// suspicious requests decided by a cached hit; they are in Suspicious too.
 type TodayCounts struct {
 	Audited           int64 `json:"audited"`
 	Suspicious        int64 `json:"suspicious"`
+	Replayed          int64 `json:"replayed"`
 	Blocked           int64 `json:"blocked"`
 	Overturned        int64 `json:"overturned"`
 	Errors            int64 `json:"errors"`
@@ -385,6 +388,7 @@ func sumStatusRows(rows []statRow, today, lastHour time.Time) statusRows {
 		sum.today.Audited += f.audited + f.cacheSkipped
 		sum.today.CacheSkipped += f.cacheSkipped
 		sum.today.Suspicious += f.hit
+		sum.today.Replayed += f.replayed
 		sum.today.Overturned += f.overturned
 		sum.today.Errors += f.errors
 	}
@@ -594,12 +598,14 @@ func summaryOf(c *counters) LatencySummary {
 }
 
 // FlowPoint is one bucket of a flow's trend. Audited counts the requests
-// the flow received, cache_skipped included (as in today's counts).
+// the flow received, cache_skipped included (as in today's counts). Replayed
+// counts the hits decided by a cached hit; they are in Hit too.
 type FlowPoint struct {
 	Ts             time.Time `json:"ts"`
 	Audited        int64     `json:"audited"`
 	CacheSkipped   int64     `json:"cache_skipped"`
 	Hit            int64     `json:"hit"`
+	Replayed       int64     `json:"replayed"`
 	Blocked        int64     `json:"blocked"`
 	Overturned     int64     `json:"overturned"`
 	Errors         int64     `json:"errors"`
@@ -714,7 +720,7 @@ func (sum trendRows) flowTrends(names map[int64]string) []FlowTrend {
 			a := sum.flows[id][ts]
 			pre, post := summaryOf(&a.pre), summaryOf(&a.post)
 			ft.Points = append(ft.Points, FlowPoint{Ts: ts, Audited: a.all.audited + a.all.cacheSkipped, CacheSkipped: a.all.cacheSkipped, Hit: a.all.hit,
-				Blocked: a.all.blocked, Overturned: a.all.overturned, Errors: a.all.errors,
+				Replayed: a.all.replayed, Blocked: a.all.blocked, Overturned: a.all.overturned, Errors: a.all.errors,
 				SuspiciousRate: ratio(a.all.hit, a.all.audited+a.all.cacheSkipped),
 				PreAvgMs:       pre.AvgMs, PreP95Ms: pre.P95Ms, PostAvgMs: post.AvgMs, PostP95Ms: post.P95Ms})
 		}

@@ -76,6 +76,7 @@ func (p *Plugin) routes() {
 	p.Handle("POST", "/flows/:id/simulate", p.simulateFlow)
 	p.Handle("POST", "/import", p.importConfig)
 	p.Handle("POST", "/test", p.testModeration)
+	p.Handle("POST", "/verdict-cache/clear", p.clearVerdictCache)
 }
 
 func parseID(req *pluginv1.HTTPRequest, name string) (int64, *pluginv1.HTTPResponse) {
@@ -95,6 +96,7 @@ type Runtime struct {
 	Configured    bool          `json:"configured"` // a flow is bound
 	SettingsHash  string        `json:"settings_hash"`
 	ConfigVersion int64         `json:"config_version"`
+	CacheEpoch    int64         `json:"cache_epoch"` // clears of the verdict cache
 	Flows         int           `json:"flows"`
 	Auditors      int           `json:"auditors"`
 	QueueLen      int           `json:"queue_len"`
@@ -122,7 +124,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		avg = p.stats.latencyMsSum.Load() / calls
 	}
 	return Runtime{
-		Mode: c.Mode, Configured: s.bound(), SettingsHash: c.settingsHash, ConfigVersion: s.version,
+		Mode: c.Mode, Configured: s.bound(), SettingsHash: c.settingsHash, ConfigVersion: s.version, CacheEpoch: s.cacheEpoch,
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(),
@@ -166,6 +168,8 @@ type Event struct {
 	LatencyMs        int        `json:"latency_ms"`
 	QueueMs          int        `json:"queue_ms"`
 	KeepUntil        *time.Time `json:"keep_until"`
+	// Replayed: decided by a cached hit (trace.cache), not a new violation.
+	Replayed bool `json:"replayed"`
 	// AI verdict of the latest analysis (§72.13.4); "" = not reviewed by AI.
 	AIVerdict    string `json:"ai_verdict"`
 	AISeverity   string `json:"ai_severity"`
@@ -232,13 +236,13 @@ type UserState struct {
 
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, endpoint, session_fp, mode, timing, result,
 	flow_id, flow_version, severity, hit_categories, highest_category, highest_score, review_status, reviewed_by, reviewed_at,
-	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until,
+	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until, replayed,
 	ai_verdict, ai_severity, ai_category, ai_evidence, ai_reason, ai_analysis_id, verdict, reason, error, llm_model`
 
 func (e *Event) scanTargets() []any {
 	return []any{&e.ID, &e.CreatedAt, &e.RequestID, &e.UserID, &e.APIKeyID, &e.GroupID, &e.Model, &e.Protocol, &e.Endpoint, &e.SessionFp, &e.Mode, &e.Timing, &e.Result,
 		&e.FlowID, &e.FlowVersion, &e.Severity, &e.HitCategories, &e.HighestCategory, &e.HighestScore, &e.ReviewStatus, &e.ReviewedBy, &e.ReviewedAt,
-		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil,
+		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil, &e.Replayed,
 		&e.AIVerdict, &e.AISeverity, &e.AICategory, &e.AIEvidence, &e.AIReason, &e.AIAnalysisID,
 		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel}
 }
@@ -261,6 +265,15 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 	f.enum(req, "severity", "high", "medium", "low")
 	f.enum(req, "review_status", "pending", "false_positive", "confirmed")
 	f.enum(req, "timing", TimingPre, TimingPost)
+	switch v := pluginsdk.Query(req, "replayed"); v {
+	case "":
+	case "true":
+		f.conds = append(f.conds, "replayed")
+	case "false":
+		f.conds = append(f.conds, "NOT replayed")
+	default:
+		f.errs = f.errs.Add("replayed", "enum", "replayed must be true or false / replayed 取值为 true、false")
+	}
 	switch v := pluginsdk.Query(req, "verdict"); v {
 	case "needs_review":
 		// AI unsure and nobody looked at it yet.
@@ -608,7 +621,9 @@ func (p *Plugin) deleteEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 // reviewEvents sets the review status of suspicious records: {ids, status};
 // other records of ids are left alone. Marking a counted record
 // false_positive takes its violation back from the user's current window;
-// undoing it counts it again in the same window (§72.8).
+// undoing it counts it again in the same window (§72.8). The verdict cache
+// follows the review (syncReviewed); cache_synced is the number of records
+// whose cached verdict was updated.
 func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in struct {
 		IDs    []int64 `json:"ids"`
@@ -683,7 +698,8 @@ func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*
 			return nil, err
 		}
 	}
-	return pluginsdk.DataResponse(map[string]any{"updated": updated, "status": in.Status}), nil
+	synced := p.syncReviewed(ctx, in.IDs, in.Status)
+	return pluginsdk.DataResponse(map[string]any{"updated": updated, "status": in.Status, "cache_synced": synced}), nil
 }
 
 // ---------------------------------------------------------------- blocks

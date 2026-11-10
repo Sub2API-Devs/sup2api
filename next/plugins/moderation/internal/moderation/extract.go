@@ -513,7 +513,7 @@ func imageFromURL(u string) Image {
 
 // segment is one normalized piece: the text the auditors see (labelled
 // with its role unless it is the user's) or one image. key identifies it in
-// the segment pass cache.
+// the verdict cache.
 type segment struct {
 	role  string
 	text  string // normalized, "[role] " label included
@@ -583,8 +583,9 @@ func (r *request) texts(fn func(string) bool) bool {
 }
 
 // chunkPart is one segment (or piece of one) in a chunk, for the record
-// detail.
+// detail; seg is the index of its request segment.
 type chunkPart struct {
+	seg  int
 	role string
 	text string
 	img  *Image
@@ -663,7 +664,7 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 			}
 			images++
 			cur.segs = append(cur.segs, i)
-			cur.parts = append(cur.parts, chunkPart{role: s.role, img: s.img})
+			cur.parts = append(cur.parts, chunkPart{seg: i, role: s.role, img: s.img})
 			pl.pieces[i] = 1
 			continue
 		}
@@ -671,7 +672,7 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 			flush()
 		}
 		if s.runes <= maxChars {
-			cur.add(i, chunkPart{role: s.role, text: s.text}, s.runes)
+			cur.add(i, chunkPart{seg: i, role: s.role, text: s.text}, s.runes)
 			pl.pieces[i] = 1
 			continue
 		}
@@ -682,7 +683,7 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 			if cur.runes > 0 {
 				flush()
 			}
-			cur.add(i, chunkPart{role: s.role, text: string(rs[start:end])}, end-start)
+			cur.add(i, chunkPart{seg: i, role: s.role, text: string(rs[start:end])}, end-start)
 			pl.pieces[i]++
 		}
 	}

@@ -44,7 +44,9 @@ type eventRec struct {
 	LatencyMs        int
 	QueueMs          int
 	KeepUntil        time.Time
-	WatchLevel       string // level when admitted (not stored)
+	// Replayed: a cached hit replayed (hook.go replay), not a new violation.
+	Replayed   bool
+	WatchLevel string // level when admitted (not stored)
 }
 
 // fillFromTrace derives result, categories and severity.
@@ -182,13 +184,13 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 				verdict, action, categories, severity, reason, error, text, text_chars, text_hash, cached,
 				llm_model, turns, latency_ms, prompt_tokens, completion_tokens,
 				result, timing, flow_id, flow_version, highest_category, highest_score, hit_categories, trace,
-				input_format, input_message, input_message_size, image_count, keep_until, queue_ms, endpoint, session_fp)
+				input_format, input_message, input_message_size, image_count, keep_until, queue_ms, endpoint, session_fp, replayed)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'','',$13,$14,$15,false,'',0,$16,0,0,
-				$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32) RETURNING id`,
+				$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33) RETURNING id`,
 			e.At, e.RequestID, e.UserID, e.APIKeyID, e.GroupID, e.Model, e.Protocol, mode,
 			verdict, action, e.HitCategories, e.Severity, e.Text, e.TextChars, e.TextHash, e.LatencyMs,
 			e.Result, e.Timing, e.FlowID, e.FlowVersion, e.HighestCategory, e.HighestScore, e.HitCategories, e.Trace,
-			e.InputFormat, e.InputMessage, e.InputMessageSize, e.ImageCount, e.KeepUntil, e.QueueMs, e.Endpoint, e.SessionFp)
+			e.InputFormat, e.InputMessage, e.InputMessageSize, e.ImageCount, e.KeepUntil, e.QueueMs, e.Endpoint, e.SessionFp, e.Replayed)
 	}
 	ids := make([]int64, len(evs))
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
@@ -205,12 +207,15 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 }
 
 // afterWrite applies the watch list (§72.8) and the automatic ban to the
-// suspicious records of a written batch.
+// suspicious records of a written batch. A replayed cached hit is not a new
+// violation (history sent again would count once per turn): it neither
+// watches the user nor counts a violation, an analysis or towards a ban
+// (new-api escalate.go onSuspicious).
 func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 	c := p.cfg.Load()
 	watchChanged, analyze, banned := false, false, map[int64]bool{}
 	for i, e := range evs {
-		if !e.suspicious() || e.UserID <= 0 || p.isStaff(ctx, e.UserID) {
+		if !e.suspicious() || e.Replayed || e.UserID <= 0 || p.isStaff(ctx, e.UserID) {
 			continue
 		}
 		changed, queued, err := p.recordWatchHit(ctx, c, e, ids[i])
@@ -427,15 +432,15 @@ func lockBlockSubject(ctx context.Context, tx pgx.Tx, uid int64) error {
 	return err
 }
 
-// countViolations counts suspicious requests (one per request id, false
-// positives and 0.1 flag verdicts excluded) of uid since the later of since, the last unblock and
+// countViolations counts suspicious requests (one per request id; false
+// positives, replayed cached hits and 0.1 flag verdicts excluded) of uid since the later of since, the last unblock and
 // the start of the user's last (expired) ban.
 func countViolations(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, uid int64, since time.Time) (int64, error) {
 	var n int64
 	err := q.QueryRow(ctx, `SELECT count(DISTINCT CASE WHEN request_id = '' THEN id::text ELSE request_id END) FROM events
-		WHERE user_id = $1 AND `+suspiciousResult+` AND review_status <> 'false_positive' AND created_at >= $2
+		WHERE user_id = $1 AND `+suspiciousResult+` AND review_status <> 'false_positive' AND NOT replayed AND created_at >= $2
 		  AND NOT (verdict = 'flag' AND flow_id = 0)
 		  AND created_at > coalesce((SELECT at FROM unblocks WHERE user_id = $1), '-infinity'::timestamptz)
 		  AND created_at > coalesce((SELECT created_at FROM blocks WHERE user_id = $1), '-infinity'::timestamptz)`,

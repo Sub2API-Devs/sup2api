@@ -83,12 +83,14 @@ func (l Latency) Percentile(q float64) float64 {
 }
 
 // counters is one stats_hourly row (or a sum of rows). cacheSkipped means
-// "answered by the pass cache" on flow rows and "nothing the engine can
-// send" (ErrNoInput) on auditor rows (HealthRow.skipped_no_text).
+// "answered by the cached passes" on flow rows and "nothing the engine can
+// send" (ErrNoInput) on auditor rows (HealthRow.skipped_no_text). replayed
+// (flow rows) counts the hits decided by a cached hit; they are in audited
+// and hit (and blocked) too.
 type counters struct {
-	audited, hit, blocked, overturned, errors, cacheSkipped, calls, tokensIn, tokensOut, latSum int64
-	lat                                                                                         Latency
-	callPrices                                                                                  // auditor rows
+	audited, hit, blocked, overturned, errors, cacheSkipped, replayed, calls, tokensIn, tokensOut, latSum int64
+	lat                                                                                                   Latency
+	callPrices                                                                                            // auditor rows
 }
 
 func (c *counters) observe(ms int64) {
@@ -103,6 +105,7 @@ func (c *counters) merge(o *counters) {
 	c.overturned += o.overturned
 	c.errors += o.errors
 	c.cacheSkipped += o.cacheSkipped
+	c.replayed += o.replayed
 	c.calls += o.calls
 	c.tokensIn += o.tokensIn
 	c.tokensOut += o.tokensOut
@@ -462,7 +465,28 @@ func (p *Plugin) countRequest(group int64, ms int64, blocked bool) {
 	rc.observe(ms)
 }
 
-// countCacheHit counts a run answered by the pass cache: on the flow row,
+// countReplay counts a request decided by a cached hit (new-api stats.go):
+// on the flow row as audited, hit and replayed (pre: blocked too) and, pre,
+// on the request row as a refused request - without a latency sample,
+// without stage or auditor rows and not on the user's day (a replay is not a
+// new violation).
+func (p *Plugin) countReplay(m *moderation) {
+	p.hourly.mu.Lock()
+	defer p.hourly.mu.Unlock()
+	h := p.hour()
+	fc := p.hourly.row(statKey{hour: h, group: m.rec.GroupID, flow: m.flow.ID, timing: m.timing})
+	fc.audited++
+	fc.hit++
+	fc.replayed++
+	if m.timing == TimingPre {
+		fc.blocked++
+		rc := p.hourly.row(statKey{hour: h, group: m.rec.GroupID, timing: TimingPre})
+		rc.audited++
+		rc.blocked++
+	}
+}
+
+// countCacheHit counts a run answered by the cached passes: on the flow row,
 // as a request without a latency sample (pre) and on the user's day.
 func (p *Plugin) countCacheHit(m *moderation, uid, group int64) {
 	p.hourly.mu.Lock()
@@ -578,8 +602,9 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 	for _, k := range slices.SortedFunc(maps.Keys(rows), compareStatKey) {
 		c := rows[k]
 		b.Queue(`INSERT INTO stats_hourly (hour, group_id, flow_id, stage, auditor_id, timing, audited, hit, blocked, overturned, errors,
-				cache_skipped, calls, tokens_in, tokens_out, latency_ms_sum, lat, cost, priced_calls, unpriced_calls, unpriced_tokens, free_calls)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::numeric,$19,$20,$21,$22)
+				cache_skipped, calls, tokens_in, tokens_out, latency_ms_sum, lat, cost, priced_calls, unpriced_calls, unpriced_tokens, free_calls,
+				replayed)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::numeric,$19,$20,$21,$22,$23)
 			ON CONFLICT (hour, group_id, flow_id, stage, auditor_id, timing) DO UPDATE SET
 				audited = stats_hourly.audited + EXCLUDED.audited, hit = stats_hourly.hit + EXCLUDED.hit,
 				blocked = stats_hourly.blocked + EXCLUDED.blocked, overturned = stats_hourly.overturned + EXCLUDED.overturned,
@@ -588,9 +613,10 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 				tokens_out = stats_hourly.tokens_out + EXCLUDED.tokens_out, latency_ms_sum = stats_hourly.latency_ms_sum + EXCLUDED.latency_ms_sum,
 				lat = `+latAdd("stats_hourly")+`, cost = stats_hourly.cost + EXCLUDED.cost,
 				priced_calls = stats_hourly.priced_calls + EXCLUDED.priced_calls, unpriced_calls = stats_hourly.unpriced_calls + EXCLUDED.unpriced_calls,
-				unpriced_tokens = stats_hourly.unpriced_tokens + EXCLUDED.unpriced_tokens, free_calls = stats_hourly.free_calls + EXCLUDED.free_calls`,
+				unpriced_tokens = stats_hourly.unpriced_tokens + EXCLUDED.unpriced_tokens, free_calls = stats_hourly.free_calls + EXCLUDED.free_calls,
+				replayed = stats_hourly.replayed + EXCLUDED.replayed`,
 			k.hour, k.group, k.flow, k.stage, k.auditor, k.timing, c.audited, c.hit, c.blocked, c.overturned, c.errors,
-			c.cacheSkipped, c.calls, c.tokensIn, c.tokensOut, c.latSum, c.lat[:], formatCost(c.units), c.priced, c.unpriced, c.unpricedTokens, c.free)
+			c.cacheSkipped, c.calls, c.tokensIn, c.tokensOut, c.latSum, c.lat[:], formatCost(c.units), c.priced, c.unpriced, c.unpricedTokens, c.free, c.replayed)
 	}
 	for _, k := range slices.SortedFunc(maps.Keys(chans), compareCostKey) {
 		r := chans[k]

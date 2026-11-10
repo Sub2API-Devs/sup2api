@@ -2,6 +2,8 @@ package moderation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,11 +17,13 @@ import (
 )
 
 // Broadcast topics: the other nodes reload at once (best effort; every
-// node also polls config_state).
+// node also polls config_state). verdict.changed carries the cache keys a
+// review changed ({"keys": [...]}): the other nodes drop them from memory.
 const (
-	TopicBlocksChanged = "blocks.changed"
-	TopicConfigChanged = "config.changed"
-	TopicWatchChanged  = "watch.changed"
+	TopicBlocksChanged  = "blocks.changed"
+	TopicConfigChanged  = "config.changed"
+	TopicWatchChanged   = "watch.changed"
+	TopicVerdictChanged = "verdict.changed"
 )
 
 // Watch levels (watchlist.level).
@@ -35,14 +39,20 @@ type liveFlow struct {
 	Version int
 	Spec    *Spec
 	timeout time.Duration
+	// fp is the verdict fingerprint (fingerprint): part of the flow's cache
+	// keys.
+	fp string
 }
 
 // snapshot is the immutable configuration the hook reads.
 type snapshot struct {
-	version  int64
-	channels map[int64]*liveChannel
-	auditors map[int64]*liveAuditor
-	flows    map[int64]*liveFlow
+	version int64
+	// cacheEpoch counts the clears of the verdict cache; part of every cache
+	// key.
+	cacheEpoch int64
+	channels   map[int64]*liveChannel
+	auditors   map[int64]*liveAuditor
+	flows      map[int64]*liveFlow
 	// byGroup maps the bound groups to their flow; nil = exempt (flow 0, the
 	// group is not moderated). A binding to a flow that is disabled,
 	// unpublished or gone is left out, so a wider binding applies. 0 =
@@ -206,7 +216,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 		return nil, err
 	}
 	s := emptySnapshot()
-	if err := db.QueryRow(ctx, `SELECT config_version FROM config_state WHERE id = 1`).Scan(&s.version); err != nil {
+	if err := db.QueryRow(ctx, `SELECT config_version, cache_epoch FROM config_state WHERE id = 1`).Scan(&s.version, &s.cacheEpoch); err != nil {
 		return nil, err
 	}
 	rows, err := db.Query(ctx, `SELECT id, type, protocol, name, base_url, api_key_enc, proxy_enc, model, billing_model, timeout_ms FROM channels
@@ -266,7 +276,10 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 		name, typ string
 		cfgJSON   []byte
 	)
+	stored := map[int64]storedAuditor{}
 	if _, err := pgx.ForEachRow(rows, []any{&aid, &name, &typ, &chID, &cfgJSON}, func() error {
+		row := storedAuditor{typ: typ, channel: chID, config: slices.Clone(cfgJSON)}
+		defer func() { stored[aid] = row }()
 		var cfg AuditorConfig
 		if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
 			p.log.Warn("moderation: auditor config is invalid", "auditor_id", aid, "error", err.Error())
@@ -277,6 +290,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 			p.log.Warn("moderation: auditor config is invalid", "auditor_id", aid, "error", err.Error())
 			return nil
 		}
+		row.defaultSet = (typ == AuditorTypeSafe || typ == AuditorLLMQuestions) && cfg.Questions == nil
 		s.auditors[aid] = a
 		return nil
 	}); err != nil {
@@ -309,6 +323,10 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}); err != nil {
 		return nil, err
 	}
+	defaultSet, _ := json.Marshal(c.jevDefault)
+	for _, f := range s.flows {
+		f.fp = fingerprint(f.Spec, stored, s.channels, defaultSet)
+	}
 	rows, err = db.Query(ctx, `SELECT group_id, flow_id FROM flow_groups ORDER BY group_id`)
 	if err != nil {
 		return nil, err
@@ -333,6 +351,48 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}
 	p.proxies.retain(proxies)
 	return s, nil
+}
+
+// storedAuditor is an auditor row as the fingerprint reads it. defaultSet:
+// the auditor asks the default question set.
+type storedAuditor struct {
+	typ        string
+	channel    int64
+	config     []byte // the jsonb text, the same on every node
+	defaultSet bool
+}
+
+// fingerprint is the verdict fingerprint of a flow (16 hex characters): a
+// hash of everything that decides what the flow answers for given content -
+// the stages (combine, n, fallback, auditors), every auditor (type, channel,
+// stored config), the channel's type, protocol, base URL and model, and the
+// default question set of the auditors that use it. It is part of the
+// flow's cache keys, so changing any of these makes the cached verdicts of
+// the flow unreachable, while the flow's name, model filter, sample rate
+// and timeout and a channel's name, key, proxy, timeout and billing model
+// leave them in place.
+func fingerprint(spec *Spec, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
+	h := sha256.New()
+	for _, st := range spec.Stages {
+		fmt.Fprintf(h, "stage %q %d %t %v\n", st.Combine, st.N, st.Fallback, st.Auditors)
+		for _, id := range st.Auditors {
+			a, ok := auditors[id]
+			if !ok {
+				fmt.Fprintf(h, "auditor %d missing\n", id)
+				continue
+			}
+			fmt.Fprintf(h, "auditor %d %q %d %d:%s\n", id, a.typ, a.channel, len(a.config), a.config)
+			if ch := channels[a.channel]; ch != nil {
+				fmt.Fprintf(h, "channel %q %q %q %q\n", ch.Type, ch.Protocol, ch.BaseURL, ch.Model)
+			} else {
+				fmt.Fprint(h, "channel -\n")
+			}
+			if a.defaultSet {
+				fmt.Fprintf(h, "default %d:%s\n", len(defaultSet), defaultSet)
+			}
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)[:8])
 }
 
 // reloadConfig replaces the snapshot (one reload at a time, never an older

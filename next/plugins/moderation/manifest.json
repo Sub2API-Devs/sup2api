@@ -168,6 +168,12 @@
       "permission": "moderation:manage"
     },
     {
+      "method": "POST",
+      "path": "/verdict-cache/clear",
+      "scope": "admin",
+      "permission": "moderation:manage"
+    },
+    {
       "method": "GET",
       "path": "/events/:id",
       "scope": "admin",

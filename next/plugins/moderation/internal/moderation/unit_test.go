@@ -642,16 +642,30 @@ func TestSelfMarker(t *testing.T) {
 func TestLRU(t *testing.T) {
 	c := newLRU(2)
 	now := time.Now()
-	c.put("a", now.Add(time.Minute))
-	c.put("b", now.Add(time.Minute))
+	has := func(key string) bool {
+		_, ok := c.get(key, now)
+		return ok
+	}
+	c.put("a", []byte("1"), now.Add(time.Minute))
+	c.put("b", []byte("2"), now.Add(time.Minute))
 	c.get("a", now)
-	c.put("c", now.Add(time.Minute))
-	if !c.get("a", now) || c.get("b", now) || !c.get("c", now) || c.len() != 2 {
+	c.put("c", []byte("3"), now.Add(time.Minute))
+	if !has("a") || has("b") || !has("c") || c.len() != 2 {
 		t.Fatal("eviction")
 	}
-	c.put("d", now)
-	if c.get("d", now) {
+	c.put("d", []byte("4"), now)
+	if has("d") {
 		t.Fatal("expired entry returned")
+	}
+	// A value is replaced in place, and a deleted key is gone.
+	c.put("a", []byte("5"), now.Add(time.Minute))
+	if v, ok := c.get("a", now); !ok || string(v) != "5" {
+		t.Fatalf("replaced value = %q %v", v, ok)
+	}
+	c.del("a")
+	c.del("missing")
+	if has("a") || c.len() != 1 {
+		t.Fatalf("after delete: len %d", c.len())
 	}
 }
 
