@@ -6992,3 +6992,36 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 第三版与第四版的核心并存时，核心页面的地址都能打开：第三版控制台拿到第四版菜单，侧栏暂时没有分组、模型价格、CCGateway、平台、余额流水的入口；它的 `/settings` 只认 `settings:read` / `sticky:read`，只有 `group:read` / `price:read` 的调用者点“系统设置”看到无权限页。第四版控制台拿到第三版菜单，这几项仍在管理员组里平铺（平台项跳到账号页），分组、模型价格同时也在系统设置视图里；CCGateway 项打开的页面在控制台视图里。刷新页面后恢复一致。
 - 核心 0.1.267 的系统设置视图还有第五组“插件设置”（每个已启用且有控制台设置页的插件一项，ccgateway 的是 `/system/ccgateway`），这些页面的上级页面是 `/settings`；它和已安装插件列表的“设置”是同一批页面，0.1.268 起去掉这一组，按 90.2。
 - anthropic 0.3.0 配第四版核心：模型目录的菜单和页面还在；0.3.1 配第三版核心：没有模型目录。
+
+## 91. 插件经账号代理发请求、CLEAR 清冷却（2026-11-10，codex 官方重置次数需要；核心 0.1.269）
+
+codex 插件要接入 OpenAI 官方的“用量重置次数”：插件要能用账号自己的出口发一次请求，重置成功后账号要立即可调度。核心不认识 Codex，只补两项通用能力。proto 只新增 `HostService.SendAccountRequest`（SDK 助手 `pluginsdk.SendAccountRequest`），没有迁移，Host API 仍是 9（91.3）。
+
+### 91.1 `HostService.SendAccountRequest`
+
+宿主替插件为它**自己的某个账号**发一次有上限的 HTTP 请求，走该账号的代理，和插件描述的配额查询、凭证刷新请求同一条发送路径。
+
+| 项 | 约定 |
+| --- | --- |
+| 授权 | 与 `GetAccountCredentials` 相同（§26.6）：`accounts.credentials`，scope 必须恰好是 `{"types":"own"}`，调用时用 PG 复核授权行（`requireOwnCredentials`）。这类请求带的就是插件用 `GetAccountCredentials` 读到的凭证，所以不另设授权。不满足 → `PERMISSION_DENIED` |
+| 参数 | `account_id > 0`；`url` 非空且不超过 8 KiB；`method` 不超过 16 字节（空 = `GET`，大小写不敏感）；`body` 不超过 64 KiB。不满足或 URL 解析不了 → `INVALID_ARGUMENT` |
+| 允许的主机 | scheme 必须是 `http` 或 `https`；主机名（去端口、不分大小写）必须等于 manifest `externalServices` 的某一项，或者是它的子域（以 `.` + 该项结尾）。项也去首尾空白、去端口后比较；端口不限制。否则 → `PERMISSION_DENIED`。`externalServices` 原来只用于展示，安装审阅时列给管理员看（`install/review.go` 的 `external_services`），现在它也是这条 RPC 的允许名单：没有声明 `externalServices` 的插件用不了这条 RPC |
+| 账号 | account 模块按 `id`、`plugin_key`、未删除查询（`SendPluginAccountRequest`，可选接口 `core.PluginAccountRequester`）。别的插件的账号和不存在的 id 一样回 `NOT_FOUND`，不泄露 id 是否存在。账号状态不限：停用、`auto_disabled` 的账号也能发（重置次数正是给被停用的账号用的） |
+| 发送 | 复用配额查询、凭证刷新的 `sendPluginCall`：账号有 `proxy_id` 就走该代理（代理停用或不存在 → `transport_error`，不会回退直连）；直连时经 netguard 拒绝私网地址（`AllowPrivateUpstream` 除外）。`body` 原样发送，请求头里没有 `Content-Type` 时默认 `application/json`。**不跟随重定向**，3xx 原样返回（配额、刷新路径照旧跟随，行为不变）。响应体最多 64 KiB，超出部分截掉并置 `truncated`；响应头名转小写，只取第一个值 |
+| 上限 | 单次 30 s（`refreshTimeout`），调用方 ctx 取消时立即中止；不另设并发上限 |
+| 传输失败 | 不是 RPC 错误：返回 `status` 0 和 `transport_error`（DNS、连接、超时、代理不可用、netguard 拒绝），和 `sendPluginCall` 一致 |
+| 审计 | 通过账号校验、真正发出的每次请求写一条 `audit_logs`：action `plugin.account_request`，target `account` / `<id>`，`user_id` 为空（执行者是插件），detail 只有 `plugin_key`、`method`、`host`（含端口）、`path`、`status`、`via: "host.SendAccountRequest"`。**不记 query、请求头、请求体、响应头和响应体**，因为这些地方带着凭证。审计在请求之后写，这样才能记下状态码。写入失败只记 WARN 日志，调用照常返回。这里和凭证读取不同（凭证读取先写审计，写不进去就整个调用失败）：这条 RPC 不会交出插件手里还没有的秘密。被拒的调用（授权、参数、主机、`NOT_FOUND`）不写审计 |
+
+### 91.2 `SetAccountAutomaticState` 的 CLEAR 顺带清冷却
+
+- CLEAR 的含义是“插件确认账号此刻可用”。除了原来的 `auto_disabled` → `active`，还要删除 Redis 冷却键 `cooldown:account:<id>`，复用 `POST /accounts/:id/reset-status`（§44.5）的 `clearCooldown`。`ApplyPluginAccountAutomaticState` 和 `ApplyAccountAutomaticState` 走同一个实现。
+- 删冷却与状态无关；状态分支保持原样：管理员停用（`disabled`）、`error`、§73 用量限制的停用都不变，只有冷却被删掉。对这些账号删冷却没有坏处：它们本来就不参与调度；等管理员启用或用量限制放开后，账号不会再被旧冷却挡一阵。
+- 先锁行、校验归属再删：别的插件的账号回 `NOT_FOUND`，冷却不动。Redis 删除失败时回 `UNAVAILABLE`，事务回滚。
+- `changed` 在状态变了或删掉了冷却键时为 `true`（proto 不变）。有变化时按状态变更的同一路径发 `account:changed` 失效缓存，并触发 CCGateway 对账。只删了冷却、状态没变时，不写 `account.automatic_state` 审计，也不发 `account.status_changed` 事件，和冷却自然到期一致。
+- DISABLE 不动冷却。核心里 CLEAR 只有 `HostService.SetAccountAutomaticState` 一个来源：`ClassifyError` 返回的 `automatic_state` 只认 DISABLE（网关 `applyAccountEffect`、`pluginAutoDisable` 把其他动作当作没有），所以网关路径不受影响。目前也没有插件用 CLEAR。
+
+### 91.3 兼容与版本
+
+- Host API 不升，仍是 9。升版会让 rolling-v1 滚动更新不可用：`gateway/internal/control` 要求前后两个版本的 `HostAPIVersion` 相同（§82），而这次只是加一个 RPC。
+- 旧核心对未知 RPC 回 `UNIMPLEMENTED`（`UnimplementedHostServiceServer`），旧核心的 CLEAR 也不清冷却。依赖本节的插件靠 `hostCompat: ">=0.1.269"` 保证核心版本；这不是 manifest 字段，`coreFloors` 查不到，要插件自己声明。
+- 没有迁移。

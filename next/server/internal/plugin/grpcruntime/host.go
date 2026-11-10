@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,10 @@ const (
 	ClearStickyBindingsMaxSalt  = 128
 	// GetUsersMaxIDs caps the ids of one GetUsers call.
 	GetUsersMaxIDs = protocol.GetUsersMaxIDs
+	// SendAccountRequest bounds its body, URL and method.
+	AccountRequestMaxBody   = 64 << 10
+	AccountRequestMaxURL    = 8 << 10
+	AccountRequestMaxMethod = 16
 )
 
 // hostServer serves HostService to exactly one plugin instance, so the
@@ -437,6 +442,60 @@ func (h *hostServer) GetAccountCredentials(ctx context.Context, in *pluginv1.Get
 		Account:         accountSummary(a.PluginAccountSummary),
 		CredentialsJson: string(a.Credentials),
 	}, nil
+}
+
+// SendAccountRequest has the account module send one request for one account
+// of this plugin's own account types through that account's proxy (CONTRACTS
+// §91). It is authorised by the credential grant, since such a request is
+// made with what GetAccountCredentials hands out, and only reaches the hosts
+// the manifest names in externalServices, which the operator reviewed at
+// install.
+func (h *hostServer) SendAccountRequest(ctx context.Context, in *pluginv1.SendAccountRequestRequest) (*pluginv1.ExecutionHTTPResponse, error) {
+	if err := h.requireOwnCredentials(ctx); err != nil {
+		return nil, err
+	}
+	if in.GetAccountId() <= 0 || in.GetUrl() == "" || len(in.GetUrl()) > AccountRequestMaxURL || len(in.GetMethod()) > AccountRequestMaxMethod {
+		return nil, status.Errorf(codes.InvalidArgument, "account_id and url (at most %d bytes) are required; method is at most %d bytes",
+			AccountRequestMaxURL, AccountRequestMaxMethod)
+	}
+	if len(in.GetBody()) > AccountRequestMaxBody {
+		return nil, status.Errorf(codes.InvalidArgument, "body is at most %d bytes", AccountRequestMaxBody)
+	}
+	if err := h.requireExternalService(in.GetUrl()); err != nil {
+		return nil, err
+	}
+	requester, ok := h.i.rt.o.Accounts.(core.PluginAccountRequester)
+	if !ok {
+		return nil, status.Error(codes.Unavailable, "account requests unavailable")
+	}
+	out, err := requester.SendPluginAccountRequest(ctx, h.key(), in)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return out, nil
+}
+
+// requireExternalService accepts an http(s) URL whose host is one of the
+// manifest's externalServices or a subdomain of one, compared without case
+// or port.
+func (h *hostServer) requireExternalService(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return status.Error(codes.InvalidArgument, "invalid url")
+	}
+	denied := status.Errorf(codes.PermissionDenied, "plugin %s: url must be http(s) on a host of the manifest's externalServices", h.key())
+	host := strings.ToLower(u.Hostname())
+	if (u.Scheme != "http" && u.Scheme != "https") || host == "" {
+		return denied
+	}
+	for _, svc := range h.i.pkg.Manifest.ExternalServices {
+		// An entry written with a port matches its host on any port.
+		svc = strings.ToLower((&url.URL{Host: strings.TrimSpace(svc)}).Hostname())
+		if svc != "" && (host == svc || strings.HasSuffix(host, "."+svc)) {
+			return nil
+		}
+	}
+	return denied
 }
 
 func (h *hostServer) SetAccountAutomaticState(ctx context.Context, in *pluginv1.SetAccountAutomaticStateRequest) (*pluginv1.SetAccountAutomaticStateResponse, error) {

@@ -52,7 +52,7 @@ type Manifest struct {
 	Resources       *Resources       `json:"resources,omitempty"`
 
 	HostPermissions  []HostPermission `json:"hostPermissions,omitempty"`
-	ExternalServices []string         `json:"externalServices,omitempty"` // display only
+	ExternalServices []string         `json:"externalServices,omitempty"` // shown at review; the hosts SendAccountRequest may reach (CONTRACTS §91)
 }
 
 // Entry locates the runtime artifact inside the package.

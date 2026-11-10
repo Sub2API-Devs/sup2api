@@ -1,6 +1,7 @@
 package account
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -398,18 +399,21 @@ func validQuotaKey(k string) bool {
 // shown the transport error, as ClassifyError is.
 func (s *Service) sendQuotaRequest(ctx context.Context, b *pluginv1.BuildQuotaRequestResponse, proxyID *int64) *pluginv1.ParseQuotaResponseRequest {
 	a := s.sendPluginCall(ctx, pluginCall{what: "quota", method: b.GetMethod(), defaultMethod: http.MethodGet,
-		url: b.GetUrl(), headers: b.GetHeaders(), body: b.GetBodyJson()}, proxyID)
+		url: b.GetUrl(), headers: b.GetHeaders(), body: []byte(b.GetBodyJson())}, proxyID)
 	return &pluginv1.ParseQuotaResponseRequest{Status: a.status, Headers: a.headers, Body: a.body,
 		TransportError: a.transportError, Truncated: a.truncated}
 }
 
-// pluginCall is an upstream request a plugin described (quota, refresh).
+// pluginCall is an upstream request a plugin described (quota, refresh,
+// HostService.SendAccountRequest).
 type pluginCall struct {
 	what                  string // for the invalid-URL message
 	method, defaultMethod string
 	url                   string
 	headers               map[string]string
-	body                  string // sent as is; Content-Type: application/json unless headers set one
+	body                  []byte // sent as is; Content-Type: application/json unless headers set one
+	// noRedirects answers a redirect as it is instead of following it.
+	noRedirects bool
 }
 
 // pluginAnswer is what the plugin is shown of the upstream's answer.
@@ -440,8 +444,8 @@ func (s *Service) sendPluginCall(ctx context.Context, b pluginCall, proxyID *int
 		method = b.defaultMethod
 	}
 	var body io.Reader
-	if b.body != "" {
-		body = strings.NewReader(b.body)
+	if len(b.body) > 0 {
+		body = bytes.NewReader(b.body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
@@ -458,6 +462,11 @@ func (s *Service) sendPluginCall(ctx context.Context, b pluginCall, proxyID *int
 	if err != nil {
 		out.transportError = core.AsError(err).Message
 		return out
+	}
+	if b.noRedirects {
+		c := *hc
+		c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		hc = &c
 	}
 	resp, err := hc.Do(req)
 	if err != nil {

@@ -192,6 +192,18 @@ type PluginAccountReader interface {
 	ReadPluginAccountCredentials(ctx context.Context, pluginKey string, id int64) (*PluginAccountCredentials, error)
 }
 
+// PluginAccountRequester (owner: account, optional on the PluginAccountReader)
+// serves HostService.SendAccountRequest: one HTTP request a plugin describes
+// for one of its OWN accounts, sent through that account's proxy the way the
+// quota and refresh requests are (CONTRACTS §91). The caller has checked the
+// grant and the URL's host. An account of another plugin's account type is
+// ErrNotFound, as in ReadPluginAccountCredentials. A transport failure is not
+// an error: it is the answer's transport_error with status 0. Every request
+// sent is audited (never its headers or bodies).
+type PluginAccountRequester interface {
+	SendPluginAccountRequest(ctx context.Context, pluginKey string, in *pluginv1.SendAccountRequestRequest) (*pluginv1.ExecutionHTTPResponse, error)
+}
+
 // StickyClearRequest selects the sticky session bindings HostService.
 // ClearStickyBindings deletes (CONTRACTS §74.2).
 type StickyClearRequest struct {
