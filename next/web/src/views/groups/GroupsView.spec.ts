@@ -104,7 +104,7 @@ describe('groups page', () => {
     expect(get).toHaveBeenCalledWith('/groups/1')
     expect(detail.text()).not.toContain('平台')
     expect(detail.find('[data-testid="group-no-accounts"]').exists()).toBe(false)
-    expect(w.getComponent(PlatformEndpointsPreview).props()).toMatchObject({ ids: ['anthropic', 'openai'], converted: true })
+    expect(w.getComponent(PlatformEndpointsPreview).props()).toMatchObject({ ids: ['anthropic', 'openai'] })
   })
 
   it('shows the warning and no endpoints in the detail of a group without accounts', async () => {

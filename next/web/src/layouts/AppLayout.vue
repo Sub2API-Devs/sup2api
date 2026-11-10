@@ -26,8 +26,11 @@ onMounted(() => void refreshShell())
     <AppSidebar />
     <div class="flex min-w-0 flex-1 flex-col">
       <AppTopbar />
-      <!-- A floating action button (SButton fab) must not cover the end of the page: pagination, the last card's actions. -->
-      <main class="w-full min-w-0 flex-1 px-3 py-3 md:px-5 md:py-4 [&:has([data-fab])]:pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+      <!-- A floating action button (SButton fab) must not cover the end of the page: pagination, the last card's actions.
+           While the bulk selection dock is up the fab is hidden and the dock keeps its own room (SBulkBar). -->
+      <main
+        class="w-full min-w-0 flex-1 px-3 py-3 md:px-5 md:py-4 [&:has([data-fab]):not(:has([data-bulk-dock]))]:pb-[calc(5.5rem+env(safe-area-inset-bottom))]"
+      >
         <RouterView v-slot="{ Component, route: view }">
           <component :is="Component" :key="view.path" />
         </RouterView>

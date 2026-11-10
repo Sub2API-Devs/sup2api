@@ -18,7 +18,7 @@ const lossTitle = computed(() => {
   const categories = lostCategories(props.row.conversion)
   return categories.length
     ? t('usage.conversion.lossy', {
-        categories: categories.map(c => t(`accounts.conversion.categories.${c}`)).join(t('usage.conversion.separator'))
+        categories: categories.map(c => t(`accounts.conversion.categories.${c}`)).join(t('common.listSeparator'))
       })
     : ''
 })

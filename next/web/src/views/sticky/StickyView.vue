@@ -175,7 +175,7 @@ async function toggle(r: Row, v: boolean) {
           <SSwitch :model-value="row.enabled" :disabled="!canManage" :aria-label="t('common.enabled') + ' · ' + row.name" @update:model-value="toggle(row, $event)" />
         </template>
         <template #cell-match="{ row }">
-          <dl class="grid grid-cols-[max-content_1fr] gap-x-2 text-xs">
+          <dl class="grid grid-cols-[max-content_1fr] gap-x-2 text-xs max-md:grid-cols-[max-content_minmax(0,1fr)]">
             <dt class="text-fg-muted">{{ t('sticky.modal.protocols') }}</dt>
             <dd class="font-mono">{{ list(row.match?.protocols) }}</dd>
             <dt class="text-fg-muted">{{ t('sticky.modal.models') }}</dt>

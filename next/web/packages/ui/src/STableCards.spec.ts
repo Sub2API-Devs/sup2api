@@ -150,6 +150,13 @@ describe('STable phone cards', () => {
     expect(cards(separate)[0].classes()).toContain('card')
   })
 
+  it('cuts a cell wider than its card at the card edge, in both card forms', async () => {
+    const w = mountPinned(STable, { props: { columns: declared, rows } })
+    expect(cards(w).map(c => c.classes('overflow-x-clip'))).toEqual([true, true])
+    await w.setProps({ card: true })
+    expect(cards(w).map(c => c.classes('overflow-x-clip'))).toEqual([true, true])
+  })
+
   it('lets #card replace a card, with selection and expansion handles', async () => {
     const w = mountPinned(STable, {
       props: { columns: declared, rows, selectable: true, expandable: true },

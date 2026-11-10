@@ -126,7 +126,6 @@ export default {
     allRejected: 'All refused',
     secondHop: 'Paths prefixed 1: belong to the second hop ({hops})',
     lossy: 'Conversion lost content: {categories}',
-    separator: ', ',
     filters: { converted: 'Converted', lossy: 'With losses' }
   },
   converted: 'converted',

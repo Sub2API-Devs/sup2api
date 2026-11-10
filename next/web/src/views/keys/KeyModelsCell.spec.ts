@@ -50,6 +50,14 @@ describe('API key models cell', () => {
     expect(render({ model_allowlist: ['claude-*'] }).text()).toBe('1 项')
   })
 
+  it('counts one entry in the singular in English', async () => {
+    const one = render({ model_allowlist: ['claude-*'] })
+    const two = render({ model_allowlist: ['claude-*', 'gpt-5'] })
+    i18n.global.locale.value = 'en'
+    await one.vm.$nextTick()
+    expect([one.text(), two.text()]).toEqual(['1 entry', '2 entries'])
+  })
+
   it('leads with at most three marks, a model of no known vendor by its own', () => {
     const w = render({ model_allowlist: ['claude-sonnet-4-5', 'gpt-5', 'gemini-2.5-pro', 'my-model', 'other-model'] })
     expect(marks(w)).toHaveLength(3)

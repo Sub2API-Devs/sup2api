@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -71,10 +72,16 @@ func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscrip
 	temp := c.temperature
 	for turn := 1; turn <= c.maxTurns; turn++ {
 		res.Turns = turn
-		t, err := c.proto.call(ctx, c.channel, llmRequest{
-			System: c.prompt, Messages: messages, Tools: []LLMTool{c.tool}, ToolChoice: c.choice,
-			Temperature: &temp, MaxTokens: c.maxTokens,
-		})
+		req := llmRequest{System: c.prompt, Messages: messages, Tools: []LLMTool{c.tool}, ToolChoice: c.choice, MaxTokens: c.maxTokens}
+		if !c.noTemperature.Load() {
+			req.Temperature = &temp
+		}
+		t, err := c.proto.call(ctx, c.channel, req)
+		if req.Temperature != nil && refusesTemperature(err) {
+			c.noTemperature.Store(true)
+			req.Temperature = nil
+			t, err = c.proto.call(ctx, c.channel, req)
+		}
 		res.Billing.add(t.Usage)
 		res.Usage.PromptTokens += t.Usage.Input
 		res.Usage.CompletionTokens += t.Usage.Output
@@ -248,4 +255,11 @@ func parseVerdict(args string, known map[string]bool) (Verdict, error) {
 		v.Categories = []string{}
 	}
 	return v, nil
+}
+
+// refusesTemperature reports an upstream 400 that names the temperature
+// parameter: the model does not take it, so the call is repeated without it.
+func refusesTemperature(err error) bool {
+	var ue *UpstreamError
+	return errors.As(err, &ue) && ue.Status == http.StatusBadRequest && strings.Contains(strings.ToLower(ue.message), "temperature")
 }

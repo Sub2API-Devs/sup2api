@@ -16,7 +16,7 @@ const props = defineProps<{ group?: Group }>()
 const { t } = useI18n()
 const items = computed(() => props.group?.model_allowlist ?? [])
 const label = computed(() =>
-  t(props.group?.model_filter_mode === 'blacklist' ? 'apikeys.models.blocked' : 'apikeys.models.allowed', { n: items.value.length })
+  t(props.group?.model_filter_mode === 'blacklist' ? 'apikeys.models.blocked' : 'apikeys.models.allowed', items.value.length)
 )
 /** One model per vendor, so each vendor's mark shows once. */
 const vendors = computed(() => [...new Map(items.value.map(m => [modelVendor(m) || m, m])).values()].slice(0, 3))
