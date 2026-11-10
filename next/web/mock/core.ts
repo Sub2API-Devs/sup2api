@@ -22,7 +22,7 @@ export const ALL_PERMISSIONS = [
   'audit:read', 'system:update:read', 'system:update:execute', 'system:update:recover',
   'plugin.guard:rules:read', 'plugin.guard:rules:manage', 'plugin.guard:stats:read',
   'plugin.dynweight:dynweight:read', 'plugin.dynweight:dynweight:manage',
-  'plugin.codex:codex:manage',
+  'plugin.codex:codex:manage', 'plugin.codex:codex:reset',
   'plugin.anthropic:model_catalog:read'
 ]
 

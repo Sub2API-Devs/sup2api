@@ -1,5 +1,6 @@
 import type { PluginHost } from '@sub2api/host'
 import CodexAuthForm from './CodexAuthForm.vue'
+import CodexResetTab from './CodexResetTab.vue'
 import messages from './messages'
 import { setHost } from './host'
 import './codex.css'
@@ -12,6 +13,7 @@ export function register(host: PluginHost) {
   setHost(host)
   host.addMessages(messages)
   host.registerComponent('CodexAuthForm', CodexAuthForm)
+  host.registerComponent('CodexResetTab', CodexResetTab)
 }
 
 export function unregister() {
