@@ -114,6 +114,6 @@ describe('the texts of the image switch', () => {
     expect(messages.zh.auditors.tryTextOnly).toContain('模型支持图片')
     expect(messages.en.auditors.tryTextOnly).toContain('Model supports images')
     // the limits of the backend contract
-    for (const lang of [messages.zh, messages.en]) for (const limit of ['5 MiB', '8000', '400', 'URL']) expect(lang.auditors.modelImagesHint).toContain(limit)
+    for (const lang of [messages.zh, messages.en]) for (const limit of ['5 MiB', '8000', '400', '413', '415', '422', 'URL']) expect(lang.auditors.modelImagesHint).toContain(limit)
   })
 })

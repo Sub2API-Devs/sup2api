@@ -216,6 +216,7 @@ export default {
       cacheHits: '全部由缓存判通过的请求（缓存条数）',
       cacheBytes: '判定缓存占用内存（估算）',
       kvErrors: '共享缓存（KV）读写出错',
+      imagesRefused: '上游拒收图片的次数',
       avgLatency: '平均耗时',
       watchedUsers: '观察名单人数',
       blockedUsers: '封禁人数',
@@ -365,6 +366,8 @@ export default {
       failedShort: '失败',
       truncated: '只审了最近 16 条消息',
       images: '发送 {sent} 张图，跳过 {skipped} 张',
+      imagesRefused: '上游拒收图片（HTTP {status}），本次只审了文字',
+      imagesRefusedNoStatus: '上游拒收图片，本次只审了文字',
       empty: '没有审核调用'
     },
     watch: {
@@ -787,7 +790,7 @@ export default {
       reviewImages: '审核图片',
       reviewImagesHint: '内联的 PNG、JPEG、GIF（第一帧）、WebP 会送审；尺寸不合规格的自动缩放或补白后发送。URL 图片、超过 16 MiB 或 1200 万像素的图片不送审；解码占用内存过大的图片（如大尺寸渐进式 JPEG）或未能在限定时间内重绘完成的图片会被跳过，文本始终送审。',
       modelImages: '模型支持图片',
-      modelImagesHint: '开启时，请求里内联的 PNG、JPEG、GIF、WebP 图片随文本一起发给模型：每张最多 5 MiB、任一边最多 8000 像素，相同的图片只发一次。URL 图片和超出限制的图片会被跳过，文本始终送审。每次审核调用都会多消耗图片 token。上游对带图片的调用返回 400 时，会只带文本重试一次。模型不支持图片时请关闭：关闭后这个审核器只审文本。',
+      modelImagesHint: '开启时，请求里内联的 PNG、JPEG、GIF、WebP 图片随文本一起发给模型：每张最多 5 MiB、任一边最多 8000 像素，相同的图片只发一次。URL 图片、超出限制的图片和数据格式损坏的图片会逐张跳过，文本始终送审。每次审核调用都会多消耗图片 token。上游对带图片的调用返回 400、413、415 或 422 时，会只带文本重试一次。模型或它前面的网关不接收图片时，必须关闭这个开关：否则每次调用都要发两次，图片不会被缓存，每一轮都会重新上传。出现这种情况时，概览里的“上游拒收图片的次数”和试跑结果里的提示会显示出来。关闭后这个审核器只审文本。',
       textOnly: '只审文本',
       llmQuestionsHint: '模型对每道题回答是或否，答「是」即命中；阈值不使用。一次调用，不带 temperature。',
       tryTextOnly: '这个审核器关闭了“模型支持图片”，只审文本，图片不会发送。',
@@ -1403,6 +1406,7 @@ export default {
       cacheHits: 'Requests passed entirely from cache (entries)',
       cacheBytes: 'Verdict cache memory (estimate)',
       kvErrors: 'Shared cache (KV) errors',
+      imagesRefused: 'Image refusals by upstreams',
       avgLatency: 'Average latency',
       watchedUsers: 'Watched users',
       blockedUsers: 'Banned users',
@@ -1538,6 +1542,8 @@ export default {
       failedShort: 'failed',
       truncated: 'Only the last 16 messages were moderated',
       images: '{sent} images sent, {skipped} skipped',
+      imagesRefused: 'The upstream refused the images (HTTP {status}); only the text was reviewed',
+      imagesRefusedNoStatus: 'The upstream refused the images; only the text was reviewed',
       empty: 'No auditor calls'
     },
     watch: {
@@ -1940,7 +1946,7 @@ export default {
       reviewImages: 'Review images',
       reviewImagesHint: 'Inline PNG, JPEG, GIF (first frame) and WebP images are sent; images outside the size limits are scaled or padded first. URL images and images over 16 MiB or 12 megapixels are not sent; images that need too much decoder memory (large progressive JPEGs) or are not redrawn within the time budget are skipped, while the text is always sent.',
       modelImages: 'Model supports images',
-      modelImagesHint: 'When on, the inline PNG, JPEG, GIF and WebP images of the request are sent to the model with the text: at most 5 MiB and 8000 px on either side each, identical images once. URL images and images outside these limits are skipped, while the text is always reviewed. This adds image tokens to every review call. If the upstream answers 400 to a call with images, the call is repeated once with the text only. Turn it off for a model without image support: the auditor then reviews the text only.',
+      modelImagesHint: 'When on, the inline PNG, JPEG, GIF and WebP images of the request are sent to the model with the text: at most 5 MiB and 8000 px on either side each, identical images once. URL images, images outside these limits and images with malformed data are skipped one by one, while the text is always reviewed. This adds image tokens to every review call. If the upstream answers 400, 413, 415 or 422 to a call with images, the call is repeated once with the text only. If the model or the gateway before it does not accept images, this switch must be turned off: otherwise every call is made twice, the images are never cached and they are uploaded again on every turn. The "Image refusals by upstreams" counter of the overview and the note in the try result show when this happens. When off, the auditor reviews the text only.',
       textOnly: 'text only',
       llmQuestionsHint: 'The model answers every question yes or no, and a yes is a hit; thresholds are not used. One call, without temperature.',
       tryTextOnly: 'This auditor has "Model supports images" off: it reviews the text only and no images are sent.',

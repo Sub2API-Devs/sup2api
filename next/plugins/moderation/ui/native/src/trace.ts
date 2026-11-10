@@ -11,6 +11,17 @@ export function outcomeState(o: Outcome): OutcomeState {
 }
 
 /**
+ * The note of an auditor call whose images the upstream refused (null when
+ * it did not): the message key and its parameters. The status is the one of
+ * the refusal only on an outcome without an error — an error of the call
+ * that followed replaces it — so the note names it only then.
+ */
+export function imagesRefusedNote(o: Pick<Outcome, 'images_refused' | 'err' | 'status'>): { key: string; params?: { status: number } } | null {
+  if (!o.images_refused) return null
+  return !o.err && o.status ? { key: 'trace.imagesRefused', params: { status: o.status } } : { key: 'trace.imagesRefusedNoStatus' }
+}
+
+/**
  * What a stage came to: failed = no verdict, passed over (earlier hits
  * stand); skipped = every auditor skipped; error = a stage of a record
  * written before 0.8.0 in which no auditor judged and an error made it pass.

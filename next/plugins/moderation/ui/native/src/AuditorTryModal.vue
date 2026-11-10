@@ -7,6 +7,7 @@ import ImageInput from './ImageInput.vue'
 import { tryImages, tryTextOnly } from './auditorForm'
 import { categoryLabel, enumLabel, ms, score } from './format'
 import { tryAuditor, useModHost } from './host'
+import { imagesRefusedNote } from './trace'
 import { useAsync } from './useAsync'
 import type { AuditorTryTarget } from './types'
 
@@ -15,7 +16,8 @@ import type { AuditorTryTarget } from './types'
 // An LLM auditor whose "model supports images" switch is off (in the unsaved
 // edits, else as stored) reviews the text only: no images are taken or sent.
 // The result of a question-table LLM auditor lists the questions answered yes
-// with the reason; a result with images says how many were sent and skipped.
+// with the reason; a result with images says how many were sent and skipped,
+// and when the upstream refused them (only the text was reviewed).
 const props = defineProps<{ target: AuditorTryTarget | null }>()
 const open = defineModel<boolean>('open', { required: true })
 const host = useModHost()
@@ -41,6 +43,8 @@ const scores = computed(() =>
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
 )
+
+const refused = computed(() => (result.value ? imagesRefusedNote(result.value) : null))
 </script>
 
 <template>
@@ -64,6 +68,7 @@ const scores = computed(() =>
           <CostBadge :cost="result.cost" class="mod-ml-auto" />
         </div>
         <SAlert v-if="result.error" tone="danger" dense>{{ result.error }}</SAlert>
+        <SAlert v-if="refused" tone="warning" dense>{{ t(refused.key, refused.params) }}</SAlert>
         <CategoryChips v-if="result.hits?.length" :categories="result.hits" wrap />
         <div v-if="result.reason" class="mod-sub">{{ result.reason }}</div>
         <div v-if="result.sent_images || result.skipped_images" class="mod-sub">{{ t('trace.images', { sent: result.sent_images || 0, skipped: result.skipped_images || 0 }) }}</div>

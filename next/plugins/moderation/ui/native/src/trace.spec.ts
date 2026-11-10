@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { stageNumber, stageState, unjudgedStages } from './trace'
+import messages from './messages'
+import { imagesRefusedNote, stageNumber, stageState, unjudgedStages } from './trace'
 import type { Outcome, StageTrace } from './types'
 
 describe('the stages of a trace', () => {
@@ -53,5 +54,45 @@ describe('the stages of a trace', () => {
     for (const u of unjudgedStages({ stages: old })) expect(stageState(old[u.n - 1])).toBe(u.state)
     expect(unjudgedStages({ stages: null })).toEqual([])
     expect(unjudgedStages(null)).toEqual([])
+  })
+})
+
+describe('the note of a call whose images the upstream refused', () => {
+  const text = (lang: typeof messages.zh, o: Parameters<typeof imagesRefusedNote>[0]): string | null => {
+    const note = imagesRefusedNote(o)
+    if (!note) return null
+    const tpl = (lang.trace as Record<string, string>)[note.key.replace('trace.', '')]
+    return tpl.replace(/\{(\w+)\}/g, (_, k: string) => String((note.params as Record<string, number> | undefined)?.[k] ?? `{${k}}`))
+  }
+
+  it('is absent unless the images were refused', () => {
+    expect(imagesRefusedNote({})).toBeNull()
+    expect(imagesRefusedNote({ images_refused: false, status: 400 })).toBeNull()
+    // the status of an error says nothing about the images
+    expect(imagesRefusedNote({ err: 'upstream_error', status: 400 })).toBeNull()
+  })
+
+  it('names the status of the refusal, on a reviewed and on a skipped outcome', () => {
+    expect(imagesRefusedNote({ images_refused: true, status: 413 })).toEqual({ key: 'trace.imagesRefused', params: { status: 413 } })
+    expect(text(messages.zh, { images_refused: true, status: 413 })).toBe('上游拒收图片（HTTP 413），本次只审了文字')
+    expect(text(messages.en, { images_refused: true, status: 422 })).toBe('The upstream refused the images (HTTP 422); only the text was reviewed')
+  })
+
+  it('has no parenthesis without a status, or when the status is the one of an error of the text call', () => {
+    expect(imagesRefusedNote({ images_refused: true })).toEqual({ key: 'trace.imagesRefusedNoStatus' })
+    expect(imagesRefusedNote({ images_refused: true, err: 'upstream_error', status: 500 })).toEqual({ key: 'trace.imagesRefusedNoStatus' })
+    for (const lang of [messages.zh, messages.en]) {
+      const s = text(lang, { images_refused: true })!
+      expect(s).toBeTruthy()
+      for (const part of ['HTTP', '{', '(', '（']) expect(s).not.toContain(part)
+    }
+  })
+})
+
+describe('the texts about refused images', () => {
+  it('name the overview counter, and the hint says that the switch must be off for a model without images', () => {
+    for (const lang of [messages.zh, messages.en]) expect(lang.auditors.modelImagesHint).toContain(lang.runtime.imagesRefused)
+    expect(messages.zh.auditors.modelImagesHint).toContain('必须关闭')
+    expect(messages.en.auditors.modelImagesHint).toContain('must be turned off')
   })
 })

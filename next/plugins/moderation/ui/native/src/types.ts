@@ -30,6 +30,8 @@ export interface Runtime {
   cache_bytes?: number
   /** failed reads and writes of the verdict cache in the shared KV (never fatal: the content is moderated instead) */
   kv_errors?: number
+  /** calls of the LLM auditors whose images the upstream refused since the node started (Outcome.images_refused) */
+  images_refused?: number
   /** image redraws that panicked in the decoder since the node started (the image is skipped, the text is still moderated) */
   redraw_panics?: number
   avg_latency_ms: number
@@ -127,7 +129,10 @@ export interface Outcome {
   latency_ms: number
   skipped?: boolean
   err?: string
+  /** upstream status of the error (err); without one, the status with which the upstream refused the images (images_refused) */
   status?: number
+  /** the upstream of an LLM auditor refused the call that carried the images (400, 413, 415, 422): no image was reviewed, the outcome is of a second call with the text alone, or skipped without a text */
+  images_refused?: boolean
 }
 
 export interface StageTrace {

@@ -6,7 +6,7 @@ import { useCatalog } from './catalog'
 import { categoryLabel, enumLabel, ms, score } from './format'
 import { useModHost } from './host'
 import type { Outcome, Trace } from './types'
-import { outcomeState, stageNumber, stageState, unjudgedStages, type OutcomeState, type StageState } from './trace'
+import { imagesRefusedNote, outcomeState, stageNumber, stageState, unjudgedStages, type OutcomeState, type StageState } from './trace'
 
 // Per-stage trace of a run: one row per auditor call. Stages carry their
 // number in the flow (the trace holds only the stages that ran). A stage
@@ -14,7 +14,8 @@ import { outcomeState, stageNumber, stageState, unjudgedStages, type OutcomeStat
 // hits stand; on records written before 0.8.0: error), a fallback stage is
 // named 补审. A replayed cached hit says which request its
 // verdict comes from; requestLink makes that request a filter link
-// (show-request).
+// (show-request). A call whose images the upstream refused says so: only
+// its text was reviewed.
 const props = defineProps<{ trace: Trace; requestLink?: boolean }>()
 const emit = defineEmits<{ (e: 'show-request', requestId: string): void }>()
 const t = useModHost().t
@@ -43,6 +44,12 @@ const columns = computed<TableColumn[]>(() => [
 ])
 
 const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warning'> = { hit: 'danger', pass: 'success', skipped: 'gray', error: 'warning' }
+
+/** The note of a call whose images the upstream refused ('' when it did not). */
+function refusedText(o: Outcome): string {
+  const note = imagesRefusedNote(o)
+  return note ? t(note.key, note.params) : ''
+}
 
 /** Stages without a verdict and without an auditor call: they have no row, so the head names them. */
 const cutStages = computed(() => unjudgedStages(props.trace))
@@ -84,6 +91,7 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
       <template #cell-verdict="{ row }">
         <SBadge :tone="VERDICT_TONE[outcomeState(row)]">{{ t(`trace.${outcomeState(row)}`) }}</SBadge>
         <div v-if="row.err" class="mod-sub">{{ enumLabel('err', row.err) }}<template v-if="row.status"> {{ row.status }}</template></div>
+        <div v-if="row.images_refused" class="mod-sub mod-text-warning">{{ refusedText(row) }}</div>
       </template>
       <template #cell-top="{ row }">
         <CategoryChips v-if="row.hits?.length" :categories="row.hits" wrap />
