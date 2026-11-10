@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
@@ -23,6 +24,9 @@ type llmJudge struct {
 	temperature float64
 	maxTokens   int
 	markerKey   []byte
+	// noTemperature is set once the upstream refuses the temperature
+	// parameter (some models no longer take it); later calls leave it out.
+	noTemperature atomic.Bool
 }
 
 // LLM verdict scores: block = 1, flag = 0.5 (CONTRACTS §72.6).

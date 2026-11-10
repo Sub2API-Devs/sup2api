@@ -5144,7 +5144,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **`typesafe`**：`POST {base}/v1/systemone`，请求体 `{model, state, questions}`。
   - `config.questions = {preamble, items:[{category, label?, question, threshold}]}`；为空时用内置题集，题目原文照抄 new-api `jev_questions.go`（`content-audit-v2-zh`，10 题）。
   - `config.review_images` 默认开。只发内联的 PNG/JPEG，只读文件头检查尺寸（每边 280–1568 px、单张 ≤16 MiB），图片打包上限 24k token 或 24 MiB，带请求头 `TypeSafe-Danger-Zone-Images: true`。上游返回 413 或 `max_tokens_exceeded` 时，只保留第一张图重试一次。
-- **`llm_verdict`**：就是 §20.5 的 agent，提示词、分类、`tool_choice`、`max_turns`、温度、`max_tokens` 都放进 `config`。
+- **`llm_verdict`**：就是 §20.5 的 agent，提示词、分类、`tool_choice`、`max_turns`、温度、`max_tokens` 都放进 `config`。上游以 400 拒绝 `temperature` 参数时（有的模型已不再接受，如 claude-haiku-5-5 回 "`temperature` is deprecated for this model"），去掉该参数重发一次，此后这个审核器不再带它，直到配置重新加载（0.7.2）。
   - 判定：结论为 `block` 算命中；结论为 `flag` 时，`config.flag_as_hit` 为真才算命中（默认否）。
   - 分数：block = 1.0，flag = 0.5，pass = 0。
   - 只审文字，不发图片。
