@@ -30,6 +30,8 @@ export interface Runtime {
   cache_bytes?: number
   /** failed reads and writes of the verdict cache in the shared KV (never fatal: the content is moderated instead) */
   kv_errors?: number
+  /** image redraws that panicked in the decoder since the node started (the image is skipped, the text is still moderated) */
+  redraw_panics?: number
   avg_latency_ms: number
   /** bumped by POST /verdict-cache/clear; absent before 0.8.0 */
   cache_epoch?: number
