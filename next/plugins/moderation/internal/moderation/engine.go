@@ -340,6 +340,12 @@ var openAIImageTypes = []string{"image/png", "image/jpeg", "image/gif", "image/w
 // one random image (the API takes one). A 400 with the image is retried once
 // with the text only. Only the chosen image becomes a data URL (one copy of
 // one image, not of all of them).
+//
+// The image is a sample: one call judges the usable images of the input, so
+// all of them count as received and a pass is cached for each (owner's
+// decision, 2026-11-10: no further calls for the images that were not drawn).
+// Images the API cannot take, and every image when the call fell back to the
+// text alone, were not judged.
 func openAIAudit(ctx context.Context, ch *liveChannel, in *Input) (EngineResult, error) {
 	usable := openAIUsableImages(in.Images)
 	res := EngineResult{SkippedImages: len(in.Images)}
@@ -353,7 +359,10 @@ func openAIAudit(ctx context.Context, ch *liveChannel, in *Input) (EngineResult,
 			pick = usable[n.Int64()]
 		}
 		img = openAIImageURL(pick.Image)
-		res.SentImages, res.SkippedImages, res.received = 1, res.SkippedImages-1, []int{pick.index}
+		res.SentImages, res.SkippedImages = 1, res.SkippedImages-1
+		for _, u := range usable {
+			res.received = append(res.received, u.index)
+		}
 	}
 	res.Calls = 1
 	scores, model, err := callModerations(ctx, ch, in.Text, img)

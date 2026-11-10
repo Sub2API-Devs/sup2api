@@ -660,7 +660,7 @@ func TestEnginesNameReceivedImages(t *testing.T) {
 
 	oai := &liveChannel{Type: ChannelOpenAI, BaseURL: srv.URL, Key: "k", Model: "m"}
 	res, err := openAIAudit(ctx, oai, &Input{Text: "t", Images: images})
-	if err != nil || res.Calls != 1 || res.SentImages != 1 || res.SkippedImages != 2 || len(res.received) != 1 || (res.received[0] != 1 && res.received[0] != 2) {
+	if err != nil || res.Calls != 1 || res.SentImages != 1 || res.SkippedImages != 2 || !slices.Equal(res.received, []int{1, 2}) {
 		t.Fatalf("openai = %+v (received %v), %v", res, res.received, err)
 	}
 	// The image is refused (400): the scores are of the text alone.

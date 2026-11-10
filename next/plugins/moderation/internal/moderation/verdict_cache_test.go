@@ -1461,25 +1461,22 @@ func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 		}
 	})
 
-	t.Run("not the image the OpenAI auditor picked", func(t *testing.T) {
-		// The moderation API takes one image per call. Of two, the one that
-		// was not sent is sent with the next request; then all is cached.
+	t.Run("the image the OpenAI auditor drew stands for the others", func(t *testing.T) {
+		// The moderation API takes one image per call and the auditor draws
+		// one at random: that call judges both, so both are cached as passed
+		// and the same request costs no second call.
 		one, two := "iVBORw0KGgoAAAAB", "iVBORw0KGgoAAAAC"
 		request := body("a harmless album", one, two)
 		holds := func(body, image string) bool { return strings.Contains(body, "base64,"+image) }
 		if r := send(10, "", request); !passedFresh(r) {
 			t.Fatalf("first = %+v", r)
 		}
-		if r := send(10, "", request); !passedFresh(r) {
-			t.Fatalf("second = %+v, want a run for the image that was not sent", r)
-		}
 		sent := mod.moderated()
-		if len(sent) != 2 || holds(sent[0], one) == holds(sent[0], two) || holds(sent[1], one) == holds(sent[1], two) ||
-			holds(sent[0], one) == holds(sent[1], one) || !strings.Contains(sent[0], "a harmless album") || strings.Contains(sent[1], "a harmless album") {
+		if len(sent) != 1 || holds(sent[0], one) == holds(sent[0], two) || !strings.Contains(sent[0], "a harmless album") {
 			t.Fatalf("calls = %d: %.300s", len(sent), strings.Join(sent, "\n"))
 		}
-		if r := send(10, "", request); r.GetNote() != cachedPass || len(mod.moderated()) != 2 {
-			t.Fatalf("third = %+v (%d calls)", r, len(mod.moderated()))
+		if r := send(10, "", request); r.GetNote() != cachedPass || len(mod.moderated()) != 1 {
+			t.Fatalf("second = %+v (%d calls)", r, len(mod.moderated()))
 		}
 	})
 }
