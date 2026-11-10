@@ -111,7 +111,7 @@ func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRe
 	size := hookRequestSize(in)
 	if !p.admitBytes(c, size) {
 		p.stats.busy.Add(1)
-		if p.watchLevel(in.GetMeta().GetUserId()) == LevelEnforce {
+		if p.preModerated(c, in.GetMeta().GetUserId()) {
 			return deny(http.StatusServiceUnavailable, DenyBusy, MsgBusy, notePrefix+"busy")
 		}
 		return allow(notePrefix + "busy")
@@ -136,19 +136,38 @@ func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRe
 }
 
 // precheck applies the steps every hook takes (CONTRACTS §72.5 steps 1–2):
-// off, exempt users pass, banned users are refused. nil = go on.
+// off passes, banned users are refused. nil = go on.
 func (p *Plugin) precheck(c *config, in *pluginv1.GatewayRequestHookRequest) *pluginv1.GatewayRequestHookResponse {
 	if !c.enabled {
 		return allowEmpty
 	}
-	uid := in.GetMeta().GetUserId()
-	if c.exempt[uid] {
-		return allowEmpty
-	}
-	if p.isBlocked(uid) {
+	if p.isBlocked(in.GetMeta().GetUserId()) {
 		return deny(http.StatusForbidden, DenyUserBlocked, MsgUserBlocked, notePrefix+"user blocked")
 	}
 	return nil
+}
+
+// effectiveLevel is the user's watch level, or the default level without a
+// live entry (new-api gate.go effectiveLevel).
+func (p *Plugin) effectiveLevel(c *config, uid int64) string {
+	if level := p.watchLevel(uid); level != "" {
+		return level
+	}
+	return c.defaultLevel
+}
+
+// preModerated reports whether the user's requests are moderated before
+// they are sent on (and refused on a hit): blocklisted users always,
+// allowlisted users never, everyone else at the enforce level (new-api
+// gate.go preModerated).
+func (p *Plugin) preModerated(c *config, uid int64) bool {
+	switch {
+	case c.blocklisted(uid):
+		return true
+	case c.allowlisted(uid):
+		return false
+	}
+	return p.effectiveLevel(c, uid) == LevelEnforce
 }
 
 // hookRequestSize is the bytes of the hook fields (what the request holds).
@@ -204,7 +223,7 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 	}
 	level := p.watchLevel(uid)
 	m := &moderation{cfg: c, flow: flow, snap: snap, timing: TimingPost}
-	if c.Mode == ModeEnforce || level == LevelEnforce {
+	if p.preModerated(c, uid) {
 		m.timing = TimingPre
 	}
 	if m.timing == TimingPost && !sampled(req.hash, flow.Spec.SampleRate) {
@@ -481,7 +500,10 @@ func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 			rec.Text = &t
 		}
 	}
-	if tr.keepsMessage() && m.cfg.StoreText && rec.Result != ResultError {
+	// The raw messages of the verdict chunk: always when a stage hit, of the
+	// other records with record_pass_input_message; never of an error
+	// record (§72.9).
+	if m.cfg.StoreText && rec.Result != ResultError && (tr.keepsMessage() || m.cfg.RecordPassInputMessage) {
 		if ch := m.chunkOf(tr); ch != nil {
 			s := string(ch.messages())
 			rec.InputMessage, rec.InputMessageSize = &s, len(s)

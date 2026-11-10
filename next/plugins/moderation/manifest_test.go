@@ -251,8 +251,10 @@ func TestSettingsForms(t *testing.T) {
 	}
 	// The 0.1 fields stay in the schema (api_key above all: without it the
 	// core would no longer mask it) but the settings page does not show
-	// them (§72.15); every other field is shown.
-	legacy := []string{"base_url", "api_key", "model", "system_prompt", "categories", "tool_choice", "max_turns", "temperature",
+	// them (§72.15); the keys retired in 0.8.0 (exempt_user_ids, read as the
+	// allowlist, and cache_ttl_seconds, read as verdict_cache_days) are
+	// hidden like them; every other field is shown.
+	legacy := []string{"exempt_user_ids", "cache_ttl_seconds", "base_url", "api_key", "model", "system_prompt", "categories", "tool_choice", "max_turns", "temperature",
 		"max_tokens", "timeout_ms", "on_error", "sample_rate", "group_ids", "model_patterns", "retention_days"}
 	for _, k := range order {
 		var fu struct {

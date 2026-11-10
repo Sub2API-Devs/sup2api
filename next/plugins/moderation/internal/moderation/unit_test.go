@@ -442,9 +442,22 @@ func TestDecodeSettings(t *testing.T) {
 		strings.Join(s.ExemptUserIDs, ",") != "7,8" || s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch {
 		t.Fatalf("settings = %+v", s)
 	}
+	// exempt_user_ids is the retired name of the allowlist; a missing
+	// record_pass_input_message is on.
 	c := compile(s)
-	if !c.enabled || !c.exempt[7] || c.retention[ResultPass] != 3*24*time.Hour || c.legacyReady {
+	if !c.enabled || !c.allowlisted(7) || !c.allowlisted(8) || c.allowlisted(9) || c.blocklisted(7) || c.defaultLevel != LevelObserve ||
+		c.retention[ResultPass] != 3*24*time.Hour || c.legacyReady || !s.RecordPassInputMessage {
 		t.Fatalf("config = %+v", c)
+	}
+	if s, _ := DecodeSettings([]byte(`{"record_pass_input_message":false}`)); s.RecordPassInputMessage {
+		t.Fatal("record_pass_input_message false ignored")
+	}
+	for mode, want := range map[string]string{ModeOff: LevelObserve, ModeObserve: LevelObserve, ModeEnforce: LevelEnforce} {
+		s := DefaultSettings()
+		s.Mode = mode
+		if c := compile(s); c.defaultLevel != want || c.enabled != (mode != ModeOff) {
+			t.Fatalf("mode %s: default level %q, enabled %v", mode, c.defaultLevel, c.enabled)
+		}
 	}
 	if _, err := DecodeSettings([]byte(`[1]`)); err == nil {
 		t.Fatal("array accepted")
@@ -452,6 +465,40 @@ func TestDecodeSettings(t *testing.T) {
 	s, _ = DecodeSettings([]byte(`{"block_status":451,"jev_default_set":{"items":[{"category":"custom/x","question":"q"}]}}`))
 	if s.BlockStatus != 451 || s.JevDefaultSet != nil {
 		t.Fatal("an invalid jev_default_set (no label, no threshold) must be ignored")
+	}
+}
+
+// verdict_cache_days is the cache TTL; settings saved before 0.8.0 only have
+// cache_ttl_seconds, which is read until the new key is saved.
+func TestVerdictCacheTTLSettings(t *testing.T) {
+	day := 24 * time.Hour
+	for _, tc := range []struct {
+		raw  string
+		days int
+	}{
+		{`{"cache_ttl_seconds":0}`, 0}, // the cache stays off
+		{`{"cache_ttl_seconds":86400}`, 1},
+		{`{"cache_ttl_seconds":200000}`, 3}, // rounded up
+		{`{"cache_ttl_seconds":1}`, 1},
+		{`{"cache_ttl_seconds":604800}`, 7},
+		{`{}`, 7},
+		{`{"verdict_cache_days":40}`, 30},
+		{`{"verdict_cache_days":0}`, 1},
+		{`{"verdict_cache_days":3}`, 3},
+		// The new key wins over the retired one, also over its 0.
+		{`{"verdict_cache_days":5,"cache_ttl_seconds":0}`, 5},
+		{`{"verdict_cache_days":5,"cache_ttl_seconds":86400}`, 5},
+		// Values of the wrong type are ignored like everywhere else.
+		{`{"verdict_cache_days":"x","cache_ttl_seconds":172800}`, 2},
+		{`{"cache_ttl_seconds":"x"}`, 7},
+	} {
+		s, err := DecodeSettings([]byte(tc.raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c := compile(s); s.VerdictCacheDays != tc.days || c.cacheTTL != time.Duration(tc.days)*day {
+			t.Errorf("%s: days = %d, ttl = %s, want %d days", tc.raw, s.VerdictCacheDays, c.cacheTTL, tc.days)
+		}
 	}
 }
 
@@ -641,6 +688,50 @@ func TestFallbackAndFailedStageViews(t *testing.T) {
 	if len(lines) != 3 || !strings.HasPrefix(lines[1], "第 2 级 行为审查：") || !strings.HasSuffix(lines[1], "上一级命中才进入，通过即放行") ||
 		!strings.HasPrefix(lines[2], "第 3 级 补审：") || !strings.HasSuffix(lines[2], "前面各级放行（未命中）才进入，命中即判定命中") {
 		t.Fatalf("prompt = %q", lines)
+	}
+
+	// A question-table LLM auditor is described with its questions: the
+	// dictionary defines each row with the question text, the view carries
+	// the table and the prompt line says how it judges (no thresholds: a
+	// yes is a hit).
+	def, _ := DefaultQuestions(nil)
+	llmq, err := compileAuditor(3, "llmq", AuditorLLMQuestions, 9, AuditorConfig{Questions: &JevQuestions{Items: []JevQuestion{
+		{Category: "custom/spam", Label: "垃圾广告", Question: "是否是垃圾广告？", Threshold: 0.5},
+		{Category: "sexual", Question: "是否露骨色情？", Threshold: 0.9}}}}, &liveChannel{ID: 9, Type: ChannelLLM, Name: "llm", Model: "judge-1"}, &def)
+	if err != nil {
+		t.Fatal(err)
+	}
+	qAuditors := map[int64]*liveAuditor{1: auditors[1], 3: llmq}
+	qFlow := &liveFlow{ID: 2, Name: "q", Version: 1, Spec: &Spec{Stages: []Stage{{Auditors: []int64{1}}, {Auditors: []int64{3}}}}}
+	qv := currentFlowView(qFlow, qAuditors, nil)
+	if av := qv.Stages[1].Auditors[0]; av.Type != AuditorLLMQuestions || av.Questions == nil || len(av.Questions.Items) != 2 || av.Thresholds != nil ||
+		av.Model != "judge-1" || qv.Stages[1].Role != RoleReview {
+		t.Fatalf("llm_questions view = %+v", qv.Stages[1])
+	}
+	if line := strings.Split(flowPromptText(qv), "\n")[1]; line != "第 2 级 复核：llmq（LLM 题表，judge-1；问题 2 个，逐题回答是或否，答是即命中）；上一级命中才进入，通过即放行" {
+		t.Fatalf("llm_questions prompt line = %q", line)
+	}
+	var spam, sexual *CategoryDef
+	for i := range qv.Dict.Items {
+		switch d := &qv.Dict.Items[i]; d.Code {
+		case "custom/spam":
+			spam = d
+		case "sexual":
+			sexual = d
+		}
+	}
+	if spam == nil || spam.Name != "垃圾广告" || spam.Def != "是否是垃圾广告？" || spam.Source != AuditorLLMQuestions || spam.Stage != 2 ||
+		spam.Auditor != "llmq" || spam.From != "第 2 级 · 复核 · llmq（问题原文）" {
+		t.Fatalf("llm_questions definition = %+v", spam)
+	}
+	// A row with a built-in code replaces the built-in definition in place.
+	if sexual == nil || sexual.Def != "是否露骨色情？" || sexual.Name != openAICategoryNames["sexual"] || sexual.Source != AuditorLLMQuestions ||
+		len(qv.Dict.Items) != len(OpenAICategories)+1 {
+		t.Fatalf("llm_questions built-in row = %+v (%d items)", sexual, len(qv.Dict.Items))
+	}
+	if prompt := buildAnalysisPrompt("", nil, qv, *qv.Dict); !strings.Contains(prompt, "- custom/spam（垃圾广告）：是否是垃圾广告？") ||
+		!strings.Contains(prompt, "LLM 题表") {
+		t.Fatalf("analysis prompt = %s", prompt)
 	}
 
 	fail := Outcome{Err: errors.New("boom")}

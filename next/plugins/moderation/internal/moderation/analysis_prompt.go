@@ -65,7 +65,7 @@ func stageRole(index int, fallback, hasJev bool) string {
 type CategoryDef struct {
 	Code    string `json:"category"`
 	Name    string `json:"name"`
-	Source  string `json:"source"` // openai_moderation | typesafe | llm_verdict
+	Source  string `json:"source"` // openai_moderation | typesafe | llm_verdict | llm_questions
 	Stage   int    `json:"stage,omitempty"`
 	Auditor string `json:"auditor,omitempty"`
 	From    string `json:"from"`
@@ -118,12 +118,12 @@ func (d *CategoryDict) merge(at map[string]int, defs []CategoryDef) {
 }
 
 // auditorDefs: OpenAI defines the 13 codes with the OpenAI meanings, Jev
-// each row with its question text, llm_verdict each category with its
-// description.
+// and llm_questions each row of the question table with its question text,
+// llm_verdict each category with its description.
 func auditorDefs(a *liveAuditor, stage int, from string) []CategoryDef {
 	var defs []CategoryDef
 	switch {
-	case a.Type == AuditorTypeSafe && a.questions != nil:
+	case (a.Type == AuditorTypeSafe || a.Type == AuditorLLMQuestions) && a.questions != nil:
 		for _, q := range a.questions.Items {
 			defs = append(defs, CategoryDef{Code: q.Category, Name: cmp.Or(q.Label, openAICategoryNames[q.Category], q.Category),
 				Source: a.Type, Stage: stage, Auditor: a.Name, From: from + "（问题原文）", Def: q.Question})
@@ -232,7 +232,7 @@ func currentAuditorView(id int64, a *liveAuditor) AuditorRefView {
 	}
 	av := AuditorRefView{AuditorID: id, Name: a.Name, Type: a.Type}
 	switch a.Type {
-	case AuditorTypeSafe:
+	case AuditorTypeSafe, AuditorLLMQuestions:
 		av.Questions = a.questions
 	case AuditorOpenAI:
 		av.Thresholds = a.thresholds
@@ -267,7 +267,8 @@ func stageStructure(spec *Spec, auditors map[int64]*liveAuditor) []StageView {
 	return views
 }
 
-var auditorTypeLabels = map[string]string{AuditorOpenAI: "OpenAI Moderation", AuditorTypeSafe: "TypeSafe Jev", AuditorLLMVerdict: "大模型判定"}
+var auditorTypeLabels = map[string]string{AuditorOpenAI: "OpenAI Moderation", AuditorTypeSafe: "TypeSafe Jev", AuditorLLMVerdict: "大模型判定",
+	AuditorLLMQuestions: "LLM 题表"}
 
 // flowPromptText: one line per stage, "第 i 级 角色：审核器（类型，模型；阈值摘要）∥ …".
 func flowPromptText(v *FlowVersionView) string {
@@ -298,6 +299,10 @@ func auditorPromptText(a AuditorRefView) string {
 	}
 	model := cmp.Or(a.Model, "渠道不可用")
 	switch {
+	case a.Type == AuditorLLMQuestions && a.Questions != nil:
+		// The model answers each question yes or no; the thresholds of the
+		// table are not used.
+		return fmt.Sprintf("%s（%s，%s；问题 %d 个，逐题回答是或否，答是即命中）", a.Name, auditorTypeLabels[a.Type], model, len(a.Questions.Items))
 	case a.Questions != nil:
 		var thresholds []string
 		for _, q := range a.Questions.Items {

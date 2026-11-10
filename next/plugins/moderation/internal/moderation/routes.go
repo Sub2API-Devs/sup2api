@@ -220,11 +220,14 @@ type RelatedItem struct {
 
 // UserState is the record user's moderation state now.
 type UserState struct {
-	Watch   *Watch     `json:"watch"`
-	Exempt  bool       `json:"exempt"`
-	Staff   bool       `json:"staff"`
-	Blocked bool       `json:"blocked"`
-	Until   *time.Time `json:"blocked_until"`
+	Watch *Watch `json:"watch"`
+	// Allowlisted, Blocklisted: the user lists of the settings (a user on
+	// both is blocklisted).
+	Allowlisted bool       `json:"allowlisted"`
+	Blocklisted bool       `json:"blocklisted"`
+	Staff       bool       `json:"staff"`
+	Blocked     bool       `json:"blocked"`
+	Until       *time.Time `json:"blocked_until"`
 }
 
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, endpoint, session_fp, mode, timing, result,
@@ -528,11 +531,12 @@ func eventExtras(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
 	return nil
 }
 
-// userState is a user's moderation state now: watch entry, exemption,
+// userState is a user's moderation state now: watch entry, user lists,
 // moderator, block.
 func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (UserState, error) {
 	now := p.now().UTC()
-	st := UserState{Exempt: p.cfg.Load().exempt[uid], Staff: p.isStaff(ctx, uid)}
+	c := p.cfg.Load()
+	st := UserState{Allowlisted: c.allowlisted(uid), Blocklisted: c.blocklisted(uid), Staff: p.isStaff(ctx, uid)}
 	if until, ok := (*p.blocked.Load())[uid]; ok && (until.IsZero() || now.Before(until)) {
 		st.Blocked = true
 		if !until.IsZero() {
@@ -551,8 +555,9 @@ func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (Us
 	return st, nil
 }
 
-// getEventInput returns the raw moderated messages of a record (stored on a
-// first-stage hit).
+// getEventInput returns the raw moderated messages of a record (stored
+// when a stage hit, and of the other records with
+// record_pass_input_message).
 func (p *Plugin) getEventInput(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	id, bad := parseID(req, "id")
 	if bad != nil {
@@ -749,7 +754,7 @@ func (p *Plugin) createBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		errs = errs.Add("reason", "too_long", "reason must be at most 500 characters / 原因最多 500 字")
 	}
 	if len(errs) == 0 {
-		errs = p.protectedUser(ctx, p.cfg.Load(), uid)
+		errs = p.unbannableUser(ctx, p.cfg.Load(), uid)
 	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid block / 封禁参数无效", errs), nil

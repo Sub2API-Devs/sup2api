@@ -33,11 +33,29 @@ func TestStatsAPIs(t *testing.T) {
 	if st.Today.Audited != 4 || st.Today.Suspicious != 1 || st.Today.Blocked != 1 || st.Today.Overturned != 1 || st.Today.CacheSkipped != 1 {
 		t.Fatalf("today = %+v", st.Today)
 	}
+	// mode is the master switch and the default level in one.
+	if !st.Enabled || st.Mode != ModeEnforce || st.DefaultLevel != LevelEnforce {
+		t.Fatalf("status mode = %q, default level = %q", st.Mode, st.DefaultLevel)
+	}
+	for mode, want := range map[string]string{ModeObserve: LevelObserve, ModeOff: LevelObserve} {
+		if errs := h.Configure(map[string]any{"mode": mode, "record_pass": true}, nil); len(errs) > 0 {
+			t.Fatal(errs)
+		}
+		if got := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); got.Mode != mode || got.DefaultLevel != want || got.Enabled != (mode != ModeOff) {
+			t.Fatalf("mode %s: status = %q %q %v", mode, got.Mode, got.DefaultLevel, got.Enabled)
+		}
+	}
+	if errs := h.Configure(map[string]any{"mode": ModeEnforce, "record_pass": true}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
 	if len(st.Funnels) != 1 || st.Funnels[0].FlowID != flow || len(st.Funnels[0].Stages) != 2 ||
 		st.Funnels[0].Stages[0].Received != 3 || st.Funnels[0].Stages[1].Received != 2 || st.Funnels[0].Stages[1].Hit != 1 {
 		t.Fatalf("funnels = %+v", st.Funnels)
 	}
-	if len(st.Auditors) != 2 || len(st.Channels) != 2 || st.AlertPercent != 5 || st.Watch.Watching != 1 || st.Watch.WatchingWithNew != 1 {
+	// Under default enforce the refused user joined the watch list at the
+	// enforce level.
+	if len(st.Auditors) != 2 || len(st.Channels) != 2 || st.AlertPercent != 5 || st.Watch.Watching != 0 || st.Watch.WatchingWithNew != 0 ||
+		st.Watch.Blocking != 1 {
 		t.Fatalf("status = %+v", st)
 	}
 	tr := decodeData[TrendResult](t, h.Do("GET", "/stats/trend", map[string]string{"granularity": "hour"}, nil))
@@ -143,7 +161,7 @@ func TestFlowDraftTimeoutAndDelete(t *testing.T) {
 
 func TestWatchListFiltersAndSeen(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "allowlist_user_ids": []string{"12"}})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	mustHook(t, h, hookReqAs(11, "", "MOD-HIT-violence one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual one"))
@@ -162,6 +180,10 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	if items[0].UserID != 12 || items[0].SuspiciousTotal != 2 || items[0].GroupID != 9 || items[0].Flow == nil ||
 		len(items[0].TopCategories) == 0 || items[0].TopCategories[0].Category != "sexual" {
 		t.Fatalf("watch items = %+v", items)
+	}
+	// Each row says whether the user is on a user list of the settings.
+	if !items[0].Allowlisted || items[0].Blocklisted || items[1].UserID != 11 || items[1].Allowlisted || items[1].Blocklisted {
+		t.Fatalf("list marks = %+v", items)
 	}
 	if got := list(map[string]string{"category": "violence"}); len(got) != 1 || got[0].UserID != 11 {
 		t.Fatalf("category filter = %+v", got)

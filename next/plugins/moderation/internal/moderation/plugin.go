@@ -58,6 +58,9 @@ type Plugin struct {
 	watchVersion atomic.Int64
 
 	legacyDone atomic.Bool
+	// parityDone: the one-time 0.8.0 conversion of the watch list ran
+	// (convertParityOnce).
+	parityDone atomic.Bool
 	// configured: Configure ran at least once, so the legacy conversion
 	// sees the real settings and not the defaults.
 	configured atomic.Bool
@@ -184,6 +187,9 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 	s, err := DecodeSettings(cfg.JSON)
 	if err != nil {
 		return pluginsdk.FieldErrors{}.Add("", "invalid_json", "settings must be a JSON object / 设置必须是 JSON 对象").Err()
+	}
+	for _, key := range s.truncated {
+		p.log.Warn("moderation: user list cut to its limit", "key", key, "limit", maxUserList)
 	}
 	c := compile(s)
 	c.settingsHash = settingsDigest(cfg.JSON)

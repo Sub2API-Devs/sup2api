@@ -349,6 +349,22 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 	if back.ViolationCount != 0 || back.ExpiresAt == nil {
 		t.Fatalf("after level change = %+v", back)
 	}
+	// Under default enforce the entry's own level wins: the observe-level
+	// user is still only moderated after the request, a user without an
+	// entry before it (and joins the list at the enforce level).
+	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if r := mustHook(t, h, hookReqAs(3, "", "a harmless question under default enforce")); denied(r) || r.GetNote() != notePrefix+"queued" {
+		t.Fatalf("observe entry under default enforce = %+v", r)
+	}
+	if r := mustHook(t, h, hookReqAs(6, "", "MOD-HIT-sexual four")); !denied(r) {
+		t.Fatalf("no entry under default enforce not refused: %+v", r)
+	}
+	waitFor(t, "enforce-level auto entry", func() bool { return p.watchLevel(6) == LevelEnforce })
+	if errs := h.Configure(map[string]any{"mode": ModeObserve}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
 	review := func(rid, status string, want int) {
 		t.Helper()
 		var ids []int64
@@ -566,6 +582,9 @@ func TestConfigValidation(t *testing.T) {
 
 func TestBansExemptAndModeOff(t *testing.T) {
 	mod := newFakeMod(t)
+	// exempt_user_ids is the retired name of the allowlist: user 8 is
+	// moderated after the request, recorded and watched, but never refused
+	// or banned.
 	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "ban_threshold": 2, "exempt_user_ids": []string{"8"}})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	mustHook(t, h, hookReq("MOD-HIT-sexual 1"))
@@ -574,13 +593,29 @@ func TestBansExemptAndModeOff(t *testing.T) {
 	if r := mustHook(t, h, hookReq("hello")); !denied(r) || r.GetDenyCode() != DenyUserBlocked {
 		t.Fatalf("banned user = %+v", r)
 	}
-	if r := mustHook(t, h, hookReqAs(8, "", "MOD-HIT-sexual")); r.GetNote() != "" {
-		t.Fatalf("exempt user moderated: %+v", r)
-	}
-	for _, path := range []string{"/watchlist", "/blocks"} {
-		if resp := h.Do("POST", path, nil, map[string]any{"user_id": 8}); resp.GetStatus() != 400 || !strings.Contains(string(resp.GetBody()), `"exempt"`) {
-			t.Fatalf("exempt %s = %d %s", path, resp.GetStatus(), resp.GetBody())
+	for i := 1; i <= 3; i++ {
+		if r := mustHook(t, h, hookReqAs(8, "", fmt.Sprintf("MOD-HIT-sexual allowlisted %d", i))); denied(r) || r.GetNote() != notePrefix+"queued" {
+			t.Fatalf("allowlisted user = %+v", r)
 		}
+	}
+	waitEvents(t, h, map[string]string{"result": "hit", "user_id": "8"}, 3)
+	waitFor(t, "allowlisted user watched", func() bool {
+		w := decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "8"}, nil))
+		return len(w) == 1 && w[0].ViolationCount == 3 && w[0].Allowlisted && !w[0].Blocklisted
+	})
+	if p.isBlocked(8) {
+		t.Fatal("allowlisted user banned")
+	}
+	if n := len(decodeData[[]Block](t, h.Do("GET", "/blocks", nil, nil))); n != 1 {
+		t.Fatalf("blocks = %d, want only user 3", n)
+	}
+	// By hand an allowlisted user cannot be banned, but can be on the watch
+	// list (the entry exists already).
+	if resp := h.Do("POST", "/blocks", nil, map[string]any{"user_id": 8}); resp.GetStatus() != 400 || !strings.Contains(string(resp.GetBody()), `"allowlisted"`) {
+		t.Fatalf("ban of an allowlisted user = %d %s", resp.GetStatus(), resp.GetBody())
+	}
+	if resp := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 8}); resp.GetStatus() != http.StatusConflict {
+		t.Fatalf("watch of an allowlisted user = %d %s", resp.GetStatus(), resp.GetBody())
 	}
 	if errs := h.Configure(map[string]any{"mode": ModeOff}, nil); len(errs) > 0 {
 		t.Fatal(errs)

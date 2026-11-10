@@ -312,9 +312,12 @@ type StatusCosts struct {
 
 // Status is GET /status.
 type Status struct {
-	Enabled      bool           `json:"enabled"`
-	Running      bool           `json:"running"`
-	Mode         string         `json:"mode"`
+	Enabled bool   `json:"enabled"`
+	Running bool   `json:"running"`
+	Mode    string `json:"mode"`
+	// DefaultLevel is the level mode gives a user without a watch entry
+	// (observe when mode is off).
+	DefaultLevel string         `json:"default_level"`
 	AlertPercent int            `json:"error_rate_alert_percent"`
 	Today        TodayCounts    `json:"today"`
 	TodayFrom    time.Time      `json:"today_from"`
@@ -353,7 +356,7 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 		return nil, err
 	}
 	sum := sumStatusRows(rows, today, lastHour)
-	out := &Status{Enabled: c.enabled, Running: p.host != nil, Mode: c.Mode, AlertPercent: c.ErrorRateAlertPercent, TodayFrom: today,
+	out := &Status{Enabled: c.enabled, Running: p.host != nil, Mode: c.Mode, DefaultLevel: c.defaultLevel, AlertPercent: c.ErrorRateAlertPercent, TodayFrom: today,
 		Today: sum.today, Auditors: sum.health(c.ErrorRateAlertPercent), Funnels: sum.funnels(names), Queue: p.queues(), Runtime: p.runtimeState(ctx),
 		Costs: StatusCosts{Channels: []CostRef{}, Auditors: costRefs(sum.auditorCosts)}, Channels: []HealthRow{}}
 	if err := p.addChannelStatus(ctx, db, out, from, today, lastHour, c.ErrorRateAlertPercent); err != nil {

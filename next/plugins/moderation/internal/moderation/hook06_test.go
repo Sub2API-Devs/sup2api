@@ -264,6 +264,98 @@ func TestErrorRecordsKeepShortText(t *testing.T) {
 	}
 }
 
+// The raw messages of the verdict chunk are kept when a stage hit; of the
+// other records only with record_pass_input_message; never of an error
+// record, and never with store_text off (CONTRACTS §72.9).
+func TestInputMessageKeptPerSetting(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	// Group 9: one stage. Group 10: two stages. Group 11: one stage and a
+	// fallback stage. hate is an OpenAI category only, custom/jailbreak a Jev
+	// one only.
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	auditors := decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil))
+	channels := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
+	if len(auditors) != 1 || len(channels) != 1 {
+		t.Fatalf("auditors %d, channels %d", len(auditors), len(channels))
+	}
+	oai := auditors[0].ID
+	jevCh := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelTypeSafe, "name": "jev", "base_url": mod.srv.URL, "api_key": "key-jev"}))
+	jev := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": "jev", "type": AuditorTypeSafe, "channel_id": jevCh.ID})).ID
+	publish := func(name string, group int64, stages ...Stage) {
+		t.Helper()
+		spec := Spec{SampleRate: 100, Stages: stages}
+		spec.ModelFilter.Type = FilterAll
+		f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": name, "draft": spec}))
+		decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/groups", f.ID), nil, map[string]any{"groups": []int64{group}}))
+		decodeData[FlowView](t, h.Do("POST", fmt.Sprintf("/flows/%d/publish", f.ID), nil, map[string]any{"expected_version": 0}))
+	}
+	publish("two stages", 10, Stage{Auditors: []int64{oai}, Combine: CombineAny}, Stage{Auditors: []int64{jev}, Combine: CombineAny})
+	publish("fallback", 11, Stage{Auditors: []int64{oai}, Combine: CombineAny}, Stage{Auditors: []int64{jev}, Combine: CombineAny, Fallback: true})
+	db, _ := p.db(context.Background())
+	const on, off = true, false
+	for i, tc := range []struct {
+		name      string
+		group     int64
+		text      string
+		storeText bool
+		passToo   bool // record_pass_input_message
+		result    string
+		kept      bool
+	}{
+		{"hit", 9, "MOD-HIT-sexual words", on, off, ResultBlock, true},
+		{"first stage failed, second hit", 10, "OAI-500 MOD-HIT-sexual words", on, off, ResultBlock, true},
+		{"first stage hit, second passed", 10, "MOD-HIT-hate words", on, off, ResultOverturned, true},
+		{"pass with the switch", 9, "calm words", on, on, ResultPass, true},
+		{"pass without the switch", 9, "calm words", on, off, ResultPass, false},
+		{"fallback stage hit", 11, "MOD-HIT-custom/jailbreak words", on, off, ResultBlock, true},
+		{"error", 9, "MOD-500 " + strings.Repeat("private ", 40), on, on, ResultError, false},
+		{"hit without store_text", 9, "MOD-HIT-sexual words", off, on, ResultBlock, false},
+		{"pass without store_text", 9, "calm words", off, on, ResultPass, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if errs := h.Configure(map[string]any{"mode": ModeEnforce, "record_pass": true, "store_text": tc.storeText,
+				"record_pass_input_message": tc.passToo, "error_text_max_chars": 50, "cache_ttl_seconds": 0}, nil); len(errs) > 0 {
+				t.Fatal(errs)
+			}
+			rid := fmt.Sprintf("keep-%d", i)
+			req := hookReqAs(3, rid, fmt.Sprintf("%s %d", tc.text, i))
+			req.Meta.GroupId = tc.group
+			if r := mustHook(t, h, req); denied(r) != (tc.result == ResultBlock) {
+				t.Fatalf("hook = %+v", r)
+			}
+			ev := waitEvents(t, h, map[string]string{"request_id": rid}, 1)[0]
+			if ev.Result != tc.result {
+				t.Fatalf("result = %s, want %s (trace %s)", ev.Result, tc.result, ev.Trace)
+			}
+			var msg, text *string
+			var size int
+			if err := db.QueryRow(context.Background(), `SELECT input_message::text, input_message_size, text FROM events WHERE id = $1`, ev.ID).Scan(&msg, &size, &text); err != nil {
+				t.Fatal(err)
+			}
+			if kept := msg != nil; kept != tc.kept || (size > 0) != tc.kept || (ev.InputMessageSize > 0) != tc.kept {
+				t.Fatalf("input message kept = %v (size %d, listed %d), want %v", kept, size, ev.InputMessageSize, tc.kept)
+			}
+			if tc.kept && !strings.Contains(*msg, fmt.Sprintf("words %d", i)) {
+				t.Fatalf("input message = %s", *msg)
+			}
+			switch {
+			case !tc.storeText:
+				if text != nil {
+					t.Fatalf("text stored without store_text: %q", *text)
+				}
+			case tc.result == ResultError:
+				// Error records keep only the start of the text.
+				if text == nil || len([]rune(*text)) != 50 {
+					t.Fatalf("error text = %v", text)
+				}
+			case text == nil || !strings.Contains(*text, tc.text):
+				t.Fatalf("text = %v", text)
+			}
+		})
+	}
+}
+
 // The cleanup job expires watch entries and bans before the purge, which
 // gets the rest of the job time minus a reserve: a long purge no longer
 // skips them.

@@ -210,7 +210,7 @@ func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 	c := p.cfg.Load()
 	watchChanged, analyze, banned := false, false, map[int64]bool{}
 	for i, e := range evs {
-		if !e.suspicious() || e.UserID <= 0 || c.exempt[e.UserID] || p.isStaff(ctx, e.UserID) {
+		if !e.suspicious() || e.UserID <= 0 || p.isStaff(ctx, e.UserID) {
 			continue
 		}
 		changed, queued, err := p.recordWatchHit(ctx, c, e, ids[i])
@@ -219,7 +219,10 @@ func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 		}
 		watchChanged = watchChanged || changed
 		analyze = analyze || queued
-		banned[e.UserID] = true
+		// Allowlisted users are watched like everyone else but never banned.
+		if !c.allowlisted(e.UserID) {
+			banned[e.UserID] = true
+		}
 	}
 	if watchChanged {
 		p.watchChanged(ctx)
@@ -239,7 +242,7 @@ func newEpoch() int64 {
 }
 
 // recordWatchHit adds the user to the watch list or counts the violation
-// (one per request id, observe level only). changed = the level set changed;
+// (one per request id; see countWatchHit for the levels that count). changed = the level set changed;
 // queued = the count reached analysis_every_violations and an analysis was
 // queued (the count restarts in a new window, §72.13.4).
 func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, eventID int64) (changed, queued bool, err error) {
@@ -273,7 +276,8 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 
 // liveWatchEntry returns the user's unexpired watch entry: an expired one
 // is removed first, and with auto_watch a user not on the list joins it at
-// observe level (§72.8). changed: an entry was removed or added;
+// the default level, so that under default enforce the new entry does not
+// lower the user to observe (§72.8, new-api autoAddModerationWatch). changed: an entry was removed or added;
 // found=false: the user is not watched.
 func liveWatchEntry(ctx context.Context, tx pgx.Tx, c *config, uid int64, now time.Time) (w Watch, found, changed bool, err error) {
 	if w, found, err = loadWatch(ctx, tx, uid); err != nil {
@@ -289,22 +293,25 @@ func liveWatchEntry(ctx context.Context, tx pgx.Tx, c *config, uid int64, now ti
 		return w, found, changed, nil
 	}
 	exp := now.Add(c.watchFor)
-	w = Watch{UserID: uid, Level: LevelObserve, Source: "auto", SinceAt: now, ExpiresAt: &exp, ViolationEpoch: newEpoch()}
+	w = Watch{UserID: uid, Level: c.defaultLevel, Source: "auto", SinceAt: now, ExpiresAt: &exp, ViolationEpoch: newEpoch()}
 	if _, err := tx.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, since_at, expires_at, violation_epoch, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $4)`, w.UserID, w.Level, w.Source, now, exp, w.ViolationEpoch); err != nil {
 		return w, false, false, err
 	}
-	if err := watchEvent(ctx, tx, watchChange{uid: uid, action: "auto_add", to: LevelObserve, reason: "首次可疑记录 / first suspicious record"}); err != nil {
+	if err := watchEvent(ctx, tx, watchChange{uid: uid, action: "auto_add", to: w.Level, reason: "首次可疑记录 / first suspicious record"}); err != nil {
 		return w, false, false, err
 	}
 	return w, true, true, nil
 }
 
-// countWatchHit counts a hit on the entry w. At observe level it also
-// extends the expiry, counts the violation once per request id, and queues
-// an analysis when the count reaches analysis_every_violations (queued).
+// countWatchHit counts a hit on the entry w. An observe entry, and under
+// default enforce an enforce entry too, counts the violation once per
+// request id and queues an analysis when the count reaches
+// analysis_every_violations (queued); only an observe entry extends its
+// expiry (new-api ApplyWatchHit).
 func (p *Plugin) countWatchHit(ctx context.Context, tx pgx.Tx, c *config, w Watch, e eventRec, eventID int64, now time.Time) (queued bool, err error) {
-	if w.Level != LevelObserve {
+	counts := w.Level == LevelObserve || (c.defaultLevel == LevelEnforce && w.Level == LevelEnforce)
+	if !counts {
 		_, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, last_hit_at = $2, updated_at = $2 WHERE user_id = $1`, e.UserID, now)
 		return false, err
 	}
@@ -315,8 +322,8 @@ func (p *Plugin) countWatchHit(ctx context.Context, tx pgx.Tx, c *config, w Watc
 			return false, err
 		}
 	}
-	var expArg *time.Time
-	if w.ExpiresAt != nil {
+	expArg := w.ExpiresAt
+	if w.Level == LevelObserve && w.ExpiresAt != nil {
 		exp := now.Add(c.watchFor)
 		if w.ExpiresAt.After(exp) {
 			exp = *w.ExpiresAt
@@ -526,6 +533,7 @@ func (p *Plugin) refreshLoop(ctx context.Context) {
 		}
 		rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		p.convertLegacyOnce(rctx)
+		p.convertParityOnce(rctx)
 		if err := p.reloadBlocks(rctx); err != nil && ctx.Err() == nil {
 			p.log.Debug("moderation: block list reload failed", "error", err.Error())
 		}

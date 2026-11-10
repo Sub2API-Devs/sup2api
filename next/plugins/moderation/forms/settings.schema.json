@@ -14,9 +14,19 @@
       ],
       "default": "off"
     },
-    "exempt_user_ids": {
+    "allowlist_user_ids": {
       "type": "array",
-      "title": "Exempt user IDs",
+      "title": "Allowlist user IDs",
+      "default": [],
+      "maxItems": 1000,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]+$"
+      }
+    },
+    "blocklist_user_ids": {
+      "type": "array",
+      "title": "Blocklist user IDs",
       "default": [],
       "maxItems": 1000,
       "items": {
@@ -175,6 +185,11 @@
       "title": "Store moderated text",
       "default": true
     },
+    "record_pass_input_message": {
+      "type": "boolean",
+      "title": "Raw messages of passed records",
+      "default": true
+    },
     "hit_retention_days": {
       "type": "integer",
       "title": "Hit retention (days)",
@@ -231,12 +246,12 @@
       "maximum": 60000,
       "default": 10000
     },
-    "cache_ttl_seconds": {
+    "verdict_cache_days": {
       "type": "integer",
-      "title": "Cache TTL (s)",
-      "minimum": 0,
-      "maximum": 604800,
-      "default": 86400
+      "title": "Verdict cache (days)",
+      "minimum": 1,
+      "maximum": 30,
+      "default": 7
     },
     "cache_entries": {
       "type": "integer",
@@ -507,6 +522,23 @@
       "maximum": 3650,
       "default": 30,
       "readOnly": true
+    },
+    "exempt_user_ids": {
+      "type": "array",
+      "title": "Exempt user IDs (retired)",
+      "default": [],
+      "maxItems": 1000,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]+$"
+      }
+    },
+    "cache_ttl_seconds": {
+      "type": "integer",
+      "title": "Cache TTL (s, retired)",
+      "minimum": 0,
+      "maximum": 604800,
+      "default": 86400
     }
   }
 }
