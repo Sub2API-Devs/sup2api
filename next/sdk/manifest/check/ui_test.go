@@ -1,6 +1,7 @@
 package check
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -398,6 +399,11 @@ func TestHostUICompatNeedsMatchingHostCompat(t *testing.T) {
 		{"^3.6", ">=0.1.256 <0.2.0", false},
 		{"~3.6.1", ">=0.1.240 <0.2.0", true},
 		{"^3.5", ">=0.1.229 <0.2.0", false},
+		// UI 3.8 starts at core 0.1.269; 0.1.268 is the last core with 3.7.
+		{"^3.8", ">=0.1.262 <0.2.0", true},
+		{"^3.8", ">=0.1.268 <0.2.0", true},
+		{"^3.8", ">=0.1.269 <0.2.0", false},
+		{"^3.7", ">=0.1.262 <0.2.0", false},
 	}
 	for _, tc := range cases {
 		c := uiCodes(uiNativeManifest(tc.ui, tc.host))
@@ -491,6 +497,92 @@ func TestEditorSectionSlot(t *testing.T) {
 	m = uiNativeManifest("^3.7", ">=0.1.261 <0.2.0")
 	if c := uiCodes(m); c["hostCompat"] != "below_ui_core" {
 		t.Fatalf("hostUICompat ^3.7 needs core 0.1.262: %v", c)
+	}
+}
+
+// typedManifest is controlsManifest (one account type, apikey) with a native
+// UI, a detail tab, a quota column decoration and a bulk account action all
+// limited to apikey, on hostUICompat ^3.8 and the given hostCompat.
+func typedManifest(hostCompat string) *manifest.Manifest {
+	m := controlsManifest(nil)
+	m.HostCompat, m.HostUICompat = hostCompat, "^3.8"
+	m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapHTTPRoutes})
+	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "ui.native"}, manifest.HostPermission{ID: "routes.admin"})
+	m.UserPermissions = []manifest.UserPermission{{Key: "quota:reset", Label: manifest.LocalizedText{"en": "Reset quota"}}}
+	m.Routes = []manifest.Route{{Method: "POST", Path: "/quota/reset", Scope: "admin", Permission: "quota:reset"}}
+	m.UI = &manifest.UI{
+		Native: &manifest.NativeUI{Entry: "ui/native/entry.js"},
+		Slots: []manifest.Slot{
+			{Slot: manifest.SlotAccountDetailTabs, Component: "QuotaTab", AccountTypes: []string{"apikey"}},
+			{Slot: manifest.SlotAccountListQuota, Component: "QuotaBadge", AccountTypes: []string{"apikey"}},
+		},
+		AccountActions: []manifest.AccountAction{{ID: "reset", Label: manifest.LocalizedText{"en": "Reset"}, Permission: "quota:reset",
+			Route: "POST /quota/reset", Bulk: true, AccountTypes: []string{"apikey"}}},
+	}
+	return m
+}
+
+// account.detail.tabs, account.list.quota and ui.accountActions take
+// accountTypes (UI 3.8) under the editor section's rules - the plugin's own
+// types, once each - and hold hostCompat to core 0.1.269, where the console
+// honours them (an older console would offer the tab or action on every
+// account, and never renders the quota decoration).
+func TestUI38TypedExtensions(t *testing.T) {
+	if c := controlCodes(typedManifest(">=0.1.269 <0.2.0")); len(c) > 0 {
+		t.Fatalf("typed UI 3.8 declarations must be accepted: %v", c)
+	}
+	for _, tc := range []struct {
+		name   string
+		mutate func(*manifest.UI)
+		want   map[string]string
+	}{
+		{"foreign types", func(u *manifest.UI) {
+			u.Slots[0].AccountTypes = []string{"oauth"}
+			u.Slots[1].AccountTypes = []string{"oauth"}
+			u.AccountActions[0].AccountTypes = []string{"apikey", "oauth"}
+		}, map[string]string{"ui.slots[0].accountTypes[0]": "invalid", "ui.slots[1].accountTypes[0]": "invalid", "ui.accountActions[0].accountTypes[1]": "invalid"}},
+		{"repeated types", func(u *manifest.UI) {
+			u.Slots[0].AccountTypes = []string{"apikey", "apikey"}
+			u.Slots[1].AccountTypes = []string{"apikey", "apikey"}
+			u.AccountActions[0].AccountTypes = []string{"apikey", "apikey"}
+		}, map[string]string{"ui.slots[0].accountTypes[1]": "invalid", "ui.slots[1].accountTypes[1]": "invalid", "ui.accountActions[0].accountTypes[1]": "invalid"}},
+		{"label and icon stay editor-section only", func(u *manifest.UI) {
+			u.Slots[0].Icon = "refresh"
+			u.Slots[1].Label = manifest.LocalizedText{"en": "Quota"}
+		}, map[string]string{"ui.slots[0]": "unsupported", "ui.slots[1]": "unsupported"}},
+		{"other slots take no accountTypes", func(u *manifest.UI) { u.Slots[0].Slot = "account.form.widgets" },
+			map[string]string{"ui.slots[0]": "unsupported"}},
+	} {
+		m := typedManifest(">=0.1.269 <0.2.0")
+		tc.mutate(m.UI)
+		if c := controlCodes(m); !maps.Equal(c, tc.want) {
+			t.Errorf("%s: got %v, want %v", tc.name, c, tc.want)
+		}
+	}
+	// Each declaration alone needs core 0.1.269, whatever hostUICompat says;
+	// the quota decoration even without accountTypes.
+	for name, keep := range map[string]func(*manifest.UI){
+		"typed detail tab": func(u *manifest.UI) { u.Slots, u.AccountActions[0].AccountTypes = u.Slots[:1], nil },
+		"typed action":     func(u *manifest.UI) { u.Slots = nil },
+		"quota decoration": func(u *manifest.UI) {
+			u.Slots, u.AccountActions = u.Slots[1:], nil
+			u.Slots[0].AccountTypes = nil
+		},
+	} {
+		m := typedManifest(">=0.1.268 <0.2.0")
+		m.HostUICompat = "^3.3"
+		keep(m.UI)
+		if c := controlCodes(m); c["hostCompat"] != "below_ui_core" || len(c) != 1 {
+			t.Errorf("a %s needs core 0.1.269: %v", name, c)
+		}
+	}
+	// Without accountTypes a detail tab and an action keep their old floors.
+	m := typedManifest(">=0.1.262 <0.2.0")
+	m.HostUICompat = "^3.7"
+	m.UI.Slots = m.UI.Slots[:1]
+	m.UI.Slots[0].AccountTypes, m.UI.AccountActions[0].AccountTypes = nil, nil
+	if c := controlCodes(m); len(c) > 0 {
+		t.Fatalf("an untyped detail tab and action keep their old floors: %v", c)
 	}
 }
 

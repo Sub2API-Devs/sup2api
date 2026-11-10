@@ -3,7 +3,7 @@ import { enableAutoUnmount, flushPromises, shallowMount, type DOMWrapper } from 
 import { reactive, ref } from 'vue'
 import type { Account, AccountType, QuotaSnapshot } from '@/api/types'
 import { i18n } from '@/i18n'
-import { SButton, SDropdown, SModal } from '@sub2api/ui'
+import { SButton, SDropdown, SModal, STabs } from '@sub2api/ui'
 import AccountsView from './AccountsView.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountEditor from './AccountEditor.vue'
@@ -644,6 +644,60 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
     await reader.get('[data-testid="select-rows"]').trigger('click')
     await flushPromises()
     expect(bulkMore(reader).props('actions')).toContainEqual(expect.objectContaining({ key: 'declared:dynweight:reset', label: '重置动态权重（0）', disabled: true }))
+  })
+
+  it('limits an action declaring accountTypes to its plugin rows of those types, in the row menu and the bulk bar (UI 3.8)', async () => {
+    mocks.accountActions = [{ ...reset, accountTypes: ['device'] }]
+    list.items.value = [row(29), row(30, { plugin_key: 'dynweight', type: 'device' }), row(31, { type: 'device' }), row(32, { plugin_key: 'dynweight', type: 'device', orphaned: true }), row(33, { plugin_key: 'dynweight', type: 'device' })]
+    const w = render(stubs)
+    const hidden = dropdowns(w).slice(0, 5).map((d) => d.props('actions').find((x: { key: string }) => x.key === 'declared:dynweight:reset')?.hidden)
+    expect(hidden).toEqual([true, false, true, true, false])
+    await w.get('[data-testid="select-rows"]').trigger('click')
+    await flushPromises()
+    expect(bulkMore(w).props('actions')).toContainEqual(expect.objectContaining({ key: 'declared:dynweight:reset', label: '重置动态权重（2）', disabled: false }))
+    bulkMore(w).vm.$emit('select', 'declared:dynweight:reset')
+    await flushPromises()
+    posted([30, 33])
+  })
+
+  it('shows a detail tab declaring accountTypes only on its plugin accounts of those types, back on the overview for each account (UI 3.8)', async () => {
+    const tab = (pluginKey: string, name: string, accountTypes?: string[]): SlotEntry => ({ pluginKey, name, component: {}, accountTypes })
+    mocks.slotEntries.mockImplementation((slot: string) => (slot === 'account.detail.tabs' ? [tab('anthropic', 'Usage'), tab('anthropic', 'Quota', ['oauth']), tab('other', 'Keys', ['apikey'])] : []))
+    list.items.value = [row(29), row(30, { type: 'oauth' })]
+    mocks.get.mockImplementation(async (path: string) => list.items.value.find((a) => path === `/accounts/${a.id}`))
+    const w = render({ SModal: { template: '<div><slot /></div>' }, STabs: { props: ['tabs', 'modelValue'], emits: ['update:modelValue'], template: '<div />' } })
+    const open = async (i: number) => {
+      dropdowns(w)[i].vm.$emit('select', 'detail')
+      await flushPromises()
+      const tabs = w.getComponent(STabs)
+      return { tabs, keys: (tabs.props('tabs') as Array<{ key: string }>).map((x) => x.key), active: tabs.props('modelValue') }
+    }
+    const oauth = await open(1)
+    expect(oauth.keys).toEqual(['overview', 'anthropic:Usage', 'anthropic:Quota'])
+    oauth.tabs.vm.$emit('update:modelValue', 'anthropic:Quota')
+    await flushPromises()
+    expect(w.getComponent(STabs).props('modelValue')).toBe('anthropic:Quota')
+    expect(await open(0)).toMatchObject({ keys: ['overview', 'anthropic:Usage'], active: 'overview' })
+  })
+
+  it('shows quota column decorations only on rows of their plugin and account types, adding the column for them (UI 3.8)', async () => {
+    const badge = (name: string, accountTypes?: string[]): SlotEntry => ({ pluginKey: 'dynweight', name, component: {}, accountTypes })
+    const device = badge('DeviceQuota', ['device'])
+    mocks.slotEntries.mockImplementation((slot: string) => (slot === 'account.list.quota' ? [device] : []))
+    const table = { STable: { props: ['rows', 'columns'], template: '<div><i data-testid="cols">{{ columns.map(c => c.key).join() }}</i><div v-for="row in rows" :key="row.id"><slot name="cell-quota" :row="row" /></div></div>' } }
+    const quotaSlots = (w: ReturnType<typeof render>) => w.findAllComponents(PluginSlot).filter((s) => s.props('name') === 'account.list.quota')
+    // No row of the type, no quota or balance: no column.
+    list.items.value = [row(29), row(30, { type: 'device' })]
+    expect(render(table).get('[data-testid="cols"]').text()).not.toContain('quota')
+    list.items.value = [row(29), row(31, { plugin_key: 'dynweight', type: 'device' })]
+    const w = render(table)
+    expect(w.get('[data-testid="cols"]').text()).toContain('quota')
+    const slots = quotaSlots(w)
+    expect(slots).toHaveLength(1)
+    expect(slots[0].props('props')).toEqual({ account: list.items.value[1] })
+    // Entries reach the plugin component only for the row they match.
+    const only = slots[0].props('only') as (e: SlotEntry) => boolean
+    expect([only(device), only(badge('KeyQuota', ['apikey'])), only(badge('Any'))]).toEqual([true, false, true])
   })
 
   it('keeps only distinct positive integer ids from setIds', async () => {

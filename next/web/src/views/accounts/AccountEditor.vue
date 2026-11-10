@@ -22,7 +22,7 @@ import { schemaWidgets } from '@/components/schema/widgets'
 import { ACCOUNT_FORM_KEY } from '@/components/schema/accountForm'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
-import { sectionFor, slotKey } from '@/components/plugin/slots'
+import { forAccountType, slotKey } from '@/components/plugin/slots'
 import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import { lt } from '@/i18n'
@@ -230,7 +230,7 @@ const conversionOptions = computed(() => policyOptions(t, t('accounts.conversion
 const conversionHint = computed(() => policySourceHint(t, basic.conversion_loss_policy, groupPolicies(basic.group_ids, groupList.value)))
 
 /** Plugin sections declared for this account type (docs/COMMON-CONTROLS.md §4). */
-const pluginSections = computed(() => plugins.slotEntries('account.editor.section').filter(e => sectionFor(e, props.accountType)))
+const pluginSections = computed(() => plugins.slotEntries('account.editor.section').filter(e => forAccountType(e, props.accountType)))
 
 const editorSections = computed(() => [
   { key: 'connection' as EditorSection, icon: 'key', label: t('accounts.editorUi.connection'), summary: basic.name.trim() || t('accounts.editorUi.unnamed') },

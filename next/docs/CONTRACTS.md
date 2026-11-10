@@ -705,8 +705,8 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `asset_base` | `/plugin-ui/{key}/{version_hash}`，拼接包内相对路径加载资源 |
 | `menus` | `[{id, section, label, icon?, page, permission?, order?}]`；按调用者权限过滤（`permission` 为插件内 key，检查 `plugin.<key>:<permission>`）；`section` 为 manifest 原值（§22） |
 | `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?, search?, create?}}`；只被无权限菜单引用的页面被去掉；`create` 的权限调用者没有时，去掉该链接以及只靠它到达的表单页（§22.1） |
-| `slots` | `[{slot, component, permission?}]`，按权限过滤 |
-| `account_actions` | manifest `ui.accountActions` `[{id, label, icon?, permission, route, bulk?, confirm?, danger?, visibleFor?}]`，按 `permission` 过滤，字段原样下发（`visibleFor` 缺省不补，前端按缺省 `editable` 处理）；每批大小不由插件声明，固定为 `manifest.MaxAccountBatch`（500；2026-11-08 决定）（UI 3.6，§23.3） |
+| `slots` | `[{slot, component, permission?, label?, icon?, accountTypes?}]`，按权限过滤，字段原样下发（`accountTypes` 缺省不补；UI 3.8 起 `account.detail.tabs`、`account.list.quota` 也可带，按账号类型匹配在控制台，见 §91b） |
+| `account_actions` | manifest `ui.accountActions` `[{id, label, icon?, permission, route, bulk?, confirm?, danger?, visibleFor?, accountTypes?}]`，按 `permission` 过滤，字段原样下发（`visibleFor`、`accountTypes` 缺省不补，前端按缺省 `editable`、所有类型处理）；每批大小不由插件声明，固定为 `manifest.MaxAccountBatch`（500；2026-11-08 决定）（UI 3.6，§23.3；`accountTypes` 是 UI 3.8，§91b） |
 | `native_entry` | 仅 `trust` 为 `official`/`verified` 时返回 manifest `ui.native.entry`，否则空串；加载方式与插件可用的共享库见 §23 |
 | `trust` | |
 | `host_ui_compat` | manifest `hostUICompat`；前端用它和 `HOST_UI_VERSION` 比较，不匹配则不加载原生 UI（§23.1） |
@@ -1357,7 +1357,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 
 **UI 3.5 手机形态（2026-11-07）。** 窄于 768px 时组件换成手机形态，宽屏渲染不变（`web/packages/ui/README.md`“手机形态”）。新增：`useViewport()` / `provideViewport()` 与类型 `Viewport`（`compact`、`touch`）；`TableColumn` 的 `mobile`（`title`/`subtitle`/`status`/`meta`/`detail`/`hidden`）、`mobileSpan`，`STable` 的 `mobile`（`card` 默认 / `scroll`）、`#card` 插槽与单元格插槽的 `layout`；`SFilterBar` 的 `#primary`、`activeCount`、`@done`，`SPageHeader` 的 `#filters-primary`、`filtersActiveCount`；`SButton` 的 `fab`；`SDrawer` 的 `side="bottom"`（底部抽屉）；`SSteps` 的 `direction` 默认 `auto`（手机竖排、宽屏横排）；`SModal` / `SFormModal` 的 `mobile`（类型 `ModalMobile`：`auto`/`sheet`/`fullscreen`/`center`），`SDropdown` 的 `mobile`（`sheet`/`popover`）；`SAutoRefresh` 的 `@refresh`；`SGrid` 的 `variant="stats"`；`dismissTopLayer()`（控制台路由在浏览器“返回”时关闭手机或触屏上打开的非持久最上层弹层，其余情况照常导航）。原生插件使用这些新增属性应声明 `hostUICompat: "^3.5"`；`sdk/manifest` 的核心下限检查仍按 UI 3.4 判断（3.6 起见下段）。
 
-**UI 3.6 账号界面扩展点（2026-11-07）。** 核心账号页开出两个通用扩展点（核心不认识任何具体插件；老插件一字不改照常运行），`HOST_UI_VERSION` 升到 `3.6.0`，`@sub2api/ui` / `@sub2api/host` 版本 3.6.0；用到其中任一项的插件声明 `hostUICompat: "^3.6"`，`sdk/manifest` 对 `ui.accountActions` 或 `account.list.toolbar` 的核心下限按 3.6 要求 `>=0.1.256`（0.1.255 是最后一个带 UI 3.5 的核心）。（1）**声明式账号操作 `ui.accountActions`**：manifest 条目 `{id, label, icon?, permission, route: "POST <path>", bulk?, confirm?, danger?, visibleFor?}`（`route` 必须是已声明的 admin 作用域 POST 路由且 permission 一致，路径不得含 `:参数` 或 `*通配` 段——核心只会发 `{"account_ids":[…]}`，填不了路径参数，校验码 `parameterized_route`；`visibleFor` 决定哪些行显示这条操作（2026-11-08 决定：行操作的可见性由插件声明）：`"editable"`（缺省）只在调用者有 `account:update` 权限的行显示，`"all"` 在调用者能看到的每一行都显示，两种取值下孤儿账号都不显示；非空且不是这两个值的校验码 `invalid`（field `ui.accountActions[i].visibleFor`）；每批大小固定为 `manifest.MaxAccountBatch`，不是可声明字段（2026-11-08 决定去掉原先的批大小字段）；见 `sdk/manifest/check/ui.go` `uiAccountActions`）；`GET /ui/plugins` 以 `account_actions` 按权限过滤、字段原样下发（`visibleFor` 缺省不补）；控制台把每条渲染进每行操作菜单（key `declared:<plugin>:<id>`，按 `visibleFor` 决定显隐、孤儿账号一律隐藏，`danger` 透传红色），`bulk: true` 的还追加进批量栏「更多」菜单，作用的行与行菜单一致：`visibleFor` 缺省时为所选可编辑账号，`all` 时为所选全部非孤儿账号，菜单计数同；`setIds` 收到的 id 列表先去重并只留正整数再记入。点击时有 `confirm` 先确认（`{n}` 替换为账号数），然后 `POST /api/v1/p/<key><path>`，body 一律 `{"account_ids": [...]}`（2026-11-08 决定：单行也是一个元素的数组，没有 `{"account_id": 7}` 这种形状），每批固定 `manifest.MaxAccountBatch`（500，前端常量 `MAX_ACCOUNT_BATCH`）个、超过分批顺序发送，每个请求带 95 秒超时（`AbortSignal.timeout`，与账号类型插件动作 `runPluginAction` 一致）；响应任意 JSON，核心只看状态码，成功后 `list.reload()`，失败按批量操作口径提示。行与批量共用 `web/src/views/accounts/usePluginAccountActions.ts`（`route` 经 `parseRouteRef(entry.route, 'POST')` 解析，解析失败不发请求）。（2）**工具栏插槽 `account.list.toolbar`**：挂在账号列表 `SPageHeader #filters-primary`（搜索框之后，手机上也始终可见；`#title-extra` 会让页面说明留在页内，不用）；props `{ ids: number[] | null, setIds(ids: number[] | null, label: string) }`。多个插件可以同时设筛选（2026-11-08 决定）：核心按插件分别记一组 id（`PluginSlot` 的 `props` 可以是 `(entry) => Record<string, any>` 函数，按插件取值），每个插件的 `props.ids` 只是它自己那组（没设过为 `null`），`setIds` 只改自己那组（`null` 与空数组都是清除，核心不截它这组）；列表的 `ids` 筛选（`GET /accounts?ids=1,2`，与其他筛选 AND）取所有组的交集，超过 500 个截到前 500 个（第一枚芯片的文案加「（前 500 个）」后缀，i18n `accounts.listUi.idsTruncated`，参数 `{label, n}`），交集为空时核心以 `ids=0` 请求（0 不是账号 id，后端解析通过、匹配不到行）、列表为空；每个插件一个可关闭芯片显示自己的 `label`，关闭只清自己那组，「清除筛选」清全部；筛选变化照常清空勾选，跨页全选也带 `ids`。`account.form.widgets` 插槽不参与账号保存（2026-11-08 决定：插件代码不进核心保存流程，账号级的插件配置在插件自己的页面改）。上面的 500 是同一个常量：Go `manifest.MaxAccountBatch`（`sdk/manifest`；声明式账号操作每批的大小、`GET /accounts?ids=` 一次的上限、dynweight 的 `/reset` `/weights` `/degraded` 都引用它），前端 `MAX_ACCOUNT_BATCH`（`@sub2api/host`；`ui-contract.spec.ts` 锁定两边相等）。
+**UI 3.6 账号界面扩展点（2026-11-07）。** 核心账号页开出两个通用扩展点（核心不认识任何具体插件；老插件一字不改照常运行），`HOST_UI_VERSION` 升到 `3.6.0`，`@sub2api/ui` / `@sub2api/host` 版本 3.6.0；用到其中任一项的插件声明 `hostUICompat: "^3.6"`，`sdk/manifest` 对 `ui.accountActions` 或 `account.list.toolbar` 的核心下限按 3.6 要求 `>=0.1.256`（0.1.255 是最后一个带 UI 3.5 的核心）。（1）**声明式账号操作 `ui.accountActions`**：manifest 条目 `{id, label, icon?, permission, route: "POST <path>", bulk?, confirm?, danger?, visibleFor?}`（`route` 必须是已声明的 admin 作用域 POST 路由且 permission 一致，路径不得含 `:参数` 或 `*通配` 段——核心只会发 `{"account_ids":[…]}`，填不了路径参数，校验码 `parameterized_route`；`visibleFor` 决定哪些行显示这条操作（2026-11-08 决定：行操作的可见性由插件声明）：`"editable"`（缺省）只在调用者有 `account:update` 权限的行显示，`"all"` 在调用者能看到的每一行都显示，两种取值下孤儿账号都不显示；非空且不是这两个值的校验码 `invalid`（field `ui.accountActions[i].visibleFor`）；每批大小固定为 `manifest.MaxAccountBatch`，不是可声明字段（2026-11-08 决定去掉原先的批大小字段）；见 `sdk/manifest/check/ui.go` `uiAccountActions`；UI 3.8 起条目还可带 `accountTypes`，只对本插件这些账号类型的行显示，批量栏同样只算这些行，见 §91b）；`GET /ui/plugins` 以 `account_actions` 按权限过滤、字段原样下发（`visibleFor` 缺省不补）；控制台把每条渲染进每行操作菜单（key `declared:<plugin>:<id>`，按 `visibleFor` 决定显隐、孤儿账号一律隐藏，`danger` 透传红色），`bulk: true` 的还追加进批量栏「更多」菜单，作用的行与行菜单一致：`visibleFor` 缺省时为所选可编辑账号，`all` 时为所选全部非孤儿账号，菜单计数同；`setIds` 收到的 id 列表先去重并只留正整数再记入。点击时有 `confirm` 先确认（`{n}` 替换为账号数），然后 `POST /api/v1/p/<key><path>`，body 一律 `{"account_ids": [...]}`（2026-11-08 决定：单行也是一个元素的数组，没有 `{"account_id": 7}` 这种形状），每批固定 `manifest.MaxAccountBatch`（500，前端常量 `MAX_ACCOUNT_BATCH`）个、超过分批顺序发送，每个请求带 95 秒超时（`AbortSignal.timeout`，与账号类型插件动作 `runPluginAction` 一致）；响应任意 JSON，核心只看状态码，成功后 `list.reload()`，失败按批量操作口径提示。行与批量共用 `web/src/views/accounts/usePluginAccountActions.ts`（`route` 经 `parseRouteRef(entry.route, 'POST')` 解析，解析失败不发请求）。（2）**工具栏插槽 `account.list.toolbar`**：挂在账号列表 `SPageHeader #filters-primary`（搜索框之后，手机上也始终可见；`#title-extra` 会让页面说明留在页内，不用）；props `{ ids: number[] | null, setIds(ids: number[] | null, label: string) }`。多个插件可以同时设筛选（2026-11-08 决定）：核心按插件分别记一组 id（`PluginSlot` 的 `props` 可以是 `(entry) => Record<string, any>` 函数，按插件取值），每个插件的 `props.ids` 只是它自己那组（没设过为 `null`），`setIds` 只改自己那组（`null` 与空数组都是清除，核心不截它这组）；列表的 `ids` 筛选（`GET /accounts?ids=1,2`，与其他筛选 AND）取所有组的交集，超过 500 个截到前 500 个（第一枚芯片的文案加「（前 500 个）」后缀，i18n `accounts.listUi.idsTruncated`，参数 `{label, n}`），交集为空时核心以 `ids=0` 请求（0 不是账号 id，后端解析通过、匹配不到行）、列表为空；每个插件一个可关闭芯片显示自己的 `label`，关闭只清自己那组，「清除筛选」清全部；筛选变化照常清空勾选，跨页全选也带 `ids`。`account.form.widgets` 插槽不参与账号保存（2026-11-08 决定：插件代码不进核心保存流程，账号级的插件配置在插件自己的页面改）。上面的 500 是同一个常量：Go `manifest.MaxAccountBatch`（`sdk/manifest`；声明式账号操作每批的大小、`GET /accounts?ids=` 一次的上限、dynweight 的 `/reset` `/weights` `/degraded` 都引用它），前端 `MAX_ACCOUNT_BATCH`（`@sub2api/host`；`ui-contract.spec.ts` 锁定两边相等）。
 
 账号页的扩展点（含今后再开的）按三条判据验收（2026-11-08 决定）：① **核心不被插件阻断**——核心的保存、删除、测试、列表加载等流程里没有同步等待插件返回值的点，插件请求失败只影响插件自己那块界面；② **插件不写核心数据**——插件只读写自己的接口，需要核心数据时由核心以 props 传入，或按公开接口只读；③ **插件输入进核心必有上限与钳制**——插件交给核心的数据（`setIds` 的 id 列表、声明里的文案与路由）由核心校验、截断或拒绝。
 
@@ -6794,7 +6794,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 87.4 编辑页分区插槽 `account.editor.section`
 
-- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（只能是本插件自己的账号类型 id，唯一，校验强制）；这三个字段只能用在这个插槽上；需要核心 ≥0.1.262。
+- manifest `ui.slots` 条目带 `label`、`icon`（已知图标名）、可选 `accountTypes`（只能是本插件自己的账号类型 id，唯一，校验强制）；这三个字段只能用在这个插槽上（UI 3.8 起 `accountTypes` 也可用于 `account.detail.tabs`、`account.list.quota`，见 §91b）；需要核心 ≥0.1.262。
 - 账号编辑页在核心分区之后追加，props `{account, accountType, readonly}`，各插件分区独立隔离错误；新建账号显示“保存账号后可配置”。按 §23.3，插件分区不进核心保存流程，由插件自己的接口保存。
 
 ## 88. 协议转换矩阵（2026-11-09，用户要求，设计见“sup2api 核心通用协议层设计”的“协议转换矩阵”一节，规格与转换器开发说明见 [CONVERT-MATRIX.md](CONVERT-MATRIX.md)；迁移 0093；核心 0.1.262，与第 1、2 期同版发布）
@@ -6992,3 +6992,38 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 第三版与第四版的核心并存时，核心页面的地址都能打开：第三版控制台拿到第四版菜单，侧栏暂时没有分组、模型价格、CCGateway、平台、余额流水的入口；它的 `/settings` 只认 `settings:read` / `sticky:read`，只有 `group:read` / `price:read` 的调用者点“系统设置”看到无权限页。第四版控制台拿到第三版菜单，这几项仍在管理员组里平铺（平台项跳到账号页），分组、模型价格同时也在系统设置视图里；CCGateway 项打开的页面在控制台视图里。刷新页面后恢复一致。
 - 核心 0.1.267 的系统设置视图还有第五组“插件设置”（每个已启用且有控制台设置页的插件一项，ccgateway 的是 `/system/ccgateway`），这些页面的上级页面是 `/settings`；它和已安装插件列表的“设置”是同一批页面，0.1.268 起去掉这一组，按 90.2。
 - anthropic 0.3.0 配第四版核心：模型目录的菜单和页面还在；0.3.1 配第三版核心：没有模型目录。
+
+## 91b. 插件标签页与行操作按账号类型显示（UI 3.8，2026-11-10，codex 官方重置次数需要；核心 0.1.269）
+
+codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操作和额度列里的一个装饰，其他账号都不显示。UI 3.7 只有编辑页分区（`account.editor.section`，§87.4）能按账号类型限定，所以 UI 3.8 把同一个 `accountTypes` 开放给详情标签页、声明式账号操作和新的额度列插槽。核心不认识任何具体插件；不用这些字段的插件一字不改照常运行。
+
+### 91b.1 manifest
+
+- `ui.slots[].accountTypes` 可用于 `account.editor.section`（UI 3.7）、`account.detail.tabs`、`account.list.quota`（UI 3.8）。`label`、`icon` 仍只能用于 `account.editor.section`：`account.detail.tabs` 或 `account.list.quota` 带了 `label`/`icon`，其他插槽带了这三个字段中任一个，都报 `ui.slots[i]` `unsupported`。
+- `ui.accountActions[].accountTypes`（新增，可选，`[]string`）：只对本插件这些账号类型的行显示这条操作；缺省对所有行（再按 `visibleFor`）。
+- 校验规则和编辑页分区相同：每个 id 必须是本插件 `accountTypes[].id` 之一，且不重复，否则报 `ui.slots[i].accountTypes[j]` / `ui.accountActions[i].accountTypes[j]` `invalid`。三处共用 `sdk/manifest/check/ui.go` 的 `ownAccountTypes`。
+- 新插槽 `account.list.quota`（`manifest.SlotAccountListQuota`），和 `account.list.weight` 一样要 `ui.native`，可带 `permission`。
+
+### 91b.2 匹配规则
+
+插槽条目或操作没声明 `accountTypes` 时对所有账号显示；声明了时只对 `plugin_key` 等于声明它的插件、且 `type` 在列表里的账号显示（别的插件同名的类型不算）。控制台只有一个函数做这个判断：`web/src/components/plugin/slots.ts` 的 `forAccountType(entry, account | accountType)`，编辑页分区、详情标签页、额度列装饰和声明式操作都用它。
+
+- **详情标签页**（`AccountsView.vue` 的 `detailSlots`）：标签按当前打开的账号过滤。每次打开详情都回到“概览”，所以上一个账号的标签不会留在当前账号上。
+- **声明式账号操作**：`web/src/views/accounts/accountRowActions.ts` 的 `actionAppliesTo(entry, account, canUpdate)` 判断一行是否显示某条操作：不是孤儿账号，`visibleFor: "all"` 或调用者能编辑这一行，并且账号类型匹配。行操作菜单和批量栏“更多”菜单都用它，所以批量操作的计数和实际处理的行就是行菜单里显示这条操作的那些行。
+- **额度列装饰 `account.list.quota`**：显示在账号列表额度列（列名“余额”）里，套餐用量窗口和余额下面单独一行（`flex items-center gap-1.5`，一行最多高出一行，多个插件的组件在同一行），props `{ account }`，每个插件组件的错误单独隔离（`PluginSlot`）。原来本页有账号带用量窗口或余额时才显示额度列，现在本页有账号匹配某个已注册的 `account.list.quota` 条目时也显示。手机卡片上额度列没有声明 `mobile`，在卡片的“详情”展开区里。
+
+### 91b.3 `GET /ui/plugins`
+
+`slots`、`account_actions` 照常按权限过滤，`accountTypes` 按 manifest 原样下发，没声明就不出现这个字段（§15.8 表格）。服务端不按账号类型过滤，由控制台匹配。
+
+### 91b.4 版本与老核心
+
+- `HOST_UI_VERSION` 3.8.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.8.0（`ui-contract.spec.ts` 锁定）。
+- 用到 `account.detail.tabs` 的 `accountTypes`、`account.list.quota` 插槽，或 `ui.accountActions[].accountTypes` 的插件要声明 `hostUICompat: "^3.8"`，`hostCompat` 要求核心 `>=0.1.269`（0.1.268 是最后一个带 UI 3.7 的核心）。`sdk/manifest/check/ui.go` 的 UI 下限表 `uiFloors` 为此加了 3.8 一行（`usesUI38`）：manifest 用到其中任一项（不管 `hostUICompat` 怎么写），或 `hostUICompat` 要求 3.8 及以上时，`hostCompat` 不能包含 0.1.268，否则报 `hostCompat` `below_ui_core`。
+- 下限必须提高，因为老核心会在所有行上显示：老控制台不认识 `accountTypes`，类型限定的操作出现在每个可见行的行菜单里（`ParseManifest` 不拒绝未知字段，所以老核心能装上这样的插件），批量栏也按所有所选行计数。老核心的 manifest 校验会拒绝带 `accountTypes` 的 `account.detail.tabs`（`unsupported`）和 `account.list.quota`（未知插槽，`invalid`）。只有声明式操作、没有 `ui.native` 的插件，控制台不检查它的 `hostUICompat`，真正拦住老核心的是 `hostCompat` 下限。
+
+### 91b.5 实现位置
+
+- manifest：`sdk/manifest/manifest.go`（`Slot.AccountTypes`、`AccountAction.AccountTypes`、`SlotAccountDetailTabs`、`SlotAccountListQuota`）、`sdk/manifest/check/ui.go`（`uiSlots`、`ownAccountTypes`、`uiAccountActions`、`uiFloors`）
+- 服务端：`server/internal/plugin/api/ui.go`（原样下发，无代码改动；测试在 `api_test.go` `TestUIPluginsAccountActions`）
+- 控制台：`web/src/components/plugin/slots.ts`（`forAccountType`）、`web/src/views/accounts/accountRowActions.ts`（`actionAppliesTo`）、`web/src/views/accounts/AccountsView.vue`（详情标签、批量栏、额度列）、`web/src/api/types.ts`

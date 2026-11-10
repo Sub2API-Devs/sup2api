@@ -3,6 +3,7 @@
 // declared plugin account actions) and their dispatch. The handlers come from
 // the view, so the table here stays pure.
 import type { Account, AccountAction } from '@/api/types'
+import { forAccountType } from '@/components/plugin/slots'
 import { i18n, lt } from '@/i18n'
 import type { PluginAccountActionEntry } from '@/stores/plugins'
 
@@ -26,13 +27,21 @@ export interface RowActionDeps {
   refreshCreds: (a: Account) => unknown
   remove: (a: Account) => unknown
   runPluginAction: (a: Account, action: AccountAction) => unknown
-  /** Declarative plugin account actions (manifest `ui.accountActions`, UI 3.6); `visibleFor` says which rows offer one. */
+  /** Declarative plugin account actions (manifest `ui.accountActions`, UI 3.6); `actionAppliesTo` says which rows offer one. */
   declaredActions: PluginAccountActionEntry[]
   runPluginAccountAction: (a: Account, entry: PluginAccountActionEntry) => unknown
 }
 
 /** Menu key of a declarative plugin account action (row menu and bulk bar alike). */
 export const pluginAccountActionKey = (x: PluginAccountActionEntry) => `declared:${x.pluginKey}:${x.id}`
+
+/**
+ * Whether a declared plugin account action is offered on a row: never on an orphaned account, only on rows the caller
+ * may update unless `visibleFor` is "all", and with `accountTypes` (UI 3.8) only on the plugin's listed types. The row
+ * menu and the bulk bar both use it, so the bulk count is exactly the rows whose menu shows the action.
+ */
+export const actionAppliesTo = (x: PluginAccountActionEntry, a: Account, canUpdate: (a: Account) => boolean) =>
+  !a.orphaned && (x.visibleFor === 'all' || canUpdate(a)) && forAccountType(x, a)
 
 /** Menu entries of one row; `hidden` keeps them out of the menu. */
 export function rowActions(a: Account, deps: RowActionDeps) {
@@ -43,8 +52,7 @@ export function rowActions(a: Account, deps: RowActionDeps) {
     { key: 'disable', label: t('accounts.listUi.disableByHand'), hidden: !deps.canDisable(a) },
     { key: 'refresh-credentials', label: t('accounts.credRefresh.action'), hidden: !deps.canRefreshCreds(a) },
     ...(a.actions || []).map((x) => ({ key: `plugin:${x.plugin_key}:${x.id}`, label: lt(x.label) || x.id, hidden: !deps.canUpdate(a) || a.orphaned || deps.running(a) })),
-    // Declared actions show on editable rows, or on every row with visibleFor "all"; never on orphaned accounts.
-    ...deps.declaredActions.map((x) => ({ key: pluginAccountActionKey(x), label: lt(x.label) || x.id, icon: x.icon, danger: x.danger, hidden: a.orphaned || (x.visibleFor !== 'all' && !deps.canUpdate(a)) })),
+    ...deps.declaredActions.map((x) => ({ key: pluginAccountActionKey(x), label: lt(x.label) || x.id, icon: x.icon, danger: x.danger, hidden: !actionAppliesTo(x, a, deps.canUpdate) })),
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !deps.canDelete(a) }
   ]
 }
