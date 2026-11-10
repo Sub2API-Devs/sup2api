@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -189,24 +190,40 @@ func (f *fakeMod) count(path string) int64 {
 }
 
 // node is a plugin instance under test. Its Init can put a fake between the
-// plugin and the KV of its host (kv).
+// plugin and the KV of its host (kv), and give the plugin a logger of the
+// test instead of the host's (log).
 type node struct {
 	*Plugin
-	kv *kvFake
+	kv  *kvFake
+	log *slog.Logger
 }
 
 func (n *node) Init(ctx context.Context, h pluginsdk.Host) error {
 	if n.kv != nil {
 		h = kvFakeHost{Host: h, kv: n.kv}
 	}
+	if n.log != nil {
+		h = logHost{Host: h, log: n.log}
+	}
 	return n.Plugin.Init(ctx, h)
 }
+
+// logHost is a host whose logger is log.
+type logHost struct {
+	pluginsdk.Host
+	log *slog.Logger
+}
+
+func (h logHost) Logger() *slog.Logger { return h.log }
 
 // nodeOpt changes a node before it is initialised.
 type nodeOpt func(*node)
 
 // withKV puts kv between the node and the KV of its host.
 func withKV(kv *kvFake) nodeOpt { return func(n *node) { n.kv = kv } }
+
+// withLog makes the node log to log.
+func withLog(log *slog.Logger) nodeOpt { return func(n *node) { n.log = log } }
 
 // noRefreshTicks stops the periodic refresh of a node: only a kick (the
 // start, a change of the settings) runs it, so the conversions it makes

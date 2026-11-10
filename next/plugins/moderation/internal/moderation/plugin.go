@@ -124,6 +124,9 @@ type Plugin struct {
 		inflight, latencyMsSum                                     atomic.Int64
 		droppedNotices, noticeErrors                               atomic.Int64
 		busy, shutdownDropped, suspiciousRetries                   atomic.Int64
+		// imagesRefused: the auditor calls whose images the upstream refused
+		// (Outcome.ImagesRefused).
+		imagesRefused atomic.Int64
 		// preWaiting: the requests waiting for their run (runPre);
 		// kvWriting: the runs whose verdicts are on their way to the KV
 		// (storeVerdicts).

@@ -10,8 +10,11 @@ import (
 	"image"
 	"image/color"
 	"image/gif"
+	"log/slog"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -242,6 +245,92 @@ func TestLLMImageLimits(t *testing.T) {
 	}
 }
 
+// An image whose base64 a strict upstream would refuse is skipped by itself:
+// the upstream answers a call that holds one with a refusal, and the call
+// then goes on without any of its images (TestLLMAuditorsImagesRefused) - one
+// line break would hide every image of a request from the reviewer. The
+// images beside it are still sent and received.
+func TestLLMImagesMalformedBase64(t *testing.T) {
+	// The good image; the malformed ones are made of another image, 3000
+	// bytes long (no padding) and ending in "++//", the characters the
+	// URL-safe alphabet replaces.
+	good := encodePNG(t, filled(40, 30, red))
+	raw, _ := base64.StdEncoding.DecodeString(padded(t, encodePNG(t, filled(41, 31, red)), 3000, 0xff))
+	raw[len(raw)-3], raw[len(raw)-2] = 0xfb, 0xef
+	body := b64(raw)
+	if !strings.HasSuffix(body, "++//") || !strictBase64(body) {
+		t.Fatalf("the image under test ends in %q", body[len(body)-12:])
+	}
+	onePad := b64(raw[:len(raw)-1]) // ends in "++8="
+	malformed := []struct{ name, data string }{
+		{"a line break in the middle", body[:len(body)/2] + "\n" + body[len(body)/2:]},
+		{"a CRLF every 76 characters", strings.Join([]string{body[:76], body[76:152], body[152:]}, "\r\n")},
+		{"trailing garbage", body + "!!!!"},
+		{"data after the padding", onePad + body[:4]},
+		{"truncated", body[:len(body)-1]},
+		{"the padding cut off", strings.TrimRight(onePad, "=")},
+		{"the URL-safe alphabet", strings.NewReplacer("+", "-", "/", "_").Replace(body)},
+		{"padding bits that are not zero", onePad[:len(onePad)-2] + "/="},
+	}
+	for _, m := range malformed {
+		// Each has the header of a sendable image: only its base64 is wrong.
+		if _, _, ok := imageHeader(m.data); !ok || decodedLen(m.data) > llmImageMaxBytes {
+			t.Fatalf("%s: not an image by its header", m.name)
+		}
+		parts, received := llmImages(&Input{Images: []Image{{Data: m.data}, {Data: good}, {Data: m.data}}})
+		if len(parts) != 1 || parts[0].Data != good || !slices.Equal(received, []int{1}) {
+			t.Errorf("%s: sent %d images, received %v", m.name, len(parts), received)
+		}
+	}
+	// Well-formed base64 of every length passes (no, one and two padding
+	// characters), nothing else does.
+	for size := 1; size <= 7; size++ {
+		if s := b64(make([]byte, size)); !strictBase64(s) || strictBase64(s[:len(s)-1]) || strictBase64(s+"=") || strictBase64(" "+s[1:]) {
+			t.Fatalf("strictBase64 of %d bytes (%q)", size, s)
+		}
+	}
+	if !strictBase64(onePad) || strictBase64("=") || strictBase64("====") || strictBase64("QQ=Q") || strictBase64("QUJD\n") {
+		t.Fatal("strictBase64 of the padding forms")
+	}
+
+	// In a call: the malformed images are skipped and not received, the good
+	// one is sent, and the upstream - which refuses a body with any of the
+	// malformed images - is called once.
+	in := &Input{Text: "the text"}
+	for _, m := range malformed {
+		in.Images = append(in.Images, Image{MediaType: "image/png", Data: m.data})
+	}
+	in.Images = append(in.Images, Image{MediaType: "image/png", Data: good})
+	last := len(in.Images) - 1
+	for _, proto := range []string{ProtocolOpenAIChat, ProtocolAnthropic} {
+		f := newFakeProto(t, proto, func(_ int, r protoReq) (int, scriptTurn) {
+			sent, _ := json.Marshal(r.Body)
+			for _, m := range malformed {
+				if d, _ := json.Marshal(m.data); bytes.Contains(sent, d[1:len(d)-1]) {
+					return 400, scriptTurn{}
+				}
+			}
+			return 200, llmAnyVerdict()
+		})
+		for typ, audit := range llmAuditors(t, f, true) {
+			t.Run(proto+"/"+typ, func(t *testing.T) {
+				before := len(f.requests())
+				res, err := audit(in)
+				if err != nil || res.SentImages != 1 || res.SkippedImages != last || !slices.Equal(res.received, []int{last}) || res.Calls != 1 {
+					t.Fatalf("result = %+v %v", res, err)
+				}
+				reqs := f.requests()[before:]
+				if len(reqs) != 1 {
+					t.Fatalf("%d calls, want one", len(reqs))
+				}
+				if parts := llmUserContent(proto, reqs[0]).Array(); len(parts) != 2 || parts[1].Raw != llmImagePart(proto, "image/png", good) {
+					t.Fatalf("user message = %.300s", llmUserContent(proto, reqs[0]).Raw)
+				}
+			})
+		}
+	}
+}
+
 // With review_images false nothing changes for an LLM auditor: no image
 // part, every image counted as skipped, images alone are no input.
 func TestLLMAuditorsImagesOff(t *testing.T) {
@@ -298,13 +387,14 @@ func TestLLMAuditorsImageOnlyInput(t *testing.T) {
 	}
 }
 
-// An upstream that answers the call with images 400 is asked once more with
-// the text alone: the verdict is of that call, and no image was received.
-// Nothing else is retried.
+// An upstream that refuses the call with images - 400, 413, 415 or 422
+// (llmImagesRefused) - is asked once more with the text alone: the verdict is
+// of that call, no image was received, and the result names the status of
+// the refusal. Nothing else is retried.
 func TestLLMAuditorsImagesRefused(t *testing.T) {
 	in, _, _ := llmImageInput(t)
 	for _, proto := range []string{ProtocolOpenAIChat, ProtocolOpenAIResponses, ProtocolAnthropic} {
-		status := 400
+		var status int
 		f := newFakeProto(t, proto, func(_ int, r protoReq) (int, scriptTurn) {
 			if hasImagePart(r) {
 				return status, scriptTurn{}
@@ -312,45 +402,56 @@ func TestLLMAuditorsImagesRefused(t *testing.T) {
 			return 200, verdictCall(`{"q1":true,"q2":false,"reason":"the text alone","verdict":"block","categories":["sexual"]}`)
 		})
 		for typ, audit := range llmAuditors(t, f, true) {
-			t.Run(proto+"/"+typ, func(t *testing.T) {
-				status = 400
-				before := len(f.requests())
-				res, err := audit(in)
-				if err != nil || res.SentImages != 0 || res.SkippedImages != len(in.Images) || res.received != nil || res.Calls != 2 ||
-					res.Scores["sexual"] != 1 || res.Reason != "the text alone" {
-					t.Fatalf("refused images: %+v %v", res, err)
-				}
-				reqs := f.requests()[before:]
-				if len(reqs) != 2 || !hasImagePart(reqs[0]) || hasImagePart(reqs[1]) {
-					t.Fatalf("%d calls", len(reqs))
-				}
-				if c := llmUserContent(proto, reqs[1]); c.Type != gjson.String || !strings.Contains(c.String(), "the text") {
-					t.Fatalf("the retry sent %.300s", c.Raw)
-				}
-				// Images alone: with the images refused nothing is left.
-				before = len(f.requests())
-				res, err = audit(&Input{Images: in.Images[:2]})
-				if !errors.Is(err, ErrNoInput) || res.SentImages != 0 || res.SkippedImages != 2 || res.received != nil || res.Calls != 1 || len(f.requests()) != before+1 {
-					t.Fatalf("refused images, no text: %+v %v (%d calls)", res, err, len(f.requests())-before)
-				}
-				// Any other failure is the result of the call.
-				for _, other := range []int{413, 429, 500} {
-					status = other
+			for _, refusal := range []int{400, 413, 415, 422} {
+				t.Run(fmt.Sprintf("%s/%s/%d", proto, typ, refusal), func(t *testing.T) {
+					status = refusal
+					before := len(f.requests())
+					res, err := audit(in)
+					if err != nil || res.SentImages != 0 || res.SkippedImages != len(in.Images) || res.received != nil || res.Calls != 2 ||
+						res.Scores["sexual"] != 1 || res.Reason != "the text alone" || res.refused != refusal {
+						t.Fatalf("refused images: %+v %v", res, err)
+					}
+					reqs := f.requests()[before:]
+					if len(reqs) != 2 || !hasImagePart(reqs[0]) || hasImagePart(reqs[1]) {
+						t.Fatalf("%d calls", len(reqs))
+					}
+					if c := llmUserContent(proto, reqs[1]); c.Type != gjson.String || !strings.Contains(c.String(), "the text") {
+						t.Fatalf("the retry sent %.300s", c.Raw)
+					}
+					// Images alone: with the images refused nothing is left.
 					before = len(f.requests())
-					res, err = audit(in)
-					if upstreamStatus(err) != other || len(f.requests()) != before+1 || res.Calls != 1 {
-						t.Fatalf("status %d: %+v %v (%d calls)", other, res, err, len(f.requests())-before)
+					res, err = audit(&Input{Images: in.Images[:2]})
+					if !errors.Is(err, ErrNoInput) || res.SentImages != 0 || res.SkippedImages != 2 || res.received != nil || res.Calls != 1 ||
+						res.refused != refusal || len(f.requests()) != before+1 {
+						t.Fatalf("refused images, no text: %+v %v (%d calls)", res, err, len(f.requests())-before)
+					}
+				})
+			}
+			// Any other failure is the result of the call, with a text or
+			// without one: it says nothing about the images.
+			t.Run(proto+"/"+typ+"/other", func(t *testing.T) {
+				for _, other := range []int{401, 404, 429, 500, 503} {
+					status = other
+					for _, input := range []*Input{in, {Images: in.Images[:2]}} {
+						before := len(f.requests())
+						res, err := audit(input)
+						if upstreamStatus(err) != other || len(f.requests()) != before+1 || res.Calls != 1 || res.refused != 0 {
+							t.Fatalf("status %d: %+v %v (%d calls)", other, res, err, len(f.requests())-before)
+						}
 					}
 				}
 			})
 		}
 	}
-	// A 400 to a call without images is not repeated either.
-	f := newFakeProto(t, ProtocolOpenAIChat, func(int, protoReq) (int, scriptTurn) { return 400, scriptTurn{} })
+	// A call without images is not repeated, whatever its answer.
+	var status int
+	f := newFakeProto(t, ProtocolOpenAIChat, func(int, protoReq) (int, scriptTurn) { return status, scriptTurn{} })
 	for typ, audit := range llmAuditors(t, f, true) {
-		before := len(f.requests())
-		if _, err := audit(&Input{Text: "text"}); upstreamStatus(err) != 400 || len(f.requests()) != before+1 {
-			t.Fatalf("%s: a 400 without images: %v (%d calls)", typ, err, len(f.requests())-before)
+		for _, status = range []int{400, 413, 415, 422} {
+			before := len(f.requests())
+			if res, err := audit(&Input{Text: "text"}); upstreamStatus(err) != status || len(f.requests()) != before+1 || res.refused != 0 {
+				t.Fatalf("%s: a %d without images: %+v %v (%d calls)", typ, status, res, err, len(f.requests())-before)
+			}
 		}
 	}
 }
@@ -358,8 +459,21 @@ func TestLLMAuditorsImagesRefused(t *testing.T) {
 // The verdict agent sends the images in its first user message only, keeps
 // them there over the turns, and repeats a call at most once for each
 // reason - the temperature the model refuses, the images the upstream
-// answers 400 - in whichever order they come up: max_turns + 2 calls at most.
+// refuses - in whichever order they come up: max_turns + 2 calls at most.
 func TestAgentImagesAndRetries(t *testing.T) {
+	// capped is respond for an upstream that at most max calls may reach. A
+	// call beyond them fails the test and is answered 500, which ends the
+	// run: a retry that repeats itself is found at once, not by the timeout
+	// of the test binary.
+	capped := func(t *testing.T, max int, respond func(fakeReq, int) (int, any)) func(fakeReq, int) (int, any) {
+		return func(r fakeReq, n int) (int, any) {
+			if n > max {
+				t.Errorf("call %d to an upstream that at most %d calls may reach", n, max)
+				return 500, map[string]any{"error": map[string]any{"message": "too many calls"}}
+			}
+			return respond(r, n)
+		}
+	}
 	img := Image{MediaType: "image/png", Data: encodePNG(t, filled(40, 30, red))}
 	imageOf := func(m map[string]any) bool {
 		parts, _ := m["content"].([]any)
@@ -378,12 +492,12 @@ func TestAgentImagesAndRetries(t *testing.T) {
 
 	// Three turns: the images stay in the first user message, the later
 	// user messages are plain.
-	llm := newFakeLLM(t, func(_ fakeReq, n int) (int, any) {
+	llm := newFakeLLM(t, capped(t, 3, func(_ fakeReq, n int) (int, any) {
 		if n < 3 {
 			return 200, textResp("hmm")
 		}
 		return 200, toolCallResp("c", ToolName, verdictFor(""))
-	})
+	}))
 	res, err := newAgent().run(context.Background(), testConfig(llm.srv.URL, nil), "text", false, img)
 	if err != nil || res.Turns != 3 || res.ImagesRefused || len(llm.reqs()) != 3 {
 		t.Fatalf("three turns: %+v %v (%d calls)", res, err, len(llm.reqs()))
@@ -405,7 +519,10 @@ func TestAgentImagesAndRetries(t *testing.T) {
 		first string
 	}{{"temperature first", "temperature"}, {"images first", "image"}} {
 		t.Run(tc.name, func(t *testing.T) {
-			llm := newFakeLLM(t, func(r fakeReq, _ int) (int, any) {
+			// Two runs of two turns: max_turns + 2 calls, then one fewer
+			// (the temperature stays out).
+			const maxTurns = 2
+			llm := newFakeLLM(t, capped(t, 2*maxTurns+3, func(r fakeReq, _ int) (int, any) {
 				hasImage, hasTemp := imageOf(firstUser(r)), temperature(r)
 				switch {
 				case hasTemp && (!hasImage || tc.first == "temperature"):
@@ -416,8 +533,8 @@ func TestAgentImagesAndRetries(t *testing.T) {
 					return 200, textResp("hmm")
 				}
 				return 200, toolCallResp("c", ToolName, verdictFor(r.Messages[1]["content"].(string)))
-			})
-			c := testConfig(llm.srv.URL, func(s *AuditorConfig) { s.MaxTurns = 2 })
+			}))
+			c := testConfig(llm.srv.URL, func(s *AuditorConfig) { s.MaxTurns = maxTurns })
 			res, err := newAgent().run(context.Background(), c, "please MOD-BLOCK", false, img)
 			if err != nil || res.Verdict.Verdict != VerdictBlock || res.Turns != 2 || !res.ImagesRefused {
 				t.Fatalf("res = %+v, err = %v", res, err)
@@ -441,16 +558,23 @@ func TestAgentImagesAndRetries(t *testing.T) {
 		})
 	}
 
-	// An upstream that refuses everything: the call, one without the
-	// images, and the error.
-	always := newFakeLLM(t, func(fakeReq, int) (int, any) { return refuse("max_tokens is too large") })
-	if res, err := newAgent().run(context.Background(), testConfig(always.srv.URL, nil), "hello", false, img); upstreamStatus(err) != 400 ||
-		len(always.reqs()) != 2 || !res.ImagesRefused {
-		t.Fatalf("err = %v, calls = %d", err, len(always.reqs()))
-	}
-	// Images alone, refused: nothing is left to judge.
-	if _, err := newAgent().run(context.Background(), testConfig(always.srv.URL, nil), "", false, img); !errors.Is(err, ErrNoInput) || len(always.reqs()) != 3 {
-		t.Fatalf("images alone: err = %v, calls = %d", err, len(always.reqs()))
+	// An upstream that refuses everything, with each status that refuses
+	// images: the call, one without the images, and the error. Images
+	// alone, refused: one call, and nothing is left to judge.
+	for _, status := range []int{400, 413, 415, 422} {
+		refuseAll := func(fakeReq, int) (int, any) {
+			return status, map[string]any{"error": map[string]any{"message": "max_tokens is too large"}}
+		}
+		always := newFakeLLM(t, capped(t, 2, refuseAll))
+		if res, err := newAgent().run(context.Background(), testConfig(always.srv.URL, nil), "hello", false, img); upstreamStatus(err) != status ||
+			len(always.reqs()) != 2 || !res.ImagesRefused || res.RefusedStatus != status {
+			t.Fatalf("status %d: res = %+v, err = %v, calls = %d", status, res, err, len(always.reqs()))
+		}
+		alone := newFakeLLM(t, capped(t, 1, refuseAll))
+		if res, err := newAgent().run(context.Background(), testConfig(alone.srv.URL, nil), "", false, img); !errors.Is(err, ErrNoInput) ||
+			len(alone.reqs()) != 1 || !res.ImagesRefused || res.RefusedStatus != status {
+			t.Fatalf("status %d, images alone: res = %+v, err = %v, calls = %d", status, res, err, len(alone.reqs()))
+		}
 	}
 }
 
@@ -663,4 +787,184 @@ func TestLLMReviewerSeesTheImage(t *testing.T) {
 			t.Fatalf("again with the images off = %+v", r)
 		}
 	})
+}
+
+// lockedBuffer is a log sink the plugin's goroutines and the test share.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// An upstream that refuses the images of an LLM auditor does not stay
+// unseen: the call that follows with the text alone succeeds, so the outcome
+// has no error - it says images_refused and carries the status of the
+// refusal, in the trace and in a try; the node counts it
+// (runtime.images_refused) and logs it once for the auditor of a snapshot.
+// Images alone that are refused are skipped with the same marks; a failure
+// that says nothing about the images stays an error.
+func TestLLMImagesRefusedIsVisible(t *testing.T) {
+	var logged lockedBuffer
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true},
+		withLog(slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn}))))
+	// The upstream answers a call with images withImages and a call without
+	// them withText (200 = a pass).
+	var withImages, withText atomic.Int64
+	withImages.Store(413)
+	withText.Store(200)
+	llm := newFakeProto(t, ProtocolAnthropic, func(_ int, r protoReq) (int, scriptTurn) {
+		status := withText.Load()
+		if hasImagePart(r) {
+			status = withImages.Load()
+		}
+		return int(status), verdictCall(`{"q1":false,"q2":false,"reason":"fine"}`)
+	})
+	ch := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelLLM, "protocol": ProtocolAnthropic, "name": "l",
+		"base_url": llm.srv.URL, "model": "m1", "api_key": "k"}))
+	auditor := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": "q", "type": AuditorLLMQuestions, "channel_id": ch.ID,
+		"config": map[string]any{"questions": llmqQuestions()}}))
+	publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, auditor.ID)}}, 9)
+
+	counted := func() int64 {
+		t.Helper()
+		n := gjson.GetBytes(h.Do("GET", "/status", nil, nil).GetBody(), "data.runtime.images_refused")
+		if n.Type != gjson.Number {
+			t.Fatalf("runtime.images_refused = %q", n.Raw)
+		}
+		return n.Int()
+	}
+	warnings := func() int { return strings.Count(logged.String(), "the upstream refused a call with images") }
+	picture := func(n int) (data string, part map[string]any) {
+		data = encodePNG(t, filled(70, 40+n, red))
+		return data, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": data}}
+	}
+	send := func(rid string, content ...any) *pluginv1.GatewayRequestHookResponse {
+		t.Helper()
+		b, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{"role": "user", "content": content}}})
+		r := mustHook(t, h, rawReq(3, rid, "anthropic.messages", string(b)))
+		written(t, p)
+		return r
+	}
+	if counted() != 0 || warnings() != 0 {
+		t.Fatalf("before any call: %d counted, log:\n%s", counted(), logged.String())
+	}
+
+	// In the hook: the request passes on its text, and the trace says that
+	// the images were refused and how.
+	for i := range 2 {
+		rid := fmt.Sprintf("refused-%d", i)
+		_, image := picture(i)
+		if r := send(rid, map[string]any{"type": "text", "text": fmt.Sprintf("caption %d", i)}, image); denied(r) {
+			t.Fatalf("request %d = %+v", i, r)
+		}
+		ev := recordOf(t, h, rid)
+		o := traceOf(t, ev).Stages[0].Outcomes[0]
+		if !o.ImagesRefused || o.Status != 413 || o.ErrType != "" || o.Skipped || o.Calls != 2 || o.SentImages != 0 || o.SkippedImages != 1 {
+			t.Fatalf("request %d: outcome = %s", i, ev.Trace)
+		}
+		if !gjson.GetBytes(ev.Trace, "stages.0.outcomes.0.images_refused").Bool() || gjson.GetBytes(ev.Trace, "stages.0.outcomes.0.status").Int() != 413 {
+			t.Fatalf("request %d: trace = %s", i, ev.Trace)
+		}
+		if n := counted(); n != int64(i+1) {
+			t.Fatalf("request %d: %d refusals counted", i, n)
+		}
+	}
+	// Logged once for the auditor, not per request, with the status.
+	if warnings() != 1 || !strings.Contains(logged.String(), "level=WARN") || !strings.Contains(logged.String(), fmt.Sprintf("auditor_id=%d", auditor.ID)) ||
+		!strings.Contains(logged.String(), "status=413") {
+		t.Fatalf("log after two refused calls:\n%s", logged.String())
+	}
+
+	// A try returns the same outcome; it is counted and not logged.
+	data, _ := picture(10)
+	try := func(body map[string]any) (TryResult, gjson.Result) {
+		t.Helper()
+		resp := h.Do("POST", fmt.Sprintf("/auditors/%d/try", auditor.ID), nil, body)
+		return decodeData[TryResult](t, resp), gjson.GetBytes(resp.GetBody(), "data")
+	}
+	both := map[string]any{"text": "a caption", "images": []string{"data:image/png;base64," + data}}
+	alone := map[string]any{"images": []string{"data:image/png;base64," + data}}
+	for i, status := range []int64{400, 413, 415, 422} {
+		withImages.Store(status)
+		res, raw := try(both)
+		if res.Error != "" || res.ErrType != "" || !res.ImagesRefused || int64(res.Status) != status || res.Skipped || res.Calls != 2 || res.SentImages != 0 ||
+			!raw.Get("images_refused").Bool() || raw.Get("status").Int() != status {
+			t.Fatalf("try, images refused with %d: %s", status, raw.Raw)
+		}
+		// Images alone (G4): nothing is left to review, and the skipped
+		// outcome says why.
+		res, raw = try(alone)
+		if res.Error != "" || !res.Skipped || !res.ImagesRefused || int64(res.Status) != status || res.Calls != 1 ||
+			!raw.Get("skipped").Bool() || !raw.Get("images_refused").Bool() || raw.Get("status").Int() != status {
+			t.Fatalf("try, images alone refused with %d: %s", status, raw.Raw)
+		}
+		if n := counted(); n != int64(2+2*(i+1)) {
+			t.Fatalf("after the tries with %d: %d refusals counted", status, n)
+		}
+	}
+	// A failure that is not about the images is an error, with images alone
+	// too: nothing is skipped, counted or marked.
+	n := counted()
+	for _, status := range []int64{404, 429, 500} {
+		withImages.Store(status)
+		for _, body := range []map[string]any{both, alone} {
+			res, raw := try(body)
+			if res.ErrType != ErrTypeUpstreamError || int64(res.Status) != status || res.Skipped || res.ImagesRefused || raw.Get("images_refused").Exists() || res.Calls != 1 {
+				t.Fatalf("try, the call with images answered %d: %s", status, raw.Raw)
+			}
+		}
+	}
+	// The call with the text alone fails after the refusal: its error and
+	// its status are the outcome's, and the refusal stays marked.
+	withImages.Store(413)
+	withText.Store(500)
+	if res, raw := try(both); res.ErrType != ErrTypeUpstreamError || res.Status != 500 || !res.ImagesRefused || res.Calls != 2 {
+		t.Fatalf("try, refused and then failed: %s", raw.Raw)
+	}
+	withText.Store(200)
+	if got := counted(); got != n+1 || warnings() != 1 {
+		t.Fatalf("%d refusals counted after the tries, want %d; %d warnings", got, n+1, warnings())
+	}
+
+	// Images alone in the hook: the auditor is skipped, counted, and still
+	// logged once.
+	_, image := picture(20)
+	if r := send("alone", image); denied(r) {
+		t.Fatalf("images alone = %+v", r)
+	}
+	if got := counted(); got != n+2 || warnings() != 1 {
+		t.Fatalf("%d refusals counted after the request of an image alone, want %d; %d warnings", got, n+2, warnings())
+	}
+
+	// A new snapshot has the auditor anew: its next refusal is logged again.
+	decodeData[AuditorView](t, h.Do("PUT", fmt.Sprintf("/auditors/%d", auditor.ID), nil, map[string]any{"name": "q2", "type": AuditorLLMQuestions,
+		"channel_id": ch.ID, "config": map[string]any{"questions": llmqQuestions()}}))
+	for i := range 2 {
+		_, image := picture(30 + i)
+		send("", map[string]any{"type": "text", "text": fmt.Sprintf("another caption %d", i)}, image)
+	}
+	if warnings() != 2 {
+		t.Fatalf("%d warnings after a reload and two more refusals:\n%s", warnings(), logged.String())
+	}
+
+	// An upstream that takes the images: nothing is marked or counted.
+	withImages.Store(200)
+	n = counted()
+	if res, raw := try(both); res.Error != "" || res.ImagesRefused || res.Status != 0 || res.SentImages != 1 || raw.Get("images_refused").Exists() || raw.Get("status").Exists() {
+		t.Fatalf("try with images taken: %s", raw.Raw)
+	}
+	if counted() != n {
+		t.Fatalf("%d refusals counted for a call whose images were taken", counted()-n)
+	}
 }

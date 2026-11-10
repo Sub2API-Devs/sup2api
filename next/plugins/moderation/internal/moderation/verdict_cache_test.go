@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -1924,10 +1925,30 @@ func imageMod(t *testing.T) (base string, jevImages, calls *atomic.Int64) {
 	return base, jevImages, calls
 }
 
+// modOrder is the order in which imageModSent answers the two calls of one
+// request, for a test whose requests come one after the other and call each
+// API at most once: Jev answers after the moderation API has (answered) and
+// settled reports true - the test says there when the plugin has taken that
+// answer. With pair the moderation API in turn answers only when the Jev
+// call has arrived, for a request that calls both at once. Nothing is timed.
+type modOrder struct {
+	pair     bool
+	settled  func() bool
+	arrived  chan struct{} // closed when the Jev call has arrived
+	answered chan struct{} // closed when the answer of the moderation API is on the wire
+	// The requests of a test may repeat a call; each channel closes once.
+	arrivedOnce, answeredOnce sync.Once
+}
+
+func newModOrder(pair bool, settled func() bool) *modOrder {
+	return &modOrder{pair: pair, settled: settled, arrived: make(chan struct{}), answered: make(chan struct{})}
+}
+
 // imageModSent is imageMod with the request bodies it received, in order,
-// and the time Jev takes to answer (nanoseconds, 0 at first).
-func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, sent func() []string, jevDelay *atomic.Int64) {
-	jevImages, calls, jevDelay = new(atomic.Int64), new(atomic.Int64), new(atomic.Int64)
+// and the order of its answers (modOrder; none at first: every call is
+// answered at once).
+func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, sent func() []string, order *atomic.Pointer[modOrder]) {
+	jevImages, calls, order = new(atomic.Int64), new(atomic.Int64), new(atomic.Pointer[modOrder])
 	var mu sync.Mutex
 	var bodies []string
 	sent = func() []string {
@@ -1942,7 +1963,15 @@ func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, se
 		bodies = append(bodies, string(body))
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
+		o := order.Load()
 		if r.URL.Path == "/v1/moderations" {
+			if o != nil && o.pair {
+				select {
+				case <-o.arrived:
+				case <-r.Context().Done():
+					return
+				}
+			}
 			scores := map[string]float64{}
 			for _, c := range OpenAICategories {
 				scores[c] = 0.01
@@ -1951,6 +1980,10 @@ func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, se
 				scores["sexual"] = 0.99
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"model": "omni-mock", "results": []any{map[string]any{"category_scores": scores}}})
+			if o != nil {
+				w.(http.Flusher).Flush()
+				o.answeredOnce.Do(func() { close(o.answered) })
+			}
 			return
 		}
 		var req struct {
@@ -1961,7 +1994,20 @@ func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, se
 		if len(req.Assets) > 0 {
 			jevImages.Add(1)
 		}
-		time.Sleep(time.Duration(jevDelay.Load()))
+		if o != nil {
+			o.arrivedOnce.Do(func() { close(o.arrived) })
+			select {
+			case <-o.answered:
+			case <-r.Context().Done():
+				return
+			}
+			for !o.settled() {
+				if r.Context().Err() != nil {
+					return
+				}
+				runtime.Gosched()
+			}
+		}
 		answers := map[string]any{}
 		for c := range req.Questions {
 			answers[c] = map[string]any{"type": "noul", "noul": 0.01}
@@ -1969,7 +2015,7 @@ func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, se
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-mock", "answers": answers, "usage": map[string]int{"input_tokens": 10}})
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL, jevImages, calls, sent, jevDelay
+	return srv.URL, jevImages, calls, sent, order
 }
 
 // imageFlows sets up the two flows in which the OpenAI auditor gets an image
@@ -2170,14 +2216,19 @@ func TestImageOnlyAHittingAuditorSawGetsTheSameVerdict(t *testing.T) {
 // its image switch off. (A flow whose auditors all take images does not keep
 // the text: TestLLMReviewerSeesTheImage.)
 func TestImageVerdictDoesNotDependOnCachedText(t *testing.T) {
-	base, jevImages, calls, sent, jevDelay := imageModSent(t)
+	base, jevImages, calls, sent, order := imageModSent(t)
 	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	flows := imageFlows(t, h, base)
 	jevWithoutImages(t, h)
 	// Jev answers after the moderation API, as it did while it waited for a
 	// redraw slot: in the stage of both, the hit is there before the pass
-	// decides the stage (and ends the other call).
-	jevDelay.Store(int64(500 * time.Millisecond))
+	// decides the stage (and ends the other call). The plugin has taken the
+	// answer of the moderation API when the Jev call is the only one left in
+	// flight. In the stage of both, the moderation API waits for the Jev
+	// call to arrive, so that the call is counted when a pass ends it.
+	ordered := func(group int64) {
+		order.Store(newModOrder(group == 10, func() bool { return p.stats.inflight.Load() <= 1 }))
+	}
 	for group, id := range flows {
 		if snap := p.snap.Load(); !snap.mixedImages(snap.flows[id]) {
 			t.Fatalf("the flow of group %d is not mixed", group)
@@ -2200,6 +2251,7 @@ func TestImageVerdictDoesNotDependOnCachedText(t *testing.T) {
 				b, _ := json.Marshal(map[string]any{"messages": []any{map[string]any{"role": "user", "content": content}}})
 				req := rawReq(3, rid, "anthropic.messages", string(b))
 				req.Meta.GroupId = tc.group
+				ordered(tc.group)
 				return mustHook(t, h, req)
 			}
 			// x sends X and checks that it was judged as a whole and let through.

@@ -272,8 +272,8 @@ const (
 	// and the OpenAI APIs take it: Anthropic measures the base64 text and
 	// takes 10 MB of it, this is 7 MiB. Anthropic on Amazon Bedrock and
 	// Google Cloud takes 5 MB of base64 (3.75 MiB of data): an image
-	// between the two is answered 400 there, and the call goes on with the
-	// text alone.
+	// between the two is refused there, and the call goes on with the
+	// text alone (llmImagesRefused).
 	llmImageMaxBytes = 5 << 20
 	// llmImageMaxSide: Anthropic refuses an image wider or higher than
 	// 8000 px.
@@ -283,8 +283,15 @@ const (
 	llmMaxImages = 20
 	// llmImagesMaxBase64 bounds the images of one call together, and with
 	// them the JSON body (the upstream APIs limit a request to some tens of
-	// megabytes) and the memory of a call: up to twice this beside the
-	// request (the data URLs and the body).
+	// megabytes) and the memory of a call. Measured for a call at the bound,
+	// beside the request itself: openai_chat and openai_responses hold the
+	// data URLs (one copy of the base64), what json.Marshal allocates for
+	// the body (up to about three times the base64 on a first call, once
+	// with a warm buffer) and the body - three to four times the base64,
+	// 60-83 MiB; anthropic, which sends the base64 without a data URL, two
+	// to three times. Nothing admits these calls by their bytes: about ten
+	// of the largest at once can exceed the 512 MB of the plugin (known
+	// limitation, DESIGN section 14; the hook then fails open).
 	llmImagesMaxBase64 = 20 << 20
 )
 
@@ -292,7 +299,10 @@ const (
 // PNG, JPEG, GIF and WebP inside the limits above, the same content once.
 // URL images are never sent (nor downloaded). The media type is the format
 // of the image's header, whatever the client declared: Anthropic refuses an
-// image whose declared type is not its real one. received lists the images
+// image whose declared type is not its real one. An image whose base64 is
+// not well-formed all the way (strictBase64) is skipped like one outside the
+// limits: a strict upstream refuses the whole call for it, and the call would
+// go on without any of its images (llmImagesRefused). received lists the images
 // of in (indexes in Input.Images) that parts stand for: every image sent and
 // its duplicates. An image that is not among them was skipped.
 func llmImages(in *Input) (parts []Image, received []int) {
@@ -310,7 +320,7 @@ func llmImages(in *Input) (parts []Image, received []int) {
 			continue
 		}
 		cfg, format, ok := imageHeader(img.Data)
-		if !ok || min(cfg.Width, cfg.Height) <= 0 || max(cfg.Width, cfg.Height) > llmImageMaxSide {
+		if !ok || min(cfg.Width, cfg.Height) <= 0 || max(cfg.Width, cfg.Height) > llmImageMaxSide || !strictBase64(img.Data) {
 			continue
 		}
 		sent[img.Data] = true
@@ -319,6 +329,39 @@ func llmImages(in *Input) (parts []Image, received []int) {
 		received = append(received, i)
 	}
 	return parts, received
+}
+
+// llmImagesRefused is the status of err when it is how an upstream (or a
+// proxy before it) refuses a call for its images, 0 otherwise: 400, 413 (the
+// body is too large), 415 and 422. A call that carried images and was
+// answered so is made once more with the text alone (llmQuestionsAudit,
+// agent.run). 404, 429 and 5xx say nothing about the images: they stay
+// errors.
+func llmImagesRefused(err error) int {
+	switch st := upstreamStatus(err); st {
+	case http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity:
+		return st
+	}
+	return 0
+}
+
+// strictBase64 reports whether s is base64 as the strictest upstream reads
+// it (RFC 4648 section 4): the standard alphabet, padded to a multiple of
+// four, nothing behind the padding, no line breaks and zero padding bits.
+// The decoders of this package are looser - they skip line breaks, and
+// imageHeader reads the head of an image only. The text is decoded as a
+// stream into nothing: no decoded copy is held.
+func strictBase64(s string) bool {
+	if len(s)%4 != 0 || strings.IndexByte(s, '\n') >= 0 || strings.IndexByte(s, '\r') >= 0 {
+		return false
+	}
+	// The stream decoder reads the text in pieces and takes padding at the
+	// end of one of them for the end of the text.
+	if i := strings.IndexByte(s, '='); i >= 0 && i < len(s)-2 {
+		return false
+	}
+	_, err := io.Copy(io.Discard, base64.NewDecoder(base64.StdEncoding.Strict(), strings.NewReader(s)))
+	return err == nil
 }
 
 // decodedLen is the size of the data in a padded base64 text, by the length

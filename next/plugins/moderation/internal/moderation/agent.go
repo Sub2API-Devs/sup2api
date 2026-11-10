@@ -35,10 +35,12 @@ type Result struct {
 	Latency    time.Duration
 	LLMModel   string
 	Transcript []json.RawMessage // only when requested (/test)
-	// ImagesRefused: the upstream answered a call with the images 400. The
-	// run went on with the text alone (one call more than Turns), or ended
-	// with ErrNoInput when there was no text.
+	// ImagesRefused: the upstream refused a call with the images, with the
+	// status RefusedStatus (llmImagesRefused). The run went on with the text
+	// alone (one call more than Turns), or ended with ErrNoInput when there
+	// was no text.
 	ImagesRefused bool
+	RefusedStatus int
 }
 
 // ErrNoVerdict is returned when the LLM gave no valid verdict within
@@ -63,10 +65,10 @@ func rawJSON(v any) json.RawMessage {
 //
 // A turn is one call, plus at most one more for each of two reasons, in
 // whichever order the upstream brings them up: it refuses the temperature
-// (remembered for the auditor, so once in all), or it answers a call with
-// images 400 - then the images are dropped for the rest of the run
-// (ImagesRefused), and without a text there is nothing left to judge
-// (ErrNoInput). So a run makes at most max_turns + 2 calls.
+// (remembered for the auditor, so once in all), or it refuses a call with
+// images (llmImagesRefused) - then the images are dropped for the rest of
+// the run (ImagesRefused), and without a text there is nothing left to
+// judge (ErrNoInput). So a run makes at most max_turns + 2 calls.
 func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscript bool, images ...Image) (*Result, error) {
 	start := time.Now()
 	res := &Result{LLMModel: c.model}
@@ -94,8 +96,8 @@ func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscrip
 			if req.Temperature != nil && refusesTemperature(err) {
 				c.noTemperature.Store(true)
 				req.Temperature = nil
-			} else if len(images) > 0 && upstreamStatus(err) == http.StatusBadRequest {
-				images, res.ImagesRefused = nil, true
+			} else if st := llmImagesRefused(err); len(images) > 0 && st != 0 {
+				images, res.ImagesRefused, res.RefusedStatus = nil, true, st
 				if text == "" {
 					return finish(ErrNoInput)
 				}

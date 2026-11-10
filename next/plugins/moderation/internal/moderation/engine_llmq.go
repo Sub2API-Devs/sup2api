@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -43,9 +42,11 @@ var errLLMNoVerdict = errors.New("llm auditor did not submit a verdict")
 // question left unanswered is a bad response (judge).
 //
 // With images on, the sendable images (llmImages) follow the text in the
-// same user message; images alone are an input too. A 400 to a call with
-// images is retried once with the text only, as openAIAudit does: then no
-// image was received, and with no text there is nothing left to send.
+// same user message; images alone are an input too. A call with images the
+// upstream refuses (llmImagesRefused) is made once more with the text only:
+// then no image was received, and with no text there is nothing left to
+// send (ErrNoInput). Either way the result names the status of the refusal
+// (EngineResult.refused).
 func llmQuestionsAudit(ctx context.Context, ch *liveChannel, qs *JevQuestions, images bool, in *Input, prior []HitCategory) (EngineResult, error) {
 	res := EngineResult{RulesVersion: qs.RulesVersion, SkippedImages: len(in.Images)}
 	var parts []Image
@@ -81,7 +82,8 @@ func llmQuestionsAudit(ctx context.Context, ch *liveChannel, qs *JevQuestions, i
 	}
 	res.Calls = 1
 	turn, err := proto.call(ctx, ch, req)
-	if len(parts) > 0 && upstreamStatus(err) == http.StatusBadRequest {
+	if st := llmImagesRefused(err); len(parts) > 0 && st != 0 {
+		res.refused = st
 		if in.Text == "" {
 			return res, ErrNoInput
 		}

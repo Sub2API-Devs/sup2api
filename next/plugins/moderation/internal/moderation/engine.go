@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"unicode/utf8"
 )
 
@@ -84,6 +85,11 @@ type EngineResult struct {
 	// verdict cache stores nothing about the others (settleVerdicts). Not
 	// part of the stored trace.
 	received []int
+	// refused is the status with which the upstream refused the call that
+	// carried the images (llmImagesRefused; 0 = it did not): the scores are
+	// of the text alone, or there are none because there was no text
+	// (ErrNoInput). audit shows it as Outcome.ImagesRefused and Status.
+	refused int
 }
 
 // ---------------------------------------------------------------- auditor
@@ -126,6 +132,9 @@ type liveAuditor struct {
 	images     bool // sends images upstream
 	llm        *llmJudge
 	flagAsHit  bool
+	// refusalLogged: the refusal of the images by the upstream of this
+	// auditor has been logged (audit), once for the snapshot it is in.
+	refusalLogged atomic.Bool
 }
 
 // compileAuditor validates cfg and builds the runtime auditor. defaultSet is
@@ -234,8 +243,15 @@ type Outcome struct {
 	Skipped     bool          `json:"skipped,omitempty"`
 	Err         error         `json:"-"`
 	ErrType     string        `json:"err,omitempty"`
-	Status      int           `json:"status,omitempty"`
-	Cost        *CallCost     `json:"cost,omitempty"` // console paths only
+	// Status is the upstream status of the error (ErrType), or without one
+	// the status with which the upstream refused the images (ImagesRefused).
+	Status int `json:"status,omitempty"`
+	// ImagesRefused: the upstream of an LLM auditor refused the call that
+	// carried the images (llmImagesRefused), so no image was reviewed: the
+	// outcome is of a second call with the text alone, or skipped when
+	// there was no text.
+	ImagesRefused bool      `json:"images_refused,omitempty"`
+	Cost          *CallCost `json:"cost,omitempty"` // console paths only
 }
 
 // audit calls the engine once through the bound channel and judges the
@@ -277,6 +293,17 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, prior []H
 		out.EngineResult, out.Err = llmQuestionsAudit(cctx, ch, a.questions, a.images, in, prior)
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
+	if out.refused != 0 {
+		// Nothing else tells that the images were not reviewed: the call
+		// that followed may well succeed. An error of that call replaces
+		// the status (runStage, tryWith).
+		out.ImagesRefused, out.Status = true, out.refused
+		p.stats.imagesRefused.Add(1)
+		if source == SourceAudit && !a.refusalLogged.Swap(true) {
+			p.log.Warn("moderation: the upstream refused a call with images, the auditor reviews the text alone; turn the image switch of the auditor off if its model takes no images (logged once per configuration load)",
+				"auditor_id", a.ID, "channel_id", a.ChannelID, "status", out.refused)
+		}
+	}
 	if source == SourceAudit {
 		// Priced from the trace once the run is counted (countRun).
 		p.countCall(source, ch, out.Calls, out.Err, out.LatencyMs)

@@ -113,6 +113,10 @@ type Runtime struct {
 	// by their budget (verdict cache lookups, writes and review syncs; one
 	// per batch, kvRun) and the failed reads and writes of the alert state.
 	KVErrors int64 `json:"kv_errors"`
+	// ImagesRefused counts the calls of the LLM auditors whose images the
+	// upstream refused, so that the text alone was reviewed
+	// (Outcome.ImagesRefused), on this node since it started.
+	ImagesRefused int64 `json:"images_refused"`
 	// RedrawPanics counts the images skipped because their decoder panicked
 	// while they were redrawn for Jev, on this node since it started.
 	RedrawPanics int64         `json:"redraw_panics"`
@@ -137,7 +141,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
-		KVErrors: p.stats.kvErrors.Load(), RedrawPanics: jevRedrawPanics.Load(),
+		KVErrors: p.stats.kvErrors.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}
