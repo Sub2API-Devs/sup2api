@@ -94,3 +94,18 @@ func requireHostAPI(h Host, version int32, what string) error {
 	}
 	return nil
 }
+
+// SendAccountRequest has the host send one bounded HTTP request for one of
+// this plugin's own accounts through that account's proxy (grant
+// "accounts.credentials" with scope {"types":"own"}; the URL's host must be
+// one of the manifest's externalServices; CONTRACTS §91). A transport
+// failure comes back in the answer's transport_error with status 0, not as
+// an error. Hosts before core 0.1.269 answer codes.Unimplemented; the Host
+// API version is not raised (that would rule out rolling updates), so a
+// plugin relying on it declares hostCompat ">=0.1.269".
+func SendAccountRequest(ctx context.Context, h Host, in *pluginv1.SendAccountRequestRequest) (*pluginv1.ExecutionHTTPResponse, error) {
+	if h == nil || h.Client() == nil {
+		return nil, ErrHostNotReady
+	}
+	return h.Client().SendAccountRequest(ctx, in)
+}

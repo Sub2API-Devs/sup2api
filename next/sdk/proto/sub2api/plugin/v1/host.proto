@@ -192,6 +192,28 @@ service HostService {
   // The host enforces cancellation, the account proxy, limits and SSRF checks.
   // A token permits at most one HTTP request; redirects are not followed.
   rpc ExecuteHTTP(ExecutionHTTPRequest) returns (ExecutionHTTPResponse);
+
+  // accounts.credentials {"types":"own"} (Critical): one bounded HTTP request
+  // for ONE account of this plugin's account types, sent by the host through
+  // that account's proxy (behind netguard for a direct connection), the same
+  // way as the quota and refresh requests the plugin describes (CONTRACTS
+  // §91). The URL must be http(s) and its host one of the manifest's
+  // externalServices (or a subdomain of one). Redirects are not followed;
+  // the answer body is capped at 64 KiB (truncated set). A transport failure
+  // is not an RPC error: it comes back in transport_error with status 0.
+  // Audited on every call (account, method, host and path; never headers or
+  // bodies). Hosts before core 0.1.269 answer UNIMPLEMENTED.
+  rpc SendAccountRequest(SendAccountRequestRequest) returns (ExecutionHTTPResponse);
+}
+
+message SendAccountRequestRequest {
+  int64 account_id = 1;
+  string method = 2;                   // empty = GET
+  string url = 3;
+  map<string, string> headers = 4;
+  // Sent as is; Content-Type defaults to application/json when a body is
+  // given and the headers set none. At most 64 KiB.
+  bytes body = 5;
 }
 
 message SetAccountAutomaticStateRequest {
