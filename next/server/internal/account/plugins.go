@@ -1,12 +1,18 @@
 package account
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -22,7 +28,10 @@ import (
 // belonging to another plugin could not even be decrypted here. Keeping the
 // predicate in the statement rather than in a post-filter means there is no
 // code path in which a row of another plugin is loaded and then discarded.
-var _ core.PluginAccountReader = (*Service)(nil)
+var (
+	_ core.PluginAccountReader    = (*Service)(nil)
+	_ core.PluginAccountRequester = (*Service)(nil)
+)
 
 // PluginAccountsMaxLimit caps one ListPluginAccounts page. A plugin with many
 // accounts must page; there is no "give me everything" call.
@@ -34,6 +43,10 @@ const PluginAccountsDefaultLimit = 100
 // AuditPluginCredentialsRead is the audit_logs action of one
 // GetAccountCredentials call.
 const AuditPluginCredentialsRead = "plugin.account.credentials.read"
+
+// AuditPluginAccountRequest is the audit_logs action of one
+// SendAccountRequest call.
+const AuditPluginAccountRequest = "plugin.account_request"
 
 // ListPluginAccounts returns one page of the accounts of pluginKey's own
 // account types, ordered by id. It selects no credential column at all, so no
@@ -116,6 +129,47 @@ func (s *Service) ReadPluginAccountCredentials(ctx context.Context, pluginKey st
 	}
 	out.Credentials = json.RawMessage(plain)
 	return &out, nil
+}
+
+// SendPluginAccountRequest sends one request a plugin described for one
+// account of pluginKey's own account types through that account's proxy, as
+// the quota and refresh requests are sent (sendPluginCall), except that a
+// redirect is answered as it is. It is bounded by refreshTimeout.
+//
+// Unlike a credential read, the audit row is written after the request: it
+// records the answer's status, and nothing secret is handed out here that the
+// plugin did not already hold, so an audit failure is logged and the answer
+// still returned. The row names the method, host and path only - never the
+// query, the headers or a body, which carry the plugin's credentials.
+func (s *Service) SendPluginAccountRequest(ctx context.Context, pluginKey string, in *pluginv1.SendAccountRequestRequest) (*pluginv1.ExecutionHTTPResponse, error) {
+	if pluginKey == "" {
+		return nil, core.ErrInvalidArgument.WithMessage("plugin key is required")
+	}
+	id := in.GetAccountId()
+	var proxyID *int64
+	err := s.d.DB.Pool.QueryRow(ctx, `SELECT a.proxy_id FROM accounts a
+		WHERE a.id = $1 AND a.plugin_key = $2 AND a.deleted_at IS NULL`, id, pluginKey).Scan(&proxyID)
+	if store.IsNoRows(err) {
+		// The same answer as for a missing id (ReadPluginAccountCredentials).
+		return nil, notFound(ctx)
+	}
+	if err != nil {
+		return nil, err
+	}
+	method := cmp.Or(strings.ToUpper(in.GetMethod()), http.MethodGet)
+	sendCtx, cancel := context.WithTimeout(ctx, refreshTimeout)
+	defer cancel()
+	ans := s.sendPluginCall(sendCtx, pluginCall{what: "account request", method: method, url: in.GetUrl(),
+		headers: in.GetHeaders(), body: in.GetBody(), noRedirects: true}, proxyID)
+	detail := map[string]any{"plugin_key": pluginKey, "method": method, "status": ans.status, "via": "host.SendAccountRequest"}
+	if u, err := url.Parse(in.GetUrl()); err == nil {
+		detail["host"], detail["path"] = u.Host, u.Path
+	}
+	if err := audit.Audit(context.WithoutCancel(ctx), s.d.DB.Pool, 0, AuditPluginAccountRequest, "account", itoa(id), detail); err != nil {
+		slog.WarnContext(ctx, "account: audit plugin account request", "plugin", pluginKey, "account", id, "err", err)
+	}
+	return &pluginv1.ExecutionHTTPResponse{Status: ans.status, Headers: ans.headers, Body: ans.body,
+		TransportError: ans.transportError, Truncated: ans.truncated}, nil
 }
 
 func settingsOrEmpty(b []byte) json.RawMessage {
