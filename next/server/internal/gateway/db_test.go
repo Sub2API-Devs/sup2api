@@ -119,7 +119,7 @@ func TestStickyRulesAPI(t *testing.T) {
 	r := findRule(res.Get("data"), "claude-code-session", sourceBuiltin)
 	if code != 200 || !r.Exists() || r.Get("plugin_key").Exists() || !r.Get("enabled").Bool() ||
 		r.Get("ttl_seconds").Int() != 3600 || r.Get("key_sources.0.path").String() != "metadata.user_id" ||
-		r.Get("match.models.0").String() != "claude-*" || r.Get("on_failure").String() != "failover" {
+		r.Get("match.models.#").Int() != 0 || r.Get("on_failure").String() != "failover" {
 		t.Fatalf("list: %d %s", code, res.Raw)
 	}
 	id := r.Get("id").Int()

@@ -808,8 +808,7 @@ sequenceDiagram
 ```jsonc
 "stickyRules": [ {
   "name": "claude-code-session",
-  "match": { "protocols": ["anthropic.messages"], "models": ["claude-*"],
-             "userAgentContains": [] },
+  "match": { "protocols": ["anthropic.messages"] },  // 内置规则只按协议匹配，不限模型；还可写 models（通配）、userAgentContains
   "keySources": [                               // 按顺序取第一个非空值
     { "type": "body",   "path": "metadata.user_id" },
     { "type": "header", "name": "x-session-id" }

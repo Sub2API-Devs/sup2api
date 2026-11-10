@@ -1437,7 +1437,7 @@ const stickyRules: any[] = [
     source: 'builtin',
     enabled: true,
     priority: 100,
-    match: { protocols: ['anthropic.messages'], models: ['claude-*'], user_agent_contains: [] },
+    match: { protocols: ['anthropic.messages'], models: [], user_agent_contains: [] },
     key_sources: [{ type: 'body', path: 'metadata.user_id' }],
     value_regex: '',
     ttl_seconds: 3600,

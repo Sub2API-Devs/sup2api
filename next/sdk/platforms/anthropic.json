@@ -235,9 +235,6 @@
       "match": {
         "protocols": [
           "anthropic.messages"
-        ],
-        "models": [
-          "claude-*"
         ]
       },
       "keySources": [
