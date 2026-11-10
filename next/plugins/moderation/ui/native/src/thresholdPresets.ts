@@ -1,7 +1,17 @@
 import type { Defaults } from './types'
 
-// OpenAI moderation threshold presets (new-api threshold-presets): the
-// default thresholds scaled. A higher threshold flags less.
+// Auditor thresholds: the OpenAI moderation presets (new-api
+// threshold-presets: the default thresholds scaled; a higher threshold flags
+// less) and the thresholds of question tables.
+
+/** The threshold a new Jev question starts with. */
+export const JEV_DEFAULT_THRESHOLD = 0.85
+/**
+ * The threshold of every question of a question-table LLM auditor
+ * (llm_questions): it answers yes or no, a "yes" scores 1 against 1, so the
+ * table's own thresholds are not used and not shown (engine.go).
+ */
+export const YES_NO_THRESHOLD = 1
 
 export const THRESHOLD_PRESETS = [
   { id: 'loose', factor: 1.1 },

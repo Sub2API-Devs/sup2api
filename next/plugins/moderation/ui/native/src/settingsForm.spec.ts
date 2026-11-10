@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
-import { CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, sentValue, settingSections, settingsKey, verdictCacheOff, withRetiredCleared } from './settingsForm'
+import { CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, settingSections, settingsKey, verdictCacheOff, withRetiredMirrored } from './settingsForm'
 import { mergeSettings, type PageValues } from './settingsMerge'
 
 const MASK = '******'
@@ -121,26 +121,33 @@ describe('the save of the settings tab', () => {
       expect(displayValues(schema, stored, ['allowlist_user_ids']).allowlist_user_ids).toEqual([])
     })
 
-    it('writes allowlist_user_ids and empties the retired key, so a 0.7.2 node does not keep exempting a removed user', () => {
+    it('writes allowlist_user_ids and the same list to the retired key, so a 0.7.2 node exempts exactly the allowlisted users', () => {
       const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: ['9', '12'] }))
       expect(m.changed).toEqual(['allowlist_user_ids'])
       expect(m.values).toEqual({ ...old, allowlist_user_ids: ['9', '12'] })
-      expect(withRetiredCleared(m.values, m.changed)).toEqual({ ...old, allowlist_user_ids: ['9', '12'], exempt_user_ids: [] })
+      // user 9 stays exempt on a 0.7.2 node, the removed user 5 does not, the added user 12 is
+      const sent = withRetiredMirrored(m.values, m.changed)
+      expect(sent).toEqual({ ...old, allowlist_user_ids: ['9', '12'], exempt_user_ids: ['9', '12'] })
+      expect(sent.exempt_user_ids).not.toBe(sent.allowlist_user_ids)
       // m.values itself is not mutated
       expect(m.values.exempt_user_ids).toEqual(['5', '9'])
     })
 
-    it('leaves the retired key alone when the allowlist is not saved, and adds none', () => {
+    it('leaves the retired key alone when the allowlist is not saved', () => {
       const other = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, mode: 'enforce' }))
       expect(other.changed).toEqual(['mode'])
-      expect(withRetiredCleared(other.values, other.changed)).toBe(other.values)
-      // no retired list, or an empty one: nothing to add
+      expect(withRetiredMirrored(other.values, other.changed)).toBe(other.values)
+    })
+
+    it('mirrors a saved allowlist also when no retired list was stored, or another one meanwhile', () => {
       const fresh = { ...stored, allowlist_user_ids: ['7'] }
-      expect(withRetiredCleared(fresh, ['allowlist_user_ids'])).toBe(fresh)
-      const emptied = { ...fresh, exempt_user_ids: [] }
-      expect(withRetiredCleared(emptied, ['allowlist_user_ids'])).toBe(emptied)
-      // the list another admin stored meanwhile (latest) is the one emptied
-      expect(withRetiredCleared({ ...fresh, exempt_user_ids: ['3'] }, ['mode', 'allowlist_user_ids']).exempt_user_ids).toEqual([])
+      expect(withRetiredMirrored(fresh, ['allowlist_user_ids'])).toEqual({ ...fresh, exempt_user_ids: ['7'] })
+      expect(withRetiredMirrored({ ...fresh, exempt_user_ids: [] }, ['allowlist_user_ids']).exempt_user_ids).toEqual(['7'])
+      // the list another admin stored meanwhile (latest) is replaced too
+      expect(withRetiredMirrored({ ...fresh, exempt_user_ids: ['3'] }, ['mode', 'allowlist_user_ids']).exempt_user_ids).toEqual(['7'])
+      // an allowlist removed by the save: a stored retired list is emptied, none is added
+      expect(withRetiredMirrored({ ...stored, exempt_user_ids: ['3'] }, ['allowlist_user_ids']).exempt_user_ids).toEqual([])
+      expect(withRetiredMirrored(stored, ['allowlist_user_ids'])).toBe(stored)
     })
 
     it('stores an emptied allowlist as [], so the retired list is not read again', () => {
@@ -148,7 +155,7 @@ describe('the save of the settings tab', () => {
         const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: emptied }))
         expect(m.changed).toEqual(['allowlist_user_ids'])
         expect(m.values.allowlist_user_ids).toEqual([])
-        expect(withRetiredCleared(m.values, m.changed).exempt_user_ids).toEqual([])
+        expect(withRetiredMirrored(m.values, m.changed).exempt_user_ids).toEqual([])
       }
       // without a retired list an emptied allowlist is simply removed
       expect(sentSetting(schema.properties.allowlist_user_ids, stored, 'allowlist_user_ids', undefined)).toBeUndefined()
@@ -218,8 +225,8 @@ describe('the save of the settings tab', () => {
     const m = mergeSettings(keys, stored, stored, initial, page(stored, { ...form, watch_days: undefined }))
     expect(m.changed).toEqual(['watch_days'])
     expect(m.values).not.toHaveProperty('watch_days')
-    expect(sentValue({ type: 'integer' }, '')).toBeUndefined()
-    expect(sentValue({ type: 'string' }, '')).toBe('')
+    expect(sentSetting({ type: 'integer' }, stored, 'watch_days', '')).toBeUndefined()
+    expect(sentSetting({ type: 'string' }, stored, 'block_message', '')).toBe('')
   })
 
   it('clears the stored 0.1 API key on request and keeps the other 0.1 fields', () => {
@@ -235,5 +242,47 @@ describe('settingsKey', () => {
     expect(settingsKey('values/allowlist_user_ids/3')).toBe('allowlist_user_ids')
     expect(settingsKey('values.jev_default_set.items[0].question')).toBe('jev_default_set')
     expect(settingsKey('block_status')).toBe('block_status')
+  })
+})
+
+describe('mergeSettings', () => {
+  const KEYS = ['block_status', 'block_message', 'notify_webhook_secret', 'jev_default_set']
+  const loaded = { block_status: 403, block_message: 'no', notify_webhook_secret: '******', jev_default_set: null, mode: 'observe' }
+  const initial = { block_status: 403, block_message: 'no', notify_webhook_secret: '******', jev_default_set: null }
+
+  it('writes only the keys this page changed, keeping later changes elsewhere', () => {
+    const latest = { ...loaded, block_message: 'changed elsewhere', mode: 'enforce', other: 1 }
+    const m = mergeSettings(KEYS, loaded, latest, initial, { ...initial, block_status: 451 })
+    expect(m.changed).toEqual(['block_status'])
+    expect(m.conflicts).toEqual([])
+    expect(m.values).toEqual({ ...latest, block_status: 451 })
+  })
+
+  it('reports a key changed both here and elsewhere, and this page wins', () => {
+    const latest = { ...loaded, block_status: 429 }
+    const m = mergeSettings(KEYS, loaded, latest, initial, { ...initial, block_status: 451 })
+    expect(m.conflicts).toEqual(['block_status'])
+    expect(m.values.block_status).toBe(451)
+  })
+
+  it('removes a key emptied here (its default applies)', () => {
+    const m = mergeSettings(KEYS, loaded, loaded, initial, { ...initial, block_message: undefined })
+    expect(m.changed).toEqual(['block_message'])
+    expect('block_message' in m.values).toBe(false)
+  })
+
+  it('keeps a stored secret (mask) and changes nothing when nothing was edited', () => {
+    const m = mergeSettings(KEYS, loaded, loaded, initial, { ...initial })
+    expect(m.changed).toEqual([])
+    expect(m.values).toEqual(loaded)
+  })
+
+  it('compares structured values by content', () => {
+    const set = { preamble: '', items: [{ category: 'a', threshold: 0.5 }] }
+    const m = mergeSettings(KEYS, { ...loaded, jev_default_set: set }, { ...loaded, jev_default_set: set }, { ...initial, jev_default_set: set }, {
+      ...initial,
+      jev_default_set: { preamble: '', items: [{ category: 'a', threshold: 0.5 }] }
+    })
+    expect(m.changed).toEqual([])
   })
 })

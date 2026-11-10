@@ -5,7 +5,7 @@ import { SBadge, SButton, SCheckbox, SHint, SModal, STagInput } from '@sub2api/u
 import { joinList } from './format'
 import { errorDetails, setFlowGroups, toastError, useModHost } from './host'
 import type { Flow, Group, GroupConflict } from './types'
-import type { GroupOwner } from './flowOps'
+import type { GroupOwner } from './bindingOps'
 
 // Bound groups of one flow, edited in a dialog from the cell (new-api
 // flow-groups-cell.tsx; PUT /flows/:id/groups). A group bound to another flow answers 409

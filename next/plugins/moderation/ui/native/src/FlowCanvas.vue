@@ -10,16 +10,12 @@ import {
   FLOW_TEMPLATES,
   MAX_STAGES,
   MAX_STAGE_AUDITORS,
-  acceptsCanvasDrag,
   addAuditor,
   addStage,
-  applyDrop,
   applyTemplate,
   auditorIndex,
   isAuditorType,
-  leavesInside,
   moveStage,
-  readCanvasDrag,
   removeAuditor,
   removeStage,
   reviewStageCount,
@@ -27,11 +23,10 @@ import {
   setFallback,
   stageRole,
   type CanvasAuditor,
-  type CanvasDrag,
-  type CanvasDropTarget,
   type Combine,
   type FlowTemplate
 } from './flowOps'
+import { acceptsCanvasDrag, applyDrop, leavesInside, readCanvasDrag, type CanvasDrag, type CanvasDropTarget } from './canvasDrag'
 
 // Flow stages as horizontal cards (new-api flow-canvas.tsx). Auditors are
 // placed by native drag and drop or the pickers; every change goes through

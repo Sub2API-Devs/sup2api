@@ -15,6 +15,10 @@ export function pct(ratio: number | null | undefined): string {
   return `${v === 0 ? 0 : Number(v.toFixed(1))}%`
 }
 
+const MIB = 1 << 20
+/** Bytes as mebibytes with one decimal ("12.5 MiB"). */
+export const mib = (bytes: number | null | undefined) => `${((bytes ?? 0) / MIB).toFixed(1)} MiB`
+
 /** Milliseconds ("120 毫秒"). */
 export function ms(v: number | null | undefined): string {
   return useModHost().t('ms', { n: num(Math.round(v ?? 0)) })

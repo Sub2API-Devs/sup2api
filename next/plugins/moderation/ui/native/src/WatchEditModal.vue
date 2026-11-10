@@ -2,10 +2,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { SButton, SField, SInput, SModal, SSegmented, fromLocalInput, toLocalInput } from '@sub2api/ui'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
-import { enumOptions } from './format'
 import { canManageSettings, createWatch, fetchPluginSettings, settingValue, updateWatch, useModHost } from './host'
 import type { Watch, WatchChange, WatchLevel } from './types'
 import { resolveUserIds } from './users'
+import { userListHint, watchLevelOptions } from './watchLevels'
 
 // Add a user to the watch list or edit an entry (new-api watch-add-dialog /
 // watch-change-dialogs): level, absolute expiry or none, note and a reason
@@ -76,9 +76,10 @@ watch(
 )
 watch(() => form.level, followLevel)
 
-const listed = computed(() => (props.entry ? { allow: !!props.allowlisted, block: !!props.blocklisted } : { allow: false, block: false }))
-const levelOptions = computed(() => enumOptions('level', ['observe', 'enforce']).map((o) => ({ ...o, disabled: o.value === 'enforce' && listed.value.allow })))
-const levelHint = computed(() => (listed.value.block ? t('lists.blockAlwaysPre') : listed.value.allow ? t('lists.allowOnlyObserve') : t('watch.levelHint')))
+/** The user lists count for an edit only: the user of a new entry is not known yet. */
+const listed = computed<{ allowlisted?: boolean; blocklisted?: boolean }>(() => (props.entry ? { allowlisted: !!props.allowlisted, blocklisted: !!props.blocklisted } : {}))
+const levelOptions = computed(() => watchLevelOptions(listed.value.allowlisted))
+const levelHint = computed(() => userListHint(listed.value) || t('watch.levelHint'))
 const expiryOptions = computed(() => [
   { value: 'at', label: t('watchEdit.expiresAt') },
   { value: 'never', label: t('watch.noExpiry') }

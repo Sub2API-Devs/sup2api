@@ -5,19 +5,8 @@ import AuditorPicker from './AuditorPicker.vue'
 import { enumLabel, enumOptions } from './format'
 import { useModHost } from './host'
 import type { Stage } from './types'
-import {
-  COMBINES,
-  acceptsCanvasDrag,
-  leavesInside,
-  passOutcome,
-  readCanvasDrag,
-  startCanvasDrag,
-  type CanvasAuditor,
-  type CanvasDrag,
-  type CanvasDropTarget,
-  type Combine,
-  type StageRole
-} from './flowOps'
+import { acceptsCanvasDrag, leavesInside, readCanvasDrag, startCanvasDrag, type CanvasDrag, type CanvasDropTarget } from './canvasDrag'
+import { COMBINES, hitOutcome, passOutcome, type CanvasAuditor, type Combine, type StageRole } from './flowOps'
 
 // One stage of the flow canvas: its auditors (drag; keyboard ← → moves
 // between stages, Delete / Backspace removes), an "add auditor" picker, the
@@ -53,6 +42,7 @@ const isFallback = computed(() => !!props.stage.fallback)
 /** The first and the last stage of this stage's kind: it does not move past them. */
 const firstOfKind = computed(() => props.index === (isFallback.value ? props.reviewCount : 0))
 const lastOfKind = computed(() => props.index === (isFallback.value ? props.count : props.reviewCount) - 1)
+const hit = computed(() => hitOutcome(props.index, props.reviewCount))
 const multi = computed(() => props.stage.auditors.length > 1)
 const combineOptions = computed(() => enumOptions('flows.combineOpt', COMBINES))
 const nameOf = (id: number) => props.byId.get(id)?.name ?? t('flows.auditorN', { id })
@@ -170,7 +160,7 @@ function setN(v: unknown) {
     </div>
     <div v-else class="mod-stage-out">
       <span class="mod-text-success">{{ t(`flows.${passOutcome(index, reviewCount, count)}`) }}</span>
-      <span class="mod-text-danger">{{ lastOfKind ? t('flows.hitSuspicious') : t('flows.hitNextN', { n: index + 2 }) }}</span>
+      <span class="mod-text-danger">{{ t(`flows.${hit.key}`, { n: hit.n }) }}</span>
     </div>
   </section>
 </template>

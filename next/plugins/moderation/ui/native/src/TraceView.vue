@@ -6,7 +6,7 @@ import { useCatalog } from './catalog'
 import { categoryLabel, enumLabel, ms, score } from './format'
 import { useModHost } from './host'
 import type { Outcome, Trace } from './types'
-import { outcomeState, stageNumber, stageState, type OutcomeState, type StageState } from './trace'
+import { outcomeState, stageNumber, stageState, unjudgedStages, type OutcomeState, type StageState } from './trace'
 
 // Per-stage trace of a run: one row per auditor call. Stages carry their
 // number in the flow (the trace holds only the stages that ran). A stage
@@ -44,8 +44,8 @@ const columns = computed<TableColumn[]>(() => [
 
 const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warning'> = { hit: 'danger', pass: 'success', skipped: 'gray', error: 'warning' }
 
-/** Failed stages without an auditor call (cut off before any answered): they have no row, so the head names them. */
-const cutStages = computed(() => (props.trace.stages || []).flatMap((st, i) => (stageState(st) === 'failed' && !st.outcomes?.length ? [stageNumber(st, i)] : [])))
+/** Stages without a verdict and without an auditor call: they have no row, so the head names them. */
+const cutStages = computed(() => unjudgedStages(props.trace))
 
 /** The request a replayed hit took its verdict from ('' when the trace does not name it). */
 const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.cache.source_request_id || '' } : null))
@@ -65,7 +65,7 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
     <div class="mod-trace-head">
       <SBadge v-if="trace.overturned" tone="info">{{ t('trace.overturned') }}</SBadge>
       <SBadge v-if="trace.errored" tone="warning">{{ t('trace.errored') }}</SBadge>
-      <SBadge v-for="n in cutStages" :key="n" tone="warning">{{ t('trace.stageN', { n }) }} · {{ t('stageResult.failed') }}</SBadge>
+      <SBadge v-for="st in cutStages" :key="st.n" tone="warning">{{ t('trace.stageN', { n: st.n }) }} · {{ enumLabel('stageResult', st.state) }}</SBadge>
       <SBadge v-if="trace.skipped" tone="gray">{{ t('trace.skipped') }}</SBadge>
       <SBadge v-if="trace.truncated_run" tone="gray">{{ t('trace.truncated') }}</SBadge>
       <SBadge v-if="trace.input_message_dropped" tone="warning" :title="trace.input_message_dropped">{{ t('trace.inputDropped') }}</SBadge>

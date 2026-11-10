@@ -1,7 +1,8 @@
-import type { Auditor, AuditorType, Channel, Flow, Spec, Stage } from './types'
+import type { Auditor, AuditorType, Channel, Spec, Stage } from './types'
 
 // Flow editing operations of the canvas editor (CONTRACTS §72.7), ported from
-// new-api web/shared/src/content-moderation/ops.ts + validate.ts. Every
+// new-api web/shared/src/content-moderation/ops.ts (the publish check is in
+// flowValidate.ts, drag and drop in canvasDrag.ts). Every
 // function returns a new spec and never mutates its input; an operation that
 // would produce an invalid arrangement (unsupported type, the same auditor
 // twice in a stage, past the stage / auditor limits) returns the input
@@ -17,9 +18,12 @@ import type { Auditor, AuditorType, Channel, Flow, Spec, Stage } from './types'
 export type Combine = Stage['combine']
 
 /** Looks up an auditor's type; undefined when the auditor does not exist. */
-type AuditorTypeOf = (id: number) => string | undefined
+export type AuditorTypeOf = (id: number) => string | undefined
 
-const AUDITOR_TYPES: readonly AuditorType[] = ['openai_moderation', 'typesafe', 'llm_verdict', 'llm_questions']
+/** The auditor types, in the order they are offered. */
+export const AUDITOR_TYPES: readonly AuditorType[] = ['openai_moderation', 'typesafe', 'llm_verdict', 'llm_questions']
+/** The auditor type judges by a question table (Jev, or an LLM answering yes / no). */
+export const hasQuestions = (type: string | undefined) => type === 'typesafe' || type === 'llm_questions'
 export const MAX_STAGES = 8
 export const MAX_STAGE_AUDITORS = 8
 export const TOTAL_TIMEOUT_MIN_MS = 1000
@@ -136,7 +140,7 @@ export function removeAuditor(spec: Spec, stageIndex: number, auditorIndex: numb
  * then, the first of them becomes a review stage). A target that already
  * has the auditor (or is full) is a no-op.
  */
-function moveAuditor(spec: Spec, from: { stage: number; index: number }, to: { stage: number; index?: number }): Spec {
+export function moveAuditor(spec: Spec, from: { stage: number; index: number }, to: { stage: number; index?: number }): Spec {
   const auditor = spec.stages[from.stage]?.auditors[from.index]
   if (auditor === undefined) return spec
   if (to.stage < 0 || to.stage > spec.stages.length) return spec
@@ -250,6 +254,15 @@ export function passOutcome(index: number, reviewCount: number, count: number): 
   return index === 0 ? 'passFallback' : 'passOverturn'
 }
 
+/**
+ * Where a hit of review stage `index` leads, as the key of its outcome line
+ * (with n = the number of the next stage): the last review stage's hit is
+ * the verdict, an earlier one hands over to the next stage.
+ */
+export function hitOutcome(index: number, reviewCount: number): { key: 'hitSuspicious' | 'hitNextN'; n: number } {
+  return { key: index === reviewCount - 1 ? 'hitSuspicious' : 'hitNextN', n: index + 2 }
+}
+
 export type StageRole = 'first' | 'behavior' | 'review' | 'fallback'
 
 /** A fallback stage = fallback (补审); stage 1 = first (初审); a later stage holding a Jev auditor = behavior; else review (analysis_prompt.go stageRole). */
@@ -292,7 +305,6 @@ export function canvasAuditors(auditors: readonly Auditor[], channels: readonly 
   })
 }
 
-/** Automatic total timeout: Σ over stages of the slowest channel of the stage. */
 /** The canvas auditors by id, with an auditor's type (undefined when it is missing) and name (#id when missing). */
 export function auditorIndex(auditors: readonly CanvasAuditor[]) {
   const byId: ReadonlyMap<number, CanvasAuditor> = new Map(auditors.map((a) => [a.id, a]))
@@ -303,230 +315,7 @@ export function auditorIndex(auditors: readonly CanvasAuditor[]) {
   }
 }
 
+/** Automatic total timeout: Σ over stages of the slowest channel of the stage. */
 export function autoTimeoutMs(spec: Spec, byId: ReadonlyMap<number, CanvasAuditor>): number {
   return spec.stages.reduce((sum, st) => sum + Math.max(0, ...st.auditors.map((id) => byId.get(id)?.timeoutMs ?? 0)), 0)
-}
-
-/** The flow a group is bound to (flows list). */
-export interface GroupOwner {
-  flowId: number
-  flowName: string
-}
-
-/** How the core's groups are moderated now; group ids, the default group 0 aside. */
-interface GroupCoverage {
-  /** groups with a flow of their own */
-  own: number[]
-  /** groups moderated by a live flow (their own, else the default group's) */
-  moderated: number[]
-  /** groups without a flow of their own while the default group has no live flow */
-  unbound: number[]
-  /** bound groups whose flow is disabled or unpublished (incl. the default group 0): the binding does not apply, they go by the default group's flow */
-  inactive: number[]
-  /** the default group 0 has a live flow: what unbound groups and groups of an inactive flow fall back to */
-  defaultLive: boolean
-  /** bound groups the core does not know (anymore) */
-  stale: number[]
-  /** groups bound to "not moderated" (flow 0, §72.17) */
-  exempt: number[]
-}
-
-/**
- * Group coverage (mirrors snapshot.flowFor): a group bound to an enabled and
- * published flow uses that flow; a group bound to "not moderated" (exempt)
- * is not moderated; other groups, those bound to a disabled or unpublished
- * flow included (the binding does not apply, 0.8.0), use the flow of the
- * default group 0. Account bindings are not counted (the bindings tab).
- */
-export function groupCoverage(
-  groupIds: readonly number[],
-  flows: readonly Pick<Flow, 'groups' | 'enabled' | 'version'>[],
-  exempt: readonly number[] = []
-): GroupCoverage {
-  const owner = new Map<number, Pick<Flow, 'enabled' | 'version'>>()
-  for (const f of flows) for (const g of f.groups) owner.set(g, f)
-  const skipped = new Set(exempt)
-  for (const g of exempt) owner.set(g, { enabled: false, version: 0 })
-  const live = (id: number) => {
-    const f = owner.get(id)
-    return !!f?.enabled && f.version > 0
-  }
-  const known = new Set(groupIds)
-  const defaultLive = live(0)
-  return {
-    own: groupIds.filter((id) => owner.has(id)),
-    moderated: groupIds.filter((id) => !skipped.has(id) && (live(id) || defaultLive)),
-    unbound: defaultLive ? [] : groupIds.filter((id) => !owner.has(id)),
-    inactive: [...owner.keys()].filter((id) => (id === 0 || known.has(id)) && !live(id) && !skipped.has(id)),
-    stale: [...owner.keys()].filter((id) => id !== 0 && !known.has(id)),
-    exempt: groupIds.filter((id) => skipped.has(id)),
-    defaultLive
-  }
-}
-
-// ---- validation (mirrors ParseSpec + Spec.Validate)
-
-type SpecIssueCode =
-  | 'unknown_field'
-  | 'invalid_field'
-  | 'invalid_model_filter'
-  | 'models_required'
-  | 'invalid_sample_rate'
-  | 'invalid_total_timeout'
-  | 'no_stages'
-  | 'too_many_stages'
-  | 'empty_stage'
-  | 'too_many_auditors'
-  | 'duplicate_auditor'
-  | 'unknown_auditor'
-  | 'unsupported_auditor_type'
-  | 'invalid_combine'
-  | 'invalid_n'
-  | 'fallback_first'
-  | 'fallback_order'
-
-export interface SpecIssue {
-  code: SpecIssueCode
-  /** stage index of a stage-level issue */
-  stage?: number
-  auditor?: number
-  field?: string
-}
-
-const SPEC_KEYS = ['model_filter', 'sample_rate', 'total_timeout_ms', 'stages']
-const MODEL_FILTER_KEYS = ['type', 'models']
-const STAGE_KEYS = ['auditors', 'combine', 'n', 'fallback']
-const MODEL_FILTER_TYPES = new Set(['all', 'only', 'exclude'])
-const COMBINE_VALUES = new Set(['', 'any', 'all', 'at_least'])
-
-const unknownKeys = (value: object, known: readonly string[]) => Object.keys(value).filter((k) => !known.includes(k))
-
-/** Validates a draft; `typeOf` resolves auditor ids. Empty = publishable. */
-export function validateSpec(spec: Spec, typeOf: AuditorTypeOf): SpecIssue[] {
-  const issues: SpecIssue[] = []
-  for (const field of unknownKeys(spec, SPEC_KEYS)) issues.push({ code: 'unknown_field', field })
-
-  const filter = spec.model_filter ?? { type: '', models: [] }
-  for (const field of unknownKeys(filter, MODEL_FILTER_KEYS)) issues.push({ code: 'unknown_field', field: `model_filter.${field}` })
-  const models = filter.models ?? []
-  if (!MODEL_FILTER_TYPES.has(filter.type) || !Array.isArray(models)) issues.push({ code: 'invalid_model_filter' })
-  else if (filter.type !== 'all' && !models.length) issues.push({ code: 'models_required' })
-
-  const rate = spec.sample_rate ?? 0
-  if (typeof rate !== 'number' || !(rate >= 0 && rate <= 100)) issues.push({ code: 'invalid_sample_rate' })
-
-  const timeout = spec.total_timeout_ms ?? 0
-  if (!(Number.isInteger(timeout) && (timeout === 0 || (timeout >= TOTAL_TIMEOUT_MIN_MS && timeout <= TOTAL_TIMEOUT_MAX_MS)))) {
-    issues.push({ code: 'invalid_total_timeout' })
-  }
-
-  const stages = spec.stages ?? []
-  if (!Array.isArray(stages)) {
-    issues.push({ code: 'invalid_field', field: 'stages' })
-    return issues
-  }
-  if (!stages.length) issues.push({ code: 'no_stages' })
-  if (stages.length > MAX_STAGES) issues.push({ code: 'too_many_stages' })
-  // The first stage is a review stage and no review stage follows a fallback stage (Spec.Validate).
-  if (stages[0]?.fallback) issues.push({ code: 'fallback_first', stage: 0 })
-  stages.forEach((st, i) => {
-    if (i > 0 && stages[i - 1]?.fallback && !st?.fallback) issues.push({ code: 'fallback_order', stage: i })
-    issues.push(...validateStage(st, i, typeOf))
-  })
-  return issues
-}
-
-function validateStage(stage: Stage, index: number, typeOf: AuditorTypeOf): SpecIssue[] {
-  if (typeof stage !== 'object' || stage === null) return [{ code: 'invalid_field', stage: index, field: 'stages' }]
-  const issues: SpecIssue[] = []
-  for (const field of unknownKeys(stage, STAGE_KEYS)) issues.push({ code: 'unknown_field', stage: index, field })
-  const auditors = stage.auditors ?? []
-  if (!Array.isArray(auditors)) return [...issues, { code: 'invalid_field', stage: index, field: 'auditors' }]
-  if (!auditors.length) issues.push({ code: 'empty_stage', stage: index })
-  if (auditors.length > MAX_STAGE_AUDITORS) issues.push({ code: 'too_many_auditors', stage: index })
-
-  const seen = new Set<number>()
-  for (const id of auditors) {
-    if (seen.has(id)) issues.push({ code: 'duplicate_auditor', stage: index, auditor: id })
-    seen.add(id)
-    const type = Number.isInteger(id) ? typeOf(id) : undefined
-    if (type === undefined) issues.push({ code: 'unknown_auditor', stage: index, auditor: id })
-    else if (!isAuditorType(type)) issues.push({ code: 'unsupported_auditor_type', stage: index, auditor: id })
-  }
-
-  const combine = stage.combine ?? ''
-  if (!COMBINE_VALUES.has(combine)) issues.push({ code: 'invalid_combine', stage: index })
-  const n = stage.n ?? 0
-  if (!Number.isInteger(n) || (combine === 'at_least' && n < 1)) issues.push({ code: 'invalid_n', stage: index })
-  if (stage.fallback !== undefined && typeof stage.fallback !== 'boolean') issues.push({ code: 'invalid_field', stage: index, field: 'fallback' })
-  return issues
-}
-
-// ---- drag and drop (new-api canvas-drag.ts)
-
-/** What is dragged: a library auditor, an auditor placed in a stage, or a stage. */
-export type CanvasDrag = { kind: 'library'; auditor: number } | { kind: 'node'; stage: number; index: number } | { kind: 'stage'; stage: number }
-
-/** Where it is dropped: a stage, the "new stage" zone, or the library (= remove). */
-export type CanvasDropTarget = { kind: 'stage'; stage: number } | { kind: 'new' } | { kind: 'trash' }
-
-const DRAG_TYPE = 'application/x-content-moderation-flow'
-
-export function startCanvasDrag(event: DragEvent, drag: CanvasDrag) {
-  if (!event.dataTransfer) return
-  event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(drag))
-  event.dataTransfer.setData('text/plain', JSON.stringify(drag))
-  event.dataTransfer.effectAllowed = 'move'
-  event.stopPropagation()
-}
-
-export function readCanvasDrag(event: DragEvent): CanvasDrag | null {
-  const dt = event.dataTransfer
-  if (!dt) return null
-  try {
-    const value = JSON.parse(dt.getData(DRAG_TYPE) || dt.getData('text/plain'))
-    return typeof value === 'object' && value !== null && 'kind' in value ? (value as CanvasDrag) : null
-  } catch {
-    return null
-  }
-}
-
-/** dragover: accepts only canvas drags (the payload itself is unreadable until drop). */
-export function acceptsCanvasDrag(event: DragEvent): boolean {
-  const types = event.dataTransfer?.types
-  return !!types && (Array.from(types).includes(DRAG_TYPE) || Array.from(types).includes('text/plain'))
-}
-
-/** dragleave that only moves onto a child of the drop zone. */
-export const leavesInside = (event: DragEvent) => {
-  const to = event.relatedTarget as Node | null
-  return !!to && (event.currentTarget as HTMLElement | null)?.contains(to) === true
-}
-
-/**
- * Applies a drop (new-api flow-canvas applyDrop). Returns the new spec, or
- * the reason nothing changed: `duplicate` (target stage has the auditor),
- * `full` (target stage holds the maximum), `max_stages`, or `noop`.
- */
-export function applyDrop(spec: Spec, drag: CanvasDrag, target: CanvasDropTarget, typeOf: AuditorTypeOf): Spec | 'duplicate' | 'full' | 'max_stages' | 'noop' {
-  let next = spec
-  if (target.kind === 'trash') {
-    if (drag.kind === 'node') next = removeAuditor(spec, drag.stage, drag.index)
-  } else if (target.kind === 'new') {
-    if (drag.kind === 'library') next = addStage(spec, drag.auditor, typeOf)
-    if (drag.kind === 'node') next = moveAuditor(spec, drag, { stage: spec.stages.length })
-    if (next === spec && drag.kind !== 'stage' && spec.stages.length >= MAX_STAGES) return 'max_stages'
-  } else if (drag.kind === 'stage') next = moveStage(spec, drag.stage, target.stage)
-  else if (drag.kind === 'library') next = addAuditor(spec, target.stage, drag.auditor, typeOf)
-  else if (drag.stage !== target.stage) next = moveAuditor(spec, drag, { stage: target.stage })
-  else return 'noop'
-
-  if (next !== spec) return next
-  if (drag.kind !== 'stage' && target.kind === 'stage') {
-    const st = spec.stages[target.stage]
-    const id = drag.kind === 'library' ? drag.auditor : spec.stages[drag.stage]?.auditors[drag.index]
-    if (st && id !== undefined && st.auditors.includes(id)) return 'duplicate'
-    if (st && st.auditors.length >= MAX_STAGE_AUDITORS) return 'full'
-  }
-  return 'noop'
 }

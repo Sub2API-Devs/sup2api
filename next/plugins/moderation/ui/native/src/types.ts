@@ -13,6 +13,8 @@ export interface Runtime {
   mode: Mode
   /** a flow is bound to a group */
   configured: boolean
+  /** hash of the settings this node runs with (nodes that differ have not all reloaded) */
+  settings_hash?: string
   config_version: number
   flows: number
   auditors: number
@@ -24,6 +26,10 @@ export interface Runtime {
   errors: number
   cache_hits: number
   cache_entries: number
+  /** estimated memory of the verdict cache entries of this node, bytes (0.8.0) */
+  cache_bytes?: number
+  /** failed reads and writes of the verdict cache in the shared KV (never fatal: the content is moderated instead) */
+  kv_errors?: number
   avg_latency_ms: number
   /** bumped by POST /verdict-cache/clear; absent before 0.8.0 */
   cache_epoch?: number
@@ -32,6 +38,8 @@ export interface Runtime {
   /** P2 (§72.13.4); absent on 0.2 */
   /** channel_problem: why a set analysis_channel_id is not used (the core saves settings unchecked) */
   analysis?: { channel_configured: boolean; channel_problem?: 'not_found' | 'not_llm' | 'unusable'; pending: number; running: number }
+  /** call costs that could not be queued for pricing */
+  dropped_costs?: number
 }
 
 /** Row of GET /events (no `text`, has `text_excerpt`). */
@@ -133,8 +141,13 @@ export interface StageTrace {
   fallback?: boolean
 }
 
-/** The verdict cache of a run: set on a replayed hit (hit, source_request_id) and on runs the cache keyed. */
-export interface TraceCache {
+/**
+ * Ties a hit record to the verdict cache (flow.go CacheInfo). key, segs and
+ * fp name the cached hit of the verdict chunk: its id, the segment hashes it
+ * holds and the flow fingerprint it was judged under. hit marks a replayed
+ * cached hit: no auditor ran, the trace is the one of source_request_id.
+ */
+export interface CacheInfo {
   hit?: boolean
   /** the request whose verdict is applied again */
   source_request_id?: string
@@ -143,9 +156,22 @@ export interface TraceCache {
   fp?: string
 }
 
+/** What of the request was moderated (extract.go InputTrace). */
+export interface InputTrace {
+  segments: number
+  cached_segments?: number
+  chunks: number
+  chunks_total: number
+  sampled?: boolean
+  images?: number
+  dropped_images?: number
+  chars: number
+}
+
 export interface Trace {
   stages: StageTrace[] | null
   final: 'hit' | 'pass'
+  /** index in `stages` (not the flow's stage number, see StageTrace.stage) of the last stage that decided hit; -1 = none */
   decider: number
   overturned?: boolean
   errored?: boolean
@@ -154,7 +180,12 @@ export interface Trace {
   /** the input message was not stored ("save_failed") */
   input_message_dropped?: string
   latency_ms: number
-  cache?: TraceCache | null
+  /** a request moderated in several chunks: the 1-based index of the deciding chunk, whose run this trace is */
+  chunk?: number
+  /** the other chunks' runs */
+  chunks?: Trace[]
+  input?: InputTrace | null
+  cache?: CacheInfo | null
 }
 
 /** Another record of the same request (GET /events/:id related[]). */
@@ -786,7 +817,11 @@ export interface Stage {
   auditors: number[]
   combine: 'any' | 'all' | 'at_least'
   n?: number
-  /** a fallback stage: runs after the review stages passed or reached no verdict; its hit is final */
+  /**
+   * a fallback stage (补审): comes after every review stage and runs only when
+   * the review chain ended without a hit and without overturning one (flow.go
+   * runFlow, flowOps passOutcome); its hit is the final hit
+   */
   fallback?: boolean
 }
 

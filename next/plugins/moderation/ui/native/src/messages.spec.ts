@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import messages from './messages'
-import { validateSpec } from './flowOps'
+import { validateSpec } from './flowValidate'
 import type { Spec } from './types'
 
 // zh and en must have the same keys (a missing one shows the raw key).
@@ -20,8 +20,8 @@ describe('messages', () => {
     for (const lang of [messages.zh, messages.en]) {
       expect(['openai_moderation', 'typesafe', 'llm_verdict', 'llm_questions'].filter((k) => !(k in lang.auditorType))).toEqual([])
       expect(['first', 'behavior', 'review', 'fallback'].filter((k) => !(k in lang.flows.role))).toEqual([])
-      expect(['hit', 'pass', 'skipped', 'failed'].filter((k) => !(k in lang.stageResult))).toEqual([])
-      for (const group of [lang.mode, lang.statusLine.level, lang.statusLine.levelHint]) expect(Object.keys(group).sort()).toEqual(['enforce', 'observe', 'off'])
+      expect(['hit', 'pass', 'skipped', 'error', 'failed'].filter((k) => !(k in lang.stageResult))).toEqual([])
+      for (const group of [lang.mode, lang.statusLine.levelHint]) expect(Object.keys(group).sort()).toEqual(['enforce', 'observe', 'off'])
       expect(Object.keys(lang.bindings.flowState).sort()).toEqual(['disabled', 'missing', 'unpublished'])
     }
   })

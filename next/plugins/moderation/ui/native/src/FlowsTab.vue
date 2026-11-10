@@ -11,8 +11,7 @@ import { useCatalog } from './catalog'
 import { dt, enumLabel, joinList, ms, num, pct } from './format'
 import { canManage, confirmDelete, deleteFlow, errorMessage, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Group, Spec, TabKey } from './types'
-import { groupCoverage, type GroupOwner } from './flowOps'
-import { exemptGroups } from './bindingOps'
+import { exemptGroups, groupCoverage, type GroupOwner } from './bindingOps'
 
 // Flows (CONTRACTS §72.7): the list (groups edited in place, 24 h stats) and
 // the full-width canvas editor of one flow (?flow=<id> or ?flow=new). Flows,

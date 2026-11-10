@@ -66,20 +66,19 @@ const columns = computed<TableColumn[]>(() => {
 })
 
 const kindTone = (k: BindingKind) => (k === 'group_account' ? 'accent' : k === 'account' ? 'info' : 'gray')
+/** What a binding leads to: its flow, or "not moderated" (flow 0). */
 const flowText = (id: number) => (id ? catalog.flowName(id) : t('bindings.exempt'))
 /** Why the flow of an inactive binding does not run. */
 function flowState(id: number): string {
   const f = catalog.flow(id)
   return t(`bindings.flowState.${!f ? 'missing' : !f.enabled ? 'disabled' : 'unpublished'}`)
 }
-/** What a binding leads to: its flow, or "not moderated". */
-const targetText = (b: Binding) => (b.flow_id ? flowText(b.flow_id) : t('bindings.exempt'))
 /** What the requests of an inactive binding go by now (the same lookup as the preview). */
 function fallbackText(b: Binding): string {
   // an account bound in any group: each request falls back within its own group
   if (bindingKind(b.group_id, b.account_id) === 'account') return t('bindings.fallbackPerGroup')
   const next = fallbackOf(rows.value, b)
-  return next ? t('bindings.fallbackBy', { scope: scopeText(next), target: targetText(next) }) : t('bindings.fallbackNone')
+  return next ? t('bindings.fallbackBy', { scope: scopeText(next), target: flowText(next.flow_id) }) : t('bindings.fallbackNone')
 }
 
 async function openFlow(id: number) {
@@ -138,7 +137,7 @@ const previewResult = computed(() => {
   const { hit, skipped } = resolveSteps(rows.value, g, a)
   const note = skipped.length ? t('bindings.previewSkipped', { scopes: joinList(skipped.map(scopeText)) }) : ''
   if (!hit) return { text: t('bindings.previewNone'), note, tone: 'gray' as const }
-  return { text: t('bindings.previewBy', { scope: scopeText(hit), target: targetText(hit) }), note, tone: hit.flow_id ? ('success' as const) : ('warning' as const) }
+  return { text: t('bindings.previewBy', { scope: scopeText(hit), target: flowText(hit.flow_id) }), note, tone: hit.flow_id ? ('success' as const) : ('warning' as const) }
 })
 </script>
 

@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { SAlert, SBadge, SBulkBar, SButton, SCheckbox, SEmpty, SHint, SSpinner } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
+import ReplayBadge from './ReplayBadge.vue'
 import ResultBadge from './ResultBadge.vue'
 import ReviewActions from './ReviewActions.vue'
 import VerdictBadge from './VerdictBadge.vue'
@@ -81,7 +82,7 @@ const toggle = (id: number, on: boolean) => (checked.value = on ? [...checked.va
         <button type="button" class="mod-timeline-item" @click="emit('open-record', r.id)">
           <span class="mod-history-head">
             <ResultBadge :result="r.result" />
-            <SBadge v-if="r.replayed" size="xs" tone="gray" :title="t('replay.badgeHint')">{{ t('replay.badge') }}</SBadge>
+            <ReplayBadge v-if="r.replayed" size="xs" />
             <VerdictBadge :event="r" />
             <CategoryChips :categories="r.hit_categories" />
             <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>

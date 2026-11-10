@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SAlert, SBadge, SButton, SLink } from '@sub2api/ui'
-import { exemptGroups } from '../bindingOps'
+import { exemptGroups, groupCoverage } from '../bindingOps'
 import { useCatalog } from '../catalog'
-import { groupCoverage } from '../flowOps'
 import { joinList } from '../format'
 import { canManage, canManageSettings, useModHost } from '../host'
 import { modeTone } from '../tones'
@@ -56,7 +55,7 @@ const act = (action: 'flows' | 'settings') => (action === 'settings' ? emit('go-
 <template>
   <div class="mod-status-line">
     <SBadge :tone="state.tone" dot>{{ t(`statusLine.${state.key}`) }}</SBadge>
-    <SBadge :tone="modeTone(level)" :title="t(`statusLine.levelHint.${level}`)">{{ t(`statusLine.level.${level}`) }}</SBadge>
+    <SBadge :tone="modeTone(level)" :title="t(`statusLine.levelHint.${level}`)">{{ t(`mode.${level}`) }}</SBadge>
     <span>
       {{ t('statusLine.flows', { n: enabledFlows.length }) }}<template v-if="disabledFlows"> · {{ t('statusLine.flowsOff', { n: disabledFlows }) }}</template>
     </span>

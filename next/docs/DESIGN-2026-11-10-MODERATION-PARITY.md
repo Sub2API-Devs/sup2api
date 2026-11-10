@@ -1060,7 +1060,7 @@ case ActionAutoRemove:    allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 
 ### 6.9 界面
 
-- `SettingsTab.vue`：第一组显示 `mode`（按新选项名）、白名单、黑名单。白名单的初始值：已存的 `allowlist_user_ids`，没有这个键时取已存的 `exempt_user_ids`（与后端的读法一致）；保存时只写 `allowlist_user_ids`。`settingsForm.ts` 的键表相应调整。
+- `SettingsTab.vue`：第一组显示 `mode`（按新选项名）、白名单、黑名单。白名单的初始值：已存的 `allowlist_user_ids`，没有这个键时取已存的 `exempt_user_ids`（与后端的读法一致）；保存时写 `allowlist_user_ids`，并把同一份名单镜像写进旧键 `exempt_user_ids`（`settingsForm.ts` 的 `withRetiredMirrored`；只在这次保存改了白名单时写）：仍在跑 0.7.2 的节点（滚动升级、回滚）只读旧键，这样它们豁免的正好是白名单里的用户，从白名单移出的用户在旧节点上也不再豁免。把白名单清空时旧键写成空数组。`settingsForm.ts` 的键表相应调整。
 - `overview/StatusLine.vue`：模式徽标改为"默认观察 / 默认拦截 / 关闭"。
 - `WatchTab.vue`、`WatchDetail.vue`、`UserStateSection.vue`、`EventDetail.vue`：用户旁显示"白名单"或"黑名单"徽标（悬停说明：白名单"只后审，永不拦截"；黑名单"总是先审"）。原来的"豁免"徽标删除。
 - `WatchEditModal.vue`、`WatchActions.vue`：白名单用户的"拦截级"选项不可选，旁边提示"白名单用户只能设为观察"；黑名单用户显示提示"黑名单用户总是先审，名单级别不影响时机"。
@@ -1073,7 +1073,7 @@ case ActionAutoRemove:    allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 - 混跑期间旧节点按旧规则：`mode = enforce` 时所有人先审；`exempt_user_ids` 里的用户不审。新节点按新规则。同一用户的请求落到不同节点时结果可能不同，持续到滚动结束。
 - 转换可能在旧节点还在运行时执行：转换成拦截级的条目在旧节点上同样是先审，无影响。旧节点在此之后自动加入的观察级条目由 24 小时窗口内的后续几轮转换（6.4）。
 - 回滚到 0.7.2：
-  - `allowlist_user_ids`、`blocklist_user_ids` 被忽略。黑名单用户按普通用户处理；白名单用户按普通用户处理（`mode = enforce` 时会被先审）。需要保持免拦截的，回滚前把这些 id 写回 `exempt_user_ids`（0.7.2 下是完全不审）。
+  - `allowlist_user_ids`、`blocklist_user_ids` 被忽略。黑名单用户按普通用户处理；白名单用户按普通用户处理（`mode = enforce` 时会被先审）。0.8.0 的设置页每次保存白名单都已把同一份名单镜像写进 `exempt_user_ids`（6.9），所以白名单用户回滚后在 0.7.2 下仍是豁免用户（0.7.2 下是完全不审），不用再做什么；只有绕过设置页、直接调设置接口写的白名单没有镜像，那种情况回滚前要把这些 id 写回 `exempt_user_ids`。
   - 转换过的名单条目保持拦截级；0.7.2 不给拦截级计违规、不延期，它们到 `expires_at` 后过期。
   - `parity_converted`、`parity_converted_at` 两列被忽略；再次升级时，如果距第一次转换不到 24 小时，回滚期间 0.7.2 自动加入的观察级条目会被转换，超过 24 小时则不再转换。
   - 设置文档里存着四个新键时，0.7.2 的设置页无法保存（它的 schema 是 `additionalProperties: false`，核心按当前安装版本的 schema 校验整份文档）。回滚前要先通过核心设置接口去掉这四个键，步骤见发布说明。

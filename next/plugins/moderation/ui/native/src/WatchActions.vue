@@ -2,9 +2,10 @@
 import { computed, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SButton, SField, SHint, SModal, SSegmented, STextarea } from '@sub2api/ui'
-import { enumLabel, enumOptions } from './format'
+import { enumLabel } from './format'
 import { createWatch, deleteWatch, errorMessage, updateWatch, useModHost } from './host'
 import type { Watch, WatchLevel } from './types'
+import { levelRefused, userListHint, watchLevelOptions, WATCH_LEVELS as levels } from './watchLevels'
 
 // Inline watch list actions of one user (new-api watch-level-actions): add
 // at a level, switch the level, remove. Each one is confirmed in a dialog
@@ -18,11 +19,10 @@ const emit = defineEmits<{ (e: 'changed', w: Watch | null): void }>()
 const host = useModHost()
 const t = host.t
 
-const levels: WatchLevel[] = ['observe', 'enforce']
 /** enforce is not offered to an allowlisted user */
-const refused = (l: WatchLevel) => l === 'enforce' && !!props.allowlisted
-const levelOptions = computed(() => enumOptions('level', levels).map((o) => ({ ...o, disabled: refused(o.value as WatchLevel) })))
-const listHint = computed(() => (props.blocklisted ? t('lists.blockAlwaysPre') : props.allowlisted ? t('lists.allowOnlyObserve') : ''))
+const refused = (l: WatchLevel) => levelRefused(l, props.allowlisted)
+const levelOptions = computed(() => watchLevelOptions(props.allowlisted))
+const listHint = computed(() => userListHint(props))
 
 /** The action being confirmed: add or set a level, or release (level null). */
 const pending = ref<{ kind: 'add' | 'level' | 'release'; level: WatchLevel | null } | null>(null)

@@ -297,7 +297,7 @@ WHERE type = 'llm_questions' AND deleted_at IS NULL;
 
 1. `GET /api/v1/plugins/moderation/settings`，取出响应里的 `values`（整份设置）。
 2. 从 `values` 里删掉这四个键。其他键原样保留；密钥类的值读到的是 `******`，原样回传表示沿用。
-3. **需要让白名单继续生效的**：把原来 `allowlist_user_ids` 里的 id 写进 `values.exempt_user_ids`。注意 0.7.2 下这个名单的含义是**完全不审核**（没有记录），不是"只后审"。不需要的话把 `exempt_user_ids` 留空，这些用户在 0.7.2 下按普通用户审核（`mode = enforce` 时先审）。
+3. **白名单**：已经镜像好了，一般不用做什么。0.8.0 的设置页每次保存白名单，都把同一份名单写进 `values.exempt_user_ids`，所以这里它应当与刚删掉的 `allowlist_user_ids` 相同，核对一下即可。只有白名单是绕过设置页、直接调设置接口写的，才需要手动把原来 `allowlist_user_ids` 里的 id 写进 `values.exempt_user_ids`。注意 0.7.2 下这个名单的含义是**完全不审核**（没有记录），不是"只后审"。不想让这些用户在 0.7.2 下免审的，把 `exempt_user_ids` 改成空数组，他们按普通用户审核（`mode = enforce` 时先审）。
 4. `PUT /api/v1/plugins/moderation/settings`，请求体 `{"values": { …修改后的整份设置… }}`。PUT 是整体替换，所以必须带上全部其他键。用持有核心 `plugin:manage` 的账号做；只有 `moderation:manage` 的账号改设置时要重填所有已存的密钥。
 5. 再 `GET` 一次，确认四个键都不在了。
 

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { applyDrop } from './canvasDrag'
 import {
   addStage,
-  applyDrop,
   canonicalSpec,
-  groupCoverage,
+  hasQuestions,
+  hitOutcome,
   isAuditorType,
+  manualTimeoutMs,
   moveStage,
   newSpec,
   passOutcome,
@@ -14,9 +16,10 @@ import {
   setCombine,
   setFallback,
   stageRole,
-  validateSpec,
+  AUDITOR_TYPES,
   DEFAULT_CHANNEL_TIMEOUT_MS
 } from './flowOps'
+import { validateSpec } from './flowValidate'
 import type { Spec, Stage } from './types'
 
 // Auditors 1–3 are OpenAI, 4 is Jev, 5 a question-table LLM auditor; 9 is of an unknown type.
@@ -66,27 +69,6 @@ describe('setFallback', () => {
     expect(setFallback(s, 1, true)).toBe(s)
     expect(setFallback(s, 0, false)).toBe(s)
     expect(setFallback(s, 5, true)).toBe(s)
-  })
-})
-
-describe('validateSpec', () => {
-  it('accepts review stages followed by fallback stages', () => {
-    expect(codes(spec(review(1), review(4), fallback(2), fallback(5)))).toEqual([])
-  })
-
-  it('reports a fallback first stage', () => {
-    expect(codes(spec(fallback(1), review(2)))).toEqual(['fallback_first@0', 'fallback_order@1'])
-    expect(codes(spec(fallback(1)))).toEqual(['fallback_first@0'])
-  })
-
-  it('reports a review stage behind a fallback stage', () => {
-    expect(codes(spec(review(1), fallback(2), review(3), fallback(4)))).toEqual(['fallback_order@2'])
-  })
-
-  it('takes fallback as a stage key and reports a value that is not a boolean', () => {
-    expect(codes(spec(review(1), { ...review(2), fallback: false }))).toEqual([])
-    const bad = spec(review(1), { ...review(2), fallback: 'yes' as unknown as boolean })
-    expect(validateSpec(bad, typeOf)).toEqual([{ code: 'invalid_field', stage: 1, field: 'fallback' }])
   })
 })
 
@@ -162,37 +144,6 @@ describe('stageRole', () => {
   })
 })
 
-// snapshot.flowFor since 0.8.0: a group bound to a disabled or unpublished
-// flow falls back to the flow of the default group 0.
-describe('groupCoverage', () => {
-  const live = { enabled: true, version: 2 }
-  const off = { enabled: false, version: 2 }
-  const draft = { enabled: true, version: 0 }
-
-  it('lets groups of an inactive flow fall back to the default flow', () => {
-    const c = groupCoverage([1, 2, 3, 4], [{ groups: [0], ...live }, { groups: [1], ...off }, { groups: [2], ...draft }, { groups: [3], ...live }])
-    expect(c.moderated).toEqual([1, 2, 3, 4])
-    expect(c.inactive).toEqual([1, 2])
-    expect(c.unbound).toEqual([])
-    expect(c.defaultLive).toBe(true)
-  })
-
-  it('moderates nothing but live bindings without a live default flow', () => {
-    const c = groupCoverage([1, 2, 3], [{ groups: [0], ...off }, { groups: [1], ...off }, { groups: [2], ...live }])
-    expect(c.moderated).toEqual([2])
-    expect(c.inactive).toEqual([0, 1])
-    expect(c.unbound).toEqual([3])
-    expect(c.defaultLive).toBe(false)
-  })
-
-  it('never moderates an exempt group, whatever the default flow', () => {
-    const c = groupCoverage([1, 2], [{ groups: [0], ...live }], [2])
-    expect(c.moderated).toEqual([1])
-    expect(c.exempt).toEqual([2])
-    expect(c.inactive).toEqual([])
-  })
-})
-
 // A removal can leave only fallback stages: the first stage cannot be one
 // (fallback_first blocks publishing and saving, and its card has no switch).
 describe('the first stage stays a review stage when the review stages are removed', () => {
@@ -244,5 +195,36 @@ describe('passOutcome', () => {
     expect(passOutcome(0, 1, 2)).toBe('passFallback')
     // a later stage overturns an earlier hit (no fallback), or had none in front (failed stages)
     expect([0, 1].map((i) => passOutcome(i, 2, 3))).toEqual(['passFallback', 'passOverturn'])
+  })
+})
+
+describe('hitOutcome', () => {
+  it('names where a hit of a review stage leads', () => {
+    // the last review stage's hit is the verdict, with or without fallback stages behind it
+    expect(hitOutcome(0, 1)).toEqual({ key: 'hitSuspicious', n: 2 })
+    expect(hitOutcome(2, 3).key).toBe('hitSuspicious')
+    // an earlier one hands over to the next stage, named by its number
+    expect(hitOutcome(0, 3)).toEqual({ key: 'hitNextN', n: 2 })
+    expect(hitOutcome(1, 3)).toEqual({ key: 'hitNextN', n: 3 })
+  })
+})
+
+describe('auditor types', () => {
+  it('are all placeable, and two of them judge by a question table', () => {
+    expect(AUDITOR_TYPES.every(isAuditorType)).toBe(true)
+    expect(AUDITOR_TYPES.filter(hasQuestions)).toEqual(['typesafe', 'llm_questions'])
+    expect(hasQuestions(undefined)).toBe(false)
+  })
+})
+
+describe('manualTimeoutMs', () => {
+  it('accepts positive seconds only', () => {
+    expect(manualTimeoutMs('1.5')).toBe(1500)
+    expect(manualTimeoutMs(30)).toBe(30_000)
+    expect(manualTimeoutMs('0')).toBeNull()
+    expect(manualTimeoutMs(-2)).toBeNull()
+    expect(manualTimeoutMs('')).toBeNull()
+    expect(manualTimeoutMs(null)).toBeNull()
+    expect(manualTimeoutMs('abc')).toBeNull()
   })
 })

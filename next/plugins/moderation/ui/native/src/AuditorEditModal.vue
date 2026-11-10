@@ -4,7 +4,8 @@ import { SAlert, SBadge, SButton, SField, SHint, SInput, SModal, SSegmented, SSe
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import { useCatalog } from './catalog'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
-import { THRESHOLD_PRESETS, presetThresholds, thresholdOverrides, thresholdPresetOf } from './thresholdPresets'
+import { AUDITOR_TYPES, hasQuestions as typeHasQuestions } from './flowOps'
+import { THRESHOLD_PRESETS, YES_NO_THRESHOLD, presetThresholds, thresholdOverrides, thresholdPresetOf } from './thresholdPresets'
 import { categoryLabel, enumLabel, enumOptions } from './format'
 import { fetchAuditor, jevPayload, saveAuditor, useModHost } from './host'
 import type { Auditor, AuditorConfig, AuditorDraft, AuditorTryTarget, AuditorType, Defaults, JevQuestions } from './types'
@@ -23,7 +24,7 @@ const t = host.t
 const catalog = useCatalog()
 
 const CHANNEL_TYPE: Record<AuditorType, string> = { openai_moderation: 'openai_moderation', typesafe: 'typesafe', llm_verdict: 'llm', llm_questions: 'llm' }
-const typeOptions = computed(() => enumOptions('auditorType', ['openai_moderation', 'typesafe', 'llm_verdict', 'llm_questions']))
+const typeOptions = computed(() => enumOptions('auditorType', AUDITOR_TYPES))
 const toolChoiceOptions = ['required', 'function', 'auto'].map((v) => ({ value: v, label: v }))
 
 const form = reactive({
@@ -113,8 +114,8 @@ function applyPreset(id: unknown) {
 function config(): AuditorConfig {
   if (form.type === 'openai_moderation') return { thresholds: formThresholds.value }
   if (form.type === 'typesafe') return { review_images: form.review_images, questions: form.ownQuestions ? jevPayload(form.questions) : null }
-  // a "yes" scores 1 against a threshold of 1: the table's thresholds are not used (engine.go)
-  if (form.type === 'llm_questions') return { questions: form.ownQuestions ? { preamble: form.questions.preamble, items: form.questions.items.map((q) => ({ ...q, threshold: 1 })) } : null }
+  // the table's thresholds are not used (YES_NO_THRESHOLD)
+  if (form.type === 'llm_questions') return { questions: form.ownQuestions ? { preamble: form.questions.preamble, items: form.questions.items.map((q) => ({ ...q, threshold: YES_NO_THRESHOLD })) } : null }
   const categories = form.categories
     .split('\n')
     .map((l) => l.trim())
@@ -134,7 +135,7 @@ function config(): AuditorConfig {
   }
 }
 const draft = (): AuditorDraft => ({ name: form.name, type: form.type, channel_id: Number(form.channel_id), config: config() })
-const hasQuestions = computed(() => form.type === 'typesafe' || form.type === 'llm_questions')
+const hasQuestions = computed(() => typeHasQuestions(form.type))
 
 const title = computed(() => {
   const a = props.auditor

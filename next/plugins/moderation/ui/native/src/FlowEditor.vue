@@ -11,7 +11,8 @@ import { useCatalog } from './catalog'
 import { joinList } from './format'
 import { canManage, errorMessage, fetchFlow, publishFlow, saveFlow, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Spec } from './types'
-import { applyTemplate, auditorIndex, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec, validateSpec, type SpecIssue } from './flowOps'
+import { applyTemplate, auditorIndex, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec } from './flowOps'
+import { validateSpec, type SpecIssue } from './flowValidate'
 
 // Flow editor (new-api flow-editor-form.tsx): name + draft kept locally and
 // compared with the saved draft ("unsaved") and the published version

@@ -5,6 +5,7 @@ import AuditorEditModal from './AuditorEditModal.vue'
 import AuditorTryModal from './AuditorTryModal.vue'
 import EnabledBadge from './EnabledBadge.vue'
 import { useCatalog } from './catalog'
+import { hasQuestions } from './flowOps'
 import { enumLabel, money, num } from './format'
 import { canManage, confirmDelete, deleteAuditor, errorMessage, fetchDefaults, useModHost } from './host'
 import type { Auditor, AuditorTryTarget } from './types'
@@ -51,7 +52,7 @@ function summary(a: Auditor): string {
     const preset = d && thresholdPresetOf(d, c.thresholds || {})
     return preset ? t(`auditors.preset.${preset}`) : t('auditors.overrides', { n: Object.keys(c.thresholds || {}).length })
   }
-  if (a.type === 'typesafe' || a.type === 'llm_questions') {
+  if (hasQuestions(a.type)) {
     return [a.rules_version, t('auditors.questions', { n: c.questions?.items?.length || d?.default.items.length || 0 })].filter(Boolean).join(' · ')
   }
   return c.flag_as_hit ? t('auditors.flagAsHit') : t('auditors.blockOnly')

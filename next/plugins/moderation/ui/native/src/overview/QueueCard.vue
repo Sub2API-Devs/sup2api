@@ -1,23 +1,29 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SCard, SDescriptions, SGrid, SProgress, type DescItem } from '@sub2api/ui'
-import { ms, num } from '../format'
+import { mib, ms, num } from '../format'
 import { useModHost } from '../host'
 import type { QueueStatus, Runtime } from '../types'
 
 // Background queues and runtime counters of the node that answered (new-api
 // queue-status): the post queue, the pricing queue and the record writer.
+// The verdict cache's memory and its KV errors are listed when the backend
+// reports them (0.8.0).
 const props = defineProps<{ queue: QueueStatus[]; runtime: Runtime }>()
 const t = useModHost().t
 
 const rows = computed<DescItem[]>(() => {
   const r = props.runtime
   const analysis = r.analysis
+  const cache: DescItem[] = []
+  if (typeof r.cache_bytes === 'number') cache.push({ key: 'cacheBytes', label: t('runtime.cacheBytes'), value: mib(r.cache_bytes) })
+  if (typeof r.kv_errors === 'number') cache.push({ key: 'kvErrors', label: t('runtime.kvErrors'), value: num(r.kv_errors) })
   return [
     { key: 'flows', label: t('runtime.flows'), value: `${num(r.flows)} / ${num(r.auditors)}` },
     { key: 'inflight', label: t('runtime.inflight'), value: num(r.inflight) },
     { key: 'calls', label: t('runtime.calls'), value: `${num(r.calls)} (${t('runtime.errorsN', { n: num(r.errors) })})` },
     { key: 'cacheHits', label: t('runtime.cacheHits'), value: `${num(r.cache_hits)} (${num(r.cache_entries)})` },
+    ...cache,
     { key: 'avgLatency', label: t('runtime.avgLatency'), value: ms(r.avg_latency_ms) },
     {
       key: 'analysis',

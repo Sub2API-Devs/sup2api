@@ -54,8 +54,8 @@ const kpis = computed(() => {
   return [
     { key: 'audited', icon: 'eyeglass', tone: 'primary' as const, value: s.today.audited, sub: t('kpi.auditedSub') },
     { key: 'suspicious', icon: 'warning', tone: 'warning' as const, value: s.today.suspicious, sub: s.today.replayed ? `${t('kpi.suspiciousSub')} · ${t('kpi.replayedSub', { n: num(s.today.replayed) })}` : t('kpi.suspiciousSub') },
-    { key: 'watching', icon: 'eye', tone: 'info' as const, value: s.watch.watching, sub: t('kpi.watchingSub', { n: num(fresh.watching) }) },
-    { key: 'blocking', icon: 'shield', tone: 'danger' as const, value: s.watch.blocking, sub: fresh.blocking === null ? t('kpi.blockingSub') : `${t('kpi.blockingSub')} · ${t('kpi.blockingNewSub', { n: num(fresh.blocking) })}` },
+    { key: 'watching', icon: 'eye', tone: 'info' as const, value: s.watch.watching, sub: t('kpi.withNewSub', { n: num(fresh.watching) }) },
+    { key: 'blocking', icon: 'shield', tone: 'danger' as const, value: s.watch.blocking, sub: fresh.blocking === null ? t('kpi.blockingSub') : `${t('kpi.blockingSub')} · ${t('kpi.withNewSub', { n: num(fresh.blocking) })}` },
     { key: 'blocked', icon: 'x', tone: 'danger' as const, value: s.today.blocked, sub: t('kpi.blockedSub') }
   ]
 })

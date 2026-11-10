@@ -19,14 +19,15 @@ import {
   validateSchema
 } from '@sub2api/ui'
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
+import VerdictCacheRow from './VerdictCacheRow.vue'
 import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { useCatalog } from './catalog'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
-import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, settingSections, settingsKey, verdictCacheOff, withRetiredCleared, type SettingSection } from './settingsForm'
+import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, settingSections, settingsKey, verdictCacheOff, withRetiredMirrored, type SettingSection } from './settingsForm'
 import { useAsync } from './useAsync'
-import { canManage, clearVerdictCache, fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, toastError, useModHost } from './host'
+import { fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, useModHost } from './host'
 import type { JevQuestions } from './types'
 
 // All the moderation settings (CONTRACTS §72.15; the plugin page is where
@@ -40,9 +41,11 @@ import type { JevQuestions } from './types'
 //
 // 0.8.0: `mode` is the switch and the default level; the allowlist starts
 // from the retired exempt_user_ids until it is saved, and the verdict cache
-// days from the retired cache_ttl_seconds (settingsForm.ts); the retired
-// keys are never written. Under the cache days, moderation:manage users can
-// empty the verdict cache of every node.
+// days from the retired cache_ttl_seconds (settingsForm.ts). Of the retired
+// keys only exempt_user_ids is written: a saved allowlist is mirrored to it
+// for nodes still on 0.7.2 (withRetiredMirrored). Under the cache days,
+// moderation:manage users can empty the verdict cache of every node
+// (VerdictCacheRow).
 //
 // A save re-reads the stored values and writes back only the keys of this
 // page edited since it loaded (settingsMerge.ts), so a change made elsewhere
@@ -192,7 +195,7 @@ async function save() {
       const names = joinList(m.conflicts.map((k) => (k === LEGACY_KEY ? t('settingsTab.legacyKey') : label(k))))
       if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys: names }), confirmText: t('settingsTab.overwrite') }))) return
     }
-    await savePluginSettings(withRetiredCleared(m.values, m.changed))
+    await savePluginSettings(withRetiredMirrored(m.values, m.changed))
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {
@@ -233,23 +236,6 @@ const channelError = computed(() => {
   if (!ch) return t('settingsTab.analysisChannelInvalid', { id })
   return ch.enabled ? '' : t('statusLine.analysisProblem.unusable')
 })
-
-// Emptying the verdict cache (POST /verdict-cache/clear): its own action, not part of the save.
-const canClearCache = computed(() => canManage())
-const clearing = ref(false)
-async function clearCache() {
-  const ok = await host.confirm({ title: t('settingsTab.clearCache'), message: t('settingsTab.clearCacheConfirm'), confirmText: t('settingsTab.clearCache'), danger: true })
-  if (!ok) return
-  clearing.value = true
-  try {
-    await clearVerdictCache()
-    host.toast(t('settingsTab.cacheCleared'), 'success')
-  } catch (e) {
-    toastError(e)
-  } finally {
-    clearing.value = false
-  }
-}
 
 const jevMode = computed({
   get: () => (jev.value ? 'custom' : 'builtin'),
@@ -333,12 +319,7 @@ const jevOptions = computed(() => [
             layout="settings"
             @update:model-value="setField(k, $event)"
           />
-          <SSettingRow v-if="k === CACHE_DAYS_KEY && (canClearCache || cacheOff)" :label="t('settingsTab.clearCache')" :description="t('settingsTab.clearCacheHint')">
-            <div class="mod-form mod-setting-control">
-              <SHint v-if="cacheOff" size="xs" tone="warning">{{ t('settingsTab.cacheOff') }}</SHint>
-              <SButton v-if="canClearCache" size="sm" icon="trash" :loading="clearing" data-testid="mod-clear-cache" @click="clearCache">{{ t('settingsTab.clearCache') }}</SButton>
-            </div>
-          </SSettingRow>
+          <VerdictCacheRow v-if="k === CACHE_DAYS_KEY" :off="cacheOff" />
           <SSettingRow v-if="k === 'block_message'" :label="t('settingsTab.preview')" stacked>
             <div class="mod-form mod-setting-wide">
               <SSegmented v-model="format" :options="formatOptions" size="sm" />

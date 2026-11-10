@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SButton, SCode, SCopyButton, SDescriptions, SHint, SModal, SSectionTitle, SSpinner, type DescItem } from '@sub2api/ui'
+import ReplayBadge from './ReplayBadge.vue'
 import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
@@ -166,7 +167,7 @@ const fields = computed<DescItem[]>(() => {
     <div v-else-if="ev" class="mod-detail">
       <div class="mod-detail-head">
         <ResultBadge :result="ev.result" />
-        <SBadge v-if="ev.replayed" tone="gray" :title="t('replay.badgeHint')">{{ t('replay.badge') }}</SBadge>
+        <ReplayBadge v-if="ev.replayed" />
         <VerdictBadge :event="ev" />
         <SBadge v-if="ev.timing">{{ enumLabel('timing', ev.timing) }}</SBadge>
         <SBadge v-if="ev.mode" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>

@@ -2,6 +2,7 @@
 import { SButton, SField, SInput, STextarea } from '@sub2api/ui'
 import { categoryLabel } from './format'
 import { useModHost } from './host'
+import { JEV_DEFAULT_THRESHOLD, YES_NO_THRESHOLD } from './thresholdPresets'
 import type { JevQuestions } from './types'
 
 // A Jev question table (new-api jev-questions-editor): the preamble and one
@@ -15,7 +16,7 @@ const props = defineProps<{ hideThreshold?: boolean }>()
 const model = defineModel<JevQuestions>({ required: true })
 const t = useModHost().t
 
-const addRow = () => model.value.items.push({ category: 'custom/', label: '', question: '', answer_yes: '', answer_no: '', threshold: props.hideThreshold ? 1 : 0.85 })
+const addRow = () => model.value.items.push({ category: 'custom/', label: '', question: '', answer_yes: '', answer_no: '', threshold: props.hideThreshold ? YES_NO_THRESHOLD : JEV_DEFAULT_THRESHOLD })
 </script>
 
 <template>

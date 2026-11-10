@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SInput, SPagination, SSelect, STable, STimeRange, type RangeKey, type TableColumn } from '@sub2api/ui'
+import ReplayBadge from './ReplayBadge.vue'
 import ResultBadge from './ResultBadge.vue'
 import ReviewActions from './ReviewActions.vue'
 import WatchDetail from './WatchDetail.vue'
@@ -309,7 +310,7 @@ watch(() => list.items.value, () => (checked.value = []))
         <template #cell-created_at="{ row }">{{ dt(row.created_at) }}</template>
         <template #cell-result="{ row }">
           <ResultBadge :result="row.result" />
-          <SBadge v-if="row.replayed" size="xs" tone="gray" class="mod-ml" :title="t('replay.badgeHint')">{{ t('replay.badge') }}</SBadge>
+          <ReplayBadge v-if="row.replayed" size="xs" class="mod-ml" />
           <div class="mod-sub">{{ enumLabel('timing', row.timing) }}</div>
         </template>
         <template #cell-scores="{ row }"><ScoreChips :trace="row.trace" /></template>

@@ -13,8 +13,9 @@ import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@su
 //   allowlist_user_ids  ← exempt_user_ids
 //   verdict_cache_days  ← cache_ttl_seconds (0 = cache off, else whole days, rounded up, 1–30)
 // A new key is never removed while its retired key would be read again
-// (sentSetting), and a saved allowlist empties the retired exempt_user_ids
-// (withRetiredCleared): nodes still on 0.7.2 do not moderate those users.
+// (sentSetting), and a saved allowlist is written to the retired
+// exempt_user_ids too (withRetiredMirrored): nodes still on 0.7.2 read only
+// that key and leave exactly the allowlisted users unmoderated.
 
 /** Keys with their own editor on the settings tab instead of the schema widget. */
 export const CUSTOM_KEYS = ['analysis_channel_id', 'notify_webhook_url', 'notify_webhook_secret', 'jev_default_set'] as const
@@ -65,7 +66,7 @@ export const schemaKeys = (keys: readonly string[]) => keys.filter((k) => k !== 
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
-export const ALLOWLIST_KEY = 'allowlist_user_ids'
+const ALLOWLIST_KEY = 'allowlist_user_ids'
 export const CACHE_DAYS_KEY = 'verdict_cache_days'
 const RETIRED_ALLOWLIST = 'exempt_user_ids'
 const RETIRED_CACHE_TTL = 'cache_ttl_seconds'
@@ -99,7 +100,7 @@ export function displayValues(schema: JSONSchema | null | undefined, stored: Rec
 }
 
 /** A widget value as sent: null, and a blank in a field that is not a string (a cleared number), are undefined, so the default applies. */
-export function sentValue(schema: JSONSchema | undefined, v: unknown): unknown {
+function sentValue(schema: JSONSchema | undefined, v: unknown): unknown {
   if (v === undefined || v === null) return undefined
   if (typeof v === 'string' && v.trim() === '' && schema?.type !== 'string') return undefined
   return v
@@ -128,16 +129,18 @@ export function sentSetting(schema: JSONSchema | undefined, stored: Record<strin
 }
 
 /**
- * The values to PUT (mergeSettings) with the retired exempt_user_ids emptied
- * when this save changes the allowlist: nodes still on 0.7.2 (a rollout in
- * progress, or after a rollback) read only the retired list and do not
- * moderate its users at all, so a user taken off the allowlist must not stay
- * on it. Nothing is added when the retired list is absent or empty.
+ * The values to PUT (mergeSettings) with the retired exempt_user_ids made a
+ * copy of the allowlist when this save changes the allowlist: nodes still on
+ * 0.7.2 (a rollout in progress, or after a rollback) read only the retired
+ * list and do not moderate its users at all, so it must hold the allowlisted
+ * users and nobody taken off the allowlist. An allowlist removed by this
+ * save (its default, empty) empties a stored retired list and adds none.
  */
-export function withRetiredCleared(values: Record<string, unknown>, changed: readonly string[]): Record<string, unknown> {
-  const retired = values[RETIRED_ALLOWLIST]
-  if (!changed.includes(ALLOWLIST_KEY) || !Array.isArray(retired) || !retired.length) return values
-  return { ...values, [RETIRED_ALLOWLIST]: [] }
+export function withRetiredMirrored(values: Record<string, unknown>, changed: readonly string[]): Record<string, unknown> {
+  if (!changed.includes(ALLOWLIST_KEY)) return values
+  const list = values[ALLOWLIST_KEY]
+  if (!Array.isArray(list) && values[RETIRED_ALLOWLIST] === undefined) return values
+  return { ...values, [RETIRED_ALLOWLIST]: Array.isArray(list) ? [...list] : [] }
 }
 
 /** The settings key of an API field path: "values.<key>[.<path>]", "values/<key>/…" or "<key>". */

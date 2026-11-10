@@ -38,6 +38,19 @@ export function stageState(st: Pick<StageTrace, 'failed' | 'skipped' | 'result' 
  */
 export const stageNumber = (st: Pick<StageTrace, 'stage'>, index: number): number => (typeof st.stage === 'number' && st.stage > 0 ? st.stage : index + 1)
 
+/**
+ * The stages of a trace that reached no verdict and have no auditor call
+ * (cut off before any answered): the trace table has no row for them, so
+ * its head names them — failed, or error on a record written before 0.8.0,
+ * as the stage path shows them.
+ */
+export function unjudgedStages(trace: Pick<Trace, 'stages'> | null | undefined): { n: number; state: 'failed' | 'error' }[] {
+  return (trace?.stages || []).flatMap((st, i) => {
+    const state = stageState(st)
+    return (state === 'failed' || state === 'error') && !st.outcomes?.length ? [{ n: stageNumber(st, i), state }] : []
+  })
+}
+
 /** A category score of a run; threshold is known for hit categories only. */
 export interface TraceScore {
   category: string
