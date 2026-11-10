@@ -18,9 +18,17 @@ export interface UsageWindow {
   full: boolean
 }
 
+const isAvailable = (c: ResetCredit) => c.status === 'available'
+
 /** The credits that can be used now, soonest expiry first (the list is sorted by the plugin). */
 export function availableCredits(r: ResetCredits | null): ResetCredit[] {
-  return (r?.credits || []).filter((c) => c.status === 'available')
+  return (r?.credits || []).filter(isAvailable)
+}
+
+/** Every credit of the account: the usable ones first, then the others (being used, used), each keeping the plugin's expiry order. */
+export function allCredits(r: ResetCredits | null): ResetCredit[] {
+  const list = r?.credits || []
+  return [...list.filter(isAvailable), ...list.filter((c) => !isAvailable(c))]
 }
 
 /** The 5 h and weekly windows of a snapshot, in USAGE_KEYS order; missing ones are left out. */

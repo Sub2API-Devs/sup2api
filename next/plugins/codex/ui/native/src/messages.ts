@@ -91,7 +91,8 @@ const zh = {
     granted: '发放于',
     defaultTitle: '完整重置',
     defaultDescription: '清零当前的用量限制',
-    emptyTitle: '没有可用的重置次数',
+    status: { available: '可用', redeeming: '使用中', redeemed: '已使用' },
+    emptyTitle: '还没有重置卡',
     emptyText: 'OpenAI 会在推荐好友成功等活动中发放重置次数，发放后会显示在这里。',
     loadFailed: '读取重置次数失败',
     confirm: {
@@ -204,7 +205,8 @@ const en: Messages = {
     granted: 'granted',
     defaultTitle: 'Full reset',
     defaultDescription: 'Reset your current usage limits',
-    emptyTitle: 'No reset available',
+    status: { available: 'Available', redeeming: 'In use', redeemed: 'Used' },
+    emptyTitle: 'No resets yet',
     emptyText: 'OpenAI grants resets in promotions such as a successful referral; they show up here once granted.',
     loadFailed: 'Could not read the resets',
     confirm: {

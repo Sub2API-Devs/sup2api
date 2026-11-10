@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anyFull, availableCredits, unixMs, usageWindows } from './resetCredits'
+import { allCredits, anyFull, availableCredits, unixMs, usageWindows } from './resetCredits'
 
 describe('resetCredits helpers', () => {
   it('keeps only the available credits, in the order the plugin sent', () => {
@@ -11,6 +11,8 @@ describe('resetCredits helpers', () => {
     ]
     expect(availableCredits({ available_count: 2, credits }).map((c) => c.id)).toEqual(['b', 'd'])
     expect(availableCredits(null)).toEqual([])
+    expect(allCredits({ available_count: 2, credits }).map((c) => c.id)).toEqual(['b', 'd', 'a', 'c'])
+    expect(allCredits(null)).toEqual([])
   })
 
   it('reads the 5 h and weekly windows in that order and marks the used-up ones', () => {

@@ -1,15 +1,15 @@
 <script setup lang="ts">
 // account.detail.tabs slot (codex_device accounts): OpenAI's official Codex
-// usage resets. Shows how many the account has, each one's wording and
-// expiry, and the account's current 5 h / weekly usage; "Use" spends one
+// usage resets. Shows how many the account has, every credit (usable first,
+// then being used and used ones, dimmed) with its status, wording and expiry, and the account's current 5 h / weekly usage; "Use" spends one
 // (the header button the soonest to expire, a row's button that row's),
 // then refreshes the usage and the list. A refusal (nothing to reset, no reset
 // left) is a warning, not an error: nothing was spent.
 import { computed, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SDateTime, SEmpty, SHint, SSkeleton } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SDateTime, SEmpty, SHint, SSkeleton, SStatusBadge, type Tone } from '@sub2api/ui'
 import { errorMessage, listResetCredits, redeemResetCredit, useCodexHost, type ResetCredit, type ResetCredits } from './host'
-import { anyFull, availableCredits, unixMs, usageWindows, type QuotaLike } from './resetCredits'
+import { allCredits, anyFull, availableCredits, unixMs, usageWindows, type QuotaLike } from './resetCredits'
 import { setResetCount } from './resetCount'
 
 const props = defineProps<{ account: { id: number; name?: string; quota?: QuotaLike | null } }>()
@@ -19,6 +19,13 @@ const canUse = computed(() => host.can('codex:reset'))
 
 /** Refusals that spent nothing: shown as a warning with the plugin's message. */
 const REFUSALS = new Set(['nothing_to_reset', 'no_credit'])
+/** Credit status tones; redeemed and unknown statuses are gray (an unknown one shows as sent). */
+const STATUS_TONES: Record<string, Tone> = { available: 'success', redeeming: 'info' }
+const statusLabels = computed(() => ({
+  available: t('reset.status.available'),
+  redeeming: t('reset.status.redeeming'),
+  redeemed: t('reset.status.redeemed')
+}))
 
 const data = ref<ResetCredits | null>(null)
 const quota = ref<QuotaLike | null>(props.account.quota ?? null)
@@ -28,6 +35,7 @@ const error = ref('')
 const busy = ref('')
 
 const credits = computed(() => availableCredits(data.value))
+const listed = computed(() => allCredits(data.value))
 const count = computed(() => data.value?.available_count ?? 0)
 const usage = computed(() => usageWindows(quota.value))
 const full = computed(() => anyFull(usage.value))
@@ -127,11 +135,21 @@ watch(
     <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
 
     <SSkeleton v-if="loading && !data" :lines="3" height="2.5rem" />
-    <SEmpty v-else-if="!credits.length && !error" size="sm" icon="inbox" :title="t('reset.emptyTitle')" :text="t('reset.emptyText')" />
-    <ul v-else-if="credits.length" class="cx-reset-list">
-      <li v-for="c in credits" :key="c.id" class="cx-reset-item" data-testid="codex-reset-credit">
+    <SEmpty v-else-if="!listed.length && !error" size="sm" icon="inbox" :title="t('reset.emptyTitle')" :text="t('reset.emptyText')" />
+    <ul v-else-if="listed.length" class="cx-reset-list">
+      <li
+        v-for="c in listed"
+        :key="c.id"
+        class="cx-reset-item"
+        :class="{ 'cx-reset-item--spent': c.status !== 'available' }"
+        data-testid="codex-reset-credit"
+        :data-status="c.status"
+      >
         <div class="cx-grow">
-          <div class="cx-reset-title">{{ c.title || t('reset.defaultTitle') }}</div>
+          <div class="cx-reset-title">
+            {{ c.title || t('reset.defaultTitle') }}
+            <SStatusBadge :status="c.status" :labels="statusLabels" :tones="STATUS_TONES" size="xs" />
+          </div>
           <div class="cx-muted cx-reset-desc">{{ c.description || t('reset.defaultDescription') }}</div>
           <div class="cx-muted cx-reset-meta">
             <span v-if="c.expires_at">{{ t('reset.expires') }} <SDateTime :value="unixMs(c.expires_at)" mode="absolute" /></span>
@@ -140,7 +158,7 @@ watch(
             <span v-if="c.granted_at">{{ t('reset.granted') }} <SDateTime :value="unixMs(c.granted_at)" mode="absolute" date-only /></span>
           </div>
         </div>
-        <SButton v-if="canUse" size="sm" :loading="busy === c.id" :disabled="!!busy" @click="use(c)">{{ t('reset.use') }}</SButton>
+        <SButton v-if="canUse && c.status === 'available'" size="sm" :loading="busy === c.id" :disabled="!!busy" @click="use(c)">{{ t('reset.use') }}</SButton>
       </li>
     </ul>
   </div>

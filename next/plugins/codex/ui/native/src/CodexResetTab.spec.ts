@@ -67,6 +67,24 @@ describe('CodexResetTab', () => {
     expect(w.text()).toContain('reset.fullHint')
   })
 
+  it('lists the used resets too, after the usable ones, dimmed and without a button', async () => {
+    answer = () => ({
+      available_count: 1,
+      credits: [
+        { id: 'old', title: 'Full reset', description: '', status: 'redeemed', granted_at: 1600000000, expires_at: null },
+        { id: 'new', title: '', description: '', status: 'available', granted_at: 1700000000, expires_at: null }
+      ]
+    })
+    const w = await mountTab()
+    const rows = w.findAll('[data-testid="codex-reset-credit"]')
+    expect(rows.map((r) => r.attributes('data-status'))).toEqual(['available', 'redeemed'])
+    expect(rows[0].text()).toContain('reset.status.available')
+    expect(rows[1].text()).toContain('reset.status.redeemed')
+    expect(rows[1].classes()).toContain('cx-reset-item--spent')
+    expect(rows[0].findAll('button')).toHaveLength(1)
+    expect(rows[1].findAll('button')).toHaveLength(0)
+  })
+
   it('spends the soonest-expiring reset from the header, then refreshes the usage and the list', async () => {
     const w = await mountTab()
     answer = (path) =>
