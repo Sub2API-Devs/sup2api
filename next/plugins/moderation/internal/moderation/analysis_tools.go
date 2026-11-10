@@ -389,12 +389,13 @@ func (tc *toolCtx) recordOf(r *toolRow, excerptRunes int, detail bool) toolRecor
 	if len(r.Trace) > 0 && json.Unmarshal(r.Trace, &tr) == nil {
 		auditors := tc.snap.auditors
 		for i, st := range tr.Stages {
-			role := stageRoleNames[stageRole(i, st.Fallback, slices.ContainsFunc(st.Outcomes, func(o Outcome) bool {
+			no := tr.stageNo(i)
+			role := stageRoleNames[stageRole(no-1, st.Fallback, slices.ContainsFunc(st.Outcomes, func(o Outcome) bool {
 				a := auditors[o.AuditorID]
 				return a != nil && a.Type == AuditorTypeSafe
 			}))]
 			for _, o := range st.Outcomes {
-				ts := toolStage{Stage: i + 1, Role: role, AuditorID: o.AuditorID, Hit: o.Hit, TopCategory: o.TopCategory, TopScore: o.TopScore,
+				ts := toolStage{Stage: no, Role: role, AuditorID: o.AuditorID, Hit: o.Hit, TopCategory: o.TopCategory, TopScore: o.TopScore,
 					Skipped: o.Skipped, Error: o.ErrType, StageFailed: st.Failed, SentImages: o.SentImages, SkippedImages: o.SkippedImages}
 				if a := auditors[o.AuditorID]; a != nil {
 					ts.Auditor, ts.Type = a.Name, a.Type
@@ -402,7 +403,7 @@ func (tc *toolCtx) recordOf(r *toolRow, excerptRunes int, detail bool) toolRecor
 					ts.Auditor = "审核器已删除"
 				}
 				for _, h := range o.Hits {
-					ts.Hits = append(ts.Hits, toolHit{Category: h.Category, Score: h.Score, Threshold: h.Threshold, Stage: i + 1})
+					ts.Hits = append(ts.Hits, toolHit{Category: h.Category, Score: h.Score, Threshold: h.Threshold, Stage: no})
 				}
 				out.Stages = append(out.Stages, ts)
 			}

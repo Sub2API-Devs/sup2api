@@ -66,6 +66,9 @@ type moderation struct {
 	key    string // singleflight key
 	size   int64  // bytes held while queued
 	queued time.Time
+	// counted: the post run is on the statistics (runPostSafely does not
+	// count it again when recording it panics).
+	counted bool
 }
 
 // OnGatewayRequest implements pluginsdk.Hook (CONTRACTS §72.5). The ban
@@ -103,12 +106,18 @@ func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayReque
 
 // moderate runs flow on the request (steps 3–10); nil flow = not moderated.
 func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow) *pluginv1.GatewayRequestHookResponse {
-	if flow == nil {
+	// What is known without reading the body: a request no flow moderates
+	// (flow == nil: its group has none, or the binding exempts it) and a
+	// model the flow's filter leaves out are not moderated whatever is in
+	// progress, so they are never answered busy.
+	if flow == nil || !flow.Spec.ModelFilter.Allows(requestModel(in)) {
 		return allowEmpty
 	}
 	// The hook request is held until this returns: admit it by its bytes
 	// before reading it, and answer at once when too much is in progress
-	// (instead of growing towards the memory limit).
+	// (instead of growing towards the memory limit). A request that would
+	// be moderated first fails closed (503): under mode = enforce that is
+	// every user who is not on the allowlist or at the observe level.
 	size := hookRequestSize(in)
 	if !p.admitBytes(c, size) {
 		p.stats.busy.Add(1)
@@ -171,6 +180,15 @@ func (p *Plugin) preModerated(c *config, uid int64) bool {
 	return p.effectiveLevel(c, uid) == LevelEnforce
 }
 
+// requestModel is the client model of a hook request: the model field, or
+// the model of the request's meta.
+func requestModel(in *pluginv1.GatewayRequestHookRequest) string {
+	if model := fieldString(in.GetFields()[FieldModel]); model != "" {
+		return model
+	}
+	return in.GetMeta().GetModel()
+}
+
 // hookRequestSize is the bytes of the hook fields (what the request holds).
 func hookRequestSize(in *pluginv1.GatewayRequestHookRequest) int64 {
 	var n int64
@@ -197,10 +215,7 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 	meta := in.GetMeta()
 	uid := meta.GetUserId()
 	fields := in.GetFields()
-	model := fieldString(fields[FieldModel])
-	if model == "" {
-		model = meta.GetModel()
-	}
+	model := requestModel(in)
 	if !flow.Spec.ModelFilter.Allows(model) {
 		return nil, allowEmpty
 	}
@@ -394,6 +409,7 @@ func (p *Plugin) runPost(m *moderation) {
 	}
 	tr := m.combine(runs)
 	p.countRun(m, tr)
+	m.counted = true
 	p.finish(m, tr, runs, false)
 }
 
@@ -623,15 +639,6 @@ func (p *Plugin) finish(m *moderation, tr Trace, runs []Trace, refused bool) {
 			rec.Text = &t
 		}
 	}
-	// The raw messages of the verdict chunk: always when a stage hit, of the
-	// other records with record_pass_input_message; never of an error
-	// record (§72.9).
-	if m.cfg.StoreText && rec.Result != ResultError && (tr.keepsMessage() || m.cfg.RecordPassInputMessage) {
-		if ch := m.chunkOf(tr); ch != nil {
-			s := string(ch.messages())
-			rec.InputMessage, rec.InputMessageSize = &s, len(s)
-		}
-	}
 	switch rec.Result {
 	case ResultPass:
 		if !m.cfg.RecordPass {
@@ -644,6 +651,16 @@ func (p *Plugin) finish(m *moderation, tr Trace, runs []Trace, refused bool) {
 	case ResultError:
 		if !m.cfg.RecordErrors {
 			return
+		}
+	}
+	// The raw messages of the verdict chunk: always when a stage hit, of the
+	// other records with record_pass_input_message; never of an error
+	// record (§72.9). Built only here, for a record that is written: with
+	// images it is megabytes, and most requests pass without a record.
+	if m.cfg.StoreText && rec.Result != ResultError && (tr.keepsMessage() || m.cfg.RecordPassInputMessage) {
+		if ch := m.chunkOf(tr); ch != nil {
+			s := string(ch.messages())
+			rec.InputMessage, rec.InputMessageSize = &s, len(s)
 		}
 	}
 	rec.KeepUntil = rec.At.Add(m.cfg.retention[rec.Result])

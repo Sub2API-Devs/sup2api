@@ -380,7 +380,10 @@ func TestBusyUsesPreModerated(t *testing.T) {
 		return m
 	}
 	p, h, _ := startDB(t, nil, settings(ModeEnforce))
-	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	b := &flowBuilder{t: t, h: h, base: mod.srv.URL}
+	b.publish(Spec{Stages: []Stage{stageOf(false, b.auditor(AuditorOpenAI))}}, 9)
+	// Group 10: a flow for gpt models only (the requests are claude-opus-5).
+	b.publish(Spec{ModelFilter: ModelFilter{Type: FilterOnly, Models: []string{"gpt-*"}}, Stages: []Stage{stageOf(false, b.auditor(AuditorOpenAI))}}, 10)
 	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 5, "level": LevelObserve}))
 	waitFor(t, "watch entry in the hook", func() bool { return p.watchLevel(5) == LevelObserve })
 	p.inflightBytes.Store(17 << 20) // others in progress
@@ -408,6 +411,31 @@ func TestBusyUsesPreModerated(t *testing.T) {
 	busy(9, true)
 	busy(8, false)
 	busy(5, false)
+	// Requests that would not be moderated anyway are never answered busy,
+	// whoever sends them: a group no flow moderates, and a model the flow's
+	// filter leaves out. The same request with a model the flow moderates
+	// is refused.
+	if errs := h.Configure(settings(ModeEnforce), nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	counted := p.stats.busy.Load()
+	for _, uid := range []int64{3, 9} {
+		for _, group := range []int64{10, 77} {
+			in := hookReqAs(uid, "", "MOD-HIT-sexual while busy")
+			in.Meta.GroupId = group
+			if r := mustHook(t, h, in); denied(r) || r.GetNote() != "" {
+				t.Fatalf("user %d, group %d (not moderated): %+v, want a plain pass", uid, group, r)
+			}
+		}
+	}
+	if got := p.stats.busy.Load(); got != counted {
+		t.Fatalf("%d requests that are not moderated counted as busy", got-counted)
+	}
+	in := hookReqAs(3, "", "MOD-HIT-sexual while busy")
+	in.Meta.GroupId, in.Meta.Model, in.Fields[FieldModel] = 10, "gpt-5", `"gpt-5"`
+	if r := mustHook(t, h, in); !denied(r) || r.GetDenyCode() != DenyBusy {
+		t.Fatalf("a model the flow moderates: %+v, want 503", r)
+	}
 	if p.inflightBytes.Load() != 17<<20 {
 		t.Fatalf("in flight = %d after the busy answers", p.inflightBytes.Load())
 	}
@@ -496,7 +524,7 @@ func TestParityConversionOnce(t *testing.T) {
 		if _, err := db.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, expires_at, violation_count) VALUES `+rows); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Exec(ctx, `UPDATE config_state SET parity_converted = false WHERE id = 1`); err != nil {
+		if _, err := db.Exec(ctx, `UPDATE config_state SET parity_converted = false, parity_converted_at = NULL WHERE id = 1`); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -610,8 +638,12 @@ func TestParityConversionOnce(t *testing.T) {
 		if ev := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/21/events", nil, nil)); len(ev) != 1 || ev[0].OperatorID != nil {
 			t.Fatalf("history of user 21 = %+v", ev)
 		}
-		// It never runs again: a later automatic observe entry stays, also
+		// Once the day after the conversion is over (TestParityConversionWindow)
+		// it never runs again: a later automatic observe entry stays, also
 		// after a restart (parityDone cleared).
+		if _, err := db.Exec(ctx, `UPDATE config_state SET parity_converted_at = now() - interval '25 hours' WHERE id = 1`); err != nil {
+			t.Fatal(err)
+		}
 		if _, err := db.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, expires_at) VALUES (27, 'observe', 'auto', now() + interval '5 days')`); err != nil {
 			t.Fatal(err)
 		}

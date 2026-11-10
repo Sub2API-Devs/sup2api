@@ -13,3 +13,5 @@ ALTER TABLE stats_hourly ADD COLUMN IF NOT EXISTS replayed    bigint  NOT NULL D
 
 -- One-time conversion of auto-added watch entries (parity.go).
 ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted boolean NOT NULL DEFAULT false;
+-- When it first ran: entries added by 0.7.x nodes in the day after it are converted too.
+ALTER TABLE config_state ADD COLUMN IF NOT EXISTS parity_converted_at timestamptz;

@@ -440,8 +440,12 @@
   },
   "cache_entries": {
     "ui:title": {
-      "en": "Pass cache entries",
-      "zh": "通过缓存条数"
+      "en": "Verdict cache entries in memory",
+      "zh": "判定缓存内存条数"
+    },
+    "ui:help": {
+      "en": "How many cached verdicts (passes and hits) each node keeps in memory; the shared store holds them all for the days above.",
+      "zh": "每个节点在内存里保留多少条判定缓存（放行和命中都算）；共享存储按上面的天数保留全部。"
     }
   },
   "input_max_chars": {
@@ -466,8 +470,8 @@
       "zh": "每个请求最多审核块数"
     },
     "ui:help": {
-      "en": "Content already passed under the same flow version is not sent again (pass cache); only new content is chunked. Each chunk is one run of the flow, with its own upstream calls.",
-      "zh": "同一流程版本下已通过的内容不会再次发送（通过缓存），只有新内容参与分块。每块各执行一次流程，各自产生上游调用。"
+      "en": "Content with a cached verdict is not sent again (verdict cache: passes and hits, kept per flow for as long as its judging configuration - stages, auditors, question sets, thresholds, channel models - stays the same); only the rest is chunked. Each chunk is one run of the flow, with its own upstream calls.",
+      "zh": "已有缓存结论的内容不会再次送审（判定缓存：放行和命中都缓存，按流程保存，流程的判定配置——级、审核器、题集、阈值、渠道模型——不变就一直有效），只有其余内容参与分块。每块各执行一次流程，各自产生上游调用。"
     }
   },
   "input_overflow": {
@@ -507,8 +511,8 @@
       "zh": "处理中的请求上限"
     },
     "ui:help": {
-      "en": "When the hook requests being processed hold more than this, new requests are answered at once: they pass, except for enforce-level users, who get 503 moderation_busy.",
-      "zh": "正在处理的钩子请求合计超过这个大小时，新请求立即返回：一般用户放行，拦截级用户返回 503 moderation_busy。"
+      "en": "When the hook requests being processed hold more than this, new requests are answered at once. Requests that would be moderated before they are sent on get 503 moderation_busy: with mode enforce that is every user who is neither on the allowlist nor on the watch list at the observe level, with mode observe only blocklisted users and enforce-level watch entries. All other requests pass unmoderated. Requests no flow moderates (no flow for the group, or a model the flow's filter leaves out) are never refused.",
+      "zh": "正在处理的钩子请求合计超过这个大小时，新请求立即返回。本应先审后放的请求返回 503 moderation_busy：模式为拦截时，是白名单和观察级名单之外的所有用户；模式为观察时，只有黑名单用户和拦截级名单用户。其余请求不审核直接放行。没有流程会审核的请求（分组没有流程，或模型被流程的模型过滤排除）不会被拒绝。"
     },
     "ui:options": {
       "unit": {
@@ -923,8 +927,8 @@
       "zh": "异常率告警阈值（%）"
     },
     "ui:help": {
-      "en": "A flow, auditor or channel whose last-hour error rate is above this (with at least 20 samples) is flagged in the overview, and a flow crossing it sends one notice. Errored checks let the request pass.",
-      "zh": "近 1 小时异常率超过该值（且样本不少于 20）的流程、审核器、渠道在概览中标红；流程越过阈值时发一次通知。审核异常时请求会直接放行。"
+      "en": "A flow, auditor or channel whose last-hour error rate is above this (with at least 20 samples) is flagged in the overview, and a flow crossing it sends one notice. A stage that fails is passed over: a hit of an earlier stage stands, and the request passes only when no stage judged at all.",
+      "zh": "近 1 小时异常率超过该值（且样本不少于 20）的流程、审核器、渠道在概览中标红；流程越过阈值时发一次通知。出错的级会被跳过：前面级的命中仍然有效，只有没有任何一级给出判定时请求才放行。"
     }
   },
   "notify_webhook_url": {

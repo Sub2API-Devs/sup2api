@@ -379,7 +379,7 @@ func (p *Plugin) countRun(m *moderation, tr Trace) {
 	for _, run := range tr.runs() {
 		for i, st := range run.Stages {
 			sk := k
-			sk.stage = i + 1
+			sk.stage = run.stageNo(i) // the spec stage, not the position among the stages that ran
 			sc := p.hourly.row(sk)
 			sc.audited++
 			if st.Result == Hit {

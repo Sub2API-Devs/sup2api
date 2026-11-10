@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -489,18 +490,107 @@ func jevNormalizePeak(t testing.TB, raw string, n int) uint64 {
 }
 
 // jevNormalizeMemoryBudget is what redrawing may take of the 512 MB the
-// plugin process is limited to (CONTRACTS §72.2); the rest is left for the
-// request bodies and everything else the plugin holds.
-const jevNormalizeMemoryBudget = 384 << 20
+// plugin process is limited to (CONTRACTS §72.2, soft limit about 460 MiB);
+// the rest is left for the request bodies and everything else the plugin
+// holds.
+const jevNormalizeMemoryBudget = 200 << 20
 
 // Design Q10: the worst case of image normalization stays inside the memory
-// limit of the plugin, with every slot busy.
+// limit of the plugin, with every slot busy. The worst case per pixel is a
+// progressive JPEG without chroma subsampling (15 bytes per pixel in the
+// decoder, from a file of a few KB), then a 16-bit PNG (8 bytes).
 func TestJevNormalizeMemory(t *testing.T) {
-	raw := jevLargestSource(t)
-	peak := jevNormalizePeak(t, raw, cap(jevNormalizeSlots))
-	t.Logf("peak memory of %d concurrent redraws of a 12 MP 16-bit PNG: %d MiB", cap(jevNormalizeSlots), peak>>20)
-	if peak > jevNormalizeMemoryBudget {
-		t.Fatalf("redrawing takes %d MiB, over the budget of %d MiB", peak>>20, jevNormalizeMemoryBudget>>20)
+	slots := cap(jevNormalizeSlots)
+	check := func(name, raw string) {
+		t.Helper()
+		peak := jevNormalizePeak(t, raw, slots)
+		t.Logf("peak memory of %d concurrent redraws of %s: %d MiB", slots, name, peak>>20)
+		if peak > jevNormalizeMemoryBudget {
+			t.Fatalf("%s: redrawing takes %d MiB, over the budget of %d MiB", name, peak>>20, jevNormalizeMemoryBudget>>20)
+		}
+	}
+	check("a 12 MP 16-bit PNG", jevLargestSource(t))
+
+	// The largest progressive 4:4:4 JPEG that is still redrawn.
+	costOf := func(data []byte) int64 {
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return jevDecodeCost("jpeg", cfg, bytes.NewReader(data))
+	}
+	side := 3464
+	for costOf(progressiveJPEG(t, side, side)) > jevNormalizeMemory {
+		side -= 8
+	}
+	if side*side < 7_000_000 {
+		t.Fatalf("the largest progressive JPEG redrawn is only %d px square", side)
+	}
+	check(fmt.Sprintf("a %d×%d progressive 4:4:4 JPEG", side, side), b64(progressiveJPEG(t, side, side)))
+
+	// Two images that fit the memory together run at once: 16-bit PNGs of
+	// half the memory each.
+	half := 2700 // 2700² × 8 bytes = 55.6 MiB
+	if int64(half*half*8)*2 > jevNormalizeMemory {
+		t.Fatalf("two %d px 16-bit squares do not fit %d MiB", half, jevNormalizeMemory>>20)
+	}
+	check(fmt.Sprintf("a %d×%d 16-bit PNG", half, half), encodePNG(t, image.NewNRGBA64(image.Rect(0, 0, half, half))))
+
+	// The 12 MP progressive JPEG (180 MB to decode, a 70 KB file) is skipped
+	// from its header, a baseline one of the same size is redrawn.
+	big := progressiveJPEG(t, 3464, 3464)
+	if len(big) > 100<<10 || costOf(big) < 170<<20 {
+		t.Fatalf("12 MP progressive JPEG: %d bytes, cost %d MiB", len(big), costOf(big)>>20)
+	}
+	if a := jevAsset(context.Background(), b64(big)); a != nil {
+		t.Fatal("a 12 MP progressive 4:4:4 JPEG was redrawn")
+	}
+	if len(jevNormalizeSlots) != 0 || !jevNormalizeBytes.TryAcquire(jevNormalizeMemory) {
+		t.Fatal("slots or memory still taken")
+	}
+	jevNormalizeBytes.Release(jevNormalizeMemory)
+}
+
+// The decoder memory is estimated from the header alone.
+func TestJevDecodeCost(t *testing.T) {
+	cost := func(format string, data []byte) int64 {
+		t.Helper()
+		cfg, f, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil || f != format {
+			t.Fatalf("%s: %s %v", format, f, err)
+		}
+		return jevDecodeCost(format, cfg, bytes.NewReader(data))
+	}
+	raw := func(s string) []byte {
+		data, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	const px = 1000 * 800
+	within := func(name string, got, want int64) {
+		t.Helper()
+		if got < want || got > want+want/8 {
+			t.Errorf("%s: cost %d, want %d (up to an eighth more)", name, got, want)
+		}
+	}
+	within("8-bit PNG", cost("png", raw(encodePNG(t, filled(1000, 800, red)))), px*4)
+	within("16-bit PNG", cost("png", raw(encodePNG(t, image.NewNRGBA64(image.Rect(0, 0, 1000, 800))))), px*8)
+	within("gray PNG", cost("png", raw(encodePNG(t, image.NewGray(image.Rect(0, 0, 1000, 800))))), px)
+	within("paletted PNG", cost("png", raw(encodePNG(t, image.NewPaletted(image.Rect(0, 0, 1000, 800), color.Palette{white, red})))), px)
+	// The standard encoder writes baseline 4:2:0: a plane and two quarters.
+	within("baseline 4:2:0 JPEG", cost("jpeg", raw(encodeJPEG(t, filled(1000, 800, red)))), px*3/2)
+	within("gray JPEG", cost("jpeg", raw(encodeJPEG(t, image.NewGray(image.Rect(0, 0, 1000, 800))))), px)
+	within("progressive 4:4:4 JPEG", cost("jpeg", progressiveJPEG(t, 1000, 800)), px*15)
+	var g bytes.Buffer
+	if err := gif.Encode(&g, filled(1000, 800, red), nil); err != nil {
+		t.Fatal(err)
+	}
+	within("GIF", cost("gif", g.Bytes()), px)
+	// A JPEG whose frame header cannot be found costs the worst case.
+	if got := jpegDecodeCost(px, bytes.NewReader([]byte{0xff, 0xd8, 0xff, 0xda, 0, 2})); got < px*15 {
+		t.Errorf("JPEG without a frame header: cost %d", got)
 	}
 }
 

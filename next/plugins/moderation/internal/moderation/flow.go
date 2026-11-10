@@ -199,6 +199,11 @@ const (
 
 // StageTrace is one executed stage.
 type StageTrace struct {
+	// Stage is the 1-based number of the stage in the flow's spec. A trace
+	// holds only the stages that ran, so a fallback stage's number is not
+	// its position in Trace.Stages plus one. Traces before 0.8.0 have no
+	// number: there the position is the number (Trace.stageNo).
+	Stage    int       `json:"stage,omitempty"`
 	Outcomes []Outcome `json:"outcomes"`
 	Result   string    `json:"result"`
 	Errored  bool      `json:"errored,omitempty"` // an auditor errored, or the stage was cut off
@@ -216,10 +221,12 @@ type StageTrace struct {
 // 1-based index) with the other runs in Chunks, and Errored / Skipped /
 // LatencyMs cover them all.
 type Trace struct {
-	Stages     []StageTrace `json:"stages"`
-	Final      string       `json:"final"`
-	Decider    int          `json:"decider"` // last stage that decided hit; -1 = none
-	Overturned bool         `json:"overturned,omitempty"`
+	Stages []StageTrace `json:"stages"`
+	Final  string       `json:"final"`
+	// Decider is the index in Stages (not the spec stage number, see
+	// StageTrace.Stage) of the last stage that decided hit; -1 = none.
+	Decider    int  `json:"decider"`
+	Overturned bool `json:"overturned,omitempty"`
 	// Errored: some auditor errored or a stage failed (or the run panicked).
 	// A failed stage is passed over, so the run may still end in a hit; it
 	// is an error only when no stage judged at all (verdict).
@@ -340,6 +347,7 @@ func runFlow(ctx context.Context, spec *Spec, timeout time.Duration, audit audit
 			break
 		}
 		stage := runStage(ctx, st, audit, tr.HitCategories())
+		stage.Stage = i + 1
 		tr.Stages = append(tr.Stages, stage)
 		tr.Errored = tr.Errored || stage.Errored
 		switch {
@@ -356,7 +364,7 @@ func runFlow(ctx context.Context, spec *Spec, timeout time.Duration, audit audit
 			}
 			return tr
 		}
-		tr.Decider = i
+		tr.Decider = len(tr.Stages) - 1
 	}
 	if tr.Decider >= 0 {
 		tr.Final = Hit
@@ -371,7 +379,8 @@ func runFlow(ctx context.Context, spec *Spec, timeout time.Duration, audit audit
 // spec) after a chain that passed or judged nothing. A failed one is passed
 // over; the first that hits decides the final Hit and ends the run. No
 // stage decided hit before them, so they get no prior hits. After the total
-// timeout or a cancel nothing more runs.
+// timeout or a cancel nothing more runs. Decider is the position of the
+// stage in tr.Stages, which holds only the stages that ran.
 func runFallback(ctx context.Context, stages []Stage, base int, audit auditFunc, tr *Trace) {
 	for j, st := range stages {
 		if ctx.Err() != nil {
@@ -379,11 +388,11 @@ func runFallback(ctx context.Context, stages []Stage, base int, audit auditFunc,
 			return
 		}
 		stage := runStage(ctx, st, audit, nil)
-		stage.Fallback = true
+		stage.Stage, stage.Fallback = base+j+1, true
 		tr.Stages = append(tr.Stages, stage)
 		tr.Errored = tr.Errored || stage.Errored
 		if stage.Result == Hit {
-			tr.Final, tr.Decider = Hit, base+j
+			tr.Final, tr.Decider = Hit, len(tr.Stages)-1
 			return
 		}
 	}
@@ -505,9 +514,10 @@ func (t *Trace) verdict() string {
 }
 
 // decidingStage is the stage whose hits the record shows: the deciding stage
-// of a hit, the last hit stage of an overturn.
+// of a hit, the last hit stage of an overturn. It is an index in Stages,
+// or -1; a Decider outside Stages (a damaged or foreign trace) is ignored.
 func (t *Trace) decidingStage() int {
-	if t.Decider >= 0 {
+	if t.Decider >= 0 && t.Decider < len(t.Stages) {
 		return t.Decider
 	}
 	for i := len(t.Stages) - 1; i >= 0; i-- {
@@ -516,6 +526,15 @@ func (t *Trace) decidingStage() int {
 		}
 	}
 	return -1
+}
+
+// stageNo is the spec stage number (1-based) of Stages[i]: the stored number,
+// or the position in traces written before stages carried one.
+func (t *Trace) stageNo(i int) int {
+	if n := t.Stages[i].Stage; n > 0 {
+		return n
+	}
+	return i + 1
 }
 
 // HitCategories collects the deciding stage's hits, best score per category.
@@ -530,7 +549,7 @@ func (t *Trace) HitCategories() []HitCategory {
 			if cur, ok := best[h.Category]; ok && cur.Score >= h.Score {
 				continue
 			}
-			h.Stage, h.Auditor = d+1, o.AuditorID
+			h.Stage, h.Auditor = t.stageNo(d), o.AuditorID
 			best[h.Category] = h
 		}
 	}

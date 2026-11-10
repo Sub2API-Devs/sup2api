@@ -145,8 +145,11 @@ type Settings struct {
 	ModelPatterns []string   `json:"model_patterns"`
 	RetentionDays int        `json:"retention_days"`
 
-	// truncated names the user lists cut to maxUserList (Configure warns).
-	truncated []string
+	// truncated names the user lists cut to maxUserList, droppedIDs the
+	// lists that held entries which are no user id, with how many
+	// (Configure warns about both).
+	truncated  []string
+	droppedIDs map[string]int
 }
 
 // maxAnalysisGuidelines caps analysis_guidelines (bytes); longer text falls
@@ -272,9 +275,10 @@ func (d decoder) strList(k string) []string {
 }
 
 // userList reads a list of decimal user ids: entries that are no integer
-// are dropped, more than maxUserList are cut (cut = true). present = the
-// key holds an array.
-func (d decoder) userList(k string) (ids []string, present, cut bool) {
+// (or too long for one: the form takes up to 18 digits) are dropped and
+// counted, more than maxUserList are cut (cut = true). present = the key
+// holds an array.
+func (d decoder) userList(k string) (ids []string, present, cut bool, dropped int) {
 	if v, ok := d.m[k]; ok {
 		var xs []any
 		present = json.Unmarshal(v, &xs) == nil && xs != nil
@@ -284,31 +288,43 @@ func (d decoder) userList(k string) (ids []string, present, cut bool) {
 			continue
 		}
 		if _, err := strconv.ParseInt(u, 10, 64); err != nil {
+			dropped++
 			continue
 		}
 		if len(ids) == maxUserList {
-			return ids, present, true
+			return ids, present, true, dropped
 		}
 		ids = append(ids, u)
 	}
-	return ids, present, false
+	return ids, present, false, dropped
 }
 
 // userLists reads the allowlist and the blocklist. Settings saved before
 // 0.8.0 have no allowlist_user_ids: their exempt_user_ids are the allowlist.
 func (d decoder) userLists(s *Settings) {
-	exempt, _, exemptCut := d.userList("exempt_user_ids")
+	note := func(key string, dropped int) {
+		if dropped > 0 {
+			if s.droppedIDs == nil {
+				s.droppedIDs = map[string]int{}
+			}
+			s.droppedIDs[key] = dropped
+		}
+	}
+	exempt, _, exemptCut, dropped := d.userList("exempt_user_ids")
 	s.ExemptUserIDs = exempt
-	allow, present, cut := d.userList("allowlist_user_ids")
+	allow, present, cut, allowDropped := d.userList("allowlist_user_ids")
 	if !present {
 		allow, cut = exempt, exemptCut
+		note("exempt_user_ids", dropped) // the retired list only counts while it is read
 	}
+	note("allowlist_user_ids", allowDropped)
 	if s.AllowlistUserIDs = allow; cut {
 		s.truncated = append(s.truncated, "allowlist_user_ids")
 	}
-	if s.BlocklistUserIDs, _, cut = d.userList("blocklist_user_ids"); cut {
+	if s.BlocklistUserIDs, _, cut, dropped = d.userList("blocklist_user_ids"); cut {
 		s.truncated = append(s.truncated, "blocklist_user_ids")
 	}
+	note("blocklist_user_ids", dropped)
 }
 
 // verdictCache reads verdict_cache_days. Settings saved before 0.8.0 only

@@ -257,6 +257,10 @@ type WatchCounts struct {
 	Watching        int64 `json:"watching"`
 	WatchingWithNew int64 `json:"watching_with_new"`
 	Blocking        int64 `json:"blocking"`
+	// BlockingWithNew: enforce-level entries with hits since they were last
+	// seen. Under the default level enforce new entries join at enforce, so
+	// this is where users with new hits show.
+	BlockingWithNew int64 `json:"blocking_with_new"`
 }
 
 // HealthRow is the last-hour health of an auditor or a channel.
@@ -507,12 +511,14 @@ func addAnalysisCounts(ctx context.Context, db *pgxpool.Pool, out *Status, today
 }
 
 // watchCounts: watching and watching_with_new count the observe level,
-// blocking the enforce level (new-api CountModerationWatch).
+// blocking the enforce level (new-api GetModerationWatchCounts);
+// blocking_with_new is the plugin's own, the enforce-level entries with new
+// hits.
 func (p *Plugin) watchCounts(ctx context.Context, db *pgxpool.Pool) (WatchCounts, error) {
 	var w WatchCounts
 	err := db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE level = 'observe'), count(*) FILTER (WHERE level = 'observe' AND hits_since_seen > 0),
-			count(*) FILTER (WHERE level = 'enforce')
-		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking)
+			count(*) FILTER (WHERE level = 'enforce'), count(*) FILTER (WHERE level = 'enforce' AND hits_since_seen > 0)
+		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking, &w.BlockingWithNew)
 	return w, err
 }
 

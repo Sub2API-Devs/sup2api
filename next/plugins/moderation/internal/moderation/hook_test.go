@@ -879,6 +879,13 @@ func TestMigration0010Idempotent(t *testing.T) {
 			t.Fatalf("%s.%s: default %v nullable %s", c[0], c[1], def, nullable)
 		}
 	}
+	// The time of the watch list conversion: unset until it ran.
+	var typ, nullable string
+	if err := conn.QueryRow(ctx, `SELECT data_type, is_nullable FROM information_schema.columns
+		WHERE table_schema = $1 AND table_name = 'config_state' AND column_name = 'parity_converted_at'`, schema).Scan(&typ, &nullable); err != nil ||
+		typ != "timestamp with time zone" || nullable != "YES" {
+		t.Fatalf("config_state.parity_converted_at: %s nullable %s (%v)", typ, nullable, err)
+	}
 	var n int
 	var def string
 	if err := conn.QueryRow(ctx, `SELECT count(*), max(pg_get_constraintdef(c.oid)) FROM pg_constraint c

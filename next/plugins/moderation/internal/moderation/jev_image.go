@@ -1,21 +1,25 @@
 package moderation
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"image"
+	"image/color"
 	_ "image/gif" // first frame only
 	"image/jpeg"
 	"image/png"
 	"io"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
+	xsemaphore "golang.org/x/sync/semaphore"
 )
 
 // Image limits of System One (new-api engine_typesafe.go): width and height
@@ -32,9 +36,23 @@ const (
 	// jevImageMaxSourcePixels bounds what is decoded for normalization: an
 	// image whose header claims more is skipped before its pixels are
 	// allocated. new-api takes 50 MP; the plugin process is limited to
-	// 512 MB (CONTRACTS §72.2), and a 12 MP image is up to 96 MB decoded
-	// (16-bit RGBA).
+	// 512 MB (CONTRACTS §72.2).
 	jevImageMaxSourcePixels = 12_000_000
+	// jevNormalizeMemory bounds the memory the decoders hold at once, by
+	// the estimate of each image's header (jevDecodeCost): an image that
+	// alone needs more is skipped, the others wait until they fit. Pixels
+	// alone do not bound it: a 12 MP image is 12 MB as a gray PNG, 96 MB as
+	// a 16-bit RGBA PNG and 180 MB as a progressive JPEG without chroma
+	// subsampling (the decoder keeps every coefficient, 4 bytes per sample,
+	// beside the planes) - and such a JPEG can be a 70 KB file. So a 16-bit
+	// 12 MP PNG is redrawn alone, and a progressive 4:4:4 JPEG up to 7.8 MP.
+	jevNormalizeMemory = 112 << 20
+	// A call redraws for at most jevNormalizeShare of the time its context
+	// has left (the channel timeout), and never longer than
+	// jevNormalizeBudgetMax: the rest belongs to the upstream call, so that
+	// images never cost the text its audit.
+	jevNormalizeShare     = 2 // one half
+	jevNormalizeBudgetMax = 5 * time.Second
 	// jevImagePNGMax: a normalized image whose PNG is larger is a photo
 	// rather than a screenshot and goes as a JPEG of jevImageJPEGQuality, a
 	// fraction of the size, so more images fit the request.
@@ -47,23 +65,39 @@ const (
 // even when another package registers a decoder for it.
 var jevImageFormats = []string{"png", "jpeg", "gif", "webp"}
 
-// jevNormalizeSlots bounds the images decoded and redrawn at once, and with
-// them the memory and CPU normalization takes on the request path.
-var jevNormalizeSlots = make(chan struct{}, 2)
+// jevNormalizeSlots bounds the images decoded and redrawn at once (the CPU
+// normalization takes on the request path), jevNormalizeBytes the memory
+// their decoders hold (jevNormalizeMemory).
+var (
+	jevNormalizeSlots = make(chan struct{}, 2)
+	jevNormalizeBytes = xsemaphore.NewWeighted(jevNormalizeMemory)
+)
+
+// jevNormalize redraws one image (a variable for the tests).
+var jevNormalize = jevNormalizeImage
 
 func jevImageTokens(w, h int) int { return w*h/250 + 100 }
 
 // jevAssets packs the sendable images in order until the next one does not
-// fit the budget; the same content is sent once.
+// fit the budget; the same content is sent once. Redrawing has its own time
+// budget inside ctx (jevNormalizeBudget): an image that is not ready when it
+// ends is skipped, like every image after it that needs redrawing, and the
+// call goes out with the text and the images that are ready. Images sent as
+// they are cost no time and are still packed.
 func jevAssets(ctx context.Context, in *Input) []typesafeAsset {
+	nctx, cancel := context.WithTimeout(ctx, jevNormalizeBudget(ctx))
+	defer cancel()
 	tokens, size := utf8.RuneCountInString(in.Text), 0
 	seen := map[[32]byte]bool{}
 	var out []typesafeAsset
 	for _, img := range in.Images {
+		if ctx.Err() != nil {
+			break // the call is over: nothing will be sent
+		}
 		if img.URL != "" {
 			continue
 		}
-		a := jevAsset(ctx, img.Data)
+		a := jevAsset(nctx, img.Data)
 		if a == nil {
 			continue
 		}
@@ -81,12 +115,22 @@ func jevAssets(ctx context.Context, in *Input) []typesafeAsset {
 	return out
 }
 
+// jevNormalizeBudget is the time a call may spend redrawing images: a share
+// of what ctx has left, at most jevNormalizeBudgetMax.
+func jevNormalizeBudget(ctx context.Context) time.Duration {
+	budget := jevNormalizeBudgetMax
+	if deadline, ok := ctx.Deadline(); ok {
+		budget = min(budget, max(time.Until(deadline), 0)/jevNormalizeShare)
+	}
+	return budget
+}
+
 // jevAsset turns an inline image (bare base64, at most 16 MiB decoded) into
 // an asset System One accepts. A PNG or JPEG whose header is inside the
 // limits is sent as it is: the header is read through a streaming decoder,
 // so the image is never held decoded. Any other PNG, JPEG, GIF or WebP is
-// normalized (jevNormalizeImage) unless its header claims more than
-// jevImageMaxSourcePixels, waiting for a jevNormalizeSlots slot within ctx.
+// normalized (jevRedraw) unless its header claims more than
+// jevImageMaxSourcePixels or more decoder memory than jevNormalizeMemory.
 // URL images are never downloaded. nil = skipped, not an error.
 func jevAsset(ctx context.Context, raw string) *typesafeAsset {
 	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
@@ -111,17 +155,174 @@ func jevAsset(ctx context.Context, raw string) *typesafeAsset {
 	if w <= 0 || h <= 0 || w*h > jevImageMaxSourcePixels {
 		return nil
 	}
+	cost := jevDecodeCost(format, cfg, base64.NewDecoder(base64.StdEncoding, strings.NewReader(raw)))
+	if cost > jevNormalizeMemory {
+		return nil
+	}
+	return jevRedraw(ctx, raw, cost)
+}
+
+// jevRedraw normalizes an image whose decoder needs cost bytes, within ctx:
+// it waits for a slot and for the memory only while ctx lasts, and when ctx
+// ends during the redraw it returns nil at once - a decoder cannot be
+// stopped, so the redraw finishes on its own and frees its slot and memory
+// then. nil = skipped.
+func jevRedraw(ctx context.Context, raw string, cost int64) *typesafeAsset {
+	if ctx.Err() != nil {
+		return nil
+	}
 	select {
 	case jevNormalizeSlots <- struct{}{}:
-		defer func() { <-jevNormalizeSlots }()
 	case <-ctx.Done():
 		return nil
 	}
-	data, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil {
+	// select takes either case when both are ready, and Acquire takes a
+	// free semaphore even when ctx is done.
+	if ctx.Err() != nil || jevNormalizeBytes.Acquire(ctx, cost) != nil {
+		<-jevNormalizeSlots
 		return nil
 	}
-	return jevNormalizeImage(data)
+	if ctx.Err() != nil {
+		jevNormalizeBytes.Release(cost)
+		<-jevNormalizeSlots
+		return nil
+	}
+	done := make(chan *typesafeAsset, 1)
+	go func() {
+		var a *typesafeAsset
+		defer func() {
+			if recover() != nil {
+				a = nil // a decoder panicked on the image: skipped
+			}
+			jevNormalizeBytes.Release(cost)
+			<-jevNormalizeSlots
+			done <- a
+		}()
+		if data, err := base64.StdEncoding.DecodeString(raw); err == nil {
+			a = jevNormalize(data)
+		}
+	}()
+	select {
+	case a := <-done:
+		return a
+	case <-ctx.Done():
+		return nil
+	}
+}
+
+// jevDecodeCost estimates the bytes the decoder of an image holds while it
+// is decoded, from the header (cfg of image.DecodeConfig, r reads the file
+// from its start). It errs on the high side where the header does not tell.
+func jevDecodeCost(format string, cfg image.Config, r io.Reader) int64 {
+	px := int64(cfg.Width) * int64(cfg.Height)
+	switch format {
+	case "jpeg":
+		return jpegDecodeCost(px, r)
+	case "gif":
+		return px // paletted, first frame
+	case "webp":
+		switch cfg.ColorModel {
+		case color.YCbCrModel:
+			return px * 3
+		case color.NYCbCrAModel:
+			return px * 4
+		}
+		return px * 8 // lossless: NRGBA and the transforms' scratch
+	}
+	// PNG: the pixel format, and half as much again when interlaced (the
+	// decoder holds a pass beside the image). Byte 28 is the interlace
+	// method of IHDR.
+	bpp := int64(4)
+	switch cfg.ColorModel {
+	case color.RGBA64Model, color.NRGBA64Model:
+		bpp = 8
+	case color.Gray16Model:
+		bpp = 2
+	case color.GrayModel:
+		bpp = 1
+	default:
+		if _, ok := cfg.ColorModel.(color.Palette); ok {
+			bpp = 1
+		}
+	}
+	cost := px * bpp
+	var head [29]byte
+	if _, err := io.ReadFull(r, head[:]); err != nil || head[28] != 0 {
+		cost += cost / 2
+	}
+	return cost
+}
+
+// jpegDecodeCost reads the frame header of a JPEG of px pixels: the planes
+// take one byte per sample, by the components' sampling factors, and a
+// progressive frame (SOF2) keeps every coefficient as well, four bytes per
+// sample. Four components (CMYK) are converted into a second image. A
+// header that cannot be read costs the worst case.
+func jpegDecodeCost(px int64, r io.Reader) int64 {
+	worst := px * (4*5 + 4)
+	br := bufio.NewReader(r)
+	var b [2]byte
+	if _, err := io.ReadFull(br, b[:]); err != nil || b[0] != 0xff || b[1] != 0xd8 {
+		return worst
+	}
+	for {
+		if _, err := io.ReadFull(br, b[:]); err != nil || b[0] != 0xff {
+			return worst
+		}
+		marker := b[1]
+		for marker == 0xff { // fill bytes
+			m, err := br.ReadByte()
+			if err != nil {
+				return worst
+			}
+			marker = m
+		}
+		if marker == 0xd8 || marker == 0x01 || (marker >= 0xd0 && marker <= 0xd7) {
+			continue // no payload
+		}
+		if _, err := io.ReadFull(br, b[:]); err != nil {
+			return worst
+		}
+		n := int(b[0])<<8 | int(b[1]) - 2
+		if n < 0 {
+			return worst
+		}
+		sof := marker >= 0xc0 && marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc
+		if !sof {
+			if marker == 0xda || marker == 0xd9 { // no frame header before the scan
+				return worst
+			}
+			if _, err := br.Discard(n); err != nil {
+				return worst
+			}
+			continue
+		}
+		head := make([]byte, n)
+		if _, err := io.ReadFull(br, head); err != nil || n < 6 || n < 6+3*int(head[5]) {
+			return worst
+		}
+		comps := int(head[5])
+		var units, hmax, vmax int64
+		for c := range comps {
+			hv := head[6+3*c+1]
+			ch, cv := int64(hv>>4), int64(hv&0x0f)
+			units += ch * cv
+			hmax, vmax = max(hmax, ch), max(vmax, cv)
+		}
+		if comps == 0 || hmax == 0 || vmax == 0 {
+			return worst
+		}
+		// Planes are rounded up to whole MCUs: a little over px.
+		samples := px*units/(hmax*vmax) + px/16
+		cost := samples
+		if marker != 0xc0 && marker != 0xc1 { // progressive (or a kind the decoder refuses)
+			cost += samples * 4
+		}
+		if comps == 4 {
+			cost += px * 4
+		}
+		return cost
+	}
 }
 
 // jevNormalizeImage decodes an image and redraws it inside the System One

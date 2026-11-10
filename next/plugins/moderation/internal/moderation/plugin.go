@@ -13,7 +13,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
+	"runtime/debug"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,6 +64,9 @@ type Plugin struct {
 	// parityDone: the one-time 0.8.0 conversion of the watch list ran
 	// (convertParityOnce).
 	parityDone atomic.Bool
+	// parityEnd: when the conversion stops looking for entries added by
+	// 0.7.x nodes (unix nanoseconds; read once parityDone is set).
+	parityEnd atomic.Int64
 	// configured: Configure ran at least once, so the legacy conversion
 	// sees the real settings and not the defaults.
 	configured atomic.Bool
@@ -192,6 +198,11 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 	for _, key := range s.truncated {
 		p.log.Warn("moderation: user list cut to its limit", "key", key, "limit", maxUserList)
 	}
+	for _, key := range slices.Sorted(maps.Keys(s.droppedIDs)) {
+		// A dropped entry is a user the list does not cover: an allowlisted
+		// user moderated first, or a blocklisted one who is not.
+		p.log.Warn("moderation: user list entries that are no user id were dropped", "key", key, "dropped", s.droppedIDs[key])
+	}
 	c := compile(s)
 	c.settingsHash = settingsDigest(cfg.JSON)
 	p.attemptHook.Store(attemptHookGranted(cfg))
@@ -315,18 +326,30 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	return errors.Join(err, p.eventWriter.Stop())
 }
 
+// recoverTracked keeps a panic in a background goroutine from ending the
+// plugin process.
+func (p *Plugin) recoverTracked() {
+	if r := recover(); r != nil {
+		p.log.Error("moderation: background task panicked", "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+	}
+}
+
 // goTracked runs fn in a goroutine Shutdown waits for before it stops the
 // event writer. Once Shutdown began, fn runs untracked.
 func (p *Plugin) goTracked(fn func()) {
 	p.poolMu.RLock()
 	defer p.poolMu.RUnlock()
 	if p.closed {
-		go fn()
+		go func() {
+			defer p.recoverTracked()
+			fn()
+		}()
 		return
 	}
 	p.wg.Add(1)
 	go func() {
 		defer p.wg.Done()
+		defer p.recoverTracked()
 		fn()
 	}()
 }
@@ -452,12 +475,33 @@ func (p *Plugin) postWorker(pool *workerPool) {
 	defer pool.wg.Done()
 	for m := range pool.ch {
 		if p.postCtx.Err() == nil {
-			p.runPost(m)
+			p.runPostSafely(m)
 		} else {
 			p.stats.shutdownDropped.Add(1)
 		}
 		p.queuedBytes.Add(-m.size)
 	}
+}
+
+// runPostSafely runs one queued job and keeps a panic in it from ending the
+// plugin process (the pre path is covered by the SDK's recover around the
+// hook; a worker goroutine is not). The job is then counted and recorded as
+// a run that errored, like a run in which nothing judged.
+func (p *Plugin) runPostSafely(m *moderation) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		p.log.Error("moderation: post run panicked", "request_id", m.rec.RequestID, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+		defer func() { _ = recover() }() // recording it must not panic either
+		tr := Trace{Final: Pass, Decider: -1, Errored: true}
+		if !m.counted {
+			p.countRun(m, tr)
+		}
+		p.finish(m, tr, nil, false)
+	}()
+	p.runPost(m)
 }
 
 // Background store of suspicious records the event writer could not take
