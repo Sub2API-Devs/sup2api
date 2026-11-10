@@ -489,6 +489,41 @@ func TestAuditorJudge(t *testing.T) {
 	if v := RulesVersionOf(&custom); !strings.HasPrefix(v, "custom-") {
 		t.Fatalf("custom version %s", v)
 	}
+	// llm_questions: the default set when it has none, every threshold 1; a
+	// yes (1) is a hit with score 1 and threshold 1, an unanswered question
+	// is a bad response, thresholds and the image switch are refused.
+	q, err := compileAuditor(4, "q", AuditorLLMQuestions, 1, AuditorConfig{}, nil, &def)
+	if err != nil || len(q.order) != 10 || q.questions.RulesVersion != RulesVersionZH || q.images || channelTypeOf[AuditorLLMQuestions] != ChannelLLM {
+		t.Fatalf("llm_questions default: %+v %v", q, err)
+	}
+	answers := map[string]float64{}
+	for _, c := range q.order {
+		answers[c] = 0
+	}
+	if hits, err := q.judge(EngineResult{Scores: answers}); err != nil || len(hits) != 0 {
+		t.Fatalf("all no: %v %v", hits, err)
+	}
+	answers["custom/jailbreak"] = 1
+	hits, err = q.judge(EngineResult{Scores: answers})
+	if err != nil || len(hits) != 1 || hits[0] != (HitCategory{Category: "custom/jailbreak", Label: "越狱与恶意预填充", Score: 1, Threshold: 1}) {
+		t.Fatalf("one yes: %+v %v", hits, err)
+	}
+	delete(answers, "sexual")
+	if _, err := q.judge(EngineResult{Scores: answers}); !errors.Is(err, errBadScores) || ErrType(err) != ErrTypeBadResponse {
+		t.Fatalf("unanswered question: %v", err)
+	}
+	own := JevQuestions{Items: []JevQuestion{{Category: "custom/x", Label: "X", Question: "q?", Threshold: 0.3}}}
+	if q, err := compileAuditor(4, "q", AuditorLLMQuestions, 1, AuditorConfig{Questions: &own}, nil, &def); err != nil || q.thresholds["custom/x"] != 1 ||
+		!strings.HasPrefix(q.questions.RulesVersion, "custom-") {
+		t.Fatalf("llm_questions own table: %+v %v", q, err)
+	}
+	on := true
+	for name, cfg := range map[string]AuditorConfig{"thresholds": {Thresholds: map[string]float64{"sexual": 0.5}}, "review_images": {ReviewImages: &on},
+		"bad table": {Questions: &JevQuestions{}}} {
+		if _, err := compileAuditor(4, "q", AuditorLLMQuestions, 1, cfg, nil, &def); err == nil {
+			t.Fatalf("llm_questions with %s accepted", name)
+		}
+	}
 	l, _ := compileAuditor(3, "l", AuditorLLMVerdict, 1, AuditorConfig{}, nil, &def)
 	if h := l.judgeLLM(EngineResult{Scores: map[string]float64{"sexual": llmFlagScore}}); len(h) != 0 {
 		t.Fatal("flag is not a hit by default")
@@ -511,8 +546,15 @@ func pngBase64(t *testing.T, w, h int) string {
 func TestJevAssetsAndOpenAIImages(t *testing.T) {
 	ok, small := pngBase64(t, 300, 300), pngBase64(t, 100, 100)
 	in := &Input{Text: "t", Images: []Image{{MediaType: "image/png", Data: ok}, {MediaType: "image/png", Data: small}, {URL: "https://x/y.png"}}}
-	if a := jevAssets(in); len(a) != 1 || a[0].Format != "png" {
+	// The in-limits PNG goes as it is, the one too small is redrawn onto a
+	// 280 px canvas, the URL image is never sent.
+	a := jevAssets(context.Background(), in)
+	if len(a) != 2 || a[0].Format != "png" || a[0].DataBase64 != ok || a[1].Format != "png" || a[1].DataBase64 == small ||
+		a[1].tokens != jevImageTokens(280, 280) {
 		t.Fatalf("assets = %d", len(a))
+	}
+	if cfg, _, err := image.DecodeConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(a[1].DataBase64))); err != nil || cfg.Width != 280 || cfg.Height != 280 {
+		t.Fatalf("redrawn image = %+v %v", cfg, err)
 	}
 	urls := []string{}
 	for _, img := range openAIUsableImages([]Image{{Data: ok}, {URL: "https://x/y.png"}, {Data: "bm90IGFuIGltYWdl"}}) {

@@ -681,7 +681,7 @@ func (p *Plugin) validateAuditor(ctx context.Context, tx pgx.Tx, in *auditorInpu
 	}
 	want, ok := channelTypeOf[in.Type]
 	if !ok {
-		return errs.Add("type", "enum", "type must be openai_moderation, typesafe or llm_verdict / type 取值为 openai_moderation、typesafe、llm_verdict")
+		return errs.Add("type", "enum", "type must be openai_moderation, typesafe, llm_verdict or llm_questions / type 取值为 openai_moderation、typesafe、llm_verdict、llm_questions")
 	}
 	var chType string
 	err := tx.QueryRow(ctx, `SELECT type FROM channels WHERE id = $1 AND deleted_at IS NULL`, in.ChannelID).Scan(&chType)

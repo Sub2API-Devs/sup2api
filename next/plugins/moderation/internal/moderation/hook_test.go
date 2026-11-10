@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -513,6 +514,15 @@ func TestConfigValidation(t *testing.T) {
 	if r := h.Do("POST", "/auditors", nil, map[string]any{"name": "j", "type": AuditorTypeSafe, "channel_id": chans[0].ID}); r.GetStatus() != 400 {
 		t.Fatalf("type mismatch = %d %s", r.GetStatus(), r.GetBody())
 	}
+	// A question-table LLM auditor needs an llm channel.
+	if r := h.Do("POST", "/auditors", nil, map[string]any{"name": "q", "type": AuditorLLMQuestions, "channel_id": chans[0].ID}); r.GetStatus() != 400 ||
+		!strings.Contains(string(r.GetBody()), "type_mismatch") {
+		t.Fatalf("llm_questions on an openai_moderation channel = %d %s", r.GetStatus(), r.GetBody())
+	}
+	if r := h.Do("POST", "/auditors", nil, map[string]any{"name": "q", "type": "llm", "channel_id": chans[0].ID}); r.GetStatus() != 400 ||
+		!strings.Contains(string(r.GetBody()), "llm_questions") {
+		t.Fatalf("unknown type = %d %s", r.GetStatus(), r.GetBody())
+	}
 	if r := h.Do("DELETE", fmt.Sprintf("/channels/%d", chans[0].ID), nil, nil); r.GetStatus() != http.StatusConflict {
 		t.Fatalf("delete used channel = %d", r.GetStatus())
 	}
@@ -692,6 +702,50 @@ func TestCleanupAndImport(t *testing.T) {
 	if r := h.Do("POST", "/import", nil, bad); r.GetStatus() != 400 {
 		t.Fatalf("bad import = %d", r.GetStatus())
 	}
+	// new-api's question-table auditor (type llm) becomes llm_questions and
+	// keeps its table; without one it uses the default set.
+	table := map[string]any{"preamble": "p", "items": []any{map[string]any{"category": "sexual", "question": "q?", "threshold": 1}}}
+	llmAuditor := map[string]any{"name": "judge", "type": "llm", "channel_ref": 0, "questions": table}
+	llmDoc := map[string]any{"data": map[string]any{
+		"channels": []any{map[string]any{"type": "llm", "protocol": "anthropic", "name": "claude", "base_url": "https://api.anthropic.com", "model": "claude-x"}},
+		"auditors": []any{llmAuditor, map[string]any{"name": "judge default", "type": "llm", "channel_ref": 0}},
+	}, "preview": true}
+	before := len(decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil)))
+	if prev := decodeData[map[string]any](t, h.Do("POST", "/import", nil, llmDoc)); prev["auditors"] != float64(2) || fmt.Sprint(prev["unsupported"]) != "[]" {
+		t.Fatalf("llm preview = %v", prev)
+	}
+	if n := len(decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil))); n != before {
+		t.Fatalf("the preview stored %d auditors", n-before)
+	}
+	llmDoc["preview"] = false
+	decodeData[map[string]any](t, h.Do("POST", "/import", nil, llmDoc))
+	var typ, cfg, chType string
+	if err := db.QueryRow(ctx, `SELECT a.type, a.config::text, c.type FROM auditors a JOIN channels c ON c.id = a.channel_id WHERE a.name = 'judge'`).Scan(&typ, &cfg, &chType); err != nil ||
+		typ != AuditorLLMQuestions || chType != ChannelLLM || !strings.Contains(cfg, `"q?"`) {
+		t.Fatalf("imported llm auditor = %s %s %s %v", typ, chType, cfg, err)
+	}
+	for _, a := range decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil)) {
+		if a.Name == "judge default" && (a.Type != AuditorLLMQuestions || a.RulesVersion != RulesVersionZH) {
+			t.Fatalf("imported llm auditor without a table = %+v", a)
+		}
+	}
+	// It has no image switch and no thresholds of its own, and it binds an
+	// llm channel only.
+	for field, extra := range map[string]map[string]any{
+		"auditors[0].config":      {"review_images": true},
+		"auditors[0].config ":     {"thresholds": map[string]float64{"sexual": 0.5}},
+		"auditors[0].channel_ref": {"channel_ref": 1},
+	} {
+		a := maps.Clone(llmAuditor)
+		maps.Copy(a, extra)
+		doc := map[string]any{"data": map[string]any{"channels": []any{
+			map[string]any{"type": "llm", "name": "claude", "base_url": "https://api.anthropic.com", "model": "claude-x"},
+			map[string]any{"type": "typesafe", "name": "jev", "base_url": "https://api.typesafe.ai"},
+		}, "auditors": []any{a}}, "preview": true}
+		if r := h.Do("POST", "/import", nil, doc); r.GetStatus() != 400 || !strings.Contains(string(r.GetBody()), strings.TrimSpace(field)) {
+			t.Fatalf("llm auditor with %v = %d %s", extra, r.GetStatus(), r.GetBody())
+		}
+	}
 }
 
 func TestConfigureRejectsNonObject(t *testing.T) {
@@ -795,5 +849,18 @@ func TestMigration0010Idempotent(t *testing.T) {
 	}
 	if n != 1 || !strings.Contains(def, "llm_questions") || !strings.Contains(def, "llm_verdict") {
 		t.Fatalf("auditors type checks = %d: %s", n, def)
+	}
+	// The constraint takes the new type and still refuses unknown ones.
+	insert := `INSERT INTO ` + pgx.Identifier{schema, "auditors"}.Sanitize() + ` (name, type, channel_id, config, created_at, updated_at) VALUES ('a', $1, $2, '{}', now(), now())`
+	var chID int64
+	if err := conn.QueryRow(ctx, `INSERT INTO `+pgx.Identifier{schema, "channels"}.Sanitize()+` (type, protocol, name, base_url, model, billing_model, timeout_ms, enabled, created_at, updated_at)
+		VALUES ('llm', 'openai_chat', 'c', 'https://x', 'm', '', 15000, true, now(), now()) RETURNING id`).Scan(&chID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, insert, AuditorLLMQuestions, chID); err != nil {
+		t.Fatalf("insert an llm_questions auditor: %v", err)
+	}
+	if _, err := conn.Exec(ctx, insert, "llm", chID); err == nil {
+		t.Fatal("an unknown auditor type was stored")
 	}
 }
