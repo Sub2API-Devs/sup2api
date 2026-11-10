@@ -7,8 +7,9 @@
 //   NODE_PATH=$(npm root -g) E2E_WEB_URL=http://localhost:5185 node --test e2e/phone-layout.test.mjs
 //
 // On an iPhone 13 and a Pixel 7 it signs in (admin@example.com / admin), opens
-// every page of the console menu and of system settings, and the pages only
-// another page links to, and checks that
+// every page of the console menu and of system settings, the plugin settings
+// the installed plugins list opens, and the pages only another page links to,
+// and checks that
 // - the page does not scroll sideways: documentElement.scrollWidth stays within
 //   the device width (innerWidth itself grows with the content under device
 //   emulation, so it is not the yardstick);
@@ -62,8 +63,7 @@ const LINKED_PAGES = ['/ledger']
 /**
  * The pages of system settings (CONTRACTS §90): on the settings page the
  * sidebar shows the settings view's menu instead of the console's, with the
- * configuration pages (/settings?tab=<key>), groups, model prices and the
- * plugins' settings.
+ * configuration pages (/settings?tab=<key>), groups and model prices.
  */
 async function settingsPages(page) {
   await page.goto(`${BASE}/settings`)
@@ -72,6 +72,13 @@ async function settingsPages(page) {
   return page.$$eval('[data-testid="nav-view-settings"] a[href]:not([data-testid="nav-back"])', links =>
     links.map(a => a.getAttribute('href'))
   )
+}
+
+/** The plugins' settings: the links on the rows of the installed plugins list, the one place that opens them. */
+async function pluginSettingsPages(page) {
+  await page.goto(`${BASE}/plugins`)
+  await page.waitForSelector('main ul[role="list"] > li')
+  return page.$$eval('main ul[role="list"] > li a[href]', links => links.map(a => a.getAttribute('href')))
 }
 
 for (const name of DEVICES) {
@@ -94,13 +101,14 @@ for (const name of DEVICES) {
       // The submenus (core directories and plugin sections) start folded; open them all to list every page.
       await page.$$eval('aside nav [aria-expanded="false"]', buttons => buttons.forEach(b => b.click()))
       const sidebar = await page.$$eval('aside nav a[href]', links => links.map(a => a.getAttribute('href')))
-      pages = [...new Set([...sidebar, ...(await settingsPages(page))])]
+      pages = [...new Set([...sidebar, ...(await settingsPages(page)), ...(await pluginSettingsPages(page))])]
     })
     after(() => browser?.close())
 
-    test('the menu and system settings list the console pages', () => {
+    test('the menu, system settings and the installed plugins list reach the console pages', () => {
       assert.ok(pages.length > 10, `pages: ${pages.join(', ')}`)
       for (const path of CARD_PAGES.filter(p => !LINKED_PAGES.includes(p))) assert.ok(pages.includes(path), `${path} is not in the menu`)
+      assert.ok(pages.includes('/plugins/guard?tab=settings'), 'the installed plugins list opens no settings form')
     })
 
     test('no page scrolls sideways; list pages show cards, the main ones within the first screen', async t => {
