@@ -258,8 +258,15 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 	// The cached verdicts (post: memory only, the worker asks the KV): a
 	// cached hit whose whole segment set is in the request decides it at
 	// once; the segments that passed are not sent again.
-	cached := p.lookupVerdicts(snap, flow, hashes, m.timing == TimingPre)
+	cached := p.lookupVerdicts(snap.scopeOf(flow), hashes, m.timing == TimingPre)
 	if cached.hit != nil {
+		// Known limitation, kept as in new-api (gate.go planAudit: a cached
+		// hit ends the plan): the replay decides the whole request, so what
+		// the request holds beside the hit set - new content after a hit in
+		// the history of a conversation - is not moderated in this request.
+		// Under post timing such a conversation is recorded as a replayed
+		// hit on every turn and its new content is never sent to an
+		// auditor; under pre timing the request is refused anyway.
 		return nil, p.replay(m, req, cached.hit, cached.hitID)
 	}
 	pl := req.makePlan(c.limits, func(h [32]byte) bool { return cached.passed[h] })
@@ -284,7 +291,12 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 	}
 	if !snap.sendsImages(flow) {
 		for _, ch := range m.chunks {
-			ch.dropImages() // image_count is already taken
+			// image_count is already taken. The chunk still lists the
+			// segments of its images (segs): they pass with it, for this
+			// flow has nothing to say about an image - the fingerprint
+			// changes when an auditor that takes images joins it. A hit
+			// names only what was sent (sentKeys).
+			ch.dropImages()
 		}
 	}
 	for _, ch := range m.chunks {
@@ -316,10 +328,10 @@ func runKey(s *snapshot, f *liveFlow, chunks []*chunk) string {
 
 // sharedRun is one pre run shared by concurrent requests with the same
 // input (singleflight): the run of every chunk and their combined trace;
-// counted makes its flow statistics count once.
+// counted makes its flow statistics count once. Its verdicts are stored by
+// the run itself, once, whoever waits for it.
 type sharedRun struct {
 	tr      Trace
-	runs    []Trace
 	counted atomic.Bool
 }
 
@@ -327,7 +339,9 @@ type sharedRun struct {
 // client that left adds nothing: no request, run or record. A hit is
 // counted and recorded as a refusal even after the client left, so
 // disconnecting cannot dodge the watch list (new-api gate.go runPre). The
-// record is written after the answer (finish), never before it.
+// verdicts of the run go to the cache in either case (new-api stores them
+// before it looks at the context). The record is written after the answer
+// (finish), never before it.
 func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
 	start := p.now()
 	budget := min(m.flow.timeout, preBudget)
@@ -337,7 +351,10 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 		defer cancel()
 		runs := p.runChunks(rctx, m)
-		return &sharedRun{tr: m.combine(runs), runs: runs}, nil
+		// Stored here and not by the waiters: once for all of them, and
+		// also when every one of them has left.
+		p.settleVerdicts(m, runs)
+		return &sharedRun{tr: m.combine(runs)}, nil
 	})
 	var r *sharedRun
 	select {
@@ -375,7 +392,7 @@ func (p *Plugin) concludePre(m *moderation, r *sharedRun, start time.Time) {
 	if r.counted.CompareAndSwap(false, true) && p.bg.Err() == nil { // runs cut short by Shutdown are not errors
 		p.countRun(m, r.tr)
 	}
-	p.finish(m, r.tr, r.runs, refused)
+	p.finish(m, r.tr, refused)
 }
 
 // runPost moderates one queued request (worker). Jobs still queued when
@@ -385,12 +402,15 @@ func (p *Plugin) runPost(m *moderation) {
 		return
 	}
 	m.rec.QueueMs = int(p.now().Sub(m.queued).Milliseconds())
-	if m.plan != nil {
+	// A job queued before the cache was cleared is not answered from the
+	// cache: its scope is the one that was cleared, so it runs, and its
+	// verdicts are stored under the current counter (settleVerdicts).
+	if m.plan != nil && p.snap.Load().cacheEpoch == m.snap.cacheEpoch {
 		// What the cache learned since the job was queued, now with the KV:
 		// a cached hit is replayed, and nothing runs when every moderated
 		// segment has passed meanwhile (another request with the same
 		// content).
-		cached := p.lookupVerdicts(m.snap, m.flow, m.plan.keys, true)
+		cached := p.lookupVerdicts(m.snap.scopeOf(m.flow), m.plan.keys, true)
 		if cached.hit != nil {
 			p.replay(m, nil, cached.hit, cached.hitID)
 			return
@@ -407,10 +427,11 @@ func (p *Plugin) runPost(m *moderation) {
 	if p.postCtx.Err() != nil { // runs cut short by Shutdown are not errors
 		return
 	}
+	p.settleVerdicts(m, runs)
 	tr := m.combine(runs)
 	p.countRun(m, tr)
 	m.counted = true
-	p.finish(m, tr, runs, false)
+	p.finish(m, tr, false)
 }
 
 // allPassed reports whether every segment of the chunks is in passed.
@@ -483,6 +504,11 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 // stored for the set of segments of the chunk; a pass (also an overturned
 // one) counts for the chunk's segments unless a whole stage was skipped. A
 // segment is stored as a pass when every chunk holding it passed.
+//
+// It is called once per run (the shared pre run, the post worker), not per
+// request. The scope carries the clear counter of now, not of the snapshot
+// the run started with: after a clear the verdicts are stored where they
+// are read, and nothing is written into the cleared scope.
 func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 	if m.plan == nil || m.cfg.cacheTTL <= 0 {
 		return
@@ -497,7 +523,9 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 		case run.Final == Hit:
 			tr := *run
 			tr.Chunk, tr.Chunks, tr.Input, tr.Cache, tr.InputMessageDropped = 0, nil, nil, nil, ""
-			hits = append(hits, storedHit{RequestID: m.rec.RequestID, Keys: hexKeys(m.segKeys(ch)), Trace: tr, At: now})
+			if keys := m.sentKeys(ch); len(keys) > 0 {
+				hits = append(hits, storedHit{RequestID: m.rec.RequestID, Keys: hexKeys(keys), Trace: tr, At: now})
+			}
 		case !run.stageSkipped():
 			for _, s := range ch.segs {
 				passed[s]++
@@ -510,14 +538,21 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 			passes = append(passes, key)
 		}
 	}
-	p.storeVerdicts(m.cfg, m.snap, m.flow, passes, hits)
+	p.storeVerdicts(m.cfg, cacheScope(p.snap.Load().cacheEpoch, m.flow), passes, hits)
 }
 
-// segKeys are the hashes of the segments a chunk holds, in request order.
-func (m *moderation) segKeys(ch *chunk) [][32]byte {
-	keys := make([][32]byte, len(ch.segs))
-	for i, s := range ch.segs {
-		keys[i] = m.plan.keys[s]
+// sentKeys are the hashes of the segments a chunk sent to the auditors, in
+// request order: the segments with a part in it. The images a flow without
+// an image auditor dropped (dropImages) are not among them, so the hit set
+// of the chunk is what was judged and nothing else.
+func (m *moderation) sentKeys(ch *chunk) [][32]byte {
+	var keys [][32]byte
+	last := -1
+	for _, part := range ch.parts {
+		if part.seg != last {
+			keys = append(keys, m.plan.keys[part.seg])
+			last = part.seg
+		}
 	}
 	return keys
 }
@@ -610,18 +645,18 @@ func (m *moderation) chunkOf(tr Trace) *chunk {
 	return m.chunks[idx]
 }
 
-// finish stores the verdicts of the chunk runs in the cache, counts the
-// request on the user's day and records the run. It never blocks on the
+// finish counts the request on the user's day and records the run (its
+// verdicts are in the cache by then, settleVerdicts). It never blocks on the
 // database (CONTRACTS §72.5 step 10): a suspicious record the event writer
 // cannot take goes to the background store (storeSuspicious), anything else
 // is dropped.
-func (p *Plugin) finish(m *moderation, tr Trace, runs []Trace, refused bool) {
-	p.settleVerdicts(m, runs)
+func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 	// A hit names the hit set of its verdict chunk, also when the run errored
 	// and nothing was cached: confirming the record stores it (syncReviewed).
 	if ch := m.chunkOf(tr); m.plan != nil && ch != nil && tr.Final == Hit && !ch.in.HasURLImage {
-		keys := m.segKeys(ch)
-		tr.Cache = &CacheInfo{Key: hitID(keys), Segs: hexKeys(keys), FP: m.flow.fp}
+		if keys := m.sentKeys(ch); len(keys) > 0 {
+			tr.Cache = &CacheInfo{Key: hitID(keys), Segs: hexKeys(keys), FP: m.flow.fp}
+		}
 	}
 	rec := m.rec
 	rec.LatencyMs = int(tr.LatencyMs)

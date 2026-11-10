@@ -45,6 +45,7 @@ type Plugin struct {
 
 	agent  *agent
 	cache  atomic.Pointer[lru]
+	kvMu   [64]sync.Mutex // this node's changes of a verdict cache key in the KV, one at a time (kvLock)
 	sf     singleflight.Group
 	sem    atomic.Pointer[semaphore] // background (post) calls
 	preSem atomic.Pointer[semaphore] // calls a request waits for
@@ -499,7 +500,7 @@ func (p *Plugin) runPostSafely(m *moderation) {
 		if !m.counted {
 			p.countRun(m, tr)
 		}
-		p.finish(m, tr, nil, false)
+		p.finish(m, tr, false)
 	}()
 	p.runPost(m)
 }

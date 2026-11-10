@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -821,13 +822,18 @@ func TestStoredHitLimits(t *testing.T) {
 	if decodeHit([]byte("{"), now, time.Hour) != nil || decodeHit([]byte(`{"k":["x"],"t":{"final":"pass"},"at":9999999999}`), now, time.Hour) != nil {
 		t.Fatal("an unreadable or passing entry was accepted")
 	}
+	// A hit is written as its entry and, on every segment, a pointer to it
+	// with the time of the write.
 	id := hitIDOf(hit.Keys)
-	if w := hitWrites("e0:1:fp", id, &hit, 0); len(w) != 2 || w[0].key != "h:e0:1:fp:"+id || w[1].key != "s:e0:1:fp:"+hit.Keys[0] || string(w[1].val) != "h"+id {
-		t.Fatalf("writes = %+v", w)
+	var seg segValue
+	pointTo(id, hit.At)(&seg)
+	if got, body := encodeHit(&hit); got != id || !bytes.Equal(body, raw) || hitKeyOf("e0:1:fp", id) != "h:e0:1:fp:"+id ||
+		segKeyHex("e0:1:fp", hit.Keys[0]) != "s:e0:1:fp:"+hit.Keys[0] || string(seg.encode()) != fmt.Sprintf("h%s@%d", id, hit.At) {
+		t.Fatalf("entry %q = %s, pointer %s", got, body, seg.encode())
 	}
 	hit.Trace.Stages = []StageTrace{{Outcomes: []Outcome{{Reason: strings.Repeat("x", maxHitBytes)}}}}
-	if w := hitWrites("e0:1:fp", id, &hit, 0); w != nil {
-		t.Fatalf("an oversized hit was stored: %d writes", len(w))
+	if got, body := encodeHit(&hit); got != "" || body != nil {
+		t.Fatalf("an oversized hit was stored: %d bytes", len(body))
 	}
 	// The id does not depend on the order of the segments.
 	a, b := [32]byte{1}, [32]byte{2}

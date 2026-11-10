@@ -362,17 +362,39 @@ type storedAuditor struct {
 	defaultSet bool
 }
 
+// judgingVersion stands in the fingerprint for what decides a verdict but
+// lives in the code instead of the stored configuration. Bump it whenever a
+// release changes such a default, so the verdicts cached under the old one
+// are not served under the new one:
+//
+//   - the OpenAI thresholds of the categories an auditor does not set
+//     (DefaultThresholds) and the category list (OpenAICategories);
+//   - the default categories of an llm_verdict auditor (DefaultCategories),
+//     its prompt template and verdict tool (expandPrompt, verdictTool);
+//   - the prompt template of llm_questions and how its answers are read;
+//   - the built-in Jev question set (the default set when the settings
+//     carry none) and how questions are sent and scored;
+//   - how content is cut into segments and rendered for the auditors, when
+//     the same segment hash would then stand for other text.
+const judgingVersion = 1
+
 // fingerprint is the verdict fingerprint of a flow (16 hex characters): a
 // hash of everything that decides what the flow answers for given content -
 // the stages (combine, n, fallback, auditors), every auditor (type, channel,
-// stored config), the channel's type, protocol, base URL and model, and the
-// default question set of the auditors that use it. It is part of the
-// flow's cache keys, so changing any of these makes the cached verdicts of
-// the flow unreachable, while the flow's name, model filter, sample rate
-// and timeout and a channel's name, key, proxy, timeout and billing model
-// leave them in place.
+// stored config), the channel's type, protocol, base URL and model, the
+// default question set of the auditors that use it, and judgingVersion for
+// the defaults in the code. It is part of the flow's cache keys, so changing
+// any of these makes the cached verdicts of the flow unreachable, while the
+// flow's name, model filter, sample rate and timeout and a channel's name,
+// key, proxy, timeout and billing model leave them in place.
 func fingerprint(spec *Spec, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
+	return fingerprintAt(judgingVersion, spec, auditors, channels, defaultSet)
+}
+
+// fingerprintAt is fingerprint under a judging version.
+func fingerprintAt(version int, spec *Spec, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
 	h := sha256.New()
+	fmt.Fprintf(h, "judging %d\n", version)
 	for _, st := range spec.Stages {
 		fmt.Fprintf(h, "stage %q %d %t %v\n", st.Combine, st.N, st.Fallback, st.Auditors)
 		for _, id := range st.Auditors {

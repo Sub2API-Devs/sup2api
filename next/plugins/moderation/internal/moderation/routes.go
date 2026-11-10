@@ -107,6 +107,7 @@ type Runtime struct {
 	Errors        int64         `json:"errors"`
 	CacheHits     int64         `json:"cache_hits"`
 	CacheEntries  int           `json:"cache_entries"`
+	CacheBytes    int64         `json:"cache_bytes"` // estimated memory of the verdict cache entries
 	AvgLatencyMs  int64         `json:"avg_latency_ms"`
 	BlockedUsers  int           `json:"blocked_users"`
 	WatchedUsers  int           `json:"watched_users"`
@@ -127,7 +128,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		Mode: c.Mode, Configured: s.bound(), SettingsHash: c.settingsHash, ConfigVersion: s.version, CacheEpoch: s.cacheEpoch,
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
-		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(),
+		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}
@@ -623,7 +624,8 @@ func (p *Plugin) deleteEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 // false_positive takes its violation back from the user's current window;
 // undoing it counts it again in the same window (§72.8). The verdict cache
 // follows the review (syncReviewed); cache_synced is the number of records
-// whose cached verdict was updated.
+// whose cached verdict was updated in the shared KV - fewer than the records
+// with a cached verdict when KV writes failed.
 func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in struct {
 		IDs    []int64 `json:"ids"`

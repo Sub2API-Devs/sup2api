@@ -498,7 +498,11 @@ func TestFinishBuildsInputMessageOnlyForRecords(t *testing.T) {
 		return after.TotalAlloc - before.TotalAlloc
 	}
 	m := admit("no-record")
-	if got := allocated(func() { p.finish(m, pass, []Trace{pass}, false) }); got > imgSize/4 {
+	finish := func(m *moderation) { // what a run does once it has its traces
+		p.settleVerdicts(m, []Trace{pass})
+		p.finish(m, pass, false)
+	}
+	if got := allocated(func() { finish(m) }); got > imgSize/4 {
 		t.Fatalf("finishing a pass without a record allocated %d KiB (the image is %d KiB)", got>>10, imgSize>>10)
 	}
 	// With the record on, the same pass keeps its input message.
@@ -506,7 +510,7 @@ func TestFinishBuildsInputMessageOnlyForRecords(t *testing.T) {
 		t.Fatal(errs)
 	}
 	m = admit("with-record")
-	p.finish(m, pass, []Trace{pass}, false)
+	finish(m)
 	ev := recordOf(t, h, "with-record")
 	if ev.Result != ResultPass || ev.InputMessageSize < imgSize {
 		t.Fatalf("record = %s with an input message of %d bytes", ev.Result, ev.InputMessageSize)
