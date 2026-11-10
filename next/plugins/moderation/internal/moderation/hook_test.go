@@ -856,11 +856,32 @@ func TestCleanupAndImport(t *testing.T) {
 			t.Fatalf("imported llm auditor without a table = %+v", a)
 		}
 	}
-	// It has no image switch and no thresholds of its own, and it binds an
-	// llm channel only.
+	// Its image switch comes with it as it is: without one the stored
+	// config has none (on), a false stays false.
+	sw := func(name string) string {
+		t.Helper()
+		var v *string
+		if err := db.QueryRow(ctx, `SELECT config->>'review_images' FROM auditors WHERE name = $1 AND deleted_at IS NULL`, name).Scan(&v); err != nil {
+			t.Fatalf("auditor %s: %v", name, err)
+		}
+		if v == nil {
+			return "unset"
+		}
+		return *v
+	}
+	seeing, blind := maps.Clone(llmAuditor), maps.Clone(llmAuditor)
+	seeing["name"], seeing["review_images"] = "judge seeing", true
+	blind["name"], blind["review_images"] = "judge blind", false
+	llmDoc["data"].(map[string]any)["auditors"] = []any{seeing, blind}
+	if got := decodeData[map[string]any](t, h.Do("POST", "/import", nil, llmDoc)); got["auditors"] != float64(2) || fmt.Sprint(got["unsupported"]) != "[]" {
+		t.Fatalf("llm auditors with an image switch = %v", got)
+	}
+	if a, b, c := sw("judge"), sw("judge seeing"), sw("judge blind"); a != "unset" || b != "true" || c != "false" {
+		t.Fatalf("imported image switches: none %s, true %s, false %s", a, b, c)
+	}
+	// It has no thresholds of its own, and it binds an llm channel only.
 	for field, extra := range map[string]map[string]any{
-		"auditors[0].config":      {"review_images": true},
-		"auditors[0].config ":     {"thresholds": map[string]float64{"sexual": 0.5}},
+		"auditors[0].config":      {"thresholds": map[string]float64{"sexual": 0.5}},
 		"auditors[0].channel_ref": {"channel_ref": 1},
 	} {
 		a := maps.Clone(llmAuditor)

@@ -543,9 +543,10 @@ func TestAuditorJudge(t *testing.T) {
 	}
 	// llm_questions: the default set when it has none, every threshold 1; a
 	// yes (1) is a hit with score 1 and threshold 1, an unanswered question
-	// is a bad response, thresholds and the image switch are refused.
+	// is a bad response, thresholds are refused. It sends images unless its
+	// image switch is off.
 	q, err := compileAuditor(4, "q", AuditorLLMQuestions, 1, AuditorConfig{}, nil, &def)
-	if err != nil || len(q.order) != 10 || q.questions.RulesVersion != RulesVersionZH || q.images || channelTypeOf[AuditorLLMQuestions] != ChannelLLM {
+	if err != nil || len(q.order) != 10 || q.questions.RulesVersion != RulesVersionZH || !q.images || channelTypeOf[AuditorLLMQuestions] != ChannelLLM {
 		t.Fatalf("llm_questions default: %+v %v", q, err)
 	}
 	answers := map[string]float64{}
@@ -569,12 +570,23 @@ func TestAuditorJudge(t *testing.T) {
 		!strings.HasPrefix(q.questions.RulesVersion, "custom-") {
 		t.Fatalf("llm_questions own table: %+v %v", q, err)
 	}
-	on := true
-	for name, cfg := range map[string]AuditorConfig{"thresholds": {Thresholds: map[string]float64{"sexual": 0.5}}, "review_images": {ReviewImages: &on},
-		"bad table": {Questions: &JevQuestions{}}} {
+	for name, cfg := range map[string]AuditorConfig{"thresholds": {Thresholds: map[string]float64{"sexual": 0.5}}, "bad table": {Questions: &JevQuestions{}}} {
 		if _, err := compileAuditor(4, "q", AuditorLLMQuestions, 1, cfg, nil, &def); err == nil {
 			t.Fatalf("llm_questions with %s accepted", name)
 		}
+	}
+	// The image switch of both LLM types: on unless review_images is false.
+	// The OpenAI auditor has none and always takes images.
+	on, off := true, false
+	for _, typ := range []string{AuditorLLMQuestions, AuditorLLMVerdict} {
+		for sw, want := range map[*bool]bool{nil: true, &on: true, &off: false} {
+			if a, err := compileAuditor(4, "a", typ, 1, AuditorConfig{ReviewImages: sw}, nil, &def); err != nil || a.images != want {
+				t.Fatalf("%s with review_images %v: images %v, %v", typ, sw, a != nil && a.images, err)
+			}
+		}
+	}
+	if _, err := compileAuditor(1, "o", AuditorOpenAI, 1, AuditorConfig{ReviewImages: &off}, nil, &def); err == nil {
+		t.Fatal("an OpenAI auditor with an image switch accepted")
 	}
 	l, _ := compileAuditor(3, "l", AuditorLLMVerdict, 1, AuditorConfig{}, nil, &def)
 	if h := l.judgeLLM(EngineResult{Scores: map[string]float64{"sexual": llmFlagScore}}); len(h) != 0 {

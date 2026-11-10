@@ -600,15 +600,15 @@ type chunk struct {
 	runes int
 }
 
-// planLimits are the chunking settings (CONTRACTS §72.4). textOnly is not a
-// setting: planUncached sets it for a flow none of whose auditors takes
-// images (snapshot.sendsImages) - its images are dropped from the chunks
-// after planning (admit), so no image is sent.
+// planLimits are the chunking settings (CONTRACTS §72.4). mixed is not a
+// setting: planUncached sets it for a flow in which some auditors take
+// images and some do not (snapshot.mixedImages). Only such a flow keeps the
+// cached text of a request beside an image that is not cached (makePlan).
 type planLimits struct {
 	maxChars  int
 	maxChunks int
 	maxImages int
-	textOnly  bool
+	mixed     bool
 }
 
 // plan is the chunks a request is moderated in: the segments not in the
@@ -642,10 +642,11 @@ const maxImageBase64 = 22 << 20
 
 // makePlan chunks the uncached segments of r.
 //
-// An image that is sent keeps the text of the request in the plan (fifth
-// round): when r holds an image that is not cached as passed and will be put
-// into a chunk (sendsImage), the text segments that are cached as passed are
-// NOT left out. An image is then always judged together with the text of its
+// In a mixed flow (lim.mixed: some auditors take images, some do not) an
+// image that is sent keeps the text of the request in the plan (fifth round):
+// when r holds an image that is not cached as passed and will be put into a
+// chunk (sendsImage), the text segments that are cached as passed are NOT
+// left out. An image is then always judged together with the text of its
 // request, whatever other requests have put into the cache. Otherwise the
 // rule of settleVerdicts for an image only a hitting auditor received (let
 // through, nothing stored, every time) breaks as soon as another request
@@ -656,9 +657,9 @@ const maxImageBase64 = 22 << 20
 //   - A request without such an image is planned as before: every cached
 //     segment is left out, and with nothing left there is no chunk and the
 //     request is answered "pass (cached)" (planUncached). That includes a
-//     request whose images are all cached as passed, and one none of whose
-//     uncached images is sent (input_max_images is 0, they are too large, or
-//     the flow has no image auditor - lim.textOnly).
+//     request whose images are all cached as passed, one none of whose
+//     uncached images is sent (input_max_images is 0, they are too large),
+//     and every request of a flow that is not mixed (below).
 //   - Cached images are still left out, and a cached HIT is found before any
 //     plan is made (lookupVerdicts): the replay of a whole hit set does not
 //     change.
@@ -696,6 +697,21 @@ const maxImageBase64 = 22 << 20
 // has no text for a reviewer, so the hit of the auditor that got the image
 // stands and {image} is cached as a hit; every request with that image is
 // then replayed as a hit, also one that was let through before.
+//
+// A flow that is not mixed does not keep the text (the owner's decision of
+// 2026-11-10: the cost above was too high for every flow to pay - a request
+// with an image that is never cached, a URL image above all, sent its whole
+// text on every turn and could be refused under input_overflow = block). A
+// flow without an image auditor has nothing to say about images. In a flow
+// whose auditors all take images the reviewer gets the image the first
+// auditor hit, so it judges the image too and its pass is stored for it. One
+// case is left there, and accepted: an auditor that takes images may not get
+// a particular one (a URL image, which only the OpenAI auditor takes; an
+// image outside its limits; a redraw that was not ready; an upstream that
+// refused the images). When another auditor got that image and hit, and the
+// text is cached as passed by another request, the image is alone in its
+// chunk, the reviewer has nothing to judge, and the request is refused where
+// with an empty cache it was let through.
 func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 	pl := &plan{pieces: make([]int, len(r.segs)), keys: make([][32]byte, len(r.segs))}
 	pl.trace.Segments = len(r.segs)
@@ -766,11 +782,12 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 	return pl
 }
 
-// sendsImage reports whether makePlan puts an image of r into a chunk: the
-// flow takes images, and an image that is not cached is within the limits
-// (the first of them always is, with input_max_images above 0).
+// sendsImage reports whether makePlan keeps the cached text of r beside an
+// image: the flow is mixed, and an image that is not cached is put into a
+// chunk - it is within the limits (the first of them always is, with
+// input_max_images above 0).
 func (r *request) sendsImage(lim planLimits, cached func([32]byte) bool) bool {
-	if lim.textOnly || lim.maxImages <= 0 {
+	if !lim.mixed || lim.maxImages <= 0 {
 		return false
 	}
 	for i := range r.segs {

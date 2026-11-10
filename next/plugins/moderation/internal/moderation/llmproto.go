@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,7 +60,8 @@ const (
 )
 
 // llmRequest is the protocol-independent input of one call. Messages are
-// already in the protocol's shape (llmUserMessage, assistant, toolResults).
+// already in the protocol's shape (llmUserMessage, user, assistant,
+// toolResults).
 // ForceTool appends a user note naming the tool instead of forcing it
 // (thinking models reject a forced tool_choice); ToolChoice is only used by
 // the verdict agent.
@@ -126,14 +128,20 @@ type llmProtocol struct {
 	parse       func(data []byte) (llmTurn, error)
 	assistant   func(t llmTurn) []any
 	toolResults func(rs []toolResult) []any
+	// A user message with images is a list of parts (user): textPart is the
+	// type of its text part, imagePart one image in the protocol's shape.
+	textPart  string
+	imagePart func(img Image) any
 }
 
 var llmProtocols = map[string]*llmProtocol{}
 
 func init() {
-	llmProtocols[ProtocolOpenAIChat] = &llmProtocol{"/v1/chat/completions", bearer, chatBody, chatEvents, chatKind, chatParse, chatAssistant, chatToolResults}
-	llmProtocols[ProtocolOpenAIResponses] = &llmProtocol{"/v1/responses", bearer, responsesBody, responsesEvents, responsesKind, responsesParse, responsesAssistant, responsesToolResults}
-	llmProtocols[ProtocolAnthropic] = &llmProtocol{"/v1/messages", anthropicHeader, anthropicBody, anthropicEvents, anthropicKind, anthropicParse, anthropicAssistant, anthropicToolResults}
+	llmProtocols[ProtocolOpenAIChat] = &llmProtocol{"/v1/chat/completions", bearer, chatBody, chatEvents, chatKind, chatParse, chatAssistant, chatToolResults, "text", chatImage}
+	llmProtocols[ProtocolOpenAIResponses] = &llmProtocol{"/v1/responses", bearer, responsesBody, responsesEvents, responsesKind, responsesParse, responsesAssistant, responsesToolResults,
+		"input_text", responsesImage}
+	llmProtocols[ProtocolAnthropic] = &llmProtocol{"/v1/messages", anthropicHeader, anthropicBody, anthropicEvents, anthropicKind, anthropicParse, anthropicAssistant, anthropicToolResults,
+		"text", anthropicImage}
 }
 
 func bearer(key string) map[string]string {
@@ -238,6 +246,85 @@ func retryAfterOf(v string) time.Duration {
 // llmUserMessage is a plain user message; the same in all three protocols.
 func llmUserMessage(text string) any {
 	return map[string]any{"role": "user", "content": text}
+}
+
+// user is the user message of an auditor: the text, then the images
+// (llmImages) as parts of the protocol. Without images it is the plain
+// message (llmUserMessage).
+func (p *llmProtocol) user(text string, images []Image) any {
+	if len(images) == 0 {
+		return llmUserMessage(text)
+	}
+	parts := make([]any, 0, len(images)+1)
+	parts = append(parts, map[string]any{"type": p.textPart, "text": text})
+	for _, img := range images {
+		parts = append(parts, p.imagePart(img))
+	}
+	return map[string]any{"role": "user", "content": parts}
+}
+
+// Image limits of the LLM auditors (llm_questions, llm_verdict). An image
+// outside them is skipped; nothing is redrawn here (the Jev auditor redraws,
+// jev_image.go).
+const (
+	// llmImageMaxBytes is the largest image, decoded (the owner's limit;
+	// read off the length of the base64, decodedLen). Anthropic's own API
+	// and the OpenAI APIs take it: Anthropic measures the base64 text and
+	// takes 10 MB of it, this is 7 MiB. Anthropic on Amazon Bedrock and
+	// Google Cloud takes 5 MB of base64 (3.75 MiB of data): an image
+	// between the two is answered 400 there, and the call goes on with the
+	// text alone.
+	llmImageMaxBytes = 5 << 20
+	// llmImageMaxSide: Anthropic refuses an image wider or higher than
+	// 8000 px.
+	llmImageMaxSide = 8000
+	// llmMaxImages: with more than 20 images in a request Anthropic applies
+	// a lower limit to the sides of every one of them.
+	llmMaxImages = 20
+	// llmImagesMaxBase64 bounds the images of one call together, and with
+	// them the JSON body (the upstream APIs limit a request to some tens of
+	// megabytes) and the memory of a call: up to twice this beside the
+	// request (the data URLs and the body).
+	llmImagesMaxBase64 = 20 << 20
+)
+
+// llmImages picks the images of in an LLM auditor sends, in order: inline
+// PNG, JPEG, GIF and WebP inside the limits above, the same content once.
+// URL images are never sent (nor downloaded). The media type is the format
+// of the image's header, whatever the client declared: Anthropic refuses an
+// image whose declared type is not its real one. received lists the images
+// of in (indexes in Input.Images) that parts stand for: every image sent and
+// its duplicates. An image that is not among them was skipped.
+func llmImages(in *Input) (parts []Image, received []int) {
+	sent := map[string]bool{}
+	size := 0
+	for i, img := range in.Images {
+		if img.URL != "" {
+			continue
+		}
+		if sent[img.Data] {
+			received = append(received, i)
+			continue
+		}
+		if len(parts) == llmMaxImages || decodedLen(img.Data) > llmImageMaxBytes || size+len(img.Data) > llmImagesMaxBase64 {
+			continue
+		}
+		cfg, format, ok := imageHeader(img.Data)
+		if !ok || min(cfg.Width, cfg.Height) <= 0 || max(cfg.Width, cfg.Height) > llmImageMaxSide {
+			continue
+		}
+		sent[img.Data] = true
+		size += len(img.Data)
+		parts = append(parts, Image{MediaType: "image/" + format, Data: img.Data})
+		received = append(received, i)
+	}
+	return parts, received
+}
+
+// decodedLen is the size of the data in a padded base64 text, by the length
+// of the text alone.
+func decodedLen(b64 string) int {
+	return base64.StdEncoding.DecodedLen(len(b64)) - strings.Count(b64[max(len(b64)-2, 0):], "=")
 }
 
 func stepMessages(req llmRequest) []any {
@@ -537,6 +624,10 @@ func anthropicAssistant(t llmTurn) []any {
 	return []any{map[string]any{"role": "assistant", "content": content}}
 }
 
+func anthropicImage(img Image) any {
+	return map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": img.MediaType, "data": img.Data}}
+}
+
 func anthropicToolResults(rs []toolResult) []any {
 	blocks := make([]any, 0, len(rs))
 	for _, r := range rs {
@@ -659,6 +750,10 @@ func chatAssistant(t llmTurn) []any {
 		msg["tool_calls"] = calls
 	}
 	return []any{msg}
+}
+
+func chatImage(img Image) any {
+	return map[string]any{"type": "image_url", "image_url": map[string]any{"url": img.DataURL()}}
 }
 
 func chatToolResults(rs []toolResult) []any {
@@ -820,6 +915,10 @@ func responsesAssistant(t llmTurn) []any {
 		items = append(items, map[string]any{"type": "function_call", "call_id": c.ID, "name": c.Name, "arguments": string(c.Args)})
 	}
 	return items
+}
+
+func responsesImage(img Image) any {
+	return map[string]any{"type": "input_image", "image_url": img.DataURL()}
 }
 
 func responsesToolResults(rs []toolResult) []any {

@@ -1358,8 +1358,8 @@ func written(t *testing.T, p *Plugin) {
 
 // An image that no auditor received is not cached as passed - whatever kept
 // it from being sent - while the text of its chunk is: the next request with
-// the image has it moderated, together with the text of that request (fifth
-// round: an uncached image keeps the cached text in the plan, makePlan).
+// the image has it moderated, on its own in these flows of one auditor (only
+// a mixed flow keeps the cached text in the plan, makePlan).
 func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 	// A Jev upstream that finds every picture violating and no text.
 	var jevCalls, jevImages atomic.Int64
@@ -1439,17 +1439,16 @@ func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 		if segs := segValues(t, fh); len(segs) != 1 {
 			t.Fatalf("segment keys after the run without the image = %v", segs)
 		}
-		// With a slot the picture is sent - with the text of the request,
-		// although that has passed (makePlan) - and refused: the hit set is
-		// the text and the picture. Before the second round, the request was
-		// answered "pass (cached)" for verdict_cache_days on every node.
+		// With a slot the picture is sent - alone, the text has passed - and
+		// refused. Before the second round, the request was answered "pass
+		// (cached)" for verdict_cache_days on every node.
 		free()
 		r := send(9, "free", request)
 		if !denied(r) || replayed(r) || jevCalls.Load() != 2 || jevImages.Load() != 1 {
 			t.Fatalf("with a free slot = %+v (%d calls, %d with an image)", r, jevCalls.Load(), jevImages.Load())
 		}
 		tr = traceOf(t, recordOf(t, h, "free"))
-		if tr.Input.Cached != 0 || tr.Cache == nil || len(tr.Cache.Segs) != 2 {
+		if tr.Input.Cached != 1 || tr.Cache == nil || len(tr.Cache.Segs) != 1 {
 			t.Fatalf("trace of the run with the image: input %+v, hit set %+v", tr.Input, tr.Cache)
 		}
 		if r := send(9, "", request); !denied(r) || !replayed(r) || jevCalls.Load() != 2 {
@@ -1459,16 +1458,15 @@ func TestSkippedImageIsNotCachedAsPassed(t *testing.T) {
 
 	t.Run("undecodable", func(t *testing.T) {
 		// Jev cannot read the image at all: it never becomes a pass, and
-		// every request with it is a run. Each of them sends the text again
-		// (the price of the fifth round: an image that is not cached keeps
-		// the text of its request in the plan, makePlan).
+		// every request with it is a run (without a call: nothing to send -
+		// the flow is not mixed, so the cached text is not sent again).
 		request := body("another harmless caption", "iVBORw0KGgo=")
 		calls := jevCalls.Load()
 		if r := send(9, "", request); !passedFresh(r) || jevCalls.Load() != calls+1 {
 			t.Fatalf("first = %+v (%d calls)", r, jevCalls.Load()-calls)
 		}
 		for i := range 2 {
-			if r := send(9, "", request); !passedFresh(r) || r.GetNote() == cachedPass || jevCalls.Load() != calls+2+int64(i) {
+			if r := send(9, "", request); !passedFresh(r) || r.GetNote() == cachedPass || jevCalls.Load() != calls+1 {
 				t.Fatalf("again %d = %+v (%d calls)", i, r, jevCalls.Load()-calls)
 			}
 		}
@@ -1640,7 +1638,7 @@ func TestFingerprintJudgingVersion(t *testing.T) {
 	auditors := map[int64]storedAuditor{1: {typ: AuditorOpenAI, channel: 1, config: []byte(`{}`)}}
 	channels := map[int64]*liveChannel{1: {ID: 1, Type: ChannelOpenAI, BaseURL: "https://a.example"}}
 	base := fingerprint(spec, auditors, channels, nil)
-	const version, want = 1, "75b99d055f9d916b"
+	const version, want = 2, "8049a4172a7adeec"
 	if judgingVersion != version || base != want {
 		t.Fatalf("fingerprint of judging version %d = %s, want %s of version %d: a change of what the fingerprint covers needs a new judgingVersion, and both belong here",
 			judgingVersion, base, want, version)
@@ -1922,13 +1920,14 @@ func TestReviewSyncOrderAndBudget(t *testing.T) {
 // every image violating (and no text), Jev finds nothing; it counts the Jev
 // calls that came with an image, and all calls.
 func imageMod(t *testing.T) (base string, jevImages, calls *atomic.Int64) {
-	base, jevImages, calls, _ = imageModSent(t)
+	base, jevImages, calls, _, _ = imageModSent(t)
 	return base, jevImages, calls
 }
 
-// imageModSent is imageMod with the request bodies it received, in order.
-func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, sent func() []string) {
-	jevImages, calls = new(atomic.Int64), new(atomic.Int64)
+// imageModSent is imageMod with the request bodies it received, in order,
+// and the time Jev takes to answer (nanoseconds, 0 at first).
+func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, sent func() []string, jevDelay *atomic.Int64) {
+	jevImages, calls, jevDelay = new(atomic.Int64), new(atomic.Int64), new(atomic.Int64)
 	var mu sync.Mutex
 	var bodies []string
 	sent = func() []string {
@@ -1962,6 +1961,7 @@ func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, se
 		if len(req.Assets) > 0 {
 			jevImages.Add(1)
 		}
+		time.Sleep(time.Duration(jevDelay.Load()))
 		answers := map[string]any{}
 		for c := range req.Questions {
 			answers[c] = map[string]any{"type": "noul", "noul": 0.01}
@@ -1969,7 +1969,7 @@ func imageModSent(t *testing.T) (base string, jevImages, calls *atomic.Int64, se
 		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-mock", "answers": answers, "usage": map[string]int{"input_tokens": 10}})
 	}))
 	t.Cleanup(srv.Close)
-	return srv.URL, jevImages, calls, sent
+	return srv.URL, jevImages, calls, sent, jevDelay
 }
 
 // imageFlows sets up the two flows in which the OpenAI auditor gets an image
@@ -1990,6 +1990,18 @@ func imageFlows(t *testing.T, h *pluginsdktest.Harness, base string) map[int64]i
 		}
 	}
 	return flows
+}
+
+// jevWithoutImages switches the images of every Jev auditor off: with an
+// OpenAI auditor beside them their flows are mixed (snapshot.mixedImages).
+func jevWithoutImages(t *testing.T, h *pluginsdktest.Harness) {
+	t.Helper()
+	for _, a := range decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil)) {
+		if a.Type == AuditorTypeSafe {
+			decodeData[AuditorView](t, h.Do("PUT", fmt.Sprintf("/auditors/%d", a.ID), nil, map[string]any{"name": a.Name, "type": a.Type,
+				"channel_id": a.ChannelID, "config": map[string]any{"review_images": false}}))
+		}
+	}
 }
 
 // A pass is stored for an image only when an auditor that itself passed had
@@ -2150,22 +2162,27 @@ func TestImageOnlyAHittingAuditorSawGetsTheSameVerdict(t *testing.T) {
 // passes, and T is a cached pass. Were T left out of the plan of the next X,
 // I would be alone in its chunk: the auditor that gets it hits, the other one
 // has nothing to judge and is skipped, X is refused, a violation is counted
-// and {I} is replayed as a hit from then on. An image that is not cached
-// keeps the text of its request in the plan (makePlan), so X is judged as a
-// whole and let through every time.
+// and {I} is replayed as a hit from then on. In a mixed flow an image that is
+// not cached keeps the text of its request in the plan (makePlan), so X is
+// judged as a whole and let through every time.
+//
+// The flows are mixed: the OpenAI auditor takes images, the Jev auditor has
+// its image switch off. (A flow whose auditors all take images does not keep
+// the text: TestLLMReviewerSeesTheImage.)
 func TestImageVerdictDoesNotDependOnCachedText(t *testing.T) {
-	base, jevImages, calls, sent := imageModSent(t)
+	base, jevImages, calls, sent, jevDelay := imageModSent(t)
 	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	flows := imageFlows(t, h, base)
-	// Both redraw slots stay busy: Jev always sends the text alone.
-	for range cap(jevNormalizeSlots) {
-		jevNormalizeSlots <- struct{}{}
-	}
-	defer func() {
-		for range cap(jevNormalizeSlots) {
-			<-jevNormalizeSlots
+	jevWithoutImages(t, h)
+	// Jev answers after the moderation API, as it did while it waited for a
+	// redraw slot: in the stage of both, the hit is there before the pass
+	// decides the stage (and ends the other call).
+	jevDelay.Store(int64(500 * time.Millisecond))
+	for group, id := range flows {
+		if snap := p.snap.Load(); !snap.mixedImages(snap.flows[id]) {
+			t.Fatalf("the flow of group %d is not mixed", group)
 		}
-	}()
+	}
 	const cachedPass = notePrefix + "pass (cached)"
 	for _, tc := range []struct {
 		name      string

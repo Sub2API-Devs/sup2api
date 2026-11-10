@@ -279,9 +279,10 @@ func TestPlanSkipsCachedSegments(t *testing.T) {
 	}
 }
 
-// An image that is sent keeps the cached text of its request in the plan: the
-// chunks, and with them the sample beyond input_max_chunks, are those of the
-// request with an empty cache. Without such an image cached text is left out.
+// In a mixed flow an image that is sent keeps the cached text of its request
+// in the plan: the chunks, and with them the sample beyond input_max_chunks,
+// are those of the request with an empty cache. Without such an image, and in
+// a flow that is not mixed, cached text is left out.
 func TestPlanKeepsCachedTextWithAnUncachedImage(t *testing.T) {
 	r := extractReq(t, "anthropic.messages", `{"system":"sys","messages":[{"role":"user","content":[{"type":"text","text":"look"},
 		{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}},{"type":"text","text":"new"}]}]}`)
@@ -290,9 +291,9 @@ func TestPlanKeepsCachedTextWithAnUncachedImage(t *testing.T) {
 	}
 	cached := map[[32]byte]bool{r.segs[0].key: true, r.segs[1].key: true}
 	isCached := func(h [32]byte) bool { return cached[h] }
-	lim := planLimits{maxChars: 12000, maxChunks: 8, maxImages: 8}
-	textOnly, noImages := lim, lim
-	textOnly.textOnly, noImages.maxImages = true, 0
+	lim := planLimits{maxChars: 12000, maxChunks: 8, maxImages: 8, mixed: true}
+	uniform, noImages := lim, lim
+	uniform.mixed, noImages.maxImages = false, 0
 	// The image is not cached: the cached text stays, and is not counted as
 	// answered from the cache.
 	pl := r.makePlan(lim, isCached)
@@ -302,10 +303,12 @@ func TestPlanKeepsCachedTextWithAnUncachedImage(t *testing.T) {
 	if cold := r.makePlan(lim, nil); cold.chunks[0].in.Hash != pl.chunks[0].in.Hash {
 		t.Fatal("the chunk differs from the one of an empty cache")
 	}
-	// An image that is not sent does not keep it: a flow without an image
-	// auditor (its images leave the chunks after planning), no image allowed.
-	if pl := r.makePlan(textOnly, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || pl.trace.Cached != 2 {
-		t.Fatalf("a text-only flow: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	// A flow that is not mixed does not keep it - no auditor takes images
+	// (they leave the chunks after planning), or all of them do: the image
+	// is planned with the text that is not cached. Nor does an image that is
+	// not sent (no image allowed).
+	if pl := r.makePlan(uniform, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || len(pl.chunks[0].in.Images) != 1 || pl.trace.Cached != 2 {
+		t.Fatalf("a flow that is not mixed: %+v text %q", pl.trace, pl.chunks[0].in.Text)
 	}
 	if pl := r.makePlan(noImages, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || pl.trace.Cached != 2 || pl.trace.DroppedImages != 1 {
 		t.Fatalf("input_max_images 0: %+v text %q", pl.trace, pl.chunks[0].in.Text)
@@ -341,7 +344,7 @@ func TestPlanKeepsCachedTextWithAnUncachedImage(t *testing.T) {
 				some[s.key] = true
 			}
 		}
-		warm := planOf(long, 100, 4, 8, func(h [32]byte) bool { return some[h] })
+		warm := long.makePlan(planLimits{maxChars: 100, maxChunks: 4, maxImages: 8, mixed: true}, func(h [32]byte) bool { return some[h] })
 		if warm.trace != cold.trace || !slices.Equal(warm.pieces, cold.pieces) || len(warm.chunks) != len(cold.chunks) {
 			t.Fatalf("%s: plan = %+v pieces %v, cold %+v pieces %v", name, warm.trace, warm.pieces, cold.trace, cold.pieces)
 		}

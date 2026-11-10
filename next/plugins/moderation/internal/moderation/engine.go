@@ -92,10 +92,12 @@ type EngineResult struct {
 type AuditorConfig struct {
 	// openai_moderation: per-category overrides of DefaultThresholds.
 	Thresholds map[string]float64 `json:"thresholds,omitempty"`
-	// typesafe: question table (nil = the default set) and the image switch
-	// (nil = on). llm_questions: the question table only.
-	Questions    *JevQuestions `json:"questions,omitempty"`
-	ReviewImages *bool         `json:"review_images,omitempty"`
+	// typesafe, llm_questions: the question table (nil = the default set).
+	Questions *JevQuestions `json:"questions,omitempty"`
+	// typesafe, llm_questions, llm_verdict: the image switch (nil = on,
+	// reviewsImages). For the LLM types it says whether the model takes
+	// images; off, the auditor sends the text alone.
+	ReviewImages *bool `json:"review_images,omitempty"`
 	// llm_verdict: the §20 agent.
 	SystemPrompt string     `json:"system_prompt,omitempty"`
 	Categories   []Category `json:"categories,omitempty"`
@@ -105,6 +107,10 @@ type AuditorConfig struct {
 	MaxTokens    int        `json:"max_tokens,omitempty"`
 	FlagAsHit    bool       `json:"flag_as_hit,omitempty"`
 }
+
+// reviewsImages reports whether the auditor sends images: unless
+// review_images is false.
+func (c AuditorConfig) reviewsImages() bool { return c.ReviewImages == nil || *c.ReviewImages }
 
 // liveAuditor is a compiled auditor of the snapshot.
 type liveAuditor struct {
@@ -168,15 +174,12 @@ func compileAuditor(id int64, name, typ string, channelID int64, cfg AuditorConf
 				a.labels[it.Category] = it.Label
 			}
 		}
-		a.images = cfg.ReviewImages == nil || *cfg.ReviewImages
+		a.images = cfg.reviewsImages()
 	case AuditorLLMQuestions:
 		// The model answers every question yes or no: a yes scores 1 against
 		// a threshold of 1, the thresholds of the table are not used.
 		if len(cfg.Thresholds) > 0 {
 			return nil, errors.New("an LLM question auditor keeps no thresholds")
-		}
-		if cfg.ReviewImages != nil {
-			return nil, errors.New("an LLM question auditor has no image switch")
 		}
 		qs := cfg.Questions
 		if qs == nil {
@@ -196,12 +199,14 @@ func compileAuditor(id int64, name, typ string, channelID int64, cfg AuditorConf
 				a.labels[it.Category] = it.Label
 			}
 		}
+		a.images = cfg.reviewsImages()
 	case AuditorLLMVerdict:
 		if len(cfg.Thresholds) > 0 || cfg.Questions != nil {
 			return nil, errors.New("an LLM auditor has no thresholds or question table")
 		}
 		a.llm = compileJudge(cfg, ch)
 		a.flagAsHit = cfg.FlagAsHit
+		a.images = cfg.reviewsImages()
 		a.thresholds = map[string]float64{}
 		for _, c := range a.llm.categories {
 			a.order = append(a.order, c.ID)
@@ -269,7 +274,7 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, prior []H
 	case AuditorLLMVerdict:
 		out.EngineResult, out.Err = p.llmAudit(cctx, a, in)
 	case AuditorLLMQuestions:
-		out.EngineResult, out.Err = llmQuestionsAudit(cctx, ch, a.questions, in, prior)
+		out.EngineResult, out.Err = llmQuestionsAudit(cctx, ch, a.questions, a.images, in, prior)
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
 	if source == SourceAudit {

@@ -175,8 +175,8 @@ func jevAsset(ctx context.Context, raw string) *typesafeAsset {
 	if err != nil || n > jevImageMaxBytes {
 		return nil
 	}
-	cfg, format, err := image.DecodeConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(raw)))
-	if err != nil || !slices.Contains(jevImageFormats, format) {
+	cfg, format, ok := imageHeader(raw)
+	if !ok {
 		return nil
 	}
 	w, h := cfg.Width, cfg.Height
@@ -192,6 +192,14 @@ func jevAsset(ctx context.Context, raw string) *typesafeAsset {
 		return nil
 	}
 	return jevRedraw(ctx, raw, cost)
+}
+
+// imageHeader reads the header of an inline image (bare base64) through a
+// streaming decoder, so the image is never held decoded: its size and its
+// format. ok only for a format of jevImageFormats.
+func imageHeader(raw string) (cfg image.Config, format string, ok bool) {
+	cfg, format, err := image.DecodeConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(raw)))
+	return cfg, format, err == nil && slices.Contains(jevImageFormats, format)
 }
 
 // jevRedraw normalizes an image whose decoder needs cost bytes, within ctx:

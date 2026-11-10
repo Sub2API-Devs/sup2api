@@ -287,11 +287,11 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 
 // planUncached asks the verdict cache about the segments of the request
 // (post: memory only, the worker asks the KV) and plans the chunks of what
-// is left to moderate - with an image that is not cached and is sent, the
-// cached text of the request too (makePlan). A non-nil response ends the
-// hook: a cached hit whose whole segment set is in the request decides it at
-// once (replay), and a request whose segments have all passed is not sent
-// again.
+// is left to moderate - in a mixed flow (snapshot.mixedImages), with an image
+// that is not cached and is sent, the cached text of the request too
+// (makePlan). A non-nil response ends the hook: a cached hit whose whole
+// segment set is in the request decides it at once (replay), and a request
+// whose segments have all passed is not sent again.
 func (p *Plugin) planUncached(m *moderation, req *request) (*plan, *pluginv1.GatewayRequestHookResponse) {
 	hashes := make([][32]byte, len(req.segs))
 	for i := range req.segs {
@@ -309,7 +309,7 @@ func (p *Plugin) planUncached(m *moderation, req *request) (*plan, *pluginv1.Gat
 		return nil, p.replaySafely(m, req, cached.hit, cached.hitID)
 	}
 	lim := m.cfg.limits
-	lim.textOnly = !m.snap.sendsImages(m.flow)
+	lim.mixed = m.snap.mixedImages(m.flow)
 	pl := req.makePlan(lim, func(h [32]byte) bool { return cached.passed[h] })
 	if len(pl.chunks) > 0 {
 		return pl, nil
@@ -627,7 +627,8 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 // request is not let through first and refused later.
 //
 // Two things make that hold. Nothing is stored here, so the request does not
-// cache its own text. And the plan keeps the text of a request beside an
+// cache its own text. And in a mixed flow (some auditors take images, some do
+// not: snapshot.mixedImages) the plan keeps the text of a request beside an
 // image that is not cached, also text that some OTHER request cached as
 // passed (makePlan, fifth round): were it left out, the image would be alone
 // in its chunk, the auditor that got it would hit again, the reviewer would
@@ -638,7 +639,9 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 // one of them calls the auditors again, and a request with an image that is
 // not cached sends its text again although it is cached. (new-api refuses
 // them: there an image is a block of its own, which a text-only auditor
-// cannot overturn.)
+// cannot overturn.) A flow whose auditors all take images does not keep the
+// text: its reviewer gets the image too, and the case that is left there is
+// described at makePlan.
 //
 // The exception that stays: a request that holds ONLY the image. No reviewer
 // has anything to judge there, the hit of the auditor that got the image

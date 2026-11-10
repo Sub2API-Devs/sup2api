@@ -93,15 +93,28 @@ func TestHookModeratesWholeRequestWithSegmentCache(t *testing.T) {
 	}
 }
 
-// An image that is not cached as passed is sent together with the text of
-// its request, also the text that is cached (fifth round, makePlan): what an
-// image is judged with does not depend on what other requests cached. Once
-// the image has passed, the request is answered from the cache and cached
-// text is left out again.
+// In a mixed flow an image that is not cached as passed is sent together with
+// the text of its request, also the text that is cached (fifth round,
+// makePlan): what an image is judged with does not depend on what other
+// requests cached. Once the image has passed, the request is answered from
+// the cache and cached text is left out again. In a flow that is not mixed
+// the image goes without the cached text, as before the fifth round.
 func TestHookSendsCachedTextWithANewImage(t *testing.T) {
+	t.Run("mixed", func(t *testing.T) { hookSendsANewImage(t, true) })
+	t.Run("not mixed", func(t *testing.T) { hookSendsANewImage(t, false) })
+}
+
+// hookSendsANewImage runs the sequence in a flow of one stage: the OpenAI
+// auditor alone, or (mixed) beside a Jev auditor that takes no images.
+func hookSendsANewImage(t *testing.T, mixed bool) {
 	mod := newFakeMod(t)
 	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
-	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	if mixed {
+		setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI, AuditorTypeSafe})
+		jevWithoutImages(t, h)
+	} else {
+		setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	}
 	const cachedPass = notePrefix + "pass (cached)"
 	picture := encodePNG(t, filled(40, 30, red))
 	send := func(content ...any) *pluginv1.GatewayRequestHookResponse {
@@ -113,7 +126,7 @@ func TestHookSendsCachedTextWithANewImage(t *testing.T) {
 	}
 	text := func(s string) any { return map[string]any{"type": "text", "text": s} }
 	image := map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": picture}}
-	// last is the one call a request made.
+	// last is the one call a request made to the OpenAI auditor.
 	last := func(calls int) string {
 		t.Helper()
 		sent := mod.moderated()
@@ -135,11 +148,12 @@ func TestHookSendsCachedTextWithANewImage(t *testing.T) {
 	if call := last(2); strings.Contains(call, "what is on this one") || strings.Contains(call, "you describe pictures") || !strings.Contains(call, "and a second question") {
 		t.Fatalf("the call for new text sent %s", call)
 	}
-	// A new image: the cached text goes with it, in one call.
+	// A new image, in one call: in a mixed flow the cached text goes with
+	// it, otherwise it goes alone.
 	if r := send(text("what is on this one"), image); denied(r) || r.GetNote() == cachedPass {
 		t.Fatalf("a new image = %+v", r)
 	}
-	if call := last(3); !strings.Contains(call, "what is on this one") || !strings.Contains(call, "you describe pictures") || !strings.Contains(call, picture) {
+	if call := last(3); strings.Contains(call, "what is on this one") != mixed || strings.Contains(call, "you describe pictures") != mixed || !strings.Contains(call, picture) {
 		t.Fatalf("the call for the new image sent %.400s", call)
 	}
 	// The image has passed: the same request calls nothing.

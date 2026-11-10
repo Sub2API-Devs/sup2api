@@ -173,6 +173,24 @@ func (s *snapshot) sendsImages(f *liveFlow) bool {
 	return false
 }
 
+// mixedImages reports whether the flow has both an auditor that takes images
+// and one that does not (the OpenAI auditor always takes them, the others by
+// their image switch). There an auditor that never gets an image can pass
+// what an auditor that got it hit, on every request, which is why there an
+// image that is not cached keeps the cached text of its request in the plan
+// (makePlan).
+func (s *snapshot) mixedImages(f *liveFlow) bool {
+	var with, without bool
+	for _, st := range f.Spec.Stages {
+		for _, id := range st.Auditors {
+			if a := s.auditors[id]; a != nil {
+				with, without = with || a.images, without || !a.images
+			}
+		}
+	}
+	return with && without
+}
+
 // bound reports whether any group or account runs a flow.
 func (s *snapshot) bound() bool {
 	for _, f := range s.byGroup {
@@ -372,11 +390,16 @@ type storedAuditor struct {
 //   - the default categories of an llm_verdict auditor (DefaultCategories),
 //     its prompt template and verdict tool (expandPrompt, verdictTool);
 //   - the prompt template of llm_questions and how its answers are read;
+//   - what an auditor without review_images does with images
+//     (AuditorConfig.reviewsImages), and which images an auditor sends;
 //   - the built-in Jev question set (the default set when the settings
 //     carry none) and how questions are sent and scored;
 //   - how content is cut into segments and rendered for the auditors, when
 //     the same segment hash would then stand for other text.
-const judgingVersion = 1
+//
+// 2: the LLM auditors send images unless review_images is false, and their
+// default prompts say that the images are judged.
+const judgingVersion = 2
 
 // fingerprint is the verdict fingerprint of a flow (16 hex characters): a
 // hash of everything that decides what the flow answers for given content -
