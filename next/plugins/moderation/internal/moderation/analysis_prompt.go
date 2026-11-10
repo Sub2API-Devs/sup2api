@@ -38,18 +38,21 @@ var openAICategoryDefs = map[string]string{
 
 const openAIDefSource = "OpenAI 内置类别说明"
 
-// Stage roles: the first stage is 初审, a later stage with a Jev auditor 行为审查,
-// any other 复核 (new-api StageRole).
+// Stage roles: a fallback stage is 补审, the first stage 初审, a later stage
+// with a Jev auditor 行为审查, any other 复核 (new-api StageRole).
 const (
 	RoleFirst    = "first"
 	RoleBehavior = "behavior"
 	RoleReview   = "review"
+	RoleFallback = "fallback"
 )
 
-var stageRoleNames = map[string]string{RoleFirst: "初审", RoleBehavior: "行为审查", RoleReview: "复核"}
+var stageRoleNames = map[string]string{RoleFirst: "初审", RoleBehavior: "行为审查", RoleReview: "复核", RoleFallback: "补审"}
 
-func stageRole(index int, hasJev bool) string {
+func stageRole(index int, fallback, hasJev bool) string {
 	switch {
+	case fallback:
+		return RoleFallback
 	case index == 0:
 		return RoleFirst
 	case hasJev:
@@ -93,7 +96,7 @@ func categoryDict(f *liveFlow, auditors map[int64]*liveAuditor) CategoryDict {
 	}
 	d.FlowID, d.FlowName, d.Version = f.ID, f.Name, f.Version
 	for i, st := range f.Spec.Stages {
-		role := stageRoleNames[stageRole(i, stageHasJev(st, auditors))]
+		role := stageRoleNames[stageRole(i, st.Fallback, stageHasJev(st, auditors))]
 		for _, id := range st.Auditors {
 			if a := auditors[id]; a != nil {
 				d.merge(at, auditorDefs(a, i+1, fmt.Sprintf("第 %d 级 · %s · %s", i+1, role, a.Name)))
@@ -177,6 +180,7 @@ type StageView struct {
 	Role     string           `json:"role"`
 	Combine  string           `json:"combine,omitempty"`
 	N        int              `json:"n,omitempty"`
+	Fallback bool             `json:"fallback,omitempty"`
 	Auditors []AuditorRefView `json:"auditors"`
 }
 
@@ -212,8 +216,8 @@ func currentFlowView(f *liveFlow, auditors map[int64]*liveAuditor, groups []int6
 	spec := *f.Spec
 	v := &FlowVersionView{FlowID: f.ID, Name: f.Name, Version: f.Version, Current: true, BoundGroups: groups, Spec: &spec, Dict: &dict}
 	for i, st := range f.Spec.Stages {
-		sv := StageView{Stage: i + 1, Role: stageRole(i, stageHasJev(st, auditors)), Combine: cmp.Or(st.Combine, CombineAny), N: st.N,
-			Auditors: []AuditorRefView{}}
+		sv := StageView{Stage: i + 1, Role: stageRole(i, st.Fallback, stageHasJev(st, auditors)), Combine: cmp.Or(st.Combine, CombineAny), N: st.N,
+			Fallback: st.Fallback, Auditors: []AuditorRefView{}}
 		for _, id := range st.Auditors {
 			sv.Auditors = append(sv.Auditors, currentAuditorView(id, auditors[id]))
 		}
@@ -248,7 +252,7 @@ func currentAuditorView(id int64, a *liveAuditor) AuditorRefView {
 func stageStructure(spec *Spec, auditors map[int64]*liveAuditor) []StageView {
 	views := make([]StageView, 0, len(spec.Stages))
 	for i, st := range spec.Stages {
-		sv := StageView{Stage: i + 1, Combine: cmp.Or(st.Combine, CombineAny), N: st.N, Auditors: make([]AuditorRefView, 0, len(st.Auditors))}
+		sv := StageView{Stage: i + 1, Combine: cmp.Or(st.Combine, CombineAny), N: st.N, Fallback: st.Fallback, Auditors: make([]AuditorRefView, 0, len(st.Auditors))}
 		for _, id := range st.Auditors {
 			a := auditors[id]
 			if a == nil {
@@ -257,7 +261,7 @@ func stageStructure(spec *Spec, auditors map[int64]*liveAuditor) []StageView {
 			}
 			sv.Auditors = append(sv.Auditors, AuditorRefView{AuditorID: id, Name: a.Name, Type: a.Type})
 		}
-		sv.Role = stageRole(i, stageHasJev(st, auditors))
+		sv.Role = stageRole(i, st.Fallback, stageHasJev(st, auditors))
 		views = append(views, sv)
 	}
 	return views
@@ -272,6 +276,10 @@ func flowPromptText(v *FlowVersionView) string {
 		parts := make([]string, 0, len(st.Auditors))
 		for _, a := range st.Auditors {
 			parts = append(parts, auditorPromptText(a))
+		}
+		if st.Fallback {
+			lines = append(lines, fmt.Sprintf("第 %d 级 %s：%s；前面各级放行（未命中）才进入，命中即判定命中", st.Stage, stageRoleNames[st.Role], strings.Join(parts, " ∥ ")))
+			continue
 		}
 		entry := ""
 		if i > 0 {

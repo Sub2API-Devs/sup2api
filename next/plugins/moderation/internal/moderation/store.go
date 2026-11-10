@@ -49,17 +49,11 @@ type eventRec struct {
 
 // fillFromTrace derives result, categories and severity.
 func (r *eventRec) fillFromTrace(tr Trace, refused bool) {
-	switch {
-	case tr.Final == Hit && refused:
+	switch v := tr.verdict(); {
+	case v == ResultHit && refused:
 		r.Result = ResultBlock
-	case tr.Final == Hit:
-		r.Result = ResultHit
-	case tr.Errored:
-		r.Result = ResultError
-	case tr.Overturned:
-		r.Result = ResultOverturned
 	default:
-		r.Result = ResultPass
+		r.Result = v
 	}
 	r.HitCategories = []string{}
 	for _, h := range tr.HitCategories() {

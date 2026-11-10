@@ -209,7 +209,10 @@ type Outcome struct {
 //
 // source names the cost source (§72.13.3): the hook (audit) prices the call
 // in the background; the console paths price it at once and return it.
-func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool, source string) Outcome {
+//
+// prior is the hits of the stage that decided before this one (runFlow); no
+// engine reads it yet.
+func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, _ []HitCategory, pre bool, source string) Outcome {
 	out := Outcome{AuditorID: a.ID, ChannelID: a.ChannelID}
 	ch := a.channel
 	if ch == nil {

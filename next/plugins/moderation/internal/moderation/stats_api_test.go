@@ -74,6 +74,39 @@ func TestStatsAPIs(t *testing.T) {
 	if st := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); st.Today.Audited != 4 {
 		t.Fatalf("after cleanup = %+v", st.Today)
 	}
+
+	// A first-stage hit whose review stage failed: the hit stands, and the
+	// flow row counts both the hit and the error, so the error rate shows
+	// the broken review stage (new-api stats.go).
+	kept := setupFlow(t, h, mod.srv.URL, []int64{10}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe})
+	req := hookReq("MOD-HIT-violence JEV-500 words")
+	req.Meta.GroupId = 10
+	if r := mustHook(t, h, req); !denied(r) {
+		t.Fatalf("hit with a failed review stage = %+v", r)
+	}
+	tr = decodeData[TrendResult](t, h.Do("GET", "/stats/trend", map[string]string{"granularity": "hour"}, nil))
+	var row *FlowPoint
+	for i := range tr.Flows {
+		if tr.Flows[i].FlowID == kept && len(tr.Flows[i].Points) == 1 {
+			row = &tr.Flows[i].Points[0]
+		}
+	}
+	if row == nil || row.Audited != 1 || row.Hit != 1 || row.Blocked != 1 || row.Errors != 1 || row.Overturned != 0 {
+		t.Fatalf("flow row = %+v (%+v)", row, tr.Flows)
+	}
+	// The stage rows: the first stage hit, the review stage errored.
+	stages := map[int]AuditorPoint{}
+	for _, a := range tr.Auditors {
+		if a.FlowID == kept && len(a.Points) == 1 {
+			stages[a.Stage] = a.Points[0]
+		}
+	}
+	if stages[1].Hit != 1 || stages[1].Errors != 0 || stages[2].Hit != 0 || stages[2].Errors != 1 {
+		t.Fatalf("stage rows = %+v", stages)
+	}
+	if st := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); st.Today.Blocked != 2 || st.Today.Errors != 1 {
+		t.Fatalf("today = %+v", st.Today)
+	}
 }
 
 func TestFlowDraftTimeoutAndDelete(t *testing.T) {

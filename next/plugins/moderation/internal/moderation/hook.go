@@ -407,7 +407,7 @@ func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
 }
 
 func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
-	return runFlow(ctx, m.flow.Spec, m.flow.timeout, func(ctx context.Context, id int64) Outcome {
+	return runFlow(ctx, m.flow.Spec, m.flow.timeout, func(ctx context.Context, id int64, prior []HitCategory) Outcome {
 		a := m.snap.auditors[id]
 		if a == nil {
 			return Outcome{AuditorID: id, Err: errAuditorMissing}
@@ -416,7 +416,7 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 		if src == "" {
 			src = SourceAudit
 		}
-		return p.audit(ctx, a, in, m.timing == TimingPre, src)
+		return p.audit(ctx, a, in, prior, m.timing == TimingPre, src)
 	})
 }
 
@@ -481,7 +481,7 @@ func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 			rec.Text = &t
 		}
 	}
-	if tr.firstStageHit() && m.cfg.StoreText && rec.Result != ResultError {
+	if tr.keepsMessage() && m.cfg.StoreText && rec.Result != ResultError {
 		if ch := m.chunkOf(tr); ch != nil {
 			s := string(ch.messages())
 			rec.InputMessage, rec.InputMessageSize = &s, len(s)
@@ -520,14 +520,7 @@ func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 func traceNote(m *moderation, tr Trace) string {
 	var b strings.Builder
 	b.WriteString(notePrefix)
-	result := tr.Final
-	switch {
-	case tr.Final == Pass && tr.Errored:
-		result = "error"
-	case tr.Overturned:
-		result = "overturned"
-	}
-	b.WriteString(result)
+	b.WriteString(tr.verdict())
 	fmt.Fprintf(&b, " flow=%d v%d", m.flow.ID, m.flow.Version)
 	if hits := tr.HitCategories(); len(hits) > 0 {
 		cats := make([]string, 0, len(hits))

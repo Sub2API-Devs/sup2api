@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
@@ -72,7 +74,8 @@ func mockLLM(t *testing.T) *fakeLLM {
 
 // fakeMod serves /v1/moderations and /v1/systemone: every category scores
 // 0.01, a "MOD-HIT-<category>" token in the text scores it 0.99, MOD-500
-// answers 500.
+// answers 500; JEV-500 and OAI-500 answer 500 on /v1/systemone and
+// /v1/moderations only.
 type fakeMod struct {
 	srv   *httptest.Server
 	calls sync.Map     // path -> *atomic.Int64
@@ -105,7 +108,8 @@ func newFakeMod(t *testing.T) *fakeMod {
 			f.texts = append(f.texts, text)
 			f.mu.Unlock()
 		}
-		if strings.Contains(text, "MOD-500") {
+		if strings.Contains(text, "MOD-500") || (r.URL.Path == "/v1/systemone" && strings.Contains(text, "JEV-500")) ||
+			(r.URL.Path == "/v1/moderations" && strings.Contains(text, "OAI-500")) {
 			w.WriteHeader(500)
 			_, _ = io.WriteString(w, `{"error":{"message":"boom"}}`)
 			return
@@ -404,13 +408,65 @@ func TestTwoStageFlowCacheAndFailOpen(t *testing.T) {
 	if got := mod.count("/v1/moderations") - before; got != 1 {
 		t.Fatalf("moderation calls for a cached pass = %d", got)
 	}
-	// Errors let the request pass and are recorded.
-	if r := mustHook(t, h, hookReq("MOD-500 please")); denied(r) || !strings.Contains(r.GetNote(), "error") {
+	// A review stage that errors is passed over: the first stage's hit
+	// stands and the request is refused (it passed before 0.8.0).
+	r := mustHook(t, h, hookReq("MOD-HIT-violence JEV-500 words"))
+	if !denied(r) || !strings.HasPrefix(r.GetNote(), notePrefix+"hit ") || !strings.Contains(r.GetNote(), "[violence]") {
+		t.Fatalf("hit with a failed review stage = %+v", r)
+	}
+	blocked := waitEvents(t, h, map[string]string{"result": "block"}, 2)
+	var kept *EventListItem
+	for i := range blocked {
+		if len(blocked[i].HitCategories) == 1 && blocked[i].HitCategories[0] == "violence" {
+			kept = &blocked[i]
+		}
+	}
+	if kept == nil {
+		t.Fatalf("blocked = %+v", blocked)
+	}
+	var ktr Trace
+	if err := json.Unmarshal(kept.Trace, &ktr); err != nil {
+		t.Fatal(err)
+	}
+	if ktr.Final != Hit || ktr.Decider != 0 || !ktr.Errored || stagesOf(ktr) != "hit failed" || len(ktr.Stages[1].Outcomes) != 1 || ktr.Stages[1].Outcomes[0].ErrType == "" {
+		t.Fatalf("trace = %s", kept.Trace)
+	}
+	// The record keeps the raw messages, as any record with a stage hit.
+	if d := decodeData[EventDetail](t, h.Do("GET", fmt.Sprintf("/events/%d", kept.ID), nil, nil)); d.InputMessageSize == 0 {
+		t.Fatalf("detail = %+v", d)
+	}
+	// Errors in every stage let the request pass and are recorded.
+	if r := mustHook(t, h, hookReq("MOD-500 please")); denied(r) || !strings.HasPrefix(r.GetNote(), notePrefix+"error ") {
 		t.Fatalf("error = %+v", r)
 	}
-	waitEvents(t, h, map[string]string{"result": "error"}, 1)
+	errs := waitEvents(t, h, map[string]string{"result": "error"}, 1)
+	var etr Trace
+	if err := json.Unmarshal(errs[0].Trace, &etr); err != nil {
+		t.Fatal(err)
+	}
+	if len(errs) != 1 || etr.Final != Pass || stagesOf(etr) != "failed failed" {
+		t.Fatalf("error records = %d, trace = %s", len(errs), errs[0].Trace)
+	}
+	// A failed first stage is passed over too: the second stage reviews as
+	// the first one, and its pass is a pass, not an error or an overturn.
+	if r := mustHook(t, h, hookReq("OAI-500 calm words")); denied(r) || !strings.HasPrefix(r.GetNote(), notePrefix+"pass ") {
+		t.Fatalf("pass after a failed first stage = %+v", r)
+	}
+	waitFor(t, "the pass after a failed stage", func() bool {
+		for _, it := range decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"result": "pass"}, nil)) {
+			var tr Trace
+			if json.Unmarshal(it.Trace, &tr) == nil && stagesOf(tr) == "failed pass" && tr.Errored && !tr.Overturned {
+				return true
+			}
+		}
+		return false
+	})
+	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"result": "error"}, nil))); n != 1 {
+		t.Fatalf("error records = %d", n)
+	}
 	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
-	if st.Today.Blocked != 1 || st.Today.Overturned != 1 || st.Today.Errors != 1 || !st.Runtime.Configured {
+	// Flow errors count the runs with a failed stage, whatever the result.
+	if st.Today.Blocked != 2 || st.Today.Overturned != 1 || st.Today.Errors != 3 || !st.Runtime.Configured {
 		t.Fatalf("status = %+v", st.Today)
 	}
 	res := decodeData[TestResult](t, h.Do("POST", "/test", nil, map[string]any{"text": "MOD-HIT-sexual", "flow_id": flow}))
@@ -476,10 +532,10 @@ func TestConfigValidation(t *testing.T) {
 	if len(moved.Groups) != 1 || moved.Groups[0] != 9 {
 		t.Fatalf("moved = %+v", moved)
 	}
-	// Group 9 is bound to an unpublished flow: not moderated, no fallback to
-	// the default flow; an unbound group still takes the default.
-	if r := mustHook(t, h, hookReq("MOD-HIT-sexual bound")); r.GetNote() != "" {
-		t.Fatalf("group of an unpublished flow moderated: %+v", r)
+	// Group 9 is bound to an unpublished flow: the binding does not apply
+	// and the group falls back to the default flow, like an unbound group.
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual bound")); r.GetNote() != notePrefix+"queued" {
+		t.Fatalf("group of an unpublished flow not on the default flow: %+v", r)
 	}
 	unbound := hookReq("MOD-HIT-sexual unbound")
 	unbound.Meta.GroupId = 10
@@ -703,5 +759,41 @@ func TestShutdownKeepsLatePreHit(t *testing.T) {
 	}
 	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "late-hit", "result": "block"}, nil))); n != 1 {
 		t.Fatalf("late hit recorded %d times", n)
+	}
+}
+
+// Migration 0010 can be applied again (DESIGN-2026-11-10 §11.3): every
+// statement is idempotent, as are the migrations before it.
+func TestMigration0010Idempotent(t *testing.T) {
+	dsn, schema := pluginsdktest.NewSchema(t, "plg_moderation_t")
+	dir := filepath.Join("..", "..", "migrations")
+	pluginsdktest.ApplyMigrations(t, dsn, schema, dir)
+	pluginsdktest.ApplyMigrations(t, dsn, schema, dir)
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	for _, c := range [][2]string{{"config_state", "cache_epoch"}, {"config_state", "parity_converted"}, {"events", "replayed"}, {"stats_hourly", "replayed"}} {
+		var def *string
+		var nullable string
+		if err := conn.QueryRow(ctx, `SELECT column_default, is_nullable FROM information_schema.columns
+			WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`, schema, c[0], c[1]).Scan(&def, &nullable); err != nil {
+			t.Fatalf("%s.%s: %v", c[0], c[1], err)
+		}
+		if def == nil || nullable != "NO" {
+			t.Fatalf("%s.%s: default %v nullable %s", c[0], c[1], def, nullable)
+		}
+	}
+	var n int
+	var def string
+	if err := conn.QueryRow(ctx, `SELECT count(*), max(pg_get_constraintdef(c.oid)) FROM pg_constraint c
+		JOIN pg_class r ON r.oid = c.conrelid JOIN pg_namespace ns ON ns.oid = r.relnamespace
+		WHERE ns.nspname = $1 AND r.relname = 'auditors' AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%type%'`, schema).Scan(&n, &def); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || !strings.Contains(def, "llm_questions") || !strings.Contains(def, "llm_verdict") {
+		t.Fatalf("auditors type checks = %d: %s", n, def)
 	}
 }

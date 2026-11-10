@@ -43,16 +43,18 @@ type snapshot struct {
 	channels map[int64]*liveChannel
 	auditors map[int64]*liveAuditor
 	flows    map[int64]*liveFlow
-	// byGroup maps every bound group to its flow; nil = exempt (flow 0) or
-	// bound to a flow that is disabled or unpublished (the group is not
-	// moderated). 0 = default.
+	// byGroup maps the bound groups to their flow; nil = exempt (flow 0, the
+	// group is not moderated). A binding to a flow that is disabled,
+	// unpublished or gone is left out, so a wider binding applies. 0 =
+	// default.
 	byGroup map[int64]*liveFlow
 	groups  map[int64][]int64 // flow id -> bound groups
 	// byAccount maps the account bindings (group 0 = the account in any
-	// group) to their flow; nil as in byGroup (§72.17).
+	// group) to their flow; nil and left out as in byGroup (§72.17).
 	byAccount map[accountKey]*liveFlow
 	// accountGroups are the groups with a binding of one of their accounts;
-	// anyGroupAccounts: some binding covers an account in every group.
+	// anyGroupAccounts: some binding covers an account in every group. Both
+	// count only the bindings in byAccount.
 	accountGroups    map[int64]bool
 	anyGroupAccounts bool
 	markers          [][]byte // self-request keys of the llm channels
@@ -69,7 +71,8 @@ func emptySnapshot() *snapshot {
 }
 
 // flowFor returns the flow of a group; a group without a binding of its own
-// falls back to the default flow (group 0). nil = not moderated.
+// (or bound to a flow that is disabled or unpublished) falls back to the
+// default flow (group 0). nil = not moderated.
 func (s *snapshot) flowFor(group int64) *liveFlow {
 	if f, ok := s.byGroup[group]; ok {
 		return f
@@ -80,8 +83,9 @@ func (s *snapshot) flowFor(group int64) *liveFlow {
 // flowForAccount returns the flow of a request of group sent to account
 // (CONTRACTS §72.17): the most specific binding decides - the account
 // within the group, the account in any group, the group, the default group.
-// Like a group binding, an account binding to a disabled or unpublished
-// flow (or to flow 0) is not moderated; the less specific ones do not apply.
+// A binding to flow 0 is not moderated and the less specific ones do not
+// apply; a binding to a disabled or unpublished flow counts as absent, so
+// the next less specific one decides (new-api runtime.go).
 func (s *snapshot) flowForAccount(group, account int64) *liveFlow {
 	for _, k := range [2]accountKey{{group, account}, {0, account}} {
 		if f, ok := s.byAccount[k]; ok {
@@ -101,8 +105,29 @@ func (s *snapshot) perAccount(group int64) bool {
 // groupsOf lists the groups bound to a flow.
 func (s *snapshot) groupsOf(flowID int64) []int64 { return s.groups[flowID] }
 
-// addAccountBinding records an account binding (f nil = not moderated).
-func (s *snapshot) addAccountBinding(k accountKey, f *liveFlow) {
+// bindGroup records a group binding. Flow 0 exempts the group; a flow that
+// is disabled, unpublished or gone leaves the group without a binding, so
+// the default flow applies (the console still lists the group, groupsOf).
+func (s *snapshot) bindGroup(group, flowID int64) {
+	switch f := s.flows[flowID]; {
+	case flowID == 0:
+		s.byGroup[group] = nil
+	case f != nil:
+		s.byGroup[group] = f
+	}
+	if flowID != 0 {
+		s.groups[flowID] = append(s.groups[flowID], group)
+	}
+}
+
+// bindAccount records an account binding. Flow 0 exempts the account; a
+// flow that is disabled, unpublished or gone is left out: a wider binding
+// applies, and the binding does not make its group per account.
+func (s *snapshot) bindAccount(k accountKey, flowID int64) {
+	f := s.flows[flowID]
+	if flowID != 0 && f == nil {
+		return
+	}
 	s.byAccount[k] = f
 	if k.group == 0 {
 		s.anyGroupAccounts = true
@@ -290,10 +315,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}
 	var gid int64
 	if _, err := pgx.ForEachRow(rows, []any{&gid, &fid}, func() error {
-		s.byGroup[gid] = s.flows[fid] // nil when exempt, or the flow is disabled or unpublished
-		if fid != 0 {
-			s.groups[fid] = append(s.groups[fid], gid)
-		}
+		s.bindGroup(gid, fid)
 		return nil
 	}); err != nil {
 		return nil, err
@@ -304,7 +326,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}
 	var acct int64
 	if _, err := pgx.ForEachRow(rows, []any{&gid, &acct, &fid}, func() error {
-		s.addAccountBinding(accountKey{gid, acct}, s.flows[fid])
+		s.bindAccount(accountKey{gid, acct}, fid)
 		return nil
 	}); err != nil {
 		return nil, err

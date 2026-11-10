@@ -364,7 +364,10 @@ func (p *Plugin) countRun(m *moderation, tr Trace) {
 		fc.hit++
 	case ResultOverturned:
 		fc.overturned++
-	case ResultError:
+	}
+	if tr.Errored {
+		// Counted whatever the result: a run whose review stage failed while
+		// the first hit stood still shows in the error rate.
 		fc.errors++
 	}
 	fc.observe(tr.LatencyMs)

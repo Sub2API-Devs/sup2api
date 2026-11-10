@@ -329,19 +329,22 @@ type toolHit struct {
 }
 
 type toolStage struct {
-	Stage         int       `json:"stage"`
-	Role          string    `json:"role"`
-	AuditorID     int64     `json:"auditor_id"`
-	Auditor       string    `json:"auditor"`
-	Type          string    `json:"type,omitempty"`
-	Hit           bool      `json:"hit"`
-	TopCategory   string    `json:"top_category,omitempty"`
-	TopScore      float64   `json:"top_score"`
-	Hits          []toolHit `json:"hits,omitempty"`
-	Skipped       bool      `json:"skipped,omitempty"`
-	Error         string    `json:"error,omitempty"`
-	SentImages    int       `json:"sent_images,omitempty"`
-	SkippedImages int       `json:"skipped_images,omitempty"`
+	Stage       int       `json:"stage"`
+	Role        string    `json:"role"`
+	AuditorID   int64     `json:"auditor_id"`
+	Auditor     string    `json:"auditor"`
+	Type        string    `json:"type,omitempty"`
+	Hit         bool      `json:"hit"`
+	TopCategory string    `json:"top_category,omitempty"`
+	TopScore    float64   `json:"top_score"`
+	Hits        []toolHit `json:"hits,omitempty"`
+	Skipped     bool      `json:"skipped,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	// StageFailed: the whole stage failed and was passed over
+	// (StageTrace.Failed); the run went on with the other stages' results.
+	StageFailed   bool `json:"stage_failed,omitempty"`
+	SentImages    int  `json:"sent_images,omitempty"`
+	SkippedImages int  `json:"skipped_images,omitempty"`
 }
 
 type toolTextRange struct {
@@ -382,13 +385,13 @@ func (tc *toolCtx) recordOf(r *toolRow, excerptRunes int, detail bool) toolRecor
 	if len(r.Trace) > 0 && json.Unmarshal(r.Trace, &tr) == nil {
 		auditors := tc.snap.auditors
 		for i, st := range tr.Stages {
-			role := stageRoleNames[stageRole(i, slices.ContainsFunc(st.Outcomes, func(o Outcome) bool {
+			role := stageRoleNames[stageRole(i, st.Fallback, slices.ContainsFunc(st.Outcomes, func(o Outcome) bool {
 				a := auditors[o.AuditorID]
 				return a != nil && a.Type == AuditorTypeSafe
 			}))]
 			for _, o := range st.Outcomes {
 				ts := toolStage{Stage: i + 1, Role: role, AuditorID: o.AuditorID, Hit: o.Hit, TopCategory: o.TopCategory, TopScore: o.TopScore,
-					Skipped: o.Skipped, Error: o.ErrType, SentImages: o.SentImages, SkippedImages: o.SkippedImages}
+					Skipped: o.Skipped, Error: o.ErrType, StageFailed: st.Failed, SentImages: o.SentImages, SkippedImages: o.SkippedImages}
 				if a := auditors[o.AuditorID]; a != nil {
 					ts.Auditor, ts.Type = a.Name, a.Type
 				} else {

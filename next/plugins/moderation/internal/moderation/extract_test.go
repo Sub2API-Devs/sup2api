@@ -316,18 +316,33 @@ func TestChunkMessagesRoundTrip(t *testing.T) {
 
 func TestCombineTraces(t *testing.T) {
 	pass := Trace{Final: Pass, Decider: -1, LatencyMs: 10}
+	last := Trace{Final: Pass, Decider: -1, LatencyMs: 5, Stages: []StageTrace{{Result: Pass}}}
 	hitTr := Trace{Final: Hit, Decider: 0, LatencyMs: 30, Stages: []StageTrace{{Result: Hit, Outcomes: []Outcome{hit("sexual", 0.9)}}}}
 	errTr := Trace{Final: Pass, Decider: -1, Errored: true, LatencyMs: 20}
-	tr := combineTraces([]Trace{pass, errTr, hitTr})
-	if tr.Final != Hit || tr.Chunk != 3 || !tr.Errored || tr.LatencyMs != 30 || len(tr.Chunks) != 2 || len(tr.runs()) != 3 {
+	overTr := Trace{Final: Pass, Decider: -1, Overturned: true, LatencyMs: 15, Stages: []StageTrace{{Result: Hit, Outcomes: []Outcome{hit("hate", 0.8)}}, {Result: Pass}}}
+	// The first hit decides, whatever comes before it.
+	tr := combineTraces([]Trace{pass, errTr, overTr, hitTr, last})
+	if tr.Final != Hit || tr.Chunk != 4 || !tr.Errored || tr.LatencyMs != 30 || len(tr.Chunks) != 4 || len(tr.runs()) != 5 {
 		t.Fatalf("combined = %+v", tr)
 	}
 	if hc := tr.HitCategories(); len(hc) != 1 || hc[0].Category != "sexual" {
 		t.Fatalf("hits = %+v", hc)
 	}
-	tr = combineTraces([]Trace{pass, errTr})
-	if tr.Final != Pass || !tr.Errored || tr.Chunk != 2 {
+	// Without a hit the first errored chunk is shown, before an overturned
+	// one (new-api gate.go).
+	tr = combineTraces([]Trace{pass, overTr, errTr, last})
+	if tr.Final != Pass || !tr.Errored || tr.Overturned || tr.Chunk != 3 {
 		t.Fatalf("errored = %+v", tr)
+	}
+	// Then the first overturned chunk.
+	tr = combineTraces([]Trace{pass, overTr, last})
+	if tr.Final != Pass || tr.Errored || !tr.Overturned || tr.Chunk != 2 || tr.verdict() != ResultOverturned {
+		t.Fatalf("overturned = %+v", tr)
+	}
+	// Every chunk passed: the last one is shown.
+	tr = combineTraces([]Trace{pass, pass, last})
+	if tr.Final != Pass || tr.Errored || tr.Chunk != 3 || len(tr.Stages) != 1 || len(tr.Chunks) != 2 || tr.Chunks[0].Chunk != 1 || tr.LatencyMs != 10 {
+		t.Fatalf("all passed = %+v", tr)
 	}
 	if one := combineTraces([]Trace{pass}); one.Chunk != 0 || one.Chunks != nil {
 		t.Fatalf("single = %+v", one)

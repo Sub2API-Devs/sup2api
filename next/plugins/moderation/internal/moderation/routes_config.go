@@ -897,7 +897,7 @@ func (p *Plugin) tryWith(ctx context.Context, req *pluginv1.HTTPRequest, id int6
 	case err != nil:
 		return nil, err
 	}
-	o := p.audit(ctx, a, in, true, SourceTry)
+	o := p.audit(ctx, a, in, nil, true, SourceTry)
 	out := TryResult{Outcome: o}
 	if o.Err != nil {
 		out.ErrType, out.Status, out.Error = ErrType(o.Err), upstreamStatus(o.Err), truncateRunes(o.Err.Error(), 300)
