@@ -46,7 +46,7 @@ export const CLIENTS: KeyClient[] = [
       { content: envLines(claudeEnv(base, key), shell) },
       { path: join(shell, '.claude', 'settings.json'), content: JSON.stringify({ env: claudeEnv(base, key) }, null, 2) }
     ],
-    ccSwitch: { app: 'claude', endpoint: (base) => base }
+    ccSwitch: { app: 'claude', endpoint: base => base }
   },
   {
     id: 'codex',
@@ -74,12 +74,15 @@ requires_openai_auth = true`
     platform: 'gemini',
     perShell: true,
     snippets: (base, key, shell) => [{ content: envLines({ GOOGLE_GEMINI_BASE_URL: base, GEMINI_API_KEY: key }, shell) }],
-    ccSwitch: { app: 'gemini', endpoint: (base) => base }
+    ccSwitch: { app: 'gemini', endpoint: base => base }
   }
 ]
 
 /** The clients of the platforms a key reaches, in CLIENTS order. */
-export const clientsFor = (platforms: readonly string[] | null | undefined) => CLIENTS.filter((c) => platforms?.includes(c.platform))
+export const clientsFor = (platforms: readonly string[] | null | undefined) => CLIENTS.filter(c => platforms?.includes(c.platform))
+
+/** A gateway address without trailing slashes, so paths join onto it with one. */
+export const trimBase = (base: string) => base.replace(/\/+$/, '')
 
 /** GET /v1/usage of the gateway at base: what a key can spend and used (CONTRACTS §62). */
 export const usageURL = (base: string) => `${base}/v1/usage`
@@ -100,6 +103,7 @@ export function ccSwitchUsageScript(base: string): string {
 
 /** The CC Switch deep link importing the key as a provider of the client, with its usage query. */
 export function ccSwitchLink(client: KeyClient, base: string, name: string, key: string): string {
+  base = trimBase(base)
   const q = new URLSearchParams({
     resource: 'provider',
     app: client.ccSwitch.app,

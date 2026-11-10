@@ -12,7 +12,7 @@ import type { Account } from '@/api/types'
 import { parseRouteRef } from '@/components/plugin/declarative'
 import { lt } from '@/i18n'
 import type { PluginAccountActionEntry } from '@/stores/plugins'
-import { bulkToast } from './bulkToast'
+import { bulkToast } from '@/composables/bulkToast'
 
 export function usePluginAccountActions(reload: () => unknown) {
   const { t } = useI18n()
@@ -43,10 +43,10 @@ export function usePluginAccountActions(reload: () => unknown) {
         ok += batch.length
       }
       if (accounts.length === 1) toast(t('accounts.pluginActions.done', { name }), 'success')
-      else bulkToast(ok, [])
+      else bulkToast('accounts.bulk', ok, [])
     } catch (error) {
       // Batches run in order: the accounts from the failed one on were not processed.
-      bulkToast(ok, accounts.slice(ok).map((item) => ({ item, error })))
+      bulkToast('accounts.bulk', ok, accounts.slice(ok).map((item) => ({ item, error })))
     } finally {
       running.value = false
     }

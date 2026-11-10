@@ -1,13 +1,31 @@
 export default {
+  state: { active: 'Enabled', disabled: 'Disabled', expired: 'Expired', exhausted: 'Quota used up' },
+  filter: { search: 'Search name or key', allStatus: 'All statuses', allGroups: 'All groups' },
+  models: { title: 'Models', allowed: '{n} entries', blocked: 'Excludes {n}' },
+  ipLimit: 'IP limit',
+  unlimited: 'Unlimited',
+  listMore: '{n} more',
+  ipAllowlistShort: '{n} entries',
+  showKey: 'Show key',
+  hideKey: 'Hide key',
+  rotateHint: 'The old key stops working at once; the new key is shown once generated, and can be viewed and copied from the list later.',
+  bulk: {
+    copy: 'Copy keys',
+    copied: 'Copied {n} keys (one "name<TAB>key" per line)',
+    copiedSkipped: 'Copied {n} keys (one "name<TAB>key" per line); skipped {skipped} legacy keys that cannot be copied',
+    nothingToCopy: 'The selected keys are all legacy keys and cannot be copied',
+    delete: 'Delete selected keys',
+    confirmDelete: 'Delete the {n} selected API keys? Clients using them stop working at once.',
+    done: 'Processed {ok} keys',
+    doneWithErrors: '{ok} succeeded, {fail} failed ({name}: {error})',
+    nothingToChange: 'The selected keys are already in that state'
+  },
   rotate: 'Regenerate key',
-  rotateShort: 'Regenerate',
-  rotateConfirm: 'Regenerate the key for "{name}"? The old key will stop working immediately. Update clients with the new key.',
-  rotated: 'Key regenerated. Copy the new key and update your clients.',
+  rotateConfirm: 'Regenerate the key for "{name}"? The old key will stop working immediately. Update clients with the new key. Unsaved changes in this form are not kept.',
   legacyCopyHint: 'This legacy key is hash-only and cannot be recovered. New keys can be copied at any time.',
   myDescription: 'Only your own keys are shown and managed here. Administrators cannot access other users’ keys. Each key belongs to one group that determines platforms, models and rates.',
   create: 'New API key',
   edit: 'Edit API key',
-  actions: { use: 'Use' },
   usage: { title: 'Usage', today: 'Today', last30d: 'Last 30 days', requests: '{n} req' },
   limits: {
     title: 'Limits',
@@ -16,9 +34,9 @@ export default {
     concurrency: 'Max concurrency',
     short: { rpm: 'RPM', tpm: 'TPM', concurrency: 'Concurrent' },
     hint: 'Empty or 0 means unlimited. Over a cap, requests get 429 with Retry-After. Tokens count when a response finishes, so large requests running at the same time can pass TPM slightly within a minute.',
-    none: 'Unlimited',
   },
   quota: {
+    unlimited: 'Unlimited',
     title: 'Quota',
     limit: 'Quota (USD)',
     hint: 'The quota adds up what requests were charged; once used up, requests get 402. Requests running at the same time count when they finish, so the quota can be passed slightly.',
@@ -28,7 +46,6 @@ export default {
     resetDone: 'Used quota reset'
   },
   use: {
-    open: 'Use key',
     title: 'Use "{name}"',
     noKey: 'This legacy key is hash-only, so its prefix stands in below; create a new key for a complete configuration.',
     base: 'Gateway address',
@@ -36,15 +53,27 @@ export default {
     shells: { unix: 'macOS / Linux', powershell: 'PowerShell', cmd: 'CMD' },
     run: 'Run in a terminal (that terminal only)',
     file: 'Write to {path}',
-    usage: 'Query what this key can still spend, its limits and usage (GET /v1/usage; CC Switch queries it after import)',
+    usage: 'Query what this key can still spend, its limits and usage (GET /v1/usage; CC Switch and Magpie query it after import)',
     noClient: 'No built-in client configuration for the platforms of this key; call the endpoints below directly.',
-    endpoints: 'Endpoints it can call (prefix them with {base}):'
+    endpoints: 'Endpoints it can call (prefix them with {base}):',
+    magpie: {
+      intro: 'Add a custom provider in Magpie and fill in the fields below; leave the address of a protocol not listed here empty.',
+      key: 'API key',
+      anthropic: 'Anthropic Messages base URL (the gateway root, without /v1)',
+      chat: 'OpenAI Chat Completions base URL',
+      responses: 'OpenAI Responses base URL',
+      gemini: 'Gemini base URL',
+      balance: 'Balance URL (Magpie asks it with this key)',
+      balance_path: 'Balance path'
+    }
   },
-  ccSwitch: {
-    noClient: 'No client of the platforms of this key can be imported into CC Switch',
-    import: 'Import to CC Switch',
-    pick: 'Import to',
-    notOpened: 'CC Switch did not open? Install CC Switch and try again.'
+  apps: {
+    title: 'Quick setup',
+    pick: 'Import into',
+    legacy: 'This legacy key is hash-only and cannot be imported; create a new key to use quick setup.',
+    import: 'Import to {app}',
+    guide: 'Manual setup guide',
+    notOpened: 'Did {app} not open? Install {app} first, then try again.'
   },
   changeGroup: 'Change group',
   groupChanged: 'Group changed',
@@ -57,10 +86,10 @@ export default {
   disabledToast: 'API key disabled; requests with it are refused',
   empty: 'No API keys yet',
   emptyHint: 'Create a key to call the platforms and models of its group through the gateway.',
+  emptyFiltered: 'No API keys match. Adjust the search or the filters.',
   key: 'Key',
   ipAllowlist: 'IP allowlist',
   ipAllowlistHint: 'One IPv4, IPv6 or CIDR entry per line (up to 256). Empty means unrestricted. Only matching client IPs can use this key.',
-  ipAllowlistCount: '{n} allowed IPs / networks',
   namePlaceholder: 'e.g. my-laptop',
   expiresAt: 'Expires',
   expiresHint: 'Optional. Leave empty for a key that never expires.',
@@ -68,9 +97,9 @@ export default {
   noExpiry: 'Never',
   lastUsed: 'Last used',
   noGroups: 'No group is available to you. Ask an administrator to assign one.',
-  groupMultiplier: 'Rate multiplier: ×{n}',
   groupModels: 'Models',
   createdTitle: 'API key created',
+  rotatedTitle: 'API key regenerated',
   onceWarning: 'Save this key. You can also copy it from the list later.',
   savedIt: 'I have saved it',
   confirmDelete: 'Delete API key "{name}"? Clients using it will stop working immediately.'

@@ -41,6 +41,16 @@ export function accountLabel(u: Pick<UsageLog, 'account_id' | 'account_name'>): 
   return u.account_name ? `#${u.account_id} ${u.account_name}` : `#${u.account_id}`
 }
 
+/** Platform a request reached its upstream account on, read off the upstream protocol: an
+ *  endpoint's protocol is "<platform id>.<name>" (CONTRACTS §13). '' when the record has no
+ *  such protocol: none recorded, or "local" (a count_tokens the core answered itself), where
+ *  the client endpoint's platform need not be the account's. */
+export function accountPlatform(u: Pick<UsageLog, 'upstream_protocol'>): string {
+  const protocol = u.upstream_protocol || ''
+  const dot = protocol.indexOf('.')
+  return dot > 0 && dot < protocol.length - 1 ? protocol.slice(0, dot) : ''
+}
+
 /** One account (or one failed plugin batch) of a model availability trace (anomalies.availability). */
 export interface AvailabilitySample {
   /** Missing when the caller lacks account:read, and on a whole-batch fail-open sample. */
@@ -201,7 +211,7 @@ export function latencyTone(u: Pick<UsageLog, 'output_tokens' | 'latency_ms'>): 
 
 const HASH_COLORS = ['bg-sky-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-indigo-500', 'bg-teal-500', 'bg-orange-500', 'bg-fuchsia-500', 'bg-lime-600']
 
-/** A fill colour picked by the text, stable across renders (model dots, user avatars). */
+/** A fill colour picked by the text, stable across renders (user avatars). */
 export function hashColor(text: string): string {
   let h = 0
   for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0

@@ -14,7 +14,7 @@ export default {
   patternInvalid: '每条模型匹配规则不能超过 200 个字符',
 
   title: '分组',
-  description: '分组是一组一起提供服务的账号（可混放不同类型），每个 API Key 只绑定一个分组。分组决定费率倍率、可用模型，并由其账号决定可服务的平台。',
+  description: '分组是一组一起提供服务的账号（可混放不同类型），每个 API Key 只绑定一个分组。分组决定费率倍率和可用模型。',
   create: '新建分组',
   editTitle: '编辑分组 {name}',
   visibility: '可见性',

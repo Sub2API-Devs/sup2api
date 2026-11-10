@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { i18n } from '@/i18n'
@@ -9,6 +9,7 @@ import UsageTokens from './UsageTokens.vue'
 import { errorText, type UsageRow } from './usage'
 import { mountPinned } from '@sub2api/ui/testing'
 
+vi.mock('@/composables/platforms', () => ({ usePlatforms: () => ({ load: vi.fn(), label: (id: string) => id }) }))
 enableAutoUnmount(afterEach)
 const row = {
   id: 1,
@@ -103,6 +104,44 @@ describe('usage records layout', () => {
     expect(accounts[0].attributes('title')).toContain('#9 Account nine')
     await accounts[0].trigger('click')
     expect(w.emitted('filter-account-id')).toEqual([[9]])
+  })
+  it('marks the model by its vendor and the account by the platform the request reached it on', () => {
+    const rows = [
+      { ...row, platform: 'openai', protocol: 'openai.chat', upstream_protocol: 'anthropic.messages' },
+      { ...row, id: 2, model: '', protocol: 'anthropic.count_tokens', upstream_protocol: 'local' }
+    ] as UsageRow[]
+    const [converted, local] = mount(UsageTable, { props: { rows }, global }).findAll('tbody tr')
+    expect(converted.get('[data-testid="model-badge"] [data-brand]').attributes('data-brand')).toBe('anthropic')
+    const account = converted.get('[data-testid="usage-account"]')
+    expect(account.get('[data-platform]').attributes('data-platform')).toBe('anthropic')
+    expect(account.classes()).toContain('brand-tint')
+    // no model, and an upstream protocol that names no platform: neither is guessed
+    expect(local.find('[data-testid="model-badge"]').exists()).toBe(false)
+    expect(local.get('[data-testid="usage-account"]').find('[data-platform]').exists()).toBe(false)
+    expect(local.get('[data-testid="usage-account"]').classes()).not.toContain('brand-tint')
+    const card = mountPinned(UsageTable, { props: { rows: rows.slice(0, 1) }, global }).get('[data-testid="mobile-usage-record"]')
+    expect(card.get('[data-testid="model-badge"] [data-brand]').attributes('data-brand')).toBe('anthropic')
+    expect(card.get('[data-platform]').attributes('data-platform')).toBe('anthropic')
+  })
+  it('keeps the account and its platform out of the self-service list', () => {
+    const w = mount(UsageTable, { props: { rows: [{ ...row, upstream_protocol: 'anthropic.messages' }], showUser: false, showAccount: false }, global })
+    expect(w.find('[data-testid="model-badge"]').exists()).toBe(true)
+    expect(w.find('[data-platform]').exists()).toBe(false)
+  })
+  it('points at the upstream model only when the account mapped the request to another', () => {
+    const w = mount(UsageTable, { props: { rows: [
+      row,
+      { ...row, id: 2, upstream_model: row.model },
+      { ...row, id: 3, upstream_model: 'claude-opus-5-5-20261001' }
+    ] }, global })
+    const mapped = w.findAll('tbody tr').map(tr => tr.find('[title$="claude-opus-5-5-20261001"]'))
+    expect(mapped.map(m => m.exists())).toEqual([false, false, true])
+    expect(mapped[2].attributes('title')).toBe('claude-opus-5-5 → claude-opus-5-5-20261001')
+    expect(mapped[2].get('[data-testid="model-badge"]').text()).toContain('claude-opus-5-5')
+    // Hovering the model name shows the mapping too, not just the name: the badge carries the same tooltip.
+    const badges = w.findAll('tbody tr').map(tr => tr.get('[data-testid="model-badge"]'))
+    expect(badges.map(b => b.attributes('title'))).toEqual(['claude-opus-5-5', 'claude-opus-5-5', 'claude-opus-5-5 → claude-opus-5-5-20261001'])
+    expect(badges[2].find('[title]').exists()).toBe(false)
   })
   it('loads owner-scoped mobile detail only when expanded and keeps admin fields hidden', async () => {
     const w = mountPinned(UsageTable, { props: { rows: [row], showUser: false, showAccount: false, detailPath: id => `/me/usage/${id}` }, global })

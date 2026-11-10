@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, SCard, SCode, SDescItem, SDescriptions, SDisclosure, SHint, SIcon, SLink } from '@sub2api/ui'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatNumber } from '@/utils/format'
 import { useOptionalT } from '@/composables/optionalText'
@@ -44,8 +45,8 @@ function label(prefix: string, value: string) {
     <SDescriptions dense stacked :columns="2">
       <SDescItem :label="t('usage.billing.price')"><div class="flex flex-wrap items-center gap-2">
         <template v-if="u.price">
-          <SLink v-if="auth.has('price:read')" :to="`/prices/${u.price.id}`" class="font-mono text-xs">{{ u.price.model }}</SLink>
-          <span v-else class="font-mono text-xs">{{ u.price.model }}</span>
+          <SLink v-if="auth.has('price:read')" :to="`/prices/${u.price.id}`" class="inline-flex max-w-full"><ModelBadge :model="u.price.model" plain /></SLink>
+          <ModelBadge v-else :model="u.price.model" plain />
           <SBadge :tone="u.price.source === 'sync' ? 'info' : 'primary'">{{ label('prices.source', u.price.source) }}</SBadge>
         </template>
         <template v-else-if="u.price_id">
