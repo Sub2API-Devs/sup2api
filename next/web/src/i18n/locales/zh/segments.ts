@@ -12,7 +12,8 @@ export default {
   publicOnly: '只有公开分组',
   customRates: '{n} 个专属倍率',
   customPrices: '{n} 条专属价',
-  deleteConfirm: '确定删除用户组“{name}”？{n} 位成员将回到默认用户组，这个用户组的授权、专属倍率和专属价一并删除。此操作无法撤销。',
+  deleteTitle: '删除用户组「{name}」',
+  deleteConfirm: '{n} 位成员将回到默认用户组，这个用户组的授权、专属倍率和专属价一并删除。此操作无法撤销。',
   created: '已创建，可以继续设置分组与倍率、添加成员。',
   columns: {
     name: '用户组',

@@ -3,11 +3,11 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, type MenuAction, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, confirm, type MenuAction, type TableColumn } from '@sub2api/ui'
 import type { Segment } from '@/api/pricing'
 import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
 import { useSegmentsLookup } from '@/components/pricing/segmentLookup'
-import { deleteWithConfirm } from '@/composables/crud'
+import { deleteResource } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -103,8 +103,10 @@ function simulate(s: Segment) {
   simulatorOpen.value = true
 }
 
-function remove(s: Segment) {
-  return deleteWithConfirm(`/segments/${s.id}`, t('segments.deleteConfirm', { name: s.name, n: s.member_count }), changed)
+/** Deleting names the user group in the title and says what goes with it. */
+async function remove(s: Segment) {
+  const ask = { title: t('segments.deleteTitle', { name: s.name }), message: t('segments.deleteConfirm', { n: s.member_count }, s.member_count), confirmText: t('common.delete'), danger: true }
+  return (await confirm(ask)) && deleteResource(`/segments/${s.id}`, undefined, changed)
 }
 </script>
 

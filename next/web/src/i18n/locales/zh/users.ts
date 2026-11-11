@@ -26,7 +26,7 @@ export default {
     target: '移到哪个用户组',
     impact: '{n} 位用户将移到「{segment}」。',
     staying: '{n} 位已在「{segment}」，不受影响。',
-    personal: '其中 {n} 位是个人专属，他们的个人专属设置会被删除。',
+    personal: '包含 {n} 位个人专属用户，移动后个人专属设置会被删除。',
     submit: '移动',
     done: '已把 {n} 位用户移到「{segment}」'
   },
@@ -51,7 +51,9 @@ export default {
     editSegment: '编辑这个用户组',
     viewSegment: '查看这个用户组',
     simulate: '价格试算',
-    discard: '有未保存的改动，确定关闭吗？',
+    discardTitle: '放弃未保存的改动？',
+    discard: '「分组与定价」里的改动还没保存，关闭后会丢失。',
+    discardStay: '继续编辑',
     discardSubmit: '放弃改动'
   },
   ledger: '余额流水',

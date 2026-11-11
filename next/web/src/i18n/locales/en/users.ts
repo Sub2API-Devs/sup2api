@@ -26,7 +26,7 @@ export default {
     target: 'Move to',
     impact: '{n} user moves to "{segment}". | {n} users move to "{segment}".',
     staying: '{n} is in "{segment}" already and stays as is. | {n} are in "{segment}" already and stay as they are.',
-    personal: '{n} of them is personal: the personal settings will be deleted. | {n} of them are personal: their personal settings will be deleted.',
+    personal: 'Includes {n} personal user: the personal settings are deleted by the move. | Includes {n} personal users: the personal settings are deleted by the move.',
     submit: 'Move',
     done: 'Moved {n} user to "{segment}" | Moved {n} users to "{segment}"'
   },
@@ -51,7 +51,9 @@ export default {
     editSegment: 'Edit this user group',
     viewSegment: 'View this user group',
     simulate: 'Price simulator',
-    discard: 'Close without saving the changes?',
+    discardTitle: 'Discard unsaved changes?',
+    discard: 'The changes to groups and pricing are not saved and are lost on closing.',
+    discardStay: 'Keep editing',
     discardSubmit: 'Discard changes'
   },
   ledger: 'Balance ledger',

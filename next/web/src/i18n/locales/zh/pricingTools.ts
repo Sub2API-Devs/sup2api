@@ -50,21 +50,22 @@ export default {
       grant: '私有分组，已授权',
       none: '私有分组，未授权'
     },
-    denied: '这个用户组用不了这个私有分组',
-    deniedHint: '下面是授权后的价格。',
+    denied: '用不了这个私有分组，下面是授权后的价格。',
     price: {
       title: '标价',
       hint: '从上往下，第一层设置了的生效。价格为每百万 token 的输入 / 输出价。',
       segment: '专属价（{segment}）',
       group: '分组内定价（{group}）',
-      global: '全局价格'
+      global: '全局价格',
+      tiered: '分段计价：单价显示的是第一档，费用按这次用量所在的档计算。'
     },
     rate: {
       title: '倍率',
       hint: '从上往下，第一层设置了的生效。专属倍率直接替换，不再乘全场折扣。',
       segment: '专属倍率（{segment}）',
       discount: '分组默认 {base} × 全场折扣 {discount}',
-      group: '分组默认倍率（{group}）'
+      group: '分组默认倍率（{group}）',
+      noDiscount: '没有全场折扣'
     },
     unset: '未设置',
     applies: '生效',

@@ -12,8 +12,9 @@ export default {
   publicOnly: 'Public groups only',
   customRates: '{n} own rate | {n} own rates',
   customPrices: '{n} own price | {n} own prices',
+  deleteTitle: 'Delete the user group "{name}"',
   deleteConfirm:
-    'Delete the user group "{name}"? Its {n} member(s) go back to the default user group, and its grants, own rates and own prices are deleted with it. This cannot be undone.',
+    'Its {n} member goes back to the default user group, and its grants, own rates and own prices are deleted with it. This cannot be undone. | Its {n} members go back to the default user group, and its grants, own rates and own prices are deleted with it. This cannot be undone.',
   created: 'Created. You can go on to set its groups and rates, and add members.',
   columns: {
     name: 'User group',

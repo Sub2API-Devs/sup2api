@@ -50,21 +50,22 @@ export default {
       grant: 'Private group, granted',
       none: 'Private group, not granted'
     },
-    denied: 'This user group cannot use this private group',
-    deniedHint: 'Below is the price once it is granted.',
+    denied: 'Cannot use this private group; below is the price once it is granted.',
     price: {
       title: 'List price',
       hint: 'Top down, the first level that is set applies. Token prices are input / output per 1M tokens.',
       segment: 'Own price ({segment})',
       group: 'Group pricing ({group})',
-      global: 'Global price'
+      global: 'Global price',
+      tiered: 'Tiered price: the first tier is shown; the cost is that of the tier this usage falls in.'
     },
     rate: {
       title: 'Rate',
       hint: 'Top down, the first level that is set applies. An own rate replaces the rate; the discount is not applied on top.',
       segment: 'Own rate ({segment})',
       discount: 'Group default {base} × discount {discount}',
-      group: 'Group default rate ({group})'
+      group: 'Group default rate ({group})',
+      noDiscount: 'No discount'
     },
     unset: 'Not set',
     applies: 'Applies',

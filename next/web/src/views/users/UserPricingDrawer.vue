@@ -74,7 +74,8 @@ async function save() {
 }
 
 async function close() {
-  if (dirty.value && !(await confirm({ message: t('users.pricing.discard'), confirmText: t('users.pricing.discardSubmit') }))) return
+  const discard = { title: t('users.pricing.discardTitle'), message: t('users.pricing.discard'), cancelText: t('users.pricing.discardStay'), confirmText: t('users.pricing.discardSubmit'), danger: true }
+  if (dirty.value && !(await confirm(discard))) return
   emit('update:open', false)
 }
 

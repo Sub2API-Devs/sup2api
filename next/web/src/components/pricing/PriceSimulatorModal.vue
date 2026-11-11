@@ -42,7 +42,7 @@ const user = ref<User | null>(null)
 const segmentId = ref<number | null>(null)
 const groupId = ref<number | null>(null)
 const model = ref<string | null>(null)
-const usage = reactive<{ p: number | null; c: number | null }>({ p: 1_000_000, c: 100_000 })
+const usage = reactive<{ p: number | null; c: number | null }>({ p: 100_000, c: 10_000 })
 
 const subjects = computed<SelectOption[]>(() => [
   { value: 'user', label: t('pricingTools.sim.subject.user') },
