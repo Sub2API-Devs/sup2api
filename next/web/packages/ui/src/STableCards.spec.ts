@@ -174,6 +174,18 @@ describe('STable phone cards', () => {
     expect(cards(w)[0].get('.custom').text()).toContain('true')
   })
 
+  it('lets a cell of a card open its row too', async () => {
+    const w = mountPinned(STable, {
+      props: { columns: declared, rows, expandable: true, expandToggle: false, expandSingle: true },
+      slots: { 'cell-actions': '<button class="open" @click.stop="params.toggleExpand()">{{ params.expanded }}</button>', expand: '<i class="more">{{ params.row.id }}</i>' }
+    })
+    await cards(w)[0].get('.open').trigger('click')
+    expect(cards(w)[0].get('.open').text()).toBe('true')
+    expect(cards(w)[0].get('button[aria-expanded]').attributes('aria-expanded')).toBe('true')
+    await cards(w)[1].get('.open').trigger('click')
+    expect(w.findAll('.more').map(e => e.text())).toEqual(['2'])
+  })
+
   it('reorders cards from their handles', async () => {
     const list = [
       { id: 'a', name: 'A' },

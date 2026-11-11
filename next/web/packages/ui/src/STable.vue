@@ -3,7 +3,11 @@
 // '—' when empty); headers render `head-<key>` slots (or the label). A
 // column with key 'actions' sticks to the right edge, set off by a shadow
 // while columns scroll underneath it. Options:
-// - expandable: chevron column + the `expand` slot under an open row;
+// - expandable: chevron column + the `expand` slot under an open row; every
+//   cell slot gets `expanded` and `toggleExpand()` of its row, so a cell (a
+//   row action) can open it too. expandToggle false leaves the chevron column
+//   out for a table opened from a cell only (phone cards keep their Details
+//   toggle); expandSingle closes the other rows when one opens;
 // - selectable + v-model:selected (array of row keys, see rowKey): checkbox
 //   column with a select-all header (indeterminate when partly selected);
 //   rowSelectable(row) disables individual rows; Shift+click on a checkbox
@@ -57,6 +61,10 @@ const props = withDefaults(
     rowKey?: string
     /** Show an expand toggle and render the "expand" slot under a row. */
     expandable?: boolean
+    /** False: no chevron column; a cell opens its row with the slot prop toggleExpand. */
+    expandToggle?: boolean
+    /** Opening a row closes the others. */
+    expandSingle?: boolean
     /** Keep expanded content within the visible width of a scrollable table. */
     fitExpandedToContainer?: boolean
     emptyText?: string
@@ -84,7 +92,7 @@ const props = withDefaults(
     /** Phone form: rows as cards (default) or the scrolling table. */
     mobile?: 'card' | 'scroll'
   }>(),
-  { rowKey: 'id', selected: () => [], swipeSelect: true, mobile: 'card', emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined, error: undefined, errorText: undefined, onRetry: undefined }
+  { rowKey: 'id', expandToggle: true, selected: () => [], swipeSelect: true, mobile: 'card', emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined, error: undefined, errorText: undefined, onRetry: undefined }
 )
 const emit = defineEmits<{
   (e: 'row-click', row: T): void
@@ -130,11 +138,19 @@ const keyed = computed(() => props.rows.map((row, i) => ({ row, i, key: keyOf(ro
 const attrsOf = (row: T, i: number) => (props.reorderable ? { ...props.rowAttrs?.(row, i), draggable: false } : props.rowAttrs?.(row, i))
 
 function toggle(row: T, key: unknown) {
-  const s = new Set(expanded.value)
-  const open = !s.delete(key)
+  const open = !expanded.value.has(key)
+  const s = new Set(open && props.expandSingle ? [] : expanded.value)
   if (open) s.add(key)
+  else s.delete(key)
   expanded.value = s
   emit('expand', row, open)
+}
+/** What a cell slot gets of its row's expansion, in the table and in a card. */
+const expansion = (row: T, key: unknown) => ({ expanded: expanded.value.has(key), toggleExpand: () => toggle(row, key) })
+/** The props of a page slot rendered by the cards: a cell slot gets its row's expansion there too. */
+function cardSlotProps(name: string | number, scope: Record<string, any> | undefined) {
+  if (!scope || !String(name).startsWith('cell-')) return scope ?? {}
+  return { ...scope, ...expansion(scope.row, keyOf(scope.row, scope.index)) }
 }
 
 const ALIGN = { left: 'text-left', right: 'text-right', center: 'text-center' }
@@ -184,8 +200,9 @@ const swipe = useTableSwipeSelect(table, {
   update: keys => emit('update:selected', keys)
 })
 
+const chevrons = computed(() => !!props.expandable && props.expandToggle)
 const span = computed(
-  () => visibleColumns.value.length + Number(props.expandable || false) + Number(props.selectable || false) + Number(props.reorderable || false)
+  () => visibleColumns.value.length + Number(chevrons.value) + Number(props.selectable || false) + Number(props.reorderable || false)
 )
 
 function onRowKey(e: KeyboardEvent, row: T) {
@@ -252,7 +269,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
       @filter="(column, value, row) => emit('filter', column, value, row)"
     >
       <template v-for="(_, name) in $slots" #[name]="scope">
-        <slot :name="name" v-bind="scope ?? {}" />
+        <slot :name="name" v-bind="cardSlotProps(name, scope)" />
       </template>
     </TableCards>
     <div
@@ -291,7 +308,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
               />
             </th>
             <th
-              v-if="expandable"
+              v-if="chevrons"
               class="w-8"
             />
             <th
@@ -399,7 +416,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
                 />
               </td>
               <td
-                v-if="expandable"
+                v-if="chevrons"
                 class="w-8 !pr-0"
               >
                 <button
@@ -429,6 +446,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
                   :value="valueOf(row, c.key)"
                   :index="i"
                   layout="table"
+                  v-bind="expansion(row, key)"
                 >
                   <TableCell
                     :column="c"

@@ -62,6 +62,7 @@ describe('where pages belong (CONTRACTS §90)', () => {
 
   it('leaves the feature pages of the sidebar without a parent', () => {
     for (const path of [
+      '/segments',
       '/roles',
       '/proxies',
       '/plugins',

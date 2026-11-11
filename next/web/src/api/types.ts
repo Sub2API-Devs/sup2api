@@ -2,6 +2,7 @@
 // "assumed" are not spelled out in the contract; views must tolerate their
 // absence.
 import type { AccountFeaturePolicy, FeatureGroup } from '@/views/ccgateway/requestPolicy'
+import type { GroupPricingSummary, MyGroupPricing, SegmentRef } from './pricing'
 
 export type LText = string | Record<string, string>
 
@@ -53,6 +54,8 @@ export interface User {
   roles?: string[] // assumed
   group_ids?: number[] // assumed
   balance?: Money // assumed
+  /** The user group the user is priced by (api/pricing.ts). */
+  segment?: SegmentRef
   last_login_at?: string | null
   created_at?: string
 }
@@ -121,7 +124,7 @@ export interface ApiKey extends Partial<KeyLimits> {
   live?: { rpm: number; tpm: number; concurrency: number }
 }
 
-export interface Group {
+export interface Group extends Partial<GroupPricingSummary>, Partial<MyGroupPricing> {
   id: number
   name: string
   description: string

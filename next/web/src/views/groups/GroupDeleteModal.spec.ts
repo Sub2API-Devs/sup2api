@@ -29,6 +29,7 @@ describe('group delete with API keys', () => {
     await flushPromises()
     expect(w.text()).toContain('该分组下还有 4 个 API Key')
     expect(w.text()).toContain('2 个账号只会移出分组')
+    expect(w.get('[data-testid="group-delete-pricing"]').text()).toBe('该分组上的授权、专属倍率和模型定价会一并删除。')
     const select = w.get('[data-testid="group-delete-target"]')
     expect(select.findAll('option').map(o => o.text())).not.toContain('old')
     await w.get('[data-testid="group-delete-confirm"]').trigger('click')

@@ -6,7 +6,7 @@ import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './
 type PriceMode = 'per_request' | 'per_token' | 'expression'
 type LText = { en: string; zh: string }
 const msg = (en: string, zh: string): LText => ({ en, zh })
-const money = (n: number) => n.toFixed(8)
+export const money = (n: number) => n.toFixed(8)
 const hashOf = (s: string) => createHash('sha256').update(s).digest('hex')
 
 // ------------------------------------------------------------------ tiny expression engine (mock only)
@@ -558,6 +558,62 @@ on('DELETE', '/prices/:id', (req) => {
   prices.splice(i, 1)
   return noContent()
 })
+
+// ------------------------------------------------------------------ price math of group pricing (pricingStore.ts, pricing.ts)
+
+/** A price as the pricing endpoints return it. */
+export interface PriceDef {
+  mode: PriceMode
+  config: Record<string, any> | null
+  expression: string
+}
+
+/** The enabled global price of a model; null when it has none. */
+export function globalPrice(model: string): PriceDef | null {
+  const p = priceFor(model)
+  return p && { mode: p.mode, config: p.config, expression: p.expression }
+}
+
+/** The models with an enabled global price, sorted. */
+export function pricedModels(): string[] {
+  return prices.filter((p) => p.enabled).map((p) => p.model).sort()
+}
+
+/** A price given as a config: what a custom price rule holds. */
+export function configPrice(mode: PriceMode, config: Record<string, any>): PriceDef {
+  return { mode, config, expression: genExpr(mode, config) }
+}
+
+const PRICE_KEYS = new Set<string>([...TOKEN_VARS, 'flat', 'price'])
+// Six decimals, as the console previews a rule before it is saved (scaleConfig rounds like a catalog instead).
+const times = (v: number, k: number) => Number((v * k).toFixed(6))
+
+/** A config with every price in it times k, at any depth (tiers, their prices); everything else stays. */
+function scalePrices(v: any, k: number): any {
+  if (Array.isArray(v)) return v.map((x) => scalePrices(x, k))
+  if (!v || typeof v !== 'object') return v
+  return Object.fromEntries(Object.entries(v).map(([key, x]) => [key, PRICE_KEYS.has(key) && isSet(x) ? times(Number(x), k) : scalePrices(x, k)]))
+}
+
+/** An expression with every price of its base part times k; the rules after ||| are multipliers already. */
+function scaleExpression(expression: string, k: number): string {
+  const [base, ...rules] = splitRules(expression)
+  const scaled = base.replace(/\b(p|c|cr|cc|cc1h)\s*\*\s*(\d+(?:\.\d+)?)|\bflat\(\s*(\d+(?:\.\d+)?)\s*\)/g, (_, name, coef, flat) =>
+    name ? `${name}*${fmtN(times(Number(coef), k))}` : `flat(${fmtN(times(Number(flat), k))})`
+  )
+  return [scaled, ...rules].join('|||')
+}
+
+/** A price times k: what a multiplier rule makes of the global price. */
+export function scalePrice(def: PriceDef, k: number): PriceDef {
+  const config = scalePrices(def.config, k)
+  return { mode: def.mode, config, expression: def.mode === 'expression' ? scaleExpression(def.expression, k) : genExpr(def.mode, config) }
+}
+
+/** What a call with `usage` costs at a price, in USD; 0 when the price cannot be evaluated. */
+export function priceCost(def: PriceDef, usage: Partial<Usage>): number {
+  return tryEvaluate(def.expression, { usage })?.cost ?? 0
+}
 
 // ------------------------------------------------------------------ price sync sources
 
@@ -1308,16 +1364,7 @@ on('GET', '/me/usage/summary', (req) =>
     ? fail(400, 'invalid_argument', 'group_by must be day, hour, none, model, api_key, group, endpoint, platform, protocol or ip')
     : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
 )
-// GET /me/prices (CONTRACTS §79.4).
-on('GET', '/me/prices', (req) => ({
-  group: { id: Number(req.query.group_id) || 1, name: 'default' },
-  rate_multiplier: req.query.group_id === '2' ? '1.5' : '1',
-  prices: [
-    { model: 'claude-sonnet-4-5', mode: 'per_token', config: { p: 3, c: 15, cr: 0.3, cc: 3.75 }, expression: '' },
-    { model: 'gemini-2.5-flash', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075 }, expression: '' },
-    { model: 'seedance-pro', mode: 'per_request', config: { price: 0.2 }, expression: '' }
-  ]
-}))
+// GET /me/prices lives in pricing.ts: it depends on the caller's segment and groups.
 // GET /me/usage/overview (CONTRACTS §66): the windows from the same rows.
 on('GET', '/me/usage/overview', (req) => ({ ...overviewOf(usageRows.filter((u) => u.user_id === 1), req.query.tz || 'UTC'), api_keys: { total: 2, active: 2 } }))
 // GET /usage/overview (CONTRACTS §66.6): all users, plus users and accounts.

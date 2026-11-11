@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SChip, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SChip, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, SSelect, SSwitch, STable, type MenuAction, type TableColumn, type Tone } from '@sub2api/ui'
 import type { Price } from '@/api/types'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
+import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
 import { deleteWithConfirm, useRowSwitch } from '@/composables/crud'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -116,12 +117,26 @@ const { busy: toggling, set: toggle } = useRowSwitch((p: Price, on) => api.patch
 function remove(p: Price) {
   return deleteWithConfirm(`/prices/${p.id}`, t('common.confirmDelete', { name: p.model }), reload)
 }
+
+// The price simulator: opened as it was left from the header, on its model from a row.
+const simulator = ref<{ open: boolean; preset?: { model: string } }>({ open: false })
+const simulate = (model?: string) => (simulator.value = { open: true, preset: model ? { model } : undefined })
+
+const rowActions = computed<MenuAction[]>(() => [
+  { key: 'simulate', label: t('prices.simulateModel') },
+  { key: 'delete', label: t('common.delete'), danger: true, hidden: !canManage.value }
+])
+function runRowAction(key: string, p: Price) {
+  if (key === 'simulate') simulate(p.model)
+  if (key === 'delete') remove(p)
+}
 </script>
 
 <template>
   <div>
     <SPageHeader :title="t('prices.title')" :description="t('prices.description')" :filters-active-count="activeFilterCount(filters)">
       <template #actions>
+        <SButton data-testid="price-simulate" @click="simulate()">{{ t('prices.simulate') }}</SButton>
         <SButton v-if="canManage" data-testid="price-sync" @click="router.push('/prices/sources')">{{ t('prices.syncPrices') }}</SButton>
         <SButton v-else variant="ghost" data-testid="price-sources" @click="router.push('/prices/sources')">{{ t('prices.viewSources') }}</SButton>
         <SButton v-if="canManage" variant="primary" icon="plus" @click="router.push('/prices/new')">{{ t('prices.new') }}</SButton>
@@ -145,7 +160,13 @@ function remove(p: Price) {
       </template>
     </SPageHeader>
 
-    <SAlert tone="primary" dense class="mb-3" data-testid="price-scope-note">{{ t('prices.scopeNote') }}</SAlert>
+    <SAlert tone="primary" dense class="mb-3" data-testid="price-scope-note">
+      {{ t('prices.scopeNote') }}
+      <template #actions>
+        <SLink v-if="auth.has('group:read')" to="/groups">{{ t('prices.scopeLinks.groups') }}</SLink>
+        <SLink v-if="auth.has('segment:read')" to="/segments">{{ t('prices.scopeLinks.segments') }}</SLink>
+      </template>
+    </SAlert>
     <STable card :columns="columns" :rows="rows" :loading="loading" :error="error" @retry="reload">
       <template #cell-model="{ row }">
         <SLink :to="`/prices/${row.id}`" class="inline-flex max-w-full"><ModelBadge :model="row.model" plain /></SLink>
@@ -179,16 +200,15 @@ function remove(p: Price) {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex justify-end gap-1">
-          <template v-if="canManage">
-            <SButton size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t('common.edit') }}</SButton>
-            <SDropdown :actions="[{ key: 'delete', label: t('common.delete'), danger: true }]" @select="$event === 'delete' && remove(row)" />
-          </template>
-          <SButton v-else size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t('common.view') }}</SButton>
+          <SButton size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t(canManage ? 'common.edit' : 'common.view') }}</SButton>
+          <SDropdown :actions="rowActions" data-testid="price-row-menu" @select="runRowAction($event, row)" />
         </div>
       </template>
       <template #footer>
         <SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" />
       </template>
     </STable>
+
+    <PriceSimulatorModal v-model:open="simulator.open" :preset="simulator.preset" />
   </div>
 </template>

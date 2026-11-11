@@ -4,6 +4,7 @@ import { fail, now, on, type MockRequest } from './router'
 
 export const ALL_PERMISSIONS = [
   'user:read', 'user:create', 'user:update', 'user:delete',
+  'segment:read', 'segment:manage',
   'role:read', 'role:manage',
   'apikey:self:manage',
   'group:read', 'group:manage',
@@ -293,6 +294,7 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/usage': 'usage:all:read',
   '/usage/overview': 'usage:all:read',
   '/users': 'user:read',
+  '/segments': 'segment:read',
   '/roles': 'role:read',
   '/plugins': 'plugin:read',
   '/market': 'plugin:market:read',
@@ -352,6 +354,7 @@ const MENUS = [
     label: L('Users', '用户'),
     items: [
       { id: 'users', label: L('Users', '用户'), icon: 'user', path: '/users' },
+      { id: 'segments', label: L('User groups', '用户组'), icon: 'publisher', path: '/segments' },
       { id: 'roles', label: L('Roles & permissions', '角色与权限'), icon: 'role', path: '/roles' }
     ]
   },

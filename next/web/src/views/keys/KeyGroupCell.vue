@@ -5,7 +5,7 @@ import GroupBadge from '@/components/platform/GroupBadge.vue'
 import ProblemIcon from '@/components/ProblemIcon.vue'
 import type { ApiKey } from '@/api/types'
 
-// Group of an API key as a badge: its name and rate multiplier, tinted by
+// Group of an API key as a badge: its name and the rate its owner pays there, tinted by
 // the platforms the key can access (CONTRACTS §13). `platforms` undefined:
 // the server did not report them; empty: the key reaches no platform.
 // `status` other than active says why the group cannot serve the key

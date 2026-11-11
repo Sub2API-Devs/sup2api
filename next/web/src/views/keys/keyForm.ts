@@ -1,6 +1,7 @@
 import type { ApiKey, Group } from '@/api/types'
 import { fromLocalInput, toLocalInput } from '@/api/admin'
 import { capsBody, capsForm, type KeyCapsForm } from './keyLimits'
+import { myGroupLabel } from './myGroup'
 
 /** The fields of the create and edit forms of an API key. */
 export interface KeyForm {
@@ -24,9 +25,13 @@ export function keyForm(k?: ApiKey | null, group: number | null = null): KeyForm
   }
 }
 
-/** The groups as select options: each by its name and the platforms its keys reach (`platformLabel` names one). */
-export function groupOptions(groups: readonly Group[], platformLabel: (id: string) => string) {
-  return groups.map((g) => ({ value: g.id, label: g.platforms?.length ? `${g.name} · ${g.platforms.map((p) => platformLabel(p)).join(', ')}` : g.name }))
+/**
+ * The groups as select options: each by its name, the rate the caller pays
+ * there, `exclusive` when it is a private group granted to them, and the
+ * platforms its keys reach (`platformLabel` names one).
+ */
+export function groupOptions(groups: readonly Group[], platformLabel: (id: string) => string, exclusive: string) {
+  return groups.map((g) => ({ value: g.id, label: [myGroupLabel(g, exclusive), g.platforms?.map((p) => platformLabel(p)).join(', ')].filter(Boolean).join(' · ') }))
 }
 
 export const ipEntries = (value: string) => value.split(/[\s,]+/).filter(Boolean)

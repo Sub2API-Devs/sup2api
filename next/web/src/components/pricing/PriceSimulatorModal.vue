@@ -1,0 +1,171 @@
+<script setup lang="ts">
+import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { api } from '@sub2api/host'
+import { SButton, SChip, SField, SGrid, SHint, SInput, SModal, SSegmented, SSelect, SSpinner, type SelectOption } from '@sub2api/ui'
+import type { GroupModelPrices, PricingQuote, PricingQuoteRequest } from '@/api/pricing'
+import GroupPicker from '@/components/GroupPicker.vue'
+import { useGroupsLookup } from '@/composables/lookups'
+import { useAuthStore } from '@/stores/auth'
+import { notifyError } from '@/utils/errors'
+import { formatNumber } from '@/utils/format'
+import PriceQuoteBreakdown from './PriceQuoteBreakdown.vue'
+import SegmentBadge from './SegmentBadge.vue'
+import SegmentSelect from './SegmentSelect.vue'
+import UserSearchSelect from './UserSearchSelect.vue'
+import { useLatestRequest } from './latestRequest'
+import type { SegmentedUser } from './segmentLookup'
+
+// Price simulator (POST /pricing/quote): what a user, or any member of a
+// segment, pays for a sample call of a model in a group (PriceQuoteBreakdown
+// shows where that comes from). A tool in a dialog: it asks again whenever a
+// condition changes and saves nothing. `preset` fills conditions in on opening.
+interface Preset {
+  userId?: number
+  segmentId?: number
+  groupId?: number
+  model?: string
+}
+const props = defineProps<{ open: boolean; preset?: Preset }>()
+const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
+const { t } = useI18n()
+const auth = useAuthStore()
+const { groups } = useGroupsLookup()
+
+// ------------------------------------------------------------------ conditions
+
+// Looking a user up takes user:read; without it the quote is for a segment.
+const canPickUser = computed(() => auth.has('user:read'))
+const subject = ref<'user' | 'segment'>(canPickUser.value ? 'user' : 'segment')
+const user = ref<SegmentedUser | null>(null)
+const segmentId = ref<number | null>(null)
+const groupId = ref<number | null>(null)
+const model = ref<string | null>(null)
+const usage = reactive<{ p: number | null; c: number | null }>({ p: 1_000_000, c: 100_000 })
+
+const subjects = computed<SelectOption[]>(() => [
+  { value: 'user', label: t('pricingTools.sim.subject.user') },
+  { value: 'segment', label: t('pricingTools.sim.subject.segment') }
+])
+
+async function presetUser(id: number) {
+  if (user.value?.id !== id) user.value = null
+  try {
+    user.value = await api.get<SegmentedUser>(`/users/${id}`)
+  } catch (e) {
+    notifyError(e)
+  }
+}
+
+/** Takes what the opener names and leaves the other conditions as they were. */
+function applyPreset(preset: Preset) {
+  if (preset.groupId !== undefined) groupId.value = preset.groupId
+  if (preset.model !== undefined) model.value = preset.model
+  if (preset.segmentId !== undefined) {
+    subject.value = 'segment'
+    segmentId.value = preset.segmentId
+  }
+  if (preset.userId === undefined) return
+  subject.value = 'user'
+  presetUser(preset.userId)
+}
+// Compared by value: an opener may hand over a new object on every render.
+const presetKey = computed(() => (props.open && props.preset ? JSON.stringify(props.preset) : ''))
+watch(
+  presetKey,
+  () => {
+    if (props.open && props.preset) applyPreset(props.preset)
+  },
+  { immediate: true }
+)
+
+// The models the chosen group provides: the ones its model prices list.
+const groupModels = useLatestRequest(
+  () => (props.open ? groupId.value : null),
+  async (id) => ({ id, models: (await api.get<GroupModelPrices>(`/groups/${id}/model-prices`)).models.map((m) => m.model) }),
+  0
+)
+/** [] without a group, null while the models of the group load. */
+const provided = computed(() => {
+  if (groupId.value === null) return []
+  const loaded = groupModels.result.value
+  return loaded?.id === groupId.value ? loaded.models : null
+})
+const modelOptions = computed<SelectOption[]>(() => (provided.value ?? []).map((m) => ({ value: m, label: m })))
+watch([provided, model], () => {
+  // A model the group does not provide cannot stay chosen; one preset before any group waits for the group.
+  if (model.value && groupId.value !== null && provided.value && !provided.value.includes(model.value)) model.value = null
+})
+
+// ------------------------------------------------------------------ quote
+
+/** Whom the quote is for, as the request names him; null until chosen. */
+const who = computed<Pick<PricingQuoteRequest, 'user_id' | 'segment_id'> | null>(() => {
+  if (subject.value === 'user') return user.value && { user_id: user.value.id }
+  return segmentId.value === null ? null : { segment_id: segmentId.value }
+})
+const request = computed<PricingQuoteRequest | null>(() => {
+  if (!props.open || !who.value || groupId.value === null || !model.value || !provided.value?.includes(model.value)) return null
+  return { ...who.value, group_id: groupId.value, model: model.value, usage: { p: usage.p ?? 0, c: usage.c ?? 0 } }
+})
+const { result: quote, loading: quoting, error: quoteError } = useLatestRequest(request, (body) => api.post<PricingQuote>('/pricing/quote', body), 400)
+
+const groupName = computed(() => groups.value.find((g) => g.id === groupId.value)?.name)
+</script>
+
+<template>
+  <SModal :open="open" :title="t('pricingTools.sim.title')" width="xl" @update:open="emit('update:open', $event)">
+    <div class="space-y-4" data-testid="price-sim">
+      <SHint>{{ t('pricingTools.sim.description') }}</SHint>
+
+      <SField :label="t('pricingTools.sim.who')">
+        <div class="flex flex-wrap items-center gap-3">
+          <SSegmented v-if="canPickUser" v-model="subject" :options="subjects" :aria-label="t('pricingTools.sim.who')" data-testid="price-sim-subject" />
+          <div class="min-w-0 flex-1 basis-64">
+            <SegmentSelect v-if="subject === 'segment'" v-model="segmentId" data-testid="price-sim-segment" />
+            <div v-else-if="user" class="flex min-h-control flex-wrap items-center gap-2" data-testid="price-sim-user">
+              <SChip closable :close-label="t('pricingTools.sim.changeUser')" @close="user = null">{{ user.email }}</SChip>
+              <SegmentBadge :segment="user.segment" />
+            </div>
+            <UserSearchSelect v-else @select="user = $event" />
+          </div>
+        </div>
+      </SField>
+      <SGrid :cols="2">
+        <SField :label="t('common.group')">
+          <!-- GroupPicker keeps attributes off its root (it is a schema widget too): the test id sits on a wrapper. -->
+          <div data-testid="price-sim-group">
+            <GroupPicker :model-value="groupId" @update:model-value="groupId = typeof $event === 'number' ? $event : null" />
+          </div>
+        </SField>
+        <SField :label="t('common.model')" :hint="t('pricingTools.sim.modelHint')">
+          <SSelect
+            :model-value="model"
+            :options="modelOptions"
+            searchable
+            :placeholder="t('pricingTools.sim.modelPlaceholder')"
+            :disabled="!provided?.length"
+            data-testid="price-sim-model"
+            @update:model-value="model = typeof $event === 'string' ? $event : null"
+          />
+        </SField>
+        <SField :label="t('pricingTools.sim.inputTokens')" :hint="formatNumber(usage.p)">
+          <SInput v-model="usage.p" type="number" min="0" data-testid="price-sim-input-tokens" />
+        </SField>
+        <SField :label="t('pricingTools.sim.outputTokens')" :hint="formatNumber(usage.c)">
+          <SInput v-model="usage.c" type="number" min="0" data-testid="price-sim-output-tokens" />
+        </SField>
+      </SGrid>
+
+      <div class="rounded-xl border border-line p-4" data-testid="price-sim-result">
+        <SHint v-if="!request">{{ t('pricingTools.sim.incomplete') }}</SHint>
+        <SHint v-else-if="quoteError" tone="danger">{{ quoteError }}</SHint>
+        <PriceQuoteBreakdown v-else-if="quote" :quote="quote" :group-name="groupName" class="transition-opacity" :class="quoting ? 'opacity-60' : ''" :aria-busy="quoting" />
+        <SSpinner v-else block />
+      </div>
+    </div>
+    <template #footer>
+      <SButton data-testid="price-sim-close" @click="emit('update:open', false)">{{ t('common.close') }}</SButton>
+    </template>
+  </SModal>
+</template>

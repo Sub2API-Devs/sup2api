@@ -20,6 +20,7 @@ export default {
     usage: 'Site usage logs',
     ledger: 'Balance ledger',
     users: 'Users',
+    segments: 'User groups',
     roles: 'Roles & permissions',
     plugins: 'Installed plugins',
     market: 'Plugin market',
