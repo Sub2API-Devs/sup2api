@@ -50,13 +50,13 @@ type Plugin struct {
 
 	agent *agent
 	cache atomic.Pointer[lru]
-	// rechecking: a background read of verdict cache keys that are due for
-	// one is under way (recheckSoon).
-	rechecking atomic.Bool
-	kvMu       [kvLockStripes]sync.Mutex // this node's changes of a verdict cache key in the KV, one at a time (kvLock)
-	sf         singleflight.Group
-	sem        atomic.Pointer[semaphore] // background (post) calls
-	preSem     atomic.Pointer[semaphore] // calls a request waits for
+	// rewriting: a background write of a cached hit that had not landed in
+	// the KV is under way (lookup.rewriteSoon).
+	rewriting atomic.Bool
+	kvMu      [kvLockStripes]sync.Mutex // this node's changes of a verdict cache key in the KV, one at a time (kvLock)
+	sf        singleflight.Group
+	sem       atomic.Pointer[semaphore] // background (post) calls
+	preSem    atomic.Pointer[semaphore] // calls a request waits for
 
 	snap   atomic.Pointer[snapshot]
 	snapMu sync.Mutex
@@ -124,12 +124,15 @@ type Plugin struct {
 		inflight, latencyMsSum                                     atomic.Int64
 		droppedNotices, noticeErrors                               atomic.Int64
 		busy, shutdownDropped, suspiciousRetries                   atomic.Int64
+		// kvTimeouts: the batches of KV calls their budget cut off (kvRun);
+		// kvErrors counts the ones in which a call failed.
+		kvTimeouts atomic.Int64
 		// imagesRefused: the auditor calls whose images the upstream refused
 		// (Outcome.ImagesRefused).
 		imagesRefused atomic.Int64
 		// preWaiting: the requests waiting for their run (runPre);
 		// kvWriting: the runs whose verdicts are on their way to the KV
-		// (storeVerdicts).
+		// (storeVerdicts), and the rewrite of a hit (lookup.rewriteSoon).
 		preWaiting, kvWriting atomic.Int64
 	}
 
@@ -277,6 +280,7 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 		"inflight":         float64(p.stats.inflight.Load()),
 		"inflight_bytes":   float64(p.inflightBytes.Load()),
 		"kv_errors":        float64(p.stats.kvErrors.Load()),
+		"kv_timeouts":      float64(p.stats.kvTimeouts.Load()),
 		"redraw_panics":    float64(jevRedrawPanics.Load()),
 		"busy":             float64(p.stats.busy.Load()),
 		"shutdown_dropped": float64(p.stats.shutdownDropped.Load()),

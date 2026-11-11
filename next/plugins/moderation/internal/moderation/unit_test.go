@@ -736,7 +736,7 @@ func TestLRU(t *testing.T) {
 	const ttl = time.Minute
 	at := now.Unix()
 	has := func(key string) bool {
-		_, _, ok := c.seg(key, now)
+		_, ok := c.seg(key, now)
 		return ok
 	}
 	pass := func(key string, at int64) { c.editSeg(key, now, ttl, passAt(at)) }
@@ -755,27 +755,23 @@ func TestLRU(t *testing.T) {
 	// A value is edited in place, and a forgotten key is gone.
 	id := strings.Repeat("ab", 32)
 	c.editSeg("a", now, ttl, pointTo(id, at))
-	if v, _, ok := c.seg("a", now); !ok || v.pass != at || len(v.hits) != 1 || v.hits[0].id != id {
+	if v, ok := c.seg("a", now); !ok || v.pass != at || len(v.hits) != 1 || v.hits[0].id != id {
 		t.Fatalf("edited value = %+v %v", v, ok)
 	}
 	c.forget([]string{"a", "missing"})
 	if has("a") || c.len() != 1 {
 		t.Fatalf("after forget: len %d", c.len())
 	}
-	// A value made on this node counts as read from the KV then; an edit of
-	// this node keeps that time, reading the KV renews it and adds what the
-	// KV holds to what is there.
+	// What a lookup read from the KV is added to what a run on this node
+	// stored meanwhile; neither replaces the other.
 	later := now.Add(10 * time.Second)
 	c.editSeg("c", later, ttl, pointTo(id, at))
-	if _, synced, _ := c.seg("c", later); !synced.Equal(now) {
-		t.Fatalf("an edit moved the time of the last read: %v, want %v", synced, now)
-	}
 	got := c.syncSeg("c", later, ttl, parseSeg([]byte("p"+strconv.FormatInt(at+5, 10))))
-	if v, synced, _ := c.seg("c", later); !synced.Equal(later) || got.pass != at+5 || len(got.hits) != 1 || v.pass != at+5 || len(v.hits) != 1 {
-		t.Fatalf("after reading the KV: %+v, read %v, returned %+v", v, synced, got)
+	if v, _ := c.seg("c", later); got.pass != at+5 || len(got.hits) != 1 || v.pass != at+5 || len(v.hits) != 1 {
+		t.Fatalf("after reading the KV: %+v, returned %+v", v, got)
 	}
 	// A value is gone the TTL after its newest write.
-	if _, _, ok := c.seg("c", time.Unix(at+5, 0).Add(ttl)); ok || c.len() != 0 {
+	if _, ok := c.seg("c", time.Unix(at+5, 0).Add(ttl)); ok || c.len() != 0 {
 		t.Fatal("a value outlived the TTL of its write")
 	}
 }
@@ -800,14 +796,14 @@ func TestLRUByteBudget(t *testing.T) {
 	}
 	c.seg("a", now)
 	pass("d") // over the budget: the least recently used goes
-	if _, _, ok := c.seg("b", now); ok || c.len() != 3 || c.size() != 3*one {
+	if _, ok := c.seg("b", now); ok || c.len() != 3 || c.size() != 3*one {
 		t.Fatalf("after the fourth: %d entries, %d bytes", c.len(), c.size())
 	}
 	// A value that grows is charged its new size.
 	id := strings.Repeat("ab", 32)
 	pointer := int64(len(" h" + id + "@1700000000"))
 	c.editSeg("a", now, ttl, pointTo(id, at))
-	if _, _, ok := c.seg("c", now); ok || c.len() != 2 || c.size() != 2*one+pointer {
+	if _, ok := c.seg("c", now); ok || c.len() != 2 || c.size() != 2*one+pointer {
 		t.Fatalf("after growing a: %d entries, %d bytes", c.len(), c.size())
 	}
 	// A decoded hit is charged hitDecodedFactor times its JSON; forgetting
@@ -817,7 +813,7 @@ func TestLRUByteBudget(t *testing.T) {
 	if !c.putHit("h", hit, 1000, exp, now, false) || c.getHit("h", now) != hit || c.size() != 2*one+pointer+1+hitDecodedFactor*1000+cacheEntryOverhead {
 		t.Fatalf("with a hit: %d bytes", c.size())
 	}
-	if _, _, ok := c.seg("h", now); ok || c.getHit("a", now) != nil {
+	if _, ok := c.seg("h", now); ok || c.getHit("a", now) != nil {
 		t.Fatal("a hit read as a segment value, or a segment value as a hit")
 	}
 	c.forget([]string{"h"})
