@@ -1,7 +1,8 @@
 // Package batch provides a generic channel-backed batch writer: send items to
-// a channel, flush them in batches (up to 200 rows or 1 second), useful for
-// guard block_log / moderation events. The user supplies a Write([]T) that
-// persists one batch and a context that stops the goroutine.
+// a channel, flush them in batches (up to 200 rows or 1 second; WithMaxBatch
+// and WithInterval choose other limits), useful for guard block_log /
+// moderation events. The user supplies a Write([]T) that persists one batch
+// and a context that stops the goroutine.
 package batch
 
 import (
@@ -17,29 +18,63 @@ const (
 	DefaultInterval = time.Second
 )
 
-// Writer[T] persists items of type T in batches.
-type Writer[T any] struct {
-	ch       chan T
-	write    func(context.Context, []T) error
-	onDrop   func(int)
+// Option changes a limit of a Writer when New creates it.
+type Option func(*limits)
+
+type limits struct {
 	max      int
 	interval time.Duration
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+}
+
+// WithMaxBatch sets the row limit before a flush (DefaultMaxBatch when not
+// given). A value that is not positive is ignored.
+func WithMaxBatch(n int) Option {
+	return func(l *limits) {
+		if n > 0 {
+			l.max = n
+		}
+	}
+}
+
+// WithInterval sets the time limit before a flush (DefaultInterval when not
+// given), e.g. a few milliseconds in a test that waits for the write. A
+// value that is not positive is ignored.
+func WithInterval(d time.Duration) Option {
+	return func(l *limits) {
+		if d > 0 {
+			l.interval = d
+		}
+	}
+}
+
+// Writer[T] persists items of type T in batches.
+type Writer[T any] struct {
+	ch     chan T
+	write  func(context.Context, []T) error
+	onDrop func(int)
+	limits // set by New and never changed: the goroutine reads them
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // New creates a Writer that collects items from a buffered channel (cap) and
 // flushes them via write. The goroutine runs until Stop or until ctx is done.
-// onDrop(n) is called when a batch write fails (may be nil).
-func New[T any](ctx context.Context, cap int, write func(context.Context, []T) error, onDrop func(int)) *Writer[T] {
+// onDrop(n) is called when a batch write fails (may be nil). opts choose
+// other limits than DefaultMaxBatch and DefaultInterval:
+//
+//	w := batch.New(ctx, 1024, write, nil, batch.WithInterval(10*time.Millisecond))
+func New[T any](ctx context.Context, cap int, write func(context.Context, []T) error, onDrop func(int), opts ...Option) *Writer[T] {
 	if cap <= 0 {
 		cap = 1024
 	}
-	bg, cancel := context.WithCancel(ctx)
-	w := &Writer[T]{
-		ch: make(chan T, cap), write: write, onDrop: onDrop,
-		max: DefaultMaxBatch, interval: DefaultInterval, cancel: cancel,
+	l := limits{max: DefaultMaxBatch, interval: DefaultInterval}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&l)
+		}
 	}
+	bg, cancel := context.WithCancel(ctx)
+	w := &Writer[T]{ch: make(chan T, cap), write: write, onDrop: onDrop, limits: l, cancel: cancel}
 	w.wg.Add(1)
 	go w.run(bg)
 	return w

@@ -20,9 +20,7 @@ func TestBatchWriter(t *testing.T) {
 		written = append(written, append([]int(nil), batch...))
 		mu.Unlock()
 		return nil
-	}, func(n int) { dropped.Add(int64(n)) })
-	w.max = 5
-	w.interval = 50 * time.Millisecond
+	}, func(n int) { dropped.Add(int64(n)) }, WithMaxBatch(5), WithInterval(50*time.Millisecond))
 
 	// Send items, flushing when batch size is hit
 	for i := 1; i <= 7; i++ {
@@ -93,5 +91,56 @@ func TestBatchWriterContextCancel(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	if n := flushed.Load(); n != 2 {
 		t.Errorf("context cancel flushed %d items, want 2", n)
+	}
+}
+
+// The limits are fixed when the Writer is created, before its goroutine
+// starts: the defaults, or what the options say. An option that makes no
+// sense (zero, negative) keeps the default.
+func TestBatchWriterLimits(t *testing.T) {
+	write := func(context.Context, []int) error { return nil }
+	for name, tc := range map[string]struct {
+		opts     []Option
+		max      int
+		interval time.Duration
+	}{
+		"defaults":      {nil, DefaultMaxBatch, DefaultInterval},
+		"interval":      {[]Option{WithInterval(20 * time.Millisecond)}, DefaultMaxBatch, 20 * time.Millisecond},
+		"max batch":     {[]Option{WithMaxBatch(7)}, 7, DefaultInterval},
+		"both":          {[]Option{WithInterval(time.Minute), WithMaxBatch(1)}, 1, time.Minute},
+		"last one wins": {[]Option{WithMaxBatch(3), WithMaxBatch(9)}, 9, DefaultInterval},
+		"not positive":  {[]Option{WithInterval(0), WithInterval(-time.Second), WithMaxBatch(0), WithMaxBatch(-1)}, DefaultMaxBatch, DefaultInterval},
+	} {
+		w := New(context.Background(), 1, write, nil, tc.opts...)
+		if w.max != tc.max || w.interval != tc.interval {
+			t.Errorf("%s: max %d, interval %v; want %d, %v", name, w.max, w.interval, tc.max, tc.interval)
+		}
+		if err := w.Stop(); err != nil {
+			t.Errorf("%s: Stop: %v", name, err)
+		}
+	}
+}
+
+// With a short interval an item is written soon after it is sent, without
+// Stop and long before the default second.
+func TestBatchWriterInterval(t *testing.T) {
+	wrote := make(chan []int, 1)
+	w := New(context.Background(), 1, func(_ context.Context, batch []int) error {
+		wrote <- append([]int(nil), batch...)
+		return nil
+	}, nil, WithInterval(5*time.Millisecond))
+	defer func() { _ = w.Stop() }()
+	start := time.Now()
+	w.Send(1)
+	select {
+	case got := <-wrote:
+		if len(got) != 1 || got[0] != 1 {
+			t.Fatalf("wrote %v, want [1]", got)
+		}
+		if d := time.Since(start); d > DefaultInterval/2 {
+			t.Fatalf("the item was written after %v", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the item was not written")
 	}
 }
