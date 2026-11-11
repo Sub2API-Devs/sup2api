@@ -505,7 +505,7 @@ func jevNormalizePeak(t testing.TB, raw string, n int) uint64 {
 	return max(peak, held()) - base
 }
 
-// jevNormalizeMemoryBudget is what redrawing may take of the 512 MB the
+// jevNormalizeMemoryBudget is what redrawing may take of the memory (512 MB when this was sized, 1024 MB since 0.8.0) the
 // plugin process is limited to (CONTRACTS §72.2, soft limit about 460 MiB);
 // the rest is left for the request bodies and everything else the plugin
 // holds.

@@ -300,7 +300,7 @@ const (
 	// post jobs hold at most maxQueueBytes until they are done. That
 	// leaves about six of the largest requests in progress on the pre
 	// path and about four more in the post queue, each with a call of
-	// every LLM auditor of its stage, which can exceed the 512 MB of the
+	// every LLM auditor of its stage, which in the worst case can exceed the 1024 MB of the
 	// plugin (known limitation, DESIGN section 14; the hook then fails
 	// open).
 	llmImagesMaxBase64 = 20 << 20

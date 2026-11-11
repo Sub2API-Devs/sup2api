@@ -40,7 +40,7 @@ const (
 	// jevImageMaxSourcePixels bounds what is decoded for normalization: an
 	// image whose header claims more is skipped before its pixels are
 	// allocated. new-api takes 50 MP; the plugin process is limited to
-	// 512 MB (CONTRACTS §72.2).
+	// 1024 MB (CONTRACTS §72.2; sized for the 512 MB of 0.7.x and kept).
 	jevImageMaxSourcePixels = 12_000_000
 	// jevNormalizeMemory bounds the memory the decoders hold at once, by
 	// the estimate of each image's header (jevDecodeCost): an image that

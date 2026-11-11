@@ -163,7 +163,7 @@ const (
 	jsonStringOverhead    = 3
 	// cacheMaxBytes bounds the memory cache beside cache_entries (a cached
 	// hit is up to maxHitBytes of JSON, and larger decoded). The plugin
-	// process is limited to 512 MB (CONTRACTS §72.2), of which the requests
+	// process is limited to 1024 MB (CONTRACTS §72.2; the budget was sized for the 512 MB of 0.7.x and kept), of which the requests
 	// in progress take 128 MB by default (max_inflight_mb) and the image
 	// decoders 112 MB (jevNormalizeMemory); with 64 MB here about 200 MB are
 	// left for the queue, the garbage the collector has not yet freed and

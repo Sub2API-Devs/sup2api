@@ -541,7 +541,7 @@
     }
   },
   "resources": {
-    "memoryMB": 512,
+    "memoryMB": 1024,
     "cpu": 0.5,
     "maxThreads": 128,
     "maxOpenFiles": 512
