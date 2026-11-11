@@ -1,22 +1,40 @@
 import { computed, inject, provide, type InjectionKey, type ComputedRef, type Ref } from 'vue'
 
+/** What a page shows in the title bar of the shell it is in: its own title and description. */
+export interface PageHead {
+  /** The page header that put it there; a header only takes back its own. */
+  owner: number
+  title: string
+  description: string
+}
+
+/**
+ * The title bar of an app shell, as a page header sees it. `head` is where
+ * the page puts its title and description. `extra` and `actions` are
+ * selectors of elements beside that title: `extra` takes what a page shows
+ * with its title (a version, a status badge), `actions` takes the actions of
+ * a header with no filters, so a lone button does not take a row of its own.
+ */
+export interface PageHeadSink {
+  head: Ref<PageHead | null>
+  extra?: string | null
+  actions?: string | null
+}
+
 const TITLE_CONTEXT: InjectionKey<ComputedRef<string>> = Symbol('s-title-context')
-const DESCRIPTION_SINK: InjectionKey<Ref<string> | null> = Symbol('s-description-sink')
-const ACTIONS_TARGET: InjectionKey<string | null> = Symbol('s-actions-target')
+const PAGE_HEAD_SINK: InjectionKey<PageHeadSink | null> = Symbol('s-page-head-sink')
 const normalize = (title: string | undefined) => (title || '').trim().replace(/\s+/g, ' ')
 
 /**
  * Scope belongs to a visible navigation title, never to arbitrary DOM text.
- * `description` is where that title shows a page description (the app top
- * bar); a nested scope without one keeps page descriptions in the page.
- * `actions` is the selector of an element beside that title where a page
- * header with no filters puts its actions on wide screens, so a lone button
- * does not take a row of its own.
+ * An app shell passes `sink`, its title bar: a page header directly in the
+ * shell shows its title and description there, whatever the title says. A
+ * nested scope (a tab, a dialog) has no sink; a header in it stays in place
+ * and only leaves out a title that repeats the scope's.
  */
-export function provideTitleContext(title: () => string | undefined, description: Ref<string> | null = null, actions: string | null = null) {
+export function provideTitleContext(title: () => string | undefined, sink: PageHeadSink | null = null) {
   provide(TITLE_CONTEXT, computed(() => normalize(title())))
-  provide(DESCRIPTION_SINK, description)
-  provide(ACTIONS_TARGET, actions)
+  provide(PAGE_HEAD_SINK, sink)
 }
 
 /** Dialogs start an independent surface even though Teleport retains injection. */
@@ -29,12 +47,7 @@ export function useTitleVisibility(title: () => string | undefined, always: () =
   return computed(() => always() || !parent?.value || normalize(title()) !== parent.value)
 }
 
-/** The description slot of the enclosing title, if it has one. */
-export function useDescriptionSink() {
-  return inject(DESCRIPTION_SINK, null)
-}
-
-/** Where the enclosing title takes page actions, if anywhere. */
-export function useActionsTarget() {
-  return inject(ACTIONS_TARGET, null)
+/** The title bar of the enclosing shell, when the caller is directly in one. */
+export function usePageHeadSink() {
+  return inject(PAGE_HEAD_SINK, null)
 }

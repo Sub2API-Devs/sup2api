@@ -263,9 +263,6 @@ async function apply() {
 <template>
   <div>
     <SPageHeader :title="t('prices.sync.title', { name: sourceName })">
-      <template #before>
-        <SButton variant="ghost" size="sm" icon="arrow-left" @click="router.push('/prices/sources')">{{ t('common.back') }}</SButton>
-      </template>
       <template #title-extra>
         <SBadge v-if="source" tone="gray">{{ t(`prices.sources.kind.${source.kind}`) }}</SBadge>
       </template>
