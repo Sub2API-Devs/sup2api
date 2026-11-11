@@ -1003,3 +1003,77 @@ func TestNodeWithoutReviewBroadcastReplaysUntilExpiry(t *testing.T) {
 		}
 	}
 }
+
+// A status that is none of the three is no review: nothing is deleted from
+// the cache and nothing is published. (The route refuses it first; the sync
+// would otherwise write it as a deletion of the hits.)
+func TestReviewSyncRefusesAnUnknownStatus(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	openAIFlow(t, h, mod.srv.URL)
+	if r := mustHook(t, h, hookReqAs(3, "g", "MOD-HIT-sexual unknown status")); !denied(r) {
+		t.Fatalf("first = %+v", r)
+	}
+	rec := recordOf(t, h, "g")
+	if n := kvCount(t, fh, "h:"); n != 1 {
+		t.Fatalf("%d hit entries", n)
+	}
+	published := len(fh.Published())
+	synced := p.syncReviewed(context.Background(), []int64{rec.ID}, "bogus")
+	if hits := kvCount(t, fh, "h:"); synced != 0 || hits != 1 || len(fh.Published()) != published {
+		t.Fatalf("syncReviewed with an unknown status = %d, %d hit entries left, %d broadcasts", synced, hits, len(fh.Published())-published)
+	}
+}
+
+// A review is synced by whichever node gets the request - here one that did
+// not judge the hit: every record counts, also those whose hit never reached
+// the cache. The node that judged goes on replaying from memory until the
+// broadcast of the review reaches it, writes nothing back meanwhile, and
+// answers by the admin's pass afterwards.
+func TestReviewOnANodeThatDidNotJudge(t *testing.T) {
+	base, calls := newPairMod(t)
+	cfg := map[string]any{"mode": ModeEnforce}
+	kv := &kvFake{}
+	var clock atomic.Int64
+	_, h, fh := startDB(t, nil, cfg, withKV(kv), withClock(&clock))
+	openAIFlow(t, h, base)
+	// Two hits whose write failed (cached nowhere), then one that is stored.
+	kv.noWrite.Store(true)
+	for _, rid := range []string{"pair", "pair again"} {
+		if r := mustHook(t, h, rawReq(3, rid, protoAnthropic, pairWhole)); !denied(r) || replayed(r) {
+			t.Fatalf("%s = %+v", rid, r)
+		}
+	}
+	kv.noWrite.Store(false)
+	clock.Store(int64(time.Hour))
+	if r := mustHook(t, h, rawReq(3, "", protoAnthropic, pairWhole)); !denied(r) || replayed(r) {
+		t.Fatalf("third = %+v", r)
+	}
+	n := calls.Load()
+	_, h2 := secondNode(t, fh, cfg)
+	if r := mustHook(t, h2, rawReq(5, "", protoAnthropic, pairWhole)); !denied(r) || !replayed(r) || calls.Load() != n {
+		t.Fatalf("second node = %+v", r)
+	}
+	var ids []int64
+	for _, ev := range waitEvents(t, h, map[string]string{"result": "block", "replayed": "false"}, 3) {
+		ids = append(ids, ev.ID)
+	}
+	if _, synced := review(t, h2, ReviewFalsePositive, ids...); synced != 3 {
+		t.Fatalf("a review on the node that did not judge: cache_synced = %d, want 3", synced)
+	}
+	// Without the broadcast the judging node replays, from memory alone.
+	for _, ahead := range []time.Duration{3 * time.Hour, 4 * time.Hour} {
+		kv.calls.Store(0)
+		clock.Store(int64(ahead))
+		if r := mustHook(t, h, rawReq(3, "", protoAnthropic, pairWhole)); !denied(r) || !replayed(r) || calls.Load() != n || kv.calls.Load() != 0 {
+			t.Fatalf("%v after the hit, without the broadcast = %+v (%d upstream calls, %d KV calls)", ahead, r, calls.Load()-n, kv.calls.Load())
+		}
+		if c := kvCount(t, fh, "h:"); c != 0 {
+			t.Fatalf("the reviewed hit is back in the KV: %d entries", c)
+		}
+	}
+	deliverLastReview(t, fh, h)
+	if r := mustHook(t, h, rawReq(3, "", protoAnthropic, pairWhole)); r.GetNote() != cachedPass || calls.Load() != n || kvCount(t, fh, "h:") != 0 {
+		t.Fatalf("after the broadcast = %+v (%d upstream calls, %d hit entries)", r, calls.Load()-n, kvCount(t, fh, "h:"))
+	}
+}
