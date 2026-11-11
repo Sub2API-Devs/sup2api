@@ -63,9 +63,9 @@ const invalid = computed(() => numberFields.value.filter((f) => {
 }).map((f) => f.key))
 const groupModes = computed(() => (['replace', 'add', 'remove'] as GroupMode[]).map((m) => ({ value: m, label: t(`accounts.bulk.groupMode.${m}`) })))
 const anyOn = computed(() => Object.values(on).some(Boolean))
-/** Selected accounts whose type fixes the field (common controls); such a field is not applied. */
 /** Controls behind a field: the session limit is the cap and its window. */
 const controlsOf = (k: (typeof FIXABLE)[number]): CommonControlName[] => (k === 'spm_limit' ? ['spm_limit', 'spm_window_seconds'] : [k])
+/** Selected accounts whose type fixes the field (common controls); such a field is not applied. */
 const fixed = computed(() => Object.fromEntries(FIXABLE.map((k) => [k, fixedCount(props.accounts, props.typeOf, ...controlsOf(k))])) as Record<(typeof FIXABLE)[number], number>)
 watch(fixed, (f) => (Object.keys(f) as Array<keyof typeof f>).forEach((k) => f[k] && (on[k] = false)), { immediate: true })
 

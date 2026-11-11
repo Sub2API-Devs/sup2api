@@ -1,6 +1,7 @@
 package pluginsdktest
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -200,10 +201,20 @@ func (f *FakeHost) Log(_ context.Context, in *pluginv1.LogRequest) (*pluginv1.Lo
 
 func kvKey(ns, key string) string { return ns + "\x00" + key }
 
+// checkKVEntry applies the host's rules to the namespace and key of a single
+// KV call; the single calls answer a broken rule with the host's error, like
+// the batch calls (kvbatch.go).
+func checkKVEntry(ns, key string) error {
+	return cmp.Or(protocol.CheckKVNamespace(ns), protocol.CheckKVKey(key))
+}
+
 func (f *FakeHost) KVGet(_ context.Context, in *pluginv1.KVGetRequest) (*pluginv1.KVGetResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.kvCalls["KVGet"]++
+	if err := checkKVEntry(in.GetNamespace(), in.GetKey()); err != nil {
+		return nil, err
+	}
 	it, ok := f.kv[kvKey(in.GetNamespace(), in.GetKey())]
 	if !ok || (!it.expires.IsZero() && time.Now().After(it.expires)) {
 		return &pluginv1.KVGetResponse{}, nil
@@ -215,8 +226,8 @@ func (f *FakeHost) KVSet(_ context.Context, in *pluginv1.KVSetRequest) (*pluginv
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.kvCalls["KVSet"]++
-	if len(in.GetValue()) > protocol.KVMaxValueBytes {
-		return nil, status.Error(codes.InvalidArgument, "value too large")
+	if err := cmp.Or(checkKVEntry(in.GetNamespace(), in.GetKey()), protocol.CheckKVValue(len(in.GetValue())), protocol.CheckKVTTL(in.GetTtlSeconds())); err != nil {
+		return nil, err
 	}
 	it := kvItem{value: append([]byte(nil), in.GetValue()...)}
 	if in.GetTtlSeconds() > 0 {
@@ -228,9 +239,12 @@ func (f *FakeHost) KVSet(_ context.Context, in *pluginv1.KVSetRequest) (*pluginv
 
 func (f *FakeHost) KVDelete(_ context.Context, in *pluginv1.KVDeleteRequest) (*pluginv1.KVDeleteResponse, error) {
 	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.kvCalls["KVDelete"]++
+	if err := checkKVEntry(in.GetNamespace(), in.GetKey()); err != nil {
+		return nil, err
+	}
 	delete(f.kv, kvKey(in.GetNamespace(), in.GetKey()))
-	f.mu.Unlock()
 	return &pluginv1.KVDeleteResponse{}, nil
 }
 
@@ -238,6 +252,9 @@ func (f *FakeHost) KVList(_ context.Context, in *pluginv1.KVListRequest) (*plugi
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.kvCalls["KVList"]++
+	if err := protocol.CheckKVNamespace(in.GetNamespace()); err != nil {
+		return nil, err
+	}
 	var keys []string
 	nsPrefix := in.GetNamespace() + "\x00"
 	for k := range f.kv {

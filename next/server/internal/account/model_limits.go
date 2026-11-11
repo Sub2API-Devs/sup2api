@@ -67,20 +67,20 @@ func coreModelLimits(in []*pluginv1.ModelLimit) []core.ModelLimit {
 	return out
 }
 
-// keepSPMWindows gives each list a plugin sent the session window of the
-// list of current with the same models: plugins do not set windows
-// (CONTRACTS §71.4), so their patch keeps the administrator's.
-func keepSPMWindows(lists, current []core.ModelLimit) []core.ModelLimit {
+// keepSPMWindows gives each normalized list a plugin sent the session
+// window of the list of current with the same models: plugins do not set
+// windows (CONTRACTS §71.4), so their patch keeps the administrator's, and
+// a new list keeps the default.
+func keepSPMWindows(lists, current []core.ModelLimit) {
 	windows := make(map[string]int, len(current))
 	for i := range current {
 		windows[current[i].Key()] = current[i].SPMWindowSeconds
 	}
 	for i := range lists {
-		if lists[i].SPMWindowSeconds == 0 {
-			lists[i].SPMWindowSeconds = windows[lists[i].Key()]
+		if w, ok := windows[lists[i].Key()]; ok {
+			lists[i].SPMWindowSeconds = w
 		}
 	}
-	return lists
 }
 
 func sameModelLimit(a, b core.ModelLimit) bool {

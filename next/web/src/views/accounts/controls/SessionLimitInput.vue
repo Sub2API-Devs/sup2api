@@ -10,7 +10,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SInput, SSelect, type ControlSize } from '@sub2api/ui'
-import { joinWindow, splitWindow, unitRange, WINDOW_UNITS, type WindowParts } from '../spmWindow'
+import { joinWindow, splitWindow, unitRange, WINDOW_UNITS, type WindowParts, type WindowUnit } from '../spmWindow'
 
 const props = defineProps<{
   /** Text after the cap (e.g. "sessions"). */
@@ -95,7 +95,7 @@ const testId = (part: string) => (props.testid ? `${props.testid}${part}` : unde
         :aria-label="t('accounts.spmWindow.unit')"
         :class="size === 'sm' ? 'w-28' : 'w-32'"
         :data-testid="testId('-window-unit')"
-        @update:model-value="setWindow({ unit: $event as WindowParts['unit'] })"
+        @update:model-value="setWindow({ unit: $event as WindowUnit })"
       />
     </div>
   </div>

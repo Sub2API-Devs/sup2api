@@ -5,8 +5,8 @@
 // model limit cards, the bulk edit and the list share these helpers.
 
 export const SPM_WINDOW_DEFAULT = 60
-export const SPM_WINDOW_MIN = 60
-export const SPM_WINDOW_MAX = 86_400
+const SPM_WINDOW_MIN = 60
+const SPM_WINDOW_MAX = 86_400
 
 export type WindowUnit = 'second' | 'minute' | 'hour'
 /** Units offered by the window input; seconds only show a window already in them. */

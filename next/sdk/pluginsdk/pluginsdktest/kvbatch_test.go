@@ -271,3 +271,43 @@ func TestFakeHostSetKVBatchUnimplemented(t *testing.T) {
 		t.Fatalf("host calls = %v", got)
 	}
 }
+
+// The single calls of the fake answer a broken rule with the host's error
+// too (protocol.CheckKV*), and store nothing then. A ttl beyond
+// protocol.KVMaxTTLSeconds used to overflow and store an expired entry.
+func TestFakeHostKVSingleCallsFollowTheHostRules(t *testing.T) {
+	f, ctx := NewFakeHost(), context.Background()
+	set := func(ns, key string, value []byte, ttl int64) error {
+		_, err := f.KVSet(ctx, &pluginv1.KVSetRequest{Namespace: ns, Key: key, Value: value, TtlSeconds: ttl})
+		return err
+	}
+	for want, err := range map[string]error{
+		`namespace must be 1..64 bytes without ':*?[]\'`: set("a:b", "k", nil, 0),
+		"key must be 1..512 bytes":                       set("ns", "", nil, 0),
+		"value exceeds 65536 bytes":                      set("ns", "k", make([]byte, protocol.KVMaxValueBytes+1), 0),
+		"ttl_seconds must be 0..9223372036":              set("ns", "k", nil, protocol.KVMaxTTLSeconds+1),
+	} {
+		if got := status.Convert(err); got.Code() != codes.InvalidArgument || got.Message() != want {
+			t.Errorf("KVSet: %v %q, want InvalidArgument %q", got.Code(), got.Message(), want)
+		}
+	}
+	if len(f.kv) != 0 {
+		t.Fatalf("a refused KVSet stored %d entries", len(f.kv))
+	}
+	if _, err := f.KVGet(ctx, &pluginv1.KVGetRequest{Namespace: "", Key: "k"}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("KVGet, empty namespace: %v", err)
+	}
+	if _, err := f.KVDelete(ctx, &pluginv1.KVDeleteRequest{Namespace: "ns", Key: strings.Repeat("k", protocol.KVMaxKeyBytes+1)}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("KVDelete, long key: %v", err)
+	}
+	if _, err := f.KVList(ctx, &pluginv1.KVListRequest{Namespace: "*"}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("KVList, bad namespace: %v", err)
+	}
+	// The largest ttl is stored and does not expire at once.
+	if err := set("ns", "k", []byte("v"), protocol.KVMaxTTLSeconds); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := f.KVGet(ctx, &pluginv1.KVGetRequest{Namespace: "ns", Key: "k"}); err != nil || !r.GetFound() {
+		t.Fatalf("the largest ttl: found %v (%v)", r.GetFound(), err)
+	}
+}

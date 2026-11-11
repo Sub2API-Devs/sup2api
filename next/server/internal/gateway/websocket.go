@@ -601,7 +601,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 				cl.finishSticky(ctx, ref.ID, false)
 				return nil, last
 			}
-			cl.releaseSession(ctx, ref)
+			cl.leaveSession(ctx, ref)
 		default:
 			cl.finishSticky(ctx, ref.ID, false)
 			return nil, res.err

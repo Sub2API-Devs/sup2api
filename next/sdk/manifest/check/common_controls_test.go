@@ -11,7 +11,7 @@ import (
 // a core that knows them.
 func controlsManifest(controls map[string]manifest.AccountCommonControl) *manifest.Manifest {
 	m := minimal()
-	m.HostCompat = ">=" + CommonControlsFirstCore + " <0.2.0"
+	m.HostCompat = ">=" + SPMWindowFirstCore + " <0.2.0"
 	m.Capabilities = []manifest.Capability{{ID: manifest.CapPlatformAdapter}}
 	m.HostPermissions = []manifest.HostPermission{
 		{ID: "gateway.endpoint"}, {ID: "platform.register"},
@@ -48,8 +48,8 @@ func TestCommonControls(t *testing.T) {
 		{"every kind valid", map[string]manifest.AccountCommonControl{
 			"schedulable": d(`false`), "auto_disable": {Configurable: &off},
 			"priority": d(`1000000`), "weight": locked(`1`), "max_concurrency": d(`0`),
-			"rpm_limit": d(`10`), "tpm_limit": d(`1000000000000`), "spm_limit": d(`5`),
-			"model_limits":       d(`[{"models": ["video-2"], "max_concurrency": 2, "rpm_limit": 1}]`),
+			"rpm_limit": d(`10`), "tpm_limit": d(`1000000000000`), "spm_limit": d(`5`), "spm_window_seconds": locked(`86400`),
+			"model_limits":       d(`[{"models": ["video-2"], "max_concurrency": 2, "rpm_limit": 1}, {"models": ["video-3"], "spm_window_seconds": 3600}]`),
 			"usage_limit":        locked(`{"enabled": true, "amount": "12.5", "period": "week", "period_count": 2, "timezone": "Asia/Shanghai"}`),
 			"model_mapping":      d(`{"video-2": "video-2-260101"}`),
 			"param_override":     locked(`{"temperature": 0.5}`),
@@ -62,8 +62,10 @@ func TestCommonControls(t *testing.T) {
 		{"int type", map[string]manifest.AccountCommonControl{"priority": d(`1.5`)}, map[string]string{f + "priority.default": "invalid"}},
 		{"int range", map[string]manifest.AccountCommonControl{"weight": d(`0`), "rpm_limit": d(`10000001`)},
 			map[string]string{f + "weight.default": "invalid", f + "rpm_limit.default": "invalid"}},
-		{"model limits", map[string]manifest.AccountCommonControl{"model_limits": d(`[{"models": ["video-*"], "spm_limit": -1}, {"models": []}]`)},
-			map[string]string{f + "model_limits.default[0].models[0]": "invalid", f + "model_limits.default[0].spm_limit": "invalid", f + "model_limits.default[1].models": "required"}},
+		{"model limits", map[string]manifest.AccountCommonControl{"model_limits": d(`[{"models": ["video-*"], "spm_limit": -1, "spm_window_seconds": 59}, {"models": []}]`)},
+			map[string]string{f + "model_limits.default[0].models[0]": "invalid", f + "model_limits.default[0].spm_limit": "invalid",
+				f + "model_limits.default[0].spm_window_seconds": "invalid", f + "model_limits.default[1].models": "required"}},
+		{"session window range", map[string]manifest.AccountCommonControl{"spm_window_seconds": d(`86401`)}, map[string]string{f + "spm_window_seconds.default": "invalid"}},
 		{"model limits shape", map[string]manifest.AccountCommonControl{"model_limits": d(`[{"models": ["video-2"], "maxConcurrency": 1}]`)},
 			map[string]string{f + "model_limits.default": "invalid"}},
 		{"usage limit", map[string]manifest.AccountCommonControl{"usage_limit": d(`{"enabled": true, "period": "year", "anchor": "1999-01-01T00:00:00Z"}`)},
@@ -100,7 +102,7 @@ func TestCommonControlsDefaultLimitsConflict(t *testing.T) {
 	prio := 5
 	m := controlsManifest(map[string]manifest.AccountCommonControl{
 		"priority":     {Default: json.RawMessage(`5`)},
-		"model_limits": {Default: json.RawMessage(`[{"models": ["video-2"], "rpm_limit": 2}]`)},
+		"model_limits": {Default: json.RawMessage(`[{"models": ["video-2"], "rpm_limit": 2, "spm_window_seconds": 60}]`)},
 	})
 	m.AccountTypes[0].DefaultLimits = &manifest.AccountDefaultLimits{Priority: &prio,
 		ModelLimits: []manifest.DefaultModelLimit{{Models: []string{"video-2"}, RPMLimit: 2}}}
@@ -132,6 +134,27 @@ func TestCommonControlsCoreFloor(t *testing.T) {
 	} {
 		m := controlsManifest(tc.controls)
 		m.HostCompat = ">=0.1.261 <0.2.0" // the release before CommonControlsFirstCore
+		if got := controlCodes(m)["hostCompat"] == "below_feature_core"; got != tc.floor {
+			t.Errorf("%s: below_feature_core = %v, want %v", tc.name, got, tc.floor)
+		}
+	}
+}
+
+// Session windows (CONTRACTS §71.1) need SPMWindowFirstCore: the control,
+// and a model_limits default naming a window.
+func TestCommonControlsSPMWindowCoreFloor(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		controls map[string]manifest.AccountCommonControl
+		floor    bool
+	}{
+		{"other controls", map[string]manifest.AccountCommonControl{"spm_limit": {Default: json.RawMessage(`1`)},
+			"model_limits": {Default: json.RawMessage(`[{"models": ["video-2"], "spm_limit": 1}]`)}}, false},
+		{"window control", map[string]manifest.AccountCommonControl{"spm_window_seconds": {Default: json.RawMessage(`300`)}}, true},
+		{"list window", map[string]manifest.AccountCommonControl{"model_limits": {Default: json.RawMessage(`[{"models": ["video-2"], "spm_window_seconds": 300}]`)}}, true},
+	} {
+		m := controlsManifest(tc.controls)
+		m.HostCompat = ">=" + CommonControlsFirstCore + " <0.2.0"
 		if got := controlCodes(m)["hostCompat"] == "below_feature_core"; got != tc.floor {
 			t.Errorf("%s: below_feature_core = %v, want %v", tc.name, got, tc.floor)
 		}
