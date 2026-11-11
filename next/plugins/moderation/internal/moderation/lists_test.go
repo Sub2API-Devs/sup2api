@@ -117,7 +117,7 @@ func TestAllowlistIsObservedNotExempt(t *testing.T) {
 			level := map[string]string{ModeObserve: LevelObserve, ModeEnforce: LevelEnforce}[mode]
 			for i := 1; i <= 3; i++ {
 				rid := fmt.Sprintf("allow-%d", i)
-				if r := mustHook(t, h, hookReqAs(8, rid, fmt.Sprintf("MOD-HIT-sexual allowlisted %d", i))); denied(r) || r.GetNote() != notePrefix+"queued" {
+				if r := mustHook(t, h, hookReqAs(8, rid, fmt.Sprintf("MOD-HIT-sexual allowlisted %d", i))); denied(r) || r.GetNote() != queuedNote {
 					t.Fatalf("request %d of the allowlisted user = %+v", i, r)
 				}
 				ev := waitEvents(t, h, map[string]string{"request_id": rid, "result": "hit"}, 1)

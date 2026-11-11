@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 // LogEntry is one record received through HostService.Log.
@@ -211,17 +212,17 @@ func (f *FakeHost) KVGet(_ context.Context, in *pluginv1.KVGetRequest) (*pluginv
 }
 
 func (f *FakeHost) KVSet(_ context.Context, in *pluginv1.KVSetRequest) (*pluginv1.KVSetResponse, error) {
-	f.countKV("KVSet")
-	if len(in.GetValue()) > 64<<10 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.kvCalls["KVSet"]++
+	if len(in.GetValue()) > protocol.KVMaxValueBytes {
 		return nil, status.Error(codes.InvalidArgument, "value too large")
 	}
 	it := kvItem{value: append([]byte(nil), in.GetValue()...)}
 	if in.GetTtlSeconds() > 0 {
 		it.expires = time.Now().Add(time.Duration(in.GetTtlSeconds()) * time.Second)
 	}
-	f.mu.Lock()
 	f.kv[kvKey(in.GetNamespace(), in.GetKey())] = it
-	f.mu.Unlock()
 	return &pluginv1.KVSetResponse{}, nil
 }
 

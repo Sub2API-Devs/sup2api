@@ -109,11 +109,11 @@ type Runtime struct {
 	CacheHits     int64  `json:"cache_hits"`
 	CacheEntries  int    `json:"cache_entries"`
 	CacheBytes    int64  `json:"cache_bytes"` // estimated memory of the verdict cache entries
-	// KVErrors counts the batch calls of the host KV that failed (verdict
-	// cache lookups, writes and review syncs: one per call, kvFailed) and the
-	// failed reads and writes of the alert state, on this node since it
-	// started. A call that ended because its caller left or the node stopped
-	// is not among them.
+	// KVErrors counts the calls of the host KV that failed (kvFailed), on
+	// this node since it started: the batch calls of the verdict cache
+	// (lookups, writes and review syncs, one per call) and the reads and
+	// writes of the alert state. A call that ended because its caller left
+	// or the node stopped is not among them.
 	KVErrors int64 `json:"kv_errors"`
 	// KVWriting is the number of runs whose verdicts are on their way to the
 	// KV right now, waiting for their turn or writing (storeVerdicts). It is

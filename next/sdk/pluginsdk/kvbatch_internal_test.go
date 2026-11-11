@@ -332,7 +332,7 @@ func TestKVBatchOnAnOlderHostReturnsTheErrorOfASingleCall(t *testing.T) {
 		case "KVDelete":
 			err = KVDeleteMany(ctx, kv, "ns", keys)
 		}
-		if !errors.Is(err, boom) && status.Code(err) != codes.Unavailable {
+		if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "kv unavailable") {
 			t.Errorf("%s: got %v, want the error of the failed call", rpc, err)
 		}
 	}
@@ -353,8 +353,9 @@ func TestKVBatchOnAnOlderHostStopsAfterAFailedSingleCall(t *testing.T) {
 	if err := KVDeleteMany(context.Background(), s.kv(), "ns", keys); status.Code(err) != codes.Unavailable {
 		t.Fatalf("got %v, want Unavailable", err)
 	}
-	// Eight in flight when the first fails, and at most one more each for
-	// the workers that had not seen the failure yet; far from all 400.
+	// Eight are in flight when the first fails, and each other worker may
+	// start one more before it sees the failure: about 15 calls. The bound
+	// leaves room for a slow machine and is still far from all 400.
 	if got := s.count("KVDelete"); got > 64 {
 		t.Fatalf("%d single calls were sent after the first one failed", got)
 	}
@@ -378,7 +379,9 @@ func TestKVBatchOnAnOlderHostRunsAFewSingleCallsAtATime(t *testing.T) {
 
 // The rules are checked by the SDK before anything is sent, so they are the
 // same on a current and on an older host, and a rejected write writes
-// nothing on either.
+// nothing on either. The rules themselves are the host's
+// (protocol.CheckKVBatchKeys, protocol.CheckKVBatchItems; their tables are
+// in sdk/protocol): this test has one case of each kind.
 func TestKVBatchRulesAreTheSameOnEveryHost(t *testing.T) {
 	big := bytes.Repeat([]byte("v"), protocol.KVMaxValueBytes)
 	item := func(key string, value []byte, ttl time.Duration) []KVItem {
@@ -400,7 +403,7 @@ func TestKVBatchRulesAreTheSameOnEveryHost(t *testing.T) {
 				t.Errorf("older host %v, %s: got %v, want InvalidArgument", old, what, err)
 			}
 		}
-		for _, ns := range []string{"", "a:b", "*", strings.Repeat("n", protocol.KVMaxNamespaceBytes+1)} {
+		for _, ns := range []string{"", "a:b"} {
 			_, err := KVGetMany(ctx, kv, ns, []string{"k"})
 			check("read, namespace "+ns, err)
 			check("write, namespace "+ns, KVSetMany(ctx, kv, ns, item("k", nil, 0)))
@@ -417,8 +420,18 @@ func TestKVBatchRulesAreTheSameOnEveryHost(t *testing.T) {
 		check("write, too many items", KVSetMany(ctx, kv, "ns", make([]KVItem, protocol.KVBatchMaxKeys+1)))
 		check("delete, too many keys", KVDeleteMany(ctx, kv, "ns", manyKeys(protocol.KVBatchMaxKeys+1)))
 		check("write, value too large", KVSetMany(ctx, kv, "ns", item("k", append(big, 'x'), 0)))
-		check("write, negative ttl", KVSetMany(ctx, kv, "ns", item("k", nil, -time.Second)))
+		// A negative TTL of under a second must not round to 0, no expiry.
+		for _, ttl := range []time.Duration{-time.Nanosecond, -time.Millisecond, -999 * time.Millisecond, -time.Second, -time.Hour} {
+			check(fmt.Sprintf("write, ttl %v", ttl), KVSetMany(ctx, kv, "ns", item("k", nil, ttl)))
+		}
 		check("write, payload too large", KVSetMany(ctx, kv, "ns", fill(protocol.KVBatchMaxBytes/protocol.KVMaxValueBytes)))
+		// The error is the host's own: it names the first item that breaks a
+		// rule, with the host's words.
+		err = KVSetMany(ctx, kv, "ns", []KVItem{{Key: "first"}, {Key: "big", Value: append(big, 'x')}, {Key: ""}})
+		if got, want := status.Convert(err).Message(), "items[1]: value exceeds 65536 bytes"; got != want {
+			t.Errorf("older host %v, two invalid items: %q, want %q", old, got, want)
+		}
+		check("write, two invalid items", err)
 		if s.batchCalls()+s.singleCalls() != 0 || len(s.data) != 0 {
 			t.Fatalf("older host %v: a rejected batch was sent: %v, %d entries written", old, s.calls, len(s.data))
 		}
@@ -442,6 +455,30 @@ func TestKVBatchRulesAreTheSameOnEveryHost(t *testing.T) {
 		}
 		if _, err := KVGetMany(ctx, kv, "ns", manyKeys(n)); status.Code(err) != codes.ResourceExhausted {
 			t.Errorf("older host: read above the payload limit: %v, want ResourceExhausted", err)
+		}
+	}
+}
+
+// KV.Set takes the ttl of the batch write: a negative one is refused before
+// anything is sent, however small. Whole seconds used to turn -1 ns ..
+// -999 ms into 0, no expiry.
+func TestKVSetRefusesANegativeTTL(t *testing.T) {
+	s := newKVStub(false)
+	kv, ctx := s.kv(), context.Background()
+	for _, ttl := range []time.Duration{-time.Nanosecond, -time.Millisecond, -999 * time.Millisecond, -time.Second, -time.Hour} {
+		err := kv.Set(ctx, "ns", "k", []byte("v"), ttl)
+		if got, want := status.Convert(err).Message(), "ttl_seconds must be 0..9223372036"; status.Code(err) != codes.InvalidArgument || got != want {
+			t.Errorf("ttl %v: %v, want InvalidArgument %q", ttl, err, want)
+		}
+	}
+	if s.singleCalls() != 0 || len(s.data) != 0 {
+		t.Fatalf("a refused Set was sent: %v, %d entries written", s.calls, len(s.data))
+	}
+	// What Set sends is unchanged: whole seconds, 0 for no expiry and for a
+	// ttl under a second.
+	for ttl, want := range map[time.Duration]int64{0: 0, 500 * time.Millisecond: 0, 1500 * time.Millisecond: 1, time.Hour: 3600} {
+		if err := kv.Set(ctx, "ns", "k", []byte("v"), ttl); err != nil || s.ttl["ns/k"] != want {
+			t.Errorf("ttl %v: sent ttl_seconds %d (%v), want %d", ttl, s.ttl["ns/k"], err, want)
 		}
 	}
 }

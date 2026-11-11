@@ -890,7 +890,6 @@ func TestLLMReviewerSeesTheImage(t *testing.T) {
 	if snap := p.snap.Load(); snap.mixedImages(snap.flows[flow]) || !snap.sendsImages(snap.flows[flow]) {
 		t.Fatal("a flow of an OpenAI auditor and an LLM auditor with images on is mixed, or sends no images")
 	}
-	const cachedPass = notePrefix + "pass (cached)"
 	picture := func(n int) (data string, part map[string]any) {
 		data = encodePNG(t, filled(60, 40+n, red))
 		return data, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": data}}
@@ -1064,7 +1063,6 @@ func TestLLMReviewerSeesTheImage(t *testing.T) {
 // pass the request on its text, and with the text cached the hit of the
 // first stage stood: the same request was let through and then refused.)
 func TestLLMReviewerSeesAWrappedImage(t *testing.T) {
-	const cachedPass = notePrefix + "pass (cached)"
 	const caption = "a harmless caption"
 	for _, tc := range []struct {
 		name string

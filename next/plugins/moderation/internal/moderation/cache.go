@@ -17,128 +17,74 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
-// Verdict cache (CONTRACTS §72.4, §72.5 step 8; 0.8.0, new-api
-// verdict_cache.go): what a flow decided about content is remembered for
-// verdict_cache_days, in the host KV shared by all nodes and, as a cache of
-// that, in an in-memory LRU of cache_entries (and at most cacheMaxBytes).
+// Verdict cache (CONTRACTS §72.4, §72.5 step 8; new-api verdict_cache.go):
+// what a flow decided about content is remembered for verdict_cache_days, in
+// the host KV shared by all nodes and, as a cache of that, in an in-memory
+// LRU of cache_entries (and at most cacheMaxBytes).
 //
-//   - A segment (text piece or inline image) that passed in every chunk
-//     holding it is stored as a pass and not sent again.
-//   - A chunk that hit is stored as a hit of the set of segments it sent,
-//     with the trace of its run. A later request holding the whole set is
-//     decided by that hit without calling upstream (replay); a request with
-//     only part of the set is moderated again.
+// What is stored. A segment (text piece or inline image) that passed in
+// every chunk holding it is stored as a pass and not sent again. A chunk
+// that hit is stored as a hit of the set of segments it sent, with the trace
+// of its run: a later request holding the whole set is decided by that hit
+// without calling upstream (replay), a request with only part of the set is
+// moderated again. A segment key holds both, the time of a pass and pointers
+// to the newest hits the segment is part of (segValue). A hit whose whole
+// set is in the request decides before any pass is looked at: otherwise the
+// parts of a hit set, passing one by one in other requests, would turn the
+// hit into a pass. Runs that errored, passes with a skipped stage and chunks
+// with URL images are never stored.
 //
-// A segment key holds both: the time a pass was written and pointers to the
-// newest maxSegHits hits the segment is part of (segValue). A pass never
-// removes a pointer, and a hit whose whole set is in the request decides
-// before any pass is looked at - otherwise the parts of a hit set, passing
-// one by one in other requests, would turn the hit into a pass.
+// Keys carry a scope (snapshot.scopeOf): the clear counter, the flow and the
+// fingerprint of everything that decides the flow's verdicts. Clearing the
+// cache or changing the flow's auditors makes the old entries unreachable;
+// they expire on their own.
 //
-// Keys carry a scope: the clear counter (config_state.cache_epoch), the flow
-// and the fingerprint of everything that decides the flow's verdicts
-// (snapshot.go fingerprint), so clearing the cache or changing the flow's
-// auditors makes the old entries unreachable; they expire on their own.
-// Runs that errored, passes with a skipped stage and chunks with URL images
-// are never stored. KV errors are never fatal: the content is moderated
-// again.
+// Memory is a cache of the KV and nothing more. A value comes into memory
+// when a lookup read its key from the KV or a run on this node wrote it
+// there, and is then used as it is: a lookup asks the KV only for what
+// memory does not hold (lookupVerdicts). It leaves memory when it expires
+// (the cache TTL after its write), when the LRU drops it, when a
+// verdict.changed broadcast names its key, when the cache is cleared and
+// with a restart. The plugin sets no time limit and no cap on its use of the
+// KV: a call waits as long as its caller does. A KV error is never fatal:
+// the content is moderated again.
 //
-// The KV first, then memory (0.8.1). Memory is a cache of the KV and nothing
-// more: a segment value (and likewise a hit entry) comes into memory when a
-// lookup reads its key from the KV, or when a run on this node has written
-// it to the KV - then as the value the KV holds from that write on - and is
-// used as it is: a lookup that finds a value in memory does not ask the KV
-// for it. It leaves memory when its parts have expired (each the cache TTL
-// after its own write), when the LRU drops it (cache_entries,
-// cacheMaxBytes), when a verdict.changed broadcast names its key, when the
-// cache is cleared (the clear counter is part of every key) and with a
-// restart. Nothing reads it again in between. Nothing is in memory that was
-// not read from the KV or written to it: when the KV does not take the
-// verdicts of a run, they are cached nowhere and the content is moderated
-// again.
-//
-// Reading (lookupVerdicts): every segment of the request that is not in
-// memory is read from the KV, and then every hit entry a live pointer names
-// that is not in memory - all of them, in batch calls (kvRead: one call for
-// up to kvSegUnit segment keys, one for up to kvHitUnit hit entries). The
-// plugin sets no time limit and no cap: a lookup waits for the KV as long as
-// its caller does - the hook call, which the core limits and a client that
-// left ends; for a queued job the plugin itself, until it stops.
-//
-// Writing (storeVerdicts, writeVerdicts): after the hook has answered. The
-// segment keys of the run are read from the KV, its passes and pointers are
-// merged into what is there, the hit entries are written and then the
-// segment keys; when all of that worked, the values that were written go
-// into memory. Until then the cache does not know the verdicts: the same
-// content sent again meanwhile is moderated again, and a hit is refused
-// again and counted as a new violation, not as a replay. That time is the
-// write itself (two or three calls of the KV) while the KV answers. While it
-// does not, the writes wait - one in its call, the others for their turn at
-// the keys (kvLock) - and nothing bounds how many: every run adds one
-// (kv_writing in /status and the health metrics), each keeps its verdicts in
-// memory until its turn, and nothing new is cached on the node until the KV
-// answers again.
+// A run writes its verdicts in the background, to the KV first and then to
+// memory (storeVerdicts, writeRun). Until that write is done the cache does
+// not know them: the same content sent again meanwhile is moderated again,
+// and a hit is refused by a run of its own and counted as a new violation,
+// not as a replay. Nothing bounds the writes that wait for a KV that does
+// not answer (kv_writing).
 //
 // The KV has no compare-and-set: a segment key is changed by reading it,
-// editing and writing it back. Within a node the changes take turns per key
-// (kvLock), from the read to the value in memory. So of two runs of a node
-// that change one key neither loses its edit, memory gets the values in the
-// order the KV got them, and a review and a run never change a key at the
-// same time. Between nodes two writers of one key within the time of a write
-// can lose one of the edits. A lost pass costs an audit. A lost pointer
-// costs a replay, and the hit stays reachable through its other segments -
-// unless the same window loses the pointers of all of them (a node writes
-// passes of A and of B while another stores the hit of {A, B}): then the KV
-// has the passes only, the set is answered as passed on every node but the
-// one that stored the hit, which replays it from memory, until the values
-// expire. That takes content whose parts pass one by one, which the cache
-// cannot tell from the whole anyway before it saw the whole.
+// editing and writing it back. On a node the changes of a key take turns
+// (kvLock). Between nodes two writers of one key at the same time can lose
+// one of the edits. A lost pass costs an audit. A lost pointer costs a
+// replay, and the hit stays reachable through its other segments - unless
+// the same window loses the pointers of all of them (a node writes passes of
+// A and of B while another stores the hit of {A, B}): then the set passes on
+// every node but the one that stored the hit, until the values expire.
 //
-// So a node can hold a segment value the KV no longer holds like that: one
-// that lacks a pointer another node wrote since (the passes of A and B, while
-// the hit of {A, B} is in the KV), or one that still has what a review on
-// another node removed (the pointer to a hit reviewed as a false positive).
-// The other nodes learn of both through the verdict.changed broadcast:
+// So a node can hold a value the KV no longer holds like that. The other
+// nodes are told by the verdict.changed broadcast (onVerdictChanged): a node
+// that stored a hit publishes the segment keys it pointed to it, a node that
+// synced a review the keys the review changed. A broadcast can be lost: the
+// node it did not reach answers by its value in memory until that expires,
+// the LRU drops it or the cache is cleared.
 //
-//   - a node that stored a hit in the KV publishes the segment keys it
-//     pointed to the hit ("stored": true); the nodes that get it drop those
-//     keys from memory and read them from the KV the next time;
-//   - a node that synced a review publishes the keys the review changed; the
-//     nodes that get it drop them and tombstone them for tombstoneTTL
-//     (writeVerdicts, syncReviewed, onVerdictChanged).
-//
-// The change counts on a node from the delivery of the broadcast on, which
-// is at once. A broadcast can be lost: the node it did not reach keeps
-// answering by its value in memory until that value expires or the LRU drops
-// it - up to the cache TTL - or until the cache is cleared. The node that
-// stored the hit or synced the review is never stale: the hit comes into its
-// memory with the pointers the KV got - or, when a review on any node came
-// between and the values may not go into memory (lru.stale), the keys leave
-// memory and are read from the KV the next time (writeRun) - and a review
-// tombstones its keys before it writes them.
-//
-// A pointer whose hit entry the KV answered "not there" for is removed from
-// the values in memory of the segments of that lookup - that pointer, not a
-// newer one to a hit of the same set (lookup.hits; the KV is not written on
-// the request path): otherwise a lookup of memory alone would find the entry
-// unreadable every time and queue the request until the pointer expires.
-//
-// A pointer whose hit entry cannot be read - a KV error, a caller that left,
-// or under a lookup of memory alone an entry that is not in memory - is not
-// a stale pointer: its segment is unknown for that lookup, whatever pass it
-// has (lookup.hits, decide). Only an entry the KV answered "not there" for
-// leaves the segment to its pass.
+// A review is not undone by what was read or judged before it: the keys it
+// changed are tombstoned on every node that knows of it, and a reading tells
+// a read or a run whether a review may have come since it began
+// (lru.reviewed).
 
-// kvNamespace holds the verdict cache. The namespace of the pass cache
-// before 0.8.0, "pass", is no longer used by the cache.
+// kvNamespace holds the verdict cache (the flow alert state has its own,
+// alertNamespace).
 const kvNamespace = "verdict"
 
 const (
@@ -153,6 +99,9 @@ const (
 	// many always fit into the answer.
 	kvSegUnit = protocol.KVBatchMaxKeys
 	kvHitUnit = protocol.KVBatchMaxBytes / protocol.KVMaxValueBytes
+	// kvLockStripes is the number of locks the cache keys share for their
+	// changes in the KV (kvLock).
+	kvLockStripes = 64
 	// maxHitBytes: a cached hit larger than this is not stored (the KV takes
 	// values up to 64 KiB).
 	maxHitBytes = 60 << 10
@@ -167,13 +116,12 @@ const (
 	verdictBroadcastBytes = 48 << 10
 	jsonStringOverhead    = 3
 	// cacheMaxBytes bounds the memory cache beside cache_entries (a cached
-	// hit is up to maxHitBytes of JSON, and larger decoded). The plugin
-	// process is limited to 1024 MB (CONTRACTS §72.2; the budget was sized for the 512 MB of 0.7.x and kept), of which the requests
-	// in progress take 128 MB by default (max_inflight_mb) and the image
-	// decoders 112 MB (jevNormalizeMemory); with 64 MB here about 200 MB are
-	// left for the queue, the garbage the collector has not yet freed and
-	// everything else. At about 250 bytes for a segment entry that is some
-	// 250,000 entries: a larger cache_entries is bounded by the bytes.
+	// hit is up to maxHitBytes of JSON, and larger decoded): 64 MB of the
+	// 1024 MB the plugin process may use (CONTRACTS §72.2), beside the
+	// requests in progress (128 MB by default, max_inflight_mb) and the
+	// image decoders (112 MB, jevNormalizeMemory). At about 250 bytes for a
+	// segment entry that is some 250,000 entries: a larger cache_entries is
+	// bounded by the bytes.
 	cacheMaxBytes = 64 << 20
 	// cacheEntryOverhead is the memory of an entry beside its key and value
 	// (list element, map slot, headers), roughly; tombstoneOverhead that of
@@ -183,12 +131,8 @@ const (
 	tombstoneOverhead  = 64
 	hitDecodedFactor   = 2
 	// tombstoneTTL: how long after a review a key it changed is neither put
-	// into memory nor written by a run (lru.kill). A run that judged before
-	// the review and comes to write within this time does not bring back
-	// what the review removed. A run or a lookup that takes longer is kept
-	// from it by the reading it began with (lru.stale): tombstones set since
-	// then, and that reading older than this, and it touches no key at all -
-	// the tombstone of its key may have come and gone.
+	// into memory nor written by a run (lru.tombstone). A read or a run that
+	// takes longer is held back by its reading (lru.lapsed).
 	tombstoneTTL = 4 * time.Second
 )
 
@@ -203,9 +147,9 @@ const (
 //
 //	p1762770000 h9f2c…@1762770000 h41aa…@1762683600
 //
-// Tokens that do not read are ignored. That includes the values of the first
-// builds of 0.8.0, "p" and "h<hit id>" without a time: the segment is
-// unknown and moderated again.
+// Tokens that do not read are ignored, and the segment is unknown and
+// moderated again. That includes "p" and "h<hit id>" without a time, which
+// early builds of 0.8.0 wrote.
 type segValue struct {
 	pass int64
 	hits []hitRef
@@ -280,10 +224,6 @@ func (v *segValue) addHit(id string, at int64) {
 	}
 }
 
-func (v *segValue) dropHit(id string) {
-	v.hits = slices.DeleteFunc(v.hits, func(h hitRef) bool { return h.id == id })
-}
-
 // merge adds what o holds.
 func (v *segValue) merge(o segValue) {
 	v.pass = max(v.pass, o.pass)
@@ -317,7 +257,11 @@ func dropPass(v *segValue) { v.pass = 0 }
 func pointTo(id string, at int64) segEdit { return func(v *segValue) { v.addHit(id, at) } }
 
 // unpoint removes every pointer to the hit id (a review).
-func unpoint(id string) segEdit { return func(v *segValue) { v.dropHit(id) } }
+func unpoint(id string) segEdit {
+	return func(v *segValue) {
+		v.hits = slices.DeleteFunc(v.hits, func(h hitRef) bool { return h.id == id })
+	}
+}
 
 // unpointRef removes the pointer ref and no other: a pointer to the same hit
 // that was written later stays.
@@ -344,6 +288,21 @@ func (o *segOps) add(key string, edits ...segEdit) {
 	o.edits[key] = append(o.edits[key], edits...)
 }
 
+// apply makes the edits of key on raw, the value the KV holds for it, and
+// returns what is written back: the key lives as long as its newest part.
+// left is false when nothing is left of the value.
+func (o *segOps) apply(key string, raw []byte, now time.Time, ttl time.Duration) (item pluginsdk.KVItem, left bool) {
+	v := parseSeg(raw)
+	for _, edit := range o.edits[key] {
+		edit(&v)
+	}
+	v.prune(now, ttl)
+	if v.empty() {
+		return item, false
+	}
+	return pluginsdk.KVItem{Key: key, Value: v.encode(), TTL: kvTTL(v.expires(ttl), now)}, true
+}
+
 // ---------------------------------------------------------------- memory
 
 // cacheEntry is a segment key with its value (val, the form the KV holds) or
@@ -367,13 +326,11 @@ func tombstoneSize(key string) int64 { return int64(len(key) + tombstoneOverhead
 // estimate of entrySize, the tombstones included), the least recently used
 // dropped first.
 //
-// dead holds the tombstones of the keys a review changed (kill): until its
-// time nothing is stored under the key, so a lookup that read the old value
-// from the KV, or a run that finished meanwhile, cannot bring it back. The
-// zero time is a tombstone without an end: the review that set it is still
-// writing, and gives it its time when it is done. A tombstone is dropped
-// once its time is over (reap); deadNext is the first time one is. kills
-// counts the calls of kill (stale).
+// tombs holds the tombstones of the keys a review changed, each with the
+// time it ends: until then nothing is stored under the key (reviewed). The
+// zero time is a tombstone without an end (tombstoneOpen). A tombstone is
+// dropped once its time is over (reap); tombNext is the first time one is.
+// tombSets counts the times tombstones were set (lapsed).
 type lru struct {
 	mu       sync.Mutex
 	max      int
@@ -381,18 +338,19 @@ type lru struct {
 	bytes    int64
 	ll       *list.List
 	items    map[string]*list.Element
-	dead     map[string]time.Time
-	deadNext time.Time
-	kills    uint64
+	tombs    map[string]time.Time
+	tombNext time.Time
+	tombSets uint64
 	gen      uint64 // which memory cache this is (lruGen); never changes
 }
 
-// lruGen numbers the memory caches of the process: a reading names its cache
-// by this number, not by a pointer that would keep a replaced cache alive.
+// lruGen numbers the memory caches of the process. A reading names its cache
+// by this number: a pointer would keep a replaced cache alive for as long as
+// a write waits with the reading.
 var lruGen atomic.Uint64
 
 func newLRU(max int) *lru {
-	return &lru{max: max, maxBytes: cacheMaxBytes, ll: list.New(), items: make(map[string]*list.Element, 256), dead: map[string]time.Time{}, gen: lruGen.Add(1)}
+	return &lru{max: max, maxBytes: cacheMaxBytes, ll: list.New(), items: make(map[string]*list.Element, 256), tombs: map[string]time.Time{}, gen: lruGen.Add(1)}
 }
 
 // entry returns the live entry of key, the most recently used now. c.mu is
@@ -411,8 +369,8 @@ func (c *lru) entry(key string, now time.Time) *cacheEntry {
 	return e
 }
 
-// set stores an entry and drops the least recently used ones beyond the
-// limits (the new one too when it alone is beyond them). c.mu is held.
+// set stores an entry (and drops it again when it alone is beyond the
+// limits, trim). c.mu is held.
 func (c *lru) set(e *cacheEntry) {
 	if el, ok := c.items[e.key]; ok {
 		c.bytes += e.size - el.Value.(*cacheEntry).size
@@ -422,6 +380,11 @@ func (c *lru) set(e *cacheEntry) {
 		c.items[e.key] = c.ll.PushFront(e)
 		c.bytes += e.size
 	}
+	c.trim()
+}
+
+// trim drops the least recently used entries beyond the limits. c.mu is held.
+func (c *lru) trim() {
 	for c.ll.Len() > 0 && (c.ll.Len() > c.max || c.bytes > c.maxBytes) {
 		c.remove(c.ll.Back())
 	}
@@ -443,43 +406,80 @@ func (c *lru) drop(key string) {
 // reap drops the tombstones whose time is over. It costs nothing until the
 // first of them is due. c.mu is held.
 func (c *lru) reap(now time.Time) {
-	if c.deadNext.IsZero() || now.Before(c.deadNext) {
+	if c.tombNext.IsZero() || now.Before(c.tombNext) {
 		return
 	}
-	c.deadNext = time.Time{}
-	for k, until := range c.dead {
+	c.tombNext = time.Time{}
+	for k, until := range c.tombs {
 		switch {
-		case until.IsZero(): // its review is still writing
+		case until.IsZero(): // without an end
 		case !now.Before(until):
-			delete(c.dead, k)
+			delete(c.tombs, k)
 			c.bytes -= tombstoneSize(k)
-		case c.deadNext.IsZero() || until.Before(c.deadNext):
-			c.deadNext = until
+		case c.tombNext.IsZero() || until.Before(c.tombNext):
+			c.tombNext = until
 		}
 	}
 }
 
-// isDead reports whether key is tombstoned. c.mu is held.
-func (c *lru) isDead(key string, now time.Time) bool {
+// hasTombstone reports whether key is tombstoned. c.mu is held.
+func (c *lru) hasTombstone(key string, now time.Time) bool {
 	c.reap(now)
-	_, dead := c.dead[key]
-	return dead
+	_, set := c.tombs[key]
+	return set
 }
 
-// reading is taken before keys are read from the KV whose values go into
-// memory afterwards, and when a request asks the cache whose run may store
-// verdicts later (lru.reading): the cache it was taken from, the tombstones
-// set there so far and the time.
+// setTombstones drops the keys and tombstones them until the given time,
+// which is not over, or (the zero time) without an end. c.mu is held.
+func (c *lru) setTombstones(keys []string, until, now time.Time) {
+	c.reap(now)
+	c.tombSets++
+	for _, k := range keys {
+		c.drop(k)
+		if _, set := c.tombs[k]; !set {
+			c.bytes += tombstoneSize(k)
+		}
+		c.tombs[k] = until
+	}
+	// The earliest time of all: a key tombstoned again may have moved later,
+	// then reap looks once too early and finds the next.
+	if !until.IsZero() && (c.tombNext.IsZero() || until.Before(c.tombNext)) {
+		c.tombNext = until
+	}
+	c.trim()
+}
+
+// tombstone drops the keys and tombstones them for tombstoneTTL: a review
+// changed them a moment ago.
+func (c *lru) tombstone(keys []string, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setTombstones(keys, now.Add(tombstoneTTL), now)
+}
+
+// tombstoneOpen drops the keys and tombstones them without an end: a review
+// on this node is about to change them, and calls tombstone when it is done.
+func (c *lru) tombstoneOpen(keys []string, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setTombstones(keys, time.Time{}, now)
+}
+
+// reading is taken before something is read that is stored later: by a
+// lookup before it reads the KV (the run of its request stores verdicts with
+// the same reading), and by the write of a run before its own read. It holds
+// the cache it was taken from, the times tombstones were set there so far and
+// the time.
 type reading struct {
-	gen   uint64 // the cache (lru.gen)
-	kills uint64
-	at    time.Time
+	gen      uint64 // the cache (lru.gen)
+	tombSets uint64
+	at       time.Time
 }
 
 func (c *lru) reading(now time.Time) reading {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return reading{gen: c.gen, kills: c.kills, at: now}
+	return reading{gen: c.gen, tombSets: c.tombSets, at: now}
 }
 
 // lapsed reports whether r can no longer tell which keys a review changed
@@ -489,36 +489,34 @@ func (c *lru) reading(now time.Time) reading {
 // tombstone lasts, so the tombstone of any key may have come and gone. c.mu
 // is held.
 func (c *lru) lapsed(r reading, now time.Time) bool {
-	return r.gen != c.gen || (c.kills != r.kills && !now.Before(r.at.Add(tombstoneTTL)))
+	return r.gen != c.gen || (c.tombSets != r.tombSets && !now.Before(r.at.Add(tombstoneTTL)))
 }
 
-// reviewedSince reports whether a review may have changed key since r was
-// taken (stale): the run of a request that asked the cache at r leaves the
-// key alone then. With "" for key it says whether that holds for every key
-// (lapsed): the run writes nothing.
+// reviewed reports whether a review may have changed key since r was taken:
+// the key is tombstoned, or r has lapsed. What was read or judged under r is
+// not stored under the key then, so it never brings back what a review
+// changed, however long it took; the price is that a read or a run that
+// outlasts a tombstone, which is rare, stores nothing. c.mu is held.
+func (c *lru) reviewed(key string, r reading, now time.Time) bool {
+	return c.hasTombstone(key, now) || c.lapsed(r, now)
+}
+
+// lapsedSince is lapsed for a caller that does not hold c.mu.
+func (c *lru) lapsedSince(r reading, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lapsed(r, now)
+}
+
+// reviewedSince is reviewed for a caller that does not hold c.mu.
 func (c *lru) reviewedSince(key string, r reading, now time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if key == "" {
-		return c.lapsed(r, now)
-	}
-	return c.stale(key, r, now)
+	return c.reviewed(key, r, now)
 }
 
-// stale reports whether what was read from the KV under r must stay out of
-// memory under key: a review may have changed the key after the read. That is
-// so while the key is tombstoned. It is also so when keys were tombstoned
-// since the read began and the read began longer ago than a tombstone lasts:
-// the tombstone of this key may have come and gone meanwhile (lapsed). So a
-// read never brings back what a review changed, however long the KV took to
-// answer; the price is that such a read, which is rare, fills nothing.
-// c.mu is held.
-func (c *lru) stale(key string, r reading, now time.Time) bool {
-	return c.isDead(key, now) || c.lapsed(r, now)
-}
-
-// seg returns the value of a segment key.
-func (c *lru) seg(key string, now time.Time) (v segValue, ok bool) {
+// getSeg returns the value of a segment key.
+func (c *lru) getSeg(key string, now time.Time) (v segValue, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if e := c.entry(key, now); e != nil && e.hit == nil {
@@ -539,21 +537,21 @@ func (c *lru) getHit(key string, now time.Time) *storedHit {
 
 // putHit stores a decoded hit whose JSON has bodyLen bytes, as the KV holds
 // it since the read r began (read there, or written there by a run on this
-// node); false when it must stay out (stale).
-func (c *lru) putHit(key string, hit *storedHit, bodyLen int, expires, now time.Time, r reading) bool {
+// node); false when it must stay out (reviewed).
+func (c *lru) putHit(key string, hit *storedHit, bodyLen int, now time.Time, ttl time.Duration, r reading) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.stale(key, r, now) {
+	if c.reviewed(key, r, now) {
 		return false
 	}
-	c.set(&cacheEntry{key: key, hit: hit, size: entrySize(key, hitDecodedFactor*bodyLen), expires: expires})
+	c.set(&cacheEntry{key: key, hit: hit, size: entrySize(key, hitDecodedFactor*bodyLen), expires: hit.expires(ttl)})
 	return true
 }
 
 // update applies edit to the value of a segment key (empty when there is
 // none) and stores the result, or removes the key when nothing is left. It
 // returns the entry as stored; nil when nothing is left. c.mu is held.
-func (c *lru) update(key string, now time.Time, ttl time.Duration, edit segEdit) *cacheEntry {
+func (c *lru) update(key string, edit segEdit, now time.Time, ttl time.Duration) *cacheEntry {
 	var v segValue
 	if e := c.entry(key, now); e != nil {
 		v = parseSeg(e.val)
@@ -570,45 +568,44 @@ func (c *lru) update(key string, now time.Time, ttl time.Duration, edit segEdit)
 	return e
 }
 
-// editSeg applies edit to the value memory holds for a segment key (a
-// pointer a lookup found stale is taken out). Nothing happens while the key
-// is tombstoned.
-func (c *lru) editSeg(key string, now time.Time, ttl time.Duration, edit segEdit) {
+// editSeg applies edit to the value memory holds for a segment key. Nothing
+// happens while the key is tombstoned.
+func (c *lru) editSeg(key string, edit segEdit, now time.Time, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.isDead(key, now) {
-		c.update(key, now, ttl, edit)
+	if !c.hasTombstone(key, now) {
+		c.update(key, edit, now, ttl)
 	}
 }
 
 // putSeg stores the value a run on this node has written to the KV for a
 // segment key (val, read under r and merged), in place of what memory held:
 // memory has what the KV has. Nothing happens, and it returns false, when it
-// must stay out (stale).
-func (c *lru) putSeg(key string, now time.Time, ttl time.Duration, val []byte, r reading) bool {
+// must stay out (reviewed).
+func (c *lru) putSeg(key string, val []byte, now time.Time, ttl time.Duration, r reading) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.stale(key, r, now) {
+	if c.reviewed(key, r, now) {
 		return false
 	}
 	kv := parseSeg(val)
-	c.update(key, now, ttl, func(v *segValue) { *v = kv })
+	c.update(key, func(v *segValue) { *v = kv }, now, ttl)
 	return true
 }
 
-// syncSeg takes what a lookup read from the KV for a segment key (kv, read
+// mergeSeg takes what a lookup read from the KV for a segment key (kv, read
 // under r) into memory, with the times of its writes (not a fresh TTL) and
 // beside what came into memory since the read (a run on this node wrote the
 // key, another lookup read it). It returns the value to decide with: the one
-// in memory, or kv alone when it must stay out (stale: a review changed the
-// key since this lookup read it; memory is left alone).
-func (c *lru) syncSeg(key string, now time.Time, ttl time.Duration, kv segValue, r reading) segValue {
+// in memory, or kv alone when it must stay out (reviewed; memory is left
+// alone).
+func (c *lru) mergeSeg(key string, kv segValue, now time.Time, ttl time.Duration, r reading) segValue {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.stale(key, r, now) {
+	if c.reviewed(key, r, now) {
 		return kv
 	}
-	e := c.update(key, now, ttl, func(v *segValue) { v.merge(kv) })
+	e := c.update(key, func(v *segValue) { v.merge(kv) }, now, ttl)
 	if e == nil {
 		return segValue{}
 	}
@@ -622,43 +619,6 @@ func (c *lru) forget(keys []string) {
 	for _, k := range keys {
 		c.drop(k)
 	}
-}
-
-// kill drops the keys and tombstones them until the given time - the zero
-// time: until they are killed again (a review, while it writes them).
-func (c *lru) kill(keys []string, until, now time.Time) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.reap(now)
-	c.kills++
-	for _, k := range keys {
-		c.drop(k)
-	}
-	if !until.IsZero() && !now.Before(until) {
-		return
-	}
-	for _, k := range keys {
-		if _, dead := c.dead[k]; !dead {
-			c.bytes += tombstoneSize(k)
-		}
-		c.dead[k] = until
-	}
-	// The earliest time of all: a key tombstoned again may have moved later,
-	// then reap looks once too early and finds the next.
-	if !until.IsZero() && (c.deadNext.IsZero() || until.Before(c.deadNext)) {
-		c.deadNext = until
-	}
-	for c.ll.Len() > 0 && c.bytes > c.maxBytes {
-		c.remove(c.ll.Back())
-	}
-}
-
-// tombstoned reports whether a review changed the key a moment ago, or is
-// changing it.
-func (c *lru) tombstoned(key string, now time.Time) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.isDead(key, now)
 }
 
 func (c *lru) len() int {
@@ -676,14 +636,17 @@ func (c *lru) size() int64 {
 
 // ---------------------------------------------------------------- keys
 
-// cacheScope is the key scope of a flow's verdicts under a clear counter:
-// "e3:7:9f2c…".
-func cacheScope(epoch int64, f *liveFlow) string {
-	return "e" + strconv.FormatInt(epoch, 10) + ":" + strconv.FormatInt(f.ID, 10) + ":" + f.fp
+// scopeOf is the key scope of a flow's verdicts under the clear counter of
+// the snapshot: "e3:7:9f2c…".
+func (s *snapshot) scopeOf(f *liveFlow) string {
+	return "e" + strconv.FormatInt(s.cacheEpoch, 10) + ":" + strconv.FormatInt(f.ID, 10) + ":" + f.fp
 }
 
-// scopeOf is the key scope of a flow's verdicts in the snapshot.
-func (s *snapshot) scopeOf(f *liveFlow) string { return cacheScope(s.cacheEpoch, f) }
+// scopeNow is the key scope of a flow's verdicts under the clear counter of
+// now, whatever snapshot the flow is of. A run stores its verdicts there and
+// a queued job asks for them there: after a clear nothing is written into
+// the cleared scope or answered from it.
+func (p *Plugin) scopeNow(f *liveFlow) string { return p.snap.Load().scopeOf(f) }
 
 // segKeyOf is the key of one segment's verdict.
 func segKeyOf(scope string, h [32]byte) string { return segKeyHex(scope, hex.EncodeToString(h[:])) }
@@ -722,8 +685,12 @@ func isHexHash(s string) bool {
 	return err == nil
 }
 
-// hitIDOf is hitID of hex segment hashes; "" when one is not a hash.
+// hitIDOf is hitID of hex segment hashes; "" when there is none or one is
+// not a hash.
 func hitIDOf(segs []string) string {
+	if len(segs) == 0 {
+		return ""
+	}
 	keys := make([][32]byte, len(segs))
 	for i, s := range segs {
 		if !isHexHash(s) {
@@ -762,17 +729,13 @@ func newStoredHit(requestID string, segs []string, run Trace, at int64) storedHi
 	return storedHit{RequestID: requestID, Keys: segs, Trace: run.ownRun(), At: at}
 }
 
-// encodeHit is the id and the stored JSON of a hit; "" when its segments are
-// not hashes or it is too large to store.
-func encodeHit(hit *storedHit) (id string, body []byte) {
-	if id = hitIDOf(hit.Keys); id == "" || len(hit.Keys) == 0 {
-		return "", nil
-	}
+// encodeHit is the stored JSON of a hit; nil when it is too large to store.
+func encodeHit(hit *storedHit) []byte {
 	body, err := json.Marshal(hit)
 	if err != nil || len(body) > maxHitBytes {
-		return "", nil
+		return nil
 	}
-	return id, body
+	return body
 }
 
 // ---------------------------------------------------------------- lookup
@@ -782,24 +745,21 @@ type verdicts struct {
 	passed map[[32]byte]bool
 	hit    *storedHit // a cached hit whose segments are all in the request; read only
 	hitID  string
-	// asked is taken before the lookup reads anything: what a review changed
+	// asked is the reading the lookup began with: what a review changed
 	// before it, the lookup saw. The run of the request stores its verdicts
 	// with it (storeVerdicts).
 	asked reading
 }
 
 // lookupVerdicts reads the cached verdicts of the segments of a request (in
-// request order) under scope: memory first, then (useKV) the KV for
-// everything memory does not hold, until ctx ends. A value in memory is used
-// as it is. The first cached hit whose whole segment set is in the request is
-// returned for replay - before any pass is looked at, so a hit set whose
-// segments passed one by one elsewhere is still a hit; otherwise the segments
-// that passed. Anything the cache cannot answer is unknown and moderated
-// again.
+// request order) under scope: from memory, and (useKV) from the KV whatever
+// memory does not hold. The first cached hit whose whole segment set is in
+// the request is returned for replay; otherwise the segments that passed.
+// Anything the cache cannot answer is unknown and moderated again.
 //
-// ctx is the caller's: the hook call (the core limits it, and a client that
-// left ends it), or the plugin's own for a queued job. The lookup has no time
-// limit beside it.
+// ctx is the caller's, and the only limit of the lookup: the hook call (the
+// core limits it, and a client that left ends it), or the plugin's own for a
+// queued job.
 func (p *Plugin) lookupVerdicts(ctx context.Context, scope string, keys [][32]byte, useKV bool) verdicts {
 	ttl := p.cfg.Load().cacheTTL
 	cache, now := p.cache.Load(), p.now()
@@ -807,9 +767,9 @@ func (p *Plugin) lookupVerdicts(ctx context.Context, scope string, keys [][32]by
 	if ttl <= 0 || len(keys) == 0 {
 		return verdicts{passed: map[[32]byte]bool{}, asked: asked}
 	}
-	l := &lookup{p: p, cache: cache, ctx: ctx, scope: scope, now: now, ttl: ttl, kv: useKV && p.host != nil, since: asked}
-	segs := l.segments(keys)
-	ids, hits, unread := l.hits(segs)
+	l := &lookup{p: p, cache: cache, ctx: ctx, scope: scope, now: now, ttl: ttl, kv: useKV && p.host != nil, asked: asked}
+	names, segs := l.segments(keys)
+	ids, hits, unread := l.hits(names, segs)
 	v := l.decide(keys, segs, ids, hits, unread)
 	v.asked = asked
 	return v
@@ -819,72 +779,70 @@ func (p *Plugin) lookupVerdicts(ctx context.Context, scope string, keys [][32]by
 type lookup struct {
 	p     *Plugin
 	cache *lru
-	ctx   context.Context // the caller's
+	ctx   context.Context
 	scope string
 	now   time.Time
 	ttl   time.Duration
-	kv    bool     // ask the KV
-	since reading  // taken before the first read of the KV
-	names []string // the segment keys, in request order
+	kv    bool    // ask the KV
+	asked reading // taken before the first read of the KV
 }
 
-// segments loads the values of the segments: from memory, and with the KV
-// every one that is not there from the KV (and into memory), each key once.
-// A value in memory is used as it is; a segment that was not read (a KV
+// segments are the keys of the segments (names) and their values, in request
+// order: from memory, and with the KV every one that is not there from the
+// KV (and into memory), each key once. A segment that was not read (a KV
 // error, the end of ctx, or a lookup without the KV) stays unknown.
-func (l *lookup) segments(keys [][32]byte) []segValue {
-	segs := make([]segValue, len(keys))
-	l.names = make([]string, len(keys))
+func (l *lookup) segments(keys [][32]byte) (names []string, segs []segValue) {
+	names, segs = make([]string, len(keys)), make([]segValue, len(keys))
 	known := make([]bool, len(keys))
-	var asked []string
-	var asking map[string]bool // made with the first segment memory does not hold
+	var missing []string
+	var listed map[string]bool // the keys in missing; made with the first
 	for i, h := range keys {
 		name := segKeyOf(l.scope, h)
-		l.names[i] = name
-		if segs[i], known[i] = l.cache.seg(name, l.now); !known[i] && !asking[name] {
-			if asking == nil {
-				asking = map[string]bool{}
+		names[i] = name
+		if segs[i], known[i] = l.cache.getSeg(name, l.now); !known[i] && !listed[name] {
+			if listed == nil {
+				listed = map[string]bool{}
 			}
-			asking[name] = true
-			asked = append(asked, name)
+			listed[name] = true
+			missing = append(missing, name)
 		}
 	}
-	if !l.kv || len(asked) == 0 {
-		return segs
+	if !l.kv || len(missing) == 0 {
+		return names, segs
 	}
-	got, read := l.p.kvRead(l.ctx, asked, kvSegUnit)
+	got, read := l.p.kvRead(l.ctx, missing, kvSegUnit)
 	now := l.p.now()
-	vals := make(map[string]segValue, len(asked))
-	for j, name := range asked {
+	vals := make(map[string]segValue, len(missing))
+	for j, name := range missing {
 		if read[j] {
-			vals[name] = l.cache.syncSeg(name, now, l.ttl, parseSeg(got[j].Value), l.since)
+			vals[name] = l.cache.mergeSeg(name, parseSeg(got[j].Value), now, l.ttl, l.asked)
 		}
 	}
-	for i, name := range l.names {
+	for i, name := range names {
 		if !known[i] {
 			segs[i] = vals[name]
 		}
 	}
-	return segs
+	return names, segs
 }
 
 // hits loads the cached hits the segments point to: ids in request order,
 // the newest first within a segment; every hit that is not in memory comes
-// from the KV. A hit is nil when it is nowhere - the KV answered that the
-// entry is not there, or holds one that does not read or has expired: the
-// pointer is stale. unread are the ids whose entry could not be read at all:
-// a KV error, the end of ctx, or, for a lookup of memory alone, not in
-// memory. Those hits may well exist.
+// from the KV. A hit is nil when the KV answered that its entry is not there
+// (or holds one that does not read or has expired): the pointer is stale.
+// unread are the ids whose entry could not be read at all - a KV error, the
+// end of ctx or, for a lookup without the KV, not in memory. Those hits may
+// well exist.
 //
-// The pointers to an entry the KV answered for and that is nowhere are
-// removed from the values in memory of the segments: a lookup of memory alone
-// cannot tell such a pointer from one whose entry is merely not in memory,
-// and would leave the segment unknown every time. Removed are the pointers
-// this lookup followed and no others (unpointRef): a run that hit the same
-// set since then has written a new entry and new pointers, and those stay.
-// The KV keeps the pointer until it expires or the key is written again; a
-// node that reads it from there drops it the same way.
-func (l *lookup) hits(segs []segValue) (ids []string, hits map[string]*storedHit, unread map[string]bool) {
+// A stale pointer is removed from the values in memory of the segments (the
+// KV is not written on the request path): a lookup without the KV cannot
+// tell it from an unread one, and would leave the segment unknown every
+// time. Removed are the pointers this lookup followed and no others
+// (unpointRef): a run that hit the same set since then has written a new
+// entry and new pointers, and those stay. The KV keeps the pointer until it
+// expires or the key is written again; a node that reads it from there drops
+// it the same way.
+func (l *lookup) hits(names []string, segs []segValue) (ids []string, hits map[string]*storedHit, unread map[string]bool) {
 	hits, unread = map[string]*storedHit{}, map[string]bool{}
 	var missing []string
 	for i := range segs {
@@ -912,11 +870,11 @@ func (l *lookup) hits(segs []segValue) (ids []string, hits map[string]*storedHit
 		}
 		return ids, hits, unread
 	}
-	names := make([]string, len(missing))
+	hitKeys := make([]string, len(missing))
 	for j, id := range missing {
-		names[j] = hitKeyOf(l.scope, id)
+		hitKeys[j] = hitKeyOf(l.scope, id)
 	}
-	got, read := l.p.kvRead(l.ctx, names, kvHitUnit)
+	got, read := l.p.kvRead(l.ctx, hitKeys, kvHitUnit)
 	now := l.p.now()
 	for j, id := range missing {
 		if !read[j] {
@@ -925,13 +883,13 @@ func (l *lookup) hits(segs []segValue) (ids []string, hits map[string]*storedHit
 		}
 		if hit := decodeHit(got[j].Value, l.now, l.ttl); hit != nil {
 			hits[id] = hit
-			l.cache.putHit(names[j], hit, len(got[j].Value), hit.expires(l.ttl), now, l.since)
+			l.cache.putHit(hitKeys[j], hit, len(got[j].Value), now, l.ttl, l.asked)
 			continue
 		}
 		for i := range segs {
 			for _, ref := range segs[i].hits {
 				if ref.id == id {
-					l.cache.editSeg(l.names[i], now, l.ttl, unpointRef(ref))
+					l.cache.editSeg(names[i], unpointRef(ref), now, l.ttl)
 				}
 			}
 		}
@@ -940,9 +898,8 @@ func (l *lookup) hits(segs []segValue) (ids []string, hits map[string]*storedHit
 }
 
 // decide: the first hit whose whole segment set is among keys, else the
-// segments with a live pass - without the segments that point to a hit whose
-// entry could not be read (unread): that hit may hold the request's content,
-// so the pass of such a segment does not count in this lookup and the
+// segments with a live pass. The pass of a segment that points to an unread
+// hit does not count: that hit may hold the request's content, so the
 // segment is moderated again (or, under post timing, queued, and the worker
 // looks it up with the KV).
 func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map[string]*storedHit, unread map[string]bool) verdicts {
@@ -974,42 +931,39 @@ func (l *lookup) decide(keys [][32]byte, segs []segValue, ids []string, hits map
 
 // ---------------------------------------------------------------- KV
 
-// kvFailed counts a batch call of the KV that failed. A call that ended
-// because its context did - the caller left, the node stops - did not fail
-// at the KV and is not counted.
+// kvFailed counts a call of the KV that failed. A call that ended because
+// its context did - the caller left, the node stops - did not fail at the KV
+// and is not counted.
 func (p *Plugin) kvFailed(ctx context.Context) {
 	if ctx.Err() == nil {
 		p.stats.kvErrors.Add(1)
 	}
 }
 
+// kvTTL is the TTL of a KV entry that lives until the given time: the KV
+// counts whole seconds and cuts off the rest, and 0 would be for ever, so it
+// is rounded up and at least a second.
+func kvTTL(until, now time.Time) time.Duration {
+	return max((until.Sub(now) + time.Second - 1).Truncate(time.Second), time.Second)
+}
+
 // kvRead reads keys from the KV, all of them, in batch calls of unit keys one
-// after the other (on a core without batch calls the SDK makes single calls
-// of them, CONTRACTS §93). got[i] is the answer for key i. read[i] is false
-// when the call for key i failed or ctx ended before it: the key is unknown
-// then, not absent. A call that fails counts one kv error (kvFailed) and the
-// calls after it are still made.
-//
-// A read whose values exceed what one answer takes (ResourceExhausted; not
-// with values this plugin wrote) is made again kvHitUnit keys at a time,
-// which always fit.
+// after the other. got[i] is the answer for key i. read[i] is false when the
+// call for key i failed or ctx ended before it: the key is unknown then, not
+// absent. A call that fails counts one kv error (kvFailed) and the calls
+// after it are still made.
 func (p *Plugin) kvRead(ctx context.Context, keys []string, unit int) (got []pluginsdk.KVValue, read []bool) {
 	got, read = make([]pluginsdk.KVValue, len(keys)), make([]bool, len(keys))
 	for from := 0; from < len(keys) && ctx.Err() == nil; from += unit {
 		to := min(from+unit, len(keys))
 		vals, err := pluginsdk.KVGetMany(ctx, p.host.KV(), kvNamespace, keys[from:to])
-		switch {
-		case err == nil:
-			copy(got[from:to], vals)
-			for i := from; i < to; i++ {
-				read[i] = true
-			}
-		case status.Code(err) == codes.ResourceExhausted && unit > kvHitUnit:
-			vals, ok := p.kvRead(ctx, keys[from:to], kvHitUnit)
-			copy(got[from:to], vals)
-			copy(read[from:to], ok)
-		default:
+		if err != nil {
 			p.kvFailed(ctx)
+			continue
+		}
+		copy(got[from:to], vals)
+		for i := from; i < to; i++ {
+			read[i] = true
 		}
 	}
 	return got, read
@@ -1082,17 +1036,17 @@ func kvStripe(key string) uint32 {
 	return h.Sum32() % kvLockStripes
 }
 
-// kvLock makes this node's changes of verdict cache keys in the KV take
-// turns: it waits until every key of keys is free, or until ctx ends (then
-// nothing is held and the change is not made). unlock ends the turn.
+// kvLock makes this node's changes of cache keys in the KV take turns: it
+// waits until every key of keys is free, or until ctx ends (then nothing is
+// held and the change is not made). unlock ends the turn.
 //
 // A change holds its keys from the read of their values to the moment the
-// new values are in memory (a run, writeVerdicts) or tombstoned (a review,
-// writeReviewed). That is what keeps two changes of one key from losing an
-// edit, memory from getting an older value after a newer one, and a write
-// that was under way from landing after a review. The keys share
-// kvLockStripes locks, which everybody takes in the same order; keys on one
-// stripe wait for each other, which costs time and nothing else.
+// new values are in memory (writeRun) or tombstoned (writeReviewed). That is
+// what keeps two changes of one key from losing an edit, memory from getting
+// an older value after a newer one, and a write that was under way from
+// landing after a review. The keys share kvLockStripes locks, which
+// everybody takes in the same order; keys on one stripe wait for each other,
+// which costs time and nothing else.
 func (p *Plugin) kvLock(ctx context.Context, keys ...[]string) (unlock func(), err error) {
 	var want [kvLockStripes]bool
 	for _, list := range keys {
@@ -1149,31 +1103,24 @@ type verdictWrite struct {
 	asked  reading
 }
 
-// storeVerdicts stores the verdicts of a run under scope: the segments that
-// passed and the chunks that hit - all of them, in the KV first and then in
-// memory (writeVerdicts). It does not wait for that: the write runs in the
-// background, on the plugin's own context (postCtx, which Shutdown ends after
-// the queue had its time), and the hook answers meanwhile. Shutdown waits for
-// the writes that began before it (goTracked).
-//
-// Until the write is done the cache does not know these verdicts, on this
-// node or on any other: the same content sent again meanwhile is moderated
-// again. For a pass that costs an audit. For a hit the request is refused
-// again by its own run, and recorded and counted as a violation of its own -
-// not as a replay.
+// storeVerdicts hands the verdicts of a run to the cache, to be kept for ttl
+// under scope: the segments that passed at the unix time at, and the chunks
+// that hit. It does not wait for the write (writeVerdicts), which runs in
+// the background on the plugin's own context: Shutdown ends that after the
+// queue had its time, and waits for the writes that began before it
+// (goTracked).
 //
 // asked is the reading of the request's lookup (verdicts.asked): the run
-// judged what that lookup did not find, and knows of no review since. A key a
-// review may have changed since then is not written (writeRun).
-func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits []storedHit, asked reading) {
-	if c.cacheTTL <= 0 || p.host == nil {
+// judged what that lookup did not find, and knows of no review since.
+func (p *Plugin) storeVerdicts(scope string, passes [][32]byte, hits []storedHit, at int64, ttl time.Duration, asked reading) {
+	if p.host == nil {
 		return
 	}
-	w := &verdictWrite{ttl: c.cacheTTL, at: p.now().Unix(), asked: asked}
+	w := &verdictWrite{ttl: ttl, at: at, asked: asked}
 	for i := range hits {
 		hit := &hits[i]
-		id, body := encodeHit(hit)
-		if id == "" {
+		id, body := hitIDOf(hit.Keys), encodeHit(hit)
+		if id == "" || body == nil {
 			continue
 		}
 		hw := hitWrite{key: hitKeyOf(scope, id), id: id, hit: hit, body: body}
@@ -1195,119 +1142,40 @@ func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits 
 	})
 }
 
-// writeVerdicts writes what a run decided to the KV and then puts it into
-// memory:
-//
-//  1. it waits for its turn at the keys (kvLock) and keeps it until the
-//     values are in memory;
-//  2. the segment keys are read from the KV, in batch calls;
-//  3. the passes and the pointers of the run are merged into the values that
-//     were read - what other nodes stored under the keys stays;
-//  4. the hit entries are written, then the segment keys, in batch calls: no
-//     pointer is in the KV before its entry;
-//  5. the hit entries and the segment values that were written go into
-//     memory - the values as the KV now holds them, the pointers of other
-//     nodes included - and the segment keys that now point to a hit of this
-//     run are published (verdict.changed, "stored"): the other nodes may hold
-//     them in memory without the pointer and drop them there.
-//
-// When a call of 2 or 4 fails (one kv error, kvRead / kvWrite) or ctx ends,
-// it stops: nothing of the run comes into memory, and the content is
-// moderated again the next time. What the KV took before the failure stays
-// there - an entry without pointers, or part of the keys of a run that needs
-// several calls or runs on a core without batch calls: all of it true, none
-// of it complete, and the next run of the content writes it again. Nothing is
-// retried here.
-//
-// A key a review changed since the request of the run asked the cache
-// (verdictWrite.asked), or is changing, is left alone, in the KV and in
-// memory: a run that judged before the review does not bring back what the
-// review removed, however long it judged, waited for its turn or for the KV.
-// The node knows that by the tombstone of the key while it lasts
-// (tombstoneTTL); once the request asked longer ago than that, by any
-// tombstone set on the node since (lru.lapsed) - then the write writes
-// nothing at all, whichever keys the review changed (counted, kv_skipped),
-// and the content is moderated again: for a hit that means the next request
-// with it is refused by a run of its own and counted as a violation, not
-// replayed. The same when the memory cache was replaced since the request
-// asked (cleared, cache_entries changed): its tombstones are gone. A hit
-// whose entry is left alone gets no pointers either. A hit entry lives for
-// the TTL from the time of the hit.
-//
-// Reviews and this write (the reason for the turn, and for the tombstones):
-//
-//   - A review on this node tombstones its keys, then waits for its turn at
-//     them. If this write has the turn, the review writes after it and over
-//     it, and tombstones the keys again, which drops what this write put into
-//     memory. If the review has the turn, this write finds the keys
-//     tombstoned when it gets its own (the review gives the tombstones their
-//     time before it ends its turn) and leaves them alone - or, when its read
-//     of the KV outlasts the tombstones, finds that tombstones were set since
-//     its request asked the cache, and writes nothing.
-//   - A review on another node cannot wait for this node. Once its
-//     verdict.changed is here the keys are tombstoned, and this write leaves
-//     them alone (looked at after the read, right before the writes) or at
-//     least keeps them out of memory (lru.stale). What stays open: this write
-//     lands in the KV after the other node's review wrote there and before
-//     its broadcast arrives here (or when it never does) - then the KV has
-//     the hit again until it expires; and a lookup can still replay from
-//     memory until the broadcast arrives (when it never does: until the entry
-//     expires or the cache is cleared).
-//
-// (The tombstones go with the memory cache when cache_entries is changed.)
+// writeVerdicts writes what a run decided (writeRun) and then, its turn at
+// the keys given back, tells the other nodes which segment keys now point to
+// a hit of the run: they may hold those in memory without the pointer.
 func (p *Plugin) writeVerdicts(ctx context.Context, w *verdictWrite) {
 	if pointed := p.writeRun(ctx, w); len(pointed) > 0 {
-		p.publishVerdictChanged(ctx, verdictChanged{Keys: pointed, Stored: true})
+		p.publishVerdictChanged(verdictChanged{Keys: pointed, Stored: true})
 	}
 }
 
-// writeRun is writeVerdicts up to the values in memory, the turn at the keys
-// taken and given back; pointed are the segment keys that now point to a hit
-// of the run.
-func (p *Plugin) writeRun(ctx context.Context, w *verdictWrite) (pointed []string) {
-	keys := slices.Clone(w.passes)
-	var hitKeys []string
+// keys are the hit keys of the write and its segment keys, the latter sorted
+// and each once.
+func (w *verdictWrite) keys() (hitKeys, segKeys []string) {
+	segKeys = slices.Clone(w.passes)
 	for _, hw := range w.hits {
 		hitKeys = append(hitKeys, hw.key)
-		keys = append(keys, hw.segs...)
+		segKeys = append(segKeys, hw.segs...)
 	}
-	slices.Sort(keys)
-	keys = slices.Compact(keys)
-	unlock, err := p.kvLock(ctx, hitKeys, keys)
-	if err != nil {
-		return nil // the node stops
-	}
-	defer unlock()
-	cache := p.cache.Load()
-	// A review may have changed any of the keys since the request asked: the
-	// run writes nothing, and the KV is not asked.
-	lapsed := func() bool {
-		if !cache.reviewedSince("", w.asked, p.now()) {
-			return false
-		}
-		p.stats.kvSkipped.Add(1)
-		return true
-	}
-	if lapsed() {
-		return nil
-	}
-	since := cache.reading(p.now())
-	got, ok := p.kvReadAll(ctx, keys)
-	if !ok || lapsed() {
-		return nil
-	}
-	now := p.now()
-	reviewed := func(key string) bool { return cache.reviewedSince(key, w.asked, now) }
+	slices.Sort(segKeys)
+	return hitKeys, slices.Compact(segKeys)
+}
+
+// changes is what the write puts into the KV when its segment keys hold the
+// values held there: the hits whose entry is written (stored), the segment
+// keys with the passes and the pointers of the run merged in (items) - what
+// other nodes stored under a key stays - and the segment keys that get a
+// pointer (pointed). A key a review may have changed (reviewed) is left
+// alone, and a hit whose entry is left alone gets no pointers either; nor
+// does a hit that has expired.
+func (w *verdictWrite) changes(held map[string][]byte, reviewed func(key string) bool, now time.Time) (stored []hitWrite, items []pluginsdk.KVItem, pointed []string) {
 	var ops segOps
-	var entries []pluginsdk.KVItem
-	var stored []hitWrite
 	for _, hw := range w.hits {
-		left := hw.hit.expires(w.ttl).Sub(now)
-		if left <= 0 || reviewed(hw.key) {
+		if !now.Before(hw.hit.expires(w.ttl)) || reviewed(hw.key) {
 			continue
 		}
-		// The KV counts whole seconds, and cuts off the rest.
-		entries = append(entries, pluginsdk.KVItem{Key: hw.key, Value: hw.body, TTL: (left + time.Second - 1).Truncate(time.Second)})
 		stored = append(stored, hw)
 		for _, key := range hw.segs {
 			if !reviewed(key) {
@@ -1315,51 +1183,105 @@ func (p *Plugin) writeRun(ctx context.Context, w *verdictWrite) (pointed []strin
 			}
 		}
 	}
-	pointed = slices.Clone(ops.keys)
+	pointed = slices.Clone(ops.keys) // only pointers were added so far
 	for _, key := range w.passes {
 		if !reviewed(key) {
 			ops.add(key, passAt(w.at))
 		}
 	}
-	items := make([]pluginsdk.KVItem, 0, len(ops.keys))
+	items = make([]pluginsdk.KVItem, 0, len(ops.keys))
 	for _, key := range ops.keys {
-		i, _ := slices.BinarySearch(keys, key)
-		v := parseSeg(got[i].Value)
-		for _, edit := range ops.edits[key] {
-			edit(&v)
+		if item, left := ops.apply(key, held[key], now, w.ttl); left {
+			items = append(items, item)
 		}
-		v.prune(now, w.ttl)
-		if v.empty() {
-			continue // the verdict expired meanwhile
-		}
-		// The key lives as long as its newest part (the KV counts whole
-		// seconds, and 0 would be for ever).
-		items = append(items, pluginsdk.KVItem{Key: key, Value: v.encode(), TTL: max(v.expires(w.ttl).Sub(now), time.Second)})
+	}
+	return stored, items, pointed
+}
+
+// writeRun writes what a run decided to the KV and then puts it into memory;
+// pointed are the segment keys that now point to a hit of the run.
+//
+//  1. It waits for its turn at the keys (kvLock) and keeps it to the end.
+//  2. The segment keys are read from the KV.
+//  3. The passes and the pointers of the run are merged into what was read
+//     (changes).
+//  4. The hit entries are written, then the segment keys: no pointer is in
+//     the KV before its entry.
+//  5. What was written goes into memory, as the KV now holds it.
+//
+// When a call of 2 or 4 fails or ctx ends, it stops: nothing of the run
+// comes into memory and nothing is retried - the next run of the content
+// writes it again. What the KV took before the failure stays there: hit
+// entries without pointers, or the segment keys of the calls that worked.
+// Those keys leave memory, which may hold them without their new pointers,
+// and the pointed ones among them are returned.
+//
+// A key a review may have changed since the request of the run asked the
+// cache (lru.reviewed, under verdictWrite.asked) is left alone, in the KV
+// and in memory; when that reading has lapsed the run writes nothing at all
+// (counted, kv_skipped). A review on this node is seen because of the turn
+// (writeReviewed), one on another node once its broadcast is here: a write
+// that lands in the KV after that review wrote there and before its
+// broadcast arrives puts the hit there again until it expires.
+func (p *Plugin) writeRun(ctx context.Context, w *verdictWrite) (pointed []string) {
+	hitKeys, keys := w.keys()
+	unlock, err := p.kvLock(ctx, hitKeys, keys)
+	if err != nil {
+		return nil // the node stops
+	}
+	defer unlock()
+	cache := p.cache.Load()
+	if cache.lapsedSince(w.asked, p.now()) {
+		p.stats.kvSkipped.Add(1)
+		return nil // before the KV is asked
+	}
+	since := cache.reading(p.now())
+	got, ok := p.kvReadAll(ctx, keys)
+	if !ok {
+		return nil
+	}
+	if cache.lapsedSince(w.asked, p.now()) {
+		p.stats.kvSkipped.Add(1)
+		return nil
+	}
+	now := p.now()
+	held := make(map[string][]byte, len(keys))
+	for i, key := range keys {
+		held[key] = got[i].Value
+	}
+	stored, items, pointed := w.changes(held, func(key string) bool { return cache.reviewedSince(key, w.asked, now) }, now)
+	entries := make([]pluginsdk.KVItem, len(stored))
+	for i, hw := range stored {
+		entries[i] = pluginsdk.KVItem{Key: hw.key, Value: hw.body, TTL: kvTTL(hw.hit.expires(w.ttl), now)}
 	}
 	if _, err := p.kvWrite(ctx, entries); err != nil {
 		return nil
 	}
-	if _, err := p.kvWrite(ctx, items); err != nil {
-		return nil
+	if done, err := p.kvWrite(ctx, items); err != nil {
+		written := make([]string, done)
+		for i, item := range items[:done] {
+			written[i] = item.Key
+		}
+		cache.forget(written)
+		return slices.DeleteFunc(pointed, func(key string) bool { return !slices.Contains(written, key) })
 	}
-	// Memory gets what the KV now holds, as a read that began before this
-	// write's own read of the KV (since). A value that must stay out - a
-	// review on another node tombstoned the key meanwhile, or tombstones came
-	// while this write took longer than they last - is not left as it was
-	// either: memory would keep a value the KV no longer has (the passes of A
-	// and B, with the hit of {A, B} just written), and nothing would correct
-	// it on the node that wrote. The key leaves memory and is read from the
-	// KV the next time.
+	// Into memory, as a read that began before this write's own read of the
+	// KV (since) - not the request's reading: a review of other keys since
+	// then must not keep the run's own hit out of the node that stored it. A
+	// value that must stay out all the same (reviewed) is not left as it was
+	// either: memory would keep what the KV no longer has (the passes of A
+	// and B, with the hit of {A, B} just written). The key leaves memory and
+	// is read from the KV the next time.
 	now = p.now()
 	var out []string
 	for _, hw := range stored {
-		if !cache.putHit(hw.key, hw.hit, len(hw.body), hw.hit.expires(w.ttl), now, since) {
+		if !cache.putHit(hw.key, hw.hit, len(hw.body), now, w.ttl, since) {
 			out = append(out, hw.key)
 		}
 	}
-	for _, it := range items {
-		if !cache.putSeg(it.Key, now, w.ttl, it.Value, since) {
-			out = append(out, it.Key)
+	for _, item := range items {
+		if !cache.putSeg(item.Key, item.Value, now, w.ttl, since) {
+			out = append(out, item.Key)
 		}
 	}
 	cache.forget(out)
@@ -1374,7 +1296,7 @@ func (p *Plugin) writeRun(ctx context.Context, w *verdictWrite) (pointed []strin
 // deleted one by one, they are no longer read and expire. config_version is
 // bumped too, so the other nodes pick the new counter up with the broadcast
 // or their next poll. Runs in progress and queued jobs notice the new
-// counter when they come to the cache (runPost, settleVerdicts).
+// counter when they come to the cache (scopeNow).
 func (p *Plugin) clearVerdictCache(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	db, err := p.db(ctx)
 	if err != nil {
@@ -1409,7 +1331,8 @@ type reviewedHit struct {
 
 // syncReviewed brings the cache in line with the review of suspicious
 // records (new-api SyncReviewedBlocks), for the records whose trace names
-// the hit set of their verdict chunk (trace.cache):
+// the hit set of their verdict chunk (trace.cache). status is one of
+// reviewStatuses:
 //
 //   - false_positive: the hit is deleted and every segment of the set is
 //     stored as a pass (content the admin found fine as a whole is fine in
@@ -1423,26 +1346,22 @@ type reviewedHit struct {
 //     deleted, so the content is moderated again.
 //
 // The scope is the record's flow in the current snapshot; records of a flow
-// that is gone or disabled are skipped. Records naming the same hit change
-// it once (the last one decides), and every key is written once.
+// that is gone or disabled are skipped (reviewedHits).
 //
-// The KV is what the nodes share, so it decides: it is written first, before
-// the review is answered, and the result is the number of records whose
-// every write succeeded. The writes run on ctx, the review request, and have
-// no time limit beside it: a request that ends first leaves the rest
-// unwritten and its records uncounted. Memory is never given the new values:
-// this node tombstones every key it tried to change (before the writes,
-// without an end, and with tombstoneTTL when they are over - writeReviewed),
-// and the other nodes do the same on verdict.changed (best effort). These
-// nodes then read the keys from the KV, whatever it holds - after a failed
-// write the old verdict on every node rather than the new one on this node
-// only. A node the broadcast did not reach keeps the values in its memory
-// until they expire or the cache is cleared (the top of the file). A record
-// whose writes failed in part is not counted; reviewing it again repeats
-// them.
+// The KV is what the nodes share, so it decides: it is written before the
+// review is answered, and the result is the number of records whose every
+// write succeeded. The writes run on ctx, the review request, and have no
+// time limit beside it: a request that ends first leaves the rest unwritten
+// and its records uncounted; reviewing them again repeats the writes. Memory
+// is never given the new values: the keys are tombstoned on this node
+// (writeReviewed) and, with the broadcast, on the others, and read from the
+// KV afterwards - after a failed write the old verdict on every node rather
+// than the new one on this node only.
 func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) int {
 	ttl := p.cfg.Load().cacheTTL
-	if ttl <= 0 || len(ids) == 0 || p.host == nil || !slices.Contains(reviewStatuses, status) {
+	// A status that is none of the three would be written as a deletion of
+	// the hits (writeReviewed): refused here too, whatever the caller checked.
+	if ttl <= 0 || p.host == nil || !slices.Contains(reviewStatuses, status) {
 		return 0
 	}
 	hits := p.reviewedHits(ctx, ids, status)
@@ -1450,16 +1369,14 @@ func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) i
 		return 0
 	}
 	keys := reviewedKeys(hits)
-	p.writeReviewed(ctx, p.cache.Load(), hits, keys, status, ttl)
+	p.writeReviewed(ctx, hits, keys, status, ttl)
 	synced := 0
 	for _, h := range hits {
 		if !h.failed {
 			synced += h.records
 		}
 	}
-	// Also when the request has ended: the other nodes are told what was
-	// changed until then.
-	p.publishVerdictChanged(p.postCtx, verdictChanged{Keys: keys})
+	p.publishVerdictChanged(verdictChanged{Keys: keys})
 	return synced
 }
 
@@ -1509,7 +1426,7 @@ func (p *Plugin) reviewedHits(ctx context.Context, ids []int64, status string) [
 			}
 			// A replayed record ran in its source request.
 			hit := newStoredHit(cmp.Or(ci.SourceRequestID, rid), ci.Segs, tr, at)
-			if _, body = encodeHit(&hit); body == nil {
+			if body = encodeHit(&hit); body == nil {
 				return nil
 			}
 		}
@@ -1577,26 +1494,24 @@ func reviewOps(hits []*reviewedHit, status string) segOps {
 	return ops
 }
 
-// writeReviewed writes the reviewed hits to the KV, in batch calls, and marks
-// the ones a write failed for (failed). The hit entries come first: no
-// pointer is written to an entry that is not there, and no pass beside a hit
-// that could not be deleted. Then the segment keys are read, edited and
-// written back (or deleted, when nothing is left of one).
+// writeReviewed writes the reviewed hits to the KV and marks the ones a write
+// failed for (failed). The hit entries come first: no pointer is written to
+// an entry that is not there, and no pass beside a hit that could not be
+// deleted. Then the segment keys are read, edited and written back (or
+// deleted, when nothing is left of one).
 //
 // keys, all the keys of the review, are tombstoned before anything else,
 // without an end: nothing comes into memory under them while the review
 // writes. Then the review waits for its turn at them (kvLock) - a write of a
 // run that has it finishes first, and the review writes over it. When the
-// writes are over, the tombstones get their time, tombstoneTTL from then, and
-// only after that the turn ends: a run that waited for it finds the keys
-// tombstoned and leaves them alone. A review that ctx ended while it waited
-// wrote nothing; its hits are marked failed.
-func (p *Plugin) writeReviewed(ctx context.Context, cache *lru, hits []*reviewedHit, keys []string, status string, ttl time.Duration) {
-	cache.kill(keys, time.Time{}, p.now())
-	timed := func() {
-		now := p.now()
-		cache.kill(keys, now.Add(tombstoneTTL), now)
-	}
+// writes are over the tombstones get their time, and only after that the
+// turn ends: a run that waited for it finds the keys tombstoned and leaves
+// them alone. A review that ctx ended while it waited wrote nothing; its
+// hits are marked failed.
+func (p *Plugin) writeReviewed(ctx context.Context, hits []*reviewedHit, keys []string, status string, ttl time.Duration) {
+	cache := p.cache.Load()
+	cache.tombstoneOpen(keys, p.now())
+	timed := func() { cache.tombstone(keys, p.now()) }
 	unlock, err := p.kvLock(ctx, keys)
 	if err != nil {
 		timed()
@@ -1633,41 +1548,34 @@ func (p *Plugin) writeReviewed(ctx context.Context, cache *lru, hits []*reviewed
 			users[seg] = append(users[seg], h)
 		}
 	}
-	failed := func(segs []string) {
-		for _, seg := range segs {
-			for _, h := range users[seg] {
-				h.failed = true
-			}
+	failed := func(seg string) {
+		for _, h := range users[seg] {
+			h.failed = true
 		}
 	}
 	got, read := p.kvRead(ctx, ops.keys, kvSegUnit)
 	now := p.now()
 	var sets []pluginsdk.KVItem
-	var setKeys, gone []string
+	var gone []string
 	for i, key := range ops.keys {
 		if !read[i] {
-			failed([]string{key})
+			failed(key)
 			continue
 		}
-		v := parseSeg(got[i].Value)
-		for _, edit := range ops.edits[key] {
-			edit(&v)
-		}
-		v.prune(now, ttl)
-		switch {
-		case !v.empty():
-			// The key lives as long as its newest part (the KV counts whole
-			// seconds, and 0 would be for ever).
-			sets = append(sets, pluginsdk.KVItem{Key: key, Value: v.encode(), TTL: max(v.expires(ttl).Sub(now), time.Second)})
-			setKeys = append(setKeys, key)
-		case got[i].Found:
+		if item, left := ops.apply(key, got[i].Value, now, ttl); left {
+			sets = append(sets, item)
+		} else if got[i].Found {
 			gone = append(gone, key)
 		}
 	}
 	done, _ = p.kvWrite(ctx, sets)
-	failed(setKeys[done:])
+	for _, item := range sets[done:] {
+		failed(item.Key)
+	}
 	done, _ = p.kvDelete(ctx, gone)
-	failed(gone[done:])
+	for _, key := range gone[done:] {
+		failed(key)
+	}
 }
 
 // verdictChanged is the payload of TopicVerdictChanged: cache keys another
@@ -1680,11 +1588,12 @@ type verdictChanged struct {
 }
 
 // publishVerdictChanged tells the other nodes which keys changed (msg), in
-// messages below the broadcast payload limit.
-func (p *Plugin) publishVerdictChanged(ctx context.Context, msg verdictChanged) {
+// messages below the broadcast payload limit. It runs on the plugin's own
+// context: the nodes are told also when the request of a review has ended.
+func (p *Plugin) publishVerdictChanged(msg verdictChanged) {
 	send := func(keys []string) {
 		payload, _ := json.Marshal(verdictChanged{Keys: keys, Stored: msg.Stored})
-		if err := p.host.Publish(ctx, TopicVerdictChanged, payload); err != nil {
+		if err := p.host.Publish(p.postCtx, TopicVerdictChanged, payload); err != nil {
 			p.log.Warn("moderation: broadcast failed; other nodes keep the verdicts in their memory until the entries expire or the cache is cleared",
 				"topic", TopicVerdictChanged, "stored", msg.Stored, "error", err.Error())
 		}
@@ -1706,21 +1615,18 @@ func (p *Plugin) publishVerdictChanged(ctx context.Context, msg verdictChanged) 
 
 // onVerdictChanged drops the keys another node changed from this node's
 // memory, so the next reads take them from the KV. Keys a review changed are
-// tombstoned for tombstoneTTL as well: neither a lookup that read the old
-// value before the review nor a run that judged before it stores it again
-// (lru.stale, writeVerdicts). Keys that got a pointer to a stored hit are
-// only dropped - a tombstone would keep this node's own runs from writing to
-// a segment many hits share.
+// tombstoned as well. Keys that got a pointer to a stored hit are only
+// dropped - a tombstone would keep this node's own runs from writing to a
+// segment many hits share.
 //
 // Dropping does not hold against what is under way at that moment: a lookup
 // that read a key from the KV before the pointer was written puts the old
-// value into memory after the drop (syncSeg). Such a value is then one the
-// broadcast never reached: it decides until it expires, is dropped or the
-// cache is cleared (the top of the file). A run of this node that ends right
-// after the drop does not add to that: its write reads the key from the KV
-// again, the pointer with it. Closing the window would take a mark per
-// dropped key that outlives the reads under way, as the tombstones of a
-// review do, with the cost named above; it is left open.
+// value into memory after the drop (mergeSeg). Such a value is then one the
+// broadcast never reached. A run of this node that ends right after the drop
+// does not add to that: its write reads the key from the KV again, the
+// pointer with it. Closing the window would take a mark per dropped key that
+// outlives the reads under way, as the tombstones of a review do, at the
+// price named above; it is left open.
 func (p *Plugin) onVerdictChanged(_ context.Context, b pluginsdk.Broadcast) error {
 	var msg verdictChanged
 	if err := json.Unmarshal(b.Payload, &msg); err != nil {
@@ -1732,7 +1638,6 @@ func (p *Plugin) onVerdictChanged(_ context.Context, b pluginsdk.Broadcast) erro
 		cache.forget(msg.Keys)
 		return nil
 	}
-	now := p.now()
-	cache.kill(msg.Keys, now.Add(tombstoneTTL), now)
+	cache.tombstone(msg.Keys, p.now())
 	return nil
 }

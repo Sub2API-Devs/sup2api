@@ -8,7 +8,7 @@ import (
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/grpcruntime"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 )
 
@@ -62,7 +62,7 @@ func TestKVBatchRealPlugin(t *testing.T) {
 	for i := range keys {
 		keys[i] = fmt.Sprintf("big%02d", i)
 	}
-	const size = grpcruntime.KVMaxValueBytes
+	const size = protocol.KVMaxValueBytes
 	if out := call("set", "b", keys[:47], size, 0); out["code"] != "OK" {
 		t.Fatalf("set 47 x 64 KiB: %v", out)
 	}
