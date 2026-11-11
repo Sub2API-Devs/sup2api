@@ -4,6 +4,17 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-11 moderation **0.8.0**（`e5db27c27`；只升级插件，核心仍 0.1.272；北京时间 11:42:58→11:43:05，rollout 257 约 7 秒，两节点同时切换；迁移 `0010_newapi_parity.sql` 已执行）：
+- 内容：对齐 new-api 11 月的内容审核改动（流程引擎：失败的级略过并保留命中、补审级、前级命中交给后级；题表式审核器 `llm_questions`；判定缓存：命中重放、清空接口、人工处理同步；`mode` 兼默认级别、白名单只观察、黑名单；Jev 长上下文与图片重画；绑定回落），另有负责人 11-10 定的三条：OpenAI 审核器抽一张图代表全部；LLM 审核器把图片发给模型（每个审核器一个开关，默认开）；插件内存上限 512 → 1024 MB。设计、七轮代码审核的修改和“已知、未改”见 [DESIGN-2026-11-10-MODERATION-PARITY](../../../docs/DESIGN-2026-11-10-MODERATION-PARITY.md)，行为变化、升级前检查和回滚步骤见 [RELEASE-MODERATION-0.8.0](../../../docs/RELEASE-MODERATION-0.8.0.md)。hostCompat、hostUICompat、宿主权限和钩子 scope 不变，不需要重新批准；manifest 多一条路由 `POST /verdict-cache/clear`。
+- 发布前核对：分支 `feat/moderation-newapi-parity` 合入 origin/develop（`c5b7fae14`，核心 0.1.272 + moderation 0.7.4），只有 manifest 版本号冲突；本机 go vet、全量测试、界面 110 条 vitest 与构建通过。升级前只读检查：没有绑定指向停用或未发布的流程（两条账号绑定 124、129 → 流程 2）；观察名单和封禁表为空；`mode = enforce`。
+- 构建：`stage/moderation-0.8.0/`（取自 `stage/moderation-0.7.4/`，去掉“只允许界面改动”的断言）：先在构建镜像里用普通用户带 `-race` 跑全量测试（`fulltest.log`，通过；内置 PG 不能用 root），再按惯例 `SUB2API_TESTPG=off` 构建、pack、sign（sup2api-plugins-2026）、verify；包 sha256 `520e9c5c038b8e6268c39bcf0dc4b197fdef40cfd607ab9b792294df52b066a8`，resources.memoryMB 1024，58 条路由。
+- 升级：`rollout.py upload` → `review`（signature valid、consent approved、host_compat_ok，权限无变化）→ `upgrade`；rollout 257，两节点 active。
+- 升级后改的线上配置：审核器 3（复核，`llm_verdict`，Claude Haiku 渠道）的自定义提示词加一句“消息里附带的图片也是待审内容，要和文字一起判断”，并写入 `review_images: true`（自定义提示词不会自动带上新默认提示词里的那句）。改前配置在 ovh `~/modmig/auditor3-before-0.8.0.json`。
+- 核验：两节点 moderation 0.8.0 active、enabled；`config_state.parity_converted = true`（名单为空，没有条目被转换）；`auditors` 的类型约束含 `llm_questions`；`/status` 返回 `default_level: enforce` 和新的运行时计数。试跑审核器 3：正常文本通过，“过 AIGC 检测”命中，带一张测试图片时 `sent_images: 1`、Haiku 的理由里描述了图片内容；流程 2 模拟：正常文本第 1 级通过，违规文本两级命中并拒绝。升级后约 3 分钟：先审记录 92 条全部通过（平均 140 ms，P95 276 ms），124、129、128 三个账号的请求没有 403、503、5xx。Playwright（Playwright 镜像，只读，拦截全部写请求）：十个标签页、流程编辑器、审核器 3 的编辑框都能打开，没有控制台报错、失败请求或未翻译的文案键，截图在 ovh `~/rel-mod080/pw/`。
+- 观察到：承接流量的节点上 `runtime.kv_errors` 在升级后 5 分钟内到 48（每百次调用约 4–6 次，逐步下降），日志里没有对应的错误；这个计数把“一次 KV 查询没在 200 ms 预算内读完”也算一次，缓存刚重建、每个请求要查的片段多时会超预算。后果是这些片段重新送审，不影响判定。0.7.x 没有这个计数，无法对比；缓存热起来后应回落，需继续看。
+- 没做：界面在本机（无可用浏览器）没看过，第一次真实加载就是上面的线上只读检查；没有在 0.7.x 数据副本上演练过升级。
+- 回滚：先按 RELEASE-MODERATION-0.8.0 的步骤处理（撤掉补审级和 `llm_questions` 审核器——线上目前没有；设置页在 0.8.0 下保存过的话先用核心设置接口删掉四个新键；把审核器 3 的 `review_images` 留着不影响 0.7.4），再 `python3 -I rollout.py upload-prev`（从 `stage/moderation-0.7.4/packages/` 重新上传）和 `rollout.py rollback`。迁移 0010 只加列和放宽约束，0.7.4 可以直接读写。
+
 2026-11-11 moderation **0.7.4**（`824a860a9`；只升级插件，核心仍 0.1.272；北京时间 03:42:16→03:42:21，rollout 256 约 5 秒，两节点同时切换；ovh 3130 和 api.prophey.ai `/readyz` 全程 200；无迁移）：
 - 内容：`OverviewTab.vue`（两处）、`TestTab.vue`、`overview/QueueCard.vue`、`overview/CostCard.vue` 的 `SGrid template` 由 `minmax(Npx, 1fr)` 改为 `minmax(min(Npx, 100%), 1fr)`（N = 360、340、260），修 0.1.272 核验时 360 px 宽“概览”页横向滚动 13 px；manifest / manifest_test 版本号，CONTRACTS §92.6 一句。hostCompat `>=0.1.258 <0.2.0`、hostUICompat `^3.4`、宿主权限、接口、后端代码都没变。
 - 发布前核对：origin/develop = `824a860a9`，`git diff 75f06b778..824a860a9` 除 0.1.272 发布记录外只有上述 7 个文件、没有迁移（build.sh 另断言 server、sdk、runtime-contract、`plugins/moderation/internal`、`migrations` 自 `75f06b778` 未变）；线上两节点核心 0.1.272 + moderation 0.7.3（包 `d83c1205…489d`）。
