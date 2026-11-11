@@ -50,13 +50,13 @@ type Plugin struct {
 
 	agent *agent
 	cache atomic.Pointer[lru]
-	// rewriting: a background write of a cached hit that had not landed in
-	// the KV is under way (lookup.rewriteSoon).
-	rewriting atomic.Bool
-	kvMu      [kvLockStripes]sync.Mutex // this node's changes of a verdict cache key in the KV, one at a time (kvLock)
-	sf        singleflight.Group
-	sem       atomic.Pointer[semaphore] // background (post) calls
-	preSem    atomic.Pointer[semaphore] // calls a request waits for
+	// kvMu: this node's changes of verdict cache keys in the KV take turns
+	// (kvLock). A lock is held while its channel holds a value, so that
+	// waiting for one can end with a context.
+	kvMu   [kvLockStripes]chan struct{}
+	sf     singleflight.Group
+	sem    atomic.Pointer[semaphore] // background (post) calls
+	preSem atomic.Pointer[semaphore] // calls a request waits for
 
 	snap   atomic.Pointer[snapshot]
 	snapMu sync.Mutex
@@ -124,15 +124,12 @@ type Plugin struct {
 		inflight, latencyMsSum                                     atomic.Int64
 		droppedNotices, noticeErrors                               atomic.Int64
 		busy, shutdownDropped, suspiciousRetries                   atomic.Int64
-		// kvTimeouts: the batches of KV calls their budget cut off (kvRun);
-		// kvErrors counts the ones in which a call failed.
-		kvTimeouts atomic.Int64
 		// imagesRefused: the auditor calls whose images the upstream refused
 		// (Outcome.ImagesRefused).
 		imagesRefused atomic.Int64
 		// preWaiting: the requests waiting for their run (runPre);
-		// kvWriting: the runs whose verdicts are on their way to the KV
-		// (storeVerdicts), and the rewrite of a hit (lookup.rewriteSoon).
+		// kvWriting: the runs whose verdicts are on their way to the KV and
+		// from there into memory (storeVerdicts).
 		preWaiting, kvWriting atomic.Int64
 	}
 
@@ -155,6 +152,9 @@ func New() *Plugin {
 		hourly:       newStatsAcc(),
 		notices:      make(chan notice, 256),
 		priceCache:   map[string]priceStateEntry{},
+	}
+	for i := range p.kvMu {
+		p.kvMu[i] = make(chan struct{}, 1)
 	}
 	p.attempts = newAttemptRuns(func() time.Time { return p.now() })
 	p.bg, p.cancel = context.WithCancel(context.Background())
@@ -280,7 +280,6 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 		"inflight":         float64(p.stats.inflight.Load()),
 		"inflight_bytes":   float64(p.inflightBytes.Load()),
 		"kv_errors":        float64(p.stats.kvErrors.Load()),
-		"kv_timeouts":      float64(p.stats.kvTimeouts.Load()),
 		"redraw_panics":    float64(jevRedrawPanics.Load()),
 		"busy":             float64(p.stats.busy.Load()),
 		"shutdown_dropped": float64(p.stats.shutdownDropped.Load()),

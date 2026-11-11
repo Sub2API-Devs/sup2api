@@ -762,13 +762,24 @@ func TestLRU(t *testing.T) {
 	if has("a") || c.len() != 1 {
 		t.Fatalf("after forget: len %d", c.len())
 	}
-	// What a lookup read from the KV is added to what a run on this node
-	// stored meanwhile; neither replaces the other.
+	// What a lookup read from the KV is added to what came into memory since
+	// (a run on this node wrote the key); neither replaces the other.
 	later := now.Add(10 * time.Second)
-	c.editSeg("c", later, ttl, pointTo(id, at))
-	got := c.syncSeg("c", later, ttl, parseSeg([]byte("p"+strconv.FormatInt(at+5, 10))))
+	read := c.reading(later)
+	c.putSeg("c", later, ttl, fmt.Appendf(nil, "p%d h%s@%d", at, id, at), read)
+	got := c.syncSeg("c", later, ttl, parseSeg([]byte("p"+strconv.FormatInt(at+5, 10))), read)
 	if v, _ := c.seg("c", later); got.pass != at+5 || len(got.hits) != 1 || v.pass != at+5 || len(v.hits) != 1 {
 		t.Fatalf("after reading the KV: %+v, returned %+v", v, got)
+	}
+	// What a run wrote to the KV replaces what memory held: memory has what
+	// the KV has. A value without a live part removes the key.
+	c.putSeg("c", later, ttl, fmt.Appendf(nil, "p%d", at+5), read)
+	if v, _ := c.seg("c", later); v.pass != at+5 || len(v.hits) != 0 {
+		t.Fatalf("after the write of a run: %+v", v)
+	}
+	c.putSeg("a", later, ttl, fmt.Appendf(nil, "p%d", now.Add(-ttl).Unix()), read)
+	if _, ok := c.seg("a", later); ok || c.len() != 1 {
+		t.Fatalf("an expired value was put: %d entries", c.len())
 	}
 	// A value is gone the TTL after its newest write.
 	if _, ok := c.seg("c", time.Unix(at+5, 0).Add(ttl)); ok || c.len() != 0 {
@@ -810,7 +821,7 @@ func TestLRUByteBudget(t *testing.T) {
 	// and expiring free.
 	hit := &storedHit{Keys: []string{"k"}}
 	c.maxBytes = 1 << 20
-	if !c.putHit("h", hit, 1000, exp, now, false) || c.getHit("h", now) != hit || c.size() != 2*one+pointer+1+hitDecodedFactor*1000+cacheEntryOverhead {
+	if !c.putHit("h", hit, 1000, exp, now, c.reading(now)) || c.getHit("h", now) != hit || c.size() != 2*one+pointer+1+hitDecodedFactor*1000+cacheEntryOverhead {
 		t.Fatalf("with a hit: %d bytes", c.size())
 	}
 	if _, ok := c.seg("h", now); ok || c.getHit("a", now) != nil {
@@ -824,7 +835,7 @@ func TestLRUByteBudget(t *testing.T) {
 	}
 	// An entry larger than the whole budget is not kept.
 	c.maxBytes = one
-	c.putHit("big", hit, int(one), exp, now, false)
+	c.putHit("big", hit, int(one), exp, now, c.reading(now))
 	if c.len() != 0 || c.size() != 0 {
 		t.Fatalf("an entry beyond the budget: %d entries, %d bytes", c.len(), c.size())
 	}
@@ -840,19 +851,21 @@ func TestLRUTombstone(t *testing.T) {
 	at, exp := now.Unix(), now.Add(ttl)
 	stone := int64(1 + tombstoneOverhead) // of a one-letter key
 	c := newLRU(10)
+	before := c.reading(now)
 	c.editSeg("s", now, ttl, passAt(at))
-	c.putHit("h", &storedHit{}, 10, exp, now, false)
+	c.putHit("h", &storedHit{}, 10, exp, now, before)
 	c.kill([]string{"s", "h"}, now.Add(time.Second), now)
 	if c.len() != 0 || c.size() != 2*stone || !c.tombstoned("s", now) || c.tombstoned("other", now) {
 		t.Fatalf("killed: %d entries, %d bytes", c.len(), c.size())
 	}
 	c.editSeg("s", now, ttl, passAt(at))
-	if c.putHit("h", &storedHit{}, 10, exp, now, false) || c.len() != 0 {
+	c.putSeg("s", now, ttl, []byte("p1700000000"), before)
+	if c.putHit("h", &storedHit{}, 10, exp, now, before) || c.len() != 0 {
 		t.Fatal("a tombstoned key was stored")
 	}
 	// What the KV holds for a tombstoned key decides the lookup that read it
 	// and stays out of memory.
-	if got := c.syncSeg("s", now, ttl, parseSeg([]byte("p1700000000"))); got.pass != at || c.len() != 0 {
+	if got := c.syncSeg("s", now, ttl, parseSeg([]byte("p1700000000")), before); got.pass != at || c.len() != 0 {
 		t.Fatalf("a tombstoned key read from the KV: %+v, %d entries", got, c.len())
 	}
 	// Killed again, a key is charged once.
@@ -865,7 +878,7 @@ func TestLRUTombstone(t *testing.T) {
 		t.Fatalf("tombstones after their time: %v, %d bytes", c.dead, c.size())
 	}
 	c.editSeg("s", later, ttl, passAt(at))
-	if !c.putHit("h", &storedHit{}, 10, exp, later, false) || c.len() != 2 {
+	if !c.putHit("h", &storedHit{}, 10, exp, later, before) || c.len() != 2 {
 		t.Fatal("a key could not be stored after its tombstone")
 	}
 	// Each tombstone goes at its own time.
@@ -882,6 +895,64 @@ func TestLRUTombstone(t *testing.T) {
 	c.kill([]string{"p", "q"}, exp, later)
 	if c.len() != 1 || c.size() > c.maxBytes {
 		t.Fatalf("with two more tombstones: %d entries, %d of %d bytes", c.len(), c.size(), c.maxBytes)
+	}
+}
+
+// A review holds its keys without an end while it writes them, and gives the
+// tombstones their time when it is done. And what was read from the KV before
+// a review is kept out of memory however long the read took: also when the
+// tombstone of its key has come and gone meanwhile.
+func TestLRUTombstoneOfAReviewInProgress(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	const ttl = time.Hour
+	at, exp := now.Unix(), now.Add(ttl)
+	val := fmt.Appendf(nil, "p%d", at)
+	c := newLRU(10)
+	read := c.reading(now) // a lookup, or the write of a run, reads the KV
+	c.kill([]string{"s", "h"}, time.Time{}, now)
+	// However long the review writes: the keys stay tombstoned.
+	for _, after := range []time.Duration{0, tombstoneTTL, time.Hour, 30 * 24 * time.Hour} {
+		if at := now.Add(after); !c.tombstoned("s", at) || !c.tombstoned("h", at) || len(c.dead) != 2 {
+			t.Fatalf("%v into the review: tombstones %v", after, c.dead)
+		}
+	}
+	// The review is over an hour later: the tombstones last tombstoneTTL from
+	// then, and go.
+	done := now.Add(time.Hour)
+	c.kill([]string{"s", "h"}, done.Add(tombstoneTTL), done)
+	if last := done.Add(tombstoneTTL - time.Nanosecond); !c.tombstoned("s", last) || c.tombstoned("s", last.Add(time.Nanosecond)) || len(c.dead) != 0 || c.size() != 0 {
+		t.Fatalf("tombstones after the review: %v, %d bytes", c.dead, c.size())
+	}
+	// The read from before the review comes back only now, with what the KV
+	// held then. Nothing of it goes into memory, under the reviewed keys or
+	// any other: which keys were tombstoned meanwhile is no longer known.
+	late := done.Add(tombstoneTTL + time.Minute)
+	c.putSeg("s", late, ttl, val, read)
+	if got := c.syncSeg("s", late, ttl, parseSeg(val), read); got.pass != at || c.putHit("h", &storedHit{}, 10, exp, late, read) || c.len() != 0 {
+		t.Fatalf("a read from before the review came into memory: %d entries (returned %+v)", c.len(), got)
+	}
+	if c.syncSeg("other", late, ttl, parseSeg(val), read); c.len() != 0 {
+		t.Fatal("a read that outlasted a tombstone came into memory")
+	}
+	// A read that began after the review is not held back, however long it
+	// takes; neither is a long read during which nothing was reviewed.
+	fresh, back := c.reading(late), late.Add(ttl/2)
+	c.putSeg("s", back, ttl, fmt.Appendf(nil, "p%d", late.Unix()), fresh)
+	if !c.putHit("h", &storedHit{}, 10, back.Add(ttl), back, fresh) || c.len() != 2 {
+		t.Fatalf("a read after the review stayed out: %d entries", c.len())
+	}
+	// A read during which a review happened, and that is back while the
+	// tombstones still stand, fills the keys the review did not change.
+	short := c.reading(late)
+	c.kill([]string{"x"}, late.Add(tombstoneTTL), late)
+	soon := late.Add(tombstoneTTL / 2)
+	c.putSeg("x", soon, ttl, fmt.Appendf(nil, "p%d", late.Unix()), short)
+	c.putSeg("y", soon, ttl, fmt.Appendf(nil, "p%d", late.Unix()), short)
+	if _, ok := c.seg("x", soon); ok {
+		t.Fatal("a reviewed key came into memory")
+	}
+	if _, ok := c.seg("y", soon); !ok {
+		t.Fatal("a key no review changed stayed out of memory")
 	}
 }
 
@@ -905,6 +976,16 @@ func TestSegValue(t *testing.T) {
 	dropPass(&v)
 	if string(v.encode()) != fmt.Sprintf("h%s@90", id(1)) || v.empty() {
 		t.Fatalf("after the drops = %q", v.encode())
+	}
+	// unpointRef removes the pointer it names and no other: not a pointer to
+	// the same hit written at another time.
+	unpointRef(hitRef{id(1), 89})(&v)
+	unpointRef(hitRef{id(2), 90})(&v)
+	if string(v.encode()) != fmt.Sprintf("h%s@90", id(1)) {
+		t.Fatalf("after dropping other pointers = %q", v.encode())
+	}
+	if unpointRef(hitRef{id(1), 90})(&v); !v.empty() {
+		t.Fatalf("after dropping the pointer = %q", v.encode())
 	}
 	// The newest maxSegHits pointers are kept; a pointer written again moves up.
 	v = segValue{}

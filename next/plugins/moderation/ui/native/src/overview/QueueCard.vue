@@ -8,8 +8,8 @@ import type { QueueStatus, Runtime } from '../types'
 // Background queues and runtime counters of the node that answered (new-api
 // queue-status): the post queue, the pricing queue and the record writer.
 // The verdict cache's memory and its KV errors are listed when the backend
-// reports them (0.8.0), its KV timeouts after them (0.8.1), and so is the
-// count of the LLM auditor calls whose images an upstream refused.
+// reports them (0.8.0), and so is the count of the LLM auditor calls whose
+// images an upstream refused.
 const props = defineProps<{ queue: QueueStatus[]; runtime: Runtime }>()
 const t = useModHost().t
 
@@ -19,7 +19,6 @@ const rows = computed<DescItem[]>(() => {
   const cache: DescItem[] = []
   if (typeof r.cache_bytes === 'number') cache.push({ key: 'cacheBytes', label: t('runtime.cacheBytes'), value: mib(r.cache_bytes) })
   if (typeof r.kv_errors === 'number') cache.push({ key: 'kvErrors', label: t('runtime.kvErrors'), value: num(r.kv_errors) })
-  if (typeof r.kv_timeouts === 'number') cache.push({ key: 'kvTimeouts', label: t('runtime.kvTimeouts'), value: num(r.kv_timeouts) })
   if (typeof r.images_refused === 'number') cache.push({ key: 'imagesRefused', label: t('runtime.imagesRefused'), value: num(r.images_refused) })
   return [
     { key: 'flows', label: t('runtime.flows'), value: `${num(r.flows)} / ${num(r.auditors)}` },

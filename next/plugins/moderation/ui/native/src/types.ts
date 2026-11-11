@@ -30,8 +30,6 @@ export interface Runtime {
   cache_bytes?: number
   /** failed reads and writes of the verdict cache in the shared KV (never fatal: the content is moderated instead) */
   kv_errors?: number
-  /** batches of shared-KV calls of the verdict cache cut off by their time budget since the node started (0.8.1): the KV answered too slowly, it did not fail */
-  kv_timeouts?: number
   /** calls of the LLM auditors whose images the upstream refused since the node started (Outcome.images_refused) */
   images_refused?: number
   /** image redraws that panicked in the decoder since the node started (the image is skipped, the text is still moderated) */
