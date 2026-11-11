@@ -6,8 +6,10 @@
 // kept as a "name contains" search; id and text exclude each other, and
 // `change` follows every pick or clear with both.
 // The first row answers Enter: "Name contains …" for text (when `text` is
-// bound), for digits the entity with that id, or "Filter by ID #n" when the
-// list has none (a deleted entity's history can still be searched).
+// bound), for digits the entity with that id, or "Use ID #n" when the
+// list has none (a deleted entity's history can still be searched). A model
+// picked by id alone also takes a typed name the list does not have, as its
+// last row (requests name models no price lists).
 // Closed, it shows "name #id"; an id whose name is not known yet (from a
 // link) is looked up, and stays "#id" when the lookup does not know it.
 // `mine` lists the caller's own entities, `scope` passes the kind's lookup
@@ -20,7 +22,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SInput, SSelect, type SelectOption } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import { ENTITIES, lookupPermissions, type EntityKind } from './entity/entities'
+import { ENTITIES, isEntityId, lookupPermissions, type EntityKind } from './entity/entities'
 import { lookupEntities, lookupUnavailable, useEntityNames, type EntityItem, type LookupResult } from './entity/lookup'
 
 const props = withDefaults(
@@ -50,7 +52,6 @@ const SEARCH_DELAY_MS = 250
 // Option values: an id or a name search, told apart by the first character.
 const ID = '#'
 const TEXT = '~'
-const isId = (v: string) => /^[1-9]\d*$/.test(v)
 
 const entity = computed(() => ENTITIES[props.kind])
 const label = computed(() => props.placeholder ?? t(entity.value.label))
@@ -118,18 +119,27 @@ function row(item: EntityItem): SelectOption {
     tag: inactive ? t('entity.inactive') : undefined
   }
 }
-// The one place typed text is read: digits are an id (the entity that has it
-// first, else the bare id), any text is a name search where `text` is bound.
+/** Typed text that is an id as it stands: one of the page's own candidates, digits, or any text where the id is the name and names are not searched. */
+function typedIsId(v: string): boolean {
+  if (props.extra.some((item) => String(item.id) === v)) return true
+  return entity.value.numeric ? isEntityId(v) : !searchesText.value
+}
+// The one place typed text is read: an id is the entity that has it, else the
+// bare id; any text is a name search where `text` is bound.
 const options = computed<SelectOption[]>(() => {
   const q = query.value
-  const asId = entity.value.numeric && isId(q)
+  const asId = !!q && typedIsId(q)
   const hit = asId ? candidates.value.find((item) => String(item.id) === q) : undefined
+  const bare = asId && !hit
   const first: SelectOption[] = []
+  const last: SelectOption[] = []
   if (hit) first.push(row(hit))
   // Offered while the search runs too, so digits + Enter never wait; only a settled list can say the id is not in it.
-  else if (asId) first.push({ value: ID + q, label: t('entity.byId', { id: q }), description: loading.value ? undefined : t('entity.byIdHint'), accent: true })
+  else if (bare && entity.value.numeric) first.push({ value: ID + q, label: t('entity.byId', { id: q }), description: loading.value ? undefined : t('entity.byIdHint'), accent: true })
+  // A typed name is more often part of a listed one: the matches keep Enter, and only a settled list offers the text as it stands.
+  else if (bare && !loading.value) last.push({ value: ID + q, label: t('entity.asTyped', { text: q }), description: t('entity.asTypedHint'), accent: true })
   if (q && searchesText.value) first.push({ value: TEXT + q, label: t('entity.contains', { text: q }), description: t('entity.containsHint'), accent: true })
-  return [...first, ...candidates.value.filter((item) => item !== hit).map(row)]
+  return [...first, ...candidates.value.filter((item) => item !== hit).map(row), ...last]
 })
 const footer = computed(() => (more.value && !loading.value ? t('entity.more', { n: found.value.length }) : undefined))
 /** What a scope parameter did to the list ("Only keys of a@x"), for the first one set. */
@@ -166,8 +176,6 @@ watch(
   (v) => (box.value = v),
   { immediate: true }
 )
-/** A kind whose id is its name takes any text as the id unless it searches names. */
-const typedIsId = (v: string) => (entity.value.numeric ? isId(v) : !searchesText.value)
 const boxPlaceholder = computed(() => {
   if (!entity.value.numeric) return label.value
   return searchesText.value ? t('entity.typeIdOrName', { name: label.value }) : t('entity.typeId', { name: label.value })

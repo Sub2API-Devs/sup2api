@@ -1135,10 +1135,7 @@ function usageFilter(rows: any[], q: Record<string, string>) {
     if (q.stream && String(u.stream) !== q.stream) return false
     if (q.billing_status && u.billing_status !== q.billing_status) return false
     if (q.conversion && !conversionMatch(u.conversion, q.conversion)) return false
-    if (q.model) {
-      const pat = q.model
-      if (pat.endsWith('*') ? !u.model.startsWith(pat.slice(0, -1)) : !u.model.includes(pat)) return false
-    }
+    if (q.model && u.model !== q.model) return false
     if (q.success === 'true' && !u.success) return false
     if (q.success === 'false' && u.success) return false
     return true

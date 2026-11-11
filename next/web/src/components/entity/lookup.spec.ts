@@ -31,6 +31,15 @@ describe('useEntityNames', () => {
     expect(get).toHaveBeenCalledTimes(1)
   })
 
+  it('does not ask for an id the lookup cannot hold, which the core would refuse with the whole batch', async () => {
+    const { label } = useEntityNames()
+    const chip = computed(() => [label('group', 0), label('group', '007'), label('group', 'abc'), label('group', 3)].join(' / '))
+    expect(chip.value).toBe('#0 / #007 / #abc / #3')
+    await flushPromises()
+    expect(queries()).toEqual([['/lookup/groups', { ids: '3' }]])
+    expect(chip.value).toBe('#0 / #007 / #abc / cc-low #3')
+  })
+
   it('a model is its name, without a lookup', () => {
     const { label, name } = useEntityNames()
     expect([name('model', 'gpt-4o'), label('model', 'gpt-4o')]).toEqual(['gpt-4o', 'gpt-4o'])

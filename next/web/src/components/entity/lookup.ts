@@ -4,7 +4,7 @@
 // that print "name #id" (useEntityNames).
 import { reactive, toValue, type MaybeRefOrGetter } from 'vue'
 import { api, isApiError, session, type Query } from '@sub2api/host'
-import { ENTITIES, type EntityKind } from './entities'
+import { ENTITIES, isEntityId, type EntityKind } from './entities'
 
 export interface EntityItem {
   /** A number; the name itself for models. */
@@ -128,14 +128,14 @@ function ask(kind: EntityKind, mine: boolean, id: string) {
  * its name arrives. `mine` = the page lists the caller's own entities.
  */
 export function useEntityNames(options: { mine?: MaybeRefOrGetter<boolean | undefined> } = {}) {
-  /** The entity's name; undefined while unknown, for an id the lookup does not know, and for ''. */
+  /** The entity's name; undefined while unknown, for an id the lookup does not know or cannot hold (0, of a page's own candidate), and for ''. */
   function name(kind: EntityKind, id: string | number | null | undefined): string | undefined {
     const text = String(id ?? '')
     if (!text) return undefined
     if (!ENTITIES[kind].numeric) return text
     const mine = !!toValue(options.mine)
     const key = keyOf(realmOf(kind, mine), text)
-    if (!known.has(key)) ask(kind, mine, text)
+    if (!known.has(key) && isEntityId(text)) ask(kind, mine, text)
     return known.get(key)?.name
   }
   /** "name #id"; "#id" while the name is unknown; the bare name for a kind whose id is its name; '' for no id. */

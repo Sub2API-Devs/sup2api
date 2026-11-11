@@ -51,6 +51,13 @@ export const ENTITIES: Record<EntityKind, EntityDescriptor> = {
   proxy: { path: 'proxies', icon: 'proxy', label: 'entity.kind.proxy', numeric: true, permissions: OWN_OR_ALL('proxy') }
 }
 
+/**
+ * An id of a numeric kind as the lookup takes one (typed as q, or in ids=): a
+ * positive integer. "0" and "007" are not: typed, they are text, and their
+ * name is never asked for (the core refuses a request that carries one).
+ */
+export const isEntityId = (v: string): boolean => /^[1-9]\d*$/.test(v)
+
 /** The permissions of which one lets a caller look `kind` up (`mine`: only its own rows). */
 export function lookupPermissions(kind: EntityKind, mine = false): string[] {
   const entity = ENTITIES[kind]

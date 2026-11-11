@@ -117,7 +117,7 @@ describe('EntityPicker list', () => {
     expect(rows(idOnly)).toEqual(['zhangsan@example.com#7Zhang San', 'lisi@example.comDisabled#12', 'takeout@example.net#31Takeout'])
   })
 
-  it('reads digits as an id: the entity that has it first, else "Filter by ID"', async () => {
+  it('reads digits as an id: the entity that has it first, else "Use ID"', async () => {
     const w = picker({ text: '' })
     await open(w)
     await type(w, '12')
@@ -128,9 +128,9 @@ describe('EntityPicker list', () => {
     await w.get('input').trigger('focus')
     await w.get('input').setValue('999')
     // Offered before the answer, so digits + Enter never wait; the list says what it knows once settled.
-    expect(rows(w)).toEqual(['Filter by ID #999', 'Name contains “999”Partial match'])
+    expect(rows(w)).toEqual(['Use ID #999', 'Name contains “999”Partial match'])
     await settle()
-    expect(rows(w)[0]).toBe('Filter by ID #999This ID is not in the list (it may have been deleted); you can still filter by it')
+    expect(rows(w)[0]).toBe('Use ID #999This ID is not in the list (it may have been deleted); you can still use it')
     await w.get('input').trigger('keydown', { key: 'Enter' })
     expect(model(w)).toEqual({ id: '999', text: '' })
   })
@@ -165,6 +165,23 @@ describe('EntityPicker list', () => {
     expect(model(w)).toEqual({ id: 'gpt-4o', text: '' })
   })
 
+  it('a model picked by id alone also takes a typed name the list does not have, after the matches', async () => {
+    mocks.get.mockImplementation(async (_path: string, query: Query = {}) => ({ items: 'gpt-4o'.includes(String(query.q ?? '')) ? [{ id: 'gpt-4o', name: 'gpt-4o' }] : [], more: false }))
+    const w = picker({ kind: 'model' })
+    await open(w)
+    await w.get('input').setValue('4o')
+    // Not while the search runs: Enter must not take a fragment for the name.
+    expect(rows(w)).toEqual([])
+    await settle()
+    expect(rows(w)).toEqual(['gpt-4o', 'Use “4o”This name is not in the list; you can still use it'])
+    await type(w, 'gpt-4o')
+    expect(rows(w)).toEqual(['gpt-4o'])
+    await type(w, 'my-unpriced-model')
+    expect(rows(w)).toEqual(['Use “my-unpriced-model”This name is not in the list; you can still use it'])
+    await w.get('input').trigger('keydown', { key: 'Enter' })
+    expect(model(w)).toEqual({ id: 'my-unpriced-model', text: '' })
+  })
+
   it('says so when the list cannot be loaded', async () => {
     mocks.get.mockRejectedValue(new ApiError(500, { code: 'internal', message: 'boom' }))
     const w = picker({})
@@ -189,6 +206,18 @@ describe('EntityPicker value', () => {
     picker({ id: '404' })
     await flushPromises()
     expect(mocks.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows and picks a candidate of the page whose id the lookup cannot hold (0), without asking for its name', async () => {
+    const extra = [{ id: 0, name: 'Default group' }]
+    const w = picker({ kind: 'group', id: '0', extra })
+    await flushPromises()
+    expect([shown(w), w.get('.input-group').text()]).toEqual(['Default group', '#0'])
+    expect(mocks.get).not.toHaveBeenCalled()
+    const empty = picker({ kind: 'group', extra })
+    await open(empty)
+    await empty.get('[role="option"]').trigger('click')
+    expect(model(empty)).toEqual({ id: '0', text: '' })
   })
 
   it('asks for the caller\'s own names with mine', async () => {
@@ -245,6 +274,13 @@ describe('EntityPicker without the lookup', () => {
     expect((box(w).element as HTMLInputElement).value).toBe('7')
     await commit(w, '9')
     expect(model(w)).toEqual({ id: '9', text: '' })
+  })
+
+  it('the text box takes the id of a page candidate the lookup does not have', async () => {
+    mocks.denied = ['group:read']
+    const w = picker({ kind: 'group', extra: [{ id: 0, name: 'Default group' }] })
+    await commit(w, '0')
+    expect(model(w)).toEqual({ id: '0', text: '' })
   })
 
   it('asks the permission of a mine lookup, which every signed-in user has for groups', async () => {

@@ -75,7 +75,6 @@ export default {
   user: 'User',
   group: 'Group',
   account: 'Account',
-  createdById: 'Creator ID',
   onlyMine: 'Only mine',
   theme: {
     toggle: 'Toggle theme',
