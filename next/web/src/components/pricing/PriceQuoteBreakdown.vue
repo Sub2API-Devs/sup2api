@@ -88,7 +88,7 @@ const ROW_CLASS: Record<LevelState, string> = {
             :data-level="row.key"
             :data-state="row.state"
           >
-            <span class="min-w-0">{{ row.label }}</span>
+            <span class="min-w-0 truncate" :title="row.label">{{ row.label }}</span>
             <span class="flex shrink-0 items-center gap-2">
               <span :class="row.state === 'unset' ? '' : 'font-mono'">{{ row.text }}</span>
               <SBadge v-if="row.state === 'applies'" tone="primary" size="xs">{{ t('pricingTools.quote.applies') }}</SBadge>
