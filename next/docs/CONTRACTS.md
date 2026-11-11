@@ -6776,7 +6776,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - **`Authorization: Bearer sak_…`**：只有核心路由（`httpapi`）接受，走 `core.AuthenticateBearer`。插件路由和其他认证入口只认 JWT，遇到密钥回 401：插件拿到的是用户 id，在插件内部做的权限判断限制不到密钥，所以插件权限也不能选给密钥。以后要开放，得先让插件的权限判断带上密钥的限制。
 - **子集在两处保证**：创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）。每次检查权限时，`authz.PermissionSet` 取“用户现有权限 ∩ 密钥权限”，所以用户失去权限，密钥立刻跟着失去；重新获得时也恢复。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn`、`guardTarget` 看到的也是这个限制后的集合。只限制密钥所属用户，查询其他用户的权限不受影响。
-- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`（`AuthedRead`），返回的权限和菜单也是限制后的。
+- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`（`AuthedRead`），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。
 - **接口**（都只能用登录会话调用）：`GET /me/access-keys`（含 `lost`：已选但用户不再持有的权限）、`GET /me/access-keys/permissions`（可选的权限，只含自己持有的）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。
 - 控制台入口在个人中心，权限选择复用角色页的权限树。
@@ -7612,4 +7612,76 @@ UI 3.8 及以前，`SPageHeader` 只有在自己的 `title` 与路由标题文�
 - `GET /usage`、`/me/usage`、`/usage/summary`、`/me/usage/summary`、`/usage/export`、`/me/usage/export` 的 `request_id` 参数在带 `from` 时改为 `(u.request_id = v OR u.client_request_id = v)`（不带 `from` 时仍只比 `u.request_id`，避免无索引全表扫描）：用户手里通常只有一个 ID（我方返回的请求 ID，或自己客户端发的 `X-Request-Id`），一个搜索框都能找到。`client_request_id` 参数不变，仍只精确比客户端请求 ID。两个参数同时给时同时生效（AND）。见 §14.4。
 - 旧核心（滚动窗口内）只比我方请求 ID，按客户端请求 ID 搜索返回空列表，不报错。
 - 测试：`usage/api_filter_test.go` 的 `TestParseFilterRequestIDs`（生成的条件与参数，表驱动）、`TestUsageSearchByRequestID`（PostgreSQL：列表、汇总、导出三处，全站与自助视图，表驱动）。
+
+## 96. 实体查找接口 `GET /lookup/{kind}`（2026-11-11，用户要求：控制台的实体选择器按名称或 ID 选用户、分组、API Key、账号、模型、代理，并把 ID 反查成名称；只读，无迁移；核心 0.1.279）
+
+各列表接口的 `q` 不匹配数字 id，也没有“查全部 API Key”的接口。选择器需要的只是“名称包含或 id 相等”的几行和按 id 取名称，所以另开一个轻量接口；现有列表接口的行为都不变。
+
+### 96.1 请求
+
+```
+GET /api/v1/lookup/{kind}
+kind: users | groups | api-keys | accounts | models | proxies
+```
+
+| 参数 | 说明 |
+|---|---|
+| `q` | 可选，去首尾空格。按名称列不区分大小写“包含”匹配，`%`、`_`、`\` 按字面匹配（`store.Like` 转义）。users 的 `q` 匹配 `email` 或 `display_name` 任一（同 `GET /users` 的 `q`），其它 kind 只匹配名称列。`q` 全是数字且不超出 int64 时同时按 id 精确匹配，id 命中的那一行排最前；超出 int64 的数字串只按名称匹配。models 没有数字 id，只按名称 |
+| `ids` | 可选，逗号分隔的正整数（models 传模型名），最多 100 个。给了就只返回这些 id 对应的行：忽略 `q` 和 `limit`，`more` 恒为 `false`；不存在、已软删除、不在调用者可见范围内的 id 直接省略，不报错。`mine`、`user_id` 照常生效。空串等同没给 |
+| `limit` | 1..50，默认 20 |
+| `mine` | 布尔，默认 `false`。`true` 只查调用者自己的，范围见 96.3 |
+| `user_id` | 仅 api-keys：只列该用户的密钥。与 `mine=true` 同时给时两个条件都生效 |
+| `prefer_group_id` | 仅 accounts：属于该分组的账号排在前面，不是过滤 |
+
+- 排序：id 等于 `q` 的行 → `prefer_group_id` 命中的行 → `name` 升序（数据库排序规则）→ `id`。
+- 其它 kind 收到 `user_id`、`prefer_group_id` 时忽略。
+- 错误：`limit` 不在 1..50、`ids` 里有非正整数或空项、`ids` 超过 100 个、`mine` 不是布尔值、`user_id` / `prefer_group_id` 不是正整数、`q` 超过 256 字节或含非法 UTF-8 / NUL，返回 400 `invalid_argument`；该 kind 不支持 `mine=true`（users）也是 400。未知的 kind 返回 404 `not_found`。没有权限返回 403 `permission_denied`，`details.permission` 是该 kind 的全量权限键（`mine=true` 时是 96.3 该列的第一个）。
+
+### 96.2 响应
+
+`200`，照例包在 `data` 里：
+
+```json
+{ "data": { "items": [ { "id": 7, "name": "zhangsan@example.com", "hint": "张三", "status": "active" } ], "more": false } }
+```
+
+- `id`：数字；models 是字符串，等于模型名。
+- `name`、`hint`、`status` 各 kind 的来源见 96.3。`hint` 是帮助辨认同名行的数据，不含翻译文案；为空时省略该字段。`status` 是实体自己的状态值，原样返回，没有状态概念的（models）省略。
+- `more`：还有更多匹配、被 `limit` 截断时为 `true`（服务端多取一行判断，不另数总数）。
+- 没有匹配时 `items` 是 `[]`。
+
+### 96.3 各 kind 的数据来源、范围与权限
+
+| kind | 表 | `name` | `hint` | `status` | 不返回 |
+|---|---|---|---|---|---|
+| users | `users` | `email`（`q` 还匹配 `display_name`） | `display_name` | `status` | 已软删除（`deleted_at`） |
+| groups | `groups` | `name` | 无（分组没有平台字段，平台由账号类型推出，§13） | `status` | — |
+| api-keys | `api_keys` 连 `users` | `name` | 全量：所属用户的 `email`；`mine=true`：`key_prefix` | `status`（不反映过期） | 已软删除 |
+| accounts | `accounts` | `name` | `plugin_key` | `status` | 已软删除 |
+| models | `model_prices` | `model` | 无 | 无 | — |
+| proxies | `proxies` | `name` | `protocol://host:port` | `status` | — |
+
+| kind | 全量（不带 `mine`） | `mine=true` |
+|---|---|---|
+| users | `user:read` | 不支持（400） |
+| groups | `group:read`：全部分组，含已停用 | 任何登录用户：`GET /me/groups` 的范围（状态 `active`，且公开或已分配给调用者） |
+| api-keys | `usage:all:read`：全部用户的密钥（使用记录本来就向它展示所有密钥的 id、名称、所属用户） | `apikey:self:manage`：调用者自己的密钥 |
+| accounts | `account:read`：全部账号；只有 `account:own:read` 时自动只看自己创建的（同 `GET /accounts`，§21.2） | `account:read` 或 `account:own:read`：只看自己创建的 |
+| models | `price:read`：价格表里的全部模型，含已停用的价格 | `apikey:self:manage`：已启用的价格里，调用者任一可用分组（`/me/groups` 的范围）的模型名单放行的模型，即 `GET /me/prices` 对每个可用分组结果的并集 |
+| proxies | `proxy:read`：全部代理；只有 `proxy:own:read` 时自动只看自己创建的（同 `GET /proxies`） | `proxy:read` 或 `proxy:own:read`：只看自己创建的 |
+
+- accounts 与 `GET /accounts` 的一处不同：插件已停用或卸载的账号也能查到（列表默认隐藏它们）。选择器用来筛使用记录，这些账号的记录还在。
+- “自己创建的”按 `created_by` 判断，`created_by` 为空的行只有全量权限能看到（§21.1）。
+- models 的 `mine` 范围在核心里用 `core.GroupInfo.AllowsModel` 逐个判断（与 `/me/prices`、`/key/prices` 同一个函数），没有在 SQL 里另写一套通配规则。
+
+### 96.4 访问密钥
+
+路由用 `AuthedRead` 注册（§80）：权限随 kind 和 `mine` 变化，由处理函数自己检查（`httpapi.CanAny`）。访问密钥可以调用，能查的 kind 受密钥自己的权限限制；`groups?mine=true` 和 `/me/groups` 一样不要权限。
+
+### 96.5 实现与兼容
+
+- 查找协议（参数解析、“名称包含或 id 相等”、排序、`more`、响应）只在 `server/internal/lookup/lookup.go` 实现一次；每个 kind 是 `entities.go` 里的一条 `Entity` 描述（表、id 列、名称列、额外参与 `q` 匹配的列 `Search`、hint 表达式、状态列、软删除条件、权限、`mine` 范围、附加参数）。新增 kind 只加一条描述。描述集中放在 lookup 包而不是分散到各模块：每条只有几行，读的表使用记录模块本来就按名称连接，放在一起就是这张权限表。
+- 没有迁移和新索引。名称匹配是 `ILIKE '%q%'`，不带 `q` 时按名称取前 `limit + 1` 行，都是顺序扫描加 top-N 排序，与现有列表接口的 `q` 同一量级。
+- 旧核心（滚动窗口内）没有这条路由，返回 404 `not_found`。
+- 测试：`server/internal/lookup/lookup_test.go` 的 `TestLookup`（PostgreSQL，表驱动：匹配与排序、`ids`、`limit` 与 `more`、通配符转义、按显示名找用户、软删除、各 kind 的权限与范围、`user_id`、`prefer_group_id`、响应形状、400 / 403 / 404）。
 

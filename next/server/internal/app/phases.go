@@ -37,6 +37,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/lookup"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/notify"
 	observer "github.com/Sub2API-Devs/sup2api/next/server/internal/observation"
@@ -516,6 +517,7 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 	b.prx.RegisterRoutes(r)
 	b.acc.RegisterRoutes(r)
 	b.bill.RegisterRoutes(r)
+	lookup.New(b.db, b.az).RegisterRoutes(r)
 	b.settler.RegisterRoutes(r)
 	b.tasks.RegisterRoutes(r, b.cl.Registry)
 	api.New(api.Deps{
