@@ -31,9 +31,11 @@ var entities = []*Entity{
 	},
 	{
 		// The usage log shows every key's id, name and owner to usage:all:read
-		// already; no other permission lists the keys of other users.
-		Kind: "api-keys", From: "api_keys k JOIN users u ON u.id = k.user_id", ID: "k.id", Name: "k.name",
-		Hint: "u.email", Status: "k.status",
+		// already; no other permission lists the keys of other users. The
+		// owner is a subquery, not a join: it is read for the rows returned
+		// only, after the limit, instead of for every key.
+		Kind: "api-keys", From: "api_keys k", ID: "k.id", Name: "k.name",
+		Hint: "(SELECT u.email FROM users u WHERE u.id = k.user_id)", Status: "k.status",
 		Live: "k.deleted_at IS NULL",
 		Read: "usage:all:read",
 		// GET /me/api-keys. The owner is the caller, so the hint is the

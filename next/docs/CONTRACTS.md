@@ -7656,7 +7656,7 @@ kind: users | groups | api-keys | accounts | models | proxies
 |---|---|---|---|---|---|
 | users | `users` | `email`（`q` 还匹配 `display_name`） | `display_name` | `status` | 已软删除（`deleted_at`） |
 | groups | `groups` | `name` | 无（分组没有平台字段，平台由账号类型推出，§13） | `status` | — |
-| api-keys | `api_keys` 连 `users` | `name` | 全量：所属用户的 `email`；`mine=true`：`key_prefix` | `status`（不反映过期） | 已软删除 |
+| api-keys | `api_keys`（所属用户取自 `users`） | `name` | 全量：所属用户的 `email`；`mine=true`：`key_prefix` | `status`（不反映过期） | 已软删除 |
 | accounts | `accounts` | `name` | `plugin_key` | `status` | 已软删除 |
 | models | `model_prices` | `model` | 无 | 无 | — |
 | proxies | `proxies` | `name` | `protocol://host:port` | `status` | — |
@@ -7681,7 +7681,7 @@ kind: users | groups | api-keys | accounts | models | proxies
 ### 96.5 实现与兼容
 
 - 查找协议（参数解析、“名称包含或 id 相等”、排序、`more`、响应）只在 `server/internal/lookup/lookup.go` 实现一次；每个 kind 是 `entities.go` 里的一条 `Entity` 描述（表、id 列、名称列、额外参与 `q` 匹配的列 `Search`、hint 表达式、状态列、软删除条件、权限、`mine` 范围、附加参数）。新增 kind 只加一条描述。描述集中放在 lookup 包而不是分散到各模块：每条只有几行，读的表使用记录模块本来就按名称连接，放在一起就是这张权限表。
-- 没有迁移和新索引。名称匹配是 `ILIKE '%q%'`，不带 `q` 时按名称取前 `limit + 1` 行，都是顺序扫描加 top-N 排序，与现有列表接口的 `q` 同一量级。
+- 没有迁移和新索引。名称匹配是 `ILIKE '%q%'`，不带 `q` 时按名称取前 `limit + 1` 行，都是顺序扫描加 top-N 排序，与现有列表接口的 `q` 同一量级。只有 users、api-keys 的全量查找会扫大表（要 `user:read` / `usage:all:read`）；`mine`、“自己创建的”、`user_id` 和 `ids` 走已有索引或只读小表。api-keys 的所属用户用子查询取，只对截断后返回的行读 `users`。合成数据实测（PostgreSQL 16，100 万用户、200 万密钥）：这两种全量查找每次约 0.1 到 0.5 秒（不并行时约 1 秒），其余在 30 毫秒内。表到这个规模以后再给名称列加 `pg_trgm` 索引。
 - 旧核心（滚动窗口内）没有这条路由，返回 404 `not_found`。
-- 测试：`server/internal/lookup/lookup_test.go` 的 `TestLookup`（PostgreSQL，表驱动：匹配与排序、`ids`、`limit` 与 `more`、通配符转义、按显示名找用户、软删除、各 kind 的权限与范围、`user_id`、`prefer_group_id`、响应形状、400 / 403 / 404）。
+- 测试：`server/internal/lookup/lookup_test.go` 的 `TestLookup`（PostgreSQL，表驱动：匹配与排序、`ids`、`limit` 与 `more`、通配符转义、按显示名找用户、软删除、各 kind 的权限与范围、范围外的行用 `ids` 或 `q` 里的 id 也查不到、`user_id`、`prefer_group_id`、响应形状、400 / 403 / 404）、`TestLookupAccessKey`（访问密钥按自己的权限调用）、`TestLookupMineIsTheSelfServiceRange`（`mine=true` 的分组、模型与同一个库上真实的 `/me/groups`、`/me/prices` 结果一致）。
 
