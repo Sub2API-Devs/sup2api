@@ -174,6 +174,33 @@ func TestKVGetManyKeepsRequestOrderAndReportsMissingKeys(t *testing.T) {
 	}
 }
 
+// KVSet takes the ttl of the batch write: 0 up to protocol.KVMaxTTLSeconds.
+// A larger one used to overflow time.Duration and store the key without an
+// expiry.
+func TestKVSetRefusesATTLThatOverflows(t *testing.T) {
+	mr, rdb, calls := kvRedis(t)
+	h := kvEnv(t, "pa", kvGrant, rdb, nil)
+	ctx := context.Background()
+	set := func(ttl int64) error {
+		_, err := h.KVSet(ctx, &pluginv1.KVSetRequest{Namespace: "n", Key: "k", Value: []byte("v"), TtlSeconds: ttl})
+		return err
+	}
+	for _, ttl := range []int64{-1, protocol.KVMaxTTLSeconds + 1, 18446744073, 1 << 62} {
+		if err := set(ttl); status.Code(err) != codes.InvalidArgument {
+			t.Errorf("ttl_seconds %d: %v, want InvalidArgument", ttl, err)
+		}
+	}
+	if got := calls.take(); len(got) != 0 || len(mr.Keys()) != 0 {
+		t.Fatalf("a refused KVSet reached Redis: %v, keys %v", got, mr.Keys())
+	}
+	if err := set(protocol.KVMaxTTLSeconds); err != nil {
+		t.Fatalf("the largest ttl: %v", err)
+	}
+	if got := mr.TTL("plugin:kv:pa:n:k"); got != time.Duration(protocol.KVMaxTTLSeconds)*time.Second {
+		t.Fatalf("largest ttl = %v", got)
+	}
+}
+
 func TestKVSetManyWritesEveryItemWithItsOwnTTL(t *testing.T) {
 	mr, rdb, _ := kvRedis(t)
 	h := kvEnv(t, "pa", kvGrant, rdb, nil)
@@ -212,15 +239,14 @@ func TestKVSetManyWritesNothingWhenOneItemIsInvalid(t *testing.T) {
 	h := kvEnv(t, "pa", kvGrant, rdb, nil)
 	kvSetMany(t, h, "n", setItem("old", "before", 0))
 	calls.take()
-	big := strings.Repeat("x", KVMaxValueBytes+1)
+	big := strings.Repeat("x", protocol.KVMaxValueBytes+1)
 	for name, bad := range map[string]*pluginv1.KVSetManyItem{
-		"empty key":      setItem("", "v", 0),
-		"long key":       setItem(strings.Repeat("k", KVMaxKeyBytes+1), "v", 0),
-		"value too big":  setItem("big", big, 0),
-		"negative ttl":   setItem("neg", "v", -1),
-		"ttl too large":  setItem("huge", "v", protocol.KVMaxTTLSeconds+1),
-		"missing (nil)":  nil,
-		"ttl overflowed": setItem("max", "v", 1<<62),
+		"empty key":     setItem("", "v", 0),
+		"long key":      setItem(strings.Repeat("k", protocol.KVMaxKeyBytes+1), "v", 0),
+		"value too big": setItem("big", big, 0),
+		"negative ttl":  setItem("neg", "v", -1),
+		"ttl too large": setItem("huge", "v", protocol.KVMaxTTLSeconds+1),
+		"missing (nil)": nil,
 	} {
 		// The bad item stands in the middle: the items before it must not be
 		// written either.
@@ -242,9 +268,16 @@ func TestKVSetManyWritesNothingWhenOneItemIsInvalid(t *testing.T) {
 			t.Fatalf("%s: existing value was overwritten: %q", name, v)
 		}
 	}
+	// The error is the one of protocol.CheckKVBatchItems, which the SDK and
+	// the fake host return too: it names the first item that breaks a rule.
+	_, err := h.KVSetMany(context.Background(), &pluginv1.KVSetManyRequest{Namespace: "n", Items: []*pluginv1.KVSetManyItem{
+		setItem("first", "1", 0), setItem("big", big, 0), setItem("", "v", 0)}})
+	if got, want := status.Convert(err).Message(), "items[1]: value exceeds 65536 bytes"; status.Code(err) != codes.InvalidArgument || got != want {
+		t.Fatalf("two invalid items: %v, want %q", err, want)
+	}
 	// A value of exactly the limit is fine.
-	kvSetMany(t, h, "n", setItem("first", "1", 0), setItem("exact", big[:KVMaxValueBytes], 0))
-	if v, _ := mr.Get("plugin:kv:pa:n:exact"); len(v) != KVMaxValueBytes {
+	kvSetMany(t, h, "n", setItem("first", "1", 0), setItem("exact", big[:protocol.KVMaxValueBytes], 0))
+	if v, _ := mr.Get("plugin:kv:pa:n:exact"); len(v) != protocol.KVMaxValueBytes {
 		t.Fatalf("value at the limit: %d bytes", len(v))
 	}
 }
@@ -255,19 +288,19 @@ func TestKVBatchLimits(t *testing.T) {
 	ctx := context.Background()
 
 	// Keys per call.
-	if got := kvBatchCodes(h, "n", numberedKeys("k", KVMaxBatchKeys)); got != allCodes(codes.OK) {
-		t.Fatalf("%d keys: %v", KVMaxBatchKeys, got)
+	if got := kvBatchCodes(h, "n", numberedKeys("k", protocol.KVBatchMaxKeys)); got != allCodes(codes.OK) {
+		t.Fatalf("%d keys: %v", protocol.KVBatchMaxKeys, got)
 	}
 	calls.take()
-	if got := kvBatchCodes(h, "n", numberedKeys("k", KVMaxBatchKeys+1)); got != allCodes(codes.InvalidArgument) {
-		t.Fatalf("%d keys: %v", KVMaxBatchKeys+1, got)
+	if got := kvBatchCodes(h, "n", numberedKeys("k", protocol.KVBatchMaxKeys+1)); got != allCodes(codes.InvalidArgument) {
+		t.Fatalf("%d keys: %v", protocol.KVBatchMaxKeys+1, got)
 	}
 	if got := calls.take(); len(got) != 0 || len(mr.Keys()) != 0 {
 		t.Fatalf("an oversized batch reached Redis: %v, keys %d", got, len(mr.Keys()))
 	}
 
 	// Payload of one write: keys plus values.
-	value := bytes.Repeat([]byte("v"), KVMaxValueBytes)
+	value := bytes.Repeat([]byte("v"), protocol.KVMaxValueBytes)
 	items := func(keys []string) []*pluginv1.KVSetManyItem {
 		out := make([]*pluginv1.KVSetManyItem, len(keys))
 		for i, k := range keys {
@@ -275,7 +308,7 @@ func TestKVBatchLimits(t *testing.T) {
 		}
 		return out
 	}
-	fits := KVMaxBatchBytes / KVMaxValueBytes // 48 values of 64 KiB are exactly the limit
+	fits := protocol.KVBatchMaxBytes / protocol.KVMaxValueBytes // 48 values of 64 KiB are exactly the limit
 	if _, err := h.KVSetMany(ctx, &pluginv1.KVSetManyRequest{Namespace: "n", Items: items(numberedKeys("a", fits))}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("write above the payload limit (values at the limit plus keys): %v", err)
 	}
@@ -331,15 +364,16 @@ func TestKVBatchIsScopedToThePluginAndNamespace(t *testing.T) {
 	if v, _ := mr.Get("plugin:kv:pa:other:k1"); v != "o1" {
 		t.Fatalf("a key with ':' wrote into another namespace: %q", v)
 	}
-	// The namespace rule of the single calls, checked even without keys.
-	for _, ns := range []string{"", "a:b", "*", "a?", "[a]", `a\b`, strings.Repeat("n", KVMaxNamespace+1)} {
+	// The namespace rule of the single calls (the table is in sdk/protocol),
+	// checked even without keys.
+	for _, ns := range []string{"", "a:b", strings.Repeat("n", protocol.KVMaxNamespaceBytes+1)} {
 		for _, keys := range [][]string{{"k"}, nil} {
 			if got := kvBatchCodes(pa, ns, keys); got != allCodes(codes.InvalidArgument) {
 				t.Errorf("namespace %q with %d keys: %v", ns, len(keys), got)
 			}
 		}
 	}
-	for _, key := range []string{"", strings.Repeat("k", KVMaxKeyBytes+1)} {
+	for _, key := range []string{"", strings.Repeat("k", protocol.KVMaxKeyBytes+1)} {
 		if got := kvBatchCodes(pa, "n", []string{"ok", key}); got != allCodes(codes.InvalidArgument) {
 			t.Errorf("key of %d bytes: %v", len(key), got)
 		}
@@ -385,6 +419,38 @@ func TestKVBatchUnavailableWhenRedisIsDown(t *testing.T) {
 	mr.Close()
 	if got := kvBatchCodes(h, "n", []string{"k"}); got != allCodes(codes.Unavailable) {
 		t.Fatalf("redis down: %v", got)
+	}
+}
+
+// kvScriptRefusesBadArguments hands the host's script a bad ttl or an odd
+// argument list for the keys k1 and k2 (the host never does): it must refuse
+// them before it writes, so neither key exists afterwards.
+func kvScriptRefusesBadArguments(t *testing.T, rdb redis.UniversalClient, k1, k2 string) {
+	t.Helper()
+	ctx := context.Background()
+	for name, args := range map[string][]any{
+		"negative ttl":       {"v1", "0", "v2", "-1"},
+		"ttl not a number":   {"v1", "60", "v2", "soon"},
+		"fractional ttl":     {"v1", "60", "v2", "1.5"},
+		"missing arguments":  {"v1", "0", "v2"},
+		"too many arguments": {"v1", "0", "v2", "0", "v3", "0"},
+	} {
+		if err := kvSetManyScript.Run(ctx, rdb, []string{k1, k2}, args...).Err(); err == nil || !strings.Contains(err.Error(), "kv batch") {
+			t.Errorf("script with %s: %v", name, err)
+		}
+		if n, err := rdb.Exists(ctx, k1, k2).Result(); err != nil || n != 0 {
+			t.Fatalf("script with %s wrote %d keys (%v)", name, n, err)
+		}
+	}
+}
+
+// The script checks its arguments before the first write. miniredis runs it
+// here; TestKVBatchRealRedis does the same on a real server.
+func TestKVSetManyScriptChecksItsArguments(t *testing.T) {
+	mr, rdb, _ := kvRedis(t)
+	kvScriptRefusesBadArguments(t, rdb, "plugin:kv:pa:n:1", "plugin:kv:pa:n:2")
+	if keys := mr.Keys(); len(keys) != 0 {
+		t.Fatalf("the script wrote %v", keys)
 	}
 }
 
@@ -537,7 +603,7 @@ func TestKVBatchRealRedis(t *testing.T) {
 	h := kvEnv(t, plugin, kvGrant, rdb, nil)
 
 	// The largest batch, three kinds of ttl, binary values.
-	keys := numberedKeys("k", KVMaxBatchKeys)
+	keys := numberedKeys("k", protocol.KVBatchMaxKeys)
 	ttls := []int64{0, 60, 3600}
 	items := make([]*pluginv1.KVSetManyItem, len(keys))
 	for i, k := range keys {
@@ -565,14 +631,14 @@ func TestKVBatchRealRedis(t *testing.T) {
 		}
 	}
 	calls.take()
-	got, err := h.KVGetMany(ctx, &pluginv1.KVGetManyRequest{Namespace: "n", Keys: append([]string{"missing"}, keys[:KVMaxBatchKeys-1]...)})
+	got, err := h.KVGetMany(ctx, &pluginv1.KVGetManyRequest{Namespace: "n", Keys: append([]string{"missing"}, keys[:protocol.KVBatchMaxKeys-1]...)})
 	if err != nil {
 		t.Fatalf("KVGetMany: %v", err)
 	}
 	if c := calls.take(); !slices.Equal(c, []string{"mget"}) {
 		t.Fatalf("KVGetMany: Redis commands = %v, want one MGET", c)
 	}
-	if len(got.GetItems()) != KVMaxBatchKeys || got.GetItems()[0].GetFound() {
+	if len(got.GetItems()) != protocol.KVBatchMaxKeys || got.GetItems()[0].GetFound() {
 		t.Fatalf("KVGetMany: %d items, missing key found = %v", len(got.GetItems()), got.GetItems()[0].GetFound())
 	}
 	for i, it := range got.GetItems()[1:] {
@@ -583,7 +649,7 @@ func TestKVBatchRealRedis(t *testing.T) {
 
 	// The largest ttl a batch accepts is one the server accepts; a ttl of
 	// one second really expires.
-	kvSetMany(t, h, "t", setItem("forever", "f", KVMaxBatchTTLSeconds), setItem("brief", "b", 1), setItem("stays", "s", 0))
+	kvSetMany(t, h, "t", setItem("forever", "f", protocol.KVMaxTTLSeconds), setItem("brief", "b", 1), setItem("stays", "s", 0))
 	if ttl, err := rdb.TTL(ctx, prefix+"t:forever").Result(); err != nil || ttl < 290*365*24*time.Hour {
 		t.Fatalf("largest ttl = %v %v", ttl, err)
 	}
@@ -593,7 +659,7 @@ func TestKVBatchRealRedis(t *testing.T) {
 	}
 
 	// 47 full-size values: one command each way.
-	value := bytes.Repeat([]byte("v"), KVMaxValueBytes)
+	value := bytes.Repeat([]byte("v"), protocol.KVMaxValueBytes)
 	bigKeys := numberedKeys("big", 47)
 	big := make([]*pluginv1.KVSetManyItem, len(bigKeys))
 	for i, k := range bigKeys {
@@ -602,27 +668,15 @@ func TestKVBatchRealRedis(t *testing.T) {
 	if _, err := h.KVSetMany(ctx, &pluginv1.KVSetManyRequest{Namespace: "big", Items: big}); err != nil {
 		t.Fatalf("KVSetMany, 47 x 64 KiB: %v", err)
 	}
-	if r, err := h.KVGetMany(ctx, &pluginv1.KVGetManyRequest{Namespace: "big", Keys: bigKeys}); err != nil || len(r.GetItems()[46].GetValue()) != KVMaxValueBytes {
+	if r, err := h.KVGetMany(ctx, &pluginv1.KVGetManyRequest{Namespace: "big", Keys: bigKeys}); err != nil || len(r.GetItems()[46].GetValue()) != protocol.KVMaxValueBytes {
 		t.Fatalf("KVGetMany, 47 x 64 KiB: %v", err)
 	}
 
-	// The script checks its arguments before it writes: handed a bad ttl or
-	// an odd argument list (the host never does), it writes nothing.
+	// The script's own argument check, on a real Lua engine.
 	before := stored()
-	k1, k2 := prefix+"s:1", prefix+"s:2"
-	for name, args := range map[string][]any{
-		"negative ttl":       {"v1", "0", "v2", "-1"},
-		"ttl not a number":   {"v1", "60", "v2", "soon"},
-		"fractional ttl":     {"v1", "60", "v2", "1.5"},
-		"missing arguments":  {"v1", "0", "v2"},
-		"too many arguments": {"v1", "0", "v2", "0", "v3", "0"},
-	} {
-		if err := kvSetManyScript.Run(ctx, rdb, []string{k1, k2}, args...).Err(); err == nil || !strings.Contains(err.Error(), "kv batch") {
-			t.Errorf("script with %s: %v", name, err)
-		}
-		if after := stored(); !slices.Equal(after, before) {
-			t.Fatalf("script with %s wrote %d keys", name, len(after)-len(before))
-		}
+	kvScriptRefusesBadArguments(t, rdb, prefix+"s:1", prefix+"s:2")
+	if after := stored(); !slices.Equal(after, before) {
+		t.Fatalf("the script wrote %d keys", len(after)-len(before))
 	}
 
 	// One DEL for all keys of a call; other namespaces stay.
@@ -638,25 +692,5 @@ func TestKVBatchRealRedis(t *testing.T) {
 	}
 	if got, want := stored(), []string{prefix + "t:forever", prefix + "t:stays"}; !slices.Equal(got, want) {
 		t.Fatalf("keys left = %v, want %v", got, want)
-	}
-}
-
-// The SDK applies protocol's KV rules when it replaces a batch call by
-// single calls on an older host; they must be the host's.
-func TestKVRulesMatchTheSDKProtocolPackage(t *testing.T) {
-	if KVMaxValueBytes != protocol.KVMaxValueBytes || KVMaxKeyBytes != protocol.KVMaxKeyBytes || KVMaxNamespace != protocol.KVMaxNamespaceBytes {
-		t.Fatal("the KV limits of the host and of sdk/protocol differ")
-	}
-	for _, ns := range []string{"", "n", "a:b", "*", "a?", "[", "]", `\`, "a.b-c_d/e", strings.Repeat("n", 64), strings.Repeat("n", 65)} {
-		if got, want := protocol.ValidKVNamespace(ns), validNamespace(ns) == nil; got != want {
-			t.Errorf("namespace %q: protocol says %v, the host %v", ns, got, want)
-		}
-	}
-	h := &hostServer{i: &Instance{pkg: &registry.Package{Key: "pa"}}}
-	for _, key := range []string{"", "k", strings.Repeat("k", 512), strings.Repeat("k", 513)} {
-		_, err := h.kvKey("n", key)
-		if got, want := protocol.ValidKVKey(key), err == nil; got != want {
-			t.Errorf("key of %d bytes: protocol says %v, the host %v", len(key), got, want)
-		}
 	}
 }

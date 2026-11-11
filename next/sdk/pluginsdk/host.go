@@ -422,7 +422,7 @@ func (k hostKV) Get(ctx context.Context, ns, key string) ([]byte, bool, error) {
 }
 
 func (k hostKV) Set(ctx context.Context, ns, key string, value []byte, ttl time.Duration) error {
-	_, err := k.c.KVSet(ctx, &pluginv1.KVSetRequest{Namespace: ns, Key: key, Value: value, TtlSeconds: int64(ttl / time.Second)})
+	_, err := k.c.KVSet(ctx, &pluginv1.KVSetRequest{Namespace: ns, Key: key, Value: value, TtlSeconds: kvTTLSeconds(ttl)})
 	return err
 }
 

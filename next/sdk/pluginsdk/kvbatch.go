@@ -35,12 +35,15 @@ import (
 // A call that breaks a rule fails with codes.InvalidArgument before
 // anything is sent, except a read whose values turn out to exceed 3 MiB:
 // that one fails with codes.ResourceExhausted, and the caller asks for
-// fewer keys.
+// fewer keys. The rules and the words of their errors are those of the host
+// (protocol.CheckKVBatchKeys, protocol.CheckKVBatchItems): the error names
+// the first key or item that breaks one, "items[2]: value exceeds 65536
+// bytes".
 //
 // Older hosts (before core 0.1.273) answer codes.Unimplemented to the batch
 // calls. The KV of Host.KV then does the work with the single calls, at
-// most kvSinglesParallel at a time, and remembers the answer, so an older
-// host costs one refused call per plugin process and not one per batch.
+// most 8 at a time, and remembers the answer, so an older host costs one
+// refused call per plugin process and not one per batch.
 // Results, rules and errors are the same; what the single calls cannot give
 // is the cost and the atomic write: on such a host a failure in the middle
 // of KVSetMany leaves the items written so far. A plugin that needs either
@@ -53,7 +56,8 @@ type KVValue struct {
 }
 
 // KVItem is one entry of a batch write. TTL 0 means no expiry; like KV.Set
-// it is sent in whole seconds, so a TTL under one second is sent as 0.
+// it is sent in whole seconds, so a TTL under one second is sent as 0. A
+// negative TTL is refused, however small.
 type KVItem struct {
 	Key   string
 	Value []byte
@@ -62,7 +66,9 @@ type KVItem struct {
 
 // KVBatch is the batch side of a KV store. The KV of Host.KV implements it;
 // call it through KVGetMany, KVSetMany and KVDeleteMany, which also accept a
-// KV that does not (a test double, a wrapper).
+// KV that does not (a test double, a wrapper). Such a KV is served with its
+// Get, Set and Delete, called from up to 8 goroutines at a time: it must be
+// safe for concurrent use.
 type KVBatch interface {
 	// GetMany returns one KVValue per key, in the order of keys.
 	GetMany(ctx context.Context, namespace string, keys []string) ([]KVValue, error)
@@ -74,7 +80,7 @@ type KVBatch interface {
 
 // KVGetMany reads many keys of namespace in one host call and returns one
 // KVValue per key, in the order of keys. A kv without batch calls is read
-// with its Get.
+// with its Get, from up to 8 goroutines at a time.
 func KVGetMany(ctx context.Context, kv KV, namespace string, keys []string) ([]KVValue, error) {
 	if kv == nil {
 		return nil, ErrHostNotReady
@@ -82,7 +88,7 @@ func KVGetMany(ctx context.Context, kv KV, namespace string, keys []string) ([]K
 	if b, ok := kv.(KVBatch); ok {
 		return b.GetMany(ctx, namespace, keys)
 	}
-	if err := kvCheckKeys(namespace, keys); err != nil {
+	if err := protocol.CheckKVBatchKeys(namespace, keys); err != nil {
 		return nil, err
 	}
 	return kvGetSingles(ctx, kv, namespace, keys)
@@ -90,7 +96,7 @@ func KVGetMany(ctx context.Context, kv KV, namespace string, keys []string) ([]K
 
 // KVSetMany writes many entries of namespace in one host call, each with
 // its own TTL, all or nothing. A kv without batch calls is written with its
-// Set, which is not atomic.
+// Set, from up to 8 goroutines at a time, which is not atomic.
 func KVSetMany(ctx context.Context, kv KV, namespace string, items []KVItem) error {
 	if kv == nil {
 		return ErrHostNotReady
@@ -105,7 +111,8 @@ func KVSetMany(ctx context.Context, kv KV, namespace string, items []KVItem) err
 }
 
 // KVDeleteMany deletes many keys of namespace in one host call. A kv
-// without batch calls is asked with its Delete.
+// without batch calls is asked with its Delete, from up to 8 goroutines at a
+// time.
 func KVDeleteMany(ctx context.Context, kv KV, namespace string, keys []string) error {
 	if kv == nil {
 		return ErrHostNotReady
@@ -113,7 +120,7 @@ func KVDeleteMany(ctx context.Context, kv KV, namespace string, keys []string) e
 	if b, ok := kv.(KVBatch); ok {
 		return b.DeleteMany(ctx, namespace, keys)
 	}
-	if err := kvCheckKeys(namespace, keys); err != nil {
+	if err := protocol.CheckKVBatchKeys(namespace, keys); err != nil {
 		return err
 	}
 	return kvDeleteSingles(ctx, kv, namespace, keys)
@@ -133,7 +140,7 @@ func (k hostKV) batchRefused(err error) bool {
 }
 
 func (k hostKV) GetMany(ctx context.Context, ns string, keys []string) ([]KVValue, error) {
-	if err := kvCheckKeys(ns, keys); err != nil {
+	if err := protocol.CheckKVBatchKeys(ns, keys); err != nil {
 		return nil, err
 	}
 	if !k.noBatch.Load() {
@@ -174,7 +181,7 @@ func (k hostKV) SetMany(ctx context.Context, ns string, items []KVItem) error {
 }
 
 func (k hostKV) DeleteMany(ctx context.Context, ns string, keys []string) error {
-	if err := kvCheckKeys(ns, keys); err != nil {
+	if err := protocol.CheckKVBatchKeys(ns, keys); err != nil {
 		return err
 	}
 	if !k.noBatch.Load() {
@@ -188,61 +195,30 @@ func (k hostKV) DeleteMany(ctx context.Context, ns string, keys []string) error 
 
 // ---------------------------------------------------------------- rules
 
-// kvTTLSeconds is the ttl KV.Set sends for ttl.
+// kvTTLSeconds is the ttl in whole seconds that KV.Set and the batch write
+// send for ttl.
 func kvTTLSeconds(ttl time.Duration) int64 { return int64(ttl / time.Second) }
 
-// kvCheckKeys applies the host's rules to the namespace and keys of one
-// batch call (HostService.KVGetMany / KVDeleteMany).
-func kvCheckKeys(ns string, keys []string) error {
-	if err := kvCheckBatch(ns, "keys", len(keys)); err != nil {
-		return err
-	}
-	for i, key := range keys {
-		if !protocol.ValidKVKey(key) {
-			return status.Errorf(codes.InvalidArgument, "keys[%d]: key must be 1..%d bytes", i, protocol.KVMaxKeyBytes)
-		}
-	}
-	return nil
-}
-
 // kvCheckItems applies the host's rules to one batch write
-// (HostService.KVSetMany).
+// (HostService.KVSetMany); protocol.CheckKVBatchKeys does it for the keys of
+// a read or a delete.
 func kvCheckItems(ns string, items []KVItem) error {
-	if err := kvCheckBatch(ns, "items", len(items)); err != nil {
-		return err
-	}
-	total := 0
-	for i, it := range items {
-		switch {
-		case !protocol.ValidKVKey(it.Key):
-			return status.Errorf(codes.InvalidArgument, "items[%d]: key must be 1..%d bytes", i, protocol.KVMaxKeyBytes)
-		case len(it.Value) > protocol.KVMaxValueBytes:
-			return status.Errorf(codes.InvalidArgument, "items[%d]: value exceeds %d bytes", i, protocol.KVMaxValueBytes)
-		case !protocol.ValidKVBatchTTL(kvTTLSeconds(it.TTL)):
-			return status.Errorf(codes.InvalidArgument, "items[%d]: ttl must not be negative", i)
+	return protocol.CheckKVBatchItems(ns, len(items), func(i int) (string, int, int64) {
+		it := items[i]
+		if it.TTL < 0 {
+			// Whole seconds would turn a negative TTL of under a second
+			// into 0, no expiry.
+			return it.Key, len(it.Value), -1
 		}
-		total += len(it.Key) + len(it.Value)
-	}
-	if total > protocol.KVBatchMaxBytes {
-		return status.Errorf(codes.InvalidArgument, "keys and values exceed %d bytes; write fewer items per call", protocol.KVBatchMaxBytes)
-	}
-	return nil
-}
-
-func kvCheckBatch(ns, what string, n int) error {
-	if !protocol.ValidKVNamespace(ns) {
-		return status.Errorf(codes.InvalidArgument, "namespace must be 1..%d bytes without '%s'", protocol.KVMaxNamespaceBytes, protocol.KVNamespaceForbidden)
-	}
-	if n > protocol.KVBatchMaxKeys {
-		return status.Errorf(codes.InvalidArgument, "at most %d %s per call", protocol.KVBatchMaxKeys, what)
-	}
-	return nil
+		return it.Key, len(it.Value), kvTTLSeconds(it.TTL)
+	})
 }
 
 // ---------------------------------------------------------------- single calls
 
 // kvSinglesParallel bounds the single calls in flight for one batch that a
-// kv without batch calls serves.
+// kv without batch calls serves. The documentation of KVBatch, KVGetMany,
+// KVSetMany and KVDeleteMany says 8.
 const kvSinglesParallel = 8
 
 // kvEach runs call for every index below n, at most kvSinglesParallel at a
@@ -289,8 +265,8 @@ func kvGetSingles(ctx context.Context, kv KV, ns string, keys []string) ([]KVVal
 	for _, v := range out {
 		total += len(v.Value)
 	}
-	if total > protocol.KVBatchMaxBytes {
-		return nil, status.Errorf(codes.ResourceExhausted, "the values of these keys exceed %d bytes; ask for fewer keys per call", protocol.KVBatchMaxBytes)
+	if err := protocol.CheckKVBatchAnswer(total); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

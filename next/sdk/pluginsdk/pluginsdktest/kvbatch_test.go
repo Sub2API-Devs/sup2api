@@ -104,12 +104,12 @@ func TestFakeHostKVBatchRulesAndAtomicWrite(t *testing.T) {
 	if _, err := f.KVSetMany(ctx, &pluginv1.KVSetManyRequest{Namespace: "ns", Items: []*pluginv1.KVSetManyItem{fakeItem("old", "before", 0)}}); err != nil {
 		t.Fatal(err)
 	}
+	// The rules are the host's (protocol.CheckKVBatchItems; their table is
+	// in sdk/protocol). One item of each kind: nothing is stored.
 	for name, bad := range map[string]*pluginv1.KVSetManyItem{
 		"empty key":     fakeItem("", "v", 0),
-		"long key":      fakeItem(strings.Repeat("k", protocol.KVMaxKeyBytes+1), "v", 0),
 		"value too big": fakeItem("big", big+"x", 0),
 		"negative ttl":  fakeItem("neg", "v", -1),
-		"ttl too large": fakeItem("huge", "v", protocol.KVMaxTTLSeconds+1),
 		"missing (nil)": nil,
 	} {
 		_, err := f.KVSetMany(ctx, &pluginv1.KVSetManyRequest{Namespace: "ns", Items: []*pluginv1.KVSetManyItem{
@@ -120,6 +120,13 @@ func TestFakeHostKVBatchRulesAndAtomicWrite(t *testing.T) {
 		if got, want := fakeGetMany(t, f, "ns", "first", "old", "last"), "- (before) -"; got != want {
 			t.Fatalf("%s: the rejected write left %s, want %s", name, got, want)
 		}
+	}
+	// The error is the host's own: it names the first item that breaks a
+	// rule, with the host's words.
+	_, err := f.KVSetMany(ctx, &pluginv1.KVSetManyRequest{Namespace: "ns", Items: []*pluginv1.KVSetManyItem{
+		fakeItem("first", "1", 0), fakeItem("big", big+"x", 0), fakeItem("", "v", 0)}})
+	if got, want := status.Convert(err).Message(), "items[1]: value exceeds 65536 bytes"; status.Code(err) != codes.InvalidArgument || got != want {
+		t.Fatalf("two invalid items: %v, want %q", err, want)
 	}
 	codesOf := func(ns string, keys []string) [3]codes.Code {
 		items := make([]*pluginv1.KVSetManyItem, len(keys))
@@ -132,7 +139,7 @@ func TestFakeHostKVBatchRulesAndAtomicWrite(t *testing.T) {
 		return [3]codes.Code{status.Code(e1), status.Code(e2), status.Code(e3)}
 	}
 	invalid := [3]codes.Code{codes.InvalidArgument, codes.InvalidArgument, codes.InvalidArgument}
-	for _, ns := range []string{"", "a:b", "*", strings.Repeat("n", protocol.KVMaxNamespaceBytes+1)} {
+	for _, ns := range []string{"", "a:b"} {
 		if got := codesOf(ns, []string{"k"}); got != invalid {
 			t.Errorf("namespace %q: %v", ns, got)
 		}
