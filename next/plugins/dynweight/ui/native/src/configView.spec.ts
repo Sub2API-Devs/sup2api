@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changes, fieldDiffs, globalLayer, inheritText, itemDiff, sourceLayers, type Draft } from './configView'
+import { changes, fastClimb, fieldDiffs, globalLayer, inheritText, itemDiff, sourceLayers, type Draft } from './configView'
 import type { Layer } from './host'
 
 // Messages echoed with their parameters, enough to tell the outputs apart.
@@ -103,5 +103,47 @@ describe('changes', () => {
     delete edited.accounts['7']
     edited.log_events = false
     expect(changes(edited, saved)).toEqual({ global: true, groups: ['3'], accounts: ['7'], notify: true })
+  })
+})
+
+describe('fastClimb', () => {
+  const climb = (name: string, when: Layer['strategies'][number]['when'], cooldown_seconds?: number) => ({
+    name,
+    when,
+    actions: [{ type: 'weight_climb' as const, mode: 'base_percent' as const, value: 10 }],
+    ...(cooldown_seconds !== undefined ? { cooldown_seconds } : {})
+  })
+
+  it('names the soonest climb of a degrading layer under a minute', () => {
+    expect(fastClimb(layer())).toBeNull() // 1 window of 60 s
+    expect(fastClimb(layer({ window_seconds: 3 }))).toEqual({ name: 'up', seconds: 3 })
+    const two = layer({ window_seconds: 10 })
+    two.strategies.push(climb('slow up', 'slow')) // 2 hits of 10 s
+    expect(fastClimb(two)).toEqual({ name: 'up', seconds: 10 })
+    two.strategies[1].enabled = false
+    expect(fastClimb(two)).toEqual({ name: 'slow up', seconds: 20 })
+  })
+
+  it('counts the cooldown and the hits a combined trigger needs', () => {
+    const l = layer({ window_seconds: 10 })
+    l.strategies[1] = climb('up', 'ok', 30)
+    expect(fastClimb(l)).toEqual({ name: 'up', seconds: 30 })
+    l.strategies[1] = climb('up', 'ok', 60)
+    expect(fastClimb(l)).toBeNull()
+    l.strategies[1] = climb('up', { all: ['ok', 'slow'] }) // every rule must hit: 2 windows
+    expect(fastClimb(l)).toEqual({ name: 'up', seconds: 20 })
+    l.strategies[1] = climb('up', { any: ['slow', { all: ['ok'] }] }) // whichever hits first: 1 window
+    expect(fastClimb(l)).toEqual({ name: 'up', seconds: 10 })
+    l.strategies[1] = climb('up', 'missing')
+    expect(fastClimb(l)).toBeNull()
+  })
+
+  it('stays quiet for a layer that is off, does not degrade or has its numbers left empty', () => {
+    expect(fastClimb(layer({ window_seconds: 3, enabled: false }))).toBeNull()
+    const l = layer({ window_seconds: 3 })
+    expect(fastClimb({ ...l, strategies: l.strategies.slice(1) })).toBeNull()
+    expect(fastClimb({ ...l, strategies: [{ ...l.strategies[0], enabled: false }, l.strategies[1]] })).toBeNull()
+    expect(fastClimb({ ...l, window_seconds: null as unknown as number })).toBeNull()
+    expect(fastClimb({ ...l, rules: l.rules.map(r => ({ ...r, hit_periods: null as unknown as number })) })).toBeNull()
   })
 })

@@ -1,25 +1,31 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { SButton, SField, SFormModal, SHint, SInput, SSegmented, SSwitch } from '@sub2api/ui'
+import { SAlert, SButton, SField, SFormModal, SHint, SInput, SSegmented, SSwitch } from '@sub2api/ui'
 import ConfigFloorInput from './ConfigFloorInput.vue'
 import IdPicker from './IdPicker.vue'
 import { useCatalog } from './catalog'
 import { inheritText, inheritedValue, overrideFields, sourceLayers, type Draft, type OverrideField } from './configView'
+import { useDialogSave, type SaveOutcome } from './dialogSave'
 import { clone, overrideIncomplete, useDwHost, type AccountOverride, type Layer } from './host'
 
 // One account override in a dialog. Each field is inherited until its
 // "override" switch is on; while off it shows the value the account
 // inherits. `target` is the account opened ('' = a new override, the account
 // picked in the dialog; an id without an override opens as new for that
-// account). Apply hands the override back to the draft.
-const props = defineProps<{ target: string | null; draft: Draft; accountGroups: Record<string, number[]>; readonly?: boolean }>()
-const emit = defineEmits<{
-  (e: 'close'): void
-  (e: 'apply', id: string, o: AccountOverride): void
-  (e: 'pick', id: string): void
+// account). Save saves the override through `save` and closes once saved
+// (`others`: other unsaved edits of the page go along).
+const props = defineProps<{
+  target: string | null
+  draft: Draft
+  accountGroups: Record<string, number[]>
+  readonly?: boolean
+  save: (id: string, o: AccountOverride) => Promise<SaveOutcome>
+  others?: boolean
 }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'pick', id: string): void }>()
 const t = useDwHost().t
 const catalog = useCatalog()
+const { saving, error, run } = useDialogSave()
 
 const account = ref('')
 const o = ref<AccountOverride>({})
@@ -30,6 +36,7 @@ watch(
   id => {
     if (id === null) return
     account.value = id
+    error.value = ''
     isNew.value = !props.draft.accounts[id]
     o.value = clone(props.draft.accounts[id] ?? {})
   },
@@ -95,23 +102,30 @@ const title = computed(() => {
   const account = catalog.accountName(Number(props.target))
   return isNew.value ? `${t('cfg.accountModal.add')} · ${account}` : t('cfg.accountModal.edit', { account })
 })
-const canApply = computed(() => validId.value && !floorError.value && !(isNew.value && nothing.value))
+const canSave = computed(() => validId.value && !floorError.value && !(isNew.value && nothing.value))
 
-function apply() {
-  if (!canApply.value) return
-  emit('apply', account.value, clone(o.value))
+async function submit() {
+  if (!canSave.value) return
+  if (await run(() => props.save(account.value, clone(o.value)))) emit('close')
 }
+
+const footerHint = computed(() => {
+  if (isNew.value && validId.value && nothing.value) return t('cfg.accountModal.nothing')
+  return props.others ? t('cfg.saveOthers') : ''
+})
 </script>
 
 <template>
   <SFormModal
     :open="target !== null"
     :title="title"
-    :submit-text="t('cfg.apply')"
-    :submit-disabled="!canApply"
+    :submit-text="t('config.save')"
+    :submit-disabled="!canSave"
+    :loading="saving"
     @update:open="!$event && emit('close')"
-    @submit="apply"
+    @submit="submit"
   >
+    <SAlert v-if="error" tone="danger">{{ error }}</SAlert>
     <SField v-if="target === '' && !readonly" :label="t('cfg.accountModal.account')">
       <IdPicker v-model="account" kind="account" :exclude="Object.keys(draft.accounts)" />
     </SField>
@@ -167,8 +181,8 @@ function apply() {
     <template v-if="readonly" #footer>
       <SButton @click="emit('close')">{{ t('cfg.close') }}</SButton>
     </template>
-    <template v-else #footer-start>
-      <SHint size="xs">{{ isNew && validId && nothing ? t('cfg.accountModal.nothing') : t('cfg.applyHint') }}</SHint>
+    <template v-else-if="footerHint" #footer-start>
+      <SHint size="xs">{{ footerHint }}</SHint>
     </template>
   </SFormModal>
 </template>

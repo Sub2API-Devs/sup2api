@@ -120,6 +120,8 @@ const zh = {
     clearFailed: '{strategy}：清理粘性会话失败：{error}',
     zero: '权重降到 0',
     window: '窗口 {total} 次，失败 {fail}',
+    step: '{strategy}：{action}',
+    configVersion: '配置 v{n}',
     nothingReset: '没有需要重置的记录',
     keysAtBase: '{n} 个在基准上的键',
     allModels: '全部模型'
@@ -211,8 +213,10 @@ const zh = {
     save: '保存',
     discard: '放弃修改',
     discardConfirm: '放弃未保存的修改并重新加载配置？',
-    saved: '配置已保存',
-    conflict: '配置已被他人修改，请刷新后重试'
+    saved: '已保存（第 {n} 版）',
+    conflict: '配置已被他人修改，请刷新后重试',
+    leaveConfirm: '配置有未保存的修改，离开后会丢失。仍要离开吗？',
+    leave: '放弃修改并离开'
   },
   logEvents: { hint: '每条权重事件同时写一行插件日志（每 60 秒最多 5000 行，事件列表不受影响）。' },
   notify: {
@@ -352,6 +356,8 @@ const en: typeof zh = {
     clearFailed: '{strategy}: clearing sticky sessions failed: {error}',
     zero: 'weight dropped to 0',
     window: 'window: {total} attempts, {fail} failed',
+    step: '{strategy}: {action}',
+    configVersion: 'config v{n}',
     nothingReset: 'nothing to reset',
     keysAtBase: '{n} keys at their base',
     allModels: 'every model'
@@ -452,8 +458,10 @@ const en: typeof zh = {
     save: 'Save',
     discard: 'Discard changes',
     discardConfirm: 'Drop the unsaved changes and reload the configuration?',
-    saved: 'Configuration saved',
-    conflict: 'Someone changed the configuration meanwhile; reload and try again'
+    saved: 'Saved (version {n})',
+    conflict: 'Someone changed the configuration meanwhile; reload and try again',
+    leaveConfirm: 'The configuration has unsaved changes, which are lost if you leave. Leave anyway?',
+    leave: 'Discard and leave'
   },
   logEvents: {
     hint: 'Also writes every weight event as a line of the plugin log (at most 5000 lines per 60 s; the event list is complete either way).'

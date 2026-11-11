@@ -13,8 +13,11 @@ import ConfigSummary from './ConfigSummary.vue'
 import ItemsTable from './ItemsTable.vue'
 import { useCatalog } from './catalog'
 import { changes as changesOf, sortedIds, type Draft } from './configView'
+import type { SaveOutcome } from './dialogSave'
+import { useLeaveGuard } from './leaveGuard'
 import {
   canManage,
+  clone,
   errorMessage,
   fetchChannels,
   fetchConfig,
@@ -28,14 +31,18 @@ import {
   type Channel,
   type ConfigBody,
   type Layer,
-  type Named
+  type Named,
+  type Rule,
+  type Strategy
 } from './host'
 
 // Configuration: the global layer, group layers that replace it, account
 // overrides that narrow it, and notifications through a core channel. Saved
-// as one document with the version it was read at. Groups and accounts are
-// edited in dialogs whose Apply only changes the draft; the bar at the
-// bottom saves it. `openAccount` (?override_account= of the page) opens the
+// as one document with the version it was read at. The fields and table
+// actions of the page change the draft, which the bar at the bottom saves;
+// the dialogs (global items, a group, an account) save their edit at once,
+// together with whatever else the draft holds. Leaving the page with unsaved
+// edits asks first. `openAccount` (?override_account= of the page) opens the
 // override dialog of that account once the config is loaded.
 const props = defineProps<{ openAccount?: string | null }>()
 const emit = defineEmits<{ (e: 'update:openAccount', v: null): void }>()
@@ -47,6 +54,7 @@ const catalog = useCatalog()
 const draft = ref<Draft | null>(null)
 const saved = ref<Draft | null>(null) // the draft as read or saved, to tell unsaved edits
 const version = ref(0)
+const updatedAt = ref(0)
 const defaults = ref<Layer | null>(null)
 const channels = ref<Channel[]>([])
 const loading = ref(false)
@@ -58,6 +66,7 @@ function setDraft(body: ConfigBody) {
   draft.value = c
   saved.value = JSON.parse(JSON.stringify(c))
   version.value = body.version
+  updatedAt.value = body.updated_at ?? 0
   void loadAccountGroups(Object.keys(c.accounts))
 }
 
@@ -67,12 +76,10 @@ const dirty = computed(() => {
   return !!c && (c.global || c.notify || c.groups.length > 0 || c.accounts.length > 0)
 })
 
-// Where the draft cannot be validated or saved: a number left empty in a
+// Where a draft cannot be validated or saved: a number left empty in a
 // layer (its own, a rule's or an item's) or an account floor. The plugin
 // would refuse it, or read a group's as the default.
-const problems = computed(() => {
-  const c = draft.value
-  if (!c) return []
+function problemsOf(c: Draft): string[] {
   return [
     ...(layerIncomplete(c) ? [t('cfg.save.global')] : []),
     ...sortedIds(c.groups)
@@ -82,8 +89,11 @@ const problems = computed(() => {
       .filter(id => overrideIncomplete(c.accounts[id]))
       .map(id => t('cfg.save.account', { name: catalog.accountName(Number(id)) }))
   ]
-})
+}
+const problems = computed(() => (draft.value ? problemsOf(draft.value) : []))
 const invalid = computed(() => problems.value.length > 0)
+const unsaved = computed(() => dirty.value || invalid.value)
+useLeaveGuard(unsaved)
 
 async function reload() {
   loading.value = true
@@ -103,10 +113,7 @@ async function reload() {
 
 /** Reloads, once the user agrees to drop unsaved edits. */
 async function discard() {
-  if (
-    (dirty.value || invalid.value) &&
-    !(await host.confirm({ message: t('config.discardConfirm'), confirmText: t('config.discard'), danger: true }))
-  )
+  if (unsaved.value && !(await host.confirm({ message: t('config.discardConfirm'), confirmText: t('config.discard'), danger: true })))
     return
   await reload()
 }
@@ -151,10 +158,10 @@ async function loadAccountGroups(ids: string[]) {
 const groupTarget = ref<string | null>(null)
 const accountTarget = ref<string | null>(null)
 
-function applyGroup(id: string, layer: Layer) {
-  if (draft.value) draft.value.groups[id] = layer
-  groupTarget.value = null
-}
+const saveGroup = (id: string, layer: Layer) =>
+  commit(c => {
+    c.groups[id] = layer
+  })
 
 async function removeGroup(id: string) {
   const message = t('cfg.groups.removeConfirm', { group: catalog.groupName(Number(id)) })
@@ -163,11 +170,13 @@ async function removeGroup(id: string) {
 }
 
 // An override left with nothing set is removed rather than kept empty.
-function applyAccount(id: string, o: AccountOverride) {
-  if (draft.value && Object.values(o).every(v => v === undefined)) delete draft.value.accounts[id]
-  else if (draft.value) draft.value.accounts[id] = o
-  accountTarget.value = null
-}
+const saveAccount = (id: string, o: AccountOverride) =>
+  commit(c => {
+    if (Object.values(o).every(v => v === undefined)) delete c.accounts[id]
+    else c.accounts[id] = o
+  })
+
+const saveItems = (lists: { rules: Rule[]; strategies: Strategy[] }) => commit(c => Object.assign(c, lists))
 
 async function removeAccount(id: string) {
   const message = t('cfg.accounts.removeConfirm', { account: catalog.accountName(Number(id)) })
@@ -189,34 +198,50 @@ watch(
 
 const saving = ref(false)
 
-// Saving validates first: an invalid draft is not sent, and its warnings are
-// confirmed.
-async function save() {
-  const c = draft.value
-  if (!c || invalid.value) return
+/**
+ * Saves the draft with `edit` applied (a dialog's Save) or as it is (the
+ * bar's). Saving validates first: an incomplete draft is not sent, and its
+ * warnings are confirmed. The edit goes to a copy, which becomes the draft
+ * only once saved: a failed or declined save leaves the page as it was,
+ * never half applied.
+ */
+async function commit(edit?: (c: Draft) => void): Promise<SaveOutcome> {
+  if (!draft.value) return { saved: false }
+  const c = clone(draft.value)
+  edit?.(c)
+  const incomplete = problemsOf(c)
+  if (incomplete.length) return { saved: false, error: t('cfg.save.invalid', { where: incomplete.join(t('cfg.sep')) }) }
   saving.value = true
-  error.value = ''
   try {
     const checked = await validateConfig({ config: c, version: version.value })
     const found = checked.warnings ?? []
-    warnings.value = found
+    // A dialog's edit is not in the draft: its warnings are only asked about, not shown over the page.
+    if (!edit) warnings.value = found
     if (
       found.length &&
       !(await host.confirm({ message: t('config.warningsConfirm', { warnings: found.join('; ') }), confirmText: t('config.save') }))
     )
-      return
+      return { saved: false }
     const body = await saveConfig({ config: c, version: version.value })
     setDraft(body)
     warnings.value = body.warnings ?? []
-    host.toast(t('config.saved'), 'success')
+    host.toast(t('config.saved', { n: body.version }), 'success')
+    return { saved: true }
   } catch (e) {
     const conflict = isApiError(e) && e.status === 409
-    // The plugin's refusal says what to fix: it stays on the page, over the config.
-    if (!conflict) error.value = errorMessage(e, t('actionFailed'))
-    host.toast(conflict ? t('config.conflict') : errorMessage(e, t('actionFailed')), 'error')
+    const message = conflict ? t('config.conflict') : errorMessage(e, t('actionFailed'))
+    host.toast(message, 'error')
+    return { saved: false, error: message, conflict }
   } finally {
     saving.value = false
   }
+}
+
+async function save() {
+  error.value = ''
+  const r = await commit()
+  // The plugin's refusal says what to fix: it stays on the page, over the config.
+  if (r.error && !r.conflict) error.value = r.error
 }
 </script>
 
@@ -226,7 +251,7 @@ async function save() {
     <SAlert v-for="w in warnings" :key="w" tone="warning" class="dw-block">{{ w }}</SAlert>
 
     <template v-if="draft">
-      <ConfigSummary v-model="draft" :readonly="!manage" class="dw-block" />
+      <ConfigSummary v-model="draft" :version="version" :updated-at="updatedAt" :unsaved="unsaved" :readonly="!manage" class="dw-block" />
 
       <SCard :title="t('cfg.global.title')" :subtitle="t('cfg.global.hint')" class="dw-block">
         <ConfigLayerFields v-model="draft" :readonly="!manage" />
@@ -236,6 +261,8 @@ async function save() {
             :strategies="draft.strategies"
             :defaults="defaults"
             :readonly="!manage"
+            :save="saveItems"
+            :others="unsaved"
             @change="({ rules, strategies }) => draft && Object.assign(draft, { rules, strategies })"
           />
         </div>
@@ -253,7 +280,7 @@ async function save() {
       <ConfigNotify v-model="draft" :channels="channels" :readonly="!manage" />
 
       <ConfigSaveBar
-        v-if="manage && changes && (dirty || invalid)"
+        v-if="manage && changes && unsaved"
         :changes="changes"
         :problems="problems"
         :saving="saving"
@@ -266,16 +293,18 @@ async function save() {
         :draft="draft"
         :defaults="defaults"
         :readonly="!manage"
+        :save="saveGroup"
+        :others="unsaved"
         @close="groupTarget = null"
-        @apply="applyGroup"
       />
       <ConfigAccountModal
         :target="accountTarget"
         :draft="draft"
         :account-groups="accountGroups"
         :readonly="!manage"
+        :save="saveAccount"
+        :others="unsaved"
         @close="accountTarget = null"
-        @apply="applyAccount"
         @pick="loadAccountGroups([$event])"
       />
     </template>

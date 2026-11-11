@@ -10,7 +10,13 @@ const zh = {
     accounts: '{n} 个账号覆盖',
     noClimbGlobal: '全局没有回升项',
     noClimbGroup: '{group} 没有回升项',
-    noClimbHint: '有启用的降权项却没有启用的回升项：降下去的权重不会自动恢复'
+    noClimbHint: '有启用的降权项却没有启用的回升项：降下去的权重不会自动恢复',
+    global: '全局',
+    fastClimb: '{layer}：{quoted}最快 {n} 秒就会回升，降权很难保持',
+    fastClimbHint: '可给它设冷却，或把它的规则改成多个窗口命中。',
+    saved: '已保存 · 第 {n} 版',
+    factory: '使用出厂配置，尚未保存',
+    unsaved: '有未保存的修改'
   },
   value: { seconds: '{n} 秒', on: '开', off: '关', none: '不豁免' },
   floorValue: { base_percent: '基准的 {n}%', fixed: '固定 {n}' },
@@ -99,9 +105,8 @@ const zh = {
     sendHint: '关闭时下面的渠道、语言和接收人不生效。',
     log: '写入插件日志'
   },
-  apply: '应用',
-  applyHint: '「应用」只改草稿，回到配置页再保存。',
-  incomplete: '有未填写的数值，填好后才能应用。',
+  saveOthers: '将连同页面上其他未保存的修改一起保存。',
+  incomplete: '有未填写的数值，填好后才能保存。',
   close: '关闭',
   sep: '、',
   quote: '「{name}」',
@@ -127,7 +132,13 @@ const en: typeof zh = {
     accounts: '{n} account overrides',
     noClimbGlobal: 'Global has no climb item',
     noClimbGroup: '{group}: no climb item',
-    noClimbHint: 'An enabled degrade item but no enabled climb item: lowered weights never come back by themselves'
+    noClimbHint: 'An enabled degrade item but no enabled climb item: lowered weights never come back by themselves',
+    global: 'Global',
+    fastClimb: '{layer}: {quoted} can climb back within {n} s, so degrades barely hold',
+    fastClimbHint: 'Give it a cooldown, or make its rule need hits in several windows.',
+    saved: 'Saved · version {n}',
+    factory: 'Factory configuration, never saved',
+    unsaved: 'Unsaved changes'
   },
   value: { seconds: '{n}s', on: 'on', off: 'off', none: 'none' },
   floorValue: { base_percent: '{n}% of base', fixed: 'fixed {n}' },
@@ -215,9 +226,8 @@ const en: typeof zh = {
     sendHint: 'Off: the channel, language and recipients below are not used.',
     log: 'Write to the plugin log'
   },
-  apply: 'Apply',
-  applyHint: 'Apply only changes the draft: save it on the config page.',
-  incomplete: 'Some numbers are empty; fill them in to apply.',
+  saveOthers: 'The other unsaved changes on the page are saved along.',
+  incomplete: 'Some numbers are empty; fill them in to save.',
   close: 'Close',
   sep: ', ',
   quote: '"{name}"',

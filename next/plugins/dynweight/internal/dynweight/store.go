@@ -34,45 +34,53 @@ type store struct{ db *pgxpool.Pool }
 
 var errVersionConflict = errors.New("the configuration was changed meanwhile")
 
+// configStamp is the stored configuration's version (0: none stored, the
+// default) and when it was saved (unix seconds, 0 for none): the console
+// shows both, so an edit that was never saved is told apart from one in force.
+type configStamp struct{ version, updatedAt int64 }
+
+// configStampSQL reads a configStamp from the config row.
+const configStampSQL = `version, floor(extract(epoch FROM updated_at))::bigint`
+
 // loadConfig reads the configuration; version 0 means the default. The
 // stored one is read tolerantly (rules.LoadConfig); warnings say what was
 // raised, fell back or was dropped.
-func (s store) loadConfig(ctx context.Context) (c rules.Config, version int64, warnings []string, err error) {
+func (s store) loadConfig(ctx context.Context) (c rules.Config, stamp configStamp, warnings []string, err error) {
 	var raw []byte
-	err = s.db.QueryRow(ctx, `SELECT doc, version FROM config WHERE id = 1`).Scan(&raw, &version)
+	err = s.db.QueryRow(ctx, `SELECT doc, `+configStampSQL+` FROM config WHERE id = 1`).Scan(&raw, &stamp.version, &stamp.updatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return rules.DefaultConfig(), 0, nil, nil
+		return rules.DefaultConfig(), configStamp{}, nil, nil
 	}
 	if err != nil {
-		return rules.Config{}, 0, nil, err
+		return rules.Config{}, configStamp{}, nil, err
 	}
 	if c, warnings, err = rules.LoadConfig(raw); err != nil {
-		return rules.Config{}, 0, nil, fmt.Errorf("stored configuration: %w", err)
+		return rules.Config{}, configStamp{}, nil, fmt.Errorf("stored configuration: %w", err)
 	}
-	return c, version, warnings, nil
+	return c, stamp, warnings, nil
 }
 
 // saveConfig stores a normalized configuration if version is still the
-// stored one (0 = none stored yet), and returns the new version.
-func (s store) saveConfig(ctx context.Context, c rules.Config, version, userID int64) (int64, error) {
+// stored one (0 = none stored yet), and returns the new stamp.
+func (s store) saveConfig(ctx context.Context, c rules.Config, version, userID int64) (configStamp, error) {
 	raw, err := json.Marshal(c)
 	if err != nil {
-		return 0, err
+		return configStamp{}, err
 	}
-	var tag pgconn.CommandTag
+	var row pgx.Row
 	if version == 0 {
-		tag, err = s.db.Exec(ctx, `INSERT INTO config (id, doc, version, updated_by) VALUES (1, $1, 1, $2) ON CONFLICT (id) DO NOTHING`, raw, userID)
+		row = s.db.QueryRow(ctx, `INSERT INTO config (id, doc, version, updated_by) VALUES (1, $1, 1, $2) ON CONFLICT (id) DO NOTHING
+			RETURNING `+configStampSQL, raw, userID)
 	} else {
-		tag, err = s.db.Exec(ctx, `UPDATE config SET doc = $1, version = version + 1, updated_at = now(), updated_by = $2
-			WHERE id = 1 AND version = $3`, raw, userID, version)
+		row = s.db.QueryRow(ctx, `UPDATE config SET doc = $1, version = version + 1, updated_at = now(), updated_by = $2
+			WHERE id = 1 AND version = $3 RETURNING `+configStampSQL, raw, userID, version)
 	}
-	if err != nil {
-		return 0, err
+	var stamp configStamp
+	err = row.Scan(&stamp.version, &stamp.updatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return configStamp{}, errVersionConflict
 	}
-	if tag.RowsAffected() == 0 {
-		return 0, errVersionConflict
-	}
-	return version + 1, nil
+	return stamp, err
 }
 
 func (s store) configVersion(ctx context.Context) (int64, error) {
@@ -374,11 +382,16 @@ func (s store) saveBases(ctx context.Context, bases map[pair]base) error {
 	return s.db.SendBatch(ctx, b).Close()
 }
 
-// eventRow is an event of a key.
+// eventRow is an event of a key. configVersion is the configuration
+// version the evaluation that decided it ran on (nil when no evaluation
+// did), so an event shows whether a save was in force. It goes into the
+// stored detail only, like the window and the steps: the log line and the
+// notification stay as they were.
 type eventRow struct {
 	key
 	rules.Event
-	Detail map[string]any
+	Detail        map[string]any
+	configVersion *int64
 }
 
 func (s store) addEvents(ctx context.Context, events []eventRow) error {
@@ -390,6 +403,12 @@ func (s store) addEvents(ctx context.Context, events []eventRow) error {
 		}
 		if e.Window != nil {
 			detail["window"] = e.Window
+		}
+		if len(e.Steps) > 0 {
+			detail["steps"] = e.Steps
+		}
+		if e.configVersion != nil {
+			detail["config_version"] = *e.configVersion
 		}
 		raw, err := json.Marshal(detail)
 		if err != nil {

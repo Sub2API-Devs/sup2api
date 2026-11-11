@@ -130,6 +130,18 @@ type SideEffect struct {
 	Zero            bool
 }
 
+// WeightStep is a strategy that changed the effective weight: its weight
+// action (Mode, Value) took it From -> To, To clamped to [floor, base] and
+// rounded to 0. The steps of an evaluation chain in order, so an event shows
+// what was executed, not only where the weight ended.
+type WeightStep struct {
+	Strategy string  `json:"strategy"`
+	Mode     string  `json:"mode"`
+	Value    int     `json:"value"`
+	From     float64 `json:"from"`
+	To       float64 `json:"to"`
+}
+
 // Output is the result of an evaluation.
 type Output struct {
 	Action      string
@@ -142,6 +154,7 @@ type Output struct {
 	Revived     bool
 	PrevDir     string
 	SideEffects []SideEffect
+	Steps       []WeightStep
 }
 
 // Precheck is the gate: a state with another base is reset; a state
@@ -176,6 +189,9 @@ func strategyDelta(mode string, value int, eff float64, base int) float64 {
 	}
 	return float64(value)
 }
+
+// roundWeight rounds an effective weight to 6 decimals.
+func roundWeight(eff float64) float64 { return math.Floor(eff*1000000+0.5) / 1000000 }
 
 // IsZero reports whether an effective weight rounds to 0: the account is not
 // scheduled.
@@ -651,9 +667,9 @@ func evalRules(in *Input, rules []Rule, l ledger, c carry, lowView int64) ruleOu
 // order, each on the previous result (two -30% make 100 -> 70 -> 49),
 // clamped to [floor, base]; a value rounding to 0 becomes 0, and a climb
 // from 0 adds at least 1. A cooldown starts when the strategy changed the
-// weight or ran a side effect. The verdict is bad on a degrade, good on a
-// climb with base > 0, else neutral.
-func applyStrategies(in *Input, strategies []ResolvedStrategy, rules ruleOutcome, eff, floor float64, zeroStart bool, cooldowns []int64) (float64, []int64, string, []SideEffect) {
+// weight or ran a side effect, and each weight change is a step. The verdict
+// is bad on a degrade, good on a climb with base > 0, else neutral.
+func applyStrategies(in *Input, strategies []ResolvedStrategy, rules ruleOutcome, eff, floor float64, zeroStart bool, cooldowns []int64) (float64, []int64, string, []SideEffect, []WeightStep) {
 	leaf := func(idx int) (bool, bool) {
 		fired := rules.fired(idx)
 		return fired, fired && rules.weightHold[idx]
@@ -682,6 +698,7 @@ func applyStrategies(in *Input, strategies []ResolvedStrategy, rules ruleOutcome
 		verdict = VerdictGood
 	}
 	var effects []SideEffect
+	var steps []WeightStep
 	for _, idx := range hits {
 		s := strategies[idx]
 		dir := s.Direction()
@@ -699,6 +716,9 @@ func applyStrategies(in *Input, strategies []ResolvedStrategy, rules ruleOutcome
 				next = 0
 			}
 			changed = next != eff
+			if changed {
+				steps = append(steps, WeightStep{Strategy: s.Name, Mode: a.Mode, Value: a.Value, From: roundWeight(eff), To: roundWeight(next)})
+			}
 			eff = next
 		}
 		// A climb only clears bindings when it raised the weight: a healthy
@@ -716,7 +736,7 @@ func applyStrategies(in *Input, strategies []ResolvedStrategy, rules ruleOutcome
 	}
 	// The ceiling always applies: a weight above a lowered base converges at
 	// once.
-	return min(eff, ceiling), cooldowns, verdict, effects
+	return min(eff, ceiling), cooldowns, verdict, effects, steps
 }
 
 // Evaluate evaluates one closed window. Writing the result back, and
@@ -743,8 +763,8 @@ func Evaluate(in Input) Output {
 		st.ErrCut = in.Window
 	}
 	ro := evalRules(&in, rules, l, c, lowView)
-	eff, cooldowns, verdict, effects := applyStrategies(&in, strategies, ro, startEff, floor, zeroStart, c.cooldowns)
-	st.WeightEff = math.Floor(eff*1000000+0.5) / 1000000
+	eff, cooldowns, verdict, effects, steps := applyStrategies(&in, strategies, ro, startEff, floor, zeroStart, c.cooldowns)
+	st.WeightEff = roundWeight(eff)
 	st.Cooldowns = cooldowns
 	// Weight 0 only keeps new sessions off the account: the sticky ones
 	// would go on to it.
@@ -777,7 +797,7 @@ func Evaluate(in Input) Output {
 	st.LastRules, st.LastRuleStats = string(ro.lastRules), ro.stats
 	st.LastVerdict, st.Recent = verdict, l.recent
 	return Output{Action: ActionApplied, Verdict: verdict, State: st, WeightFrom: from, WeightTo: st.WeightEff,
-		Adjust: in.Cfg.Enabled, SigReset: c.sigReset, Revived: revived, PrevDir: prevDir, SideEffects: effects}
+		Adjust: in.Cfg.Enabled, SigReset: c.sigReset, Revived: revived, PrevDir: prevDir, SideEffects: effects, Steps: steps}
 }
 
 // pick keeps the counts of the configured thresholds (0 included).

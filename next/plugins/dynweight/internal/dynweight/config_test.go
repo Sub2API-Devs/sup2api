@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -135,5 +136,60 @@ func TestEventLogCap(t *testing.T) {
 		if g, d := l.take(step.n, int64(step.at)); g != step.granted || d != step.dropped {
 			t.Fatalf("take(%d) at %d: granted %d dropped %d, want %d %d", step.n, step.at, g, d, step.granted, step.dropped)
 		}
+	}
+}
+
+// /config says when the version it returns was saved: 0 before any save, the
+// stored time after one, and a save returns its own.
+func TestConfigUpdatedAt(t *testing.T) {
+	e := newEnv(t)
+	read := func() configBody {
+		var body struct {
+			Data configBody `json:"data"`
+		}
+		e.decode(e.h.Do("GET", "/config", nil, nil), http.StatusOK, &body)
+		return body.Data
+	}
+	put := func(version int64) configBody {
+		var body struct {
+			Data configBody `json:"data"`
+		}
+		e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: rules.DefaultConfig(), Version: version, UpdatedAt: 123}), http.StatusOK, &body)
+		return body.Data
+	}
+	if got := read(); got.Version != 0 || got.UpdatedAt != 0 {
+		t.Fatalf("never saved: %d %d", got.Version, got.UpdatedAt)
+	}
+	before := time.Now().Unix()
+	saved := put(0)
+	if saved.Version != 1 || saved.UpdatedAt < before || saved.UpdatedAt > time.Now().Unix() {
+		t.Fatalf("first save: %d %d", saved.Version, saved.UpdatedAt)
+	}
+	if got := read(); got.UpdatedAt != saved.UpdatedAt {
+		t.Fatalf("read %d, saved %d", got.UpdatedAt, saved.UpdatedAt)
+	}
+	s, err := e.p.store(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(context.Background(), `UPDATE config SET updated_at = to_timestamp(1000)`); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got.UpdatedAt != 1000 {
+		t.Fatalf("stored time: %d", got.UpdatedAt)
+	}
+	if saved = put(1); saved.Version != 2 || saved.UpdatedAt < before {
+		t.Fatalf("second save: %d %d", saved.Version, saved.UpdatedAt)
+	}
+	if got := read(); got.UpdatedAt != saved.UpdatedAt {
+		t.Fatalf("read %d, saved %d", got.UpdatedAt, saved.UpdatedAt)
+	}
+	// Validating saves nothing, so it has no time.
+	var checked struct {
+		Data configBody `json:"data"`
+	}
+	e.decode(e.h.Do("POST", "/config/validate", nil, configBody{Config: rules.DefaultConfig(), Version: 2, UpdatedAt: 123}), http.StatusOK, &checked)
+	if checked.Data.UpdatedAt != 0 {
+		t.Fatalf("validate: %d", checked.Data.UpdatedAt)
 	}
 }

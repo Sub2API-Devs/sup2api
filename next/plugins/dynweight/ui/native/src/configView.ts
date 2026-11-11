@@ -1,9 +1,10 @@
-import { omit, type AccountOverride, type Config, type Layer, type Strategy } from './host'
-import { whenRefs } from './items'
+import { omit, type AccountOverride, type Config, type Layer, type Strategy, type When } from './host'
+import { directionOf, whenRefs } from './items'
 
 // What the config page shows about a draft: how a group layer differs from
-// the global one, which layer an account's override falls back to, and which
-// parts have unsaved edits. Pure functions, so they are tested on their own.
+// the global one, which layer an account's override falls back to, which
+// parts have unsaved edits, and layers that climb back too soon. Pure
+// functions, so they are tested on their own.
 
 /** The edited config, with groups and accounts always present. */
 export interface Draft extends Config {
@@ -162,4 +163,43 @@ export function changes(draft: Draft, saved: Draft): Changes {
     accounts: differing(draft.accounts, saved.accounts),
     notify: !same(draft.notify, saved.notify) || draft.log_events !== saved.log_events
   }
+}
+
+// ---- climbing back too soon
+
+/** A climb that can fire again sooner than this (seconds) undoes a degrade before it has had an effect. */
+export const FAST_CLIMB_SECONDS = 60
+
+/**
+ * The fewest windows before a trigger can fire: its rule's hit_periods; the
+ * least of an `any`, the most of an `all` (every rule must have hit). A
+ * missing or disabled rule, or one whose hits are left empty, never fires
+ * here (Infinity); no trigger fires every window.
+ */
+function triggerHits(w: When | null | undefined, hits: Map<string, number | null>): number {
+  if (w === null || w === undefined || w === '') return 1
+  if (typeof w === 'string') return hits.get(w) ?? Infinity
+  const all = 'all' in w
+  const each = (all ? w.all : w.any).map(m => triggerHits(m, hits))
+  if (!each.length) return Infinity
+  return all ? Math.max(...each) : Math.min(...each)
+}
+
+/**
+ * The enabled climb item of an enabled, degrading layer that can raise a
+ * weight again the soonest, when that is under FAST_CLIMB_SECONDS: a
+ * degrade then barely holds. An item fires again no sooner than its trigger
+ * hits again (hit_periods windows) and its cooldown has passed. null when
+ * none is that fast (or a number it needs is left empty).
+ */
+export function fastClimb(l: Layer): { name: string; seconds: number } | null {
+  const on = l.strategies.filter(s => s.enabled !== false)
+  if (!l.enabled || !l.window_seconds || !on.some(s => directionOf(s.actions) === 'degrade')) return null
+  const hits = new Map(l.rules.filter(r => r.enabled !== false).map(r => [r.name, r.hit_periods] as const))
+  let fastest: { name: string; seconds: number } | null = null
+  for (const s of on.filter(x => directionOf(x.actions) === 'climb')) {
+    const seconds = Math.max(triggerHits(s.when, hits) * l.window_seconds, s.cooldown_seconds ?? 0)
+    if (seconds < FAST_CLIMB_SECONDS && (!fastest || seconds < fastest.seconds)) fastest = { name: s.name, seconds }
+  }
+  return fastest
 }

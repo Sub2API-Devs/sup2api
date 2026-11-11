@@ -18,6 +18,7 @@ import {
   type ItemEntry,
   type Written
 } from './items'
+import type { SaveOutcome } from './dialogSave'
 import { clone, useDwHost, type Layer, type Rule, type Strategy } from './host'
 
 // Adjustment items of a layer: one row per strategy with its trigger and
@@ -25,9 +26,20 @@ import { clone, useDwHost, type Layer, type Rule, type Strategy } from './host'
 // delete. Every change is written back through writeItems (a rule nobody
 // references any more leaves with its item, and a toast names it) and
 // emitted as both lists; the page saves them. The editor opens on a row, or
-// on a new item from "Add item".
-const props = defineProps<{ rules: Rule[]; strategies: Strategy[]; defaults: Layer | null; readonly?: boolean }>()
-const emit = defineEmits<{ (e: 'change', value: { rules: Rule[]; strategies: Strategy[] }): void }>()
+// on a new item from "Add item". With `save` the editor saves its lists
+// through it instead (`others`: the page holds other unsaved edits, saved
+// along); without it (inside the group dialog) it hands them back like a
+// row action.
+type Lists = { rules: Rule[]; strategies: Strategy[] }
+const props = defineProps<{
+  rules: Rule[]
+  strategies: Strategy[]
+  defaults: Layer | null
+  readonly?: boolean
+  save?: (lists: Lists) => Promise<SaveOutcome>
+  others?: boolean
+}>()
+const emit = defineEmits<{ (e: 'change', value: Lists): void }>()
 const host = useDwHost()
 const t = host.t
 
@@ -58,10 +70,22 @@ const columns = computed<TableColumn[]>(() => [
 ])
 const KIND_TONE = { weight_degrade: 'warning', weight_climb: 'success', affinity_clear: 'info' } as const
 
-/** Emits written lists (from a row action or the editor), naming the rules that left with them. */
-function emitWritten(written: Written) {
+/** Names the rules that left with written lists. */
+function toastDropped(written: Written) {
   if (written.dropped.length) host.toast(t('it.dropped', { names: nameList(written.dropped, t) }), 'info')
+}
+
+/** Emits written lists (from a row action or the editor). */
+function emitWritten(written: Written) {
+  toastDropped(written)
   emit('change', { rules: written.rules, strategies: written.strategies })
+}
+
+/** Saves the editor's lists through `save`. */
+async function saveWritten(written: Written): Promise<SaveOutcome> {
+  const r = await props.save!({ rules: written.rules, strategies: written.strategies })
+  if (r.saved) toastDropped(written)
+  return r
 }
 const commit = (next: ItemEntry[]) => emitWritten(writeItems(next, props.rules))
 
@@ -175,6 +199,8 @@ const edit = (index: number, append = false) => (editor.value = { open: true, in
       :index="editor.index"
       :append="editor.append"
       :readonly="readonly"
+      :save="save && saveWritten"
+      :others="others"
       @apply="emitWritten"
     />
   </div>

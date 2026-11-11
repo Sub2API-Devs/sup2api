@@ -49,6 +49,7 @@ type Event struct {
 	To     float64        `json:"to"`
 	Rules  []string       `json:"rules,omitempty"`
 	Window *WindowSummary `json:"window,omitempty"`
+	Steps  []WeightStep   `json:"steps,omitempty"`
 }
 
 // ChangeKind classifies the weight change of an applied evaluation: down;
@@ -75,7 +76,8 @@ func ChangeKind(out Output) string {
 
 // Events expands an evaluation into its events: a base mismatch reset; or,
 // once applied, a rules change reset then the weight change (but a plain
-// weight_up), both with the rules that fired and the window's evidence.
+// weight_up), both with the window's evidence, the weight change also with
+// the rules that fired and the strategy steps that moved it.
 func Events(cfg *Resolved, window int64, out Output) []Event {
 	if out.Action == ActionReset {
 		return []Event{{Kind: EventReset, Reason: ReasonBaseMismatch}}
@@ -97,7 +99,7 @@ func Events(cfg *Resolved, window int64, out Output) []Event {
 		events = append(events, Event{Kind: EventReset, Reason: ReasonRulesChange, From: out.WeightFrom, To: to, Window: win})
 	}
 	if kind := ChangeKind(out); kind != "" && kind != EventWeightUp {
-		events = append(events, Event{Kind: kind, From: out.WeightFrom, To: out.WeightTo, Rules: FiredRules(cfg, st.LastRules), Window: win})
+		events = append(events, Event{Kind: kind, From: out.WeightFrom, To: out.WeightTo, Rules: FiredRules(cfg, st.LastRules), Window: win, Steps: out.Steps})
 	}
 	return events
 }
