@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SFormModal, SPageHeader, SSpinner, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SFormModal, SPageHeader, SSpinner, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
 import PluginStatusBadge from './parts/PluginStatusBadge.vue'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
@@ -12,7 +12,6 @@ import { useAuthStore } from '@/stores/auth'
 import { refreshShell } from '@/stores/app'
 import { consentPath } from './reviewCache'
 import { compareVersions, conflictLines, consoleSettings, hasCoreSettings, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
-import PluginAvatar from './parts/PluginAvatar.vue'
 import TrustBadge from './parts/TrustBadge.vue'
 import OverviewTab from './detail/OverviewTab.vue'
 import GrantsTab from './detail/GrantsTab.vue'
@@ -184,12 +183,6 @@ onMounted(load)
 
 <template>
   <div>
-    <div class="mb-4">
-      <SLink to="/plugins" class="inline-flex items-center gap-1 text-sm">
-        <SIcon name="arrow-left" class="h-4 w-4" />{{ t('plugins.list.title') }}
-      </SLink>
-    </div>
-
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
 
     <SCard v-else-if="!detail">
@@ -200,9 +193,6 @@ onMounted(load)
 
     <template v-else>
       <SPageHeader :title="name">
-        <template #before>
-          <PluginAvatar :name="name" :plugin-key="detail.key" :icon="(detail.manifest as any)?.icon" />
-        </template>
         <template #title-extra>
           <span class="font-mono text-sm text-gray-500">{{ detail.active_version ? 'v' + detail.active_version : '' }}</span>
           <span v-if="detail.desired_version && detail.desired_version !== detail.active_version" class="font-mono text-xs text-primary-600 dark:text-primary-400">

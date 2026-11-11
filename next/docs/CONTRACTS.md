@@ -1257,7 +1257,7 @@ type ProxyResolver interface {
 
 | 组件 | 用途 | props（默认值） | emits / slots |
 |---|---|---|---|
-| `SPageHeader` | 页面标题行 | `title`（必填）、`description` | slots `before`、`title-extra`、`actions`、`filters`（筛选行） |
+| `SPageHeader` | 页面页头。直接在控制台外壳下时，标题、说明和（宽屏）`before`/`title-extra` 显示在顶栏，页面里只剩筛选与操作一行（UI 3.9，§94）；嵌套范围内是页面里的标题行 | `title`（必填）、`description` | slots `before`、`title-extra`、`actions`、`filters`（筛选行） |
 | `SCard` | 卡片（`.card` 表面，与 `SSettingsGroup`、`STable card` 同一套） | `title`、`subtitle`、`padded`（true）、`variant`（`default`/`flat`，flat 去阴影，卡片套卡片时用） | slots 默认、`title`、`actions`、`footer`（底部按钮条） |
 | `SStatCard` | 统计卡 | `label`、`value`（必填）、`sub`、`icon`、`tone`（`primary`/`success`/`warning`/`danger`，primary）、`trend`（number \| null，显示 ▲/▼ 百分比）、`loading`、`compact`（小号）、`selected`（boolean；给了就渲染成 `<button aria-pressed>`，选中描边）、`selectable`（渲染成按钮）、`to`（`RouterLink`）/ `href`（`<a>`）：整张卡是链接 | emits `click`（有 `@click` 监听时也渲染成按钮）；slot 默认 |
 | `SChart` | ECharts 图（懒加载 echarts；已注册 Line/Bar/Pie、Grid/Tooltip/Legend/Title/Dataset、Canvas） | `option`（必填，按原样应用，自动补主题色、文字、轴线和 tooltip 颜色）、`height`（`'280px'`）、`loading` | 自动 resize、随暗色重绘。`option` 按引用比较：传新对象（computed）才重绘，不要原地改 |
@@ -7478,3 +7478,15 @@ type KVBatch interface {
 - SDK：`sdk/protocol/kv.go`，`sdk/pluginsdk/kvbatch.go`，`sdk/pluginsdk/pluginsdktest/kvbatch.go`。
 - 宿主测试 `grpcruntime/host_kv_batch_internal_test.go`：顺序与缺失的键；每项自己的 TTL；一项不合法时什么都不写；键数和数据量上限；两个插件、两个 namespace 之间互不可见；授权（含 PG 里撤销）；每次调用恰好一次授权查询和一条 Redis 命令（pgx tracer 和 go-redis hook 计数）；Redis 不可用。`TestKVBatchRealRedis` 在设置了 `TEST_REDIS_URL` 时对真实的 Valkey / Redis 运行（CI 设置；本地跳过）：真实 Lua 引擎上的脚本、512 个键、真实过期、脚本自身的参数检查。`grpcruntime/kv_batch_test.go` 用真实插件进程（`testdata/testplugin` 的 `/kvbatch`）走 broker 连接，并验证 4 MiB 的连接上限。
 - SDK 测试 `sdk/pluginsdk/kvbatch_internal_test.go`（新核心一批一次调用；旧核心回退、只被拒一次、结果相同；不吞其他错误；规则在两种核心上相同；并发上限）和 `sdk/pluginsdk/pluginsdktest/kvbatch_test.go`（FakeHost 的规则、原子写、旧核心开关、经 SDK 的端到端）。
+
+## 94. 页头统一进顶栏（UI 3.9，2026-11-11，用户要求：每个页面的标题和说明都像 API 密钥页那样显示在顶栏，不在页面里另占一行；菜单名与页面标题各自独立；无迁移）
+
+UI 3.8 及以前，`SPageHeader` 只有在自己的 `title` 与路由标题文字完全相同、且没有 `#before` / `#title-extra` 时，才把说明和操作交给顶栏。标题不同名的页面（个人设置、全站概览、全站日志、用量概览、使用日志）、没有路由标题的插件页面（`/p/:plugin/:page`）、带返回按钮或徽章的页面（价格来源、价格编辑、价格同步、插件详情、插件设置）都在页面里另画一行标题。
+
+- **规则。** 页面声明，顶栏显示：直接处在控制台外壳下的 `SPageHeader` 总是把 `title`、`description` 交给顶栏，不比较文字。顶栏标题取页面给的，页面还没给时（加载中、没有 `SPageHeader` 的页面）取路由 `meta.title`。侧栏菜单名（`nav.items.*`）和面包屑不受影响，可以与页面标题不同。
+- **`@sub2api/ui`。** `provideTitleContext(title, sink?)`：第二个参数由原来的 `description`、`actions` 两个参数改为 `PageHeadSink`（`{ head: Ref<PageHead | null>, extra?: string, actions?: string }`，`extra`、`actions` 是顶栏里两个容器的选择器）；`PageHead` 是 `{ owner, title, description }`，`owner` 标识写入它的页头，页头卸载时只清自己写的那份。新导出类型 `PageHead`、`PageHeadSink`。只传 `title` 的调用（`STitleScope`、插件自己的嵌套范围）不变。
+- **宽屏（≥768px）。** `#before`、`#title-extra` 传送到顶栏标题后（`#s-page-title-extra`）；没有 `#filters` / `#filters-primary` 时 `#actions` 传送到顶栏（`#s-page-actions`，同 UI 3.8）；有筛选时筛选与操作仍是页面里的一行。
+- **窄屏。** 顶栏只放标题；`#before`、`#title-extra`、`#actions` 留在页面里，说明不显示（同 UI 3.8）。
+- **嵌套范围。** 标签页、`STitleScope`、弹窗、抽屉没有 `sink`，里面的 `SPageHeader` 行为与 UI 3.8 相同。
+- **控制台。** `useAppStore().pageHead` 取代 `pageDescription`；顶栏标题可截断（`data-testid="page-title"`）。价格来源、价格编辑、价格同步页去掉页头里的「返回」按钮（面包屑已有上级页面）；插件授权确认页、插件发布进度页由手写 `<h1>` 改为 `SPageHeader`，发布进度页回插件详情的链接改为页头操作按钮。
+- **插件。** 原生插件页面用的是宿主的 `@sub2api/ui`，不重新构建即按新规则显示；`hostUICompat: "^3.x"` 的现有声明都满足 3.9。`HOST_UI_VERSION` 3.9.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.9.0（`ui-contract.spec.ts` 锁定）。`sdk/manifest` 的核心下限检查不变：3.9 没有新增 manifest 字段。
