@@ -76,6 +76,35 @@ export function rangeBounds(key: RangeKey): { from: string; to: string } {
   return { from: from ? from.toISOString() : '', to: to ? to.toISOString() : '' }
 }
 
+/**
+ * A preset's bounds with the end closed, for a picker that shows both ends
+ * to the second: a preset rangeBounds leaves open ends at the local midnight
+ * after today (to is exclusive, so the last second shown is 23:59:59).
+ */
+export function closedRangeBounds(key: RangeKey): { from: string; to: string } {
+  const b = rangeBounds(key)
+  return key === 'all' || b.to ? b : { from: b.from, to: daysAgo(-1).toISOString() }
+}
+
+/**
+ * The bounds a request log opens with, as new-api's usage log does: from
+ * today's local midnight to one hour from now, so requests made while the
+ * page is open stay in range. `to` is exclusive: one second past that end.
+ */
+export function logRangeBounds(): { from: string; to: string } {
+  const end = Math.floor(Date.now() / 1000) * 1000 + 3600_000
+  return { from: startOfToday().toISOString(), to: new Date(end + 1000).toISOString() }
+}
+
+/** RFC 3339 -> value of <input type="datetime-local" step="1"> (local time, to the second). */
+export function toLocalSecondsInput(v: string | Date | null | undefined): string {
+  if (!v) return ''
+  const d = v instanceof Date ? v : new Date(v)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (x: number) => String(x).padStart(2, '0')
+  return `${dayKey(d)}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 /** RFC 3339 -> value of <input type="datetime-local"> (local time). */
 export function toLocalInput(v: string | null | undefined): string {
   if (!v) return ''

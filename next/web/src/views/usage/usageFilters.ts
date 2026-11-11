@@ -1,12 +1,16 @@
 import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { rangeBounds, type RangeKey } from '@sub2api/ui'
+import { logRangeBounds, rangeBounds, type RangeKey } from '@sub2api/ui'
 import type { LocationQuery } from 'vue-router'
 
-/** The search bar's starting filters: the range, and the fields it always sends. */
-export function baseUsageFilters(range: RangeKey) {
+/**
+ * The search bar's starting filters: the range, and the fields it always
+ * sends. `log` opens on the request log's own range instead (today's midnight
+ * to an hour from now, as new-api's usage log), whatever the preset shown.
+ */
+export function baseUsageFilters(range: RangeKey, log = false) {
   return {
-    ...rangeBounds(range),
+    ...(log ? logRangeBounds() : rangeBounds(range)),
     model_contains: '',
     success: '',
     client_ip: '',

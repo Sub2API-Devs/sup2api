@@ -31,7 +31,6 @@ const props = withDefaults(
   defineProps<{
     listPath: string
     summaryPath: string
-    defaultRange: RangeKey
     admin?: boolean
     groupOptions?: Array<{ value: string | number; label: string }>
     /** Bumped by the page's refresh button: reload everything (the page owns the header). */
@@ -50,8 +49,10 @@ const auth = useAuthStore()
 // (the server leaves it out for everyone else, CONTRACTS §66.5).
 const showAccount = computed(() => props.admin && auth.has('account:read'))
 
-const range = ref<RangeKey>(props.defaultRange)
-const baseFilters = baseUsageFilters(props.defaultRange)
+// The request log opens like new-api's: today from 00:00:00 to an hour from
+// now, both ends shown to the second.
+const range = ref<RangeKey>('today')
+const baseFilters = baseUsageFilters('today', true)
 // A link from the dashboard opens the page already filtered.
 const fromQuery = queryUsageFilters(route.query, props.admin)
 if (fromQuery.from || fromQuery.to) range.value = 'custom'
@@ -133,7 +134,7 @@ async function exportCsv() {
     >
       <template #range>
         <slot v-if="extraOpen" :name="`tab-${tab}-range`" />
-        <SDateRange v-else v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
+        <SDateRange v-else v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" time />
       </template>
       <template #filters>
         <slot v-if="extraOpen" :name="`tab-${tab}-filters`" />

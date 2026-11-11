@@ -43,7 +43,7 @@ enableAutoUnmount(afterEach)
 
 function render(admin = false, extraTabs: Array<{ key: string; label: string }> = []) {
   return mount(UsageRecords, {
-    props: { listPath: admin ? '/usage' : '/me/usage', summaryPath: admin ? '/usage/summary' : '/me/usage/summary', defaultRange: '7d', admin, extraTabs },
+    props: { listPath: admin ? '/usage' : '/me/usage', summaryPath: admin ? '/usage/summary' : '/me/usage/summary', admin, extraTabs },
     slots: { 'tab-ledger': '<div data-testid="ledger" />', 'tab-ledger-range': '<div data-testid="ledger-range" />', 'tab-ledger-filters': '<div data-testid="ledger-filters" />' },
     global: { plugins: [i18n], stubs: { SChart: true } }
   })
@@ -211,6 +211,18 @@ describe('usage records page', () => {
     }
   })
 
+  it('opens on today from 00:00:00 to an hour from now, shown to the second', () => {
+    const midnight = new Date()
+    midnight.setHours(0, 0, 0, 0)
+    const w = render(true)
+    const f = lists[0].filters as { from: string; to: string }
+    expect(f.from).toBe(midnight.toISOString())
+    const end = new Date(f.to).getTime() - 1000
+    expect(Math.abs(end - (Date.now() + 3600_000))).toBeLessThan(5000)
+    const range = w.findComponent({ name: 'SDateRange' })
+    expect(range.props()).toMatchObject({ range: 'today', time: true, from: f.from, to: f.to })
+  })
+
   it('starts from the filters of a link; a user cannot preset another user', async () => {
     query = { user_id: '3', group_name: 'vip', from: '2026-10-01T00:00:00.000Z', to: '2026-10-08T00:00:00.000Z' }
     render(true)
@@ -233,7 +245,7 @@ describe('usage records page', () => {
 
   it('renders the page actions in the search bar beside Export', async () => {
     const w = mount(UsageRecords, {
-      props: { listPath: '/me/usage', summaryPath: '/me/usage/summary', defaultRange: '7d' },
+      props: { listPath: '/me/usage', summaryPath: '/me/usage/summary' },
       slots: { actions: '<button data-testid="page-refresh" />' },
       global: { plugins: [i18n], stubs: { SChart: true } }
     })

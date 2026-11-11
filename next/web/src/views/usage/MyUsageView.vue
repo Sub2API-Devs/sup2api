@@ -48,7 +48,6 @@ function refresh() {
       :revision="recordsRevision"
       list-path="/me/usage"
       summary-path="/me/usage/summary"
-      default-range="7d"
       :extra-tabs="extraTabs"
       @update:tab="tab = $event"
     >
