@@ -212,10 +212,10 @@ function clearChips() {
   apply()
 }
 
-watch(
-  () => [form.result, form.conclusion, form.severity, form.category, form.flow, form.group_id, form.timing, form.watch_level, form.replayed, from.value, to.value],
-  apply
-)
+// Selects apply at once; text fields (the group id without a group list, the
+// key id) on search. Compared as a string: a catalog refresh that rebuilds the
+// fields with the same values does not apply what is typed.
+watch(() => JSON.stringify([form.result, from.value, to.value, ...advancedFields.value.filter((f) => f.options).map((f) => form[f.key])]), apply)
 watch(
   () => props.preset,
   (p) => p && reset(String(p.user_id))
@@ -319,10 +319,10 @@ watch(() => list.items.value, () => (checked.value = []))
             <SInput v-else v-model="form[f.key]" size="sm" inputmode="numeric" :placeholder="f.placeholder || f.label" :aria-label="f.label" :title="f.label" />
           </template>
         </template>
-        <template v-if="!compact" #end>
+        <template #end>
           <!-- The column settings sit in the search bar, not on a row of their own above the table. -->
           <STableColumnSettings :state="columnState" />
-          <SButton type="submit" variant="primary" size="sm" icon="search" :loading="list.loading.value">{{ t('events.search') }}</SButton>
+          <SButton v-if="!compact" type="submit" variant="primary" size="sm" icon="search" :loading="list.loading.value">{{ t('events.search') }}</SButton>
         </template>
       </SFilterBar>
     </form>

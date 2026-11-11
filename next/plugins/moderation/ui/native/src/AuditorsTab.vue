@@ -53,7 +53,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'summary', label: t('auditors.col.summary'), grow: true, mobile: 'subtitle' },
   { key: 'today', label: t('auditors.col.today'), align: 'right', nowrap: true, mobile: 'meta' },
   { key: 'usable', label: t('auditors.col.usable'), nowrap: true, hideable: false, mobile: 'status' },
-  { key: 'actions', label: '', align: 'right', nowrap: true, hideable: false }
+  { key: 'actions', label: t('actions'), align: 'right', nowrap: true, hideable: false }
 ])
 const columnState = useTableColumns(columns, 'moderation-auditors')
 

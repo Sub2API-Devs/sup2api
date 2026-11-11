@@ -85,7 +85,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'kind', label: t('bindings.col.kind'), nowrap: true, mobile: 'status' },
     { key: 'flow', label: t('bindings.col.flow'), grow: true, mobile: 'meta', mobileSpan: 2 }
   ]
-  if (manage.value) c.push({ key: 'actions', label: '', align: 'right', hideable: false })
+  if (manage.value) c.push({ key: 'actions', label: t('actions'), align: 'right', hideable: false })
   return c
 })
 const columnState = useTableColumns(columns, 'moderation-bindings')
@@ -192,9 +192,9 @@ const previewResult = computed(() => {
         :aria-label="t('bindings.col.kind')"
         @update:model-value="kindFilter = $event as BindingKind | null"
       />
-      <template v-if="!compact" #end>
+      <template #end>
         <STableColumnSettings :state="columnState" />
-        <SButton v-if="manage" variant="primary" size="sm" icon="plus" @click="openEdit(null)">{{ t('bindings.add') }}</SButton>
+        <SButton v-if="manage && !compact" variant="primary" size="sm" icon="plus" @click="openEdit(null)">{{ t('bindings.add') }}</SButton>
       </template>
     </SFilterBar>
     <SButton v-if="manage && compact" fab icon="plus" :aria-label="t('bindings.add')" @click="openEdit(null)" />

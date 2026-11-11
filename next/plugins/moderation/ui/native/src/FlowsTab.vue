@@ -35,7 +35,7 @@ import { useCatalog } from './catalog'
 import { enumLabel, joinList, ms, num, pct } from './format'
 import { canManage, confirmDelete, deleteFlow, errorMessage, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Group, Spec, TabKey } from './types'
-import { exemptGroups, groupCoverage, type GroupOwner } from './bindingOps'
+import { exemptGroups, flowBindingsInactive, flowBound, groupCoverage, type GroupOwner } from './bindingOps'
 
 // Flows (CONTRACTS §72.7): the list (one line a row: groups as chips, 24 h
 // stats, edit / groups and a More menu) and the full-width canvas editor of
@@ -72,8 +72,6 @@ function stagesSummary(s: Spec | null): string {
   return s.stages.map((st) => `${st.auditors.map(catalog.auditorName).join(' ∥ ')}${st.auditors.length > 1 ? ` (${enumLabel('combine', st.combine || 'any')}${st.combine === 'at_least' ? ' ' + st.n : ''})` : ''}`).join(' → ')
 }
 const groupChips = (f: Flow) => f.groups.map((id) => ({ key: String(id), label: groupLabel(id), title: groupLabel(id) }))
-/** The flow is disabled or unpublished while something is bound to it: those bindings do not apply. */
-const bindingsInactive = (f: Flow) => (!f.enabled || !f.version) && (f.groups.length > 0 || !!f.accounts?.length)
 
 // ---- filters
 const nameQuery = ref('')
@@ -109,7 +107,7 @@ const columns = computed<TableColumn[]>(() => {
   }
   c.push(
     { key: 'published_at', label: t('flows.col.published'), nowrap: true, mobile: 'detail' },
-    { key: 'actions', label: '', align: 'right', nowrap: true, hideable: false }
+    { key: 'actions', label: t('actions'), align: 'right', nowrap: true, hideable: false }
   )
   return c
 })
@@ -172,8 +170,7 @@ async function toggle(f: Flow, on: boolean) {
   if (!on) {
     const lost = lostGroups(f)
     // its bindings stop applying: the groups and accounts fall back to wider bindings
-    const bound = f.groups.length > 0 || !!f.accounts?.length
-    const message = [t('flows.disableConfirm', { name: f.name }), bound ? t('flows.disableFallsBack') : '', lost.length ? t('flows.disableLoses', { groups: joinList(lost.map(groupLabel)) }) : ''].filter(Boolean).join(' ')
+    const message = [t('flows.disableConfirm', { name: f.name }), flowBound(f) ? t('flows.disableFallsBack') : '', lost.length ? t('flows.disableLoses', { groups: joinList(lost.map(groupLabel)) }) : ''].filter(Boolean).join(' ')
     if (!(await host.confirm({ message, danger: lost.length > 0, confirmText: t('flows.disable') }))) return
   }
   try {
@@ -186,7 +183,7 @@ async function toggle(f: Flow, on: boolean) {
 
 function remove(f: Flow) {
   // an enabled flow with bindings cannot be deleted: say why instead of asking first
-  if (f.enabled && (f.groups.length > 0 || !!f.accounts?.length)) {
+  if (f.enabled && flowBound(f)) {
     host.toast(t('flows.deleteBlocked'), 'warning')
     return
   }
@@ -247,9 +244,11 @@ function onCreated(id: number) {
           <SInput v-model="nameQuery" type="search" size="sm" icon="search" :placeholder="t('flows.searchName')" :aria-label="t('flows.searchName')" class="mod-flows-search" clearable />
         </template>
         <SSelect :model-value="groupFilter" size="sm" :options="groupOptions" :aria-label="t('flows.groupFilter')" class="mod-flows-group" @update:model-value="groupFilter = $event as number | null" />
-        <template v-if="!compact" #end>
+        <template #end>
           <STableColumnSettings :state="columnState" />
-          <SButton v-for="a in createActions" :key="a.key" size="sm" :variant="a.variant" :icon="a.icon" :disabled="a.disabled" :title="a.title" @click="a.run">{{ a.label }}</SButton>
+          <template v-if="!compact">
+            <SButton v-for="a in createActions" :key="a.key" size="sm" :variant="a.variant" :icon="a.icon" :disabled="a.disabled" :title="a.title" @click="a.run">{{ a.label }}</SButton>
+          </template>
         </template>
       </SFilterBar>
       <div v-if="compact && createActions.length" class="mod-toolbar">
@@ -266,7 +265,7 @@ function onCreated(id: number) {
             </span>
           </template>
           <template #cell-status="{ row }">
-            <span class="mod-cell-line" :title="bindingsInactive(row) ? t('flows.bindingsInactiveHint') : undefined">
+            <span class="mod-cell-line" :title="flowBindingsInactive(row) ? t('flows.bindingsInactiveHint') : undefined">
               <SSwitch v-if="manage" :model-value="row.enabled" size="sm" :aria-label="t('enabled')" @update:model-value="toggle(row, $event)" />
               <EnabledBadge v-else :enabled="row.enabled" size="xs" />
               <SBadge v-if="!row.version" tone="gray" size="xs">{{ t('flows.unpublished') }}</SBadge>

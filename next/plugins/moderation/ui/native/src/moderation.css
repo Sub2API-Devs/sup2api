@@ -997,8 +997,7 @@ p.mod-text-danger {
   min-width: 0;
   overflow: hidden;
 }
-.mod-attention-item .mod-sub,
-.mod-cell-line > .mod-sub {
+.mod-attention-item .mod-sub {
   margin-top: 0;
 }
 .mod-filter-sm {

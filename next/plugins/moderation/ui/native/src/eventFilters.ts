@@ -1,7 +1,8 @@
 import type { FilterChipItem, SelectOption } from '@sub2api/ui'
 
 // Filters of the records tab (EventsTab): the selects that stand for two
-// query parameters (verdict, flow) and the chips of the applied filters.
+// query parameters (verdict, flow); and the chips of the applied filters,
+// shared with the watch list tab.
 
 /** The verdict select sets one of these query parameters at a time. */
 export const CONCLUSION_PARAMS = ['review_status', 'ai_verdict', 'verdict'] as const

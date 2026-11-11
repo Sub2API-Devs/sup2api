@@ -150,6 +150,17 @@ describe('shared usage search', () => {
     expect(w.text()).not.toContain('usage.search.')
   })
 
+  it('drops the account type with its plugin chip, and Clear all clears the chips only', async () => {
+    const w = mount(UsageFilters, { props: { modelValue: { model_contains: 'gpt', plugin_key: 'p', account_type: 'apikey' }, admin: true }, global })
+    // the API refuses account_type without plugin_key
+    await w.get('[data-filter-key="plugin_key"] button').trigger('click')
+    expect(w.emitted('update:modelValue')![0]![0]).toEqual({ plugin_key: '', account_type: '' })
+    await w.get('[data-testid="filter-chips-clear"]').trigger('click')
+    const cleared = w.emitted('update:modelValue')![1]![0] as Record<string, string>
+    expect(cleared).toMatchObject({ plugin_key: '', account_type: '' })
+    expect(cleared).not.toHaveProperty('model_contains')
+  })
+
   it('ends the filter row with reset and search when there is no stats or actions row', () => {
     const bare = mount(UsageFilters, { props: { modelValue: {} }, global })
     expect(bare.find('.mt-3').exists()).toBe(false)

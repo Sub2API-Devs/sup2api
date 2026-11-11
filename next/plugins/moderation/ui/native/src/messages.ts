@@ -67,6 +67,7 @@ export default {
     saved: '已保存',
     edit: '编辑',
     delete: '删除',
+    actions: '操作',
     deleted: '已删除',
     enabled: '启用',
     disabled: '停用',
@@ -264,7 +265,6 @@ export default {
       allVersions: '全部版本',
       suspicious: '可疑（命中和拦截）',
       search: '查询',
-      reset: '重置',
       empty: '没有符合条件的审核记录',
       loadFailed: '加载审核记录失败',
       filterUser: '只看该用户的记录',
@@ -491,7 +491,7 @@ export default {
       created: '已封禁用户 #{id}',
       invalidUser: '请输入有效的用户 ID',
       invalidDuration: '时长必须是不小于 0 的整数',
-      col: { user: '用户', reason: '原因', violations: '违规次数', source: '来源', created: '封禁时间', expires: '到期时间', actions: '操作' }
+      col: { user: '用户', reason: '原因', violations: '违规次数', source: '来源', created: '封禁时间', expires: '到期时间' }
     },
     bindings: {
       hint: '流程可以绑定到分组（该分组的全部账号）、分组下的某个账号、或某个账号（不论分组）。请求发往某个账号时，按“分组 + 账号 → 账号 → 分组 → 默认分组”的顺序取第一条绑定；绑定到“不审核”即免审。绑定的流程停用或未发布时，这条绑定不生效，继续按更宽的绑定审核。只有分组绑定时，审核仍在调度前进行，与以前相同；有账号绑定时，在选定账号后、发往该账号前审核，换账号重试时会按新账号再判断一次，同一流程不重复审核。',
@@ -1028,7 +1028,6 @@ export default {
       every: '每 {n} 次违规自动分析一次',
       everyOff: '自动分析已关闭',
       newHits: '新记录 {n}',
-      otherGroups: '另有 {n} 个分组',
       noFlow: '未绑定流程',
       sev: {
         high: '高 {n}',
@@ -1156,7 +1155,6 @@ export default {
       edit: '编辑流程',
       empty: '今天没有经过流程的请求',
       entered: '进入',
-      hitArrow: '命中 →',
       hit: '命中 {n}',
       passed: '通过 {n}',
       overturned: '推翻 {n}',
@@ -1265,6 +1263,7 @@ export default {
     saved: 'Saved',
     edit: 'Edit',
     delete: 'Delete',
+    actions: 'Actions',
     deleted: 'Deleted',
     enabled: 'Enabled',
     disabled: 'Disabled',
@@ -1462,7 +1461,6 @@ export default {
       allVersions: 'All versions',
       suspicious: 'Suspicious (hit and blocked)',
       search: 'Search',
-      reset: 'Reset',
       empty: 'No records match',
       loadFailed: 'Failed to load the records',
       filterUser: 'Only this user',
@@ -1656,7 +1654,7 @@ export default {
       created: 'User #{id} banned',
       invalidUser: 'Enter a valid user ID',
       invalidDuration: 'The duration must be a non-negative integer',
-      col: { user: 'User', reason: 'Reason', violations: 'Violations', source: 'Source', created: 'Banned at', expires: 'Expires', actions: 'Actions' }
+      col: { user: 'User', reason: 'Reason', violations: 'Violations', source: 'Source', created: 'Banned at', expires: 'Expires' }
     },
     bindings: {
       hint: 'A flow can be bound to a group (every account of it), to an account within a group, or to an account in any group. A request sent to an account goes by the first binding in the order group + account, account, group, default group; a binding to "Not moderated" exempts it. A binding whose flow is disabled or unpublished does not apply: the next wider binding decides. With group bindings only, requests are moderated before scheduling as before; with account bindings they are moderated once the account is chosen and before it gets the request, again when a retry moves to another account, never twice by the same flow.',
@@ -2193,7 +2191,6 @@ export default {
       every: 'Analyzed automatically every {n} violations',
       everyOff: 'Automatic analysis is off',
       newHits: '{n} new',
-      otherGroups: '{n} more groups',
       noFlow: 'No flow',
       sev: {
         high: 'High {n}',
@@ -2321,7 +2318,6 @@ export default {
       edit: 'Edit flows',
       empty: 'No request went through a flow today',
       entered: 'Entered',
-      hitArrow: 'hit →',
       hit: 'Hit {n}',
       passed: 'Passed {n}',
       overturned: 'Overturned {n}',

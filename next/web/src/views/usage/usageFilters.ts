@@ -100,6 +100,9 @@ export function usageSearchLayout(c: UsageSearchContext) {
   return { primary, advanced, params, tagged: params.filter(p => !untagged.includes(p)) }
 }
 
+/** The parameters removing the chip `key` clears: account_type goes with its plugin_key (the API refuses it alone). */
+export const chipParams = (key: string): string[] => (key === 'plugin_key' ? [key, 'account_type'] : [key])
+
 /** Parameters labelled outside usage.search. */
 const LABEL_KEYS: Record<string, string> = { success: 'common.status', billing_status: 'usage.billing.statusLabel' }
 

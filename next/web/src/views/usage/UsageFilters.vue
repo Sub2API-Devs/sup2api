@@ -16,9 +16,10 @@
 // #tools go to the end of that sheet.
 import { computed, reactive, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SFilterBar, SFilterChips, SSelect, useViewport } from '@sub2api/ui'
+import { SFilterBar, SFilterChips, SSelect, useViewport } from '@sub2api/ui'
 import UsageFilterFields from './UsageFilterFields.vue'
-import { fieldText, usageSearchLayout, useUsageSearchLabels } from './usageFilters'
+import UsageSearchButtons from './UsageSearchButtons.vue'
+import { chipParams, fieldText, usageSearchLayout, useUsageSearchLabels } from './usageFilters'
 
 const props = withDefaults(defineProps<{
   modelValue: Record<string, unknown>
@@ -164,29 +165,13 @@ function pickLogType(value: unknown) {
         v-if="searchable && !bottomRow"
         class="ms-auto flex items-center gap-2"
       >
-        <SButton
-          type="button"
-          size="sm"
-          data-testid="reset-usage-filters"
-          @click="reset"
-        >
-          {{ t('common.reset') }}
-        </SButton>
-        <SButton
-          type="submit"
-          variant="primary"
-          size="sm"
-          icon="search"
-          data-testid="search-usage"
-        >
-          {{ t('common.search') }}
-        </SButton>
+        <UsageSearchButtons @reset="reset" />
       </div>
     </div>
     <SFilterChips
       class="mt-2"
       :items="chips"
-      @remove="emitParams([$event], true)"
+      @remove="emitParams(chipParams($event), true)"
       @clear="emitParams(layout.tagged, true)"
     />
     <div
@@ -200,23 +185,7 @@ function pickLogType(value: unknown) {
           v-if="!compact"
           name="tools"
         />
-        <SButton
-          type="button"
-          size="sm"
-          data-testid="reset-usage-filters"
-          @click="reset"
-        >
-          {{ t('common.reset') }}
-        </SButton>
-        <SButton
-          type="submit"
-          variant="primary"
-          size="sm"
-          icon="search"
-          data-testid="search-usage"
-        >
-          {{ t('common.search') }}
-        </SButton>
+        <UsageSearchButtons @reset="reset" />
       </div>
     </div>
   </form>

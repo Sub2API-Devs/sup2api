@@ -33,6 +33,7 @@ import UserListBadge from './UserListBadge.vue'
 import UserRef from './UserRef.vue'
 import { useCatalog } from './catalog'
 import { useCategoryOptions } from './categories'
+import { filterChips, type FilterField } from './eventFilters'
 import { applyFilters } from './forms'
 import { enumLabel, enumOptions, joinList, num } from './format'
 import { analysisState, canManage, errorMessage, useModHost, useWatchList } from './host'
@@ -87,12 +88,12 @@ const sortOptions = computed(() => enumOptions('watchList.sort', ['new', 'last_h
 const categories = useCategoryOptions()
 const categoryOptions = computed(() => anyOf(t('watchList.category'), categories.value))
 
-// The "more filters" in effect, as removable chips under the bar.
-const advanced = computed(() => [
-  { key: 'trend' as const, label: t('watchList.trend'), options: trendOptions.value },
-  { key: 'category' as const, label: t('watchList.category'), options: categoryOptions.value }
+// The "more filters"; the ones in effect are removable chips under the bar.
+const advanced = computed<Array<FilterField<'trend' | 'category'> & { searchable?: boolean }>>(() => [
+  { key: 'trend', label: t('watchList.trend'), options: trendOptions.value },
+  { key: 'category', label: t('watchList.category'), options: categoryOptions.value, searchable: true }
 ])
-const chips = computed(() => advanced.value.filter((f) => filter[f.key]).map((f) => ({ key: f.key, label: f.label, value: f.options.find((o) => o.value === filter[f.key])?.label ?? filter[f.key] })))
+const chips = computed(() => filterChips(advanced.value, filter))
 /** Bar filters off their default (the phone sheet adds the chips to its badge). */
 const activeCount = computed(() => [filter.level, filter.new_only, filter.sort !== 'new'].filter(Boolean).length)
 const dirty = computed(() => activeCount.value + chips.value.length > 0 || filter.user.trim() !== '')
@@ -100,7 +101,7 @@ function removeChip(key: string) {
   filter[key as 'trend' | 'category'] = ''
 }
 function clearChips() {
-  filter.trend = filter.category = ''
+  for (const f of advanced.value) filter[f.key] = ''
 }
 
 const sevText = (r: WatchItem) => `${t('watchList.sev.high', { n: r.by_severity.high })} · ${t('watchList.sev.medium', { n: r.by_severity.medium })} · ${t('watchList.sev.low', { n: r.by_severity.low })}`
@@ -123,7 +124,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'violation_count', label: t('watch.col.violations'), align: 'right', nowrap: true, defaultHidden: true, mobile: 'detail' },
     { key: 'note', label: t('watch.col.note'), grow: true, defaultHidden: true, mobile: 'detail' }
   ]
-  if (manage.value) c.push({ key: 'actions', label: '', align: 'right', hideable: false })
+  if (manage.value) c.push({ key: 'actions', label: t('actions'), align: 'right', hideable: false })
   return c
 })
 const columnState = useTableColumns(columns, 'moderation-watch')
@@ -196,12 +197,11 @@ const promptOpen = ref(false)
         <SSelect v-model="filter.sort" size="sm" class="mod-filter-sm" :options="sortOptions" :aria-label="t('watchList.sortBy')" :title="t('watchList.sortBy')" />
         <SCheckbox v-model="filter.new_only" :label="t('watchList.newOnly')" />
         <template #advanced>
-          <SSelect v-model="filter.trend" size="sm" :options="trendOptions" :aria-label="t('watchList.trend')" :title="t('watchList.trend')" />
-          <SSelect v-model="filter.category" size="sm" :options="categoryOptions" searchable :aria-label="t('watchList.category')" :title="t('watchList.category')" />
+          <SSelect v-for="f in advanced" :key="f.key" v-model="filter[f.key]" size="sm" :options="f.options!" :searchable="f.searchable" :aria-label="f.label" :title="f.label" />
         </template>
-        <template v-if="!compact" #end>
+        <template #end>
           <STableColumnSettings :state="columnState" />
-          <SButton type="submit" variant="primary" size="sm" icon="search" :loading="list.loading.value">{{ t('events.search') }}</SButton>
+          <SButton v-if="!compact" type="submit" variant="primary" size="sm" icon="search" :loading="list.loading.value">{{ t('events.search') }}</SButton>
         </template>
       </SFilterBar>
     </form>

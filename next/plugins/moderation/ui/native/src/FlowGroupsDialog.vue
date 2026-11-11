@@ -4,7 +4,7 @@ import { isApiError } from '@sub2api/host'
 import { SButton, SCheckbox, SHint, SModal, STagInput } from '@sub2api/ui'
 import { errorDetails, setFlowGroups, toastError, useModHost } from './host'
 import type { Flow, Group, GroupConflict } from './types'
-import type { GroupOwner } from './bindingOps'
+import { flowBindingsInactive, type GroupOwner } from './bindingOps'
 
 // Bound groups of one flow, edited from the flow list's row action (new-api
 // flow-groups-cell.tsx; PUT /flows/:id/groups). A group bound to another flow
@@ -30,11 +30,7 @@ const saving = ref(false)
 const conflicts = ref<GroupConflict[] | null>(null)
 
 const name = computed(() => props.flow?.name ?? '')
-/** The flow is disabled or unpublished while something is bound to it: those bindings do not apply. */
-const inactive = computed(() => {
-  const f = props.flow
-  return !!f && (!f.enabled || !f.version) && (f.groups.length > 0 || !!f.accounts?.length)
-})
+const inactive = computed(() => !!props.flow && flowBindingsInactive(props.flow))
 
 watch(
   () => [props.open, props.flow] as const,

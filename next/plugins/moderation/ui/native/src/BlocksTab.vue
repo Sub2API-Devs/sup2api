@@ -14,7 +14,6 @@ import {
   STable,
   STableColumnSettings,
   useTableColumns,
-  useViewport,
   type TableColumn
 } from '@sub2api/ui'
 import UserRef from './UserRef.vue'
@@ -32,7 +31,6 @@ import { useAsync } from './useAsync'
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
-const { compact } = useViewport()
 
 const { data, loading, error, reload } = useAsync(fetchBlocks, () => t('blocks.loadFailed'))
 const rows = computed(() => data.value || [])
@@ -49,7 +47,7 @@ const columns = computed(() => {
     { key: 'created_at', label: t('blocks.col.created'), nowrap: true, mobile: 'meta' },
     { key: 'expires_at', label: t('blocks.col.expires'), nowrap: true, mobile: 'meta' }
   ]
-  if (manage.value) c.push({ key: 'actions', label: '', align: 'right', hideable: false })
+  if (manage.value) c.push({ key: 'actions', label: t('actions'), align: 'right', hideable: false })
   return c
 })
 const columnState = useTableColumns(columns, 'moderation-blocks')
@@ -112,7 +110,7 @@ async function submit() {
     <SHint class="mod-hint">{{ t('blocks.hint') }}</SHint>
 
     <div class="mod-toolbar">
-      <STableColumnSettings v-if="!compact" :state="columnState" />
+      <STableColumnSettings :state="columnState" />
       <SButton v-if="manage" variant="danger" size="sm" icon="lock" @click="openForm">{{ t('blocks.manual') }}</SButton>
     </div>
 

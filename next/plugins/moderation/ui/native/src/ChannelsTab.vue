@@ -65,7 +65,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'tokens', label: t('channels.col.tokens'), align: 'right', nowrap: true, defaultHidden: true, mobile: 'detail' },
   { key: 'price', label: t('channels.col.price'), nowrap: true, defaultHidden: true, mobile: 'detail' },
   { key: 'enabled', label: t('channels.col.enabled'), nowrap: true, hideable: false, mobile: 'status' },
-  { key: 'actions', label: '', align: 'right', nowrap: true, hideable: false }
+  { key: 'actions', label: t('actions'), align: 'right', nowrap: true, hideable: false }
 ])
 const columnState = useTableColumns(columns, 'moderation-channels')
 
