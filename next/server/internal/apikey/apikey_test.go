@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -604,5 +605,111 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	}
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "unauthenticated" {
 		t.Fatalf("deleted key: %v", err)
+	}
+}
+
+// GET /me/api-keys narrows the caller's keys by q, status and group_id
+// (CONTRACTS §92.1): the filters combine with AND, q's wildcards are literal,
+// a pasted key is matched by its stored prefix alone, and no filter reaches a
+// deleted key or another user's.
+func TestListMineFilters(t *testing.T) {
+	e := setup(t)
+	one := e.exec1(`INSERT INTO groups (name) VALUES ('one') RETURNING id`)
+	two := e.exec1(`INSERT INTO groups (name) VALUES ('two') RETURNING id`)
+	other := e.exec1(`INSERT INTO users (email, password_hash) VALUES ('other@x.com', 'x') RETURNING id`)
+	past, future := time.Now().Add(-time.Hour), time.Now().Add(time.Hour)
+	// add stores a key whose random part starts with tag and returns the key.
+	add := func(owner int64, name, tag string, group int64, status string, expires *time.Time) string {
+		raw := KeyPrefix + tag + strings.Repeat("0", keyRandomLen-len(tag))
+		e.exec(`INSERT INTO api_keys (user_id, group_id, name, key_prefix, key_hash, status, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			owner, group, name, raw[:displayPrefix], HashKey(raw), status, expires)
+		return raw
+	}
+	add(e.user, "Prod-Main", "Alpha", one, "active", nil)
+	backup := add(e.user, "prod_backup", "Bravo", one, "disabled", nil)
+	add(e.user, "100%done", "Charl", two, "active", &past)
+	add(e.user, "1000 done", "Delta", two, "disabled", &past)
+	add(e.user, "prodXbackup", "Echo1", two, "active", &future)
+	deleted := add(e.user, "prod-deleted", "Foxtr", one, "active", nil)
+	e.exec(`UPDATE api_keys SET deleted_at = now() WHERE key_hash = $1`, HashKey(deleted))
+	foreign := add(other, "prod-other", "Golf1", one, "active", nil)
+	add(other, "sk-s2a-Hotel-note", "India", one, "active", nil)
+	gone := e.exec1(`INSERT INTO groups (name) VALUES ('gone') RETURNING id`)
+	add(other, "unbound", "Julie", gone, "active", nil)
+	e.exec(`DELETE FROM groups WHERE id = $1`, gone)
+
+	list := func(uid int64, query url.Values) (int, map[string]any, []string) {
+		status, out := e.do(uid, "GET", "/me/api-keys?"+query.Encode(), nil)
+		names := []string{}
+		for _, k := range out["data"].([]any) {
+			names = append(names, k.(map[string]any)["name"].(string))
+		}
+		return status, out, names
+	}
+	groupTwo := strconv.FormatInt(two, 10)
+	for _, c := range []struct {
+		query url.Values
+		want  []string
+	}{
+		{url.Values{}, []string{"prodXbackup", "1000 done", "100%done", "prod_backup", "Prod-Main"}},
+		{url.Values{"q": {"  "}, "status": {""}, "group_id": {""}}, []string{"prodXbackup", "1000 done", "100%done", "prod_backup", "Prod-Main"}},
+		// q: part of the name in any case, or the start of a key that goes
+		// past what every key starts with.
+		{url.Values{"q": {" PROD "}}, []string{"prodXbackup", "prod_backup", "Prod-Main"}},
+		{url.Values{"q": {"SK-S2A-bravo"}}, []string{"prod_backup"}},
+		{url.Values{"q": {"Bravo"}}, []string{}},
+		{url.Values{"q": {"s"}}, []string{}},
+		{url.Values{"q": {KeyPrefix}}, []string{}},
+		// A pasted key is cut to the stored prefix: the whole key finds its row,
+		// and so does one with a wrong tail; another prefix finds nothing.
+		{url.Values{"q": {backup}}, []string{"prod_backup"}},
+		{url.Values{"q": {backup[:keyLen-1] + "1"}}, []string{"prod_backup"}},
+		{url.Values{"q": {KeyPrefix + "Zulu9" + backup[displayPrefix:]}}, []string{}},
+		{url.Values{"q": {KeyPrefix + "Brav中"}}, []string{}},
+		{url.Values{"q": {deleted}}, []string{}},
+		{url.Values{"q": {foreign}}, []string{}},
+		// LIKE wildcards and the escape character in q are literal.
+		{url.Values{"q": {"prod_b"}}, []string{"prod_backup"}},
+		{url.Values{"q": {"100%d"}}, []string{"100%done"}},
+		{url.Values{"q": {`\`}}, []string{}},
+		// status: a disabled key is "disabled" even past its expiry.
+		{url.Values{"status": {"active"}}, []string{"prodXbackup", "Prod-Main"}},
+		{url.Values{"status": {"disabled"}}, []string{"1000 done", "prod_backup"}},
+		{url.Values{"status": {"expired"}}, []string{"100%done"}},
+		{url.Values{"group_id": {groupTwo}}, []string{"prodXbackup", "1000 done", "100%done"}},
+		{url.Values{"q": {"prod"}, "status": {"active"}, "group_id": {groupTwo}}, []string{"prodXbackup"}},
+		{url.Values{"q": {"done"}, "status": {"disabled"}}, []string{"1000 done"}},
+		{url.Values{"q": {"prod"}, "page": {"2"}, "page_size": {"2"}}, []string{"Prod-Main"}},
+	} {
+		status, _, names := list(e.user, c.query)
+		require.Equal(t, 200, status, c.query)
+		require.Equal(t, c.want, names, c.query)
+	}
+	_, out, _ := list(e.user, url.Values{"q": {"prod"}, "page_size": {"2"}})
+	require.Equal(t, float64(3), out["page"].(map[string]any)["total"], "total counts the filtered keys")
+	_, _, names := list(other, url.Values{"q": {"prod"}})
+	require.Equal(t, []string{"prod-other"}, names)
+	_, _, names = list(other, url.Values{"q": {"sk-s2a-Hotel-note"}})
+	require.Equal(t, []string{"sk-s2a-Hotel-note"}, names, "the name is matched against the whole q")
+	// A key whose group was deleted stays listed, under no group_id.
+	_, _, names = list(other, url.Values{})
+	require.Equal(t, []string{"unbound", "sk-s2a-Hotel-note", "prod-other"}, names)
+	for _, group := range []int64{one, gone} {
+		_, _, names = list(other, url.Values{"group_id": {strconv.FormatInt(group, 10)}})
+		require.NotContains(t, names, "unbound", group)
+	}
+
+	for field, values := range map[string][]string{
+		"q":        {"\xff", "a\x00b"},
+		"status":   {"exhausted", "Active"},
+		"group_id": {"abc", "0", "-1", "1.5"},
+	} {
+		for _, v := range values {
+			status, out := e.do(e.user, "GET", "/me/api-keys?"+url.Values{field: {v}}.Encode(), nil)
+			require.Equal(t, 400, status, "%s=%q", field, v)
+			problem := out["error"].(map[string]any)
+			require.Equal(t, "invalid_argument", problem["code"], "%s=%q", field, v)
+			require.Equal(t, field, problem["details"].(map[string]any)["fields"].([]any)[0].(map[string]any)["field"], "%s=%q", field, v)
+		}
 	}
 }

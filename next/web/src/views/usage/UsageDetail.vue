@@ -8,7 +8,10 @@ import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
 import { formatMoney, formatNumber } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
+import PlatformBadge from '@/components/platform/PlatformBadge.vue'
 import { accountLabel, availabilityTrace, factText, hookTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
+import UsageAccountMark from './UsageAccountMark.vue'
 import UsageAvailabilityTrace from './UsageAvailabilityTrace.vue'
 import UsageConversionBadges from './UsageConversionBadges.vue'
 import UsageConversionTrace from './UsageConversionTrace.vue'
@@ -77,7 +80,8 @@ const availabilityHint = computed(() => u.value.error_type === 'model_availabili
     <SCard variant="flat" :padded="false" data-testid="usage-detail-summary">
       <div class="flex flex-wrap items-center gap-4 p-4">
         <div class="min-w-0 flex-1">
-          <p class="mb-2 truncate font-mono text-sm font-semibold" :title="u.model">{{ u.model || '—' }}</p>
+          <ModelBadge v-if="u.model" :model="u.model" class="mb-2" />
+          <p v-else class="mb-2 text-sm">—</p>
           <div class="flex flex-wrap items-center gap-2">
             <UsageStatus :row="u" />
             <SBadge size="xs" :tone="u.stream ? 'info' : 'gray'">{{ u.stream ? t('usage.stream') : t('usage.nonStream') }}</SBadge>
@@ -130,7 +134,9 @@ const availabilityHint = computed(() => u.value.error_type === 'model_availabili
     <SCard variant="flat" :title="t('usage.request.title')" data-testid="usage-request-facts">
       <SDescriptions dense :columns="2" label-width="6rem">
         <SDescItem :label="t('common.group')">{{ u.group_name || (u.group_id ? '#' + u.group_id : '—') }}</SDescItem>
-        <SDescItem v-if="u.account_id || u.account_name" :label="t('common.account')">{{ accountLabel(u) }}</SDescItem>
+        <SDescItem v-if="u.account_id || u.account_name" :label="t('common.account')"><span class="inline-flex items-center gap-1" data-testid="detail-account">
+          <UsageAccountMark :row="u" />{{ accountLabel(u) }}
+        </span></SDescItem>
         <SDescItem v-if="u.api_key_name || u.api_key_id" :label="t('usage.request.apiKey')">{{ u.api_key_name || '#' + u.api_key_id }}</SDescItem>
         <SDescItem :label="t('usage.request.clientIP')"><SIPAddress :value="u.client_ip" data-testid="detail-client-ip" /></SDescItem>
         <SDescItem :label="t('usage.request.id')"><div class="flex items-center gap-1">
@@ -147,7 +153,7 @@ const availabilityHint = computed(() => u.value.error_type === 'model_availabili
         </div></SDescItem>
         <SDescItem v-if="u.endpoint || u.protocol" :label="t('usage.request.endpoint')"><span class="font-mono text-xs">
           {{ u.endpoint || '—' }} <SHint inline size="xs">{{ u.protocol }}</SHint>
-          <SHint v-if="u.platform" inline size="xs" class="font-sans"> · {{ t('common.platform') }} {{ u.platform }}</SHint>
+          <template v-if="u.platform"><SHint inline size="xs" class="font-sans"> · {{ t('common.platform') }}</SHint> <PlatformBadge :id="u.platform" class="font-sans" /></template>
         </span></SDescItem>
         <SDescItem v-if="u.account_type" :label="t('usage.cols.accountType')">
           {{ accountTypes.typeLabel(u.plugin_key, u.account_type) }}
@@ -161,7 +167,7 @@ const availabilityHint = computed(() => u.value.error_type === 'model_availabili
           <UsageConversionBadges :row="u" />
           <SHint v-if="isConverted(u)" inline size="xs">{{ t('usage.convertedFrom', { protocol: u.protocol }) }}</SHint>
         </div></SDescItem>
-        <SDescItem v-if="u.upstream_model && u.upstream_model !== u.model" :label="t('usage.request.upstreamModel')"><span class="font-mono text-xs">{{ u.upstream_model }}</span></SDescItem>
+        <SDescItem v-if="u.upstream_model && u.upstream_model !== u.model" :label="t('usage.request.upstreamModel')"><ModelBadge :model="u.upstream_model" plain /></SDescItem>
         <SDescItem v-if="u.node_id" :label="t('usage.request.node')"><span class="font-mono text-xs">{{ u.node_id }}</span></SDescItem>
         <SDescItem v-if="u.attempts !== undefined" :label="t('usage.request.attempts')">{{ u.attempts }}</SDescItem>
         <SDescItem :label="t('usage.request.userAgent')" full><span class="break-all text-xs">{{ u.user_agent || '—' }}</span></SDescItem>

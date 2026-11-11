@@ -77,10 +77,10 @@ export function usePlatforms() {
   }
 
   /** Endpoints of the given platforms, grouped by platform, unknown ids kept with no endpoints. */
-  function endpointsOf(ids: string[]): Array<{ id: string; label: string; builtin: boolean; endpoints: PlatformEndpoint[]; known: boolean }> {
+  function endpointsOf(ids: string[]): Array<{ id: string; endpoints: PlatformEndpoint[]; known: boolean }> {
     return ids.map((id) => {
       const p = find(id)
-      return { id, label: label(id), builtin: p?.builtin ?? false, endpoints: p?.endpoints || [], known: !!p }
+      return { id, endpoints: p?.endpoints || [], known: !!p }
     })
   }
 

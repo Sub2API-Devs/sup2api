@@ -85,7 +85,7 @@ func CoreGatewayPath(p string) bool {
 // GET or HEAD endpoint under one of them would replace a console page.
 // server/internal/webui tests keep the list in step with the console.
 var ConsoleSegments = []string{
-	"assets", "index.html", "favicon.svg",
+	"assets", "index.html", "favicon.svg", "LOBE-ICONS-LICENSE.txt",
 	"login", "forbidden", "dashboard", "me", "usage", "ledger", "users", "groups", "roles",
 	"accounts", "api-keys", "proxies", "platforms", "prices", "sticky", "settings",
 	"plugins", "p", "market", "publishers", "nodes", "system",

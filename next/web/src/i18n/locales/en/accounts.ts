@@ -481,7 +481,7 @@ export default {
     edit: 'Bulk edit ({n})', more: 'More bulk actions', delete: 'Delete ({n})',
     enable: 'Enable ({n})', disable: 'Disable ({n})', reset: 'Reset status ({n})', pluginAction: '{name} ({n})',
     progress: 'Processing {done}/{total}', nothingToChange: 'The selected accounts are already in that state',
-    done: '{ok} accounts done', doneWithErrors: '{ok} succeeded, {fail} failed; {name}: {error}',
+    done: '{ok} account done | {ok} accounts done', doneWithErrors: '{ok} succeeded, {fail} failed; {name}: {error}',
     resetConfirm: 'Clear the cooldown, error and automatic-disable state of the {n} selected accounts?',
     editTitle: 'Edit {n} accounts', editInfo: 'Only the ticked fields change (editing a field ticks it). Each account is saved on its own with the same checks as a single edit.',
     apply: 'Apply to {n} accounts', weightHint: 'Random share within one priority (1–1000)', zeroUnlimited: '0 means unlimited',

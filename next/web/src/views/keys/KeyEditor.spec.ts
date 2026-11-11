@@ -4,15 +4,15 @@ import { i18n } from '@/i18n'
 import type { ApiKey, Group } from '@/api/types'
 import KeyEditor from './KeyEditor.vue'
 
-const { post, patch, confirm } = vi.hoisted(() => ({ post: vi.fn(), patch: vi.fn(), confirm: vi.fn() }))
+const { post, patch, confirm, notifyError } = vi.hoisted(() => ({ post: vi.fn(), patch: vi.fn(), confirm: vi.fn(), notifyError: vi.fn() }))
 vi.mock('@sub2api/host', () => ({ api: { post, patch } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), confirm }))
 vi.mock('@/composables/platforms', () => ({ usePlatforms: () => ({ load: vi.fn(), label: (v: string) => v, endpointsOf: () => [] }) }))
-vi.mock('@/utils/errors', () => ({ fieldErrors: (e: { fields?: Record<string, string> }) => e?.fields ?? {}, notifyError: vi.fn() }))
+vi.mock('@/utils/errors', () => ({ fieldErrors: (e: { fields?: Record<string, string> }) => e?.fields ?? {}, notifyError }))
 enableAutoUnmount(afterEach)
 
 const groups = [{ id: 1, name: 'default', rate_multiplier: '1' }, { id: 2, name: 'vip', rate_multiplier: '0.8' }] as Group[]
-const key = { id: 7, name: 'laptop', group_id: 1, key_prefix: 'sk', status: 'active', created_at: '', allowed_ips: ['192.0.2.0/24'],
+const key = { id: 7, name: 'laptop', group_id: 1, key_prefix: 'sk-s2a-old00', status: 'active', created_at: '', allowed_ips: ['192.0.2.0/24'],
   expires_at: null, rpm_limit: 60, tpm_limit: 0, max_concurrency: 0, quota_limit: '10', quota_used: '4' } as ApiKey
 const render = (apiKey: ApiKey | null) => {
   i18n.global.locale.value = 'zh'
@@ -62,7 +62,7 @@ describe('API key editor', () => {
     expect(w.emitted('update:open')).toBeUndefined()
     expect(w.text()).toContain('invalid IP')
   })
-  it('resets the used quota after confirmation', async () => {
+  it('resets the used quota after confirmation, staying open and handing the key as it is now to its owner', async () => {
     const k = { ...key }
     const w = render(k)
     confirm.mockResolvedValueOnce(false)
@@ -74,6 +74,48 @@ describe('API key editor', () => {
     await input(w, 'reset-key-quota').trigger('click')
     await flushPromises()
     expect(patch).toHaveBeenCalledWith('/me/api-keys/7', { reset_quota: true })
-    expect(k.quota_used).toBe('0')
+    expect(w.emitted('updated')).toEqual([[{ ...k, quota_used: '0' }]])
+    expect(w.emitted()).not.toHaveProperty('update:open')
+    // The key it was given may be a row the list replaced since: it is not written to.
+    expect(k.quota_used).toBe('4')
+    await w.setProps({ apiKey: { ...k, quota_used: '0' } })
+    expect(input(w, 'reset-key-quota').attributes('disabled')).toBeDefined()
+  })
+  it('regenerates the key only after confirmation, then closes and hands over the new plaintext', async () => {
+    const rotated = { ...key, key_prefix: 'sk-s2a-new00', key: 'sk-s2a-new00-plaintext' }
+    post.mockResolvedValue(rotated)
+    const w = render(key)
+    expect(w.get('[data-testid="key-editor"]').text()).toContain('sk-s2a-old00******')
+    confirm.mockResolvedValueOnce(false)
+    await input(w, 'rotate-api-key').trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('laptop'), danger: true }))
+    // Regenerating closes the editor without saving the form, which the question says.
+    expect(confirm.mock.calls[0][0].message).toContain('未保存的修改不会保留')
+    expect(post).not.toHaveBeenCalled()
+    expect(w.emitted()).not.toHaveProperty('rotated')
+
+    confirm.mockResolvedValueOnce(true)
+    await input(w, 'rotate-api-key').trigger('click')
+    await flushPromises()
+    expect(post).toHaveBeenCalledWith('/me/api-keys/7/rotate', {})
+    expect(w.emitted('update:open')).toEqual([[false]])
+    expect(w.emitted('rotated')).toEqual([[rotated]])
+    // Regenerating is not a save of the form: nothing else was sent.
+    expect(patch).not.toHaveBeenCalled()
+    expect(w.emitted()).not.toHaveProperty('saved')
+  })
+  it('stays open when regenerating fails, and offers it only for an existing key', async () => {
+    const err = new Error('unavailable')
+    post.mockRejectedValueOnce(err)
+    confirm.mockResolvedValueOnce(true)
+    const w = render(key)
+    await input(w, 'rotate-api-key').trigger('click')
+    await flushPromises()
+    expect(notifyError).toHaveBeenCalledWith(err)
+    expect(w.emitted()).not.toHaveProperty('update:open')
+    expect(w.emitted()).not.toHaveProperty('rotated')
+    expect(input(w, 'rotate-api-key').attributes('disabled')).toBeUndefined()
+    expect(render(null).find('[data-testid="rotate-api-key"]').exists()).toBe(false)
   })
 })

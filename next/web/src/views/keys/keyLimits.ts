@@ -26,17 +26,23 @@ export function capsBody(form: KeyCapsForm): KeyCaps {
   return { rpm_limit: form.rpm_limit || 0, tpm_limit: form.tpm_limit || 0, max_concurrency: form.max_concurrency || 0, quota_limit: form.quota_limit || 0 }
 }
 
-/** Each limit of a key with its cap (0 = unlimited) and current use (undefined when not counted). */
-export function limitRows(k: ApiKey) {
-  return LIMITS.map((l) => ({ ...l, max: k[l.field] ?? 0, used: k.live?.[l.live] }))
+/** The limits a key caps, each with its cap and current use (undefined when not counted); none when it caps nothing. */
+export function cappedRows(k: ApiKey) {
+  return LIMITS.map((l) => ({ ...l, max: k[l.field] ?? 0, used: k.live?.[l.live] })).filter((r) => r.max > 0)
 }
 
-/** A key's quota: limit 0 = unlimited; used is what its requests were charged. */
+/**
+ * A key's quota: limit 0 = unlimited; used is what its requests were charged
+ * (it can pass the limit slightly), remaining what is left of a limit.
+ */
 export function quotaOf(k: ApiKey) {
   const limit = Number(k.quota_limit) || 0
   const used = Number(k.quota_used) || 0
-  return { limit, used, exhausted: limit > 0 && used >= limit }
+  return { limit, used, remaining: Math.max(0, limit - used), exhausted: limit > 0 && used >= limit }
 }
 
 /** Bar tone of used against max: warning from 80 %, danger when reached. */
 export const usageTone = (used: number, max: number) => (used >= max ? 'danger' : used >= max * 0.8 ? 'warning' : 'primary')
+
+/** Bar tone of what is left of max: warning under 20 %, danger when none is left. */
+export const remainTone = (left: number, max: number) => (left <= 0 ? 'danger' : left < max * 0.2 ? 'warning' : 'success')

@@ -16,7 +16,9 @@ import { lt } from '@/i18n'
 import { useAccountTypes, typeKey } from './accountTypes'
 import AccountTypePicker from './AccountTypePicker.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
-import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
+import AccountTypePlatforms from './AccountTypePlatforms.vue'
+import PlatformIcon from '@/components/platform/PlatformIcon.vue'
+import AccountGroupsCell from './AccountGroupsCell.vue'
 import AccountEditor from './AccountEditor.vue'
 import AccountNumberCell from './AccountNumberCell.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
@@ -39,7 +41,7 @@ import { accountEnabled, accountStatusKey, accountStatusKeys, accountStatusTone,
 import { useBatchTest } from './useBatchTest'
 import { useSelection } from '@/composables/useSelection'
 import { useBulkRun } from '@/composables/useBulkRun'
-import { bulkToast } from './bulkToast'
+import { bulkToast } from '@/composables/bulkToast'
 import AccountBulkEditDialog from './AccountBulkEditDialog.vue'
 import AccountBulkDeleteDialog from './AccountBulkDeleteDialog.vue'
 import { subscriptionLabel } from './subscription'
@@ -154,15 +156,18 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'actions', label: t('common.actions'), align: 'right', width: '176px' }
 ])
 
+const lookupGroup = (id: number) => groups.value.find((g) => g.id === id)
 function groupName(id: number, refs?: Array<{ id: number; name: string }>) {
-  return refs?.find((g) => g.id === id)?.name || groups.value.find((g) => g.id === id)?.name || `#${id}`
+  return refs?.find((g) => g.id === id)?.name || lookupGroup(id)?.name || `#${id}`
 }
 function groupNames(ids: number[] | undefined, refs?: Array<{ id: number; name: string }>) {
   return ids?.length ? ids.map((id) => groupName(id, refs)).join(', ') : '—'
 }
 /** Read-only plugin facts of a row, without the ones repeating its name (e.g. a login email used as the name). */
 const rowFacts = (a: Account) => accountTypes.pluginFacts(a.plugin_key, a.type, a.settings).filter((fact) => fact.value !== a.name)
-const groupTags = (a: Account) => (a.group_ids || []).map((id) => ({ id, name: groupName(id, a.groups) }))
+const groupTags = (a: Account) => (a.group_ids || []).map((id) => ({ id, name: groupName(id, a.groups), platforms: lookupGroup(id)?.platforms }))
+/** Platforms the account's type serves now: their marks lead its type line. */
+const rowPlatforms = (a: Account) => (typeOf(a)?.platforms ?? []).filter((p) => p.available !== false).map((p) => p.id)
 
 /** Applies a server change to the list row and the open detail of the same account. */
 function patchAccount(id: number, patch: Partial<Account>) {
@@ -343,7 +348,7 @@ async function bulkToggle(enable: boolean) {
   const out = await bulk.run(rows, async (a, signal) => {
     patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, enabledPatch(enable), { signal, query: todayQuery() }))
   })
-  bulkToast(out.ok.length, out.failed)
+  bulkToast('accounts.bulk', out.ok.length, out.failed)
 }
 async function bulkReset() {
   const rows = picked.value.reset
@@ -352,7 +357,7 @@ async function bulkReset() {
   const out = await bulk.run(rows, async (a) => {
     patchAccount(a.id, await resetAccountStatus(a.id))
   })
-  bulkToast(out.ok.length, out.failed)
+  bulkToast('accounts.bulk', out.ok.length, out.failed)
   list.reload()
 }
 const bulkEditOpen = ref(false)
@@ -692,11 +697,11 @@ function resetFilters() {
       <template #cell-name="{ row }">
         <div class="min-w-56 max-w-[17rem] space-y-0.5">
           <div class="flex items-center gap-2"><span class="shrink-0 font-mono text-xxs text-fg-subtle">#{{ row.id }}</span><SLink as="button" class="min-w-0 truncate font-semibold" :title="row.name" @click="openDetail(row)">{{ row.name }}</SLink></div>
-          <div class="flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-muted"><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span><SBadge v-if="row.subscription_type" size="xs" tone="purple" class="shrink-0" :title="t('accounts.subscriptionHint')" data-testid="account-subscription">{{ subscriptionLabel(row.subscription_type) }}</SBadge><span v-if="row.last_used_at" class="shrink-0 text-xxs text-fg-subtle">· {{ formatRelative(row.last_used_at, t) }}</span></div>
+          <div class="flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-muted"><span v-if="rowPlatforms(row).length" class="inline-flex shrink-0 items-center gap-0.5" data-testid="account-platforms"><PlatformIcon v-for="p in rowPlatforms(row)" :id="p" :key="p" /></span><span :title="row.plugin_key">{{ accountTypes.pluginName(row.plugin_key) }}</span><span aria-hidden="true">/</span><span class="truncate" :title="accountTypes.typeLabel(row.plugin_key, row.type, row.type_label)">{{ accountTypes.typeLabel(row.plugin_key, row.type, row.type_label) }}</span><SBadge v-if="row.subscription_type" size="xs" tone="purple" class="shrink-0" :title="t('accounts.subscriptionHint')" data-testid="account-subscription">{{ subscriptionLabel(row.subscription_type) }}</SBadge><span v-if="row.last_used_at" class="shrink-0 text-xxs text-fg-subtle">· {{ formatRelative(row.last_used_at, t) }}</span></div>
           <div v-for="fact in rowFacts(row)" :key="fact.key" class="truncate text-xs text-fg-muted" :title="`${fact.label}: ${fact.value}`" :data-testid="'account-fact-' + fact.key">{{ fact.label }} <span class="text-fg">{{ fact.value }}</span></div>
         </div>
       </template>
-      <template #cell-groups="{ row }"><div class="flex max-w-56 gap-1" :title="groupNames(row.group_ids, row.groups)"><SBadge v-for="group in groupTags(row).slice(0, 2)" :key="group.id" tone="gray" class="max-w-40 truncate">{{ group.name }}</SBadge><SBadge v-if="groupTags(row).length > 2" tone="gray">+{{ groupTags(row).length - 2 }}</SBadge><SHint v-if="!row.group_ids?.length" size="xs">—</SHint></div></template>
+      <template #cell-groups="{ row }"><AccountGroupsCell :groups="groupTags(row)" /></template>
       <template #cell-created_by="{ row }">
         <span v-if="row.created_by_email" class="text-xs" :title="row.created_by ? `#${row.created_by}` : ''">{{ row.created_by_email }}</span>
         <SHint v-else-if="row.created_by" inline size="xs">#{{ row.created_by }}</SHint>
@@ -817,7 +822,7 @@ function resetFilters() {
                 <SHint v-if="detail.rate_limit_tier" inline size="xs" class="ml-1.5 font-mono" data-testid="account-rate-limit-tier">· {{ detail.rate_limit_tier }}</SHint>
               </SDescItem>
               <SDescItem v-for="fact in accountTypes.pluginFacts(detail.plugin_key, detail.type, detail.settings)" :key="fact.key" :label="fact.label" :data-testid="'account-detail-fact-' + fact.key">{{ fact.value }}</SDescItem>
-              <SDescItem v-if="detailType" :label="t('platforms.supported')"><PlatformBadges :items="detailType.platforms" empty="—" /></SDescItem>
+              <SDescItem v-if="detailType" :label="t('platforms.supported')"><AccountTypePlatforms :items="detailType.platforms" /></SDescItem>
               <SDescItem :label="t('accounts.servesEndpoints')">
                 <AccountTypeEndpoints v-if="detailType" :endpoints="detailType.endpoints" />
                 <SHint v-else inline size="xs">{{ t('accounts.typeUnavailable') }}</SHint>

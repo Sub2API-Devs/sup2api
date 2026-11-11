@@ -7,6 +7,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, SCard, SDescItem, SDescriptions, SDisclosure, SHint } from '@sub2api/ui'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
 import { useOptionalT } from '@/composables/optionalText'
 import { formatDateTime } from '@/utils/format'
 import { quotaCountdown } from '@/views/accounts/accountQuota'
@@ -72,7 +73,7 @@ const decisionTone = (d: string) => (d === 'block' ? 'danger' : d === 'fail_open
               <SHint v-if="s.attempt" inline size="xs">{{ t('usage.availability.attempt', { n: s.attempt }) }}</SHint>
               <SHint v-if="account(s).hidden" inline size="xs" data-testid="availability-hidden-account">{{ account(s).text }}</SHint>
               <span v-else class="min-w-0 break-all">{{ account(s).text }}</span>
-              <span v-if="s.model" class="min-w-0 break-all font-mono text-xs">{{ s.model }}</span>
+              <ModelBadge v-if="s.model" :model="s.model" plain />
               <SBadge size="xs" :tone="decisionTone(s.decision)">{{ tr(`usage.availability.decisions.${s.decision}`, undefined, s.decision || '—') }}</SBadge>
               <span class="min-w-0 break-words text-xs" :title="s.reason" data-testid="availability-reason">{{ reason(s.reason) }}</span>
               <SHint v-if="s.retry_at" inline size="xs" class="tabular-nums">{{ t('usage.availability.sampleRetry') }} {{ retryText(s.retry_at) }}</SHint>

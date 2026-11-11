@@ -1,16 +1,33 @@
 export default {
+  state: { active: '已启用', disabled: '已禁用', expired: '已过期', exhausted: '额度用尽' },
+  filter: { search: '搜索名称或密钥', allStatus: '全部状态', allGroups: '全部分组' },
+  models: { title: '可用模型', allowed: '{n} 项', blocked: '排除 {n} 项' },
+  ipLimit: 'IP 限制',
+  unlimited: '无限制',
+  listMore: '另 {n} 项',
+  ipAllowlistShort: '{n} 条',
+  showKey: '显示密钥',
+  hideKey: '隐藏密钥',
+  rotateHint: '旧密钥立即失效；新密钥生成后会显示，之后也可在列表中查看和复制。',
+  bulk: {
+    copy: '复制密钥',
+    copied: '已复制 {n} 个密钥（每行“名称 Tab 密钥”）',
+    copiedSkipped: '已复制 {n} 个密钥（每行“名称 Tab 密钥”），跳过 {skipped} 个无法复制的旧密钥',
+    nothingToCopy: '所选都是旧密钥，无法复制',
+    delete: '删除所选密钥',
+    confirmDelete: '确定删除所选的 {n} 个 API Key？使用它们的客户端将立即失效。',
+    done: '已处理 {ok} 个密钥',
+    doneWithErrors: '成功 {ok} 个，失败 {fail} 个（{name}：{error}）',
+    nothingToChange: '所选密钥已是该状态'
+  },
   myDescription: '仅显示和管理你自己的密钥，管理员也无法查看其他用户的 Key。每个 Key 绑定一个分组，决定可访问的平台、模型和费率。',
   create: '新建 API Key',
   edit: '编辑 API Key',
-  actions: { use: '使用' },
   key: '密钥',
   ipAllowlist: 'IP 白名单',
   ipAllowlistHint: '每行一个 IPv4、IPv6 地址或 CIDR 网段，最多 256 条。留空表示不限；设置后仅匹配的调用 IP 可使用此密钥。',
-  ipAllowlistCount: '允许 {n} 个 IP / 网段',
   rotate: '重新生成密钥',
-  rotateShort: '重新生成',
-  rotateConfirm: '确定重新生成 "{name}" 的密钥？旧密钥会立即失效，使用它的客户端需要更新。',
-  rotated: '密钥已重新生成，请复制新密钥并更新客户端。',
+  rotateConfirm: '确定重新生成 "{name}" 的密钥？旧密钥会立即失效，使用它的客户端需要更新。表单中未保存的修改不会保留。',
   namePlaceholder: '例如 my-laptop',
   expiresAt: '过期时间',
   expiresHint: '可选。留空表示永不过期。',
@@ -18,9 +35,9 @@ export default {
   noExpiry: '永不',
   lastUsed: '最近使用',
   noGroups: '没有可用的分组，请联系管理员分配。',
-  groupMultiplier: '费率倍率：×{n}',
   groupModels: '可用模型',
   createdTitle: 'API Key 已创建',
+  rotatedTitle: 'API Key 已重新生成',
   onceWarning: '请复制保存此密钥，之后也可以在列表中点击复制按钮获取。',
   legacyCopyHint: '旧密钥仅保存了哈希，无法恢复；新建密钥后可随时复制。',
   savedIt: '我已保存',
@@ -32,9 +49,9 @@ export default {
     concurrency: '最大并发',
     short: { rpm: 'RPM', tpm: 'TPM', concurrency: '并发' },
     hint: '留空或 0 表示不限。超出时请求返回 429 并带 Retry-After。Token 在响应结束后才计入，同一分钟内同时进行的大请求可能略超 TPM。',
-    none: '不限',
   },
   quota: {
+    unlimited: '无限额度',
     title: '额度',
     limit: '额度（美元）',
     hint: '额度按实际扣费累计，用完后请求返回 402；同时进行的请求在结束后才计入，可能略超额度。',
@@ -44,7 +61,6 @@ export default {
     resetDone: '已用额度已清零'
   },
   use: {
-    open: '使用密钥',
     title: '使用 "{name}"',
     noKey: '这是旧密钥，只保存了哈希，下面用前缀代替；新建密钥后即可得到完整配置。',
     base: '网关地址',
@@ -52,15 +68,27 @@ export default {
     shells: { unix: 'macOS / Linux', powershell: 'PowerShell', cmd: 'CMD' },
     run: '在终端执行（只对当前终端有效）',
     file: '写入 {path}',
-    usage: '查询这个 Key 的剩余额度、限速与用量（GET /v1/usage，CC Switch 导入后自动查询）',
+    usage: '查询这个 Key 的剩余额度、限速与用量（GET /v1/usage，CC Switch、Magpie 导入后自动查询）',
     noClient: '这个 Key 所在分组的平台没有内置的客户端配置，可直接调用下方接口。',
-    endpoints: '可调用的接口（地址前加 {base}）：'
+    endpoints: '可调用的接口（地址前加 {base}）：',
+    magpie: {
+      intro: '在 Magpie 里点“添加供应商”，选“自定义供应商”，按下面逐项填写：“Base URL”一栏选一种协议并填它的地址，其余协议的地址在“更多端点”里，余额两项在“高级”里；这里没有列出的地址留空。',
+      key: 'API 密钥',
+      anthropic: 'Anthropic 地址（网关根地址，不带 /v1）',
+      chat: 'OpenAI 地址（Chat Completions）',
+      responses: 'Responses 地址',
+      gemini: 'Gemini 地址',
+      balance: '余额查询地址（Magpie 用这个 Key 请求）',
+      balance_path: '余额字段'
+    }
   },
-  ccSwitch: {
-    noClient: '这个 Key 的平台没有可导入 CC Switch 的客户端',
-    import: '导入 CC Switch',
-    pick: '导入到',
-    notOpened: '没有打开 CC Switch？请先安装 CC Switch 后再试。'
+  apps: {
+    title: '快捷配置',
+    pick: '一键导入到',
+    legacy: '旧密钥只保存了哈希，无法一键导入；新建密钥后即可使用。',
+    import: '导入 {app}',
+    guide: '手动配置说明',
+    notOpened: '没有打开 {app}？请先安装 {app} 后再试。'
   },
   changeGroup: '更换分组',
   groupChanged: '已更换分组',
@@ -73,5 +101,6 @@ export default {
   disabledToast: 'API Key 已停用，使用它的请求会被拒绝',
   empty: '还没有 API Key',
   emptyHint: '新建一个 Key，即可通过网关调用所选分组的平台和模型。',
+  emptyFiltered: '没有符合条件的 API Key，请调整搜索或筛选。',
   confirmDelete: '确定删除 API Key "{name}"？使用它的客户端将立即失效。'
 }

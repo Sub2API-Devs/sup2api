@@ -507,7 +507,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | `group_id`、`group_name` | Key 与分组松耦合：分组删除后 `group_id` 为 `null`、`group_name` 为 `""`，Key 保留，所有者用 PATCH 选新分组即恢复 |
 | `group_status` | `active` \| `disabled`（分组停用）\| `unavailable`（受限分组不再分配给所有者）\| `deleted`（分组已删除）；非 `active` 时网关鉴权分别返回 403 `group_disabled` / `group_not_allowed` / `group_deleted`，不会进入调度后才以无账号失败 |
 | `platforms` | `[id]`，该 Key 所属分组内账号类型支持的平台（去重、排序，只含当前存在的平台）；无注册表时为 `[]` |
-| `status` | `active` \| `disabled` |
+| `status` | `active` \| `disabled`。这是存储的状态；列表筛选的 `expired` 是按 `expires_at` 推导的，不是存储状态，见 §92.1 |
 | `expires_at`、`last_used_at` | 可为 `null`；`last_used_at` 每 10 秒批量落库，有延迟 |
 | `created_at` | |
 | `key` | 明文 Key（`sk-s2a-` + 40 位 base62），只在创建和显式授权的复制响应中出现，列表不返回 |
@@ -515,11 +515,11 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 新建 Key 除认证哈希外使用服务器主密钥 AES-GCM 加密保存，AAD 为 `apikey:{id}`。POST `/me/api-keys/:id/reveal` 要求 `apikey:self:manage` 并校验所有权，管理员也只可操作自己的 Key。响应 `{key}`、`Cache-Control: no-store`，返回前写 `apikey.reveal` 审计（不含密钥）。旧 Key 返回 409，删除或非本人 Key 返回 404。
 
-POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理员绕过。原子替换认证哈希、前缀、加密密钥，写 `apikey.rotate` 审计，保留 ID、名称、分组、状态、有效期和历史记录。响应新 `APIKey`（含 `key`），旧密钥立即失效；前端要求用户确认后执行。
+POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理员绕过。原子替换认证哈希、前缀、加密密钥，写 `apikey.rotate` 审计，保留 ID、名称、分组、状态、有效期和历史记录。响应新 `APIKey`（含 `key`），旧密钥立即失效；前端要求用户确认后执行，入口在编辑窗口（2026-11-10 起，见 §92）。
 
 | 方法 路径 | 权限 | 请求 | 响应 / 约定 |
 |---|---|---|---|
-| GET `/me/api-keys` | `apikey:self:manage` | 分页；无筛选参数 | 当前用户未删除的 Key，`id` 倒序 |
+| GET `/me/api-keys` | `apikey:self:manage` | 分页；筛选 `q`（名称或密钥前缀）、`status`（`active`\|`disabled`\|`expired`）、`group_id`（正整数），2026-11-10 起，见 §92.1 | 当前用户未删除的 Key，`id` 倒序；筛选值非法返回 400 `invalid_argument` |
 | POST `/me/api-keys` | `apikey:self:manage` | `{name, group_id, expires_at?}` | 201 `APIKey`（含 `key`）。`name` 去首尾空格后 1–100 字符；`expires_at` 必须晚于当前时间；`group_id` 须为 `active` 且对该用户可用（`visibility=public` 或已分配给用户），否则 `details.fields[{field:"group_id", code:"not_available"}]` |
 | DELETE `/me/api-keys/:id` | `apikey:self:manage` | | 204；只能删自己的 Key（软删除），他人的 Key 返回 404 |
 
@@ -533,6 +533,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/users` | 分页 | `q`（邮箱或显示名 ILIKE）、`status`（`active`\|`disabled`）、`role`（角色 key） | `id` 升序 | `iam/users.go` |
 | GET `/groups` | 分页 | `q`（名称 ILIKE）、`status` | `id` 升序 | `group/group.go` |
 | GET `/me/groups` | 不分页 | 无（只返回 `active` 且对当前用户可用的分组；字段 `{id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms}`） | `id` 升序 | `group/group.go` |
+| GET `/me/api-keys` | 分页 | 限定当前用户；`q`（名称 ILIKE；以 `sk-s2a-` 开头时也按 `key_prefix` 开头匹配）、`status`（`active`\|`disabled`\|`expired`，按状态与过期时间推导）、`group_id`（正整数）；见 §92.1 | `id` 倒序 | `apikey/apikey.go` |
 | GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `created_at` 倒序，再 `id` 倒序（§18.3；与调度顺序无关） | `account/handlers.go` |
 | GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
 | GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model` 或 `note` ILIKE） | `model`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
@@ -1369,7 +1370,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 - 插件 CSS 里需要与控制台一致的颜色时，用控制台的 CSS 变量（RGB 三元组，亮/暗色自动切换），写成 `rgb(var(--name))` 或带透明度 `rgb(var(--name) / 0.5)`：`--bg`（页面底色）、`--surface`（卡片/输入框底色）、`--surface-2`（次级底色、表头）、`--line`（边框/分隔线）、`--line-strong`（悬停边框、复选框边）、`--fg`（正文）、`--fg-muted`（次要文字）、`--fg-subtle`（占位/图标）。只有这 8 个是契约；主色、状态色等没有 CSS 变量，需要时用组件的 `tone`。
 - 颜色语义：`SBadge` 的 `tone` 为 `Tone`（`purple` 与 `accent` 等价，新代码写 `accent`）；`SAlert` `SChip` `SStatusDot` `SProgress` `SChoiceCards` 为 `StatusTone`（`neutral` 代替 `gray`）。
 - 输入控件外面用 `SField`（或设置页用 `SSettingRow`）放 label / hint / error / 必填标记，控件不必写 `id`；服务端字段错误从 `ApiError.fields[field]` 取，塞给 `SField` 的 `error`（控件会自动 `aria-invalid` 并显示红框）。
-- 操作按钮写文字（2026-11-09 定，参照 new-api）：表格行操作用 `SRowAction`，其余用带文字的 `SButton`（删除/移除类加 `tone="danger"`）。只有一眼就懂的图标才单独成按钮：关闭 ×、更多 ···、菜单、主题切换、紧挨值的复制、提示信息 ⓘ、芯片/缩略图上的移除 ×；这类用 `SButton icon="…" icon-only aria-label="…"`。所有按钮默认 `type="button"`。
+- 操作按钮写文字（2026-11-09 定，参照 new-api）：表格行操作用 `SRowAction`，其余用带文字的 `SButton`（删除/移除类加 `tone="danger"`）。只有一眼就懂的图标才单独成按钮：关闭 ×、更多 ···、菜单、主题切换、紧挨值的复制与显示/隐藏（眼睛）、提示信息 ⓘ、芯片/缩略图上的移除 ×；这类用 `SButton icon="…" icon-only aria-label="…"`。所有按钮默认 `type="button"`。
 - 数字、金额、时间用 `host.i18n.formatNumber` / `formatMoney` / `formatDateTime` 或 `SDateTime`，不自己拼；多语言文本（`{en,zh}`）用 `host.i18n.text`；插件文案走 `host.addMessages` + `host.t`。
 - 提示和确认用 `host.toast` / `host.confirm`（或 `@sub2api/ui` 的同名函数），不自己弹。弹窗、侧滑面板用 `SModal` / `SDrawer`，不要自己写遮罩（否则 Esc、焦点和滚动锁不在同一层栈里）。
 - 需要感知暗色时读 `host.theme`（`Ref<'light'|'dark'>`），不要自己查 `document.documentElement.classList`；组件本身已自动适配。
@@ -4498,7 +4499,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 60.4 控制台
 
-「我的 API Key」列表的「限速」列总是列出 RPM、TPM、并发三项，显示「当前 / 上限」（不限为 ∞，未计数为 —），设了上限的项下有进度条（≥80% 黄、满额红）。三项在新建与编辑 Key 的表单里设置，留空即不限。
+「我的 API Key」列表的「限速」列默认隐藏，可在列设置里打开（2026-11-10 起，见 §92）。它只列设了上限的项，显示「当前 / 上限」和进度条（≥80% 黄、满额红；未计数时当前值为 —，不画进度条）；三项都不限时显示「无限制」标签。三项在新建与编辑 Key 的表单里设置，留空即不限。
 
 2026-10-26 起 `PATCH /me/api-keys/:id` 还接受 `name`、`allowed_ips`（与 `PUT …/ip-allowlist` 同样规范化）与 `expires_at`（`null` 去掉过期时间），控制台「编辑」用一次 PATCH 保存全部字段（分组未变时不发 `group_id`）。
 
@@ -4508,13 +4509,13 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - `POST /me/api-keys`、`PATCH /me/api-keys/:id` 接受 `quota_limit`（0–1,000,000,000，最多 8 位小数）；PATCH 的 `reset_quota: true` 把 `quota_used` 清零。Key 视图返回 `quota_limit`、`quota_used`（十进制字符串）。
 - 网关：认证结果带 `core.KeyQuota`；计费端点在 `prepareBilling` 查余额之前检查，`quota_used >= quota_limit` 时返回 402 `key_quota_exhausted`（Anthropic 格式 `billing_error`，OpenAI 格式 `insufficient_quota`，客户端不会重试），用量记录 `error_type` 为 `key_quota_exhausted`，不选账号、不请求上游。免费端点不受限。
 - 额度在请求结算后才增加：同时进行的请求都放行，额度可能被超出这些请求的费用；WebSocket 会话里的每一轮用的是建立会话时读到的已用额度。
-- 控制台「额度」列显示「已用 / 额度」与进度条（用完标红），不限时显示已用金额；在「设置限速与额度」里修改额度和清零已用，新建表单也可设置。
+- 控制台「额度」列（2026-11-10 起，见 §92）显示「剩余 / 额度」和剩余量的进度条（剩余不足 20% 黄、用完红）；不限时显示「无限额度」标签；已用金额在悬浮提示里。修改额度和清零已用在编辑窗口，新建表单也可设置额度。
 
 ## 62. `GET /v1/usage`：API Key 查询自己的余额与用量（2026-10-26，用户要求）
 
 - 网关保留路径 `/v1/usage`（`manifest.CoreGatewayPrefixes`，插件端点不能声明它或它下面的路径），在插件端点与资源接口之前处理。密钥可放在 `x-api-key`、`Authorization: Bearer` 或 `x-goog-api-key`；认证与普通请求相同（停用、过期、IP 白名单、`gateway:use`），失败按 Anthropic 错误格式返回；非 GET 405，子路径 404。不占并发槽、不计入限速，响应 `Cache-Control: no-store`。
 - 响应沿用 sub2api 的形状（CC Switch 的用量脚本可直接读）：`mode`（有额度或任一限速时 `quota_limited`，否则 `unrestricted`）、`isValid`（启用且未过期；额度用完仍为 true）、`status`、`planName`（分组名）、`remaining`（可再花的美元：所有者余额，设了额度时不超过额度剩余，不小于 0）、`unit: "USD"`、`balance`、`quota {limit, used, remaining, unit}`、`rate_limits [{type: rpm|tpm|concurrency, window: 1m|now, limit, used, remaining}]`（只列设了上限的项）、`expires_at`、`usage.today/total {requests, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens, cost}`。金额为 JSON 数字；今天按 UTC 日；`cost` 与额度同口径（`apikey_quota_charge`）。
-- 控制台「使用密钥」给出查询命令；「导入 CC Switch」带上用量脚本（`usageEnabled`、`usageScript`、`usageAutoInterval=30`），脚本请求 `<网关>/v1/usage`，由 CC Switch 填入 `{{apiKey}}`，读取 `remaining`、`unit`、`isValid`。
+- 控制台的入口是行操作「快捷配置」菜单（2026-11-10 起，见 §92）：按客户端分项的 CC Switch 导入、Magpie 导入和「手动配置说明」。「手动配置说明」给出查询命令；CC Switch 导入的参数不变，带上用量脚本（`usageEnabled`、`usageScript`、`usageAutoInterval=30`），脚本请求 `<网关>/v1/usage`，由 CC Switch 填入 `{{apiKey}}`，读取 `remaining`、`unit`、`isValid`；Magpie 的导入链接带 `balance=<网关>/v1/usage`、`balance_path=remaining`，详见 §92。
 
 ## 63. 首 token 延迟里的服务端部分（2026-10-26，用户要求分析并修复）
 
@@ -7269,3 +7270,79 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 - manifest：`sdk/manifest/manifest.go`（`Slot.AccountTypes`、`AccountAction.AccountTypes`、`SlotAccountDetailTabs`、`SlotAccountListQuota`）、`sdk/manifest/check/ui.go`（`uiSlots`、`ownAccountTypes`、`uiAccountActions`、`uiFloors`）
 - 服务端：`server/internal/plugin/api/ui.go`（原样下发，无代码改动；测试在 `api_test.go` `TestUIPluginsAccountActions`）
 - 控制台：`web/src/components/plugin/slots.ts`（`forAccountType`）、`web/src/views/accounts/accountRowActions.ts`（`actionAppliesTo`）、`web/src/views/accounts/AccountsView.vue`（详情标签、批量栏、额度列）、`web/src/api/types.ts`
+
+## 92. API 密钥页重设计与平台品牌色（2026-11-10，用户要求：参考 new-api 令牌页；无迁移；核心 0.1.270）
+
+### 92.1 列表筛选（后端）
+
+`GET /me/api-keys`（`apikey:self:manage`）新增三个可选查询参数，互相是 AND 关系。范围、分页、排序都不变：只返回当前用户未删除的 Key，`id` 倒序，`page.total` 是筛选后的总数，请求里的 `user_id` 照旧忽略。不带这些参数或值为空串时，结果和 SQL 都与之前相同。
+
+| 参数 | 取值 | 匹配 |
+|---|---|---|
+| `q` | 文本，去首尾空格后非空才生效 | 满足任一项即可：名称包含 `q`；`q` 是密钥的开头（以 `sk-s2a-` 开头且比它长）时，`key_prefix` 以 `q` 开头。都不区分大小写，`%`、`_`、`\` 按字面匹配（`store.Like` 转义）。比 `key_prefix` 长的密钥按前缀截断，见下 |
+| `status` | `active` \| `disabled` \| `expired` | 见下表 |
+| `group_id` | 正整数 | Key 的 `group_id` 等于该值。不检查分组是否存在、是否对用户可用；分组已删除的 Key（`group_id` 为 `null`）不被任何值匹配 |
+
+`status` 的三个值把 Key 分成互不重叠的三类，和控制台状态徽标 `keyState()`（`web/src/views/keys/keyState.ts`）的判断顺序一致，禁用优先于过期：
+
+| `status` | 条件 | 对应的 `keyState()` |
+|---|---|---|
+| `active` | Key 状态为 `active`，且没有 `expires_at` 或 `expires_at` 晚于当前时间 | `active`、`exhausted` |
+| `disabled` | Key 状态不是 `active`（目前只有 `disabled`），不论是否过期 | `disabled` |
+| `expired` | Key 状态为 `active`，且 `expires_at` 不晚于当前时间 | `expired` |
+
+- “额度用尽”（`exhausted`）不是筛选值：这类 Key 归在 `active` 里，徽标由控制台按 `quota_limit`、`quota_used` 推导（`KEY_STATE_FILTERS` 也只有上面三个值）。
+- 过期的规则与网关认证（`Authenticate`）相同：`expires_at` <= 当前时间算过期。列表取数据库时间，认证取节点时间。
+- 错误：`status` 不是上面三个值，`group_id` 不是正整数，或 `q` 含非法 UTF-8 或 NUL 字符，返回 400 `invalid_argument`，`details.fields[{field:"status"|"group_id"|"q", code:"invalid"}]`。
+- `q` 只按名称和 `key_prefix` 匹配，不比较完整密钥，也不读 `key_hash`、`key_cipher`。只有以 `sk-s2a-` 开头（不区分大小写）且比这 7 个字符长的 `q` 才参与前缀匹配：`sk-s2a-` 本身和它的开头部分（如 `s`、`sk-`）是每个 Key 的前缀，按前缀匹配等于没筛，这类输入只按名称匹配。服务端不在文本中间找密钥。
+- 参与前缀匹配的 `q` 比入库的 `key_prefix`（前 12 个字符，`displayPrefix`）长时，前缀匹配只取它的前 12 个字符，名称匹配仍用完整的 `q`。所以粘贴完整密钥能找到对应的那一行（旧的仅哈希 Key 也一样）；12 个字符之后写错的密钥同样会找到它，前缀不同的找不到。别人的 Key、已删除的 Key 搜不到。
+- 控制台在发请求前就把密钥形态的输入截成前 12 个字符（见 92.2 的 `searchQuery()`），完整密钥的明文不进查询串；服务端的截断是给其他调用方兜底。
+- 没有迁移，也没有新索引：所有筛选都叠加在“当前用户、未删除”这个条件上，它有现成的部分索引 `api_keys_user_idx`，筛选只需在一个用户的 Key 上做。
+- 实现位置：`server/internal/apikey/apikey.go`（`listMine`、`mineFilter`、`searchedPrefix`、`keyStatusFilters`），测试 `apikey_test.go` `TestListMineFilters`。
+
+### 92.2 密钥列表（控制台 `web/src/views/keys/`）
+
+- 列：名称、状态、额度、分组、密钥、可用模型、IP 限制、用量（需 `usage:self:read`）、限速、创建时间、最近使用、过期时间、操作。限速、创建时间默认隐藏；列设置的表名是 `my-api-keys`。表格工具栏显示接入地址（`window.location.origin`）和复制按钮。
+- 状态徽标由 `keyState()`（`keyState.ts`）推导，顺序是：`status` 不是 `active` → 已禁用；`expires_at` <= 当前时间 → 已过期；`quota_limit > 0` 且 `quota_used >= quota_limit` → 额度用尽；否则已启用。状态筛选只有已启用、已禁用、已过期三项，额度用尽归在已启用里（92.1）。
+- 搜索、状态、分组三个筛选对应 92.1 的 `q`、`status`、`group_id`。搜索框的内容经 `searchQuery()`（`reveal.ts`）处理后才发出：文本里任意位置出现密钥形态的片段（`sk-s2a-` 开头，不区分大小写，如带引号、`Bearer `、`KEY=` 粘贴的）时只发该片段的前 12 个字符，其余文本丢弃；输入框显示的内容不变。分组筛选项取自 `GET /me/groups`，所以已停用或不再对用户开放的分组不在选项里。
+- 密钥列显示掩码（`key_prefix` + `******`），眼睛按钮就地显示完整密钥、复制按钮复制（都调 `POST /me/api-keys/:id/reveal`，每次一条 `apikey.reveal` 审计）；只保存了哈希的旧 Key（`copyable: false`）两个按钮禁用并说明原因。行的 `key_prefix` 变化（重新生成）时丢弃已显示或缓存的明文。眼睛按钮属于 §23.4“一眼就懂的图标”。
+- 行操作是文字按钮：快捷配置（92.3）、禁用 / 启用（`PATCH status`）、编辑、删除；原来的行内启用开关取消。“重新生成密钥”在编辑窗口顶部，确认后调 `rotate`，关闭编辑窗口并弹出一次性明文窗口（标题区分“已创建”和“已重新生成”）。
+- 批量：勾选或“选择全部 N 项”（`listAll` 带当前筛选，结果再用 `matchesKeyFilter()` 按当前筛选过一遍）后可复制密钥（每行 `名称<TAB>密钥`，逐个 `reveal`，旧 Key 跳过）、启用、禁用、删除（确认后执行）；都是逐个调原有单条接口，已是目标状态的不发请求。改变筛选会清空勾选；带状态筛选时批量启用 / 禁用完成后也清空勾选。
+- 分组列：分组有问题（已删除、已禁用、不再对用户开放、没有可用平台）时只显示警告图标，句子在悬浮提示里（`ProblemIcon`，92.4），不占一行文字。可用模型列在拿不到分组时显示“—”。
+
+### 92.3 快捷配置
+
+行操作“快捷配置”是一个下拉菜单：“一键导入到”下每个受支持的应用一项，最后是“手动配置说明”。应用清单由 `keyAppsFor(platforms)`（`keyApps.ts`）按 Key 所在分组自己的平台（`Group.platforms`）给出，链接里的名称取控制台主机名，网关地址取 `window.location.origin`：
+
+| 应用 | 条件 | 链接 |
+|---|---|---|
+| CC Switch（每个客户端一项） | 平台有对应客户端（`keyClients.ts` 的 `CLIENTS`） | `ccswitch://v1/import?resource=provider&app&name&homepage&endpoint&apiKey&configFormat=json&usageEnabled=true&usageScript=<base64>&usageAutoInterval=30`，与 §62 相同 |
+| Magpie | 分组自己的平台里有 anthropic、openai、gemini 中至少一个 | `magpie://import?name&key&anthropic=<网关>&chat=<网关>/v1&responses=<网关>/v1&gemini=<网关>/v1beta&website=<网关>&balance=<网关>/v1/usage&balance_path=remaining`，只带分组自己平台的协议参数，不带模型列表，空格编码为 `%20` |
+
+- 点应用项时先 `reveal` 取明文，再把页面地址设为该链接；1.5 秒后页面仍有焦点就提示“没有打开？请先安装客户端”。明文只进这个自定义协议链接，不进任何 HTTP 请求的查询串。
+- 只保存了哈希的旧 Key：应用项全部禁用，菜单头部说明原因，仍可打开手动配置说明（说明里用前缀占位，含占位密钥的代码块不可复制，没有导入按钮）。
+- 应用清单和客户端页签不含经协议转换可达的平台（92.5）：协议能转换不等于模型可用，给 Claude 分组的 Key 生成 Codex 配置会因模型名对不上而失败。接入地址的展示才包含转换端点。
+- 手动配置说明（`KeyUseGuide.vue`）在各客户端页签之后多一个 Magpie 页签，逐项列出 API 密钥、各协议地址、余额查询地址（`/v1/usage`）和余额字段（`remaining`）。字段名照 Magpie 自定义供应商表单的界面文案（`internal/gui/assets/app.js`、`i18n.js`，2026-11-10 核对）：API key / API 密钥、Anthropic URL / Anthropic 地址、OpenAI URL / OpenAI 地址（Chat Completions）、Responses URL / Responses 地址、Gemini URL / Gemini 地址、Balance URL / 余额查询地址、Balance field / 余额字段；表单的“Base URL”一栏填所选协议的地址，其余协议地址在“更多端点”里，余额两项在“高级”里。说明末尾的“可调用的接口”包含经协议转换可达的端点（92.5）。
+
+### 92.4 平台品牌色（控制台 `web/src/components/platform/`）
+
+- `brands.ts`：厂商表（id、亮色、可选的暗色、可选的图形标记），平台 → 厂商（平台 id 与厂商 id 相同的不用列，`volcengine` → `doubao`），模型名 → 厂商（正则表，先去掉 `厂商/` 路径前缀，按表的顺序取第一个命中的）。表里没有的 id 按字符串哈希从 8 组备用色里取一组，标记是首字母。厂商图形取自 @lobehub/icons（MIT，许可文本 `LOBE-ICONS-LICENSE.txt` 在组件目录和 `web/public/` 各一份）。
+- 组件：`BrandMark`（厂商标记；`decorative` 时对读屏隐藏）、`PlatformIcon`（平台 id → 标记）、`PlatformBadge`（标记 + 平台名的色块；`unavailable` 给出原因时灰显、名称加删除线、原因在 `ProblemIcon` 里）、`ModelBadge`（标记 + 模型名；`plain` 只留标记不着色）、`GroupBadge`（分组名 + 倍率；**不带平台图标**；只有一个平台时着该厂商色，多个平台中性描边，没有平台灰色）。
+- 样式类 `.brand-tint`（厂商色文字 + 淡底）、`.brand-fg`（厂商色文字）在 `components/platform/brand.css`，由 `--brand`、`--brand-dark` 两个变量取色，文字与底色的对比度不低于 4.5:1。它们是控制台内部的类，不属于 §23.4 的插件契约。
+- `components/ProblemIcon.vue`：一个问题显示为警告图标，句子放在悬浮提示和 `aria-label` 里；键盘聚焦和触屏轻触都能打开提示。表格单元格里的问题说明一律用它，不写成一行文字。
+- 使用处：密钥页（分组、可用模型）、账号页（类型行前的平台图标、分组徽章、账号类型选择与详情的平台徽章）、分组页（模型名单）、使用日志与详情（模型；管理视图里账号按 `upstream_protocol` 点号前的平台着色，`local` 或为空时不着色；自助视图没有这个字段，不着色）、用量概览的模型分布、模型价格、价格同步预览、我的模型。分组名在任何页面都不加平台图标。
+
+### 92.5 分组页
+
+- 列表、编辑窗口、详情都不再显示“可服务的平台”：核心对四种文本协议互转（§88），一个分组能接哪些协议不取决于它的账号属于哪个平台。`Group.platforms` 字段照常返回，控制台只用它给分组徽章着色和算接入地址。“有账号但不支持任何已启用平台”的警告随之取消。
+- 没有账号的分组在“账号数”前显示警告图标（`ProblemIcon`，`data-testid="group-no-accounts"`），列表、手机卡片和详情都有。
+- 接入地址（`views/platforms/PlatformEndpointsPreview.vue`：分组详情、密钥页的手动配置说明、密钥编辑窗口里的分组说明）一律包含经协议转换可达的端点（`views/platforms/convertedEndpoints.ts`）：分组自己的平台里只要有一个文本协议端点（`anthropic.messages`、`openai.chat`、`openai.responses`、`gemini.generate`、`gemini.stream_generate`），就额外列出其它平台上这些协议以及两个 count_tokens 的端点，标“经协议转换”；embeddings、视频等不可转换的端点只列在自己平台下。这是按平台级端点做的近似，不看各账号类型声明的端点子集；这张协议清单与 `server/internal/convert` 的内置转换对一致，新增转换对时两处一起改。密钥编辑窗口里的分组说明（`KeyGroupDetails.vue`）是个小框：每个平台最多列 3 个端点，转换端点收在“经协议转换还可调用：<平台名>”的展开项里（`fold`），默认收起；另两处直接列出。
+
+### 92.6 兼容与混跑
+
+- 没有迁移；Host API、`HOST_UI_VERSION` 不变，`web/packages/host`、SDK、网关、内置插件都没改（0.1.270 也没改 `web/packages/ui`；0.1.271 的改动见本节末条），按 rolling-v1 滚动更新（§82）。
+- 新控制台遇到旧核心（滚动窗口内）：旧核心忽略 `q`、`status`、`group_id`，返回 200 和未筛选的全部 Key。列表会暂时显示未筛选的结果；跨页全选的结果在控制台按当前筛选再过一遍（92.2），批量操作不会作用到筛选之外的 Key。其余用到的接口和字段在 0.1.269 都已存在。
+- 旧控制台遇到新核心：不带这些参数，结果与之前相同。
+- 核心 0.1.271 的后续修补（仍无迁移、契约版本不变）：密钥页的接入地址也包含转换端点（92.5）；Magpie 手动填写说明的字段名改成 Magpie 界面上的叫法（92.3）；`SBulkBar` 手机停靠条的占位从组件原位置挪到它父元素的末尾，停靠期间 `fab` 按钮隐藏、控制台不再为它留底部空间（`web/packages/ui/README.md`“手机形态”；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，原生插件经 import map 用控制台这一份，不用重建；停靠时根元素带 `data-bulk-dock`，控制台布局据此让出 `fab` 的留白，原来占位元素的 `data-testid="bulk-dock-space"` 取消）。
+- 核心 0.1.272 + moderation 0.7.3 的手机布局修补（仍无迁移、契约版本不变；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，其它原生插件不用重建，详见 `web/packages/ui/README.md`“手机形态”）：`SBulkBar` 停靠条的操作按钮放不下时，藏着按钮的一侧渐隐，只露出一部分的按钮点一下只滚进视野、不触发操作；`STable` 手机卡片把收不进卡片的单元格内容裁在卡片边缘，不再把页面撑出横向滚动。0.1.271 核验时提示词审核“审核记录”页宽 427 px 的原因不是标签栏，是 moderation 给分数标签写的 `max-width: 14rem` 比卡片里半宽的格子宽。moderation 0.7.3 只改原生界面的样式（`hostCompat`、`hostUICompat`、接口、迁移都不变）：窄屏（768 px 以下）分数与分类标签在格子里换行，流程页“绑定分组”在格子里换行，筛选栏的按钮组放不下时换行（英文界面观察名单页原来伸出屏幕）；宽屏渲染不变。moderation 0.7.4（同样只改原生界面）：概览页（360 px、卡片内 260 px）、测试页（340 px）网格的最小列宽不再超过容器（`minmax(min(…, 100%), 1fr)`）；原来概览页在 360 px 宽的手机上横向滚动 13 px，更窄时更多（320 px 时概览页 52 px、测试页 32 px）。
+- 删除的控制台组件与标识：`KeyCcSwitchButton`、`KeyEnabledSwitch`、`ccSwitch.ts`、`GroupPlatforms`、`PlatformBadges`、`platformTheme.ts`；`data-testid` `key-enabled-switch`、`key-ccswitch`、`guide-ccswitch`、`use-key`、`group-platforms`、`platform-badges`。

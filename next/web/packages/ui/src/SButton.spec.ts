@@ -17,6 +17,13 @@ describe('SButton fab', () => {
     expect(w.attributes('data-fab')).toBe('true')
   })
 
+  it('gives the bottom of the screen to the bulk selection dock while one is up', () => {
+    const w = mountPinned(SButton, { props: { fab: true, icon: 'plus' }, slots: { default: () => 'New key' } })
+    expect(w.classes()).toContain('[:root:has([data-bulk-dock])_&]:hidden')
+    const wide = mount(SButton, { props: { fab: true, icon: 'plus' }, slots: { default: () => 'New key' } })
+    expect(wide.classes().join(' ')).not.toContain('data-bulk-dock')
+  })
+
   it('is an ordinary button on a wide screen', () => {
     const w = mount(SButton, { props: { fab: true, icon: 'plus' }, slots: { default: () => 'New key' } })
     expect(w.classes()).not.toContain('fixed')

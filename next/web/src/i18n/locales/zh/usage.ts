@@ -126,7 +126,6 @@ export default {
     allRejected: '全部拒绝',
     secondHop: '带 1: 前缀的路径属于第 2 跳（{hops}）',
     lossy: '转换有丢失：{categories}',
-    separator: '、',
     filters: { converted: '已转换', lossy: '有丢失' }
   },
   converted: '已转换',

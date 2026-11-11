@@ -1,0 +1,20 @@
+/* Brand colours (brands.ts): a badge sets --brand / --brand-dark and takes one
+   of these classes. Internal to the console's platform components, unlike the
+   classes of style.css, which plugins may use; main.ts loads it.
+   The tint mixes enough black (white on dark) into the text for 4.5:1 on its own
+   background with every brand and stand-in colour, the group badge's darker rate
+   chip included (lowest: doubao 4.6 on light, minimax 4.6 on dark). */
+.brand-fg {
+  color: var(--brand);
+}
+.dark .brand-fg {
+  color: var(--brand-dark);
+}
+.brand-tint {
+  color: color-mix(in srgb, var(--brand) 64%, #000);
+  background-color: color-mix(in srgb, var(--brand) 11%, transparent);
+}
+.dark .brand-tint {
+  color: color-mix(in srgb, var(--brand-dark) 68%, #fff);
+  background-color: color-mix(in srgb, var(--brand-dark) 18%, transparent);
+}

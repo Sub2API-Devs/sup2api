@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SStatusBadge, SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SFormModal, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
+import { SStatusBadge, SBadge, SButton, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SFormModal, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
 import type { ConversionLossPolicy, EnvironmentValues, Group } from '@/api/types'
 import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
@@ -14,10 +14,11 @@ import { formatNumber } from '@/utils/format'
 import { policyLabel, policyOptions } from '@/utils/conversion'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
+import GroupAccountCount from './GroupAccountCount.vue'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
 import GroupDeleteModal from './GroupDeleteModal.vue'
 import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
-import GroupPlatforms from '@/views/platforms/GroupPlatforms.vue'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 
 const { t } = useI18n()
@@ -58,11 +59,10 @@ async function loadModels(gid: number | null) {
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
     { key: 'name', label: t('common.name'), mobile: 'title' },
-    { key: 'platforms', label: t('platforms.served'), mobile: 'meta', mobileSpan: 2 },
     { key: 'visibility', label: t('groups.visibility'), mobile: 'meta' },
     { key: 'rate_multiplier', label: t('groups.rateMultiplier'), align: 'right', mobile: 'meta' },
     { key: 'model_allowlist', label: t('groups.modelRules'), mobile: 'meta', mobileSpan: 2 },
-    { key: 'account_count', label: t('groups.accountCount'), align: 'right' },
+    { key: 'account_count', label: t('groups.accountCount'), align: 'right', mobile: 'meta' },
     { key: 'key_count', label: t('groups.keyCount'), align: 'right' },
     { key: 'status', label: t('common.status'), mobile: 'status' }
   ]
@@ -233,9 +233,6 @@ async function onAction(listed: Group, key: string) {
         <SLink as="button" class="text-left font-medium" data-testid="group-name" @click="openDetail(row)">{{ row.name }}</SLink>
         <SHint v-if="row.description" size="xs" class="max-w-xs truncate">{{ row.description }}</SHint>
       </template>
-      <template #cell-platforms="{ row }">
-        <GroupPlatforms :group="row" />
-      </template>
       <template #cell-visibility="{ row }">
         <SBadge :tone="row.visibility === 'public' ? 'primary' : 'accent'">
           {{ row.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}
@@ -247,14 +244,14 @@ async function onAction(listed: Group, key: string) {
       <template #cell-model_allowlist="{ row }">
         <div v-if="row.model_allowlist && row.model_allowlist.length" class="flex max-w-xs flex-wrap items-center gap-1">
           <SBadge :tone="row.model_filter_mode === 'blacklist' ? 'danger' : 'primary'">{{ t(row.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</SBadge>
-          <SCode v-for="m in row.model_allowlist.slice(0, 4)" :key="m" inline :text="m" />
+          <ModelBadge v-for="m in row.model_allowlist.slice(0, 4)" :key="m" :model="m" />
           <SHint v-if="row.model_allowlist.length > 4" inline size="xs" :title="row.model_allowlist.join(', ')">
             +{{ row.model_allowlist.length - 4 }}
           </SHint>
         </div>
         <SHint v-else inline>{{ t('common.unlimited') }}</SHint>
       </template>
-      <template #cell-account_count="{ row }">{{ formatNumber(row.account_count) }}</template>
+      <template #cell-account_count="{ row }"><GroupAccountCount :count="row.account_count" /></template>
       <template #cell-key_count="{ row }">{{ formatNumber(keyCount(row)) }}</template>
       <template #cell-status="{ row }">
         <SStatusBadge :status="row.status" />
@@ -307,9 +304,6 @@ async function onAction(listed: Group, key: string) {
       <SField :label="t('accounts.conversion.title')" :hint="t('groups.conversionHint')" :error="errors.conversion_loss_policy">
         <SSelect v-model="form.conversion_loss_policy" :options="conversionOptions" data-testid="group-conversion-policy" />
       </SField>
-      <SField v-if="editing" :label="t('platforms.served')">
-        <GroupPlatforms :group="editing" hint />
-      </SField>
       <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.groupHint')" data-testid="group-environment">
         <EnvironmentEditor v-model="form.environment" layer="group" field="environment" :errors="errors" :disabled="saving" />
       </SSettingsGroup>
@@ -331,9 +325,8 @@ async function onAction(listed: Group, key: string) {
           <SDescItem :label="t('groups.rateMultiplier')"><span class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</span></SDescItem>
           <SDescItem><template #label>{{ t('groups.modelRules') }} · {{ t(detail.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</template>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</SDescItem>
           <SDescItem :label="t('accounts.conversion.title')"><span data-testid="group-detail-conversion">{{ conversionText(detail) }}</span></SDescItem>
-          <SDescItem :label="t('groups.accountCount')">{{ formatNumber(detail.account_count) }}</SDescItem>
+          <SDescItem :label="t('groups.accountCount')"><GroupAccountCount :count="detail.account_count" /></SDescItem>
           <SDescItem :label="t('groups.keyCount')">{{ formatNumber(keyCount(detail)) }}</SDescItem>
-          <SDescItem :label="t('platforms.served')"><GroupPlatforms :group="detail" hint /></SDescItem>
           <SDescItem v-if="detail.platforms?.length && detail.account_count !== 0" :label="t('platforms.endpoints')"><PlatformEndpointsPreview :ids="detail.platforms" /></SDescItem>
         </SDescriptions>
       </template>

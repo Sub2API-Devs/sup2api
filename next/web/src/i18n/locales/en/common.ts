@@ -65,6 +65,7 @@ export default {
   thisMonth: 'This month',
   more: 'More',
   unlimited: 'Unlimited',
+  listSeparator: ', ',
   never: 'Never',
   source: 'Source',
   version: 'Version',

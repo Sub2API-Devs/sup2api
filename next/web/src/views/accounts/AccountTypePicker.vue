@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import PluginAvatar from '@/views/plugins/parts/PluginAvatar.vue'
 import TrustBadge from '@/views/plugins/parts/TrustBadge.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
-import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
+import AccountTypePlatforms from './AccountTypePlatforms.vue'
 import { typeKey, useAccountTypes } from './accountTypes'
 import { creationChoices } from './accountTypeChoices'
 
@@ -68,9 +68,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
           <TrustBadge v-if="at.trust" :trust="at.trust" />
         </div>
 
-        <div class="flex flex-wrap items-center gap-1 text-xs" data-testid="type-platforms">
-          <PlatformBadges :items="at.platforms" :empty="'—'" />
-        </div>
+        <AccountTypePlatforms :items="at.platforms" />
 
         <SHint v-if="at.description" size="xs" class="line-clamp-2">{{ lt(at.description) }}</SHint>
 

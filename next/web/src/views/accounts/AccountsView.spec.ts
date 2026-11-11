@@ -7,20 +7,22 @@ import { SButton, SDropdown, SModal, STabs } from '@sub2api/ui'
 import AccountsView from './AccountsView.vue'
 import AccountModelTest from './AccountModelTest.vue'
 import AccountEditor from './AccountEditor.vue'
+import AccountGroupsCell from './AccountGroupsCell.vue'
+import PlatformIcon from '@/components/platform/PlatformIcon.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import type { PluginAccountActionEntry, SlotEntry } from '@/stores/plugins'
 
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), pluginFacts: vi.fn((): { key: string; label: string; value: string }[] => []), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as SlotEntry[]), accountActions: [] as PluginAccountActionEntry[] }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), findType: vi.fn(), confirm: vi.fn(), toast: vi.fn(), notifyError: vi.fn(), reload: vi.fn(), pluginFacts: vi.fn((): { key: string; label: string; value: string }[] => []), canUpdate: true, slotEntries: vi.fn((_slot: string) => [] as SlotEntry[]), accountActions: [] as PluginAccountActionEntry[], groups: [] as { id: number; name: string; platforms?: string[] }[] }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { get: mocks.get, post: mocks.post, patch: mocks.patch, list: async () => ({ items: [] }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), confirm: mocks.confirm, toast: mocks.toast }))
 vi.mock('@/utils/errors', () => ({ notifyError: mocks.notifyError, errorMessage: String }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ slotEntries: mocks.slotEntries, get accountActions() { return mocks.accountActions }, plugin: () => undefined, component: () => undefined }) }))
-vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useGroupsLookup: () => ({ groups: ref([]) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
+vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useGroupsLookup: () => ({ groups: ref(mocks.groups) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
 vi.mock('@/composables/useOwnership', async (original) => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ scopeOf: () => 'all', can: (_a: Account, keys: readonly string[]) => keys.includes('account:update') && mocks.canUpdate }) }))
 vi.mock('./accountTypes', () => ({ typeKey: () => '', useAccountTypes: () => ({ load: vi.fn(), find: mocks.findType, grouped: ref([]), types: ref([]), pluginFacts: () => mocks.pluginFacts(), pluginName: (key: string) => key, typeLabel: (_key: string, type: string) => type }) }))
 vi.mock('@/composables/useList', async (original) => ({ ...await original<object>(), useList: () => list }))
@@ -770,8 +772,12 @@ describe('declared plugin account actions and the toolbar slot (CONTRACTS §23.3
 
 describe('account list layout', () => {
   const row = (id: number, over: Partial<Account> = {}) => ({ id, name: 'a@example.com', plugin_key: 'ccgateway', type: 'oauth', status: 'active', schedulable: true, created_by: 1, settings: {}, ...over }) as unknown as Account
-  const renderLayout = () => render({ STable: { props: ['rows', 'columns'], template: '<div><i data-testid="cols">{{ columns.map((c) => c.key).join() }}</i><div v-for="row in rows" :key="row.id"><slot name="cell-name" :row="row" /></div></div>' } })
-  beforeEach(() => mocks.pluginFacts.mockReset().mockReturnValue([]))
+  const renderLayout = () => render({ STable: { props: ['rows', 'columns'], template: '<div><i data-testid="cols">{{ columns.map((c) => c.key).join() }}</i><div v-for="row in rows" :key="row.id"><slot name="cell-name" :row="row" /><slot name="cell-groups" :row="row" /></div></div>' } })
+  beforeEach(() => {
+    mocks.pluginFacts.mockReset().mockReturnValue([])
+    mocks.findType.mockReset()
+    mocks.groups = []
+  })
 
   it('shows the creator column only when the page has more than one creator', () => {
     list.items.value = [row(1), row(2)]
@@ -786,5 +792,30 @@ describe('account list layout', () => {
     const w = renderLayout()
     expect(w.find('[data-testid="account-fact-email"]').exists()).toBe(false)
     expect(w.get('[data-testid="account-fact-org"]').text()).toContain('acme')
+  })
+
+  it("leads the type line with the marks of the platforms the account's type serves now", () => {
+    mocks.findType.mockReturnValue({ platforms: [{ id: 'anthropic', available: true }, { id: 'foo', available: false }, { id: 'openai' }] })
+    list.items.value = [row(1)]
+    const w = renderLayout()
+    expect(w.find('[data-testid="account-platforms"]').exists()).toBe(true)
+    expect(w.findAllComponents(PlatformIcon).map((icon) => icon.props('id'))).toEqual(['anthropic', 'openai'])
+  })
+
+  it('shows no platform mark for a type that is gone or serves no platform now', () => {
+    list.items.value = [row(1)]
+    expect(renderLayout().find('[data-testid="account-platforms"]').exists()).toBe(false)
+    mocks.findType.mockReturnValue({ platforms: [{ id: 'foo', available: false }] })
+    expect(renderLayout().find('[data-testid="account-platforms"]').exists()).toBe(false)
+  })
+
+  it('hands the groups cell every group of the account: the name the row carries, the platforms the lookup knows', () => {
+    mocks.groups = [{ id: 2, name: 'vip', platforms: ['anthropic'] }, { id: 3, name: 'renamed-since', platforms: ['gemini', 'openai'] }]
+    list.items.value = [row(1, { group_ids: [2, 3, 9], groups: [{ id: 3, name: 'batch' }] })]
+    expect(renderLayout().getComponent(AccountGroupsCell).props('groups')).toEqual([
+      { id: 2, name: 'vip', platforms: ['anthropic'] },
+      { id: 3, name: 'batch', platforms: ['gemini', 'openai'] },
+      { id: 9, name: '#9', platforms: undefined }
+    ])
   })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CLIENTS, ccSwitchLink, ccSwitchUsageScript, clientsFor } from './keyClients'
 
-const client = (id: string) => CLIENTS.find((c) => c.id === id)!
+const client = (id: string) => CLIENTS.find(c => c.id === id)!
 const base = 'https://gw.example.com'
 const key = 'sk-s2a-test'
 
@@ -16,7 +16,7 @@ describe('API key clients', () => {
     expect(extractor({ isValid: false, remaining: 0 })).toEqual({ isValid: false, remaining: 0, unit: 'USD' })
   })
   it('offers the clients of the platforms a key reaches', () => {
-    expect(clientsFor(['openai', 'volcengine', 'anthropic']).map((c) => c.id)).toEqual(['claude', 'codex'])
+    expect(clientsFor(['openai', 'volcengine', 'anthropic']).map(c => c.id)).toEqual(['claude', 'codex'])
     expect(clientsFor(['volcengine'])).toEqual([])
     expect(clientsFor(undefined)).toEqual([])
   })
@@ -40,9 +40,34 @@ describe('API key clients', () => {
     const link = new URL(ccSwitchLink(client('codex'), base, 'gw.example.com', key))
     expect(link.protocol).toBe('ccswitch:')
     expect(Object.fromEntries(link.searchParams)).toEqual({
-      resource: 'provider', app: 'codex', name: 'gw.example.com', homepage: base, endpoint: `${base}/v1`, apiKey: key, configFormat: 'json',
-      usageEnabled: 'true', usageScript: btoa(ccSwitchUsageScript(base)), usageAutoInterval: '30'
+      resource: 'provider',
+      app: 'codex',
+      name: 'gw.example.com',
+      homepage: base,
+      endpoint: `${base}/v1`,
+      apiKey: key,
+      configFormat: 'json',
+      usageEnabled: 'true',
+      usageScript: btoa(ccSwitchUsageScript(base)),
+      usageAutoInterval: '30'
     })
     expect(new URL(ccSwitchLink(client('claude'), base, 'n', key)).searchParams.get('endpoint')).toBe(base)
+  })
+  it.each([
+    ['claude', 'claude', base],
+    ['codex', 'codex', `${base}/v1`],
+    ['gemini', 'gemini', base]
+  ])('imports %s into CC Switch as its app %s at %s', (id, app, endpoint) => {
+    const link = ccSwitchLink(client(id), base, 'gw.example.com', key)
+    expect(link.startsWith('ccswitch://v1/import?resource=provider&')).toBe(true)
+    expect(Object.fromEntries(new URL(link).searchParams)).toMatchObject({ app, endpoint, homepage: base, apiKey: key })
+  })
+  it.each(['laptop key', '我的 网关', 'a&b=c'])('encodes the name %j in the CC Switch link', name => {
+    const link = ccSwitchLink(client('claude'), base, name, key)
+    expect(link).not.toMatch(/\s|[^\x20-\x7e]/)
+    expect(new URL(link).searchParams.getAll('name')).toEqual([name])
+  })
+  it('joins paths onto a gateway address ending in a slash with one slash', () => {
+    expect(ccSwitchLink(client('codex'), `${base}/`, 'n', key)).toBe(ccSwitchLink(client('codex'), base, 'n', key))
   })
 })

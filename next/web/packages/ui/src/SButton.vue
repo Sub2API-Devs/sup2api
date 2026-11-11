@@ -11,7 +11,8 @@
 // `fab` (with an `icon`): on a compact screen a 56px round button floating
 // bottom-right above the home indicator, its text visually hidden (kept for
 // screen readers), marked `data-fab` so the page layout can keep room for it
-// under the last row; an ordinary button on wide screens.
+// under the last row, and not shown while the bulk selection dock (SBulkBar)
+// holds the bottom of the screen; an ordinary button on wide screens.
 import { computed } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 import SSpinner from './SSpinner.vue'
@@ -65,11 +66,12 @@ const SIZE = { xs: 'btn-xs', sm: 'btn-sm', md: 'btn-md', lg: 'btn-lg' }
 // Square = as wide as tall, so icon buttons stay square when touch screens raise the control height.
 const SQUARE = 'aspect-square px-0'
 const ICON: Record<string, string> = { xs: 'h-3.5 w-3.5', sm: 'h-3.5 w-3.5', md: 'h-4 w-4', lg: 'h-5 w-5' }
-// Under the bulk selection dock (z-30), which covers it while rows are selected.
+// Hidden while rows are selected: the bulk selection dock is shorter than the fab and would cover only part of it.
 // The console layout pads a page holding a fab by 5.5rem (+ the safe area) at the bottom:
 // the 3.5rem button plus its 1rem offset and a 1rem gap. Change them together.
 const FAB = {
-  button: 'fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-20 h-14 w-14 rounded-full px-0 shadow-lg',
+  button:
+    'fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-20 h-14 w-14 rounded-full px-0 shadow-lg [:root:has([data-bulk-dock])_&]:hidden',
   icon: 'h-6 w-6'
 }
 const { compact } = useViewport()

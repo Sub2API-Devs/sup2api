@@ -7,6 +7,7 @@ import { api } from '@sub2api/host'
 import { SAlert, SBadge, SCard, SInput, SPageHeader, SSelect, STable, type TableColumn } from '@sub2api/ui'
 import type { Group } from '@/api/types'
 import { fetchMyGroups } from '@/composables/lookups'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
 import { num, parseExpression, summarize, tokenPricesFrom, normalizeVisual, hasVisualConfig, type PriceMode, type TokenPrices } from '@/views/prices/priceExpr'
 import { errorMessage } from '@/utils/errors'
 
@@ -98,7 +99,7 @@ const columns = computed<TableColumn[]>(() => [
     <SCard :padded="false" data-testid="models-table">
       <STable :columns="columns" :rows="shown" :loading="loading" row-key="model" dense :empty-text="t('me.models.empty')">
         <template #cell-model="{ row }">
-          <span class="font-mono text-sm">{{ row.model }}</span>
+          <ModelBadge :model="row.model" />
           <SBadge v-if="row.price.tiers > 1" tone="gray" class="ms-2">{{ t('me.models.tiered', { n: row.price.tiers }) }}</SBadge>
         </template>
         <template #cell-input="{ row }">

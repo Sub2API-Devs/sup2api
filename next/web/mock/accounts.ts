@@ -349,6 +349,8 @@ function applyCommonControls(pluginKey: string, type: string, body: Record<strin
 
 const typeLabel = (pluginKey: string, type: string) => accountTypeDecls.find((x) => x.plugin_key === pluginKey && x.type === type)?.label || type
 
+// claude-main is in three groups (the list shows two and "+1"); with claude-bak
+// it makes haiku-only a group of one platform, whose badge takes the vendor tint.
 export const accounts: any[] = [
   { id: 12, name: 'claude-main', param_override: { operations: [
     { description: '固定 temperature', mode: 'set', path: 'temperature', value: 0.7 },
@@ -356,8 +358,8 @@ export const accounts: any[] = [
     { description: 'claude- 模型设置 max_tokens', mode: 'set', path: 'max_tokens', value: 8192, keep_origin: true, logic: 'OR', conditions: [{ path: 'model', mode: 'prefix', value: 'claude-' }] },
     { description: 'anthropic-beta 去掉 1M 上下文', mode: 'set_header', path: 'anthropic-beta', value: { 'context-1m-2025-08-07': null } },
     { mode: 'return_error', value: { message: '该账号不提供 opus', status_code: 400 }, logic: 'OR', conditions: [{ path: 'model', mode: 'contains', value: 'opus' }] }
-  ] }, plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, spm_limit: 8, model_limits: [{ models: ['claude-opus-4-1'], max_concurrency: 2, rpm_limit: 10, tpm_limit: 0, spm_limit: 2 }, { models: ['claude-haiku-4-5', 'claude-sonnet-4-5'], max_concurrency: 0, rpm_limit: 0, tpm_limit: 50000 }], status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
-  { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', created_by: 6, group_ids: [1], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  ] }, plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1, 2, 3], proxy_id: null, priority: 1, weight: 3, max_concurrency: 10, schedulable: true, models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'], model_mapping: { 'claude-3-5-sonnet-latest': 'claude-sonnet-4-5' }, rpm_limit: 60, tpm_limit: 100000, spm_limit: 8, model_limits: [{ models: ['claude-opus-4-1'], max_concurrency: 2, rpm_limit: 10, tpm_limit: 0, spm_limit: 2 }, { models: ['claude-haiku-4-5', 'claude-sonnet-4-5'], max_concurrency: 0, rpm_limit: 0, tpm_limit: 50000 }], status: 'active', status_reason: '', in_use: 3, cooldown_until: null, orphaned: false, last_used_at: now(-12), created_at: now(-86400 * 20), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
+  { id: 13, name: 'claude-bak', plugin_key: 'anthropic', type: 'apikey', created_by: 6, group_ids: [1, 3], proxy_id: 1, priority: 2, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: now(600), cooldown_reason: '429', orphaned: false, last_used_at: now(-300), created_at: now(-86400 * 10), credentials: { api_key: '******', base_url: 'https://api.anthropic.com' } },
   { id: 14, name: 'old-key', plugin_key: 'anthropic', type: 'apikey', created_by: 1, group_ids: [1], proxy_id: null, priority: 5, weight: 1, max_concurrency: 10, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'disabled', status_reason: '401 invalid credentials', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 40), credentials: { api_key: '******' } },
   { id: 16, name: 'relay-1', plugin_key: 'relay', type: 'relay_key', created_by: 6, group_ids: [1], proxy_id: null, priority: 3, weight: 1, max_concurrency: 20, schedulable: true, models: [], model_mapping: { 'claude-opus-4-1': 'claude-sonnet-4-5' }, rpm_limit: 120, tpm_limit: 0, status: 'active', status_reason: '', in_use: 1, cooldown_until: null, orphaned: false, last_used_at: now(-40), created_at: now(-86400 * 2), credentials: { api_key: '******', base_url: 'https://relay.example.com' } },
   { id: 17, name: 'video-1', plugin_key: 'videogen', type: 'video_key', created_by: 1, group_ids: [2], proxy_id: null, priority: 1, weight: 1, max_concurrency: 4, schedulable: true, models: ['myvideo-pro'], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-3600), created_at: now(-86400 * 3), credentials: { api_key: '******', region: 'us' } },
@@ -564,8 +566,11 @@ const withGroups = (a: any) => ({
   quota: quotaOf(a),
   refresh: refreshOf(a),
   last_test: a.last_test ?? null,
-  groups: (a.group_ids || []).map((id: number) => ({ id, name: id === 1 ? 'default' : id === 2 ? 'vip' : `group-${id}` }))
+  groups: (a.group_ids || []).map((id: number) => ({ id, name: GROUP_NAMES[id] ?? `group-${id}` }))
 })
+
+/** Names of the groups in resources.ts (which imports this file), for the `groups` of an account. */
+const GROUP_NAMES: Record<number, string> = { 1: 'default', 2: 'vip', 3: 'haiku-only', 4: 'gemini-trial' }
 
 // The console's three statuses, as the core filters them (GET /accounts ?status=).
 const statusKey = (a: { status: string; schedulable: boolean }) =>

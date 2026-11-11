@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { SAlert, SButton, SCard, SSegmented } from '@sub2api/ui'
 import { useUsageSummary } from '@/views/usage/useUsageSummary'
 import { errorMessage } from '@/utils/errors'
+import ModelBadge from '@/components/platform/ModelBadge.vue'
 import DistributionCard from './DistributionCard.vue'
 import MetricStrip from './MetricStrip.vue'
 import TokenTrendChart from './TokenTrendChart.vue'
@@ -77,6 +78,7 @@ watch(() => props.revision, reload)
           <template v-if="modelSources" #extra>
             <SSegmented v-model="source" size="sm" :aria-label="t('stats.model')" :options="sourceOptions" data-testid="model-source" />
           </template>
+          <template #label="{ label }"><ModelBadge :model="label" plain /></template>
         </DistributionCard>
         <DistributionCard
           v-if="secondary"
@@ -101,6 +103,7 @@ watch(() => props.revision, reload)
         <template v-if="modelSources" #extra>
           <SSegmented v-model="source" size="sm" :aria-label="t('stats.model')" :options="sourceOptions" data-testid="model-source" />
         </template>
+        <template #label="{ label }"><ModelBadge :model="label" plain /></template>
       </DistributionCard>
     </div>
     <MetricStrip :rows="trend.rows.value" :buckets="buckets" :granularity="granularity" :loading="trend.loading.value" :group="group" />
