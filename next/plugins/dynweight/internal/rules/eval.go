@@ -136,6 +136,7 @@ type SideEffect struct {
 // what was executed, not only where the weight ended.
 type WeightStep struct {
 	Strategy string  `json:"strategy"`
+	Type     string  `json:"type"` // weight_degrade | weight_climb: a clamp to the floor or the base can move against it
 	Mode     string  `json:"mode"`
 	Value    int     `json:"value"`
 	From     float64 `json:"from"`
@@ -716,8 +717,9 @@ func applyStrategies(in *Input, strategies []ResolvedStrategy, rules ruleOutcome
 				next = 0
 			}
 			changed = next != eff
-			if changed {
-				steps = append(steps, WeightStep{Strategy: s.Name, Mode: a.Mode, Value: a.Value, From: roundWeight(eff), To: roundWeight(next)})
+			// Compared as stored: a few ulps over the floor are no step.
+			if from, to := roundWeight(eff), roundWeight(next); from != to {
+				steps = append(steps, WeightStep{Strategy: s.Name, Type: a.Type, Mode: a.Mode, Value: a.Value, From: from, To: to})
 			}
 			eff = next
 		}

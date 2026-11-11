@@ -52,6 +52,17 @@ type Event struct {
 	Steps  []WeightStep   `json:"steps,omitempty"`
 }
 
+// ByConfig reports whether the configuration decided the event: a weight
+// change, or the reset a rules change made. A base mismatch comes from the
+// account's weight, manual and status resets from people, sticky clears
+// from a strategy run earlier.
+func (e Event) ByConfig() bool {
+	if e.Kind == EventReset {
+		return e.Reason == ReasonRulesChange
+	}
+	return e.Kind != EventAffinityClear
+}
+
 // ChangeKind classifies the weight change of an applied evaluation: down;
 // revived from 0; then restored to the base > first climb after a degrade >
 // any other climb; "" when the weight did not change or the adjustment is

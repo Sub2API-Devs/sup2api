@@ -1050,7 +1050,7 @@ func TestEventDetailStepsAndVersion(t *testing.T) {
 	e.window(5, 5)
 	e.window(5, 5)
 	down := e.events(map[string]string{"kind": rules.EventWeightDown})
-	want := []rules.WeightStep{{Strategy: "错误率过高", Mode: rules.ModeCurrentPercent, Value: 30, From: 100, To: 70}}
+	want := []rules.WeightStep{{Strategy: "错误率过高", Type: rules.ActionWeightDegrade, Mode: rules.ModeCurrentPercent, Value: 30, From: 100, To: 70}}
 	if len(down) != 1 || !slices.Equal(detailSteps(t, down[0]), want) || down[0].Detail["config_version"] != float64(1) || down[0].Detail["window"] == nil {
 		t.Fatalf("down event %+v", down)
 	}

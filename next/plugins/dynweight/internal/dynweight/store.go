@@ -383,8 +383,8 @@ func (s store) saveBases(ctx context.Context, bases map[pair]base) error {
 }
 
 // eventRow is an event of a key. configVersion is the configuration
-// version the evaluation that decided it ran on (nil when no evaluation
-// did), so an event shows whether a save was in force. It goes into the
+// version the evaluation ran on, for the events the configuration decided
+// (rules.Event.ByConfig; nil for the others), so an event shows whether a save was in force. It goes into the
 // stored detail only, like the window and the steps: the log line and the
 // notification stay as they were.
 type eventRow struct {

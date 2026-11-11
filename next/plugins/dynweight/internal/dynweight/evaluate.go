@@ -341,12 +341,11 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 	if changed {
 		e.changed++
 	}
+	version := e.cfg.version
 	for _, ev := range events {
 		row := eventRow{key: k, Event: ev}
-		// A base mismatch comes from the account's weight, not the
-		// configuration.
-		if ev.Reason != rules.ReasonBaseMismatch {
-			row.configVersion = &e.cfg.version
+		if ev.ByConfig() {
+			row.configVersion = &version
 		}
 		e.events = append(e.events, row)
 		if rules.Notified(ev.Kind) {
