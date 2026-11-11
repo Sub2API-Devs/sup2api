@@ -5026,7 +5026,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 下面各小节里判定缓存的段落写的是 0.8.1 的行为，与 0.8.0 不同的地方标"0.8.1"；0.8.0 在这些地方的做法只写在这张表里。改动的段落：72.3（版本）、72.5 第 8 步的"查"和"写"、72.7 与 72.9 的多节点同步和人工处理、72.11 的 `/status`、72.16。没有迁移，没有设置和接口路径的变化，可以与 0.8.0 混跑。实测、设计理由、审核中发现并修掉的问题和已知的代价见 `docs/DESIGN-2026-11-10-MODERATION-PARITY.md` 第 14 节"上线后修改"；上线经过、KV 不回答时的后果和回滚见 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节。0.8.1 在 2026-11-11 随核心 0.1.274 上线（核心 0.1.273 已构建但没有发布，§93.7）。
 
-**0.8.2（0.8.1 上线后的整理，尚未发布）**：不改 0.8.1 的缓存规则，只有三处小的行为变化和界面上的两处，各处标"0.8.2"：分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播（72.5 第 8 步"KV 写失败之后"）；告警状态的 KV 失败按缓存的规则计数（72.5 第 8 步"KV 出错"）；片段键在 KV 里的 TTL 向上取整到整秒（72.5 第 8 步"存储"）；概览页显示 `runtime.kv_skipped`、`kv_writing` 一行换了文案（72.11、72.16）。其余是代码和测试的整理。`hostCompat`、权限、迁移、设置、KV 里的键和值都不变，可以与 0.8.1 混跑（72.3、72.16）。
+**0.8.2（0.8.1 上线后的整理，2026-11-11 随核心 0.1.275 上线）**：不改 0.8.1 的缓存规则，只有三处小的行为变化和界面上的两处，各处标"0.8.2"：分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播（72.5 第 8 步"KV 写失败之后"）；告警状态的 KV 失败按缓存的规则计数（72.5 第 8 步"KV 出错"）；片段键在 KV 里的 TTL 向上取整到整秒（72.5 第 8 步"存储"）；概览页显示 `runtime.kv_skipped`、`kv_writing` 一行换了文案（72.11、72.16）。其余是代码和测试的整理。`hostCompat`、权限、迁移、设置、KV 里的键和值都不变，可以与 0.8.1 混跑（72.3、72.16）。
 
 用户已确认的取舍：
 - 只迁配置（Jev 题集、阈值、分析准则、渠道），通过页面导入；new-api 的记录和名单不迁，两边的用户不是同一批人。
@@ -5829,7 +5829,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 界面：概览页"队列与运行状态"卡片加一行 `runtime.kv_writing`（0.8.1 的文案是"正在写入共享缓存的结论"）。别的页面没有变化。
   - 测试：0.8.1 发布时判定缓存的测试都在 `internal/moderation/verdict_cache_test.go`；0.8.2 把它们拆成五个文件并整理过名字，现在的清单见下面 0.8.2 一条。
   - 部署：**要求有批量 KV 调用的核心（`hostCompat >=0.1.273`，72.3）**。2026-11-11 随核心 0.1.274 作为内置插件上线——核心滚动升级完成后内置同步把插件从 0.8.0 升到 0.8.1（核心 0.1.273 已构建但没有发布，0.1.274 带着它的内容）。不需要管理员重新批准，没有迁移，没有设置变化；KV 里的键和值不变，可以与 0.8.0 滚动混跑。回滚 = 插件装回 0.8.0；核心也要退回 0.1.272 时先退插件。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节。
-- **0.8.2（0.8.1 上线后的整理；尚未发布）**：
+- **0.8.2（0.8.1 上线后的整理；2026-11-11 随核心 0.1.275 上线）**：
   - 改动，共五项：(1) 分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播；(2) 告警状态的 KV 失败按缓存的规则计数，因 ctx 结束而没做成的调用不计；(3) 片段键在 KV 里的 TTL 向上取整到整秒；(4) 界面：概览页在 `kv_writing` 旁边显示 `runtime.kv_skipped`（"未写缓存的审核（期间有人工处理或缓存被换）"），`kv_writing` 一行的文案改为"等待写入共享缓存的审核（当前）"，删掉 `runtime` 下六个没有任何页面用到的文案键（vitest：`messages.spec.ts` 核对这张卡片的文案键）；(5) 内部整理：`cache.go` 统一用词、运行的写和人工处理共用"读出、修改、写回"的逻辑，测试拆成五个文件、运行时间减半（事件写入器的刷新间隔可在测试里调短，`Plugin.eventFlushEvery`）。前三项的规则在 72.5 第 8 步。0.8.1 的缓存规则（先 KV 后内存、读数、`kv_writing`、`kv_skipped`、清空后出队的任务按当前纪元查）没有变。
   - 测试（`internal/moderation/`；判定缓存现在的全部测试，按文件，名字取自代码；每个测试断言什么见设计文档 5.10）：
     - `verdict_cache_test.go`（存、重放、范围、清空、人工处理同步、广播）：`TestVerdictCacheStoresHitAndReplays`、`TestReplayNeedsWholeHitSet`、`TestReplayIsNotAViolation`、`TestReplayPostTiming`、`TestVerdictCacheSkipsErrorsSkippedStagesURLImages`、`TestHitSurvivesPassesOfItsSegments`、`TestHitKeptDecoded`、`TestVerdictCacheScope`、`TestClearVerdictCache`、`TestReviewSyncsVerdictCache`、`TestReviewSyncWritesEachKeyOnce`、`TestReviewSyncRefusesAnUnknownStatus`、`TestReviewOnANodeThatDidNotJudge`、`TestReviewSyncKVFailure`、`TestFalsePositiveUnderAnotherFingerprint`、`TestVerdictChangedBroadcastDropsMemory`、`TestStoredHitReachesANodeByBroadcastExpiryOrClear`、`TestNodeWithoutReviewBroadcastReplaysUntilExpiry`。
@@ -5838,7 +5838,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
     - `verdict_cache_image_test.go`（审核器没收到的图片）：`TestSkippedImageIsNotCachedAsPassed`、`TestImagePassNeedsAPassingAuditor`、`TestImageOnlyAHittingAuditorSawGetsTheSameVerdict`、`TestImageVerdictDoesNotDependOnCachedText`。
     - `verdict_cache_helpers_test.go`：假 KV 和各文件共用的辅助函数，没有测试。缓存在别的文件里的测试：`unit_test.go` 的 `TestVerdictCacheTTLSettings`、`TestLRU`、`TestLRUByteBudget`、`TestLRUTombstone`、`TestLRUTombstoneOfAReviewInProgress`、`TestReadingLapses`、`TestSegValue`、`TestStoredHitCodecAndKeys`、`TestFingerprint`、`TestFingerprintJudgingVersion`；`hook_test.go` 的 `TestPreRunStoresVerdictsOnce`、`TestPreRunSurvivesPanic`、`TestHitStandsWhenRecordingPanics`。
     - 测试辅助：`mustHook` 在发请求前后各等一次本节点的后台写完成（结论在回答之后才进缓存）；`hookNow` 不等。
-  - 部署：`hostCompat` 不变，**不需要管理员重新批准，没有迁移，没有设置变化**；KV 里的键和值不变，可以与 0.8.1 滚动混跑。计划随核心 0.1.275（§93 的规则统一）作为内置插件发布；它本身不依赖 0.1.275，在 0.1.274 上也能跑。回滚 = 插件装回 0.8.1。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 第 8 节。
+  - 部署：`hostCompat` 不变，**不需要管理员重新批准，没有迁移，没有设置变化**；KV 里的键和值不变，可以与 0.8.1 滚动混跑。2026-11-11 随核心 0.1.275（§93 的规则统一）作为内置插件上线；它本身不依赖 0.1.275，在 0.1.274 上也能跑。回滚 = 插件装回 0.8.1。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 第 8 节。
 
 ### 72.17 绑定到账号（0.7.0，2026-11-08，用户要求；需要核心 §85）
 
@@ -7411,7 +7411,7 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 
 本节加三个 RPC，一次调用处理同一个 namespace 下的多个键：**授权只复核一次，Redis 只往返一次**，开销不再随键数增长。proto 只新增这三个 RPC 和它们的消息，单键调用不变。
 
-版本：这三个 RPC 进了核心 0.1.273 的构建；0.1.273 没有发布，第一个发布的带它们的核心是 0.1.274（2026-11-11，93.7）。下文和代码注释里的"0.1.273"指这个构建起的核心。规则只写一处、单键 `KVSet` 的 TTL 上界、`KVGetMany` 提前拒绝，以及 SDK 拒绝负的 TTL，是之后的整理，属于核心 0.1.275 和随它构建的 SDK（尚未发布），各处标了"0.1.275"。
+版本：这三个 RPC 进了核心 0.1.273 的构建；0.1.273 没有发布，第一个发布的带它们的核心是 0.1.274（2026-11-11，93.7）。下文和代码注释里的"0.1.273"指这个构建起的核心。规则只写一处、单键 `KVSet` 的 TTL 上界、`KVGetMany` 提前拒绝，以及 SDK 拒绝负的 TTL，是之后的整理，属于核心 0.1.275 和随它构建的 SDK（2026-11-11 上线），各处标了"0.1.275"。
 
 ### 93.1 调用与消息
 
