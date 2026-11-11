@@ -218,7 +218,7 @@ const zh = {
     conflict: '配置已被他人修改，请刷新后重试',
     conflictDialog: '配置已被他人修改，请关闭弹窗后点「刷新」重新加载',
     saving: '正在保存，请稍候',
-    leaveConfirm: '配置有未保存的修改，离开后会丢失。仍要离开吗？',
+    leaveConfirm: '配置有未保存的修改（或编辑框还开着），离开后会丢失。仍要离开吗？',
     leave: '放弃修改并离开'
   },
   logEvents: { hint: '每条权重事件同时写一行插件日志（每 60 秒最多 5000 行，事件列表不受影响）。' },
@@ -466,7 +466,7 @@ const en: typeof zh = {
     conflict: 'Someone changed the configuration meanwhile; reload and try again',
     conflictDialog: 'Someone changed the configuration meanwhile; close this dialog and click Refresh to reload it',
     saving: 'Saving, please wait',
-    leaveConfirm: 'The configuration has unsaved changes, which are lost if you leave. Leave anyway?',
+    leaveConfirm: 'The configuration has unsaved changes (or an editor is open), which are lost if you leave. Leave anyway?',
     leave: 'Discard and leave'
   },
   logEvents: {

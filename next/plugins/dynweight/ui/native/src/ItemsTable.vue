@@ -82,17 +82,11 @@ function emitWritten(written: Written) {
 }
 
 /** The editor's save: the lists through `save`, naming the rules that left once saved. */
-const saveWritten = computed(() => {
-  const save = props.save
-  return (
-    save &&
-    (async (written: Written): Promise<SaveOutcome> => {
-      const r = await save({ rules: written.rules, strategies: written.strategies })
-      if (r.saved) toastDropped(written)
-      return r
-    })
-  )
-})
+async function saveWritten(written: Written): Promise<SaveOutcome> {
+  const r = await props.save!({ rules: written.rules, strategies: written.strategies })
+  if (r.saved) toastDropped(written)
+  return r
+}
 const commit = (next: ItemEntry[]) => emitWritten(writeItems(next, props.rules))
 
 const copyName = copyNamer(t)
@@ -209,7 +203,7 @@ watch(
       :index="editor.index"
       :append="editor.append"
       :readonly="readonly"
-      :save="saveWritten"
+      :save="save && saveWritten"
       :others="others"
       @apply="emitWritten"
     />

@@ -18,8 +18,8 @@ const catalog = useCatalog()
 
 // The layers as the warnings name them: the global one (null), then each
 // group. Each is judged on its own switch, as the warnings always were: the
-// global one's is the master switch; a group is still warned about while it
-// is off, since its items take effect as they are once it is on.
+// global one's is the master switch; a group is still warned about while the
+// master switch is off, since its items take effect as they are once it is on.
 const layers = computed((): Array<[string | null, Layer]> => {
   const c = draft.value
   return [[null, c], ...sortedIds(c.groups).map((id): [string, Layer] => [catalog.groupName(Number(id)), c.groups[id]])]
