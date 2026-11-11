@@ -589,7 +589,7 @@ type storedHit struct {
 
 - **通过不抹掉指针**。一个片段键同时保存"通过"和指针。命中集合 K 的各个片段在别的请求里可能各自单独通过（例如 K 里的系统提示词片段）；如果通过把指针覆盖掉，K 的命中就会被逐个片段的通过"洗"成放行。所以写通过时保留已有指针，查的时候先看有没有完整的命中集合，再看通过（5.3.4）。
 - **每个片段最多 8 个指针**（`maxSegHits`），保留写入时间最新的 8 个。被很多命中集合共用的片段（系统提示词）会丢掉较旧的指针，那些集合仍能通过它们别的片段找到；一个命中只有在它的每个片段此后都进了 8 个以上更新的命中集合时才找不到。
-- **值里带写入时间，不续期**。片段键里的每一项、命中条目的 `at` 都是各自的写入时间；读到的任何一项，只要距写入超过 `verdict_cache_days` 就不用（`liveAt`），不论是从内存还是从 KV 读到的。从 KV 读进内存的值按原来的写入时间算到期，不重新计时。KV 键的 TTL 取值里最新一项的到期时间。
+- **值里带写入时间，不续期**。片段键里的每一项、命中条目的 `at` 都是各自的写入时间；读到的任何一项，只要距写入超过 `verdict_cache_days` 就不用（`liveAt`），不论是从内存还是从 KV 读到的。从 KV 读进内存的值按原来的写入时间算到期，不重新计时。KV 键的 TTL 取值里最新一项的到期时间，向上取整到整秒、至少 1 秒（KV 按整秒计，0 是不过期）。
 - 读不懂的项忽略，对应的片段按未知处理、重新送审。
 - KV 的值上限是 64 KiB。`storedHit` 序列化后超过 60 KiB（`maxHitBytes`）就不存这个命中（照常写记录）。
 - KV 没有比较并交换：改片段键是"读出、修改、写回"。同一节点内，对缓存键的修改按键轮流（64 把锁，键按哈希分到其中一把；一次修改按固定顺序拿它涉及的全部锁，等锁可以被 ctx 打断）。运行的写从读出片段键起、到把写成的值放进内存为止一直占着这些键（5.3.5）；人工处理从等到这些键起、到给墓碑定下期限为止占着（5.3.8）。所以同一节点上改同一个键的两次运行不会丢掉对方的修改，内存得到值的顺序就是 KV 得到值的顺序，运行的写和人工处理不会同时改一个键。不同节点在一次写的时间内（两三次 KV 调用）同时改同一个键时可能丢掉其中一方的修改。丢一个通过的后果是多审一次；丢一个指针的后果是少一次重放，命中通常仍能通过集合里别的片段找到。**例外**（审核时复现过；没有常驻测试，它是写明的已知行为）：同一个窗口里集合的全部指针都被盖掉时——节点 1 正在写 A、B 各自的"通过"（已读完 KV），节点 2 写入命中 {A, B}，节点 1 写回——KV 里只剩两个"通过"，{A, B} 在节点 1 和任何新节点上按"通过"回答，节点 2 靠自己内存里的命中继续重放，直到这些值到期。前提是 A、B 各自单独能通过，也就是缓存本来就分不清的"没作为整体见过的集合"，不靠这个竞态也能做到；窗口是一次写的时间（有批量调用时约 0.1 秒）。
@@ -620,8 +620,8 @@ type storedHit struct {
 2. 收集各片段的指针（按请求顺序，每个片段内新的在前），取对应的命中条目：先内存，**不在内存的全部从 KV 读**，`KVGetMany` 每次最多 48 个（一次批量读的回答最多 3 MiB，KV 的一个值最多 64 KiB，48 个一定放得下；命中条目最大 60 KiB）。读的结果分三种：读到了；KV 明确回答"没有"（或内容读不懂、已过期）——指针失效；**没能读**——KV 出错、调用方的 ctx 结束，或只看内存的查询里条目不在内存。
    - **没有预算，也没有个数上限**（0.8.1，负责人 2026-11-11 的决定）：查询等 KV 回答。唯一的期限是调用方自己的 ctx——钩子里的查询用钩子请求的 ctx（核心给一次钩子调用限时；客户端断开时它被取消），工作协程出队时的查询用插件自己的 ctx（关停时取消）。ctx 结束时还没读到的按"没能读"处理，查询立刻返回，请求照常往下走：pre 的请求进入它的运行，在那里按原有的"客户端已离开"路径处理（回答放行，运行继续，命中照样记为拒绝；`TestLookupEndsWithItsRequest`）。
    - **一次查询的 KV 调用数**（核心有批量调用时）：读片段键 ⌈不在内存的片段数 / 512⌉ 次，再读命中条目 ⌈不在内存的条目数 / 48⌉ 次（没有这样的指针时是 0 次）。150 个片段的请求第一次到达一个节点是 1 次调用（加上有指针时的 1 次）；1200 个片段是 3 次（`TestLookupReadsEverySegment`）。**一个请求的片段全在内存里、它们指向的命中条目也在内存里时，这一步没有任何 KV 调用。**
-   - **KV 没有批量调用时**（测试里那种不实现 `KVBatch` 的 KV 包装；0.1.273 之前的核心也是这样，但 0.8.1 的 `hostCompat` 不允许装在那上面）：SDK 把每次批量调用换成逐键调用，8 路并发，结果相同，只是慢——150 个片段是 150 次调用、约 19 轮（`TestColdLookupIsOneCall`）。查询仍然全部读完，不会因为慢而少读。
-   - 一次读的值合计超过 3 MiB 时（核心回答 `ResourceExhausted`；本插件写的片段值不到 1 KiB，正常不会出现），这一批改成每次 48 个键重读，不算错误（`TestKVReadBeyondOneAnswer`）。
+   - 核心没有批量调用的情形在这里不会出现：0.8.1 的 `hostCompat` 不允许它装在 0.1.273 之前的核心上。SDK 在那种核心上的逐键回退由 SDK 自己的测试覆盖（CONTRACTS §93.6）。
+   - 一次读的回答不会超过批量调用 3 MiB 的上限：片段值不到 1 KiB（512 个合计不到 0.5 MiB），命中条目每次只读 48 个、每个最多 64 KiB。所以没有"读超限后分小批重读"这条路。
 3. **先找命中**：按上面的顺序，第一个"条目存在、未过期、且 `Keys` 全部在本请求的片段集合里"的命中决定这个请求，走重放（5.3.6），不再分块。这一步在看任何"通过"之前。
 4. 没有可重放的命中 → 带有未过期 `p…` 的片段算已放行，其余（包括指针失效、集合不完整的）送审。**例外：片段有一个未过期的指针，而它指向的命中条目没能读**，这个片段本次按未知处理，不管它有没有"通过"——那个命中可能正好覆盖本请求；pre 时重新送审，post 的钩子里入队、由工作协程带 KV 再查（`TestUnreadableHitEntryIsUnknown`）。在此之前这种片段按"通过"回答：KV 只在读命中条目时出错，或命中条目被内存 LRU 淘汰后，一个完整的命中集合会被答成 `pass (cached)`。之后与以前相同：`makePlan`，全部已放行则计 `cache_skipped`，note 为 `moderation: pass (cached)`。一处不同（第五轮，5.3.5"没缓存的图片总是和本请求的文字一起审"）：**混合流程**（有的审核器收图片、有的不收）的请求里有没缓存成"通过"、这次要送审的图片时，`makePlan` 不把已放行的文字片段拿掉。
 
@@ -629,7 +629,7 @@ type storedHit struct {
 
 KV 出错：没读到的片段、指向没读到的命中条目的片段按未知处理，照常送审。计数只有一个（0.8.1）：
 
-- KV 错误的计数：**一次批量调用失败计一次**（查询的一次读、后台写的一次读或写、人工处理同步的一次读、写或删），不论这次调用带了多少个键。读的时候一批失败，后面的批照常读；写和删在第一次失败处停下。告警状态的读写失败也各算一次。
+- KV 错误的计数：**一次批量调用失败计一次**（查询的一次读、后台写的一次读或写、人工处理同步的一次读、写或删），不论这次调用带了多少个键。读的时候一批失败，后面的批照常读；写和删在第一次失败处停下。告警状态（流程异常率告警的"已告警"标记）的读写失败也各算一次，规则相同（`TestAlertStateCountsKVFailuresLikeTheCache`）。
 - **因为调用方的 ctx 结束而没做成的调用不是 KV 的错，不计**：客户端断开或钩子超时打断的查询、关停时打断的后台写、请求结束时打断的人工处理同步。
 
 计数器是本节点启动以来的累计值，在 `GET /status` 的 `runtime.kv_errors` 和健康指标 `kv_errors` 里输出；请求路径上不为它写日志。0.8.0 的查询和写入有预算，被预算截断的一批也计在 `kv_errors` 里，KV 慢而没有出错时它照样增长。
@@ -686,7 +686,7 @@ post 的请求在 `admit` 里只看内存（`useKV = false`）；出队执行前
 
   **全部写入，没有个数上限**（0.8.0 每次运行只把最靠后的 64 个通过、每个命中最靠后 64 个片段的指针写进 KV）。**没有预算**（0.8.0 是 2 秒）：后台任务用插件自己的 ctx，不随请求的 ctx 取消；关停时在排队任务的宽限期过后被取消，被取消的写不计错误，也不留下协程（`TestStopEndsVerdictWrites`）。
 
-  **任何一次调用失败就停**（计一次 `kv_errors`；读片段键要分几次调用时，第一次失败后面的也不再发，`TestVerdictWriteStopsAtAFailedRead`）：这次运行的结论不进内存，这段内容下次重新审。KV 里可能留下已经写进去的部分——没有指针的命中条目、一次运行要分几次调用时的前几批——都是真的结论，只是不全，这段内容的下一次运行会补上。不重试。
+  **任何一次调用失败就停**（计一次 `kv_errors`；读片段键要分几次调用时，第一次失败后面的也不再发，`TestVerdictWriteStopsAtAFailedRead`）：这次运行的结论不进内存，这段内容下次重新审。KV 里可能留下已经写进去的部分——没有指针的命中条目、一次运行要分几次调用时的前几批——都是真的结论，只是不全，这段内容的下一次运行会补上。不重试。片段键要分几次调用写、中途失败时，前几次调用写成的键在 KV 里已经带着新指针，而本节点内存里它们的旧值没有：这些键从本节点内存里删掉，其中得到指针的照常广播（`stored`），就像写成功了一样——否则这个命中集合会在各片段记着"通过"的节点上一直按通过回答，直到值到期（`TestVerdictWriteCutShortForgetsWhatItWrote`）。
 
   **一次运行的 KV 调用数**：读片段键 ⌈片段键数 / 512⌉ 次，写片段键同样多次，有命中时再加写命中条目的 1 次——通常是 2 到 3 次。
 
@@ -707,7 +707,7 @@ post 的请求在 `admit` 里只看内存（`useKV = false`）；出队执行前
 #### 5.3.6 重放
 
 ```go
-func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, hitID string) *pluginv1.GatewayRequestHookResponse
+func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, id string) *pluginv1.GatewayRequestHookResponse
 ```
 
 - 不调用上游，不占并发名额，不进 singleflight。
@@ -758,7 +758,7 @@ func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, hitID strin
 - **去掉预算之后，墓碑为什么仍然挡得住**（0.8.0 的墓碑同样是 4 秒，是后台写预算的两倍，靠的是"任何进行中的读写都比墓碑短"；现在读写没有时限）：
   - **本节点上的运行的写**，靠两样：轮流，和"请求问缓存时的读数"。每个请求查缓存时记下一个读数（那一刻的时间和本节点到那时为止立过的墓碑数），它的运行交出结论时带着。写在读完 KV、动手写之前对每个键判断"处理可能在这个请求问过缓存之后改了它"（规则同下面"进行中的读"）：键上有墓碑；或者请求问缓存已超过 4 秒、而这期间本节点立过任何墓碑——这时分不清这个键的墓碑是不是来了又走了，**这次写什么都不写**，内容下次重审。于是：
     - 写占着键时：处理在第 2 步等它写完，然后覆盖它写的东西；它往内存里放值时键上已有第 1 步的墓碑，放不进，即使放进了也被第 4 步删掉。
-    - 处理占着键时：写要等到第 5 步之后才开始，那时墓碑已有期限，写看到墓碑，跳过这些键（`TestReviewIsNotUndoneByLateWrites`、`TestReviewSyncOrderAndItsCaller`）。
+    - 处理占着键时：写要等到第 5 步之后才开始，那时墓碑已有期限，写看到墓碑，跳过这些键（`TestReviewIsNotUndoneByLateWrites`、`TestReviewTombstonesBeforeItWrites`）。
     - 写排队或读 KV 用了 4 秒以上、墓碑已经过期时：墓碑数变了，请求问缓存又在 4 秒之前，什么都不写（`TestReviewIsNotUndoneByWritesThatOutlastItsTombstones` 第 1 段）。0.8.0 的写不可能比墓碑久；预算去掉后只看墓碑就不够了，这样的写会把已标为误报的命中写回去。
     - 判定在处理之前开始、处理的墓碑过期之后才交出结论的运行（审得久的 LLM 流程）：同样什么都不写（同一个测试的第 2 段；经过真实钩子请求的是 `TestRunAcrossAReviewDoesNotUndoIt`）。0.8.0 在这里会把命中写回缓存。
     - 处理之后才问缓存的请求判出的命中是新的结论，照常写。
@@ -845,19 +845,24 @@ ALTER TABLE stats_hourly ADD COLUMN IF NOT EXISTS replayed    bigint  NOT NULL D
 const kvNamespace = "verdict"
 
 // 片段键的值
-type segValue struct { pass int64; hits []hitRef } // parseSeg / encode / addHit / dropHit / merge / prune
-type segEdit func(*segValue)                       // passAt、dropPass、pointTo、unpoint
+type segValue struct { pass int64; hits []hitRef } // parseSeg / encode / addHit / merge / prune
+type segEdit func(*segValue)                       // passAt、dropPass、pointTo、unpoint、unpointRef
 
 // 内存 LRU：条数和字节两个上限；命中条目保存解码后的结构；墓碑
-func (c *lru) get(key string, now time.Time) ([]byte, bool)
+func (c *lru) getSeg(key string, now time.Time) (v segValue, ok bool)
 func (c *lru) getHit(key string, now time.Time) *storedHit
-func (c *lru) putHit(key string, hit *storedHit, bodyLen int, expires, now time.Time) bool
-func (c *lru) editSeg(key string, now time.Time, ttl time.Duration, edit segEdit)
-func (c *lru) kill(keys []string, until, now time.Time)
+// r 是读数：读 KV 之前取的（reading）。键在那之后可能被人工处理改过时不放，返回 false。
+func (c *lru) reading(now time.Time) reading
+func (c *lru) putHit(key string, hit *storedHit, bodyLen int, now time.Time, ttl time.Duration, r reading) bool
+func (c *lru) putSeg(key string, val []byte, now time.Time, ttl time.Duration, r reading) bool
+func (c *lru) mergeSeg(key string, kv segValue, now time.Time, ttl time.Duration, r reading) segValue
+func (c *lru) editSeg(key string, edit segEdit, now time.Time, ttl time.Duration)
+func (c *lru) tombstone(keys []string, now time.Time)     // 墓碑，4 秒
+func (c *lru) tombstoneOpen(keys []string, now time.Time) // 墓碑，不设期限（人工处理还在写）
 func (c *lru) size() int64
 
-func cacheScope(epoch int64, f *liveFlow) string           // "e3:7:9f2c…"
-func (s *snapshot) scopeOf(f *liveFlow) string
+func (s *snapshot) scopeOf(f *liveFlow) string             // "e3:7:9f2c…"
+func (p *Plugin) scopeNow(f *liveFlow) string              // 当前清空纪元下的范围
 func segKeyOf(scope string, h [32]byte) string             // "s:" + scope + ":" + hex
 func hitKeyOf(scope, id string) string                     // "h:" + scope + ":" + id
 func hitID(keys [][32]byte) string
@@ -867,12 +872,12 @@ type verdicts struct {
     passed map[[32]byte]bool
     hit    *storedHit // a cached hit whose segments are all in the request
     hitID  string
-    asked  reading    // taken before the lookup read anything; the run stores its verdicts with it (0.8.1)
+    asked  reading    // the reading the lookup began with; the run stores its verdicts with it (0.8.1)
 }
 
 func (p *Plugin) lookupVerdicts(ctx context.Context, scope string, keys [][32]byte, useKV bool) verdicts
-// Decides what is stored and starts the background write; the hook does not wait.
-func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits []storedHit, asked reading)
+// Hands the verdicts of a run to the cache and starts the background write; the hook does not wait.
+func (p *Plugin) storeVerdicts(scope string, passes [][32]byte, hits []storedHit, at int64, ttl time.Duration, asked reading)
 // KV first, then memory: lock, read, merge, write entries, write segment keys, put into memory.
 func (p *Plugin) writeVerdicts(ctx context.Context, w *verdictWrite)
 // One change of a key at a time on a node; the wait ends with ctx.
@@ -881,9 +886,9 @@ func (p *Plugin) kvLock(ctx context.Context, keys ...[]string) (unlock func(), e
 func (p *Plugin) kvRead(ctx context.Context, keys []string, unit int) (got []pluginsdk.KVValue, read []bool)
 func (p *Plugin) kvWrite(ctx context.Context, items []pluginsdk.KVItem) (done int, err error)
 func (p *Plugin) kvDelete(ctx context.Context, keys []string) (done int, err error)
-func (p *Plugin) clearVerdictCache(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error)
+func (p *Plugin) clearVerdictCache(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error)
 func (p *Plugin) syncReviewed(ctx context.Context, ids []int64, status string) int
-func (p *Plugin) onVerdictChanged(ctx context.Context, b pluginsdk.Broadcast) error
+func (p *Plugin) onVerdictChanged(_ context.Context, b pluginsdk.Broadcast) error
 ```
 
 删除 `segKey`、`cachedSegments`、`putSegments`。
@@ -914,7 +919,7 @@ type CacheInfo struct {
 **`stats.go`**：`counters` 加 `replayed`（`merge`、`writeStats` 的 INSERT 和 ON CONFLICT 都带上）；新增 `countReplay(m *moderation)`。
 **`stats_api.go`**：`loadStats` 读这一列；`TodayCounts.Replayed`、`FlowPoint.Replayed`。
 **`routes.go`**：注册路由；`Event` 加 `replayed`，`eventColumns` 加列；`eventFilter` 加 `replayed`；`reviewEvents` 末尾调 `syncReviewed`；`Runtime` 加 `CacheEpoch`、`CacheBytes`。
-**`plugin.go`**：`OnTopic(TopicVerdictChanged, p.onVerdictChanged)`；`Configure` 里缓存容量变化时照旧重建 LRU（墓碑随之清掉）；`kvMu [64]sync.Mutex`。
+**`plugin.go`**：`OnTopic(TopicVerdictChanged, p.onVerdictChanged)`；`Configure` 里缓存容量变化时照旧重建 LRU（墓碑随之清掉）；`kvMu`，64 个容量为 1 的通道，按键轮流用的锁（0.8.0 是 64 把互斥锁）。
 **`settings.go`**：`VerdictCacheDays`，`cacheTTL` 按 5.5 的规则算。
 **`analysis_tools.go`**：`toolRecord.Replayed`（取自 `events.replayed`）；工具说明。
 
@@ -936,7 +941,7 @@ type CacheInfo struct {
 
 ### 5.10 测试
 
-新增 `verdict_cache_test.go`（用 `pluginsdktest.FakeHost` 的 KV）：
+判定缓存的测试在五个文件里，都用 `pluginsdktest.FakeHost` 的 KV，要注入故障时外面包一层假 KV（`kvFake`）：`verdict_cache_test.go`（存、重放、范围、清空、人工处理同步、广播）、`verdict_cache_kv_test.go`（查询、运行的写、KV 故障、按键轮流）、`verdict_cache_review_race_test.go`（人工处理遇上进行中的运行、排队的任务）、`verdict_cache_image_test.go`（审核器没收到的图片）、`verdict_cache_helpers_test.go`（假 KV 和各文件共用的辅助函数，没有测试）。设计时定下的断言（除注明外在 `verdict_cache_test.go`）：
 
 | 测试 | 断言 |
 |---|---|
@@ -950,20 +955,18 @@ type CacheInfo struct {
 | `TestReviewSyncsVerdictCache` | 误报 → 同一内容下次不送审、直接放行；改为确认 → 重放；改为待处理 → 重新送审；流程指纹已变时"确认"不写缓存，`cache_synced = 0` |
 | `TestVerdictChangedBroadcastDropsMemory` | 收到 `verdict.changed` 的实例删掉内存里的对应键 |
 | `TestVerdictCacheTTLSettings`（在 `unit_test.go`） | `DecodeSettings`：只有 `cache_ttl_seconds = 0` → 关闭；`= 86400` → 1 天；`= 200000` → 3 天；两个键都没有 → 7 天；`verdict_cache_days = 40` → 30 |
-| `TestKVFailureAuditsAgain` | KV 报错时照常送审，不放行、不重放 |
+| `TestKVFailureAuditsAgain`（在 `verdict_cache_kv_test.go`） | KV 报错时照常送审，不放行、不重放；这期间的运行不在内存里留下任何东西 |
 
-- 代码审核后和 0.8.1 补的测试（按功能归位，没有单独的"审核修复"文件；补的时候每个测试都在去掉对应的代码后确认过失败）。在 `verdict_cache_test.go` 里，除注明外：
-  - **键、值、指纹**：`TestHitSurvivesPassesOfItsSegments`、`TestHitKeptDecoded`、`TestKVValueKeepsItsWriteTime`、`TestStoredHitLimits`、`TestFingerprint`、`TestFingerprintJudgingVersion`（固定配置的指纹是固定值）、`TestFalsePositiveUnderAnotherFingerprint`。
-  - **图片**：`TestSkippedImageIsNotCachedAsPassed`（没等到重画名额、解不了、OpenAI 没选中的图片都不记"通过"；这个测试的流程只有一个审核器，不是混合流程：没等到重画名额的图片下一次单独送审，文字算缓存命中，命中集合是 {图片}；解不了的图片的请求之后没有上游调用）、`TestImagePassNeedsAPassingAuditor`（OpenAI 收图命中、Jev 没收到图而通过：两级推翻和单级 `all` 两种，整块都不缓存；Jev 收到并通过后才缓存）、`TestImageOnlyAHittingAuditorSawGetsTheSameVerdict`（Jev 的重画名额一直占满；同一请求发三次：每次两个审核器都被调用、都放行、note 相同，KV 里没有这个流程的片段键和命中条目，没有可疑记录，不计违规）、`TestImageVerdictDoesNotDependOnCachedText`、`hook06_test.go` 的 `TestHookSendsCachedTextWithANewImage`、`extract_test.go` 的 `TestPlanKeepsCachedTextWithAnUncachedImage`（这三个的断言见 5.3.5）。
-  - **查询**：`TestKnownSegmentsMakeNoKVCall`（假 KV 每次调用 50 ms，一个 150 个片段都在内存里的请求：在值到期前的任何时刻都答 `pass (cached)`，KV 调用数为 0，`kv_errors` 不变）、`TestLookupReadsEverySegment`（150 和 1200 个片段：查询全部读到，`KVGetMany` 分别 1 次和 3 次，KV 里已有"通过"的片段一个都不送审）、`TestColdLookupIsOneCall`（每次调用 50 ms 的假 KV：150 个片段的冷查询是 1 次调用；不实现批量调用的 KV 包装和回答 `UNIMPLEMENTED` 的旧核心上是 150 次逐键调用，照样全部读到、不送审）、`TestKVReadBeyondOneAnswer`（一次读的值超过一个回答装得下的量时分小批重读，不算错误）、`TestLookupEndsWithItsRequest`（KV 不回答时钩子一直等；客户端离开后立刻返回、不计 `kv_errors`，运行继续，命中记为拒绝并写进缓存）、`TestUnreadableHitEntryIsUnknown`（只有 `h:` 键读失败的假 KV；只看内存且命中条目被淘汰；KV 回答"没有"时仍按通过）、`TestStalePointerLeavesMemory`（post 时机，三次请求：第一次入队，第二、三次从内存回答，KV 没有被改写）、`TestStalePointerRemovalKeepsANewerPointer`（KV 回答"没有这个条目"之后、查询动手之前，本节点把同一集合重新判成命中：查询只删它跟过的旧指针，新指针不动）。
-  - **KV 错误的计数**：`TestKVCallsCountFailuresNotEndedContexts`（读、写、删各四个场景——全部做完、ctx 中途结束、ctx 已结束、调用失败：失败的调用计一次，ctx 结束不计）、`TestKVFailureAuditsAgain`（KV 报错时照常送审，不放行、不重放，运行不在内存里留下任何东西）。
-  - **运行的写**：`TestMemoryHoldsWhatTheKVHolds`（运行之后内存里的值与 KV 里的逐字节相同，含别的节点先写的指针；KV 写失败时内存里没有这次运行的任何东西、`kv_errors` 加一、同样的请求再审）、`TestHitEntryIsWrittenBeforeItsPointers`、`TestHitWhoseWriteFailedIsCachedNowhere`（写失败的命中不在内存里；同样的内容再来是又一次运行、又一条不是重放的命中记录；各片段随后各自通过时两个节点都答 `pass (cached)`；KV 可写后的那次运行把命中存下，TTL 从那次运行算起，之后的重放不调用 KV；别的节点上标为误报、广播不送达时本节点继续重放但不写回，广播送达后跟上）、`TestVerdictWriteStopsAtAFailedRead`（写要读的片段键分几次调用时，一次失败后面的就不再发）、`TestRepeatedBeforeTheWriteIsModeratedAgain`（写被挂住时重复的请求再审一次，命中记为新的记录；写完后从内存回答、KV 调用数为 0）、`TestKVChangesOfAKeyTakeTurns`（两次运行的写改同一个片段键：第二次等第一次、从它写的值读起，两处修改都在，内存里的值等于 KV 里的值；等键时调用方离开的修改不发出任何 KV 调用，也不留下占着的键）、`TestWaitingVerdictWritesAreReported`（KV 不回答时等待的写的个数在 `/status` 和健康指标的 `kv_writing` 里，期间什么都不缓存；KV 恢复后全部写完）、`TestStopEndsVerdictWrites`（关停打断进行中的写：不计错误，不留下协程）。
-  - **多节点**：`TestPassDoesNotHideAHitAnotherNodeStored`（第 14 节的序列 A 和 B：71 个新片段、命中集合的片段排在最前；每次 KV 调用 30 ms 的慢 KV。两个都以第二个节点重放命中结束）、`TestStoredHitIsKnownOnItsNode`（命中在去 KV 的路上时别的节点做了人工处理：写入命中的节点之后仍知道这个命中；连写自己的读数也过期时这些键出内存、下次从 KV 读）、`TestStoredHitReachesOtherNodes`（四个实例共用库和 KV，时钟由测试控制：收到广播的节点立即重放；没收到的节点继续按内存里的"通过"回答、不调用 KV，值到期后才重放，清空缓存后重新送审）、`TestNodeWithoutReviewBroadcastReplaysUntilExpiry`（两个节点、广播不送达：误报、待处理、KV 里命中条目已删三种情况，第二个节点一直按内存重放、不调用 KV，值到期后才跟上）。
-  - **人工处理**：`TestReviewSyncWritesEachKeyOnce`、`TestReviewSyncKVFailure`、`TestReviewSyncOrderAndItsCaller`（先立墓碑再写 KV；处理请求在等键时结束：什么都没写进 KV、记录不计入、不计 `kv_errors`，墓碑有期限）、`TestReviewIsNotUndoneByLateWrites`（可阻塞的假 KV 造出三种交错：处理节点上运行的写已读完 KV、正在写 KV 时处理到来，被告知的节点上运行的写已读完 KV 时广播到来；KV 和内存里都没有被处理掉的命中，别的命中照常写入）、`TestReviewIsNotUndoneByWritesThatOutlastItsTombstones`（三段，5.3.8）、`TestRunAcrossAReviewDoesNotUndoIt`（真实的钩子请求，审核渠道的回答压到处理的墓碑过期之后：它自己的请求按自己的结论被拒绝，什么都不缓存，计一次 `kv_skipped`，下一个请求得到管理员的结论）。
-  - **清空与排队的任务**：`TestQueuedJobAfterClear`、`TestQueuedJobAfterClearSeesAReview`（清空之后别的请求判出、又被标为误报的命中，回答清空前入队的任务）、`TestQueuedJobStoresByItsLastLookup`（排队期间别的内容被处理过，不妨碍它的结论进缓存）。
-  - `unit_test.go`：`TestLRU`、`TestSegValue`、`TestLRUByteBudget`、`TestLRUTombstone`（墓碑计入字节数、到期即清）、`TestLRUTombstoneOfAReviewInProgress`（无期限的墓碑；读得比墓碑久的值不进内存）、`TestReadingLapses`（被换掉的内存缓存上取的读数立刻失效；同一个缓存上的读数在之后立过墓碑、且比墓碑的期限更旧时才失效）；`TestEnginesNameReceivedImages`（两个引擎在结果里列出上游实际收到的图：OpenAI 选中的那一张，400 重试后没有；Jev 的各个资产，413 重试后只有第一个）。
-  - `hook_test.go`：`TestPreRunStoresVerdictsOnce`（上游被挂住，等 5 个请求都在等同一次运行后再放行）、`TestPreRunSurvivesPanic`（结算时 panic：拒绝并记为 `block`；合并也 panic：断言块号；后台写 panic：被后台任务的 recover 接住，命中成立，键被让出，下一次写成功）、`TestHitStandsWhenRecordingPanics`（事件写入器置空使写记录 panic：命中被拒绝、重放被拒绝、通过仍放行）。
-  - 测试辅助：`mustHook` 在发请求之前和之后各等一次本节点的后台写完成——运行的结论在回答之后才进缓存，连发两次同样的请求的测试要等第一次写完；不等的版本是 `hookNow`。假件各只有一份：假 KV `kvFake`（计调用次数和写入次数、可让每次调用耗时、可设失败、可只让写入失败、可只让某个前缀的读失败、记每个键最后一次写的 TTL、可挂住写入、可挂住读的回答；`batch` 置位时实现批量调用——一次批量调用算一次调用——否则只有逐键调用，SDK 像在旧核心上那样逐键读写），启动实例 `startNode` / `startDB` / `secondNode`，建流程 `publishFlow` / `setupFlow`。
+- 代码审核后和 0.8.1 补的测试（按文件；补的时候每个测试都在去掉对应的代码后确认过失败）：
+  - `verdict_cache_test.go`：`TestHitSurvivesPassesOfItsSegments`、`TestHitKeptDecoded`、`TestFalsePositiveUnderAnotherFingerprint`、`TestReviewSyncWritesEachKeyOnce`、`TestReviewSyncKVFailure`、`TestStoredHitReachesANodeByBroadcastExpiryOrClear`（收到广播的节点立即重放；没收到的节点继续按内存里的"通过"回答、不从 KV 重读，值到期后才重放，清空缓存后重新送审）、`TestNodeWithoutReviewBroadcastReplaysUntilExpiry`（两个节点、广播不送达：误报、待处理、KV 里命中条目已删三种情况，第二个节点一直按内存重放、不调用 KV，值到期后才跟上）。
+  - `verdict_cache_kv_test.go`，查询：`TestKnownSegmentsMakeNoKVCall`（150 个片段都在内存里的请求：值到期前的任何时刻都没有 KV 调用，`kv_errors` 不变）、`TestLookupReadsEverySegment`（150 和 1200 个片段：查询全部读到，批量读分别 1 次和 3 次，KV 里已有"通过"的片段一个都不送审；存下这些通过的那次运行也是全部写完、同样多次调用）、`TestLookupEndsWithItsRequest`（KV 不回答时钩子一直等；客户端离开后立刻返回、不计 `kv_errors`，运行继续，命中记为拒绝并写进缓存）、`TestUnreadableHitEntryIsUnknown`（只有 `h:` 键读失败的假 KV；只看内存且命中条目被淘汰；KV 回答"没有"时仍按通过）、`TestStalePointerLeavesMemory`（post 时机，三次请求：第一次入队，第二、三次从内存回答，KV 没有被改写）、`TestStalePointerRemovalKeepsANewerPointer`（KV 回答"没有这个条目"之后、查询动手之前，本节点把同一集合重新判成命中：查询只删它跟过的旧指针，新指针不动）、`TestKVValueKeepsItsWriteTime`。
+  - `verdict_cache_kv_test.go`，运行的写：`TestMemoryHoldsWhatTheKVHolds`（运行之后内存里的值与 KV 里的逐字节相同，含别的节点先写的指针；KV 写失败时内存里没有这次运行的任何东西、`kv_errors` 加一、同样的请求再审）、`TestPassDoesNotHideAHitAnotherNodeStored`（命中集合 {A, B} 由另一个节点存下；本节点先后收到"A 加 70 个没见过的片段""B 加另外 70 个"，再收到 A 和 B：查询读全部键，写把通过并入 KV 里的值，A、B 的指针都在，这一对被重放——第 14 节的序列 A）、`TestHitEntryIsWrittenBeforeItsPointers`、`TestHitWhoseWriteFailedIsCachedNowhere`（写失败的命中哪里都不缓存；同样的内容再来是又一次运行、记为新的违规，那次运行的写把命中存下，TTL 按那次运行算；命中哪里都没缓存时，各片段在别的节点上各自通过，整体在所有节点上都答 `pass (cached)`）、`TestVerdictWriteStopsAtAFailedRead`（写要读的片段键分几次调用时，一次失败后面的就不再发）、`TestVerdictWriteCutShortForgetsWhatItWrote`（片段键分几次调用写、中途失败：已写成的键出本节点内存，其中得到指针的照常广播）、`TestRepeatedBeforeTheWriteIsModeratedAgain`（写被挂住时重复的请求再审一次，命中记为新的记录；写完后从内存回答、KV 调用数为 0）、`TestKVChangesOfAKeyTakeTurns`（两次运行的写改同一个片段键：第二次等第一次、从它写的值读起，两处修改都在，内存里的值等于 KV 里的值；等键时调用方离开的修改不做）、`TestWaitingVerdictWritesAreReported`（KV 不回答时等待的写的个数在 `/status` 和健康指标的 `kv_writing` 里，期间什么都不缓存；KV 恢复后全部写完）、`TestStopEndsVerdictWrites`（关停结束进行中的写并等它们：不留下协程，这样结束的写不计错误）。
+  - `verdict_cache_kv_test.go`，KV 错误的计数：`TestKVCallsCountFailuresNotEndedContexts`（读、写、删：失败的调用计一次，不论带多少个键；读的后续调用照发，写停下；因 ctx 结束而没做完的不计，之后也不再发调用）、`TestAlertStateCountsKVFailuresLikeTheCache`（告警状态的 KV 读写同一条规则）。
+  - `verdict_cache_review_race_test.go`：`TestReviewTombstonesBeforeItWrites`（处理先立墓碑再写 KV，期间运行存的东西不进内存；等它的那次写在它之后不动这些键；墓碑从处理结束起留 4 秒）、`TestReviewEndsWithItsRequest`（处理没有自己的时限；请求在等键时结束：什么都没写进 KV、记录不计入已同步、不计 `kv_errors`，墓碑从那时起留 4 秒）、`TestReviewIsNotUndoneByLateWrites`（可阻塞的假 KV 造出真实的交错：处理节点上运行的写已读完 KV、或正在写 KV 时处理到来，被告知的节点上运行的写已读完 KV 时广播到来；KV 和内存里都没有被处理掉的命中）、`TestReviewIsNotUndoneByWritesThatOutlastItsTombstones`（三段，5.3.8）、`TestRunAcrossAReviewDoesNotUndoIt`（真实的钩子请求，审核渠道的回答压到处理的墓碑过期之后：它自己的请求按自己的结论被拒绝，什么都不缓存，计一次 `kv_skipped`，下一个请求得到管理员的结论）、`TestStoredHitIsKnownOnItsNode`（命中在去 KV 的路上时别的节点做了人工处理：写入命中的节点之后仍知道这个命中；连写自己的读数也过期时这些键出内存、下次从 KV 读）、`TestQueuedJobAfterClear`、`TestQueuedJobAfterClearSeesAReview`（清空之后别的请求判出、又被标为误报的命中，回答清空前入队的任务）、`TestQueuedJobStoresByItsLastLookup`（排队期间别的内容被处理过，不妨碍它的结论进缓存）。
+  - `verdict_cache_image_test.go`：`TestSkippedImageIsNotCachedAsPassed`（没等到重画名额、解不了、OpenAI 没选中的图片都不记"通过"；这个测试的流程只有一个审核器，不是混合流程：没等到重画名额的图片下一次单独送审，文字算缓存命中，命中集合是 {图片}；解不了的图片的请求之后没有上游调用）、`TestImagePassNeedsAPassingAuditor`（OpenAI 收图命中、Jev 没收到图而通过：两级推翻和单级 `all` 两种，整块都不缓存；Jev 收到并通过后才缓存）、`TestImageOnlyAHittingAuditorSawGetsTheSameVerdict`（Jev 的重画名额一直占满；同一请求发三次：每次两个审核器都被调用、都放行、note 相同，KV 里没有这个流程的片段键和命中条目，没有可疑记录，不计违规）、`TestImageVerdictDoesNotDependOnCachedText`；另有 `hook06_test.go` 的 `TestHookSendsCachedTextWithANewImage` 和 `extract_test.go` 的 `TestPlanKeepsCachedTextWithAnUncachedImage`（这三个的断言见 5.3.5）。
+  - `unit_test.go`：`TestLRU`、`TestLRUByteBudget`、`TestLRUTombstone`（墓碑计入字节数、到期即清）、`TestLRUTombstoneOfAReviewInProgress`（无期限的墓碑；读得比墓碑久的值不进内存）、`TestReadingLapses`（被换掉的内存缓存上取的读数立刻失效；同一个缓存上的读数在之后立过墓碑、且比墓碑的期限更旧时才失效）、`TestSegValue`、`TestStoredHitCodecAndKeys`（命中条目过了有效期不用、读不懂的按未知、超过 KV 上限的不存；条目和指针的键、命中集合的 id）、`TestFingerprint`、`TestFingerprintJudgingVersion`（固定配置的指纹是固定值）；`TestEnginesNameReceivedImages`（两个引擎在结果里列出上游实际收到的图：OpenAI 选中的那一张，400 重试后没有；Jev 的各个资产，413 重试后只有第一个）。
+  - `hook_test.go`：`TestPreRunStoresVerdictsOnce`（上游被挂住，等 5 个请求都在等同一次运行后再放行）、`TestPreRunSurvivesPanic`（各块运行时 panic：放行并记为出错；把结论交给缓存时 panic：拒绝并记为 `block`；后台写 panic：被后台任务的 recover 接住，命中成立，键被让出，下一次写成功；合并也 panic：第一个命中的块单独作为结果，断言块号）、`TestHitStandsWhenRecordingPanics`（事件写入器置空使写记录 panic：命中被拒绝、重放被拒绝、通过仍放行）。
+  - 测试辅助：`mustHook` 在发请求之前和之后各等一次本节点的后台写完成——运行的结论在回答之后才进缓存，连发两次同样的请求的测试要等第一次写完；不等的版本是 `hookNow`。假件各只有一份：假 KV `kvFake`（计调用次数和写入次数、可让每次调用耗时、可设失败、可只让写入失败、可只让某个前缀的读或写失败、记每个键最后一次写的 TTL、可挂住写入、可挂住读的回答；它总是有批量调用，一次批量调用算一次调用），启动实例 `startNode` / `startDB` / `secondNode`，建流程 `publishFlow` / `setupFlow`。
 - 现有 `hook06_test.go` `TestHookModeratesWholeRequestWithSegmentCache`、`extract_test.go` `TestPlanSkipsCachedSegments`：按新接口改写，断言不变。
 - `stats_api_test.go`：`/status` 的 `today.replayed`、趋势点的 `replayed`。
 - `manifest_test.go`：新路由在 manifest 里且权限是 manage（现有的路由对照测试会自动覆盖）。
@@ -1784,7 +1787,7 @@ T1–T5 完成后做了一轮代码审核，问题在三个提交里修掉：`cb
 | 旧键 `exempt_user_ids` 的镜像等于白名单：同时在黑名单上的用户在 0.7.2 节点上完全不审；只改黑名单的保存不重写旧键 | 镜像改为"白名单减去黑名单"，保存任一名单时重写（6.9） |
 | CONTRACTS 两处仍写"旧键写成空数组" | 改为镜像规则 |
 | `stored` 广播的删键可以被当时正在进行的查询或刚结束的运行撤销 | 没有便宜且明显正确的改法（要给每个键留标记，等同墓碑，而墓碑会挡住共用片段的写入）：在代码注释和 5.3.3 写明这个窗口，它以该值的下一次 5 分钟重读为界 |
-| `TestStoredHitReachesOtherNodes` 的节点时钟随墙上时钟走，慢的 CI 上"还没到期"的断言会失败 | 节点时钟完全由测试控制（`withClock`） |
+| `TestStoredHitReachesANodeByBroadcastExpiryOrClear` 的节点时钟随墙上时钟走，慢的 CI 上"还没到期"的断言会失败 | 节点时钟完全由测试控制（`withClock`） |
 | `recheckSoon` 和 `storeVerdicts` 的后台协程没有 recover，panic 会结束进程 | 各加带日志的 recover（`recoverTracked`） |
 
 **第四轮代码审核**
@@ -1871,7 +1874,7 @@ T1–T5 完成后做了一轮代码审核，问题在三个提交里修掉：`cb
 - **序列 A：新片段比一次查询读的多。** 本节点收到"A 加 70 个没见过的片段"的请求，查询只读最靠后的 64 个，排在最前面的 A 没读；A 送审、通过（没有 B 就不是命中），作为"通过"进了内存，不带 KV 里那个指针。B 同样。之后 {A, B} 在本节点上一直答 `pass (cached)`，直到这两个值到期。
 - **序列 B：KV 慢。** 同样的请求，查询在 200 ms 的预算内读不到最前面的片段，结果与 A 相同。
 
-0.8.0 靠 5 分钟重读把指针读回来。第 2、3 条去掉的是原因：查询读全部片段并且等到读完；运行的写把自己的"通过"并入从 KV 读出的值再写回，放进内存的是并入之后的值。即使查询什么都没读到，写也会把指针读回来；写也读不到时什么都不进内存（`TestPassDoesNotHideAHitAnotherNodeStored`）。
+0.8.0 靠 5 分钟重读把指针读回来。第 2、3 条去掉的是原因：查询读全部片段并且等到读完；运行的写把自己的"通过"并入从 KV 读出的值再写回，放进内存的是并入之后的值。即使查询什么都没读到，写也会把指针读回来；写也读不到时什么都不进内存（`TestPassDoesNotHideAHitAnotherNodeStored` 走的是序列 A；序列 B 靠的查询预算已经不存在，没有单独的测试）。
 
 **KV 调用数**（一次调用的单位：片段键 512 个；命中条目 48 个，一次回答 3 MiB 装得下 48 个 64 KiB 的值）：
 
@@ -1882,7 +1885,7 @@ T1–T5 完成后做了一轮代码审核，问题在三个提交里修掉：`cb
 | 人工处理（k 个片段键） | 1 次删或写命中条目，⌈k/512⌉ 次读，至多各 ⌈k/512⌉ 次写和删 |
 | 片段和命中条目都在内存里的请求 | 0 |
 
-一个 150 个片段的请求第一次到达承载流量的节点，从"读到约 32 个、其余送审"变成 **1 次调用，约 50 ms，150 个全部读到**（`TestColdLookupIsOneCall`）。
+一个 150 个片段的请求第一次到达承载流量的节点，从"读到约 32 个、其余送审"变成 **1 次调用，约 50 ms，150 个全部读到**（调用次数由 `TestLookupReadsEverySegment` 断言）。
 
 **相对 0.8.0 删掉的**（`cache.go`、`plugin.go`）：
 
