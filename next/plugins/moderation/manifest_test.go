@@ -67,7 +67,7 @@ func TestManifest(t *testing.T) {
 	}
 	// hostCompat: the verdict cache makes batch calls of the KV, which a core
 	// has from 0.1.273 on.
-	if m.Key != "moderation" || m.Version != "0.8.1" || m.HostCompat != ">=0.1.273 <0.2.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.8.2" || m.HostCompat != ">=0.1.273 <0.2.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
