@@ -52,7 +52,7 @@ func TestHookModeratesWholeRequestWithSegmentCache(t *testing.T) {
 	}
 	// The same clean conversation again calls nothing.
 	before := len(mod.moderated())
-	if r := mustHook(t, h, rawReq(3, "", "anthropic.messages", `{"system":"you help","messages":[{"role":"user","content":"hello  there"}]}`)); denied(r) || r.GetNote() != notePrefix+"pass (cached)" {
+	if r := mustHook(t, h, rawReq(3, "", "anthropic.messages", `{"system":"you help","messages":[{"role":"user","content":"hello  there"}]}`)); denied(r) || r.GetNote() != cachedPass {
 		t.Fatalf("cached = %+v", r)
 	}
 	if len(mod.moderated()) != before {
@@ -115,7 +115,6 @@ func hookSendsANewImage(t *testing.T, mixed bool) {
 	} else {
 		setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	}
-	const cachedPass = notePrefix + "pass (cached)"
 	picture := encodePNG(t, filled(40, 30, red))
 	send := func(content ...any) *pluginv1.GatewayRequestHookResponse {
 		t.Helper()
@@ -312,7 +311,7 @@ func TestShutdownDrainsPostQueue(t *testing.T) {
 			setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 			mod.delay.Store(int64(tc.delay))
 			for i := range 4 {
-				if r := mustHook(t, h, hookReqAs(3, fmt.Sprintf("q%d", i), fmt.Sprintf("queued text %d", i))); r.GetNote() != notePrefix+"queued" {
+				if r := mustHook(t, h, hookReqAs(3, fmt.Sprintf("q%d", i), fmt.Sprintf("queued text %d", i))); r.GetNote() != queuedNote {
 					t.Fatalf("not queued: %+v", r)
 				}
 			}

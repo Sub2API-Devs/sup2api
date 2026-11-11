@@ -964,6 +964,37 @@ func TestLRUTombstoneOfAReviewInProgress(t *testing.T) {
 	}
 }
 
+// A reading taken on a memory cache that was replaced since (cleared,
+// cache_entries changed) tells nothing on the new one, whose tombstones began
+// anew: every key counts as reviewed since, at once. A reading of the cache
+// itself lapses when tombstones were set since and it is older than a
+// tombstone lasts - not before, and not without tombstones.
+func TestReadingLapses(t *testing.T) {
+	now := time.Now()
+	late := now.Add(tombstoneTTL + time.Second)
+	old, c := newLRU(10), newLRU(10)
+	if r := old.reading(now); !c.lapsedSince(r, now) || !c.reviewedSince("k", r, now) {
+		t.Fatal("a reading of a replaced cache is taken for one of the new cache")
+	}
+	r := c.reading(now)
+	if c.lapsedSince(r, late) || c.reviewedSince("k", r, late) {
+		t.Fatal("lapsed without a tombstone since")
+	}
+	c.tombstone([]string{"other"}, now.Add(time.Second))
+	if c.lapsedSince(r, now.Add(2*time.Second)) || c.reviewedSince("k", r, now.Add(2*time.Second)) {
+		t.Fatal("lapsed while a tombstone of the key would still be there")
+	}
+	if !c.reviewedSince("other", r, now.Add(2*time.Second)) {
+		t.Fatal("a tombstoned key is not reviewed")
+	}
+	if !c.lapsedSince(r, late) || !c.reviewedSince("k", r, late) {
+		t.Fatal("not lapsed after a tombstone, with a reading older than a tombstone lasts")
+	}
+	if fresh := c.reading(late); c.lapsedSince(fresh, late.Add(time.Hour)) {
+		t.Fatal("a reading taken after the tombstones lapsed")
+	}
+}
+
 // A segment key holds a pass and the newest pointers, each with the time of
 // its write.
 func TestSegValue(t *testing.T) {
@@ -1022,6 +1053,116 @@ func TestSegValue(t *testing.T) {
 		if got := parseSeg([]byte(raw)); !got.empty() {
 			t.Errorf("%q read as %+v", raw, got)
 		}
+	}
+}
+
+// A cached hit is not kept beyond the TTL of its write, an unreadable entry
+// is unknown, and an entry too large for the KV is not stored; the keys of
+// the entry and of its pointers, and the id of a hit set.
+func TestStoredHitCodecAndKeys(t *testing.T) {
+	now := time.Now()
+	hit := storedHit{RequestID: "r", Keys: []string{strings.Repeat("ab", 32)}, Trace: Trace{Final: Hit, Decider: 0}, At: now.Add(-2 * time.Hour).Unix()}
+	raw, _ := json.Marshal(hit)
+	if decodeHit(raw, now, 3*time.Hour) == nil || decodeHit(raw, now, time.Hour) != nil {
+		t.Fatal("expiry of a cached hit")
+	}
+	if decodeHit([]byte("{"), now, time.Hour) != nil || decodeHit([]byte(`{"k":["x"],"t":{"final":"pass"},"at":9999999999}`), now, time.Hour) != nil {
+		t.Fatal("an unreadable or passing entry was accepted")
+	}
+	// A hit is written as its entry and, on every segment, a pointer to it
+	// with the time of the write.
+	id := hitIDOf(hit.Keys)
+	var seg segValue
+	pointTo(id, hit.At)(&seg)
+	if body := encodeHit(&hit); !bytes.Equal(body, raw) || hitKeyOf("e0:1:fp", id) != "h:e0:1:fp:"+id ||
+		segKeyHex("e0:1:fp", hit.Keys[0]) != "s:e0:1:fp:"+hit.Keys[0] || string(seg.encode()) != fmt.Sprintf("h%s@%d", id, hit.At) {
+		t.Fatalf("entry %q = %s, pointer %s", id, body, seg.encode())
+	}
+	hit.Trace.Stages = []StageTrace{{Outcomes: []Outcome{{Reason: strings.Repeat("x", maxHitBytes)}}}}
+	if body := encodeHit(&hit); body != nil {
+		t.Fatalf("an oversized hit was stored: %d bytes", len(body))
+	}
+	// The id does not depend on the order of the segments.
+	a, b := [32]byte{1}, [32]byte{2}
+	if hitID([][32]byte{a, b}) != hitID([][32]byte{b, a}) || hitID([][32]byte{a}) == hitID([][32]byte{a, b}) || hitIDOf([]string{"zz"}) != "" || hitIDOf(nil) != "" {
+		t.Fatal("hit id")
+	}
+}
+
+// The fingerprint covers what decides a verdict and nothing else.
+func TestFingerprint(t *testing.T) {
+	spec := &Spec{SampleRate: 100, TotalTimeoutMs: 5000, Stages: []Stage{{Auditors: []int64{1, 2}, Combine: CombineAtLeast, N: 2}, {Auditors: []int64{3}, Combine: CombineAny, Fallback: true}}}
+	auditors := map[int64]storedAuditor{
+		1: {typ: AuditorOpenAI, channel: 1, config: []byte(`{"thresholds": {"sexual": 0.5}}`)},
+		2: {typ: AuditorTypeSafe, channel: 2, config: []byte(`{}`), defaultSet: true},
+	}
+	channels := map[int64]*liveChannel{
+		1: {ID: 1, Name: "a", Type: ChannelOpenAI, BaseURL: "https://a.example", Key: "k1", Timeout: time.Second},
+		2: {ID: 2, Name: "b", Type: ChannelTypeSafe, BaseURL: "https://b.example", Model: "m", BillingModel: "bm"},
+	}
+	def := []byte(`{"preamble":"p","items":[]}`)
+	base := fingerprint(spec, auditors, channels, def)
+	if len(base) != 16 || base != fingerprint(spec, auditors, channels, def) {
+		t.Fatalf("fingerprint = %q", base)
+	}
+	same := func(name string, got string) {
+		t.Helper()
+		if got != base {
+			t.Errorf("%s changed the fingerprint", name)
+		}
+	}
+	differs := func(name string, got string) {
+		t.Helper()
+		if got == base {
+			t.Errorf("%s kept the fingerprint", name)
+		}
+	}
+	s := *spec
+	s.SampleRate, s.TotalTimeoutMs, s.ModelFilter = 10, 9000, ModelFilter{Type: FilterOnly, Models: []string{"x"}}
+	same("sample rate, timeout and model filter", fingerprint(&s, auditors, channels, def))
+	ch := map[int64]*liveChannel{1: {ID: 1, Name: "renamed", Type: ChannelOpenAI, BaseURL: "https://a.example", Key: "k2", Timeout: time.Minute, BillingModel: "x"}, 2: channels[2]}
+	same("channel name, key, timeout and billing model", fingerprint(spec, auditors, ch, def))
+
+	s = *spec
+	s.Stages = []Stage{{Auditors: []int64{1, 2}, Combine: CombineAny}, spec.Stages[1]}
+	differs("combine", fingerprint(&s, auditors, channels, def))
+	s.Stages = []Stage{spec.Stages[0], {Auditors: []int64{3}, Combine: CombineAny}}
+	differs("fallback", fingerprint(&s, auditors, channels, def))
+	s.Stages = []Stage{{Auditors: []int64{2, 1}, Combine: CombineAtLeast, N: 2}, spec.Stages[1]}
+	differs("auditor order", fingerprint(&s, auditors, channels, def))
+	a := map[int64]storedAuditor{1: {typ: AuditorOpenAI, channel: 1, config: []byte(`{"thresholds": {"sexual": 0.6}}`)}, 2: auditors[2]}
+	differs("auditor config", fingerprint(spec, a, channels, def))
+	a = map[int64]storedAuditor{1: auditors[1], 2: auditors[2], 3: {typ: AuditorOpenAI, channel: 1, config: []byte(`{}`)}}
+	differs("a missing auditor that exists", fingerprint(spec, a, channels, def))
+	ch = map[int64]*liveChannel{1: channels[1], 2: {ID: 2, Type: ChannelTypeSafe, BaseURL: "https://b.example", Model: "m2"}}
+	differs("channel model", fingerprint(spec, auditors, ch, def))
+	ch = map[int64]*liveChannel{1: {ID: 1, Type: ChannelOpenAI, BaseURL: "https://c.example"}, 2: channels[2]}
+	differs("channel base URL", fingerprint(spec, auditors, ch, def))
+	differs("an unusable channel", fingerprint(spec, auditors, map[int64]*liveChannel{2: channels[2]}, def))
+	differs("the default question set", fingerprint(spec, auditors, channels, []byte(`{"preamble":"q","items":[]}`)))
+	// The default set only matters to the auditors that use it.
+	own := map[int64]storedAuditor{1: auditors[1], 2: {typ: AuditorTypeSafe, channel: 2, config: []byte(`{"questions": {}}`)}}
+	if fingerprint(spec, own, channels, def) != fingerprint(spec, own, channels, []byte(`{"preamble":"q","items":[]}`)) {
+		t.Error("the default question set changed the fingerprint of a flow that does not use it")
+	}
+}
+
+// The fingerprint carries the version of the judging defaults in the code,
+// and is the same on every node and in every build of a version: changing
+// what it is made of without a new judgingVersion would leave the nodes of a
+// rolling upgrade with different cache keys for the same configuration.
+func TestFingerprintJudgingVersion(t *testing.T) {
+	spec := &Spec{Stages: []Stage{{Auditors: []int64{1}, Combine: CombineAny}}}
+	auditors := map[int64]storedAuditor{1: {typ: AuditorOpenAI, channel: 1, config: []byte(`{}`)}}
+	channels := map[int64]*liveChannel{1: {ID: 1, Type: ChannelOpenAI, BaseURL: "https://a.example"}}
+	base := fingerprint(spec, auditors, channels, nil)
+	const version, want = 2, "8049a4172a7adeec"
+	if judgingVersion != version || base != want {
+		t.Fatalf("fingerprint of judging version %d = %s, want %s of version %d: a change of what the fingerprint covers needs a new judgingVersion, and both belong here",
+			judgingVersion, base, want, version)
+	}
+	if base == fingerprintAt(judgingVersion+1, spec, auditors, channels, nil) {
+		t.Fatal("another judging version kept the fingerprint")
 	}
 }
 
@@ -1208,36 +1349,5 @@ func TestFallbackDeciderIndexesTheTrace(t *testing.T) {
 	none := Trace{Final: Hit, Decider: 7}
 	if got := none.HitCategories(); got != nil {
 		t.Fatalf("decider without stages: %+v", got)
-	}
-}
-
-// A reading taken on a memory cache that was replaced since (cleared,
-// cache_entries changed) tells nothing on the new one, whose tombstones began
-// anew: every key counts as reviewed since, at once. A reading of the cache
-// itself lapses when tombstones were set since and it is older than a
-// tombstone lasts - not before, and not without tombstones.
-func TestReadingLapses(t *testing.T) {
-	now := time.Now()
-	late := now.Add(tombstoneTTL + time.Second)
-	old, c := newLRU(10), newLRU(10)
-	if r := old.reading(now); !c.lapsedSince(r, now) || !c.reviewedSince("k", r, now) {
-		t.Fatal("a reading of a replaced cache is taken for one of the new cache")
-	}
-	r := c.reading(now)
-	if c.lapsedSince(r, late) || c.reviewedSince("k", r, late) {
-		t.Fatal("lapsed without a tombstone since")
-	}
-	c.tombstone([]string{"other"}, now.Add(time.Second))
-	if c.lapsedSince(r, now.Add(2*time.Second)) || c.reviewedSince("k", r, now.Add(2*time.Second)) {
-		t.Fatal("lapsed while a tombstone of the key would still be there")
-	}
-	if !c.reviewedSince("other", r, now.Add(2*time.Second)) {
-		t.Fatal("a tombstoned key is not reviewed")
-	}
-	if !c.lapsedSince(r, late) || !c.reviewedSince("k", r, late) {
-		t.Fatal("not lapsed after a tombstone, with a reading older than a tombstone lasts")
-	}
-	if fresh := c.reading(late); c.lapsedSince(fresh, late.Add(time.Hour)) {
-		t.Fatal("a reading taken after the tombstones lapsed")
 	}
 }

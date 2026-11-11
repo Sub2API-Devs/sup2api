@@ -391,15 +391,25 @@ func TestJevAssetsDedupeAndBudget(t *testing.T) {
 	}
 }
 
-func TestJevNormalizeSlotsHonourContext(t *testing.T) {
+// busySlots takes every redraw slot of the Jev auditor, as large images of
+// other requests would; free gives them back, and so does the end of the
+// test.
+func busySlots(t *testing.T) (free func()) {
+	t.Helper()
 	for range cap(jevNormalizeSlots) {
 		jevNormalizeSlots <- struct{}{}
 	}
-	release := sync.OnceFunc(func() {
+	free = sync.OnceFunc(func() {
 		for range cap(jevNormalizeSlots) {
 			<-jevNormalizeSlots
 		}
 	})
+	t.Cleanup(free)
+	return free
+}
+
+func TestJevNormalizeSlotsHonourContext(t *testing.T) {
+	release := busySlots(t)
 	defer release()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -851,14 +861,7 @@ func TestJevRedrawGivesUpWaiting(t *testing.T) {
 	}
 
 	// Both slots are taken.
-	for range cap(jevNormalizeSlots) {
-		jevNormalizeSlots <- struct{}{}
-	}
-	freeSlots := sync.OnceFunc(func() {
-		for range cap(jevNormalizeSlots) {
-			<-jevNormalizeSlots
-		}
-	})
+	freeSlots := busySlots(t)
 	defer freeSlots()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

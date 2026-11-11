@@ -64,14 +64,10 @@ func settingsMap(base string, mode string, extra map[string]any) map[string]any 
 // (recordOf) and the next mustHook for its write. hookNow does not wait.
 func mustHook(t *testing.T, h *pluginsdktest.Harness, req *pluginv1.GatewayRequestHookRequest) *pluginv1.GatewayRequestHookResponse {
 	t.Helper()
-	p, _ := nodes.Load(h)
-	if p != nil {
-		written(t, p.(*Plugin))
-	}
+	p := nodeOf(t, h)
+	written(t, p)
 	r := hookNow(t, h, req)
-	if p != nil {
-		written(t, p.(*Plugin))
-	}
+	written(t, p)
 	return r
 }
 
@@ -86,8 +82,31 @@ func hookNow(t *testing.T, h *pluginsdktest.Harness, req *pluginv1.GatewayReques
 	return r
 }
 
+// written waits until the verdicts the node's runs stored so far are in the
+// KV and in the node's memory (or their writes have failed).
+func written(t *testing.T, p *Plugin) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for p.stats.kvWriting.Load() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for the verdict writes")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // nodes maps the harness of every node of the tests to its plugin (startNode).
 var nodes sync.Map
+
+// nodeOf is the plugin of the node behind h.
+func nodeOf(t *testing.T, h *pluginsdktest.Harness) *Plugin {
+	t.Helper()
+	p, ok := nodes.Load(h)
+	if !ok {
+		t.Fatal("a harness that startNode did not start")
+	}
+	return p.(*Plugin)
+}
 
 func denied(r *pluginv1.GatewayRequestHookResponse) bool {
 	return r.GetDecision() == pluginv1.GatewayRequestHookResponse_DECISION_DENY
@@ -254,11 +273,22 @@ func withLog(log *slog.Logger) nodeOpt { return func(n *node) { n.log = log } }
 // cannot fall into the middle of a test that makes them by hand.
 func noRefreshTicks(n *node) { n.refreshEvery = 24 * time.Hour }
 
+// withClock gives a node a clock that stands still at the time of the call
+// plus ahead (nanoseconds): only the test moves it.
+func withClock(ahead *atomic.Int64) nodeOpt {
+	start := time.Now()
+	return func(n *node) {
+		n.now = func() time.Time { return start.Add(time.Duration(ahead.Load())) }
+	}
+}
+
 // startNode starts a plugin instance on the host fh: every test instance of
-// the plugin starts here.
+// the plugin starts here. Its event writer flushes every few milliseconds, so
+// a test does not wait a second for each record (recordOf, waitEvents).
 func startNode(t *testing.T, fh *pluginsdktest.FakeHost, cfg any, opts ...nodeOpt) (*Plugin, *pluginsdktest.Harness) {
 	t.Helper()
 	n := &node{Plugin: New()}
+	n.eventFlushEvery = 10 * time.Millisecond
 	for _, opt := range opts {
 		opt(n)
 	}
@@ -428,7 +458,7 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	first := hookReqAs(3, "req-a", "MOD-HIT-sexual one")
 	first.Meta.SessionFingerprint = "fp-a"
-	if r := mustHook(t, h, first); denied(r) || r.GetNote() != notePrefix+"queued" {
+	if r := mustHook(t, h, first); denied(r) || r.GetNote() != queuedNote {
 		t.Fatalf("observe = %+v", r)
 	}
 	waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3"}, 1)
@@ -491,7 +521,7 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, nil); len(errs) > 0 {
 		t.Fatal(errs)
 	}
-	if r := mustHook(t, h, hookReqAs(3, "", "a harmless question under default enforce")); denied(r) || r.GetNote() != notePrefix+"queued" {
+	if r := mustHook(t, h, hookReqAs(3, "", "a harmless question under default enforce")); denied(r) || r.GetNote() != queuedNote {
 		t.Fatalf("observe entry under default enforce = %+v", r)
 	}
 	if r := mustHook(t, h, hookReqAs(6, "", "MOD-HIT-sexual four")); !denied(r) {
@@ -696,12 +726,12 @@ func TestConfigValidation(t *testing.T) {
 	}
 	// Group 9 is bound to an unpublished flow: the binding does not apply
 	// and the group falls back to the default flow, like an unbound group.
-	if r := mustHook(t, h, hookReq("MOD-HIT-sexual bound")); r.GetNote() != notePrefix+"queued" {
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual bound")); r.GetNote() != queuedNote {
 		t.Fatalf("group of an unpublished flow not on the default flow: %+v", r)
 	}
 	unbound := hookReq("MOD-HIT-sexual unbound")
 	unbound.Meta.GroupId = 10
-	if r := mustHook(t, h, unbound); r.GetNote() != notePrefix+"queued" {
+	if r := mustHook(t, h, unbound); r.GetNote() != queuedNote {
 		t.Fatalf("unbound group not on the default flow: %+v", r)
 	}
 	if r := h.Do("POST", fmt.Sprintf("/flows/%d/publish", flow), nil, map[string]any{"expected_version": 0}); r.GetStatus() != http.StatusConflict {
@@ -730,7 +760,7 @@ func TestBansExemptAndModeOff(t *testing.T) {
 		t.Fatalf("banned user = %+v", r)
 	}
 	for i := 1; i <= 3; i++ {
-		if r := mustHook(t, h, hookReqAs(8, "", fmt.Sprintf("MOD-HIT-sexual allowlisted %d", i))); denied(r) || r.GetNote() != notePrefix+"queued" {
+		if r := mustHook(t, h, hookReqAs(8, "", fmt.Sprintf("MOD-HIT-sexual allowlisted %d", i))); denied(r) || r.GetNote() != queuedNote {
 			t.Fatalf("allowlisted user = %+v", r)
 		}
 	}
@@ -1253,7 +1283,6 @@ func TestPreRunStoresVerdictsOnce(t *testing.T) {
 	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	calls := func() int64 { return mod.count("/v1/moderations") }
-	passed := func(v segValue) bool { return v.pass > 0 }
 
 	// The client leaves while its run waits for the upstream: the pass is
 	// cached all the same.
@@ -1272,13 +1301,13 @@ func TestPreRunStoresVerdictsOnce(t *testing.T) {
 	}
 	release()
 	waitSegs(t, fh, "that passed", 1, passed)
-	if r := mustHook(t, h, hookReqAs(3, "", "clean and left behind")); r.GetNote() != notePrefix+"pass (cached)" || calls() != 1 {
+	if r := mustHook(t, h, hookReqAs(3, "", "clean and left behind")); r.GetNote() != cachedPass || calls() != 1 {
 		t.Fatalf("after the client left = %+v, calls %d", r, calls())
 	}
 
 	// Five requests share one run: its verdict is written once. The run is
 	// held at the upstream until all five wait for it.
-	waitFor(t, "the write of the first run", func() bool { return p.stats.kvWriting.Load() == 0 })
+	written(t, p)
 	kv.counts()
 	arrived, release = mod.hold(t)
 	notes := make(chan string, 5)
@@ -1303,7 +1332,7 @@ func TestPreRunStoresVerdictsOnce(t *testing.T) {
 		t.Fatalf("the five requests made %d runs", calls()-1)
 	}
 	// Every write of the run and of its waiters has been started by now.
-	waitFor(t, "the verdict writes", func() bool { return p.stats.kvWriting.Load() == 0 })
+	written(t, p)
 	writes := kv.counts()
 	if len(writes) != 1 {
 		t.Fatalf("writes = %v", writes)
@@ -1313,7 +1342,9 @@ func TestPreRunStoresVerdictsOnce(t *testing.T) {
 			t.Fatalf("%s written %d times", key, n)
 		}
 	}
-	waitSegs(t, fh, "that passed", 2, passed)
+	if n := segCount(t, fh, passed); n != 2 {
+		t.Fatalf("%d segment keys that passed", n)
+	}
 }
 
 // logged reports whether the host got a log line with the message.
@@ -1333,7 +1364,7 @@ func logged(fh *pluginsdktest.FakeHost, message string) int {
 // passes and is recorded as an error. Once the auditors have decided, their
 // decision stands: a hit is refused and recorded as a block although handing
 // it to the cache panicked - in the run, or in the write that follows the
-// answer in the background (0.8.1), which has a recover of its own.
+// answer in the background, which has a recover of its own.
 func TestPreRunSurvivesPanic(t *testing.T) {
 	mod := newFakeMod(t)
 	// Without the periodic refresh: nothing but this test reads the snapshot
@@ -1386,7 +1417,7 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 	stood("panics-storing", r)
 	waitFor(t, "the second panic in the log", func() bool { return logged(fh, "pre run panicked") == 2 })
 	// While the verdicts are written, which is after the answer and in the
-	// background (0.8.1; the node has no memory cache to put them in): the
+	// background (the node has no memory cache to put them in): the
 	// panic ends there, the hit stands, and the write gives back its turn at
 	// the keys - the next write of the same keys is made.
 	cache := p.cache.Swap(nil)
@@ -1401,8 +1432,9 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 	r = p.runPre(context.Background(), hitJob("writes-again", 2))
 	written(t, p)
 	stood("writes-again", r)
-	waitKV(t, fh, "h:", 1)
-	waitSegs(t, fh, "pointing to the hit", 1, pointed)
+	if hits, segs := kvCount(t, fh, "h:"), segCount(t, fh, pointed); hits != 1 || segs != 1 {
+		t.Fatalf("after the write that was made again: %d hit entries, %d segment keys pointing to one", hits, segs)
+	}
 	// Nothing judged: an error. With the runs the result is their combination.
 	two := &moderation{chunks: []*chunk{{}, {}}}
 	if tr := afterPanic(nil, two.combine); tr.Final != Pass || !tr.Errored {
@@ -1440,10 +1472,10 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 	}
 }
 
-// Fourth round, F4: a panic while the result of a pre run is counted or
-// recorded does not change the answer. Left to the SDK the hook would fail,
-// and the core lets a request through whose hook failed - also one the
-// auditors judged a hit, or a cached hit decides.
+// A panic while the result of a pre run is counted or recorded does not change
+// the answer. Left to the SDK the hook would fail, and the core lets a request
+// through whose hook failed - also one the auditors judged a hit, or a cached
+// hit decides.
 func TestHitStandsWhenRecordingPanics(t *testing.T) {
 	mod := newFakeMod(t)
 	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
@@ -1502,14 +1534,7 @@ func TestPostPanicIsCountedOnce(t *testing.T) {
 	ctx := context.Background()
 	job := func(rid string) *moderation {
 		t.Helper()
-		snap := p.snap.Load()
-		in := hookReqAs(3, rid, "MOD-HIT-sexual "+rid)
-		m, early := p.admit(context.Background(), p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
-		if early != nil || m.timing != TimingPost {
-			t.Fatalf("admit = %+v, %+v", m, early)
-		}
-		m.queued = p.now()
-		return m
+		return queuedJob(t, p, flow, hookReqAs(3, rid, "MOD-HIT-sexual "+rid))
 	}
 	// Without its event writer the plugin panics where a record is handed
 	// over: in finish, after the request was counted on the user's day.

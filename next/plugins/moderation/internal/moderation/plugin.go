@@ -95,6 +95,9 @@ type Plugin struct {
 	postCancel context.CancelFunc
 
 	eventWriter *batch.Writer[eventRec]
+	// eventFlushEvery is the time limit before the event writer flushes;
+	// zero is the SDK's default (batch.DefaultInterval). Set before Init.
+	eventFlushEvery time.Duration
 
 	hourly     *statsAcc
 	categories categoryCache
@@ -195,7 +198,7 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 		kept := p.retrySuspicious(ctx, evs)
 		p.stats.droppedEvents.Add(int64(len(evs) - kept))
 		return nil
-	}, nil)
+	}, nil, batch.WithInterval(p.eventFlushEvery))
 	p.wg.Add(3)
 	go p.refreshLoop(p.bg)
 	go p.statsLoop(p.bg)
