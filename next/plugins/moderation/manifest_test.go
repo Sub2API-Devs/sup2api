@@ -67,8 +67,8 @@ func TestManifest(t *testing.T) {
 	}
 	// hostCompat: the native UI uses UI 3.10 (SFilterBar more filters,
 	// SFilterChips, SChipList, TableColumn.grow), first shipped with core
-	// 0.1.276; the verdict cache's batch KV calls need 0.1.273 already.
-	if m.Key != "moderation" || m.Version != "0.9.0" || m.HostCompat != ">=0.1.276 <0.2.0" || m.HostUICompat != "^3.10" || m.UI == nil || m.UI.Native == nil ||
+	// 0.1.277; the verdict cache's batch KV calls need 0.1.273 already.
+	if m.Key != "moderation" || m.Version != "0.9.0" || m.HostCompat != ">=0.1.277 <0.2.0" || m.HostUICompat != "^3.10" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}

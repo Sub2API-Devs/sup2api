@@ -482,7 +482,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 ### 14.4 接口收尾
 
-- **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选（只比客户端请求 ID）。`?request_id=` 同时匹配我方请求 ID 和客户端请求 ID（`u.request_id = v OR u.client_request_id = v`，核心 0.1.276 起，§95.4；此前只比我方请求 ID）：使用记录列表、汇总、导出都经 `usage/api.go` 的 `parseFilter`，`/usage` 与 `/me/usage` 相同，自助视图仍限定本人。`client_request_id` 不唯一，一个值可以匹配多行；该列没有索引，所以 `request_id` 只在带 `from` 时才加上客户端请求 ID 那一半（按时间范围扫描，与其它无索引筛选相同）；不带 `from` 时只比我方请求 ID（走唯一索引）。控制台的时间范围总会带 `from`。
+- **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选（只比客户端请求 ID）。`?request_id=` 同时匹配我方请求 ID 和客户端请求 ID（`u.request_id = v OR u.client_request_id = v`，核心 0.1.277 起，§95.4；此前只比我方请求 ID）：使用记录列表、汇总、导出都经 `usage/api.go` 的 `parseFilter`，`/usage` 与 `/me/usage` 相同，自助视图仍限定本人。`client_request_id` 不唯一，一个值可以匹配多行；该列没有索引，所以 `request_id` 只在带 `from` 时才加上客户端请求 ID 那一半（按时间范围扫描，与其它无索引筛选相同）；不带 `from` 时只比我方请求 ID（走唯一索引）。控制台的时间范围总会带 `from`。
 - **`GET/PUT /settings/gateway`**（`settings:read` / `settings:manage`，网关负责）：`{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}`，校验范围 1–10、100–30000、50–2000。自动禁用设置是独立接口 `/settings/auto-disable`，见 §42.2。
 - 前端此前提出的缺失接口说明见 §15（按后端现状整理）。
 
@@ -5081,7 +5081,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - `kv` 权限的 `reason` 文案从"在节点之间共享审核通过缓存"改为"在节点之间共享审核判定缓存"。只改文案不触发重新批准：核心的授权记录只有权限 id、scope 和状态，升级时的比较（`server/internal/plugin/install/review.go` `diffGrants`）只看是否已授予和 scope 是否扩大，没有新增或扩大时 `carryOverConsent` 自动沿用全部授权；`reason` 只在审批页展示。
 - **0.8.1**：版本 0.8.1。**`hostCompat` 抬到 `>=0.1.273 <0.2.0`**；能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。批量 KV 调用（§93）用的是已有的 `kv` 授权。不允许 0.8.1 装在 0.1.272 上的原因：没有这些调用的核心上 SDK 会换成逐键调用，结果相同，但一次 150 个键的写约 2 秒、期间几乎独占本节点的写，写入能力不够用（93.7 说的"依赖一次往返的开销的插件"；测试里量的数字在 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节"上线经过"）。下限写 0.1.273 而第一个发布的带这些调用的核心是 0.1.274，两者在已发布的核心里是一回事（93.7）。
 - **0.8.2**：版本 0.8.2。`hostCompat` 不变（`>=0.1.273 <0.2.0`），能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。
-- **0.9.0**：版本 0.9.0，只改原生界面（审核记录页的筛选收成常用 4 项 + 更多筛选、已生效条件以标签显示，各标签页表格单元格只占一行）。用到 UI 3.10 的 `SFilterBar` `#advanced`、`SFilterChips`、`SChipList`、`TableColumn.grow`，**`hostUICompat` 改为 `^3.10`，`hostCompat` 抬到 `>=0.1.276 <0.2.0`**（UI 3.10 随核心 0.1.276 发布，更老的核心的控制台按 `hostUICompat` 不加载这个界面，所以也不让它装上）。能力、钩子、任务、路由、宿主权限、用户权限、迁移和设置都不变，升级不需要管理员重新批准。
+- **0.9.0**：版本 0.9.0，只改原生界面（审核记录页的筛选收成常用 4 项 + 更多筛选、已生效条件以标签显示，各标签页表格单元格只占一行）。用到 UI 3.10 的 `SFilterBar` `#advanced`、`SFilterChips`、`SChipList`、`TableColumn.grow`，**`hostUICompat` 改为 `^3.10`，`hostCompat` 抬到 `>=0.1.277 <0.2.0`**（UI 3.10 随核心 0.1.277 发布，更老的核心的控制台按 `hostUICompat` 不加载这个界面，所以也不让它装上）。能力、钩子、任务、路由、宿主权限、用户权限、迁移和设置都不变，升级不需要管理员重新批准。
 
 ### 72.4 抽取
 
@@ -7543,7 +7543,7 @@ UI 3.8 及以前，`SPageHeader` 只有在自己的 `title` 与路由标题文�
 - **控制台。** `useAppStore().pageHead` 取代 `pageDescription`；顶栏标题可截断（`data-testid="page-title"`）。价格来源、价格编辑、价格同步页去掉页头里的「返回」按钮（面包屑已有上级页面）；插件授权确认页、插件发布进度页由手写 `<h1>` 改为 `SPageHeader`，发布进度页回插件详情的链接改为页头操作按钮。
 - **插件。** 原生插件页面用的是宿主的 `@sub2api/ui`，不重新构建即按新规则显示；`hostUICompat: "^3.x"` 的现有声明都满足 3.9。`HOST_UI_VERSION` 3.9.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.9.0（`ui-contract.spec.ts` 锁定）。`sdk/manifest` 的核心下限检查不变：3.9 没有新增 manifest 字段。
 
-## 95. 筛选精简与单行单元格（UI 3.10，2026-11-11，用户要求：筛选默认只露常用几项、其余收进“更多筛选”，表格每个单元格只占一行；使用记录 `request_id` 同时匹配客户端请求 ID；核心 0.1.276；无迁移）
+## 95. 筛选精简与单行单元格（UI 3.10，2026-11-11，用户要求：筛选默认只露常用几项、其余收进“更多筛选”，表格每个单元格只占一行；使用记录 `request_id` 同时匹配客户端请求 ID；核心 0.1.277；无迁移）
 
 页面各自手写的“更多筛选”展开按钮、硬截断的标签列表和挤成两行的单元格收进平台组件：控制台使用日志 / 全站日志、提示词审核的审核记录页先用上。
 
@@ -7559,7 +7559,7 @@ UI 3.8 及以前，`SPageHeader` 只有在自己的 `title` 与路由标题文�
 ### 95.2 版本与插件声明
 
 - `HOST_UI_VERSION` 3.10.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.10.0（`ui-contract.spec.ts` 锁定，并检查 `^3.9`、`^3.10` 的判断与新导出）。
-- 原生插件用到 95.1 任一项时声明 `hostUICompat: "^3.10"`，`hostCompat` 要求核心 `>=0.1.276`（0.1.275 是最后一个带 UI 3.9 的核心）。`sdk/manifest/check/ui.go` 的 UI 下限表 `uiFloors` 为此加了 3.10 一行（`lastUI` 3.9.0、`lastCore` 0.1.275、`firstCore` 0.1.276，无 `uses`：3.10 没有新增 manifest 字段，只按 `hostUICompat` 判断）：`hostUICompat` 要求 3.10 及以上而 `hostCompat` 包含 0.1.275 时报 `hostCompat` `below_ui_core`（`TestHostUICompatNeedsMatchingHostCompat`）。
+- 原生插件用到 95.1 任一项时声明 `hostUICompat: "^3.10"`，`hostCompat` 要求核心 `>=0.1.277`（0.1.276 是最后一个带 UI 3.9 的核心）。`sdk/manifest/check/ui.go` 的 UI 下限表 `uiFloors` 为此加了 3.10 一行（`lastUI` 3.9.0、`lastCore` 0.1.276、`firstCore` 0.1.277，无 `uses`：3.10 没有新增 manifest 字段，只按 `hostUICompat` 判断）：`hostUICompat` 要求 3.10 及以上而 `hostCompat` 包含 0.1.276 时报 `hostCompat` `below_ui_core`（`TestHostUICompatNeedsMatchingHostCompat`）。
 - 旧插件不受影响：`^3.0`–`^3.9` 的声明都满足 3.10；它们看到的唯一变化是 `STimeRange` 预设“全部”显示为“全部时间”。
 
 ### 95.3 控制台使用日志 / 全站日志的筛选
@@ -7568,7 +7568,7 @@ UI 3.8 及以前，`SPageHeader` 只有在自己的 `title` 与路由标题文�
 - 更多筛选：全站日志为分组（有选项时下拉 → `group_id`，否则输入 → `group_name`）、请求 ID（→ `request_id`，见 95.4）、账号（有 `account:read` 时；纯数字 → `account_id`，否则 → `account_name` 包含）、调用 IP、请求类型、协议转换、状态、计费状态；使用日志为请求 ID、调用 IP、请求类型、状态、计费状态。失败请求日志类型下去掉状态（已由日志类型确定），加 HTTP 状态码、错误类型。
 - 界面不再有字段、后端与链接照常支持的参数（`client_request_id`、`platform`、`endpoint`、`stream`、`plugin_key`、`account_type`、`node_id`、`upstream_model`、`upstream_protocol`，没被选作字段的那一个分组参数，以及失败请求以外的日志类型下的 `status_code`、`error_type`）生效时，与更多筛选里已生效的条件一起用 `SFilterChips` 显示在筛选条下方，可单独删除或清除全部（「清除全部」只清标签里的参数，常用一行不动；删除 `plugin_key` 标签时 `account_type` 一并清除，因为后端拒绝只带 `account_type`）。合并框的显示值从已生效参数反推（`user_id=7` → 框里显示 7）。代码：`web/src/views/usage/usageFilters.ts`（`usageSearchLayout`）、`UsageFilters.vue`、`UsageFilterFields.vue`。
 
-### 95.4 使用记录 `request_id` 同时匹配客户端请求 ID（核心 0.1.276）
+### 95.4 使用记录 `request_id` 同时匹配客户端请求 ID（核心 0.1.277）
 
 - `GET /usage`、`/me/usage`、`/usage/summary`、`/me/usage/summary`、`/usage/export`、`/me/usage/export` 的 `request_id` 参数在带 `from` 时改为 `(u.request_id = v OR u.client_request_id = v)`（不带 `from` 时仍只比 `u.request_id`，避免无索引全表扫描）：用户手里通常只有一个 ID（我方返回的请求 ID，或自己客户端发的 `X-Request-Id`），一个搜索框都能找到。`client_request_id` 参数不变，仍只精确比客户端请求 ID。两个参数同时给时同时生效（AND）。见 §14.4。
 - 旧核心（滚动窗口内）只比我方请求 ID，按客户端请求 ID 搜索返回空列表，不报错。

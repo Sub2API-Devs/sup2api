@@ -404,10 +404,10 @@ func TestHostUICompatNeedsMatchingHostCompat(t *testing.T) {
 		{"^3.8", ">=0.1.268 <0.2.0", true},
 		{"^3.8", ">=0.1.269 <0.2.0", false},
 		{"^3.7", ">=0.1.262 <0.2.0", false},
-		// UI 3.10 starts at core 0.1.276; 0.1.275 is the last core with 3.9.
+		// UI 3.10 starts at core 0.1.277; 0.1.276 is the last core with 3.9.
 		{"^3.10", ">=0.1.269 <0.2.0", true},
-		{"^3.10", ">=0.1.275 <0.2.0", true},
-		{"^3.10", ">=0.1.276 <0.2.0", false},
+		{"^3.10", ">=0.1.276 <0.2.0", true},
+		{"^3.10", ">=0.1.277 <0.2.0", false},
 		{"~3.10.1", ">=0.1.270 <0.2.0", true},
 		{"^3.9", ">=0.1.269 <0.2.0", false},
 	}

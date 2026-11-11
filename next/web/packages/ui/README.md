@@ -285,7 +285,7 @@ const columns: TableColumn[] = [
 
 ## 更多筛选与单行单元格（UI SDK 3.10）
 
-筛选默认只露常用几项，其余收进“更多筛选”；表格每个单元格只占一行，次要信息进提示、列设置里的可选列或详情。原生插件用到本节任一项（`#advanced`、`advanced-count`、`v-model:advanced-open`、`SFilterChips`、`SChipList`、`TableColumn.grow`、图标 `image`）时声明 `hostUICompat: "^3.10"`，`hostCompat` 要求核心 `>=0.1.276`（0.1.275 是最后一个带 UI 3.9 的核心）。
+筛选默认只露常用几项，其余收进“更多筛选”；表格每个单元格只占一行，次要信息进提示、列设置里的可选列或详情。原生插件用到本节任一项（`#advanced`、`advanced-count`、`v-model:advanced-open`、`SFilterChips`、`SChipList`、`TableColumn.grow`、图标 `image`）时声明 `hostUICompat: "^3.10"`，`hostCompat` 要求核心 `>=0.1.277`（0.1.276 是最后一个带 UI 3.9 的核心）。
 
 **更多筛选：`SFilterBar` 的 `#advanced`。** 宽屏时默认插槽之后出现“更多筛选”按钮（角标 `advanced-count`，即 `#advanced` 里已生效的个数；收起且大于 0 时按钮高亮），展开后在筛选条下方整行网格显示；`v-model:advanced-open` 可由页面控制展开状态，不绑定时组件自己记、默认收起。不传 `#advanced` 时与 3.9 完全一样。
 
