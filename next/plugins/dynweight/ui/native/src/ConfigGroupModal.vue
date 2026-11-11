@@ -4,7 +4,7 @@ import { SAlert, SButton, SField, SHint, SModal, SSettingRow, SSwitch } from '@s
 import ConfigLayerFields from './ConfigLayerFields.vue'
 import ItemsTable from './ItemsTable.vue'
 import { useCatalog } from './catalog'
-import { globalLayer, type Draft } from './configView'
+import { globalLayer, isDraftKey, type Draft } from './configView'
 import { useDialogSave, type SaveOutcome } from './dialogSave'
 import { clone, layerIncomplete, useDwHost, type Layer } from './host'
 
@@ -46,7 +46,7 @@ watch(
   { immediate: true }
 )
 
-const validId = computed(() => /^\d+$/.test(group.value) && Number(group.value) > 0)
+const validId = computed(() => isDraftKey(group.value))
 // Saving a new layer over the one the picked group has would drop it.
 const taken = computed(() => isNew.value && group.value in props.draft.groups)
 const incomplete = computed(() => !!layer.value && layerIncomplete(layer.value))

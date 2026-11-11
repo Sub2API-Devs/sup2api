@@ -112,7 +112,7 @@ const NO_USER = Number.MAX_SAFE_INTEGER
  * (an id no user has when none does). null = a name search is not possible
  * (no user:read).
  */
-export async function searchUserIds(q: string): Promise<number[] | null> {
+async function searchUserIds(q: string): Promise<number[] | null> {
   if (denied) return null
   const my = gen
   try {

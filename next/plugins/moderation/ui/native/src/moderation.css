@@ -126,12 +126,12 @@ html.dark {
   padding: 0 1rem;
 }
 .mod-filter-q {
-  flex: 1 1 16rem;
+  flex: 1 1 12rem;
 }
 .mod-filter-md {
   width: 11.5rem;
 }
-/* the watch list's user picker, where the bar has the room for "email #id" */
+/* a user picker: room for "email #id" */
 .mod-filter-lg {
   width: 15rem;
 }

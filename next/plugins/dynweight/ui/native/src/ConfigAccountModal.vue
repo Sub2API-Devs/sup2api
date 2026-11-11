@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { SAlert, SButton, SField, SFormModal, SHint, SInput, SSegmented, SSwitch } from '@sub2api/ui'
 import ConfigFloorInput from './ConfigFloorInput.vue'
 import { useCatalog } from './catalog'
-import { inheritText, inheritedValue, overrideFields, sourceLayers, type Draft, type OverrideField } from './configView'
+import { inheritText, inheritedValue, isDraftKey, overrideFields, sourceLayers, type Draft, type OverrideField } from './configView'
 import { useDialogSave, type SaveOutcome } from './dialogSave'
 import { clone, overrideIncomplete, useDwHost, type AccountOverride, type Layer } from './host'
 
@@ -46,7 +46,7 @@ watch(
 )
 watch(account, id => id && emit('pick', id), { immediate: true })
 
-const validId = computed(() => /^\d+$/.test(account.value) && Number(account.value) > 0)
+const validId = computed(() => isDraftKey(account.value))
 // Saving a new override over the one the picked account has would drop it.
 const taken = computed(() => props.target === '' && account.value in props.draft.accounts)
 /** The account is settled: its fields can be set and saved. */

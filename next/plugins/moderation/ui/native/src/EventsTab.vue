@@ -122,6 +122,17 @@ async function search() {
   if ((await users.resolve(form.user_id, form.user_text)) && !apply()) list.reload()
 }
 
+/**
+ * The user picker changed. The key picker lists only the picked user's keys,
+ * and this page cannot tell whose key an earlier pick is: a new user filter
+ * drops it (for another user it would match nothing), clearing the user
+ * filter keeps it.
+ */
+function pickUser() {
+  if (form.user_id || form.user_text) form.api_key_id = ''
+  search()
+}
+
 function reset(userId = '') {
   Object.assign(form, emptyForm(), { user_id: userId })
   range.value = 'all'
@@ -316,8 +327,8 @@ watch(() => list.items.value, () => (checked.value = []))
         </template>
         <SDateRange v-model:range="range" v-model:from="from" v-model:to="to" :keys="rangeKeys" size="sm" :label="false" />
         <SSelect v-model="form.result" size="sm" class="mod-filter-md" :options="resultOptions" :aria-label="t('events.result')" :title="t('events.result')" />
-        <SField :error="users.error.value" class="mod-filter-md">
-          <EntityPicker v-model:id="form.user_id" v-model:text="form.user_text" kind="user" size="sm" :placeholder="t('events.user')" @change="search" />
+        <SField :error="users.error.value" class="mod-filter-lg">
+          <EntityPicker v-model:id="form.user_id" v-model:text="form.user_text" kind="user" size="sm" :placeholder="t('events.user')" @change="pickUser" />
         </SField>
         <template #advanced>
           <template v-for="f in advancedFields" :key="f.key">
