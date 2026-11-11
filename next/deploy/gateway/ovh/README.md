@@ -4,6 +4,16 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-11 核心 **0.1.274** + moderation **0.8.1**（`ba75109f3`；北京时间 21:20–21:28；计划 `aff60df884e5a8c8c00fc8629dbc35ca` rolling-v1 completed，21:20:32→21:28:09 约 7 分 37 秒，没有暂停，两节点轮流让出（先 ccp 后 ovh），ovh 3130 和 api.prophey.ai `/readyz` 全程 200；stop 等在途请求排空 ccp 约 5 分 2 秒（21:20:54→21:25:56）、ovh 约 1 分 24 秒（21:26:32→21:27:56））：
+- 内容：页头统一进顶栏（CONTRACTS §94，UI 3.9.0：`SPageHeader` 在控制台外壳下把标题、说明和宽屏的 `#before`/`#title-extra` 交给顶栏，不再比较标题文字；`provideTitleContext(title, sink)`）。自 0.1.273 的提交（`e496cea25`）以来只改了 `next/web` 和 `next/docs`。
+- 0.1.273 的去向：0.1.273（`e496cea25`，批量 KV + moderation 0.8.1）11-11 已构建、签名（manifest `c0f10a75…705c`），没有导入、没有上线；用户决定直接发 0.1.274。0.1.274 的内置集是 0.1.273 stage 的那一套原样复制（`diff -r` 相同，moderation-0.8.1 包 sha256 `8c8ad5a3…8b17`），没有重建任何插件。
+- 内置升级：计划完成后内置同步把 moderation 从 0.8.0 升到 0.8.1，两节点 serving 0.8.1、ready、restarts 0，没有 pending；其余 9 个插件版本不变。
+- new-api 渠道没有关；不备份数据库。schema 不变（`d403141a…29ad`）。
+- 核验：两节点 `sub2api version` 0.1.274（release digest `1ab2a028`）。moderation 只读对比（flows、bindings、auditors、channels）：发布前后只有调用计数、费用和 24 小时统计在变，配置相同，审核在继续。usage_logs 21:20–21:30：383 条，5xx 0 条，499 1 条，400 1 条（发布前 10 分钟 608 条，4xx 4 条）。界面只读走查（`~/rel274/runui.sh`，Playwright，写请求全部拦截）：1440 px 和 iPhone 13 各 33 个页面，顶栏都有页面标题，页面内没有 `<h1>`，没有横向溢出；发布前同一脚本在 0.1.272 上，个人设置、4 个用量页和全部插件页的标题在页面里。提示词审核、动态权重这类原生插件页的标题和说明进了顶栏（插件没有重新构建）。
+- 已知：`/p/guard/dashboard` 标题显示插件 key `guard`（发布前就是）；提示词审核页的「默认拦截」徽章和「刷新」仍是页面里的一行（它们在 `#filters` / `#actions` 里，有筛选时操作不进顶栏）。
+- 回滚：核心回 0.1.272（manifest `ec53135115f89d8a1dd22c9f18f18578d7cfec99ec43e9b763f309350b51fd8c`，无迁移，rolling）；moderation 回 0.8.0 需先用 `stage/moderation-0.8.0/rollout.py` 重新上传再 upgrade（内置同步只升不降）。
+- 脚本 `stage/0.1.274/`（纯核心模板，`PREV_V=0.1.273`：build.sh 断言自 `BASE` 以来只动 `next/web`、`next/docs` 和本文件，sdk、plugins、runtime-contract、migrations 不变）；manifest `1ab2a02858f11c9c96a21dde5a487a49bb27752d8e942b8dafff533826b9a0c9`，bundle `01f2d22fe4c1ecc9cf034d4a7e6887c1a31fa1afc2e113f63ab98620c95a4501`；观察与核验脚本、输出在 `~/rel274/`。
+
 2026-11-11 moderation **0.8.0**（`e5db27c27`；只升级插件，核心仍 0.1.272；北京时间 11:42:58→11:43:05，rollout 257 约 7 秒，两节点同时切换；迁移 `0010_newapi_parity.sql` 已执行）：
 - 内容：对齐 new-api 11 月的内容审核改动（流程引擎：失败的级略过并保留命中、补审级、前级命中交给后级；题表式审核器 `llm_questions`；判定缓存：命中重放、清空接口、人工处理同步；`mode` 兼默认级别、白名单只观察、黑名单；Jev 长上下文与图片重画；绑定回落），另有负责人 11-10 定的三条：OpenAI 审核器抽一张图代表全部；LLM 审核器把图片发给模型（每个审核器一个开关，默认开）；插件内存上限 512 → 1024 MB。设计、七轮代码审核的修改和“已知、未改”见 [DESIGN-2026-11-10-MODERATION-PARITY](../../../docs/DESIGN-2026-11-10-MODERATION-PARITY.md)，行为变化、升级前检查和回滚步骤见 [RELEASE-MODERATION-0.8.0](../../../docs/RELEASE-MODERATION-0.8.0.md)。hostCompat、hostUICompat、宿主权限和钩子 scope 不变，不需要重新批准；manifest 多一条路由 `POST /verdict-cache/clear`。
 - 发布前核对：分支 `feat/moderation-newapi-parity` 合入 origin/develop（`c5b7fae14`，核心 0.1.272 + moderation 0.7.4），只有 manifest 版本号冲突；本机 go vet、全量测试、界面 110 条 vitest 与构建通过。升级前只读检查：没有绑定指向停用或未发布的流程（两条账号绑定 124、129 → 流程 2）；观察名单和封禁表为空；`mode = enforce`。
