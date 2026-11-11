@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCode, SCopyButton, SDateTime, SDescItem, SDescriptions, SDisclosure, SDrawer, SEmpty, SHint, SInput, SSegmented, SSelect, SSpinner, STable, STabs, type SelectOption, type TabItem, type TableColumn } from '@sub2api/ui'
 import { errorMessage } from '@/utils/errors'
+import EntityPicker from '@/components/EntityPicker.vue'
 import RequestLogBody from './RequestLogBody.vue'
 import RequestLogContent from './RequestLogContent.vue'
 import {
@@ -46,6 +47,8 @@ const active = ref<RequestLogActive[]>([])
 const next = ref<string | null>(null)
 const loading = ref(false)
 const error = ref('')
+/** Models of the listed requests, offered beside the priced ones: a log may name a model the price list does not. */
+const listedModels = computed(() => [...new Set(items.value.flatMap(i => i.model || []))].map(m => ({ id: m, name: m })))
 
 const current = ref<RequestLogItem | null>(null)
 const detail = ref<RequestLogDetail | null>(null)
@@ -151,10 +154,10 @@ watch(() => [props.open, props.accountId, props.requestId] as const, async ([ope
 watch(() => props.search, (v) => { if (v !== undefined) searchable.value = v })
 
 let filterTimer: ReturnType<typeof setTimeout> | undefined
-watch([range, status, level, mode, changed], () => { if (props.open) void load() })
+watch([range, status, level, mode, changed, model], () => { if (props.open) void load() })
 // Turning search on or off changes the query only when a filter is set.
 watch(searchable, () => { if (props.open && (mode.value || changed.value || sessionFilter.value.trim() || shaFilter.value.trim())) void load() })
-watch([model, requestFilter, sessionFilter, shaFilter], () => {
+watch([requestFilter, sessionFilter, shaFilter], () => {
   clearTimeout(filterTimer)
   filterTimer = setTimeout(() => { if (props.open) void load() }, 400)
 })
@@ -264,7 +267,7 @@ const yesNo = (v: boolean | null) => (v === null ? '—' : v ? t('ccgateway.logV
         <SSelect v-model="range" :options="rangeOptions" size="sm" class="w-32" :aria-label="t('ccgateway.logViewer.rangeLabel')" />
         <SSegmented v-model="status" :options="statusOptions" size="sm" :aria-label="t('ccgateway.logViewer.cols.status')" />
         <SSegmented v-model="level" :options="levelOptions" size="sm" :aria-label="t('ccgateway.logViewer.cols.level')" />
-        <SInput v-model="model" size="sm" class="w-36" :placeholder="t('ccgateway.logViewer.cols.model')" :aria-label="t('ccgateway.logViewer.cols.model')" clearable />
+        <EntityPicker v-model:id="model" kind="model" size="sm" class="w-52" :extra="listedModels" data-testid="request-log-filter-model" />
         <SInput v-model="requestFilter" size="sm" mono class="w-52" :placeholder="t('ccgateway.logViewer.cols.requestId')" :aria-label="t('ccgateway.logViewer.cols.requestId')" clearable data-testid="request-log-filter-id" />
         <SButton size="sm" icon="refresh" :loading="loading" @click="load()">{{ t('common.refresh') }}</SButton>
       </div>

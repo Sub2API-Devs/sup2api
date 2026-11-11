@@ -21,6 +21,7 @@ export default {
   failed: 'Failed',
   exitIp: 'Exit IP',
   createdBy: 'Created by',
+  creator: 'Creator',
   copyHint: "Copy the full proxy URL (protocol://user:pass{'@'}host:port)",
   copyFailed: 'Copy failed. Check the browser clipboard permission.',
   pasteUrl: 'Paste a proxy URL to fill the form',

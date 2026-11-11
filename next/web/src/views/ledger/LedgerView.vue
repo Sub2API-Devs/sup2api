@@ -2,9 +2,10 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { SButton, SField, SInput, SPageHeader, SPagination, SSelect, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
+import { SButton, SField, SPageHeader, SPagination, SSelect, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { activeFilterCount, useList } from '@/composables/useList'
+import EntityPicker from '@/components/EntityPicker.vue'
 import AdjustBalanceModal from './AdjustBalanceModal.vue'
 import LedgerTable from './LedgerTable.vue'
 import { LEDGER_RANGES, useKindOptions } from './kinds'
@@ -33,8 +34,8 @@ const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ?
         <SButton v-permission="'balance:adjust'" variant="primary" @click="adjustOpen = true">{{ t('ledger.adjust.button') }}</SButton>
       </template>
       <template #filters>
-        <SField class="w-28" :label="t('usage.filters.userId')">
-          <SInput v-model.trim="filters.user_id" inputmode="numeric" :placeholder="t('common.id')" />
+        <SField class="w-72" :label="t('common.user')">
+          <EntityPicker v-model:id="filters.user_id" kind="user" />
         </SField>
         <SField class="w-40" :label="t('ledger.cols.kind')">
           <SSelect v-model="filters.kind" :options="kindOptions" />

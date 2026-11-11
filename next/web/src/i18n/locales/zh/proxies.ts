@@ -21,6 +21,7 @@ export default {
   failed: '失败',
   exitIp: '出口 IP',
   createdBy: '创建人',
+  creator: '创建人',
   copyHint: "复制完整代理串（协议://用户名:密码{'@'}主机:端口）",
   copyFailed: '复制失败，请检查浏览器剪贴板权限。',
   pasteUrl: '粘贴代理串自动填充',
