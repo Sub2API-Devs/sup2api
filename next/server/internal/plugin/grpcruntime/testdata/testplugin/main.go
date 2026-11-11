@@ -8,9 +8,12 @@
 //   - HTTP POST /publish publishes the body as broadcast topic "t.ping";
 //     OnBroadcast stores "<topic>:<payload>:<source node>" in KV t/broadcast.
 //   - HTTP POST /lock makes one HostService lock call (see lockCall).
+//   - HTTP POST /kvbatch makes one HostService kv batch call (see
+//     kvBatchCall).
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -198,6 +201,9 @@ func (s *server) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (*plu
 	if in.GetPath() == "/lock" {
 		lockCall(ctx, s.hostClient(), in.GetBody(), out)
 	}
+	if in.GetPath() == "/kvbatch" {
+		kvBatchCall(ctx, s.hostClient(), in.GetBody(), out)
+	}
 	if in.GetPath() == "/env" {
 		// The plugin's own environment: names only, plus where its
 		// temporary directory and sockets are (isolation tests).
@@ -260,6 +266,55 @@ func lockCall(ctx context.Context, h pluginv1.HostServiceClient, body []byte, ou
 		err = status.Error(codes.InvalidArgument, "unknown op")
 	}
 	out["code"] = status.Code(err).String()
+}
+
+// kvBatchCall runs one HostService kv batch call described by body
+// {"op":"set|get|delete","ns":...,"keys":[...],"size":...,"ttl":...}: set
+// writes every key with ttl seconds and a value of size bytes ("v:<key>"
+// when size is 0); get reports found (one per key), bytes (the values'
+// total) and, for small answers, values. A host error is reported as
+// out["code"] and out["message"], like lockCall.
+func kvBatchCall(ctx context.Context, h pluginv1.HostServiceClient, body []byte, out map[string]any) {
+	var req struct {
+		Op   string   `json:"op"`
+		NS   string   `json:"ns"`
+		Keys []string `json:"keys"`
+		Size int      `json:"size"`
+		TTL  int64    `json:"ttl"`
+	}
+	_ = json.Unmarshal(body, &req)
+	var err error
+	switch req.Op {
+	case "set":
+		items := make([]*pluginv1.KVSetManyItem, len(req.Keys))
+		for i, k := range req.Keys {
+			value := []byte("v:" + k)
+			if req.Size > 0 {
+				value = bytes.Repeat([]byte("v"), req.Size)
+			}
+			items[i] = &pluginv1.KVSetManyItem{Key: k, Value: value, TtlSeconds: req.TTL}
+		}
+		_, err = h.KVSetMany(ctx, &pluginv1.KVSetManyRequest{Namespace: req.NS, Items: items})
+	case "get":
+		var r *pluginv1.KVGetManyResponse
+		if r, err = h.KVGetMany(ctx, &pluginv1.KVGetManyRequest{Namespace: req.NS, Keys: req.Keys}); err == nil {
+			found, values, total := []bool{}, []string{}, 0
+			for _, it := range r.GetItems() {
+				found = append(found, it.GetFound())
+				values = append(values, string(it.GetValue()))
+				total += len(it.GetValue())
+			}
+			out["found"], out["bytes"] = found, total
+			if total <= 1024 {
+				out["values"] = values
+			}
+		}
+	case "delete":
+		_, err = h.KVDeleteMany(ctx, &pluginv1.KVDeleteManyRequest{Namespace: req.NS, Keys: req.Keys})
+	default:
+		err = status.Error(codes.InvalidArgument, "unknown op")
+	}
+	out["code"], out["message"] = status.Code(err).String(), status.Convert(err).Message()
 }
 
 func main() {

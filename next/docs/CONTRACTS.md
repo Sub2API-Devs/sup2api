@@ -263,7 +263,7 @@
 | `balance:{user_id}` | STRING 余额缓存 | B |
 | `sticky:{rule}:{group}:{model}:{hash}` | STRING account_id，TTL | G |
 | `sticky:stats:{rule}` | HASH hits/misses/rebinds | G |
-| `plugin:kv:{plugin_key}:{ns}:{key}` | STRING | C |
+| `plugin:kv:{plugin_key}:{ns}:{key}` | STRING，可带 TTL。插件经 `HostService.KVGet/KVSet/KVDelete/KVList` 和批量的 `KVGetMany/KVSetMany/KVDeleteMany`（§93）读写，前缀由宿主按调用者强制加上 | C |
 | `hook:breaker:{plugin}:{hook}` | STRING 熔断截止毫秒时间戳，TTL 30s | G |
 | `hook:stats:{plugin}:{hook}` | HASH 调用/拒绝/超时/错误计数与延迟桶，TTL 7d | G |
 | `hook:statidx:{plugin}` | SET 该插件出现过的钩子 id，TTL 7d | G |
@@ -2179,7 +2179,7 @@ sub2api 按多节点部署设计，**插件的每个实例都跑在每个节点�
 | `Initializer.Init` **每个实例调用一次**：每个节点各一次，进程重启、资源限制变更（§14.3）、升级时新版本 standby 启动都会再调用 | 不要在 `Init` 里做「全集群只该做一次」的事（建表、导数据、发通知）。建表写进 `migrations/*.sql`；一次性工作放进 manifest `jobs[]` 或用 `lock` | `sdk/pluginsdk/interfaces.go`（`Initializer`），`sdk/pluginsdk/serve.go`（`InitHost` 里调用 `Init`） |
 | 周期性工作用 manifest `jobs[]`：**全集群每个触发点执行一次**（锁 + 唯一索引，§27.2），错过的触发点不补跑；节点在插入运行记录后崩溃，这个触发点就没跑完，也不会重试 | 不要在 `Init` 里自己起定时器 goroutine——那会在每个节点各跑一份。任务本身按「可能没跑完」来写（下一个触发点能接着做） | `server/internal/job/job.go`（包注释、`runScheduled`），§11.7 |
 | 按需互斥（「同一素材同时只同步一次」）用宿主权限 `lock` | 用 `Host.Locks().WithLock(ctx, name, ttl, fn)`：`fn` 用传进来的 ctx 干活（丢锁时它被取消，cause 为 `ErrLockLost`），给外层 ctx 一个框住工作的截止时间（续期只活到它结束）。返回 `(false, nil)` = 别的节点正持有，不是错误；**`fn` 成功但中途丢过锁时返回 `(true, ErrLockLost)`**，说明 `fn` 可能和下一个持有者重叠过，不可幂等的部分必须另有数据库保护。自己手写 gRPC 调用时每次 `LockAcquire` 都要新 token（同 token 重抢会删掉自己的锁） | §27.3，`sdk/pluginsdk/lock.go`（`Locks`） |
-| KV 只有 `Get` / `Set` / `Delete` / `List`，**没有 CAS、自增或 SETNX** | 「读 → 改 → 写」在两个节点并发时**会丢更新**。计数、累加、状态机放进自己的 schema（事务 / 条件 UPDATE），或在 `lock` 下做 | `sdk/pluginsdk/host.go`（`KV` 接口），`sdk/proto/sub2api/plugin/v1/host.proto` |
+| KV 只有 `Get` / `Set` / `Delete` / `List`，以及一次处理多个键的 `KVGetMany` / `KVSetMany` / `KVDeleteMany`（§93，核心 0.1.273 起），**没有 CAS、自增或 SETNX** | 「读 → 改 → 写」在两个节点并发时**会丢更新**。计数、累加、状态机放进自己的 schema（事务 / 条件 UPDATE），或在 `lock` 下做。批量写是原子的（全写或全不写），但它不是条件写，同样解决不了丢更新。一次要读写多个键时用批量调用：每个单键调用各做一次授权复核和一次 Redis 往返，批量调用各只做一次 | `sdk/pluginsdk/host.go`（`KV` 接口），`sdk/pluginsdk/kvbatch.go`（批量调用），`sdk/proto/sub2api/plugin/v1/host.proto` |
 | `Publish` 是 **best effort**：无确认、无顺序、无重放，**发布者所在节点自己收不到** | 缓存失效要「**本节点直接生效 + 广播通知其他节点 + 短周期轮询兜底**」三件都做：只广播，本节点不会失效；只靠广播，丢一条消息某个节点就一直是旧的 | `sdk/pluginsdk/host.go`（`Host.Publish` 注释），`server/internal/plugin/rollout/broadcast.go`（`broadcastHub.handle` 跳过 `SourceBootID` 为本节点的消息），`server/internal/core/ports_cluster.go`（`Bus` 注释「every consumer must also reconcile periodically」），§14.3 |
 | `OnEvents` **至少一次**：确认之前的批次会重投，持锁节点切换时也可能重投 | 按事件 `id` 去重（例如在自己的 schema 里对事件 id 建唯一索引） | `server/internal/event/delivery/delivery.go`（包注释），§11.7 |
 | `MigrateData` 在发布协调者被接管后**可能重复执行** | 必须幂等：重跑一遍得到同样的结果 | `server/internal/plugin/rollout/coordinator.go`（`takeOver`、`migrateData`），§11.7 |
@@ -7353,3 +7353,121 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 - 核心 0.1.271 的后续修补（仍无迁移、契约版本不变）：密钥页的接入地址也包含转换端点（92.5）；Magpie 手动填写说明的字段名改成 Magpie 界面上的叫法（92.3）；`SBulkBar` 手机停靠条的占位从组件原位置挪到它父元素的末尾，停靠期间 `fab` 按钮隐藏、控制台不再为它留底部空间（`web/packages/ui/README.md`“手机形态”；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，原生插件经 import map 用控制台这一份，不用重建；停靠时根元素带 `data-bulk-dock`，控制台布局据此让出 `fab` 的留白，原来占位元素的 `data-testid="bulk-dock-space"` 取消）。
 - 核心 0.1.272 + moderation 0.7.3 的手机布局修补（仍无迁移、契约版本不变；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，其它原生插件不用重建，详见 `web/packages/ui/README.md`“手机形态”）：`SBulkBar` 停靠条的操作按钮放不下时，藏着按钮的一侧渐隐，只露出一部分的按钮点一下只滚进视野、不触发操作；`STable` 手机卡片把收不进卡片的单元格内容裁在卡片边缘，不再把页面撑出横向滚动。0.1.271 核验时提示词审核“审核记录”页宽 427 px 的原因不是标签栏，是 moderation 给分数标签写的 `max-width: 14rem` 比卡片里半宽的格子宽。moderation 0.7.3 只改原生界面的样式（`hostCompat`、`hostUICompat`、接口、迁移都不变）：窄屏（768 px 以下）分数与分类标签在格子里换行，流程页“绑定分组”在格子里换行，筛选栏的按钮组放不下时换行（英文界面观察名单页原来伸出屏幕）；宽屏渲染不变。moderation 0.7.4（同样只改原生界面）：概览页（360 px、卡片内 260 px）、测试页（340 px）网格的最小列宽不再超过容器（`minmax(min(…, 100%), 1fr)`）；原来概览页在 360 px 宽的手机上横向滚动 13 px，更窄时更多（320 px 时概览页 52 px、测试页 32 px）。
 - 删除的控制台组件与标识：`KeyCcSwitchButton`、`KeyEnabledSwitch`、`ccSwitch.ts`、`GroupPlatforms`、`PlatformBadges`、`platformTheme.ts`；`data-testid` `key-enabled-switch`、`key-ccswitch`、`guide-ccswitch`、`use-key`、`group-platforms`、`platform-badges`。
+
+## 93. 插件 KV 批量调用（2026-11-10，moderation 判定缓存需要；无迁移；Host API 仍是 9；核心 0.1.273）
+
+插件读写自己的 KV 只能经 `HostService` 的 `KVGet` / `KVSet` / `KVDelete` / `KVList`。每次调用先在 PostgreSQL 复核一次 `kv` 授权（`hostServer.require`），再发一条 Redis 命令。在承载流量的节点上实测，这两步分别是 27 ms 和 23 ms，合计每个键约 50 ms。moderation 的判定缓存一个请求最多读 64 个键，写也是这么多；它 8 个一组并发，200 ms 后放弃，所以在这个节点上大部分缓存没有被查到。
+
+本节加三个 RPC，一次调用处理同一个 namespace 下的多个键：**授权只复核一次，Redis 只往返一次**，开销不再随键数增长。proto 只新增这三个 RPC 和它们的消息，单键调用不变。
+
+### 93.1 调用与消息
+
+| RPC | 请求 | 响应 |
+| --- | --- | --- |
+| `KVGetMany` | `namespace`，`keys[]` | `items[]`，每项 `{found, value}`，与 `keys` 等长、同序 |
+| `KVSetMany` | `namespace`，`items[]`，每项 `{key, value, ttl_seconds}` | 空 |
+| `KVDeleteMany` | `namespace`，`keys[]` | 空 |
+
+- Redis 键与单键调用相同：`plugin:kv:{plugin_key}:{ns}:{key}`，前缀由宿主按调用者加上。批量调用和单键调用读写的是同一份数据，可以混用。
+- `KVGetMany`：不存在的键回 `found=false`；存在但值为空的键回 `found=true` 和空 `value`。
+- `KVSetMany`：每项用自己的 `ttl_seconds`，0 表示不过期（会清掉这个键原有的过期时间，和 `KVSet` 一样）。**全写或全不写**（93.3）。
+- `KVDeleteMany`：不存在的键不算错。
+- 同一个键可以在一次调用里出现多次：`KVGetMany` 每次出现各回一项，`KVSetMany` 以最后一项为准。
+- `keys` / `items` 为空是合法调用：照常复核授权、校验 namespace，然后直接返回，不访问 Redis。
+
+### 93.2 规则与上限
+
+| 项 | 约定 |
+| --- | --- |
+| 授权 | `kv`，与单键调用相同。每次调用复核一次，在校验参数之前 |
+| namespace | 与单键调用相同（`validNamespace`）：1 到 64 字节，不含 `:*?[]\`。没有键时也校验 |
+| key | 与单键调用相同（`kvKey`）：1 到 512 字节 |
+| value | 与 `KVSet` 相同：不超过 64 KiB（`KVMaxValueBytes`） |
+| `ttl_seconds` | 0 到 9223372036（`KVMaxBatchTTLSeconds`，`time.Duration` 能表示的最大整秒数，约 292 年）。`KVSet` 只要求不小于 0；批量写加了上界，因为 Redis 对过大的过期时间报错，而脚本中途出错会留下已经写入的项 |
+| 每次调用的键数 | 不超过 512（`KVMaxBatchKeys`） |
+| 每次调用的数据量 | 不超过 3 MiB（`KVMaxBatchBytes`）。`KVSetMany` 算请求里所有键和值的长度之和；`KVGetMany` 算读到的所有值的长度之和。满长的值（64 KiB）一次最多写 47 个、读 48 个 |
+
+- 3 MiB 是按连接的消息上限定的。插件调用 `HostService` 走 go-plugin broker 上的 gRPC 服务端（`serveHostBroker` 里的 `grpc.NewServer`），它用 gRPC 默认的接收上限 **4 MiB（4194304 字节）**；宿主发送和插件接收的上限都是 `MaxInt32`（go-plugin 的 `dialGRPCConn`）。请求里 3 MiB 的键和值加上 protobuf 的开销总能送到；超过 4 MiB 的请求由 gRPC 自己以 `RESOURCE_EXHAUSTED` 拒绝，到不了核心的处理函数。
+- 校验顺序：授权 → namespace → 键数 → 每一项的 key → 每一项的 value 和 ttl → 数据量。逐项的错误信息带下标，如 `items[2]: value exceeds 65536 bytes`。
+- 这些规则和上限定义在 `sdk/protocol/kv.go`（`KVBatchMaxKeys`、`KVBatchMaxBytes`、`KVMaxTTLSeconds`、`ValidKVNamespace`、`ValidKVKey`、`ValidKVBatchTTL`），宿主和 SDK 用同一份；宿主侧的常量在 `grpcruntime/host.go`，紧挨原有的 KV 上限。
+- `KVGetMany` 的数据量在读完之后才算得出来：一次调用最坏会让核心从 Redis 读入 512 × 64 KiB = 32 MiB，然后才拒绝。
+
+### 93.3 一次授权复核，一次 Redis 往返
+
+| RPC | PostgreSQL | Redis |
+| --- | --- | --- |
+| `KVGetMany` | 一次授权查询 | 一条 `MGET` |
+| `KVSetMany` | 一次授权查询 | 一条 `EVALSHA`（核心自己的脚本） |
+| `KVDeleteMany` | 一次授权查询 | 一条 `DEL` |
+
+- `KVSetMany` 的脚本是核心写的包级常量（`grpcruntime/host.go` 的 `kvSetManyLua`，用 `redis.NewScript` 发送）：`KEYS[i]` 是第 i 项的 Redis 键，`ARGV[2i-1]` 是值，`ARGV[2i]` 是以秒计的 ttl。脚本先检查参数个数和每个 ttl（非负整数），再逐项执行 `SET key value`（ttl 为 0）或 `SET key value EX ttl`。Redis 服务端还没有这个脚本时（重启或 `SCRIPT FLUSH` 之后的第一次调用），`EVALSHA` 回 `NOSCRIPT`，客户端改用 `EVAL` 再发一次；这是唯一多出一次往返的情况，每个 Redis 服务端只发生一次。
+- 原子性：核心在访问 Redis 之前校验全部项，任何一项不合法就整个调用失败、什么都不写。校验通过后，脚本在 Redis 里作为一个整体执行，其他命令不会插到中间；脚本在第一次写入之前再检查一遍参数，`SET` 对已有的键不会因类型失败。所以要么全部写入，要么一项都不写。内存达到 `maxmemory` 且策略是 `noeviction` 时，Redis 在脚本的第一次写入处拒绝，同样一项都不写（在 Redis 7.0.15 上验证过），调用回 `UNAVAILABLE`。
+- `MGET` 是一条命令，一次 `KVGetMany` 读到的是同一时刻的值。`DEL` 同样是一条命令。
+- Redis 部署：核心用 `redis.NewClient` 连单个实例（`cluster.OpenRedis`），不是 Redis Cluster。多键的 `MGET`、`DEL` 和带多个 `KEYS` 的脚本在单实例上都合法。如果以后改成 Redis Cluster，同一次调用的键会落到不同的槽（键名里没有 hash tag），这三个调用要跟着改。
+- 结果：64 个键的读，从 64 次授权查询加 64 次 Redis 往返，变成各一次。
+
+### 93.4 错误
+
+| 情况 | 状态码 |
+| --- | --- |
+| 没有 `kv` 授权，或授权已在 PG 里撤销、scope 已变 | `PERMISSION_DENIED` |
+| 授权查询失败 | `UNAVAILABLE`（`cannot verify current plugin grant`） |
+| namespace、key、value、ttl 不合规则；键数超过 512；`KVSetMany` 的数据量超过 3 MiB | `INVALID_ARGUMENT` |
+| `KVGetMany` 读到的值合计超过 3 MiB | `RESOURCE_EXHAUSTED`，调用方减少每次的键数重试 |
+| 请求超过连接的 4 MiB 上限 | `RESOURCE_EXHAUSTED`（gRPC 返回，不是核心） |
+| Redis 失败（连不上、超时、脚本出错） | `UNAVAILABLE`（`kv unavailable`），与单键调用相同 |
+| 核心早于 0.1.273 | `UNIMPLEMENTED`（93.7） |
+
+### 93.5 核心不执行插件提交的脚本
+
+批量写用 Lua 脚本，但脚本是核心的，插件只提供键、值和 ttl。没有、也不会有“插件提交脚本由核心执行”的调用：Redis 是核心自己的数据（会话粘性、限流、冷却、锁、节点注册）和所有插件共用的，脚本里可以访问任意键，宿主加的 `plugin:kv:{plugin_key}:` 前缀约束不了脚本。让插件提交脚本，等于把整个 Redis 交给这个插件。插件需要新的原子操作时，在核心加一个有明确语义的 RPC。
+
+### 93.6 SDK
+
+```go
+type KVValue struct {
+	Value []byte
+	Found bool
+}
+
+type KVItem struct {
+	Key   string
+	Value []byte
+	TTL   time.Duration // 0 = 不过期；按整秒发送，和 KV.Set 一样
+}
+
+func KVGetMany(ctx context.Context, kv KV, namespace string, keys []string) ([]KVValue, error)
+func KVSetMany(ctx context.Context, kv KV, namespace string, items []KVItem) error
+func KVDeleteMany(ctx context.Context, kv KV, namespace string, keys []string) error
+
+// 可选接口，Host.KV() 返回的 KV 实现了它。
+type KVBatch interface {
+	GetMany(ctx context.Context, namespace string, keys []string) ([]KVValue, error)
+	SetMany(ctx context.Context, namespace string, items []KVItem) error
+	DeleteMany(ctx context.Context, namespace string, keys []string) error
+}
+```
+
+- 插件调用包级函数，把 `host.KV()` 传进去：`pluginsdk.KVGetMany(ctx, host.KV(), ns, keys)`。`KV` 接口没有加方法，已有的实现（测试替身、包了一层的 KV）照常编译。
+- 传进来的 `KV` 实现了 `KVBatch` 就用它，否则用这个 `KV` 的 `Get` / `Set` / `Delete` 逐个完成。所以只实现了四个单键方法的测试替身也能用，它注入的故障照样生效。
+- **旧核心自动回退**：`Host.KV()` 的实现在核心回 `UNIMPLEMENTED` 时改用单键调用，并记住这个结果（记在这条宿主连接上，即一个插件进程一份）。旧核心只多付一次被拒的调用，不是每批一次。核心升级时插件进程随核心重启，标记自然重置。只有 `UNIMPLEMENTED` 触发回退，其他错误（`PERMISSION_DENIED`、`UNAVAILABLE`、`INVALID_ARGUMENT`、`RESOURCE_EXHAUSTED` 等）原样返回。
+- 回退时单键调用最多 8 个并发（`kvSinglesParallel`）；有一个失败就不再发新的，返回这个错误。同一个键在一批写里出现多次时只写最后一项，结果与批量调用一致。
+- **规则在两种核心上相同**：SDK 在发出任何调用之前按 93.2 校验（规则来自 `sdk/protocol/kv.go`），不合规则回 `codes.InvalidArgument`，什么都不发。回退路径上读到的值合计超过 3 MiB 时同样回 `codes.ResourceExhausted`。
+- 回退给不了两样东西：开销（仍是每个键一次授权复核加一次往返）和写的原子性（中途失败时，之前的项已经写入）。需要其中任何一样的插件声明 `hostCompat: ">=0.1.273"`。
+- 测试替身 `pluginsdktest.FakeHost` 实现了这三个 RPC，规则和上限与宿主相同，写入是原子的。`KVBatchUnimplemented`（或运行中调用 `SetKVBatchUnimplemented(true)`）让它像旧核心一样回 `UNIMPLEMENTED`；`KVCalls()` 返回每个 KV RPC 被调用的次数，用来断言“这批键只用了一次调用”。
+
+### 93.7 兼容与版本
+
+- Host API 不升，仍是 9，理由同 91.3：升版会让 rolling-v1 滚动更新不可用（`gateway/internal/control` 要求前后两个版本的 `HostAPIVersion` 相同，§82），而这次只是加 RPC。
+- 旧核心对未知 RPC 回 `UNIMPLEMENTED`（`UnimplementedHostServiceServer`）。用 SDK 函数的插件在旧核心上自动回退（93.6），不需要提高 `hostCompat`；直接用生成的 gRPC 客户端的插件要自己处理 `UNIMPLEMENTED`。依赖一次往返的开销或原子写的插件声明 `hostCompat: ">=0.1.273"`。
+- 滚动更新期间新旧核心并存没有问题：两种核心读写同一批 Redis 键、同一种值，批量调用和单键调用的结果可以互相读到。
+- 0.1.273 是按当前版本序列写的（0.1.272 之后的下一个核心版本）。发布时版本号如果不同，以第一个带这三个 RPC 的核心版本为准，同时改这里、`host.proto` 和 SDK 的注释。
+- 没有迁移，没有新的宿主权限，manifest 不变。
+
+### 93.8 实现位置与测试
+
+- proto：`sdk/proto/sub2api/plugin/v1/host.proto`（RPC 的注释是给插件作者读的规则全文；消息放在文件末尾，已有消息的生成代码不动）。生成代码 `sdk/gen/pluginv1/host.pb.go`、`host_grpc.pb.go`（`buf generate`，protoc-gen-go v1.31.0、protoc-gen-go-grpc v1.2.0）。
+- 宿主：`server/internal/plugin/grpcruntime/host.go`（`KVGetMany`、`KVSetMany`、`KVDeleteMany`、`kvBatchKeys`、`kvSetManyLua`）。
+- SDK：`sdk/protocol/kv.go`，`sdk/pluginsdk/kvbatch.go`，`sdk/pluginsdk/pluginsdktest/kvbatch.go`。
+- 宿主测试 `grpcruntime/host_kv_batch_internal_test.go`：顺序与缺失的键；每项自己的 TTL；一项不合法时什么都不写；键数和数据量上限；两个插件、两个 namespace 之间互不可见；授权（含 PG 里撤销）；每次调用恰好一次授权查询和一条 Redis 命令（pgx tracer 和 go-redis hook 计数）；Redis 不可用。`TestKVBatchRealRedis` 在设置了 `TEST_REDIS_URL` 时对真实的 Valkey / Redis 运行（CI 设置；本地跳过）：真实 Lua 引擎上的脚本、512 个键、真实过期、脚本自身的参数检查。`grpcruntime/kv_batch_test.go` 用真实插件进程（`testdata/testplugin` 的 `/kvbatch`）走 broker 连接，并验证 4 MiB 的连接上限。
+- SDK 测试 `sdk/pluginsdk/kvbatch_internal_test.go`（新核心一批一次调用；旧核心回退、只被拒一次、结果相同；不吞其他错误；规则在两种核心上相同；并发上限）和 `sdk/pluginsdk/pluginsdktest/kvbatch_test.go`（FakeHost 的规则、原子写、旧核心开关、经 SDK 的端到端）。
