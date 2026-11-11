@@ -35,10 +35,13 @@ func (p *Plugin) routes() {
 	p.Handle("GET", "/stats", p.getStats)
 }
 
+// configBody is what /config reads and writes. UpdatedAt is when the
+// stored version was saved (unix seconds, 0 = never); PUT ignores it.
 type configBody struct {
-	Config   rules.Config `json:"config"`
-	Version  int64        `json:"version"`
-	Warnings []string     `json:"warnings,omitempty"`
+	Config    rules.Config `json:"config"`
+	Version   int64        `json:"version"`
+	UpdatedAt int64        `json:"updated_at"`
+	Warnings  []string     `json:"warnings,omitempty"`
 }
 
 // getConfig reads the stored configuration, not this node's copy, so a save
@@ -48,11 +51,11 @@ func (p *Plugin) getConfig(ctx context.Context, _ *pluginv1.HTTPRequest) (*plugi
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	c, version, warnings, err := s.loadConfig(ctx)
+	c, stamp, warnings, err := s.loadConfig(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	return pluginsdk.DataResponse(configBody{Config: c, Version: version, Warnings: warnings}), nil
+	return pluginsdk.DataResponse(configBody{Config: c, Version: stamp.version, UpdatedAt: stamp.updatedAt, Warnings: warnings}), nil
 }
 
 func (p *Plugin) getDefaults(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -79,7 +82,7 @@ func (p *Plugin) putConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	version, err := s.saveConfig(ctx, body.Config, body.Version, req.GetCaller().GetUserId())
+	stamp, err := s.saveConfig(ctx, body.Config, body.Version, req.GetCaller().GetUserId())
 	if errors.Is(err, errVersionConflict) {
 		return pluginsdk.ErrorResponse(http.StatusConflict, "conflict", "the configuration was changed meanwhile, reload it / 配置已被修改，请刷新后重试"), nil
 	}
@@ -90,7 +93,7 @@ func (p *Plugin) putConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	if prev.Enabled && !body.Config.Enabled {
 		warnings = append(warnings, p.resetOnDisable(ctx)...)
 	}
-	return pluginsdk.DataResponse(configBody{Config: body.Config, Version: version, Warnings: warnings}), nil
+	return pluginsdk.DataResponse(configBody{Config: body.Config, Version: stamp.version, UpdatedAt: stamp.updatedAt, Warnings: warnings}), nil
 }
 
 // validateConfig checks a configuration as PUT /config would, without

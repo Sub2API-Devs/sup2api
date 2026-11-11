@@ -2,10 +2,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { SButton, SField, SInput, SModal, SSegmented, fromLocalInput, toLocalInput } from '@sub2api/ui'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
-import { enumOptions } from './format'
 import { canManageSettings, createWatch, fetchPluginSettings, settingValue, updateWatch, useModHost } from './host'
 import type { Watch, WatchChange, WatchLevel } from './types'
 import { resolveUserIds } from './users'
+import { userListHint, watchLevelOptions } from './watchLevels'
 
 // Add a user to the watch list or edit an entry (new-api watch-add-dialog /
 // watch-change-dialogs): level, absolute expiry or none, note and a reason
@@ -14,7 +14,11 @@ import { resolveUserIds } from './users'
 // change. An untouched expiry is left to the backend, which on a new entry
 // or a level change sets watch_days at observe and none at enforce; the form
 // shows that default for the chosen level until the expiry is edited.
-const props = defineProps<{ open: boolean; entry: Watch | null }>()
+// allowlisted / blocklisted are the user lists of the entry's user (known
+// for an edit): an allowlisted user cannot be set to the enforce level, and
+// for a user typed into a new entry the backend's level/allowlisted error
+// shows at the level.
+const props = defineProps<{ open: boolean; entry: Watch | null; allowlisted?: boolean; blocklisted?: boolean }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved'): void }>()
 const host = useModHost()
 const t = host.t
@@ -72,7 +76,10 @@ watch(
 )
 watch(() => form.level, followLevel)
 
-const levelOptions = computed(() => enumOptions('level', ['observe', 'enforce']))
+/** The user lists count for an edit only: the user of a new entry is not known yet. */
+const listed = computed<{ allowlisted?: boolean; blocklisted?: boolean }>(() => (props.entry ? { allowlisted: !!props.allowlisted, blocklisted: !!props.blocklisted } : {}))
+const levelOptions = computed(() => watchLevelOptions(listed.value.allowlisted))
+const levelHint = computed(() => userListHint(listed.value) || t('watch.levelHint'))
 const expiryOptions = computed(() => [
   { value: 'at', label: t('watchEdit.expiresAt') },
   { value: 'never', label: t('watch.noExpiry') }
@@ -134,7 +141,7 @@ async function save() {
       <SField v-if="!entry" :label="t('events.user')" :hint="t('watchEdit.userHint')" required :error="errs.user_id">
         <SInput v-model="form.user" :placeholder="t('events.userPlaceholder')" />
       </SField>
-      <SField :label="t('watch.col.level')" :hint="t('watch.levelHint')" :error="errs.level">
+      <SField :label="t('watch.col.level')" :hint="levelHint" :error="errs.level">
         <SSegmented v-model="form.level" :options="levelOptions" />
       </SField>
       <SField :label="t('watch.col.expires')" :hint="expiryHint" :error="errs.expires_at || errs.days">

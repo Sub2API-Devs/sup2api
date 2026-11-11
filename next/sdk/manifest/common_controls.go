@@ -106,6 +106,12 @@ const (
 	MaxAccountModels = 500
 	// MaxAccountModelLimits bounds the model limit lists of an account.
 	MaxAccountModelLimits = 50
+	// MinSPMWindowSeconds and MaxSPMWindowSeconds bound spm_window_seconds,
+	// the window an account or a model list counts sessions over (CONTRACTS
+	// §71.1); DefaultSPMWindowSeconds is the window of one naming none.
+	MinSPMWindowSeconds     = 60
+	MaxSPMWindowSeconds     = 86_400
+	DefaultSPMWindowSeconds = 60
 )
 
 // Usage limit bounds (CONTRACTS §73), shared by the account API and
@@ -145,6 +151,7 @@ var CommonControlSpecs = map[string]CommonControlSpec{
 	"rpm_limit":          {Kind: ControlInt, Max: MaxAccountRateLimit},
 	"tpm_limit":          {Kind: ControlInt, Max: MaxAccountTokenLimit},
 	"spm_limit":          {Kind: ControlInt, Max: MaxAccountRateLimit},
+	"spm_window_seconds": {Kind: ControlInt, Min: MinSPMWindowSeconds, Max: MaxSPMWindowSeconds},
 	"model_limits":       {Kind: ControlModelLimits},
 	"usage_limit":        {Kind: ControlUsageLimit},
 	"model_mapping":      {Kind: ControlModelMapping},
@@ -159,13 +166,15 @@ var CommonControlSpecs = map[string]CommonControlSpec{
 var LegacyCommonControls = []string{"schedulable", "auto_disable"}
 
 // ModelLimitValue is one model limit list in the account API shape
-// (model_limits[]); it converts to and from DefaultModelLimit.
+// (model_limits[]). SPMWindowSeconds is the list's session window, 0 for
+// the default (CONTRACTS §71.1); a DefaultModelLimit has none.
 type ModelLimitValue struct {
-	Models         []string `json:"models"`
-	MaxConcurrency int      `json:"max_concurrency"`
-	RPMLimit       int      `json:"rpm_limit"`
-	TPMLimit       int64    `json:"tpm_limit"`
-	SPMLimit       int      `json:"spm_limit"`
+	Models           []string `json:"models"`
+	MaxConcurrency   int      `json:"max_concurrency"`
+	RPMLimit         int      `json:"rpm_limit"`
+	TPMLimit         int64    `json:"tpm_limit"`
+	SPMLimit         int      `json:"spm_limit"`
+	SPMWindowSeconds int      `json:"spm_window_seconds,omitempty"`
 }
 
 // ControlDefaults are the declared limits under their common control names,
@@ -189,7 +198,7 @@ func (d *AccountDefaultLimits) ControlDefaults() map[string]any {
 	if len(d.ModelLimits) > 0 {
 		lists := make([]ModelLimitValue, len(d.ModelLimits))
 		for i, l := range d.ModelLimits {
-			lists[i] = ModelLimitValue(l)
+			lists[i] = ModelLimitValue{Models: l.Models, MaxConcurrency: l.MaxConcurrency, RPMLimit: l.RPMLimit, TPMLimit: l.TPMLimit, SPMLimit: l.SPMLimit}
 		}
 		out["model_limits"] = lists
 	}

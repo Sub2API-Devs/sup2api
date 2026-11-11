@@ -172,17 +172,31 @@ func (c *call) policyCandidates(ctx context.Context, original []core.AccountRef)
 		if !c.candidateEligible(&ref) || !c.creditAccountAllowed(&ref) {
 			continue
 		}
-		if !allowed[ref.ID] || s.sameID != 0 && ref.ID != s.sameID {
+		if !allowed[ref.ID] {
+			continue
+		}
+		delete(allowed, ref.ID)
+		if s.sameID != 0 && ref.ID != s.sameID {
+			c.skipAccount(ref.ID, core.SchedFailurePolicy, "same_account")
 			continue
 		}
 		proxy := proxyIdentity(ref.ProxyID)
 		if initial, seen := s.accountProxies[ref.ID]; seen && initial != proxy {
+			c.skipAccount(ref.ID, core.SchedFailurePolicy, "proxy_changed")
 			continue
 		}
 		if s.baseSet && (s.sameProxy && proxy != s.baseProxy || s.proxyOnly && proxy == 0) {
+			c.skipAccount(ref.ID, core.SchedFailurePolicy, "egress")
 			continue
 		}
 		out = append(out, ref)
+	}
+	// What is left of allowed stopped being offered since the request began:
+	// disabled or cooling down meanwhile (concludeScheduling reads which).
+	for _, ref := range original {
+		if allowed[ref.ID] {
+			c.skipAccount(ref.ID, core.SchedNotSchedulable, "left")
+		}
 	}
 	return out, nil
 }
@@ -279,6 +293,7 @@ func (c *call) planAvailabilityFailure(ctx context.Context, ref *core.AccountRef
 	s.preserveSticky = true
 	s.sameID = 0
 	excluded[ref.ID] = true
+	c.leaveSession(ctx, ref)
 	c.finishFailureDecision(ref, attempts, firstNonEmpty(res.err.NeutralReason, errTypeModelAvailability))
 	res.kind = attemptFailover
 	return res
@@ -336,6 +351,13 @@ func (c *call) prepareRetry(ctx context.Context, ref *core.AccountRef, action st
 		}
 		s.sameID = ref.ID
 		s.sameRetries[ref.ID]++
+		// The request is admitted on this account again: its own session,
+		// counted at each admission (CONTRACTS §71.2), leaves first, so that
+		// it is one session there and does not fill the cap it is checked
+		// against. A sticky session is remembered and counts once anyway.
+		if core.IsRequestSession(c.session) {
+			c.releaseSession(ctx, ref)
+		}
 		return ""
 	}
 	if action == failureReset {
@@ -345,8 +367,8 @@ func (c *call) prepareRetry(ctx context.Context, ref *core.AccountRef, action st
 		if err := c.releaseBinding(ctx, ref.ID); err != nil {
 			return "sticky_reset_failed"
 		}
-		c.releaseSession(ctx, ref)
 	}
+	c.leaveSession(ctx, ref)
 	s.preserveSticky = action == failureSwitch
 	s.sameID = 0
 	excluded[ref.ID] = true

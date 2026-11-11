@@ -51,6 +51,26 @@ describe('bulk account dialogs', () => {
     expect(mocks.toast).toHaveBeenCalledWith('成功 1，失败 1，跳过 1', 'warning')
   })
 
+  it('applies the session limit and its period as one field, refusing a period over 24 hours or not a whole number', async () => {
+    mocks.patch.mockImplementation(async (path: string, body: object) => ({ id: Number(path.split('/')[2]), ...body }))
+    const w = mount(AccountBulkEditDialog, {
+      props: { open: true, accounts: [acc(1), acc(2, { spm_limit: 20, spm_window_seconds: 3600 })], typeOf: () => undefined },
+      global: { plugins: [i18n], stubs: { SModal } }
+    })
+    const field = w.get('[data-testid="bulk-field-spm_limit"]')
+    expect(field.text()).toContain('会话数限制')
+    await field.get('input[data-testid="bulk-spm_limit"]').setValue('20')
+    await field.get('select[data-testid="bulk-spm_limit-window-unit"]').setValue('1')
+    for (const bad of ['25', '1.5']) {
+      await field.get('input[data-testid="bulk-spm_limit-window"]').setValue(bad)
+      expect(w.get('[data-testid="bulk-edit-apply"]').attributes('disabled')).toBeDefined()
+    }
+    await field.get('input[data-testid="bulk-spm_limit-window"]').setValue('1')
+    await w.get('[data-testid="bulk-edit-apply"]').trigger('click')
+    await flushPromises()
+    expect(mocks.patch.mock.calls.map((c) => [c[0], c[1]])).toEqual([['/accounts/1', { spm_limit: 20, spm_window_seconds: 3600 }]])
+  })
+
   it('disables every number field a selected type fixes or locks', async () => {
     const types: Record<number, AccountType> = {
       1: { common_controls: { weight: { locked: true, default: 2 } } } as unknown as AccountType,

@@ -6,6 +6,7 @@
 // a single edit), a few at a time; a stop keeps the rest unchanged. Failures
 // stay listed in the dialog; the saved rows are reported through `saved`.
 // A field some selected account's type fixes (common controls) is disabled.
+// The session cap and its window are one field (fixed when either is).
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
@@ -15,16 +16,19 @@ import GroupPicker from '@/components/GroupPicker.vue'
 import ProxyPicker from '@/components/ProxyPicker.vue'
 import { useBulkRun, type BulkFailure } from '@/composables/useBulkRun'
 import { errorMessage } from '@/utils/errors'
-import { fixedCount } from './commonControls'
+import { fixedCount, type CommonControlName } from './commonControls'
 import { todayQuery } from './accountUsage'
 import { buildBulkPatch, BULK_LIMITS, type BulkFields, type GroupMode, type NumberField } from './bulkEdit'
+import { SPM_WINDOW_DEFAULT, validWindow } from './spmWindow'
+import SessionLimitInput from './controls/SessionLimitInput.vue'
 
 const props = defineProps<{ open: boolean; accounts: Account[]; typeOf: (a: Account) => AccountType | undefined }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved', rows: Account[]): void }>()
 const { t } = useI18n()
 
 const on = reactive({ priority: false, weight: false, max_concurrency: false, tpm_limit: false, rpm_limit: false, spm_limit: false, groups: false, proxy: false, auto_disable: false })
-const values = reactive<BulkFields>({ priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true })
+const initialValues = (): BulkFields => ({ priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, spm_window_seconds: SPM_WINDOW_DEFAULT, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true })
+const values = reactive<BulkFields>(initialValues())
 const failures = ref<BulkFailure<Account>[]>([])
 /** The fields that are common controls. */
 const FIXABLE = ['auto_disable', ...(Object.keys(BULK_LIMITS) as NumberField[])] as const
@@ -33,7 +37,7 @@ const bulk = useBulkRun(4)
 watch(() => props.open, (open) => {
   if (!open) return
   Object.keys(on).forEach((k) => (on[k as keyof typeof on] = false))
-  Object.assign(values, { priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true })
+  Object.assign(values, initialValues())
   failures.value = []
 })
 
@@ -49,18 +53,20 @@ const numberFields = computed(() => [
   { key: 'max_concurrency' as const, label: t('accounts.concurrency'), hint: t('accounts.bulk.zeroUnlimited') },
   { key: 'rpm_limit' as const, label: t('accounts.rpmLimit'), hint: t('accounts.bulk.zeroUnlimited') },
   { key: 'tpm_limit' as const, label: t('accounts.tpmLimit'), hint: t('accounts.bulk.zeroUnlimited') },
-  { key: 'spm_limit' as const, label: t('accounts.spmLimit'), hint: t('accounts.bulk.zeroUnlimited') }
+  { key: 'spm_limit' as const, label: t('accounts.spmLimit'), hint: t('accounts.bulk.spmHint') }
 ])
 const invalid = computed(() => numberFields.value.filter((f) => {
   if (!on[f.key]) return false
   const v = Number(values[f.key])
   const [min, max] = BULK_LIMITS[f.key]
-  return values[f.key] === null || !Number.isInteger(v) || v < min || v > max
+  return values[f.key] === null || !Number.isInteger(v) || v < min || v > max || (f.key === 'spm_limit' && !validWindow(values.spm_window_seconds))
 }).map((f) => f.key))
 const groupModes = computed(() => (['replace', 'add', 'remove'] as GroupMode[]).map((m) => ({ value: m, label: t(`accounts.bulk.groupMode.${m}`) })))
 const anyOn = computed(() => Object.values(on).some(Boolean))
+/** Controls behind a field: the session limit is the cap and its window. */
+const controlsOf = (k: (typeof FIXABLE)[number]): CommonControlName[] => (k === 'spm_limit' ? ['spm_limit', 'spm_window_seconds'] : [k])
 /** Selected accounts whose type fixes the field (common controls); such a field is not applied. */
-const fixed = computed(() => Object.fromEntries(FIXABLE.map((k) => [k, fixedCount(props.accounts, props.typeOf, k)])) as Record<(typeof FIXABLE)[number], number>)
+const fixed = computed(() => Object.fromEntries(FIXABLE.map((k) => [k, fixedCount(props.accounts, props.typeOf, ...controlsOf(k))])) as Record<(typeof FIXABLE)[number], number>)
 watch(fixed, (f) => (Object.keys(f) as Array<keyof typeof f>).forEach((k) => f[k] && (on[k] = false)), { immediate: true })
 
 async function apply() {
@@ -92,10 +98,24 @@ async function apply() {
   <SModal :open="open" :title="t('accounts.bulk.editTitle', { n: accounts.length })" width="lg" :persistent="bulk.running.value" :closable="!bulk.running.value" @update:open="(v) => emit('update:open', v)">
     <div class="space-y-4">
       <SHint>{{ t('accounts.bulk.editInfo', { n: accounts.length }) }}</SHint>
-      <fieldset class="grid gap-x-4 gap-y-3 sm:grid-cols-2" :disabled="bulk.running.value">
-        <div v-for="f in numberFields" :key="f.key" class="space-y-1" :data-testid="`bulk-field-${f.key}`">
+      <fieldset class="grid gap-x-4 gap-y-3 sm:grid-flow-row-dense sm:grid-cols-2" :disabled="bulk.running.value">
+        <div v-for="f in numberFields" :key="f.key" class="space-y-1" :class="f.key === 'spm_limit' ? 'sm:col-span-2' : ''" :data-testid="`bulk-field-${f.key}`">
           <SCheckbox v-model="on[f.key]" size="sm" :disabled="!!fixed[f.key]">{{ f.label }}</SCheckbox>
-          <SInput type="number" :model-value="values[f.key]" :min="BULK_LIMITS[f.key][0]" :max="BULK_LIMITS[f.key][1]" :aria-label="f.label" :class="on[f.key] ? '' : 'opacity-60'" :error="invalid.includes(f.key)" :disabled="!!fixed[f.key]" @update:model-value="set(f.key, $event as number | null, f.key)" />
+          <SessionLimitInput
+            v-if="f.key === 'spm_limit'"
+            :limit="values.spm_limit"
+            :window-seconds="values.spm_window_seconds"
+            :limit-max="BULK_LIMITS.spm_limit[1]"
+            :suffix="t('accounts.spmWindow.sessions')"
+            :aria-label="f.label"
+            :class="on.spm_limit ? '' : 'opacity-60'"
+            :error="invalid.includes('spm_limit')"
+            :disabled="!!fixed.spm_limit"
+            testid="bulk-spm_limit"
+            @update:limit="set('spm_limit', $event ?? null, 'spm_limit')"
+            @update:window-seconds="set('spm_window_seconds', $event ?? null, 'spm_limit')"
+          />
+          <SInput v-else type="number" :model-value="values[f.key]" :min="BULK_LIMITS[f.key][0]" :max="BULK_LIMITS[f.key][1]" :aria-label="f.label" :class="on[f.key] ? '' : 'opacity-60'" :error="invalid.includes(f.key)" :disabled="!!fixed[f.key]" @update:model-value="set(f.key, $event as number | null, f.key)" />
           <SHint v-if="fixed[f.key]" size="xs" tone="warning">{{ t('accounts.bulk.controlFixed', { n: fixed[f.key] }) }}</SHint>
           <SHint v-else size="xs">{{ f.hint }}</SHint>
         </div>

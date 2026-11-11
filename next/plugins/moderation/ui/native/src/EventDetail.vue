@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SButton, SCode, SCopyButton, SDescriptions, SHint, SModal, SSectionTitle, SSpinner, type DescItem } from '@sub2api/ui'
+import ReplayBadge from './ReplayBadge.vue'
 import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
@@ -13,7 +14,7 @@ import UserRef from './UserRef.vue'
 import UserStateSection from './UserStateSection.vue'
 import { useCatalog } from './catalog'
 import { categoryLabel, dt, enumLabel, idText, isSuspicious, ms, num } from './format'
-import { canManage, deleteEvent, fetchEvent, reviewEvents, toastError, useModHost } from './host'
+import { canManage, deleteEvent, fetchEvent, reviewDoneText, reviewEvents, toastError, useModHost } from './host'
 import { aiVerdictTone, modeTone, severityTone } from './tones'
 import type { EventFilter, ModEventDetail, ReviewStatus, Watch } from './types'
 import { useAsync } from './useAsync'
@@ -24,7 +25,8 @@ import { useAsync } from './useAsync'
 // structured input message; manage users review a suspicious record (hit,
 // block) or delete any. userLink=false (the user drawer, already showing
 // the user) leaves the user as plain text. filterable (the records tab)
-// offers to filter the list by the record's endpoint or session (filter).
+// offers to filter the list by the record's endpoint or session, and by the
+// request a replayed hit took its verdict from (filter).
 const props = withDefaults(defineProps<{ open: boolean; eventId: number | null; userLink?: boolean; filterable?: boolean }>(), { userLink: true })
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
@@ -68,10 +70,10 @@ async function review(status: ReviewStatus) {
   if (!e) return
   busy.value = true
   try {
-    await reviewEvents([e.id], status)
+    const r = await reviewEvents([e.id], status)
     e.review_status = status
     emit('reviewed', [e.id], status)
-    host.toast(t('review.done', { n: 1 }), 'success')
+    host.toast(reviewDoneText(r, 1), 'success')
   } catch (err) {
     toastError(err)
   } finally {
@@ -165,6 +167,7 @@ const fields = computed<DescItem[]>(() => {
     <div v-else-if="ev" class="mod-detail">
       <div class="mod-detail-head">
         <ResultBadge :result="ev.result" />
+        <ReplayBadge v-if="ev.replayed" />
         <VerdictBadge :event="ev" />
         <SBadge v-if="ev.timing">{{ enumLabel('timing', ev.timing) }}</SBadge>
         <SBadge v-if="ev.mode" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>
@@ -193,7 +196,7 @@ const fields = computed<DescItem[]>(() => {
 
       <div v-if="ev.trace">
         <SSectionTitle tag="p">{{ t('detail.trace') }}</SSectionTitle>
-        <TraceView :trace="ev.trace" />
+        <TraceView :trace="ev.trace" :request-link="filterable" @show-request="filterBy({ request_id: $event })" />
       </div>
 
       <FlowSnapshotCard v-if="ev.flow_snapshot" :snapshot="ev.flow_snapshot" :name="ev.flow_name" :current="ev.flow_current_version" />
@@ -202,13 +205,11 @@ const fields = computed<DescItem[]>(() => {
         <SSectionTitle tag="p">{{ t('detail.related') }}</SSectionTitle>
         <ul class="mod-related">
           <li v-for="r in ev.related" :key="r.id">
-            <button type="button" class="mod-timeline-item" @click="currentId = r.id">
-              <span class="mod-history-head">
-                <ResultBadge :result="r.result" />
-                <SBadge v-if="r.timing" size="xs">{{ enumLabel('timing', r.timing) }}</SBadge>
-                <FlowRef :flow-id="r.flow_id" :version="r.flow_version" />
-                <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>
-              </span>
+            <button type="button" class="mod-related-item" @click="currentId = r.id">
+              <ResultBadge :result="r.result" />
+              <SBadge v-if="r.timing" size="xs">{{ enumLabel('timing', r.timing) }}</SBadge>
+              <FlowRef :flow-id="r.flow_id" :version="r.flow_version" compact />
+              <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>
             </button>
           </li>
         </ul>
@@ -235,7 +236,7 @@ const fields = computed<DescItem[]>(() => {
         <template #item-flow><FlowRef :flow-id="ev.flow_id" :version="ev.flow_version" :name="ev.flow_name" :current="ev.flow_current_version" /></template>
         <template #item-endpoint>
           {{ ev.endpoint || '—' }}
-          <SButton v-if="filterable && ev.endpoint" size="xs" variant="ghost" :title="t('detail.endpointRecords')" @click="filterBy({ endpoint: ev.endpoint })">{{ t('filter') }}</SButton>
+          <SButton v-if="filterable && ev.endpoint" size="xs" variant="ghost" icon="filter" @click="filterBy({ endpoint: ev.endpoint })">{{ t('detail.endpointRecords') }}</SButton>
         </template>
         <template #item-session>
           {{ ev.session_fp }}

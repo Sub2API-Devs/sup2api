@@ -305,11 +305,14 @@ func TestEscalationOf(t *testing.T) {
 		}
 	}
 	c := compile(DefaultSettings())
-	if a, d := decideEscalation(c, LevelObserve, TrendOccasional, SuggestRelease, 0); a != ActionAutoNotAllowed || d != ActionAutoRemove {
+	if a, d := decideEscalation(c, 3, LevelObserve, TrendOccasional, SuggestRelease, 0); a != ActionAutoNotAllowed || d != ActionAutoRemove {
 		t.Fatalf("removal must be off by default: %s %s", a, d)
 	}
+	if a, d := decideEscalation(c, 3, LevelObserve, TrendPersistent, SuggestBlock, 2); a != ActionAutoUpgrade || d != "" {
+		t.Fatalf("allowed upgrade: %s %s", a, d)
+	}
 	c.AnalysisAllowUpgrade = false
-	if a, d := decideEscalation(c, LevelObserve, TrendPersistent, SuggestBlock, 2); a != ActionAutoNotAllowed || d != ActionAutoUpgrade {
+	if a, d := decideEscalation(c, 3, LevelObserve, TrendPersistent, SuggestBlock, 2); a != ActionAutoNotAllowed || d != ActionAutoUpgrade {
 		t.Fatalf("not allowed: %s %s", a, d)
 	}
 }

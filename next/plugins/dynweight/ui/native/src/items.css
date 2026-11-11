@@ -389,9 +389,12 @@
     margin-left: 0;
   }
   /* No spacer before the first condition; the wide fields share the row. */
-  .dw-it-cond > span.dw-it-w-join,
-  .dw-it-modal-f {
+  .dw-it-cond > span.dw-it-w-join {
     display: none;
+  }
+  /* The footer note takes a row of its own above the buttons. */
+  .dw-it-modal-f {
+    flex-basis: 100% !important;
   }
   .dw-it-w-metric,
   .dw-it-w-value,

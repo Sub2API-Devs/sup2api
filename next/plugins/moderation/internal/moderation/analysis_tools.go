@@ -37,11 +37,11 @@ var analysisTools []ToolSpec
 func init() {
 	analysisTools = []ToolSpec{
 		{Name: "get_user_summary", Purpose: "看这个用户的整体情况", Args: "无",
-			Returns: "今天和近 30 天的审核记录数、可疑数，按类别和严重度的计数，名单级别、来源、到期日，名单历史，上一次分析结论；当前分组、该分组当前绑定的流程（id / 名称 / 版本）、近 30 天「分组 → 流程@版本」分布",
+			Returns: "今天和近 30 天的审核记录数、可疑数（不含缓存命中的重放），按类别和严重度的计数（按记录统计，含重放记录；replayed 为 true 的是历史内容被再次发送时的缓存命中，不是新的违规），名单级别、来源、到期日，名单历史，上一次分析结论；当前分组、该分组当前绑定的流程（id / 名称 / 版本）、近 30 天「分组 → 流程@版本」分布",
 			Schema:  objectSchema(nil, map[string]any{}), Handler: toolUserSummary},
 		{Name: "list_suspicious_records", Purpose: "列出这个用户的可疑记录（新的在前，分页）",
 			Args:    "since_days? 默认 30 · limit? 默认 20，≤50 · before_id? 翻页",
-			Returns: "id、时间、group、flow_id、flow_version、命中类别、严重度（按分数）、各级各审核器的得分和阈值（含送审的图片数 sent_images、没送出的 skipped_images）、处理状态（误报 / 确认 / 还没处理）、上次 AI 复核结论、120 字摘录（没保存原文时为空）、session_fp（请求所属粘性会话的指纹，没有粘性会话时为空；同一指纹即同一粘性会话，可据此判断违规是否集中在同一会话）",
+			Returns: "id、时间、group、flow_id、flow_version、命中类别、严重度（按分数）、各级各审核器的得分和阈值（含送审的图片数 sent_images、没送出的 skipped_images）、处理状态（误报 / 确认 / 还没处理）、上次 AI 复核结论、120 字摘录（没保存原文时为空）、session_fp（请求所属粘性会话的指纹，没有粘性会话时为空；同一指纹即同一粘性会话，可据此判断违规是否集中在同一会话）、replayed（replayed 为 true 的是历史内容被再次发送时的缓存命中，不是新的违规：没有调用审核器，沿用了这段内容第一次被审出时的结果）",
 			Schema: objectSchema(nil, map[string]any{
 				"since_days": map[string]any{"type": "integer", "minimum": 1, "maximum": 365},
 				"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": 50},
@@ -49,7 +49,7 @@ func init() {
 			}), Handler: toolListRecords},
 		{Name: "get_record", Purpose: "看一条可疑记录的详情",
 			Args:    "id（必须是这个用户的记录，否则返回错误给模型）· offset? 全文从第几个字开始读，默认 0 · limit? 这次最多读多少字，默认 12000，≤20000",
-			Returns: "240 字摘录；记录保存了原文时另有 text：用户消息全文从 offset 起的一段（审核器只看了全文的前 12000 字），以 text 为准，和 text_range（offset 本段起点、returned 本段字数、total 全文字数、complete 是否已读到全文末尾、next_offset 没读完时下一段的 offset）；没读完又需要后文时，用 next_offset 再调一次；hit_categories（类别、得分、阈值、所在级）、group、flow_id、flow_version、各级各审核器的得分和阈值（含送审的图片数 sent_images、没送出的 skipped_images）、处理状态（记录上没有 evidence）、session_fp（请求所属粘性会话的指纹，没有粘性会话时为空；同一指纹即同一粘性会话）",
+			Returns: "240 字摘录；记录保存了原文时另有 text：用户消息全文从 offset 起的一段（审核器只看了全文的前 12000 字），以 text 为准，和 text_range（offset 本段起点、returned 本段字数、total 全文字数、complete 是否已读到全文末尾、next_offset 没读完时下一段的 offset）；没读完又需要后文时，用 next_offset 再调一次；hit_categories（类别、得分、阈值、所在级）、group、flow_id、flow_version、各级各审核器的得分和阈值（含送审的图片数 sent_images、没送出的 skipped_images）、处理状态（记录上没有 evidence）、session_fp（请求所属粘性会话的指纹，没有粘性会话时为空；同一指纹即同一粘性会话）、replayed（replayed 为 true 的是历史内容被再次发送时的缓存命中，不是新的违规）",
 			Schema: objectSchema([]string{"id"}, map[string]any{
 				"id":     map[string]any{"type": "integer"},
 				"offset": map[string]any{"type": "integer", "minimum": 0},
@@ -309,15 +309,16 @@ type toolRow struct {
 	Trace        []byte
 	Excerpt      string
 	TextLen      int
+	Replayed     bool
 }
 
 const toolRowColumns = `id, created_at, group_id, session_fp, flow_id, flow_version, timing, severity, review_status,
-	ai_verdict, ai_severity, ai_reason, trace, left(coalesce(text, ''), $EXCERPT), coalesce(char_length(text), 0)`
+	ai_verdict, ai_severity, ai_reason, trace, left(coalesce(text, ''), $EXCERPT), coalesce(char_length(text), 0), replayed`
 
 func scanToolRow(r pgx.Row) (toolRow, error) {
 	var t toolRow
 	err := r.Scan(&t.ID, &t.CreatedAt, &t.GroupID, &t.SessionFp, &t.FlowID, &t.FlowVersion, &t.Timing, &t.Severity, &t.ReviewStatus,
-		&t.AIVerdict, &t.AISeverity, &t.AIReason, &t.Trace, &t.Excerpt, &t.TextLen)
+		&t.AIVerdict, &t.AISeverity, &t.AIReason, &t.Trace, &t.Excerpt, &t.TextLen, &t.Replayed)
 	return t, err
 }
 
@@ -329,19 +330,22 @@ type toolHit struct {
 }
 
 type toolStage struct {
-	Stage         int       `json:"stage"`
-	Role          string    `json:"role"`
-	AuditorID     int64     `json:"auditor_id"`
-	Auditor       string    `json:"auditor"`
-	Type          string    `json:"type,omitempty"`
-	Hit           bool      `json:"hit"`
-	TopCategory   string    `json:"top_category,omitempty"`
-	TopScore      float64   `json:"top_score"`
-	Hits          []toolHit `json:"hits,omitempty"`
-	Skipped       bool      `json:"skipped,omitempty"`
-	Error         string    `json:"error,omitempty"`
-	SentImages    int       `json:"sent_images,omitempty"`
-	SkippedImages int       `json:"skipped_images,omitempty"`
+	Stage       int       `json:"stage"`
+	Role        string    `json:"role"`
+	AuditorID   int64     `json:"auditor_id"`
+	Auditor     string    `json:"auditor"`
+	Type        string    `json:"type,omitempty"`
+	Hit         bool      `json:"hit"`
+	TopCategory string    `json:"top_category,omitempty"`
+	TopScore    float64   `json:"top_score"`
+	Hits        []toolHit `json:"hits,omitempty"`
+	Skipped     bool      `json:"skipped,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	// StageFailed: the whole stage failed and was passed over
+	// (StageTrace.Failed); the run went on with the other stages' results.
+	StageFailed   bool `json:"stage_failed,omitempty"`
+	SentImages    int  `json:"sent_images,omitempty"`
+	SkippedImages int  `json:"skipped_images,omitempty"`
 }
 
 type toolTextRange struct {
@@ -353,23 +357,26 @@ type toolTextRange struct {
 }
 
 type toolRecord struct {
-	ID            int64          `json:"id"`
-	CreatedAt     string         `json:"created_at"`
-	Group         int64          `json:"group"`
-	SessionFp     string         `json:"session_fp"`
-	FlowID        int64          `json:"flow_id"`
-	FlowVersion   int            `json:"flow_version"`
-	Timing        string         `json:"timing"`
-	HitCategories []toolHit      `json:"hit_categories"`
-	Severity      string         `json:"severity"`
-	Stages        []toolStage    `json:"stages"`
-	ReviewStatus  string         `json:"review_status"`
-	AIVerdict     *string        `json:"ai_verdict"`
-	AISeverity    string         `json:"ai_severity,omitempty"`
-	AIReason      string         `json:"ai_reason,omitempty"`
-	Excerpt       string         `json:"excerpt"`
-	Text          string         `json:"text,omitempty"`
-	TextRange     *toolTextRange `json:"text_range,omitempty"`
+	ID            int64       `json:"id"`
+	CreatedAt     string      `json:"created_at"`
+	Group         int64       `json:"group"`
+	SessionFp     string      `json:"session_fp"`
+	FlowID        int64       `json:"flow_id"`
+	FlowVersion   int         `json:"flow_version"`
+	Timing        string      `json:"timing"`
+	HitCategories []toolHit   `json:"hit_categories"`
+	Severity      string      `json:"severity"`
+	Stages        []toolStage `json:"stages"`
+	ReviewStatus  string      `json:"review_status"`
+	AIVerdict     *string     `json:"ai_verdict"`
+	AISeverity    string      `json:"ai_severity,omitempty"`
+	AIReason      string      `json:"ai_reason,omitempty"`
+	Excerpt       string      `json:"excerpt"`
+	// Replayed: a cached hit replayed when content moderated before was sent
+	// again, not a new violation.
+	Replayed  bool           `json:"replayed,omitempty"`
+	Text      string         `json:"text,omitempty"`
+	TextRange *toolTextRange `json:"text_range,omitempty"`
 }
 
 var reviewStatusNames = map[string]string{"pending": "还没处理", "false_positive": "误报", "confirmed": "确认"}
@@ -377,25 +384,26 @@ var reviewStatusNames = map[string]string{"pending": "还没处理", "false_posi
 func (tc *toolCtx) recordOf(r *toolRow, excerptRunes int, detail bool) toolRecord {
 	out := toolRecord{ID: r.ID, CreatedAt: toolTime(&r.CreatedAt), Group: r.GroupID, SessionFp: r.SessionFp, FlowID: r.FlowID, FlowVersion: r.FlowVersion,
 		Timing: r.Timing, Severity: r.Severity, ReviewStatus: reviewStatusNames[r.ReviewStatus], Excerpt: wrapUserText(truncateRunes(r.Excerpt, excerptRunes)),
-		HitCategories: []toolHit{}, Stages: []toolStage{}}
+		HitCategories: []toolHit{}, Stages: []toolStage{}, Replayed: r.Replayed}
 	var tr Trace
 	if len(r.Trace) > 0 && json.Unmarshal(r.Trace, &tr) == nil {
 		auditors := tc.snap.auditors
 		for i, st := range tr.Stages {
-			role := stageRoleNames[stageRole(i, slices.ContainsFunc(st.Outcomes, func(o Outcome) bool {
+			no := tr.stageNo(i)
+			role := stageRoleNames[stageRole(no-1, st.Fallback, slices.ContainsFunc(st.Outcomes, func(o Outcome) bool {
 				a := auditors[o.AuditorID]
 				return a != nil && a.Type == AuditorTypeSafe
 			}))]
 			for _, o := range st.Outcomes {
-				ts := toolStage{Stage: i + 1, Role: role, AuditorID: o.AuditorID, Hit: o.Hit, TopCategory: o.TopCategory, TopScore: o.TopScore,
-					Skipped: o.Skipped, Error: o.ErrType, SentImages: o.SentImages, SkippedImages: o.SkippedImages}
+				ts := toolStage{Stage: no, Role: role, AuditorID: o.AuditorID, Hit: o.Hit, TopCategory: o.TopCategory, TopScore: o.TopScore,
+					Skipped: o.Skipped, Error: o.ErrType, StageFailed: st.Failed, SentImages: o.SentImages, SkippedImages: o.SkippedImages}
 				if a := auditors[o.AuditorID]; a != nil {
 					ts.Auditor, ts.Type = a.Name, a.Type
 				} else {
 					ts.Auditor = "审核器已删除"
 				}
 				for _, h := range o.Hits {
-					ts.Hits = append(ts.Hits, toolHit{Category: h.Category, Score: h.Score, Threshold: h.Threshold, Stage: i + 1})
+					ts.Hits = append(ts.Hits, toolHit{Category: h.Category, Score: h.Score, Threshold: h.Threshold, Stage: no})
 				}
 				out.Stages = append(out.Stages, ts)
 			}

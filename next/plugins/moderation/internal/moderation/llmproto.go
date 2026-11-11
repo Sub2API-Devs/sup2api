@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,7 +60,8 @@ const (
 )
 
 // llmRequest is the protocol-independent input of one call. Messages are
-// already in the protocol's shape (llmUserMessage, assistant, toolResults).
+// already in the protocol's shape (llmUserMessage, user, assistant,
+// toolResults).
 // ForceTool appends a user note naming the tool instead of forcing it
 // (thinking models reject a forced tool_choice); ToolChoice is only used by
 // the verdict agent.
@@ -126,14 +128,20 @@ type llmProtocol struct {
 	parse       func(data []byte) (llmTurn, error)
 	assistant   func(t llmTurn) []any
 	toolResults func(rs []toolResult) []any
+	// A user message with images is a list of parts (user): textPart is the
+	// type of its text part, imagePart one image in the protocol's shape.
+	textPart  string
+	imagePart func(img Image) any
 }
 
 var llmProtocols = map[string]*llmProtocol{}
 
 func init() {
-	llmProtocols[ProtocolOpenAIChat] = &llmProtocol{"/v1/chat/completions", bearer, chatBody, chatEvents, chatKind, chatParse, chatAssistant, chatToolResults}
-	llmProtocols[ProtocolOpenAIResponses] = &llmProtocol{"/v1/responses", bearer, responsesBody, responsesEvents, responsesKind, responsesParse, responsesAssistant, responsesToolResults}
-	llmProtocols[ProtocolAnthropic] = &llmProtocol{"/v1/messages", anthropicHeader, anthropicBody, anthropicEvents, anthropicKind, anthropicParse, anthropicAssistant, anthropicToolResults}
+	llmProtocols[ProtocolOpenAIChat] = &llmProtocol{"/v1/chat/completions", bearer, chatBody, chatEvents, chatKind, chatParse, chatAssistant, chatToolResults, "text", chatImage}
+	llmProtocols[ProtocolOpenAIResponses] = &llmProtocol{"/v1/responses", bearer, responsesBody, responsesEvents, responsesKind, responsesParse, responsesAssistant, responsesToolResults,
+		"input_text", responsesImage}
+	llmProtocols[ProtocolAnthropic] = &llmProtocol{"/v1/messages", anthropicHeader, anthropicBody, anthropicEvents, anthropicKind, anthropicParse, anthropicAssistant, anthropicToolResults,
+		"text", anthropicImage}
 }
 
 func bearer(key string) map[string]string {
@@ -238,6 +246,173 @@ func retryAfterOf(v string) time.Duration {
 // llmUserMessage is a plain user message; the same in all three protocols.
 func llmUserMessage(text string) any {
 	return map[string]any{"role": "user", "content": text}
+}
+
+// user is the user message of an auditor: the text, then the images
+// (llmImages) as parts of the protocol. Without images it is the plain
+// message (llmUserMessage).
+func (p *llmProtocol) user(text string, images []Image) any {
+	if len(images) == 0 {
+		return llmUserMessage(text)
+	}
+	parts := make([]any, 0, len(images)+1)
+	parts = append(parts, map[string]any{"type": p.textPart, "text": text})
+	for _, img := range images {
+		parts = append(parts, p.imagePart(img))
+	}
+	return map[string]any{"role": "user", "content": parts}
+}
+
+// Image limits of the LLM auditors (llm_questions, llm_verdict). An image
+// outside them is skipped; nothing is redrawn here (the Jev auditor redraws,
+// jev_image.go).
+const (
+	// llmImageMaxBytes is the largest image, decoded (the owner's limit;
+	// read off the length of the base64, decodedLen). Anthropic's own API
+	// and the OpenAI APIs take it: Anthropic measures the base64 text and
+	// takes 10 MB of it, this is 7 MiB. Anthropic on Amazon Bedrock and
+	// Google Cloud takes 5 MB of base64 (3.75 MiB of data): an image
+	// between the two is refused there, and the call goes on with the
+	// text alone (llmImagesRefused).
+	llmImageMaxBytes = 5 << 20
+	// llmImageMaxSide: Anthropic refuses an image wider or higher than
+	// 8000 px.
+	llmImageMaxSide = 8000
+	// llmMaxImages: with more than 20 images in a request Anthropic applies
+	// a lower limit to the sides of every one of them.
+	llmMaxImages = 20
+	// llmImagesMaxBase64 bounds the images of one call together, and with
+	// them the JSON body (the upstream APIs limit a request to some tens of
+	// megabytes) and the memory of a call. Measured for building the body
+	// of a call at the bound, beside the request itself: it grows with the
+	// number of images. openai_chat and openai_responses hold the data
+	// URLs (one copy of the base64), what json.Marshal allocates (its
+	// buffer is not reliably warm) and the body - about 83 MiB allocated
+	// for 3 images, 126 MiB for 8, 143 MiB for 20, that is 4 to 7 times
+	// the base64; anthropic, which sends the base64 without a data URL,
+	// about 63 to 123 MiB, 3 to 6 times. Images that came with line breaks
+	// add the copies without them (llmImages): what stays is at most the
+	// images sent, what is copied on the way is up to all the wrapped
+	// images of the request, because the total and the count are checked
+	// after the copy. The calls themselves are not admitted by their
+	// bytes; the requests they serve are: a hook request holds its bytes
+	// of max_inflight_mb (128 MB by default) while it is handled, and the
+	// post jobs hold at most maxQueueBytes until they are done. That
+	// leaves about six of the largest requests in progress on the pre
+	// path and about four more in the post queue, each with a call of
+	// every LLM auditor of its stage, which in the worst case can exceed the 1024 MB of the
+	// plugin (known limitation, DESIGN section 14; the hook then fails
+	// open).
+	llmImagesMaxBase64 = 20 << 20
+)
+
+// llmImages picks the images of in an LLM auditor sends, in order: inline
+// PNG, JPEG, GIF and WebP inside the limits above, the same content once.
+// URL images are never sent (nor downloaded). The media type is the format
+// of the image's header, whatever the client declared: Anthropic refuses an
+// image whose declared type is not its real one.
+//
+// Base64 that came with line breaks - wrapped at 76 characters, a newline at
+// its end: what many encoders write, and what the other auditors read - is
+// sent without them (unwrapBase64): the limits, the duplicates and the part
+// are of that text, so a wrapped and an unwrapped copy of an image are one
+// image. An image whose base64 is then not well-formed all the way
+// (strictBase64) is skipped like one outside the limits: a strict upstream
+// refuses the whole call for it, and the call would go on without any of its
+// images (llmImagesRefused).
+//
+// received lists the images of in (indexes in Input.Images) that parts stand
+// for: every image sent and its duplicates. An image that is not among them
+// was skipped.
+func llmImages(in *Input) (parts []Image, received []int) {
+	sent := map[string]bool{}
+	size := 0
+	for i, img := range in.Images {
+		if img.URL != "" {
+			continue
+		}
+		data := img.Data
+		if breaks := strings.Count(data, "\r") + strings.Count(data, "\n"); breaks > 0 {
+			// Not copied when it is over the size limit whatever its padding.
+			if base64.StdEncoding.DecodedLen(len(data)-breaks) > llmImageMaxBytes+2 {
+				continue
+			}
+			data = unwrapBase64(data, len(data)-breaks)
+		}
+		if sent[data] {
+			received = append(received, i)
+			continue
+		}
+		if len(parts) == llmMaxImages || decodedLen(data) > llmImageMaxBytes || size+len(data) > llmImagesMaxBase64 {
+			continue
+		}
+		cfg, format, ok := imageHeader(data)
+		if !ok || min(cfg.Width, cfg.Height) <= 0 || max(cfg.Width, cfg.Height) > llmImageMaxSide || !strictBase64(data) {
+			continue
+		}
+		sent[data] = true
+		size += len(data)
+		parts = append(parts, Image{MediaType: "image/" + format, Data: data})
+		received = append(received, i)
+	}
+	return parts, received
+}
+
+// unwrapBase64 is s without its line breaks (CR and LF, nothing else), size
+// bytes long: one copy, which lives as long as the parts of the call that
+// hold it.
+func unwrapBase64(s string, size int) string {
+	// One pass over the bytes: a text that is mostly line breaks costs no
+	// more than one that has none.
+	out := make([]byte, 0, size)
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c != '\r' && c != '\n' {
+			out = append(out, c)
+		}
+	}
+	return string(out)
+}
+
+// llmImagesRefused is the status of err when it is how an upstream (or a
+// proxy before it) refuses a call for its images, 0 otherwise: 400, 413 (the
+// body is too large), 415 and 422. A call that carried images and was
+// answered so is made once more with the text alone (llmQuestionsAudit,
+// agent.run). 404, 429 and 5xx say nothing about the images: they stay
+// errors. Nor does one of the four statuses when the call with the text
+// alone is answered with one of them too (a wrong model name, max_tokens,
+// tool_choice): then the images were not what the upstream refused, and the
+// result is the error of that call, without a refusal.
+func llmImagesRefused(err error) int {
+	switch st := upstreamStatus(err); st {
+	case http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity:
+		return st
+	}
+	return 0
+}
+
+// strictBase64 reports whether s is base64 as the strictest upstream reads
+// it (RFC 4648 section 4): the standard alphabet, padded to a multiple of
+// four, nothing behind the padding, no line breaks (llmImages takes them out
+// first) and zero padding bits. The decoders of this package are looser -
+// they skip line breaks, and imageHeader reads the head of an image only.
+// The text is decoded as a stream into nothing: no decoded copy is held.
+func strictBase64(s string) bool {
+	if len(s)%4 != 0 || strings.IndexByte(s, '\n') >= 0 || strings.IndexByte(s, '\r') >= 0 {
+		return false
+	}
+	// The stream decoder reads the text in pieces and takes padding at the
+	// end of one of them for the end of the text.
+	if i := strings.IndexByte(s, '='); i >= 0 && i < len(s)-2 {
+		return false
+	}
+	_, err := io.Copy(io.Discard, base64.NewDecoder(base64.StdEncoding.Strict(), strings.NewReader(s)))
+	return err == nil
+}
+
+// decodedLen is the size of the data in a padded base64 text, by the length
+// of the text alone.
+func decodedLen(b64 string) int {
+	return base64.StdEncoding.DecodedLen(len(b64)) - strings.Count(b64[max(len(b64)-2, 0):], "=")
 }
 
 func stepMessages(req llmRequest) []any {
@@ -537,6 +712,10 @@ func anthropicAssistant(t llmTurn) []any {
 	return []any{map[string]any{"role": "assistant", "content": content}}
 }
 
+func anthropicImage(img Image) any {
+	return map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": img.MediaType, "data": img.Data}}
+}
+
 func anthropicToolResults(rs []toolResult) []any {
 	blocks := make([]any, 0, len(rs))
 	for _, r := range rs {
@@ -659,6 +838,10 @@ func chatAssistant(t llmTurn) []any {
 		msg["tool_calls"] = calls
 	}
 	return []any{msg}
+}
+
+func chatImage(img Image) any {
+	return map[string]any{"type": "image_url", "image_url": map[string]any{"url": img.DataURL()}}
 }
 
 func chatToolResults(rs []toolResult) []any {
@@ -820,6 +1003,10 @@ func responsesAssistant(t llmTurn) []any {
 		items = append(items, map[string]any{"type": "function_call", "call_id": c.ID, "name": c.Name, "arguments": string(c.Args)})
 	}
 	return items
+}
+
+func responsesImage(img Image) any {
+	return map[string]any{"type": "input_image", "image_url": img.DataURL()}
 }
 
 func responsesToolResults(rs []toolResult) []any {

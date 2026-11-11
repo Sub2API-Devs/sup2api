@@ -1,7 +1,8 @@
 {
   "ui:order": [
     "mode",
-    "exempt_user_ids",
+    "allowlist_user_ids",
+    "blocklist_user_ids",
     "block_status",
     "block_message",
     "auto_watch",
@@ -23,6 +24,7 @@
     "record_overturned",
     "record_errors",
     "store_text",
+    "record_pass_input_message",
     "error_text_max_chars",
     "hit_retention_days",
     "overturned_retention_days",
@@ -33,7 +35,7 @@
     "queue_size",
     "max_inflight_mb",
     "ttft_timeout_ms",
-    "cache_ttl_seconds",
+    "verdict_cache_days",
     "cache_entries",
     "min_chars",
     "input_max_chars",
@@ -58,13 +60,15 @@
     "sample_rate",
     "group_ids",
     "model_patterns",
-    "retention_days"
+    "retention_days",
+    "exempt_user_ids",
+    "cache_ttl_seconds"
   ],
   "mode": {
     "ui:section": {
       "title": {
-        "en": "Mode and exemptions",
-        "zh": "运行模式与豁免"
+        "en": "Mode and user lists",
+        "zh": "运行模式与用户名单"
       },
       "description": {
         "en": "Channels, auditors and flows are configured on their tabs of this page; a flow bound to a group (or the default group 0) decides what is moderated.",
@@ -78,37 +82,53 @@
         "zh": "关闭"
       },
       {
-        "en": "Observe",
-        "zh": "观察"
+        "en": "On · observe by default",
+        "zh": "开启 · 默认观察"
       },
       {
-        "en": "Enforce",
-        "zh": "拦截"
+        "en": "On · enforce by default",
+        "zh": "开启 · 默认拦截"
       }
     ],
     "ui:title": {
-      "en": "Mode",
-      "zh": "模式"
+      "en": "Moderation and default level",
+      "zh": "审核与默认级别"
     },
     "ui:help": {
-      "en": "Observe: requests pass at once and are moderated in the background; users on the watch list at the enforce level are moderated first. Enforce: every request waits for the flow.",
-      "zh": "观察：请求直接放行、后台审核；观察名单中“拦截级”的用户先审后发。拦截：所有请求都等审核结果。"
+      "en": "Observe by default: requests pass at once and are moderated in the background; only users on the watch list at the enforce level and blocklisted users are moderated first. Enforce by default: users without a watch entry are moderated first too; a watch entry's own level wins, so users at the observe level are only moderated in the background.",
+      "zh": "默认观察：请求直接放行、后台审核；只有观察名单里拦截级的用户和黑名单用户先审后发。默认拦截：没有名单条目的用户也先审后发；名单条目自己的级别优先，观察级的用户只后台审核。"
     },
     "ui:details": {
-      "en": "A hit refuses the request only when it was moderated before the upstream call. Moderation errors always let the request pass.",
-      "zh": "只有先审后发的请求命中时才会被拒绝。审核出错一律放行。"
+      "en": "A hit refuses the request only when it was moderated before the upstream call. A stage that fails is skipped and the hits before it are kept; when no stage reaches a verdict the request passes. Users added to the watch list automatically join at the default level.",
+      "zh": "只有先审后发的请求命中时才会被拒绝。某一级审核出错时跳过这一级、保留前面的命中；所有级都没有结论时放行。自动加入观察名单的用户以默认级别加入。"
     }
   },
-  "exempt_user_ids": {
+  "allowlist_user_ids": {
     "ui:widget": "tags",
     "ui:placeholder": "42",
     "ui:title": {
-      "en": "Exempt user IDs",
-      "zh": "免审用户 ID"
+      "en": "Allowlist (observe only)",
+      "zh": "白名单（只观察）"
     },
     "ui:help": {
-      "en": "Requests of these users are never moderated. Moderators (users with moderation:read) are recognised automatically and are never put on the watch list.",
-      "zh": "这些用户的请求不审核。持有 moderation:read 的版主会被自动识别，不会进观察名单。"
+      "en": "These users are only moderated after their requests were sent on and are never refused; they still get records and may enter the watch list. They cannot be set to the enforce level by hand and the AI never upgrades them. A user who is also on the blocklist is treated as blocklisted.",
+      "zh": "这些用户只在请求放行后审核，永不被拦截；仍会留下记录、可能进入观察名单。不能手动设为拦截级，AI 也不会把他们升级。同时在黑名单里的用户按黑名单处理。"
+    },
+    "ui:details": {
+      "en": "Allowlisted users are never banned either. Moderators (users with moderation:read) are recognised automatically and are never put on the watch list.",
+      "zh": "白名单用户也不会被封禁。持有 moderation:read 的版主会被自动识别，不会进观察名单。"
+    }
+  },
+  "blocklist_user_ids": {
+    "ui:widget": "tags",
+    "ui:placeholder": "42",
+    "ui:title": {
+      "en": "Blocklist (always moderated first)",
+      "zh": "黑名单（总是先审）"
+    },
+    "ui:help": {
+      "en": "Every request of these users is moderated before it is sent on and refused on a hit. The AI never downgrades them or takes them off the watch list. This is not a ban: bans are on the Bans tab.",
+      "zh": "这些用户的每个请求都先审后发，命中即拒绝。AI 不会把他们降级或移出名单。这不是封禁：封禁在“封禁”页。"
     }
   },
   "block_status": {
@@ -154,8 +174,8 @@
       "zh": "自动加入观察名单"
     },
     "ui:help": {
-      "en": "The first suspicious record adds the user at the observe level.",
-      "zh": "首次出现可疑记录时，以观察级加入名单。"
+      "en": "The first suspicious record adds the user at the default level.",
+      "zh": "首次出现可疑记录时，以默认级别加入名单。"
     }
   },
   "watch_days": {
@@ -180,8 +200,8 @@
       "zh": "每多少次违规自动分析一次"
     },
     "ui:help": {
-      "en": "Violations of an observe-level user (one per request) that queue an AI analysis; the count then restarts. 0 = only manual analyses.",
-      "zh": "观察级用户每累计这么多次违规（同一请求只计一次）就自动排队分析一次，然后重新计数。0 表示只手动分析。"
+      "en": "Violations of an observe-level user (one per request) that queue an AI analysis; the count then restarts. With enforce as the default level, enforce-level users count too. 0 = only manual analyses.",
+      "zh": "观察级用户每累计这么多次违规（同一请求只计一次）就自动排队分析一次，然后重新计数。默认级别为拦截时，拦截级用户也计数。0 表示只手动分析。"
     },
     "ui:options": {
       "unit": {
@@ -282,12 +302,23 @@
       "zh": "保存审核文本"
     },
     "ui:help": {
-      "en": "Keep the moderated text, and the moderated messages of first-stage hits. They may contain user data; error records keep only the start (see Text kept on error records).",
-      "zh": "保存被审核的文本，以及第一级命中时被审核的那一块消息，可能包含用户数据；出错记录只保存开头（见“出错记录保存字数”）。"
+      "en": "Keep the moderated text, and the raw messages of the chunk the verdict came from when a stage hit. They may contain user data; error records keep only the start (see Text kept on error records).",
+      "zh": "保存被审核的文本，以及有级命中时判定那一块的原始消息，可能包含用户数据；出错记录只保存开头（见“出错记录保存字数”）。"
     },
     "ui:details": {
       "en": "Whatever is moderated is also sent to the moderation channels (and the AI analysis channel reads the stored text): choose channels whose data handling you accept.",
       "zh": "被审核的内容会发送给审核渠道（AI 分析渠道还会读取保存的原文），请选择数据处理方式可以接受的渠道。"
+    }
+  },
+  "record_pass_input_message": {
+    "ui:widget": "switch",
+    "ui:title": {
+      "en": "Raw messages of passed records too",
+      "zh": "通过的记录也保存原始消息"
+    },
+    "ui:help": {
+      "en": "With Store moderated text on, passed and overturned records also keep the raw messages (images included) of the chunk the verdict came from, for later review; off, only records with a stage hit keep them. Error records never keep raw messages.",
+      "zh": "保存原文开着时，通过和被推翻的记录也保存判定那一块的原始消息（含图片），便于事后复核；关闭后只有命中过的记录保存。出错的记录不保存原始消息。"
     }
   },
   "hit_retention_days": {
@@ -387,30 +418,34 @@
       "zh": "对 OpenAI 审核和 Jev 审核器的调用以及 AI 分析的每一步（流式）生效，与渠道的总超时同时计时，先到者结束调用。LLM 判定审核器不走流式，只受渠道超时限制。"
     }
   },
-  "cache_ttl_seconds": {
+  "verdict_cache_days": {
     "ui:title": {
-      "en": "Pass cache",
-      "zh": "通过缓存时长"
+      "en": "Verdict cache",
+      "zh": "判定缓存天数"
     },
     "ui:help": {
-      "en": "Content (each message, document or image) that passed cleanly under the same flow version is not sent again for this long. 0 disables the cache.",
-      "zh": "同一流程版本下干净通过的内容（每条消息、文档或图片）在这段时间内不再重复发送审核。0 表示不缓存。"
+      "en": "Verdicts on content already moderated under the same flow are kept this many days: content that passed is not sent again, and a hit is applied again as it was (a request moderated first is refused) without calling the moderation channels.",
+      "zh": "同一流程下已经审过的内容，结论保留这么多天：放行的不再送审，命中的直接按原结论处理（先审的请求被拒绝），不再调用审核渠道。"
     },
     "ui:details": {
-      "en": "Hits, errors, skipped auditors and URL images are never cached. Changing an auditor, a channel or the flow version starts over.",
-      "zh": "命中、出错、有审核器被跳过、URL 图片都不缓存。修改审核器、渠道或流程版本后缓存失效。"
+      "en": "Runs with errors, passes with a skipped stage and URL images are not cached. Changing a flow's stages, auditors, question sets, thresholds or channel models invalidates that flow's cache. A replayed cached hit is recorded as usual but is not a new violation.",
+      "zh": "出错的运行、整级被跳过的放行、URL 图片不缓存。修改流程的级、审核器、题集、阈值或渠道模型后，该流程的缓存自动失效。缓存命中的重放照常写记录，但不算新的违规。"
     },
     "ui:options": {
       "unit": {
-        "en": "s",
-        "zh": "秒"
+        "en": "days",
+        "zh": "天"
       }
     }
   },
   "cache_entries": {
     "ui:title": {
-      "en": "Pass cache entries",
-      "zh": "通过缓存条数"
+      "en": "Verdict cache entries in memory",
+      "zh": "判定缓存内存条数"
+    },
+    "ui:help": {
+      "en": "How many cached verdicts (passes and hits) each node keeps in memory; the shared store holds them all for the days above.",
+      "zh": "每个节点在内存里保留多少条判定缓存（放行和命中都算）；共享存储按上面的天数保留全部。"
     }
   },
   "input_max_chars": {
@@ -435,8 +470,8 @@
       "zh": "每个请求最多审核块数"
     },
     "ui:help": {
-      "en": "Content already passed under the same flow version is not sent again (pass cache); only new content is chunked. Each chunk is one run of the flow, with its own upstream calls.",
-      "zh": "同一流程版本下已通过的内容不会再次发送（通过缓存），只有新内容参与分块。每块各执行一次流程，各自产生上游调用。"
+      "en": "Content with a cached verdict is not sent again (verdict cache: passes and hits, kept per flow for as long as its judging configuration - stages, auditors, question sets, thresholds, channel models - stays the same); only the rest is chunked. Each chunk is one run of the flow, with its own upstream calls.",
+      "zh": "已有缓存结论的内容不会再次送审（判定缓存：放行和命中都缓存，按流程保存，流程的判定配置——级、审核器、题集、阈值、渠道模型——不变就一直有效），只有其余内容参与分块。每块各执行一次流程，各自产生上游调用。"
     }
   },
   "input_overflow": {
@@ -476,8 +511,8 @@
       "zh": "处理中的请求上限"
     },
     "ui:help": {
-      "en": "When the hook requests being processed hold more than this, new requests are answered at once: they pass, except for enforce-level users, who get 503 moderation_busy.",
-      "zh": "正在处理的钩子请求合计超过这个大小时，新请求立即返回：一般用户放行，拦截级用户返回 503 moderation_busy。"
+      "en": "When the hook requests being processed hold more than this, new requests are answered at once. Requests that would be moderated before they are sent on get 503 moderation_busy: with mode enforce that is every user who is neither on the allowlist nor on the watch list at the observe level, with mode observe only blocklisted users and enforce-level watch entries. All other requests pass unmoderated. Requests no flow moderates (no flow for the group, or a model the flow's filter leaves out) are never refused.",
+      "zh": "正在处理的钩子请求合计超过这个大小时，新请求立即返回。本应先审后放的请求返回 503 moderation_busy：模式为拦截时，是白名单和观察级名单之外的所有用户；模式为观察时，只有黑名单用户和拦截级名单用户。其余请求不审核直接放行。没有流程会审核的请求（分组没有流程，或模型被流程的模型过滤排除）不会被拒绝。"
     },
     "ui:options": {
       "unit": {
@@ -739,8 +774,8 @@
       "zh": "审核失败时"
     },
     "ui:help": {
-      "en": "No longer used: moderation errors always let the request pass.",
-      "zh": "已不再生效：审核出错一律放行。"
+      "en": "No longer used: a stage that fails is skipped and the hits before it are kept; when no stage reaches a verdict the request passes.",
+      "zh": "已不再生效：某一级审核出错时跳过这一级、保留前面的命中；所有级都没有结论时放行。"
     }
   },
   "sample_rate": {
@@ -892,8 +927,8 @@
       "zh": "异常率告警阈值（%）"
     },
     "ui:help": {
-      "en": "A flow, auditor or channel whose last-hour error rate is above this (with at least 20 samples) is flagged in the overview, and a flow crossing it sends one notice. Errored checks let the request pass.",
-      "zh": "近 1 小时异常率超过该值（且样本不少于 20）的流程、审核器、渠道在概览中标红；流程越过阈值时发一次通知。审核异常时请求会直接放行。"
+      "en": "A flow, auditor or channel whose last-hour error rate is above this (with at least 20 samples) is flagged in the overview, and a flow crossing it sends one notice. A stage that fails is passed over: a hit of an earlier stage stands, and the request passes only when no stage judged at all.",
+      "zh": "近 1 小时异常率超过该值（且样本不少于 20）的流程、审核器、渠道在概览中标红；流程越过阈值时发一次通知。出错的级会被跳过：前面级的命中仍然有效，只有没有任何一级给出判定时请求才放行。"
     }
   },
   "notify_webhook_url": {
@@ -925,6 +960,34 @@
     "ui:help": {
       "en": "Hourly statistics, per-user daily counts and moderation costs older than this are deleted by the daily cleanup.",
       "zh": "每日清理时删除超过该天数的小时统计、用户每日计数和审核费用。"
+    }
+  },
+  "exempt_user_ids": {
+    "ui:widget": "hidden",
+    "ui:title": {
+      "en": "Exempt user IDs (retired)",
+      "zh": "免审用户 ID（已停用）"
+    },
+    "ui:help": {
+      "en": "Retired in 0.8.0: read as the allowlist until Allowlist is saved. These users are no longer left unmoderated.",
+      "zh": "0.8.0 起停用：在保存“白名单”之前按白名单读取。这些用户不再是完全不审核。"
+    }
+  },
+  "cache_ttl_seconds": {
+    "ui:widget": "hidden",
+    "ui:title": {
+      "en": "Pass cache (retired)",
+      "zh": "通过缓存时长（已停用）"
+    },
+    "ui:help": {
+      "en": "Retired in 0.8.0: only read until Verdict cache is saved (0 keeps the cache off, anything else is rounded up to whole days).",
+      "zh": "0.8.0 起停用：在保存“判定缓存天数”之前读取（0 表示不缓存，其余向上取整为天）。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "s",
+        "zh": "秒"
+      }
     }
   }
 }

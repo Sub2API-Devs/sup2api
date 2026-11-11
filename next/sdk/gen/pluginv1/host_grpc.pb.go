@@ -62,6 +62,31 @@ type HostServiceClient interface {
 	KVSet(ctx context.Context, in *KVSetRequest, opts ...grpc.CallOption) (*KVSetResponse, error)
 	KVDelete(ctx context.Context, in *KVDeleteRequest, opts ...grpc.CallOption) (*KVDeleteResponse, error)
 	KVList(ctx context.Context, in *KVListRequest, opts ...grpc.CallOption) (*KVListResponse, error)
+	// kv batch (grant "kv", CONTRACTS §93): many keys of ONE namespace in one
+	// call. The host checks the grant once and makes one Redis round trip
+	// (MGET, one host-owned script, DEL), so the cost does not grow with the
+	// number of keys the way N single calls do.
+	//
+	//   * Namespace, key, value and ttl rules are those of the single calls.
+	//     At most 512 keys or items per call, and at most 3 MiB of keys plus
+	//     values in one KVSetMany; otherwise INVALID_ARGUMENT. A key may
+	//     repeat: KVGetMany answers every occurrence, KVSetMany keeps the
+	//     last one. No keys is valid and does nothing.
+	//   * KVGetMany answers one item per requested key, in request order.
+	//     When the values found add up to more than 3 MiB the call fails with
+	//     RESOURCE_EXHAUSTED and the caller asks for fewer keys (48 keys
+	//     always fit).
+	//   * KVSetMany is all or nothing: when any item is invalid nothing is
+	//     written, otherwise every item is written with its own ttl in one
+	//     atomic step. ttl_seconds is 0 (no expiry) up to 9223372036.
+	//   * The script is the host's own. Plugins cannot submit scripts.
+	//
+	// Hosts before core 0.1.273 answer UNIMPLEMENTED (the Host API version is
+	// not raised); the SDK (pluginsdk.KVGetMany, KVSetMany, KVDeleteMany)
+	// then does the batch with the single calls.
+	KVGetMany(ctx context.Context, in *KVGetManyRequest, opts ...grpc.CallOption) (*KVGetManyResponse, error)
+	KVSetMany(ctx context.Context, in *KVSetManyRequest, opts ...grpc.CallOption) (*KVSetManyResponse, error)
+	KVDeleteMany(ctx context.Context, in *KVDeleteManyRequest, opts ...grpc.CallOption) (*KVDeleteManyResponse, error)
 	// secrets (grant "secrets"): seal / open small values (<= 64 KiB) with the
 	// core master key (AES-256-GCM). The ciphertext is bound to the calling
 	// plugin and to `context`, so another plugin, or another row of the same
@@ -341,6 +366,33 @@ func (c *hostServiceClient) KVList(ctx context.Context, in *KVListRequest, opts 
 	return out, nil
 }
 
+func (c *hostServiceClient) KVGetMany(ctx context.Context, in *KVGetManyRequest, opts ...grpc.CallOption) (*KVGetManyResponse, error) {
+	out := new(KVGetManyResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/KVGetMany", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) KVSetMany(ctx context.Context, in *KVSetManyRequest, opts ...grpc.CallOption) (*KVSetManyResponse, error) {
+	out := new(KVSetManyResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/KVSetMany", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) KVDeleteMany(ctx context.Context, in *KVDeleteManyRequest, opts ...grpc.CallOption) (*KVDeleteManyResponse, error) {
+	out := new(KVDeleteManyResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/KVDeleteMany", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hostServiceClient) SecretSeal(ctx context.Context, in *SecretSealRequest, opts ...grpc.CallOption) (*SecretSealResponse, error) {
 	out := new(SecretSealResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/SecretSeal", in, out, opts...)
@@ -565,6 +617,31 @@ type HostServiceServer interface {
 	KVSet(context.Context, *KVSetRequest) (*KVSetResponse, error)
 	KVDelete(context.Context, *KVDeleteRequest) (*KVDeleteResponse, error)
 	KVList(context.Context, *KVListRequest) (*KVListResponse, error)
+	// kv batch (grant "kv", CONTRACTS §93): many keys of ONE namespace in one
+	// call. The host checks the grant once and makes one Redis round trip
+	// (MGET, one host-owned script, DEL), so the cost does not grow with the
+	// number of keys the way N single calls do.
+	//
+	//   * Namespace, key, value and ttl rules are those of the single calls.
+	//     At most 512 keys or items per call, and at most 3 MiB of keys plus
+	//     values in one KVSetMany; otherwise INVALID_ARGUMENT. A key may
+	//     repeat: KVGetMany answers every occurrence, KVSetMany keeps the
+	//     last one. No keys is valid and does nothing.
+	//   * KVGetMany answers one item per requested key, in request order.
+	//     When the values found add up to more than 3 MiB the call fails with
+	//     RESOURCE_EXHAUSTED and the caller asks for fewer keys (48 keys
+	//     always fit).
+	//   * KVSetMany is all or nothing: when any item is invalid nothing is
+	//     written, otherwise every item is written with its own ttl in one
+	//     atomic step. ttl_seconds is 0 (no expiry) up to 9223372036.
+	//   * The script is the host's own. Plugins cannot submit scripts.
+	//
+	// Hosts before core 0.1.273 answer UNIMPLEMENTED (the Host API version is
+	// not raised); the SDK (pluginsdk.KVGetMany, KVSetMany, KVDeleteMany)
+	// then does the batch with the single calls.
+	KVGetMany(context.Context, *KVGetManyRequest) (*KVGetManyResponse, error)
+	KVSetMany(context.Context, *KVSetManyRequest) (*KVSetManyResponse, error)
+	KVDeleteMany(context.Context, *KVDeleteManyRequest) (*KVDeleteManyResponse, error)
 	// secrets (grant "secrets"): seal / open small values (<= 64 KiB) with the
 	// core master key (AES-256-GCM). The ciphertext is bound to the calling
 	// plugin and to `context`, so another plugin, or another row of the same
@@ -738,6 +815,15 @@ func (UnimplementedHostServiceServer) KVDelete(context.Context, *KVDeleteRequest
 }
 func (UnimplementedHostServiceServer) KVList(context.Context, *KVListRequest) (*KVListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KVList not implemented")
+}
+func (UnimplementedHostServiceServer) KVGetMany(context.Context, *KVGetManyRequest) (*KVGetManyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KVGetMany not implemented")
+}
+func (UnimplementedHostServiceServer) KVSetMany(context.Context, *KVSetManyRequest) (*KVSetManyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KVSetMany not implemented")
+}
+func (UnimplementedHostServiceServer) KVDeleteMany(context.Context, *KVDeleteManyRequest) (*KVDeleteManyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KVDeleteMany not implemented")
 }
 func (UnimplementedHostServiceServer) SecretSeal(context.Context, *SecretSealRequest) (*SecretSealResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SecretSeal not implemented")
@@ -1114,6 +1200,60 @@ func _HostService_KVList_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HostServiceServer).KVList(ctx, req.(*KVListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_KVGetMany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KVGetManyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).KVGetMany(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/KVGetMany",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).KVGetMany(ctx, req.(*KVGetManyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_KVSetMany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KVSetManyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).KVSetMany(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/KVSetMany",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).KVSetMany(ctx, req.(*KVSetManyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_KVDeleteMany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KVDeleteManyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).KVDeleteMany(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/KVDeleteMany",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).KVDeleteMany(ctx, req.(*KVDeleteManyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1552,6 +1692,18 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "KVList",
 			Handler:    _HostService_KVList_Handler,
+		},
+		{
+			MethodName: "KVGetMany",
+			Handler:    _HostService_KVGetMany_Handler,
+		},
+		{
+			MethodName: "KVSetMany",
+			Handler:    _HostService_KVSetMany_Handler,
+		},
+		{
+			MethodName: "KVDeleteMany",
+			Handler:    _HostService_KVDeleteMany_Handler,
 		},
 		{
 			MethodName: "SecretSeal",

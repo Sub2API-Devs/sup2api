@@ -93,6 +93,9 @@ func applyAccountPatch(ctx context.Context, out *pluginv1.AccountLifecycleRespon
 	if fe := probe.validateScheduling(ctx); len(fe) > 0 {
 		return nil, invalidPatch(fe)
 	}
+	if probe.ModelLimits != nil {
+		keepSPMWindows(*probe.ModelLimits, *to.ModelLimits)
+	}
 	for _, f := range []struct {
 		name     string
 		from, to *int

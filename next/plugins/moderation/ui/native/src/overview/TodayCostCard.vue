@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SAlert, SCard, SEmpty, SGrid } from '@sub2api/ui'
+import { SAlert, SCard, SEmpty, SGrid, SStatCard } from '@sub2api/ui'
 import { useCatalog } from '../catalog'
 import { money, num } from '../format'
 import { useModHost } from '../host'
@@ -34,9 +34,8 @@ const total = computed(() => props.costs.total)
   <SCard :title="t('todayCost.title')" :subtitle="t('cost.hint')">
     <SEmpty v-if="!total.calls" :text="t('todayCost.empty')" icon="price" />
     <SGrid v-else template="repeat(auto-fit, minmax(220px, 1fr))">
-      <div>
-        <div class="mod-sub">{{ t('cost.total') }}</div>
-        <div class="mod-cost-amount mod-num">{{ money(total.cost) }}</div>
+      <div class="mod-stack">
+        <SStatCard compact :label="t('cost.total')" :value="money(total.cost)" :sub="t('cost.calls', { n: num(total.calls) })" />
         <SAlert v-if="total.unpriced_calls" tone="warning" dense>{{ t('todayCost.unpriced', { n: num(total.unpriced_calls) }) }}</SAlert>
         <ul class="mod-scores">
           <li v-for="s in sources" :key="s.key">
@@ -50,7 +49,7 @@ const total = computed(() => props.costs.total)
         <span v-if="!l.rows.length" class="mod-sub">{{ t('todayCost.none') }}</span>
         <ul v-else class="mod-scores">
           <li v-for="r in l.rows" :key="r.id">
-            <span :title="r.name">{{ r.name }}</span>
+            <span class="mod-ellipsis" :title="r.name">{{ r.name }}</span>
             <span class="mod-num">
               {{ money(r.cost.cost) }}<span v-if="r.cost.unpriced_calls" class="mod-sub"> · {{ t('channels.unpricedN', { n: num(r.cost.unpriced_calls) }) }}</span>
             </span>

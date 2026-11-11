@@ -74,7 +74,7 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 		return 200, scriptTurn{Usage: u, Calls: []llmToolCall{{ID: "t9", Name: submitAnalysisTool, Args: []byte(`{"trend":"likely_false_positive",
 			"suggestion":"release","summary":"误报","record_verdicts":[{"record_id":` + ids[0] + `,"verdict":"false_positive","severity":"low","reason":"引用"}]}`)}}}
 	})
-	_, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "analysis_every_violations": 2, "analysis_channel_id": 2}, func(p *Plugin) {})
+	_, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "analysis_every_violations": 2, "analysis_channel_id": 2}, func(*node) {})
 	priceTable(fh, map[string][2]float64{"deepseek-flash": {0.3, 1.2}, "jev-latest": {0.042, 0}})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	ch := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": "llm", "protocol": "anthropic", "name": "ana",

@@ -59,7 +59,7 @@ describe('common controls', () => {
     expect(v.weight).toEqual({ visible: true, disabled: true, required: false, reason: 'commonControlLocked' })
     expect(v.environment).toEqual({ visible: false, disabled: false, required: false, reason: '' })
     expect(v.proxy.required).toBe(true)
-    expect(Object.keys(v)).toHaveLength(15)
+    expect(Object.keys(v)).toHaveLength(16)
   })
 
   it('starts a new account from core, then default_limits, then the declared defaults', () => {

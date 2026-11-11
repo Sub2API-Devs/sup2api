@@ -109,6 +109,8 @@ export interface Config extends Layer {
 export interface ConfigBody {
   config: Config
   version: number
+  /** When this version was saved, unix seconds; 0 = never saved (the factory configuration). */
+  updated_at?: number
   warnings?: string[]
 }
 
@@ -222,6 +224,29 @@ export interface KeyStatus extends Key {
   current: CurrentWindow
 }
 
+/** A strategy step that moved a weight (WeightEvent detail.steps), in the order they ran. */
+export interface WeightStep {
+  strategy: string
+  /** The weight action's direction: a clamp to the floor or the base can move the weight against it. */
+  type: Exclude<ActionType, 'affinity_clear'>
+  mode: WeightMode
+  value: number
+  from: number
+  to: number
+}
+
+/**
+ * Event detail fields the UI reads; others pass through. `steps` and
+ * `config_version` (the configuration version the event ran under) are
+ * absent from older events.
+ */
+export interface EventDetail {
+  window?: { total?: number; fail?: number }
+  steps?: WeightStep[]
+  config_version?: number
+  [k: string]: unknown
+}
+
 export interface WeightEvent {
   id: number
   created_at: string
@@ -234,7 +259,7 @@ export interface WeightEvent {
   from: number
   to: number
   rules: string[] | null
-  detail: Record<string, unknown> | null
+  detail: EventDetail | null
 }
 
 /** Puts the keys of accounts and/or a group (and model) back to their base. */

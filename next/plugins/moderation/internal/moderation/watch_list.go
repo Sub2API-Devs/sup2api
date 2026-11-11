@@ -44,6 +44,9 @@ type SeverityCounts struct {
 // WatchItem is one row of GET /watchlist.
 type WatchItem struct {
 	Watch
+	// Allowlisted, Blocklisted: the user lists of the settings.
+	Allowlisted     bool            `json:"allowlisted"`
+	Blocklisted     bool            `json:"blocklisted"`
 	GroupID         int64           `json:"group_id"` // group of the latest record
 	OtherGroups     []int64         `json:"other_groups"`
 	Flow            *FlowRef        `json:"flow"` // flow bound to group_id now
@@ -176,9 +179,11 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 		return items, nil
 	}
 	r := &watchRows{byID: map[int64]*WatchItem{}, categories: map[int64]map[string]int64{}, grouped: map[int64]bool{}}
+	c := p.cfg.Load()
 	for i, w := range list {
 		w.fillRunning(now)
-		items[i] = WatchItem{Watch: w, OtherGroups: []int64{}, TopCategories: []CategoryCount{}}
+		items[i] = WatchItem{Watch: w, Allowlisted: c.allowlisted(w.UserID), Blocklisted: c.blocklisted(w.UserID),
+			OtherGroups: []int64{}, TopCategories: []CategoryCount{}}
 		r.ids = append(r.ids, w.UserID)
 		r.byID[w.UserID] = &items[i]
 		if w.LatestAnalysisStatus == AnalysisStatusOK && w.LatestAnalysisID > 0 {

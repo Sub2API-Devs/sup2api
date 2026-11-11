@@ -1,6 +1,7 @@
 package check
 
 import (
+	"encoding/json"
 	"slices"
 
 	"github.com/Masterminds/semver/v3"
@@ -31,6 +32,12 @@ const UpstreamFirstCore = "0.1.262"
 // fields (CONTRACTS §87). Older cores refuse the names at install and ignore
 // the fields, which would leave a locked setting editable.
 const CommonControlsFirstCore = "0.1.262"
+
+// SPMWindowFirstCore is the first core that knows session windows (CONTRACTS
+// §71.1): the spm_window_seconds common control and spm_window_seconds in a
+// model_limits default. Older cores refuse both at install, so the floor
+// only turns that into a clear hostCompat error.
+const SPMWindowFirstCore = "0.1.276"
 
 // ConvertMatrixFirstCore is the first core of the protocol conversion
 // matrix (CONTRACTS §88), which adds the openai.responses -> openai.chat
@@ -78,6 +85,7 @@ var coreFloors = []coreFloor{
 	}},
 	{field: "accountTypes[].commonControls (new controls or visible, locked, required)", firstCore: CommonControlsFirstCore,
 		uses: (*validator).usesNewCommonControls},
+	{field: "accountTypes[].commonControls (session windows)", firstCore: SPMWindowFirstCore, uses: (*validator).usesSPMWindows},
 }
 
 // usesNewCommonControls reports a common control an older core does not
@@ -89,6 +97,22 @@ func (v *validator) usesNewCommonControls() bool {
 			if !slices.Contains(manifest.LegacyCommonControls, name) || c.Visible != nil || c.Locked || c.Required {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// usesSPMWindows reports a declared session window: the spm_window_seconds
+// control, or a model_limits default whose lists name one.
+func (v *validator) usesSPMWindows() bool {
+	for _, at := range v.m.AccountTypes {
+		if _, ok := at.CommonControls["spm_window_seconds"]; ok {
+			return true
+		}
+		var lists []manifest.ModelLimitValue
+		if json.Unmarshal(at.CommonControls["model_limits"].Default, &lists) == nil &&
+			slices.ContainsFunc(lists, func(l manifest.ModelLimitValue) bool { return l.SPMWindowSeconds != 0 }) {
+			return true
 		}
 	}
 	return false

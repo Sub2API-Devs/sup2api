@@ -12,10 +12,10 @@ import type { Flow, SimulateBody, SimUserState } from './types'
 
 // Flow simulation (§72.13.5): runs the draft, the published version or an
 // older version with the current auditors on a text or a stored record.
-// The user state picks the timing as a live request would run: unmarked and
-// observe-level users after the upstream call, enforce-level users before it
-// (a hit is refused). Nothing is recorded, counted or cached; the cost goes
-// to source "simulate".
+// The user state picks the timing as a live request would run: unmarked
+// users at the default level of the settings, observe-level users after the
+// upstream call, enforce-level users before it (a hit is refused). Nothing
+// is recorded, counted or cached; the cost goes to source "simulate".
 const props = defineProps<{ open: boolean; flow: Flow | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
 const host = useModHost()

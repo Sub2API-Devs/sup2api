@@ -513,7 +513,7 @@ func imageFromURL(u string) Image {
 
 // segment is one normalized piece: the text the auditors see (labelled
 // with its role unless it is the user's) or one image. key identifies it in
-// the segment pass cache.
+// the verdict cache.
 type segment struct {
 	role  string
 	text  string // normalized, "[role] " label included
@@ -583,8 +583,9 @@ func (r *request) texts(fn func(string) bool) bool {
 }
 
 // chunkPart is one segment (or piece of one) in a chunk, for the record
-// detail.
+// detail; seg is the index of its request segment.
 type chunkPart struct {
+	seg  int
 	role string
 	text string
 	img  *Image
@@ -599,11 +600,15 @@ type chunk struct {
 	runes int
 }
 
-// planLimits are the chunking settings (CONTRACTS §72.4).
+// planLimits are the chunking settings (CONTRACTS §72.4). mixed is not a
+// setting: planUncached sets it for a flow in which some auditors take
+// images and some do not (snapshot.mixedImages). Only such a flow keeps the
+// cached text of a request beside an image that is not cached (makePlan).
 type planLimits struct {
 	maxChars  int
 	maxChunks int
 	maxImages int
+	mixed     bool
 }
 
 // plan is the chunks a request is moderated in: the segments not in the
@@ -636,6 +641,77 @@ type InputTrace struct {
 const maxImageBase64 = 22 << 20
 
 // makePlan chunks the uncached segments of r.
+//
+// In a mixed flow (lim.mixed: some auditors take images, some do not) an
+// image that is sent keeps the text of the request in the plan (fifth round):
+// when r holds an image that is not cached as passed and will be put into a
+// chunk (sendsImage), the text segments that are cached as passed are NOT
+// left out. An image is then always judged together with the text of its
+// request, whatever other requests have put into the cache. Otherwise the
+// rule of settleVerdicts for an image only a hitting auditor received (let
+// through, nothing stored, every time) breaks as soon as another request
+// caches the text: the image is alone in its chunk, the auditor that gets it
+// hits, the text-only reviewer has nothing to judge and is skipped, and the
+// request that was let through is refused and replayed as a hit. What follows:
+//
+//   - A request without such an image is planned as before: every cached
+//     segment is left out, and with nothing left there is no chunk and the
+//     request is answered "pass (cached)" (planUncached). That includes a
+//     request whose images are all cached as passed, one none of whose
+//     uncached images is sent (input_max_images is 0, they are too large),
+//     and every request of a flow that is not mixed (below).
+//   - Cached images are still left out, and a cached HIT is found before any
+//     plan is made (lookupVerdicts): the replay of a whole hit set does not
+//     change.
+//   - The kept text is chunked like text that is not cached, a segment longer
+//     than a chunk is cut into pieces as always. Chunk boundaries come from
+//     the text alone (an image joins the chunk being filled), so with the text
+//     kept the chunks are those of the request with an empty cache; they
+//     differ only in the images they hold (a cached image is left out, and
+//     input_max_images counts the ones that are not cached).
+//   - input_max_chunks therefore counts the whole text of such a request, as
+//     with an empty cache: which chunks are sampled (spread) depends on the
+//     request alone and is the same every time, and under input_overflow =
+//     block a pre request beyond the limit is refused every time - where a
+//     request without such an image counts only what is not cached. A chunk
+//     that is sampled out is not judged; an image in it stays uncached and
+//     the next request is planned the same way.
+//   - The cost: a request with such an image sends its text again although it
+//     is cached, in every request for as long as the image is not cached as
+//     passed - for good with an image that never is (a URL image, an image no
+//     auditor can take, an image only a hitting auditor received).
+//   - Storing (settleVerdicts) needs nothing new: when a chunk passes, its
+//     kept text is stored as passed again like any other segment; when it
+//     falls under the rule above (Trace.judgedUnpassedImage) nothing is
+//     stored for it, and the pass its text has from another request is no
+//     longer a way around that rule, because it does not take the text out of
+//     the plan.
+//   - Post timing plans here at enqueue, with what memory knows: an image only
+//     the KV knows as passed counts as uncached and keeps the text. The plan
+//     is not made again at dequeue; there the worker asks the cache (with the
+//     KV) about every segment of the chunks, kept text and images alike, and
+//     runs nothing when all of them have passed (moderation.allPassed) -
+//     otherwise the chunks run as planned, the image with its text.
+//
+// What stays (not a matter of the plan): a request that holds ONLY the image
+// has no text for a reviewer, so the hit of the auditor that got the image
+// stands and {image} is cached as a hit; every request with that image is
+// then replayed as a hit, also one that was let through before.
+//
+// A flow that is not mixed does not keep the text (the owner's decision of
+// 2026-11-10: the cost above was too high for every flow to pay - a request
+// with an image that is never cached, a URL image above all, sent its whole
+// text on every turn and could be refused under input_overflow = block). A
+// flow without an image auditor has nothing to say about images. In a flow
+// whose auditors all take images the reviewer gets the image the first
+// auditor hit, so it judges the image too and its pass is stored for it. One
+// case is left there, and accepted: an auditor that takes images may not get
+// a particular one (a URL image, which only the OpenAI auditor takes; an
+// image outside its limits; a redraw that was not ready; an upstream that
+// refused the images). When another auditor got that image and hit, and the
+// text is cached as passed by another request, the image is alone in its
+// chunk, the reviewer has nothing to judge, and the request is refused where
+// with an empty cache it was let through.
 func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 	pl := &plan{pieces: make([]int, len(r.segs)), keys: make([][32]byte, len(r.segs))}
 	pl.trace.Segments = len(r.segs)
@@ -649,10 +725,11 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 		cur = &chunk{}
 	}
 	images := 0
+	keepText := cached != nil && r.sendsImage(lim, cached)
 	for i := range r.segs {
 		s := &r.segs[i]
 		pl.keys[i] = s.key
-		if cached != nil && cached(s.key) {
+		if cached != nil && cached(s.key) && (s.img != nil || !keepText) {
 			pl.trace.Cached++
 			continue
 		}
@@ -663,7 +740,7 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 			}
 			images++
 			cur.segs = append(cur.segs, i)
-			cur.parts = append(cur.parts, chunkPart{role: s.role, img: s.img})
+			cur.parts = append(cur.parts, chunkPart{seg: i, role: s.role, img: s.img})
 			pl.pieces[i] = 1
 			continue
 		}
@@ -671,7 +748,7 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 			flush()
 		}
 		if s.runes <= maxChars {
-			cur.add(i, chunkPart{role: s.role, text: s.text}, s.runes)
+			cur.add(i, chunkPart{seg: i, role: s.role, text: s.text}, s.runes)
 			pl.pieces[i] = 1
 			continue
 		}
@@ -682,7 +759,7 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 			if cur.runes > 0 {
 				flush()
 			}
-			cur.add(i, chunkPart{role: s.role, text: string(rs[start:end])}, end-start)
+			cur.add(i, chunkPart{seg: i, role: s.role, text: string(rs[start:end])}, end-start)
 			pl.pieces[i]++
 		}
 	}
@@ -703,6 +780,22 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 	}
 	pl.trace.Chunks = len(pl.chunks)
 	return pl
+}
+
+// sendsImage reports whether makePlan keeps the cached text of r beside an
+// image: the flow is mixed, and an image that is not cached is put into a
+// chunk - it is within the limits (the first of them always is, with
+// input_max_images above 0).
+func (r *request) sendsImage(lim planLimits, cached func([32]byte) bool) bool {
+	if !lim.mixed || lim.maxImages <= 0 {
+		return false
+	}
+	for i := range r.segs {
+		if s := &r.segs[i]; s.img != nil && len(s.img.Data) <= maxImageBase64 && !cached(s.key) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *chunk) add(seg int, p chunkPart, runes int) {

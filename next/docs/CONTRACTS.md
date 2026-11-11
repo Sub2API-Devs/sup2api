@@ -263,14 +263,16 @@
 | `balance:{user_id}` | STRING 余额缓存 | B |
 | `sticky:{rule}:{group}:{model}:{hash}` | STRING account_id，TTL | G |
 | `sticky:stats:{rule}` | HASH hits/misses/rebinds | G |
-| `plugin:kv:{plugin_key}:{ns}:{key}` | STRING | C |
+| `plugin:kv:{plugin_key}:{ns}:{key}` | STRING，可带 TTL。插件经 `HostService.KVGet/KVSet/KVDelete/KVList` 和批量的 `KVGetMany/KVSetMany/KVDeleteMany`（§93）读写，前缀由宿主按调用者强制加上 | C |
 | `hook:breaker:{plugin}:{hook}` | STRING 熔断截止毫秒时间戳，TTL 30s | G |
 | `hook:stats:{plugin}:{hook}` | HASH 调用/拒绝/超时/错误计数与延迟桶，TTL 7d | G |
 | `hook:statidx:{plugin}` | SET 该插件出现过的钩子 id，TTL 7d | G |
 | `plugin:ledger:{key}:{credit\|debit}:{yyyymmdd}` | STRING 插件当日入账/扣款累计，TTL 48h | C2 |
-| `rl:account:{id}:rpm`、`rl:account:{id}:tpm` | ZSET 账号近 60 秒的请求和 token 事件，TTL 2m（§18、§68.3） | A |
-| `rl:account:{id}:m:{key}:rpm`、`rl:account:{id}:m:{key}:tpm` | ZSET 账号某个模型列表近 60 秒的请求和 token 事件，TTL 2m（§68.3） | A |
-| `rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm` | ZSET 账号 / 模型列表近 60 秒活跃的会话（member = 粘性会话键，没有粘性键时为 `req:{请求 ID}`，score = Redis 毫秒时间），每次准入时修剪窗口外成员，TTL 2m（§71） | A |
+| `rl:account:{id}:rpmb`、`rl:account:{id}:tpmb` | HASH 账号近 60 秒窗口的分段计数：field = 段号（Redis 毫秒时间 ÷ 3000），value = 该段的请求数 / token 数；写入时删除窗口外的段，TTL 63s（窗口 + 一段，每次写入刷新）（§18、§68.3）。2026-11-11 前是 ZSET `…:rpm`、`…:tpm`（逐条事件），不再读写 | A |
+| `rl:account:{id}:m:{key}:rpmb`、`rl:account:{id}:m:{key}:tpmb`；`rl:account:{id}:md:{model}:rpmb`、`…:tpmb` | 同上，账号某个模型列表 / 某个客户端模型（§68.3、§68.7） | A |
+| `rl:account:{id}:spmb:{秒}`、`rl:account:{id}:m:{key}:spmb:{秒}`、`rl:account:{id}:md:{model}:spmb:{秒}` | HASH 账号 / 模型列表 / 客户端模型在 `{秒}`（该层的 `spm_window_seconds`，按模型的跟随账号）周期内的会话分段计数：field = 段号（Redis 毫秒时间 ÷ (周期 ÷ 20)），value = 最后出现在该段的会话数（含不记成员的 `req:` 会话）；TTL = 周期 + 一段（§71） | A |
+| `rl:account:{id}:spms:{秒}`、`rl:account:{id}:m:{key}:spms:{秒}`、`rl:account:{id}:md:{model}:spms:{秒}` | ZSET 同一周期内出现过的粘性会话：member = 粘性会话键（WebSocket 连接没有粘性键时为 `conn:{首轮请求 ID}`，§71.2），score = 最后出现的段号；每次写入删除 score < 当前段 − 20 的成员，TTL 同上。`req:{请求 ID}` 不写入。周期是 key 名的一部分，改周期即换新计数。2026-11-11 前是 ZSET `…:spm`（score = 毫秒时间），不再读写 | A |
+| `rl:apikey:{id}:rpmb`、`rl:apikey:{id}:tpmb` | HASH API Key 近 60 秒窗口的分段计数，格式同账号（§60.3、§68.3）；API Key 没有会话上限 | A |
 | `slot:account-model:{key}:{id}` | ZSET 账号某个模型列表的并发槽位，格式同 `slot:{kind}:{id}`（§68.2） | D |
 
 广播频道：`plugin:events`、`authz:changed`、`account:changed`、`config:changed`（`core/ports_cluster.go`）。权限版本以 PG `authz_meta` 为准，Redis 不存。`config:changed` payload：代理 `{"type":"proxy","id":N}`，插件配置 `{"type":"config","plugin_key":k}`。`plugin:events` payload：`{"type":"rollout"|"config","plugin_key","rollout_id"?}`。
@@ -480,7 +482,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 ### 14.4 接口收尾
 
-- **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选。
+- **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选（只比客户端请求 ID）。`?request_id=` 同时匹配我方请求 ID 和客户端请求 ID（`u.request_id = v OR u.client_request_id = v`，核心 0.1.277 起，§95.4；此前只比我方请求 ID）：使用记录列表、汇总、导出都经 `usage/api.go` 的 `parseFilter`，`/usage` 与 `/me/usage` 相同，自助视图仍限定本人。`client_request_id` 不唯一，一个值可以匹配多行；该列没有索引，所以 `request_id` 只在带 `from` 时才加上客户端请求 ID 那一半（按时间范围扫描，与其它无索引筛选相同）；不带 `from` 时只比我方请求 ID（走唯一索引）。控制台的时间范围总会带 `from`。
 - **`GET/PUT /settings/gateway`**（`settings:read` / `settings:manage`，网关负责）：`{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}`，校验范围 1–10、100–30000、50–2000。自动禁用设置是独立接口 `/settings/auto-disable`，见 §42.2。
 - 前端此前提出的缺失接口说明见 §15（按后端现状整理）。
 
@@ -537,8 +539,8 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `created_at` 倒序，再 `id` 倒序（§18.3；与调度顺序无关） | `account/handlers.go` |
 | GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
 | GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model` 或 `note` ILIKE） | `model`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
-| GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`request_id`、`account_type`（精确匹配）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
-| GET `/me/usage` | 分页 | 限定当前用户；`api_key_id`、`group_id`、`model`、`platform`、`billing_status`、`request_id`、`success`、`from`、`to`（**不支持** `user_id`、`account_id`、`account_type`） | 同上 | `usage/api.go` |
+| GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`client_request_id`、`account_type`（精确匹配）；`request_id`（我方请求 ID 或客户端请求 ID，精确匹配，§14.4）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
+| GET `/me/usage` | 分页 | 限定当前用户；`api_key_id`、`group_id`、`model`、`platform`、`billing_status`、`request_id`（同上）、`client_request_id`、`success`、`from`、`to`（**不支持** `user_id`、`account_id`、`account_type`） | 同上 | `usage/api.go` |
 | GET `/usage/summary` | 不分页 | 同 `/usage` 的全部筛选参数，加 `group_by=day\|model\|user\|ip`（默认 `day`）；未给 `from` 时默认最近 30 天 | 按 `key` 升序；`ip` 按请求数倒序、最多 100 项 | `usage/api.go` |
 | GET `/me/usage/summary` | 不分页 | 限定当前用户；同 `/me/usage` 的筛选参数，加 `group_by=day\|model\|ip`（`user` 返回 400）；未给 `from` 时默认最近 30 天 | 同上 | `usage/api.go` |
 | GET `/ledger` | 分页 | `user_id`（整数）、`kind`（`usage`\|`admin_adjust`\|`plugin_credit`\|`plugin_debit`\|`refund`）、`from`、`to` | `id` 倒序 | `billing/balance.go` |
@@ -850,10 +852,10 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 | `weight` | 1–1000，默认 1 | 同一优先级内按权重加权随机排序（不放回的加权抽样：权重 3 的账号被先选中的概率是权重 1 的三倍）。插件可为单次请求临时改写（§24） |
 | `rpm_limit` | 0–10000000，默认 0 | 每分钟请求数上限，0 = 不限。每次在该账号上准入一次尝试计 1 次（切换到别的账号时各账号各计各的）。在 `TryHit` 时计入，之后的本地失败（读账号、路由、协议转换）没有发到上游也不退（§78.1） |
 | `tpm_limit` | 0–10^12，默认 0 | 每分钟 token 数上限，0 = 不限 |
-| `rate_usage` | 只读：`{rpm, tpm, sessions, models}`（§68.4、§71.1） | 近 60 秒的用量，`rpm`、`tpm` 是估算值（§68.3）（列表与详情都有；Redis 不可用时都为 0） |
+| `rate_usage` | 只读：`{rpm, tpm, sessions, models}`（§68.4、§71.1） | 近 60 秒窗口（20 段严格口径，§68.3）的请求数和 token 数，`sessions` 按该层会话周期（§71.1）（列表与详情都有；Redis 不可用时都为 0） |
 
 - token 数口径（2026-11-04 起，参照 new-api）：**非缓存输入 + 输出**（`core.UsageTokens.Throughput`），缓存读写都不计。`inclusive` 平台（OpenAI、Gemini）的 input 含缓存，先减去。设了 TPM 上限时，准入时按估算预占，响应结束后换成实际用量（§78.3）。
-- 判断和展示都按精确的近 60 秒（§68.3），时间取 Redis `TIME`。
+- 判断和展示都按近 60 秒的 20 段严格窗口（§68.3），时间取 Redis `TIME`。
 - 候选筛选只是预检查；拿到账号并发槽后必须调用 Redis Lua `TryHit`，在一次原子操作中检查并占用 RPM，同时预占 TPM（§78.3）。共享时间取 Redis `TIME`，Redis 出错则拒绝这次准入。
 - 达到任一上限的账号在本窗口内不再参与调度（和冷却一样从候选中剔除，不改状态、不发事件）。候选账号都因限流或并发满而不可用时，网关返回 429 `rate_limited`（message：`all accounts are busy or rate limited, please retry later`）；候选为空仍是 503 `no_available_account`。
 - 粘性会话绑定的账号达到限流上限时，视同"没有空闲并发槽位"：`on_failure=failover` 的规则改选别的账号，**绑定不变**，`stick` 的规则返回 429。绑定在选中账号时写入（原子操作，同一会话的并发请求跟随先到的那个），命中只续期，溢出不改写；账号失败时只解除指向该账号的绑定，会话已被别的请求绑到新账号时跟随新账号；绑定账号已不在候选里（禁用、额度用完等）时解除绑定，`keep_on_account_disabled` 开启时保留；正有请求排队的账号不接受新会话（全部都在排队时才排）（2026-11-04，用户决定，[排查记录](audits/2026-11-04-sticky-load-tier.md)）。绑定账号只是并发满时先排队（§78.5）。
@@ -872,8 +874,8 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 - POST/PATCH `/accounts`：以上字段都可选；PATCH 时 `models`、`model_mapping` 整体替换。字段错误：`models[i]`（`invalid` / `duplicate` / `too_many`）、`model_mapping.<from>`（`invalid`）、`model_mapping`（`too_many`）、`weight`、`rpm_limit`、`tpm_limit`（`invalid`）。
 - GET `/accounts` 新增筛选 `?model=<完整模型 ID>`：只列出能服务该模型的账号（`models` 为空或包含它）。列表按添加时间倒序（`created_at DESC, id DESC`，新账号在最前；以前是 `priority, weight DESC, id`，改优先级或权重会让行换位置，控制台自动刷新时看起来像乱排；调度顺序见 §18.2，与列表顺序无关）。
 - POST `/accounts/:id/test {model?}`：模型先经该账号的 `model_mapping` 映射再交给插件。
-- Redis key（§7 补充）：`rl:account:{id}:rpm`、`rl:account:{id}:tpm`（ZSET，TTL 2 分钟，格式见 §68.3），由 `account` 模块实现 `core.AccountLimiter`。
-- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`；端口 `core.AccountLimiter` 包含 `Exhausted(ctx, refs, model, session)` 预检查、`TryHit(ctx, ref, model, session) (bool, error)` 原子准入、`Reserve(ctx, ref, model, session, tokens) (RateHold, bool, error)` 准入并预占、`Settle(ctx, hold, actual)` 结算、`ReleaseSession(ctx, ref, model, session)`、`AddTokens(ctx, id, list, n)` 与 `Usage(ctx, refs)`（§68.2、§71、§78.3）。网关用 `Reserve`，托管任务轮询和资源下载用 `TryHit`。网关 `Deps.Limiter` 为 nil 时不限流。
+- Redis key（§7 补充）：`rl:account:{id}:rpmb`、`rl:account:{id}:tpmb`（HASH 分段计数，TTL 63 秒，格式见 §68.3；2026-11-11 前为 ZSET `…:rpm`、`…:tpm`），由 `account` 模块实现 `core.AccountLimiter`。
+- `core.AccountRef` 新增 `Models []string`、`ModelMapping map[string]string`、`Weight`、`RPMLimit`、`TPMLimit`；端口 `core.AccountLimiter` 包含 `Exhausted(ctx, refs, model, session)` 预检查、`TryHit(ctx, ref, model, session) (bool, error)` 原子准入、`Reserve(ctx, ref, model, session, tokens) (RateHold, bool, error)` 准入并预占、`Settle(ctx, hold, actual)` 结算、`ReleaseSession(ctx, ref, model, session, at)`（`at` 见 §71.3）、`AddTokens(ctx, id, list, n)` 与 `Usage(ctx, refs)`（§68.2、§71、§78.3）。网关用 `Reserve`，托管任务轮询和资源下载用 `TryHit`。网关 `Deps.Limiter` 为 nil 时不限流。
 
 ### 18.4 控制台
 
@@ -1184,10 +1186,10 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.7.0`，§87.3；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.10.0`，§95；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
-- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard、moderation 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 用 `^3.6`；`sdk/manifest`：声明了 `ui.native` 时必填）。
+- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 用 `^3.6`；moderation 0.9.0 起用 `^3.10`（§95）；`sdk/manifest`：声明了 `ui.native` 时必填）。
 - 插件的 `package.json` 只需 devDependencies：`@sub2api/vite-preset`、`@vitejs/plugin-vue`、`vite`、`vue`（类型用）；`@sub2api/ui`、`@sub2api/host` 通过 import map 在运行时解析，本地开发用 tsconfig `paths` 指到 `web/packages/*/src` 取类型。
 
 ### 23.2 `@sub2api/host`
@@ -1257,7 +1259,7 @@ type ProxyResolver interface {
 
 | 组件 | 用途 | props（默认值） | emits / slots |
 |---|---|---|---|
-| `SPageHeader` | 页面标题行 | `title`（必填）、`description` | slots `before`、`title-extra`、`actions`、`filters`（筛选行） |
+| `SPageHeader` | 页面页头。直接在控制台外壳下时，标题、说明和（宽屏）`before`/`title-extra` 显示在顶栏，页面里只剩筛选与操作一行（UI 3.9，§94）；嵌套范围内是页面里的标题行 | `title`（必填）、`description` | slots `before`、`title-extra`、`actions`、`filters`（筛选行） |
 | `SCard` | 卡片（`.card` 表面，与 `SSettingsGroup`、`STable card` 同一套） | `title`、`subtitle`、`padded`（true）、`variant`（`default`/`flat`，flat 去阴影，卡片套卡片时用） | slots 默认、`title`、`actions`、`footer`（底部按钮条） |
 | `SStatCard` | 统计卡 | `label`、`value`（必填）、`sub`、`icon`、`tone`（`primary`/`success`/`warning`/`danger`，primary）、`trend`（number \| null，显示 ▲/▼ 百分比）、`loading`、`compact`（小号）、`selected`（boolean；给了就渲染成 `<button aria-pressed>`，选中描边）、`selectable`（渲染成按钮）、`to`（`RouterLink`）/ `href`（`<a>`）：整张卡是链接 | emits `click`（有 `@click` 监听时也渲染成按钮）；slot 默认 |
 | `SChart` | ECharts 图（懒加载 echarts；已注册 Line/Bar/Pie、Grid/Tooltip/Legend/Title/Dataset、Canvas） | `option`（必填，按原样应用，自动补主题色、文字、轴线和 tooltip 颜色）、`height`（`'280px'`）、`loading` | 自动 resize、随暗色重绘。`option` 按引用比较：传新对象（computed）才重绘，不要原地改 |
@@ -1269,6 +1271,8 @@ type ProxyResolver interface {
 | `SDropdown` | 操作菜单（Teleport 到 body，自动定位/翻转）。菜单项是 `<button role="menuitem">`：↑/↓/Home/End 移动，Enter/空格选择，Esc 关闭并把焦点还给触发按钮，Tab 关闭 | `actions: MenuAction[]`（必填）、`label`、`ariaLabel`（只有图标时默认 `ui.moreActions`）、`align`（`end`/`start`，end）、`width`（CSS 宽度，`'11rem'`）、`disabled` | emits `select(key)`、`open`、`close`；slot 默认为触发按钮内容（缺省显示 `label` 或 `more` 图标）；slot `trigger`（`{open, toggle, attrs}`：整个替换触发按钮，自己的按钮要 `v-bind="attrs"`（`aria-haspopup`/`aria-expanded`/`aria-controls`）并 `@click="toggle"`）；slot `header`（菜单顶部说明） |
 | `SBadge` | 徽标 | `tone: Tone`（gray；`purple` 与 `accent` 同色）、`dot`、`size`（`xs`/`sm`，sm） | slot 默认 |
 | `SChip` | 小标签 / 筛选芯片 | `tone: StatusTone`（neutral）、`icon`、`size`（`xs`/`sm`，sm）、`closable` + `closeLabel`（默认 `ui.remove`）、`pressed`（boolean：切换按钮，`aria-pressed`，`v-model:pressed`）、`clickable`（普通按钮）、`disabled` | emits `close`、`click`、`update:pressed`；slot 默认 |
+| `SChipList` | 单元格里的一行标签（UI 3.10，§95） | `items: ChipListItem[]`（`{key, label, tone?, title?}`）、`max`（2）、`size`（`xs`/`sm`，xs） | 只显示前 `max` 个，其余收成「+N」，悬停或聚焦时卡片提示列出全部；整体不换行；没有条目时不渲染 |
+| `SFilterChips` | 已生效的筛选条件（UI 3.10，§95） | `items: FilterChipItem[]`（`{key, label, value}`） | emits `remove(key)`、`clear`；一行可关闭的「label：value ×」与「清除全部」；没有条目时不渲染 |
 | `SStatusDot` | 状态点 | `tone`（`StatusTone`，也接受 `error`/`gray`；neutral）、`pulse`（呼吸光圈）、`label`、`srOnly`（文字只给读屏）、`size`（`xs`/`sm`/`md`，sm；xs 为小号文字） | slot 默认替代 `label` |
 | `SIcon` | 线框图标 | `name`（必填；词表在 `icons.ts`，用导出的 `ICON_NAMES` 校验；未知名字画“方框问号”占位并在控制台警告一次）、`context`（警告里的出处说明）、`label`（给了才是 `role="img"` + `aria-label`，否则 `aria-hidden`） | class 里没有 `h-`/`w-`/`size-` 时默认 `h-4 w-4` |
 | `SSpinner` | 加载圈（`role="status"`，`aria-label` 默认 `ui.loading`） | `size`（`sm`/`md`/`lg`，md）、`label`、`decorative`（按钮里用，不朗读）、`block`（居中、上下留白的块） | |
@@ -1340,7 +1344,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 | `FIELD_KEY`、`useFieldControl(props, labelable = true)`、`type FieldContext`、`type ControlSize` | 自定义表单控件接入 `SField`/`SSettingRow` 的 id、`aria-describedby`、`aria-invalid`、尺寸 |
 | `uiMessages` | `{en, zh}`，控制台挂在全局 i18n 的 `ui` 命名空间：`ui.ok` `ui.cancel` `ui.confirm` `ui.close` `ui.loading` `ui.noData` `ui.noResults` `ui.prev` `ui.next` `ui.page` `ui.pagination` `ui.pageSize` `ui.total` `ui.perPage` `ui.add` `ui.remove` `ui.removeItem` `ui.clear` `ui.show` `ui.hide` `ui.showPassword` `ui.hidePassword` `ui.expand` `ui.collapse` `ui.expandRow` `ui.collapseRow` `ui.dismiss` `ui.moreActions` `ui.selectAll` `ui.selectRow` `ui.copy` `ui.copied` `ui.copyFailed` `ui.moveUp` `ui.moveDown` `ui.item` `ui.key` `ui.value` `ui.addTag` `ui.confirmTitle` `ui.stepDone` `ui.stepCurrent` `ui.stepError`，`STimeRange` 用的 `ui.time` `ui.from` `ui.to` `ui.all` `ui.lastHour` `ui.last24h` `ui.today` `ui.last7d` `ui.last30d` `ui.thisMonth` `ui.custom`，`SDisclosure` 用的 `ui.moreDetails` `ui.lessDetails`；插件可用 `host.i18n.t('ui.cancel')` 复用 |
 
-类型（`types.ts`）：`TableColumn {key, label, width?, align?: 'left'|'right'|'center', class?, headerClass?, nowrap?, ellipsis?: boolean | string}`（`ellipsis` true = 最大 16rem，字符串 = 最大宽度；默认渲染时完整值放进 `title`）、`TabItem {key, label, badge?, disabled?}`、`SelectOption {value: string|number|boolean|null, label, disabled?, options?: SelectOption[]}`（带 `options` 的是 `SSelect` 的分组项）、`MenuAction {key, label, danger?, disabled?, hidden?, icon?, divider?}`（`divider` 在该项上方画分隔线）、`Tone = 'primary'|'success'|'warning'|'danger'|'gray'|'purple'|'accent'|'info'`（`purple` 是 `accent` 的旧名，颜色相同）、`StatusTone = 'neutral'|'primary'|'info'|'success'|'warning'|'danger'|'accent'`、`ChoiceOption {value, label, description?, icon?, disabled?, tone?}`、`DescItem {key, label, value?, mono?, copyable?, full?}`、`StepItem {key, title, description?, state?}`、`StepState = 'done'|'current'|'pending'|'error'`。
+类型（`types.ts`）：`TableColumn {key, label, width?, align?: 'left'|'right'|'center', class?, headerClass?, nowrap?, ellipsis?: boolean | string, grow?: boolean}`（`ellipsis` true = 最大 16rem，字符串 = 最大宽度；默认渲染时完整值放进 `title`；`grow`（UI 3.10）吃掉其余列剩下的宽度并单行省略，手机卡片不受影响）、`TabItem {key, label, badge?, disabled?}`、`SelectOption {value: string|number|boolean|null, label, disabled?, options?: SelectOption[]}`（带 `options` 的是 `SSelect` 的分组项）、`MenuAction {key, label, danger?, disabled?, hidden?, icon?, divider?}`（`divider` 在该项上方画分隔线）、`Tone = 'primary'|'success'|'warning'|'danger'|'gray'|'purple'|'accent'|'info'`（`purple` 是 `accent` 的旧名，颜色相同）、`StatusTone = 'neutral'|'primary'|'info'|'success'|'warning'|'danger'|'accent'`、`ChoiceOption {value, label, description?, icon?, disabled?, tone?}`、`DescItem {key, label, value?, mono?, copyable?, full?}`、`StepItem {key, title, description?, state?}`、`StepState = 'done'|'current'|'pending'|'error'`。
 
 **UI 3.1 列设置。** `STable` 的 `columnSettingsKey` 为开发者指定的可选表名（例如 `usage-log`、`account-list`）；设置后自动显示 `STableColumnSettings`，并按可见列渲染表头、单元格与展开行跨度，`toolbar` 插槽此时不要求 `card`。`TableColumn` 新增 `hideable?: boolean`（false 为固定列）和 `defaultHidden?: boolean`。未启用此能力的表格保持全部传入列可见。
 
@@ -1491,6 +1495,43 @@ message RankedAccount {
 - 每个插件条目的 `changed` **最多 100 条**，超出的不再记录（只影响这列的取证，不影响调度本身）。
 - 触发 fail open 的插件不产生条目；整次运行因"所有候选都被置 0"而作废时（§24.3 第 3 条），**已累积的条目一并清空**，与"这次调度没有被改写过"保持一致。
 - **当前限制（有意为之）**：这一列**只落库，`GET /usage/:id`、`/me/usage/:id` 的响应体都不暴露它**（§15.2 的详情字段表里没有它，与 `hook_decisions` 不同）。排查需要直接查库，例如 `SELECT sched_decisions FROM usage_logs WHERE request_id = '…'`。
+
+### 24.6 可观测性：`usage_logs.anomalies.scheduling`（账号调度记录，2026-11-12 起）
+
+§24.5 只记插件改了谁的权重，不记"哪个账号为什么没被选"。一次请求选不出账号时，客户端只看到 `no available account`（Anthropic 格式是 529 `Overloaded`）或 `all accounts are busy or rate limited`（429），此前使用记录和节点日志里都没有原因。调度过程现在把每个**未被选用的账号及原因**记下来，写进使用记录的 `anomalies.scheduling`（JSON 字符串，与 `availability`、`failure_policy` 同构，核心类型 `core.SchedulingTrace`）：
+
+```json
+{"v":1,"outcome":"none","candidates":3,"eligible":0,
+ "counts":{"referenced_model_not_served":3,"not_schedulable":1},
+ "skipped":[{"account_id":124,"reason":"referenced_model_not_served","detail":"claude-x"},
+            {"account_id":127,"reason":"not_schedulable","detail":"disabled"}]}
+```
+
+- **何时写**：① 请求最终以 `error_type = no_account` 结束（`outcome` 为 `none`，429 时为 `busy`）——必写；② 请求选到了账号，但途中有账号因**当时的状态**被跳过（限流、并发满、排队、尝试失败后切换、失败策略收窄重试范围），`outcome = picked`。只因配置或请求形态不合格（模型列表不含该模型等）而选到了别的账号的请求**不写**：那是每个请求都一样的事实，写了只是噪声。
+- `candidates`：分组内可调度、且账号类型能服务该端点的账号数（`AccountDirectory.Candidates` 的结果）；`eligible`：其中能服务**本请求**的账号数（过了模型列表、引用模型、用量计量、资源绑定和模型可用性预检）。
+- `skipped`：每个账号每种原因一条，最多 40 条，超出的计入 `omitted`；`counts` 按原因计数，最多 16 个键。`detail` 是原因的对象（模型名、用量种类、账号状态），最长 100 字节；`until` 是定时停用或冷却的结束时间（unix 秒）。
+- **原因码**：
+
+| `reason` | 含义 | `detail` |
+|---|---|---|
+| `not_schedulable` | 账号在分组里，但当前不参与调度。只在 `no_account` 时读取（`AccountDirectory.Unschedulable`，失败路径上的一次查库） | `disabled` / `unschedulable` / `auto_disabled` / `cooldown`；请求期间退出调度而尚未读到状态时为 `left` |
+| `no_route` | 账号类型没有该端点的路由 | `插件/类型` |
+| `model_not_served` | 账号模型列表不含请求的模型 | 模型名 |
+| `referenced_model_not_served` | 请求引用了第二个模型（`fallbacks`、advisor 工具，§13 `modelReferences`），账号模型列表不含它 | 模型名 |
+| `usage_unsupported` | 账号类型无法计量请求要求的用量 | `additional` / `attempts` / 引用的用量种类 |
+| `bound_elsewhere` | 请求的文件资源、辅助历史或回退额度凭证属于另一个账号 | `resource` / `helper_history` / `fallback_credit` |
+| `availability_blocked` | 被模型可用性预检拦截（细节在 `anomalies.availability`） | — |
+| `failure_policy` | 失败策略把重试限定在别的账号 | `same_account` / `proxy_changed` / `egress` |
+| `rank_excluded` | `scheduler.rank` 插件给了权重 0 | — |
+| `conversion_refused` | 请求转不成该账号类型的协议，或账号的损失策略拒绝转换 | — |
+| `rate_limited` | 账号的限流窗口已满，或限流器没有放行 | — |
+| `concurrency_full` | 账号并发槽位已满 | — |
+| `queued` | 已有请求在为该账号排队，新会话不绑定到它 | — |
+| `attempt_failed` | 在该账号上的一次尝试失败，请求切到下一个账号 | `状态码 error_type` |
+
+- **节点日志**：`no_account` 的请求另打一行 WARN `gateway: no account for the request`，带 `request_id`、`group`、`model`、`protocol`、`outcome`、`candidates`、`eligible` 和 `skipped`（`账号:原因[:对象]`，空格分隔）。
+- **接口**：随 `anomalies` 在管理端 `GET /usage/:id` 返回（§15.2；`/me/usage` 不返回 `anomalies`，用户看不到这条）。有 `account:read` 时每条 `skipped` 补上 `account_name`；没有时去掉 `account_id`，原因保留；解析不了的记录对无权限者整个丢弃。它是调度轨迹，不是记录的异常：统计里的"异常行"不计它。
+- **不记的**：请求体不落库，所以 `detail` 只有模型名这类已经过校验的字段；HTTP 与 WebSocket 首轮（`connect`）走同一套记录。由插件执行并在尝试内提交用量的请求不带这条。
 
 
 
@@ -2179,7 +2220,7 @@ sub2api 按多节点部署设计，**插件的每个实例都跑在每个节点�
 | `Initializer.Init` **每个实例调用一次**：每个节点各一次，进程重启、资源限制变更（§14.3）、升级时新版本 standby 启动都会再调用 | 不要在 `Init` 里做「全集群只该做一次」的事（建表、导数据、发通知）。建表写进 `migrations/*.sql`；一次性工作放进 manifest `jobs[]` 或用 `lock` | `sdk/pluginsdk/interfaces.go`（`Initializer`），`sdk/pluginsdk/serve.go`（`InitHost` 里调用 `Init`） |
 | 周期性工作用 manifest `jobs[]`：**全集群每个触发点执行一次**（锁 + 唯一索引，§27.2），错过的触发点不补跑；节点在插入运行记录后崩溃，这个触发点就没跑完，也不会重试 | 不要在 `Init` 里自己起定时器 goroutine——那会在每个节点各跑一份。任务本身按「可能没跑完」来写（下一个触发点能接着做） | `server/internal/job/job.go`（包注释、`runScheduled`），§11.7 |
 | 按需互斥（「同一素材同时只同步一次」）用宿主权限 `lock` | 用 `Host.Locks().WithLock(ctx, name, ttl, fn)`：`fn` 用传进来的 ctx 干活（丢锁时它被取消，cause 为 `ErrLockLost`），给外层 ctx 一个框住工作的截止时间（续期只活到它结束）。返回 `(false, nil)` = 别的节点正持有，不是错误；**`fn` 成功但中途丢过锁时返回 `(true, ErrLockLost)`**，说明 `fn` 可能和下一个持有者重叠过，不可幂等的部分必须另有数据库保护。自己手写 gRPC 调用时每次 `LockAcquire` 都要新 token（同 token 重抢会删掉自己的锁） | §27.3，`sdk/pluginsdk/lock.go`（`Locks`） |
-| KV 只有 `Get` / `Set` / `Delete` / `List`，**没有 CAS、自增或 SETNX** | 「读 → 改 → 写」在两个节点并发时**会丢更新**。计数、累加、状态机放进自己的 schema（事务 / 条件 UPDATE），或在 `lock` 下做 | `sdk/pluginsdk/host.go`（`KV` 接口），`sdk/proto/sub2api/plugin/v1/host.proto` |
+| KV 只有 `Get` / `Set` / `Delete` / `List`，以及一次处理多个键的 `KVGetMany` / `KVSetMany` / `KVDeleteMany`（§93，核心 0.1.273 起），**没有 CAS、自增或 SETNX** | 「读 → 改 → 写」在两个节点并发时**会丢更新**。计数、累加、状态机放进自己的 schema（事务 / 条件 UPDATE），或在 `lock` 下做。批量写是原子的（全写或全不写），但它不是条件写，同样解决不了丢更新。一次要读写多个键时用批量调用：每个单键调用各做一次授权复核和一次 Redis 往返，批量调用各只做一次 | `sdk/pluginsdk/host.go`（`KV` 接口），`sdk/pluginsdk/kvbatch.go`（批量调用），`sdk/proto/sub2api/plugin/v1/host.proto` |
 | `Publish` 是 **best effort**：无确认、无顺序、无重放，**发布者所在节点自己收不到** | 缓存失效要「**本节点直接生效 + 广播通知其他节点 + 短周期轮询兜底**」三件都做：只广播，本节点不会失效；只靠广播，丢一条消息某个节点就一直是旧的 | `sdk/pluginsdk/host.go`（`Host.Publish` 注释），`server/internal/plugin/rollout/broadcast.go`（`broadcastHub.handle` 跳过 `SourceBootID` 为本节点的消息），`server/internal/core/ports_cluster.go`（`Bus` 注释「every consumer must also reconcile periodically」），§14.3 |
 | `OnEvents` **至少一次**：确认之前的批次会重投，持锁节点切换时也可能重投 | 按事件 `id` 去重（例如在自己的 schema 里对事件 id 建唯一索引） | `server/internal/event/delivery/delivery.go`（包注释），§11.7 |
 | `MigrateData` 在发布协调者被接管后**可能重复执行** | 必须幂等：重跑一遍得到同样的结果 | `server/internal/plugin/rollout/coordinator.go`（`takeOver`、`migrateData`），§11.7 |
@@ -4495,7 +4536,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 60.3 共享实现
 
-`internal/ratelimit.Minute` 是按作用域（`account`、`apikey`）的近 60 秒窗口；`account.Limiter` 是它的 `account` 作用域。Redis 键为 `rl:{作用域}:{id}:{rpm|tpm}`（§68.3）。2026-11-04 改键后，滚动升级期间新旧节点各计各的，这段时间和刚升级的 60 秒内限额偏松；回滚同理。
+`internal/ratelimit.Minute` 是按作用域（`account`、`apikey`）的近 60 秒窗口；`account.Limiter` 是它的 `account` 作用域。Redis 键为 `rl:{作用域}:{id}:{rpmb|tpmb}`（§68.3，2026-11-11 起；此前 2026-11-04 起为 ZSET `rl:{作用域}:{id}:{rpm|tpm}`）。每次改键后，滚动升级期间新旧节点各计各的，这段时间和刚升级的 60 秒内限额偏松；回滚同理。
 
 ### 60.4 控制台
 
@@ -4864,17 +4905,20 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **并发**：先占账号自身的槽位（`slot:account:{id}`），请求模型在某个列表里时再占列表的槽位（Slots kind `account-model:{key}`，id 为账号 id）。任何一个满了，这个账号本次就算忙，换下一个账号；两个槽位一起释放。列表上限为 0 时也占槽位，用来统计使用中的数量。
 - **RPM / TPM**：`AccountLimiter` 的参数从 session 改为请求模型。`Exhausted(ctx, refs, model)` 预检查，`TryHit(ctx, ref, model)` 在一个 Lua 脚本里同时检查账号和列表的上限，都没到才同时记一条事件，任何一个到了就都不记。结算时同时写账号和列表（网关持有最后一次准入的 `RateHold`，§78.3）。托管任务轮询和资源下载不带模型，只计账号自身。
 - 被列表上限挡住和被账号上限挡住的效果一样（§18.1）：从候选中跳过，不改状态、不发事件；都不可用时返回 429 `rate_limited`。
-- Redis key：`rl:account:{id}:m:{key}:rpm`、`rl:account:{id}:m:{key}:tpm`（ZSET，TTL 2 分钟），与账号自身的 `rl:account:{id}:rpm` 并列。
+- Redis key：`rl:account:{id}:m:{key}:rpmb`、`rl:account:{id}:m:{key}:tpmb`（HASH 分段计数，TTL 63 秒，§68.3），与账号自身的 `rl:account:{id}:rpmb` 并列。
 
 ### 68.3 近 60 秒窗口（账号和 API Key 都适用）
 
-2026-11-04 起参照 new-api 改为逐条记录（`common/ratelua`）。此前按分钟桶估算，3 个请求可能显示成 1 个，真实 60 秒内可放行约 2 倍上限。
+**2026-11-11 起（用户要求）改为 20 段滚动叠加计数、严格口径。** 2026-11-04 起参照 new-api 逐条记录（`common/ratelua`，每个请求一条 ZSET 成员），TPM 准入要把窗口内全部事件读出来相加，实测窗口内 10 万条时每次准入约 110ms，开销随请求量线性增长，不可接受，所以改回分段计数。与 2026-11-04 前的“按分钟桶”不同：那时只有当前和上一分钟两个桶，按比例估算，3 个请求可能显示成 1 个，真实 60 秒内可放行约 2 倍上限；现在窗口切成 20 段，且最老的一段整段过期前都算，**任意 60 秒内放行的请求数仍不超过上限**，只是额度最多晚 3 秒（一段）释放。
 
-- 每个请求是一条事件，写进 ZSET，score 为 Redis 时间（毫秒）：`rpm` 的成员是事件 ID，`tpm` 的成员是 `事件 ID|token 数`。读取和判断只看 score 在近 60 秒内的事件，写入时删掉更早的，key 的 TTL 是 2 分钟。
-- RPM 准入条件是 `已用 < 上限`，TPM 是 `已用 + 本次预占 <= 上限`，本次不预占时按 1 算。所以任意 60 秒内放行的请求数不超过 RPM 上限，分钟交界也没有突发。
-- 被拒时，`retry`（API Key 的 `Retry-After`）是腾出足够额度的那条事件离开窗口的时间，最少 1 秒。TPM 的这个时间不算在途请求结算后可能退回的部分。
-- `rate_usage` 的 `rpm`、`tpm` 是精确值，`tpm` 含在途请求的预占（§78.3）。
-- 开销随 60 秒内的请求数增长。一次脚本最多加总 10 万条 token 事件，超过时判为达到上限；读用量时每 50 组一个脚本，不让一个长脚本卡住 Redis。
+- **分段**：段长 = 窗口 ÷ 20，RPM、TPM 的窗口固定 60 秒，段长 3 秒；段号 = Redis 毫秒时间 ÷ 段长（整除）。每层（账号自身、模型列表、按模型计数、API Key）一个 HASH：`rpmb` 的 field 是段号、value 是该段的请求数；`tpmb` 同样记 token 数（§7）。
+- **窗口内的段**：当前段号为 cur 时，段号在 [cur − 20, cur] 的 21 段都算（严格口径）。一个请求从准入起计 60–63 秒，所以任何 60 秒内的请求都还在计数里。
+- **准入**：同一个 Lua 脚本里把各层窗口内各段相加，同时 `HDEL` 窗口外的段，然后各层当前段 `HINCRBY`（预占的 token 记在准入那一段）。RPM 准入条件是 `已用 < 上限`，TPM 是 `已用 + 本次预占 <= 上限`，本次不预占时按 1 算。每个 HASH 最多 21 段左右，脚本开销与请求量无关（实测窗口内 1 千、1 万、10 万次准入时，单次准入 + 结算脚本的 Redis 端耗时都在 0.10–0.11ms；一层的计数 key 约 300 字节）。
+- **TTL** = 窗口 + 一段（63 秒），每次写入刷新。
+- **被拒时**，`retry`（API Key 的 `Retry-After`）是腾出足够额度的那一段整段过期的时间（段号为 s 的段在 (s + 21) × 段长 时过期），向上取整到秒，最少 1 秒。TPM 的这个时间不算在途请求结算后可能退回的部分。
+- **结算**（§78.3）：`core.RateHold.At` 记着准入时的 Redis 时间。预占所在的段仍在窗口内 → 在该段加 (实际 − 预占)（可为负，段值不低于 0，降到 0 就删掉该段）；已滑出窗口 → 只把实际超出预占的部分记到当前段；没有预占的层同样记到当前段。
+- `rate_usage` 的 `rpm`、`tpm` 是这 21 段之和，`tpm` 含在途请求的预占（§78.3）。读用量时每 50 组一个脚本。
+- 2026-11-11 换新 key 名（`rpmb`、`tpmb`，旧的 ZSET `rpm`、`tpm` 不再读写，2 分钟内自然过期），类型不同，不能复用旧名。新旧节点同时服务时各计各的，限额偏松。本版本带迁移 0094（§71.1），按带迁移的发布走 primary-first（先升主节点跑完迁移，再升其余节点），新旧节点混跑只在这段时间内。
 
 ### 68.4 用量 `rate_usage.models`
 
@@ -4903,7 +4947,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 68.7 按模型明细（2026-11-09，用户要求参照 new-api 渠道 RPM / TPM / TPD / SPM 悬浮明细）
 
-- **计数**（全部在 Redis）：请求的客户端模型（`model` 非空）除了计入账号和所在模型列表，还单独计一组不设上限的计数：近 60 秒窗口 sub `md:<model>`（RPM / TPM / 会话，和账号同一次 admit 脚本写入，结算时随 hold 一起换成实际 token），并发槽位 kind `account-md:<model>`（`core.ModelSlots`，limit 0，只计数不拒绝），以及当天 token：结算时把与 TPM 同口径的 token 加到哈希 `rl:account:<id>:tpd:<UTC 整点 unix 秒>`（field = 模型，TTL 26 小时，`AccountLimiter.CountModelTokens`）。不设上限，所以永远不会因为按模型计数而拒绝请求；代价是每次尝试多一次槽位登记、结算多一次 HINCRBY。`model` 为空的请求（任务、下载、资源回源）只计账号。
+- **计数**（全部在 Redis）：请求的客户端模型（`model` 非空）除了计入账号和所在模型列表，还单独计一组不设上限的计数：近 60 秒窗口 sub `md:<model>`（RPM / TPM / 会话，会话周期跟随账号的 `spm_window_seconds`，和账号同一次 admit 脚本写入，结算时随 hold 一起换成实际 token），并发槽位 kind `account-md:<model>`（`core.ModelSlots`，limit 0，只计数不拒绝），以及当天 token：结算时把与 TPM 同口径的 token 加到哈希 `rl:account:<id>:tpd:<UTC 整点 unix 秒>`（field = 模型，TTL 26 小时，`AccountLimiter.CountModelTokens`）。不设上限，所以永远不会因为按模型计数而拒绝请求；代价是每次尝试多一次槽位登记、结算多一次 HINCRBY。`model` 为空的请求（任务、下载、资源回源）只计账号。
 - **接口**：`GET /accounts/:id/rate-models?tz=`（`account:read` / `account:own:read`）返回 `{total, models: [{model, in_use, rpm, tpm, tpd, sessions}]}`，不查数据库。`total` 是账号自身的计数，`total.tpd` 是所有模型当天 token 之和。模型名单取当天 0 点和 1 小时前两者中较早的整点之后各小时哈希里出现过的模型（1 小时前的用来覆盖跨午夜的长请求，只计名不计 TPD），按 TPD 取前 100 个；结果按并发、RPM、TPM、TPD 倒序。`tpd` 按 `tz` 的当天 0 点所在整点起累计：整点时区准确，半点时区多算 0 点前不到一小时。按模型的会话和并发相加不一定等于账号的（一个会话可以用多个模型）。Redis 读失败返回 503；没有 Redis 时全为 0。
 - **控制台**：账号列表"并发 / RPM / TPM / 会话"列的悬浮卡片先显示按模型明细（全部模型 + 各模型的并发 / RPM / TPM / TPD / 会话），卡片打开期间每 2 秒刷新一次（上一次返回后再发下一次），关闭即停；账号设了上限或有模型列表时，下面再显示原来的限额表（§68.6）。
 - 0.1.260 的 TPD 曾查 usage_logs；0.1.261 改为上面的 Redis 小时哈希，升级当天的 TPD 从升级时刻起算。
@@ -4943,7 +4987,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 控制台没有任何数据时显示"暂无用量，下次请求后更新，或点击刷新"。
 - 用量窗口不参与调度准入（§44.7「用量窗口不再拦截」），所以只靠响应头更新的快照即使变旧，也不会挡住账号。
 
-## 71. 每分钟会话数 SPM（2026-10-30，用户要求参照 new-api）
+## 71. 每分钟会话数 SPM（2026-10-30，用户要求参照 new-api；2026-11-11 起周期可设，用户要求）
 
 用户要求：把 new-api 的 SPM（每分钟会话限制）加上，与并发、RPM、TPM 并列；会话按粘性会话键判断是否是新会话。参照 new-api `model/channel_rate_limit.go`（`spm`、`tryOccupy`、`filterSPMBlockedChannels`）。本节取代 §18 早期版本里已移除的 `spm_limit`（2026-10-05 移除，列一直保留未用）。
 
@@ -4951,27 +4995,38 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 | 字段 | 类型 / 校验 | 说明 |
 |---|---|---|
-| `spm_limit` | 0–10000000，默认 0（迁移 0063，列 `accounts.spm_limit`） | 账号近 60 秒内活跃的会话数上限（会话见 71.2），0 = 不限 |
-| `model_limits[].spm_limit` | 同上；旧数据缺省为 0 | 该模型列表近 60 秒内活跃的会话数上限 |
-| `rate_usage.sessions`、`rate_usage.models[].sessions` | 只读 | 近 60 秒内被准入过的不同会话数（精确值，不是估算；不等于进行中的会话，§78.1） |
+| `spm_limit` | 0–10000000，默认 0（迁移 0063，列 `accounts.spm_limit`） | 账号一个会话周期内出现过的会话数上限（会话见 71.2），0 = 不限 |
+| `spm_window_seconds` | 60–86400 秒，默认 60（迁移 0094，列 `accounts.spm_window_seconds`，约束 `accounts_spm_window_seconds_chk`） | 账号的会话周期：`spm_limit` 和 `rate_usage.sessions` 按它计。2026-11-11 起（用户要求） |
+| `model_limits[].spm_limit` | 同上；旧数据缺省为 0 | 该模型列表一个会话周期内的会话数上限 |
+| `model_limits[].spm_window_seconds` | 60–86400 秒；缺省或 0 视为 60（存在 `model_limits` JSON 里，保存和读取时补成 60） | 该模型列表的会话周期 |
+| `rate_usage.sessions`、`rate_usage.models[].sessions` | 只读 | 该层会话周期内被准入过的会话数（20 段计数，见 71.2；不等于进行中的会话，§78.1） |
 
-- POST / PATCH `/accounts` 可带 `spm_limit`；字段错误 `spm_limit: invalid`、`model_limits[i].spm_limit: invalid`。
+- POST / PATCH `/accounts` 可带 `spm_limit`、`spm_window_seconds`；字段错误 `spm_limit: invalid`、`spm_window_seconds: invalid`、`model_limits[i].spm_limit: invalid`、`model_limits[i].spm_window_seconds: invalid`。
+- `spm_window_seconds` 也是通用配置项（§87，`manifest.CommonControlSpecs`，int 60–86400，核心默认 60），账号类型可声明默认值或锁定。插件 proto（`AccountProperties`、`ModelLimit`、`AccountPatch`）和 manifest `defaultLimits` **不带**这个字段：插件建的账号是 60；插件经 `account_patch` 改 `model_limits` 时，模型相同的列表（按去空格、去重后的模型比较）保留管理员设的周期（`keepSPMWindows`），新列表为 60。`GET /account-types` 的 `default_limits.model_limits[]` 带 `spm_window_seconds: 60`。`commonControls.model_limits.default` 是账号接口的形状，各列表可带 `spm_window_seconds`（`manifest.ModelLimitValue`，check 按 60–86400 校验，0 或缺省 = 60；与 `defaultLimits` 比冲突时 60 与缺省相同）。声明 `commonControls.spm_window_seconds` 或带周期的 `model_limits` 默认值的插件，`hostCompat` 下限须 ≥0.1.276（`check.SPMWindowFirstCore`，否则 `below_feature_core`）：更早的核心安装时不认识它们、拒绝安装。
+- 迁移 0094：`ADD COLUMN IF NOT EXISTS spm_window_seconds int NOT NULL DEFAULT 60`，约束先 DROP IF EXISTS 再 ADD；已有账号仍按 60 秒计。旧核心忽略该列、按 60 秒计。
 - 迁移 0063：列在 0009 就存在（早期 SPM 的残留），首次执行时清零旧值，避免它们突然变成生效的上限；之后用列注释 `CONTRACTS §71` 标记已执行，重跑不会清掉管理员新设的值。加约束 `accounts_spm_limit_chk`（0–10000000，先 DROP IF EXISTS 再 ADD）。旧核心忽略该列。
 
 ### 71.2 会话与准入
 
 - **会话身份 = 请求命中的粘性规则算出的粘性会话键**（`sticky:{rule}:{group}:{model}:{sha256(value)}`，§ 粘性会话）。粘性会话关闭、没有规则命中或没有会话值时，**这次请求本身就是一个新会话**（`req:{请求 ID}`，与 new-api `GetRateSessionIdentity` 的兜底一致）：照样受 SPM 限制、计入会话数。
-- 每层（账号自身、请求模型所在的模型列表）各有一个 ZSET，**各层独立判定**：持有某层的会话槽不豁免其他层。
-- 某层设了上限时：该会话在该层近 60 秒内已出现过 → 总是放行；否则该层近 60 秒内的会话数 < 上限才放行。
-- 准入和 RPM / TPM 在**同一个 Lua 脚本**里完成（`ratelimit.Minute.AdmitAll`，`core.AccountLimiter.TryHit(ctx, ref, model, session)`）：任何一层的 RPM、TPM、SPM 到了，整次都不计；都没到时每层 RPM +1，且（有会话时）每层把会话写入 ZSET（score 为 Redis 时间，同一会话再次请求只刷新时间；时间只在准入时刷新，请求进行中和结束时都不刷新），并修剪 60 秒外的成员。会话数在每一层都计，不论该层是否设了上限，用于展示。
-- 被 SPM 挡住和被 RPM / TPM 挡住效果一样（§18.1、§68.2）：本次跳过该账号，不改状态、不发事件；都不可用时 429 `rate_limited`（`all accounts are busy or rate limited, please retry later`）。`ratelimit` 给出的 retry 为最早一个会话离开窗口的时间（最少 1 秒）；账号路径与 RPM / TPM 一样不向客户端返回 `Retry-After`。
+- 每层（账号自身、请求模型所在的模型列表、按模型计数）各自计数，**各层独立判定**：持有某层的会话槽不豁免其他层。
+- **会话也分 20 段（2026-11-11 起，用户要求）**：段长 = 该层周期 ÷ 20，口径同 §68.3（[cur − 20, cur] 共 21 段）。每层一个段计数 HASH `spmb:{秒}`（value = 最后出现在该段的会话数）和一个成员 ZSET `spms:{秒}`（score = 最后出现的段号）。会话数 = 窗口内各段之和，**每个会话只计在它最后出现的那一段**（§7）。按模型计数（`md:<model>`）的周期跟随账号的。
+- 某层设了上限时：
+  - 粘性会话已在该层周期内（ZSCORE ≥ cur − 20）→ 总是放行；最后段不是当前段时，旧段 −1、当前段 +1、更新 score（会话数不变）。
+  - 新的粘性会话 → 该层会话数 < 上限才放行；当前段 +1，写入 ZSET。
+  - `req:{请求 ID}`（没有粘性会话的请求）→ 会话数 < 上限才放行；只给当前段 +1，**不写 ZSET**（它不会再出现，记成员只会占内存）。它计在哪一段只有网关知道：准入返回的 `core.RateHold.At` 是准入时的 Redis 时间，网关记在 `call.sessionAt`，释放时据此找到那一段（§71.3）。网关用 `core.RequestSession` 生成、`account` 用 `core.IsRequestSession` 识别，在 `ratelimit.Session.Once` 里显式标出，Lua 里不认前缀。
+- 准入和 RPM / TPM 在**同一个 Lua 脚本**里完成（`ratelimit.Minute.AdmitAll`，`core.AccountLimiter.TryHit(ctx, ref, model, session)`）：任何一层的 RPM、TPM、SPM 到了，整次都不计；都没到时每层 RPM +1，且（有会话时）每层按上面的规则计会话（只在准入时更新，请求进行中和结束时都不更新），并删除 score < cur − 20 的成员和窗口外的段。会话数在每一层都计，不论该层是否设了上限，用于展示。key 名带周期秒数，改周期就换新计数，不同段长的段号不会混用；key TTL = 周期 + 一段。
+- 被 SPM 挡住和被 RPM / TPM 挡住效果一样（§18.1、§68.2）：本次跳过该账号，不改状态、不发事件；都不可用时 429 `rate_limited`（`all accounts are busy or rate limited, please retry later`）。`ratelimit` 给出的 retry 为腾出名额的那一段整段过期的时间（最少 1 秒）；账号路径与 RPM / TPM 一样不向客户端返回 `Retry-After`。
+- **同一请求在同一账号上只算 1 个会话**。网关对同一账号再次准入同一会话只有两处：失败策略的同号重试（`retry`，`prepareRetry` 把下一次挑号限定为该账号），和 WebSocket 连接的后续轮次（`wsSession.reuse`）。其余路径都把离开的账号排除在本次请求之外（换号、`switch_reset`、可用性守卫、被限流拒绝），不会再准入。
+  - 同号重试：粘性会话在 ZSET 里，再次准入时已持有，不重复计；`req:` 会话在重试前先从该账号释放上一次准入计的那 1 个（`releaseSession`，按 `RateHold.At`），再走预判和准入。所以它只计 1 个，也不会被自己占的名额挡住（SPM = 1 时同号重试照常进行）。
+  - WebSocket：没有粘性键的连接用 `conn:{首轮请求 ID}`（`core.ConnectionSession`），按粘性会话的规则记成员，后续轮次在周期内持有它，一条连接算 1 个会话。成员数按连接数增长，不按请求数。
 - 托管任务轮询、资源下载不带会话（与不带模型一样），不受 SPM 限制。
 
 ### 71.3 调度
 
-- `Exhausted(ctx, refs, model, session)` 只读预判（一次读脚本：各层 RPM/TPM 窗口 + `ZCOUNT` + 该会话的 `ZSCORE`），会拒绝该会话的账号不进候选池。粘性绑定的账号在 60 秒内持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话最后一次准入超过 60 秒后不再算持有（从准入算起，不是从请求结束算起：超过 60 秒的长流还没结束，会话就已不算持有）：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `req:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
+- `Exhausted(ctx, refs, model, session)` 预判（一次读脚本：各层 RPM/TPM/会话的段之和 + 该会话的 `ZSCORE`；`req:` 会话不查 ZSCORE），会拒绝该会话的账号不进候选池。粘性绑定的账号在**会话周期内**持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话最后一次准入所在的段离开周期窗口后不再算持有（从准入算起，不是从请求结束算起：比周期还长的流还没结束，会话就已不算持有）：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `conn:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话（71.2）。首轮握手失败换号时同样按下面“重试换号时会话跟着走”的规则从离开的账号释放该会话（`conn:` 会话没有绑定，总是释放；2026-11-11 起，此前 WebSocket 握手换号不释放）。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
 - Redis 出错：预判放行（与 RPM / TPM 预判一致）；原子准入出错时整次请求失败（`account limits unavailable`，与 §18.1 现行 RPM / TPM 一致，不是放行；WebSocket 和资源接口的响应不同，§78.4）。
-- **重试换号时会话跟着走**（2026-11-01）：失败策略换号并清除粘性绑定（`switch_reset`，Schema 3 起总是如此），或未发布失败策略时按插件分类切换账号，核心在换号前把本次会话从离开的账号各层 ZSET 里移除（`core.AccountLimiter.ReleaseSession`，尽力而为，`ZREM`；`gateway` `releaseSession`）。否则同一会话在 60 秒内同时占着两个账号的会话槽。已计的 RPM 不退。旧版失败策略的 `switch`（换号但保留绑定）不移除：会话仍绑定在原账号上。
+- **重试换号时会话跟着走**（2026-11-01）：失败策略换号并清除粘性绑定（`switch_reset`，Schema 3 起总是如此），或未发布失败策略时按插件分类切换账号，核心在换号前把本次会话从离开的账号各层 ZSET 里移除，并把它最后所在的段 −1（`core.AccountLimiter.ReleaseSession`，尽力而为，一个 Lua 脚本；`gateway` `releaseSession`）。否则同一会话在周期内同时占着两个账号的会话槽。`req:` 会话没有成员：`ReleaseSession(ctx, ref, model, session, at)` 的 `at` 是本次在该账号准入的 Redis 时间（`RateHold.At`，网关 `call.sessionAt`），各层把该时刻所在的段 −1，段已滑出窗口就不动；`at` 为零时不动。网关每次准入只释放一次（释放后清空 `sessionAt`），所以不会多减别的请求的计数。已计的 RPM 不退。旧版失败策略的 `switch`（换号但保留绑定）和可用性守卫换号（同样保留绑定）不移除仍绑定在原账号上的粘性会话：它还会回到原账号；没有绑定的会话（`req:`、`conn:`）不会回来，任何换号都移除（2026-11-11 起，`gateway` `leaveSession`：粘性会话仍绑定在离开的账号上时不释放，其余都释放）。
 
 ### 71.4 插件
 
@@ -4981,12 +5036,36 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 71.5 控制台
 
 - 账号列表的限额列改为"并发 / RPM / TPM / 会话"，第四个数字是会话：设了上限显示 `已用/上限` 并按比例着色，没设只显示用量。悬停明细表加"会话"列（账号与各模型列表）。
-- 编辑表单"限流"加"每分钟会话数（SPM）"；"指定模型限速"卡片加"会话"；批量编辑加"每分钟会话数（SPM）"；新建时按 `default_limits.spm_limit` 预填。
-- Redis key：`rl:account:{id}:spm`、`rl:account:{id}:m:{key}:spm`（§7）。
+- 编辑表单"限流"加"每分钟会话数（SPM）"；"指定模型限速"卡片加"会话"；批量编辑加"每分钟会话数（SPM）"；新建时按 `default_limits.spm_limit` 预填。（2026-11-11 起这三处都带周期，见下。）
+- Redis key：`rl:account:{id}[:m:{key}|:md:{model}]:spmb:{秒}`（段计数）、`…:spms:{秒}`（成员）（§7；2026-11-11 前为 ZSET `…:spm`）。
+- 会话周期（2026-11-11，`spm_window_seconds`）：
+  - 编辑表单的会话数限制是一行 `[N] 个会话 / 每 [n] [分钟|小时]`：共享组件 `web/src/views/accounts/controls/SessionLimitInput.vue`，换算与校验在 `web/src/views/accounts/spmWindow.ts`（按能整除的最大单位显示；经接口设的非整分钟周期按秒显示，只有那时才出现“秒”）。通用配置项固定或隐藏 `spm_window_seconds` 时，周期输入置灰或不显示。
+  - "指定模型限速"卡片用同一个输入；周期为 60 秒时不写入该条 `model_limits`（读取时缺省即 60），周期不同的条目不合并成一张卡片。
+  - 批量编辑的会话数一行同样带周期，勾选后同时改数量和周期（周期与账号现值相同时不发送）。
+  - 账号列表的会话数在周期不是 60 秒时带上周期，如 `3/20·5分`；悬停明细的会话列标出各层（账号、各模型列表）的周期。
 
-## 72. 提示词审核 0.2：参照 new-api 的流程、观察名单与 AI 分析（2026-10-30，用户要求；P1 已上线 0.2.0，P2 见 72.13，P3 在 0.4.0 实现，见 72.14）
+## 72. 提示词审核 0.2：参照 new-api 的流程、观察名单与 AI 分析（2026-10-30，用户要求；P1 已上线 0.2.0，P2 见 72.13，P3 在 0.4.0 实现，见 72.14；0.8.0 跟进 new-api 11 月的改动，各小节已按 0.8.0 改写）
 
 用户要求把 new-api 的内容审核（`D:\projects\golang\new-api`，分支 `feat/content-moderation`，cp.270；代码在 `service/moderation/`、`model/moderation*.go`、`controller/content_moderation.go`）迁移过来。sup2api 已有内置插件 `moderation`（§20，0.1.13），所以做法是**把 new-api 的设计并入这个插件，升到 0.2.0**，不新建插件。本节确定后，§20 中与本节冲突的条目以本节为准，实现时同步改 §20。
+
+**0.8.0（2026-11-10，分支 `feat/moderation-newapi-parity`）**：new-api 在 2026-11-01 至 11-08 之间改了流程引擎（失败级跳过、补审级、初审命中传给后级）、缓存（放行和命中都缓存，命中重放）、审核时机（默认级别、白名单、黑名单）、Jev 引擎（长上下文、图片重画），并新增题表式 LLM 审核器；插件在 0.8.0 跟进，参照 new-api 提交 `207797b76`（cp.294）。设计、与 new-api 仍然不同之处及原因见 `docs/DESIGN-2026-11-10-MODERATION-PARITY.md`（第 10 节、第 14 节），发布与回滚见 `docs/RELEASE-MODERATION-0.8.0.md`。本节各小节描述的是 0.8.0 的行为；与 0.7.2 不同的地方标"0.8.0"。
+
+**0.8.1（2026-11-11，0.8.0 上线后）**：只改判定缓存和它对 KV 的用法（负责人 2026-11-11 的决定）。原因是上线当天的实测：承载流量的节点上插件的每次 KV 调用约 50 ms，0.8.0 的到期重读在请求路径上读不完，一个 150 个片段的请求第一次到达节点时在 200 ms 内只读得到约 32 个。与 0.8.0 的不同：
+
+| | 0.8.0 | 0.8.1 |
+|---|---|---|
+| 内存层 | 片段值每 5 分钟对照 KV 重读一遍 | 只是 KV 的缓存：值进了内存一直用到到期，不重读 |
+| 读写 KV | 逐键调用、8 路并发，有预算和个数上限：查询最多读最靠后的 64 个片段、连同命中条目总共 200 ms，读不完的送审；运行最多写 64 个通过、后台写 2 秒；人工处理每 64 个键 1 秒、最多 10 秒 | 核心的批量调用（§93），没有预算和个数上限，唯一的期限是调用方自己的 ctx |
+| 运行的结论 | 内存立即写，KV 在后台写；KV 没写进的通过和命中只留在本节点内存（命中带"未落地"标记，到期重读时重写） | 钩子先回答，后台先写 KV、写成功后才进内存；KV 写失败的结论哪里都不缓存 |
+| 广播丢失 | 没收到的节点最迟 5 分钟后由到期重读跟上 | 没有时限：按内存里的值回答，直到值到期、被淘汰或缓存被清空 |
+| 人工处理之后才写缓存的运行 | 靠 4 秒的墓碑挡住；墓碑过期之后才结束的运行会把处理去掉的命中写回 | 按请求查缓存时的读数判断，不论审了多久、写等了多久都不写回 |
+| 清空之后才出队的后审任务 | 不查缓存，直接运行 | 按当前的清空纪元查一次缓存 |
+| `/status` | `runtime.kv_errors` 把被预算截断的一批也计在内 | `kv_errors` 只计失败的批量调用；新增 `runtime.kv_writing`、`runtime.kv_skipped` |
+| 核心 | `hostCompat >=0.1.258` | `hostCompat >=0.1.273`（72.3） |
+
+下面各小节里判定缓存的段落写的是 0.8.1 的行为，与 0.8.0 不同的地方标"0.8.1"；0.8.0 在这些地方的做法只写在这张表里。改动的段落：72.3（版本）、72.5 第 8 步的"查"和"写"、72.7 与 72.9 的多节点同步和人工处理、72.11 的 `/status`、72.16。没有迁移，没有设置和接口路径的变化，可以与 0.8.0 混跑。实测、设计理由、审核中发现并修掉的问题和已知的代价见 `docs/DESIGN-2026-11-10-MODERATION-PARITY.md` 第 14 节"上线后修改"；上线经过、KV 不回答时的后果和回滚见 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节。0.8.1 在 2026-11-11 随核心 0.1.274 上线（核心 0.1.273 已构建但没有发布，§93.7）。
+
+**0.8.2（0.8.1 上线后的整理，2026-11-11 随核心 0.1.275 上线）**：不改 0.8.1 的缓存规则，只有三处小的行为变化和界面上的两处，各处标"0.8.2"：分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播（72.5 第 8 步"KV 写失败之后"）；告警状态的 KV 失败按缓存的规则计数（72.5 第 8 步"KV 出错"）；片段键在 KV 里的 TTL 向上取整到整秒（72.5 第 8 步"存储"）；概览页显示 `runtime.kv_skipped`、`kv_writing` 一行换了文案（72.11、72.16）。其余是代码和测试的整理。`hostCompat`、权限、迁移、设置、KV 里的键和值都不变，可以与 0.8.1 混跑（72.3、72.16）。
 
 用户已确认的取舍：
 - 只迁配置（Jev 题集、阈值、分析准则、渠道），通过页面导入；new-api 的记录和名单不迁，两边的用户不是同一批人。
@@ -4999,10 +5078,10 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | 方面 | §20（0.1.x） | new-api | 0.2 做法 |
 |---|---|---|---|
 | 审什么 | 最新一条 user 消息，只有文字；剥掉 `<system-reminder>` | 只审最后一条是 user 的请求；取结尾连续的 user 消息（Anthropic 的 tool_result 不算文字），文字加图片，保留 `<system-reminder>`，压缩空白后截到 12000 字 | 0.2–0.5 照 new-api；**0.6.0 起改为请求里客户端可控的全部内容**（各角色的消息、system/instructions、工具调用与结果、文档、工具定义、图片），按内容片段缓存、超长分块（72.4）。new-api 的做法只防得住诚实的客户端（2026-10-31 团队审核 P1-6） |
-| 怎么判 | 一个 LLM + `submit_verdict` | 审核器：OpenAI `/v1/moderations` 按类别分数比阈值；TypeSafe Jev 按问题打分 | 三种审核器：`openai_moderation`、`typesafe`、`llm_verdict`（72.6） |
-| 组合 | 一次调用 | 多级流程：同级审核器并发，组合方式 any/all/at_least；某一级判通过就整体通过 | 照 new-api（72.7） |
+| 怎么判 | 一个 LLM + `submit_verdict` | 审核器：OpenAI `/v1/moderations` 按类别分数比阈值；TypeSafe Jev 按问题打分 | 四种审核器：`openai_moderation`、`typesafe`、`llm_verdict`，0.8.0 加 `llm_questions`（new-api 11 月新增的题表式 `llm` 审核器）（72.6） |
+| 组合 | 一次调用 | 多级流程：同级审核器并发，组合方式 any/all/at_least；某一级判通过就整体通过。11 月起：没有结论的级跳过、前面的命中保留；补审级；初审命中传给后级 | 照 new-api（72.7）；11 月的改动在 0.8.0 跟进 |
 | 配置粒度 | 全局 | 分组绑定流程，流程可发布、有版本、可回滚 | 分组绑定流程；`group_id=0` 是默认流程，没有单独绑定的分组都走它 |
-| 何时拦截 | 全局 `observe` 或 `enforce` | 默认后台异步审核；只有名单上拦截级的用户同步审核，命中就拒绝 | `mode`：`off`、`observe`（new-api 行为）、`enforce`（所有人同步审核）（72.5） |
+| 何时拦截 | 全局 `observe` 或 `enforce` | 11 月起由默认级别（observe / block）、白名单、黑名单和名单条目的级别决定：黑名单总是同步审核，白名单只异步审核，其余用户按名单条目的级别，没有条目的按默认级别 | 0.8.0 照 new-api：`mode` 既是总开关也是默认级别——`off`、`observe`（默认观察）、`enforce`（默认拦截）；设置 `allowlist_user_ids`、`blocklist_user_ids`（72.5 第 6 步）。0.2–0.7 的 `enforce` 是所有人同步审核 |
 | 用户处置 | 窗口内违规达到阈值自动封禁（`blocks`） | 观察名单：observe / block 两级、有效期、违规计数、AI 分析可自动升降级 | 观察名单两级 `observe` / `enforce`；原来的封禁保留，作为名单之上的第三级"封禁"（72.8） |
 | 人工审核 | 只能删记录 | 标误报或确认；最终结论 = 人工结论优先，否则取 AI 结论 | 照 new-api（72.9） |
 | AI 分析 | 无 | 带 5 个工具的 agent，结论自动调整名单 | P2（72.13） |
@@ -5015,8 +5094,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 1. **取结尾的消息不改核心**：gjson 自带的多路径写法 `messages|@reverse|[0,1,…,15]` 就能取到倒数 16 条（倒序；数组不足 16 条时缺的位置自动跳过，2026-10-30 用 gjson v1.19.0 实测）。插件把结果倒回正序，再算出结尾连续的 user 消息，不必把整段历史传过去。下文用 `TAIL16` 代指 `|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]`。**0.6.0 起作废**：插件要审整个请求，`needs` 改为各顶层字段整体（`messages|@this` 等，72.3），核心把整段历史传给插件。
 2. **宿主调用 `SecretSeal` / `SecretOpen`**（HostService，宿主权限 `secrets`，风险 low，即无需管理员额外同意，插件升级时自动授予）：用核心的主密钥做 AES-256-GCM（`secret.Cipher`），AAD = `plugin-secret:{插件 key}:{context}`，context 由插件指定（≤128 字节，例如 `channel:3`），明文 ≤64 KiB。插件 A 封存的数据插件 B 解不开，同一插件换了 context 也解不开；解不开时一律返回 `InvalidArgument "ciphertext does not open"`，不区分原因。SDK：`Host.SealSecret` / `Host.OpenSecret`；`pluginsdktest.FakeHost` 用公开的测试密钥实现同样的绑定。审核渠道的 API Key 和代理地址密文存在插件表里（new-api 存明文；我们的账号凭证都加密，这里不降级）。旧核心没有这两个调用，返回 Unimplemented。
 3. **钩子请求的消息大小**：插件侧 gRPC 默认只收 4 MiB，带图片的请求会超过。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize(n)`（编译进插件），moderation 设 64 MiB（`main.go` 的 `maxRecvMsgSize`），覆盖正常的请求（上游自己也限制请求大小，原先固定的请求体上限是 32 MiB）。核心作为客户端的发送上限是 gRPC 默认值（不限），钩子字段只是请求体的片段。§74.3 的 `max_request_body_mb` 允许管理员把请求体调大，个别请求可能超过插件的接收上限：这样的调用以 `RESOURCE_EXHAUSTED` 失败，核心按该钩子的 failure 处理这一次，**但熔断不理会它**（2026-10-31，`hooks.go` `requestTooLarge`）：只有同时满足三条才算超大请求——状态码 `RESOURCE_EXHAUSTED`、消息以 grpc-go 接收端自己的 `grpc: received message larger than max` 开头、请求本身（`proto.Size(request)`）超过 4 MiB（gRPC 默认接收上限）；超大请求既不计为失败，也不重置连续失败计数。插件自己因过载返回 `RESOURCE_EXHAUSTED`（消息是插件自己的）时，即使请求很大也计为失败（2026-10-31 修订，原先只看状态码和大小，会把过载误判成超大请求）。插件是健康的，不能因为个别超大请求让整个集群暂停审核。（原先这里写"插件的响应超大仍计为失败"：核心的接收上限是 MaxInt32，这个分支实际碰不到，已删去。）
-   - **内存与 failure=open 的后果（0.6.0，2026-10-31 团队审核 P1-7）**：插件内存上限 512 MB，一个钩子请求在插件里会被解码、规范化、分块，峰值占用是请求字段的数倍；几个大请求同时到达就可能让插件被内存上限杀掉。0.6.0 的做法：钩子入口按请求字段的字节数做并发准入（`max_inflight_mb`，默认 128 MiB；一个请求单独到达时不论多大都接收），超出时立即回答——一般用户放行（note `moderation: busy`），拦截级用户返回 503 `moderation_busy`；被封禁用户在准入之前就拒绝。图片最多审 `input_max_images` 张（默认 8），单张 base64 超过约 22 MiB（解码后约 16 MiB）的不审；OpenAI 审核器只为选中的那一张图拼 data URL；排队的 post 任务只保留分块后的文字和图片，不持有整个钩子请求。
-   - **failure=open 的后果，如实写明**：两个钩子都是 `failure: open`。插件进程不可用、超时、连续失败 10 次触发熔断（30 秒）时，核心不经插件直接放行，**拦截级用户和被封禁用户在这段时间里也会被放行**。核心在插件不可用时无法询问插件，封禁名单也只在插件里，所以插件侧做不到"不可用时拒绝被封禁用户"。改成 `failure: closed` 会在插件故障时拒绝所有用户的请求，代价过大，不改。需要硬性封禁时，应在核心停用该用户或其 API Key（核心鉴权阶段就拒绝，不依赖插件）。
+   - **内存与 failure=open 的后果（0.6.0，2026-10-31 团队审核 P1-7）**：插件内存上限 1024 MB（0.8.0 起，此前 512 MB；下面的预算是按 512 MB 定的，没有改），一个钩子请求在插件里会被解码、规范化、分块，峰值占用是请求字段的数倍；几个大请求同时到达就可能让插件被内存上限杀掉。0.6.0 的做法：钩子入口按请求字段的字节数做并发准入（`max_inflight_mb`，默认 128 MiB；一个请求单独到达时不论多大都接收），超出时立即回答——本应先审的请求返回 503 `moderation_busy`，其余放行（note `moderation: busy`），0.8.0 的规则见 72.5 第 4 步的"准入"；被封禁用户在准入之前就拒绝。图片最多审 `input_max_images` 张（默认 8），单张 base64 超过约 22 MiB（解码后约 16 MiB）的不审；OpenAI 审核器只为选中的那一张图拼 data URL；排队的 post 任务只保留分块后的文字和图片，不持有整个钩子请求。
+   - **failure=open 的后果，如实写明**：两个钩子都是 `failure: open`。插件进程不可用、超时、连续失败 10 次触发熔断（30 秒）时，核心不经插件直接放行，**本应先审的用户（72.5 第 6 步）和被封禁用户在这段时间里也会被放行**。核心在插件不可用时无法询问插件，封禁名单也只在插件里，所以插件侧做不到"不可用时拒绝被封禁用户"。改成 `failure: closed` 会在插件故障时拒绝所有用户的请求，代价过大，不改。需要硬性封禁时，应在核心停用该用户或其 API Key（核心鉴权阶段就拒绝，不依赖插件）。
 4. `moderation` 的 `hostCompat` 改为 `>=` 本次核心版本（因为要用 `secrets`）；**发布顺序是先核心、后插件**。
 5. 不改：钩子点（仍然只有 `gateway.request`）、`usage_logs`、权限目录。插件权限在 manifest 里声明。（0.7.0 起另用通用钩子点 `gateway.attempt`，§85、72.17。）
 6. **钩子覆盖所有协议的写法**（2026-10-31 核实，核心不需要改）：`match.protocols` 写 `["*"]` 或省略（空数组）就匹配所有协议，也可以用 `openai.*` 这类通配（§15.5，运行时 `matchList`、安装时校验语义一致）。核心对经过网关管线的**每个**端点都执行 `gateway.request` 钩子，包括 `anthropic.count_tokens`、`gemini.count_tokens`、`openai.embeddings`、`openai.responses_ws` 的每条 `response.create`，以及插件声明的端点（`volcengine.images`、`volcengine.video_submit`、`volcengine.video_query`；查询是 GET、没有请求体，钩子照样调用，`fields` 为空）。钩子收到的 `meta.protocol` 是客户端端点的协议，插件据此决定做什么（例如所有协议都查封禁，只有生成内容的协议才审核）。
@@ -5032,6 +5111,14 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **封禁钩子（0.6.0）**：另一个钩子 `ban`（order 199，`match` 为空即匹配所有协议，不要任何字段，超时 2 秒，failure open），只做 72.5 第 1、2 步：被封禁用户在 `openai.embeddings`、`*.count_tokens`、`volcengine.video_query` 以及平台插件自己声明的协议上也被拒绝（2026-10-31 团队审核 P2；此前 §72.1 "封禁"的定义言过其实）。内容审核钩子仍只匹配上面 8 个协议：embeddings 和 count_tokens 不生成内容，而且 count_tokens 的请求体就是整段对话，匹配它们只会把大请求白白发给插件。核心对空 `match`（或 `"*"`）匹配全部协议、这些协议都会执行请求钩子（2026-10-31 与核心确认；`video_query` 是 GET，没有请求体，字段为空）。封禁钩子与审核钩子对 8 个审核协议各调一次插件，封禁检查只读内存，开销可以忽略。
 - 权限：保留 `moderation:read`、`moderation:manage`，和 new-api 的 read / write 一一对应。read 能看全部页面，包括原文；manage 负责所有修改和要花钱的调用（试跑、测试、手动分析）。
 - 任务：`cleanup` 保留（72.10）；P2 加 `analysis`（`@every 1m`，处理分析队列，72.13）。
+- **0.8.0**：版本 0.8.0，`hostCompat` 不变（`>=0.1.258 <0.2.0`，没有用到新的宿主接口）。
+  - 路由加一条：`POST /verdict-cache/clear`（scope `admin`，权限 `moderation:manage`，72.11）。
+  - 能力、钩子（`ban`、`moderation`、`moderation_attempt` 的 `match`、`needs`、超时、failure）、任务、用户权限都不变。
+  - **宿主权限不新增、scope 不变，升级到 0.8.0 不需要管理员重新批准**：题表式 LLM 和 Jev 走现有的 `net`，判定缓存用现有的 `kv`，广播新主题 `verdict.changed` 用现有的 `broadcast`，迁移 `0010` 用现有的 `db.schema`。
+  - `kv` 权限的 `reason` 文案从"在节点之间共享审核通过缓存"改为"在节点之间共享审核判定缓存"。只改文案不触发重新批准：核心的授权记录只有权限 id、scope 和状态，升级时的比较（`server/internal/plugin/install/review.go` `diffGrants`）只看是否已授予和 scope 是否扩大，没有新增或扩大时 `carryOverConsent` 自动沿用全部授权；`reason` 只在审批页展示。
+- **0.8.1**：版本 0.8.1。**`hostCompat` 抬到 `>=0.1.273 <0.2.0`**；能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。批量 KV 调用（§93）用的是已有的 `kv` 授权。不允许 0.8.1 装在 0.1.272 上的原因：没有这些调用的核心上 SDK 会换成逐键调用，结果相同，但一次 150 个键的写约 2 秒、期间几乎独占本节点的写，写入能力不够用（93.7 说的"依赖一次往返的开销的插件"；测试里量的数字在 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节"上线经过"）。下限写 0.1.273 而第一个发布的带这些调用的核心是 0.1.274，两者在已发布的核心里是一回事（93.7）。
+- **0.8.2**：版本 0.8.2。`hostCompat` 不变（`>=0.1.273 <0.2.0`），能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。
+- **0.9.0**：版本 0.9.0，只改原生界面（审核记录页的筛选收成常用 4 项 + 更多筛选、已生效条件以标签显示，各标签页表格单元格只占一行）。用到 UI 3.10 的 `SFilterBar` `#advanced`、`SFilterChips`、`SChipList`、`TableColumn.grow`，**`hostUICompat` 改为 `^3.10`，`hostCompat` 抬到 `>=0.1.277 <0.2.0`**（UI 3.10 随核心 0.1.277 发布，更老的核心的控制台按 `hostUICompat` 不加载这个界面，所以也不让它装上）。能力、钩子、任务、路由、宿主权限、用户权限、迁移和设置都不变，升级不需要管理员重新批准。
 
 ### 72.4 抽取
 
@@ -5052,25 +5139,31 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 图片：照旧（Anthropic `image`、`image_url`、`input_image`、Gemini 图片 `inlineData` / `fileData`，生图的 `image`），URL 图片一律不下载；
   - 不审：thinking / reasoning 块（上游只收回自己签名或加密过的）、PDF 和其他二进制文件。
 - **片段（segment）**：上面每一项是一个片段。文字规范化后（空白压缩成一个空格；去掉 NUL、其他控制字符和零宽字符；非法 UTF-8 换成 U+FFFD，所以一定能写进 PostgreSQL 的 text 列，P1-5），非 user 的片段加角色前缀 `[assistant] `、`[system] `、`[tool] `、`[tools] `、`[document] `、`[developer] `，让审核器看得出这是哪一部分。同一请求里规范化后相同的片段只审一次（例如每轮都带的同一段提醒）。**不剥掉 `<system-reminder>`**。
-- **片段放行缓存**：每个片段按（`config_version`, flow_id, flow_version, 片段哈希）缓存"干净通过"（72.5 第 8 步）。请求只把没命中缓存的片段送审，真实的长对话每一轮只有新增内容需要审。
-- **分块**：没命中缓存的片段按请求顺序装进块，每块最多 `input_max_chars`（默认 12000）字；比一块长的片段切成整块。每块单独执行一次流程（同一请求的各块并发），任何一块命中整个请求就命中；记录的 trace 是判定那一块的 trace，其他块在 `trace.chunks`，`trace.input` 记片段数、命中缓存的片段数、块数、总块数、是否抽样、图片数。片段只有在包含它的每一块都干净通过时才进缓存。
+- **片段判定缓存**（0.8.0；0.6–0.7 是只存"干净通过"的放行缓存，键为 `config_version`、flow_id、flow_version、片段哈希）：缓存按片段记两种结论（72.5 第 8 步）。
+  - **通过**：片段干净通过后记下，之后的请求不再送审这个片段，真实的长对话每一轮只有新增内容需要审。
+  - **命中**：一块命中时，分不出是块里哪个片段造成的，所以命中记在"这一块实际送审的片段集合"上。之后的请求只要包含这个集合的**全部**片段，就按原结论处理（重放，不再调用审核渠道）；只含其中一部分的请求不重放，这些片段重新送审。一个片段可以同时有"通过"和指向若干命中集合的指针，查的时候完整的命中集合优先。
+  - 键的范围是（清空纪元, flow_id, 流程的判定指纹）：不同流程互不共用结论；改了流程的级、审核器、题集、阈值或渠道模型后指纹变化，旧结论自动失效。
+- **分块**：没命中缓存的片段按请求顺序装进块，每块最多 `input_max_chars`（默认 12000）字；比一块长的片段切成整块。**例外**（0.8.0 第五轮；只用于**混合流程**——流程里有的审核器收图片、有的不收，72.5 第 8 步"查"第 2 条）：请求里有一张没缓存成"通过"、这次要送审的图片时，已缓存成"通过"的文字片段不从块里拿掉，图片总是和本请求的文字一起审。每块单独执行一次流程（同一请求的各块并发），任何一块命中整个请求就命中；记录的 trace 是判定那一块的 trace，其他块在 `trace.chunks`，`trace.input` 记片段数、命中缓存的片段数、块数、总块数、是否抽样、图片数。片段只有在包含它的每一块都通过时才记为"通过"；命中的块按上一条记命中集合。
 - **块数上限 `input_max_chunks`**（默认 8，1–32）：超过时按 `input_overflow` 处理：
   - `sample`（默认）：审第一块、最后一块和均匀分布在中间的块（共 `input_max_chunks` 块），`trace.input.sampled = true`。
   - `block`：pre 时直接拒绝（`block_status`，code `moderation_input_too_large`）；post 仍按 `sample`（请求已经放行）。
-  - 时间预算：各块并发执行，pre 仍受 min(流程总超时, 29 秒) 限制；块数 × 每块审核器数受并发名额（72.5 第 9 条）约束，名额等不到时该审核器按出错计，整个请求按"出错放行"。
+  - 时间预算：各块并发执行，pre 仍受 min(流程总超时, 29 秒) 限制；块数 × 每块审核器数受并发名额（72.5 第 9 条）约束，名额等不到时该审核器按出错计，不参与这一级的表决（72.7）；一级里没有任何审核器判出结论时这一级失败、被跳过，前面的命中保留，所有级都没有结论时请求才放行并记为出错。
 - **输入哈希**（`text_hash`、抽样）= 所有片段哈希的 sha256；singleflight 的键 = 本次各块的哈希。
 - `min_chars`：所有片段的可见字数之和小于它、且没有图片时不审。
 - 自身请求识别（§20.4 第 5 步）保留：任一文字片段带本插件 `llm` 渠道的签名标记就放行。0.6.0 起 AI 分析的开场消息也带一个空的签名标记：分析的工具结果就是用户的可疑原文，分析渠道指回本网关时，不带标记就会被当成违规请求拒绝或让分析用的账号进名单。
 - **同步拦截能覆盖什么、还剩什么限制（如实写明）**：
   - 覆盖：违规内容放在早期 user 轮次后接假 assistant 和无害 user；补 16 条以上无害消息把违规挤出窗口；最后一条是 assistant 预填或 system/developer；内容放进 tool_result、tool_use、document 文本、Responses `input_file`（文本）、`instructions`、`system`、工具定义；开头垫长文本让违规部分被截掉（现在分块，不截）；附带假的 `messages` 字段；NUL 字节让记录写不进库。
   - 剩余限制：
-    1. **成本**：每个请求审的内容从"结尾的 user 消息"变成"整个请求里没缓存的部分"。首轮（或缓存过期、改了审核器/渠道/流程版本之后）要把 system 提示词和工具定义（Claude Code 一次就有几万字）全部审一遍，按 12000 字一块就是若干次调用；Jev、LLM 审核器按 token 计费，费用和延迟都会上升。后续轮次命中缓存，只审新增内容。缓存 TTL 默认改为 24 小时（`cache_ttl_seconds`）。
-    2. 超过 `input_max_chunks` 且 `input_overflow=sample` 时，没抽到的块不审：刻意构造的超长请求仍可能把违规内容藏在没抽到的块里。需要严格时设 `input_overflow=block`（拦截级用户和 enforce 模式下的超长请求会被拒绝）。
-    3. 图片超过 `input_max_images` 或过大时不审；URL 图片不下载，只有 OpenAI 审核器把 URL 交给上游。
+    1. **成本**：每个请求审的内容从"结尾的 user 消息"变成"整个请求里没缓存的部分"。首轮（或缓存过期、被清空、流程的判定指纹变了之后）要把 system 提示词和工具定义（Claude Code 一次就有几万字）全部审一遍，按 12000 字一块就是若干次调用；Jev、LLM 审核器按 token 计费，费用和延迟都会上升。后续轮次命中缓存，只审新增内容。缓存保留 `verdict_cache_days` 天（0.8.0，默认 7；0.6–0.7 是 `cache_ttl_seconds`，默认 24 小时）。
+    2. 超过 `input_max_chunks` 且 `input_overflow=sample` 时，没抽到的块不审：刻意构造的超长请求仍可能把违规内容藏在没抽到的块里。需要严格时设 `input_overflow=block`（先审的超长请求会被拒绝）。
+    3. 图片超过 `input_max_images` 或过大时不审；URL 图片不下载，只有 OpenAI 审核器把 URL 交给上游。各审核器另有自己的图片上限（72.6）：Jev 把不合规格的图片重画后送审，LLM 审核器只发上限以内的内联图片、不重画。
     4. PDF 和其他二进制文件、thinking 块不审；`image` 之外的视频、音频素材不审。
-    5. post（观察模式、非拦截级用户）是抽样且异步的，本来就不拦截。
+    5. post（后审的请求，72.5 第 6 步）是抽样且异步的，本来就不拦截。
     6. 插件不可用或熔断时一律放行（72.2 第 3 条）。
     7. 审核器本身可被提示注入或对抗样本绕过，这一点任何文本审核都一样。
+    8. **缓存命中的重放决定整个请求**（0.8.0，与 new-api 相同，有意保留）：请求里含有一个已缓存的命中集合时，这个请求不再送审任何内容。先审的请求被拒绝，没有遗漏；**后审的请求只记一条重放记录（不算新的违规），它在命中集合之外新增的内容这一次不审**。一个对话的历史里有过一次命中后，后审用户在这个对话里之后每一轮的新内容都不会被审，直到命中条目过期（`verdict_cache_days`）、记录被标为误报或缓存被清空。
+    9. 重放不分用户（0.8.0，与 new-api 相同）：一段内容被判命中并缓存后，别的用户第一次发同样的内容也是重放，会被记录、先审时会被拒绝，但不进名单、不计违规。
+    10. **被后面只读文字的复核推翻的图片命中，每次都放行**（0.8.0，负责人 2026-11-10 的决定，与 new-api 不同）：图片只被判了命中的审核器收到，请求因为另一个没收到图片的审核器（后一级的复核，或同一级 `all` / `at_least` 里的另一个审核器）而通过时，这个块整块不进缓存（文字也不进），同一个请求每次都整块重新审、每次都放行（72.5 第 8 步"只被命中的审核器收到的图片"）。**混合流程里这个结果不随别的请求缓存了什么而变**：没缓存成"通过"的图片总是和本请求的文字一起送审，文字即使已被别的请求缓存成"通过"也照送（72.5 第 8 步"查"第 2 条；非混合流程不留文字，残留情形见那里）。new-api 会拒绝：那里一张图片自成一个内容块，只读文字的审核器推翻不了它。代价：这类请求每次都重新调用审核器；并且混合流程里凡是带着一张没缓存成"通过"、要送审的图片的请求，都把已缓存的文字再送一遍——图片一直进不了缓存时（URL 图片、审核器收不了的图片、本条说的图片）每个请求都如此，块数上限也按整个请求的文字算（超出 `input_max_chunks` 时抽样，`input_overflow=block` 时先审的请求被拒绝，与缓存为空时相同）。**保留的例外**：这张图片一旦在某个请求里**单独**被判命中（请求里只有这张图，没有文字可供复核，命中没人能推翻），命中集合 {图片} 进缓存，此后所有含这张图的请求都按重放拒绝，包括之前放行过的；那是另一个请求确立的命中。
 
 **0.2–0.5（历史，已被上面取代）**：
 
@@ -5091,32 +5184,96 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 72.5 钩子流程（取代 §20.4）
 
-1. `mode=off` → 放行。用户在 `exempt_user_ids` 里 → 放行。
+以下是 0.8.0 的流程；与 0.7.2 不同的步骤标"0.8.0"。
+
+1. `mode=off` → 放行。
+   - **0.8.0**：没有"不审核的用户"这一类了。旧设置 `exempt_user_ids` 读作白名单（72.10）；白名单用户不在这一步放行，继续往下，按后审处理（第 6 步）。
 2. 用户被封禁且未过期 → 拒绝 403 `moderation_user_blocked`（行为同 §20.4 第 2 步）。封禁钩子（`ban`，所有协议，72.3）只做第 1、2 步就返回。
-   - **准入（0.6.0）**：审核钩子在读取请求之前按请求字段的字节数占用 `max_inflight_mb`；超出时立即回答（一般用户放行，note `moderation: busy`；拦截级用户 503 `moderation_busy`），见 72.2 第 3 条。
-3. 按 `meta.group_id` 找流程：先看该分组的绑定，没有绑定才用 `group_id=0`。分组绑定的流程已停用或未发布 → 放行（不回落到默认流程）；默认流程也没有 → 放行。
-   - **0.7.0**：流程还可以绑定到账号（72.17）。请求所在分组的流程取决于账号时（有账号绑定涉及该分组），这一步和之后的步骤改在 `gateway.attempt` 钩子里按选定的账号执行；其他分组仍在这里执行，与之前完全相同。绑定到 flow 0（“不审核”）的分组放行。
+3. 按 `meta.group_id` 找流程：先看该分组的绑定，没有绑定才用默认分组 `group_id=0` 的绑定；都没有 → 放行。
+   - 绑定到 flow 0（"不审核"，免审）的分组放行，不回落到默认流程。
+   - **0.8.0（绑定回落，照 new-api）**：绑定指向已停用、未发布或已删除的流程时，这条绑定视为不存在，请求按默认分组的流程审核。0.7.2 及以前这样的分组不审核；升级前要核对这类绑定（72.17、发布说明）。
+   - **0.7.0**：流程还可以绑定到账号（72.17）。请求所在分组的流程取决于账号时（有生效的账号绑定涉及该分组），这一步和之后的步骤改在 `gateway.attempt` 钩子里按选定的账号执行；其他分组仍在这里执行。
    - 原来的 `group_ids`、`model_patterns` 两个设置删除，转换方法见 72.12。
 4. 流程的 `model_filter`（all / only / exclude，glob，按客户端模型匹配）不匹配 → 放行。
-5. 抽取（72.4）。结果为空 → 放行。是自身请求 → 放行，note `moderation: self`。
-6. 定时机（timing）：
-   - `mode=enforce`，或用户在名单上且是 `enforce` 级 → **pre**（同步）。
-   - 其他情况 → **post**（异步）。
+   - **准入（0.6.0；规则在 0.8.0 改）**：通过第 3、4 步的请求，在读取请求内容之前按请求字段的字节数占用 `max_inflight_mb`（一个请求单独到达时不论多大都接收）。超出时立即回答：
+     - 本应先审的用户（第 6 步的规则为 pre）→ 503 `moderation_busy`。`mode=enforce` 时这是白名单和观察级名单条目之外的**所有用户**；`mode=observe` 时只有黑名单用户和拦截级名单条目的用户。
+     - 其余用户 → 放行，不审核，note `moderation: busy`。
+     - 没有流程会审核的请求（第 3 步没有流程或免审、第 4 步模型被排除）在准入之前就已放行，繁忙时也不会得到 503（0.8.0；此前模型过滤在准入之后）。
+     - 0.7.2 及以前只有名单上拦截级的用户得到 503。`mode=enforce` 的部署升级后，繁忙时得到 503 的用户范围明显变大；`max_inflight_mb` 默认 128，见 72.2 第 3 条。
+5. 抽取（72.4）。结果为空 → 放行。是自身请求 → 放行，note `moderation: self`。可见字数小于 `min_chars` 且没有图片 → 放行。
+6. 定时机（timing）。**0.8.0 照 new-api `preModerated`**，依次判断：
+   1. 用户在黑名单（`blocklist_user_ids`）→ **pre**（先审，同步）。同时在两个名单上的用户算黑名单。
+   2. 用户在白名单（`allowlist_user_ids`）→ **post**（后审，异步），永不先审。
+   3. 用户有未过期的观察名单条目 → 按条目的级别：`enforce` 为 pre，`observe` 为 post。
+   4. 没有条目 → 按默认级别：`mode=enforce` 为 pre，`mode=observe` 为 post。
+   - 名单条目自己的级别优先于默认级别：`mode=enforce` 时，观察级条目的用户只后审。
+   - 0.7.2 及以前：`mode=enforce` 时所有人都是 pre，不看条目的级别。
 7. 只有 post 抽样：按输入哈希取模，同一输入结果稳定；比例由流程的 `sample_rate` 决定。
-8. **放行缓存**：0.6.0 起按片段缓存（72.4），键为（配置版本 `config_version`, flow_id, flow_version, 片段哈希），改审核器、渠道或默认题集（流程版本不变）也会让旧结论失效；**只缓存干净通过的片段**。所有片段都命中就放行，记为 `cache_skipped`（只计数，不写记录）；部分命中时只审其余片段。
-   - 以下不进缓存：所在块命中、出过错、有审核器被跳过、带 URL 图片；被推翻的通过照样进缓存（72.14）。
-   - 存储沿用 §20 的内存 LRU + KV，条数由 `cache_entries` 决定，TTL 由 `cache_ttl_seconds` 决定（0.6.0 默认改为 86400；已保存过的值不变）。pre 每个请求最多查 64 个片段的 KV（8 路并发、总共 200 ms），其余只看本节点内存。
-9. **post**：入队（条数满或排队请求占用的字节超过 96 MiB 就丢弃并计数），放行，note `moderation: queued`。流程和上游请求并行执行。排队的任务只保留分块后的文字和图片（复制出来，不持有钩子请求），裁掉流程里没有审核器会用到的图片。插件内存上限 512 MB。
-   - pre 调用和 post 调用各用一组并发名额（post = `max_concurrency`，pre = max(64, 4 × `max_concurrency`)），后台积压不会让拦截级用户的审核等到超时放行。
-   - **关停（0.6.0，P2）**：Shutdown 不再直接丢弃排队的任务，post 工作协程有 5 秒继续处理队列（不再接新任务），之后剩下的任务丢弃，数量计入健康指标 `shutdown_dropped` 并写一条日志。
-10. **pre**：在钩子内同步执行流程，同一输入并发时只执行一次（singleflight，沿用 §20）。
-    - 结果为 Hit → 拒绝，状态码 `block_status`，code `moderation_blocked`，message 为 `block_message`。
-    - 结果为通过或出错 → 放行。审核出错一律放行，原来的 `on_error` 设置删除：new-api 就是一律放行，否则审核服务一挂所有拦截级用户都用不了。
-    - 客户端断开时：结果不是 Hit 就不写记录；Hit 照样写，免得用户靠断开连接躲过名单。
-    - **先回答、后写库（0.6.0，P2）**：记录交给批量写入队列；队列满或写入器已停时，可疑记录（hit、block）在后台协程里写，失败按 1、2、4 秒重试共 4 次，仍失败才计入 `dropped_events` 并写日志；钩子从不等数据库。此前队列满时在钩子里同步写库（最多 10 秒），可能超过钩子超时，使本应拒绝的请求按 failure=open 放行。
-11. note（≤1 KiB）形如 `moderation: hit flow=3 v5 [sexual,custom/jailbreak] 0.97`，分块审核时追加 ` chunk=2/4`。拒绝时核心照常写 `blocked_by_hook`。
+8. **判定缓存**（0.8.0；0.6–0.7 是只存通过的片段放行缓存）。规则照 new-api `verdict_cache.go`、`gate.go`，单位按 72.4 换成片段：
+   - **范围**：`e{cache_epoch}:{flow_id}:{fp}`。
+     - `cache_epoch` 是清空计数（`config_state.cache_epoch`）。
+     - `fp` 是流程的判定指纹（16 位十六进制），由会改变这个流程判定结果的东西算出：各级的 `combine`、`n`、`fallback` 和审核器列表；每个被引用的审核器的类型、渠道和已存的 `config` 原文；该渠道的类型、协议、`base_url`、`model`；用默认题集的审核器再加当前默认题集；以及代码里的常量 `judgingVersion`（内置题集、默认阈值、提示词模板这类写在代码里的判定默认值变了就加一；LLM 审核器默认发图片、默认提示词提到图片之后是 2）。
+     - 不进指纹：流程名、`model_filter`、`sample_rate`、总超时，渠道的名称、密钥、代理、超时、计费模型。改这些不影响缓存；改指纹里的任何一项，该流程的旧结论自动读不到。
+   - **存储**：宿主 KV 的命名空间 `verdict`（各节点共用），加本节点的内存 LRU（`cache_entries` 条，另有 64 MiB 的字节上限，先到为准）作为它的缓存。**先 KV，后内存（0.8.1）**：值只在从 KV 读到、或被本节点的运行写进 KV 之后才进入内存，内存里没有 KV 里没有过的值。0.7.x 的命名空间 `pass` 里的缓存键不再读写，到期消失（告警状态仍在 `pass`，72.14）。
+     - 片段键 `s:{范围}:{片段哈希}`，值是以空格分隔的若干项：`p<unix 秒>`（这个片段通过，数字是写入时间）和 `h<命中 id>@<unix 秒>`（指向一个命中条目）。一个片段最多保留 8 个指针（最新的）。**写入通过不抹掉指针**。
+     - 命中键 `h:{范围}:{命中 id}`，值是 JSON `{r: 来源请求 id, k: [片段哈希…], t: 那一块的 trace, at: 写入时间}`；命中 id 是集合里片段哈希排序后的 sha256。超过 60 KiB 的命中不存（记录照写）。
+     - 有效期 `verdict_cache_days` 天，从写入时算，**不续期**：值里带写入时间，读到的任何一项超过期限就不用，从 KV 读进内存时也按原写入时间算。KV 键自己的 TTL 取值里最新一项的到期时间，向上取整到整秒（0.8.2；0.8.1 是截到整秒、至少 1 秒，最多短 1 秒）。旧设置 `cache_ttl_seconds = 0` 且没保存过新键时缓存关闭（72.10）。
+   - **查**：先内存；pre 时，**内存里没有的片段键全部从 KV 读**，再把这些片段的指针指向的、不在内存里的命中条目全部读出。用批量调用（§93）：片段键每次最多 512 个，命中条目每次最多 48 个（一次回答最多 3 MiB，一个值最多 64 KiB），多了就多调几次，一次接一次。**没有预算，也没有个数上限（0.8.1）**：查询等 KV 回答，唯一的期限是钩子请求自己的 ctx（核心给钩子调用限时；客户端断开时取消）；ctx 结束时没读到的按未知处理，请求照常进入运行，在那里按"客户端已离开"处理。post 的请求在钩子里只看内存，工作协程出队执行前再带 KV 查一次（用插件自己的 ctx）。**内存里有值的片段不问 KV（0.8.1）**：内存层只是缓存，值进入内存之后一直照用，没有定期重读；它只在这些情况下离开内存——值里的各项到期（各自的写入时间加 `verdict_cache_days`）、内存 LRU 淘汰（条数或字节上限）、收到点名这个键的 `verdict.changed` 广播（写入命中的广播：删键；人工处理的广播：删键并立墓碑）、清空缓存（纪元）、进程重启或改了 `cache_entries`（内存缓存整个换新）。一个请求的片段全在内存里、它们指向的命中条目也在内存里时，查询不产生任何 KV 调用；150 个片段的请求第一次到达一个节点是 1 次调用（片段有指针时再加 1 次）。
+     1. **先找命中**：按请求顺序看各片段的指针，第一个"命中条目存在、未过期、且它的片段全部在本请求里"的命中决定这个请求 → 重放（见下）。这一步在看"通过"之前：命中集合的片段即使各自在别的请求里通过过，集合完整出现时仍然是命中。
+     2. 没有可重放的命中时，带未过期"通过"的片段不再送审——**指针未过期、而它指向的命中条目没能读到的片段除外**（KV 出错、钩子请求的 ctx 结束；只看内存的查询里条目不在内存）：这种片段本次按未知处理，pre 时重新送审，post 的钩子里入队、由工作协程带 KV 再查。KV 明确回答"没有这个条目"时指针算失效，片段照常按"通过"处理。全部片段都已通过 → 放行，记为 `cache_skipped`（只计数，不写记录），note `moderation: pass (cached)`；部分通过时只审其余片段。
+        - **混合流程里，有图片要送审时，已缓存的文字不拿掉**（第五轮；负责人 2026-11-10 的决定之后只用于混合流程）。混合流程：流程的各级合计，至少有一个收图片的审核器、又至少有一个不收图片的审核器（OpenAI 审核器总是收；Jev 和两种 LLM 审核器看各自的 `review_images`，72.6）。条件：流程是混合流程，请求里至少有一张图片没缓存成"通过"，而且这次会放进块里——`input_max_images` 大于 0，图片没超过大小上限。这时已缓存成"通过"的文字片段照样留在块里，和图片一起送审；已缓存成"通过"的图片仍然不送。这样一张图片总是和它所在请求的文字一起审，结果不取决于别的请求往缓存里写了什么（见下"只被命中的审核器收到的图片"）。
+        - 这时的分块与缓存为空时相同：块的划分只由文字决定（图片跟着当时的块），比一块长的片段照样切开；超过 `input_max_chunks` 时抽到哪些块只取决于请求本身、每次相同，`input_overflow=block` 时先审的请求按整个请求的文字判超长（没有这种图片的请求只算没缓存的部分）。没抽到的块不审，里面的图片仍是未缓存。留下的文字在它所在的块都通过时重新记一次"通过"，`trace.input.cached_segments` 不把它们算作命中缓存。
+        - 没有这种图片的请求不变：没有图片、图片都已缓存成"通过"、或没缓存的图片这次都不送审（`input_max_images` 为 0、图片过大）时，已缓存的片段都不送，全部已缓存就是 `pass (cached)`。
+        - **非混合流程不留文字**：没有收图片的审核器的流程（图片在分块后被丢掉）和全部审核器都收图片的流程，已缓存的片段都不送，没缓存的图片只和没缓存的文字一起送。只用于混合流程的原因是代价：否则请求里只要有一张进不了缓存的图片（最常见的是 URL 图片），带它的每个请求都把全部文字重审，`input_overflow=block` 时还可能被拒绝；而不收图片的审核器每次都只看文字、能让收图片的审核器命中的内容通过，只在混合流程里是常态。全部审核器都收图片时，复核的审核器也收到图片：它通过，图片记"通过"并缓存；它命中，命中成立。**残留情形（已知，接受）**：全部审核器都收图片的流程里，某个审核器这一次没收到某张图片（URL 图片只有 OpenAI 审核器收；超出 LLM 审核器上限的图片；Jev 没等到重画名额或时间；LLM 的上游拒绝了图片，72.6），另一个审核器收到并命中，而请求的文字又已被别的请求缓存成"通过"——图片单独成块，没收到图片的审核器没有可审内容、被跳过，命中成立：同一个请求缓存为空时放行、文字已缓存时被拒绝。
+        - post：入队时按内存里的缓存分块（只在 KV 里记了"通过"的图片当作未缓存，文字留下）；出队时不重新分块，带 KV 查到这些块的片段（留下的文字和图片）全部已通过就不审，否则按入队时的块运行。
+        - 代价：这样的请求把已缓存的文字再审一遍；图片一直进不了缓存时（URL 图片、审核器收不了的图片、只被命中的审核器收到的图片）每个请求都如此。
+     - KV 出错：没读到的片段、指向没读到的命中条目的片段按未知处理，照常送审。缓存的故障不会放行从未审过的内容。计数只有一个（0.8.1）：`kvErrors`，本节点启动以来的累计值，**一次批量调用失败计一次**（查询的一次读、后台写的一次读或写、人工处理同步的一次读、写或删；不论这次调用带多少个键），告警状态的读写失败也各算一次，在 `GET /status` 的 `runtime.kv_errors` 和健康指标 `kv_errors` 里输出，请求路径上不为它写日志。**因为调用方的 ctx 结束而没做成的调用不计**（客户端断开或钩子超时打断的查询、关停时打断的后台写、请求结束时打断的人工处理同步）：那不是 KV 的错。告警状态的读写从 0.8.2 起也按这条规则，0.8.1 里它每次失败都计。
+   - **写**：每次运行结束时写一次（pre 的共享运行写一次，不论有几个请求在等它、等的请求是否已离开；post 由工作协程写；写缓存是尽力而为的，pre 的共享运行在写缓存时 panic 不改变审核器已做出的结论，见第 10 步），每个块按它自己那次运行：
 
-钩子超时仍是 30000 ms。流程的总超时最大 120 秒，但 pre 实际可用的时间是 min(流程总超时, 29 秒)，超时按出错放行。
+     | 该块的运行 | 写入 |
+     |---|---|
+     | 块里有 URL 图片（同一地址后面的内容可以变），或运行出过错（`errored`，不论最终是命中还是通过） | 不写 |
+     | 最终命中 | 写命中条目，并在该块实际送审的每个片段的键里加上指针 |
+     | 通过（含被推翻的通过），块里有图片被某个审核器收到、却没有被任何通过的审核器收到 | 不写：整块（含文字）每次重新审（见下"只被命中的审核器收到的图片"） |
+     | 通过（含被推翻的通过，72.14），且没有任何一级整级跳过 | 这一块给它的每个片段记一次"通过"；图片只有被自己判了通过的审核器收到过才记（见下） |
+     | 其他（通过，但有一级整级被跳过） | 不写 |
+
+     - 出过错的命中不写，是因为那个命中可能只是后面的级失败后沿用的初审结果，下次应当重审。
+     - 片段记为"通过"的条件：包含它的每一块（含抽样没跑的块）都记了通过。一级里个别审核器跳过、其他审核器判了，这一级算判过。
+     - 命中集合只列实际送审的片段：流程里没有收图片的审核器时，图片不送审，也不进命中集合（它们随块记"通过"）。
+     - **没有审核器实际收到的图片不缓存**：流程里有收图片的审核器，但这张图这次没有发给任何一个做出判断的审核器（Jev：没等到重画名额或重画时间预算、解码内存不够、太大、解不了、超出请求的 token 或体积预算、请求过大重试时只带第一张；OpenAI 和 LLM 审核器：带图请求被上游拒绝（OpenAI：400；LLM：400、413、415、422）后只发文字重试时的全部图片；LLM 审核器：URL 图片、超出它的上限的图片、base64 不合规范的图片，72.6），它既不记"通过"也不进命中集合；OpenAI 每次调用随机带的那一张是抽样，代表这次输入里全部可用的图片，调用成功时它们都算收到、一起缓存，不为没抽中的图片再调用；同一块的文字照常缓存。带这张图的下一个请求会再送它一次，混合流程里连同该请求的文字（已缓存的也送，"查"第 2 条）。没收到的原因一直存在的图片永远不进缓存；混合流程里带它的每个请求都把文字再送一遍。
+     - **图片记"通过"的规则**：一张图片记"通过"，当且仅当收到它的某个审核器**自己的结果是通过**（判了、没命中），且该审核器所在的级的结果是通过。只被命中的审核器收到的图片不记：例如第 1 级 OpenAI 收到图片并命中、第 2 级 Jev 没收到图片只审文字并通过（推翻），或同一级 `all` / `at_least` 里 OpenAI 命中、Jev 没收到图片而通过——运行通过，图片不进缓存，下次再送（同一块的文字也不缓存，见下一条）。被推翻的运行只看推翻它的那一级；没有命中就通过的运行，每一个结果为通过的级（含补审级）都算。命中集合不受这条限制：任何做出判断的审核器收到过的图片都进集合。
+     - **只被命中的审核器收到的图片：整块不记"通过"**（负责人 2026-11-10 的决定）。一个块的运行最终通过，但块里有一张图片被某个做出判断的审核器收到过、却没有被任何通过的审核器收到（按上一条不能记"通过"的、但有人收到过的图片），这个块的所有片段都不记"通过"，文字也不记；没有这种图片的块不受影响（文字加一张谁也没收到的图片：文字缓存，图片不缓存）。这样的内容按"没有得出结论的审核"处理——放行，而且**同一个请求每次得到同一个结果，不管别的请求往缓存里写了什么**。靠两条：这个块自己不记"通过"；混合流程里分块时没缓存成"通过"的图片不让已缓存的文字离开块（"查"第 2 条，第五轮；非混合流程的残留情形也在那里）。缺任何一条，图片都会单独成块：收图片的审核器再次命中，只读文字的复核没有可审的内容、整级跳过，命中成立并进缓存，同一个请求第一次放行、之后被拒绝、计违规并一直重放。只有第一条时，另一个请求把同样的文字审过一次就会这样（例如"系统提示词加一条只有图片的 user 消息"，缓存为空时放行，系统提示词已缓存时被拒绝）。**代价：这类请求永远不走缓存，每个请求都重新调用审核器；带着没缓存成"通过"的图片的请求把已缓存的文字再送一遍。** **保留的例外**：这张图片在某个请求里单独出现（请求里只有它，没有文字）时，收图片的审核器命中、没有可供复核的内容，命中集合 {图片} 进缓存，此后所有含这张图的请求都按重放处理（先审的被拒绝），包括之前放行过的；那是另一个请求确立的命中，不改。与 new-api 不同：被后面只读文字的复核推翻的图片命中，这里每次都放行；new-api 会拒绝，因为那里一张图片自成一个内容块，只读文字的审核器推翻不了它。
+     - **先回答，再写 KV，最后写内存（0.8.1）**。钩子一得出结论就回答，不等写。写在后台进行（用插件自己的 ctx，不随请求取消；关停时等它，宽限期过后取消），全部用批量调用，没有预算、没有个数上限：(1) 等到轮到它改这些键（同一节点上对缓存键的修改按键轮流）；(2) 读这次运行涉及的全部片段键；(3) 把这次运行的通过和指针并入读到的值，别的节点写的通过和指针保留；(4) 写命中条目，再写片段键（KV 里不会有指向还不存在的条目的指针）；(5) 全部成功后，把命中条目和写进 KV 的那些片段值放进内存——内存里这些键的值就是 KV 里的值——再广播得到指针的片段键。通常是 2 到 3 次调用。写的范围用结算时的清空纪元。不重试。
+     - **写在排队时（0.8.1）**：每次运行的写是一个后台任务，按键轮流；KV 不回答时排在前面的写不结束，后面的一直等，个数没有上限（`runtime.kv_writing`、健康指标 `kv_writing`），这期间本节点的新结论都不进缓存。负责人的决定是不设时限、不设兜底；最坏情况见 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节"KV 不回答时"。
+     - **人工处理过的键不写（0.8.1）**：请求查缓存时记下读数（时间和本节点到那时立过的墓碑数），它的运行的写带着这个读数；键上有墓碑，或者请求问缓存已超过 4 秒而这期间本节点立过墓碑，或者本节点的内存缓存在这之后被换掉了（在本节点清空缓存、改 `cache_entries`），就不写（后两种情况整次写都不写，计一次 `runtime.kv_skipped`）。所以判定在处理之前开始的运行，不论审了多久、写等了多久，都不会把处理去掉的结论写回来（72.9）。代价：每次人工处理前后，各节点上审了 4 秒以上的运行的结论都不进缓存；命中的内容再来时不是重放，而是再审、再计一条违规。写成功后放进内存按写自己的读数判断，放不进的键从内存里删掉、下次从 KV 读（不留旧值）。
+     - **KV 写失败之后（0.8.1）**：任何一次调用失败（计一次 `kv_errors`）就停，这次运行的结论**哪里都不缓存**，内存里也没有，这段内容下次重新审。KV 里可能留下已经写进去的部分（没有指针的命中条目、分几次调用时的前几批），都是真的结论，只是不全。**0.8.2**：片段键分几次调用写、中途失败时，已经写成的键在 KV 里带着新指针：它们从本节点内存里删掉，其中得到指针的照常广播（`verdict.changed`，`stored`），否则这个命中集合会在各片段记着"通过"的节点上按通过回答到值到期（0.8.1 在这种情况下不删也不广播；一次运行超过 512 个片段键时才会分几次调用）。代价：命中在被重新审之前，如果它的各片段在别的请求里各自通过并缓存了，整体按各片段的"通过"回答，所有节点都一样。
+     - **写完之前，同样的内容再来就再审一次（0.8.1，已知）**：从钩子回答到后台写完成之间（正常是两三次 KV 调用的时间），缓存不知道这次运行的结论。同样的内容在这期间再次到达：通过的再审一次；命中的由它自己的运行再次拒绝，**记为一条新的违规**（不是重放，计入用户的统计、违规数和封禁计数）。写完之后从内存回答，不调用 KV。同时到达的相同请求仍合成一次运行。new-api 同步写，没有这个窗口。
+     - KV 明确回答"没有这个条目"的指针，从本次查询各片段在内存里的值中删掉（只改内存；只删查询跟过的那一个指针——同一个命中 id、同一个写入时间——期间本节点新写的、指向同一集合的指针不动）：post 的钩子只看内存，否则这样的片段每次都入队，直到指针过期。
+     - **其他节点何时看到一个新命中**：内存里没有这些片段的节点，KV 写完后的下一次查询就读到。内存里已有这些片段"通过"的节点：写入节点在 KV 写完后广播 `verdict.changed`（72.7"多节点同步"），收到即从内存里删掉这些键、下次从 KV 读——广播送达即生效。**广播丢失时没有时限（0.8.1）**：没收到的节点继续按内存里的值回答，直到这些值到期或被 LRU 淘汰（最长 `verdict_cache_days`），或缓存被清空；人工处理造成的改动同样如此（72.9）。写入命中的节点、做人工处理的节点自己不会过时：命中条目和 KV 里的指针在写成功时一起进了写入节点的内存。这一点有意与 new-api 不同：new-api 每次查询都读共享存储。
+   - **重放**（缓存命中，照 new-api `replayHit`）：不调用审核渠道，不占并发名额。
+     - 写一条记录：trace 是存下的那次运行的 trace，`latency_ms = 0`，`trace.cache = {hit: true, source_request_id, key, segs, fp}`，新列 `replayed = true`（72.9）；pre 的结果是 `block`，post 是 `hit`；`text` 和 `input_message`（`store_text` 开）是命中集合那些片段的内容。
+     - pre：拒绝（`block_status`、`moderation_blocked`、`block_message`）。post：请求放行。
+     - **重放不是新的违规**：不更新观察名单、不计违规、不触发 AI 分析、不计入自动封禁，也不计入用户的每日计数；流程行除 `audited`、`hit`（pre 还有 `blocked`）外另计 `replayed`，pre 的请求行计一次请求和一次拒绝，都不记耗时。
+     - 重放决定整个请求：命中集合之外的内容这一次不审（72.4 剩余限制第 8 条）。
+   - **清空**：`POST /verdict-cache/clear`（72.11）把 `cache_epoch` 和 `config_version` 各加一，本节点换空的内存缓存，其他节点随 `config.changed` 广播或 5 秒一次的版本轮询跟上。KV 里的旧键不删除（宿主 KV 没有按前缀删除，要先分页列出再分批删），不再被读到，到期消失。清空前入队的 post 任务不用旧范围里的结论回答：出队时按新范围查缓存（清空之后的结论，包括人工处理写下的，能回答它），它的结论写到新范围。
+   - **人工处理同步缓存**：`POST /events/review` 之后，记录的 `trace.cache` 指明的命中随处理结果更新，规则见 72.9。
+   - 试跑、测试、模拟不读也不写缓存。
+9. **post**：入队（条数满或排队请求占用的字节超过 96 MiB 就丢弃并计数），放行，note `moderation: queued`。流程和上游请求并行执行。排队的任务只保留分块后的文字和图片（复制出来，不持有钩子请求），裁掉流程里没有审核器会用到的图片。插件内存上限 512 MB。
+   - pre 调用和 post 调用各用一组并发名额（post = `max_concurrency`，pre = max(64, 4 × `max_concurrency`)），后台积压不会拖慢先审的请求。
+   - **关停（0.6.0，P2）**：Shutdown 不再直接丢弃排队的任务，post 工作协程有 5 秒继续处理队列（不再接新任务），之后剩下的任务丢弃，数量计入健康指标 `shutdown_dropped` 并写一条日志。
+   - **0.8.0**：工作协程处理一个任务时 panic 不会结束插件进程：这个任务记为一次出错的运行并写日志，其他任务继续（`runPostSafely`）。
+10. **pre**：在钩子内同步执行流程，同一输入并发时只执行一次（singleflight，沿用 §20；键是缓存范围加各块的哈希）。
+    - 结果为 Hit → 拒绝，状态码 `block_status`，code `moderation_blocked`，message 为 `block_message`。
+    - 其他结果 → 放行。
+    - **某一级出错或超时怎么办（0.8.0，照 new-api，72.7）**：这一级跳过，前面的命中保留。所以"初审命中、复核出错或超时"的请求**被拒绝**；只有所有级都没有得出结论时请求才放行，记为 `error`。没有"出错时拦截"的设置（原来的 `on_error` 已删除）：所有审核渠道都不可用时放行，否则审核服务一挂，所有先审的用户都用不了。
+    - 共享的运行里发生 panic 不会结束插件进程。各块的运行返回之前的 panic：按一次出错的运行处理，请求放行，记为 `error`。审核器已经给出结论之后的 panic（写缓存、合并各块的运行时）：结论不变，结果是各块运行合并后的 trace——命中照样拒绝并记为 `block`，只丢这次缓存写入。合并本身再次 panic 时，第一个命中的块的运行单独作为结果（多块时带它的块号，`trace.cache` 指这个块的命中集合；不带其他块的运行和 `trace.input`），各块都没有命中时按一次出错的运行处理。
+    - 运行结束之后，钩子协程上计数、交记录的一步（包括 pre 重放的记录）panic 时回答不变：记 error 日志，命中（或重放的命中）照样拒绝，其余照样放行，丢的是这条记录。不这样做的话 panic 会让钩子失败，核心按 `failure: open` 放行一个审核器已判命中的请求。
+    - 共享的运行有自己的期限（min(流程总超时, 29 秒)），不随某个请求的客户端断开而取消。客户端断开时：结果不是 Hit 就不写记录、不计数；Hit 照样计数并写记录，免得用户靠断开连接躲过名单。运行的结论照常进缓存。
+    - **先回答、后写库（0.6.0，P2）**：记录交给批量写入队列；队列满或写入器已停时，可疑记录（hit、block）在后台协程里写，失败按 1、2、4 秒重试共 4 次，仍失败才计入 `dropped_events` 并写日志；钩子从不等数据库。此前队列满时在钩子里同步写库（最多 10 秒），可能超过钩子超时，使本应拒绝的请求按 failure=open 放行。
+11. note（≤1 KiB）形如 `moderation: hit flow=3 v5 [sexual,custom/jailbreak] 0.97`，开头的结果词是 `hit`、`overturned`、`error` 或 `pass`；分块审核时追加 ` chunk=2/4`。0.8.0：pre 的重放在末尾追加 ` replay`，post 的重放是 `moderation: hit (replay)`，全部命中通过缓存是 `moderation: pass (cached)`。拒绝时核心照常写 `blocked_by_hook`。
+
+钩子超时仍是 30000 ms。流程的总超时最大 120 秒，但 pre 实际可用的时间是 min(流程总超时, 29 秒)。到点时还没开始的级不再运行，正在运行的级失败；前面的命中保留（请求被拒绝），没有任何一级判定时放行并记为出错（0.8.0）。
 
 ### 72.6 渠道与审核器
 
@@ -5144,14 +5301,41 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 图片每次随机发一张；裸 base64 先嗅探 MIME 类型。带图请求返回 400 时，去掉图片重试一次。
 - **`typesafe`**：`POST {base}/v1/systemone`，请求体 `{model, state, questions}`。
   - `config.questions = {preamble, items:[{category, label?, question, threshold}]}`；为空时用内置题集，题目原文照抄 new-api `jev_questions.go`（`content-audit-v2-zh`，10 题）。
-  - `config.review_images` 默认开。只发内联的 PNG/JPEG，只读文件头检查尺寸（每边 280–1568 px、单张 ≤16 MiB），图片打包上限 24k token 或 24 MiB，带请求头 `TypeSafe-Danger-Zone-Images: true`。上游返回 413 或 `max_tokens_exceeded` 时，只保留第一张图重试一次。
+  - **长上下文（0.8.0，照 new-api）**：每次调用都带请求头 `TypeSafe-Danger-Zone-Long-Context: true`。一次请求的预算是文字（一个字算一个 token）加图片合计 200000 token、base64 合计 24 MiB（0.7.2 及以前是 24k token，不带这个请求头）。按 new-api 文档，长上下文更慢、准确度略低、单价不变。
+  - `config.review_images` 默认开，有图片时另带请求头 `TypeSafe-Danger-Zone-Images: true`。**图片规则（0.8.0）**：
+    - System One 的规格：每边 280–1568 px、总像素 78,400–2,458,624、单张解码后 ≤16 MiB。内联的 PNG / JPEG 在规格内 → 原样发送，只读文件头，不解码像素。
+    - 其他内联的 PNG、JPEG、GIF（取第一帧）、WebP → **重画后发送**：等比缩小到长边不超过 1568 px（从不放大），居中放到白色画布上、画布每边至少 280 px，透明部分铺白；结果是 PNG，超过 2 MiB 时改用 JPEG（质量 85）。0.7.2 及以前这些图片一律跳过。
+    - 不送审（计入 `skipped_images`）：URL 图片（不下载）；解码后超过 16 MiB；无法识别的格式；文件头声称超过 1200 万像素；按文件头估算的解码内存超过 112 MiB（例如不做色度抽样的渐进式 JPEG 约 780 万像素以上；16 位彩色 PNG 接近 1200 万像素时只能单独重画）。
+    - 没送审的图片（上面这些，以及没等到重画名额、超出重画时间预算或请求预算的）**不进判定缓存**（72.4）。解码器在某张图上 panic 时只跳过这张图，`runtime.redraw_panics` 加一并记一条不含图片内容的 error 日志。
+    - 重画的限制：同时最多 2 张，所有正在重画的图片的估算解码内存合计不超过 112 MiB（放不下的等待）；一次调用里重画最多用这次调用剩余时间的一半、且不超过 5 秒，到点时没画好的图和它后面需要重画的图都跳过。**文字总是送审**，不会因为图片慢而审不成。new-api 的上限是 5000 万像素，没有内存和时间这两项限制；插件进程内存上限是 512 MB（72.2 第 3 条）。
+    - 规格化之后内容相同的图片只发一次；按顺序装，装不下预算的图片及其后的不发。
+  - 上游返回 413 或 `max_tokens_exceeded` 且带了多张图时，只保留第一张图重试一次。
+  - `rules_version`：题表内容等于内置题集时报 `content-audit-v2-zh`；等于 new-api 已删除的两套旧内置题集时报 `content-audit-13-en-v1`、`content-audit-13-zh-v1`（0.8.0，此前显示为 `custom-…`）；其余为 `custom-` 加内容哈希。
 - **`llm_verdict`**：就是 §20.5 的 agent，提示词、分类、`tool_choice`、`max_turns`、温度、`max_tokens` 都放进 `config`。上游以 400 拒绝 `temperature` 参数时（有的模型已不再接受，如 claude-haiku-5-5 回 "`temperature` is deprecated for this model"），去掉该参数重发一次，此后这个审核器不再带它，直到配置重新加载（0.7.2）。
   - 判定：结论为 `block` 算命中；结论为 `flag` 时，`config.flag_as_hit` 为真才算命中（默认否）。
   - 分数：block = 1.0，flag = 0.5，pass = 0。
-  - 只审文字，不发图片。
+  - 图片：`config.review_images` 默认开，见下"LLM 审核器的图片"。图片只在第一条 user 消息里。
+- **`llm_questions`**（0.8.0，new-api 的题表式 `llm` 审核器，`engine_llmq.go`）：绑定 `llm` 渠道，三种协议都能用。
+  - `config` 有 `questions` 和 `review_images`。`questions` 的结构与 Jev 题表相同（`preamble` 加若干行 `category / label / question / answer_yes / answer_no / threshold`）；为 null 时用默认题集（`jev_default_set` 或内置题集；new-api 要求必填）。阈值不参与判定。不接受 `thresholds`（保存时报错）。
+  - **一次流式调用**，`max_tokens` 4096，**请求里不带 `temperature`**，只提供工具 `submit_verdict`，`tool_choice` 为 auto，不多轮；除带图调用被上游拒绝（400、413、415、422）时只发文字重试一次外不重试。工具参数是每题一个必填布尔 `q1…qN` 加一个必填字符串 `reason`。
+  - 系统提示词：`preamble`、固定的审核员说明、逐题一行（题号、类别、问题、"是"和"否"的标准）。说明里写明待审文本是一次请求里的若干段内容、非用户所写的段落带 `[system]`、`[assistant]` 等前缀（72.4）；这一句与 new-api 不同，因为插件的一块含多种角色。
+  - 用户消息：第一行是自身请求标记（渠道可以指回本网关，72.4）；有初审命中时一行 `初审命中：<标签或类别> 0.97；…（仅供参考，以你的判断为准）`；然后是用每次调用随机生成的边界（`=====` 加 16 位十六进制加 `=====`）包住的待审文本。
+  - 读结果：取 `submit_verdict` 的参数；模型没调工具而直接输出文字时取其中最外层的 JSON 对象。每题先找 `qN`，再找类别码；答案接受布尔或字符串 `true / false / 是 / 否 / yes / no`。答"是"即命中（分数 1，阈值 1），答"否"为 0。任何一题没有答案 → 出错（`bad_response`）。`reason` 截到 500 字，存进 trace。
+  - 图片：`config.review_images` 默认开，见下"LLM 审核器的图片"（new-api 的 `llm` 审核器只审文字）。固定的审核员说明里有一句"消息里附带的图片同样是待审内容，与文本一并判断。"
+  - **初审命中**（`prior`）：流程把到目前为止判定命中的那一级的命中类别传给后面的级的每个审核器；第一个得出结论的级和补审级拿不到。只有这个审核器用它。
+- **LLM 审核器的图片**（0.8.0，负责人 2026-11-10 的决定；`llm_questions` 和 `llm_verdict`，有意超出 new-api）：
+  - **开关**：`config.review_images`，布尔，缺省 = 开，表示渠道的模型是否支持图片。请求里写 `"config": {"review_images": false}` 关掉；不写或写 `true` 是开。缺省即开，所以已存的 LLM 审核器和从 new-api 导入的 `llm` 审核器升级后开始发图片。关掉后与此前相同：只发文字，图片全部计为 `skipped_images`，没有文字时跳过。开着的 LLM 审核器算"收图片的审核器"（72.5 第 8 步的缓存规则、流程是否混合、流程是否保留图片都按这个算）。开关是已存 `config` 的一部分，改它就换判定指纹。
+  - **发什么**：图片放在带待审文字的 user 消息里，文字在前、图片在后，用各协议自己的形状——`openai_chat`：`{"type":"image_url","image_url":{"url":"data:<类型>;base64,<数据>"}}`（文字是 `{"type":"text",…}`）；`openai_responses`：`{"type":"input_image","image_url":"data:<类型>;base64,<数据>"}`（文字是 `{"type":"input_text",…}`）；`anthropic`：`{"type":"image","source":{"type":"base64","media_type":"<类型>","data":"<数据>"}}`。没有要发的图片时 user 消息是原来的纯字符串。
+  - **哪些图片**：只发内联 base64 的 PNG、JPEG、GIF、WebP，媒体类型取自文件头（不用客户端声明的）。不发、计入 `skipped_images`：URL 图片（不下载）；解码后超过 5 MiB 的（按 base64 的长度算，不解码；Anthropic 自家 API 每张收 10 MB 的 base64，在其内；Anthropic 在 Amazon Bedrock、Google Cloud 上只收 5 MB 的 base64，渠道指向那里时 3.75–5 MiB 的图片会被 400 拒绝，见下）；任一边超过 8000 px 的；无法识别的格式；base64 整段不合规范的（换行——CR、LF，只这两个字符——先去掉，发出去的、算上限的、判重的都是去掉换行后的文本；去掉之后必须是标准字母表、长度为 4 的倍数、填充只在末尾、末尾填充位为零；URL 安全字母表、缺填充、被截断、末尾多出内容、带别的空白字符的都不发——文件头只读开头，这样的图片文件头照样正常，而严格的上游会因为它拒绝整次调用、让全部图片回退，所以逐张校验、只跳过这一张）；一次调用里第 20 张之后的；一次调用合计 base64 超过 20 MiB 时放不下的。不重画。内容相同的图片只发一次，重复的算收到。
+  - **只有图片的输入**是有效输入（开着时）：此前没有文字就跳过。没有一张图片发得出去、又没有文字时仍跳过。
+  - **上游拒绝带图调用**（状态码 400、413、415、422；上游前面的代理也会用后三个）：只发文字重试一次，结论来自重试，没有图片算收到（不进判定缓存，72.5 第 8 步）；没有文字时跳过。404、429、5xx 和其他错误不重试，是这次调用的错误（只有图片时也是）；不带图片的调用收到这四个状态码也不重试。**回退留下的痕迹**：这次调用的结果（trace 里该审核器的 outcome、试跑的返回）带 `images_refused: true`，`status` 是上游拒绝时的状态码——`status` 在没有错误的结果里只在这种情况下出现；重试的那次调用因为别的原因失败时（超时、5xx 等），`err` 和 `status` 是那次失败的，`images_refused` 仍为真；重试也被这四个状态码之一拒绝时（与图片无关的原因，例如模型名写错），结果就是那次上游错误，没有 `images_refused`，不计数、不记日志；没有文字而跳过的结果同样带这两个字段（`skipped: true`）。每发生一次，`GET /status` 的 `runtime.images_refused` 加一（本节点启动以来的次数，试跑和模拟也计）；钩子里的审核调用另记一条 warn 日志（审核器 id、渠道 id、状态码），每个审核器每个快照（每次加载配置）只记一次。`llm_verdict` 的 `temperature` 重试与它并存：一轮里每种原因最多重试一次，一次运行最多 `max_turns + 2` 次调用。
+  - **结果**：`sent_images` 是发出的图片数，`skipped_images` 是其余的（含重复的图片）；`images_refused`（布尔，为假时省略）表示带图调用被上游拒绝、这次结果只来自文字（或因没有文字而跳过），此时 `sent_images` 为 0。 只有图片、没有文字的输入被这四个状态码之一拒绝时，一律标 `images_refused`（该审核器跳过），即使真正的原因与图片无关：没有文字可以重试，分不出来。
+  - **`llm_verdict` 的提示词**：默认系统提示词里有一句"消息里附带的图片同样是待审核的输入，与文字一并判断。"；自己写的 `system_prompt` 不会自动得到这句话，图片照发。
+  - **费用与注意**：每次带图调用按图片计 token，`llm_verdict` 多轮时每轮重发。模型或上游不收图片时必须关掉开关。拒绝带图调用的上游：开着时每次调用多一次往返，图片从不被审也从不进缓存（对话的每一轮都把没缓存的图片再传一遍、再被拒绝一遍，post 路径上按字节计的队列会被占满），而且流程不算混合流程（72.5），文字已缓存、图片被另一个审核器命中的请求会被拒绝而缓存为空时放行；是否发生看 `runtime.images_refused`、结果里的 `images_refused` 和 warn 日志。不报错而忽略图片的上游会让没被看过的图片缓存成"通过"。
 - **通用规则**：
   - 任何类别缺分数，或分数不在 [0,1] 内，都算出错（`bad_response`）。
   - 审核器没有可审的内容时（例如只有图片，而它不收图片），记为**跳过**，不计入组合规则的分母。
+  - 出错的审核器同样不计入分母（0.8.0，72.7）。
 
 ### 72.7 流程
 
@@ -5161,18 +5345,30 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 {"model_filter":{"type":"all|only|exclude","models":["claude-*"]},
  "sample_rate":100,
  "total_timeout_ms":0,
- "stages":[{"auditors":[1,2],"combine":"any|all|at_least","n":2}]}
+ "stages":[{"auditors":[1,2],"combine":"any|all|at_least","n":2},
+           {"auditors":[3],"combine":"any","fallback":true}]}
 ```
 
-- 启用开关是 `flows.enabled` 列（`PUT /flows/:id/enabled`），不进 spec，开关不产生新版本。上限：最多 8 级，每级最多 8 个审核器。
+- 启用开关是 `flows.enabled` 列（`PUT /flows/:id/enabled`），不进 spec，开关不产生新版本。上限：最多 8 级（含补审级），每级最多 8 个审核器。
+- **补审级（0.8.0）**：`stages[].fallback = true`。第一级不能是补审级；补审级必须排在所有普通级后面（校验错误 `the first stage cannot be a fallback stage`、`stage N: fallback stages must come after every review stage`）。不是补审级的不写这个键，所以没用补审的流程，草稿和已发布的 JSON 与 0.7.2 逐字节相同。0.7.2 的节点读不了带 `fallback` 的 spec（未知字段），会跳过整个流程：滚动升级期间不要发布带补审级的流程，回滚前先去掉补审级并重新发布。
 
-**执行**（照 new-api `flow.go`）：
+**执行**（0.8.0，照 new-api 11 月的 `flow.go`）：
 - 同一级的审核器并发执行，结论一旦确定就取消该级剩下的调用。
-- 某一级判通过 → 整体通过；如果之前有级判过命中，结果记为 `overturned`（被推翻）。
-- 每一级都命中 → `hit`；如果是 pre 并且拒绝了这次请求，记为 `block`。
-- 第一级的审核器全部被跳过 → 以跳过的方式通过；后面某级全部被跳过 → 沿用前一级的结论。
-- 某一级出错或超时 → 该级无结论，按通过处理，并标 `errored`，记录结果为 `error`。
+- **一级的结论**：跳过的和出错的审核器都不参与表决，所需命中数按"判出结论的审核器"算（`any` 为 1，`all` 为全部，`at_least` 为 min(n, 判出结论的个数)）。例：两个审核器 `all`，一个出错、一个命中 → 这一级命中（0.7.2 及以前：无结论）。
+  - 全部审核器都跳过 → 这一级**跳过**（`skipped`）。
+  - 判不出结论且不是全部跳过（都出错了，或有的出错有的跳过），或等结果时流程总超时到点、运行被取消 → 这一级**失败**（`failed`，同时标 `errored`）。
+- **普通级链**依次执行：
+  - 某一级判通过 → 链结束，整体通过；如果之前有级判过命中，结果记为 `overturned`（被推翻）。
+  - 某一级命中 → 交给下一级复核；每一个判出结论的级都命中 → `hit`；如果是 pre 并且拒绝了这次请求，记为 `block`。
+  - **失败的级跳过，前面的命中保留**：初审命中、复核失败 → 仍是命中。前面还没有级判出结论时，下一级就当第一级来审。0.7.2 及以前，失败的级使整个流程通过并记为 `error`。
+  - 第一级全部被跳过 → 流程以跳过的方式通过，不跑补审；后面某级全部被跳过 → 沿用前面的结论。
+  - 每一级开始前检查总超时：已到点就不再运行后面的级，前面的命中保留。
+- **补审级**在两种情况下运行：普通级链以通过结束且不是推翻；或普通级全部失败或跳过，没有任何一级判出结论。补审级依次运行，失败的跳过，**第一个命中的就是最终命中**，之后的不再运行；都不命中时流程通过。被推翻的通过不跑补审。补审级拿不到初审命中。
+- **初审命中传给后级**：见 72.6 `llm_questions`。
+- **记录的结果**（照 new-api `result.go`）：最终命中 → `hit`（pre 且拒绝了为 `block`）；否则被推翻 → `overturned`；否则 `errored` 且没有任何一级判出过结论（命中或通过）→ `error`；其余 → `pass`。所以有失败的级、但别的级判过的运行，结果是 `hit`、`overturned` 或 `pass`，不是 `error`；`error` 只表示这次什么都没判出来。trace 顶层的 `errored` 仍然标出"有审核器出错或有级失败"。
 - 严重度取判定那一级的最高命中分数：≥0.9 为 high，≥0.7 为 medium，其余为 low。
+- 多块请求（72.4）每块各跑一次流程。记录显示的那一块按这个顺序选：第一个命中的块 → 第一个出过错的块 → 第一个被推翻的块 → 最后一块（0.8.0，照 new-api；此前是命中 → 推翻 → 出错 → 第一块）。结果按这一块自己的各级判断；顶层的 `errored` 是所有块的"或"。
+- 运行中出现 panic 时这次运行按"什么都没判出来"处理（通过、`errored`），不影响进程。
 
 **超时**：`total_timeout_ms` 为 0 时，发布时自动填成"每级最大渠道超时之和"，封顶 120000。草稿保留 0（自动），只有已发布的 spec 和 `flow_versions.spec` 带算出的值；`flow_versions.auto_timeout`（0.5.1，迁移 `0008`）记下该版本发布时是否为自动，回滚到它时草稿恢复为 0 并重新计算，界面"放弃修改"按流程的 `published_auto_timeout` 把草稿恢复为 0。0.5.1 之前发布的版本记为非自动。流程接口用 `dirty` 表示草稿与已发布版本不同（0.5.1 删除了同义的 `has_draft_changes`）。
 
@@ -5180,9 +5376,9 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 草稿和已发布版本分开存；发布时带 `expected_version`（乐观锁）。
 - 每个发布过的版本都写进 `flow_versions`。P1 只做发布；回滚和版本历史放到 P2。
 
-**绑定**：`flow_groups(group_id PK, flow_id)`，一个分组只能属于一个流程，`group_id=0` 是默认流程。0.7.0 起 `flow_id=0` 表示该分组不审核（免审），另有账号绑定表 `flow_accounts`，见 72.17。
+**绑定**：`flow_groups(group_id PK, flow_id)`，一个分组只能属于一个流程，`group_id=0` 是默认流程。0.7.0 起 `flow_id=0` 表示该分组不审核（免审），另有账号绑定表 `flow_accounts`，见 72.17。**0.8.0**：指向已停用、未发布或已删除流程的绑定视为不存在，请求按更宽的绑定审核（72.5 第 3 步、72.17）；免审（flow 0）不回落。
 
-**多节点同步**：保存或发布后广播 `config.changed`，各节点重新加载快照；另外每 30 秒检查一次版本号兜底。
+**多节点同步**：保存或发布后广播 `config.changed`，各节点重新加载快照；另外每 5 秒检查一次版本号兜底（`refreshEvery`；此前这里写的 30 秒与代码不符）。0.8.0 另有广播 `verdict.changed`，负载 `{"keys": [缓存键…], "stored"?: true}`（每条消息的键合计不超过 48 KiB）：不带 `stored` 的是人工处理后发的，其他节点删掉内存里的这些键并立 4 秒墓碑（72.9）；带 `stored: true` 的是一次运行把命中写进 KV 后发的，`keys` 是得到指针的片段键，其他节点只删键、下次从 KV 读（72.4）。`verdict.changed` 是其他节点得知新命中和人工处理的唯一途径（0.8.1 起没有定期重读）：丢失时，没收到的节点按内存里的值回答，直到值到期、被淘汰或缓存被清空（72.5 第 8 步）。
 
 ### 72.8 观察名单与封禁
 
@@ -5190,23 +5386,29 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - `watchlist`：一个用户一行，字段有 `user_id PK`、`level` observe|enforce、`source` auto|manual|analysis、`since_at`、`expires_at`、`hit_count`、`violation_count`、`violation_epoch`、`last_hit_at`、`note`。P2 再加 `analysis_claim_until` 和 `latest_*` 几列。
 - `watch_events`：只追加的历史，字段有 `user_id`、`action`、`from_level`、`to_level`、`reason`、`operator_id`、`analysis_id`、`created_at`。
 
-**进入名单**：记录写入后，结果为 `hit` 或 `block` 且用户不在豁免名单里时，在一个事务里依次处理：
-- `auto_watch`（默认开）时，首次可疑自动以 observe 级加入，有效期 `watch_days`（默认 30 天）。
+**进入名单**（0.8.0，照 new-api `escalate.go`、`ApplyWatchHit`）：记录写入后，结果为 `hit` 或 `block`、不是缓存重放（`replayed`）、用户不是版主时，在一个事务里依次处理：
+- `auto_watch`（默认开）时，首次可疑自动加入，**级别是默认级别**（`mode=enforce` 时为 enforce 级，否则 observe 级），有效期 `watch_days`（默认 30 天，两种级别都有）。0.7.2 及以前自动加入的条目总是 observe 级。
 - 已过期但还没清理的条目，先按过期移出再重新加入。
-- observe 级每命中一次，有效期往后延长。
-- 同一个 request_id 只计一次违规，只有 observe 级才计数。
-- 计数达到 `analysis_every_violations` 时，计数清零，并把分析排进队列（P2；P1 只计数）。
+- observe 级每命中一次，有效期往后延长；enforce 级不延长。
+- 同一个 request_id 只计一次违规。observe 级的条目总是计；**默认级别是拦截（`mode=enforce`）时 enforce 级的条目也计**；默认观察时 enforce 级的条目只加命中数（`hit_count`），不计违规。
+- 计数达到 `analysis_every_violations` 时，计数清零，并把分析排进队列（72.13.4）。
+- **白名单用户照常后审、照常进名单**（级别同样是默认级别），只是永不先审：即使他们的条目是 enforce 级，时机仍是 post（72.5 第 6 步）。
+- **缓存重放不算新的违规**：不进名单、不延期、不计数、不触发分析（72.5 第 8 步）。
 
-**管理员**：插件现在识别不了管理员，P3 有了 `users.read` 再补。在那之前，需要把管理员的 user_id 加进 `exempt_user_ids`，页面上提示这一点。
+**升级到 0.8.0 时的名单转换**（`parity.go`）：0.7.x 下 `mode=enforce` 时所有人先审，自动加入的条目却都是 observe 级；按 0.8.0 的规则（条目的级别优先）这些用户会变成只后审。所以插件首次以 0.8.0 运行、且当时 `mode=enforce` 时，把未过期的、`source=auto` 的 observe 级条目改为 enforce 级（各写一条 `watch_events`：`set_level`，reason 以"0.8.0 升级"开头，没有操作人；有效期和计数不动）。手动设的（`manual`）和 AI 降下来的（`analysis`）observe 级条目不动，这些用户升级后只后审。首次转换后的 24 小时内（`config_state.parity_converted_at` 起）每 5 秒再查一次这段时间里新加入的自动 observe 级条目（滚动升级期间 0.7.x 节点加的），同样转换；之后不再转换。每个条目一个事务，取锁顺序与其他名单操作相同。日志 `moderation: 0.8.0 watch list conversion`（`mode`、`converted`、`first_run`）。
+
+**管理员**：持有 `moderation:read` 的用户（版主）由插件自动识别（72.14），不进观察名单、不会被封禁，不需要为此把他们加进任何名单。（0.2 时插件识别不了管理员，曾建议把管理员加进 `exempt_user_ids`；这条建议早已作废，该设置在 0.8.0 退役，读作白名单，72.10。）
 
 **手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。没指定天数或 `expires_at` 时，observe 级的有效期是 `watch_days`，enforce 级不过期（加入和改级别都一样，照 new-api）。改级别时开新的计数窗口（照 new-api）：新 `violation_epoch`、计数和新命中清零、`since_at` 重设、`source` 改为 manual，返回的条目就是存下的值。
+- **0.8.0**：白名单用户不能手动设为 enforce 级（`POST /watchlist`、`PATCH /watchlist/:user_id` 返回 400，字段 `level`，码 `allowlisted`，"白名单用户只能设为观察"），可以以 observe 级加入。黑名单用户可以设任何级别，但名单级别不影响他们的时机（总是先审）。版主不能加入（字段 `user_id`，码 `staff`）。
 
-**封禁**（`blocks`、`unblocks`、`block_subjects` 不变）：
+**封禁**（`blocks`、`unblocks`、`block_subjects` 不变；new-api 没有封禁）：
 - `ban_threshold` 等设置保留，默认关。
-- 违规计数改为统计结果是 `hit` 或 `block` 的记录，按 request_id 去重。
-- 封禁优先于名单：钩子第 2 步就拒绝。
+- 违规计数改为统计结果是 `hit` 或 `block` 的记录，按 request_id 去重；**0.8.0：缓存重放的记录不计入**（`NOT replayed`）。
+- 封禁优先于名单：钩子第 2 步就拒绝。已经被封禁的用户不受白名单、黑名单影响。
+- **0.8.0**：白名单用户不会被自动封禁，也不能手动封禁（`POST /blocks` 返回 400，字段 `user_id`，码 `allowlisted`，取代原来的 `exempt`）；白名单的含义是永不被拦截，封禁比拦截更重。黑名单用户照常计入自动封禁。
 
-**误报**：管理员把记录标为误报时，只扣当前计数窗口（`violation_epoch`）里确实被计过数的记录，每条最多扣一次。
+**误报**：管理员把记录标为误报时，只扣当前计数窗口（`violation_epoch`）里确实被计过数的记录，每条最多扣一次。退回计数只对 observe 级的条目做；默认拦截下 enforce 级条目计的违规不退（new-api 相同）。
 
 **多节点同步**：名单变化广播 `watch.changed`；钩子读的是内存里的名单快照，另外每 5 秒按版本号检查一次兜底（和 §20 的封禁表一样）。
 
@@ -5221,9 +5423,10 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `flow_id`、`flow_version` | |
 | `highest_category`、`highest_score` | |
 | `hit_categories` | text[] |
-| `trace` | jsonb：每级、每个审核器的分数、是否命中、是否跳过、出错原因、耗时。0.6.0 起分块审核时，顶层是判定那一块的 trace（`chunk` 为块序号），其余块在 `chunks`，`input` 记片段数、命中缓存的片段、块数和总块数、是否抽样、图片数与未审的图片数、字数（72.4） |
+| `trace` | jsonb：每级、每个审核器的分数、是否命中、是否跳过、出错原因、耗时。0.6.0 起分块审核时，顶层是判定那一块的 trace（`chunk` 为块序号），其余块在 `chunks`，`input` 记片段数、命中缓存的片段、块数和总块数、是否抽样、图片数与未审的图片数、字数（72.4）。**0.8.0**：`stages` 只收录实际运行过的级，每级带 `stage`（它在 spec 里的序号，从 1 起；之前的记录没有，按位置算）、`failed`（这一级没有结论，被跳过）、`fallback`（补审级）；`decider` 是最后一个判定命中的级在 `stages` 里的**下标**（没有为 -1），不是 spec 的级序号；命中类别里的 `stage`、统计的级行、漏斗、AI 分析工具用 spec 的级序号。`cache`：命中记录上是 `{key, segs, fp}`（判定块的命中 id、它送审的片段哈希、当时的流程指纹；块里有 URL 图片时没有），重放记录上另有 `hit: true` 和 `source_request_id`（72.5 第 8 步） |
 | `input_format` | 客户端协议，如 `anthropic.messages`、`openai.chat` |
-| `input_message`、`input_message_size` | 第一级命中时保存的消息 JSON；受 `store_text` 控制。0.2–0.5 保存客户端原样发来的结尾 user 消息；**0.6.0 起保存判定那一块**，统一写成 chat 形式 `[{role, content:[{type:text,text}\|{type:image_url,image_url:{url}}]}]`，role 是片段的角色（user、assistant、system、tool、tools、document 等）；出错记录不保存 |
+| `input_message`、`input_message_size` | 原始消息的 JSON；受 `store_text` 控制。0.2–0.5 保存客户端原样发来的结尾 user 消息；**0.6.0 起保存判定那一块**（多块全部通过时是最后一块），统一写成 chat 形式 `[{role, content:[{type:text,text}\|{type:image_url,image_url:{url}}]}]`，role 是片段的角色（user、assistant、system、tool、tools、document 等）。**0.8.0 的保存条件**（照 new-api）：`store_text` 开，结果不是 `error`，并且"这次运行命中过（最终命中，或任何一级判过命中，含补审级、含被推翻的）"或 `record_pass_input_message` 开（默认开）。0.7.2 及以前只有第一级命中时保存。出错记录不保存（new-api 会存；这里保留渠道故障时的存储保护）。只在确定要写记录时才拼这段 JSON |
+| `replayed` | 0.8.0（迁移 `0010`，boolean，默认 false）：这条记录是缓存命中的重放，没有调用审核渠道，不算新的违规（72.5 第 8 步） |
 | `image_count` | |
 | `review_status`、`reviewed_by`、`reviewed_at` | review_status 为 pending / false_positive / confirmed |
 | `violation_epoch`、`counted` | |
@@ -5233,15 +5436,22 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - P2 再加 6 个 `ai_*` 列。
 - 老列 `verdict`、`action`、`text` 等保留只读，迁移时回填 `result`：block 且 deny → block；block 且 allow → hit；flag → hit；error → error；pass → pass。回填的 `keep_until`：命中类（block、flag）取创建时间 + 180 天，其余 + 30 天。0.1 的 flag 记录（`flow_id = 0`）不计入封禁次数（0.1 只计 block）。滚动升级时旧节点还在写的行，由 `cleanup` 任务每次先执行同一条回填。
-- 写哪些记录：可疑（hit、block）总是写；`record_overturned`（默认开）、`record_errors`（默认开）、`record_pass`（默认关，沿用原设置）控制其余几类。
-- `text`（`store_text` 打开时）0.6.0 起是本次各块的文字（换行分隔，≤100000 字），即实际送审的内容，不含命中缓存的片段。**出错记录只保存前 `error_text_max_chars` 字**（默认 2000，0 = 不保存原文），也不保存 `input_message`：渠道故障期间每个请求都会出错，此前原文最多 10 万字、保存 7 天（P2）。
+- 写哪些记录：可疑（hit、block）总是写，重放也写；`record_overturned`（默认开）、`record_errors`（默认开）、`record_pass`（默认关，沿用原设置）控制其余几类。
+- **结果的含义（0.8.0，72.7）**：`error` 只表示这次运行没有任何一级判出结论（通常是审核渠道整体不可用或总超时）。有的级失败、别的级判过的运行，结果是 `hit`、`block`、`overturned` 或 `pass`，trace 的 `errored` 为真。所以 `error` 记录比 0.7.2 少，`record_errors`、`error_retention_days` 管到的记录相应减少；要找"有级失败"的运行，看 trace 的 `errored`，或流程的异常率（72.14）。
+- `text`（`store_text` 打开时）0.6.0 起是本次各块的文字（换行分隔，≤100000 字），即实际送审的内容，不含命中缓存的片段。重放记录的 `text` 是命中集合那些片段的文字（post 任务出队时重放的，只有入队时还在块里的那部分）。**出错记录只保存前 `error_text_max_chars` 字**（默认 2000，0 = 不保存原文），也不保存 `input_message`：渠道故障期间每个请求都会出错，此前原文最多 10 万字、保存 7 天（P2）。
 - **入库前清理**（0.6.0，P1-5）：所有文字列去掉 NUL、非法 UTF-8 换成 U+FFFD；`trace`、`input_message` 去掉 `\u0000` 转义（jsonb 不收）。此前提示词里带 `\x00` 时整批写入失败，可疑记录丢失，用户进不了名单、不会被封禁。
-- **隐私面（如实写明）**：被审核的内容会发给审核渠道（OpenAI、Jev、LLM 渠道，可能是第三方）；0.6.0 起发送的是整个请求里没缓存的部分（含 system 提示词、工具结果、文档），比以前多。AI 分析会把保存的原文（`get_record`）发给分析渠道。`store_text` 打开时原文按结果类别的留存期保存在插件库里，持有 `moderation:read` 的人都能看。选渠道和权限时要按这个范围评估。
+- **隐私面（如实写明）**：被审核的内容会发给审核渠道（OpenAI、Jev、LLM 渠道，可能是第三方）；0.6.0 起发送的是整个请求里没缓存的部分（含 system 提示词、工具结果、文档），比以前多。AI 分析会把保存的原文（`get_record`）发给分析渠道。`store_text` 打开时原文按结果类别的留存期保存在插件库里，持有 `moderation:read` 的人都能看；0.8.0 起 `record_pass_input_message` 默认开，被推翻的记录（以及开了 `record_pass` 时通过的记录）也带原始消息，含其中的图片，`events` 表会更大。判定缓存里的命中条目只有哈希和 trace，不含原文。选渠道和权限时要按这个范围评估。
+- **人工处理同步判定缓存**（0.8.0，照 new-api `SyncReviewedBlocks`，`cache.go` `syncReviewed`）：`POST /events/review` 之后，对其中 `trace.cache` 带 `key` 和 `segs` 的可疑记录更新缓存。范围按记录的流程在当前配置下算；流程已删除、停用或未发布的记录跳过。
+  - **误报**：删除命中条目和各片段指向它的指针；记录的 `fp` 等于流程现在的指纹时，再把集合里每个片段记为通过（管理员认定整体没问题，则各部分没问题）；指纹已变时只删命中，不记通过（现在的配置没审过这段内容）。
+  - **确认**：只在 `fp` 等于流程现在的指纹时，用记录的 trace 重建命中条目，并去掉这些片段的"通过"（可以盖掉之前误报写下的通过）；指纹已变的记录跳过。
+  - **改回待处理**：删除命中条目、指针和这些片段的"通过"，下次重新审。
+  - 同一次处理里指向同一个命中的多条记录（一次命中和它的重放）只改一次。
+  - **以 KV 为准**：KV 同步写，用批量调用（先删或写命中条目，再读出、修改、写回片段键），**没有预算（0.8.1）**：同步用处理请求自己的 ctx，请求结束时停下，没写的不写、对应记录不计入 `cache_synced`。本节点先给这些键立不设期限的墓碑，等到轮到它改这些键（正在写这些键的运行先写完），写 KV，再把墓碑的期限定为此后 4 秒，然后才让出；收到广播 `verdict.changed` 的其他节点把这些键从内存里删掉并立 4 秒墓碑。墓碑期内查询读到的旧值和刚结束的运行都不能把旧结论放回内存或写回 KV；读 KV 用了比墓碑更久、期间又有键被立过墓碑的那次读，读到的值一个都不放进内存；运行的写同理按"它的请求问缓存的时刻"算——问缓存已超过 4 秒、期间本节点立过墓碑的运行什么都不写（规则和它的代价在 72.5 第 8 步的"写"）。之后都从 KV 重新读。响应的 `cache_synced` 是缓存改动全部写成功的记录数；写失败的不计入（各节点一致地沿用旧结论），再处理一次会重做。广播是尽力而为的。**漏收的节点（0.8.1）**继续按内存里的旧值回答——例如继续重放已被标为误报的命中——没有时限（72.5 第 8 步"其他节点何时看到一个新命中"），做处理的节点自己立即生效；清空缓存可以兜底（72.11）。同步里失败的批量调用各计一次 `runtime.kv_errors`；因为请求结束而停下的不计。
 - **最终结论只在前端计算**：有人工结论用人工结论；否则用 AI 结论，AI 判 unsure 时显示"待复核"；同时标注来源是人工还是 AI。
 
 ### 72.10 设置（`forms/settings.schema.json` 改动）
 
-- **保留**：`mode`、`exempt_user_ids`、`input_max_chars`（默认改为 12000）、`min_chars`、`cache_ttl_seconds`、`block_status`（沿用 400–599，默认 403；没有收窄，免得 0.1 的旧值升级后存不了）、`block_message`、`record_pass`、`store_text`、`max_concurrency`、`queue_size`、`ban_*`。
+- **保留**：`mode`、`exempt_user_ids`（0.8.0 退役，见下）、`input_max_chars`（默认改为 12000）、`min_chars`、`cache_ttl_seconds`（0.8.0 退役，见下）、`block_status`（沿用 400–599，默认 403；没有收窄，免得 0.1 的旧值升级后存不了）、`block_message`、`record_pass`、`store_text`、`max_concurrency`、`queue_size`、`ban_*`。
 - **新增**：
 
 | 设置 | 默认值 / 范围 |
@@ -5268,8 +5478,24 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `max_inflight_mb` | 128（16–4096） | 处理中的钩子请求合计字节上限（72.2 第 3 条） |
 | `error_text_max_chars` | 2000（0–100000） | 出错记录保存的原文字数（72.9） |
 
+- **0.8.0**（都在设置页，72.15；迁移见下）：
+
+| 设置 | 默认值 / 范围 | 说明 |
+|---|---|---|
+| `mode` | `off`（`off` \| `observe` \| `enforce`），定义不变 | **含义变了**：总开关加默认级别（new-api 的 `enabled` + `default_level`）。`observe` = 开启、默认观察；`enforce` = 开启、默认拦截：没有名单条目的用户先审，有条目的按条目的级别，白名单只后审（72.5 第 6 步）。0.7.2 及以前 `enforce` 是所有人先审。没有新增 `default_level` 键：已存的设置不用改，旧版本也认识；`GET /status` 返回派生的 `default_level` |
+| `allowlist_user_ids` | `[]`，最多 1000 项，每项是 1–18 位数字的字符串 | 白名单：只后审，永不先审、永不被拒绝；照常有记录、照常进名单；不能手动设为拦截级，AI 不升级，不会被封禁 |
+| `blocklist_user_ids` | `[]`，同上 | 黑名单：总是先审。AI 不降级、不移出。不是封禁。同时在两个名单上的用户算黑名单 |
+| `verdict_cache_days` | 7（1–30） | 判定缓存保留天数（72.5 第 8 步） |
+| `record_pass_input_message` | true | `store_text` 开着时，没有命中过的记录（通过、被推翻）也保存原始消息（72.9） |
+
+  - **退役 `exempt_user_ids`**：留在 schema 里并隐藏，只作白名单的旧名读取。取值规则（`DecodeSettings`）：文档里有 `allowlist_user_ids` 这个键（是数组）就用它，否则用 `exempt_user_ids` 的值。"完全不审核"这个语义不再存在：原来列在里面的用户升级后变成后台审核、有记录、可能进名单、永不被拦截。设置页保存白名单或黑名单时同时把 `exempt_user_ids` 写成"白名单减去黑名单"（镜像）：仍在跑 0.7.2 的节点只读这个键、对里面的用户完全不审，这样它们豁免的正好是白名单里且不在黑名单里的用户，已移出白名单或被加进黑名单的用户不再豁免。
+  - **退役 `cache_ttl_seconds`**：留在 schema 里并隐藏。文档里有 `verdict_cache_days` 就用它；没有但有 `cache_ttl_seconds` 时，值为 0 表示缓存关闭，否则天数 = 向上取整到整天并限制在 1–30；两个都没有 → 7 天。设置页清空天数时，如果旧键还在，会写入默认值 7 而不是删掉新键。
+  - 名单里不是用户 id 的条目被丢弃、超过 1000 项的被截断，各记一条警告日志（核心保存时已按 schema 的 `pattern`、`maxItems` 拒绝，这只对绕过表单写入的值起作用）。
+  - `max_inflight_mb` 的定义不变，超出时谁得到 503 的规则变了（72.5 第 4 步）。
+  - 默认值的影响：`record_pass_input_message` 没保存过时取 true，升级后被推翻的记录立即开始带原始消息；不想要就关掉。
+  - **回滚到 0.7.2 的限制**：0.7.2 的 schema 是 `additionalProperties: false`，不认识上面四个新键。它读设置时忽略它们，但核心保存设置时按当前安装版本的 schema 校验整份文档（见下"0.6.0 现状"），所以库里存着这四个键时 0.7.2 的设置页保存不了任何设置。回滚前要先在 0.8.0 下通过核心设置接口把这四个键去掉，步骤见 `docs/RELEASE-MODERATION-0.8.0.md`。
 - **0.6.0 改的默认值**：`cache_ttl_seconds` 3600 → 86400（片段缓存，长对话每轮只审新增内容）；`analysis_allow_remove` true → false（72.13.4）。默认值只影响没保存过该项的配置；已保存的值升级后不变（核心按保存的文档下发，插件只对缺失的键用默认值）。旧配置升级后的行为：审核范围扩大到整个请求（72.4），其余设置照旧；`input_max_chars` 的含义从"截断长度"变为"每块长度"。
-- **迁移说明**（P2，2026-10-31）：`0007_endpoint_session.sql` 用的是非并发的 `CREATE INDEX`，首次升级到 0.5.0 时会在建索引期间阻塞 `events` 的写入（事件量小时只有几秒，可以接受；已执行过的迁移不能改）。核心的插件迁移在事务里执行（`dbschema.Migrate`），**不能用 `CREATE INDEX CONCURRENTLY`**；以后给大表加索引时，要么接受短暂阻塞并写进部署记录，要么先请核心支持非事务迁移。0.6.0 没有新迁移。
+- **迁移说明**（P2，2026-10-31）：`0007_endpoint_session.sql` 用的是非并发的 `CREATE INDEX`，首次升级到 0.5.0 时会在建索引期间阻塞 `events` 的写入（事件量小时只有几秒，可以接受；已执行过的迁移不能改）。核心的插件迁移在事务里执行（`dbschema.Migrate`），**不能用 `CREATE INDEX CONCURRENTLY`**；以后给大表加索引时，要么接受短暂阻塞并写进部署记录，要么先请核心支持非事务迁移。0.6.0 没有新迁移。**0.8.0 的迁移 `0010_newapi_parity.sql`**（幂等，只有可重复执行的语句）：`auditors` 的类型 CHECK 约束（`auditors_type_check`）先删后建，加上 `llm_questions`；`config_state` 加 `cache_epoch bigint NOT NULL DEFAULT 0`、`parity_converted boolean NOT NULL DEFAULT false`、`parity_converted_at timestamptz`；`events` 加 `replayed boolean NOT NULL DEFAULT false`；`stats_hourly` 加 `replayed bigint NOT NULL DEFAULT 0`。新列都是常量默认值或可空，不重写表，`events` 上只短暂持锁；重建 CHECK 约束会扫一遍 `auditors`（几十行）。不加索引。回滚到 0.7.x 后这些列和放宽的约束被忽略，不用撤销。
 - `retention_days` 改成上面按结果类别的几项。转换时 `hit_retention_days` 取 `max(旧值, 180)`，其余几项取默认值。
 - **转走的**：`base_url`、`api_key`、`model`、`system_prompt`、`categories`、`tool_choice`、`max_turns`、`temperature`、`max_tokens`、`timeout_ms`、`on_error`、`sample_rate`、`group_ids`、`model_patterns`。
   - 这些字段 0.2 的 schema 里仍然保留，放在"旧版配置（已转换）"分组里、只读，只用于 72.12 的一次性转换；0.3 再删除。
@@ -5292,16 +5518,21 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/auditors`，GET/PUT/DELETE `/auditors/:id`，POST `/auditors/:id/try`，POST `/auditors/try` | read / manage | try 的请求体是 `{text, images?, draft?}`，返回分数和是否命中，不写记录。`draft` 是 `{name, type, channel_id, config}` 中的任意字段，覆盖已保存的审核器，用来试跑未保存的修改。`/auditors/try` 试跑全新的草稿，此时必须带 `draft`。草稿格式错误、渠道类型不符时返回 400 |
 | GET `/jev/default-questions` | read | 内置题集，以及 `jev_default_set` |
 | GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled` | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict` |
-| GET/PUT `/bindings`，DELETE `/bindings/:group_id/:account_id`（0.7.0） | read / manage | 全部绑定（分组、分组下的账号、任意分组的账号），见 72.17 |
-| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version`、`endpoint`、`session_fp`（都是精确匹配，照 new-api） |
+| GET/PUT `/bindings`，DELETE `/bindings/:group_id/:account_id`（0.7.0） | read / manage | 全部绑定（分组、分组下的账号、任意分组的账号），见 72.17。0.8.0：`GET` 的每行可带 `inactive: true`（绑定的流程本节点没有在运行，这条绑定不生效） |
+| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version`、`endpoint`、`session_fp`（都是精确匹配，照 new-api）；0.8.0 加 `replayed=true\|false`，每行返回 `replayed`。`GET /events/:id` 的 `user_state` 用 `allowlisted`、`blocklisted` 取代原来的 `exempt` |
 | GET `/events/:id/input` | read | 原文，按需加载 |
-| POST `/events/review` | manage | 请求体 `{ids, status}`；只处理结果为 hit 或 block 的记录，其他记录不变。改为误报或从误报改回时，按 72.8 调整违规计数 |
-| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议。`seen` 把新命中清零 |
-| POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`none` 或 `observe` 按 post 执行，`enforce` 按 pre 执行，返回时机和"是否会被拒绝" |
-| POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认 |
+| POST `/events/review` | manage | 请求体 `{ids, status}`；只处理结果为 hit 或 block 的记录，其他记录不变。改为误报或从误报改回时，按 72.8 调整违规计数。0.8.0：处理后同步判定缓存（72.9），响应 `{updated, status, cache_synced}`，`cache_synced` 是缓存改动全部写成功的记录数 |
+| POST `/verdict-cache/clear`（0.8.0） | manage | 清空判定缓存，无请求体，返回 `{epoch}`（新的清空计数）。所有内容按当前配置重新审核，一段时间内审核调用和费用上升。各节点最多晚 5 秒生效（72.5 第 8 步） |
+| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议。`seen` 把新命中清零。0.8.0：列表每行带 `allowlisted`、`blocklisted`；把白名单用户设为 `enforce` 返回 400（`level` / `allowlisted`，72.8） |
+| POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`observe` 按 post 执行，`enforce` 按 pre 执行，`none`（或不带）是没有名单条目的用户，按默认级别决定（0.8.0；此前固定为 post）；返回时机和"是否会被拒绝" |
+| POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认。0.8.0：new-api 的 `llm` 审核器导入为 `llm_questions` |
+| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（失败的 KV 批量调用次数；因调用方的 ctx 结束而没做成的不计，72.5 第 8 步"KV 出错"）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）、`runtime.images_refused`（LLM 审核器的带图调用被上游拒绝、改为只审文字的次数，72.6）；后三个是本节点启动以来的计数。0.8.1 加 `runtime.kv_writing`（此刻结论正在去 KV 路上的运行数，是瞬时值不是累计；持续增长说明 KV 不回答）和 `runtime.kv_skipped`（本节点启动以来整次没写缓存的运行数：人工处理可能在它的请求查缓存之后改过缓存，或本节点的内存缓存在那之后被换掉了，72.5 第 8 步的"写"）。概览页"队列与运行状态"卡片显示 `cache_bytes`、`kv_errors`、`kv_writing`、`images_refused`，0.8.2 起还有 `kv_skipped`（0.8.1 里它只在这里和健康指标里）；`redraw_panics` 只在这里和健康指标里 |
+| POST `/blocks`（改） | manage | 0.8.0：白名单用户不能封禁，字段错误码 `allowlisted`（取代 `exempt`） |
 | POST `/test`（改） | manage | 请求体 `{text, images?, flow_id?}`：不带 flow_id 时按默认流程执行，返回每级的 trace |
 
 0.4 删掉了三个旧接口：`GET /overview`（改用 `GET /status`）、`GET /defaults`（同 `GET /jev/default-questions`）、`GET /watchlist/:user_id`（改用 `GET /users/:user_id`）。
+
+审核器接口的 `type` 在 0.8.0 多一个取值 `llm_questions`；`/auditors/:id/try`、`/auditors/try`、`/test` 和流程模拟把请求体里的 `images` 交给审核器，两种 LLM 审核器开着 `review_images` 时收到它们，结果带 `sent_images` / `skipped_images`，上游拒绝图片时另带 `images_refused` 和 `status`（72.6）。`GET /stats/trend` 的流程点加 `replayed`（已含在 `hit` 里）。
 
 所有修改接口都广播相应的变更事件。管理接口的写操作由核心自动审计（§75.2，`plugin.route.write`），插件不用自己写；名单的操作另外记在 `watch_events` 里。
 
@@ -5318,6 +5549,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **从 new-api 导入**：
 - 格式：`{channels:[{type, protocol, name, base_url, model, timeout_ms, api_key?, billing_model?}], auditors:[{name, type, channel_ref, thresholds|questions, review_images?}], jev_default_set, analysis_guidelines}`。
+- **审核器类型的映射（0.8.0）**：new-api 的审核器 `type: "llm"`（题表式）导入为插件的 `llm_questions`，带上它的 `questions`；这类审核器带 `thresholds` 时返回字段错误；`review_images` 带不带都接受，原值照存（不带 = 开，72.6）。渠道的 `type: "llm"` 两边同名，不用映射。0.7.2 及以前导入含 `llm` 审核器的文档会报 `channel_ref` 无效。插件自己的 `llm_verdict` 在 new-api 里没有对应物，不会出现在导入文档里。
 - key：渠道带 `api_key` 时加密保存（72.13.7，以代码为准；原先写的"key 不导入"已作废），不带时导入后逐个填写。导入的渠道一律是停用状态。
 - `jev_default_set` 和 `analysis_guidelines` 是插件设置，设置由核心保存、插件写不了，所以导入只校验并在预览和结果里原样返回（`analysis_guidelines` 去掉首尾空白，超过 16 KB 返回 400），由界面写进设置（0.6.0 起；此前 `analysis_guidelines` 被静默丢弃）。
 - 文档里导入不读的字段（例如 `flows`、渠道的 `proxy`、`enabled`）列在预览和结果的 `unsupported` 里（如 `["flows","channels[0].proxy"]`），不再静默丢弃。
@@ -5365,7 +5597,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **72.13.4 AI 分析**（照 new-api `analysis.go`、`analysis_tools.go`、`escalate.go`、`category_dict.go`）
 
 - **触发**：
-  - 自动：observe 级用户的违规计数达到 `analysis_every_violations`（>0，且分析渠道可用：存在、启用、是 `llm` 渠道，与 `runtime.analysis.channel_configured` 同一判断）时，计数清零、开新的计数窗口，并把这个用户排进分析队列。分析渠道不可用时不排队、计数也不清零（0.5.1 起；此前只看 `analysis_channel_id` 非 0）。
+  - 自动：计违规的名单条目（observe 级；0.8.0 起默认级别为拦截时 enforce 级的条目也计，72.8）的违规计数达到 `analysis_every_violations`（>0，且分析渠道可用：存在、启用、是 `llm` 渠道，与 `runtime.analysis.channel_configured` 同一判断）时，计数清零、开新的计数窗口，并把这个用户排进分析队列。分析渠道不可用时不排队、计数也不清零（0.5.1 起；此前只看 `analysis_channel_id` 非 0）。
   - 手动：`POST /watchlist/:user_id/analyze`（manage）。observe 级、enforce 级都可以。用户不在名单上返回 404；没设分析渠道返回 400 `no_analysis_channel`；已在排队或正在分析返回 409 `analysis_pending`。
 - **队列**：在名单行上实现，新增列：
   - `analysis_requested_at`、`analysis_source`（auto|manual）：已排队。
@@ -5381,6 +5613,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 名单条目对外给 `analysis_requested_at`、`analysis_source`、`analysis_running`（布尔，由认领是否未过期得出；认领列和令牌不对外）、`latest_analysis_id`（0 = 从没分析过）、`latest_analysis_status`、`latest_trend`、`latest_suggestion`、`analyzed_at`。
 - **agent**：
   - 照 new-api 的工具集：`get_user_summary`、`list_suspicious_records`、`get_record`、`get_flow`、`submit_analysis`。工具说明的中文原文照抄。记录里的 `session_fp`（会话指纹）2026-10-31 随 `RequestMeta.session_fingerprint` 恢复；new-api 的 `session_rule`（粘性规则名）没有恢复：核心只给指纹，规则名不出核心。
+  - **0.8.0**：`list_suspicious_records`、`get_record` 返回的记录带 `replayed`（缓存命中的重放）；三个读工具的说明里写明重放是历史内容被再次发送时的缓存命中、不是新的违规，`get_user_summary` 的可疑数不含重放。记录里各级各审核器的条目带 `stage_failed`（这一级没有结论、被跳过），级号是 spec 的级序号。流程视图里补审级的角色名是"补审"；类别字典收录 `llm_questions` 审核器的题目。
   - `get_record` 的全文来自 `events.text`（`store_text` 打开时保存，≤100000 字），可以分段读；摘录取前 240 字，列表里取 120 字。
   - 用户 id 由服务端注入，模型不能指定。上下文超出 `analysis_context_kb` 时，把最早的工具结果替换成占位文字；替换完仍然超出，下一步就必须提交。
   - 只回文字不调工具时最多提醒 2 次；`submit_analysis` 参数不合法时最多重发 2 次。
@@ -5393,6 +5626,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **自动调整名单**：照 new-api `escalationOf`，new-api 的 block 级就是我们的 enforce 级。
   - 动作：`auto_upgrade`（升为 enforce）、`upgrade_skipped`（建议拦截、趋势偏重，但没有复核为违规的记录，未升级）、`auto_downgrade`（降为 observe，有效期重设为 `watch_days`）、`downgrade_skipped`（建议解除或观察，但仍有违规或趋势偏重，未降级或移出）、`auto_remove`，以及不允许时的 `auto_not_allowed`。
   - 是否允许由三个开关决定：`analysis_allow_upgrade`、`analysis_allow_downgrade`、`analysis_allow_remove`。
+  - **0.8.0（照 new-api）**：还受两个用户名单限制——白名单用户不升级；黑名单用户不降级、不移出。被名单挡下的结论同样记为 `auto_not_allowed`。
   - **移出名单的额外条件（0.6.0，P2）**：被分析的记录是用户原文，可能诱导模型给出 release，所以模型的结论单独不足以把人移出名单：
     1. `analysis_allow_remove` 默认改为关（已保存的值不变）；
     2. enforce 级用户的 release 只降为 observe（`auto_downgrade`，受 `analysis_allow_downgrade` 控制），不直接移出；
@@ -5463,7 +5697,10 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 72.14 P3：统计、告警、用户信息（0.4.0 已实现）
 
 **统计表**（迁移 `0005_stats.sql`、`0006_stats_prices.sql`）：
-- `stats_hourly`：主键是（UTC 小时、分组、流程、级、审核器、时机）。行分四种：请求行（flow 0，只有 pre，记录审核给请求加的延迟）、流程行（stage 0）、级行（auditor 0）、审核器行。累加审核数、命中、拦截、推翻、错误、`cache_skipped`、上游调用数、token、9 档延迟分桶和费用；审核器行另有 `priced_calls`、`unpriced_calls`、`unpriced_tokens`、`free_calls`。`cache_skipped` 在流程行表示"放行缓存直接回答"，在审核器行表示"没有可发送的内容"。
+- `stats_hourly`：主键是（UTC 小时、分组、流程、级、审核器、时机）。行分四种：请求行（flow 0，只有 pre，记录审核给请求加的延迟）、流程行（stage 0）、级行（auditor 0）、审核器行。累加审核数、命中、拦截、推翻、错误、`cache_skipped`、上游调用数、token、9 档延迟分桶和费用；审核器行另有 `priced_calls`、`unpriced_calls`、`unpriced_tokens`、`free_calls`。`cache_skipped` 在流程行表示"判定缓存里全部片段都已通过，直接放行"，在审核器行表示"没有可发送的内容"。
+  - **0.8.0**：新列 `replayed`（迁移 `0010`），只在流程行上计：缓存命中重放的次数，这些次数同时计在 `audited`、`hit`（pre 还有 `blocked`）里，不记耗时，不计级行、审核器行和费用。
+  - **流程行 `errors` 的定义变了（0.8.0，照 new-api）**：按运行的 `errored` 计，即"有审核器出错或有级失败"的运行，不论最终结果是什么。0.7.2 及以前只在结果为 `error` 时加一。这样复核级坏了、初审命中仍然成立的运行，异常率还看得到。同一批流量下这个数只会变大或持平；它和"结果为 error 的记录数"不再是一回事。
+  - 级行的级号是 spec 的级序号（补审级记在它自己的级号上）。
 - 渠道健康度不进 `stats_hourly`，记在 `costs` 的同一行（小时、渠道、来源）上：调用数、错误、延迟分桶。手动来源（test、try、simulate）不计入健康度。
 - `user_daily`：每个用户每个 UTC 日的审核数、可疑数、高危数、错误数、最近命中时间。共用一次 pre 审核的多个请求各记各的用户。持有 `moderation:read` 的用户（版主）不记。
 - 每个节点在内存里累加，每 10 秒写一次。写入串行，按固定键顺序 upsert，避免多节点死锁；失败的部分留到下一轮。读接口先写本节点的待写数据，其他节点最多晚 10 秒。
@@ -5471,13 +5708,15 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 清理：`stats_retention_days`（默认 90 天）删除 `stats_hourly`、`user_daily` 和 `costs`，与 72.10 的统计表一样在 `purgeRetention` 的锁内分批删除（0.5.1 起；此前 `costs` 固定保留 400 天、不分批）。
 
 **接口**（都要 `moderation:read`）：
-- `GET /status`：今日计数、AI 复核计数、观察名单计数、近 1 小时审核器和渠道健康度、漏斗、队列、今日费用。观察计数与 new-api 一致：`watching` 和 `watching_with_new` 只算 observe 级，`blocking` 算 enforce 级。
+- `GET /status`：今日计数、AI 复核计数、观察名单计数、近 1 小时审核器和渠道健康度、漏斗、队列、今日费用。观察计数与 new-api 一致：`watching` 和 `watching_with_new` 只算 observe 级，`blocking` 算 enforce 级；0.8.0 另加 `blocking_with_new`（enforce 级条目里有新命中的个数，new-api 没有）：默认级别为拦截时新条目以 enforce 级加入，有新命中的用户出现在这里，概览的"有新命中"把两者都算上。0.8.0 还加了 `default_level`、`today.replayed`、`runtime.cache_epoch`、`runtime.cache_bytes`（72.11）。漏斗的级号是 spec 的级序号。
 - `GET /stats/trend`、`GET /stats/performance`、`GET /stats/categories`。
 - 流程、审核器、渠道列表上的 24 小时或今日列。
 - "今日"和按天的分桶按 `tz_offset_minutes`（浏览器时区）计算，四舍五入到整小时，因为数据按整小时存。`GET /costs` 的按天分桶也一样（2026-10-31）。
 
 **告警与通知**：
 - `alerts` 任务每分钟检查一次：近 1 小时内某个流程至少有 20 次运行，且异常率超过 `error_rate_alert_percent` 时告警。告警状态存在 KV 里，TTL 2 小时；只要仍然超标，每次检查都刷新 TTL，所以一段连续超标只发一次通知。`error_rate_alert_percent` 设为 0 表示关闭告警。
+  - **0.8.0**：异常率的分子是流程行的 `errors`，定义如上（有级失败的运行都算）。同样的阈值下告警会比 0.7.2 更容易触发；升级后按新的数值重新看一下阈值。
+  - 告警状态的 KV 命名空间仍是 `pass`（0.7.x 的缓存也用过这个命名空间；0.8.0 的判定缓存改用 `verdict`，告警状态不跟着换）：滚动升级期间新旧节点共用同一份状态，正在持续的告警不会重发。
 - AI 分析自动调整名单级别时也会发通知。
 - 通知发到 `notify_webhook_url`：JSON POST，中英双语，可以用 `notify_webhook_secret` 做 HMAC 签名（请求头 `X-Signature: sha256=…`）。通知里不带被审核的原文。设置表单里，密钥是 `writeOnly`，URL 是 `x-sensitive`。
 - 核心现在有通知（§74.4 `Notify`），但它按"渠道 + 接收人"发送，不按权限找管理员。是否把 moderation 的签名 webhook 迁到核心通知，等用户决定；在此之前继续用 webhook。
@@ -5485,7 +5724,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **用户信息**：
 - `GET /users/:user_id`：任意用户 id 都能查，不要求在名单上。返回以下内容：
   - 名单条目或 null；
-  - 豁免、版主、封禁状态；
+  - 白名单、黑名单（0.8.0，`user_state.allowlisted`、`blocklisted`，取代原来的 `exempt`）、版主、封禁状态；
   - 可疑记录汇总（按人工复核、严重度、AI 结论统计，含 `none`）；
   - 上下文栏：最近一条记录的分组、该分组现在绑定的流程，以及 30 天内的来源（分组 → 流程@版本，各带 AI 计数，标出当前来源）；
   - 30 天的 `user_daily`；
@@ -5496,7 +5735,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 插件查不了（没授予 `users.read`，或核心早于 Host API 8）时回答 503 `users_unavailable`，界面此后改为逐个调核心的 `/users/:id`（需要 `user:read`，遇到 403 就停止）；邮箱和角色只从这条路得到，没有显示名时界面才显示邮箱。其他错误（查询失败等）不切换：这批 id 暂记为未知，30 秒后再次渲染时重查。
   - 通知（AI 调整观察级别）里的用户写成"显示名 #id"，没有显示名时只写 `#id`，不用邮箱。
   - 时间线和名单历史仍走 `GET /events?user_id=` 和 `GET /watchlist/:user_id/events`。（2026-10-31 改：此前返回邮箱和角色、任意 id 都回答、任何错误都永久改走核心。）
-- 手动加入名单（`POST /watchlist`）和手动封禁（`POST /blocks`）先用 `GetUsers` 确认用户存在，不存在返回 404 `user_not_found`（照 new-api）。查不了时不校验，与以前相同；查询出错返回 503。两者都拒绝豁免用户和版主（400，`user_id` 字段错误 `exempt` / `staff`，0.5.1 起封禁也检查）。
+- 手动加入名单（`POST /watchlist`）和手动封禁（`POST /blocks`）先用 `GetUsers` 确认用户存在，不存在返回 404 `user_not_found`（照 new-api）。查不了时不校验，与以前相同；查询出错返回 503。两者都拒绝版主（400，`user_id` 字段错误 `staff`）。0.8.0：手动封禁还拒绝白名单用户（`user_id` / `allowlisted`）；手动加入名单不拒绝白名单用户，只是不能设为 enforce 级（`level` / `allowlisted`，72.8）。
 - `users.read`（风险 high）是**可选**授权：不授予时上面两项退回旧行为。0.5.0 新增，升级时管理员需要确认。
 - 名单的"新命中"（`hits_since_seen`）在以下情况清零：手动标记已读、手动改级别、AI 改级别（与 new-api 的 `hits_since_mark` 一致）。
 
@@ -5504,7 +5743,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 记录保存客户端端点（`endpoint`）和粘性会话指纹（`session_fp`），记录列表可按两者筛选，AI 分析的 `list_suspicious_records`、`get_record` 返回 `session_fp`（2026-10-31，核心在 `RequestMeta` 加了这两个字段，§25.1）。
 - `ttft_timeout_ms`（默认 10000，范围 1000–60000）：上游调用的首字超时。JSON 引擎调用（OpenAI 审核、Jev）以收到响应头为准，流式调用以第一个模型输出为准（Responses 流里任何 `*.delta` 事件都算输出）。非流式的 LLM 调用（LLM 判定审核器）一次收到全部回答，不设首字超时，只受渠道超时限制。超时的错误类型是 `ttft_timeout`。
 - mode 切到 off 后，post 队列里剩下的任务直接丢弃，不再调用上游。
-- 被推翻的放行也进放行缓存。
+- 被推翻的通过同样在判定缓存里记为"通过"（72.5 第 8 步）。
 - 记录批量写入失败时，去掉其中的原始消息再写一次，并在 trace 中标 `input_message_dropped: save_failed`。仍然失败时，其中的可疑记录（hit、block）再逐条写一次，其余丢弃；写入队列满时，可疑记录交给后台协程写入并重试（0.6.0 起，72.5 第 10 条；此前在钩子里当场写入，照 new-api `worker.go`），其余丢弃。可疑记录决定名单、违规计数和封禁，不能丢。
 - pre 审核时客户端已离开且没有命中：请求、流程运行和记录都不计。命中时照常计数，并按拒绝记录（`result=block`），离开也躲不过名单（照 new-api `gate.go`）。
 - `user_daily` 不计审核管理员；查询某个用户是否是管理员失败时，这个用户的计数留到下次写入再判断。
@@ -5513,9 +5752,29 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **与 new-api 不同**（有意为之）：
 - 天按查看者的浏览器时区划分（new-api 用服务器本地时区），不设时区设置。例外是 `user_daily`：按 UTC 日期存储，改时区就要改表，所以用户详情的每日图按 UTC 日，界面写明。
 - 分析渠道的类型在保存设置时不校验：设置由核心保存，不经插件（核心没有保存前的校验钩子；Configure 拒绝只记日志，启动时拒绝会让插件起不来）。插件在应用时把不存在、不是 `llm`、或停用的渠道当作未配置，`GET /status` 的 `runtime.analysis.channel_problem`（`not_found`、`not_llm`、`unusable`）给出原因，概览状态条显示出来。设置页按渠道列表对所选渠道作同样的提示：不存在或不是 `llm` 时提示重新选择，停用时用 `unusable` 的文案。new-api 保存时就拒绝。
-- 原始消息由 `store_text` 一起控制，没有单独的 `record_input_message`。
+- 原始消息由 `store_text` 一起控制，没有单独的 `record_input_message`。0.8.0 加了 `record_pass_input_message`，含义与 new-api 相同；但出错记录不保存原始消息、原文只留前 `error_text_max_chars` 字（new-api 在开关开着时会存），这是渠道故障时的存储保护（72.9）。
 - `worker_count` 和 `post_concurrency` 合并为 `max_concurrency`。
 - 手动分析改为排队，不返回 503。
+- **0.8.0 对齐 new-api 之后仍然不同的地方**（原因详见设计文档第 10 节）：
+  - 审核单位：new-api 一个内容块跑一次流程；插件把片段装进块，一块跑一次（72.4）。
+  - 缓存键：new-api 只按内容；插件按清空纪元、流程、判定指纹、片段。指纹让改配置后自动失效，new-api 靠人清空。代码里的判定默认值变化由 `judgingVersion` 带进指纹。
+  - 命中的缓存单位：new-api 是内容块；插件是块里实际送审的片段集合，整个集合都在请求里才重放。片段键同时存通过和最多 8 个命中指针，命中优先。
+  - 缓存的有效期：值里带写入时间，按当前的 `verdict_cache_days` 判断，读到不续期。
+  - 误报写通过：对命中集合里的每个片段写，且只在流程的判定指纹没变时写；"确认"重写命中也只在指纹没变时做（new-api 都无条件）。
+  - 缓存写入：运行结果在钩子回答之后写，先 KV、写成功后才进内存（0.8.1；写完之前同样的内容再来会再审一次）；人工处理以 KV 为准（new-api 都是同步写）。
+  - 清空缓存：换纪元，旧键等到期（new-api 的 Redis 模式立即删除）。
+  - 设置键：`mode` 三个值表达 new-api 的 `enabled` + `default_level`；白名单兼容旧键 `exempt_user_ids`。
+  - Jev 图片重画：1200 万像素（new-api 5000 万），另有解码内存和重画时间两项限制（72.6）。
+  - 题表式 LLM：审核器类型名 `llm_questions`（保留 `llm_verdict`）；提示词说明各段的角色前缀，用户消息带自身请求标记；题表可为空。
+  - LLM 审核器收图片：new-api 只发文字；插件默认发，审核器的 `review_images` 关掉后只发文字（72.6）。
+  - 多块请求的流程行 `errors` 按所有块的"或"（new-api 按代表块）。
+  - 客户端断开不取消 pre 运行（singleflight）；new-api 取消运行、保留前面的命中。
+  - 封禁（`blocks`）是插件独有的：重放不计入封禁，白名单用户不封禁。
+  - AI 对 enforce 级用户的"移出"建议只降级（72.13.4）。
+  - 默认分组 `group_id=0` 是绑定回落的最后一级（new-api 没有默认分组）；绑定到 flow 0 是免审，不回落。
+  - 繁忙准入（`max_inflight_mb`）是插件独有的：本应先审的用户 503，其余放行。
+  - 升级时的名单转换、`watch.blocking_with_new`、告警状态留在 KV 命名空间 `pass`：都是插件自己的升级和展示需要。
+- **与 new-api 相同、但需要知道的两点**：重放不分用户；后审的请求被重放时，命中集合之外的新内容这一次不审（72.4 剩余限制第 8、9 条）。
 
 **仍缺核心支持**：
 - 按权限通知管理员、各管理员自己订阅：核心通知（§74.4）只按渠道和接收人发送，还不能发给"持有 `moderation:read` 的管理员"，也没有各管理员的订阅和语言。
@@ -5532,8 +5791,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **设置全部在这里编辑**（0.6.1 起，2026-10-31 用户要求；manifest `ui.settings` 为 `{"mode":"native","page":"dashboard",…}` 并带 schema 和 uiSchema，§75.5）。插件详情页不再有设置标签，`/plugins/moderation/settings` 转到本页 `?tab=settings`；插件页也不再有"完整设置"按钮或链接。存储不变：仍是核心的 `GET/PUT /plugins/moderation/settings`（核心加密保存、按 schema 校验并掩码密钥、改动后通知插件）。
 
-- **分组**：按 `forms/settings.ui.json` 的 `ui:order` 和 `ui:section` 分成：运行模式与豁免、拦截响应、观察名单与封禁、AI 分析、记录与保留、性能与缓存（默认折叠）、输入范围（默认折叠）、告警与通知、Jev 默认题集。每组一个 `SSettingsGroup`，每项一个 `SSettingRow`；有错误的折叠组自动展开。
+- **分组**：按 `forms/settings.ui.json` 的 `ui:order` 和 `ui:section` 分成：运行模式与用户名单（0.8.0；此前叫"运行模式与豁免"）、拦截响应、观察名单与封禁、AI 分析、记录与保留、性能与缓存（默认折叠）、输入范围（默认折叠）、告警与通知、Jev 默认题集。每组一个 `SSettingsGroup`，每项一个 `SSettingRow`；有错误的折叠组自动展开。
 - **渲染**：一般的项用 `@sub2api/ui` 的 `SchemaField`（settings 布局）按 schema / uiSchema 渲染，显示值为已存值，没有存过的显示 schema 默认值。以下几项用本页自己的编辑器：拦截提示下面的拦截响应预览（OpenAI / Claude / Gemini 三种格式）、AI 分析渠道（只能选大模型渠道的下拉框，已存渠道不是可用的大模型渠道时提示）、通知 Webhook 地址和签名密钥（已设置时显示"已设置，留空保持不变"，可单独清除）、Jev 默认题集（内置 / 自定义，题集编辑器）。
+- **0.8.0 的设置项**：第一组是 `mode`（标题"审核与默认级别"，选项"关闭 / 开启 · 默认观察 / 开启 · 默认拦截"）、白名单、黑名单；"记录与保留"组在 `store_text` 之后是 `record_pass_input_message`；"性能与缓存"组用 `verdict_cache_days` 取代 `cache_ttl_seconds`，下面有"清空判定缓存"按钮（只对 `moderation:manage` 显示，先确认）。退役的 `exempt_user_ids`、`cache_ttl_seconds` 隐藏。
+  - 白名单的初始值：已存的 `allowlist_user_ids`，没有这个键时取已存的 `exempt_user_ids`（与后端读法一致）；白名单或黑名单有改动的保存同时把 `exempt_user_ids` 写成"白名单减去黑名单"（镜像；只改黑名单的保存也重写）。只保存黑名单而新键还从没存过、旧键里又有被加进黑名单的用户时，把旧键原样存成 `allowlist_user_ids`，旧键去掉这些用户。把白名单清空而旧键里还有用户时，写入空数组而不是删掉新键（旧键也写成空数组）。
+  - 缓存天数的初始值：已存的 `verdict_cache_days`，没有时由 `cache_ttl_seconds` 换算（0 显示为关闭）；清空天数而旧键还在时写入默认值 7。
 - **0.1 旧字段**（`base_url`、`api_key`、`model`、`system_prompt`、`categories`、`tool_choice`、`max_turns`、`temperature`、`max_tokens`、`timeout_ms`、`on_error`、`sample_rate`、`group_ids`、`model_patterns`、`retention_days`）在 uiSchema 里是 `ui:widget: hidden`，不在界面出现，但留在 schema 里（`api_key` 必须留，否则核心不再把它当密钥掩码），保存时原样回传。仍存着 0.1 的 `api_key` 时页面顶部提示并提供"清除"（只持有 `moderation:manage` 的人在它存在时任何保存都会被要求重填它，§75.1，而它已无法重填）。
 - **密钥**：Webhook 地址（`x-sensitive`）和签名密钥（`writeOnly`）读到 `******`；输入框留空回传 `******` 表示沿用，点清除后回传时去掉该键；核心要求重填已存密钥（字段错误码 `reenter`）时在对应输入框下提示。
 - **校验与错误**：保存前按 schema 校验本页改过的项；核心返回的字段错误（`values/<key>/…`）显示在该项下面，不属于本页任何项的错误弹提示。数字项清空表示不保存，用 schema 默认值。
@@ -5541,6 +5803,15 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **设置的保存**（核心设置接口没有版本号，PUT 整体替换 values）：页面加载时记下已存的值和本页各项的初始值；保存时重新读取已存的设置，只把本页**相对加载时改过的项**写进最新值再写回，本页没动过的项（包括本页显示的项、隐藏的 0.1 旧字段）和其他设置都保持最新值，不会被打开页面时的旧值覆盖。没有改动时不发请求；有未保存的改动时保存栏提示。本页改过的项如果别人在此期间也改过（加载时的值 ≠ 最新值），先确认，确认后以本页的值为准，只覆盖这些项。限制：密钥类的项读到的是掩码，别人改了密钥看不出来；两次读取之间仍有很短的竞争窗口，要彻底解决需要核心设置接口支持版本号或按键 PATCH。
 
 - **概览**：数据来自 `/status` 和 `/stats/*`。内容包括：状态行、KPI、需关注用户、AI 复核、今日费用、性能、分类、漏斗、趋势、健康度、队列。
+- **0.8.0 新增的界面**：
+  - **流程画布**：级卡片上有"补审级"开关（第一级没有）；改成补审级的级移到所有普通级后面，改回时移到所有补审级前面；新增、移动、拖放都保持普通级在前，第一级不会停留在补审级（成为第一级的级自动变回普通级）。普通级与补审级之间的箭头标注"通过或无结论 → 补审"。发布对话框列出每一级通往哪里。校验多两条：`fallback_first`、`fallback_order`。所有原来写"出错放行"的说明都改成了 0.8.0 的规则；原来"全部命中在渠道故障时永远不命中"的画布警告删除（出错的审核器不再计入分母）。
+  - **trace 与级路径**：失败的级显示"本级失败，已跳过"，补审级显示"补审"，级号按 `stage` 显示；重放的记录在 trace 顶部写明沿用了哪个请求的结果、本次没有调用审核渠道、不算新的违规，请求 id 可点击。0.8.0 之前的记录没有 `failed`：其中没有任何审核器判出结论的出错级仍显示为出错，不显示成通过。
+  - **记录**：重放的记录在结果旁有"重放"徽标，筛选里有"缓存重放：全部 / 只看重放 / 不含重放"；人工处理成功的提示在 `cache_synced > 0` 时加"已同步判定缓存 N 条"。
+  - **审核器**：新类型"LLM 题表"（`llm_questions`），用 Jev 的题表编辑器但不显示阈值列；两种 LLM 审核器都有开关"模型支持图片"（`review_images`，默认开，72.6），关着时试跑只审文字；Jev 图片开关的说明写明哪些图片会重画、哪些不送审。
+  - **名单与用户**：名单列表、名单详情、记录详情的用户状态里显示"白名单""黑名单"徽标；白名单用户的"拦截级"不可选，后端的 `level/allowlisted`、`user_id/allowlisted` 错误显示在对应字段下。
+  - **概览**：状态行的模式徽标是"默认观察 / 默认拦截 / 关闭"；今日可疑下有"其中缓存重放 N"；趋势提示框有"重放"；"有新命中"包含拦截级条目（`blocking_with_new`）。
+  - **绑定**：见 72.17。
+  - **模拟**：用户状态"未标记"按默认级别。
 - **流程**：拖拽画布，与 new-api 一致。支持模板、发布、版本与回滚、模拟（可选用户状态），分组单元格遇到 409 时可以强制覆盖。手动总超时填 0、负数或留空时显示错误，不改动已有值（0 表示自动），离开输入框后显示回已有值，发布的就是框里显示的值。版本抽屉切换流程后丢弃旧流程的版本详情响应。
 - **记录**：
   - 列表：按用户、分组、流程、请求 id、端点、会话指纹筛选。列有分数标签、级路径、流程@版本，模型下面是端点。
@@ -5556,9 +5827,9 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - **单元测试**：把 new-api `service/moderation/moderation_test.go`、`model/moderation_test.go` 里的场景改写到插件里，至少覆盖：
   - 结尾连续 user 消息的各种协议形态；
-  - 三种组合规则、推翻、跳过、出错放行；
+  - 三种组合规则、推翻、跳过、出错（0.8.0 起：失败的级跳过、前面的命中保留，全部失败才放行）；
   - 名单首次加入、延期、按 request_id 去重、误报只扣当前窗口；
-  - 放行缓存不收哪些结论；
+  - 缓存不收哪些结论（0.8.0 起是判定缓存）；
   - 老配置转换；
   - pre 下客户端断开时的记录规则。
 - **核心测试**：`SecretSeal` / `SecretOpen` 的授权与绑定（`grpcruntime/secrets_internal_test.go`）。插件测试：`TAIL16` 字段在各协议请求上的取值（用核心同一个 gjson 版本）。
@@ -5579,6 +5850,36 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 部署：`gateway.hook` 的 `scope.fields` 扩大，升级时管理员要重新批准（72.3）。不需要新核心版本：空 `match` 匹配全部协议、各协议都执行请求钩子，现有核心已支持（重复键由核心统一拒绝是另一项核心修复，与插件版本无关）。没有新迁移。
   - 发布后观察：审核调用数和费用会上升（72.4 剩余限制第 1 条），首日留意 Jev / LLM 渠道的费用和 pre 延迟。
 
+- **0.8.0（2026-11-10，与 new-api 对齐）**：
+  - 测试（都在 `internal/moderation/`，界面在 `ui/native/src/`）：
+    - 流程引擎：`unit_test.go` 的 `TestRunFlow`（失败级、总超时保留命中、分母、补审级、初审命中）、`TestSpecValidate`、`TestRecordResultOfTrace`，`extract_test.go` 的 `TestCombineTraces`；`hook_test.go` `TestTwoStageFlowCacheAndFailOpen`（复核出错 → 命中并拒绝；所有级出错 → 放行、记 error）；`unit_test.go` `TestFallbackDeciderIndexesTheTrace`；`hook_test.go` `TestFallbackStageHitEndToEnd`、`TestPostWorkerSurvivesPanic`、`TestPostPanicIsCountedOnce`、`TestPreRunSurvivesPanic`（先审的共享运行或后审任务 panic 时进程不退出，按出错计一次）。
+    - 题表式 LLM：`engine_llmq_test.go`（请求体、边界、初审命中、自身请求标记、读结果、关掉图片时只审文字、在流程里）。
+    - LLM 审核器的图片：`llm_image_test.go`（三种协议的图片 part、上限与去重、开关关掉、只有图片的输入、400 回退、`llm_verdict` 的两种重试合计不超过 `max_turns + 2` 次调用、提示词；流程里复核看图后推翻并缓存 / 确认并拒绝、非混合流程不留已缓存的文字、试跑与 `/test` 的计数、开关进指纹）。
+    - Jev：`jev_image_test.go`（长上下文请求头、原样发送、缩小、补白、透明、GIF 和 WebP、JPEG 回退、各种跳过、去重与预算、名额、解码内存估算、旧题集版本号、重画不占用文字的审核时间、等名额和等内存时 ctx 结束、解码器 panic）。
+    - 判定缓存：`verdict_cache_test.go` 和另外四个 `verdict_cache_*_test.go`（全部测试名按文件列在下面 0.8.1 一条里）。覆盖：命中并重放、整个集合才重放、重放不是违规、post 时机、不缓存的情况、范围与指纹、清空、人工处理同步、广播、KV 故障、命中条目上限；还有：命中不被片段的通过覆盖、人工处理去重与 KV 失败、指纹已变的误报、写入时间、清空前入队的任务、`judgingVersion`、晚到的后台写不撤销人工处理（可阻塞的假 KV）、没收到的图片不缓存、图片只凭通过的审核器记"通过"、新命中传到其他节点（广播；0.8.1 起没收到广播的节点按内存回答到值到期或清空）、没收到人工处理广播的节点（0.8.1 起一直重放到值到期，`TestNodeWithoutReviewBroadcastReplaysUntilExpiry`）、读不到的命中条目按未知、同键修改轮流（`TestKVChangesOfAKeyTakeTurns`）、人工处理先立墓碑（`TestReviewTombstonesBeforeItWrites`）并随它的请求结束（`TestReviewEndsWithItsRequest`）；第四轮：只被命中的审核器收到的图片每次得到同一结果（`TestImageOnlyAHittingAuditorSawGetsTheSameVerdict`）、KV 写失败的命中哪里都不缓存、下次重新审，写成功后不写回人工处理删掉的命中（0.8.1，`TestHitWhoseWriteFailedIsCachedNowhere`）、失效的指针出内存（`TestStalePointerLeavesMemory`）；第五轮：混合流程里没缓存的图片总是和本请求的文字一起审，别的请求缓存了文字也不改变结果（`TestImageVerdictDoesNotDependOnCachedText`；`hook06_test.go` 的 `TestHookSendsCachedTextWithANewImage`、`extract_test.go` 的 `TestPlanKeepsCachedTextWithAnUncachedImage`）；写记录时 panic 命中照样拒绝（`TestHitStandsWhenRecordingPanics`）和合并也 panic 的分支（`TestPreRunSurvivesPanic`）在 `hook_test.go`。片段值格式、内存字节上限、墓碑、指纹、命中条目的编码和键在 `unit_test.go`；共享运行只结算一次在 `hook_test.go`。
+    - 时机与名单：`lists_test.go`（`TestPreModerated` 的全部组合、白名单是观察而不是不审、自动条目用默认级别、拦截级计数、手动设拦截级被拒、AI 受名单限制、繁忙、旧键读作白名单、名单转换、模拟）、名单项格式）；`parity_test.go`（一次性转换、转换窗口、取锁顺序）；`stats_api_test.go`（`blocking_with_new`、告警状态的命名空间）；`account_binding_test.go`（`inactive`）。
+    - 原始消息：`hook06_test.go` `TestInputMessageKeptPerSetting`；绑定回落：`account_binding_test.go`（72.17）。
+    - 界面（vitest）：`flowOps.spec.ts`、`bindingOps.spec.ts`、`settingsForm.spec.ts`、`messages.spec.ts`。
+  - 部署：不需要新核心版本，**不需要管理员重新批准**（72.3）；有一个新迁移 `0010`（72.10）。升级前的核对、滚动升级期间的禁忌、升级后的核对和回滚步骤见 `docs/RELEASE-MODERATION-0.8.0.md`。要点：
+    - 现有配置下就会变的行为：复核出错或超时不再放行已命中的请求；`mode=enforce` 的含义；绑定到停用流程的分组和账号回落到默认流程（从不审核变成审核）；繁忙时 503 的范围；更多记录带原始消息。
+    - 升级后第一天缓存全部重建（旧缓存作废），加上 Jev 送审更多图片，审核调用数和费用会上升。
+    - 滚动升级期间不要发布带补审级的流程、不要创建 `llm_questions` 审核器（0.7.2 的节点读不了）；回滚前先撤掉它们，并去掉四个新设置键（72.10）。
+- **0.8.1（2026-11-11，判定缓存：内存层不再重读；批量 KV 调用，没有预算和上限；先 KV 后内存）**：
+  - 改动：见 §72 开头的 0.8.1 对照表、72.5 第 8 步和 72.9 的人工处理同步。
+  - 界面：概览页"队列与运行状态"卡片加一行 `runtime.kv_writing`（0.8.1 的文案是"正在写入共享缓存的结论"）。别的页面没有变化。
+  - 测试：0.8.1 发布时判定缓存的测试都在 `internal/moderation/verdict_cache_test.go`；0.8.2 把它们拆成五个文件并整理过名字，现在的清单见下面 0.8.2 一条。
+  - 部署：**要求有批量 KV 调用的核心（`hostCompat >=0.1.273`，72.3）**。2026-11-11 随核心 0.1.274 作为内置插件上线——核心滚动升级完成后内置同步把插件从 0.8.0 升到 0.8.1（核心 0.1.273 已构建但没有发布，0.1.274 带着它的内容）。不需要管理员重新批准，没有迁移，没有设置变化；KV 里的键和值不变，可以与 0.8.0 滚动混跑。回滚 = 插件装回 0.8.0；核心也要退回 0.1.272 时先退插件。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节。
+- **0.8.2（0.8.1 上线后的整理；2026-11-11 随核心 0.1.275 上线）**：
+  - 改动，共五项：(1) 分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播；(2) 告警状态的 KV 失败按缓存的规则计数，因 ctx 结束而没做成的调用不计；(3) 片段键在 KV 里的 TTL 向上取整到整秒；(4) 界面：概览页在 `kv_writing` 旁边显示 `runtime.kv_skipped`（"未写缓存的审核（期间有人工处理或缓存被换）"），`kv_writing` 一行的文案改为"等待写入共享缓存的审核（当前）"，删掉 `runtime` 下六个没有任何页面用到的文案键（vitest：`messages.spec.ts` 核对这张卡片的文案键）；(5) 内部整理：`cache.go` 统一用词、运行的写和人工处理共用"读出、修改、写回"的逻辑，测试拆成五个文件、运行时间减半（事件写入器的刷新间隔可在测试里调短，`Plugin.eventFlushEvery`）。前三项的规则在 72.5 第 8 步。0.8.1 的缓存规则（先 KV 后内存、读数、`kv_writing`、`kv_skipped`、清空后出队的任务按当前纪元查）没有变。
+  - 测试（`internal/moderation/`；判定缓存现在的全部测试，按文件，名字取自代码；每个测试断言什么见设计文档 5.10）：
+    - `verdict_cache_test.go`（存、重放、范围、清空、人工处理同步、广播）：`TestVerdictCacheStoresHitAndReplays`、`TestReplayNeedsWholeHitSet`、`TestReplayIsNotAViolation`、`TestReplayPostTiming`、`TestVerdictCacheSkipsErrorsSkippedStagesURLImages`、`TestHitSurvivesPassesOfItsSegments`、`TestHitKeptDecoded`、`TestVerdictCacheScope`、`TestClearVerdictCache`、`TestReviewSyncsVerdictCache`、`TestReviewSyncWritesEachKeyOnce`、`TestReviewSyncRefusesAnUnknownStatus`、`TestReviewOnANodeThatDidNotJudge`、`TestReviewSyncKVFailure`、`TestFalsePositiveUnderAnotherFingerprint`、`TestVerdictChangedBroadcastDropsMemory`、`TestStoredHitReachesANodeByBroadcastExpiryOrClear`、`TestNodeWithoutReviewBroadcastReplaysUntilExpiry`。
+    - `verdict_cache_kv_test.go`（查询、运行的写、KV 故障、按键轮流）：`TestKVCallsCountFailuresNotEndedContexts`、`TestKVChangesOfAKeyTakeTurns`、`TestKVFailureAuditsAgain`、`TestKVValueKeepsItsWriteTime`、`TestLookupReadsEverySegment`、`TestKnownSegmentsMakeNoKVCall`、`TestLookupEndsWithItsRequest`、`TestPassDoesNotHideAHitAnotherNodeStored`、`TestUnreadableHitEntryIsUnknown`、`TestStalePointerLeavesMemory`、`TestStalePointerRemovalKeepsANewerPointer`、`TestMemoryHoldsWhatTheKVHolds`、`TestRepeatedBeforeTheWriteIsModeratedAgain`、`TestHitEntryIsWrittenBeforeItsPointers`、`TestHitWhoseWriteFailedIsCachedNowhere`、`TestVerdictWriteStopsAtAFailedRead`、`TestVerdictWriteCutShortForgetsWhatItWrote`、`TestWaitingVerdictWritesAreReported`、`TestStopEndsVerdictWrites`、`TestAlertStateCountsKVFailuresLikeTheCache`。
+    - `verdict_cache_review_race_test.go`（人工处理遇上进行中的运行、排队的任务）：`TestReviewIsNotUndoneByLateWrites`、`TestReviewTombstonesBeforeItWrites`、`TestReviewEndsWithItsRequest`、`TestReviewIsNotUndoneByWritesThatOutlastItsTombstones`、`TestRunAcrossAReviewDoesNotUndoIt`、`TestStoredHitIsKnownOnItsNode`、`TestQueuedJobAfterClear`、`TestQueuedJobAfterClearSeesAReview`、`TestQueuedJobStoresByItsLastLookup`。
+    - `verdict_cache_image_test.go`（审核器没收到的图片）：`TestSkippedImageIsNotCachedAsPassed`、`TestImagePassNeedsAPassingAuditor`、`TestImageOnlyAHittingAuditorSawGetsTheSameVerdict`、`TestImageVerdictDoesNotDependOnCachedText`。
+    - `verdict_cache_helpers_test.go`：假 KV 和各文件共用的辅助函数，没有测试。缓存在别的文件里的测试：`unit_test.go` 的 `TestVerdictCacheTTLSettings`、`TestLRU`、`TestLRUByteBudget`、`TestLRUTombstone`、`TestLRUTombstoneOfAReviewInProgress`、`TestReadingLapses`、`TestSegValue`、`TestStoredHitCodecAndKeys`、`TestFingerprint`、`TestFingerprintJudgingVersion`；`hook_test.go` 的 `TestPreRunStoresVerdictsOnce`、`TestPreRunSurvivesPanic`、`TestHitStandsWhenRecordingPanics`。
+    - 测试辅助：`mustHook` 在发请求前后各等一次本节点的后台写完成（结论在回答之后才进缓存）；`hookNow` 不等。
+  - 部署：`hostCompat` 不变，**不需要管理员重新批准，没有迁移，没有设置变化**；KV 里的键和值不变，可以与 0.8.1 滚动混跑。2026-11-11 随核心 0.1.275（§93 的规则统一）作为内置插件上线；它本身不依赖 0.1.275，在 0.1.274 上也能跑。回滚 = 插件装回 0.8.1。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 第 8 节。
+
 ### 72.17 绑定到账号（0.7.0，2026-11-08，用户要求；需要核心 §85）
 
 流程除了绑定到分组，还可以绑定到**分组下的某个账号**和**某个账号（不论分组）**。三种绑定可以同时存在，一个请求只按其中一条审核。
@@ -5589,21 +5890,25 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 3. 分组 G；
 4. 默认分组 `group_id=0`。
 
-找到的第一条决定结果；一条都没有就不审核。和分组绑定的规则一样，命中的绑定指向 flow 0（“不审核”，即免审）、已停用或未发布的流程时**不审核，也不回落**到更宽的绑定。
+找到的第一条**生效的**绑定决定结果；一条都没有就不审核。
+
+- 绑定指向 flow 0（“不审核”，即免审）：匹配到就停，不审核，更宽的绑定不再看。
+- **0.8.0（照 new-api `runtime.go`）**：绑定指向已停用、未发布或已删除的流程时，这条绑定**视为不存在**，接着找更宽的绑定；各级都没有生效的绑定才不审核。0.7.x 把这种绑定和免审同样对待（匹配到就不审核）。
+- 后果：升级前靠"绑一个停用的流程"来让某个分组或账号不审核的，升级后会按更宽的绑定（通常是默认流程）审核。要继续不审核，升级前把绑定改成“不审核（免审）”（0.7.2 已支持）；发布说明里有列出这类绑定的查询。迁移不自动改它们：分不清是有意不审还是流程临时停用。
 
 **存储**（迁移 `0009_account_bindings.sql`，幂等）：
 - 分组绑定仍在 `flow_groups`，不迁移、不改写。`flow_id=0` 是新增的“不审核”（免审）：0.6.x 把它读成指向不存在的流程，结果同样是不审核。
 - 账号绑定在新表 `flow_accounts(group_id, account_id, flow_id)`，主键 `(group_id, account_id)`，`group_id=0` 表示任意分组，`flow_id=0` 表示不审核。删除流程时一并删除它的账号绑定；启用且有绑定（分组或账号）的流程不能删除。
 
 **在哪里审核**：账号要等核心调度后才知道，所以：
-- 请求分组的流程**不取决于账号**时（没有 `(0, *)` 绑定，也没有 `(G, *)` 绑定，`snapshot.perAccount`），`gateway.request` 钩子照旧在调度前按分组审核，并回答 `skip_attempt_hooks`，核心不再为这个请求调用本插件的 `gateway.attempt` 钩子。行为和开销与 0.6.x 完全相同。
+- 请求分组的流程**不取决于账号**时（没有生效的 `(0, *)` 绑定，也没有生效的 `(G, *)` 绑定，`snapshot.perAccount`；0.8.0 起指向停用或未发布流程的账号绑定不算，所以一个分组的账号绑定全部失效时，这个分组回到在请求钩子里按分组审核），`gateway.request` 钩子照旧在调度前按分组审核，并回答 `skip_attempt_hooks`，核心不再为这个请求调用本插件的 `gateway.attempt` 钩子。行为和开销与 0.6.x 完全相同。
 - 取决于账号时，请求钩子只做封禁等前置检查（72.5 第 1、2 步），note `moderation: per account`，把审核交给 `gateway.attempt` 钩子 `moderation_attempt`（与审核钩子相同的 `match`、`needs`、超时和 failure）。它在每次尝试选定账号后、发往该账号前，按上面的优先级找流程，再执行 72.5 第 4–11 步（pre 命中即拒绝，核心不再换账号；post 照旧入队）。
-- **换账号不绕过、不重复**：插件按 `request_id` 记下这个请求已执行过的流程（内存，两代、各最多 10 万个请求、10–20 分钟）。换账号后新账号的流程已执行过就跳过，是另一个流程才再审一次；片段放行缓存（72.5 第 8 步）照常命中。记录丢失（插件重启、超过上限）时只会多审一次，不会漏审。WebSocket 的每条 `response.create` 是单独的请求，各审一次。
+- **换账号不绕过、不重复**：插件按 `request_id` 记下这个请求已执行过的流程（内存，两代、各最多 10 万个请求、10–20 分钟）。换账号后新账号的流程已执行过就跳过，是另一个流程才再审一次。判定缓存（72.5 第 8 步）按流程分范围：同一个流程的结论照常命中，另一个流程不沿用前一个流程的结论（否则账号绑定的流程形同虚设）。记录丢失（插件重启、超过上限）时只会多审一次，不会漏审。WebSocket 的每条 `response.create` 是单独的请求，各审一次。
 
 **授权**：`gateway.hook` 的 `scope.points` 加上 `gateway.attempt`（scope 扩大，**升级到 0.7.0 需要管理员重新批准**；批准前旧版本继续运行）。管理员只批准了 `gateway.request` 时（`Configure` 里看不到该点），账号绑定保留但不生效，所有请求按分组审核，`GET /bindings` 返回 `account_bindings_active: false`，绑定页显示警告。
 
 **接口**：
-- `GET /bindings`（read）：`{bindings:[{kind, group_id, account_id, flow_id}], account_bindings_active}`，账号绑定在前（按账号、再按分组），然后是分组绑定。`kind` 为 `group_account` | `account` | `group`。
+- `GET /bindings`（read）：`{bindings:[{kind, group_id, account_id, flow_id, inactive?}], account_bindings_active}`，账号绑定在前（按账号、再按分组），然后是分组绑定。`kind` 为 `group_account` | `account` | `group`。0.8.0：`inactive: true` 表示这条绑定不生效——流程不为 0，且回答请求的这个节点当前的快照里没有它（停用、未发布、已删除，或这个节点读不了它的 spec）。
 - `PUT /bindings`（manage）：`{group_id, account_id, flow_id, replace?}`，`account_id=0` 写 `flow_groups`，否则写 `flow_accounts`。流程不存在 404；该绑定已指向另一个流程且没带 `replace` 时 409 `binding_exists`（`details.flow_id` 是现在的流程）。保存后立即生效，不产生流程版本，广播 `config.changed`。
 - `DELETE /bindings/:group_id/:account_id`（manage）：不存在时 404。
 - 流程接口的 `FlowView` 加 `accounts:[{group_id, account_id}]`。`PUT /flows/:id/groups` 不变。
@@ -5611,13 +5916,15 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **界面**：新标签页“绑定”（`BindingsTab.vue`），位于“流程”之后。
 - 列出全部绑定，按优先级排序；可按类型筛选、按账号 / 分组 / 流程搜索。手机上每条显示为卡片。
 - 新增或编辑在弹窗里进行（`BindingEditModal.vue`）：选类型，再选分组和账号（选“分组 + 账号”时只列出该分组的账号）和流程（含“不审核（免审）”）。读不到核心账号列表时改为填 ID。编辑只能改流程。
-- “命中预览”：选分组和账号，显示请求会按哪一条绑定审核。
+- “命中预览”：选分组和账号，显示请求会按哪一条绑定审核；0.8.0 起跳过不生效的绑定，并列出被跳过的是哪几条（`bindingOps.resolveBinding`）。
+- 0.8.0：不生效的绑定在列表里显示灰色徽标（“流程已停用，这条绑定不生效”等）和“现在按哪条绑定审核”或“现在不审核”。编辑时选了未启用的流程会提示保存后暂不生效、要不审核请选免审。流程页停用一个有绑定的流程时，确认框写明它的分组和账号将回落到更宽的绑定。
 - 流程列表的分组单元格显示“另有 N 个账号绑定”，可跳到绑定页；分组冲突的对方为 flow 0 时显示“不审核”。
 
 **升级兼容**：
-- 现有的分组绑定（包括默认分组 0）一条不动，没有账号绑定时每个请求的审核范围、时机、流程和开销都与 0.6.2 相同：请求钩子同样回答，只多带 `skip_attempt_hooks`。
+- （0.7.0 时）现有的分组绑定（包括默认分组 0）一条不动，没有账号绑定时每个请求的审核范围、时机、流程和开销都与 0.6.2 相同：请求钩子同样回答，只多带 `skip_attempt_hooks`。
+- **升级到 0.8.0**：绑定表不变，没有持久化的变化；变的是指向停用或未发布流程的绑定的含义（见上）。滚动升级期间新旧节点对这类绑定的处理不同；回滚后恢复 0.7.x 的处理。
 - 回滚到 0.6.x 时 `flow_accounts` 被忽略，只有分组绑定生效；免审分组（flow 0）在旧版本里也不审核。
-- 测试：`TestUpgradeKeepsGroupBindings`。默认分组、单独绑定的分组、绑定到停用流程的分组的结果都与之前相同，且请求钩子都带 `skip_attempt_hooks`；即使核心照样调用 attempt 钩子，也不会再审一次。
+- 测试：`TestUpgradeKeepsGroupBindings`。默认分组、单独绑定的分组、免审分组（flow 0）的结果都与之前相同，且请求钩子都带 `skip_attempt_hooks`；即使核心照样调用 attempt 钩子，也不会再审一次。0.8.0 起其中"绑定到停用流程的分组"的期望是按默认流程审核。
 
 **取舍**（如实写明）：
 - 流程取决于账号的分组改在调度后审核。pre（同步）审核期间占着该账号的并发名额；在发往账号之前就失败的请求（没有可用账号、余额不足）不会被这类分组审核。
@@ -5625,7 +5932,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **发布**：先发含 §85 的核心（`hostCompat >=0.1.258`，`check.AttemptHookFirstCore`），再发插件 0.7.0。
 
-测试：`account_binding_test.go`（`TestFlowForAccount` 与界面的 `bindingOps.spec.ts` 用同一组用例；还有 `TestAttemptRuns`、`TestAttemptHookGranted`、`TestUpgradeKeepsGroupBindings`、`TestAccountBindingsModerateEachAttempt`）、`manifest_test.go`。
+测试：`account_binding_test.go`（`TestFlowForAccount` 与界面的 `bindingOps.spec.ts` 用同一组用例；还有 `TestAttemptRuns`、`TestAttemptHookGranted`、`TestUpgradeKeepsGroupBindings`、`TestAccountBindingsModerateEachAttempt`，0.8.0 加 `TestInactiveAccountBindingDoesNotDeferToAttempt` 和 `TestBindingInactiveFollowsSnapshot`）、`manifest_test.go`。
 
 ## 73. 账号成功率、用量、原始倍率计费与用量限制（2026-10-31，用户要求参照 new-api）
 
@@ -5800,6 +6107,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 控制台：状态色全部改用 `@sub2api/ui` 组件的 `tone`，去掉插件自造的色板和对 `html.dark` 的依赖（§23.4；规则位图的命中格改为中性色实心，调整项动作行的方向色从左边框改为 `SStatusDot`）；按 id 读账号名改为批量 `GET /accounts?ids=`；百分比和毫秒数用 `host.i18n.formatNumber`。
 - **0.5.4（2026-11-10）**：manifest 只把菜单的 `section` 从 `gateway` 改成 `system`（0.5.5 改回）；`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。（0.5.3 只把控制台的操作按钮改成文字，同样可单独升级。）
 - **0.5.5（2026-11-10）**：manifest 只把菜单的 `section` 从 `system` 改回 `gateway`（§90：功能页归各自的区）；`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。0.5.4 的菜单仍在 `system` 区，排在 `/settings` 之后。
+- **0.5.6（2026-11-11）**：线上有人改了配置没保存，以为"改了不生效"。事件和配置接口多了字段，好让事件一眼看出按哪一版配置、执行了哪些动作：评估写的权重事件带 `detail.steps`（每个改变了有效权重的策略一步）和 `detail.config_version`，`GET /config`、`PUT /config` 返回 `updated_at`，见下文"接口"；控制台的改动见 §74.6。旧前端忽略新字段照常工作。`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。
 - **只安装不启用**（`BUILTIN_PLUGINS_INSTALL_ONLY`）：启用后每次调度都会调用它，所以要由管理员有意打开。
 
 #### 计数
@@ -5891,13 +6199,13 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 
 | 接口 | 说明 |
 | --- | --- |
-| `GET /config` | 从数据库读，返回 `{config, version, warnings?}`；`warnings` 说明加载时提升的窗口、回退的全局字段和忽略的分组层、账号覆盖、通知（见上文"加载已保存的配置"） |
-| `PUT /config` | 提交 `{config, version}`。校验失败返回 400，渠道不存在返回 400，版本冲突返回 409（`version` 为 0 只在还没有保存过配置时接受）。成功时回 `warnings`，例如有降权却没有回升策略、规则读流式整次耗时、回升规则依赖可能为空的指标（见上文"规则的保存警告"） |
-| `POST /config/validate` | 0.2.0 起，需要 `dynweight:manage`。与 `PUT /config` 同一套校验但不保存：拒绝时回同样的 400，通过时回 `{config（规范化后）, version, warnings}`。控制台保存前先调它，有警告时请管理员确认 |
+| `GET /config` | 从数据库读，返回 `{config, version, updated_at, warnings?}`；`updated_at`（0.5.6 起）是这一版的保存时间（unix 秒），从未保存过（`version` 为 0）时为 0；`warnings` 说明加载时提升的窗口、回退的全局字段和忽略的分组层、账号覆盖、通知（见上文"加载已保存的配置"） |
+| `PUT /config` | 提交 `{config, version}`。校验失败返回 400，渠道不存在返回 400，版本冲突返回 409（`version` 为 0 只在还没有保存过配置时接受）。成功时回 `warnings`，例如有降权却没有回升策略、规则读流式整次耗时、回升规则依赖可能为空的指标（见上文"规则的保存警告"）。成功时的 `version`、`updated_at`（0.5.6 起）是写入后的新版本和保存时间；请求里带的 `updated_at` 被忽略 |
+| `POST /config/validate` | 0.2.0 起，需要 `dynweight:manage`。与 `PUT /config` 同一套校验但不保存：拒绝时回同样的 400，通过时回 `{config（规范化后）, version, warnings}`（0.5.6 起另有 `updated_at`，因为不保存恒为 0）。控制台保存前先调它，有警告时请管理员确认 |
 | `GET /defaults` | 默认的层，包括默认规则和策略 |
 | `GET /channels` | 可选的通知渠道 |
 | `GET /status?account_id&group_id&model&degraded=1` | 有状态或保留期内有计数的键（尚未评估过的键也列出，`eval_window` 为 0；状态的基准与调度最近给的基准不同时，与 new-api 一样按没有状态显示：有效权重等于新基准，调度也不用它，下一次评估按 `base_mismatch` 重置），按 有效/基准 比值升序，分页。每项另有：`weight_min`（生效下限换算出的权重）、`state`（`normal` / `degrading` / `climbing`）、`group_configured`、`no_climb_strategy`、`next_eval_at`（最早的评估时刻 = 本窗口结束 + 宽限）、上一窗口的 `error_evaluable`、`ttfb_samples`、`latency_samples`、`thresholds` / `latency_thresholds`（`[{ms, count}]`）；`rules` 列出生效层的每条启用规则：`scope`、`periods`、`hit_periods`，以及状态用的就是这套规则且调整开启时的 `hit`、`fired`、`bitmap`（最近窗口是否命中，最新在末尾，触发后清空）、`samples`、`lookback`、`no_samples`、`unjudged`（0.3.0 起：严格模式下样本不足、这个窗口没有判定）；`current` 是进行中的窗口（已写入的计数）：`window_start`、`elapsed_seconds`、`total`、`fail`、`stream_total`、`stream_fail`（都已扣除豁免状态码的失败）、`ttfb_samples`、`latency_samples` 和阈值计数 |
-| `GET /events?account_id&group_id&model&kind` | 权重事件，分页。每项带 `account_name`（调度最近一次看到的账号名） |
+| `GET /events?account_id&group_id&model&kind` | 权重事件，分页。每项带 `account_name`（调度最近一次看到的账号名）。评估写的 `rules_change` 重置和权重变化事件在 `detail.window` 里带这个窗口的证据；0.5.6 起权重变化事件（`weight_down`、`weight_up_start`、`weight_restored`、`weight_revived`）另带 `detail.steps`：按执行顺序，每个改变了有效权重的策略一步 `{strategy, type, mode, value, from, to}`（`type` 是它权重动作的类型 `weight_degrade`/`weight_climb`，夹到下限或基准时这一步的方向可能与类型相反，所以单独给出；`mode`、`value` 是它权重动作的方式和数值，`from`、`to` 是这一步前后的有效权重，`to` 已夹到 [下限, 基准] 并把取整为 0 的归零；命中但没改变权重的策略不列，没有步骤时不写）；这些事件和 `rules_change` 重置另带 `detail.config_version`（评估节点当时加载的配置版本，整数；0 是从未保存、用出厂默认；某节点还没重载新配置时是旧版本号，这正是它要让人看出来的）。下限被调高时，评估先把权重抬到新下限再执行策略，这一段不算步骤，所以第一步的 `from` 可能大于事件的 `from`，只有抬升时事件没有步骤。0.5.6 以前写的事件、滚动升级期间旧节点写的事件都没有这两项。`base_mismatch` 重置、手动和状态变化重置、`affinity_cleared` 不带这两项。日志行和通知的内容不变 |
 | `POST /reset {account_id?, account_ids?, group_id?, model?}` | 至少指定账号或分组，`account_ids` 最多 500 个（0.2.0 起；0.5.0 起上限引用 `manifest.MaxAccountBatch`），`account_id` 与一个元素的 `account_ids` 等价。见上文"重置"；回答 `{reset}` 为重置的键数 |
 | `GET /stats` | 0.2.0 起。本节点的运行指标，见上文 |
 | `GET /weights?account_ids=1,2` | 账号列表的权重组件用，最多 500 个 id（`manifest.MaxAccountBatch`）。回答本节点快照中各账号已降权键的数量、最低有效权重和基准；0.5.0 起每个账号另有 `keys: [{group_id, model, eff, base}]`，按 `eff` 升序最多 10 条（`eff` 是未取整的有效权重，与 `/status` 的 `effective` 一致）；0.5.1 起每个键另有 `state`（与 `/status` 的 `state` 同一判断 `rules.Trend`：最近一次变化是降权为 `degrading`，否则为 `climbing`；调整未开启或状态表里读不到时为空串）和 `changed_at`（最近一次权重变化的时间，没有时省略；0.5.1 是 RFC 3339 字符串，0.5.2 起是 unix 秒，与 `/status` 的 `changed_at` 一致，控制台两种都认），由按本次账号 id 的一次状态表查询得出（只读低于基准的键）；读不到配置或状态表时照常回答快照，只是不带 `adjust_off` 或 `state` / `changed_at`；账号覆盖关闭了调整（`accounts.<id>.enabled` 为 false）的账号带 `adjust_off: true`，即使没有已降权的键也列出（`degraded` 为 0、`keys` 为空数组）。0.5.2 起总开关关闭时回答空对象，调度不再提供的账号的键不列（见"基准权重"） |
@@ -5911,7 +6219,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 配置（0.5.1 起）：从上到下是概况条（总开关、全局调整项数、分组配置数、账号覆盖数，启用了调整的层里有降权项却没有回升项时给出警告芯片）、全局配置（"统计与判定""最低权重"两组字段，下限方式和数值是一个组合输入）、分组配置表、账号覆盖表、"通知与日志"，有改动或有未填数值时出现吸底保存栏（写出改了哪几处：全局 / 分组 / 账号 / 通知与日志）。
     - **调整项**：编辑单位是"调整项"，即一条策略连同它 `when` 指向的那条规则；规则名不再单独显示。表格每行一项，"什么时候""做什么"两列是生成的句子，行上可切换启用，复制、上移、下移、删除在"⋯"菜单。编辑弹窗左侧是调整项列表，右侧按"当 / 就"编辑：条件行（指标、分位、比较、阈值，行尾"⋯"展开条件级统计范围和"无样本时"，非默认值显示成标签）、规则统计范围、"最近 N 个窗口中至少 M 个命中"、动作（最多一个权重动作加一个清理粘性）、冷却、一句话预览；右上角可切到 JSON 同时编辑两个数组（无效时不能切回和应用）。读写照 new-api：没改过的规则原样写回；被多条策略共用的规则改了就复制一份（名为"调整项名 (2)"）；没有任何策略引用的规则随删除一起去掉并提示；调整项改名时，同名且未被共用的规则跟着改名。`when` 是多条规则组合（all / any、嵌套）、或引用的规则缺失 / 停用的条目在可视化里只读（锁形标签和原因），只能在 JSON 里改（2026-11-08 决定）。
     - **分组配置**：表格写出和全局不同的字段与调整项增删改，配置缺回升项时标出；弹窗里编辑，新建时复制全局层（不复制只在全局的 `log_events`）。**账号覆盖**：表格里沿用的值用灰字写出实际值（账号所在分组层或全局；账号所在分组经 `GET /accounts?ids=` 批量读取），单独设置的值加粗；弹窗里每个字段一个"单独设置"开关。`?tab=config&override_account=<id>` 直接打开该账号的覆盖弹窗（没有覆盖时以新增模式打开），账号详情的动态权重标签用它跳转。
-    - 弹窗里的"应用"只改草稿，配置仍是一份带版本号的文档，由保存栏的"保存"统一 `PUT /config`（2026-11-08 决定）。保存前先 `/config/validate`，有警告时确认；409 提示已被他人修改。单独的"校验"按钮去掉。改动检测按区域比较、忽略键顺序。只读用户看到的是禁用的控件和只读弹窗，没有保存栏。
+    - 弹窗里的"应用"只改草稿，配置仍是一份带版本号的文档，由保存栏的"保存"统一 `PUT /config`（2026-11-08 决定；0.5.6 起弹窗主按钮改为直接保存，见 §74.6）。保存前先 `/config/validate`，有警告时确认；409 提示已被他人修改。单独的"校验"按钮去掉。改动检测按区域比较、忽略键顺序。只读用户看到的是禁用的控件和只读弹窗，没有保存栏。
   - 分组和账号的名称经核心接口取得，用的是查看者自己的 `group:read` / `account:read`：分组一次读入（`@sub2api/host` 的 `listAll`，最多 1000 个，失败后下次再读）；账号不整表读入，选择框按输入的名称搜索 `GET /accounts?q=`（前 20 个），其他地方要显示的账号名按 id 读（0.5.2 起同一时刻要显示的 id 合并成 `GET /accounts?ids=`，每批最多 500 个，之前每个 id 一次 `GET /accounts/:id`）。选择框总能直接输入数字 id；选中的 id 不在列表里时显示为名称或 `#id`。没有这些权限时名称显示为 `#id`（状态和事件里的账号名仍来自插件自己记下的名称）。
 - **账号列表**（0.5.0 起接上 UI 3.6 的账号界面扩展点，见 §23.3；核心不认识 dynweight，都是通用插槽和声明）：
   - 权重徽标：`account.list.weight` 插槽在权重数字右侧同一行显示（核心 0.1.257 起：核心把权重框和插槽放进一个不换行的行，注册了该插槽时权重列从 84px 加宽到 128px；之前插槽另起一行，被装饰的行都会变高，2026-11-08 用户要求不换行）"▼ N"（降权中，N 为最低有效权重，为 0 时红色）或"▲ N"（列出的键都在回升中）；账号覆盖关闭了调整时显示灰色"只统计"（0.5.1 起；之前是"动态 N"）。同一帧内所有行的请求合并成一次 `/weights`。悬停（键盘聚焦、触屏点按）弹出紧凑卡片：标题行是账号名、低于基准的键数和基准，右侧链接"全部键"（插件页 `?tab=status&account=<id>`，核心没有从插槽打开详情标签的能力）和"事件"；下面每个键一行：分组名（经核心 catalog）、模型、有效 / 基准、状态（▼ 降权 / ▲ 回升）、最近变化时间，最多 10 行，其余注明"还有 N 个"；只统计的账号显示"账号覆盖：调整关闭"和去配置页修改的链接。
@@ -5929,6 +6237,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - dynweight 0.4.0：能力和授权不变。（0.4.1 只把控制台页面改成懒加载，`hostCompat` 下限提到 0.1.229，见 §23.1。）默认降权策略加上清理 30% 粘性会话，迁移 `0003_default_affinity_clear` 把仍是 0.3.0 出厂默认的策略换成新默认（见 §74.5"0.3.0 的默认策略迁到 0.4.0"）。控制台配置页的修正见 §74.5"界面"。
 - dynweight 0.5.1：只换控制台界面并给 `GET /weights` 加字段（见 §74.5），能力、授权、迁移都不变，可以单独升级插件，核心不用动。
 - dynweight 0.5.2：窗口下限 3 秒、`evaluate` 每 5 秒（见 §74.5），能力、授权、迁移都不变，可以单独升级插件，核心不用动（`@every 5s` 在 `hostCompat` 下限 0.1.256 的核心上合法）。同版合入复核修复（§74.5 的 0.5.2 条目）：关闭总开关立即重置全部键、关闭期间徽标不列降权、不再评估和计数调度已不提供的账号、改账号权重后不吞新窗口、`/weights` 的 `changed_at` 改为 unix 秒（新控制台两种格式都认，按节点滚动升级期间不受影响）、控制台状态色改用组件 `tone`、账号名批量读取。`bases.seen_at` 对降权中的账号写得更勤（每个账号每 5 秒至多一次），其余不变。
+- dynweight 0.5.6：事件和配置接口加字段（权重事件的 `detail.steps`、`detail.config_version`，`/config` 的 `updated_at`，见 §74.5），能力、授权、迁移都不变，可以单独升级插件，核心不用动。起因是线上有人改了配置没保存，以为"改了不生效"。控制台同版改动：调整项、分组、账号覆盖弹窗的主按钮改为直接保存（连同页面上其他未保存的改动一起 `PUT /config`，同样先校验、有警告时确认；之前只改草稿，还要再点保存栏的"保存"）；有未保存改动或配置弹窗开着时离开页面先拦截确认（只改 `?tab=` 和去登录页的跳转放行），弹窗保存失败的错误只显示在弹窗内；事件说明显示执行了哪些动作（`detail.steps`）和配置版本；配置页显示当前版本和保存时间；恢复过快时给出提醒。
 
 ## 75. 插件设置权限、插件写操作审计、按 id 查用户（2026-10-31，审计 moderation 与 dynweight 时发现的通用缺口）
 
@@ -6367,7 +6676,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | 并发 `in_use` | 占槽时 +1，这次尝试结束时 -1（流式在最后一个字节写出之后） | 此刻占用的槽位数，集群实时。任务轮询和资源下载也占账号槽 |
 | RPM | 准入时记一条事件，之后不再变 | 近 60 秒**准入尝试数**，精确值。不是客户端请求数，也不是成功数：换号和同账号重试每次都计，准入后的失败也不退 |
 | TPM | 有上限时准入即预占，结束时换成实际值；没上限时结束才计入 | 近 60 秒的非缓存输入加输出，含在途请求的预占 |
-| 会话 | 准入时写入或刷新时间 | 近 60 秒**被准入过**的不同会话数，精确值。不是进行中的会话：超过 60 秒的单个流，并发是 1，会话是 0 |
+| 会话 | 准入时计入当前段（粘性会话从旧段移到当前段） | 会话周期（`spm_window_seconds`，默认 60 秒）内**被准入过**的会话数，20 段严格口径（§71.2）。不是进行中的会话：比周期长的单个流，并发是 1，会话是 0 |
 
 **并发和 RPM 没有固定比例。** 并发约等于“进入速率 × 请求时长”。每分钟进 1 个请求、每个流跑 3 分钟，稳定时就是并发 3、RPM 1，这不是统计错误。
 
@@ -6393,12 +6702,12 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - **何时预占**：账号、请求模型所在的列表或 API Key 设了 TPM 上限才估算和预占，没设的层不预占，结束时直接计入实际值。
 - **预占多少**：本地 tokenizer 算出的 prompt 加声明的最大输出（`max_tokens`、`max_completion_tokens`、`max_output_tokens`、`generationConfig.maxOutputTokens`），没声明时加 4000。数不出 prompt 时用请求体字节数除以 4。免费端点（如 `count_tokens`）不预占。每层最多预占到自己的上限，所以单个超大请求能在窗口全空时通过，不会永远被拒（new-api 会拒绝）。
-- **怎么结算**：`core.RateHold` 记着事件 ID 和各层预占量，结束时 `Settle` 把预占换成实际值，保持原来的时间。流式响应没有中途更新。
-- **长流**：预占已离开 60 秒窗口时，它已经算满了 60 秒，只把实际值超出预占的部分记到当前时间。new-api 这时不再计入，这里有意不同。
+- **怎么结算**：`core.RateHold` 记着准入时刻（`At`）和各层预占量，结束时 `Settle` 在准入那一段把预占换成实际值（§68.3）。流式响应没有中途更新。
+- **长流**：预占所在的段已离开窗口时，它已经算满了窗口，只把实际值超出预占的部分记到当前段。new-api 这时不再计入，这里有意不同。
 - **失败和没有用量**：
   - 这次尝试没成功（换号、上游错误、取消、拒绝）：预占退回，RPM 不退。
   - 请求没成功且没有用量（流在用量事件前中断）：按估算的 prompt 计入，避免客户端提前断开来绕过 TPM。成功但没有用量（如 `count_tokens`）不计。
-  - 进程崩溃等没结算的情况：预占随时间离开窗口，最多占 60 秒。
+  - 进程崩溃等没结算的情况：预占随所在段离开窗口，最多占 63 秒。
 - **保守的一面**：prompt 估算不区分缓存，而实际 TPM 不计缓存。大量命中缓存的请求预占远高于实际值，在途时会占住额度，结束才退回。TPM 上限较小的账号，并发可能被这一点压低。
 
 ### 78.4 已知偏差（实现与本文不符或有缺陷，待修）
@@ -6408,7 +6717,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | PG 卡住会拖累 Redis 心跳 | `cluster` registry，两者共用一个 5 秒 ctx | 单节点 PG 卡住 15 秒以上时被其他节点判死，它的槽位被回收。在跑的请求不受影响，槽位会写回，但节点在这段时间显示为下线 |
 | 会话时间只在准入时刷新 | `ratelimit` `admit` | 长流还没结束，会话就已不算持有。账号会话满时，同一会话的下一个请求可能被改绑（`failover`）。new-api 也是这样 |
 | WebSocket 沿用连接建立时的账号和 Key 上限 | `gateway/websocket.go` | 管理员降低上限后，活跃连接仍按旧值放行 |
-| WebSocket 首轮换号不移除旧账号的会话 | `gateway/websocket.go` | 与 §71.3 不符，旧账号的会话数最多虚高 60 秒 |
+| WebSocket 首轮换号不移除旧账号的会话 | `gateway/websocket.go` | 与 §71.3 不符，旧账号的会话数最多虚高一个会话周期 |
 | 准入时 Redis 出错的响应不一致 | `gateway/websocket.go`、`gateway/resource_http.go` | HTTP 返回 503，WebSocket 和资源接口返回 429，与 §71.3 不符 |
 | 账号详情抽屉的用量不刷新 | `web/src/views/accounts/AccountsView.vue` | 数字停在打开时的值，列表正常刷新 |
 
@@ -6773,7 +7082,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 87.1 commonControls
 
-- `accountTypes[].commonControls.<名>`：`{visible?, configurable?, default?, locked?, required?}`；名称与取值类型见 `sdk/manifest/common_controls.go` 的 `CommonControlSpecs`（schedulable、auto_disable、priority、weight、max_concurrency、rpm_limit、tpm_limit、spm_limit、model_limits、usage_limit、model_mapping、param_override、header_passthrough、environment、proxy）。`default` 是账号接口该字段的 JSON，范围与账号接口相同（常量在 sdk，核心、校验共用）。老的 `{"configurable":…, "default":…}` 写法照旧有效。
+- `accountTypes[].commonControls.<名>`：`{visible?, configurable?, default?, locked?, required?}`；名称与取值类型见 `sdk/manifest/common_controls.go` 的 `CommonControlSpecs`（schedulable、auto_disable、priority、weight、max_concurrency、rpm_limit、tpm_limit、spm_limit、spm_window_seconds（0.1.276 起，§71.1）、model_limits、usage_limit、model_mapping、param_override、header_passthrough、environment、proxy）。`default` 是账号接口该字段的 JSON，范围与账号接口相同（常量在 sdk，核心、校验共用）。老的 `{"configurable":…, "default":…}` 写法照旧有效。
 - 语义：新账号缺省值取 `default`（再缺省取核心默认，自己级用户的并发默认 10 照旧，有声明时声明优先）；`configurable: false` 新建只接受默认值、更新只接受原值；`locked` 新老账号都只接受 `default`；不符报 `read_only`。值按 JSON 比较（格式、键序、数字写法、null 与空不影响）。`proxy` 只能写 `required`：新建没有代理、或更新清掉了代理时报 `proxy_id: required`，老账号没代理时其他修改照常。`visible` 只影响界面。
 - 执行点：`account/common_controls.go`，更新在锁行之后；`PUT /accounts/:id/usage-limit` 同样检查（`usage_limit: read_only`）；插件生命周期返回的 `account_patch` 不能改固定项（固定项从可改字段中移除，可改的照常）。
 - 校验（`sdk/manifest/check/common_controls.go`）：未知名称、类型或范围不符、`required` 用在 proxy 之外、proxy 写了 `required` 以外的字段、`locked` 没有 `default` 或同时写 `configurable: true`、与 `defaultLimits` 的值冲突（`conflict`）。用到新名称或 `visible`/`locked`/`required` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.CommonControlsFirstCore`）。
@@ -7137,3 +7446,170 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 - 核心 0.1.271 的后续修补（仍无迁移、契约版本不变）：密钥页的接入地址也包含转换端点（92.5）；Magpie 手动填写说明的字段名改成 Magpie 界面上的叫法（92.3）；`SBulkBar` 手机停靠条的占位从组件原位置挪到它父元素的末尾，停靠期间 `fab` 按钮隐藏、控制台不再为它留底部空间（`web/packages/ui/README.md`“手机形态”；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，原生插件经 import map 用控制台这一份，不用重建；停靠时根元素带 `data-bulk-dock`，控制台布局据此让出 `fab` 的留白，原来占位元素的 `data-testid="bulk-dock-space"` 取消）。
 - 核心 0.1.272 + moderation 0.7.3 的手机布局修补（仍无迁移、契约版本不变；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，其它原生插件不用重建，详见 `web/packages/ui/README.md`“手机形态”）：`SBulkBar` 停靠条的操作按钮放不下时，藏着按钮的一侧渐隐，只露出一部分的按钮点一下只滚进视野、不触发操作；`STable` 手机卡片把收不进卡片的单元格内容裁在卡片边缘，不再把页面撑出横向滚动。0.1.271 核验时提示词审核“审核记录”页宽 427 px 的原因不是标签栏，是 moderation 给分数标签写的 `max-width: 14rem` 比卡片里半宽的格子宽。moderation 0.7.3 只改原生界面的样式（`hostCompat`、`hostUICompat`、接口、迁移都不变）：窄屏（768 px 以下）分数与分类标签在格子里换行，流程页“绑定分组”在格子里换行，筛选栏的按钮组放不下时换行（英文界面观察名单页原来伸出屏幕）；宽屏渲染不变。moderation 0.7.4（同样只改原生界面）：概览页（360 px、卡片内 260 px）、测试页（340 px）网格的最小列宽不再超过容器（`minmax(min(…, 100%), 1fr)`）；原来概览页在 360 px 宽的手机上横向滚动 13 px，更窄时更多（320 px 时概览页 52 px、测试页 32 px）。
 - 删除的控制台组件与标识：`KeyCcSwitchButton`、`KeyEnabledSwitch`、`ccSwitch.ts`、`GroupPlatforms`、`PlatformBadges`、`platformTheme.ts`；`data-testid` `key-enabled-switch`、`key-ccswitch`、`guide-ccswitch`、`use-key`、`group-platforms`、`platform-badges`。
+
+## 93. 插件 KV 批量调用（2026-11-10，moderation 判定缓存需要；无迁移；Host API 仍是 9；核心 0.1.273 构建、随 0.1.274 首次发布；规则统一在 0.1.275）
+
+核心 0.1.273 之前，插件读写自己的 KV 只能经 `HostService` 的 `KVGet` / `KVSet` / `KVDelete` / `KVList`。每次调用先在 PostgreSQL 复核一次 `kv` 授权（`hostServer.require`），再发一条 Redis 命令。在承载流量的节点上实测，这两步分别是 27 ms 和 23 ms，合计每个键约 50 ms。moderation 0.8.0 的判定缓存一个请求最多读 64 个键，写也是这么多；它 8 个一组并发，200 ms 后放弃，所以在这个节点上大部分缓存没有被查到（0.8.1 改用本节的调用，§72）。
+
+本节加三个 RPC，一次调用处理同一个 namespace 下的多个键：**授权只复核一次，Redis 只往返一次**，开销不再随键数增长。proto 只新增这三个 RPC 和它们的消息，单键调用不变。
+
+版本：这三个 RPC 进了核心 0.1.273 的构建；0.1.273 没有发布，第一个发布的带它们的核心是 0.1.274（2026-11-11，93.7）。下文和代码注释里的"0.1.273"指这个构建起的核心。规则只写一处、单键 `KVSet` 的 TTL 上界、`KVGetMany` 提前拒绝，以及 SDK 拒绝负的 TTL，是之后的整理，属于核心 0.1.275 和随它构建的 SDK（2026-11-11 上线），各处标了"0.1.275"。
+
+### 93.1 调用与消息
+
+| RPC | 请求 | 响应 |
+| --- | --- | --- |
+| `KVGetMany` | `namespace`，`keys[]` | `items[]`，每项 `{found, value}`，与 `keys` 等长、同序 |
+| `KVSetMany` | `namespace`，`items[]`，每项 `{key, value, ttl_seconds}` | 空 |
+| `KVDeleteMany` | `namespace`，`keys[]` | 空 |
+
+- Redis 键与单键调用相同：`plugin:kv:{plugin_key}:{ns}:{key}`，前缀由宿主按调用者加上。批量调用和单键调用读写的是同一份数据，可以混用。
+- `KVGetMany`：不存在的键回 `found=false`；存在但值为空的键回 `found=true` 和空 `value`。
+- `KVSetMany`：每项用自己的 `ttl_seconds`，0 表示不过期（会清掉这个键原有的过期时间，和 `KVSet` 一样）。**全写或全不写**（93.3）。
+- `KVDeleteMany`：不存在的键不算错。
+- 同一个键可以在一次调用里出现多次：`KVGetMany` 每次出现各回一项，`KVSetMany` 以最后一项为准。
+- `keys` / `items` 为空是合法调用：照常复核授权、校验 namespace，然后直接返回，不访问 Redis。
+
+### 93.2 规则与上限
+
+| 项 | 约定 |
+| --- | --- |
+| 授权 | `kv`，与单键调用相同。每次调用复核一次，在校验参数之前 |
+| namespace | 与单键调用相同（`CheckKVNamespace`）：1 到 64 字节（`KVMaxNamespaceBytes`），不含 `:*?[]\`。没有键时也校验 |
+| key | 与单键调用相同（`CheckKVKey`）：1 到 512 字节（`KVMaxKeyBytes`） |
+| value | 与 `KVSet` 相同（`CheckKVValue`）：不超过 64 KiB（`KVMaxValueBytes`） |
+| `ttl_seconds` | 0 到 9223372036（`CheckKVTTL`；`KVMaxTTLSeconds`，`time.Duration` 能表示的最大整秒数，约 292 年）。单键的 `KVSet` 用同一条规则（核心 0.1.275 起；0.1.274 及以前它只要求不小于 0，更大的值换算成 `time.Duration` 时溢出，键被存成不过期）。批量写需要这个上界，是因为 Redis 对过大的过期时间报错，而脚本中途出错会留下已经写入的项 |
+| 每次调用的键数 | 不超过 512（`KVBatchMaxKeys`） |
+| 每次调用的数据量 | 不超过 3 MiB（`KVBatchMaxBytes`）。`KVSetMany` 算请求里所有键和值的长度之和；`KVGetMany` 算读到的所有值的长度之和。满长的值（64 KiB）一次最多写 47 个、读 48 个 |
+
+- 3 MiB 是按连接的消息上限定的。插件调用 `HostService` 走 go-plugin broker 上的 gRPC 服务端（`serveHostBroker` 里的 `grpc.NewServer`），它用 gRPC 默认的接收上限 **4 MiB（4194304 字节）**；宿主发送和插件接收的上限都是 `MaxInt32`（go-plugin 的 `dialGRPCConn`）。请求里 3 MiB 的键和值加上 protobuf 的开销总能送到；超过 4 MiB 的请求由 gRPC 自己以 `RESOURCE_EXHAUSTED` 拒绝，到不了核心的处理函数。
+- 校验顺序，三个调用和 SDK 都一样：授权（只在核心）→ namespace → 键数 → 按请求顺序逐项（每一项先 key，再 value，再 ttl）→ 数据量。报告的是第一个不合规则的项，错误信息带下标，如 `items[2]: value exceeds 65536 bytes`、`keys[3]: key must be 1..512 bytes`。（核心 0.1.275 起。0.1.274 的 `KVSetMany` 先查完所有项的 key，再逐项查 value 和 ttl，所以两项都不合规则时报的可能是另一项；规则本身相同。）
+- 这些规则只写在一处（核心 0.1.275 和随它构建的 SDK 起；0.1.274 里核心和 SDK 各写了一遍，SDK 对负的 TTL 另有自己的一句 `ttl must not be negative`），`sdk/protocol/kv.go`：常量 `KVMaxNamespaceBytes`、`KVMaxKeyBytes`、`KVMaxValueBytes`、`KVMaxTTLSeconds`、`KVBatchMaxKeys`、`KVBatchMaxBytes`，和直接返回 gRPC 状态的函数 `CheckKVNamespace`、`CheckKVKey`、`CheckKVValue`、`CheckKVTTL`、`CheckKVBatchKeys`、`CheckKVBatchItems`、`CheckKVBatchAnswer`。核心的单键和批量处理函数、SDK（93.6）和 `pluginsdktest.FakeHost` 的单键和批量调用都调用这些函数，所以三处对同一个不合规则的请求给出同一个下标和同一句话。核心自己只留列表的上限 `KVMaxListLimit`。
+- `KVGetMany` 的数据量在读完之后才算得出来：一次调用最坏会让核心从 Redis 读入 512 × 64 KiB = 32 MiB。核心按顺序累计，在让合计超过上限的那个值处拒绝，其余的值不再复制进回答（0.1.275 起；0.1.274 全部复制完才算合计）。
+
+### 93.3 一次授权复核，一次 Redis 往返
+
+| RPC | PostgreSQL | Redis |
+| --- | --- | --- |
+| `KVGetMany` | 一次授权查询 | 一条 `MGET` |
+| `KVSetMany` | 一次授权查询 | 一条 `EVALSHA`（核心自己的脚本） |
+| `KVDeleteMany` | 一次授权查询 | 一条 `DEL` |
+
+- `KVSetMany` 的脚本是核心写的包级常量（`grpcruntime/host.go` 的 `kvSetManyLua`，用 `redis.NewScript` 发送）：`KEYS[i]` 是第 i 项的 Redis 键，`ARGV[2i-1]` 是值，`ARGV[2i]` 是以秒计的 ttl。脚本先检查参数个数和每个 ttl（非负整数），再逐项执行 `SET key value`（ttl 为 0）或 `SET key value EX ttl`。Redis 服务端还没有这个脚本时（重启或 `SCRIPT FLUSH` 之后的第一次调用），`EVALSHA` 回 `NOSCRIPT`，客户端改用 `EVAL` 再发一次；这是唯一多出一次往返的情况，每个 Redis 服务端只发生一次。
+- 原子性：核心在访问 Redis 之前校验全部项，任何一项不合法就整个调用失败、什么都不写。校验通过后，脚本在 Redis 里作为一个整体执行，其他命令不会插到中间；脚本在第一次写入之前再检查一遍参数，`SET` 对已有的键不会因类型失败。所以要么全部写入，要么一项都不写。内存达到 `maxmemory` 且策略是 `noeviction` 时，Redis 在脚本的第一次写入处拒绝，同样一项都不写（在 Redis 7.0.15 上验证过），调用回 `UNAVAILABLE`。
+- `MGET` 是一条命令，一次 `KVGetMany` 读到的是同一时刻的值。`DEL` 同样是一条命令。
+- Redis 部署：核心用 `redis.NewClient` 连单个实例（`cluster.OpenRedis`），不是 Redis Cluster。多键的 `MGET`、`DEL` 和带多个 `KEYS` 的脚本在单实例上都合法。如果以后改成 Redis Cluster，同一次调用的键会落到不同的槽（键名里没有 hash tag），这三个调用要跟着改。
+- 结果：64 个键的读，从 64 次授权查询加 64 次 Redis 往返，变成各一次。
+
+### 93.4 错误
+
+| 情况 | 状态码 |
+| --- | --- |
+| 没有 `kv` 授权，或授权已在 PG 里撤销、scope 已变 | `PERMISSION_DENIED` |
+| 授权查询失败 | `UNAVAILABLE`（`cannot verify current plugin grant`） |
+| namespace、key、value、ttl 不合规则；键数超过 512；`KVSetMany` 的数据量超过 3 MiB | `INVALID_ARGUMENT`，信息指出是哪条规则，逐项的带下标（93.2） |
+| 单键 `KVSet` 的 `ttl_seconds` 为负或超过 9223372036 | `INVALID_ARGUMENT`（`ttl_seconds must be 0..9223372036`）。核心 0.1.275 起；0.1.274 及以前负值的信息是 `ttl_seconds must be >= 0`，过大的值不报错 |
+| `KVGetMany` 读到的值合计超过 3 MiB | `RESOURCE_EXHAUSTED`，调用方减少每次的键数重试 |
+| 请求超过连接的 4 MiB 上限 | `RESOURCE_EXHAUSTED`（gRPC 返回，不是核心） |
+| Redis 失败（连不上、超时、脚本出错） | `UNAVAILABLE`（`kv unavailable`），与单键调用相同 |
+| 核心没有这三个 RPC（已发布的核心里：早于 0.1.274） | `UNIMPLEMENTED`（93.7） |
+
+### 93.5 核心不执行插件提交的脚本
+
+批量写用 Lua 脚本，但脚本是核心的，插件只提供键、值和 ttl。没有、也不会有“插件提交脚本由核心执行”的调用：Redis 是核心自己的数据（会话粘性、限流、冷却、锁、节点注册）和所有插件共用的，脚本里可以访问任意键，宿主加的 `plugin:kv:{plugin_key}:` 前缀约束不了脚本。让插件提交脚本，等于把整个 Redis 交给这个插件。插件需要新的原子操作时，在核心加一个有明确语义的 RPC。
+
+### 93.6 SDK
+
+```go
+type KVValue struct {
+	Value []byte
+	Found bool
+}
+
+type KVItem struct {
+	Key   string
+	Value []byte
+	TTL   time.Duration // 0 = 不过期；按整秒发送（不足一秒的发成 0），和 KV.Set 一样；负值被拒绝
+}
+
+func KVGetMany(ctx context.Context, kv KV, namespace string, keys []string) ([]KVValue, error)
+func KVSetMany(ctx context.Context, kv KV, namespace string, items []KVItem) error
+func KVDeleteMany(ctx context.Context, kv KV, namespace string, keys []string) error
+
+// 可选接口，Host.KV() 返回的 KV 实现了它。
+type KVBatch interface {
+	GetMany(ctx context.Context, namespace string, keys []string) ([]KVValue, error)
+	SetMany(ctx context.Context, namespace string, items []KVItem) error
+	DeleteMany(ctx context.Context, namespace string, keys []string) error
+}
+```
+
+- 插件调用包级函数，把 `host.KV()` 传进去：`pluginsdk.KVGetMany(ctx, host.KV(), ns, keys)`。`KV` 接口没有加方法，已有的实现（测试替身、包了一层的 KV）照常编译。
+- 传进来的 `KV` 实现了 `KVBatch` 就用它，否则用这个 `KV` 的 `Get` / `Set` / `Delete` 逐个完成。所以只实现了四个单键方法的测试替身也能用，它注入的故障照样生效。这样的 `KV` 会被最多 8 个 goroutine 同时调用，必须能并发使用（`KVBatch` 和三个函数的导出注释里写了）。
+- **旧核心自动回退**：`Host.KV()` 的实现在核心回 `UNIMPLEMENTED` 时改用单键调用，并记住这个结果（记在这条宿主连接上，即一个插件进程一份）。旧核心只多付一次被拒的调用，不是每批一次。核心升级时插件进程随核心重启，标记自然重置。只有 `UNIMPLEMENTED` 触发回退，其他错误（`PERMISSION_DENIED`、`UNAVAILABLE`、`INVALID_ARGUMENT`、`RESOURCE_EXHAUSTED` 等）原样返回。
+- 回退时单键调用最多 8 个并发（`kvSinglesParallel`）；有一个失败就不再发新的，返回这个错误。同一个键在一批写里出现多次时只写最后一项，结果与批量调用一致。
+- **规则在两种核心上相同**：SDK 在发出任何调用之前用核心的那几个函数校验（`protocol.CheckKVBatchKeys`、`protocol.CheckKVBatchItems`，93.2），不合规则时回的就是核心会回的 `codes.InvalidArgument`——同一个下标、同一句话——什么都不发。回退路径上读到的值合计超过 3 MiB 时同样回 `codes.ResourceExhausted`（`protocol.CheckKVBatchAnswer`）。
+- **负的 TTL 一律拒绝，不论多小**（随核心 0.1.275 的 SDK 起；SDK 编在插件里，所以对一个插件来说是从用这版 SDK 构建的版本起，moderation 是 0.8.2）：SDK 把 TTL 换算成整秒再发，负值在 `KVSetMany` 和单键的 `KV.Set` 里都在发送之前回 `codes.InvalidArgument`（`ttl_seconds must be 0..9223372036`）。此前 -1 ns 到 -999 ms 被截成 0，也就是不过期。
+- 回退给不了两样东西：开销（仍是每个键一次授权复核加一次往返）和写的原子性（中途失败时，之前的项已经写入）。需要其中任何一样的插件声明 `hostCompat: ">=0.1.273"`。
+- 测试替身 `pluginsdktest.FakeHost` 实现了这三个 RPC，校验用的是同一组函数，所以规则、上限和错误信息与宿主相同，写入是原子的（它没有授权这一层）。它的单键调用（`KVGet` / `KVSet` / `KVDelete` / `KVList`）也用这组函数校验 namespace、key、value 和 ttl，回宿主的错误信息（0.1.275 的 SDK 起；此前单键 `KVSet` 只查值的大小，过大的 ttl 溢出后存成一个已过期的项）。`KVBatchUnimplemented`（或运行中调用 `SetKVBatchUnimplemented(true)`）让它像旧核心一样回 `UNIMPLEMENTED`；`KVCalls()` 返回每个 KV RPC 被调用的次数，用来断言“这批键只用了一次调用”。
+
+### 93.7 兼容与版本
+
+- Host API 不升，仍是 9，理由同 91.3：升版会让 rolling-v1 滚动更新不可用（`gateway/internal/control` 要求前后两个版本的 `HostAPIVersion` 相同，§82），而这次只是加 RPC。
+- 旧核心对未知 RPC 回 `UNIMPLEMENTED`（`UnimplementedHostServiceServer`）。用 SDK 函数的插件在旧核心上自动回退（93.6），不需要提高 `hostCompat`；直接用生成的 gRPC 客户端的插件要自己处理 `UNIMPLEMENTED`。依赖一次往返的开销或原子写的插件声明 `hostCompat: ">=0.1.273"`。
+- 滚动更新期间新旧核心并存没有问题：两种核心读写同一批 Redis 键、同一种值，批量调用和单键调用的结果可以互相读到。
+- 版本号：这三个 RPC 进了核心 0.1.273 的构建，但 0.1.273 构建、签名之后没有导入也没有发布；2026-11-11 发布的 0.1.274 带着它的全部内容，是第一个发布的有这三个 RPC 的核心。`host.proto`、SDK 的注释和插件的 `hostCompat` 仍写 0.1.273，这仍然是对的：0.1.273 的构建确实有这些调用，而 0.1.272 和 0.1.274 之间没有发布过别的核心，所以 `>=0.1.273` 在已发布的核心里就是"0.1.274 及以后"。93.2 的规则统一、单键 TTL 上界和 `KVGetMany` 的提前拒绝是核心 0.1.275 的，不改这三个 RPC 的协议，新旧核心和新旧 SDK 可以任意搭配。
+- 没有迁移，没有新的宿主权限，manifest 不变。
+
+### 93.8 实现位置与测试
+
+- proto：`sdk/proto/sub2api/plugin/v1/host.proto`（RPC 的注释是给插件作者读的规则全文；消息放在文件末尾，已有消息的生成代码不动）。生成代码 `sdk/gen/pluginv1/host.pb.go`、`host_grpc.pb.go`（`buf generate`，protoc-gen-go v1.31.0、protoc-gen-go-grpc v1.2.0）。
+- 宿主：`server/internal/plugin/grpcruntime/host.go`（`KVGetMany`、`KVSetMany`、`KVDeleteMany`、`kvSetManyLua`；拼 Redis 键的 `kvPrefix`、`kvKey`、`kvKeys`）。
+- SDK：`sdk/protocol/kv.go`（规则，93.2），`sdk/pluginsdk/kvbatch.go`，`sdk/pluginsdk/host.go`（`KV.Set` 的 TTL），`sdk/pluginsdk/pluginsdktest/kvbatch.go`。
+- 宿主测试 `grpcruntime/host_kv_batch_internal_test.go`：顺序与缺失的键；每项自己的 TTL；一项不合法时什么都不写；键数和数据量上限；两个插件、两个 namespace 之间互不可见；授权（含 PG 里撤销）；每次调用恰好一次授权查询和一条 Redis 命令（pgx tracer 和 go-redis hook 计数）；Redis 不可用；单键 `KVSet` 拒绝会溢出的 TTL（`TestKVSetRefusesATTLThatOverflows`）；脚本在第一次写入之前检查自己的参数（`TestKVSetManyScriptChecksItsArguments`，在 miniredis 上）。`TestKVBatchRealRedis` 在设置了 `TEST_REDIS_URL` 时对真实的 Valkey / Redis 运行（CI 设置；本地跳过）：真实 Lua 引擎上的脚本和它的参数检查、512 个键、真实过期。`grpcruntime/kv_batch_test.go` 用真实插件进程（`testdata/testplugin` 的 `/kvbatch`）走 broker 连接，并验证 4 MiB 的连接上限。
+- 规则本身的测试在 `sdk/protocol/kv_test.go`（`TestKVEntryRules`、`TestKVBatchRules`：每条规则的边界、校验顺序和错误信息）。
+- SDK 测试 `sdk/pluginsdk/kvbatch_internal_test.go`（新核心一批一次调用；旧核心回退、只被拒一次、结果相同；不吞其他错误；规则在两种核心上相同；并发上限；`KV.Set` 拒绝负的 TTL，`TestKVSetRefusesANegativeTTL`）和 `sdk/pluginsdk/pluginsdktest/kvbatch_test.go`（FakeHost 的规则、单键调用同样校验 `TestFakeHostKVSingleCallsFollowTheHostRules`、原子写、旧核心开关、经 SDK 的端到端）。
+
+## 94. 页头统一进顶栏（UI 3.9，2026-11-11，用户要求：每个页面的标题和说明都像 API 密钥页那样显示在顶栏，不在页面里另占一行；菜单名与页面标题各自独立；无迁移）
+
+UI 3.8 及以前，`SPageHeader` 只有在自己的 `title` 与路由标题文字完全相同、且没有 `#before` / `#title-extra` 时，才把说明和操作交给顶栏。标题不同名的页面（个人设置、全站概览、全站日志、用量概览、使用日志）、没有路由标题的插件页面（`/p/:plugin/:page`）、带返回按钮或徽章的页面（价格来源、价格编辑、价格同步、插件详情、插件设置）都在页面里另画一行标题。
+
+- **规则。** 页面声明，顶栏显示：直接处在控制台外壳下的 `SPageHeader` 总是把 `title`、`description` 交给顶栏，不比较文字。顶栏标题取页面给的，页面还没给时（加载中、没有 `SPageHeader` 的页面）取路由 `meta.title`。侧栏菜单名（`nav.items.*`）和面包屑不受影响，可以与页面标题不同。
+- **`@sub2api/ui`。** `provideTitleContext(title, sink?)`：第二个参数由原来的 `description`、`actions` 两个参数改为 `PageHeadSink`（`{ head: Ref<PageHead | null>, extra?: string, actions?: string }`，`extra`、`actions` 是顶栏里两个容器的选择器）；`PageHead` 是 `{ owner, title, description }`，`owner` 标识写入它的页头，页头卸载时只清自己写的那份。新导出类型 `PageHead`、`PageHeadSink`。只传 `title` 的调用（`STitleScope`、插件自己的嵌套范围）不变。
+- **宽屏（≥768px）。** `#before`、`#title-extra` 传送到顶栏标题后（`#s-page-title-extra`）；没有 `#filters` / `#filters-primary` 时 `#actions` 传送到顶栏（`#s-page-actions`，同 UI 3.8）；有筛选时筛选与操作仍是页面里的一行。
+- **窄屏。** 顶栏只放标题；`#before`、`#title-extra`、`#actions` 留在页面里，说明不显示（同 UI 3.8）。
+- **嵌套范围。** 标签页、`STitleScope`、弹窗、抽屉没有 `sink`，里面的 `SPageHeader` 行为与 UI 3.8 相同。
+- **控制台。** `useAppStore().pageHead` 取代 `pageDescription`；顶栏标题可截断（`data-testid="page-title"`）。价格来源、价格编辑、价格同步页去掉页头里的「返回」按钮（面包屑已有上级页面）；插件授权确认页、插件发布进度页由手写 `<h1>` 改为 `SPageHeader`，发布进度页回插件详情的链接改为页头操作按钮。
+- **插件。** 原生插件页面用的是宿主的 `@sub2api/ui`，不重新构建即按新规则显示；`hostUICompat: "^3.x"` 的现有声明都满足 3.9。`HOST_UI_VERSION` 3.9.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.9.0（`ui-contract.spec.ts` 锁定）。`sdk/manifest` 的核心下限检查不变：3.9 没有新增 manifest 字段。
+
+## 95. 筛选精简与单行单元格（UI 3.10，2026-11-11，用户要求：筛选默认只露常用几项、其余收进“更多筛选”，表格每个单元格只占一行；使用记录 `request_id` 同时匹配客户端请求 ID；核心 0.1.277；无迁移）
+
+页面各自手写的“更多筛选”展开按钮、硬截断的标签列表和挤成两行的单元格收进平台组件：控制台使用日志 / 全站日志、提示词审核的审核记录页先用上。
+
+### 95.1 `@sub2api/ui` 新能力
+
+- **`SFilterBar` 的 `#advanced`。** 新插槽 `#advanced` 放不常用的筛选，新 prop `advancedCount`（其中已生效的个数）和可选的 `v-model:advancedOpen`（不绑定时组件自己记，默认收起）。宽屏：默认插槽之后、`#end` 之前出现“更多筛选”按钮（数字角标；收起且 `advancedCount > 0` 时按钮高亮；带 `aria-expanded` / `aria-controls`），展开后 `#advanced` 在筛选条下方整行网格显示（`repeat(auto-fill, minmax(11rem, 1fr))`，虚线上边框）。手机（< 768px）：`#advanced` 接在默认插槽之后一起进“筛选”底部抽屉，不显示该按钮。不传 `#advanced` 时与 3.9 完全一样。
+- **手机“筛选”角标 = `activeCount` + `advancedCount`。** 角标数抽屉里已生效的条件，组件自动合计；两个数各管各的插槽：`activeCount` 只数默认插槽里的筛选（`#primary` 留在按钮旁，不计），`advancedCount` 只数 `#advanced` 里的。没有 `#advanced` 的页面照旧只传 `activeCount`，不会重复计数；用了 `#advanced` 的页面不要再把 `advancedCount` 加进 `activeCount`。
+- **`SFilterChips`。** `items: FilterChipItem[]`（`{key, label, value}`），渲染一行可关闭的「label：value ×」标签和末尾「清除全部」，emits `remove(key)`、`clear`；没有条目时不渲染。放在筛选条下方，列出收起的更多筛选里已生效的条件，以及表单里没有字段、只能由链接或详情带入的条件。
+- **`SChipList`。** `items: ChipListItem[]`（`{key, label, tone?, title?}`）、`max`（默认 2）、`size`（`xs` 默认 / `sm`）：只显示前 `max` 个 `SChip`，其余收成「+N」，悬停或键盘聚焦时用 `STooltip variant="card"` 列出全部（可换行）；整体 `inline-flex whitespace-nowrap`，永不换行。
+- **`TableColumn.grow`。** 该列吃掉其余列剩下的宽度并单行省略（`width: 100%; max-width: 0` 加 `overflow: hidden; text-overflow: ellipsis; white-space: nowrap`；单元格插槽的根元素被限制在列宽内）；默认渲染时完整值进 `title`。手机卡片不受影响。
+- **其它。** 新图标 `image`（`sdk/manifest/check/icons.json` 已重新生成，菜单可用）；新类型导出 `ChipListItem`、`FilterChipItem`；SDK 文案新增 `ui.moreFilters`、`ui.clearAll`、`ui.filterChip`、`ui.removeFilter`、`ui.allTime`，时间范围预设 `all` 的显示由“全部”改为“全部时间”（`RANGE_LABELS.all` = `ui.allTime`）。
+
+### 95.2 版本与插件声明
+
+- `HOST_UI_VERSION` 3.10.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.10.0（`ui-contract.spec.ts` 锁定，并检查 `^3.9`、`^3.10` 的判断与新导出）。
+- 原生插件用到 95.1 任一项时声明 `hostUICompat: "^3.10"`，`hostCompat` 要求核心 `>=0.1.277`（0.1.276 是最后一个带 UI 3.9 的核心）。`sdk/manifest/check/ui.go` 的 UI 下限表 `uiFloors` 为此加了 3.10 一行（`lastUI` 3.9.0、`lastCore` 0.1.276、`firstCore` 0.1.277，无 `uses`：3.10 没有新增 manifest 字段，只按 `hostUICompat` 判断）：`hostUICompat` 要求 3.10 及以上而 `hostCompat` 包含 0.1.276 时报 `hostCompat` `below_ui_core`（`TestHostUICompatNeedsMatchingHostCompat`）。
+- 旧插件不受影响：`^3.0`–`^3.9` 的声明都满足 3.10；它们看到的唯一变化是 `STimeRange` 预设“全部”显示为“全部时间”。
+
+### 95.3 控制台使用日志 / 全站日志的筛选
+
+- 常用一行：时间、日志类型、模型、用户（仅全站日志；纯数字 → `user_id`，否则 → `user_email` 包含）、API Key（纯数字 → `api_key_id`，否则 → `api_key_name` 包含）；使用日志用分组代替用户。
+- 更多筛选：全站日志为分组（有选项时下拉 → `group_id`，否则输入 → `group_name`）、请求 ID（→ `request_id`，见 95.4）、账号（有 `account:read` 时；纯数字 → `account_id`，否则 → `account_name` 包含）、调用 IP、请求类型、协议转换、状态、计费状态；使用日志为请求 ID、调用 IP、请求类型、状态、计费状态。失败请求日志类型下去掉状态（已由日志类型确定），加 HTTP 状态码、错误类型。
+- 界面不再有字段、后端与链接照常支持的参数（`client_request_id`、`platform`、`endpoint`、`stream`、`plugin_key`、`account_type`、`node_id`、`upstream_model`、`upstream_protocol`，没被选作字段的那一个分组参数，以及失败请求以外的日志类型下的 `status_code`、`error_type`）生效时，与更多筛选里已生效的条件一起用 `SFilterChips` 显示在筛选条下方，可单独删除或清除全部（「清除全部」只清标签里的参数，常用一行不动；删除 `plugin_key` 标签时 `account_type` 一并清除，因为后端拒绝只带 `account_type`）。合并框的显示值从已生效参数反推（`user_id=7` → 框里显示 7）。代码：`web/src/views/usage/usageFilters.ts`（`usageSearchLayout`）、`UsageFilters.vue`、`UsageFilterFields.vue`。
+
+### 95.4 使用记录 `request_id` 同时匹配客户端请求 ID（核心 0.1.277）
+
+- `GET /usage`、`/me/usage`、`/usage/summary`、`/me/usage/summary`、`/usage/export`、`/me/usage/export` 的 `request_id` 参数在带 `from` 时改为 `(u.request_id = v OR u.client_request_id = v)`（不带 `from` 时仍只比 `u.request_id`，避免无索引全表扫描）：用户手里通常只有一个 ID（我方返回的请求 ID，或自己客户端发的 `X-Request-Id`），一个搜索框都能找到。`client_request_id` 参数不变，仍只精确比客户端请求 ID。两个参数同时给时同时生效（AND）。见 §14.4。
+- 旧核心（滚动窗口内）只比我方请求 ID，按客户端请求 ID 搜索返回空列表，不报错。
+- 测试：`usage/api_filter_test.go` 的 `TestParseFilterRequestIDs`（生成的条件与参数，表驱动）、`TestUsageSearchByRequestID`（PostgreSQL：列表、汇总、导出三处，全站与自助视图，表驱动）。
+

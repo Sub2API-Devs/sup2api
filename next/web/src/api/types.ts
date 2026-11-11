@@ -474,8 +474,10 @@ export interface ModelLimit {
   max_concurrency: number
   rpm_limit: number
   tpm_limit: number
-  /** Sessions active in the last 60 seconds (CONTRACTS §71). */
+  /** Sessions active within spm_window_seconds (CONTRACTS §71). */
   spm_limit: number
+  /** Window of spm_limit in seconds, 60–86400; absent = 60. */
+  spm_window_seconds?: number
 }
 
 /** Usage of one model list, in the order of the account's model_limits. */
@@ -484,12 +486,13 @@ export interface ModelRateUsage {
   in_use: number
   rpm: number
   tpm: number
+  /** Sessions within the list's spm_window_seconds. */
   sessions?: number
 }
 
 /** Account fields an account type may declare a common control for (manifest accountTypes[].commonControls). */
 export const COMMON_CONTROL_NAMES = [
-  'schedulable', 'auto_disable', 'priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit',
+  'schedulable', 'auto_disable', 'priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit', 'spm_window_seconds',
   'model_limits', 'usage_limit', 'model_mapping', 'param_override', 'header_passthrough', 'environment', 'proxy'
 ] as const
 export type CommonControlName = (typeof COMMON_CONTROL_NAMES)[number]
@@ -633,8 +636,10 @@ export interface Account {
   /** 0 = unlimited. */
   rpm_limit: number
   tpm_limit: number
-  /** Sessions per minute: sessions active in the last 60 seconds by sticky session key, 0 = unlimited (CONTRACTS §71). */
+  /** Session cap: sessions active within spm_window_seconds by sticky session key, 0 = unlimited (CONTRACTS §71). */
   spm_limit: number
+  /** Window of spm_limit in seconds, 60–86400; absent = 60. */
+  spm_window_seconds?: number
   /** Limits of lists of client models on top of the account's own (CONTRACTS §68). */
   model_limits?: ModelLimit[]
   /** The account layer of the environment variables (CONTRACTS §74.3). */
@@ -645,7 +650,7 @@ export interface Account {
   param_override?: Record<string, unknown> | null
   /** Loss policy for converted requests; null inherits the group's. */
   conversion_loss_policy?: ConversionLossPolicy | null
-  /** Read-only usage of the last 60 seconds (0 when Redis is unavailable), with one entry per model list. */
+  /** Read-only usage of the last 60 seconds, sessions within each layer's spm_window_seconds (0 when Redis is unavailable), with one entry per model list. */
   rate_usage?: { rpm: number; tpm: number; sessions?: number; models?: ModelRateUsage[] }
   /** Successful requests and failed attempts of the last minute (CONTRACTS §73); null when unavailable. */
   outcomes?: AccountOutcomes | null

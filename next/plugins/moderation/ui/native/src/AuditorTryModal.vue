@@ -4,13 +4,20 @@ import { SAlert, SBadge, SButton, SHint, SModal, STextarea } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import CostBadge from './CostBadge.vue'
 import ImageInput from './ImageInput.vue'
+import { tryImages, tryTextOnly } from './auditorForm'
 import { categoryLabel, enumLabel, ms, score } from './format'
 import { tryAuditor, useModHost } from './host'
+import { imagesRefusedNote } from './trace'
 import { useAsync } from './useAsync'
 import type { AuditorTryTarget } from './types'
 
 // Tries an auditor on a text and images: a stored one from its row, or the
 // editor's unsaved edits (target.draft). The inputs are kept between tries.
+// An LLM auditor whose "model supports images" switch is off (in the unsaved
+// edits, else as stored) reviews the text only: no images are taken or sent.
+// The result of a question-table LLM auditor lists the questions answered yes
+// with the reason; a result with images says how many were sent and skipped,
+// and when the upstream refused them (only the text was reviewed).
 const props = defineProps<{ target: AuditorTryTarget | null }>()
 const open = defineModel<boolean>('open', { required: true })
 const host = useModHost()
@@ -19,7 +26,9 @@ const t = host.t
 const text = ref('')
 const images = ref<string[]>([])
 // Only the latest try writes the result; opening again drops a pending one.
-const attempt = useAsync(() => tryAuditor(props.target!.id, text.value, images.value, props.target!.draft), () => t('actionFailed'))
+const textOnly = computed(() => tryTextOnly(props.target))
+const sentImages = computed(() => tryImages(props.target, images.value))
+const attempt = useAsync(() => tryAuditor(props.target!.id, text.value, sentImages.value, props.target!.draft), () => t('actionFailed'))
 const { data: result, loading: trying, error: failure } = attempt
 watch(open, (v) => v && attempt.reset())
 
@@ -34,13 +43,19 @@ const scores = computed(() =>
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
 )
+
+const refused = computed(() => (result.value ? imagesRefusedNote(result.value) : null))
 </script>
 
 <template>
   <SModal v-model:open="open" :title="t('auditors.tryTitle', { name: target?.name || '' })" width="lg">
     <div class="mod-form">
       <SHint size="xs">{{ t('auditors.tryHint') }}</SHint>
-      <ImageInput v-model="images">
+      <template v-if="textOnly">
+        <SHint size="xs">{{ t('auditors.tryTextOnly') }}</SHint>
+        <STextarea v-model="text" :rows="5" :placeholder="t('test.placeholder')" />
+      </template>
+      <ImageInput v-else v-model="images">
         <STextarea v-model="text" :rows="5" :placeholder="t('test.placeholder')" />
       </ImageInput>
       <SAlert v-if="failure" tone="danger" dense>{{ failure }}</SAlert>
@@ -53,8 +68,10 @@ const scores = computed(() =>
           <CostBadge :cost="result.cost" class="mod-ml-auto" />
         </div>
         <SAlert v-if="result.error" tone="danger" dense>{{ result.error }}</SAlert>
+        <SAlert v-if="refused" tone="warning" dense>{{ t(refused.key, refused.params) }}</SAlert>
         <CategoryChips v-if="result.hits?.length" :categories="result.hits" wrap />
         <div v-if="result.reason" class="mod-sub">{{ result.reason }}</div>
+        <div v-if="result.sent_images || result.skipped_images" class="mod-sub">{{ t('trace.images', { sent: result.sent_images || 0, skipped: result.skipped_images || 0 }) }}</div>
         <ul v-if="scores.length" class="mod-scores">
           <li v-for="[c, s] in scores" :key="c"><span>{{ categoryLabel(c) }}</span><span class="mod-num">{{ score(s) }}</span></li>
         </ul>
@@ -62,7 +79,7 @@ const scores = computed(() =>
     </div>
     <template #footer>
       <SButton @click="open = false">{{ host.i18n.t('ui.close') }}</SButton>
-      <SButton variant="primary" icon="play" :loading="trying" :disabled="!text.trim() && !images.length" @click="run">{{ t('test.run') }}</SButton>
+      <SButton variant="primary" icon="play" :loading="trying" :disabled="!text.trim() && !sentImages.length" @click="run">{{ t('test.run') }}</SButton>
     </template>
   </SModal>
 </template>

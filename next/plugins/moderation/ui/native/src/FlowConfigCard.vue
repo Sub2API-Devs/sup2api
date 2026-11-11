@@ -7,15 +7,18 @@ import { useModHost } from './host'
 import type { Spec } from './types'
 import { NAME_MAX } from './flowOps'
 
-// Name, enabled switch, bound groups (read-only), sample rate, model scope
-// and total timeout of a flow (new-api flow-config-card.tsx). The enabled
-// switch is its own column here (not in the spec) and saves at once.
+// Name, enabled switch, bound groups (read-only, with the count of account
+// bindings), sample rate, model scope and total timeout of a flow (new-api
+// flow-config-card.tsx). The enabled switch is its own column here (not in
+// the spec) and saves at once.
 const props = defineProps<{
   name: string
   enabled: boolean
   draft: Spec
   /** names of the groups bound to the saved flow (edited in the list) */
   groups: string[]
+  /** account bindings of the saved flow (the bindings tab) */
+  accounts: number
   autoMs: number
   isNew: boolean
   disabled: boolean
@@ -60,7 +63,8 @@ function setRate(v: unknown) {
       <SField :label="t('flows.boundGroups')">
         <div class="mod-config-inline mod-wrap">
           <SBadge v-for="g in groups" :key="g">{{ g }}</SBadge>
-          <span v-if="!groups.length" class="mod-text-warning">{{ isNew ? t('flows.noGroupsNew') : t('flows.noGroupsWarn') }}</span>
+          <span v-if="accounts" class="mod-sub">{{ groups.length ? t('flows.accountBindings', { n: accounts }) : t('flows.accountsOnly', { n: accounts }) }}</span>
+          <span v-else-if="!groups.length" class="mod-text-warning">{{ isNew ? t('flows.noGroupsNew') : t('flows.noGroupsWarn') }}</span>
           <SLink v-if="!isNew" as="button" @click="emit('go-list')">{{ t('flows.editInList') }}</SLink>
         </div>
       </SField>

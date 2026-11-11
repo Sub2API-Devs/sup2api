@@ -1,46 +1,86 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SAlert, SBadge, SButton, SLink } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SLink, type Tone } from '@sub2api/ui'
+import { exemptGroups, groupCoverage } from '../bindingOps'
 import { useCatalog } from '../catalog'
-import { groupCoverage } from '../flowOps'
 import { joinList } from '../format'
 import { canManage, canManageSettings, useModHost } from '../host'
 import { modeTone } from '../tones'
 import type { Status, TabKey } from '../types'
 
-// One-line running state (new-api status-line): switch, enabled flows,
-// bound / unmoderated groups, disabled channels, analysis channel; plus the
-// setup hint when nothing is bound or moderation is off.
+// Running state (new-api status-line) as short label + badge entries:
+// moderation (switch and the default level: the level of users without a
+// watch entry, `mode` of the settings), flows, moderated / unmoderated groups,
+// channels, the analysis channel; plus the setup hint when nothing is bound
+// or moderation is off. Long explanations (group names, why analyses are off)
+// are the badges' tooltips.
 const props = defineProps<{ status: Status }>()
 const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void; (e: 'go-settings'): void }>()
 const t = useModHost().t
 const catalog = useCatalog()
 
-const state = computed(() => {
-  if (!props.status.enabled) return { tone: 'gray' as const, key: 'off' }
-  return props.status.running ? { tone: 'success' as const, key: 'running' } : { tone: 'warning' as const, key: 'stopped' }
+interface Badge {
+  text: string
+  tone: Tone
+  title?: string
+  dot?: boolean
+}
+
+/** off, or the default level (GET /status default_level; the mode says the same on a backend without it). */
+const level = computed(() => (!props.status.mode || props.status.mode === 'off' ? 'off' : props.status.default_level || props.status.mode))
+
+const state = computed<Badge[]>(() => {
+  const run = !props.status.enabled ? { tone: 'gray' as const, key: 'off' } : props.status.running ? { tone: 'success' as const, key: 'running' } : { tone: 'warning' as const, key: 'stopped' }
+  return [
+    { text: t(`statusLine.${run.key}`), tone: run.tone, dot: true },
+    { text: t(`mode.${level.value}`), tone: modeTone(level.value), title: t(`statusLine.levelHint.${level.value}`) }
+  ]
 })
 
-const enabledFlows = computed(() => catalog.state.flows.filter((f) => f.enabled))
-const disabledFlows = computed(() => catalog.state.flows.length - enabledFlows.value.length)
-/** moderated / unmoderated groups of the core; null when groups are not readable */
-const coverage = computed(() => {
-  const groups = catalog.state.groups
-  if (!groups.length) return null
-  const c = groupCoverage(groups.map((g) => g.id), catalog.state.flows)
-  const moderated = new Set(c.moderated)
-  return { moderated: moderated.size, unmoderated: groups.filter((g) => !moderated.has(g.id)).map((g) => g.name) }
+const flows = computed<Badge[]>(() => {
+  const on = catalog.state.flows.filter((f) => f.enabled).length
+  const off = catalog.state.flows.length - on
+  const list: Badge[] = [{ text: t('statusLine.flows', { n: on }), tone: on ? 'success' : 'warning' }]
+  if (off) list.push({ text: t('statusLine.flowsOff', { n: off }), tone: 'gray' })
+  return list
 })
-const channelsDown = computed(() => catalog.state.channels.filter((c) => !c.enabled).length)
-const analysisConfigured = computed(() => !!props.status.runtime.analysis?.channel_configured)
-/** why analyses are off: no channel, or the saved one is not a usable llm channel */
-const analysisOff = computed(() => {
-  const problem = props.status.runtime.analysis?.channel_problem
-  return problem ? t(`statusLine.analysisProblem.${problem}`) : t('statusLine.analysisOff')
+
+/** moderated / unmoderated groups of the core; null when groups are not readable */
+const groups = computed<Badge[] | null>(() => {
+  const all = catalog.state.groups
+  if (!all.length) return null
+  const moderated = new Set(groupCoverage(all.map((g) => g.id), catalog.state.flows, exemptGroups(catalog.state.bindings)).moderated)
+  const unmoderated = all.filter((g) => !moderated.has(g.id)).map((g) => g.name)
+  const list: Badge[] = [{ text: t('statusLine.bound', { n: moderated.size }), tone: moderated.size ? 'success' : 'gray' }]
+  if (unmoderated.length) list.push({ text: t('statusLine.unbound', { n: unmoderated.length }), tone: 'warning', title: t('statusLine.unboundHint', { groups: joinList(unmoderated) }) })
+  return list
+})
+
+const channels = computed<Badge[]>(() => {
+  const down = catalog.state.channels.filter((c) => !c.enabled).length
+  return [down ? { text: t('statusLine.channelsDown', { n: down }), tone: 'warning' } : { text: t('statusLine.channelsOk'), tone: 'success' }]
+})
+
+const analysis = computed<Badge[]>(() => {
+  const a = props.status.runtime.analysis
+  if (a?.channel_configured) return [{ text: t('statusLine.analysisOn'), tone: 'success' }]
+  // why analyses are off: no channel, or the saved one is not a usable llm channel
+  if (a?.channel_problem) return [{ text: t('statusLine.analysisUnusable'), tone: 'warning', title: t(`statusLine.analysisProblem.${a.channel_problem}`) }]
+  return [{ text: t('statusLine.analysisOffShort'), tone: 'warning', title: t('statusLine.analysisOff') }]
 })
 
 // Settings links only for those who may edit the settings (canManageSettings).
 const settingsLink = computed(() => canManageSettings())
+const entries = computed(() =>
+  [
+    { key: 'state', badges: state.value },
+    { key: 'flows', badges: flows.value },
+    { key: 'groups', badges: groups.value },
+    { key: 'channels', badges: channels.value },
+    { key: 'analysis', badges: analysis.value, settings: settingsLink.value && !props.status.runtime.analysis?.channel_configured }
+  ].filter((e): e is { key: string; badges: Badge[]; settings?: boolean } => !!e.badges)
+)
+
 const notice = computed<{ tone: 'warning' | 'info'; text: string; action: 'flows' | 'settings' | '' } | null>(() => {
   if (!props.status.runtime.configured) return { tone: 'warning', text: t('overview.notConfigured'), action: canManage() ? 'flows' : '' }
   if (props.status.mode === 'off') return { tone: 'info', text: t('overview.offHint'), action: settingsLink.value ? 'settings' : '' }
@@ -50,26 +90,15 @@ const act = (action: 'flows' | 'settings') => (action === 'settings' ? emit('go-
 </script>
 
 <template>
-  <div class="mod-status-line">
-    <SBadge :tone="state.tone" dot>{{ t(`statusLine.${state.key}`) }}</SBadge>
-    <SBadge :tone="modeTone(status.mode)">{{ t(`mode.${status.mode || 'off'}`) }}</SBadge>
-    <span>
-      {{ t('statusLine.flows', { n: enabledFlows.length }) }}<template v-if="disabledFlows"> · {{ t('statusLine.flowsOff', { n: disabledFlows }) }}</template>
-    </span>
-    <template v-if="coverage">
-      <span class="mod-sub">·</span>
-      <span>{{ t('statusLine.bound', { n: coverage.moderated }) }}</span>
-      <span v-if="coverage.unmoderated.length" class="mod-text-warning" :title="joinList(coverage.unmoderated)">
-        {{ t('statusLine.unbound', { n: coverage.unmoderated.length, groups: joinList(coverage.unmoderated.slice(0, 5)) }) }}
-      </span>
-    </template>
-    <span class="mod-sub">·</span>
-    <span :class="channelsDown ? 'mod-text-warning' : ''">{{ channelsDown ? t('statusLine.channelsDown', { n: channelsDown }) : t('statusLine.channelsOk') }}</span>
-    <span class="mod-sub">·</span>
-    <span v-if="analysisConfigured">{{ t('statusLine.analysisOn') }}</span>
-    <SLink v-else-if="settingsLink" as="button" class="mod-text-warning" @click="emit('go-settings')">{{ analysisOff }}</SLink>
-    <span v-else class="mod-text-warning">{{ analysisOff }}</span>
-  </div>
+  <dl class="mod-status-line">
+    <div v-for="e in entries" :key="e.key" class="mod-status-item">
+      <dt>{{ t(`statusLine.label.${e.key}`) }}</dt>
+      <dd>
+        <SBadge v-for="b in e.badges" :key="b.text" :tone="b.tone" :dot="b.dot" size="xs" :title="b.title">{{ b.text }}</SBadge>
+        <SLink v-if="e.settings" as="button" @click="emit('go-settings')">{{ t('settings') }}</SLink>
+      </dd>
+    </div>
+  </dl>
 
   <SAlert v-if="notice" :tone="notice.tone" class="mod-block">
     {{ notice.text }}

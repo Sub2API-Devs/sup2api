@@ -19,12 +19,13 @@ import {
   validateSchema
 } from '@sub2api/ui'
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
+import VerdictCacheRow from './VerdictCacheRow.vue'
 import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { useCatalog } from './catalog'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
-import { displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentValue, settingSections, settingsKey, type SettingSection } from './settingsForm'
+import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentSetting, settingSections, settingsKey, verdictCacheOff, withRetiredMirrored, type SettingSection } from './settingsForm'
 import { useAsync } from './useAsync'
 import { fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, useModHost } from './host'
 import type { JevQuestions } from './types'
@@ -37,6 +38,15 @@ import type { JevQuestions } from './types'
 // analysis channel picker, the webhook address and secret ("set" / clear)
 // and the Jev default question set. The converted 0.1 fields are hidden and
 // go back as stored; a stored 0.1 API key can only be cleared.
+//
+// 0.8.0: `mode` is the switch and the default level; the allowlist starts
+// from the retired exempt_user_ids until it is saved, and the verdict cache
+// days from the retired cache_ttl_seconds (settingsForm.ts). Of the retired
+// keys only exempt_user_ids is written: a save of the allowlist or of the
+// blocklist puts the allowlist without the blocklisted users there, for
+// nodes still on 0.7.2 (withRetiredMirrored). Under the cache days,
+// moderation:manage users can empty the verdict cache of every node
+// (VerdictCacheRow).
 //
 // A save re-reads the stored values and writes back only the keys of this
 // page edited since it loaded (settingsMerge.ts), so a change made elsewhere
@@ -68,6 +78,8 @@ const opened = reactive<Record<string, boolean>>({})
 const copyQuestions = (q: JevQuestions): JevQuestions => ({ preamble: q.preamble || '', items: q.items.map((x) => ({ ...x })) })
 /** The stored values when the page loaded, and this page's values then (what a save compares with). */
 let loaded: Record<string, unknown> = {}
+/** The stored settings keep the verdict cache off (the retired cache_ttl_seconds = 0). */
+const cacheOff = ref(false)
 const initial = ref<PageValues>({})
 
 const { data, loading, error, reload } = useAsync(() => Promise.all([fetchPluginSettings(), fetchDefaults()]), () => t('settingsTab.loadFailed'))
@@ -108,6 +120,7 @@ watch(data, (v) => {
   jev.value = set ? copyQuestions(set) : null
   clearErrors(errs)
   loaded = { ...stored }
+  cacheOff.value = verdictCacheOff(stored)
   initial.value = pageValues()
 })
 onMounted(reload)
@@ -122,7 +135,7 @@ function webhookValue(k: WebhookKey) {
 /** The keys of this page as sent; undefined = removed (its default applies). */
 function pageValues(): PageValues {
   const out: PageValues = {}
-  for (const k of widgetKeys.value) out[k] = sentValue(prop(k), form[k])
+  for (const k of widgetKeys.value) out[k] = sentSetting(prop(k), loaded, k, form[k])
   if (keys.value.includes('analysis_channel_id')) out.analysis_channel_id = Number(channelId.value) || 0
   for (const k of WEBHOOK) if (keys.value.includes(k)) out[k] = webhookValue(k)
   if (keys.value.includes('jev_default_set')) out.jev_default_set = jev.value ? jevPayload(jev.value) : null
@@ -183,7 +196,7 @@ async function save() {
       const names = joinList(m.conflicts.map((k) => (k === LEGACY_KEY ? t('settingsTab.legacyKey') : label(k))))
       if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys: names }), confirmText: t('settingsTab.overwrite') }))) return
     }
-    await savePluginSettings(m.values)
+    await savePluginSettings(withRetiredMirrored(m.values, m.changed))
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {
@@ -307,6 +320,7 @@ const jevOptions = computed(() => [
             layout="settings"
             @update:model-value="setField(k, $event)"
           />
+          <VerdictCacheRow v-if="k === CACHE_DAYS_KEY" :off="cacheOff" />
           <SSettingRow v-if="k === 'block_message'" :label="t('settingsTab.preview')" stacked>
             <div class="mod-form mod-setting-wide">
               <SSegmented v-model="format" :options="formatOptions" size="sm" />

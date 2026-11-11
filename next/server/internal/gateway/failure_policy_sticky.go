@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
@@ -95,14 +96,29 @@ func (c *call) releaseBinding(ctx context.Context, id int64) error {
 }
 
 // releaseSession takes the request's session off the active sessions of the
-// account a retry leaves (sessions-per-minute, CONTRACTS §71): the session
-// moves to the next account with its binding, and counting it on both would
-// hold a session slot of an account that no longer serves it.
+// account a retry leaves (session caps, CONTRACTS §71.3): the session moves
+// to the next account with its binding, and counting it on both would hold a
+// session slot of an account that no longer serves it. ref is the account
+// last admitted; its admission is released once.
 func (c *call) releaseSession(ctx context.Context, ref *core.AccountRef) {
+	at := c.sessionAt
+	c.sessionAt = time.Time{}
 	if c.g.d.Limiter == nil || c.session == "" {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stickyRedisTimeout)
 	defer cancel()
-	c.g.d.Limiter.ReleaseSession(ctx, *ref, c.model, c.session)
+	c.g.d.Limiter.ReleaseSession(ctx, *ref, c.model, c.session, at)
+}
+
+// leaveSession is releaseSession for a retry that moves the request off ref,
+// unless the session's sticky binding stays on ref (a switch keeps it): that
+// session comes back there and keeps its slot. A session no binding holds
+// (the request's or the connection's own) never comes back, so it always
+// leaves (CONTRACTS §71.3).
+func (c *call) leaveSession(ctx context.Context, ref *core.AccountRef) {
+	if c.sticky != nil && c.sticky.bound == ref.ID {
+		return
+	}
+	c.releaseSession(ctx, ref)
 }

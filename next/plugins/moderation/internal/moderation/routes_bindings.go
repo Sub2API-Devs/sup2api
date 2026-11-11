@@ -21,12 +21,16 @@ const (
 
 // Binding is one binding of the whole table: account_id 0 = a group binding
 // (flow_groups), group_id 0 with an account = the account in any group.
-// flow_id 0 = not moderated.
+// flow_id 0 = not moderated. Inactive: the flow is disabled, unpublished,
+// gone or published with a spec this node cannot read, so the binding does
+// not apply and a wider one decides. It is what the node does: the flow is
+// not among the flows it runs (snapshot.flows).
 type Binding struct {
 	Kind      string `json:"kind"`
 	GroupID   int64  `json:"group_id"`
 	AccountID int64  `json:"account_id"`
 	FlowID    int64  `json:"flow_id"`
+	Inactive  bool   `json:"inactive,omitempty"`
 }
 
 func bindingKind(group, account int64) string {
@@ -59,7 +63,7 @@ func (p *Plugin) listBindings(ctx context.Context, _ *pluginv1.HTTPRequest) (*pl
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	list, err := loadBindings(ctx, db)
+	list, err := loadBindings(ctx, db, p.snap.Load())
 	if err != nil {
 		return nil, err
 	}
@@ -67,12 +71,16 @@ func (p *Plugin) listBindings(ctx context.Context, _ *pluginv1.HTTPRequest) (*pl
 }
 
 // loadBindings reads both tables, account bindings first (by account, then
-// group), then the group bindings.
-func loadBindings(ctx context.Context, q querier) ([]Binding, error) {
-	rows, err := q.Query(ctx, `SELECT group_id, account_id, flow_id FROM (
+// group), then the group bindings. A binding is inactive when its flow is
+// not one snap runs: the same test that makes the request fall back to a
+// wider binding (bindGroup, bindAccount), so a published and enabled flow
+// whose spec was dropped from the snapshot is not reported as applying.
+func loadBindings(ctx context.Context, q querier, snap *snapshot) ([]Binding, error) {
+	rows, err := q.Query(ctx, `SELECT b.group_id, b.account_id, b.flow_id
+		FROM (
 			SELECT group_id, account_id, flow_id FROM flow_accounts
 			UNION ALL SELECT group_id, 0, flow_id FROM flow_groups) b
-		ORDER BY account_id = 0, account_id, group_id`)
+		ORDER BY b.account_id = 0, b.account_id, b.group_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +88,7 @@ func loadBindings(ctx context.Context, q querier) ([]Binding, error) {
 		var b Binding
 		err := r.Scan(&b.GroupID, &b.AccountID, &b.FlowID)
 		b.Kind = bindingKind(b.GroupID, b.AccountID)
+		b.Inactive = b.FlowID != 0 && (snap == nil || snap.flows[b.FlowID] == nil)
 		return b, err
 	})
 	if list == nil {

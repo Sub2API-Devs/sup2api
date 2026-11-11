@@ -224,16 +224,22 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		EventID int64  `json:"event_id"`
 		Source  string `json:"source"`
 		Version int    `json:"version"`
-		// UserState: none | observe (moderated after the request, post) or
-		// enforce (before it, pre: a hit refuses).
+		// UserState: observe (moderated after the request, post), enforce
+		// (before it, pre: a hit refuses) or none (a user without a watch
+		// entry: the default level decides).
 		UserState string `json:"user_state"`
 	}
 	if err := json.Unmarshal(req.GetBody(), &sel); err != nil {
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid JSON body / 请求体不是合法 JSON"), nil
 	}
+	c := p.cfg.Load()
 	timing := TimingPost
 	switch sel.UserState {
-	case "", "none", LevelObserve:
+	case "", "none":
+		if c.defaultLevel == LevelEnforce {
+			timing = TimingPre
+		}
+	case LevelObserve:
 	case LevelEnforce:
 		timing = TimingPre
 	default:
@@ -244,7 +250,6 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	c := p.cfg.Load()
 	var chunks []*chunk
 	if sel.EventID > 0 {
 		var text *string

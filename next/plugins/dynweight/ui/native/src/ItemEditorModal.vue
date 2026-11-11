@@ -25,21 +25,33 @@ import {
   type ItemEntry,
   type Written
 } from './items'
+import { useDialogSave, type SaveOutcome } from './dialogSave'
 import { clone, directionTone, enumOptions, useDwHost, type Rule, type Strategy } from './host'
 
 // The items editor (new-api's layout): the items on the left (search, a dot
 // for the direction, a red dot for errors), the selected one on the right,
 // and the two lists as JSON behind the Visual / JSON switch. It works on its
-// own copy: Apply writes the items back (writeItems) and hands both lists to
-// the page, which saves them with the rest of the configuration; Cancel
-// drops the copy. Apply and the way back from JSON are blocked while
-// anything would be refused by the plugin. The table names the rules that
-// left (Written.dropped), including those a switch to JSON wrote away.
+// own copy: Save writes the items back (writeItems) and saves both lists
+// through `save`, closing only once they are saved (`others`: other unsaved
+// edits go along); without `save` (inside the group dialog, which saves
+// itself) Apply hands them back. Cancel drops the copy. Saving and the way
+// back from JSON are blocked while anything would be refused by the plugin.
+// The table names the rules that left (Written.dropped), including those a
+// switch to JSON wrote away.
 const open = defineModel<boolean>('open', { required: true })
-const props = defineProps<{ rules: Rule[]; strategies: Strategy[]; index: number; append: boolean; readonly?: boolean }>()
+const props = defineProps<{
+  rules: Rule[]
+  strategies: Strategy[]
+  index: number
+  append: boolean
+  readonly?: boolean
+  save?: (value: Written) => Promise<SaveOutcome>
+  others?: boolean
+}>()
 const emit = defineEmits<{ (e: 'apply', value: Written): void }>()
 const host = useDwHost()
 const t = host.t
+const { saving, error, run } = useDialogSave()
 
 interface Row {
   id: number
@@ -72,6 +84,7 @@ watch(open, now => {
   if (!now) return
   mode.value = 'visual'
   search.value = ''
+  error.value = ''
   dropped = []
   load(props.rules, props.strategies, props.index)
   if (props.append) add()
@@ -138,7 +151,7 @@ function setMode(next: 'visual' | 'json') {
   mode.value = 'visual'
 }
 
-function apply() {
+async function apply() {
   if (mode.value === 'json' && jsonInvalid.value) return host.toast(t('it.editor.jsonInvalid'), 'error')
   const bad = problems.value.findIndex(p => p.length)
   if (bad >= 0) {
@@ -150,13 +163,19 @@ function apply() {
   // A read-only item brings its references over as they are: the lists get the plugin's checks once more.
   const [first] = validateLists(written.rules, written.strategies)
   if (first) return host.toast(describeProblem(first, t), 'error')
-  emit('apply', { ...written, dropped: [...dropped, ...written.dropped] })
+  const value = { ...written, dropped: [...dropped, ...written.dropped] }
+  if (props.save) {
+    const save = props.save
+    if (await run(() => save(value))) open.value = false
+    return
+  }
+  emit('apply', value)
   open.value = false
 }
 </script>
 
 <template>
-  <SModal v-model:open="open" width="xl" persistent>
+  <SModal v-model:open="open" width="xl" persistent :closable="!saving">
     <template #header>
       <div class="dw-it-modal-h">
         <div class="dw-it-modal-t">
@@ -167,6 +186,7 @@ function apply() {
       </div>
     </template>
 
+    <SAlert v-if="error" tone="danger" class="dw-block">{{ error }}</SAlert>
     <fieldset v-if="mode === 'json'" class="dw-fieldset" :disabled="readonly">
       <ItemsJsonPanel v-model="json" v-model:invalid="jsonInvalid" :rows="16" />
     </fieldset>
@@ -258,9 +278,13 @@ function apply() {
     </div>
 
     <template #footer>
-      <span v-if="!readonly" class="dw-it-muted dw-it-modal-f">{{ t('it.editor.applyHint') }}</span>
-      <SButton @click="open = false">{{ t(readonly ? 'it.editor.close' : 'cancel') }}</SButton>
-      <SButton v-if="!readonly" variant="primary" @click="apply">{{ t('it.editor.apply') }}</SButton>
+      <span v-if="!readonly && (!save || others)" class="dw-it-muted dw-it-modal-f">{{
+        t(save ? 'cfg.saveOthers' : 'it.editor.applyHint')
+      }}</span>
+      <SButton :disabled="saving" @click="open = false">{{ t(readonly ? 'it.editor.close' : 'cancel') }}</SButton>
+      <SButton v-if="!readonly" variant="primary" :loading="saving" @click="apply">{{
+        t(save ? 'config.save' : 'it.editor.apply')
+      }}</SButton>
     </template>
   </SModal>
 </template>

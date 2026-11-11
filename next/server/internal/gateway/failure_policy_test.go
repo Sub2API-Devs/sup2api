@@ -15,6 +15,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/account"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -225,6 +226,34 @@ func TestFailurePolicyStickyResetAndPreserve(t *testing.T) {
 				// The session moved with its binding: account 1 no longer holds it.
 				require.Equal(t, []string{"1:" + key}, lim.released)
 			}
+		})
+	}
+}
+
+// A request without a sticky session is a session of its own (CONTRACTS
+// §71.2): retried on the same account it is one session there, not one per
+// admission, and it leaves the account a retry moves it from, whether or not
+// the retry keeps sticky bindings: it has none (§71.3).
+func TestFailurePolicyRequestSessionCountsOnce(t *testing.T) {
+	for _, exhausted := range []string{failureReset, failureSwitch} {
+		t.Run(exhausted, func(t *testing.T) {
+			e := newEnv(t)
+			e.gw.d.Limiter = account.NewLimiter(e.rdb)
+			e.accounts.set(1, func(acc *core.Account) { acc.SPMLimit = 1 })
+			p := testFailurePolicy()
+			p.MaxRetries = 2
+			p.RetryRules[0].Action, p.RetryRules[0].SameAccountRetries, p.RetryRules[0].ExhaustedAction = failureRetry, 1, exhausted
+			e.setFailurePolicy(p)
+			e.up.set("acc-1", &upstreamRule{status: 503})
+			require.Equal(t, 200, e.messages(body(testModel, false)).status)
+			e.record()
+			// The same-account retry fits account 1's cap of one session: its own.
+			require.Equal(t, []string{"acc-1", "acc-1", "acc-2"}, e.up.keys())
+			u, err := e.gw.d.Limiter.Usage(t.Context(), []core.AccountRef{{ID: 1}, {ID: 2}})
+			require.NoError(t, err)
+			require.Equal(t, int64(0), u[1].Sessions, "the retry took the request off account 1")
+			require.Equal(t, int64(2), u[1].RPM, "its requests stay counted")
+			require.Equal(t, int64(1), u[2].Sessions)
 		})
 	}
 }

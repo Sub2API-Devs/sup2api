@@ -14,6 +14,7 @@ describe('sectionOfErrors', () => {
   it("counts a fixed control and a model list's limit as scheduling fields", () => {
     expect(isSchedulingField('schedulable')).toBe(true)
     expect(isSchedulingField('model_limits[0].rpm_limit')).toBe(true)
+    expect(isSchedulingField('spm_window_seconds')).toBe(true)
     expect(isSchedulingField('models')).toBe(false)
     expect(sectionOfErrors({ header_passthrough: 'blocked', 'model_limits[0].models': 'invalid' }, {})).toBe('scheduling')
   })

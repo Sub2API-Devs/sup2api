@@ -215,15 +215,30 @@ func (in watchInput) historyReason(note string) string {
 	return note
 }
 
-// protectedUser refuses to put a user moderation leaves alone on the watch
-// list or under a ban by hand: exempt users and moderators (staff), whom
-// the hook never watches or bans either (new-api: administrators).
-func (p *Plugin) protectedUser(ctx context.Context, c *config, uid int64) pluginsdk.FieldErrors {
-	if c.exempt[uid] {
-		return pluginsdk.FieldErrors{}.Add("user_id", "exempt", "the user is exempt from moderation / 该用户在豁免名单中")
-	}
+// staffUser refuses to put a moderator (staff) on the watch list or under a
+// ban by hand: the hook never watches or bans them either (new-api:
+// administrators).
+func (p *Plugin) staffUser(ctx context.Context, uid int64) pluginsdk.FieldErrors {
 	if p.isStaff(ctx, uid) {
 		return pluginsdk.FieldErrors{}.Add("user_id", "staff", "moderators are not watched or banned / 审核管理员不进入观察名单，也不会被封禁")
+	}
+	return nil
+}
+
+// unbannableUser refuses a ban by hand: moderators, and allowlisted users,
+// who are never refused (a ban is heavier than a refusal).
+func (p *Plugin) unbannableUser(ctx context.Context, c *config, uid int64) pluginsdk.FieldErrors {
+	if c.allowlisted(uid) {
+		return pluginsdk.FieldErrors{}.Add("user_id", "allowlisted", "allowlisted users cannot be banned / 白名单用户不能封禁")
+	}
+	return p.staffUser(ctx, uid)
+}
+
+// allowlistedEnforce refuses the enforce level for an allowlisted user
+// (new-api moderationWatchChange).
+func allowlistedEnforce(c *config, uid int64, level *string) pluginsdk.FieldErrors {
+	if level != nil && *level == LevelEnforce && c.allowlisted(uid) {
+		return pluginsdk.FieldErrors{}.Add("level", "allowlisted", "allowlisted users can only be observed / 白名单用户只能设为观察")
 	}
 	return nil
 }
@@ -248,7 +263,7 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
 	uid := v.uid
-	if errs := p.protectedUser(ctx, c, uid); len(errs) > 0 {
+	if errs := append(allowlistedEnforce(c, uid, in.Level), p.staffUser(ctx, uid)...); len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
 	if resp := p.missingUser(ctx, uid); resp != nil {
@@ -305,6 +320,9 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	c := p.cfg.Load()
 	v, errs := in.validate(false)
+	if len(errs) == 0 {
+		errs = allowlistedEnforce(c, uid, in.Level)
+	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}

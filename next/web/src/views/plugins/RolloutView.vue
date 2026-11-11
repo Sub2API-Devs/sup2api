@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner, confirm, toast } from '@sub2api/ui'
 import PluginStatusBadge from './parts/PluginStatusBadge.vue'
 import type { Rollout, RolloutNode } from '@/api/types'
 import { lt } from '@/i18n'
@@ -167,11 +167,18 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="mx-auto max-w-4xl">
-    <div class="mb-4">
-      <SLink :to="`/plugins/${encodeURIComponent(key)}`" class="inline-flex items-center gap-1 text-sm">
-        <SIcon name="arrow-left" class="h-4 w-4" />{{ name }}
-      </SLink>
-    </div>
+    <SPageHeader :title="rollout ? `${name} · ${t(`plugins.rollout.actions.${rollout.action}`)}` : name">
+      <template v-if="rollout" #title-extra>
+        <span class="font-mono text-sm text-gray-500">
+          <template v-if="rollout.from_version">v{{ rollout.from_version }} → </template>v{{ rollout.target_version }}
+        </span>
+        <PluginStatusBadge :status="rollout.phase" :title="t('plugins.rollout.phase')" />
+        <SSpinner v-if="running" size="sm" class="text-primary-500" />
+      </template>
+      <template #actions>
+        <SButton :to="`/plugins/${encodeURIComponent(key)}`" icon="arrow-left">{{ t('plugins.rollout.backToDetail') }}</SButton>
+      </template>
+    </SPageHeader>
 
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
 
@@ -182,22 +189,6 @@ onBeforeUnmount(() => {
     </SCard>
 
     <template v-else>
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
-          {{ name }}
-          <span class="mx-1 text-gray-400">·</span>
-          <span class="text-base font-normal">{{ t(`plugins.rollout.actions.${rollout.action}`) }}</span>
-          <span class="ml-2 font-mono text-base font-normal text-gray-500">
-            <template v-if="rollout.from_version">v{{ rollout.from_version }} → </template>v{{ rollout.target_version }}
-          </span>
-        </h1>
-        <div class="flex items-center gap-2 text-sm">
-          <SHint inline>{{ t('plugins.rollout.phase') }}</SHint>
-          <PluginStatusBadge :status="rollout.phase" />
-          <SSpinner v-if="running" size="sm" class="text-primary-500" />
-        </div>
-      </div>
-
       <!-- result banners -->
       <SAlert v-if="phase === 'active'" tone="success" :title="t(`plugins.rollout.success.${rollout.action}`, { version: rollout.target_version })" class="mb-4">
         <template #actions>

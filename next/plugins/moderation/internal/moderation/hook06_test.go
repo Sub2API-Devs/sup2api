@@ -52,7 +52,7 @@ func TestHookModeratesWholeRequestWithSegmentCache(t *testing.T) {
 	}
 	// The same clean conversation again calls nothing.
 	before := len(mod.moderated())
-	if r := mustHook(t, h, rawReq(3, "", "anthropic.messages", `{"system":"you help","messages":[{"role":"user","content":"hello  there"}]}`)); denied(r) || r.GetNote() != notePrefix+"pass (cached)" {
+	if r := mustHook(t, h, rawReq(3, "", "anthropic.messages", `{"system":"you help","messages":[{"role":"user","content":"hello  there"}]}`)); denied(r) || r.GetNote() != cachedPass {
 		t.Fatalf("cached = %+v", r)
 	}
 	if len(mod.moderated()) != before {
@@ -90,6 +90,83 @@ func TestHookModeratesWholeRequestWithSegmentCache(t *testing.T) {
 	}
 	if prefill == nil {
 		t.Fatal("the prefill record keeps no input")
+	}
+}
+
+// In a mixed flow an image that is not cached as passed is sent together with
+// the text of its request, also the text that is cached (fifth round,
+// makePlan): what an image is judged with does not depend on what other
+// requests cached. Once the image has passed, the request is answered from
+// the cache and cached text is left out again. In a flow that is not mixed
+// the image goes without the cached text, as before the fifth round.
+func TestHookSendsCachedTextWithANewImage(t *testing.T) {
+	t.Run("mixed", func(t *testing.T) { hookSendsANewImage(t, true) })
+	t.Run("not mixed", func(t *testing.T) { hookSendsANewImage(t, false) })
+}
+
+// hookSendsANewImage runs the sequence in a flow of one stage: the OpenAI
+// auditor alone, or (mixed) beside a Jev auditor that takes no images.
+func hookSendsANewImage(t *testing.T, mixed bool) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	if mixed {
+		setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI, AuditorTypeSafe})
+		jevWithoutImages(t, h)
+	} else {
+		setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	}
+	picture := encodePNG(t, filled(40, 30, red))
+	send := func(content ...any) *pluginv1.GatewayRequestHookResponse {
+		t.Helper()
+		b, _ := json.Marshal(map[string]any{"system": "you describe pictures", "messages": []any{map[string]any{"role": "user", "content": content}}})
+		r := mustHook(t, h, rawReq(3, "", "anthropic.messages", string(b)))
+		written(t, p)
+		return r
+	}
+	text := func(s string) any { return map[string]any{"type": "text", "text": s} }
+	image := map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": picture}}
+	// last is the one call a request made to the OpenAI auditor.
+	last := func(calls int) string {
+		t.Helper()
+		sent := mod.moderated()
+		if len(sent) != calls {
+			t.Fatalf("%d upstream calls, want %d", len(sent), calls)
+		}
+		return sent[calls-1]
+	}
+
+	// The text passes and is cached.
+	if r := send(text("what is on this one")); denied(r) || r.GetNote() == cachedPass {
+		t.Fatalf("the text = %+v", r)
+	}
+	last(1)
+	// A request without an image: cached text is not sent again.
+	if r := send(text("what is on this one"), text("and a second question")); denied(r) {
+		t.Fatalf("more text = %+v", r)
+	}
+	if call := last(2); strings.Contains(call, "what is on this one") || strings.Contains(call, "you describe pictures") || !strings.Contains(call, "and a second question") {
+		t.Fatalf("the call for new text sent %s", call)
+	}
+	// A new image, in one call: in a mixed flow the cached text goes with
+	// it, otherwise it goes alone.
+	if r := send(text("what is on this one"), image); denied(r) || r.GetNote() == cachedPass {
+		t.Fatalf("a new image = %+v", r)
+	}
+	if call := last(3); strings.Contains(call, "what is on this one") != mixed || strings.Contains(call, "you describe pictures") != mixed || !strings.Contains(call, picture) {
+		t.Fatalf("the call for the new image sent %.400s", call)
+	}
+	// The image has passed: the same request calls nothing.
+	if r := send(text("what is on this one"), image); r.GetNote() != cachedPass {
+		t.Fatalf("the same request again = %+v", r)
+	}
+	last(3)
+	// With every image of the request cached, cached text is left out as
+	// before: only what is new is sent.
+	if r := send(text("what is on this one"), image, text("and what colour is it")); denied(r) {
+		t.Fatalf("new text beside the cached image = %+v", r)
+	}
+	if call := last(4); strings.Contains(call, "what is on this one") || strings.Contains(call, "you describe pictures") || strings.Contains(call, picture) || !strings.Contains(call, "and what colour is it") {
+		t.Fatalf("the call for new text beside the cached image sent %.400s", call)
 	}
 }
 
@@ -234,7 +311,7 @@ func TestShutdownDrainsPostQueue(t *testing.T) {
 			setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 			mod.delay.Store(int64(tc.delay))
 			for i := range 4 {
-				if r := mustHook(t, h, hookReqAs(3, fmt.Sprintf("q%d", i), fmt.Sprintf("queued text %d", i))); r.GetNote() != notePrefix+"queued" {
+				if r := mustHook(t, h, hookReqAs(3, fmt.Sprintf("q%d", i), fmt.Sprintf("queued text %d", i))); r.GetNote() != queuedNote {
 					t.Fatalf("not queued: %+v", r)
 				}
 			}
@@ -261,6 +338,90 @@ func TestErrorRecordsKeepShortText(t *testing.T) {
 	var n int
 	if err := db.QueryRow(context.Background(), `SELECT char_length(text) FROM events WHERE request_id = 'err'`).Scan(&n); err != nil || n != 100 {
 		t.Fatalf("error text = %d %v", n, err)
+	}
+}
+
+// The raw messages of the verdict chunk are kept when a stage hit; of the
+// other records only with record_pass_input_message; never of an error
+// record, and never with store_text off (CONTRACTS §72.9).
+func TestInputMessageKeptPerSetting(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	// Group 9: one stage. Group 10: two stages. Group 11: one stage and a
+	// fallback stage. hate is an OpenAI category only, custom/jailbreak a Jev
+	// one only.
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	auditors := decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil))
+	channels := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
+	if len(auditors) != 1 || len(channels) != 1 {
+		t.Fatalf("auditors %d, channels %d", len(auditors), len(channels))
+	}
+	oai := auditors[0].ID
+	jevCh := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelTypeSafe, "name": "jev", "base_url": mod.srv.URL, "api_key": "key-jev"}))
+	jev := decodeData[AuditorView](t, h.Do("POST", "/auditors", nil, map[string]any{"name": "jev", "type": AuditorTypeSafe, "channel_id": jevCh.ID})).ID
+	publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, oai), stageOf(false, jev)}}, 10) // two stages
+	publishFlow(t, h, Spec{Stages: []Stage{stageOf(false, oai), stageOf(true, jev)}}, 11)  // a fallback stage
+	db, _ := p.db(context.Background())
+	const on, off = true, false
+	for i, tc := range []struct {
+		name      string
+		group     int64
+		text      string
+		storeText bool
+		passToo   bool // record_pass_input_message
+		result    string
+		kept      bool
+	}{
+		{"hit", 9, "MOD-HIT-sexual words", on, off, ResultBlock, true},
+		{"first stage failed, second hit", 10, "OAI-500 MOD-HIT-sexual words", on, off, ResultBlock, true},
+		{"first stage hit, second passed", 10, "MOD-HIT-hate words", on, off, ResultOverturned, true},
+		{"pass with the switch", 9, "calm words", on, on, ResultPass, true},
+		{"pass without the switch", 9, "calm words", on, off, ResultPass, false},
+		{"fallback stage hit", 11, "MOD-HIT-custom/jailbreak words", on, off, ResultBlock, true},
+		{"error", 9, "MOD-500 " + strings.Repeat("private ", 40), on, on, ResultError, false},
+		{"hit without store_text", 9, "MOD-HIT-sexual words", off, on, ResultBlock, false},
+		{"pass without store_text", 9, "calm words", off, on, ResultPass, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if errs := h.Configure(map[string]any{"mode": ModeEnforce, "record_pass": true, "store_text": tc.storeText,
+				"record_pass_input_message": tc.passToo, "error_text_max_chars": 50, "cache_ttl_seconds": 0}, nil); len(errs) > 0 {
+				t.Fatal(errs)
+			}
+			rid := fmt.Sprintf("keep-%d", i)
+			req := hookReqAs(3, rid, fmt.Sprintf("%s %d", tc.text, i))
+			req.Meta.GroupId = tc.group
+			if r := mustHook(t, h, req); denied(r) != (tc.result == ResultBlock) {
+				t.Fatalf("hook = %+v", r)
+			}
+			ev := waitEvents(t, h, map[string]string{"request_id": rid}, 1)[0]
+			if ev.Result != tc.result {
+				t.Fatalf("result = %s, want %s (trace %s)", ev.Result, tc.result, ev.Trace)
+			}
+			var msg, text *string
+			var size int
+			if err := db.QueryRow(context.Background(), `SELECT input_message::text, input_message_size, text FROM events WHERE id = $1`, ev.ID).Scan(&msg, &size, &text); err != nil {
+				t.Fatal(err)
+			}
+			if kept := msg != nil; kept != tc.kept || (size > 0) != tc.kept || (ev.InputMessageSize > 0) != tc.kept {
+				t.Fatalf("input message kept = %v (size %d, listed %d), want %v", kept, size, ev.InputMessageSize, tc.kept)
+			}
+			if tc.kept && !strings.Contains(*msg, fmt.Sprintf("words %d", i)) {
+				t.Fatalf("input message = %s", *msg)
+			}
+			switch {
+			case !tc.storeText:
+				if text != nil {
+					t.Fatalf("text stored without store_text: %q", *text)
+				}
+			case tc.result == ResultError:
+				// Error records keep only the start of the text.
+				if text == nil || len([]rune(*text)) != 50 {
+					t.Fatalf("error text = %v", text)
+				}
+			case text == nil || !strings.Contains(*text, tc.text):
+				t.Fatalf("text = %v", text)
+			}
+		})
 	}
 }
 

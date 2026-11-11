@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -12,43 +13,113 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
 
-// The most specific binding decides (CONTRACTS §72.17): the account within
-// the group, the account in any group, the group, the default group.
-func TestFlowForAccount(t *testing.T) {
-	f1, f2, f3 := &liveFlow{ID: 1}, &liveFlow{ID: 2}, &liveFlow{ID: 3}
+// bindingSnapshot builds a snapshot with the live flows and the bindings
+// {group, account, flow} as loadSnapshot registers them (account 0 = a
+// group binding).
+func bindingSnapshot(live []int64, bindings ...[3]int64) *snapshot {
 	s := emptySnapshot()
-	s.byGroup[0], s.byGroup[9], s.byGroup[10] = f1, f2, nil
-	s.addAccountBinding(accountKey{9, 7}, f3)
-	s.addAccountBinding(accountKey{0, 7}, nil) // exempt in any group
-	s.addAccountBinding(accountKey{0, 8}, f3)
-	for _, tc := range []struct {
-		group, account int64
-		want           *liveFlow
-	}{
-		{9, 7, f3},  // group + account beats the account
-		{5, 7, nil}, // the account is exempt elsewhere
-		{9, 8, f3},  // the account beats the group
-		{10, 8, f3}, // ... and a group bound to no flow
-		{9, 6, f2},  // the group
-		{5, 6, f1},  // the default
-		{10, 6, nil},
-	} {
-		if got := s.flowForAccount(tc.group, tc.account); got != tc.want {
-			t.Errorf("flowForAccount(%d, %d) = %v, want %v", tc.group, tc.account, got, tc.want)
+	for _, id := range live {
+		s.flows[id] = &liveFlow{ID: id}
+	}
+	for _, b := range bindings {
+		if b[1] == 0 {
+			s.bindGroup(b[0], b[2])
+		} else {
+			s.bindAccount(accountKey{b[0], b[1]}, b[2])
 		}
 	}
+	return s
+}
+
+// The most specific binding decides (CONTRACTS §72.17): the account within
+// the group, the account in any group, the group, the default group. A
+// binding to flow 0 exempts; a binding to a flow that is disabled or
+// unpublished (not in snapshot.flows) counts as absent. The same cases as
+// ui/native/src/bindingOps.spec.ts.
+func TestFlowForAccount(t *testing.T) {
+	// Flows 1-3 are live, 4 and 5 are disabled or unpublished.
+	live := []int64{1, 2, 3}
+	s := bindingSnapshot(live, [3]int64{0, 0, 1}, [3]int64{9, 0, 2}, [3]int64{10, 0, 0},
+		[3]int64{9, 7, 3}, [3]int64{0, 7, 0}, [3]int64{0, 8, 3})
+	type want struct {
+		group, account int64
+		flow           int64 // 0 = not moderated
+	}
+	check := func(t *testing.T, s *snapshot, cases ...want) {
+		t.Helper()
+		for _, tc := range cases {
+			var got int64
+			if f := s.flowForAccount(tc.group, tc.account); f != nil {
+				got = f.ID
+			}
+			if got != tc.flow {
+				t.Errorf("flowForAccount(%d, %d) = flow %d, want %d", tc.group, tc.account, got, tc.flow)
+			}
+		}
+	}
+	check(t, s,
+		want{9, 7, 3},  // group + account beats the account
+		want{5, 7, 0},  // the account is exempt elsewhere
+		want{9, 8, 3},  // the account beats the group
+		want{10, 8, 3}, // ... and a group bound to no flow
+		want{9, 6, 2},  // the group
+		want{5, 6, 1},  // the default
+		want{10, 6, 0},
+	)
 	if !s.perAccount(5) || !s.perAccount(9) {
 		t.Fatal("an any-group account binding makes every group per account")
 	}
-	g := emptySnapshot()
-	g.byGroup[0] = f1
-	g.addAccountBinding(accountKey{9, 7}, f3)
+	g := bindingSnapshot(live, [3]int64{0, 0, 1}, [3]int64{9, 7, 3})
 	if !g.perAccount(9) || g.perAccount(5) {
 		t.Fatal("a group + account binding makes only its group per account")
 	}
 	if emptySnapshot().perAccount(0) {
 		t.Fatal("no account binding, no group per account")
 	}
+
+	t.Run("group bound to a disabled flow takes the default flow", func(t *testing.T) {
+		s := bindingSnapshot(live, [3]int64{0, 0, 1}, [3]int64{9, 0, 4})
+		check(t, s, want{9, 6, 1}, want{9, 0, 1})
+		if f := s.flowFor(9); f == nil || f.ID != 1 {
+			t.Fatalf("flowFor(9) = %+v", f)
+		}
+		// The console still lists the group under the disabled flow.
+		if got := s.groupsOf(4); len(got) != 1 || got[0] != 9 {
+			t.Fatalf("groupsOf(4) = %v", got)
+		}
+	})
+	t.Run("group bound to an unpublished flow falls back", func(t *testing.T) {
+		// An unpublished flow is not in snapshot.flows either; without a
+		// default flow nothing is left.
+		check(t, bindingSnapshot(live, [3]int64{0, 0, 2}, [3]int64{9, 0, 5}), want{9, 6, 2})
+		check(t, bindingSnapshot(live, [3]int64{9, 0, 5}), want{9, 6, 0})
+	})
+	t.Run("group + account bound to a disabled flow takes the account binding", func(t *testing.T) {
+		s := bindingSnapshot(live, [3]int64{0, 0, 1}, [3]int64{9, 0, 2}, [3]int64{9, 7, 4}, [3]int64{0, 7, 3})
+		check(t, s, want{9, 7, 3})
+	})
+	t.Run("both account bindings disabled take the group flow", func(t *testing.T) {
+		s := bindingSnapshot(live, [3]int64{0, 0, 1}, [3]int64{9, 0, 2}, [3]int64{9, 7, 4}, [3]int64{0, 7, 5})
+		check(t, s, want{9, 7, 2}, want{5, 7, 1})
+		// Bindings that do not apply do not send the group to the attempts.
+		if s.perAccount(9) || s.perAccount(5) {
+			t.Fatal("inactive account bindings made a group per account")
+		}
+	})
+	t.Run("every level disabled or absent is not moderated", func(t *testing.T) {
+		s := bindingSnapshot(live, [3]int64{0, 0, 4}, [3]int64{9, 0, 5}, [3]int64{9, 7, 4}, [3]int64{0, 7, 5})
+		check(t, s, want{9, 7, 0}, want{9, 6, 0}, want{5, 6, 0})
+		check(t, bindingSnapshot(live), want{9, 7, 0})
+	})
+	t.Run("flow 0 exempts and does not fall back", func(t *testing.T) {
+		s := bindingSnapshot(live, [3]int64{0, 0, 1}, [3]int64{9, 0, 2}, [3]int64{9, 7, 0}, [3]int64{0, 7, 3})
+		check(t, s, want{9, 7, 0}, want{5, 7, 3})
+		if !s.perAccount(9) {
+			t.Fatal("an exempt account binding makes its group per account")
+		}
+		// An exempt group does not fall back to the default either.
+		check(t, bindingSnapshot(live, [3]int64{0, 0, 1}, [3]int64{10, 0, 0}), want{10, 6, 0})
+	})
 }
 
 func TestAttemptRuns(t *testing.T) {
@@ -128,8 +199,9 @@ func noteFlow(r *pluginv1.GatewayRequestHookResponse, flow int64) bool {
 
 // Upgrade compatibility (§72.17): the group bindings of 0.6.x keep their
 // meaning - a group with its own binding uses its flow, any other group the
-// default flow, a group bound to a disabled flow is not moderated - and the
-// request hook settles every such request, so the attempt hook adds nothing.
+// default flow, an exempt group (flow 0) is not moderated - and the request
+// hook settles every such request, so the attempt hook adds nothing. Since
+// 0.8.0 a group bound to a disabled flow falls back to the default flow.
 func TestUpgradeKeepsGroupBindings(t *testing.T) {
 	mod := newFakeMod(t)
 	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
@@ -140,13 +212,14 @@ func TestUpgradeKeepsGroupBindings(t *testing.T) {
 	own := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	off := setupFlow(t, h, mod.srv.URL, []int64{10}, CombineAny, []string{AuditorOpenAI})
 	decodeData[map[string]any](t, h.Do("PUT", fmt.Sprintf("/flows/%d/enabled", off), nil, map[string]any{"enabled": false}))
+	putBinding(t, h, 12, 0, 0) // group 12 is exempt
 	if !p.attemptHook.Load() {
 		t.Fatal("attempt hook grant not seen")
 	}
 	for _, tc := range []struct {
 		group int64
 		flow  int64 // 0 = not moderated
-	}{{9, own}, {11, def}, {0, def}, {10, 0}} {
+	}{{9, own}, {11, def}, {0, def}, {10, def}, {12, 0}} {
 		r := mustHook(t, h, requestReq("", tc.group, fmt.Sprintf("MOD-HIT-sexual group %d", tc.group)))
 		if !r.GetSkipAttemptHooks() {
 			t.Fatalf("group %d: request hook did not settle the request: %+v", tc.group, r)
@@ -170,13 +243,104 @@ func TestUpgradeKeepsGroupBindings(t *testing.T) {
 		t.Fatal("attempt hook called the auditor")
 	}
 	v := decodeData[BindingsView](t, h.Do("GET", "/bindings", nil, nil))
-	if !v.AccountBindingsActive || len(v.Bindings) != 3 {
+	if !v.AccountBindingsActive || len(v.Bindings) != 4 {
 		t.Fatalf("bindings = %+v", v)
 	}
 	for _, b := range v.Bindings {
 		if b.Kind != BindingGroup || b.AccountID != 0 {
 			t.Fatalf("binding %+v is not a group binding", b)
 		}
+		// Only the binding to the disabled flow is inactive; the exempt
+		// one applies.
+		if b.Inactive != (b.GroupID == 10) {
+			t.Fatalf("binding %+v: inactive = %v", b, b.Inactive)
+		}
+	}
+	// Once the flow is enabled again its binding applies as before.
+	decodeData[map[string]any](t, h.Do("PUT", fmt.Sprintf("/flows/%d/enabled", off), nil, map[string]any{"enabled": true}))
+	if r := mustHook(t, h, requestReq("", 10, "MOD-HIT-sexual group 10 again")); !denied(r) || !noteFlow(r, off) {
+		t.Fatalf("group 10 after enabling its flow: %+v", r)
+	}
+}
+
+// Account bindings that all point to a disabled flow do not apply, so they
+// do not leave the group to the attempts: the request hook moderates by the
+// group and settles the request. GET /bindings marks them inactive.
+func TestInactiveAccountBindingDoesNotDeferToAttempt(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	if errs := h.Configure(map[string]any{"mode": ModeEnforce}, attemptGrants); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	def := setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
+	off := setupFlow(t, h, mod.srv.URL, nil, CombineAny, []string{AuditorOpenAI})
+	auds := decodeData[[]AuditorView](t, h.Do("GET", "/auditors", nil, nil))
+	draft := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "draft",
+		"draft": map[string]any{"stages": []any{map[string]any{"auditors": []int64{auds[0].ID}}}}}))
+	putBinding(t, h, 9, 7, off)
+	putBinding(t, h, 0, 8, off)
+	putBinding(t, h, 9, 6, draft.ID) // never published
+
+	// While the flow is enabled the group is left to the attempts.
+	if r := mustHook(t, h, requestReq("a1", 9, "MOD-HIT-sexual")); denied(r) || r.GetSkipAttemptHooks() || r.GetNote() != notePrefix+"per account" {
+		t.Fatalf("active account binding = %+v", r)
+	}
+	if r := mustHook(t, h, attemptReq("a1", 9, 7, "MOD-HIT-sexual")); !denied(r) || !noteFlow(r, off) {
+		t.Fatalf("attempt on the bound account = %+v", r)
+	}
+
+	decodeData[map[string]any](t, h.Do("PUT", fmt.Sprintf("/flows/%d/enabled", off), nil, map[string]any{"enabled": false}))
+	if s := p.snap.Load(); s.perAccount(9) || s.perAccount(5) || len(s.byAccount) != 0 {
+		t.Fatalf("inactive bindings in the snapshot: %+v", s.byAccount)
+	}
+	for _, group := range []int64{9, 5} {
+		r := mustHook(t, h, requestReq("", group, fmt.Sprintf("MOD-HIT-sexual inactive %d", group)))
+		if !denied(r) || !r.GetSkipAttemptHooks() || !noteFlow(r, def) {
+			t.Fatalf("group %d: %+v, want a hit of the default flow settled by the request hook", group, r)
+		}
+	}
+	// The attempt hook has nothing left to do for these requests.
+	n := len(mod.moderated())
+	mustHook(t, h, requestReq("a2", 9, "MOD-HIT-violence"))
+	if r := mustHook(t, h, attemptReq("a2", 9, 7, "MOD-HIT-violence")); denied(r) || r.GetNote() != "" || len(mod.moderated()) != n+1 {
+		t.Fatalf("attempt after the request hook settled = %+v", r)
+	}
+
+	v := decodeData[BindingsView](t, h.Do("GET", "/bindings", nil, nil))
+	if len(v.Bindings) != 4 {
+		t.Fatalf("bindings = %+v", v.Bindings)
+	}
+	for _, b := range v.Bindings {
+		if want := b.AccountID != 0; b.Inactive != want {
+			t.Fatalf("binding %+v: inactive = %v, want %v", b, b.Inactive, want)
+		}
+	}
+	// The list a write answers with carries the mark too, and an exempt
+	// binding is never inactive.
+	v = putBinding(t, h, 9, 7, 0)
+	for _, b := range v.Bindings {
+		if want := b.AccountID != 0 && b.FlowID != 0; b.Inactive != want {
+			t.Fatalf("binding %+v after the write: inactive = %v, want %v", b, b.Inactive, want)
+		}
+	}
+	// A binding whose flow row is gone is inactive as well (a deleted flow
+	// normally takes its bindings with it).
+	db, err := p.db(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(context.Background(), `INSERT INTO flow_accounts (group_id, account_id, flow_id) VALUES (3, 4, 99999)`); err != nil {
+		t.Fatal(err)
+	}
+	v = decodeData[BindingsView](t, h.Do("GET", "/bindings", nil, nil))
+	found := false
+	for _, b := range v.Bindings {
+		if b.FlowID == 99999 {
+			found = b.Inactive
+		}
+	}
+	if !found {
+		t.Fatalf("binding to a missing flow not inactive: %+v", v.Bindings)
 	}
 }
 
@@ -267,5 +431,47 @@ func TestAccountBindingsModerateEachAttempt(t *testing.T) {
 	}
 	if v := decodeData[BindingsView](t, h.Do("GET", "/bindings", nil, nil)); v.AccountBindingsActive {
 		t.Fatal("account bindings reported active without the grant")
+	}
+}
+
+// GET /bindings reports a binding as inactive when this node does not run
+// its flow, also for a published and enabled flow whose spec it cannot read.
+func TestBindingInactiveFollowsSnapshot(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	inactive := func() bool {
+		t.Helper()
+		v := decodeData[BindingsView](t, h.Do("GET", "/bindings", nil, nil))
+		if len(v.Bindings) != 1 || v.Bindings[0].FlowID != flow || v.Bindings[0].GroupID != 9 {
+			t.Fatalf("bindings = %+v", v.Bindings)
+		}
+		return v.Bindings[0].Inactive
+	}
+	if inactive() {
+		t.Fatal("binding to a running flow is inactive")
+	}
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual words")); !denied(r) {
+		t.Fatalf("not moderated: %+v", r)
+	}
+	// The published spec has a field this version does not know: the flow
+	// is dropped from the snapshot (still published and enabled in the
+	// table), the request is not moderated and the binding says so.
+	ctx := context.Background()
+	db, _ := p.db(ctx)
+	if _, err := db.Exec(ctx, `UPDATE flows SET published = published || '{"from_a_later_version": 1}'::jsonb WHERE id = $1`, flow); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.reloadConfig(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if p.snap.Load().flows[flow] != nil {
+		t.Fatal("the flow with an unreadable spec is still in the snapshot")
+	}
+	if r := mustHook(t, h, hookReq("MOD-HIT-sexual words again")); denied(r) {
+		t.Fatalf("moderated by a flow that is not running: %+v", r)
+	}
+	if !inactive() {
+		t.Fatal("binding to a flow the node does not run is reported active")
 	}
 }

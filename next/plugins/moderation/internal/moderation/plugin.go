@@ -13,7 +13,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
+	"runtime/debug"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,8 +43,12 @@ type Plugin struct {
 	httpClient *http.Client
 	proxies    proxyClients
 
-	agent  *agent
-	cache  atomic.Pointer[lru]
+	agent *agent
+	cache atomic.Pointer[lru]
+	// kvMu: this node's changes of verdict cache keys in the KV take turns
+	// (kvLock). A lock is held while its channel holds a value, so that
+	// waiting for one can end with a context.
+	kvMu   [kvLockStripes]chan struct{}
 	sf     singleflight.Group
 	sem    atomic.Pointer[semaphore] // background (post) calls
 	preSem atomic.Pointer[semaphore] // calls a request waits for
@@ -58,6 +65,12 @@ type Plugin struct {
 	watchVersion atomic.Int64
 
 	legacyDone atomic.Bool
+	// parityDone: the one-time 0.8.0 conversion of the watch list ran
+	// (convertParityOnce).
+	parityDone atomic.Bool
+	// parityEnd: when the conversion stops looking for entries added by
+	// 0.7.x nodes (unix nanoseconds; read once parityDone is set).
+	parityEnd atomic.Int64
 	// configured: Configure ran at least once, so the legacy conversion
 	// sees the real settings and not the defaults.
 	configured atomic.Bool
@@ -82,6 +95,9 @@ type Plugin struct {
 	postCancel context.CancelFunc
 
 	eventWriter *batch.Writer[eventRec]
+	// eventFlushEvery is the time limit before the event writer flushes;
+	// zero is the SDK's default (batch.DefaultInterval). Set before Init.
+	eventFlushEvery time.Duration
 
 	hourly     *statsAcc
 	categories categoryCache
@@ -106,6 +122,16 @@ type Plugin struct {
 		inflight, latencyMsSum                                     atomic.Int64
 		droppedNotices, noticeErrors                               atomic.Int64
 		busy, shutdownDropped, suspiciousRetries                   atomic.Int64
+		// imagesRefused: the auditor calls whose images the upstream refused
+		// (Outcome.ImagesRefused).
+		imagesRefused atomic.Int64
+		// preWaiting: the requests waiting for their run (runPre);
+		// kvWriting: the runs whose verdicts are on their way to the KV
+		// (Runtime.KVWriting).
+		preWaiting, kvWriting atomic.Int64
+		// kvSkipped: the runs whose verdicts were not written
+		// (Runtime.KVSkipped).
+		kvSkipped atomic.Int64
 	}
 
 	bg     context.Context
@@ -128,6 +154,9 @@ func New() *Plugin {
 		notices:      make(chan notice, 256),
 		priceCache:   map[string]priceStateEntry{},
 	}
+	for i := range p.kvMu {
+		p.kvMu[i] = make(chan struct{}, 1)
+	}
 	p.attempts = newAttemptRuns(func() time.Time { return p.now() })
 	p.bg, p.cancel = context.WithCancel(context.Background())
 	p.postCtx, p.postCancel = context.WithCancel(context.Background())
@@ -146,6 +175,7 @@ func New() *Plugin {
 	p.OnTopic(TopicBlocksChanged, p.onBroadcast(p.reloadBlocks))
 	p.OnTopic(TopicConfigChanged, p.onBroadcast(p.reloadConfig))
 	p.OnTopic(TopicWatchChanged, p.onBroadcast(p.reloadWatch))
+	p.OnTopic(TopicVerdictChanged, p.onVerdictChanged)
 	return p
 }
 
@@ -154,6 +184,7 @@ func New() *Plugin {
 func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	p.host = h
 	p.log = h.Logger()
+	jevLogger.Store(p.log)
 	// A batch that fails is dropped; drops are counted here and by finish
 	// (the writer's own drop count would also see a full queue whose
 	// suspicious record finish then writes itself). Only Shutdown stops it,
@@ -167,7 +198,7 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 		kept := p.retrySuspicious(ctx, evs)
 		p.stats.droppedEvents.Add(int64(len(evs) - kept))
 		return nil
-	}, nil)
+	}, nil, batch.WithInterval(p.eventFlushEvery))
 	p.wg.Add(3)
 	go p.refreshLoop(p.bg)
 	go p.statsLoop(p.bg)
@@ -184,6 +215,14 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 	s, err := DecodeSettings(cfg.JSON)
 	if err != nil {
 		return pluginsdk.FieldErrors{}.Add("", "invalid_json", "settings must be a JSON object / 设置必须是 JSON 对象").Err()
+	}
+	for _, key := range s.truncated {
+		p.log.Warn("moderation: user list cut to its limit", "key", key, "limit", maxUserList)
+	}
+	for _, key := range slices.Sorted(maps.Keys(s.droppedIDs)) {
+		// A dropped entry is a user the list does not cover: an allowlisted
+		// user moderated first, or a blocklisted one who is not.
+		p.log.Warn("moderation: user list entries that are no user id were dropped", "key", key, "dropped", s.droppedIDs[key])
 	}
 	c := compile(s)
 	c.settingsHash = settingsDigest(cfg.JSON)
@@ -241,6 +280,10 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 		"cache_hits":       float64(p.stats.cacheHits.Load()),
 		"inflight":         float64(p.stats.inflight.Load()),
 		"inflight_bytes":   float64(p.inflightBytes.Load()),
+		"kv_errors":        float64(p.stats.kvErrors.Load()),
+		"kv_writing":       float64(p.stats.kvWriting.Load()),
+		"kv_skipped":       float64(p.stats.kvSkipped.Load()),
+		"redraw_panics":    float64(jevRedrawPanics.Load()),
 		"busy":             float64(p.stats.busy.Load()),
 		"shutdown_dropped": float64(p.stats.shutdownDropped.Load()),
 		"blocked_users":    float64(p.blockedCount()),
@@ -308,18 +351,30 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	return errors.Join(err, p.eventWriter.Stop())
 }
 
+// recoverTracked keeps a panic in a background goroutine from ending the
+// plugin process.
+func (p *Plugin) recoverTracked() {
+	if r := recover(); r != nil {
+		p.log.Error("moderation: background task panicked", "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+	}
+}
+
 // goTracked runs fn in a goroutine Shutdown waits for before it stops the
 // event writer. Once Shutdown began, fn runs untracked.
 func (p *Plugin) goTracked(fn func()) {
 	p.poolMu.RLock()
 	defer p.poolMu.RUnlock()
 	if p.closed {
-		go fn()
+		go func() {
+			defer p.recoverTracked()
+			fn()
+		}()
 		return
 	}
 	p.wg.Add(1)
 	go func() {
 		defer p.wg.Done()
+		defer p.recoverTracked()
 		fn()
 	}()
 }
@@ -445,12 +500,51 @@ func (p *Plugin) postWorker(pool *workerPool) {
 	defer pool.wg.Done()
 	for m := range pool.ch {
 		if p.postCtx.Err() == nil {
-			p.runPost(m)
+			p.runPostSafely(m)
 		} else {
 			p.stats.shutdownDropped.Add(1)
 		}
 		p.queuedBytes.Add(-m.size)
 	}
+}
+
+// runPostSafely runs one queued job and keeps a panic in it from ending the
+// plugin process: nothing else recovers in a worker goroutine. (On the pre
+// path the SDK recovers a panic of the hook itself; the shared run, which
+// singleflight executes, recovers its own - runPre.)
+func (p *Plugin) runPostSafely(m *moderation) {
+	defer func() {
+		if r := recover(); r != nil {
+			p.postPanicked(m, r)
+		}
+	}()
+	p.runPost(m)
+}
+
+// postPanicked concludes a queued job that panicked with r: it is counted
+// and recorded as a run that errored, like a run in which nothing judged.
+// What the job had counted before the panic is not counted again: the run
+// (m.counted), and the request on its user's day (m.userCounted) - then the
+// panic came from writing the record, the statistics already have the job
+// with its real result, and it is only logged. A panic while the error is
+// recorded is logged as well.
+func (p *Plugin) postPanicked(m *moderation, r any) {
+	p.log.Error("moderation: post run panicked", "request_id", m.rec.RequestID, "counted", m.counted, "user_counted", m.userCounted,
+		"panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+	if m.userCounted {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			p.log.Error("moderation: recording the panicked post run failed", "request_id", m.rec.RequestID,
+				"panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+		}
+	}()
+	tr := panickedRun()
+	if !m.counted {
+		p.countRun(m, tr)
+	}
+	p.finish(m, tr, false)
 }
 
 // Background store of suspicious records the event writer could not take

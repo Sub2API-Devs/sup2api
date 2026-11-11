@@ -71,7 +71,7 @@ const (
 // attemptRuns remembers the requests the request hook left to the attempts
 // and the flows their attempts ran. Two generations of at most
 // attemptRunsCap requests, each kept attemptRunsTTL to twice that: a request
-// forgotten earlier is moderated again on a failover (the pass cache makes
+// forgotten earlier is moderated again on a failover (the verdict cache makes
 // that cheap), never skipped.
 type attemptRuns struct {
 	mu        sync.Mutex

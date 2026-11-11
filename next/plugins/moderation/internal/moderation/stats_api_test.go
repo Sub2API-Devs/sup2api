@@ -33,11 +33,29 @@ func TestStatsAPIs(t *testing.T) {
 	if st.Today.Audited != 4 || st.Today.Suspicious != 1 || st.Today.Blocked != 1 || st.Today.Overturned != 1 || st.Today.CacheSkipped != 1 {
 		t.Fatalf("today = %+v", st.Today)
 	}
+	// mode is the master switch and the default level in one.
+	if !st.Enabled || st.Mode != ModeEnforce || st.DefaultLevel != LevelEnforce {
+		t.Fatalf("status mode = %q, default level = %q", st.Mode, st.DefaultLevel)
+	}
+	for mode, want := range map[string]string{ModeObserve: LevelObserve, ModeOff: LevelObserve} {
+		if errs := h.Configure(map[string]any{"mode": mode, "record_pass": true}, nil); len(errs) > 0 {
+			t.Fatal(errs)
+		}
+		if got := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); got.Mode != mode || got.DefaultLevel != want || got.Enabled != (mode != ModeOff) {
+			t.Fatalf("mode %s: status = %q %q %v", mode, got.Mode, got.DefaultLevel, got.Enabled)
+		}
+	}
+	if errs := h.Configure(map[string]any{"mode": ModeEnforce, "record_pass": true}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
 	if len(st.Funnels) != 1 || st.Funnels[0].FlowID != flow || len(st.Funnels[0].Stages) != 2 ||
 		st.Funnels[0].Stages[0].Received != 3 || st.Funnels[0].Stages[1].Received != 2 || st.Funnels[0].Stages[1].Hit != 1 {
 		t.Fatalf("funnels = %+v", st.Funnels)
 	}
-	if len(st.Auditors) != 2 || len(st.Channels) != 2 || st.AlertPercent != 5 || st.Watch.Watching != 1 || st.Watch.WatchingWithNew != 1 {
+	// Under default enforce the refused user joined the watch list at the
+	// enforce level.
+	if len(st.Auditors) != 2 || len(st.Channels) != 2 || st.AlertPercent != 5 || st.Watch.Watching != 0 || st.Watch.WatchingWithNew != 0 ||
+		st.Watch.Blocking != 1 {
 		t.Fatalf("status = %+v", st)
 	}
 	tr := decodeData[TrendResult](t, h.Do("GET", "/stats/trend", map[string]string{"granularity": "hour"}, nil))
@@ -73,6 +91,71 @@ func TestStatsAPIs(t *testing.T) {
 	}
 	if st := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); st.Today.Audited != 4 {
 		t.Fatalf("after cleanup = %+v", st.Today)
+	}
+
+	// A first-stage hit whose review stage failed: the hit stands, and the
+	// flow row counts both the hit and the error, so the error rate shows
+	// the broken review stage (new-api stats.go).
+	kept := setupFlow(t, h, mod.srv.URL, []int64{10}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe})
+	req := hookReq("MOD-HIT-violence JEV-500 words")
+	req.Meta.GroupId = 10
+	if r := mustHook(t, h, req); !denied(r) {
+		t.Fatalf("hit with a failed review stage = %+v", r)
+	}
+	tr = decodeData[TrendResult](t, h.Do("GET", "/stats/trend", map[string]string{"granularity": "hour"}, nil))
+	var row *FlowPoint
+	for i := range tr.Flows {
+		if tr.Flows[i].FlowID == kept && len(tr.Flows[i].Points) == 1 {
+			row = &tr.Flows[i].Points[0]
+		}
+	}
+	if row == nil || row.Audited != 1 || row.Hit != 1 || row.Blocked != 1 || row.Errors != 1 || row.Overturned != 0 {
+		t.Fatalf("flow row = %+v (%+v)", row, tr.Flows)
+	}
+	// The stage rows: the first stage hit, the review stage errored.
+	stages := map[int]AuditorPoint{}
+	for _, a := range tr.Auditors {
+		if a.FlowID == kept && len(a.Points) == 1 {
+			stages[a.Stage] = a.Points[0]
+		}
+	}
+	if stages[1].Hit != 1 || stages[1].Errors != 0 || stages[2].Hit != 0 || stages[2].Errors != 1 {
+		t.Fatalf("stage rows = %+v", stages)
+	}
+	if st := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); st.Today.Blocked != 2 || st.Today.Errors != 1 {
+		t.Fatalf("today = %+v", st.Today)
+	}
+}
+
+// Replayed hits show in /status and the trend: counted as suspicious (hit)
+// and, of those, as replayed; a refused replay is a refused request without
+// a latency sample.
+func TestStatsCountReplays(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	for i := range 3 {
+		if r := mustHook(t, h, hookReq("MOD-HIT-sexual counted")); !denied(r) || strings.Contains(r.GetNote(), "replay") != (i > 0) {
+			t.Fatalf("request %d = %+v", i, r)
+		}
+	}
+	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
+	if st.Today.Audited != 3 || st.Today.Suspicious != 3 || st.Today.Replayed != 2 || st.Today.Blocked != 3 || st.Today.AuditorCalls != 1 {
+		t.Fatalf("today = %+v", st.Today)
+	}
+	if len(st.Funnels) != 1 || st.Funnels[0].Suspicious != 3 || st.Funnels[0].Blocked != 3 || st.Funnels[0].Stages[0].Received != 1 {
+		t.Fatalf("funnel = %+v", st.Funnels)
+	}
+	tr := decodeData[TrendResult](t, h.Do("GET", "/stats/trend", map[string]string{"granularity": "hour"}, nil))
+	if len(tr.Flows) != 1 || tr.Flows[0].FlowID != flow || len(tr.Flows[0].Points) != 1 {
+		t.Fatalf("trend = %+v", tr.Flows)
+	}
+	if pt := tr.Flows[0].Points[0]; pt.Audited != 3 || pt.Hit != 3 || pt.Replayed != 2 || pt.Blocked != 3 {
+		t.Fatalf("trend point = %+v", pt)
+	}
+	// The replays are requests of the pre path, without a latency sample.
+	if perf := decodeData[PerformanceResult](t, h.Do("GET", "/stats/performance", nil, nil)); perf.Summary.Count != 1 {
+		t.Fatalf("performance = %+v", perf.Summary)
 	}
 }
 
@@ -110,7 +193,7 @@ func TestFlowDraftTimeoutAndDelete(t *testing.T) {
 
 func TestWatchListFiltersAndSeen(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "allowlist_user_ids": []string{"12"}})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	mustHook(t, h, hookReqAs(11, "", "MOD-HIT-violence one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual one"))
@@ -129,6 +212,10 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	if items[0].UserID != 12 || items[0].SuspiciousTotal != 2 || items[0].GroupID != 9 || items[0].Flow == nil ||
 		len(items[0].TopCategories) == 0 || items[0].TopCategories[0].Category != "sexual" {
 		t.Fatalf("watch items = %+v", items)
+	}
+	// Each row says whether the user is on a user list of the settings.
+	if !items[0].Allowlisted || items[0].Blocklisted || items[1].UserID != 11 || items[1].Allowlisted || items[1].Blocklisted {
+		t.Fatalf("list marks = %+v", items)
 	}
 	if got := list(map[string]string{"category": "violence"}); len(got) != 1 || got[0].UserID != 11 {
 		t.Fatalf("category filter = %+v", got)
@@ -566,5 +653,88 @@ func TestDayStartIgnoresTimeZoneOfTime(t *testing.T) {
 		if got := (clock{offset: 8 * time.Hour}).dayStart(at); !got.Equal(time.Date(2026, 10, 30, 16, 0, 0, 0, time.UTC)) {
 			t.Errorf("UTC+8 day of %v = %v", at, got)
 		}
+	}
+}
+
+// The status counts enforce-level entries with new hits: under the default
+// level enforce that is where users with new hits are.
+func TestStatusBlockingWithNew(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 5, "level": LevelObserve}))
+	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 6, "level": LevelEnforce}))
+	waitFor(t, "watch entries in the hook", func() bool { return p.watchLevel(5) == LevelObserve && p.watchLevel(6) == LevelEnforce })
+	counts := func() WatchCounts {
+		t.Helper()
+		return decodeData[Status](t, h.Do("GET", "/status", nil, nil)).Watch
+	}
+	if got := counts(); got != (WatchCounts{Watching: 1, Blocking: 1}) {
+		t.Fatalf("before the hits: %+v", got)
+	}
+	// User 3 joins at enforce with the hit, user 6 is refused, user 5 hits
+	// at the observe level.
+	for _, uid := range []int64{3, 6, 5} {
+		mustHook(t, h, hookReqAs(uid, "", fmt.Sprintf("MOD-HIT-sexual by user %d", uid)))
+	}
+	want := WatchCounts{Watching: 1, WatchingWithNew: 1, Blocking: 2, BlockingWithNew: 2}
+	waitFor(t, "the hits on the watch list", func() bool { return counts() == want })
+	// Seen entries leave the count.
+	if resp := h.Do("POST", "/watchlist/3/seen", nil, nil); resp.GetStatus() != http.StatusOK {
+		t.Fatalf("mark seen: %d %s", resp.GetStatus(), resp.GetBody())
+	}
+	want.BlockingWithNew = 1
+	if got := counts(); got != want {
+		t.Fatalf("after marking user 3 seen: %+v, want %+v", got, want)
+	}
+	var raw struct {
+		Data struct {
+			Watch map[string]int64 `json:"watch"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(h.Do("GET", "/status", nil, nil).GetBody(), &raw); err != nil || raw.Data.Watch["blocking_with_new"] != 1 {
+		t.Fatalf("status JSON watch = %v (%v)", raw.Data.Watch, err)
+	}
+}
+
+// The alert state of a flow stays in the KV namespace 0.7.x used, so an
+// alert that is going on during an upgrade does not fire again.
+func TestAlertStateKeepsItsNamespace(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	ctx := context.Background()
+	if alertNamespace != "pass" || alertNamespace == kvNamespace {
+		t.Fatalf("alert namespace %q (verdict cache: %q)", alertNamespace, kvNamespace)
+	}
+	// A 0.7.x node alerted for the flow.
+	if err := p.host.KV().Set(ctx, "pass", alertKey(flow), []byte{1}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if was, err := p.alerted(ctx, flow); err != nil || !was {
+		t.Fatalf("alert state of 0.7.x not seen: %v %v", was, err)
+	}
+	// Still over the threshold after the upgrade: no second notice.
+	for i := range minAlertSamples {
+		mustHook(t, h, hookReqAs(3, "", fmt.Sprintf("MOD-500 %d", i)))
+	}
+	waitFor(t, "errors counted", func() bool {
+		return decodeData[Status](t, h.Do("GET", "/status", nil, nil)).Today.Errors == minAlertSamples
+	})
+	resp, err := p.RunJob(ctx, &pluginv1.RunJobRequest{JobId: JobAlerts})
+	if err != nil || !strings.Contains(resp.GetMessage(), " 0 alerts") {
+		t.Fatalf("alert job = %q %v", resp.GetMessage(), err)
+	}
+	// The state is written where the other versions read it.
+	p.setAlerted(ctx, flow, false)
+	if _, found, err := p.host.KV().Get(ctx, "pass", alertKey(flow)); err != nil || found {
+		t.Fatalf("alert state not cleared in the shared namespace: %v %v", found, err)
+	}
+	p.setAlerted(ctx, flow, true)
+	if _, found, _ := p.host.KV().Get(ctx, "pass", alertKey(flow)); !found {
+		t.Fatal("alert state not written to the shared namespace")
+	}
+	if _, found, _ := p.host.KV().Get(ctx, kvNamespace, alertKey(flow)); found {
+		t.Fatal("alert state written to the verdict cache namespace")
 	}
 }

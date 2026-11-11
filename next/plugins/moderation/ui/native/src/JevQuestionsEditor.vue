@@ -2,17 +2,21 @@
 import { SButton, SField, SInput, STextarea } from '@sub2api/ui'
 import { categoryLabel } from './format'
 import { useModHost } from './host'
+import { JEV_DEFAULT_THRESHOLD, YES_NO_THRESHOLD } from './thresholdPresets'
 import type { JevQuestions } from './types'
 
 // A Jev question table (new-api jev-questions-editor): the preamble and one
 // row per category with its label, threshold, question and the optional
 // answers sent as criteria.true / criteria.false. Shared by the auditor
 // editor and the default question set in the settings tab; the toolbar slot
-// takes the caller's copy / restore buttons.
+// takes the caller's copy / restore buttons. hideThreshold leaves out the
+// threshold column: the question-table LLM auditor answers yes or no and
+// uses no threshold.
+const props = defineProps<{ hideThreshold?: boolean }>()
 const model = defineModel<JevQuestions>({ required: true })
 const t = useModHost().t
 
-const addRow = () => model.value.items.push({ category: 'custom/', label: '', question: '', answer_yes: '', answer_no: '', threshold: 0.85 })
+const addRow = () => model.value.items.push({ category: 'custom/', label: '', question: '', answer_yes: '', answer_no: '', threshold: props.hideThreshold ? YES_NO_THRESHOLD : JEV_DEFAULT_THRESHOLD })
 </script>
 
 <template>
@@ -28,7 +32,7 @@ const addRow = () => model.value.items.push({ category: 'custom/', label: '', qu
       <div class="mod-form-row">
         <SField :label="t('auditors.category')" size="sm"><SInput v-model="q.category" size="sm" :maxlength="64" /></SField>
         <SField :label="t('auditors.label')" size="sm"><SInput v-model="q.label" size="sm" :maxlength="64" :placeholder="categoryLabel(q.category)" /></SField>
-        <SField :label="t('auditors.threshold')" size="sm"><SInput v-model="q.threshold" type="number" min="0.01" max="1" step="0.01" size="sm" /></SField>
+        <SField v-if="!hideThreshold" :label="t('auditors.threshold')" size="sm"><SInput v-model="q.threshold" type="number" min="0.01" max="1" step="0.01" size="sm" /></SField>
         <SButton size="sm" variant="ghost" tone="danger" @click="model.items.splice(i, 1)">{{ t('delete') }}</SButton>
       </div>
       <STextarea v-model="q.question" :rows="2" :maxlength="2000" :placeholder="t('auditors.question')" />

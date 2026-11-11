@@ -1,17 +1,19 @@
 <script setup lang="ts">
-// Page header. When the title repeats the app top bar's (see
-// provideTitleContext) the title is not drawn again and the description
-// moves into the top bar, so the header is a single toolbar row: #filters on
-// the left, #actions on the right. With no #filters the actions alone would
-// take that row, so on a wide screen they move into the top bar beside the
-// title instead. Otherwise (detail pages, nested scopes) it is a title block
-// with the actions beside it and the filters below.
+// Page header. Directly in an app shell (provideTitleContext with a sink) the
+// shell's title bar shows the page's title and description, and on a wide
+// screen what the page puts beside its title (#before, #title-extra); the
+// header itself is a single toolbar row: #filters on the left, #actions on
+// the right. With no #filters the actions alone would take that row, so on a
+// wide screen they move into the title bar too.
+// In a nested scope (a tab, a dialog) or outside a shell it is a title block
+// with the actions beside it and the filters below; a title that repeats the
+// scope's is not drawn again.
 // `#filters-primary` holds the filters that stay in sight on a phone; on
 // wide screens they come before #filters. On a compact screen #filters fold
 // behind a Filters button (badge `filtersActiveCount`) that opens a bottom
 // sheet with them.
 import { computed, onBeforeUnmount, useSlots, watchEffect } from 'vue'
-import { useActionsTarget, useDescriptionSink, useTitleVisibility } from './titleContext'
+import { usePageHeadSink, useTitleVisibility } from './titleContext'
 import { useViewport } from './viewport'
 import FilterSheet from './internal/FilterSheet.vue'
 
@@ -20,32 +22,38 @@ const props = withDefaults(defineProps<{ title: string; description?: string; fi
   filtersActiveCount: 0
 })
 const slots = useSlots()
-const showTitle = useTitleVisibility(() => props.title)
-const sink = useDescriptionSink()
-const actionsTarget = useActionsTarget()
-const lifted = computed(() => !showTitle.value && !!sink && !slots.before && !slots['title-extra'])
-const headed = computed(() => showTitle.value || !!slots.before || !!slots['title-extra'] || (!!props.description && !lifted.value))
+const sink = usePageHeadSink()
+const lifted = !!sink
+const distinct = useTitleVisibility(() => props.title)
+const showTitle = computed(() => !lifted && distinct.value)
 
-// The top bar hides the description on a compact screen; the actions stay in the page there too.
+// A phone's title bar has room for the title only: what goes with the title
+// and the actions stay in the page there (and the description is not shown).
+// These are read while rendering, not cached: a slot can come and go (a
+// `<template v-if #title-extra>`), and the slots object is not reactive.
 const { compact } = useViewport()
-const hasFilters = computed(() => !!slots.filters || !!slots['filters-primary'])
-const actionsUp = computed(() => !!actionsTarget && lifted.value && !headed.value && !hasFilters.value && !!slots.actions && !compact.value)
+const hasExtras = () => !!slots.before || !!slots['title-extra']
+const extrasUp = () => lifted && !!sink.extra && hasExtras() && !compact.value
+const headed = () => (lifted ? hasExtras() && !extrasUp() : showTitle.value || hasExtras() || !!props.description)
+const hasFilters = () => !!slots.filters || !!slots['filters-primary']
+const actionsUp = () => lifted && !!sink.actions && !headed() && !hasFilters() && !!slots.actions && !compact.value
 
-let owned = ''
+const owner = ++headers
 watchEffect(() => {
-  if (!sink) return
-  const text = lifted.value ? props.description || '' : ''
-  if (text || sink.value === owned) sink.value = text
-  owned = text
+  if (sink) sink.head.value = { owner, title: props.title, description: props.description || '' }
 })
 onBeforeUnmount(() => {
-  if (sink && owned && sink.value === owned) sink.value = ''
+  if (sink && sink.head.value?.owner === owner) sink.head.value = null
 })
+</script>
+
+<script lang="ts">
+let headers = 0
 </script>
 
 <template>
   <div
-    v-if="headed"
+    v-if="headed()"
     class="mb-4 flex flex-wrap items-start justify-between gap-3"
   >
     <div class="min-w-0">
@@ -74,9 +82,22 @@ onBeforeUnmount(() => {
     </div>
   </div>
   <Teleport
-    v-if="actionsUp"
+    v-if="extrasUp()"
     defer
-    :to="actionsTarget!"
+    :to="sink!.extra!"
+  >
+    <div
+      class="flex shrink-0 items-center gap-2"
+      data-testid="page-title-extra"
+    >
+      <slot name="before" />
+      <slot name="title-extra" />
+    </div>
+  </Teleport>
+  <Teleport
+    v-if="actionsUp()"
+    defer
+    :to="sink!.actions!"
   >
     <div
       class="flex shrink-0 items-center gap-2"
@@ -86,11 +107,11 @@ onBeforeUnmount(() => {
     </div>
   </Teleport>
   <div
-    v-else-if="hasFilters || (!headed && $slots.actions)"
+    v-else-if="hasFilters() || (!headed() && $slots.actions)"
     class="mb-3 flex flex-wrap items-end gap-2"
   >
     <div
-      v-if="hasFilters"
+      v-if="hasFilters()"
       class="flex min-w-0 flex-1 flex-wrap items-end gap-2"
     >
       <FilterSheet
@@ -112,7 +133,7 @@ onBeforeUnmount(() => {
       </FilterSheet>
     </div>
     <div
-      v-if="!headed && $slots.actions"
+      v-if="!headed() && $slots.actions"
       class="ms-auto flex max-w-full shrink-0 flex-wrap items-center gap-2"
     >
       <slot name="actions" />

@@ -1,34 +1,68 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { SAlert, SBadge, SButton, SCard, SCheckbox, SField, SHint, SInput, SPagination, SSelect, STable, type TableColumn } from '@sub2api/ui'
+import {
+  SAlert,
+  SBadge,
+  SButton,
+  SCard,
+  SCheckbox,
+  SDateTime,
+  SDropdown,
+  SField,
+  SFilterBar,
+  SFilterChips,
+  SHint,
+  SInput,
+  SPagination,
+  SRowAction,
+  SSelect,
+  STable,
+  STableColumnSettings,
+  useTableColumns,
+  useViewport,
+  type SelectOption,
+  type TableColumn
+} from '@sub2api/ui'
 import WatchDetail from './WatchDetail.vue'
 import WatchEditModal from './WatchEditModal.vue'
-import WatchActions from './WatchActions.vue'
+import WatchActionDialog from './WatchActionDialog.vue'
 import AnalysisPromptModal from './AnalysisPromptModal.vue'
 import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
+import UserListBadge from './UserListBadge.vue'
 import UserRef from './UserRef.vue'
 import { useCatalog } from './catalog'
 import { useCategoryOptions } from './categories'
+import { filterChips, type FilterField } from './eventFilters'
 import { applyFilters } from './forms'
-import { dt, enumLabel, enumOptions, joinList, num, withAll } from './format'
+import { enumLabel, enumOptions, joinList, num } from './format'
 import { analysisState, canManage, errorMessage, useModHost, useWatchList } from './host'
+import { watchNew } from './status'
 import { levelTone, trendTone } from './tones'
-import type { Watch, WatchListMeta } from './types'
+import type { Watch, WatchItem, WatchLevel, WatchListMeta } from './types'
 import { useUserFilter } from './users'
+import { levelRefused, userListHint, type WatchAction } from './watchLevels'
 
 // Watch list (new-api watchlist): observe = moderated in the background and
 // counted; enforce = moderated before the upstream call, a hit is refused.
-// Filters, sort, header counts and per-user aggregates come from GET /watchlist.
+// Filters, sort, header counts and per-user aggregates come from GET
+// /watchlist, with each user's allowlist / blocklist mark of the settings:
+// an allowlisted user is never moderated first whatever the level, a
+// blocklisted user always. The filter bar holds the common filters (user,
+// level, sort, new records only), the others fold under "more filters"
+// (applied ones are chips under the bar). Each table cell keeps to one line;
+// the level changes and the removal are row actions, confirmed in a dialog.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const emit = defineEmits<{ (e: 'show-user', userId: number): void }>()
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 const catalog = useCatalog()
+const { compact } = useViewport()
 
 const meta = ref<WatchListMeta | null>(null)
-const filter = reactive({ level: '', new_only: false, trend: '', category: '', sort: 'new', user: '' })
+const emptyFilter = () => ({ level: '', new_only: false, trend: '', category: '', sort: 'new', user: '' })
+const filter = reactive(emptyFilter())
 const users = useUserFilter()
 const query = () => ({ level: filter.level, new_only: filter.new_only || '', trend: filter.trend, category: filter.category, sort: filter.sort, user_id: users.query.value.user_id ?? '', user_ids: users.query.value.user_ids ?? '' })
 
@@ -40,34 +74,78 @@ watch(() => [filter.level, filter.new_only, filter.trend, filter.category, filte
 async function search() {
   if ((await users.resolve(filter.user)) && !apply()) list.reload()
 }
+function reset() {
+  Object.assign(filter, emptyFilter())
+  search()
+}
 defineExpose({ reload: list.reload })
 
-const levelOptions = computed(() => enumOptions('level', ['observe', 'enforce'], { all: true }))
-const trendOptions = computed(() => withAll([{ value: 'none', label: t('watchList.notAnalyzed') }, ...enumOptions('trend', ['escalating', 'persistent', 'occasional', 'likely_false_positive'])]))
-const sortOptions = computed(() => enumOptions('watchList.sort', ['new', 'last_hit', 'severity', 'total']))
+/** A select without a label: its first option reads "<name>: all". */
+const anyOf = (name: string, options: SelectOption[]) => [{ value: '', label: t('events.anyOf', { name }) }, ...options]
+const levelOptions = computed(() => anyOf(t('watch.col.level'), enumOptions('level', ['observe', 'enforce'])))
+const trendOptions = computed(() => anyOf(t('watchList.trend'), [{ value: 'none', label: t('watchList.notAnalyzed') }, ...enumOptions('trend', ['escalating', 'persistent', 'occasional', 'likely_false_positive'])]))
+const sortOptions = computed(() => enumOptions('watchList.sort', ['new', 'last_hit', 'severity', 'total']).map((o) => ({ ...o, label: host.i18n.t('ui.filterChip', { label: t('watchList.sortBy'), value: o.label }) })))
 const categories = useCategoryOptions()
-const categoryOptions = computed(() => withAll(categories.value))
+const categoryOptions = computed(() => anyOf(t('watchList.category'), categories.value))
 
-const columns = computed<TableColumn[]>(() => [
-  { key: 'user_id', label: t('watch.col.user') },
-  { key: 'level', label: t('watch.col.level'), nowrap: true },
-  { key: 'group', label: t('watchList.col.group') },
-  { key: 'flow', label: t('events.col.flow'), nowrap: true },
-  { key: 'suspicious', label: t('watchList.col.suspicious'), align: 'right', nowrap: true },
-  { key: 'categories', label: t('watchList.col.categories') },
-  { key: 'analysis', label: t('watch.col.analysis') },
-  { key: 'last_hit_at', label: t('watch.col.lastHit'), nowrap: true },
-  { key: 'expires_at', label: t('watch.col.expires'), nowrap: true },
-  { key: 'actions', label: '', align: 'right' }
+// The "more filters"; the ones in effect are removable chips under the bar.
+const advanced = computed<Array<FilterField<'trend' | 'category'> & { searchable?: boolean }>>(() => [
+  { key: 'trend', label: t('watchList.trend'), options: trendOptions.value },
+  { key: 'category', label: t('watchList.category'), options: categoryOptions.value, searchable: true }
 ])
+const chips = computed(() => filterChips(advanced.value, filter))
+/** Bar filters off their default (the phone sheet adds the chips to its badge). */
+const activeCount = computed(() => [filter.level, filter.new_only, filter.sort !== 'new'].filter(Boolean).length)
+const dirty = computed(() => activeCount.value + chips.value.length > 0 || filter.user.trim() !== '')
+function removeChip(key: string) {
+  filter[key as 'trend' | 'category'] = ''
+}
+function clearChips() {
+  for (const f of advanced.value) filter[f.key] = ''
+}
+
+const sevText = (r: WatchItem) => `${t('watchList.sev.high', { n: r.by_severity.high })} · ${t('watchList.sev.medium', { n: r.by_severity.medium })} · ${t('watchList.sev.low', { n: r.by_severity.low })}`
+const aiText = (r: WatchItem) => (r.ai_counts ? t('analysis.counts', { v: num(r.ai_counts.violation), fp: num(r.ai_counts.false_positive), u: num(r.ai_counts.unsure) }) : '')
+
+const columns = computed<TableColumn[]>(() => {
+  const c: TableColumn[] = [
+    { key: 'user_id', label: t('watch.col.user'), nowrap: true, hideable: false, mobile: 'title' },
+    { key: 'level', label: t('watch.col.level'), nowrap: true, mobile: 'status' },
+    { key: 'suspicious', label: t('watchList.col.suspicious'), align: 'right', nowrap: true, mobile: 'meta' },
+    { key: 'severity', label: t('events.severity'), nowrap: true, defaultHidden: true, mobile: 'detail' },
+    { key: 'categories', label: t('watchList.col.categories'), nowrap: true, mobile: 'meta' },
+    { key: 'analysis', label: t('watch.col.analysis'), nowrap: true, mobile: 'meta' },
+    { key: 'ai_counts', label: t('analysis.verdictCounts'), nowrap: true, defaultHidden: true, mobile: 'detail' },
+    { key: 'group', label: t('watchList.col.group'), ellipsis: '10rem', mobile: 'detail' },
+    { key: 'flow', label: t('events.col.flow'), ellipsis: '12rem', mobile: 'detail' },
+    { key: 'last_hit_at', label: t('watch.col.lastHit'), nowrap: true, mobile: 'meta' },
+    { key: 'expires_at', label: t('watch.col.expires'), nowrap: true, mobile: 'detail' },
+    { key: 'source', label: t('watch.col.source'), nowrap: true, defaultHidden: true, mobile: 'detail' },
+    { key: 'violation_count', label: t('watch.col.violations'), align: 'right', nowrap: true, defaultHidden: true, mobile: 'detail' },
+    { key: 'note', label: t('watch.col.note'), grow: true, defaultHidden: true, mobile: 'detail' }
+  ]
+  if (manage.value) c.push({ key: 'actions', label: t('actions'), align: 'right', hideable: false })
+  return c
+})
+const columnState = useTableColumns(columns, 'moderation-watch')
 
 // ---- add / edit
 const editOpen = ref(false)
-const editing = ref<Watch | null>(null)
-function openEdit(w: Watch | null) {
+const editing = ref<WatchItem | null>(null)
+function openEdit(w: WatchItem | null) {
   editing.value = w
   editOpen.value = true
 }
+
+// ---- row actions: switch the level, edit; remove under "more"
+const otherLevel = (r: WatchItem): WatchLevel => (r.level === 'enforce' ? 'observe' : 'enforce')
+const acting = ref<WatchItem | null>(null)
+const action = ref<WatchAction | null>(null)
+function ask(r: WatchItem, a: WatchAction) {
+  acting.value = r
+  action.value = a
+}
+const moreActions = computed(() => [{ key: 'remove', label: t('watch.remove'), danger: true }])
 
 // ---- detail drawer and analysis prompt preview
 const detailOpen = ref(false)
@@ -92,9 +170,9 @@ function patchRow(userId: number | null, w: Partial<Watch> | null) {
   if (w && i >= 0) list.items.value[i] = { ...list.items.value[i], ...w }
   else if (!w) list.reload()
 }
-/** An inline level change or removal: patch the row at once, then reload for the header counts. */
-function onAction(userId: number, w: Watch | null) {
-  if (w) patchRow(userId, w)
+/** A row's level change or removal: patch the row at once, then reload for the header counts. */
+function onAction(w: Watch | null) {
+  if (w) patchRow(acting.value?.user_id ?? null, w)
   void list.reload()
 }
 function showUser(id: number) {
@@ -108,83 +186,105 @@ const promptOpen = ref(false)
   <div>
     <SHint class="mod-hint">{{ t('watch.hint') }}</SHint>
 
-    <SCard>
-      <form class="mod-filters" @submit.prevent="search">
-        <SField class="mod-filter" :label="t('watch.col.level')">
-          <SSelect v-model="filter.level" :options="levelOptions" />
-        </SField>
-        <SField class="mod-filter" :label="t('watchList.trend')">
-          <SSelect v-model="filter.trend" :options="trendOptions" />
-        </SField>
-        <SField class="mod-filter" :label="t('watchList.category')">
-          <SSelect v-model="filter.category" :options="categoryOptions" searchable />
-        </SField>
-        <SField class="mod-filter" :label="t('events.user')" :error="users.error.value">
-          <SInput v-model="filter.user" type="search" :placeholder="t('events.userPlaceholder')" />
-        </SField>
-        <SField class="mod-filter" :label="t('watchList.sortBy')">
-          <SSelect v-model="filter.sort" :options="sortOptions" />
-        </SField>
-        <SCheckbox v-model="filter.new_only" :label="t('watchList.newOnly')" class="mod-filter-check" />
-        <div class="mod-filter-actions">
-          <SButton type="submit" variant="primary" icon="search" :loading="list.loading.value">{{ t('events.search') }}</SButton>
-          <SButton v-if="manage" icon="plus" @click="openEdit(null)">{{ t('watch.add') }}</SButton>
-          <SButton icon="eyeglass" @click="promptOpen = true">{{ t('watch.promptPreview') }}</SButton>
-        </div>
-      </form>
-    </SCard>
+    <form @submit.prevent="search">
+      <SFilterBar :aria-label="t('filter')" :active-count="activeCount" :advanced-count="chips.length" :dirty="dirty" :on-reset="reset" @done="search">
+        <template #primary>
+          <SField :error="users.error.value" class="mod-filter-sm">
+            <SInput v-model="filter.user" type="search" size="sm" icon="search" :placeholder="t('events.userPlaceholder')" :aria-label="t('events.user')" />
+          </SField>
+        </template>
+        <SSelect v-model="filter.level" size="sm" class="mod-filter-sm" :options="levelOptions" :aria-label="t('watch.col.level')" :title="t('watch.col.level')" />
+        <SSelect v-model="filter.sort" size="sm" class="mod-filter-sm" :options="sortOptions" :aria-label="t('watchList.sortBy')" :title="t('watchList.sortBy')" />
+        <SCheckbox v-model="filter.new_only" :label="t('watchList.newOnly')" />
+        <template #advanced>
+          <SSelect v-for="f in advanced" :key="f.key" v-model="filter[f.key]" size="sm" :options="f.options!" :searchable="f.searchable" :aria-label="f.label" :title="f.label" />
+        </template>
+        <template #end>
+          <STableColumnSettings :state="columnState" />
+          <SButton v-if="!compact" type="submit" variant="primary" size="sm" icon="search" :loading="list.loading.value">{{ t('events.search') }}</SButton>
+        </template>
+      </SFilterBar>
+    </form>
+    <SFilterChips :items="chips" class="mod-filter-chips" @remove="removeChip" @clear="clearChips" />
 
-    <div v-if="meta" class="mod-counts mod-section">
-      <SBadge tone="info">{{ t('watchList.counts.watching', { n: num(meta.counts.watching) }) }}</SBadge>
-      <SBadge tone="warning">{{ t('watchList.counts.withNew', { n: num(meta.counts.watching_with_new) }) }}</SBadge>
-      <SBadge tone="danger">{{ t('watchList.counts.blocking', { n: num(meta.counts.blocking) }) }}</SBadge>
-      <SHint inline size="xs">{{ meta.analysis_every_violations ? t('watchList.every', { n: meta.analysis_every_violations }) : t('watchList.everyOff') }}</SHint>
+    <!-- counts on the left, the page actions on the right: not mixed into the filters -->
+    <div class="mod-counts mod-section">
+      <template v-if="meta">
+        <SBadge tone="info">{{ t('watchList.counts.watching', { n: num(meta.counts.watching) }) }}</SBadge>
+        <SBadge tone="warning">{{ t('watchList.counts.withNew', { n: num(watchNew(meta.counts).total) }) }}</SBadge>
+        <SBadge tone="danger">{{ t('watchList.counts.blocking', { n: num(meta.counts.blocking) }) }}</SBadge>
+        <SHint inline size="xs">{{ meta.analysis_every_violations ? t('watchList.every', { n: meta.analysis_every_violations }) : t('watchList.everyOff') }}</SHint>
+      </template>
+      <span class="mod-ml-auto mod-inline mod-gap">
+        <SButton size="sm" variant="ghost" icon="eyeglass" @click="promptOpen = true">{{ t('watch.promptPreview') }}</SButton>
+        <SButton v-if="manage" size="sm" variant="primary" icon="plus" @click="openEdit(null)">{{ t('watch.add') }}</SButton>
+      </span>
     </div>
 
     <SAlert v-if="error" tone="danger" class="mod-section">{{ error }}</SAlert>
 
     <SCard :padded="false" class="mod-section">
-      <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" row-key="user_id" :empty-text="t('watch.empty')" dense clickable @row-click="openDetail($event.user_id)">
+      <STable
+        :columns="columnState.visibleColumns.value"
+        :rows="list.items.value"
+        :loading="list.loading.value"
+        row-key="user_id"
+        :empty-text="t('watch.empty')"
+        dense
+        clickable
+        @row-click="openDetail($event.user_id)"
+      >
         <template #cell-user_id="{ row }">
-          <UserRef :user-id="row.user_id" link :title="t('watch.showRecords')" @click="emit('show-user', $event)" />
-          <div v-if="row.hits_since_seen"><SBadge tone="warning" size="xs">{{ t('watchList.newHits', { n: row.hits_since_seen }) }}</SBadge></div>
+          <span class="mod-cell-line">
+            <UserRef :user-id="row.user_id" link :title="t('watch.showRecords')" @click="emit('show-user', $event)" />
+            <UserListBadge :allowlisted="row.allowlisted" :blocklisted="row.blocklisted" size="xs" />
+            <SBadge v-if="row.hits_since_seen" tone="warning" size="xs">{{ t('watchList.newHits', { n: row.hits_since_seen }) }}</SBadge>
+          </span>
         </template>
         <template #cell-level="{ row }">
-          <WatchActions v-if="manage" :user-id="row.user_id" :watch="row" @click.stop @changed="onAction(row.user_id, $event)" />
-          <SBadge v-else :tone="levelTone(row.level)">{{ enumLabel('level', row.level) }}</SBadge>
-        </template>
-        <template #cell-group="{ row }">
-          <span v-if="row.group_id || row.flow">{{ catalog.groupName(row.group_id) }}</span>
-          <SHint v-else inline>—</SHint>
-          <div v-if="row.other_groups.length" class="mod-sub" :title="joinList(row.other_groups.map(catalog.groupName))">{{ t('watchList.otherGroups', { n: row.other_groups.length }) }}</div>
-        </template>
-        <template #cell-flow="{ row }">
-          <FlowRef v-if="row.flow" :flow-id="row.flow.flow_id" :version="row.flow.version" :name="row.flow.name" />
-          <SHint v-else inline>{{ t('watchList.noFlow') }}</SHint>
+          <SBadge :tone="levelTone(row.level)" :title="userListHint(row) || undefined">{{ enumLabel('level', row.level) }}</SBadge>
         </template>
         <template #cell-suspicious="{ row }">
-          <span class="mod-num">{{ num(row.suspicious_total) }}</span>
-          <div class="mod-sub mod-num">
-            <span class="mod-text-danger">{{ t('watchList.sev.high', { n: row.by_severity.high }) }}</span> ·
-            <span class="mod-text-warning">{{ t('watchList.sev.medium', { n: row.by_severity.medium }) }}</span> ·
-            {{ t('watchList.sev.low', { n: row.by_severity.low }) }}
-          </div>
+          <span class="mod-num" :title="sevText(row)">{{ num(row.suspicious_total) }}</span>
         </template>
-        <template #cell-categories="{ row }"><CategoryChips :categories="row.top_categories" :other="row.top_other" /></template>
+        <template #cell-severity="{ row }"><span class="mod-num">{{ sevText(row) }}</span></template>
+        <template #cell-categories="{ row }"><CategoryChips :categories="row.top_categories" :other="row.top_other" :max="1" /></template>
         <template #cell-analysis="{ row }">
-          <SBadge v-if="analysisState(row) !== 'idle'" :tone="analysisState(row) === 'running' ? 'info' : 'warning'" dot>{{ enumLabel('analysisState', analysisState(row)) }}</SBadge>
-          <SBadge v-else-if="row.latest_trend" :tone="trendTone(row.latest_trend)">{{ enumLabel('trend', row.latest_trend) }}</SBadge>
-          <SBadge v-else-if="row.latest_analysis_status === 'failed'" tone="danger">{{ enumLabel('analysisStatus', 'failed') }}</SBadge>
-          <SHint v-else inline>{{ t('watchList.notAnalyzed') }}</SHint>
-          <div v-if="row.ai_counts" class="mod-sub mod-num">{{ t('analysis.counts', { v: num(row.ai_counts.violation), fp: num(row.ai_counts.false_positive), u: num(row.ai_counts.unsure) }) }}</div>
+          <span :title="aiText(row) || undefined">
+            <SBadge v-if="analysisState(row) !== 'idle'" :tone="analysisState(row) === 'running' ? 'info' : 'warning'" dot>{{ enumLabel('analysisState', analysisState(row)) }}</SBadge>
+            <SBadge v-else-if="row.latest_trend" :tone="trendTone(row.latest_trend)">{{ enumLabel('trend', row.latest_trend) }}</SBadge>
+            <SBadge v-else-if="row.latest_analysis_status === 'failed'" tone="danger">{{ enumLabel('analysisStatus', 'failed') }}</SBadge>
+            <SHint v-else inline>{{ t('watchList.notAnalyzed') }}</SHint>
+          </span>
         </template>
-        <template #cell-last_hit_at="{ row }">{{ dt(row.last_hit_at) }}</template>
-        <template #cell-expires_at="{ row }">
-          <template v-if="row.expires_at">{{ dt(row.expires_at) }}</template>
-          <SBadge v-else tone="gray">{{ t('watch.noExpiry') }}</SBadge>
+        <template #cell-ai_counts="{ row }"><span class="mod-num">{{ aiText(row) || '—' }}</span></template>
+        <template #cell-group="{ row }">
+          <span v-if="row.group_id || row.flow" :title="joinList([row.group_id, ...row.other_groups].map(catalog.groupName))">
+            {{ catalog.groupName(row.group_id) }}<span v-if="row.other_groups.length" class="mod-num mod-sub"> +{{ row.other_groups.length }}</span>
+          </span>
+          <SHint v-else inline>—</SHint>
         </template>
+        <template #cell-flow="{ row }">
+          <FlowRef v-if="row.flow" :flow-id="row.flow.flow_id" :version="row.flow.version" :name="row.flow.name" compact />
+          <SHint v-else inline>{{ t('watchList.noFlow') }}</SHint>
+        </template>
+        <template #cell-last_hit_at="{ row }"><SDateTime :value="row.last_hit_at" /></template>
+        <template #cell-expires_at="{ row }"><SDateTime :value="row.expires_at" mode="time" :empty="t('watch.noExpiry')" /></template>
+        <template #cell-source="{ row }">{{ enumLabel('watchSource', row.source) }}</template>
+        <template #cell-violation_count="{ row }"><span class="mod-num">{{ num(row.violation_count) }}</span></template>
+        <template #cell-note="{ row }"><span :title="row.note || undefined">{{ row.note || '—' }}</span></template>
         <template #cell-actions="{ row }">
-          <SButton v-if="manage" size="sm" variant="ghost" @click.stop="openEdit(row)">{{ t('edit') }}</SButton>
+          <span class="mod-row-actions" @click.stop>
+            <SRowAction
+              :label="t(`watchActions.set.${otherLevel(row)}`)"
+              :tone="otherLevel(row) === 'enforce' ? 'danger' : 'default'"
+              :disabled="levelRefused(otherLevel(row), row.allowlisted)"
+              :title="levelRefused(otherLevel(row), row.allowlisted) ? userListHint(row) : undefined"
+              @click="ask(row, { kind: 'level', level: otherLevel(row) })"
+            />
+            <SRowAction :label="t('edit')" @click="openEdit(row)" />
+            <SDropdown :actions="moreActions" @select="$event === 'remove' && ask(row, { kind: 'release', level: null })" />
+          </span>
         </template>
       </STable>
       <div class="mod-pager">
@@ -192,7 +292,8 @@ const promptOpen = ref(false)
       </div>
     </SCard>
 
-    <WatchEditModal v-model:open="editOpen" :entry="editing" @saved="list.reload" />
+    <WatchActionDialog v-model:action="action" :user-id="acting?.user_id ?? null" :allowlisted="acting?.allowlisted" :blocklisted="acting?.blocklisted" @changed="onAction" />
+    <WatchEditModal v-model:open="editOpen" :entry="editing" :allowlisted="editing?.allowlisted" :blocklisted="editing?.blocklisted" @saved="list.reload" />
     <WatchDetail v-model:open="detailOpen" :user-id="detailUser" :item="detailItem" @changed="patchRow(detailUser, $event)" @show-user="showUser" />
     <AnalysisPromptModal v-model:open="promptOpen" />
   </div>

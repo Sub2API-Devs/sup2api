@@ -56,8 +56,10 @@ const trend = computed(() => {
 const suggestion = computed(() => {
   const d = props.detail
   const a = latest.value
-  if (!manage.value || d.staff || d.exempt || stale.value || a?.status !== 'ok' || !a.suggestion) return null
+  if (!manage.value || d.staff || stale.value || a?.status !== 'ok' || !a.suggestion) return null
   const level = SUGGESTED_LEVEL[a.suggestion]
+  // an allowlisted user can only be observed (POST / PATCH /watchlist answer level/allowlisted)
+  if (level === 'enforce' && d.allowlisted) return null
   return level === (d.watch?.level ?? null) ? null : { key: a.suggestion, level, analysisId: a.id }
 })
 const applying = ref(false)

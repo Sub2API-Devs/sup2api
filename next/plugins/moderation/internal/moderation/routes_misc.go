@@ -275,8 +275,11 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	def := p.cfg.Load().jevDefault
 	for i, a := range in.Data.Auditors {
 		typ := a.Type
-		if typ == "openai" {
+		switch typ { // new-api names
+		case "openai":
 			typ = AuditorOpenAI
+		case "llm":
+			typ = AuditorLLMQuestions
 		}
 		auds[i] = auditorInput{Name: strings.TrimSpace(a.Name), Type: typ,
 			Config: AuditorConfig{Thresholds: a.Thresholds, Questions: a.Questions, ReviewImages: a.ReviewImages}}

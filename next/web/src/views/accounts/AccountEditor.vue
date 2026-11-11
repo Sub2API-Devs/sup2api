@@ -50,6 +50,7 @@ import ModelLimitsEditor from './ModelLimitsEditor.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 import { useUsageLimitEdit } from './useUsageLimitEdit'
 import { toCards, type ModelLimitCard } from './modelLimits'
+import { SPM_WINDOW_DEFAULT } from './spmWindow'
 import { newAccountConcurrency } from './accountLimits'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import { containerLocales, containerTimezones, environmentOptions } from './containerEnvironment'
@@ -90,6 +91,7 @@ const basic = reactive({
   rpm_limit: 0,
   tpm_limit: 0,
   spm_limit: 0,
+  spm_window_seconds: SPM_WINDOW_DEFAULT as number | null,
   environment: {} as EnvironmentValues,
   header_passthrough: [] as string[],
   param_override: null as ParamOverride | null,
@@ -511,7 +513,7 @@ const ownCaller = () => own.scopeOf(ACCOUNT_KEYS.create) === 'own'
 /** The core's values of the controls (before the plugin's defaults). */
 const coreValues = (): ControlValues => ({
   priority: 10, weight: 1, max_concurrency: newAccountConcurrency(own.scopeOf(ACCOUNT_KEYS.create)), schedulable: true, auto_disable: true,
-  rpm_limit: 0, tpm_limit: 0, spm_limit: 0, environment: {}, header_passthrough: [], param_override: null, model_limits: []
+  rpm_limit: 0, tpm_limit: 0, spm_limit: 0, spm_window_seconds: SPM_WINDOW_DEFAULT, environment: {}, header_passthrough: [], param_override: null, model_limits: []
 })
 /** Controls kept outside `basic`. */
 const setControl: Partial<Record<CommonControlName, (v: any) => void>> = {

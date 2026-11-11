@@ -1039,3 +1039,49 @@ func TestWeightsTrendAndAdjustOff(t *testing.T) {
 		t.Fatalf("snapshot only %+v", listed.Data)
 	}
 }
+
+// The evaluation's events keep the steps it executed and the configuration
+// version it ran on in their detail; a base mismatch and the other events
+// are not the configuration's doing and carry no version.
+func TestEventDetailStepsAndVersion(t *testing.T) {
+	e := newEnv(t)
+	e.configure(nil)
+	e.rank(100)
+	e.window(5, 5)
+	e.window(5, 5)
+	down := e.events(map[string]string{"kind": rules.EventWeightDown})
+	want := []rules.WeightStep{{Strategy: "错误率过高", Type: rules.ActionWeightDegrade, Mode: rules.ModeCurrentPercent, Value: 30, From: 100, To: 70}}
+	if len(down) != 1 || !slices.Equal(detailSteps(t, down[0]), want) || down[0].Detail["config_version"] != float64(1) || down[0].Detail["window"] == nil {
+		t.Fatalf("down event %+v", down)
+	}
+	if clear := e.events(map[string]string{"kind": rules.EventAffinityClear}); len(clear) != 1 || clear[0].Detail["config_version"] != nil {
+		t.Fatalf("affinity event %+v", clear)
+	}
+	// New rules: the reset names the version that changed them, no steps.
+	e.configure(func(c *rules.Config) { c.MinSamples = 5 })
+	e.window(20, 0)
+	reset := e.events(map[string]string{"kind": rules.EventReset})
+	if len(reset) != 1 || reset[0].Reason != rules.ReasonRulesChange || reset[0].Detail["config_version"] != float64(2) || reset[0].Detail["steps"] != nil {
+		t.Fatalf("rules change event %+v", reset)
+	}
+	// A base change is the account's.
+	e.rank(50)
+	e.window(20, 0)
+	if reset = e.events(map[string]string{"kind": rules.EventReset}); len(reset) != 2 || reset[0].Reason != rules.ReasonBaseMismatch || reset[0].Detail["config_version"] != nil {
+		t.Fatalf("base mismatch event %+v", reset)
+	}
+}
+
+// detailSteps reads detail.steps of an event.
+func detailSteps(t *testing.T, ev eventItem) []rules.WeightStep {
+	t.Helper()
+	raw, err := json.Marshal(ev.Detail["steps"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var steps []rules.WeightStep
+	if err := json.Unmarshal(raw, &steps); err != nil {
+		t.Fatal(err)
+	}
+	return steps
+}

@@ -279,6 +279,91 @@ func TestPlanSkipsCachedSegments(t *testing.T) {
 	}
 }
 
+// In a mixed flow an image that is sent keeps the cached text of its request
+// in the plan: the chunks, and with them the sample beyond input_max_chunks,
+// are those of the request with an empty cache. Without such an image, and in
+// a flow that is not mixed, cached text is left out.
+func TestPlanKeepsCachedTextWithAnUncachedImage(t *testing.T) {
+	r := extractReq(t, "anthropic.messages", `{"system":"sys","messages":[{"role":"user","content":[{"type":"text","text":"look"},
+		{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}},{"type":"text","text":"new"}]}]}`)
+	if len(r.segs) != 4 || r.segs[2].img == nil {
+		t.Fatalf("segments = %+v", r.segs)
+	}
+	cached := map[[32]byte]bool{r.segs[0].key: true, r.segs[1].key: true}
+	isCached := func(h [32]byte) bool { return cached[h] }
+	lim := planLimits{maxChars: 12000, maxChunks: 8, maxImages: 8, mixed: true}
+	uniform, noImages := lim, lim
+	uniform.mixed, noImages.maxImages = false, 0
+	// The image is not cached: the cached text stays, and is not counted as
+	// answered from the cache.
+	pl := r.makePlan(lim, isCached)
+	if len(pl.chunks) != 1 || pl.chunks[0].in.Text != "[system] sys look new" || len(pl.chunks[0].in.Images) != 1 || pl.trace.Cached != 0 {
+		t.Fatalf("an uncached image: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	}
+	if cold := r.makePlan(lim, nil); cold.chunks[0].in.Hash != pl.chunks[0].in.Hash {
+		t.Fatal("the chunk differs from the one of an empty cache")
+	}
+	// A flow that is not mixed does not keep it - no auditor takes images
+	// (they leave the chunks after planning), or all of them do: the image
+	// is planned with the text that is not cached. Nor does an image that is
+	// not sent (no image allowed).
+	if pl := r.makePlan(uniform, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || len(pl.chunks[0].in.Images) != 1 || pl.trace.Cached != 2 {
+		t.Fatalf("a flow that is not mixed: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	}
+	if pl := r.makePlan(noImages, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || pl.trace.Cached != 2 || pl.trace.DroppedImages != 1 {
+		t.Fatalf("input_max_images 0: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	}
+	// The image is cached: as without an image.
+	cached[r.segs[2].key] = true
+	if pl := r.makePlan(lim, isCached); len(pl.chunks) != 1 || pl.chunks[0].in.Text != "new" || len(pl.chunks[0].in.Images) != 0 || pl.trace.Cached != 3 {
+		t.Fatalf("a cached image: %+v text %q", pl.trace, pl.chunks[0].in.Text)
+	}
+	cached[r.segs[3].key] = true
+	if pl := r.makePlan(lim, isCached); len(pl.chunks) != 0 || pl.trace.Cached != 4 {
+		t.Fatalf("fully cached = %+v", pl.trace)
+	}
+
+	// A long request: a segment cut into pieces, more chunks than
+	// input_max_chunks, the image in a chunk that is sampled out.
+	var msgs []string
+	for i := 0; i < 20; i++ {
+		msgs = append(msgs, fmt.Sprintf(`{"role":"user","content":"m%02d %s"}`, i, strings.Repeat("x", 90)))
+	}
+	msgs[3] = `{"role":"user","content":[{"type":"text","text":"m03 ` + strings.Repeat("y", 250) + `"},{"type":"image_url","image_url":{"url":"data:image/png;base64,iVBORw0KGgo="}}]}`
+	long := extractReq(t, "openai.chat", `{"messages":[`+strings.Join(msgs, ",")+`]}`)
+	cold := planOf(long, 100, 4, 8, nil)
+	if cold.trace.ChunksTotal != 22 || !cold.trace.Sampled || cold.pieces[3] != 3 || cold.trace.Images != 0 {
+		t.Fatalf("cold = %+v pieces %v", cold.trace, cold.pieces)
+	}
+	// Whatever text is cached - all of it, or every other segment - the plan
+	// is the cold one: the same chunks are sampled.
+	for name, every := range map[string]int{"all text cached": 1, "every other segment cached": 2} {
+		some := map[[32]byte]bool{}
+		for i, s := range long.segs {
+			if s.img == nil && i%every == 0 {
+				some[s.key] = true
+			}
+		}
+		warm := long.makePlan(planLimits{maxChars: 100, maxChunks: 4, maxImages: 8, mixed: true}, func(h [32]byte) bool { return some[h] })
+		if warm.trace != cold.trace || !slices.Equal(warm.pieces, cold.pieces) || len(warm.chunks) != len(cold.chunks) {
+			t.Fatalf("%s: plan = %+v pieces %v, cold %+v pieces %v", name, warm.trace, warm.pieces, cold.trace, cold.pieces)
+		}
+		for i := range warm.chunks {
+			if warm.chunks[i].in.Hash != cold.chunks[i].in.Hash {
+				t.Fatalf("%s: chunk %d differs from the cold plan", name, i)
+			}
+		}
+	}
+	// With the image cached too, only what is not cached is planned.
+	rest := map[[32]byte]bool{}
+	for _, s := range long.segs[:19] {
+		rest[s.key] = true
+	}
+	if pl := planOf(long, 100, 4, 8, func(h [32]byte) bool { return rest[h] }); pl.trace.ChunksTotal != 2 || pl.trace.Sampled || pl.trace.Cached != 19 {
+		t.Fatalf("the image cached = %+v", pl.trace)
+	}
+}
+
 func TestPlanImageLimit(t *testing.T) {
 	var parts []string
 	for i := 0; i < 5; i++ {
@@ -316,18 +401,33 @@ func TestChunkMessagesRoundTrip(t *testing.T) {
 
 func TestCombineTraces(t *testing.T) {
 	pass := Trace{Final: Pass, Decider: -1, LatencyMs: 10}
+	last := Trace{Final: Pass, Decider: -1, LatencyMs: 5, Stages: []StageTrace{{Result: Pass}}}
 	hitTr := Trace{Final: Hit, Decider: 0, LatencyMs: 30, Stages: []StageTrace{{Result: Hit, Outcomes: []Outcome{hit("sexual", 0.9)}}}}
 	errTr := Trace{Final: Pass, Decider: -1, Errored: true, LatencyMs: 20}
-	tr := combineTraces([]Trace{pass, errTr, hitTr})
-	if tr.Final != Hit || tr.Chunk != 3 || !tr.Errored || tr.LatencyMs != 30 || len(tr.Chunks) != 2 || len(tr.runs()) != 3 {
+	overTr := Trace{Final: Pass, Decider: -1, Overturned: true, LatencyMs: 15, Stages: []StageTrace{{Result: Hit, Outcomes: []Outcome{hit("hate", 0.8)}}, {Result: Pass}}}
+	// The first hit decides, whatever comes before it.
+	tr := combineTraces([]Trace{pass, errTr, overTr, hitTr, last})
+	if tr.Final != Hit || tr.Chunk != 4 || !tr.Errored || tr.LatencyMs != 30 || len(tr.Chunks) != 4 || len(tr.runs()) != 5 {
 		t.Fatalf("combined = %+v", tr)
 	}
 	if hc := tr.HitCategories(); len(hc) != 1 || hc[0].Category != "sexual" {
 		t.Fatalf("hits = %+v", hc)
 	}
-	tr = combineTraces([]Trace{pass, errTr})
-	if tr.Final != Pass || !tr.Errored || tr.Chunk != 2 {
+	// Without a hit the first errored chunk is shown, before an overturned
+	// one (new-api gate.go).
+	tr = combineTraces([]Trace{pass, overTr, errTr, last})
+	if tr.Final != Pass || !tr.Errored || tr.Overturned || tr.Chunk != 3 {
 		t.Fatalf("errored = %+v", tr)
+	}
+	// Then the first overturned chunk.
+	tr = combineTraces([]Trace{pass, overTr, last})
+	if tr.Final != Pass || tr.Errored || !tr.Overturned || tr.Chunk != 2 || tr.verdict() != ResultOverturned {
+		t.Fatalf("overturned = %+v", tr)
+	}
+	// Every chunk passed: the last one is shown.
+	tr = combineTraces([]Trace{pass, pass, last})
+	if tr.Final != Pass || tr.Errored || tr.Chunk != 3 || len(tr.Stages) != 1 || len(tr.Chunks) != 2 || tr.Chunks[0].Chunk != 1 || tr.LatencyMs != 10 {
+		t.Fatalf("all passed = %+v", tr)
 	}
 	if one := combineTraces([]Trace{pass}); one.Chunk != 0 || one.Chunks != nil {
 		t.Fatalf("single = %+v", one)

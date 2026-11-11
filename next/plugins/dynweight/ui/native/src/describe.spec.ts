@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeDraft, describeItemSentence, describeStored, partsSentence } from './describe'
+import { describeDraft, describeEvent, describeItemSentence, describeStored, partsSentence } from './describe'
 import type { Rule, Strategy } from './host'
 import { readItems } from './items'
 import { DEFAULT_RULES_JSON, DEFAULT_STRATEGIES_JSON } from './items.fixture'
@@ -92,6 +92,74 @@ describe('describe', () => {
     )
     expect(describeItemSentence(strategies[1], rules, en)).toBe(
       'First token P95 ≥ 10 s · 2 of the last 3 windows → weight −30% (of current), clear 30% of sticky sessions'
+    )
+  })
+})
+
+describe('describeEvent', () => {
+  const step = (
+    strategy: string,
+    type: 'weight_degrade' | 'weight_climb',
+    mode: 'current_percent' | 'base_percent' | 'fixed',
+    value: number,
+    from: number,
+    to: number
+  ) => ({
+    strategy,
+    type,
+    mode,
+    value,
+    from,
+    to
+  })
+  const down = {
+    kind: 'weight_down',
+    reason: '',
+    detail: {
+      window: { total: 3, fail: 1 },
+      steps: [step('错误率过高', 'weight_degrade', 'current_percent', 20, 100, 80)],
+      config_version: 10
+    }
+  }
+
+  it('puts the steps first, then the config version and the window', () => {
+    expect(describeEvent(down, zh)).toBe('错误率过高：权重降低 20%（按当前） · 配置第 10 版 · 窗口 3 次，失败 1')
+    const up = {
+      kind: 'weight_up_start',
+      reason: '',
+      detail: {
+        steps: [step('自动回升', 'weight_climb', 'base_percent', 10, 50, 60), step('惩罚', 'weight_degrade', 'fixed', 5, 60, 55)],
+        config_version: 0
+      }
+    }
+    expect(describeEvent(up, zh)).toBe('自动回升：权重抬高 10%（按基准） · 惩罚：权重降低 5 · 出厂配置')
+    expect(describeEvent(down, translator('en'))).toBe(
+      '错误率过高: weight −20% (of current) · config version 10 · window: 3 attempts, 1 failed'
+    )
+  })
+
+  it('names the action of a step, not where a clamp took the weight', () => {
+    // A degrade below a floor that was raised meanwhile: the weight went up.
+    const clamped = {
+      kind: 'weight_down',
+      reason: '',
+      detail: { steps: [step('错误率过高', 'weight_degrade', 'current_percent', 20, 1, 2)] }
+    }
+    expect(describeEvent(clamped, zh)).toBe('错误率过高：权重降低 20%（按当前）')
+  })
+
+  it('reads older events as before', () => {
+    expect(describeEvent({ kind: 'weight_down', reason: '', detail: { window: { total: 3, fail: 1 } } }, zh)).toBe('窗口 3 次，失败 1')
+    expect(describeEvent({ kind: 'weight_down', reason: '', detail: null }, zh)).toBe('')
+    expect(describeEvent({ kind: 'reset', reason: 'manual', detail: { matched: 0 } }, zh)).toBe('手动重置 · 没有需要重置的记录')
+    expect(describeEvent({ kind: 'affinity_cleared', reason: '', detail: { strategy: '首字挂死', cleared: 2 } }, zh)).toBe(
+      '首字挂死：清理了 2 个粘性会话'
+    )
+  })
+
+  it('gives a rules-change reset its config version', () => {
+    expect(describeEvent({ kind: 'reset', reason: 'rules_change', detail: { keys: 4, config_version: 11 } }, zh)).toBe(
+      '规则已修改，历史清空 · 4 个在基准上的键 · 配置第 11 版'
     )
   })
 })

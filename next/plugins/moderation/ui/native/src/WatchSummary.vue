@@ -45,12 +45,12 @@ const fields = computed<DescItem[]>(() => {
 <template>
   <SDescriptions :items="fields" :columns="2" dense>
     <template #item-review>
-      <span class="mod-chips mod-chips-wrap">
+      <span class="mod-chips">
         <SBadge v-for="r in review" :key="r.key" size="xs">{{ t(`review.${r.key}`) }} {{ num(r.n) }}</SBadge>
       </span>
     </template>
     <template #item-ai>
-      <span class="mod-chips mod-chips-wrap">
+      <span class="mod-chips">
         <SBadge v-for="a in ai" :key="a.key" size="xs">{{ t(`aiVerdict.${a.key}`) }} {{ num(a.n) }}</SBadge>
       </span>
     </template>

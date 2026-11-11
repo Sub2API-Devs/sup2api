@@ -13,6 +13,7 @@ export { default as SButton } from './SButton.vue'
 export { default as SCard } from './SCard.vue'
 export { default as SChart } from './SChart.vue'
 export { default as SChip } from './SChip.vue'
+export { default as SChipList } from './SChipList.vue'
 export { default as SChoiceCards } from './SChoiceCards.vue'
 export { default as SConfirmHost } from './SConfirmHost.vue'
 export { default as SCopyButton } from './SCopyButton.vue'
@@ -25,6 +26,7 @@ export { default as SDropdown } from './SDropdown.vue'
 export { default as SEmpty } from './SEmpty.vue'
 export { default as SField } from './SField.vue'
 export { default as SFilterBar } from './SFilterBar.vue'
+export { default as SFilterChips } from './SFilterChips.vue'
 export { default as SIcon } from './SIcon.vue'
 // Icon vocabulary: the authoritative list of names <SIcon> (and therefore
 // manifest ui.menus[].icon) accepts.
@@ -39,7 +41,7 @@ export { default as SModal } from './SModal.vue'
 export { dismissTopLayer } from './overlay'
 export { default as SFormModal } from './SFormModal.vue'
 export { default as SPageHeader } from './SPageHeader.vue'
-export { provideTitleContext } from './titleContext'
+export { provideTitleContext, type PageHead, type PageHeadSink } from './titleContext'
 export { default as SPagination } from './SPagination.vue'
 export { default as SProgress } from './SProgress.vue'
 export { default as SSegmented } from './SSegmented.vue'
@@ -95,6 +97,8 @@ export type {
   StatusTone,
   ModalMobile,
   ChoiceOption,
+  ChipListItem,
+  FilterChipItem,
   DescItem,
   StepItem,
   StepState,

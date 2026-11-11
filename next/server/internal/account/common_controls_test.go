@@ -31,6 +31,7 @@ func TestCommonControlEnforcement(t *testing.T) {
 		"weight":             {Configurable: &off, Default: raw(`5`)},
 		"max_concurrency":    {Configurable: &off},
 		"rpm_limit":          {Locked: true, Default: raw(`100`)},
+		"spm_window_seconds": {Default: raw(`300`)},
 		"header_passthrough": {Visible: &off, Default: raw(`["X-Foo"]`)},
 		"param_override":     {Locked: true, Default: raw(`{"temperature": 0.5}`)},
 		"usage_limit":        {Locked: true, Default: raw(`{"enabled": true, "amount": "5", "period": "day", "timezone": "UTC"}`)},
@@ -61,6 +62,7 @@ func TestCommonControlEnforcement(t *testing.T) {
 		{"not configurable, core default", map[string]any{"max_concurrency": 5}, "max_concurrency:read_only"},
 		{"locked", map[string]any{"rpm_limit": 99}, "rpm_limit:read_only"},
 		{"locked object", map[string]any{"param_override": map[string]any{}}, "param_override:read_only"},
+		{"session window out of range", map[string]any{"spm_window_seconds": 59}, "spm_window_seconds:invalid"},
 		{"proxy required", map[string]any{"proxy_id": nil}, "proxy_id:required"},
 	} {
 		status, result = e.do("POST", "/accounts", body(tc.extra))
@@ -76,6 +78,7 @@ func TestCommonControlEnforcement(t *testing.T) {
 	require.Equal(t, 5.0, created["weight"])
 	require.Equal(t, 0.0, created["max_concurrency"])
 	require.Equal(t, 100.0, created["rpm_limit"])
+	require.Equal(t, 300.0, created["spm_window_seconds"])
 	require.Equal(t, []any{"x-foo"}, created["header_passthrough"])
 	require.Equal(t, map[string]any{"temperature": 0.5}, created["param_override"])
 	id := itoa(int64(created["id"].(float64)))
@@ -88,6 +91,7 @@ func TestCommonControlEnforcement(t *testing.T) {
 	status, result = e.do("POST", "/accounts", body(map[string]any{"name": "chosen", "priority": 70, "header_passthrough": []string{}}))
 	require.Equal(t, 201, status, result)
 	require.Equal(t, 70.0, data(result)["priority"])
+	require.Equal(t, 300.0, data(result)["spm_window_seconds"])
 	require.Empty(t, data(result)["header_passthrough"])
 
 	for _, tc := range []struct {

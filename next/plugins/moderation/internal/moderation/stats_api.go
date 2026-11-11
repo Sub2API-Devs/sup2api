@@ -87,7 +87,8 @@ func (p *Plugin) loadStats(ctx context.Context, db *pgxpool.Pool, sf statFilter)
 		f.cond("flow_id = ", sf.flow)
 	}
 	rows, err := db.Query(ctx, `SELECT hour, group_id, flow_id, stage, auditor_id, timing, audited, hit, blocked, overturned, errors, cache_skipped,
-			calls, tokens_in, tokens_out, latency_ms_sum, lat, `+costUnits("cost")+`, priced_calls, unpriced_calls, unpriced_tokens, free_calls
+			calls, tokens_in, tokens_out, latency_ms_sum, lat, `+costUnits("cost")+`, priced_calls, unpriced_calls, unpriced_tokens, free_calls,
+			replayed
 		FROM stats_hourly WHERE `+f.where(), f.args...)
 	if err != nil {
 		return nil, err
@@ -97,7 +98,7 @@ func (p *Plugin) loadStats(ctx context.Context, db *pgxpool.Pool, sf statFilter)
 		var lat []int64
 		err := r.Scan(&s.hour, &s.group, &s.flow, &s.stage, &s.auditor, &s.timing, &s.audited, &s.hit, &s.blocked, &s.overturned,
 			&s.errors, &s.cacheSkipped, &s.calls, &s.tokensIn, &s.tokensOut, &s.latSum, &lat, &s.units, &s.priced, &s.unpriced,
-			&s.unpricedTokens, &s.free)
+			&s.unpricedTokens, &s.free, &s.replayed)
 		s.hour = s.hour.UTC()
 		copy(s.lat[:], lat)
 		return s, err
@@ -226,10 +227,12 @@ func flowCounters(rows []statRow, since time.Time) (all, pre map[int64]*counters
 
 // ---------------------------------------------------------------- GET /status
 
-// TodayCounts are today's totals of the overview.
+// TodayCounts are today's totals of the overview. Replayed counts the
+// suspicious requests decided by a cached hit; they are in Suspicious too.
 type TodayCounts struct {
 	Audited           int64 `json:"audited"`
 	Suspicious        int64 `json:"suspicious"`
+	Replayed          int64 `json:"replayed"`
 	Blocked           int64 `json:"blocked"`
 	Overturned        int64 `json:"overturned"`
 	Errors            int64 `json:"errors"`
@@ -254,6 +257,10 @@ type WatchCounts struct {
 	Watching        int64 `json:"watching"`
 	WatchingWithNew int64 `json:"watching_with_new"`
 	Blocking        int64 `json:"blocking"`
+	// BlockingWithNew: enforce-level entries with hits since they were last
+	// seen. Under the default level enforce new entries join at enforce, so
+	// this is where users with new hits show.
+	BlockingWithNew int64 `json:"blocking_with_new"`
 }
 
 // HealthRow is the last-hour health of an auditor or a channel.
@@ -312,9 +319,12 @@ type StatusCosts struct {
 
 // Status is GET /status.
 type Status struct {
-	Enabled      bool           `json:"enabled"`
-	Running      bool           `json:"running"`
-	Mode         string         `json:"mode"`
+	Enabled bool   `json:"enabled"`
+	Running bool   `json:"running"`
+	Mode    string `json:"mode"`
+	// DefaultLevel is the level mode gives a user without a watch entry
+	// (observe when mode is off).
+	DefaultLevel string         `json:"default_level"`
 	AlertPercent int            `json:"error_rate_alert_percent"`
 	Today        TodayCounts    `json:"today"`
 	TodayFrom    time.Time      `json:"today_from"`
@@ -353,7 +363,7 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 		return nil, err
 	}
 	sum := sumStatusRows(rows, today, lastHour)
-	out := &Status{Enabled: c.enabled, Running: p.host != nil, Mode: c.Mode, AlertPercent: c.ErrorRateAlertPercent, TodayFrom: today,
+	out := &Status{Enabled: c.enabled, Running: p.host != nil, Mode: c.Mode, DefaultLevel: c.defaultLevel, AlertPercent: c.ErrorRateAlertPercent, TodayFrom: today,
 		Today: sum.today, Auditors: sum.health(c.ErrorRateAlertPercent), Funnels: sum.funnels(names), Queue: p.queues(), Runtime: p.runtimeState(ctx),
 		Costs: StatusCosts{Channels: []CostRef{}, Auditors: costRefs(sum.auditorCosts)}, Channels: []HealthRow{}}
 	if err := p.addChannelStatus(ctx, db, out, from, today, lastHour, c.ErrorRateAlertPercent); err != nil {
@@ -382,6 +392,7 @@ func sumStatusRows(rows []statRow, today, lastHour time.Time) statusRows {
 		sum.today.Audited += f.audited + f.cacheSkipped
 		sum.today.CacheSkipped += f.cacheSkipped
 		sum.today.Suspicious += f.hit
+		sum.today.Replayed += f.replayed
 		sum.today.Overturned += f.overturned
 		sum.today.Errors += f.errors
 	}
@@ -500,12 +511,14 @@ func addAnalysisCounts(ctx context.Context, db *pgxpool.Pool, out *Status, today
 }
 
 // watchCounts: watching and watching_with_new count the observe level,
-// blocking the enforce level (new-api CountModerationWatch).
+// blocking the enforce level (new-api GetModerationWatchCounts);
+// blocking_with_new is the plugin's own, the enforce-level entries with new
+// hits.
 func (p *Plugin) watchCounts(ctx context.Context, db *pgxpool.Pool) (WatchCounts, error) {
 	var w WatchCounts
 	err := db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE level = 'observe'), count(*) FILTER (WHERE level = 'observe' AND hits_since_seen > 0),
-			count(*) FILTER (WHERE level = 'enforce')
-		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking)
+			count(*) FILTER (WHERE level = 'enforce'), count(*) FILTER (WHERE level = 'enforce' AND hits_since_seen > 0)
+		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking, &w.BlockingWithNew)
 	return w, err
 }
 
@@ -591,12 +604,14 @@ func summaryOf(c *counters) LatencySummary {
 }
 
 // FlowPoint is one bucket of a flow's trend. Audited counts the requests
-// the flow received, cache_skipped included (as in today's counts).
+// the flow received, cache_skipped included (as in today's counts). Replayed
+// counts the hits decided by a cached hit; they are in Hit too.
 type FlowPoint struct {
 	Ts             time.Time `json:"ts"`
 	Audited        int64     `json:"audited"`
 	CacheSkipped   int64     `json:"cache_skipped"`
 	Hit            int64     `json:"hit"`
+	Replayed       int64     `json:"replayed"`
 	Blocked        int64     `json:"blocked"`
 	Overturned     int64     `json:"overturned"`
 	Errors         int64     `json:"errors"`
@@ -711,7 +726,7 @@ func (sum trendRows) flowTrends(names map[int64]string) []FlowTrend {
 			a := sum.flows[id][ts]
 			pre, post := summaryOf(&a.pre), summaryOf(&a.post)
 			ft.Points = append(ft.Points, FlowPoint{Ts: ts, Audited: a.all.audited + a.all.cacheSkipped, CacheSkipped: a.all.cacheSkipped, Hit: a.all.hit,
-				Blocked: a.all.blocked, Overturned: a.all.overturned, Errors: a.all.errors,
+				Replayed: a.all.replayed, Blocked: a.all.blocked, Overturned: a.all.overturned, Errors: a.all.errors,
 				SuspiciousRate: ratio(a.all.hit, a.all.audited+a.all.cacheSkipped),
 				PreAvgMs:       pre.AvgMs, PreP95Ms: pre.P95Ms, PostAvgMs: post.AvgMs, PostP95Ms: post.P95Ms})
 		}

@@ -56,9 +56,10 @@ const maxMessageLen = 2000
 const slotUniqueIndex = "plugin_job_runs_slot_uniq"
 
 // notLoadedRetry is how soon a cluster run is put off on a node that does not
-// run the plugin, until the run is older than the job's timeout. The limits
-// of manifest jobs are the manifest package's (see EffectiveJob).
-const notLoadedRetry = 5 * time.Second
+// run the plugin, until the run is older than the job's timeout (a variable
+// so tests can shorten it). The limits of manifest jobs are the manifest
+// package's (see EffectiveJob).
+var notLoadedRetry = 5 * time.Second
 
 // Tasks is the part of the task service the bridge uses (*task.Service).
 type Tasks interface {

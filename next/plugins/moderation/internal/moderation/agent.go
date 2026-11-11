@@ -35,6 +35,14 @@ type Result struct {
 	Latency    time.Duration
 	LLMModel   string
 	Transcript []json.RawMessage // only when requested (/test)
+	// ImagesRefused: the upstream refused a call with the images
+	// (llmImagesRefused). The run went on with the text alone (one call more
+	// than Turns), or ended with ErrNoInput when there was no text.
+	// RefusedStatus is the status of that refusal - or 0 when the call with
+	// the text alone was refused in the same way: the images were not the
+	// reason, and the error of the run says what the upstream answered.
+	ImagesRefused bool
+	RefusedStatus int
 }
 
 // ErrNoVerdict is returned when the LLM gave no valid verdict within
@@ -53,15 +61,26 @@ func rawJSON(v any) json.RawMessage {
 	return b
 }
 
-// run moderates text (already truncated). keepTranscript records every
-// message exchanged, including the final assistant message.
-func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscript bool) (*Result, error) {
+// run moderates text (already truncated) and images (llmImages), which go
+// with the text in the first user message only. keepTranscript records
+// every message exchanged, including the final assistant message.
+//
+// A turn is one call, plus at most one more for each of two reasons, in
+// whichever order the upstream brings them up: it refuses the temperature
+// (remembered for the auditor, so once in all), or it refuses a call with
+// images (llmImagesRefused) - then the images are dropped for the rest of
+// the run (ImagesRefused), and without a text there is nothing left to
+// judge (ErrNoInput). So a run makes at most max_turns + 2 calls. When the
+// turn that dropped the images is refused without them too, the refusal was
+// not about the images (RefusedStatus 0).
+func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscript bool, images ...Image) (*Result, error) {
 	start := time.Now()
 	res := &Result{LLMModel: c.model}
 	if c.channel == nil || c.proto == nil {
 		return res, errNoChannel
 	}
-	messages := []any{llmUserMessage(wrapUserContent(c.markerKey, text))}
+	user := wrapUserContent(c.markerKey, text)
+	messages := []any{c.proto.user(user, images)}
 	finish := func(err error) (*Result, error) {
 		res.Latency = time.Since(start)
 		if keepTranscript {
@@ -77,10 +96,24 @@ func (a *agent) run(ctx context.Context, c *llmJudge, text string, keepTranscrip
 			req.Temperature = &temp
 		}
 		t, err := c.proto.call(ctx, c.channel, req)
-		if req.Temperature != nil && refusesTemperature(err) {
-			c.noTemperature.Store(true)
-			req.Temperature = nil
+		dropped := false // the images, in this turn
+		for {
+			if req.Temperature != nil && refusesTemperature(err) {
+				c.noTemperature.Store(true)
+				req.Temperature = nil
+			} else if st := llmImagesRefused(err); len(images) > 0 && st != 0 {
+				images, res.ImagesRefused, res.RefusedStatus, dropped = nil, true, st, true
+				if text == "" {
+					return finish(ErrNoInput)
+				}
+				messages[0] = llmUserMessage(user) // req.Messages is this slice
+			} else {
+				break
+			}
 			t, err = c.proto.call(ctx, c.channel, req)
+		}
+		if dropped && llmImagesRefused(err) != 0 {
+			res.RefusedStatus = 0
 		}
 		res.Billing.add(t.Usage)
 		res.Usage.PromptTokens += t.Usage.Input

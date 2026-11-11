@@ -181,10 +181,17 @@ func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, er
 	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("checked %d flows, %d alerts", len(flows), sent)}, nil
 }
 
+// alertNamespace is the KV namespace of the flow alert state. It is the one
+// every version so far used ("pass", the namespace of the pass cache until
+// 0.7.x), not the verdict cache's: nodes of different versions share the
+// state of an alert during a rolling upgrade, and an alert that is going on
+// does not fire again after it.
+const alertNamespace = "pass"
+
 func (p *Plugin) alerted(ctx context.Context, flow int64) (bool, error) {
-	_, found, err := p.host.KV().Get(ctx, kvNamespace, alertKey(flow))
+	_, found, err := p.host.KV().Get(ctx, alertNamespace, alertKey(flow))
 	if err != nil {
-		p.stats.kvErrors.Add(1)
+		p.kvFailed(ctx)
 	}
 	return found, err
 }
@@ -195,12 +202,12 @@ func (p *Plugin) alerted(ctx context.Context, flow int64) (bool, error) {
 func (p *Plugin) setAlerted(ctx context.Context, flow int64, over bool) {
 	var err error
 	if over {
-		err = p.host.KV().Set(ctx, kvNamespace, alertKey(flow), []byte{1}, 2*time.Hour)
+		err = p.host.KV().Set(ctx, alertNamespace, alertKey(flow), []byte{1}, 2*time.Hour)
 	} else {
-		err = p.host.KV().Delete(ctx, kvNamespace, alertKey(flow))
+		err = p.host.KV().Delete(ctx, alertNamespace, alertKey(flow))
 	}
 	if err != nil {
-		p.stats.kvErrors.Add(1)
+		p.kvFailed(ctx)
 	}
 }
 

@@ -16,11 +16,11 @@ import { provideOverviewTick } from './overview/tick'
 import { useCatalog } from './catalog'
 import { num } from './format'
 import { useModHost } from './host'
-import { useStatus } from './status'
+import { useStatus, watchNew } from './status'
 import type { TabKey } from './types'
 
 // Overview (new-api content-moderation overview): running state, today's
-// KPIs, the users most in need of attention, AI review, cost, performance,
+// KPIs (the suspicious count says how many were replayed cached hits), the users most in need of attention, AI review, cost, performance,
 // categories, funnel, trend, health and queues. GET /status (shared with the
 // page header) feeds the page; cards with their own query reload on the
 // shared tick. Refreshes every minute while the tab is shown.
@@ -49,11 +49,13 @@ onBeforeUnmount(() => clearInterval(timer))
 const kpis = computed(() => {
   const s = status.data.value
   if (!s) return []
+  // entries with new hits: under the default level "enforce" they are enforce-level ones
+  const fresh = watchNew(s.watch)
   return [
     { key: 'audited', icon: 'eyeglass', tone: 'primary' as const, value: s.today.audited, sub: t('kpi.auditedSub') },
-    { key: 'suspicious', icon: 'warning', tone: 'warning' as const, value: s.today.suspicious, sub: t('kpi.suspiciousSub') },
-    { key: 'watching', icon: 'eye', tone: 'info' as const, value: s.watch.watching, sub: t('kpi.watchingSub', { n: num(s.watch.watching_with_new) }) },
-    { key: 'blocking', icon: 'shield', tone: 'danger' as const, value: s.watch.blocking, sub: t('kpi.blockingSub') },
+    { key: 'suspicious', icon: 'warning', tone: 'warning' as const, value: s.today.suspicious, sub: s.today.replayed ? `${t('kpi.suspiciousSub')} · ${t('kpi.replayedSub', { n: num(s.today.replayed) })}` : t('kpi.suspiciousSub') },
+    { key: 'watching', icon: 'eye', tone: 'info' as const, value: s.watch.watching, sub: t('kpi.withNewSub', { n: num(fresh.watching) }) },
+    { key: 'blocking', icon: 'shield', tone: 'danger' as const, value: s.watch.blocking, sub: fresh.blocking === null ? t('kpi.blockingSub') : `${t('kpi.blockingSub')} · ${t('kpi.withNewSub', { n: num(fresh.blocking) })}` },
     { key: 'blocked', icon: 'x', tone: 'danger' as const, value: s.today.blocked, sub: t('kpi.blockedSub') }
   ]
 })
@@ -66,7 +68,7 @@ const goTab = (tab: TabKey) => emit('go-tab', tab)
     <SSpinner v-if="!status.data.value && status.loading.value" block />
     <template v-if="status.data.value">
       <StatusLine :status="status.data.value" @go-tab="goTab" @go-settings="emit('go-settings')" />
-      <SGrid template="repeat(auto-fit, minmax(170px, 1fr))">
+      <SGrid variant="stats" md-template="repeat(auto-fit, minmax(170px, 1fr))">
         <SStatCard v-for="k in kpis" :key="k.key" :label="t(`kpi.${k.key}`)" :value="num(k.value)" :sub="k.sub" :icon="k.icon" :tone="k.tone" />
       </SGrid>
     </template>

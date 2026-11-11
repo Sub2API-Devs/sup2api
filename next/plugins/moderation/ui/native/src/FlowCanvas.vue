@@ -10,30 +10,28 @@ import {
   FLOW_TEMPLATES,
   MAX_STAGES,
   MAX_STAGE_AUDITORS,
-  acceptsCanvasDrag,
   addAuditor,
   addStage,
-  applyDrop,
   applyTemplate,
   auditorIndex,
   isAuditorType,
-  leavesInside,
   moveStage,
-  readCanvasDrag,
   removeAuditor,
   removeStage,
+  reviewStageCount,
   setCombine,
+  setFallback,
   stageRole,
   type CanvasAuditor,
-  type CanvasDrag,
-  type CanvasDropTarget,
   type Combine,
   type FlowTemplate
 } from './flowOps'
+import { acceptsCanvasDrag, applyDrop, leavesInside, readCanvasDrag, type CanvasDrag, type CanvasDropTarget } from './canvasDrag'
 
 // Flow stages as horizontal cards (new-api flow-canvas.tsx). Auditors are
 // placed by native drag and drop or the pickers; every change goes through
-// flowOps, so the result always matches the backend rules.
+// flowOps, so the result always matches the backend rules: review stages
+// first, the fallback stages (补审) after them.
 const props = defineProps<{ spec: Spec; auditors: CanvasAuditor[]; disabled: boolean }>()
 const emit = defineEmits<{ (e: 'update:spec', spec: Spec): void; (e: 'manage'): void }>()
 const host = useModHost()
@@ -45,6 +43,17 @@ const usable = computed(() => props.auditors.filter((a) => isAuditorType(a.type)
 const lookup = computed(() => auditorIndex(props.auditors))
 const typeOf = (id: number) => lookup.value.typeOf(id)
 const nameOf = (id: number) => lookup.value.nameOf(id)
+const reviewCount = computed(() => reviewStageCount(props.spec.stages))
+
+/**
+ * What leads from the stage before into stage i (i > 0). Into the first
+ * fallback stage: the chain ended without any hit (a pass that overturned a
+ * hit ends the run, a hit followed by failed stages stands) or judged nothing.
+ */
+function arrowText(i: number): { text: string; cls: string } {
+  if (i < reviewCount.value) return { text: t('flows.hitNext'), cls: 'mod-text-danger' }
+  return { text: i === reviewCount.value ? t('flows.toFallback') : t('flows.fallbackNext'), cls: 'mod-text-success' }
+}
 
 const change = (next: Spec) => {
   if (next !== props.spec) emit('update:spec', next)
@@ -65,7 +74,8 @@ function drop(drag: CanvasDrag, target: CanvasDropTarget) {
 function refocus(drag: Extract<CanvasDrag, { kind: 'node' }>, target: CanvasDropTarget, next: Spec) {
   if (target.kind === 'trash') return
   const id = props.spec.stages[drag.stage]?.auditors[drag.index]
-  let stage = target.kind === 'new' ? next.stages.length - 1 : target.stage
+  // a new stage is the last review stage, in front of the fallback stages
+  let stage = target.kind === 'new' ? reviewStageCount(next.stages) - 1 : target.stage
   // the source stage disappeared when it held only this auditor
   if (target.kind === 'stage' && props.spec.stages[drag.stage].auditors.length === 1 && target.stage > drag.stage) stage--
   nextTick(() => root.value?.querySelector<HTMLElement>(`[data-stage="${stage}"] [data-auditor="${id}"]`)?.focus())
@@ -129,12 +139,13 @@ function onDropNew(e: DragEvent) {
         <template v-for="(st, i) in spec.stages" :key="i">
           <div class="mod-canvas-arrow">
             <span aria-hidden="true">→</span>
-            <span v-if="i > 0" class="mod-text-danger">{{ t('flows.hitNext') }}</span>
+            <span v-if="i > 0" :class="arrowText(i).cls">{{ arrowText(i).text }}</span>
           </div>
           <StageCard
             :stage="st"
             :index="i"
             :count="spec.stages.length"
+            :review-count="reviewCount"
             :role="stageRole(i, st, typeOf)"
             :by-id="lookup.byId"
             :addable="st.auditors.length < MAX_STAGE_AUDITORS ? usable.filter((a) => !st.auditors.includes(a.id)) : []"
@@ -145,6 +156,7 @@ function onDropNew(e: DragEvent) {
             @move-stage="change(moveStage(spec, i, $event))"
             @remove-stage="change(removeStage(spec, i))"
             @combine="(c: Combine, n?: number) => change(setCombine(spec, i, c, n))"
+            @fallback="change(setFallback(spec, i, $event))"
           />
         </template>
         <section

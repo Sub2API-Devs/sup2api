@@ -24,6 +24,51 @@ describe('SFilterBar', () => {
   })
 })
 
+describe('SFilterBar more filters', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+  const slots = { default: () => h('select', { id: 'status' }), advanced: () => h('input', { id: 'ip' }), end: () => 'UTC' }
+  const panel = (w: ReturnType<typeof mount>) => w.get('[data-testid="filter-advanced"]')
+
+  it('folds #advanced behind a toggle placed before #end, with the count badge', async () => {
+    const w = mount(SFilterBar, { props: { advancedCount: 2 }, slots, attachTo: document.body })
+    const toggle = w.get('[data-testid="filter-advanced-toggle"]')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(toggle.attributes('aria-controls')).toBe(panel(w).attributes('id'))
+    expect(toggle.classes()).toContain('!text-primary-600')
+    expect(w.get('[data-testid="filter-advanced-count"]').text()).toBe('2')
+    expect(w.html().indexOf('filter-advanced-toggle')).toBeLessThan(w.html().indexOf('UTC'))
+    expect(panel(w).isVisible()).toBe(false)
+    await toggle.trigger('click')
+    expect(panel(w).isVisible()).toBe(true)
+    expect(panel(w).find('#ip').exists()).toBe(true)
+    expect(toggle.classes()).not.toContain('!text-primary-600')
+    expect(w.emitted('update:advancedOpen')).toEqual([[true]])
+  })
+
+  it('follows v-model:advancedOpen and adds nothing without #advanced', async () => {
+    const w = mount(SFilterBar, { props: { advancedOpen: true }, slots, attachTo: document.body })
+    expect(panel(w).isVisible()).toBe(true)
+    await w.setProps({ advancedOpen: false })
+    expect(panel(w).isVisible()).toBe(false)
+    const plain = mount(SFilterBar, { slots: { default: slots.default } })
+    expect(plain.find('[data-testid="filter-advanced-toggle"]').exists()).toBe(false)
+    expect(plain.find('[data-testid="filter-advanced"]').exists()).toBe(false)
+  })
+
+  it('puts #advanced after the default slot in the phone sheet, without the toggle, badging both counts', async () => {
+    const w = mountPinned(SFilterBar, { props: { activeCount: 1, advancedCount: 2 }, slots })
+    expect(w.find('[data-testid="filter-advanced-toggle"]').exists()).toBe(false)
+    const open = w.get('[data-testid="filter-sheet-open"]')
+    expect(open.attributes('aria-label')).toBe('Filters, 3 active')
+    expect(open.text()).toContain('3')
+    await open.trigger('click')
+    const fields = [...document.querySelectorAll('[data-testid="filter-sheet"] > *')].map((e) => e.id)
+    expect(fields).toEqual(['status', 'ip'])
+  })
+})
+
 describe('SFilterBar on a phone', () => {
   afterEach(() => {
     document.body.innerHTML = ''

@@ -251,18 +251,20 @@ func escalationOf(level, trend, suggestion string, violations int) string {
 	return ""
 }
 
-// decideEscalation applies the permission switches: a change that is not
+// decideEscalation applies the permission switches and the user lists of
+// user uid: an allowlisted user is never upgraded, a blocklisted one never
+// downgraded or removed (new-api applyAnalysisResult). A change that is not
 // allowed becomes auto_not_allowed naming the denied action.
-func decideEscalation(c *config, level, trend, suggestion string, violations int) (action, denied string) {
+func decideEscalation(c *config, uid int64, level, trend, suggestion string, violations int) (action, denied string) {
 	action = escalationOf(level, trend, suggestion, violations)
 	allowed := true
 	switch action {
 	case ActionAutoUpgrade:
-		allowed = c.AnalysisAllowUpgrade
+		allowed = c.AnalysisAllowUpgrade && !c.allowlisted(uid)
 	case ActionAutoDowngrade:
-		allowed = c.AnalysisAllowDowngrade
+		allowed = c.AnalysisAllowDowngrade && !c.blocklisted(uid)
 	case ActionAutoRemove:
-		allowed = c.AnalysisAllowRemove
+		allowed = c.AnalysisAllowRemove && !c.blocklisted(uid)
 	}
 	if allowed {
 		return action, ""
@@ -372,7 +374,7 @@ type escalation struct {
 // (§72.13.4): upgrade, downgrade or removal when the settings allow it,
 // otherwise auto_not_allowed; every action goes to the history.
 func escalateWatch(ctx context.Context, tx pgx.Tx, c *config, w Watch, a *Analysis, id int64, now time.Time) (escalation, error) {
-	action, denied := decideEscalation(c, w.Level, a.Trend, a.Suggestion, int(a.VerdictCounts.Violation))
+	action, denied := decideEscalation(c, w.UserID, w.Level, a.Trend, a.Suggestion, int(a.VerdictCounts.Violation))
 	reason := "trend:" + a.Trend
 	if action == ActionAutoRemove {
 		// The model's verdicts are not enough to take a user off the list:

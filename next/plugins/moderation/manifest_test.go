@@ -65,7 +65,10 @@ func TestManifest(t *testing.T) {
 	if fields, ok := check.Fields(check.Validate(&m, files, check.ValidateOptions{Tooling: true})); ok {
 		t.Fatalf("manifest check: %+v", fields)
 	}
-	if m.Key != "moderation" || m.Version != "0.7.4" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	// hostCompat: the native UI uses UI 3.10 (SFilterBar more filters,
+	// SFilterChips, SChipList, TableColumn.grow), first shipped with core
+	// 0.1.277; the verdict cache's batch KV calls need 0.1.273 already.
+	if m.Key != "moderation" || m.Version != "0.9.0" || m.HostCompat != ">=0.1.277 <0.2.0" || m.HostUICompat != "^3.10" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -97,12 +100,13 @@ func TestManifest(t *testing.T) {
 		"GET /stats/categories": "moderation:read", "POST /watchlist/:user_id/seen": "moderation:manage", "POST /auditors/try": "moderation:manage",
 		"GET /users/:user_id": "moderation:read", "GET /users": "moderation:read",
 		"GET /bindings": "moderation:read", "PUT /bindings": "moderation:manage", "DELETE /bindings/:group_id/:account_id": "moderation:manage",
+		"POST /verdict-cache/clear": "moderation:manage",
 	} {
 		if routes[route] != perm {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 57 {
+	if len(routes) != 58 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -251,8 +255,10 @@ func TestSettingsForms(t *testing.T) {
 	}
 	// The 0.1 fields stay in the schema (api_key above all: without it the
 	// core would no longer mask it) but the settings page does not show
-	// them (§72.15); every other field is shown.
-	legacy := []string{"base_url", "api_key", "model", "system_prompt", "categories", "tool_choice", "max_turns", "temperature",
+	// them (§72.15); the keys retired in 0.8.0 (exempt_user_ids, read as the
+	// allowlist, and cache_ttl_seconds, read as verdict_cache_days) are
+	// hidden like them; every other field is shown.
+	legacy := []string{"exempt_user_ids", "cache_ttl_seconds", "base_url", "api_key", "model", "system_prompt", "categories", "tool_choice", "max_turns", "temperature",
 		"max_tokens", "timeout_ms", "on_error", "sample_rate", "group_ids", "model_patterns", "retention_days"}
 	for _, k := range order {
 		var fu struct {

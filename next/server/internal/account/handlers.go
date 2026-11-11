@@ -51,6 +51,7 @@ type row struct {
 	RPMLimit          int
 	TPMLimit          int64
 	SPMLimit          int
+	SPMWindowSeconds  int
 	ModelLimits       []byte
 	Environment       core.EnvironmentValues
 	HeaderPassthrough []string
@@ -84,7 +85,7 @@ type row struct {
 // statement built on it must qualify account columns with "a.".
 const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc, a.settings, a.proxy_id,
 	a.status, a.status_reason, a.schedulable, a.auto_disable, a.priority, a.weight, a.max_concurrency,
-	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment, a.last_used_at,
+	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.spm_window_seconds, a.model_limits, a.environment, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
 	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough,a.param_override,a.conversion_loss_policy
@@ -94,7 +95,7 @@ func scanRow(r pgx.Row) (*row, error) {
 	var a row
 	err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.CredEnc, &a.Settings, &a.ProxyID,
 		&a.Status, &a.StatusReason, &a.Schedulable, &a.AutoDisable, &a.Priority, &a.Weight, &a.MaxConcurrency,
-		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
+		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.SPMWindowSeconds, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
 		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough, &a.ParamOverride, &a.LossPolicy)
@@ -202,7 +203,10 @@ type View struct {
 	RPMLimit     int               `json:"rpm_limit"`
 	TPMLimit     int64             `json:"tpm_limit"`
 	SPMLimit     int               `json:"spm_limit"`
-	ModelLimits  []core.ModelLimit `json:"model_limits"`
+	// SPMWindowSeconds is the window spm_limit counts sessions over
+	// (CONTRACTS §71.1).
+	SPMWindowSeconds int               `json:"spm_window_seconds"`
+	ModelLimits      []core.ModelLimit `json:"model_limits"`
 	// Environment is the account layer of the environment variables (§74.3).
 	Environment core.EnvironmentValues `json:"environment"`
 	// HeaderPassthrough lists the client headers the account copies onto its
@@ -294,7 +298,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
 			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
-			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(), Environment: a.Environment,
+			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, SPMWindowSeconds: a.SPMWindowSeconds, ModelLimits: a.modelLimits(), Environment: a.Environment,
 			HeaderPassthrough: passthrough, ParamOverride: a.ParamOverride, ConversionLossPolicy: a.LossPolicy,
 			Orphaned: !s.pluginActive(a.PluginKey), Settings: st,
 			CreatedBy: a.CreatedBy, CreatedByEmail: a.CreatedByEmail,
@@ -422,14 +426,15 @@ func (s *Service) fillCooldowns(ctx context.Context, ids []int64, out []*View) {
 	}
 }
 
-// fillRateUsage sets RateUsage (rpm/tpm/sessions of the last minute).
+// fillRateUsage sets RateUsage (rpm/tpm of the last minute, sessions of
+// each session window).
 func (s *Service) fillRateUsage(ctx context.Context, out []*View) {
 	if s.d.Limiter == nil {
 		return
 	}
 	refs := make([]core.AccountRef, len(out))
 	for i, v := range out {
-		refs[i] = core.AccountRef{ID: v.ID, ModelLimits: v.ModelLimits}
+		refs[i] = core.AccountRef{ID: v.ID, SPMWindowSeconds: v.SPMWindowSeconds, ModelLimits: v.ModelLimits}
 	}
 	usage, err := s.d.Limiter.Usage(ctx, refs)
 	if err != nil {
@@ -684,7 +689,9 @@ type input struct {
 	RPMLimit       *int               `json:"rpm_limit"`
 	TPMLimit       *int64             `json:"tpm_limit"`
 	SPMLimit       *int               `json:"spm_limit"`
-	ModelLimits    *[]core.ModelLimit `json:"model_limits"`
+	// SPMWindowSeconds is the window of spm_limit, 60-86400 (§71.1).
+	SPMWindowSeconds *int               `json:"spm_window_seconds"`
+	ModelLimits      *[]core.ModelLimit `json:"model_limits"`
 	// Environment replaces the account layer as a whole (§74.3).
 	Environment *core.EnvironmentValues `json:"environment"`
 	// HeaderPassthrough replaces the account's header passthrough rules (§81).
@@ -745,6 +752,7 @@ func (in *input) changedFields() []string {
 	set("rpm_limit", in.RPMLimit != nil)
 	set("tpm_limit", in.TPMLimit != nil)
 	set("spm_limit", in.SPMLimit != nil)
+	set("spm_window_seconds", in.SPMWindowSeconds != nil)
 	set("model_limits", in.ModelLimits != nil)
 	set("environment", in.Environment != nil)
 	set("header_passthrough", in.HeaderPassthrough != nil)
@@ -879,7 +887,10 @@ func (in *input) validateScheduling(ctx context.Context) []core.FieldError {
 		add("tpm_limit", "invalid", "tpm limit must be 0-1000000000000 (0 = unlimited)", "每分钟 token 上限必须为 0-1000000000000（0 表示不限）")
 	}
 	if in.SPMLimit != nil && (*in.SPMLimit < 0 || *in.SPMLimit > maxRPMLimit) {
-		add("spm_limit", "invalid", "spm limit must be 0-10000000 (0 = unlimited)", "每分钟会话数上限必须为 0-10000000（0 表示不限）")
+		add("spm_limit", "invalid", spmLimitEN, spmLimitZH)
+	}
+	if in.SPMWindowSeconds != nil && !validSPMWindow(*in.SPMWindowSeconds) {
+		add("spm_window_seconds", "invalid", spmWindowEN, spmWindowZH)
 	}
 	if in.Environment != nil {
 		values, errs := core.ValidateEnvironmentValues(ctx, core.EnvLayerAccount, "environment", *in.Environment)
@@ -1169,7 +1180,7 @@ func (s *Service) create(c *gin.Context) {
 	prio, maxc, weight := *in.Priority, *in.MaxConcurrency, *in.Weight
 	models := core.ValueOr(in.Models, []string{})
 	mapping := *in.ModelMapping
-	rpm, tpm, spm := *in.RPMLimit, *in.TPMLimit, *in.SPMLimit
+	rpm, tpm, spm, spmWindow := *in.RPMLimit, *in.TPMLimit, *in.SPMLimit, *in.SPMWindowSeconds
 	modelLimits, environment, headerPassthrough := *in.ModelLimits, *in.Environment, *in.HeaderPassthrough
 	uid, _ := core.UserID(ctx)
 	before, err := s.accountLifecycle(ctx, bt, &pluginv1.AccountLifecycleRequest{Phase: "before_create", Caller: &pluginv1.Caller{UserId: uid}, ResourceFactsJson: factsJSON(facts), Account: &pluginv1.Account{
@@ -1212,13 +1223,13 @@ func (s *Service) create(c *gin.Context) {
 		if err := tx.QueryRow(ctx, `INSERT INTO accounts (name, plugin_key, type, credentials_enc, settings,
 			proxy_id, status, schedulable, priority, max_concurrency, created_by,
 			weight, models, model_mapping, rpm_limit, tpm_limit, auto_disable, subscription_type, auto_models, model_limits, spm_limit, environment, header_passthrough, param_override,
-			conversion_loss_policy)
+			conversion_loss_policy, spm_window_seconds)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, NULLIF($11::bigint, 0),
-			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb, $21, $22, $23::text[], $24::jsonb, $25) RETURNING id`,
+			$12, $13, $14::jsonb, $15, $16, $17, NULLIF($18, ''), $19, $20::jsonb, $21, $22, $23::text[], $24::jsonb, $25, $26) RETURNING id`,
 			*in.Name, bt.Plugin.Key, bt.Type.ID, p.enc, string(p.settings),
 			proxyID, status, sched, prio, maxc, uid,
 			weight, models, mappingJSON(mapping), rpm, tpm, autoDisable, facts.SubscriptionType, in.AutoModels, modelLimitsJSON(modelLimits), spm, environment, headerPassthrough, in.paramOverride(),
-			in.ConversionLossPolicy.Stored()).Scan(&id); err != nil {
+			in.ConversionLossPolicy.Stored(), spmWindow).Scan(&id); err != nil {
 			return err
 		}
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
@@ -1508,11 +1519,12 @@ func (s *Service) update(c *gin.Context) {
 			header_passthrough = COALESCE($23::text[], header_passthrough),
 			param_override = CASE WHEN $24 THEN $25::jsonb ELSE param_override END,
 			conversion_loss_policy = CASE WHEN $26 THEN $27 ELSE conversion_loss_policy END,
+			spm_window_seconds = COALESCE($28, spm_window_seconds),
 			updated_at = clock_timestamp()
 			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
 			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
 			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment, in.HeaderPassthrough,
-			len(in.ParamOverride) > 0, in.paramOverride(), in.ConversionLossPolicy.Set, in.ConversionLossPolicy.Stored()); err != nil {
+			len(in.ParamOverride) > 0, in.paramOverride(), in.ConversionLossPolicy.Set, in.ConversionLossPolicy.Stored(), in.SPMWindowSeconds); err != nil {
 			return err
 		}
 		if statusChanged && *in.Status == "active" && limitDisabled(locked.Status, locked.AutoDisabledSource) {

@@ -2,6 +2,7 @@ package moderation
 
 import (
 	"context"
+	"errors"
 	"math"
 	"slices"
 	"strings"
@@ -70,17 +71,33 @@ func compileJudge(cfg AuditorConfig, ch *liveChannel) *llmJudge {
 	return j
 }
 
-// llmAudit runs the agent on the text (images are not sent).
+// llmAudit runs the agent on the text and, with the image switch on, the
+// sendable images (llmImages); images alone are an input too. When the
+// upstream refused the images (agent.run) the verdict is of the text alone,
+// no image was received and the result names the status of the refusal (none
+// when the call with the text alone was refused likewise).
 func (p *Plugin) llmAudit(ctx context.Context, a *liveAuditor, in *Input) (EngineResult, error) {
 	res := EngineResult{SkippedImages: len(in.Images)}
-	if in.Text == "" {
+	var parts []Image
+	var received []int
+	if a.images {
+		parts, received = llmImages(in)
+	}
+	if in.Text == "" && len(parts) == 0 {
 		return res, ErrNoInput
 	}
-	r, err := p.agent.run(ctx, a.llm, in.Text, false)
+	r, err := p.agent.run(ctx, a.llm, in.Text, false, parts...)
 	if r != nil {
 		res.Calls, res.Model = r.Turns, r.LLMModel
 		res.Usage = engineUsage(r.Billing)
+		if r.ImagesRefused {
+			parts, received, res.refused = nil, nil, r.RefusedStatus
+			if !errors.Is(err, ErrNoInput) {
+				res.Calls++ // the refused call, repeated without the images
+			}
+		}
 	}
+	res.SentImages, res.SkippedImages, res.received = len(parts), len(in.Images)-len(parts), received
 	if err != nil {
 		return res, ctxErr(ctx, err)
 	}

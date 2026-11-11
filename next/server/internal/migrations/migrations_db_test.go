@@ -357,6 +357,41 @@ func TestAccountSPMLimitMigration(t *testing.T) {
 	require.Error(t, exec(`UPDATE accounts SET spm_limit = 10000001 WHERE name='spm'`))
 }
 
+// 0094 adds accounts.spm_window_seconds (CONTRACTS §71.1): existing accounts
+// count sessions over 60 seconds as before, a re-run keeps what was set, and
+// the column keeps its range.
+func TestAccountSPMWindowMigration(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) error {
+		_, err := db.Pool.Exec(ctx, sql)
+		return err
+	}
+	window := func() (v int) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT spm_window_seconds FROM accounts WHERE name='window'`).Scan(&v))
+		return v
+	}
+	migrate := func() []string {
+		t.Helper()
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		return done
+	}
+	const forget = `DELETE FROM schema_migrations WHERE id='0094_account_spm_window.sql'`
+	require.NoError(t, exec(`ALTER TABLE accounts DROP COLUMN spm_window_seconds;
+		INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('window','fixture','apikey','');
+		`+forget))
+	require.Equal(t, []string{"0094_account_spm_window.sql"}, migrate())
+	require.Equal(t, 60, window(), "an existing account changed window")
+
+	require.NoError(t, exec(`UPDATE accounts SET spm_window_seconds = 86400 WHERE name='window'; `+forget))
+	migrate()
+	require.Equal(t, 86400, window(), "a rerun reset the window")
+	require.Error(t, exec(`UPDATE accounts SET spm_window_seconds = 59 WHERE name='window'`))
+	require.Error(t, exec(`UPDATE accounts SET spm_window_seconds = 86401 WHERE name='window'`))
+}
+
 // 0064 and 0068 sum an account's usage (CONTRACTS §73): existing rows are
 // backfilled once, then the trigger journals settlement, reconcile, refunds
 // and a moved account, and account_usage_fold sums the journal; deleting

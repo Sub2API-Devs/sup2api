@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SButton, SField, SHint, SInput, SModal, SSegmented, SSelect } from '@sub2api/ui'
+import { SAlert, SButton, SField, SHint, SInput, SModal, SSegmented, SSelect } from '@sub2api/ui'
 import { bindingKind } from './bindingOps'
 import { useCatalog } from './catalog'
 import { putBinding, toastError, useModHost } from './host'
@@ -12,6 +12,8 @@ import type { Binding, BindingKind, CoreAccount } from './types'
 // the flow it runs, or "not moderated". An edit keeps what the binding
 // covers and only changes the flow. Adding a binding that exists asks before
 // it replaces the flow. Saving takes effect at once and creates no version.
+// A binding to a disabled or unpublished flow does not apply (requests go by
+// a wider binding): the form warns and points to "not moderated".
 const props = defineProps<{
   open: boolean
   binding: Binding | null
@@ -137,9 +139,10 @@ async function save() {
         />
         <SInput v-else v-model="form.account" inputmode="numeric" :disabled="!!binding" :placeholder="t('bindings.accountIdPlaceholder')" />
       </SField>
-      <SField :label="t('bindings.col.flow')" :hint="flowWarning || t('bindings.flowHint')">
+      <SField :label="t('bindings.col.flow')" :hint="t('bindings.flowHint')">
         <SSelect v-model="form.flow" :options="flowOptions" searchable />
       </SField>
+      <SAlert v-if="flowWarning" tone="warning" dense>{{ flowWarning }}</SAlert>
       <SHint size="xs">{{ t('bindings.priorityHint') }}</SHint>
     </form>
     <template #footer>

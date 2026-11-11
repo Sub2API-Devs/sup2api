@@ -6,7 +6,10 @@ import type { CommonControlName } from '@/api/types'
 export type EditorSection = 'connection' | 'models' | 'scheduling' | 'advanced' | 'cc_features' | `plugin:${string}`
 export const pluginSection = (key: string): EditorSection => `plugin:${key}`
 
-/** Rows of the scheduling group and of the limits group. */
+/**
+ * Rows of the scheduling group and of the limits group. The session window is
+ * part of the spm_limit row, not a row: a type hiding every limit hides the group.
+ */
 export const SCHEDULING_ROWS: readonly CommonControlName[] = ['priority', 'weight', 'max_concurrency', 'schedulable', 'auto_disable']
 export const RATE_LIMITS: readonly CommonControlName[] = ['rpm_limit', 'tpm_limit', 'spm_limit']
 const SCHEDULING_CONTROLS: readonly CommonControlName[] = [...SCHEDULING_ROWS, ...RATE_LIMITS, 'usage_limit', 'model_limits']
@@ -24,8 +27,8 @@ const fieldOf = (fields: readonly string[]) => (k: string) => fields.some(p => k
 /** The advanced section (request forwarding): header passthrough rules (CONTRACTS §81), the parameter override (§84), the conversion loss policy (CONVERT-MATRIX §6.3) and the account layer of the environment variables (`environment.<key>`). */
 export const isAdvancedField = fieldOf(['header_passthrough', 'param_override', 'conversion_loss_policy', 'environment'])
 
-/** Scheduling and limit fields: the scheduling section's controls (a model list's limits included). */
-export const isSchedulingField = fieldOf(SCHEDULING_CONTROLS)
+/** Scheduling and limit fields: the scheduling section's controls and the session window (a model list's limits included). */
+export const isSchedulingField = fieldOf([...SCHEDULING_CONTROLS, 'spm_window_seconds'])
 
 const CREDENTIAL_RE = /^credentials[.[]?(.*?)]?$/
 const isModelsField = fieldOf(['models', 'model_mapping'])

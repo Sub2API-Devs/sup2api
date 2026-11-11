@@ -1,6 +1,7 @@
 package pluginsdktest
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 // LogEntry is one record received through HostService.Log.
@@ -91,9 +93,15 @@ type FakeHost struct {
 	Locks                *LockTable
 	LockErr              error
 	LockAcquireLostReply error
+	// KVBatchUnimplemented makes the fake answer KVGetMany, KVSetMany and
+	// KVDeleteMany like a core before 0.1.273: UNIMPLEMENTED, so the SDK
+	// does the batch with the single calls. Set it before Start, or with
+	// SetKVBatchUnimplemented while the plugin runs. See KVCalls.
+	KVBatchUnimplemented bool
 
 	logs      []LogEntry
 	kv        map[string]kvItem
+	kvCalls   map[string]int
 	ledger    []LedgerEntry
 	ledgerBy  map[string]LedgerEntry
 	dials     []string
@@ -113,7 +121,7 @@ type kvItem struct {
 
 // NewFakeHost returns an empty fake host.
 func NewFakeHost() *FakeHost {
-	return &FakeHost{kv: map[string]kvItem{}, ledgerBy: map[string]LedgerEntry{}, Locks: NewLockTable()}
+	return &FakeHost{kv: map[string]kvItem{}, kvCalls: map[string]int{}, ledgerBy: map[string]LedgerEntry{}, Locks: NewLockTable()}
 }
 
 func (f *FakeHost) ExecuteHTTP(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
@@ -193,9 +201,20 @@ func (f *FakeHost) Log(_ context.Context, in *pluginv1.LogRequest) (*pluginv1.Lo
 
 func kvKey(ns, key string) string { return ns + "\x00" + key }
 
+// checkKVEntry applies the host's rules to the namespace and key of a single
+// KV call; the single calls answer a broken rule with the host's error, like
+// the batch calls (kvbatch.go).
+func checkKVEntry(ns, key string) error {
+	return cmp.Or(protocol.CheckKVNamespace(ns), protocol.CheckKVKey(key))
+}
+
 func (f *FakeHost) KVGet(_ context.Context, in *pluginv1.KVGetRequest) (*pluginv1.KVGetResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.kvCalls["KVGet"]++
+	if err := checkKVEntry(in.GetNamespace(), in.GetKey()); err != nil {
+		return nil, err
+	}
 	it, ok := f.kv[kvKey(in.GetNamespace(), in.GetKey())]
 	if !ok || (!it.expires.IsZero() && time.Now().After(it.expires)) {
 		return &pluginv1.KVGetResponse{}, nil
@@ -204,29 +223,38 @@ func (f *FakeHost) KVGet(_ context.Context, in *pluginv1.KVGetRequest) (*pluginv
 }
 
 func (f *FakeHost) KVSet(_ context.Context, in *pluginv1.KVSetRequest) (*pluginv1.KVSetResponse, error) {
-	if len(in.GetValue()) > 64<<10 {
-		return nil, status.Error(codes.InvalidArgument, "value too large")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.kvCalls["KVSet"]++
+	if err := cmp.Or(checkKVEntry(in.GetNamespace(), in.GetKey()), protocol.CheckKVValue(len(in.GetValue())), protocol.CheckKVTTL(in.GetTtlSeconds())); err != nil {
+		return nil, err
 	}
 	it := kvItem{value: append([]byte(nil), in.GetValue()...)}
 	if in.GetTtlSeconds() > 0 {
 		it.expires = time.Now().Add(time.Duration(in.GetTtlSeconds()) * time.Second)
 	}
-	f.mu.Lock()
 	f.kv[kvKey(in.GetNamespace(), in.GetKey())] = it
-	f.mu.Unlock()
 	return &pluginv1.KVSetResponse{}, nil
 }
 
 func (f *FakeHost) KVDelete(_ context.Context, in *pluginv1.KVDeleteRequest) (*pluginv1.KVDeleteResponse, error) {
 	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.kvCalls["KVDelete"]++
+	if err := checkKVEntry(in.GetNamespace(), in.GetKey()); err != nil {
+		return nil, err
+	}
 	delete(f.kv, kvKey(in.GetNamespace(), in.GetKey()))
-	f.mu.Unlock()
 	return &pluginv1.KVDeleteResponse{}, nil
 }
 
 func (f *FakeHost) KVList(_ context.Context, in *pluginv1.KVListRequest) (*pluginv1.KVListResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.kvCalls["KVList"]++
+	if err := protocol.CheckKVNamespace(in.GetNamespace()); err != nil {
+		return nil, err
+	}
 	var keys []string
 	nsPrefix := in.GetNamespace() + "\x00"
 	for k := range f.kv {

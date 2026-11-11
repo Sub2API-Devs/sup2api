@@ -681,7 +681,7 @@ func (p *Plugin) validateAuditor(ctx context.Context, tx pgx.Tx, in *auditorInpu
 	}
 	want, ok := channelTypeOf[in.Type]
 	if !ok {
-		return errs.Add("type", "enum", "type must be openai_moderation, typesafe or llm_verdict / type 取值为 openai_moderation、typesafe、llm_verdict")
+		return errs.Add("type", "enum", "type must be openai_moderation, typesafe, llm_verdict or llm_questions / type 取值为 openai_moderation、typesafe、llm_verdict、llm_questions")
 	}
 	var chType string
 	err := tx.QueryRow(ctx, `SELECT type FROM channels WHERE id = $1 AND deleted_at IS NULL`, in.ChannelID).Scan(&chType)
@@ -897,7 +897,7 @@ func (p *Plugin) tryWith(ctx context.Context, req *pluginv1.HTTPRequest, id int6
 	case err != nil:
 		return nil, err
 	}
-	o := p.audit(ctx, a, in, true, SourceTry)
+	o := p.audit(ctx, a, in, nil, true, SourceTry)
 	out := TryResult{Outcome: o}
 	if o.Err != nil {
 		out.ErrType, out.Status, out.Error = ErrType(o.Err), upstreamStatus(o.Err), truncateRunes(o.Err.Error(), 300)

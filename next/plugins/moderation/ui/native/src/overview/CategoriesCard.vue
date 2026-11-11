@@ -26,18 +26,20 @@ const items = computed(() => stats.data.value?.items || [])
     :empty="!items.length"
     :empty-text="t('categories.empty')"
   >
-    <div class="mod-legend">
-      <span>{{ t('categories.requests') }} <b class="mod-num">{{ num(stats.data.value?.suspicious_requests) }}</b></span>
-      <span>{{ t('categories.hits') }} <b class="mod-num">{{ num(stats.data.value?.category_hits) }}</b></span>
+    <div class="mod-stack">
+      <div class="mod-legend">
+        <span>{{ t('categories.requests') }} <b class="mod-num">{{ num(stats.data.value?.suspicious_requests) }}</b></span>
+        <span>{{ t('categories.hits') }} <b class="mod-num">{{ num(stats.data.value?.category_hits) }}</b></span>
+      </div>
+      <RankList :items="items" :item-key="(c) => c.category" tone="warning" :empty-text="t('categories.empty')" empty-icon="chart">
+        <template #name="{ item: c }">
+          <span class="mod-rank-name" :title="c.category">
+            {{ categoryLabel(c.category, c.label) }}<code v-if="categoryLabel(c.category, c.label) !== c.category" class="mod-code">{{ c.category }}</code>
+          </span>
+        </template>
+        <template #count="{ item: c }">{{ num(c.count) }}</template>
+      </RankList>
+      <SHint v-if="stats.data.value?.truncated" size="xs" tone="warning">{{ t('categories.truncated') }}</SHint>
     </div>
-    <RankList :items="items" :item-key="(c) => c.category" tone="warning" :empty-text="t('categories.empty')" empty-icon="chart">
-      <template #name="{ item: c }">
-        <span class="mod-rank-name" :title="c.category">
-          {{ categoryLabel(c.category, c.label) }}<code v-if="categoryLabel(c.category, c.label) !== c.category" class="mod-code">{{ c.category }}</code>
-        </span>
-      </template>
-      <template #count="{ item: c }">{{ num(c.count) }}</template>
-    </RankList>
-    <SHint v-if="stats.data.value?.truncated" size="xs" tone="warning">{{ t('categories.truncated') }}</SHint>
   </AsyncCard>
 </template>

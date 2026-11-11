@@ -14,12 +14,17 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
 
-// Modes (settings.mode, CONTRACTS §72.5).
+// Modes (settings.mode, CONTRACTS §72.5): the master switch and the default
+// level in one (new-api enabled + default_level).
 const (
 	ModeOff     = "off"
-	ModeObserve = "observe" // pre only for enforce-level users, post for the rest
-	ModeEnforce = "enforce" // everyone pre
+	ModeObserve = "observe" // on, default level observe: post unless the user is at the enforce level
+	ModeEnforce = "enforce" // on, default level enforce: pre unless the user is at the observe level
 )
+
+// maxUserList caps allowlist_user_ids and blocklist_user_ids (new-api
+// maxUserListSize).
+const maxUserList = 1000
 
 // Verdicts and actions of the 0.1 columns events.verdict / events.action, and
 // the LLM verdicts of submit_verdict.
@@ -52,16 +57,26 @@ type Category struct {
 // §72.10). The legacy block (BaseURL … ModelPatterns) is the 0.1 single-model
 // setup, only read by the one-time conversion (§72.12).
 type Settings struct {
-	Mode          string   `json:"mode"`
-	ExemptUserIDs []string `json:"exempt_user_ids"`
+	Mode string `json:"mode"`
+	// AllowlistUserIDs are only moderated after the request and never
+	// refused; BlocklistUserIDs always before it. A user on both lists is
+	// blocklisted. ExemptUserIDs is the retired name of the allowlist, read
+	// when the settings have no allowlist_user_ids yet.
+	AllowlistUserIDs []string `json:"allowlist_user_ids"`
+	BlocklistUserIDs []string `json:"blocklist_user_ids"`
+	ExemptUserIDs    []string `json:"exempt_user_ids"`
 
-	InputMaxChars   int `json:"input_max_chars"`
-	MinChars        int `json:"min_chars"`
-	CacheTTLSeconds int `json:"cache_ttl_seconds"`
-	CacheEntries    int `json:"cache_entries"`
-	MaxConcurrency  int `json:"max_concurrency"`
-	QueueSize       int `json:"queue_size"`
-	TTFTTimeoutMs   int `json:"ttft_timeout_ms"`
+	InputMaxChars int `json:"input_max_chars"`
+	MinChars      int `json:"min_chars"`
+	// VerdictCacheDays is how long a cached verdict lives; 0 = no cache,
+	// which only the retired cache_ttl_seconds = 0 gives. CacheTTLSeconds is
+	// the retired key, read when the settings have no verdict_cache_days yet.
+	VerdictCacheDays int `json:"verdict_cache_days"`
+	CacheTTLSeconds  int `json:"cache_ttl_seconds"`
+	CacheEntries     int `json:"cache_entries"`
+	MaxConcurrency   int `json:"max_concurrency"`
+	QueueSize        int `json:"queue_size"`
+	TTFTTimeoutMs    int `json:"ttft_timeout_ms"`
 
 	// Chunking and admission (CONTRACTS §72.4, §72.5; 0.6.0).
 	InputMaxChunks    int    `json:"input_max_chunks"`
@@ -77,6 +92,9 @@ type Settings struct {
 	RecordOverturned bool `json:"record_overturned"`
 	RecordErrors     bool `json:"record_errors"`
 	StoreText        bool `json:"store_text"`
+	// RecordPassInputMessage: with store_text, records without a stage hit
+	// (passes) keep the raw messages too (new-api record_pass_input_message).
+	RecordPassInputMessage bool `json:"record_pass_input_message"`
 
 	HitRetentionDays        int `json:"hit_retention_days"`
 	OverturnedRetentionDays int `json:"overturned_retention_days"`
@@ -126,6 +144,12 @@ type Settings struct {
 	GroupIDs      []int64    `json:"group_ids"`
 	ModelPatterns []string   `json:"model_patterns"`
 	RetentionDays int        `json:"retention_days"`
+
+	// truncated names the user lists cut to maxUserList, droppedIDs the
+	// lists that held entries which are no user id, with how many
+	// (Configure warns about both).
+	truncated  []string
+	droppedIDs map[string]int
 }
 
 // maxAnalysisGuidelines caps analysis_guidelines (bytes); longer text falls
@@ -147,11 +171,11 @@ func DefaultSettings() Settings {
 	return Settings{
 		Mode:          ModeOff,
 		InputMaxChars: 12000, MinChars: 2,
-		CacheTTLSeconds: 86400, CacheEntries: 100000,
+		VerdictCacheDays: 7, CacheTTLSeconds: 86400, CacheEntries: 100000,
 		MaxConcurrency: 16, QueueSize: 1000, TTFTTimeoutMs: 10000,
 		InputMaxChunks: 8, InputOverflow: OverflowSample, InputMaxImages: 8, MaxInflightMB: 128, ErrorTextMaxChars: 2000,
 		BlockStatus: 403, BlockMessage: DefaultBlockMessage,
-		RecordOverturned: true, RecordErrors: true, StoreText: true,
+		RecordOverturned: true, RecordErrors: true, StoreText: true, RecordPassInputMessage: true,
 		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
 		AutoWatch: true, WatchDays: 30, AnalysisEveryViolations: 30,
 		AnalysisTimeoutMs: 60000, AnalysisConcurrency: 2, AnalysisContextKB: 64, AnalysisKeepPerUser: 20,
@@ -250,6 +274,75 @@ func (d decoder) strList(k string) []string {
 	return out
 }
 
+// userList reads a list of decimal user ids: entries that are no integer
+// (or too long for one: the form takes up to 18 digits) are dropped and
+// counted, more than maxUserList are cut (cut = true). present = the key
+// holds an array.
+func (d decoder) userList(k string) (ids []string, present, cut bool, dropped int) {
+	if v, ok := d.m[k]; ok {
+		var xs []any
+		present = json.Unmarshal(v, &xs) == nil && xs != nil
+	}
+	for _, u := range d.strList(k) {
+		if u = strings.TrimSpace(u); u == "" {
+			continue
+		}
+		if _, err := strconv.ParseInt(u, 10, 64); err != nil {
+			dropped++
+			continue
+		}
+		if len(ids) == maxUserList {
+			return ids, present, true, dropped
+		}
+		ids = append(ids, u)
+	}
+	return ids, present, false, dropped
+}
+
+// userLists reads the allowlist and the blocklist. Settings saved before
+// 0.8.0 have no allowlist_user_ids: their exempt_user_ids are the allowlist.
+func (d decoder) userLists(s *Settings) {
+	note := func(key string, dropped int) {
+		if dropped > 0 {
+			if s.droppedIDs == nil {
+				s.droppedIDs = map[string]int{}
+			}
+			s.droppedIDs[key] = dropped
+		}
+	}
+	exempt, _, exemptCut, dropped := d.userList("exempt_user_ids")
+	s.ExemptUserIDs = exempt
+	allow, present, cut, allowDropped := d.userList("allowlist_user_ids")
+	if !present {
+		allow, cut = exempt, exemptCut
+		note("exempt_user_ids", dropped) // the retired list only counts while it is read
+	}
+	note("allowlist_user_ids", allowDropped)
+	if s.AllowlistUserIDs = allow; cut {
+		s.truncated = append(s.truncated, "allowlist_user_ids")
+	}
+	if s.BlocklistUserIDs, _, cut, dropped = d.userList("blocklist_user_ids"); cut {
+		s.truncated = append(s.truncated, "blocklist_user_ids")
+	}
+	note("blocklist_user_ids", dropped)
+}
+
+// verdictCache reads verdict_cache_days. Settings saved before 0.8.0 only
+// have cache_ttl_seconds: 0 keeps the cache off, anything else is rounded
+// up to whole days.
+func (d decoder) verdictCache(s *Settings) {
+	d.integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
+	var f float64
+	if legacy := d.num("cache_ttl_seconds", &f); d.num("verdict_cache_days", &f) || !legacy {
+		d.integer("verdict_cache_days", &s.VerdictCacheDays, 1, 30)
+		return
+	}
+	s.VerdictCacheDays = 0
+	if s.CacheTTLSeconds > 0 {
+		s.VerdictCacheDays = clampInt((s.CacheTTLSeconds+86399)/86400, 1, 30)
+	}
+}
+
 func (d decoder) enum(k string, dst *string, allowed ...string) {
 	var x string
 	d.str(k, &x)
@@ -264,16 +357,10 @@ func (d decoder) enum(k string, dst *string, allowed ...string) {
 
 func (d decoder) general(s *Settings) {
 	d.enum("mode", &s.Mode, ModeOff, ModeObserve, ModeEnforce)
-	for _, u := range d.strList("exempt_user_ids") {
-		if u = strings.TrimSpace(u); u != "" {
-			if _, err := strconv.ParseInt(u, 10, 64); err == nil {
-				s.ExemptUserIDs = append(s.ExemptUserIDs, u)
-			}
-		}
-	}
+	d.userLists(s)
 	d.integer("input_max_chars", &s.InputMaxChars, 256, 100000)
 	d.integer("min_chars", &s.MinChars, 0, 1000)
-	d.integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
+	d.verdictCache(s)
 	d.integer("cache_entries", &s.CacheEntries, 1000, 1000000)
 	d.integer("max_concurrency", &s.MaxConcurrency, 1, 256)
 	d.integer("ttft_timeout_ms", &s.TTFTTimeoutMs, 1000, 60000)
@@ -302,6 +389,7 @@ func (d decoder) storage(s *Settings) {
 	d.boolean("record_overturned", &s.RecordOverturned)
 	d.boolean("record_errors", &s.RecordErrors)
 	d.boolean("store_text", &s.StoreText)
+	d.boolean("record_pass_input_message", &s.RecordPassInputMessage)
 	// 0.1 kept every record retention_days; the hit retention never drops
 	// below it (§72.10).
 	d.integer("retention_days", &s.RetentionDays, 1, 3650)
@@ -420,9 +508,12 @@ func clampInt(v, lo, hi int) int {
 type config struct {
 	Settings
 
-	enabled         bool // mode != off
-	settingsHash    string
-	exempt          map[int64]bool
+	enabled      bool   // mode != off
+	defaultLevel string // level of a user without a watch entry (mode)
+	settingsHash string
+	// allow, block: allowlist_user_ids and blocklist_user_ids (see
+	// allowlisted, blocklisted).
+	allow, block    map[int64]bool
 	cacheTTL        time.Duration
 	ttft            time.Duration
 	banWindow       time.Duration
@@ -442,13 +533,12 @@ func compile(s Settings) *config {
 	c.enabled = s.Mode != ModeOff
 	c.limits = planLimits{maxChars: s.InputMaxChars, maxChunks: s.InputMaxChunks, maxImages: s.InputMaxImages}
 	c.maxInflight = int64(s.MaxInflightMB) << 20
-	c.exempt = map[int64]bool{}
-	for _, u := range s.ExemptUserIDs {
-		if id, err := strconv.ParseInt(u, 10, 64); err == nil {
-			c.exempt[id] = true
-		}
+	c.defaultLevel = LevelObserve
+	if s.Mode == ModeEnforce {
+		c.defaultLevel = LevelEnforce
 	}
-	c.cacheTTL = time.Duration(s.CacheTTLSeconds) * time.Second
+	c.allow, c.block = userSet(s.AllowlistUserIDs), userSet(s.BlocklistUserIDs)
+	c.cacheTTL = time.Duration(s.VerdictCacheDays) * 24 * time.Hour
 	c.ttft = time.Duration(s.TTFTTimeoutMs) * time.Millisecond
 	c.banWindow = time.Duration(s.BanWindowHours) * time.Hour
 	c.banDuration = time.Duration(s.BanDurationHours) * time.Hour
@@ -464,6 +554,24 @@ func compile(s Settings) *config {
 	c.jevDefault, _ = DefaultQuestions(s.JevDefaultSet)
 	return c
 }
+
+func userSet(ids []string) map[int64]bool {
+	set := make(map[int64]bool, len(ids))
+	for _, u := range ids {
+		if id, err := strconv.ParseInt(u, 10, 64); err == nil {
+			set[id] = true
+		}
+	}
+	return set
+}
+
+// blocklisted: every request of the user is moderated before it is sent on,
+// and the AI may not downgrade or remove the user.
+func (c *config) blocklisted(uid int64) bool { return c.block[uid] }
+
+// allowlisted: the user is only moderated after the request, never refused
+// or banned, and the AI may not upgrade the user. The blocklist wins.
+func (c *config) allowlisted(uid int64) bool { return c.allow[uid] && !c.block[uid] }
 
 // retentionCut reports whether c keeps some records or statistics for a
 // shorter time than old.

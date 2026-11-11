@@ -209,7 +209,7 @@ func (p *Plugin) reloadConfig(ctx context.Context) error {
 	}
 	p.reload.Lock()
 	defer p.reload.Unlock()
-	c, version, warnings, err := s.loadConfig(ctx)
+	c, stamp, warnings, err := s.loadConfig(ctx)
 	if err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func (p *Plugin) reloadConfig(ctx context.Context) error {
 	if _, err := c.Normalize(); err != nil {
 		return err
 	}
-	p.cfg.Store(&compiledConfig{Compiled: rules.Compile(c), version: version, loaded: true})
+	p.cfg.Store(&compiledConfig{Compiled: rules.Compile(c), version: stamp.version, loaded: true})
 	return nil
 }
 

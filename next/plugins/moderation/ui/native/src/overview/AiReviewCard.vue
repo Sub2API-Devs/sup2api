@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SAlert, SCard, SEmpty, SLink } from '@sub2api/ui'
+import { SAlert, SCard, SEmpty, SLink, SStatCard } from '@sub2api/ui'
 import { num, pct } from '../format'
 import { useModHost } from '../host'
 import type { AIReviewCounts, TodayCounts, TabKey } from '../types'
@@ -36,13 +36,12 @@ const tokens = computed(() => (props.today?.analysis_tokens_in ?? 0) + (props.to
     <template #actions><SLink as="button" @click="emit('go-tab', 'watch')">{{ t('aiReview.watch') }}</SLink></template>
     <SEmpty v-if="!reviewed" :text="t('aiReview.empty')" icon="eyeglass" />
     <div v-else class="mod-stack">
-      <div class="mod-kpi-row">
-        <div>
-          <div class="mod-sub">{{ t('aiReview.reviewed') }}</div>
-          <div class="mod-cost-amount mod-num">{{ num(reviewed) }}</div>
-        </div>
-        <span class="mod-sub">{{ t('aiReview.runs', { runs: num(today?.analyses), failed: num(today?.analyses_failed), tokens: num(tokens) }) }}</span>
-      </div>
+      <SStatCard
+        compact
+        :label="t('aiReview.reviewed')"
+        :value="num(reviewed)"
+        :sub="t('aiReview.runs', { runs: num(today?.analyses), failed: num(today?.analyses_failed), tokens: num(tokens) })"
+      />
       <div class="mod-bar" role="img" :aria-label="t('aiReview.title')">
         <span v-for="s in shares" :key="s.key" :class="s.cls" :style="{ width: `${share(s.count) * 100}%` }" />
       </div>

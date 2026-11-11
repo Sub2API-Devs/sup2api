@@ -4,7 +4,8 @@ import { SLink } from '@sub2api/ui'
 import { enumLabel } from './format'
 import { useModHost } from './host'
 import type { Spec } from './types'
-import { acceptsCanvasDrag, leavesInside, readCanvasDrag, startCanvasDrag, type CanvasAuditor, type CanvasDrag, type CanvasDropTarget } from './flowOps'
+import { acceptsCanvasDrag, leavesInside, readCanvasDrag, startCanvasDrag, type CanvasDrag, type CanvasDropTarget } from './canvasDrag'
+import type { CanvasAuditor } from './flowOps'
 
 // Auditor library of the canvas: drag a card onto a stage; dropping a placed
 // auditor back onto the library removes it from the flow.

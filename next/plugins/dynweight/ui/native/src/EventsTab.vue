@@ -4,6 +4,7 @@ import { useList } from '@sub2api/host'
 import { SAlert, SBadge, SCard, SField, SHint, SPagination, SSelect, STable, type TableColumn } from '@sub2api/ui'
 import KeyFilters from './KeyFilters.vue'
 import { useCatalog } from './catalog'
+import { describeEvent } from './describe'
 import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTone, filterQuery, useDwHost, weightOf, type Filter, type WeightEvent } from './host'
 
 // Weight events (newest first): degrades, climbs, restores, revivals, cleared
@@ -54,22 +55,6 @@ const columns = computed<TableColumn[]>(() => [
 
 /** Weight changes, and resets of a key that was off its base. */
 const showsWeight = (e: WeightEvent) => e.kind.startsWith('weight_') || (e.kind === 'reset' && e.from !== e.to)
-
-/** One-line detail: the window counts, the reason, or the strategy's clearing. */
-function detailText(e: WeightEvent): string {
-  const d = e.detail ?? {}
-  if (e.reason) {
-    const extra = d.matched === 0 ? t('events.nothingReset') : d.keys ? t('events.keysAtBase', { n: Number(d.keys) }) : ''
-    return [t(`reason.${e.reason}`), extra].filter(Boolean).join(' · ')
-  }
-  if (e.kind === 'affinity_cleared') {
-    // A weight dropping to 0 clears without a strategy.
-    const strategy = d.strategy ? String(d.strategy) : d.zero ? t('events.zero') : ''
-    return d.error ? t('events.clearFailed', { strategy, error: String(d.error) }) : t('events.cleared', { strategy, n: Number(d.cleared ?? 0) })
-  }
-  const w = d.window as { total?: number; fail?: number } | undefined
-  return w ? t('events.window', { total: w.total ?? 0, fail: w.fail ?? 0 }) : ''
-}
 </script>
 
 <template>
@@ -101,7 +86,10 @@ function detailText(e: WeightEvent): string {
             <SBadge v-for="r in row.rules ?? []" :key="r" size="xs">{{ r }}</SBadge>
           </div>
         </template>
-        <template #cell-detail="{ row }">{{ detailText(row) }}</template>
+        <!-- The cell is cut at its width: the whole line is its title. -->
+        <template #cell-detail="{ row }"
+          ><span :title="describeEvent(row, t)">{{ describeEvent(row, t) }}</span></template
+        >
       </STable>
       <div class="dw-pager">
         <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />

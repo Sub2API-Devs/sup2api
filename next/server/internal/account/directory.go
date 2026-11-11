@@ -77,6 +77,69 @@ func (s *Service) GroupHasType(ctx context.Context, groupID int64, types []core.
 	return ok, err
 }
 
+// Unschedulable lists the accounts of the group Candidates does not offer now,
+// with why. Not cached: only a dispatch that found no account asks, to record
+// what the group holds (CONTRACTS §24.6).
+func (s *Service) Unschedulable(ctx context.Context, groupID int64) ([]core.UnschedulableAccount, error) {
+	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.status, a.schedulable, a.auto_disabled_until
+		FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
+		WHERE ag.group_id = $1 AND a.deleted_at IS NULL ORDER BY a.id LIMIT 200`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	type row struct {
+		id          int64
+		status      string
+		schedulable bool
+		until       *time.Time
+	}
+	all, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var a row
+		return a, r.Scan(&a.id, &a.status, &a.schedulable, &a.until)
+	})
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	var out []core.UnschedulableAccount
+	var offered []int64
+	for _, a := range all {
+		switch {
+		case a.status == "auto_disabled" && a.schedulable && a.until != nil && !now.Before(*a.until):
+			offered = append(offered, a.id) // lazily expired: served again
+		case a.status == "auto_disabled":
+			u := core.UnschedulableAccount{ID: a.id, Reason: "auto_disabled"}
+			if a.until != nil {
+				u.Until = *a.until
+			}
+			out = append(out, u)
+		case a.status != "active":
+			out = append(out, core.UnschedulableAccount{ID: a.id, Reason: "disabled"})
+		case !a.schedulable:
+			out = append(out, core.UnschedulableAccount{ID: a.id, Reason: "unschedulable"})
+		default:
+			offered = append(offered, a.id)
+		}
+	}
+	if len(offered) == 0 || s.d.Redis == nil {
+		return out, nil
+	}
+	pipe := s.d.Redis.Pipeline()
+	ttls := make([]*redis.DurationCmd, len(offered))
+	for i, id := range offered {
+		ttls[i] = pipe.PTTL(ctx, cooldownKey(id))
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return out, nil // what the database says still stands
+	}
+	for i, id := range offered {
+		if ttl := ttls[i].Val(); ttl > 0 {
+			out = append(out, core.UnschedulableAccount{ID: id, Reason: "cooldown", Until: now.Add(ttl)})
+		}
+	}
+	return out, nil
+}
+
 // groupSnapshot returns the group's schedulable accounts: active ones and
 // those under a timed automatic disable, whose release times it lists.
 func (s *Service) groupSnapshot(ctx context.Context, groupID int64) (groupSnap, error) {
@@ -90,7 +153,7 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) (groupSnap, 
 	}
 	v, err, _ := s.sf.Do("g:"+itoa(groupID), func() (any, error) {
 		rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.type, a.priority, a.weight,
-				a.max_concurrency, a.proxy_id, a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment,
+				a.max_concurrency, a.proxy_id, a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.spm_window_seconds, a.model_limits, a.environment,
 				COALESCE(a.conversion_loss_policy, ''), CASE WHEN a.status = 'auto_disabled' THEN a.auto_disabled_until END
 			FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
 			WHERE ag.group_id = $1 AND a.deleted_at IS NULL AND a.schedulable
@@ -105,7 +168,7 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) (groupSnap, 
 			var mapping, limits []byte
 			var until *time.Time
 			err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.Priority, &a.Weight, &a.MaxConcurrency, &a.ProxyID,
-				&a.Models, &mapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &limits, &a.Environment, &a.ConversionLossPolicy, &until)
+				&a.Models, &mapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.SPMWindowSeconds, &limits, &a.Environment, &a.ConversionLossPolicy, &until)
 			if err == nil && len(mapping) > 0 {
 				_ = json.Unmarshal(mapping, &a.ModelMapping)
 			}
@@ -160,7 +223,7 @@ func (s *Service) Load(ctx context.Context, id int64) (*core.Account, error) {
 	acc := core.Account{
 		AccountRef: core.AccountRef{ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type,
 			Priority: a.Priority, Weight: a.Weight, MaxConcurrency: a.MaxConcurrency, ProxyID: a.ProxyID,
-			Models: a.Models, ModelMapping: a.mapping(), RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(),
+			Models: a.Models, ModelMapping: a.mapping(), RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, SPMWindowSeconds: a.SPMWindowSeconds, ModelLimits: a.modelLimits(),
 			Environment: a.Environment, ConversionLossPolicy: core.ValueOr(a.LossPolicy, "")},
 		Status:            a.Status,
 		Schedulable:       a.Schedulable,

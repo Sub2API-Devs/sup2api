@@ -83,5 +83,10 @@ describe('core editor widgets (docs/COMMON-CONTROLS.md §3)', () => {
     })
     // The card being filled in (an empty list) stays.
     expect(w.getComponent(ModelLimitsEditor).props('modelValue')[0].lists).toEqual([['m-a'], []])
+    // The session window joins the limits only once changed (absent = 1 minute).
+    expect(w.props('modelValue')?.limits).not.toHaveProperty('spm_window_seconds')
+    await w.get('input[data-testid="account-spm_limit-window"]').setValue('10')
+    await flushPromises()
+    expect(w.props('modelValue')?.limits).toEqual({ rpm_limit: 1, tpm_limit: 5, spm_limit: 0, spm_window_seconds: 600 })
   })
 })

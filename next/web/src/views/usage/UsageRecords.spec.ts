@@ -148,12 +148,13 @@ describe('usage records page', () => {
     expect(bar.find('[data-testid="ledger-range"]').exists()).toBe(true)
     expect(bar.find('[data-testid="ledger-filters"]').exists()).toBe(true)
     expect(w.find('[data-testid="ledger"]').exists()).toBe(true)
-    for (const gone of ['filter-model_contains', 'filter-protocol', 'filter-success', 'toggle-usage-filters', 'live-stats', 'export-usage', 'search-usage', 'reset-usage-filters']) {
+    for (const gone of ['filter-model_contains', 'filter-protocol', 'filter-success', 'filter-advanced-toggle', 'live-stats', 'export-usage', 'search-usage', 'reset-usage-filters']) {
       expect(bar.find(`[data-testid="${gone}"]`).exists()).toBe(false)
     }
     await pick(w, 'records')
     expect(bar.find('[data-testid="ledger-filters"]').exists()).toBe(false)
     expect(bar.find('[data-testid="filter-model_contains"]').exists()).toBe(true)
+    expect(bar.find('[data-testid="filter-advanced-toggle"]').exists()).toBe(true)
     expect(bar.find('[data-testid="live-stats"]').exists()).toBe(true)
     expect(w.find('[data-testid="ledger"]').exists()).toBe(false)
   })

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -76,6 +77,7 @@ func (p *Plugin) routes() {
 	p.Handle("POST", "/flows/:id/simulate", p.simulateFlow)
 	p.Handle("POST", "/import", p.importConfig)
 	p.Handle("POST", "/test", p.testModeration)
+	p.Handle("POST", "/verdict-cache/clear", p.clearVerdictCache)
 }
 
 func parseID(req *pluginv1.HTTPRequest, name string) (int64, *pluginv1.HTTPResponse) {
@@ -91,25 +93,52 @@ func parseID(req *pluginv1.HTTPRequest, name string) (int64, *pluginv1.HTTPRespo
 
 // Runtime is this node's live state.
 type Runtime struct {
-	Mode          string        `json:"mode"`
-	Configured    bool          `json:"configured"` // a flow is bound
-	SettingsHash  string        `json:"settings_hash"`
-	ConfigVersion int64         `json:"config_version"`
-	Flows         int           `json:"flows"`
-	Auditors      int           `json:"auditors"`
-	QueueLen      int           `json:"queue_len"`
-	QueueCap      int           `json:"queue_cap"`
-	Dropped       int64         `json:"dropped"`
-	Inflight      int64         `json:"inflight"`
-	Calls         int64         `json:"calls"`
-	Errors        int64         `json:"errors"`
-	CacheHits     int64         `json:"cache_hits"`
-	CacheEntries  int           `json:"cache_entries"`
-	AvgLatencyMs  int64         `json:"avg_latency_ms"`
-	BlockedUsers  int           `json:"blocked_users"`
-	WatchedUsers  int           `json:"watched_users"`
-	Analysis      analysisStats `json:"analysis"`
-	DroppedCosts  int64         `json:"dropped_costs"`
+	Mode          string `json:"mode"`
+	Configured    bool   `json:"configured"` // a flow is bound
+	SettingsHash  string `json:"settings_hash"`
+	ConfigVersion int64  `json:"config_version"`
+	CacheEpoch    int64  `json:"cache_epoch"` // clears of the verdict cache
+	Flows         int    `json:"flows"`
+	Auditors      int    `json:"auditors"`
+	QueueLen      int    `json:"queue_len"`
+	QueueCap      int    `json:"queue_cap"`
+	Dropped       int64  `json:"dropped"`
+	Inflight      int64  `json:"inflight"`
+	Calls         int64  `json:"calls"`
+	Errors        int64  `json:"errors"`
+	CacheHits     int64  `json:"cache_hits"`
+	CacheEntries  int    `json:"cache_entries"`
+	CacheBytes    int64  `json:"cache_bytes"` // estimated memory of the verdict cache entries
+	// KVErrors counts the calls of the host KV that failed (kvFailed), on
+	// this node since it started: the batch calls of the verdict cache
+	// (lookups, writes and review syncs, one per call) and the reads and
+	// writes of the alert state. A call that ended because its caller left
+	// or the node stopped is not among them.
+	KVErrors int64 `json:"kv_errors"`
+	// KVWriting is the number of runs whose verdicts are on their way to the
+	// KV right now, waiting for their turn or writing (storeVerdicts). It is
+	// 0 or close to it while the KV answers; a number that keeps growing
+	// means the KV does not, and nothing new is cached meanwhile.
+	KVWriting int64 `json:"kv_writing"`
+	// KVSkipped counts the runs whose verdicts were not cached because a
+	// review (on this node, or one this node was told of) may have changed
+	// the cache since their request asked it, or because the memory cache
+	// was replaced since (cleared on this node, cache_entries changed), on
+	// this node since it started: their content is moderated again the next
+	// time.
+	KVSkipped int64 `json:"kv_skipped"`
+	// ImagesRefused counts the calls of the LLM auditors whose images the
+	// upstream refused, so that the text alone was reviewed
+	// (Outcome.ImagesRefused), on this node since it started.
+	ImagesRefused int64 `json:"images_refused"`
+	// RedrawPanics counts the images skipped because their decoder panicked
+	// while they were redrawn for Jev, on this node since it started.
+	RedrawPanics int64         `json:"redraw_panics"`
+	AvgLatencyMs int64         `json:"avg_latency_ms"`
+	BlockedUsers int           `json:"blocked_users"`
+	WatchedUsers int           `json:"watched_users"`
+	Analysis     analysisStats `json:"analysis"`
+	DroppedCosts int64         `json:"dropped_costs"`
 }
 
 func (p *Plugin) runtimeState(ctx context.Context) Runtime {
@@ -122,10 +151,11 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		avg = p.stats.latencyMsSum.Load() / calls
 	}
 	return Runtime{
-		Mode: c.Mode, Configured: s.bound(), SettingsHash: c.settingsHash, ConfigVersion: s.version,
+		Mode: c.Mode, Configured: s.bound(), SettingsHash: c.settingsHash, ConfigVersion: s.version, CacheEpoch: s.cacheEpoch,
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
-		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(),
+		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
+		KVErrors: p.stats.kvErrors.Load(), KVWriting: p.stats.kvWriting.Load(), KVSkipped: p.stats.kvSkipped.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}
@@ -166,6 +196,8 @@ type Event struct {
 	LatencyMs        int        `json:"latency_ms"`
 	QueueMs          int        `json:"queue_ms"`
 	KeepUntil        *time.Time `json:"keep_until"`
+	// Replayed: decided by a cached hit (trace.cache), not a new violation.
+	Replayed bool `json:"replayed"`
 	// AI verdict of the latest analysis (§72.13.4); "" = not reviewed by AI.
 	AIVerdict    string `json:"ai_verdict"`
 	AISeverity   string `json:"ai_severity"`
@@ -220,22 +252,25 @@ type RelatedItem struct {
 
 // UserState is the record user's moderation state now.
 type UserState struct {
-	Watch   *Watch     `json:"watch"`
-	Exempt  bool       `json:"exempt"`
-	Staff   bool       `json:"staff"`
-	Blocked bool       `json:"blocked"`
-	Until   *time.Time `json:"blocked_until"`
+	Watch *Watch `json:"watch"`
+	// Allowlisted, Blocklisted: the user lists of the settings (a user on
+	// both is blocklisted).
+	Allowlisted bool       `json:"allowlisted"`
+	Blocklisted bool       `json:"blocklisted"`
+	Staff       bool       `json:"staff"`
+	Blocked     bool       `json:"blocked"`
+	Until       *time.Time `json:"blocked_until"`
 }
 
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, endpoint, session_fp, mode, timing, result,
 	flow_id, flow_version, severity, hit_categories, highest_category, highest_score, review_status, reviewed_by, reviewed_at,
-	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until,
+	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until, replayed,
 	ai_verdict, ai_severity, ai_category, ai_evidence, ai_reason, ai_analysis_id, verdict, reason, error, llm_model`
 
 func (e *Event) scanTargets() []any {
 	return []any{&e.ID, &e.CreatedAt, &e.RequestID, &e.UserID, &e.APIKeyID, &e.GroupID, &e.Model, &e.Protocol, &e.Endpoint, &e.SessionFp, &e.Mode, &e.Timing, &e.Result,
 		&e.FlowID, &e.FlowVersion, &e.Severity, &e.HitCategories, &e.HighestCategory, &e.HighestScore, &e.ReviewStatus, &e.ReviewedBy, &e.ReviewedAt,
-		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil,
+		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil, &e.Replayed,
 		&e.AIVerdict, &e.AISeverity, &e.AICategory, &e.AIEvidence, &e.AIReason, &e.AIAnalysisID,
 		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel}
 }
@@ -256,8 +291,17 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 		f.enum(req, "result", ResultBlock, ResultHit, ResultOverturned, ResultError, ResultPass)
 	}
 	f.enum(req, "severity", "high", "medium", "low")
-	f.enum(req, "review_status", "pending", "false_positive", "confirmed")
+	f.enum(req, "review_status", reviewStatuses...)
 	f.enum(req, "timing", TimingPre, TimingPost)
+	switch v := pluginsdk.Query(req, "replayed"); v {
+	case "":
+	case "true":
+		f.conds = append(f.conds, "replayed")
+	case "false":
+		f.conds = append(f.conds, "NOT replayed")
+	default:
+		f.errs = f.errs.Add("replayed", "enum", "replayed must be true or false / replayed 取值为 true、false")
+	}
 	switch v := pluginsdk.Query(req, "verdict"); v {
 	case "needs_review":
 		// AI unsure and nobody looked at it yet.
@@ -528,11 +572,12 @@ func eventExtras(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
 	return nil
 }
 
-// userState is a user's moderation state now: watch entry, exemption,
+// userState is a user's moderation state now: watch entry, user lists,
 // moderator, block.
 func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (UserState, error) {
 	now := p.now().UTC()
-	st := UserState{Exempt: p.cfg.Load().exempt[uid], Staff: p.isStaff(ctx, uid)}
+	c := p.cfg.Load()
+	st := UserState{Allowlisted: c.allowlisted(uid), Blocklisted: c.blocklisted(uid), Staff: p.isStaff(ctx, uid)}
 	if until, ok := (*p.blocked.Load())[uid]; ok && (until.IsZero() || now.Before(until)) {
 		st.Blocked = true
 		if !until.IsZero() {
@@ -551,8 +596,9 @@ func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (Us
 	return st, nil
 }
 
-// getEventInput returns the raw moderated messages of a record (stored on a
-// first-stage hit).
+// getEventInput returns the raw moderated messages of a record (stored
+// when a stage hit, and of the other records with
+// record_pass_input_message).
 func (p *Plugin) getEventInput(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	id, bad := parseID(req, "id")
 	if bad != nil {
@@ -600,10 +646,24 @@ func (p *Plugin) deleteEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	return pluginsdk.DataResponse(map[string]any{"id": id, "deleted": true}), nil
 }
 
+// Review statuses of a suspicious record (events.review_status).
+const (
+	ReviewPending       = "pending"
+	ReviewFalsePositive = "false_positive"
+	ReviewConfirmed     = "confirmed"
+	// maxReviewIDs is the number of records one review request may name.
+	maxReviewIDs = 500
+)
+
+var reviewStatuses = []string{ReviewPending, ReviewFalsePositive, ReviewConfirmed}
+
 // reviewEvents sets the review status of suspicious records: {ids, status};
 // other records of ids are left alone. Marking a counted record
 // false_positive takes its violation back from the user's current window;
-// undoing it counts it again in the same window (§72.8).
+// undoing it counts it again in the same window (§72.8). The verdict cache
+// follows the review (syncReviewed); cache_synced is the number of records
+// whose cached verdict was updated in the shared KV - fewer than the records
+// with a cached verdict when KV writes failed or the request ended first.
 func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in struct {
 		IDs    []int64 `json:"ids"`
@@ -613,10 +673,10 @@ func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		return bad, nil
 	}
 	var errs pluginsdk.FieldErrors
-	if len(in.IDs) == 0 || len(in.IDs) > 500 {
-		errs = errs.Add("ids", "invalid", "ids must list 1 to 500 records / ids 需要 1–500 条")
+	if len(in.IDs) == 0 || len(in.IDs) > maxReviewIDs {
+		errs = errs.Add("ids", "invalid", fmt.Sprintf("ids must list 1 to %d records / ids 需要 1–%d 条", maxReviewIDs, maxReviewIDs))
 	}
-	if in.Status != "pending" && in.Status != "false_positive" && in.Status != "confirmed" {
+	if !slices.Contains(reviewStatuses, in.Status) {
 		errs = errs.Add("status", "enum", "status must be pending, false_positive or confirmed / status 取值为 pending、false_positive、confirmed")
 	}
 	if len(errs) > 0 {
@@ -678,7 +738,8 @@ func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*
 			return nil, err
 		}
 	}
-	return pluginsdk.DataResponse(map[string]any{"updated": updated, "status": in.Status}), nil
+	synced := p.syncReviewed(ctx, in.IDs, in.Status)
+	return pluginsdk.DataResponse(map[string]any{"updated": updated, "status": in.Status, "cache_synced": synced}), nil
 }
 
 // ---------------------------------------------------------------- blocks
@@ -749,7 +810,7 @@ func (p *Plugin) createBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		errs = errs.Add("reason", "too_long", "reason must be at most 500 characters / 原因最多 500 字")
 	}
 	if len(errs) == 0 {
-		errs = p.protectedUser(ctx, p.cfg.Load(), uid)
+		errs = p.unbannableUser(ctx, p.cfg.Load(), uid)
 	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid block / 封禁参数无效", errs), nil

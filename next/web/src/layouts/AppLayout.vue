@@ -11,10 +11,12 @@ const app = useAppStore()
 const route = useRoute()
 const { t } = useI18n()
 
-// The top bar shows the route title and the page description; a page header
-// with the same title is only its filters and actions, and with no filters its
-// actions move into the top bar on a wide screen (AppTopbar's #s-page-actions).
-provideTitleContext(() => (route.meta.title ? t(route.meta.title as string) : ''), toRef(app, 'pageDescription'), '#s-page-actions')
+// The top bar shows what the page header of the page gives: its title, its
+// description and, on a wide screen, what it puts beside the title. The header
+// in the page is then only its filters and actions, and with no filters its
+// actions move into the top bar as well (AppTopbar's #s-page-title-extra and
+// #s-page-actions). Until a page gives a title the top bar shows the route's.
+provideTitleContext(() => app.pageHead?.title || (route.meta.title ? t(route.meta.title as string) : ''), { head: toRef(app, 'pageHead'), extra: '#s-page-title-extra', actions: '#s-page-actions' })
 
 // The menus do not wait for the plugin modules: GET /me/menus already lists
 // plugin menus, and the fallback is a fixed dashboard entry.

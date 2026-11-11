@@ -9,28 +9,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
-	_ "image/jpeg" // DecodeConfig only
-	_ "image/png"
-	"io"
 	"math"
 	"math/big"
 	"net/http"
 	"regexp"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"unicode/utf8"
 )
 
 // Auditor types (auditors.type).
 const (
-	AuditorOpenAI     = ChannelOpenAI
-	AuditorTypeSafe   = ChannelTypeSafe
-	AuditorLLMVerdict = "llm_verdict"
+	AuditorOpenAI       = ChannelOpenAI
+	AuditorTypeSafe     = ChannelTypeSafe
+	AuditorLLMVerdict   = "llm_verdict"
+	AuditorLLMQuestions = "llm_questions"
 )
 
 // channelTypeOf is the channel type an auditor type binds to.
-var channelTypeOf = map[string]string{AuditorOpenAI: ChannelOpenAI, AuditorTypeSafe: ChannelTypeSafe, AuditorLLMVerdict: ChannelLLM}
+var channelTypeOf = map[string]string{AuditorOpenAI: ChannelOpenAI, AuditorTypeSafe: ChannelTypeSafe, AuditorLLMVerdict: ChannelLLM,
+	AuditorLLMQuestions: ChannelLLM}
 
 // OpenAICategories are the 13 omni-moderation categories.
 var OpenAICategories = []string{
@@ -78,8 +77,21 @@ type EngineResult struct {
 	RulesVersion  string             `json:"rules_version,omitempty"`
 	SentImages    int                `json:"sent_images,omitempty"`
 	SkippedImages int                `json:"skipped_images,omitempty"`
-	Reason        string             `json:"reason,omitempty"` // llm_verdict
+	Reason        string             `json:"reason,omitempty"` // llm_verdict, llm_questions
 	Calls         int                `json:"calls"`
+	// received lists the images (indexes in Input.Images) the upstream took
+	// in the call the scores come from; an image whose content went under
+	// another index (a duplicate) counts. Only these images were judged: the
+	// verdict cache stores nothing about the others (settleVerdicts). Not
+	// part of the stored trace.
+	received []int
+	// refused is the status with which the upstream refused the call that
+	// carried the images (llmImagesRefused; 0 = it did not, or it refused
+	// the call with the text alone in the same way, which says nothing about
+	// the images): the scores are of the text alone, or there are none
+	// because there was no text (ErrNoInput). audit shows it as
+	// Outcome.ImagesRefused and Status.
+	refused int
 }
 
 // ---------------------------------------------------------------- auditor
@@ -88,10 +100,12 @@ type EngineResult struct {
 type AuditorConfig struct {
 	// openai_moderation: per-category overrides of DefaultThresholds.
 	Thresholds map[string]float64 `json:"thresholds,omitempty"`
-	// typesafe: question table (nil = the default set) and the image switch
-	// (nil = on).
-	Questions    *JevQuestions `json:"questions,omitempty"`
-	ReviewImages *bool         `json:"review_images,omitempty"`
+	// typesafe, llm_questions: the question table (nil = the default set).
+	Questions *JevQuestions `json:"questions,omitempty"`
+	// typesafe, llm_questions, llm_verdict: the image switch (nil = on,
+	// reviewsImages). For the LLM types it says whether the model takes
+	// images; off, the auditor sends the text alone.
+	ReviewImages *bool `json:"review_images,omitempty"`
 	// llm_verdict: the §20 agent.
 	SystemPrompt string     `json:"system_prompt,omitempty"`
 	Categories   []Category `json:"categories,omitempty"`
@@ -101,6 +115,10 @@ type AuditorConfig struct {
 	MaxTokens    int        `json:"max_tokens,omitempty"`
 	FlagAsHit    bool       `json:"flag_as_hit,omitempty"`
 }
+
+// reviewsImages reports whether the auditor sends images: unless
+// review_images is false.
+func (c AuditorConfig) reviewsImages() bool { return c.ReviewImages == nil || *c.ReviewImages }
 
 // liveAuditor is a compiled auditor of the snapshot.
 type liveAuditor struct {
@@ -116,6 +134,9 @@ type liveAuditor struct {
 	images     bool // sends images upstream
 	llm        *llmJudge
 	flagAsHit  bool
+	// refusalLogged: the refusal of the images by the upstream of this
+	// auditor has been logged (audit), once for the snapshot it is in.
+	refusalLogged atomic.Bool
 }
 
 // compileAuditor validates cfg and builds the runtime auditor. defaultSet is
@@ -164,13 +185,39 @@ func compileAuditor(id int64, name, typ string, channelID int64, cfg AuditorConf
 				a.labels[it.Category] = it.Label
 			}
 		}
-		a.images = cfg.ReviewImages == nil || *cfg.ReviewImages
+		a.images = cfg.reviewsImages()
+	case AuditorLLMQuestions:
+		// The model answers every question yes or no: a yes scores 1 against
+		// a threshold of 1, the thresholds of the table are not used.
+		if len(cfg.Thresholds) > 0 {
+			return nil, errors.New("an LLM question auditor keeps no thresholds")
+		}
+		qs := cfg.Questions
+		if qs == nil {
+			qs = defaultSet
+		}
+		if err := qs.Validate(); err != nil {
+			return nil, err
+		}
+		q := *qs
+		q.RulesVersion = RulesVersionOf(&q)
+		a.questions = &q
+		a.thresholds = map[string]float64{}
+		for _, it := range q.Items {
+			a.order = append(a.order, it.Category)
+			a.thresholds[it.Category] = 1
+			if it.Label != "" {
+				a.labels[it.Category] = it.Label
+			}
+		}
+		a.images = cfg.reviewsImages()
 	case AuditorLLMVerdict:
 		if len(cfg.Thresholds) > 0 || cfg.Questions != nil {
 			return nil, errors.New("an LLM auditor has no thresholds or question table")
 		}
 		a.llm = compileJudge(cfg, ch)
 		a.flagAsHit = cfg.FlagAsHit
+		a.images = cfg.reviewsImages()
 		a.thresholds = map[string]float64{}
 		for _, c := range a.llm.categories {
 			a.order = append(a.order, c.ID)
@@ -198,8 +245,15 @@ type Outcome struct {
 	Skipped     bool          `json:"skipped,omitempty"`
 	Err         error         `json:"-"`
 	ErrType     string        `json:"err,omitempty"`
-	Status      int           `json:"status,omitempty"`
-	Cost        *CallCost     `json:"cost,omitempty"` // console paths only
+	// Status is the upstream status of the error (ErrType), or without one
+	// the status with which the upstream refused the images (ImagesRefused).
+	Status int `json:"status,omitempty"`
+	// ImagesRefused: the upstream of an LLM auditor refused the call that
+	// carried the images (llmImagesRefused), so no image was reviewed: the
+	// outcome is of a second call with the text alone, or skipped when
+	// there was no text.
+	ImagesRefused bool      `json:"images_refused,omitempty"`
+	Cost          *CallCost `json:"cost,omitempty"` // console paths only
 }
 
 // audit calls the engine once through the bound channel and judges the
@@ -209,7 +263,10 @@ type Outcome struct {
 //
 // source names the cost source (§72.13.3): the hook (audit) prices the call
 // in the background; the console paths price it at once and return it.
-func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool, source string) Outcome {
+//
+// prior is the hits of the stage that decided before this one (runFlow); the
+// question-table LLM auditor shows them to the model as a hint.
+func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, prior []HitCategory, pre bool, source string) Outcome {
 	out := Outcome{AuditorID: a.ID, ChannelID: a.ChannelID}
 	ch := a.channel
 	if ch == nil {
@@ -234,8 +291,23 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool,
 		out.EngineResult, out.Err = typesafeAudit(cctx, ch, a.questions, a.images, in)
 	case AuditorLLMVerdict:
 		out.EngineResult, out.Err = p.llmAudit(cctx, a, in)
+	case AuditorLLMQuestions:
+		out.EngineResult, out.Err = llmQuestionsAudit(cctx, ch, a.questions, a.images, in, prior)
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
+	if out.refused != 0 {
+		// Nothing else tells that the images were not reviewed: the call
+		// that followed may well succeed. An error of that call replaces
+		// the status (runStage, tryWith); when that error is a refusal of
+		// the same kind the engine reports none (llmImagesRefused), so a
+		// wrong model name is not counted or logged as refused images.
+		out.ImagesRefused, out.Status = true, out.refused
+		p.stats.imagesRefused.Add(1)
+		if source == SourceAudit && !a.refusalLogged.Swap(true) {
+			p.log.Warn("moderation: the upstream refused a call with images, the auditor reviews the text alone; turn the image switch of the auditor off if its model takes no images (logged once per configuration load)",
+				"auditor_id", a.ID, "channel_id", a.ChannelID, "status", out.refused)
+		}
+	}
 	if source == SourceAudit {
 		// Priced from the trace once the run is counted (countRun).
 		p.countCall(source, ch, out.Calls, out.Err, out.LatencyMs)
@@ -304,6 +376,12 @@ var openAIImageTypes = []string{"image/png", "image/jpeg", "image/gif", "image/w
 // one random image (the API takes one). A 400 with the image is retried once
 // with the text only. Only the chosen image becomes a data URL (one copy of
 // one image, not of all of them).
+//
+// The image is a sample: one call judges the usable images of the input, so
+// all of them count as received and a pass is cached for each (owner's
+// decision, 2026-11-10: no further calls for the images that were not drawn).
+// Images the API cannot take, and every image when the call fell back to the
+// text alone, were not judged.
 func openAIAudit(ctx context.Context, ch *liveChannel, in *Input) (EngineResult, error) {
 	usable := openAIUsableImages(in.Images)
 	res := EngineResult{SkippedImages: len(in.Images)}
@@ -316,14 +394,17 @@ func openAIAudit(ctx context.Context, ch *liveChannel, in *Input) (EngineResult,
 		if n, err := rand.Int(rand.Reader, big.NewInt(int64(len(usable)))); err == nil {
 			pick = usable[n.Int64()]
 		}
-		img = openAIImageURL(pick)
+		img = openAIImageURL(pick.Image)
 		res.SentImages, res.SkippedImages = 1, res.SkippedImages-1
+		for _, u := range usable {
+			res.received = append(res.received, u.index)
+		}
 	}
 	res.Calls = 1
 	scores, model, err := callModerations(ctx, ch, in.Text, img)
 	var up *UpstreamError
 	if img != "" && errors.As(err, &up) && up.Status == http.StatusBadRequest {
-		res.SentImages, res.SkippedImages = 0, res.SkippedImages+1
+		res.SentImages, res.SkippedImages, res.received = 0, res.SkippedImages+1, nil
 		if in.Text == "" {
 			return res, ErrNoInput
 		}
@@ -358,14 +439,20 @@ func callModerations(ctx context.Context, ch *liveChannel, text, img string) (ma
 	return out.Results[0].CategoryScores, out.Model, nil
 }
 
+// openAIImage is an image the API can take and its index in the input.
+type openAIImage struct {
+	Image
+	index int
+}
+
 // openAIUsableImages are the images the API can take, with the MIME type of
 // bare base64 sniffed when the client gave none: URLs as they are, inline
 // data of a known image type.
-func openAIUsableImages(images []Image) []Image {
-	out := make([]Image, 0, len(images))
-	for _, img := range images {
+func openAIUsableImages(images []Image) []openAIImage {
+	out := make([]openAIImage, 0, len(images))
+	for i, img := range images {
 		if img.URL != "" {
-			out = append(out, img)
+			out = append(out, openAIImage{img, i})
 			continue
 		}
 		if img.MediaType == "" {
@@ -375,7 +462,7 @@ func openAIUsableImages(images []Image) []Image {
 			}
 		}
 		if img.MediaType != "" {
-			out = append(out, img)
+			out = append(out, openAIImage{img, i})
 		}
 	}
 	return out
@@ -391,17 +478,18 @@ func openAIImageURL(img Image) string {
 
 // ---------------------------------------------------------------- typesafe (Jev)
 
-// System One image limits (new-api engine_typesafe.go).
+// System One request limits (new-api engine_typesafe.go); the image limits
+// are in jev_image.go. A request is packed within 200k tokens (text: 1 token
+// per rune, images: jevImageTokens) and 24 MiB of base64, under the 262k
+// tokens of the long-context mode every call uses.
 const (
-	jevImageMinSide      = 280
-	jevImageMaxSide      = 1568
-	jevImageMinPixels    = 78_400
-	jevImageMaxPixels    = 2_458_624
-	jevImageMaxBytes     = 16 << 20
-	jevRequestTokenLimit = 24_000
+	jevRequestTokenLimit = 200_000
 	jevRequestBase64Max  = 24 << 20
 	jevImageLineFormat   = "用户发送的图片 %d："
 	jevImagesHeader      = "TypeSafe-Danger-Zone-Images"
+	// jevLongContextHeader raises the per-question and per-request context
+	// to 262k tokens (default 32k / 64k) at the same price.
+	jevLongContextHeader = "TypeSafe-Danger-Zone-Long-Context"
 )
 
 type typesafeAsset struct {
@@ -409,16 +497,20 @@ type typesafeAsset struct {
 	Format     string `json:"format"`
 	DataBase64 string `json:"data_base64"`
 	tokens     int
+	// from lists the images of the input (indexes in Input.Images) the
+	// asset stands for: the image it was made of and its duplicates.
+	from []int
 }
 
 // typesafeAudit calls POST {base}/v1/systemone with {model, state, questions}
-// (+ assets with images on). A too-large request with several images is
-// retried once with the first image only.
+// (+ assets with images on: inline images as they are or redrawn to the
+// System One limits, jev_image.go). A too-large request with several images
+// is retried once with the first image only.
 func typesafeAudit(ctx context.Context, ch *liveChannel, qs *JevQuestions, images bool, in *Input) (EngineResult, error) {
 	res := EngineResult{RulesVersion: qs.RulesVersion}
 	var assets []typesafeAsset
 	if images {
-		assets = jevAssets(in)
+		assets = jevAssets(ctx, in)
 	}
 	res.SkippedImages = len(in.Images) - len(assets)
 	if in.Text == "" && len(assets) == 0 {
@@ -433,6 +525,9 @@ func typesafeAudit(ctx context.Context, ch *liveChannel, qs *JevQuestions, image
 		out, err = callSystemOne(ctx, ch, qs, in.Text, assets)
 	}
 	res.SentImages = len(assets)
+	for _, a := range assets {
+		res.received = append(res.received, a.from...)
+	}
 	if err != nil {
 		return res, err
 	}
@@ -461,9 +556,10 @@ type systemOneAnswers struct {
 	Usage EngineUsage `json:"usage"`
 }
 
+// callSystemOne sends one request, always in long-context mode.
 func callSystemOne(ctx context.Context, ch *liveChannel, qs *JevQuestions, text string, assets []typesafeAsset) (systemOneAnswers, error) {
 	body := map[string]any{"model": ch.Model, "state": text, "questions": qs.wired}
-	var header map[string]string
+	header := map[string]string{jevLongContextHeader: "true"}
 	if len(assets) > 0 {
 		var state strings.Builder
 		state.WriteString(text)
@@ -478,7 +574,7 @@ func callSystemOne(ctx context.Context, ch *liveChannel, qs *JevQuestions, text 
 			refs[ref] = a
 		}
 		body["state"], body["assets"] = state.String(), refs
-		header = map[string]string{jevImagesHeader: "true"}
+		header[jevImagesHeader] = "true"
 	}
 	var out systemOneAnswers
 	err := callJSON(ctx, ch, pathSystemOne, header, body, &out)
@@ -491,49 +587,6 @@ func jevImageRef() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return "img-" + hex.EncodeToString(b)
-}
-
-func jevImageTokens(w, h int) int { return w*h/250 + 100 }
-
-// jevAssets packs the sendable images in order until the budget is full.
-func jevAssets(in *Input) []typesafeAsset {
-	tokens, size := utf8.RuneCountInString(in.Text), 0
-	var out []typesafeAsset
-	for _, img := range in.Images {
-		if img.URL != "" {
-			continue
-		}
-		a := jevAsset(img.Data)
-		if a == nil {
-			continue
-		}
-		if tokens+a.tokens > jevRequestTokenLimit || size+len(a.DataBase64) > jevRequestBase64Max {
-			break
-		}
-		tokens, size = tokens+a.tokens, size+len(a.DataBase64)
-		out = append(out, *a)
-	}
-	return out
-}
-
-// jevAsset checks an inline PNG / JPEG by its header only; nil = skipped.
-func jevAsset(raw string) *typesafeAsset {
-	if base64.StdEncoding.DecodedLen(len(raw)) > jevImageMaxBytes+2 {
-		return nil
-	}
-	n, err := io.Copy(io.Discard, base64.NewDecoder(base64.StdEncoding, strings.NewReader(raw)))
-	if err != nil || n > jevImageMaxBytes {
-		return nil
-	}
-	cfg, format, err := image.DecodeConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(raw)))
-	if err != nil || (format != "png" && format != "jpeg") {
-		return nil
-	}
-	w, h := cfg.Width, cfg.Height
-	if min(w, h) < jevImageMinSide || max(w, h) > jevImageMaxSide || w*h < jevImageMinPixels || w*h > jevImageMaxPixels {
-		return nil
-	}
-	return &typesafeAsset{Type: "image", Format: format, DataBase64: raw, tokens: jevImageTokens(w, h)}
 }
 
 // ---------------------------------------------------------------- Jev questions
@@ -564,7 +617,17 @@ type typesafeQuestion struct {
 
 const (
 	// RulesVersionZH is the version of the built-in set (new-api content-audit-v2-zh).
-	RulesVersionZH       = "content-audit-v2-zh"
+	RulesVersionZH = "content-audit-v2-zh"
+	// RulesVersionEN and RulesVersionZH13 are the built-in sets new-api
+	// removed (the English set and the 13-row Chinese set); an auditor that
+	// still holds a copy of one keeps reporting its version. Their texts are
+	// gone: legacyWireHashEN / legacyWireHashZH are the sha256 of their wire
+	// content (new-api jev_questions.go).
+	RulesVersionEN   = "content-audit-13-en-v1"
+	RulesVersionZH13 = "content-audit-13-zh-v1"
+	legacyWireHashEN = "e2ca199d2bb8208d2ebdc47dbf079b49f9f41794c9a4a25527fb1ec609451add"
+	legacyWireHashZH = "b01b9f2d0e8df50000f90eed1681717e197afc2f73698f108bbb045eada6d3dd"
+
 	maxJevQuestions      = 32
 	maxJevPreambleRunes  = 2000
 	maxJevQuestionRunes  = 2000
@@ -630,12 +693,13 @@ func (qs *JevQuestions) Validate() error {
 	return nil
 }
 
-// RulesVersionOf: the built-in table keeps its version, others are
-// custom-<sha256[:8]> of the wire content.
+// RulesVersionOf: a table whose wire content is a built-in set (the current
+// one or a removed one) keeps that version, others are custom-<sha256[:8]>
+// of the wire content.
 func RulesVersionOf(qs *JevQuestions) string {
 	sum := jevWireHash(qs)
-	if sum == builtinWireHash {
-		return RulesVersionZH
+	if v, ok := builtinVersions[sum]; ok {
+		return v
 	}
 	return jevCustomRulesPrefix + sum[:8]
 }
@@ -646,7 +710,12 @@ func jevWireHash(qs *JevQuestions) string {
 	return hex.EncodeToString(sum[:])
 }
 
-var builtinWireHash = jevWireHash(&builtinQuestions)
+// builtinVersions maps the wire hash of every built-in set to its version.
+var builtinVersions = map[string]string{
+	jevWireHash(&builtinQuestions): RulesVersionZH,
+	legacyWireHashEN:               RulesVersionEN,
+	legacyWireHashZH:               RulesVersionZH13,
+}
 
 // DefaultQuestions is the default set: jev_default_set when it validates,
 // otherwise the built-in set.

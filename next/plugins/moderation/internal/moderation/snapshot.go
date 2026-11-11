@@ -2,6 +2,8 @@ package moderation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,11 +17,13 @@ import (
 )
 
 // Broadcast topics: the other nodes reload at once (best effort; every
-// node also polls config_state).
+// node also polls config_state). verdict.changed carries the cache keys a
+// review changed ({"keys": [...]}): the other nodes drop them from memory.
 const (
-	TopicBlocksChanged = "blocks.changed"
-	TopicConfigChanged = "config.changed"
-	TopicWatchChanged  = "watch.changed"
+	TopicBlocksChanged  = "blocks.changed"
+	TopicConfigChanged  = "config.changed"
+	TopicWatchChanged   = "watch.changed"
+	TopicVerdictChanged = "verdict.changed"
 )
 
 // Watch levels (watchlist.level).
@@ -35,24 +39,32 @@ type liveFlow struct {
 	Version int
 	Spec    *Spec
 	timeout time.Duration
+	// fp is the verdict fingerprint (fingerprint): part of the flow's cache
+	// keys.
+	fp string
 }
 
 // snapshot is the immutable configuration the hook reads.
 type snapshot struct {
-	version  int64
-	channels map[int64]*liveChannel
-	auditors map[int64]*liveAuditor
-	flows    map[int64]*liveFlow
-	// byGroup maps every bound group to its flow; nil = exempt (flow 0) or
-	// bound to a flow that is disabled or unpublished (the group is not
-	// moderated). 0 = default.
+	version int64
+	// cacheEpoch counts the clears of the verdict cache; part of every cache
+	// key.
+	cacheEpoch int64
+	channels   map[int64]*liveChannel
+	auditors   map[int64]*liveAuditor
+	flows      map[int64]*liveFlow
+	// byGroup maps the bound groups to their flow; nil = exempt (flow 0, the
+	// group is not moderated). A binding to a flow that is disabled,
+	// unpublished or gone is left out, so a wider binding applies. 0 =
+	// default.
 	byGroup map[int64]*liveFlow
 	groups  map[int64][]int64 // flow id -> bound groups
 	// byAccount maps the account bindings (group 0 = the account in any
-	// group) to their flow; nil as in byGroup (§72.17).
+	// group) to their flow; nil and left out as in byGroup (§72.17).
 	byAccount map[accountKey]*liveFlow
 	// accountGroups are the groups with a binding of one of their accounts;
-	// anyGroupAccounts: some binding covers an account in every group.
+	// anyGroupAccounts: some binding covers an account in every group. Both
+	// count only the bindings in byAccount.
 	accountGroups    map[int64]bool
 	anyGroupAccounts bool
 	markers          [][]byte // self-request keys of the llm channels
@@ -69,7 +81,8 @@ func emptySnapshot() *snapshot {
 }
 
 // flowFor returns the flow of a group; a group without a binding of its own
-// falls back to the default flow (group 0). nil = not moderated.
+// (or bound to a flow that is disabled or unpublished) falls back to the
+// default flow (group 0). nil = not moderated.
 func (s *snapshot) flowFor(group int64) *liveFlow {
 	if f, ok := s.byGroup[group]; ok {
 		return f
@@ -80,8 +93,9 @@ func (s *snapshot) flowFor(group int64) *liveFlow {
 // flowForAccount returns the flow of a request of group sent to account
 // (CONTRACTS §72.17): the most specific binding decides - the account
 // within the group, the account in any group, the group, the default group.
-// Like a group binding, an account binding to a disabled or unpublished
-// flow (or to flow 0) is not moderated; the less specific ones do not apply.
+// A binding to flow 0 is not moderated and the less specific ones do not
+// apply; a binding to a disabled or unpublished flow counts as absent, so
+// the next less specific one decides (new-api runtime.go).
 func (s *snapshot) flowForAccount(group, account int64) *liveFlow {
 	for _, k := range [2]accountKey{{group, account}, {0, account}} {
 		if f, ok := s.byAccount[k]; ok {
@@ -101,8 +115,29 @@ func (s *snapshot) perAccount(group int64) bool {
 // groupsOf lists the groups bound to a flow.
 func (s *snapshot) groupsOf(flowID int64) []int64 { return s.groups[flowID] }
 
-// addAccountBinding records an account binding (f nil = not moderated).
-func (s *snapshot) addAccountBinding(k accountKey, f *liveFlow) {
+// bindGroup records a group binding. Flow 0 exempts the group; a flow that
+// is disabled, unpublished or gone leaves the group without a binding, so
+// the default flow applies (the console still lists the group, groupsOf).
+func (s *snapshot) bindGroup(group, flowID int64) {
+	switch f := s.flows[flowID]; {
+	case flowID == 0:
+		s.byGroup[group] = nil
+	case f != nil:
+		s.byGroup[group] = f
+	}
+	if flowID != 0 {
+		s.groups[flowID] = append(s.groups[flowID], group)
+	}
+}
+
+// bindAccount records an account binding. Flow 0 exempts the account; a
+// flow that is disabled, unpublished or gone is left out: a wider binding
+// applies, and the binding does not make its group per account.
+func (s *snapshot) bindAccount(k accountKey, flowID int64) {
+	f := s.flows[flowID]
+	if flowID != 0 && f == nil {
+		return
+	}
 	s.byAccount[k] = f
 	if k.group == 0 {
 		s.anyGroupAccounts = true
@@ -136,6 +171,24 @@ func (s *snapshot) sendsImages(f *liveFlow) bool {
 		}
 	}
 	return false
+}
+
+// mixedImages reports whether the flow has both an auditor that takes images
+// and one that does not (the OpenAI auditor always takes them, the others by
+// their image switch). There an auditor that never gets an image can pass
+// what an auditor that got it hit, on every request, which is why there an
+// image that is not cached keeps the cached text of its request in the plan
+// (makePlan).
+func (s *snapshot) mixedImages(f *liveFlow) bool {
+	var with, without bool
+	for _, st := range f.Spec.Stages {
+		for _, id := range st.Auditors {
+			if a := s.auditors[id]; a != nil {
+				with, without = with || a.images, without || !a.images
+			}
+		}
+	}
+	return with && without
 }
 
 // bound reports whether any group or account runs a flow.
@@ -181,7 +234,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 		return nil, err
 	}
 	s := emptySnapshot()
-	if err := db.QueryRow(ctx, `SELECT config_version FROM config_state WHERE id = 1`).Scan(&s.version); err != nil {
+	if err := db.QueryRow(ctx, `SELECT config_version, cache_epoch FROM config_state WHERE id = 1`).Scan(&s.version, &s.cacheEpoch); err != nil {
 		return nil, err
 	}
 	rows, err := db.Query(ctx, `SELECT id, type, protocol, name, base_url, api_key_enc, proxy_enc, model, billing_model, timeout_ms FROM channels
@@ -241,7 +294,10 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 		name, typ string
 		cfgJSON   []byte
 	)
+	stored := map[int64]storedAuditor{}
 	if _, err := pgx.ForEachRow(rows, []any{&aid, &name, &typ, &chID, &cfgJSON}, func() error {
+		row := storedAuditor{typ: typ, channel: chID, config: slices.Clone(cfgJSON)}
+		defer func() { stored[aid] = row }()
 		var cfg AuditorConfig
 		if err := json.Unmarshal(cfgJSON, &cfg); err != nil {
 			p.log.Warn("moderation: auditor config is invalid", "auditor_id", aid, "error", err.Error())
@@ -252,6 +308,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 			p.log.Warn("moderation: auditor config is invalid", "auditor_id", aid, "error", err.Error())
 			return nil
 		}
+		row.defaultSet = (typ == AuditorTypeSafe || typ == AuditorLLMQuestions) && cfg.Questions == nil
 		s.auditors[aid] = a
 		return nil
 	}); err != nil {
@@ -284,16 +341,17 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}); err != nil {
 		return nil, err
 	}
+	defaultSet, _ := json.Marshal(c.jevDefault)
+	for _, f := range s.flows {
+		f.fp = fingerprint(f.Spec, stored, s.channels, defaultSet)
+	}
 	rows, err = db.Query(ctx, `SELECT group_id, flow_id FROM flow_groups ORDER BY group_id`)
 	if err != nil {
 		return nil, err
 	}
 	var gid int64
 	if _, err := pgx.ForEachRow(rows, []any{&gid, &fid}, func() error {
-		s.byGroup[gid] = s.flows[fid] // nil when exempt, or the flow is disabled or unpublished
-		if fid != 0 {
-			s.groups[fid] = append(s.groups[fid], gid)
-		}
+		s.bindGroup(gid, fid)
 		return nil
 	}); err != nil {
 		return nil, err
@@ -304,13 +362,82 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}
 	var acct int64
 	if _, err := pgx.ForEachRow(rows, []any{&gid, &acct, &fid}, func() error {
-		s.addAccountBinding(accountKey{gid, acct}, s.flows[fid])
+		s.bindAccount(accountKey{gid, acct}, fid)
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 	p.proxies.retain(proxies)
 	return s, nil
+}
+
+// storedAuditor is an auditor row as the fingerprint reads it. defaultSet:
+// the auditor asks the default question set.
+type storedAuditor struct {
+	typ        string
+	channel    int64
+	config     []byte // the jsonb text, the same on every node
+	defaultSet bool
+}
+
+// judgingVersion stands in the fingerprint for what decides a verdict but
+// lives in the code instead of the stored configuration. Bump it whenever a
+// release changes such a default, so the verdicts cached under the old one
+// are not served under the new one:
+//
+//   - the OpenAI thresholds of the categories an auditor does not set
+//     (DefaultThresholds) and the category list (OpenAICategories);
+//   - the default categories of an llm_verdict auditor (DefaultCategories),
+//     its prompt template and verdict tool (expandPrompt, verdictTool);
+//   - the prompt template of llm_questions and how its answers are read;
+//   - what an auditor without review_images does with images
+//     (AuditorConfig.reviewsImages), and which images an auditor sends;
+//   - the built-in Jev question set (the default set when the settings
+//     carry none) and how questions are sent and scored;
+//   - how content is cut into segments and rendered for the auditors, when
+//     the same segment hash would then stand for other text.
+//
+// 2: the LLM auditors send images unless review_images is false, and their
+// default prompts say that the images are judged.
+const judgingVersion = 2
+
+// fingerprint is the verdict fingerprint of a flow (16 hex characters): a
+// hash of everything that decides what the flow answers for given content -
+// the stages (combine, n, fallback, auditors), every auditor (type, channel,
+// stored config), the channel's type, protocol, base URL and model, the
+// default question set of the auditors that use it, and judgingVersion for
+// the defaults in the code. It is part of the flow's cache keys, so changing
+// any of these makes the cached verdicts of the flow unreachable, while the
+// flow's name, model filter, sample rate and timeout and a channel's name,
+// key, proxy, timeout and billing model leave them in place.
+func fingerprint(spec *Spec, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
+	return fingerprintAt(judgingVersion, spec, auditors, channels, defaultSet)
+}
+
+// fingerprintAt is fingerprint under a judging version.
+func fingerprintAt(version int, spec *Spec, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
+	h := sha256.New()
+	fmt.Fprintf(h, "judging %d\n", version)
+	for _, st := range spec.Stages {
+		fmt.Fprintf(h, "stage %q %d %t %v\n", st.Combine, st.N, st.Fallback, st.Auditors)
+		for _, id := range st.Auditors {
+			a, ok := auditors[id]
+			if !ok {
+				fmt.Fprintf(h, "auditor %d missing\n", id)
+				continue
+			}
+			fmt.Fprintf(h, "auditor %d %q %d %d:%s\n", id, a.typ, a.channel, len(a.config), a.config)
+			if ch := channels[a.channel]; ch != nil {
+				fmt.Fprintf(h, "channel %q %q %q %q\n", ch.Type, ch.Protocol, ch.BaseURL, ch.Model)
+			} else {
+				fmt.Fprint(h, "channel -\n")
+			}
+			if a.defaultSet {
+				fmt.Fprintf(h, "default %d:%s\n", len(defaultSet), defaultSet)
+			}
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)[:8])
 }
 
 // reloadConfig replaces the snapshot (one reload at a time, never an older

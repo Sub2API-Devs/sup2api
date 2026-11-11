@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { SButton, SField, SInput, SModal, SSelect, SSwitch } from '@sub2api/ui'
+import { SButton, SField, SFormModal, SInput, SSelect, SSwitch } from '@sub2api/ui'
 import { DEFAULT_CHANNEL_TIMEOUT_MS } from './flowOps'
 import { enumOptions } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
@@ -94,8 +94,8 @@ async function save() {
 </script>
 
 <template>
-  <SModal v-model:open="open" :title="title" width="lg">
-    <form class="mod-form" @submit.prevent="save">
+  <SFormModal v-model:open="open" :title="title" width="lg" :loading="saving" @submit="save">
+    <div class="mod-form">
       <fieldset class="mod-fieldset" :disabled="readonly">
         <SField :label="t('channels.col.type')" :error="errs.type" :hint="channel ? t('channels.typeFixed') : t(`channelTypeHint.${form.type}`)">
           <SSelect v-model="form.type" :options="typeOptions" :disabled="!!channel" />
@@ -128,10 +128,9 @@ async function save() {
           <SSwitch v-model="form.enabled" />
         </SField>
       </fieldset>
-    </form>
-    <template #footer>
-      <SButton @click="open = false">{{ host.i18n.t(readonly ? 'ui.close' : 'ui.cancel') }}</SButton>
-      <SButton v-if="!readonly" variant="primary" :loading="saving" @click="save">{{ t('save') }}</SButton>
+    </div>
+    <template v-if="readonly" #footer>
+      <SButton @click="open = false">{{ host.i18n.t('ui.close') }}</SButton>
     </template>
-  </SModal>
+  </SFormModal>
 </template>

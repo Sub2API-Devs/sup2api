@@ -11,7 +11,8 @@ import { useCatalog } from './catalog'
 import { joinList } from './format'
 import { canManage, errorMessage, fetchFlow, publishFlow, saveFlow, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Spec } from './types'
-import { applyTemplate, auditorIndex, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec, validateSpec, type SpecIssue } from './flowOps'
+import { applyTemplate, auditorIndex, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec } from './flowOps'
+import { validateSpec, type SpecIssue } from './flowValidate'
 
 // Flow editor (new-api flow-editor-form.tsx): name + draft kept locally and
 // compared with the saved draft ("unsaved") and the published version
@@ -94,6 +95,7 @@ const unpublished = computed(() => !saved.value?.version || saved.value.dirty)
 const publishedVersion = computed(() => saved.value?.version ?? 0)
 const autoMs = computed(() => autoTimeoutMs(draft.value, lookup.value.byId))
 const groupNames = computed(() => (saved.value?.groups || []).map(props.groupLabel))
+const accountBindings = computed(() => saved.value?.accounts?.length ?? 0)
 
 function issueText(i: SpecIssue): string {
   const prefix = i.stage === undefined ? '' : t('flows.stagePrefix', { n: i.stage + 1 })
@@ -275,6 +277,7 @@ onBeforeUnmount(() => {
         v-model:draft="draft"
         :enabled="enabled"
         :groups="groupNames"
+        :accounts="accountBindings"
         :auto-ms="autoMs"
         :is-new="isNew"
         :disabled="!manage"
@@ -311,6 +314,7 @@ onBeforeUnmount(() => {
       :enabled="enabled"
       :draft="draft"
       :groups="groupNames"
+      :accounts="accountBindings"
       :auditors="auditors"
       :loading="busy === 'publish'"
       @confirm="publish"

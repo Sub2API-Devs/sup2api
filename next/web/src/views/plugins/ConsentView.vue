@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner, confirm, toast } from '@sub2api/ui'
 import type { HostPermissionReview, PluginReview, Role } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -195,11 +195,11 @@ onMounted(load)
 
 <template>
   <div class="mx-auto max-w-5xl pb-24">
-    <div class="mb-4">
-      <SLink to="/plugins" class="inline-flex items-center gap-1 text-sm">
-        <SIcon name="arrow-left" class="h-4 w-4" />{{ t('plugins.list.title') }}
-      </SLink>
-    </div>
+    <SPageHeader :title="review ? `${isUpgrade ? t('plugins.consent.titleUpgrade') : t('plugins.consent.titleInstall')}${colon}${lt(review.name) || review.plugin_key}` : t('nav.crumbs.pluginConsent')">
+      <template v-if="review" #title-extra>
+        <span class="font-mono text-sm text-gray-500">v{{ review.version }}</span>
+      </template>
+    </SPageHeader>
 
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
 
@@ -216,11 +216,7 @@ onMounted(load)
         <div class="flex flex-wrap items-start gap-4">
           <PluginAvatar :name="lt(review.name)" :plugin-key="review.plugin_key" size="lg" />
           <div class="min-w-0 flex-1">
-            <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
-              {{ isUpgrade ? t('plugins.consent.titleUpgrade') : t('plugins.consent.titleInstall') }}{{ colon }}{{ lt(review.name) || review.plugin_key }}
-              <span class="font-mono text-base text-gray-500">v{{ review.version }}</span>
-            </h1>
-            <div class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
               <span class="inline-flex items-center gap-2">
                 <SHint inline>{{ t('plugins.publisher') }}</SHint>
                 <span class="font-medium">{{ review.publisher || '—' }}</span>

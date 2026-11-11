@@ -6,13 +6,15 @@ export type Result = 'block' | 'hit' | 'overturned' | 'error' | 'pass'
 export type ReviewStatus = 'pending' | 'false_positive' | 'confirmed'
 export type WatchLevel = 'observe' | 'enforce'
 export type ChannelType = 'openai_moderation' | 'typesafe' | 'llm'
-export type AuditorType = 'openai_moderation' | 'typesafe' | 'llm_verdict'
+export type AuditorType = 'openai_moderation' | 'typesafe' | 'llm_verdict' | 'llm_questions'
 
 /** Runtime state of the node that served the request. */
 export interface Runtime {
   mode: Mode
   /** a flow is bound to a group */
   configured: boolean
+  /** hash of the settings this node runs with (nodes that differ have not all reloaded) */
+  settings_hash?: string
   config_version: number
   flows: number
   auditors: number
@@ -24,17 +26,33 @@ export interface Runtime {
   errors: number
   cache_hits: number
   cache_entries: number
+  /** estimated memory of the verdict cache entries of this node, bytes (0.8.0) */
+  cache_bytes?: number
+  /** failed reads and writes of the verdict cache in the shared KV (never fatal: the content is moderated instead) */
+  kv_errors?: number
+  /** runs whose verdicts wait to be written to the shared KV right now, in their call or for their turn (0.8.1); a gauge, not a count: it keeps growing while the KV does not answer */
+  kv_writing?: number
+  /** runs since the node started whose verdicts were not cached: a review may have changed the cache since their request asked it, or the memory cache was replaced (0.8.1); their content is moderated again */
+  kv_skipped?: number
+  /** calls of the LLM auditors whose images the upstream refused since the node started (Outcome.images_refused) */
+  images_refused?: number
+  /** image redraws that panicked in the decoder since the node started (the image is skipped, the text is still moderated) */
+  redraw_panics?: number
   avg_latency_ms: number
+  /** bumped by POST /verdict-cache/clear; absent before 0.8.0 */
+  cache_epoch?: number
   blocked_users: number
   watched_users: number
   /** P2 (§72.13.4); absent on 0.2 */
   /** channel_problem: why a set analysis_channel_id is not used (the core saves settings unchecked) */
   analysis?: { channel_configured: boolean; channel_problem?: 'not_found' | 'not_llm' | 'unusable'; pending: number; running: number }
+  /** call costs that could not be queued for pricing */
+  dropped_costs?: number
 }
 
 /** Row of GET /events (no `text`, has `text_excerpt`). */
 /** Record filters a record detail can set (click-to-filter). */
-export type EventFilter = { endpoint?: string; session_fp?: string }
+export type EventFilter = { endpoint?: string; session_fp?: string; request_id?: string }
 
 export interface ModEvent {
   id: number
@@ -62,6 +80,8 @@ export interface ModEvent {
   reviewed_by: number | null
   reviewed_at: string | null
   counted: boolean
+  /** a cached hit applied again without calling the channels (0.8.0); not a new violation */
+  replayed?: boolean
   input_format: string
   text_chars: number
   image_count: number
@@ -113,19 +133,56 @@ export interface Outcome {
   latency_ms: number
   skipped?: boolean
   err?: string
+  /** upstream status of the error (err); without one, the status with which the upstream refused the images (images_refused) */
   status?: number
+  /** the upstream of an LLM auditor refused the call that carried the images (400, 413, 415, 422): no image was reviewed, the outcome is of a second call with the text alone, or skipped without a text */
+  images_refused?: boolean
 }
 
 export interface StageTrace {
+  /** 1-based number of the stage in the flow's spec; absent on records written before 0.8.0 (trace.ts stageNumber) */
+  stage?: number
   outcomes: Outcome[] | null
   result: 'hit' | 'pass' | 'skipped'
   errored?: boolean
   skipped?: boolean
+  /** the stage reached no verdict and was passed over; earlier hits stand (0.8.0) */
+  failed?: boolean
+  /** a fallback stage (Stage.fallback) */
+  fallback?: boolean
+}
+
+/**
+ * Ties a hit record to the verdict cache (flow.go CacheInfo). key, segs and
+ * fp name the cached hit of the verdict chunk: its id, the segment hashes it
+ * holds and the flow fingerprint it was judged under. hit marks a replayed
+ * cached hit: no auditor ran, the trace is the one of source_request_id.
+ */
+export interface CacheInfo {
+  hit?: boolean
+  /** the request whose verdict is applied again */
+  source_request_id?: string
+  key?: string
+  segs?: string[]
+  fp?: string
+}
+
+/** What of the request was moderated (extract.go InputTrace). */
+export interface InputTrace {
+  segments: number
+  cached_segments?: number
+  chunks: number
+  chunks_total: number
+  sampled?: boolean
+  images?: number
+  dropped_images?: number
+  chars: number
 }
 
 export interface Trace {
   stages: StageTrace[] | null
   final: 'hit' | 'pass'
+  /** index in `stages` (not the flow's stage number, see StageTrace.stage) of the last stage that decided hit; -1 = none */
   decider: number
   overturned?: boolean
   errored?: boolean
@@ -134,6 +191,12 @@ export interface Trace {
   /** the input message was not stored ("save_failed") */
   input_message_dropped?: string
   latency_ms: number
+  /** a request moderated in several chunks: the 1-based index of the deciding chunk, whose run this trace is */
+  chunk?: number
+  /** the other chunks' runs */
+  chunks?: Trace[]
+  input?: InputTrace | null
+  cache?: CacheInfo | null
 }
 
 /** Another record of the same request (GET /events/:id related[]). */
@@ -150,7 +213,10 @@ export interface RelatedEvent {
 /** The record user's moderation state now. */
 export interface UserState {
   watch: Watch | null
-  exempt: boolean
+  /** on the allowlist of the settings: only moderated after the request, never refused or banned */
+  allowlisted: boolean
+  /** on the blocklist of the settings: always moderated first (a user on both lists is blocklisted) */
+  blocklisted: boolean
   staff: boolean
   blocked: boolean
   blocked_until: string | null
@@ -244,12 +310,17 @@ export interface WatchItem extends Watch {
   top_other: number
   /** verdict counts of the latest successful analysis */
   ai_counts: VerdictCounts | null
+  /** the user lists of the settings (a user on both is blocklisted) */
+  allowlisted?: boolean
+  blocklisted?: boolean
 }
 
 export interface WatchCounts {
   watching: number
   watching_with_new: number
   blocking: number
+  /** enforce-level entries with new hits since last seen; absent before 0.8.0 */
+  blocking_with_new?: number
 }
 
 /** Envelope members of GET /watchlist besides data and page. */
@@ -406,6 +477,8 @@ export type Granularity = 'hour' | 'day'
 export interface TodayCounts {
   audited: number
   suspicious: number
+  /** replayed cached hits, already counted in suspicious */
+  replayed?: number
   blocked: number
   overturned: number
   errors: number
@@ -464,6 +537,8 @@ export interface Status {
   enabled: boolean
   running: boolean
   mode: Mode
+  /** the level of users without a watch entry (observe while mode is off) */
+  default_level?: WatchLevel
   error_rate_alert_percent: number
   today: TodayCounts
   today_from: string
@@ -482,6 +557,8 @@ export interface FlowPoint {
   audited: number
   cache_skipped: number
   hit: number
+  /** replayed cached hits, already counted in hit */
+  replayed?: number
   blocked: number
   overturned: number
   errors: number
@@ -677,6 +754,7 @@ export interface FlowVersionStage {
   role?: string
   combine?: string
   n?: number
+  fallback?: boolean
   auditors: FlowVersionAuditor[]
 }
 
@@ -717,6 +795,7 @@ export interface JevQuestions {
 export interface AuditorConfig {
   thresholds?: Record<string, number>
   questions?: JevQuestions | null
+  /** typesafe: review images; llm_verdict and llm_questions: the model supports images (off = text only). Absent = on. */
   review_images?: boolean | null
   system_prompt?: string
   categories?: Category[]
@@ -750,6 +829,12 @@ export interface Stage {
   auditors: number[]
   combine: 'any' | 'all' | 'at_least'
   n?: number
+  /**
+   * a fallback stage (补审): comes after every review stage and runs only when
+   * the review chain ended without a hit and without overturning one (flow.go
+   * runFlow, flowOps passOutcome); its hit is the final hit
+   */
+  fallback?: boolean
 }
 
 export interface Spec {
@@ -809,6 +894,8 @@ export interface Binding {
   group_id: number
   account_id: number
   flow_id: number
+  /** the flow is disabled, unpublished or gone: the binding does not apply and a wider one decides */
+  inactive?: boolean
 }
 
 export interface BindingsView {
@@ -914,6 +1001,9 @@ export interface AuditorDraft {
 export interface AuditorTryTarget {
   id: number | null
   name: string
+  type?: AuditorType
+  /** the stored config of a try without a draft: an LLM auditor with review_images off takes no images */
+  config?: AuditorConfig
   draft?: AuditorDraft
 }
 
@@ -934,7 +1024,7 @@ export interface SimulateBody {
   event_id?: number
   source: 'draft' | 'published' | 'version'
   version?: number
-  /** none / observe run after the request (post), enforce before it (pre: a hit refuses) */
+  /** none runs at the default level; observe after the request (post), enforce before it (pre: a hit refuses) */
   user_state?: SimUserState
 }
 export type SimUserState = 'none' | 'observe' | 'enforce'

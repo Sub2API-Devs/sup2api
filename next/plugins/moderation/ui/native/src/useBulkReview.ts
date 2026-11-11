@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { reviewEvents, toastError, useModHost } from './host'
+import { reviewDoneText, reviewEvents, toastError, useModHost } from './host'
 import type { ReviewStatus } from './types'
 
 /**
@@ -20,7 +20,7 @@ export function useBulkReview(done: (ids: number[], status: ReviewStatus) => voi
       const r = await reviewEvents(ids, status)
       done(ids, status)
       checked.value = []
-      host.toast(host.t('review.done', { n: r?.updated ?? ids.length }), 'success')
+      host.toast(reviewDoneText(r, ids.length), 'success')
     } catch (e) {
       toastError(e)
     } finally {
