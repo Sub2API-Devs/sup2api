@@ -238,6 +238,22 @@ useAutoRefresh(list.reload, () => seconds.value * 1000, { enabled: () => !editor
 
 绑定 `@reset` 时显示“重置”，`dirty` 为假时禁用；`:card="false"` 去掉卡片外框，用于卡片内部。
 
+**更多筛选。** 不常用的筛选放进 `#advanced`：宽屏时默认插槽之后出现“更多筛选”按钮（`advanced-count` 为其中已生效的个数，收起且大于 0 时按钮高亮），展开后在筛选条下方整行网格显示；`v-model:advanced-open` 可由页面控制展开状态，不绑定时组件自己记、默认收起。手机上 `#advanced` 接在默认插槽之后一起进筛选抽屉（不显示该按钮），记得把它们计入 `active-count`。不传 `#advanced` 时与原来完全一样。
+
+**已生效条件：`SFilterChips`。** `items: { key, label, value }[]` 渲染为一行可关闭的「label：value ×」标签和「清除全部」，`@remove(key)` / `@clear`；没有条目时不渲染。放在筛选条下方，也用于表单里没有字段、只能由链接或详情带入的条件。
+
+```vue
+<SFilterBar :advanced-count="advancedCount" @reset="reset">
+  <SSelect v-model="filters.status" … />
+  <template #advanced><SInput v-model="filters.ip" … /></template>
+</SFilterBar>
+<SFilterChips :items="chips" @remove="clearFilter" @clear="reset" />
+```
+
+### 单行单元格：`SChipList` 与 `TableColumn.grow`
+
+表格单元格只占一行。`SChipList`（`items: { key, label, tone?, title? }[]`，`max` 默认 2，`size` 默认 `'xs'`）只显示前 `max` 个标签，其余收成「+N」，悬停或聚焦时用卡片提示列出全部；整体不换行。列配置 `grow: true` 让该列吃掉其余列剩下的宽度并单行省略（单元格插槽内容同样被截断，块级或 flex 根元素会被限制在列宽内，可自行 `truncate`）；手机卡片不受影响。
+
 手机上的形态见下文“手机形态”。
 
 ### 插件页懒加载：`lazyPage`

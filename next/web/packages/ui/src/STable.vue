@@ -298,7 +298,7 @@ function onRowKey(e: KeyboardEvent, row: T) {
               v-for="c in visibleColumns"
               :key="c.key"
               :style="c.width ? { width: c.width } : undefined"
-              :class="[ALIGN[c.align ?? 'left'], c.headerClass, { 's-table-actions': c.key === 'actions' }]"
+              :class="[ALIGN[c.align ?? 'left'], c.headerClass, { 's-table-actions': c.key === 'actions', 's-table-grow': c.grow }]"
             >
               <slot
                 :name="`head-${c.key}`"
@@ -419,9 +419,9 @@ function onRowKey(e: KeyboardEvent, row: T) {
               <td
                 v-for="c in visibleColumns"
                 :key="c.key"
-                :class="[ALIGN[c.align ?? 'left'], c.class, { 's-table-actions': c.key === 'actions', 'whitespace-nowrap': c.nowrap }]"
+                :class="[ALIGN[c.align ?? 'left'], c.class, { 's-table-actions': c.key === 'actions', 'whitespace-nowrap': c.nowrap, 's-table-grow': c.grow }]"
                 :style="cellStyle(c)"
-                :title="c.ellipsis && !$slots[`cell-${c.key}`] ? displayValue(valueOf(row, c.key)) : undefined"
+                :title="(c.ellipsis || c.grow) && !$slots[`cell-${c.key}`] ? displayValue(valueOf(row, c.key)) : undefined"
               >
                 <slot
                   :name="`cell-${c.key}`"
@@ -522,6 +522,19 @@ function onRowKey(e: KeyboardEvent, row: T) {
   border: 1.5px solid rgb(var(--primary-500, 20 184 166) / 0.45);
   border-radius: 4px;
   background: rgb(var(--primary-500, 20 184 166) / 0.1);
+}
+/* A `grow` column takes the width the others leave and truncates to one
+   line; a block / flex root of its cell slot is held to the cell width so
+   its own truncation applies. */
+.s-table-grow {
+  width: 100%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.s-table-grow > :deep(*) {
+  max-width: 100%;
 }
 .s-table-actions {
   position: sticky;

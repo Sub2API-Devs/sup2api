@@ -20,6 +20,11 @@ export interface TableColumn {
    * width ('12rem'). Default rendering gets the full value as `title`.
    */
   ellipsis?: boolean | string
+  /**
+   * Take the width the other columns leave and truncate the cell to one line
+   * (cell slot content too). Phone cards are not affected.
+   */
+  grow?: boolean
   /** Extra class of the header cell. */
   headerClass?: string
   /** False keeps a required column visible in the column picker. */
@@ -80,6 +85,21 @@ export type StatusTone = 'neutral' | 'primary' | 'info' | 'success' | 'warning' 
 
 /** SModal / SFormModal `mobile`: their form on phones; `auto` picks a sheet or a full-screen dialog by width. */
 export type ModalMobile = 'auto' | 'sheet' | 'fullscreen' | 'center'
+
+/** One chip of SChipList. `title` is its native tooltip. */
+export interface ChipListItem {
+  key: string
+  label: string
+  tone?: StatusTone
+  title?: string
+}
+
+/** One applied filter of SFilterChips, shown as "label: value". */
+export interface FilterChipItem {
+  key: string
+  label: string
+  value: string
+}
 
 export interface ChoiceOption {
   value: string | number | boolean | null

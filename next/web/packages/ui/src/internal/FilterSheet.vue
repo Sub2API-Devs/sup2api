@@ -8,26 +8,34 @@
 // width, #end, and Reset / Done. Filters apply
 // as they change through the page's v-model; Done (or Enter in a sheet field)
 // closes the sheet and emits `done`, for a page that applies a draft then.
+// `#advanced` holds the less used filters: inline they hide behind a "More
+// filters" toggle after the default slot (badge `advancedCount`, highlighted
+// while folded) and open as a full-width grid under the row
+// (v-model:advancedOpen); folded they follow the default slot in the sheet.
 import { computed, ref, useId, useSlots } from 'vue'
 import { useUiT } from '../i18n'
 import SButton from '../SButton.vue'
 import SDrawer from '../SDrawer.vue'
+import SIcon from '../SIcon.vue'
 
 const props = withDefaults(
-  defineProps<{ collapse?: boolean; activeCount?: number; title?: string; dirty?: boolean; onReset?: () => void }>(),
+  defineProps<{ collapse?: boolean; activeCount?: number; advancedCount?: number; title?: string; dirty?: boolean; onReset?: () => void }>(),
   {
     activeCount: 0,
+    advancedCount: 0,
     title: undefined,
     dirty: undefined,
     onReset: undefined
   }
 )
 const emit = defineEmits<{ done: [] }>()
+const advancedOpen = defineModel<boolean>('advancedOpen', { default: false })
 const slots = useSlots()
 const t = useUiT()
 const open = ref(false)
-const folded = computed(() => props.collapse && !!slots.default)
+const folded = computed(() => props.collapse && !!(slots.default || slots.advanced))
 const formId = useId()
+const advancedId = useId()
 function finish() {
   open.value = false
   emit('done')
@@ -63,6 +71,7 @@ function finish() {
       <form :id="formId" @submit.prevent="finish">
         <div class="flex flex-col gap-3 [&>*]:!w-full" data-testid="filter-sheet">
           <slot />
+          <slot name="advanced" />
         </div>
         <div v-if="$slots.end" class="mt-3 flex flex-wrap items-center gap-2">
           <slot name="end" />
@@ -88,6 +97,24 @@ function finish() {
     <slot name="primary" />
     <slot />
     <SButton
+      v-if="$slots.advanced"
+      size="sm"
+      variant="ghost"
+      :class="advancedCount && !advancedOpen ? '!text-primary-600 dark:!text-primary-400' : ''"
+      :aria-expanded="advancedOpen"
+      :aria-controls="advancedId"
+      data-testid="filter-advanced-toggle"
+      @click="advancedOpen = !advancedOpen"
+    >
+      {{ t('ui.moreFilters') }}
+      <span
+        v-if="advancedCount"
+        class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-500 px-1 text-xxs text-white"
+        data-testid="filter-advanced-count"
+      >{{ advancedCount }}</span>
+      <SIcon name="chevron-down" class="h-3.5 w-3.5 transition-transform" :class="advancedOpen ? 'rotate-180' : ''" />
+    </SButton>
+    <SButton
       v-if="onReset"
       size="sm"
       variant="ghost"
@@ -100,6 +127,15 @@ function finish() {
     </SButton>
     <div v-if="$slots.end" class="ms-auto flex items-center gap-2">
       <slot name="end" />
+    </div>
+    <div
+      v-if="$slots.advanced"
+      v-show="advancedOpen"
+      :id="advancedId"
+      class="grid w-full grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2 border-t border-dashed border-line pt-2 [&>*]:!w-full [&>*]:min-w-0"
+      data-testid="filter-advanced"
+    >
+      <slot name="advanced" />
     </div>
   </template>
 </template>

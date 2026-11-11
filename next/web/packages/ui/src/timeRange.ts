@@ -2,7 +2,7 @@ export type RangeKey = 'all' | '1h' | '24h' | 'today' | 'yesterday' | '7d' | '14
 
 /** UI message key of each preset's label. */
 export const RANGE_LABELS: Record<RangeKey, string> = {
-  all: 'ui.all',
+  all: 'ui.allTime',
   '1h': 'ui.lastHour',
   '24h': 'ui.last24h',
   today: 'ui.today',

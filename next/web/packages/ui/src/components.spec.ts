@@ -347,6 +347,15 @@ describe('STable', () => {
     expect(w.emitted('row-click')?.[0]).toEqual([rows[1]])
   })
 
+  it('lets a grow column take the remaining width on one line, titled with its value', () => {
+    const w = mount(STable, { props: { columns: [{ key: 'id', label: 'ID' }, { key: 'name', label: 'Name', grow: true }], rows } })
+    expect(w.findAll('th')[1].classes()).toContain('s-table-grow')
+    const [id, name] = w.findAll('tbody tr')[0].findAll('td')
+    expect(name.classes()).toContain('s-table-grow')
+    expect(name.attributes('title')).toBe('one')
+    expect(id.classes()).not.toContain('s-table-grow')
+  })
+
   it('renders inside a card with toolbar and header slots', () => {
     const w = mount(STable, { props: { columns, rows, card: true }, slots: { toolbar: '<span class="tb">T</span>', 'head-name': '<b class="hn">N</b>' } })
     expect(w.classes()).toContain('card')
