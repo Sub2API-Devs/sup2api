@@ -131,6 +131,10 @@ html.dark {
 .mod-filter-md {
   width: 11.5rem;
 }
+/* the watch list's user picker, where the bar has the room for "email #id" */
+.mod-filter-lg {
+  width: 15rem;
+}
 .mod-filter-chips {
   margin-top: 0.75rem;
 }

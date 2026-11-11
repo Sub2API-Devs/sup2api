@@ -288,9 +288,8 @@ export default {
       },
       user: '用户',
       userPlaceholder: '用户名或 ID',
-      groupId: '分组 ID',
       userSearchDenied: '没有读取用户的权限，只能按用户 ID 筛选',
-      apiKey: 'API 密钥 ID',
+      apiKey: 'API Key',
       openUser: '查看用户详情',
     },
     detail: {
@@ -1471,9 +1470,8 @@ export default {
       col: { time: 'Time', result: 'Result', verdict: 'Final verdict', categories: 'Hit categories', score: 'Score', review: 'Review', text: 'Text', user: 'User', model: 'Model', flow: 'Flow', latency: 'Latency', stages: 'Stages' },
       user: 'User',
       userPlaceholder: 'Username or ID',
-      groupId: 'Group ID',
       userSearchDenied: 'No permission to read users; filter by user ID',
-      apiKey: 'API key ID',
+      apiKey: 'API key',
       openUser: 'Open user details',
     },
     detail: {
