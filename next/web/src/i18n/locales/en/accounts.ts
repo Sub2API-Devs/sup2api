@@ -22,7 +22,7 @@ export default {
     model: 'Model', capsTitle: 'Caps', noModels: 'No requests in the last hour or today', modelsFailed: 'Could not load the figures by model',
     cols: { in_use: 'Conc.', rpm: 'RPM', tpm: 'TPM', tpd: 'TPD', sessions: 'Sessions' },
     waiting: '{n} waiting',
-    windowHint: 'RPM, TPM and sessions are the exact usage of the last 60 seconds. RPM counts a request when it starts, so a long stream counts once and concurrency can exceed RPM. TPM is the input outside any cache plus the output; with a cap it includes what requests in flight reserved, replaced by their real usage when they finish. Sessions are those that started a request in that time (by sticky session key; a request matching no sticky rule counts as one). Without a cap only the usage is shown. A request for a listed model counts on the account and on its list. TPD is the input outside any cache plus the output since midnight in the browser time zone, counted as TPM is, by the hour in Redis. Sessions and requests in flight by model need not add up to the row of all models: a session can use several models.'
+    windowHint: 'RPM and TPM are the usage of the last 60 seconds and sessions that of their period, each counted in 20 rolling segments (3 seconds each for 60 seconds) that stop counting once they expire. RPM counts a request when it starts, so a long stream counts once and concurrency can exceed RPM. TPM is the input outside any cache plus the output; with a cap it includes what requests in flight reserved, replaced by their real usage when they finish. Sessions are those that started a request within the period (by sticky session key; a request matching no sticky rule counts as one); the period is 60 seconds unless set for the account or a model list, and the caps table names each one. Without a cap only the usage is shown. A request for a listed model counts on the account and on its list. TPD is the input outside any cache plus the output since midnight in the browser time zone, counted as TPM is, by the hour in Redis. Sessions and requests in flight by model need not add up to the row of all models: a session can use several models.'
   },
   usage: {
     column: 'Usage', title: 'Account usage', raw: 'Raw', rawHint: 'Counted at the raw ratio: group multiplier taken as 1',
@@ -55,7 +55,7 @@ export default {
   },
   modelLimits: {
     title: 'Model limits',
-    hint: 'Limit concurrency, RPM, TPM and sessions per minute of chosen models. A card holds one set of limits and one or more lists: the models of a list share one counter, each list counts on its own. They apply together with the account limits, and the account is skipped once any is reached; 0 means unlimited.',
+    hint: 'Limit concurrency, RPM, TPM and sessions (each over its own period) of chosen models. A card holds one set of limits and one or more lists: the models of a list share one counter, each list counts on its own. They apply together with the account limits, and the account is skipped once any is reached; 0 means unlimited.',
     add: 'Add model limit', addList: 'Add list', removeList: 'Remove list', removeCard: 'Remove these limits',
     empty: 'None: every model only counts against the account limits.', placeholder: 'Pick or type models, Enter to add',
     duplicate: '{model} is already in another list', summary: '{n} model limits'
@@ -82,10 +82,10 @@ export default {
     autoModels: 'Configure models automatically', autoModelsHint: 'When on, the built-in model list is used and adjusted to the Max / Pro subscription, applied on save. Turn it off to edit the list by hand.',
     copyModels: 'Copy', copied: '{n} models copied', clearModels: 'Clear', unrestricted: 'Unrestricted: the account serves every request model', mappedTo: 'Mapped to {model}',
     mappingEmpty: 'No mapping: request models go upstream unchanged', mappingAdd: 'Add mapping', mappingRowNotInModels: 'Not in the model list: the account is never scheduled for this model', mappingNotInModels: '{n} request models are not in the model list, so the account is never scheduled for them: {models}', mappingAddToModels: 'Add to model list',
-    schedulingCardHint: 'Decides the order accounts are picked in and how many requests each handles at once', schedulableHint: 'When off the account is kept but receives no requests', autoDisableHint: 'Disable the account when the upstream reports invalid credentials, exhausted quota and similar errors (rules under Settings → Scheduling policy → Automatic disabling). When off the account is only cooled down for 60 seconds', limitsHint: 'Counted over the last 60 seconds: once any limit is reached the account is skipped until its usage falls back; 0 means unlimited',
+    schedulingCardHint: 'Decides the order accounts are picked in and how many requests each handles at once', schedulableHint: 'When off the account is kept but receives no requests', autoDisableHint: 'Disable the account when the upstream reports invalid credentials, exhausted quota and similar errors (rules under Settings → Scheduling policy → Automatic disabling). When off the account is only cooled down for 60 seconds', limitsHint: 'RPM and TPM count the last 60 seconds, sessions their period: once any limit is reached the account is skipped until its usage falls back; 0 means unlimited',
     commonControlFixed: 'The plugin makes this read-only. Existing accounts keep their current setting.', commonControlLocked: 'The plugin fixes this to its preset value.', commonControlLockedPending: 'The plugin fixes this to its preset value; saving changes it to {value}.',
     autoDisableGlobalOff: 'Automatic disabling is globally off. This switch has no effect and cannot be changed; the account preference is preserved.', autoDisableUnavailable: 'Unable to load the global automatic disabling setting. This switch cannot be changed for now; the account preference is preserved.',
-    unitRpm: 'req / min', unitTpm: 'tokens / min', unitTpd: 'tokens / day', unitSpm: 'sessions / min', create: 'Create account', noCredentials: 'This account type has no credential fields to fill in here.', modelsInputHint: 'Type or pick a model, Enter or comma adds it, paste comma or line separated lists; click a tag to copy it, mapped models show → target' },
+    unitRpm: 'req / min', unitTpm: 'tokens / min', unitTpd: 'tokens / day', create: 'Create account', noCredentials: 'This account type has no credential fields to fill in here.', modelsInputHint: 'Type or pick a model, Enter or comma adds it, paste comma or line separated lists; click a tag to copy it, mapped models show → target' },
   title: 'Accounts',
   subtitle: 'Upstream accounts used by the gateway. Account types are declared by plugins; a group can mix accounts of different types.',
   new: 'New account',
@@ -133,7 +133,7 @@ export default {
   rpmLimit: 'Requests per minute (RPM)',
   tpmLimit: 'Tokens per minute (TPM)',
   tpdLimit: 'Tokens per day (TPD)',
-  spmLimit: 'Sessions per minute (SPM)',
+  spmLimit: 'Session limit',
   forwarding: {
     title: 'Request forwarding',
     hint: 'How requests go to the upstream: which client headers they carry, which parameters are rewritten, and the timeouts. An empty timeout follows the group and global environment variables',
@@ -339,7 +339,11 @@ export default {
   },
 
   tpdHint: '0 = unlimited; per UTC day',
-  spmHint: 'Cap of the sessions active in the last 60 seconds, told apart by sticky session key. A session asking again is not a new one; sessions already on the account always pass, new sessions over the cap go to other accounts. A request matching no sticky rule is a new session of its own. 0 means unlimited',
+  spmHint: 'Cap of the sessions active within the period, which runs from 1 minute to 24 hours. Sessions are told apart by sticky session key, and a session asking again within the period is not a new one; sessions already on the account always pass, new sessions over the cap go to other accounts. A request matching no sticky rule is a new session of its own. 0 means unlimited',
+  spmWindow: {
+    sessions: 'sessions', every: '/ every', length: 'Period', unit: 'Period unit', units: { second: 'second | seconds', minute: 'minute | minutes', hour: 'hour | hours' },
+    short: { second: '{n}s', minute: '{n}m', hour: '{n}h' }
+  },
   models: 'Models',
   modelsHint: 'Empty = all models. Enter complete model ids; Enter or comma adds one.',
   modelsPlaceholder: 'Model id, press Enter',
@@ -484,7 +488,7 @@ export default {
     done: '{ok} account done | {ok} accounts done', doneWithErrors: '{ok} succeeded, {fail} failed; {name}: {error}',
     resetConfirm: 'Clear the cooldown, error and automatic-disable state of the {n} selected accounts?',
     editTitle: 'Edit {n} accounts', editInfo: 'Only the ticked fields change (editing a field ticks it). Each account is saved on its own with the same checks as a single edit.',
-    apply: 'Apply to {n} accounts', weightHint: 'Random share within one priority (1–1000)', zeroUnlimited: '0 means unlimited',
+    apply: 'Apply to {n} accounts', weightHint: 'Random share within one priority (1–1000)', zeroUnlimited: '0 means unlimited', spmHint: '0 means unlimited; the count and the period (1 minute to 24 hours) apply together',
     groupModeLabel: 'How to change groups', groupMode: { replace: 'Replace with', add: 'Add', remove: 'Remove' },
     groupModeHint: { replace: 'Each account gets exactly the chosen groups (none clears them)', add: 'The chosen groups are added to each account\'s groups', remove: 'The chosen groups are removed from each account; others stay' },
     proxyHint: 'None means no proxy; a Claude Code account without a proxy has no internet access',

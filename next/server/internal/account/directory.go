@@ -90,7 +90,7 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) (groupSnap, 
 	}
 	v, err, _ := s.sf.Do("g:"+itoa(groupID), func() (any, error) {
 		rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.type, a.priority, a.weight,
-				a.max_concurrency, a.proxy_id, a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment,
+				a.max_concurrency, a.proxy_id, a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.spm_window_seconds, a.model_limits, a.environment,
 				COALESCE(a.conversion_loss_policy, ''), CASE WHEN a.status = 'auto_disabled' THEN a.auto_disabled_until END
 			FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
 			WHERE ag.group_id = $1 AND a.deleted_at IS NULL AND a.schedulable
@@ -105,7 +105,7 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) (groupSnap, 
 			var mapping, limits []byte
 			var until *time.Time
 			err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.Priority, &a.Weight, &a.MaxConcurrency, &a.ProxyID,
-				&a.Models, &mapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &limits, &a.Environment, &a.ConversionLossPolicy, &until)
+				&a.Models, &mapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.SPMWindowSeconds, &limits, &a.Environment, &a.ConversionLossPolicy, &until)
 			if err == nil && len(mapping) > 0 {
 				_ = json.Unmarshal(mapping, &a.ModelMapping)
 			}
@@ -160,7 +160,7 @@ func (s *Service) Load(ctx context.Context, id int64) (*core.Account, error) {
 	acc := core.Account{
 		AccountRef: core.AccountRef{ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type,
 			Priority: a.Priority, Weight: a.Weight, MaxConcurrency: a.MaxConcurrency, ProxyID: a.ProxyID,
-			Models: a.Models, ModelMapping: a.mapping(), RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, ModelLimits: a.modelLimits(),
+			Models: a.Models, ModelMapping: a.mapping(), RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, SPMWindowSeconds: a.SPMWindowSeconds, ModelLimits: a.modelLimits(),
 			Environment: a.Environment, ConversionLossPolicy: core.ValueOr(a.LossPolicy, "")},
 		Status:            a.Status,
 		Schedulable:       a.Schedulable,

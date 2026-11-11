@@ -18,6 +18,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/account"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -742,6 +743,44 @@ func TestWebSocketUnansweredPingEndsTheSession(t *testing.T) {
 	_ = e.mustDial() // never reads, so it never answers a ping
 	waitFor(t, func() bool { n, _ := e.slots.InUse(context.Background(), "ws", 5); return n == 1 })
 	waitFor(t, func() bool { n, _ := e.slots.InUse(context.Background(), "ws", 5); return n == 0 })
+}
+
+// A connection without a sticky session is one session however many turns
+// it serves (CONTRACTS §71.3): a later turn passes a cap the connection fills.
+func TestWebSocketConnectionCountsOneSession(t *testing.T) {
+	e := newWSEnv(t)
+	e.gw.d.Limiter = account.NewLimiter(e.rdb)
+	e.accounts.set(11, func(a *core.Account) { a.SPMLimit = 1 })
+	c := e.mustDial()
+	for turn := range 2 {
+		c.send(create(wsModel, "hi"))
+		c.until("response.completed")
+		if r := e.record(); !r.Success || r.AccountID == nil || *r.AccountID != 11 {
+			t.Fatalf("turn %d: %+v", turn, r)
+		}
+	}
+	u, err := e.gw.d.Limiter.Usage(t.Context(), []core.AccountRef{{ID: 11}})
+	if err != nil || u[11].Sessions != 1 || u[11].RPM != 2 {
+		t.Fatal(u, err)
+	}
+}
+
+// A handshake that fails over leaves no session behind on the account it
+// left (CONTRACTS §71.3): only the account that serves the connection holds it.
+func TestWebSocketHandshakeFailoverReleasesTheSession(t *testing.T) {
+	e := newWSEnv(t)
+	e.gw.d.Limiter = account.NewLimiter(e.rdb)
+	e.wsUp.reject["oa-11"] = http.StatusUnauthorized
+	c := e.mustDial()
+	c.send(create(wsModel, "hello"))
+	c.until("response.completed")
+	if r := e.record(); r.AccountID == nil || *r.AccountID != 12 || r.Attempts != 2 {
+		t.Fatalf("record after failover: %+v", r)
+	}
+	u, err := e.gw.d.Limiter.Usage(t.Context(), []core.AccountRef{{ID: 11}, {ID: 12}})
+	if err != nil || u[11].Sessions != 0 || u[12].Sessions != 1 {
+		t.Fatal(u, err)
+	}
 }
 
 // A WebSocket turn is balanced like any other pick (CONTRACTS §89.3).

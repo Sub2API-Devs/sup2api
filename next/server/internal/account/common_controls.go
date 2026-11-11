@@ -107,6 +107,8 @@ var commonControlFields = map[string]commonControl{
 		func(a *row) int64 { return a.TPMLimit }, always(int64(0))),
 	"spm_limit": fieldControl(func(in *input) **int { return &in.SPMLimit },
 		func(a *row) int { return a.SPMLimit }, always(0)),
+	"spm_window_seconds": fieldControl(func(in *input) **int { return &in.SPMWindowSeconds },
+		func(a *row) int { return a.SPMWindowSeconds }, always(manifest.DefaultSPMWindowSeconds)),
 	"model_limits": fieldControl(func(in *input) **[]core.ModelLimit { return &in.ModelLimits },
 		(*row).modelLimits, always([]core.ModelLimit{})),
 	"model_mapping": fieldControl(func(in *input) **map[string]string { return &in.ModelMapping },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 指定模型限速 of the account editor (CONTRACTS §68, §71, like new-api's
-// channel form): each card is one set of concurrency / RPM / TPM / sessions
-// caps with one or more model lists; the models of a list share one counter,
+// channel form): each card is one set of concurrency / RPM / TPM caps and a
+// session cap over its own window, with one or more model lists; the models of a list share one counter,
 // every list counts on its own. A model may be in one list only. Server
 // errors of the saved entries (model_limits[i]...) are shown under the card
 // holding entry i.
@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { SButton, SField, SHint, SInput, SLink, SIcon, toast } from '@sub2api/ui'
 import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import { entryPositions, newCard, repeatedModel, type ModelLimitCard } from './modelLimits'
+import SessionLimitInput from './controls/SessionLimitInput.vue'
 
 const props = defineProps<{ options: string[]; errors: Record<string, string>; disabled?: boolean }>()
 const cards = defineModel<ModelLimitCard[]>({ required: true })
@@ -18,9 +19,9 @@ const { t } = useI18n()
 const FIELDS = [
   { key: 'max_concurrency', label: () => t('accounts.concurrency'), max: 100_000 },
   { key: 'rpm_limit', label: () => 'RPM', max: 10_000_000 },
-  { key: 'tpm_limit', label: () => 'TPM', max: 1_000_000_000_000 },
-  { key: 'spm_limit', label: () => t('accounts.limitsUi.sessions'), max: 10_000_000 }
+  { key: 'tpm_limit', label: () => 'TPM', max: 1_000_000_000_000 }
 ] as const
+const SPM_MAX = 10_000_000
 
 /** Messages of the server's model_limits[i]... errors, by card. */
 const cardErrors = computed(() => {
@@ -65,6 +66,9 @@ function removeCard(i: number) {
       <div class="flex flex-wrap items-end gap-2">
         <SField v-for="f in FIELDS" :key="f.key" :label="f.label()" class="w-36">
           <SInput v-model.number="card[f.key]" type="number" min="0" :max="f.max" size="sm" :disabled="disabled" :data-testid="`model-limit-${f.key}`" />
+        </SField>
+        <SField :label="t('accounts.limitsUi.sessions')">
+          <SessionLimitInput v-model:limit="card.spm_limit" v-model:window-seconds="card.spm_window_seconds" :limit-max="SPM_MAX" size="sm" :disabled="disabled" testid="model-limit-spm_limit" />
         </SField>
         <SButton class="ms-auto" size="sm" variant="ghost" tone="danger" :disabled="disabled" data-testid="model-limit-remove" @click="removeCard(ci)">{{ t('accounts.modelLimits.removeCard') }}</SButton>
       </div>

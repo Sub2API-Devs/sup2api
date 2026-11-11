@@ -1,12 +1,15 @@
 // Bulk edit of account core properties: the PATCH body for one account from
 // the ticked fields. Group changes are relative to the account's own groups
-// (add / remove) or replace them; an account a change would leave as it is
-// gets no request (null).
+// (add / remove) or replace them; the session cap applies with its window. An
+// account a change would leave as it is gets no request (null).
 import type { Account } from '@/api/types'
+import { windowOf } from './spmWindow'
 
 export type GroupMode = 'replace' | 'add' | 'remove'
 export type NumberField = 'priority' | 'weight' | 'max_concurrency' | 'rpm_limit' | 'tpm_limit' | 'spm_limit'
 export type BulkFields = Record<NumberField, number | null> & {
+  /** Window of spm_limit, applied with it; null = the default. */
+  spm_window_seconds: number | null
   group_ids: number[]
   groupMode: GroupMode
   proxy_id: number | null
@@ -37,6 +40,7 @@ export function buildBulkPatch(a: Account, v: BulkFields, on: BulkFlags): Record
   num('tpm_limit', a.tpm_limit ?? 0)
   num('rpm_limit', a.rpm_limit ?? 0)
   num('spm_limit', a.spm_limit ?? 0)
+  if (on.spm_limit && windowOf(v.spm_window_seconds) !== windowOf(a.spm_window_seconds)) body.spm_window_seconds = windowOf(v.spm_window_seconds)
   if (on.groups) {
     const current = a.group_ids ?? []
     let next: number[]

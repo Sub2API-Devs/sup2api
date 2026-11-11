@@ -151,7 +151,7 @@ export function withoutFixed(body: Record<string, unknown>, type: AccountType | 
   )
 }
 
-/** How many of the accounts have a type that fixes the control (bulk edit). */
-export function fixedCount(accounts: Account[], typeOf: (a: Account) => AccountType | undefined, name: CommonControlName): number {
-  return accounts.filter(a => !accountControl(typeOf(a), name).configurable).length
+/** How many of the accounts have a type that fixes any of the controls (bulk edit). */
+export function fixedCount(accounts: Account[], typeOf: (a: Account) => AccountType | undefined, ...names: CommonControlName[]): number {
+  return accounts.filter(a => names.some(n => !accountControl(typeOf(a), n).configurable)).length
 }

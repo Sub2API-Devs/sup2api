@@ -81,7 +81,7 @@ func (c *call) dispatch(ctx context.Context) {
 		c.fail(fromCore(core.ErrUnavailable.WithMessage("sticky store unavailable"), errTypeInternal))
 		return
 	}
-	c.session = c.sessionIdentity()
+	c.session = c.sessionIdentity(core.RequestSession)
 	excluded := map[int64]bool{}
 	var last *gwError
 	var lastAccount int64
@@ -218,14 +218,15 @@ func (c *call) dispatch(ctx context.Context) {
 	c.finishSticky(ctx, 0, false)
 }
 
-// sessionIdentity is the request's session for the limiter's
-// sessions-per-minute caps (CONTRACTS §71): the sticky session key when a
-// rule matched, else the request itself is a new session (as new-api does).
-func (c *call) sessionIdentity() string {
+// sessionIdentity is the request's session for the limiter's session caps
+// (CONTRACTS §71): the sticky session key when a rule matched, else a new
+// session of the request alone (as new-api does), which own names from the
+// request ID: RequestSession, or ConnectionSession for a WebSocket.
+func (c *call) sessionIdentity(own func(requestID string) string) string {
 	if c.sticky != nil {
 		return c.sticky.key
 	}
-	return "req:" + c.rid
+	return own(c.rid)
 }
 
 // pick chooses the next account: the sticky binding first (when usable),
@@ -522,7 +523,7 @@ func (c *call) admitRate(ref *core.AccountRef) (bool, error) {
 	}
 	hold, ok, err := c.g.d.Limiter.Reserve(c.slotCtx, *ref, c.model, c.session, tokens)
 	if ok && err == nil {
-		c.accountHold = &hold
+		c.accountHold, c.sessionAt = &hold, hold.At
 	}
 	return ok, err
 }

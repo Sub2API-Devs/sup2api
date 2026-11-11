@@ -547,7 +547,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 	if cl.failureState.stickyErr != nil {
 		return nil, fromCore(core.ErrUnavailable.WithMessage("sticky store unavailable"), errTypeInternal)
 	}
-	cl.session = cl.sessionIdentity()
+	cl.session = cl.sessionIdentity(core.ConnectionSession)
 	excluded := map[int64]bool{}
 	var last *gwError
 	var pendingRelease func()
@@ -601,6 +601,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 				cl.finishSticky(ctx, ref.ID, false)
 				return nil, last
 			}
+			cl.releaseSession(ctx, ref)
 		default:
 			cl.finishSticky(ctx, ref.ID, false)
 			return nil, res.err

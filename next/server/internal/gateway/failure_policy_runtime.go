@@ -336,6 +336,13 @@ func (c *call) prepareRetry(ctx context.Context, ref *core.AccountRef, action st
 		}
 		s.sameID = ref.ID
 		s.sameRetries[ref.ID]++
+		// The request is admitted on this account again: its own session,
+		// counted at each admission (CONTRACTS §71.2), leaves first, so that
+		// it is one session there and does not fill the cap it is checked
+		// against. A sticky session is remembered and counts once anyway.
+		if core.IsRequestSession(c.session) {
+			c.releaseSession(ctx, ref)
+		}
 		return ""
 	}
 	if action == failureReset {

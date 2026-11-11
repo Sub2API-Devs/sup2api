@@ -57,7 +57,7 @@ export interface HostPermissions {
  * Each v-model is the account API field as the core executes it; all take
  * `disabled`:
  * - ParamOverrideEditor: `param_override` object | null; `models?: string[]` (preview suggestions)
- * - RateLimitEditor: `{ rpm_limit, tpm_limit, spm_limit }`; `errors?: Record<string, string>`
+ * - RateLimitEditor: `{ rpm_limit, tpm_limit, spm_limit, spm_window_seconds? }` (the window only once given or changed); `errors?: Record<string, string>`
  * - ModelLimitsEditor: `model_limits` array; `options?: string[]` (model suggestions), `errors?`
  * - HeaderPassthroughEditor: `header_passthrough` string[]
  * - ProxyPicker: `proxy_id` number | null

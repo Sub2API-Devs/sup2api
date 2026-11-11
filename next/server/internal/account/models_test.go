@@ -135,28 +135,36 @@ func TestAccountModelsAndLimits(t *testing.T) {
 	}
 
 	// Model lists (CONTRACTS §68): trimmed, repeats and empty lists dropped,
-	// a model in one list only. Sessions per minute (§71) on both levels.
-	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{"spm_limit": 5, "model_limits": []map[string]any{
-		{"models": []string{" m-a ", "m-a", "m-b"}, "rpm_limit": 3, "max_concurrency": 2, "spm_limit": 4}, {"models": []string{}}}})
+	// a model in one list only. Session caps (§71) on both levels, each over
+	// its own window (60 when not given).
+	if acc["spm_window_seconds"] != 60.0 {
+		t.Fatalf("default session window: %v", acc)
+	}
+	code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{"spm_limit": 5, "spm_window_seconds": 300, "model_limits": []map[string]any{
+		{"models": []string{" m-a ", "m-a", "m-b"}, "rpm_limit": 3, "max_concurrency": 2, "spm_limit": 4, "spm_window_seconds": 86400}, {"models": []string{}},
+		{"models": []string{"m-d"}}}})
 	if code != 200 {
 		t.Fatalf("patch model limits: %d %v", code, out)
 	}
 	limits := out["data"].(map[string]any)["model_limits"].([]any)
-	if len(limits) != 1 || fmt.Sprint(limits[0].(map[string]any)["models"]) != "[m-a m-b]" || limits[0].(map[string]any)["rpm_limit"] != 3.0 ||
-		limits[0].(map[string]any)["spm_limit"] != 4.0 || out["data"].(map[string]any)["spm_limit"] != 5.0 {
+	if len(limits) != 2 || fmt.Sprint(limits[0].(map[string]any)["models"]) != "[m-a m-b]" || limits[0].(map[string]any)["rpm_limit"] != 3.0 ||
+		limits[0].(map[string]any)["spm_limit"] != 4.0 || out["data"].(map[string]any)["spm_limit"] != 5.0 ||
+		limits[0].(map[string]any)["spm_window_seconds"] != 86400.0 || limits[1].(map[string]any)["spm_window_seconds"] != 60.0 ||
+		out["data"].(map[string]any)["spm_window_seconds"] != 300.0 {
 		t.Fatalf("model limits saved as %v", out["data"])
 	}
-	if a, _ := e.svc.Load(ctx, id2); a == nil || a.SPMLimit != 5 || a.ModelLimits[0].SPMLimit != 4 {
+	if a, _ := e.svc.Load(ctx, id2); a == nil || a.SPMLimit != 5 || a.ModelLimits[0].SPMLimit != 4 || a.SPMWindowSeconds != 300 || a.ModelLimits[0].SPMWindowSeconds != 86400 {
 		t.Fatalf("load: %+v", a)
 	}
-	if code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{"spm_limit": -1, "model_limits": []map[string]any{
-		{"models": []string{"m-a"}}, {"models": []string{"m-c", "m-a"}, "tpm_limit": -1, "spm_limit": 10_000_001}}}); code != 400 ||
-		fields(out) != "[model_limits[1].models[1]:duplicate model_limits[1].spm_limit:invalid model_limits[1].tpm_limit:invalid spm_limit:invalid]" {
+	if code, out = e.do("PATCH", fmt.Sprintf("/accounts/%d", id2), map[string]any{"spm_limit": -1, "spm_window_seconds": 59, "model_limits": []map[string]any{
+		{"models": []string{"m-a"}}, {"models": []string{"m-c", "m-a"}, "tpm_limit": -1, "spm_limit": 10_000_001, "spm_window_seconds": 86401}}}); code != 400 ||
+		fields(out) != "[model_limits[1].models[1]:duplicate model_limits[1].spm_limit:invalid model_limits[1].spm_window_seconds:invalid model_limits[1].tpm_limit:invalid spm_limit:invalid spm_window_seconds:invalid]" {
 		t.Fatalf("patch invalid model limits: %d %v", code, fields(out))
 	}
 
-	// Rate usage is read from the limiter, with one entry per model list.
-	if ok, err := e.svc.d.Limiter.TryHit(ctx, core.AccountRef{ID: id2}, "", "session-1"); err != nil || !ok {
+	// Rate usage is read from the limiter, with one entry per model list,
+	// sessions over the account's window.
+	if ok, err := e.svc.d.Limiter.TryHit(ctx, core.AccountRef{ID: id2, SPMWindowSeconds: 300}, "", "session-1"); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	e.svc.d.Limiter.AddTokens(ctx, id2, "", 1234)
@@ -166,7 +174,7 @@ func TestAccountModelsAndLimits(t *testing.T) {
 		gjson.GetBytes(raw, "data.rate_usage.sessions").Int() != 1 {
 		t.Fatalf("rate usage: %s", gjson.GetBytes(raw, "data.rate_usage").Raw)
 	}
-	if m := gjson.GetBytes(raw, "data.rate_usage.models"); len(m.Array()) != 1 || m.Get("0.models.1").String() != "m-b" || !m.Get("0.in_use").Exists() ||
+	if m := gjson.GetBytes(raw, "data.rate_usage.models"); len(m.Array()) != 2 || m.Get("0.models.1").String() != "m-b" || !m.Get("0.in_use").Exists() ||
 		!m.Get("0.sessions").Exists() {
 		t.Fatalf("model list usage: %s", m.Raw)
 	}

@@ -3,6 +3,7 @@ import type { Account, AccountRateModels, ModelLimit } from '@/api/types'
 import type { OwnerScope } from '@/composables/useOwnership'
 import { todayQuery } from './accountUsage'
 import { usageLevel, type UsageLevel } from './usageLevel'
+import { windowOf } from './spmWindow'
 
 /** Max concurrency of a new account: unlimited, or 10 for an own-level caller, who may only set 1–1000 (as the server, CONTRACTS §15.9). */
 export const newAccountConcurrency = (scope: OwnerScope) => (scope === 'own' ? 10 : 0)
@@ -12,6 +13,8 @@ export interface LimitFigure {
   key: 'concurrency' | 'rpm' | 'tpm' | 'sessions'
   used: number
   limit: number
+  /** Sessions only: the window they are counted in, seconds. */
+  window?: number
 }
 
 type FigureKey = LimitFigure['key']
@@ -42,7 +45,7 @@ const figures = (u: Used | undefined, caps: Caps): LimitFigure[] => [
   { key: 'concurrency', used: u?.in_use ?? 0, limit: caps.max_concurrency || 0 },
   { key: 'rpm', used: u?.rpm ?? 0, limit: caps.rpm_limit || 0 },
   { key: 'tpm', used: u?.tpm ?? 0, limit: caps.tpm_limit || 0 },
-  { key: 'sessions', used: u?.sessions ?? 0, limit: caps.spm_limit || 0 }
+  { key: 'sessions', used: u?.sessions ?? 0, limit: caps.spm_limit || 0, window: windowOf(caps.spm_window_seconds) }
 ]
 
 /** The account's own figures followed by those of its model lists, in their order. */

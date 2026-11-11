@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -26,15 +27,16 @@ func TestLimiterUsesRedisWindowForEveryOperation(t *testing.T) {
 	if ok, err := b.TryHit(ctx, ref, "second", ""); err != nil || ok {
 		t.Fatal("second node bypassed shared limit", ok, err)
 	}
-	if at, err := rdb.ZRangeWithScores(ctx, ratelimit.Key("account", 7, "rpm"), 0, -1).Result(); err != nil || len(at) != 1 || int64(at[0].Score) != stamp.UnixMilli() {
-		t.Fatal("RPM event used local time", at, err)
+	segment := strconv.FormatInt(stamp.UnixMilli()/3000, 10)
+	if at, err := rdb.HGetAll(ctx, ratelimit.Key("account", 7, ratelimit.Requests)).Result(); err != nil || len(at) != 1 || at[segment] != "1" {
+		t.Fatal("RPM counted in a segment of local time", at, err)
 	}
 	if ok, err := a.TryHit(ctx, core.AccountRef{ID: 8}, "", ""); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
 	a.AddTokens(ctx, 8, "", 17)
-	if at, err := rdb.ZRangeWithScores(ctx, ratelimit.Key("account", 8, "tpm"), 0, -1).Result(); err != nil || len(at) != 1 || int64(at[0].Score) != stamp.UnixMilli() {
-		t.Fatal("TPM event used local time", at, err)
+	if at, err := rdb.HGetAll(ctx, ratelimit.Key("account", 8, ratelimit.Tokens)).Result(); err != nil || len(at) != 1 || at[segment] != "17" {
+		t.Fatal("TPM counted in a segment of local time", at, err)
 	}
 	u, err := b.Usage(ctx, []core.AccountRef{{ID: 8}})
 	if err != nil || u[8].RPM != 1 || u[8].TPM != 17 {

@@ -8,7 +8,7 @@ export const pluginSection = (key: string): EditorSection => `plugin:${key}`
 
 /** Rows of the scheduling group and of the limits group. */
 export const SCHEDULING_ROWS: readonly CommonControlName[] = ['priority', 'weight', 'max_concurrency', 'schedulable', 'auto_disable']
-export const RATE_LIMITS: readonly CommonControlName[] = ['rpm_limit', 'tpm_limit', 'spm_limit']
+export const RATE_LIMITS: readonly CommonControlName[] = ['rpm_limit', 'tpm_limit', 'spm_limit', 'spm_window_seconds']
 const SCHEDULING_CONTROLS: readonly CommonControlName[] = [...SCHEDULING_ROWS, ...RATE_LIMITS, 'usage_limit', 'model_limits']
 /**
  * Sections made only of common controls: hidden when every one of them is.

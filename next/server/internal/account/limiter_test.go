@@ -6,6 +6,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -36,13 +37,14 @@ func TestLimiterWindows(t *testing.T) {
 	if err != nil || u[1].RPM != 2 || u[2].TPM != 100 || u[3].RPM != 0 || u[3].TPM != 0 {
 		t.Fatal(u, err)
 	}
-	// Right after the minute the previous window still counts in full.
-	now = now.Add(30 * time.Second)
+	// Right after the minute the previous window still counts in full,
+	// until its segment has wholly left (12:00:30 starts a segment).
+	now = now.Add(62 * time.Second)
 	ex, err = l.Exhausted(ctx, refs, "m", "")
 	if err != nil || !ex[1] || !ex[2] {
 		t.Fatal("previous minute forgotten", ex, err)
 	}
-	now = now.Add(31 * time.Second)
+	now = now.Add(time.Second)
 	ex, err = l.Exhausted(ctx, refs, "m", "")
 	if err != nil || len(ex) != 0 {
 		t.Fatal("window slid", ex, err)
@@ -54,7 +56,7 @@ func TestLimiterWindows(t *testing.T) {
 		t.Fatal(ex, err)
 	}
 	for _, k := range mr.Keys() {
-		if len(k) >= 4 && (k[len(k)-4:] == ":spm") {
+		if strings.Contains(k, ":spm") {
 			t.Fatal("a request without a session wrote a session key", k)
 		}
 	}
@@ -144,10 +146,57 @@ func TestLimiterSessions(t *testing.T) {
 	if err != nil || u[6].Sessions != 2 || u[6].Models[0].Sessions != 1 || u[6].RPM != 2 {
 		t.Fatal(u, err)
 	}
-	for _, k := range []string{"rl:account:6:spm", "rl:account:6:m:" + opus.Key() + ":spm"} {
+	for _, k := range []string{"rl:account:6:spms:60", "rl:account:6:m:" + opus.Key() + ":spms:60"} {
 		if !mr.Exists(k) {
 			t.Fatal("session key missing", k, mr.Keys())
 		}
+	}
+}
+
+// Each level counts sessions over its own window; the model's uncapped
+// counters follow the account's. A request alone is never remembered.
+func TestLimiterSessionWindows(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	now := time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
+	l := NewLimiter(rdb)
+	l.w.Now = func() time.Time { return now }
+	ctx := context.Background()
+	opus := core.ModelLimit{Models: []string{"opus"}, SPMLimit: 1, SPMWindowSeconds: 600}
+	ref := core.AccountRef{ID: 3, SPMLimit: 5, SPMWindowSeconds: 300, ModelLimits: []core.ModelLimit{opus}}
+	if ok, err := l.TryHit(ctx, ref, "opus", "s1"); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if ok, _ := l.TryHit(ctx, ref, "sonnet", core.RequestSession("r1")); !ok {
+		t.Fatal("a request alone refused by the account")
+	}
+	for _, k := range []string{"rl:account:3:spms:300", "rl:account:3:m:" + opus.Key() + ":spms:600", "rl:account:3:md:opus:spms:300"} {
+		if !mr.Exists(k) {
+			t.Fatal("session key missing", k, mr.Keys())
+		}
+	}
+	if n, _ := rdb.ZCard(ctx, "rl:account:3:spms:300").Result(); n != 1 {
+		t.Fatal("a request alone was remembered", n)
+	}
+	// 8 minutes later the account forgot s1, the list has not.
+	now = now.Add(8 * time.Minute)
+	if ok, _ := l.TryHit(ctx, ref, "opus", "s2"); ok {
+		t.Fatal("the list's 10 minutes ignored")
+	}
+	if ex, _ := l.Exhausted(ctx, []core.AccountRef{ref}, "opus", "s1"); ex[3] {
+		t.Fatal("s1 is held by the list for 10 minutes")
+	}
+	u, err := l.Usage(ctx, []core.AccountRef{ref})
+	if err != nil || u[3].Sessions != 0 || u[3].Models[0].Sessions != 1 {
+		t.Fatal(u, err)
+	}
+	rates, err := l.ModelRates(ctx, ref, now.Truncate(24*time.Hour))
+	if err != nil || rates[0].Sessions != 0 || rates[0].RPM != 0 {
+		t.Fatal(rates, err)
+	}
+	if got, _ := l.ModelUsage(ctx, []core.AccountRef{ref}, "opus"); got[3].Sessions != 0 {
+		t.Fatal("the model's sessions do not follow the account's window", got)
 	}
 }
 
@@ -174,7 +223,7 @@ func TestLimiterModelRates(t *testing.T) {
 	if ok, err := l.TryHit(ctx, ref, "c", ""); err != nil || ok {
 		t.Fatal("the account cap of 3 must refuse a fourth request", ok, err)
 	}
-	got, err := l.ModelRates(ctx, 7, now.Truncate(24*time.Hour))
+	got, err := l.ModelRates(ctx, ref, now.Truncate(24*time.Hour))
 	want := []core.ModelRates{
 		{RPM: 3, TPM: 30, TPD: 30, Sessions: 2},
 		{Model: "a", RPM: 2, TPM: 20, TPD: 20, Sessions: 2},

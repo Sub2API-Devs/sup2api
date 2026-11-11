@@ -106,6 +106,12 @@ const (
 	MaxAccountModels = 500
 	// MaxAccountModelLimits bounds the model limit lists of an account.
 	MaxAccountModelLimits = 50
+	// MinSPMWindowSeconds and MaxSPMWindowSeconds bound spm_window_seconds,
+	// the window an account or a model list counts sessions over (CONTRACTS
+	// §71.1); DefaultSPMWindowSeconds is the window of one naming none.
+	MinSPMWindowSeconds     = 60
+	MaxSPMWindowSeconds     = 86_400
+	DefaultSPMWindowSeconds = 60
 )
 
 // Usage limit bounds (CONTRACTS §73), shared by the account API and
@@ -145,6 +151,7 @@ var CommonControlSpecs = map[string]CommonControlSpec{
 	"rpm_limit":          {Kind: ControlInt, Max: MaxAccountRateLimit},
 	"tpm_limit":          {Kind: ControlInt, Max: MaxAccountTokenLimit},
 	"spm_limit":          {Kind: ControlInt, Max: MaxAccountRateLimit},
+	"spm_window_seconds": {Kind: ControlInt, Min: MinSPMWindowSeconds, Max: MaxSPMWindowSeconds},
 	"model_limits":       {Kind: ControlModelLimits},
 	"usage_limit":        {Kind: ControlUsageLimit},
 	"model_mapping":      {Kind: ControlModelMapping},

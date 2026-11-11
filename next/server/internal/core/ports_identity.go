@@ -182,11 +182,12 @@ const AccountWaitSlots = "account-wait"
 
 // RateHold is one admitted request in the rate windows: what it reserved in
 // each set of counters of its subject, until Settle replaces that by what the
-// request really used. A hold never settled returns by itself when its
-// reservation leaves the 60 seconds.
+// request really used. At is the Redis time it was admitted at: the
+// reservations sit in the window's segment of that time (CONTRACTS §68.3). A
+// hold never settled returns by itself when that segment leaves the window.
 type RateHold struct {
-	ID      string
 	Subject int64
+	At      time.Time
 	Items   []RateHoldItem
 }
 
@@ -234,10 +235,11 @@ type AccountRef struct {
 	// ModelMapping rewrites the client model to the upstream model.
 	ModelMapping map[string]string
 	// Rate limits; 0 = unlimited (CONTRACTS §18). SPMLimit caps the sticky
-	// sessions active in the last 60 seconds (CONTRACTS §71).
-	RPMLimit int
-	TPMLimit int64
-	SPMLimit int
+	// sessions seen in the last SPMWindowSeconds (0 = 60; CONTRACTS §71).
+	RPMLimit         int
+	TPMLimit         int64
+	SPMLimit         int
+	SPMWindowSeconds int
 	// ModelLimits cap lists of (client) models on top of the account's own
 	// limits (CONTRACTS §68); a model is in at most one list.
 	ModelLimits []ModelLimit
@@ -249,13 +251,15 @@ type AccountRef struct {
 }
 
 // ModelLimit caps the requests of a list of models on one account. The
-// models of a list share one set of counters; 0 = unlimited.
+// models of a list share one set of counters; 0 = unlimited. Its sessions
+// are counted over SPMWindowSeconds (absent or 0 = 60; CONTRACTS §71).
 type ModelLimit struct {
-	Models         []string `json:"models"`
-	MaxConcurrency int      `json:"max_concurrency"`
-	RPMLimit       int      `json:"rpm_limit"`
-	TPMLimit       int64    `json:"tpm_limit"`
-	SPMLimit       int      `json:"spm_limit"`
+	Models           []string `json:"models"`
+	MaxConcurrency   int      `json:"max_concurrency"`
+	RPMLimit         int      `json:"rpm_limit"`
+	TPMLimit         int64    `json:"tpm_limit"`
+	SPMLimit         int      `json:"spm_limit"`
+	SPMWindowSeconds int      `json:"spm_window_seconds"`
 }
 
 // Key identifies the counters of the list: a hash of its sorted models, so
@@ -331,8 +335,9 @@ func (a *AccountRef) Limited() bool {
 	return false
 }
 
-// RateUsage is the usage of the last 60 seconds of a subject's rate limits.
-// Sessions (accounts only) counts the distinct sticky sessions; Models
+// RateUsage is the usage of a subject's rate limits: requests and tokens of
+// the last 60 seconds. Sessions (accounts only) counts the sessions of the
+// session window (CONTRACTS §71); Models
 // (accounts only) holds the usage of each model list, in the order of the
 // account's model_limits.
 type RateUsage struct {
@@ -351,13 +356,32 @@ type ModelRateUsage struct {
 	Sessions int64    `json:"sessions"`
 }
 
+// requestSessionPrefix starts the session of a request that is its own
+// session (RequestSession).
+const requestSessionPrefix = "req:"
+
+// RequestSession is the session of a request no sticky session matched: the
+// request alone is a new session (CONTRACTS §71.2), which never comes back.
+func RequestSession(requestID string) string { return requestSessionPrefix + requestID }
+
+// IsRequestSession reports whether session is a RequestSession: the limiter
+// counts it once and does not remember it.
+func IsRequestSession(session string) bool { return strings.HasPrefix(session, requestSessionPrefix) }
+
+// ConnectionSession is the session of a WebSocket connection no sticky
+// session matched: every later turn comes back with it, so the limiter
+// remembers it like a sticky session and the connection counts once
+// (CONTRACTS §71.3).
+func ConnectionSession(requestID string) string { return "conn:" + requestID }
+
 // AccountLimiter enforces per-account RPM, TPM and SPM, and those of the
-// model list holding the request's (client) model, over the last 60 seconds
-// shared by every node. model "" checks the account's own limits only; any
+// model list holding the request's (client) model, shared by every node:
+// requests and tokens over the last 60 seconds, sessions over each level's
+// session window. model "" checks the account's own limits only; any
 // other model is also counted apart, uncapped, for GET /accounts/:id/rate-models.
 // session is the request's session (CONTRACTS §71: its sticky session key,
-// else the request itself); "" (tasks, downloads) is neither checked
-// against SPM nor counted.
+// else RequestSession, or ConnectionSession on a WebSocket connection); ""
+// (tasks, downloads) is neither checked against SPM nor counted.
 type AccountLimiter interface {
 	// Exhausted returns the ids among refs that reached a limit for model
 	// and session; an account already holding the session passes its SPM.
@@ -374,8 +398,11 @@ type AccountLimiter interface {
 	Settle(ctx context.Context, hold RateHold, actual int64)
 	// ReleaseSession takes session off the account's (and its model list's)
 	// active sessions: a retry moved the session to another account, which
-	// now holds it alone. Best effort.
-	ReleaseSession(ctx context.Context, ref AccountRef, model, session string)
+	// now holds it alone, or brings the request back to this one. at is the
+	// time the request was admitted on ref (RateHold.At): a RequestSession,
+	// counted once and not remembered, leaves the counts of that time, and
+	// stays counted when at is zero. Once per admission; best effort.
+	ReleaseSession(ctx context.Context, ref AccountRef, model, session string, at time.Time)
 	// AddTokens adds the tokens of a finished response to the account and,
 	// when list is not "", to the model list of that key (ModelLimit.Key).
 	AddTokens(ctx context.Context, id int64, list string, n int64)
@@ -390,10 +417,11 @@ type AccountLimiter interface {
 	// CountModelTokens adds the tokens of a finished response to today's
 	// tokens of the client model on account id (CONTRACTS §68.7).
 	CountModelTokens(ctx context.Context, id int64, model string, n int64)
-	// ModelRates returns the figures of account id, then those of each
+	// ModelRates returns the figures of the account, then those of each
 	// client model it served since the earlier of midnight and an hour ago,
-	// the most tokens today first; InUse is left to the caller.
-	ModelRates(ctx context.Context, id int64, midnight time.Time) ([]ModelRates, error)
+	// the most tokens today first; InUse is left to the caller. Sessions are
+	// counted over the account's session window.
+	ModelRates(ctx context.Context, ref AccountRef, midnight time.Time) ([]ModelRates, error)
 }
 
 // ModelRates are the figures of one client model of an account ("" = the

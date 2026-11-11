@@ -21,7 +21,7 @@ export default {
     title: '并发 / RPM / TPM / TPD / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话', waiting: '等待 {n}',
     model: '模型', capsTitle: '限额', noModels: '近 1 小时和今日没有请求', modelsFailed: '按模型明细加载失败',
     cols: { in_use: '并发', rpm: 'RPM', tpm: 'TPM', tpd: 'TPD', sessions: '会话' },
-    windowHint: 'RPM、TPM、会话都是精确的近 60 秒用量。RPM 在请求开始时计入，长流不会重复计，所以并发可以高于 RPM。TPM 是非缓存输入加输出，设了上限时包含进行中请求的预占，结束后换成实际值。会话是近 60 秒内开始过请求的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。TPD 是今日（浏览器所在时区）0 点起累计的非缓存输入加输出，与 TPM 同口径，按小时记在 Redis。按模型的会话和并发相加不等于全部模型：一个会话可能用多个模型。'
+    windowHint: 'RPM、TPM 是近 60 秒用量，会话是周期内用量，都把周期分成 20 段滚动统计（60 秒即每段 3 秒），段已过期才不再计入。RPM 在请求开始时计入，长流不会重复计，所以并发可以高于 RPM。TPM 是非缓存输入加输出，设了上限时包含进行中请求的预占，结束后换成实际值。会话是周期内开始过请求的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）；周期默认 60 秒，账号和各模型列表可分别设置，限额表的会话列标出各自的周期。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。TPD 是今日（浏览器所在时区）0 点起累计的非缓存输入加输出，与 TPM 同口径，按小时记在 Redis。按模型的会话和并发相加不等于全部模型：一个会话可能用多个模型。'
   },
   usage: {
     column: '用量', title: '账号用量', raw: '原始', rawHint: '按原始倍率计费：分组倍率视为 1',
@@ -54,7 +54,7 @@ export default {
   },
   modelLimits: {
     title: '指定模型限速',
-    hint: '为指定模型单独限制并发、RPM、TPM、每分钟会话数。一张卡片一组限额，卡片内可建多个列表：同一列表的模型共用一个计数器，不同列表各自计数。与账号总限额同时生效，任一达到上限就不再调度该账号；0 表示不限。',
+    hint: '为指定模型单独限制并发、RPM、TPM、会话数（会话按各自的周期计）。一张卡片一组限额，卡片内可建多个列表：同一列表的模型共用一个计数器，不同列表各自计数。与账号总限额同时生效，任一达到上限就不再调度该账号；0 表示不限。',
     add: '添加模型限制', addList: '添加列表', removeList: '移除列表', removeCard: '删除这组限制',
     empty: '未设置，所有模型只受账号总限额约束。', placeholder: '选择或输入模型，回车添加',
     duplicate: '{model} 已在另一个列表中', summary: '{n} 组模型限速'
@@ -81,10 +81,10 @@ export default {
     autoModels: '自动配置模型', autoModelsHint: '打开时使用内置模型列表，并按 Max / Pro 订阅自动调整，保存时生效；关闭后可手动修改。',
     copyModels: '复制', copied: '已复制 {n} 个模型', clearModels: '清空', unrestricted: '未限制：账号可服务所有请求模型', mappedTo: '映射到 {model}',
     mappingEmpty: '未配置映射：请求模型原样发往上游', mappingAdd: '添加映射', mappingRowNotInModels: '不在模型列表中，账号不会因此模型被调度', mappingNotInModels: '{n} 个请求模型不在模型列表中，账号不会因它们被调度：{models}', mappingAddToModels: '加入模型列表',
-    schedulingCardHint: '决定账号被选中的先后顺序，以及同时处理的请求数', schedulableHint: '关闭后账号保留，但不再被分配请求', autoDisableHint: '上游返回凭证失效、额度耗尽等错误时自动禁用该账号（规则见 设置 → 调度策略 → 自动禁用）。关闭后只冷却 60 秒，不会禁用', limitsHint: '按近 60 秒统计，达到任一上限后暂停调度该账号，用量回落后自动恢复；0 表示不限',
+    schedulingCardHint: '决定账号被选中的先后顺序，以及同时处理的请求数', schedulableHint: '关闭后账号保留，但不再被分配请求', autoDisableHint: '上游返回凭证失效、额度耗尽等错误时自动禁用该账号（规则见 设置 → 调度策略 → 自动禁用）。关闭后只冷却 60 秒，不会禁用', limitsHint: 'RPM、TPM 按近 60 秒统计，会话按所设周期统计；达到任一上限后暂停调度该账号，用量回落后自动恢复；0 表示不限',
     commonControlFixed: '插件将此项设为不可修改，已有账号保留当前设置。', commonControlLocked: '插件将此项固定为预设值，不可修改。', commonControlLockedPending: '插件将此项固定为预设值，保存后改为锁定值 {value}。',
     autoDisableGlobalOff: '全局自动禁用已关闭，此开关暂不生效且不可修改；账号原有设置会保留。', autoDisableUnavailable: '无法读取全局自动禁用设置，暂时无法修改此开关；账号原有设置会保留。',
-    unitRpm: '次 / 分钟', unitTpm: 'tokens / 分钟', unitTpd: 'tokens / 天', unitSpm: '会话 / 分钟', create: '创建账号', noCredentials: '此账号类型没有需要在这里填写的凭证字段。', modelsInputHint: '输入或从下拉中选择模型，回车或逗号添加，可粘贴逗号或换行分隔的列表；点击标签复制，已映射的模型显示 → 目标' },
+    unitRpm: '次 / 分钟', unitTpm: 'tokens / 分钟', unitTpd: 'tokens / 天', create: '创建账号', noCredentials: '此账号类型没有需要在这里填写的凭证字段。', modelsInputHint: '输入或从下拉中选择模型，回车或逗号添加，可粘贴逗号或换行分隔的列表；点击标签复制，已映射的模型显示 → 目标' },
   title: '账号',
   subtitle: '网关使用的上游账号。账号类型由插件声明，同一分组可以混放不同类型的账号。',
   new: '新建账号',
@@ -132,7 +132,7 @@ export default {
   rpmLimit: '每分钟请求数（RPM）',
   tpmLimit: '每分钟 token 数（TPM）',
   tpdLimit: '每天 token 数（TPD）',
-  spmLimit: '每分钟会话数（SPM）',
+  spmLimit: '会话数限制',
   forwarding: {
     title: '请求转发',
     hint: '请求发往上游时的处理：带上哪些客户端请求头、改写哪些参数，以及各项超时。超时留空表示跟随分组与全局的环境变量',
@@ -337,7 +337,11 @@ export default {
     }
   },
   tpdHint: '0 表示不限；按 UTC 自然日',
-  spmHint: '近 60 秒内活跃的会话数上限，按粘性会话键区分会话。同一会话再次请求不算新会话；已在用该账号的会话总是放行，新会话到达上限时改用其他账号。没有命中粘性规则的请求每个都算一个新会话。0 表示不限',
+  spmHint: '周期内活跃的会话数上限，周期可设 1 分钟到 24 小时。按粘性会话键区分会话，同一会话在周期内再次请求不算新会话；已在用该账号的会话总是放行，新会话到达上限时改用其他账号。没有命中粘性规则的请求每个都算一个新会话。0 表示不限',
+  spmWindow: {
+    sessions: '个会话', every: '/ 每', length: '周期', unit: '周期单位', units: { second: '秒', minute: '分钟', hour: '小时' },
+    short: { second: '{n}秒', minute: '{n}分', hour: '{n}小时' }
+  },
   models: '模型',
   modelsHint: '留空表示所有模型；输入完整模型 ID，回车或逗号添加',
   modelsPlaceholder: '模型 ID，回车添加',
@@ -482,7 +486,7 @@ export default {
     done: '已完成 {ok} 个账号', doneWithErrors: '成功 {ok} 个，失败 {fail} 个；{name}：{error}',
     resetConfirm: '清除所选 {n} 个账号的冷却、错误与自动禁用状态？',
     editTitle: '批量编辑 {n} 个账号', editInfo: '只更新勾选的字段（修改某项会自动勾选），其余保持不变。逐个账号保存，校验与单个编辑相同。',
-    apply: '应用到 {n} 个账号', weightHint: '同一优先级内按权重随机分配（1–1000）', zeroUnlimited: '0 表示不限制',
+    apply: '应用到 {n} 个账号', weightHint: '同一优先级内按权重随机分配（1–1000）', zeroUnlimited: '0 表示不限制', spmHint: '0 表示不限制；数量和周期（1 分钟–24 小时）一起应用',
     groupModeLabel: '分组修改方式', groupMode: { replace: '替换为', add: '追加', remove: '移除' },
     groupModeHint: { replace: '各账号的分组改为所选分组（不选即清空分组）', add: '在各账号原有分组上追加所选分组', remove: '从各账号移除所选分组，其余分组保留' },
     proxyHint: '不选即不使用代理；Claude Code 账号没有代理时容器无法联网',

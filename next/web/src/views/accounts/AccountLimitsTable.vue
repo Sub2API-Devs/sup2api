@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // Concurrency, RPM, TPM and sessions of an account and of each of its model
-// lists (CONTRACTS §68, §71): "used/cap", or only the usage without a cap.
+// lists (CONTRACTS §68, §71): "used/cap", or only the usage without a cap;
+// sessions name the window of their layer.
 // Shown in the list cell's hover card and in the account detail.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/api/types'
 import { formatCompact } from '@/utils/format'
 import { FIGURE_COLOR, figureTone, limitRows, type LimitFigure } from './accountLimits'
+import { formatWindow } from './spmWindow'
 
 const props = defineProps<{ account: Account }>()
 const { t } = useI18n()
@@ -31,7 +33,9 @@ const scopeLabel = (models: string[]) => (models.length > 2 ? `${models.slice(0,
       <tbody>
         <tr v-for="(row, i) in rows" :key="i" class="border-t border-line" :data-testid="row.models.length ? 'account-limits-list' : 'account-limits-total'">
           <td class="max-w-56 truncate py-1 pr-3" :title="row.models.join(', ')">{{ row.models.length ? scopeLabel(row.models) : t('accounts.limitsUi.allModels') }}</td>
-          <td v-for="f in row.figures" :key="f.key" class="whitespace-nowrap py-1 pr-3 text-right last:pr-0" :class="tone(f)">{{ text(f) }}</td>
+          <td v-for="f in row.figures" :key="f.key" class="whitespace-nowrap py-1 pr-3 text-right last:pr-0" :class="tone(f)">
+            {{ text(f) }}<span v-if="f.window" class="ms-1 text-xxs font-normal text-fg-subtle" data-testid="account-limits-window">· {{ formatWindow(t, f.window) }}</span>
+          </td>
         </tr>
       </tbody>
     </table>
