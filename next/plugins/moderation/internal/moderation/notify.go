@@ -191,7 +191,7 @@ const alertNamespace = "pass"
 func (p *Plugin) alerted(ctx context.Context, flow int64) (bool, error) {
 	_, found, err := p.host.KV().Get(ctx, alertNamespace, alertKey(flow))
 	if err != nil {
-		p.stats.kvErrors.Add(1)
+		p.kvFailed(ctx)
 	}
 	return found, err
 }
@@ -207,7 +207,7 @@ func (p *Plugin) setAlerted(ctx context.Context, flow int64, over bool) {
 		err = p.host.KV().Delete(ctx, alertNamespace, alertKey(flow))
 	}
 	if err != nil {
-		p.stats.kvErrors.Add(1)
+		p.kvFailed(ctx)
 	}
 }
 

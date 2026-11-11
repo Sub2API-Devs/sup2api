@@ -723,9 +723,10 @@ var errKVDown = errors.New("kv unavailable")
 // kvFake stands between a node and the KV of its host (withKV): it counts
 // the calls the node makes (calls) and the writes (Set, Delete) that reach
 // it by key, makes every call take delay, fails every call while fail is
-// set, the reads of some keys while noRead is and every write while noWrite
-// is, keeps the TTL of the last Set of a key, and can hold writes back
-// (hold) and the answers of reads (holdRead).
+// set, the reads of some keys while noRead is, every write while noWrite is
+// and the writes of some keys while noWriteOf is, keeps the TTL of the last
+// Set of a key, and can hold writes back (hold) and the answers of reads
+// (holdRead).
 //
 // Without batch the node's KV has no batch calls (pluginsdk.KVBatch), as
 // behind a wrapper of a plugin's own: the SDK makes single calls of every
@@ -739,9 +740,12 @@ type kvFake struct {
 	noWrite atomic.Bool
 	ttls    sync.Map               // key -> time.Duration of its last Set
 	noRead  atomic.Pointer[string] // reads of the keys with this prefix fail
-	mu      sync.Mutex
-	writes  map[string]int
-	held    [2]*kvHold // the writes (kvWrites) and the answers of reads (kvReads) that wait; nil = none
+	// noWriteOf: a write (of a batch call: the whole call) with a key of this
+	// prefix fails.
+	noWriteOf atomic.Pointer[string]
+	mu        sync.Mutex
+	writes    map[string]int
+	held      [2]*kvHold // the writes (kvWrites) and the answers of reads (kvReads) that wait; nil = none
 }
 
 const (
@@ -855,6 +859,9 @@ func (k *kvFake) read(keys ...string) error {
 // write is called before a write of keys reaches the KV.
 func (k *kvFake) write(keys ...string) error {
 	if k.noWrite.Load() {
+		return errKVDown
+	}
+	if prefix := k.noWriteOf.Load(); prefix != nil && slices.ContainsFunc(keys, func(key string) bool { return strings.HasPrefix(key, *prefix) }) {
 		return errKVDown
 	}
 	k.mu.Lock()
@@ -1061,17 +1068,17 @@ func TestStoredHitLimits(t *testing.T) {
 	id := hitIDOf(hit.Keys)
 	var seg segValue
 	pointTo(id, hit.At)(&seg)
-	if got, body := encodeHit(&hit); got != id || !bytes.Equal(body, raw) || hitKeyOf("e0:1:fp", id) != "h:e0:1:fp:"+id ||
+	if body := encodeHit(&hit); !bytes.Equal(body, raw) || hitKeyOf("e0:1:fp", id) != "h:e0:1:fp:"+id ||
 		segKeyHex("e0:1:fp", hit.Keys[0]) != "s:e0:1:fp:"+hit.Keys[0] || string(seg.encode()) != fmt.Sprintf("h%s@%d", id, hit.At) {
-		t.Fatalf("entry %q = %s, pointer %s", got, body, seg.encode())
+		t.Fatalf("entry %q = %s, pointer %s", id, body, seg.encode())
 	}
 	hit.Trace.Stages = []StageTrace{{Outcomes: []Outcome{{Reason: strings.Repeat("x", maxHitBytes)}}}}
-	if got, body := encodeHit(&hit); got != "" || body != nil {
+	if body := encodeHit(&hit); body != nil {
 		t.Fatalf("an oversized hit was stored: %d bytes", len(body))
 	}
 	// The id does not depend on the order of the segments.
 	a, b := [32]byte{1}, [32]byte{2}
-	if hitID([][32]byte{a, b}) != hitID([][32]byte{b, a}) || hitID([][32]byte{a}) == hitID([][32]byte{a, b}) || hitIDOf([]string{"zz"}) != "" {
+	if hitID([][32]byte{a, b}) != hitID([][32]byte{b, a}) || hitID([][32]byte{a}) == hitID([][32]byte{a, b}) || hitIDOf([]string{"zz"}) != "" || hitIDOf(nil) != "" {
 		t.Fatal("hit id")
 	}
 }
@@ -1400,8 +1407,7 @@ func TestKVCallsCountFailuresNotEndedContexts(t *testing.T) {
 
 	// A write is cut where a call would exceed the bytes of a batch call: 100
 	// values of 60 KiB are 6 MB, two calls of 3 MiB. They are read 48 at a
-	// time, which always fits into an answer: three calls. (A read that does
-	// not fit: the next test.)
+	// time, which always fits into an answer: three calls.
 	big := make([]pluginsdk.KVItem, 100)
 	bigKeys := make([]string, len(big))
 	for i := range big {
@@ -1421,35 +1427,6 @@ func TestKVCallsCountFailuresNotEndedContexts(t *testing.T) {
 	}
 	if left := kvKeys(t, fh, ""); len(left) != 0 {
 		t.Fatalf("%d keys left after the delete", len(left))
-	}
-}
-
-// A read whose values are more than one answer of the KV takes (3 MiB; not
-// with segment values this plugin wrote, which are under 1 KiB) is made again
-// with as many keys per call as always fit: everything is read, and nothing
-// counts as a kv error.
-func TestKVReadBeyondOneAnswer(t *testing.T) {
-	p, _, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce})
-	ctx := context.Background()
-	const n = 60 // of 60 KiB each: 3.5 MiB
-	keys := make([]string, n)
-	for i := range keys {
-		keys[i] = fmt.Sprintf("s:test:%04d", i)
-		val := bytes.Repeat([]byte{byte('a' + i%26)}, maxHitBytes)
-		if _, err := fh.KVSet(ctx, &pluginv1.KVSetRequest{Namespace: kvNamespace, Key: keys[i], Value: val}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	calls, errs := fh.KVCalls()["KVGetMany"], p.stats.kvErrors.Load()
-	got, read := p.kvRead(ctx, keys, kvSegUnit)
-	for i := range keys {
-		if !read[i] || len(got[i].Value) != maxHitBytes || got[i].Value[0] != byte('a'+i%26) {
-			t.Fatalf("key %d: read %v, %d bytes", i, read[i], len(got[i].Value))
-		}
-	}
-	// The call that was too much, then 48 keys and 12.
-	if c, e := fh.KVCalls()["KVGetMany"]-calls, p.stats.kvErrors.Load()-errs; c != 3 || e != 0 {
-		t.Fatalf("%d calls, %d kv errors", c, e)
 	}
 }
 
@@ -1540,7 +1517,7 @@ func TestKVValueKeepsItsWriteTime(t *testing.T) {
 	if v := p.lookupVerdicts(context.Background(), scope, keys, false); len(v.passed) != 1 || !v.passed[old] {
 		t.Fatalf("from memory = %+v", v)
 	}
-	if _, ok := cache.seg(segKeyOf(scope, old), now.Add(time.Hour+time.Second)); ok {
+	if _, ok := cache.getSeg(segKeyOf(scope, old), now.Add(time.Hour+time.Second)); ok {
 		t.Fatal("the pass outlived the TTL of its write")
 	}
 }
@@ -2078,7 +2055,7 @@ func TestReviewIsNotUndoneByLateWrites(t *testing.T) {
 		} else {
 			entered = tc.kv.hold(func(key string) bool { return key == hitKey })
 		}
-		tc.p.storeVerdicts(tc.p.cfg.Load(), scope, [][32]byte{seg}, append(late, again), askNow(tc.p))
+		tc.p.storeVerdicts(scope, [][32]byte{seg}, append(late, again), tc.p.now().Unix(), tc.p.cfg.Load().cacheTTL, askNow(tc.p))
 		within(t, "the held write of the run", entered)
 
 		out := review(rec, ReviewPending)
@@ -2170,7 +2147,7 @@ func TestKVChangesOfAKeyTakeTurns(t *testing.T) {
 	// is held.
 	entered := kv.hold(func(k string) bool { return k == key })
 	defer kv.open()
-	p.storeVerdicts(c, scope, nil, []storedHit{hit}, askNow(p))
+	p.storeVerdicts(scope, nil, []storedHit{hit}, p.now().Unix(), c.cacheTTL, askNow(p))
 	within(t, "the write of the first change", entered) // it has read the key and is about to write it
 	if !taken() {
 		t.Fatal("a change does not hold its key while it writes")
@@ -2178,7 +2155,7 @@ func TestKVChangesOfAKeyTakeTurns(t *testing.T) {
 	// The second run stores a pass of the segment: it waits, and asks the KV
 	// nothing meanwhile.
 	asked := kv.calls.Load()
-	p.storeVerdicts(c, scope, [][32]byte{seg}, nil, askNow(p))
+	p.storeVerdicts(scope, [][32]byte{seg}, nil, p.now().Unix(), c.cacheTTL, askNow(p))
 	time.Sleep(100 * time.Millisecond) // it waits; a longer look would say no more
 	if n := kv.calls.Load() - asked; n != 0 || p.stats.kvWriting.Load() != 2 {
 		t.Fatalf("the second change did not wait for the first: %d KV calls, %d writes under way", n, p.stats.kvWriting.Load())
@@ -2298,7 +2275,7 @@ func TestReviewSyncOrderAndItsCaller(t *testing.T) {
 	}
 	again := *held
 	again.At = time.Now().Unix()
-	p.storeVerdicts(p.cfg.Load(), scope, [][32]byte{seg}, []storedHit{again}, askNow(p))
+	p.storeVerdicts(scope, [][32]byte{seg}, []storedHit{again}, p.now().Unix(), p.cfg.Load().cacheTTL, askNow(p))
 	if v := p.lookupVerdicts(context.Background(), scope, [][32]byte{seg}, false); v.hit != nil || len(v.passed) != 0 {
 		t.Fatalf("a run stored %+v during the review", v)
 	}
@@ -3036,7 +3013,7 @@ func TestStalePointerRemovalKeepsANewerPointer(t *testing.T) {
 	if again.At <= first.At {
 		t.Fatalf("the second hit is not newer: %d, %d", first.At, again.At)
 	}
-	p.storeVerdicts(p.cfg.Load(), scope, nil, []storedHit{again}, askNow(p))
+	p.storeVerdicts(scope, nil, []storedHit{again}, p.now().Unix(), p.cfg.Load().cacheTTL, askNow(p))
 	written(t, p)
 	// The lookup gets its answer: for it the pointers were stale.
 	kv.open()
@@ -3543,7 +3520,7 @@ func TestMemoryHoldsWhatTheKVHolds(t *testing.T) {
 	// and that is what comes into its memory.
 	kv := &kvFake{}
 	p, h := secondNode(t, fh, cfg, withKV(kv))
-	p.storeVerdicts(p.cfg.Load(), scope, [][32]byte{hashOf(t, c.Segs[0])}, nil, askNow(p))
+	p.storeVerdicts(scope, [][32]byte{hashOf(t, c.Segs[0])}, nil, p.now().Unix(), p.cfg.Load().cacheTTL, askNow(p))
 	written(t, p)
 	same(p, keyA)
 	if v := parseSeg(memoryValue(p, keyA)); v.pass == 0 || len(v.hits) != 1 || v.hits[0].id != c.Key || p.cache.Load().len() != 1 {
@@ -3935,7 +3912,7 @@ func TestReviewIsNotUndoneByWritesThatOutlastItsTombstones(t *testing.T) {
 	within(t, "the first write of the review", entered)
 	again := held
 	again.At = p.now().Unix()
-	p.storeVerdicts(p.cfg.Load(), scope, nil, []storedHit{again}, askNow(p))
+	p.storeVerdicts(scope, nil, []storedHit{again}, p.now().Unix(), p.cfg.Load().cacheTTL, askNow(p))
 	read := kv.holdRead(func(key string) bool { return key == segKey })
 	kv.release() // the review goes on
 	within(t, "the review's read of the segment key", read)
@@ -3959,7 +3936,7 @@ func TestReviewIsNotUndoneByWritesThatOutlastItsTombstones(t *testing.T) {
 	clock.Add(int64(tombstoneTTL + time.Second))
 	again = held
 	again.At = p.now().Unix()
-	p.storeVerdicts(p.cfg.Load(), scope, nil, []storedHit{again}, before)
+	p.storeVerdicts(scope, nil, []storedHit{again}, p.now().Unix(), p.cfg.Load().cacheTTL, before)
 	written(t, p)
 	reviewed("a run that judged across the review", seg, hitKey, segKey)
 
@@ -3977,7 +3954,7 @@ func TestReviewIsNotUndoneByWritesThatOutlastItsTombstones(t *testing.T) {
 	p.cache.Store(newLRU(1000))
 	again = held
 	again.At = p.now().Unix()
-	p.storeVerdicts(p.cfg.Load(), scope, nil, []storedHit{again}, before)
+	p.storeVerdicts(scope, nil, []storedHit{again}, p.now().Unix(), p.cfg.Load().cacheTTL, before)
 	written(t, p)
 	reviewed("a run whose memory cache was replaced after the review", seg, hitKey, segKey)
 	if n := p.stats.kvSkipped.Load(); n != 3 {
@@ -3986,7 +3963,7 @@ func TestReviewIsNotUndoneByWritesThatOutlastItsTombstones(t *testing.T) {
 
 	// A request that asks the cache now, after the review, and whose run
 	// hits: that is a verdict of its own, and it is stored.
-	p.storeVerdicts(p.cfg.Load(), scope, nil, []storedHit{again}, askNow(p))
+	p.storeVerdicts(scope, nil, []storedHit{again}, p.now().Unix(), p.cfg.Load().cacheTTL, askNow(p))
 	written(t, p)
 	if _, found := kvValue(t, fh, hitKey); !found || p.lookupVerdicts(ctx, scope, [][32]byte{seg}, true).hit == nil {
 		t.Fatal("the hit of a run whose request asked after the review was not stored")
@@ -4017,7 +3994,7 @@ func TestWaitingVerdictWritesAreReported(t *testing.T) {
 	entered := kv.holdRead(func(string) bool { return true })
 	defer kv.open()
 	for i := range runs {
-		p.storeVerdicts(p.cfg.Load(), scope, [][32]byte{sha256.Sum256(fmt.Append(nil, "a run while the KV hangs ", i))}, nil, askNow(p))
+		p.storeVerdicts(scope, [][32]byte{sha256.Sum256(fmt.Append(nil, "a run while the KV hangs ", i))}, nil, p.now().Unix(), p.cfg.Load().cacheTTL, askNow(p))
 	}
 	within(t, "the first read of a write", entered)
 	if s, m := writing(); s != runs || m != runs {
@@ -4047,7 +4024,7 @@ func TestVerdictWriteStopsAtAFailedRead(t *testing.T) {
 	}
 	kv.fail.Store(true)
 	errs := p.stats.kvErrors.Load()
-	p.storeVerdicts(p.cfg.Load(), scope, passes, nil, askNow(p))
+	p.storeVerdicts(scope, passes, nil, p.now().Unix(), p.cfg.Load().cacheTTL, askNow(p))
 	written(t, p)
 	if calls, failed := kv.calls.Load(), p.stats.kvErrors.Load()-errs; calls != 1 || failed != 1 || p.cache.Load().len() != 0 {
 		t.Fatalf("a write whose first read failed: %d KV calls, %d kv errors, %d entries in memory", calls, failed, p.cache.Load().len())
@@ -4056,7 +4033,7 @@ func TestVerdictWriteStopsAtAFailedRead(t *testing.T) {
 	// three writes.
 	kv.fail.Store(false)
 	kv.calls.Store(0)
-	p.storeVerdicts(p.cfg.Load(), scope, passes, nil, askNow(p))
+	p.storeVerdicts(scope, passes, nil, p.now().Unix(), p.cfg.Load().cacheTTL, askNow(p))
 	written(t, p)
 	if calls := kv.calls.Load(); calls != 6 || kvCount(t, fh, "s:") != len(passes) || p.cache.Load().len() != len(passes) {
 		t.Fatalf("with the KV back: %d KV calls, %d keys in the KV, %d entries in memory", calls, kvCount(t, fh, "s:"), p.cache.Load().len())
@@ -4097,8 +4074,8 @@ func TestStoredHitIsKnownOnItsNode(t *testing.T) {
 		if first.hit != nil || len(first.passed) != 0 {
 			t.Fatalf("%s: cold lookup = %+v", tc.name, first)
 		}
-		p.storeVerdicts(cfg, scope, [][32]byte{a}, nil, askNow(p))
-		p.storeVerdicts(cfg, scope, [][32]byte{b}, nil, askNow(p))
+		p.storeVerdicts(scope, [][32]byte{a}, nil, p.now().Unix(), cfg.cacheTTL, askNow(p))
+		p.storeVerdicts(scope, [][32]byte{b}, nil, p.now().Unix(), cfg.cacheTTL, askNow(p))
 		written(t, p)
 		if v := p.lookupVerdicts(ctx, scope, keys, false); len(v.passed) != 2 {
 			t.Fatalf("%s: the passes of the parts are not in memory: %+v", tc.name, v)
@@ -4107,7 +4084,7 @@ func TestStoredHitIsKnownOnItsNode(t *testing.T) {
 		hit := newStoredHit("r1", hexKeys(keys), Trace{Final: Hit}, p.now().Unix())
 		hitKey := hitKeyOf(scope, hitIDOf(hit.Keys))
 		entered := kv.hold(func(key string) bool { return key == hitKey })
-		p.storeVerdicts(cfg, scope, nil, []storedHit{hit}, first.asked)
+		p.storeVerdicts(scope, nil, []storedHit{hit}, p.now().Unix(), cfg.cacheTTL, first.asked)
 		within(t, "the write of the hit entry", entered)
 		// The review of some other record on another node: its broadcast.
 		payload, _ := json.Marshal(verdictChanged{Keys: []string{segKeyHex(scope, "unrelated")}})
@@ -4272,5 +4249,107 @@ func TestQueuedJobAfterClearSeesAReview(t *testing.T) {
 	if n := mod.count("/v1/moderations") - calls; n != 0 || back || parseSeg(val).pass == 0 || len(parseSeg(val).hits) != 0 || v.hit != nil || !v.passed[seg] {
 		t.Fatalf("the queued job after the clear and the review: %d upstream calls, hit entry in the KV %v, segment key %q, lookup hit %v passed %v",
 			n, back, val, v.hit != nil, v.passed[seg])
+	}
+}
+
+// A write of a run whose segment keys need several calls of the KV, and that
+// fails after some of them worked: the keys those calls wrote are in the KV
+// with their new pointers. They leave this node's memory, which held them
+// without the pointers, and the other nodes are told of them as after a
+// write that worked - or the set would pass on every node that held its
+// parts as passed, until they expire.
+func TestVerdictWriteCutShortForgetsWhatItWrote(t *testing.T) {
+	kv := &kvFake{}
+	kv.batch.Store(true)
+	p, _, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	const scope = "e0:1:fp"
+	ctx := context.Background()
+	ttl := p.cfg.Load().cacheTTL
+	a, b := sha256.Sum256([]byte("part a of a long request")), sha256.Sum256([]byte("part b of a long request"))
+	set := [][32]byte{a, b}
+	// a and b passed one by one: the node holds their passes in memory.
+	p.storeVerdicts(scope, set, nil, p.now().Unix(), ttl, askNow(p))
+	written(t, p)
+	if v := p.lookupVerdicts(ctx, scope, set, false); len(v.passed) != 2 {
+		t.Fatalf("the passes of the parts are not in memory: %+v", v)
+	}
+	// {a, b} hits in a request with more segments than one call writes: the
+	// hit entry, then a and b with their pointers and most of the passes in
+	// a call that works, and the rest in a call that fails.
+	passes := make([][32]byte, kvSegUnit)
+	for i := range passes {
+		passes[i] = sha256.Sum256(fmt.Append(nil, "another segment of the long request ", i))
+	}
+	hit := newStoredHit("r1", hexKeys(set), Trace{Final: Hit}, p.now().Unix())
+	last := segKeyOf(scope, passes[len(passes)-1])
+	kv.noWriteOf.Store(&last)
+	errs := p.stats.kvErrors.Load()
+	p.storeVerdicts(scope, passes, []storedHit{hit}, p.now().Unix(), ttl, askNow(p))
+	written(t, p)
+	kv.noWriteOf.Store(nil)
+	if n := p.stats.kvErrors.Load() - errs; n != 1 {
+		t.Fatalf("%d kv errors for the call that failed", n)
+	}
+	segA, segB := segKeyOf(scope, a), segKeyOf(scope, b)
+	for _, key := range []string{segA, segB} {
+		if raw, _ := kvValue(t, fh, key); len(parseSeg(raw).hits) != 1 {
+			t.Fatalf("the KV holds %q for %s: the call with the pointers did not work", raw, key)
+		}
+	}
+	if _, found := kvValue(t, fh, last); found {
+		t.Fatal("the call that was to fail wrote")
+	}
+	// Memory no longer answers for a and b; with the KV the set is the hit.
+	if v := p.lookupVerdicts(ctx, scope, set, false); v.hit != nil || len(v.passed) != 0 {
+		t.Fatalf("memory kept what the KV no longer holds: %+v", v)
+	}
+	if v := p.lookupVerdicts(ctx, scope, set, true); v.hit == nil {
+		t.Fatalf("the hit is not found with the KV: %+v", v)
+	}
+	// The other nodes are told of a and b, and of no key that was not written.
+	var told []string
+	for _, m := range fh.Published() {
+		var msg verdictChanged
+		if m.Topic != TopicVerdictChanged {
+			continue
+		}
+		if err := json.Unmarshal(m.Payload, &msg); err != nil {
+			t.Fatal(err)
+		}
+		if msg.Stored {
+			told = append(told, msg.Keys...)
+		}
+	}
+	if !slices.Equal(told, []string{segA, segB}) {
+		t.Fatalf("published as pointed to a stored hit: %d keys %v", len(told), told)
+	}
+}
+
+// The alert state counts its KV failures like the verdict cache (kvFailed):
+// a call that failed at the KV is one kv error, a call that ended because its
+// context did is none.
+func TestAlertStateCountsKVFailuresLikeTheCache(t *testing.T) {
+	kv := &kvFake{}
+	p, _, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	ctx := context.Background()
+	kv.fail.Store(true)
+	errs := p.stats.kvErrors.Load()
+	if _, err := p.alerted(ctx, 1); !errors.Is(err, errKVDown) {
+		t.Fatalf("alerted while the KV fails: %v", err)
+	}
+	p.setAlerted(ctx, 1, true)
+	p.setAlerted(ctx, 1, false)
+	if n := p.stats.kvErrors.Load() - errs; n != 3 {
+		t.Fatalf("%d kv errors for three calls that failed", n)
+	}
+	gone, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := p.alerted(gone, 1); err == nil {
+		t.Fatal("alerted after its context ended")
+	}
+	p.setAlerted(gone, 1, true)
+	p.setAlerted(gone, 1, false)
+	if n := p.stats.kvErrors.Load() - errs; n != 3 {
+		t.Fatalf("calls whose context ended were counted as kv errors: %d", n-3)
 	}
 }

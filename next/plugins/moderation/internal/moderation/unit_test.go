@@ -730,19 +730,26 @@ func TestSelfMarker(t *testing.T) {
 	}
 }
 
+// tombstoned reports whether key is tombstoned at now.
+func (c *lru) tombstoned(key string, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.hasTombstone(key, now)
+}
+
 func TestLRU(t *testing.T) {
 	c := newLRU(2)
 	now := time.Unix(1_700_000_000, 0)
 	const ttl = time.Minute
 	at := now.Unix()
 	has := func(key string) bool {
-		_, ok := c.seg(key, now)
+		_, ok := c.getSeg(key, now)
 		return ok
 	}
-	pass := func(key string, at int64) { c.editSeg(key, now, ttl, passAt(at)) }
+	pass := func(key string, at int64) { c.editSeg(key, passAt(at), now, ttl) }
 	pass("a", at)
 	pass("b", at)
-	c.seg("a", now)
+	c.getSeg("a", now)
 	pass("c", at)
 	if !has("a") || has("b") || !has("c") || c.len() != 2 {
 		t.Fatal("eviction")
@@ -754,8 +761,8 @@ func TestLRU(t *testing.T) {
 	}
 	// A value is edited in place, and a forgotten key is gone.
 	id := strings.Repeat("ab", 32)
-	c.editSeg("a", now, ttl, pointTo(id, at))
-	if v, ok := c.seg("a", now); !ok || v.pass != at || len(v.hits) != 1 || v.hits[0].id != id {
+	c.editSeg("a", pointTo(id, at), now, ttl)
+	if v, ok := c.getSeg("a", now); !ok || v.pass != at || len(v.hits) != 1 || v.hits[0].id != id {
 		t.Fatalf("edited value = %+v %v", v, ok)
 	}
 	c.forget([]string{"a", "missing"})
@@ -766,23 +773,23 @@ func TestLRU(t *testing.T) {
 	// (a run on this node wrote the key); neither replaces the other.
 	later := now.Add(10 * time.Second)
 	read := c.reading(later)
-	c.putSeg("c", later, ttl, fmt.Appendf(nil, "p%d h%s@%d", at, id, at), read)
-	got := c.syncSeg("c", later, ttl, parseSeg([]byte("p"+strconv.FormatInt(at+5, 10))), read)
-	if v, _ := c.seg("c", later); got.pass != at+5 || len(got.hits) != 1 || v.pass != at+5 || len(v.hits) != 1 {
+	c.putSeg("c", fmt.Appendf(nil, "p%d h%s@%d", at, id, at), later, ttl, read)
+	got := c.mergeSeg("c", parseSeg([]byte("p"+strconv.FormatInt(at+5, 10))), later, ttl, read)
+	if v, _ := c.getSeg("c", later); got.pass != at+5 || len(got.hits) != 1 || v.pass != at+5 || len(v.hits) != 1 {
 		t.Fatalf("after reading the KV: %+v, returned %+v", v, got)
 	}
 	// What a run wrote to the KV replaces what memory held: memory has what
 	// the KV has. A value without a live part removes the key.
-	c.putSeg("c", later, ttl, fmt.Appendf(nil, "p%d", at+5), read)
-	if v, _ := c.seg("c", later); v.pass != at+5 || len(v.hits) != 0 {
+	c.putSeg("c", fmt.Appendf(nil, "p%d", at+5), later, ttl, read)
+	if v, _ := c.getSeg("c", later); v.pass != at+5 || len(v.hits) != 0 {
 		t.Fatalf("after the write of a run: %+v", v)
 	}
-	c.putSeg("a", later, ttl, fmt.Appendf(nil, "p%d", now.Add(-ttl).Unix()), read)
-	if _, ok := c.seg("a", later); ok || c.len() != 1 {
+	c.putSeg("a", fmt.Appendf(nil, "p%d", now.Add(-ttl).Unix()), later, ttl, read)
+	if _, ok := c.getSeg("a", later); ok || c.len() != 1 {
 		t.Fatalf("an expired value was put: %d entries", c.len())
 	}
 	// A value is gone the TTL after its newest write.
-	if _, ok := c.seg("c", time.Unix(at+5, 0).Add(ttl)); ok || c.len() != 0 {
+	if _, ok := c.getSeg("c", time.Unix(at+5, 0).Add(ttl)); ok || c.len() != 0 {
 		t.Fatal("a value outlived the TTL of its write")
 	}
 }
@@ -796,7 +803,7 @@ func TestLRUByteBudget(t *testing.T) {
 	if c.maxBytes != cacheMaxBytes {
 		t.Fatalf("default budget = %d", c.maxBytes)
 	}
-	pass := func(key string) { c.editSeg(key, now, ttl, passAt(at)) }
+	pass := func(key string) { c.editSeg(key, passAt(at), now, ttl) }
 	one := int64(1 + len("p1700000000") + cacheEntryOverhead) // a one-letter key with a pass
 	c.maxBytes = 3 * one
 	for _, k := range []string{"a", "b", "c"} {
@@ -805,37 +812,37 @@ func TestLRUByteBudget(t *testing.T) {
 	if c.len() != 3 || c.size() != 3*one {
 		t.Fatalf("%d entries, %d bytes", c.len(), c.size())
 	}
-	c.seg("a", now)
+	c.getSeg("a", now)
 	pass("d") // over the budget: the least recently used goes
-	if _, ok := c.seg("b", now); ok || c.len() != 3 || c.size() != 3*one {
+	if _, ok := c.getSeg("b", now); ok || c.len() != 3 || c.size() != 3*one {
 		t.Fatalf("after the fourth: %d entries, %d bytes", c.len(), c.size())
 	}
 	// A value that grows is charged its new size.
 	id := strings.Repeat("ab", 32)
 	pointer := int64(len(" h" + id + "@1700000000"))
-	c.editSeg("a", now, ttl, pointTo(id, at))
-	if _, ok := c.seg("c", now); ok || c.len() != 2 || c.size() != 2*one+pointer {
+	c.editSeg("a", pointTo(id, at), now, ttl)
+	if _, ok := c.getSeg("c", now); ok || c.len() != 2 || c.size() != 2*one+pointer {
 		t.Fatalf("after growing a: %d entries, %d bytes", c.len(), c.size())
 	}
 	// A decoded hit is charged hitDecodedFactor times its JSON; forgetting
 	// and expiring free.
-	hit := &storedHit{Keys: []string{"k"}}
+	hit := &storedHit{Keys: []string{"k"}, At: at}
 	c.maxBytes = 1 << 20
-	if !c.putHit("h", hit, 1000, exp, now, c.reading(now)) || c.getHit("h", now) != hit || c.size() != 2*one+pointer+1+hitDecodedFactor*1000+cacheEntryOverhead {
+	if !c.putHit("h", hit, 1000, now, ttl, c.reading(now)) || c.getHit("h", now) != hit || c.size() != 2*one+pointer+1+hitDecodedFactor*1000+cacheEntryOverhead {
 		t.Fatalf("with a hit: %d bytes", c.size())
 	}
-	if _, ok := c.seg("h", now); ok || c.getHit("a", now) != nil {
+	if _, ok := c.getSeg("h", now); ok || c.getHit("a", now) != nil {
 		t.Fatal("a hit read as a segment value, or a segment value as a hit")
 	}
 	c.forget([]string{"h"})
-	c.seg("a", exp)
-	c.seg("d", exp)
+	c.getSeg("a", exp)
+	c.getSeg("d", exp)
 	if c.len() != 0 || c.size() != 0 {
 		t.Fatalf("emptied: %d entries, %d bytes", c.len(), c.size())
 	}
 	// An entry larger than the whole budget is not kept.
 	c.maxBytes = one
-	c.putHit("big", hit, int(one), exp, now, c.reading(now))
+	c.putHit("big", hit, int(one), now, ttl, c.reading(now))
 	if c.len() != 0 || c.size() != 0 {
 		t.Fatalf("an entry beyond the budget: %d entries, %d bytes", c.len(), c.size())
 	}
@@ -848,51 +855,52 @@ func TestLRUByteBudget(t *testing.T) {
 func TestLRUTombstone(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	const ttl = time.Hour
-	at, exp := now.Unix(), now.Add(ttl)
+	at := now.Unix()
 	stone := int64(1 + tombstoneOverhead) // of a one-letter key
 	c := newLRU(10)
 	before := c.reading(now)
-	c.editSeg("s", now, ttl, passAt(at))
-	c.putHit("h", &storedHit{}, 10, exp, now, before)
-	c.kill([]string{"s", "h"}, now.Add(time.Second), now)
+	c.editSeg("s", passAt(at), now, ttl)
+	c.putHit("h", &storedHit{At: at}, 10, now, ttl, before)
+	c.tombstone([]string{"s", "h"}, now)
 	if c.len() != 0 || c.size() != 2*stone || !c.tombstoned("s", now) || c.tombstoned("other", now) {
-		t.Fatalf("killed: %d entries, %d bytes", c.len(), c.size())
+		t.Fatalf("tombstoned: %d entries, %d bytes", c.len(), c.size())
 	}
-	c.editSeg("s", now, ttl, passAt(at))
-	c.putSeg("s", now, ttl, []byte("p1700000000"), before)
-	if c.putHit("h", &storedHit{}, 10, exp, now, before) || c.len() != 0 {
+	c.editSeg("s", passAt(at), now, ttl)
+	c.putSeg("s", []byte("p1700000000"), now, ttl, before)
+	if c.putHit("h", &storedHit{At: at}, 10, now, ttl, before) || c.len() != 0 {
 		t.Fatal("a tombstoned key was stored")
 	}
 	// What the KV holds for a tombstoned key decides the lookup that read it
 	// and stays out of memory.
-	if got := c.syncSeg("s", now, ttl, parseSeg([]byte("p1700000000")), before); got.pass != at || c.len() != 0 {
+	if got := c.mergeSeg("s", parseSeg([]byte("p1700000000")), now, ttl, before); got.pass != at || c.len() != 0 {
 		t.Fatalf("a tombstoned key read from the KV: %+v, %d entries", got, c.len())
 	}
-	// Killed again, a key is charged once.
-	c.kill([]string{"s"}, now.Add(time.Second), now)
+	// Tombstoned again, a key is charged once.
+	c.tombstone([]string{"s"}, now)
 	if c.size() != 2*stone {
-		t.Fatalf("a key killed twice: %d bytes", c.size())
+		t.Fatalf("a key tombstoned twice: %d bytes", c.size())
 	}
-	later := now.Add(time.Second)
-	if c.tombstoned("s", later) || len(c.dead) != 0 || c.size() != 0 {
-		t.Fatalf("tombstones after their time: %v, %d bytes", c.dead, c.size())
+	later := now.Add(tombstoneTTL)
+	if c.tombstoned("s", later) || len(c.tombs) != 0 || c.size() != 0 {
+		t.Fatalf("tombstones after their time: %v, %d bytes", c.tombs, c.size())
 	}
-	c.editSeg("s", later, ttl, passAt(at))
-	if !c.putHit("h", &storedHit{}, 10, exp, later, before) || c.len() != 2 {
+	c.editSeg("s", passAt(at), later, ttl)
+	if !c.putHit("h", &storedHit{At: at}, 10, later, ttl, c.reading(later)) || c.len() != 2 {
 		t.Fatal("a key could not be stored after its tombstone")
 	}
-	// Each tombstone goes at its own time.
-	c.kill([]string{"x"}, later.Add(time.Second), later)
-	c.kill([]string{"y"}, later.Add(3*time.Second), later)
-	if !c.tombstoned("y", later.Add(2*time.Second)) || len(c.dead) != 1 {
-		t.Fatalf("tombstones two seconds on = %v", c.dead)
+	// Each tombstone goes at its own time: x is set at later, y two seconds
+	// after it.
+	c.tombstone([]string{"x"}, later)
+	c.tombstone([]string{"y"}, later.Add(2*time.Second))
+	if !c.tombstoned("y", later.Add(tombstoneTTL+time.Second)) || len(c.tombs) != 1 {
+		t.Fatalf("tombstones after the first is over = %v", c.tombs)
 	}
-	if c.tombstoned("y", later.Add(3*time.Second)) || len(c.dead) != 0 {
-		t.Fatalf("tombstones three seconds on = %v", c.dead)
+	if c.tombstoned("y", later.Add(tombstoneTTL+2*time.Second)) || len(c.tombs) != 0 {
+		t.Fatalf("tombstones after both are over = %v", c.tombs)
 	}
 	// Tombstones take room in the byte budget: entries make way for them.
 	c.maxBytes = c.size() + stone
-	c.kill([]string{"p", "q"}, exp, later)
+	c.tombstone([]string{"p", "q"}, later)
 	if c.len() != 1 || c.size() > c.maxBytes {
 		t.Fatalf("with two more tombstones: %d entries, %d of %d bytes", c.len(), c.size(), c.maxBytes)
 	}
@@ -905,53 +913,53 @@ func TestLRUTombstone(t *testing.T) {
 func TestLRUTombstoneOfAReviewInProgress(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	const ttl = time.Hour
-	at, exp := now.Unix(), now.Add(ttl)
+	at := now.Unix()
 	val := fmt.Appendf(nil, "p%d", at)
 	c := newLRU(10)
 	read := c.reading(now) // a lookup, or the write of a run, reads the KV
-	c.kill([]string{"s", "h"}, time.Time{}, now)
+	c.tombstoneOpen([]string{"s", "h"}, now)
 	// However long the review writes: the keys stay tombstoned.
 	for _, after := range []time.Duration{0, tombstoneTTL, time.Hour, 30 * 24 * time.Hour} {
-		if at := now.Add(after); !c.tombstoned("s", at) || !c.tombstoned("h", at) || len(c.dead) != 2 {
-			t.Fatalf("%v into the review: tombstones %v", after, c.dead)
+		if at := now.Add(after); !c.tombstoned("s", at) || !c.tombstoned("h", at) || len(c.tombs) != 2 {
+			t.Fatalf("%v into the review: tombstones %v", after, c.tombs)
 		}
 	}
 	// The review is over an hour later: the tombstones last tombstoneTTL from
 	// then, and go.
 	done := now.Add(time.Hour)
-	c.kill([]string{"s", "h"}, done.Add(tombstoneTTL), done)
-	if last := done.Add(tombstoneTTL - time.Nanosecond); !c.tombstoned("s", last) || c.tombstoned("s", last.Add(time.Nanosecond)) || len(c.dead) != 0 || c.size() != 0 {
-		t.Fatalf("tombstones after the review: %v, %d bytes", c.dead, c.size())
+	c.tombstone([]string{"s", "h"}, done)
+	if last := done.Add(tombstoneTTL - time.Nanosecond); !c.tombstoned("s", last) || c.tombstoned("s", last.Add(time.Nanosecond)) || len(c.tombs) != 0 || c.size() != 0 {
+		t.Fatalf("tombstones after the review: %v, %d bytes", c.tombs, c.size())
 	}
 	// The read from before the review comes back only now, with what the KV
 	// held then. Nothing of it goes into memory, under the reviewed keys or
 	// any other: which keys were tombstoned meanwhile is no longer known.
 	late := done.Add(tombstoneTTL + time.Minute)
-	c.putSeg("s", late, ttl, val, read)
-	if got := c.syncSeg("s", late, ttl, parseSeg(val), read); got.pass != at || c.putHit("h", &storedHit{}, 10, exp, late, read) || c.len() != 0 {
+	c.putSeg("s", val, late, ttl, read)
+	if got := c.mergeSeg("s", parseSeg(val), late, ttl, read); got.pass != at || c.putHit("h", &storedHit{At: at}, 10, late, ttl, read) || c.len() != 0 {
 		t.Fatalf("a read from before the review came into memory: %d entries (returned %+v)", c.len(), got)
 	}
-	if c.syncSeg("other", late, ttl, parseSeg(val), read); c.len() != 0 {
+	if c.mergeSeg("other", parseSeg(val), late, ttl, read); c.len() != 0 {
 		t.Fatal("a read that outlasted a tombstone came into memory")
 	}
 	// A read that began after the review is not held back, however long it
 	// takes; neither is a long read during which nothing was reviewed.
 	fresh, back := c.reading(late), late.Add(ttl/2)
-	c.putSeg("s", back, ttl, fmt.Appendf(nil, "p%d", late.Unix()), fresh)
-	if !c.putHit("h", &storedHit{}, 10, back.Add(ttl), back, fresh) || c.len() != 2 {
+	c.putSeg("s", fmt.Appendf(nil, "p%d", late.Unix()), back, ttl, fresh)
+	if !c.putHit("h", &storedHit{At: back.Unix()}, 10, back, ttl, fresh) || c.len() != 2 {
 		t.Fatalf("a read after the review stayed out: %d entries", c.len())
 	}
 	// A read during which a review happened, and that is back while the
 	// tombstones still stand, fills the keys the review did not change.
 	short := c.reading(late)
-	c.kill([]string{"x"}, late.Add(tombstoneTTL), late)
+	c.tombstone([]string{"x"}, late)
 	soon := late.Add(tombstoneTTL / 2)
-	c.putSeg("x", soon, ttl, fmt.Appendf(nil, "p%d", late.Unix()), short)
-	c.putSeg("y", soon, ttl, fmt.Appendf(nil, "p%d", late.Unix()), short)
-	if _, ok := c.seg("x", soon); ok {
+	c.putSeg("x", fmt.Appendf(nil, "p%d", late.Unix()), soon, ttl, short)
+	c.putSeg("y", fmt.Appendf(nil, "p%d", late.Unix()), soon, ttl, short)
+	if _, ok := c.getSeg("x", soon); ok {
 		t.Fatal("a reviewed key came into memory")
 	}
-	if _, ok := c.seg("y", soon); !ok {
+	if _, ok := c.getSeg("y", soon); !ok {
 		t.Fatal("a key no review changed stayed out of memory")
 	}
 }
@@ -1212,24 +1220,24 @@ func TestReadingLapses(t *testing.T) {
 	now := time.Now()
 	late := now.Add(tombstoneTTL + time.Second)
 	old, c := newLRU(10), newLRU(10)
-	if r := old.reading(now); !c.reviewedSince("", r, now) || !c.reviewedSince("k", r, now) {
+	if r := old.reading(now); !c.lapsedSince(r, now) || !c.reviewedSince("k", r, now) {
 		t.Fatal("a reading of a replaced cache is taken for one of the new cache")
 	}
 	r := c.reading(now)
-	if c.reviewedSince("", r, late) || c.reviewedSince("k", r, late) {
+	if c.lapsedSince(r, late) || c.reviewedSince("k", r, late) {
 		t.Fatal("lapsed without a tombstone since")
 	}
-	c.kill([]string{"other"}, late.Add(tombstoneTTL), now.Add(time.Second))
-	if c.reviewedSince("", r, now.Add(2*time.Second)) || c.reviewedSince("k", r, now.Add(2*time.Second)) {
+	c.tombstone([]string{"other"}, now.Add(time.Second))
+	if c.lapsedSince(r, now.Add(2*time.Second)) || c.reviewedSince("k", r, now.Add(2*time.Second)) {
 		t.Fatal("lapsed while a tombstone of the key would still be there")
 	}
 	if !c.reviewedSince("other", r, now.Add(2*time.Second)) {
 		t.Fatal("a tombstoned key is not reviewed")
 	}
-	if !c.reviewedSince("", r, late) || !c.reviewedSince("k", r, late) {
+	if !c.lapsedSince(r, late) || !c.reviewedSince("k", r, late) {
 		t.Fatal("not lapsed after a tombstone, with a reading older than a tombstone lasts")
 	}
-	if fresh := c.reading(late); c.reviewedSince("", fresh, late.Add(time.Hour)) {
+	if fresh := c.reading(late); c.lapsedSince(fresh, late.Add(time.Hour)) {
 		t.Fatal("a reading taken after the tombstones lapsed")
 	}
 }

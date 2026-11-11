@@ -29,11 +29,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/batch"
 )
 
-// kvLockStripes is the number of locks the verdict cache keys share for
-// their changes in the KV (kvLock): two keys on one stripe wait for each
-// other, which costs time and nothing else.
-const kvLockStripes = 64
-
 // Plugin is the moderation plugin. It implements pluginsdk.Hook,
 // pluginsdk.JobRunner, pluginsdk.HTTP, pluginsdk.BroadcastHandler and the
 // lifecycle interfaces.
@@ -128,15 +123,11 @@ type Plugin struct {
 		// (Outcome.ImagesRefused).
 		imagesRefused atomic.Int64
 		// preWaiting: the requests waiting for their run (runPre);
-		// kvWriting: the runs whose verdicts are on their way to the KV and
-		// from there into memory (storeVerdicts) - waiting for their turn at
-		// the keys or writing. Nothing bounds it: while the KV does not
-		// answer, every run adds one (Health and /status show it).
+		// kvWriting: the runs whose verdicts are on their way to the KV
+		// (Runtime.KVWriting).
 		preWaiting, kvWriting atomic.Int64
-		// kvSkipped: the runs whose verdicts were not written, to the KV or
-		// to memory, because a review may have changed the cache since their
-		// request asked it or the memory cache was replaced since (writeRun),
-		// on this node since it started.
+		// kvSkipped: the runs whose verdicts were not written
+		// (Runtime.KVSkipped).
 		kvSkipped atomic.Int64
 	}
 
