@@ -18,6 +18,13 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
+func init() {
+	// A run on a node without the plugin goes to whichever node fetches it
+	// next, so the number of put-offs before it reaches the plugin's node
+	// has no bound: make each one short. It never changes after.
+	notLoadedRetry = 300 * time.Millisecond
+}
+
 // ---------------------------------------------------------------- fakes
 
 type fakeGen struct {

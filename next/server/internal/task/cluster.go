@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"strconv"
 	"sync"
 	"time"
@@ -35,6 +36,9 @@ const (
 	leaseGrace        = time.Minute
 	executorGroupSize = 4
 	executorQueue     = 16
+	// fetchPoll is how often a node polls for runs besides the insert
+	// notifications (River's default; snooze spreads put-offs over it).
+	fetchPoll = time.Second
 )
 
 // queuePlugin runs the plugin tasks, so slow plugin tasks do not hold up
@@ -145,6 +149,7 @@ func newClusterBackend(ctx context.Context, log *slog.Logger, db *store.DB, reg 
 		Workers:                     workers,
 		Queues:                      queues,
 		MaxAttempts:                 5,
+		FetchPollInterval:           fetchPoll,
 		RescueStuckJobsAfter:        rescueStuckAfter,
 		CompletedJobRetentionPeriod: completedRetain,
 		CancelledJobRetentionPeriod: failedRetain,
@@ -364,7 +369,7 @@ func (w *taskWorker) Work(ctx context.Context, job *river.Job[taskArgs]) error {
 	t, ok := b.reg.Get(job.Args.Name)
 	if !ok || t.Scope != core.TaskCluster {
 		if time.Since(job.CreatedAt) < unknownGrace {
-			return river.JobSnooze(snoozeElsewhere)
+			return snooze(snoozeElsewhere)
 		}
 		return river.JobCancel(fmt.Errorf("task %s is not registered on any node that picked it up", job.Args.Name))
 	}
@@ -378,7 +383,7 @@ func (w *taskWorker) Work(ctx context.Context, job *river.Job[taskArgs]) error {
 	permit, err := group.Acquire(ctx)
 	if err != nil {
 		// This node stopped admitting background work: let another one run it.
-		return river.JobSnooze(snoozeElsewhere)
+		return snooze(snoozeElsewhere)
 	}
 	var out error
 	_ = permit.Run(ctx, background.Work{}, func(ctx context.Context) error {
@@ -387,6 +392,14 @@ func (w *taskWorker) Work(ctx context.Context, job *river.Job[taskArgs]) error {
 	})
 	return out
 }
+
+// snooze puts a run off for d plus a random part of a fetch poll. A put-off
+// of whole seconds ends just before the next poll of the node that put the
+// run off, which then fetches it again ahead of the other nodes: a node that
+// cannot run a task (its plugin is not loaded there) would keep the run from
+// the nodes that can. The random part makes every node as likely to fetch
+// the run next.
+func snooze(d time.Duration) error { return river.JobSnooze(d + rand.N(fetchPoll)) }
 
 // work runs one attempt under the task's lease and records its outcome.
 func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskArgs]) error {
@@ -408,7 +421,7 @@ func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskA
 	}
 	if !leased {
 		if job.Args.Manual || job.Args.Key != "" || t.Schedule == nil {
-			return river.JobSnooze(snoozeBusy)
+			return snooze(snoozeBusy)
 		}
 		record(runOutput{Status: StatusSkipped, Message: "the previous run is still going"})
 		return nil
@@ -430,7 +443,7 @@ func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskA
 		o.Status = StatusContinued
 	case errors.As(herr, &retry):
 		o.Status, o.Message = StatusSkipped, truncate(herr.Error())
-		ret = river.JobSnooze(retry.Delay)
+		ret = snooze(retry.Delay)
 	case errors.As(herr, &skip):
 		o.Status, o.Message = StatusSkipped, truncate(skip.Reason)
 	case timedOut:

@@ -20,8 +20,8 @@ func TestRuntimeTasksSyncAndRun(t *testing.T) {
 	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "cleanup", Schedule: "0 3 * * *"})
 	app := &fakeApp{}
 	n := e.node(t, "node-a", p, app)
-	// node-b runs no plugin: a run it picks up is put off 5 s at a time, so
-	// the waits below allow for a few of those.
+	// node-b runs no plugin: a run it picks up is put off (notLoadedRetry)
+	// until node-a fetches it.
 	other := e.node(t, "node-b", nil, nil)
 
 	ignored, err := n.bridge.SyncPluginTasks(ctx, "demo", "1.0.0", []core.PluginTask{
