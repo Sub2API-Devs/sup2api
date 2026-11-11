@@ -8,19 +8,22 @@
 // the trigger. `label` = false hides the field label (the trigger keeps an
 // aria-label). On a compact screen the trigger shows only the preset and the
 // panel is a bottom sheet: the presets as a grid, the date pair under them.
+// `time` works to the second, as new-api's log filter does: the trigger shows
+// both ends in full, the pair is two date-time inputs, and a preset fills
+// both ends (an open end closes at the end of today).
 import { computed, nextTick, onBeforeUnmount, ref, useId } from 'vue'
 import SField from './SField.vue'
 import { useUiT } from './i18n'
 import { useFloating } from './floating'
 import { useViewport } from './viewport'
-import { RANGE_LABELS, dayKey, rangeBounds, type RangeKey } from './timeRange'
+import { RANGE_LABELS, closedRangeBounds, dayKey, rangeBounds, toLocalSecondsInput, type RangeKey } from './timeRange'
 import DayRangeForm from './internal/DayRangeForm.vue'
 import RangeSheet from './internal/RangeSheet.vue'
 import RangeTrigger from './internal/RangeTrigger.vue'
 
 const props = withDefaults(
-  defineProps<{ range: RangeKey; from: string; to: string; keys?: RangeKey[]; size?: 'sm' | 'md'; label?: boolean }>(),
-  { keys: () => ['today', 'yesterday', '24h', '7d', '14d', '30d', 'month', 'lastMonth', 'custom'], size: 'md', label: true }
+  defineProps<{ range: RangeKey; from: string; to: string; keys?: RangeKey[]; size?: 'sm' | 'md'; label?: boolean; time?: boolean }>(),
+  { keys: () => ['today', 'yesterday', '24h', '7d', '14d', '30d', 'month', 'lastMonth', 'custom'], size: 'md', label: true, time: false }
 )
 const emit = defineEmits<{
   (e: 'update:range', v: RangeKey): void
@@ -43,6 +46,12 @@ const span = computed(() => {
   if (!props.from) return ''
   const a = new Date(props.from)
   if (Number.isNaN(a.getTime())) return ''
+  if (props.time) {
+    // The last second in range: `to` is exclusive.
+    const end = props.to ? new Date(new Date(props.to).getTime() - 1000) : null
+    const text = (d: Date) => toLocalSecondsInput(d).replace('T', ' ')
+    return `${text(a)} ~ ${end && !Number.isNaN(end.getTime()) ? text(end) : t('ui.now')}`
+  }
   const b = props.to ? new Date(new Date(props.to).getTime() - 1) : new Date()
   const s = dayKey(a).slice(5)
   const e = Number.isNaN(b.getTime()) ? '' : dayKey(b).slice(5)
@@ -65,8 +74,13 @@ function onDoc(e: MouseEvent) {
 }
 function show() {
   if (open.value) return
-  draftStart.value = props.from ? dayKey(props.from) : ''
-  draftEnd.value = dayKey(props.to ? new Date(new Date(props.to).getTime() - 1) : new Date())
+  if (props.time) {
+    draftStart.value = toLocalSecondsInput(props.from)
+    draftEnd.value = toLocalSecondsInput(props.to ? new Date(new Date(props.to).getTime() - 1000) : new Date())
+  } else {
+    draftStart.value = props.from ? dayKey(props.from) : ''
+    draftEnd.value = dayKey(props.to ? new Date(new Date(props.to).getTime() - 1) : new Date())
+  }
   open.value = true
   if (compact.value) return
   document.addEventListener('mousedown', onDoc)
@@ -94,7 +108,7 @@ function onKey(e: KeyboardEvent) {
   }
 }
 function pick(k: RangeKey) {
-  const b = rangeBounds(k)
+  const b = props.time ? closedRangeBounds(k) : rangeBounds(k)
   emit('update:range', k)
   emit('update:from', b.from)
   emit('update:to', b.to)
@@ -102,8 +116,14 @@ function pick(k: RangeKey) {
 }
 function apply() {
   emit('update:range', 'custom')
-  emit('update:from', midnight(draftStart.value).toISOString())
-  emit('update:to', midnight(draftEnd.value, 1).toISOString())
+  if (props.time) {
+    // The end typed is the last second in range; `to` is exclusive.
+    emit('update:from', new Date(draftStart.value).toISOString())
+    emit('update:to', new Date(new Date(draftEnd.value).getTime() + 1000).toISOString())
+  } else {
+    emit('update:from', midnight(draftStart.value).toISOString())
+    emit('update:to', midnight(draftEnd.value, 1).toISOString())
+  }
   close()
 }
 onBeforeUnmount(() => close(false))
@@ -127,7 +147,7 @@ defineExpose({ open: show, close: () => close(false) })
       </span>
     </SField>
     <RangeSheet v-if="compact" :open="open" :range="range" :keys="keys" @update:open="close(false)" @pick="pick">
-      <DayRangeForm v-if="customAllowed" v-model:start="draftStart" v-model:end="draftEnd" @apply="apply" />
+      <DayRangeForm v-if="customAllowed" v-model:start="draftStart" v-model:end="draftEnd" :time="time" @apply="apply" />
     </RangeSheet>
     <Teleport v-else to="body">
       <div
@@ -163,7 +183,9 @@ defineExpose({ open: show, close: () => close(false) })
           v-if="customAllowed"
           v-model:start="draftStart"
           v-model:end="draftEnd"
-          class="w-56 border-l border-line pl-3"
+          :time="time"
+          class="border-l border-line pl-3"
+          :class="time ? 'w-64' : 'w-56'"
           @apply="apply"
         />
       </div>

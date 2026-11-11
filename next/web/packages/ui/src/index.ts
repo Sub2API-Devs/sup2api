@@ -85,7 +85,7 @@ export { toast, confirm, toastState, confirmState, dismissToast, settleConfirm, 
 export { copyToClipboard } from './clipboard'
 export { createItemId } from './itemId'
 export { default as uiMessages } from './messages'
-export { rangeBounds, rangeSpanMs, toLocalInput, fromLocalInput, dayKey, RANGE_LABELS } from './timeRange'
+export { rangeBounds, closedRangeBounds, logRangeBounds, rangeSpanMs, toLocalInput, toLocalSecondsInput, fromLocalInput, dayKey, RANGE_LABELS } from './timeRange'
 export type { RangeKey } from './timeRange'
 export type {
   TableColumn,

@@ -14,7 +14,7 @@ vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => mocks.can })
 vi.mock('./UsageRecords.vue', () => ({
   default: {
     name: 'UsageRecords',
-    props: ['revision', 'listPath', 'summaryPath', 'defaultRange', 'extraTabs'],
+    props: ['revision', 'listPath', 'summaryPath', 'extraTabs'],
     emits: ['update:loading', 'update:tab'],
     template: '<div><slot name="actions" /><slot name="tab-ledger-range" /><slot name="tab-ledger-filters" /><div data-testid="records">{{ revision }}</div><span data-testid="extra">{{ extraTabs.map((x) => x.key).join() }}</span><slot name="tab-ledger" /></div>'
   }

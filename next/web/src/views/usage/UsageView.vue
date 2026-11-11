@@ -32,7 +32,6 @@ function refresh() {
       :revision="revision"
       list-path="/usage"
       summary-path="/usage/summary"
-      default-range="today"
       admin
       :group-options="canGroups ? groupOptions : undefined"
     >
