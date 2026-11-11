@@ -1634,12 +1634,12 @@ func kvValue(t *testing.T, fh *pluginsdktest.FakeHost, key string) ([]byte, bool
 	return r.GetValue(), r.GetFound()
 }
 
-// written waits until the verdicts the node's runs stored so far are in the
-// KV and in the node's memory (or their writes have failed).
 // askNow is the reading of a request that asks the cache now (the lookup of
 // the run whose verdicts a test stores by hand).
 func askNow(p *Plugin) reading { return p.cache.Load().reading(p.now()) }
 
+// written waits until the verdicts the node's runs stored so far are in the
+// KV and in the node's memory (or their writes have failed).
 func written(t *testing.T, p *Plugin) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
@@ -3960,6 +3960,27 @@ func TestReviewIsNotUndoneByWritesThatOutlastItsTombstones(t *testing.T) {
 	written(t, p)
 	reviewed("a run that judged across the review", seg, hitKey, segKey)
 
+	if n := p.stats.kvSkipped.Load(); n != 2 {
+		t.Fatalf("kv_skipped = %d after two runs that wrote nothing, want 2", n)
+	}
+
+	// 3. The memory cache is replaced between the review and the write
+	// (cache_entries changed): the tombstones of the review went with the old
+	// cache, at once. The run's reading is of the old cache, and it writes
+	// nothing.
+	rec, seg, hitKey, segKey, held = cachedHit("swapped")
+	before = askNow(p)
+	synced("swapped", falsePositive(rec))
+	p.cache.Store(newLRU(1000))
+	again = held
+	again.At = p.now().Unix()
+	p.storeVerdicts(p.cfg.Load(), scope, nil, []storedHit{again}, before)
+	written(t, p)
+	reviewed("a run whose memory cache was replaced after the review", seg, hitKey, segKey)
+	if n := p.stats.kvSkipped.Load(); n != 3 {
+		t.Fatalf("kv_skipped = %d, want 3", n)
+	}
+
 	// A request that asks the cache now, after the review, and whose run
 	// hits: that is a verdict of its own, and it is stored.
 	p.storeVerdicts(p.cfg.Load(), scope, nil, []storedHit{again}, askNow(p))
@@ -4011,7 +4032,7 @@ func TestWaitingVerdictWritesAreReported(t *testing.T) {
 
 // The write of a run needs every one of its segment keys read: when a call of
 // its read fails, it stops there - the calls after it are not made, their
-// answers would be thrown away - and holds its keys no longer than that.
+// answers would be thrown away.
 func TestVerdictWriteStopsAtAFailedRead(t *testing.T) {
 	kv := &kvFake{}
 	kv.batch.Store(true)
@@ -4036,5 +4057,166 @@ func TestVerdictWriteStopsAtAFailedRead(t *testing.T) {
 	written(t, p)
 	if calls := kv.calls.Load(); calls != 6 || kvCount(t, fh, "s:") != len(passes) || p.cache.Load().len() != len(passes) {
 		t.Fatalf("with the KV back: %d KV calls, %d keys in the KV, %d entries in memory", calls, kvCount(t, fh, "s:"), p.cache.Load().len())
+	}
+}
+
+// The node that stores a hit knows it afterwards, also when a review on
+// another node came while the hit was on its way to the KV (the second gate
+// review of 0.8.1: the values went into memory by the reading of the
+// request's lookup, a run of 5 s with any review in it was refused there, and
+// memory kept the passes of A and of B it had - the node answered {A, B} as
+// passed while the KV held the hit, and nothing corrected it).
+//
+// The values go into memory by a reading of the write itself. When even that
+// one has lapsed - the write took longer than a tombstone lasts, with a
+// review in it - the keys leave memory instead: unknown to a lookup of
+// memory alone, read from the KV by the others.
+func TestStoredHitIsKnownOnItsNode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		slow time.Duration // how long the KV takes for the write of the hit entry
+	}{
+		{"a review while the hit is written", 0},
+		{"a review while a write that outlasts the tombstones is under way", tombstoneTTL + time.Second},
+	} {
+		kv := &kvFake{}
+		kv.batch.Store(true)
+		var clock atomic.Int64
+		p, _, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+		const scope = "e0:1:fp"
+		ctx := context.Background()
+		cfg := p.cfg.Load()
+		a, b := sha256.Sum256([]byte("part a of "+tc.name)), sha256.Sum256([]byte("part b of "+tc.name))
+		keys := [][32]byte{a, b}
+		// The request of {a, b} asks the cache, which knows nothing, and its
+		// run judges for 5 s. Meanwhile a and b pass one by one elsewhere.
+		first := p.lookupVerdicts(ctx, scope, keys, true)
+		if first.hit != nil || len(first.passed) != 0 {
+			t.Fatalf("%s: cold lookup = %+v", tc.name, first)
+		}
+		p.storeVerdicts(cfg, scope, [][32]byte{a}, nil, askNow(p))
+		p.storeVerdicts(cfg, scope, [][32]byte{b}, nil, askNow(p))
+		written(t, p)
+		if v := p.lookupVerdicts(ctx, scope, keys, false); len(v.passed) != 2 {
+			t.Fatalf("%s: the passes of the parts are not in memory: %+v", tc.name, v)
+		}
+		clock.Add(int64(5 * time.Second))
+		hit := newStoredHit("r1", hexKeys(keys), Trace{Final: Hit}, p.now().Unix())
+		hitKey := hitKeyOf(scope, hitIDOf(hit.Keys))
+		entered := kv.hold(func(key string) bool { return key == hitKey })
+		p.storeVerdicts(cfg, scope, nil, []storedHit{hit}, first.asked)
+		within(t, "the write of the hit entry", entered)
+		// The review of some other record on another node: its broadcast.
+		payload, _ := json.Marshal(verdictChanged{Keys: []string{segKeyHex(scope, "unrelated")}})
+		if err := p.onVerdictChanged(ctx, pluginsdk.Broadcast{Payload: payload}); err != nil {
+			t.Fatal(err)
+		}
+		clock.Add(int64(tc.slow))
+		kv.open()
+		written(t, p)
+		if _, found := kvValue(t, fh, hitKey); !found || p.stats.kvSkipped.Load() != 0 {
+			t.Fatalf("%s: the hit is not in the KV (found %v, %d writes skipped)", tc.name, found, p.stats.kvSkipped.Load())
+		}
+		fromMemory := p.lookupVerdicts(ctx, scope, keys, false)
+		if tc.slow == 0 {
+			if fromMemory.hit == nil {
+				t.Fatalf("%s: memory of the node that stored the hit = %+v", tc.name, fromMemory)
+			}
+		} else if fromMemory.hit != nil || len(fromMemory.passed) != 0 {
+			t.Fatalf("%s: memory kept or took values a review may have changed: %+v", tc.name, fromMemory)
+		}
+		if v := p.lookupVerdicts(ctx, scope, keys, true); v.hit == nil {
+			t.Fatalf("%s: the node that stored the hit of {a, b} answers it as %d passes", tc.name, len(v.passed))
+		}
+	}
+}
+
+// A run that is under way while its content is reviewed - its request asked
+// the cache before the review, its auditor answers after the tombstones of
+// the review ended - does not bring the reviewed hit back, through the hook
+// and all: its own request is refused by its own verdict, nothing of it is
+// cached (kv_skipped), and the next request gets the admin's answer.
+func TestRunAcrossAReviewDoesNotUndoIt(t *testing.T) {
+	mod := newFakeMod(t)
+	kv := &kvFake{}
+	kv.batch.Store(true)
+	var clock atomic.Int64
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv), withClock(&clock))
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	snap := p.snap.Load()
+	scope := snap.scopeOf(snap.flows[flow])
+	const text = "MOD-HIT-sexual judged across a review"
+	// The first request is refused; its hit is on its way to the KV.
+	entered := kv.hold(func(string) bool { return true })
+	defer kv.open()
+	if r := hookNow(t, h, hookReqAs(3, "first", text)); !denied(r) {
+		t.Fatalf("first = %+v", r)
+	}
+	within(t, "the write of the first run", entered)
+	// The same content again, before the cache knows it: a run of its own,
+	// whose auditor takes its time.
+	arrived, release := mod.hold(t)
+	second := make(chan *pluginv1.GatewayRequestHookResponse, 1)
+	go func() {
+		r, _ := h.Hook.OnGatewayRequest(context.Background(), hookReqAs(3, "second", text))
+		second <- r
+	}()
+	within(t, "the upstream call of the second run", arrived)
+	// The first hit lands, and an admin reviews it as a false positive.
+	kv.open()
+	waitFor(t, "the write of the first run", func() bool { return p.stats.kvWriting.Load() == 0 })
+	rec := recordOf(t, h, "first")
+	c := traceOf(t, rec).Cache
+	seg := hashOf(t, c.Segs[0])
+	hitKey, segKey := hitKeyOf(scope, c.Key), segKeyOf(scope, seg)
+	if _, found := kvValue(t, fh, hitKey); !found {
+		t.Fatal("the first hit is not in the KV")
+	}
+	if n := decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": []int64{rec.ID}, "status": ReviewFalsePositive}))["cache_synced"]; n != float64(1) {
+		t.Fatalf("cache_synced = %v", n)
+	}
+	// The auditor of the second run answers after the tombstones ended.
+	clock.Add(int64(tombstoneTTL + time.Second))
+	release()
+	if r := within(t, "the second request", second); !denied(r) || replayed(r) {
+		t.Fatalf("second = %+v", r)
+	}
+	waitFor(t, "the write of the second run", func() bool { return p.stats.kvWriting.Load() == 0 && p.stats.kvSkipped.Load() == 1 })
+	val, _ := kvValue(t, fh, segKey)
+	if _, back := kvValue(t, fh, hitKey); back || parseSeg(val).pass == 0 || len(parseSeg(val).hits) != 0 {
+		t.Fatalf("the run that judged across the review wrote: entry in the KV %v, segment key %q", back, val)
+	}
+	calls := mod.count("/v1/moderations")
+	if r := mustHook(t, h, hookReqAs(3, "third", text)); denied(r) || r.GetNote() != notePrefix+"pass (cached)" || mod.count("/v1/moderations") != calls {
+		t.Fatalf("after the review = %+v (%d upstream calls)", r, mod.count("/v1/moderations")-calls)
+	}
+}
+
+// A queued job asks the cache again when its turn comes, and stores its
+// verdicts by that reading: a review on the node while the job waited in the
+// queue - of other content - does not keep its verdicts out of the cache.
+func TestQueuedJobStoresByItsLastLookup(t *testing.T) {
+	mod := newFakeMod(t)
+	var clock atomic.Int64
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve}, withClock(&clock))
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	snap := p.snap.Load()
+	queued := hookReqAs(6, "queued", "a clean text that waits in the queue")
+	m, early := p.admit(context.Background(), p.cfg.Load(), queued, snap, snap.flows[flow], requestModel(queued))
+	if early != nil || m == nil || m.timing != TimingPost {
+		t.Fatalf("admit = %+v, %+v", m, early)
+	}
+	m.queued = p.now()
+	// While it waits: the broadcast of a review of something else, and more
+	// time than a tombstone lasts.
+	payload, _ := json.Marshal(verdictChanged{Keys: []string{segKeyHex(snap.scopeOf(snap.flows[flow]), "unrelated")}})
+	if err := p.onVerdictChanged(context.Background(), pluginsdk.Broadcast{Payload: payload}); err != nil {
+		t.Fatal(err)
+	}
+	clock.Add(int64(tombstoneTTL + time.Second))
+	p.runPost(m)
+	written(t, p)
+	if n := kvCount(t, fh, "s:"); n == 0 || p.cache.Load().len() != n || p.stats.kvSkipped.Load() != 0 {
+		t.Fatalf("the verdicts of the queued job: %d keys in the KV, %d entries in memory, %d writes skipped", n, p.cache.Load().len(), p.stats.kvSkipped.Load())
 	}
 }

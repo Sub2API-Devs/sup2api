@@ -1365,6 +1365,9 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 		m := job(rid)
 		m.chunks = []*chunk{{in: &Input{Text: "MOD-HIT-sexual words"}, segs: []int{0}, parts: []chunkPart{{seg: 0, role: RoleUser, text: "MOD-HIT-sexual words"}}}}
 		m.plan = &plan{keys: [][32]byte{{key}}, pieces: []int{1}}
+		if c := p.cache.Load(); c != nil { // as the lookup of the request leaves it (planUncached)
+			m.asked = c.reading(p.now())
+		}
 		return m
 	}
 	stood := func(rid string, r *pluginv1.GatewayRequestHookResponse) {

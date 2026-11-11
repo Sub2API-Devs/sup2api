@@ -133,6 +133,10 @@ type Plugin struct {
 		// the keys or writing. Nothing bounds it: while the KV does not
 		// answer, every run adds one (Health and /status show it).
 		preWaiting, kvWriting atomic.Int64
+		// kvSkipped: the runs whose verdicts were not written, to the KV or
+		// to memory, because a review may have changed the cache since their
+		// request asked it (writeRun), on this node since it started.
+		kvSkipped atomic.Int64
 	}
 
 	bg     context.Context
@@ -283,6 +287,7 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 		"inflight_bytes":   float64(p.inflightBytes.Load()),
 		"kv_errors":        float64(p.stats.kvErrors.Load()),
 		"kv_writing":       float64(p.stats.kvWriting.Load()),
+		"kv_skipped":       float64(p.stats.kvSkipped.Load()),
 		"redraw_panics":    float64(jevRedrawPanics.Load()),
 		"busy":             float64(p.stats.busy.Load()),
 		"shutdown_dropped": float64(p.stats.shutdownDropped.Load()),

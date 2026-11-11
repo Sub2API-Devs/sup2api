@@ -1204,26 +1204,32 @@ func TestFallbackDeciderIndexesTheTrace(t *testing.T) {
 }
 
 // A reading taken on a memory cache that was replaced since (cleared,
-// cache_entries changed) counts on the new one from its first tombstone on:
-// nothing is stale while no review came, everything once one did and the
-// reading is older than a tombstone lasts.
-func TestReadingOfAReplacedCache(t *testing.T) {
+// cache_entries changed) tells nothing on the new one, whose tombstones began
+// anew: every key counts as reviewed since, at once. A reading of the cache
+// itself lapses when tombstones were set since and it is older than a
+// tombstone lasts - not before, and not without tombstones.
+func TestReadingLapses(t *testing.T) {
 	now := time.Now()
-	old, c := newLRU(10), newLRU(10)
-	old.kill([]string{"x"}, now.Add(tombstoneTTL), now)
-	r := old.reading(now)
-	if own := c.reading(now); c.own(own) != own {
-		t.Fatal("a reading of the cache itself is changed")
-	}
 	late := now.Add(tombstoneTTL + time.Second)
-	if c.reviewedSince("k", c.own(r), late) {
-		t.Fatal("stale on a new cache no review touched")
+	old, c := newLRU(10), newLRU(10)
+	if r := old.reading(now); !c.reviewedSince("", r, now) || !c.reviewedSince("k", r, now) {
+		t.Fatal("a reading of a replaced cache is taken for one of the new cache")
 	}
-	c.kill([]string{"other"}, late.Add(tombstoneTTL), late)
-	if c.reviewedSince("k", c.own(r), now.Add(time.Second)) {
-		t.Fatal("stale while a tombstone of the key would still be there")
+	r := c.reading(now)
+	if c.reviewedSince("", r, late) || c.reviewedSince("k", r, late) {
+		t.Fatal("lapsed without a tombstone since")
 	}
-	if !c.reviewedSince("k", c.own(r), late) {
-		t.Fatal("not stale after a review on the new cache, with a reading older than a tombstone lasts")
+	c.kill([]string{"other"}, late.Add(tombstoneTTL), now.Add(time.Second))
+	if c.reviewedSince("", r, now.Add(2*time.Second)) || c.reviewedSince("k", r, now.Add(2*time.Second)) {
+		t.Fatal("lapsed while a tombstone of the key would still be there")
+	}
+	if !c.reviewedSince("other", r, now.Add(2*time.Second)) {
+		t.Fatal("a tombstoned key is not reviewed")
+	}
+	if !c.reviewedSince("", r, late) || !c.reviewedSince("k", r, late) {
+		t.Fatal("not lapsed after a tombstone, with a reading older than a tombstone lasts")
+	}
+	if fresh := c.reading(late); c.reviewedSince("", fresh, late.Add(time.Hour)) {
+		t.Fatal("a reading taken after the tombstones lapsed")
 	}
 }

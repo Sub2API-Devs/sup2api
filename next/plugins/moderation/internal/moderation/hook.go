@@ -518,6 +518,11 @@ func (p *Plugin) runPost(m *moderation) {
 	// A job queued before the cache was cleared is not answered from the
 	// cache: its scope is the one that was cleared, so it runs, and its
 	// verdicts are stored under the current counter (settleVerdicts).
+	if m.plan != nil && p.snap.Load().cacheEpoch != m.snap.cacheEpoch {
+		// It asks nothing, and judges from now on: the reading of the hook
+		// may be one of the memory cache the clear replaced.
+		m.asked = p.cache.Load().reading(p.now())
+	}
 	if m.plan != nil && p.snap.Load().cacheEpoch == m.snap.cacheEpoch {
 		// What the cache learned since the job was queued, now with the KV:
 		// a cached hit is replayed, and nothing runs when every moderated

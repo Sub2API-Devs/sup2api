@@ -120,6 +120,11 @@ type Runtime struct {
 	// 0 or close to it while the KV answers; a number that keeps growing
 	// means the KV does not, and nothing new is cached meanwhile.
 	KVWriting int64 `json:"kv_writing"`
+	// KVSkipped counts the runs whose verdicts were not cached because a
+	// review (on this node, or one this node was told of) may have changed
+	// the cache since their request asked it, on this node since it started:
+	// their content is moderated again the next time.
+	KVSkipped int64 `json:"kv_skipped"`
 	// ImagesRefused counts the calls of the LLM auditors whose images the
 	// upstream refused, so that the text alone was reviewed
 	// (Outcome.ImagesRefused), on this node since it started.
@@ -148,7 +153,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
-		KVErrors: p.stats.kvErrors.Load(), KVWriting: p.stats.kvWriting.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
+		KVErrors: p.stats.kvErrors.Load(), KVWriting: p.stats.kvWriting.Load(), KVSkipped: p.stats.kvSkipped.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}

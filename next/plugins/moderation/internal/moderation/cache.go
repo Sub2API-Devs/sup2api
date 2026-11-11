@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -119,8 +120,10 @@ import (
 // answering by its value in memory until that value expires or the LRU drops
 // it - up to the cache TTL - or until the cache is cleared. The node that
 // stored the hit or synced the review is never stale: the hit comes into its
-// memory with the pointers the KV got, and a review tombstones its keys
-// before it writes them.
+// memory with the pointers the KV got - or, when a review on any node came
+// between and the values may not go into memory (lru.stale), the keys leave
+// memory and are read from the KV the next time (writeRun) - and a review
+// tombstones its keys before it writes them.
 //
 // A pointer whose hit entry the KV answered "not there" for is removed from
 // the values in memory of the segments of that lookup - that pointer, not a
@@ -381,10 +384,15 @@ type lru struct {
 	dead     map[string]time.Time
 	deadNext time.Time
 	kills    uint64
+	gen      uint64 // which memory cache this is (lruGen); never changes
 }
 
+// lruGen numbers the memory caches of the process: a reading names its cache
+// by this number, not by a pointer that would keep a replaced cache alive.
+var lruGen atomic.Uint64
+
 func newLRU(max int) *lru {
-	return &lru{max: max, maxBytes: cacheMaxBytes, ll: list.New(), items: make(map[string]*list.Element, 256), dead: map[string]time.Time{}}
+	return &lru{max: max, maxBytes: cacheMaxBytes, ll: list.New(), items: make(map[string]*list.Element, 256), dead: map[string]time.Time{}, gen: lruGen.Add(1)}
 }
 
 // entry returns the live entry of key, the most recently used now. c.mu is
@@ -463,7 +471,7 @@ func (c *lru) isDead(key string, now time.Time) bool {
 // verdicts later (lru.reading): the cache it was taken from, the tombstones
 // set there so far and the time.
 type reading struct {
-	of    *lru
+	gen   uint64 // the cache (lru.gen)
 	kills uint64
 	at    time.Time
 }
@@ -471,26 +479,29 @@ type reading struct {
 func (c *lru) reading(now time.Time) reading {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return reading{of: c, kills: c.kills, at: now}
+	return reading{gen: c.gen, kills: c.kills, at: now}
 }
 
-// own returns r as a reading of this cache. A reading of another one - the
-// memory cache was replaced since (cleared, cache_entries changed), and the
-// tombstones went with the old one - counts from the first tombstone of this
-// cache on.
-func (c *lru) own(r reading) reading {
-	if r.of != c {
-		return reading{of: c, at: r.at}
-	}
-	return r
+// lapsed reports whether r can no longer tell which keys a review changed
+// since it was taken: it is a reading of another cache - the memory cache was
+// replaced since (cleared, cache_entries changed) and the tombstones went
+// with the old one - or tombstones were set since and r is older than a
+// tombstone lasts, so the tombstone of any key may have come and gone. c.mu
+// is held.
+func (c *lru) lapsed(r reading, now time.Time) bool {
+	return r.gen != c.gen || (c.kills != r.kills && !now.Before(r.at.Add(tombstoneTTL)))
 }
 
-// reviewedSince reports whether a review may have changed key since r, a
-// reading of this cache, was taken (stale): the run of a request that asked
-// the cache at r leaves the key alone then.
+// reviewedSince reports whether a review may have changed key since r was
+// taken (stale): the run of a request that asked the cache at r leaves the
+// key alone then. With "" for key it says whether that holds for every key
+// (lapsed): the run writes nothing.
 func (c *lru) reviewedSince(key string, r reading, now time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if key == "" {
+		return c.lapsed(r, now)
+	}
 	return c.stale(key, r, now)
 }
 
@@ -498,12 +509,12 @@ func (c *lru) reviewedSince(key string, r reading, now time.Time) bool {
 // memory under key: a review may have changed the key after the read. That is
 // so while the key is tombstoned. It is also so when keys were tombstoned
 // since the read began and the read began longer ago than a tombstone lasts:
-// the tombstone of this key may have come and gone meanwhile. So a read
-// never brings back what a review changed, however long the KV took to
+// the tombstone of this key may have come and gone meanwhile (lapsed). So a
+// read never brings back what a review changed, however long the KV took to
 // answer; the price is that such a read, which is rare, fills nothing.
 // c.mu is held.
 func (c *lru) stale(key string, r reading, now time.Time) bool {
-	return c.isDead(key, now) || (c.kills != r.kills && !now.Before(r.at.Add(tombstoneTTL)))
+	return c.isDead(key, now) || c.lapsed(r, now)
 }
 
 // seg returns the value of a segment key.
@@ -572,14 +583,17 @@ func (c *lru) editSeg(key string, now time.Time, ttl time.Duration, edit segEdit
 
 // putSeg stores the value a run on this node has written to the KV for a
 // segment key (val, read under r and merged), in place of what memory held:
-// memory has what the KV has. Nothing happens when it must stay out (stale).
-func (c *lru) putSeg(key string, now time.Time, ttl time.Duration, val []byte, r reading) {
+// memory has what the KV has. Nothing happens, and it returns false, when it
+// must stay out (stale).
+func (c *lru) putSeg(key string, now time.Time, ttl time.Duration, val []byte, r reading) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.stale(key, r, now) {
-		kv := parseSeg(val)
-		c.update(key, now, ttl, func(v *segValue) { *v = kv })
+	if c.stale(key, r, now) {
+		return false
 	}
+	kv := parseSeg(val)
+	c.update(key, now, ttl, func(v *segValue) { *v = kv })
+	return true
 }
 
 // syncSeg takes what a lookup read from the KV for a segment key (kv, read
@@ -1211,10 +1225,14 @@ func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits 
 // review removed, however long it judged, waited for its turn or for the KV.
 // The node knows that by the tombstone of the key while it lasts
 // (tombstoneTTL); once the request asked longer ago than that, by any
-// tombstone set on the node since (lru.stale) - then the write writes
-// nothing at all, whichever keys the review changed, and the content is
-// moderated again. A hit whose entry is left alone gets no pointers either.
-// A hit entry lives for the TTL from the time of the hit.
+// tombstone set on the node since (lru.lapsed) - then the write writes
+// nothing at all, whichever keys the review changed (counted, kv_skipped),
+// and the content is moderated again: for a hit that means the next request
+// with it is refused by a run of its own and counted as a violation, not
+// replayed. The same when the memory cache was replaced since the request
+// asked (cleared, cache_entries changed): its tombstones are gone. A hit
+// whose entry is left alone gets no pointers either. A hit entry lives for
+// the TTL from the time of the hit.
 //
 // Reviews and this write (the reason for the turn, and for the tombstones):
 //
@@ -1261,13 +1279,25 @@ func (p *Plugin) writeRun(ctx context.Context, w *verdictWrite) (pointed []strin
 	}
 	defer unlock()
 	cache := p.cache.Load()
+	// A review may have changed any of the keys since the request asked: the
+	// run writes nothing, and the KV is not asked.
+	lapsed := func() bool {
+		if !cache.reviewedSince("", w.asked, p.now()) {
+			return false
+		}
+		p.stats.kvSkipped.Add(1)
+		return true
+	}
+	if lapsed() {
+		return nil
+	}
+	since := cache.reading(p.now())
 	got, ok := p.kvReadAll(ctx, keys)
-	if !ok {
+	if !ok || lapsed() {
 		return nil
 	}
 	now := p.now()
-	asked := cache.own(w.asked)
-	reviewed := func(key string) bool { return cache.reviewedSince(key, asked, now) }
+	reviewed := func(key string) bool { return cache.reviewedSince(key, w.asked, now) }
 	var ops segOps
 	var entries []pluginsdk.KVItem
 	var stored []hitWrite
@@ -1312,13 +1342,27 @@ func (p *Plugin) writeRun(ctx context.Context, w *verdictWrite) (pointed []strin
 	if _, err := p.kvWrite(ctx, items); err != nil {
 		return nil
 	}
+	// Memory gets what the KV now holds, as a read that began before this
+	// write's own read of the KV (since). A value that must stay out - a
+	// review on another node tombstoned the key meanwhile, or tombstones came
+	// while this write took longer than they last - is not left as it was
+	// either: memory would keep a value the KV no longer has (the passes of A
+	// and B, with the hit of {A, B} just written), and nothing would correct
+	// it on the node that wrote. The key leaves memory and is read from the
+	// KV the next time.
 	now = p.now()
+	var out []string
 	for _, hw := range stored {
-		cache.putHit(hw.key, hw.hit, len(hw.body), hw.hit.expires(w.ttl), now, asked)
+		if !cache.putHit(hw.key, hw.hit, len(hw.body), hw.hit.expires(w.ttl), now, since) {
+			out = append(out, hw.key)
+		}
 	}
 	for _, it := range items {
-		cache.putSeg(it.Key, now, w.ttl, it.Value, asked)
+		if !cache.putSeg(it.Key, now, w.ttl, it.Value, since) {
+			out = append(out, it.Key)
+		}
 	}
+	cache.forget(out)
 	return pointed
 }
 
