@@ -313,13 +313,13 @@ func TestMigrationMovesOldDefaults(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	c, version, warnings, err := s.loadConfig(ctx)
+	c, stamp, warnings, err := s.loadConfig(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Two updates (the global layer, the groups), then nothing.
-	if version != 6 {
-		t.Fatalf("version %d", version)
+	if stamp.version != 6 {
+		t.Fatalf("version %d", stamp.version)
 	}
 	def := rules.DefaultLayer()
 	if !reflect.DeepEqual(c.Rules, def.Rules) || !reflect.DeepEqual(c.Groups[5].Rules, def.Rules) || c.Groups[5].WindowSeconds != 30 {
@@ -371,13 +371,13 @@ func TestMigrationAddsDefaultClearing(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	c, version, _, err := s.loadConfig(ctx)
+	c, stamp, _, err := s.loadConfig(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Two updates (the global layer, the groups), then nothing.
-	if version != 6 {
-		t.Fatalf("version %d", version)
+	if stamp.version != 6 {
+		t.Fatalf("version %d", stamp.version)
 	}
 	def := rules.DefaultLayer()
 	if !reflect.DeepEqual(c.Strategies, def.Strategies) || !reflect.DeepEqual(c.Groups[5].Strategies, def.Strategies) || c.Groups[5].WindowSeconds != 30 {

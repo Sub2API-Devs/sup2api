@@ -8,12 +8,24 @@ import {
   type Problem,
   type ReadonlyReason
 } from './items'
-import { percentileMetric, type Action, type ActionType, type Condition, type Rule, type Scope, type Strategy, type When } from './host'
+import {
+  percentileMetric,
+  type Action,
+  type ActionType,
+  type Condition,
+  type Rule,
+  type Scope,
+  type Strategy,
+  type WeightEvent,
+  type WeightStep,
+  type When
+} from './host'
 
 // Sentences of the adjustment items: the trigger ("错误率 ≥ 30%"), its
 // windows ("最近 3 个窗口中 2 次"), the actions ("权重降低 30%（按当前）")
 // and the cooldown. The table, the editor's preview and the group diff of
-// the configuration page all read them, so an item says the same everywhere.
+// the configuration page all read them, so an item says the same everywhere;
+// so does the detail of a weight event, for the steps it ran.
 
 export type Translate = (key: string, params?: Record<string, unknown>) => string
 
@@ -154,3 +166,53 @@ export const nameList = (names: string[], t: Translate) => names.join(t('it.sep'
 
 /** The name of a copy: "x 副本 2". */
 export const copyNamer = (t: Translate) => (name: string, n: number) => t('item.copyName', { name, n })
+
+// ---- weight events
+
+/** A step of a weight event as its item says it: "错误率过高：权重降低 20%（按当前）". */
+function describeStep(s: WeightStep, t: Translate): string {
+  return t('events.step', { strategy: s.strategy, action: describeAction({ type: s.type, mode: s.mode, value: s.value }, t) })
+}
+
+/** "配置第 10 版", "出厂配置" for version 0, '' for an event without one. */
+function configVersion(v: number | undefined, t: Translate): string {
+  if (typeof v !== 'number') return ''
+  return v > 0 ? t('events.configVersion', { n: v }) : t('events.factoryConfig')
+}
+
+/**
+ * The parts of an event's detail, what ran first: the reason, the strategy's
+ * clearing, or the steps; then the config version (where the event has
+ * one) and the window counts.
+ */
+function eventParts(e: Pick<WeightEvent, 'kind' | 'reason' | 'detail'>, t: Translate): string[] {
+  const d = e.detail ?? {}
+  const version = configVersion(d.config_version, t)
+  if (e.reason) {
+    const extra = d.matched === 0 ? t('events.nothingReset') : d.keys ? t('events.keysAtBase', { n: Number(d.keys) }) : ''
+    return [t(`reason.${e.reason}`), extra, version]
+  }
+  if (e.kind === 'affinity_cleared') {
+    // A weight dropping to 0 clears without a strategy.
+    const strategy = d.strategy ? String(d.strategy) : d.zero ? t('events.zero') : ''
+    return [
+      d.error
+        ? t('events.clearFailed', { strategy, error: String(d.error) })
+        : t('events.cleared', { strategy, n: Number(d.cleared ?? 0) }),
+      version
+    ]
+  }
+  const w = d.window
+  return [
+    ...(Array.isArray(d.steps) ? d.steps.map(s => describeStep(s, t)) : []),
+    version,
+    w ? t('events.window', { total: w.total ?? 0, fail: w.fail ?? 0 }) : ''
+  ]
+}
+
+/**
+ * One-line detail of a weight event: "错误率过高：权重降低 20%（按当前） · 配置第
+ * 10 版 · 窗口 3 次，失败 1". Older events carry neither steps nor a version.
+ */
+export const describeEvent = (e: Pick<WeightEvent, 'kind' | 'reason' | 'detail'>, t: Translate): string =>
+  eventParts(e, t).filter(Boolean).join(' · ')

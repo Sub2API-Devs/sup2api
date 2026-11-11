@@ -472,3 +472,118 @@ func TestResolveLayers(t *testing.T) {
 		t.Fatalf("retention %d", c.RetentionSeconds())
 	}
 }
+
+// twoHungDegrades makes the hung first token rule fire two -20% (current)
+// strategies, plus the given ones after them.
+func twoHungDegrades(t *testing.T, mutate func(*Config)) *Compiled {
+	return compiled(t, func(c *Config) {
+		minus20 := Action{Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 20}
+		c.Strategies[2].Actions = []Action{minus20}
+		c.Strategies = append(c.Strategies, Strategy{Name: "再降", When: &When{Rule: "首字挂死"}, Actions: []Action{minus20}})
+		if mutate != nil {
+			mutate(c)
+		}
+	})
+}
+
+// The steps say what each strategy did, in order, each on the previous
+// result; the weight events carry them.
+func TestWeightSteps(t *testing.T) {
+	s := newSim(t, twoHungDegrades(t, nil), 100)
+	out := s.step(1, 0, 61000)
+	want := []WeightStep{
+		{Strategy: "首字挂死", Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 20, From: 100, To: 80},
+		{Strategy: "再降", Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 20, From: 80, To: 64},
+	}
+	if out.WeightTo != 64 || !reflect.DeepEqual(out.Steps, want) {
+		t.Fatalf("degrade: %v %+v", out.WeightTo, out.Steps)
+	}
+	if ev := Events(&s.cfg, s.win, out); len(ev) != 1 || ev[0].Kind != EventWeightDown || !reflect.DeepEqual(ev[0].Steps, want) {
+		t.Fatalf("down event: %+v", ev)
+	}
+	// The climb back is a step of its own.
+	out = s.step(20, 0, 1000)
+	want = []WeightStep{{Strategy: "自动回升", Type: ActionWeightClimb, Mode: ModeBasePercent, Value: 10, From: 64, To: 74}}
+	if ev := Events(&s.cfg, s.win, out); len(ev) != 1 || ev[0].Kind != EventWeightUpStart || !reflect.DeepEqual(ev[0].Steps, want) {
+		t.Fatalf("up_start event: %+v", ev)
+	}
+	// At the base the climb hits but changes nothing: no step.
+	for range 3 {
+		s.step(20, 0, 1000)
+	}
+	if out = s.step(20, 0, 1000); out.WeightTo != 100 || len(out.Steps) != 0 {
+		t.Fatalf("at base: %v %+v", out.WeightTo, out.Steps)
+	}
+	// New rules: the reset event has no steps.
+	s.cfg = twoHungDegrades(t, func(c *Config) { c.MinSamples = 5 }).Resolve(1, 1)
+	if ev := Events(&s.cfg, s.win, s.step(20, 0, 1000)); len(ev) != 1 || ev[0].Reason != ReasonRulesChange || ev[0].Steps != nil {
+		t.Fatalf("rules change: %+v", ev)
+	}
+}
+
+// A step clamped to the floor ends at it; a strategy that hits at the floor
+// changed nothing and is not a step.
+func TestWeightStepsFloor(t *testing.T) {
+	c := twoHungDegrades(t, func(c *Config) {
+		c.MinWeight = 70
+		c.Strategies = append(c.Strategies, Strategy{Name: "三降", When: &When{Rule: "首字挂死"},
+			Actions: []Action{{Type: ActionWeightDegrade, Mode: ModeFixed, Value: 5}}})
+	})
+	out := newSim(t, c, 100).step(1, 0, 61000)
+	want := []WeightStep{
+		{Strategy: "首字挂死", Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 20, From: 100, To: 80},
+		{Strategy: "再降", Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 20, From: 80, To: 70},
+	}
+	if out.WeightTo != 70 || !reflect.DeepEqual(out.Steps, want) {
+		t.Fatalf("floor: %v %+v", out.WeightTo, out.Steps)
+	}
+}
+
+// Leaving 0 is a step from 0.
+func TestWeightStepsRevive(t *testing.T) {
+	c := compiled(t, func(c *Config) {
+		c.Strategies[2].Actions[0] = Action{Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 100}
+	})
+	s := newSim(t, c, 100)
+	s.step(1, 0, 61000)
+	s.step(0, 0, -1)
+	out := s.step(0, 0, -1)
+	want := []WeightStep{{Strategy: "复活探测", Type: ActionWeightClimb, Mode: ModeBasePercent, Value: 10, From: 0, To: 10}}
+	if ev := Events(&s.cfg, s.win, out); len(ev) != 1 || ev[0].Kind != EventWeightRevived || !reflect.DeepEqual(ev[0].Steps, want) {
+		t.Fatalf("revived: %+v", ev)
+	}
+}
+
+// A climb from 0 adds at least 1: 10% of a base of 5 is half a weight.
+func TestWeightStepsReviveAtLeastOne(t *testing.T) {
+	c := compiled(t, func(c *Config) {
+		c.Strategies[2].Actions[0] = Action{Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 100}
+	})
+	s := newSim(t, c, 5)
+	s.step(1, 0, 61000)
+	s.step(0, 0, -1)
+	out := s.step(0, 0, -1)
+	want := []WeightStep{{Strategy: "复活探测", Type: ActionWeightClimb, Mode: ModeBasePercent, Value: 10, From: 0, To: 1}}
+	if ev := Events(&s.cfg, s.win, out); len(ev) != 1 || ev[0].Kind != EventWeightRevived || !reflect.DeepEqual(ev[0].Steps, want) {
+		t.Fatalf("revived: %+v", ev)
+	}
+}
+
+func TestEventByConfig(t *testing.T) {
+	for _, tc := range []struct {
+		ev   Event
+		want bool
+	}{
+		{Event{Kind: EventWeightDown}, true},
+		{Event{Kind: EventWeightRevived}, true},
+		{Event{Kind: EventReset, Reason: ReasonRulesChange}, true},
+		{Event{Kind: EventReset, Reason: ReasonBaseMismatch}, false},
+		{Event{Kind: EventReset, Reason: ReasonManual}, false},
+		{Event{Kind: EventReset, Reason: ReasonStatusChange}, false},
+		{Event{Kind: EventAffinityClear}, false},
+	} {
+		if got := tc.ev.ByConfig(); got != tc.want {
+			t.Errorf("%s/%s: ByConfig = %v, want %v", tc.ev.Kind, tc.ev.Reason, got, tc.want)
+		}
+	}
+}

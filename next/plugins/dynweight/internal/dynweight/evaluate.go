@@ -341,8 +341,13 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 	if changed {
 		e.changed++
 	}
+	version := e.cfg.version
 	for _, ev := range events {
-		e.events = append(e.events, eventRow{key: k, Event: ev})
+		row := eventRow{key: k, Event: ev}
+		if ev.ByConfig() {
+			row.configVersion = &version
+		}
+		e.events = append(e.events, row)
 		if rules.Notified(ev.Kind) {
 			e.notices = append(e.notices, notice{k: k, name: b.Name, ev: ev})
 		}

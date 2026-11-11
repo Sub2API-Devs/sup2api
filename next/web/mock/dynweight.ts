@@ -98,6 +98,7 @@ const DEFAULT_LAYER = {
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
 let version = 1
+let updatedAt = Math.floor(Date.now() / 1000) - 3600
 let config: any = {
   ...clone(DEFAULT_LAYER),
   // Group 2 (vip) degrades without a climb strategy: the no-climb warning shows for its accounts.
@@ -207,7 +208,16 @@ const events: any[] = keys
     from: k.base,
     to: k.effective,
     rules: k.hits ?? null,
-    detail: { window: { total: 40, fail: 14 } }
+    // 0.5.6: the strategy steps that moved the weight and the configuration version they ran on.
+    detail: {
+      window: { total: 40, fail: 14 },
+      steps: [
+        k.state === 'climbing'
+          ? { strategy: '自动回升', type: 'weight_climb', mode: 'base_percent', value: 10, from: k.effective - k.base * 0.1, to: k.effective }
+          : { strategy: k.hits?.[0] ?? '错误率过高', type: 'weight_degrade', mode: 'current_percent', value: 30, from: k.base, to: k.effective }
+      ],
+      config_version: version
+    }
   }))
 
 /** Puts the keys of an account (or of the given accounts), narrowed to a group / model, back to their base. */
@@ -228,7 +238,7 @@ function resetKeys(body: any): number {
   return n
 }
 
-on('GET', '/p/dynweight/config', () => ({ config, version }))
+on('GET', '/p/dynweight/config', () => ({ config, version, updated_at: updatedAt }))
 on('GET', '/p/dynweight/defaults', () => DEFAULT_LAYER)
 on('GET', '/p/dynweight/channels', () => [])
 on('POST', '/p/dynweight/config/validate', (req) => ({ config: req.body?.config, version: req.body?.version ?? version, warnings: [] }))
@@ -236,7 +246,8 @@ on('PUT', '/p/dynweight/config', (req) => {
   if (Number(req.body?.version) !== version) return fail(409, 'conflict', 'the configuration was changed meanwhile, reload it / 配置已被修改，请刷新后重试')
   config = req.body.config
   version++
-  return { config, version, warnings: [] }
+  updatedAt = Math.floor(Date.now() / 1000)
+  return { config, version, updated_at: updatedAt, warnings: [] }
 })
 on('GET', '/p/dynweight/status', (req) => {
   const q = req.query
