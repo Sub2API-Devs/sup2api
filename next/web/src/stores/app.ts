@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { api } from '@sub2api/host'
+import type { PageHead } from '@sub2api/ui'
 import type { MenuSection } from '@/api/types'
 import { usePluginStore } from './plugins'
 
@@ -42,8 +43,8 @@ export const useAppStore = defineStore('app', () => {
   const theme = ref<Theme>(initialTheme())
   const sidebarCollapsed = ref(localStorage.getItem('s2a.sidebar') === '1')
   const mobileNavOpen = ref(false)
-  /** Description of the current page, shown beside the top bar title. */
-  const pageDescription = ref('')
+  /** Title and description of the current page, as its page header gives them; the top bar shows them. */
+  const pageHead = ref<PageHead | null>(null)
   const menus = ref<NavSection[]>([])
   const menusLoaded = ref(false)
   /** GET /me/menus failed; the sidebar shows the dashboard and a retry. */
@@ -76,7 +77,7 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  return { theme, sidebarCollapsed, mobileNavOpen, pageDescription, menus, menusLoaded, menusError, toggleTheme, loadMenus }
+  return { theme, sidebarCollapsed, mobileNavOpen, pageHead, menus, menusLoaded, menusError, toggleTheme, loadMenus }
 })
 
 function normalizeSection(s: MenuSection): NavSection {

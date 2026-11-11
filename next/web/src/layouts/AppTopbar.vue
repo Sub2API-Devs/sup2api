@@ -20,7 +20,8 @@ const { compact } = useViewport()
 
 const pwdOpen = ref(false)
 
-const title = computed(() => (route.meta.title ? t(route.meta.title as string) : ''))
+// The page's own title (its page header's); the route's until the page has given one.
+const title = computed(() => app.pageHead?.title || (route.meta.title ? t(route.meta.title as string) : ''))
 
 /**
  * The pages above this one (meta.parent, followed upwards), outermost first.
@@ -82,9 +83,13 @@ async function logout() {
           <SIcon name="chevron-right" class="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
         </template>
       </nav>
-      <h1 class="shrink-0 text-base font-semibold text-fg">{{ title }}</h1>
-      <!-- flex-1: the description takes the room the breadcrumbs and the title leave, so a long one does not squeeze them. -->
-      <p v-if="app.pageDescription" class="hidden min-w-0 flex-1 truncate text-xs text-fg-muted md:block" :title="app.pageDescription" data-testid="page-description">{{ app.pageDescription }}</p>
+      <h1 class="min-w-0 truncate text-base font-semibold text-fg" :title="title" data-testid="page-title">{{ title }}</h1>
+      <!-- This box takes only the room the breadcrumbs and the title leave, so what goes with the title and a long
+           description are cut before either of those is. -->
+      <div class="flex min-w-0 flex-1 basis-0 items-center gap-3 self-center overflow-hidden">
+        <div id="s-page-title-extra" class="flex shrink-0 items-center empty:hidden" />
+        <p v-if="app.pageHead?.description" class="hidden min-w-0 flex-1 truncate text-xs text-fg-muted md:block" :title="app.pageHead.description" data-testid="page-description">{{ app.pageHead.description }}</p>
+      </div>
     </div>
     <div id="s-page-actions" class="flex shrink-0 items-center empty:hidden" />
 
