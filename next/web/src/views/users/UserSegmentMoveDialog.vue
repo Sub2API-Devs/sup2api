@@ -3,14 +3,16 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SAlert, SField, SFormModal, SHint, toast } from '@sub2api/ui'
 import SegmentSelect from '@/components/pricing/SegmentSelect.vue'
-import { useSegmentsLookup, type SegmentedUser } from '@/components/pricing/segmentLookup'
+import type { User } from '@/api/types'
+import { useSegmentsLookup } from '@/components/pricing/segmentLookup'
+import { moveToSegment } from '@/components/pricing/segmentMembers'
 import { notifyError } from '@/utils/errors'
-import { moveImpact, moveToSegment } from './userSegments'
+import { moveImpact } from './userSegments'
 
 // Moves the selected users to one named segment (POST /segments/:id/members).
 // It says what the move changes before it is made: who moves, and who loses
 // a personal segment by it.
-const props = defineProps<{ open: boolean; users: SegmentedUser[] }>()
+const props = defineProps<{ open: boolean; users: User[] }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'done'): void }>()
 const { t } = useI18n()
 const { segments } = useSegmentsLookup()

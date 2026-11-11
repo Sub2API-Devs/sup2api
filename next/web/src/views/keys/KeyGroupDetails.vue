@@ -17,7 +17,7 @@ const { t } = useI18n()
   <div class="space-y-1.5 rounded-xl bg-surface-2 px-3 py-2 text-xs text-fg-muted" data-testid="key-group-details">
     <div class="flex flex-wrap items-center gap-1.5">
       <GroupBadge :name="group.name" :platforms="group.platforms" :rate="myRate(group)" />
-      <SBadge v-if="group.exclusive" tone="purple" size="xs" data-testid="key-group-exclusive">{{ t('apikeys.exclusiveGroup') }}</SBadge>
+      <SBadge v-if="group.exclusive" tone="purple" size="xs" data-testid="key-group-exclusive">{{ t('pricing.exclusive') }}</SBadge>
       <SLink class="ms-auto" :to="{ path: '/me/models', query: { group: group.id } }" target="_blank" data-testid="key-group-prices">{{ t('apikeys.groupPrices') }}</SLink>
     </div>
     <div v-if="hasOwnRate(group)" data-testid="key-group-own-rate">{{ t('apikeys.ownRate', { group: rateText(group.rate_multiplier), rate: rateText(myRate(group)) }) }}</div>

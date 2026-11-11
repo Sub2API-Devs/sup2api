@@ -7,12 +7,11 @@ import type { Segment } from '@/api/pricing'
 import type { User } from '@/api/types'
 import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
 import SegmentBadge from '@/components/pricing/SegmentBadge.vue'
-import { useLatestRequest } from '@/components/pricing/latestRequest'
-import { validRate } from '@/components/pricing/pricingFormat'
-import type { SegmentedUser } from '@/components/pricing/segmentLookup'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import SegmentGroupsEditor from '@/views/segments/SegmentGroupsEditor.vue'
+import { validDiscount } from '@/views/segments/segmentForm'
 import UserSegmentPanel from './UserSegmentPanel.vue'
 
 // Groups and pricing of one user: the segment he belongs to and what it gives
@@ -24,12 +23,13 @@ const props = defineProps<{ open: boolean; user: User | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'changed'): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
+const canManage = computed(() => auth.has('segment:manage'))
 
 // ------------------------------------------------------------------ the user's segment
 
 // Asked for by user: the list row is out of date as soon as he is moved from here.
 async function segmentOf(userId: number): Promise<Segment | null> {
-  const { segment: own } = await api.get<SegmentedUser>(`/users/${userId}`)
+  const { segment: own } = await api.get<User>(`/users/${userId}`)
   return own ? api.get<Segment>(`/segments/${own.id}`) : null
 }
 const revision = ref(0)
@@ -53,10 +53,10 @@ watch(segment, (s) => {
   discount.value = s?.discount ?? '1'
 })
 
-const editable = computed(() => segment.value?.kind === 'personal' && auth.has('segment:manage'))
+const editable = computed(() => segment.value?.kind === 'personal' && canManage.value)
 const discountChanged = computed(() => discount.value.trim() !== segment.value?.discount)
 const dirty = computed(() => editable.value && (discountChanged.value || !!editor.value?.dirty))
-const savable = computed(() => dirty.value && validRate(discount.value))
+const savable = computed(() => dirty.value && validDiscount(discount.value.trim()))
 
 async function save() {
   const s = segment.value
@@ -97,13 +97,16 @@ const simulatorOpen = ref(false)
       <template v-else>
         <section>
           <SSectionTitle :title="t('users.pricing.membership')" />
-          <UserSegmentPanel v-model:discount="discount" :user="user" :segment="segment" :editable="auth.has('segment:manage')" @changed="onMoved" />
+          <UserSegmentPanel v-model:discount="discount" :user="user" :segment="segment" :editable="canManage" @changed="onMoved" />
         </section>
         <section>
           <SSectionTitle :title="t('users.pricing.groups')" />
           <SAlert v-if="segment.kind === 'named'" tone="neutral" dense class="mb-3" data-testid="user-pricing-inherited">
             {{ t('users.pricing.inherited', { segment: segment.name }) }}
-            <template #actions><SLink to="/segments">{{ t('users.pricing.editSegment') }}</SLink></template>
+            <template v-if="canManage">{{ t('users.pricing.inheritedEdit') }}</template>
+            <template #actions>
+              <SLink :to="{ path: '/segments', query: { edit: segment.id } }" data-testid="user-pricing-segment-link">{{ t(canManage ? 'users.pricing.editSegment' : 'users.pricing.viewSegment') }}</SLink>
+            </template>
           </SAlert>
           <SegmentGroupsEditor ref="editor" :segment-id="segment.id" :editable="editable" :discount="discount" />
         </section>

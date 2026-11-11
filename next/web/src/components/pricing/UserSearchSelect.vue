@@ -3,15 +3,15 @@ import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SHint, SInput, SSpinner } from '@sub2api/ui'
+import type { User } from '@/api/types'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import SegmentBadge from './SegmentBadge.vue'
-import { useLatestRequest } from './latestRequest'
-import type { SegmentedUser } from './segmentLookup'
 
 // Finds one user by email or display name (GET /users?q=) and hands it to the
 // parent, which shows whom it picked; the field itself goes back to empty.
 // Small on purpose: a general entity picker is to take its place.
 const props = defineProps<{ placeholder?: string; disabled?: boolean; excludeIds?: number[] }>()
-const emit = defineEmits<{ (e: 'select', user: SegmentedUser): void }>()
+const emit = defineEmits<{ (e: 'select', user: User): void }>()
 const { t } = useI18n()
 
 const PAGE_SIZE = 8
@@ -22,7 +22,7 @@ const active = ref(0)
 
 const { result, loading, error } = useLatestRequest(
   () => query.value.trim() || null,
-  async (q) => (await api.list<SegmentedUser>('/users', { q, page_size: PAGE_SIZE })).items
+  async (q) => (await api.list<User>('/users', { q, page_size: PAGE_SIZE })).items
 )
 const users = computed(() => (result.value ?? []).filter((u) => !props.excludeIds?.includes(u.id)))
 const shown = computed(() => open.value && !!query.value.trim())
@@ -30,7 +30,7 @@ watch(users, () => (active.value = 0))
 // Typing brings back a list that Escape closed.
 watch(query, () => (open.value = true))
 
-function pick(u: SegmentedUser | undefined) {
+function pick(u: User | undefined) {
   if (!u) return
   emit('select', u)
   query.value = ''

@@ -33,7 +33,7 @@ describe('API key group details', () => {
     const own = render({ id: 2, name: 'vip', rate_multiplier: '0.8', effective_rate: '0.72', exclusive: true })
     expect(own.getComponent(GroupBadge).props('rate')).toBe('0.72')
     expect(own.get('[data-testid="key-group-own-rate"]').text()).toBe('分组默认 ×0.8，你的倍率 ×0.72')
-    expect(own.get('[data-testid="key-group-exclusive"]').text()).toBe('专属分组')
+    expect(own.get('[data-testid="key-group-exclusive"]').text()).toBe('专属')
 
     const plain = render({ effective_rate: '1' })
     expect(plain.getComponent(GroupBadge).props('rate')).toBe('1')

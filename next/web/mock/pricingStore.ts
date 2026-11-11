@@ -198,19 +198,6 @@ export function listPriceOf(s: MockSegment | null, groupId: number, model: strin
   return { group_rule, segment_rule, source, list_price: applyRule(base, segment_rule ?? group_rule) }
 }
 
-const GLOB_SPECIALS = /[.+^${}()|[\]\\]/g
-
-function globMatch(pattern: string, s: string): boolean {
-  return new RegExp('^' + pattern.replace(GLOB_SPECIALS, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$').test(s)
-}
-
-/** The model policy of a group (core.GroupInfo.AllowsModel): an empty list allows every model. */
-export function allowsModel(g: { model_allowlist: string[]; model_filter_mode?: 'whitelist' | 'blacklist' }, model: string): boolean {
-  if (!g.model_allowlist.length) return true
-  const listed = g.model_allowlist.some((p) => globMatch(p, model))
-  return g.model_filter_mode === 'blacklist' ? !listed : listed
-}
-
 // ------------------------------------------------------------------ changes
 
 /** Removes the rows `gone` picks, in place. */

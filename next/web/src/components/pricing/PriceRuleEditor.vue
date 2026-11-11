@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SAlert, SField, SGrid, SHint, SInput, SSegmented, type SelectOption } from '@sub2api/ui'
+import { SAlert, SField, SHint, SInput, SSegmented, SStack, type SelectOption } from '@sub2api/ui'
 import type { PriceDef, PriceRule } from '@/api/pricing'
 import { applyRule, priceBrief } from './pricingFormat'
 import { customFields, startRule, validRule } from './ruleDrafts'
@@ -90,8 +90,9 @@ defineExpose({ valid })
     </div>
 
     <template v-if="custom">
-      <SGrid :cols-base="2" :gap="2" class="w-full max-w-xs">
-        <SField v-for="(key, i) in custom.keys" :key="key" size="sm" :label="fieldLabel(key)" :required="i < custom.required">
+      <!-- One row where the editor has the width for it; the prices wrap where it has not. -->
+      <SStack direction="row" :gap="2" wrap>
+        <SField v-for="(key, i) in custom.keys" :key="key" size="sm" class="w-28" :label="fieldLabel(key)" :required="i < custom.required">
           <SInput
             :model-value="custom.rule.config[key]"
             type="number"
@@ -103,7 +104,7 @@ defineExpose({ valid })
             @update:model-value="setPrice(custom.rule, key, $event as number | null)"
           />
         </SField>
-      </SGrid>
+      </SStack>
       <SHint size="xs" :tone="valid ? 'muted' : 'danger'" data-testid="price-rule-unit">{{ customHint }}</SHint>
     </template>
   </div>

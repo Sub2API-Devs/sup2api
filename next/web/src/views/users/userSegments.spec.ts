@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Segment, SegmentRef } from '@/api/pricing'
-import type { SegmentedUser } from '@/components/pricing/segmentLookup'
+import type { User } from '@/api/types'
 import { PERSONAL_FILTER, moveImpact, segmentFilterOptions } from './userSegments'
 
 const vip: SegmentRef = { id: 2, kind: 'named', name: 'VIP' }
-const user = (id: number, segment?: SegmentRef): SegmentedUser => ({ id, email: `u${id}@example.com`, display_name: '', status: 'active', segment })
+const user = (id: number, segment?: SegmentRef): User => ({ id, email: `u${id}@example.com`, display_name: '', status: 'active', segment })
 const personalOf = (u: number): SegmentRef => ({ id: 100 + u, kind: 'personal', name: `u${u}@example.com`, user_id: u })
 
 describe('segmentFilterOptions', () => {

@@ -327,7 +327,7 @@ const title = computed(() => {
     <template v-else>
       <!-- basic -->
       <SCard :title="t('prices.basic')">
-        <SAlert tone="primary" dense class="mb-4">{{ t('prices.scopeNote') }}</SAlert>
+        <SAlert tone="primary" dense class="mb-4">{{ t('prices.scopeNoteEdit') }}</SAlert>
         <SGrid :cols="1" :md-cols="2">
           <SField :label="t('prices.model')" :hint="t('prices.modelHint')" :error="errors.model" required>
             <SInput v-model.trim="form.model" mono placeholder="claude-sonnet-4-5" :disabled="readonly" />

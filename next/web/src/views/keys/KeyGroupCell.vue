@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { SBadge } from '@sub2api/ui'
 import GroupBadge from '@/components/platform/GroupBadge.vue'
 import ProblemIcon from '@/components/ProblemIcon.vue'
 import type { ApiKey } from '@/api/types'
@@ -8,11 +9,12 @@ import type { ApiKey } from '@/api/types'
 // Group of an API key as a badge: its name and the rate its owner pays there, tinted by
 // the platforms the key can access (CONTRACTS §13). `platforms` undefined:
 // the server did not report them; empty: the key reaches no platform.
+// `exclusive` marks a private group granted to the owner.
 // `status` other than active says why the group cannot serve the key
 // (deleted, disabled, no longer open to the owner); the owner then picks
 // another group. A problem is a warning icon after the badge, its sentence
 // in the tooltip, so the cell stays one line.
-const props = defineProps<{ name: string; multiplier?: string | number; platforms?: string[] | null; status?: ApiKey['group_status'] }>()
+const props = defineProps<{ name: string; multiplier?: string | number; platforms?: string[] | null; status?: ApiKey['group_status']; exclusive?: boolean }>()
 const { t } = useI18n()
 const STATUS_PROBLEMS: Record<string, string> = {
   deleted: 'apikeys.groupState.deleted',
@@ -31,6 +33,7 @@ const problem = computed(() => {
 <template>
   <div class="flex min-w-0 max-w-72 items-center gap-1.5 whitespace-nowrap" data-testid="key-group">
     <GroupBadge v-if="status !== 'deleted'" :name="name" :platforms="platforms" :rate="multiplier" />
+    <SBadge v-if="exclusive" tone="purple" size="xs" class="shrink-0" data-testid="key-group-exclusive">{{ t('pricing.exclusive') }}</SBadge>
     <ProblemIcon v-if="problem" :text="t(problem.message)" :tone="problem.tone" data-testid="key-group-problem" />
   </div>
 </template>

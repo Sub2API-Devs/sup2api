@@ -306,3 +306,20 @@ const columns: TableColumn[] = [
 **吃剩余宽度的列：`TableColumn.grow`。** `grow: true` 让该列吃掉其余列剩下的宽度并单行省略，默认渲染时完整值进 `title`；单元格插槽内容同样被截断（块级或 flex 根元素被限制在列宽内，可自行 `truncate`）。手机卡片不受影响。其余列用 `nowrap` 或 `ellipsis`。
 
 **其它。** 新图标 `image`；时间范围预设“全部”显示为“全部时间”（`ui.allTime`）。
+
+## 从单元格展开行（暂未计入 UI SDK 版本号）
+
+`STable` 的展开行除了行首的箭头，也可以由单元格里的按钮打开（例如操作列的“设置”），用于在行下方就地编辑。本节三项还没有对应的 UI SDK 版本号（`HOST_UI_VERSION` 仍是 3.10.0）：控制台自己的页面可以用，原生插件在版本号提升、能用 `hostUICompat` 声明之前不要依赖。
+
+```vue
+<STable :columns="columns" :rows="rows" row-key="model" expandable :expand-toggle="false" expand-single>
+  <template #cell-actions="{ expanded, toggleExpand }">
+    <SRowAction :label="expanded ? t('common.close') : t('common.edit')" :aria-expanded="expanded" @click="toggleExpand()" />
+  </template>
+  <template #expand="{ row }">…</template>
+</STable>
+```
+
+- 每个 `cell-<key>` 插槽多两个参数：`expanded`（该行是否展开）和 `toggleExpand()`（展开或收起该行，照常触发 `expand` 事件），需要 `expandable`；手机卡片里的单元格插槽同样有，与 `#card` 插槽的同名参数一致。
+- `:expand-toggle="false"` 去掉行首的箭头列，只由单元格打开；手机卡片仍保留“详情”折叠。默认 `true`，与以前一样。
+- `expand-single`：展开一行时收起其它行。默认关闭。

@@ -4,6 +4,8 @@
 
 export const GROUP_EDIT_TABS = ['basic', 'segments', 'pricing', 'models', 'accounts', 'advanced'] as const
 export type GroupEditTab = (typeof GROUP_EDIT_TABS)[number]
+/** The tabs about who may use the group and at what price: all a caller who only reads groups is shown. */
+export type GroupPricingTab = Extract<GroupEditTab, 'segments' | 'pricing'>
 
 const TAB_FIELDS: Partial<Record<GroupEditTab, readonly string[]>> = {
   basic: ['name', 'description', 'status', 'rate_multiplier', 'visibility'],

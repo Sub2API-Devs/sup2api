@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, type MenuAction, type TableColumn } from '@sub2api/ui'
 import type { Segment } from '@/api/pricing'
@@ -9,6 +10,7 @@ import { useSegmentsLookup } from '@/components/pricing/segmentLookup'
 import { deleteWithConfirm } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
+import { notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
 import PersonalSegments from './PersonalSegments.vue'
 import SegmentEditor, { type SegmentEditorTab } from './SegmentEditor.vue'
@@ -17,9 +19,12 @@ import SegmentTable from './SegmentTable.vue'
 // User groups ("segments"): every user is in exactly one, and it decides
 // which private groups he may use and at what rate and prices. The list has
 // the named ones; the users priced individually, each a segment of his own,
-// are summed up under it and listed by PersonalSegments.
+// are summed up under it and listed by PersonalSegments. A caller who may
+// not manage segments opens them read-only.
 const { t } = useI18n()
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 const canManage = computed(() => auth.has('segment:manage'))
 const list = useList<Segment>('/segments', { q: '' })
 
@@ -30,13 +35,11 @@ const lead = computed<TableColumn[]>(() => [
 
 function rowActions(s: Segment): MenuAction[] {
   return [
-    { key: 'members', label: t('segments.tabs.members'), hidden: !canManage.value },
+    { key: 'members', label: t('segments.tabs.members') },
     { key: 'simulate', label: t('pricingTools.sim.title'), hidden: !auth.has('price:read') },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !canManage.value, disabled: s.is_default }
   ]
 }
-const hasMenu = (s: Segment) => rowActions(s).some((a) => !a.hidden)
-
 function onAction(s: Segment, key: string) {
   if (key === 'members') openEditor(s, 'members')
   else if (key === 'simulate') simulate(s)
@@ -76,6 +79,20 @@ function openEditor(s: Segment | null, tab: SegmentEditorTab = 'basic') {
   editorOpen.value = true
 }
 
+/** ?edit=<id> opens that user group: other pages link to it this way. The parameter is used once and leaves the address bar. */
+async function openFromQuery(id: unknown) {
+  if (typeof id !== 'string') return
+  router.replace({ query: { ...route.query, edit: undefined } })
+  try {
+    const s = await api.get<Segment>(`/segments/${id}`)
+    // A personal segment is edited where its user is, not in this list.
+    if (s.kind === 'named') openEditor(s)
+  } catch (e) {
+    notifyError(e)
+  }
+}
+watch(() => route.query.edit, openFromQuery, { immediate: true })
+
 // ------------------------------------------------------------------ row menu
 
 const simulatorPreset = ref<{ segmentId: number }>()
@@ -111,13 +128,12 @@ function remove(s: Segment) {
         <SHint v-if="row.description" size="xs" class="max-w-xs truncate">{{ row.description }}</SHint>
       </template>
       <template #cell-member_count="{ row }">
-        <SLink v-if="canManage" as="button" class="font-mono" data-testid="segment-members-link" @click="openEditor(row, 'members')">{{ formatNumber(row.member_count) }}</SLink>
-        <span v-else class="font-mono">{{ formatNumber(row.member_count) }}</span>
+        <SLink as="button" class="font-mono" data-testid="segment-members-link" @click="openEditor(row, 'members')">{{ formatNumber(row.member_count) }}</SLink>
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
-          <SButton v-if="canManage" variant="ghost" size="sm" data-testid="segment-edit" @click="openEditor(row)">{{ t('common.edit') }}</SButton>
-          <SDropdown v-if="hasMenu(row)" :actions="rowActions(row)" @select="onAction(row, $event)" />
+          <SButton variant="ghost" size="sm" data-testid="segment-edit" @click="openEditor(row)">{{ t(canManage ? 'common.edit' : 'common.view') }}</SButton>
+          <SDropdown :actions="rowActions(row)" @select="onAction(row, $event)" />
         </div>
       </template>
       <template #footer>
@@ -132,7 +148,7 @@ function remove(s: Segment) {
       </template>
     </SegmentTable>
 
-    <SegmentEditor v-model:open="editorOpen" :segment="editing" :tab="editorTab" @changed="changed" />
+    <SegmentEditor v-model:open="editorOpen" :segment="editing" :tab="editorTab" :readonly="!canManage" @changed="changed" />
     <PersonalSegments v-model:open="personalOpen" @changed="changed" />
     <PriceSimulatorModal v-model:open="simulatorOpen" :preset="simulatorPreset" />
   </div>

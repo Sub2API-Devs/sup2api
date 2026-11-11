@@ -213,7 +213,11 @@ route('PUT', '/groups/:id/segments', 'group:manage', onGroup((g, req) => {
 
 // ------------------------------------------------------------------ model prices
 
-/** The prices a custom rule may set per mode; the first `required` of them must be set. */
+/**
+ * The prices a custom rule may set per mode; the first `required` of them
+ * must be set. The console checks a rule by the same table before it saves
+ * (customFields in src/components/pricing/ruleDrafts.ts): keep the two alike.
+ */
 const CUSTOM_PRICES = {
   per_request: { keys: ['price'], required: 1 },
   per_token: { keys: ['p', 'c', 'cr', 'cc', 'cc1h'], required: 2 }

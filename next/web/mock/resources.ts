@@ -4,7 +4,7 @@ import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './
 import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 import { pricedModels } from './billing'
-import { accessOf, allowsModel, forgetGroup, forgetUser, grantedGroupIds, groupAccess, groupRuleCounts, rateOf, segmentOfUser, segmentRef } from './pricingStore'
+import { accessOf, findSegment, forgetGroup, forgetUser, grantedGroupIds, groupAccess, groupRuleCounts, moveUser, rateOf, segmentOfUser, segmentRef } from './pricingStore'
 
 type L = { en: string; zh: string }
 const L = (en: string, zh: string): L => ({ en, zh })
@@ -215,6 +215,19 @@ function groupOut(g: MockGroup) {
   return { ...g, account_count: groupAccountCount(g.id), platforms: groupPlatforms(g.id), api_key_count: keys.filter((k) => k.group_id === g.id).length, access: groupAccess(g.id), ...groupRuleCounts(g.id), model_count: groupModels(g).length }
 }
 
+const GLOB_SPECIALS = /[.+^${}()|[\]\\]/g
+
+function globMatch(pattern: string, s: string): boolean {
+  return new RegExp('^' + pattern.replace(GLOB_SPECIALS, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$').test(s)
+}
+
+/** The model policy of a group (core.GroupInfo.AllowsModel): an empty list allows every model. */
+function allowsModel(g: Pick<MockGroup, 'model_allowlist' | 'model_filter_mode'>, model: string): boolean {
+  if (!g.model_allowlist.length) return true
+  const listed = g.model_allowlist.some((p) => globMatch(p, model))
+  return g.model_filter_mode === 'blacklist' ? !listed : listed
+}
+
 /**
  * The models a group provides: those its accounts declare, through its model
  * policy. An account that declares none serves every model, which here is
@@ -234,7 +247,12 @@ function validateGroup(b: any) {
   return null
 }
 
-on('GET', '/groups', (req) => paginate(groups.filter((g) => match(req.query.q, g.name, g.description)).map(groupOut), req.query))
+// ?model=<name> keeps the groups that provide that model.
+on('GET', '/groups', (req) => {
+  const { q, model } = req.query
+  const rows = groups.filter((g) => match(q, g.name, g.description) && (!model || groupModels(g).includes(model)))
+  return paginate(rows.map(groupOut), req.query)
+})
 on('GET', '/groups/:id/models', req => {
  const gid = Number(req.params.id)
  if (!groups.some(g => g.id === gid)) return fail(404, 'not_found', 'group not found')
@@ -349,9 +367,13 @@ on('POST', '/users', (req) => {
   if (!/^[^@\s]+@[^@\s]+$/.test(b.email || '')) return invalid('email', 'invalid email')
   if (users.some((u) => u.email === b.email)) return invalid('email', 'email already registered')
   if (!b.password || String(b.password).length < 8) return invalid('password', 'password must be at least 8 characters')
+  // segment_id: the named user group the user starts in; without it, the default one.
+  const segment = b.segment_id == null ? null : findSegment(Number(b.segment_id))
+  if (segment !== null && segment?.kind !== 'named') return invalid('segment_id', 'unknown user group')
   const roleKeys: string[] = Array.isArray(b.role_keys) && b.role_keys.length ? b.role_keys : ['user']
   const u: MockUser = { id: nextId(), email: b.email, display_name: b.display_name || '', status: 'active', roles: roleKeys, group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(), updated_at: now() }
   users.unshift(u)
+  if (segment) moveUser(u.id, segment)
   return userOut(u)
 })
 on('PATCH', '/users/:id', (req) => {

@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SAlert, SButton, SField, SGrid, SHint, SInput, toast } from '@sub2api/ui'
-import type { Segment } from '@/api/pricing'
+import { SAlert, SButton, SField, SGrid, SHint, toast } from '@sub2api/ui'
+import type { PersonalDialogUser, Segment } from '@/api/pricing'
 import PersonalConvertDialog from '@/components/pricing/PersonalConvertDialog.vue'
 import PersonalRemoveDialog from '@/components/pricing/PersonalRemoveDialog.vue'
 import SegmentSelect from '@/components/pricing/SegmentSelect.vue'
-import { rateText, validRate } from '@/components/pricing/pricingFormat'
-import { useSegmentsLookup, type PersonalDialogUser } from '@/components/pricing/segmentLookup'
+import { rateText } from '@/components/pricing/pricingFormat'
+import { useSegmentsLookup } from '@/components/pricing/segmentLookup'
+import { moveToSegment } from '@/components/pricing/segmentMembers'
 import { confirmAction } from '@/composables/crud'
-import { moveToSegment } from './userSegments'
+import SegmentDiscountField from '@/views/segments/SegmentDiscountField.vue'
+import { validDiscount } from '@/views/segments/segmentForm'
 
 // The segment one user belongs to, and the ways out of it. In a named segment:
 // move him to another one, or give him a personal one. In a personal segment:
@@ -78,11 +80,7 @@ async function switchTo(id: number | null) {
           <SButton size="sm" data-testid="user-move-back" @click="removeOpen = true">{{ t('users.pricing.moveBack') }}</SButton>
         </template>
       </SAlert>
-      <SField :label="t('users.pricing.discount')" :hint="t('users.pricing.discountHint')" :error="validRate(discount) ? '' : t('pricing.rate.invalid')">
-        <SInput v-model="discount" mono inputmode="decimal" class="w-40" :disabled="!editable" data-testid="user-discount">
-          <template #prefix><span class="text-xs text-fg-subtle">×</span></template>
-        </SInput>
-      </SField>
+      <SegmentDiscountField v-model="discount" :error="validDiscount(discount.trim()) ? undefined : t('segments.discount.invalid')" :disabled="!editable" />
     </template>
 
     <PersonalConvertDialog v-model:open="convertOpen" :user="member" @done="emit('changed')" />

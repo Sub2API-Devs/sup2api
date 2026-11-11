@@ -21,7 +21,7 @@ export default {
   public: '公开',
   restricted: '私有',
   publicHint: '所有用户都能用。',
-  restrictedHint: '只有被授权的用户组和个人专属能用，在“授权与倍率”里勾选。',
+  restrictedHint: '只有被授权的用户组和个人专属能用，在“授权与倍率”里授权。',
   rateMultiplier: '默认倍率',
   multiplierHint: '实付 = 标价 × 倍率，例如 0.8 表示八折。没有专属倍率的用户组按它乘全场折扣计费。',
   conversionDefault: '默认（允许）',
@@ -56,8 +56,9 @@ export default {
   whoCanUse: '谁能用',
   modelPricing: '模型定价',
   modelCount: '提供 {n} 个模型',
-  unsaved: '未保存',
   pickUser: '指定用户单独定价',
+  pricingTitle: '{name} 的授权与定价',
+  viewPricing: '查看授权与定价',
   deleteWithPricing: '该分组上的授权、专属倍率和模型定价会一并删除。',
   tabs: {
     basic: '基本信息',
@@ -78,21 +79,10 @@ export default {
     segments: '{n} 条用户组专属价'
   },
   segments: {
-    hint: '每个用户组在这个分组能不能用、按几倍收费。倍率留空就跟随分组默认倍率 × 该用户组的全场折扣；填了就按填的算，不再乘折扣。要给某个用户单独设置，用“指定用户单独定价”搜索他：他会作为个人专属加进表格，还在用户组里的会先让你确认。',
-    nobody: '这个私有分组还没有授权给任何人，现在没有人能用。打开下面“能否使用”的开关来授权。',
-    segment: '用户组',
-    access: '能否使用',
-    rateOverride: '倍率',
-    rate: '实际倍率',
-    prices: '专属价',
-    members: '{n} 人',
-    publicAccess: '公开，都能用',
-    grant: '授权「{name}」使用',
-    rateOf: '「{name}」的专属倍率',
-    notGranted: '还没授权，用不了这个分组',
-    priceRules: '{n} 条',
-    setPrices: '去设置',
-    rateInvalid: '「{name}」的倍率填得不对：请输入不小于 0 的数字，最多 4 位小数。'
+    hint: '每个用户组在这个分组能不能用、按几倍计费。专属倍率留空就跟随分组默认倍率 × 该用户组的全场折扣；填了就按填的算，不再乘折扣。要给某个用户单独设置，用“指定用户单独定价”搜索他：他会作为个人专属加进表格，还在用户组里的会先让你确认。',
+    nobody: '这个私有分组还没有授权给任何人，现在没有人能用。',
+    nobodyHint: '打开下面“能否使用”的开关来授权。',
+    members: '{n} 人'
   },
   pricing: {
     target: '给谁定价',
@@ -101,6 +91,7 @@ export default {
     notGrantedOption: '{name}（未授权）',
     groupScope: '分组内定价对所有使用这个分组的人生效，没单独定价的模型跟随全局价格。实付 = 标价 × 各自的倍率（分组默认 {rate}）。',
     segmentScope: '正在给「{name}」定专属价：只对它生效，没设的模型跟随分组内定价。',
+    segmentScopeReadonly: '「{name}」的专属价：只对它生效，没设的模型跟随分组内定价。',
     segmentRate: '它在本分组的实际倍率是 {rate}，实付 = 标价 {rate}。',
     segmentNotGranted: '它还没被授权使用这个私有分组，专属价要等授权后才用得上。',
     emptyNew: '先保存分组并加入账号后再定价。',

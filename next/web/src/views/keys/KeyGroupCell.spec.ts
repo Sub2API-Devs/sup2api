@@ -25,6 +25,11 @@ describe('API key group cell', () => {
     expect(problem(render({}))).toBeUndefined()
   })
 
+  it('marks a private group granted to the owner', () => {
+    expect(render({ status: 'active', exclusive: true }).get('[data-testid="key-group-exclusive"]').text()).toBe('专属')
+    expect(render({ status: 'active' }).find('[data-testid="key-group-exclusive"]').exists()).toBe(false)
+  })
+
   it('marks a group without usable accounts with a warning icon, the sentence in its tooltip only', () => {
     const w = render({ platforms: [], status: 'active' })
     expect(problem(w)).toEqual({ text: '该分组暂时无法提供服务（没有可用账号）。', tone: 'warning' })

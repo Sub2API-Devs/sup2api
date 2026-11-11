@@ -3,12 +3,12 @@ export default {
   description: 'Every user belongs to exactly one user group. It decides which private groups they may use, and at what rate and prices they are billed.',
   create: 'New user group',
   editTitle: 'Edit user group {name}',
+  viewTitle: 'User group {name}',
   searchPlaceholder: 'Search name or note…',
   default: 'Default',
   defaultHint: 'New users join this user group; it cannot be deleted.',
   defaultName: 'The default user group cannot be renamed.',
   note: 'Note',
-  unsaved: 'Unsaved',
   publicOnly: 'Public groups only',
   customRates: '{n} own rate | {n} own rates',
   customPrices: '{n} own price | {n} own prices',
@@ -29,30 +29,13 @@ export default {
   discount: {
     label: 'Discount',
     hint: 'Multiplies the default rate of every group; a group with an own rate ignores it. 1 means no discount.',
-    example: 'E.g. group default {group} → actual {rate}',
+    example: 'E.g. group default {group} → effective {rate}',
     invalid: 'Enter a number above 0, up to 4 decimals; 1 for no discount.'
   },
   groups: {
     hint: 'Whether "{name}" may use each group, and at what rate. Grants and rates take effect on Save; own model prices are saved in their own dialog.',
     emptyNew: 'Save first, then set the groups and rates.',
-    access: 'Access',
-    public: 'Public',
-    private: 'Private',
-    granted: 'Granted',
-    notGranted: 'Not granted',
-    grant: 'Grant {group}',
-    rateOf: 'Own rate in {group}',
-    rate: 'Actual rate',
-    source: {
-      segment: 'Own rate',
-      discount: 'Group default × discount',
-      group: 'Group default'
-    },
-    inactive: 'Not granted, not in effect',
-    prices: 'Own model prices',
-    priceCount: '{n} price | {n} prices',
-    setPrices: 'Set',
-    invalidRate: 'The own rate in {group} is not a valid number; fix it first.'
+    private: 'Private'
   },
   prices: {
     title: 'Own model prices of "{segment}" in {group}',
@@ -66,6 +49,7 @@ export default {
     addHint: 'A user belongs to one user group: joining "{segment}" moves them out of the one they are in.',
     addPlaceholder: 'Search the user to add by email or name',
     search: 'Search members',
+    inUsers: 'View in the users list',
     empty: 'This user group has no members yet',
     already: '{name} is in this user group already',
     dropPersonal:

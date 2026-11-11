@@ -40,7 +40,8 @@ export default {
     modelHint: '只列这个分组提供的模型。',
     inputTokens: '输入 tokens',
     outputTokens: '输出 tokens',
-    incomplete: '选好对象、分组和模型后自动计算。'
+    incomplete: '选好对象、分组和模型后自动计算。',
+    unprovided: '还没有分组提供 {model}，无法试算。'
   },
   quote: {
     access: {
@@ -69,6 +70,7 @@ export default {
     applies: '生效',
     paid: '实付',
     paidIfGranted: '授权后的价格',
+    unpriced: '这个模型还没有全局价格，无法计费。请先到“模型价格”里设置。',
     listCost: '标价费用',
     rateName: '倍率'
   }

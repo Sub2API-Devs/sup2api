@@ -3,10 +3,10 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SField, SFormModal, toast } from '@sub2api/ui'
-import type { SegmentRef } from '@/api/pricing'
+import type { PersonalDialogUser, SegmentRef } from '@/api/pricing'
 import { notifyError } from '@/utils/errors'
 import SegmentSelect from './SegmentSelect.vue'
-import { useSegmentsLookup, type PersonalDialogUser } from './segmentLookup'
+import { useSegmentsLookup } from './segmentLookup'
 
 // Moves a user out of his personal segment into a named one
 // (DELETE /users/:id/personal-segment?to=): the personal settings go with it.

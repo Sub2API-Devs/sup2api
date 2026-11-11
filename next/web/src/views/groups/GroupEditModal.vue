@@ -11,13 +11,14 @@ import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import { policyOptions } from '@/utils/conversion'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import { markUnsaved, useTabbedSave, type SaveStep } from '@/composables/useTabbedSave'
+import type { DraftedSetting } from '@/components/pricing/accessRateDrafts'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
 import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
 import GroupPricingEditor from './GroupPricingEditor.vue'
 import GroupSegmentsEditor from './GroupSegmentsEditor.vue'
 import { GROUP_EDIT_TABS, changedTabs, tabOfErrors, type GroupEditTab } from './groupEditTabs'
-import type { SegmentView } from './segmentDrafts'
 
 // Creates a group (`group` null) or edits one, in tabs. The form holds the
 // group's own fields; its accounts, user groups and model prices are
@@ -88,7 +89,6 @@ const formOf = (g: Group): GroupForm => ({
   conversion_loss_policy: g.conversion_loss_policy ?? null
 })
 
-const saving = ref(false)
 const errors = ref<Record<string, string>>({})
 const form = reactive(blankForm())
 /** The form as it was opened: what a changed tab is compared with. */
@@ -97,7 +97,7 @@ const opened = ref(blankForm())
 const created = ref<Group | null>(null)
 const current = computed(() => created.value ?? props.group)
 /** The rows of the user groups editor, for the tab that prices per user group. */
-const segmentRows = ref<SegmentView[]>([])
+const segmentRows = ref<DraftedSetting[]>([])
 const tab = ref<GroupEditTab>('basic')
 
 const visibilityOptions = computed<ChoiceOption[]>(() => [
@@ -125,13 +125,14 @@ watch(
 
 // ------------------------------------------------------------------ tabs
 
-const dirtyTabs = computed(() => {
+const dirtyTabs = computed<string[]>(() => {
   const editors: Partial<Record<GroupEditTab, boolean>> = { accounts: accountsEditor.value?.dirty, segments: segmentsEditor.value?.dirty, pricing: pricingEditor.value?.dirty }
   return [...changedTabs(form, opened.value), ...GROUP_EDIT_TABS.filter((key) => editors[key])]
 })
-const tabs = computed<TabItem[]>(() =>
-  GROUP_EDIT_TABS.filter((key) => key !== 'accounts' || canEditAccounts.value).map((key) => ({ key, label: t(`groups.tabs.${key}`), badge: dirtyTabs.value.includes(key) ? '•' : undefined }))
-)
+const tabs = computed<TabItem[]>(() => {
+  const shown = GROUP_EDIT_TABS.filter((key) => key !== 'accounts' || canEditAccounts.value)
+  return markUnsaved(shown.map((key) => ({ key, label: t(`groups.tabs.${key}`) })), (key) => dirtyTabs.value.includes(key))
+})
 
 /** Opens the model prices of one user group. */
 function openPricing(segment: SegmentRef) {
@@ -139,60 +140,24 @@ function openPricing(segment: SegmentRef) {
   tab.value = 'pricing'
 }
 
-/** Shows the first tab with a field error; true when there is one. */
-function showErrors(): boolean {
-  if (!Object.keys(errors.value).length) return false
-  tab.value = tabOfErrors(errors.value) ?? tab.value
-  return true
-}
-
 // ------------------------------------------------------------------ save
 
-async function saveAccounts(gid: number): Promise<boolean> {
-  const failed = (await accountsEditor.value?.save(gid)) ?? []
-  if (failed.length) toast(t('groups.accounts.saveFailed', { names: failed.join(', ') }), 'error')
-  return !failed.length
-}
-/** The sub-editors in the order they are saved: the models a group prices come from its accounts. */
-const steps: Array<{ tab: GroupEditTab; save: (gid: number) => Promise<boolean> }> = [
-  { tab: 'accounts', save: saveAccounts },
-  { tab: 'segments', save: async (gid) => (await segmentsEditor.value?.save(gid)) ?? true },
-  { tab: 'pricing', save: async () => (await pricingEditor.value?.save()) ?? true }
-]
+const { saving, run } = useTabbedSave(tab)
+/** The group itself was saved by the current attempt, whatever its later steps do. */
+let groupSaved = false
 
-/** Saves the sub-editors; false when one could not be saved: its tab opens and says why. */
-async function saveEditors(gid: number): Promise<boolean> {
-  for (const step of steps) {
-    const saved = await step.save(gid).catch((e) => {
-      notifyError(e)
-      return false
-    })
-    if (saved) continue
-    tab.value = step.tab
-    return false
-  }
-  return true
+async function saveGroup(body: Record<string, unknown>) {
+  if (current.value) await api.patch(`/groups/${current.value.id}`, body)
+  else created.value = (await api.post<Group>('/groups', body)) ?? null
 }
 
-async function saveGroup(body: Record<string, unknown>): Promise<number | null> {
-  if (current.value) {
-    await api.patch(`/groups/${current.value.id}`, body)
-    return current.value.id
-  }
-  created.value = (await api.post<Group>('/groups', body)) ?? null
-  return created.value?.id ?? null
-}
-
-async function submit() {
-  if (modelPolicyEditor.value && !modelPolicyEditor.value.commit()) {
-    tab.value = 'models'
-    return
-  }
+/** Checks and sends the group's own fields. False when one is wrong: the error is next to it. */
+async function saveForm(): Promise<boolean> {
   errors.value = {}
   if (!form.name.trim()) errors.value.name = t('common.required')
   const rm = String(form.rate_multiplier).trim()
   if (!/^\d+(\.\d+)?$/.test(rm) || Number(rm) < 0) errors.value.rate_multiplier = t('groups.multiplierInvalid')
-  if (showErrors()) return
+  if (Object.keys(errors.value).length) return false
   const body = {
     name: form.name.trim(),
     description: form.description.trim(),
@@ -205,22 +170,42 @@ async function submit() {
     environment: form.environment,
     conversion_loss_policy: form.conversion_loss_policy
   }
-  saving.value = true
-  let groupSaved = false
   try {
-    const gid = await saveGroup(body)
-    groupSaved = true
-    if (gid && !(await saveEditors(gid))) return
-    toast(t(props.group ? 'common.updated' : 'common.created'), 'success')
-    emit('update:open', false)
+    await saveGroup(body)
   } catch (e) {
     applyFormError(e, errors)
-    showErrors()
-  } finally {
-    saving.value = false
-    // The list shows the group as saved even when a later step keeps the dialog open.
-    if (groupSaved) emit('saved')
+    return false
   }
+  groupSaved = true
+  return true
+}
+
+async function saveAccounts(gid: number): Promise<boolean> {
+  const failed = (await accountsEditor.value?.save(gid)) ?? []
+  if (failed.length) toast(t('groups.accounts.saveFailed', { names: failed.join(', ') }), 'error')
+  return !failed.length
+}
+/** A sub-editor's step: it saves under the id the group has by then. */
+const onGroup = (save: (gid: number) => Promise<boolean>) => async () => (current.value ? save(current.value.id) : true)
+
+/** What Save does, in order: the group first, and its accounts before the prices of the models they provide. */
+const steps: SaveStep<GroupEditTab>[] = [
+  { tab: 'models', save: () => modelPolicyEditor.value?.commit() ?? true },
+  // A field error opens the tab of its field; any other failure was shown as a toast.
+  { tab: () => tabOfErrors(errors.value) ?? tab.value, save: saveForm },
+  { tab: 'accounts', save: onGroup(saveAccounts) },
+  { tab: 'segments', save: onGroup(async (gid) => (await segmentsEditor.value?.save(gid)) ?? true) },
+  { tab: 'pricing', save: async () => (await pricingEditor.value?.save()) ?? true }
+]
+
+async function submit() {
+  groupSaved = false
+  const done = await run(steps)
+  // The list shows the group as saved even when a later step keeps the dialog open.
+  if (groupSaved) emit('saved')
+  if (!done) return
+  toast(t(props.group ? 'common.updated' : 'common.created'), 'success')
+  emit('update:open', false)
 }
 </script>
 
@@ -229,7 +214,6 @@ async function submit() {
     :open="open"
     :title="current ? t('groups.editTitle', { name: current.name }) : t('groups.create')"
     width="2xl"
-    fixed
     :loading="saving"
     :submit-text="current ? t('common.save') : t('common.create')"
     :submit-attrs="{ 'data-testid': 'group-edit-submit' }"
@@ -239,8 +223,8 @@ async function submit() {
     @submit="submit"
   >
     <STabs v-if="open" v-model="tab" :tabs="tabs" :aria-label="t('groups.title')" data-testid="group-edit-tabs">
-      <!-- Every tab stays mounted: the sub-editors keep their drafts while another tab shows. -->
-      <div>
+      <!-- Every tab stays mounted: the sub-editors keep their drafts while another tab shows. The least height keeps the dialog from collapsing on a short tab. -->
+      <div class="min-h-[24rem]">
         <div v-show="tab === 'basic'" class="space-y-4">
           <SGrid>
             <SField :label="t('common.name')" required :error="errors.name">
@@ -266,6 +250,7 @@ async function submit() {
           :group-id="group?.id ?? null"
           :visibility="form.visibility"
           :default-rate="form.rate_multiplier"
+          editable
           :disabled="saving"
           @rows="segmentRows = $event"
           @pricing="openPricing"

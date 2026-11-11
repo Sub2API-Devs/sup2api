@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { h, ref, type Component, type SetupContext } from 'vue'
 import { i18n } from '@/i18n'
-import type { SegmentRef } from '@/api/pricing'
+import type { Segment, SegmentGroupSetting, SegmentRef } from '@/api/pricing'
+import { blankSetting, draftedSetting, type DraftedSetting } from '@/components/pricing/accessRateDrafts'
 import GroupPricingEditor from './GroupPricingEditor.vue'
-import { viewRow, type SegmentRow, type SegmentView } from './segmentDrafts'
 
 enableAutoUnmount(afterEach)
 
@@ -23,9 +23,10 @@ const picker: Component = { emits: ['select'], setup: () => () => h('div', { 'da
 const vip: SegmentRef = { id: 2, kind: 'named', name: 'VIP' }
 const staff: SegmentRef = { id: 4, kind: 'named', name: 'Staff' }
 const solo: SegmentRef = { id: 104, kind: 'personal', name: 'a@b.c', user_id: 9 }
-const view = (segment: SegmentRef, over: Partial<SegmentRow> = {}): SegmentView =>
-  viewRow({ segment, granted: false, rate_override: null, discount: '1', price_rule_count: 0, ...over }, new Map(), { visibility: 'restricted', defaultRate: '0.8' })
-const segments = [view(vip, { granted: true, discount: '0.9' }), view(staff), view(solo, { granted: true, rate_override: '0.65' })]
+/** The row of a segment in a private group at ×0.8, as the user groups editor hands it over. */
+const view = (segment: SegmentRef, over: Partial<SegmentGroupSetting> = {}, discount = '1'): DraftedSetting =>
+  draftedSetting('segment', { ...blankSetting({ ...segment, discount } as Segment), ...over }, undefined, { visibility: 'restricted', groupDefault: '0.8' })
+const segments = [view(vip, { granted: true }, '0.9'), view(staff), view(solo, { granted: true, rate_override: '0.65' })]
 
 function render(groupId: number | null = 3) {
   const w = mount(GroupPricingEditor, {

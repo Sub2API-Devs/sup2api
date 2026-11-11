@@ -3,9 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SChoiceCards, SFormModal, toast, type ChoiceOption } from '@sub2api/ui'
-import type { Segment } from '@/api/pricing'
+import type { PersonalDialogUser, Segment } from '@/api/pricing'
 import { notifyError } from '@/utils/errors'
-import type { PersonalDialogUser } from './segmentLookup'
 
 // Gives a user a personal segment (POST /users/:id/personal-segment): he
 // leaves his segment for one of his own, which starts as a copy of that

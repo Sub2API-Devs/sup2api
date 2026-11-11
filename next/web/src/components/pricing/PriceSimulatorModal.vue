@@ -4,8 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SButton, SChip, SField, SGrid, SHint, SInput, SModal, SSegmented, SSelect, SSpinner, type SelectOption } from '@sub2api/ui'
 import type { GroupModelPrices, PricingQuote, PricingQuoteRequest } from '@/api/pricing'
+import type { Group, User } from '@/api/types'
 import GroupPicker from '@/components/GroupPicker.vue'
-import { useGroupsLookup } from '@/composables/lookups'
+import { fetchFirstPage, useGroupsLookup } from '@/composables/lookups'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
@@ -13,13 +15,12 @@ import PriceQuoteBreakdown from './PriceQuoteBreakdown.vue'
 import SegmentBadge from './SegmentBadge.vue'
 import SegmentSelect from './SegmentSelect.vue'
 import UserSearchSelect from './UserSearchSelect.vue'
-import { useLatestRequest } from './latestRequest'
-import type { SegmentedUser } from './segmentLookup'
 
 // Price simulator (POST /pricing/quote): what a user, or any member of a
 // segment, pays for a sample call of a model in a group (PriceQuoteBreakdown
 // shows where that comes from). A tool in a dialog: it asks again whenever a
-// condition changes and saves nothing. `preset` fills conditions in on opening.
+// condition changes and saves nothing. `preset` fills conditions in on
+// opening; a model named without a group brings a group that provides it.
 interface Preset {
   userId?: number
   segmentId?: number
@@ -37,7 +38,7 @@ const { groups } = useGroupsLookup()
 // Looking a user up takes user:read; without it the quote is for a segment.
 const canPickUser = computed(() => auth.has('user:read'))
 const subject = ref<'user' | 'segment'>(canPickUser.value ? 'user' : 'segment')
-const user = ref<SegmentedUser | null>(null)
+const user = ref<User | null>(null)
 const segmentId = ref<number | null>(null)
 const groupId = ref<number | null>(null)
 const model = ref<string | null>(null)
@@ -51,7 +52,23 @@ const subjects = computed<SelectOption[]>(() => [
 async function presetUser(id: number) {
   if (user.value?.id !== id) user.value = null
   try {
-    user.value = await api.get<SegmentedUser>(`/users/${id}`)
+    user.value = await api.get<User>(`/users/${id}`)
+  } catch (e) {
+    notifyError(e)
+  }
+}
+
+/** A preset model that no group provides: the result says so until a model is chosen. */
+const unprovided = ref<string | null>(null)
+
+/** Chooses a model named without a group: in the chosen group when that one provides it, else in the first group that does (GET /groups?model=). */
+async function presetModel(name: string) {
+  try {
+    const providers = await fetchFirstPage<Group>('/groups', { model: name })
+    const group = providers.find((g) => g.id === groupId.value) ?? providers[0]
+    if (group) groupId.value = group.id
+    model.value = group ? name : null
+    unprovided.value = group ? null : name
   } catch (e) {
     notifyError(e)
   }
@@ -59,8 +76,10 @@ async function presetUser(id: number) {
 
 /** Takes what the opener names and leaves the other conditions as they were. */
 function applyPreset(preset: Preset) {
+  unprovided.value = null
   if (preset.groupId !== undefined) groupId.value = preset.groupId
-  if (preset.model !== undefined) model.value = preset.model
+  if (preset.model !== undefined && preset.groupId !== undefined) model.value = preset.model
+  else if (preset.model !== undefined) presetModel(preset.model)
   if (preset.segmentId !== undefined) {
     subject.value = 'segment'
     segmentId.value = preset.segmentId
@@ -93,7 +112,8 @@ const provided = computed(() => {
 })
 const modelOptions = computed<SelectOption[]>(() => (provided.value ?? []).map((m) => ({ value: m, label: m })))
 watch([provided, model], () => {
-  // A model the group does not provide cannot stay chosen; one preset before any group waits for the group.
+  if (model.value) unprovided.value = null
+  // A model the group does not provide cannot stay chosen; while the models of the group load, it waits.
   if (model.value && groupId.value !== null && provided.value && !provided.value.includes(model.value)) model.value = null
 })
 
@@ -158,7 +178,8 @@ const groupName = computed(() => groups.value.find((g) => g.id === groupId.value
       </SGrid>
 
       <div class="rounded-xl border border-line p-4" data-testid="price-sim-result">
-        <SHint v-if="!request">{{ t('pricingTools.sim.incomplete') }}</SHint>
+        <SHint v-if="unprovided" tone="warning" data-testid="price-sim-unprovided">{{ t('pricingTools.sim.unprovided', { model: unprovided }) }}</SHint>
+        <SHint v-else-if="!request">{{ t('pricingTools.sim.incomplete') }}</SHint>
         <SHint v-else-if="quoteError" tone="danger">{{ quoteError }}</SHint>
         <PriceQuoteBreakdown v-else-if="quote" :quote="quote" :group-name="groupName" class="transition-opacity" :class="quoting ? 'opacity-60' : ''" :aria-busy="quoting" />
         <SSpinner v-else block />

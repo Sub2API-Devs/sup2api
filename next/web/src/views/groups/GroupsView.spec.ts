@@ -7,9 +7,9 @@ import { mountPinned } from '@sub2api/ui/testing'
 import GroupsView from './GroupsView.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 
-const { get } = vi.hoisted(() => ({ get: vi.fn() }))
+const { get, denied } = vi.hoisted(() => ({ get: vi.fn(), denied: new Set<string>() }))
 vi.mock('@sub2api/host', () => ({ api: { get } }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !denied.has(key) }) }))
 vi.mock('@/composables/lookups', async original => ({ ...(await original<object>()), useGroupsLookup: vi.fn() }))
 const group = (id: number, name: string, over: Partial<Group> = {}): Group => ({
   id,
@@ -59,6 +59,7 @@ async function openDetail(w: View, index: number) {
 describe('groups page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    denied.clear()
     i18n.global.locale.value = 'zh'
     items.value = [group(1, 'default', { platforms: ['anthropic', 'openai'] }), group(2, 'trial', { account_count: 0, platforms: [] })]
     get.mockImplementation(async (path: string) =>
@@ -100,6 +101,25 @@ describe('groups page', () => {
     await flushPromises()
     expect(w.text()).toContain('编辑分组 vip')
     expect(w.get('[role="tab"][aria-selected="true"]').text()).toBe('模型定价')
+  })
+
+  it('shows access and pricing read-only to a caller who may not manage groups', async () => {
+    denied.add('group:manage')
+    items.value = [group(2, 'vip', { visibility: 'restricted', price_rule_count: 1 })]
+    const w = render()
+    expect(w.findAll('thead th').map(th => th.text())).not.toContain('操作')
+    await rows(w)[0].get('[data-testid="group-pricing-summary"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid="group-pricing-view"]').findAll('[role="tab"]').map(t => t.text())).toEqual(['授权与倍率', '模型定价'])
+    expect(w.get('[role="tab"][aria-selected="true"]').text()).toBe('模型定价')
+    expect(w.text()).toContain('vip 的授权与定价')
+    expect(w.text()).not.toContain('编辑分组')
+    await w.get('[data-testid="group-pricing-view-close"]').trigger('click')
+
+    await openDetail(w, 0)
+    await w.get('[data-testid="group-detail-pricing"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[role="tab"][aria-selected="true"]').text()).toBe('授权与倍率')
   })
 
   it('warns beside the account count of a group without accounts, as an icon with the sentence behind it', () => {

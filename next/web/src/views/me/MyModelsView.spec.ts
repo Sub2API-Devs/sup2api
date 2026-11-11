@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { ApiError } from '@sub2api/host'
 import { i18n } from '@/i18n'
 import MyModelsView from './MyModelsView.vue'
 
@@ -114,5 +115,24 @@ describe('models and prices', () => {
     expect(get.mock.calls.filter(([path]) => path === '/me/prices')).toEqual([['/me/prices', { group_id: '2' }]])
     expect((w.get('[data-testid="models-group"]').element as HTMLSelectElement).selectedIndex).toBe(2)
     expect(row(w, 'tokens').text()).toContain('$4.5')
+  })
+
+  it('falls back to every group, with a note, when the address names a group the caller cannot use', async () => {
+    get.mockImplementation(async (path: string, q: Record<string, string>) => {
+      if (path === '/me/groups') return groups
+      if (q.group_id === '999') throw new ApiError(404, { code: 'not_found', message: 'group not found' })
+      return q.group_id === '2' ? inVip : everyGroup
+    })
+    const { w, router } = await render('/me/models?group=999')
+    expect(router.currentRoute.value.query).toEqual({})
+    expect(w.get('[data-testid="models-group-unavailable"]').text()).toBe('链接里的分组不对你开放，已改为显示全部分组。')
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+    expect((w.get('[data-testid="models-group"]').element as HTMLSelectElement).selectedIndex).toBe(0)
+    expect(row(w, 'one-shot').exists()).toBe(true)
+
+    // The note goes once a group is chosen.
+    await w.get('[data-testid="models-group"]').setValue('2')
+    await settle()
+    expect(w.find('[data-testid="models-group-unavailable"]').exists()).toBe(false)
   })
 })

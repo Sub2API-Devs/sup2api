@@ -40,7 +40,8 @@ export default {
     modelHint: 'Only the models this group provides.',
     inputTokens: 'Input tokens',
     outputTokens: 'Output tokens',
-    incomplete: 'Pick who, a group and a model: the price is calculated at once.'
+    incomplete: 'Pick who, a group and a model: the price is calculated at once.',
+    unprovided: 'No group provides {model} yet, so there is nothing to simulate.'
   },
   quote: {
     access: {
@@ -69,6 +70,7 @@ export default {
     applies: 'Applies',
     paid: 'Paid',
     paidIfGranted: 'Price once granted',
+    unpriced: 'This model has no global price yet, so it cannot be billed. Set one under Model prices first.',
     listCost: 'List cost',
     rateName: 'Rate'
   }

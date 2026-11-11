@@ -3,6 +3,7 @@ export default {
     personal: 'Personal',
     personalOf: 'Personal · {name}'
   },
+  exclusive: 'Exclusive',
   rate: {
     label: 'Own rate',
     follow: 'Follows {rate}',
@@ -17,7 +18,7 @@ export default {
     custom: 'Custom price',
     multiplierText: 'Global {rate}',
     customText: 'Custom {price}',
-    applied: '{price} after it; follows the global price',
+    applied: 'Comes to {price}; follows the global price',
     appliedOpaque: 'Every price is multiplied by it; follows the global price',
     multiplierInvalid: 'Enter a number of 0 or more, up to 4 decimals',
     tokenUnit: 'A fixed price that does not follow the global price. In $ per 1M tokens',

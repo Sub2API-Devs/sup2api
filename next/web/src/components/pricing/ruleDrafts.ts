@@ -9,7 +9,11 @@ export type RuleScope = 'group' | 'segment'
 
 export const ruleOf = (row: ModelPriceRow, scope: RuleScope): PriceRule | null => (scope === 'segment' ? row.segment_rule : row.group_rule) ?? null
 
-/** The prices a custom rule sets, in the order shown: the first `required` of them must be filled. */
+/**
+ * The prices a custom rule sets, in the order shown: the first `required` of
+ * them must be filled. The server checks a saved rule by the same table
+ * (CUSTOM_PRICES in mock/pricing.ts stands in for it): keep the two alike.
+ */
 export function customFields(mode: 'per_request' | 'per_token'): { keys: readonly string[]; required: number } {
   return mode === 'per_request' ? { keys: ['price'], required: 1 } : { keys: RULE_TOKEN_VARS, required: 2 }
 }

@@ -12,7 +12,7 @@
 // kind "personal" with that single user as its member: the system creates it
 // when an admin prices a user individually and deletes it when the user is
 // moved back to a named segment.
-import type { Money } from './types'
+import type { Money, User } from './types'
 import type { PriceMode } from '@/views/prices/priceExpr'
 
 export type SegmentKind = 'named' | 'personal'
@@ -31,6 +31,9 @@ export interface SegmentUser {
   email: string
   display_name: string
 }
+
+/** What the personal-segment dialogs need of a user. */
+export type PersonalDialogUser = Pick<User, 'id' | 'email' | 'display_name' | 'segment'>
 
 export interface Segment extends SegmentRef {
   description: string

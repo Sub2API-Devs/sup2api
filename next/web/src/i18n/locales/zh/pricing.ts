@@ -3,6 +3,7 @@ export default {
     personal: '个人专属',
     personalOf: '个人专属 · {name}'
   },
+  exclusive: '专属',
   rate: {
     label: '专属倍率',
     follow: '跟随 {rate}',

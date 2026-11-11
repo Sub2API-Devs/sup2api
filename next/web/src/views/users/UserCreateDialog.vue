@@ -3,23 +3,23 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SCheckbox, SField, SFormModal, SHint, SInput, toast } from '@sub2api/ui'
-import type { Role, User } from '@/api/types'
+import type { Role } from '@/api/types'
 import SegmentSelect from '@/components/pricing/SegmentSelect.vue'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
-import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
-import { moveToSegment, useNamedSegments } from './userSegments'
+import { useNamedSegments } from './userSegments'
 
-// New user (POST /users), with the roles the page has loaded. The server puts
-// a new user in the default segment; any other choice is a move made right
-// after the creation.
+// New user (POST /users), with the roles the page has loaded. A caller who
+// manages segments also says which one the user joins (`segment_id`); left
+// out, the server puts him in the default segment.
 const props = defineProps<{ open: boolean; roles: Role[] }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'created'): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const segments = useNamedSegments()
 const defaultSegmentId = computed(() => segments.value.find((s) => s.is_default)?.id ?? null)
+const canPlace = computed(() => auth.has('segment:manage'))
 
 const creating = ref(false)
 const errors = ref<Record<string, string>>({})
@@ -45,13 +45,6 @@ function toggleKey(listRef: string[], key: string) {
   else listRef.push(key)
 }
 
-/** The user exists by now: a failed move is reported and leaves him in the default segment. */
-async function joinChosenSegment(userId: number) {
-  const target = form.segment_id
-  if (target === null || target === defaultSegmentId.value) return
-  await moveToSegment(target, [userId]).catch(notifyError)
-}
-
 async function submit() {
   errors.value = {}
   if (!form.email.trim()) errors.value.email = t('common.required')
@@ -59,13 +52,13 @@ async function submit() {
   if (Object.keys(errors.value).length) return
   creating.value = true
   try {
-    const created = await api.post<User>('/users', {
+    await api.post('/users', {
       email: form.email.trim(),
       display_name: form.display_name.trim(),
       password: form.password,
-      role_keys: form.role_keys
+      role_keys: form.role_keys,
+      segment_id: canPlace.value ? (form.segment_id ?? undefined) : undefined
     })
-    await joinChosenSegment(created.id)
     toast(t('common.created'), 'success')
     emit('update:open', false)
     emit('created')
@@ -101,7 +94,7 @@ async function submit() {
       </div>
       <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
     </SField>
-    <SField v-if="auth.has('segment:manage')" :label="t('users.segment')" :hint="t('users.segmentHint')">
+    <SField v-if="canPlace" :label="t('users.segment')" :hint="t('users.segmentHint')" :error="errors.segment_id">
       <SegmentSelect v-model="form.segment_id" data-testid="user-create-segment" />
     </SField>
   </SFormModal>

@@ -551,7 +551,7 @@ describe('API key row actions', () => {
     const move = rowOf(w, 'laptop').getComponent(KeyGroupSwitch)
     expect(move.props('options')).toEqual([
       { value: 1, label: 'default · ×1 · anthropic' },
-      { value: 2, label: 'vip · ×0.72 · 专属分组 · anthropic, openai' }
+      { value: 2, label: 'vip · ×0.72 · 专属 · anthropic, openai' }
     ])
     move.vm.$emit('change', 2)
     await flushPromises()

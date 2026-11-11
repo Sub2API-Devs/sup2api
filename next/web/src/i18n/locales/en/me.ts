@@ -100,10 +100,9 @@ export default {
   },
   models: {
     title: 'Models & prices',
-    description: 'The models there are, the ones your groups provide and what they cost you: the list price times your rate.',
+    description: 'Every model, which of your groups provide it and what it costs you there: the list price times your rate.',
     group: 'Group',
     allGroups: 'All groups · base price',
-    exclusive: 'exclusive',
     search: 'Search models',
     model: 'Model',
     input: 'Input',
@@ -125,6 +124,7 @@ export default {
     tiered: '{n} tiers, first shown',
     custom: 'Billed by rules',
     empty: 'This group has no models',
-    emptyAll: 'No models yet'
+    emptyAll: 'No models yet',
+    groupUnavailable: 'The group in the link is not open to you. Showing all groups instead.'
   }
 }

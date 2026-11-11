@@ -7,7 +7,7 @@ import { validDiscount } from './segmentForm'
 
 // The discount of a segment: one number on the default rate of every group.
 // The example beside it follows what is typed.
-const props = defineProps<{ modelValue: string; error?: string }>()
+const props = defineProps<{ modelValue: string; error?: string; disabled?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 const { t } = useI18n()
 
@@ -24,7 +24,7 @@ const example = computed(() => {
 <template>
   <SField :label="t('segments.discount.label')" required :hint="t('segments.discount.hint')" :error="error">
     <div class="flex flex-wrap items-center gap-3">
-      <SInput :model-value="modelValue" class="w-36" mono inputmode="decimal" data-testid="segment-discount" @update:model-value="emit('update:modelValue', String($event ?? ''))">
+      <SInput :model-value="modelValue" class="w-36" mono inputmode="decimal" :disabled="disabled" data-testid="segment-discount" @update:model-value="emit('update:modelValue', String($event ?? ''))">
         <template #prefix><span class="text-xs text-fg-subtle">×</span></template>
       </SInput>
       <SHint v-if="example" inline size="xs" data-testid="segment-discount-example">{{ example }}</SHint>

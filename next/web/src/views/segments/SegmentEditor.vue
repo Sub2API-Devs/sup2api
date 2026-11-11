@@ -5,7 +5,7 @@ import { api } from '@sub2api/host'
 import { SAlert, SButton, SEmpty, SField, SFormModal, SGrid, SHint, SInput, STabs, STextarea, toast, type TabItem } from '@sub2api/ui'
 import type { Segment } from '@/api/pricing'
 import SegmentBadge from '@/components/pricing/SegmentBadge.vue'
-import { notifyError } from '@/utils/errors'
+import { markUnsaved, useTabbedSave, type SaveStep } from '@/composables/useTabbedSave'
 import { applyFormError } from '@/utils/formErrors'
 import SegmentDiscountField from './SegmentDiscountField.vue'
 import SegmentGroupsEditor from './SegmentGroupsEditor.vue'
@@ -18,8 +18,10 @@ import { formChanged, formOf, segmentBody, validDiscount } from './segmentForm'
 // its groups, and `remove` asks the opener to move the user back to a named
 // segment. Saving sends the form first and the groups' drafts after it; the
 // members tab acts at once. `changed` says the opener's list is out of date.
-export type SegmentEditorTab = 'basic' | 'groups' | 'members'
-const props = defineProps<{ open: boolean; segment: Segment | null; tab?: SegmentEditorTab }>()
+// `readonly` only shows the segment, to a caller who may not change it.
+const TABS = ['basic', 'groups', 'members'] as const
+export type SegmentEditorTab = (typeof TABS)[number]
+const props = defineProps<{ open: boolean; segment: Segment | null; tab?: SegmentEditorTab; readonly?: boolean }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'changed'): void; (e: 'remove', segment: Segment): void }>()
 const { t } = useI18n()
 
@@ -29,16 +31,17 @@ const form = reactive(formOf(null))
 const errors = ref<Record<string, string>>({})
 /** The tab in front; `tab` is the one the opener asks for. */
 const shown = ref<SegmentEditorTab>('basic')
-const saving = ref(false)
 const groupsEditor = ref<InstanceType<typeof SegmentGroupsEditor>>()
 
 const personal = computed(() => current.value?.kind === 'personal')
+/** The tab the form's fields are on: a personal segment has only its discount, above its groups. */
+const formTab = computed<SegmentEditorTab>(() => (personal.value ? 'groups' : 'basic'))
 
 function show(segment: Segment | null, at: SegmentEditorTab = 'basic') {
   current.value = segment
   Object.assign(form, formOf(segment))
   errors.value = {}
-  shown.value = at
+  shown.value = personal.value ? formTab.value : at
 }
 watch(
   () => props.open,
@@ -48,16 +51,22 @@ watch(
   { immediate: true }
 )
 
-const title = computed(() => (current.value ? t('segments.editTitle', { name: current.value.name }) : t('segments.create')))
-/** A dot on the tabs with something to save. */
-const unsaved = (dirty: boolean | undefined) => (dirty ? '•' : undefined)
+const title = computed(() => {
+  if (!current.value) return t('segments.create')
+  return t(props.readonly ? 'segments.viewTitle' : 'segments.editTitle', { name: current.value.name })
+})
+const formDirty = computed(() => !!current.value && formChanged(form, current.value))
+const unsaved = (key: string) => (key === formTab.value && formDirty.value) || (key === 'groups' && groupsEditor.value?.dirty)
 const tabs = computed<TabItem[]>(() => {
-  const groups: TabItem = { key: 'groups', label: t('segments.tabs.groups'), badge: unsaved(groupsEditor.value?.dirty) }
-  if (personal.value) return [groups]
-  return [{ key: 'basic', label: t('segments.tabs.basic'), badge: unsaved(!!current.value && formChanged(form, current.value)) }, groups, { key: 'members', label: t('segments.tabs.members') }]
+  const keys = personal.value ? TABS.filter((key) => key === 'groups') : TABS
+  return markUnsaved(keys.map((key) => ({ key, label: t(`segments.tabs.${key}`) })), unsaved)
 })
 
 // ------------------------------------------------------------------ saving
+
+const { saving, run } = useTabbedSave(shown)
+/** The form was saved by the current attempt, whatever happens to the groups after it. */
+let formSaved = false
 
 function validate(): boolean {
   errors.value = {}
@@ -66,45 +75,35 @@ function validate(): boolean {
   return !Object.keys(errors.value).length
 }
 
-/** Sends the form. False when it was refused: the errors are next to the fields. */
+/** Checks and sends the form. False when it was refused: the errors are next to the fields. */
 async function saveForm(): Promise<boolean> {
+  if (!validate()) return false
   const body = segmentBody(form, personal.value)
   try {
     const saved = current.value ? await api.patch<Segment>(`/segments/${current.value.id}`, body) : await api.post<Segment>('/segments', body)
     current.value = saved
     Object.assign(form, formOf(saved))
-    return true
   } catch (e) {
     applyFormError(e, errors)
     return false
   }
+  formSaved = true
+  return true
 }
 
-/** Saves the drafts of the groups tab. False when one cannot be saved, or the request failed. */
-async function saveGroups(): Promise<boolean> {
-  try {
-    return (await groupsEditor.value?.save()) ?? true
-  } catch (e) {
-    notifyError(e)
-    return false
-  }
-}
-
-/** Saves the form, then the groups. The tab that could not be saved, if any. */
-async function save(): Promise<SegmentEditorTab | null> {
-  if (!validate() || !(await saveForm())) return 'basic'
-  const groupsSaved = await saveGroups()
-  emit('changed')
-  return groupsSaved ? null : 'groups'
-}
+/** What Save does, in order: the groups' rates are answered under the discount the form has just saved. */
+const steps: SaveStep<SegmentEditorTab>[] = [
+  { tab: () => formTab.value, save: saveForm },
+  { tab: 'groups', save: async () => (await groupsEditor.value?.save()) ?? true }
+]
 
 async function submit() {
   const creating = !current.value
-  saving.value = true
-  const failedAt = await save()
-  saving.value = false
-  if (failedAt) shown.value = failedAt
-  else if (creating) created()
+  formSaved = false
+  const done = await run(steps)
+  if (formSaved) emit('changed')
+  if (!done) return
+  if (creating) created()
   else updated()
 }
 
@@ -125,7 +124,6 @@ function updated() {
     :open="open"
     :title="title"
     width="2xl"
-    fixed
     :loading="saving"
     :submit-text="current ? t('common.save') : t('common.create')"
     :submit-attrs="{ 'data-testid': 'segment-editor-submit' }"
@@ -142,33 +140,39 @@ function updated() {
     </template>
     <SAlert v-if="personal && current" tone="accent" icon="user" data-testid="segment-editor-notice">
       {{ current.origin ? t('segments.personal.noticeOrigin', { origin: current.origin.name }) : t('segments.personal.notice') }}
-      <template #actions>
+      <template v-if="!readonly" #actions>
         <SButton size="sm" data-testid="segment-editor-remove" @click="emit('remove', current)">{{ t('segments.personal.remove') }}</SButton>
       </template>
     </SAlert>
     <STabs v-model="shown" :tabs="tabs" :aria-label="title">
       <template #default="{ active }">
-        <div v-show="active === 'basic'" class="space-y-4">
-          <SGrid>
-            <SField :label="t('common.name')" required :hint="current?.is_default ? t('segments.defaultName') : undefined" :error="errors.name">
-              <SInput v-model="form.name" :disabled="current?.is_default" data-testid="segment-name" />
+        <!-- The least height keeps the dialog from collapsing on a short tab. -->
+        <div class="min-h-[20rem]">
+          <div v-show="active === 'basic'" class="space-y-4">
+            <SGrid>
+              <SField :label="t('common.name')" required :hint="current?.is_default ? t('segments.defaultName') : undefined" :error="errors.name">
+                <SInput v-model="form.name" :disabled="readonly || current?.is_default" data-testid="segment-name" />
+              </SField>
+              <SegmentDiscountField v-if="!personal" v-model="form.discount" :error="errors.discount" :disabled="readonly" />
+            </SGrid>
+            <SField :label="t('segments.note')" :error="errors.description">
+              <STextarea v-model="form.description" :rows="2" :disabled="readonly" data-testid="segment-description" />
             </SField>
-            <SegmentDiscountField v-if="!personal" v-model="form.discount" :error="errors.discount" />
-          </SGrid>
-          <SField :label="t('segments.note')" :error="errors.description">
-            <STextarea v-model="form.description" :rows="2" data-testid="segment-description" />
-          </SField>
+          </div>
+          <div v-show="active === 'groups'" class="space-y-4">
+            <SegmentDiscountField v-if="personal" v-model="form.discount" :error="errors.discount" :disabled="readonly" />
+            <SHint v-if="current && !personal && !readonly" size="xs">{{ t('segments.groups.hint', { name: current.name }) }}</SHint>
+            <SegmentGroupsEditor ref="groupsEditor" :segment-id="current?.id ?? null" :discount="form.discount.trim()" :editable="!readonly" />
+          </div>
+          <template v-if="active === 'members'">
+            <SegmentMembers v-if="current" :segment="current" @changed="emit('changed')" />
+            <SEmpty v-else size="sm" icon="user" :text="t('segments.members.emptyNew')" data-testid="segment-members-empty" />
+          </template>
         </div>
-        <div v-show="active === 'groups'" class="space-y-4">
-          <SegmentDiscountField v-if="personal" v-model="form.discount" :error="errors.discount" />
-          <SHint v-if="current && !personal" size="xs">{{ t('segments.groups.hint', { name: current.name }) }}</SHint>
-          <SegmentGroupsEditor ref="groupsEditor" :segment-id="current?.id ?? null" :discount="form.discount.trim()" editable />
-        </div>
-        <template v-if="active === 'members'">
-          <SegmentMembers v-if="current" :segment="current" @changed="emit('changed')" />
-          <SEmpty v-else size="sm" icon="user" :text="t('segments.members.emptyNew')" data-testid="segment-members-empty" />
-        </template>
       </template>
     </STabs>
+    <template v-if="readonly" #footer>
+      <SButton variant="primary" data-testid="segment-editor-close" @click="emit('update:open', false)">{{ t('common.close') }}</SButton>
+    </template>
   </SFormModal>
 </template>

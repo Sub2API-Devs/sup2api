@@ -1,10 +1,10 @@
-// The user groups (segments) of the users page: the list's filter, and moving
-// users from one to another.
+// The user groups (segments) of the users page: the list's filter, and what
+// moving users from one to another changes.
 import { ref, type Ref } from 'vue'
-import { api } from '@sub2api/host'
 import type { SelectOption } from '@sub2api/ui'
+import type { User } from '@/api/types'
 import type { Segment } from '@/api/pricing'
-import { useSegmentsLookup, type SegmentedUser } from '@/components/pricing/segmentLookup'
+import { useSegmentsLookup } from '@/components/pricing/segmentLookup'
 import { useAuthStore } from '@/stores/auth'
 
 /** The named segments when the caller may list them (segment:read), none otherwise. */
@@ -28,12 +28,7 @@ export interface MoveImpact {
   personal: number
 }
 
-export function moveImpact(users: SegmentedUser[], target: number | null): MoveImpact {
+export function moveImpact(users: User[], target: number | null): MoveImpact {
   const moving = users.filter((u) => u.segment?.id !== target)
   return { ids: moving.map((u) => u.id), personal: moving.filter((u) => u.segment?.kind === 'personal').length }
-}
-
-/** Moves users into a named segment; the personal segment a user leaves is deleted. */
-export function moveToSegment(segmentId: number, userIds: number[]) {
-  return api.post<{ moved: number }>(`/segments/${segmentId}/members`, { user_ids: userIds })
 }

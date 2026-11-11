@@ -3,12 +3,12 @@ export default {
   description: '每个用户只属于一个用户组。用户组决定他能用哪些私有分组、按什么倍率和价格计费。',
   create: '新建用户组',
   editTitle: '编辑用户组 {name}',
+  viewTitle: '用户组 {name}',
   searchPlaceholder: '搜索名称或说明…',
   default: '默认',
   defaultHint: '新用户自动加入这个用户组，它不能删除。',
   defaultName: '默认用户组不能改名。',
   note: '说明',
-  unsaved: '未保存',
   publicOnly: '只有公开分组',
   customRates: '{n} 个专属倍率',
   customPrices: '{n} 条专属价',
@@ -34,24 +34,7 @@ export default {
   groups: {
     hint: '「{name}」在每个分组能不能用、按几倍计费。授权和倍率的改动在点“保存”后生效；模型专属价在各自的弹窗里保存。',
     emptyNew: '保存后再设置分组与倍率。',
-    access: '能否使用',
-    public: '公开',
-    private: '私有',
-    granted: '已授权',
-    notGranted: '未授权',
-    grant: '授权使用 {group}',
-    rateOf: '{group} 的专属倍率',
-    rate: '实际倍率',
-    source: {
-      segment: '专属倍率',
-      discount: '分组默认 × 全场折扣',
-      group: '分组默认'
-    },
-    inactive: '未授权，暂不生效',
-    prices: '模型专属价',
-    priceCount: '{n} 条',
-    setPrices: '设置',
-    invalidRate: '{group} 的专属倍率填得不对，请先改正。'
+    private: '私有'
   },
   prices: {
     title: '「{segment}」在 {group} 的模型专属价',
@@ -65,6 +48,7 @@ export default {
     addHint: '每个用户只属于一个用户组：加入「{segment}」就是把他从原来的用户组移过来。',
     addPlaceholder: '按邮箱或昵称搜索要加入的用户',
     search: '搜索成员',
+    inUsers: '在用户列表中查看',
     empty: '这个用户组还没有成员',
     already: '{name} 已经在这个用户组里',
     dropPersonal: '{name} 现在是个人专属。加入「{segment}」后，他的个人专属设置（授权、专属倍率、专属价）会被删除，之后按「{segment}」计费。',

@@ -2,16 +2,16 @@
 // Mine > Models & prices: every model at its base price with the caller's
 // groups that provide it, or what one of those groups provides at what the
 // caller pays there, the list price times their rate (CONTRACTS §79.4).
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { api } from '@sub2api/host'
+import { api, isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SCard, SChip, SInput, SPageHeader, SSelect, STable, type TableColumn } from '@sub2api/ui'
 import type { MyPrices } from '@/api/pricing'
 import type { Group } from '@/api/types'
 import { fetchMyGroups } from '@/composables/lookups'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
-import { useLatestRequest } from '@/components/pricing/latestRequest'
 import { priceCells, priceText, rateText } from '@/components/pricing/pricingFormat'
 import { myGroupLabel } from '@/views/keys/myGroup'
 import { num } from '@/views/prices/priceExpr'
@@ -28,12 +28,29 @@ const groupID = computed({
   get: () => (typeof route.query.group === 'string' && /^\d+$/.test(route.query.group) ? route.query.group : ''),
   set: (id: string) => void router.replace({ query: { ...route.query, group: id || undefined } })
 })
+/** The link named a group the caller cannot use (any more): every group is shown instead, with a note, until a group is chosen. */
+const unavailable = ref(false)
+watch(groupID, (id) => {
+  if (id) unavailable.value = false
+})
+
+/** GET /me/prices of the choice. A group the caller cannot use is a 404: the choice goes back to every group, answered here too so that no error shows meanwhile. */
+async function loadPrices(id: string): Promise<MyPrices> {
+  try {
+    return await api.get<MyPrices>('/me/prices', id ? { group_id: id } : {})
+  } catch (e) {
+    if (!id || !isApiError(e) || e.status !== 404) throw e
+    unavailable.value = true
+    groupID.value = ''
+    return api.get<MyPrices>('/me/prices', {})
+  }
+}
 // The answer stays while the next choice loads: what describes the rows below reads it, not the choice.
-const { result: prices, loading, error } = useLatestRequest(groupID, (id) => api.get<MyPrices>('/me/prices', id ? { group_id: id } : {}), 0)
+const { result: prices, loading, error } = useLatestRequest(groupID, loadPrices, 0)
 
 const groupOptions = computed(() => [
   { value: '', label: t('me.models.allGroups') },
-  ...groups.value.map((g) => ({ value: String(g.id), label: myGroupLabel(g, t('me.models.exclusive')) }))
+  ...groups.value.map((g) => ({ value: String(g.id), label: myGroupLabel(g, t('pricing.exclusive')) }))
 ])
 
 onMounted(async () => {
@@ -82,6 +99,7 @@ const columns = computed<TableColumn[]>(() => [
       <span class="ms-auto text-xs text-fg-muted" data-testid="models-unit">{{ unit }}</span>
     </div>
     <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
+    <SAlert v-if="unavailable" tone="warning" dense data-testid="models-group-unavailable">{{ t('me.models.groupUnavailable') }}</SAlert>
     <SAlert v-if="atBase" tone="primary" dense data-testid="models-base-note">{{ t('me.models.baseNote') }}</SAlert>
     <SCard :padded="false" data-testid="models-table">
       <STable :columns="columns" :rows="shown" :loading="loading" row-key="model" dense :empty-text="t(atBase ? 'me.models.emptyAll' : 'me.models.empty')">

@@ -14,8 +14,9 @@ import GroupAccessSummary from './GroupAccessSummary.vue'
 import GroupAccountCount from './GroupAccountCount.vue'
 import GroupDeleteModal from './GroupDeleteModal.vue'
 import GroupEditModal from './GroupEditModal.vue'
+import GroupPricingModal from './GroupPricingModal.vue'
 import GroupPricingSummary from './GroupPricingSummary.vue'
-import type { GroupEditTab } from './groupEditTabs'
+import type { GroupEditTab, GroupPricingTab } from './groupEditTabs'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
 import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
@@ -97,6 +98,21 @@ function openEdit(g: Group | null, tab: GroupEditTab = 'basic') {
   open.value = true
 }
 
+// ------------------------------------------------------------------ access and pricing
+
+/** The group whose access and pricing a caller who may not manage groups looks at. */
+const viewing = ref<Group | null>(null)
+const viewOpen = ref(false)
+const viewTab = ref<GroupPricingTab>('segments')
+
+/** Opens who may use a group and what it costs there: in the editor, or read-only without group:manage. */
+function openPricing(g: Group, tab: GroupPricingTab = 'segments') {
+  if (canManage.value) return openEdit(g, tab)
+  viewing.value = g
+  viewTab.value = tab
+  viewOpen.value = true
+}
+
 // ------------------------------------------------------------------ row menu
 
 /** The group being deleted while it still has API keys (they move or are unbound). */
@@ -145,7 +161,7 @@ async function onAction(listed: Group, key: string) {
       <template #cell-rate_multiplier="{ row }">
         <span class="font-mono">{{ multiplier(row.rate_multiplier) }}</span>
       </template>
-      <template #cell-pricing="{ row }"><GroupPricingSummary :group="row" :link="canManage" @open="openEdit(row, 'pricing')" /></template>
+      <template #cell-pricing="{ row }"><GroupPricingSummary :group="row" link @open="openPricing(row, 'pricing')" /></template>
       <template #cell-model_allowlist="{ row }">
         <SHint v-if="row.model_count !== undefined" size="xs" class="whitespace-nowrap" data-testid="group-model-count">{{ t('groups.modelCount', { n: row.model_count }) }}</SHint>
         <div v-if="row.model_allowlist && row.model_allowlist.length" class="flex max-w-xs flex-wrap items-center gap-1">
@@ -181,6 +197,7 @@ async function onAction(listed: Group, key: string) {
     </STable>
 
     <GroupEditModal v-model:open="open" :group="editing" :initial-tab="editTab" @saved="changed" />
+    <GroupPricingModal v-model:open="viewOpen" :group="viewing" :initial-tab="viewTab" />
 
     <GroupDeleteModal v-model:open="deleteOpen" :group="deleting" :key-count="deleting ? keyCount(deleting) ?? 0 : 0" @deleted="changed" />
     <PriceSimulatorModal v-model:open="simOpen" :preset="simPreset" />
@@ -205,6 +222,7 @@ async function onAction(listed: Group, key: string) {
       </template>
       <template #footer>
         <SButton v-if="canManage && detail" @click="editFromDetail">{{ t('common.edit') }}</SButton>
+        <SButton v-else-if="detail" data-testid="group-detail-pricing" @click="openPricing(detail)">{{ t('groups.viewPricing') }}</SButton>
         <SButton variant="primary" @click="detailOpen = false">{{ t('common.close') }}</SButton>
       </template>
     </SModal>

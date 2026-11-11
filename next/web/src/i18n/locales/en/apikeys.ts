@@ -99,7 +99,6 @@ export default {
   noGroups: 'No group is available to you. Ask an administrator to assign one.',
   groupModels: 'Models',
   groupPrices: 'Models and prices of this group',
-  exclusiveGroup: 'Exclusive',
   ownRate: 'Group default {group}, your rate {rate}',
   createdTitle: 'API key created',
   rotatedTitle: 'API key regenerated',

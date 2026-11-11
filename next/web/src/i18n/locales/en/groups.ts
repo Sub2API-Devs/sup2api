@@ -56,8 +56,9 @@ export default {
   whoCanUse: 'Who can use it',
   modelPricing: 'Model pricing',
   modelCount: 'Provides {n} models',
-  unsaved: 'Unsaved',
   pickUser: 'Price one user individually',
+  pricingTitle: 'Access & pricing of {name}',
+  viewPricing: 'View access & pricing',
   deleteWithPricing: 'Its grants, rate overrides and model prices are deleted with it.',
   tabs: {
     basic: 'Basics',
@@ -78,21 +79,10 @@ export default {
     segments: '{n} user group prices'
   },
   segments: {
-    hint: 'Whether each user group can use this group, and at which rate. An empty rate follows the group\'s default rate × the user group\'s discount; a value replaces both. To set one user apart, search for him under "Price one user individually": he joins the table as a personal user group, after you confirm when he is still in a user group.',
-    nobody: 'This private group is granted to nobody yet, so nobody can use it. Turn on "Can use" below to grant it.',
-    segment: 'User group',
-    access: 'Can use',
-    rateOverride: 'Rate',
-    rate: 'Effective rate',
-    prices: 'Own prices',
-    members: '{n} users',
-    publicAccess: 'Public, open to all',
-    grant: 'Grant to "{name}"',
-    rateOf: 'Rate override of "{name}"',
-    notGranted: 'Not granted, cannot use this group',
-    priceRules: '{n} set',
-    setPrices: 'Set',
-    rateInvalid: 'The rate of "{name}" is not valid: enter a number of at least 0 with up to 4 decimals.'
+    hint: 'Whether each user group can use this group, and at which rate. An empty own rate follows the group\'s default rate × the user group\'s discount; a value replaces both. To set one user apart, search for them under "Price one user individually": they join the table as Personal, after you confirm when they are still in a user group.',
+    nobody: 'This private group is granted to nobody yet, so nobody can use it.',
+    nobodyHint: 'Turn on a switch under "Access" below to grant it.',
+    members: '{n} users'
   },
   pricing: {
     target: 'Pricing for',
@@ -101,6 +91,7 @@ export default {
     notGrantedOption: '{name} (not granted)',
     groupScope: 'Group prices apply to everyone using this group; a model without one follows the global price. Paid = list price × each user\'s rate (group default {rate}).',
     segmentScope: 'Setting the own prices of "{name}": they apply to it only; a model without one follows the group price.',
+    segmentScopeReadonly: 'The own prices of "{name}": they apply to it only; a model without one follows the group price.',
     segmentRate: 'Its effective rate in this group is {rate}: paid = list price {rate}.',
     segmentNotGranted: 'It is not granted this private group yet, so these prices only matter once it is.',
     emptyNew: 'Save the group and add accounts before pricing its models.',

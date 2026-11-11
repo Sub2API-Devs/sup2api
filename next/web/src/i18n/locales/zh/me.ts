@@ -103,7 +103,6 @@ export default {
     description: '系统里有哪些模型、你的分组提供哪些，以及你的实付价（标价 × 你的倍率）。',
     group: '分组',
     allGroups: '全部分组 · 基础价',
-    exclusive: '专属',
     search: '搜索模型',
     model: '模型',
     input: '输入',
@@ -125,6 +124,7 @@ export default {
     tiered: '{n} 档，显示第一档',
     custom: '按规则计费',
     empty: '这个分组没有可用模型',
-    emptyAll: '还没有可用的模型'
+    emptyAll: '还没有可用的模型',
+    groupUnavailable: '链接里的分组不对你开放，已改为显示全部分组。'
   }
 }

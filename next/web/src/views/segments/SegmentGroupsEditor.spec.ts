@@ -28,8 +28,8 @@ async function render(props: { segmentId: number | null; editable?: boolean; dis
   const w = mount(SegmentGroupsEditor, { props, global: { plugins: [i18n], stubs: { SegmentGroupPricesModal: true } } })
   await flushPromises()
   const row = (group: number) => w.get(`[data-group="${group}"]`)
-  const rate = (group: number) => row(group).get('[data-testid="segment-group-rate"]').text()
-  const source = (group: number) => row(group).get('[data-testid="segment-group-rate-source"]').text()
+  const rate = (group: number) => row(group).get('[data-testid="access-rate-value"]').text()
+  const source = (group: number) => row(group).get('[data-testid="access-rate-source"]').text()
   return { w, row, rate, source }
 }
 
@@ -50,14 +50,15 @@ describe('the groups of a segment', () => {
   it('lists what the segment gets in each group, read-only without fields', async () => {
     const { w, row, rate, source } = await render({ segmentId: 2 })
     expect(mocks.get).toHaveBeenCalledWith('/segments/2/groups')
-    expect(row(1).get('[data-testid="segment-group-access"]').text()).toBe('Public')
+    expect(w.findAll('thead th').map((th) => th.text())).toEqual(['Group', 'Access', 'Effective rate', 'Own prices'])
+    expect(row(1).get('[data-testid="access-rate-access"]').text()).toBe('Public')
     expect([rate(1), source(1)]).toEqual(['×1.08', 'Group default × discount'])
-    expect(row(1).get('[data-testid="segment-group-price-count"]').text()).toBe('2 prices')
-    expect(row(2).get('[data-testid="segment-group-access"]').text()).toBe('Not granted')
-    expect(source(2)).toBe('Not granted, not in effect')
-    expect(row(2).get('[data-testid="segment-group-prices"]').text()).toBe('View')
+    expect(row(1).get('[data-testid="access-rate-price-count"]').text()).toBe('2 prices')
+    expect(row(2).get('[data-testid="access-rate-access"]').text()).toBe('Not granted')
+    expect([rate(2), source(2)]).toEqual(['×1.08', 'Not granted, not in effect'])
+    expect(row(2).get('[data-testid="access-rate-prices"]').text()).toBe('View')
     expect(w.find('[data-testid="rate-override-input"]').exists()).toBe(false)
-    expect(w.find('[data-testid="segment-group-grant"]').exists()).toBe(false)
+    expect(w.find('[data-testid="access-rate-grant"]').exists()).toBe(false)
   })
 
   it('follows the discount of the form before it is saved', async () => {
@@ -70,7 +71,8 @@ describe('the groups of a segment', () => {
   it('keeps grants and rates in drafts and saves the changed groups', async () => {
     const { w, row, rate, source } = await render({ segmentId: 2, editable: true })
     await row(1).get('[data-testid="rate-override-input"]').setValue('0.8')
-    await row(2).get('[data-testid="segment-group-grant"]').setValue(true)
+    expect(w.findAll('thead th').map((th) => th.text())).toEqual(['Group', 'Access', 'Own rate', 'Effective rate', 'Own prices'])
+    await row(2).get('[data-testid="access-rate-grant"]').setValue(true)
     expect([rate(1), source(1)]).toEqual(['×0.8', 'Own rate'])
     expect(source(2)).toBe('Group default × discount')
     expect(w.vm.dirty).toBe(true)
@@ -86,7 +88,7 @@ describe('the groups of a segment', () => {
     })
     await flushPromises()
     expect(w.vm.dirty).toBe(false)
-    expect(w.find('[data-testid="segment-group-unsaved"]').exists()).toBe(false)
+    expect(w.find('[data-testid="access-rate-unsaved"]').exists()).toBe(false)
   })
 
   it('sends nothing without a change, and refuses a rate that is not one', async () => {

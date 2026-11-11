@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
-import { useLatestRequest } from './latestRequest'
+import { useLatestRequest } from './useLatestRequest'
 
 /** A `load` whose answers the test hands out one by one. */
 function deferredLoad() {
