@@ -1,18 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SButton, SPageHeader } from '@sub2api/ui'
-import type { Group } from '@/api/types'
-import { useGroupsLookup } from '@/composables/lookups'
-import { useAuthStore } from '@/stores/auth'
 import UsageRecords from './UsageRecords.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
 
-const canGroups = auth.has('group:read')
-const groups = canGroups ? useGroupsLookup().groups : ref<Group[]>([])
-const groupOptions = computed(() => groups.value.map((g) => ({ value: g.id, label: g.name })))
 // The page owns the header and the refresh button, which sits in the search
 // bar (#actions) rather than on a row of its own; the records component
 // follows `revision` and reports its loading state, so no ref reaches into
@@ -33,7 +26,6 @@ function refresh() {
       list-path="/usage"
       summary-path="/usage/summary"
       admin
-      :group-options="canGroups ? groupOptions : undefined"
     >
       <template #actions>
         <SButton size="sm" :loading="loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>

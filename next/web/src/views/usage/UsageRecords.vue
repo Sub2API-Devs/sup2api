@@ -24,7 +24,7 @@ import UsageLiveStats from './UsageLiveStats.vue'
 import UsageTable from './UsageTable.vue'
 import UserRanking from './UserRanking.vue'
 import { useUsageSummary } from './useUsageSummary'
-import { baseUsageFilters, queryUsageFilters } from './usageFilters'
+import { baseUsageFilters, entityPatch, queryUsageFilters } from './usageFilters'
 import type { UsageRow } from './usage'
 
 const props = withDefaults(
@@ -32,12 +32,11 @@ const props = withDefaults(
     listPath: string
     summaryPath: string
     admin?: boolean
-    groupOptions?: Array<{ value: string | number; label: string }>
     /** Bumped by the page's refresh button: reload everything (the page owns the header). */
     revision?: number
     extraTabs?: TabItem[]
   }>(),
-  { admin: false, groupOptions: undefined, revision: 0, extraTabs: () => [] }
+  { admin: false, revision: 0, extraTabs: () => [] }
 )
 const emit = defineEmits<{ (e: 'update:loading', value: boolean): void; (e: 'update:tab', value: string): void }>()
 const { t } = useI18n()
@@ -88,17 +87,21 @@ const ips = useUsageSummary(props.summaryPath, filters, 'ip', () => tab.value ==
 // the type filter itself, so the other types stay on offer once one is picked.
 const protocols = useUsageSummary(props.summaryPath, filters, 'protocol', true, () => ({ protocol: '' }))
 const protocolOptions = computed(() => protocols.rows.value.map((r) => r.key).filter((k) => k !== ''))
+// The models under the search, for the model picker, likewise without the model filters themselves.
+const models = useUsageSummary(props.summaryPath, filters, 'model', true, () => ({ model: '', model_contains: '' }))
+const modelOptions = computed(() => models.rows.value.map((r) => r.key).filter((k) => k !== ''))
 
 function reload() {
   reloadList()
   protocols.reload()
+  models.reload()
   if (tab.value === 'ips') ips.reload()
 }
 watch(() => props.revision, reload)
 watch(loading, (v) => emit('update:loading', v), { immediate: true })
 
 function selectUser(id: string) {
-  filters.user_id = id
+  Object.assign(filters, entityPatch('user', { id }))
   tab.value = 'records'
 }
 
@@ -125,8 +128,8 @@ async function exportCsv() {
       :model-value="filters"
       :admin="admin"
       :accounts="showAccount"
-      :group-options="groupOptions"
       :protocol-options="protocolOptions"
+      :model-options="modelOptions"
       :log-types="logTypes"
       :searchable="!extraOpen"
       @update:model-value="Object.assign(filters, $event)"
@@ -165,7 +168,7 @@ async function exportCsv() {
       :detail-path="(id: number) => `${listPath}/${id}`"
       @filter-client-request-id="(id: string) => (filters.client_request_id = id)"
       @filter-client-ip="(ip: string) => (filters.client_ip = ip)"
-      @filter-account-id="(id: number) => (filters.account_id = String(id))"
+      @filter-account-id="(id: number) => Object.assign(filters, entityPatch('account', { id: String(id) }))"
     >
       <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
     </UsageTable>

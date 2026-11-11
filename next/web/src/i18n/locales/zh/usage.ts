@@ -32,14 +32,9 @@ export default {
   nonStream: '非流式',
   search: {
     logType: '日志类型',
-    // 合并框：纯数字按 ID，其它按名称/邮箱包含
-    user: '用户（ID 或邮箱）',
-    api_key: 'API Key（ID 或名称）',
-    account: '账号（ID 或名称）',
-    model_contains: '模型包含',
-    api_key_name: 'API Key 名称包含',
+    // 模型、用户、API Key、分组、账号是实体选择器（EntityPicker），占位用它自带的实体名；
+    // 这里是其余输入框的占位，以及筛选标签的名称（按查询参数）。
     client_ip: '调用 IP（精确）',
-    api_key_id: 'API Key ID',
     group_id: '分组',
     group_name: '分组名称包含',
     request_id: '请求 ID',
@@ -49,9 +44,7 @@ export default {
     endpoint: '端点',
     status_code: 'HTTP 状态码',
     error_type: '错误类型',
-    user_id: '用户 ID',
-    user_email: '用户邮箱包含',
-    account_id: '账号 ID',
+    account_id: '账号',
     account_name: '账号名称包含',
     plugin_key: '插件标识',
     account_type: '账号类型',
@@ -60,10 +53,6 @@ export default {
     upstream_protocol: '上游协议',
     conversion: '协议转换',
     stream: '响应方式'
-  },
-  filters: {
-    // 被 LedgerView（管理员余额流水）跨命名空间使用，不要删。
-    userId: '用户 ID'
   },
   success: {
     ok: '成功',

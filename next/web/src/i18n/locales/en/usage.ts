@@ -32,14 +32,10 @@ export default {
   nonStream: 'Non-streaming',
   search: {
     logType: 'Log type',
-    // id-or-name boxes: all digits match the id, other text the name / email
-    user: 'User (ID or email)',
-    api_key: 'API key (ID or name)',
-    account: 'Account (ID or name)',
-    model_contains: 'Model contains',
-    api_key_name: 'API key name contains',
+    // The model, user, API key, group and account are entity pickers (EntityPicker), named by
+    // the picker itself; these are the other fields' placeholders and the filter chips' names
+    // (by query parameter).
     client_ip: 'Client IP (exact)',
-    api_key_id: 'API key ID',
     group_id: 'Group',
     group_name: 'Group name contains',
     request_id: 'Request ID',
@@ -49,9 +45,7 @@ export default {
     endpoint: 'Endpoint',
     status_code: 'HTTP status',
     error_type: 'Error type',
-    user_id: 'User ID',
-    user_email: 'User email contains',
-    account_id: 'Account ID',
+    account_id: 'Account',
     account_name: 'Account name contains',
     plugin_key: 'Plugin key',
     account_type: 'Account type',
@@ -60,10 +54,6 @@ export default {
     upstream_protocol: 'Upstream protocol',
     conversion: 'Protocol conversion',
     stream: 'Response mode'
-  },
-  filters: {
-    // Read by LedgerView (admin balance ledger) across namespaces: keep it.
-    userId: 'User ID'
   },
   success: {
     ok: 'Succeeded',

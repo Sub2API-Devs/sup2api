@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { reactive, ref } from 'vue'
 import { i18n } from '@/i18n'
+import EntityPicker from '@/components/EntityPicker.vue'
 import UsageRecords from './UsageRecords.vue'
 
 // Data sources are stubbed: what this spec checks is the page around them -
@@ -19,19 +20,23 @@ vi.mock('@/composables/useList', async importOriginal => ({
 const summaries: string[] = []
 const extras: Record<string, Record<string, unknown>> = {}
 const protocolRows = ref<Array<{ key: string }>>([])
+const modelRows = ref<Array<{ key: string }>>([])
+const summaryRows: Record<string, typeof protocolRows> = { protocol: protocolRows, model: modelRows }
 vi.mock('./useUsageSummary', () => ({
   useUsageSummary: (_p: string, _f: unknown, groupBy: unknown, _enabled?: unknown, extra?: unknown) => {
     const by = typeof groupBy === 'function' ? groupBy() : String(groupBy)
     summaries.push(by)
     extras[by] = typeof extra === 'function' ? extra() : ((extra as Record<string, unknown>) ?? {})
-    return { rows: by === 'protocol' ? protocolRows : ref([]), loading: ref(false), error: ref(null), reload: vi.fn() }
+    return { rows: summaryRows[by] ?? ref([]), loading: ref(false), error: ref(null), reload: vi.fn() }
   }
 }))
 const replace = vi.fn()
 let query: Record<string, string> = {}
 vi.mock('vue-router', () => ({ useRoute: () => ({ query }), useRouter: () => ({ replace }) }))
+// The pickers look names up; no entity is known here.
+vi.mock('@sub2api/host', async original => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get: async () => ({ items: [], more: false }) } }))
 const perms = vi.hoisted(() => ({ accountRead: true }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => key === 'account:read' && perms.accountRead }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string | string[]) => perms.accountRead || ![key].flat().includes('account:read') }) }))
 vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows', 'showAccount'], emits: ['filter-account-id'], template: '<div data-testid="usage-table" />' } }))
 vi.mock('./UsageIPPanel.vue', () => ({ default: { name: 'UsageIPPanel', template: '<div data-testid="ip-panel" />' } }))
 vi.mock('./UsageLiveStats.vue', () => ({ default: { name: 'UsageLiveStats', props: ['realtimePath', 'summaryPath', 'revision'], template: '<div data-testid="live-stats" />' } }))
@@ -64,6 +69,7 @@ describe('usage records page', () => {
     lists.length = 0
     summaries.length = 0
     protocolRows.value = []
+    modelRows.value = []
     replace.mockClear()
     query = {}
     i18n.global.locale.value = 'zh'
@@ -121,11 +127,23 @@ describe('usage records page', () => {
   it('applies the filters typed so far along with the log type', async () => {
     const w = render()
     await flushPromises()
-    await w.get('[data-testid="filter-model_contains"]').setValue('opus')
-    expect(lists[0].filters.model_contains).toBe('')
+    await w.get('[data-testid="filter-request_id"]').setValue('req-1')
+    expect(lists[0].filters.request_id).toBeUndefined()
     await pick(w, 'errors')
-    expect(lists[0].filters).toMatchObject({ model_contains: 'opus', success: 'false' })
-    expect((w.get('[data-testid="filter-model_contains"]').element as HTMLInputElement).value).toBe('opus')
+    expect(lists[0].filters).toMatchObject({ request_id: 'req-1', success: 'false' })
+    expect((w.get('[data-testid="filter-request_id"]').element as HTMLInputElement).value).toBe('req-1')
+  })
+
+  it('searches at once when an entity is picked, among the caller\'s own on their page', async () => {
+    const w = render()
+    await flushPromises()
+    const model = w.findAllComponents(EntityPicker).find((p) => p.props('kind') === 'model')!
+    expect(model.props('mine')).toBe(true)
+    model.vm.$emit('change', { id: 'claude-opus-5', text: '' })
+    await flushPromises()
+    expect(lists[0].filters).toMatchObject({ model: 'claude-opus-5', model_contains: '' })
+    expect(w.findAllComponents(EntityPicker).map((p) => p.props('kind'))).toEqual(['model', 'group', 'api_key'])
+    expect(render(true).findAllComponents(EntityPicker).map((p) => [p.props('kind'), p.props('mine')])).toEqual([['model', false], ['user', false], ['api_key', false], ['group', false], ['account', false]])
   })
 
   it('returns to the request list on reset', async () => {
@@ -148,12 +166,12 @@ describe('usage records page', () => {
     expect(bar.find('[data-testid="ledger-range"]').exists()).toBe(true)
     expect(bar.find('[data-testid="ledger-filters"]').exists()).toBe(true)
     expect(w.find('[data-testid="ledger"]').exists()).toBe(true)
-    for (const gone of ['filter-model_contains', 'filter-protocol', 'filter-success', 'filter-advanced-toggle', 'live-stats', 'export-usage', 'search-usage', 'reset-usage-filters']) {
+    for (const gone of ['filter-model', 'filter-protocol', 'filter-success', 'filter-advanced-toggle', 'live-stats', 'export-usage', 'search-usage', 'reset-usage-filters']) {
       expect(bar.find(`[data-testid="${gone}"]`).exists()).toBe(false)
     }
     await pick(w, 'records')
     expect(bar.find('[data-testid="ledger-filters"]').exists()).toBe(false)
-    expect(bar.find('[data-testid="filter-model_contains"]').exists()).toBe(true)
+    expect(bar.find('[data-testid="filter-model"]').exists()).toBe(true)
     expect(bar.find('[data-testid="filter-advanced-toggle"]').exists()).toBe(true)
     expect(bar.find('[data-testid="live-stats"]').exists()).toBe(true)
     expect(w.find('[data-testid="ledger"]').exists()).toBe(false)
@@ -182,9 +200,11 @@ describe('usage records page', () => {
     expect(w.text()).toContain('用户排行')
     const ranking = w.findComponent({ name: 'UserRanking' })
     expect(ranking.exists()).toBe(true)
+    lists[0].filters.user_email = 'ann'
     ranking.vm.$emit('select', '3')
     await flushPromises()
-    expect(lists[0].filters.user_id).toBe('3')
+    // the picked user replaces a searched email
+    expect(lists[0].filters).toMatchObject({ user_id: '3', user_email: '' })
     expect(w.find('[data-testid="ranking"]').exists()).toBe(false)
     expect(replace).toHaveBeenLastCalledWith({ query: { tab: undefined } })
   })
@@ -195,9 +215,10 @@ describe('usage records page', () => {
     const w = render(true)
     const table = w.findComponent({ name: 'UsageTable' })
     expect(table.props('showAccount')).toBe(true)
+    lists[0].filters.account_name = 'main'
     table.vm.$emit('filter-account-id', 9)
     await flushPromises()
-    expect(lists[0].filters.account_id).toBe('9')
+    expect(lists[0].filters).toMatchObject({ account_id: '9', account_name: '' })
   })
 
   it('hides the account from an operator who may not read accounts', () => {
@@ -224,14 +245,14 @@ describe('usage records page', () => {
   })
 
   it('starts from the filters of a link; a user cannot preset another user', async () => {
-    query = { user_id: '3', group_name: 'vip', from: '2026-10-01T00:00:00.000Z', to: '2026-10-08T00:00:00.000Z' }
+    query = { user_id: '3', group_name: 'vip', model: 'gpt-4o', from: '2026-10-01T00:00:00.000Z', to: '2026-10-08T00:00:00.000Z' }
     render(true)
     expect(lists[0].filters).toMatchObject(query)
     lists.length = 0
     render()
     expect(lists[0].filters.user_id).toBeUndefined()
     expect(lists[0].filters.group_name).toBeUndefined()
-    expect(lists[0].filters.from).toBe('2026-10-01T00:00:00.000Z')
+    expect(lists[0].filters).toMatchObject({ model: 'gpt-4o', from: '2026-10-01T00:00:00.000Z' })
   })
 
   it('offers the request types under the search as filter options, leaving the type filter itself out of that query', async () => {
@@ -241,6 +262,17 @@ describe('usage records page', () => {
     expect(summaries).toContain('protocol')
     expect(extras.protocol).toEqual({ protocol: '' })
     expect(w.findComponent({ name: 'UsageFilters' }).props('protocolOptions')).toEqual(['anthropic.messages', 'openai.chat'])
+  })
+
+  it('offers the models under the search to the model picker, leaving the model filters themselves out of that query', async () => {
+    modelRows.value = [{ key: 'claude-opus-5' }, { key: '' }, { key: 'gpt-4o' }]
+    const w = render()
+    await flushPromises()
+    expect(extras.model).toEqual({ model: '', model_contains: '' })
+    expect(w.findAllComponents(EntityPicker).find((p) => p.props('kind') === 'model')!.props('extra')).toEqual([
+      { id: 'claude-opus-5', name: 'claude-opus-5' },
+      { id: 'gpt-4o', name: 'gpt-4o' }
+    ])
   })
 
   it('renders the page actions in the search bar beside Export', async () => {
