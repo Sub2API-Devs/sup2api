@@ -459,6 +459,30 @@ func TestKVBatchRulesAreTheSameOnEveryHost(t *testing.T) {
 	}
 }
 
+// KV.Set takes the ttl of the batch write: a negative one is refused before
+// anything is sent, however small. Whole seconds used to turn -1 ns ..
+// -999 ms into 0, no expiry.
+func TestKVSetRefusesANegativeTTL(t *testing.T) {
+	s := newKVStub(false)
+	kv, ctx := s.kv(), context.Background()
+	for _, ttl := range []time.Duration{-time.Nanosecond, -time.Millisecond, -999 * time.Millisecond, -time.Second, -time.Hour} {
+		err := kv.Set(ctx, "ns", "k", []byte("v"), ttl)
+		if got, want := status.Convert(err).Message(), "ttl_seconds must be 0..9223372036"; status.Code(err) != codes.InvalidArgument || got != want {
+			t.Errorf("ttl %v: %v, want InvalidArgument %q", ttl, err, want)
+		}
+	}
+	if s.singleCalls() != 0 || len(s.data) != 0 {
+		t.Fatalf("a refused Set was sent: %v, %d entries written", s.calls, len(s.data))
+	}
+	// What Set sends is unchanged: whole seconds, 0 for no expiry and for a
+	// ttl under a second.
+	for ttl, want := range map[time.Duration]int64{0: 0, 500 * time.Millisecond: 0, 1500 * time.Millisecond: 1, time.Hour: 3600} {
+		if err := kv.Set(ctx, "ns", "k", []byte("v"), ttl); err != nil || s.ttl["ns/k"] != want {
+			t.Errorf("ttl %v: sent ttl_seconds %d (%v), want %d", ttl, s.ttl["ns/k"], err, want)
+		}
+	}
+}
+
 // plainKV has the four single calls only, like a wrapper a plugin's tests
 // put around Host.KV.
 type plainKV struct {

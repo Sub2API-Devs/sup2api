@@ -15,6 +15,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/egress"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 // ErrHostNotReady is returned by Host methods before InitHost completed.
@@ -205,7 +206,9 @@ type AccountCredentials struct {
 // one (see KVBatch).
 type KV interface {
 	Get(ctx context.Context, namespace, key string) (value []byte, found bool, err error)
-	// Set stores value (<= 64 KiB); ttl 0 means no expiry.
+	// Set stores value (<= 64 KiB); ttl 0 means no expiry. The ttl is sent
+	// in whole seconds, so one under a second is sent as 0; a negative ttl
+	// is refused, however small.
 	Set(ctx context.Context, namespace, key string, value []byte, ttl time.Duration) error
 	Delete(ctx context.Context, namespace, key string) error
 	// List returns keys with prefix; pass the returned cursor to continue,
@@ -422,7 +425,11 @@ func (k hostKV) Get(ctx context.Context, ns, key string) ([]byte, bool, error) {
 }
 
 func (k hostKV) Set(ctx context.Context, ns, key string, value []byte, ttl time.Duration) error {
-	_, err := k.c.KVSet(ctx, &pluginv1.KVSetRequest{Namespace: ns, Key: key, Value: value, TtlSeconds: kvTTLSeconds(ttl)})
+	seconds := kvTTLSeconds(ttl)
+	if err := protocol.CheckKVTTL(seconds); err != nil {
+		return err // a negative ttl, refused here like in a batch write
+	}
+	_, err := k.c.KVSet(ctx, &pluginv1.KVSetRequest{Namespace: ns, Key: key, Value: value, TtlSeconds: seconds})
 	return err
 }
 

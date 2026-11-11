@@ -195,22 +195,23 @@ func (k hostKV) DeleteMany(ctx context.Context, ns string, keys []string) error 
 
 // ---------------------------------------------------------------- rules
 
-// kvTTLSeconds is the ttl in whole seconds that KV.Set and the batch write
-// send for ttl.
-func kvTTLSeconds(ttl time.Duration) int64 { return int64(ttl / time.Second) }
+// kvTTLSeconds is the ttl_seconds of ttl for KV.Set and the batch write:
+// whole seconds, and -1 for a negative ttl, however small. The rules refuse
+// that (protocol.CheckKVTTL); rounded like the others, a negative ttl of
+// under a second would be 0, no expiry.
+func kvTTLSeconds(ttl time.Duration) int64 {
+	if ttl < 0 {
+		return -1
+	}
+	return int64(ttl / time.Second)
+}
 
 // kvCheckItems applies the host's rules to one batch write
 // (HostService.KVSetMany); protocol.CheckKVBatchKeys does it for the keys of
 // a read or a delete.
 func kvCheckItems(ns string, items []KVItem) error {
 	return protocol.CheckKVBatchItems(ns, len(items), func(i int) (string, int, int64) {
-		it := items[i]
-		if it.TTL < 0 {
-			// Whole seconds would turn a negative TTL of under a second
-			// into 0, no expiry.
-			return it.Key, len(it.Value), -1
-		}
-		return it.Key, len(it.Value), kvTTLSeconds(it.TTL)
+		return items[i].Key, len(items[i].Value), kvTTLSeconds(items[i].TTL)
 	})
 }
 
