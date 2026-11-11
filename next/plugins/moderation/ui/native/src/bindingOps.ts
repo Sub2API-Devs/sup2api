@@ -65,6 +65,12 @@ export const exemptGroups = (list: readonly Binding[]) => list.filter((b) => !b.
 /** Whether any binding names an account (the flow then depends on the account a request goes to). */
 export const hasAccountBindings = (list: readonly Binding[]) => list.some((b) => b.account_id > 0)
 
+/** Whether a group or an account is bound to the flow. */
+export const flowBound = (f: Pick<Flow, 'groups' | 'accounts'>) => f.groups.length > 0 || !!f.accounts?.length
+
+/** The flow is disabled or unpublished while something is bound to it: those bindings do not apply. */
+export const flowBindingsInactive = (f: Pick<Flow, 'enabled' | 'version' | 'groups' | 'accounts'>) => (!f.enabled || !f.version) && flowBound(f)
+
 // ---- group coverage (flows list, status line)
 
 /** The flow a group is bound to (flows list). */

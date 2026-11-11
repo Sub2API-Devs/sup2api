@@ -172,17 +172,31 @@ func (c *call) policyCandidates(ctx context.Context, original []core.AccountRef)
 		if !c.candidateEligible(&ref) || !c.creditAccountAllowed(&ref) {
 			continue
 		}
-		if !allowed[ref.ID] || s.sameID != 0 && ref.ID != s.sameID {
+		if !allowed[ref.ID] {
+			continue
+		}
+		delete(allowed, ref.ID)
+		if s.sameID != 0 && ref.ID != s.sameID {
+			c.skipAccount(ref.ID, core.SchedFailurePolicy, "same_account")
 			continue
 		}
 		proxy := proxyIdentity(ref.ProxyID)
 		if initial, seen := s.accountProxies[ref.ID]; seen && initial != proxy {
+			c.skipAccount(ref.ID, core.SchedFailurePolicy, "proxy_changed")
 			continue
 		}
 		if s.baseSet && (s.sameProxy && proxy != s.baseProxy || s.proxyOnly && proxy == 0) {
+			c.skipAccount(ref.ID, core.SchedFailurePolicy, "egress")
 			continue
 		}
 		out = append(out, ref)
+	}
+	// What is left of allowed stopped being offered since the request began:
+	// disabled or cooling down meanwhile (concludeScheduling reads which).
+	for _, ref := range original {
+		if allowed[ref.ID] {
+			c.skipAccount(ref.ID, core.SchedNotSchedulable, "left")
+		}
 	}
 	return out, nil
 }

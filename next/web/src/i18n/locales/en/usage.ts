@@ -31,13 +31,16 @@ export default {
   },
   nonStream: 'Non-streaming',
   search: {
-    advanced: 'More filters',
     logType: 'Log type',
+    // id-or-name boxes: all digits match the id, other text the name / email
+    user: 'User (ID or email)',
+    api_key: 'API key (ID or name)',
+    account: 'Account (ID or name)',
     model_contains: 'Model contains',
     api_key_name: 'API key name contains',
     client_ip: 'Client IP (exact)',
     api_key_id: 'API key ID',
-    group_id: 'Group ID',
+    group_id: 'Group',
     group_name: 'Group name contains',
     request_id: 'Request ID',
     client_request_id: 'Client request ID',
@@ -51,7 +54,7 @@ export default {
     account_id: 'Account ID',
     account_name: 'Account name contains',
     plugin_key: 'Plugin key',
-    account_type: 'Account type (requires plugin)',
+    account_type: 'Account type',
     node_id: 'Node ID',
     upstream_model: 'Upstream model',
     upstream_protocol: 'Upstream protocol',
@@ -189,6 +192,54 @@ export default {
   },
   hooks: {
     title: 'Hook decisions'
+  },
+  scheduling: {
+    title: 'Account scheduling',
+    seeBelow: 'See "Account scheduling" below for why each account was not used.',
+    outcomes: {
+      none: 'No account could serve',
+      busy: 'All accounts busy or rate limited',
+      picked: 'Picked after skipping accounts'
+    },
+    candidates: 'Schedulable accounts',
+    eligible: 'Can serve this request',
+    counts: 'By reason',
+    skipped: 'Accounts not used',
+    omitted: '{n} more accounts not listed',
+    until: 'until {time}',
+    hiddenAccount: 'No permission to view accounts',
+    reasonWithDetail: '{reason}: {detail}',
+    reasons: {
+      not_schedulable: 'Account is not being scheduled',
+      no_route: 'Account type does not serve this endpoint',
+      model_not_served: 'Model not in the account\'s model list',
+      referenced_model_not_served: 'Referenced model not in the account\'s model list',
+      usage_unsupported: 'Account type cannot meter a usage the request asks for',
+      bound_elsewhere: 'Request is bound to another account',
+      availability_blocked: 'Blocked by the model availability precheck',
+      failure_policy: 'Failure policy narrowed the retry',
+      rank_excluded: 'A scheduling plugin set the weight to 0',
+      conversion_refused: 'Protocol conversion unavailable or refused by the loss policy',
+      rate_limited: 'Rate limited',
+      concurrency_full: 'Concurrency full',
+      queued: 'Requests are queueing for it',
+      attempt_failed: 'Attempt failed, moved on'
+    },
+    details: {
+      disabled: 'disabled',
+      unschedulable: 'scheduling off',
+      auto_disabled: 'automatically disabled',
+      cooldown: 'cooling down',
+      left: 'left scheduling during the request',
+      resource: 'file resource',
+      helper_history: 'helper history',
+      fallback_credit: 'fallback credit',
+      additional: 'additional usage',
+      attempts: 'fallback attempt usage',
+      same_account: 'retrying the same account only',
+      proxy_changed: 'account proxy changed',
+      egress: 'egress restriction'
+    }
   },
   availability: {
     title: 'Model availability check',

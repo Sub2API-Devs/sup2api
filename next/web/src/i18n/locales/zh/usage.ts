@@ -31,13 +31,16 @@ export default {
   },
   nonStream: '非流式',
   search: {
-    advanced: '更多筛选',
     logType: '日志类型',
+    // 合并框：纯数字按 ID，其它按名称/邮箱包含
+    user: '用户（ID 或邮箱）',
+    api_key: 'API Key（ID 或名称）',
+    account: '账号（ID 或名称）',
     model_contains: '模型包含',
     api_key_name: 'API Key 名称包含',
     client_ip: '调用 IP（精确）',
     api_key_id: 'API Key ID',
-    group_id: '分组 ID',
+    group_id: '分组',
     group_name: '分组名称包含',
     request_id: '请求 ID',
     client_request_id: '客户端请求 ID',
@@ -51,7 +54,7 @@ export default {
     account_id: '账号 ID',
     account_name: '账号名称包含',
     plugin_key: '插件标识',
-    account_type: '账号类型（需指定插件）',
+    account_type: '账号类型',
     node_id: '节点 ID',
     upstream_model: '上游模型',
     upstream_protocol: '上游协议',
@@ -189,6 +192,54 @@ export default {
   },
   hooks: {
     title: '钩子决策'
+  },
+  scheduling: {
+    title: '账号调度记录',
+    seeBelow: '每个账号未被选用的原因见下方"账号调度记录"。',
+    outcomes: {
+      none: '无账号可用',
+      busy: '账号均繁忙或限流',
+      picked: '跳过部分账号后选中'
+    },
+    candidates: '分组可调度账号',
+    eligible: '可服务本请求',
+    counts: '按原因',
+    skipped: '未选用的账号',
+    omitted: '另有 {n} 个账号未列出',
+    until: '至 {time}',
+    hiddenAccount: '无账号查看权限',
+    reasonWithDetail: '{reason}：{detail}',
+    reasons: {
+      not_schedulable: '账号当前不参与调度',
+      no_route: '账号类型不支持该端点',
+      model_not_served: '账号模型列表不含请求的模型',
+      referenced_model_not_served: '账号模型列表不含请求引用的模型',
+      usage_unsupported: '账号类型无法计量请求要求的用量',
+      bound_elsewhere: '请求绑定了其它账号',
+      availability_blocked: '被模型可用性预检拦截',
+      failure_policy: '失败策略限定了重试范围',
+      rank_excluded: '调度插件将权重置为 0',
+      conversion_refused: '协议转换不可用或被损失策略拒绝',
+      rate_limited: '触发限流',
+      concurrency_full: '并发已满',
+      queued: '已有请求在排队',
+      attempt_failed: '尝试失败后切换'
+    },
+    details: {
+      disabled: '已停用',
+      unschedulable: '已关闭调度',
+      auto_disabled: '已自动停用',
+      cooldown: '冷却中',
+      left: '请求期间退出调度',
+      resource: '文件资源',
+      helper_history: '辅助历史',
+      fallback_credit: '回退额度凭证',
+      additional: '附加用量',
+      attempts: '回退尝试用量',
+      same_account: '仅重试原账号',
+      proxy_changed: '账号代理已变化',
+      egress: '出口限制'
+    }
   },
   availability: {
     title: '模型可用性预检',

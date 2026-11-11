@@ -205,13 +205,11 @@ const fields = computed<DescItem[]>(() => {
         <SSectionTitle tag="p">{{ t('detail.related') }}</SSectionTitle>
         <ul class="mod-related">
           <li v-for="r in ev.related" :key="r.id">
-            <button type="button" class="mod-timeline-item" @click="currentId = r.id">
-              <span class="mod-history-head">
-                <ResultBadge :result="r.result" />
-                <SBadge v-if="r.timing" size="xs">{{ enumLabel('timing', r.timing) }}</SBadge>
-                <FlowRef :flow-id="r.flow_id" :version="r.flow_version" />
-                <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>
-              </span>
+            <button type="button" class="mod-related-item" @click="currentId = r.id">
+              <ResultBadge :result="r.result" />
+              <SBadge v-if="r.timing" size="xs">{{ enumLabel('timing', r.timing) }}</SBadge>
+              <FlowRef :flow-id="r.flow_id" :version="r.flow_version" compact />
+              <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>
             </button>
           </li>
         </ul>
@@ -238,7 +236,7 @@ const fields = computed<DescItem[]>(() => {
         <template #item-flow><FlowRef :flow-id="ev.flow_id" :version="ev.flow_version" :name="ev.flow_name" :current="ev.flow_current_version" /></template>
         <template #item-endpoint>
           {{ ev.endpoint || '—' }}
-          <SButton v-if="filterable && ev.endpoint" size="xs" variant="ghost" :title="t('detail.endpointRecords')" @click="filterBy({ endpoint: ev.endpoint })">{{ t('filter') }}</SButton>
+          <SButton v-if="filterable && ev.endpoint" size="xs" variant="ghost" icon="filter" @click="filterBy({ endpoint: ev.endpoint })">{{ t('detail.endpointRecords') }}</SButton>
         </template>
         <template #item-session>
           {{ ev.session_fp }}

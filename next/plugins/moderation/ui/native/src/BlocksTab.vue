@@ -1,17 +1,33 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, STable, type TableColumn } from '@sub2api/ui'
+import {
+  SAlert,
+  SBadge,
+  SButton,
+  SCard,
+  SDateTime,
+  SField,
+  SFormModal,
+  SHint,
+  SInput,
+  SRowAction,
+  STable,
+  STableColumnSettings,
+  useTableColumns,
+  type TableColumn
+} from '@sub2api/ui'
 import UserRef from './UserRef.vue'
-import { dt, enumLabel } from './format'
+import { enumLabel, num } from './format'
 import { canManage, createBlock, deleteBlock, fetchBlocks, toastError, useModHost } from './host'
 import type { Block } from './types'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { useAsync } from './useAsync'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
-// manual block (POST /blocks). Actions need the manage permission. A
-// moderator or an allowlisted user cannot be banned: the backend's field
-// error (user_id/staff, user_id/allowlisted) shows at the user id.
+// manual block (POST /blocks, in a dialog opened from the toolbar). Actions
+// need the manage permission. A moderator or an allowlisted user cannot be
+// banned: the backend's field error (user_id/staff, user_id/allowlisted)
+// shows at the user id. Each table cell keeps to one line.
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
@@ -24,16 +40,17 @@ defineExpose({ reload })
 
 const columns = computed(() => {
   const c: TableColumn[] = [
-    { key: 'user_id', label: t('blocks.col.user') },
-    { key: 'reason', label: t('blocks.col.reason'), ellipsis: '16rem' },
-    { key: 'violations', label: t('blocks.col.violations'), align: 'right', class: 'mod-num' },
-    { key: 'source', label: t('blocks.col.source') },
-    { key: 'created_at', label: t('blocks.col.created'), nowrap: true },
-    { key: 'expires_at', label: t('blocks.col.expires'), nowrap: true }
+    { key: 'user_id', label: t('blocks.col.user'), nowrap: true, hideable: false, mobile: 'title' },
+    { key: 'source', label: t('blocks.col.source'), nowrap: true, mobile: 'status' },
+    { key: 'reason', label: t('blocks.col.reason'), grow: true, mobile: 'subtitle' },
+    { key: 'violations', label: t('blocks.col.violations'), align: 'right', nowrap: true, mobile: 'meta' },
+    { key: 'created_at', label: t('blocks.col.created'), nowrap: true, mobile: 'meta' },
+    { key: 'expires_at', label: t('blocks.col.expires'), nowrap: true, mobile: 'meta' }
   ]
-  if (manage.value) c.push({ key: 'actions', label: t('blocks.col.actions'), align: 'right' })
+  if (manage.value) c.push({ key: 'actions', label: t('actions'), align: 'right', hideable: false })
   return c
 })
+const columnState = useTableColumns(columns, 'moderation-blocks')
 
 async function unblock(b: Block) {
   const ok = await host.confirm({ message: t('blocks.unblockConfirm', { id: b.user_id }), confirmText: t('blocks.unblock') })
@@ -50,11 +67,18 @@ async function unblock(b: Block) {
   }
 }
 
-// Manual block form.
+// Manual block dialog.
+const formOpen = ref(false)
 const form = reactive<{ user_id: string; reason: string; duration_hours: number | null }>({ user_id: '', reason: '', duration_hours: 24 })
 const FIELDS = ['user_id', 'duration_hours']
 const formErr = reactive<FieldErrors>({})
 const saving = ref(false)
+
+function openForm() {
+  clearErrors(formErr)
+  Object.assign(form, { user_id: '', reason: '', duration_hours: 24 })
+  formOpen.value = true
+}
 
 async function submit() {
   clearErrors(formErr)
@@ -71,8 +95,7 @@ async function submit() {
     if (form.reason.trim()) body.reason = form.reason.trim()
     await createBlock(body)
     host.toast(t('blocks.created', { id: uid }), 'success')
-    form.user_id = ''
-    form.reason = ''
+    formOpen.value = false
     await reload()
   } catch (e) {
     applyErrorsOrToast(formErr, e, FIELDS)
@@ -86,40 +109,44 @@ async function submit() {
   <div>
     <SHint class="mod-hint">{{ t('blocks.hint') }}</SHint>
 
-    <SCard v-if="manage" :title="t('blocks.manual')" class="mod-section-b">
-      <form class="mod-block-form" @submit.prevent="submit">
-        <SField class="mod-filter" :label="t('blocks.userId')" required :error="formErr.user_id">
-          <SInput v-model="form.user_id" inputmode="numeric" />
-        </SField>
-        <SField class="mod-filter mod-filter-wide" :label="t('blocks.reason')">
-          <SInput v-model="form.reason" :maxlength="500" :placeholder="t('blocks.reasonPlaceholder')" />
-        </SField>
-        <SField class="mod-filter" :label="t('blocks.duration')" :error="formErr.duration_hours" :hint="t('blocks.durationHint')">
-          <SInput v-model="form.duration_hours" type="number" min="0" step="1" />
-        </SField>
-        <div class="mod-filter-actions">
-          <SButton type="submit" variant="danger" icon="lock" :loading="saving">{{ t('blocks.submit') }}</SButton>
-        </div>
-      </form>
-    </SCard>
+    <div class="mod-toolbar">
+      <STableColumnSettings :state="columnState" />
+      <SButton v-if="manage" variant="danger" size="sm" icon="lock" @click="openForm">{{ t('blocks.manual') }}</SButton>
+    </div>
 
     <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
     <SCard :padded="false">
-      <STable :columns="columns" :rows="rows" :loading="loading" row-key="user_id" :empty-text="t('blocks.empty')">
+      <STable :columns="columnState.visibleColumns.value" :rows="rows" :loading="loading" row-key="user_id" :empty-text="t('blocks.empty')" dense>
         <template #cell-user_id="{ row }"><UserRef :user-id="row.user_id" /></template>
         <template #cell-source="{ row }">
           <SBadge :tone="row.source === 'manual' ? 'accent' : 'warning'">{{ enumLabel('source', row.source) }}</SBadge>
         </template>
-        <template #cell-created_at="{ row }">{{ dt(row.created_at) }}</template>
+        <template #cell-reason="{ row }"><span :title="row.reason || undefined">{{ row.reason || '—' }}</span></template>
+        <template #cell-violations="{ row }"><span class="mod-num">{{ num(row.violations) }}</span></template>
+        <template #cell-created_at="{ row }"><SDateTime :value="row.created_at" mode="time" /></template>
         <template #cell-expires_at="{ row }">
-          <template v-if="row.expires_at">{{ dt(row.expires_at) }}</template>
+          <SDateTime v-if="row.expires_at" :value="row.expires_at" mode="time" />
           <SBadge v-else tone="danger">{{ t('blocks.forever') }}</SBadge>
         </template>
         <template #cell-actions="{ row }">
-          <SButton size="sm" :loading="busy === row.user_id" @click="unblock(row)">{{ t('blocks.unblock') }}</SButton>
+          <SRowAction :label="t('blocks.unblock')" :loading="busy === row.user_id" @click="unblock(row)" />
         </template>
       </STable>
     </SCard>
+
+    <SFormModal v-model:open="formOpen" :title="t('blocks.manual')" width="md" :loading="saving" :submit-text="t('blocks.submit')" submit-variant="danger" @submit="submit">
+      <div class="mod-form">
+        <SField :label="t('blocks.userId')" required :error="formErr.user_id">
+          <SInput v-model="form.user_id" inputmode="numeric" />
+        </SField>
+        <SField :label="t('blocks.reason')">
+          <SInput v-model="form.reason" :maxlength="500" :placeholder="t('blocks.reasonPlaceholder')" />
+        </SField>
+        <SField :label="t('blocks.duration')" :error="formErr.duration_hours" :hint="t('blocks.durationHint')">
+          <SInput v-model="form.duration_hours" type="number" min="0" step="1" />
+        </SField>
+      </div>
+    </SFormModal>
   </div>
 </template>

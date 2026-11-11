@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { bindingKind, exemptGroups, fallbackOf, groupCoverage, hasAccountBindings, resolveBinding, resolveSteps, sortBindings } from './bindingOps'
+import { bindingKind, exemptGroups, fallbackOf, flowBindingsInactive, groupCoverage, hasAccountBindings, resolveBinding, resolveSteps, sortBindings } from './bindingOps'
 import type { Binding } from './types'
+
+describe('flowBindingsInactive', () => {
+  it.each([
+    [{ enabled: true, version: 2, groups: [1], accounts: [] }, false],
+    [{ enabled: false, version: 2, groups: [1], accounts: [] }, true],
+    [{ enabled: true, version: 0, groups: [], accounts: [{ account_id: 5, group_id: 0 }] }, true],
+    [{ enabled: false, version: 0, groups: [], accounts: [] }, false]
+  ])('%o → %s', (f, want) => {
+    expect(flowBindingsInactive(f as never)).toBe(want)
+  })
+})
 
 const b = (group_id: number, account_id: number, flow_id: number): Binding => ({ kind: bindingKind(group_id, account_id), group_id, account_id, flow_id })
 /** Flows 1-3 are live, 4 and 5 are disabled or unpublished: GET /bindings marks their bindings inactive. */

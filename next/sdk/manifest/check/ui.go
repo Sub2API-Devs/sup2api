@@ -446,8 +446,11 @@ type uiFloor struct {
 // uiFloors, newest first. Core 0.1.228 is the last that ships UI 3.3
 // (3.4 starts at 0.1.229); 0.1.255 is the last with UI 3.5 (3.6 starts at
 // 0.1.256); 0.1.261 is the last with UI 3.6 (3.7 starts at 0.1.262);
-// 0.1.268 is the last with UI 3.7 (3.8 starts at 0.1.269).
+// 0.1.268 is the last with UI 3.7 (3.8 starts at 0.1.269); 0.1.276 is the
+// last with UI 3.9 (3.10 starts at 0.1.277). 3.10 adds components, no
+// manifest declaration, so only hostUICompat asks for it.
 var uiFloors = []uiFloor{
+	{minor: 10, lastUI: "3.9.0", lastCore: "0.1.276", firstCore: "0.1.277"},
 	{minor: 8, lastUI: "3.7.0", lastCore: "0.1.268", firstCore: "0.1.269", uses: usesUI38},
 	{minor: 7, lastUI: "3.6.0", lastCore: "0.1.261", firstCore: CommonControlsFirstCore, uses: func(u *manifest.UI) bool {
 		return slices.ContainsFunc(u.Slots, func(s manifest.Slot) bool { return s.Slot == manifest.SlotAccountEditorSection })

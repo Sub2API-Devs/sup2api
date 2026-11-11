@@ -238,6 +238,8 @@ useAutoRefresh(list.reload, () => seconds.value * 1000, { enabled: () => !editor
 
 绑定 `@reset` 时显示“重置”，`dirty` 为假时禁用；`:card="false"` 去掉卡片外框，用于卡片内部。
 
+不常用的筛选可收进“更多筛选”，已生效条件用 `SFilterChips` 显示，见下文“更多筛选与单行单元格（UI SDK 3.10）”。
+
 手机上的形态见下文“手机形态”。
 
 ### 插件页懒加载：`lazyPage`
@@ -281,3 +283,26 @@ const columns: TableColumn[] = [
 
 **其他组件。** `SPagination` 为「共 N 条 + ‹ 3 / 12 ›」，点页码跳页、选每页条数；`SBulkBar` 有选择时固定在屏幕底部，原位置不占高度（根元素 `display: contents`，带 `data-bulk-dock`），改用父元素的 `::after` 在它末尾留出同样高度：所以要把它和它操作的列表放在同一个容器里（末尾几行和分页才能滚出停靠条），这个容器自己不要再用 `::after`，也不要是横向 flex 或多列 grid；停靠条里的操作按钮放不下时横向滚动（触屏上不显示滚动条），藏着按钮的一侧渐隐，只露出一部分的按钮点一下只滚进视野、不触发操作（键盘按下照常触发），危险操作照常放在最后；`STabs` 的标签放不下时标签栏自己横向滚动（藏着标签的一侧渐隐，选中的标签滚到中间）；`SAutoRefresh` 是带运行点的图标按钮，绑定 `@refresh` 时菜单里有“立即刷新”；`SButton fab`（需 `icon`）是右下角 56px 圆形按钮，带 `data-fab`，控制台据此在页面底部留出空间；`SBulkBar` 停靠期间 fab 不显示，控制台也不再为它留空间（只剩停靠条自己那一份；按页面里有没有 `data-bulk-dock` 判断，`v-show` 藏起来的停靠条也算）；`SGrid variant="stats"` 保持两列统计卡片；`SSegmented` 横向滚动；`STooltip` 在触屏上点按切换；`SSteps` 的 `direction` 默认改为 `'auto'`（手机竖排、宽屏横排，宽屏与以前一致）；`SChart` 默认 220px 高并使用手机图例；Toast 在顶部居中。
 
+## 更多筛选与单行单元格（UI SDK 3.10）
+
+筛选默认只露常用几项，其余收进“更多筛选”；表格每个单元格只占一行，次要信息进提示、列设置里的可选列或详情。原生插件用到本节任一项（`#advanced`、`advanced-count`、`v-model:advanced-open`、`SFilterChips`、`SChipList`、`TableColumn.grow`、图标 `image`）时声明 `hostUICompat: "^3.10"`，`hostCompat` 要求核心 `>=0.1.277`（0.1.276 是最后一个带 UI 3.9 的核心）。
+
+**更多筛选：`SFilterBar` 的 `#advanced`。** 宽屏时默认插槽之后出现“更多筛选”按钮（角标 `advanced-count`，即 `#advanced` 里已生效的个数；收起且大于 0 时按钮高亮），展开后在筛选条下方整行网格显示；`v-model:advanced-open` 可由页面控制展开状态，不绑定时组件自己记、默认收起。不传 `#advanced` 时与 3.9 完全一样。
+
+手机上 `#advanced` 接在默认插槽之后一起进筛选抽屉（不显示该按钮）。“筛选”按钮的角标数抽屉里已生效的条件，组件自动合计：`active-count` + `advanced-count`。两个数各管各的插槽：`active-count` 只数默认插槽里的筛选（`#primary` 留在按钮旁，不计），`advanced-count` 只数 `#advanced` 里的；不要把后者再加进前者。没有 `#advanced` 的页面照旧只传 `active-count`。
+
+**已生效条件：`SFilterChips`。** `items: { key, label, value }[]` 渲染为一行可关闭的「label：value ×」标签和「清除全部」，`@remove(key)` / `@clear`；没有条目时不渲染。放在筛选条下方，列出收起的更多筛选里已生效的条件，以及表单里没有字段、只能由链接或详情带入的条件。
+
+```vue
+<SFilterBar :active-count="activeCount" :advanced-count="advancedCount" @reset="reset">
+  <SSelect v-model="filters.status" … />
+  <template #advanced><SInput v-model="filters.ip" … /></template>
+</SFilterBar>
+<SFilterChips :items="chips" @remove="clearFilter" @clear="reset" />
+```
+
+**多个标签：`SChipList`。** `items: { key, label, tone?, title? }[]`，`max` 默认 2，`size` 默认 `'xs'`：只显示前 `max` 个标签，其余收成「+N」，悬停或键盘聚焦时用卡片提示列出全部；整体不换行。
+
+**吃剩余宽度的列：`TableColumn.grow`。** `grow: true` 让该列吃掉其余列剩下的宽度并单行省略，默认渲染时完整值进 `title`；单元格插槽内容同样被截断（块级或 flex 根元素被限制在列宽内，可自行 `truncate`）。手机卡片不受影响。其余列用 `nowrap` 或 `ellipsis`。
+
+**其它。** 新图标 `image`；时间范围预设“全部”显示为“全部时间”（`ui.allTime`）。

@@ -77,6 +77,69 @@ func (s *Service) GroupHasType(ctx context.Context, groupID int64, types []core.
 	return ok, err
 }
 
+// Unschedulable lists the accounts of the group Candidates does not offer now,
+// with why. Not cached: only a dispatch that found no account asks, to record
+// what the group holds (CONTRACTS §24.6).
+func (s *Service) Unschedulable(ctx context.Context, groupID int64) ([]core.UnschedulableAccount, error) {
+	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.status, a.schedulable, a.auto_disabled_until
+		FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
+		WHERE ag.group_id = $1 AND a.deleted_at IS NULL ORDER BY a.id LIMIT 200`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	type row struct {
+		id          int64
+		status      string
+		schedulable bool
+		until       *time.Time
+	}
+	all, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (row, error) {
+		var a row
+		return a, r.Scan(&a.id, &a.status, &a.schedulable, &a.until)
+	})
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	var out []core.UnschedulableAccount
+	var offered []int64
+	for _, a := range all {
+		switch {
+		case a.status == "auto_disabled" && a.schedulable && a.until != nil && !now.Before(*a.until):
+			offered = append(offered, a.id) // lazily expired: served again
+		case a.status == "auto_disabled":
+			u := core.UnschedulableAccount{ID: a.id, Reason: "auto_disabled"}
+			if a.until != nil {
+				u.Until = *a.until
+			}
+			out = append(out, u)
+		case a.status != "active":
+			out = append(out, core.UnschedulableAccount{ID: a.id, Reason: "disabled"})
+		case !a.schedulable:
+			out = append(out, core.UnschedulableAccount{ID: a.id, Reason: "unschedulable"})
+		default:
+			offered = append(offered, a.id)
+		}
+	}
+	if len(offered) == 0 || s.d.Redis == nil {
+		return out, nil
+	}
+	pipe := s.d.Redis.Pipeline()
+	ttls := make([]*redis.DurationCmd, len(offered))
+	for i, id := range offered {
+		ttls[i] = pipe.PTTL(ctx, cooldownKey(id))
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return out, nil // what the database says still stands
+	}
+	for i, id := range offered {
+		if ttl := ttls[i].Val(); ttl > 0 {
+			out = append(out, core.UnschedulableAccount{ID: id, Reason: "cooldown", Until: now.Add(ttl)})
+		}
+	}
+	return out, nil
+}
+
 // groupSnapshot returns the group's schedulable accounts: active ones and
 // those under a timed automatic disable, whose release times it lists.
 func (s *Service) groupSnapshot(ctx context.Context, groupID int64) (groupSnap, error) {
