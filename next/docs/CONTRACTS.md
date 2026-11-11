@@ -482,7 +482,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 ### 14.4 接口收尾
 
-- **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选。
+- **客户端请求 ID**：网关把客户端 `X-Request-Id`（截断到 128 字符）写入 `UsageRecord.ClientRequestID`；`usage_logs.client_request_id`；管理员使用记录列表/详情返回 `client_request_id`，支持 `?client_request_id=` 精确筛选（只比客户端请求 ID）。`?request_id=` 同时匹配我方请求 ID 和客户端请求 ID（`u.request_id = v OR u.client_request_id = v`，核心 0.1.277 起，§95.4；此前只比我方请求 ID）：使用记录列表、汇总、导出都经 `usage/api.go` 的 `parseFilter`，`/usage` 与 `/me/usage` 相同，自助视图仍限定本人。`client_request_id` 不唯一，一个值可以匹配多行；该列没有索引，所以 `request_id` 只在带 `from` 时才加上客户端请求 ID 那一半（按时间范围扫描，与其它无索引筛选相同）；不带 `from` 时只比我方请求 ID（走唯一索引）。控制台的时间范围总会带 `from`。
 - **`GET/PUT /settings/gateway`**（`settings:read` / `settings:manage`，网关负责）：`{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}`，校验范围 1–10、100–30000、50–2000。自动禁用设置是独立接口 `/settings/auto-disable`，见 §42.2。
 - 前端此前提出的缺失接口说明见 §15（按后端现状整理）。
 
@@ -539,8 +539,8 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/accounts` | 分页 | `plugin_key`、`type`、`status`、`group_id`（整数）、`q`（名称 ILIKE） | `created_at` 倒序，再 `id` 倒序（§18.3；与调度顺序无关） | `account/handlers.go` |
 | GET `/proxies` | 分页 | `q`（名称或主机 ILIKE）、`status` | `id` 升序 | `proxy/proxy.go` |
 | GET `/prices` | 分页 | `mode`（`per_request`\|`per_token`\|`expression`）、`source`（`admin`\|`plugin_default`）、`plugin_key`、`enabled`、`q`（`model` 或 `note` ILIKE） | `model`、`source`、`plugin_key`（NULL 在前）、`id` | `billing/prices.go` |
-| GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`request_id`、`account_type`（精确匹配）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
-| GET `/me/usage` | 分页 | 限定当前用户；`api_key_id`、`group_id`、`model`、`platform`、`billing_status`、`request_id`、`success`、`from`、`to`（**不支持** `user_id`、`account_id`、`account_type`） | 同上 | `usage/api.go` |
+| GET `/usage` | 分页 | `user_id`、`api_key_id`、`group_id`、`account_id`（整数）；`model`、`platform`、`billing_status`、`client_request_id`、`account_type`（精确匹配）；`request_id`（我方请求 ID 或客户端请求 ID，精确匹配，§14.4）；`success`；`from`、`to` | `created_at` 倒序，再 `id` 倒序 | `usage/api.go` |
+| GET `/me/usage` | 分页 | 限定当前用户；`api_key_id`、`group_id`、`model`、`platform`、`billing_status`、`request_id`（同上）、`client_request_id`、`success`、`from`、`to`（**不支持** `user_id`、`account_id`、`account_type`） | 同上 | `usage/api.go` |
 | GET `/usage/summary` | 不分页 | 同 `/usage` 的全部筛选参数，加 `group_by=day\|model\|user\|ip`（默认 `day`）；未给 `from` 时默认最近 30 天 | 按 `key` 升序；`ip` 按请求数倒序、最多 100 项 | `usage/api.go` |
 | GET `/me/usage/summary` | 不分页 | 限定当前用户；同 `/me/usage` 的筛选参数，加 `group_by=day\|model\|ip`（`user` 返回 400）；未给 `from` 时默认最近 30 天 | 同上 | `usage/api.go` |
 | GET `/ledger` | 分页 | `user_id`（整数）、`kind`（`usage`\|`admin_adjust`\|`plugin_credit`\|`plugin_debit`\|`refund`）、`from`、`to` | `id` 倒序 | `billing/balance.go` |
@@ -1186,10 +1186,10 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.7.0`，§87.3；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.10.0`，§95；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
-- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard、moderation 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 用 `^3.6`；`sdk/manifest`：声明了 `ui.native` 时必填）。
+- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 用 `^3.6`；moderation 0.9.0 起用 `^3.10`（§95）；`sdk/manifest`：声明了 `ui.native` 时必填）。
 - 插件的 `package.json` 只需 devDependencies：`@sub2api/vite-preset`、`@vitejs/plugin-vue`、`vite`、`vue`（类型用）；`@sub2api/ui`、`@sub2api/host` 通过 import map 在运行时解析，本地开发用 tsconfig `paths` 指到 `web/packages/*/src` 取类型。
 
 ### 23.2 `@sub2api/host`
@@ -1271,6 +1271,8 @@ type ProxyResolver interface {
 | `SDropdown` | 操作菜单（Teleport 到 body，自动定位/翻转）。菜单项是 `<button role="menuitem">`：↑/↓/Home/End 移动，Enter/空格选择，Esc 关闭并把焦点还给触发按钮，Tab 关闭 | `actions: MenuAction[]`（必填）、`label`、`ariaLabel`（只有图标时默认 `ui.moreActions`）、`align`（`end`/`start`，end）、`width`（CSS 宽度，`'11rem'`）、`disabled` | emits `select(key)`、`open`、`close`；slot 默认为触发按钮内容（缺省显示 `label` 或 `more` 图标）；slot `trigger`（`{open, toggle, attrs}`：整个替换触发按钮，自己的按钮要 `v-bind="attrs"`（`aria-haspopup`/`aria-expanded`/`aria-controls`）并 `@click="toggle"`）；slot `header`（菜单顶部说明） |
 | `SBadge` | 徽标 | `tone: Tone`（gray；`purple` 与 `accent` 同色）、`dot`、`size`（`xs`/`sm`，sm） | slot 默认 |
 | `SChip` | 小标签 / 筛选芯片 | `tone: StatusTone`（neutral）、`icon`、`size`（`xs`/`sm`，sm）、`closable` + `closeLabel`（默认 `ui.remove`）、`pressed`（boolean：切换按钮，`aria-pressed`，`v-model:pressed`）、`clickable`（普通按钮）、`disabled` | emits `close`、`click`、`update:pressed`；slot 默认 |
+| `SChipList` | 单元格里的一行标签（UI 3.10，§95） | `items: ChipListItem[]`（`{key, label, tone?, title?}`）、`max`（2）、`size`（`xs`/`sm`，xs） | 只显示前 `max` 个，其余收成「+N」，悬停或聚焦时卡片提示列出全部；整体不换行；没有条目时不渲染 |
+| `SFilterChips` | 已生效的筛选条件（UI 3.10，§95） | `items: FilterChipItem[]`（`{key, label, value}`） | emits `remove(key)`、`clear`；一行可关闭的「label：value ×」与「清除全部」；没有条目时不渲染 |
 | `SStatusDot` | 状态点 | `tone`（`StatusTone`，也接受 `error`/`gray`；neutral）、`pulse`（呼吸光圈）、`label`、`srOnly`（文字只给读屏）、`size`（`xs`/`sm`/`md`，sm；xs 为小号文字） | slot 默认替代 `label` |
 | `SIcon` | 线框图标 | `name`（必填；词表在 `icons.ts`，用导出的 `ICON_NAMES` 校验；未知名字画“方框问号”占位并在控制台警告一次）、`context`（警告里的出处说明）、`label`（给了才是 `role="img"` + `aria-label`，否则 `aria-hidden`） | class 里没有 `h-`/`w-`/`size-` 时默认 `h-4 w-4` |
 | `SSpinner` | 加载圈（`role="status"`，`aria-label` 默认 `ui.loading`） | `size`（`sm`/`md`/`lg`，md）、`label`、`decorative`（按钮里用，不朗读）、`block`（居中、上下留白的块） | |
@@ -1342,7 +1344,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 | `FIELD_KEY`、`useFieldControl(props, labelable = true)`、`type FieldContext`、`type ControlSize` | 自定义表单控件接入 `SField`/`SSettingRow` 的 id、`aria-describedby`、`aria-invalid`、尺寸 |
 | `uiMessages` | `{en, zh}`，控制台挂在全局 i18n 的 `ui` 命名空间：`ui.ok` `ui.cancel` `ui.confirm` `ui.close` `ui.loading` `ui.noData` `ui.noResults` `ui.prev` `ui.next` `ui.page` `ui.pagination` `ui.pageSize` `ui.total` `ui.perPage` `ui.add` `ui.remove` `ui.removeItem` `ui.clear` `ui.show` `ui.hide` `ui.showPassword` `ui.hidePassword` `ui.expand` `ui.collapse` `ui.expandRow` `ui.collapseRow` `ui.dismiss` `ui.moreActions` `ui.selectAll` `ui.selectRow` `ui.copy` `ui.copied` `ui.copyFailed` `ui.moveUp` `ui.moveDown` `ui.item` `ui.key` `ui.value` `ui.addTag` `ui.confirmTitle` `ui.stepDone` `ui.stepCurrent` `ui.stepError`，`STimeRange` 用的 `ui.time` `ui.from` `ui.to` `ui.all` `ui.lastHour` `ui.last24h` `ui.today` `ui.last7d` `ui.last30d` `ui.thisMonth` `ui.custom`，`SDisclosure` 用的 `ui.moreDetails` `ui.lessDetails`；插件可用 `host.i18n.t('ui.cancel')` 复用 |
 
-类型（`types.ts`）：`TableColumn {key, label, width?, align?: 'left'|'right'|'center', class?, headerClass?, nowrap?, ellipsis?: boolean | string}`（`ellipsis` true = 最大 16rem，字符串 = 最大宽度；默认渲染时完整值放进 `title`）、`TabItem {key, label, badge?, disabled?}`、`SelectOption {value: string|number|boolean|null, label, disabled?, options?: SelectOption[]}`（带 `options` 的是 `SSelect` 的分组项）、`MenuAction {key, label, danger?, disabled?, hidden?, icon?, divider?}`（`divider` 在该项上方画分隔线）、`Tone = 'primary'|'success'|'warning'|'danger'|'gray'|'purple'|'accent'|'info'`（`purple` 是 `accent` 的旧名，颜色相同）、`StatusTone = 'neutral'|'primary'|'info'|'success'|'warning'|'danger'|'accent'`、`ChoiceOption {value, label, description?, icon?, disabled?, tone?}`、`DescItem {key, label, value?, mono?, copyable?, full?}`、`StepItem {key, title, description?, state?}`、`StepState = 'done'|'current'|'pending'|'error'`。
+类型（`types.ts`）：`TableColumn {key, label, width?, align?: 'left'|'right'|'center', class?, headerClass?, nowrap?, ellipsis?: boolean | string, grow?: boolean}`（`ellipsis` true = 最大 16rem，字符串 = 最大宽度；默认渲染时完整值放进 `title`；`grow`（UI 3.10）吃掉其余列剩下的宽度并单行省略，手机卡片不受影响）、`TabItem {key, label, badge?, disabled?}`、`SelectOption {value: string|number|boolean|null, label, disabled?, options?: SelectOption[]}`（带 `options` 的是 `SSelect` 的分组项）、`MenuAction {key, label, danger?, disabled?, hidden?, icon?, divider?}`（`divider` 在该项上方画分隔线）、`Tone = 'primary'|'success'|'warning'|'danger'|'gray'|'purple'|'accent'|'info'`（`purple` 是 `accent` 的旧名，颜色相同）、`StatusTone = 'neutral'|'primary'|'info'|'success'|'warning'|'danger'|'accent'`、`ChoiceOption {value, label, description?, icon?, disabled?, tone?}`、`DescItem {key, label, value?, mono?, copyable?, full?}`、`StepItem {key, title, description?, state?}`、`StepState = 'done'|'current'|'pending'|'error'`。
 
 **UI 3.1 列设置。** `STable` 的 `columnSettingsKey` 为开发者指定的可选表名（例如 `usage-log`、`account-list`）；设置后自动显示 `STableColumnSettings`，并按可见列渲染表头、单元格与展开行跨度，`toolbar` 插槽此时不要求 `card`。`TableColumn` 新增 `hideable?: boolean`（false 为固定列）和 `defaultHidden?: boolean`。未启用此能力的表格保持全部传入列可见。
 
@@ -5079,6 +5081,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - `kv` 权限的 `reason` 文案从"在节点之间共享审核通过缓存"改为"在节点之间共享审核判定缓存"。只改文案不触发重新批准：核心的授权记录只有权限 id、scope 和状态，升级时的比较（`server/internal/plugin/install/review.go` `diffGrants`）只看是否已授予和 scope 是否扩大，没有新增或扩大时 `carryOverConsent` 自动沿用全部授权；`reason` 只在审批页展示。
 - **0.8.1**：版本 0.8.1。**`hostCompat` 抬到 `>=0.1.273 <0.2.0`**；能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。批量 KV 调用（§93）用的是已有的 `kv` 授权。不允许 0.8.1 装在 0.1.272 上的原因：没有这些调用的核心上 SDK 会换成逐键调用，结果相同，但一次 150 个键的写约 2 秒、期间几乎独占本节点的写，写入能力不够用（93.7 说的"依赖一次往返的开销的插件"；测试里量的数字在 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节"上线经过"）。下限写 0.1.273 而第一个发布的带这些调用的核心是 0.1.274，两者在已发布的核心里是一回事（93.7）。
 - **0.8.2**：版本 0.8.2。`hostCompat` 不变（`>=0.1.273 <0.2.0`），能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。
+- **0.9.0**：版本 0.9.0，只改原生界面（审核记录页的筛选收成常用 4 项 + 更多筛选、已生效条件以标签显示，各标签页表格单元格只占一行）。用到 UI 3.10 的 `SFilterBar` `#advanced`、`SFilterChips`、`SChipList`、`TableColumn.grow`，**`hostUICompat` 改为 `^3.10`，`hostCompat` 抬到 `>=0.1.277 <0.2.0`**（UI 3.10 随核心 0.1.277 发布，更老的核心的控制台按 `hostUICompat` 不加载这个界面，所以也不让它装上）。能力、钩子、任务、路由、宿主权限、用户权限、迁移和设置都不变，升级不需要管理员重新批准。
 
 ### 72.4 抽取
 
@@ -7539,3 +7542,35 @@ UI 3.8 及以前，`SPageHeader` 只有在自己的 `title` 与路由标题文�
 - **嵌套范围。** 标签页、`STitleScope`、弹窗、抽屉没有 `sink`，里面的 `SPageHeader` 行为与 UI 3.8 相同。
 - **控制台。** `useAppStore().pageHead` 取代 `pageDescription`；顶栏标题可截断（`data-testid="page-title"`）。价格来源、价格编辑、价格同步页去掉页头里的「返回」按钮（面包屑已有上级页面）；插件授权确认页、插件发布进度页由手写 `<h1>` 改为 `SPageHeader`，发布进度页回插件详情的链接改为页头操作按钮。
 - **插件。** 原生插件页面用的是宿主的 `@sub2api/ui`，不重新构建即按新规则显示；`hostUICompat: "^3.x"` 的现有声明都满足 3.9。`HOST_UI_VERSION` 3.9.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.9.0（`ui-contract.spec.ts` 锁定）。`sdk/manifest` 的核心下限检查不变：3.9 没有新增 manifest 字段。
+
+## 95. 筛选精简与单行单元格（UI 3.10，2026-11-11，用户要求：筛选默认只露常用几项、其余收进“更多筛选”，表格每个单元格只占一行；使用记录 `request_id` 同时匹配客户端请求 ID；核心 0.1.277；无迁移）
+
+页面各自手写的“更多筛选”展开按钮、硬截断的标签列表和挤成两行的单元格收进平台组件：控制台使用日志 / 全站日志、提示词审核的审核记录页先用上。
+
+### 95.1 `@sub2api/ui` 新能力
+
+- **`SFilterBar` 的 `#advanced`。** 新插槽 `#advanced` 放不常用的筛选，新 prop `advancedCount`（其中已生效的个数）和可选的 `v-model:advancedOpen`（不绑定时组件自己记，默认收起）。宽屏：默认插槽之后、`#end` 之前出现“更多筛选”按钮（数字角标；收起且 `advancedCount > 0` 时按钮高亮；带 `aria-expanded` / `aria-controls`），展开后 `#advanced` 在筛选条下方整行网格显示（`repeat(auto-fill, minmax(11rem, 1fr))`，虚线上边框）。手机（< 768px）：`#advanced` 接在默认插槽之后一起进“筛选”底部抽屉，不显示该按钮。不传 `#advanced` 时与 3.9 完全一样。
+- **手机“筛选”角标 = `activeCount` + `advancedCount`。** 角标数抽屉里已生效的条件，组件自动合计；两个数各管各的插槽：`activeCount` 只数默认插槽里的筛选（`#primary` 留在按钮旁，不计），`advancedCount` 只数 `#advanced` 里的。没有 `#advanced` 的页面照旧只传 `activeCount`，不会重复计数；用了 `#advanced` 的页面不要再把 `advancedCount` 加进 `activeCount`。
+- **`SFilterChips`。** `items: FilterChipItem[]`（`{key, label, value}`），渲染一行可关闭的「label：value ×」标签和末尾「清除全部」，emits `remove(key)`、`clear`；没有条目时不渲染。放在筛选条下方，列出收起的更多筛选里已生效的条件，以及表单里没有字段、只能由链接或详情带入的条件。
+- **`SChipList`。** `items: ChipListItem[]`（`{key, label, tone?, title?}`）、`max`（默认 2）、`size`（`xs` 默认 / `sm`）：只显示前 `max` 个 `SChip`，其余收成「+N」，悬停或键盘聚焦时用 `STooltip variant="card"` 列出全部（可换行）；整体 `inline-flex whitespace-nowrap`，永不换行。
+- **`TableColumn.grow`。** 该列吃掉其余列剩下的宽度并单行省略（`width: 100%; max-width: 0` 加 `overflow: hidden; text-overflow: ellipsis; white-space: nowrap`；单元格插槽的根元素被限制在列宽内）；默认渲染时完整值进 `title`。手机卡片不受影响。
+- **其它。** 新图标 `image`（`sdk/manifest/check/icons.json` 已重新生成，菜单可用）；新类型导出 `ChipListItem`、`FilterChipItem`；SDK 文案新增 `ui.moreFilters`、`ui.clearAll`、`ui.filterChip`、`ui.removeFilter`、`ui.allTime`，时间范围预设 `all` 的显示由“全部”改为“全部时间”（`RANGE_LABELS.all` = `ui.allTime`）。
+
+### 95.2 版本与插件声明
+
+- `HOST_UI_VERSION` 3.10.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.10.0（`ui-contract.spec.ts` 锁定，并检查 `^3.9`、`^3.10` 的判断与新导出）。
+- 原生插件用到 95.1 任一项时声明 `hostUICompat: "^3.10"`，`hostCompat` 要求核心 `>=0.1.277`（0.1.276 是最后一个带 UI 3.9 的核心）。`sdk/manifest/check/ui.go` 的 UI 下限表 `uiFloors` 为此加了 3.10 一行（`lastUI` 3.9.0、`lastCore` 0.1.276、`firstCore` 0.1.277，无 `uses`：3.10 没有新增 manifest 字段，只按 `hostUICompat` 判断）：`hostUICompat` 要求 3.10 及以上而 `hostCompat` 包含 0.1.276 时报 `hostCompat` `below_ui_core`（`TestHostUICompatNeedsMatchingHostCompat`）。
+- 旧插件不受影响：`^3.0`–`^3.9` 的声明都满足 3.10；它们看到的唯一变化是 `STimeRange` 预设“全部”显示为“全部时间”。
+
+### 95.3 控制台使用日志 / 全站日志的筛选
+
+- 常用一行：时间、日志类型、模型、用户（仅全站日志；纯数字 → `user_id`，否则 → `user_email` 包含）、API Key（纯数字 → `api_key_id`，否则 → `api_key_name` 包含）；使用日志用分组代替用户。
+- 更多筛选：全站日志为分组（有选项时下拉 → `group_id`，否则输入 → `group_name`）、请求 ID（→ `request_id`，见 95.4）、账号（有 `account:read` 时；纯数字 → `account_id`，否则 → `account_name` 包含）、调用 IP、请求类型、协议转换、状态、计费状态；使用日志为请求 ID、调用 IP、请求类型、状态、计费状态。失败请求日志类型下去掉状态（已由日志类型确定），加 HTTP 状态码、错误类型。
+- 界面不再有字段、后端与链接照常支持的参数（`client_request_id`、`platform`、`endpoint`、`stream`、`plugin_key`、`account_type`、`node_id`、`upstream_model`、`upstream_protocol`，没被选作字段的那一个分组参数，以及失败请求以外的日志类型下的 `status_code`、`error_type`）生效时，与更多筛选里已生效的条件一起用 `SFilterChips` 显示在筛选条下方，可单独删除或清除全部（「清除全部」只清标签里的参数，常用一行不动；删除 `plugin_key` 标签时 `account_type` 一并清除，因为后端拒绝只带 `account_type`）。合并框的显示值从已生效参数反推（`user_id=7` → 框里显示 7）。代码：`web/src/views/usage/usageFilters.ts`（`usageSearchLayout`）、`UsageFilters.vue`、`UsageFilterFields.vue`。
+
+### 95.4 使用记录 `request_id` 同时匹配客户端请求 ID（核心 0.1.277）
+
+- `GET /usage`、`/me/usage`、`/usage/summary`、`/me/usage/summary`、`/usage/export`、`/me/usage/export` 的 `request_id` 参数在带 `from` 时改为 `(u.request_id = v OR u.client_request_id = v)`（不带 `from` 时仍只比 `u.request_id`，避免无索引全表扫描）：用户手里通常只有一个 ID（我方返回的请求 ID，或自己客户端发的 `X-Request-Id`），一个搜索框都能找到。`client_request_id` 参数不变，仍只精确比客户端请求 ID。两个参数同时给时同时生效（AND）。见 §14.4。
+- 旧核心（滚动窗口内）只比我方请求 ID，按客户端请求 ID 搜索返回空列表，不报错。
+- 测试：`usage/api_filter_test.go` 的 `TestParseFilterRequestIDs`（生成的条件与参数，表驱动）、`TestUsageSearchByRequestID`（PostgreSQL：列表、汇总、导出三处，全站与自助视图，表驱动）。
+

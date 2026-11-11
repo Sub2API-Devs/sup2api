@@ -3,39 +3,109 @@ package usage
 import (
 	"net/http/httptest"
 	"strconv"
-
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/require"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-func TestParseFilterClientRequestID(t *testing.T) {
+// request_id matches our request ID or the client's X-Request-Id;
+// client_request_id stays an exact match on the client's alone.
+func TestParseFilterRequestIDs(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
-	for _, self := range []*int64{nil, new(int64)} {
-		c, _ := gin.CreateTestContext(httptest.NewRecorder())
-		c.Request = httptest.NewRequest("GET", "/usage?client_request_id=abc-123&request_id=r1", nil)
-		f, err := parseFilter(c, self, self == nil)
-		if err != nil {
-			t.Fatal(err)
+	since := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name, query string
+		conds       []string
+		args        []any
+	}{
+		{"request_id", "request_id=r1&from=2026-09-01T00:00:00Z", []string{"(u.request_id = $1 OR u.client_request_id = $2)", "u.created_at >= $3"}, []any{"r1", "r1", since}},
+		{"request_id without range", "request_id=r1", []string{"u.request_id = $1"}, []any{"r1"}},
+		{"client_request_id", "client_request_id=abc-123", []string{"u.client_request_id = $1"}, []any{"abc-123"}},
+		{"both", "client_request_id=abc-123&request_id=r1&from=2026-09-01T00:00:00Z",
+			[]string{"u.client_request_id = $1", "(u.request_id = $2 OR u.client_request_id = $3)", "u.created_at >= $4"}, []any{"abc-123", "r1", "r1", since}},
+		{"neither", "model=m", []string{"u.model = $1"}, []any{"m"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("GET", "/usage?"+tc.query, nil)
+			f, err := parseFilter(c, nil, true)
+			require.NoError(t, err)
+			require.Equal(t, " WHERE "+strings.Join(tc.conds, " AND "), f.Cond())
+			require.Equal(t, tc.args, f.Args())
+		})
+	}
+	// A user's own search keeps its user condition first and the same match.
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("GET", "/me/usage?request_id=r1&from=2026-09-01T00:00:00Z", nil)
+	f, err := parseFilter(c, new(int64), false)
+	require.NoError(t, err)
+	require.Equal(t, " WHERE u.user_id = $1 AND (u.request_id = $2 OR u.client_request_id = $3) AND u.created_at >= $4", f.Cond())
+}
+
+// The usage list, summary and export find a row by either request ID; a
+// user still sees only their own rows, and client_request_id never matches
+// our request ID.
+func TestUsageSearchByRequestID(t *testing.T) {
+	f := newFixture(t)
+	a := f.record("rid-a", false)
+	a.ClientRequestID = "cli-shared"
+	b := f.record("rid-b", false)
+	b.ClientRequestID = "rid-a" // a client ID that happens to equal another row's ID
+	c := f.record("rid-c", false)
+	c.UserID, c.ClientRequestID = f.other, "cli-shared"
+	f.svc.process(t.Context(), []*core.UsageRecord{a, b, c})
+
+	cases := []struct {
+		path, query string
+		want        []string
+	}{
+		{"/usage", "request_id=rid-c", []string{"rid-c"}},
+		{"/usage", "request_id=rid-a", []string{"rid-a", "rid-b"}},
+		{"/usage", "request_id=cli-shared", []string{"rid-a", "rid-c"}},
+		{"/me/usage", "request_id=cli-shared", []string{"rid-a"}},
+		{"/me/usage", "request_id=rid-c", nil},
+		{"/usage", "request_id=missing", nil},
+		{"/usage", "client_request_id=cli-shared", []string{"rid-a", "rid-c"}},
+		{"/usage", "client_request_id=rid-c", nil},
+		{"/usage", "client_request_id=rid-a&request_id=rid-a", []string{"rid-b"}},
+	}
+	// Without a time range the unindexed client half is left out: only our request_id matches.
+	t.Run("no range matches request_id only", func(t *testing.T) {
+		var got []string
+		for _, r := range f.get(f.user, "/usage?request_id=cli-shared", 200)["data"].([]any) {
+			got = append(got, r.(map[string]any)["request_id"].(string))
 		}
-		sql := f.Cond()
-		if !strings.Contains(sql, "u.client_request_id = $") || !strings.Contains(sql, "u.request_id = $") {
-			t.Fatalf("self=%v sql: %s", self != nil, sql)
-		}
-		found := false
-		for _, a := range f.Args() {
-			if a == "abc-123" {
-				found = true
+		require.Empty(t, got)
+	})
+	for _, tc := range cases {
+		t.Run(tc.path+"?"+tc.query, func(t *testing.T) {
+			var got []string
+			for _, r := range f.get(f.user, tc.path+"?from=2026-09-01T00:00:00Z&"+tc.query, 200)["data"].([]any) {
+				got = append(got, r.(map[string]any)["request_id"].(string))
 			}
-		}
-		if !found {
-			t.Fatalf("args: %v", f.Args())
-		}
+			require.ElementsMatch(t, tc.want, got)
+
+			requests := 0.0
+			for _, r := range f.get(f.user, tc.path+"/summary?group_by=none&from=2026-09-01T00:00:00Z&"+tc.query, 200)["data"].([]any) {
+				requests += r.(map[string]any)["requests"].(float64)
+			}
+			require.Equal(t, float64(len(tc.want)), requests)
+
+			req := httptest.NewRequest("GET", "/api/v1"+tc.path+"/export?lang=en&from=2026-09-01T00:00:00Z&"+tc.query, nil)
+			req.Header.Set("Authorization", "Bearer "+strconv.FormatInt(f.user, 10))
+			w := httptest.NewRecorder()
+			f.h.ServeHTTP(w, req)
+			require.Equal(t, 200, w.Code, w.Body.String())
+			require.Len(t, strings.Split(strings.TrimSpace(w.Body.String()), "\n"), 1+len(tc.want)) // header + rows
+		})
 	}
 }
 

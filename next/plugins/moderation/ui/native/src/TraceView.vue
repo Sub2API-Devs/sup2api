@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SAlert, SBadge, SCode, SHint, SLink, STable, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SCode, SHint, SIcon, SLink, STable, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import { useCatalog } from './catalog'
 import { categoryLabel, enumLabel, ms, score } from './format'
@@ -14,8 +14,11 @@ import { imagesRefusedNote, outcomeState, stageNumber, stageState, unjudgedStage
 // hits stand; on records written before 0.8.0: error), a fallback stage is
 // named 补审. A replayed cached hit says which request its
 // verdict comes from; requestLink makes that request a filter link
-// (show-request). A call whose images the upstream refused says so: only
-// its text was reviewed.
+// (show-request). A call whose images the upstream refused is marked with a
+// warning icon (only its text was reviewed). Each cell keeps to one line: the
+// stage result, the question set, the error and the images sent are in
+// tooltips, a long reason is cut (hover for all of it). A phone card, without
+// hover, shows the whole reason and the refused-images note.
 const props = defineProps<{ trace: Trace; requestLink?: boolean }>()
 const emit = defineEmits<{ (e: 'show-request', requestId: string): void }>()
 const t = useModHost().t
@@ -35,12 +38,14 @@ const rows = computed<Row[]>(() =>
 )
 
 const columns = computed<TableColumn[]>(() => [
-  { key: 'stage', label: t('trace.stage'), nowrap: true },
-  { key: 'auditor', label: t('trace.auditor') },
-  { key: 'verdict', label: t('trace.verdict'), nowrap: true },
-  { key: 'top', label: t('trace.top') },
-  { key: 'model', label: t('trace.model'), ellipsis: '10rem' },
-  { key: 'latency_ms', label: t('trace.latency'), align: 'right', nowrap: true }
+  { key: 'stage', label: t('trace.stage'), nowrap: true, mobile: 'subtitle' },
+  { key: 'auditor', label: t('trace.auditor'), ellipsis: '10rem', mobile: 'title' },
+  { key: 'verdict', label: t('trace.verdict'), nowrap: true, mobile: 'status' },
+  { key: 'top', label: t('trace.top'), nowrap: true, mobile: 'meta' },
+  // LLM auditors give a reason (a phone card also says here that the images were refused); left out when no row has one
+  ...(rows.value.some((r) => r.reason || r.images_refused) ? [{ key: 'reason', label: t('detail.f.reason'), grow: true, mobile: 'meta', mobileSpan: 2 } satisfies TableColumn] : []),
+  { key: 'model', label: t('trace.model'), ellipsis: '12rem', mobile: 'detail' },
+  { key: 'latency_ms', label: t('trace.latency'), align: 'right', nowrap: true, mobile: 'detail' }
 ])
 
 const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warning'> = { hit: 'danger', pass: 'success', skipped: 'gray', error: 'warning' }
@@ -50,6 +55,12 @@ function refusedText(o: Outcome): string {
   const note = imagesRefusedNote(o)
   return note ? t(note.key, note.params) : ''
 }
+
+/** The error of a call ("timeout 504"), in its verdict's tooltip. */
+const errText = (o: Outcome) => (o.err ? `${enumLabel('err', o.err)}${o.status ? ` ${o.status}` : ''}` : undefined)
+
+/** Images sent and skipped, in the top hit's tooltip. */
+const imagesText = (o: Outcome) => (o.sent_images || o.skipped_images ? t('trace.images', { sent: o.sent_images || 0, skipped: o.skipped_images || 0 }) : undefined)
 
 /** Stages without a verdict and without an auditor call: they have no row, so the head names them. */
 const cutStages = computed(() => unjudgedStages(props.trace))
@@ -80,25 +91,33 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
     </div>
     <STable :columns="columns" :rows="rows" row-key="key" dense :empty-text="t('trace.empty')">
       <template #cell-stage="{ row }">
-        {{ t('trace.stageN', { n: row.stage }) }}<template v-if="row.fallback"> · {{ t('flows.role.fallback') }}</template>
-        <div v-if="row.stageResult === 'failed' || row.stageResult === 'error'"><SBadge tone="warning" size="xs">{{ enumLabel('stageResult', row.stageResult) }}</SBadge></div>
-        <div v-else class="mod-sub">{{ enumLabel('stageResult', row.stageResult) }}</div>
+        <span class="mod-cell-line" :title="enumLabel('stageResult', row.stageResult)">
+          {{ t('trace.stageN', { n: row.stage }) }}<template v-if="row.fallback"> · {{ t('flows.role.fallback') }}</template>
+          <SBadge v-if="row.stageResult === 'failed' || row.stageResult === 'error'" tone="warning" size="xs">{{ enumLabel('stageResult', row.stageResult) }}</SBadge>
+        </span>
       </template>
       <template #cell-auditor="{ row }">
-        {{ catalog.auditorName(row.auditor_id) }}
-        <div v-if="row.rules_version" class="mod-sub">{{ row.rules_version }}</div>
+        <span :title="row.rules_version || undefined">{{ catalog.auditorName(row.auditor_id) }}</span>
       </template>
       <template #cell-verdict="{ row }">
-        <SBadge :tone="VERDICT_TONE[outcomeState(row)]">{{ t(`trace.${outcomeState(row)}`) }}</SBadge>
-        <div v-if="row.err" class="mod-sub">{{ enumLabel('err', row.err) }}<template v-if="row.status"> {{ row.status }}</template></div>
-        <div v-if="row.images_refused" class="mod-sub mod-text-warning">{{ refusedText(row) }}</div>
+        <span class="mod-cell-line">
+          <SBadge :tone="VERDICT_TONE[outcomeState(row)]" :title="errText(row)">{{ t(`trace.${outcomeState(row)}`) }}</SBadge>
+          <SIcon v-if="row.images_refused" name="warning" class="mod-text-warning" :label="refusedText(row)" />
+        </span>
       </template>
       <template #cell-top="{ row }">
-        <CategoryChips v-if="row.hits?.length" :categories="row.hits" wrap />
-        <span v-else-if="row.top_category" class="mod-num">{{ categoryLabel(row.top_category) }} {{ score(row.top_score) }}</span>
-        <SHint v-else inline>—</SHint>
-        <div v-if="row.reason" class="mod-sub">{{ row.reason }}</div>
-        <div v-if="row.sent_images || row.skipped_images" class="mod-sub">{{ t('trace.images', { sent: row.sent_images || 0, skipped: row.skipped_images || 0 }) }}</div>
+        <span :title="imagesText(row)">
+          <CategoryChips v-if="row.hits?.length" :categories="row.hits" />
+          <span v-else-if="row.top_category" class="mod-num">{{ categoryLabel(row.top_category) }} {{ score(row.top_score) }}</span>
+          <SHint v-else inline>—</SHint>
+        </span>
+      </template>
+      <template #cell-reason="{ row, layout }">
+        <template v-if="layout === 'card'">
+          <p v-if="row.images_refused" class="mod-text-warning">{{ refusedText(row) }}</p>
+          <p v-if="row.reason || !row.images_refused">{{ row.reason || '—' }}</p>
+        </template>
+        <span v-else class="mod-ellipsis" :title="row.reason || undefined">{{ row.reason || '—' }}</span>
       </template>
       <template #cell-model="{ row }">{{ row.model || '—' }}</template>
       <template #cell-latency_ms="{ row }"><span class="mod-num">{{ ms(row.latency_ms) }}</span></template>

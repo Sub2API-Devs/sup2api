@@ -1,6 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, SLink, SSelect, STable, type TableColumn } from '@sub2api/ui'
+import {
+  SAlert,
+  SBadge,
+  SButton,
+  SCard,
+  SField,
+  SFilterBar,
+  SHint,
+  SInput,
+  SLink,
+  SRowAction,
+  SSelect,
+  STable,
+  STableColumnSettings,
+  useTableColumns,
+  useViewport,
+  type TableColumn
+} from '@sub2api/ui'
 import BindingEditModal from './BindingEditModal.vue'
 import { bindingKey, bindingKind, fallbackOf, hasAccountBindings, resolveSteps, sortBindings } from './bindingOps'
 import { useCatalog } from './catalog'
@@ -15,11 +32,14 @@ import { useAsync } from './useAsync'
 // are the same ones the flows list edits. A binding to a disabled,
 // unpublished or deleted flow is inactive (GET /bindings `inactive`): it
 // does not apply, its row says what its requests go by instead, and the
-// preview passes over it.
+// preview passes over it. Each table cell keeps to one line: the scope
+// reads "account · in group", the fallback of an inactive binding is in the
+// tooltip (on a phone card, under the flow).
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
+const { compact } = useViewport()
 
 const catalog = useCatalog()
 const accounts = useAsync<CoreAccount[]>(fetchAccounts, () => t('bindings.loadFailed'))
@@ -45,6 +65,10 @@ const kindOptions = computed(() => [
   { value: null, label: t('bindings.allKinds') },
   ...(['group_account', 'account', 'group'] as const).map((k) => ({ value: k, label: t(`bindings.kind.${k}`) }))
 ])
+function resetFilters() {
+  kindFilter.value = null
+  query.value = ''
+}
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   return rows.value.filter((b) => {
@@ -57,13 +81,14 @@ const filtered = computed(() => {
 
 const columns = computed<TableColumn[]>(() => {
   const c: TableColumn[] = [
-    { key: 'scope', label: t('bindings.col.scope'), mobile: 'title' },
+    { key: 'scope', label: t('bindings.col.scope'), ellipsis: '24rem', hideable: false, mobile: 'title' },
     { key: 'kind', label: t('bindings.col.kind'), nowrap: true, mobile: 'status' },
-    { key: 'flow', label: t('bindings.col.flow'), mobile: 'meta', mobileSpan: 2 }
+    { key: 'flow', label: t('bindings.col.flow'), grow: true, mobile: 'meta', mobileSpan: 2 }
   ]
-  if (manage.value) c.push({ key: 'actions', label: '', align: 'right' })
+  if (manage.value) c.push({ key: 'actions', label: t('actions'), align: 'right', hideable: false })
   return c
 })
+const columnState = useTableColumns(columns, 'moderation-bindings')
 
 const kindTone = (k: BindingKind) => (k === 'group_account' ? 'accent' : k === 'account' ? 'info' : 'gray')
 /** What a binding leads to: its flow, or "not moderated" (flow 0). */
@@ -107,6 +132,14 @@ async function remove(b: Binding) {
   }
 }
 
+/** The second part of a scope: the group an account binding holds in, or whom a group binding covers. */
+function scopeNote(b: Binding): string {
+  if (b.account_id) return b.group_id ? t('bindings.inGroup', { group: groupLabel(b.group_id) }) : t('bindings.anyGroup')
+  return b.group_id ? t('bindings.allAccounts') : t('bindings.defaultScope')
+}
+/** The tooltip of an inactive binding: why it does not apply and what its requests go by now. */
+const inactiveText = (b: Binding) => `${t('bindings.rowInactive', { state: flowState(b.flow_id) })} · ${fallbackText(b)}`
+
 function scopeText(b: Binding): string {
   switch (bindingKind(b.group_id, b.account_id)) {
     case 'group':
@@ -147,71 +180,68 @@ const previewResult = computed(() => {
     <SAlert v-if="inactive" tone="warning" class="mod-block">{{ t('bindings.inactive') }}</SAlert>
     <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
-    <div class="mod-toolbar mod-bindings-toolbar">
+    <SFilterBar :aria-label="t('filter')" :active-count="kindFilter ? 1 : 0" :dirty="!!kindFilter || query.trim() !== ''" :on-reset="resetFilters">
+      <template #primary>
+        <SInput v-model="query" type="search" size="sm" icon="search" :placeholder="t('bindings.search')" :aria-label="t('bindings.search')" class="mod-bindings-search" clearable />
+      </template>
       <SSelect
         :model-value="kindFilter"
         :options="kindOptions"
+        size="sm"
+        class="mod-filter-sm"
         :aria-label="t('bindings.col.kind')"
-        class="mod-bindings-kind"
         @update:model-value="kindFilter = $event as BindingKind | null"
       />
-      <SInput
-        v-model="query"
-        type="search"
-        icon="search"
-        :placeholder="t('bindings.search')"
-        :aria-label="t('bindings.search')"
-        class="mod-bindings-search"
-        clearable
-      />
-      <SButton v-if="manage" variant="primary" icon="plus" class="mod-ml-auto" @click="openEdit(null)">{{ t('bindings.add') }}</SButton>
-    </div>
+      <template #end>
+        <STableColumnSettings :state="columnState" />
+        <SButton v-if="manage && !compact" variant="primary" size="sm" icon="plus" @click="openEdit(null)">{{ t('bindings.add') }}</SButton>
+      </template>
+    </SFilterBar>
+    <SButton v-if="manage && compact" fab icon="plus" :aria-label="t('bindings.add')" @click="openEdit(null)" />
 
-    <SCard :padded="false">
+    <SCard :padded="false" class="mod-section">
       <STable
-        :columns="columns"
+        :columns="columnState.visibleColumns.value"
         :rows="filtered"
         :loading="catalog.state.loading"
         row-key="key"
         :empty-text="rows.length ? t('bindings.noMatch') : t('bindings.empty')"
         dense
       >
-        <template #cell-scope="{ row }">
-          <span class="mod-bindings-scope">
-            <span>{{ row.account_id ? accountLabel(row.account_id) : groupLabel(row.group_id) }}</span>
-            <span v-if="row.account_id" class="mod-sub">{{
-              row.group_id ? t('bindings.inGroup', { group: groupLabel(row.group_id) }) : t('bindings.anyGroup')
-            }}</span>
-            <span v-else class="mod-sub">{{ row.group_id ? t('bindings.allAccounts') : t('bindings.defaultScope') }}</span>
+        <template #cell-scope="{ row, layout }">
+          <!-- one line in the table; a phone card title may wrap -->
+          <span :class="layout === 'card' ? 'mod-inline mod-wrap mod-gap' : 'mod-cell-line'" :title="scopeText(row)">
+            <span class="mod-ellipsis">{{ row.account_id ? accountLabel(row.account_id) : groupLabel(row.group_id) }}</span>
+            <span class="mod-sub">{{ scopeNote(row) }}</span>
           </span>
         </template>
         <template #cell-kind="{ row }">
           <SBadge :tone="kindTone(row.kind)">{{ t(`bindings.kind.${row.kind}`) }}</SBadge>
         </template>
-        <template #cell-flow="{ row }">
+        <template #cell-flow="{ row, layout }">
           <SBadge v-if="!row.flow_id" tone="warning">{{ t('bindings.exempt') }}</SBadge>
-          <template v-else>
-            <SLink as="button" @click="openFlow(row.flow_id)">{{ flowText(row.flow_id) }}</SLink>
-            <template v-if="row.inactive">
-              <SBadge tone="gray" class="mod-ml">{{ t('bindings.rowInactive', { state: flowState(row.flow_id) }) }}</SBadge>
-              <div class="mod-sub">{{ fallbackText(row) }}</div>
-            </template>
-          </template>
+          <span v-else class="mod-cell-line">
+            <SLink as="button" class="mod-ellipsis" @click="openFlow(row.flow_id)">{{ flowText(row.flow_id) }}</SLink>
+            <SBadge v-if="row.inactive" tone="gray" :title="inactiveText(row)">{{ t('bindings.rowInactive', { state: flowState(row.flow_id) }) }}</SBadge>
+          </span>
+          <div v-if="row.flow_id && row.inactive && layout === 'card'" class="mod-sub">{{ fallbackText(row) }}</div>
         </template>
         <template #cell-actions="{ row }">
-          <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
-          <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
+          <span class="mod-row-actions">
+            <SRowAction :label="t('edit')" @click="openEdit(row)" />
+            <SRowAction :label="t('delete')" tone="danger" @click="remove(row)" />
+          </span>
         </template>
       </STable>
     </SCard>
 
     <SCard :title="t('bindings.previewTitle')" class="mod-section">
       <div class="mod-bindings-preview">
-        <SField class="mod-filter" :label="t('bindings.col.group')">
+        <SField :label="t('bindings.col.group')">
           <SSelect v-if="previewGroups.length" v-model="preview.group" :options="previewGroups" :placeholder="t('bindings.pickGroup')" searchable />
           <SInput v-else v-model="preview.group" inputmode="numeric" :placeholder="t('bindings.groupIdPlaceholder')" />
         </SField>
-        <SField class="mod-filter" :label="t('bindings.col.account')">
+        <SField :label="t('bindings.col.account')">
           <SSelect v-if="accountList.length" v-model="preview.account" :options="previewAccounts" searchable />
           <SInput v-else v-model="preview.account" inputmode="numeric" :placeholder="t('bindings.accountIdPlaceholder')" />
         </SField>

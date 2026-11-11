@@ -1,23 +1,22 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { SAlert, SBadge, SBulkBar, SButton, SCheckbox, SEmpty, SHint, SSpinner } from '@sub2api/ui'
+import { SAlert, SBadge, SBulkBar, SButton, SDateTime, STable, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
-import ReplayBadge from './ReplayBadge.vue'
 import ResultBadge from './ResultBadge.vue'
 import ReviewActions from './ReviewActions.vue'
 import VerdictBadge from './VerdictBadge.vue'
 import { useCatalog } from './catalog'
-import { dt } from './format'
 import { canManage, fetchUserEvents, RECENT_DAYS, useModHost } from './host'
 import type { ReviewStatus, SourceFilter } from './types'
 import { useAsync } from './useAsync'
 import { useBulkReview } from './useBulkReview'
 
 // The suspicious records of a user (new-api user timeline), newest first,
-// optionally of one source (group → flow@version); manage users review
-// checked records in bulk. Reloads when `version` changes; a review here
-// emits `reviewed` so the drawer refreshes the counts.
+// optionally of one source (group → flow@version), as a table of one-line
+// rows (the AI reason in the text's tooltip); a row opens the record, manage
+// users review checked records in bulk. Reloads when `version` changes; a
+// review here emits `reviewed` so the drawer refreshes the counts.
 const props = defineProps<{ userId: number; version: number; source: SourceFilter | null }>()
 const emit = defineEmits<{
   (e: 'open-record', id: number): void
@@ -58,7 +57,14 @@ const { checked, reviewing, review } = useBulkReview((ids, status) => {
   emit('reviewed')
 })
 watch(records, () => (checked.value = []))
-const toggle = (id: number, on: boolean) => (checked.value = on ? [...checked.value, id] : checked.value.filter((x) => x !== id))
+
+const columns = computed<TableColumn[]>(() => [
+  { key: 'created_at', label: t('events.col.time'), nowrap: true, mobile: 'subtitle' },
+  { key: 'result', label: t('events.col.result'), nowrap: true, mobile: 'status' },
+  { key: 'verdict', label: t('events.col.verdict'), nowrap: true, mobile: 'meta' },
+  { key: 'hit_categories', label: t('events.col.categories'), nowrap: true, mobile: 'meta' },
+  { key: 'text_excerpt', label: t('events.col.text'), grow: true, mobile: 'title' }
+])
 </script>
 
 <template>
@@ -74,24 +80,27 @@ const toggle = (id: number, on: boolean) => (checked.value = on ? [...checked.va
       <ReviewActions :loading="reviewing" @review="review" />
     </SBulkBar>
     <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
-    <SSpinner v-else-if="loading && !data" block />
-    <SEmpty v-else-if="!records.length" :text="t('watch.noSuspicious')" icon="eyeglass" />
-    <ol v-else class="mod-timeline">
-      <li v-for="r in records" :key="r.id" class="mod-timeline-row">
-        <SCheckbox v-if="manage" :model-value="checked.includes(r.id)" :aria-label="`#${r.id}`" @update:model-value="toggle(r.id, $event)" />
-        <button type="button" class="mod-timeline-item" @click="emit('open-record', r.id)">
-          <span class="mod-history-head">
-            <ResultBadge :result="r.result" />
-            <ReplayBadge v-if="r.replayed" size="xs" />
-            <VerdictBadge :event="r" />
-            <CategoryChips :categories="r.hit_categories" />
-            <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>
-          </span>
-          <span class="mod-sub mod-timeline-text">{{ r.text_excerpt || '—' }}</span>
-          <span v-if="r.ai_reason" class="mod-sub mod-timeline-text">AI: {{ r.ai_reason }}</span>
-        </button>
-      </li>
-    </ol>
+    <STable
+      v-else
+      v-model:selected="checked"
+      :columns="columns"
+      :rows="records"
+      :loading="loading && !data"
+      :empty-text="t('watch.noSuspicious')"
+      :selectable="manage"
+      card
+      dense
+      clickable
+      @row-click="emit('open-record', $event.id)"
+    >
+      <template #cell-created_at="{ row }"><SDateTime :value="row.created_at" mode="time" /></template>
+      <template #cell-result="{ row }"><ResultBadge :result="row.result" :replayed="row.replayed" /></template>
+      <template #cell-verdict="{ row }"><VerdictBadge :event="row" /></template>
+      <template #cell-hit_categories="{ row }"><CategoryChips :categories="row.hit_categories" :max="1" /></template>
+      <template #cell-text_excerpt="{ row }">
+        <span class="mod-ellipsis" :title="row.ai_reason ? `${row.text_excerpt}\nAI: ${row.ai_reason}` : row.text_excerpt">{{ row.text_excerpt || '—' }}</span>
+      </template>
+    </STable>
     <div v-if="total > records.length" class="mod-center">
       <SButton size="sm" variant="ghost" @click="emit('show-user', userId)">{{ t('watch.allRecords') }}</SButton>
     </div>

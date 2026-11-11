@@ -9,6 +9,12 @@ import type { WatchLevel } from './types'
 
 export const WATCH_LEVELS: readonly WatchLevel[] = ['observe', 'enforce']
 
+/** A watch list action to confirm: add or set a level, or release (level null). */
+export interface WatchAction {
+  kind: 'add' | 'level' | 'release'
+  level: WatchLevel | null
+}
+
 /** An allowlisted user cannot be set to the enforce level (the backend answers level/allowlisted). */
 export const levelRefused = (level: unknown, allowlisted: boolean | undefined) => level === 'enforce' && !!allowlisted
 

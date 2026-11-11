@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { SBadge, SLink } from '@sub2api/ui'
+import { SBadge, SChipList, SLink } from '@sub2api/ui'
 import AsyncCard from './AsyncCard.vue'
-import CategoryChips from '../CategoryChips.vue'
 import UserRef from '../UserRef.vue'
 import { onOverviewTick } from './tick'
 import { useAsync } from '../useAsync'
-import { enumLabel } from '../format'
+import { categoryLabel, enumLabel } from '../format'
 import { fetchWatchList, useModHost } from '../host'
-import type { TabKey } from '../types'
+import type { TabKey, WatchItem } from '../types'
 import { levelTone, trendTone } from '../tones'
 
 // "最需关注的人": the first six of the watch list in its default order (new
-// records since last seen first). A row opens the user's watch detail.
+// records since last seen first), one line a user: level, top categories
+// (the rest behind "+N"), new records and trend. A row opens the user's
+// watch detail.
 const emit = defineEmits<{ (e: 'open-watch', userId: number): void; (e: 'go-tab', tab: TabKey): void }>()
 const t = useModHost().t
 
@@ -20,6 +21,10 @@ const list = useAsync(() => fetchWatchList({ page: 1, page_size: 6, sort: 'new' 
 onMounted(list.reload)
 onOverviewTick(list.reload)
 const items = computed(() => list.data.value?.items || [])
+const categoryChips = (w: WatchItem) => [
+  ...w.top_categories.map((c) => ({ key: c.category, label: `${categoryLabel(c.category, c.label)} ${c.count}`, tone: 'warning' as const, title: c.category })),
+  ...(w.top_other ? [{ key: '_other', label: t('chips.other', { n: w.top_other }) }] : [])
+]
 </script>
 
 <template>
@@ -36,16 +41,12 @@ const items = computed(() => list.data.value?.items || [])
     <ul class="mod-attention">
       <li v-for="w in items" :key="w.user_id">
         <button type="button" class="mod-attention-item" @click="emit('open-watch', w.user_id)">
-          <span class="mod-attention-row">
-            <UserRef :user-id="w.user_id" />
-            <SBadge :tone="levelTone(w.level)" size="xs">{{ enumLabel('level', w.level) }}</SBadge>
-          </span>
-          <CategoryChips :categories="w.top_categories" :other="w.top_other" />
-          <span class="mod-attention-row">
-            <span v-if="w.hits_since_seen" class="mod-text-warning mod-sub">{{ t('attention.new', { n: w.hits_since_seen }) }}</span>
-            <span v-else class="mod-sub">{{ t('attention.noNew') }}</span>
-            <SBadge v-if="w.latest_trend" size="xs" :tone="trendTone(w.latest_trend)">{{ enumLabel('trend', w.latest_trend) }}</SBadge>
-          </span>
+          <UserRef :user-id="w.user_id" class="mod-ellipsis" />
+          <SBadge :tone="levelTone(w.level)" size="xs">{{ enumLabel('level', w.level) }}</SBadge>
+          <span class="mod-attention-cats"><SChipList :items="categoryChips(w)" :max="1" /></span>
+          <span v-if="w.hits_since_seen" class="mod-text-warning mod-sub">{{ t('attention.new', { n: w.hits_since_seen }) }}</span>
+          <span v-else class="mod-sub">{{ t('attention.noNew') }}</span>
+          <SBadge v-if="w.latest_trend" size="xs" :tone="trendTone(w.latest_trend)">{{ enumLabel('trend', w.latest_trend) }}</SBadge>
         </button>
       </li>
     </ul>

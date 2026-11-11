@@ -217,10 +217,22 @@ func parseFilter(c *gin.Context, self *int64, accounts bool) (*store.Filter, err
 			f.And(x.col+" = ?", id)
 		}
 	}
-	for _, x := range []struct{ q, col string }{{"model", "u.model"}, {"platform", "u.platform"}, {"billing_status", "u.billing_status"}, {"request_id", "u.request_id"},
+	for _, x := range []struct{ q, col string }{{"model", "u.model"}, {"platform", "u.platform"}, {"billing_status", "u.billing_status"},
 		{"client_request_id", "u.client_request_id"}, {"protocol", "u.protocol"}, {"endpoint", "u.endpoint"}, {"error_type", "u.error_type"}} {
 		if v := c.Query(x.q); v != "" {
 			f.And(x.col+" = ?", v)
+		}
+	}
+	// request_id takes either ID a user may hold: ours, or the client's own
+	// X-Request-Id (CONTRACTS §14.4), so one search box finds the row.
+	// client_request_id has no index, so the client half needs a time range
+	// (from) to stay a range scan like the other unindexed filters; without
+	// one only our indexed request_id is matched.
+	if v := c.Query("request_id"); v != "" {
+		if c.Query("from") != "" {
+			f.And("(u.request_id = ? OR u.client_request_id = ?)", v, v)
+		} else {
+			f.And("u.request_id = ?", v)
 		}
 	}
 	if self == nil {

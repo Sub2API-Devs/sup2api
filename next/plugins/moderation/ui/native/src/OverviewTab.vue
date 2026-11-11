@@ -68,7 +68,7 @@ const goTab = (tab: TabKey) => emit('go-tab', tab)
     <SSpinner v-if="!status.data.value && status.loading.value" block />
     <template v-if="status.data.value">
       <StatusLine :status="status.data.value" @go-tab="goTab" @go-settings="emit('go-settings')" />
-      <SGrid template="repeat(auto-fit, minmax(170px, 1fr))">
+      <SGrid variant="stats" md-template="repeat(auto-fit, minmax(170px, 1fr))">
         <SStatCard v-for="k in kpis" :key="k.key" :label="t(`kpi.${k.key}`)" :value="num(k.value)" :sub="k.sub" :icon="k.icon" :tone="k.tone" />
       </SGrid>
     </template>

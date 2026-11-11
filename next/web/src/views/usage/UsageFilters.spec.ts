@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { reactive, ref } from 'vue'
 import { createPinia } from 'pinia'
 import { i18n } from '@/i18n'
@@ -42,86 +42,123 @@ describe('shared usage search', () => {
     expect(get).toHaveBeenCalledWith('/usage/summary', expect.objectContaining({ client_ip: '192.0.2.7', group_by: 'ip' }))
   })
 
-  it('retains selected groups when query IDs are strings', async () => {
-    const w = mount(UsageFilters, { props: { modelValue: { group_id: '7' }, groupOptions: [{ value: '', label: 'All' }, { value: 7, label: 'Team' }] }, global })
-    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
-    const selected = w.findAll('select').find(select => select.text().includes('Team'))!
-    expect((selected.element as HTMLSelectElement).value).toBe('1')
-    await w.get('form').trigger('submit')
-    expect(w.emitted('update:modelValue')![0]![0]).toMatchObject({ group_id: '7' })
+  /** The More filters panel of a wide screen, and its toggle. */
+  const advanced = (w: VueWrapper) => w.get('[data-testid="filter-advanced"]')
+  const toggleAdvanced = (w: VueWrapper) => w.get('[data-testid="filter-advanced-toggle"]').trigger('click')
+  const inAdvanced = (w: VueWrapper, field: string) => w.get(`[data-testid="filter-${field}"]`).element.closest('[data-testid="filter-advanced"]') !== null
+
+  it('retains selected groups when query IDs are strings, on a user\'s first row and behind an operator\'s More filters', async () => {
+    const groupOptions = [{ value: '', label: 'All' }, { value: 7, label: 'Team' }]
+    for (const admin of [false, true]) {
+      const w = mount(UsageFilters, { props: { modelValue: { group_id: '7' }, groupOptions, admin }, global })
+      expect(inAdvanced(w, 'group_id')).toBe(admin)
+      const select = w.get('[data-testid="filter-group_id"]')
+      expect(select.text()).toContain('Team')
+      expect((select.element as HTMLSelectElement).value).toBe('1')
+      await w.get('form').trigger('submit')
+      expect(w.emitted('update:modelValue')![0]![0]).toMatchObject({ group_id: '7' })
+    }
   })
 
   it('applies complete filters only on search and resets without changing time bounds', async () => {
-    const w = mount(UsageFilters, { props: { modelValue: { from: '2026-10-01T00:00:00Z', client_request_id: 'request-one' }, admin: true }, global })
-    await w.get('[data-testid="filter-client_ip"]').setValue('192.0.2.7')
+    const w = mount(UsageFilters, {
+      props: { modelValue: { from: '2026-10-01T00:00:00Z', client_request_id: 'request-one' }, admin: true, logType: 'errors' },
+      global,
+      attachTo: document.body
+    })
+    await w.get('[data-testid="filter-api_key"]').setValue('7')
     expect(w.emitted('update:modelValue')).toBeUndefined()
-    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
-    await w.get('[data-testid="filter-api_key_id"]').setValue('7')
+    expect(advanced(w).isVisible()).toBe(false)
+    await toggleAdvanced(w)
+    expect(advanced(w).isVisible()).toBe(true)
+    await w.get('[data-testid="filter-client_ip"]').setValue('192.0.2.7')
     await w.get('[data-testid="filter-status_code"]').setValue('429')
+    expect(w.emitted('update:modelValue')).toBeUndefined()
     await w.get('form').trigger('submit')
     const first = w.emitted('update:modelValue')![0]![0]
-    expect(first).toMatchObject({ client_ip: '192.0.2.7', api_key_id: '7', status_code: '429', client_request_id: 'request-one' })
+    // the id-or-name box sets the id and clears the name; a parameter without a field is kept
+    expect(first).toMatchObject({ client_ip: '192.0.2.7', api_key_id: '7', api_key_name: '', status_code: '429', client_request_id: 'request-one' })
     expect(first).not.toHaveProperty('from')
     await w.get('[data-testid="reset-usage-filters"]').trigger('click')
     expect(Object.values(w.emitted('update:modelValue')![1]![0] as Record<string, string>).every(value => value === '')).toBe(true)
+    expect(w.emitted('reset')).toHaveLength(1)
+    document.body.innerHTML = ''
   })
 
-  it('offers the account filters only to an operator who may read accounts', async () => {
+  it('offers the account filter only to an operator who may read accounts', async () => {
     const w = mount(UsageFilters, { props: { modelValue: {}, admin: true }, global })
-    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
-    expect(w.find('[data-testid="filter-user_id"]').exists()).toBe(true)
-    expect(w.find('[data-testid="filter-account_id"]').exists()).toBe(false)
-    expect(w.find('[data-testid="filter-account_name"]').exists()).toBe(false)
+    expect(inAdvanced(w, 'user')).toBe(false)
+    expect(w.find('[data-testid="filter-account"]').exists()).toBe(false)
     await w.get('form').trigger('submit')
     expect(w.emitted('update:modelValue')![0]![0]).not.toHaveProperty('account_id')
+    expect(w.emitted('update:modelValue')![0]![0]).not.toHaveProperty('account_name')
     await w.setProps({ accounts: true })
-    expect(w.find('[data-testid="filter-account_id"]').exists()).toBe(true)
-    expect(w.find('[data-testid="filter-account_name"]').exists()).toBe(true)
+    expect(inAdvanced(w, 'account')).toBe(true)
+    await w.get('[data-testid="filter-account"]').setValue('Main')
+    await w.get('form').trigger('submit')
+    expect(w.emitted('update:modelValue')![1]![0]).toMatchObject({ account_id: '', account_name: 'Main' })
   })
 
   it('filters operators by protocol conversion (CONVERT-MATRIX §6.2)', async () => {
+    const locale = i18n.global.locale.value
     i18n.global.locale.value = 'zh'
     const w = mount(UsageFilters, { props: { modelValue: { conversion: 'lossy' }, admin: true }, global })
-    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
+    expect(inAdvanced(w, 'conversion')).toBe(true)
     const select = w.get('[data-testid="filter-conversion"]')
     const options = select.findAll('option')
     expect(options.map(option => option.text())).toEqual(['协议转换', '原生', '已转换', '良好', '一般', '不推荐', '本地估算', '有丢失'])
     expect(options[(select.element as HTMLSelectElement).selectedIndex].text()).toBe('有丢失')
+    // set behind the folded More filters: counted on the toggle, listed as a chip
+    expect(w.get('[data-testid="filter-advanced-count"]').text()).toBe('1')
+    expect(w.get('[data-filter-key="conversion"]').text()).toContain('协议转换：有丢失')
     await select.setValue('4')
     await w.get('form').trigger('submit')
     expect(w.emitted('update:modelValue')![0]![0]).toMatchObject({ conversion: 'fair' })
     const self = mount(UsageFilters, { props: { modelValue: {} }, global })
-    await self.get('[data-testid="toggle-usage-filters"]').trigger('click')
     expect(self.find('[data-testid="filter-conversion"]').exists()).toBe(false)
+    i18n.global.locale.value = locale
   })
 
-  it('selects the request type on the first row from the types under the search, keeping a preset one', async () => {
+  it('selects the request type behind More filters from the types under the search, keeping a preset one', async () => {
     const w = mount(UsageFilters, { props: { modelValue: { protocol: 'vid.gen' }, protocolOptions: ['anthropic.messages', 'openai.chat'] }, global })
+    expect(inAdvanced(w, 'protocol')).toBe(true)
     const select = w.get('[data-testid="filter-protocol"]')
     const options = select.findAll('option')
     expect(options.map(option => option.text()).slice(1)).toEqual(['anthropic.messages', 'openai.chat', 'vid.gen'])
     expect(options[0].text()).not.toContain('usage.search.')
     expect(options[(select.element as HTMLSelectElement).selectedIndex].text()).toBe('vid.gen')
-    expect(w.find('[data-testid="usage-advanced-filters"]').exists()).toBe(false)
     await select.setValue('2')
     await w.get('form').trigger('submit')
     expect(w.emitted('update:modelValue')![0]![0]).toMatchObject({ protocol: 'openai.chat' })
-    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
-    expect(w.find('[data-testid="filter-protocol"]').element.closest('[data-testid="usage-advanced-filters"]')).toBeNull()
   })
 
   it('keeps administrative fields out of self-service and synchronizes external request-id filters', async () => {
     const w = mount(UsageFilters, { props: { modelValue: {} }, global })
-    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
-    expect(w.find('[data-testid="filter-user_id"]').exists()).toBe(false)
-    expect(w.find('[data-testid="filter-account_id"]').exists()).toBe(false)
-    expect(w.find('[data-testid="filter-node_id"]').exists()).toBe(false)
-    expect(w.find('[data-testid="filter-request_id"]').exists()).toBe(true)
-    await w.setProps({ modelValue: { client_request_id: 'selected-request' } })
-    expect((w.get('[data-testid="filter-client_request_id"]').element as HTMLInputElement).value).toBe('selected-request')
+    for (const field of ['user', 'account', 'node_id', 'conversion']) expect(w.find(`[data-testid="filter-${field}"]`).exists()).toBe(false)
+    expect(inAdvanced(w, 'request_id')).toBe(true)
+    expect(w.find('[data-testid="filter-chips"]').exists()).toBe(false)
+    // a request id set from outside fills its field; a client request id, which has none, shows as a chip
+    await w.setProps({ modelValue: { request_id: 'req-9', client_request_id: 'selected-request' } })
+    expect((w.get('[data-testid="filter-request_id"]').element as HTMLInputElement).value).toBe('req-9')
+    expect(w.get('[data-filter-key="client_request_id"]').text()).toContain('selected-request')
     await w.get('form').trigger('submit')
-    expect(w.emitted('update:modelValue')![0]![0]).not.toHaveProperty('user_id')
+    const applied = w.emitted('update:modelValue')![0]![0]
+    expect(applied).toMatchObject({ request_id: 'req-9', client_request_id: 'selected-request' })
+    expect(applied).not.toHaveProperty('user_id')
+    await w.get('[data-filter-key="client_request_id"] button').trigger('click')
+    expect(w.emitted('update:modelValue')![1]![0]).toEqual({ client_request_id: '' })
     expect(w.text()).not.toContain('usage.search.')
+  })
+
+  it('drops the account type with its plugin chip, and Clear all clears the chips only', async () => {
+    const w = mount(UsageFilters, { props: { modelValue: { model_contains: 'gpt', plugin_key: 'p', account_type: 'apikey' }, admin: true }, global })
+    // the API refuses account_type without plugin_key
+    await w.get('[data-filter-key="plugin_key"] button').trigger('click')
+    expect(w.emitted('update:modelValue')![0]![0]).toEqual({ plugin_key: '', account_type: '' })
+    await w.get('[data-testid="filter-chips-clear"]').trigger('click')
+    const cleared = w.emitted('update:modelValue')![1]![0] as Record<string, string>
+    expect(cleared).toMatchObject({ plugin_key: '', account_type: '' })
+    expect(cleared).not.toHaveProperty('model_contains')
   })
 
   it('ends the filter row with reset and search when there is no stats or actions row', () => {
@@ -138,7 +175,7 @@ describe('shared usage search', () => {
     expect(w.get('.mt-3').findAll('button').map(b => b.classes('act') ? 'act' : b.classes('tool') ? 'tool' : b.attributes('data-testid'))).toEqual(['act', 'tool', 'reset-usage-filters', 'search-usage'])
   })
 
-  it('keeps the range, the log type and the text searches in sight on a phone, folds the rest into the Filters sheet and applies it on Done', async () => {
+  it('keeps the range, the log type and the first row in sight on a phone, folds More filters into the Filters sheet and applies it on Done', async () => {
     const logTypes = [{ value: 'records', label: 'Records' }, { value: 'errors', label: 'Errors' }]
     const w = mountPinned(UsageFilters, {
       props: { modelValue: { protocol: 'openai.chat', stream: 'true', success: 'false' }, logTypes, logType: 'errors' },
@@ -146,16 +183,19 @@ describe('shared usage search', () => {
       global
     })
     expect(w.find('.tool').exists()).toBe(false)
-    for (const key of ['log-type', 'model_contains', 'api_key_name', 'client_ip']) expect(w.find(`[data-testid="filter-${key}"]`).exists()).toBe(true)
+    for (const key of ['log-type', 'model_contains', 'group_name', 'api_key']) expect(w.find(`[data-testid="filter-${key}"]`).exists()).toBe(true)
     expect(w.find('.range').exists()).toBe(true)
-    expect(w.find('[data-testid="filter-protocol"]').exists()).toBe(false)
-    // request type and stream are set; the status of failed requests is not a sheet filter
-    expect(w.get('[data-testid="filter-sheet-open"]').text()).toContain('2')
+    for (const key of ['protocol', 'client_ip']) expect(w.find(`[data-testid="filter-${key}"]`).exists()).toBe(false)
+    expect(w.find('[data-testid="filter-advanced-toggle"]').exists()).toBe(false)
+    // only the request type is a sheet filter: the stream has no field (a chip) and failed requests set the status themselves
+    expect(w.get('[data-testid="filter-sheet-open"]').text()).toContain('1')
+    expect(w.find('[data-filter-key="stream"]').exists()).toBe(true)
+    expect(w.find('[data-filter-key="success"]').exists()).toBe(false)
     await w.get('[data-testid="filter-sheet-open"]').trigger('click')
     await flushPromises()
-    // the More filters fields come along, with no toggle
     const sheet = document.querySelector('[data-testid="filter-sheet"]')!
     expect(sheet.querySelector('[data-testid="filter-protocol"]')).not.toBeNull()
+    expect(sheet.querySelector('[data-testid="filter-status_code"]')).not.toBeNull()
     expect(document.querySelector('[role="dialog"] .tool')).not.toBeNull()
     const requestId = sheet.querySelector<HTMLInputElement>('input[data-testid="filter-request_id"]')!
     requestId.value = 'req-1'

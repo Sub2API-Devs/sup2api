@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { SAlert, SBadge, SButton, SCard, SHint, STable, type TableColumn } from '@sub2api/ui'
+import {
+  SAlert,
+  SBadge,
+  SButton,
+  SCard,
+  SDropdown,
+  SHint,
+  SRowAction,
+  STable,
+  STableColumnSettings,
+  useTableColumns,
+  type MenuAction,
+  type TableColumn
+} from '@sub2api/ui'
 import AuditorEditModal from './AuditorEditModal.vue'
 import AuditorTryModal from './AuditorTryModal.vue'
 import EnabledBadge from './EnabledBadge.vue'
@@ -33,18 +46,19 @@ const reload = () => Promise.all([refreshLists(), defaults.reload()])
 onMounted(() => !defaults.data.value && defaults.reload())
 defineExpose({ reload })
 
-const columns = computed<TableColumn[]>(() => {
-  const c: TableColumn[] = [
-    { key: 'name', label: t('auditors.col.name'), nowrap: true },
-    { key: 'type', label: t('auditors.col.type'), nowrap: true },
-    { key: 'channel', label: t('auditors.col.channel') },
-    { key: 'summary', label: t('auditors.col.summary') },
-    { key: 'today', label: t('auditors.col.today'), align: 'right', nowrap: true },
-    { key: 'usable', label: t('auditors.col.usable'), nowrap: true }
-  ]
-  c.push({ key: 'actions', label: '', align: 'right' })
-  return c
-})
+const columns = computed<TableColumn[]>(() => [
+  { key: 'name', label: t('auditors.col.name'), nowrap: true, hideable: false, mobile: 'title' },
+  { key: 'type', label: t('auditors.col.type'), nowrap: true, mobile: 'meta' },
+  { key: 'channel', label: t('auditors.col.channel'), nowrap: true, mobile: 'meta' },
+  { key: 'summary', label: t('auditors.col.summary'), grow: true, mobile: 'subtitle' },
+  { key: 'today', label: t('auditors.col.today'), align: 'right', nowrap: true, mobile: 'meta' },
+  { key: 'usable', label: t('auditors.col.usable'), nowrap: true, hideable: false, mobile: 'status' },
+  { key: 'actions', label: t('actions'), align: 'right', nowrap: true, hideable: false }
+])
+const columnState = useTableColumns(columns, 'moderation-auditors')
+
+/** Today's calls not priced, the tooltip of today's cost. */
+const todayTitle = (a: Auditor) => (a.today?.cost.unpriced_calls ? t('channels.unpricedN', { n: num(a.today.cost.unpriced_calls) }) : undefined)
 
 function summary(a: Auditor): string {
   const c = a.config || {}
@@ -75,45 +89,52 @@ function openTry(target: AuditorTryTarget) {
   tryOpen.value = true
 }
 
+/** The row's "more" menu: the danger action. */
+const moreActions = computed<MenuAction[]>(() => [{ key: 'delete', label: t('delete'), danger: true }])
 const remove = (a: Auditor) => confirmDelete(t('auditors.deleteConfirm', { name: a.name }), () => deleteAuditor(a.id), () => void refreshLists())
 </script>
 
 <template>
   <div>
     <SHint class="mod-hint">{{ t('auditors.hint') }}</SHint>
-    <div v-if="manage" class="mod-toolbar">
-      <SButton variant="primary" icon="plus" :disabled="!channels.length" :title="channels.length ? '' : t('auditors.needChannel')" @click="openEdit(null)">{{ t('auditors.add') }}</SButton>
+    <div class="mod-toolbar">
+      <STableColumnSettings :state="columnState" />
+      <SButton v-if="manage" variant="primary" size="sm" icon="plus" :disabled="!channels.length" :title="channels.length ? '' : t('auditors.needChannel')" @click="openEdit(null)">
+        {{ t('auditors.add') }}
+      </SButton>
     </div>
     <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
     <SCard :padded="false">
-      <STable :columns="columns" :rows="rows" :loading="loading" :empty-text="t('auditors.empty')" dense>
-        <template #cell-name="{ row }">{{ row.name }} <span class="mod-sub mod-num">#{{ row.id }}</span></template>
+      <STable :columns="columnState.visibleColumns.value" :rows="rows" :loading="loading" :empty-text="t('auditors.empty')" dense>
+        <template #cell-name="{ row }">
+          <span class="mod-cell-line">
+            <span class="mod-ellipsis" :title="row.name">{{ row.name }}</span>
+            <SHint inline size="xs" class="mod-num">#{{ row.id }}</SHint>
+          </span>
+        </template>
         <template #cell-type="{ row }">{{ enumLabel('auditorType', row.type) }}</template>
         <template #cell-channel="{ row }">
-          {{ row.channel_name || catalog.channelName(row.channel_id) }}
-          <EnabledBadge v-if="!(row.channel_enabled ?? catalog.channel(row.channel_id)?.enabled)" :enabled="false" :missing="!row.channel_name && !catalog.channel(row.channel_id)" size="xs" />
+          <span class="mod-cell-line">
+            <span class="mod-ellipsis">{{ row.channel_name || catalog.channelName(row.channel_id) }}</span>
+            <EnabledBadge v-if="!(row.channel_enabled ?? catalog.channel(row.channel_id)?.enabled)" :enabled="false" :missing="!row.channel_name && !catalog.channel(row.channel_id)" size="xs" />
+          </span>
         </template>
-        <template #cell-summary="{ row }">{{ summary(row) }}</template>
+        <template #cell-summary="{ row }"><span :title="summary(row)">{{ summary(row) }}</span></template>
         <template #cell-today="{ row }">
-          <template v-if="row.today?.calls">
-            <span class="mod-num">{{ money(row.today.cost.cost) }}</span>
-            <div class="mod-sub mod-num">
-              {{ t('cost.calls', { n: num(row.today.calls) }) }}<template v-if="row.today.cost.unpriced_calls"> · {{ t('channels.unpricedN', { n: num(row.today.cost.unpriced_calls) }) }}</template>
-            </div>
-          </template>
+          <span v-if="row.today?.calls" class="mod-num" :title="todayTitle(row)">{{ money(row.today.cost.cost) }} · {{ t('cost.calls', { n: num(row.today.calls) }) }}</span>
           <SHint v-else inline>—</SHint>
         </template>
         <template #cell-usable="{ row }">
           <SBadge :tone="row.usable ? 'success' : 'warning'" dot>{{ row.usable ? t('auditors.ready') : t('auditors.notReady') }}</SBadge>
         </template>
         <template #cell-actions="{ row }">
-          <template v-if="manage">
-            <SButton size="sm" variant="ghost" @click="openTry({ id: row.id, name: row.name, type: row.type, config: row.config })">{{ t('auditors.try') }}</SButton>
-            <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
-            <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
-          </template>
-          <SButton v-else size="sm" variant="ghost" @click="openEdit(row)">{{ t('view') }}</SButton>
+          <span v-if="manage" class="mod-cell-line">
+            <SRowAction :label="t('auditors.try')" @click="openTry({ id: row.id, name: row.name, type: row.type, config: row.config })" />
+            <SRowAction :label="t('edit')" @click="openEdit(row)" />
+            <SDropdown :actions="moreActions" @select="remove(row)" />
+          </span>
+          <SRowAction v-else :label="t('view')" @click="openEdit(row)" />
         </template>
       </STable>
     </SCard>

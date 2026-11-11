@@ -1,33 +1,30 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SChip, SHint, type StatusTone } from '@sub2api/ui'
+import { SChipList, SHint, type StatusTone } from '@sub2api/ui'
 import { categoryLabel, score } from './format'
 import { useModHost } from './host'
 import type { Trace } from './types'
 import { scoreLevel, traceScores, type ScoreLevel } from './trace'
 
-// Top category scores of a record: red above the threshold, amber near it
-// (≥ 80 %); the exact score / threshold is in the tooltip.
-const props = withDefaults(defineProps<{ trace?: Trace | null; max?: number }>(), { max: 3 })
+// Category scores of a record on one line, highest first: red above the
+// threshold, amber near it (≥ 80 %); the first `max` (1) as chips, the rest
+// behind "+N". The exact score / threshold is in each chip's tooltip.
+const props = withDefaults(defineProps<{ trace?: Trace | null; max?: number }>(), { max: 1 })
 const t = useModHost().t
 
 const TONE: Record<ScoreLevel, StatusTone> = { over: 'danger', near: 'warning', low: 'neutral' }
 
 const chips = computed(() =>
-  traceScores(props.trace)
-    .slice(0, props.max)
-    .map((s) => {
-      const level = scoreLevel(s)
-      const threshold = s.threshold ? ` / ${score(s.threshold)}` : ''
-      const state = level === 'low' ? '' : ` · ${t(`scoreLevel.${level}`)}`
-      return { key: s.category, level, label: categoryLabel(s.category, s.label), title: `${s.category}: ${score(s.score)}${threshold}${state}`, value: score(s.score) }
-    })
+  traceScores(props.trace).map((s) => {
+    const level = scoreLevel(s)
+    const threshold = s.threshold ? ` / ${score(s.threshold)}` : ''
+    const state = level === 'low' ? '' : ` · ${t(`scoreLevel.${level}`)}`
+    return { key: s.category, tone: TONE[level], label: `${categoryLabel(s.category, s.label)} ${score(s.score)}`, title: `${s.category}: ${score(s.score)}${threshold}${state}` }
+  })
 )
 </script>
 
 <template>
-  <span v-if="chips.length" class="mod-chips">
-    <SChip v-for="c in chips" :key="c.key" :tone="TONE[c.level]" size="xs" :title="c.title">{{ c.label }} {{ c.value }}</SChip>
-  </span>
+  <SChipList v-if="chips.length" :items="chips" :max="max" />
   <SHint v-else inline>—</SHint>
 </template>
