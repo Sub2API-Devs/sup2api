@@ -227,6 +227,8 @@ export interface KeyStatus extends Key {
 /** A strategy step that moved a weight (WeightEvent detail.steps), in the order they ran. */
 export interface WeightStep {
   strategy: string
+  /** The weight action's direction: a clamp to the floor or the base can move the weight against it. */
+  type: Exclude<ActionType, 'affinity_clear'>
   mode: WeightMode
   value: number
   from: number

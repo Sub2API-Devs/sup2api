@@ -136,6 +136,10 @@ describe('fastClimb', () => {
     expect(fastClimb(l)).toEqual({ name: 'up', seconds: 10 })
     l.strategies[1] = climb('up', 'missing')
     expect(fastClimb(l)).toBeNull()
+    l.strategies[1] = climb('up', null) // refused by the plugin: never fires
+    expect(fastClimb(l)).toBeNull()
+    l.strategies[1] = climb('up', { any: [] })
+    expect(fastClimb(l)).toBeNull()
   })
 
   it('stays quiet for a layer that is off, does not degrade or has its numbers left empty', () => {

@@ -121,7 +121,8 @@ const zh = {
     zero: '权重降到 0',
     window: '窗口 {total} 次，失败 {fail}',
     step: '{strategy}：{action}',
-    configVersion: '配置 v{n}',
+    configVersion: '配置第 {n} 版',
+    factoryConfig: '出厂配置',
     nothingReset: '没有需要重置的记录',
     keysAtBase: '{n} 个在基准上的键',
     allModels: '全部模型'
@@ -215,6 +216,8 @@ const zh = {
     discardConfirm: '放弃未保存的修改并重新加载配置？',
     saved: '已保存（第 {n} 版）',
     conflict: '配置已被他人修改，请刷新后重试',
+    conflictDialog: '配置已被他人修改，请关闭弹窗后点「刷新」重新加载',
+    saving: '正在保存，请稍候',
     leaveConfirm: '配置有未保存的修改，离开后会丢失。仍要离开吗？',
     leave: '放弃修改并离开'
   },
@@ -357,7 +360,8 @@ const en: typeof zh = {
     zero: 'weight dropped to 0',
     window: 'window: {total} attempts, {fail} failed',
     step: '{strategy}: {action}',
-    configVersion: 'config v{n}',
+    configVersion: 'config version {n}',
+    factoryConfig: 'factory config',
     nothingReset: 'nothing to reset',
     keysAtBase: '{n} keys at their base',
     allModels: 'every model'
@@ -460,6 +464,8 @@ const en: typeof zh = {
     discardConfirm: 'Drop the unsaved changes and reload the configuration?',
     saved: 'Saved (version {n})',
     conflict: 'Someone changed the configuration meanwhile; reload and try again',
+    conflictDialog: 'Someone changed the configuration meanwhile; close this dialog and click Refresh to reload it',
+    saving: 'Saving, please wait',
     leaveConfirm: 'The configuration has unsaved changes, which are lost if you leave. Leave anyway?',
     leave: 'Discard and leave'
   },

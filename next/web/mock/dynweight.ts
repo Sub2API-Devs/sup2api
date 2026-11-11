@@ -211,7 +211,11 @@ const events: any[] = keys
     // 0.5.6: the strategy steps that moved the weight and the configuration version they ran on.
     detail: {
       window: { total: 40, fail: 14 },
-      steps: [{ strategy: k.hits?.[0] ?? '错误率过高', mode: 'current_percent', value: 30, from: k.base, to: k.effective }],
+      steps: [
+        k.state === 'climbing'
+          ? { strategy: '自动回升', type: 'weight_climb', mode: 'base_percent', value: 10, from: k.effective - k.base * 0.1, to: k.effective }
+          : { strategy: k.hits?.[0] ?? '错误率过高', type: 'weight_degrade', mode: 'current_percent', value: 30, from: k.base, to: k.effective }
+      ],
       config_version: version
     }
   }))

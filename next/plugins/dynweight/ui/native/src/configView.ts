@@ -167,17 +167,18 @@ export function changes(draft: Draft, saved: Draft): Changes {
 
 // ---- climbing back too soon
 
-/** A climb that can fire again sooner than this (seconds) undoes a degrade before it has had an effect. */
-export const FAST_CLIMB_SECONDS = 60
+/** A climb that can repeat sooner than this (seconds) may undo a degrade before it has had an effect. */
+const FAST_CLIMB_SECONDS = 60
 
 /**
  * The fewest windows before a trigger can fire: its rule's hit_periods; the
  * least of an `any`, the most of an `all` (every rule must have hit). A
- * missing or disabled rule, or one whose hits are left empty, never fires
- * here (Infinity); no trigger fires every window.
+ * trigger the plugin refuses (none, an empty combination, a missing or
+ * disabled rule) or a rule whose hits are left empty never fires here
+ * (Infinity).
  */
 function triggerHits(w: When | null | undefined, hits: Map<string, number | null>): number {
-  if (w === null || w === undefined || w === '') return 1
+  if (!w) return Infinity
   if (typeof w === 'string') return hits.get(w) ?? Infinity
   const all = 'all' in w
   const each = (all ? w.all : w.any).map(m => triggerHits(m, hits))
@@ -186,11 +187,12 @@ function triggerHits(w: When | null | undefined, hits: Map<string, number | null
 }
 
 /**
- * The enabled climb item of an enabled, degrading layer that can raise a
- * weight again the soonest, when that is under FAST_CLIMB_SECONDS: a
- * degrade then barely holds. An item fires again no sooner than its trigger
- * hits again (hit_periods windows) and its cooldown has passed. null when
- * none is that fast (or a number it needs is left empty).
+ * The enabled climb item of an enabled, degrading layer that can repeat the
+ * soonest, when that is under FAST_CLIMB_SECONDS: its climbs may undo a
+ * degrade soon after. A heuristic: `seconds` is a lower bound of how often
+ * the item itself can fire (its trigger's hit_periods windows, at least its
+ * cooldown), not of how soon a given degrade is undone. null when none is
+ * that fast (or a number it needs is left empty).
  */
 export function fastClimb(l: Layer): { name: string; seconds: number } | null {
   const on = l.strategies.filter(s => s.enabled !== false)

@@ -169,38 +169,50 @@ export const copyNamer = (t: Translate) => (name: string, n: number) => t('item.
 
 // ---- weight events
 
-/** A step of a weight event as its item says it: "错误率过高：权重降低 20%（按当前）". Its direction is where it moved the weight. */
-export function describeStep(s: WeightStep, t: Translate): string {
-  const type = s.to > s.from ? 'weight_climb' : 'weight_degrade'
-  return t('events.step', { strategy: s.strategy, action: describeAction({ type, mode: s.mode, value: s.value }, t) })
+/** A step of a weight event as its item says it: "错误率过高：权重降低 20%（按当前）". */
+function describeStep(s: WeightStep, t: Translate): string {
+  return t('events.step', { strategy: s.strategy, action: describeAction({ type: s.type, mode: s.mode, value: s.value }, t) })
 }
 
-/** The parts of an event's detail before the config version: the reason, the strategy's clearing, or the window counts and steps. */
+/** "配置第 10 版", "出厂配置" for version 0, '' for an event without one. */
+function configVersion(v: number | undefined, t: Translate): string {
+  if (typeof v !== 'number') return ''
+  return v > 0 ? t('events.configVersion', { n: v }) : t('events.factoryConfig')
+}
+
+/**
+ * The parts of an event's detail, what ran first: the reason, the strategy's
+ * clearing, or the steps; then the config version (where the event has
+ * one) and the window counts.
+ */
 function eventParts(e: Pick<WeightEvent, 'kind' | 'reason' | 'detail'>, t: Translate): string[] {
   const d = e.detail ?? {}
+  const version = configVersion(d.config_version, t)
   if (e.reason) {
     const extra = d.matched === 0 ? t('events.nothingReset') : d.keys ? t('events.keysAtBase', { n: Number(d.keys) }) : ''
-    return [t(`reason.${e.reason}`), extra]
+    return [t(`reason.${e.reason}`), extra, version]
   }
   if (e.kind === 'affinity_cleared') {
     // A weight dropping to 0 clears without a strategy.
     const strategy = d.strategy ? String(d.strategy) : d.zero ? t('events.zero') : ''
     return [
-      d.error ? t('events.clearFailed', { strategy, error: String(d.error) }) : t('events.cleared', { strategy, n: Number(d.cleared ?? 0) })
+      d.error
+        ? t('events.clearFailed', { strategy, error: String(d.error) })
+        : t('events.cleared', { strategy, n: Number(d.cleared ?? 0) }),
+      version
     ]
   }
   const w = d.window
   return [
-    w ? t('events.window', { total: w.total ?? 0, fail: w.fail ?? 0 }) : '',
-    ...(Array.isArray(d.steps) ? d.steps.map(s => describeStep(s, t)) : [])
+    ...(Array.isArray(d.steps) ? d.steps.map(s => describeStep(s, t)) : []),
+    version,
+    w ? t('events.window', { total: w.total ?? 0, fail: w.fail ?? 0 }) : ''
   ]
 }
 
 /**
- * One-line detail of a weight event: "窗口 3 次，失败 1 · 错误率过高：权重降低
- * 20%（按当前） · 配置 v10". Older events carry neither steps nor a version.
+ * One-line detail of a weight event: "错误率过高：权重降低 20%（按当前） · 配置第
+ * 10 版 · 窗口 3 次，失败 1". Older events carry neither steps nor a version.
  */
-export function describeEvent(e: Pick<WeightEvent, 'kind' | 'reason' | 'detail'>, t: Translate): string {
-  const v = e.detail?.config_version
-  return [...eventParts(e, t), typeof v === 'number' ? t('events.configVersion', { n: v }) : ''].filter(Boolean).join(' · ')
-}
+export const describeEvent = (e: Pick<WeightEvent, 'kind' | 'reason' | 'detail'>, t: Translate): string =>
+  eventParts(e, t).filter(Boolean).join(' · ')

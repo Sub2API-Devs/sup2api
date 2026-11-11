@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SButton, SDropdown, SIcon, SRowAction, SSwitch, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
 import ItemEditorModal from './ItemEditorModal.vue'
 import { copyNamer, describeDraft, describeReason, describeStored, nameList } from './describe'
@@ -26,10 +26,10 @@ import { clone, useDwHost, type Layer, type Rule, type Strategy } from './host'
 // delete. Every change is written back through writeItems (a rule nobody
 // references any more leaves with its item, and a toast names it) and
 // emitted as both lists; the page saves them. The editor opens on a row, or
-// on a new item from "Add item". With `save` the editor saves its lists
-// through it instead (`others`: the page holds other unsaved edits, saved
-// along); without it (inside the group dialog) it hands them back like a
-// row action.
+// on a new item from "Add item", and `editing` says while it is open. With
+// `save` the editor saves its lists through it instead (`others`: the page
+// holds other unsaved edits, saved along); without it (inside the group
+// dialog) it hands them back like a row action.
 type Lists = { rules: Rule[]; strategies: Strategy[] }
 const props = defineProps<{
   rules: Rule[]
@@ -39,7 +39,7 @@ const props = defineProps<{
   save?: (lists: Lists) => Promise<SaveOutcome>
   others?: boolean
 }>()
-const emit = defineEmits<{ (e: 'change', value: Lists): void }>()
+const emit = defineEmits<{ (e: 'change', value: Lists): void; (e: 'editing', open: boolean): void }>()
 const host = useDwHost()
 const t = host.t
 
@@ -81,12 +81,18 @@ function emitWritten(written: Written) {
   emit('change', { rules: written.rules, strategies: written.strategies })
 }
 
-/** Saves the editor's lists through `save`. */
-async function saveWritten(written: Written): Promise<SaveOutcome> {
-  const r = await props.save!({ rules: written.rules, strategies: written.strategies })
-  if (r.saved) toastDropped(written)
-  return r
-}
+/** The editor's save: the lists through `save`, naming the rules that left once saved. */
+const saveWritten = computed(() => {
+  const save = props.save
+  return (
+    save &&
+    (async (written: Written): Promise<SaveOutcome> => {
+      const r = await save({ rules: written.rules, strategies: written.strategies })
+      if (r.saved) toastDropped(written)
+      return r
+    })
+  )
+})
 const commit = (next: ItemEntry[]) => emitWritten(writeItems(next, props.rules))
 
 const copyName = copyNamer(t)
@@ -117,6 +123,10 @@ async function restore() {
 
 const editor = ref({ open: false, index: 0, append: false })
 const edit = (index: number, append = false) => (editor.value = { open: true, index, append })
+watch(
+  () => editor.value.open,
+  open => emit('editing', open)
+)
 </script>
 
 <template>
@@ -199,7 +209,7 @@ const edit = (index: number, append = false) => (editor.value = { open: true, in
       :index="editor.index"
       :append="editor.append"
       :readonly="readonly"
-      :save="save && saveWritten"
+      :save="saveWritten"
       :others="others"
       @apply="emitWritten"
     />

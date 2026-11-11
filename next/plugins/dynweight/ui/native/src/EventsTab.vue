@@ -86,7 +86,10 @@ const showsWeight = (e: WeightEvent) => e.kind.startsWith('weight_') || (e.kind 
             <SBadge v-for="r in row.rules ?? []" :key="r" size="xs">{{ r }}</SBadge>
           </div>
         </template>
-        <template #cell-detail="{ row }">{{ describeEvent(row, t) }}</template>
+        <!-- The cell is cut at its width: the whole line is its title. -->
+        <template #cell-detail="{ row }"
+          ><span :title="describeEvent(row, t)">{{ describeEvent(row, t) }}</span></template
+        >
       </STable>
       <div class="dw-pager">
         <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />

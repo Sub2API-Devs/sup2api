@@ -45,7 +45,7 @@ const zh = {
     close: '关闭',
     invalid: '{where}有错误，请先修正',
     itemInvalid: '这一项有错误，请先修正',
-    jsonInvalid: 'JSON 有错误，修正后才能切回可视化或继续',
+    jsonInvalid: 'JSON 有错误，修正后才能切回可视化编辑，也才能保存或应用',
     openJson: '在 JSON 中编辑',
     readonlyHint: '这一项的触发条件无法在可视化中表示，以下是它的内容；开关、排序、复制和删除仍可在这里操作。'
   },
@@ -188,7 +188,7 @@ const en: typeof zh = {
     close: 'Close',
     invalid: 'Fix the errors in {where} first',
     itemInvalid: 'This item has errors; fix them first',
-    jsonInvalid: 'The JSON has errors; fix them to go back to the visual editor or go on',
+    jsonInvalid: 'The JSON has errors; fix them to go back to the visual editor, or to save or apply',
     openJson: 'Edit in JSON',
     readonlyHint:
       'The visual editor cannot show this trigger; here is what the item does. Its switch, order, copy and delete still work here.'

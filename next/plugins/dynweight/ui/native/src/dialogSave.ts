@@ -8,18 +8,18 @@ import { ref } from 'vue'
 export interface SaveOutcome {
   saved: boolean
   error?: string
-  /** Someone else saved meanwhile (409): the page is to be reloaded. */
-  conflict?: boolean
 }
 
 /**
  * A dialog's Save: runs `save`, spinning meanwhile, and keeps its error for
- * the dialog to show. Resolves whether it saved, i.e. whether to close.
+ * the dialog to show. Resolves whether it saved, i.e. whether to close; a
+ * Save while one runs does nothing.
  */
 export function useDialogSave() {
   const saving = ref(false)
   const error = ref('')
   async function run(save: () => Promise<SaveOutcome>): Promise<boolean> {
+    if (saving.value) return false
     saving.value = true
     error.value = ''
     try {

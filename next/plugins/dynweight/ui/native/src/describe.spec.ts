@@ -97,31 +97,55 @@ describe('describe', () => {
 })
 
 describe('describeEvent', () => {
+  const step = (
+    strategy: string,
+    type: 'weight_degrade' | 'weight_climb',
+    mode: 'current_percent' | 'base_percent' | 'fixed',
+    value: number,
+    from: number,
+    to: number
+  ) => ({
+    strategy,
+    type,
+    mode,
+    value,
+    from,
+    to
+  })
   const down = {
     kind: 'weight_down',
     reason: '',
     detail: {
       window: { total: 3, fail: 1 },
-      steps: [{ strategy: '错误率过高', mode: 'current_percent' as const, value: 20, from: 100, to: 80 }],
+      steps: [step('错误率过高', 'weight_degrade', 'current_percent', 20, 100, 80)],
       config_version: 10
     }
   }
 
-  it('adds the steps and the config version after the window', () => {
-    expect(describeEvent(down, zh)).toBe('窗口 3 次，失败 1 · 错误率过高：权重降低 20%（按当前） · 配置 v10')
+  it('puts the steps first, then the config version and the window', () => {
+    expect(describeEvent(down, zh)).toBe('错误率过高：权重降低 20%（按当前） · 配置第 10 版 · 窗口 3 次，失败 1')
     const up = {
       kind: 'weight_up_start',
       reason: '',
       detail: {
-        steps: [
-          { strategy: '自动回升', mode: 'base_percent' as const, value: 10, from: 50, to: 60 },
-          { strategy: '惩罚', mode: 'fixed' as const, value: 5, from: 60, to: 55 }
-        ],
+        steps: [step('自动回升', 'weight_climb', 'base_percent', 10, 50, 60), step('惩罚', 'weight_degrade', 'fixed', 5, 60, 55)],
         config_version: 0
       }
     }
-    expect(describeEvent(up, zh)).toBe('自动回升：权重抬高 10%（按基准） · 惩罚：权重降低 5 · 配置 v0')
-    expect(describeEvent(down, translator('en'))).toBe('window: 3 attempts, 1 failed · 错误率过高: weight −20% (of current) · config v10')
+    expect(describeEvent(up, zh)).toBe('自动回升：权重抬高 10%（按基准） · 惩罚：权重降低 5 · 出厂配置')
+    expect(describeEvent(down, translator('en'))).toBe(
+      '错误率过高: weight −20% (of current) · config version 10 · window: 3 attempts, 1 failed'
+    )
+  })
+
+  it('names the action of a step, not where a clamp took the weight', () => {
+    // A degrade below a floor that was raised meanwhile: the weight went up.
+    const clamped = {
+      kind: 'weight_down',
+      reason: '',
+      detail: { steps: [step('错误率过高', 'weight_degrade', 'current_percent', 20, 1, 2)] }
+    }
+    expect(describeEvent(clamped, zh)).toBe('错误率过高：权重降低 20%（按当前）')
   })
 
   it('reads older events as before', () => {
@@ -135,7 +159,7 @@ describe('describeEvent', () => {
 
   it('gives a rules-change reset its config version', () => {
     expect(describeEvent({ kind: 'reset', reason: 'rules_change', detail: { keys: 4, config_version: 11 } }, zh)).toBe(
-      '规则已修改，历史清空 · 4 个在基准上的键 · 配置 v11'
+      '规则已修改，历史清空 · 4 个在基准上的键 · 配置第 11 版'
     )
   })
 })

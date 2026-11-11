@@ -42,8 +42,9 @@ import {
 // actions of the page change the draft, which the bar at the bottom saves;
 // the dialogs (global items, a group, an account) save their edit at once,
 // together with whatever else the draft holds. Leaving the page with unsaved
-// edits asks first. `openAccount` (?override_account= of the page) opens the
-// override dialog of that account once the config is loaded.
+// edits, or with a dialog open, asks first. `openAccount` (?override_account=
+// of the page) opens the override dialog of that account once the config is
+// loaded.
 const props = defineProps<{ openAccount?: string | null }>()
 const emit = defineEmits<{ (e: 'update:openAccount', v: null): void }>()
 const host = useDwHost()
@@ -64,7 +65,7 @@ const warnings = ref<string[]>([])
 function setDraft(body: ConfigBody) {
   const c: Draft = { ...body.config, groups: body.config.groups ?? {}, accounts: body.config.accounts ?? {} }
   draft.value = c
-  saved.value = JSON.parse(JSON.stringify(c))
+  saved.value = clone(c)
   version.value = body.version
   updatedAt.value = body.updated_at ?? 0
   void loadAccountGroups(Object.keys(c.accounts))
@@ -93,7 +94,6 @@ function problemsOf(c: Draft): string[] {
 const problems = computed(() => (draft.value ? problemsOf(draft.value) : []))
 const invalid = computed(() => problems.value.length > 0)
 const unsaved = computed(() => dirty.value || invalid.value)
-useLeaveGuard(unsaved)
 
 async function reload() {
   loading.value = true
@@ -157,6 +157,11 @@ async function loadAccountGroups(ids: string[]) {
 
 const groupTarget = ref<string | null>(null)
 const accountTarget = ref<string | null>(null)
+const itemsEditing = ref(false) // the global items editor is open
+
+// An open dialog holds edits of its own, not in the draft yet.
+const editing = computed(() => manage.value && (groupTarget.value !== null || accountTarget.value !== null || itemsEditing.value))
+useLeaveGuard(computed(() => unsaved.value || editing.value))
 
 const saveGroup = (id: string, layer: Layer) =>
   commit(c => {
@@ -203,14 +208,17 @@ const saving = ref(false)
  * bar's). Saving validates first: an incomplete draft is not sent, and its
  * warnings are confirmed. The edit goes to a copy, which becomes the draft
  * only once saved: a failed or declined save leaves the page as it was,
- * never half applied.
+ * never half applied. A dialog shows the error it gets back; the bar's
+ * failure is toasted and, unless a conflict, shown over the page.
  */
 async function commit(edit?: (c: Draft) => void): Promise<SaveOutcome> {
+  if (saving.value) return { saved: false, error: t('config.saving') }
   if (!draft.value) return { saved: false }
   const c = clone(draft.value)
   edit?.(c)
+  // Only a dialog's Save gets here incomplete (the bar's is disabled then), and its own fields are complete: the rest of the page is not.
   const incomplete = problemsOf(c)
-  if (incomplete.length) return { saved: false, error: t('cfg.save.invalid', { where: incomplete.join(t('cfg.sep')) }) }
+  if (incomplete.length) return { saved: false, error: t('cfg.save.invalidDialog', { where: incomplete.join(t('cfg.sep')) }) }
   saving.value = true
   try {
     const checked = await validateConfig({ config: c, version: version.value })
@@ -225,13 +233,17 @@ async function commit(edit?: (c: Draft) => void): Promise<SaveOutcome> {
     const body = await saveConfig({ config: c, version: version.value })
     setDraft(body)
     warnings.value = body.warnings ?? []
+    error.value = ''
     host.toast(t('config.saved', { n: body.version }), 'success')
     return { saved: true }
   } catch (e) {
     const conflict = isApiError(e) && e.status === 409
+    if (edit) return { saved: false, error: conflict ? t('config.conflictDialog') : errorMessage(e, t('actionFailed')) }
     const message = conflict ? t('config.conflict') : errorMessage(e, t('actionFailed'))
+    // The plugin's refusal says what to fix: it stays on the page, over the config.
+    if (!conflict) error.value = message
     host.toast(message, 'error')
-    return { saved: false, error: message, conflict }
+    return { saved: false }
   } finally {
     saving.value = false
   }
@@ -239,9 +251,7 @@ async function commit(edit?: (c: Draft) => void): Promise<SaveOutcome> {
 
 async function save() {
   error.value = ''
-  const r = await commit()
-  // The plugin's refusal says what to fix: it stays on the page, over the config.
-  if (r.error && !r.conflict) error.value = r.error
+  await commit()
 }
 </script>
 
@@ -263,6 +273,7 @@ async function save() {
             :readonly="!manage"
             :save="saveItems"
             :others="unsaved"
+            @editing="itemsEditing = $event"
             @change="({ rules, strategies }) => draft && Object.assign(draft, { rules, strategies })"
           />
         </div>
