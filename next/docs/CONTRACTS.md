@@ -7691,7 +7691,7 @@ kind: users | groups | api-keys | accounts | models | proxies
 
 - `HOST_UI_VERSION` 3.11.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.11.0（`ui-contract.spec.ts` 锁定）。3.11 只加不改：`SSelect` 的可搜索形态新增 `icon`、`clearable`、`tinted`、`remote`（+ `search` 事件）、`loading`、`selected`、`note`、`footer`，选项新增 `hint`、`description`、`tag`、`muted`、`accent`（`web/packages/ui/README.md` 的 3.11 一节）；`SDateRange` 的 `time` 模式在任何宽度都完整显示起止时间到秒，放不下时起止各占一行；`HOST_COMPONENT_NAMES` 新增 `EntityPicker`。
 - `EntityPicker`（`web/src/components/EntityPicker.vue`，用法和行为见 `COMMON-CONTROLS.md` §6）是这条查找接口在控制台的唯一入口：`v-model:id` 加可选的 `v-model:text`（“名称包含”），选中即发 `change`；没有查找权限或接口返回 403 / 404 时自己退化成文本框。页面只描述“这是哪种实体、id 和名称各写到哪个参数”，不再各写一套“ID 或名称”的拆分。把 id 显示成名称用 `useEntityNames`（同一 kind 的反查合并成一次 `ids=` 请求，本次登录内缓存）。
-- 接入的页面：使用记录三页（模型、用户、API Key、分组、账号；选中即查询，手输的文本仍等回车或“搜索”；换用户后 API Key 不属于新用户就清掉；链接参数新增 `model`）、账号列表（分组、模型、创建人）、代理列表（创建人）、余额流水和调整余额弹窗（用户）、ccgateway 请求日志（模型）。
+- 接入的页面：使用记录三页（模型、用户、API Key、分组、账号；选中即查询，手输的文本仍等回车或“搜索”；换用户后 API Key 不属于新用户就清掉；链接参数新增 `model`、`group_id`、`account_id`（后者只对能读账号的管理员），链接里不是正整数的 id 直接丢弃）、账号列表（分组、模型、创建人）、代理列表（创建人）、余额流水和调整余额弹窗（用户）、ccgateway 请求日志（模型）。
 - 原生插件用到 3.11 任一项时声明 `hostUICompat: "^3.11"`，`hostCompat` 要求核心 `>=0.1.279`（0.1.278 是最后一个带 UI 3.10 的核心；`sdk/manifest/check/ui.go` 的 `uiFloors`）。moderation 0.9.1、dynweight 0.5.7 是头两个使用者。
 - 回滚顺序：两个插件的 `hostCompat` 都抬到了 `>=0.1.279`，核心退回 0.1.278 之前先把 moderation 退回 0.9.0、dynweight 退回 0.5.6。
 

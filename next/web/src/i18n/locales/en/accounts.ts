@@ -108,7 +108,6 @@ export default {
   proxy: 'Proxy',
   proxyRequired: 'This account type needs a proxy',
   createdBy: 'Created by',
-  creator: 'Creator',
   proxyPickExisting: 'Pick existing',
   proxyPasteUrl: 'Paste proxy URL',
   proxyUrlProbeHint: 'Without a scheme (host:port:user:pass and similar), click Test: socks5, http and https are tried in turn',

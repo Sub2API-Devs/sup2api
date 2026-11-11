@@ -72,11 +72,17 @@ function pickLogType(value: unknown) {
   emit('update:logType', String(value))
   apply()
 }
-/** Clears the draft's API key unless it holds for the user just picked; a user or key changed while that was looked up is left alone. */
-async function dropForeignKey() {
+/**
+ * Settles the draft's API key for the user just picked: cleared unless it
+ * holds for them. False when the user or the key changed while that was
+ * looked up: they are left alone, for the pick that changed them to apply.
+ */
+async function settleKey(): Promise<boolean> {
   const asked = { ...draft }
-  if (await keyHoldsForUser(asked)) return
-  if (['user_id', 'api_key_id'].every(key => draft[key] === asked[key])) Object.assign(draft, entityPatch('api_key', {}))
+  const holds = await keyHoldsForUser(asked)
+  if (['user_id', 'api_key_id'].some(key => draft[key] !== asked[key])) return false
+  if (!holds) Object.assign(draft, entityPatch('api_key', {}))
+  return true
 }
 /**
  * Takes a pick into the draft and applies the search at once, as the log type
@@ -85,7 +91,7 @@ async function dropForeignKey() {
  */
 async function pick(patch: Record<string, string>, held = false) {
   Object.assign(draft, patch)
-  if ('user_id' in patch) await dropForeignKey()
+  if ('user_id' in patch && !(await settleKey())) return
   if (!held) apply()
 }
 </script>

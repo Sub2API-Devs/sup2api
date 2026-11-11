@@ -53,7 +53,7 @@ const showAccount = computed(() => props.admin && auth.has('account:read'))
 const range = ref<RangeKey>('today')
 const baseFilters = baseUsageFilters('today', true)
 // A link from the dashboard opens the page already filtered.
-const fromQuery = queryUsageFilters(route.query, props.admin)
+const fromQuery = queryUsageFilters(route.query, props.admin, showAccount.value)
 if (fromQuery.from || fromQuery.to) range.value = 'custom'
 
 // The log type.

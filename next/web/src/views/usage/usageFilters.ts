@@ -2,7 +2,7 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { logRangeBounds, rangeBounds, type RangeKey } from '@sub2api/ui'
 import type { LocationQuery } from 'vue-router'
-import type { EntityKind } from '@/components/entity/entities'
+import { ENTITIES, isEntityId, type EntityKind } from '@/components/entity/entities'
 import { lookupEntities, useEntityNames } from '@/components/entity/lookup'
 
 /**
@@ -28,15 +28,28 @@ export const CONVERSION_FILTERS = ['native', 'converted', 'good', 'fair', 'disco
 export const conversionFilterLabel = (v: string) =>
   v === 'converted' || v === 'lossy' ? `usage.conversion.filters.${v}` : `accounts.conversion.grades.${v}`
 
-const QUERY_FILTERS = ['user_id', 'group_name', 'model', 'model_contains', 'api_key_id', 'from', 'to'] as const
+const QUERY_FILTERS = ['user_id', 'group_id', 'group_name', 'model', 'model_contains', 'api_key_id', 'account_id', 'from', 'to'] as const
+/** Link filters of an operator only: a user cannot preset another user. */
+const OPERATOR_QUERY_FILTERS: readonly string[] = ['user_id', 'group_name', 'account_id']
 
-/** The filters a link presets (?user_id=…&from=…&to=…); a user cannot preset another user. */
-export function queryUsageFilters(query: LocationQuery, admin: boolean): Record<string, string> {
+/**
+ * The filters a link presets (?user_id=…&from=…&to=…). `accounts`: the
+ * operator may read accounts (the API refuses the account filter to any
+ * other). An id that is not one (?user_id=abc) is dropped rather than sent to
+ * the list and the lookup.
+ */
+export function queryUsageFilters(query: LocationQuery, admin: boolean, accounts = false): Record<string, string> {
   const out: Record<string, string> = {}
   for (const k of QUERY_FILTERS) {
     const v = query[k]
-    if (typeof v === 'string' && v !== '' && (admin || (k !== 'user_id' && k !== 'group_name'))) out[k] = v
+    if (typeof v !== 'string' || v === '') continue
+    if (OPERATOR_QUERY_FILTERS.includes(k) && !admin) continue
+    if (k === 'account_id' && !accounts) continue
+    if (NUMERIC_ID_PARAMS.has(k) && !isEntityId(v)) continue
+    out[k] = v
   }
+  // The model picker shows one of the two: the exact model leaves no search beside it.
+  if (out.model) delete out.model_contains
   return out
 }
 
@@ -60,6 +73,8 @@ export const ENTITY_FIELDS: Record<string, EntityField> = {
 }
 /** The entity an id parameter names (group_id: a group), for showing its value by name. */
 const ID_PARAM_KINDS: Record<string, EntityKind> = Object.fromEntries(Object.values(ENTITY_FIELDS).map(e => [e.id, e.kind]))
+/** The id parameters whose value is a number (all but the model's, which is its name). */
+const NUMERIC_ID_PARAMS = new Set(Object.keys(ID_PARAM_KINDS).filter(param => ENTITIES[ID_PARAM_KINDS[param]].numeric))
 
 /** The query parameters a search field sets. */
 export function fieldParams(field: string): string[] {

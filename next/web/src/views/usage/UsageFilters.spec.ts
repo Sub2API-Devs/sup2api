@@ -128,6 +128,35 @@ describe('shared usage search', () => {
     expect(applied(w)).toMatchObject({ user_id: '', api_key_id: '104' })
   })
 
+  it('leaves the search to the latest pick while an earlier user\'s API key is still looked up', async () => {
+    const answers: Array<(theirs: boolean) => void> = []
+    get.mockImplementation(async (path, query) => {
+      const asked = query as Record<string, unknown>
+      if (path !== '/lookup/api-keys' || !asked.user_id) return lookup(String(path), asked)
+      return new Promise(resolve => answers.push(theirs => resolve({ items: theirs ? [{ id: Number(asked.ids), name: 'laptop' }] : [], more: false })))
+    })
+    const w = mount(UsageFilters, { props: { modelValue: { api_key_id: '104' }, admin: true }, global })
+    picker(w, 'user').vm.$emit('change', { id: '12', text: '' })
+    picker(w, 'user').vm.$emit('change', { id: '7', text: '' })
+    await flushPromises()
+    // the key is not the first user's, who is no longer the pick: nothing is cleared, nothing searched yet
+    answers[0](false)
+    await flushPromises()
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+    answers[1](true)
+    await flushPromises()
+    expect(w.emitted('update:modelValue')).toHaveLength(1)
+    expect(applied(w)).toMatchObject({ user_id: '7', api_key_id: '104' })
+    // a key picked while the next user's is looked up applies at once and is not the one the late answer speaks of
+    picker(w, 'user').vm.$emit('change', { id: '12', text: '' })
+    picker(w, 'api_key').vm.$emit('change', { id: '105', text: '' })
+    await flushPromises()
+    expect(applied(w)).toMatchObject({ user_id: '12', api_key_id: '105' })
+    answers[2](false)
+    await flushPromises()
+    expect(w.emitted('update:modelValue')).toHaveLength(2)
+  })
+
   it('applies typed text on Search only and a pick at once with what is typed, and resets without changing time bounds', async () => {
     const w = mount(UsageFilters, {
       props: { modelValue: { from: '2026-10-01T00:00:00Z', client_request_id: 'request-one' }, admin: true, logType: 'errors' },

@@ -34,7 +34,7 @@ const auth = useAuthStore()
 
 const showAccount = computed(() => props.admin && auth.has('account:read'))
 
-const fromQuery = queryUsageFilters(route.query, props.admin)
+const fromQuery = queryUsageFilters(route.query, props.admin, showAccount.value)
 const range = ref<RangeKey>(fromQuery.from || fromQuery.to ? 'custom' : props.defaultRange)
 const filters = reactive<Record<string, string>>({ ...baseUsageFilters(props.defaultRange), ...fromQuery })
 

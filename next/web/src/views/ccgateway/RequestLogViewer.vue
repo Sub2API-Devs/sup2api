@@ -267,7 +267,7 @@ const yesNo = (v: boolean | null) => (v === null ? '—' : v ? t('ccgateway.logV
         <SSelect v-model="range" :options="rangeOptions" size="sm" class="w-32" :aria-label="t('ccgateway.logViewer.rangeLabel')" />
         <SSegmented v-model="status" :options="statusOptions" size="sm" :aria-label="t('ccgateway.logViewer.cols.status')" />
         <SSegmented v-model="level" :options="levelOptions" size="sm" :aria-label="t('ccgateway.logViewer.cols.level')" />
-        <EntityPicker v-model:id="model" kind="model" size="sm" class="w-52" :extra="listedModels" data-testid="request-log-filter-model" />
+        <EntityPicker v-model:id="model" kind="model" size="sm" class="w-full sm:w-52" :extra="listedModels" data-testid="request-log-filter-model" />
         <SInput v-model="requestFilter" size="sm" mono class="w-52" :placeholder="t('ccgateway.logViewer.cols.requestId')" :aria-label="t('ccgateway.logViewer.cols.requestId')" clearable data-testid="request-log-filter-id" />
         <SButton size="sm" icon="refresh" :loading="loading" @click="load()">{{ t('common.refresh') }}</SButton>
       </div>

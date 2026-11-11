@@ -26,8 +26,21 @@ describe('entity search fields', () => {
     expect(entityPatch(field, picked)).toEqual(patch)
   })
 
-  it('a link presets the exact model as well as the model search', () => {
-    expect(queryUsageFilters({ model: 'gpt-4o', model_contains: 'gpt', account_id: '9' }, true)).toEqual({ model: 'gpt-4o', model_contains: 'gpt' })
+  it('a link presets the exact model or the model search, the exact one alone when it brings both', () => {
+    expect(queryUsageFilters({ model: 'gpt-4o', account_name: 'main' }, true)).toEqual({ model: 'gpt-4o' })
+    expect(queryUsageFilters({ model_contains: 'gpt' }, false)).toEqual({ model_contains: 'gpt' })
+    expect(queryUsageFilters({ model: 'gpt-4o', model_contains: 'opus' }, true)).toEqual({ model: 'gpt-4o' })
+  })
+
+  it('a link presets the entities by id: the group for anyone, the user for an operator, the account for one who reads accounts', () => {
+    const link = { user_id: '3', group_id: '7', api_key_id: '104', account_id: '25' }
+    expect(queryUsageFilters(link, true, true)).toEqual(link)
+    expect(queryUsageFilters(link, true)).toEqual({ user_id: '3', group_id: '7', api_key_id: '104' })
+    expect(queryUsageFilters(link, false)).toEqual({ group_id: '7', api_key_id: '104' })
+  })
+
+  it.each(['abc', '0', '007', '-1', '1.5', ' 7'])('a link id that is not one (%o) is dropped; a model, being a name, is kept', id => {
+    expect(queryUsageFilters({ user_id: id, group_id: id, api_key_id: id, account_id: id, model: id }, true, true)).toEqual({ model: id })
   })
 })
 

@@ -107,7 +107,6 @@ export default {
   proxy: '代理',
   proxyRequired: '此账号类型必须配置代理',
   createdBy: '创建人',
-  creator: '创建人',
   proxyPickExisting: '选择已有',
   proxyPasteUrl: '粘贴代理串',
   proxyUrlProbeHint: '没有协议的写法（主机:端口:用户名:密码 等）请点「测试」，依次尝试 socks5、http、https',

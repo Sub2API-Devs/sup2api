@@ -255,6 +255,38 @@ describe('usage records page', () => {
     expect(lists[0].filters).toMatchObject({ model: 'gpt-4o', from: '2026-10-01T00:00:00.000Z' })
   })
 
+  it('a link picks the group and the account by id: shown in their pickers and chips, cleared by Reset', async () => {
+    query = { group_id: '7', account_id: '25', api_key_id: 'abc' }
+    const w = render(true)
+    await flushPromises()
+    expect(lists[0].filters).toMatchObject({ group_id: '7', account_id: '25' })
+    // not an id: neither listed by nor looked up
+    expect(lists[0].filters.api_key_id).toBeUndefined()
+    const ids = () => Object.fromEntries(w.findAllComponents(EntityPicker).map((p) => [p.props('kind'), p.props('id')]))
+    expect(ids()).toMatchObject({ group: '7', account: '25', api_key: '' })
+    expect(w.get('[data-filter-key="group_id"]').text()).toContain('#7')
+    expect(w.get('[data-filter-key="account_id"]').text()).toContain('#25')
+    await w.get('[data-testid="reset-usage-filters"]').trigger('click')
+    await flushPromises()
+    expect(lists[0].filters).toMatchObject({ group_id: '', account_id: '' })
+    expect(ids()).toMatchObject({ group: '', account: '' })
+  })
+
+  it('a link does not set the account filter for a user, nor for an operator who may not read accounts (the API refuses it)', () => {
+    query = { group_id: '7', account_id: '25' }
+    perms.accountRead = false
+    try {
+      for (const admin of [true, false]) {
+        lists.length = 0
+        render(admin)
+        expect(lists[0].filters).toMatchObject({ group_id: '7' })
+        expect(lists[0].filters.account_id).toBeUndefined()
+      }
+    } finally {
+      perms.accountRead = true
+    }
+  })
+
   it('offers the request types under the search as filter options, leaving the type filter itself out of that query', async () => {
     protocolRows.value = [{ key: 'anthropic.messages' }, { key: '' }, { key: 'openai.chat' }]
     const w = render()

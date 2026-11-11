@@ -646,8 +646,8 @@ function resetFilters() {
     </SPageHeader>
 
     <section v-if="advancedFilters" class="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2" :aria-label="t('accounts.listUi.filters')">
-      <EntityPicker v-model:id="list.filters.model" kind="model" class="w-64" data-testid="model-filter" />
-      <EntityPicker v-if="showOwner" v-model:id="list.filters.created_by" kind="user" class="w-72" data-testid="created-by-filter" :placeholder="t('accounts.creator')" />
+      <EntityPicker v-model:id="list.filters.model" kind="model" class="w-full sm:w-64" data-testid="model-filter" />
+      <EntityPicker v-if="showOwner" v-model:id="list.filters.created_by" kind="user" class="w-full sm:w-72" data-testid="created-by-filter" :placeholder="t('accounts.createdBy')" />
       <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
       <SSwitch v-model="showOrphaned" :label="t('accounts.showOrphaned')" data-testid="show-orphaned" />
     </section>
