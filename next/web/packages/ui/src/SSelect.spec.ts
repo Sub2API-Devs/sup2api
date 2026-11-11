@@ -142,6 +142,20 @@ describe('searchable select with rich options (UI 3.11)', () => {
     expect(document.querySelector('[role="listbox"]')).not.toBeNull()
   })
 
+  it('a clear from the keyboard leaves focus in the field, a clear by pointer where it was', async () => {
+    const w = mount(SSelect, { props: { modelValue: 7, options: people, searchable: true, clearable: true }, attachTo: document.body })
+    const clear = w.get<HTMLButtonElement>('button')
+    // A press does not focus the button (its mousedown is prevented).
+    await clear.trigger('click')
+    expect(document.activeElement).toBe(document.body)
+    // Tab reaches the button; without the value it is gone, so the field takes over.
+    clear.element.focus()
+    await clear.trigger('click')
+    await w.setProps({ modelValue: null })
+    expect(w.emitted('update:modelValue')).toEqual([[null], [null]])
+    expect(document.activeElement).toBe(w.get('input').element)
+  })
+
   it('keeps the bare field and the placeholder row without the framing props', async () => {
     const w = mount(SSelect, { props: { modelValue: 7, options: people, searchable: true, placeholder: 'Any' } })
     expect(w.find('.input-group').exists()).toBe(false)
@@ -182,6 +196,20 @@ describe('searchable select with remote options (UI 3.11)', () => {
     await w.setProps({ options: [], note: undefined, footer: undefined })
     await input.trigger('focus')
     expect(w.get('[role="listbox"]').text()).toBe('Nothing')
+  })
+
+  it('keeps the highlight when the same results are given again, and moves it to the first of other results', async () => {
+    const w = mount(SSelect, { props: { modelValue: null, options: found, searchable: true, remote: true } })
+    const input = w.get('input')
+    const active = () => w.findAll('[role="option"]').findIndex((o) => o.attributes('id') === input.attributes('aria-activedescendant'))
+    await input.trigger('focus')
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    expect(active()).toBe(1)
+    // The caller rebuilt its list (a page refresh): the user's place holds.
+    await w.setProps({ options: found.map((o) => ({ ...o })) })
+    expect(active()).toBe(1)
+    await w.setProps({ options: [{ label: 'claude-new', value: 14 }, ...found] })
+    expect(active()).toBe(0)
   })
 
   // Console specs shallow-mount pages with SSelect unstubbed: its rows must not live in a child component.

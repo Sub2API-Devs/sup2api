@@ -129,7 +129,8 @@ function typedIsId(v: string): boolean {
 const options = computed<SelectOption[]>(() => {
   const q = query.value
   const asId = !!q && typedIsId(q)
-  const hit = asId ? candidates.value.find((item) => String(item.id) === q) : undefined
+  // The page's own candidates are at hand while the search runs: what Enter picks must not depend on when it is pressed.
+  const hit = asId ? (loading.value ? props.extra : candidates.value).find((item) => String(item.id) === q) : undefined
   const bare = asId && !hit
   const first: SelectOption[] = []
   const last: SelectOption[] = []

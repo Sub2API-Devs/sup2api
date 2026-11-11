@@ -33,11 +33,12 @@ describe('useEntityNames', () => {
 
   it('does not ask for an id the lookup cannot hold, which the core would refuse with the whole batch', async () => {
     const { label } = useEntityNames()
-    const chip = computed(() => [label('group', 0), label('group', '007'), label('group', 'abc'), label('group', 3)].join(' / '))
-    expect(chip.value).toBe('#0 / #007 / #abc / #3')
+    const past = '99999999999999999999' // more than an int64 holds
+    const chip = computed(() => [label('group', 0), label('group', '007'), label('group', 'abc'), label('group', past), label('group', 3)].join(' / '))
+    expect(chip.value).toBe(`#0 / #007 / #abc / #${past} / #3`)
     await flushPromises()
     expect(queries()).toEqual([['/lookup/groups', { ids: '3' }]])
-    expect(chip.value).toBe('#0 / #007 / #abc / cc-low #3')
+    expect(chip.value).toBe(`#0 / #007 / #abc / #${past} / cc-low #3`)
   })
 
   it('a model is its name, without a lookup', () => {
@@ -91,6 +92,23 @@ describe('useEntityNames', () => {
     expect(name('group', 3)).toBe('cc-low')
     session.clear()
     expect(name('group', 3)).toBeUndefined()
+  })
+
+  it('learns nothing from an answer that arrives after its session ended', async () => {
+    let answer!: (result: unknown) => void
+    get.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+    const { label } = useEntityNames()
+    label('group', 3)
+    label('group', 9)
+    await nextTick()
+    resetEntityLookups()
+    answer({ items: GROUPS, more: false })
+    await flushPromises()
+    // Neither the last user's name nor "unknown" for an id the next user may see.
+    expect(label('group', 3)).toBe('#3')
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(2)
+    expect([label('group', 3), label('group', 9)]).toEqual(['cc-low #3', '#9'])
   })
 })
 

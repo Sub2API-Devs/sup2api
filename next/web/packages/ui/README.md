@@ -328,9 +328,9 @@ const columns: TableColumn[] = [
 | prop | 作用 |
 |---|---|
 | `icon` | 输入框开头的 `SIcon` 图标 |
-| `clearable` | 有值时显示 ×，点击发出 `null`；此时 `placeholder` 不再作为列表里的“空值”一行 |
+| `clearable` | 有值时显示 ×，点击发出 `null`；此时 `placeholder` 不再作为列表里的“空值”一行。用键盘在 × 上清除后焦点回到输入框（× 随值消失） |
 | `tinted` | 有值时输入框带主色底（筛选已生效） |
-| `remote` | `options` 就是搜索结果：不做本地过滤，打开时发出 `search('')`、输入时发出 `search(输入)`，防抖和请求由调用方做；列表固定 20rem 宽（不随结果变宽变窄），输入的文字在结果里高亮；结果到达后高亮第一项，回车选中 |
+| `remote` | `options` 就是搜索结果：不做本地过滤，打开时发出 `search('')`、输入时发出 `search(输入)`，防抖和请求由调用方做；列表固定 20rem 宽（不随结果变宽变窄），输入的文字在结果里高亮；结果到达后高亮第一项，回车选中；调用方重建了列表而各项的 `value` 没变时，高亮留在原处 |
 | `loading` | 列表末尾显示“正在搜索…”（代替“没有匹配项”）；已给的 `options` 照常显示 |
 | `selected` | `SelectOption`：`modelValue` 不在 `options` 里时（远程结果）收起后显示它的 `label` / `hint`；它的 `value` 与 `modelValue` 不同时忽略 |
 | `note` / `footer` | 列表顶部的说明行、固定在列表底部的提示行（如“只显示前 20 个，输入以缩小范围”） |

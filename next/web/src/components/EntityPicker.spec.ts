@@ -182,6 +182,22 @@ describe('EntityPicker list', () => {
     expect(model(w)).toEqual({ id: 'my-unpriced-model', text: '' })
   })
 
+  it('a typed id of a page candidate is the first row before the search answers and after: Enter picks the same either way', async () => {
+    mocks.get.mockResolvedValue({ items: [{ id: 'gpt-4o', name: 'gpt-4o' }, { id: 'gpt-4o-mini', name: 'gpt-4o-mini' }], more: false })
+    const w = picker({ kind: 'model', text: '', extra: [{ id: 'gpt-4o', name: 'gpt-4o' }] })
+    await open(w)
+    await w.get('input').setValue('gpt-4o')
+    expect(rows(w)).toEqual(['gpt-4o', 'Name contains “gpt-4o”Partial match'])
+    await settle()
+    expect(rows(w)).toEqual(['gpt-4o', 'Name contains “gpt-4o”Partial match', 'gpt-4o-mini'])
+    await w.get('input').setValue('gpt-4o-mini')
+    // Not the page's own: text until the list has it, and "Name contains" keeps Enter.
+    expect(rows(w)).toEqual(['Name contains “gpt-4o-mini”Partial match'])
+    await w.get('input').setValue('gpt-4o')
+    await w.get('input').trigger('keydown', { key: 'Enter' })
+    expect(model(w)).toEqual({ id: 'gpt-4o', text: '' })
+  })
+
   it('says so when the list cannot be loaded', async () => {
     mocks.get.mockRejectedValue(new ApiError(500, { code: 'internal', message: 'boom' }))
     const w = picker({})

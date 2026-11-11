@@ -166,18 +166,22 @@ function relist() {
   active.value = filtered.value.findIndex((o) => !o.disabled)
   if (floats.value) nextTick(() => floating.update())
 }
-// Remote results arrive after the typing that asked for them.
-watch(filtered, () => {
-  if (open.value && props.remote) relist()
+// Remote results arrive after the typing that asked for them. The same values
+// given again (the caller rebuilt its list) leave the highlight where it is.
+watch(filtered, (now, before) => {
+  if (!open.value || !props.remote) return
+  if (now.length !== before.length || now.some((o, i) => o.value !== before[i].value)) relist()
 })
 function pick(o: SelectOption) {
   if (props.disabled || o.disabled) return
   emit('update:modelValue', o.value)
   open.value = false
 }
-function clear() {
+/** The × button: it goes away with the value, so focus that was on it (keyboard) moves to the field. */
+function clear(e: MouseEvent) {
   emit('update:modelValue', null)
   open.value = false
+  if (e.currentTarget === document.activeElement) field.value?.focus()
 }
 /** A press on the frame beside the text (icon, hint, chevron) goes to the field. */
 function toField(e: MouseEvent) {
@@ -265,11 +269,11 @@ const control = computed(() =>
   <div v-if="searchable" ref="root" class="relative" v-bind="parts.wrap">
     <div
       v-if="framed"
-      class="input input-group cursor-text"
+      class="input input-group"
       :class="[
         size === 'sm' ? 'input-sm' : '',
         invalid ? 'input-error' : '',
-        disabled ? 'input-group-disabled' : '',
+        disabled ? 'input-group-disabled' : 'cursor-text',
         tinted && hasValue ? 'border-primary-300 bg-primary-50 dark:border-primary-700 dark:bg-primary-900/20' : ''
       ]"
       :title="typing ? undefined : [selectedLabel, shown?.hint].filter(Boolean).join(' ') || undefined"

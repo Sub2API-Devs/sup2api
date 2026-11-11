@@ -48,8 +48,12 @@ const known = reactive(new Map<string, EntityItem | null>())
 const asked = new Map<string, Set<string>>()
 const queued = new Map<string, Set<string>>()
 
+/** Counts the sessions: an answer that arrives after its session ended teaches the next one nothing. */
+let era = 0
+
 /** Forgets every name and refusal (the session ended; specs). */
 export function resetEntityLookups() {
+  era++
   unavailable.clear()
   known.clear()
   asked.clear()
@@ -80,13 +84,14 @@ export async function lookupEntities(kind: EntityKind, { q, ids, mine = false, s
   bindToSession()
   const realm = realmOf(kind, mine)
   const query: Query = { ...scope, q: q || undefined, ids: ids?.join(','), mine: mine || undefined }
+  const from = era
   try {
     const result = await api.get<LookupResult | null>(`/lookup/${ENTITIES[kind].path}`, query)
     const items = result?.items ?? []
-    for (const item of items) known.set(keyOf(realm, item.id), item)
+    if (from === era) for (const item of items) known.set(keyOf(realm, item.id), item)
     return { items, more: !!result?.more }
   } catch (e) {
-    if (isApiError(e) && UNAVAILABLE.has(e.status)) unavailable.add(realm)
+    if (from === era && isApiError(e) && UNAVAILABLE.has(e.status)) unavailable.add(realm)
     throw e
   }
 }
@@ -96,14 +101,18 @@ async function resolveQueued(kind: EntityKind, mine: boolean) {
   const realm = realmOf(kind, mine)
   const ids = [...(queued.get(realm) ?? [])]
   queued.delete(realm)
+  const from = era
   for (let i = 0; i < ids.length; i += MAX_IDS) {
     const batch = ids.slice(i, i + MAX_IDS)
+    let answered = true
     try {
       await lookupEntities(kind, { ids: batch, mine })
-      for (const id of batch) if (!known.has(keyOf(realm, id))) known.set(keyOf(realm, id), null)
     } catch {
       // The ids stay unnamed ("#id"); a later read asks again unless the lookup is unavailable.
+      answered = false
     }
+    if (from !== era) return
+    if (answered) for (const id of batch) if (!known.has(keyOf(realm, id))) known.set(keyOf(realm, id), null)
     for (const id of batch) asked.get(realm)?.delete(id)
   }
 }

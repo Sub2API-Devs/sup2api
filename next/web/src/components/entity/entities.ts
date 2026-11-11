@@ -53,10 +53,12 @@ export const ENTITIES: Record<EntityKind, EntityDescriptor> = {
 
 /**
  * An id of a numeric kind as the lookup takes one (typed as q, or in ids=): a
- * positive integer. "0" and "007" are not: typed, they are text, and their
- * name is never asked for (the core refuses a request that carries one).
+ * positive integer of at most 18 digits (any fits the core's int64). "0",
+ * "007" and longer digit strings are not: typed, they are text, and their
+ * name is never asked for (the core refuses ids= with a 0 or with a number
+ * past int64, and the other ids of the request with it).
  */
-export const isEntityId = (v: string): boolean => /^[1-9]\d*$/.test(v)
+export const isEntityId = (v: string): boolean => /^[1-9]\d{0,17}$/.test(v)
 
 /** The permissions of which one lets a caller look `kind` up (`mine`: only its own rows). */
 export function lookupPermissions(kind: EntityKind, mine = false): string[] {
