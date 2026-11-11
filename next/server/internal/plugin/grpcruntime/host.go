@@ -1,6 +1,7 @@
 package grpcruntime
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -20,11 +21,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-// Limits enforced by HostService.
+// Limits enforced by HostService. The rules of the kv calls (the limits of
+// one entry and of one batch call, CONTRACTS §93) are in sdk/protocol/kv.go,
+// shared with the SDK: protocol.KVMax*, protocol.KVBatchMax* and the
+// protocol.CheckKV functions.
 const (
-	KVMaxValueBytes  = 64 << 10
-	KVMaxKeyBytes    = 512
-	KVMaxNamespace   = 64
 	KVMaxListLimit   = 500
 	LogMaxMessage    = 8 << 10
 	LogMaxAttrs      = 32
@@ -42,21 +43,6 @@ const (
 	AccountRequestMaxBody   = 64 << 10
 	AccountRequestMaxURL    = 8 << 10
 	AccountRequestMaxMethod = 16
-)
-
-// Limits of the kv batch calls KVGetMany, KVSetMany and KVDeleteMany
-// (CONTRACTS §93); the limits of one entry are the KVMax* above.
-const (
-	// KVMaxBatchKeys caps the keys (or items) of one call.
-	KVMaxBatchKeys = protocol.KVBatchMaxKeys
-	// KVMaxBatchBytes caps the payload of one call: the keys plus the values
-	// of a KVSetMany request, and the values of a KVGetMany answer. A
-	// plugin's request reaches HostService through a gRPC server with the
-	// default receive limit of 4 MiB (serveHostBroker), so a request of
-	// KVMaxBatchBytes plus its framing always arrives.
-	KVMaxBatchBytes = protocol.KVBatchMaxBytes
-	// KVMaxBatchTTLSeconds is the largest ttl_seconds of a batch write.
-	KVMaxBatchTTLSeconds = protocol.KVMaxTTLSeconds
 )
 
 // hostServer serves HostService to exactly one plugin instance, so the
@@ -121,21 +107,30 @@ func (h *hostServer) Log(ctx context.Context, in *pluginv1.LogRequest) (*pluginv
 
 // ------------------------------------------------------------------ kv
 
-func (h *hostServer) kvKey(ns, k string) (string, error) {
-	if err := validNamespace(ns); err != nil {
-		return "", err
-	}
-	if k == "" || len(k) > KVMaxKeyBytes {
-		return "", status.Error(codes.InvalidArgument, "key must be 1..512 bytes")
-	}
-	return "plugin:kv:" + h.key() + ":" + ns + ":" + k, nil
+// kvPrefix is what the host puts before every key of namespace ns of this
+// plugin. The namespace is checked by the caller.
+func (h *hostServer) kvPrefix(ns string) string {
+	return "plugin:kv:" + h.key() + ":" + ns + ":"
 }
 
-func validNamespace(ns string) error {
-	if ns == "" || len(ns) > KVMaxNamespace || strings.ContainsAny(ns, ":*?[]\\") {
-		return status.Error(codes.InvalidArgument, `namespace must be 1..64 bytes without ':*?[]\'`)
+// kvKey checks the namespace and key of a single call and returns the Redis
+// key.
+func (h *hostServer) kvKey(ns, k string) (string, error) {
+	if err := cmp.Or(protocol.CheckKVNamespace(ns), protocol.CheckKVKey(k)); err != nil {
+		return "", err
 	}
-	return nil
+	return h.kvPrefix(ns) + k, nil
+}
+
+// kvKeys returns the Redis keys of the checked keys of a batch call, in
+// order.
+func (h *hostServer) kvKeys(ns string, keys []string) []string {
+	prefix := h.kvPrefix(ns)
+	out := make([]string, len(keys))
+	for i, k := range keys {
+		out[i] = prefix + k
+	}
+	return out
 }
 
 func (h *hostServer) KVGet(ctx context.Context, in *pluginv1.KVGetRequest) (*pluginv1.KVGetResponse, error) {
@@ -164,11 +159,8 @@ func (h *hostServer) KVSet(ctx context.Context, in *pluginv1.KVSetRequest) (*plu
 	if err != nil {
 		return nil, err
 	}
-	if len(in.GetValue()) > KVMaxValueBytes {
-		return nil, status.Errorf(codes.InvalidArgument, "value exceeds %d bytes", KVMaxValueBytes)
-	}
-	if in.GetTtlSeconds() < 0 {
-		return nil, status.Error(codes.InvalidArgument, "ttl_seconds must be >= 0")
+	if err := cmp.Or(protocol.CheckKVValue(len(in.GetValue())), protocol.CheckKVTTL(in.GetTtlSeconds())); err != nil {
+		return nil, err
 	}
 	if err := h.i.rt.o.Redis.Set(ctx, key, in.GetValue(), time.Duration(in.GetTtlSeconds())*time.Second).Err(); err != nil {
 		return nil, status.Error(codes.Unavailable, "kv unavailable")
@@ -194,7 +186,7 @@ func (h *hostServer) KVList(ctx context.Context, in *pluginv1.KVListRequest) (*p
 	if err := h.require(ctx, "kv"); err != nil {
 		return nil, err
 	}
-	if err := validNamespace(in.GetNamespace()); err != nil {
+	if err := protocol.CheckKVNamespace(in.GetNamespace()); err != nil {
 		return nil, err
 	}
 	limit := int(in.GetLimit())
@@ -207,7 +199,7 @@ func (h *hostServer) KVList(ctx context.Context, in *pluginv1.KVListRequest) (*p
 			return nil, status.Error(codes.InvalidArgument, "invalid cursor")
 		}
 	}
-	base := "plugin:kv:" + h.key() + ":" + in.GetNamespace() + ":"
+	base := h.kvPrefix(in.GetNamespace())
 	match := globEscape(base) + globEscape(in.GetPrefix()) + "*"
 	out := &pluginv1.KVListResponse{}
 	for {
@@ -233,8 +225,10 @@ func (h *hostServer) KVList(ctx context.Context, in *pluginv1.KVListRequest) (*p
 //
 // KVGetMany, KVSetMany and KVDeleteMany (CONTRACTS §93) do for many keys of
 // one namespace what the single calls do for one: the grant is checked once
-// and Redis is asked once, whatever the number of keys. They are valid on
-// the single Redis instance the core connects to (cluster.OpenRedis); on a
+// and Redis is asked once, whatever the number of keys. The request is
+// checked by protocol.CheckKVBatchKeys and protocol.CheckKVBatchItems, the
+// functions the SDK calls before it sends one. The calls are valid on the
+// single Redis instance the core connects to (cluster.OpenRedis); on a
 // Redis Cluster the keys of one call would hash to different slots.
 
 // kvSetManyLua writes the items of one KVSetMany call. KEYS[i] is the Redis
@@ -270,36 +264,14 @@ return #KEYS
 // EVAL when the server does not know it yet.
 var kvSetManyScript = redis.NewScript(kvSetManyLua)
 
-// kvBatchKeys validates the namespace and the n keys of one batch call and
-// returns their Redis keys, in order. what names the request field in
-// errors. A missing (nil) item has no key and fails like an empty one.
-func (h *hostServer) kvBatchKeys(ns, what string, n int, key func(int) string) ([]string, error) {
-	if err := validNamespace(ns); err != nil {
-		return nil, err
-	}
-	if n > KVMaxBatchKeys {
-		return nil, status.Errorf(codes.InvalidArgument, "at most %d %s per call", KVMaxBatchKeys, what)
-	}
-	out := make([]string, n)
-	for i := range out {
-		full, err := h.kvKey(ns, key(i))
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "%s[%d]: %s", what, i, status.Convert(err).Message())
-		}
-		out[i] = full
-	}
-	return out, nil
-}
-
 func (h *hostServer) KVGetMany(ctx context.Context, in *pluginv1.KVGetManyRequest) (*pluginv1.KVGetManyResponse, error) {
 	if err := h.require(ctx, "kv"); err != nil {
 		return nil, err
 	}
-	asked := in.GetKeys()
-	keys, err := h.kvBatchKeys(in.GetNamespace(), "keys", len(asked), func(i int) string { return asked[i] })
-	if err != nil {
+	if err := protocol.CheckKVBatchKeys(in.GetNamespace(), in.GetKeys()); err != nil {
 		return nil, err
 	}
+	keys := h.kvKeys(in.GetNamespace(), in.GetKeys())
 	out := &pluginv1.KVGetManyResponse{Items: make([]*pluginv1.KVGetManyItem, len(keys))}
 	if len(keys) == 0 {
 		return out, nil
@@ -312,13 +284,15 @@ func (h *hostServer) KVGetMany(ctx context.Context, in *pluginv1.KVGetManyReques
 	for i, v := range values {
 		item := &pluginv1.KVGetManyItem{}
 		if s, ok := v.(string); ok {
-			item.Found, item.Value = true, []byte(s)
+			// The answer is refused at the first value that takes it over
+			// the limit, before the rest is copied.
 			total += len(s)
+			if err := protocol.CheckKVBatchAnswer(total); err != nil {
+				return nil, err
+			}
+			item.Found, item.Value = true, []byte(s)
 		}
 		out.Items[i] = item
-	}
-	if total > KVMaxBatchBytes {
-		return nil, status.Errorf(codes.ResourceExhausted, "the values of these keys exceed %d bytes; ask for fewer keys per call", KVMaxBatchBytes)
 	}
 	return out, nil
 }
@@ -327,28 +301,22 @@ func (h *hostServer) KVSetMany(ctx context.Context, in *pluginv1.KVSetManyReques
 	if err := h.require(ctx, "kv"); err != nil {
 		return nil, err
 	}
+	// A missing (nil) item has no key and fails like one with an empty key.
 	items := in.GetItems()
-	keys, err := h.kvBatchKeys(in.GetNamespace(), "items", len(items), func(i int) string { return items[i].GetKey() })
-	if err != nil {
+	if err := protocol.CheckKVBatchItems(in.GetNamespace(), len(items), func(i int) (string, int, int64) {
+		return items[i].GetKey(), len(items[i].GetValue()), items[i].GetTtlSeconds()
+	}); err != nil {
 		return nil, err
 	}
-	args := make([]any, 0, 2*len(items))
-	total := 0
-	for i, it := range items {
-		if len(it.GetValue()) > KVMaxValueBytes {
-			return nil, status.Errorf(codes.InvalidArgument, "items[%d]: value exceeds %d bytes", i, KVMaxValueBytes)
-		}
-		if !protocol.ValidKVBatchTTL(it.GetTtlSeconds()) {
-			return nil, status.Errorf(codes.InvalidArgument, "items[%d]: ttl_seconds must be 0..%d", i, KVMaxBatchTTLSeconds)
-		}
-		total += len(it.GetKey()) + len(it.GetValue())
-		args = append(args, it.GetValue(), strconv.FormatInt(it.GetTtlSeconds(), 10))
-	}
-	if total > KVMaxBatchBytes {
-		return nil, status.Errorf(codes.InvalidArgument, "keys and values exceed %d bytes; write fewer items per call", KVMaxBatchBytes)
-	}
-	if len(keys) == 0 {
+	if len(items) == 0 {
 		return &pluginv1.KVSetManyResponse{}, nil
+	}
+	prefix := h.kvPrefix(in.GetNamespace())
+	keys := make([]string, len(items))
+	args := make([]any, 0, 2*len(items))
+	for i, it := range items {
+		keys[i] = prefix + it.GetKey()
+		args = append(args, it.GetValue(), strconv.FormatInt(it.GetTtlSeconds(), 10))
 	}
 	if err := kvSetManyScript.Run(ctx, h.i.rt.o.Redis, keys, args...).Err(); err != nil {
 		return nil, status.Error(codes.Unavailable, "kv unavailable")
@@ -360,15 +328,13 @@ func (h *hostServer) KVDeleteMany(ctx context.Context, in *pluginv1.KVDeleteMany
 	if err := h.require(ctx, "kv"); err != nil {
 		return nil, err
 	}
-	asked := in.GetKeys()
-	keys, err := h.kvBatchKeys(in.GetNamespace(), "keys", len(asked), func(i int) string { return asked[i] })
-	if err != nil {
+	if err := protocol.CheckKVBatchKeys(in.GetNamespace(), in.GetKeys()); err != nil {
 		return nil, err
 	}
-	if len(keys) == 0 {
+	if len(in.GetKeys()) == 0 {
 		return &pluginv1.KVDeleteManyResponse{}, nil
 	}
-	if err := h.i.rt.o.Redis.Del(ctx, keys...).Err(); err != nil {
+	if err := h.i.rt.o.Redis.Del(ctx, h.kvKeys(in.GetNamespace(), in.GetKeys())...).Err(); err != nil {
 		return nil, status.Error(codes.Unavailable, "kv unavailable")
 	}
 	return &pluginv1.KVDeleteManyResponse{}, nil
