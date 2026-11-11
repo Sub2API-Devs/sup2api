@@ -91,9 +91,15 @@ type FakeHost struct {
 	Locks                *LockTable
 	LockErr              error
 	LockAcquireLostReply error
+	// KVBatchUnimplemented makes the fake answer KVGetMany, KVSetMany and
+	// KVDeleteMany like a core before 0.1.273: UNIMPLEMENTED, so the SDK
+	// does the batch with the single calls. Set it before Start, or with
+	// SetKVBatchUnimplemented while the plugin runs. See KVCalls.
+	KVBatchUnimplemented bool
 
 	logs      []LogEntry
 	kv        map[string]kvItem
+	kvCalls   map[string]int
 	ledger    []LedgerEntry
 	ledgerBy  map[string]LedgerEntry
 	dials     []string
@@ -113,7 +119,7 @@ type kvItem struct {
 
 // NewFakeHost returns an empty fake host.
 func NewFakeHost() *FakeHost {
-	return &FakeHost{kv: map[string]kvItem{}, ledgerBy: map[string]LedgerEntry{}, Locks: NewLockTable()}
+	return &FakeHost{kv: map[string]kvItem{}, kvCalls: map[string]int{}, ledgerBy: map[string]LedgerEntry{}, Locks: NewLockTable()}
 }
 
 func (f *FakeHost) ExecuteHTTP(ctx context.Context, in *pluginv1.ExecutionHTTPRequest) (*pluginv1.ExecutionHTTPResponse, error) {
@@ -196,6 +202,7 @@ func kvKey(ns, key string) string { return ns + "\x00" + key }
 func (f *FakeHost) KVGet(_ context.Context, in *pluginv1.KVGetRequest) (*pluginv1.KVGetResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.kvCalls["KVGet"]++
 	it, ok := f.kv[kvKey(in.GetNamespace(), in.GetKey())]
 	if !ok || (!it.expires.IsZero() && time.Now().After(it.expires)) {
 		return &pluginv1.KVGetResponse{}, nil
@@ -204,6 +211,7 @@ func (f *FakeHost) KVGet(_ context.Context, in *pluginv1.KVGetRequest) (*pluginv
 }
 
 func (f *FakeHost) KVSet(_ context.Context, in *pluginv1.KVSetRequest) (*pluginv1.KVSetResponse, error) {
+	f.countKV("KVSet")
 	if len(in.GetValue()) > 64<<10 {
 		return nil, status.Error(codes.InvalidArgument, "value too large")
 	}
@@ -219,6 +227,7 @@ func (f *FakeHost) KVSet(_ context.Context, in *pluginv1.KVSetRequest) (*pluginv
 
 func (f *FakeHost) KVDelete(_ context.Context, in *pluginv1.KVDeleteRequest) (*pluginv1.KVDeleteResponse, error) {
 	f.mu.Lock()
+	f.kvCalls["KVDelete"]++
 	delete(f.kv, kvKey(in.GetNamespace(), in.GetKey()))
 	f.mu.Unlock()
 	return &pluginv1.KVDeleteResponse{}, nil
@@ -227,6 +236,7 @@ func (f *FakeHost) KVDelete(_ context.Context, in *pluginv1.KVDeleteRequest) (*p
 func (f *FakeHost) KVList(_ context.Context, in *pluginv1.KVListRequest) (*pluginv1.KVListResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.kvCalls["KVList"]++
 	var keys []string
 	nsPrefix := in.GetNamespace() + "\x00"
 	for k := range f.kv {

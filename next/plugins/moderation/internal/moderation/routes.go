@@ -109,10 +109,24 @@ type Runtime struct {
 	CacheHits     int64  `json:"cache_hits"`
 	CacheEntries  int    `json:"cache_entries"`
 	CacheBytes    int64  `json:"cache_bytes"` // estimated memory of the verdict cache entries
-	// KVErrors counts the batches of host KV calls with a failure or cut off
-	// by their budget (verdict cache lookups, writes and review syncs; one
-	// per batch, kvRun) and the failed reads and writes of the alert state.
+	// KVErrors counts the batch calls of the host KV that failed (verdict
+	// cache lookups, writes and review syncs: one per call, kvFailed) and the
+	// failed reads and writes of the alert state, on this node since it
+	// started. A call that ended because its caller left or the node stopped
+	// is not among them.
 	KVErrors int64 `json:"kv_errors"`
+	// KVWriting is the number of runs whose verdicts are on their way to the
+	// KV right now, waiting for their turn or writing (storeVerdicts). It is
+	// 0 or close to it while the KV answers; a number that keeps growing
+	// means the KV does not, and nothing new is cached meanwhile.
+	KVWriting int64 `json:"kv_writing"`
+	// KVSkipped counts the runs whose verdicts were not cached because a
+	// review (on this node, or one this node was told of) may have changed
+	// the cache since their request asked it, or because the memory cache
+	// was replaced since (cleared on this node, cache_entries changed), on
+	// this node since it started: their content is moderated again the next
+	// time.
+	KVSkipped int64 `json:"kv_skipped"`
 	// ImagesRefused counts the calls of the LLM auditors whose images the
 	// upstream refused, so that the text alone was reviewed
 	// (Outcome.ImagesRefused), on this node since it started.
@@ -141,7 +155,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
-		KVErrors: p.stats.kvErrors.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
+		KVErrors: p.stats.kvErrors.Load(), KVWriting: p.stats.kvWriting.Load(), KVSkipped: p.stats.kvSkipped.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}
@@ -649,7 +663,7 @@ var reviewStatuses = []string{ReviewPending, ReviewFalsePositive, ReviewConfirme
 // undoing it counts it again in the same window (§72.8). The verdict cache
 // follows the review (syncReviewed); cache_synced is the number of records
 // whose cached verdict was updated in the shared KV - fewer than the records
-// with a cached verdict when KV writes failed.
+// with a cached verdict when KV writes failed or the request ended first.
 func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in struct {
 		IDs    []int64 `json:"ids"`

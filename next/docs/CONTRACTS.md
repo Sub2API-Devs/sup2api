@@ -263,7 +263,7 @@
 | `balance:{user_id}` | STRING 余额缓存 | B |
 | `sticky:{rule}:{group}:{model}:{hash}` | STRING account_id，TTL | G |
 | `sticky:stats:{rule}` | HASH hits/misses/rebinds | G |
-| `plugin:kv:{plugin_key}:{ns}:{key}` | STRING | C |
+| `plugin:kv:{plugin_key}:{ns}:{key}` | STRING，可带 TTL。插件经 `HostService.KVGet/KVSet/KVDelete/KVList` 和批量的 `KVGetMany/KVSetMany/KVDeleteMany`（§93）读写，前缀由宿主按调用者强制加上 | C |
 | `hook:breaker:{plugin}:{hook}` | STRING 熔断截止毫秒时间戳，TTL 30s | G |
 | `hook:stats:{plugin}:{hook}` | HASH 调用/拒绝/超时/错误计数与延迟桶，TTL 7d | G |
 | `hook:statidx:{plugin}` | SET 该插件出现过的钩子 id，TTL 7d | G |
@@ -2179,7 +2179,7 @@ sub2api 按多节点部署设计，**插件的每个实例都跑在每个节点�
 | `Initializer.Init` **每个实例调用一次**：每个节点各一次，进程重启、资源限制变更（§14.3）、升级时新版本 standby 启动都会再调用 | 不要在 `Init` 里做「全集群只该做一次」的事（建表、导数据、发通知）。建表写进 `migrations/*.sql`；一次性工作放进 manifest `jobs[]` 或用 `lock` | `sdk/pluginsdk/interfaces.go`（`Initializer`），`sdk/pluginsdk/serve.go`（`InitHost` 里调用 `Init`） |
 | 周期性工作用 manifest `jobs[]`：**全集群每个触发点执行一次**（锁 + 唯一索引，§27.2），错过的触发点不补跑；节点在插入运行记录后崩溃，这个触发点就没跑完，也不会重试 | 不要在 `Init` 里自己起定时器 goroutine——那会在每个节点各跑一份。任务本身按「可能没跑完」来写（下一个触发点能接着做） | `server/internal/job/job.go`（包注释、`runScheduled`），§11.7 |
 | 按需互斥（「同一素材同时只同步一次」）用宿主权限 `lock` | 用 `Host.Locks().WithLock(ctx, name, ttl, fn)`：`fn` 用传进来的 ctx 干活（丢锁时它被取消，cause 为 `ErrLockLost`），给外层 ctx 一个框住工作的截止时间（续期只活到它结束）。返回 `(false, nil)` = 别的节点正持有，不是错误；**`fn` 成功但中途丢过锁时返回 `(true, ErrLockLost)`**，说明 `fn` 可能和下一个持有者重叠过，不可幂等的部分必须另有数据库保护。自己手写 gRPC 调用时每次 `LockAcquire` 都要新 token（同 token 重抢会删掉自己的锁） | §27.3，`sdk/pluginsdk/lock.go`（`Locks`） |
-| KV 只有 `Get` / `Set` / `Delete` / `List`，**没有 CAS、自增或 SETNX** | 「读 → 改 → 写」在两个节点并发时**会丢更新**。计数、累加、状态机放进自己的 schema（事务 / 条件 UPDATE），或在 `lock` 下做 | `sdk/pluginsdk/host.go`（`KV` 接口），`sdk/proto/sub2api/plugin/v1/host.proto` |
+| KV 只有 `Get` / `Set` / `Delete` / `List`，以及一次处理多个键的 `KVGetMany` / `KVSetMany` / `KVDeleteMany`（§93，核心 0.1.273 起），**没有 CAS、自增或 SETNX** | 「读 → 改 → 写」在两个节点并发时**会丢更新**。计数、累加、状态机放进自己的 schema（事务 / 条件 UPDATE），或在 `lock` 下做。批量写是原子的（全写或全不写），但它不是条件写，同样解决不了丢更新。一次要读写多个键时用批量调用：每个单键调用各做一次授权复核和一次 Redis 往返，批量调用各只做一次 | `sdk/pluginsdk/host.go`（`KV` 接口），`sdk/pluginsdk/kvbatch.go`（批量调用），`sdk/proto/sub2api/plugin/v1/host.proto` |
 | `Publish` 是 **best effort**：无确认、无顺序、无重放，**发布者所在节点自己收不到** | 缓存失效要「**本节点直接生效 + 广播通知其他节点 + 短周期轮询兜底**」三件都做：只广播，本节点不会失效；只靠广播，丢一条消息某个节点就一直是旧的 | `sdk/pluginsdk/host.go`（`Host.Publish` 注释），`server/internal/plugin/rollout/broadcast.go`（`broadcastHub.handle` 跳过 `SourceBootID` 为本节点的消息），`server/internal/core/ports_cluster.go`（`Bus` 注释「every consumer must also reconcile periodically」），§14.3 |
 | `OnEvents` **至少一次**：确认之前的批次会重投，持锁节点切换时也可能重投 | 按事件 `id` 去重（例如在自己的 schema 里对事件 id 建唯一索引） | `server/internal/event/delivery/delivery.go`（包注释），§11.7 |
 | `MigrateData` 在发布协调者被接管后**可能重复执行** | 必须幂等：重跑一遍得到同样的结果 | `server/internal/plugin/rollout/coordinator.go`（`takeOver`、`migrateData`），§11.7 |
@@ -4990,6 +4990,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **0.8.0（2026-11-10，分支 `feat/moderation-newapi-parity`）**：new-api 在 2026-11-01 至 11-08 之间改了流程引擎（失败级跳过、补审级、初审命中传给后级）、缓存（放行和命中都缓存，命中重放）、审核时机（默认级别、白名单、黑名单）、Jev 引擎（长上下文、图片重画），并新增题表式 LLM 审核器；插件在 0.8.0 跟进，参照 new-api 提交 `207797b76`（cp.294）。设计、与 new-api 仍然不同之处及原因见 `docs/DESIGN-2026-11-10-MODERATION-PARITY.md`（第 10 节、第 14 节），发布与回滚见 `docs/RELEASE-MODERATION-0.8.0.md`。本节各小节描述的是 0.8.0 的行为；与 0.7.2 不同的地方标"0.8.0"。
 
+**0.8.1（2026-11-11，0.8.0 上线后；分支 `fix/moderation-cache-no-recheck`、`feat/moderation-kv-batch`）**：判定缓存的内存层只是 KV 的缓存，不再每 5 分钟对照 KV 重读；缓存用核心的批量 KV 调用（§93）读写，查询和写入不再有预算和个数上限，一次运行的结论先写 KV、写成功后才进内存（负责人 2026-11-11 的两个决定）。承载流量的节点上每次 KV 调用约 50 ms：0.8.0 的到期重读在请求路径上读不完，一个 150 个片段的请求第一次到达节点时在 200 ms 内只读得到约 32 个；现在是一次批量调用。改动的段落：72.3（版本）、72.5 第 8 步的"查"和"写"、72.7 与 72.9 的多节点同步和人工处理、72.11 的 `/status`、72.16。没有迁移，没有设置和接口路径的变化，可以与 0.8.0 混跑；要求核心 0.1.273（`hostCompat` 抬高：SDK 在旧核心上的逐键回退结果相同，但写入能力不够用）。第二版的门禁审核之后又改了三处：运行的写不把人工处理去掉的结论写回来（不论写等了多久）、等待中的写的个数输出为 `runtime.kv_writing`、`hostCompat`。实测、门禁审核发现的问题和删掉的东西见 `docs/DESIGN-2026-11-10-MODERATION-PARITY.md` 第 14 节"上线后修改"。
+
 用户已确认的取舍：
 - 只迁配置（Jev 题集、阈值、分析准则、渠道），通过页面导入；new-api 的记录和名单不迁，两边的用户不是同一批人。
 - 现有的单模型审核保留，作为审核器类型 `llm_verdict`，老配置自动转换、继续可用。
@@ -5039,6 +5041,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 能力、钩子（`ban`、`moderation`、`moderation_attempt` 的 `match`、`needs`、超时、failure）、任务、用户权限都不变。
   - **宿主权限不新增、scope 不变，升级到 0.8.0 不需要管理员重新批准**：题表式 LLM 和 Jev 走现有的 `net`，判定缓存用现有的 `kv`，广播新主题 `verdict.changed` 用现有的 `broadcast`，迁移 `0010` 用现有的 `db.schema`。
   - `kv` 权限的 `reason` 文案从"在节点之间共享审核通过缓存"改为"在节点之间共享审核判定缓存"。只改文案不触发重新批准：核心的授权记录只有权限 id、scope 和状态，升级时的比较（`server/internal/plugin/install/review.go` `diffGrants`）只看是否已授予和 scope 是否扩大，没有新增或扩大时 `carryOverConsent` 自动沿用全部授权；`reason` 只在审批页展示。
+- **0.8.1**：版本 0.8.1。**`hostCompat` 抬到 `>=0.1.273 <0.2.0`**；能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。批量 KV 调用（§93）用的是已有的 `kv` 授权。核心 0.1.273 之前没有这些调用，SDK 会自动换成逐键调用，但那样一次 150 个键的写约 2 秒、期间几乎独占本节点的写（门禁审核实测），写入能力不够用，所以不允许 0.8.1 装在 0.1.272 上（93.7 说的"依赖一次往返的开销的插件"）。
 
 ### 72.4 抽取
 
@@ -5134,20 +5137,20 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
      - `cache_epoch` 是清空计数（`config_state.cache_epoch`）。
      - `fp` 是流程的判定指纹（16 位十六进制），由会改变这个流程判定结果的东西算出：各级的 `combine`、`n`、`fallback` 和审核器列表；每个被引用的审核器的类型、渠道和已存的 `config` 原文；该渠道的类型、协议、`base_url`、`model`；用默认题集的审核器再加当前默认题集；以及代码里的常量 `judgingVersion`（内置题集、默认阈值、提示词模板这类写在代码里的判定默认值变了就加一；LLM 审核器默认发图片、默认提示词提到图片之后是 2）。
      - 不进指纹：流程名、`model_filter`、`sample_rate`、总超时，渠道的名称、密钥、代理、超时、计费模型。改这些不影响缓存；改指纹里的任何一项，该流程的旧结论自动读不到。
-   - **存储**：本节点内存 LRU（`cache_entries` 条，另有 64 MiB 的字节上限，先到为准）加宿主 KV 的命名空间 `verdict`。0.7.x 的命名空间 `pass` 里的缓存键不再读写，到期消失（告警状态仍在 `pass`，72.14）。
+   - **存储**：宿主 KV 的命名空间 `verdict`（各节点共用），加本节点的内存 LRU（`cache_entries` 条，另有 64 MiB 的字节上限，先到为准）作为它的缓存。**先 KV，后内存（0.8.1）**：值只在从 KV 读到、或被本节点的运行写进 KV 之后才进入内存，内存里没有 KV 里没有过的值。0.7.x 的命名空间 `pass` 里的缓存键不再读写，到期消失（告警状态仍在 `pass`，72.14）。
      - 片段键 `s:{范围}:{片段哈希}`，值是以空格分隔的若干项：`p<unix 秒>`（这个片段通过，数字是写入时间）和 `h<命中 id>@<unix 秒>`（指向一个命中条目）。一个片段最多保留 8 个指针（最新的）。**写入通过不抹掉指针**。
      - 命中键 `h:{范围}:{命中 id}`，值是 JSON `{r: 来源请求 id, k: [片段哈希…], t: 那一块的 trace, at: 写入时间}`；命中 id 是集合里片段哈希排序后的 sha256。超过 60 KiB 的命中不存（记录照写）。
      - 有效期 `verdict_cache_days` 天，从写入时算，**不续期**：值里带写入时间，读到的任何一项超过期限就不用，从 KV 读进内存时也按原写入时间算。旧设置 `cache_ttl_seconds = 0` 且没保存过新键时缓存关闭（72.10）。
-   - **查**：先内存；pre 时内存里没有的片段再查 KV，每个请求最多 64 个片段（取最靠后的）、8 路并发、连同命中条目总共 200 ms。post 的请求在钩子里只看内存，工作协程出队执行前再带 KV 查一次。内存里的片段值自上次从 KV 读出（或在本节点写入）起只用 5 分钟（`verdictRecheck`）：到期后，带 KV 的查询先把它重读一遍、**用 KV 里的值替换内存里的值**再判断（每次查询另计最多 64 个，最久没读的在前，只用 200 ms 的前一半，命中条目的读取不被它挤掉；旧值里本节点 4 秒内刚写、可能还没落到 KV 的项保留；旧值指向的命中条目同时出内存，需要时从 KV 重读；KV 没读到时保留内存里的值）；只看内存的查询（post 的钩子）照用内存里的值，同时在后台重读，下一个请求用上读回来的值。
+   - **查**：先内存；pre 时，**内存里没有的片段键全部从 KV 读**，再把这些片段的指针指向的、不在内存里的命中条目全部读出。用批量调用（§93）：片段键每次最多 512 个，命中条目每次最多 48 个（一次回答最多 3 MiB，一个值最多 64 KiB），多了就多调几次，一次接一次。**没有预算，也没有个数上限（0.8.1）**：查询等 KV 回答，唯一的期限是钩子请求自己的 ctx（核心给钩子调用限时；客户端断开时取消）；ctx 结束时没读到的按未知处理，请求照常进入运行，在那里按"客户端已离开"处理。post 的请求在钩子里只看内存，工作协程出队执行前再带 KV 查一次（用插件自己的 ctx）。**内存里有值的片段不问 KV（0.8.1）**：内存层只是缓存，值进入内存之后一直照用，没有定期重读；它只在这些情况下离开内存——值里的各项到期（各自的写入时间加 `verdict_cache_days`）、内存 LRU 淘汰（条数或字节上限）、收到点名这个键的 `verdict.changed` 广播（写入命中的广播：删键；人工处理的广播：删键并立墓碑）、清空缓存（纪元）、进程重启。一个请求的片段全在内存里、它们指向的命中条目也在内存里时，查询不产生任何 KV 调用；150 个片段的请求第一次到达一个节点是 1 次调用（片段有指针时再加 1 次）。核心没有批量调用时（0.1.273 之前）SDK 把每次批量调用换成逐键调用、8 路并发：照样全部读到，只是慢（150 个片段约 19 轮）。（0.8.0：内存里的片段值每 5 分钟重读一遍，`verdictRecheck`；内存里没有的片段每个请求最多读最靠后的 64 个、8 路并发、连同命中条目总共 200 ms，读不完的送审。都删掉了。）
      1. **先找命中**：按请求顺序看各片段的指针，第一个"命中条目存在、未过期、且它的片段全部在本请求里"的命中决定这个请求 → 重放（见下）。这一步在看"通过"之前：命中集合的片段即使各自在别的请求里通过过，集合完整出现时仍然是命中。
-     2. 没有可重放的命中时，带未过期"通过"的片段不再送审——**指针未过期、而它指向的命中条目没能读到的片段除外**（KV 出错、预算用完、超出 64 个；只看内存的查询里条目不在内存）：这种片段本次按未知处理，pre 时重新送审，post 的钩子里入队、由工作协程带 KV 再查。KV 明确回答"没有这个条目"时指针算失效，片段照常按"通过"处理。全部片段都已通过 → 放行，记为 `cache_skipped`（只计数，不写记录），note `moderation: pass (cached)`；部分通过时只审其余片段。
+     2. 没有可重放的命中时，带未过期"通过"的片段不再送审——**指针未过期、而它指向的命中条目没能读到的片段除外**（KV 出错、钩子请求的 ctx 结束；只看内存的查询里条目不在内存）：这种片段本次按未知处理，pre 时重新送审，post 的钩子里入队、由工作协程带 KV 再查。KV 明确回答"没有这个条目"时指针算失效，片段照常按"通过"处理。全部片段都已通过 → 放行，记为 `cache_skipped`（只计数，不写记录），note `moderation: pass (cached)`；部分通过时只审其余片段。
         - **混合流程里，有图片要送审时，已缓存的文字不拿掉**（第五轮；负责人 2026-11-10 的决定之后只用于混合流程）。混合流程：流程的各级合计，至少有一个收图片的审核器、又至少有一个不收图片的审核器（OpenAI 审核器总是收；Jev 和两种 LLM 审核器看各自的 `review_images`，72.6）。条件：流程是混合流程，请求里至少有一张图片没缓存成"通过"，而且这次会放进块里——`input_max_images` 大于 0，图片没超过大小上限。这时已缓存成"通过"的文字片段照样留在块里，和图片一起送审；已缓存成"通过"的图片仍然不送。这样一张图片总是和它所在请求的文字一起审，结果不取决于别的请求往缓存里写了什么（见下"只被命中的审核器收到的图片"）。
         - 这时的分块与缓存为空时相同：块的划分只由文字决定（图片跟着当时的块），比一块长的片段照样切开；超过 `input_max_chunks` 时抽到哪些块只取决于请求本身、每次相同，`input_overflow=block` 时先审的请求按整个请求的文字判超长（没有这种图片的请求只算没缓存的部分）。没抽到的块不审，里面的图片仍是未缓存。留下的文字在它所在的块都通过时重新记一次"通过"，`trace.input.cached_segments` 不把它们算作命中缓存。
         - 没有这种图片的请求不变：没有图片、图片都已缓存成"通过"、或没缓存的图片这次都不送审（`input_max_images` 为 0、图片过大）时，已缓存的片段都不送，全部已缓存就是 `pass (cached)`。
         - **非混合流程不留文字**：没有收图片的审核器的流程（图片在分块后被丢掉）和全部审核器都收图片的流程，已缓存的片段都不送，没缓存的图片只和没缓存的文字一起送。只用于混合流程的原因是代价：否则请求里只要有一张进不了缓存的图片（最常见的是 URL 图片），带它的每个请求都把全部文字重审，`input_overflow=block` 时还可能被拒绝；而不收图片的审核器每次都只看文字、能让收图片的审核器命中的内容通过，只在混合流程里是常态。全部审核器都收图片时，复核的审核器也收到图片：它通过，图片记"通过"并缓存；它命中，命中成立。**残留情形（已知，接受）**：全部审核器都收图片的流程里，某个审核器这一次没收到某张图片（URL 图片只有 OpenAI 审核器收；超出 LLM 审核器上限的图片；Jev 没等到重画名额或时间；LLM 的上游拒绝了图片，72.6），另一个审核器收到并命中，而请求的文字又已被别的请求缓存成"通过"——图片单独成块，没收到图片的审核器没有可审内容、被跳过，命中成立：同一个请求缓存为空时放行、文字已缓存时被拒绝。
         - post：入队时按内存里的缓存分块（只在 KV 里记了"通过"的图片当作未缓存，文字留下）；出队时不重新分块，带 KV 查到这些块的片段（留下的文字和图片）全部已通过就不审，否则按入队时的块运行。
         - 代价：这样的请求把已缓存的文字再审一遍；图片一直进不了缓存时（URL 图片、审核器收不了的图片、只被命中的审核器收到的图片）每个请求都如此。
-     - KV 出错或超时：没读到的片段、指向没读到的命中条目的片段按未知处理（到期重读没读到的沿用内存里的值），照常送审，计数器 `kvErrors` 加一，在 `GET /status` 的 `runtime.kv_errors` 和健康指标 `kv_errors` 里输出（本节点启动以来的累计值；一批 KV 调用里有失败或被预算截断算一次）。缓存的故障不会放行从未审过的内容。
+     - KV 出错：没读到的片段、指向没读到的命中条目的片段按未知处理，照常送审。缓存的故障不会放行从未审过的内容。计数只有一个（0.8.1）：`kvErrors`，本节点启动以来的累计值，**一次批量调用失败计一次**（查询的一次读、后台写的一次读或写、人工处理同步的一次读、写或删；不论这次调用带多少个键），告警状态的读写失败也各算一次，在 `GET /status` 的 `runtime.kv_errors` 和健康指标 `kv_errors` 里输出，请求路径上不为它写日志。**因为调用方的 ctx 结束而没做成的调用不计**（客户端断开或钩子超时打断的查询、关停时打断的后台写、请求结束时打断的人工处理同步）：那不是 KV 的错。0.8.0 的查询和写入有预算，被预算截断的一批也计在 `kv_errors` 里；0.8.1 的第一版（未发布）为此加过 `kv_timeouts`（`runtime.kv_timeouts`、健康指标 `kv_timeouts`），预算去掉后一并删掉了。
    - **写**：每次运行结束时写一次（pre 的共享运行写一次，不论有几个请求在等它、等的请求是否已离开；post 由工作协程写；写缓存是尽力而为的，pre 的共享运行在写缓存时 panic 不改变审核器已做出的结论，见第 10 步），每个块按它自己那次运行：
 
      | 该块的运行 | 写入 |
@@ -5164,16 +5167,19 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
      - **没有审核器实际收到的图片不缓存**：流程里有收图片的审核器，但这张图这次没有发给任何一个做出判断的审核器（Jev：没等到重画名额或重画时间预算、解码内存不够、太大、解不了、超出请求的 token 或体积预算、请求过大重试时只带第一张；OpenAI 和 LLM 审核器：带图请求被上游拒绝（OpenAI：400；LLM：400、413、415、422）后只发文字重试时的全部图片；LLM 审核器：URL 图片、超出它的上限的图片、base64 不合规范的图片，72.6），它既不记"通过"也不进命中集合；OpenAI 每次调用随机带的那一张是抽样，代表这次输入里全部可用的图片，调用成功时它们都算收到、一起缓存，不为没抽中的图片再调用；同一块的文字照常缓存。带这张图的下一个请求会再送它一次，混合流程里连同该请求的文字（已缓存的也送，"查"第 2 条）。没收到的原因一直存在的图片永远不进缓存；混合流程里带它的每个请求都把文字再送一遍。
      - **图片记"通过"的规则**：一张图片记"通过"，当且仅当收到它的某个审核器**自己的结果是通过**（判了、没命中），且该审核器所在的级的结果是通过。只被命中的审核器收到的图片不记：例如第 1 级 OpenAI 收到图片并命中、第 2 级 Jev 没收到图片只审文字并通过（推翻），或同一级 `all` / `at_least` 里 OpenAI 命中、Jev 没收到图片而通过——运行通过，图片不进缓存，下次再送（同一块的文字也不缓存，见下一条）。被推翻的运行只看推翻它的那一级；没有命中就通过的运行，每一个结果为通过的级（含补审级）都算。命中集合不受这条限制：任何做出判断的审核器收到过的图片都进集合。
      - **只被命中的审核器收到的图片：整块不记"通过"**（负责人 2026-11-10 的决定）。一个块的运行最终通过，但块里有一张图片被某个做出判断的审核器收到过、却没有被任何通过的审核器收到（按上一条不能记"通过"的、但有人收到过的图片），这个块的所有片段都不记"通过"，文字也不记；没有这种图片的块不受影响（文字加一张谁也没收到的图片：文字缓存，图片不缓存）。这样的内容按"没有得出结论的审核"处理——放行，而且**同一个请求每次得到同一个结果，不管别的请求往缓存里写了什么**。靠两条：这个块自己不记"通过"；混合流程里分块时没缓存成"通过"的图片不让已缓存的文字离开块（"查"第 2 条，第五轮；非混合流程的残留情形也在那里）。缺任何一条，图片都会单独成块：收图片的审核器再次命中，只读文字的复核没有可审的内容、整级跳过，命中成立并进缓存，同一个请求第一次放行、之后被拒绝、计违规并一直重放。只有第一条时，另一个请求把同样的文字审过一次就会这样（例如"系统提示词加一条只有图片的 user 消息"，缓存为空时放行，系统提示词已缓存时被拒绝）。**代价：这类请求永远不走缓存，每个请求都重新调用审核器；带着没缓存成"通过"的图片的请求把已缓存的文字再送一遍。** **保留的例外**：这张图片在某个请求里单独出现（请求里只有它，没有文字）时，收图片的审核器命中、没有可供复核的内容，命中集合 {图片} 进缓存，此后所有含这张图的请求都按重放处理（先审的被拒绝），包括之前放行过的；那是另一个请求确立的命中，不改。与 new-api 不同：被后面只读文字的复核推翻的图片命中，这里每次都放行；new-api 会拒绝，因为那里一张图片自成一个内容块，只读文字的审核器推翻不了它。
-     - 内存立即写，KV 在后台写（预算 2 秒；钩子不等 KV；不重试）。写的范围用结算时的清空纪元。
-     - **KV 写失败之后**：命中条目或它的指针没写成功的命中，留在判出它的节点的内存里（带"未落地"标记），该节点对它的片段做 5 分钟到期重读时保留它并把条目和指针再写一次 KV（TTL 从命中最初的写入时间算；被人工处理改过、还在墓碑期内的键不写）；写成功之前其他节点不知道这个命中，各自重新审这段内容。写确认过的、或从 KV 读来的命中条目，KV 里不再有时就是被人工处理删掉了，不会被写回。未落地的命中在三种情况下仍会丢，结果与没有这条规则时相同（内容按各片段的"通过"回答，或重新送审）：未落地的条目被内存 LRU 淘汰；它的片段键被别的节点的 `stored` 广播、人工处理的广播或淘汰从内存里删掉（片段从 KV 重读回来时没有指针，条目成了孤儿）；进程重启或改了 `cache_entries`。只在内存里的"通过"（KV 写不进，或一次运行超过 64 个新片段时多出来的）在第一次到期重读时丢掉，这些片段再审一次。
-     - KV 明确回答"没有这个条目"的指针，从本次查询各片段在内存里的值中删掉（只改内存，写入不到 4 秒的不删）：post 的钩子只看内存，否则这样的片段每次都入队，直到指针过期。
-     - **其他节点何时看到一个新命中**：内存里没有这些片段的节点，KV 写完后的下一次查询就读到。内存里已有这些片段"通过"的节点：写入节点在 KV 写完后广播 `verdict.changed`（72.8"多节点同步"），收到即从内存里删掉这些键、下次从 KV 读；广播丢失时，靠上面的 5 分钟重读，**最迟在该节点上次从 KV 读这些片段键的 5 分钟后生效**（人工处理造成的改动同样如此，72.8；KV 可读的前提下；post 时机下再晚一个请求；一个请求里到期的值超过 64 个时多出的部分顺延到下一次查询；本节点自己写入而当时没能读到 KV 的片段，5 分钟从写入时算）。
+     - **先回答，再写 KV，最后写内存（0.8.1）**。钩子一得出结论就回答，不等写。写在后台进行（用插件自己的 ctx，不随请求取消；关停时等它，宽限期过后取消），全部用批量调用，没有预算、没有个数上限：(1) 等到轮到它改这些键（同一节点上对缓存键的修改按键轮流）；(2) 读这次运行涉及的全部片段键；(3) 把这次运行的通过和指针并入读到的值，别的节点写的通过和指针保留；(4) 写命中条目，再写片段键（KV 里不会有指向还不存在的条目的指针）；(5) 全部成功后，把命中条目和写进 KV 的那些片段值放进内存——内存里这些键的值就是 KV 里的值——再广播得到指针的片段键。通常是 2 到 3 次调用（核心没有批量调用时每个键一次读、一次写）。写的范围用结算时的清空纪元。不重试。
+     - **写在排队时（0.8.1）**：每次运行的写是一个后台任务，按键轮流；KV 不回答时排在前面的写不结束，后面的一直等，个数没有上限（`runtime.kv_writing`、健康指标 `kv_writing`），这期间本节点的新结论都不进缓存。负责人的决定是不设时限、不设兜底；最坏情况见 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节"KV 不回答时"。
+     - **人工处理过的键不写（0.8.1）**：请求查缓存时记下读数（时间和本节点到那时立过的墓碑数），它的运行的写带着这个读数；键上有墓碑，或者请求问缓存已超过 4 秒而这期间本节点立过墓碑，或者内存缓存在这之后被换掉了（清空、改 `cache_entries`），就不写（后两种情况整次写都不写，计一次 `runtime.kv_skipped`）。所以判定在处理之前开始的运行，不论审了多久、写等了多久，都不会把处理去掉的结论写回来（72.9）。代价：每次人工处理前后，各节点上审了 4 秒以上的运行的结论都不进缓存；命中的内容再来时不是重放，而是再审、再计一条违规。写成功后放进内存按写自己的读数判断，放不进的键从内存里删掉、下次从 KV 读（不留旧值）。
+     - **KV 写失败之后（0.8.1）**：任何一次调用失败（计一次 `kv_errors`）就停，这次运行的结论**哪里都不缓存**，内存里也没有，这段内容下次重新审。KV 里可能留下已经写进去的部分（没有指针的命中条目、分几次调用时的前几批、旧核心上逐键写时已写的键），都是真的结论，只是不全。代价：命中在被重新审之前，如果它的各片段在别的请求里各自通过并缓存了，整体按各片段的"通过"回答，所有节点都一样。（0.8.0：没写成功的命中带"未落地"标记留在判出它的节点的内存里并被重写，KV 写不进或一次运行超过 64 个新片段时多出来的"通过"只存在于本节点内存。这两种只在内存里的值连同为它们写的代码都删掉了。）
+     - **写完之前，同样的内容再来就再审一次（0.8.1，已知）**：从钩子回答到后台写完成之间（正常是两三次 KV 调用的时间），缓存不知道这次运行的结论。同样的内容在这期间再次到达：通过的再审一次；命中的由它自己的运行再次拒绝，**记为一条新的违规**（不是重放，计入用户的统计、违规数和封禁计数）。写完之后从内存回答，不调用 KV。同时到达的相同请求仍合成一次运行。new-api 同步写，没有这个窗口。
+     - KV 明确回答"没有这个条目"的指针，从本次查询各片段在内存里的值中删掉（只改内存；只删查询跟过的那一个指针——同一个命中 id、同一个写入时间——期间本节点新写的、指向同一集合的指针不动）：post 的钩子只看内存，否则这样的片段每次都入队，直到指针过期。
+     - **其他节点何时看到一个新命中**：内存里没有这些片段的节点，KV 写完后的下一次查询就读到。内存里已有这些片段"通过"的节点：写入节点在 KV 写完后广播 `verdict.changed`（72.7"多节点同步"），收到即从内存里删掉这些键、下次从 KV 读——广播送达即生效。**广播丢失时没有时限（0.8.1）**：没收到的节点继续按内存里的值回答，直到这些值到期或被 LRU 淘汰（最长 `verdict_cache_days`），或缓存被清空；人工处理造成的改动同样如此（72.9）。写入命中的节点、做人工处理的节点自己不会过时：命中条目和 KV 里的指针在写成功时一起进了写入节点的内存。（0.8.0 靠 5 分钟重读把这个时限定为 5 分钟。）这一点有意与 new-api 不同：new-api 每次查询都读共享存储。
    - **重放**（缓存命中，照 new-api `replayHit`）：不调用审核渠道，不占并发名额。
      - 写一条记录：trace 是存下的那次运行的 trace，`latency_ms = 0`，`trace.cache = {hit: true, source_request_id, key, segs, fp}`，新列 `replayed = true`（72.9）；pre 的结果是 `block`，post 是 `hit`；`text` 和 `input_message`（`store_text` 开）是命中集合那些片段的内容。
      - pre：拒绝（`block_status`、`moderation_blocked`、`block_message`）。post：请求放行。
      - **重放不是新的违规**：不更新观察名单、不计违规、不触发 AI 分析、不计入自动封禁，也不计入用户的每日计数；流程行除 `audited`、`hit`（pre 还有 `blocked`）外另计 `replayed`，pre 的请求行计一次请求和一次拒绝，都不记耗时。
      - 重放决定整个请求：命中集合之外的内容这一次不审（72.4 剩余限制第 8 条）。
-   - **清空**：`POST /verdict-cache/clear`（72.11）把 `cache_epoch` 和 `config_version` 各加一，本节点换空的内存缓存，其他节点随 `config.changed` 广播或 5 秒一次的版本轮询跟上。KV 里的旧键不逐个删除，不再被读到，到期消失。清空前入队的 post 任务不用旧范围里的结论回答，它的结论写到新范围。
+   - **清空**：`POST /verdict-cache/clear`（72.11）把 `cache_epoch` 和 `config_version` 各加一，本节点换空的内存缓存，其他节点随 `config.changed` 广播或 5 秒一次的版本轮询跟上。KV 里的旧键不删除（宿主 KV 没有按前缀删除，要先分页列出再分批删），不再被读到，到期消失。清空前入队的 post 任务不用旧范围里的结论回答：出队时按新范围查缓存（清空之后的结论，包括人工处理写下的，能回答它），它的结论写到新范围。
    - **人工处理同步缓存**：`POST /events/review` 之后，记录的 `trace.cache` 指明的命中随处理结果更新，规则见 72.9。
    - 试跑、测试、模拟不读也不写缓存。
 9. **post**：入队（条数满或排队请求占用的字节超过 96 MiB 就丢弃并计数），放行，note `moderation: queued`。流程和上游请求并行执行。排队的任务只保留分块后的文字和图片（复制出来，不持有钩子请求），裁掉流程里没有审核器会用到的图片。插件内存上限 512 MB。
@@ -5295,7 +5301,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **绑定**：`flow_groups(group_id PK, flow_id)`，一个分组只能属于一个流程，`group_id=0` 是默认流程。0.7.0 起 `flow_id=0` 表示该分组不审核（免审），另有账号绑定表 `flow_accounts`，见 72.17。**0.8.0**：指向已停用、未发布或已删除流程的绑定视为不存在，请求按更宽的绑定审核（72.5 第 3 步、72.17）；免审（flow 0）不回落。
 
-**多节点同步**：保存或发布后广播 `config.changed`，各节点重新加载快照；另外每 5 秒检查一次版本号兜底（`refreshEvery`；此前这里写的 30 秒与代码不符）。0.8.0 另有广播 `verdict.changed`，负载 `{"keys": [缓存键…], "stored"?: true}`（每条消息的键合计不超过 48 KiB）：不带 `stored` 的是人工处理后发的，其他节点删掉内存里的这些键并立 4 秒墓碑（72.9）；带 `stored: true` 的是一次运行把命中写进 KV 后发的，`keys` 是得到指针的片段键，其他节点只删键、下次从 KV 读（72.4）。
+**多节点同步**：保存或发布后广播 `config.changed`，各节点重新加载快照；另外每 5 秒检查一次版本号兜底（`refreshEvery`；此前这里写的 30 秒与代码不符）。0.8.0 另有广播 `verdict.changed`，负载 `{"keys": [缓存键…], "stored"?: true}`（每条消息的键合计不超过 48 KiB）：不带 `stored` 的是人工处理后发的，其他节点删掉内存里的这些键并立 4 秒墓碑（72.9）；带 `stored: true` 的是一次运行把命中写进 KV 后发的，`keys` 是得到指针的片段键，其他节点只删键、下次从 KV 读（72.4）。`verdict.changed` 是其他节点得知新命中和人工处理的唯一途径（0.8.1 起没有定期重读）：丢失时，没收到的节点按内存里的值回答，直到值到期、被淘汰或缓存被清空（72.5 第 8 步）。
 
 ### 72.8 观察名单与封禁
 
@@ -5363,7 +5369,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - **确认**：只在 `fp` 等于流程现在的指纹时，用记录的 trace 重建命中条目，并去掉这些片段的"通过"（可以盖掉之前误报写下的通过）；指纹已变的记录跳过。
   - **改回待处理**：删除命中条目、指针和这些片段的"通过"，下次重新审。
   - 同一次处理里指向同一个命中的多条记录（一次命中和它的重放）只改一次。
-  - **以 KV 为准**：KV 同步写（每 64 个键 1 秒，最多 10 秒）；本节点和收到广播 `verdict.changed` 的其他节点只把这些键从内存里删掉，并在 4 秒内不让查询或刚结束的运行把旧值写回，之后都从 KV 重新读。响应的 `cache_synced` 是缓存改动全部写成功的记录数；写失败的不计入（各节点一致地沿用旧结论），再处理一次会重做。广播是尽力而为的，漏收的节点最迟在它上次从 KV 读这些键的 5 分钟后跟上（到期重读用 KV 的值替换内存的值，72.4；KV 可读的前提下，post 时机下再晚一个请求）；清空缓存可以兜底（72.11）。
+  - **以 KV 为准**：KV 同步写，用批量调用（先删或写命中条目，再读出、修改、写回片段键），**没有预算（0.8.1）**：同步用处理请求自己的 ctx，请求结束时停下，没写的不写、对应记录不计入 `cache_synced`（0.8.0 是每 64 个键 1 秒，最多 10 秒）。本节点先给这些键立不设期限的墓碑，等到轮到它改这些键（正在写这些键的运行先写完），写 KV，再把墓碑的期限定为此后 4 秒，然后才让出；收到广播 `verdict.changed` 的其他节点把这些键从内存里删掉并立 4 秒墓碑。墓碑期内查询读到的旧值和刚结束的运行都不能把旧结论放回内存或写回 KV；读 KV 用了比墓碑更久、期间又有键被立过墓碑的那次读，读到的值一个都不放进内存；运行的写同理按"它的请求问缓存的时刻"算——问缓存已超过 4 秒、期间本节点立过墓碑的运行什么都不写（72.5 第 8 步的"写"；0.8.1 的第二版只看墓碑，排队或读 KV 超过 4 秒的写会把标为误报的命中写回去，门禁审核复现后改掉）。之后都从 KV 重新读。响应的 `cache_synced` 是缓存改动全部写成功的记录数；写失败的不计入（各节点一致地沿用旧结论），再处理一次会重做。广播是尽力而为的。**漏收的节点（0.8.1）**继续按内存里的旧值回答——例如继续重放已被标为误报的命中——直到这些值到期或被 LRU 淘汰（最长 `verdict_cache_days`），做处理的节点自己立即生效；清空缓存可以兜底（72.11）。0.8.0 时漏收的节点最迟 5 分钟后由到期重读跟上，0.8.1 删掉了到期重读（72.5 第 8 步）。同步里失败的批量调用各计一次 `runtime.kv_errors`；因为请求结束而停下的不计。
 - **最终结论只在前端计算**：有人工结论用人工结论；否则用 AI 结论，AI 判 unsure 时显示"待复核"；同时标注来源是人工还是 AI。
 
 ### 72.10 设置（`forms/settings.schema.json` 改动）
@@ -5443,7 +5449,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议。`seen` 把新命中清零。0.8.0：列表每行带 `allowlisted`、`blocklisted`；把白名单用户设为 `enforce` 返回 400（`level` / `allowlisted`，72.8） |
 | POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`observe` 按 post 执行，`enforce` 按 pre 执行，`none`（或不带）是没有名单条目的用户，按默认级别决定（0.8.0；此前固定为 post）；返回时机和"是否会被拒绝" |
 | POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认。0.8.0：new-api 的 `llm` 审核器导入为 `llm_questions` |
-| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（KV 调用失败的累计次数）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）、`runtime.images_refused`（LLM 审核器的带图调用被上游拒绝、改为只审文字的次数，72.6）；后三个是本节点启动以来的计数 |
+| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（失败的 KV 批量调用次数；0.8.1 起插件的 KV 调用没有预算，因调用方的 ctx 结束而没做成的不计，72.5 第 8 步。0.8.1 的第一版加过 `runtime.kv_timeouts`，未发布，已删）、`runtime.kv_writing`（0.8.1：此刻结论正在去 KV 路上的运行数，是瞬时值不是累计；持续增长说明 KV 不回答）、`runtime.kv_skipped`（0.8.1：因人工处理而整次没写缓存的运行数，72.5 第 8 步的"写"）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）、`runtime.images_refused`（LLM 审核器的带图调用被上游拒绝、改为只审文字的次数，72.6）；`kv_errors`、`redraw_panics`、`images_refused` 都是本节点启动以来的计数（`kv_skipped` 也是） |
 | POST `/blocks`（改） | manage | 0.8.0：白名单用户不能封禁，字段错误码 `allowlisted`（取代 `exempt`） |
 | POST `/test`（改） | manage | 请求体 `{text, images?, flow_id?}`：不带 flow_id 时按默认流程执行，返回每级的 trace |
 
@@ -5678,7 +5684,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 命中的缓存单位：new-api 是内容块；插件是块里实际送审的片段集合，整个集合都在请求里才重放。片段键同时存通过和最多 8 个命中指针，命中优先。
   - 缓存的有效期：值里带写入时间，按当前的 `verdict_cache_days` 判断，读到不续期。
   - 误报写通过：对命中集合里的每个片段写，且只在流程的判定指纹没变时写；"确认"重写命中也只在指纹没变时做（new-api 都无条件）。
-  - 缓存写入：运行结果是内存同步、KV 后台；人工处理以 KV 为准（new-api 都是同步写）。
+  - 缓存写入：运行结果在钩子回答之后写，先 KV、写成功后才进内存（0.8.1；写完之前同样的内容再来会再审一次）；人工处理以 KV 为准（new-api 都是同步写）。
   - 清空缓存：换纪元，旧键等到期（new-api 的 Redis 模式立即删除）。
   - 设置键：`mode` 三个值表达 new-api 的 `enabled` + `default_level`；白名单兼容旧键 `exempt_user_ids`。
   - Jev 图片重画：1200 万像素（new-api 5000 万），另有解码内存和重画时间两项限制（72.6）。
@@ -5773,7 +5779,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
     - 题表式 LLM：`engine_llmq_test.go`（请求体、边界、初审命中、自身请求标记、读结果、关掉图片时只审文字、在流程里）。
     - LLM 审核器的图片：`llm_image_test.go`（三种协议的图片 part、上限与去重、开关关掉、只有图片的输入、400 回退、`llm_verdict` 的两种重试合计不超过 `max_turns + 2` 次调用、提示词；流程里复核看图后推翻并缓存 / 确认并拒绝、非混合流程不留已缓存的文字、试跑与 `/test` 的计数、开关进指纹）。
     - Jev：`jev_image_test.go`（长上下文请求头、原样发送、缩小、补白、透明、GIF 和 WebP、JPEG 回退、各种跳过、去重与预算、名额、解码内存估算、旧题集版本号、重画不占用文字的审核时间、等名额和等内存时 ctx 结束、解码器 panic）。
-    - 判定缓存：`verdict_cache_test.go`（命中并重放、整个集合才重放、重放不是违规、post 时机、不缓存的情况、范围与指纹、清空、人工处理同步、广播、KV 故障、命中条目上限）；同一文件里还有：命中不被片段的通过覆盖、人工处理去重与 KV 失败、指纹已变的误报、写入时间、清空前入队的任务、`judgingVersion`、晚到的后台写不撤销人工处理（可阻塞的假 KV）、没收到的图片不缓存、图片只凭通过的审核器记"通过"、新命中传到其他节点（广播与 5 分钟重读）、人工处理传到没收到广播的节点（重读替换）、读不到的命中条目按未知、同键修改串行、人工处理先立墓碑并遵守预算；第四轮：只被命中的审核器收到的图片每次得到同一结果（`TestImageOnlyAHittingAuditorSawGetsTheSameVerdict`）、没落到 KV 的命中在重读时重写且不写回人工处理删掉的命中（`TestUnlandedHitIsWrittenAgain`）、失效的指针出内存（`TestStalePointerLeavesMemory`）；第五轮：混合流程里没缓存的图片总是和本请求的文字一起审，别的请求缓存了文字也不改变结果（`TestImageVerdictDoesNotDependOnCachedText`；`hook06_test.go` 的 `TestHookSendsCachedTextWithANewImage`、`extract_test.go` 的 `TestPlanKeepsCachedTextWithAnUncachedImage`）；写记录时 panic 命中照样拒绝（`TestHitStandsWhenRecordingPanics`）和合并也 panic 的分支（`TestPreRunSurvivesPanic`）在 `hook_test.go`。片段值格式、内存字节上限、墓碑在 `unit_test.go`；共享运行只结算一次在 `hook_test.go`。
+    - 判定缓存：`verdict_cache_test.go`（命中并重放、整个集合才重放、重放不是违规、post 时机、不缓存的情况、范围与指纹、清空、人工处理同步、广播、KV 故障、命中条目上限）；同一文件里还有：命中不被片段的通过覆盖、人工处理去重与 KV 失败、指纹已变的误报、写入时间、清空前入队的任务、`judgingVersion`、晚到的后台写不撤销人工处理（可阻塞的假 KV）、没收到的图片不缓存、图片只凭通过的审核器记"通过"、新命中传到其他节点（广播；0.8.1 起没收到广播的节点按内存回答到值到期或清空）、没收到人工处理广播的节点（0.8.1 起一直重放到值到期，`TestNodeWithoutReviewBroadcastReplaysUntilExpiry`）、读不到的命中条目按未知、同键修改轮流（`TestKVChangesOfAKeyTakeTurns`）、人工处理先立墓碑并随它的请求结束（`TestReviewSyncOrderAndItsCaller`）；第四轮：只被命中的审核器收到的图片每次得到同一结果（`TestImageOnlyAHittingAuditorSawGetsTheSameVerdict`）、KV 写失败的命中哪里都不缓存、下次重新审，写成功后不写回人工处理删掉的命中（0.8.1：`TestHitWhoseWriteFailedIsCachedNowhere`，原 `TestUnlandedHitIsWrittenAgain`）、失效的指针出内存（`TestStalePointerLeavesMemory`）；第五轮：混合流程里没缓存的图片总是和本请求的文字一起审，别的请求缓存了文字也不改变结果（`TestImageVerdictDoesNotDependOnCachedText`；`hook06_test.go` 的 `TestHookSendsCachedTextWithANewImage`、`extract_test.go` 的 `TestPlanKeepsCachedTextWithAnUncachedImage`）；写记录时 panic 命中照样拒绝（`TestHitStandsWhenRecordingPanics`）和合并也 panic 的分支（`TestPreRunSurvivesPanic`）在 `hook_test.go`。片段值格式、内存字节上限、墓碑在 `unit_test.go`；共享运行只结算一次在 `hook_test.go`。
     - 时机与名单：`lists_test.go`（`TestPreModerated` 的全部组合、白名单是观察而不是不审、自动条目用默认级别、拦截级计数、手动设拦截级被拒、AI 受名单限制、繁忙、旧键读作白名单、名单转换、模拟）、名单项格式）；`parity_test.go`（一次性转换、转换窗口、取锁顺序）；`stats_api_test.go`（`blocking_with_new`、告警状态的命名空间）；`account_binding_test.go`（`inactive`）。
     - 原始消息：`hook06_test.go` `TestInputMessageKeptPerSetting`；绑定回落：`account_binding_test.go`（72.17）。
     - 界面（vitest）：`flowOps.spec.ts`、`bindingOps.spec.ts`、`settingsForm.spec.ts`、`messages.spec.ts`、`fixes.spec.ts`。
@@ -5781,6 +5787,14 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
     - 现有配置下就会变的行为：复核出错或超时不再放行已命中的请求；`mode=enforce` 的含义；绑定到停用流程的分组和账号回落到默认流程（从不审核变成审核）；繁忙时 503 的范围；更多记录带原始消息。
     - 升级后第一天缓存全部重建（旧缓存作废），加上 Jev 送审更多图片，审核调用数和费用会上升。
     - 滚动升级期间不要发布带补审级的流程、不要创建 `llm_questions` 审核器（0.7.2 的节点读不了）；回滚前先撤掉它们，并去掉四个新设置键（72.10）。
+- **0.8.1（2026-11-11，判定缓存：内存层不再重读；批量 KV 调用，没有预算和上限；先 KV 后内存）**：
+  - 改动：见 §72 开头的 0.8.1 一段、72.5 第 8 步和 72.9 的人工处理同步。界面没有变化（0.8.1 的第一版在概览页加过"共享缓存（KV）读写超时"一行，未发布，已随 `runtime.kv_timeouts` 删掉）。
+  - 测试（`internal/moderation/verdict_cache_test.go`，除注明外；逐项说明见设计文档 5.10）：
+    - 去掉重读时改了断言的：`TestStoredHitReachesOtherNodes`（没收到广播的节点一直按内存里的"通过"回答、不调用 KV，值到期后或清空缓存后才跟上）、`TestNodeWithoutReviewBroadcastReplaysUntilExpiry`（原 `TestReviewReachesNodeWithoutBroadcast`）、`unit_test.go` 的 `TestLRU`；新增 `TestKnownSegmentsMakeNoKVCall`（KV 每次调用 50 ms，150 个片段都在内存里的请求：值到期前任何时刻都没有 KV 调用，`kv_errors` 不动）。
+    - 批量调用、去掉预算和上限、先 KV 后内存时换掉的（场景保留，断言随规则改）：`TestKVRunStopsWithItsContext` → `TestKVCallsCountFailuresNotEndedContexts`；`TestLookupOfMissesStopsAtItsBudget` → `TestLookupReadsEverySegment`（150 和 1200 个片段全部读到，`KVGetMany` 1 次和 3 次，KV 里已通过的不送审）；`TestReviewSyncOrderAndBudget` → `TestReviewSyncOrderAndItsCaller`；`TestUnlandedHitIsWrittenAgain` → `TestHitWhoseWriteFailedIsCachedNowhere`；`TestKVChangesOfAKeyTakeTurns`、`TestReviewIsNotUndoneByLateWrites`、`TestStoredHitReachesOtherNodes`（铺垫）、`TestKVFailureAuditsAgain`、`TestReviewSyncKVFailure`、`hook_test.go` 的 `TestPreRunSurvivesPanic`（多一例：后台写 panic）。
+    - 新增：`TestPassDoesNotHideAHitAnotherNodeStored`（门禁审核的两个序列，现在以重放结束）、`TestMemoryHoldsWhatTheKVHolds`、`TestRepeatedBeforeTheWriteIsModeratedAgain`、`TestHitEntryIsWrittenBeforeItsPointers`、`TestColdLookupIsOneCall`（50 ms 一次调用的 KV：150 个片段的冷查询是 1 次调用；没有批量调用时 150 次逐键调用，照样读全）、`TestLookupEndsWithItsRequest`、`TestStopEndsVerdictWrites`、`TestKVReadBeyondOneAnswer`、`TestStalePointerRemovalKeepsANewerPointer`，`unit_test.go` 的 `TestLRUTombstoneOfAReviewInProgress`。
+    - 测试辅助：`mustHook` 在发请求前后各等一次本节点的后台写完成（结论在回答之后才进缓存）；`hookNow` 不等。
+  - 部署：**要求核心 0.1.273（有批量 KV 调用；`hostCompat >=0.1.273`）**，随它作为内置插件发布——核心滚动升级完成后内置同步才升插件。不需要管理员重新批准，没有迁移，没有设置变化；KV 里的键和值不变，可以与 0.8.0 滚动混跑。回滚 = 插件装回 0.8.0；核心也要退回 0.1.272 时先退插件。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 末尾的"0.8.1"一节。
 
 ### 72.17 绑定到账号（0.7.0，2026-11-08，用户要求；需要核心 §85）
 
@@ -7346,3 +7360,121 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 - 核心 0.1.271 的后续修补（仍无迁移、契约版本不变）：密钥页的接入地址也包含转换端点（92.5）；Magpie 手动填写说明的字段名改成 Magpie 界面上的叫法（92.3）；`SBulkBar` 手机停靠条的占位从组件原位置挪到它父元素的末尾，停靠期间 `fab` 按钮隐藏、控制台不再为它留底部空间（`web/packages/ui/README.md`“手机形态”；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，原生插件经 import map 用控制台这一份，不用重建；停靠时根元素带 `data-bulk-dock`，控制台布局据此让出 `fab` 的留白，原来占位元素的 `data-testid="bulk-dock-space"` 取消）。
 - 核心 0.1.272 + moderation 0.7.3 的手机布局修补（仍无迁移、契约版本不变；`@sub2api/ui` 只改内部 DOM 和样式，props、事件、插槽、导出都不变，其它原生插件不用重建，详见 `web/packages/ui/README.md`“手机形态”）：`SBulkBar` 停靠条的操作按钮放不下时，藏着按钮的一侧渐隐，只露出一部分的按钮点一下只滚进视野、不触发操作；`STable` 手机卡片把收不进卡片的单元格内容裁在卡片边缘，不再把页面撑出横向滚动。0.1.271 核验时提示词审核“审核记录”页宽 427 px 的原因不是标签栏，是 moderation 给分数标签写的 `max-width: 14rem` 比卡片里半宽的格子宽。moderation 0.7.3 只改原生界面的样式（`hostCompat`、`hostUICompat`、接口、迁移都不变）：窄屏（768 px 以下）分数与分类标签在格子里换行，流程页“绑定分组”在格子里换行，筛选栏的按钮组放不下时换行（英文界面观察名单页原来伸出屏幕）；宽屏渲染不变。moderation 0.7.4（同样只改原生界面）：概览页（360 px、卡片内 260 px）、测试页（340 px）网格的最小列宽不再超过容器（`minmax(min(…, 100%), 1fr)`）；原来概览页在 360 px 宽的手机上横向滚动 13 px，更窄时更多（320 px 时概览页 52 px、测试页 32 px）。
 - 删除的控制台组件与标识：`KeyCcSwitchButton`、`KeyEnabledSwitch`、`ccSwitch.ts`、`GroupPlatforms`、`PlatformBadges`、`platformTheme.ts`；`data-testid` `key-enabled-switch`、`key-ccswitch`、`guide-ccswitch`、`use-key`、`group-platforms`、`platform-badges`。
+
+## 93. 插件 KV 批量调用（2026-11-10，moderation 判定缓存需要；无迁移；Host API 仍是 9；核心 0.1.273）
+
+插件读写自己的 KV 只能经 `HostService` 的 `KVGet` / `KVSet` / `KVDelete` / `KVList`。每次调用先在 PostgreSQL 复核一次 `kv` 授权（`hostServer.require`），再发一条 Redis 命令。在承载流量的节点上实测，这两步分别是 27 ms 和 23 ms，合计每个键约 50 ms。moderation 的判定缓存一个请求最多读 64 个键，写也是这么多；它 8 个一组并发，200 ms 后放弃，所以在这个节点上大部分缓存没有被查到。
+
+本节加三个 RPC，一次调用处理同一个 namespace 下的多个键：**授权只复核一次，Redis 只往返一次**，开销不再随键数增长。proto 只新增这三个 RPC 和它们的消息，单键调用不变。
+
+### 93.1 调用与消息
+
+| RPC | 请求 | 响应 |
+| --- | --- | --- |
+| `KVGetMany` | `namespace`，`keys[]` | `items[]`，每项 `{found, value}`，与 `keys` 等长、同序 |
+| `KVSetMany` | `namespace`，`items[]`，每项 `{key, value, ttl_seconds}` | 空 |
+| `KVDeleteMany` | `namespace`，`keys[]` | 空 |
+
+- Redis 键与单键调用相同：`plugin:kv:{plugin_key}:{ns}:{key}`，前缀由宿主按调用者加上。批量调用和单键调用读写的是同一份数据，可以混用。
+- `KVGetMany`：不存在的键回 `found=false`；存在但值为空的键回 `found=true` 和空 `value`。
+- `KVSetMany`：每项用自己的 `ttl_seconds`，0 表示不过期（会清掉这个键原有的过期时间，和 `KVSet` 一样）。**全写或全不写**（93.3）。
+- `KVDeleteMany`：不存在的键不算错。
+- 同一个键可以在一次调用里出现多次：`KVGetMany` 每次出现各回一项，`KVSetMany` 以最后一项为准。
+- `keys` / `items` 为空是合法调用：照常复核授权、校验 namespace，然后直接返回，不访问 Redis。
+
+### 93.2 规则与上限
+
+| 项 | 约定 |
+| --- | --- |
+| 授权 | `kv`，与单键调用相同。每次调用复核一次，在校验参数之前 |
+| namespace | 与单键调用相同（`validNamespace`）：1 到 64 字节，不含 `:*?[]\`。没有键时也校验 |
+| key | 与单键调用相同（`kvKey`）：1 到 512 字节 |
+| value | 与 `KVSet` 相同：不超过 64 KiB（`KVMaxValueBytes`） |
+| `ttl_seconds` | 0 到 9223372036（`KVMaxBatchTTLSeconds`，`time.Duration` 能表示的最大整秒数，约 292 年）。`KVSet` 只要求不小于 0；批量写加了上界，因为 Redis 对过大的过期时间报错，而脚本中途出错会留下已经写入的项 |
+| 每次调用的键数 | 不超过 512（`KVMaxBatchKeys`） |
+| 每次调用的数据量 | 不超过 3 MiB（`KVMaxBatchBytes`）。`KVSetMany` 算请求里所有键和值的长度之和；`KVGetMany` 算读到的所有值的长度之和。满长的值（64 KiB）一次最多写 47 个、读 48 个 |
+
+- 3 MiB 是按连接的消息上限定的。插件调用 `HostService` 走 go-plugin broker 上的 gRPC 服务端（`serveHostBroker` 里的 `grpc.NewServer`），它用 gRPC 默认的接收上限 **4 MiB（4194304 字节）**；宿主发送和插件接收的上限都是 `MaxInt32`（go-plugin 的 `dialGRPCConn`）。请求里 3 MiB 的键和值加上 protobuf 的开销总能送到；超过 4 MiB 的请求由 gRPC 自己以 `RESOURCE_EXHAUSTED` 拒绝，到不了核心的处理函数。
+- 校验顺序：授权 → namespace → 键数 → 每一项的 key → 每一项的 value 和 ttl → 数据量。逐项的错误信息带下标，如 `items[2]: value exceeds 65536 bytes`。
+- 这些规则和上限定义在 `sdk/protocol/kv.go`（`KVBatchMaxKeys`、`KVBatchMaxBytes`、`KVMaxTTLSeconds`、`ValidKVNamespace`、`ValidKVKey`、`ValidKVBatchTTL`），宿主和 SDK 用同一份；宿主侧的常量在 `grpcruntime/host.go`，紧挨原有的 KV 上限。
+- `KVGetMany` 的数据量在读完之后才算得出来：一次调用最坏会让核心从 Redis 读入 512 × 64 KiB = 32 MiB，然后才拒绝。
+
+### 93.3 一次授权复核，一次 Redis 往返
+
+| RPC | PostgreSQL | Redis |
+| --- | --- | --- |
+| `KVGetMany` | 一次授权查询 | 一条 `MGET` |
+| `KVSetMany` | 一次授权查询 | 一条 `EVALSHA`（核心自己的脚本） |
+| `KVDeleteMany` | 一次授权查询 | 一条 `DEL` |
+
+- `KVSetMany` 的脚本是核心写的包级常量（`grpcruntime/host.go` 的 `kvSetManyLua`，用 `redis.NewScript` 发送）：`KEYS[i]` 是第 i 项的 Redis 键，`ARGV[2i-1]` 是值，`ARGV[2i]` 是以秒计的 ttl。脚本先检查参数个数和每个 ttl（非负整数），再逐项执行 `SET key value`（ttl 为 0）或 `SET key value EX ttl`。Redis 服务端还没有这个脚本时（重启或 `SCRIPT FLUSH` 之后的第一次调用），`EVALSHA` 回 `NOSCRIPT`，客户端改用 `EVAL` 再发一次；这是唯一多出一次往返的情况，每个 Redis 服务端只发生一次。
+- 原子性：核心在访问 Redis 之前校验全部项，任何一项不合法就整个调用失败、什么都不写。校验通过后，脚本在 Redis 里作为一个整体执行，其他命令不会插到中间；脚本在第一次写入之前再检查一遍参数，`SET` 对已有的键不会因类型失败。所以要么全部写入，要么一项都不写。内存达到 `maxmemory` 且策略是 `noeviction` 时，Redis 在脚本的第一次写入处拒绝，同样一项都不写（在 Redis 7.0.15 上验证过），调用回 `UNAVAILABLE`。
+- `MGET` 是一条命令，一次 `KVGetMany` 读到的是同一时刻的值。`DEL` 同样是一条命令。
+- Redis 部署：核心用 `redis.NewClient` 连单个实例（`cluster.OpenRedis`），不是 Redis Cluster。多键的 `MGET`、`DEL` 和带多个 `KEYS` 的脚本在单实例上都合法。如果以后改成 Redis Cluster，同一次调用的键会落到不同的槽（键名里没有 hash tag），这三个调用要跟着改。
+- 结果：64 个键的读，从 64 次授权查询加 64 次 Redis 往返，变成各一次。
+
+### 93.4 错误
+
+| 情况 | 状态码 |
+| --- | --- |
+| 没有 `kv` 授权，或授权已在 PG 里撤销、scope 已变 | `PERMISSION_DENIED` |
+| 授权查询失败 | `UNAVAILABLE`（`cannot verify current plugin grant`） |
+| namespace、key、value、ttl 不合规则；键数超过 512；`KVSetMany` 的数据量超过 3 MiB | `INVALID_ARGUMENT` |
+| `KVGetMany` 读到的值合计超过 3 MiB | `RESOURCE_EXHAUSTED`，调用方减少每次的键数重试 |
+| 请求超过连接的 4 MiB 上限 | `RESOURCE_EXHAUSTED`（gRPC 返回，不是核心） |
+| Redis 失败（连不上、超时、脚本出错） | `UNAVAILABLE`（`kv unavailable`），与单键调用相同 |
+| 核心早于 0.1.273 | `UNIMPLEMENTED`（93.7） |
+
+### 93.5 核心不执行插件提交的脚本
+
+批量写用 Lua 脚本，但脚本是核心的，插件只提供键、值和 ttl。没有、也不会有“插件提交脚本由核心执行”的调用：Redis 是核心自己的数据（会话粘性、限流、冷却、锁、节点注册）和所有插件共用的，脚本里可以访问任意键，宿主加的 `plugin:kv:{plugin_key}:` 前缀约束不了脚本。让插件提交脚本，等于把整个 Redis 交给这个插件。插件需要新的原子操作时，在核心加一个有明确语义的 RPC。
+
+### 93.6 SDK
+
+```go
+type KVValue struct {
+	Value []byte
+	Found bool
+}
+
+type KVItem struct {
+	Key   string
+	Value []byte
+	TTL   time.Duration // 0 = 不过期；按整秒发送，和 KV.Set 一样
+}
+
+func KVGetMany(ctx context.Context, kv KV, namespace string, keys []string) ([]KVValue, error)
+func KVSetMany(ctx context.Context, kv KV, namespace string, items []KVItem) error
+func KVDeleteMany(ctx context.Context, kv KV, namespace string, keys []string) error
+
+// 可选接口，Host.KV() 返回的 KV 实现了它。
+type KVBatch interface {
+	GetMany(ctx context.Context, namespace string, keys []string) ([]KVValue, error)
+	SetMany(ctx context.Context, namespace string, items []KVItem) error
+	DeleteMany(ctx context.Context, namespace string, keys []string) error
+}
+```
+
+- 插件调用包级函数，把 `host.KV()` 传进去：`pluginsdk.KVGetMany(ctx, host.KV(), ns, keys)`。`KV` 接口没有加方法，已有的实现（测试替身、包了一层的 KV）照常编译。
+- 传进来的 `KV` 实现了 `KVBatch` 就用它，否则用这个 `KV` 的 `Get` / `Set` / `Delete` 逐个完成。所以只实现了四个单键方法的测试替身也能用，它注入的故障照样生效。
+- **旧核心自动回退**：`Host.KV()` 的实现在核心回 `UNIMPLEMENTED` 时改用单键调用，并记住这个结果（记在这条宿主连接上，即一个插件进程一份）。旧核心只多付一次被拒的调用，不是每批一次。核心升级时插件进程随核心重启，标记自然重置。只有 `UNIMPLEMENTED` 触发回退，其他错误（`PERMISSION_DENIED`、`UNAVAILABLE`、`INVALID_ARGUMENT`、`RESOURCE_EXHAUSTED` 等）原样返回。
+- 回退时单键调用最多 8 个并发（`kvSinglesParallel`）；有一个失败就不再发新的，返回这个错误。同一个键在一批写里出现多次时只写最后一项，结果与批量调用一致。
+- **规则在两种核心上相同**：SDK 在发出任何调用之前按 93.2 校验（规则来自 `sdk/protocol/kv.go`），不合规则回 `codes.InvalidArgument`，什么都不发。回退路径上读到的值合计超过 3 MiB 时同样回 `codes.ResourceExhausted`。
+- 回退给不了两样东西：开销（仍是每个键一次授权复核加一次往返）和写的原子性（中途失败时，之前的项已经写入）。需要其中任何一样的插件声明 `hostCompat: ">=0.1.273"`。
+- 测试替身 `pluginsdktest.FakeHost` 实现了这三个 RPC，规则和上限与宿主相同，写入是原子的。`KVBatchUnimplemented`（或运行中调用 `SetKVBatchUnimplemented(true)`）让它像旧核心一样回 `UNIMPLEMENTED`；`KVCalls()` 返回每个 KV RPC 被调用的次数，用来断言“这批键只用了一次调用”。
+
+### 93.7 兼容与版本
+
+- Host API 不升，仍是 9，理由同 91.3：升版会让 rolling-v1 滚动更新不可用（`gateway/internal/control` 要求前后两个版本的 `HostAPIVersion` 相同，§82），而这次只是加 RPC。
+- 旧核心对未知 RPC 回 `UNIMPLEMENTED`（`UnimplementedHostServiceServer`）。用 SDK 函数的插件在旧核心上自动回退（93.6），不需要提高 `hostCompat`；直接用生成的 gRPC 客户端的插件要自己处理 `UNIMPLEMENTED`。依赖一次往返的开销或原子写的插件声明 `hostCompat: ">=0.1.273"`。
+- 滚动更新期间新旧核心并存没有问题：两种核心读写同一批 Redis 键、同一种值，批量调用和单键调用的结果可以互相读到。
+- 0.1.273 是按当前版本序列写的（0.1.272 之后的下一个核心版本）。发布时版本号如果不同，以第一个带这三个 RPC 的核心版本为准，同时改这里、`host.proto` 和 SDK 的注释。
+- 没有迁移，没有新的宿主权限，manifest 不变。
+
+### 93.8 实现位置与测试
+
+- proto：`sdk/proto/sub2api/plugin/v1/host.proto`（RPC 的注释是给插件作者读的规则全文；消息放在文件末尾，已有消息的生成代码不动）。生成代码 `sdk/gen/pluginv1/host.pb.go`、`host_grpc.pb.go`（`buf generate`，protoc-gen-go v1.31.0、protoc-gen-go-grpc v1.2.0）。
+- 宿主：`server/internal/plugin/grpcruntime/host.go`（`KVGetMany`、`KVSetMany`、`KVDeleteMany`、`kvBatchKeys`、`kvSetManyLua`）。
+- SDK：`sdk/protocol/kv.go`，`sdk/pluginsdk/kvbatch.go`，`sdk/pluginsdk/pluginsdktest/kvbatch.go`。
+- 宿主测试 `grpcruntime/host_kv_batch_internal_test.go`：顺序与缺失的键；每项自己的 TTL；一项不合法时什么都不写；键数和数据量上限；两个插件、两个 namespace 之间互不可见；授权（含 PG 里撤销）；每次调用恰好一次授权查询和一条 Redis 命令（pgx tracer 和 go-redis hook 计数）；Redis 不可用。`TestKVBatchRealRedis` 在设置了 `TEST_REDIS_URL` 时对真实的 Valkey / Redis 运行（CI 设置；本地跳过）：真实 Lua 引擎上的脚本、512 个键、真实过期、脚本自身的参数检查。`grpcruntime/kv_batch_test.go` 用真实插件进程（`testdata/testplugin` 的 `/kvbatch`）走 broker 连接，并验证 4 MiB 的连接上限。
+- SDK 测试 `sdk/pluginsdk/kvbatch_internal_test.go`（新核心一批一次调用；旧核心回退、只被拒一次、结果相同；不吞其他错误；规则在两种核心上相同；并发上限）和 `sdk/pluginsdk/pluginsdktest/kvbatch_test.go`（FakeHost 的规则、原子写、旧核心开关、经 SDK 的端到端）。

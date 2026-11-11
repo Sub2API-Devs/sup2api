@@ -61,6 +61,9 @@ type moderation struct {
 	snap   *snapshot
 	chunks []*chunk
 	plan   *plan // segment hashes and pieces for the verdict cache
+	// asked: the reading of the last lookup of the verdict cache for this
+	// request; its run stores the verdicts with it (settleVerdicts).
+	asked  reading
 	rec    eventRec
 	timing string
 	source string // cost source; "" = audit
@@ -134,7 +137,7 @@ func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRe
 		return allow(notePrefix + "busy")
 	}
 	defer p.inflightBytes.Add(-size)
-	m, early := p.admit(c, in, snap, flow, model)
+	m, early := p.admit(ctx, c, in, snap, flow, model)
 	if early != nil {
 		return early
 	}
@@ -218,8 +221,9 @@ func (p *Plugin) admitBytes(c *config, size int64) bool {
 
 // admit applies the remaining preconditions (steps 4–8) for flow, a flow of
 // snap whose model filter takes model, the request's model. A non-nil
-// response ends the hook; otherwise m is ready to run.
-func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow, model string) (*moderation, *pluginv1.GatewayRequestHookResponse) {
+// response ends the hook; otherwise m is ready to run. ctx is the hook
+// call's: the lookup of the verdict cache waits for the KV on it.
+func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow, model string) (*moderation, *pluginv1.GatewayRequestHookResponse) {
 	meta := in.GetMeta()
 	uid := meta.GetUserId()
 	protocol := meta.GetClientProtocol()
@@ -254,7 +258,7 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 		Timing: m.timing, FlowID: flow.ID, FlowVersion: flow.Version, InputFormat: protocol,
 		TextHash: hex.EncodeToString(req.hash[:]), WatchLevel: p.watchLevel(uid),
 	}
-	pl, early := p.planUncached(m, req)
+	pl, early := p.planUncached(ctx, m, req)
 	if early != nil {
 		return nil, early
 	}
@@ -292,12 +296,19 @@ func (p *Plugin) admit(c *config, in *pluginv1.GatewayRequestHookRequest, snap *
 // (makePlan). A non-nil response ends the hook: a cached hit whose whole
 // segment set is in the request decides it at once (replay), and a request
 // whose segments have all passed is not sent again.
-func (p *Plugin) planUncached(m *moderation, req *request) (*plan, *pluginv1.GatewayRequestHookResponse) {
+//
+// Under pre timing the lookup reads from the KV whatever memory does not
+// hold, and waits for it on ctx, the hook call. When that ends first (the
+// client left, or the core's time for a hook call is over), what was not read
+// is unknown: the request goes on to its run like any other, where a client
+// that left is dealt with (runPre).
+func (p *Plugin) planUncached(ctx context.Context, m *moderation, req *request) (*plan, *pluginv1.GatewayRequestHookResponse) {
 	hashes := make([][32]byte, len(req.segs))
 	for i := range req.segs {
 		hashes[i] = req.segs[i].key
 	}
-	cached := p.lookupVerdicts(m.snap.scopeOf(m.flow), hashes, m.timing == TimingPre)
+	cached := p.lookupVerdicts(ctx, m.snap.scopeOf(m.flow), hashes, m.timing == TimingPre)
+	m.asked = cached.asked
 	if cached.hit != nil {
 		// Known limitation, kept as in new-api (gate.go planAudit: a cached
 		// hit ends the plan): the replay decides the whole request, so what
@@ -357,7 +368,8 @@ type sharedRun struct {
 // counted and recorded as a refusal even after the client left, so
 // disconnecting cannot dodge the watch list (new-api gate.go runPre). The
 // verdicts of the run go to the cache in either case (new-api stores them
-// before it looks at the context). The record is written after the answer
+// before it looks at the context), after the answer and without the request
+// waiting for it (storeVerdicts). The record is written after the answer
 // (finish), never before it.
 func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
 	start := p.now()
@@ -503,15 +515,21 @@ func (p *Plugin) runPost(m *moderation) {
 		return
 	}
 	m.rec.QueueMs = int(p.now().Sub(m.queued).Milliseconds())
-	// A job queued before the cache was cleared is not answered from the
-	// cache: its scope is the one that was cleared, so it runs, and its
-	// verdicts are stored under the current counter (settleVerdicts).
-	if m.plan != nil && p.snap.Load().cacheEpoch == m.snap.cacheEpoch {
+	if m.plan != nil {
 		// What the cache learned since the job was queued, now with the KV:
 		// a cached hit is replayed, and nothing runs when every moderated
 		// segment has passed meanwhile (another request with the same
-		// content).
-		cached := p.lookupVerdicts(m.snap.scopeOf(m.flow), m.plan.keys, true)
+		// content, or a review).
+		//
+		// The cache is asked under the clear counter of now, which is where
+		// the verdicts of the job are stored (settleVerdicts) - not under
+		// the counter of the snapshot the job was queued with: after a clear
+		// that scope is the cleared one, and the job is answered by what the
+		// cache learned since the clear, or runs. Its verdicts are stored
+		// with the reading of this lookup, so what was reviewed before it,
+		// the job saw.
+		cached := p.lookupVerdicts(p.postCtx, cacheScope(p.snap.Load().cacheEpoch, m.flow), m.plan.keys, true)
+		m.asked = cached.asked
 		if cached.hit != nil {
 			p.replay(m, nil, cached.hit, cached.hitID)
 			return
@@ -653,6 +671,12 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 // request. The scope carries the clear counter of now, not of the snapshot
 // the run started with: after a clear the verdicts are stored where they
 // are read, and nothing is written into the cleared scope.
+//
+// It decides what is stored and hands it over (storeVerdicts): the write to
+// the KV, and after it to memory, runs in the background. The same content
+// sent again before that write is done is moderated again. With it goes the
+// reading of the request's lookup (m.asked): what a review changed since the
+// request asked the cache, the write leaves alone (writeRun).
 func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 	if m.plan == nil || m.cfg.cacheTTL <= 0 {
 		return
@@ -685,7 +709,7 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 			passes = append(passes, key)
 		}
 	}
-	p.storeVerdicts(m.cfg, cacheScope(p.snap.Load().cacheEpoch, m.flow), passes, hits)
+	p.storeVerdicts(m.cfg, cacheScope(p.snap.Load().cacheEpoch, m.flow), passes, hits, m.asked)
 }
 
 // unreceived are the request segments of the images of ch that are not among
@@ -817,10 +841,10 @@ func (m *moderation) chunkOf(tr Trace) *chunk {
 }
 
 // finish counts the request on the user's day and records the run (its
-// verdicts are in the cache by then, settleVerdicts). It never blocks on the
-// database (CONTRACTS §72.5 step 10): a suspicious record the event writer
-// cannot take goes to the background store (storeSuspicious), anything else
-// is dropped.
+// verdicts are on their way to the cache by then, settleVerdicts). It never
+// blocks on the database (CONTRACTS §72.5 step 10): a suspicious record the
+// event writer cannot take goes to the background store (storeSuspicious),
+// anything else is dropped.
 func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 	// A hit names the hit set of its verdict chunk, also when the run errored
 	// and nothing was cached: confirming the record stores it (syncReviewed).

@@ -56,7 +56,28 @@ func settingsMap(base string, mode string, extra map[string]any) map[string]any 
 	return m
 }
 
+// mustHook sends a hook request to the node h when the verdicts of the runs
+// before it are in the cache, and returns when those of its own run are (the
+// writes that failed are over as well): a run stores its verdicts after the
+// hook has answered, and the same content sent again before that is moderated
+// again. Under post timing the run comes later; a test waits for its record
+// (recordOf) and the next mustHook for its write. hookNow does not wait.
 func mustHook(t *testing.T, h *pluginsdktest.Harness, req *pluginv1.GatewayRequestHookRequest) *pluginv1.GatewayRequestHookResponse {
+	t.Helper()
+	p, _ := nodes.Load(h)
+	if p != nil {
+		written(t, p.(*Plugin))
+	}
+	r := hookNow(t, h, req)
+	if p != nil {
+		written(t, p.(*Plugin))
+	}
+	return r
+}
+
+// hookNow sends a hook request at once, whatever the node is still writing
+// to its verdict cache, and does not wait for what its run writes.
+func hookNow(t *testing.T, h *pluginsdktest.Harness, req *pluginv1.GatewayRequestHookRequest) *pluginv1.GatewayRequestHookResponse {
 	t.Helper()
 	r, err := h.Hook.OnGatewayRequest(context.Background(), req)
 	if err != nil {
@@ -64,6 +85,9 @@ func mustHook(t *testing.T, h *pluginsdktest.Harness, req *pluginv1.GatewayReque
 	}
 	return r
 }
+
+// nodes maps the harness of every node of the tests to its plugin (startNode).
+var nodes sync.Map
 
 func denied(r *pluginv1.GatewayRequestHookResponse) bool {
 	return r.GetDecision() == pluginv1.GatewayRequestHookResponse_DECISION_DENY
@@ -238,7 +262,10 @@ func startNode(t *testing.T, fh *pluginsdktest.FakeHost, cfg any, opts ...nodeOp
 	for _, opt := range opts {
 		opt(n)
 	}
-	return n.Plugin, pluginsdktest.Start(t, n, pluginsdktest.Options{Host: fh, SDK: sdkOpts(), Config: cfg})
+	h := pluginsdktest.Start(t, n, pluginsdktest.Options{Host: fh, SDK: sdkOpts(), Config: cfg})
+	nodes.Store(h, n.Plugin)
+	t.Cleanup(func() { nodes.Delete(h) })
+	return n.Plugin, h
 }
 
 // startDB starts a plugin instance on a host of its own with a fresh
@@ -1177,7 +1204,7 @@ func TestFinishBuildsInputMessageOnlyForRecords(t *testing.T) {
 		in := hookReqAs(3, rid, "")
 		in.Fields[FieldMessages] = string(msgs)
 		snap := p.snap.Load()
-		m, early := p.admit(p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
+		m, early := p.admit(context.Background(), p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
 		if early != nil || len(m.chunks) != 1 || len(m.chunks[0].in.Images) != 1 {
 			t.Fatalf("admit = %+v, %+v", m, early)
 		}
@@ -1304,11 +1331,14 @@ func logged(fh *pluginsdktest.FakeHost, message string) int {
 // either (singleflight would hand it to a goroutine nothing recovers in).
 // Before the chunks have run the waiters get a run that errored: the request
 // passes and is recorded as an error. Once the auditors have decided, their
-// decision stands: a hit is refused and recorded as a block although storing
-// it in the cache panicked.
+// decision stands: a hit is refused and recorded as a block although handing
+// it to the cache panicked - in the run, or in the write that follows the
+// answer in the background (0.8.1), which has a recover of its own.
 func TestPreRunSurvivesPanic(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_errors": true})
+	// Without the periodic refresh: nothing but this test reads the snapshot
+	// while the test has taken it away (below).
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_errors": true}, noRefreshTicks)
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	snap := p.snap.Load()
 	job := func(rid string) *moderation {
@@ -1329,22 +1359,50 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 	}
 	waitFor(t, "the panic in the log", func() bool { return logged(fh, "pre run panicked") == 1 })
 
-	// While the verdicts are stored (the node has no memory cache to store
-	// them in), after the upstream judged the text a hit.
-	storing := job("panics-storing")
-	storing.chunks = []*chunk{{in: &Input{Text: "MOD-HIT-sexual words"}, segs: []int{0}, parts: []chunkPart{{seg: 0, role: RoleUser, text: "MOD-HIT-sexual words"}}}}
-	storing.plan = &plan{keys: [][32]byte{{1}}, pieces: []int{1}}
-	cache := p.cache.Swap(nil)
-	r = p.runPre(context.Background(), storing)
-	p.cache.Store(cache)
-	if !denied(r) || r.GetDenyCode() != DenyBlocked || !strings.HasPrefix(r.GetNote(), notePrefix+"hit flow=") {
-		t.Fatalf("panic while storing a hit = %+v", r)
+	// While the verdicts are handed to the cache (the node has no snapshot to
+	// take the clear counter from), after the upstream judged the text a hit.
+	hitJob := func(rid string, key byte) *moderation {
+		m := job(rid)
+		m.chunks = []*chunk{{in: &Input{Text: "MOD-HIT-sexual words"}, segs: []int{0}, parts: []chunkPart{{seg: 0, role: RoleUser, text: "MOD-HIT-sexual words"}}}}
+		m.plan = &plan{keys: [][32]byte{{key}}, pieces: []int{1}}
+		if c := p.cache.Load(); c != nil { // as the lookup of the request leaves it (planUncached)
+			m.asked = c.reading(p.now())
+		}
+		return m
 	}
-	ev = recordOf(t, h, "panics-storing")
-	if tr := traceOf(t, ev); ev.Result != ResultBlock || tr.Final != Hit || tr.Cache == nil || len(tr.Cache.Segs) != 1 {
-		t.Fatalf("record of the panic while storing = %s %s", ev.Result, ev.Trace)
+	stood := func(rid string, r *pluginv1.GatewayRequestHookResponse) {
+		t.Helper()
+		if !denied(r) || r.GetDenyCode() != DenyBlocked || !strings.HasPrefix(r.GetNote(), notePrefix+"hit flow=") {
+			t.Fatalf("%s = %+v", rid, r)
+		}
+		ev := recordOf(t, h, rid)
+		if tr := traceOf(t, ev); ev.Result != ResultBlock || tr.Final != Hit || tr.Cache == nil || len(tr.Cache.Segs) != 1 {
+			t.Fatalf("record of %s = %s %s", rid, ev.Result, ev.Trace)
+		}
 	}
+	p.snap.Store(nil)
+	r = p.runPre(context.Background(), hitJob("panics-storing", 1))
+	p.snap.Store(snap)
+	stood("panics-storing", r)
 	waitFor(t, "the second panic in the log", func() bool { return logged(fh, "pre run panicked") == 2 })
+	// While the verdicts are written, which is after the answer and in the
+	// background (0.8.1; the node has no memory cache to put them in): the
+	// panic ends there, the hit stands, and the write gives back its turn at
+	// the keys - the next write of the same keys is made.
+	cache := p.cache.Swap(nil)
+	r = p.runPre(context.Background(), hitJob("panics-writing", 2))
+	written(t, p)
+	p.cache.Store(cache)
+	stood("panics-writing", r)
+	waitFor(t, "the panic of the write in the log", func() bool { return logged(fh, "background task panicked") == 1 })
+	if n := logged(fh, "pre run panicked"); n != 2 {
+		t.Fatalf("%d pre runs panicked", n)
+	}
+	r = p.runPre(context.Background(), hitJob("writes-again", 2))
+	written(t, p)
+	stood("writes-again", r)
+	waitKV(t, fh, "h:", 1)
+	waitSegs(t, fh, "pointing to the hit", 1, pointed)
 	// Nothing judged: an error. With the runs the result is their combination.
 	two := &moderation{chunks: []*chunk{{}, {}}}
 	if tr := afterPanic(nil, two.combine); tr.Final != Pass || !tr.Errored {
@@ -1369,7 +1427,7 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 	if tr := afterPanic(runs[:1], panics); tr.Final != Pass || !tr.Errored || tr.Chunk != 0 {
 		t.Fatalf("combining panicked, no hit = %+v", tr)
 	}
-	if n := mod.count("/v1/moderations"); n != 1 { // the second job reached the upstream
+	if n := mod.count("/v1/moderations"); n != 3 { // the jobs after the first reached the upstream
 		t.Fatalf("upstream calls = %d", n)
 	}
 	// The hook still moderates.
@@ -1377,7 +1435,7 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 		t.Fatalf("after the panics = %+v", r)
 	}
 	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
-	if st.Today.Errors != 1 || st.Today.Audited != 3 {
+	if st.Today.Errors != 1 || st.Today.Audited != 5 {
 		t.Fatalf("today = %+v", st.Today)
 	}
 }
@@ -1446,7 +1504,7 @@ func TestPostPanicIsCountedOnce(t *testing.T) {
 		t.Helper()
 		snap := p.snap.Load()
 		in := hookReqAs(3, rid, "MOD-HIT-sexual "+rid)
-		m, early := p.admit(p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
+		m, early := p.admit(context.Background(), p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
 		if early != nil || m.timing != TimingPost {
 			t.Fatalf("admit = %+v, %+v", m, early)
 		}
