@@ -55,14 +55,13 @@ func (c *call) dispatch(ctx context.Context) {
 			return
 		}
 	}
+	c.sched.candidates = len(all)
 	cands := make([]core.AccountRef, 0, len(all))
 	creditExcluded := false
 	for i := range all {
-		if !c.candidateEligible(&all[i]) {
-			continue
-		}
-		if !c.creditAccountAllowed(&all[i]) {
-			creditExcluded = true
+		if reason, detail, ok := c.ineligibleReason(&all[i]); !ok {
+			c.skipAccount(all[i].ID, reason, detail)
+			creditExcluded = creditExcluded || detail == schedDetailCredit
 			continue
 		}
 		cands = append(cands, all[i])
@@ -71,7 +70,10 @@ func (c *call) dispatch(ctx context.Context) {
 		c.fail(c.creditRequest.lookupError)
 		return
 	}
+	eligible := cands
 	cands, availabilityErr := c.filterAvailability(ctx, cands)
+	c.noteDropped(eligible, cands, core.SchedAvailabilityBlocked)
+	c.sched.eligible = len(cands)
 	if availabilityErr != nil {
 		c.fail(availabilityErr)
 		return
@@ -125,6 +127,7 @@ func (c *call) dispatch(ctx context.Context) {
 			if !admitted {
 				release()
 				excluded[ref.ID] = true
+				c.skipAccount(ref.ID, core.SchedRateLimited, "")
 				if c.sticky != nil {
 					c.sticky.hit = false
 				}
@@ -190,6 +193,7 @@ func (c *call) dispatch(ctx context.Context) {
 				return
 			}
 			excluded[ref.ID] = true
+			c.skipAccount(ref.ID, core.SchedAttemptFailed, attemptFailureDetail(res.err))
 			last = res.err
 			if stickyAttempt && c.sticky.rule.OnFailure == onFailureStick {
 				// Protect the upstream cache: do not move the session.
@@ -258,17 +262,23 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	c.readBalance(ctx, cands)
 	var pool, limited []core.AccountRef
 	for i := range cands {
-		if excluded[cands[i].ID] || !c.routed(&cands[i]) {
+		if excluded[cands[i].ID] {
+			continue
+		}
+		if !c.routed(&cands[i]) {
+			c.skipAccount(cands[i].ID, core.SchedConversionRefused, "")
 			continue
 		}
 		ref := cands[i]
 		if o, ok := over[ref.ID]; ok {
 			if o.weight == 0 {
+				c.skipAccount(ref.ID, core.SchedRankExcluded, "")
 				continue
 			}
 			ref.Priority, ref.Weight = o.priority, o.weight
 		}
 		if exhausted[ref.ID] {
+			c.skipAccount(ref.ID, core.SchedRateLimited, "")
 			limited = append(limited, ref)
 			continue
 		}
@@ -278,12 +288,18 @@ func (c *call) pick(ctx context.Context, cands []core.AccountRef, excluded map[i
 	queued := c.queuedAccounts(ctx, pool)
 	for i := range pool {
 		ref := pool[i]
-		if queued[ref.ID] || !c.usable(ctx, &ref) {
+		if queued[ref.ID] {
+			c.skipAccount(ref.ID, core.SchedQueued, "")
+			continue
+		}
+		if !c.usable(ctx, &ref) {
+			c.skipAccount(ref.ID, core.SchedConversionRefused, "")
 			continue
 		}
 		if release, ok := c.acquireAccount(ctx, &ref); ok {
 			return c.finishPick(ctx, &ref, release, cands, excluded)
 		}
+		c.skipAccount(ref.ID, core.SchedConcurrencyFull, "")
 	}
 	// Busy only when an account that could serve the request is full or
 	// rate limited, not when every one was refused for its conversion.
@@ -391,6 +407,9 @@ func (c *call) tryStickyBinding(ctx context.Context, cands []core.AccountRef, ex
 					s.hit = true
 					return bound, release, true
 				}
+				c.skipAccount(bound.ID, core.SchedConcurrencyFull, "")
+			} else {
+				c.skipAccount(bound.ID, core.SchedRateLimited, "")
 			}
 			s.refused = s.rule.OnFailure == onFailureStick
 		}

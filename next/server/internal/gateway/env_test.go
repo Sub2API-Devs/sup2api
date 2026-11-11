@@ -543,6 +543,20 @@ func (a *fakeAccounts) GroupHasType(_ context.Context, group int64, types []core
 	return false, nil
 }
 
+func (a *fakeAccounts) Unschedulable(_ context.Context, group int64) ([]core.UnschedulableAccount, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var out []core.UnschedulableAccount
+	for _, id := range a.groups[group] {
+		if _, dis := a.disabled[id]; dis {
+			out = append(out, core.UnschedulableAccount{ID: id, Reason: "disabled"})
+		} else if until := a.cooldown[id]; time.Now().Before(until) {
+			out = append(out, core.UnschedulableAccount{ID: id, Reason: "cooldown", Until: until})
+		}
+	}
+	return out, nil
+}
+
 func (a *fakeAccounts) Candidates(_ context.Context, group int64, types []core.AccountTypeKey) ([]core.AccountRef, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

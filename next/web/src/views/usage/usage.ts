@@ -171,6 +171,83 @@ export function availabilityReasonLabel(tr: OptionalT, reason: string): string {
   return detail ? tr('usage.availability.reasonWithDetail', { reason: label, detail: pluginReasonLabel(tr, detail) }) : label
 }
 
+/** One account the scheduler did not use for a request (anomalies.scheduling). */
+export interface SchedulingSkip {
+  /** Missing when the caller lacks account:read. */
+  account_id?: number
+  /** Filled by the API for callers with account:read. */
+  account_name?: string
+  /** Reason code (CONTRACTS §24.6). */
+  reason: string
+  /** The model, usage kind or account status the reason is about. */
+  detail?: string
+  /** Unix seconds: when a timed disable or cooldown ends. */
+  until?: number
+}
+
+/** Why accounts of the group were not used for one request (CONTRACTS §24.6). */
+export interface SchedulingTrace {
+  v: number
+  /** none (no account could serve) | busy (all rate limited or full) | picked (one served after others were passed over) */
+  outcome: string
+  /** Schedulable accounts of the group whose type serves the endpoint. */
+  candidates: number
+  /** Those of them that can serve this request. */
+  eligible: number
+  /** Reason code -> accounts. */
+  counts: Record<string, number>
+  skipped: SchedulingSkip[]
+  omitted?: number
+}
+
+/** The recorded scheduling trace of a request, or null when absent or malformed.
+ *  Defensive like availabilityTrace: every field is type-checked and lists are capped. */
+export function schedulingTrace(u: Pick<UsageLog, 'anomalies'>): SchedulingTrace | null {
+  const raw: unknown = u.anomalies?.scheduling
+  let value: unknown = raw
+  if (typeof raw === 'string') {
+    try { value = JSON.parse(raw) } catch { return null }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const o = value as Record<string, unknown>
+  const outcome = text(o.outcome, 32)
+  if (!outcome) return null
+  const counts: Record<string, number> = {}
+  if (o.counts && typeof o.counts === 'object' && !Array.isArray(o.counts)) {
+    for (const [k, v] of Object.entries(o.counts).slice(0, 32)) if (count(v) > 0) counts[k.slice(0, 100)] = count(v)
+  }
+  const skipped: SchedulingSkip[] = []
+  for (const item of Array.isArray(o.skipped) ? o.skipped.slice(0, 60) : []) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const s = item as Record<string, unknown>
+    const reason = text(s.reason, 100)
+    if (!reason) continue
+    const skip: SchedulingSkip = { reason }
+    if (count(s.account_id) > 0) skip.account_id = count(s.account_id)
+    if (text(s.account_name, 200)) skip.account_name = text(s.account_name, 200)
+    if (text(s.detail, 200)) skip.detail = text(s.detail, 200)
+    if (count(s.until) > 0) skip.until = count(s.until)
+    skipped.push(skip)
+  }
+  const trace: SchedulingTrace = { v: count(o.v), outcome, candidates: count(o.candidates), eligible: count(o.eligible), counts, skipped }
+  if (count(o.omitted) > 0) trace.omitted = count(o.omitted)
+  return trace
+}
+
+/** Badge tone of a scheduling outcome. */
+export function schedulingOutcomeTone(outcome: string): 'danger' | 'warning' | 'gray' {
+  return outcome === 'none' ? 'danger' : outcome === 'busy' ? 'warning' : 'gray'
+}
+
+/** Text of a scheduling reason, with what it is about: "Model not in the account's list: claude-x".
+ *  not_schedulable's detail is an account status, translated; codes the console does not know show as recorded. */
+export function schedulingReasonLabel(tr: OptionalT, skip: Pick<SchedulingSkip, 'reason' | 'detail'>): string {
+  const label = tr(`usage.scheduling.reasons.${skip.reason}`, undefined, skip.reason)
+  if (!skip.detail) return label
+  const detail = tr(`usage.scheduling.details.${skip.detail}`, undefined, skip.detail)
+  return tr('usage.scheduling.reasonWithDetail', { reason: label, detail })
+}
+
 /** True when the core converted the request to another upstream protocol. */
 export function isConverted(u: Pick<UsageLog, 'protocol' | 'upstream_protocol'>): boolean {
   return !!u.upstream_protocol && !!u.protocol && u.upstream_protocol !== u.protocol

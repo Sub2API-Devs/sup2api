@@ -124,3 +124,27 @@ func TestShapeAnomaliesDropsUnreadableTraces(t *testing.T) {
 	plain := json.RawMessage(`{"usage_extract":"fallback"}`)
 	require.Equal(t, plain, s.shapeAnomalies(t.Context(), plain, false))
 }
+
+// The scheduling trace keeps its skips for an operator without account:read,
+// without the accounts; one that cannot be parsed is dropped for them.
+func TestShapeAnomaliesRedactsSchedulingTrace(t *testing.T) {
+	t.Parallel()
+	s := &Service{}
+	rec := &core.UsageRecord{Scheduling: &core.SchedulingTrace{V: 1, Outcome: core.SchedulingNone, Candidates: 2,
+		Counts:  map[string]int{core.SchedModelNotServed: 1, core.SchedNotSchedulable: 1},
+		Skipped: []core.SchedulingSkip{{AccountID: 7, Reason: core.SchedModelNotServed, Detail: "m"}, {AccountID: 8, Reason: core.SchedNotSchedulable, Detail: "cooldown", Until: 1_900_000_000}}}}
+	raw, err := json.Marshal(rec.Anomalies())
+	require.NoError(t, err)
+	var m map[string]string
+	require.NoError(t, json.Unmarshal(s.shapeAnomalies(t.Context(), raw, false), &m))
+	var tr core.SchedulingTrace
+	require.NoError(t, json.Unmarshal([]byte(m[core.AnomalyScheduling]), &tr))
+	require.Len(t, tr.Skipped, 2)
+	require.Equal(t, core.SchedulingSkip{Reason: core.SchedModelNotServed, Detail: "m"}, tr.Skipped[0])
+	require.Equal(t, core.SchedulingSkip{Reason: core.SchedNotSchedulable, Detail: "cooldown", Until: 1_900_000_000}, tr.Skipped[1])
+	require.Equal(t, rec.Scheduling.Counts, tr.Counts)
+
+	broken := json.RawMessage(`{"scheduling":"{not json"}`)
+	require.JSONEq(t, `{}`, string(s.shapeAnomalies(t.Context(), broken, false)))
+	require.JSONEq(t, string(broken), string(s.shapeAnomalies(t.Context(), broken, true)))
+}

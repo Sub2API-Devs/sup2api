@@ -533,13 +533,19 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 	if err != nil {
 		return nil, fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal)
 	}
+	cl.sched.candidates = len(all)
 	cands := make([]core.AccountRef, 0, len(all))
 	for i := range all {
 		if cl.route(&all[i]) != nil && cl.servesAllModels(&all[i]) {
 			cands = append(cands, all[i])
+		} else if reason, detail, ok := cl.ineligibleReason(&all[i]); !ok {
+			cl.skipAccount(all[i].ID, reason, detail)
 		}
 	}
+	eligible := cands
 	cands, availabilityErr := cl.filterAvailability(ctx, cands)
+	cl.noteDropped(eligible, cands, core.SchedAvailabilityBlocked)
+	cl.sched.eligible = len(cands)
 	if availabilityErr != nil {
 		return nil, availabilityErr
 	}
@@ -573,6 +579,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			if err != nil || !admitted {
 				release()
 				excluded[ref.ID] = true
+				cl.skipAccount(ref.ID, core.SchedRateLimited, "")
 				last = fromCore(core.ErrRateLimited.WithMessage("all accounts are busy or rate limited, please retry later"), errTypeNoAccount)
 				continue
 			}
@@ -596,6 +603,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 		switch res.kind {
 		case attemptFailover:
 			excluded[ref.ID] = true
+			cl.skipAccount(ref.ID, core.SchedAttemptFailed, attemptFailureDetail(res.err))
 			last = res.err
 			if cl.sticky != nil && cl.sticky.hit && cl.sticky.bound == ref.ID && cl.sticky.rule.OnFailure == onFailureStick {
 				cl.finishSticky(ctx, ref.ID, false)
