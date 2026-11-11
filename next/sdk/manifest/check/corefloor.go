@@ -37,7 +37,7 @@ const CommonControlsFirstCore = "0.1.262"
 // §71.1): the spm_window_seconds common control and spm_window_seconds in a
 // model_limits default. Older cores refuse both at install, so the floor
 // only turns that into a clear hostCompat error.
-const SPMWindowFirstCore = "0.1.275"
+const SPMWindowFirstCore = "0.1.276"
 
 // ConvertMatrixFirstCore is the first core of the protocol conversion
 // matrix (CONTRACTS §88), which adds the openai.responses -> openai.chat
