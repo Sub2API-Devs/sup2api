@@ -163,7 +163,10 @@ type call struct {
 	// accountHold and keyHold are the holds of the account last admitted by
 	// the limiter and of the API key, until their tokens settle (CONTRACTS §78).
 	accountHold, keyHold *core.RateHold
-	rateEstimate         rateEstimate
+	// sessionAt is when the account last admitted by the limiter counted the
+	// request's session, until releaseSession takes it off (CONTRACTS §71.3).
+	sessionAt    time.Time
+	rateEstimate rateEstimate
 	// precharged is the estimate the request was pre-charged for (nil before
 	// precharge, or when the endpoint bills nothing); upstreamResponded says
 	// an upstream answer started to be relayed. Together they decide what a

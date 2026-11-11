@@ -93,8 +93,8 @@ func (l *Limiter) Settle(ctx context.Context, hold core.RateHold, actual int64) 
 	l.w.Settle(ctx, hold, actual)
 }
 
-func (l *Limiter) ReleaseSession(ctx context.Context, ref core.AccountRef, model, session string) {
-	l.w.ReleaseSession(ctx, limitsOf(ref, model), sessionOf(session))
+func (l *Limiter) ReleaseSession(ctx context.Context, ref core.AccountRef, model, session string, at time.Time) {
+	l.w.ReleaseSession(ctx, limitsOf(ref, model), sessionOf(session), at)
 }
 
 func (l *Limiter) AddTokens(ctx context.Context, id int64, list string, n int64) {

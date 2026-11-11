@@ -15,6 +15,7 @@ manifest `accountTypes[].commonControls`：键 = 通用项名，值 = 声明。
 | `weight` | `weight` | int |
 | `max_concurrency` | `max_concurrency` | int |
 | `rpm_limit`、`tpm_limit`、`spm_limit` | 同名 | int |
+| `spm_window_seconds` | `spm_window_seconds`（会话周期，CONTRACTS §71.1） | int，60–86400，核心默认 60 |
 | `model_limits` | `model_limits` | 数组（同账号接口） |
 | `usage_limit` | 账号用量限制（§73） | 对象（同账号接口） |
 | `model_mapping` | `model_mapping` | 对象 |
@@ -47,7 +48,7 @@ manifest `accountTypes[].commonControls`：键 = 通用项名，值 = 声明。
 
 ## 3. 核心编辑器开放给插件（UI 3.7）
 
-- `@sub2api/host`：`HOST_UI_VERSION` 3.6.0 → 3.7.0；`PluginHost.components`（只读对象）提供 `ParamOverrideEditor`、`RateLimitEditor`（rpm/tpm/spm）、`ModelLimitsEditor`、`HeaderPassthroughEditor`、`ProxyPicker`、`ModelMappingEditor`、`UpstreamEditor`，props 与 v-model 形状和账号接口字段一致；用到的插件声明 `hostUICompat: "^3.7"`（sdk/manifest check 按 3.7 要求核心下限为本期核心版本）。
+- `@sub2api/host`：`HOST_UI_VERSION` 3.6.0 → 3.7.0；`PluginHost.components`（只读对象）提供 `ParamOverrideEditor`、`RateLimitEditor`（rpm/tpm/spm，2026-11-11 起会话数一行带会话周期 `spm_window_seconds`，只在给过或改过时出现在 v-model 里）、`ModelLimitsEditor`、`HeaderPassthroughEditor`、`ProxyPicker`、`ModelMappingEditor`、`UpstreamEditor`，props 与 v-model 形状和账号接口字段一致；用到的插件声明 `hostUICompat: "^3.7"`（sdk/manifest check 按 3.7 要求核心下限为本期核心版本）。
 - schema 表单控件（`web/src/components/schema/widgets.ts`）：新增 `param-override`、`header-passthrough`、`rate-limits`、`model-limits`、`model-mapping`（`proxy-select`、`upstream-editor` 已有），插件设置和账号凭证表单都能用；数据格式即核心执行格式，校验在插件自己的设置接口里用 SDK 同一套规则（`sdk/paramoverride` 等）。
 - 规则：组件产出的格式就是核心执行的格式，插件不自己解释；凭证头、逐跳头仍在 §81 禁止列表。
 

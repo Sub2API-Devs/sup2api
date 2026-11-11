@@ -368,14 +368,20 @@ func RequestSession(requestID string) string { return requestSessionPrefix + req
 // counts it once and does not remember it.
 func IsRequestSession(session string) bool { return strings.HasPrefix(session, requestSessionPrefix) }
 
+// ConnectionSession is the session of a WebSocket connection no sticky
+// session matched: every later turn comes back with it, so the limiter
+// remembers it like a sticky session and the connection counts once
+// (CONTRACTS §71.3).
+func ConnectionSession(requestID string) string { return "conn:" + requestID }
+
 // AccountLimiter enforces per-account RPM, TPM and SPM, and those of the
 // model list holding the request's (client) model, shared by every node:
 // requests and tokens over the last 60 seconds, sessions over each level's
 // session window. model "" checks the account's own limits only; any
 // other model is also counted apart, uncapped, for GET /accounts/:id/rate-models.
 // session is the request's session (CONTRACTS §71: its sticky session key,
-// else RequestSession); "" (tasks, downloads) is neither checked against SPM
-// nor counted.
+// else RequestSession, or ConnectionSession on a WebSocket connection); ""
+// (tasks, downloads) is neither checked against SPM nor counted.
 type AccountLimiter interface {
 	// Exhausted returns the ids among refs that reached a limit for model
 	// and session; an account already holding the session passes its SPM.
@@ -392,8 +398,11 @@ type AccountLimiter interface {
 	Settle(ctx context.Context, hold RateHold, actual int64)
 	// ReleaseSession takes session off the account's (and its model list's)
 	// active sessions: a retry moved the session to another account, which
-	// now holds it alone. Best effort.
-	ReleaseSession(ctx context.Context, ref AccountRef, model, session string)
+	// now holds it alone, or brings the request back to this one. at is the
+	// time the request was admitted on ref (RateHold.At): a RequestSession,
+	// counted once and not remembered, leaves the counts of that time, and
+	// stays counted when at is zero. Once per admission; best effort.
+	ReleaseSession(ctx context.Context, ref AccountRef, model, session string, at time.Time)
 	// AddTokens adds the tokens of a finished response to the account and,
 	// when list is not "", to the model list of that key (ModelLimit.Key).
 	AddTokens(ctx context.Context, id int64, list string, n int64)

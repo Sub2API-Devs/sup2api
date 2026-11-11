@@ -64,7 +64,7 @@ func (l *fakeLimiter) TryHit(_ context.Context, ref core.AccountRef, model, sess
 	return !l.refused[ref.ID], nil
 }
 
-func (l *fakeLimiter) ReleaseSession(_ context.Context, ref core.AccountRef, _ string, session string) {
+func (l *fakeLimiter) ReleaseSession(_ context.Context, ref core.AccountRef, _ string, session string, _ time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.released = append(l.released, itoa(ref.ID)+":"+session)

@@ -887,7 +887,7 @@ func (in *input) validateScheduling(ctx context.Context) []core.FieldError {
 		add("tpm_limit", "invalid", "tpm limit must be 0-1000000000000 (0 = unlimited)", "每分钟 token 上限必须为 0-1000000000000（0 表示不限）")
 	}
 	if in.SPMLimit != nil && (*in.SPMLimit < 0 || *in.SPMLimit > maxRPMLimit) {
-		add("spm_limit", "invalid", "spm limit must be 0-10000000 (0 = unlimited)", "每分钟会话数上限必须为 0-10000000（0 表示不限）")
+		add("spm_limit", "invalid", spmLimitEN, spmLimitZH)
 	}
 	if in.SPMWindowSeconds != nil && !validSPMWindow(*in.SPMWindowSeconds) {
 		add("spm_window_seconds", "invalid", spmWindowEN, spmWindowZH)

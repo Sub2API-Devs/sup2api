@@ -84,7 +84,8 @@ func (l Limits) sessionMs() int64 { return int64(l.sessionWindow()) * 1000 }
 // the segment it was last seen in and counted there only, so it holds its
 // slot while it keeps coming back within the window. Once marks a session
 // that never comes back (a request without a sticky session): it is counted
-// where it is seen and never remembered.
+// where it is admitted and never remembered, so only the caller knows that
+// segment, by the time of its RateHold.
 type Session struct {
 	Key  string
 	Once bool
@@ -290,16 +291,26 @@ for i=0,#KEYS/4-1 do
 end
 return out`)
 
-// release forgets session in every set: it leaves the members, and the
-// segment it was last seen in counts one session less. KEYS: per set its
-// session counts and members keys. ARGV: now ms, session, then per set its
-// session window ms.
+// release forgets session in every set: the segment it was last seen in,
+// while inside the window, counts one session less. A remembered session
+// also leaves the members; one counted once was seen in the segment of the
+// ms it was admitted at. KEYS: per set its session counts and members keys.
+// ARGV: now ms, session, the ms a session counted once was admitted at (0 =
+// remembered), then per set its session window ms.
 var release = redis.NewScript(segments + `
 local session=ARGV[2]
+local once=tonumber(ARGV[3])
 for i=0,#KEYS/2-1 do
-  local cur,_,ttl=span(tonumber(ARGV[3+i]))
-  local seen=held(KEYS[2*i+2],session,cur)
-  redis.call('ZREM',KEYS[2*i+2],session)
+  local w=tonumber(ARGV[4+i])
+  local cur,_,ttl=span(w)
+  local seen
+  if once>0 then
+    seen=span(w,once)
+    seen=seen>=cur-SEGMENTS and seen
+  else
+    seen=held(KEYS[2*i+2],session,cur)
+    redis.call('ZREM',KEYS[2*i+2],session)
+  end
   if seen then add(KEYS[2*i+1],cur,seen,-1,ttl) end
 end
 return 1`)
@@ -411,17 +422,22 @@ func (m *Minute) AddSubTokens(ctx context.Context, id int64, sub string, n int64
 }
 
 // ReleaseSession forgets session in every set, so a session that moved to
-// another subject no longer holds a slot of this one. A session counted
-// Once is not remembered and stays counted.
-func (m *Minute) ReleaseSession(ctx context.Context, sets []Limits, session Session) {
-	if m.rdb == nil || session.Key == "" || session.Once || len(sets) == 0 {
+// another subject no longer holds a slot of this one. A session counted Once
+// leaves the segment of at, the time its request was admitted at
+// (RateHold.At); zero leaves it counted. Release it once per admission.
+func (m *Minute) ReleaseSession(ctx context.Context, sets []Limits, session Session, at time.Time) {
+	if m.rdb == nil || session.Key == "" || len(sets) == 0 || (session.Once && at.IsZero()) {
 		return
+	}
+	once := int64(0)
+	if session.Once {
+		once = at.UnixMilli()
 	}
 	now, err := m.now(ctx)
 	if err == nil {
 		keys := make([]string, 0, 2*len(sets))
-		args := make([]any, 0, 2+len(sets))
-		args = append(args, now.UnixMilli(), session.Key)
+		args := make([]any, 0, 3+len(sets))
+		args = append(args, now.UnixMilli(), session.Key, once)
 		for _, l := range sets {
 			keys = append(keys, m.keys(l)[2:]...)
 			args = append(args, l.sessionMs())

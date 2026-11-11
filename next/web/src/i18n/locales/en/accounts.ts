@@ -22,7 +22,7 @@ export default {
     model: 'Model', capsTitle: 'Caps', noModels: 'No requests in the last hour or today', modelsFailed: 'Could not load the figures by model',
     cols: { in_use: 'Conc.', rpm: 'RPM', tpm: 'TPM', tpd: 'TPD', sessions: 'Sessions' },
     waiting: '{n} waiting',
-    windowHint: 'RPM and TPM are the exact usage of the last 60 seconds. RPM counts a request when it starts, so a long stream counts once and concurrency can exceed RPM. TPM is the input outside any cache plus the output; with a cap it includes what requests in flight reserved, replaced by their real usage when they finish. Sessions are those that started a request within the period (by sticky session key; a request matching no sticky rule counts as one); the period is 60 seconds unless set for the account or a model list, and the caps table names each one. Without a cap only the usage is shown. A request for a listed model counts on the account and on its list. TPD is the input outside any cache plus the output since midnight in the browser time zone, counted as TPM is, by the hour in Redis. Sessions and requests in flight by model need not add up to the row of all models: a session can use several models.'
+    windowHint: 'RPM and TPM are the usage of the last 60 seconds and sessions that of their period, each counted in 20 rolling segments (3 seconds each for 60 seconds) that stop counting once they expire. RPM counts a request when it starts, so a long stream counts once and concurrency can exceed RPM. TPM is the input outside any cache plus the output; with a cap it includes what requests in flight reserved, replaced by their real usage when they finish. Sessions are those that started a request within the period (by sticky session key; a request matching no sticky rule counts as one); the period is 60 seconds unless set for the account or a model list, and the caps table names each one. Without a cap only the usage is shown. A request for a listed model counts on the account and on its list. TPD is the input outside any cache plus the output since midnight in the browser time zone, counted as TPM is, by the hour in Redis. Sessions and requests in flight by model need not add up to the row of all models: a session can use several models.'
   },
   usage: {
     column: 'Usage', title: 'Account usage', raw: 'Raw', rawHint: 'Counted at the raw ratio: group multiplier taken as 1',
@@ -341,7 +341,7 @@ export default {
   tpdHint: '0 = unlimited; per UTC day',
   spmHint: 'Cap of the sessions active within the period, which runs from 1 minute to 24 hours. Sessions are told apart by sticky session key, and a session asking again within the period is not a new one; sessions already on the account always pass, new sessions over the cap go to other accounts. A request matching no sticky rule is a new session of its own. 0 means unlimited',
   spmWindow: {
-    sessions: 'sessions', every: '/ every', length: 'Period', unit: 'Period unit', units: { minute: 'minute | minutes', hour: 'hour | hours' },
+    sessions: 'sessions', every: '/ every', length: 'Period', unit: 'Period unit', units: { second: 'second | seconds', minute: 'minute | minutes', hour: 'hour | hours' },
     short: { second: '{n}s', minute: '{n}m', hour: '{n}h' }
   },
   models: 'Models',

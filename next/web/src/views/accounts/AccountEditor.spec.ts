@@ -47,7 +47,8 @@ function render(account?: Account, realSelect = false, type: AccountType = accou
     SHint: { template: '<p><slot /></p>' },
     SSegmented: false,
     SSelect: realSelect ? false : { props: ['modelValue', 'options', 'disabled', 'searchable'], emits: ['update:modelValue'], template: '<input :value="modelValue" :disabled="disabled" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
-    SInput: { props: ['modelValue'], emits: ['update:modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
+    // Like SInput, type="number" emits a number (null when empty).
+    SInput: { props: ['modelValue', 'type'], emits: ['update:modelValue'], template: '<input :type="type" :value="modelValue" @input="$emit(\'update:modelValue\', type === \'number\' ? ($event.target.value === \'\' ? null : Number($event.target.value)) : $event.target.value)" />' },
     SchemaForm: { template: '<div />', methods: { validate: () => true } },
   } } })
 }
@@ -572,6 +573,11 @@ describe('account model limits', () => {
     await flushPromises()
     expect(hidden.find('[data-testid="account-spm_limit-window"]').exists()).toBe(false)
     expect(hidden.find('input[data-testid="account-spm_limit"]').exists()).toBe(true)
+    // A fixed cap leaves its period editable.
+    const capFixed = render(savedAccount(), false, { ...accountType, common_controls: { spm_limit: { configurable: false } } } as unknown as AccountType)
+    await flushPromises()
+    expect(capFixed.get('input[data-testid="account-spm_limit"]').attributes('disabled')).toBeDefined()
+    expect(capFixed.get('input[data-testid="account-spm_limit-window"]').attributes('disabled')).toBeUndefined()
   })
 
   it('refuses to save a model listed twice', async () => {

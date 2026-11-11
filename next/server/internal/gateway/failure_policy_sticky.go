@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
@@ -95,14 +96,17 @@ func (c *call) releaseBinding(ctx context.Context, id int64) error {
 }
 
 // releaseSession takes the request's session off the active sessions of the
-// account a retry leaves (sessions-per-minute, CONTRACTS §71): the session
-// moves to the next account with its binding, and counting it on both would
-// hold a session slot of an account that no longer serves it.
+// account a retry leaves (session caps, CONTRACTS §71.3): the session moves
+// to the next account with its binding, and counting it on both would hold a
+// session slot of an account that no longer serves it. ref is the account
+// last admitted; its admission is released once.
 func (c *call) releaseSession(ctx context.Context, ref *core.AccountRef) {
+	at := c.sessionAt
+	c.sessionAt = time.Time{}
 	if c.g.d.Limiter == nil || c.session == "" {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stickyRedisTimeout)
 	defer cancel()
-	c.g.d.Limiter.ReleaseSession(ctx, *ref, c.model, c.session)
+	c.g.d.Limiter.ReleaseSession(ctx, *ref, c.model, c.session, at)
 }

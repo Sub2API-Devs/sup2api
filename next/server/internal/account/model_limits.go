@@ -16,10 +16,13 @@ import (
 // maxModelLimits bounds the model lists of an account (CONTRACTS §68).
 const maxModelLimits = manifest.MaxAccountModelLimits
 
-// spmWindowEN and spmWindowZH explain an spm_window_seconds out of range.
+// spmLimitEN/ZH and spmWindowEN/ZH explain an spm_limit and an
+// spm_window_seconds out of range, of an account or a model list.
 const (
-	spmWindowEN = "spm window must be 60-86400 seconds"
-	spmWindowZH = "会话数统计周期必须为 60-86400 秒"
+	spmLimitEN  = "session limit must be 0-10000000 (0 = unlimited)"
+	spmLimitZH  = "会话数上限必须为 0-10000000（0 表示不限）"
+	spmWindowEN = "session window must be 60-86400 seconds"
+	spmWindowZH = "会话周期必须为 60-86400 秒"
 )
 
 // validSPMWindow reports whether secs is a session window an account or a
@@ -128,7 +131,7 @@ func normalizeModelLimits(ctx context.Context, in []core.ModelLimit) ([]core.Mod
 			add(field+".tpm_limit", "invalid", "tpm limit must be 0-1000000000000 (0 = unlimited)", "每分钟 token 上限必须为 0-1000000000000（0 表示不限）")
 		}
 		if l.SPMLimit < 0 || l.SPMLimit > maxRPMLimit {
-			add(field+".spm_limit", "invalid", "spm limit must be 0-10000000 (0 = unlimited)", "每分钟会话数上限必须为 0-10000000（0 表示不限）")
+			add(field+".spm_limit", "invalid", spmLimitEN, spmLimitZH)
 		}
 		if l = withSPMWindow(l); !validSPMWindow(l.SPMWindowSeconds) {
 			add(field+".spm_window_seconds", "invalid", spmWindowEN, spmWindowZH)

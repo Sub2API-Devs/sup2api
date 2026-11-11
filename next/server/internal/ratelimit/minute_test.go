@@ -288,16 +288,21 @@ func TestAdmitSessions(t *testing.T) {
 	}
 }
 
-// A request alone is counted where it is seen, every time, and never
-// remembered.
+// A request alone is counted where it is admitted, every time, and never
+// remembered: releasing it takes it off the segment of its hold's time, once
+// that segment is still in the window.
 func TestAdmitOnceSessions(t *testing.T) {
-	m, mr, _, _ := newMinute(t, "account")
+	m, mr, _, at := newMinute(t, "account")
 	ctx := t.Context()
 	own := []Limits{{ID: 4, SPM: 3}}
-	for _, s := range []string{"req:a", "req:b", "req:a"} {
-		if ok, _, _ := m.AdmitAll(ctx, own, Session{Key: s, Once: true}); !ok {
+	holds := map[string]time.Time{}
+	for i, s := range []string{"req:a", "req:b", "req:a"} {
+		at(time.Duration(i) * 10 * time.Second)
+		hold, ok, _, _ := m.ReserveAll(ctx, own, Session{Key: s, Once: true}, 0)
+		if !ok {
 			t.Fatal("refused", s)
 		}
+		holds[s] = hold.At
 	}
 	if ok, _, _ := m.AdmitAll(ctx, own, Session{Key: "req:c", Once: true}); ok {
 		t.Fatal("a fourth session admitted")
@@ -309,9 +314,25 @@ func TestAdmitOnceSessions(t *testing.T) {
 	if !mr.Exists(counts) || mr.Exists(members) {
 		t.Fatal("requests alone remembered", mr.Keys())
 	}
-	m.ReleaseSession(ctx, own, Session{Key: "req:a", Once: true})
+	m.ReleaseSession(ctx, own, Session{Key: "req:a", Once: true}, time.Time{})
 	if u, _ := m.UsageOf(ctx, own); u[0].Sessions != 3 {
-		t.Fatal("released a session never remembered", u)
+		t.Fatal("released without its admission time", u)
+	}
+	// req:a's second admission (20 s) leaves its segment; the first (0 s)
+	// and req:b (10 s) stay.
+	m.ReleaseSession(ctx, own, Session{Key: "req:a", Once: true}, holds["req:a"])
+	if n, _ := mr.HKeys(counts); len(n) != 2 {
+		t.Fatal("segments after the release", n)
+	}
+	if ok, _, _ := m.AdmitAll(ctx, own, Session{Key: "req:c", Once: true}); !ok {
+		t.Fatal("released slot not free")
+	}
+	// A segment that left the window is not taken off again: req:b's (10 s)
+	// left at 72 s; req:c (20 s) stays counted.
+	at(75 * time.Second)
+	m.ReleaseSession(ctx, own, Session{Key: "req:b", Once: true}, holds["req:b"])
+	if u, _ := m.UsageOf(ctx, own); u[0].Sessions != 1 {
+		t.Fatal("released a segment out of the window", u)
 	}
 }
 
@@ -363,7 +384,7 @@ func TestReleaseSession(t *testing.T) {
 	if ok, _, _ := m.AdmitAll(ctx, sets, Session{Key: "next"}); ok {
 		t.Fatal("third session admitted over the cap")
 	}
-	m.ReleaseSession(ctx, sets, Session{Key: "moved"})
+	m.ReleaseSession(ctx, sets, Session{Key: "moved"}, time.Time{})
 	u, err := m.UsageOf(ctx, sets)
 	if err != nil || u[0].Sessions != 1 || u[1].Sessions != 0 || u[0].RPM != 2 {
 		t.Fatal("released session still counted", u, err)

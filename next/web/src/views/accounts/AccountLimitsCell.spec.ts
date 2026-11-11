@@ -118,4 +118,24 @@ describe('model limits editor', () => {
     await w.get('[data-testid="model-limit-add"]').trigger('click')
     expect(cards[1]).toEqual(newCard())
   })
+  it('shows a period set in seconds as seconds and takes whole numbers only', async () => {
+    i18n.global.locale.value = 'zh'
+    const cards = [{ lists: [['m-a']], ...cardCaps, spm_window_seconds: 90 }]
+    const w = mount(ModelLimitsEditor, {
+      props: { modelValue: cards, options: [], errors: {} },
+      global: { plugins: [i18n], stubs: { ModelTagSelect: true } }
+    })
+    const input = w.get('input[data-testid="model-limit-spm_limit-window"]')
+    const unit = w.get('select[data-testid="model-limit-spm_limit-window-unit"]')
+    expect([(input.element as HTMLInputElement).value, input.attributes('min'), input.attributes('step')]).toEqual(['90', '60', undefined])
+    expect(unit.findAll('option').map((o) => o.text())).toEqual(['秒', '分钟', '小时'])
+    await input.setValue('1.5')
+    expect(cards[0].spm_window_seconds).toBeNaN()
+    expect((input.element as HTMLInputElement).value).toBe('1.5')
+    await unit.setValue('1')
+    await input.setValue('2')
+    expect(cards[0].spm_window_seconds).toBe(120)
+    // Seconds are offered only while the period is in them.
+    expect(unit.findAll('option').map((o) => o.text())).toEqual(['分钟', '小时'])
+  })
 })

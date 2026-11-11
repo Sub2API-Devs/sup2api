@@ -1,21 +1,26 @@
 <script setup lang="ts">
 // A session cap and its window (spm_limit, spm_window_seconds; CONTRACTS §71)
 // on one line: "[20] sessions / every [5] [minutes | hours]". Both models are
-// null while their input is empty (cap 0, default window). The window's number
-// and unit stay local while typing (60 minutes does not turn into 1 hour); an
-// outside change of the window reloads them. Used by the account editor, the
-// model limit cards and the bulk edit.
+// null while their input is empty (cap 0, default window); the window takes
+// whole numbers (NaN otherwise, see joinWindow). A window that is not whole
+// minutes shows in seconds, offered only then. The window's number and unit
+// stay local while typing (60 minutes does not turn into 1 hour); an outside
+// change of the window reloads them. Used by the account editor, the model
+// limit cards and the bulk edit.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SInput, SSelect, type ControlSize } from '@sub2api/ui'
-import { joinWindow, splitWindow, unitMax, WINDOW_UNITS, type WindowParts } from '../spmWindow'
+import { joinWindow, splitWindow, unitRange, WINDOW_UNITS, type WindowParts } from '../spmWindow'
 
 const props = defineProps<{
   /** Text after the cap (e.g. "sessions"). */
   suffix?: string
   limitMax?: number
   size?: ControlSize
+  /** Both inputs are disabled. */
   disabled?: boolean
+  /** The cap alone is fixed (common controls). */
+  limitDisabled?: boolean
   /** The window alone is fixed (common controls). */
   windowDisabled?: boolean
   /** The window is hidden (common controls): only the cap shows. */
@@ -31,15 +36,22 @@ const windowSeconds = defineModel<number | null | undefined>('windowSeconds')
 const { t } = useI18n()
 
 const parts = ref<WindowParts>(splitWindow(windowSeconds.value ?? null))
+// Object.is: a NaN echoed back is the window being typed, not an outside change.
 watch(windowSeconds, s => {
-  if (joinWindow(parts.value) !== (s ?? null)) parts.value = splitWindow(s ?? null, parts.value.unit)
+  if (!Object.is(joinWindow(parts.value), s ?? null)) parts.value = splitWindow(s ?? null, parts.value.unit)
 })
 function setWindow(p: Partial<WindowParts>) {
   parts.value = { ...parts.value, ...p }
   windowSeconds.value = joinWindow(parts.value)
 }
 
-const unitOptions = computed(() => WINDOW_UNITS.map(u => ({ value: u, label: t(`accounts.spmWindow.units.${u}`, parts.value.value ?? 2) })))
+const range = computed(() => unitRange(parts.value.unit))
+const unitOptions = computed(() =>
+  (parts.value.unit === 'second' ? ['second' as const, ...WINDOW_UNITS] : WINDOW_UNITS).map(u => ({
+    value: u,
+    label: t(`accounts.spmWindow.units.${u}`, parts.value.value ?? 2)
+  }))
+)
 const testId = (part: string) => (props.testid ? `${props.testid}${part}` : undefined)
 </script>
 
@@ -52,10 +64,10 @@ const testId = (part: string) => (props.testid ? `${props.testid}${part}` : unde
       :max="limitMax"
       :suffix="suffix"
       :size="size"
-      :disabled="disabled"
+      :disabled="disabled || limitDisabled"
       :error="error"
       :aria-label="ariaLabel"
-      :class="suffix ? 'w-36' : 'w-24'"
+      class="w-36"
       :data-testid="testId('')"
       @update:model-value="limit = $event as number | null"
     />
@@ -64,9 +76,9 @@ const testId = (part: string) => (props.testid ? `${props.testid}${part}` : unde
       <SInput
         :model-value="parts.value"
         type="number"
-        :min="1"
-        :max="unitMax(parts.unit)"
-        step="any"
+        :min="range[0]"
+        :max="range[1]"
+        inputmode="numeric"
         :size="size"
         :disabled="disabled || windowDisabled"
         :error="error"
@@ -81,7 +93,7 @@ const testId = (part: string) => (props.testid ? `${props.testid}${part}` : unde
         :size="size"
         :disabled="disabled || windowDisabled"
         :aria-label="t('accounts.spmWindow.unit')"
-        class="w-24"
+        :class="size === 'sm' ? 'w-28' : 'w-32'"
         :data-testid="testId('-window-unit')"
         @update:model-value="setWindow({ unit: $event as WindowParts['unit'] })"
       />
