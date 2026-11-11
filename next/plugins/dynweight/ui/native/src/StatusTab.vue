@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { MAX_ACCOUNT_BATCH, useList } from '@sub2api/host'
-import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SInput, SModal, SSwitch } from '@sub2api/ui'
-import IdPicker from './IdPicker.vue'
+import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SModal, SSwitch } from '@sub2api/ui'
 import KeyFilters from './KeyFilters.vue'
 import KeyStatusTable from './KeyStatusTable.vue'
 import StatsPanel from './StatsPanel.vue'
 import { useCatalog } from './catalog'
-import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, keyOf, useDwHost, useReset, type Filter, type KeyStatus } from './host'
+import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, keyOf, modelCandidates, useDwHost, useReset, type Filter, type KeyStatus } from './host'
 
 // Effective weights per (account, group, model), degraded first, each with
 // its evaluation detail. A key, the selected accounts (optionally in one
@@ -18,6 +17,7 @@ const props = defineProps<{ preset?: Filter | null }>()
 const emit = defineEmits<{ (e: 'show-events', f: Filter): void }>()
 const host = useDwHost()
 const t = host.t
+const { EntityPicker } = host.components
 const manage = computed(() => canManage())
 const catalog = useCatalog()
 
@@ -27,6 +27,7 @@ const query = () => ({ ...filterQuery(filter), degraded: degraded.value ? '1' : 
 
 const list = useList<KeyStatus>(host.pluginApi, '/status', query(), { pageSize: 50 })
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('status.loadFailed')) : ''))
+const models = computed(() => modelCandidates(list.items.value))
 
 const search = () => applyQuery(list, query())
 
@@ -84,7 +85,7 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
     <StatsPanel ref="stats" class="dw-block" />
 
     <SCard>
-      <KeyFilters v-model="filter" :loading="list.loading.value" @search="search" @clear="clear">
+      <KeyFilters v-model="filter" :loading="list.loading.value" :models="models" @search="search" @clear="clear">
         <SField class="dw-filter" :label="t('status.degradedOnly')">
           <SSwitch v-model="degraded" @update:model-value="search" />
         </SField>
@@ -110,10 +111,10 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
       <SHint class="dw-hint">{{ t('status.resetSelectedHint') }}</SHint>
       <div class="dw-list">
         <SField :label="t('filter.group')">
-          <IdPicker v-model="batch.group_id" kind="group" :empty="t('filter.all')" />
+          <EntityPicker v-model:id="batch.group_id" kind="group" />
         </SField>
         <SField :label="t('filter.model')" :hint="t('status.modelHint')">
-          <SInput v-model="batch.model" />
+          <EntityPicker v-model:id="batch.model" kind="model" :extra="models" />
         </SField>
       </div>
       <template #footer>

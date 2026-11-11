@@ -108,16 +108,15 @@ async function loadCoreUser(id: number, my: number) {
 const NO_USER = Number.MAX_SAFE_INTEGER
 
 /**
- * Resolves a user search (an id, or a name / email fragment through the
- * core) to user ids. null = a name search is not possible (no user:read).
+ * The ids of the users a name / email fragment matches, through the core
+ * (an id no user has when none does). null = a name search is not possible
+ * (no user:read).
  */
-export async function resolveUserIds(q: string): Promise<number[] | null> {
-  const v = q.trim()
-  if (/^\d+$/.test(v)) return [Number(v)]
+async function searchUserIds(q: string): Promise<number[] | null> {
   if (denied) return null
   const my = gen
   try {
-    const r = await searchCoreUsers(v)
+    const r = await searchCoreUsers(q.trim())
     if (my === gen) for (const u of r.items) users.set(u.id, u)
     return r.items.length ? r.items.map((u) => u.id) : [NO_USER]
   } catch (e) {
@@ -126,25 +125,38 @@ export async function resolveUserIds(q: string): Promise<number[] | null> {
   }
 }
 
+/** Resolves a form's user box (an id, or a name / email fragment as in searchUserIds) to user ids. */
+export async function resolveUserIds(q: string): Promise<number[] | null> {
+  const v = q.trim()
+  return /^\d+$/.test(v) ? [Number(v)] : searchUserIds(v)
+}
+
 /** user_id / user_ids query of a resolved search ({} when the search is empty). */
 export function userQuery(ids: number[] | null): { user_id?: number; user_ids?: string } {
   if (!ids?.length) return {}
   return ids.length === 1 ? { user_id: ids[0] } : { user_ids: ids.join(',') }
 }
 
+/** The ids a list's user filter stands for: the picked user, else the users a name search finds ([] = no filter). */
+async function filterUserIds(id: string, text: string): Promise<number[] | null> {
+  if (id) return [Number(id)]
+  return text.trim() ? searchUserIds(text) : []
+}
+
 /**
- * The user filter of a list: `resolve(q)` turns the search into `query`
- * (user_id / user_ids) and `error` (no user:read for a name). Returns false
- * when a newer search started meanwhile, which then decides.
+ * The user filter of a list, as its EntityPicker holds it: `resolve(id, text)`
+ * turns the picked user (`id`) or a name search (`text`, through the core)
+ * into `query` (user_id / user_ids) and `error` (no user:read for a name).
+ * Returns false when a newer search started meanwhile, which then decides.
  */
 export function useUserFilter(initial: number[] | null = null) {
   const t = useModHost().t
   const query = ref(userQuery(initial))
   const error = ref('')
   let seq = 0
-  async function resolve(q: string): Promise<boolean> {
+  async function resolve(id: string, text: string): Promise<boolean> {
     const my = ++seq
-    const ids = q.trim() ? await resolveUserIds(q) : []
+    const ids = await filterUserIds(id, text)
     if (my !== seq) return false
     error.value = ids === null ? t('events.userSearchDenied') : ''
     query.value = userQuery(ids)

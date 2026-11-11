@@ -3,59 +3,60 @@
 // range (#range), the log type and the common fields on the first row, the
 // rest behind the bar's More filters (usageSearchLayout), then the totals
 // (#stats) with extra toggles (#actions, then the secondary #tools) beside
-// Reset / Search. Text filters apply on Search (or Enter) only; the time range
-// slot applies at once. Parameters set off the first row (More filters, or
-// ones the search keeps no field for, brought by a link or a table action)
-// show as removable chips under the bar.
+// Reset / Search. A pick (an entity picker's, a select's) applies at once,
+// with any filter typed so far, and so does the time range slot; typed text
+// applies on Search (or Enter) only. Parameters set off the first row (More
+// filters, or ones the search keeps no field for, brought by a link or a
+// table action) show as removable chips under the bar, a picked entity by
+// its name.
 // With `logTypes` the first filter picks what the page lists, as new-api's log
-// type does; it applies at once, with any filter typed so far. A type these
-// fields do not search (`searchable` = false) brings its own in #filters.
+// type does; it applies at once like any pick. A type these fields do not
+// search (`searchable` = false) brings its own in #filters.
 // The filters sit in an SFilterBar: on a phone the range sits above it, the
 // log type and the first-row fields stay in sight beside its Filters button
-// and the More filters fold into its sheet, whose Done applies the search;
-// #tools go to the end of that sheet.
+// and the More filters fold into its sheet, where a pick waits with the rest
+// for Done, which applies the search; #tools go to the end of that sheet.
 import { computed, reactive, useSlots, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SFilterBar, SFilterChips, SSelect, useViewport } from '@sub2api/ui'
 import UsageFilterFields from './UsageFilterFields.vue'
 import UsageSearchButtons from './UsageSearchButtons.vue'
-import { chipParams, fieldText, usageSearchLayout, useUsageSearchLabels } from './usageFilters'
+import { chipParams, entityPatch, fieldParams, keyHoldsForUser, usageSearchLayout, useUsageSearchLabels } from './usageFilters'
 
 const props = withDefaults(defineProps<{
   modelValue: Record<string, unknown>
   admin?: boolean
   /** The account filter, for an operator who may read accounts. */
   accounts?: boolean
-  /** Groups to pick from; without them the group is typed (a name). */
-  groupOptions?: Array<{ value: string | number; label: string }>
   /** The request types (protocol ids) under the current search, for the type select. */
   protocolOptions?: string[]
+  /** The models under the current search, for the model picker (besides the models it looks up). */
+  modelOptions?: string[]
   /** What the page can list, for the log type select; none hides it. */
   logTypes?: Array<{ value: string; label: string }>
   logType?: string
   searchable?: boolean
-}>(), { admin: false, accounts: false, groupOptions: () => [], protocolOptions: () => [], logTypes: () => [], logType: '', searchable: true })
+}>(), { admin: false, accounts: false, protocolOptions: () => [], modelOptions: () => [], logTypes: () => [], logType: '', searchable: true })
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, string>]; 'update:logType': [value: string]; reset: [] }>()
 const { t } = useI18n()
 const { compact } = useViewport()
 const slots = useSlots()
 /** The stats and actions row; without either the reset and search buttons end the filter row. */
 const bottomRow = computed(() => !!slots.stats || !!slots.actions)
-const layout = computed(() =>
-  usageSearchLayout({ admin: props.admin, accounts: props.accounts, groupSelect: props.groupOptions.length > 0, errors: props.logType === 'errors' })
-)
-const { label, valueLabel } = useUsageSearchLabels(() => props.groupOptions, () => props.protocolOptions, () => String(props.modelValue.protocol ?? ''))
+const layout = computed(() => usageSearchLayout({ admin: props.admin, accounts: props.accounts, errors: props.logType === 'errors' }))
+/** Everyone but an operator searches their own records: the pickers and the names are of their own entities. */
+const mine = computed(() => !props.admin)
+const { label, valueLabel } = useUsageSearchLabels(() => props.protocolOptions, () => String(props.modelValue.protocol ?? ''), mine)
+const isSet = (key: string) => String(props.modelValue[key] ?? '') !== ''
 const draft = reactive<Record<string, string>>({})
 watch(() => props.modelValue, value => {
   for (const key of layout.value.params) draft[key] = String(value[key] ?? '')
 }, { deep: true, immediate: true })
 /** The More filters in effect: the bar's badge, and on a phone its Filters button's (the sheet holds no other search field). */
-const advancedCount = computed(() => (props.searchable ? layout.value.advanced.filter(field => fieldText(props.modelValue, field)).length : 0))
+const advancedCount = computed(() => (props.searchable ? layout.value.advanced.filter(field => fieldParams(field).some(isSet)).length : 0))
 const chips = computed(() =>
   props.searchable
-    ? layout.value.tagged
-      .filter(key => String(props.modelValue[key] ?? '') !== '')
-      .map(key => ({ key, label: label(key), value: valueLabel(key, String(props.modelValue[key])) }))
+    ? layout.value.tagged.filter(isSet).map(key => ({ key, label: label(key), value: valueLabel(key, String(props.modelValue[key])) }))
     : []
 )
 /** Applies the parameters `keys` from the draft, or cleared. */
@@ -70,6 +71,28 @@ function reset() {
 function pickLogType(value: unknown) {
   emit('update:logType', String(value))
   apply()
+}
+/**
+ * Settles the draft's API key for the user just picked: cleared unless it
+ * holds for them. False when the user or the key changed while that was
+ * looked up: they are left alone, for the pick that changed them to apply.
+ */
+async function settleKey(): Promise<boolean> {
+  const asked = { ...draft }
+  const holds = await keyHoldsForUser(asked)
+  if (['user_id', 'api_key_id'].some(key => draft[key] !== asked[key])) return false
+  if (!holds) Object.assign(draft, entityPatch('api_key', {}))
+  return true
+}
+/**
+ * Takes a pick into the draft and applies the search at once, as the log type
+ * does; `held` leaves it to Done (the phone's Filters sheet). A new user keeps
+ * the API key only when it is theirs, which the search waits to know.
+ */
+async function pick(patch: Record<string, string>, held = false) {
+  Object.assign(draft, patch)
+  if ('user_id' in patch && !(await settleKey())) return
+  if (!held) apply()
 }
 </script>
 
@@ -101,11 +124,13 @@ function pickLogType(value: unknown) {
             v-if="!compact"
             name="range"
           />
-          <!-- Two columns beside the Filters button on a phone, an odd last field taking the row; on a wide screen the
-               search fields share the row, while a type with its own filters keeps its selects at their size. -->
+          <!-- Two to a row beside the Filters button on a phone, an odd one out taking its row and so does a picker
+               that is set (data-set), to show the name it picked; on a wide screen the search fields share the row
+               (up to a width: one that wraps does not stretch across the bar), while a type with its own filters
+               keeps its selects at their size. -->
           <div
-            class="grid grid-cols-2 gap-2 md:contents max-md:[&>:last-child:nth-child(odd)]:col-span-2"
-            :class="searchable ? 'md:[&>*]:flex-[1_1_9rem]' : 'md:[&>*]:flex-[0_1_12rem]'"
+            class="flex flex-wrap gap-2 md:contents max-md:[&>*]:min-w-0 max-md:[&>*]:flex-[1_1_6.5rem] max-md:[&>[data-set]]:basis-full"
+            :class="searchable ? 'md:[&>*]:max-w-[22rem] md:[&>*]:flex-[1_1_9rem]' : 'md:[&>*]:flex-[0_1_12rem]'"
           >
             <SSelect
               v-if="logTypes.length"
@@ -120,8 +145,10 @@ function pickLogType(value: unknown) {
               v-if="searchable"
               :fields="layout.primary"
               :values="draft"
-              :group-options="groupOptions"
+              :mine="mine"
+              :model-options="modelOptions"
               @update="Object.assign(draft, $event)"
+              @pick="pick"
             />
           </div>
         </template>
@@ -138,9 +165,10 @@ function pickLogType(value: unknown) {
           <UsageFilterFields
             :fields="layout.advanced"
             :values="draft"
-            :group-options="groupOptions"
+            :mine="mine"
             :protocol-options="protocolOptions"
             @update="Object.assign(draft, $event)"
+            @pick="pick($event, compact)"
           />
         </template>
         <template

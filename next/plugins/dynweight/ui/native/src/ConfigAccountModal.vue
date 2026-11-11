@@ -2,9 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { SAlert, SButton, SField, SFormModal, SHint, SInput, SSegmented, SSwitch } from '@sub2api/ui'
 import ConfigFloorInput from './ConfigFloorInput.vue'
-import IdPicker from './IdPicker.vue'
 import { useCatalog } from './catalog'
-import { inheritText, inheritedValue, overrideFields, sourceLayers, type Draft, type OverrideField } from './configView'
+import { inheritText, inheritedValue, isDraftKey, overrideFields, sourceLayers, type Draft, type OverrideField } from './configView'
 import { useDialogSave, type SaveOutcome } from './dialogSave'
 import { clone, overrideIncomplete, useDwHost, type AccountOverride, type Layer } from './host'
 
@@ -12,8 +11,9 @@ import { clone, overrideIncomplete, useDwHost, type AccountOverride, type Layer 
 // "override" switch is on; while off it shows the value the account
 // inherits. `target` is the account opened ('' = a new override, the account
 // picked in the dialog; an id without an override opens as new for that
-// account). Save saves the override through `save` and closes once saved
-// (`others`: other unsaved edits of the page go along).
+// account; one picked in the dialog that has an override already is refused:
+// it is edited from the list). Save saves the override through `save` and
+// closes once saved (`others`: other unsaved edits of the page go along).
 const props = defineProps<{
   target: string | null
   draft: Draft
@@ -23,7 +23,9 @@ const props = defineProps<{
   others?: boolean
 }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'pick', id: string): void }>()
-const t = useDwHost().t
+const host = useDwHost()
+const t = host.t
+const { EntityPicker } = host.components
 const catalog = useCatalog()
 const { saving, error, run } = useDialogSave()
 
@@ -44,7 +46,11 @@ watch(
 )
 watch(account, id => id && emit('pick', id), { immediate: true })
 
-const validId = computed(() => /^\d+$/.test(account.value) && Number(account.value) > 0)
+const validId = computed(() => isDraftKey(account.value))
+// Saving a new override over the one the picked account has would drop it.
+const taken = computed(() => props.target === '' && account.value in props.draft.accounts)
+/** The account is settled: its fields can be set and saved. */
+const ready = computed(() => validId.value && !taken.value)
 const groups = computed(() => (validId.value ? props.accountGroups[account.value] : undefined))
 const sources = computed(() => sourceLayers(props.draft, groups.value))
 const groupsLine = computed(() => {
@@ -102,7 +108,7 @@ const title = computed(() => {
   const account = catalog.accountName(Number(props.target))
   return isNew.value ? `${t('cfg.accountModal.add')} · ${account}` : t('cfg.accountModal.edit', { account })
 })
-const canSave = computed(() => validId.value && !floorError.value && !(isNew.value && nothing.value))
+const canSave = computed(() => ready.value && !floorError.value && !(isNew.value && nothing.value))
 
 async function submit() {
   if (!canSave.value) return
@@ -110,7 +116,7 @@ async function submit() {
 }
 
 const footerHint = computed(() => {
-  if (isNew.value && validId.value && nothing.value) return t('cfg.accountModal.nothing')
+  if (isNew.value && ready.value && nothing.value) return t('cfg.accountModal.nothing')
   return props.others ? t('cfg.saveOthers') : ''
 })
 </script>
@@ -126,16 +132,20 @@ const footerHint = computed(() => {
     @submit="submit"
   >
     <SAlert v-if="error" tone="danger">{{ error }}</SAlert>
-    <SField v-if="target === '' && !readonly" :label="t('cfg.accountModal.account')">
-      <IdPicker v-model="account" kind="account" :exclude="Object.keys(draft.accounts)" />
+    <SField
+      v-if="target === '' && !readonly"
+      :label="t('cfg.accountModal.account')"
+      :error="taken ? t('cfg.accountModal.taken') : undefined"
+    >
+      <EntityPicker v-model:id="account" kind="account" />
     </SField>
     <SHint v-if="groupsLine" size="xs">{{ groupsLine }}</SHint>
 
-    <fieldset class="dw-fieldset dw-cfg-ovr-list" :disabled="readonly || !validId">
+    <fieldset class="dw-fieldset dw-cfg-ovr-list" :disabled="readonly || !ready">
       <div class="dw-cfg-ovr">
         <div class="dw-cfg-ovr-head">
           <span class="dw-cfg-ovr-label">{{ t('cfg.accountModal.enabled') }}</span>
-          <SSwitch v-model="custom.enabled.value" size="sm" :label="t('cfg.accountModal.custom')" :disabled="readonly || !validId" />
+          <SSwitch v-model="custom.enabled.value" size="sm" :label="t('cfg.accountModal.custom')" :disabled="readonly || !ready" />
         </div>
         <template v-if="custom.enabled.value">
           <SSegmented
@@ -153,7 +163,7 @@ const footerHint = computed(() => {
       <div class="dw-cfg-ovr">
         <div class="dw-cfg-ovr-head">
           <span class="dw-cfg-ovr-label">{{ t('cfg.accountModal.exempt') }}</span>
-          <SSwitch v-model="custom.exempt.value" size="sm" :label="t('cfg.accountModal.custom')" :disabled="readonly || !validId" />
+          <SSwitch v-model="custom.exempt.value" size="sm" :label="t('cfg.accountModal.custom')" :disabled="readonly || !ready" />
         </div>
         <SField v-if="custom.exempt.value" :hint="t('cfg.accountModal.exemptHint')">
           <SInput
@@ -169,7 +179,7 @@ const footerHint = computed(() => {
       <div class="dw-cfg-ovr">
         <div class="dw-cfg-ovr-head">
           <span class="dw-cfg-ovr-label">{{ t('cfg.accountModal.floor') }}</span>
-          <SSwitch v-model="custom.floor.value" size="sm" :label="t('cfg.accountModal.custom')" :disabled="readonly || !validId" />
+          <SSwitch v-model="custom.floor.value" size="sm" :label="t('cfg.accountModal.custom')" :disabled="readonly || !ready" />
         </div>
         <SField v-if="custom.floor.value" :hint="t('layer.floorHint')" :error="floorError">
           <ConfigFloorInput v-model="floor" :disabled="readonly" :aria-label="t('cfg.accountModal.floor')" />

@@ -41,11 +41,12 @@ export function flowQuery(v: string): { flow_id: number | ''; flow_version: numb
 /** The flow select's value of a query ('' without flow_id). */
 export const flowValue = (q: { flow_id?: unknown; flow_version?: unknown }): string => (q.flow_id ? `${q.flow_id}:${q.flow_version || ''}` : '')
 
-/** A filter field: a select (its options), else a text input. */
+/** A filter field: a select (its options), else a text input or an entity picker (`text` names the picked id). */
 export interface FilterField<K extends string = string> {
   key: K
   label: string
   options?: SelectOption[]
+  text?: (value: string) => string
 }
 
 export const isSet = (v: unknown): boolean => v !== undefined && v !== null && String(v).trim() !== ''
@@ -60,9 +61,14 @@ export function optionText(options: SelectOption[], value: unknown): string {
   return String(value)
 }
 
+/** What a chip says of a field's value: the option's label, the field's own text, else the value trimmed. */
+function chipText(f: FilterField, value: unknown): string {
+  if (f.options) return optionText(f.options, value)
+  const text = String(value).trim()
+  return f.text ? f.text(text) : text
+}
+
 /** Chips of the fields set in `values` (the applied filters, keyed like the fields), in field order. */
 export function filterChips(fields: FilterField[], values: Record<string, unknown>): FilterChipItem[] {
-  return fields
-    .filter((f) => isSet(values[f.key]))
-    .map((f) => ({ key: f.key, label: f.label, value: f.options ? optionText(f.options, values[f.key]) : String(values[f.key]).trim() }))
+  return fields.filter((f) => isSet(values[f.key])).map((f) => ({ key: f.key, label: f.label, value: chipText(f, values[f.key]) }))
 }

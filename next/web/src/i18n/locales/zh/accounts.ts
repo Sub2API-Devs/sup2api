@@ -89,7 +89,6 @@ export default {
   subtitle: '网关使用的上游账号。账号类型由插件声明，同一分组可以混放不同类型的账号。',
   new: '新建账号',
   allTypes: '全部类型',
-  allGroups: '全部分组',
   allStatus: '全部状态',
   status: {
     active: '启用',
@@ -346,7 +345,6 @@ export default {
   modelsHint: '留空表示所有模型；输入完整模型 ID，回车或逗号添加',
   modelsPlaceholder: '模型 ID，回车添加',
   modelsTextPlaceholder: '每行一个模型 ID，也可以用逗号分隔',
-  modelFilter: '按模型筛选',
   allModels: '全部模型',
   modelInvalid: '不是合法的完整模型 ID（不允许通配符）：{model}',
   modelsNotArray: '必须是由模型 ID 字符串组成的 JSON 数组',

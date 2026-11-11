@@ -24,12 +24,20 @@ export function applyErrorsOrToast(errs: FieldErrors, e: unknown, shown?: readon
   if (!applyFieldErrors(errs, e, shown, key)) toastError(e)
 }
 
+/** Filters a query was put into during the current task: their list is about to reload by itself. */
+const fresh = new WeakSet<object>()
+
 /**
  * Puts a filter query into a useList's filters. Returns false when nothing
  * changed: the list then does not reload by itself and the caller reloads.
+ * A change made earlier in the same task still counts: Enter in an entity
+ * picker's text box applies the pick and submits the form, and the form's
+ * search must not load the same filters a second time.
  */
 export function applyFilters(filters: Record<string, unknown>, next: Record<string, unknown>): boolean {
-  if (Object.entries(next).every(([k, v]) => filters[k] === v)) return false
+  if (Object.entries(next).every(([k, v]) => filters[k] === v)) return fresh.has(filters)
   Object.assign(filters, next)
+  fresh.add(filters)
+  setTimeout(() => fresh.delete(filters))
   return true
 }

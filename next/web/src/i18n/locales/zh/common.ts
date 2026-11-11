@@ -75,7 +75,6 @@ export default {
   user: '用户',
   group: '分组',
   account: '账号',
-  createdById: '创建人 ID',
   onlyMine: '只看我的',
   theme: {
     toggle: '切换主题',

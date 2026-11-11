@@ -141,6 +141,17 @@ describe('SDateRange on a phone', () => {
     expect(sheet()).toBeNull()
   })
 
+  it('with time shows both ends to the second, each whole, so the line can only break between them', () => {
+    const at = (h: number, m: number, sec: number) => new Date(2026, 10, 12, h, m, sec).toISOString()
+    const w = mountPinned(SDateRange, { props: { range: 'today', from: at(0, 0, 0), to: at(15, 4, 6), time: true } })
+    const trigger = w.get('[data-testid="date-range-trigger"]')
+    expect(trigger.text()).toBe('Today2026-11-12 00:00:00 ~ 2026-11-12 15:04:05')
+    expect(trigger.findAll('.whitespace-nowrap').map((e) => e.text())).toEqual(['Today', '2026-11-12 00:00:00 ~', '2026-11-12 15:04:05'])
+    // Nothing clips or fixes the height: the button grows to a second line.
+    expect(trigger.classes()).toEqual(expect.arrayContaining(['h-auto', 'min-h-control']))
+    expect(trigger.classes()).not.toContain('whitespace-nowrap')
+  })
+
   it('applies a custom span from the sheet', async () => {
     const w = mountPinned(SDateRange, { props: { range: '7d', from: '', to: '' } })
     await w.get('[data-testid="date-range-trigger"]').trigger('click')
