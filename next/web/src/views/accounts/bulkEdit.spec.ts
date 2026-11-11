@@ -3,7 +3,7 @@ import type { Account } from '@/api/types'
 import { buildBulkPatch, type BulkFields, type BulkFlags } from './bulkEdit'
 
 const account = (over: Partial<Account> = {}) => ({ id: 1, name: 'a', priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, group_ids: [1, 2], proxy_id: null, auto_disable: true, ...over }) as unknown as Account
-const fields = (over: Partial<BulkFields> = {}): BulkFields => ({ priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true, ...over })
+const fields = (over: Partial<BulkFields> = {}): BulkFields => ({ priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, spm_limit: 0, spm_window_seconds: 60, group_ids: [], groupMode: 'replace', proxy_id: null, auto_disable: true, ...over })
 const flags = (over: Partial<BulkFlags> = {}): BulkFlags => ({ priority: false, weight: false, max_concurrency: false, tpm_limit: false, rpm_limit: false, spm_limit: false, groups: false, proxy: false, auto_disable: false, ...over })
 
 describe('bulk account patch', () => {
@@ -12,6 +12,13 @@ describe('bulk account patch', () => {
     expect(buildBulkPatch(account({ priority: 5 }), fields({ priority: 5 }), flags({ priority: true }))).toBeNull()
     expect(buildBulkPatch(account(), fields({ weight: 1, spm_limit: 4 }), flags({ weight: true, spm_limit: true }))).toEqual({ spm_limit: 4 })
     expect(buildBulkPatch(account({ spm_limit: 4 }), fields({ spm_limit: 4 }), flags({ spm_limit: true }))).toBeNull()
+  })
+
+  it('applies the session limit with its period, an absent period being 1 minute', () => {
+    expect(buildBulkPatch(account({ spm_limit: 4 }), fields({ spm_limit: 4, spm_window_seconds: 300 }), flags({ spm_limit: true }))).toEqual({ spm_window_seconds: 300 })
+    expect(buildBulkPatch(account({ spm_window_seconds: 300 }), fields({ spm_limit: 9, spm_window_seconds: 300 }), flags({ spm_limit: true }))).toEqual({ spm_limit: 9 })
+    expect(buildBulkPatch(account({ spm_window_seconds: 300 }), fields({ spm_window_seconds: null }), flags({ spm_limit: true }))).toEqual({ spm_window_seconds: 60 })
+    expect(buildBulkPatch(account(), fields({ spm_window_seconds: 3600 }), flags())).toBeNull()
   })
 
   it('replaces, adds to or removes from each account its own groups', () => {

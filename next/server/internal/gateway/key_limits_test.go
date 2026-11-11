@@ -54,7 +54,7 @@ func TestAPIKeyCaps(t *testing.T) {
 			t.Fatalf("first: %d %s", r.status, r.body)
 		}
 		e.record()
-		limited(t, e, e.messages(body(testModel, false)), "60") // the first request leaves the last 60 seconds in 60 s
+		limited(t, e, e.messages(body(testModel, false)), "63") // the first request's segment (12:00:15-18) leaves the window at 12:01:18
 		if n := len(e.up.keys()); n != 1 {
 			t.Fatalf("upstream calls %d", n)
 		}

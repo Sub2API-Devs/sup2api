@@ -75,7 +75,7 @@ func defaultLimitsView(d *manifest.AccountDefaultLimits) *DefaultLimitsView {
 	}
 	v := &DefaultLimitsView{Priority: d.Priority, Weight: d.Weight, MaxConcurrency: d.MaxConcurrency, RPMLimit: d.RPMLimit, TPMLimit: d.TPMLimit, SPMLimit: d.SPMLimit}
 	for _, l := range d.ModelLimits {
-		v.ModelLimits = append(v.ModelLimits, core.ModelLimit{Models: l.Models, MaxConcurrency: l.MaxConcurrency, RPMLimit: l.RPMLimit, TPMLimit: l.TPMLimit, SPMLimit: l.SPMLimit})
+		v.ModelLimits = append(v.ModelLimits, withSPMWindow(core.ModelLimit{Models: l.Models, MaxConcurrency: l.MaxConcurrency, RPMLimit: l.RPMLimit, TPMLimit: l.TPMLimit, SPMLimit: l.SPMLimit}))
 	}
 	return v
 }

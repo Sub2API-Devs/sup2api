@@ -131,7 +131,7 @@ func (l *fakeLimiter) CountModelTokens(_ context.Context, id int64, model string
 	l.modelTkns[itoa(id)+":"+model] += n
 }
 
-func (l *fakeLimiter) ModelRates(context.Context, int64, time.Time) ([]core.ModelRates, error) {
+func (l *fakeLimiter) ModelRates(context.Context, core.AccountRef, time.Time) ([]core.ModelRates, error) {
 	return []core.ModelRates{{}}, nil
 }
 
@@ -217,7 +217,7 @@ func TestRateLimitedAccountsAreSkipped(t *testing.T) {
 	}
 	// Without a sticky session each request is a session of its own (CONTRACTS §71).
 	for _, s := range lim.sessions {
-		if !strings.HasPrefix(s, "req:") {
+		if !core.IsRequestSession(s) {
 			t.Fatalf("sessions %q", lim.sessions)
 		}
 	}

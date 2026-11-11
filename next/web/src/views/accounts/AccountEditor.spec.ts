@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
+import { ApiError } from '@sub2api/host'
 import { i18n } from '@/i18n'
 import type { Account, AccountType, Group } from '@/api/types'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -16,6 +17,7 @@ import { SSpinner, SSwitch, STagInput } from '@sub2api/ui'
 import AccountEditorNav from './AccountEditorNav.vue'
 import ParamOverrideField from './paramOverride/ParamOverrideField.vue'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
+import RateLimitEditor from './controls/RateLimitEditor.vue'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }), toast: vi.fn() }))
 vi.mock('@sub2api/host', async (original) => ({ ...await original<object>(), api: mocks }))
@@ -36,6 +38,7 @@ function render(account?: Account, realSelect = false, type: AccountType = accou
     // The models card is rendered (not stubbed) so its tag select is reachable.
     AccountModelsCard: false,
     RateLimitEditor: false,
+    SessionLimitInput: false,
     HeaderPassthroughEditor: false,
     SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' },
     SSettingRow: { template: '<div><slot /></div>' },
@@ -508,37 +511,73 @@ describe('account model limits', () => {
   })
 
   const caps = { max_concurrency: 0, rpm_limit: 0, tpm_limit: 0, spm_limit: 0 }
+  /** A card's caps: the window is always there, saved entries leave out the default. */
+  const cardCaps = { ...caps, spm_window_seconds: 60 }
 
   it('edits the saved lists as cards and submits one entry per list', async () => {
     const limits = [{ models: ['m-a'], ...caps, max_concurrency: 1, spm_limit: 2 }, { models: ['m-b'], ...caps, max_concurrency: 1, spm_limit: 2 }]
     const w = render({ ...savedAccount(), model_limits: limits } as Account)
     await flushPromises()
     const editor = w.getComponent(ModelLimitsEditor)
-    expect(editor.props('modelValue')).toEqual([{ lists: [['m-a'], ['m-b']], ...caps, max_concurrency: 1, spm_limit: 2 }])
-    editor.vm.$emit('update:modelValue', [{ lists: [['m-a', 'm-c'], []], ...caps, rpm_limit: 9, spm_limit: 3 }])
+    expect(editor.props('modelValue')).toEqual([{ lists: [['m-a'], ['m-b']], ...cardCaps, max_concurrency: 1, spm_limit: 2 }])
+    editor.vm.$emit('update:modelValue', [{ lists: [['m-a', 'm-c'], []], ...cardCaps, rpm_limit: 9, spm_limit: 3 }])
     await flushPromises()
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ model_limits: [{ models: ['m-a', 'm-c'], ...caps, rpm_limit: 9, spm_limit: 3 }] }))
   })
 
-  it('edits the sessions per minute of the account and of a model list', async () => {
-    const w = render({ ...savedAccount(), spm_limit: 5 } as Account)
+  it('edits the session limit and its period of the account and of a model list', async () => {
+    const w = render({ ...savedAccount(), spm_limit: 5, spm_window_seconds: 300, model_limits: [{ models: ['m-b'], ...caps, spm_window_seconds: 7200 }] } as Account)
     await flushPromises()
-    const input = w.get('input[data-testid="account-spm_limit"]')
-    expect((input.element as HTMLInputElement).value).toBe('5')
-    await input.setValue('7')
-    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a']], ...caps, spm_limit: 2 }])
+    const value = (id: string) => (w.get(`[data-testid="${id}"]`).element as HTMLInputElement).value
+    expect([value('account-spm_limit'), value('account-spm_limit-window'), value('account-spm_limit-window-unit')]).toEqual(['5', '5', 'minute'])
+    expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([{ lists: [['m-b']], ...cardCaps, spm_window_seconds: 7200 }])
+    await w.get('input[data-testid="account-spm_limit"]').setValue('7')
+    await w.get('input[data-testid="account-spm_limit-window"]').setValue('2')
+    await w.get('[data-testid="account-spm_limit-window-unit"]').setValue('hour')
+    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a']], ...cardCaps, spm_limit: 2 }, { lists: [['m-c']], ...cardCaps, spm_window_seconds: 600 }])
     await flushPromises()
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ spm_limit: 7, model_limits: [{ models: ['m-a'], ...caps, spm_limit: 2 }] }))
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({
+      spm_limit: 7,
+      spm_window_seconds: 7200,
+      model_limits: [{ models: ['m-a'], ...caps, spm_limit: 2 }, { models: ['m-c'], ...caps, spm_window_seconds: 600 }]
+    }))
+  })
+
+  it('sends the default period of an account saved without one, and shows the server\'s period error on the session row', async () => {
+    mocks.patch.mockRejectedValueOnce(new ApiError(400, { code: 'invalid_argument', message: 'invalid', details: { fields: [{ field: 'spm_window_seconds', code: 'invalid', message: 'spm_window_seconds: invalid' }] } }))
+    const w = render(savedAccount())
+    await flushPromises()
+    expect((w.get('input[data-testid="account-spm_limit-window"]').element as HTMLInputElement).value).toBe('1')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/1', expect.objectContaining({ spm_window_seconds: 60, model_limits: [] }))
+    expect(w.getComponent(RateLimitEditor).props('errors')).toEqual({ spm_window_seconds: 'spm_window_seconds: invalid' })
+    expect(w.getComponent(AccountEditorNav).props('errors')).toMatchObject({ scheduling: true })
+  })
+
+  it('leaves a period the type fixes to the server, and hides one the type hides', async () => {
+    const fixedType = { ...accountType, common_controls: { spm_window_seconds: { configurable: false } } } as unknown as AccountType
+    const w = render({ ...savedAccount(), spm_window_seconds: 600 } as Account, false, fixedType)
+    await flushPromises()
+    expect(w.get('input[data-testid="account-spm_limit-window"]').attributes('disabled')).toBeDefined()
+    expect(w.get('input[data-testid="account-spm_limit"]').attributes('disabled')).toBeUndefined()
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('spm_window_seconds')
+    const hidden = render(savedAccount(), false, { ...accountType, common_controls: { spm_window_seconds: { visible: false } } } as unknown as AccountType)
+    await flushPromises()
+    expect(hidden.find('[data-testid="account-spm_limit-window"]').exists()).toBe(false)
+    expect(hidden.find('input[data-testid="account-spm_limit"]').exists()).toBe(true)
   })
 
   it('refuses to save a model listed twice', async () => {
     const w = render(savedAccount())
     await flushPromises()
-    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a'], ['m-a']], ...caps, rpm_limit: 1 }])
+    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-a'], ['m-a']], ...cardCaps, rpm_limit: 1 }])
     await flushPromises()
     await w.get('form').trigger('submit')
     await flushPromises()
@@ -564,7 +603,8 @@ describe('account model limits', () => {
     const type = { ...accountType, default_limits: { priority: 3, spm_limit: 6, model_limits: [{ models: ['m-a'], ...caps, max_concurrency: 2 }] } } as AccountType
     const w = render(undefined, false, type)
     await flushPromises()
-    expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([{ lists: [['m-a']], ...caps, max_concurrency: 2 }])
+    expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([{ lists: [['m-a']], ...cardCaps, max_concurrency: 2 }])
+    expect((w.get('input[data-testid="account-spm_limit-window"]').element as HTMLInputElement).value).toBe('1')
     expect((w.get('input[data-testid="account-spm_limit"]').element as HTMLInputElement).value).toBe('6')
   })
 })
@@ -786,7 +826,7 @@ describe('common controls of the account type (docs/COMMON-CONTROLS.md §2)', ()
     const w = render(undefined, false, { ...group, type: 'a' } as unknown as AccountType)
     await flushPromises()
     await input(w, 'priority').setValue('42')
-    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-1']], max_concurrency: 0, rpm_limit: 3, tpm_limit: 0, spm_limit: 0 }])
+    w.getComponent(ModelLimitsEditor).vm.$emit('update:modelValue', [{ lists: [['m-1']], max_concurrency: 0, rpm_limit: 3, tpm_limit: 0, spm_limit: 0, spm_window_seconds: 60 }])
     await w.setProps({ accountType: { ...group, type: 'b', default_limits: { weight: 6, priority: 1 }, common_controls: { model_limits: { configurable: false } } } as unknown as AccountType })
     await flushPromises()
     expect((input(w, 'priority').element as HTMLInputElement).value).toBe('42')

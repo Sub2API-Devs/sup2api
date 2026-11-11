@@ -16,10 +16,34 @@ import (
 // maxModelLimits bounds the model lists of an account (CONTRACTS §68).
 const maxModelLimits = manifest.MaxAccountModelLimits
 
+// spmWindowEN and spmWindowZH explain an spm_window_seconds out of range.
+const (
+	spmWindowEN = "spm window must be 60-86400 seconds"
+	spmWindowZH = "会话数统计周期必须为 60-86400 秒"
+)
+
+// validSPMWindow reports whether secs is a session window an account or a
+// model list may count over (CONTRACTS §71.1).
+func validSPMWindow(secs int) bool {
+	return secs >= manifest.MinSPMWindowSeconds && secs <= manifest.MaxSPMWindowSeconds
+}
+
+// withSPMWindow gives a list saved without a session window (before 0094)
+// or sent without one the default.
+func withSPMWindow(l core.ModelLimit) core.ModelLimit {
+	if l.SPMWindowSeconds == 0 {
+		l.SPMWindowSeconds = manifest.DefaultSPMWindowSeconds
+	}
+	return l
+}
+
 func parseModelLimits(raw []byte) []core.ModelLimit {
 	out := []core.ModelLimit{}
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &out)
+	}
+	for i := range out {
+		out[i] = withSPMWindow(out[i])
 	}
 	return out
 }
@@ -40,8 +64,25 @@ func coreModelLimits(in []*pluginv1.ModelLimit) []core.ModelLimit {
 	return out
 }
 
+// keepSPMWindows gives each list a plugin sent the session window of the
+// list of current with the same models: plugins do not set windows
+// (CONTRACTS §71.4), so their patch keeps the administrator's.
+func keepSPMWindows(lists, current []core.ModelLimit) []core.ModelLimit {
+	windows := make(map[string]int, len(current))
+	for i := range current {
+		windows[current[i].Key()] = current[i].SPMWindowSeconds
+	}
+	for i := range lists {
+		if lists[i].SPMWindowSeconds == 0 {
+			lists[i].SPMWindowSeconds = windows[lists[i].Key()]
+		}
+	}
+	return lists
+}
+
 func sameModelLimit(a, b core.ModelLimit) bool {
-	return slices.Equal(a.Models, b.Models) && a.MaxConcurrency == b.MaxConcurrency && a.RPMLimit == b.RPMLimit && a.TPMLimit == b.TPMLimit && a.SPMLimit == b.SPMLimit
+	return slices.Equal(a.Models, b.Models) && a.MaxConcurrency == b.MaxConcurrency && a.RPMLimit == b.RPMLimit && a.TPMLimit == b.TPMLimit &&
+		a.SPMLimit == b.SPMLimit && a.SPMWindowSeconds == b.SPMWindowSeconds
 }
 
 // normalizeModelLimits trims the model lists, drops repeated models within a
@@ -88,6 +129,9 @@ func normalizeModelLimits(ctx context.Context, in []core.ModelLimit) ([]core.Mod
 		}
 		if l.SPMLimit < 0 || l.SPMLimit > maxRPMLimit {
 			add(field+".spm_limit", "invalid", "spm limit must be 0-10000000 (0 = unlimited)", "每分钟会话数上限必须为 0-10000000（0 表示不限）")
+		}
+		if l = withSPMWindow(l); !validSPMWindow(l.SPMWindowSeconds) {
+			add(field+".spm_window_seconds", "invalid", spmWindowEN, spmWindowZH)
 		}
 		if len(models) == 0 {
 			continue

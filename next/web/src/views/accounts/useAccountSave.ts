@@ -17,6 +17,7 @@ import { sectionOfErrors, splitFieldErrors, type EditorSection } from './editorE
 import { subscriptionLabel } from './subscription'
 import type { useModelEdit } from './useModelEdit'
 import { fromCards, repeatedModel, type ModelLimitCard } from './modelLimits'
+import { windowOf } from './spmWindow'
 
 /** Editable basics of an account (AccountEditor's `basic`). */
 export interface AccountBasics {
@@ -31,6 +32,8 @@ export interface AccountBasics {
   rpm_limit: number
   tpm_limit: number
   spm_limit: number
+  /** Window of spm_limit in seconds; null while its input is empty (the default). */
+  spm_window_seconds: number | null
   /** The account layer of the environment variables (CONTRACTS §74.3). */
   environment: EnvironmentValues
   /** Header passthrough rules (CONTRACTS §81). */
@@ -151,6 +154,7 @@ export function useAccountSave(deps: AccountSaveDeps) {
       rpm_limit: Number(basic.rpm_limit) || 0,
       tpm_limit: Number(basic.tpm_limit) || 0,
       spm_limit: Number(basic.spm_limit) || 0,
+      spm_window_seconds: windowOf(basic.spm_window_seconds),
       model_limits: fromCards(deps.modelLimits.value),
       environment: basic.environment,
       header_passthrough: basic.header_passthrough,

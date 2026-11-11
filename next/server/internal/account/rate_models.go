@@ -28,11 +28,12 @@ func (s *Service) getRateModels(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if _, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:read"), false); err != nil {
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:read"), false)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	out, err := s.rateModels(ctx, id, time.Now())
+	out, err := s.rateModels(ctx, core.AccountRef{ID: id, SPMWindowSeconds: a.SPMWindowSeconds}, time.Now())
 	if err != nil {
 		httpapi.Fail(c, core.ErrUnavailable.WithCause(err))
 		return
@@ -40,15 +41,15 @@ func (s *Service) getRateModels(c *gin.Context) {
 	httpapi.OK(c, out)
 }
 
-func (s *Service) rateModels(ctx context.Context, id int64, now time.Time) (*RateModels, error) {
+func (s *Service) rateModels(ctx context.Context, ref core.AccountRef, now time.Time) (*RateModels, error) {
 	rows := []core.ModelRates{{}}
 	if s.d.Limiter != nil {
 		var err error
-		if rows, err = s.d.Limiter.ModelRates(ctx, id, dayStart(now, core.TimeZone(ctx))); err != nil {
+		if rows, err = s.d.Limiter.ModelRates(ctx, ref, dayStart(now, core.TimeZone(ctx))); err != nil {
 			return nil, err
 		}
 	}
-	if err := s.fillModelInFlight(ctx, id, rows); err != nil {
+	if err := s.fillModelInFlight(ctx, ref.ID, rows); err != nil {
 		return nil, err
 	}
 	models := rows[1:]
