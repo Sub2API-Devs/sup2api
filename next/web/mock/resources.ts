@@ -198,7 +198,7 @@ interface MockGroup {
   created_at: string
 }
 
-const groups: MockGroup[] = [
+export const groups: MockGroup[] = [
   { id: 1, name: 'default', description: 'Default group for everyone', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], account_count: 8, created_at: now(-86400 * 60) },
   { id: 2, name: 'vip', description: 'Discounted Claude access', status: 'active', rate_multiplier: '0.8', visibility: 'restricted', model_allowlist: ['claude-*'], account_count: 3, created_at: now(-86400 * 30) },
   { id: 3, name: 'haiku-only', description: 'Cheap models for batch jobs', status: 'disabled', rate_multiplier: '0.5', visibility: 'restricted', model_allowlist: ['claude-3-5-haiku*', 'claude-haiku-4*'], account_count: 1, created_at: now(-86400 * 5) },
@@ -288,7 +288,7 @@ interface MockUser {
   updated_at: string
 }
 
-const users: MockUser[] = [
+export const users: MockUser[] = [
   { id: 1, email: 'admin@example.com', display_name: 'Admin', status: 'active', roles: ['super_admin'], group_ids: [1, 2], balance: '12.34000000', last_login_at: now(-60), created_at: now(-86400 * 90), updated_at: now(-86400) },
   { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', roles: ['operator', 'user'], group_ids: [1], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
   { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', roles: ['operator'], group_ids: [1, 2], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
@@ -384,8 +384,8 @@ interface MockKey {
   created_at: string
 }
 
-const ME_ID = 1
-const keys: MockKey[] = [
+export const ME_ID = 1
+export const keys: MockKey[] = [
   { id: 1, user_id: 1, group_id: 1, name: 'laptop', key_prefix: 'sk-s2a-a1b2c', status: 'active', expires_at: null, last_used_at: now(-42), created_at: now(-86400 * 30) },
   { id: 2, user_id: 1, group_id: 2, rpm_limit: 60, tpm_limit: 200000, max_concurrency: 2, quota_limit: '20', quota_used: '17.3', name: 'ci-runner', key_prefix: 'sk-s2a-c3d4e', status: 'active', expires_at: now(86400 * 60), last_used_at: now(-3600 * 3), created_at: now(-86400 * 12) },
   { id: 3, user_id: 1, group_id: 1, name: 'old-script', key_prefix: 'sk-s2a-e5f6g', status: 'active', expires_at: now(-86400), last_used_at: now(-86400 * 3), created_at: now(-86400 * 50) },
@@ -444,7 +444,7 @@ function randomToken(n: number) {
   return s
 }
 
-function myGroups() {
+export function myGroups() {
   const me = users.find((u) => u.id === ME_ID)
   return groups.filter((g) => g.status === 'active' && (g.visibility === 'public' || me?.group_ids.includes(g.id))).map(groupOut)
 }
@@ -539,7 +539,7 @@ interface MockProxy {
   created_at: string
 }
 
-const proxies: MockProxy[] = [
+export const proxies: MockProxy[] = [
   { id: 1, name: 'us-west-1', protocol: 'http', host: '10.0.1.20', port: 3128, username: '', password: '', status: 'active', created_by: 1, created_at: now(-86400 * 40) },
   { id: 2, name: 'jp-residential', protocol: 'socks5', host: 'jp.proxy.example.net', port: 1080, username: 'acme', password: 's3cret', status: 'active', created_by: vendorUser.id, created_at: now(-86400 * 15) },
   { id: 3, name: 'eu-backup', protocol: 'https', host: 'eu.proxy.example.net', port: 443, username: 'backup', password: 'pw', status: 'disabled', created_by: null, created_at: now(-86400 * 3) }

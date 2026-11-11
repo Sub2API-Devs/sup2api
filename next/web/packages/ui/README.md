@@ -306,3 +306,48 @@ const columns: TableColumn[] = [
 **吃剩余宽度的列：`TableColumn.grow`。** `grow: true` 让该列吃掉其余列剩下的宽度并单行省略，默认渲染时完整值进 `title`；单元格插槽内容同样被截断（块级或 flex 根元素被限制在列宽内，可自行 `truncate`）。手机卡片不受影响。其余列用 `nowrap` 或 `ellipsis`。
 
 **其它。** 新图标 `image`；时间范围预设“全部”显示为“全部时间”（`ui.allTime`）。
+
+## 可搜索下拉的扩展与时间范围（UI SDK 3.11）
+
+`SSelect` 的 `searchable` 形态能当“实体选择器”的底座用了：每行带 ID 和副标题、可清除、可远程搜索。原生 `<select>` 形态不变；不传本节的 prop 和选项字段时，可搜索形态的渲染和交互与 3.10 相同。原生插件用到本节任一项时声明 `hostUICompat: "^3.11"`，`hostCompat` 要求核心 `>=0.1.279`（0.1.278 是最后一个带 UI 3.10 的核心）。
+
+**选项字段（`SelectOption`，只在 `searchable` 时生效）。**
+
+| 字段 | 作用 |
+|---|---|
+| `hint` | 行尾灰色等宽小字（如 `#7`）；选中后收起时显示在名称之后 |
+| `description` | 第二行灰色小字，单行省略 |
+| `tag` | 名称后的灰色小标签（如“已停用”） |
+| `muted` | 名称弱化（已停用但仍可选） |
+| `accent` | 不是列表里的值、而是一个动作的行（如“名称包含 “x””）：名称用主色，行下有虚线；`description` 可换行 |
+
+带任一字段的行（以及 `remote` 列表的每一行）按两行排版；本地过滤同时匹配 `label`、`hint`、`description`。行的渲染留在 `SSelect` 自己的模板里、不拆成子组件：控制台的页面测试用 `shallowMount` 且不 stub `SSelect`，子组件会被 stub 掉（`helpers.spec.ts` 有守卫）。
+
+**新 prop（都只在 `searchable` 时生效）。**
+
+| prop | 作用 |
+|---|---|
+| `icon` | 输入框开头的 `SIcon` 图标 |
+| `clearable` | 有值时显示 ×，点击发出 `null`；此时 `placeholder` 不再作为列表里的“空值”一行 |
+| `tinted` | 有值时输入框带主色底（筛选已生效） |
+| `remote` | `options` 就是搜索结果：不做本地过滤，打开时发出 `search('')`、输入时发出 `search(输入)`，防抖和请求由调用方做；列表固定 20rem 宽（不随结果变宽变窄），输入的文字在结果里高亮；结果到达后高亮第一项，回车选中 |
+| `loading` | 列表末尾显示“正在搜索…”（代替“没有匹配项”）；已给的 `options` 照常显示 |
+| `selected` | `SelectOption`：`modelValue` 不在 `options` 里时（远程结果）收起后显示它的 `label` / `hint`；它的 `value` 与 `modelValue` 不同时忽略 |
+| `note` / `footer` | 列表顶部的说明行、固定在列表底部的提示行（如“只显示前 20 个，输入以缩小范围”） |
+
+事件新增 `search(query: string)`（仅 `remote`）。`icon`、`clearable`、`tinted` 任一给出时，输入框变成带边框的一组：图标、文字、选中项的 `hint`、×、箭头；点文字以外的位置同样打开列表。透传到输入框的原生监听（`@input`、`@focus`）照旧。手机上仍是底部抽屉，以上各项在抽屉里同样生效。
+
+```vue
+<SSelect
+  :model-value="value" :options="results" :selected="current"
+  searchable remote clearable tinted icon="user" placeholder="用户"
+  :loading="loading" :footer="more ? '只显示前 20 个，输入以缩小范围' : undefined"
+  @search="search" @update:model-value="pick"
+/>
+```
+
+控制台和插件里选用户、分组、API Key、账号、模型、代理不要自己拼这一套：用核心的 `EntityPicker`（`host.components.EntityPicker`，见 docs/COMMON-CONTROLS.md §6）。
+
+**时间范围：`SDateRange` 的 `time`。** 触发按钮在任何宽度都完整显示起止时间到秒，不截断、不省略：一行放不下时（手机）结束时间换到开始时间下面，按钮随之变高。不带 `time` 的日期范围不变（手机上仍只显示预设名）。
+
+**其它。** 新文案 `ui.searching`、`ui.clearItem`。
