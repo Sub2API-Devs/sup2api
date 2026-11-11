@@ -115,6 +115,11 @@ type Runtime struct {
 	// started. A call that ended because its caller left or the node stopped
 	// is not among them.
 	KVErrors int64 `json:"kv_errors"`
+	// KVWriting is the number of runs whose verdicts are on their way to the
+	// KV right now, waiting for their turn or writing (storeVerdicts). It is
+	// 0 or close to it while the KV answers; a number that keeps growing
+	// means the KV does not, and nothing new is cached meanwhile.
+	KVWriting int64 `json:"kv_writing"`
 	// ImagesRefused counts the calls of the LLM auditors whose images the
 	// upstream refused, so that the text alone was reviewed
 	// (Outcome.ImagesRefused), on this node since it started.
@@ -143,7 +148,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
-		KVErrors: p.stats.kvErrors.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
+		KVErrors: p.stats.kvErrors.Load(), KVWriting: p.stats.kvWriting.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}

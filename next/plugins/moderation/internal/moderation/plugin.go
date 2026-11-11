@@ -129,7 +129,9 @@ type Plugin struct {
 		imagesRefused atomic.Int64
 		// preWaiting: the requests waiting for their run (runPre);
 		// kvWriting: the runs whose verdicts are on their way to the KV and
-		// from there into memory (storeVerdicts).
+		// from there into memory (storeVerdicts) - waiting for their turn at
+		// the keys or writing. Nothing bounds it: while the KV does not
+		// answer, every run adds one (Health and /status show it).
 		preWaiting, kvWriting atomic.Int64
 	}
 
@@ -280,6 +282,7 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 		"inflight":         float64(p.stats.inflight.Load()),
 		"inflight_bytes":   float64(p.inflightBytes.Load()),
 		"kv_errors":        float64(p.stats.kvErrors.Load()),
+		"kv_writing":       float64(p.stats.kvWriting.Load()),
 		"redraw_panics":    float64(jevRedrawPanics.Load()),
 		"busy":             float64(p.stats.busy.Load()),
 		"shutdown_dropped": float64(p.stats.shutdownDropped.Load()),

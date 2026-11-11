@@ -61,6 +61,9 @@ type moderation struct {
 	snap   *snapshot
 	chunks []*chunk
 	plan   *plan // segment hashes and pieces for the verdict cache
+	// asked: the reading of the last lookup of the verdict cache for this
+	// request; its run stores the verdicts with it (settleVerdicts).
+	asked  reading
 	rec    eventRec
 	timing string
 	source string // cost source; "" = audit
@@ -305,6 +308,7 @@ func (p *Plugin) planUncached(ctx context.Context, m *moderation, req *request) 
 		hashes[i] = req.segs[i].key
 	}
 	cached := p.lookupVerdicts(ctx, m.snap.scopeOf(m.flow), hashes, m.timing == TimingPre)
+	m.asked = cached.asked
 	if cached.hit != nil {
 		// Known limitation, kept as in new-api (gate.go planAudit: a cached
 		// hit ends the plan): the replay decides the whole request, so what
@@ -520,6 +524,7 @@ func (p *Plugin) runPost(m *moderation) {
 		// segment has passed meanwhile (another request with the same
 		// content).
 		cached := p.lookupVerdicts(p.postCtx, m.snap.scopeOf(m.flow), m.plan.keys, true)
+		m.asked = cached.asked
 		if cached.hit != nil {
 			p.replay(m, nil, cached.hit, cached.hitID)
 			return
@@ -664,7 +669,9 @@ func (p *Plugin) runChunk(ctx context.Context, m *moderation, in *Input) Trace {
 //
 // It decides what is stored and hands it over (storeVerdicts): the write to
 // the KV, and after it to memory, runs in the background. The same content
-// sent again before that write is done is moderated again.
+// sent again before that write is done is moderated again. With it goes the
+// reading of the request's lookup (m.asked): what a review changed since the
+// request asked the cache, the write leaves alone (writeRun).
 func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 	if m.plan == nil || m.cfg.cacheTTL <= 0 {
 		return
@@ -697,7 +704,7 @@ func (p *Plugin) settleVerdicts(m *moderation, runs []Trace) {
 			passes = append(passes, key)
 		}
 	}
-	p.storeVerdicts(m.cfg, cacheScope(p.snap.Load().cacheEpoch, m.flow), passes, hits)
+	p.storeVerdicts(m.cfg, cacheScope(p.snap.Load().cacheEpoch, m.flow), passes, hits, m.asked)
 }
 
 // unreceived are the request segments of the images of ch that are not among

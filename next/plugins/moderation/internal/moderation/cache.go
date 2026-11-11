@@ -78,7 +78,13 @@ import (
 // segment keys; when all of that worked, the values that were written go
 // into memory. Until then the cache does not know the verdicts: the same
 // content sent again meanwhile is moderated again, and a hit is refused
-// again and counted as a new violation, not as a replay.
+// again and counted as a new violation, not as a replay. That time is the
+// write itself (two or three calls of the KV) while the KV answers. While it
+// does not, the writes wait - one in its call, the others for their turn at
+// the keys (kvLock) - and nothing bounds how many: every run adds one
+// (kv_writing in /status and the health metrics), each keeps its verdicts in
+// memory until its turn, and nothing new is cached on the node until the KV
+// answers again.
 //
 // The KV has no compare-and-set: a segment key is changed by reading it,
 // editing and writing it back. Within a node the changes take turns per key
@@ -87,7 +93,13 @@ import (
 // order the KV got them, and a review and a run never change a key at the
 // same time. Between nodes two writers of one key within the time of a write
 // can lose one of the edits. A lost pass costs an audit. A lost pointer
-// costs a replay, and the hit stays reachable through its other segments.
+// costs a replay, and the hit stays reachable through its other segments -
+// unless the same window loses the pointers of all of them (a node writes
+// passes of A and of B while another stores the hit of {A, B}): then the KV
+// has the passes only, the set is answered as passed on every node but the
+// one that stored the hit, which replays it from memory, until the values
+// expire. That takes content whose parts pass one by one, which the cache
+// cannot tell from the whole anyway before it saw the whole.
 //
 // So a node can hold a segment value the KV no longer holds like that: one
 // that lacks a pointer another node wrote since (the passes of A and B, while
@@ -170,9 +182,10 @@ const (
 	// tombstoneTTL: how long after a review a key it changed is neither put
 	// into memory nor written by a run (lru.kill). A run that judged before
 	// the review and comes to write within this time does not bring back
-	// what the review removed. It is not what keeps a write or a lookup that
-	// was under way during the review from doing so, however long they take:
-	// kvLock and lru.stale are.
+	// what the review removed. A run or a lookup that takes longer is kept
+	// from it by the reading it began with (lru.stale): tombstones set since
+	// then, and that reading older than this, and it touches no key at all -
+	// the tombstone of its key may have come and gone.
 	tombstoneTTL = 4 * time.Second
 )
 
@@ -446,8 +459,11 @@ func (c *lru) isDead(key string, now time.Time) bool {
 }
 
 // reading is taken before keys are read from the KV whose values go into
-// memory afterwards (lru.reading): the tombstones set so far and the time.
+// memory afterwards, and when a request asks the cache whose run may store
+// verdicts later (lru.reading): the cache it was taken from, the tombstones
+// set there so far and the time.
 type reading struct {
+	of    *lru
 	kills uint64
 	at    time.Time
 }
@@ -455,7 +471,27 @@ type reading struct {
 func (c *lru) reading(now time.Time) reading {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return reading{kills: c.kills, at: now}
+	return reading{of: c, kills: c.kills, at: now}
+}
+
+// own returns r as a reading of this cache. A reading of another one - the
+// memory cache was replaced since (cleared, cache_entries changed), and the
+// tombstones went with the old one - counts from the first tombstone of this
+// cache on.
+func (c *lru) own(r reading) reading {
+	if r.of != c {
+		return reading{of: c, at: r.at}
+	}
+	return r
+}
+
+// reviewedSince reports whether a review may have changed key since r, a
+// reading of this cache, was taken (stale): the run of a request that asked
+// the cache at r leaves the key alone then.
+func (c *lru) reviewedSince(key string, r reading, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.stale(key, r, now)
 }
 
 // stale reports whether what was read from the KV under r must stay out of
@@ -732,6 +768,10 @@ type verdicts struct {
 	passed map[[32]byte]bool
 	hit    *storedHit // a cached hit whose segments are all in the request; read only
 	hitID  string
+	// asked is taken before the lookup reads anything: what a review changed
+	// before it, the lookup saw. The run of the request stores its verdicts
+	// with it (storeVerdicts).
+	asked reading
 }
 
 // lookupVerdicts reads the cached verdicts of the segments of a request (in
@@ -748,14 +788,17 @@ type verdicts struct {
 // limit beside it.
 func (p *Plugin) lookupVerdicts(ctx context.Context, scope string, keys [][32]byte, useKV bool) verdicts {
 	ttl := p.cfg.Load().cacheTTL
-	if ttl <= 0 || len(keys) == 0 {
-		return verdicts{passed: map[[32]byte]bool{}}
-	}
 	cache, now := p.cache.Load(), p.now()
-	l := &lookup{p: p, cache: cache, ctx: ctx, scope: scope, now: now, ttl: ttl, kv: useKV && p.host != nil, since: cache.reading(now)}
+	asked := cache.reading(now)
+	if ttl <= 0 || len(keys) == 0 {
+		return verdicts{passed: map[[32]byte]bool{}, asked: asked}
+	}
+	l := &lookup{p: p, cache: cache, ctx: ctx, scope: scope, now: now, ttl: ttl, kv: useKV && p.host != nil, since: asked}
 	segs := l.segments(keys)
 	ids, hits, unread := l.hits(segs)
-	return l.decide(keys, segs, ids, hits, unread)
+	v := l.decide(keys, segs, ids, hits, unread)
+	v.asked = asked
+	return v
 }
 
 // lookup is one lookupVerdicts call.
@@ -958,6 +1001,22 @@ func (p *Plugin) kvRead(ctx context.Context, keys []string, unit int) (got []plu
 	return got, read
 }
 
+// kvReadAll reads segment keys for a change that needs every one of them (the
+// write of a run): kvRead, one call after the other, up to the first that
+// fails or the end of ctx - ok is false then, and the calls after it are not
+// made.
+func (p *Plugin) kvReadAll(ctx context.Context, keys []string) (got []pluginsdk.KVValue, ok bool) {
+	got = make([]pluginsdk.KVValue, 0, len(keys))
+	for from := 0; from < len(keys); from += kvSegUnit {
+		vals, read := p.kvRead(ctx, keys[from:min(from+kvSegUnit, len(keys))], kvSegUnit)
+		if slices.Contains(read, false) {
+			return nil, false
+		}
+		got = append(got, vals...)
+	}
+	return got, true
+}
+
 // kvWrite writes items to the KV, all of them, in batch calls one after the
 // other, each with as many items as a call takes (protocol.KVBatchMaxKeys
 // items, protocol.KVBatchMaxBytes of keys and values). It stops at the first
@@ -1065,12 +1124,15 @@ type hitWrite struct {
 }
 
 // verdictWrite is what a run decided, on its way to the KV: the chunks that
-// hit and the segment keys that passed, at the unix time at.
+// hit and the segment keys that passed, at the unix time at. asked is the
+// reading of the lookup the run's request asked the cache with, before the
+// run judged.
 type verdictWrite struct {
 	ttl    time.Duration
 	hits   []hitWrite
 	passes []string
 	at     int64
+	asked  reading
 }
 
 // storeVerdicts stores the verdicts of a run under scope: the segments that
@@ -1085,11 +1147,15 @@ type verdictWrite struct {
 // again. For a pass that costs an audit. For a hit the request is refused
 // again by its own run, and recorded and counted as a violation of its own -
 // not as a replay.
-func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits []storedHit) {
+//
+// asked is the reading of the request's lookup (verdicts.asked): the run
+// judged what that lookup did not find, and knows of no review since. A key a
+// review may have changed since then is not written (writeRun).
+func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits []storedHit, asked reading) {
 	if c.cacheTTL <= 0 || p.host == nil {
 		return
 	}
-	w := &verdictWrite{ttl: c.cacheTTL, at: p.now().Unix()}
+	w := &verdictWrite{ttl: c.cacheTTL, at: p.now().Unix(), asked: asked}
 	for i := range hits {
 		hit := &hits[i]
 		id, body := encodeHit(hit)
@@ -1139,10 +1205,16 @@ func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits 
 // of it complete, and the next run of the content writes it again. Nothing is
 // retried here.
 //
-// A key a review changed within tombstoneTTL, or is changing, is left alone,
-// in the KV and in memory: a run that judged before the review does not bring
-// back what the review removed. A hit whose entry is such a key gets no
-// pointers either. A hit entry lives for the TTL from the time of the hit.
+// A key a review changed since the request of the run asked the cache
+// (verdictWrite.asked), or is changing, is left alone, in the KV and in
+// memory: a run that judged before the review does not bring back what the
+// review removed, however long it judged, waited for its turn or for the KV.
+// The node knows that by the tombstone of the key while it lasts
+// (tombstoneTTL); once the request asked longer ago than that, by any
+// tombstone set on the node since (lru.stale) - then the write writes
+// nothing at all, whichever keys the review changed, and the content is
+// moderated again. A hit whose entry is left alone gets no pointers either.
+// A hit entry lives for the TTL from the time of the hit.
 //
 // Reviews and this write (the reason for the turn, and for the tombstones):
 //
@@ -1151,7 +1223,9 @@ func (p *Plugin) storeVerdicts(c *config, scope string, passes [][32]byte, hits 
 //     it, and tombstones the keys again, which drops what this write put into
 //     memory. If the review has the turn, this write finds the keys
 //     tombstoned when it gets its own (the review gives the tombstones their
-//     time before it ends its turn) and leaves them alone.
+//     time before it ends its turn) and leaves them alone - or, when its read
+//     of the KV outlasts the tombstones, finds that tombstones were set since
+//     its request asked the cache, and writes nothing.
 //   - A review on another node cannot wait for this node. Once its
 //     verdict.changed is here the keys are tombstoned, and this write leaves
 //     them alone (looked at after the read, right before the writes) or at
@@ -1187,13 +1261,13 @@ func (p *Plugin) writeRun(ctx context.Context, w *verdictWrite) (pointed []strin
 	}
 	defer unlock()
 	cache := p.cache.Load()
-	since := cache.reading(p.now())
-	got, read := p.kvRead(ctx, keys, kvSegUnit)
-	if slices.Contains(read, false) {
+	got, ok := p.kvReadAll(ctx, keys)
+	if !ok {
 		return nil
 	}
 	now := p.now()
-	reviewed := func(key string) bool { return cache.tombstoned(key, now) }
+	asked := cache.own(w.asked)
+	reviewed := func(key string) bool { return cache.reviewedSince(key, asked, now) }
 	var ops segOps
 	var entries []pluginsdk.KVItem
 	var stored []hitWrite
@@ -1240,10 +1314,10 @@ func (p *Plugin) writeRun(ctx context.Context, w *verdictWrite) (pointed []strin
 	}
 	now = p.now()
 	for _, hw := range stored {
-		cache.putHit(hw.key, hw.hit, len(hw.body), hw.hit.expires(w.ttl), now, since)
+		cache.putHit(hw.key, hw.hit, len(hw.body), hw.hit.expires(w.ttl), now, asked)
 	}
 	for _, it := range items {
-		cache.putSeg(it.Key, now, w.ttl, it.Value, since)
+		cache.putSeg(it.Key, now, w.ttl, it.Value, asked)
 	}
 	return pointed
 }
