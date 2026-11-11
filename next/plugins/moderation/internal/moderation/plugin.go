@@ -135,7 +135,8 @@ type Plugin struct {
 		preWaiting, kvWriting atomic.Int64
 		// kvSkipped: the runs whose verdicts were not written, to the KV or
 		// to memory, because a review may have changed the cache since their
-		// request asked it (writeRun), on this node since it started.
+		// request asked it or the memory cache was replaced since (writeRun),
+		// on this node since it started.
 		kvSkipped atomic.Int64
 	}
 

@@ -274,7 +274,7 @@ WHERE level = 'observe' AND (expires_at IS NULL OR expires_at > now()) GROUP BY 
 | `runtime.cache_bytes`、`runtime.cache_entries` | 随流量增长；`cache_bytes` 不超过约 64 MiB |
 | `runtime.kv_errors` | 存在（数字）。本节点启动以来读写 KV 失败的次数（0.8.1 起一次批量调用算一次）；正常为 0 或很少，持续增长说明 KV（Redis）有问题，这期间缓存不起作用、内容照常送审。**0.8.0 的节点上这个数字也包含"KV 太慢、在预算内没读完"的批次**，KV 没出错时也会涨；0.8.1 的插件对 KV 不设预算，这个数字只计真正的失败，慢的 KV 表现为请求变慢（看核心一侧 `moderation` 钩子的耗时），不表现在这里 |
 | `runtime.kv_writing` | 0.8.1 起存在（数字）。此刻正在把结论写进 KV 的运行数（在等轮到自己，或正在写）。KV 正常时是 0 或个位数；**持续增长说明 KV 不回答**，这期间新结论都进不了缓存（第 7 节"KV 不回答时"） |
-| `runtime.kv_skipped` | 0.8.1 起存在（数字）。本节点启动以来，因为人工处理可能在请求查缓存之后改过缓存而整次没写缓存的审核数（第 6 节第 3 条）；只在有人处理记录的前后增长 |
+| `runtime.kv_skipped` | 0.8.1 起存在（数字）。本节点启动以来，因为人工处理可能在请求查缓存之后改过缓存而整次没写缓存的审核数（第 6 节第 3 条）；本节点清空缓存或改 `cache_entries` 那一刻正在审的也计入。只在这些操作前后增长 |
 | `runtime.redraw_panics` | 存在（数字），正常为 0。本节点启动以来因图片解码器异常而跳过的图片数 |
 | `runtime.images_refused` | 存在（数字）。本节点启动以来 LLM 审核器的带图调用被上游拒绝、改为只审文字的次数（试跑和模拟也计）；正常为 0 或很少，持续增长说明某个 LLM 审核器的模型或上游不收图片，关掉它的图片开关（第 1.11 节） |
 
@@ -452,7 +452,7 @@ GROUP BY user_id ORDER BY replayed_requests DESC LIMIT 50;
 **升级后的核对。**
 
 - `GET /api/v1/p/moderation/status` 的 `runtime` 里**没有** `kv_timeouts`，`kv_errors` 和 `kv_writing` 在；升级时进程重启，计数器从 0 开始。
-- `runtime.kv_writing` 在承载流量的节点上是 0 或个位数，不持续增长。`runtime.kv_skipped` 在，没人处理记录时不增长。
+- `runtime.kv_writing` 在承载流量的节点上是 0 或个位数，不持续增长。`runtime.kv_skipped` 在，没人处理记录、清空缓存或改 `cache_entries` 时不增长。
 - 承载流量的节点上，`runtime.kv_errors` 不再持续增长。它增长就是 KV 调用真的失败了：查 Redis 和核心的日志。
 - 核心一侧 `moderation` 钩子的耗时：节点重启后的头一批请求各多一到两次 KV 调用的时间（核心有批量调用时约 50 到 100 ms；没有时见上面的"上线顺序"），之后回落到没有 KV 调用。插件自己的耗时数字（`runtime.avg_latency_ms`、记录里的耗时）**不包含缓存查询的时间**，从这些数字看不出这次修改的效果。
 - 同一个用户的命中记录里，如果出现间隔不到一秒、内容相同、都不是重放的两条，就是上面说的"写完之前的重复请求"。

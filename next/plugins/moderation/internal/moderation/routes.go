@@ -122,8 +122,10 @@ type Runtime struct {
 	KVWriting int64 `json:"kv_writing"`
 	// KVSkipped counts the runs whose verdicts were not cached because a
 	// review (on this node, or one this node was told of) may have changed
-	// the cache since their request asked it, on this node since it started:
-	// their content is moderated again the next time.
+	// the cache since their request asked it, or because the memory cache
+	// was replaced since (cleared on this node, cache_entries changed), on
+	// this node since it started: their content is moderated again the next
+	// time.
 	KVSkipped int64 `json:"kv_skipped"`
 	// ImagesRefused counts the calls of the LLM auditors whose images the
 	// upstream refused, so that the text alone was reviewed

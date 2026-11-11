@@ -515,20 +515,20 @@ func (p *Plugin) runPost(m *moderation) {
 		return
 	}
 	m.rec.QueueMs = int(p.now().Sub(m.queued).Milliseconds())
-	// A job queued before the cache was cleared is not answered from the
-	// cache: its scope is the one that was cleared, so it runs, and its
-	// verdicts are stored under the current counter (settleVerdicts).
-	if m.plan != nil && p.snap.Load().cacheEpoch != m.snap.cacheEpoch {
-		// It asks nothing, and judges from now on: the reading of the hook
-		// may be one of the memory cache the clear replaced.
-		m.asked = p.cache.Load().reading(p.now())
-	}
-	if m.plan != nil && p.snap.Load().cacheEpoch == m.snap.cacheEpoch {
+	if m.plan != nil {
 		// What the cache learned since the job was queued, now with the KV:
 		// a cached hit is replayed, and nothing runs when every moderated
 		// segment has passed meanwhile (another request with the same
-		// content).
-		cached := p.lookupVerdicts(p.postCtx, m.snap.scopeOf(m.flow), m.plan.keys, true)
+		// content, or a review).
+		//
+		// The cache is asked under the clear counter of now, which is where
+		// the verdicts of the job are stored (settleVerdicts) - not under
+		// the counter of the snapshot the job was queued with: after a clear
+		// that scope is the cleared one, and the job is answered by what the
+		// cache learned since the clear, or runs. Its verdicts are stored
+		// with the reading of this lookup, so what was reviewed before it,
+		// the job saw.
+		cached := p.lookupVerdicts(p.postCtx, cacheScope(p.snap.Load().cacheEpoch, m.flow), m.plan.keys, true)
 		m.asked = cached.asked
 		if cached.hit != nil {
 			p.replay(m, nil, cached.hit, cached.hitID)

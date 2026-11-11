@@ -1547,6 +1547,9 @@ func TestKVValueKeepsItsWriteTime(t *testing.T) {
 
 // Finding 5: a post job queued before the cache was cleared is not answered
 // from the cleared cache, and its verdict is stored under the new counter.
+// (It asks the cache under the new counter when its turn comes, which knows
+// nothing of the content here; TestQueuedJobAfterClearSeesAReview is the case
+// where it does.)
 func TestQueuedJobAfterClear(t *testing.T) {
 	mod := newFakeMod(t)
 	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve})
@@ -4218,5 +4221,56 @@ func TestQueuedJobStoresByItsLastLookup(t *testing.T) {
 	written(t, p)
 	if n := kvCount(t, fh, "s:"); n == 0 || p.cache.Load().len() != n || p.stats.kvSkipped.Load() != 0 {
 		t.Fatalf("the verdicts of the queued job: %d keys in the KV, %d entries in memory, %d writes skipped", n, p.cache.Load().len(), p.stats.kvSkipped.Load())
+	}
+}
+
+// A job queued before a clear asks the cache under the counter of now when
+// its turn comes: what was decided about its content since the clear - here
+// a hit another request got, which an admin reviewed as a false positive -
+// answers it. (The third gate review of 0.8.1: the job skipped the lookup,
+// ran with a reading taken after the review, and wrote the reviewed hit
+// back.)
+func TestQueuedJobAfterClearSeesAReview(t *testing.T) {
+	mod := newFakeMod(t)
+	var clock atomic.Int64
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve}, withClock(&clock))
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	const text = "MOD-HIT-violence queued across a clear and a review"
+	snap := p.snap.Load()
+	queued := hookReqAs(6, "queued", text)
+	m, early := p.admit(context.Background(), p.cfg.Load(), queued, snap, snap.flows[flow], requestModel(queued))
+	if early != nil || m == nil || m.timing != TimingPost {
+		t.Fatalf("admit = %+v, %+v", m, early)
+	}
+	m.queued = p.now()
+	if got := decodeData[map[string]int64](t, h.Do("POST", "/verdict-cache/clear", nil, nil))["epoch"]; got != 1 {
+		t.Fatalf("clear = %d", got)
+	}
+	waitFor(t, "the snapshot of the new counter", func() bool { return p.snap.Load().cacheEpoch == 1 })
+	// Another request with the same content, under the new counter: a hit,
+	// which an admin reviews as a false positive.
+	mustHook(t, h, hookReqAs(3, "other", text))
+	rec := recordOf(t, h, "other")
+	written(t, p)
+	waitKV(t, fh, "h:e1:", 1)
+	now := p.snap.Load()
+	scope := now.scopeOf(now.flows[flow])
+	c := traceOf(t, rec).Cache
+	seg := hashOf(t, c.Segs[0])
+	hitKey, segKey := hitKeyOf(scope, c.Key), segKeyOf(scope, seg)
+	if n := decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": []int64{rec.ID}, "status": ReviewFalsePositive}))["cache_synced"]; n != float64(1) {
+		t.Fatalf("cache_synced = %v", n)
+	}
+	clock.Add(int64(tombstoneTTL + time.Second))
+	// The queued job has its turn: answered by the admin's pass, no run.
+	calls := mod.count("/v1/moderations")
+	p.runPost(m)
+	written(t, p)
+	_, back := kvValue(t, fh, hitKey)
+	val, _ := kvValue(t, fh, segKey)
+	v := p.lookupVerdicts(context.Background(), scope, [][32]byte{seg}, true)
+	if n := mod.count("/v1/moderations") - calls; n != 0 || back || parseSeg(val).pass == 0 || len(parseSeg(val).hits) != 0 || v.hit != nil || !v.passed[seg] {
+		t.Fatalf("the queued job after the clear and the review: %d upstream calls, hit entry in the KV %v, segment key %q, lookup hit %v passed %v",
+			n, back, val, v.hit != nil, v.passed[seg])
 	}
 }
