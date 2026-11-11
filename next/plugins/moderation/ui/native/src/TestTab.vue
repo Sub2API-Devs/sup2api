@@ -63,13 +63,13 @@ function onKey(e: KeyboardEvent) {
             <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" :aria-label="t('test.title')" @keydown="onKey" />
           </ImageInput>
         </div>
-        <div class="mod-test-actions">
+        <template #footer>
           <SHint inline size="xs">{{ t('labelColon', { label: t('test.samples') }) }}</SHint>
           <SButton v-for="s in samples" :key="s" variant="ghost" size="sm" @click="useSample(s)">{{ t(`test.sample.${s}`) }}</SButton>
           <SButton variant="primary" icon="play" class="mod-ml-auto" :loading="running" :disabled="!text.trim() && !images.length" @click="run">
             {{ running ? t('test.running') : t('test.run') }}
           </SButton>
-        </div>
+        </template>
       </SCard>
 
       <SCard :title="t('test.result')">

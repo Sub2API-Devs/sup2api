@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SDrawer, SEmpty, SHint, SSpinner } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SDateTime, SDrawer, SEmpty, SHint, SSpinner } from '@sub2api/ui'
 import FlowStages from './FlowStages.vue'
-import { dt, joinList, specText } from './format'
+import { joinList, specText } from './format'
 import { canManage, errorDetails, fetchFlowVersion, fetchFlowVersions, rollbackFlow, toastError, useModHost } from './host'
 import type { Flow, FlowVersionDetail } from './types'
 import { useAsync } from './useAsync'
@@ -99,7 +99,7 @@ async function rollback(v: number) {
         <div class="mod-history-head">
           <strong class="mod-num">v{{ it.version }}</strong>
           <SBadge v-if="it.current" tone="info">{{ t('flows.current') }}</SBadge>
-          <SHint inline size="xs">{{ dt(it.published_at) }}<template v-if="it.published_by"> · {{ t('flows.publishedBy', { id: it.published_by }) }}</template></SHint>
+          <SHint inline size="xs"><SDateTime :value="it.published_at" mode="absolute" /><template v-if="it.published_by"> · {{ t('flows.publishedBy', { id: it.published_by }) }}</template></SHint>
           <span class="mod-ml-auto">
             <SButton size="sm" variant="ghost" :loading="viewLoading === it.version" @click="view(it.version)">{{ t('flows.view') }}</SButton>
             <SButton v-if="manage && !it.current" size="sm" variant="ghost" icon="refresh" :loading="rolling === it.version" @click="rollback(it.version)">{{ t('flows.rollback') }}</SButton>

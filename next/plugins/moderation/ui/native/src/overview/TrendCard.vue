@@ -57,7 +57,7 @@ const nodes = computed(() =>
   })
 )
 const columns = computed<TableColumn[]>(() => [
-  { key: 'node', label: t('trendCard.node') },
+  { key: 'node', label: t('trendCard.node'), grow: true },
   { key: 'audited', label: t('trendCard.entered'), align: 'right', nowrap: true },
   { key: 'hitRate', label: t('stats.hitRate'), align: 'right', nowrap: true },
   { key: 'errorRate', label: t('stats.errorRate'), align: 'right', nowrap: true }

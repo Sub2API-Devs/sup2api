@@ -1,26 +1,52 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SHint, SInput, SLink, SSelect, SSwitch, STable, type TableColumn } from '@sub2api/ui'
+import {
+  SAlert,
+  SBadge,
+  SButton,
+  SCard,
+  SChipList,
+  SDateTime,
+  SDropdown,
+  SFilterBar,
+  SHint,
+  SInput,
+  SLink,
+  SRowAction,
+  SSelect,
+  SSwitch,
+  STable,
+  STableColumnSettings,
+  STooltip,
+  useTableColumns,
+  useViewport,
+  type MenuAction,
+  type Tone,
+  type TableColumn
+} from '@sub2api/ui'
+import EnabledBadge from './EnabledBadge.vue'
 import FlowEditor from './FlowEditor.vue'
-import FlowGroupsCell from './FlowGroupsCell.vue'
+import FlowGroupsDialog from './FlowGroupsDialog.vue'
 import FlowVersions from './FlowVersions.vue'
 import FlowSimulate from './FlowSimulate.vue'
 import ImportDialog from './ImportDialog.vue'
 import { useCatalog } from './catalog'
-import { dt, enumLabel, joinList, ms, num, pct } from './format'
+import { enumLabel, joinList, ms, num, pct } from './format'
 import { canManage, confirmDelete, deleteFlow, errorMessage, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Group, Spec, TabKey } from './types'
 import { exemptGroups, groupCoverage, type GroupOwner } from './bindingOps'
 
-// Flows (CONTRACTS §72.7): the list (groups edited in place, 24 h stats) and
-// the full-width canvas editor of one flow (?flow=<id> or ?flow=new). Flows,
-// auditors and groups come from the shared catalog; flow changes refresh the
-// flows. Manage users import a configuration (channels, auditors) here.
+// Flows (CONTRACTS §72.7): the list (one line a row: groups as chips, 24 h
+// stats, edit / groups and a More menu) and the full-width canvas editor of
+// one flow (?flow=<id> or ?flow=new). Flows, auditors and groups come from
+// the shared catalog; flow changes refresh the flows. Manage users import a
+// configuration (channels, auditors) here.
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
+const { compact } = useViewport()
 
 const catalog = useCatalog()
 const rows = computed(() => catalog.state.flows)
@@ -45,6 +71,9 @@ function stagesSummary(s: Spec | null): string {
   if (!s?.stages?.length) return '—'
   return s.stages.map((st) => `${st.auditors.map(catalog.auditorName).join(' ∥ ')}${st.auditors.length > 1 ? ` (${enumLabel('combine', st.combine || 'any')}${st.combine === 'at_least' ? ' ' + st.n : ''})` : ''}`).join(' → ')
 }
+const groupChips = (f: Flow) => f.groups.map((id) => ({ key: String(id), label: groupLabel(id), title: groupLabel(id) }))
+/** The flow is disabled or unpublished while something is bound to it: those bindings do not apply. */
+const bindingsInactive = (f: Flow) => (!f.enabled || !f.version) && (f.groups.length > 0 || !!f.accounts?.length)
 
 // ---- filters
 const nameQuery = ref('')
@@ -57,46 +86,78 @@ const filtered = computed(() => {
   const q = nameQuery.value.trim().toLowerCase()
   return rows.value.filter((f) => (groupFilter.value === null || f.groups.includes(groupFilter.value)) && (!q || f.name.toLowerCase().includes(q)))
 })
+const filtersOn = computed(() => groupFilter.value !== null)
+function resetFilters() {
+  nameQuery.value = ''
+  groupFilter.value = null
+}
 
 const hasStats = computed(() => rows.value.some((f) => f.stats_24h))
 const columns = computed<TableColumn[]>(() => {
   const c: TableColumn[] = [
-    { key: 'name', label: t('flows.col.name'), nowrap: true },
-    { key: 'status', label: t('flows.col.status'), nowrap: true },
-    { key: 'groups', label: t('flows.col.groups') },
-    { key: 'stages', label: t('flows.col.stages'), ellipsis: '24rem' }
+    { key: 'name', label: t('flows.col.name'), nowrap: true, hideable: false, mobile: 'title' },
+    { key: 'status', label: t('flows.col.status'), nowrap: true, mobile: 'status' },
+    { key: 'groups', label: t('flows.col.groups'), nowrap: true, mobile: 'meta', mobileSpan: 2 },
+    { key: 'stages', label: t('flows.col.stages'), grow: true, mobile: 'meta', mobileSpan: 2 }
   ]
   if (hasStats.value) {
     c.push(
-      { key: 'audited', label: t('flows.col.audited'), align: 'right', nowrap: true },
-      { key: 'rate', label: t('flows.col.suspiciousRate'), align: 'right', nowrap: true },
-      { key: 'pre', label: t('flows.col.preAvg'), align: 'right', nowrap: true }
+      { key: 'audited', label: t('flows.col.audited'), align: 'right', nowrap: true, mobile: 'meta' },
+      { key: 'rate', label: t('flows.col.suspiciousRate'), align: 'right', nowrap: true, mobile: 'meta' },
+      { key: 'pre', label: t('flows.col.preAvg'), align: 'right', nowrap: true, defaultHidden: true, mobile: 'detail' }
     )
   }
-  c.push({ key: 'published_at', label: t('flows.col.published'), nowrap: true }, { key: 'actions', label: '', align: 'right' })
+  c.push(
+    { key: 'published_at', label: t('flows.col.published'), nowrap: true, mobile: 'detail' },
+    { key: 'actions', label: '', align: 'right', nowrap: true, hideable: false }
+  )
   return c
 })
+const columnState = useTableColumns(columns, 'moderation-flows')
 
-// group coverage under the table (new-api flows-table.tsx)
+// group coverage under the table (new-api flows-table.tsx): short counts, the group names in a tooltip
 const coverage = computed(() => {
   if (!groups.value.length) return null
   const c = groupCoverage(groups.value.map((g) => g.id), rows.value, exempt.value)
-  const names = (ids: number[]) => joinList(ids.map(groupLabel))
-  return { total: groups.value.length, bound: c.own.length, unbound: names(c.unbound), disabled: names(c.inactive), defaultLive: c.defaultLive, stale: names(c.stale), exempt: names(c.exempt) }
+  const names = (ids: number[]) => ({ groups: joinList(ids.map(groupLabel)) })
+  const notes: Array<{ key: string; n: number; tone: Tone; tip: string }> = [
+    { key: 'unbound', n: c.unbound.length, tone: 'warning', tip: t('flows.unboundGroups', names(c.unbound)) },
+    { key: 'stale', n: c.stale.length, tone: 'danger', tip: t('flows.staleGroups', names(c.stale)) },
+    { key: 'inactive', n: c.inactive.length, tone: 'gray', tip: t(c.defaultLive ? 'flows.disabledGroups' : 'flows.disabledGroupsOff', names(c.inactive)) },
+    { key: 'exempt', n: c.exempt.length, tone: 'gray', tip: t('flows.exemptGroups', names(c.exempt)) }
+  ]
+  return { summary: t('flows.groupsSummary', { total: groups.value.length, bound: c.own.length }), notes: notes.filter((x) => x.n > 0) }
 })
 
-// ---- versions drawer, simulation
-const versionsOpen = ref(false)
-const importOpen = ref(false)
-const simulateOpen = ref(false)
+// ---- dialogs: groups, versions, simulation, import
+const dialogs = reactive({ groups: false, versions: false, simulate: false, import: false })
 const target = ref<Flow | null>(null)
-function openVersions(f: Flow) {
+function openDialog(f: Flow, which: 'groups' | 'versions' | 'simulate') {
   target.value = f
-  versionsOpen.value = true
+  dialogs[which] = true
 }
-function openSimulate(f: Flow) {
-  target.value = f
-  simulateOpen.value = true
+
+/** Import and New of a manage user: in the filter bar's end on wide screens, under it on phones. */
+const createActions = computed(() => {
+  if (!manage.value) return []
+  const noAuditor = !catalog.state.auditors.length
+  return [
+    { key: 'import', label: t('import.button'), icon: 'upload', variant: 'secondary' as const, disabled: false, title: '', run: (): void => void (dialogs.import = true) },
+    { key: 'add', label: t('flows.add'), icon: 'plus', variant: 'primary' as const, disabled: noAuditor, title: noAuditor ? t('flows.needAuditor') : '', run: (): void => openEditor(null) }
+  ]
+})
+
+/** The More menu of a row; a manage user's only (a viewer sees View and Versions as buttons). */
+const menu = (f: Flow): MenuAction[] => [
+  { key: 'simulate', label: t('flows.simulate'), icon: 'play' },
+  { key: 'versions', label: t('flows.versions'), icon: 'clock', hidden: !f.version },
+  { key: 'accounts', label: t('flows.openBindings', { n: f.accounts?.length ?? 0 }), icon: 'link', hidden: !f.accounts?.length },
+  { key: 'delete', label: t('delete'), icon: 'trash', danger: true, divider: true }
+]
+function onMenu(f: Flow, key: string) {
+  if (key === 'simulate' || key === 'versions') openDialog(f, key)
+  else if (key === 'accounts') emit('go-tab', 'bindings')
+  else if (key === 'delete') remove(f)
 }
 
 /** Groups moderated now that no flow would moderate once this one is disabled (its own groups fall back to the default group's flow when that is live). */
@@ -123,15 +184,19 @@ async function toggle(f: Flow, on: boolean) {
   }
 }
 
-const deleteBlocked = (f: Flow) => f.enabled && (f.groups.length > 0 || !!f.accounts?.length)
-
-const remove = (f: Flow) =>
-  confirmDelete(
+function remove(f: Flow) {
+  // an enabled flow with bindings cannot be deleted: say why instead of asking first
+  if (f.enabled && (f.groups.length > 0 || !!f.accounts?.length)) {
+    host.toast(t('flows.deleteBlocked'), 'warning')
+    return
+  }
+  void confirmDelete(
     t('flows.deleteConfirm', { name: f.name }),
     () => deleteFlow(f.id),
     () => void refreshFlows(),
     (e) => (isApiError(e) && e.code === 'flow_in_use' ? t('flows.deleteBlocked') : errorMessage(e, t('actionFailed')))
   )
+}
 
 // ---- editor (?flow=<id> | ?flow=new)
 const route = host.router.currentRoute
@@ -177,37 +242,44 @@ function onCreated(id: number) {
     <FlowEditor v-if="editor" :key="editor.key" :flow-id="editor.id" :group-label="groupLabel" @close="closeEditor" @created="onCreated" @changed="refreshFlows" @manage="emit('go-tab', 'auditors')" />
     <template v-else>
       <SHint class="mod-hint">{{ t('flows.hint') }}</SHint>
-      <div class="mod-toolbar mod-flows-toolbar">
-        <SInput v-model="nameQuery" type="search" icon="search" :placeholder="t('flows.searchName')" :aria-label="t('flows.searchName')" class="mod-flows-search" clearable />
-        <SSelect :model-value="groupFilter" :options="groupOptions" :aria-label="t('flows.groupFilter')" class="mod-flows-group" @update:model-value="groupFilter = $event as number | null" />
-        <SButton v-if="manage" icon="upload" class="mod-ml-auto" @click="importOpen = true">{{ t('import.button') }}</SButton>
-        <SButton
-          v-if="manage"
-          variant="primary"
-          icon="plus"
-          :disabled="!catalog.state.auditors.length"
-          :title="catalog.state.auditors.length ? '' : t('flows.needAuditor')"
-          @click="openEditor(null)"
-        >{{ t('flows.add') }}</SButton>
+      <SFilterBar :aria-label="t('filter')" :active-count="filtersOn ? 1 : 0" :dirty="filtersOn || !!nameQuery" :on-reset="resetFilters" class="mod-block">
+        <template #primary>
+          <SInput v-model="nameQuery" type="search" size="sm" icon="search" :placeholder="t('flows.searchName')" :aria-label="t('flows.searchName')" class="mod-flows-search" clearable />
+        </template>
+        <SSelect :model-value="groupFilter" size="sm" :options="groupOptions" :aria-label="t('flows.groupFilter')" class="mod-flows-group" @update:model-value="groupFilter = $event as number | null" />
+        <template v-if="!compact" #end>
+          <STableColumnSettings :state="columnState" />
+          <SButton v-for="a in createActions" :key="a.key" size="sm" :variant="a.variant" :icon="a.icon" :disabled="a.disabled" :title="a.title" @click="a.run">{{ a.label }}</SButton>
+        </template>
+      </SFilterBar>
+      <div v-if="compact && createActions.length" class="mod-toolbar">
+        <SButton v-for="a in createActions" :key="a.key" :variant="a.variant" :icon="a.icon" :disabled="a.disabled" :title="a.title" @click="a.run">{{ a.label }}</SButton>
       </div>
       <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
       <SCard :padded="false">
-        <STable :columns="columns" :rows="filtered" :loading="loading" :empty-text="rows.length ? t('flows.noMatch') : t('flows.empty')" dense>
+        <STable :columns="columnState.visibleColumns.value" :rows="filtered" :loading="loading" :empty-text="rows.length ? t('flows.noMatch') : t('flows.empty')" dense>
           <template #cell-name="{ row }">
-            <SLink as="button" @click="openEditor(row.id)">{{ row.name }}</SLink>
-            <span class="mod-sub mod-num mod-ml">#{{ row.id }}</span>
-            <SBadge v-if="!row.enabled" tone="gray" class="mod-ml">{{ t('disabled') }}</SBadge>
+            <span class="mod-cell-line">
+              <SLink as="button" class="mod-ellipsis" :title="row.name" @click="openEditor(row.id)">{{ row.name }}</SLink>
+              <span class="mod-sub mod-num">#{{ row.id }}</span>
+            </span>
           </template>
           <template #cell-status="{ row }">
-            <SSwitch v-if="manage" :model-value="row.enabled" size="sm" :aria-label="t('enabled')" @update:model-value="toggle(row, $event)" />
-            <SBadge v-if="row.version" tone="info">v{{ row.version }}</SBadge>
-            <SBadge v-else tone="gray">{{ t('flows.unpublished') }}</SBadge>
-            <SBadge v-if="row.version && row.dirty" tone="warning">{{ t('flows.badgeChanges') }}</SBadge>
+            <span class="mod-cell-line" :title="bindingsInactive(row) ? t('flows.bindingsInactiveHint') : undefined">
+              <SSwitch v-if="manage" :model-value="row.enabled" size="sm" :aria-label="t('enabled')" @update:model-value="toggle(row, $event)" />
+              <EnabledBadge v-else :enabled="row.enabled" size="xs" />
+              <SBadge v-if="!row.version" tone="gray" size="xs">{{ t('flows.unpublished') }}</SBadge>
+              <SBadge v-else-if="row.dirty" tone="warning" size="xs" :title="t('flows.badgeChanges')">v{{ row.version }} · {{ t('flows.changedShort') }}</SBadge>
+              <SBadge v-else tone="info" size="xs">v{{ row.version }}</SBadge>
+            </span>
           </template>
           <template #cell-groups="{ row }">
-            <FlowGroupsCell :flow="row" :all-groups="allGroups" :owners="owners" :can-write="manage" :group-label="groupLabel" @saved="refreshFlows" />
-            <SLink v-if="row.accounts?.length" as="button" class="mod-sub mod-flow-accounts" @click="emit('go-tab', 'bindings')">{{ t('flows.accountBindings', { n: row.accounts.length }) }}</SLink>
+            <span class="mod-cell-line">
+              <SChipList v-if="row.groups.length" :items="groupChips(row)" :max="2" />
+              <SBadge v-else tone="warning" size="xs">{{ t('flows.noGroups') }}</SBadge>
+              <span v-if="row.accounts?.length" class="mod-sub" :title="t('flows.accountBindings', { n: row.accounts.length })">{{ t('flows.accountsN', { n: row.accounts.length }) }}</span>
+            </span>
           </template>
           <template #cell-stages="{ row }"><span :title="stagesSummary(row.draft)">{{ stagesSummary(row.published || row.draft) }}</span></template>
           <template #cell-audited="{ row }"><span class="mod-num">{{ row.stats_24h ? num(row.stats_24h.audited) : '—' }}</span></template>
@@ -217,30 +289,32 @@ function onCreated(id: number) {
           <template #cell-pre="{ row }">
             <span class="mod-num">{{ row.stats_24h?.pre_avg_ms ? ms(Math.round(row.stats_24h.pre_avg_ms)) : '—' }}</span>
           </template>
-          <template #cell-published_at="{ row }">{{ dt(row.published_at) }}</template>
+          <template #cell-published_at="{ row }"><SDateTime :value="row.published_at" /></template>
           <template #cell-actions="{ row }">
-            <SButton size="sm" variant="ghost" @click="openEditor(row.id)">{{ manage ? t('edit') : t('flows.view') }}</SButton>
-            <SButton v-if="manage" size="sm" variant="ghost" @click="openSimulate(row)">{{ t('flows.simulate') }}</SButton>
-            <SButton v-if="row.version" size="sm" variant="ghost" @click="openVersions(row)">{{ t('flows.versions') }}</SButton>
-            <span v-if="manage" :title="deleteBlocked(row) ? t('flows.deleteBlocked') : ''">
-              <SButton size="sm" variant="ghost" :disabled="deleteBlocked(row)" @click="remove(row)">{{ t('delete') }}</SButton>
+            <span class="mod-cell-line">
+              <SRowAction :label="manage ? t('edit') : t('flows.view')" @click="openEditor(row.id)" />
+              <template v-if="manage">
+                <SRowAction :label="t('flows.groupsAction')" :title="t('flows.editGroups', { name: row.name })" @click="openDialog(row, 'groups')" />
+                <SDropdown :actions="menu(row)" @select="onMenu(row, $event)" />
+              </template>
+              <SRowAction v-else-if="row.version" :label="t('flows.versions')" @click="openDialog(row, 'versions')" />
             </span>
           </template>
         </STable>
       </SCard>
 
-      <p v-if="coverage" class="mod-sub mod-flows-coverage">
-        {{ t('flows.groupsSummary', { total: coverage.total, bound: coverage.bound }) }}
-        <template v-if="coverage.disabled">{{ t(coverage.defaultLive ? 'flows.disabledGroups' : 'flows.disabledGroupsOff', { groups: coverage.disabled }) }}</template>
-        <template v-if="coverage.exempt">{{ t('flows.exemptGroups', { groups: coverage.exempt }) }}</template>
-        <span v-if="coverage.unbound" class="mod-text-warning"> · {{ t('flows.unboundGroups', { groups: coverage.unbound }) }}</span>
-        <span v-if="coverage.stale" class="mod-text-danger"> · {{ t('flows.staleGroups', { groups: coverage.stale }) }}</span>
-        · {{ t('flows.statsNote') }}
-      </p>
+      <div v-if="coverage" class="mod-flows-coverage">
+        <span>{{ coverage.summary }}</span>
+        <STooltip v-for="c in coverage.notes" :key="c.key" :content="c.tip">
+          <SBadge :tone="c.tone" size="xs">{{ t(`flows.coverage.${c.key}`, { n: c.n }) }}</SBadge>
+        </STooltip>
+        <span class="mod-sub">{{ t('flows.statsNote') }}</span>
+      </div>
 
-      <FlowVersions v-model:open="versionsOpen" :flow="target" @rolled-back="refreshFlows" />
-      <FlowSimulate v-model:open="simulateOpen" :flow="target" />
-      <ImportDialog v-model:open="importOpen" />
+      <FlowGroupsDialog v-model:open="dialogs.groups" :flow="target" :all-groups="allGroups" :owners="owners" :group-label="groupLabel" @saved="refreshFlows" />
+      <FlowVersions v-model:open="dialogs.versions" :flow="target" @rolled-back="refreshFlows" />
+      <FlowSimulate v-model:open="dialogs.simulate" :flow="target" />
+      <ImportDialog v-model:open="dialogs.import" />
     </template>
   </div>
 </template>

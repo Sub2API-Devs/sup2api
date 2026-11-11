@@ -12,8 +12,9 @@ import { outcomeState, stageNumber, stageState, type OutcomeState } from './trac
 // its full name ("第 1 级") and each auditor's state and top score. A
 // fallback stage is named 补审 (its number is in the hover text); a stage
 // that reached no verdict is marked failed (it was passed over; on records
-// written before 0.8.0: error); a replayed cached hit starts with the
-// replay mark.
+// written before 0.8.0: error). A replayed cached hit shows the path of
+// the request it took the verdict from; the records table marks the replay
+// next to the result.
 const props = defineProps<{ trace?: Trace | null }>()
 const t = useModHost().t
 const catalog = useCatalog()
@@ -43,12 +44,10 @@ const stages = computed(() =>
     return { key: i, name: st.fallback ? t('flows.role.fallback') : String(n), outcomes, mark, title: [head, ...outcomes.map(outcomeTitle)].join('\n') }
   })
 )
-const replayed = computed(() => !!props.trace?.cache?.hit)
 </script>
 
 <template>
   <span v-if="stages.length" class="mod-stage-path">
-    <span v-if="replayed" class="mod-sub" :title="t('replay.badgeHint')">↻</span>
     <template v-for="(st, i) in stages" :key="st.key">
       <span v-if="i" class="mod-sub">→</span>
       <span class="mod-stage-step" :title="st.title">

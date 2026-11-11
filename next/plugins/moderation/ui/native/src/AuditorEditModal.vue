@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { SAlert, SBadge, SButton, SField, SHint, SInput, SModal, SSegmented, SSelect, SSwitch, STextarea } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SField, SHint, SInput, SFormModal, SSegmented, SSelect, SSwitch, STextarea } from '@sub2api/ui'
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import { useCatalog } from './catalog'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
@@ -105,8 +105,8 @@ async function save() {
 </script>
 
 <template>
-  <SModal v-model:open="open" :title="title" width="2xl">
-    <form class="mod-form" @submit.prevent="save">
+  <SFormModal v-model:open="open" :title="title" width="2xl" :loading="saving" @submit="save">
+    <div class="mod-form">
       <fieldset class="mod-fieldset" :disabled="readonly">
         <div class="mod-form-row">
           <SField :label="t('auditors.col.name')" required :error="errs.name">
@@ -171,16 +171,12 @@ async function save() {
           </SField>
         </template>
       </fieldset>
-    </form>
-    <template #footer>
-      <template v-if="readonly">
-        <SButton @click="open = false">{{ host.i18n.t('ui.close') }}</SButton>
-      </template>
-      <template v-else>
-        <SButton icon="play" :disabled="!form.channel_id" @click="emit('try', { id: auditor?.id ?? null, name: form.name || t('auditors.unsaved'), type: form.type, draft: draft() })">{{ t('auditors.tryDraft') }}</SButton>
-        <SButton @click="open = false">{{ host.i18n.t('ui.cancel') }}</SButton>
-        <SButton variant="primary" :loading="saving" @click="save">{{ t('save') }}</SButton>
-      </template>
+    </div>
+    <template v-if="readonly" #footer>
+      <SButton @click="open = false">{{ host.i18n.t('ui.close') }}</SButton>
     </template>
-  </SModal>
+    <template v-else #footer-start>
+      <SButton icon="play" :disabled="!form.channel_id" @click="emit('try', { id: auditor?.id ?? null, name: form.name || t('auditors.unsaved'), type: form.type, draft: draft() })">{{ t('auditors.tryDraft') }}</SButton>
+    </template>
+  </SFormModal>
 </template>

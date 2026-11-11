@@ -5,6 +5,7 @@ import {
   SBulkBar,
   SButton,
   SCard,
+  SDateRange,
   SDateTime,
   SField,
   SFilterBar,
@@ -13,13 +14,11 @@ import {
   SInput,
   SPagination,
   SSelect,
-  SDateRange,
   STable,
   STableColumnSettings,
   useTableColumns,
   useViewport,
   type RangeKey,
-  type SelectOption,
   type TableColumn
 } from '@sub2api/ui'
 import ResultBadge from './ResultBadge.vue'
@@ -33,6 +32,7 @@ import UserRef from './UserRef.vue'
 import VerdictBadge from './VerdictBadge.vue'
 import { useCatalog } from './catalog'
 import { useCategoryOptions } from './categories'
+import { conclusionQuery, conclusionValue, filterChips, flowQuery, flowValue, isSet, pairOptions, type FilterField } from './eventFilters'
 import { applyFilters } from './forms'
 import { enumLabel, enumOptions, idText, isSuspicious, ms, num } from './format'
 import { canManage, errorMessage, useEventList, useModHost } from './host'
@@ -60,7 +60,7 @@ const emptyForm = () => ({
   result: 'suspicious',
   user: '',
   q: '',
-  // more filters; conclusion and flow pair two query parameters (see paired)
+  // more filters; conclusion and flow stand for two query parameters each (eventFilters)
   conclusion: '',
   severity: '',
   category: '',
@@ -86,32 +86,16 @@ const rangeKeys: RangeKey[] = ['all', 'today', '7d', '30d', 'custom']
 /** The user filter resolved to user_id / user_ids. */
 const users = useUserFilter(props.preset ? [props.preset.user_id] : null)
 
-/**
- * Two query parameters in one select: an option value is "key:value" — the
- * conclusion's parameter (review_status / ai_verdict / verdict) and its
- * value, or a flow id and its version ('' = every version).
- */
-const paired = (key: string | number, options: SelectOption[]) => options.map((o) => ({ ...o, value: `${key}:${o.value}` }))
-function unpair(v: string): [string, string] {
-  const i = v.indexOf(':')
-  return i < 0 ? ['', ''] : [v.slice(0, i), v.slice(i + 1)]
-}
-
 function query() {
-  const [verdictKey, verdictValue] = unpair(form.conclusion)
-  const [flowId, flowVersion] = unpair(form.flow)
   return {
     result: form.result,
     timing: form.timing,
-    review_status: verdictKey === 'review_status' ? verdictValue : '',
-    ai_verdict: verdictKey === 'ai_verdict' ? verdictValue : '',
-    verdict: verdictKey === 'verdict' ? verdictValue : '',
+    ...conclusionQuery(form.conclusion),
     severity: form.severity,
     watch_level: form.watch_level,
     replayed: form.replayed,
     category: form.category,
-    flow_id: flowId ? Number(flowId) : '',
-    flow_version: flowVersion ? Number(flowVersion) : '',
+    ...flowQuery(form.flow),
     group_id: form.group_id,
     api_key_id: form.api_key_id.trim(),
     user_id: users.query.value.user_id ?? '',
@@ -149,27 +133,23 @@ const resultOptions = computed(() => [
 ])
 const categories = useCategoryOptions()
 
-interface FilterField {
-  key: FormKey
-  label: string
-  /** a select (its first option: "<label>: all"), else a text input */
-  options?: SelectOption[]
+interface Field extends FilterField<FormKey> {
   searchable?: boolean
   placeholder?: string
 }
-const advancedFields = computed<FilterField[]>(() => {
+const advancedFields = computed<Field[]>(() => {
   const groups = catalog.groupOptions()
-  const fields: FilterField[] = [
+  const fields: Field[] = [
     {
       key: 'conclusion',
       label: t('events.conclusion'),
       options: [
-        { value: null, label: t('events.conclusionGroup.review'), options: paired('review_status', enumOptions('review', ['pending', 'confirmed', 'false_positive'])) },
-        { value: null, label: t('events.conclusionGroup.ai'), options: paired('ai_verdict', enumOptions('aiVerdict', ['violation', 'false_positive', 'unsure', 'none'])) },
+        { value: null, label: t('events.conclusionGroup.review'), options: pairOptions('review_status', enumOptions('review', ['pending', 'confirmed', 'false_positive'])) },
+        { value: null, label: t('events.conclusionGroup.ai'), options: pairOptions('ai_verdict', enumOptions('aiVerdict', ['violation', 'false_positive', 'unsure', 'none'])) },
         {
           value: null,
           label: t('events.conclusionGroup.summary'),
-          options: paired('verdict', [
+          options: pairOptions('verdict', [
             { value: 'needs_review', label: t('events.needsReview') },
             { value: 'disagree', label: t('events.disagree') }
           ])
@@ -186,7 +166,7 @@ const advancedFields = computed<FilterField[]>(() => {
       options: catalog.state.flows.map((f) => ({
         value: null,
         label: f.name,
-        options: paired(f.id, [{ value: '', label: t('events.allVersions') }, ...Array.from({ length: f.version }, (_, i) => ({ value: f.version - i, label: `v${f.version - i}` }))])
+        options: pairOptions(f.id, [{ value: '', label: t('events.allVersions') }, ...Array.from({ length: f.version }, (_, i) => ({ value: f.version - i, label: `v${f.version - i}` }))])
       }))
     },
     { key: 'group_id', label: t('stats.group'), options: groups.length ? groups : undefined, searchable: true, placeholder: t('events.groupId') },
@@ -204,28 +184,24 @@ const advancedFields = computed<FilterField[]>(() => {
   ]
   return fields.map((f) => (f.options ? { ...f, options: [{ value: '', label: t('events.anyOf', { name: f.label }) }, ...f.options] } : f))
 })
-const hiddenFields = computed<FilterField[]>(() => [
+const hiddenFields = computed<Field[]>(() => [
   { key: 'request_id', label: t('events.requestId') },
   { key: 'endpoint', label: t('events.endpoint') },
   { key: 'session_fp', label: t('events.session') }
 ])
 
-const isSet = (key: FormKey) => String(form[key]).trim() !== ''
-/** The label of a select's value, "group · option" inside an optgroup. */
-function optionText(options: SelectOption[], value: unknown): string {
-  const hit = options.flatMap((o) => (o.options ? o.options.map((c) => ({ c, group: o.label })) : [{ c: o, group: '' }])).find((x) => x.c.value === value)
-  if (!hit) return String(value)
-  return hit.group ? `${hit.group} · ${hit.c.label}` : hit.c.label
-}
-const chips = computed(() =>
-  [...advancedFields.value, ...hiddenFields.value]
-    .filter((f) => isSet(f.key))
-    .map((f) => ({ key: f.key, label: f.label, value: f.options ? optionText(f.options, form[f.key]) : String(form[f.key]).trim() }))
-)
-const advancedCount = computed(() => advancedFields.value.filter((f) => isSet(f.key)).length)
-/** Filters off their default in the phone sheet (Filters badge). */
-const activeCount = computed(() => advancedCount.value + [range.value !== 'all', form.result !== 'suspicious', isSet('user')].filter(Boolean).length)
-const dirty = computed(() => activeCount.value > 0 || chips.value.length > 0 || isSet('q'))
+// The chips and the counts show the applied filters (what the list shows),
+// not what is typed and not yet searched.
+const applied = computed<Record<string, unknown>>(() => ({ ...list.filters, conclusion: conclusionValue(list.filters), flow: flowValue(list.filters) }))
+const chips = computed(() => filterChips([...advancedFields.value, ...hiddenFields.value], applied.value))
+const advancedCount = computed(() => advancedFields.value.filter((f) => isSet(applied.value[f.key])).length)
+/** The default-slot filters off their default (SFilterBar adds advancedCount for the phone Filters badge). */
+const activeCount = computed(() => {
+  const f = applied.value
+  return [isSet(f.from) || isSet(f.to), f.result !== 'suspicious', isSet(f.user_id) || isSet(f.user_ids)].filter(Boolean).length
+})
+/** Reset is enabled while any filter is applied (the chips hold the more filters and the hidden ones) or the form is off its default. */
+const dirty = computed(() => activeCount.value + chips.value.length > 0 || isSet(applied.value.q) || Object.entries(emptyForm()).some(([k, v]) => form[k as FormKey] !== v))
 
 function removeChip(key: string) {
   form[key as FormKey] = ''
@@ -382,10 +358,7 @@ watch(() => list.items.value, () => (checked.value = []))
       >
         <template #cell-created_at="{ row }"><SDateTime :value="row.created_at" mode="time" /></template>
         <template #cell-result="{ row }">
-          <span class="mod-cell-line" :title="row.timing ? enumLabel('timing', row.timing) : undefined">
-            <ResultBadge :result="row.result" />
-            <SIcon v-if="row.replayed" name="refresh" class="mod-replay-mark" :label="t('replay.badgeHint')" />
-          </span>
+          <span :title="row.timing ? enumLabel('timing', row.timing) : undefined"><ResultBadge :result="row.result" :replayed="row.replayed" /></span>
         </template>
         <template #cell-timing="{ row }">{{ enumLabel('timing', row.timing) }}</template>
         <template #cell-verdict="{ row }"><VerdictBadge :event="row" /></template>

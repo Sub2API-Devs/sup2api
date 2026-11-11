@@ -16,8 +16,9 @@
 // toggle after the default slot (badge `advancedCount`, the number of them in
 // effect; highlighted while folded) shows them as a full-width grid under the
 // row; v-model:advancedOpen controls it (kept inside, folded, when unbound).
-// On a compact screen they follow the default slot in the sheet (count them
-// in `activeCount`).
+// On a compact screen they follow the default slot in the sheet, whose
+// Filters badge is `activeCount` + `advancedCount`: `activeCount` counts the
+// default-slot filters only (a page without #advanced passes just that).
 import { useViewport } from './viewport'
 import FilterSheet from './internal/FilterSheet.vue'
 

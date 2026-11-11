@@ -1,7 +1,23 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SHint, SSwitch, STable, type TableColumn } from '@sub2api/ui'
+import {
+  SAlert,
+  SBadge,
+  SButton,
+  SCard,
+  SChipList,
+  SDropdown,
+  SHint,
+  SRowAction,
+  SSwitch,
+  STable,
+  STableColumnSettings,
+  useTableColumns,
+  type ChipListItem,
+  type MenuAction,
+  type TableColumn
+} from '@sub2api/ui'
 import ChannelEditModal from './ChannelEditModal.vue'
 import EnabledBadge from './EnabledBadge.vue'
 import PriceCell from './PriceCell.vue'
@@ -30,28 +46,45 @@ const error = computed(() => (catalog.state.errors.channels ? errorMessage(catal
 const reload = () => catalog.refresh(['channels', 'auditors'])
 defineExpose({ reload })
 
-const columns = computed<TableColumn[]>(() => {
-  const c: TableColumn[] = [
-    { key: 'name', label: t('channels.col.name'), nowrap: true },
-    { key: 'type', label: t('channels.col.type'), nowrap: true },
-    { key: 'base_url', label: t('channels.col.baseUrl'), ellipsis: '13rem' },
-    { key: 'model', label: t('channels.col.model'), ellipsis: '10rem' },
-    { key: 'used_by', label: t('channels.col.usedBy') },
-    { key: 'hour', label: t('channels.col.hour'), align: 'right', nowrap: true },
-    { key: 'today', label: t('channels.col.today'), align: 'right', nowrap: true },
-    { key: 'price', label: t('channels.col.price') },
-    { key: 'enabled', label: t('channels.col.enabled'), nowrap: true }
-  ]
-  c.push({ key: 'actions', label: '', align: 'right' })
-  return c
-})
+// One line per cell: the key, protocol, timeout, proxy, billing model,
+// today's tokens and the price state are optional columns (and tooltips of
+// the cells they belong to); a channel not priced says so next to today's cost.
+const columns = computed<TableColumn[]>(() => [
+  { key: 'name', label: t('channels.col.name'), nowrap: true, hideable: false, mobile: 'title' },
+  { key: 'type', label: t('channels.col.type'), nowrap: true, mobile: 'meta' },
+  { key: 'protocol', label: t('channels.protocol'), nowrap: true, defaultHidden: true, mobile: 'detail' },
+  { key: 'base_url', label: t('channels.col.baseUrl'), grow: true, mobile: 'subtitle' },
+  { key: 'key', label: t('channels.col.key'), nowrap: true, defaultHidden: true, mobile: 'detail' },
+  { key: 'timeout', label: t('channels.col.timeout'), align: 'right', nowrap: true, defaultHidden: true, mobile: 'detail' },
+  { key: 'proxy', label: t('channels.proxy'), nowrap: true, defaultHidden: true, mobile: 'detail' },
+  { key: 'model', label: t('channels.col.model'), ellipsis: '10rem', mobile: 'meta' },
+  { key: 'billing_model', label: t('channels.billingModel'), ellipsis: '10rem', defaultHidden: true, mobile: 'detail' },
+  { key: 'used_by', label: t('channels.col.usedBy'), nowrap: true, mobile: 'meta' },
+  { key: 'hour', label: t('channels.col.hour'), align: 'right', nowrap: true, mobile: 'meta' },
+  { key: 'today', label: t('channels.col.today'), align: 'right', nowrap: true, mobile: 'meta' },
+  { key: 'tokens', label: t('channels.col.tokens'), align: 'right', nowrap: true, defaultHidden: true, mobile: 'detail' },
+  { key: 'price', label: t('channels.col.price'), nowrap: true, defaultHidden: true, mobile: 'detail' },
+  { key: 'enabled', label: t('channels.col.enabled'), nowrap: true, hideable: false, mobile: 'status' },
+  { key: 'actions', label: '', align: 'right', nowrap: true, hideable: false }
+])
+const columnState = useTableColumns(columns, 'moderation-channels')
 
-/** Today's cost by source as "审核 $0.01 · AI 分析 $0.02" (sources with calls only). */
-function todaySources(c: Channel): string {
-  return Object.entries(c.stats?.cost_today_sources || {})
-    .filter(([, s]) => s.calls > 0)
-    .map(([k, s]) => `${enumLabel('costSource', k)} ${money(s.cost)}`)
+const usedBy = (c: Channel): ChipListItem[] => (c.used_by || []).map((a) => ({ key: String(a.id), label: a.name || `#${a.id}` }))
+
+/** The address with its timeout and proxy, the tooltip of the address cell. */
+const urlTitle = (c: Channel) =>
+  [c.base_url, `${t('channels.col.timeout')} ${ms(c.timeout_ms)}`, c.has_proxy ? t('channels.viaProxy') : ''].filter(Boolean).join('\n')
+
+/** Today's tokens, cost by source ("审核 $0.01 · AI 分析 $0.02", sources with calls only) and unpriced calls: the tooltip of today's cost. */
+function todayTitle(c: Channel): string {
+  const s = c.stats
+  if (!s) return ''
+  const sources = Object.entries(s.cost_today_sources || {})
+    .filter(([, v]) => v.calls > 0)
+    .map(([k, v]) => `${enumLabel('costSource', k)} ${money(v.cost)}`)
     .join(' · ')
+  const unpriced = s.cost_today.unpriced_calls ? t('channels.unpricedN', { n: num(s.cost_today.unpriced_calls) }) : ''
+  return [t('channels.tokensN', { n: num(s.tokens_today) }), sources, unpriced].filter(Boolean).join('\n')
 }
 
 const editOpen = ref(false)
@@ -87,6 +120,8 @@ function deleteError(e: unknown): string {
   return names.length ? t('channels.inUse', { names: joinList(names) }) : errorMessage(e, t('actionFailed'))
 }
 
+/** The row's "more" menu: the danger action. */
+const moreActions = computed<MenuAction[]>(() => [{ key: 'delete', label: t('delete'), danger: true }])
 const remove = (c: Channel) =>
   confirmDelete(t('channels.deleteConfirm', { name: c.name }), () => deleteChannel(c.id), () => void catalog.refresh(['channels']), deleteError)
 
@@ -112,55 +147,60 @@ async function test(c: Channel) {
 <template>
   <div>
     <SHint class="mod-hint">{{ t('channels.hint') }}</SHint>
-    <div v-if="manage" class="mod-toolbar">
-      <SButton variant="primary" icon="plus" @click="openEdit(null)">{{ t('channels.add') }}</SButton>
+    <div class="mod-toolbar">
+      <STableColumnSettings :state="columnState" />
+      <SButton v-if="manage" variant="primary" size="sm" icon="plus" @click="openEdit(null)">{{ t('channels.add') }}</SButton>
     </div>
     <SAlert v-if="error" tone="danger" class="mod-block">{{ error }}</SAlert>
 
     <SCard :padded="false">
-      <STable :columns="columns" :rows="rows" :loading="loading" :empty-text="t('channels.empty')" dense>
+      <STable :columns="columnState.visibleColumns.value" :rows="rows" :loading="loading" :empty-text="t('channels.empty')" dense>
         <template #cell-name="{ row }">
-          {{ row.name }} <span class="mod-sub mod-num">#{{ row.id }}</span>
-          <SBadge v-if="row.analysis" tone="purple" size="xs" class="mod-ml">{{ t('channels.analysis') }}</SBadge>
-          <div class="mod-sub">
-            <template v-if="row.has_key">{{ t('channels.col.key') }} <code class="mod-code mod-code-plain">…{{ row.api_key_tail || '****' }}</code></template>
-            <SBadge v-else size="xs" tone="warning">{{ t('channels.noKey') }}</SBadge>
-          </div>
+          <span class="mod-cell-line">
+            <span class="mod-ellipsis" :title="row.name">{{ row.name }}</span>
+            <SHint inline size="xs" class="mod-num">#{{ row.id }}</SHint>
+            <SBadge v-if="row.analysis" tone="purple" size="xs">{{ t('channels.analysis') }}</SBadge>
+            <SBadge v-if="!row.has_key" size="xs" tone="warning">{{ t('channels.noKey') }}</SBadge>
+          </span>
         </template>
         <template #cell-type="{ row }">
-          {{ enumLabel('channelType', row.type) }}
-          <div v-if="row.type === 'llm' && row.protocol" class="mod-sub">{{ enumLabel('protocol', row.protocol) }}</div>
+          <span :title="row.type === 'llm' && row.protocol ? enumLabel('protocol', row.protocol) : undefined">{{ enumLabel('channelType', row.type) }}</span>
         </template>
+        <template #cell-protocol="{ row }">{{ row.type === 'llm' && row.protocol ? enumLabel('protocol', row.protocol) : '—' }}</template>
         <template #cell-base_url="{ row }">
-          <code class="mod-code mod-code-plain" :title="row.base_url">{{ row.base_url }}</code>
-          <div class="mod-sub mod-num">
-            {{ t('channels.col.timeout') }} {{ ms(row.timeout_ms) }}<template v-if="row.has_proxy"> · {{ t('channels.viaProxy') }}</template>
-          </div>
+          <!-- the scheme is left out to leave room for the host; the tooltip has the whole address -->
+          <code class="mod-code mod-code-plain" :title="urlTitle(row)">{{ row.base_url.replace(/^https?:\/\//, '') }}</code>
         </template>
+        <template #cell-key="{ row }">
+          <code v-if="row.has_key" class="mod-code mod-code-plain">…{{ row.api_key_tail || '****' }}</code>
+          <SHint v-else inline>—</SHint>
+        </template>
+        <template #cell-timeout="{ row }"><span class="mod-num">{{ ms(row.timeout_ms) }}</span></template>
+        <template #cell-proxy="{ row }">{{ row.has_proxy ? t('channels.viaProxy') : '—' }}</template>
+        <template #cell-model="{ row }">
+          <span :title="row.billing_model ? `${row.model}\n${t('channels.pricedAs', { model: row.billing_model })}` : row.model">{{ row.model || '—' }}</span>
+        </template>
+        <template #cell-billing_model="{ row }">{{ row.billing_model || '—' }}</template>
         <template #cell-used_by="{ row }">
-          <span v-if="row.used_by?.length" class="mod-chips mod-chips-wrap">
-            <SBadge v-for="a in row.used_by" :key="a.id" size="xs">{{ a.name || `#${a.id}` }}</SBadge>
-          </span>
+          <SChipList v-if="row.used_by?.length" :items="usedBy(row)" :max="1" />
           <SHint v-else inline>{{ row.analysis ? '—' : t('channels.unused') }}</SHint>
         </template>
         <template #cell-hour="{ row }">
-          <template v-if="row.stats">
-            <span class="mod-num">{{ t('channels.callsN', { n: num(row.stats.calls_1h) }) }}</span>
-            <div class="mod-sub">{{ t('stats.errorRate') }} <RateCell :rate="row.stats.error_rate_1h" :alert-percent="alertPercent" /></div>
-          </template>
+          <span v-if="row.stats" class="mod-cell-line mod-num" :title="t('stats.errorRate')">
+            {{ t('channels.callsN', { n: num(row.stats.calls_1h) }) }} · <RateCell :rate="row.stats.error_rate_1h" :alert-percent="alertPercent" />
+          </span>
           <SHint v-else inline>—</SHint>
         </template>
         <template #cell-today="{ row }">
-          <template v-if="row.stats">
-            <span class="mod-num" :title="todaySources(row)">{{ money(row.stats.cost_today.cost) }}</span>
-            <div class="mod-sub mod-num">{{ t('channels.tokensN', { n: num(row.stats.tokens_today) }) }}</div>
-            <div v-if="todaySources(row)" class="mod-sub">{{ todaySources(row) }}</div>
-          </template>
-          <SHint v-else inline>—</SHint>
+          <span class="mod-cell-line">
+            <span v-if="row.stats" class="mod-num" :title="todayTitle(row)">{{ money(row.stats.cost_today.cost) }}</span>
+            <SHint v-else inline>—</SHint>
+            <PriceCell :channel="row" problem-only />
+          </span>
         </template>
-        <template #cell-model="{ row }">
-          <span :title="row.model">{{ row.model || '—' }}</span>
-          <div v-if="row.billing_model" class="mod-sub" :title="t('channels.billingModel')">{{ t('channels.pricedAs', { model: row.billing_model }) }}</div>
+        <template #cell-tokens="{ row }">
+          <span v-if="row.stats" class="mod-num">{{ num(row.stats.tokens_today) }}</span>
+          <SHint v-else inline>—</SHint>
         </template>
         <template #cell-price="{ row }"><PriceCell :channel="row" /></template>
         <template #cell-enabled="{ row }">
@@ -168,12 +208,12 @@ async function test(c: Channel) {
           <EnabledBadge v-else :enabled="row.enabled" />
         </template>
         <template #cell-actions="{ row }">
-          <template v-if="manage">
-            <SButton size="sm" variant="ghost" :loading="testing === row.id" @click="test(row)">{{ t('channels.test') }}</SButton>
-            <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
-            <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
-          </template>
-          <SButton v-else size="sm" variant="ghost" @click="openEdit(row)">{{ t('view') }}</SButton>
+          <span v-if="manage" class="mod-cell-line">
+            <SRowAction :label="t('channels.test')" :loading="testing === row.id" @click="test(row)" />
+            <SRowAction :label="t('edit')" @click="openEdit(row)" />
+            <SDropdown :actions="moreActions" @select="remove(row)" />
+          </span>
+          <SRowAction v-else :label="t('view')" @click="openEdit(row)" />
         </template>
       </STable>
     </SCard>

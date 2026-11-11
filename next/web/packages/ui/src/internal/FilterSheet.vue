@@ -12,6 +12,8 @@
 // filters" toggle after the default slot (badge `advancedCount`, highlighted
 // while folded) and open as a full-width grid under the row
 // (v-model:advancedOpen); folded they follow the default slot in the sheet.
+// Each count covers its own slot, so the Filters badge, counting everything
+// in the sheet, is their sum: `activeCount` (default slot) + `advancedCount`.
 import { computed, ref, useId, useSlots } from 'vue'
 import { useUiT } from '../i18n'
 import SButton from '../SButton.vue'
@@ -34,6 +36,7 @@ const slots = useSlots()
 const t = useUiT()
 const open = ref(false)
 const folded = computed(() => props.collapse && !!(slots.default || slots.advanced))
+const sheetCount = computed(() => props.activeCount + props.advancedCount)
 const formId = useId()
 const advancedId = useId()
 function finish() {
@@ -52,17 +55,17 @@ function finish() {
         icon="filter"
         aria-haspopup="dialog"
         :aria-expanded="open"
-        :aria-label="activeCount ? t('ui.filtersActive', { n: activeCount }) : undefined"
+        :aria-label="sheetCount ? t('ui.filtersActive', { n: sheetCount }) : undefined"
         data-testid="filter-sheet-open"
         @click="open = true"
       >
         {{ t('ui.filters') }}
         <span
-          v-if="activeCount"
+          v-if="sheetCount"
           class="min-w-[1.25rem] rounded-full bg-primary-600 px-1.5 text-center text-xs leading-5 text-white"
           aria-hidden="true"
         >
-          {{ activeCount }}
+          {{ sheetCount }}
         </span>
       </SButton>
     </div>

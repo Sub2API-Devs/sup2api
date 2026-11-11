@@ -4,9 +4,9 @@
 // rest behind the bar's More filters (usageSearchLayout), then the totals
 // (#stats) with extra toggles (#actions, then the secondary #tools) beside
 // Reset / Search. Text filters apply on Search (or Enter) only; the time range
-// slot applies at once. Parameters set without a field in sight (folded More
-// filters, or ones the search keeps no field for, brought by a link or a table
-// action) show as removable chips under the bar.
+// slot applies at once. Parameters set off the first row (More filters, or
+// ones the search keeps no field for, brought by a link or a table action)
+// show as removable chips under the bar.
 // With `logTypes` the first filter picks what the page lists, as new-api's log
 // type does; it applies at once, with any filter typed so far. A type these
 // fields do not search (`searchable` = false) brings its own in #filters.
@@ -48,7 +48,7 @@ const draft = reactive<Record<string, string>>({})
 watch(() => props.modelValue, value => {
   for (const key of layout.value.params) draft[key] = String(value[key] ?? '')
 }, { deep: true, immediate: true })
-/** The More filters in effect: the bar's badge, and on a phone its Filters button's. */
+/** The More filters in effect: the bar's badge, and on a phone its Filters button's (the sheet holds no other search field). */
 const advancedCount = computed(() => (props.searchable ? layout.value.advanced.filter(field => fieldText(props.modelValue, field)).length : 0))
 const chips = computed(() =>
   props.searchable
@@ -89,7 +89,6 @@ function pickLogType(value: unknown) {
         :card="false"
         class="min-w-[16rem] flex-1"
         :aria-label="t('stats.filters')"
-        :active-count="advancedCount"
         :advanced-count="advancedCount"
         @done="apply"
       >

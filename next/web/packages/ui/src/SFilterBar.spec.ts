@@ -57,10 +57,13 @@ describe('SFilterBar more filters', () => {
     expect(plain.find('[data-testid="filter-advanced"]').exists()).toBe(false)
   })
 
-  it('puts #advanced after the default slot in the phone sheet, without the toggle', async () => {
-    const w = mountPinned(SFilterBar, { slots })
+  it('puts #advanced after the default slot in the phone sheet, without the toggle, badging both counts', async () => {
+    const w = mountPinned(SFilterBar, { props: { activeCount: 1, advancedCount: 2 }, slots })
     expect(w.find('[data-testid="filter-advanced-toggle"]').exists()).toBe(false)
-    await w.get('[data-testid="filter-sheet-open"]').trigger('click')
+    const open = w.get('[data-testid="filter-sheet-open"]')
+    expect(open.attributes('aria-label')).toBe('Filters, 3 active')
+    expect(open.text()).toContain('3')
+    await open.trigger('click')
     const fields = [...document.querySelectorAll('[data-testid="filter-sheet"] > *')].map((e) => e.id)
     expect(fields).toEqual(['status', 'ip'])
   })

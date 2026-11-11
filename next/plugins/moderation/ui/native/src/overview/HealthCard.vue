@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SBadge, SCard, SLink, STable, type TableColumn } from '@sub2api/ui'
+import { SBadge, SCard, SIcon, SLink, STable, type TableColumn } from '@sub2api/ui'
 import EnabledBadge from '../EnabledBadge.vue'
 import RateCell from '../RateCell.vue'
 import { useCatalog } from '../catalog'
@@ -22,14 +22,14 @@ const auditors = computed(() => props.status.auditors.map((h) => ({ ...h, audito
 const channels = computed(() => props.status.channels.map((h) => ({ ...h, channel: catalog.channel(h.id) })))
 
 const auditorColumns = computed<TableColumn[]>(() => [
-  { key: 'name', label: t('trace.auditor') },
-  { key: 'channel', label: t('auditors.col.channel') },
+  { key: 'name', label: t('trace.auditor'), grow: true },
+  { key: 'channel', label: t('auditors.col.channel'), nowrap: true },
   { key: 'calls', label: t('health.calls'), align: 'right', nowrap: true },
   { key: 'hit_rate', label: t('stats.hitRate'), align: 'right', nowrap: true },
   { key: 'error_rate', label: t('health.errorRate'), align: 'right', nowrap: true }
 ])
 const channelColumns = computed<TableColumn[]>(() => [
-  { key: 'name', label: t('channels.col.name') },
+  { key: 'name', label: t('channels.col.name'), grow: true },
   { key: 'calls', label: t('health.calls'), align: 'right', nowrap: true },
   { key: 'error_rate', label: t('health.errorRate'), align: 'right', nowrap: true }
 ])
@@ -44,19 +44,23 @@ const channelColumns = computed<TableColumn[]>(() => [
     <div class="mod-stack">
       <STable :columns="auditorColumns" :rows="auditors" row-key="id" dense :empty-text="t('health.noAuditors')">
         <template #cell-name="{ row }">
-          {{ catalog.auditorName(row.id) }}
-          <span v-if="row.auditor" class="mod-sub">{{ enumLabel('auditorType', row.auditor.type) }}</span>
+          <span class="mod-cell-line">
+            {{ catalog.auditorName(row.id) }}
+            <span v-if="row.auditor" class="mod-sub">{{ enumLabel('auditorType', row.auditor.type) }}</span>
+          </span>
         </template>
         <template #cell-channel="{ row }">
-          <template v-if="row.auditor">
+          <span v-if="row.auditor" class="mod-cell-line">
             {{ row.auditor.channel_name || catalog.channelName(row.auditor.channel_id) }}
-            <EnabledBadge :enabled="row.auditor.channel_enabled" size="xs" class="mod-ml" />
-          </template>
+            <EnabledBadge :enabled="row.auditor.channel_enabled" size="xs" />
+          </span>
           <span v-else class="mod-sub">—</span>
         </template>
         <template #cell-calls="{ row }">
-          <span class="mod-num">{{ num(row.calls) }}</span>
-          <div v-if="row.skipped_no_text" class="mod-sub">{{ t('health.skipped', { n: num(row.skipped_no_text) }) }}</div>
+          <span class="mod-cell-line" :title="row.skipped_no_text ? t('health.skipped', { n: num(row.skipped_no_text) }) : undefined">
+            <SIcon v-if="row.skipped_no_text" name="info" class="mod-icon mod-sub" :label="t('health.skipped', { n: num(row.skipped_no_text) })" />
+            <span class="mod-num">{{ num(row.calls) }}</span>
+          </span>
         </template>
         <template #cell-hit_rate="{ row }"><RateCell :rate="row.hit_rate" /></template>
         <template #cell-error_rate="{ row }"><RateCell :rate="row.error_rate" :alert-percent="alert" :flagged="row.flagged" /></template>
@@ -64,12 +68,14 @@ const channelColumns = computed<TableColumn[]>(() => [
 
       <STable :columns="channelColumns" :rows="channels" row-key="id" dense :empty-text="t('health.noChannels')">
         <template #cell-name="{ row }">
-          {{ catalog.channelName(row.id) }}
-          <template v-if="row.channel">
-            <span class="mod-sub">{{ enumLabel('channelType', row.channel.type) }}</span>
-            <SBadge v-if="row.channel.analysis" tone="purple" size="xs" class="mod-ml">{{ t('channels.analysis') }}</SBadge>
-            <EnabledBadge v-if="!row.channel.enabled" :enabled="false" size="xs" class="mod-ml" />
-          </template>
+          <span class="mod-cell-line">
+            {{ catalog.channelName(row.id) }}
+            <template v-if="row.channel">
+              <span class="mod-sub">{{ enumLabel('channelType', row.channel.type) }}</span>
+              <SBadge v-if="row.channel.analysis" tone="purple" size="xs">{{ t('channels.analysis') }}</SBadge>
+              <EnabledBadge v-if="!row.channel.enabled" :enabled="false" size="xs" />
+            </template>
+          </span>
         </template>
         <template #cell-calls="{ row }"><span class="mod-num">{{ num(row.calls) }}</span></template>
         <template #cell-error_rate="{ row }"><RateCell :rate="row.error_rate" :alert-percent="alert" :flagged="row.flagged" /></template>
