@@ -337,9 +337,8 @@ func (a *AccountRef) Limited() bool {
 
 // RateUsage is the usage of a subject's rate limits: requests and tokens of
 // the last 60 seconds. Sessions (accounts only) counts the sessions of the
-// session window (CONTRACTS §71); Models
-// (accounts only) holds the usage of each model list, in the order of the
-// account's model_limits.
+// session window (CONTRACTS §71); Models (accounts only) holds the usage of
+// each model list, in the order of the account's model_limits.
 type RateUsage struct {
 	RPM      int64            `json:"rpm"`
 	TPM      int64            `json:"tpm"`
@@ -356,9 +355,12 @@ type ModelRateUsage struct {
 	Sessions int64    `json:"sessions"`
 }
 
-// requestSessionPrefix starts the session of a request that is its own
-// session (RequestSession).
-const requestSessionPrefix = "req:"
+// Prefixes of the sessions a request or a WebSocket connection is alone
+// (RequestSession, ConnectionSession).
+const (
+	requestSessionPrefix    = "req:"
+	connectionSessionPrefix = "conn:"
+)
 
 // RequestSession is the session of a request no sticky session matched: the
 // request alone is a new session (CONTRACTS §71.2), which never comes back.
@@ -372,7 +374,7 @@ func IsRequestSession(session string) bool { return strings.HasPrefix(session, r
 // session matched: every later turn comes back with it, so the limiter
 // remembers it like a sticky session and the connection counts once
 // (CONTRACTS §71.3).
-func ConnectionSession(requestID string) string { return "conn:" + requestID }
+func ConnectionSession(requestID string) string { return connectionSessionPrefix + requestID }
 
 // AccountLimiter enforces per-account RPM, TPM and SPM, and those of the
 // model list holding the request's (client) model, shared by every node:

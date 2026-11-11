@@ -4965,7 +4965,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `rate_usage.sessions`、`rate_usage.models[].sessions` | 只读 | 该层会话周期内被准入过的会话数（20 段计数，见 71.2；不等于进行中的会话，§78.1） |
 
 - POST / PATCH `/accounts` 可带 `spm_limit`、`spm_window_seconds`；字段错误 `spm_limit: invalid`、`spm_window_seconds: invalid`、`model_limits[i].spm_limit: invalid`、`model_limits[i].spm_window_seconds: invalid`。
-- `spm_window_seconds` 也是通用配置项（§87，`manifest.CommonControlSpecs`，int 60–86400，核心默认 60），账号类型可声明默认值或锁定。插件 proto（`AccountProperties`、`ModelLimit`、`AccountPatch`）和 manifest `defaultLimits` **不带**这个字段：插件建的账号是 60；插件经 `account_patch` 改 `model_limits` 时，模型相同的列表保留管理员设的周期（`keepSPMWindows`），新列表为 60。`GET /account-types` 的 `default_limits.model_limits[]` 带 `spm_window_seconds: 60`。
+- `spm_window_seconds` 也是通用配置项（§87，`manifest.CommonControlSpecs`，int 60–86400，核心默认 60），账号类型可声明默认值或锁定。插件 proto（`AccountProperties`、`ModelLimit`、`AccountPatch`）和 manifest `defaultLimits` **不带**这个字段：插件建的账号是 60；插件经 `account_patch` 改 `model_limits` 时，模型相同的列表（按去空格、去重后的模型比较）保留管理员设的周期（`keepSPMWindows`），新列表为 60。`GET /account-types` 的 `default_limits.model_limits[]` 带 `spm_window_seconds: 60`。`commonControls.model_limits.default` 是账号接口的形状，各列表可带 `spm_window_seconds`（`manifest.ModelLimitValue`，check 按 60–86400 校验，0 或缺省 = 60；与 `defaultLimits` 比冲突时 60 与缺省相同）。声明 `commonControls.spm_window_seconds` 或带周期的 `model_limits` 默认值的插件，`hostCompat` 下限须 ≥0.1.276（`check.SPMWindowFirstCore`，否则 `below_feature_core`）：更早的核心安装时不认识它们、拒绝安装。
 - 迁移 0094：`ADD COLUMN IF NOT EXISTS spm_window_seconds int NOT NULL DEFAULT 60`，约束先 DROP IF EXISTS 再 ADD；已有账号仍按 60 秒计。旧核心忽略该列、按 60 秒计。
 - 迁移 0063：列在 0009 就存在（早期 SPM 的残留），首次执行时清零旧值，避免它们突然变成生效的上限；之后用列注释 `CONTRACTS §71` 标记已执行，重跑不会清掉管理员新设的值。加约束 `accounts_spm_limit_chk`（0–10000000，先 DROP IF EXISTS 再 ADD）。旧核心忽略该列。
 
@@ -4987,9 +4987,9 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 71.3 调度
 
-- `Exhausted(ctx, refs, model, session)` 预判（一次读脚本：各层 RPM/TPM/会话的段之和 + 该会话的 `ZSCORE`；`req:` 会话不查 ZSCORE），会拒绝该会话的账号不进候选池。粘性绑定的账号在**会话周期内**持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话最后一次准入所在的段离开周期窗口后不再算持有（从准入算起，不是从请求结束算起：比周期还长的流还没结束，会话就已不算持有）：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `conn:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话（71.2）。首轮握手失败换号时同样先从离开的账号释放该会话（2026-11-11 起，此前 WebSocket 握手换号不释放）。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
+- `Exhausted(ctx, refs, model, session)` 预判（一次读脚本：各层 RPM/TPM/会话的段之和 + 该会话的 `ZSCORE`；`req:` 会话不查 ZSCORE），会拒绝该会话的账号不进候选池。粘性绑定的账号在**会话周期内**持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话最后一次准入所在的段离开周期窗口后不再算持有（从准入算起，不是从请求结束算起：比周期还长的流还没结束，会话就已不算持有）：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `conn:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话（71.2）。首轮握手失败换号时同样按下面“重试换号时会话跟着走”的规则从离开的账号释放该会话（`conn:` 会话没有绑定，总是释放；2026-11-11 起，此前 WebSocket 握手换号不释放）。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
 - Redis 出错：预判放行（与 RPM / TPM 预判一致）；原子准入出错时整次请求失败（`account limits unavailable`，与 §18.1 现行 RPM / TPM 一致，不是放行；WebSocket 和资源接口的响应不同，§78.4）。
-- **重试换号时会话跟着走**（2026-11-01）：失败策略换号并清除粘性绑定（`switch_reset`，Schema 3 起总是如此），或未发布失败策略时按插件分类切换账号，核心在换号前把本次会话从离开的账号各层 ZSET 里移除，并把它最后所在的段 −1（`core.AccountLimiter.ReleaseSession`，尽力而为，一个 Lua 脚本；`gateway` `releaseSession`）。否则同一会话在周期内同时占着两个账号的会话槽。`req:` 会话没有成员：`ReleaseSession(ctx, ref, model, session, at)` 的 `at` 是本次在该账号准入的 Redis 时间（`RateHold.At`，网关 `call.sessionAt`），各层把该时刻所在的段 −1，段已滑出窗口就不动；`at` 为零时不动。网关每次准入只释放一次（释放后清空 `sessionAt`），所以不会多减别的请求的计数。已计的 RPM 不退。旧版失败策略的 `switch`（换号但保留绑定）不移除：会话仍绑定在原账号上。
+- **重试换号时会话跟着走**（2026-11-01）：失败策略换号并清除粘性绑定（`switch_reset`，Schema 3 起总是如此），或未发布失败策略时按插件分类切换账号，核心在换号前把本次会话从离开的账号各层 ZSET 里移除，并把它最后所在的段 −1（`core.AccountLimiter.ReleaseSession`，尽力而为，一个 Lua 脚本；`gateway` `releaseSession`）。否则同一会话在周期内同时占着两个账号的会话槽。`req:` 会话没有成员：`ReleaseSession(ctx, ref, model, session, at)` 的 `at` 是本次在该账号准入的 Redis 时间（`RateHold.At`，网关 `call.sessionAt`），各层把该时刻所在的段 −1，段已滑出窗口就不动；`at` 为零时不动。网关每次准入只释放一次（释放后清空 `sessionAt`），所以不会多减别的请求的计数。已计的 RPM 不退。旧版失败策略的 `switch`（换号但保留绑定）和可用性守卫换号（同样保留绑定）不移除仍绑定在原账号上的粘性会话：它还会回到原账号；没有绑定的会话（`req:`、`conn:`）不会回来，任何换号都移除（2026-11-11 起，`gateway` `leaveSession`：粘性会话仍绑定在离开的账号上时不释放，其余都释放）。
 
 ### 71.4 插件
 
@@ -5028,7 +5028,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 下面各小节里判定缓存的段落写的是 0.8.1 的行为，与 0.8.0 不同的地方标"0.8.1"；0.8.0 在这些地方的做法只写在这张表里。改动的段落：72.3（版本）、72.5 第 8 步的"查"和"写"、72.7 与 72.9 的多节点同步和人工处理、72.11 的 `/status`、72.16。没有迁移，没有设置和接口路径的变化，可以与 0.8.0 混跑。实测、设计理由、审核中发现并修掉的问题和已知的代价见 `docs/DESIGN-2026-11-10-MODERATION-PARITY.md` 第 14 节"上线后修改"；上线经过、KV 不回答时的后果和回滚见 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节。0.8.1 在 2026-11-11 随核心 0.1.274 上线（核心 0.1.273 已构建但没有发布，§93.7）。
 
-**0.8.2（0.8.1 上线后的整理，尚未发布）**：不改 0.8.1 的缓存规则，只有三处小的行为变化和界面上的两处，各处标"0.8.2"：分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播（72.5 第 8 步"KV 写失败之后"）；告警状态的 KV 失败按缓存的规则计数（72.5 第 8 步"KV 出错"）；片段键在 KV 里的 TTL 向上取整到整秒（72.5 第 8 步"存储"）；概览页显示 `runtime.kv_skipped`、`kv_writing` 一行换了文案（72.11、72.16）。其余是代码和测试的整理。`hostCompat`、权限、迁移、设置、KV 里的键和值都不变，可以与 0.8.1 混跑（72.3、72.16）。
+**0.8.2（0.8.1 上线后的整理，2026-11-11 随核心 0.1.275 上线）**：不改 0.8.1 的缓存规则，只有三处小的行为变化和界面上的两处，各处标"0.8.2"：分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播（72.5 第 8 步"KV 写失败之后"）；告警状态的 KV 失败按缓存的规则计数（72.5 第 8 步"KV 出错"）；片段键在 KV 里的 TTL 向上取整到整秒（72.5 第 8 步"存储"）；概览页显示 `runtime.kv_skipped`、`kv_writing` 一行换了文案（72.11、72.16）。其余是代码和测试的整理。`hostCompat`、权限、迁移、设置、KV 里的键和值都不变，可以与 0.8.1 混跑（72.3、72.16）。
 
 用户已确认的取舍：
 - 只迁配置（Jev 题集、阈值、分析准则、渠道），通过页面导入；new-api 的记录和名单不迁，两边的用户不是同一批人。
@@ -5832,7 +5832,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 界面：概览页"队列与运行状态"卡片加一行 `runtime.kv_writing`（0.8.1 的文案是"正在写入共享缓存的结论"）。别的页面没有变化。
   - 测试：0.8.1 发布时判定缓存的测试都在 `internal/moderation/verdict_cache_test.go`；0.8.2 把它们拆成五个文件并整理过名字，现在的清单见下面 0.8.2 一条。
   - 部署：**要求有批量 KV 调用的核心（`hostCompat >=0.1.273`，72.3）**。2026-11-11 随核心 0.1.274 作为内置插件上线——核心滚动升级完成后内置同步把插件从 0.8.0 升到 0.8.1（核心 0.1.273 已构建但没有发布，0.1.274 带着它的内容）。不需要管理员重新批准，没有迁移，没有设置变化；KV 里的键和值不变，可以与 0.8.0 滚动混跑。回滚 = 插件装回 0.8.0；核心也要退回 0.1.272 时先退插件。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节。
-- **0.8.2（0.8.1 上线后的整理；尚未发布）**：
+- **0.8.2（0.8.1 上线后的整理；2026-11-11 随核心 0.1.275 上线）**：
   - 改动，共五项：(1) 分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播；(2) 告警状态的 KV 失败按缓存的规则计数，因 ctx 结束而没做成的调用不计；(3) 片段键在 KV 里的 TTL 向上取整到整秒；(4) 界面：概览页在 `kv_writing` 旁边显示 `runtime.kv_skipped`（"未写缓存的审核（期间有人工处理或缓存被换）"），`kv_writing` 一行的文案改为"等待写入共享缓存的审核（当前）"，删掉 `runtime` 下六个没有任何页面用到的文案键（vitest：`messages.spec.ts` 核对这张卡片的文案键）；(5) 内部整理：`cache.go` 统一用词、运行的写和人工处理共用"读出、修改、写回"的逻辑，测试拆成五个文件、运行时间减半（事件写入器的刷新间隔可在测试里调短，`Plugin.eventFlushEvery`）。前三项的规则在 72.5 第 8 步。0.8.1 的缓存规则（先 KV 后内存、读数、`kv_writing`、`kv_skipped`、清空后出队的任务按当前纪元查）没有变。
   - 测试（`internal/moderation/`；判定缓存现在的全部测试，按文件，名字取自代码；每个测试断言什么见设计文档 5.10）：
     - `verdict_cache_test.go`（存、重放、范围、清空、人工处理同步、广播）：`TestVerdictCacheStoresHitAndReplays`、`TestReplayNeedsWholeHitSet`、`TestReplayIsNotAViolation`、`TestReplayPostTiming`、`TestVerdictCacheSkipsErrorsSkippedStagesURLImages`、`TestHitSurvivesPassesOfItsSegments`、`TestHitKeptDecoded`、`TestVerdictCacheScope`、`TestClearVerdictCache`、`TestReviewSyncsVerdictCache`、`TestReviewSyncWritesEachKeyOnce`、`TestReviewSyncRefusesAnUnknownStatus`、`TestReviewOnANodeThatDidNotJudge`、`TestReviewSyncKVFailure`、`TestFalsePositiveUnderAnotherFingerprint`、`TestVerdictChangedBroadcastDropsMemory`、`TestStoredHitReachesANodeByBroadcastExpiryOrClear`、`TestNodeWithoutReviewBroadcastReplaysUntilExpiry`。
@@ -5841,7 +5841,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
     - `verdict_cache_image_test.go`（审核器没收到的图片）：`TestSkippedImageIsNotCachedAsPassed`、`TestImagePassNeedsAPassingAuditor`、`TestImageOnlyAHittingAuditorSawGetsTheSameVerdict`、`TestImageVerdictDoesNotDependOnCachedText`。
     - `verdict_cache_helpers_test.go`：假 KV 和各文件共用的辅助函数，没有测试。缓存在别的文件里的测试：`unit_test.go` 的 `TestVerdictCacheTTLSettings`、`TestLRU`、`TestLRUByteBudget`、`TestLRUTombstone`、`TestLRUTombstoneOfAReviewInProgress`、`TestReadingLapses`、`TestSegValue`、`TestStoredHitCodecAndKeys`、`TestFingerprint`、`TestFingerprintJudgingVersion`；`hook_test.go` 的 `TestPreRunStoresVerdictsOnce`、`TestPreRunSurvivesPanic`、`TestHitStandsWhenRecordingPanics`。
     - 测试辅助：`mustHook` 在发请求前后各等一次本节点的后台写完成（结论在回答之后才进缓存）；`hookNow` 不等。
-  - 部署：`hostCompat` 不变，**不需要管理员重新批准，没有迁移，没有设置变化**；KV 里的键和值不变，可以与 0.8.1 滚动混跑。计划随核心 0.1.275（§93 的规则统一）作为内置插件发布；它本身不依赖 0.1.275，在 0.1.274 上也能跑。回滚 = 插件装回 0.8.1。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 第 8 节。
+  - 部署：`hostCompat` 不变，**不需要管理员重新批准，没有迁移，没有设置变化**；KV 里的键和值不变，可以与 0.8.1 滚动混跑。2026-11-11 随核心 0.1.275（§93 的规则统一）作为内置插件上线；它本身不依赖 0.1.275，在 0.1.274 上也能跑。回滚 = 插件装回 0.8.1。发布说明见 `docs/RELEASE-MODERATION-0.8.0.md` 第 8 节。
 
 ### 72.17 绑定到账号（0.7.0，2026-11-08，用户要求；需要核心 §85）
 
@@ -7043,7 +7043,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 87.1 commonControls
 
-- `accountTypes[].commonControls.<名>`：`{visible?, configurable?, default?, locked?, required?}`；名称与取值类型见 `sdk/manifest/common_controls.go` 的 `CommonControlSpecs`（schedulable、auto_disable、priority、weight、max_concurrency、rpm_limit、tpm_limit、spm_limit、model_limits、usage_limit、model_mapping、param_override、header_passthrough、environment、proxy）。`default` 是账号接口该字段的 JSON，范围与账号接口相同（常量在 sdk，核心、校验共用）。老的 `{"configurable":…, "default":…}` 写法照旧有效。
+- `accountTypes[].commonControls.<名>`：`{visible?, configurable?, default?, locked?, required?}`；名称与取值类型见 `sdk/manifest/common_controls.go` 的 `CommonControlSpecs`（schedulable、auto_disable、priority、weight、max_concurrency、rpm_limit、tpm_limit、spm_limit、spm_window_seconds（0.1.276 起，§71.1）、model_limits、usage_limit、model_mapping、param_override、header_passthrough、environment、proxy）。`default` 是账号接口该字段的 JSON，范围与账号接口相同（常量在 sdk，核心、校验共用）。老的 `{"configurable":…, "default":…}` 写法照旧有效。
 - 语义：新账号缺省值取 `default`（再缺省取核心默认，自己级用户的并发默认 10 照旧，有声明时声明优先）；`configurable: false` 新建只接受默认值、更新只接受原值；`locked` 新老账号都只接受 `default`；不符报 `read_only`。值按 JSON 比较（格式、键序、数字写法、null 与空不影响）。`proxy` 只能写 `required`：新建没有代理、或更新清掉了代理时报 `proxy_id: required`，老账号没代理时其他修改照常。`visible` 只影响界面。
 - 执行点：`account/common_controls.go`，更新在锁行之后；`PUT /accounts/:id/usage-limit` 同样检查（`usage_limit: read_only`）；插件生命周期返回的 `account_patch` 不能改固定项（固定项从可改字段中移除，可改的照常）。
 - 校验（`sdk/manifest/check/common_controls.go`）：未知名称、类型或范围不符、`required` 用在 proxy 之外、proxy 写了 `required` 以外的字段、`locked` 没有 `default` 或同时写 `configurable: true`、与 `defaultLimits` 的值冲突（`conflict`）。用到新名称或 `visible`/`locked`/`required` 的插件 `hostCompat` 下限须 ≥0.1.262（`check.CommonControlsFirstCore`）。
@@ -7414,7 +7414,7 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 
 本节加三个 RPC，一次调用处理同一个 namespace 下的多个键：**授权只复核一次，Redis 只往返一次**，开销不再随键数增长。proto 只新增这三个 RPC 和它们的消息，单键调用不变。
 
-版本：这三个 RPC 进了核心 0.1.273 的构建；0.1.273 没有发布，第一个发布的带它们的核心是 0.1.274（2026-11-11，93.7）。下文和代码注释里的"0.1.273"指这个构建起的核心。规则只写一处、单键 `KVSet` 的 TTL 上界、`KVGetMany` 提前拒绝，以及 SDK 拒绝负的 TTL，是之后的整理，属于核心 0.1.275 和随它构建的 SDK（尚未发布），各处标了"0.1.275"。
+版本：这三个 RPC 进了核心 0.1.273 的构建；0.1.273 没有发布，第一个发布的带它们的核心是 0.1.274（2026-11-11，93.7）。下文和代码注释里的"0.1.273"指这个构建起的核心。规则只写一处、单键 `KVSet` 的 TTL 上界、`KVGetMany` 提前拒绝，以及 SDK 拒绝负的 TTL，是之后的整理，属于核心 0.1.275 和随它构建的 SDK（2026-11-11 上线），各处标了"0.1.275"。
 
 ### 93.1 调用与消息
 
@@ -7445,7 +7445,7 @@ codex 插件要给 `codex_device` 账号加一个详情标签页、一个行操�
 
 - 3 MiB 是按连接的消息上限定的。插件调用 `HostService` 走 go-plugin broker 上的 gRPC 服务端（`serveHostBroker` 里的 `grpc.NewServer`），它用 gRPC 默认的接收上限 **4 MiB（4194304 字节）**；宿主发送和插件接收的上限都是 `MaxInt32`（go-plugin 的 `dialGRPCConn`）。请求里 3 MiB 的键和值加上 protobuf 的开销总能送到；超过 4 MiB 的请求由 gRPC 自己以 `RESOURCE_EXHAUSTED` 拒绝，到不了核心的处理函数。
 - 校验顺序，三个调用和 SDK 都一样：授权（只在核心）→ namespace → 键数 → 按请求顺序逐项（每一项先 key，再 value，再 ttl）→ 数据量。报告的是第一个不合规则的项，错误信息带下标，如 `items[2]: value exceeds 65536 bytes`、`keys[3]: key must be 1..512 bytes`。（核心 0.1.275 起。0.1.274 的 `KVSetMany` 先查完所有项的 key，再逐项查 value 和 ttl，所以两项都不合规则时报的可能是另一项；规则本身相同。）
-- 这些规则只写在一处（核心 0.1.275 和随它构建的 SDK 起；0.1.274 里核心和 SDK 各写了一遍，SDK 对负的 TTL 另有自己的一句 `ttl must not be negative`），`sdk/protocol/kv.go`：常量 `KVMaxNamespaceBytes`、`KVMaxKeyBytes`、`KVMaxValueBytes`、`KVMaxTTLSeconds`、`KVBatchMaxKeys`、`KVBatchMaxBytes`，和直接返回 gRPC 状态的函数 `CheckKVNamespace`、`CheckKVKey`、`CheckKVValue`、`CheckKVTTL`、`CheckKVBatchKeys`、`CheckKVBatchItems`、`CheckKVBatchAnswer`。核心的单键和批量处理函数、SDK（93.6）和 `pluginsdktest.FakeHost` 的批量调用都调用这些函数，所以三处对同一个不合规则的请求给出同一个下标和同一句话。核心自己只留列表的上限 `KVMaxListLimit`。
+- 这些规则只写在一处（核心 0.1.275 和随它构建的 SDK 起；0.1.274 里核心和 SDK 各写了一遍，SDK 对负的 TTL 另有自己的一句 `ttl must not be negative`），`sdk/protocol/kv.go`：常量 `KVMaxNamespaceBytes`、`KVMaxKeyBytes`、`KVMaxValueBytes`、`KVMaxTTLSeconds`、`KVBatchMaxKeys`、`KVBatchMaxBytes`，和直接返回 gRPC 状态的函数 `CheckKVNamespace`、`CheckKVKey`、`CheckKVValue`、`CheckKVTTL`、`CheckKVBatchKeys`、`CheckKVBatchItems`、`CheckKVBatchAnswer`。核心的单键和批量处理函数、SDK（93.6）和 `pluginsdktest.FakeHost` 的单键和批量调用都调用这些函数，所以三处对同一个不合规则的请求给出同一个下标和同一句话。核心自己只留列表的上限 `KVMaxListLimit`。
 - `KVGetMany` 的数据量在读完之后才算得出来：一次调用最坏会让核心从 Redis 读入 512 × 64 KiB = 32 MiB。核心按顺序累计，在让合计超过上限的那个值处拒绝，其余的值不再复制进回答（0.1.275 起；0.1.274 全部复制完才算合计）。
 
 ### 93.3 一次授权复核，一次 Redis 往返
@@ -7512,7 +7512,7 @@ type KVBatch interface {
 - **规则在两种核心上相同**：SDK 在发出任何调用之前用核心的那几个函数校验（`protocol.CheckKVBatchKeys`、`protocol.CheckKVBatchItems`，93.2），不合规则时回的就是核心会回的 `codes.InvalidArgument`——同一个下标、同一句话——什么都不发。回退路径上读到的值合计超过 3 MiB 时同样回 `codes.ResourceExhausted`（`protocol.CheckKVBatchAnswer`）。
 - **负的 TTL 一律拒绝，不论多小**（随核心 0.1.275 的 SDK 起；SDK 编在插件里，所以对一个插件来说是从用这版 SDK 构建的版本起，moderation 是 0.8.2）：SDK 把 TTL 换算成整秒再发，负值在 `KVSetMany` 和单键的 `KV.Set` 里都在发送之前回 `codes.InvalidArgument`（`ttl_seconds must be 0..9223372036`）。此前 -1 ns 到 -999 ms 被截成 0，也就是不过期。
 - 回退给不了两样东西：开销（仍是每个键一次授权复核加一次往返）和写的原子性（中途失败时，之前的项已经写入）。需要其中任何一样的插件声明 `hostCompat: ">=0.1.273"`。
-- 测试替身 `pluginsdktest.FakeHost` 实现了这三个 RPC，校验用的是同一组函数，所以规则、上限和错误信息与宿主相同，写入是原子的（它没有授权这一层；它的单键 `KVSet` 只查值的大小）。`KVBatchUnimplemented`（或运行中调用 `SetKVBatchUnimplemented(true)`）让它像旧核心一样回 `UNIMPLEMENTED`；`KVCalls()` 返回每个 KV RPC 被调用的次数，用来断言“这批键只用了一次调用”。
+- 测试替身 `pluginsdktest.FakeHost` 实现了这三个 RPC，校验用的是同一组函数，所以规则、上限和错误信息与宿主相同，写入是原子的（它没有授权这一层）。它的单键调用（`KVGet` / `KVSet` / `KVDelete` / `KVList`）也用这组函数校验 namespace、key、value 和 ttl，回宿主的错误信息（0.1.275 的 SDK 起；此前单键 `KVSet` 只查值的大小，过大的 ttl 溢出后存成一个已过期的项）。`KVBatchUnimplemented`（或运行中调用 `SetKVBatchUnimplemented(true)`）让它像旧核心一样回 `UNIMPLEMENTED`；`KVCalls()` 返回每个 KV RPC 被调用的次数，用来断言“这批键只用了一次调用”。
 
 ### 93.7 兼容与版本
 
@@ -7529,7 +7529,7 @@ type KVBatch interface {
 - SDK：`sdk/protocol/kv.go`（规则，93.2），`sdk/pluginsdk/kvbatch.go`，`sdk/pluginsdk/host.go`（`KV.Set` 的 TTL），`sdk/pluginsdk/pluginsdktest/kvbatch.go`。
 - 宿主测试 `grpcruntime/host_kv_batch_internal_test.go`：顺序与缺失的键；每项自己的 TTL；一项不合法时什么都不写；键数和数据量上限；两个插件、两个 namespace 之间互不可见；授权（含 PG 里撤销）；每次调用恰好一次授权查询和一条 Redis 命令（pgx tracer 和 go-redis hook 计数）；Redis 不可用；单键 `KVSet` 拒绝会溢出的 TTL（`TestKVSetRefusesATTLThatOverflows`）；脚本在第一次写入之前检查自己的参数（`TestKVSetManyScriptChecksItsArguments`，在 miniredis 上）。`TestKVBatchRealRedis` 在设置了 `TEST_REDIS_URL` 时对真实的 Valkey / Redis 运行（CI 设置；本地跳过）：真实 Lua 引擎上的脚本和它的参数检查、512 个键、真实过期。`grpcruntime/kv_batch_test.go` 用真实插件进程（`testdata/testplugin` 的 `/kvbatch`）走 broker 连接，并验证 4 MiB 的连接上限。
 - 规则本身的测试在 `sdk/protocol/kv_test.go`（`TestKVEntryRules`、`TestKVBatchRules`：每条规则的边界、校验顺序和错误信息）。
-- SDK 测试 `sdk/pluginsdk/kvbatch_internal_test.go`（新核心一批一次调用；旧核心回退、只被拒一次、结果相同；不吞其他错误；规则在两种核心上相同；并发上限；`KV.Set` 拒绝负的 TTL，`TestKVSetRefusesANegativeTTL`）和 `sdk/pluginsdk/pluginsdktest/kvbatch_test.go`（FakeHost 的规则、原子写、旧核心开关、经 SDK 的端到端）。
+- SDK 测试 `sdk/pluginsdk/kvbatch_internal_test.go`（新核心一批一次调用；旧核心回退、只被拒一次、结果相同；不吞其他错误；规则在两种核心上相同；并发上限；`KV.Set` 拒绝负的 TTL，`TestKVSetRefusesANegativeTTL`）和 `sdk/pluginsdk/pluginsdktest/kvbatch_test.go`（FakeHost 的规则、单键调用同样校验 `TestFakeHostKVSingleCallsFollowTheHostRules`、原子写、旧核心开关、经 SDK 的端到端）。
 
 ## 94. 页头统一进顶栏（UI 3.9，2026-11-11，用户要求：每个页面的标题和说明都像 API 密钥页那样显示在顶栏，不在页面里另占一行；菜单名与页面标题各自独立；无迁移）
 

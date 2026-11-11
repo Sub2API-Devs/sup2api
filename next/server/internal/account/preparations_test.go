@@ -405,14 +405,17 @@ func TestAccountPatchSetsSchedulingAndLimits(t *testing.T) {
 		t.Fatalf("update: %d %v", code, out)
 	}
 	// Plugins do not set session windows: a list they patch keeps the
-	// administrator's.
+	// administrator's (matched after trimming and de-duplicating its
+	// models), a new list gets the default.
 	plugin.patch = func(*pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatch {
-		return &pluginv1.AccountPatch{ModelLimits: &pluginv1.ModelLimitList{Items: []*pluginv1.ModelLimit{{Models: []string{"claude-opus-5"}, RpmLimit: 5, SpmLimit: 2}}}}
+		return &pluginv1.AccountPatch{ModelLimits: &pluginv1.ModelLimitList{Items: []*pluginv1.ModelLimit{
+			{Models: []string{" claude-opus-5 ", "claude-opus-5"}, RpmLimit: 5, SpmLimit: 2}, {Models: []string{"claude-haiku-5"}, SpmLimit: 1}}}}
 	}
 	code, out = e.do("PATCH", "/accounts/"+strconv.FormatInt(id, 10), map[string]any{"spm_window_seconds": 120, "model_limits": []map[string]any{
 		{"models": []string{"claude-opus-5"}, "rpm_limit": 3, "spm_limit": 2, "spm_window_seconds": 300}}})
-	if limits, _ = data(out)["model_limits"].([]any); code != 200 || data(out)["spm_window_seconds"] != 120.0 || len(limits) != 1 ||
-		limits[0].(map[string]any)["rpm_limit"] != 5.0 || limits[0].(map[string]any)["spm_window_seconds"] != 300.0 {
+	if limits, _ = data(out)["model_limits"].([]any); code != 200 || data(out)["spm_window_seconds"] != 120.0 || len(limits) != 2 ||
+		limits[0].(map[string]any)["rpm_limit"] != 5.0 || limits[0].(map[string]any)["spm_window_seconds"] != 300.0 ||
+		limits[1].(map[string]any)["spm_window_seconds"] != 60.0 {
 		t.Fatalf("plugin patch over session windows: %d %v", code, out)
 	}
 	// An out-of-range value is refused; nothing changes.

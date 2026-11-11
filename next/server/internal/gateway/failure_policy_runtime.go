@@ -279,6 +279,7 @@ func (c *call) planAvailabilityFailure(ctx context.Context, ref *core.AccountRef
 	s.preserveSticky = true
 	s.sameID = 0
 	excluded[ref.ID] = true
+	c.leaveSession(ctx, ref)
 	c.finishFailureDecision(ref, attempts, firstNonEmpty(res.err.NeutralReason, errTypeModelAvailability))
 	res.kind = attemptFailover
 	return res
@@ -352,8 +353,8 @@ func (c *call) prepareRetry(ctx context.Context, ref *core.AccountRef, action st
 		if err := c.releaseBinding(ctx, ref.ID); err != nil {
 			return "sticky_reset_failed"
 		}
-		c.releaseSession(ctx, ref)
 	}
+	c.leaveSession(ctx, ref)
 	s.preserveSticky = action == failureSwitch
 	s.sameID = 0
 	excluded[ref.ID] = true

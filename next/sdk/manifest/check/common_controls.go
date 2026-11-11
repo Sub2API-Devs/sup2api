@@ -103,10 +103,21 @@ func (v *validator) controlDefault(f, name string, spec manifest.CommonControlSp
 
 // sameAs reports whether raw, decoded into the type of value (so that
 // omitted fields read as zero), equals value. A raw that does not decode is
-// reported by controlDefault, not here.
+// reported by controlDefault, not here. A model list naming the default
+// session window equals one naming none, as defaultLimits cannot name one.
 func sameAs(value any, raw json.RawMessage) bool {
 	typed := reflect.New(reflect.TypeOf(value))
-	return json.Unmarshal(raw, typed.Interface()) != nil || manifest.SameControlValue(value, typed.Elem().Interface())
+	if json.Unmarshal(raw, typed.Interface()) != nil {
+		return true
+	}
+	if lists, ok := typed.Interface().(*[]manifest.ModelLimitValue); ok {
+		for i := range *lists {
+			if (*lists)[i].SPMWindowSeconds == manifest.DefaultSPMWindowSeconds {
+				(*lists)[i].SPMWindowSeconds = 0
+			}
+		}
+	}
+	return manifest.SameControlValue(value, typed.Elem().Interface())
 }
 
 // decodeStrict decodes one JSON value, refusing unknown object keys.
@@ -175,6 +186,9 @@ func (v *validator) modelLimitLists(f string, lists []manifest.ModelLimitValue, 
 			value   int64
 		}{{"max_concurrency", int64(l.MaxConcurrency)}, {"rpm_limit", int64(l.RPMLimit)}, {"tpm_limit", l.TPMLimit}, {"spm_limit", int64(l.SPMLimit)}} {
 			v.controlRange(lf+"."+key(x.control), x.control, x.value)
+		}
+		if l.SPMWindowSeconds != 0 { // 0 is the default window
+			v.controlRange(lf+".spm_window_seconds", "spm_window_seconds", int64(l.SPMWindowSeconds))
 		}
 	}
 }

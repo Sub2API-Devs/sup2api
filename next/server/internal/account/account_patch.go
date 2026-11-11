@@ -88,10 +88,13 @@ func applyAccountPatch(ctx context.Context, out *pluginv1.AccountLifecycleRespon
 		probe.SPMLimit = new(int(patch.GetSpmLimit()))
 	}
 	if list := patch.GetModelLimits(); list != nil && to.ModelLimits != nil {
-		probe.ModelLimits = new(keepSPMWindows(coreModelLimits(list.GetItems()), *to.ModelLimits))
+		probe.ModelLimits = new(coreModelLimits(list.GetItems()))
 	}
 	if fe := probe.validateScheduling(ctx); len(fe) > 0 {
 		return nil, invalidPatch(fe)
+	}
+	if probe.ModelLimits != nil {
+		keepSPMWindows(*probe.ModelLimits, *to.ModelLimits)
 	}
 	for _, f := range []struct {
 		name     string

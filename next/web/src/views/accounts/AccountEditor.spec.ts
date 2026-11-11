@@ -580,6 +580,13 @@ describe('account model limits', () => {
     expect(capFixed.get('input[data-testid="account-spm_limit-window"]').attributes('disabled')).toBeUndefined()
   })
 
+  it('hides the limits group of a type hiding every limit, its undeclared period included', async () => {
+    const hidden = { visible: false }
+    const w = render(savedAccount(), false, { ...accountType, common_controls: { rpm_limit: hidden, tpm_limit: hidden, spm_limit: hidden } } as unknown as AccountType)
+    await flushPromises()
+    expect(w.find('[data-testid="account-limits"]').exists()).toBe(false)
+  })
+
   it('refuses to save a model listed twice', async () => {
     const w = render(savedAccount())
     await flushPromises()

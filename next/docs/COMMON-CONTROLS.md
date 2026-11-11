@@ -15,8 +15,8 @@ manifest `accountTypes[].commonControls`：键 = 通用项名，值 = 声明。
 | `weight` | `weight` | int |
 | `max_concurrency` | `max_concurrency` | int |
 | `rpm_limit`、`tpm_limit`、`spm_limit` | 同名 | int |
-| `spm_window_seconds` | `spm_window_seconds`（会话周期，CONTRACTS §71.1） | int，60–86400，核心默认 60 |
-| `model_limits` | `model_limits` | 数组（同账号接口） |
+| `spm_window_seconds` | `spm_window_seconds`（会话周期，CONTRACTS §71.1） | int，60–86400，核心默认 60；声明它需 `hostCompat` 下限 ≥0.1.276（`check.SPMWindowFirstCore`） |
+| `model_limits` | `model_limits` | 数组（同账号接口；各列表可带 `spm_window_seconds`，带了同样需下限 ≥0.1.276） |
 | `usage_limit` | 账号用量限制（§73） | 对象（同账号接口） |
 | `model_mapping` | `model_mapping` | 对象 |
 | `param_override` | `param_override` | §84 对象 |
