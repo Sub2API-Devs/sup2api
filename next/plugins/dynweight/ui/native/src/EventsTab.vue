@@ -5,7 +5,7 @@ import { SAlert, SBadge, SCard, SField, SHint, SPagination, SSelect, STable, typ
 import KeyFilters from './KeyFilters.vue'
 import { useCatalog } from './catalog'
 import { describeEvent } from './describe'
-import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTone, filterQuery, useDwHost, weightOf, type Filter, type WeightEvent } from './host'
+import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTone, filterQuery, modelCandidates, useDwHost, weightOf, type Filter, type WeightEvent } from './host'
 
 // Weight events (newest first): degrades, climbs, restores, revivals, cleared
 // sticky sessions and resets, filtered by key and kind.
@@ -21,6 +21,7 @@ const query = () => ({ ...filterQuery(filter), kind: kind.value })
 
 const list = useList<WeightEvent>(host.pluginApi, '/events', query(), { pageSize: 50 })
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('events.loadFailed')) : ''))
+const models = computed(() => modelCandidates(list.items.value))
 
 const search = () => applyQuery(list, query())
 
@@ -60,7 +61,7 @@ const showsWeight = (e: WeightEvent) => e.kind.startsWith('weight_') || (e.kind 
 <template>
   <div>
     <SCard>
-      <KeyFilters v-model="filter" :loading="list.loading.value" @search="search" @clear="clear">
+      <KeyFilters v-model="filter" :loading="list.loading.value" :models="models" @search="search" @clear="clear">
         <SField class="dw-filter" :label="t('events.kind')">
           <SSelect v-model="kind" :options="kindOptions" @update:model-value="search" />
         </SField>
