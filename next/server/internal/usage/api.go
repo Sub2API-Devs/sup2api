@@ -546,6 +546,15 @@ func (s *Service) shapeAnomalies(ctx context.Context, raw json.RawMessage, accou
 		}
 		changed = true
 	}
+	if v, ok := m[core.AnomalyScheduling]; ok {
+		out, keep := s.shapeScheduling(ctx, v, accounts)
+		if keep {
+			m[core.AnomalyScheduling] = out
+		} else {
+			delete(m, core.AnomalyScheduling)
+		}
+		changed = true
+	}
 	if v, ok := m[anomalyFailurePolicy]; ok && !accounts {
 		if out, ok := redactFailurePolicy(v); ok {
 			m[anomalyFailurePolicy] = out
@@ -579,6 +588,61 @@ func encodeTrace(v any) (json.RawMessage, bool) {
 	return out, err == nil
 }
 
+// shapeScheduling is shapeAvailability for the scheduling trace: without
+// account:read the skips stay, without their account.
+func (s *Service) shapeScheduling(ctx context.Context, v json.RawMessage, accounts bool) (json.RawMessage, bool) {
+	var tr core.SchedulingTrace
+	if !decodeTrace(v, &tr) {
+		return v, accounts
+	}
+	if !accounts {
+		for i := range tr.Skipped {
+			tr.Skipped[i].AccountID, tr.Skipped[i].AccountName = 0, ""
+		}
+		return encodeTrace(&tr)
+	}
+	ids := make([]int64, 0, len(tr.Skipped))
+	for _, skip := range tr.Skipped {
+		if skip.AccountID > 0 {
+			ids = append(ids, skip.AccountID)
+		}
+	}
+	names, ok := s.accountNames(ctx, ids)
+	if !ok {
+		return v, true // the ids still say which accounts
+	}
+	for i := range tr.Skipped {
+		tr.Skipped[i].AccountName = names[tr.Skipped[i].AccountID]
+	}
+	out, ok := encodeTrace(&tr)
+	if !ok {
+		return v, true
+	}
+	return out, true
+}
+
+// accountNames reads the names of the accounts (deleted ones included, as a
+// trace outlives its accounts); false when they could not be read.
+func (s *Service) accountNames(ctx context.Context, ids []int64) (map[int64]string, bool) {
+	names := map[int64]string{}
+	if len(ids) == 0 {
+		return names, true
+	}
+	rows, err := s.db.Pool.Query(ctx, `SELECT id, name FROM accounts WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return nil, false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var name string
+		if rows.Scan(&id, &name) == nil {
+			names[id] = name
+		}
+	}
+	return names, rows.Err() == nil
+}
+
 func (s *Service) shapeAvailability(ctx context.Context, v json.RawMessage, accounts bool) (json.RawMessage, bool) {
 	var tr core.AvailabilityTrace
 	if !decodeTrace(v, &tr) {
@@ -604,21 +668,9 @@ func (s *Service) shapeAvailability(ctx context.Context, v json.RawMessage, acco
 	if len(ids) == 0 {
 		return v, true
 	}
-	names := map[int64]string{}
-	rows, err := s.db.Pool.Query(ctx, `SELECT id, name FROM accounts WHERE id = ANY($1)`, ids)
-	if err != nil {
+	names, ok := s.accountNames(ctx, ids)
+	if !ok {
 		return v, true // the ids still say which accounts
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int64
-		var name string
-		if rows.Scan(&id, &name) == nil {
-			names[id] = name
-		}
-	}
-	if rows.Err() != nil {
-		return v, true
 	}
 	for _, list := range lists {
 		for i := range list {

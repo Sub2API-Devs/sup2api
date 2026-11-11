@@ -1177,7 +1177,38 @@ func TestDirectory(t *testing.T) {
 	if got, _ := e.svc.GroupHasType(ctx, g+1000, apikey); got {
 		t.Fatal("GroupHasType: another group")
 	}
+	// Unschedulable: what Candidates does not offer, and why. a3 is disabled,
+	// a2 cools down, a1 is offered.
+	// The key is written directly: SetCooldown would emit a status event.
+	until := time.Now().Add(time.Minute)
+	cooling := "cooldown:account:" + strconv.FormatInt(a2, 10)
+	if err := e.mr.Set(cooling, "fixture"); err != nil {
+		t.Fatal(err)
+	}
+	e.mr.SetTTL(cooling, time.Minute)
+	off, err := e.svc.Unschedulable(ctx, g)
+	if err != nil || len(off) != 2 {
+		t.Fatalf("Unschedulable: %+v %v", off, err)
+	}
+	for _, u := range off {
+		switch {
+		case u.ID == a3 && u.Reason == "disabled" && u.Until.IsZero():
+		case u.ID == a2 && u.Reason == "cooldown" && u.Until.After(time.Now()) && !u.Until.After(until.Add(time.Second)):
+		default:
+			t.Fatalf("Unschedulable entry %+v", u)
+		}
+	}
+	e.mr.Del(cooling)
 	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET status = 'active' WHERE id = $1`, a3); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET schedulable = false WHERE id = $1`, a1); err != nil {
+		t.Fatal(err)
+	}
+	if off, err := e.svc.Unschedulable(ctx, g); err != nil || len(off) != 1 || off[0].ID != a1 || off[0].Reason != "unschedulable" {
+		t.Fatalf("Unschedulable after re-enabling: %+v %v", off, err)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `UPDATE accounts SET schedulable = true WHERE id = $1`, a1); err != nil {
 		t.Fatal(err)
 	}
 

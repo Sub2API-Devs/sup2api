@@ -120,6 +120,9 @@ type call struct {
 	// failover attempts reuse the same result. nil = the accounts' own values.
 	ranked   map[int64]rankValues
 	rankDone bool
+	// sched collects the accounts scheduling did not use and why
+	// (usage_logs.anomalies.scheduling, CONTRACTS §24.6).
+	sched schedTrace
 	// balance is the core balancing's usage read for this request (balance.go),
 	// read at the same moment as the ranking and reused by failover.
 	balance     *balanceState
@@ -833,6 +836,8 @@ func (c *call) submit() {
 		return
 	}
 	rec.Conversion = c.conversionTrace()
+	c.concludeScheduling(c.c.Request.Context())
+	rec.Scheduling = c.schedulingTrace()
 	c.statsCompletedAt = c.g.now()
 	c.statsCanceled = c.c.Request.Context().Err() != nil
 	c.observeRequest(observation.Completed, rec)

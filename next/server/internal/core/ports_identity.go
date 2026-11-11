@@ -485,6 +485,10 @@ type AccountDirectory interface {
 	// whatever its status) of one of types: without one the group cannot serve
 	// the endpoint at all, which is not a passing shortage.
 	GroupHasType(ctx context.Context, groupID int64, types []AccountTypeKey) (bool, error)
+	// Unschedulable lists the accounts of the group (not deleted) that
+	// Candidates does not offer now, with why: disabled, unschedulable,
+	// automatically disabled or cooling down. Only failed dispatches ask.
+	Unschedulable(ctx context.Context, groupID int64) ([]UnschedulableAccount, error)
 	// Load returns one account with decrypted credentials.
 	Load(ctx context.Context, id int64) (*Account, error)
 	IsCoolingDown(ctx context.Context, id int64) (bool, error)

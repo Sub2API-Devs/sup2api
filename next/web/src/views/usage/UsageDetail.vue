@@ -10,9 +10,10 @@ import { errorMessage } from '@/utils/errors'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
 import PlatformBadge from '@/components/platform/PlatformBadge.vue'
-import { accountLabel, availabilityTrace, factText, hookTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
+import { accountLabel, availabilityTrace, factText, hookTone, isConverted, knownUsageRounds, schedulingTrace, type UsageRow } from './usage'
 import UsageAccountMark from './UsageAccountMark.vue'
 import UsageAvailabilityTrace from './UsageAvailabilityTrace.vue'
+import UsageSchedulingTrace from './UsageSchedulingTrace.vue'
 import UsageConversionBadges from './UsageConversionBadges.vue'
 import UsageConversionTrace from './UsageConversionTrace.vue'
 import UsageBillingFacts from './UsageBillingFacts.vue'
@@ -72,6 +73,8 @@ const failureDecisions = computed<FailureDecision[]>(() => {
 })
 // A model availability rejection's message is the generic client text; the recorded trace has the reasons.
 const availabilityHint = computed(() => u.value.error_type === 'model_availability' && !!availabilityTrace(u.value))
+// "no available account" and "busy" are the client's text too; the scheduling trace says which account was skipped for what.
+const schedulingHint = computed(() => u.value.error_type === 'no_account' && !!schedulingTrace(u.value))
 </script>
 
 <template>
@@ -100,6 +103,7 @@ const availabilityHint = computed(() => u.value.error_type === 'model_availabili
       <span class="break-all font-mono text-xs">{{ u.error_type }}</span>
       <p v-if="u.error_message" class="mt-1 break-words text-sm">{{ u.error_message }}</p>
       <p v-if="availabilityHint" class="mt-1 text-sm" data-testid="usage-availability-hint">{{ t('usage.availability.seeBelow') }}</p>
+      <p v-if="schedulingHint" class="mt-1 text-sm" data-testid="usage-scheduling-hint">{{ t('usage.scheduling.seeBelow') }}</p>
     </SAlert>
 
     <SGrid :cols="1" :lg-cols="knownRounds.length ? 1 : 2" :gap="4" class="items-start" data-testid="usage-detail-primary">
@@ -212,6 +216,7 @@ const availabilityHint = computed(() => u.value.error_type === 'model_availabili
         </SDisclosure>
       </SCard>
     </SGrid>
+    <UsageSchedulingTrace :row="u" />
     <UsageAvailabilityTrace :row="u" />
     <UsageConversionTrace :row="u" />
     <SCard v-if="failureDecisions.length" variant="flat" data-testid="failure-decisions">

@@ -1496,6 +1496,43 @@ message RankedAccount {
 - 触发 fail open 的插件不产生条目；整次运行因"所有候选都被置 0"而作废时（§24.3 第 3 条），**已累积的条目一并清空**，与"这次调度没有被改写过"保持一致。
 - **当前限制（有意为之）**：这一列**只落库，`GET /usage/:id`、`/me/usage/:id` 的响应体都不暴露它**（§15.2 的详情字段表里没有它，与 `hook_decisions` 不同）。排查需要直接查库，例如 `SELECT sched_decisions FROM usage_logs WHERE request_id = '…'`。
 
+### 24.6 可观测性：`usage_logs.anomalies.scheduling`（账号调度记录，2026-11-12 起）
+
+§24.5 只记插件改了谁的权重，不记"哪个账号为什么没被选"。一次请求选不出账号时，客户端只看到 `no available account`（Anthropic 格式是 529 `Overloaded`）或 `all accounts are busy or rate limited`（429），此前使用记录和节点日志里都没有原因。调度过程现在把每个**未被选用的账号及原因**记下来，写进使用记录的 `anomalies.scheduling`（JSON 字符串，与 `availability`、`failure_policy` 同构，核心类型 `core.SchedulingTrace`）：
+
+```json
+{"v":1,"outcome":"none","candidates":3,"eligible":0,
+ "counts":{"referenced_model_not_served":3,"not_schedulable":1},
+ "skipped":[{"account_id":124,"reason":"referenced_model_not_served","detail":"claude-x"},
+            {"account_id":127,"reason":"not_schedulable","detail":"disabled"}]}
+```
+
+- **何时写**：① 请求最终以 `error_type = no_account` 结束（`outcome` 为 `none`，429 时为 `busy`）——必写；② 请求选到了账号，但途中有账号因**当时的状态**被跳过（限流、并发满、排队、尝试失败后切换、失败策略收窄重试范围），`outcome = picked`。只因配置或请求形态不合格（模型列表不含该模型等）而选到了别的账号的请求**不写**：那是每个请求都一样的事实，写了只是噪声。
+- `candidates`：分组内可调度、且账号类型能服务该端点的账号数（`AccountDirectory.Candidates` 的结果）；`eligible`：其中能服务**本请求**的账号数（过了模型列表、引用模型、用量计量、资源绑定和模型可用性预检）。
+- `skipped`：每个账号每种原因一条，最多 40 条，超出的计入 `omitted`；`counts` 按原因计数，最多 16 个键。`detail` 是原因的对象（模型名、用量种类、账号状态），最长 100 字节；`until` 是定时停用或冷却的结束时间（unix 秒）。
+- **原因码**：
+
+| `reason` | 含义 | `detail` |
+|---|---|---|
+| `not_schedulable` | 账号在分组里，但当前不参与调度。只在 `no_account` 时读取（`AccountDirectory.Unschedulable`，失败路径上的一次查库） | `disabled` / `unschedulable` / `auto_disabled` / `cooldown`；请求期间退出调度而尚未读到状态时为 `left` |
+| `no_route` | 账号类型没有该端点的路由 | `插件/类型` |
+| `model_not_served` | 账号模型列表不含请求的模型 | 模型名 |
+| `referenced_model_not_served` | 请求引用了第二个模型（`fallbacks`、advisor 工具，§13 `modelReferences`），账号模型列表不含它 | 模型名 |
+| `usage_unsupported` | 账号类型无法计量请求要求的用量 | `additional` / `attempts` / 引用的用量种类 |
+| `bound_elsewhere` | 请求的文件资源、辅助历史或回退额度凭证属于另一个账号 | `resource` / `helper_history` / `fallback_credit` |
+| `availability_blocked` | 被模型可用性预检拦截（细节在 `anomalies.availability`） | — |
+| `failure_policy` | 失败策略把重试限定在别的账号 | `same_account` / `proxy_changed` / `egress` |
+| `rank_excluded` | `scheduler.rank` 插件给了权重 0 | — |
+| `conversion_refused` | 请求转不成该账号类型的协议，或账号的损失策略拒绝转换 | — |
+| `rate_limited` | 账号的限流窗口已满，或限流器没有放行 | — |
+| `concurrency_full` | 账号并发槽位已满 | — |
+| `queued` | 已有请求在为该账号排队，新会话不绑定到它 | — |
+| `attempt_failed` | 在该账号上的一次尝试失败，请求切到下一个账号 | `状态码 error_type` |
+
+- **节点日志**：`no_account` 的请求另打一行 WARN `gateway: no account for the request`，带 `request_id`、`group`、`model`、`protocol`、`outcome`、`candidates`、`eligible` 和 `skipped`（`账号:原因[:对象]`，空格分隔）。
+- **接口**：随 `anomalies` 在管理端 `GET /usage/:id` 返回（§15.2；`/me/usage` 不返回 `anomalies`，用户看不到这条）。有 `account:read` 时每条 `skipped` 补上 `account_name`；没有时去掉 `account_id`，原因保留；解析不了的记录对无权限者整个丢弃。它是调度轨迹，不是记录的异常：统计里的"异常行"不计它。
+- **不记的**：请求体不落库，所以 `detail` 只有模型名这类已经过校验的字段；HTTP 与 WebSocket 首轮（`connect`）走同一套记录。由插件执行并在尝试内提交用量的请求不带这条。
+
 
 
 ---
