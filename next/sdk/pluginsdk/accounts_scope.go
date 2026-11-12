@@ -25,7 +25,12 @@ import (
 //	}
 //	// a list: keep what the caller may see
 //	scope, err := pluginsdk.ResolveAccountScope(ctx, host, req, "read", ids...)
+//	if err != nil {
+//		return pluginsdk.Unavailable("cannot check account access"), nil
+//	}
 //	visible := scope.Filter(ids)
+//
+// The actions are manifest.AccountsRead, AccountsUpdate and AccountsTest.
 //
 // A route that declares `accounts` in the manifest is already checked by the
 // core before it reaches the plugin; these are for ids the manifest cannot
@@ -96,7 +101,8 @@ func ResolveAccountScope(ctx context.Context, h Host, req *pluginv1.HTTPRequest,
 // without either account key, and 404 for an account outside the user's own
 // (as if it did not exist). A caller limited to their own accounts must name
 // at least one: with no ids only a user reaching every account passes (403).
-// A host that cannot answer is a 503.
+// A host that cannot answer is a 503. An unknown action or an id that is not
+// positive is the plugin's mistake and a 400, whatever the user holds.
 func RequireAccounts(ctx context.Context, h Host, req *pluginv1.HTTPRequest, action string, ids ...int64) *pluginv1.HTTPResponse {
 	scope, err := ResolveAccountScope(ctx, h, req, action, ids...)
 	switch {
@@ -105,14 +111,14 @@ func RequireAccounts(ctx context.Context, h Host, req *pluginv1.HTTPRequest, act
 	case status.Code(err) == codes.PermissionDenied:
 		return Forbidden()
 	case status.Code(err) == codes.InvalidArgument:
-		return ErrorResponse(http.StatusBadRequest, "invalid_argument", status.Convert(err).Message())
+		return ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid account action or account id / 账号操作或账号 id 不合法")
 	case err != nil:
 		return Unavailable("cannot check account access / 无法校验账号权限")
 	case scope.All:
 		return nil
 	case len(ids) == 0:
 		return Forbidden()
-	case len(scope.Filter(ids)) != len(ids):
+	case slices.ContainsFunc(ids, func(id int64) bool { return !scope.Allows(id) }):
 		return ErrorResponse(http.StatusNotFound, "not_found", "account not found / 账号不存在")
 	}
 	return nil

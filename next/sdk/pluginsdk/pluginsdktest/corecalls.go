@@ -37,9 +37,9 @@ func (f *FakeHost) Notify(ctx context.Context, in *pluginv1.NotifyRequest) (*plu
 // checks of the host.
 func (f *FakeHost) AccountScopeCheck(_ context.Context, in *pluginv1.AccountScopeCheckRequest) (*pluginv1.AccountScopeCheckResponse, error) {
 	ids := in.GetAccountIds()
-	if in.GetUserId() <= 0 || in.GetAction() == "" || len(ids) > manifest.MaxAccountBatch ||
-		slices.ContainsFunc(ids, func(id int64) bool { return id <= 0 }) {
-		return nil, status.Errorf(codes.InvalidArgument, "user_id, action and at most %d positive account_ids are required", manifest.MaxAccountBatch)
+	if in.GetUserId() <= 0 || len(ids) > manifest.MaxAccountBatch || slices.ContainsFunc(ids, func(id int64) bool { return id <= 0 }) ||
+		!slices.Contains([]string{manifest.AccountsRead, manifest.AccountsUpdate, manifest.AccountsTest}, in.GetAction()) {
+		return nil, status.Errorf(codes.InvalidArgument, "user_id, a known action and at most %d positive account_ids are required", manifest.MaxAccountBatch)
 	}
 	f.mu.Lock()
 	fn := f.AccountScope

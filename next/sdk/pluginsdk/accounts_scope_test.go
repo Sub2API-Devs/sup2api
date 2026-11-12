@@ -29,7 +29,7 @@ func scopeHost(t *testing.T) (pluginsdk.Host, *[][]int64) {
 	fh.AccountScope = func(uid int64, action string, ids []int64) (bool, []int64, error) {
 		calls = append(calls, ids)
 		switch {
-		case action == "boom":
+		case uid == 9:
 			return false, nil, status.Error(codes.Unavailable, "database down")
 		case uid == 1:
 			return true, nil, nil
@@ -109,7 +109,8 @@ func TestRequireAccounts(t *testing.T) {
 		{name: "neither key", host: h, uid: 3, action: "read", ids: []int64{2}, status: 403, code: "permission_denied"},
 		{name: "no caller", host: h, uid: 0, action: "read", ids: []int64{2}, status: 401, code: "unauthenticated"},
 		{name: "bad id", host: h, uid: 2, action: "read", ids: []int64{-1}, status: 400, code: "invalid_argument"},
-		{name: "host failure", host: h, uid: 2, action: "boom", ids: []int64{2}, status: 503, code: "unavailable"},
+		{name: "unknown action", host: h, uid: 1, action: "delete", ids: []int64{2}, status: 400, code: "invalid_argument"},
+		{name: "host failure", host: h, uid: 9, action: "read", ids: []int64{2}, status: 503, code: "unavailable"},
 		{name: "no host", host: nil, uid: 2, action: "read", ids: []int64{2}, status: 503, code: "unavailable"},
 	}
 	for _, tc := range cases {

@@ -105,7 +105,9 @@ service HostService {
   // on? The answer is the core's own account ownership rule (CONTRACTS
   // §21.1), so a plugin route applies it instead of deciding by itself.
   // PERMISSION_DENIED when the user holds neither account:<action> nor
-  // account:own:<action>.
+  // account:own:<action>. Being ungranted, it tells every enabled plugin
+  // which of the two account keys of an action any user holds, and which of
+  // the asked ids are live accounts that user created (ids only).
   rpc AccountScopeCheck(AccountScopeCheckRequest) returns (AccountScopeCheckResponse);
 
   // ledger.credit / ledger.debit: bounded by the approved scope

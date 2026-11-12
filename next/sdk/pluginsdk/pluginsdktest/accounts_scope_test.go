@@ -45,6 +45,7 @@ func TestFakeHostAccountScopeCheck(t *testing.T) {
 	for name, in := range map[string]*pluginv1.AccountScopeCheckRequest{
 		"no user":     {Action: "read"},
 		"no action":   {UserId: 7},
+		"bad action":  {UserId: 7, Action: "delete"},
 		"zero id":     {UserId: 7, Action: "read", AccountIds: []int64{1, 0}},
 		"negative id": {UserId: 7, Action: "read", AccountIds: []int64{-3}},
 		"too many":    {UserId: 7, Action: "read", AccountIds: tooMany},

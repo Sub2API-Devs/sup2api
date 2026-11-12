@@ -108,7 +108,9 @@ type HostServiceClient interface {
 	// on? The answer is the core's own account ownership rule (CONTRACTS
 	// §21.1), so a plugin route applies it instead of deciding by itself.
 	// PERMISSION_DENIED when the user holds neither account:<action> nor
-	// account:own:<action>.
+	// account:own:<action>. Being ungranted, it tells every enabled plugin
+	// which of the two account keys of an action any user holds, and which of
+	// the asked ids are live accounts that user created (ids only).
 	AccountScopeCheck(ctx context.Context, in *AccountScopeCheckRequest, opts ...grpc.CallOption) (*AccountScopeCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.
@@ -679,7 +681,9 @@ type HostServiceServer interface {
 	// on? The answer is the core's own account ownership rule (CONTRACTS
 	// §21.1), so a plugin route applies it instead of deciding by itself.
 	// PERMISSION_DENIED when the user holds neither account:<action> nor
-	// account:own:<action>.
+	// account:own:<action>. Being ungranted, it tells every enabled plugin
+	// which of the two account keys of an action any user holds, and which of
+	// the asked ids are live accounts that user created (ids only).
 	AccountScopeCheck(context.Context, *AccountScopeCheckRequest) (*AccountScopeCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.

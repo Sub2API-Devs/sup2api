@@ -48,8 +48,10 @@ type FakeHost struct {
 	// AccountScope decides AccountScopeCheck: whether the user reaches every
 	// account for the action, or else which of ids are theirs; an error is
 	// returned as is (status.Error(codes.PermissionDenied, ...) for a user
-	// with neither account key). nil answers that the user reaches all. The
-	// arguments are checked as the host checks them before it is called.
+	// with neither account key). nil answers that the user reaches all, so a
+	// test of a route that acts on accounts should set it to cover the own
+	// scope and its 404. The arguments are checked as the core checks them
+	// (known action, positive ids, batch size) before it is called.
 	AccountScope func(userID int64, action string, ids []int64) (all bool, allowed []int64, err error)
 	// DialFunc is used by EgressService.Dial (default net.Dialer).
 	DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
