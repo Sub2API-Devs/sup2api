@@ -204,8 +204,9 @@ func TestAuthenticateAndRejectAccessKey(t *testing.T) {
 	if _, isKey := core.AccessKey(c.Request.Context()); !ok || !isKey {
 		t.Fatalf("access key: ok=%v key=%v", ok, isKey)
 	}
-	if RejectAccessKey(c) || !c.IsAborted() || w.Code != http.StatusForbidden {
-		t.Fatalf("RejectAccessKey on a key: aborted=%v code=%d", c.IsAborted(), w.Code)
+	if RejectAccessKey(c) || !c.IsAborted() || w.Code != http.StatusForbidden ||
+		!strings.Contains(w.Body.String(), "access keys cannot use this endpoint") {
+		t.Fatalf("RejectAccessKey on a key: aborted=%v code=%d body=%s", c.IsAborted(), w.Code, w.Body)
 	}
 
 	for _, bearer := range []string{"", "Basic u5", "Bearer ", "Bearer bad"} {
