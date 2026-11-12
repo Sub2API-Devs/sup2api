@@ -55,12 +55,12 @@
     { "method": "POST", "path": "/config/validate", "scope": "admin", "permission": "dynweight:manage" },
     { "method": "GET", "path": "/defaults", "scope": "admin", "permission": "dynweight:read" },
     { "method": "GET", "path": "/channels", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/status", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/events", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "POST", "path": "/reset", "scope": "admin", "permission": "dynweight:manage" },
-    { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/degraded", "scope": "admin", "permission": "dynweight:read" },
-    { "method": "GET", "path": "/stats", "scope": "admin", "permission": "dynweight:read" }
+    { "method": "GET", "path": "/status", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read", "from": ["query:account_id"] } },
+    { "method": "GET", "path": "/events", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read", "from": ["query:account_id"] } },
+    { "method": "POST", "path": "/reset", "scope": "admin", "permission": "dynweight:manage", "accounts": { "action": "update", "from": ["body:account_ids", "body:account_id"] } },
+    { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read", "from": ["query:account_ids"] } },
+    { "method": "GET", "path": "/degraded", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read" } },
+    { "method": "GET", "path": "/stats", "scope": "admin", "permission": "dynweight:read", "accounts": { "action": "read" } }
   ],
 
   "ui": {

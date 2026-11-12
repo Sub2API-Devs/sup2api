@@ -569,79 +569,121 @@
       "method": "GET",
       "path": "/accounts",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "GET",
       "path": "/asset-groups",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "POST",
       "path": "/asset-groups",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update",
+        "from": ["body:account_id"]
+      }
     },
     {
       "method": "GET",
       "path": "/asset-groups/:id",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "PATCH",
       "path": "/asset-groups/:id",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "DELETE",
       "path": "/asset-groups/:id",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "GET",
       "path": "/assets",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "POST",
       "path": "/assets",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "GET",
       "path": "/assets/:id",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read"
+      }
     },
     {
       "method": "PATCH",
       "path": "/assets/:id",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "DELETE",
       "path": "/assets/:id",
       "scope": "admin",
-      "permission": "assets:manage"
+      "permission": "assets:manage",
+      "accounts": {
+        "action": "update"
+      }
     },
     {
       "method": "GET",
       "path": "/accounts/:account_id/upstream/asset-groups",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read",
+        "from": ["path:account_id"]
+      }
     },
     {
       "method": "GET",
       "path": "/accounts/:account_id/upstream/assets",
       "scope": "admin",
-      "permission": "assets:read"
+      "permission": "assets:read",
+      "accounts": {
+        "action": "read",
+        "from": ["path:account_id"]
+      }
     }
   ],
   "ui": {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -74,6 +75,34 @@ func TestManifestShape(t *testing.T) {
 		resp, err := p.HandleHTTP(context.Background(), &pluginv1.HTTPRequest{Method: r.Method, Path: r.Path, RoutePath: r.Path})
 		if err != nil || resp.GetStatus() == http.StatusNotFound {
 			t.Errorf("route %s %s is not served: %v", r.Method, r.Path, err)
+		}
+	}
+}
+
+// TestRouteAccounts pins the accounts the core checks before forwarding: the
+// own level passes for accounts the caller created, a request naming none (a
+// group, the node view) needs account:<action>, and the settings routes act
+// on no account.
+func TestRouteAccounts(t *testing.T) {
+	var m manifest.Manifest
+	if err := json.Unmarshal(manifestJSON, &m); err != nil {
+		t.Fatalf("manifest.json: %v", err)
+	}
+	read := func(from ...string) *manifest.RouteAccounts {
+		return &manifest.RouteAccounts{Action: manifest.AccountsRead, From: from}
+	}
+	want := map[string]*manifest.RouteAccounts{
+		"GET /status":   read("query:account_id"),
+		"GET /events":   read("query:account_id"),
+		"GET /weights":  read("query:account_ids"),
+		"GET /degraded": read(),
+		"GET /stats":    read(),
+		"POST /reset":   {Action: manifest.AccountsUpdate, From: []string{manifest.AccountActionIDs, "body:account_id"}},
+	}
+	for _, r := range m.Routes {
+		sig := r.Method + " " + r.Path
+		if got := manifest.EffectiveRouteAccounts(&m, r); !reflect.DeepEqual(got, want[sig]) {
+			t.Errorf("%s accounts = %+v, want %+v", sig, got, want[sig])
 		}
 	}
 }

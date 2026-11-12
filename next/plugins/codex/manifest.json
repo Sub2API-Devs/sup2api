@@ -126,9 +126,9 @@
     { "method": "POST", "path": "/auth/device/poll", "scope": "admin", "permission": "codex:manage" },
     { "method": "POST", "path": "/auth/siwc/start", "scope": "admin", "permission": "codex:manage" },
     { "method": "POST", "path": "/auth/siwc/exchange", "scope": "admin", "permission": "codex:manage" },
-    { "method": "POST", "path": "/reset-credits/list", "scope": "admin", "permission": "codex:reset" },
+    { "method": "POST", "path": "/reset-credits/list", "scope": "admin", "permission": "codex:reset", "accounts": { "action": "update", "from": ["body:account_id"] } },
     { "method": "POST", "path": "/reset-credits/consume", "scope": "admin", "permission": "codex:reset" },
-    { "method": "POST", "path": "/reset-credits/summary", "scope": "admin", "permission": "codex:reset" }
+    { "method": "POST", "path": "/reset-credits/summary", "scope": "admin", "permission": "codex:reset", "accounts": { "action": "read", "from": ["body:account_ids"] } }
   ],
 
   "ui": {

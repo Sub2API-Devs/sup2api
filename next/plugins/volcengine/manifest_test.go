@@ -474,18 +474,27 @@ func hostAllowed(domains []string, host string) bool {
 }
 
 // TestAssetRoutesAndPages pins the asset library's declared surface: every
-// route is an admin route behind one of the plugin's two permissions, and
-// every host-rendered page reads a route that actually exists.
+// route is an admin route behind one of the plugin's two permissions and
+// account:read (reads) or account:update (writes), and every host-rendered
+// page reads a route that actually exists. Only the routes naming an account
+// directly pass the own level; the others reach accounts through rows of
+// this plugin, which the core cannot see.
 func TestAssetRoutesAndPages(t *testing.T) {
 	m := decodeManifest(t)
 	if len(m.Routes) == 0 {
 		t.Fatal("stage three declares the asset library routes")
+	}
+	accountFrom := map[string][]string{
+		"POST /asset-groups":                              {"body:account_id"},
+		"GET /accounts/:account_id/upstream/asset-groups": {"path:account_id"},
+		"GET /accounts/:account_id/upstream/assets":       {"path:account_id"},
 	}
 	declared := map[string]bool{}
 	for _, r := range m.Routes {
 		if r.Scope != "admin" {
 			t.Errorf("route %s %s scope = %q; the asset library is administrator-only", r.Method, r.Path, r.Scope)
 		}
+		action := manifest.AccountsRead
 		switch r.Permission {
 		case volcengine.PermAssetsRead:
 			if r.Method != "GET" {
@@ -495,8 +504,13 @@ func TestAssetRoutesAndPages(t *testing.T) {
 			if r.Method == "GET" {
 				t.Errorf("route %s %s is a read behind the manage permission", r.Method, r.Path)
 			}
+			action = manifest.AccountsUpdate
 		default:
 			t.Errorf("route %s %s permission = %q", r.Method, r.Path, r.Permission)
+		}
+		want := &manifest.RouteAccounts{Action: action, From: accountFrom[r.Method+" "+r.Path]}
+		if !reflect.DeepEqual(r.Accounts, want) {
+			t.Errorf("route %s %s accounts = %+v, want %+v", r.Method, r.Path, r.Accounts, want)
 		}
 		declared[r.Method+" "+r.Path] = true
 	}
