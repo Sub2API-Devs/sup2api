@@ -48,6 +48,7 @@ type wsLimits struct {
 	pingTimeout  time.Duration // a ping unanswered this long closes that connection
 	maxPerKey    int           // open sessions per API key, cluster-wide
 	slotWait     time.Duration // later turns wait this long for the account
+	auth         time.Duration // re-authenticating the key before a turn
 	drainGrace   time.Duration // a turn in progress when draining starts
 	handshake    time.Duration // upstream dial and handshake
 	writeTimeout time.Duration // one message to a slow peer
@@ -56,7 +57,7 @@ type wsLimits struct {
 }
 
 func defaultWSLimits() wsLimits {
-	return wsLimits{ping: 30 * time.Second, pingTimeout: 30 * time.Second, maxPerKey: 64, slotWait: 10 * time.Second,
+	return wsLimits{ping: 30 * time.Second, pingTimeout: 30 * time.Second, maxPerKey: 64, slotWait: 10 * time.Second, auth: 10 * time.Second,
 		drainGrace: 30 * time.Second, handshake: 30 * time.Second, writeTimeout: time.Minute, upstreamRead: 64 << 20,
 		drainPoll: 500 * time.Millisecond}
 }
@@ -234,7 +235,13 @@ func (s *wsSession) run(ctx context.Context) {
 				return
 			}
 			asked = true
-			if e, code := s.refresh(sctx); e != nil {
+			// The message is checked first: one that cannot start a turn
+			// costs no key lookup.
+			e, code := wsMessageError(m.data), websocket.StatusCode(0)
+			if e == nil {
+				e, code = s.refresh(sctx)
+			}
+			if e != nil {
 				s.sendError(sctx, e)
 				if code == 0 {
 					resetIdle(s.g.ws.idle)
@@ -396,7 +403,11 @@ func (s *wsSession) sendError(ctx context.Context, e *gwError) {
 // recorded for a turn refused here, as for a request that fails to
 // authenticate on HTTP.
 func (s *wsSession) refresh(ctx context.Context) (e *gwError, closeCode websocket.StatusCode) {
-	p, err := s.g.d.Auth.Authenticate(core.WithClientIP(ctx, s.ip), s.key)
+	// The session context has no deadline; a key store that hangs must not
+	// stop the session loop (pings, drain, the client closing).
+	actx, cancel := context.WithTimeout(core.WithClientIP(ctx, s.ip), s.g.ws.auth)
+	p, err := s.g.d.Auth.Authenticate(actx, s.key)
+	cancel()
 	if err != nil {
 		e = fromCore(core.AsError(err), "")
 		if e.Status == http.StatusUnauthorized || e.Status == http.StatusForbidden {
@@ -428,7 +439,28 @@ func (s *wsSession) newCall(body []byte) *call {
 	return cl
 }
 
-// begin starts a turn, or answers why it cannot run and records that.
+// wsMessageError answers why a client message cannot start a turn: it is not
+// a JSON object within the shape limits, or not a response.create.
+func wsMessageError(data []byte) *gwError {
+	shape := scanJSONShape(data)
+	if shape.tooDeep {
+		return jsonShapeError(shape, "message")
+	}
+	if !utf8.Valid(data) || !gjson.ValidBytes(data) || !gjson.ParseBytes(data).IsObject() {
+		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code, Message: "message is not a JSON object"}
+	}
+	if e := jsonShapeError(shape, "message"); e != nil {
+		return e
+	}
+	if typ := gjson.GetBytes(data, "type").String(); typ != "response.create" {
+		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
+			Message: "unsupported message type " + strconvQuote(typ) + ": only response.create is accepted"}
+	}
+	return nil
+}
+
+// begin starts a turn for a message wsMessageError accepted, or answers why
+// it cannot run and records that.
 // fatal means the upstream connection broke and the session must end.
 func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bool) {
 	reject := func(cl *call, e *gwError) (*wsTurn, bool) {
@@ -438,20 +470,6 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		}
 		s.sendError(ctx, e)
 		return nil, false
-	}
-	shape := scanJSONShape(m.data)
-	if shape.tooDeep {
-		return reject(nil, jsonShapeError(shape, "message"))
-	}
-	if !utf8.Valid(m.data) || !gjson.ValidBytes(m.data) || !gjson.ParseBytes(m.data).IsObject() {
-		return reject(nil, &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code, Message: "message is not a JSON object"})
-	}
-	if e := jsonShapeError(shape, "message"); e != nil {
-		return reject(nil, e)
-	}
-	if typ := gjson.GetBytes(m.data, "type").String(); typ != "response.create" {
-		return reject(nil, &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
-			Message: "unsupported message type " + strconvQuote(typ) + ": only response.create is accepted"})
 	}
 	cl := s.newCall(m.data)
 	if e := cl.checkModel(ctx); e != nil {

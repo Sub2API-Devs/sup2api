@@ -171,7 +171,11 @@ func (h *Handler) serveAPI(c *gin.Context) {
 	case "admin", "user":
 		// Access keys never reach plugins (their keys cannot hold plugin.*);
 		// a route without a permission matches nothing and is denied.
-		if !httpapi.Authenticate(c, h.tokens) || !httpapi.RejectAccessKey(c) ||
+		if !httpapi.Authenticate(c, h.tokens) {
+			return
+		}
+		httpapi.StampAuthzVersion(c, h.authz)
+		if !httpapi.RejectAccessKey(c) ||
 			!httpapi.CanAny(c, h.authz, manifest.PermissionKey(key, chosen.Route.Permission)) {
 			return
 		}

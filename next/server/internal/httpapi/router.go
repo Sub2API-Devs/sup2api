@@ -91,7 +91,7 @@ func (r *Router) Group() *gin.RouterGroup { return r.api }
 func (r *Router) auth() []gin.HandlerFunc {
 	chain := []gin.HandlerFunc{func(c *gin.Context) {
 		if Authenticate(c, r.tokens) {
-			r.stampAuthzVersion(c)
+			StampAuthzVersion(c, r.authz)
 			c.Next()
 		}
 	}}
@@ -109,10 +109,11 @@ func (r *Router) auth() []gin.HandlerFunc {
 // authenticated response of the console API.
 const HeaderAuthzVersion = "X-Authz-Version"
 
-// stampAuthzVersion sets HeaderAuthzVersion when the authorizer tells its
-// version.
-func (r *Router) stampAuthzVersion(c *gin.Context) {
-	if v, ok := r.authz.(core.AuthzVersioner); ok {
+// StampAuthzVersion sets HeaderAuthzVersion when the authorizer tells its
+// version. Router does it for its routes; a handler that authenticates by
+// itself (the plugin route proxy) calls it after Authenticate.
+func StampAuthzVersion(c *gin.Context, authz core.Authorizer) {
+	if v, ok := authz.(core.AuthzVersioner); ok {
 		c.Header(HeaderAuthzVersion, strconv.FormatInt(v.Version(), 10))
 	}
 }

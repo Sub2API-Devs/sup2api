@@ -939,3 +939,19 @@ func TestWebSocketAuthUnavailableFailsOnlyTheTurn(t *testing.T) {
 		t.Fatalf("session did not survive: keys %v messages %d", keys, len(msgs))
 	}
 }
+
+// A message that cannot start a turn is refused before the key is looked up.
+func TestWebSocketInvalidMessageSkipsAuthentication(t *testing.T) {
+	e := newWSEnv(t)
+	c := e.mustDial()
+	e.auth.change(func(a *fakeAuth) { a.err = core.ErrUnavailable.WithMessage("key store unavailable") })
+	c.send(map[string]any{"type": "session.update"})
+	if ev := c.until("error"); ev[0].Get("status").Int() != 400 {
+		t.Fatalf("invalid message: %v", ev)
+	}
+	e.noRecord()
+	e.auth.change(func(a *fakeAuth) { a.err = nil })
+	if r := e.turn(c, "next"); !r.Success {
+		t.Fatalf("turn after the invalid message: %+v", r)
+	}
+}

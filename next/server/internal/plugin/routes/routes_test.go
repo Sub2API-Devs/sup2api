@@ -80,6 +80,7 @@ func (authz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
 }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
+func (authz) Version() int64                                  { return 42 }
 func (authz) CanActOn(context.Context, int64, []string) error { return nil }
 
 func setup(t *testing.T, opts ...routes.Option) (*gin.Engine, *echo, *registry.Registry, *registry.Package) {
@@ -170,11 +171,16 @@ func TestPluginAPIRoutes(t *testing.T) {
 		t.Fatal("plugin responses must be sandboxed")
 	}
 
-	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "", ""); w.Code != 401 {
-		t.Fatalf("no token: %d", w.Code)
+	// Authenticated answers carry the authz version like the core's own.
+	if got := w.Header().Get(httpapi.HeaderAuthzVersion); got != "42" {
+		t.Fatalf("%s = %q", httpapi.HeaderAuthzVersion, got)
 	}
-	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "nobody", ""); w.Code != 403 {
-		t.Fatalf("no permission: %d", w.Code)
+
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "", ""); w.Code != 401 || w.Header().Get(httpapi.HeaderAuthzVersion) != "" {
+		t.Fatalf("no token: %d %v", w.Code, w.Header())
+	}
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "nobody", ""); w.Code != 403 || w.Header().Get(httpapi.HeaderAuthzVersion) != "42" {
+		t.Fatalf("no permission: %d %v", w.Code, w.Header())
 	}
 	// Access keys are refused outright, even one holding the permission.
 	h.last = nil
@@ -188,7 +194,7 @@ func TestPluginAPIRoutes(t *testing.T) {
 		t.Fatalf("unknown route: %d", w.Code)
 	}
 	// Webhooks need no login.
-	if w := do(e, "POST", "/api/v1/p/demo/hook", "", `{"a":1}`); w.Code != 201 || h.last.GetCaller().GetUserId() != 0 {
+	if w := do(e, "POST", "/api/v1/p/demo/hook", "", `{"a":1}`); w.Code != 201 || h.last.GetCaller().GetUserId() != 0 || w.Header().Get(httpapi.HeaderAuthzVersion) != "" {
 		t.Fatalf("webhook: %d", w.Code)
 	}
 	// Body limit.
