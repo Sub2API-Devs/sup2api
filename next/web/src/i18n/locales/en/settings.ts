@@ -160,6 +160,20 @@ export default {
     minBalanceHint: 'Requests are rejected with 402 when the balance is at or below this value (default 0).',
     bigCost: 'High-cost warning threshold',
     bigCostHint: 'Saving a price that costs more than this for 1M input tokens requires confirmation.',
-    decimalInvalid: 'Enter a number with at most 8 decimals'
+    decimalInvalid: 'Enter a number with at most 8 decimals',
+    disconnectPolicy: 'When the client disconnects mid-response',
+    disconnect: {
+      precharge: 'Bill the pre-charge',
+      continue: 'Finish, then bill',
+      free: 'Do not bill'
+    },
+    disconnectHint: {
+      precharge: 'Stops the upstream request at once and bills the estimate pre-charged before the request.',
+      continue: 'Sends nothing more to the client but reads the upstream response to its end and bills the usage the upstream reports. The account slot stays in use meanwhile; a read that cannot finish is billed the pre-charge estimate. Default.',
+      free: 'Stops the upstream request at once and bills nothing. A client that disconnects after receiving the text pays no output cost, so use this only in internal or trusted environments.'
+    },
+    disconnectWait: 'Keep reading for at most',
+    disconnectWaitHint: 'An upstream response not finished by then is stopped and billed the pre-charge estimate ({min} to {max} seconds, default {default}).',
+    disconnectWaitInvalid: 'Enter an integer between {min} and {max}'
   }
 }

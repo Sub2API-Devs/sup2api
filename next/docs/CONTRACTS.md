@@ -285,7 +285,7 @@
 
 | key | 值 | 默认 |
 |---|---|---|
-| `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd}` | `reject`、`"0"`、`"10"` |
+| `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd, client_disconnect_policy, client_disconnect_wait_seconds}`（后两项见 §25.8） | `reject`、`"0"`、`"10"`、`continue`、120 |
 | `sticky` | `{enabled, default_ttl_seconds, keep_on_account_disabled}` | `true`、3600、`false` |
 | `gateway` | `{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}` | 3、2000、300 |
 | `auto_disable` | `{enabled, status_codes, keywords}`（§42.2） | `true`、`"401"`、new-api 的 7 条关键词 |
@@ -2057,6 +2057,23 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 **日志**：Unimplemented 触发本地 tokenizer 回退时，记录 `slog.Info("plugin EstimateUsage unimplemented, using local tokenizer", "plugin", pluginKey)`，方便排查。
 
 **客户端在 usage 事件前断开，按预扣估算计费（2026-11-08 审计）**：所有流式协议的 usage 都在流末尾（Anthropic `message_delta`、OpenAI 最后一个 chunk / `response.completed`），此前客户端收完内容再挂断，记录无 usage → `billing_status=free` → 预扣原样退回，输出白送。现在 `UsageRecord.ErrorType=client_canceled` 且上游**已经开始应答**（`call.upstreamResponded`，`forward()` 收到响应、WebSocket 轮次收到第一条上游消息时置位）的请求，按 `precharge()` 保存的估算计费：每项 token 取「响应已报告的数」与「估算」的较大值（估算的输出项即 `output_reserve_tokens`），`Additional`/`Metrics`/`UsageSemantics` 为空时也取估算；`per_request` 价格同样计费；记录 `usage_logs.anomalies.usage_extract = "precharge"`，统计口径与 `reconcile=estimated` 一样算"估算行"。不适用于：排队时就离开（没有上游应答，预扣照旧释放）、端点 `billing=free`、插件自带结算（`Replacement` 或 `Reservation`）、上游错误。单测 `gateway/precharge_cancel_test.go`。
+
+**客户端断开时的计费策略（2026-11-12，设计见 `DESIGN-2026-11-12-CLIENT-DISCONNECT-BILLING.md`）**：上一段的行为成为三种策略之一，由 `settings.billing.client_disconnect_policy` 选择，控制台在「系统设置 → 计费」。适用条件不变（上游已开始应答；排队时离开、端点 `billing=free`、插件自带结算、上游错误都不适用）。
+
+| 取值 | 行为 |
+|---|---|
+| `precharge` | 立即中止上游，按预扣估算计费，即上一段。 |
+| `continue`（默认，2026-11-12 用户决定） | 不再向客户端写，继续把上游响应读完，按上游报告的用量计费；记录仍为 `client_canceled` / 499，`usage_extract` 不写 `precharge`。读不完时按 `precharge` 处理。 |
+| `free` | 立即中止上游，`billable=false`，已报告的 token 仍留在记录里。 |
+
+- **估算与已报告用量的合并改为分侧取值**，取代上一段的「每项取较大值」：输入侧四项（`input`、`cache_read`、`cache_creation`、`cache_creation_1h`）只要响应报告过任意一项就整体采用响应的数，否则整体采用估算；输出取两者较大值。原因：估算把整段提示算作输入，响应把同一段提示的缓存部分算在缓存项下，逐项取较大值在输入不含缓存的协议（Anthropic）上把提示计了两遍。实现 `gateway/pipeline.go` 的 `canceledTokens`。
+- **`continue` 的等待上限** `client_disconnect_wait_seconds`，5–1800，默认 120。到时以 `errDisconnectWaitTimeout` 取消上游。流空闲超时、`relay_timeout_seconds` 照常生效。读取期间请求不退出，账号与 API Key 的并发名额照常占用。
+- **上游请求的 context 不再派生自客户端请求**（`gateway/dispatch.go` 的 `forwardBuilt`）：由 `gateway/disconnect.go` 的 `upstreamDrain` 在客户端 context 结束时取消它，`continue` 且 `forward` 正在转发成功响应时改为启动等待计时器。
+- **`continue` 只覆盖核心直接转发的响应**（`forwardSSE`、`forwardJSON`、`forwardJSONConverted`）。插件 `Execute` 执行的请求、`task.submit`、资源与额度流、WebSocket 不续读，按 `precharge` 处理。
+- 旧的 `billing` 行没有这两个字段，读出默认值，**所以升级后既有部署即按 `continue` 运行**；存储值不在取值集合内时策略取默认值，等待秒数夹到范围内。设置读取失败时网关按 `precharge` 处理。
+- **什么算「读完」**：有输出因客户端已离开而被丢弃，且上游正常结束、没有以流内错误事件收尾。客户端收完最后一个字节才断开的请求没有丢输出，照常记为成功。关停不再等待在途请求时调用 `Gateway.AbandonReads()`（`app/phases.go` 的 `cancelRequests`），续读立即中止，按 `precharge` 处理。
+- 策略经 `core.ClientDisconnectSource` 读取，`billing.Service` 实现；网关拿不到时按 `precharge` 处理。网关包的测试环境同样默认 `precharge`，只有针对 `continue` 的用例显式开启。
+- 测试：`gateway/disconnect_test.go`（三种策略、等待超时、续读中关停的端到端，`canceledTokens`）、`e2e/ac26_client_disconnect_test.go`（整机验收）、`gateway/precharge_cancel_test.go`（判定）、`billing/settings_disconnect_test.go`（设置读写与校验）。
 
 ### 25.9 请求体里重复的对象键与过深嵌套一律拒绝（2026-10-31，团队审核 P1）
 

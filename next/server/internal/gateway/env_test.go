@@ -479,7 +479,20 @@ func (p *fakePlatform) ParseQuotaResponse(context.Context, *pluginv1.ParseQuotaR
 	return nil, status.Error(codes.Unimplemented, "no")
 }
 
-type fakeBalance struct{ broke map[int64]bool }
+type fakeBalance struct {
+	broke map[int64]bool
+	// disconnect is the client_disconnect_policy. Zero is "precharge", not
+	// the product default: a test that drops its client expects the upstream
+	// to stop, and only the tests about "continue" want it kept.
+	disconnect core.ClientDisconnect
+}
+
+func (b *fakeBalance) ClientDisconnect(context.Context) (core.ClientDisconnect, error) {
+	if b.disconnect.Policy == "" {
+		return core.ClientDisconnect{Policy: core.DisconnectPrecharge}, nil
+	}
+	return b.disconnect, nil
+}
 
 func (b *fakeBalance) PreConsumeTokens(context.Context) (int64, error) { return 500, nil }
 func (b *fakeBalance) Precharge(ctx context.Context, r *core.UsageRecord) error {
