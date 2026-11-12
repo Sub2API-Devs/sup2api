@@ -251,5 +251,5 @@
 ## T49 W5-A9：账号动作可见性按行归属判断
 
 - 改动：`account.visibleActions(ctx, row)` 取代列表（`fillActions`）与 `GET /accounts/:id/actions` 里两份相同的过滤：调用者能修改这一行（`core.ScopeOf(core.AccountScope("update"))` 与 `core.Allows(scope, created_by)`）时返回该账号类型的全部动作（声明的动作都要求 `account:update`），否则只返回不要求权限的动作。此前只要持有 `account:own:update`，就对看得到的每个账号都列出动作。无迁移。
-- 影响对象：读全量、改 own 级的用户（`account:read` + `account:own:update`）在别人创建的账号（含 `created_by` 为空的历史账号）上不再看到动作按钮（重新授权、刷新令牌等）；这些按钮此前点了也是 404。自己创建的账号、持有 `account:update` 的用户（admin、operator）不变。`GET /accounts/:id/actions` 的 `actions` 在没有可见动作时仍是 `[]`。
+- 影响对象：读全量、改 own 级的用户（`account:read` + `account:own:update`）在别人创建的账号（含 `created_by` 为空的历史账号）上，列表的 `actions` 字段与 `GET /accounts/:id/actions` 不再返回动作（重新授权、刷新令牌等）；这些动作此前调用也是 404。控制台此前已按行归属隐藏这些菜单项（`accountRowActions.ts` 的 `canUpdate`），界面无变化，变化只对直接调接口或用访问密钥的调用方可见。自己创建的账号、持有 `account:update` 的用户（admin、operator）不变。`GET /accounts/:id/actions` 的 `actions` 在没有可见动作时仍是 `[]`。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。

@@ -24,7 +24,9 @@ type AccountAction struct {
 	PluginKey string `json:"plugin_key"`
 	// AccountType restricts the action to a specific account type; empty means all types of the plugin.
 	AccountType string `json:"account_type,omitempty"`
-	// Permission is the required permission to see and invoke the action.
+	// Permission is what seeing and invoking the action takes: empty for
+	// nothing, otherwise account:update or, on the caller's own accounts,
+	// account:own:update.
 	Permission string `json:"permission,omitempty"`
 }
 
@@ -131,7 +133,7 @@ func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context
 
 // listAccountActions returns the available actions for an account type.
 func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType string) []AccountAction {
-	var actions []AccountAction
+	actions := []AccountAction{}
 	if binding, ok := s.accountType(pluginKey, accountType); ok && binding.Type.Lifecycle != nil {
 		for _, action := range binding.Type.Lifecycle.Actions {
 			actions = append(actions, AccountAction{ID: action.ID, Label: action.Label, Icon: action.Icon, PluginKey: pluginKey, AccountType: accountType, Permission: "account:update"})
@@ -154,22 +156,19 @@ func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType
 	return actions
 }
 
-// visibleActions are the actions of a the caller may invoke: every action
-// when the caller may update that account (its own, or any with the "all"
-// key; declared actions all require account:update), otherwise only the ones
-// that require nothing. Never nil.
+// visibleActions are the actions of account a that the caller may invoke:
+// every action when the caller may update that account (its own, or any with
+// the "all" key; declared actions all require account:update), otherwise
+// only the ones that require nothing. Never nil.
 func (s *Service) visibleActions(ctx context.Context, a *row) []AccountAction {
 	actions := s.listAccountActions(ctx, a.PluginKey, a.Type)
+	if len(actions) == 0 {
+		return actions
+	}
 	if scope, ok := core.ScopeOf(ctx, s.d.Authorizer, core.AccountScope("update")); ok && core.Allows(scope, a.CreatedBy) {
-		return append([]AccountAction{}, actions...)
+		return actions
 	}
-	open := make([]AccountAction, 0, len(actions))
-	for _, action := range actions {
-		if action.Permission == "" {
-			open = append(open, action)
-		}
-	}
-	return open
+	return slices.DeleteFunc(actions, func(action AccountAction) bool { return action.Permission != "" })
 }
 
 // getAccountActions serves GET /accounts/:id/actions: lists available actions for an account.

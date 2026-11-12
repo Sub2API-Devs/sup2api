@@ -32,7 +32,10 @@ func TestAccountActionsFollowRowOwnership(t *testing.T) {
 		}
 		return id
 	}
-	mine, theirs := create("mine", mixed), create("theirs", admin)
+	mine, theirs, legacy := create("mine", mixed), create("theirs", admin), create("legacy", admin)
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE accounts SET created_by = NULL WHERE id = $1`, legacy); err != nil {
+		t.Fatal(err)
+	}
 
 	// count is the number of actions uid sees on account id, by both routes.
 	count := func(uid, id int64) (detail, list int) {
@@ -62,6 +65,8 @@ func TestAccountActionsFollowRowOwnership(t *testing.T) {
 	}{
 		{"own row of an own-level updater", mixed, mine, 1},
 		{"foreign row of an own-level updater", mixed, theirs, 0},
+		{"row without a creator, own-level updater", mixed, legacy, 0},
+		{"row without a creator, administrator", admin, legacy, 1},
 		{"administrator, own row", admin, theirs, 1},
 		{"administrator, foreign row", admin, mine, 1},
 		{"reader", reader, mine, 0},
@@ -69,5 +74,9 @@ func TestAccountActionsFollowRowOwnership(t *testing.T) {
 		if detail, list := count(tc.uid, tc.id); detail != tc.want || list != tc.want {
 			t.Errorf("%s: detail %d, list %d, want %d", tc.name, detail, list, tc.want)
 		}
+	}
+	// What is not shown cannot be invoked either.
+	if code, out := e.doAs(mixed, "POST", fmt.Sprintf("/accounts/%d/actions/ccgateway/refresh_auth", theirs), nil); code != 404 {
+		t.Errorf("own-level updater invoked an action on a foreign row: %d %v", code, out)
 	}
 }
