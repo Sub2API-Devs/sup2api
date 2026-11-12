@@ -748,7 +748,7 @@ func (v *validator) userPermissions() {
 	seen := map[string]bool{}
 	for i, up := range v.m.UserPermissions {
 		f := fmt.Sprintf("userPermissions[%d]", i)
-		if !userPermKeyRe.MatchString(up.Key) || len("plugin."+v.m.Key+":"+up.Key) > 150 {
+		if !userPermKeyRe.MatchString(up.Key) || len(manifest.PermissionKey(v.m.Key, up.Key)) > 150 {
 			v.add(f+".key", "invalid_format", "permission key %q must match %s", up.Key, userPermKeyRe.String())
 		} else if seen[up.Key] {
 			v.add(f+".key", "duplicate", "permission %q declared twice", up.Key)

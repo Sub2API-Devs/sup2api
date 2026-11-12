@@ -2,26 +2,13 @@ package authz
 
 import (
 	"context"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
-
-// PluginPermissionKey returns the global key of a plugin permission
-// ("plugin.<pluginKey>:<local>"); already-prefixed keys are returned as is.
-func PluginPermissionKey(pluginKey, local string) string {
-	prefix := PluginModule(pluginKey) + ":"
-	if strings.HasPrefix(local, prefix) {
-		return local
-	}
-	return prefix + local
-}
-
-// PluginModule returns the module name of a plugin's permissions.
-func PluginModule(pluginKey string) string { return "plugin." + pluginKey }
 
 // SyncPlugin implements core.PermissionCatalog. New permissions are inserted
 // with status active; existing ones keep their status and role grants.
@@ -33,15 +20,15 @@ func (s *Service) SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, d
 	if err != nil {
 		return err
 	}
-	module := PluginModule(pluginKey)
+	module := manifest.PermissionModule(pluginKey)
 	keys := make([]string, 0, len(defs))
 	var newIDs []int64
 	for i, d := range defs {
-		local := strings.TrimPrefix(d.Key, module+":")
-		if local == "" {
+		key := manifest.PermissionKey(pluginKey, d.Key)
+		local, ok := manifest.LocalPermission(pluginKey, key)
+		if !ok {
 			return core.ErrInvalidArgument.WithMessage("empty plugin permission key")
 		}
-		key := module + ":" + local
 		keys = append(keys, key)
 		label := d.Label
 		if label.Get("en") == "" {

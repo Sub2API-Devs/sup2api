@@ -57,7 +57,7 @@ func (a *API) uiPlugins(c *gin.Context) {
 		if m == nil || m.UI == nil {
 			continue
 		}
-		allowed := func(perm string) bool { return perm == "" || ps.Has(install.PermissionKey(p.Key, perm)) }
+		allowed := func(perm string) bool { return perm == "" || ps.Has(manifest.PermissionKey(p.Key, perm)) }
 		item := UIPlugin{Key: p.Key, Version: p.Version, Name: core.LocalizedText(m.Name), AssetBase: p.AssetBase,
 			Menus: []manifest.Menu{}, Pages: map[string]manifest.Page{}, Slots: []manifest.Slot{}, AccountActions: []manifest.AccountAction{},
 			Trust: p.Trust, HostUICompat: m.HostUICompat}

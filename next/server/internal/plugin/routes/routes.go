@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
@@ -176,7 +177,7 @@ func (h *Handler) serveAPI(c *gin.Context) {
 		userID = uid
 		ctx = core.WithUserID(ctx, uid)
 		if perm := chosen.Route.Permission; perm != "" {
-			full := "plugin." + key + ":" + perm
+			full := manifest.PermissionKey(key, perm)
 			if h.authz == nil {
 				httpapi.Fail(c, core.ErrPermissionDenied)
 				return

@@ -138,6 +138,17 @@ export function useHost(): HostContext {
   return ctx
 }
 
+/**
+ * RBAC key of a plugin-local permission: "plugin.<pluginKey>:<local>". An
+ * already qualified key of the same plugin is returned as is; an empty local
+ * key gives "" (callers then deny). Mirrors manifest.PermissionKey on the server.
+ */
+export function pluginPermissionKey(pluginKey: string, local: string): string {
+  const prefix = `plugin.${pluginKey}:`
+  const rest = local.startsWith(prefix) ? local.slice(prefix.length) : local
+  return rest ? prefix + rest : ''
+}
+
 export function createPluginHost(
   base: HostContext,
   plugin: PluginHost['plugin'],
@@ -152,7 +163,10 @@ export function createPluginHost(
     asset: (path: string) => plugin.assetBase.replace(/\/$/, '') + '/' + path.replace(/^\//, ''),
     t: (key, params) => base.i18n.t(`${ns}.${key}`, params),
     addMessages: messages => base.i18n.addMessages(ns, messages),
-    can: perm => base.permissions.has(`plugin.${plugin.key}:${perm}`)
+    can: perm => {
+      const key = pluginPermissionKey(plugin.key, perm)
+      return key !== '' && base.permissions.has(key)
+    }
   }
 }
 

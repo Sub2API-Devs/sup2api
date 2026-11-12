@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
@@ -397,7 +398,7 @@ func (h *hostServer) qualify(perm string) string {
 	}
 	for _, up := range h.i.pkg.Manifest.UserPermissions {
 		if up.Key == perm {
-			return "plugin." + h.key() + ":" + perm
+			return manifest.PermissionKey(h.key(), perm)
 		}
 	}
 	return perm

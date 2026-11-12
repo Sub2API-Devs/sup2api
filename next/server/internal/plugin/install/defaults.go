@@ -44,18 +44,13 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 	return nil
 }
 
-// PermissionKey returns the RBAC key of a plugin-local permission.
-func PermissionKey(pluginKey, local string) string {
-	return "plugin." + pluginKey + ":" + local
-}
-
 // PermissionDefs converts manifest userPermissions into catalog entries.
 func PermissionDefs(m *manifest.Manifest) []core.PermissionDef {
 	defs := make([]core.PermissionDef, 0, len(m.UserPermissions))
 	for i, up := range m.UserPermissions {
 		defs = append(defs, core.PermissionDef{
-			Key:         PermissionKey(m.Key, up.Key),
-			Module:      "plugin." + m.Key,
+			Key:         manifest.PermissionKey(m.Key, up.Key),
+			Module:      manifest.PermissionModule(m.Key),
 			Label:       core.LocalizedText(up.Label),
 			Description: core.LocalizedText(up.Description),
 			Sensitive:   up.Sensitive,

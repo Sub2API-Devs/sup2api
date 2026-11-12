@@ -388,7 +388,7 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 	}
 	perms := make([]string, 0, len(m.UserPermissions))
 	for _, up := range m.UserPermissions {
-		perms = append(perms, PermissionKey(m.Key, up.Key))
+		perms = append(perms, manifest.PermissionKey(m.Key, up.Key))
 	}
 	var existing []string
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM permissions WHERE key = ANY($1)`, perms).Scan(&existing); err != nil {

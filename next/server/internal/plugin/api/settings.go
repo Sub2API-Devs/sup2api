@@ -60,7 +60,7 @@ func (a *API) settingsForm(c *gin.Context, key, corePerm string) (*SettingsView,
 		f = m.UI.Settings
 	}
 	if f != nil && f.Permission != "" {
-		v.Permission = install.PermissionKey(key, f.Permission)
+		v.Permission = manifest.PermissionKey(key, f.Permission)
 	}
 	if !httpapi.CanAny(c, a.d.Authz, corePerm, v.Permission) {
 		return nil, false
