@@ -151,7 +151,6 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/accounts/param-override/preview", s.previewParamOverride, "account:create", "account:own:create", "account:update", "account:own:update")
 	r.PermAny("GET", "/accounts/stats", s.getAccountStats, "account:read", "account:own:read")
 	r.PermAny("GET", "/accounts/:id/stats", s.getAccountStats, "account:read", "account:own:read")
-	r.Perm("POST", "/system/ccgateway/connect", "settings:manage", s.connectCCGateway)
 	// Re-authorizing a Claude Code account (CONTRACTS §49.17), next to the
 	// ccgateway module's /system/ccgateway/accounts/:id/:action.
 	reauth := perm.Strings(ccgReauthKeys.Keys())

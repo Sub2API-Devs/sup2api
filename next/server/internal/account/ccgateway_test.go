@@ -67,10 +67,10 @@ func (e *env) withCCGateway(runtimes bool, ctl http.HandlerFunc) *ccgateway.Serv
 	return ccg
 }
 
-// TestConnectCCGatewayWithAccountRuntimes: with per-account runtimes the
-// shared /admin/status check is skipped, the account is created with its
-// proxy and its runtime is prepared at once (CONTRACTS §49.6).
-func TestConnectCCGatewayWithAccountRuntimes(t *testing.T) {
+// TestCreateCCGatewayAccountPreparesRuntime: with per-account runtimes no
+// shared /admin/status is asked, the account is created with its proxy and
+// its runtime is prepared at once (CONTRACTS §49.1).
+func TestCreateCCGatewayAccountPreparesRuntime(t *testing.T) {
 	e := setup(t)
 	var mu sync.Mutex
 	var paths []string
@@ -93,9 +93,10 @@ func TestConnectCCGatewayWithAccountRuntimes(t *testing.T) {
 	go ccg.Run(ctx)
 	pid := e.exec1(`INSERT INTO proxies(name,protocol,host,port) VALUES('ccg','http','proxy.example',3128) RETURNING id`)
 
-	code, out := e.do("POST", "/system/ccgateway/connect", map[string]any{"name": "cc-1", "proxy_id": pid})
+	code, out := e.do("POST", "/accounts", map[string]any{"name": "cc-1", "plugin_key": "ccgateway", "type": "managed",
+		"credentials": map[string]any{}, "proxy_id": pid})
 	if code != 201 {
-		t.Fatalf("connect: %d %v", code, out)
+		t.Fatalf("create: %d %v", code, out)
 	}
 	d := out["data"].(map[string]any)
 	id := int64(d["id"].(float64))
@@ -292,16 +293,15 @@ func TestDisabledAccountAndProxyKeepCCGatewayRuntime(t *testing.T) {
 	}
 }
 
-// TestConnectCCGatewaySharedNeedsAuthorization keeps the shared-container
-// behaviour: an unauthorized shared CCGateway refuses to connect.
-func TestConnectCCGatewaySharedNeedsAuthorization(t *testing.T) {
+// TestConnectCCGatewayRouteRemoved: accounts are created through POST
+// /accounts only; the connect shortcut, which created them at a level its
+// route key did not grant, is gone.
+func TestConnectCCGatewayRouteRemoved(t *testing.T) {
 	e := setup(t)
-	e.withCCGateway(false, func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"healthy":true,"logged_in":false}`))
-	})
-	code, out := e.do("POST", "/system/ccgateway/connect", map[string]any{"name": "cc-shared"})
-	if code != 503 {
-		t.Fatalf("connect to an unauthorized shared CCGateway: %d %v", code, out)
+	e.withCCGateway(true, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{}`)) })
+	code, out := e.do("POST", "/system/ccgateway/connect", map[string]any{"name": "cc"})
+	if code != 404 {
+		t.Fatalf("connect: %d %v", code, out)
 	}
 	var n int
 	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM accounts WHERE plugin_key='ccgateway'`).Scan(&n); err != nil || n != 0 {

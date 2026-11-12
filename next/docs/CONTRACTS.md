@@ -2608,7 +2608,7 @@ volcengine 0.12.2 的两个表单同时用 `ui:section` 把素材库字段归入
 
 ### 41.5 Claude Code 连接为账号
 
-`POST /system/ccgateway/connect` 新增可选 `model_mapping: {from: to}`，与 `models` 一起原样交给创建账号（校验同 §18）；请求体上限由 8 KiB 提高到 512 KiB，以容纳 500 个模型与 500 条映射。控制台的连接表单在加载时用 ccgateway `managed` 类型的预设填充模型列表（预设映射现为空，§41.4），两者都可增删。每账号容器模式下的行为见 §49.6。
+（`POST /system/ccgateway/connect` 已在 2026-11-12 删除，见 §49.6；以下为历史。）`POST /system/ccgateway/connect` 新增可选 `model_mapping: {from: to}`，与 `models` 一起原样交给创建账号（校验同 §18）；请求体上限由 8 KiB 提高到 512 KiB，以容纳 500 个模型与 500 条映射。控制台的连接表单在加载时用 ccgateway `managed` 类型的预设填充模型列表（预设映射现为空，§41.4），两者都可增删。每账号容器模式下的行为见 §49.6。
 
 ## 42. 账号自动禁用：全局开关、管理员规则、账号级开关（2026-10-04，用户要求）
 
@@ -3275,13 +3275,9 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 用 `Router.PermAny` 注册（§21.1），key 来自 `ccgateway.RuntimeScope(method)`。只命中 `account:own:*` 时只能操作 `created_by` = 调用者的账号，其余（含不存在、已删除）一律 404，与账号接口的所有权规则一致；归属由 `core.AccountAccess`（账号模块）判断，未注入时这些接口 503。**2026-11-12 权限加固 T38（D15）起不再接受 `settings:read` / `settings:manage`**：按账号的运行环境跟随账号本身的权限，settings 管理员只保留控制器、镜像、默认规则等全局设置（`remote-config`、`remote-*`、`runtime/*`、`runtimes/*`、`cli/:id`、`features`），请求日志查看接口（§64）不变。
 
-### 49.6 `POST /system/ccgateway/connect`
+### 49.6 `POST /system/ccgateway/connect`（已删除）
 
-- 共享容器模式（未开启 `account_runtimes`）不变：先检查共享容器 `/admin/status` 已授权，否则 503 "请先配置并授权 CCGateway"。
-- 每账号容器模式：跳过该检查（控制器上没有这个路径，原来总是 503），直接建 `managed` 账号；创建即 Kick（49.1），返回 201 与账号详情（含 `id`）。之后在账号上授权。
-- 请求体新增可选 `proxy_id` / `proxy_url`（同 `POST /accounts`，§21.4），每账号容器模式下应当提供，否则账号是 `blocked`。
-- 路由仍要求 `settings:manage`，处理函数另查 `account:create`。修正：原来 `create` 按路由命中的 `settings:manage` 判定范围，即使调用者持有 `account:create` 也被当作 own 级（受 §21.3.1 限制，绑定分组要 `group:manage` / `account:group:bind`、无受限设置的类型要 `account:relay`）；现在已核对过 `account:create`，按全部级创建。
-- 共享 CCGateway 未配置或未授权时的 503 现在是英文 message，`details.reason: not_configured`。`connect` 不接受 `ccgateway_runtime`（草稿流程用 `POST /accounts`）。
+2026-11-12 权限加固 T39（D7）删除了这条接口（现在 404）：控制台早已不调用它，而它以 `settings:manage` 注册、再在请求上下文里补一个 `account:create` 去走创建账号的流程，等于伪造路由命中的权限。CCGateway 账号统一用 `POST /accounts {plugin_key:"ccgateway", type:"managed", credentials:{}, proxy_id | proxy_url, …}` 创建（创建即 Kick，§49.1），权限与范围按 §21。共享容器模式的“先检查共享容器已授权”随接口一并删除。
 
 ### 49.7 运行环境 key
 

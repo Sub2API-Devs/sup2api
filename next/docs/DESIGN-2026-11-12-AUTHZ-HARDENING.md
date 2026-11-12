@@ -234,3 +234,9 @@
 - 影响对象：只有 `settings:read` / `settings:manage`、没有账号权限的角色，访问某个账号的运行环境状态、会话、健康、特性预览、请求日志设置，或对其同步、启动、授权、登出、重新授权，由 200 变为 403；控制台里对应按钮隐藏或置灰。需要这些操作的角色要另外授予 `account:read` / `account:update`（或 own 级）。settings 管理员仍可管理控制器、镜像、Worker 升级、清理、保留的运行环境、CLI 管理与默认规则，请求日志查看接口（列表、详情、文件）仍接受 `settings:read` / `settings:manage`。内置 admin、operator 默认同时持有 `account:read`、`account:update`，不受影响。后续任务（T70）不得把 `settings:*` 加回这些路由。
 - 不改（wontfix）：own 级调用者在特性预览里能看到继承值及其来源（分组与全局策略）；`GET health` 会记录运行环境上报的订阅类型、草稿的 `GET status` 会更新 `last_seen_at`（W1-F7）。代码里有注释。
 - 回滚：revert 这个提交（与 review fixes）即可，无迁移、无数据变化。
+
+## T39 W5-A6、D7：删除 /system/ccgateway/connect
+
+- 改动：删除 `POST /system/ccgateway/connect` 的路由与处理函数（连同只为它服务的 `ccgateway.Service.Ready`、请求体上限与 503 文案）。它以 `settings:manage` 注册，再用 `core.WithGranted` 给请求补上 `account:create` 走创建流程，是代码里唯一伪造路由命中权限的地方。控制台不调用它（已 grep 确认，`next/web` 无引用）。原测试改用 `POST /accounts`。CONTRACTS §41.5、§49.6 同步。无迁移。
+- 影响对象：仍调用这条接口的外部脚本收到 404，改用 `POST /accounts {plugin_key:"ccgateway", type:"managed", credentials:{}, …}`（需要 `account:create` 或 `account:own:create`，不再需要 `settings:manage`）。控制台不受影响。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
