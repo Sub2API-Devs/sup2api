@@ -2717,7 +2717,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 
 ### 43.6 授予与操作他人的权限检查
 
-- 授予角色或权限（`CanGrant`）：只能授予自己拥有的权限，否则 403，`details.missing` 列出缺的权限。覆盖 POST `/roles`、PUT `/roles/:id/permissions`、POST `/roles/:id/reset`、POST `/users`（带 role_keys）和 PUT `/users/:id/roles`；后者只检查**新增**的角色所含权限，用户已有的角色不算授予，给自己分配角色同样检查（2026-11-05 修正：之前 POST `/roles` 和 PUT `/users/:id/roles` 没有做这项检查，持 `role:manage` 的运维可以建一个带 `plugin:install` 的角色再分配给自己）。
+- 授予角色或权限（`CanGrant`）：只能授予自己拥有的权限，否则 403，`details.missing` 列出缺的权限。覆盖 POST `/roles`、PUT `/roles/:id/permissions`（只检查**新增**的权限，见下文角色写入口）、POST `/roles/:id/reset`、POST `/users`（带 role_keys）和 PUT `/users/:id/roles`；后者只检查**新增**的角色所含权限，用户已有的角色不算授予，给自己分配角色同样检查（2026-11-05 修正：之前 POST `/roles` 和 PUT `/users/:id/roles` 没有做这项检查，持 `role:manage` 的运维可以建一个带 `plugin:install` 的角色再分配给自己）。
 - 修改、禁用、删除其他用户（`CanActOnUser`、`CanActOn`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。
 - 两类检查都比较超管标志（`core.PermissionSet.Missing`）：缺超管标志时 403 带 `details.superuser = true`。访问密钥收窄后的权限集永远不是超管，所以超管的访问密钥不能授予 `super_admin`（2026-11-12 修正 H1：之前授予检查只比权限 key，超管角色不含 key，带 `role:manage` 的超管密钥可以授予 `super_admin`）。
 - 角色写入口（`editableRole`，2026-11-12 修正 M5）：改名称描述、改权限、重置、删除角色前，先在同一事务里锁住角色行；超级管理员角色对任何人（含超管和系统）都 409；其余角色当前授予的权限（授予视角，不含已移除的）必须是操作者的子集，否则 403 `you cannot change a role with permissions you don't have`。此前持 `role:manage` 的人可以先把权限比自己大的角色削到自己以下，再对持有该角色的用户改密码、禁用，接管账号。改权限因此只需检查新增部分（现有部分已在操作者之内）；重置删掉的权限同样已在操作者之内（C-L2）。
