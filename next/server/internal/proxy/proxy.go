@@ -24,6 +24,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -105,16 +106,17 @@ func New(db *store.DB, cipher *secret.Cipher, bus core.Bus, opts Options) *Servi
 // key or its "own" counterpart (CONTRACTS §21.2); handlers narrow their SQL
 // with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
+	write := perm.Strings(writeScope.Keys())
 	r.PermAny("GET", "/proxies", s.list, "proxy:read", "proxy:own:read")
-	r.PermAny("POST", "/proxies", s.create, "proxy:manage", "proxy:own:manage")
+	r.PermAny("POST", "/proxies", s.create, write...)
 	r.PermAny("GET", "/proxies/:id", s.get, "proxy:read", "proxy:own:read")
 	r.PermAny("GET", "/proxies/:id/location", s.location, "proxy:read", "proxy:own:read")
-	r.PermAny("PATCH", "/proxies/:id", s.update, "proxy:manage", "proxy:own:manage")
-	r.PermAny("DELETE", "/proxies/:id", s.delete, "proxy:manage", "proxy:own:manage")
-	r.PermAny("POST", "/proxies/:id/test", s.test, "proxy:manage", "proxy:own:manage")
+	r.PermAny("PATCH", "/proxies/:id", s.update, write...)
+	r.PermAny("DELETE", "/proxies/:id", s.delete, write...)
+	r.PermAny("POST", "/proxies/:id/test", s.test, write...)
 	// The URL carries the plain-text password: sessions only (CONTRACTS §80).
-	r.SessionOnly().PermAny("POST", "/proxies/:id/reveal-url", s.revealURL, "proxy:manage", "proxy:own:manage")
-	r.PermAny("POST", "/proxies/probe", s.probeURL, "proxy:manage", "proxy:own:manage")
+	r.SessionOnly().PermAny("POST", "/proxies/:id/reveal-url", s.revealURL, write...)
+	r.PermAny("POST", "/proxies/probe", s.probeURL, write...)
 }
 
 // changeMsg is published on config:changed when a proxy changes.
@@ -164,9 +166,12 @@ func (s *Service) changed(ctx context.Context, id int64) {
 
 // ---------------------------------------------------------------- directory
 
-// newTransport builds an upstream transport for the given proxy URL.
-func newTransport(proxyURL *url.URL) *http.Transport {
-	dialer := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
+// newTransport builds an upstream transport for the given proxy URL. Unless
+// allowPrivate, the dial to the proxy (socks5 included: it goes through
+// DialContext too) is refused when the resolved address is not public, so a
+// host name pointing inside the deployment's network is caught as well.
+func newTransport(proxyURL *url.URL, allowPrivate bool) *http.Transport {
+	dialer := netguard.Dialer(15*time.Second, allowPrivate)
 	tr := &http.Transport{
 		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     true,
@@ -218,13 +223,38 @@ func (s *Service) buildClient(r *row) (*http.Client, error) {
 		return nil, err
 	}
 	// A proxy saved under the own key must not itself be a private address
-	// unless the operator had proxy:manage (CONTRACTS §21.5).
-	if !r.AllowPrivate && !s.opts.AllowPrivate {
-		if netguard.LiteralPrivate(r.Host) {
-			return nil, core.ErrUnavailable.WithMessage("proxy address is private and not allowed")
-		}
+	// unless the operator had proxy:manage (CONTRACTS §43.3): a literal
+	// address fails here, a name resolving to one fails when dialing.
+	allowPrivate := r.AllowPrivate || s.opts.AllowPrivate
+	if !allowPrivate && netguard.LiteralPrivate(r.Host) {
+		return nil, core.ErrUnavailable.WithMessage("proxy address is private and not allowed")
 	}
-	return &http.Client{Transport: newTransport(u)}, nil
+	return &http.Client{Transport: newTransport(u, allowPrivate)}, nil
+}
+
+// writeScope is the write range of proxies; every write route is registered
+// with its keys.
+var writeScope = perm.Pair("proxy:manage", "proxy:own:manage")
+
+// checkPrivate decides whether a proxy at host may be written in scope (nil =
+// proxy:manage): only the full key may save a private address, and only rows
+// it writes are stored with allow_private (CONTRACTS §43.3).
+func (s *Service) checkPrivate(ctx context.Context, scope *int64, host string) (allowPrivate bool, err error) {
+	if scope != nil && !s.opts.AllowPrivate && netguard.LiteralPrivate(host) {
+		return false, core.ErrPermissionDenied.WithMessage(t(ctx,
+			"saving a proxy at a private address requires proxy:manage",
+			"保存私网地址代理需要 proxy:manage 权限")).
+			WithDetails(map[string]any{"permission": "proxy:manage"})
+	}
+	return scope == nil, nil
+}
+
+// privateScope is the write range of a route registered with writeScope,
+// together with checkPrivate's answer for host.
+func (s *Service) privateScope(ctx context.Context, host string) (scope *int64, allowPrivate bool, err error) {
+	scope = core.OwnerScopeOf(ctx, writeScope)
+	allowPrivate, err = s.checkPrivate(ctx, scope, host)
+	return scope, allowPrivate, err
 }
 
 // HTTPClient returns the client for proxyID; nil means a direct connection.
@@ -537,26 +567,10 @@ func (s *Service) create(c *gin.Context) {
 	if in.Status != nil {
 		status = *in.Status
 	}
-	// Only proxy:manage (not proxy:own:manage) may save a proxy at a private
-	// address (CONTRACTS §21.5).
-	allowPriv := s.opts.AllowPrivate
-	if !allowPriv {
-		granted := httpapi.Granted(c)
-		hasManage := false
-		for _, k := range granted {
-			if k == "proxy:manage" {
-				hasManage = true
-				break
-			}
-		}
-		if !hasManage && netguard.LiteralPrivate(*in.Host) {
-			httpapi.Fail(c, core.ErrPermissionDenied.WithMessage(t(ctx,
-				"saving a proxy at a private address requires proxy:manage",
-				"保存私网地址代理需要 proxy:manage 权限")).
-				WithDetails(map[string]any{"permission": "proxy:manage"}))
-			return
-		}
-		allowPriv = hasManage
+	_, allowPriv, err := s.privateScope(ctx, *in.Host)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
 	}
 	uid, _ := core.UserID(ctx)
 	var id int64
@@ -601,7 +615,18 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	scope := core.OwnerScope(ctx, "proxy:manage")
+	scope := core.OwnerScopeOf(ctx, writeScope)
+	// A new host is judged like a new proxy; allow_private follows whoever
+	// set the host last.
+	var allowPriv *bool
+	if in.Host != nil {
+		ok, err := s.checkPrivate(ctx, scope, *in.Host)
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		allowPriv = &ok
+	}
 	uid, _ := core.UserID(ctx)
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE proxies p SET
@@ -612,9 +637,10 @@ func (s *Service) update(c *gin.Context) {
 			username = COALESCE($6, username),
 			password_enc = CASE WHEN $7 THEN $8 ELSE password_enc END,
 			status = COALESCE($9, status),
+			allow_private = COALESCE($11, allow_private),
 			updated_at = clock_timestamp()
 			WHERE p.id = $1 AND `+scoped("$10"),
-			id, in.Name, in.Protocol, in.Host, in.Port, in.Username, in.Password != nil, enc, in.Status, scope)
+			id, in.Name, in.Protocol, in.Host, in.Port, in.Username, in.Password != nil, enc, in.Status, scope, allowPriv)
 		if err != nil {
 			return err
 		}
@@ -646,7 +672,7 @@ func (s *Service) delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	scope := core.OwnerScope(ctx, "proxy:manage")
+	scope := core.OwnerScopeOf(ctx, writeScope)
 	uid, _ := core.UserID(ctx)
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		// Visibility first: a proxy outside the caller's range is 404 even
@@ -694,7 +720,7 @@ func (s *Service) revealURL(c *gin.Context) {
 	}
 	var r row
 	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
-		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScope(ctx, "proxy:manage")).
+		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScopeOf(ctx, writeScope)).
 		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))
@@ -734,7 +760,7 @@ func (s *Service) test(c *gin.Context) {
 	}
 	var r row
 	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc, p.allow_private FROM proxies p
-		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScope(ctx, "proxy:manage")).
+		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScopeOf(ctx, writeScope)).
 		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc, &r.AllowPrivate)
 	if store.IsNoRows(err) {
 		httpapi.Fail(c, notFound(ctx))

@@ -1140,7 +1140,7 @@ type ProxyResolver interface {
 ```
 
 - 权限：调用者须有 `proxy:manage` 或 `proxy:own:manage`，否则 403 `permission_denied`（`details.permission = "proxy:own:manage"`）。由账号模块用 `Authorizer.Can` 判断（`FindOrCreate` 不查权限）；权限、解析都在调用插件校验凭证之前做，`account.Deps.Resolver` 为空时 `proxy_url` 返回 501 `unsupported`。
-- 可见范围 `scope`：有 `proxy:read` 为全部（`nil`），否则为自己创建的（`proxy:own:read` 或 `proxy:own:manage`，传 `&uid`）。由账号模块算好传入。同一套范围也用于校验 `proxy_id`（自己级账号 key 时）：没有任何代理 key 的调用者给出任何 `proxy_id` 都是 `proxy_id/not_found`；全部级账号 key（`account:create` / `account:update`）的调用者 `proxy_id` 只要存在即可。
+- 匹配范围 `scope`：代理的**写范围**（2026-11-12 权限加固 T30 起；此前按读范围）：有 `proxy:manage` 为全部（`nil`），只有 `proxy:own:manage` 为自己创建的（传 `&uid`）。由账号模块用 `core.ScopeOf` 与权限判断一次算好传入；`POST /proxies/probe` 带 `save` 时同样传写范围。新建的行 `allow_private = (scope == nil)`（§43.3）。校验 `proxy_id` 用的是另一套可见范围（自己级账号 key 时）：有 `proxy:read` 为全部，`proxy:own:read` 或 `proxy:own:manage` 为自己创建的；没有任何代理 key 的调用者给出任何 `proxy_id` 都是 `proxy_id/not_found`；全部级账号 key（`account:create` / `account:update`）的调用者 `proxy_id` 只要存在即可。
 - 匹配键 = `protocol, host（小写）, port, username, password` 全等；`name`、`status` 不参与。SQL 按 `protocol = $1 AND lower(host) = $2 AND port = $3 AND username = $4` 加 `(password_enc IS NULL) = <输入密码是否为空>` 与范围条件预筛，`ORDER BY id`，候选逐条解密后 `subtle.ConstantTimeCompare` 比密码（解不开的行跳过）。**跳过 `status=disabled` 的代理**。命中多条取 id 最小的。
 - 未命中则新建：`name` = `<protocol>://<host>:<port>`（IPv6 host 带方括号；超长按 rune 截断到 100），`status=active`，`created_by` = `ownerID`。
 - 查找 + 创建与账号写入在**同一事务**，`FindOrCreate` 先 `SELECT pg_advisory_xact_lock(hashtext(protocol||'|'||host||'|'||port||'|'||username))`（不含密码）防并发重复。
@@ -1149,7 +1149,7 @@ type ProxyResolver interface {
 
 响应：账号对象里 `proxy_id` 为关联结果，创建/修改响应另带 `proxy_created: true|false`（仅这两个响应，没给 `proxy_url` 时为 `false`；列表、详情没有这个键）。
 
-`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 只做解析，用 `core.ProxyDirectory.HTTPClientFor(ctx context.Context, spec core.ProxySpec) (*http.Client, error)` 临时建客户端（不缓存、不落库、无整体超时，调用方用 ctx 限时并在用完后 `CloseIdleConnections()`）。`HTTPClientFor` 是 `ProxyDirectory` 接口的新方法，所有实现该接口的测试桩都要补上。`account.Deps` 新增 `Authorizer core.Authorizer`（为空时所有额外权限问题都按"无"处理）与 `Resolver core.ProxyResolver`，`app.go` 用 authz 服务与代理服务组装。
+`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 同样要求 `proxy:manage` 或 `proxy:own:manage`（否则 403，`details.permission = "proxy:own:manage"`；T30 起），只做解析，用 `core.ProxyDirectory.HTTPClientFor(ctx context.Context, spec core.ProxySpec) (*http.Client, error)` 临时建客户端（不缓存、不落库、无整体超时，调用方用 ctx 限时并在用完后 `CloseIdleConnections()`）。`HTTPClientFor` 是 `ProxyDirectory` 接口的新方法，所有实现该接口的测试桩都要补上。`account.Deps` 新增 `Authorizer core.Authorizer`（为空时所有额外权限问题都按"无"处理）与 `Resolver core.ProxyResolver`，`app.go` 用 authz 服务与代理服务组装。
 
 ### 21.5 控制台
 
@@ -2693,7 +2693,9 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 只有持 `proxy:manage` 的用户能把代理保存在私网地址（存为 `allow_private = true`）。只持 `proxy:own:manage` 时：
   - 保存私网地址 → 403，`details.permission = "proxy:manage"`；
   - 保存账号时自动关联代理（§21.5）遇到私网地址同样拒绝。
-- 使用代理时，`allow_private = false` 的代理指向私网地址 → 不可用。
+- `PATCH /proxies/:id` 带 `host` 时按新建判断：只持 `proxy:own:manage` 改成私网地址 → 403；成功时 `allow_private` 跟随本次修改者（`proxy:manage` 为 `true`，否则 `false`）。不带 `host` 时不变。
+- `POST /proxies/probe`：只持 `proxy:own:manage` 探测私网地址 → 403；带 `save` 时按调用者的写范围查找或创建（`proxy:manage` 可复用他人的代理，新建的行 `allow_private = true`）。
+- 使用代理时，`allow_private = false` 的代理指向私网地址 → 不可用。字面私网地址在建客户端时拒绝；域名在**拨号时**按解析后的 IP 判断（`netguard.Dialer`，socks5 同样经过），指向私网、回环、链路本地地址的连接失败（`netguard.ErrPrivate`）。`proxy_url` 的临时客户端（`HTTPClientFor`）与 own 范围的探测同样在拨号时检查。
 - `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true`（只用于测试）关闭以上检查。
 
 ### 43.4 出站地址检查统一到 `netguard`

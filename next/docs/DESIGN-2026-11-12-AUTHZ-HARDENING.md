@@ -196,3 +196,14 @@
   - 回滚到旧版本后，用旧版本给第二个用户授予 `super_admin` 会被 0098 的触发器拒绝，旧版本返回 500（日志 23505 `only one user may hold the super admin role`），数据不变式成立。
 - 待确认（不改代码）：0097 按决策 3、T13 做存量等价迁移，生产 operator 得到 `assign_custom = true` 与 {operator, user}，宽于决策 5 的新库默认（operator = supplier、user）。生产 operator 目前 0 个持有者。若上线即按决策 5，超管执行 `POST /roles/<operator id>/reset`（同时恢复默认权限与默认可分配清单），或在 T55 一并收紧。
 - 回滚：revert 对应提交即可，无迁移、无数据变化。
+
+## T30 M3、W1-F4、W1-F8、W1-F9：代理拨号守卫与代理写范围收敛
+
+- 改动：`proxy.newTransport(proxyURL, allowPrivate)` 改用 `netguard.Dialer`，连接代理时按解析后的 IP 拒绝私网、回环、链路本地地址（socks5 同样经过）；已存代理用 `allow_private || AllowPrivateUpstream`，`proxy_url` 的临时客户端只看 `AllowPrivateUpstream`，探测按调用者的写范围。`proxy.checkPrivate` / `privateScope` 成为“能否写私网代理、是否存 `allow_private`”的唯一判断（新建、修改、探测、`FindOrCreate` 共用），写路由用同一个 `writeScope`（`proxy:manage` / `proxy:own:manage`）注册。`PATCH /proxies/:id` 带 `host` 时按新建判断并同步 `allow_private`。探测保存改用写范围（此前按 `proxy:read` 判断，而这条路由不会匹配它，管理员被当成 own）。账号的 `proxy_url` 用 `core.ScopeOf` 一次得到“是否允许 + 写范围”；`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 走同一个 `parseProxyURL`。CONTRACTS §21.4、§43.3 同步。无迁移。
+- 影响对象：
+  - `AllowPrivateUpstream` 关闭（生产默认）时，`allow_private = false` 的代理（own 级建的，或 0027 之后经 `proxy_url` 自动建的）如果域名解析到内网地址，测试与实际请求由成功变为失败。升级前可查 `SELECT id, name, host FROM proxies WHERE NOT allow_private` 并逐个确认解析结果；确需保留的由持 `proxy:manage` 的人 `PATCH /proxies/:id {host}` 原样重存一次即可（存为 `allow_private = true`）。
+  - 只持 `proxy:own:manage` 把自己的代理改到私网地址由成功变为 403；own 级改 `host` 会把 `allow_private` 置回 `false`。
+  - 探测保存：`proxy:manage` 现在能复用他人的代理并存为 `allow_private = true`（此前会另建一行、`allow_private = false`）。
+  - 账号 `proxy_url`：有 `proxy:read` 但只有 `proxy:own:manage` 的用户不再匹配他人的代理（另建自己的行），建出的行 `allow_private = false`；有 `proxy:manage` 而没有 `proxy:read` 的用户反过来能匹配全部。
+  - 没有任何代理写权限的用户在 `models/fetch` 带 `proxy_url` 由成功变为 403（`details.permission = "proxy:own:manage"`）；`proxy_id` 不受影响。
+- 回滚：revert 这个提交（与 review fixes）即可，无迁移；期间由 PATCH 改写的 `allow_private` 保留，旧代码按其现值使用。

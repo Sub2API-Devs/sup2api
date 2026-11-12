@@ -378,6 +378,35 @@ func TestProxyURL(t *testing.T) {
 		t.Fatalf("admin save: %v", ad)
 	}
 
+	// proxy_url is resolved in the proxy write range: proxy:read widens
+	// neither the rows it matches nor allow_private of the row it creates.
+	dave := e.addUser("dave@x.com")
+	authz.keys[dave] = append([]string{"proxy:read"}, supplierKeys...)
+	d1 := e.createAs(dave, "d1", map[string]any{"proxy_url": url1})
+	if d1["proxy_created"] != true {
+		t.Fatalf("own-level writer with proxy:read reused another user's proxy: %v", d1)
+	}
+	allowPrivate := func(id any) (v bool) {
+		t.Helper()
+		if err := e.db.Pool.QueryRow(ctx, `SELECT allow_private FROM proxies WHERE id = $1`, int64(id.(float64))).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	if allowPrivate(d1["proxy_id"]) {
+		t.Fatal("proxy created under proxy:own:manage has allow_private")
+	}
+	ad2 := e.createAs(admin, "ad2", map[string]any{"proxy_url": "http://manage.example:8080"})
+	if ad2["proxy_created"] != true || !allowPrivate(ad2["proxy_id"]) {
+		t.Fatalf("proxy created under proxy:manage: %v", ad2)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `DELETE FROM accounts WHERE id = ANY($1)`, []int64{int64(d1["id"].(float64)), int64(ad2["id"].(float64))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `DELETE FROM proxies WHERE id = ANY($1)`, []int64{int64(d1["proxy_id"].(float64)), int64(ad2["proxy_id"].(float64))}); err != nil {
+		t.Fatal(err)
+	}
+
 	// PATCH: a new address creates and relinks; the audit lists proxy_url.
 	own := fmt.Sprintf("/accounts/%d", a1ID)
 	code, out := e.doAs(alice, "PATCH", own, map[string]any{"proxy_url": "http://Proxy.Example:3128"})
@@ -455,11 +484,15 @@ func TestProxyURL(t *testing.T) {
 	}
 
 	// Type models/fetch with proxy_url goes through the address without
-	// creating a proxy; no proxy key is needed for that.
+	// creating a proxy; it takes a proxy write key like saving one.
 	host, port, hits := forwardProxy(t)
 	before := proxies()
 	fetch := map[string]any{"credentials": map[string]any{"api_key": "sk-good-key-123"}, "proxy_url": fmt.Sprintf("http://%s:%d", host, port)}
 	code, out = e.doAs(carol, "POST", "/account-types/anthropic/apikey/models/fetch", fetch)
+	if code != 403 || permission(out) != "proxy:own:manage" || hits.Load() != 0 {
+		t.Fatalf("fetch through proxy_url without a proxy key: %d %v hits=%d", code, out, hits.Load())
+	}
+	code, out = e.doAs(alice, "POST", "/account-types/anthropic/apikey/models/fetch", fetch)
 	if code != 200 || len(data(out)["models"].([]any)) != 2 || hits.Load() == 0 || proxies() != before {
 		t.Fatalf("fetch through proxy_url: %d %v hits=%d proxies=%d", code, out, hits.Load(), proxies())
 	}

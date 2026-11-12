@@ -23,6 +23,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
@@ -1116,8 +1117,9 @@ func statusPayload(id int64, pluginKey, typ, name, status, reason string, until 
 	return p
 }
 
-// proxyByURL is a proxy_url accepted for saving: the parsed address and the
-// range FindOrCreate may match in (CONTRACTS §21.4).
+// proxyByURL is a proxy_url the caller may use: the parsed address and the
+// caller's proxy write range, which FindOrCreate matches in and which
+// decides allow_private of a row it creates (CONTRACTS §21.4).
 type proxyByURL struct {
 	spec  core.ProxySpec
 	scope *int64
@@ -1128,17 +1130,15 @@ type proxyByURL struct {
 // permission_denied (details.permission = proxy:own:manage) or the
 // invalid_argument of core.ParseProxyURL (never echoing the address).
 func (s *Service) parseProxyURL(ctx context.Context, raw string) (*proxyByURL, error) {
-	if s.d.Resolver == nil {
-		return nil, core.ErrUnsupported.WithMessage("proxy_url is not supported")
-	}
-	if !core.Can(ctx, s.d.Authorizer, "proxy:manage") && !core.Can(ctx, s.d.Authorizer, "proxy:own:manage") {
+	scope, ok := core.ScopeOf(ctx, s.d.Authorizer, perm.Pair("proxy:manage", "proxy:own:manage"))
+	if !ok {
 		return nil, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "proxy:own:manage"})
 	}
 	spec, err := core.ParseProxyURL(raw)
 	if err != nil {
 		return nil, err
 	}
-	return &proxyByURL{spec: spec, scope: s.proxyRangeOf(ctx).scope}, nil
+	return &proxyByURL{spec: spec, scope: scope}, nil
 }
 
 // resolveProxy runs FindOrCreate for a proxy_url inside the account's
@@ -1174,6 +1174,9 @@ func (s *Service) resolveWriteRefs(ctx context.Context, in *input, perm string) 
 		return nil, nil, nil, err
 	}
 	if in.ProxyURL != nil {
+		if s.d.Resolver == nil {
+			return nil, nil, nil, core.ErrUnsupported.WithMessage("proxy_url is not supported")
+		}
 		if byURL, err = s.parseProxyURL(ctx, *in.ProxyURL); err != nil {
 			return nil, nil, nil, err
 		}
