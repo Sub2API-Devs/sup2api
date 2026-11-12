@@ -152,7 +152,7 @@ export default {
     codeLabel: 'Full authorization code (code#state)', codePlaceholder: 'Paste the code, like xxxx#yyyy', codeShape: 'The code normally contains # (code#state); make sure you copied all of it.', submit: 'Complete authorization',
     completeFailed: 'The authorization code was not accepted', notConfirmed: 'The code was accepted, but the container has not confirmed the login yet; retry shortly or request a new link.', regetLink: 'Request a new link', cancel: 'Cancel this authorization',
     authorized: 'Credentials saved', loggedOut: 'No saved credentials', authorizedToast: 'Claude credentials saved', authorizedDraftHint: 'The account can now be saved.', reauthorize: 'Re-authorize',
-    readOnly: 'Starting the container and authorizing need the right to edit this account (or settings:manage); ask an administrator.', noRead: 'You may not view the container state of this account.', noCreate: 'Starting the container needs the right to create accounts (or settings:manage); ask an administrator.',
+    readOnly: 'Starting the container and authorizing need the right to edit this account; ask an administrator.', noRead: 'You may not view the container state of this account.', noCreate: 'Starting the container needs the right to create accounts (or settings:manage); ask an administrator.',
     saveBlocked: 'The account can be saved once Claude is authorized', saveBlockedFix: 'Show the authorization steps',
     blockedTitle: 'Account container stopped: {reason}', blockedUnknown: 'the core stopped this container',
     blocked: { pickProxy: 'Pick a proxy' },

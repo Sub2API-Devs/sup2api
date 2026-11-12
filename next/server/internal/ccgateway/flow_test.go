@@ -21,7 +21,6 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -73,7 +72,7 @@ type fixtureAccess struct {
 }
 
 func (a fixtureAccess) AccountsInScope(ctx context.Context, uid int64, action string, ids []int64) (bool, []int64, error) {
-	scope, ok := core.ScopeOf(core.WithUserID(ctx, uid), a.az, perm.Pair(perm.Key("account:"+action), perm.Key("account:own:"+action)))
+	scope, ok := core.ScopeOf(core.WithUserID(ctx, uid), a.az, core.AccountScope(action))
 	if !ok {
 		return false, nil, core.AccountsDenied(action)
 	}

@@ -30,7 +30,7 @@
 - **迁移 0061** `ccgateway_account_request_logs(account_id bigint PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE, level text NOT NULL CHECK (level IN ('off','summary','full')), full_until timestamptz, updated_at timestamptz NOT NULL DEFAULT now(), updated_by bigint)`，`CHECK ((level='full') = (full_until IS NOT NULL))`。迁移须可重跑（CONTRACTS §43.7）。
 - **配置**：`Config.RequestLogs *RequestLogDefault {Level string}`，保存时只接受 `off|summary`；缺省视为 `summary`。改动走现有配置保存与缓存失效。
 - **下发**：`attachPolicy` 组装策略头时填 `request_log` = 生效级别（第 1 节）。账号设置走请求路径缓存（同 `requestAccountFeatures` 的 readThrough + 失效），保存后立刻失效；`full_until` 到期在组装时判断，不依赖缓存刷新。账号测试（probe）同样下发。
-- **接口** `GET/PUT /system/ccgateway/accounts/:id/request-logs`（权限不变：`settings:manage` 或该账号编辑权限，`settings:read`/`account:read` 可读）：
+- **接口** `GET/PUT /system/ccgateway/accounts/:id/request-logs`（2026-11-12 权限加固 T36/T38 起：GET `account:read` / 本人 `account:own:read`，PUT 只认 `account:update`，不再接受 `settings:*`；此前为 `settings:manage` 或该账号编辑权限，`settings:read`/`account:read` 可读）：
   - GET 返回 `{"setting":{"level":"follow|off|summary|full","full_until":…},"default":"summary","effective":"summary","worker":{…Worker 状态原样：limits、usage、viewer、viewer_search…}}`；Worker 不可达时 `worker` 为 null，其余照常返回。
   - PUT `{"level":"follow"}`（删行）、`{"level":"off"|"summary"}`、`{"level":"full","full_for_hours":1|4|24}` 只写核心表，**不再转发给 Worker**；`{"clear_full":true}`、`{"clear_all":true}` 转发给 Worker。每次修改记审计（级别与到期时间）。
 - **默认规则接口**：随 CCGateway 配置读写（`request_logs.level`），`settings:manage`。

@@ -152,7 +152,7 @@ export default {
     codeLabel: '完整授权码（code#state）', codePlaceholder: '粘贴形如 xxxx#yyyy 的授权码', codeShape: '授权码通常包含 #（code#state），请确认已完整复制。', submit: '完成授权',
     completeFailed: '授权码未被接受', notConfirmed: '授权码已提交，但容器尚未确认登录；请稍后重试或重新获取链接。', regetLink: '重新获取链接', cancel: '取消本次授权',
     authorized: '凭据已保存', loggedOut: '未保存凭据', authorizedToast: 'Claude 凭据已保存', authorizedDraftHint: '现在可以保存账号。', reauthorize: '重新授权',
-    readOnly: '需要编辑该账号的权限（或 settings:manage）才能启动容器和授权，请联系管理员。', noRead: '没有查看该账号容器状态的权限。', noCreate: '需要创建账号的权限（或 settings:manage）才能启动容器，请联系管理员。',
+    readOnly: '需要编辑该账号的权限才能启动容器和授权，请联系管理员。', noRead: '没有查看该账号容器状态的权限。', noCreate: '需要创建账号的权限（或 settings:manage）才能启动容器，请联系管理员。',
     saveBlocked: '完成 Claude 授权后才能保存账号', saveBlockedFix: '查看授权步骤',
     blockedTitle: '账号容器已停止：{reason}', blockedUnknown: '核心停止了该容器',
     blocked: { pickProxy: '去选择代理' },

@@ -13,9 +13,9 @@ import (
 // keys. settings:* opens none of them; it keeps the controller and the
 // images.
 
-// runtimeAction is the account action (core.AccountAccess) a request with
+// accountAction is the account action (core.AccountAccess) a request with
 // method needs.
-func runtimeAction(method string) string {
+func accountAction(method string) string {
 	if method == http.MethodGet {
 		return "read"
 	}
@@ -24,10 +24,7 @@ func runtimeAction(method string) string {
 
 // RuntimeScope is the key range of the per-account runtime endpoints for
 // method; their routes are registered with its keys.
-func RuntimeScope(method string) perm.Scoped {
-	a := runtimeAction(method)
-	return perm.Pair(perm.Key("account:"+a), perm.Key("account:own:"+a))
-}
+func RuntimeScope(method string) perm.Scoped { return core.AccountScope(accountAction(method)) }
 
 var errNoAccountAccess = core.ErrUnavailable.WithMessage("account checks of account runtimes are not configured")
 
@@ -40,5 +37,5 @@ func (s *Service) authorizeAccount(ctx context.Context, method string, id int64)
 		return errNoAccountAccess
 	}
 	uid, _ := core.UserID(ctx)
-	return core.AuthorizeAccounts(ctx, s.Accounts, uid, runtimeAction(method), []int64{id})
+	return core.AuthorizeAccounts(ctx, s.Accounts, uid, accountAction(method), []int64{id})
 }

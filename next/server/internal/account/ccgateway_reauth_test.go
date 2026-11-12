@@ -170,6 +170,12 @@ func TestCCGatewayReauthorize(t *testing.T) {
 		if code, _ := e.doAs(stranger, "POST", "/system/ccgateway/accounts/"+itoa(id)+"/sync", map[string]any{}); code != 404 {
 			t.Fatalf("stranger sync: %d", code)
 		}
+		// The owner and an account reader read its runtime.
+		for _, uid := range []int64{owner, reader} {
+			if code, out := e.doAs(uid, "GET", "/system/ccgateway/accounts/"+itoa(id)+"/request-logs", nil); code != 200 {
+				t.Fatalf("user %d request-logs: %d %v", uid, code, out)
+			}
+		}
 		for i := 0; i < 2; i++ {
 			code, out := e.doAs(owner, "POST", path, map[string]any{"authorization_mode": "fresh"})
 			if code != 200 || out["data"].(map[string]any)["key"] != key || out["data"].(map[string]any)["in_place"] != true {

@@ -105,10 +105,10 @@ func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64
 
 // ---------------------------------------------------------------- re-authorization (CONTRACTS §49.17)
 
-// ccgReauthKeys are the keys of the re-authorization endpoints: those of
+// ccgReauthScope is the key range of the re-authorization endpoints: that of
 // the other per-account runtime writes (the §49.5 rule), account:update for
 // every account, account:own:update for the accounts the caller created.
-var ccgReauthKeys = ccgateway.RuntimeScope(http.MethodPost)
+var ccgReauthScope = ccgateway.RuntimeScope(http.MethodPost)
 
 // ccgReauthAccount loads the CCGateway account of a re-authorization
 // request; ok=false after the failure was written.
@@ -116,7 +116,7 @@ func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int6
 	if id, ok = httpapi.PathID(c, "id"); !ok {
 		return 0, nil, false
 	}
-	scope = core.OwnerScopeOf(ctx, ccgReauthKeys)
+	scope = core.OwnerScopeOf(ctx, ccgReauthScope)
 	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)

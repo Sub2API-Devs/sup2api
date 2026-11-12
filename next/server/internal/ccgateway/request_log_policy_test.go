@@ -302,13 +302,13 @@ func TestRequestLogsPermissions(t *testing.T) {
 	f.auth.keys[updater] = []string{"account:update"}
 	settings := f.user("settings@test")
 	f.auth.keys[settings] = []string{"settings:read", "settings:manage"}
-	for _, method := range []string{"GET", "PUT"} {
-		code, out := f.callAs(settings, method, 1, "request-logs", `{"level":"off"}`)
-		require.Equal(t, 403, code, out)
-	}
 	id := f.account(false)
 	_, err := f.db.Pool.Exec(context.Background(), "UPDATE accounts SET created_by=$1 WHERE id=$2", owner, id)
 	require.NoError(t, err)
+	for _, method := range []string{"GET", "PUT"} {
+		code, out := f.callAs(settings, method, id, "request-logs", `{"level":"off"}`)
+		require.Equal(t, 403, code, out)
+	}
 	code, out := f.callAs(owner, "PUT", id, "request-logs", `{"level":"off"}`)
 	require.Equal(t, 403, code, out)
 	code, out = f.callAs(owner, "GET", id, "request-logs", "")
