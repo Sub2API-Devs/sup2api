@@ -272,6 +272,19 @@ describe('account runtime debug log levels', () => {
     }
   })
 
+  it('leaves an own-level caller the level as read only, without the clear action', async () => {
+    mocks.granted = ['account:own:read', 'account:own:update']
+    try {
+      worker(leveled({ usage: { summary_bytes: MIB, full_bytes: 3 * MIB, requests: 9 } }))
+      const w = await render()
+      const inputs = w.get('[data-testid="request-log-level-25"]').findAll('input')
+      expect(inputs.length).toBeGreaterThan(0)
+      expect(inputs.every(i => i.element.disabled)).toBe(true)
+      expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+      w.unmount()
+    } finally { mocks.granted = null }
+  })
+
   it('deletes the full content with clear_full after confirmation', async () => {
     worker(leveled({ usage: { summary_bytes: MIB, full_bytes: 3 * MIB, requests: 9 } }))
     mocks.put.mockResolvedValue(leveled({ usage: { summary_bytes: MIB, full_bytes: 0, requests: 9 } }))
@@ -628,17 +641,6 @@ describe('account runtime actions of an own-level caller', () => {
     expect([shown('ccgateway-runtime-start-25'), shown('ccgateway-runtime-refresh-25')]).toEqual([true, true])
     expect([shown('ccgateway-runtime-start-26'), shown('ccgateway-runtime-refresh-26')]).toEqual([false, false])
     expect(w.findAll('[data-testid="ccgateway-runtime-edit"]')).toHaveLength(2)
-    w.unmount()
-  })
-
-  it('cannot change the request logs, not even of its own rows', async () => {
-    const w = mount(AccountRuntimes, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
-    await flushPromises()
-    const toggle = w.get('[data-testid="request-logs-25"]')
-    expect(toggle.attributes('disabled') ?? toggle.attributes('aria-disabled')).toBeDefined()
-    await toggle.trigger('click')
-    await flushPromises()
-    expect(mocks.put).not.toHaveBeenCalled()
     w.unmount()
   })
 })

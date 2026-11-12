@@ -93,7 +93,7 @@ const auth = useAuthStore()
 /** Bumped by reload(): the retained list below reloads with the table. */
 const retainedRevision = ref(0)
 const own = useOwnership()
-// Changing a row (log level, start, re-authorization) takes update on that row, as the core checks.
+// Changing a row (start, re-authorization) takes update on that row, as the core checks.
 const canUpdateRow = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KEYS.update)
 // Changing or clearing the request logs is not an own-level action: the core takes these keys only.
 const canLogs = computed(() => auth.has(['settings:manage', 'account:update']))

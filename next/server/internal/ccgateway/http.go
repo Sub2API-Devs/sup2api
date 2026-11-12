@@ -30,13 +30,13 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// update that account (own level: accounts it created), CONTRACTS §49.5.
 	r.PermAny("GET", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:read", "account:read", "account:own:read")
 	r.PermAny("POST", "/system/ccgateway/accounts/:id/:action", s.accountManage, "settings:manage", "account:update", "account:own:update")
+	// PUT only sets the request logs, which is not an own-level action.
 	r.PermAny("PUT", "/system/ccgateway/accounts/:id/:action", func(c *gin.Context) {
 		if c.Param("action") != "request-logs" {
 			httpapi.Fail(c, core.ErrNotFound)
 			return
 		}
 		s.accountManage(c)
-		// Request log settings are not an own-level action: no own key.
 	}, "settings:manage", "account:update")
 	// Reading the request logs (REQUEST-LOG-VIEWER-DESIGN.md §6).
 	s.registerRequestLogViewer(r)

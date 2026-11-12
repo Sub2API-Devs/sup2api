@@ -4738,7 +4738,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 默认规则：`GET /system/ccgateway/remote-config`（`settings:read`）返回 `"request_logs":{"level":"summary"}`（总是给出生效的默认值，可为 `full`）；`PUT …/remote-config`（`settings:manage`）可带 `"request_logs":{"level":"off"|"summary"|"full"}`，省略保持原值；空串、其他值或未知键（含 `full_for_hours`/`full_until`：默认的 `full` 不带时长）400。
 
-账号：`GET/PUT /system/ccgateway/accounts/:id/request-logs`（权限不变：GET `settings:read`/`account:read`/本人 `account:own:read`；PUT 只认 `settings:manage`/`account:update`，不接受 `account:own:update`（2026-11-12 权限加固 T36；此前本人级可改自己账号的）；GET 的本人级只能到自己创建的账号，否则 404）。GET 与 PUT 成功都返回同一形状：
+账号：`GET/PUT /system/ccgateway/accounts/:id/request-logs`（GET `settings:read`/`account:read`/本人 `account:own:read`；PUT 只认 `settings:manage`/`account:update`，不接受 `account:own:update`（2026-11-12 权限加固 T36；此前本人级可改自己账号的）；GET 的本人级只能到自己创建的账号，否则 404）。GET 与 PUT 成功都返回同一形状：
 
 ```json
 {"setting":{"level":"full","full_until":"2026-10-26T16:00:00Z"},
