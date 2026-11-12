@@ -4,6 +4,18 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-12 核心 **0.1.283**（`beb06edbb`，develop 头；北京时间 22:16–22:25；计划 `1d71581aa3ab9a0409676bd24760cf2c` rolling-v1 completed，22:16:13→22:25:12 约 9 分钟，没有暂停，两节点轮流让出（先 ccp 后 ovh），ovh 3130 和 api.prophey.ai `/readyz` 全程 200；stop 等在途请求排空 ccp 约 5 分 5 秒（22:16:33→22:21:39）、ovh 约 2 分 44 秒（22:22:18→22:25:01）；无核心迁移，schema 仍 `a9befa8c…1e11`；Host API 仍 9）：
+- 内容（均衡负载去掉“默认”策略，CONTRACTS §89，设计 `next/docs/DESIGN-2026-11-12-BALANCE-DROP-DEFAULT.md`；只改 `next/server/internal/gateway`、`next/web`、`next/docs`）：流量均衡始终开着，开箱即用为“流量 + 会话”；设置行仍写 `mode:"traffic"`（旧核心按它开流量均衡）；旧 default 行（上限负载关）归一为 sessions、model_limits 关，上限负载开的保留原选择；单候选不读用量；控制台去掉策略一行。
+- 发布前核对：ovh 工作树 `~/sup2api/release-0.1.283` 在 `beb06edbb`（origin/develop 头，合并了 `a1e391567`）；自 0.1.282（`8c9b189a2`）起只改了上述目录和 0.1.282 的发布记录；`plugins/`、`runtime-contract`、核心迁移未变（最后一个迁移仍是 0096）。版本号 0.1.283 无人占用。线上 `GET /settings/scheduling` 发布前为 `{"mode":"traffic","metric":"rpm","limit_load":false,"model_limits":true}`，存的是 mode traffic，新核心按原样保留。
+- 构建：`stage/0.1.283/`（纯核心模板，取自 `stage/0.1.282/`，只改 env.sh 与注释）。内置集合与 0.1.282 的 stage 逐字节相同（`diff -r`）。核心 sha256 `fa76ffe5aa668f70bfe88638b62580af683514cb6c71ec03c9e99df90f216fd6`。
+- 测试：`test.sh` 全部通过：server 全量 57 个包、`-race` internal/lookup 与 internal/usage、sdk 15 个包；控制台 `vue-tsc -b` + vitest 239 个文件 1985 条，moderation 界面 16 个文件 167 条，dynweight 界面 4 个文件 50 条。TEST-OK。
+- 清单 `b1d4066abdfe9250aac67cbf84b456eb74e371d8d888ab0a55f8d9798836a1ef`，bundle `bca935310299861109468a774f60e98d078a3b92a37a37b0a1f7616678b68454`，strategy rolling，`source_commit` `beb06edbb`。`release.sh` 只 import（22:15:52）；`--preflight-only` 选中 rolling-v1、无 blocker（22:15:59）后正式执行。没有内置升级。
+- new-api 渠道没有关（用户要求：滚动发布、不去 new-api 停用渠道）；不备份数据库；没有改线上的均衡负载设置。
+- 核验（`~/rel283/`，只读）：两节点 `sub2api version` 0.1.283；10 个插件两节点都 serving、ready、restarts 0，没有 pending；两入口 `/readyz` 200；`sched.py`：`GET /settings/scheduling` 仍为 traffic、rpm、limit_load false、model_limits true。两节点核心日志自 22:16 起没有 ERROR，只有让出时的 “offload started” 和重启时的 “local core unreachable; recovering from the persisted route”（各 1 次）。`errs.sh`：发布前 21:45–22:16 共 1537 次（都在 ccp），5xx 14（都是 529 上游过载）、499 0；发布中 22:16–22:26 共 398 次（ovh 267、ccp 131），没有错误；发布后 22:26–22:30 共 126 次（都在 ccp，与发布前一样），没有错误。
+- 回滚：导入 0.1.282 的清单 `cdf610c638516268648261379bb8ad8499c9f57bf3bafbee060ba43b22c493f2` 建反向计划（schema 相同，走 rolling；建计划前先 `--preflight-only` 确认选中 rolling-v1）。这次没有写任何新结构；回滚后旧核心读到的仍是 mode traffic 的设置行，行为与发布前相同。
+- 脚本 `stage/0.1.283/`；工作树 `~/sup2api/release-0.1.283`；观察与核验脚本、输出在 `~/rel283/`。
+
+
 2026-11-12 核心 **0.1.282**（`8c9b189a2`，develop 头；北京时间 21:04–21:15；计划 `e555ce2b8e30833702e9d8777aa678b8` rolling-v1 completed，21:04:31→21:14:51 约 10 分 20 秒，没有暂停，两节点轮流让出（先 ccp 后 ovh），ovh 3130 和 api.prophey.ai `/readyz` 全程 200；stop 等在途请求排空 ccp 约 5 分 5 秒（21:04:49→21:09:54）、ovh 约 4 分 7 秒（21:10:32→21:14:39）；无核心迁移，schema 仍 `a9befa8c…1e11`；Host API 仍 9）：
 - 内容（分组定价第二轮复审修复，只改 `next/server`、`next/web`、`next/docs`）：`POST /pricing/quote` 要 `price:read` + `group:read`，带 `user_id` 再要 `user:read`、带 `segment_id` 再要 `segment:read`；试算用量校验 0..1e12；试算价格取自同一快照；结算的待结算输入合并为一处；自定义价缺历史表达式且带附加分项时记 failed；`price_rule_count` 只算分组在售的模型；网关鉴权复用共用 SQL；控制台一批修复（`STable` 不可展开时 `toggleExpand` 空操作等），UI 仍 3.13。
 - 发布前核对：ovh 工作树 `~/sup2api/release-0.1.282` 在 `8c9b189a2`（origin/develop 头）；自 0.1.281（`5b660cce6`）起只改了上述目录和 0.1.281 的发布记录；`plugins/`、`runtime-contract`、核心迁移未变（最后一个迁移仍是 0096）。版本号 0.1.282 无人占用。
