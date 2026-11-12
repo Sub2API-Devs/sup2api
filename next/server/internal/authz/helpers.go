@@ -73,9 +73,10 @@ func (s *Service) canActOnSet(ctx context.Context, actorID int64, target core.Pe
 
 // actorMissing is what want holds beyond the actor's effective set, which
 // its access key narrows and never leaves a superuser. The system (actor 0)
-// misses nothing.
+// misses nothing, and nothing is missed from an empty want, so neither needs
+// the actor's set.
 func (s *Service) actorMissing(ctx context.Context, actorID int64, want core.PermissionSet) (core.Missing, error) {
-	if actorID == 0 {
+	if actorID == 0 || (!want.Superuser && len(want.Keys) == 0) {
 		return core.Missing{}, nil
 	}
 	set, err := s.permissionSetCached(ctx, actorID)
