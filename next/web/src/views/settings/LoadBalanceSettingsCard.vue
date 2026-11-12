@@ -18,8 +18,10 @@ const { form, loading, saving, dirty, errors, isLoaded, load, save, reset } = us
 })
 
 const modes = computed(() => (['default', 'traffic'] as const).map(value => ({ value, label: t(`settings.balance.modes.${value}`) })))
+/** With limit-aware load on, the default strategy picks by the lowered weights. */
+const modeHintKey = computed(() => (form.mode === 'default' && form.limit_load ? 'defaultLimitLoad' : form.mode))
 const metrics = computed(() =>
-  (['rpm', 'concurrency', 'tpm'] as const).map(value => ({ value, label: t(`settings.balance.metrics.${value}`) }))
+  (['rpm', 'concurrency', 'tpm', 'sessions'] as const).map(value => ({ value, label: t(`settings.balance.metrics.${value}`) }))
 )
 /** The metric and balancing by model only matter once something balances. */
 const balanceOff = computed(() => !canManage.value || (form.mode === 'default' && !form.limit_load))
@@ -38,7 +40,7 @@ onMounted(load)
     </template>
     <SSpinner v-if="loading && !isLoaded" block />
     <template v-else>
-      <SSettingRow :label="t('settings.balance.mode')" :description="t(`settings.balance.modeHints.${form.mode}`)" :error="errors.mode">
+      <SSettingRow :label="t('settings.balance.mode')" :description="t(`settings.balance.modeHints.${modeHintKey}`)" :error="errors.mode">
         <SSegmented v-model="form.mode" :options="modes" :disabled="!canManage" data-testid="balance-mode" />
       </SSettingRow>
       <SSettingRow :label="t('settings.balance.limitLoad')" :description="t('settings.balance.limitLoadHint')">
@@ -50,6 +52,7 @@ onMounted(load)
         />
       </SSettingRow>
       <SSettingRow :label="t('settings.balance.metric')" :description="t('settings.balance.metricHint')" :error="errors.metric">
+        <template #details>{{ t('settings.balance.metricDetails') }}</template>
         <SSegmented v-model="form.metric" :options="metrics" :disabled="balanceOff" data-testid="balance-metric" />
       </SSettingRow>
       <SSettingRow :label="t('settings.balance.modelLimits')" :description="t('settings.balance.modelLimitsHint')">
