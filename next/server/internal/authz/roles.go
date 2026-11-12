@@ -31,12 +31,13 @@ type Role struct {
 var roleKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
 
 var (
-	errBuiltinRole      = core.ErrConflict.WithMessage("built-in roles cannot be deleted")
-	errNotBuiltinRole   = core.ErrConflict.WithMessage("only built-in roles can be reset")
-	errSuperuserPerms   = core.ErrConflict.WithMessage("the permissions of the super admin role cannot be changed")
-	errLastSuperAdmin   = core.ErrConflict.WithMessage("the last super admin cannot be removed")
-	errOwnSuperAdmin    = core.ErrConflict.WithMessage("you cannot revoke your own super admin role")
-	errSuperuserGrantor = core.ErrPermissionDenied.WithMessage("only a super admin can grant or revoke the super admin role")
+	errRoleNotFound        = core.ErrNotFound.WithMessage("role not found")
+	errBuiltinRole         = core.ErrConflict.WithMessage("built-in roles cannot be deleted")
+	errNotBuiltinRole      = core.ErrConflict.WithMessage("only built-in roles can be reset")
+	errSuperuserRoleFrozen = core.ErrConflict.WithMessage("the super admin role cannot be changed")
+	errLastSuperAdmin      = core.ErrConflict.WithMessage("the last super admin cannot be removed")
+	errOwnSuperAdmin       = core.ErrConflict.WithMessage("you cannot revoke your own super admin role")
+	errSuperuserGrantor    = core.ErrPermissionDenied.WithMessage("only a super admin can grant or revoke the super admin role")
 )
 
 const roleSelect = `
@@ -88,9 +89,34 @@ func (s *Service) GetRole(ctx context.Context, id int64) (*Role, error) {
 func (s *Service) getRole(ctx context.Context, q store.Querier, id int64) (*Role, error) {
 	r, err := scanRole(q.QueryRow(ctx, roleSelect+` WHERE r.id = $1`, id))
 	if store.IsNoRows(err) {
-		return nil, core.ErrNotFound.WithMessage("role not found")
+		return nil, errRoleNotFound
 	}
 	return r, err
+}
+
+// editableRole locks role id inside tx, which has called Bump, and returns
+// it when actorID may change it: the super admin role is frozen for everyone
+// (name, description, permissions, reset, delete), and any other role must be
+// within the actor's grantSet (canActOnRole, M5: an actor who could weaken a
+// role above it could then act on that role's holders). The system (actor 0)
+// passes. Every role write goes through it.
+func (s *Service) editableRole(ctx context.Context, tx pgx.Tx, actorID, id int64) (*Role, error) {
+	r, err := scanRole(tx.QueryRow(ctx, roleSelect+` WHERE r.id = $1 FOR UPDATE OF r`, id))
+	switch {
+	case store.IsNoRows(err):
+		return nil, errRoleNotFound
+	case err != nil:
+		return nil, err
+	case r.Superuser:
+		return nil, errSuperuserRoleFrozen
+	case actorID == 0:
+		return r, nil
+	}
+	cur, err := s.RolesPermissions(ctx, tx, []string{r.Key})
+	if err != nil {
+		return nil, err
+	}
+	return r, s.covers(ctx, tx, actorID, cur, cannotActOnRole(ctx))
 }
 
 // CreateRoleInput is the body of POST /roles.
@@ -102,7 +128,8 @@ type CreateRoleInput struct {
 }
 
 // CreateRole creates a custom (non-superuser) role. The actor must hold all
-// permissions being granted, as for SetRolePermissions (CONTRACTS §43.6).
+// permissions being granted, as for SetRolePermissions (CONTRACTS §43.6),
+// checked inside the transaction after Bump.
 func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleInput) (*Role, error) {
 	var fields []core.FieldError
 	if !roleKeyRe.MatchString(in.Key) {
@@ -117,12 +144,16 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 	if in.Description == nil {
 		in.Description = core.LocalizedText{}
 	}
-	if err := s.CanGrant(ctx, actorID, in.PermissionKeys); err != nil {
-		return nil, err
-	}
 	var id int64
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `INSERT INTO roles (key, name, description) VALUES ($1, $2, $3) RETURNING id`,
+		keys, ids, err := resolvePermissions(ctx, tx, in.PermissionKeys)
+		if err != nil {
+			return err
+		}
+		if err := s.covers(ctx, tx, actorID, core.PermissionSetOf(keys...), cannotGrant(ctx)); err != nil {
+			return err
+		}
+		err = tx.QueryRow(ctx, `INSERT INTO roles (key, name, description) VALUES ($1, $2, $3) RETURNING id`,
 			in.Key, in.Name, in.Description).Scan(&id)
 		if store.IsUniqueViolation(err, "") {
 			return core.ErrConflict.WithMessage("role key already exists")
@@ -130,7 +161,10 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 		if err != nil {
 			return err
 		}
-		return s.setRolePermissions(ctx, tx, id, in.PermissionKeys)
+		if err := setRolePermissions(ctx, tx, id, ids); err != nil {
+			return err
+		}
+		return s.audit(ctx, tx, actorID, "role.create", "role", id, map[string]any{"key": in.Key, "permission_keys": keys})
 	})
 	if err != nil {
 		return nil, err
@@ -144,21 +178,21 @@ type UpdateRoleInput struct {
 	Description core.LocalizedText `json:"description"`
 }
 
-// UpdateRole changes name/description (built-in roles included).
-func (s *Service) UpdateRole(ctx context.Context, id int64, in UpdateRoleInput) (*Role, error) {
+// UpdateRole changes name/description of a role actorID may edit
+// (editableRole; built-in roles included).
+func (s *Service) UpdateRole(ctx context.Context, actorID, id int64, in UpdateRoleInput) (*Role, error) {
 	if in.Name != nil && in.Name.Get("en") == "" {
 		return nil, core.InvalidFields(core.FieldError{Field: "name", Code: "required", Message: "name is required"})
 	}
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE roles SET name = COALESCE($2, name), description = COALESCE($3, description), updated_at = now() WHERE id = $1`,
-			id, nilIfEmpty(in.Name), nilIfEmpty(in.Description))
-		if err != nil {
+		if _, err := s.editableRole(ctx, tx, actorID, id); err != nil {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
-			return core.ErrNotFound.WithMessage("role not found")
+		if _, err := tx.Exec(ctx, `UPDATE roles SET name = COALESCE($2, name), description = COALESCE($3, description), updated_at = now() WHERE id = $1`,
+			id, nilIfEmpty(in.Name), nilIfEmpty(in.Description)); err != nil {
+			return err
 		}
-		return nil
+		return s.audit(ctx, tx, actorID, "role.update", "role", id, in)
 	})
 	if err != nil {
 		return nil, err
@@ -173,63 +207,58 @@ func nilIfEmpty(t core.LocalizedText) any {
 	return t
 }
 
-// DeleteRole deletes a custom role (its assignments cascade).
-func (s *Service) DeleteRole(ctx context.Context, id int64) error {
+// DeleteRole deletes a custom role actorID may edit (editableRole); its
+// assignments cascade.
+func (s *Service) DeleteRole(ctx context.Context, actorID, id int64) error {
 	return s.mutate(ctx, func(tx pgx.Tx) error {
-		var builtin bool
-		err := tx.QueryRow(ctx, `SELECT builtin FROM roles WHERE id = $1`, id).Scan(&builtin)
-		if store.IsNoRows(err) {
-			return core.ErrNotFound.WithMessage("role not found")
-		}
+		r, err := s.editableRole(ctx, tx, actorID, id)
 		if err != nil {
 			return err
 		}
-		if builtin {
+		if r.Builtin {
 			return errBuiltinRole
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM roles WHERE id = $1`, id)
-		return err
+		if _, err := tx.Exec(ctx, `DELETE FROM roles WHERE id = $1`, id); err != nil {
+			return err
+		}
+		return s.audit(ctx, tx, actorID, "role.delete", "role", id, map[string]any{"key": r.Key})
 	})
 }
 
-// ResetRole restores a built-in role to its defaults: name, description and
-// core permissions. Plugin permissions on the role are left alone, since
-// they are granted per plugin at consent time. The actor must hold every
-// default permission, as for SetRolePermissions.
+// ResetRole restores a built-in role actorID may edit (editableRole) to its
+// defaults: name, description and core permissions. Plugin permissions on
+// the role are left alone, since they are granted per plugin at consent
+// time. The actor must hold every default permission, as for
+// SetRolePermissions; what the reset drops is within the actor already
+// (editableRole), so it cannot weaken a role above the actor (C-L2).
 func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, error) {
-	var key string
-	var builtin bool
-	err := s.db.Pool.QueryRow(ctx, `SELECT key, builtin FROM roles WHERE id = $1`, id).Scan(&key, &builtin)
-	if store.IsNoRows(err) {
-		return nil, core.ErrNotFound.WithMessage("role not found")
-	}
-	if err != nil {
-		return nil, err
-	}
-	def, ok := builtinRoleByKey(key)
-	if !builtin || !ok {
-		return nil, errNotBuiltinRole
-	}
-	keys := def.defaultPermissions()
-	if err := s.CanGrant(ctx, actorID, keys); err != nil {
-		return nil, err
-	}
-	err = s.mutate(ctx, func(tx pgx.Tx) error {
+	err := s.mutate(ctx, func(tx pgx.Tx) error {
+		r, err := s.editableRole(ctx, tx, actorID, id)
+		if err != nil {
+			return err
+		}
+		def, ok := builtinRoleByKey(r.Key)
+		if !r.Builtin || !ok {
+			return errNotBuiltinRole
+		}
+		keys := def.defaultPermissions()
+		if err := s.covers(ctx, tx, actorID, core.PermissionSetOf(keys...), cannotGrant(ctx)); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE roles SET name = $2, description = $3, updated_at = now() WHERE id = $1`,
 			id, def.name, def.description); err != nil {
 			return err
-		}
-		if def.superuser {
-			return nil
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM role_permissions rp USING permissions p
 WHERE rp.role_id = $1 AND p.id = rp.permission_id AND p.source = 'core' AND p.key <> ALL($2)`, id, keys); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id)
+		if _, err := tx.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id)
 SELECT $1, p.id FROM permissions p WHERE p.source = 'core' AND p.status <> 'removed' AND p.key = ANY($2)
-ON CONFLICT DO NOTHING`, id, keys)
-		return err
+ON CONFLICT DO NOTHING`, id, keys); err != nil {
+			return err
+		}
+		return s.audit(ctx, tx, actorID, "role.reset", "role", id, map[string]any{"key": r.Key})
 	})
 	if err != nil {
 		return nil, err
@@ -237,29 +266,32 @@ ON CONFLICT DO NOTHING`, id, keys)
 	return s.GetRole(ctx, id)
 }
 
-// SetRolePermissions replaces the permissions of a (non-superuser) role.
-// The actor must hold all permissions being granted (CONTRACTS §4.1, SEC-H2).
+// SetRolePermissions replaces the permissions of a role actorID may edit
+// (editableRole). The actor must hold the permissions being added (CONTRACTS
+// §4.1, SEC-H2); those the role keeps are within it already. Removed
+// permissions in keys are ignored and their grant rows kept, so a role saves
+// back as listed (P2).
 func (s *Service) SetRolePermissions(ctx context.Context, actorID, id int64, keys []string) (*Role, error) {
-	if err := s.CanGrant(ctx, actorID, keys); err != nil {
-		return nil, err
-	}
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
-		var superuser bool
-		err := tx.QueryRow(ctx, `SELECT superuser FROM roles WHERE id = $1`, id).Scan(&superuser)
-		if store.IsNoRows(err) {
-			return core.ErrNotFound.WithMessage("role not found")
-		}
+		r, err := s.editableRole(ctx, tx, actorID, id)
 		if err != nil {
 			return err
 		}
-		if superuser {
-			return errSuperuserPerms
-		}
-		if err := s.setRolePermissions(ctx, tx, id, keys); err != nil {
+		live, ids, err := resolvePermissions(ctx, tx, keys)
+		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE roles SET updated_at = now() WHERE id = $1`, id)
-		return err
+		added := addedKeys(live, r.PermissionKeys)
+		if err := s.covers(ctx, tx, actorID, core.PermissionSetOf(added...), cannotGrant(ctx)); err != nil {
+			return err
+		}
+		if err := setRolePermissions(ctx, tx, id, ids); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE roles SET updated_at = now() WHERE id = $1`, id); err != nil {
+			return err
+		}
+		return s.audit(ctx, tx, actorID, "role.permissions", "role", id, map[string]any{"permission_keys": live, "added": added})
 	})
 	if err != nil {
 		return nil, err
@@ -267,43 +299,59 @@ func (s *Service) SetRolePermissions(ctx context.Context, actorID, id int64, key
 	return s.GetRole(ctx, id)
 }
 
-func (s *Service) setRolePermissions(ctx context.Context, tx pgx.Tx, roleID int64, keys []string) error {
+// resolvePermissions dedupes keys and resolves them to permission ids,
+// dropping removed permissions. A key that does not exist at all is invalid.
+func resolvePermissions(ctx context.Context, tx pgx.Tx, keys []string) ([]string, []int64, error) {
 	keys = dedupe(keys)
-	rows, err := tx.Query(ctx, `SELECT id, key FROM permissions WHERE key = ANY($1) AND status <> 'removed'`, keys)
+	rows, err := tx.Query(ctx, `SELECT key, id, status = 'removed' FROM permissions WHERE key = ANY($1)`, keys)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	found := map[string]int64{}
+	type perm struct {
+		id      int64
+		removed bool
+	}
+	found := map[string]perm{}
 	for rows.Next() {
-		var id int64
 		var k string
-		if err := rows.Scan(&id, &k); err != nil {
+		var p perm
+		if err := rows.Scan(&k, &p.id, &p.removed); err != nil {
 			rows.Close()
-			return err
+			return nil, nil, err
 		}
-		found[k] = id
+		found[k] = p
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return err
+		return nil, nil, err
 	}
 	var unknown []string
+	kept := make([]string, 0, len(keys))
 	ids := make([]int64, 0, len(keys))
 	for _, k := range keys {
-		id, ok := found[k]
-		if !ok {
+		p, ok := found[k]
+		switch {
+		case !ok:
 			unknown = append(unknown, k)
-			continue
+		case !p.removed:
+			kept = append(kept, k)
+			ids = append(ids, p.id)
 		}
-		ids = append(ids, id)
 	}
 	if len(unknown) > 0 {
-		return core.InvalidFields(core.FieldError{Field: "permission_keys", Code: "unknown", Message: "unknown permissions: " + strings.Join(unknown, ", ")})
+		return nil, nil, core.InvalidFields(core.FieldError{Field: "permission_keys", Code: "unknown", Message: "unknown permissions: " + strings.Join(unknown, ", ")})
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM role_permissions WHERE role_id = $1 AND permission_id <> ALL($2)`, roleID, ids); err != nil {
+	return kept, ids, nil
+}
+
+// setRolePermissions makes ids the role's live permissions. Grant rows of
+// removed permissions stay: they grant nothing, and revive with the key.
+func setRolePermissions(ctx context.Context, tx pgx.Tx, roleID int64, ids []int64) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM role_permissions rp USING permissions p
+WHERE rp.role_id = $1 AND p.id = rp.permission_id AND p.status <> 'removed' AND rp.permission_id <> ALL($2)`, roleID, ids); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, roleID, ids)
+	_, err := tx.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, roleID, ids)
 	return err
 }
 

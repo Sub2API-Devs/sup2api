@@ -273,7 +273,7 @@ func TestResetBuiltinRole(t *testing.T) {
 	}
 
 	// Edit: rename, drop a core permission, add a settings one.
-	if _, err := s.UpdateRole(ctx, opID, UpdateRoleInput{Name: lt("Night shift", "夜班")}); err != nil {
+	if _, err := s.UpdateRole(ctx, root, opID, UpdateRoleInput{Name: lt("Night shift", "夜班")}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SetRolePermissions(ctx, root, opID, []string{"user:read", "settings:manage", "plugin.guard:stats:read"}); err != nil {
@@ -282,8 +282,7 @@ func TestResetBuiltinRole(t *testing.T) {
 	mustCan(t, s, opUser, "settings:manage", true)
 	mustCan(t, s, opUser, "account:update", false)
 
-	// The operator itself lacks settings and plugin permissions: it cannot
-	// reset the admin role to defaults that include them.
+	// The operator holds less than the admin role: it cannot reset it.
 	if _, err := s.ResetRole(ctx, opUser, roleID(t, s, RoleAdmin)); !isCode(err, "permission_denied") {
 		t.Fatalf("operator resets admin: %v", err)
 	}
@@ -302,14 +301,7 @@ func TestResetBuiltinRole(t *testing.T) {
 	mustCan(t, s, opUser, "settings:manage", false)
 	mustCan(t, s, opUser, "account:update", true)
 
-	// super_admin: only name/description; custom roles cannot be reset.
-	suID := roleID(t, s, RoleSuperAdmin)
-	if _, err := s.UpdateRole(ctx, suID, UpdateRoleInput{Name: lt("Root", "根")}); err != nil {
-		t.Fatal(err)
-	}
-	if r, err := s.ResetRole(ctx, root, suID); err != nil || r.Name.Get("zh") != "超级管理员" || !r.Superuser {
-		t.Fatalf("reset super_admin: %+v %v", r, err)
-	}
+	// Custom roles cannot be reset.
 	custom, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "viewer", Name: lt("Viewer", "只读")})
 	if err != nil {
 		t.Fatal(err)
@@ -464,7 +456,7 @@ func TestRoleManagement(t *testing.T) {
 	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
 	admin := addUser(t, s, "admin@x.com", RoleAdmin)
 
-	if err := s.DeleteRole(ctx, roleID(t, s, RoleAdmin)); !isCode(err, "conflict") {
+	if err := s.DeleteRole(ctx, root, roleID(t, s, RoleAdmin)); !isCode(err, "conflict") {
 		t.Fatalf("delete builtin: %v", err)
 	}
 	if _, err := s.SetRolePermissions(ctx, admin, roleID(t, s, RoleSuperAdmin), []string{"user:read"}); !isCode(err, "conflict") {
@@ -487,11 +479,11 @@ func TestRoleManagement(t *testing.T) {
 	mustCan(t, s, uid, "account:test", true)
 	mustCan(t, s, uid, "account:delete", false)
 
-	r, err = s.UpdateRole(ctx, r.ID, UpdateRoleInput{Name: lt("Operators", "运营人员")})
+	r, err = s.UpdateRole(ctx, admin, r.ID, UpdateRoleInput{Name: lt("Operators", "运营人员")})
 	if err != nil || r.Name.Get("zh") != "运营人员" || r.UserCount != 1 {
 		t.Fatalf("update: %+v %v", r, err)
 	}
-	if err := s.DeleteRole(ctx, r.ID); err != nil {
+	if err := s.DeleteRole(ctx, admin, r.ID); err != nil {
 		t.Fatal(err)
 	}
 	mustCan(t, s, uid, "account:test", false)

@@ -99,6 +99,14 @@ func cannotActOn(ctx context.Context, target core.PermissionSet) *core.Error {
 	return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a user with higher privileges", "你不能修改权限更高的用户"))
 }
 
+// cannotActOnRole is the denial of a change to a role granting more than the
+// actor holds (editableRole).
+func cannotActOnRole(ctx context.Context) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"you cannot change a role with permissions you don't have",
+		"你不能修改含有你所没有权限的角色"))
+}
+
 // audit records one audit_logs row of an authz change through q, the
 // change's transaction.
 func (s *Service) audit(ctx context.Context, q store.Querier, actorID int64, action, targetType string, id any, detail any) error {

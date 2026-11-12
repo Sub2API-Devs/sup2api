@@ -77,7 +77,8 @@ func (s *Service) handleUpdateRole(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	role, err := s.UpdateRole(c.Request.Context(), id, in)
+	actorID, _ := core.UserID(c.Request.Context())
+	role, err := s.UpdateRole(c.Request.Context(), actorID, id, in)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -90,7 +91,8 @@ func (s *Service) handleDeleteRole(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := s.DeleteRole(c.Request.Context(), id); err != nil {
+	actorID, _ := core.UserID(c.Request.Context())
+	if err := s.DeleteRole(c.Request.Context(), actorID, id); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
