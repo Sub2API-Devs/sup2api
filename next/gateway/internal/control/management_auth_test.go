@@ -191,6 +191,7 @@ func TestManagementTokenFile(t *testing.T) {
 // The migration switch is visible while it is on: every request served
 // without a token is counted, and /metrics says whether the switch is set.
 func TestTokenlessManagementIsCounted(t *testing.T) {
+	t.Cleanup(func() { tokenlessStats.enabled.Store(false) })
 	token, err := NewManagementToken()
 	if err != nil {
 		t.Fatal(err)
@@ -236,6 +237,7 @@ func TestTokenlessManagementIsCounted(t *testing.T) {
 // Over the management socket: /metrics carries the two series, and the
 // upgrade preflight warns for as long as the switch is on.
 func TestTokenlessManagementWarnsInPreflightAndMetrics(t *testing.T) {
+	t.Cleanup(func() { tokenlessStats.enabled.Store(false) })
 	s, _, _, target := setupEngines(t)
 	token, err := NewManagementToken()
 	if err != nil {

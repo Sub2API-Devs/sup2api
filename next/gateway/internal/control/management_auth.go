@@ -103,7 +103,7 @@ var tokenlessStats struct {
 	accepted atomic.Int64
 }
 
-// tokenlessWarning is the preflight warning of the switch left on.
+// tokenlessWarning is what the upgrade preflight reports while the switch is on.
 const tokenlessWarning = "tokenless management is enabled; clear it once every core sends the token"
 
 // writeTokenlessMetrics writes tokenlessStats in the Prometheus text format.
