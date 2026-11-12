@@ -3,13 +3,17 @@ package grpcruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
+	"slices"
 	"testing"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
@@ -97,5 +101,89 @@ func TestHostAuthzCheckArguments(t *testing.T) {
 	}
 	if _, err := hostEnv(t, Options{}, nil).AuthzCheck(t.Context(), &pluginv1.AuthzCheckRequest{UserId: 7, Permission: "rules:read"}); status.Code(err) != codes.Unavailable {
 		t.Fatalf("no authorizer: %v", err)
+	}
+}
+
+// scopedAccounts adds core.AccountAccess to the account fake and records what
+// it was asked.
+type scopedAccounts struct {
+	*fakeAccounts
+	all     bool
+	allowed []int64
+	err     error
+	asked   []string
+}
+
+func (a *scopedAccounts) AccountsInScope(_ context.Context, uid int64, action string, ids []int64) (bool, []int64, error) {
+	a.asked = append(a.asked, fmt.Sprintf("%d:%s:%v", uid, action, ids))
+	return a.all, a.allowed, a.err
+}
+
+// AccountScopeCheck needs no grant and forwards to core.AccountAccess, the
+// rule the core proxy enforces, with its errors mapped like every core error.
+func TestHostAccountScopeCheckForwards(t *testing.T) {
+	in := &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "update", AccountIds: []int64{3, 1}}
+
+	acc := &scopedAccounts{fakeAccounts: &fakeAccounts{}, allowed: []int64{3}}
+	out, err := hostEnv(t, Options{Accounts: acc}, nil).AccountScopeCheck(t.Context(), in)
+	if err != nil || out.GetAll() || !slices.Equal(out.GetAllowedIds(), []int64{3}) {
+		t.Fatalf("own scope: %v %v", out, err)
+	}
+	if !slices.Equal(acc.asked, []string{"7:update:[3 1]"}) {
+		t.Fatalf("asked %v", acc.asked)
+	}
+
+	acc = &scopedAccounts{fakeAccounts: &fakeAccounts{}, all: true}
+	if out, err := hostEnv(t, Options{Accounts: acc}, nil).AccountScopeCheck(t.Context(), &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "read"}); err != nil || !out.GetAll() || len(out.GetAllowedIds()) != 0 {
+		t.Fatalf("all scope without ids: %v %v", out, err)
+	}
+
+	for name, tc := range map[string]struct {
+		err  error
+		code codes.Code
+	}{
+		"neither account key": {core.AccountsDenied("update"), codes.PermissionDenied},
+		"unknown action":      {core.InvalidFields(core.FieldError{Field: "action", Code: "invalid"}), codes.InvalidArgument},
+		"database failure":    {errors.New("pool closed"), codes.Internal},
+	} {
+		acc := &scopedAccounts{fakeAccounts: &fakeAccounts{}, err: tc.err}
+		if _, err := hostEnv(t, Options{Accounts: acc}, nil).AccountScopeCheck(t.Context(), in); status.Code(err) != tc.code {
+			t.Fatalf("%s: %v, want %v", name, err, tc.code)
+		}
+	}
+}
+
+func TestHostAccountScopeCheckArguments(t *testing.T) {
+	acc := &scopedAccounts{fakeAccounts: &fakeAccounts{}, all: true}
+	h := hostEnv(t, Options{Accounts: acc}, nil)
+	tooMany := make([]int64, manifest.MaxAccountBatch+1)
+	for i := range tooMany {
+		tooMany[i] = int64(i + 1)
+	}
+	for name, in := range map[string]*pluginv1.AccountScopeCheckRequest{
+		"no user":       {Action: "read", AccountIds: []int64{1}},
+		"negative user": {UserId: -1, Action: "read"},
+		"no action":     {UserId: 7, AccountIds: []int64{1}},
+		"zero id":       {UserId: 7, Action: "read", AccountIds: []int64{1, 0}},
+		"negative id":   {UserId: 7, Action: "read", AccountIds: []int64{-2}},
+		"too many ids":  {UserId: 7, Action: "read", AccountIds: tooMany},
+	} {
+		if _, err := h.AccountScopeCheck(t.Context(), in); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if len(acc.asked) != 0 {
+		t.Fatalf("invalid arguments reached the account module: %v", acc.asked)
+	}
+	if _, err := h.AccountScopeCheck(t.Context(), &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "read", AccountIds: tooMany[1:]}); err != nil {
+		t.Fatalf("a full batch: %v", err)
+	}
+
+	// An account module that cannot answer scope questions, or none at all.
+	ok := &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "read"}
+	for name, o := range map[string]Options{"reader only": {Accounts: &fakeAccounts{}}, "none": {}} {
+		if _, err := hostEnv(t, o, nil).AccountScopeCheck(t.Context(), ok); status.Code(err) != codes.Unavailable {
+			t.Fatalf("%s: %v", name, err)
+		}
 	}
 }

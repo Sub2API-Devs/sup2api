@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -396,6 +397,26 @@ func (h *hostServer) AuthzCheck(ctx context.Context, in *pluginv1.AuthzCheckRequ
 		return nil, toStatus(err)
 	}
 	return &pluginv1.AuthzCheckResponse{Allowed: ok}, nil
+}
+
+// AccountScopeCheck answers which accounts a console user may act on. It
+// needs no grant: the answer is core.AccountAccess, the rule the core proxy
+// enforces on plugin routes, and its errors map like every other core error.
+func (h *hostServer) AccountScopeCheck(ctx context.Context, in *pluginv1.AccountScopeCheckRequest) (*pluginv1.AccountScopeCheckResponse, error) {
+	ids := in.GetAccountIds()
+	if in.GetUserId() <= 0 || in.GetAction() == "" || len(ids) > manifest.MaxAccountBatch ||
+		slices.ContainsFunc(ids, func(id int64) bool { return id <= 0 }) {
+		return nil, status.Errorf(codes.InvalidArgument, "user_id, action and at most %d positive account_ids are required", manifest.MaxAccountBatch)
+	}
+	access, ok := h.i.rt.o.Accounts.(core.AccountAccess)
+	if !ok {
+		return nil, status.Error(codes.Unavailable, "account access unavailable")
+	}
+	all, allowed, err := access.AccountsInScope(ctx, in.GetUserId(), in.GetAction(), ids)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pluginv1.AccountScopeCheckResponse{All: all, AllowedIds: allowed}, nil
 }
 
 // qualify resolves the permission a plugin asks about to its RBAC key. own

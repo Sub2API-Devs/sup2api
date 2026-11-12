@@ -2,11 +2,13 @@ package pluginsdktest
 
 import (
 	"context"
+	"slices"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
@@ -29,6 +31,27 @@ func (f *FakeHost) Notify(ctx context.Context, in *pluginv1.NotifyRequest) (*plu
 		return nil, status.Error(codes.Unimplemented, "no Notify handler")
 	}
 	return f.NotifyFunc(ctx, in)
+}
+
+// AccountScopeCheck answers with FakeHost.AccountScope after the argument
+// checks of the host.
+func (f *FakeHost) AccountScopeCheck(_ context.Context, in *pluginv1.AccountScopeCheckRequest) (*pluginv1.AccountScopeCheckResponse, error) {
+	ids := in.GetAccountIds()
+	if in.GetUserId() <= 0 || in.GetAction() == "" || len(ids) > manifest.MaxAccountBatch ||
+		slices.ContainsFunc(ids, func(id int64) bool { return id <= 0 }) {
+		return nil, status.Errorf(codes.InvalidArgument, "user_id, action and at most %d positive account_ids are required", manifest.MaxAccountBatch)
+	}
+	f.mu.Lock()
+	fn := f.AccountScope
+	f.mu.Unlock()
+	if fn == nil {
+		return &pluginv1.AccountScopeCheckResponse{All: true}, nil
+	}
+	all, allowed, err := fn(in.GetUserId(), in.GetAction(), ids)
+	if err != nil {
+		return nil, err
+	}
+	return &pluginv1.AccountScopeCheckResponse{All: all, AllowedIds: allowed}, nil
 }
 
 func (f *FakeHost) GetUsers(_ context.Context, in *pluginv1.GetUsersRequest) (*pluginv1.GetUsersResponse, error) {

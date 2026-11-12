@@ -250,6 +250,39 @@ func Unauthenticated() *pluginv1.HTTPResponse {
 	return ErrorResponse(http.StatusUnauthorized, "unauthenticated", "authentication required / 需要登录")
 }
 
+// Forbidden is the 403 of a caller who lacks a permission. It is the same
+// whichever permission is missing: the answer does not name it.
+func Forbidden() *pluginv1.HTTPResponse {
+	return ErrorResponse(http.StatusForbidden, "permission_denied", "permission denied / 没有权限")
+}
+
+// RequirePermission wraps next so that it only runs for a console user who
+// holds perm, asked of the host (Host.AuthzCheck: a plugin-local key such as
+// "rules:manage" needs no grant, any other key needs "authz.read"). A request
+// without a user is a 401, a user without the permission a 403, and a host
+// that cannot answer a 503. Use it where one route needs more than the
+// permission its manifest entry names; h must be the initialised host, so
+// register such routes from Init.
+func RequirePermission(h Host, perm string, next HandlerFunc) HandlerFunc {
+	return func(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+		uid := req.GetCaller().GetUserId()
+		if uid <= 0 {
+			return Unauthenticated(), nil
+		}
+		if h == nil {
+			return Unavailable("cannot check the permission / 无法校验权限"), nil
+		}
+		allowed, err := h.AuthzCheck(ctx, uid, perm)
+		if err != nil {
+			return Unavailable("cannot check the permission / 无法校验权限"), nil
+		}
+		if !allowed {
+			return Forbidden(), nil
+		}
+		return next(ctx, req)
+	}
+}
+
 // Unavailable is a 503 for "database unavailable" or similar errors.
 func Unavailable(msg string) *pluginv1.HTTPResponse {
 	return ErrorResponse(http.StatusServiceUnavailable, "unavailable", msg)

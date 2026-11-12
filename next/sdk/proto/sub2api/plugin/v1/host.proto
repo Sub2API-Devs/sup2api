@@ -101,6 +101,13 @@ service HostService {
   // need authz.read.
   rpc AuthzCheck(AuthzCheckRequest) returns (AuthzCheckResponse);
 
+  // accounts scope (always granted): which accounts may a console user act
+  // on? The answer is the core's own account ownership rule (CONTRACTS
+  // §21.1), so a plugin route applies it instead of deciding by itself.
+  // PERMISSION_DENIED when the user holds neither account:<action> nor
+  // account:own:<action>.
+  rpc AccountScopeCheck(AccountScopeCheckRequest) returns (AccountScopeCheckResponse);
+
   // ledger.credit / ledger.debit: bounded by the approved scope
   // (maxPerTx, maxPerDay), idempotent on idempotency_key.
   rpc LedgerCredit(LedgerChangeRequest) returns (LedgerChangeResponse);
@@ -623,6 +630,24 @@ message AuthzCheckRequest {
 
 message AuthzCheckResponse {
   bool allowed = 1;
+}
+
+message AccountScopeCheckRequest {
+  int64 user_id = 1;
+  // "read", "update" or "test".
+  string action = 2;
+  // The accounts asked about; at most 500. May be empty to learn only
+  // whether the user reaches every account.
+  repeated int64 account_ids = 3;
+}
+
+message AccountScopeCheckResponse {
+  // The user holds account:<action>: every account is in scope and
+  // allowed_ids is empty.
+  bool all = 1;
+  // Otherwise (account:own:<action>): the ids among account_ids that are
+  // live accounts the user created, in request order, once each.
+  repeated int64 allowed_ids = 2;
 }
 
 message LedgerChangeRequest {
