@@ -9,7 +9,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,7 +24,9 @@ type AccountAction struct {
 	PluginKey string `json:"plugin_key"`
 	// AccountType restricts the action to a specific account type; empty means all types of the plugin.
 	AccountType string `json:"account_type,omitempty"`
-	// Permission is the required permission to see and invoke the action.
+	// Permission is what seeing and invoking the action takes: empty for
+	// nothing, otherwise account:update or, on the caller's own accounts,
+	// account:own:update.
 	Permission string `json:"permission,omitempty"`
 }
 
@@ -109,10 +110,8 @@ func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context
 		return
 	}
 
-	uid, _ := core.UserID(ctx)
-
-	// Start a re-authorization draft (or return the existing one).
-	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
+	// Re-authorization runs in place: this returns the account's runtime.
+	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -134,7 +133,7 @@ func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context
 
 // listAccountActions returns the available actions for an account type.
 func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType string) []AccountAction {
-	var actions []AccountAction
+	actions := []AccountAction{}
 	if binding, ok := s.accountType(pluginKey, accountType); ok && binding.Type.Lifecycle != nil {
 		for _, action := range binding.Type.Lifecycle.Actions {
 			actions = append(actions, AccountAction{ID: action.ID, Label: action.Label, Icon: action.Icon, PluginKey: pluginKey, AccountType: accountType, Permission: "account:update"})
@@ -157,6 +156,21 @@ func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType
 	return actions
 }
 
+// visibleActions are the actions of account a that the caller may invoke:
+// every action when the caller may update that account (its own, or any with
+// the "all" key; declared actions all require account:update), otherwise
+// only the ones that require nothing. Never nil.
+func (s *Service) visibleActions(ctx context.Context, a *row) []AccountAction {
+	actions := s.listAccountActions(ctx, a.PluginKey, a.Type)
+	if len(actions) == 0 {
+		return actions
+	}
+	if scope, ok := core.ScopeOf(ctx, s.d.Authorizer, core.AccountScope("update")); ok && core.Allows(scope, a.CreatedBy) {
+		return actions
+	}
+	return slices.DeleteFunc(actions, func(action AccountAction) bool { return action.Permission != "" })
+}
+
 // getAccountActions serves GET /accounts/:id/actions: lists available actions for an account.
 func (s *Service) getAccountActions(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -172,15 +186,5 @@ func (s *Service) getAccountActions(c *gin.Context) {
 		return
 	}
 
-	actions := s.listAccountActions(ctx, a.PluginKey, a.Type)
-
-	// Filter by permission.
-	filtered := make([]AccountAction, 0, len(actions))
-	for _, action := range actions {
-		if action.Permission == "" || core.Can(ctx, s.d.Authorizer, perm.Key(action.Permission)) || core.Can(ctx, s.d.Authorizer, "account:own:update") {
-			filtered = append(filtered, action)
-		}
-	}
-
-	httpapi.OK(c, gin.H{"actions": filtered})
+	httpapi.OK(c, gin.H{"actions": s.visibleActions(ctx, a)})
 }

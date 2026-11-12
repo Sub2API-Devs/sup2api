@@ -28,18 +28,12 @@ import (
 // able to prepare the runtime of a Claude Code account too.
 var draftKeys = []string{"settings:manage", "account:create", "account:own:create"}
 
-// draftUseKeys are the permissions of the endpoints addressing one draft:
-// besides draftKeys, whoever may re-authorize an account (account:update,
-// account:own:update, §49.17) drives the re-authorization draft it started.
-// Visibility stays the creator or settings:manage either way.
-var draftUseKeys = append(append([]string{}, draftKeys...), "account:update", "account:own:update")
-
 func (s *Service) registerDraftRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/system/ccgateway/drafts", s.draftCreate, draftKeys...)
-	r.PermAny("PUT", "/system/ccgateway/drafts/:key", s.draftUpdate, draftUseKeys...)
-	r.PermAny("DELETE", "/system/ccgateway/drafts/:key", s.draftDelete, draftUseKeys...)
-	r.PermAny("GET", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftUseKeys...)
-	r.PermAny("POST", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftUseKeys...)
+	r.PermAny("PUT", "/system/ccgateway/drafts/:key", s.draftUpdate, draftKeys...)
+	r.PermAny("DELETE", "/system/ccgateway/drafts/:key", s.draftDelete, draftKeys...)
+	r.PermAny("GET", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftKeys...)
+	r.PermAny("POST", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftKeys...)
 }
 
 func newDraftKey() string {

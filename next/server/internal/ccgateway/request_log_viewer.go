@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -47,8 +49,10 @@ var (
 )
 
 func (s *Service) registerRequestLogViewer(r *httpapi.Router) {
-	r.PermAny("GET", "/system/ccgateway/accounts/:id/request-logs/requests", s.requestLogList, "settings:read", "account:read")
-	// settings:manage is listed so the detail knows whether to keep event texts whole.
+	// settings:manage is listed so the handlers know whether the caller reads
+	// content: the error text in the list, whole metadata and event texts in
+	// the detail.
+	r.PermAny("GET", "/system/ccgateway/accounts/:id/request-logs/requests", s.requestLogList, "settings:read", "account:read", "settings:manage")
 	r.PermAny("GET", "/system/ccgateway/accounts/:id/request-logs/requests/:log", s.requestLogDetail, "settings:read", "account:read", "settings:manage")
 	r.Perm("GET", "/system/ccgateway/accounts/:id/request-logs/requests/:log/files/:name", "settings:manage", s.requestLogFile)
 }
@@ -261,6 +265,51 @@ type requestLogPage struct {
 	Active []requestLogActive `json:"active"`
 }
 
+// requestLogSummaryKeys are the metadata fields of a request log every reader
+// of the log sees: identifiers, sizes, digests, states and classified errors,
+// like the list. Anything else is content (the upstream's error text,
+// message summaries, identity a Worker may record) and goes to
+// settings:manage only; a field the Worker adds later is content until it is
+// listed here.
+var requestLogSummaryKeys = map[string]bool{
+	"request_id": true, "timestamp": true, "method": true, "path": true, "duration_ms": true,
+	"status": true, "http_status": true, "stage": true, "canceled": true, "test_mode": true,
+	"model": true, "upstream_model": true, "stream": true, "upstream_stream": true,
+	"mode": true, "execution_mode": true, "operation_kind": true, "history_mode": true,
+	"message_count": true, "has_system": true, "anthropic_beta": true,
+	"error_type": true, "error_code": true, "error_source": true,
+	"log_level": true, "log_level_source": true, "log_status": true, "log_limit_bytes": true,
+	"log_retained_bytes": true, "log_dropped_bytes": true, "log_dropped_writes": true, "log_overflow_stage": true,
+	"body_bytes": true, "body_sha256": true, "body_changed": true,
+	"client_session_id": true, "upstream_session_id": true, "upstream_request_class": true,
+	"upstream_captured": true, "upstream_attempts": true, "upstream_betas": true,
+	"upstream_body_bytes": true, "upstream_body_sha256": true, "upstream_body_dropped": true,
+	"response_assembled": true, "response_capture": true, "response_events": true, "response_interrupted": true,
+	"invalid_json": true, "messages_truncated": true, "metadata_details_truncated": true, "request_body_retained": true,
+}
+
+// summaryValue reports whether v has the shape of a summary field: a scalar,
+// or a list of strings (upstream_betas). Nothing nested passes under a
+// listed name.
+func summaryValue(v any) bool {
+	switch v := v.(type) {
+	case string, float64, bool:
+		return true
+	case []any:
+		return !slices.ContainsFunc(v, func(e any) bool { _, ok := e.(string); return !ok })
+	}
+	return false
+}
+
+// projectMetadata is the metadata a caller reads: whole with content
+// (settings:manage), otherwise only requestLogSummaryKeys of a summary shape.
+func projectMetadata(m map[string]any, content bool) map[string]any {
+	if !content {
+		maps.DeleteFunc(m, func(k string, v any) bool { return !requestLogSummaryKeys[k] || !summaryValue(v) })
+	}
+	return m
+}
+
 // decodeRequestLogPage keeps the fields the list shows, each checked.
 func decodeRequestLogPage(raw []byte) (requestLogPage, error) {
 	var page requestLogPage
@@ -304,6 +353,12 @@ func (s *Service) requestLogList(c *gin.Context) {
 	if err != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "runtime_unavailable"))
 		return
+	}
+	// The upstream's error text is content: other readers keep error_type.
+	if !core.HasGranted(ctx, "settings:manage") {
+		for i := range page.Items {
+			page.Items[i].Error = ""
+		}
 	}
 	httpapi.OK(c, page)
 }
@@ -402,6 +457,7 @@ func (s *Service) requestLogDetail(c *gin.Context) {
 	if out.Events == nil {
 		out.Events = []any{}
 	}
+	out.Metadata = projectMetadata(out.Metadata, content)
 	out.RequestHeaders, out.ResponseHeaders = maskHeaders(out.RequestHeaders), maskHeaders(out.ResponseHeaders)
 	out.UpstreamRequest = maskUpstreamRequest(out.UpstreamRequest)
 	httpapi.OK(c, out)

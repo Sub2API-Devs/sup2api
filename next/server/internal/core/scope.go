@@ -66,3 +66,10 @@ func ScopeOf(ctx context.Context, az Authorizer, s perm.Scoped) (scope *int64, o
 func Allows(scope, createdBy *int64) bool {
 	return scope == nil || (createdBy != nil && *createdBy == *scope)
 }
+
+// AccountScope is the key range of an account action: account:<action>
+// reaches every account, account:own:<action> the ones the user created.
+// Routes that act on accounts register with its keys.
+func AccountScope(action string) perm.Scoped {
+	return perm.Pair(perm.Key("account:"+action), perm.Key("account:own:"+action))
+}

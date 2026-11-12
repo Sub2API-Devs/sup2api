@@ -427,7 +427,7 @@ POST /system/ccgateway/accounts/:id/cc-features/preview
 
 GET 返回已保存账号覆盖、可查看分组、当前有效策略、各字段继承来源和可编辑状态。POST 接受未保存的账号覆盖草稿与 group_id，使用同一合并器返回预览，不落库、不调用 Worker 或模型。响应携带 global/group/account 版本组成的 `policy_revision`；返回的字段名为 `effective`、`inherited`、`sources`、`editable`、`disabled_reason`。
 
-已有 `/system/ccgateway/accounts/:id/:action` 是通用管理路由，新路由需显式注册并防止被通配 action 当成未知管理动作。权限分别复用 settings 管理权、账号行级读写权；必须验证账号归属和分组关系，不允许通过预览读取其他账号策略或控制器秘密。分组配置修改要求 settings:manage，并核验真实分组；不得为虚构或已删除 group ID 保存配置。
+已有 `/system/ccgateway/accounts/:id/:action` 是通用管理路由，新路由需显式注册并防止被通配 action 当成未知管理动作。权限复用账号行级读写权（2026-11-12 权限加固 T38 起不再接受 settings 管理权）；必须验证账号归属和分组关系，不允许通过预览读取其他账号策略或控制器秘密。分组配置修改要求 settings:manage，并核验真实分组；不得为虚构或已删除 group ID 保存配置。
 
 **请求接入：**`gateway/dispatch.go` 已用 `c.principal.Group.ID` 调度账号，但调用 `ModelClientFor` 时仅传账号与代理。改为传入类型明确的请求上下文（账号 ID、代理 ID、API Key 分组 ID、用途），不继续用可变位置参数塞入更多 ID。
 

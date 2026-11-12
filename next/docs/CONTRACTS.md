@@ -1091,7 +1091,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 | GET `/account-types`、GET `/account-types/:p/:t/form`、GET `/platforms` | `account:read` / `account:own:read` / `account:own:create` | form 按调用者权限改写（§21.3） |
 | GET `/proxies`、GET `/proxies/:id` | `proxy:read` / `proxy:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（`strconv.ParseBool`） |
 | POST `/proxies` | `proxy:manage` / `proxy:own:manage` | `created_by` = 调用者 |
-| PATCH/DELETE `/proxies/:id`、POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage` | 范围外（含 `created_by` 为空的历史行）一律 404，**先判可见再判占用**；自己级下删除时 409 的 `account_count` 仍是引用它的全部账号数 |
+| PATCH/DELETE `/proxies/:id`、POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage` | 范围外（含 `created_by` 为空的历史行）一律 404，**先判可见再判占用**；自己级下删除时 409 的 `account_count` 仍是引用它的全部账号数；自己级下 PATCH 改了连接字段（`protocol`、`host`、`port`、`username`、`password` 任一与现值不同，原样带回不算，`host` 只有大小写不同也不算且不写入）而代理正被他人创建的账号（含 `created_by` 为空的）使用时，返回 409 `proxy_in_use`，`details.account_count` 为这些账号的数量（2026-11-12 权限加固 T31）；改名称、状态不受限，`proxy:manage` 不受限 |
 
 菜单（`/me/menus`、前端回退表、路由 meta）：账号/平台菜单 anyOf `account:read account:own:read account:own:create`（§90 第四版起没有平台菜单）；代理菜单 anyOf `proxy:read proxy:own:read proxy:own:manage`。
 
@@ -1139,8 +1139,8 @@ type ProxyResolver interface {
 }
 ```
 
-- 权限：调用者须有 `proxy:manage` 或 `proxy:own:manage`，否则 403 `permission_denied`（`details.permission = "proxy:own:manage"`）。由账号模块用 `Authorizer.Can` 判断（`FindOrCreate` 不查权限）；权限、解析都在调用插件校验凭证之前做，`account.Deps.Resolver` 为空时 `proxy_url` 返回 501 `unsupported`。
-- 可见范围 `scope`：有 `proxy:read` 为全部（`nil`），否则为自己创建的（`proxy:own:read` 或 `proxy:own:manage`，传 `&uid`）。由账号模块算好传入。同一套范围也用于校验 `proxy_id`（自己级账号 key 时）：没有任何代理 key 的调用者给出任何 `proxy_id` 都是 `proxy_id/not_found`；全部级账号 key（`account:create` / `account:update`）的调用者 `proxy_id` 只要存在即可。
+- 权限：调用者须有 `proxy:manage` 或 `proxy:own:manage`，否则 403 `permission_denied`（`details.permission = "proxy:own:manage"`）。由账号模块用 `core.ScopeOf` 判断（`FindOrCreate` 不查权限）；权限、解析都在调用插件校验凭证之前做，`account.Deps.Resolver` 为空时 `proxy_url` 返回 501 `unsupported`。
+- 匹配范围 `scope`：代理的**写范围**（2026-11-12 权限加固 T30 起；此前按读范围）：有 `proxy:manage` 为全部（`nil`），只有 `proxy:own:manage` 为自己创建的（传 `&uid`）。由账号模块用 `core.ScopeOf` 与权限判断一次算好传入；`POST /proxies/probe` 带 `save` 时同样传写范围。新建的行 `allow_private = (scope == nil)`（§43.3）。校验 `proxy_id` 用的是另一套可见范围（自己级账号 key 时）：有 `proxy:read` 为全部，`proxy:own:read` 或 `proxy:own:manage` 为自己创建的；没有任何代理 key 的调用者给出任何 `proxy_id` 都是 `proxy_id/not_found`；全部级账号 key（`account:create` / `account:update`）的调用者 `proxy_id` 只要存在即可。
 - 匹配键 = `protocol, host（小写）, port, username, password` 全等；`name`、`status` 不参与。SQL 按 `protocol = $1 AND lower(host) = $2 AND port = $3 AND username = $4` 加 `(password_enc IS NULL) = <输入密码是否为空>` 与范围条件预筛，`ORDER BY id`，候选逐条解密后 `subtle.ConstantTimeCompare` 比密码（解不开的行跳过）。**跳过 `status=disabled` 的代理**。命中多条取 id 最小的。
 - 未命中则新建：`name` = `<protocol>://<host>:<port>`（IPv6 host 带方括号；超长按 rune 截断到 100），`status=active`，`created_by` = `ownerID`。
 - 查找 + 创建与账号写入在**同一事务**，`FindOrCreate` 先 `SELECT pg_advisory_xact_lock(hashtext(protocol||'|'||host||'|'||port||'|'||username))`（不含密码）防并发重复。
@@ -1149,7 +1149,7 @@ type ProxyResolver interface {
 
 响应：账号对象里 `proxy_id` 为关联结果，创建/修改响应另带 `proxy_created: true|false`（仅这两个响应，没给 `proxy_url` 时为 `false`；列表、详情没有这个键）。
 
-`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 只做解析，用 `core.ProxyDirectory.HTTPClientFor(ctx context.Context, spec core.ProxySpec) (*http.Client, error)` 临时建客户端（不缓存、不落库、无整体超时，调用方用 ctx 限时并在用完后 `CloseIdleConnections()`）。`HTTPClientFor` 是 `ProxyDirectory` 接口的新方法，所有实现该接口的测试桩都要补上。`account.Deps` 新增 `Authorizer core.Authorizer`（为空时所有额外权限问题都按"无"处理）与 `Resolver core.ProxyResolver`，`app.go` 用 authz 服务与代理服务组装。
+`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 同样要求 `proxy:manage` 或 `proxy:own:manage`（否则 403，`details.permission = "proxy:own:manage"`；T30 起），只做解析，用 `core.ProxyDirectory.HTTPClientFor(ctx context.Context, spec core.ProxySpec) (*http.Client, error)` 临时建客户端（不缓存、不落库、无整体超时，调用方用 ctx 限时并在用完后 `CloseIdleConnections()`）。`HTTPClientFor` 是 `ProxyDirectory` 接口的新方法，所有实现该接口的测试桩都要补上。`account.Deps` 新增 `Authorizer core.Authorizer`（为空时所有额外权限问题都按"无"处理）与 `Resolver core.ProxyResolver`，`app.go` 用 authz 服务与代理服务组装。
 
 ### 21.5 控制台
 
@@ -2608,7 +2608,7 @@ volcengine 0.12.2 的两个表单同时用 `ui:section` 把素材库字段归入
 
 ### 41.5 Claude Code 连接为账号
 
-`POST /system/ccgateway/connect` 新增可选 `model_mapping: {from: to}`，与 `models` 一起原样交给创建账号（校验同 §18）；请求体上限由 8 KiB 提高到 512 KiB，以容纳 500 个模型与 500 条映射。控制台的连接表单在加载时用 ccgateway `managed` 类型的预设填充模型列表（预设映射现为空，§41.4），两者都可增删。每账号容器模式下的行为见 §49.6。
+（`POST /system/ccgateway/connect` 已在 2026-11-12 删除，见 §49.6；以下为历史。）`POST /system/ccgateway/connect` 新增可选 `model_mapping: {from: to}`，与 `models` 一起原样交给创建账号（校验同 §18）；请求体上限由 8 KiB 提高到 512 KiB，以容纳 500 个模型与 500 条映射。控制台的连接表单在加载时用 ccgateway `managed` 类型的预设填充模型列表（预设映射现为空，§41.4），两者都可增删。每账号容器模式下的行为见 §49.6。
 
 ## 42. 账号自动禁用：全局开关、管理员规则、账号级开关（2026-10-04，用户要求）
 
@@ -2692,8 +2692,10 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 迁移 0027：`proxies.allow_private boolean NOT NULL DEFAULT false`。迁移时已有的代理一律置为 `true`，保持升级前行为；迁移带守卫，重跑不会把后来关掉的再打开（`TestSecurityHardeningDoesNotReopenPrivateProxies`）。
 - 只有持 `proxy:manage` 的用户能把代理保存在私网地址（存为 `allow_private = true`）。只持 `proxy:own:manage` 时：
   - 保存私网地址 → 403，`details.permission = "proxy:manage"`；
-  - 保存账号时自动关联代理（§21.5）遇到私网地址同样拒绝。
-- 使用代理时，`allow_private = false` 的代理指向私网地址 → 不可用。
+  - 保存账号时自动关联代理（§21.4）遇到私网地址同样拒绝。
+- `PATCH /proxies/:id` 改了地址（`protocol`、`host`、`port` 任一与现值不同；`host` 不分大小写比较，原样带回的字段不算）时按新建判断：只持 `proxy:own:manage` 时结果地址是私网地址 → 403；成功时 `allow_private` 跟随本次修改者（`proxy:manage` 为 `true`，否则 `false`）。地址没变时不变。
+- `POST /proxies/probe`：只持 `proxy:own:manage` 探测私网地址 → 403；带 `save` 时按调用者的写范围查找或创建（`proxy:manage` 可复用他人的代理，新建的行 `allow_private = true`；复用的行不改 `allow_private`，探测成功不代表该行在使用时可达私网）。拨号被拒时 `attempts[].message` / 测试结果的 `message` 为固定文案，不带解析出的地址。
+- 使用代理时，`allow_private = false` 的代理指向私网地址 → 不可用。字面私网地址在建客户端时拒绝；域名在**拨号时**按解析后的 IP 判断（`netguard.Dialer`，socks5 同样经过），指向私网、回环、链路本地地址的连接失败（`netguard.ErrPrivate`）。`proxy_url` 的临时客户端（`HTTPClientFor`）与 own 范围的探测同样在拨号时检查。
 - `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true`（只用于测试）关闭以上检查。
 
 ### 43.4 出站地址检查统一到 `netguard`
@@ -3267,18 +3269,15 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 | 路由 | 接受任一权限 |
 |---|---|
-| GET `status` / `health` / `session` | `settings:read`、`account:read`、`account:own:read` |
-| POST `sync` / `start` / `complete` / `cancel` / `logout` | `settings:manage`、`account:update`、`account:own:update` |
+| GET `status` / `health` / `session` / `features` / `request-logs` / `cc-features` | `account:read`、`account:own:read` |
+| POST `sync` / `start` / `complete` / `cancel` / `logout` / `cc-features/preview`、`reauthorize`、`reauthorize/:key/commit`（§49.17） | `account:update`、`account:own:update` |
+| PUT `request-logs`（§65） | `account:update` |
 
-用 `Router.PermAny` 注册（§21.1）。只命中 `account:own:*` 时只能操作 `created_by` = 调用者的账号，其余（含不存在、已删除）一律 404，与账号接口的所有权规则一致。原来只有 `settings:*` 能用，own 级用户能建 ccgateway 账号却授权不了。CCGateway 全局设置（`remote-config`、`remote-*`、共享容器的 `auth/*`、`proxy`）仍只认 `settings:*`。
+用 `Router.PermAny` 注册（§21.1），key 来自 `ccgateway.RuntimeScope(method)`。只命中 `account:own:*` 时只能操作 `created_by` = 调用者的账号，其余（含不存在、已删除）一律 404，与账号接口的所有权规则一致；归属由 `core.AccountAccess`（账号模块）判断，未注入时这些接口 503。**2026-11-12 权限加固 T38（D15）起不再接受 `settings:read` / `settings:manage`**：按账号的运行环境跟随账号本身的权限，settings 管理员只保留控制器、镜像、默认规则等全局设置（`remote-config`、`remote-*`、`runtime/*`、`runtimes/*`、`cli/:id`、`features`），请求日志查看接口（§64）不变。
 
-### 49.6 `POST /system/ccgateway/connect`
+### 49.6 `POST /system/ccgateway/connect`（已删除）
 
-- 共享容器模式（未开启 `account_runtimes`）不变：先检查共享容器 `/admin/status` 已授权，否则 503 "请先配置并授权 CCGateway"。
-- 每账号容器模式：跳过该检查（控制器上没有这个路径，原来总是 503），直接建 `managed` 账号；创建即 Kick（49.1），返回 201 与账号详情（含 `id`）。之后在账号上授权。
-- 请求体新增可选 `proxy_id` / `proxy_url`（同 `POST /accounts`，§21.4），每账号容器模式下应当提供，否则账号是 `blocked`。
-- 路由仍要求 `settings:manage`，处理函数另查 `account:create`。修正：原来 `create` 按路由命中的 `settings:manage` 判定范围，即使调用者持有 `account:create` 也被当作 own 级（受 §21.3.1 限制，绑定分组要 `group:manage` / `account:group:bind`、无受限设置的类型要 `account:relay`）；现在已核对过 `account:create`，按全部级创建。
-- 共享 CCGateway 未配置或未授权时的 503 现在是英文 message，`details.reason: not_configured`。`connect` 不接受 `ccgateway_runtime`（草稿流程用 `POST /accounts`）。
+2026-11-12 权限加固 T39（D7）删除了这条接口（现在 404）：控制台早已不调用它，而它以 `settings:manage` 注册、再在请求上下文里补一个 `account:create` 去走创建账号的流程，等于伪造路由命中的权限。CCGateway 账号统一用 `POST /accounts` 创建，权限与范围按 §21：`managed` 类型要求先准备运行环境（manifest `lifecycle.preparation.required`），即先走草稿流程（§49.9、§49.10：`POST /system/ccgateway/drafts` → 授权 → `POST /accounts` 带 `ccgateway_runtime`）或账号预备（§59 的 `preparation_key`）。connect 两者都不带，对真实的 `managed` 类型早已只会返回 400。共享容器模式的“先检查共享容器已授权”随接口一并删除。
 
 ### 49.7 运行环境 key
 
@@ -3318,7 +3317,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 ### 49.9 草稿接口
 
-权限：`settings:manage`、`account:create`、`account:own:create` 任一（`Router.PermAny`）；按 key 访问的草稿接口（`PUT`/`DELETE drafts/:key`、`drafts/:key/:action`）另外接受 `account:update`、`account:own:update`（驱动重新授权草稿，§49.17），`POST drafts` 不变。草稿只对创建者可见；持有 `settings:manage` 的调用者看得到所有草稿；其他人（以及已认领、已删除、不存在的 key、数字 key）一律 404，`details.reason: draft_not_found`。**每次草稿调用（含 GET status/health/session）都更新 `last_seen_at`**——控制台在草稿存在期间每 60 秒发一次 `GET status` 作心跳，用户在授权后填写其他字段时草稿不会被当作闲置清理。
+权限：`settings:manage`、`account:create`、`account:own:create` 任一（`Router.PermAny`）；五条草稿路由同一组 key（2026-11-12 权限加固 T37：重新授权已改为在账号现有运行环境上原地进行，不再建草稿，按 key 的草稿接口不再接受 `account:update`、`account:own:update`）。草稿只对创建者可见；持有 `settings:manage` 的调用者看得到所有草稿；其他人（以及已认领、已删除、不存在的 key、数字 key）一律 404，`details.reason: draft_not_found`。**每次草稿调用（含 GET status/health/session）都更新 `last_seen_at`**——控制台在草稿存在期间每 60 秒发一次 `GET status` 作心跳，用户在授权后填写其他字段时草稿不会被当作闲置清理。
 
 | 方法 | 路径 | 请求 → 结果 |
 |---|---|---|
@@ -3471,7 +3470,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 
 `account_id` 仍 UNIQUE：只有账号当前使用的运行环境带它。行的四种状态：未认领草稿（`account_id`、`retired_at` 为空；`for_account` 为空 = 新建账号的草稿，非空 = 该账号的重新授权草稿）、已认领（`account_id` 非空）、已退役（`account_id` 为空、`retired_at` 非空）。
 
-**接口**（由 account 模块注册，与 ccgateway 模块的 `/system/ccgateway/accounts/:id/:action` 并存）。权限 `settings:manage`、`account:update`、`account:own:update` 任一；后者只能操作自己创建的账号（§49.5 规则），别人的账号 404。账号必须是未删除的 `ccgateway` 账号（否则 404）。
+**接口**（由 account 模块注册，与 ccgateway 模块的 `/system/ccgateway/accounts/:id/:action` 并存）。权限 `account:update`、`account:own:update` 任一（T38 起不再接受 `settings:manage`）；后者只能操作自己创建的账号（§49.5 规则），别人的账号 404。账号必须是未删除的 `ccgateway` 账号（否则 404）。
 
 | 方法 | 路径 | 结果 |
 |---|---|---|
@@ -3482,7 +3481,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - 未开启 `account_runtimes` → 503 `not_configured`；`apikey` 账号 → 400 `api_key_account`；账号已删除 → 400 `account_deleted`；绑定的代理不可用 → 400 `proxy_unavailable`。账号停用、代理停用都不影响重新授权（§49.22）。
 - 草稿 key 同 §49.9（`d` + 16 hex），`proxy_id` = 账号当前代理，`created_by` = 调用者，`for_account` = 账号 id；建好立即 Kick。审计 `account.ccgateway_reauthorize_start`（只在新建时）。
 - 每个账号最多一个未过期的重新授权草稿（按账号的 PG advisory 锁串行）。已有时返回它，并刷新 `last_seen_at`、把 `proxy_id` 改成账号当前代理。**调用者看不到它时（不是创建者、也没有 `settings:manage`）把 `created_by` 改成调用者（接管）**：能更新这个账号的人总能继续流程，原创建者之后对该草稿得到 `draft_not_found`（控制台按"重新开始"处理，再调 `reauthorize` 会接管回来）。闲置超过 15 分钟或存在超过 2 小时的草稿不再复用（留给清理任务），新建一个。
-- 草稿用 §49.9 的草稿接口驱动（`status/health/session/sync/start/complete/cancel`、`DELETE`），可见性规则不变（创建者或 `settings:manage`）。按 key 的草稿接口为此另外接受 `account:update`、`account:own:update`。重新授权草稿**不能** `PUT drafts/:key` 改代理（404 `draft_not_found`），也**不能**在 `POST /accounts` 的 `ccgateway_runtime` 里使用（400 `draft_not_found`）。
+- （历史：换新运行环境的流程，已被原地重新授权取代。现在没有重新授权草稿，用账号的运行环境接口 `/system/ccgateway/accounts/:id/:action` 驱动，取消 = `POST accounts/:id/cancel`；T37 起按 key 的草稿接口不再接受 `account:update`、`account:own:update`。以下两条只描述旧流程。）草稿用 §49.9 的草稿接口驱动（`status/health/session/sync/start/complete/cancel`、`DELETE`），可见性规则不变（创建者或 `settings:manage`）。重新授权草稿**不能** `PUT drafts/:key` 改代理（404 `draft_not_found`），也**不能**在 `POST /accounts` 的 `ccgateway_runtime` 里使用（400 `draft_not_found`）。
 - 取消 = `DELETE /system/ccgateway/drafts/:key`（§49.9 原接口），账号不受影响。
 
 `commit`：
@@ -3505,7 +3504,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 **与原契约文件的偏差：**
 - 原文写 "`error_message` empty"：`accounts` 没有 `error_message` 列，实现清的是 `status_reason`。2026-10-11 起成功重新授权恢复 `error/auto_disabled`，管理员停用与来源不明的旧 `disabled` 记录仍需显式启用或重置，见 §42.5。
 - 原文没处理"已有草稿属于别人"的情况：实现为接管（见上）。
-- 原文让账号只有 `account:update` 的人用草稿接口，但草稿接口原权限只有 `settings:manage` / `account:create` / `account:own:create`：实现为按 key 的草稿接口加上两个 update 权限。
+- 原文让账号只有 `account:update` 的人用草稿接口，但草稿接口原权限只有 `settings:manage` / `account:create` / `account:own:create`：实现为按 key 的草稿接口加上两个 update 权限。（T37 起已撤销，见 §49.9。）
 - 提交前预先 `PUT config`（原文只说提交后 Kick）：避免提交后几秒内网关拿到控制器 409。
 
 **部署：** 控制器须先升级到支持 `X-CCG-Delete-Account` 的版本，否则退役数字 key 的删除每分钟失败一次（行保留、记 WARN），升级后自动删掉。旧核心节点不读新列，会把退役行当成未认领草稿（reconcile 它、草稿 key 的退役行会被旧节点的草稿清理提前删掉）：全部节点升级后再使用重新授权。
@@ -4702,6 +4701,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 64.2 详情 `GET …/requests/:log`
 
 - 新字段 `upstream_request`（对象，可省略）= Worker 返回的 `upstream-request.json` 内容，原样透传，只对其中 `headers` 再遮蔽一次：名字（不区分大小写）在 `requestLogSecretHeaders`（`authorization`、`proxy-authorization`、`x-api-key`、`cookie`、`set-cookie`、`x-ccg-revision`）里的值改成 `"[REDACTED]"`（字符串值直接替换，数组逐项替换，其他类型整体替换）；`headers` 不是对象时删掉该键。`upstream_request` 不是对象时整个详情 503（与其他字段一致）。
+- `metadata` 按白名单投影（2026-11-12 权限加固 T43，D22）：调用者命中 `settings:manage`（即 `content: true`）时原样返回；否则只保留 `requestLogSummaryKeys` 里的摘要字段（请求标识、状态与阶段、模型、耗时、`http_status`、`error_type` / `error_code` / `error_source`、日志级别与用量、正文大小与摘要值、会话标识、上游请求类别与 betas、响应捕获状态等），其余一律删除，包括上游错误原文 `error`、`messages`、`log_directory`，可能出现的身份字段（如 `device_id`、`account_uuid`），以及 Worker 以后新增的任何字段（默认只给 `settings:manage`，要放开须加入白名单）；白名单内的值必须是标量或字符串数组，否则同样删除。列表（§64.1）每行的 `error` 同理：只有命中 `settings:manage` 时给出，其余调用者为空（`error_type` 保留）；为此列表路由的 key 增加 `settings:manage`。
 - `upstream-request.json` 加入摘要文件集合：不出现在 `files`，`…/files/upstream-request.json` 读取一律 400。`upstream-request.body` 是正文文件，照常出现在 `files`、仅 `settings:manage` 可读并审计。
 
 ### 64.3 状态 `GET …/request-logs`
@@ -4736,7 +4736,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 默认规则：`GET /system/ccgateway/remote-config`（`settings:read`）返回 `"request_logs":{"level":"summary"}`（总是给出生效的默认值，可为 `full`）；`PUT …/remote-config`（`settings:manage`）可带 `"request_logs":{"level":"off"|"summary"|"full"}`，省略保持原值；空串、其他值或未知键（含 `full_for_hours`/`full_until`：默认的 `full` 不带时长）400。
 
-账号：`GET/PUT /system/ccgateway/accounts/:id/request-logs`（权限不变：GET `settings:read`/`account:read`/本人 `account:own:read`；PUT `settings:manage`/`account:update`/本人 `account:own:update`；本人级只能到自己创建的账号，否则 404）。GET 与 PUT 成功都返回同一形状：
+账号：`GET/PUT /system/ccgateway/accounts/:id/request-logs`（GET `account:read`/本人 `account:own:read`；PUT 只认 `account:update`，不接受 `account:own:update`（2026-11-12 权限加固 T36；此前本人级可改自己账号的），T38 起两者都不再接受 `settings:*`；GET 的本人级只能到自己创建的账号，否则 404）。GET 与 PUT 成功都返回同一形状：
 
 ```json
 {"setting":{"level":"full","full_until":"2026-10-26T16:00:00Z"},

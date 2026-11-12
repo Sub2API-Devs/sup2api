@@ -14,7 +14,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/netguard"
 )
 
 // probeProtocols is the order a proxy given without a scheme is tried in:
@@ -122,15 +121,15 @@ func (s *Service) probeURL(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	// A private address needs proxy:manage, as when saving one (§21.5).
-	if !s.opts.AllowPrivate && netguard.LiteralPrivate(candidates[0].Host) && !granted(c, "proxy:manage") {
-		httpapi.Fail(c, core.ErrPermissionDenied.WithMessage(t(ctx, "proxy address is private and not allowed", "不允许使用私网地址代理")).
-			WithDetails(map[string]any{"permission": "proxy:manage"}))
+	// A private address needs proxy:manage, as when saving one (§43.3).
+	scope, allowPrivate, err := s.privateScope(ctx, candidates[0].Host)
+	if err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	clients := make([]*http.Client, len(candidates))
 	for i, spec := range candidates {
-		clients[i] = &http.Client{Transport: newTransport(specURL(spec))}
+		clients[i] = &http.Client{Transport: newTransport(specURL(spec), allowPrivate || s.opts.AllowPrivate)}
 		defer clients[i].CloseIdleConnections()
 	}
 	tests := make([]TestResult, len(candidates))
@@ -168,7 +167,7 @@ func (s *Service) probeURL(c *gin.Context) {
 		var created bool
 		err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 			var err error
-			if id, created, err = s.FindOrCreate(ctx, tx, spec, uid, core.OwnerScope(ctx, "proxy:read")); err != nil || !created {
+			if id, created, err = s.FindOrCreate(ctx, tx, spec, uid, scope); err != nil || !created {
 				return err
 			}
 			return audit.Audit(ctx, tx, uid, "proxy.create", "proxy", strconv.FormatInt(id, 10), map[string]any{"auto": true, "probe": true})
@@ -183,13 +182,4 @@ func (s *Service) probeURL(c *gin.Context) {
 		out.ProxyID, out.ProxyCreated = &id, created
 	}
 	httpapi.OK(c, out)
-}
-
-func granted(c *gin.Context, key string) bool {
-	for _, k := range httpapi.Granted(c) {
-		if k == key {
-			return true
-		}
-	}
-	return false
 }

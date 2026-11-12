@@ -243,6 +243,7 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	// A changed subscription type recomputes automatic model lists (§59);
 	// account already imports ccgateway, so the hook is wired here.
 	b.ccg.FactsObserved = b.acc.FactsObserved
+	b.ccg.Accounts = b.acc
 	// Price sync sources (upstream API keys encrypted) and GET /key/prices for
 	// downstream sup2api instances (CONTRACTS §17).
 	b.bill.SetSyncDeps(billing.SyncDeps{Cipher: b.cipher, Keys: b.keys})

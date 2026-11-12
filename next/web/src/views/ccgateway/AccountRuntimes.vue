@@ -93,8 +93,10 @@ const auth = useAuthStore()
 /** Bumped by reload(): the retained list below reloads with the table. */
 const retainedRevision = ref(0)
 const own = useOwnership()
-// Changing a row (log level, start, re-authorization) takes update on that row, as the core checks.
-const canUpdateRow = (r: Row) => auth.has('settings:manage') || own.can(r, ACCOUNT_KEYS.update)
+// Changing a row (start, re-authorization) takes update on that row, as the core checks.
+const canUpdateRow = (r: Row) => own.can(r, ACCOUNT_KEYS.update)
+// Changing or clearing the request logs is not an own-level action: the core takes this key only.
+const canLogs = computed(() => auth.has('account:update'))
 // Reading the logs: settings or account readers, not own-level ones (§7).
 const canViewLogs = computed(() => auth.has('settings:read') || auth.has('account:read'))
 const viewing = ref<Row | null>(null)
@@ -196,7 +198,7 @@ async function setLogs(r: Row, enabled: boolean) {
 }
 
 async function putLogs(r: Row, body: Record<string, unknown>) {
-  if (r.logsBusy || !canUpdateRow(r)) return
+  if (r.logsBusy || !canLogs.value) return
   r.logsBusy = true
   r.logsError = false
   try {
@@ -250,7 +252,7 @@ function setHours(v: SelectOption['value']) {
 }
 
 async function chooseLevel(r: Row, value: SelectOption['value']) {
-  if (r.logsBusy || !canUpdateRow(r) || !isLevel(value) || value === r.logsLevels?.level) return
+  if (r.logsBusy || !canLogs.value || !isLevel(value) || value === r.logsLevels?.level) return
   if (value === 'full') {
     fullDialog.value = { row: r, hours: 1 }
     return
@@ -265,7 +267,7 @@ async function chooseLevel(r: Row, value: SelectOption['value']) {
  */
 async function chooseSetting(r: Row, value: SelectOption['value']) {
   const p = r.logsPolicy
-  if (!p || r.logsBusy || !canUpdateRow(r) || !isSetting(value) || value === activeSetting(p, now.value)) return
+  if (!p || r.logsBusy || !canLogs.value || !isSetting(value) || value === activeSetting(p, now.value)) return
   if (value === 'full') {
     fullDialog.value = { row: r, hours: 1 }
     return
@@ -281,14 +283,14 @@ async function confirmFull() {
 }
 
 async function clearFull(r: Row) {
-  if (r.logsBusy || !canUpdateRow(r)) return
+  if (r.logsBusy || !canLogs.value) return
   if (!await confirm({ title: t('ccgateway.requestLogs.clearFullTitle'), message: t('ccgateway.requestLogs.clearFullConfirm'), confirmText: t('ccgateway.requestLogs.clearFull'), danger: true })) return
   await putLogs(r, { clear_full: true })
 }
 
 /** Deletes every log of the account (summaries and bodies); the setting stays (§4). */
 async function clearAll(r: Row) {
-  if (r.logsBusy || !canUpdateRow(r) || !r.logsPolicy?.worker?.clearAll) return
+  if (r.logsBusy || !canLogs.value || !r.logsPolicy?.worker?.clearAll) return
   if (!await confirm({ title: t('ccgateway.requestLogs.clearAllTitle'), message: t('ccgateway.requestLogs.clearAllConfirm'), confirmText: t('ccgateway.requestLogs.clearAll'), danger: true })) return
   await putLogs(r, { clear_all: true })
 }
@@ -448,7 +450,7 @@ async function refreshAuth(r: Row) {
           <!-- The tooltip only mirrors the row's hidden description, which assistive technology reads instead. -->
           <template v-if="row.logsPolicy">
             <STooltip :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
-              <SSegmented :model-value="settingOf(row.logsPolicy)" :options="settingOptions(row.logsPolicy)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canUpdateRow(row) || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseSetting(row, $event)" />
+              <SSegmented :model-value="settingOf(row.logsPolicy)" :options="settingOptions(row.logsPolicy)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseSetting(row, $event)" />
               <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
               <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
               <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
@@ -456,14 +458,14 @@ async function refreshAuth(r: Row) {
             <div class="mt-1 flex items-center gap-2 whitespace-nowrap">
               <SButton v-if="showViewer(row)" size="sm" variant="ghost" icon="list" :disabled="!row.logsPolicy.worker" :data-testid="`request-log-view-${row.id}`" @click="viewing = row">{{ viewText(row.logsPolicy.worker) }}</SButton>
               <SHint v-if="settingOf(row.logsPolicy) === 'full'" inline size="xs" tone="warning" :data-testid="`request-log-full-${row.id}`">{{ fullRemaining(row) }}</SHint>
-              <SButton v-if="(row.logsPolicy.worker?.usage.full_bytes ?? 0) > 0 && canUpdateRow(row)" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
-              <SButton v-if="canUpdateRow(row) && row.logsPolicy.worker?.clearAll" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-all-${row.id}`" @click="clearAll(row)">{{ t('ccgateway.requestLogs.clearAll') }}</SButton>
+              <SButton v-if="(row.logsPolicy.worker?.usage.full_bytes ?? 0) > 0 && canLogs" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
+              <SButton v-if="canLogs && row.logsPolicy.worker?.clearAll" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-all-${row.id}`" @click="clearAll(row)">{{ t('ccgateway.requestLogs.clearAll') }}</SButton>
             </div>
             <SHint v-if="!row.logsPolicy.worker" size="xs" :data-testid="`request-log-worker-unavailable-${row.id}`">{{ t('ccgateway.requestLogs.workerUnavailable') }}</SHint>
           </template>
           <template v-else-if="row.logsLevels">
             <STooltip :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
-              <SSegmented :model-value="row.logsLevels.level" :options="levelOptions(row)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canUpdateRow(row) || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseLevel(row, $event)" />
+              <SSegmented :model-value="row.logsLevels.level" :options="levelOptions(row)" size="sm" :aria-label="t('ccgateway.requestLogs.levelLabel')" :aria-describedby="`request-log-limits-${row.id}`" :disabled="!canLogs || row.logsBusy || row.checking || loading" :data-testid="`request-log-level-${row.id}`" @update:model-value="chooseLevel(row, $event)" />
               <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
               <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
               <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>
@@ -473,11 +475,11 @@ async function refreshAuth(r: Row) {
                 {{ viewText(row.logsLevels) }}
               </SButton>
               <SHint v-if="row.logsLevels.level === 'full'" inline size="xs" tone="warning" :data-testid="`request-log-full-${row.id}`">{{ fullRemaining(row) }}</SHint>
-              <SButton v-if="(row.logsLevels.usage.full_bytes ?? 0) > 0 && canUpdateRow(row)" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
+              <SButton v-if="(row.logsLevels.usage.full_bytes ?? 0) > 0 && canLogs" size="sm" variant="ghost" tone="danger" :disabled="row.logsBusy || row.checking || loading" :data-testid="`request-log-clear-full-${row.id}`" @click="clearFull(row)">{{ t('ccgateway.requestLogs.clearFull') }}</SButton>
             </div>
           </template>
           <STooltip v-else-if="row.logsEnabled !== null" :delay="0" placement="bottom" class="items-center gap-1.5 whitespace-nowrap" :data-testid="`request-log-cell-${row.id}`">
-            <SSwitch :model-value="row.logsEnabled" :disabled="!canUpdateRow(row) || row.logsBusy || row.checking || loading" :describedby="`request-log-limits-${row.id}`" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)"><span class="sr-only">{{ t('ccgateway.requestLogs.title') }}</span></SSwitch>
+            <SSwitch :model-value="row.logsEnabled" :disabled="!canLogs || row.logsBusy || row.checking || loading" :describedby="`request-log-limits-${row.id}`" :data-testid="`request-logs-${row.id}`" @update:model-value="setLogs(row, $event)"><span class="sr-only">{{ t('ccgateway.requestLogs.title') }}</span></SSwitch>
             <SButton variant="ghost" size="sm" icon="info" icon-only class="text-fg-subtle" :aria-label="t('ccgateway.requestLogs.details')" :aria-describedby="`request-log-limits-${row.id}`" :data-testid="`request-log-info-${row.id}`" />
             <span :id="`request-log-limits-${row.id}`" class="sr-only" :data-testid="`request-log-limits-${row.id}`">{{ logDetails(row) }}</span>
             <template #content><span aria-hidden="true" data-testid="request-log-tooltip">{{ logDetails(row) }}</span></template>

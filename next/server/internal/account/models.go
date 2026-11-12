@@ -70,12 +70,13 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 	var hc *http.Client
 	switch {
 	case proxyURL != "":
-		spec, err := core.ParseProxyURL(proxyURL)
+		// Reaching a proxy by address takes a proxy write key, as when saving.
+		byURL, err := s.parseProxyURL(ctx, proxyURL)
 		if err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
-		if hc, err = s.d.Proxies.HTTPClientFor(ctx, spec); err != nil {
+		if hc, err = s.d.Proxies.HTTPClientFor(ctx, byURL.spec); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}

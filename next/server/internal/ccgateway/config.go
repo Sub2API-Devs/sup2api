@@ -216,6 +216,9 @@ type Service struct {
 	// endpoints (CONTRACTS §21.4); nil: callers without account:create see
 	// no proxy.
 	Authorizer core.Authorizer
+	// Accounts decides which accounts a caller of the per-account runtime
+	// endpoints reaches; nil: those endpoints answer 503.
+	Accounts core.AccountAccess
 	// Locker lets one node at a time install the runtime; nil: this node
 	// only (single-node tests).
 	Locker core.Locker

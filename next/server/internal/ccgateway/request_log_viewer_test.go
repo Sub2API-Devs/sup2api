@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,6 +149,78 @@ func TestRequestLogListRejectsMalformedWorkerAnswers(t *testing.T) {
 		`{"items":[{"id":"` + viewerLogID + `","time":"now","log_level":"full"}]}`, `{"items":[],"next":"x"}`, `not json`} {
 		if w := get(readers, ""); w.Code != 503 {
 			t.Fatalf("%s: %d", answer, w.Code)
+		}
+	}
+}
+
+// The detail's metadata is projected by default: without settings:manage only
+// the listed summary fields come through, so identity, the upstream's error
+// text, Worker paths and fields added later stay with settings:manage.
+func TestRequestLogDetailProjectsMetadataWithoutContent(t *testing.T) {
+	const summary = `"request_id":"rid","http_status":529,"status":529,"stage":"request_command","model":"claude-x","duration_ms":12,` +
+		`"error_type":"overloaded_error","error_code":"overloaded","error_source":"http","mode":"build","body_sha256":"ab","upstream_betas":["b1"],"stream":true`
+	// path is a listed name, but an object is not a summary value.
+	const metadata = `{` + summary + `,"device_id":"dev-1","account_uuid":"acc-uuid","error":"upstream said: secret detail","log_directory":"x",` +
+		`"messages":[{"role":"user"}],"future_field":"new","path":{"nested":"content"}}`
+	_, _, _, get := viewerFixture(t, func(w http.ResponseWriter, _ string, _ map[string]any) {
+		_, _ = w.Write([]byte(`{"metadata":` + metadata + `,"events":[],"events_truncated":false,"files":[]}`))
+	})
+	read := func(keys viewerAuth) map[string]any {
+		t.Helper()
+		w := get(keys, "/"+viewerLogID)
+		var out struct {
+			Data struct {
+				Metadata map[string]any `json:"metadata"`
+			} `json:"data"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.Data.Metadata == nil {
+			t.Fatalf("detail: %d %s", w.Code, w.Body)
+		}
+		return out.Data.Metadata
+	}
+	var whole, projected map[string]any
+	if json.Unmarshal([]byte(metadata), &whole) != nil || json.Unmarshal([]byte(`{`+summary+`}`), &projected) != nil {
+		t.Fatal("fixture")
+	}
+	for _, keys := range []viewerAuth{{"account:read": true}, {"settings:read": true}} {
+		if got := read(keys); !reflect.DeepEqual(got, projected) {
+			t.Errorf("%v reads %v, want %v", keys, got, projected)
+		}
+	}
+	for _, keys := range []viewerAuth{{"settings:manage": true}, {"account:read": true, "settings:manage": true}} {
+		if got := read(keys); !reflect.DeepEqual(got, whole) {
+			t.Errorf("%v reads %v, want the whole metadata", keys, got)
+		}
+	}
+}
+
+// The list keeps the classified error for every reader and the upstream's
+// text for settings:manage only.
+func TestRequestLogListHidesErrorTextWithoutContent(t *testing.T) {
+	_, _, _, get := viewerFixture(t, func(w http.ResponseWriter, _ string, _ map[string]any) {
+		_, _ = w.Write([]byte(`{"items":[{"id":"` + viewerLogID + `","request_id":"rid","time":"2026-11-12T00:00:00Z","duration_ms":1,"status":529,` +
+			`"stage":"request_command","log_level":"summary","error_type":"overloaded_error","error":"upstream said: secret detail","log_status":"complete","bytes":1}],"next":null}`))
+	})
+	for _, tc := range []struct {
+		keys viewerAuth
+		text string
+	}{
+		{viewerAuth{"account:read": true}, ""},
+		{viewerAuth{"settings:read": true}, ""},
+		{viewerAuth{"settings:manage": true}, "upstream said: secret detail"},
+		{viewerAuth{"account:read": true, "settings:manage": true}, "upstream said: secret detail"},
+	} {
+		w := get(tc.keys, "")
+		var out struct {
+			Data struct {
+				Items []requestLogItem `json:"items"`
+			} `json:"data"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || len(out.Data.Items) != 1 {
+			t.Fatalf("%v list: %d %s", tc.keys, w.Code, w.Body)
+		}
+		if item := out.Data.Items[0]; item.Error != tc.text || item.ErrorType != "overloaded_error" {
+			t.Errorf("%v reads error %q (%s), want %q", tc.keys, item.Error, item.ErrorType, tc.text)
 		}
 	}
 }

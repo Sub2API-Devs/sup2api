@@ -81,7 +81,7 @@ const inPlace = computed(() => Number.isSafeInteger(props.reauthAccountId) && (p
 const reauthCompleted = ref(false)
 const reauth = computed(() => !props.draft && (inPlace.value || isDraftKey(props.reauthKey)))
 const mode = computed<CcgMode>(() => (reauth.value ? 'reauth' : 'draft'))
-const canManage = computed(() => auth.has('settings:manage') || (reauth.value ? !!props.canEdit : auth.has([...ACCOUNT_KEYS.create])))
+const canManage = computed(() => (reauth.value ? !!props.canEdit : auth.has(['settings:manage', ...ACCOUNT_KEYS.create])))
 
 /** New account: draft key once created, and the proxy the draft runs with. */
 const draftKey = ref<string | null>(null)
