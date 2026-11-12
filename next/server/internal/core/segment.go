@@ -1,6 +1,10 @@
 package core
 
-import "github.com/shopspring/decimal"
+import (
+	"strings"
+
+	"github.com/shopspring/decimal"
+)
 
 // Group pricing (CONTRACTS §97): what a call costs is a list price times a
 // rate, and each side is resolved on its own.
@@ -45,6 +49,13 @@ const (
 const RateScale = 4
 
 var MaxRate = decimal.New(9999999999, -RateScale)
+
+// ParseRate reads a rate, a discount or a multiplier as a client sends it: a
+// decimal from 0 to MaxRate with RateScale decimals at most.
+func ParseRate(s string) (decimal.Decimal, bool) {
+	d, err := decimal.NewFromString(strings.TrimSpace(s))
+	return d, err == nil && !d.IsNegative() && !d.GreaterThan(MaxRate) && d.Exponent() >= -RateScale
+}
 
 // SegmentRef names a segment where other rows refer to it. Name of a personal
 // segment is its user's email.

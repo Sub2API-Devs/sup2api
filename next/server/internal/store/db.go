@@ -79,6 +79,13 @@ func IsUniqueViolation(err error, constraint string) bool {
 	return constraint == "" || pg.ConstraintName == constraint
 }
 
+// IsForeignKeyViolation reports a write that refers to a row that is not
+// there (any more).
+func IsForeignKeyViolation(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && pg.Code == "23503"
+}
+
 // IsNoRows reports pgx.ErrNoRows.
 func IsNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 

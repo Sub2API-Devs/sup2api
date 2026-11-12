@@ -50,3 +50,25 @@ func TestPriceRuleMultiplier(t *testing.T) {
 		t.Errorf("a multiplier of zero is free: got %s", got)
 	}
 }
+
+func TestParseRate(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want string // "" = rejected
+	}{
+		{"0", "0"},
+		{" 1.5 ", "1.5"},
+		{"0.0001", "0.0001"},
+		{"999999.9999", "999999.9999"},
+		{"1000000", ""},
+		{"0.00001", ""},
+		{"-1", ""},
+		{"", ""},
+		{"abc", ""},
+	} {
+		got, ok := ParseRate(tc.in)
+		if ok != (tc.want != "") || (ok && got.String() != tc.want) {
+			t.Errorf("ParseRate(%q) = %s, %v; want %q", tc.in, got, ok, tc.want)
+		}
+	}
+}
