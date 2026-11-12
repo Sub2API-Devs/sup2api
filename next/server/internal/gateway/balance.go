@@ -125,15 +125,15 @@ func trafficWeights(w, used []float64) []float64 {
 
 // readBalance reads, once per request and at the first pick the binding does
 // not serve, the usage the scheduling settings balance on. Nothing is read
-// when they are off or the request counts tokens. A later pick (failover)
-// reuses the read.
+// when the request counts tokens or a single candidate has nothing to be
+// balanced against. A later pick (failover) reuses the read.
 func (c *call) readBalance(ctx context.Context, cands []core.AccountRef) {
 	if c.balanceDone {
 		return
 	}
 	c.balanceDone = true
 	cfg := c.scheduling
-	if !cfg.active() || c.tokenCounting() {
+	if c.tokenCounting() {
 		return
 	}
 	refs := make([]core.AccountRef, 0, len(cands))
@@ -142,7 +142,10 @@ func (c *call) readBalance(ctx context.Context, cands []core.AccountRef) {
 			refs = append(refs, cands[i])
 		}
 	}
-	byModel := cfg.Mode == balanceModeTraffic && cfg.ModelLimits && c.model != ""
+	if len(refs) < 2 {
+		return
+	}
+	byModel := cfg.ModelLimits && c.model != ""
 	trafficModel := ""
 	if byModel {
 		trafficModel = c.model
@@ -173,7 +176,7 @@ type usageQuery struct {
 func (c *call) readUsage(ctx context.Context, cfg SchedulingSettings, refs []core.AccountRef, trafficModel string) (map[int64]accountUsage, error) {
 	metric, ok := balanceMetricTable[cfg.Metric]
 	if !ok { // settings are normalized; a stray value must not take the request down
-		metric = balanceMetricTable[balanceMetricRPM]
+		metric = balanceMetricTable[defaultSchedulingSettings().Metric]
 	}
 	q := usageQuery{metric: metric, refs: refs, lists: make([]int, len(refs)),
 		account: cfg.LimitLoad || trafficModel == "", trafficModel: trafficModel}
@@ -296,7 +299,8 @@ func (c *call) readSlotUsage(ctx context.Context, q usageQuery, out map[int64]ac
 // tierWeights are the weights one (priority, grade) tier is drawn with: the
 // scheduler.rank plugins' weight with the higher of their load and the core's
 // limit load applied, then the traffic balance (CONTRACTS §67, §89). Without
-// loads and with the settings off they are the accounts' weights.
+// loads and with nothing read (a token count, a single candidate) they are
+// the accounts' weights.
 func (c *call) tierWeights(tier []core.AccountRef) []float64 {
 	b := c.balance
 	if b == nil && c.ranked == nil {
@@ -319,7 +323,7 @@ func (c *call) tierWeights(tier []core.AccountRef) []float64 {
 		}
 		w[i] = loadedWeight(weight, loads[i])
 	}
-	if b != nil && b.cfg.Mode == balanceModeTraffic {
+	if b != nil {
 		b.applyTraffic(tier, w)
 	}
 	c.recordBalance(tier, base, w, loads)
@@ -327,7 +331,7 @@ func (c *call) tierWeights(tier []core.AccountRef) []float64 {
 }
 
 // usageOf is the read usage of account id; false when nothing was read for it
-// (balancing off, failed read, or an account the read did not cover).
+// (nothing read, failed read, or an account the read did not cover).
 func (b *balanceState) usageOf(id int64) (accountUsage, bool) {
 	if b == nil {
 		return accountUsage{}, false

@@ -25,6 +25,11 @@ func (panicStatsLimiter) TryHit(context.Context, core.AccountRef, string, string
 	panic("admission panic")
 }
 
+// Usage reports nothing: the balancing reads it before the admission.
+func (panicStatsLimiter) Usage(context.Context, []core.AccountRef) (map[int64]core.RateUsage, error) {
+	return nil, nil
+}
+
 func TestAccountStatsAdmissionPanicReleasesSlots(t *testing.T) {
 	t.Run("http", func(t *testing.T) {
 		e := newEnv(t)
