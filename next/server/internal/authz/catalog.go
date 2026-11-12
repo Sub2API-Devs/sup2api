@@ -50,7 +50,7 @@ var coreModules = []coreModule{
 		{key: "user:create", en: "Create users", zh: "新建用户"},
 		{key: "user:update", en: "Edit users", zh: "编辑用户"},
 		{key: "user:delete", en: "Delete users", zh: "删除用户", sensitive: true},
-		{key: "user:password:reset", en: "Reset user passwords", zh: "重置他人密码", sensitive: true, sessionOnly: true},
+		{key: "user:password:reset", en: "Reset user passwords and two-factor", zh: "重置他人密码与两步验证", sensitive: true, sessionOnly: true},
 	}},
 	{"role", lt("Roles", "角色"), []corePerm{
 		{key: "role:read", en: "View roles and permissions", zh: "查看角色与权限"},

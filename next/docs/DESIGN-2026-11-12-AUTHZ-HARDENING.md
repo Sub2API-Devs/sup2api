@@ -236,3 +236,12 @@
 - 改动：`authz.Service.Version()`（读锁返回 `minVersion`，不查库）实现新的可选接口 `core.AuthzVersioner`；`httpapi.Router` 的认证中间件在认证成功后写响应头 `X-Authz-Version`（`httpapi.HeaderAuthzVersion`，authorizer 没有实现该接口时不写）；`iam.Me` 增加 `authz_version`（取 `PermissionSet.Version`）。`authz.Start` 在 `SyncCore` 之后读一次版本，节点从第一个请求起就报告库里的版本，而不是等到第一次变更或 30 秒轮询。`TokenPair` 不变。CONTRACTS §5.2 同步。
 - 影响对象：只新增输出。控制台 API 所有通过认证的响应多一个头；`GET /me` 多一个字段。登出、撤销会话、改密码走 iam 自己的 `iam:user:changed`，不推进这个版本，前端不会因他人登出而刷新权限（创建、删除、启用/禁用用户与角色、授权、目录变更一样会推进）。头是本节点在认证那一刻已知的版本：变更请求自身的响应不反映该变更，多节点下可能短暂落后或领先于取 `/me` 的节点，前端按“头大于 `max(/me 的 authz_version, 上次触发重取的头值)` 才重新取”判断，同一个头值至多重取一次；跨域部署读取这个头需要 `Access-Control-Expose-Headers`（核心目前不发 CORS 头，同源部署不受影响）。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T48 W2-F8、决策 D16：清除他人两步验证改需 user:password:reset（产品性收紧）
+
+- 改动：`DELETE /users/:id/security` 的权限由 `user:update` 改为 `user:password:reset`（`iam/security_http.go`）；权限目录里该权限的标签改为“重置他人密码与两步验证 / Reset user passwords and two-factor”（SyncCore 启动时更新 `permissions.label`）；用户列表“重置二次验证和通行密钥”按钮的判断键同步改（`UsersView.vue`）。不新增权限，无迁移。目标检查（`CanActOnUser`）与重置自己时的二次确认不变。CONTRACTS §43 同步。
+- 影响对象：
+  - 只有 `user:update`、没有 `user:password:reset` 的角色：调用由成功变为 403 `details.permission = user:password:reset`，按钮不再显示。内置的 `admin`、`operator` 默认两个权限都有，不受影响（被人手工去掉 `user:password:reset` 的除外）；只勾了 `user:update` 的自定义角色需要补勾。
+  - 访问密钥：`user:password:reset` 只认会话（T10），带 `user:update` 的密钥此前能清他人的两步验证，现在一律 403，需改用登录会话。
+  - 经 `DELETE /users/<自己>/security` 重置自己因子的人同样需要这个权限；没有的人用 `/me/two-factor/disable`。
+- 回滚：revert 这个提交即可；标签在旧版本下次启动时由 SyncCore 改回，无数据变化。

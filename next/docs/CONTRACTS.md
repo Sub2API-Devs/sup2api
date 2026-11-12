@@ -6798,7 +6798,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - `POST /setup {password}`：返回 `{flow_token, secret, otpauth_url, qr_code}`（`qr_code` 是 PNG data URL，CSP 的 `img-src` 允许）。`POST /enable {flow_token, code}`：验证后开启，返回 10 个备用码，只显示这一次。
 - `POST /disable {password, code}`、`POST /backup-codes {password, code}`：都要密码和验证码（或备用码）。
 - TOTP：SHA-1、6 位、30 秒，前后各容忍一个时间步；`last_step` 保证同一个码不能用两次。密钥用主密钥加密（AAD 绑定用户 id），备用码只存 bcrypt 哈希。
-- `DELETE /users/:id/security`（`user:update`）：管理员给丢失设备的用户清除二次验证和全部通行密钥；非超级管理员不能对超级管理员操作。
+- `DELETE /users/:id/security`（`user:password:reset`🔐🔑，2026-11-12 起，此前是 `user:update`）：管理员给丢失设备的用户清除二次验证和全部通行密钥；非超级管理员不能对超级管理员操作。清掉第二因子后账号只剩密码，与重置密码同级，所以共用同一个权限（权限标签改为“重置他人密码与两步验证”）；该权限只认登录会话，访问密钥调用一律 403（`details.permission = user:password:reset`）。经这个路由重置自己的因子同样需要这个权限（没有的人走 `/me/two-factor/disable`）。
 
 ### 79.3 通行密钥（`/me/passkeys`）
 
