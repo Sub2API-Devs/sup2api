@@ -119,3 +119,99 @@ func TestOwnerScopeWithoutGrant(t *testing.T) {
 		t.Fatalf("all scope = %v", *s)
 	}
 }
+
+// keyTokens also verifies access keys: "sak_<uid>" acts for uid.
+type keyTokens struct{ fakeTokens }
+
+func (keyTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	uid, err := strconv.ParseInt(strings.TrimPrefix(raw, core.AccessKeyPrefix), 10, 64)
+	return core.AccessKeyIdentity{UserID: uid, KeyID: 1}, err
+}
+
+func serve(engine *gin.Engine, method, path, bearer string) int {
+	req := httptest.NewRequest(method, "/api/v1"+path, nil)
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	w := httptest.NewRecorder()
+	engine.ServeHTTP(w, req)
+	return w.Code
+}
+
+func TestSessionOnly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	r := NewRouter(engine, keyTokens{}, fakeAuthz{keys: map[int64][]string{1: {"x:read"}}})
+	ok := func(c *gin.Context) { OK(c, nil) }
+	strict := r.SessionOnly()
+	strict.Perm("GET", "/strict/perm", "x:read", ok)
+	strict.PermAny("GET", "/strict/any", ok, "x:read", "x:own:read")
+	r.Perm("GET", "/perm", "x:read", ok)
+	r.PermAny("GET", "/any", ok, "x:read", "x:own:read")
+	r.AuthedRead("/read", ok)
+	r.Authed("GET", "/authed", ok)
+
+	cases := []struct {
+		path     string
+		jwt, key int
+		name     string
+	}{
+		{"/strict/perm", 200, http.StatusForbidden, "SessionOnly Perm"},
+		{"/strict/any", 200, http.StatusForbidden, "SessionOnly PermAny"},
+		{"/perm", 200, 200, "Perm on the original router"},
+		{"/any", 200, 200, "PermAny on the original router"},
+		{"/read", 200, 200, "AuthedRead"},
+		{"/authed", 200, http.StatusForbidden, "Authed"},
+	}
+	for _, tc := range cases {
+		if got := serve(engine, "GET", tc.path, "u1"); got != tc.jwt {
+			t.Errorf("%s with a JWT = %d, want %d", tc.name, got, tc.jwt)
+		}
+		if got := serve(engine, "GET", tc.path, core.AccessKeyPrefix+"1"); got != tc.key {
+			t.Errorf("%s with an access key = %d, want %d", tc.name, got, tc.key)
+		}
+		if got := serve(engine, "GET", tc.path, ""); got != http.StatusUnauthorized {
+			t.Errorf("%s without a token = %d, want 401", tc.name, got)
+		}
+	}
+	// Permission checks still run after the key refusal on a view.
+	if got := serve(engine, "GET", "/strict/perm", "u2"); got != http.StatusForbidden {
+		t.Errorf("SessionOnly Perm without the permission = %d", got)
+	}
+}
+
+func TestAuthenticateAndRejectAccessKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	run := func(bearer string) (*gin.Context, *httptest.ResponseRecorder, bool) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("GET", "/", nil)
+		if bearer != "" {
+			c.Request.Header.Set("Authorization", bearer)
+		}
+		return c, w, Authenticate(c, keyTokens{})
+	}
+
+	c, _, ok := run("Bearer u5")
+	if uid, _ := core.UserID(c.Request.Context()); !ok || uid != 5 || c.IsAborted() {
+		t.Fatalf("JWT: ok=%v uid=%d aborted=%v", ok, uid, c.IsAborted())
+	}
+	if !RejectAccessKey(c) || c.IsAborted() {
+		t.Fatal("RejectAccessKey refused a JWT caller")
+	}
+
+	c, w, ok := run("Bearer " + core.AccessKeyPrefix + "6")
+	if _, isKey := core.AccessKey(c.Request.Context()); !ok || !isKey {
+		t.Fatalf("access key: ok=%v key=%v", ok, isKey)
+	}
+	if RejectAccessKey(c) || !c.IsAborted() || w.Code != http.StatusForbidden {
+		t.Fatalf("RejectAccessKey on a key: aborted=%v code=%d", c.IsAborted(), w.Code)
+	}
+
+	for _, bearer := range []string{"", "Basic u5", "Bearer ", "Bearer bad"} {
+		c, w, ok := run(bearer)
+		if ok || !c.IsAborted() || w.Code != http.StatusUnauthorized {
+			t.Errorf("%q: ok=%v aborted=%v code=%d", bearer, ok, c.IsAborted(), w.Code)
+		}
+	}
+}

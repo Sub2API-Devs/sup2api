@@ -23,6 +23,7 @@ type Router struct {
 	api    *gin.RouterGroup
 	tokens core.TokenVerifier
 	authz  core.Authorizer
+	noKeys bool
 }
 
 // NewRouter mounts common middleware on engine and returns the /api/v1 router.
@@ -40,25 +41,26 @@ func (r *Router) Public(method, path string, h ...gin.HandlerFunc) {
 // route without a permission has nothing to limit a key by, and most of them
 // manage how the user signs in (CONTRACTS §80).
 func (r *Router) Authed(method, path string, h ...gin.HandlerFunc) {
-	chain := []gin.HandlerFunc{r.authenticate(), rejectAccessKey}
-	r.api.Handle(method, path, append(chain, h...)...)
+	r.api.Handle(method, path, append(r.SessionOnly().auth(), h...)...)
 }
 
 // AuthedRead registers a read-only route for any logged-in user or access key:
 // who the caller is and what they can see, under the key's own limits.
 func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) {
-	r.api.Handle(http.MethodGet, path, append([]gin.HandlerFunc{r.authenticate()}, h...)...)
+	r.api.Handle(http.MethodGet, path, append(r.auth(), h...)...)
 }
 
-func rejectAccessKey(c *gin.Context) {
-	if _, ok := core.AccessKey(c.Request.Context()); ok {
-		Fail(c, core.ErrPermissionDenied.WithMessage("access keys cannot use this endpoint"))
-	}
+// SessionOnly returns a view of r whose routes refuse access keys; r itself
+// is unchanged.
+func (r *Router) SessionOnly() *Router {
+	v := *r
+	v.noKeys = true
+	return &v
 }
 
 // Perm registers a route requiring permission.
 func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
-	chain := []gin.HandlerFunc{r.authenticate(), r.require(permission)}
+	chain := append(r.auth(), r.require(permission))
 	r.api.Handle(method, path, append(chain, h...)...)
 }
 
@@ -71,8 +73,7 @@ func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...s
 	if len(keys) == 0 {
 		panic("httpapi: PermAny without permission keys")
 	}
-	chain := []gin.HandlerFunc{r.authenticate(), r.requireAny(keys), handler}
-	r.api.Handle(method, path, chain...)
+	r.api.Handle(method, path, append(r.auth(), r.requireAny(keys), handler)...)
 }
 
 // Granted returns the permission keys the route middleware matched for the
@@ -84,22 +85,50 @@ func Granted(c *gin.Context) []string {
 // Group exposes the raw group for special cases (plugin route proxy).
 func (r *Router) Group() *gin.RouterGroup { return r.api }
 
-func (r *Router) authenticate() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		h := c.GetHeader("Authorization")
-		token, ok := strings.CutPrefix(h, "Bearer ")
-		if !ok || token == "" {
-			Fail(c, core.ErrUnauthenticated)
-			return
+// auth is the authentication chain of r's routes: the bearer check, then,
+// on a SessionOnly view, the access key refusal.
+func (r *Router) auth() []gin.HandlerFunc {
+	chain := []gin.HandlerFunc{func(c *gin.Context) {
+		if Authenticate(c, r.tokens) {
+			c.Next()
 		}
-		ctx, _, err := core.AuthenticateBearer(c.Request.Context(), r.tokens, token, c.ClientIP())
-		if err != nil {
-			Fail(c, core.ErrUnauthenticated.WithCause(err))
-			return
-		}
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
+	}}
+	if r.noKeys {
+		chain = append(chain, func(c *gin.Context) {
+			if RejectAccessKey(c) {
+				c.Next()
+			}
+		})
 	}
+	return chain
+}
+
+// Authenticate resolves the request's bearer token (a JWT or an access key)
+// and stores the caller in the request context. On failure it renders
+// unauthenticated and returns false.
+func Authenticate(c *gin.Context, tokens core.TokenVerifier) bool {
+	token, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+	if !ok || token == "" {
+		Fail(c, core.ErrUnauthenticated)
+		return false
+	}
+	ctx, _, err := core.AuthenticateBearer(c.Request.Context(), tokens, token, c.ClientIP())
+	if err != nil {
+		Fail(c, core.ErrUnauthenticated.WithCause(err))
+		return false
+	}
+	c.Request = c.Request.WithContext(ctx)
+	return true
+}
+
+// RejectAccessKey renders permission_denied and returns false when the
+// caller authenticated with an access key.
+func RejectAccessKey(c *gin.Context) bool {
+	if _, ok := core.AccessKey(c.Request.Context()); ok {
+		Fail(c, core.ErrPermissionDenied.WithMessage("access keys cannot use this endpoint"))
+		return false
+	}
+	return true
 }
 
 func (r *Router) require(permission string) gin.HandlerFunc {
