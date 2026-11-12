@@ -218,8 +218,14 @@ func (h *HTTPHandler) handleWebhook(ctx context.Context, req *pluginv1.HTTPReque
 	}
 
 	if err := h.orders.HandlePaymentNotification(ctx, providerKey, req); err != nil {
-		slog.Error("webhook notification failed", "provider", providerKey, "error", err)
-		return webhookFailure(err), nil
+		resp := webhookFailure(err)
+		// Anyone can call the webhook: only our own failures are errors.
+		level := slog.LevelWarn
+		if resp.GetStatus() >= http.StatusInternalServerError && resp.GetStatus() != http.StatusNotImplemented {
+			level = slog.LevelError
+		}
+		slog.Log(ctx, level, "webhook notification failed", "provider", providerKey, "status", resp.GetStatus(), "error", err)
+		return resp, nil
 	}
 	return webhookOK(), nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -141,8 +142,56 @@ func TestWebhookDisabledInstanceIsUnknown(t *testing.T) {
 	`, ProviderStripe); err != nil {
 		t.Fatal(err)
 	}
-	p.orderService.RegisterVerifier(ProviderStripe, &stubVerifier{})
-	if resp := webhook(t, p, ProviderStripe); resp.GetStatus() != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", resp.GetStatus())
+	v := &stubVerifier{}
+	p.orderService.RegisterVerifier(ProviderStripe, v)
+	if resp := webhook(t, p, ProviderStripe); resp.GetStatus() != http.StatusNotFound || v.calls != 0 {
+		t.Fatalf("status = %d, verifier calls = %d, want 404 and 0", resp.GetStatus(), v.calls)
+	}
+}
+
+// perInstanceVerifier accepts the notification only for one instance.
+type perInstanceVerifier struct {
+	accept int64
+	n      *PaymentNotification
+	seen   []int64
+}
+
+func (v *perInstanceVerifier) Verify(_ context.Context, _ *pluginv1.HTTPRequest, cfg ProviderConfig) (*PaymentNotification, error) {
+	v.seen = append(v.seen, cfg.ID)
+	if cfg.ID != v.accept {
+		return nil, errors.New("secret-detail: wrong key")
+	}
+	return v.n, nil
+}
+
+// Each enabled instance is tried; one accepting is enough, none accepting is
+// a 400 that does not echo the verifier's errors.
+func TestWebhookTriesEveryInstance(t *testing.T) {
+	p, _ := startDB(t)
+	order := pendingOrder(t, p)
+	var second int64
+	if err := mustDB(t, p).QueryRow(context.Background(), `
+		INSERT INTO payment_provider_instances (provider_key, name, sort_order) VALUES ($1, 'second', 1) RETURNING id
+	`, ProviderAlipay).Scan(&second); err != nil {
+		t.Fatal(err)
+	}
+	v := &perInstanceVerifier{accept: -1, n: &PaymentNotification{
+		OutTradeNo: order.OutTradeNo, TradeNo: "t2", Amount: decimal.NewFromInt(100), Status: NotificationStatusSuccess}}
+	p.orderService.RegisterVerifier(ProviderAlipay, v)
+
+	resp := webhook(t, p, ProviderAlipay)
+	if resp.GetStatus() != http.StatusBadRequest || len(v.seen) != 2 || strings.Contains(string(resp.GetBody()), "secret-detail") {
+		t.Fatalf("all rejecting: status %d, seen %v, body %s", resp.GetStatus(), v.seen, resp.GetBody())
+	}
+	if got := orderStatus(t, p, order.OrderID); got != StatusPending {
+		t.Fatalf("order status = %s after rejection", got)
+	}
+
+	v.accept, v.seen = second, nil
+	if resp := webhook(t, p, ProviderAlipay); resp.GetStatus() != http.StatusOK || len(v.seen) != 2 {
+		t.Fatalf("second accepting: status %d, seen %v", resp.GetStatus(), v.seen)
+	}
+	if got := orderStatus(t, p, order.OrderID); got != StatusCompleted {
+		t.Fatalf("order status = %s, want completed", got)
 	}
 }

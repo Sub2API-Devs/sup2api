@@ -151,7 +151,6 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 // instance must accept the request (ErrNotificationRejected). Only a verified
 // success notification reaches the order; every failure leaves it untouched.
 func (s *OrderService) HandlePaymentNotification(ctx context.Context, providerKey string, req *pluginv1.HTTPRequest) error {
-	slog.Info("payment notification received", "provider", providerKey)
 	db, err := s.db(ctx)
 	if err != nil {
 		return err
@@ -160,8 +159,8 @@ func (s *OrderService) HandlePaymentNotification(ctx context.Context, providerKe
 	if err != nil {
 		return err
 	}
+	slog.Info("payment notification verified", "provider", providerKey, "status", notification.Status)
 	if notification.Status != NotificationStatusSuccess {
-		slog.Info("payment notification ignored", "provider", providerKey, "status", notification.Status)
 		return nil
 	}
 

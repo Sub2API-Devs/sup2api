@@ -38,14 +38,23 @@ type ProviderConfig struct {
 // NotificationVerifier authenticates one provider's webhook call and parses
 // it. It is the integration point of a real provider: Verify must check the
 // provider's signature over req with the secrets in cfg and return an error
-// for anything it cannot prove authentic.
+// for anything it cannot prove authentic; a nil error comes with a non-nil
+// notification.
+//
+// Orders do not record their provider instance yet, so a verified
+// notification is matched to its order by out_trade_no alone. A real provider
+// must also bind the order to cfg.ID once orders store it.
 type NotificationVerifier interface {
 	Verify(ctx context.Context, req *pluginv1.HTTPRequest, cfg ProviderConfig) (*PaymentNotification, error)
 }
 
 // RegisterVerifier installs the verifier of a provider key. Call it while the
-// plugin is being built; it is not safe for use once requests are served.
+// plugin is being built; it is not safe for use once requests are served. A
+// nil verifier is a programming error.
 func (s *OrderService) RegisterVerifier(providerKey string, v NotificationVerifier) {
+	if v == nil {
+		panic("payment: nil NotificationVerifier for " + providerKey)
+	}
 	s.verifiers[providerKey] = v
 }
 
@@ -63,15 +72,18 @@ func (s *OrderService) verifyNotification(ctx context.Context, db *pgxpool.Pool,
 	if !ok {
 		return nil, ErrProviderNotImplemented
 	}
-	var rejected error
+	var rejected []error
 	for _, cfg := range configs {
 		n, err := verifier.Verify(ctx, req, cfg)
 		if err == nil && n != nil {
 			return n, nil
 		}
-		rejected = err
+		if err == nil {
+			err = errors.New("verifier returned no notification")
+		}
+		rejected = append(rejected, fmt.Errorf("instance %d: %w", cfg.ID, err))
 	}
-	return nil, fmt.Errorf("%w: %v", ErrNotificationRejected, rejected)
+	return nil, fmt.Errorf("%w: %w", ErrNotificationRejected, errors.Join(rejected...))
 }
 
 // enabledProviders lists the enabled instances of a provider key.
