@@ -97,8 +97,18 @@ service HostService {
   // through EgressService (the SDK dialer does this automatically).
   rpc GetDSN(GetDSNRequest) returns (GetDSNResponse);
 
-  // authz (always granted): does a console user hold a permission?
+  // authz: does a console user hold a permission? Own keys always; others
+  // need authz.read.
   rpc AuthzCheck(AuthzCheckRequest) returns (AuthzCheckResponse);
+
+  // accounts scope (always granted): which accounts may a console user act
+  // on? The answer is the core's own account ownership rule (CONTRACTS
+  // §21.1), so a plugin route applies it instead of deciding by itself.
+  // PERMISSION_DENIED when the user holds neither account:<action> nor
+  // account:own:<action>. Being ungranted, it tells every enabled plugin
+  // which of the two account keys of an action any user holds, and which of
+  // the asked ids are live accounts that user created (ids only).
+  rpc AccountScopeCheck(AccountScopeCheckRequest) returns (AccountScopeCheckResponse);
 
   // ledger.credit / ledger.debit: bounded by the approved scope
   // (maxPerTx, maxPerDay), idempotent on idempotency_key.
@@ -614,12 +624,32 @@ message GetDSNResponse {
 
 message AuthzCheckRequest {
   int64 user_id = 1;
-  // Plugin-local key ("rules:manage") or fully qualified key.
+  // Plugin-local key ("rules:manage") or fully qualified key. The plugin's
+  // own keys need no grant; a core key or another plugin's key needs
+  // "authz.read".
   string permission = 2;
 }
 
 message AuthzCheckResponse {
   bool allowed = 1;
+}
+
+message AccountScopeCheckRequest {
+  int64 user_id = 1;
+  // "read", "update" or "test".
+  string action = 2;
+  // The accounts asked about; at most 500. May be empty to learn only
+  // whether the user reaches every account.
+  repeated int64 account_ids = 3;
+}
+
+message AccountScopeCheckResponse {
+  // The user holds account:<action>: every account is in scope and
+  // allowed_ids is empty.
+  bool all = 1;
+  // Otherwise (account:own:<action>): the ids among account_ids that are
+  // live accounts the user created, in request order, once each.
+  repeated int64 allowed_ids = 2;
 }
 
 message LedgerChangeRequest {

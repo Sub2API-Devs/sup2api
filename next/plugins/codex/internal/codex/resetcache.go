@@ -56,7 +56,7 @@ func resetCountKey(id int64) string { return strconv.FormatInt(id, 10) }
 
 // storeResetCount caches the account's current count.
 func (p *Plugin) storeResetCount(ctx context.Context, id int64, n int) {
-	err := p.saveSession(ctx, kvResetCount, resetCountKey(id), ResetCount{AvailableCount: n, UpdatedAt: p.now().Unix()}, resetCountTTL)
+	err := p.saveCached(ctx, kvResetCount, resetCountKey(id), ResetCount{AvailableCount: n, UpdatedAt: p.now().Unix()}, resetCountTTL)
 	if err != nil {
 		p.log.Warn("codex: cache the reset count", "account_id", id, "error", err.Error())
 	}
@@ -89,7 +89,7 @@ func (p *Plugin) loadResetCounts(ctx context.Context, ids []int64) map[string]Re
 		wg.Go(func() {
 			defer func() { <-slots }()
 			var c ResetCount
-			found, err := p.loadSession(ctx, kvResetCount, resetCountKey(id), &c)
+			found, err := p.loadCached(ctx, kvResetCount, resetCountKey(id), &c)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {

@@ -83,6 +83,7 @@ export default {
     ui_menu: '控制台菜单',
     ui_iframe: '沙箱 iframe 页面',
     accounts_read: '读取账号',
+    authz_read: '查询用户的核心与其他插件权限',
     accounts_auto_state: '修改账号自动状态',
     lock: '跨节点锁',
     db_schema: '独立数据库 schema',

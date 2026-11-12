@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -344,7 +345,9 @@ func (h *Handler) serveAsset(c *gin.Context) {
 	var ct string
 	var err error
 	if !current {
-		if h.assets == nil {
+		// A version this node does not serve costs a package load: refuse
+		// what no package may serve before paying for it.
+		if h.assets == nil || (!prefixAllowed(name) && !looksLikeIcon(name)) {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
@@ -396,22 +399,47 @@ func (h *Handler) serveAsset(c *gin.Context) {
 	c.Data(http.StatusOK, ct, data)
 }
 
+// assetAllowed reports whether a package may serve name: a file below a
+// public directory, or one its manifest names as an icon.
 func assetAllowed(info core.PluginInfo, name string) bool {
+	return prefixAllowed(name) || iconAllowed(info, name)
+}
+
+// prefixAllowed reports whether name is a file below a public package
+// directory. It needs no manifest.
+func prefixAllowed(name string) bool {
 	for _, prefix := range []string{"ui/", "forms/", "i18n/"} {
 		if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
 			return true
 		}
 	}
-	if m := info.Manifest; m != nil {
-		icons := []string{m.Icon}
-		for _, at := range m.AccountTypes {
-			icons = append(icons, at.Icon)
-		}
-		for _, icon := range icons {
-			if icon != "" && !strings.HasPrefix(icon, "text:") && name == strings.TrimPrefix(path.Clean("/"+icon), "/") {
-				return true
-			}
+	return false
+}
+
+// iconAllowed reports whether the manifest names name as the plugin's icon or
+// an account type's.
+func iconAllowed(info core.PluginInfo, name string) bool {
+	m := info.Manifest
+	if m == nil {
+		return false
+	}
+	icons := []string{m.Icon}
+	for _, at := range m.AccountTypes {
+		icons = append(icons, at.Icon)
+	}
+	for _, icon := range icons {
+		if icon != "" && !strings.HasPrefix(icon, "text:") && name == strings.TrimPrefix(path.Clean("/"+icon), "/") {
+			return true
 		}
 	}
 	return false
+}
+
+// iconExtensions are the image types the core serves (registry.ContentType):
+// what a manifest icon outside the public directories can be.
+var iconExtensions = []string{".svg", ".png", ".webp", ".ico", ".jpg", ".jpeg", ".gif"}
+
+// looksLikeIcon reports whether name could be a manifest icon, by extension.
+func looksLikeIcon(name string) bool {
+	return slices.Contains(iconExtensions, strings.ToLower(path.Ext(name)))
 }

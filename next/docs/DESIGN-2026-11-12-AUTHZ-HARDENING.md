@@ -253,3 +253,57 @@
 - 改动：`account.visibleActions(ctx, row)` 取代列表（`fillActions`）与 `GET /accounts/:id/actions` 里两份相同的过滤：调用者能修改这一行（`core.ScopeOf(core.AccountScope("update"))` 与 `core.Allows(scope, created_by)`）时返回该账号类型的全部动作（声明的动作都要求 `account:update`），否则只返回不要求权限的动作。此前只要持有 `account:own:update`，就对看得到的每个账号都列出动作。无迁移。
 - 影响对象：读全量、改 own 级的用户（`account:read` + `account:own:update`）在别人创建的账号（含 `created_by` 为空的历史账号）上，列表的 `actions` 字段与 `GET /accounts/:id/actions` 不再返回动作（重新授权、刷新令牌等）；这些动作此前调用也是 404。控制台此前已按行归属隐藏这些菜单项（`accountRowActions.ts` 的 `canUpdate`），界面无变化，变化只对直接调接口或用访问密钥的调用方可见。自己创建的账号、持有 `account:update` 的用户（admin、operator）不变。`GET /accounts/:id/actions` 的 `actions` 在没有可见动作时仍是 `[]`。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T35 M12：payment webhook 删除 mock，未注册验签器时 501
+
+- 改动：`HandlePaymentNotification` 不再用写死的 `mock_out_trade_no` 当作已验证通知。按 `:provider` 查 `payment_provider_instances` 里启用的实例：没有则 404；渠道没有注册 `NotificationVerifier`（`notification.go`，以后接入真实验签的接口，`OrderService.RegisterVerifier`）则 501；验签器对所有实例都不接受则 400；只有验证通过且状态为成功的通知才会改订单并入账，金额不符 400，其他内部错误 500（原先一律 400 并回显错误文本）。任何失败都不改订单状态。本次不实现任何具体渠道的验签。
+- 影响对象：payment 插件的 webhook 现在对所有渠道回 404 或 501（仓库里没有任何验签器），在真实验签接入前不会有订单经 webhook 入账。原实现只会查找 `mock_out_trade_no` 这一个不存在的订单并回 200，从未入账，所以没有可用功能被关掉；对接方会从 200 变为收到 404/501。错误响应不再带内部错误文本。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T40 C-T2、W5-C3：AuthzCheck 只免授权查询本插件的权限
+
+- 改动：宿主 `AuthzCheck` 只对本插件的权限 key 免授权：manifest `userPermissions` 里声明的本地 key，或 `plugin.<本插件>:` 开头的完整 key（`hostServer.qualify` 返回 `(key, own)`，用 `manifest.LocalPermission` / `PermissionKey` 判断）。查询核心 key（如 `user:read`，包括未在 manifest 声明的本地写法）或其他插件的 key 需要新的宿主权限 `authz.read`（风险 medium，需管理员批准），没有时返回 `PermissionDenied`，不调用鉴权器。`HostPermissionRisk`、控制台风险表与中英文标签同步增加 `authz.read`。
+- 影响对象：仓库 15 个插件都不受影响（只有 moderation 调 `AuthzCheck`，查的是自己的 `moderation:read`）。第三方插件若用 `AuthzCheck` 查核心或其他插件的权限，升级核心后调用失败，需在 manifest `hostPermissions` 申请 `authz.read` 并由管理员批准。用未声明的本地 key 调用（原先按核心 key 原样查询，除超管外结果为 false）现在同样需要该授权。保留的已知情况：超管对任何 key 都返回 true，所以插件凭自己的 key 仍能判断某个用户是不是超管（“本插件 key 免授权”的固有结果，改动前同样如此）。`pluginsdktest.FakeHost.AuthzCheck` 不模拟这条规则，插件作者的单测查核心 key 仍会通过，以真实宿主为准。
+- 回滚：revert 这个提交即可，无迁移。已批准的 `authz.read` 授权行留在 `plugin_permission_grants`，旧代码不读它。回滚后 `authz.read` 不在 `HostPermissionRisk` 里，声明了它的第三方 manifest 会在安装、升级的校验中被判为未知宿主权限，需去掉该声明；这类插件应把 `hostCompat` 设为包含本提交的核心版本。
+
+## T41 W2-F9a：插件设置的密钥掩码，打包校验与运行时共用一份读法
+
+- 改动：新增 `manifest.SettingsSecrets(schema) (fields, unreachable)`（`sdk/manifest/settings_secrets.go`），是设置 schema 里 `writeOnly`、`format: password`、`x-sensitive` 标记的唯一读法；核心原来的 `secretFields` 删除，改为调用它。`fields` 是沿 `properties` 嵌套对象能到达的标记（最多 8 层，被标记的属性整体掩码、其下不再列出）；`unreachable` 是到达不了、因而无法单独掩码的标记位置：`items`、`additionalProperties`、`patternProperties`、`allOf`/`anyOf`/`oneOf`、`if`/`then`/`else`、`$defs`、`dependencies` 等任何其他关键字之下的、超过 8 层的；schema 里只要有任何标记，其中每个引用（`$ref`、`$dynamicRef`、`$recursiveRef`）都算不可达（不解析引用的去向：百分号编码、内嵌 `$id`、锚点等都会让解析结果与校验器不一致，所以带密钥的设置 schema 不能用引用）；根节点本身带标记、或 schema 文件不是 JSON 对象时，根（`""`）不可达。读取代价与 schema 大小成线性。
+  - 打包（`manifest/check`）：`ui.settings` 的 schema 有 `unreachable` 时报 `ui.settings.schema` `unmaskable_secret`，列出位置。
+  - 运行时（`GET|PUT /plugins/:key/settings`）：已安装的旧包若有 `unreachable`，含这些标记的顶层设置整块按凭据掩码（`manifest.UnmaskableFields`）；标记不属于某一个顶层设置时（含 schema 文件不是 JSON 对象）全部顶层设置掩码。没有 schema 却存了值的插件，每个顶层键都按凭据掩码。回传掩码沿用原值、只凭插件权限修改时须重填沿用的凭据，这两条规则对整块掩码的设置同样生效。
+- 影响对象：
+  - 仓库 4 个带设置 schema 的插件（growth、guard、mailer、moderation）没有不可达标记，行为不变。
+  - 第三方插件：schema 在数组项等位置标记密钥的、带标记又用了 `$ref` 的（即使引用的是不含密钥的定义）、或 schema 文件不是 JSON 对象的，重新打包、上传安装时校验失败，需把密钥改成对象属性并去掉引用；已安装的照常运行，但对应的顶层设置在设置页显示为 `******`，schema 表单无法逐项编辑它（需整块重填，或升级到改过 schema 的版本）。此前这些值在 `GET` 里是明文返回的。
+  - 没有设置 schema 的插件：`GET /plugins/:key/settings` 的 `values` 由明文变为全部 `******`（空串与 null 除外），`secret_fields` 列出各顶层键。仓库里这类插件都没有存设置值，不受影响；经 API 直接读写这类设置的脚本读不到原值，写入时未改的键回传 `******` 即可（不回传的键照旧被删除；只凭插件权限、没有 `plugin:manage` 的人要改动任何一项，须把保留的每个键都重填）。
+  - 被标记的对象属性之下的嵌套标记不再单独出现在 `secret_fields`（整个对象已是一个掩码字段）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化（存储的设置值从不含掩码）。
+
+## T42 W2-F9b：OAuth 授权会话绑定发起人，claude-oauth 核对 state
+
+- 改动：SDK 新增 `pluginsdk.SaveCallerSession` / `LoadCallerSession` / `UpdateCallerSession`（`sdk/pluginsdk/session.go`）：把多次请求的流程状态存进插件 KV，存储形式 `{"uid": 发起人, "v": 内容}`，会话 id 由 SDK 生成（192 位随机）；读取时比对调用者，会话不存在、已过期、属于他人、或不是这种格式，一律返回 `ok=false`，无法区分；没有登录调用者的请求不能创建会话（`ErrNoCaller`）。`UpdateCallerSession` 是任务说明之外补的第三个函数：codex 设备码轮询要原地改写已有会话（记录上次轮询时间、放慢间隔），它只能用于刚由 `LoadCallerSession` 读到的会话。测试工具 `pluginsdktest.Harness` 增加 `DoAs(userID, ...)`。
+  - claude-oauth：`/auth/start`、`/auth/exchange` 的会话改用上述助手；`exchange` 时 code 里带的 state（`code#state`）非空且与会话的 state 不一致（常量时间比较）回 400 `state_mismatch` 并删除会话，不向上游发请求。
+  - codex：设备码与 Sign in with ChatGPT 两种会话改用上述助手；重置次数缓存不是会话，改名为 `loadCached` / `saveCached`，行为不变。
+- 影响对象：
+  - 他人拿到 `session_id` 也无法继续别人的授权：claude-oauth `exchange` 回 404 `not_found`，codex 设备码轮询回 `expired`（与会话不存在时的回答相同，仍是 200 的轮询结果，不是 HTTP 404），codex SIWC `exchange` 回 404 `session_expired`；会话保留给发起人。
+  - 升级时尚未完成的授权会话（旧格式，没有 `uid`）一律按不存在处理，需重新发起授权（claude-oauth 会话最长 30 分钟，codex 设备码 15 分钟，SIWC 以其会话有效期为准）。回滚时同理：新格式的会话旧代码读不出内容，需重新发起。
+  - 授权的发起与完成必须是同一个登录用户（同一用户的不同浏览器仍可；这些路由本来就不接受访问密钥）。
+  - claude-oauth 粘贴的 code 若带着另一次授权的 state，原先会原样转给上游，现在 400 且该会话作废（首尾空白不算不一致）。这只是防粘错：不带 state 的 code 照旧转给上游，由 PKCE verifier 保证它属于本会话。没有登录用户时发起授权回 401。
+  - 随插件重新打包生效（版本在期 4 统一升）。
+- 回滚：revert 这个提交即可，无迁移；进行中的会话需重新发起。
+
+## T44：/plugin-ui 非当前版本的资源，先按路径拒绝再加载包
+
+- 改动：`GET|HEAD /plugin-ui/:key/:vh/*path` 请求的不是本节点当前版本时，原先一律先 `ReadVersionAsset`（加载该版本的包）再用 `assetAllowed` 判断；现在路径既不在公开目录（`ui/`、`forms/`、`i18n/`，`prefixAllowed`）下、扩展名也不像图标（核心能当图片返回的类型：`.svg`、`.png`、`.webp`、`.ico`、`.jpg`、`.jpeg`、`.gif`，不分大小写，`looksLikeIcon`；任务说明只列了前四种，后三种是审查后补的，避免旧版本的 jpg/gif 图标取不到）时直接 404，不加载包。通过预检的请求在读到包后仍按完整的 `assetAllowed`（公开目录或 manifest 声明的图标，`iconAllowed`）判定。当前版本的路径不变。不加缓存（LRU、singleflight 延后）。
+- 影响对象：这个接口不需要登录，原先任何人都能用任意路径让节点反复加载旧版本的包；现在只有公开目录和图标样式的路径才会触发加载。正常页面不受影响。可见的变化：被预检拒绝的路径一律是空 body 的 404，不再出现版本不存在时的 JSON 404 或加载包失败时的 5xx；旧版本（非当前版本）的 manifest 图标放在公开目录之外且扩展名不在上述列表里（如 `.bmp`、无扩展名）时，按旧版本地址取它会 404，当前版本不受影响，仓库插件的图标都是 `.svg`。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T47 M1-b：宿主 AccountScopeCheck 与 SDK 的账号范围、权限助手
+
+- 改动：
+  - proto：`HostService.AccountScopeCheck(AccountScopeCheckRequest{user_id, action, account_ids}) → AccountScopeCheckResponse{all, allowed_ids}`，不需要宿主授权（与 `AuthzCheck` 查本插件 key 一样总是可用），生成代码已重新生成。
+  - 宿主（`grpcruntime/host.go`）：校验参数（`user_id > 0`、`action` 非空、id 为正且不超过 `manifest.MaxAccountBatch` = 500）后，把 `Accounts` 断言为 `core.AccountAccess` 转调 `AccountsInScope`，即核心代理检查插件路由账号归属用的同一个实现；错误经 `toStatus` 映射（两种 account key 都没有 → `PERMISSION_DENIED`，未知 action → `INVALID_ARGUMENT`），没有接入时 `UNAVAILABLE`。
+  - SDK（`pluginsdk/accounts_scope.go`）：`AccountScope{All}` 及 `Allows`、`Filter`；`ResolveAccountScope(ctx, host, req, action, ids...)`（去重、按 500 分批，调用者取自 `req.Caller`）；`RequireAccounts(...) *HTTPResponse`，nil 表示全部可操作，否则给出与核心 `core.AuthorizeAccounts` 相同的回答：无登录 401、两种 key 都没有 403、own 范围不带 id 403、含不在自己范围内的账号 404、宿主答不了 503；未知 action 或非正数 id 是插件自己的错误，一律 400（核心代理对非正数 id 是按不存在处理，这是两者唯一的差别）。鉴权器自身出错时共享原语按“没有权限”处理，所以表现为 403 而不是 503，与核心代理一致。这部分判定在 SDK 里是照 `AuthorizeAccounts` 的语义写的（SDK 不能依赖 server 包），范围计算本身只在核心。
+  - SDK（`pluginsdk/http.go`）：`RequirePermission(host, perm, next)`：没有登录用户 401，没有权限统一 403（不说明缺哪个权限），宿主答不了 503；`Forbidden()`、`Unauthenticated()` 两个信封助手。
+  - `pluginsdktest.FakeHost.AccountScope` 回调（不设时回答“全部账号”），参数校验与宿主一致。
+- 影响对象：只新增接口，已有行为不变；本次没有插件改用它们（期 3 接入）。旧核心对 `AccountScopeCheck` 回 `UNIMPLEMENTED`，`RequireAccounts` 因此回 503（失败收紧），依赖它的插件需把 `hostCompat` 设为包含本提交的核心版本；Host API 版本号不升（与 `SendAccountRequest` 的做法一致，避免滚动升级时被拒）。`AccountScopeCheck` 按用户的角色权限计算，不带访问密钥的收窄：插件的 admin/user 路由本来就不接受访问密钥。已接受的风险（“总是授予”是任务既定方案，是否收紧由后续决定）：任何已启用的插件不需要授权就能用它得知 (1) 任意用户在某个操作上持有 `account:<action>`、只有 `account:own:<action>`、还是都没有，即绕过 `authz.read` 读到这 6 个核心 key；(2) 对只有 own key 的用户，哪些 id 是该用户创建的未删除账号（含其他插件类型的账号，可按 500 一批扫描），只有 id、没有账号内容，无限速、无审计。`FakeHost` 不设回调时回答“全部账号”，测试账号路由时应设置回调覆盖 own 范围；未知 action 在 fake 里同样 400。
+- 回滚：revert 这个提交即可，无迁移；回滚后已改用这些助手的插件会收到 `UNIMPLEMENTED` 并回 503。

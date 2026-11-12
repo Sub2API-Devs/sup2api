@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"net/url"
 	"testing"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -223,12 +224,110 @@ func TestAuthStartFlow(t *testing.T) {
 	if !kvResp.GetFound() {
 		t.Fatal("session not found in KV")
 	}
-	var session map[string]any
-	if err := json.Unmarshal(kvResp.GetValue(), &session); err != nil {
+	// 会话绑定发起人（Harness.Do 的调用者是用户 1）
+	var stored struct {
+		UserID  int64       `json:"uid"`
+		Session authSession `json:"v"`
+	}
+	if err := json.Unmarshal(kvResp.GetValue(), &stored); err != nil {
 		t.Fatalf("parse session: %v", err)
 	}
-	if session["scope"] != ScopeOAuth {
-		t.Errorf("session scope = %v, want %s", session["scope"], ScopeOAuth)
+	if stored.UserID != 1 || stored.Session.Scope != ScopeOAuth || stored.Session.State == "" || stored.Session.CodeVerifier == "" {
+		t.Errorf("stored session = %+v", stored)
+	}
+}
+
+// startAuth starts an authorization as user 1 and returns its session id and
+// state.
+func startAuth(t *testing.T, h *pluginsdktest.Harness) (id, state string) {
+	t.Helper()
+	resp := h.Do("POST", "/auth/start", nil, map[string]any{"scope": "oauth"})
+	var start authStartResponse
+	if err := json.Unmarshal(resp.GetBody(), &start); err != nil || resp.GetStatus() != 200 {
+		t.Fatalf("auth/start = %d %s (%v)", resp.GetStatus(), resp.GetBody(), err)
+	}
+	u, err := url.Parse(start.AuthURL)
+	if err != nil || u.Query().Get("state") == "" {
+		t.Fatalf("auth url %q: %v", start.AuthURL, err)
+	}
+	return start.SessionID, u.Query().Get("state")
+}
+
+func sessionStored(t *testing.T, h *pluginsdktest.Harness, id string) bool {
+	t.Helper()
+	kv, err := h.Host.KVGet(context.Background(), &pluginv1.KVGetRequest{Namespace: kvOAuthSession, Key: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return kv.GetFound()
+}
+
+func errorCode(t *testing.T, resp *pluginv1.HTTPResponse) string {
+	t.Helper()
+	var out struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(resp.GetBody(), &out); err != nil {
+		t.Fatalf("parse error body %s: %v", resp.GetBody(), err)
+	}
+	return out.Error.Code
+}
+
+func authHarness(t *testing.T) *pluginsdktest.Harness {
+	t.Helper()
+	return pluginsdktest.Start(t, newPlugin(), pluginsdktest.Options{
+		SDK:    []pluginsdk.Option{pluginsdk.WithManifest(manifestRaw)},
+		Grants: []*pluginv1.Grant{{Permission: "kv"}, {Permission: "routes.admin"}},
+	})
+}
+
+// Only the user who started an authorization can exchange its code: to anyone
+// else the session does not exist, and it is left for its owner.
+func TestAuthExchangeNeedsTheStartingUser(t *testing.T) {
+	h := authHarness(t)
+	id, state := startAuth(t, h)
+	body := map[string]any{"session_id": id, "code": "code-1#" + state}
+	missing := h.Do("POST", "/auth/exchange", nil, map[string]any{"session_id": "no-such-session", "code": "code-1"})
+	for _, uid := range []int64{2, 0} {
+		resp := h.DoAs(uid, "POST", "/auth/exchange", nil, body)
+		if resp.GetStatus() != 404 || string(resp.GetBody()) != string(missing.GetBody()) {
+			t.Fatalf("user %d = %d %s, want the answer of a missing session %s", uid, resp.GetStatus(), resp.GetBody(), missing.GetBody())
+		}
+	}
+	if !sessionStored(t, h, id) {
+		t.Fatal("another user's attempt removed the session")
+	}
+	if resp := h.DoAs(0, "POST", "/auth/start", nil, map[string]any{"scope": "oauth"}); resp.GetStatus() != 401 {
+		t.Fatalf("auth/start without a caller = %d %s", resp.GetStatus(), resp.GetBody())
+	}
+}
+
+// Whitespace pasted around the code or its state is not a different state.
+func TestAuthExchangeStateIgnoresPastedWhitespace(t *testing.T) {
+	h := authHarness(t)
+	id, state := startAuth(t, h)
+	resp := h.Do("POST", "/auth/exchange", nil, map[string]any{"session_id": id, "code": "  code-1#" + state + " \n"})
+	if errorCode(t, resp) == "state_mismatch" || !sessionStored(t, h, id) {
+		t.Fatalf("padded state = %d %s, session kept %v", resp.GetStatus(), resp.GetBody(), sessionStored(t, h, id))
+	}
+}
+
+// A code carrying another authorization's state is refused before anything
+// is sent upstream, and the session is over.
+func TestAuthExchangeStateMismatch(t *testing.T) {
+	h := authHarness(t)
+	id, state := startAuth(t, h)
+	resp := h.Do("POST", "/auth/exchange", nil, map[string]any{"session_id": id, "code": "code-1#not-" + state})
+	if resp.GetStatus() != 400 || errorCode(t, resp) != "state_mismatch" {
+		t.Fatalf("mismatched state = %d %s", resp.GetStatus(), resp.GetBody())
+	}
+	if sessionStored(t, h, id) {
+		t.Fatal("the session survived a state mismatch")
+	}
+	if resp := h.Do("POST", "/auth/exchange", nil, map[string]any{"session_id": id, "code": "code-1#" + state}); resp.GetStatus() != 404 {
+		t.Fatalf("exchange after a mismatch = %d %s", resp.GetStatus(), resp.GetBody())
 	}
 }
 

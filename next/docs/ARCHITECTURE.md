@@ -528,7 +528,7 @@ guard-0.1.0.s2plugin
 flowchart LR
   subgraph host["核心"]
     rt["grpcRuntime"]
-    hs["HostService<br/>Log · KVGet/KVSet/KVDelete/KVList · KVGetMany/KVSetMany/KVDeleteMany（CONTRACTS §93） · GetDSN<br/>AuthzCheck · LedgerCredit/LedgerDebit · Publish<br/>ListAccounts · GetAccountCredentials<br/>LockAcquire/LockRenew/LockRelease（CONTRACTS §27.3）"]
+    hs["HostService<br/>Log · KVGet/KVSet/KVDelete/KVList · KVGetMany/KVSetMany/KVDeleteMany（CONTRACTS §93） · GetDSN<br/>AuthzCheck · AccountScopeCheck · LedgerCredit/LedgerDebit · Publish<br/>ListAccounts · GetAccountCredentials<br/>LockAcquire/LockRenew/LockRelease（CONTRACTS §27.3）"]
     eg["EgressService<br/>Dial（双向流）"]
   end
   subgraph plugin["插件进程"]
@@ -640,7 +640,7 @@ stateDiagram-v2
 | 等级 | 权限 |
 |---|---|
 | 🟢 低 | `kv`、`config`、`log`、`broadcast`、`secrets`（§72.2）、`prices`（只读按模型价格试算费用，§72.13.1） |
-| 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`lock`（CONTRACTS §27.3） |
+| 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`authz.read`（`AuthzCheck` 查询非本插件的权限 key）、`lock`（CONTRACTS §27.3） |
 | 🟠 高 | `accounts.auto_state`、`db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`gateway.observe`、`platform.register`、`scheduler.rank`、`sticky.clear`（§74.2）、`users.read`、`notify.send`（经其他插件的渠道向任意外部地址发通知，核心限速，§74.4） |
 | 🔴 极高 | `accounts.credentials`、`ledger.credit`、`ledger.debit`、`ui.native`、`users.write`、`db.core_views` |
 

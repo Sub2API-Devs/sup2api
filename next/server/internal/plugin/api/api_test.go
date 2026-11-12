@@ -639,3 +639,44 @@ func TestResourcesRefusedForRuntimeNone(t *testing.T) {
 	require.Len(t, fields, 1, out)
 	assert.Equal(t, "runtime", fields[0].(map[string]any)["field"])
 }
+
+// A plugin without a settings schema may still hold stored values: nothing
+// says which are secret, so every top-level value is masked, and a mask sent
+// back keeps the stored value.
+func TestSettingsWithoutSchemaAreAllMasked(t *testing.T) {
+	h, root := newHarness(t)
+	guard := pkgtest.Guard("guard", "0.1.0", "sub2api")
+	guard.UI.Settings = nil
+	code, out := h.do("POST", "/plugins/upload", "admin", fileBody(t, pkgtest.Build(guard, root)))
+	require.Equal(t, http.StatusOK, code, out)
+	consent := install.ConsentRequest{Grants: []install.GrantInput{{Permission: "db.schema"}, {Permission: "gateway.hook"},
+		{Permission: "events"}, {Permission: "jobs"}, {Permission: "routes.admin"}, {Permission: "ui.menu"}, {Permission: "ui.native"}}}
+	code, out = h.do("POST", "/plugins/guard/versions/0.1.0/consent", "admin", consent)
+	require.Equal(t, http.StatusOK, code, out)
+
+	code, out = h.do("PUT", "/plugins/guard/settings", "admin", map[string]any{"values": map[string]any{
+		"api_key": "k-1", "upstream": map[string]any{"url": "https://u.example", "token": "t-1"}, "note": ""}})
+	require.Equal(t, http.StatusOK, code, out)
+	masked := map[string]any{"api_key": Mask, "upstream": Mask, "note": ""}
+	assert.Equal(t, masked, data(out)["values"])
+	assert.ElementsMatch(t, []any{"api_key", "note", "upstream"}, data(out)["secret_fields"])
+
+	code, out = h.do("GET", "/plugins/guard/settings", "admin", nil)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, "none", data(out)["mode"])
+	assert.Equal(t, masked, data(out)["values"])
+	assert.NotContains(t, string(mustJSON(t, out)), "k-1")
+	assert.NotContains(t, string(mustJSON(t, out)), "t-1")
+
+	// Masks keep the stored values; a new value replaces its own key only.
+	code, out = h.do("PUT", "/plugins/guard/settings", "admin", map[string]any{"values": map[string]any{
+		"api_key": Mask, "upstream": Mask, "note": "n"}})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, map[string]any{"api_key": Mask, "upstream": Mask, "note": Mask}, data(out)["values"])
+	var enc []byte
+	require.NoError(t, h.db.Pool.QueryRow(context.Background(), `SELECT config_enc FROM plugins WHERE key = 'guard'`).Scan(&enc))
+	cipher, _ := secret.New(bytes.Repeat([]byte{7}, 32))
+	plain, err := cipher.Decrypt(enc, ConfigAAD("guard"))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"api_key":"k-1","upstream":{"url":"https://u.example","token":"t-1"},"note":"n"}`, string(plain))
+}

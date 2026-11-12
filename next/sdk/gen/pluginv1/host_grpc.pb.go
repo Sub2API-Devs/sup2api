@@ -101,8 +101,17 @@ type HostServiceClient interface {
 	// db.schema: restricted DSN for the plugin schema. The connection must go
 	// through EgressService (the SDK dialer does this automatically).
 	GetDSN(ctx context.Context, in *GetDSNRequest, opts ...grpc.CallOption) (*GetDSNResponse, error)
-	// authz (always granted): does a console user hold a permission?
+	// authz: does a console user hold a permission? Own keys always; others
+	// need authz.read.
 	AuthzCheck(ctx context.Context, in *AuthzCheckRequest, opts ...grpc.CallOption) (*AuthzCheckResponse, error)
+	// accounts scope (always granted): which accounts may a console user act
+	// on? The answer is the core's own account ownership rule (CONTRACTS
+	// §21.1), so a plugin route applies it instead of deciding by itself.
+	// PERMISSION_DENIED when the user holds neither account:<action> nor
+	// account:own:<action>. Being ungranted, it tells every enabled plugin
+	// which of the two account keys of an action any user holds, and which of
+	// the asked ids are live accounts that user created (ids only).
+	AccountScopeCheck(ctx context.Context, in *AccountScopeCheckRequest, opts ...grpc.CallOption) (*AccountScopeCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.
 	LedgerCredit(ctx context.Context, in *LedgerChangeRequest, opts ...grpc.CallOption) (*LedgerChangeResponse, error)
@@ -438,6 +447,15 @@ func (c *hostServiceClient) AuthzCheck(ctx context.Context, in *AuthzCheckReques
 	return out, nil
 }
 
+func (c *hostServiceClient) AccountScopeCheck(ctx context.Context, in *AccountScopeCheckRequest, opts ...grpc.CallOption) (*AccountScopeCheckResponse, error) {
+	out := new(AccountScopeCheckResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/AccountScopeCheck", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hostServiceClient) LedgerCredit(ctx context.Context, in *LedgerChangeRequest, opts ...grpc.CallOption) (*LedgerChangeResponse, error) {
 	out := new(LedgerChangeResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/LedgerCredit", in, out, opts...)
@@ -656,8 +674,17 @@ type HostServiceServer interface {
 	// db.schema: restricted DSN for the plugin schema. The connection must go
 	// through EgressService (the SDK dialer does this automatically).
 	GetDSN(context.Context, *GetDSNRequest) (*GetDSNResponse, error)
-	// authz (always granted): does a console user hold a permission?
+	// authz: does a console user hold a permission? Own keys always; others
+	// need authz.read.
 	AuthzCheck(context.Context, *AuthzCheckRequest) (*AuthzCheckResponse, error)
+	// accounts scope (always granted): which accounts may a console user act
+	// on? The answer is the core's own account ownership rule (CONTRACTS
+	// §21.1), so a plugin route applies it instead of deciding by itself.
+	// PERMISSION_DENIED when the user holds neither account:<action> nor
+	// account:own:<action>. Being ungranted, it tells every enabled plugin
+	// which of the two account keys of an action any user holds, and which of
+	// the asked ids are live accounts that user created (ids only).
+	AccountScopeCheck(context.Context, *AccountScopeCheckRequest) (*AccountScopeCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.
 	LedgerCredit(context.Context, *LedgerChangeRequest) (*LedgerChangeResponse, error)
@@ -839,6 +866,9 @@ func (UnimplementedHostServiceServer) GetDSN(context.Context, *GetDSNRequest) (*
 }
 func (UnimplementedHostServiceServer) AuthzCheck(context.Context, *AuthzCheckRequest) (*AuthzCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AuthzCheck not implemented")
+}
+func (UnimplementedHostServiceServer) AccountScopeCheck(context.Context, *AccountScopeCheckRequest) (*AccountScopeCheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AccountScopeCheck not implemented")
 }
 func (UnimplementedHostServiceServer) LedgerCredit(context.Context, *LedgerChangeRequest) (*LedgerChangeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LedgerCredit not implemented")
@@ -1348,6 +1378,24 @@ func _HostService_AuthzCheck_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_AccountScopeCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AccountScopeCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).AccountScopeCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/AccountScopeCheck",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).AccountScopeCheck(ctx, req.(*AccountScopeCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _HostService_LedgerCredit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LedgerChangeRequest)
 	if err := dec(in); err != nil {
@@ -1724,6 +1772,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AuthzCheck",
 			Handler:    _HostService_AuthzCheck_Handler,
+		},
+		{
+			MethodName: "AccountScopeCheck",
+			Handler:    _HostService_AccountScopeCheck_Handler,
 		},
 		{
 			MethodName: "LedgerCredit",
