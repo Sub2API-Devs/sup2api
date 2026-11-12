@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { h, type Component, type SetupContext } from 'vue'
 import { i18n } from '@/i18n'
 import type { SegmentGroupSetting } from '@/api/pricing'
 import SegmentGroupsEditor from './SegmentGroupsEditor.vue'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), toast: vi.fn() }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), toast: vi.fn(), denied: new Set<string>() }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !mocks.denied.has(key) }) }))
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get: mocks.get, put: mocks.put } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...(await original<object>()), toast: (...a: unknown[]) => mocks.toast(...a) }))
 
@@ -24,8 +26,16 @@ function setting(id: number, visibility: 'public' | 'restricted', over: Partial<
 }
 const saved = () => [setting(1, 'public', { price_rule_count: 2 }), setting(2, 'restricted')]
 
+/** The dialog of a row's model prices: what it was opened with, and a button that saves. */
+const pricesModal: Component = {
+  props: ['open', 'setting', 'editable'],
+  emits: ['saved'],
+  setup: (props: { open?: boolean; editable?: boolean }, { emit }: SetupContext) => () =>
+    h('button', { 'data-testid': 'prices-modal', 'data-open': String(!!props.open), 'data-editable': String(!!props.editable), onClick: () => emit('saved') })
+}
+
 async function render(props: { segmentId: number | null; editable?: boolean; discount?: string }) {
-  const w = mount(SegmentGroupsEditor, { props, global: { plugins: [i18n], stubs: { SegmentGroupPricesModal: true } } })
+  const w = mount(SegmentGroupsEditor, { props, global: { plugins: [i18n], stubs: { SegmentGroupPricesModal: pricesModal } } })
   await flushPromises()
   const row = (group: number) => w.get(`[data-group="${group}"]`)
   const rate = (group: number) => row(group).get('[data-testid="access-rate-value"]').text()
@@ -34,6 +44,7 @@ async function render(props: { segmentId: number | null; editable?: boolean; dis
 }
 
 beforeEach(() => {
+  mocks.denied.clear()
   mocks.get.mockReset().mockResolvedValue(saved())
   mocks.put.mockReset()
   mocks.toast.mockReset()
@@ -106,5 +117,41 @@ describe('the groups of a segment', () => {
     mocks.put.mockRejectedValue(new Error('down'))
     await expect(w.vm.save()).rejects.toThrow('down')
     expect(w.vm.dirty).toBe(true)
+  })
+
+  it('opens the model prices of a row, and says their count changed once they are saved', async () => {
+    const { w, row } = await render({ segmentId: 2, editable: true })
+    expect(row(1).get('[data-testid="access-rate-prices"]').text()).toBe('Set')
+    await row(1).get('[data-testid="access-rate-prices"]').trigger('click')
+    const modal = w.get('[data-testid="prices-modal"]')
+    expect([modal.attributes('data-open'), modal.attributes('data-editable')]).toEqual(['true', 'true'])
+    mocks.get.mockClear()
+    await modal.trigger('click')
+    await flushPromises()
+    expect(mocks.get).toHaveBeenCalledWith('/segments/2/groups')
+    expect(w.emitted('changed')).toHaveLength(1)
+  })
+
+  it('leaves the model prices to a caller who may read groups, and their editing to one who may manage them', async () => {
+    mocks.denied.add('group:manage')
+    const readOnly = await render({ segmentId: 2, editable: true })
+    expect(readOnly.row(1).get('[data-testid="access-rate-prices"]').text()).toBe('View')
+    // The grants and rates are the segment's: still edited.
+    expect(readOnly.row(1).find('[data-testid="rate-override-input"]').exists()).toBe(true)
+    await readOnly.row(1).get('[data-testid="access-rate-prices"]').trigger('click')
+    expect(readOnly.w.get('[data-testid="prices-modal"]').attributes('data-editable')).toBe('false')
+
+    mocks.denied.add('group:read')
+    const blind = await render({ segmentId: 2, editable: true })
+    expect(blind.w.findAll('thead th').map((th) => th.text())).toEqual(['Group', 'Access', 'Own rate', 'Effective rate'])
+    expect(blind.w.find('[data-testid="access-rate-prices"]').exists()).toBe(false)
+    expect(blind.w.find('[data-testid="prices-modal"]').exists()).toBe(false)
+  })
+
+  it('holds its fields still while the parent saves', async () => {
+    const { w, row } = await render({ segmentId: 2, editable: true, discount: '0.9' })
+    await w.setProps({ disabled: true })
+    expect(row(1).get('[data-testid="rate-override-input"]').attributes('disabled')).toBeDefined()
+    expect(row(2).get('[data-testid="access-rate-grant"]').html()).toContain('disabled')
   })
 })

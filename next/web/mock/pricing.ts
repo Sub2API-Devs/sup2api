@@ -33,10 +33,19 @@ import {
 
 // ------------------------------------------------------------------ routing helpers
 
-/** Registers a handler that needs the permission `perm`. */
-function route(method: string, path: string, perm: string, handler: MockHandler) {
-  on(method, path, (req) => (hasPerm(caller(req), perm) ? handler(req) : fail(403, 'permission_denied', `${perm} is required`, { permission: perm })))
+/** The 403 of a caller without `perm`. */
+const denied = (perm: string) => fail(403, 'permission_denied', `${perm} is required`, { permission: perm })
+
+/** Registers a handler that needs every permission of `perms`; the first one missing is named. */
+function route(method: string, path: string, perms: string | string[], handler: MockHandler) {
+  on(method, path, (req) => {
+    const missing = [perms].flat().find((perm) => !hasPerm(caller(req), perm))
+    return missing ? denied(missing) : handler(req)
+  })
 }
+
+/** Whether the caller may read users: only then does a personal segment go by its user's email (segment.Masked). */
+const showsUsers = (req: MockRequest) => hasPerm(caller(req), 'user:read')
 
 /** A handler on the row `find` gives for the request; 404 when there is none. */
 function onRow<T>(what: string, find: (req: MockRequest) => T | undefined, handler: (row: T, req: MockRequest) => MockResult): MockHandler {
@@ -55,6 +64,8 @@ const onUser = (handler: (u: MockUser, req: MockRequest) => MockResult) => onRow
 const validRate = (v: unknown) => /^\d+(\.\d{1,4})?$/.test(String(v)) && Number(v) < 1000000
 /** What the message of a value that is no rate ends with. */
 const RATE_LIMITS = 'below 1000000, with at most 4 decimals'
+/** An id in the query as the server parses one: a positive integer ("007" is 7). */
+const positive = (v: string) => /^\d+$/.test(v) && Number(v) > 0
 const itemsOf = (req: MockRequest): any[] => (Array.isArray(req.body?.items) ? req.body.items : [])
 
 // ------------------------------------------------------------------ rows
@@ -62,10 +73,11 @@ const itemsOf = (req: MockRequest): any[] => (Array.isArray(req.body?.items) ? r
 const membersOf = (s: MockSegment) => users.filter((u) => segmentOfUser(u.id).id === s.id)
 const namedFirst = (a: MockSegment, b: MockSegment) => Number(a.kind === 'personal') - Number(b.kind === 'personal')
 
-function segmentOut(s: MockSegment) {
+/** A segment as the caller may see it: a personal one goes by its user only with `showUsers`. */
+function segmentOut(s: MockSegment, showUsers: boolean) {
   const granted = grantedGroupIds(s.id)
   return {
-    ...segmentRef(s),
+    ...segmentRef(s, showUsers),
     description: s.description,
     discount: s.discount,
     is_default: s.is_default,
@@ -73,23 +85,23 @@ function segmentOut(s: MockSegment) {
     granted_groups: groups.filter((g) => g.visibility === 'restricted' && granted.includes(g.id)).map((g) => ({ id: g.id, name: g.name })),
     rate_override_count: pairsWhere({ segment_id: s.id }).filter((p) => p.rate_override !== null).length,
     price_rule_count: rulesWhere({ segment_id: s.id }).length,
-    ...(s.kind === 'personal' ? personalOut(s) : {}),
+    ...(s.kind === 'personal' ? personalOut(s, showUsers) : {}),
     created_at: s.created_at
   }
 }
 
-/** What only a personal segment has: its user, and the segment that user came from. */
-function personalOut(s: MockSegment) {
-  const u = users.find((x) => x.id === s.user_id)
+/** What only a personal segment has: its user (for a caller who may read users), and the segment that user came from. */
+function personalOut(s: MockSegment, showUsers: boolean) {
+  const u = showUsers ? users.find((x) => x.id === s.user_id) : undefined
   const origin = findSegment(s.origin_id)
-  return { user: u && { id: u.id, email: u.email, display_name: u.display_name }, origin: origin ? segmentRef(origin) : null }
+  return { ...(u ? { user: { id: u.id, email: u.email, display_name: u.display_name } } : {}), origin: origin ? segmentRef(origin) : null }
 }
 
 /** The settings of one segment in one group. */
-function settingOut(s: MockSegment, g: MockGroup) {
+function settingOut(s: MockSegment, g: MockGroup, showUsers: boolean) {
   const access = accessOf(s, g)
   return {
-    segment: segmentRef(s),
+    segment: segmentRef(s, showUsers),
     group: { id: g.id, name: g.name, description: g.description, status: g.status, visibility: g.visibility, rate_multiplier: g.rate_multiplier, platforms: groupPlatforms(g.id) },
     accessible: access.accessible,
     granted: access.granted,
@@ -100,17 +112,18 @@ function settingOut(s: MockSegment, g: MockGroup) {
   }
 }
 
-const segmentSettings = (s: MockSegment) => groups.map((g) => settingOut(s, g))
+const segmentSettings = (s: MockSegment, req: MockRequest) => groups.map((g) => settingOut(s, g, showsUsers(req)))
 
 /** A personal segment is listed in a group only when it has something there. */
 const hasSettingsIn = (s: MockSegment, g: MockGroup) => pairsWhere({ segment_id: s.id, group_id: g.id }).length + rulesWhere({ segment_id: s.id, group_id: g.id }).length > 0
 
 /** The rows of a group: `include` (?include=<id>,<id>) keeps personal segments that have nothing there yet. */
-function groupSettings(g: MockGroup, include: number[] = []) {
+function groupSettings(g: MockGroup, req: MockRequest) {
+  const include = includedIn(req)
   return segments
     .filter((s) => s.kind === 'named' || hasSettingsIn(s, g) || include.includes(s.id))
     .sort(namedFirst)
-    .map((s) => settingOut(s, g))
+    .map((s) => settingOut(s, g, showsUsers(req)))
 }
 
 /** One model of a group: its global price, the rules on it and the list price `s` (or anyone, when null) gets. */
@@ -121,38 +134,49 @@ function modelRow(g: MockGroup, s: MockSegment | null, model: string) {
   return { model, base, group_rule, ...ofSegments, list_price, source }
 }
 
-function modelPrices(g: MockGroup, s: MockSegment | null) {
-  return { group: { id: g.id, name: g.name }, ...(s ? { segment: segmentRef(s) } : {}), rate: rateOf(s, g), models: groupModels(g).map((m) => modelRow(g, s, m)) }
+function modelPrices(g: MockGroup, s: MockSegment | null, req: MockRequest) {
+  return { group: { id: g.id, name: g.name }, ...(s ? { segment: segmentRef(s, showsUsers(req)) } : {}), rate: rateOf(s, g), models: groupModels(g).map((m) => modelRow(g, s, m)) }
 }
 
 // ------------------------------------------------------------------ segments
 
-function segmentMatches(s: MockSegment, q: Record<string, string>) {
+/** Whether a segment is listed for ?kind=&q=: q matches the name and the description; the email and the display name of a personal segment's user only for a caller who may read users. */
+function segmentMatches(s: MockSegment, q: Record<string, string>, showUsers: boolean) {
   if (s.kind !== (q.kind === 'personal' ? 'personal' : 'named')) return false
-  const u = users.find((x) => x.id === s.user_id)
-  return match(q.q, s.name, s.description, u?.display_name)
+  // The server keeps no name of a personal segment: what the mock keeps there is its user's email.
+  const own = s.kind === 'named' ? [s.name, s.description] : [s.description]
+  const u = showUsers ? users.find((x) => x.id === s.user_id) : undefined
+  return match(q.q, ...own, u?.email, u?.display_name)
 }
+
+/** The longest name of a segment, as segments.name varchar(100); and of its description. */
+const NAME_MAX = 100
+const DESCRIPTION_MAX = 2000
 
 /** The first invalid field of a segment body; `self` is the segment being edited. */
 function segmentError(b: any, self?: MockSegment) {
   const name = String(b.name ?? '').trim()
   if (self?.kind === 'personal' && (b.name !== undefined || b.description !== undefined)) return invalid('name', 'a personal user group only has a discount')
   if (b.name !== undefined && !name) return invalid('name', 'name is required')
-  if (name && segments.some((s) => s !== self && s.kind === 'named' && s.name === name)) return invalid('name', 'name already in use')
+  if ([...name].length > NAME_MAX) return invalid('name', `name must be at most ${NAME_MAX} characters`)
+  // Unique without regard to case, as segments_name_uq on lower(name).
+  if (name && segments.some((s) => s !== self && s.kind === 'named' && s.name.toLowerCase() === name.toLowerCase())) return invalid('name', 'name already in use')
+  if (b.description !== undefined && [...String(b.description)].length > DESCRIPTION_MAX) return invalid('description', 'description is too long')
   if (b.discount !== undefined && !(validRate(b.discount) && Number(b.discount) > 0)) return invalid('discount', `must be above 0 and ${RATE_LIMITS}`)
   return null
 }
 
 route('GET', '/segments', 'segment:read', (req) => {
-  const rows = segments.filter((s) => segmentMatches(s, req.query)).sort((a, b) => Number(b.is_default) - Number(a.is_default))
-  return paginate(rows.map(segmentOut), req.query)
+  const show = showsUsers(req)
+  const rows = segments.filter((s) => segmentMatches(s, req.query, show)).sort((a, b) => Number(b.is_default) - Number(a.is_default))
+  return paginate(rows.map((s) => segmentOut(s, show)), req.query)
 })
-route('GET', '/segments/:id', 'segment:read', onSegment(segmentOut))
+route('GET', '/segments/:id', 'segment:read', onSegment((s, req) => segmentOut(s, showsUsers(req))))
 route('POST', '/segments', 'segment:manage', (req) => {
   const b = req.body || {}
   const err = segmentError({ ...b, name: b.name ?? '' })
   if (err) return err
-  return segmentOut(addSegment(String(b.name).trim(), String(b.description ?? ''), String(b.discount ?? '1')))
+  return segmentOut(addSegment(String(b.name).trim(), String(b.description ?? ''), String(b.discount ?? '1')), showsUsers(req))
 })
 route('PATCH', '/segments/:id', 'segment:manage', onSegment((s, req) => {
   const b = req.body || {}
@@ -161,7 +185,7 @@ route('PATCH', '/segments/:id', 'segment:manage', onSegment((s, req) => {
   if (b.name !== undefined) s.name = String(b.name).trim()
   if (b.description !== undefined) s.description = String(b.description)
   if (b.discount !== undefined) s.discount = String(b.discount)
-  return segmentOut(s)
+  return segmentOut(s, showsUsers(req))
 }))
 route('DELETE', '/segments/:id', 'segment:manage', onSegment((s) => {
   if (s.is_default) return fail(409, 'conflict', 'the default user group cannot be deleted')
@@ -170,7 +194,8 @@ route('DELETE', '/segments/:id', 'segment:manage', onSegment((s) => {
   return noContent()
 }))
 
-route('GET', '/segments/:id/members', 'segment:read', onSegment((s, req) => {
+// The members are user rows: they take user:read as well.
+route('GET', '/segments/:id/members', ['segment:read', 'user:read'], onSegment((s, req) => {
   const rows = membersOf(s).filter((u) => match(req.query.q, u.email, u.display_name))
   return paginate(rows.map(userOut), req.query)
 }))
@@ -203,14 +228,16 @@ function savePairs(items: any[], pairOf: (item: any) => { s?: MockSegment; g?: M
 route('GET', '/segments/:id/groups', 'segment:read', onSegment(segmentSettings))
 route('PUT', '/segments/:id/groups', 'segment:manage', onSegment((s, req) => {
   const err = savePairs(itemsOf(req), (item) => ({ s, g: groups.find((g) => g.id === Number(item.group_id)) }))
-  return err ?? segmentSettings(s)
+  return err ?? segmentSettings(s, req)
 }))
-const includedIn = (req: MockRequest) => String(req.query.include || '').split(',').filter(Boolean).map(Number)
+function includedIn(req: MockRequest) {
+  return String(req.query.include || '').split(',').filter(Boolean).map(Number)
+}
 
-route('GET', '/groups/:id/segments', 'group:read', onGroup((g, req) => groupSettings(g, includedIn(req))))
+route('GET', '/groups/:id/segments', 'group:read', onGroup(groupSettings))
 route('PUT', '/groups/:id/segments', 'group:manage', onGroup((g, req) => {
   const err = savePairs(itemsOf(req), (item) => ({ s: findSegment(Number(item.segment_id)), g }))
-  return err ?? groupSettings(g, includedIn(req))
+  return err ?? groupSettings(g, req)
 }))
 
 // ------------------------------------------------------------------ model prices
@@ -254,10 +281,12 @@ function storedRule(rule: any): PriceRule | null {
   return { kind: 'custom', mode, config: Object.fromEntries(CUSTOM_PRICES[mode].keys.map((k) => [k, rule.config?.[k] ?? null])) }
 }
 
-/** A handler of /groups/:id/model-prices[?segment_id=]: `s` is the segment asked for (null without one); 404 when it does not exist. */
+/** A handler of /groups/:id/model-prices[?segment_id=]: `s` is the segment asked for (null without one); 400 when segment_id is no positive integer, 404 when it does not exist. */
 function onGroupPrices(handler: (g: MockGroup, s: MockSegment | null, req: MockRequest) => MockResult) {
   return onGroup((g, req) => {
-    const s = req.query.segment_id ? findSegment(Number(req.query.segment_id)) : null
+    const raw = req.query.segment_id
+    if (raw && !positive(raw)) return invalid('segment_id', 'must be a positive integer')
+    const s = raw ? findSegment(Number(raw)) : null
     return s === undefined ? fail(404, 'not_found', 'user group not found') : handler(g, s, req)
   })
 }
@@ -270,14 +299,14 @@ route('PUT', '/groups/:id/model-prices', 'group:manage', onGroupPrices((g, s, re
     if (err) return invalid(`items.${i}`, err)
   }
   for (const item of items) setRule(item.segment_id == null ? null : Number(item.segment_id), g.id, String(item.model), storedRule(item.rule))
-  return modelPrices(g, s)
+  return modelPrices(g, s, req)
 }))
 
 // ------------------------------------------------------------------ personal segments
 
 route('POST', '/users/:id/personal-segment', 'segment:manage', onUser((u, req) => {
   if (segmentOfUser(u.id).kind === 'personal') return fail(409, 'conflict', 'the user has a personal user group already')
-  return segmentOut(makePersonal(u, !!req.body?.copy))
+  return segmentOut(makePersonal(u, !!req.body?.copy), showsUsers(req))
 }))
 route('DELETE', '/users/:id/personal-segment', 'segment:manage', onUser((u, req) => {
   if (segmentOfUser(u.id).kind !== 'personal') return fail(404, 'not_found', 'the user has no personal user group')
@@ -289,26 +318,30 @@ route('DELETE', '/users/:id/personal-segment', 'segment:manage', onUser((u, req)
 
 // ------------------------------------------------------------------ quote
 
-/** Who a quote is for: the segment of `user_id`, else `segment_id`. */
+/** Who a quote is for: the segment of `user_id`, or `segment_id` (the handler checks that exactly one is given). */
 function quoteSegment(b: any): MockSegment | undefined {
   if (b.user_id == null) return findSegment(Number(b.segment_id))
   return users.some((u) => u.id === Number(b.user_id)) ? segmentOfUser(Number(b.user_id)) : undefined
 }
 
+// POST /pricing/quote, in the order the server checks: the subject, the group, the segment, the model, then the costs.
 route('POST', '/pricing/quote', 'price:read', (req) => {
   const b = req.body || {}
-  const s = quoteSegment(b)
+  if ((b.user_id == null) === (b.segment_id == null)) return invalid('user_id', 'give either user_id or segment_id')
   const g = groups.find((x) => x.id === Number(b.group_id))
-  if (!s) return fail(404, 'not_found', 'user or user group not found')
   if (!g) return fail(404, 'not_found', 'group not found')
+  const s = quoteSegment(b)
+  if (!s) return fail(404, 'not_found', 'user or user group not found')
   if (!groupModels(g).includes(b.model)) return invalid('model', 'the group does not provide this model')
   const access = accessOf(s, g)
   const base = globalPrice(b.model)
   const price = listPriceOf(s, g.id, b.model, base)
   const rate = rateOf(s, g)
+  // Without a global price nothing is billed; a price the usage cannot be evaluated with is a 400, as for a request.
   const listCost = price.list_price ? priceCost(price.list_price, b.usage || {}) : 0
+  if (listCost === null) return fail(400, 'invalid_argument', 'the price cannot be evaluated with this usage')
   return {
-    segment: segmentRef(s),
+    segment: segmentRef(s, showsUsers(req)),
     accessible: access.accessible,
     access_source: access.source,
     base,
@@ -342,11 +375,12 @@ function groupPrices(g: MyGroup, s: MockSegment) {
   return { group: { id: g.id, name: g.name }, rate_multiplier: g.effective_rate, rate_source: g.rate_source, prices }
 }
 
-// GET /me/prices (CONTRACTS §79.4): a group the caller cannot use is a 404.
+// GET /me/prices (CONTRACTS §79.5): a group_id that is no positive integer is a 400, a group the caller cannot use a 404.
 on('GET', '/me/prices', (req) => {
   const who = caller(req)
   const mine = myGroups(who.id)
   if (!req.query.group_id) return allPrices(mine)
+  if (!positive(req.query.group_id)) return fail(400, 'invalid_argument', 'invalid group_id')
   const g = mine.find((x) => x.id === Number(req.query.group_id))
   return g ? groupPrices(g, segmentOfUser(who.id)) : fail(404, 'not_found', 'group not found')
 })

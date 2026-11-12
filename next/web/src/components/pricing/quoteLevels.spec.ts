@@ -20,6 +20,16 @@ describe('quote levels', () => {
     expect(states(priceLevels({ price_levels: { segment: null, group: null }, base, price_source: 'global' }))).toEqual({ segment: 'unset', group: 'unset', global: 'applies' })
   })
 
+  it('marks a rule that is set but not in effect, which leaves the level under it to apply', () => {
+    const stale = { kind: 'custom', mode: 'per_request', config: { price: 0.002 }, inactive: true } as const
+    const levels = priceLevels({ price_levels: { segment: null, group: stale }, base, price_source: 'global' })
+    expect(levels.map((l) => [l.key, l.state, !!l.inactive])).toEqual([
+      ['segment', 'unset', false],
+      ['group', 'shadowed', true],
+      ['global', 'applies', false]
+    ])
+  })
+
   it('leaves every list price level unset for a model without a global price', () => {
     expect(states(priceLevels({ price_levels: { segment: null, group: null }, base: null, price_source: 'global' }))).toEqual({ segment: 'unset', group: 'unset', global: 'unset' })
   })

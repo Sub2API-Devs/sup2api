@@ -158,6 +158,21 @@ func TestParseSup2APIMultiplierOnVisualExpression(t *testing.T) {
 	}
 }
 
+func TestParseSup2APISkipsPriceWithoutConfig(t *testing.T) {
+	body := `{"data": {"prices": [
+		{"model": "no-config", "mode": "per_token", "expression": ""},
+		{"model": "null-config", "mode": "per_request", "config": null},
+		{"model": "ok", "mode": "per_token", "config": {"p": 1, "c": 2}}],
+		"rate_multiplier": "2", "group": {"id": 3, "name": "g"}}}`
+	f, err := parseSup2API([]byte(body), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.prices) != 1 || f.skipped != 2 || f.prices["ok"] == nil {
+		t.Fatalf("prices %v skipped %d", f.prices, f.skipped)
+	}
+}
+
 // fakeKeys authenticates "sk-good" into a group with multiplier 2. Group and
 // Segment, when set, are the group of the key and the segment of its owner.
 type fakeKeys struct {

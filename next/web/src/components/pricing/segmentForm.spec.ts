@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Segment } from '@/api/pricing'
-import { formChanged, formOf, hasDiscount, segmentBody, validDiscount } from './segmentForm'
+import { hasDiscount } from './pricingFormat'
+import { formChanged, formOf, segmentBody, validDiscount } from './segmentForm'
 
 function segment(over: Partial<Segment> = {}): Segment {
   return { id: 2, kind: 'named', name: 'VIP', description: 'paying', discount: '0.9', is_default: false, member_count: 3, granted_groups: [], rate_override_count: 0, price_rule_count: 0, ...over }

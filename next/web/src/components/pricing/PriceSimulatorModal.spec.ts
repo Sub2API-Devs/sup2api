@@ -22,7 +22,7 @@ async function settle() {
   await new Promise((r) => setTimeout(r))
   await flushPromises()
 }
-async function open(preset: { groupId?: number; model?: string }) {
+async function open(preset: { groupId?: number; model?: string; userId?: number }) {
   const w = mount(PriceSimulatorModal, { props: { open: true, preset }, global: { plugins: [i18n], stubs: { Teleport: true } } })
   await settle()
   return w
@@ -59,12 +59,12 @@ describe('price simulator', () => {
   it('quotes for a user or a user group, and only for what the caller may read', async () => {
     const both = await open({})
     expect(both.find('[data-testid="price-sim-subject"]').exists()).toBe(true)
-    expect(both.find('[data-testid="user-search"]').exists()).toBe(true)
+    expect(both.find('[data-testid="price-sim-user"]').exists()).toBe(true)
 
     denied.add('segment:read')
     const users = await open({})
     expect(users.find('[data-testid="price-sim-subject"]').exists()).toBe(false)
-    expect(users.find('[data-testid="user-search"]').exists()).toBe(true)
+    expect(users.find('[data-testid="price-sim-user"]').exists()).toBe(true)
     expect(api.list).not.toHaveBeenCalledWith('/segments', expect.anything())
 
     denied.clear()
@@ -78,5 +78,36 @@ describe('price simulator', () => {
     const w = await open({ model: 'claude-opus-9' })
     expect(w.get('[data-testid="price-sim-unprovided"]').text()).toBe('还没有分组提供 claude-opus-9，无法试算。')
     expect(chosen(w)).toEqual({ group: null, model: null })
+  })
+
+  it('takes the user a preset names, and only the latest of two', async () => {
+    const answers: Record<string, (u: object) => void> = {}
+    api.get.mockImplementation((path: string) => (path.startsWith('/users/') ? new Promise((r) => (answers[path] = r)) : Promise.resolve({ models: [] })))
+    const w = await open({ userId: 7 })
+    await w.setProps({ preset: { userId: 8 } })
+    await settle()
+    answers['/users/8']({ id: 8, email: 'b@x', segment: { id: 3, kind: 'named', name: 'VIP' } })
+    answers['/users/7']({ id: 7, email: 'a@x', segment: { id: 2, kind: 'named', name: 'Old' } })
+    await settle()
+    expect(w.get('[data-testid="price-sim-user"]').get('[data-testid="segment-badge"]').text()).toBe('VIP')
+  })
+
+  it('takes the groups of the latest model named, whichever answers first', async () => {
+    const answers: Record<string, (v: object) => void> = {}
+    api.list.mockImplementation((_path: string, q: { model: string }) => new Promise((r) => (answers[q.model] = r)))
+    const w = await open({ model: 'gpt-4o' })
+    await w.setProps({ preset: { model: 'claude-haiku-4-5' } })
+    await settle()
+    answers['claude-haiku-4-5']({ items: [GROUPS[1]] })
+    await settle()
+    answers['gpt-4o']({ items: [GROUPS[0]] })
+    await settle()
+    expect(chosen(w)).toEqual({ group: 2, model: 'claude-haiku-4-5' })
+  })
+
+  it('says why the models of the group could not be listed', async () => {
+    api.get.mockRejectedValue(new Error('models down'))
+    const w = await open({ groupId: 2 })
+    expect(w.get('[data-testid="price-sim"]').text()).toContain('models down')
   })
 })

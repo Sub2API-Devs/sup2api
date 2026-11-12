@@ -40,6 +40,24 @@ describe('price quote breakdown', () => {
     expect(level('rate', 'segment').text()).toContain('未设置')
   })
 
+  it('marks a rule that is not in effect as the model price table does', () => {
+    const stale = { kind: 'custom', mode: 'per_request', config: { price: 0.002 }, inactive: true } as const
+    const w = render({ price_levels: { segment: null, group: stale } })
+    const group = w.get('[data-testid="price-quote-price"] [data-level="group"]')
+    expect(group.attributes('data-state')).toBe('shadowed')
+    expect(group.get('[data-testid="price-quote-inactive"]').text()).toBe('规则未生效')
+    expect(group.get('[data-testid="price-quote-inactive"]').attributes('title')).toContain('计费方式已变')
+    expect(w.findAll('[data-testid="price-quote-inactive"]')).toHaveLength(1)
+  })
+
+  it('shows a multiplier over an expression it cannot break down as the rule alone, the list price with the multiplier beside it', () => {
+    const opaque = { mode: 'expression' as const, config: null, expression: 'p * 2 + unknown(1)' }
+    const w = render({ base: opaque, list_price: { ...opaque, multiplier: '0.9' }, price_source: 'group', price_levels: { segment: null, group: { kind: 'multiplier', multiplier: '0.9' } } })
+    expect(w.get('[data-testid="price-quote-price"] [data-level="group"]').text()).toContain('全局 ×0.9')
+    expect(w.get('[data-testid="price-quote-price"] [data-level="group"]').text()).not.toContain('=')
+    expect(w.get('[data-testid="price-quote-price"] [data-level="global"]').text()).toContain('表达式计费')
+  })
+
   it('notes under a tiered list price that the first tier is shown', () => {
     const tiered = { mode: 'expression' as const, config: { tiers: [{ name: 'a', p: 3, c: 15 }, { name: 'b', p: 6, c: 22.5 }] }, expression: '' }
     expect(render({ base: tiered, list_price: tiered }).get('[data-testid="price-quote-price-note"]').text()).toContain('分段计价')

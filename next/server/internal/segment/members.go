@@ -70,10 +70,10 @@ func requireUsers(ctx context.Context, q store.Querier, ids []int64) error {
 }
 
 // moveUsers puts the users into the named segment to and deletes the
-// personal segment of each one who had one, with its settings. Only users in
-// a segment of the kind from move ("" = of either kind). It returns how many
-// moved (a user already there does not) and whether a personal segment went:
-// its price rules went with it.
+// personal segment of each one who had one, with its settings. With from a
+// segment kind, only users in a segment of that kind move. It returns how
+// many moved (a user already there does not) and whether a personal segment
+// went: its price rules went with it.
 func moveUsers(ctx context.Context, tx pgx.Tx, to int64, userIDs []int64, from string) (moved int, dropped bool, err error) {
 	ids, err := lockUsers(ctx, tx, `id = ANY($1) AND deleted_at IS NULL AND segment_id <> $2
 		AND ($3 = '' OR segment_id IN (SELECT id FROM segments WHERE kind = $3))`, userIDs, to, from)

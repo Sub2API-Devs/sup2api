@@ -12,8 +12,8 @@ import { confirmDiscard } from '@/composables/confirmDiscard'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
-import SegmentGroupsEditor from '@/views/segments/SegmentGroupsEditor.vue'
-import { validDiscount } from '@/views/segments/segmentForm'
+import SegmentGroupsEditor from '@/components/pricing/SegmentGroupsEditor.vue'
+import { validDiscount } from '@/components/pricing/segmentForm'
 import UserSegmentPanel from './UserSegmentPanel.vue'
 
 // Groups and pricing of one user: the segment he belongs to and what it gives

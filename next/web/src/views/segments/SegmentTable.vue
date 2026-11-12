@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { SChipList, SHint, STable, type ChipListItem, type TableColumn } from '@sub2api/ui'
 import type { Segment } from '@/api/pricing'
 import { rateText } from '@/components/pricing/pricingFormat'
-import { hasDiscount } from './segmentForm'
+import { hasDiscount } from '@/components/pricing/pricingFormat'
 
 // A table of segments. What a segment gets reads the same for a named and a
 // personal one, so those columns are here: its discount, the private groups

@@ -755,7 +755,9 @@ func scalePrice(p *syncPrice, m decimal.Decimal) error {
 	var cfg map[string]any
 	dec := json.NewDecoder(strings.NewReader(string(p.Config)))
 	dec.UseNumber()
-	_ = dec.Decode(&cfg)
+	if dec.Decode(&cfg) != nil || cfg == nil {
+		return errors.New("price config is not an object")
+	}
 	switch p.Mode {
 	case expr.ModePerRequest:
 		cfg["price"] = scale(cfg["price"])

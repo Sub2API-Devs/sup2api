@@ -34,10 +34,13 @@ vi.mock('@/composables/useList', async importOriginal => ({
     reload: vi.fn()
   })
 }))
-const can = vi.hoisted(() => ({ manage: true }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (perm: string) => can.manage || perm.endsWith(':read') }) }))
+const can = vi.hoisted(() => ({ manage: true, denied: new Set<string>() }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (perm: string) => !can.denied.has(perm) && (can.manage || perm.endsWith(':read')) }) }))
 enableAutoUnmount(afterEach)
-afterEach(() => (can.manage = true))
+afterEach(() => {
+  can.manage = true
+  can.denied.clear()
+})
 
 async function render() {
   const router = createRouter({
@@ -86,5 +89,13 @@ describe('model prices list', () => {
     expect(await actions()).toEqual(['simulate', 'delete'])
     can.manage = false
     expect(await actions()).toEqual(['simulate'])
+  })
+
+  it('leaves the price simulator out for a caller who may not read groups', async () => {
+    can.denied.add('group:read')
+    const w = await render()
+    expect(w.find('[data-testid="price-simulate"]').exists()).toBe(false)
+    expect(w.findComponent(SDropdown).props('actions').filter(a => !a.hidden).map(a => a.key)).toEqual(['delete'])
+    expect(w.findComponent(PriceSimulatorModal).exists()).toBe(false)
   })
 })

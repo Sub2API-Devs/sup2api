@@ -108,12 +108,10 @@ function incomplete(): string | null {
  */
 async function save(): Promise<boolean> {
   if (props.groupId === null) return true
-  return state.save(async (sent) => {
-    const result = await api.put<GroupModelPrices>(path.value, { items: rulePatches(sent, props.segment?.id ?? null) }, { query: query.value })
-    // The editor that was open goes with what it edited.
-    tableKey.value++
-    return result
-  })
+  const saved = await state.save((sent) => api.put<GroupModelPrices>(path.value, { items: rulePatches(sent, props.segment?.id ?? null) }, { query: query.value }))
+  // Once everything is saved the open editor has nothing left to show; one on a rule edited meanwhile stays.
+  if (saved && !dirty.value) tableKey.value++
+  return saved
 }
 
 defineExpose({ save, dirty })

@@ -18,7 +18,8 @@ function prices(models: ModelPriceRow[], segment?: SegmentRef): GroupModelPrices
 }
 const groupView = () =>
   prices([
-    { model: 'gpt-4o', base: price(3, 15), group_rule: { kind: 'multiplier', multiplier: '1.5' }, segment_rule_count: 2, list_price: price(4.5, 22.5), source: 'group' },
+    // A multiplier rule: the server gives the global price as it is, with the multiplier beside it.
+    { model: 'gpt-4o', base: price(3, 15), group_rule: { kind: 'multiplier', multiplier: '1.5' }, segment_rule_count: 2, list_price: { ...price(3, 15), multiplier: '1.5' }, source: 'group' },
     { model: 'o3', base: price(2, 8), group_rule: null, segment_rule_count: 0, list_price: price(2, 8), source: 'global' }
   ])
 
@@ -72,6 +73,49 @@ describe('model price table', () => {
     expect(w.find('[data-testid="price-rule-editor"]').exists()).toBe(false)
   })
 
+  it('shows a draft as the saved rule will read, the list price through the same path', async () => {
+    const { w, row, editor } = await render({ groupId: 3, editable: true })
+    await row('o3').get('[data-testid="model-price-set"]').trigger('click')
+    await editor().get('input[type="radio"][value="multiplier"]').setValue(true)
+    await editor().get('[data-testid="price-rule-multiplier"]').setValue('1.5')
+    const drafted = row('o3').get('[data-testid="model-price-list"]').text()
+    expect(drafted).toBe('$3 / $12')
+
+    mocks.put.mockResolvedValue(prices([{ model: 'o3', base: price(2, 8), group_rule: { kind: 'multiplier', multiplier: '1.5' }, segment_rule_count: 0, list_price: { ...price(2, 8), multiplier: '1.5' }, source: 'group' }]))
+    await w.vm.save()
+    await flushPromises()
+    expect(row('o3').find('[data-testid="model-price-unsaved"]').exists()).toBe(false)
+    expect(row('o3').get('[data-testid="model-price-list"]').text()).toBe(drafted)
+  })
+
+  it('names the multiplier after a list price billed by an expression it cannot break down', async () => {
+    const opaque: PriceDef = { mode: 'expression', config: null, expression: 'p * 2 + unknown(1)' }
+    mocks.get.mockResolvedValue(prices([{ model: 'custom', base: opaque, group_rule: { kind: 'multiplier', multiplier: '1.5' }, segment_rule_count: 0, list_price: { ...opaque, multiplier: '1.5' }, source: 'group' }]))
+    const { row } = await render({ groupId: 3 })
+    expect(row('custom').get('[data-testid="model-price-base"]').text()).toBe('Billed by expression')
+    expect(row('custom').get('[data-testid="model-price-list"]').text()).toBe('Billed by expression ×1.5')
+  })
+
+  it('keeps what is edited while a save is under way', async () => {
+    const { w, row, editor } = await render({ groupId: 3, editable: true })
+    await row('gpt-4o').get('[data-testid="model-price-clear"]').trigger('click')
+    let answer!: (v: GroupModelPrices) => void
+    mocks.put.mockReturnValue(new Promise<GroupModelPrices>((resolve) => (answer = resolve)))
+    const saving = w.vm.save()
+
+    await row('o3').get('[data-testid="model-price-set"]').trigger('click')
+    await editor().get('input[type="radio"][value="multiplier"]').setValue(true)
+    answer(prices([groupView().models[1], { ...groupView().models[0], group_rule: null, list_price: price(3, 15), source: 'global' }]))
+    expect(await saving).toBe(true)
+    await flushPromises()
+
+    expect(mocks.put.mock.calls[0][1].items).toEqual([{ segment_id: null, model: 'gpt-4o', rule: null }])
+    expect(row('gpt-4o').find('[data-testid="model-price-unsaved"]').exists()).toBe(false)
+    expect(row('o3').find('[data-testid="model-price-unsaved"]').exists()).toBe(true)
+    expect(editor().get('input[type="radio"][value="multiplier"]').element).toHaveProperty('checked', true)
+    expect(w.vm.dirty).toBe(true)
+  })
+
   it('opens one editor at a time, under its row, and sends nothing without a change', async () => {
     const { w, row } = await render({ groupId: 3, editable: true })
     const set = (model: string) => row(model).get('[data-testid="model-price-set"]')
@@ -101,7 +145,7 @@ describe('model price table', () => {
 
   it('edits the prices of a segment and leaves the group pricing read-only', async () => {
     mocks.get.mockResolvedValue(
-      prices([{ model: 'gpt-4o', base: price(3, 15), group_rule: { kind: 'multiplier', multiplier: '1.5' }, segment_rule: null, list_price: price(4.5, 22.5), source: 'group' }], vip)
+      prices([{ model: 'gpt-4o', base: price(3, 15), group_rule: { kind: 'multiplier', multiplier: '1.5' }, segment_rule: null, list_price: { ...price(3, 15), multiplier: '1.5' }, source: 'group' }], vip)
     )
     const { w, row, editor } = await render({ groupId: 3, segment: vip, editable: true })
     expect(mocks.get).toHaveBeenCalledWith('/groups/3/model-prices', { segment_id: 7 })

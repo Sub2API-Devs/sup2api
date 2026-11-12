@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { reactive, ref } from 'vue'
+import { SDropdown } from '@sub2api/ui'
+import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
 import { i18n } from '@/i18n'
 import type { Segment } from '@/api/pricing'
 import SegmentEditor from './SegmentEditor.vue'
@@ -69,5 +71,30 @@ describe('user groups page', () => {
     expect(view.text()).toBe('查看')
     await view.trigger('click')
     expect(editor()).toMatchObject({ open: true, readonly: true })
+  })
+
+  it('opens the members of a user group only for a caller who reads users', async () => {
+    const menu = (w: Awaited<ReturnType<typeof render>>['w']) => w.findAllComponents(SDropdown)[1].props('actions').filter((a: { hidden?: boolean }) => !a.hidden).map((a: { key: string }) => a.key)
+    const all = await render()
+    expect(menu(all.w)).toEqual(['members', 'simulate', 'delete'])
+
+    mocks.denied.add('user:read')
+    const { w, editor } = await render()
+    expect(menu(w)).toEqual(['simulate', 'delete'])
+    const vip = w.get('[data-segment="2"]')
+    expect(vip.find('[data-testid="segment-members-link"]').exists()).toBe(false)
+    expect(vip.get('[data-testid="segment-member-count"]').text()).toBe('3')
+    expect(editor().open).toBe(false)
+  })
+
+  it('offers the price simulator, and mounts it, only to a caller who may quote in a group', async () => {
+    const all = await render()
+    expect(all.w.findComponent(PriceSimulatorModal).exists()).toBe(true)
+
+    mocks.denied.add('group:read')
+    const { w } = await render()
+    expect(w.findAllComponents(SDropdown)[1].props('actions').find((a: { key: string }) => a.key === 'simulate')?.hidden).toBe(true)
+    // Mounted, it would ask for the groups and be refused.
+    expect(w.findComponent(PriceSimulatorModal).exists()).toBe(false)
   })
 })

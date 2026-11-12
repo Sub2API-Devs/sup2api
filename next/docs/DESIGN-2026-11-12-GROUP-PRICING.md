@@ -33,7 +33,7 @@
 |---|---|
 | `segments` | `kind`（`named \| personal`）、`name`（命名用户组不区分大小写唯一；个人专属为空）、`description`、`discount numeric(10,4)`（> 0，默认 1）、`is_default`（至多一行）、`user_id`（个人专属的唯一成员，每个用户至多一个）、`origin_id`（个人专属原来所在的用户组） |
 | `segment_groups` | 主键 `(segment_id, group_id)`；`granted`、`rate_override numeric(10,4)`（NULL = 跟随）。既没授权也没专属倍率的行不保留 |
-| `price_rules` | `group_id`、`segment_id`（NULL = 分组内定价）、`model`、`kind`（`multiplier \| custom`）、`multiplier`、`mode / config / expression / expr_hash`（custom）；`(group_id, model)` 和 `(group_id, segment_id, model)` 各一个部分唯一索引 |
+| `price_rules` | `group_id`、`segment_id`（NULL = 分组内定价）、`model`、`kind`（`multiplier \| custom`）、`multiplier`、`mode / config / expression / expr_hash`（custom）；唯一索引 `(group_id, model) WHERE segment_id IS NULL` 和 `(group_id, segment_id, model)`（后者不带条件，兼作按分组查规则的索引） |
 | `users.segment_id` | 非空，默认值 `default_segment_id()`：任何不写这一列的 `INSERT INTO users`（旧二进制、插件、测试）都进默认组 |
 | `usage_logs.base_cost` | `numeric(20,8)`，原价；旧行为 NULL。单独放在 0096：0095 在事务里持有 `users` 的排他锁，不能同时去等 `usage_logs` 的锁（鉴权每次请求都连 `users`） |
 

@@ -2,10 +2,7 @@
 // discount; a personal one (named after its user by the system) only the
 // discount.
 import type { Segment } from '@/api/pricing'
-import { validRate } from '@/components/pricing/pricingFormat'
-
-// Whether a segment has a discount to show is a rule of every pricing view.
-export { hasDiscount } from '@/components/pricing/pricingFormat'
+import { validRate } from './pricingFormat'
 
 export interface SegmentForm {
   name: string

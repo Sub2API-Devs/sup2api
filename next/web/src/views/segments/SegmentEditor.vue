@@ -9,10 +9,10 @@ import { canListMembers } from '@/components/pricing/segmentMembers'
 import { confirmDiscard } from '@/composables/confirmDiscard'
 import { markUnsaved, useTabbedSave, type SaveStep } from '@/composables/useTabbedSave'
 import { applyFormError } from '@/utils/formErrors'
-import SegmentDiscountField from './SegmentDiscountField.vue'
-import SegmentGroupsEditor from './SegmentGroupsEditor.vue'
+import SegmentDiscountField from '@/components/pricing/SegmentDiscountField.vue'
+import SegmentGroupsEditor from '@/components/pricing/SegmentGroupsEditor.vue'
 import SegmentMembers from './SegmentMembers.vue'
-import { formChanged, formOf, segmentBody, validDiscount } from './segmentForm'
+import { formChanged, formOf, segmentBody, validDiscount } from '@/components/pricing/segmentForm'
 
 // Creates or edits a segment. A named one has three tabs: what it is, what it
 // gets in every group, and who is in it (for a caller who may list its

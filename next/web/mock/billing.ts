@@ -561,11 +561,12 @@ on('DELETE', '/prices/:id', (req) => {
 
 // ------------------------------------------------------------------ price math of group pricing (pricingStore.ts, pricing.ts)
 
-/** A price as the pricing endpoints return it. */
+/** A price as the pricing endpoints return it. `multiplier` is only on the list price of a multiplier rule: that price (the global one, as it is) times it. */
 export interface PriceDef {
   mode: PriceMode
   config: Record<string, any> | null
   expression: string
+  multiplier?: string
 }
 
 /** The enabled global price of a model; null when it has none. */
@@ -584,35 +585,10 @@ export function configPrice(mode: PriceMode, config: Record<string, any>): Price
   return { mode, config, expression: genExpr(mode, config) }
 }
 
-const PRICE_KEYS = new Set<string>([...TOKEN_VARS, 'flat', 'price'])
-// Six decimals, as the console previews a rule before it is saved (scaleConfig rounds like a catalog instead).
-const times = (v: number, k: number) => Number((v * k).toFixed(6))
-
-/** A config with every price in it times k, at any depth (tiers, their prices); everything else stays. */
-function scalePrices(v: any, k: number): any {
-  if (Array.isArray(v)) return v.map((x) => scalePrices(x, k))
-  if (!v || typeof v !== 'object') return v
-  return Object.fromEntries(Object.entries(v).map(([key, x]) => [key, PRICE_KEYS.has(key) && isSet(x) ? times(Number(x), k) : scalePrices(x, k)]))
-}
-
-/** An expression with every price of its base part times k; the rules after ||| are multipliers already. */
-function scaleExpression(expression: string, k: number): string {
-  const [base, ...rules] = splitRules(expression)
-  const scaled = base.replace(/\b(p|c|cr|cc|cc1h)\s*\*\s*(\d+(?:\.\d+)?)|\bflat\(\s*(\d+(?:\.\d+)?)\s*\)/g, (_, name, coef, flat) =>
-    name ? `${name}*${fmtN(times(Number(coef), k))}` : `flat(${fmtN(times(Number(flat), k))})`
-  )
-  return [scaled, ...rules].join('|||')
-}
-
-/** A price times k: what a multiplier rule makes of the global price. */
-export function scalePrice(def: PriceDef, k: number): PriceDef {
-  const config = scalePrices(def.config, k)
-  return { mode: def.mode, config, expression: def.mode === 'expression' ? scaleExpression(def.expression, k) : genExpr(def.mode, config) }
-}
-
-/** What a call with `usage` costs at a price, in USD; 0 when the price cannot be evaluated. */
-export function priceCost(def: PriceDef, usage: Partial<Usage>): number {
-  return tryEvaluate(def.expression, { usage })?.cost ?? 0
+/** What a call with `usage` costs at a price, in USD, its multiplier included; null when the expression cannot be evaluated with that usage (an error, or a result that is not a finite non-negative number, as expr.Eval refuses). */
+export function priceCost(def: PriceDef, usage: Partial<Usage>): number | null {
+  const cost = tryEvaluate(def.expression, { usage })?.cost
+  return cost !== undefined && Number.isFinite(cost) && cost >= 0 ? cost * Number(def.multiplier ?? 1) : null
 }
 
 // ------------------------------------------------------------------ price sync sources
@@ -1006,6 +982,19 @@ function charge(price: MockPrice, input: EvalInput, rate: number, terms?: Pricin
 }
 
 const usageRows: any[] = []
+
+/**
+ * The base cost of a record (usage_logs.base_cost, CONTRACTS §97.5): the
+ * global price times the usage, before any rule and any rate. It is the
+ * billing_detail.cost a record keeps; one without a detail falls back to
+ * total_cost / rate_multiplier, as rows from before 0096 do (0 at a rate of 0).
+ * A record priced by a rule shows why it matters: there the fallback would be
+ * its list cost.
+ */
+function baseCost(u: any): number {
+  if (u._detail?.cost !== undefined) return Number(u._detail.cost)
+  return Number(u.rate_multiplier) > 0 ? Number(u.total_cost) / Number(u.rate_multiplier) : 0
+}
 const ledgerRows: any[] = []
 
 for (let i = 0; i < 90; i++) {
@@ -1340,7 +1329,7 @@ function usageSummary(rows: any[], query: Record<string, string>) {
     // The mock generator's input_tokens are the exclusive pricing variable p.
     s.prompt_tokens += u.input_tokens + u.cache_read_tokens + u.cache_creation_tokens + (u.cache_creation_1h_tokens || 0)
     s.total_cost += Number(u.total_cost)
-    s.standard_cost += Number(u.rate_multiplier) > 0 ? Number(u.total_cost) / Number(u.rate_multiplier) : 0
+    s.standard_cost += baseCost(u)
     map.set(key, s)
   }
   const empty = { key: '', requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, prompt_tokens: 0, total_cost: 0, standard_cost: 0, _lat: 0, _ft: 0, _n: 0 }

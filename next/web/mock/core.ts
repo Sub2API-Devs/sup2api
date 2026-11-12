@@ -83,7 +83,22 @@ export const readonlyUser: Identity = {
   superuser: false
 }
 
-const identities = [me, plainUser, vendorUser, readonlyUser]
+/**
+ * Sign in as pricer@example.com (password admin): reads user groups, groups
+ * and prices but not users, so a personal user group goes by "#<user id>",
+ * its members cannot be listed and no user may be put in a user group
+ * (CONTRACTS §97.6, §97.7).
+ */
+export const pricerUser: Identity = {
+  id: 8,
+  email: 'pricer@example.com',
+  display_name: 'Pricer',
+  roles: ['pricer'],
+  permissions: ['segment:read', 'group:read', 'group:manage', 'price:read', 'gateway:use'],
+  superuser: false
+}
+
+const identities = [me, plainUser, vendorUser, readonlyUser, pricerUser]
 
 /** Email of a (possibly deleted) user id, for created_by_email. */
 export function userEmail(id: number | null | undefined): string | null {

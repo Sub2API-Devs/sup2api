@@ -1,7 +1,7 @@
 // Mock handlers: users, roles, permissions, API keys, groups, proxies, nodes,
 // publishers. (Accounts and account types live in their own mock module.)
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
-import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
+import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, pricerUser, readonlyUser, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 import { pricedModels } from './billing'
 import { accessOf, findSegment, forgetGroup, forgetUser, groupAccess, groupRuleCounts, moveUser, rateOf, segmentOfUser, segmentRef } from './pricingStore'
@@ -127,7 +127,9 @@ const roles: MockRole[] = [
   { id: 4, key: 'operator', name: L('Operator', '运维'), description: 'Core permissions except settings and plugins', builtin: true, superuser: false, permission_keys: [...OPERATOR_KEYS, 'plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read'], created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
   // CONTRACTS §21.1 typical roles: vendor (own-level only, no settings:custom) and read-only.
   { id: 5, key: 'vendor', name: L('Vendor', '供应商'), description: 'Maintains only the accounts and proxies it created', builtin: false, superuser: false, permission_keys: [...vendorUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
+  { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
+  // Group pricing without users (CONTRACTS §97.6): personal user groups go by "#<user id>".
+  { id: 7, key: 'pricer', name: L('Pricer', '定价员'), description: 'Prices groups and user groups, sees no users', builtin: false, superuser: false, permission_keys: [...pricerUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
 ]
 
 function roleOut(r: MockRole) {
@@ -212,7 +214,7 @@ export const groups: MockGroup[] = [
 // account_count and platforms come from the accounts mock (CONTRACTS §13);
 // the key count uses the server spelling api_key_count.
 function groupOut(g: MockGroup) {
-  return { ...g, account_count: groupAccountCount(g.id), platforms: groupPlatforms(g.id), api_key_count: keys.filter((k) => k.group_id === g.id).length, access: groupAccess(g.id), ...groupRuleCounts(g.id), model_count: groupModels(g).length }
+  return { ...g, account_count: groupAccountCount(g.id), platforms: groupPlatforms(g.id), api_key_count: keys.filter((k) => k.group_id === g.id).length, access: groupAccess(g), ...groupRuleCounts(g.id), model_count: groupModels(g).length }
 }
 
 const GLOB_SPECIALS = /[.+^${}()|[\]\\]/g
@@ -329,7 +331,8 @@ export const users: MockUser[] = [
   { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', roles: ['user'], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
   { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', roles: ['user'], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
   { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', roles: ['vendor'], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
+  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: pricerUser.id, email: pricerUser.email, display_name: pricerUser.display_name, status: 'active', roles: ['pricer'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
 ]
 for (let i = 0; i < 18; i++) {
   users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', roles: ['user'], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
@@ -362,6 +365,8 @@ on('GET', '/users/:id', (req) => {
 })
 on('POST', '/users', (req) => {
   const b = req.body || {}
+  // Choosing the user group is a segment assignment: it needs segment:manage as well, checked before the fields.
+  if (b.segment_id != null && !hasPerm(caller(req), 'segment:manage')) return fail(403, 'permission_denied', 'segment:manage is required', { permission: 'segment:manage' })
   if (!/^[^@\s]+@[^@\s]+$/.test(b.email || '')) return invalid('email', 'invalid email')
   if (users.some((u) => u.email === b.email)) return invalid('email', 'email already registered')
   if (!b.password || String(b.password).length < 8) return invalid('password', 'password must be at least 8 characters')
@@ -502,7 +507,12 @@ export function myGroups(userId = ME_ID) {
     })
 }
 
-on('GET', '/me/groups', (req) => myGroups(caller(req).id))
+/** A row of GET /me/groups: the fields the server's group.MyGroup has, no more. */
+function myGroupOut(g: ReturnType<typeof myGroups>[number]) {
+  const { id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms, effective_rate, rate_source, exclusive } = g
+  return { id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms, effective_rate, rate_source, exclusive }
+}
+on('GET', '/me/groups', (req) => myGroups(caller(req).id).map(myGroupOut))
 /** A key under the status filter: one that is switched off is "disabled" even past its expiry. */
 function keyListStatus(k: MockKey) {
   if (k.status !== 'active') return 'disabled'

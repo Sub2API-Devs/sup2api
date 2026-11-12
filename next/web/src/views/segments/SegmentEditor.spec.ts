@@ -5,9 +5,10 @@ import { i18n } from '@/i18n'
 import type { Segment } from '@/api/pricing'
 import SegmentEditor from './SegmentEditor.vue'
 
-const mocks = vi.hoisted(() => ({ post: vi.fn(), patch: vi.fn(), toast: vi.fn() }))
+const mocks = vi.hoisted(() => ({ post: vi.fn(), patch: vi.fn(), toast: vi.fn(), confirm: vi.fn(), denied: new Set<string>() }))
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { post: mocks.post, patch: mocks.patch } }))
-vi.mock('@sub2api/ui', async (original) => ({ ...(await original<object>()), toast: (...a: unknown[]) => mocks.toast(...a) }))
+vi.mock('@sub2api/ui', async (original) => ({ ...(await original<object>()), toast: (...a: unknown[]) => mocks.toast(...a), confirm: (...a: unknown[]) => mocks.confirm(...a) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !mocks.denied.has(key) }) }))
 enableAutoUnmount(afterEach)
 
 /** What ran, in order: the segment's own request and the save of its groups. */
@@ -16,10 +17,11 @@ const calls: string[] = []
 const groups = { dirty: false, saved: true }
 const groupsEditor: Component = {
   props: { segmentId: Number, editable: Boolean, discount: String },
-  setup(props: { editable?: boolean }, { expose }: SetupContext) {
+  emits: ['changed'],
+  setup(props: { editable?: boolean }, { expose, emit }: SetupContext) {
     const save = async () => (calls.push('groups'), groups.saved)
     expose({ save, get dirty() { return groups.dirty } })
-    return () => h('div', { 'data-testid': 'groups', 'data-editable': String(props.editable) })
+    return () => h('button', { 'data-testid': 'groups', 'data-editable': String(props.editable), onClick: () => emit('changed') })
   }
 }
 
@@ -46,7 +48,9 @@ beforeEach(() => {
   i18n.global.locale.value = 'zh'
   calls.length = 0
   Object.assign(groups, { dirty: false, saved: true })
+  mocks.denied.clear()
   mocks.toast.mockReset()
+  mocks.confirm.mockReset().mockResolvedValue(false)
   mocks.patch.mockReset().mockImplementation(async (path: string, body: Partial<Segment>) => (calls.push(`PATCH ${path}`), segment(body)))
   mocks.post.mockReset().mockImplementation(async (path: string, body: Partial<Segment>) => (calls.push(`POST ${path}`), segment({ id: 9, ...body })))
 })
@@ -120,5 +124,44 @@ describe('segment editor', () => {
     expect(w.find('[data-testid="segment-editor-submit"]').exists()).toBe(false)
     await w.get('[data-testid="segment-editor-close"]').trigger('click')
     expect(w.emitted('update:open')).toEqual([[false]])
+  })
+
+  it('lists the members only to a caller who reads users', async () => {
+    mocks.denied.add('user:read')
+    const { tabs } = await render(segment(), {})
+    expect(tabs()).toEqual(['基本信息', '分组与倍率'])
+    // Asked for the members tab, it opens on the first one it has.
+    const w = mount(SegmentEditor, { props: { open: true, segment: segment(), tab: 'members' }, global: { plugins: [i18n], stubs: { Teleport: true, SegmentGroupsEditor: groupsEditor, SegmentMembers: true } } })
+    await flushPromises()
+    expect(w.get('[role="tab"][aria-selected="true"]').text()).toBe('基本信息')
+    expect(w.find('segment-members-stub').exists()).toBe(false)
+  })
+
+  it('asks before closing with changes not saved, and closes at once without', async () => {
+    const { w } = await render(segment())
+    await w.get('[data-overlay-close]').trigger('click')
+    await flushPromises()
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    expect(w.emitted('update:open')).toEqual([[false]])
+
+    const changed = await render(segment())
+    await changed.w.get('[data-testid="segment-discount"]').setValue('0.8')
+    await changed.w.get('[data-overlay-close]').trigger('click')
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: '放弃未保存的改动？', confirmText: '放弃改动', cancelText: '继续编辑' }))
+    expect(changed.w.emitted('update:open')).toBeUndefined()
+
+    groups.dirty = true
+    mocks.confirm.mockResolvedValue(true)
+    const drafted = await render(segment())
+    await drafted.w.get('[data-overlay-close]').trigger('click')
+    await flushPromises()
+    expect(drafted.w.emitted('update:open')).toEqual([[false]])
+  })
+
+  it('passes on that the model prices of a group were saved', async () => {
+    const { w } = await render(segment())
+    await w.get('[data-testid="groups"]').trigger('click')
+    expect(w.emitted('changed')).toHaveLength(1)
   })
 })

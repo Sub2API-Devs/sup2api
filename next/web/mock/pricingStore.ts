@@ -7,7 +7,7 @@
 // Users and groups are known here by id only; resources.ts and pricing.ts put
 // the API rows together.
 import { nextId, now } from './router'
-import { configPrice, scalePrice, type PriceDef } from './billing'
+import { configPrice, type PriceDef } from './billing'
 
 export type RateSource = 'segment' | 'discount' | 'group'
 export type PriceSource = 'segment' | 'group' | 'global'
@@ -129,9 +129,14 @@ export function segmentOfUser(userId: number): MockSegment {
   return findSegment(membership.get(userId)) ?? defaultSegment()
 }
 
-/** A segment as other rows refer to it. */
-export function segmentRef(s: MockSegment) {
-  return { id: s.id, kind: s.kind, name: s.name, ...(s.kind === 'personal' ? { user_id: s.user_id } : {}) }
+/**
+ * A segment as other rows refer to it. A personal one goes by its user's
+ * email only for a caller who may read users (`showUsers`); to others it is
+ * "#<user_id>" (segment.Masked).
+ */
+export function segmentRef(s: MockSegment, showUsers = true) {
+  if (s.kind !== 'personal') return { id: s.id, kind: s.kind, name: s.name }
+  return { id: s.id, kind: s.kind, name: showUsers ? s.name : `#${s.user_id}`, user_id: s.user_id }
 }
 
 /** The groups a segment is granted, public ones included. */
@@ -143,11 +148,12 @@ export function rateOverrideOf(segmentId: number, groupId: number): string | nul
   return pairsWhere({ segment_id: segmentId, group_id: groupId })[0]?.rate_override ?? null
 }
 
-/** Who a group is granted to: the named segments, and how many personal ones. */
-export function groupAccess(groupId: number) {
-  const ids = new Set(pairsWhere({ group_id: groupId, granted: true }).map((p) => p.segment_id))
+/** Who a private group is granted to: the named segments, and how many personal ones. A public group is open to all: nobody is listed. */
+export function groupAccess(g: PricedGroup) {
+  if (g.visibility !== 'restricted') return { segments: [], personal_count: 0 }
+  const ids = new Set(pairsWhere({ group_id: g.id, granted: true }).map((p) => p.segment_id))
   const granted = segments.filter((s) => ids.has(s.id))
-  return { segments: granted.filter((s) => s.kind === 'named').map(segmentRef), personal_count: granted.filter((s) => s.kind === 'personal').length }
+  return { segments: granted.filter((s) => s.kind === 'named').map((s) => segmentRef(s)), personal_count: granted.filter((s) => s.kind === 'personal').length }
 }
 
 /** How many model prices a group has: its own, and those of segments in it. */
@@ -183,10 +189,15 @@ export function rateOf(s: MockSegment | null, g: PricedGroup): { value: string; 
   return { ...levels, value: g.rate_multiplier, source: 'group' }
 }
 
-/** The list price a rule gives over the global price `base`; a model without a global price has none. */
+/**
+ * The list price a rule gives over the global price `base`, as the server's
+ * billing.listPrice gives it: a custom rule is a price of its own; a
+ * multiplier goes beside the global price, which stays as it is (no config
+ * scaled, no expression rewritten). A model without a global price has none.
+ */
 export function applyRule(base: PriceDef | null, rule: PriceRule | null): PriceDef | null {
   if (!base || !rule) return base
-  return rule.kind === 'custom' ? configPrice(rule.mode, rule.config) : scalePrice(base, Number(rule.multiplier))
+  return rule.kind === 'custom' ? configPrice(rule.mode, rule.config) : { ...base, multiplier: rule.multiplier }
 }
 
 /** A rule as a row of model prices carries it. */

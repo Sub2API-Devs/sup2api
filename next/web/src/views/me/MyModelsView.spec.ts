@@ -110,6 +110,25 @@ describe('models and prices', () => {
     expect(get).toHaveBeenLastCalledWith('/me/prices', {})
   })
 
+  it('reads the multiplier of a rule into the prices of a group, and names it after a price it cannot break down', async () => {
+    const ruled = {
+      group: basic,
+      rate_multiplier: '1',
+      rate_source: 'group',
+      prices: [
+        { ...prices[0], groups: undefined, multiplier: '0.8', source: 'group' },
+        { ...prices[1], groups: undefined, multiplier: '0', source: 'segment' },
+        { ...prices[3], groups: undefined, multiplier: '1.5', source: 'group' }
+      ]
+    }
+    get.mockImplementation(async (path: string) => (path === '/me/groups' ? groups : ruled))
+    const { w } = await render('/me/models?group=1')
+    expect(row(w, 'tokens').text()).toContain('$2.4')
+    expect(row(w, 'tokens').text()).toContain('$12')
+    expect(row(w, 'one-shot').get('[data-testid="models-per-request"]').text()).toBe('$0 / 次')
+    expect(row(w, 'custom').get('[data-testid="models-opaque"]').text()).toBe('按规则计费 ×1.5')
+  })
+
   it('opens the group named in the address', async () => {
     const { w } = await render('/me/models?group=2')
     expect(get.mock.calls.filter(([path]) => path === '/me/prices')).toEqual([['/me/prices', { group_id: '2' }]])

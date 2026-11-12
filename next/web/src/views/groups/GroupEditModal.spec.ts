@@ -6,9 +6,9 @@ import type { Group } from '@/api/types'
 import GroupEditModal from './GroupEditModal.vue'
 import type { GroupEditTab } from './groupEditTabs'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), toast: vi.fn(), denied: new Set<string>() }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), toast: vi.fn(), confirm: vi.fn(), denied: new Set<string>() }))
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get: mocks.get, post: mocks.post, patch: mocks.patch } }))
-vi.mock('@sub2api/ui', async (original) => ({ ...(await original<object>()), toast: (...a: unknown[]) => mocks.toast(...a) }))
+vi.mock('@sub2api/ui', async (original) => ({ ...(await original<object>()), toast: (...a: unknown[]) => mocks.toast(...a), confirm: (...a: unknown[]) => mocks.confirm(...a) }))
 // Any of the keys asked for, as the store answers.
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (keys: string | string[]) => [keys].flat().some((key) => !mocks.denied.has(key)) }) }))
 enableAutoUnmount(afterEach)
@@ -61,6 +61,7 @@ beforeEach(() => {
   mocks.denied.clear()
   mocks.get.mockReset().mockResolvedValue({ models: [], unrestricted_accounts: 0 })
   mocks.toast.mockReset()
+  mocks.confirm.mockReset().mockResolvedValue(false)
   mocks.patch.mockReset().mockImplementation(async (path: string) => void calls.push(`PATCH ${path}`))
   mocks.post.mockReset().mockImplementation(async (path: string) => (calls.push(`POST ${path}`), { ...vip, id: 9, name: 'new' }))
 })
@@ -137,5 +138,44 @@ describe('group editor', () => {
     expect(marked()).toEqual(['授权与倍率'])
     await w.get('[data-testid="group-default-rate"]').setValue('0.9')
     expect(marked()).toEqual(['基本信息', '授权与倍率'])
+  })
+
+  it('takes a default rate as the server does: up to four decimals, below 1000000', async () => {
+    const { w, submit } = await render(vip)
+    await w.get('[data-testid="group-default-rate"]').setValue('0.12345')
+    await submit()
+    expect(calls).toEqual([])
+    expect(w.text()).toContain('最多 4 位小数')
+    await w.get('[data-testid="group-default-rate"]').setValue('0.1234')
+    await submit()
+    expect(calls[0]).toBe('PATCH /groups/2')
+  })
+
+  it('asks before closing with a tab not saved, and closes at once without', async () => {
+    const plain = await render(vip)
+    await plain.w.get('[data-overlay-close]').trigger('click')
+    await flushPromises()
+    expect(mocks.confirm).not.toHaveBeenCalled()
+    expect(plain.w.emitted('update:open')).toEqual([[false]])
+
+    dirty.segments = true
+    const { w } = await render(vip)
+    await w.get('[data-overlay-close]').trigger('click')
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: '放弃未保存的改动？', cancelText: '继续编辑' }))
+    expect(w.emitted('update:open')).toBeUndefined()
+    mocks.confirm.mockResolvedValue(true)
+    await w.get('[data-overlay-close]').trigger('click')
+    await flushPromises()
+    expect(w.emitted('update:open')).toEqual([[false]])
+  })
+
+  it('counts the fields as saved once the group is, though a later step keeps the dialog open', async () => {
+    const { w, submit } = await render(vip)
+    await w.get('[data-testid="group-default-rate"]').setValue('0.9')
+    answers.pricing = false
+    await submit()
+    const marked = w.findAll('[role="tab"]').filter((t) => t.text().includes('•'))
+    expect(marked).toHaveLength(0)
   })
 })

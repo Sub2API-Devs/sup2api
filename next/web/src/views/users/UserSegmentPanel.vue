@@ -10,8 +10,8 @@ import { rateText } from '@/components/pricing/pricingFormat'
 import { useSegmentsLookup } from '@/components/pricing/segmentLookup'
 import { moveToSegment } from '@/components/pricing/segmentMembers'
 import { confirmAction } from '@/composables/crud'
-import SegmentDiscountField from '@/views/segments/SegmentDiscountField.vue'
-import { validDiscount } from '@/views/segments/segmentForm'
+import SegmentDiscountField from '@/components/pricing/SegmentDiscountField.vue'
+import { validDiscount } from '@/components/pricing/segmentForm'
 
 // The segment one user belongs to, and the ways out of it. In a named segment:
 // move him to another one, or give him a personal one. In a personal segment:
