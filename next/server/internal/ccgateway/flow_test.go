@@ -17,9 +17,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -63,6 +65,29 @@ func (a *keyAuth) PermissionSet(context.Context, int64) (core.PermissionSet, err
 func (a *keyAuth) CanGrant(context.Context, int64, []string) error { return nil }
 func (a *keyAuth) CanActOn(context.Context, int64, []string) error { return nil }
 
+// fixtureAccess stands in for the account module's core.AccountAccess, which
+// cannot be imported here (account imports this package).
+type fixtureAccess struct {
+	db *store.DB
+	az core.Authorizer
+}
+
+func (a fixtureAccess) AccountsInScope(ctx context.Context, uid int64, action string, ids []int64) (bool, []int64, error) {
+	scope, ok := core.ScopeOf(core.WithUserID(ctx, uid), a.az, perm.Pair(perm.Key("account:"+action), perm.Key("account:own:"+action)))
+	if !ok {
+		return false, nil, core.AccountsDenied(action)
+	}
+	if scope == nil {
+		return true, nil, nil
+	}
+	rows, err := a.db.Pool.Query(ctx, `SELECT id FROM accounts WHERE id = ANY($1) AND deleted_at IS NULL AND created_by = $2`, ids, *scope)
+	if err != nil {
+		return false, nil, err
+	}
+	allowed, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	return false, allowed, err
+}
+
 func newRuntimeFixture(t *testing.T, controller http.HandlerFunc) *runtimeFixture {
 	t.Helper()
 	db := testutil.DB(t)
@@ -75,6 +100,7 @@ func newRuntimeFixture(t *testing.T, controller http.HandlerFunc) *runtimeFixtur
 	engine := gin.New()
 	auth := &keyAuth{keys: map[int64][]string{}}
 	s.Authorizer = auth
+	s.Accounts = fixtureAccess{db: db, az: auth}
 	s.RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 	f := &runtimeFixture{t: t, db: db, s: s, engine: engine, auth: auth, cipher: cipher}
 	f.runtimes(true)
@@ -592,9 +618,9 @@ func TestCLIVersionOf(t *testing.T) {
 	}
 }
 
-// TestAccountRuntimeOwnership: besides settings administrators, account
-// readers and updaters reach the runtime of the accounts they may see; own
-// level only the ones they created (CONTRACTS §49.5).
+// TestAccountRuntimeOwnership: account readers and updaters reach the runtime
+// of the accounts they may see, own level only the ones they created;
+// settings keys open none of it (CONTRACTS §49.5).
 func TestAccountRuntimeOwnership(t *testing.T) {
 	ctl := newFakeController(t)
 	f := newRuntimeFixture(t, ctl.ServeHTTP)
@@ -604,6 +630,8 @@ func TestAccountRuntimeOwnership(t *testing.T) {
 	f.auth.keys[vendor] = []string{"account:own:read", "account:own:update"}
 	f.auth.keys[reader] = []string{"account:read"}
 	f.auth.keys[nobody] = []string{"account:own:create"}
+	settings := f.user("settings@x")
+	f.auth.keys[settings] = []string{"settings:read", "settings:manage"}
 	mine, other := f.account(true), f.account(true)
 	if _, err := f.db.Pool.Exec(ctx, `UPDATE accounts SET created_by=$1 WHERE id=$2`, vendor, mine); err != nil {
 		t.Fatal(err)
@@ -635,8 +663,19 @@ func TestAccountRuntimeOwnership(t *testing.T) {
 		{reader, "POST", "sync", mine, 403},
 		{nobody, "GET", "status", mine, 403},
 		{nobody, "POST", "start", mine, 403},
-		{admin, "POST", "cancel", mine, 200}, // settings administrator
+		{admin, "POST", "cancel", mine, 200},
 		{admin, "GET", "status", other, 200},
+		{settings, "GET", "session", mine, 403},
+		{settings, "GET", "status", other, 403},
+		{settings, "GET", "cc-features", mine, 403},
+		{settings, "POST", "sync", mine, 403},
+		{settings, "POST", "cc-features/preview", mine, 403},
+		{settings, "PUT", "request-logs", mine, 403},
+		{vendor, "GET", "session", other, 404},
+		{vendor, "GET", "cc-features", mine, 200},
+		{vendor, "GET", "cc-features", other, 404},
+		{vendor, "POST", "cc-features/preview", other, 404},
+		{reader, "GET", "cc-features", other, 200},
 	} {
 		code, out := f.callAs(tc.uid, tc.method, tc.id, tc.action, `{}`)
 		if code != tc.want {

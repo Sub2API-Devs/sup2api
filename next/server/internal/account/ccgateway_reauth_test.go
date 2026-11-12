@@ -127,6 +127,8 @@ func TestCCGatewayReauthorize(t *testing.T) {
 	authz.keys[owner] = []string{"account:own:update", "account:own:read", "account:own:delete"}
 	authz.keys[stranger] = []string{"account:own:update"}
 	authz.keys[reader] = []string{"account:read"}
+	settings := e.addUser("settings@x")
+	authz.keys[settings] = []string{"settings:read", "settings:manage"}
 	create := func(name string) int64 {
 		code, out := e.do("POST", "/accounts", map[string]any{"name": name, "plugin_key": "ccgateway", "type": "managed", "credentials": map[string]any{}})
 		if code != 201 {
@@ -157,6 +159,16 @@ func TestCCGatewayReauthorize(t *testing.T) {
 		}
 		if code, _ := e.doAs(reader, "POST", path, nil); code != 403 {
 			t.Fatalf("reader: %d", code)
+		}
+		// Settings keys do not re-authorize accounts, nor read their runtime.
+		if code, _ := e.doAs(settings, "POST", path, nil); code != 403 {
+			t.Fatalf("settings administrator: %d", code)
+		}
+		if code, _ := e.doAs(settings, "GET", "/system/ccgateway/accounts/"+itoa(id)+"/session", nil); code != 403 {
+			t.Fatalf("settings administrator session: %d", code)
+		}
+		if code, _ := e.doAs(stranger, "POST", "/system/ccgateway/accounts/"+itoa(id)+"/sync", map[string]any{}); code != 404 {
+			t.Fatalf("stranger sync: %d", code)
 		}
 		for i := 0; i < 2; i++ {
 			code, out := e.doAs(owner, "POST", path, map[string]any{"authorization_mode": "fresh"})

@@ -227,3 +227,10 @@
 - 改动：删除 `draftUseKeys`，五条 `/system/ccgateway/drafts*` 路由都只接受 `settings:manage`、`account:create`、`account:own:create`。`ccgateway.ReauthDraft`、`CommitReauth` 去掉不再使用的调用者与范围参数（重新授权在账号现有运行环境上原地进行，归属由账号接口先行检查）。CONTRACTS §49.9、§49.17 同步。无迁移。
 - 影响对象：只有 `account:update` / `account:own:update`、没有任何 create key 的用户访问按 key 的草稿接口由 404（看不到别人的草稿）或 200（自己建的草稿，但没有 create key 本就建不了）变为 403。重新授权流程不经过草稿接口，不受影响。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T38 W1-F6、W5-A7、D15：按账号的运行环境只认 account:*（产品性收紧，单独提交）
+
+- 改动：`ccgateway.RuntimeScope(method)`（读 = `account:read` / `account:own:read`，其余 = `account:update` / `account:own:update`）成为 `/system/ccgateway/accounts/:id/:action`、`cc-features`、`cc-features/preview` 与 `reauthorize`、`reauthorize/:key/commit` 的唯一 key 来源，不再包含 `settings:read` / `settings:manage`；`PUT request-logs` 只认 `account:update`。归属判断删除 `callerScope` 与两份手写 EXISTS，改调 `core.AccountAccess`（`ccgateway.Service.Accounts`，由 app 注入账号模块；未注入时 503），账号类型等附加条件仍在 ccgateway 自己的查询里。控制台：运行环境页的行操作（启动、重新授权）只按该行的 update 判断，请求日志控件只按 `account:update`；账号编辑里的重新授权面板不再把 `settings:*` 当作可读可写。CONTRACTS §49.5、§49.17、§65 同步。无迁移。
+- 影响对象：只有 `settings:read` / `settings:manage`、没有账号权限的角色，访问某个账号的运行环境状态、会话、健康、特性预览、请求日志设置，或对其同步、启动、授权、登出、重新授权，由 200 变为 403；控制台里对应按钮隐藏或置灰。需要这些操作的角色要另外授予 `account:read` / `account:update`（或 own 级）。settings 管理员仍可管理控制器、镜像、Worker 升级、清理、保留的运行环境、CLI 管理与默认规则，请求日志查看接口（列表、详情、文件）仍接受 `settings:read` / `settings:manage`。内置 admin、operator 默认同时持有 `account:read`、`account:update`，不受影响。后续任务（T70）不得把 `settings:*` 加回这些路由。
+- 不改（wontfix）：own 级调用者在特性预览里能看到继承值及其来源（分组与全局策略）；`GET health` 会记录运行环境上报的订阅类型、草稿的 `GET status` 会更新 `last_seen_at`（W1-F7）。代码里有注释。
+- 回滚：revert 这个提交（与 review fixes）即可，无迁移、无数据变化。

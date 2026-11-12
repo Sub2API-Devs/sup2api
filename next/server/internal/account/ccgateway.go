@@ -14,6 +14,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/environment"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -168,15 +169,10 @@ func (s *Service) connectCCGateway(c *gin.Context) {
 
 // ---------------------------------------------------------------- re-authorization (CONTRACTS §49.17)
 
-// ccgReauthScope is the account range of the re-authorization endpoints
-// (the §49.5 rule): settings:manage or account:update reach every account,
-// account:own:update the accounts the caller created.
-func ccgReauthScope(ctx context.Context) *int64 {
-	if core.OwnerScope(ctx, "settings:manage") == nil {
-		return nil
-	}
-	return core.OwnerScope(ctx, "account:update")
-}
+// ccgReauthKeys are the keys of the re-authorization endpoints: those of
+// the other per-account runtime writes (the §49.5 rule), account:update for
+// every account, account:own:update for the accounts the caller created.
+var ccgReauthKeys = ccgateway.RuntimeScope(http.MethodPost)
 
 // ccgReauthAccount loads the CCGateway account of a re-authorization
 // request; ok=false after the failure was written.
@@ -184,7 +180,7 @@ func (s *Service) ccgReauthAccount(c *gin.Context, ctx context.Context) (id int6
 	if id, ok = httpapi.PathID(c, "id"); !ok {
 		return 0, nil, false
 	}
-	scope = ccgReauthScope(ctx)
+	scope = core.OwnerScopeOf(ctx, ccgReauthKeys)
 	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)

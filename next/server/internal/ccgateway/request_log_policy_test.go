@@ -288,8 +288,8 @@ func TestRequestLogCacheInvalidation(t *testing.T) {
 }
 
 // GET is open to readers of the account (an own-level caller only reaches
-// accounts it created); PUT takes account:update or settings:manage, never
-// the own key.
+// accounts it created); PUT takes account:update only, never the own key;
+// settings keys open neither.
 func TestRequestLogsPermissions(t *testing.T) {
 	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
 	owner := f.user("owner@test")
@@ -298,8 +298,14 @@ func TestRequestLogsPermissions(t *testing.T) {
 	updater := f.user("updater@test")
 	f.auth.keys[owner] = []string{"account:own:read", "account:own:update"}
 	f.auth.keys[outsider] = []string{"account:own:read", "account:own:update"}
-	f.auth.keys[reader] = []string{"settings:read"}
+	f.auth.keys[reader] = []string{"account:read"}
 	f.auth.keys[updater] = []string{"account:update"}
+	settings := f.user("settings@test")
+	f.auth.keys[settings] = []string{"settings:read", "settings:manage"}
+	for _, method := range []string{"GET", "PUT"} {
+		code, out := f.callAs(settings, method, 1, "request-logs", `{"level":"off"}`)
+		require.Equal(t, 403, code, out)
+	}
 	id := f.account(false)
 	_, err := f.db.Pool.Exec(context.Background(), "UPDATE accounts SET created_by=$1 WHERE id=$2", owner, id)
 	require.NoError(t, err)

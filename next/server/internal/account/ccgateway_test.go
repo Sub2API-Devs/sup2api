@@ -46,6 +46,7 @@ func (e *env) withCCGateway(runtimes bool, ctl http.HandlerFunc) *ccgateway.Serv
 	e.t.Cleanup(srv.Close)
 	e.t.Setenv("CCGATEWAY_URL", srv.URL)
 	ccg := ccgateway.New(e.db, e.svc.d.Cipher)
+	ccg.Accounts = e.svc
 	plain, _ := json.Marshal(ccgateway.Config{Mode: "local", AccountRuntimes: runtimes, AdminKey: "controller-secret", RequestPolicy: &ccgateway.RequestPolicy{SchemaVersion: 1, UnknownField: "reject", CLIVersion: "2.1.302"}})
 	enc, err := e.svc.d.Cipher.Encrypt(plain, []byte("system:ccgateway:v1"))
 	if err != nil {

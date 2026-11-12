@@ -6,11 +6,11 @@ import AccountRuntimes from './AccountRuntimes.vue'
 /** Toggles a switch: SSwitch is a checkbox (jsdom only activates connected ones on click), stubs are buttons. */
 const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof HTMLInputElement ? el.setValue(!el.element.checked) : el.trigger('click'))
 
-// granted: the keys the caller holds, overriding manage + account:read.
+// manage: the caller holds settings:manage and account:update (besides account:read); granted: the exact keys instead.
 const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn(), confirm: vi.fn(), manage: true, granted: null as string[] | null }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), confirm: (...a: unknown[]) => mocks.confirm(...a), toast: vi.fn() }))
-const holds = (key: string) => mocks.granted ? mocks.granted.includes(key) : key === 'settings:manage' ? mocks.manage : key === 'account:read'
+const holds = (key: string) => mocks.granted ? mocks.granted.includes(key) : key === 'settings:manage' || key === 'account:update' ? mocks.manage : key === 'account:read'
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string | string[]) => [key].flat().some(holds), me: { id: 1 } }) }))
 
 describe('account runtime debug log switches', () => {
@@ -270,6 +270,18 @@ describe('account runtime debug log levels', () => {
       expect(w.get('[data-testid="request-log-full-25"]').text()).toBe(text)
       w.unmount()
     }
+  })
+
+  it('gives a settings administrator without account:update no row action', async () => {
+    mocks.granted = ['settings:manage', 'account:read']
+    try {
+      worker(leveled({ usage: { summary_bytes: MIB, full_bytes: 3 * MIB, requests: 9 } }))
+      const w = await render()
+      expect(w.get('[data-testid="request-log-level-25"]').findAll('input').every(i => i.element.disabled)).toBe(true)
+      expect(w.find('[data-testid="request-log-clear-full-25"]').exists()).toBe(false)
+      expect(w.find('[data-testid="ccgateway-runtime-refresh-25"]').exists()).toBe(false)
+      w.unmount()
+    } finally { mocks.granted = null }
   })
 
   it('leaves an own-level caller the level as read only, without the clear action', async () => {

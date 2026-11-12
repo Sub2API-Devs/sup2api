@@ -3269,10 +3269,11 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 | 路由 | 接受任一权限 |
 |---|---|
-| GET `status` / `health` / `session` | `settings:read`、`account:read`、`account:own:read` |
-| POST `sync` / `start` / `complete` / `cancel` / `logout` | `settings:manage`、`account:update`、`account:own:update` |
+| GET `status` / `health` / `session` / `features` / `request-logs` / `cc-features` | `account:read`、`account:own:read` |
+| POST `sync` / `start` / `complete` / `cancel` / `logout` / `cc-features/preview`、`reauthorize`、`reauthorize/:key/commit`（§49.17） | `account:update`、`account:own:update` |
+| PUT `request-logs`（§65） | `account:update` |
 
-用 `Router.PermAny` 注册（§21.1）。只命中 `account:own:*` 时只能操作 `created_by` = 调用者的账号，其余（含不存在、已删除）一律 404，与账号接口的所有权规则一致。原来只有 `settings:*` 能用，own 级用户能建 ccgateway 账号却授权不了。CCGateway 全局设置（`remote-config`、`remote-*`、共享容器的 `auth/*`、`proxy`）仍只认 `settings:*`。
+用 `Router.PermAny` 注册（§21.1），key 来自 `ccgateway.RuntimeScope(method)`。只命中 `account:own:*` 时只能操作 `created_by` = 调用者的账号，其余（含不存在、已删除）一律 404，与账号接口的所有权规则一致；归属由 `core.AccountAccess`（账号模块）判断，未注入时这些接口 503。**2026-11-12 权限加固 T38（D15）起不再接受 `settings:read` / `settings:manage`**：按账号的运行环境跟随账号本身的权限，settings 管理员只保留控制器、镜像、默认规则等全局设置（`remote-config`、`remote-*`、`runtime/*`、`runtimes/*`、`cli/:id`、`features`），请求日志查看接口（§64）不变。
 
 ### 49.6 `POST /system/ccgateway/connect`
 
@@ -3473,7 +3474,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 
 `account_id` 仍 UNIQUE：只有账号当前使用的运行环境带它。行的四种状态：未认领草稿（`account_id`、`retired_at` 为空；`for_account` 为空 = 新建账号的草稿，非空 = 该账号的重新授权草稿）、已认领（`account_id` 非空）、已退役（`account_id` 为空、`retired_at` 非空）。
 
-**接口**（由 account 模块注册，与 ccgateway 模块的 `/system/ccgateway/accounts/:id/:action` 并存）。权限 `settings:manage`、`account:update`、`account:own:update` 任一；后者只能操作自己创建的账号（§49.5 规则），别人的账号 404。账号必须是未删除的 `ccgateway` 账号（否则 404）。
+**接口**（由 account 模块注册，与 ccgateway 模块的 `/system/ccgateway/accounts/:id/:action` 并存）。权限 `account:update`、`account:own:update` 任一（T38 起不再接受 `settings:manage`）；后者只能操作自己创建的账号（§49.5 规则），别人的账号 404。账号必须是未删除的 `ccgateway` 账号（否则 404）。
 
 | 方法 | 路径 | 结果 |
 |---|---|---|
@@ -4738,7 +4739,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 默认规则：`GET /system/ccgateway/remote-config`（`settings:read`）返回 `"request_logs":{"level":"summary"}`（总是给出生效的默认值，可为 `full`）；`PUT …/remote-config`（`settings:manage`）可带 `"request_logs":{"level":"off"|"summary"|"full"}`，省略保持原值；空串、其他值或未知键（含 `full_for_hours`/`full_until`：默认的 `full` 不带时长）400。
 
-账号：`GET/PUT /system/ccgateway/accounts/:id/request-logs`（GET `settings:read`/`account:read`/本人 `account:own:read`；PUT 只认 `settings:manage`/`account:update`，不接受 `account:own:update`（2026-11-12 权限加固 T36；此前本人级可改自己账号的）；GET 的本人级只能到自己创建的账号，否则 404）。GET 与 PUT 成功都返回同一形状：
+账号：`GET/PUT /system/ccgateway/accounts/:id/request-logs`（GET `account:read`/本人 `account:own:read`；PUT 只认 `account:update`，不接受 `account:own:update`（2026-11-12 权限加固 T36；此前本人级可改自己账号的），T38 起两者都不再接受 `settings:*`；GET 的本人级只能到自己创建的账号，否则 404）。GET 与 PUT 成功都返回同一形状：
 
 ```json
 {"setting":{"level":"full","full_until":"2026-10-26T16:00:00Z"},

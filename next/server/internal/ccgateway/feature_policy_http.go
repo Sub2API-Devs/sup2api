@@ -61,17 +61,20 @@ func (s *Service) accountFeaturePreview(c *gin.Context) {
 	httpapi.OK(c, out)
 }
 
-// previewAuthorize confirms the account exists, is a CCGateway account and is
-// visible to the caller for this method's permission pair.
+// previewAuthorize confirms the caller may act on the account for this
+// method and that it is a live CCGateway account.
+//
+// An own-level caller sees the whole resolution, inherited values and their
+// sources (group and global policy) included (won't fix): they decide how its
+// own account behaves and name no other account.
 func (s *Service) previewAuthorize(c *gin.Context, ctx context.Context, id int64) bool {
-	keys := []string{"settings:read", "account:read"}
-	if c.Request.Method == "POST" {
-		keys = []string{"settings:manage", "account:update"}
+	if err := s.authorizeAccount(ctx, c.Request.Method, id); err != nil {
+		httpapi.Fail(c, err)
+		return false
 	}
-	scope := callerScope(ctx, keys...)
 	var exists bool
 	err := s.DB.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM accounts WHERE id=$1 AND deleted_at IS NULL
-		AND plugin_key='ccgateway' AND type IN ('managed','apikey') AND ($2::bigint IS NULL OR created_by=$2))`, id, scope).Scan(&exists)
+		AND plugin_key='ccgateway' AND type IN ('managed','apikey'))`, id).Scan(&exists)
 	if err != nil || !exists {
 		httpapi.Fail(c, core.ErrNotFound)
 		return false
