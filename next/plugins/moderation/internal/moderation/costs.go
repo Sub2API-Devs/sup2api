@@ -21,7 +21,9 @@ import (
 
 // Cost sources (costs.source, CONTRACTS §72.13.3).
 const (
-	SourceAudit    = "audit"
+	SourceAudit = "audit"
+	// SourceAnalysis is the retired AI analysis (removed in 0.10.0): cost
+	// rows written before then keep it until the stats retention drops them.
 	SourceAnalysis = "analysis"
 	SourceTest     = "test"
 	SourceTry      = "try"

@@ -195,6 +195,8 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	mod := newFakeMod(t)
 	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "allowlist_user_ids": []string{"12"}})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	// auto_watch skips the allowlisted user 12: watched by hand.
+	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 12}))
 	mustHook(t, h, hookReqAs(11, "", "MOD-HIT-violence one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual two"))
@@ -227,7 +229,7 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	if got := list(map[string]string{"new_only": "true"}); len(got) != 1 || got[0].UserID != 11 {
 		t.Fatalf("new_only after seen = %+v", got)
 	}
-	// Absolute expiry, reason and the analysis link go to the history. The
+	// Absolute expiry and reason go to the history. The
 	// answer is the entry as stored: a level change resets the new hits and
 	// makes the entry manual.
 	w := decodeData[Watch](t, h.Do("PATCH", "/watchlist/11", nil, map[string]any{"level": "enforce", "expires_at": "2099-01-01T00:00:00Z", "reason": "manual check"}))
@@ -241,7 +243,7 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	// The detail drawer answers for any user; a level change resets the new hits.
 	d := decodeData[UserDetail](t, h.Do("GET", "/users/11", nil, nil))
 	if d.Watch == nil || d.Watch.Level != LevelEnforce || d.Watch.HitsSinceSeen != 0 || d.Summary.Total != 1 || d.Summary.Pending != 1 ||
-		d.Summary.AIVerdicts.None != 1 || d.Context.GroupID == nil || *d.Context.GroupID != 9 || d.Context.Flow == nil ||
+		d.Context.GroupID == nil || *d.Context.GroupID != 9 || d.Context.Flow == nil ||
 		len(d.Context.Sources) != 1 || !d.Context.Sources[0].Current || len(d.Daily) != 1 || d.Daily[0].Suspicious != 1 {
 		t.Fatalf("detail = %+v", d)
 	}
@@ -249,12 +251,11 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 		d.Daily == nil || d.Context.Sources == nil {
 		t.Fatalf("unknown user detail = %+v", d)
 	}
-	// Removing can record the reason and the analysis whose suggestion was applied.
-	if resp := h.Do("DELETE", "/watchlist/12", map[string]string{"reason": "AI suggests release", "analysis_id": "7"}, nil); resp.GetStatus() != 200 {
+	// Removing can record the reason.
+	if resp := h.Do("DELETE", "/watchlist/12", map[string]string{"reason": "no longer suspicious"}, nil); resp.GetStatus() != 200 {
 		t.Fatalf("delete with reason = %d %s", resp.GetStatus(), resp.GetBody())
 	}
-	if evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/12/events", nil, nil)); evs[0].Action != "remove" || evs[0].Reason != "AI suggests release" ||
-		evs[0].AnalysisID == nil || *evs[0].AnalysisID != 7 {
+	if evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/12/events", nil, nil)); evs[0].Action != "remove" || evs[0].Reason != "no longer suspicious" {
 		t.Fatalf("remove history = %+v", evs[0])
 	}
 	// Without days or expires_at, enforce never expires and observe gets
@@ -270,9 +271,6 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	}
 	if w := decodeData[Watch](t, h.Do("PATCH", "/watchlist/31", nil, map[string]any{"level": "observe", "days": 0})); w.ExpiresAt != nil {
 		t.Fatalf("explicit days 0 = %v", w.ExpiresAt)
-	}
-	if resp := h.Do("DELETE", "/watchlist/31", map[string]string{"analysis_id": "0"}, nil); resp.GetStatus() != 400 {
-		t.Fatalf("delete with analysis_id 0 = %d", resp.GetStatus())
 	}
 	// Moderators are neither put on the watch list nor banned by hand.
 	fh.Authz = func(uid int64, _ string) bool { return uid == 77 }

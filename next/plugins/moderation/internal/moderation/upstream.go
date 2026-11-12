@@ -54,10 +54,9 @@ const (
 // with the key removed; it may echo user input, so it is only shown by the
 // channel test and never stored.
 type UpstreamError struct {
-	Status     int
-	message    string
-	tooLarge   bool
-	retryAfter time.Duration
+	Status   int
+	message  string
+	tooLarge bool
 }
 
 func (e *UpstreamError) Error() string { return fmt.Sprintf("upstream returned status %d", e.Status) }

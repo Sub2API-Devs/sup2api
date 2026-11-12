@@ -209,22 +209,22 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 // afterWrite applies the watch list (§72.8) and the automatic ban to the
 // suspicious records of a written batch. A replayed cached hit is not a new
 // violation (history sent again would count once per turn): it neither
-// watches the user nor counts a violation, an analysis or towards a ban
-// (new-api escalate.go onSuspicious).
+// watches the user nor counts a violation or towards a ban (new-api
+// escalate.go onSuspicious).
 func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 	c := p.cfg.Load()
-	watchChanged, analyze, banned := false, false, map[int64]bool{}
+	watchChanged, banned := false, map[int64]bool{}
 	for i, e := range evs {
 		if !e.suspicious() || e.Replayed || e.UserID <= 0 || p.isStaff(ctx, e.UserID) {
 			continue
 		}
-		changed, queued, err := p.recordWatchHit(ctx, c, e, ids[i])
+		changed, err := p.recordWatchHit(ctx, c, e, ids[i])
 		if err != nil {
 			p.log.Warn("moderation: watch list update failed", "user_id", e.UserID, "error", err.Error())
 		}
 		watchChanged = watchChanged || changed
-		analyze = analyze || queued
-		// Allowlisted users are watched like everyone else but never banned.
+		// Allowlisted users are never banned (nor watched automatically,
+		// liveWatchEntry).
 		if !c.allowlisted(e.UserID) {
 			banned[e.UserID] = true
 		}
@@ -235,9 +235,6 @@ func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 	if len(banned) > 0 {
 		p.applyBans(ctx, banned)
 	}
-	if analyze {
-		p.kickAnalyses()
-	}
 }
 
 func newEpoch() int64 {
@@ -247,17 +244,16 @@ func newEpoch() int64 {
 }
 
 // recordWatchHit adds the user to the watch list or counts the violation
-// (one per request id; see countWatchHit for the levels that count). changed = the level set changed;
-// queued = the count reached analysis_every_violations and an analysis was
-// queued (the count restarts in a new window, §72.13.4).
-func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, eventID int64) (changed, queued bool, err error) {
+// (one per request id; see countWatchHit for the levels that count).
+// changed = the level set changed.
+func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, eventID int64) (changed bool, err error) {
 	db, err := p.db(ctx)
 	if err != nil {
-		return false, false, err
+		return false, err
 	}
 	now := p.now().UTC()
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		changed, queued = false, false
+		changed = false
 		if err := lockBlockSubject(ctx, tx, e.UserID); err != nil {
 			return err
 		}
@@ -267,7 +263,7 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 		}
 		changed = entryChanged
 		if found {
-			if queued, err = p.countWatchHit(ctx, tx, c, w, e, eventID, now); err != nil {
+			if err := countWatchHit(ctx, tx, c, w, e, eventID, now); err != nil {
 				return err
 			}
 		}
@@ -276,14 +272,16 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 		}
 		return nil
 	})
-	return changed, queued, err
+	return changed, err
 }
 
 // liveWatchEntry returns the user's unexpired watch entry: an expired one
 // is removed first, and with auto_watch a user not on the list joins it at
 // the default level, so that under default enforce the new entry does not
-// lower the user to observe (§72.8, new-api autoAddModerationWatch). changed: an entry was removed or added;
-// found=false: the user is not watched.
+// lower the user to observe (§72.8, new-api autoAddModerationWatch). An
+// allowlisted user is only moderated in the background, so auto_watch never
+// adds one (a manual entry still may, at the observe level). changed: an
+// entry was removed or added; found=false: the user is not watched.
 func liveWatchEntry(ctx context.Context, tx pgx.Tx, c *config, uid int64, now time.Time) (w Watch, found, changed bool, err error) {
 	if w, found, err = loadWatch(ctx, tx, uid); err != nil {
 		return w, false, false, err
@@ -294,7 +292,7 @@ func liveWatchEntry(ctx context.Context, tx pgx.Tx, c *config, uid int64, now ti
 		}
 		found, changed = false, true
 	}
-	if found || !c.AutoWatch {
+	if found || !c.AutoWatch || c.allowlisted(uid) {
 		return w, found, changed, nil
 	}
 	exp := now.Add(c.watchFor)
@@ -311,20 +309,19 @@ func liveWatchEntry(ctx context.Context, tx pgx.Tx, c *config, uid int64, now ti
 
 // countWatchHit counts a hit on the entry w. An observe entry, and under
 // default enforce an enforce entry too, counts the violation once per
-// request id and queues an analysis when the count reaches
-// analysis_every_violations (queued); only an observe entry extends its
-// expiry (new-api ApplyWatchHit).
-func (p *Plugin) countWatchHit(ctx context.Context, tx pgx.Tx, c *config, w Watch, e eventRec, eventID int64, now time.Time) (queued bool, err error) {
+// request id; only an observe entry extends its expiry (new-api
+// ApplyWatchHit).
+func countWatchHit(ctx context.Context, tx pgx.Tx, c *config, w Watch, e eventRec, eventID int64, now time.Time) error {
 	counts := w.Level == LevelObserve || (c.defaultLevel == LevelEnforce && w.Level == LevelEnforce)
 	if !counts {
 		_, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, last_hit_at = $2, updated_at = $2 WHERE user_id = $1`, e.UserID, now)
-		return false, err
+		return err
 	}
 	counted := false
 	if e.RequestID != "" {
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE user_id = $1 AND request_id = $2 AND counted AND id <> $3)`,
 			e.UserID, e.RequestID, eventID).Scan(&counted); err != nil {
-			return false, err
+			return err
 		}
 	}
 	expArg := w.ExpiresAt
@@ -339,32 +336,11 @@ func (p *Plugin) countWatchHit(ctx context.Context, tx pgx.Tx, c *config, w Watc
 	if !counted {
 		inc = 1
 		if _, err := tx.Exec(ctx, `UPDATE events SET counted = true, violation_epoch = $2 WHERE id = $1`, eventID, w.ViolationEpoch); err != nil {
-			return false, err
+			return err
 		}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, violation_count = violation_count + $2,
-		last_hit_at = $3, expires_at = $4, updated_at = $3 WHERE user_id = $1`, e.UserID, inc, now, expArg); err != nil {
-		return false, err
-	}
-	// Without a usable analysis channel the window stays open: closing it
-	// would queue an analysis nothing runs and reset the count for nothing.
-	if inc == 0 || c.AnalysisEveryViolations <= 0 || w.ViolationCount+1 < c.AnalysisEveryViolations || !p.analysisChannelUsable() {
-		return false, nil
-	}
-	return true, queueAutoAnalysis(ctx, tx, e.UserID, eventID, now)
-}
-
-// queueAutoAnalysis closes the user's counting window and queues an
-// automatic analysis (§72.13.4): the count restarts, and the record that
-// closed the window no longer belongs to a window a false positive could
-// reduce.
-func queueAutoAnalysis(ctx context.Context, tx pgx.Tx, uid, eventID int64, now time.Time) error {
-	if _, err := tx.Exec(ctx, `UPDATE watchlist SET violation_count = 0, violation_epoch = $2,
-		analysis_source = CASE WHEN analysis_requested_at IS NULL THEN $4 ELSE analysis_source END,
-		analysis_requested_at = coalesce(analysis_requested_at, $3) WHERE user_id = $1`, uid, newEpoch(), now, AnalysisSourceAuto); err != nil {
-		return err
-	}
-	_, err := tx.Exec(ctx, `UPDATE events SET violation_epoch = 0 WHERE id = $1`, eventID)
+	_, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, violation_count = violation_count + $2,
+		last_hit_at = $3, expires_at = $4, updated_at = $3 WHERE user_id = $1`, e.UserID, inc, now, expArg)
 	return err
 }
 

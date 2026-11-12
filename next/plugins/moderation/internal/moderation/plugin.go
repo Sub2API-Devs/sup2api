@@ -102,11 +102,8 @@ type Plugin struct {
 	hourly     *statsAcc
 	categories categoryCache
 	staff      staffCache
-	// AI analyses running on this node and the dispatcher guard.
-	analysesRunning atomic.Int64
-	dispatching     atomic.Bool
-	priceMu         sync.Mutex
-	priceCache      map[string]priceStateEntry
+	priceMu    sync.Mutex
+	priceCache map[string]priceStateEntry
 
 	// blocked maps user id -> expiry (zero = until unblocked).
 	blocked        atomic.Pointer[map[int64]time.Time]

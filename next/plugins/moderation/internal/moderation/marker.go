@@ -51,8 +51,8 @@ func wrapUserContent(key []byte, text string) string {
 	return userPreamble + "\n" + contentTagOpen + newMarkerID(key) + "\">\n" + text + "\n" + contentTagClose
 }
 
-// selfMarker is an empty signed tag: a request of the plugin that carries no
-// content to wrap (AI analysis) is still recognised as its own.
+// selfMarker is an empty signed tag: a request of the plugin that does not
+// wrap its content (the LLM question auditor) is still recognised as its own.
 func selfMarker(key []byte) string {
 	return contentTagOpen + newMarkerID(key) + "\">" + contentTagClose
 }

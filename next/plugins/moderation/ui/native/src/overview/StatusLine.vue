@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SAlert, SBadge, SButton, SLink, type Tone } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, type Tone } from '@sub2api/ui'
 import { exemptGroups, groupCoverage } from '../bindingOps'
 import { useCatalog } from '../catalog'
 import { joinList } from '../format'
 import { canManage, canManageSettings, useModHost } from '../host'
 import { modeTone } from '../tones'
-import type { Status, TabKey } from '../types'
+import type { Status } from '../types'
+import type { SectionKey } from '../nav'
 
 // Running state (new-api status-line) as short label + badge entries:
 // moderation (switch and the default level: the level of users without a
 // watch entry, `mode` of the settings), flows, moderated / unmoderated groups,
-// channels, the analysis channel; plus the setup hint when nothing is bound
-// or moderation is off. Long explanations (group names, why analyses are off)
-// are the badges' tooltips.
+// channels; plus the setup hint when nothing is bound or moderation is off.
+// Long explanations (group names) are the badges' tooltips.
 const props = defineProps<{ status: Status }>()
-const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void; (e: 'go-settings'): void }>()
+const emit = defineEmits<{ (e: 'go-tab', tab: SectionKey): void }>()
 const t = useModHost().t
 const catalog = useCatalog()
 
@@ -61,32 +61,22 @@ const channels = computed<Badge[]>(() => {
   return [down ? { text: t('statusLine.channelsDown', { n: down }), tone: 'warning' } : { text: t('statusLine.channelsOk'), tone: 'success' }]
 })
 
-const analysis = computed<Badge[]>(() => {
-  const a = props.status.runtime.analysis
-  if (a?.channel_configured) return [{ text: t('statusLine.analysisOn'), tone: 'success' }]
-  // why analyses are off: no channel, or the saved one is not a usable llm channel
-  if (a?.channel_problem) return [{ text: t('statusLine.analysisUnusable'), tone: 'warning', title: t(`statusLine.analysisProblem.${a.channel_problem}`) }]
-  return [{ text: t('statusLine.analysisOffShort'), tone: 'warning', title: t('statusLine.analysisOff') }]
-})
-
-// Settings links only for those who may edit the settings (canManageSettings).
+// The settings link only for those who may edit the settings (canManageSettings).
 const settingsLink = computed(() => canManageSettings())
 const entries = computed(() =>
   [
     { key: 'state', badges: state.value },
     { key: 'flows', badges: flows.value },
     { key: 'groups', badges: groups.value },
-    { key: 'channels', badges: channels.value },
-    { key: 'analysis', badges: analysis.value, settings: settingsLink.value && !props.status.runtime.analysis?.channel_configured }
-  ].filter((e): e is { key: string; badges: Badge[]; settings?: boolean } => !!e.badges)
+    { key: 'channels', badges: channels.value }
+  ].filter((e): e is { key: string; badges: Badge[] } => !!e.badges)
 )
 
-const notice = computed<{ tone: 'warning' | 'info'; text: string; action: 'flows' | 'settings' | '' } | null>(() => {
+const notice = computed<{ tone: 'warning' | 'info'; text: string; action: 'flows' | 'policy' | '' } | null>(() => {
   if (!props.status.runtime.configured) return { tone: 'warning', text: t('overview.notConfigured'), action: canManage() ? 'flows' : '' }
-  if (props.status.mode === 'off') return { tone: 'info', text: t('overview.offHint'), action: settingsLink.value ? 'settings' : '' }
+  if (props.status.mode === 'off') return { tone: 'info', text: t('overview.offHint'), action: settingsLink.value ? 'policy' : '' }
   return null
 })
-const act = (action: 'flows' | 'settings') => (action === 'settings' ? emit('go-settings') : emit('go-tab', action))
 </script>
 
 <template>
@@ -95,7 +85,6 @@ const act = (action: 'flows' | 'settings') => (action === 'settings' ? emit('go-
       <dt>{{ t(`statusLine.label.${e.key}`) }}</dt>
       <dd>
         <SBadge v-for="b in e.badges" :key="b.text" :tone="b.tone" :dot="b.dot" size="xs" :title="b.title">{{ b.text }}</SBadge>
-        <SLink v-if="e.settings" as="button" @click="emit('go-settings')">{{ t('settings') }}</SLink>
       </dd>
     </div>
   </dl>
@@ -103,7 +92,7 @@ const act = (action: 'flows' | 'settings') => (action === 'settings' ? emit('go-
   <SAlert v-if="notice" :tone="notice.tone" class="mod-block">
     {{ notice.text }}
     <template v-if="notice.action" #actions>
-      <SButton :variant="notice.action === 'flows' ? 'primary' : 'secondary'" size="sm" @click="act(notice.action)">
+      <SButton :variant="notice.action === 'flows' ? 'primary' : 'secondary'" size="sm" @click="emit('go-tab', notice.action)">
         {{ notice.action === 'flows' ? t('tabs.flows') : t('settings') }}
       </SButton>
     </template>

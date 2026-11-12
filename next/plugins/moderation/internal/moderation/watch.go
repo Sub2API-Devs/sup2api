@@ -32,37 +32,16 @@ type Watch struct {
 	HitsSinceSeen int       `json:"hits_since_seen"`
 	Note          string    `json:"note"`
 	UpdatedAt     time.Time `json:"updated_at"`
-	// AI analysis (§72.13.4): queued, running, latest conclusion.
-	AnalysisRequestedAt  *time.Time `json:"analysis_requested_at"`
-	AnalysisSource       string     `json:"analysis_source"`
-	AnalysisRunning      bool       `json:"analysis_running"`
-	LatestAnalysisID     int64      `json:"latest_analysis_id"`
-	LatestAnalysisStatus string     `json:"latest_analysis_status"`
-	LatestTrend          string     `json:"latest_trend"`
-	LatestSuggestion     string     `json:"latest_suggestion"`
-	AnalyzedAt           *time.Time `json:"analyzed_at"`
-	claimUntil           *time.Time
-	analysisToken        int64
 }
 
-const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, hits_since_seen, note, updated_at,
-	analysis_requested_at, analysis_source, analysis_claim_until, analysis_token, latest_analysis_id, latest_analysis_status,
-	latest_trend, latest_suggestion, analyzed_at`
+const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, hits_since_seen, note, updated_at`
 
 func scanWatch(r pgx.Row) (Watch, error) {
 	var w Watch
-	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.HitsSinceSeen, &w.Note, &w.UpdatedAt,
-		&w.AnalysisRequestedAt, &w.AnalysisSource, &w.claimUntil, &w.analysisToken, &w.LatestAnalysisID, &w.LatestAnalysisStatus,
-		&w.LatestTrend, &w.LatestSuggestion, &w.AnalyzedAt)
+	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.HitsSinceSeen, &w.Note, &w.UpdatedAt)
 	w.SinceAt, w.UpdatedAt = w.SinceAt.UTC(), w.UpdatedAt.UTC()
 	w.ExpiresAt, w.LastHitAt = utcPtr(w.ExpiresAt), utcPtr(w.LastHitAt)
-	w.AnalysisRequestedAt, w.AnalyzedAt, w.claimUntil = utcPtr(w.AnalysisRequestedAt), utcPtr(w.AnalyzedAt), utcPtr(w.claimUntil)
 	return w, err
-}
-
-// fillRunning sets AnalysisRunning from the claim.
-func (w *Watch) fillRunning(now time.Time) {
-	w.AnalysisRunning = w.claimUntil != nil && now.Before(*w.claimUntil)
 }
 
 func utcPtr(t *time.Time) *time.Time {
@@ -84,18 +63,17 @@ func loadWatch(ctx context.Context, tx pgx.Tx, uid int64) (Watch, bool, error) {
 }
 
 // watchChange is one row of the watch history: action from one level to
-// another, by operator (nil = automatic), applying the suggestion of
-// analysis (nil = none).
+// another, by operator (nil = automatic).
 type watchChange struct {
-	uid                int64
-	action, from, to   string
-	reason             string
-	operator, analysis *int64
+	uid              int64
+	action, from, to string
+	reason           string
+	operator         *int64
 }
 
 func watchEvent(ctx context.Context, tx pgx.Tx, c watchChange) error {
-	_, err := tx.Exec(ctx, `INSERT INTO watch_events (user_id, action, from_level, to_level, reason, operator_id, analysis_id) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		c.uid, c.action, c.from, c.to, truncateRunes(c.reason, 500), c.operator, c.analysis)
+	_, err := tx.Exec(ctx, `INSERT INTO watch_events (user_id, action, from_level, to_level, reason, operator_id) VALUES ($1,$2,$3,$4,$5,$6)`,
+		c.uid, c.action, c.from, c.to, truncateRunes(c.reason, 500), c.operator)
 	return err
 }
 
@@ -124,7 +102,6 @@ type WatchEvent struct {
 	ToLevel    string    `json:"to_level"`
 	Reason     string    `json:"reason"`
 	OperatorID *int64    `json:"operator_id"`
-	AnalysisID *int64    `json:"analysis_id"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
@@ -138,15 +115,14 @@ func callerID(req *pluginv1.HTTPRequest) *int64 {
 // watchInput is the POST /watchlist and PATCH /watchlist/:user_id body.
 // days 0 = no expiry; absent = keep (PATCH) or watch_days (POST);
 // expires_at sets an absolute expiry instead ("" = none). reason goes to
-// the history; analysis_id links the analysis whose suggestion is applied.
+// the history.
 type watchInput struct {
-	UserID     json.Number `json:"user_id"`
-	Level      *string     `json:"level"`
-	Days       *int        `json:"days"`
-	ExpiresAt  *string     `json:"expires_at"`
-	Note       *string     `json:"note"`
-	Reason     *string     `json:"reason"`
-	AnalysisID *int64      `json:"analysis_id"`
+	UserID    json.Number `json:"user_id"`
+	Level     *string     `json:"level"`
+	Days      *int        `json:"days"`
+	ExpiresAt *string     `json:"expires_at"`
+	Note      *string     `json:"note"`
+	Reason    *string     `json:"reason"`
 }
 
 // watchValues are the parsed values of a watchInput.
@@ -177,9 +153,6 @@ func (in watchInput) validate(create bool) (v watchValues, errs pluginsdk.FieldE
 	}
 	if in.Reason != nil && utf8.RuneCountInString(*in.Reason) > 500 {
 		errs = errs.Add("reason", "too_long", "reason must be at most 500 characters / 原因最多 500 字")
-	}
-	if in.AnalysisID != nil && *in.AnalysisID <= 0 {
-		errs = errs.Add("analysis_id", "invalid", "analysis_id must be a positive integer / analysis_id 必须是正整数")
 	}
 	if in.ExpiresAt != nil {
 		v.hasExpires = true
@@ -292,7 +265,7 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			return w, err
 		}
 		return w, watchEvent(ctx, tx, watchChange{uid: uid, action: "add", to: level, reason: in.historyReason(w.Note),
-			operator: callerID(req), analysis: in.AnalysisID})
+			operator: callerID(req)})
 	})
 }
 
@@ -370,27 +343,16 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			action = "note"
 		}
 		return w, watchEvent(ctx, tx, watchChange{uid: uid, action: action, from: from, to: w.Level, reason: in.historyReason(w.Note),
-			operator: callerID(req), analysis: in.AnalysisID})
+			operator: callerID(req)})
 	})
 }
 
-// deleteWatch removes an entry; the optional query reason and analysis_id
-// (an applied "release" suggestion) go to the history.
+// deleteWatch removes an entry; the optional query reason goes to the
+// history.
 func (p *Plugin) deleteWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	uid, bad := parseID(req, "user_id")
 	if bad != nil {
 		return bad, nil
-	}
-	var analysis *int64
-	id, ok, ferr := queryID(req, "analysis_id")
-	if ok && id == 0 {
-		ferr = &pluginv1.FieldError{Field: "analysis_id", Code: "invalid", Message: "analysis_id must be a positive integer / analysis_id 必须是正整数"}
-	}
-	if ferr != nil {
-		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效", pluginsdk.FieldErrors{ferr}), nil
-	}
-	if ok {
-		analysis = &id
 	}
 	reason := strings.TrimSpace(pluginsdk.Query(req, "reason"))
 	return p.writeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, _ time.Time) (Watch, error) {
@@ -398,7 +360,7 @@ func (p *Plugin) deleteWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			return w, errNotFound
 		}
 		return w, removeEntry(ctx, tx, watchChange{uid: uid, action: "remove", from: w.Level, reason: reason,
-			operator: callerID(req), analysis: analysis})
+			operator: callerID(req)})
 	})
 }
 
@@ -456,14 +418,14 @@ func (p *Plugin) listWatchEvents(ctx context.Context, req *pluginv1.HTTPRequest)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	rows, err := db.Query(ctx, `SELECT id, user_id, action, from_level, to_level, reason, operator_id, analysis_id, created_at
+	rows, err := db.Query(ctx, `SELECT id, user_id, action, from_level, to_level, reason, operator_id, created_at
 		FROM watch_events WHERE user_id = $1 ORDER BY id DESC LIMIT 200`, uid)
 	if err != nil {
 		return nil, err
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (WatchEvent, error) {
 		var e WatchEvent
-		err := r.Scan(&e.ID, &e.UserID, &e.Action, &e.FromLevel, &e.ToLevel, &e.Reason, &e.OperatorID, &e.AnalysisID, &e.CreatedAt)
+		err := r.Scan(&e.ID, &e.UserID, &e.Action, &e.FromLevel, &e.ToLevel, &e.Reason, &e.OperatorID, &e.CreatedAt)
 		e.CreatedAt = e.CreatedAt.UTC()
 		return e, err
 	})

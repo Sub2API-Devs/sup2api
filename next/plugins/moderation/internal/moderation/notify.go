@@ -18,22 +18,18 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
-// Notifications (CONTRACTS §72.14, new-api escalate.go notifyAutoChange and
-// stats.go alertErrorRate). The core's Notify (CONTRACTS §74.4) sends to a
+// Notifications (CONTRACTS §72.14, new-api stats.go alertErrorRate). The
+// core's Notify (CONTRACTS §74.4) sends to a
 // channel and explicit recipients, not to the administrators holding a
 // permission, so the plugin still posts signed JSON to notify_webhook_url like
 // the guard plugin's alerts; moving to Notify waits on the owner's decision.
-// A notice never carries moderated text or an analysis summary (it may quote
-// the user).
+// A notice never carries moderated text (it may quote the user).
 
 // JobAlerts is the job id declared in manifest.json.
 const JobAlerts = "alerts"
 
-// Notice events.
-const (
-	NoticeFlowErrorRate = "flow.error_rate"
-	NoticeWatchChanged  = "watch.auto_changed"
-)
+// NoticeFlowErrorRate is the event of an error rate alert.
+const NoticeFlowErrorRate = "flow.error_rate"
 
 // notice is one webhook body.
 type notice struct {
@@ -105,33 +101,6 @@ func postNotice(ctx context.Context, client *http.Client, url, secret string, n 
 		return fmt.Errorf("webhook answered %d", resp.StatusCode)
 	}
 	return nil
-}
-
-// notifyWatchChange tells administrators about a watch list change the AI
-// analysis made (auto_upgrade, auto_downgrade, auto_remove).
-// The user's name comes from the core when it can tell (users.read).
-func (p *Plugin) notifyWatchChange(uid int64, action, from, to, trend, suggestion string, analysisID int64) {
-	if p.cfg.Load().NotifyWebhookURL == "" {
-		return
-	}
-	ctx, cancel := context.WithTimeout(p.bg, 3*time.Second)
-	users, _, _ := p.lookupUsers(ctx, []int64{uid})
-	cancel()
-	name, who := "", fmt.Sprintf("#%d", uid)
-	if len(users) > 0 {
-		name = users[0].GetDisplayName()
-	}
-	if name != "" {
-		who = name + " " + who
-	}
-	levelName := map[string]string{LevelObserve: "观察 observe", LevelEnforce: "拦截 enforce", "": "移出名单 removed"}
-	title := fmt.Sprintf("提示词审核：AI 分析自动调整了用户 %s 的观察级别 / Moderation: AI analysis changed the watch level of user %s", who, who)
-	text := fmt.Sprintf("用户 %s：%s → %s（趋势 %s，建议 %s）。详情见提示词审核 → 观察名单。\nUser %s: %s → %s (trend %s, suggestion %s). See Moderation → Watch list.",
-		who, levelName[from], levelName[to], trend, suggestion, who, levelName[from], levelName[to], trend, suggestion)
-	p.notify(NoticeWatchChanged, title, text, map[string]any{
-		"user_id": uid, "user_name": name, "action": action, "from_level": from, "to_level": to, "trend": trend, "suggestion": suggestion,
-		"analysis_id": analysisID, "path": "/p/moderation/dashboard?tab=watch&user_id=" + strconv.FormatInt(uid, 10),
-	})
 }
 
 // ---------------------------------------------------------------- error rate alerts

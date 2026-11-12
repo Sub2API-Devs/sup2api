@@ -68,8 +68,8 @@ type Settings struct {
 
 	InputMaxChars int `json:"input_max_chars"`
 	MinChars      int `json:"min_chars"`
-	// VerdictCacheDays is how long a cached verdict lives; 0 = no cache,
-	// which only the retired cache_ttl_seconds = 0 gives. CacheTTLSeconds is
+	// VerdictCacheDays is how long a cached verdict lives; 0 = no cache
+	// (also what the retired cache_ttl_seconds = 0 gives). CacheTTLSeconds is
 	// the retired key, read when the settings have no verdict_cache_days yet.
 	VerdictCacheDays int `json:"verdict_cache_days"`
 	CacheTTLSeconds  int `json:"cache_ttl_seconds"`
@@ -101,20 +101,10 @@ type Settings struct {
 	ErrorRetentionDays      int `json:"error_retention_days"`
 	PassRetentionDays       int `json:"pass_retention_days"`
 
-	AutoWatch               bool `json:"auto_watch"`
-	WatchDays               int  `json:"watch_days"`
-	AnalysisEveryViolations int  `json:"analysis_every_violations"`
-
-	// AI analysis (CONTRACTS §72.13.4).
-	AnalysisChannelID      int64  `json:"analysis_channel_id"`
-	AnalysisGuidelines     string `json:"analysis_guidelines"`
-	AnalysisTimeoutMs      int    `json:"analysis_timeout_ms"`
-	AnalysisConcurrency    int    `json:"analysis_concurrency"`
-	AnalysisContextKB      int    `json:"analysis_context_kb"`
-	AnalysisKeepPerUser    int    `json:"analysis_keep_per_user"`
-	AnalysisAllowUpgrade   bool   `json:"analysis_allow_upgrade"`
-	AnalysisAllowDowngrade bool   `json:"analysis_allow_downgrade"`
-	AnalysisAllowRemove    bool   `json:"analysis_allow_remove"`
+	AutoWatch bool `json:"auto_watch"`
+	WatchDays int  `json:"watch_days"`
+	// The analysis_* keys of the retired AI analysis (removed in 0.10.0)
+	// stay in the settings schema as hidden legacy keys and are not read.
 
 	BanThreshold     int `json:"ban_threshold"`
 	BanWindowHours   int `json:"ban_window_hours"`
@@ -152,10 +142,6 @@ type Settings struct {
 	droppedIDs map[string]int
 }
 
-// maxAnalysisGuidelines caps analysis_guidelines (bytes); longer text falls
-// back to the built-in guidelines.
-const maxAnalysisGuidelines = 16 << 10
-
 // DefaultBlockMessage is the default deny message of a hit.
 const DefaultBlockMessage = "Your request was blocked by content moderation. Please revise your input and try again."
 
@@ -177,9 +163,7 @@ func DefaultSettings() Settings {
 		BlockStatus: 403, BlockMessage: DefaultBlockMessage,
 		RecordOverturned: true, RecordErrors: true, StoreText: true, RecordPassInputMessage: true,
 		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
-		AutoWatch: true, WatchDays: 30, AnalysisEveryViolations: 30,
-		AnalysisTimeoutMs: 60000, AnalysisConcurrency: 2, AnalysisContextKB: 64, AnalysisKeepPerUser: 20,
-		AnalysisAllowUpgrade: true, AnalysisAllowDowngrade: true, AnalysisAllowRemove: false,
+		AutoWatch: true, WatchDays: 30,
 		BanWindowHours: 24, BanDurationHours: 24,
 		ErrorRateAlertPercent: 5, StatsRetentionDays: 90,
 		ToolChoice: "required", MaxTurns: 3, MaxTokens: 512, TimeoutMs: 10000, OnError: "allow",
@@ -327,14 +311,14 @@ func (d decoder) userLists(s *Settings) {
 	note("blocklist_user_ids", dropped)
 }
 
-// verdictCache reads verdict_cache_days. Settings saved before 0.8.0 only
-// have cache_ttl_seconds: 0 keeps the cache off, anything else is rounded
-// up to whole days.
+// verdictCache reads verdict_cache_days (0 = cache off). Settings saved
+// before 0.8.0 only have cache_ttl_seconds: 0 keeps the cache off, anything
+// else is rounded up to whole days.
 func (d decoder) verdictCache(s *Settings) {
 	d.integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
 	var f float64
 	if legacy := d.num("cache_ttl_seconds", &f); d.num("verdict_cache_days", &f) || !legacy {
-		d.integer("verdict_cache_days", &s.VerdictCacheDays, 1, 30)
+		d.integer("verdict_cache_days", &s.VerdictCacheDays, 0, 30)
 		return
 	}
 	s.VerdictCacheDays = 0
@@ -405,22 +389,6 @@ func (d decoder) storage(s *Settings) {
 func (d decoder) watch(s *Settings) {
 	d.boolean("auto_watch", &s.AutoWatch)
 	d.integer("watch_days", &s.WatchDays, 1, 365)
-	d.integer("analysis_every_violations", &s.AnalysisEveryViolations, 0, 1000)
-	var ch int
-	d.integer("analysis_channel_id", &ch, 0, math.MaxInt32)
-	s.AnalysisChannelID = int64(ch)
-	d.str("analysis_guidelines", &s.AnalysisGuidelines)
-	s.AnalysisGuidelines = strings.TrimSpace(s.AnalysisGuidelines)
-	if len(s.AnalysisGuidelines) > maxAnalysisGuidelines {
-		s.AnalysisGuidelines = ""
-	}
-	d.integer("analysis_timeout_ms", &s.AnalysisTimeoutMs, 10000, 600000)
-	d.integer("analysis_concurrency", &s.AnalysisConcurrency, 1, 16)
-	d.integer("analysis_context_kb", &s.AnalysisContextKB, 16, 1024)
-	d.integer("analysis_keep_per_user", &s.AnalysisKeepPerUser, 1, 1000)
-	d.boolean("analysis_allow_upgrade", &s.AnalysisAllowUpgrade)
-	d.boolean("analysis_allow_downgrade", &s.AnalysisAllowDowngrade)
-	d.boolean("analysis_allow_remove", &s.AnalysisAllowRemove)
 	d.integer("ban_threshold", &s.BanThreshold, 0, 1000)
 	d.integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
 	d.integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
@@ -513,18 +481,17 @@ type config struct {
 	settingsHash string
 	// allow, block: allowlist_user_ids and blocklist_user_ids (see
 	// allowlisted, blocklisted).
-	allow, block    map[int64]bool
-	cacheTTL        time.Duration
-	ttft            time.Duration
-	banWindow       time.Duration
-	banDuration     time.Duration // 0 = until unblocked
-	watchFor        time.Duration
-	analysisTimeout time.Duration
-	retention       map[string]time.Duration // by result
-	legacyReady     bool                     // the 0.1 setup is complete enough to convert
-	jevDefault      JevQuestions
-	limits          planLimits // chunking of the moderated content
-	maxInflight     int64      // bytes of hook requests in progress (max_inflight_mb)
+	allow, block map[int64]bool
+	cacheTTL     time.Duration
+	ttft         time.Duration
+	banWindow    time.Duration
+	banDuration  time.Duration // 0 = until unblocked
+	watchFor     time.Duration
+	retention    map[string]time.Duration // by result
+	legacyReady  bool                     // the 0.1 setup is complete enough to convert
+	jevDefault   JevQuestions
+	limits       planLimits // chunking of the moderated content
+	maxInflight  int64      // bytes of hook requests in progress (max_inflight_mb)
 }
 
 // compile derives the runtime config from settings.
@@ -543,7 +510,6 @@ func compile(s Settings) *config {
 	c.banWindow = time.Duration(s.BanWindowHours) * time.Hour
 	c.banDuration = time.Duration(s.BanDurationHours) * time.Hour
 	c.watchFor = time.Duration(s.WatchDays) * 24 * time.Hour
-	c.analysisTimeout = time.Duration(s.AnalysisTimeoutMs) * time.Millisecond
 	day := 24 * time.Hour
 	c.retention = map[string]time.Duration{
 		ResultBlock: time.Duration(s.HitRetentionDays) * day, ResultHit: time.Duration(s.HitRetentionDays) * day,

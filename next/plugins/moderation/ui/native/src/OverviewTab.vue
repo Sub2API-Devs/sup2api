@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { SAlert, SGrid, SSpinner, SStatCard } from '@sub2api/ui'
 import StatusLine from './overview/StatusLine.vue'
 import AttentionUsers from './overview/AttentionUsers.vue'
-import AiReviewCard from './overview/AiReviewCard.vue'
 import TodayCostCard from './overview/TodayCostCard.vue'
 import PerformanceCard from './overview/PerformanceCard.vue'
 import CategoriesCard from './overview/CategoriesCard.vue'
@@ -17,7 +16,7 @@ import { useCatalog } from './catalog'
 import { num } from './format'
 import { useModHost } from './host'
 import { useStatus, watchNew } from './status'
-import type { TabKey } from './types'
+import type { SectionKey } from './nav'
 
 // Overview (new-api content-moderation overview): running state, today's
 // KPIs (the suspicious count says how many were replayed cached hits), the users most in need of attention, AI review, cost, performance,
@@ -27,8 +26,7 @@ import type { TabKey } from './types'
 const props = defineProps<{ active: boolean }>()
 const emit = defineEmits<{
   (e: 'open-watch', userId: number): void
-  (e: 'go-tab', tab: TabKey): void
-  (e: 'go-settings'): void
+  (e: 'go-tab', tab: SectionKey): void
 }>()
 const t = useModHost().t
 const catalog = useCatalog()
@@ -59,7 +57,7 @@ const kpis = computed(() => {
     { key: 'blocked', icon: 'x', tone: 'danger' as const, value: s.today.blocked, sub: t('kpi.blockedSub') }
   ]
 })
-const goTab = (tab: TabKey) => emit('go-tab', tab)
+const goTab = (tab: SectionKey) => emit('go-tab', tab)
 </script>
 
 <template>
@@ -67,16 +65,13 @@ const goTab = (tab: TabKey) => emit('go-tab', tab)
     <SAlert v-if="status.error.value" tone="danger" class="mod-block">{{ status.error.value }}</SAlert>
     <SSpinner v-if="!status.data.value && status.loading.value" block />
     <template v-if="status.data.value">
-      <StatusLine :status="status.data.value" @go-tab="goTab" @go-settings="emit('go-settings')" />
+      <StatusLine :status="status.data.value" @go-tab="goTab" />
       <SGrid variant="stats" md-template="repeat(auto-fit, minmax(170px, 1fr))">
         <SStatCard v-for="k in kpis" :key="k.key" :label="t(`kpi.${k.key}`)" :value="num(k.value)" :sub="k.sub" :icon="k.icon" :tone="k.tone" />
       </SGrid>
     </template>
 
-    <SGrid template="repeat(auto-fit, minmax(min(360px, 100%), 1fr))" class="mod-section">
-      <AttentionUsers @open-watch="emit('open-watch', $event)" @go-tab="goTab" />
-      <AiReviewCard :review="status.data.value?.ai_review" :today="status.data.value?.today" @go-tab="goTab" />
-    </SGrid>
+    <AttentionUsers class="mod-section" @open-watch="emit('open-watch', $event)" @go-tab="goTab" />
     <TodayCostCard v-if="status.data.value" :costs="status.data.value.costs" class="mod-section" />
     <PerformanceCard class="mod-section" />
     <SGrid template="repeat(auto-fit, minmax(min(360px, 100%), 1fr))" class="mod-section">

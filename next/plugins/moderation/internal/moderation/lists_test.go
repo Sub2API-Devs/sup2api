@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -104,17 +103,16 @@ func TestPreModerated(t *testing.T) {
 	}
 }
 
-// An allowlisted user is not exempt: a violating request passes, is
-// recorded and puts the user on the watch list at the default level. Under
-// default enforce that is an enforce entry, and the user is still only
-// moderated after the request. The user is never banned.
-func TestAllowlistIsObservedNotExempt(t *testing.T) {
+// An allowlisted user is not exempt: a violating request passes and is
+// recorded. The user is only moderated in the background, so auto_watch
+// does not put the user on the watch list (P8), and the user is never
+// banned. An entry added by hand still counts the user's violations.
+func TestAllowlistIsRecordedNotWatched(t *testing.T) {
 	for _, mode := range []string{ModeObserve, ModeEnforce} {
 		t.Run(mode, func(t *testing.T) {
 			mod := newFakeMod(t)
 			p, h, _ := startDB(t, nil, map[string]any{"mode": mode, "allowlist_user_ids": []string{"8"}, "ban_threshold": 2})
 			setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
-			level := map[string]string{ModeObserve: LevelObserve, ModeEnforce: LevelEnforce}[mode]
 			for i := 1; i <= 3; i++ {
 				rid := fmt.Sprintf("allow-%d", i)
 				if r := mustHook(t, h, hookReqAs(8, rid, fmt.Sprintf("MOD-HIT-sexual allowlisted %d", i))); denied(r) || r.GetNote() != queuedNote {
@@ -124,22 +122,13 @@ func TestAllowlistIsObservedNotExempt(t *testing.T) {
 				if ev[0].Timing != TimingPost {
 					t.Fatalf("record %d = %+v", i, ev[0].Event)
 				}
-				// The entry is live in the hook before the next request.
-				waitFor(t, "watch entry in the hook", func() bool { return p.watchLevel(8) == level })
-			}
-			var w []WatchItem
-			waitFor(t, "three hits on the entry", func() bool {
-				w = decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "8"}, nil))
-				return len(w) == 1 && w[0].HitCount == 3
-			})
-			if w[0].Level != level || w[0].Source != "auto" || !w[0].Allowlisted || w[0].Blocklisted || w[0].ViolationCount != 3 {
-				t.Fatalf("watch entry = %+v", w[0])
 			}
 			if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"user_id": "8", "result": "block"}, nil))); n != 0 {
 				t.Fatalf("%d refusals of the allowlisted user", n)
 			}
 			// Three violations with ban_threshold 2: no ban. An ordinary user
-			// with the same history is banned.
+			// with the same history is banned and watched; the records are
+			// handled in order, so the allowlisted user's are done by then.
 			for i := 1; i <= 2; i++ {
 				mustHook(t, h, hookReqAs(3, "", fmt.Sprintf("MOD-HIT-sexual ordinary %d", i)))
 			}
@@ -150,34 +139,32 @@ func TestAllowlistIsObservedNotExempt(t *testing.T) {
 			if b := decodeData[[]Block](t, h.Do("GET", "/blocks", nil, nil)); len(b) != 1 || b[0].UserID != 3 {
 				t.Fatalf("blocks = %+v", b)
 			}
+			if w := decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", nil, nil)); len(w) != 1 || w[0].UserID != 3 || w[0].Source != "auto" {
+				t.Fatalf("watch list = %+v", w)
+			}
 			d := decodeData[UserDetail](t, h.Do("GET", "/users/8", nil, nil))
-			if !d.Allowlisted || d.Blocklisted || d.Blocked || d.Watch == nil || d.Watch.Level != level {
+			if !d.Allowlisted || d.Blocklisted || d.Blocked || d.Watch != nil || p.watchLevel(8) != "" {
 				t.Fatalf("user state = %+v", d.UserState)
 			}
 			if resp := h.Do("POST", "/blocks", nil, map[string]any{"user_id": 8}); resp.GetStatus() != 400 ||
 				!strings.Contains(string(resp.GetBody()), `"user_id"`) || !strings.Contains(string(resp.GetBody()), `"allowlisted"`) {
 				t.Fatalf("manual ban of an allowlisted user = %d %s", resp.GetStatus(), resp.GetBody())
 			}
+			decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 8, "level": LevelObserve}))
+			mustHook(t, h, hookReqAs(8, "allow-manual", "MOD-HIT-sexual allowlisted, watched by hand"))
+			waitFor(t, "hit on the manual entry", func() bool {
+				w := decodeData[UserDetail](t, h.Do("GET", "/users/8", nil, nil)).Watch
+				return w != nil && w.HitCount == 1 && w.ViolationCount == 1 && w.Source == "manual"
+			})
 		})
 	}
 }
 
 // Under default enforce a user's first suspicious record adds the user at
 // the enforce level for watch_days; later hits count violations without
-// extending the expiry, and the count queues an analysis like at observe.
+// extending the expiry.
 func TestAutoWatchUsesDefaultLevel(t *testing.T) {
 	mod := newFakeMod(t)
-	// The analysis channel holds its call until the test ends, so a queued
-	// analysis stays queued.
-	release := make(chan struct{})
-	llm := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		select {
-		case <-release:
-		case <-r.Context().Done():
-		}
-	}))
-	t.Cleanup(llm.Close)
-	t.Cleanup(func() { close(release) })
 	var mu sync.Mutex
 	now := time.Now().UTC().Truncate(time.Second)
 	clock := func() time.Time {
@@ -185,12 +172,8 @@ func TestAutoWatchUsesDefaultLevel(t *testing.T) {
 		defer mu.Unlock()
 		return now
 	}
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "watch_days": 10, "analysis_every_violations": 3, "analysis_channel_id": 2},
-		func(n *node) { n.now = clock })
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "watch_days": 10}, func(n *node) { n.now = clock })
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
-	decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": "llm", "protocol": "anthropic", "name": "ana",
-		"base_url": llm.URL, "api_key": "sk-a", "model": "m"}))
-	waitFor(t, "analysis channel", p.analysisChannelUsable)
 	entry := func(hits int) Watch {
 		t.Helper()
 		var w *Watch
@@ -219,25 +202,16 @@ func TestAutoWatchUsesDefaultLevel(t *testing.T) {
 	if r := mustHook(t, h, hookReqAs(3, "", "MOD-HIT-sexual second")); !denied(r) {
 		t.Fatalf("enforce entry: %+v", r)
 	}
-	if w = entry(2); w.ViolationCount != 2 || !w.ExpiresAt.Equal(expires) || w.AnalysisRequestedAt != nil {
+	if w = entry(2); w.ViolationCount != 2 || !w.ExpiresAt.Equal(expires) || w.Level != LevelEnforce {
 		t.Fatalf("after the second hit = %+v", w)
-	}
-	// The third violation reaches analysis_every_violations: the analysis is
-	// queued and the count restarts.
-	if r := mustHook(t, h, hookReqAs(3, "", "MOD-HIT-sexual third")); !denied(r) {
-		t.Fatalf("enforce entry: %+v", r)
-	}
-	if w = entry(3); w.ViolationCount != 0 || w.AnalysisRequestedAt == nil || w.AnalysisSource != AnalysisSourceAuto || !w.ExpiresAt.Equal(expires) ||
-		w.Level != LevelEnforce {
-		t.Fatalf("after the third hit = %+v", w)
 	}
 }
 
-// Under default observe an enforce entry only counts its hits: no
-// violations, no analysis.
+// Under default observe an enforce entry only counts its hits, not
+// violations.
 func TestEnforceEntriesCountOnlyUnderDefaultEnforce(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "analysis_every_violations": 1})
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	added := decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 4, "level": LevelEnforce, "days": 5}))
 	for i := 1; i <= 2; i++ {
@@ -250,7 +224,7 @@ func TestEnforceEntriesCountOnlyUnderDefaultEnforce(t *testing.T) {
 		w = decodeData[UserDetail](t, h.Do("GET", "/users/4", nil, nil)).Watch
 		return w != nil && w.HitCount == 2
 	})
-	if w.ViolationCount != 0 || w.HitsSinceSeen != 2 || w.AnalysisRequestedAt != nil || w.ExpiresAt == nil ||
+	if w.ViolationCount != 0 || w.HitsSinceSeen != 2 || w.ExpiresAt == nil ||
 		w.ExpiresAt.Sub(*added.ExpiresAt).Abs() > time.Millisecond {
 		t.Fatalf("enforce entry under default observe = %+v", w)
 	}
@@ -312,60 +286,6 @@ func TestAllowlistedCannotBeEnforcedByHand(t *testing.T) {
 	// A blocklisted user can be banned by hand.
 	if resp := h.Do("POST", "/blocks", nil, map[string]any{"user_id": 10}); resp.GetStatus() != 200 {
 		t.Fatalf("ban of a blocklisted user = %d %s", resp.GetStatus(), resp.GetBody())
-	}
-}
-
-// The user lists override the permission switches of the AI conclusion: an
-// allowlisted user is never upgraded, a blocklisted one never downgraded or
-// removed (new-api applyAnalysisResult).
-func TestAnalysisRespectsLists(t *testing.T) {
-	s := DefaultSettings()
-	s.AnalysisAllowUpgrade, s.AnalysisAllowDowngrade, s.AnalysisAllowRemove = true, true, true
-	s.AllowlistUserIDs, s.BlocklistUserIDs = []string{"8", "10"}, []string{"9", "10"}
-	c := compile(s)
-	const plain, allowed, blocked, both = 3, 8, 9, 10
-	upgrade := func(uid int64) (string, string) {
-		return decideEscalation(c, uid, LevelObserve, TrendPersistent, SuggestBlock, 2)
-	}
-	downgrade := func(uid int64) (string, string) {
-		return decideEscalation(c, uid, LevelEnforce, TrendOccasional, SuggestObserve, 0)
-	}
-	remove := func(uid int64) (string, string) {
-		return decideEscalation(c, uid, LevelObserve, TrendOccasional, SuggestRelease, 0)
-	}
-	for _, tc := range []struct {
-		name         string
-		decide       func(int64) (string, string)
-		uid          int64
-		want, denied string
-	}{
-		{"upgrade", upgrade, plain, ActionAutoUpgrade, ""},
-		{"upgrade of an allowlisted user", upgrade, allowed, ActionAutoNotAllowed, ActionAutoUpgrade},
-		{"upgrade of a blocklisted user", upgrade, blocked, ActionAutoUpgrade, ""},
-		{"upgrade of a user on both lists", upgrade, both, ActionAutoUpgrade, ""},
-		{"downgrade", downgrade, plain, ActionAutoDowngrade, ""},
-		{"downgrade of an allowlisted user", downgrade, allowed, ActionAutoDowngrade, ""},
-		{"downgrade of a blocklisted user", downgrade, blocked, ActionAutoNotAllowed, ActionAutoDowngrade},
-		{"downgrade of a user on both lists", downgrade, both, ActionAutoNotAllowed, ActionAutoDowngrade},
-		{"removal", remove, plain, ActionAutoRemove, ""},
-		{"removal of an allowlisted user", remove, allowed, ActionAutoRemove, ""},
-		{"removal of a blocklisted user", remove, blocked, ActionAutoNotAllowed, ActionAutoRemove},
-		{"removal of a user on both lists", remove, both, ActionAutoNotAllowed, ActionAutoRemove},
-	} {
-		if got, denied := tc.decide(tc.uid); got != tc.want || denied != tc.denied {
-			t.Errorf("%s: %q (denied %q), want %q (denied %q)", tc.name, got, denied, tc.want, tc.denied)
-		}
-	}
-	// Off the lists the switches decide, as before.
-	c.AnalysisAllowUpgrade, c.AnalysisAllowDowngrade, c.AnalysisAllowRemove = false, false, false
-	for name, decide := range map[string]func(int64) (string, string){ActionAutoUpgrade: upgrade, ActionAutoDowngrade: downgrade, ActionAutoRemove: remove} {
-		if got, denied := decide(plain); got != ActionAutoNotAllowed || denied != name {
-			t.Errorf("%s with its switch off: %q (denied %q)", name, got, denied)
-		}
-	}
-	// A conclusion that changes nothing is not turned into a refusal.
-	if got, denied := decideEscalation(c, blocked, LevelObserve, TrendOccasional, SuggestObserve, 0); got != "" || denied != "" {
-		t.Errorf("no action: %q %q", got, denied)
 	}
 }
 

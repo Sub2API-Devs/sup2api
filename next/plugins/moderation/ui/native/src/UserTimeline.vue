@@ -14,7 +14,7 @@ import { useBulkReview } from './useBulkReview'
 
 // The suspicious records of a user (new-api user timeline), newest first,
 // optionally of one source (group → flow@version), as a table of one-line
-// rows (the AI reason in the text's tooltip); a row opens the record, manage
+// rows; a row opens the record, manage
 // users review checked records in bulk. Reloads when `version` changes; a
 // review here emits `reviewed` so the drawer refreshes the counts.
 const props = defineProps<{ userId: number; version: number; source: SourceFilter | null }>()
@@ -98,7 +98,7 @@ const columns = computed<TableColumn[]>(() => [
       <template #cell-verdict="{ row }"><VerdictBadge :event="row" /></template>
       <template #cell-hit_categories="{ row }"><CategoryChips :categories="row.hit_categories" :max="1" /></template>
       <template #cell-text_excerpt="{ row }">
-        <span class="mod-ellipsis" :title="row.ai_reason ? `${row.text_excerpt}\nAI: ${row.ai_reason}` : row.text_excerpt">{{ row.text_excerpt || '—' }}</span>
+        <span class="mod-ellipsis" :title="row.text_excerpt">{{ row.text_excerpt || '—' }}</span>
       </template>
     </STable>
     <div v-if="total > records.length" class="mod-center">

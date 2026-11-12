@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SBadge, SCard, SIcon, SLink, STable, type TableColumn } from '@sub2api/ui'
+import { SCard, SIcon, SLink, STable, type TableColumn } from '@sub2api/ui'
 import EnabledBadge from '../EnabledBadge.vue'
 import RateCell from '../RateCell.vue'
 import { useCatalog } from '../catalog'
 import { enumLabel, num } from '../format'
 import { useModHost } from '../host'
-import type { Status, TabKey } from '../types'
+import type { Status } from '../types'
+import type { SectionKey } from '../nav'
 
 // Channels · auditors in the last hour (new-api health-card): calls, hit and
 // error rate (red when flagged or above the alert threshold). Failed calls
 // pass as moderation errors without retry.
 const props = defineProps<{ status: Status }>()
-const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
+const emit = defineEmits<{ (e: 'go-tab', tab: SectionKey): void }>()
 const t = useModHost().t
 const catalog = useCatalog()
 const alert = computed(() => props.status.error_rate_alert_percent)
@@ -72,7 +73,6 @@ const channelColumns = computed<TableColumn[]>(() => [
             {{ catalog.channelName(row.id) }}
             <template v-if="row.channel">
               <span class="mod-sub">{{ enumLabel('channelType', row.channel.type) }}</span>
-              <SBadge v-if="row.channel.analysis" tone="purple" size="xs">{{ t('channels.analysis') }}</SBadge>
               <EnabledBadge v-if="!row.channel.enabled" :enabled="false" size="xs" />
             </template>
           </span>

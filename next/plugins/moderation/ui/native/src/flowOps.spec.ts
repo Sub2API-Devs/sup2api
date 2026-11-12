@@ -136,11 +136,12 @@ describe('canonicalSpec', () => {
 })
 
 describe('stageRole', () => {
-  it('names a fallback stage before any other rule', () => {
-    expect(stageRole(0, review(1), typeOf)).toBe('first')
-    expect(stageRole(1, review(4), typeOf)).toBe('behavior')
-    expect(stageRole(1, review(5), typeOf)).toBe('review')
-    expect(stageRole(2, fallback(4), typeOf)).toBe('fallback')
+  it('names a stage by what it does, whatever its auditors', () => {
+    expect(stageRole(0, review(1))).toBe('first')
+    expect(stageRole(1, review(4))).toBe('review')
+    expect(stageRole(1, review(5))).toBe('review')
+    expect(stageRole(2, fallback(4))).toBe('fallback')
+    expect(stageRole(0, fallback(4))).toBe('fallback')
   })
 })
 

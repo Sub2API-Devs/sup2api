@@ -3,7 +3,6 @@ package moderation
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"net/http"
 	"slices"
 	"strconv"
@@ -18,9 +17,9 @@ import (
 )
 
 // GET /watchlist like new-api ListModerationWatch: filters level, new_only,
-// trend (none = never analysed), category, user_id / user_ids (the console
-// resolves usernames to ids through the core), sort new | last_hit |
-// severity | total, and per-row aggregates of the user's suspicious records.
+// category, user_id / user_ids (the console resolves usernames to ids
+// through the core), sort new | last_hit | severity | total, and per-row
+// aggregates of the user's suspicious records.
 
 // recentDays is the window of a watch row's groups (new-api moderationRecentDays).
 const recentDays = 30
@@ -54,7 +53,6 @@ type WatchItem struct {
 	BySeverity      SeverityCounts  `json:"by_severity"`
 	TopCategories   []CategoryCount `json:"top_categories"`
 	TopOther        int64           `json:"top_other"`
-	AICounts        *VerdictCounts  `json:"ai_counts"`
 }
 
 // watchFilter builds the WHERE clause over watchlist w.
@@ -73,15 +71,6 @@ func watchFilter(req *pluginv1.HTTPRequest, now time.Time) (string, []any, plugi
 		f.conds = append(f.conds, "w.hits_since_seen > 0")
 	default:
 		f.errs = f.errs.Add("new_only", "enum", "new_only must be true or false / new_only 取值为 true、false")
-	}
-	switch v := pluginsdk.Query(req, "trend"); {
-	case v == "":
-	case v == "none":
-		f.conds = append(f.conds, "w.latest_trend = ''")
-	case slices.Contains(trends, v):
-		f.conds = append(f.conds, "w.latest_trend = "+f.arg(v))
-	default:
-		f.errs = f.errs.Add("trend", "enum", "trend is invalid / trend 取值无效")
 	}
 	if v := pluginsdk.Query(req, "category"); v != "" {
 		if !jevCategoryRe.MatchString(v) && !categoryIDRe.MatchString(v) {
@@ -153,7 +142,7 @@ func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	}
 	return pluginsdk.JSONResponse(http.StatusOK, map[string]any{
 		"data": items, "page": pluginsdk.Page{Page: page, PageSize: size, Total: total},
-		"counts": counts, "analysis_every_violations": p.cfg.Load().AnalysisEveryViolations,
+		"counts": counts,
 	}), nil
 }
 
@@ -164,15 +153,12 @@ type watchRows struct {
 	byID map[int64]*WatchItem
 	// categories counts each user's suspicious records by highest category.
 	categories map[int64]map[string]int64
-	// analyses are the latest successful analyses of the entries.
-	analyses []int64
 	// grouped: the user has records of the last recentDays (GroupID is set).
 	grouped map[int64]bool
 }
 
 // watchItems adds the aggregates of each entry's suspicious records, its
-// recent groups, the flow of its current group and the AI counts of its
-// latest successful analysis.
+// recent groups and the flow of its current group.
 func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch, now time.Time) ([]WatchItem, error) {
 	items := make([]WatchItem, len(list))
 	if len(list) == 0 {
@@ -181,17 +167,13 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 	r := &watchRows{byID: map[int64]*WatchItem{}, categories: map[int64]map[string]int64{}, grouped: map[int64]bool{}}
 	c := p.cfg.Load()
 	for i, w := range list {
-		w.fillRunning(now)
 		items[i] = WatchItem{Watch: w, Allowlisted: c.allowlisted(w.UserID), Blocklisted: c.blocklisted(w.UserID),
 			OtherGroups: []int64{}, TopCategories: []CategoryCount{}}
 		r.ids = append(r.ids, w.UserID)
 		r.byID[w.UserID] = &items[i]
-		if w.LatestAnalysisStatus == AnalysisStatusOK && w.LatestAnalysisID > 0 {
-			r.analyses = append(r.analyses, w.LatestAnalysisID)
-		}
 	}
 	for _, load := range []func(context.Context, *pgxpool.Pool, *watchRows, time.Time) error{
-		loadWatchRecords, loadWatchGroups, loadWatchAICounts,
+		loadWatchRecords, loadWatchGroups,
 	} {
 		if err := load(ctx, db, r, now); err != nil {
 			return nil, err
@@ -276,27 +258,6 @@ func loadWatchGroups(ctx context.Context, db *pgxpool.Pool, r *watchRows, now ti
 			r.grouped[uid], it.GroupID = true, group
 		} else {
 			it.OtherGroups = append(it.OtherGroups, group)
-		}
-		return nil
-	})
-	return err
-}
-
-// loadWatchAICounts reads the verdict counts of the latest analyses.
-func loadWatchAICounts(ctx context.Context, db *pgxpool.Pool, r *watchRows, _ time.Time) error {
-	if len(r.analyses) == 0 {
-		return nil
-	}
-	rows, err := db.Query(ctx, `SELECT id, user_id, verdict_counts FROM user_analyses WHERE id = ANY($1)`, r.analyses)
-	if err != nil {
-		return err
-	}
-	var id, uid int64
-	var raw []byte
-	_, err = pgx.ForEachRow(rows, []any{&id, &uid, &raw}, func() error {
-		var vc VerdictCounts
-		if it := r.byID[uid]; it != nil && it.LatestAnalysisID == id && json.Unmarshal(raw, &vc) == nil {
-			it.AICounts = &vc
 		}
 		return nil
 	})

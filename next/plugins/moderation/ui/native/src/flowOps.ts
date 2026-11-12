@@ -221,13 +221,13 @@ export const sameSpec = (a: Spec, b: Spec) => JSON.stringify(canonicalSpec(a)) =
 // ---- templates
 
 /**
- * first_behavior = first review (OpenAI) → behavior review (Jev);
+ * first_review = first review (OpenAI) → review (Jev);
  * single = one OpenAI stage. Each stage preselects the only auditor of its
  * type; with none or several the stage stays empty for the user to pick
  * (validation reports it until then).
  */
-export type FlowTemplate = 'first_behavior' | 'single'
-export const FLOW_TEMPLATES: readonly FlowTemplate[] = ['first_behavior', 'single']
+export type FlowTemplate = 'first_review' | 'single'
+export const FLOW_TEMPLATES: readonly FlowTemplate[] = ['first_review', 'single']
 
 export function applyTemplate(spec: Spec, template: FlowTemplate, auditors: readonly { id: number; type: string }[]): Spec {
   const onlyOf = (type: AuditorType): number[] => {
@@ -263,13 +263,16 @@ export function hitOutcome(index: number, reviewCount: number): { key: 'hitSuspi
   return { key: index === reviewCount - 1 ? 'hitSuspicious' : 'hitNextN', n: index + 2 }
 }
 
-export type StageRole = 'first' | 'behavior' | 'review' | 'fallback'
+export type StageRole = 'first' | 'review' | 'fallback'
 
-/** A fallback stage = fallback (补审); stage 1 = first (初审); a later stage holding a Jev auditor = behavior; else review (analysis_prompt.go stageRole). */
-export function stageRole(index: number, stage: Pick<Stage, 'auditors' | 'fallback'>, typeOf: AuditorTypeOf): StageRole {
+/**
+ * What a stage does in the run (flow.go runFlow), whatever its auditors: a
+ * fallback stage = fallback (补审), stage 1 = first (初审), a later stage =
+ * review (复核, it runs only on the hit of the one before).
+ */
+export function stageRole(index: number, stage: Pick<Stage, 'fallback'>): StageRole {
   if (stage.fallback) return 'fallback'
-  if (index === 0) return 'first'
-  return stage.auditors.some((id) => typeOf(id) === 'typesafe') ? 'behavior' : 'review'
+  return index === 0 ? 'first' : 'review'
 }
 
 // ---- auditors as the canvas shows them

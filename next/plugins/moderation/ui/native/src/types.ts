@@ -43,9 +43,6 @@ export interface Runtime {
   cache_epoch?: number
   blocked_users: number
   watched_users: number
-  /** P2 (§72.13.4); absent on 0.2 */
-  /** channel_problem: why a set analysis_channel_id is not used (the core saves settings unchecked) */
-  analysis?: { channel_configured: boolean; channel_problem?: 'not_found' | 'not_llm' | 'unusable'; pending: number; running: number }
   /** call costs that could not be queued for pricing */
   dropped_costs?: number
 }
@@ -97,13 +94,6 @@ export interface ModEvent {
   text_excerpt?: string
   /** per-stage trace (list and detail; null on 0.1 records) */
   trace?: Trace | null
-  /** P2 AI verdict (§72.13.4); empty / absent until an analysis reviewed the record */
-  ai_verdict?: AIVerdict | '' | null
-  ai_severity?: string | null
-  ai_category?: string | null
-  ai_evidence?: string | null
-  ai_reason?: string | null
-  ai_analysis_id?: number | null
 }
 
 export interface HitCategory {
@@ -277,16 +267,6 @@ export interface Watch {
   hits_since_seen?: number
   note: string
   updated_at: string
-  /** P2 analysis queue and latest result (§72.13.4) */
-  analysis_requested_at?: string | null
-  analysis_source?: 'auto' | 'manual' | '' | null
-  /** a node holds a live claim on the queued analysis */
-  analysis_running?: boolean
-  latest_analysis_id?: number | null
-  latest_analysis_status?: AnalysisStatus | '' | null
-  latest_trend?: Trend | '' | null
-  latest_suggestion?: Suggestion | '' | null
-  analyzed_at?: string | null
 }
 
 export interface SeverityCounts {
@@ -308,8 +288,6 @@ export interface WatchItem extends Watch {
   top_categories: Array<{ category: string; label?: string; count: number }>
   /** records whose highest category is not among top_categories */
   top_other: number
-  /** verdict counts of the latest successful analysis */
-  ai_counts: VerdictCounts | null
   /** the user lists of the settings (a user on both is blocklisted) */
   allowlisted?: boolean
   blocklisted?: boolean
@@ -326,7 +304,6 @@ export interface WatchCounts {
 /** Envelope members of GET /watchlist besides data and page. */
 export interface WatchListMeta {
   counts: WatchCounts
-  analysis_every_violations: number
 }
 
 export interface WatchEvent {
@@ -337,16 +314,7 @@ export interface WatchEvent {
   to_level: string
   reason: string
   operator_id: number | null
-  analysis_id?: number | null
   created_at: string
-}
-
-/** Suspicious records by AI verdict (none = not analysed yet). */
-export interface AIVerdictCounts {
-  violation: number
-  false_positive: number
-  unsure: number
-  none: number
 }
 
 /** All suspicious records of a user. */
@@ -356,7 +324,6 @@ export interface UserSummary {
   confirmed: number
   false_positive: number
   by_severity: SeverityCounts
-  ai_verdicts: AIVerdictCounts
 }
 
 /** One "group → flow@version" the user's suspicious records of the last 30 days came through. */
@@ -366,7 +333,6 @@ export interface ContextSource {
   flow_name: string
   version: number
   count: number
-  ai_verdicts: AIVerdictCounts
   /** the group's flow version now */
   current: boolean
 }
@@ -394,8 +360,6 @@ export interface UserDetail extends UserState {
   }
   /** last 30 UTC days */
   daily: UserDay[]
-  latest_analysis: Analysis | null
-  analysis: { running: boolean; queued: boolean; violations_since_analysis: number; every: number }
 }
 
 export type Protocol = 'openai_chat' | 'openai_responses' | 'anthropic'
@@ -439,8 +403,6 @@ export interface Channel {
   proxy?: string
   stats?: ChannelStats | null
   used_by?: Array<{ id: number; name: string }>
-  /** the AI analysis channel */
-  analysis?: boolean
   created_at: string
   updated_at: string
 }
@@ -486,17 +448,6 @@ export interface TodayCounts {
   auditor_calls: number
   tokens_in: number
   tokens_out: number
-  analyses: number
-  analyses_failed: number
-  analysis_tokens_in: number
-  analysis_tokens_out: number
-}
-
-export interface AIReviewCounts {
-  reviewed: number
-  violation: number
-  false_positive: number
-  unsure: number
 }
 
 /** Last-hour health of an auditor or a channel; rates are 0–1. */
@@ -542,13 +493,12 @@ export interface Status {
   error_rate_alert_percent: number
   today: TodayCounts
   today_from: string
-  ai_review: AIReviewCounts
   watch: WatchCounts
   auditors: HealthRow[]
   channels: HealthRow[]
   funnels: Funnel[]
   queue: QueueStatus[]
-  costs: { total: CostSummary; audit: CostSummary; analysis: CostSummary; manual: CostSummary; channels: CostRef[]; auditors: CostRef[] }
+  costs: { total: CostSummary; audit: CostSummary; manual: CostSummary; channels: CostRef[]; auditors: CostRef[] }
   runtime: Runtime
 }
 
@@ -622,32 +572,6 @@ export interface StatsQuery {
   group_id?: number | ''
 }
 
-// ---- AI analysis (§72.13.4)
-
-export type AIVerdict = 'violation' | 'false_positive' | 'unsure'
-export type Trend = 'occasional' | 'persistent' | 'escalating' | 'likely_false_positive'
-export type Suggestion = 'release' | 'observe' | 'block'
-/** a stale analysis has status ok and error stale (§72.13.4) */
-export type AnalysisStatus = 'ok' | 'failed'
-
-export interface VerdictCounts {
-  violation: number
-  false_positive: number
-  unsure: number
-  high?: number
-  medium?: number
-  low?: number
-}
-
-export interface RecordVerdict {
-  record_id: number
-  verdict: AIVerdict
-  severity?: string
-  category?: string
-  evidence?: string
-  reason?: string
-}
-
 export interface FlowRef {
   flow_id: number
   name?: string
@@ -655,76 +579,6 @@ export interface FlowRef {
   via?: string
   historical?: boolean
   deleted?: boolean
-}
-
-export interface AnalysisStep {
-  step: number
-  tool?: string
-  /** argument digest */
-  args?: string
-  latency_ms: number
-  tokens_in?: number
-  tokens_out?: number
-  result_bytes?: number
-  truncated?: boolean
-  error?: string
-  notes?: Array<{ kind: string; record_id?: number }>
-}
-
-/** Row of GET /watchlist/:user_id/analyses (no trace, no record_verdicts). */
-export interface Analysis {
-  id: number
-  user_id: number
-  source: 'auto' | 'manual' | string
-  status: AnalysisStatus | string
-  error?: string
-  trend?: Trend | ''
-  suggestion?: Suggestion | ''
-  summary?: string
-  main_problems?: string[] | null
-  verdict_counts?: VerdictCounts | null
-  flows_seen?: FlowRef[] | null
-  model?: string
-  steps: number
-  tokens_in: number
-  tokens_out: number
-  /** user_analyses.cost: USD decimal string; null when no call was priced */
-  cost?: string | null
-  unpriced_calls?: number
-  duration_ms: number
-  created_at: string
-}
-
-/** GET /analyses/:id */
-export interface AnalysisDetail extends Analysis {
-  record_verdicts?: RecordVerdict[] | null
-  trace?: AnalysisStep[] | null
-}
-
-export interface CategoryDef {
-  category: string
-  name?: string
-  source?: string
-  stage?: number
-  auditor?: string
-  from?: string
-  definition?: string
-}
-
-export interface AnalysisPrompt {
-  group_id?: number
-  flow: FlowVersionDetail | null
-  dict: CategoryDef[] | null
-  prompt: string
-  bytes?: number
-}
-
-export interface AnalysisTool {
-  name: string
-  purpose?: string
-  args?: string
-  returns?: string
-  kind?: 'read' | 'end' | string
 }
 
 // ---- flow versions (§72.13.5)
@@ -972,7 +826,7 @@ export interface Group {
 
 /**
  * Body of POST / PATCH /watchlist. expires_at (RFC 3339, "" = never) wins over
- * days; reason goes to the history; analysis_id links the AI suggestion applied.
+ * days; reason goes to the history.
  */
 export interface WatchChange {
   level?: WatchLevel
@@ -980,7 +834,6 @@ export interface WatchChange {
   expires_at?: string
   note?: string
   reason?: string
-  analysis_id?: number
 }
 
 /** Auditor fields as saved, or tried unsaved instead of (or over) the stored ones. */
@@ -1061,7 +914,3 @@ export interface ImportResult {
   auditor_ids?: number[]
 }
 
-// ---- page
-
-/** Tabs of the moderation page (?tab=). */
-export type TabKey = 'overview' | 'events' | 'watch' | 'blocks' | 'flows' | 'bindings' | 'auditors' | 'channels' | 'test' | 'settings'

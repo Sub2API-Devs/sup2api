@@ -71,7 +71,7 @@ func TestManifest(t *testing.T) {
 	// the forms) came with 0.1.279, UI 3.10 (SFilterBar more filters,
 	// SFilterChips, SChipList, TableColumn.grow) with 0.1.277, the verdict
 	// cache's batch KV calls with 0.1.273.
-	if m.Key != "moderation" || m.Version != "0.9.3" || m.HostCompat != ">=0.1.280 <0.2.0" || m.HostUICompat != "^3.12" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.10.0" || m.HostCompat != ">=0.1.280 <0.2.0" || m.HostUICompat != "^3.12" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -97,8 +97,7 @@ func TestManifest(t *testing.T) {
 		"POST /events/review": "moderation:manage", "PATCH /watchlist/:user_id": "moderation:manage", "POST /channels/:id/test": "moderation:manage",
 		"POST /auditors/:id/try": "moderation:manage", "POST /flows/:id/publish": "moderation:manage", "POST /import": "moderation:manage",
 		"POST /test": "moderation:manage", "GET /jev/default-questions": "moderation:read", "DELETE /blocks/:user_id": "moderation:manage",
-		"POST /watchlist/:user_id/analyze": "moderation:manage", "GET /analyses/:id": "moderation:read", "GET /costs": "moderation:read",
-		"POST /flows/:id/rollback": "moderation:manage", "POST /flows/:id/simulate": "moderation:manage", "GET /analysis/prompt": "moderation:read",
+		"GET /costs": "moderation:read", "POST /flows/:id/rollback": "moderation:manage", "POST /flows/:id/simulate": "moderation:manage",
 		"GET /status": "moderation:read", "GET /stats/trend": "moderation:read", "GET /stats/performance": "moderation:read",
 		"GET /stats/categories": "moderation:read", "POST /watchlist/:user_id/seen": "moderation:manage", "POST /auditors/try": "moderation:manage",
 		"GET /users/:user_id": "moderation:read", "GET /users": "moderation:read",
@@ -109,7 +108,13 @@ func TestManifest(t *testing.T) {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 58 {
+	// The routes of the AI analysis are gone (removed in 0.10.0).
+	for _, gone := range []string{"POST /watchlist/:user_id/analyze", "GET /watchlist/:user_id/analyses", "GET /analyses/:id", "GET /analysis/prompt", "GET /analysis/tools"} {
+		if _, ok := routes[gone]; ok {
+			t.Errorf("route %s is still declared", gone)
+		}
+	}
+	if len(routes) != 53 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -185,9 +190,8 @@ func TestManifest(t *testing.T) {
 			t.Errorf("scope.fields[%d] = %v, want %s", i, f, wantNeeds[i])
 		}
 	}
-	if len(m.Jobs) != 3 || m.Jobs[0].ID != moderation.JobCleanup || m.Jobs[0].Schedule != "0 4 * * *" ||
-		m.Jobs[1].ID != moderation.JobAnalysis || m.Jobs[1].Schedule != "@every 1m" ||
-		m.Jobs[2].ID != moderation.JobAlerts || m.Jobs[2].Schedule != "@every 1m" {
+	if len(m.Jobs) != 2 || m.Jobs[0].ID != moderation.JobCleanup || m.Jobs[0].Schedule != "0 4 * * *" ||
+		m.Jobs[1].ID != moderation.JobAlerts || m.Jobs[1].Schedule != "@every 1m" {
 		t.Fatalf("jobs = %+v", m.Jobs)
 	}
 	caps := map[string]bool{}
@@ -260,8 +264,10 @@ func TestSettingsForms(t *testing.T) {
 	// core would no longer mask it) but the settings page does not show
 	// them (§72.15); the keys retired in 0.8.0 (exempt_user_ids, read as the
 	// allowlist, and cache_ttl_seconds, read as verdict_cache_days) are
-	// hidden like them; every other field is shown.
-	legacy := []string{"exempt_user_ids", "cache_ttl_seconds", "base_url", "api_key", "model", "system_prompt", "categories", "tool_choice", "max_turns", "temperature",
+	// hidden like them, as are the analysis_* keys of the removed AI analysis
+	// (kept so stored values still validate); every other field is shown.
+	legacy := []string{"exempt_user_ids", "cache_ttl_seconds", "analysis_every_violations", "analysis_channel_id", "analysis_guidelines",
+		"analysis_timeout_ms", "analysis_concurrency", "analysis_context_kb", "analysis_keep_per_user", "analysis_allow_upgrade", "analysis_allow_downgrade", "analysis_allow_remove", "base_url", "api_key", "model", "system_prompt", "categories", "tool_choice", "max_turns", "temperature",
 		"max_tokens", "timeout_ms", "on_error", "sample_rate", "group_ids", "model_patterns", "retention_days"}
 	for _, k := range order {
 		var fu struct {

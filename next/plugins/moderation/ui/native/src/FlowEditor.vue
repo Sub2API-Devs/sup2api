@@ -62,10 +62,10 @@ async function load() {
     const [f] = await Promise.all([id ? fetchFlow(id) : Promise.resolve(null), catalog.ensure()])
     if (f) resetFrom(f)
     else {
-      // A new flow starts from the recommended "first → behavior" template.
+      // A new flow starts from the recommended "first → review" template.
       draft.value = applyTemplate(
         newSpec(),
-        'first_behavior',
+        'first_review',
         auditors.value.filter((a) => isAuditorType(a.type))
       )
     }
