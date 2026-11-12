@@ -513,8 +513,8 @@ func (s *Service) loadKey(ctx context.Context, id, ownerID int64) (*APIKey, erro
 // foreign key violation.
 func groupAvailable(ctx context.Context, q store.Querier, userID, groupID int64) (bool, error) {
 	var ok bool
-	err := q.QueryRow(ctx, `SELECT true FROM groups g WHERE g.id = $2 AND g.status = 'active'
-		AND `+segment.OpenToUserSQL("g", "$1")+`
+	err := q.QueryRow(ctx, `SELECT true FROM groups g WHERE g.id = $2
+		AND `+segment.UsableGroupSQL("g", "$1")+`
 		FOR KEY SHARE OF g`,
 		userID, groupID).Scan(&ok)
 	if store.IsNoRows(err) {

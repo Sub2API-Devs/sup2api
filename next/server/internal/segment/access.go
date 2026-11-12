@@ -24,6 +24,13 @@ func OpenToUserSQL(group, user string) string {
 		WHERE sg.group_id = ` + group + `.id AND sg.granted AND su.id = ` + user + `))`
 }
 
+// UsableGroupSQL is the SQL condition for the groups the user can use (GET
+// /me/groups): active, and OpenToUserSQL. It is also the range of groups an
+// "own" account holder may bind.
+func UsableGroupSQL(group, user string) string {
+	return group + `.status = 'active' AND ` + OpenToUserSQL(group, user)
+}
+
 // Terms is what a segment gets in a group.
 type Terms struct {
 	SegmentID int64

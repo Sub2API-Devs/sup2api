@@ -486,7 +486,7 @@ func (s *Service) myGroups(c *gin.Context) {
 	rows, err := s.db.Pool.Query(ctx, `SELECT g.id, g.name, g.description, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode,
 			g.visibility = 'restricted'
 		FROM groups g
-		WHERE g.status = 'active' AND `+segment.OpenToUserSQL("g", "$1")+`
+		WHERE `+segment.UsableGroupSQL("g", "$1")+`
 		ORDER BY g.id`, uid)
 	if err != nil {
 		httpapi.Fail(c, err)

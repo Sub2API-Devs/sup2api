@@ -7721,7 +7721,7 @@ kind: users | groups | api-keys | accounts | models | proxies
 | kind | 全量（不带 `mine`） | `mine=true` |
 |---|---|---|
 | users | `user:read` | 不支持（400） |
-| groups | `group:read`：全部分组，含已停用 | 任何登录用户：`GET /me/groups` 的范围（状态 `active`，且公开或已授权给调用者所在的用户组，§97） |
+| groups | `group:read`：全部分组，含已停用；只有 `account:group:bind`：调用者自己可用的分组（与 `mine=true` 同一范围，即 own 级账号可绑定的分组，`segment.UsableGroupSQL`） | 任何登录用户：`GET /me/groups` 的范围（状态 `active`，且公开或已授权给调用者所在的用户组，§97） |
 | api-keys | `usage:all:read`：全部用户的密钥（使用记录本来就向它展示所有密钥的 id、名称、所属用户） | `apikey:self:manage`：调用者自己的密钥 |
 | accounts | `account:read`：全部账号；只有 `account:own:read` 时自动只看自己创建的（同 `GET /accounts`，§21.2） | `account:read` 或 `account:own:read`：只看自己创建的 |
 | models | `price:read`：价格表里的全部模型，含已停用的价格 | `apikey:self:manage`：已启用的价格里，调用者任一可用分组（`/me/groups` 的范围）的模型名单放行的模型（0.1.279 时这等于 `GET /me/prices` 对每个可用分组结果的并集；§97 起 `/me/prices?group_id=` 只列分组里的账号提供的模型，所以这个范围是各可用分组 `/me/prices?group_id=` 结果并集的超集，§79.5） |

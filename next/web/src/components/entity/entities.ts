@@ -28,7 +28,15 @@ const OWN_OR_ALL = (resource: string) => [`${resource}:read`, `${resource}:own:r
 
 export const ENTITIES: Record<EntityKind, EntityDescriptor> = {
   user: { path: 'users', icon: 'user', label: 'entity.kind.user', numeric: true, permissions: ['user:read'] },
-  group: { path: 'groups', icon: 'group', label: 'entity.kind.group', numeric: true, permissions: ['group:read'], minePermissions: [] },
+  group: {
+    path: 'groups',
+    icon: 'group',
+    label: 'entity.kind.group',
+    numeric: true,
+    // account:group:bind alone finds the groups the caller can use: those an own account may be bound to.
+    permissions: ['group:read', 'account:group:bind'],
+    minePermissions: []
+  },
   api_key: {
     path: 'api-keys',
     icon: 'key',

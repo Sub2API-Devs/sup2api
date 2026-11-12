@@ -65,7 +65,7 @@ func (s *Service) myPrices(c *gin.Context) {
 // usableBy selects the active groups a user may use; user is the placeholder
 // of the user's id.
 func usableBy(user string) string {
-	return ` WHERE g.status = 'active' AND ` + segment.OpenToUserSQL("g", user)
+	return ` WHERE ` + segment.UsableGroupSQL("g", user)
 }
 
 // pricesOfGroups lists every model with a global price, at that price, with

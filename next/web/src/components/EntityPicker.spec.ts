@@ -379,7 +379,7 @@ describe('EntityPicker without the lookup', () => {
   })
 
   it('the text box takes the id of a page candidate the lookup does not have', async () => {
-    mocks.denied = ['group:read']
+    mocks.denied = ['group:read', 'account:group:bind']
     const w = picker({ kind: 'group', extra: [{ id: 0, name: 'Default group' }] })
     await commit(w, '0')
     expect(model(w)).toEqual({ id: '0', text: '' })
@@ -400,7 +400,7 @@ describe('EntityPicker without the lookup', () => {
   })
 
   it('asks the permission of a mine lookup, which every signed-in user has for groups', async () => {
-    mocks.denied = ['group:read', 'usage:all:read']
+    mocks.denied = ['group:read', 'account:group:bind', 'usage:all:read']
     expect(picker({ kind: 'group' }).find('[role="combobox"]').exists()).toBe(false)
     expect(picker({ kind: 'group', mine: true }).find('[role="combobox"]').exists()).toBe(true)
     expect(picker({ kind: 'api_key' }).find('[role="combobox"]').exists()).toBe(false)
