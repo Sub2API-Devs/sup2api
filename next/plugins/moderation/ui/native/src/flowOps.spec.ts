@@ -3,6 +3,7 @@ import { applyDrop } from './canvasDrag'
 import {
   addStage,
   canonicalSpec,
+  flowBody,
   hasQuestions,
   hitOutcome,
   isAuditorType,
@@ -135,12 +136,23 @@ describe('canonicalSpec', () => {
   })
 })
 
+describe('flowBody', () => {
+  it('sends the scope beside the spec, and none for a flow from before it existed', () => {
+    const spec = newSpec()
+    expect(flowBody('a', spec, 'input')).toEqual({ name: 'a', draft: canonicalSpec(spec), scope: 'input' })
+    expect(flowBody('a', spec, 'all').scope).toBe('all')
+    expect(flowBody('a', spec, null)).toEqual({ name: 'a', draft: canonicalSpec(spec) })
+    expect('scope' in flowBody('a', spec, null).draft).toBe(false)
+  })
+})
+
 describe('stageRole', () => {
-  it('names a fallback stage before any other rule', () => {
-    expect(stageRole(0, review(1), typeOf)).toBe('first')
-    expect(stageRole(1, review(4), typeOf)).toBe('behavior')
-    expect(stageRole(1, review(5), typeOf)).toBe('review')
-    expect(stageRole(2, fallback(4), typeOf)).toBe('fallback')
+  it('names a stage by what it does, whatever its auditors', () => {
+    expect(stageRole(0, review(1))).toBe('first')
+    expect(stageRole(1, review(4))).toBe('review')
+    expect(stageRole(1, review(5))).toBe('review')
+    expect(stageRole(2, fallback(4))).toBe('fallback')
+    expect(stageRole(0, fallback(4))).toBe('fallback')
   })
 })
 

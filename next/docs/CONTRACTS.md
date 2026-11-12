@@ -5096,6 +5096,37 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **0.8.2（0.8.1 上线后的整理，2026-11-11 随核心 0.1.275 上线）**：不改 0.8.1 的缓存规则，只有三处小的行为变化和界面上的两处，各处标"0.8.2"：分几次调用的片段键写中途失败时，已写成的键出本节点内存、得到指针的照常广播（72.5 第 8 步"KV 写失败之后"）；告警状态的 KV 失败按缓存的规则计数（72.5 第 8 步"KV 出错"）；片段键在 KV 里的 TTL 向上取整到整秒（72.5 第 8 步"存储"）；概览页显示 `runtime.kv_skipped`、`kv_writing` 一行换了文案（72.11、72.16）。其余是代码和测试的整理。`hostCompat`、权限、迁移、设置、KV 里的键和值都不变，可以与 0.8.1 混跑（72.3、72.16）。
 
+**0.10.0（2026-11-12，分支 `feat/moderation-redesign`）：删除 AI 分析**（用户决定：第 2 级 LLM 复核已按请求做二次判断，按用户跑的分析不再需要；设计见分支 `proto/moderation-redesign` 的 `design/MODERATION_REDESIGN.md` §9）。分两步：
+- **第一步（0.10.0，停用并隐藏，没有迁移，可 rolling）**：插件不再触发、运行、读取分析。去掉 `analysis` 任务和 5 条路由（`POST /watchlist/:user_id/analyze`、`GET /watchlist/:user_id/analyses`、`GET /analyses/:id`、`GET /analysis/prompt`、`GET /analysis/tools`）；接口里去掉分析的字段：名单行的 `analysis_*`、`latest_*`、`ai_counts`，名单列表的 `trend` 筛选和 `analysis_every_violations`，用户详情的 `ai_verdicts`、`latest_analysis`、`analysis`，记录的 `ai_*` 字段、`ai_verdict` 筛选和 `verdict=needs_review|disagree`，`/status` 的 `today.analyses*`、`ai_review`、`costs.analysis`、`runtime.analysis`，渠道的 `analysis` 标记和删除时的 409 保护，名单写入和 DELETE 的 `analysis_id`；导入不再读 `analysis_guidelines`（列入 `unsupported`）；每日清理不再裁剪 `user_analyses`；不再发 AI 调整名单的通知（`watch.auto_changed`）。违规计数照旧用于显示、观察期顺延和封禁，只是不再在达到 `analysis_every_violations` 时清零排队。`analysis_*` 设置留在 schema 里作为隐藏的旧键（已存的值仍能通过核心校验），插件不读。`user_analyses` 表、名单行的分析列、记录的 `ai_*` 列和 `watch_events.analysis_id` 不动，只是不读不写；名单历史里以前的 `auto_*` 动作、`source=analysis` 的条目照常显示。费用来源 `analysis` 保留：已有的分析费用计入合计、不单列，渠道健康只看 `audit`。rolling 期间旧节点照常分析并调整名单，不想要就在升级前清空 `analysis_channel_id`。
+- **第二步（以后，要迁移）**：删 `user_analyses`、名单行的分析列和索引、记录的 `ai_*` 列和 schema 里的 `analysis_*` 旧键；`watch_events.analysis_id` 留作审计。
+- 同版本的两处改动：`auto_watch` 不再加入白名单用户（P8，72.8）；`verdict_cache_days` 可以设为 0，表示关闭判定缓存（P11，72.10）。
+
+**0.10.0 审核逻辑（设计 §4.1、§4.2、§4.4、§4.6，D1/D3/D4 用户已确认；迁移 0011）**：
+- **审核范围（72.4）**：流程新增 `scope`：`input`（system、developer、user 文本，user 的图片和文档）、`tools`（`input` + 工具结果）、`all`（全部，即以前的行为；工具定义只在 `all` 下送审）。按片段的角色过滤（`scope.go` 一张角色表），抽取本身不变；`document` 角色在哪都算输入，客户端自造的角色在所有范围下都送审。**存为列 `flows.scope`，不放进 spec**：0.9.3 的 `ParseSpec` 拒绝未知字段，会把带 `scope` 的已发布 spec 当作无效、丢掉整个流程。因此范围和 `enabled`、绑定一样**保存即生效，不随发布走版本**。`NULL` = `all`：已有流程和老配置转换出的流程保持 `all`（D1），0.10.0 新建且没带 `scope` 的流程是 `input`。范围不是 `all` 时计入判定指纹（`all` 与 `NULL` 的指纹和 0.9.3 相同，已有缓存不失效）。`all_but_own`（跳过网关自己返回过的 assistant 片段）**推迟**：核心没有响应结束的钩子（manifest 只有 `gateway.request` / `gateway.attempt`）。
+- **命中重放（72.5 第 8 步）**：新设置 `hit_replay`，`new_content`（默认）| `whole`（0.9.3 的行为）。`new_content`：命中集合照常记一条重放记录；先审照样拒绝，提示在 `block_message` 后加一句"历史里有已命中的内容，请清理上下文"（`MsgHistoryHit`）；后审时命中集合之外的新内容照常送审——钩子只在请求里除命中集合外全是已放行内容时直接重放，其余照常入队，由 worker 重放一次再把所有完整在请求里的命中集合的片段拿掉、审剩下的（`plan.without`）。**默认行为变化**：后审会多送审新内容（成本略增），新内容里的命中算新的违规。
+- **失败策略（72.5）**：新设置 `fail_policy`，`open`（默认）| `close_pre`。所有失败（审核出错、总超时 / 客户端离开、处理中字节超限）走同一个 `failResponse`：`open` 放行（出错照常记 error 记录；繁忙只计 `runtime.busy`，不写记录）；`close_pre` 对先审的请求返回 503（繁忙 `moderation_busy`，出错 / 超时 `moderation_unavailable`）；后审总是放行。**默认行为变化**：以前处理中字节超限时先审用户得到 503，现在默认放行。`on_error` 不再读取（见下面"设置清理"）。
+- **流程匹配来源（72.17）**：记录新增 `flow_source`（`group` | `account` | `account_any` | `default` | `fallback`）；`fallback` 表示请求更具体的一条绑定因流程不在运行而没生效，由更宽的绑定决定，此时 `flow_fallback = {flow_id, reason}`，`reason` 是 `deleted` | `disabled` | `unpublished` | `invalid`（已发布的 spec 本节点读不了，例如更新版本写的）。取更具体的那条失效绑定。0.10.0 以前的记录两者都没有（字段不出现）。`GET /bindings` 每行加 `effective_flow_id`（这条绑定覆盖的请求实际跑的流程，0 = 不审；任意分组的账号绑定按"没有自己绑定的分组"算）和 `fallback_reason`（生效时为 `""`）；`inactive` 照旧。`GET /status` 加 `stale_bindings`（不生效的绑定数）。
+- **rolling**：0011 只加可空列（`flows.scope`，`events.flow_source`、`flow_fallback_id`、`flow_fallback_reason`），0.9.3 对这两张表的语句都列出了列名（测试 `TestMigration0011Rolling` 用 0.9.3 的原句在迁移前后读写）。0.9.3 节点忽略 `scope`，照 `all` 审（范围更宽，安全），写的记录没有来源；新设置键旧节点忽略（`DecodeSettings` 宽松）。混跑期间范围收窄只在新节点生效，`hit_replay`、`fail_policy` 同理。`verdict_cache_days = 0` 在 0.9.3 节点上被夹到 1 天：旧节点照样缓存 1 天，新节点不读缓存（无害，升级完成后消失）。
+- **迁移的锁**：0011、0012 的 `ALTER TABLE` 要拿 ACCESS EXCLUSIVE 锁（只改元数据，不重写表；`locked` 的常量默认值同样不重写），文件开头 `SET LOCAL lock_timeout = '10s'`（与核心 0095、0096 相同）：排在 `events` 上的长查询后面时 10 秒内失败，而不是一直排队、把网关的写入堵在它后面。插件迁移每个文件一个事务（`server/internal/store/migrate.go:84-108`），超时整个文件回滚、不记录；rollout 在 preparing 阶段迁移失败即标为 failed，插件回到原来的 active 版本继续运行（`rollout/coordinator.go:165-167` → `controller.go` `finishFailed`：`desired_version = active_version`），之前已提交的文件保留（都是 expand，旧版本照常运行）；再发起一次 rollout 会跳过已记录的文件、重跑失败的那个（`migrate.go:76-78`）。测试 `TestMigrationsFailFastOnLock`。
+- **已知限制**：`hit_replay = new_content` 时，请求里已命中集合的片段在钩子里仍按新内容计入输入上限（`input_max_chars`、`input_max_chunks`），worker 才把它们拿掉；未缓存的输入超过上限（默认约 8 × 12 000 字）且 `input_overflow = sample` 时，抽样可能留下随后被拿掉的命中片段、漏掉部分新内容。只在超长请求里出现，暂不处理。
+
+**0.10.0 第 4 期（重设计 §4.3、§4.7/D5、D10、§4.6/§4.8 P12；迁移 0012，可 rolling，不依赖 0011）**：
+- **处理级别一个函数决定**（`decideHandling`，`hook.go`）：黑名单 → enforce（来源 `blocklist`），白名单 → observe（`allowlist`，黑名单优先），未锁定的有效名单条目 → 条目级别（`watch`），否则 `mode` 的默认级别（`default`）。每种输入的结果与 0.9.3 的 `preModerated` 相同（`TestDecideHandling` 逐项对照）。版主照常审核，不影响级别。锁定条目不参与决定（名单才是依据），所以用户刚移出名单、条目还没删时按默认级别，旧节点在这几秒里仍按条目。
+- **记录**：`events` 加可空列 `level`（observe|enforce）和 `level_source`（blocklist|allowlist|watch|default）；`GET /events`、`GET /events/:id` 的记录带同名字段，没有值时（0.10.0 之前的记录、0.9.x 节点写的记录）不出现。
+- **固定名单并入观察名单，作为锁定条目（D5）**：`watchlist` 加 `locked boolean NOT NULL DEFAULT false`。本版设置里的 `allowlist_user_ids`、`blocklist_user_ids` 仍是唯一依据、仍决定先审后审（0.9.3 节点读它们，所以新旧节点决定相同），名单里的锁定条目只是镜像（`locks.go`）：
+  - 每个节点在设置变化（名单变了就立刻）和观察名单变化后对一次账（5 秒一轮的刷新里；内存里的名单与设置比较，没差别就不碰数据库）：名单上的用户都有一条锁定条目，黑名单 enforce、白名单 observe，不过期，`source=manual`（`source` 的 CHECK 没有别的值可用）；用户原有的条目被覆盖（级别变了就开新计数窗口），不再在名单上的锁定条目直接删除（不恢复成加锁前的样子）。每次改动写一条历史：`lock`（from 原级别或空，reason 写名单名）、`unlock`（from 原级别）。每个用户一个事务，先取用户锁再读行，几个节点同时对账也只改一次。已知限制：保存名单后，各节点收到新设置（`Configure`）有先后，还没收到的节点可能按旧名单把条目改回去，多写几条 `lock` / `unlock` 历史；所有节点收到新设置后稳定（通常几秒）。
+  - 接口：条目和 `GET /users/:user_id` 的 `watch` 带 `locked`（bool）和 `lock`（`allowlist`|`blocklist`；用户刚离开名单、条目还没删时不出现）；`GET /watchlist` 加筛选 `locked=true|false`，头部计数加 `counts.locked`（锁定条目同时算在 `watching`/`blocking` 里）。名单上的用户和锁定条目不能通过观察名单接口改：`POST /watchlist`、`PATCH`/`DELETE /watchlist/:user_id` 返回 **409，码 `locked`**（取代 0.8.0 的 400 `allowlisted`：白名单用户不能再手动加 observe 条目，他们已经有锁定条目）；要改就改设置里的名单（控制台在名单页保存这两个设置键）。`POST /watchlist/:user_id/seen` 照常可用。
+  - 锁定条目照常计命中和违规（显示用），不过期、不被自动加入改级别、不自动升级；封禁规则不变（白名单不封、黑名单照常）。
+  - 行为变化：名单上的用户出现在观察名单和名单计数里；记录筛选 `watch_level` 也会包括他们。
+  - rolling：0.9.3 节点不认 `locked`，会把锁定条目当普通条目显示，也可能手动改、手动删，或由 AI 分析降级、移出；下一次对账（新节点 5 秒内）恢复，历史里多一条 `lock`。0.9.3 对这些用户的决定仍看名单，不受影响。
+  - **下一版的契约迁移**：观察名单成为唯一依据——迁移从当时的设置把名单写成锁定条目并记下名单种类（列 `lock_kind`），`decideHandling` 只看条目，删除设置键 `allowlist_user_ids`、`blocklist_user_ids`（和读作白名单的 `exempt_user_ids`）。这一步也按 expand/contract 滚动做：下一版以条目为依据，同时把名单回写到这两个设置键（0.10.0 节点照读，决定不变）；全部节点升级后，再下一版才删除设置键。
+- **自动升为拦截级（D10，`escalate_violations`，默认 0 = 关，`escalate_window_seconds` 默认 3600）**：每条新违规（进入名单的那些记录，72.8）之后，窗口内违规达到 N 次的用户升为 enforce：observe 条目升级（新计数窗口），不在名单上的用户直接以 enforce 加入；有效期 `watch_days`，`source=auto`，历史动作 `auto_escalate`，reason 如 `3 violations within 10m / 10 分钟内违规 3 次`（窗口取能整除的最大单位 h/m/s）。计数与封禁阈值相同（`countViolations`：按 request_id 去重，不含误报、缓存重放和 0.1 的 flag，从上次解封、上次封禁开始算），另外只算该用户最近一次**人工**名单操作（`watch_events.operator_id` 非空，或保存名单产生的 `lock` / `unlock`）之后的违规，所以人工降级、移出或改名单不会被已经判过的违规立刻推翻；人工降级、移出照常用观察名单接口。不升级：N=0、白名单和黑名单用户、版主、锁定条目、已是 enforce 的条目。
+  - 顺序：**封禁 > 升级 > 自动加入**。同一次违规同时达到封禁阈值（且用户能被封禁）时只封禁、不升级：封禁拒绝一切请求，升级没有意义，也免得解封后用户还留在拦截级。会同时触发自动加入时只升级，只写一条历史。
+  - 代价：每条违规多两次按用户的查询（最近一次人工操作、窗口计数），都走索引 `events (user_id, created_at)`、`watch_events (user_id, id)`，窗口再短（10 秒）也只是读该用户最近的几行，不需要 Valkey。窗口按记录时间（节点时钟）算，人工操作时间是数据库时钟，两者差不到一秒。
+- **设置清理（第 4 期）**：键全部留在 schema 里（`additionalProperties:false`，已存的值要能通过校验），只删解码：`on_error` 不再读（它在 0.2 起就不起作用，只用于转换时的一条日志）。仍读的旧键和理由：`exempt_user_ids`（没有 `allowlist_user_ids` 的设置仍以它为白名单）、`cache_ttl_seconds`（没有 `verdict_cache_days` 的设置以它决定缓存天数，0 = 关）、`retention_days`（没有 `hit_retention_days` 的设置以它为命中保留下限）——这三种设置是从没在 0.8.0 之后保存过的；0.1 单模型的 13 个键（`base_url` … `model_patterns`）只由一次性转换读（从 0.1 直接升上来的安装仍要转换），解码移到 `legacy.go` 的私有结构。**输入上限（`input_max_chars`、`input_max_chunks`、`input_overflow`、`input_max_images`、`min_chars`）不移到流程**：流程 spec 加字段会被 0.9.x 的 `ParseSpec`（`DisallowUnknownFields`）判为无效而丢掉整个流程，而且这些是每个节点的内存保护，和按流程选择审核内容无关。P12：会被解码截断或丢弃的字符串键在 schema 里都有同样的 `maxLength`/`pattern`（`block_message` 500、`notify_webhook_secret` 200、`notify_webhook_url` 1000 + pattern，`TestSchemaLimitsMatchDecoding` 检查），解码的截断留作兜底；webhook 地址的长度改按字符数算，与 schema 一致。
+
+下面各小节里 AI 分析的内容是 0.9.x 及以前的行为，标"0.10.0 删除"。
+
 用户已确认的取舍：
 - 只迁配置（Jev 题集、阈值、分析准则、渠道），通过页面导入；new-api 的记录和名单不迁，两边的用户不是同一批人。
 - 现有的单模型审核保留，作为审核器类型 `llm_verdict`，老配置自动转换、继续可用。
@@ -5113,7 +5144,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | 何时拦截 | 全局 `observe` 或 `enforce` | 11 月起由默认级别（observe / block）、白名单、黑名单和名单条目的级别决定：黑名单总是同步审核，白名单只异步审核，其余用户按名单条目的级别，没有条目的按默认级别 | 0.8.0 照 new-api：`mode` 既是总开关也是默认级别——`off`、`observe`（默认观察）、`enforce`（默认拦截）；设置 `allowlist_user_ids`、`blocklist_user_ids`（72.5 第 6 步）。0.2–0.7 的 `enforce` 是所有人同步审核 |
 | 用户处置 | 窗口内违规达到阈值自动封禁（`blocks`） | 观察名单：observe / block 两级、有效期、违规计数、AI 分析可自动升降级 | 观察名单两级 `observe` / `enforce`；原来的封禁保留，作为名单之上的第三级"封禁"（72.8） |
 | 人工审核 | 只能删记录 | 标误报或确认；最终结论 = 人工结论优先，否则取 AI 结论 | 照 new-api（72.9） |
-| AI 分析 | 无 | 带 5 个工具的 agent，结论自动调整名单 | P2（72.13） |
+| AI 分析 | 无 | 带 5 个工具的 agent，结论自动调整名单 | P2（72.13）；0.10.0 删除 |
 | 统计、成本、通知 | 概览只有聚合 | 小时统计、延迟分桶、成本、异常率告警 | P3（72.14）。成本不搬：审核渠道指回本网关时，费用自然记在专用 Key 名下 |
 
 **名词。** 为避免和已有的 `blocks` 表（封禁）混淆，new-api 名单的 `block` 级在这里叫 **`enforce` 级**。本节说的"拦截"只指拒绝某一次请求；"封禁"指这个用户的所有请求都拒绝——前提是插件在运行：封禁由插件的钩子执行（0.6.0 起有一个匹配全部协议的 `ban` 钩子，72.3），插件不可用或钩子熔断期间按 failure=open 放行，被封禁用户也一样（72.2 第 3 条）。
@@ -5139,7 +5170,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 钩子 `match.protocols`：`anthropic.messages`、`openai.chat`、`openai.responses`、`openai.responses_ws`、`gemini.generate`、`gemini.stream_generate`。`openai.responses_ws`（2026-10-31 补上）：核心对 WebSocket 的每条 `response.create` 单独跑钩子，字段从这条消息本身取（`model`、`input` 在顶层，与 HTTP Responses 相同），漏掉它时拦截级用户和被封禁用户走 WebSocket 就完全不经审核。0.6.0 加上 `volcengine.images`（审 `prompt` 和 `image`）、`volcengine.video_submit`（审 `content` 里的文字和图片）。
 - **封禁钩子（0.6.0）**：另一个钩子 `ban`（order 199，`match` 为空即匹配所有协议，不要任何字段，超时 2 秒，failure open），只做 72.5 第 1、2 步：被封禁用户在 `openai.embeddings`、`*.count_tokens`、`volcengine.video_query` 以及平台插件自己声明的协议上也被拒绝（2026-10-31 团队审核 P2；此前 §72.1 "封禁"的定义言过其实）。内容审核钩子仍只匹配上面 8 个协议：embeddings 和 count_tokens 不生成内容，而且 count_tokens 的请求体就是整段对话，匹配它们只会把大请求白白发给插件。核心对空 `match`（或 `"*"`）匹配全部协议、这些协议都会执行请求钩子（2026-10-31 与核心确认；`video_query` 是 GET，没有请求体，字段为空）。封禁钩子与审核钩子对 8 个审核协议各调一次插件，封禁检查只读内存，开销可以忽略。
 - 权限：保留 `moderation:read`、`moderation:manage`，和 new-api 的 read / write 一一对应。read 能看全部页面，包括原文；manage 负责所有修改和要花钱的调用（试跑、测试、手动分析）。
-- 任务：`cleanup` 保留（72.10）；P2 加 `analysis`（`@every 1m`，处理分析队列，72.13）。
+- 任务：`cleanup` 保留（72.10）；P2 加 `analysis`（`@every 1m`，处理分析队列，72.13），0.10.0 删除。
 - **0.8.0**：版本 0.8.0，`hostCompat` 不变（`>=0.1.258 <0.2.0`，没有用到新的宿主接口）。
   - 路由加一条：`POST /verdict-cache/clear`（scope `admin`，权限 `moderation:manage`，72.11）。
   - 能力、钩子（`ban`、`moderation`、`moderation_attempt` 的 `match`、`needs`、超时、failure）、任务、用户权限都不变。
@@ -5162,7 +5193,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - `gemini.generate`、`gemini.stream_generate`：`systemInstruction`（或 `system_instruction`）+ `contents` + `tools`；
   - `volcengine.images`：`prompt` + `image`；`volcengine.video_submit`：`content`；
   - 其他协议不审内容（只有封禁钩子，72.3）。此前按"`messages` 存在就用 `messages`"选择，Responses / Gemini 请求附带一个假的 `messages` 数组就能绕过（P1-3）。重复键（`{"messages":[良性],"messages":[违规]}`）由核心在网关统一拒绝（400），插件不处理。
-- **审核范围 = 请求里客户端可控的全部内容**：
+- **审核范围 = 请求里客户端可控的全部内容**（0.10.0 起这是流程 `scope = all` 的内容，`input`、`tools` 只审其中一部分，见 72 开头"0.10.0 审核逻辑"）：
   - 所有角色的消息：user、assistant（含预填）、system、developer、tool / function；
   - system 提示词、Responses `instructions`、Gemini `systemInstruction`；
   - 工具调用的参数（Anthropic `tool_use.input`、chat `tool_calls[].function.arguments`、Responses `function_call.arguments`、Gemini `functionCall.args`）和工具结果（Anthropic `tool_result`、chat `role:tool`、Responses `function_call_output`、Gemini `functionResponse`）；参数和结果是 JSON 时取其中的字符串值；
@@ -5298,7 +5329,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 10. **pre**：在钩子内同步执行流程，同一输入并发时只执行一次（singleflight，沿用 §20；键是缓存范围加各块的哈希）。
     - 结果为 Hit → 拒绝，状态码 `block_status`，code `moderation_blocked`，message 为 `block_message`。
     - 其他结果 → 放行。
-    - **某一级出错或超时怎么办（0.8.0，照 new-api，72.7）**：这一级跳过，前面的命中保留。所以"初审命中、复核出错或超时"的请求**被拒绝**；只有所有级都没有得出结论时请求才放行，记为 `error`。没有"出错时拦截"的设置（原来的 `on_error` 已删除）：所有审核渠道都不可用时放行，否则审核服务一挂，所有先审的用户都用不了。
+    - **某一级出错或超时怎么办（0.8.0，照 new-api，72.7）**：这一级跳过，前面的命中保留。所以"初审命中、复核出错或超时"的请求**被拒绝**；只有所有级都没有得出结论时请求才放行，记为 `error`。默认没有"出错时拦截"（原来的 `on_error` 已删除）：所有审核渠道都不可用时放行，否则审核服务一挂，所有先审的用户都用不了。0.10.0 起可以用 `fail_policy = close_pre` 让先审的请求在出错、超时、繁忙时返回 503（72.5 的 0.10.0 说明）。
     - 共享的运行里发生 panic 不会结束插件进程。各块的运行返回之前的 panic：按一次出错的运行处理，请求放行，记为 `error`。审核器已经给出结论之后的 panic（写缓存、合并各块的运行时）：结论不变，结果是各块运行合并后的 trace——命中照样拒绝并记为 `block`，只丢这次缓存写入。合并本身再次 panic 时，第一个命中的块的运行单独作为结果（多块时带它的块号，`trace.cache` 指这个块的命中集合；不带其他块的运行和 `trace.input`），各块都没有命中时按一次出错的运行处理。
     - 运行结束之后，钩子协程上计数、交记录的一步（包括 pre 重放的记录）panic 时回答不变：记 error 日志，命中（或重放的命中）照样拒绝，其余照样放行，丢的是这条记录。不这样做的话 panic 会让钩子失败，核心按 `failure: open` 放行一个审核器已判命中的请求。
     - 共享的运行有自己的期限（min(流程总超时, 29 秒)），不随某个请求的客户端断开而取消。客户端断开时：结果不是 Hit 就不写记录、不计数；Hit 照样计数并写记录，免得用户靠断开连接躲过名单。运行的结论照常进缓存。
@@ -5419,12 +5450,12 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - `watch_events`：只追加的历史，字段有 `user_id`、`action`、`from_level`、`to_level`、`reason`、`operator_id`、`analysis_id`、`created_at`。
 
 **进入名单**（0.8.0，照 new-api `escalate.go`、`ApplyWatchHit`）：记录写入后，结果为 `hit` 或 `block`、不是缓存重放（`replayed`）、用户不是版主时，在一个事务里依次处理：
-- `auto_watch`（默认开）时，首次可疑自动加入，**级别是默认级别**（`mode=enforce` 时为 enforce 级，否则 observe 级），有效期 `watch_days`（默认 30 天，两种级别都有）。0.7.2 及以前自动加入的条目总是 observe 级。
+- `auto_watch`（默认开）时，首次可疑自动加入，**级别是默认级别**（`mode=enforce` 时为 enforce 级，否则 observe 级），有效期 `watch_days`（默认 30 天，两种级别都有）。0.7.2 及以前自动加入的条目总是 observe 级。**0.10.0（P8）**：白名单用户不自动加入（他们只在后台审核）；手动加入仍可以，只能是 observe 级，已有的条目照常计数。
 - 已过期但还没清理的条目，先按过期移出再重新加入。
 - observe 级每命中一次，有效期往后延长；enforce 级不延长。
 - 同一个 request_id 只计一次违规。observe 级的条目总是计；**默认级别是拦截（`mode=enforce`）时 enforce 级的条目也计**；默认观察时 enforce 级的条目只加命中数（`hit_count`），不计违规。
-- 计数达到 `analysis_every_violations` 时，计数清零，并把分析排进队列（72.13.4）。
-- **白名单用户照常后审、照常进名单**（级别同样是默认级别），只是永不先审：即使他们的条目是 enforce 级，时机仍是 post（72.5 第 6 步）。
+- 计数达到 `analysis_every_violations` 时，计数清零，并把分析排进队列（72.13.4）。0.10.0 删除：计数一直累加，不清零。
+- **白名单用户照常后审**，只是永不先审：即使他们的条目是 enforce 级，时机仍是 post（72.5 第 6 步）。0.9.x 及以前他们照常自动进名单（级别是默认级别），0.10.0 起不自动加入（P8）。
 - **缓存重放不算新的违规**：不进名单、不延期、不计数、不触发分析（72.5 第 8 步）。
 
 **升级到 0.8.0 时的名单转换**（`parity.go`）：0.7.x 下 `mode=enforce` 时所有人先审，自动加入的条目却都是 observe 级；按 0.8.0 的规则（条目的级别优先）这些用户会变成只后审。所以插件首次以 0.8.0 运行、且当时 `mode=enforce` 时，把未过期的、`source=auto` 的 observe 级条目改为 enforce 级（各写一条 `watch_events`：`set_level`，reason 以"0.8.0 升级"开头，没有操作人；有效期和计数不动）。手动设的（`manual`）和 AI 降下来的（`analysis`）observe 级条目不动，这些用户升级后只后审。首次转换后的 24 小时内（`config_state.parity_converted_at` 起）每 5 秒再查一次这段时间里新加入的自动 observe 级条目（滚动升级期间 0.7.x 节点加的），同样转换；之后不再转换。每个条目一个事务，取锁顺序与其他名单操作相同。日志 `moderation: 0.8.0 watch list conversion`（`mode`、`converted`、`first_run`）。
@@ -5432,7 +5463,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **管理员**：持有 `moderation:read` 的用户（版主）由插件自动识别（72.14），不进观察名单、不会被封禁，不需要为此把他们加进任何名单。（0.2 时插件识别不了管理员，曾建议把管理员加进 `exempt_user_ids`；这条建议早已作废，该设置在 0.8.0 退役，读作白名单，72.10。）
 
 **手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。没指定天数或 `expires_at` 时，observe 级的有效期是 `watch_days`，enforce 级不过期（加入和改级别都一样，照 new-api）。改级别时开新的计数窗口（照 new-api）：新 `violation_epoch`、计数和新命中清零、`since_at` 重设、`source` 改为 manual，返回的条目就是存下的值。
-- **0.8.0**：白名单用户不能手动设为 enforce 级（`POST /watchlist`、`PATCH /watchlist/:user_id` 返回 400，字段 `level`，码 `allowlisted`，"白名单用户只能设为观察"），可以以 observe 级加入。黑名单用户可以设任何级别，但名单级别不影响他们的时机（总是先审）。版主不能加入（字段 `user_id`，码 `staff`）。
+- **0.8.0**：白名单用户不能手动设为 enforce 级（`POST /watchlist`、`PATCH /watchlist/:user_id` 返回 400，字段 `level`，码 `allowlisted`，"白名单用户只能设为观察"），可以以 observe 级加入。黑名单用户可以设任何级别，但名单级别不影响他们的时机（总是先审）。版主不能加入（字段 `user_id`，码 `staff`）。**0.10.0**：两个名单的用户是锁定条目，手动操作一律 409 `locked`（见 72 节开头"0.10.0 第 4 期"）；`auto_escalate` 见同处。
 
 **封禁**（`blocks`、`unblocks`、`block_subjects` 不变；new-api 没有封禁）：
 - `ban_threshold` 等设置保留，默认关。
@@ -5490,7 +5521,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 |---|---|
 | `auto_watch` | true |
 | `watch_days` | 30（1–365） |
-| `analysis_every_violations` | 30（0–1000，P2 才生效） |
+| `analysis_every_violations` | 30（0–1000，P2 才生效；0.10.0 起是不读的隐藏旧键） |
 | `record_overturned` | true |
 | `record_errors` | true |
 | `cache_entries` | 100000 |
@@ -5517,7 +5548,9 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `mode` | `off`（`off` \| `observe` \| `enforce`），定义不变 | **含义变了**：总开关加默认级别（new-api 的 `enabled` + `default_level`）。`observe` = 开启、默认观察；`enforce` = 开启、默认拦截：没有名单条目的用户先审，有条目的按条目的级别，白名单只后审（72.5 第 6 步）。0.7.2 及以前 `enforce` 是所有人先审。没有新增 `default_level` 键：已存的设置不用改，旧版本也认识；`GET /status` 返回派生的 `default_level` |
 | `allowlist_user_ids` | `[]`，最多 1000 项，每项是 1–18 位数字的字符串 | 白名单：只后审，永不先审、永不被拒绝；照常有记录、照常进名单；不能手动设为拦截级，AI 不升级，不会被封禁 |
 | `blocklist_user_ids` | `[]`，同上 | 黑名单：总是先审。AI 不降级、不移出。不是封禁。同时在两个名单上的用户算黑名单 |
-| `verdict_cache_days` | 7（1–30） | 判定缓存保留天数（72.5 第 8 步） |
+| `verdict_cache_days` | 7（0–30；0.10.0 前是 1–30） | 判定缓存保留天数（72.5 第 8 步）；0 = 关闭判定缓存（0.10.0，P11；此前只有旧键 `cache_ttl_seconds = 0` 能关） |
+| `hit_replay` | `new_content`（`new_content` \| `whole`），0.10.0 | 请求含完整的缓存命中集合时：只重放命中部分、新内容照常后审，或整个请求按命中处理（72 开头"0.10.0 审核逻辑"） |
+| `fail_policy` | `open`（`open` \| `close_pre`），0.10.0 | 审核出错、超时、繁忙时：放行，或先审的请求返回 503 |
 | `record_pass_input_message` | true | `store_text` 开着时，没有命中过的记录（通过、被推翻）也保存原始消息（72.9） |
 
   - **退役 `exempt_user_ids`**：留在 schema 里并隐藏，只作白名单的旧名读取。取值规则（`DecodeSettings`）：文档里有 `allowlist_user_ids` 这个键（是数组）就用它，否则用 `exempt_user_ids` 的值。"完全不审核"这个语义不再存在：原来列在里面的用户升级后变成后台审核、有记录、可能进名单、永不被拦截。设置页保存白名单或黑名单时同时把 `exempt_user_ids` 写成"白名单减去黑名单"（镜像）：仍在跑 0.7.2 的节点只读这个键、对里面的用户完全不审，这样它们豁免的正好是白名单里且不在黑名单里的用户，已移出白名单或被加进黑名单的用户不再豁免。
@@ -5549,13 +5582,13 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/channels`，GET/PUT/DELETE `/channels/:id`，POST `/channels/:id/test` | read / manage | 不返回 key 和代理明文，只返回 `api_key_tail` 和 `has_proxy` |
 | GET/POST `/auditors`，GET/PUT/DELETE `/auditors/:id`，POST `/auditors/:id/try`，POST `/auditors/try` | read / manage | try 的请求体是 `{text, images?, draft?}`，返回分数和是否命中，不写记录。`draft` 是 `{name, type, channel_id, config}` 中的任意字段，覆盖已保存的审核器，用来试跑未保存的修改。`/auditors/try` 试跑全新的草稿，此时必须带 `draft`。草稿格式错误、渠道类型不符时返回 400 |
 | GET `/jev/default-questions` | read | 内置题集，以及 `jev_default_set` |
-| GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled` | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict` |
-| GET/PUT `/bindings`，DELETE `/bindings/:group_id/:account_id`（0.7.0） | read / manage | 全部绑定（分组、分组下的账号、任意分组的账号），见 72.17。0.8.0：`GET` 的每行可带 `inactive: true`（绑定的流程本节点没有在运行，这条绑定不生效） |
-| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version`、`endpoint`、`session_fp`（都是精确匹配，照 new-api）；0.8.0 加 `replayed=true\|false`，每行返回 `replayed`。`GET /events/:id` 的 `user_state` 用 `allowlisted`、`blocklisted` 取代原来的 `exempt` |
+| GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled`，PUT `/flows/:id/scope`（0.10.0） | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict`。0.10.0：流程带 `scope`（`input` \| `tools` \| `all`；`null` = 没选过，按 `all` 审）；POST、PUT 可带 `scope`，保存即生效、不需要发布，POST 不带时为 `input`，PUT 不带时不变，取值无效返回 400，字段错误码 `invalid_scope`；`PUT /flows/:id/scope`（body `{scope}`）只改范围、不碰草稿，控制台的范围选择用它（像启用开关一样，不会因已保存草稿里的审核器失效而失败，也不会覆盖别人刚保存的草稿） |
+| GET/PUT `/bindings`，DELETE `/bindings/:group_id/:account_id`（0.7.0） | read / manage | 全部绑定（分组、分组下的账号、任意分组的账号），见 72.17。0.8.0：`GET` 的每行可带 `inactive: true`（绑定的流程本节点没有在运行，这条绑定不生效）。0.10.0：每行加 `effective_flow_id`、`fallback_reason` |
+| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version`、`endpoint`、`session_fp`（都是精确匹配，照 new-api）；0.8.0 加 `replayed=true\|false`，每行返回 `replayed`。0.10.0：列表和详情返回 `flow_source`、`flow_fallback`（没有时不出现）。`GET /events/:id` 的 `user_state` 用 `allowlisted`、`blocklisted` 取代原来的 `exempt` |
 | GET `/events/:id/input` | read | 原文，按需加载 |
 | POST `/events/review` | manage | 请求体 `{ids, status}`；只处理结果为 hit 或 block 的记录，其他记录不变。改为误报或从误报改回时，按 72.8 调整违规计数。0.8.0：处理后同步判定缓存（72.9），响应 `{updated, status, cache_synced}`，`cache_synced` 是缓存改动全部写成功的记录数 |
 | POST `/verdict-cache/clear`（0.8.0） | manage | 清空判定缓存，无请求体，返回 `{epoch}`（新的清空计数）。所有内容按当前配置重新审核，一段时间内审核调用和费用上升。各节点最多晚 5 秒生效（72.5 第 8 步） |
-| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议。`seen` 把新命中清零。0.8.0：列表每行带 `allowlisted`、`blocklisted`；把白名单用户设为 `enforce` 返回 400（`level` / `allowlisted`，72.8） |
+| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议（`analysis_id` 0.10.0 删除，带了也忽略）。`seen` 把新命中清零。0.8.0：列表每行带 `allowlisted`、`blocklisted`；把白名单用户设为 `enforce` 返回 400（`level` / `allowlisted`，72.8）。0.10.0：条目带 `locked`、`lock`，筛选 `locked`，计数 `counts.locked`；名单用户的条目一律 409 `locked`（72 节开头"0.10.0 第 4 期"） |
 | POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`observe` 按 post 执行，`enforce` 按 pre 执行，`none`（或不带）是没有名单条目的用户，按默认级别决定（0.8.0；此前固定为 post）；返回时机和"是否会被拒绝" |
 | POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认。0.8.0：new-api 的 `llm` 审核器导入为 `llm_questions` |
 | GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（失败的 KV 批量调用次数；因调用方的 ctx 结束而没做成的不计，72.5 第 8 步"KV 出错"）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）、`runtime.images_refused`（LLM 审核器的带图调用被上游拒绝、改为只审文字的次数，72.6）；后三个是本节点启动以来的计数。0.8.1 加 `runtime.kv_writing`（此刻结论正在去 KV 路上的运行数，是瞬时值不是累计；持续增长说明 KV 不回答）和 `runtime.kv_skipped`（本节点启动以来整次没写缓存的运行数：人工处理可能在它的请求查缓存之后改过缓存，或本节点的内存缓存在那之后被换掉了，72.5 第 8 步的"写"）。概览页"队列与运行状态"卡片显示 `cache_bytes`、`kv_errors`、`kv_writing`、`images_refused`，0.8.2 起还有 `kv_skipped`（0.8.1 里它只在这里和健康指标里）；`redraw_panics` 只在这里和健康指标里 |
@@ -5583,6 +5616,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 格式：`{channels:[{type, protocol, name, base_url, model, timeout_ms, api_key?, billing_model?}], auditors:[{name, type, channel_ref, thresholds|questions, review_images?}], jev_default_set, analysis_guidelines}`。
 - **审核器类型的映射（0.8.0）**：new-api 的审核器 `type: "llm"`（题表式）导入为插件的 `llm_questions`，带上它的 `questions`；这类审核器带 `thresholds` 时返回字段错误；`review_images` 带不带都接受，原值照存（不带 = 开，72.6）。渠道的 `type: "llm"` 两边同名，不用映射。0.7.2 及以前导入含 `llm` 审核器的文档会报 `channel_ref` 无效。插件自己的 `llm_verdict` 在 new-api 里没有对应物，不会出现在导入文档里。
 - key：渠道带 `api_key` 时加密保存（72.13.7，以代码为准；原先写的"key 不导入"已作废），不带时导入后逐个填写。导入的渠道一律是停用状态。
+- 0.10.0 起不再读 `analysis_guidelines`，导入报为 `unsupported`，下面关于它的说明只适用于 0.9.x 及以前。
 - `jev_default_set` 和 `analysis_guidelines` 是插件设置，设置由核心保存、插件写不了，所以导入只校验并在预览和结果里原样返回（`analysis_guidelines` 去掉首尾空白，超过 16 KB 返回 400），由界面写进设置（0.6.0 起；此前 `analysis_guidelines` 被静默丢弃）。
 - 文档里导入不读的字段（例如 `flows`、渠道的 `proxy`、`enabled`）列在预览和结果的 `unsupported` 里（如 `["flows","channels[0].proxy"]`），不再静默丢弃。
 - new-api 那边还没有导出接口：直接查它的库生成这份 JSON，或者给 new-api 加一个只读导出接口，实现时再定。
@@ -5627,6 +5661,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 页面：概览加"审核费用"卡片（跟随概览的 24 小时 / 7 天 / 30 天，按来源、按渠道分，带趋势）；渠道列表加"价格"和"30 天费用"两列；测试、试跑、模拟、分析的结果都显示本次费用。金额显示为美元。
 
 **72.13.4 AI 分析**（照 new-api `analysis.go`、`analysis_tools.go`、`escalate.go`、`category_dict.go`）
+
+> **0.10.0 删除**：本小节整节只描述 0.9.x 及以前的行为，删除的范围与数据处理见 72 节开头的"0.10.0"。流程版本视图和类别字典（`FlowVersionView`、`categoryDict`）仍由 72.13.5 的版本接口使用，代码移到 `flow_view.go`。
 
 - **触发**：
   - 自动：计违规的名单条目（observe 级；0.8.0 起默认级别为拦截时 enforce 级的条目也计，72.8）的违规计数达到 `analysis_every_violations`（>0，且分析渠道可用：存在、启用、是 `llm` 渠道，与 `runtime.analysis.channel_configured` 同一判断）时，计数清零、开新的计数窗口，并把这个用户排进分析队列。分析渠道不可用时不排队、计数也不清零（0.5.1 起；此前只看 `analysis_channel_id` 非 0）。
@@ -5704,6 +5740,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 带 `event_id` 时取那条记录保存的原文；没保存原文时返回 400 `no_text`。
 
 **72.13.6 界面**
+
+0.10.0 删除了下面与 AI 分析有关的部分：记录的 AI 结论、"待复核"和三个 AI 过滤（结论只看人工处理），观察名单的"重新分析"、分析状态、分析卡片和"分析提示词预览"。
 
 - **记录**：列表和详情显示最终结论，规则是人工优先，其次 AI；AI 判 unsure 时显示"待复核"；同时标明来源是人工还是 AI。详情里显示 AI 的严重度、类别、证据和理由。新增"AI 结论""待复核""人与 AI 意见相反"三个过滤。
 - **观察名单**：详情抽屉包括以下几部分：
@@ -5848,7 +5886,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **记录**：
   - 列表：按用户、分组、流程、请求 id、端点、会话指纹筛选。列有分数标签、级路径、流程@版本，模型下面是端点。
   - 详情抽屉：用户状态和名单操作、流程快照、同一请求的其他记录、原始消息查看器、端点和粘性会话。图片 URL 点击后才加载。在记录页打开的详情可一键只看同一端点或同一会话的记录。
-- **用户详情抽屉**：建在 `GET /users/:user_id` 上，任意用户都能打开（从名单或记录进入）。内容包括：汇总、近 30 天来源和每日计数、分析进度、应用 AI 建议、可疑记录时间线（可批量处理）、名单历史。点击某个来源时，时间线按该来源过滤并带 `from`=近 30 天，与来源计数的窗口一致。最近一次分析已过时（`status=ok`、`error=stale`，§72.13.4）时显示"已过时"，不提供"按 AI 建议执行"，趋势显示名单上的（上一次生效的分析），与名单行一致。分析进行中轮询失败时保留已显示的内容，只在顶部显示刷新失败的提示。
+- **用户详情抽屉**：建在 `GET /users/:user_id` 上，任意用户都能打开（从名单或记录进入）。内容包括：汇总、近 30 天来源和每日计数、分析进度、应用 AI 建议、可疑记录时间线（可批量处理）、名单历史（0.10.0 删除分析进度、应用 AI 建议和下面与分析有关的显示）。点击某个来源时，时间线按该来源过滤并带 `from`=近 30 天，与来源计数的窗口一致。最近一次分析已过时（`status=ok`、`error=stale`，§72.13.4）时显示"已过时"，不提供"按 AI 建议执行"，趋势显示名单上的（上一次生效的分析），与名单行一致。分析进行中轮询失败时保留已显示的内容，只在顶部显示刷新失败的提示。
 - **审核器**：阈值预设，Jev 题集编辑，试跑未保存的修改，今日调用和费用。OpenAI 阈值输入框清空表示该类别用默认阈值（不发送这一项）。
 - **分析提示词预览**：按流程预览时只能选已发布的流程；没有已发布的流程时"按流程"不可选，不发 `flow_id`（`flow_id=0` 会被拒绝）。
 - **试跑、测试、模拟的图片**（共用 `ImageInput.vue`）：上传或在文本框里粘贴图片（PNG、JPEG、WebP、GIF），在浏览器里转成 data URL，显示缩略图，可逐张移除；也可以填图片地址。合计不超过约 675 KB 图片（data URL 900 KiB），因为核心转发插件请求时请求体最多 1 MiB（`routes.MaxBodyBytes`）。图片用满时，文本和草稿（试跑的审核器草稿、模拟的参数）只剩约 124 KiB，文本本身不单独限长：试跑、测试、模拟在发送前按 UTF-8 计算 JSON 请求体大小，超过 1 MiB 不发送，直接提示请求大小和上限；核心仍返回 413 `payload_too_large` 时显示同样的明确文案，而不是通用的失败。
@@ -5927,6 +5965,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 绑定指向 flow 0（“不审核”，即免审）：匹配到就停，不审核，更宽的绑定不再看。
 - **0.8.0（照 new-api `runtime.go`）**：绑定指向已停用、未发布或已删除的流程时，这条绑定**视为不存在**，接着找更宽的绑定；各级都没有生效的绑定才不审核。0.7.x 把这种绑定和免审同样对待（匹配到就不审核）。
 - 后果：升级前靠"绑一个停用的流程"来让某个分组或账号不审核的，升级后会按更宽的绑定（通常是默认流程）审核。要继续不审核，升级前把绑定改成“不审核（免审）”（0.7.2 已支持）；发布说明里有列出这类绑定的查询。迁移不自动改它们：分不清是有意不审还是流程临时停用。
+- **0.10.0**：这样回退的请求，记录写 `flow_source = fallback` 和 `flow_fallback = {flow_id, reason}`（跳过的最具体的那条绑定）；`GET /bindings` 每行给出 `fallback_reason` 和实际生效的 `effective_flow_id`，`GET /status` 给出 `stale_bindings`（72 开头"0.10.0 审核逻辑"）。
 
 **存储**（迁移 `0009_account_bindings.sql`，幂等）：
 - 分组绑定仍在 `flow_groups`，不迁移、不改写。`flow_id=0` 是新增的“不审核”（免审）：0.6.x 把它读成指向不存在的流程，结果同样是不审核。
@@ -7367,6 +7406,17 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 第三版与第四版的核心并存时，核心页面的地址都能打开：第三版控制台拿到第四版菜单，侧栏暂时没有分组、模型价格、CCGateway、平台、余额流水的入口；它的 `/settings` 只认 `settings:read` / `sticky:read`，只有 `group:read` / `price:read` 的调用者点“系统设置”看到无权限页。第四版控制台拿到第三版菜单，这几项仍在管理员组里平铺（平台项跳到账号页），分组、模型价格同时也在系统设置视图里；CCGateway 项打开的页面在控制台视图里。刷新页面后恢复一致。
 - 核心 0.1.267 的系统设置视图还有第五组“插件设置”（每个已启用且有控制台设置页的插件一项，ccgateway 的是 `/system/ccgateway`），这些页面的上级页面是 `/settings`；它和已安装插件列表的“设置”是同一批页面，0.1.268 起去掉这一组，按 90.2。
 - anthropic 0.3.0 配第四版核心：模型目录的菜单和页面还在；0.3.1 配第三版核心：没有模型目录。
+
+### 90.7 插件页的侧栏子导航（UI 3.14，核心 0.1.284）
+
+插件的原生页面可以声明 `ui.pages.<page>.nav`，控制台用和系统设置视图（90.2）同一套机制，把这个页面的各个分区画在左侧侧栏里。
+
+- 形状：`nav.groups[]`，每组 `key`、`label`（多语言）、`items[]`；每项 `key`、`label`、可选的 `icon`、`permission`、`corePermission`。
+- 页面按 `?tab=<项的 key>` 显示对应分区；不带 `tab` 时显示调用者能看到的第一项。
+- 校验（SDK `check`）：只有 `type: "native"` 的页面能声明；至少一组；组和项的 `key` 符合 `^[a-z][a-z0-9_-]{0,31}$`，组 key 不重复，项 key 在整个页面内不重复（`?tab=` 不带组名）；标签不能为空；`icon` 必须是控制台图标集里的名字；`permission` 必须是 `userPermissions` 里声明的插件权限；`corePermission` 是核心权限 key，SDK 不认识核心权限，只检查不能是空白。
+- 权限过滤由核心做：`GET /ui/plugins` 返回页面前去掉调用者看不到的项。一项同时声明 `permission` 和 `corePermission` 时，持有任意一个就显示；两个都没有的项对能看到这个页面的人都显示。去掉后空的组不返回，一项都不剩时整个 `nav` 不返回。共享的清单不被改动。
+- 混跑：UI 3.13 及更早的控制台忽略 `nav`，所以插件页面自己要保留页内的分区切换（标签页等）作为回退；声明 `nav` 不提高插件要求的核心版本，`hostCompat` 不必因此改到 0.1.284 以上。UI 3.14 从核心 0.1.284 开始（0.1.283 是最后一个带 UI 3.13 的核心），`hostUICompat` 写 `^3.14` 时 `hostCompat` 要排除 0.1.283 及更早的核心。
+- 实现位置：`sdk/manifest/manifest.go`（`PageNav`、`NavGroup`、`NavItem`）、`sdk/manifest/check/ui.go`（`pageNav`、`uiFloors`）、`server/internal/plugin/api/ui.go`（`visibleNav`）；控制台见 `web/src/layouts/sidebarViews.ts`。
 
 ## 91. 插件经账号代理发请求、CLEAR 清冷却（2026-11-10，codex 官方重置次数需要；核心 0.1.269）
 

@@ -146,7 +146,7 @@ function onDropNew(e: DragEvent) {
             :index="i"
             :count="spec.stages.length"
             :review-count="reviewCount"
-            :role="stageRole(i, st, typeOf)"
+            :role="stageRole(i, st)"
             :by-id="lookup.byId"
             :addable="st.auditors.length < MAX_STAGE_AUDITORS ? usable.filter((a) => !st.auditors.includes(a.id)) : []"
             :disabled="disabled"

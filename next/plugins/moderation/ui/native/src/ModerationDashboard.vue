@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { SBadge, SButton, SPageHeader, STabs } from '@sub2api/ui'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { SBadge, SButton, SPageHeader, SSegmented, STabs } from '@sub2api/ui'
 import OverviewTab from './OverviewTab.vue'
 import EventsTab from './EventsTab.vue'
 import WatchTab from './WatchTab.vue'
@@ -15,51 +15,50 @@ import { useCatalog } from './catalog'
 import { canManage, canManageSettings, useModHost } from './host'
 import { useStatus } from './status'
 import { modeTone } from './tones'
-import type { TabKey } from './types'
+import { hostShowsNav, isSettingsPage, useSection, visibleGroups, type Access, type SectionKey } from './nav'
 
-// Prompt moderation page (CONTRACTS §72.15): overview, records, watch list,
-// bans, flows, bindings (§72.17), auditors, channels, playground and, for those who may edit
-// the settings (plugin:manage or moderation:manage, §75.1), all the
-// moderation settings. The plugin has no settings of its own on the plugin
-// page any more (ui.settings mode native, §75.5): the console sends
-// /plugins/moderation/settings here with ?tab=settings.
+// Prompt moderation page (CONTRACTS §72.15): the sections of nav.ts, in the
+// console's sidebar from UI 3.14 (manifest ui.pages.dashboard.nav) or as tabs
+// here before it. The settings are several short pages, one per nav item of
+// access "settings" (the ui:section page of forms/settings.ui.json), for those
+// who may edit them (plugin:manage or moderation:manage, §75.1). The console
+// still sends /plugins/moderation/settings here with ?tab=settings, which
+// opens the first of them (nav.ts RENAMED).
 const host = useModHost()
 const t = host.t
 
 const manage = computed(() => canManage())
 const manageSettings = computed(() => canManageSettings())
-const tabs = computed(() => {
-  const list: Array<{ key: TabKey; label: string }> = [
-    { key: 'overview', label: t('tabs.overview') },
-    { key: 'events', label: t('tabs.events') },
-    { key: 'watch', label: t('tabs.watch') },
-    { key: 'blocks', label: t('tabs.blocks') },
-    { key: 'flows', label: t('tabs.flows') },
-    { key: 'bindings', label: t('tabs.bindings') },
-    { key: 'auditors', label: t('tabs.auditors') },
-    { key: 'channels', label: t('tabs.channels') }
-  ]
-  if (manage.value) list.push({ key: 'test', label: t('tabs.test') })
-  if (manageSettings.value) list.push({ key: 'settings', label: t('tabs.settings') })
-  return list
+const may = (a: Access) => a === 'read' || (a === 'manage' ? manage.value : manageSettings.value)
+const groups = computed(() => visibleGroups(may))
+const keys = computed<SectionKey[]>(() => groups.value.flatMap((g) => g.items.map((i) => i.key)))
+const settingsPages = computed(() => keys.value.filter(isSettingsPage))
+
+// The section is ?tab= (useSection). From UI 3.14 the console's sidebar lists
+// the sections; an older console gets them as tabs here, the settings pages
+// as one Settings tab with a switch over them (hostShowsNav).
+const inSidebar = hostShowsNav(host)
+const tab = useSection(host.router, keys, inSidebar)
+const SETTINGS_TAB = 'settings'
+/** The tabs wrapping the sections on an older console; a plain block when the sidebar lists them. */
+const sectionsProps = computed(() => {
+  if (inSidebar) return {}
+  const own = keys.value.filter((k) => !isSettingsPage(k)).map((k) => ({ key: k, label: t(`nav.items.${k}`) }))
+  const tabs = settingsPages.value.length ? [...own, { key: SETTINGS_TAB, label: t('tabs.settings') }] : own
+  return {
+    tabs,
+    modelValue: isSettingsPage(tab.value) ? SETTINGS_TAB : tab.value,
+    'onUpdate:modelValue': (v: string) => (tab.value = v === SETTINGS_TAB ? lastSettingsPage() : (v as SectionKey))
+  }
 })
-const isTab = (v: unknown): v is TabKey => tabs.value.some((x) => x.key === v)
-
-/** ?tab=, else the records tab for a ?record= link, else the overview. */
-function initialTab(): TabKey {
-  const { tab: q, record } = host.router.currentRoute.value.query
-  if (isTab(q)) return q
-  return record ? 'events' : 'overview'
-}
-
-const tab = ref<TabKey>(initialTab())
-const visited = ref(new Set<TabKey>([tab.value]))
-
+/** The settings page last shown, else the first: the Settings tab of an older console opens it. */
+const lastSettingsPage = () => [...visited.value].reverse().find((k) => settingsPages.value.includes(k)) ?? settingsPages.value[0]
+const settingsOptions = computed(() => settingsPages.value.map((k) => ({ value: k, label: t(`nav.items.${k}`) })))
+const visited = ref(new Set<SectionKey>([tab.value]))
 watch(tab, (v) => {
   if (!visited.value.has(v)) visited.value = new Set([...visited.value, v])
-  const route = host.router.currentRoute.value
-  if (route.query.tab !== v) host.router.replace({ query: { ...route.query, tab: v } })
 })
+const shown = (k: SectionKey) => visited.value.has(k) && keys.value.includes(k)
 
 // Mode badge and the error-rate alert threshold, from the status the
 // overview shows too (the overview loads it itself).
@@ -67,12 +66,21 @@ const status = useStatus()
 const runtime = computed(() => status.data.value?.runtime ?? null)
 onMounted(() => tab.value !== 'overview' && status.reload())
 
-// Tabs with reload(), refreshed by the header button (the overview reloads the status itself).
-const refs: Partial<Record<TabKey, { reload(): unknown }>> = {}
-const setRef = (k: TabKey) => (el: unknown) => {
-  if (el) refs[k] = el as { reload(): unknown }
+// Sections with reload(), refreshed by the header button (the overview reloads the status itself); a settings page also says whether it has unsaved edits.
+type SectionRef = { reload(): unknown; dirty?: boolean }
+const refs: Partial<Record<SectionKey, SectionRef>> = {}
+const setRef = (k: SectionKey) => (el: unknown) => {
+  if (el) refs[k] = el as SectionRef
   else delete refs[k]
 }
+
+// Leaving a settings page with unsaved edits, for another section or another page, asks first.
+const offGuard = host.router.beforeEach((to, from) => {
+  const leaving = to.path !== from.path || to.query.tab !== from.query.tab
+  if (!leaving || !refs[tab.value]?.dirty) return true
+  return host.confirm({ title: t('settingsTab.leaveTitle'), message: t('settingsTab.leaveMessage'), confirmText: t('flows.leave'), cancelText: t('flows.stay'), danger: true })
+})
+onUnmounted(offGuard)
 const catalog = useCatalog()
 const refreshing = ref(false)
 async function refresh() {
@@ -84,15 +92,8 @@ async function refresh() {
   }
 }
 
-/** A tab link; tabs the user cannot see (playground, settings) are ignored. */
-function goTab(k: TabKey) {
-  if (isTab(k)) tab.value = k
-}
-
-/** The settings tab; links to it are only shown to those who may edit the settings. */
-function goSettings() {
-  if (manageSettings.value) tab.value = 'settings'
-}
+/** A section link; sections the user cannot see (playground, settings) are ignored (useSection). */
+const goTab = (k: SectionKey) => (tab.value = k)
 
 // "Show records of this user" from the overview and the watch list.
 const userPreset = ref<{ user_id: number; n: number } | null>(null)
@@ -103,17 +104,14 @@ function showUser(userId: number) {
 }
 
 // "Open this user's watch detail" from the overview.
-const watchPreset = ref<{ user_id: number; n: number } | null>(null)
-function openWatch(userId: number) {
-  watchPreset.value = { user_id: userId, n: ++presetN }
-  tab.value = 'watch'
-}
+/** A user's watch list drawer (?tab=watch&user=, WatchTab). */
+const openWatch = (userId: number) => host.router.push({ query: { tab: 'watch', user: String(userId) } })
 </script>
 
 <template>
   <div>
     <!-- The mode badges go with the title: in the top bar on a wide screen, in the page on a phone. -->
-    <SPageHeader :title="t('title')" :description="t('subtitle')">
+    <SPageHeader :title="inSidebar ? t(`nav.items.${tab}`) : t('title')" :description="inSidebar ? t(`nav.desc.${tab}`) : t('subtitle')">
       <template v-if="runtime" #title-extra>
         <SBadge :tone="modeTone(runtime.mode)" dot>{{ t(`mode.${runtime.mode || 'off'}`) }}</SBadge>
         <SBadge v-if="!runtime.configured" tone="warning">{{ t('notConfiguredBadge') }}</SBadge>
@@ -123,25 +121,27 @@ function openWatch(userId: number) {
       </template>
     </SPageHeader>
 
-    <STabs v-model="tab" :tabs="tabs">
+    <component :is="inSidebar ? 'div' : STabs" v-bind="sectionsProps" data-testid="mod-sections">
       <OverviewTab
-        v-if="visited.has('overview')"
+        v-if="shown('overview')"
         v-show="tab === 'overview'"
         :ref="setRef('overview')"
         :active="tab === 'overview'"
         @open-watch="openWatch"
         @go-tab="goTab"
-        @go-settings="goSettings"
       />
-      <EventsTab v-if="visited.has('events')" v-show="tab === 'events'" :ref="setRef('events')" :preset="userPreset" />
-      <WatchTab v-if="visited.has('watch')" v-show="tab === 'watch'" :ref="setRef('watch')" :preset="watchPreset" @show-user="showUser" />
-      <BlocksTab v-if="visited.has('blocks')" v-show="tab === 'blocks'" :ref="setRef('blocks')" />
-      <FlowsTab v-if="visited.has('flows')" v-show="tab === 'flows'" :ref="setRef('flows')" @go-tab="goTab" />
-      <BindingsTab v-if="visited.has('bindings')" v-show="tab === 'bindings'" :ref="setRef('bindings')" @go-tab="goTab" />
-      <AuditorsTab v-if="visited.has('auditors')" v-show="tab === 'auditors'" :ref="setRef('auditors')" />
-      <ChannelsTab v-if="visited.has('channels')" v-show="tab === 'channels'" :ref="setRef('channels')" :alert-percent="status.data.value?.error_rate_alert_percent ?? 0" />
-      <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-tab="goTab" />
-      <SettingsTab v-if="manageSettings && visited.has('settings')" v-show="tab === 'settings'" :ref="setRef('settings')" />
-    </STabs>
+      <EventsTab v-if="shown('events')" v-show="tab === 'events'" :ref="setRef('events')" :preset="userPreset" />
+      <TestTab v-if="shown('test')" v-show="tab === 'test'" @go-tab="goTab" />
+      <FlowsTab v-if="shown('flows')" v-show="tab === 'flows'" :ref="setRef('flows')" @go-tab="goTab" />
+      <BindingsTab v-if="shown('bindings')" v-show="tab === 'bindings'" :ref="setRef('bindings')" @go-tab="goTab" />
+      <WatchTab v-if="shown('watch')" v-show="tab === 'watch'" :ref="setRef('watch')" @show-user="showUser" />
+      <BlocksTab v-if="shown('blocks')" v-show="tab === 'blocks'" :ref="setRef('blocks')" />
+      <AuditorsTab v-if="shown('auditors')" v-show="tab === 'auditors'" :ref="setRef('auditors')" />
+      <ChannelsTab v-if="shown('channels')" v-show="tab === 'channels'" :ref="setRef('channels')" :alert-percent="status.data.value?.error_rate_alert_percent ?? 0" />
+      <SSegmented v-if="!inSidebar && isSettingsPage(tab)" v-model="tab" :options="settingsOptions" size="sm" class="mod-settings-switch" />
+      <template v-for="k in settingsPages" :key="k">
+        <SettingsTab v-if="shown(k)" v-show="tab === k" :ref="setRef(k)" :page="k" />
+      </template>
+    </component>
   </div>
 </template>

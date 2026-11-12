@@ -589,7 +589,7 @@ func emptyMemory(p *Plugin) { p.cache.Store(newLRU(1000)) }
 func queuedJob(t *testing.T, p *Plugin, flow int64, req *pluginv1.GatewayRequestHookRequest) *moderation {
 	t.Helper()
 	snap := p.snap.Load()
-	m, early := p.admit(context.Background(), p.cfg.Load(), req, snap, snap.flows[flow], requestModel(req))
+	m, early := p.admit(context.Background(), p.cfg.Load(), req, snap, snap.flows[flow], flowMatch{}, requestModel(req))
 	if early != nil || m == nil || m.timing != TimingPost {
 		t.Fatalf("admit = %+v, %+v", m, early)
 	}

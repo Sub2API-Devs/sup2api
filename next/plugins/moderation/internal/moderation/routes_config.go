@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -45,10 +44,8 @@ type ChannelView struct {
 	// Cost30dFrom: stats_retention_days is under 30, cost_30d starts here.
 	Cost30dFrom *time.Time   `json:"cost_30d_from,omitempty"`
 	Stats       *ChannelStat `json:"stats,omitempty"`
-	// UsedBy lists the auditors on the channel; Analysis = it is the AI
-	// analysis channel.
-	UsedBy   []AuditorRef `json:"used_by,omitempty"`
-	Analysis bool         `json:"analysis"`
+	// UsedBy lists the auditors on the channel.
+	UsedBy []AuditorRef `json:"used_by,omitempty"`
 }
 
 // AuditorRef names an auditor.
@@ -186,12 +183,11 @@ func (p *Plugin) decorateChannels(ctx context.Context, req *pluginv1.HTTPRequest
 	}); err != nil {
 		return err
 	}
-	analysis := p.cfg.Load().AnalysisChannelID
 	for i := range list {
 		c := &list[i]
 		p.decorateChannel(ctx, c, costs)
 		c.Stats = cmp.Or(stats[c.ID], newChannelStat())
-		c.UsedBy, c.Analysis, c.Proxy = users[c.ID], c.ID == analysis, proxies[c.ID]
+		c.UsedBy, c.Proxy = users[c.ID], proxies[c.ID]
 	}
 	return nil
 }
@@ -416,11 +412,6 @@ func (p *Plugin) deleteChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 	}
 	var resp *pluginv1.HTTPResponse
 	err := p.configTx(ctx, func(tx pgx.Tx) error {
-		if id == p.cfg.Load().AnalysisChannelID {
-			resp = pluginsdk.ErrorResponse(http.StatusConflict, "analysis_channel",
-				"the channel is the AI analysis channel; choose another one in the settings first / 该渠道是 AI 分析渠道，请先在设置中改用其他渠道")
-			return errRollback
-		}
 		rows, err := tx.Query(ctx, `SELECT id, name FROM auditors WHERE channel_id = $1 AND deleted_at IS NULL ORDER BY id`, id)
 		if err != nil {
 			return err
@@ -1000,9 +991,4 @@ func withParam(req *pluginv1.HTTPRequest, name string, id int64) *pluginv1.HTTPR
 	}
 	r.PathParams[name] = fmt.Sprint(id)
 	return r
-}
-
-func isUniqueViolation(err error) bool {
-	var pe *pgconn.PgError
-	return errors.As(err, &pe) && pe.Code == "23505"
 }

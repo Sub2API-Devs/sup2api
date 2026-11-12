@@ -1,4 +1,5 @@
 import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@sub2api/ui'
+import type { UserList } from './types'
 
 // The settings tab as a whole settings page (CONTRACTS §72.15, §75.5): the
 // fields of forms/settings.schema.json in the order and ui:section groups of
@@ -8,24 +9,28 @@ import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@su
 // go back as stored (settingsMerge.ts).
 //
 // Two keys of 0.8.0 replace a retired one that the plugin still reads until
-// the new key is stored (settings.go DecodeSettings); the page shows what
-// the plugin reads and writes the new key:
+// the new key is stored (settings.go DecodeSettings); what the plugin reads
+// is shown and the new key is written:
 //   allowlist_user_ids  ← exempt_user_ids
-//   verdict_cache_days  ← cache_ttl_seconds (0 = cache off, else whole days, rounded up, 1–30)
-// A new key is never removed while its retired key would be read again
-// (sentSetting), and a save of the allowlist or of the blocklist writes "the
+//   verdict_cache_days  ← cache_ttl_seconds (0 = cache off, else whole days, rounded up, 1–30);
+//                         verdict_cache_days = 0 turns the cache off too
+// Cleared cache days are not removed while the retired key would be read
+// again (sentSetting). The user lists are hidden on the page since 0.10.0
+// and saved by locking a user on the watch list (userLock.ts), which stores
+// an emptied list as [] (the retired key is not read again) and writes "the
 // allowlist without the blocklisted users" to the retired exempt_user_ids
 // too (withRetiredMirrored): nodes still on 0.7.2 read only that key and do
 // not moderate its users at all.
 
 /** Keys with their own editor on the settings tab instead of the schema widget. */
-export const CUSTOM_KEYS = ['analysis_channel_id', 'notify_webhook_url', 'notify_webhook_secret', 'jev_default_set'] as const
+export const CUSTOM_KEYS = ['notify_webhook_url', 'notify_webhook_secret', 'jev_default_set'] as const
 /** The stored 0.1 API key: hidden, but the page offers to clear it (a kept credential makes moderation:manage re-enter it, §75.1). */
 export const LEGACY_KEY = 'api_key'
 
-/** A ui:section group of visible fields; title / description are LocalizedText. */
+/** A ui:section group of visible fields; title / description are LocalizedText; page = the settings page showing it (nav.ts). */
 export interface SettingSection {
   id: string
+  page: string
   title: unknown
   description: unknown
   collapsed: boolean
@@ -42,13 +47,13 @@ export const isHidden = (ui: UISchema | null | undefined, key: string) => uiGet(
 export function settingSections(schema: JSONSchema | null | undefined, ui: UISchema | null | undefined): SettingSection[] {
   if (!schema?.properties) return []
   const out: SettingSection[] = []
-  let cur: SettingSection = { id: '', title: '', description: '', collapsed: false, keys: [] }
+  let cur: SettingSection = { id: '', page: '', title: '', description: '', collapsed: false, keys: [] }
   for (const k of orderedKeys(schema, ui || undefined)) {
     const s = childUI(ui || undefined, k)?.['ui:section']
     if (s) {
       out.push(cur)
       const obj = typeof s === 'object' && !Array.isArray(s) && 'title' in s
-      cur = { id: k, title: obj ? s.title : s, description: obj ? s.description || '' : '', collapsed: obj && s.collapsed === true, keys: [] }
+      cur = { id: k, page: obj ? String(s.page || '') : '', title: obj ? s.title : s, description: obj ? s.description || '' : '', collapsed: obj && s.collapsed === true, keys: [] }
     }
     if (!isHidden(ui, k)) cur.keys.push(k)
   }
@@ -56,10 +61,16 @@ export function settingSections(schema: JSONSchema | null | undefined, ui: UISch
   return out.filter((g) => g.keys.length)
 }
 
-/** The keys this page edits: every visible field, and the 0.1 API key while one is stored (to clear it). */
-export function editableKeys(sections: SettingSection[], stored: Record<string, unknown>): string[] {
+/** The page that offers to clear a stored 0.1 API key. */
+export const LEGACY_KEY_PAGE = 'policy'
+
+/** The sections of one settings page. */
+export const sectionsOf = (sections: SettingSection[], page: string) => sections.filter((g) => g.page === page)
+
+/** The keys a page edits: its visible fields, and on LEGACY_KEY_PAGE the 0.1 API key while one is stored (to clear it). */
+export function editableKeys(sections: SettingSection[], stored: Record<string, unknown>, page: string): string[] {
   const keys = sections.flatMap((g) => g.keys)
-  return stored[LEGACY_KEY] ? [...keys, LEGACY_KEY] : keys
+  return stored[LEGACY_KEY] && page === LEGACY_KEY_PAGE ? [...keys, LEGACY_KEY] : keys
 }
 
 /** The keys rendered by the schema widgets (editable keys without a custom editor). */
@@ -67,8 +78,10 @@ export const schemaKeys = (keys: readonly string[]) => keys.filter((k) => k !== 
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
-const ALLOWLIST_KEY = 'allowlist_user_ids'
-const BLOCKLIST_KEY = 'blocklist_user_ids'
+/** The settings key of each user list. */
+export const USER_LIST_KEYS: Readonly<Record<UserList, string>> = { allowlist: 'allowlist_user_ids', blocklist: 'blocklist_user_ids' }
+const ALLOWLIST_KEY = USER_LIST_KEYS.allowlist
+const BLOCKLIST_KEY = USER_LIST_KEYS.blocklist
 export const CACHE_DAYS_KEY = 'verdict_cache_days'
 const RETIRED_ALLOWLIST = 'exempt_user_ids'
 const RETIRED_CACHE_TTL = 'cache_ttl_seconds'
@@ -77,6 +90,9 @@ const CACHE_DAYS_MAX = 30
 
 /** The stored settings turn the verdict cache off: only the retired cache_ttl_seconds = 0 does, until verdict_cache_days is saved. */
 export const verdictCacheOff = (stored: Record<string, unknown>) => stored[CACHE_DAYS_KEY] === undefined && stored[RETIRED_CACHE_TTL] === 0
+
+/** The stored settings keep the verdict cache off: verdict_cache_days = 0, or the retired key's 0 (verdictCacheOff). */
+export const verdictCacheDisabled = (stored: Record<string, unknown>) => stored[CACHE_DAYS_KEY] === 0 || verdictCacheOff(stored)
 
 /** What the plugin reads for a key never stored whose retired key is: undefined = nothing (the schema default applies). */
 function retiredValue(stored: Record<string, unknown>, k: string): unknown {
@@ -109,23 +125,17 @@ function sentValue(schema: JSONSchema | undefined, v: unknown): unknown {
 }
 
 /**
- * sentValue of a key of the page. A new key is not removed while the plugin
- * would then read its retired key again instead of the schema default:
- * - an allowlist emptied while the retired exempt_user_ids still holds users
- *   is sent as [];
- * - cleared cache days are sent as the schema default (7) while a retired
- *   cache_ttl_seconds is stored (it would give "off" for 0, else its own
- *   days). The one exception is the field left empty because the retired
- *   key keeps the cache off (verdictCacheOff: nothing was cleared, the page
- *   says the cache is off and it stays off).
+ * sentValue of a key of the page. Cleared cache days are not removed while
+ * the plugin would then read its retired key again instead of the schema
+ * default: they are sent as the schema default (7) while a retired
+ * cache_ttl_seconds is stored (it would give "off" for 0, else its own
+ * days). The one exception is the field left empty because the retired key
+ * keeps the cache off (verdictCacheOff: nothing was cleared, the page says
+ * the cache is off and it stays off).
  */
 export function sentSetting(schema: JSONSchema | undefined, stored: Record<string, unknown>, k: string, v: unknown): unknown {
   const sent = sentValue(schema, v)
   if (sent !== undefined) return sent
-  if (k === ALLOWLIST_KEY) {
-    const retired = stored[RETIRED_ALLOWLIST]
-    return Array.isArray(retired) && retired.length ? [] : undefined
-  }
   if (k === CACHE_DAYS_KEY && stored[RETIRED_CACHE_TTL] !== undefined && !verdictCacheOff(stored)) return schema?.default
   return undefined
 }

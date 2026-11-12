@@ -36,11 +36,6 @@ func (p *Plugin) routes() {
 	p.Handle("GET", "/users", p.getUsers)
 	p.Handle("GET", "/users/:user_id", p.getUserDetail)
 	p.Handle("POST", "/watchlist/:user_id/seen", p.markWatchSeen)
-	p.Handle("POST", "/watchlist/:user_id/analyze", p.analyzeWatch)
-	p.Handle("GET", "/watchlist/:user_id/analyses", p.listAnalyses)
-	p.Handle("GET", "/analyses/:id", p.getAnalysis)
-	p.Handle("GET", "/analysis/prompt", p.getAnalysisPrompt)
-	p.Handle("GET", "/analysis/tools", p.getAnalysisTools)
 	p.Handle("GET", "/costs", p.getCosts)
 	p.Handle("GET", "/status", p.getStatus)
 	p.Handle("GET", "/stats/trend", p.getTrend)
@@ -71,6 +66,7 @@ func (p *Plugin) routes() {
 	p.Handle("DELETE", "/bindings/:group_id/:account_id", p.deleteBinding)
 	p.Handle("POST", "/flows/:id/publish", p.publishFlow)
 	p.Handle("PUT", "/flows/:id/enabled", p.setFlowEnabled)
+	p.Handle("PUT", "/flows/:id/scope", p.setFlowScope)
 	p.Handle("GET", "/flows/:id/versions", p.listFlowVersions)
 	p.Handle("GET", "/flows/:id/versions/:version", p.getFlowVersion)
 	p.Handle("POST", "/flows/:id/rollback", p.rollbackFlow)
@@ -133,15 +129,14 @@ type Runtime struct {
 	ImagesRefused int64 `json:"images_refused"`
 	// RedrawPanics counts the images skipped because their decoder panicked
 	// while they were redrawn for Jev, on this node since it started.
-	RedrawPanics int64         `json:"redraw_panics"`
-	AvgLatencyMs int64         `json:"avg_latency_ms"`
-	BlockedUsers int           `json:"blocked_users"`
-	WatchedUsers int           `json:"watched_users"`
-	Analysis     analysisStats `json:"analysis"`
-	DroppedCosts int64         `json:"dropped_costs"`
+	RedrawPanics int64 `json:"redraw_panics"`
+	AvgLatencyMs int64 `json:"avg_latency_ms"`
+	BlockedUsers int   `json:"blocked_users"`
+	WatchedUsers int   `json:"watched_users"`
+	DroppedCosts int64 `json:"dropped_costs"`
 }
 
-func (p *Plugin) runtimeState(ctx context.Context) Runtime {
+func (p *Plugin) runtimeState() Runtime {
 	c := p.cfg.Load()
 	s := p.snap.Load()
 	qlen, qcap := p.queueLen()
@@ -157,7 +152,7 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
 		KVErrors: p.stats.kvErrors.Load(), KVWriting: p.stats.kvWriting.Load(), KVSkipped: p.stats.kvSkipped.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
-		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
+		DroppedCosts: p.hourly.dropped.Load(),
 	}
 }
 
@@ -198,13 +193,18 @@ type Event struct {
 	KeepUntil        *time.Time `json:"keep_until"`
 	// Replayed: decided by a cached hit (trace.cache), not a new violation.
 	Replayed bool `json:"replayed"`
-	// AI verdict of the latest analysis (§72.13.4); "" = not reviewed by AI.
-	AIVerdict    string `json:"ai_verdict"`
-	AISeverity   string `json:"ai_severity"`
-	AICategory   string `json:"ai_category"`
-	AIEvidence   string `json:"ai_evidence"`
-	AIReason     string `json:"ai_reason"`
-	AIAnalysisID int64  `json:"ai_analysis_id"`
+	// FlowSource is how the request found its flow (FlowSourceGroup ...);
+	// FlowFallback, with source fallback, the binding that did not apply.
+	// Both are left out on the records of before 0.10.0 (§72.17).
+	FlowSource     *string       `json:"flow_source,omitempty"`
+	FlowFallback   *StaleBinding `json:"flow_fallback,omitempty"`
+	fallbackID     *int64
+	fallbackReason *string
+	// Level, LevelSource: the handling that applied (observe | enforce,
+	// blocklist | allowlist | watch | default); absent on records written
+	// before 0.10.0 or by 0.9.x nodes.
+	Level       *string `json:"level,omitempty"`
+	LevelSource *string `json:"level_source,omitempty"`
 	// 0.1 records only.
 	Verdict  string `json:"verdict"`
 	Reason   string `json:"reason"`
@@ -236,7 +236,6 @@ type EventDetail struct {
 	Related      []RelatedItem `json:"related"`
 	UserState    UserState     `json:"user_state"`
 	InputText    string        `json:"input_text"`
-	AIAnalyzedAt *time.Time    `json:"ai_analyzed_at"`
 }
 
 // RelatedItem is another record of the same request.
@@ -265,20 +264,22 @@ type UserState struct {
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, endpoint, session_fp, mode, timing, result,
 	flow_id, flow_version, severity, hit_categories, highest_category, highest_score, review_status, reviewed_by, reviewed_at,
 	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until, replayed,
-	ai_verdict, ai_severity, ai_category, ai_evidence, ai_reason, ai_analysis_id, verdict, reason, error, llm_model`
+	verdict, reason, error, llm_model, flow_source, flow_fallback_id, flow_fallback_reason, level, level_source`
 
 func (e *Event) scanTargets() []any {
 	return []any{&e.ID, &e.CreatedAt, &e.RequestID, &e.UserID, &e.APIKeyID, &e.GroupID, &e.Model, &e.Protocol, &e.Endpoint, &e.SessionFp, &e.Mode, &e.Timing, &e.Result,
 		&e.FlowID, &e.FlowVersion, &e.Severity, &e.HitCategories, &e.HighestCategory, &e.HighestScore, &e.ReviewStatus, &e.ReviewedBy, &e.ReviewedAt,
 		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil, &e.Replayed,
-		&e.AIVerdict, &e.AISeverity, &e.AICategory, &e.AIEvidence, &e.AIReason, &e.AIAnalysisID,
-		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel}
+		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel, &e.FlowSource, &e.fallbackID, &e.fallbackReason, &e.Level, &e.LevelSource}
 }
 
 func (e *Event) normalize() {
 	e.CreatedAt, e.ReviewedAt, e.KeepUntil = e.CreatedAt.UTC(), utcPtr(e.ReviewedAt), utcPtr(e.KeepUntil)
 	if e.HitCategories == nil {
 		e.HitCategories = []string{}
+	}
+	if e.fallbackID != nil && e.fallbackReason != nil {
+		e.FlowFallback = &StaleBinding{FlowID: *e.fallbackID, Reason: *e.fallbackReason}
 	}
 }
 
@@ -293,30 +294,8 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 	f.enum(req, "severity", "high", "medium", "low")
 	f.enum(req, "review_status", reviewStatuses...)
 	f.enum(req, "timing", TimingPre, TimingPost)
-	switch v := pluginsdk.Query(req, "replayed"); v {
-	case "":
-	case "true":
-		f.conds = append(f.conds, "replayed")
-	case "false":
-		f.conds = append(f.conds, "NOT replayed")
-	default:
-		f.errs = f.errs.Add("replayed", "enum", "replayed must be true or false / replayed 取值为 true、false")
-	}
-	switch v := pluginsdk.Query(req, "verdict"); v {
-	case "needs_review":
-		// AI unsure and nobody looked at it yet.
-		f.conds = append(f.conds, "ai_verdict = 'unsure' AND review_status = 'pending'")
-	case "disagree":
-		// Decided by a person against a decided AI verdict.
-		f.conds = append(f.conds, "((review_status = 'confirmed' AND ai_verdict = 'false_positive') OR (review_status = 'false_positive' AND ai_verdict = 'violation'))")
-	default:
-		f.enum(req, "verdict", VerdictPass, VerdictFlag, VerdictBlock, VerdictError)
-	}
-	if v := pluginsdk.Query(req, "ai_verdict"); v == "none" {
-		f.conds = append(f.conds, "ai_verdict = '' AND "+suspiciousResult)
-	} else {
-		f.enum(req, "ai_verdict", AIViolation, AIFalsePositive, AIUnsure)
-	}
+	f.flag(req, "replayed", "replayed")
+	f.enum(req, "verdict", VerdictPass, VerdictFlag, VerdictBlock, VerdictError)
 	f.enum(req, "action", ActionAllow, ActionDeny)
 	f.enum(req, "mode", ModeObserve, ModeEnforce)
 	f.ids(req)
@@ -545,29 +524,18 @@ func (p *Plugin) flowContext(ctx context.Context, db *pgxpool.Pool, d *EventDeta
 	return err
 }
 
-// eventExtras adds the readable input text and the time of the analysis
-// that judged the record.
+// eventExtras adds the readable input text.
 func eventExtras(ctx context.Context, db *pgxpool.Pool, d *EventDetail) error {
-	if d.InputMessageSize > 0 {
-		var msg *string
-		err := db.QueryRow(ctx, `SELECT input_message FROM events WHERE id = $1`, d.ID).Scan(&msg)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return err
-		}
-		if msg != nil {
-			d.InputText = MessageText(d.InputFormat, *msg)
-		}
+	if d.InputMessageSize == 0 {
+		return nil
 	}
-	if d.AIAnalysisID > 0 {
-		var at time.Time
-		err := db.QueryRow(ctx, `SELECT created_at FROM user_analyses WHERE id = $1`, d.AIAnalysisID).Scan(&at)
-		switch {
-		case err == nil:
-			at = at.UTC()
-			d.AIAnalyzedAt = &at
-		case !errors.Is(err, pgx.ErrNoRows): // pruned analyses leave the time out
-			return err
-		}
+	var msg *string
+	err := db.QueryRow(ctx, `SELECT input_message FROM events WHERE id = $1`, d.ID).Scan(&msg)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if msg != nil {
+		d.InputText = MessageText(d.InputFormat, *msg)
 	}
 	return nil
 }
@@ -588,7 +556,7 @@ func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (Us
 	w, err := scanWatch(db.QueryRow(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, uid, now))
 	switch {
 	case err == nil:
-		w.fillRunning(now)
+		w = c.withLock(w)
 		st.Watch = &w
 	case !errors.Is(err, pgx.ErrNoRows):
 		return st, err

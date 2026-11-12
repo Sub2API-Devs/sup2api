@@ -199,15 +199,12 @@ type importDoc struct {
 		ReviewImages *bool              `json:"review_images"`
 	} `json:"auditors"`
 	JevDefaultSet *JevQuestions `json:"jev_default_set"`
-	// AnalysisGuidelines is returned like the Jev default set: both are
-	// settings, which the core stores, so the console saves them.
-	AnalysisGuidelines *string `json:"analysis_guidelines"`
 }
 
 // importFields are the fields POST /import reads, per level; anything else
 // is reported in "unsupported" (CONTRACTS §72.12).
 var importFields = map[string][]string{
-	"":         {"channels", "auditors", "jev_default_set", "analysis_guidelines"},
+	"":         {"channels", "auditors", "jev_default_set"},
 	"channels": {"type", "protocol", "name", "base_url", "model", "timeout_ms", "api_key", "billing_model"},
 	"auditors": {"name", "type", "channel_ref", "thresholds", "questions", "review_images"},
 }
@@ -243,9 +240,9 @@ func unsupportedImportFields(raw json.RawMessage) []string {
 
 // importConfig: {data, preview}. Imported channels are disabled; a channel
 // key in the document is sealed (§72.13.7), otherwise the administrator
-// fills it. The Jev default set and the analysis guidelines are only
-// returned: they are settings the administrator saves. Fields the import
-// does not read are listed in "unsupported".
+// fills it. The Jev default set is only returned: it is a setting the
+// administrator saves. Fields the import does not read are listed in
+// "unsupported".
 func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in struct {
 		Data    importDoc `json:"data"`
@@ -296,14 +293,6 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 			errs = errs.Add("jev_default_set", "invalid", err.Error())
 		}
 	}
-	var guidelines *string
-	if in.Data.AnalysisGuidelines != nil {
-		g := strings.TrimSpace(*in.Data.AnalysisGuidelines)
-		if len(g) > maxAnalysisGuidelines {
-			errs = errs.Add("analysis_guidelines", "too_long", fmt.Sprintf("analysis_guidelines must not exceed %d bytes / 分析准则不能超过 %d 字节", maxAnalysisGuidelines, maxAnalysisGuidelines))
-		}
-		guidelines = &g
-	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid import / 导入内容无效", errs), nil
 	}
@@ -314,7 +303,7 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		}
 	}
 	out := map[string]any{"channels": len(chans), "auditors": len(auds), "keys": keys, "jev_default_set": in.Data.JevDefaultSet,
-		"analysis_guidelines": guidelines, "unsupported": unsupportedImportFields(rawDoc.Data), "preview": in.Preview}
+		"unsupported": unsupportedImportFields(rawDoc.Data), "preview": in.Preview}
 	if in.Preview {
 		return pluginsdk.DataResponse(out), nil
 	}
@@ -355,8 +344,6 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
 	switch in.GetJobId() {
 	case JobCleanup:
-	case JobAnalysis:
-		return p.runAnalysisJob(ctx)
 	case JobAlerts:
 		return p.runAlertsJob(ctx)
 	default:
@@ -385,12 +372,6 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	blocks, err := p.expireBlocks(ctx, db, now)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup blocks: %v", err)
-	}
-	// analysis_keep_per_user may have been lowered since a user's last analysis.
-	if _, err := db.Exec(ctx, `DELETE FROM user_analyses WHERE id IN (SELECT id FROM (
-			SELECT id, row_number() OVER (PARTITION BY user_id ORDER BY id DESC) AS n FROM user_analyses) t WHERE n > $1)`,
-		p.cfg.Load().AnalysisKeepPerUser); err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup analyses: %v", err)
 	}
 	pctx, cancel := purgeBudget(ctx)
 	defer cancel()

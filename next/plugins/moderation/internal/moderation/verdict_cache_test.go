@@ -78,6 +78,23 @@ func TestVerdictCacheStoresHitAndReplays(t *testing.T) {
 	}
 }
 
+// verdict_cache_days 0 turns the cache off (P11): the same hit again is
+// moderated again, nothing is replayed.
+func TestVerdictCacheDaysZeroIsOff(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "verdict_cache_days": 0})
+	openAIFlow(t, h, mod.srv.URL)
+	for i, rid := range []string{"first", "again"} {
+		r := mustHook(t, h, hookReqAs(3, rid, "MOD-HIT-sexual one"))
+		if !denied(r) || replayed(r) || mod.count("/v1/moderations") != int64(i+1) {
+			t.Fatalf("%s = %+v after %d calls", rid, r, mod.count("/v1/moderations"))
+		}
+	}
+	if rec := recordOf(t, h, "again"); rec.Replayed || rec.Result != ResultBlock {
+		t.Fatalf("record of the second request = %+v", rec.Event)
+	}
+}
+
 // A hit is cached for the set of segments of its chunk, {S1, S4}: a request
 // with only S1 is not replayed and S1 is moderated again; a request holding
 // both, with more around them, is replayed.

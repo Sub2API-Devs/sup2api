@@ -64,6 +64,10 @@ type Plugin struct {
 	watchMu      sync.Mutex
 	watchVersion atomic.Int64
 
+	// locks: what the last complete reconcile of the locked entries saw
+	// (reconcileLocks).
+	locks atomic.Pointer[locksState]
+
 	legacyDone atomic.Bool
 	// parityDone: the one-time 0.8.0 conversion of the watch list ran
 	// (convertParityOnce).
@@ -102,11 +106,8 @@ type Plugin struct {
 	hourly     *statsAcc
 	categories categoryCache
 	staff      staffCache
-	// AI analyses running on this node and the dispatcher guard.
-	analysesRunning atomic.Int64
-	dispatching     atomic.Bool
-	priceMu         sync.Mutex
-	priceCache      map[string]priceStateEntry
+	priceMu    sync.Mutex
+	priceCache map[string]priceStateEntry
 
 	// blocked maps user id -> expiry (zero = until unblocked).
 	blocked        atomic.Pointer[map[int64]time.Time]
@@ -262,7 +263,7 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 			}()
 		}
 	}
-	if !p.configured.Swap(true) || (c.enabled && (old == nil || !old.enabled)) {
+	if !p.configured.Swap(true) || (c.enabled && (old == nil || !old.enabled)) || listsChanged(old, c) {
 		p.kickRefresh()
 	}
 	return nil

@@ -54,25 +54,22 @@ type Category struct {
 }
 
 // Settings is the plugin configuration (forms/settings.schema.json, CONTRACTS
-// §72.10). The legacy block (BaseURL … ModelPatterns) is the 0.1 single-model
-// setup, only read by the one-time conversion (§72.12).
+// §72.10). The retired keys stay in the schema as hidden legacy keys (stored
+// settings must still validate); only those still deciding something for
+// settings that were never saved again are read (§72.10 0.10.0).
 type Settings struct {
 	Mode string `json:"mode"`
 	// AllowlistUserIDs are only moderated after the request and never
 	// refused; BlocklistUserIDs always before it. A user on both lists is
-	// blocklisted. ExemptUserIDs is the retired name of the allowlist, read
-	// when the settings have no allowlist_user_ids yet.
+	// blocklisted. Both are mirrored into the watch list as locked entries
+	// (locks.go).
 	AllowlistUserIDs []string `json:"allowlist_user_ids"`
 	BlocklistUserIDs []string `json:"blocklist_user_ids"`
-	ExemptUserIDs    []string `json:"exempt_user_ids"`
 
 	InputMaxChars int `json:"input_max_chars"`
 	MinChars      int `json:"min_chars"`
-	// VerdictCacheDays is how long a cached verdict lives; 0 = no cache,
-	// which only the retired cache_ttl_seconds = 0 gives. CacheTTLSeconds is
-	// the retired key, read when the settings have no verdict_cache_days yet.
+	// VerdictCacheDays is how long a cached verdict lives; 0 = no cache.
 	VerdictCacheDays int `json:"verdict_cache_days"`
-	CacheTTLSeconds  int `json:"cache_ttl_seconds"`
 	CacheEntries     int `json:"cache_entries"`
 	MaxConcurrency   int `json:"max_concurrency"`
 	QueueSize        int `json:"queue_size"`
@@ -87,6 +84,10 @@ type Settings struct {
 
 	BlockStatus  int    `json:"block_status"`
 	BlockMessage string `json:"block_message"`
+	// HitReplay and FailPolicy (CONTRACTS §72.5, 0.10.0): what is beside a
+	// replayed hit, and what a request whose moderation failed gets.
+	HitReplay  string `json:"hit_replay"`
+	FailPolicy string `json:"fail_policy"`
 
 	RecordPass       bool `json:"record_pass"`
 	RecordOverturned bool `json:"record_overturned"`
@@ -101,20 +102,12 @@ type Settings struct {
 	ErrorRetentionDays      int `json:"error_retention_days"`
 	PassRetentionDays       int `json:"pass_retention_days"`
 
-	AutoWatch               bool `json:"auto_watch"`
-	WatchDays               int  `json:"watch_days"`
-	AnalysisEveryViolations int  `json:"analysis_every_violations"`
-
-	// AI analysis (CONTRACTS §72.13.4).
-	AnalysisChannelID      int64  `json:"analysis_channel_id"`
-	AnalysisGuidelines     string `json:"analysis_guidelines"`
-	AnalysisTimeoutMs      int    `json:"analysis_timeout_ms"`
-	AnalysisConcurrency    int    `json:"analysis_concurrency"`
-	AnalysisContextKB      int    `json:"analysis_context_kb"`
-	AnalysisKeepPerUser    int    `json:"analysis_keep_per_user"`
-	AnalysisAllowUpgrade   bool   `json:"analysis_allow_upgrade"`
-	AnalysisAllowDowngrade bool   `json:"analysis_allow_downgrade"`
-	AnalysisAllowRemove    bool   `json:"analysis_allow_remove"`
+	AutoWatch bool `json:"auto_watch"`
+	WatchDays int  `json:"watch_days"`
+	// EscalateViolations violations within EscalateWindowSeconds put a user
+	// at the enforce level (0 = off; CONTRACTS §72.8 0.10.0).
+	EscalateViolations    int `json:"escalate_violations"`
+	EscalateWindowSeconds int `json:"escalate_window_seconds"`
 
 	BanThreshold     int `json:"ban_threshold"`
 	BanWindowHours   int `json:"ban_window_hours"`
@@ -128,22 +121,9 @@ type Settings struct {
 	NotifyWebhookURL      string `json:"notify_webhook_url"`
 	NotifyWebhookSecret   string `json:"notify_webhook_secret"`
 
-	// Legacy 0.1 single-model setup.
-	BaseURL       string     `json:"base_url"`
-	APIKey        string     `json:"api_key"`
-	Model         string     `json:"model"`
-	SystemPrompt  string     `json:"system_prompt"`
-	Categories    []Category `json:"categories"`
-	ToolChoice    string     `json:"tool_choice"`
-	MaxTurns      int        `json:"max_turns"`
-	Temperature   float64    `json:"temperature"`
-	MaxTokens     int        `json:"max_tokens"`
-	TimeoutMs     int        `json:"timeout_ms"`
-	OnError       string     `json:"on_error"`
-	SampleRate    int        `json:"sample_rate"`
-	GroupIDs      []int64    `json:"group_ids"`
-	ModelPatterns []string   `json:"model_patterns"`
-	RetentionDays int        `json:"retention_days"`
+	// legacy is the 0.1 single-model setup, only read by the one-time
+	// conversion (legacy.go, §72.12).
+	legacy legacySetup
 
 	// truncated names the user lists cut to maxUserList, droppedIDs the
 	// lists that held entries which are no user id, with how many
@@ -151,10 +131,6 @@ type Settings struct {
 	truncated  []string
 	droppedIDs map[string]int
 }
-
-// maxAnalysisGuidelines caps analysis_guidelines (bytes); longer text falls
-// back to the built-in guidelines.
-const maxAnalysisGuidelines = 16 << 10
 
 // DefaultBlockMessage is the default deny message of a hit.
 const DefaultBlockMessage = "Your request was blocked by content moderation. Please revise your input and try again."
@@ -166,24 +142,42 @@ const (
 	OverflowBlock  = "block"  // pre: refused; post: sampled like OverflowSample
 )
 
+// hit_replay: what a request holding a cached hit set gets.
+const (
+	// HitReplayNewContent: the hit is replayed (a pre request is refused,
+	// replayMessage) and, after the request, what is beside the hit set is
+	// moderated.
+	HitReplayNewContent = "new_content"
+	// HitReplayWhole: the replay decides the whole request (0.9.3).
+	HitReplayWhole = "whole"
+)
+
+// fail_policy: what a request whose moderation failed gets (failResponse).
+const (
+	FailOpen     = "open"      // it passes, recorded as an error
+	FailClosePre = "close_pre" // a pre request is refused with 503
+)
+
+// MsgHistoryHit follows the deny message of a replayed hit under hit_replay
+// = new_content: the hit is in content the request sent again - the history
+// of a conversation, mostly - so rewording the new message does not help.
+const MsgHistoryHit = "The conversation history contains content that was already flagged; please clear the context and try again."
+
 // DefaultSettings returns the schema defaults.
 func DefaultSettings() Settings {
 	return Settings{
 		Mode:          ModeOff,
 		InputMaxChars: 12000, MinChars: 2,
-		VerdictCacheDays: 7, CacheTTLSeconds: 86400, CacheEntries: 100000,
+		VerdictCacheDays: 7, CacheEntries: 100000,
 		MaxConcurrency: 16, QueueSize: 1000, TTFTTimeoutMs: 10000,
 		InputMaxChunks: 8, InputOverflow: OverflowSample, InputMaxImages: 8, MaxInflightMB: 128, ErrorTextMaxChars: 2000,
-		BlockStatus: 403, BlockMessage: DefaultBlockMessage,
+		BlockStatus: 403, BlockMessage: DefaultBlockMessage, HitReplay: HitReplayNewContent, FailPolicy: FailOpen,
 		RecordOverturned: true, RecordErrors: true, StoreText: true, RecordPassInputMessage: true,
 		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
-		AutoWatch: true, WatchDays: 30, AnalysisEveryViolations: 30,
-		AnalysisTimeoutMs: 60000, AnalysisConcurrency: 2, AnalysisContextKB: 64, AnalysisKeepPerUser: 20,
-		AnalysisAllowUpgrade: true, AnalysisAllowDowngrade: true, AnalysisAllowRemove: false,
+		AutoWatch: true, WatchDays: 30, EscalateWindowSeconds: 3600,
 		BanWindowHours: 24, BanDurationHours: 24,
 		ErrorRateAlertPercent: 5, StatsRetentionDays: 90,
-		ToolChoice: "required", MaxTurns: 3, MaxTokens: 512, TimeoutMs: 10000, OnError: "allow",
-		SampleRate: 100, RetentionDays: 30,
+		legacy: defaultLegacySetup(),
 	}
 }
 
@@ -209,7 +203,7 @@ func DecodeSettings(raw []byte) (Settings, error) {
 	d.storage(&s)
 	d.watch(&s)
 	d.notify(&s)
-	d.legacy(&s)
+	s.legacy = d.legacySetup()
 	return s, nil
 }
 
@@ -300,7 +294,8 @@ func (d decoder) userList(k string) (ids []string, present, cut bool, dropped in
 }
 
 // userLists reads the allowlist and the blocklist. Settings saved before
-// 0.8.0 have no allowlist_user_ids: their exempt_user_ids are the allowlist.
+// 0.8.0 have no allowlist_user_ids: their exempt_user_ids (the retired name,
+// still read for them) are the allowlist.
 func (d decoder) userLists(s *Settings) {
 	note := func(key string, dropped int) {
 		if dropped > 0 {
@@ -311,7 +306,6 @@ func (d decoder) userLists(s *Settings) {
 		}
 	}
 	exempt, _, exemptCut, dropped := d.userList("exempt_user_ids")
-	s.ExemptUserIDs = exempt
 	allow, present, cut, allowDropped := d.userList("allowlist_user_ids")
 	if !present {
 		allow, cut = exempt, exemptCut
@@ -327,19 +321,20 @@ func (d decoder) userLists(s *Settings) {
 	note("blocklist_user_ids", dropped)
 }
 
-// verdictCache reads verdict_cache_days. Settings saved before 0.8.0 only
-// have cache_ttl_seconds: 0 keeps the cache off, anything else is rounded
-// up to whole days.
+// verdictCache reads verdict_cache_days (0 = cache off). Settings saved
+// before 0.8.0 only have the retired cache_ttl_seconds, still read for them:
+// 0 keeps the cache off, anything else is rounded up to whole days.
 func (d decoder) verdictCache(s *Settings) {
-	d.integer("cache_ttl_seconds", &s.CacheTTLSeconds, 0, 604800)
 	var f float64
 	if legacy := d.num("cache_ttl_seconds", &f); d.num("verdict_cache_days", &f) || !legacy {
-		d.integer("verdict_cache_days", &s.VerdictCacheDays, 1, 30)
+		d.integer("verdict_cache_days", &s.VerdictCacheDays, 0, 30)
 		return
 	}
+	ttl := 0
+	d.integer("cache_ttl_seconds", &ttl, 0, 604800)
 	s.VerdictCacheDays = 0
-	if s.CacheTTLSeconds > 0 {
-		s.VerdictCacheDays = clampInt((s.CacheTTLSeconds+86399)/86400, 1, 30)
+	if ttl > 0 {
+		s.VerdictCacheDays = clampInt((ttl+86399)/86400, 1, 30)
 	}
 }
 
@@ -376,6 +371,8 @@ func (d decoder) general(s *Settings) {
 	if s.BlockMessage == "" {
 		s.BlockMessage = DefaultBlockMessage
 	}
+	d.enum("hit_replay", &s.HitReplay, HitReplayNewContent, HitReplayWhole)
+	d.enum("fail_policy", &s.FailPolicy, FailOpen, FailClosePre)
 	if v, ok := d.m["jev_default_set"]; ok {
 		var q JevQuestions
 		if json.Unmarshal(v, &q) == nil && q.Validate() == nil {
@@ -390,11 +387,13 @@ func (d decoder) storage(s *Settings) {
 	d.boolean("record_errors", &s.RecordErrors)
 	d.boolean("store_text", &s.StoreText)
 	d.boolean("record_pass_input_message", &s.RecordPassInputMessage)
-	// 0.1 kept every record retention_days; the hit retention never drops
-	// below it (§72.10).
-	d.integer("retention_days", &s.RetentionDays, 1, 3650)
-	if _, ok := d.m["hit_retention_days"]; !ok && s.RetentionDays > s.HitRetentionDays {
-		s.HitRetentionDays = s.RetentionDays
+	// 0.1 kept every record retention_days (retired, still read for
+	// settings saved without hit_retention_days); the hit retention never
+	// drops below it (§72.10).
+	if _, ok := d.m["hit_retention_days"]; !ok {
+		legacy := 0
+		d.integer("retention_days", &legacy, 1, 3650)
+		s.HitRetentionDays = max(s.HitRetentionDays, legacy)
 	}
 	d.integer("hit_retention_days", &s.HitRetentionDays, 1, 3650)
 	d.integer("overturned_retention_days", &s.OverturnedRetentionDays, 1, 3650)
@@ -405,22 +404,8 @@ func (d decoder) storage(s *Settings) {
 func (d decoder) watch(s *Settings) {
 	d.boolean("auto_watch", &s.AutoWatch)
 	d.integer("watch_days", &s.WatchDays, 1, 365)
-	d.integer("analysis_every_violations", &s.AnalysisEveryViolations, 0, 1000)
-	var ch int
-	d.integer("analysis_channel_id", &ch, 0, math.MaxInt32)
-	s.AnalysisChannelID = int64(ch)
-	d.str("analysis_guidelines", &s.AnalysisGuidelines)
-	s.AnalysisGuidelines = strings.TrimSpace(s.AnalysisGuidelines)
-	if len(s.AnalysisGuidelines) > maxAnalysisGuidelines {
-		s.AnalysisGuidelines = ""
-	}
-	d.integer("analysis_timeout_ms", &s.AnalysisTimeoutMs, 10000, 600000)
-	d.integer("analysis_concurrency", &s.AnalysisConcurrency, 1, 16)
-	d.integer("analysis_context_kb", &s.AnalysisContextKB, 16, 1024)
-	d.integer("analysis_keep_per_user", &s.AnalysisKeepPerUser, 1, 1000)
-	d.boolean("analysis_allow_upgrade", &s.AnalysisAllowUpgrade)
-	d.boolean("analysis_allow_downgrade", &s.AnalysisAllowDowngrade)
-	d.boolean("analysis_allow_remove", &s.AnalysisAllowRemove)
+	d.integer("escalate_violations", &s.EscalateViolations, 0, 1000)
+	d.integer("escalate_window_seconds", &s.EscalateWindowSeconds, 1, 31536000)
 	d.integer("ban_threshold", &s.BanThreshold, 0, 1000)
 	d.integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
 	d.integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
@@ -431,67 +416,11 @@ func (d decoder) notify(s *Settings) {
 	d.integer("stats_retention_days", &s.StatsRetentionDays, 7, 3650)
 	d.str("notify_webhook_url", &s.NotifyWebhookURL)
 	s.NotifyWebhookURL = strings.TrimSpace(s.NotifyWebhookURL)
-	if s.NotifyWebhookURL != "" && (!baseURLRe.MatchString(s.NotifyWebhookURL) || len(s.NotifyWebhookURL) > 1000) {
+	if s.NotifyWebhookURL != "" && (!baseURLRe.MatchString(s.NotifyWebhookURL) || utf8.RuneCountInString(s.NotifyWebhookURL) > 1000) {
 		s.NotifyWebhookURL = "" // the core rejects it on save (schema pattern); a stored bad value turns notices off
 	}
 	d.str("notify_webhook_secret", &s.NotifyWebhookSecret)
 	s.NotifyWebhookSecret = textutil.TruncateRunes(strings.TrimSpace(s.NotifyWebhookSecret), 200)
-}
-
-// legacy reads the 0.1 single-model setup (converted once, §72.12).
-func (d decoder) legacy(s *Settings) {
-	d.str("base_url", &s.BaseURL)
-	s.BaseURL = strings.TrimSpace(s.BaseURL)
-	if s.BaseURL != "" && !baseURLRe.MatchString(s.BaseURL) {
-		s.BaseURL = ""
-	}
-	d.str("api_key", &s.APIKey)
-	s.APIKey = strings.TrimSpace(s.APIKey)
-	d.str("model", &s.Model)
-	s.Model = textutil.TruncateRunes(strings.TrimSpace(s.Model), 200)
-	d.str("system_prompt", &s.SystemPrompt)
-	s.SystemPrompt = textutil.TruncateRunes(s.SystemPrompt, 20000)
-	if v, ok := d.m["categories"]; ok {
-		var cats []struct {
-			ID          any `json:"id"`
-			Description any `json:"description"`
-		}
-		if json.Unmarshal(v, &cats) == nil {
-			seen := map[string]bool{}
-			for _, c := range cats {
-				id, _ := c.ID.(string)
-				desc, _ := c.Description.(string)
-				id = strings.TrimSpace(id)
-				if !categoryIDRe.MatchString(id) || seen[id] {
-					continue
-				}
-				seen[id] = true
-				s.Categories = append(s.Categories, Category{ID: id, Description: textutil.TruncateRunes(strings.TrimSpace(desc), 500)})
-				if len(s.Categories) == 50 {
-					break
-				}
-			}
-		}
-	}
-	d.enum("tool_choice", &s.ToolChoice, "required", "function", "auto")
-	d.integer("max_turns", &s.MaxTurns, 1, 5)
-	if d.num("temperature", &s.Temperature) {
-		s.Temperature = math.Max(0, math.Min(2, s.Temperature))
-	}
-	d.integer("max_tokens", &s.MaxTokens, 64, 4096)
-	d.integer("timeout_ms", &s.TimeoutMs, 1000, 25000)
-	d.enum("on_error", &s.OnError, "allow", "block")
-	d.integer("sample_rate", &s.SampleRate, 1, 100)
-	for _, g := range d.strList("group_ids") {
-		if id, err := strconv.ParseInt(strings.TrimSpace(g), 10, 64); err == nil && id > 0 {
-			s.GroupIDs = append(s.GroupIDs, id)
-		}
-	}
-	for _, p := range d.strList("model_patterns") {
-		if p = strings.TrimSpace(p); p != "" {
-			s.ModelPatterns = append(s.ModelPatterns, p)
-		}
-	}
 }
 
 func clampInt(v, lo, hi int) int {
@@ -513,18 +442,20 @@ type config struct {
 	settingsHash string
 	// allow, block: allowlist_user_ids and blocklist_user_ids (see
 	// allowlisted, blocklisted).
-	allow, block    map[int64]bool
-	cacheTTL        time.Duration
-	ttft            time.Duration
-	banWindow       time.Duration
-	banDuration     time.Duration // 0 = until unblocked
-	watchFor        time.Duration
-	analysisTimeout time.Duration
-	retention       map[string]time.Duration // by result
-	legacyReady     bool                     // the 0.1 setup is complete enough to convert
-	jevDefault      JevQuestions
-	limits          planLimits // chunking of the moderated content
-	maxInflight     int64      // bytes of hook requests in progress (max_inflight_mb)
+	allow, block map[int64]bool
+	cacheTTL     time.Duration
+	ttft         time.Duration
+	banWindow    time.Duration
+	banDuration  time.Duration // 0 = until unblocked
+	watchFor     time.Duration
+	retention    map[string]time.Duration // by result
+	legacyReady  bool                     // the 0.1 setup is complete enough to convert
+	jevDefault   JevQuestions
+	limits       planLimits // chunking of the moderated content
+	maxInflight  int64      // bytes of hook requests in progress (max_inflight_mb)
+
+	// escalateWindow: escalate_window_seconds (escalates).
+	escalateWindow time.Duration
 }
 
 // compile derives the runtime config from settings.
@@ -541,16 +472,16 @@ func compile(s Settings) *config {
 	c.cacheTTL = time.Duration(s.VerdictCacheDays) * 24 * time.Hour
 	c.ttft = time.Duration(s.TTFTTimeoutMs) * time.Millisecond
 	c.banWindow = time.Duration(s.BanWindowHours) * time.Hour
+	c.escalateWindow = time.Duration(s.EscalateWindowSeconds) * time.Second
 	c.banDuration = time.Duration(s.BanDurationHours) * time.Hour
 	c.watchFor = time.Duration(s.WatchDays) * 24 * time.Hour
-	c.analysisTimeout = time.Duration(s.AnalysisTimeoutMs) * time.Millisecond
 	day := 24 * time.Hour
 	c.retention = map[string]time.Duration{
 		ResultBlock: time.Duration(s.HitRetentionDays) * day, ResultHit: time.Duration(s.HitRetentionDays) * day,
 		ResultOverturned: time.Duration(s.OverturnedRetentionDays) * day,
 		ResultError:      time.Duration(s.ErrorRetentionDays) * day, ResultPass: time.Duration(s.PassRetentionDays) * day,
 	}
-	c.legacyReady = s.BaseURL != "" && s.Model != ""
+	c.legacyReady = s.legacy.BaseURL != "" && s.legacy.Model != ""
 	c.jevDefault, _ = DefaultQuestions(s.JevDefaultSet)
 	return c
 }
@@ -565,12 +496,19 @@ func userSet(ids []string) map[int64]bool {
 	return set
 }
 
-// blocklisted: every request of the user is moderated before it is sent on,
-// and the AI may not downgrade or remove the user.
+// replayMessage is the deny message of a replayed hit.
+func (c *config) replayMessage() string {
+	if c.HitReplay == HitReplayWhole {
+		return c.BlockMessage
+	}
+	return c.BlockMessage + " " + MsgHistoryHit
+}
+
+// blocklisted: every request of the user is moderated before it is sent on.
 func (c *config) blocklisted(uid int64) bool { return c.block[uid] }
 
-// allowlisted: the user is only moderated after the request, never refused
-// or banned, and the AI may not upgrade the user. The blocklist wins.
+// allowlisted: the user is only moderated after the request, never refused,
+// banned or escalated. The blocklist wins.
 func (c *config) allowlisted(uid int64) bool { return c.allow[uid] && !c.block[uid] }
 
 // retentionCut reports whether c keeps some records or statistics for a
