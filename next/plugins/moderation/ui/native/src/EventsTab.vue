@@ -33,7 +33,7 @@ import VerdictBadge from './VerdictBadge.vue'
 import { useCatalog } from './catalog'
 import { useCategoryOptions } from './categories'
 import { conclusionQuery, conclusionValue, filterChips, flowQuery, flowValue, isSet, pairOptions, type FilterField } from './eventFilters'
-import { applyFilters } from './forms'
+import { applyFilters, defaultGroupCandidate } from './forms'
 import { enumLabel, enumOptions, idText, isSuspicious, ms, num } from './format'
 import { canManage, errorMessage, useEventList, useModHost } from './host'
 import type { EventFilter, ReviewStatus } from './types'
@@ -184,8 +184,7 @@ const advancedFields = computed<Field[]>(() => {
         options: pairOptions(f.id, [{ value: '', label: t('events.allVersions') }, ...Array.from({ length: f.version }, (_, i) => ({ value: f.version - i, label: `v${f.version - i}` }))])
       }))
     },
-    // group 0 (the default group) is no row of the lookup: offered as the page's own candidate
-    { key: 'group_id', label: t('stats.group'), text: (id) => catalog.groupName(Number(id)), picker: { kind: 'group', extra: [{ id: 0, name: t('defaultGroup') }] } },
+    { key: 'group_id', label: t('stats.group'), text: (id) => catalog.groupName(Number(id)), picker: { kind: 'group', extra: defaultGroupCandidate(t('defaultGroup')) } },
     // only the keys of the picked user, when one is picked
     { key: 'api_key_id', label: t('events.apiKey'), text: (id) => idText(Number(id)), picker: { kind: 'api_key', scope: { user_id: form.user_id } } },
     { key: 'timing', label: t('events.timing'), options: enumOptions('timing', ['pre', 'post']) },

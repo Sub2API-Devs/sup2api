@@ -511,8 +511,10 @@ p.mod-text-danger {
   width: 16rem;
   max-width: 100%;
 }
+/* room for the default group's name: "默认（未单独绑定的分组） #0" */
 .mod-flows-group {
-  width: 12rem;
+  width: 18rem;
+  max-width: 100%;
 }
 /* the group coverage under the table: a summary, short counts (names in tooltips), the stats note */
 .mod-flows-coverage {
@@ -538,7 +540,7 @@ p.mod-text-danger {
   gap: 0.75rem;
 }
 .mod-bindings-preview > * {
-  width: 16rem;
+  width: 18rem;
 }
 .mod-bindings-result {
   margin: 0.75rem 0 0;

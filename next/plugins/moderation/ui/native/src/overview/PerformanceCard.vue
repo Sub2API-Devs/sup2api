@@ -6,7 +6,7 @@ import { onOverviewTick } from './tick'
 import { useCatalog } from '../catalog'
 import { bucketLabel, lineChart } from '../charts'
 import { enumLabel, enumOptions, latency, num } from '../format'
-import { idNumber } from '../forms'
+import { defaultGroupCandidate, idNumber } from '../forms'
 import { fetchPerformance, useModHost } from '../host'
 import type { StatsQuery } from '../types'
 import { useAsync } from '../useAsync'
@@ -27,8 +27,7 @@ watch(q, perf.reload, { immediate: true })
 onOverviewTick(perf.reload)
 
 const granularityOptions = computed(() => enumOptions('stats.granularity', ['hour', 'day']))
-// group 0 (the default group) is no row of the lookup: offered as the page's own candidate
-const defaultGroup = computed(() => [{ id: 0, name: t('defaultGroup') }])
+const defaultGroup = computed(() => defaultGroupCandidate(t('defaultGroup')))
 /** The group picker's id as the query takes it ('' = every group). */
 function pickGroup(id: string) {
   const group = idNumber(id)

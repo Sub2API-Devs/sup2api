@@ -4,18 +4,19 @@ import { isApiError } from '@sub2api/host'
 import { SAlert, SButton, SField, SHint, SModal, SSegmented, SSelect } from '@sub2api/ui'
 import { bindingKind } from './bindingOps'
 import { useCatalog } from './catalog'
-import { idNumber } from './forms'
-import { putBinding, toastError, useModHost } from './host'
+import { defaultGroupCandidate, groupAccountsFirst, idNumber } from './forms'
+import { fetchAccountGroups, putBinding, toastError, useModHost } from './host'
 import type { Binding, BindingKind } from './types'
 
 // Adds or edits one binding (PUT /bindings, CONTRACTS §72.17): what it
 // covers (a group, an account within a group, an account in any group) and
 // the flow it runs, or "not moderated". The group and the account are picked
-// with the host's EntityPicker. An edit keeps what the binding covers and
-// only changes the flow. Adding a binding that exists asks before it replaces
-// the flow. Saving takes effect at once and creates no version. A binding to
-// a disabled or unpublished flow does not apply (requests go by a wider
-// binding): the form warns and points to "not moderated".
+// with the host's EntityPicker; an account that is not in the picked group
+// gets a warning. An edit keeps what the binding covers and only changes the
+// flow. Adding a binding that exists asks before it replaces the flow. Saving
+// takes effect at once and creates no version. A binding to a disabled or
+// unpublished flow does not apply (requests go by a wider binding): the form
+// warns and points to "not moderated".
 const props = defineProps<{ open: boolean; binding: Binding | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved'): void }>()
 const host = useModHost()
@@ -46,10 +47,9 @@ const kindOptions = computed(() => (['group_account', 'account', 'group'] as con
 const needsGroup = computed(() => form.kind !== 'account')
 const needsAccount = computed(() => form.kind !== 'group')
 
-// The default group (0) is no row of the lookup, and only a group binding
-// takes it: the group picker's own candidate there, dropped when the kind
-// changes.
-const defaultGroup = computed(() => (form.kind === 'group' ? [{ id: 0, name: t('flows.defaultGroup') }] : []))
+// Only a group binding takes the default group (0): the group picker's own
+// candidate there, dropped when the kind changes.
+const defaultGroup = computed(() => (form.kind === 'group' ? defaultGroupCandidate(t('flows.defaultGroup')) : []))
 watch(
   () => form.kind,
   (kind) => {
@@ -57,7 +57,26 @@ watch(
   }
 )
 /** Within a group, its accounts are listed first (the others cannot serve its requests). */
-const accountScope = computed(() => (form.kind === 'group_account' && idNumber(form.group) > 0 ? { prefer_group_id: form.group } : undefined))
+const accountScope = computed(() => (form.kind === 'group_account' ? groupAccountsFirst(form.group) : undefined))
+
+// The account picker lists every account, and an account outside the group
+// gets none of its requests, so such a binding would never apply: the form
+// warns once it knows the account's groups (never for a caller who may not
+// read the account).
+const accountGroups = ref<number[] | null>(null)
+watch(
+  () => (form.kind === 'group_account' ? idNumber(form.account) : NaN),
+  async (account) => {
+    accountGroups.value = null
+    if (!(account > 0)) return
+    const groups = await fetchAccountGroups(account)
+    if (idNumber(form.account) === account) accountGroups.value = groups
+  }
+)
+const outsideGroup = computed(() => {
+  const group = idNumber(form.group)
+  return form.kind === 'group_account' && group > 0 && !!accountGroups.value && !accountGroups.value.includes(group)
+})
 
 const flowOptions = computed(() => [
   { value: 0, label: t('bindings.exemptOption') },
@@ -113,6 +132,7 @@ async function save() {
       <SField v-if="needsAccount" :label="t('bindings.col.account')" required :error="errs.account">
         <EntityPicker v-model:id="form.account" kind="account" :scope="accountScope" :disabled="!!binding" />
       </SField>
+      <SAlert v-if="outsideGroup" tone="warning" dense>{{ t('bindings.accountOutsideGroup') }}</SAlert>
       <SField :label="t('bindings.col.flow')" :hint="t('bindings.flowHint')">
         <SSelect v-model="form.flow" :options="flowOptions" searchable />
       </SField>

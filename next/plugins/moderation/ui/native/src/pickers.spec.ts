@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ApiError, type PluginHost } from '@sub2api/host'
-import { SCHEMA_WIDGETS_KEY, SField, SFormModal, SSegmented } from '@sub2api/ui'
+import { SAlert, SCHEMA_WIDGETS_KEY, SField, SFormModal, SSegmented } from '@sub2api/ui'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
 import BindingEditModal from './BindingEditModal.vue'
@@ -10,7 +10,7 @@ import BindingsTab from './BindingsTab.vue'
 import BlocksTab from './BlocksTab.vue'
 import SettingsTab from './SettingsTab.vue'
 import WatchEditModal from './WatchEditModal.vue'
-import { fetchAccountNames, setHost } from './host'
+import { fetchAccountGroups, fetchAccountNames, setHost } from './host'
 import { resetSessionCaches } from './session'
 import type { Binding, Watch } from './types'
 
@@ -118,6 +118,17 @@ describe('the block form', () => {
     expect(fieldError(w, 'blocks.col.user')).toBe('a moderator')
     expect(w.findComponent(SFormModal).props('open')).toBe(true)
   })
+
+  it('opens empty again after a ban', async () => {
+    const { w, picker, submit } = await opened()
+    picker.vm.$emit('update:id', '7')
+    await submit()
+    expect(w.findComponent(SFormModal).props('open')).toBe(false)
+    await click(w, 'blocks.manual')
+    expect(w.findComponent(EntityPicker).props('id')).toBe('')
+    await submit()
+    expect(post).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('WatchEditModal', () => {
@@ -158,6 +169,22 @@ describe('WatchEditModal', () => {
   it('does not offer another user for an entry', async () => {
     const w = await opened(entry)
     expect(w.findComponent(EntityPicker).exists()).toBe(false)
+  })
+
+  it('opens empty again: not with the user picked before, nor with the user of an entry edited before', async () => {
+    const w = await opened()
+    w.findComponent(EntityPicker).vm.$emit('update:id', '4')
+    await w.setProps({ open: false })
+    await w.setProps({ open: true })
+    expect(w.findComponent(EntityPicker).props('id')).toBe('')
+    await w.setProps({ open: false, entry })
+    await w.setProps({ open: true })
+    await w.setProps({ open: false, entry: null })
+    await w.setProps({ open: true })
+    await flushPromises()
+    expect(w.findComponent(EntityPicker).props('id')).toBe('')
+    await click(w, 'save')
+    expect(post).not.toHaveBeenCalled()
   })
 })
 
@@ -239,6 +266,69 @@ describe('BindingEditModal', () => {
     await click(w, 'save')
     expect(put).toHaveBeenCalledWith('/bindings', { group_id: 2, account_id: 12, flow_id: 0, replace: true })
   })
+
+  it('opens empty again after an edit: a new binding takes nothing over', async () => {
+    const { w, pickers } = await opened({ kind: 'group', group_id: 0, account_id: 0, flow_id: 0 })
+    expect(pickers().group.props('id')).toBe('0')
+    await w.setProps({ open: false, binding: null })
+    await w.setProps({ open: true })
+    await flushPromises()
+    expect([pickers().group.props('id'), pickers().account.props('id')]).toEqual(['', ''])
+    await click(w, 'save')
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  describe('an account outside the picked group', () => {
+    const warned = (w: ReturnType<typeof mount>) => w.findAllComponents(SAlert).some((a) => a.text() === 'bindings.accountOutsideGroup')
+    /** Account 12 is in group 2 only; account 13 is not readable. */
+    beforeEach(() => {
+      coreGet.mockImplementation(async (path) => {
+        if (path === '/accounts/13') throw new ApiError(403, { code: 'permission_denied', message: 'not your account' })
+        return { id: 12, group_ids: [2] }
+      })
+    })
+    async function picked(group: string, account: string) {
+      const o = await opened()
+      o.pickers().group.vm.$emit('update:id', group)
+      o.pickers().account.vm.$emit('update:id', account)
+      await flushPromises()
+      return o
+    }
+
+    it('is warned of, and can still be bound', async () => {
+      const { w } = await picked('3', '12')
+      expect(warned(w)).toBe(true)
+      await click(w, 'save')
+      expect(put).toHaveBeenCalledWith('/bindings', { group_id: 3, account_id: 12, flow_id: 0, replace: false })
+    })
+
+    it('is not warned of once the group is one of the account, nor for an account in any group', async () => {
+      const { w, pickers, kind } = await picked('3', '12')
+      pickers().group.vm.$emit('update:id', '2')
+      await flushPromises()
+      expect(warned(w)).toBe(false)
+      pickers().group.vm.$emit('update:id', '3')
+      await kind('account')
+      expect(warned(w)).toBe(false)
+    })
+
+    it('is not known of an account the caller may not read', async () => {
+      const { w } = await picked('3', '13')
+      expect(coreGet).toHaveBeenCalledWith('/accounts/13')
+      expect(warned(w)).toBe(false)
+    })
+
+    it('is told by the account picked last, whichever answer comes last', async () => {
+      let late: (v: unknown) => void = () => {}
+      coreGet.mockImplementation((path) => (path === '/accounts/12' ? new Promise((resolve) => (late = resolve)) : Promise.resolve({ id: 14, group_ids: [3] })))
+      const { w, pickers } = await picked('3', '12')
+      pickers().account.vm.$emit('update:id', '14')
+      await flushPromises()
+      late({ id: 12, group_ids: [2] })
+      await flushPromises()
+      expect(warned(w)).toBe(false)
+    })
+  })
 })
 
 describe('the bindings tab', () => {
@@ -264,8 +354,7 @@ describe('the bindings tab', () => {
     await flushPromises()
     const [group, account] = w.findAllComponents(EntityPicker)
     expect([group.props('kind'), account.props('kind')]).toEqual(['group', 'account'])
-    // The default group is no group of a request.
-    expect(group.props('extra')).toBeUndefined()
+    expect(account.props('scope')).toBeUndefined()
     expect(w.find('.mod-bindings-result').exists()).toBe(false)
     group.vm.$emit('update:id', '2')
     await flushPromises()
@@ -274,6 +363,24 @@ describe('the bindings tab', () => {
     account.vm.$emit('update:id', '12')
     await flushPromises()
     expect(w.find('.mod-bindings-result').text()).toContain('bindings.previewBy')
+  })
+
+  it('previews the default group too: what a group without a binding of its own goes by', async () => {
+    bindings = [{ kind: 'group_account', group_id: 2, account_id: 12, flow_id: 0 }]
+    const w = mount(BindingsTab, { attachTo: document.body })
+    await flushPromises()
+    const [group, account] = w.findAllComponents(EntityPicker)
+    expect(group.props('extra')).toEqual([{ id: 0, name: 'flows.defaultGroup' }])
+    group.vm.$emit('update:id', '0')
+    account.vm.$emit('update:id', '12')
+    await flushPromises()
+    // The lookup takes no group 0 to list accounts first by.
+    expect(account.props('scope')).toBeUndefined()
+    // The binding of account 12 within group 2 is none of another group's.
+    expect(w.find('.mod-bindings-result').text()).toBe('bindings.previewNone')
+    group.vm.$emit('update:id', '')
+    await flushPromises()
+    expect(w.find('.mod-bindings-result').exists()).toBe(false)
   })
 })
 
@@ -296,6 +403,18 @@ describe('fetchAccountNames', () => {
     coreGet.mockRejectedValue(new ApiError(403, { code: 'permission_denied', message: 'account:read is required' }))
     expect((await fetchAccountNames([1, 2])).size).toBe(0)
     expect(await fetchAccountNames([])).toEqual(new Map())
+  })
+
+  it('asks nothing for a caller who may read no account, and for one who may read only its own', async () => {
+    const as = (...permissions: string[]) => setHost({ api: { get: coreGet }, permissions: { has: (key: string) => permissions.includes(key) } } as unknown as PluginHost)
+    as('plugin.moderation:moderation:manage')
+    expect((await fetchAccountNames([1, 2])).size).toBe(0)
+    expect(await fetchAccountGroups(1)).toBeNull()
+    expect(coreGet).not.toHaveBeenCalled()
+    as('account:own:read')
+    coreGet.mockResolvedValue({ id: 1, group_ids: [2], items: [{ id: 1, name: 'mine' }] })
+    expect((await fetchAccountNames([1, 2])).get(1)).toBe('mine')
+    expect(await fetchAccountGroups(1)).toEqual([2])
   })
 })
 

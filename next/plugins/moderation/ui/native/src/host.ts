@@ -282,6 +282,9 @@ export const savePluginSettings = (values: Record<string, unknown>) => useModHos
 /** A setting as stored, else its schema default; undefined when neither is known. */
 export const settingValue = (s: PluginSettings | null | undefined, key: string): unknown => s?.values?.[key] ?? s?.schema?.properties?.[key]?.default
 
+/** May read accounts of the console, all or the caller's own: a caller who may not is not sent for a 403. */
+const canReadAccounts = () => ['account:read', 'account:own:read'].some((k) => useModHost().permissions.has(k))
+
 /** Ids one lookup request takes (the core's cap, CONTRACTS §96.1). */
 const LOOKUP_IDS = 100
 /**
@@ -292,6 +295,7 @@ const LOOKUP_IDS = 100
  */
 export async function fetchAccountNames(ids: readonly number[]): Promise<Map<number, string>> {
   const names = new Map<number, string>()
+  if (!canReadAccounts()) return names
   for (let i = 0; i < ids.length; i += LOOKUP_IDS) {
     const found = await useModHost()
       .api.get<{ items?: Array<{ id: number; name: string }> } | null>('/lookup/accounts', { ids: ids.slice(i, i + LOOKUP_IDS).join(',') })
@@ -299,6 +303,18 @@ export async function fetchAccountNames(ids: readonly number[]): Promise<Map<num
     for (const a of found?.items ?? []) names.set(a.id, a.name)
   }
   return names
+}
+
+/**
+ * The groups an account of the console is in (GET /accounts/:id, the same
+ * permissions); null when the account is not readable.
+ */
+export async function fetchAccountGroups(id: number): Promise<number[] | null> {
+  if (!canReadAccounts()) return null
+  const account = await useModHost()
+    .api.get<{ group_ids?: number[] | null } | null>(`/accounts/${id}`)
+    .catch(() => null)
+  return account?.group_ids ?? null
 }
 
 /** Groups of the console (needs group:read); [] when not readable. */

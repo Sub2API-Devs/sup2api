@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SButton, SCode, SCopyButton, SDisclosure, SField, SHint, SModal, SSectionTitle, SSegmented, SSelect, SSpinner, STable, type TableColumn } from '@sub2api/ui'
 import { categoryLabel, enumLabel } from './format'
-import { idNumber } from './forms'
+import { defaultGroupCandidate, idNumber } from './forms'
 import { fetchAnalysisPrompt, fetchAnalysisTools, useModHost } from './host'
 import type { AnalysisTool } from './types'
 import { useCatalog } from './catalog'
@@ -62,8 +62,7 @@ watch(flows, (list) => {
   if (!list.some((f) => f.id === flowId.value)) flowId.value = list[0]?.id ?? 0
 })
 
-// group 0 (the default group) is no row of the lookup: offered as the page's own candidate
-const defaultGroup = computed(() => [{ id: 0, name: t('flows.defaultGroup') }])
+const defaultGroup = computed(() => defaultGroupCandidate(t('flows.defaultGroup')))
 const flowOptions = computed(() => flows.value.map((f) => ({ value: f.id, label: `${f.name} v${f.version}` })))
 const byOptions = computed(() => [
   { value: 'group', label: t('prompt.byGroup') },

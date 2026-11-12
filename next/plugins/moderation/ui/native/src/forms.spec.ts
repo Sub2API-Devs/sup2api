@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyFilters, idNumber } from './forms'
+import { applyFilters, groupAccountsFirst, idNumber } from './forms'
 
 describe('applyFilters', () => {
   beforeEach(() => vi.useFakeTimers())
@@ -32,5 +32,12 @@ describe('idNumber', () => {
 
   it('reads no id from nothing, from another spelling of one or from digits a number cannot hold', () => {
     for (const v of ['', ' 7', '007', '00', '-1', '1.5', '1e3', 'abc', '9007199254740993']) expect(idNumber(v)).toBeNaN()
+  })
+})
+
+describe('groupAccountsFirst', () => {
+  it('lists the accounts of a picked group first, and names the lookup no group it would refuse', () => {
+    expect(groupAccountsFirst('3')).toEqual({ prefer_group_id: '3' })
+    for (const group of ['', '0', 'abc']) expect(groupAccountsFirst(group)).toBeUndefined()
   })
 })

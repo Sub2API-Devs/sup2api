@@ -22,7 +22,7 @@ import BindingEditModal from './BindingEditModal.vue'
 import { bindingKey, bindingKind, fallbackOf, hasAccountBindings, resolveSteps, sortBindings } from './bindingOps'
 import { useCatalog } from './catalog'
 import { joinList } from './format'
-import { idNumber } from './forms'
+import { defaultGroupCandidate, groupAccountsFirst, idNumber } from './forms'
 import { canManage, deleteBinding, errorMessage, fetchAccountNames, toastError, useModHost } from './host'
 import type { Binding, BindingKind, TabKey } from './types'
 import { useAsync } from './useAsync'
@@ -158,10 +158,11 @@ function scopeText(b: Binding): string {
 
 // ---- preview: which binding a request goes by
 const preview = ref<{ group: string; account: string }>({ group: '', account: '' })
+// The default group (0) stands for a group without a binding of its own.
+const defaultGroup = computed(() => defaultGroupCandidate(t('flows.defaultGroup')))
 const previewResult = computed(() => {
-  // a request's group is a real one: none picked (or 0, the default group) previews nothing
   const g = idNumber(preview.value.group)
-  if (!(g > 0)) return null
+  if (Number.isNaN(g)) return null
   const a = idNumber(preview.value.account) || 0
   const { hit, skipped } = resolveSteps(rows.value, g, a)
   const note = skipped.length ? t('bindings.previewSkipped', { scopes: joinList(skipped.map(scopeText)) }) : ''
@@ -234,10 +235,10 @@ const previewResult = computed(() => {
     <SCard :title="t('bindings.previewTitle')" class="mod-section">
       <div class="mod-bindings-preview">
         <SField :label="t('bindings.col.group')">
-          <EntityPicker v-model:id="preview.group" kind="group" />
+          <EntityPicker v-model:id="preview.group" kind="group" :extra="defaultGroup" />
         </SField>
         <SField :label="t('bindings.col.account')" :hint="t('bindings.previewNoAccount')">
-          <EntityPicker v-model:id="preview.account" kind="account" :scope="{ prefer_group_id: preview.group }" />
+          <EntityPicker v-model:id="preview.account" kind="account" :scope="groupAccountsFirst(preview.group)" />
         </SField>
       </div>
       <p v-if="previewResult" class="mod-bindings-result">

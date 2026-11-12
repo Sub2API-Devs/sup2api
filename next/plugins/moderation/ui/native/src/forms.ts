@@ -34,6 +34,19 @@ export function idNumber(v: string): number {
   return Number.isSafeInteger(id) ? id : NaN
 }
 
+/**
+ * Group 0, the default group, as a group picker's own candidate (`extra`):
+ * the core's lookup has no row for it. `name` is what the page calls it.
+ */
+export const defaultGroupCandidate = (name: string) => [{ id: 0, name }]
+
+/**
+ * The lookup scope of an account picker beside a group picker: the accounts
+ * of the picked group come first. None for no group and for the default
+ * group, which the lookup refuses (400).
+ */
+export const groupAccountsFirst = (group: string) => (idNumber(group) > 0 ? { prefer_group_id: group } : undefined)
+
 /** Filters a query was put into during the current task: their list is about to reload by itself. */
 const fresh = new WeakSet<object>()
 

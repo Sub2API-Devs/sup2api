@@ -32,7 +32,7 @@ import FlowSimulate from './FlowSimulate.vue'
 import ImportDialog from './ImportDialog.vue'
 import { useCatalog } from './catalog'
 import { enumLabel, joinList, ms, num, pct } from './format'
-import { idNumber } from './forms'
+import { defaultGroupCandidate, idNumber } from './forms'
 import { canManage, confirmDelete, deleteFlow, errorMessage, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Group, Spec, TabKey } from './types'
 import { exemptGroups, flowBindingsInactive, flowBound, groupCoverage, type GroupOwner } from './bindingOps'
@@ -78,8 +78,7 @@ const groupChips = (f: Flow) => f.groups.map((id) => ({ key: String(id), label: 
 const nameQuery = ref('')
 /** The group picker's id ('' = every group). */
 const groupFilter = ref('')
-// group 0 (the default group) is no row of the lookup: offered as the page's own candidate
-const defaultGroup = computed(() => [{ id: 0, name: t('flows.defaultGroup') }])
+const defaultGroup = computed(() => defaultGroupCandidate(t('flows.defaultGroup')))
 const filtered = computed(() => {
   const q = nameQuery.value.trim().toLowerCase()
   const group = idNumber(groupFilter.value)
