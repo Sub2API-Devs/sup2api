@@ -319,7 +319,10 @@ func (a appAdapter) OnEvents(ctx context.Context, in *pluginv1.OnEventsRequest) 
 
 type httpAdapter struct{ i *Instance }
 
+// HandleHTTP records the caller for as long as the plugin serves the request:
+// AccountScopeCheck only answers about a user the plugin is serving.
 func (a httpAdapter) HandleHTTP(ctx context.Context, in *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	defer a.i.callers.enter(in.GetCaller().GetUserId())()
 	return invoke(a.i, ctx, classConsole, TimeoutHTTP, httpOf, pluginv1.HTTPServiceClient.HandleHTTP, in)
 }
 

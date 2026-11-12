@@ -51,7 +51,11 @@ type FakeHost struct {
 	// with neither account key). nil answers that the user reaches all, so a
 	// test of a route that acts on accounts should set it to cover the own
 	// scope and its 404. The arguments are checked as the core checks them
-	// (known action, positive ids, batch size) before it is called.
+	// (known action, positive ids, batch size) before it is called. As on
+	// the host, the call is PERMISSION_DENIED unless the user is the caller
+	// of a request in flight: Harness.Do and DoAs see to that, a test that
+	// calls a handler by itself uses Serve. The fake has no grants, so the
+	// "accounts.read" grant the host also asks for is not simulated.
 	AccountScope func(userID int64, action string, ids []int64) (all bool, allowed []int64, err error)
 	// DialFunc is used by EgressService.Dial (default net.Dialer).
 	DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
@@ -107,6 +111,7 @@ type FakeHost struct {
 	// SetKVBatchUnimplemented while the plugin runs. See KVCalls.
 	KVBatchUnimplemented bool
 
+	serving   map[int64]int // console users of the requests in flight
 	logs      []LogEntry
 	kv        map[string]kvItem
 	kvCalls   map[string]int

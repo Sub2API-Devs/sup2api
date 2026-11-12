@@ -119,13 +119,22 @@ func (a *scopedAccounts) AccountsInScope(_ context.Context, uid int64, action st
 	return a.all, a.allowed, a.err
 }
 
-// AccountScopeCheck needs no grant and forwards to core.AccountAccess, the
-// rule the core proxy enforces, with its errors mapped like every core error.
+// scopeEnv is hostEnv with the "accounts.read" grant, serving a request of
+// user 7 until the test ends.
+func scopeEnv(t *testing.T, o Options) *hostServer {
+	t.Helper()
+	h := hostEnv(t, o, registry.Grants{"accounts.read": json.RawMessage(`{}`)})
+	t.Cleanup(h.i.callers.enter(7))
+	return h
+}
+
+// AccountScopeCheck forwards to core.AccountAccess, the rule the core proxy
+// enforces, with its errors mapped like every core error.
 func TestHostAccountScopeCheckForwards(t *testing.T) {
 	in := &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "update", AccountIds: []int64{3, 1}}
 
 	acc := &scopedAccounts{fakeAccounts: &fakeAccounts{}, allowed: []int64{3}}
-	out, err := hostEnv(t, Options{Accounts: acc}, nil).AccountScopeCheck(t.Context(), in)
+	out, err := scopeEnv(t, Options{Accounts: acc}).AccountScopeCheck(t.Context(), in)
 	if err != nil || out.GetAll() || !slices.Equal(out.GetAllowedIds(), []int64{3}) {
 		t.Fatalf("own scope: %v %v", out, err)
 	}
@@ -134,7 +143,7 @@ func TestHostAccountScopeCheckForwards(t *testing.T) {
 	}
 
 	acc = &scopedAccounts{fakeAccounts: &fakeAccounts{}, all: true}
-	if out, err := hostEnv(t, Options{Accounts: acc}, nil).AccountScopeCheck(t.Context(), &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "read"}); err != nil || !out.GetAll() || len(out.GetAllowedIds()) != 0 {
+	if out, err := scopeEnv(t, Options{Accounts: acc}).AccountScopeCheck(t.Context(), &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "read"}); err != nil || !out.GetAll() || len(out.GetAllowedIds()) != 0 {
 		t.Fatalf("all scope without ids: %v %v", out, err)
 	}
 
@@ -147,15 +156,54 @@ func TestHostAccountScopeCheckForwards(t *testing.T) {
 		"database failure":    {errors.New("pool closed"), codes.Internal},
 	} {
 		acc := &scopedAccounts{fakeAccounts: &fakeAccounts{}, err: tc.err}
-		if _, err := hostEnv(t, Options{Accounts: acc}, nil).AccountScopeCheck(t.Context(), in); status.Code(err) != tc.code {
+		if _, err := scopeEnv(t, Options{Accounts: acc}).AccountScopeCheck(t.Context(), in); status.Code(err) != tc.code {
 			t.Fatalf("%s: %v, want %v", name, err, tc.code)
 		}
 	}
 }
 
+// A plugin without the "accounts.read" grant is refused, and so is a
+// user_id that is not the caller of a request the plugin is serving: neither
+// reaches the account module.
+func TestHostAccountScopeCheckNeedsGrantAndCaller(t *testing.T) {
+	in := &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "read", AccountIds: []int64{1}}
+	acc := &scopedAccounts{fakeAccounts: &fakeAccounts{}, all: true}
+
+	ungranted := hostEnv(t, Options{Accounts: acc}, registry.Grants{"authz.read": json.RawMessage(`{}`)})
+	t.Cleanup(ungranted.i.callers.enter(7))
+	if _, err := ungranted.AccountScopeCheck(t.Context(), in); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("without accounts.read: %v", err)
+	}
+
+	h := scopeEnv(t, Options{Accounts: acc})
+	if _, err := h.AccountScopeCheck(t.Context(), &pluginv1.AccountScopeCheckRequest{UserId: 8, Action: "read", AccountIds: []int64{1}}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("a user the plugin is not serving: %v", err)
+	}
+	if len(acc.asked) != 0 {
+		t.Fatalf("a refused call reached the account module: %v", acc.asked)
+	}
+
+	// The caller counts for as long as one of their requests is in flight.
+	second := h.i.callers.enter(8)
+	leave := h.i.callers.enter(8)
+	leave()
+	if _, err := h.AccountScopeCheck(t.Context(), &pluginv1.AccountScopeCheckRequest{UserId: 8, Action: "read"}); err != nil {
+		t.Fatalf("one of two requests still in flight: %v", err)
+	}
+	second()
+	if _, err := h.AccountScopeCheck(t.Context(), &pluginv1.AccountScopeCheckRequest{UserId: 8, Action: "read"}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("after the request ended: %v", err)
+	}
+	// A request without a user (webhook, public route) admits nobody.
+	h.i.callers.enter(0)
+	if h.i.callers.has(0) {
+		t.Fatal("user 0 counted as a caller")
+	}
+}
+
 func TestHostAccountScopeCheckArguments(t *testing.T) {
 	acc := &scopedAccounts{fakeAccounts: &fakeAccounts{}, all: true}
-	h := hostEnv(t, Options{Accounts: acc}, nil)
+	h := scopeEnv(t, Options{Accounts: acc})
 	tooMany := make([]int64, manifest.MaxAccountBatch+1)
 	for i := range tooMany {
 		tooMany[i] = int64(i + 1)
@@ -182,7 +230,7 @@ func TestHostAccountScopeCheckArguments(t *testing.T) {
 	// An account module that cannot answer scope questions, or none at all.
 	ok := &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "read"}
 	for name, o := range map[string]Options{"reader only": {Accounts: &fakeAccounts{}}, "none": {}} {
-		if _, err := hostEnv(t, o, nil).AccountScopeCheck(t.Context(), ok); status.Code(err) != codes.Unavailable {
+		if _, err := scopeEnv(t, o).AccountScopeCheck(t.Context(), ok); status.Code(err) != codes.Unavailable {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}

@@ -12,12 +12,23 @@ import (
 )
 
 // The fake follows the host's contract for AccountScopeCheck: the same
-// argument checks before the callback, the callback's answer and error as
-// they are, and "reaches every account" without one.
+// argument checks before the callback, only the caller of a request in
+// flight, the callback's answer and error as they are, and "reaches every
+// account" without one.
 func TestFakeHostAccountScopeCheck(t *testing.T) {
 	ctx := context.Background()
 	f := NewFakeHost()
 	ok := &pluginv1.AccountScopeCheckRequest{UserId: 7, Action: "read", AccountIds: []int64{1, 2}}
+	if _, err := f.AccountScopeCheck(ctx, ok); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("a user without a request in flight: %v", err)
+	}
+	done := f.Serve(7)
+	done()
+	if _, err := f.AccountScopeCheck(ctx, ok); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("after the request ended: %v", err)
+	}
+	defer f.Serve(7)()
+	defer f.Serve(8)()
 	if r, err := f.AccountScopeCheck(ctx, ok); err != nil || !r.GetAll() || len(r.GetAllowedIds()) != 0 {
 		t.Fatalf("no callback: %v %v", r, err)
 	}

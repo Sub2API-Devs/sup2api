@@ -43,6 +43,7 @@ type Instance struct {
 
 	sems     [numClasses]chan struct{}
 	inflight atomic.Int64
+	callers  callerSet     // console users of the HTTP requests in flight
 	draining atomic.Bool   // no new calls are admitted
 	idle     chan struct{} // closed once draining and no call in flight
 	idleOnce sync.Once

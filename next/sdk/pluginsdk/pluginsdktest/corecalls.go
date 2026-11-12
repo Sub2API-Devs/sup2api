@@ -33,8 +33,26 @@ func (f *FakeHost) Notify(ctx context.Context, in *pluginv1.NotifyRequest) (*plu
 	return f.NotifyFunc(ctx, in)
 }
 
-// AccountScopeCheck answers with FakeHost.AccountScope after the argument
-// checks of the host.
+// Serve marks userID as the caller of a request in flight until done is
+// called, as the host does around HTTPService.HandleHTTP. AccountScopeCheck
+// only answers about such a user.
+func (f *FakeHost) Serve(userID int64) (done func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.serving == nil {
+		f.serving = map[int64]int{}
+	}
+	f.serving[userID]++
+	return func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.serving[userID]--
+	}
+}
+
+// AccountScopeCheck answers with FakeHost.AccountScope after the checks of
+// the host: the arguments, and that the user is the caller of a request in
+// flight (Serve).
 func (f *FakeHost) AccountScopeCheck(_ context.Context, in *pluginv1.AccountScopeCheckRequest) (*pluginv1.AccountScopeCheckResponse, error) {
 	ids := in.GetAccountIds()
 	if in.GetUserId() <= 0 || len(ids) > manifest.MaxAccountBatch || slices.ContainsFunc(ids, func(id int64) bool { return id <= 0 }) ||
@@ -42,8 +60,11 @@ func (f *FakeHost) AccountScopeCheck(_ context.Context, in *pluginv1.AccountScop
 		return nil, status.Errorf(codes.InvalidArgument, "user_id, a known action and at most %d positive account_ids are required", manifest.MaxAccountBatch)
 	}
 	f.mu.Lock()
-	fn := f.AccountScope
+	fn, serving := f.AccountScope, f.serving[in.GetUserId()] > 0
 	f.mu.Unlock()
+	if !serving {
+		return nil, status.Error(codes.PermissionDenied, "user_id is not the caller of a request in flight")
+	}
 	if fn == nil {
 		return &pluginv1.AccountScopeCheckResponse{All: true}, nil
 	}

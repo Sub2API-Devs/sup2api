@@ -13,8 +13,8 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
-// Account scope (HostService.AccountScopeCheck, always granted; CONTRACTS
-// §21.1). A console user reaches every account with account:<action>, or
+// Account scope (HostService.AccountScopeCheck; CONTRACTS §21.1). A console
+// user reaches every account with account:<action>, or
 // only the accounts they created with account:own:<action>. The core decides
 // which: a plugin route that acts on accounts asks it instead of trusting the
 // ids in the request.
@@ -34,9 +34,16 @@ import (
 //
 // A route that declares `accounts` in the manifest is already checked by the
 // core before it reaches the plugin; these are for ids the manifest cannot
-// name (nested in the body, read from the plugin's own tables). Hosts before
-// this call answer codes.Unimplemented, which fails closed here; a plugin
-// relying on it declares the matching hostCompat.
+// name (nested in the body, read from the plugin's own tables).
+//
+// The host answers only a plugin that holds the "accounts.read" host
+// permission (declare it in the manifest), and only about the caller of a
+// request the plugin is serving: call these inside the HTTP handler, with its
+// request, not from a job or after the handler returned. Otherwise the call
+// is codes.PermissionDenied, which RequireAccounts turns into a 403 like a
+// user without either account key. Hosts before this call answer
+// codes.Unimplemented, which fails closed here; a plugin relying on it
+// declares the matching hostCompat.
 
 // AccountScope is what a console user may do to a set of accounts.
 type AccountScope struct {
@@ -64,7 +71,8 @@ func (s AccountScope) Filter(ids []int64) []int64 {
 // ResolveAccountScope asks the host what req's caller may do (action "read",
 // "update" or "test") to the accounts ids. The error is ErrNoCaller for a
 // request without a user, codes.PermissionDenied when the user holds neither
-// account key, or the failed host call.
+// account key (or the plugin lacks "accounts.read", or req is not a request
+// in flight), or the failed host call.
 func ResolveAccountScope(ctx context.Context, h Host, req *pluginv1.HTTPRequest, action string, ids ...int64) (AccountScope, error) {
 	uid := req.GetCaller().GetUserId()
 	if uid <= 0 {

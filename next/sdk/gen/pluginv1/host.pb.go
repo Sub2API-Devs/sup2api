@@ -3748,6 +3748,7 @@ type AccountScopeCheckRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	// HTTPRequest.caller.user_id of a request in flight.
 	UserId int64 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	// "read", "update" or "test".
 	Action string `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`

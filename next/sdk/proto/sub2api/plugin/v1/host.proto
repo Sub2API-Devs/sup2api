@@ -101,13 +101,12 @@ service HostService {
   // need authz.read.
   rpc AuthzCheck(AuthzCheckRequest) returns (AuthzCheckResponse);
 
-  // accounts scope (always granted): which accounts may a console user act
-  // on? The answer is the core's own account ownership rule (CONTRACTS
-  // §21.1), so a plugin route applies it instead of deciding by itself.
-  // PERMISSION_DENIED when the user holds neither account:<action> nor
-  // account:own:<action>. Being ungranted, it tells every enabled plugin
-  // which of the two account keys of an action any user holds, and which of
-  // the asked ids are live accounts that user created (ids only).
+  // accounts.read: which accounts may the caller of a request act on? The
+  // answer is the core's own account ownership rule (CONTRACTS §21.1), so a
+  // plugin route applies it instead of deciding by itself. user_id must be
+  // the Caller of an HTTPService.HandleHTTP request this plugin is serving
+  // when it asks; any other user is PERMISSION_DENIED, as is a user holding
+  // neither account:<action> nor account:own:<action>.
   rpc AccountScopeCheck(AccountScopeCheckRequest) returns (AccountScopeCheckResponse);
 
   // ledger.credit / ledger.debit: bounded by the approved scope
@@ -635,6 +634,7 @@ message AuthzCheckResponse {
 }
 
 message AccountScopeCheckRequest {
+  // HTTPRequest.caller.user_id of a request in flight.
   int64 user_id = 1;
   // "read", "update" or "test".
   string action = 2;

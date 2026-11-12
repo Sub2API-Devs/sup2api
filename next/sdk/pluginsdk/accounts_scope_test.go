@@ -21,7 +21,9 @@ func userReq(uid int64) *pluginv1.HTTPRequest {
 }
 
 // scopeHost starts a plugin against a fake host where user 1 reaches every
-// account, user 2 only the even ones they "created", and user 3 none.
+// account, user 2 only the even ones they "created", and user 3 none. The
+// host is serving a request of each of them and of user 9, whose answer
+// fails; of nobody else.
 func scopeHost(t *testing.T) (pluginsdk.Host, *[][]int64) {
 	t.Helper()
 	var calls [][]int64
@@ -37,6 +39,9 @@ func scopeHost(t *testing.T) (pluginsdk.Host, *[][]int64) {
 			return false, slices.DeleteFunc(slices.Clone(ids), func(id int64) bool { return id%2 != 0 }), nil
 		}
 		return false, nil, status.Error(codes.PermissionDenied, "permission_denied: account:"+action)
+	}
+	for _, uid := range []int64{1, 2, 3, 9} {
+		t.Cleanup(fh.Serve(uid))
 	}
 	p := &locker{}
 	pluginsdktest.Start(t, p, pluginsdktest.Options{Host: fh, SDK: []pluginsdk.Option{pluginsdk.WithManifest([]byte(lockManifest))}})
@@ -107,6 +112,7 @@ func TestRequireAccounts(t *testing.T) {
 		{name: "own scope, one id not owned", host: h, uid: 2, action: "update", ids: []int64{2, 3}, status: 404, code: "not_found"},
 		{name: "own scope without ids", host: h, uid: 2, action: "read", status: 403, code: "permission_denied"},
 		{name: "neither key", host: h, uid: 3, action: "read", ids: []int64{2}, status: 403, code: "permission_denied"},
+		{name: "a user the host is not serving", host: h, uid: 5, action: "read", ids: []int64{2}, status: 403, code: "permission_denied"},
 		{name: "no caller", host: h, uid: 0, action: "read", ids: []int64{2}, status: 401, code: "unauthenticated"},
 		{name: "bad id", host: h, uid: 2, action: "read", ids: []int64{-1}, status: 400, code: "invalid_argument"},
 		{name: "unknown action", host: h, uid: 1, action: "delete", ids: []int64{2}, status: 400, code: "invalid_argument"},
@@ -124,8 +130,8 @@ func TestRequireAccounts(t *testing.T) {
 			require.NotNil(t, resp)
 			require.Equal(t, tc.status, resp.GetStatus(), string(resp.GetBody()))
 			require.Equal(t, tc.code, errorCodeOf(t, resp))
-			if tc.status == 401 {
-				require.Empty(t, *calls, "the host is not asked about nobody")
+			if tc.status == 401 || tc.uid == 5 {
+				require.Empty(t, *calls, "the scope of nobody, or of a user without a request in flight, is not computed")
 			}
 		})
 	}

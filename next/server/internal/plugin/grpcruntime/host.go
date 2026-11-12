@@ -399,14 +399,22 @@ func (h *hostServer) AuthzCheck(ctx context.Context, in *pluginv1.AuthzCheckRequ
 	return &pluginv1.AuthzCheckResponse{Allowed: ok}, nil
 }
 
-// AccountScopeCheck answers which accounts a console user may act on. It
-// needs no grant: the answer is core.AccountAccess, the rule the core proxy
-// enforces on plugin routes, and its errors map like every other core error.
+// AccountScopeCheck answers which accounts the caller of a request may act
+// on: core.AccountAccess, the rule the core proxy enforces on plugin routes,
+// with its errors mapped like every other core error. It needs the
+// "accounts.read" grant, and user_id must be the caller of an HTTP request
+// this plugin is serving right now, so a plugin cannot survey other users.
 func (h *hostServer) AccountScopeCheck(ctx context.Context, in *pluginv1.AccountScopeCheckRequest) (*pluginv1.AccountScopeCheckResponse, error) {
+	if err := h.require(ctx, "accounts.read"); err != nil {
+		return nil, err
+	}
 	ids := in.GetAccountIds()
 	if in.GetUserId() <= 0 || in.GetAction() == "" || len(ids) > manifest.MaxAccountBatch ||
 		slices.ContainsFunc(ids, func(id int64) bool { return id <= 0 }) {
 		return nil, status.Errorf(codes.InvalidArgument, "user_id, action and at most %d positive account_ids are required", manifest.MaxAccountBatch)
+	}
+	if !h.i.callers.has(in.GetUserId()) {
+		return nil, status.Error(codes.PermissionDenied, "user_id is not the caller of a request in flight")
 	}
 	access, ok := h.i.rt.o.Accounts.(core.AccountAccess)
 	if !ok {

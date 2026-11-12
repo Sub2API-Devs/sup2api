@@ -201,6 +201,9 @@ func (h *Harness) DoAs(userID int64, method, routePath string, query map[string]
 		}
 		req.Body = raw
 	}
+	if userID > 0 {
+		defer h.Host.Serve(userID)()
+	}
 	resp, err := h.HTTP.HandleHTTP(context.Background(), req)
 	if err != nil {
 		h.T.Fatalf("pluginsdktest: HandleHTTP %s %s: %v", method, routePath, err)
