@@ -150,7 +150,7 @@ func TestPlatformResolver(t *testing.T) {
 func TestGroupPlatformsWithoutRegistry(t *testing.T) {
 	// No registry: no database access, every group gets [].
 	s := New(nil, nil, nil, nil)
-	ps, err := s.groupPlatforms(context.Background(), []int64{1, 2})
+	ps, err := s.Platforms(context.Background(), []int64{1, 2})
 	if err != nil || len(ps) != 2 || ps[1] == nil || len(ps[2]) != 0 {
 		t.Fatalf("platforms: %v %v", ps, err)
 	}

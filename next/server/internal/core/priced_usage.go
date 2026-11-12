@@ -33,10 +33,7 @@ func ClonePricedUsage(items []PricedUsage) []PricedUsage {
 	}
 	out := append([]PricedUsage(nil), items...)
 	for i := range out {
-		if out[i].Price != nil {
-			price := *out[i].Price
-			out[i].Price = &price
-		}
+		out[i].Price = out[i].Price.Clone()
 		out[i].Metrics = CloneUsageMetrics(out[i].Metrics)
 		out[i].PriceParams = maps.Clone(out[i].PriceParams)
 		out[i].PriceHeaders = maps.Clone(out[i].PriceHeaders)

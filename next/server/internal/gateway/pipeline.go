@@ -367,6 +367,8 @@ func (c *call) newRecord() *core.UsageRecord {
 		UserID:          p.UserID,
 		APIKeyID:        p.KeyID,
 		GroupID:         p.Group.ID,
+		SegmentID:       p.SegmentID,
+		RateSource:      p.RateSource,
 		PluginKey:       c.plugin.Key,
 		PluginVersion:   c.plugin.Version,
 		Platform:        c.platform,
@@ -379,6 +381,12 @@ func (c *call) newRecord() *core.UsageRecord {
 		CreatedAt:       c.start,
 		HookDecisions:   []core.HookDecision{},
 	}
+}
+
+// priceQuery asks for model's list price as the key's group and its owner's
+// segment see it.
+func (c *call) priceQuery(model string) core.PriceQuery {
+	return core.PriceQuery{Model: model, GroupID: c.principal.Group.ID, SegmentID: c.principal.SegmentID}
 }
 
 // bodyLimit is the largest client request body (or WebSocket message).
@@ -584,7 +592,7 @@ func (c *call) prepareBilling(ctx context.Context) *gwError {
 	if strings.EqualFold(c.ep.Billing, "free") {
 		return nil
 	}
-	rule, err := c.g.d.Pricer.Resolve(ctx, c.model)
+	rule, err := c.g.d.Pricer.Resolve(ctx, c.priceQuery(c.model))
 	if err != nil {
 		e := core.AsError(err)
 		rt := errTypePriceNotConfigured

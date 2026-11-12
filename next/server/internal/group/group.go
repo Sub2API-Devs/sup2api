@@ -164,7 +164,7 @@ func (s *Service) fillPlatforms(ctx context.Context, gs []*Group) error {
 	for i, g := range gs {
 		ids[i] = g.ID
 	}
-	ps, err := s.groupPlatforms(ctx, ids)
+	ps, err := s.Platforms(ctx, ids)
 	if err != nil {
 		return err
 	}
@@ -487,7 +487,7 @@ func (s *Service) myGroups(c *gin.Context) {
 	for i, g := range out {
 		ids[i] = g.ID
 	}
-	ps, err := s.groupPlatforms(ctx, ids)
+	ps, err := s.Platforms(ctx, ids)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

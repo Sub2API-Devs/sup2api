@@ -100,6 +100,11 @@ func (s *Service) changed(ctx context.Context, key string) {
 	}
 }
 
+// PriceRulesChanged drops the cached price rules on every node. Packages
+// that delete or copy price_rules rows on their own (a segment going away)
+// call it after their transaction committed.
+func (s *Service) PriceRulesChanged(ctx context.Context) { s.changed(ctx, "price_rules") }
+
 // RegisterRoutes mounts the billing console API.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	s.registerPriceRoutes(r)

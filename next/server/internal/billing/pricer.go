@@ -85,7 +85,8 @@ func (snap *priceSnapshot) match(model string) *core.PriceRule {
 
 // Resolve implements core.Pricer. Prices are global per model: the platform
 // and account type serving the request do not matter (ARCHITECTURE 7.3).
-func (s *Service) Resolve(ctx context.Context, model string) (*core.PriceRule, error) {
+func (s *Service) Resolve(ctx context.Context, q core.PriceQuery) (*core.PriceRule, error) {
+	model := q.Model
 	key := model
 	s.mu.Lock()
 	hit, ok := s.resolved[key]
