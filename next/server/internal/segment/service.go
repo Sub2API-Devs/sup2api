@@ -15,6 +15,9 @@ type Deps struct {
 	DB *store.DB
 	// Authz tells whether the caller may read users (see Masked).
 	Authz core.Authorizer
+	// Users decides which users the caller may move between segments; nil
+	// refuses all.
+	Users core.UserGuard
 	// Platforms returns the platforms each group serves (group.Service.Platforms).
 	Platforms func(ctx context.Context, groupIDs []int64) (map[int64][]string, error)
 	// PriceRulesChanged drops the cached price rules on every node (billing.Service.PriceRulesChanged).
@@ -28,6 +31,7 @@ type Deps struct {
 type Service struct {
 	db                *store.DB
 	authz             core.Authorizer
+	users             core.UserGuard
 	platforms         func(ctx context.Context, groupIDs []int64) (map[int64][]string, error)
 	priceRulesChanged func(ctx context.Context)
 	ruleCounts        func(ctx context.Context, segmentIDs []int64) (map[int64]map[int64]int64, error)
@@ -35,7 +39,7 @@ type Service struct {
 
 // New builds the segment service.
 func New(d Deps) *Service {
-	return &Service{db: d.DB, authz: d.Authz, platforms: d.Platforms, priceRulesChanged: d.PriceRulesChanged,
+	return &Service{db: d.DB, authz: d.Authz, users: core.GuardOrDeny(d.Users), platforms: d.Platforms, priceRulesChanged: d.PriceRulesChanged,
 		ruleCounts: d.RuleCounts}
 }
 
@@ -60,6 +64,14 @@ func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh
 
 func fieldError(ctx context.Context, field, code, en, zh string) core.FieldError {
 	return core.FieldError{Field: field, Code: code, Message: t(ctx, en, zh)}
+}
+
+// actOnOthers fails unless the caller may choose the user group of the
+// users: none of them is the caller, and none holds roles granting more than
+// the caller's (C-L7).
+func (s *Service) actOnOthers(ctx context.Context, userIDs ...int64) error {
+	actor, _ := core.UserID(ctx)
+	return core.ActOnOthers(ctx, s.users, actor, userIDs...)
 }
 
 // NotFound is the not_found of a user group that does not exist. It is the

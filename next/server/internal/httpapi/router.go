@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,6 +91,7 @@ func (r *Router) Group() *gin.RouterGroup { return r.api }
 func (r *Router) auth() []gin.HandlerFunc {
 	chain := []gin.HandlerFunc{func(c *gin.Context) {
 		if Authenticate(c, r.tokens) {
+			r.stampAuthzVersion(c)
 			c.Next()
 		}
 	}}
@@ -101,6 +103,18 @@ func (r *Router) auth() []gin.HandlerFunc {
 		})
 	}
 	return chain
+}
+
+// HeaderAuthzVersion carries core.AuthzVersioner's version on every
+// authenticated response of the console API.
+const HeaderAuthzVersion = "X-Authz-Version"
+
+// stampAuthzVersion sets HeaderAuthzVersion when the authorizer tells its
+// version.
+func (r *Router) stampAuthzVersion(c *gin.Context) {
+	if v, ok := r.authz.(core.AuthzVersioner); ok {
+		c.Header(HeaderAuthzVersion, strconv.FormatInt(v.Version(), 10))
+	}
 }
 
 // Authenticate resolves the request's bearer token (a JWT or an access key)

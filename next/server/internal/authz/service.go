@@ -53,6 +53,7 @@ type catalogSnapshot struct {
 var (
 	_ core.Authorizer        = (*Service)(nil)
 	_ core.PermissionCatalog = (*Service)(nil)
+	_ core.AuthzVersioner    = (*Service)(nil)
 )
 
 // New creates the service. Call Start before serving requests.
@@ -70,6 +71,8 @@ func (s *Service) Start(ctx context.Context) error {
 	if err := s.SyncCore(ctx); err != nil {
 		return err
 	}
+	// Version answers from the first request on, not from the first change.
+	s.refreshVersion(ctx)
 	if s.bus == nil {
 		return nil
 	}
@@ -213,6 +216,16 @@ func (s *Service) refreshVersion(ctx context.Context) {
 		return
 	}
 	s.invalidate(v)
+}
+
+// Version implements core.AuthzVersioner: the newest authz version this node
+// has seen (at start, in its own changes, in authz:changed or in the version
+// poll). It reads no database, so it may trail another node's change by the
+// time the broadcast takes.
+func (s *Service) Version() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.minVersion
 }
 
 // invalidate drops cache entries older than version.

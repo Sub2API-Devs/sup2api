@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/shopspring/decimal"
 	"github.com/tidwall/gjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -802,5 +803,139 @@ func TestWebSocketTurnsAreBalanced(t *testing.T) {
 	c.until("response.completed")
 	if r := e.record(); r.AccountID == nil || *r.AccountID != 12 || coreDecision(r) == nil {
 		t.Fatalf("record: account %v, decisions %+v", r.AccountID, r.SchedDecisions)
+	}
+}
+
+// turn runs one successful turn and returns its usage record.
+func (e *wsEnv) turn(c *wsClient, input string) *core.UsageRecord {
+	e.t.Helper()
+	c.send(create(wsModel, input))
+	c.until("response.completed")
+	return e.record()
+}
+
+// A key revoked after the upgrade ends the session at its next turn, which
+// is refused like an unauthenticated request: no usage record.
+func TestWebSocketRevokedKeyEndsTheSessionAtTheNextTurn(t *testing.T) {
+	e := newWSEnv(t)
+	c := e.mustDial()
+	e.turn(c, "first")
+	e.auth.change(func(a *fakeAuth) { delete(a.keys, testKey) })
+	c.send(create(wsModel, "second"))
+	if ev := c.until("error"); ev[0].Get("status").Int() != 401 {
+		t.Fatalf("revoked key: %v", ev)
+	}
+	if code := c.closed(); code != websocket.StatusPolicyViolation {
+		t.Fatalf("revoked key close code: %d", code)
+	}
+	e.noRecord()
+	if _, msgs := e.wsUp.snapshot(); len(msgs) != 1 {
+		t.Fatalf("refused turn reached the upstream: %v", msgs)
+	}
+	waitFor(t, func() bool { n, _ := e.slots.InUse(context.Background(), "ws", 5); return n == 0 })
+}
+
+func TestWebSocketPermissionDeniedEndsTheSession(t *testing.T) {
+	e := newWSEnv(t)
+	c := e.mustDial()
+	e.turn(c, "first")
+	e.auth.change(func(a *fakeAuth) { a.err = core.ErrPermissionDenied.WithMessage("user is disabled") })
+	c.send(create(wsModel, "second"))
+	if ev := c.until("error"); ev[0].Get("status").Int() != 403 {
+		t.Fatalf("denied key: %v", ev)
+	}
+	if code := c.closed(); code != websocket.StatusPolicyViolation {
+		t.Fatalf("denied key close code: %d", code)
+	}
+	e.noRecord()
+}
+
+// Limits and quota changed during the session apply to its next turn; the
+// turn they refuse is recorded and the session goes on.
+func TestWebSocketTurnUsesFreshKeyLimits(t *testing.T) {
+	e := newWSEnv(t)
+	c := e.mustDial()
+	e.turn(c, "first")
+	e.auth.change(func(a *fakeAuth) {
+		a.keys[testKey].KeyQuota = core.KeyQuota{Limit: decimal.NewFromInt(1), Used: decimal.NewFromInt(1)}
+	})
+	c.send(create(wsModel, "over quota"))
+	if ev := c.until("error"); ev[0].Get("status").Int() != 402 || ev[0].Get("error.code").String() != core.ErrKeyQuotaExhausted.Code {
+		t.Fatalf("exhausted quota: %v", ev)
+	}
+	if r := e.record(); r.ErrorType != errTypeKeyQuotaExhausted {
+		t.Fatalf("exhausted quota record: %+v", r)
+	}
+	// One request a minute, and this minute already had the first turn.
+	e.auth.change(func(a *fakeAuth) {
+		a.keys[testKey].KeyQuota = core.KeyQuota{}
+		a.keys[testKey].KeyLimits.RPM = 1
+	})
+	c.send(create(wsModel, "over rpm"))
+	if ev := c.until("error"); ev[0].Get("status").Int() != 429 {
+		t.Fatalf("lowered rpm: %v", ev)
+	}
+	if r := e.record(); r.ErrorType != errTypeRateLimited {
+		t.Fatalf("lowered rpm record: %+v", r)
+	}
+	e.auth.change(func(a *fakeAuth) { a.keys[testKey].KeyLimits.RPM = 0 })
+	if r := e.turn(c, "again"); !r.Success {
+		t.Fatalf("turn after the limits were lifted: %+v", r)
+	}
+	if keys, _ := e.wsUp.snapshot(); len(keys) != 1 {
+		t.Fatalf("session did not keep its upstream connection: %v", keys)
+	}
+}
+
+// The upstream connection is an account of the first turn's group; a key
+// moved to another group is told to reconnect.
+func TestWebSocketGroupChangeAsksToReconnect(t *testing.T) {
+	e := newWSEnv(t)
+	c := e.mustDial()
+	// Before any turn there is no upstream connection to keep: the first
+	// turn is scheduled in the group the key is in by then.
+	e.accounts.addTyped(testGroup+1, 13, 99, "oa-13", "openai", "apikey")
+	e.auth.change(func(a *fakeAuth) { a.keys[testKey].Group.ID = testGroup + 1 })
+	if r := e.turn(c, "first"); r.AccountID == nil || *r.AccountID != 13 {
+		t.Fatalf("first turn after a group change: %+v", r)
+	}
+	e.auth.change(func(a *fakeAuth) { a.keys[testKey].Group.ID = testGroup })
+	c.send(create(wsModel, "second"))
+	if ev := c.until("error"); ev[0].Get("status").Int() != 409 || ev[0].Get("error.code").String() != "api_key_group_changed" {
+		t.Fatalf("group change: %v", ev)
+	}
+	if code := c.closed(); code != wsCloseRestart {
+		t.Fatalf("group change close code: %d", code)
+	}
+	e.noRecord()
+}
+
+func TestWebSocketAuthUnavailableFailsOnlyTheTurn(t *testing.T) {
+	e := newWSEnv(t)
+	e.gw.ws.firstMessage = 300 * time.Millisecond
+	c := e.mustDial()
+	unavailable := func(input string) {
+		t.Helper()
+		e.auth.change(func(a *fakeAuth) { a.err = core.ErrUnavailable.WithMessage("key store unavailable") })
+		c.send(create(wsModel, input))
+		if ev := c.until("error"); ev[0].Get("status").Int() != 503 {
+			t.Fatalf("auth unavailable: %v", ev)
+		}
+		e.noRecord()
+		e.auth.change(func(a *fakeAuth) { a.err = nil })
+	}
+	// The failed message is the session's first: the first-message timer
+	// stops with it and does not close the session later.
+	unavailable("first")
+	time.Sleep(400 * time.Millisecond)
+	if r := e.turn(c, "second"); !r.Success {
+		t.Fatalf("turn after auth came back: %+v", r)
+	}
+	unavailable("third")
+	if r := e.turn(c, "fourth"); !r.Success {
+		t.Fatalf("turn after auth came back: %+v", r)
+	}
+	if keys, msgs := e.wsUp.snapshot(); len(keys) != 1 || len(msgs) != 2 {
+		t.Fatalf("session did not survive: keys %v messages %d", keys, len(msgs))
 	}
 }

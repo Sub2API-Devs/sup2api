@@ -178,6 +178,16 @@ type Authorizer interface {
 	CanActOn(ctx context.Context, actorID int64, targetPerms []string) error
 }
 
+// AuthzVersioner is optionally implemented by an Authorizer: the newest
+// version of the roles and permissions it knows of, without reading the
+// database. Every change of roles, grants or the catalog raises it; a session
+// that ends does not. The console compares it (response header
+// X-Authz-Version) with the authz_version of its GET /me to know when to
+// fetch the caller's permissions again.
+type AuthzVersioner interface {
+	Version() int64
+}
+
 // UserGuard is SEC-H2 for actions on users (authz implements it).
 type UserGuard interface {
 	// CanActOnUsers fails unless what the targets' roles grant is within

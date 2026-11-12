@@ -307,3 +307,52 @@
   - `pluginsdktest.FakeHost.AccountScope` 回调（不设时回答“全部账号”），参数校验与宿主一致。
 - 影响对象：只新增接口，已有行为不变；本次没有插件改用它们（期 3 接入）。旧核心对 `AccountScopeCheck` 回 `UNIMPLEMENTED`，`RequireAccounts` 因此回 503（失败收紧），依赖它的插件需把 `hostCompat` 设为包含本提交的核心版本；Host API 版本号不升（与 `SendAccountRequest` 的做法一致，避免滚动升级时被拒）。`AccountScopeCheck` 按用户的角色权限计算，不带访问密钥的收窄：插件的 admin/user 路由本来就不接受访问密钥。已接受的风险（“总是授予”是任务既定方案，是否收紧由后续决定）：任何已启用的插件不需要授权就能用它得知 (1) 任意用户在某个操作上持有 `account:<action>`、只有 `account:own:<action>`、还是都没有，即绕过 `authz.read` 读到这 6 个核心 key；(2) 对只有 own key 的用户，哪些 id 是该用户创建的未删除账号（含其他插件类型的账号，可按 500 一批扫描），只有 id、没有账号内容，无限速、无审计。`FakeHost` 不设回调时回答“全部账号”，测试账号路由时应设置回调覆盖 own 范围；未知 action 在 fake 里同样 400。
 - 回滚：revert 这个提交即可，无迁移；回滚后已改用这些助手的插件会收到 `UNIMPLEMENTED` 并回 503。
+
+## T32 M4：WebSocket 每轮重新鉴权
+
+- 改动：`gateway/websocket.go` 的会话记住握手时的 API key 与客户端地址；每条客户端消息在开始一轮之前先 `wsSession.refresh`（`Auth.Authenticate`，与握手同一路径），成功后这一轮用新的 principal（限速、额度、分组信息、倍率）。401/403（密钥被撤销、禁用、过期，用户被禁用，IP 不在白名单等）→ 发 error 事件并以 1008 关闭会话；其他鉴权错误（如存储暂不可用）→ 只这一轮失败，会话保留；首轮之后密钥换了分组 → 409 `api_key_group_changed` 并以 1012 关闭（上游连接属于旧分组的账号，客户端重连后按新分组调度）。在这一步被拒的轮次不写用量记录（与 HTTP 鉴权失败一致）。进行中的那一轮不打断；空闲会话的定时复检延后。
+- 影响对象：此前 WebSocket 会话整个生命周期使用握手时的 principal，密钥撤销、额度用尽、限速修改要等客户端重连才生效；现在在下一轮生效。长连接客户端在密钥失效后会收到 1008（不应重连），换分组后收到 1012（应重连）。每轮多一次 `Authenticate`（与一次 HTTP 请求相同的开销）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T33 M7、C-L7：调余额与用户组成员、个人专属接入 core.ActOnOthers（产品性收紧）
+
+- 改动：`billing.Service` 增加 `Users core.UserGuard`，`adjustBalance` 在 `Apply` 之前 `core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id)`；`segment.Deps` 增加 `Users`（`New` 里 `core.GuardOrDeny`），`addMembers`（整批 `user_ids`，事务之前，一条 SQL）、`makePersonal`、`removePersonal`（路径上的用户）经 `Service.actOnOthers` 做同一检查；`app/phases.go` 把 authz 注入两处。未注入时一律拒绝（500），不会 panic 或放行。CONTRACTS §5.2、§5.5、§97.6 同步（含 wontfix：`PATCH/DELETE /segments/:id`、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、分组专属价作用于用户组本身，不做目标用户检查，个人专属（只有一个成员）也按用户组处理；`POST /usage/:id/refund` 延后）。
+- 影响对象：
+  - 持有 `balance:adjust` 的任何人（包括超管，决策 D6）给自己调余额：由 200 变为 409 `you cannot do this to yourself`。超管全局唯一（T18）且只有超管能操作超管，所以超管的余额不能再由任何人经这个接口调整；核心里没有别的人工入账途径（账本只有用量、`admin_adjust`、插件入账/扣款、退款），需要时由支付类插件入账，或用另一个账号调用网关。
+  - 持有 `balance:adjust` / `segment:manage` 的非超管给超管、或给角色权限超出自己可授予范围的用户调余额、移用户组、设/取消个人专属：由成功变为 403（`you cannot modify a superuser` / `you cannot modify a user with higher privileges`）。
+  - 持有 `segment:manage` 的人把自己移入用户组、给自己设/取消个人专属：由成功变为 409；批量移入的 `user_ids` 里含本人或不可操作的用户时整批拒绝。经访问密钥调用同样适用（密钥主人不能给自己调）。
+  - 前端未改：用户列表里对本人、对超管的“调整余额”“设为个人专属”等按钮仍显示，点击后得到上述 409/403 提示（按钮按目标隐藏可在前端任务里跟进）。
+  - 已知未覆盖：持有 `segment:manage` 的人不能把自己移入别的用户组，但仍能修改自己所在用户组（含自己的个人专属）的折扣、授权、专属倍率与专属价（wontfix，见 CONTRACTS §97.6“目标用户检查”）；软删除但仍留有角色行的高权限用户作为目标时回 403 而不是 404/400。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T34 M11：用量详情的账号与本人视图字段（Detail.hideAccounts / redactForSelf）
+
+- 改动：`usage/api.go` 新增 `Detail.hideAccounts`（记录的账号 + `hook_decisions` 各项的 `account_id` + `settlement.account_id`；`hook_decisions` 不是数组时整个不返回）与 `Detail.redactForSelf`（`hideUpstream`、`hideAccounts`，并清空 `plugin_version`、`sticky_rule`、`expr_hash`、`node_id`、`plugin_detail`、`anomalies`、`settlement`、`request_log_account_id`）。`GET /usage/:id` 没有 `account:read` 的分支改调前者，`GET /me/usage/:id` 只调后者。CONTRACTS §5.5、§15.2 同步。
+- 影响对象：
+  - `GET /me/usage/:id` 与没有 `account:read` 的 `GET /usage/:id`：`gateway.attempt` 钩子决定里的 `account_id` 不再返回（此前泄露了尝试的账号 id）。
+  - `GET /me/usage/:id`：`plugin_version`、`sticky_rule`、`expr_hash` 由原值变为空串。用户自己的用量详情页因此不再显示“粘性规则”卡片和计价表达式的哈希行（两处都是有值才渲染，前端无需改动；`sticky_hit` 仍在）。`metrics` 没有动：前端把其中每一项都展示给用户（缓存写入依据与 `u("key")` 用量事实），也是计价的输入，没有可判定为内部的子集。
+  - `GET /me/usage/:id` 的 `billing_detail` 不再带计价表达式与哈希（`withoutExpressions`：`inputs.pricing.base.{expression,expr_hash}`、各附加/替换组件的 `expression_hash` 与 `inputs` 里的整条 `Price`）；前端只用 `base` 是否存在与组件的 `Tokens`/`Metrics`，不受影响。
+  - 已知未处理（不在本任务范围，改的是网关的计费记录）：ccgateway helper 轮次的替换组件用上游模型名记账（`gateway/helper_history_response.go`），`billing_detail.replacement[].model` 因此对本人视图仍可见上游模型；`hook_decisions[].note` 是插件的自由文本，原样返回。
+  - 有 `account:read` 的 `GET /usage/:id` 不变。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T45：外壳 tokenless 管理开关的指标与 preflight 警告
+
+- 改动（`next/gateway/internal/control`）：包级 `tokenlessStats{enabled, accepted}` 由 `RequireManagementToken` 写入（构造时记下开关，每放行一个无令牌请求加一）；管理 socket 的 `/metrics` 追加 `gateway_management_tokenless_enabled` 与 `gateway_management_tokenless_accepted_total`；开关打开时 `POST /system/upgrades/preflight` 的结果附 `warnings`（`Preflight.Warnings`，`omitempty`）。鉴权行为与函数签名不变，开关的删除延后。CONTRACTS §（外壳管理 socket 令牌）同步。
+- 影响对象：只新增输出。开关打开的部署在 preflight 响应里多一个 `warnings` 字段（核心原样转发；升级页目前不展示它，不影响“可以创建”的判断）；抓取 `/metrics` 的监控多两个序列。计数是进程内的，外壳重启归零。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T46 B1 后端：X-Authz-Version 响应头与 Me.authz_version
+
+- 改动：`authz.Service.Version()`（读锁返回 `minVersion`，不查库）实现新的可选接口 `core.AuthzVersioner`；`httpapi.Router` 的认证中间件在认证成功后写响应头 `X-Authz-Version`（`httpapi.HeaderAuthzVersion`，authorizer 没有实现该接口时不写）；`iam.Me` 增加 `authz_version`（取 `PermissionSet.Version`）。`authz.Start` 在 `SyncCore` 之后读一次版本，节点从第一个请求起就报告库里的版本，而不是等到第一次变更或 30 秒轮询。`TokenPair` 不变。CONTRACTS §5.2 同步。
+- 影响对象：只新增输出。控制台 API 所有通过认证的响应多一个头；`GET /me` 多一个字段。登出、撤销会话、改密码走 iam 自己的 `iam:user:changed`，不推进这个版本，前端不会因他人登出而刷新权限（创建、删除、启用/禁用用户与角色、授权、目录变更一样会推进）。头是本节点在认证那一刻已知的版本：变更请求自身的响应不反映该变更，多节点下可能短暂落后或领先于取 `/me` 的节点，前端按“头大于 `max(/me 的 authz_version, 上次触发重取的头值)` 才重新取”判断，同一个头值至多重取一次；跨域部署读取这个头需要 `Access-Control-Expose-Headers`（核心目前不发 CORS 头，同源部署不受影响）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T48 W2-F8、决策 D16：清除他人两步验证改需 user:password:reset（产品性收紧）
+
+- 改动：`DELETE /users/:id/security` 的权限由 `user:update` 改为 `user:password:reset`（`iam/security_http.go`）；权限目录里该权限的标签改为“重置他人密码与两步验证 / Reset user passwords and two-factor”（SyncCore 启动时更新 `permissions.label`）；用户列表“重置二次验证和通行密钥”按钮的判断键同步改（`UsersView.vue`）。不新增权限，无迁移。目标检查（`CanActOnUser`）与重置自己时的二次确认不变。CONTRACTS §14.2、§79.2、§80 同步。
+- 影响对象：
+  - 只有 `user:update`、没有 `user:password:reset` 的角色：调用由成功变为 403 `details.permission = user:password:reset`，按钮不再显示。内置的 `admin`、`operator` 默认两个权限都有，不受影响（被人手工去掉 `user:password:reset` 的除外）；只勾了 `user:update` 的自定义角色需要补勾。
+  - 访问密钥：`user:password:reset` 只认会话（T10），带 `user:update` 的密钥此前能清他人的两步验证，现在一律 403，需改用登录会话。
+  - 经 `DELETE /users/<自己>/security` 重置自己因子的人同样需要这个权限；没有的人用 `/me/two-factor/disable`。
+- 回滚：revert 这个提交即可；标签在旧版本下次启动时由 SyncCore 改回，无数据变化。

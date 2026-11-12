@@ -40,7 +40,9 @@ func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
 	r.Authed(http.MethodPatch, "/me/access-keys/:id", s.handleAccessKeyUpdate)
 	r.Authed(http.MethodDelete, "/me/access-keys/:id", s.handleAccessKeyDelete)
 
-	r.Perm(http.MethodDelete, "/users/:id/security", "user:update", s.handleResetSecurity)
+	// Removing someone's second factor leaves the account one password away,
+	// like resetting the password: the same permission, session only (D16).
+	r.Perm(http.MethodDelete, "/users/:id/security", "user:password:reset", s.handleResetSecurity)
 }
 
 func (s *Service) handleAccessKeys(c *gin.Context) {

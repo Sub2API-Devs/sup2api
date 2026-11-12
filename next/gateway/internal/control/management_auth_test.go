@@ -1,11 +1,13 @@
 package control
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -183,5 +185,98 @@ func TestManagementTokenFile(t *testing.T) {
 	}
 	if _, err = ReadManagementToken(filepath.Join(dir, "missing")); err == nil {
 		t.Fatal("missing token file accepted")
+	}
+}
+
+// The migration switch is visible while it is on: every request served
+// without a token is counted, and /metrics says whether the switch is set.
+func TestTokenlessManagementIsCounted(t *testing.T) {
+	t.Cleanup(func() { tokenlessStats.enabled.Store(false) })
+	token, err := NewManagementToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })
+	serve := func(h http.Handler, header string) {
+		req := httptest.NewRequest("GET", "http://shell/system/upgrades", nil)
+		if header != "" {
+			req.Header.Set("Authorization", header)
+		}
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	metrics := func() string {
+		var b strings.Builder
+		writeTokenlessMetrics(&b)
+		return b.String()
+	}
+
+	open := RequireManagementToken(token, true, inner)
+	before := tokenlessStats.accepted.Load()
+	serve(open, "")
+	serve(open, "Bearer "+token) // authenticated: not counted
+	serve(open, "Bearer wrong")  // rejected: not counted
+	serve(open, "")
+	if got := tokenlessStats.accepted.Load() - before; got != 2 {
+		t.Fatalf("tokenless requests counted: %d, want 2", got)
+	}
+	if m := metrics(); !strings.Contains(m, "\ngateway_management_tokenless_enabled 1\n") ||
+		!strings.Contains(m, "\ngateway_management_tokenless_accepted_total "+strconv.FormatInt(before+2, 10)+"\n") {
+		t.Fatalf("metrics with the switch on:\n%s", m)
+	}
+
+	closed := RequireManagementToken(token, false, inner)
+	serve(closed, "")
+	if got := tokenlessStats.accepted.Load() - before; got != 2 {
+		t.Fatalf("a rejected request was counted: %d", got)
+	}
+	if m := metrics(); !strings.Contains(m, "\ngateway_management_tokenless_enabled 0\n") {
+		t.Fatalf("metrics with the switch off:\n%s", m)
+	}
+}
+
+// Over the management socket: /metrics carries the two series, and the
+// upgrade preflight warns for as long as the switch is on.
+func TestTokenlessManagementWarnsInPreflightAndMetrics(t *testing.T) {
+	t.Cleanup(func() { tokenlessStats.enabled.Store(false) })
+	s, _, _, target := setupEngines(t)
+	token, err := NewManagementToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobs := &pluginblob.Service{Store: &pluginblob.Store{Dir: t.TempDir()}}
+	call := func(h http.Handler, method, path, body string) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(method, "http://shell"+path, strings.NewReader(body)))
+		if w.Code != 200 {
+			t.Fatalf("%s %s: %d %s", method, path, w.Code, w.Body)
+		}
+		return w.Body.String()
+	}
+	preflight := `{"release_digest":"` + target.Digest + `"}`
+
+	before := tokenlessStats.accepted.Load()
+	open := RequireManagementToken(token, true, ManagementHandler(s, blobs, nil))
+	var out struct {
+		Data Preflight `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(call(open, "POST", "/system/upgrades/preflight", preflight)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Data.Warnings) != 1 || out.Data.Warnings[0] != tokenlessWarning || len(out.Data.Blockers) != 0 {
+		t.Fatalf("preflight with the switch on: %+v", out.Data)
+	}
+	if m := call(open, "GET", "/metrics", ""); !strings.Contains(m, "\ngateway_management_tokenless_enabled 1\n") ||
+		!strings.Contains(m, "\ngateway_management_tokenless_accepted_total "+strconv.FormatInt(before+2, 10)+"\n") {
+		t.Fatalf("metrics with the switch on:\n%s", m)
+	}
+
+	closed := RequireManagementToken(token, false, ManagementHandler(s, blobs, nil))
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "http://shell/system/upgrades/preflight", strings.NewReader(preflight))
+	req.Header.Set("Authorization", "Bearer "+token)
+	closed.ServeHTTP(w, req)
+	if w.Code != 200 || strings.Contains(w.Body.String(), "warnings") {
+		t.Fatalf("preflight with the switch off: %d %s", w.Code, w.Body)
 	}
 }
