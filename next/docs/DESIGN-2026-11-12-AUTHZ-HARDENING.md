@@ -239,7 +239,7 @@
 
 ## T48 W2-F8、决策 D16：清除他人两步验证改需 user:password:reset（产品性收紧）
 
-- 改动：`DELETE /users/:id/security` 的权限由 `user:update` 改为 `user:password:reset`（`iam/security_http.go`）；权限目录里该权限的标签改为“重置他人密码与两步验证 / Reset user passwords and two-factor”（SyncCore 启动时更新 `permissions.label`）；用户列表“重置二次验证和通行密钥”按钮的判断键同步改（`UsersView.vue`）。不新增权限，无迁移。目标检查（`CanActOnUser`）与重置自己时的二次确认不变。CONTRACTS §43 同步。
+- 改动：`DELETE /users/:id/security` 的权限由 `user:update` 改为 `user:password:reset`（`iam/security_http.go`）；权限目录里该权限的标签改为“重置他人密码与两步验证 / Reset user passwords and two-factor”（SyncCore 启动时更新 `permissions.label`）；用户列表“重置二次验证和通行密钥”按钮的判断键同步改（`UsersView.vue`）。不新增权限，无迁移。目标检查（`CanActOnUser`）与重置自己时的二次确认不变。CONTRACTS §14.2、§79.2、§80 同步。
 - 影响对象：
   - 只有 `user:update`、没有 `user:password:reset` 的角色：调用由成功变为 403 `details.permission = user:password:reset`，按钮不再显示。内置的 `admin`、`operator` 默认两个权限都有，不受影响（被人手工去掉 `user:password:reset` 的除外）；只勾了 `user:update` 的自定义角色需要补勾。
   - 访问密钥：`user:password:reset` 只认会话（T10），带 `user:update` 的密钥此前能清他人的两步验证，现在一律 403，需改用登录会话。

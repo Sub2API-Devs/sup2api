@@ -45,7 +45,7 @@ func TestResetSecurityNeedsPasswordReset(t *testing.T) {
 		e, _ := out["error"].(map[string]any)
 		details, _ := e["details"].(map[string]any)
 		if code != 403 || details["permission"] != wantDetail {
-			t.Fatalf("%s: %d %v", who, code, out)
+			t.Fatalf("%s: %d %v, want 403 with details.permission=%v", who, code, out, wantDetail)
 		}
 		if !enrolled() {
 			t.Fatalf("%s cleared the two-factor", who)
@@ -56,8 +56,14 @@ func TestResetSecurityNeedsPasswordReset(t *testing.T) {
 	denied("user:update alone", editor, "user:password:reset")
 	// The permission is session only: no access key carries it, whatever its
 	// owner holds and whatever else the key was given.
-	key := k.createKey(t, resetterID, adminPassword, "user:read", "user:update").Key
-	denied("an access key of a holder", key, "user:password:reset")
+	// Not even one stored with it before the permission became session only.
+	for who, owner := range map[string]int64{"an access key of a holder": resetterID, "an access key of the super admin": mustLogin(t, k.s, adminEmail, adminPassword).User.ID} {
+		key := k.createKey(t, owner, adminPassword, "user:read", "user:update")
+		if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'user:password:reset') WHERE id = $1`, key.ID); err != nil {
+			t.Fatal(err)
+		}
+		denied(who, key.Key, "user:password:reset")
+	}
 
 	if code, out := k.call(resetter, "DELETE", target, nil); code != 204 {
 		t.Fatalf("holder: %d %v", code, out)

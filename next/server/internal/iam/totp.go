@@ -382,7 +382,8 @@ func removeTwoFactor(ctx context.Context, tx pgx.Tx, userID int64) error {
 func (s *Service) ResetSecurity(ctx context.Context, actorID, targetID int64, confirm SelfConfirmation, ip string) error {
 	// SEC-H2: removing the factors of a user with higher privileges would
 	// leave that account one password away from takeover. One's own session
-	// passes; an access key is compared on its owner too (decision 1).
+	// passes. (No access key gets here over HTTP: the route's permission is
+	// session only.)
 	if err := s.authz.CanActOnUser(ctx, actorID, targetID); err != nil {
 		return err
 	}
