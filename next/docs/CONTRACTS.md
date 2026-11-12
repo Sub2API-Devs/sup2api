@@ -6312,7 +6312,9 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
     - 什么都没改时照常沿用。
     - 回传掩码的敏感地址不受此限：它沿用原值，地址没有变，凭据也不会被发到别处；所以"凭据全部重填、地址保持掩码"可以保存。
     - `plugin:manage` 不受此限制。
-    - 实现：`plugin/api/settings.go` `secretFields`、`mergeSettings`。
+    - 实现：`sdk/manifest` `SettingsSecrets`（标记的唯一读法，打包校验与核心共用）、`plugin/api/settings.go` `schemaSecrets`、`mergeSettings`。
+  - **标记只能写在能掩码的位置**（2026-11-12）：只有沿 `properties` 嵌套对象能到达的属性（最多 8 层）能单独掩码；被标记的属性整体掩码，其下不再细分。`items`、`additionalProperties`、`patternProperties`、`allOf`/`anyOf`/`oneOf`、`if`/`then`/`else`、`$defs` 等其他位置的标记、超过 8 层的标记，以及指向带标记 schema 的 `$ref`，打包校验报 `ui.settings.schema` `unmaskable_secret`。校验之前已安装的包：含这类标记的顶层设置整块按凭据掩码；标记不属于某一个顶层设置时（根上的 `allOf`、`additionalProperties` 等）全部顶层设置按凭据掩码。
+  - **没有 schema 的设置**（没有 `ui.settings`、iframe 或不带 schema 的 native，或包里缺 schema 文件）：已存值的每个顶层键都按凭据掩码，`secret_fields` 列出它们，回传掩码沿用原值，上面的重填规则同样适用。
   - `GET` 的回答多一个 `permission`：完整的 RBAC key（`plugin.<key>:<permission>`），没有声明时省略。
 - **审计**：设置修改照旧写 `plugin.settings.update`（`changed_keys`，不记值），现在多记 `request_id`；用户是谁看 `user_id`。
 - **控制台**：

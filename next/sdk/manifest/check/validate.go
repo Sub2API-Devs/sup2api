@@ -490,12 +490,24 @@ func sortedKeys[V any](m map[string]V) []string {
 	return out
 }
 
+// maskableSecrets refuses a settings schema that marks secrets where the core
+// cannot mask them one by one (manifest.SettingsSecrets).
+func (v *validator) maskableSecrets(field, schema string) {
+	if _, unreachable := manifest.SettingsSecrets(v.files[schema]); len(unreachable) > 0 {
+		v.add(field, "unmaskable_secret", "writeOnly, format password and x-sensitive are only masked on properties of nested objects (at most %d deep); found at %s",
+			manifest.MaxSecretDepth, strings.Join(unreachable, ", "))
+	}
+}
+
 // form validates a console form; settings=true for ui.settings.
 func (v *validator) form(field string, f manifest.Form, settings bool) {
 	if f.Permission != "" && !settings {
 		v.add(field+".permission", "unsupported", "only ui.settings takes a permission")
 	} else if f.Permission != "" && !v.userPerm(f.Permission) {
 		v.add(field+".permission", "unknown", "permission %q is not declared in userPermissions", f.Permission)
+	}
+	if settings {
+		v.maskableSecrets(field+".schema", f.Schema)
 	}
 	switch f.Mode {
 	case "schema":

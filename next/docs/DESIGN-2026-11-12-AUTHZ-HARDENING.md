@@ -208,3 +208,15 @@
 - 改动：宿主 `AuthzCheck` 只对本插件的权限 key 免授权：manifest `userPermissions` 里声明的本地 key，或 `plugin.<本插件>:` 开头的完整 key（`hostServer.qualify` 返回 `(key, own)`，用 `manifest.LocalPermission` / `PermissionKey` 判断）。查询核心 key（如 `user:read`，包括未在 manifest 声明的本地写法）或其他插件的 key 需要新的宿主权限 `authz.read`（风险 medium，需管理员批准），没有时返回 `PermissionDenied`，不调用鉴权器。`HostPermissionRisk`、控制台风险表与中英文标签同步增加 `authz.read`。
 - 影响对象：仓库 15 个插件都不受影响（只有 moderation 调 `AuthzCheck`，查的是自己的 `moderation:read`）。第三方插件若用 `AuthzCheck` 查核心或其他插件的权限，升级核心后调用失败，需在 manifest `hostPermissions` 申请 `authz.read` 并由管理员批准。用未声明的本地 key 调用（原先按核心 key 原样查询，除超管外结果为 false）现在同样需要该授权。保留的已知情况：超管对任何 key 都返回 true，所以插件凭自己的 key 仍能判断某个用户是不是超管（“本插件 key 免授权”的固有结果，改动前同样如此）。`pluginsdktest.FakeHost.AuthzCheck` 不模拟这条规则，插件作者的单测查核心 key 仍会通过，以真实宿主为准。
 - 回滚：revert 这个提交即可，无迁移。已批准的 `authz.read` 授权行留在 `plugin_permission_grants`，旧代码不读它。回滚后 `authz.read` 不在 `HostPermissionRisk` 里，声明了它的第三方 manifest 会在安装、升级的校验中被判为未知宿主权限，需去掉该声明；这类插件应把 `hostCompat` 设为包含本提交的核心版本。
+
+## T41 W2-F9a：插件设置的密钥掩码，打包校验与运行时共用一份读法
+
+- 改动：新增 `manifest.SettingsSecrets(schema) (fields, unreachable)`（`sdk/manifest/settings_secrets.go`），是设置 schema 里 `writeOnly`、`format: password`、`x-sensitive` 标记的唯一读法；核心原来的 `secretFields` 删除，改为调用它。`fields` 是沿 `properties` 嵌套对象能到达的标记（最多 8 层，被标记的属性整体掩码、其下不再列出）；`unreachable` 是到达不了、因而无法单独掩码的标记位置：`items`、`additionalProperties`、`patternProperties`、`allOf`/`anyOf`/`oneOf`、`if`/`then`/`else`、`$defs` 等任何其他关键字之下的、超过 8 层的，以及指向带标记 schema 的 `$ref`。
+  - 打包（`manifest/check`）：`ui.settings` 的 schema 有 `unreachable` 时报 `ui.settings.schema` `unmaskable_secret`，列出位置。
+  - 运行时（`GET|PUT /plugins/:key/settings`）：已安装的旧包若有 `unreachable`，含这些标记的顶层设置整块按凭据掩码（`manifest.UnmaskableFields`）；标记不属于某一个顶层设置时全部顶层设置掩码。没有 schema 却存了值的插件，每个顶层键都按凭据掩码。回传掩码沿用原值、只凭插件权限修改时须重填沿用的凭据，这两条规则对整块掩码的设置同样生效。
+- 影响对象：
+  - 仓库 4 个带设置 schema 的插件（growth、guard、mailer、moderation）没有不可达标记，行为不变。
+  - 第三方插件：schema 在数组项、`$ref` 等位置标记密钥的，重新打包、上传安装时校验失败，需把密钥改成对象属性；已安装的照常运行，但对应的顶层设置在设置页显示为 `******`，schema 表单无法逐项编辑它（需整块重填，或升级到改过 schema 的版本）。此前这些值在 `GET` 里是明文返回的。
+  - 没有设置 schema 的插件：`GET /plugins/:key/settings` 的 `values` 由明文变为全部 `******`（空串与 null 除外），`secret_fields` 列出各顶层键。仓库里这类插件都没有存设置值，不受影响；经 API 直接读写这类设置的脚本读不到原值，写入时未改的键回传 `******` 即可。
+  - 被标记的对象属性之下的嵌套标记不再单独出现在 `secret_fields`（整个对象已是一个掩码字段）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化（存储的设置值从不含掩码）。

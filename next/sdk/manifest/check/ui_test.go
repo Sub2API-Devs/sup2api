@@ -766,3 +766,26 @@ func TestParseRouteRef(t *testing.T) {
 		}
 	}
 }
+
+// A settings schema may only mark secrets where the core can mask them: on
+// properties of nested objects (manifest.SettingsSecrets). Other forms are
+// not settings and are not judged.
+func TestSettingsSecretsMustBeMaskable(t *testing.T) {
+	m := uiManifest()
+	m.UI.Settings = &manifest.Form{Mode: "schema", Schema: "settings.schema.json"}
+	validate := func(schema string) map[string]string {
+		return codes(Validate(m, map[string][]byte{"settings.schema.json": []byte(schema)}, ValidateOptions{Tooling: true}))
+	}
+	if c := validate(`{"properties":{"key":{"writeOnly":true},"up":{"properties":{"url":{"x-sensitive":true}}},"tags":{"type":"array","items":{"type":"string"}}}}`); len(c) > 0 {
+		t.Fatalf("maskable secrets are valid: %v", c)
+	}
+	for name, schema := range map[string]string{
+		"items":      `{"properties":{"hooks":{"type":"array","items":{"properties":{"token":{"writeOnly":true}}}}}}`,
+		"$ref":       `{"properties":{"a":{"$ref":"#/$defs/s"}},"$defs":{"s":{"format":"password"}}}`,
+		"root allOf": `{"allOf":[{"properties":{"x":{"x-sensitive":true}}}]}`,
+	} {
+		if c := validate(schema); c["ui.settings.schema"] != "unmaskable_secret" {
+			t.Fatalf("%s: a secret that cannot be masked must be rejected: %v", name, c)
+		}
+	}
+}
