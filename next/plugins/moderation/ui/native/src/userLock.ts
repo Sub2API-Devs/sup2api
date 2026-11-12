@@ -17,8 +17,14 @@ export type LockAction = UserList | 'unlock'
 /** The list a user is on (a user on both is blocklisted, as the plugin reads them); null = neither. */
 export const userListOf = (u: { allowlisted?: boolean; blocklisted?: boolean }): UserList | null => (u.blocklisted ? 'blocklist' : u.allowlisted ? 'allowlist' : null)
 
-/** What can be done to a user on `current`: lock on another list; unlock when on one. */
-export const lockActions = (current: UserList | null): LockAction[] => [...USER_LISTS.filter((l) => l !== current), ...(current ? (['unlock'] as const) : [])]
+/**
+ * What can be done to a user on `current`: lock on another list, except a
+ * moderator (staff), who cannot be locked; unlock when on one.
+ */
+export const lockActions = (current: UserList | null, staff = false): LockAction[] => [
+  ...(staff ? [] : USER_LISTS.filter((l) => l !== current)),
+  ...(current ? (['unlock'] as const) : [])
+]
 
 /**
  * The lock actions of a user as menu items (keyed by LockAction), and `run`
@@ -27,10 +33,11 @@ export const lockActions = (current: UserList | null): LockAction[] => [...USER_
 export function useUserLock(reload: () => void) {
   const host = useModHost()
   const t = host.t
-  const items = (current: UserList | null): MenuAction[] => lockActions(current).map((a) => ({ key: a, label: t(`lock.action.${a}`), icon: 'lock' }))
-  /** Does nothing for a key that is not one of items(current). */
-  async function run(userId: number, key: string, current: UserList | null): Promise<void> {
-    const action = lockActions(current).find((a) => a === key)
+  const items = (current: UserList | null, staff = false): MenuAction[] =>
+    lockActions(current, staff).map((a) => ({ key: a, label: t(`lock.action.${a}`), icon: 'lock' }))
+  /** Does nothing for a key that is not one of items(current, staff). */
+  async function run(userId: number, key: string, current: UserList | null, staff = false): Promise<void> {
+    const action = lockActions(current, staff).find((a) => a === key)
     if (!action) return
     const message = t(`lock.confirm.${action}`, { id: userId, list: current ? t(`lists.name.${current}`) : '' })
     if (!(await host.confirm({ title: t(`lock.action.${action}`), message, confirmText: t('lock.save'), danger: action === 'blocklist' }))) return

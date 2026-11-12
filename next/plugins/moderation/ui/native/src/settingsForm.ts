@@ -68,17 +68,26 @@ const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v
 
 export const CACHE_DAYS_KEY = 'verdict_cache_days'
 const DAY_SECONDS = 86400
-const CACHE_DAYS_MAX = 30
+/** The old maximum of cache_ttl_seconds, 604800 s, in days. */
+const CACHE_TTL_MAX_DAYS = 7
 const HOUR_SECONDS = 3600
+/** The default and maximum of hit_retention_days (settings.schema.json). */
+export const HIT_DAYS = { default: 180, max: 3650 }
 
 /** A finite number through f, else undefined (nothing to fold). */
 const numberTo = (f: (n: number) => number) => (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? f(v) : undefined)
 
-/** Retired keys and the key that replaced each, with the conversion of a stored value. */
+/**
+ * Retired keys and the key that replaced each, with the conversion of a
+ * stored value; the plugin reads them the same way until they are saved
+ * (settings.go retiredKeys).
+ */
 export const RETIRED: Readonly<Record<string, { key: string; convert: (v: unknown) => unknown }>> = {
-  // 0 = cache off, else whole days, rounded up, 1–30
-  cache_ttl_seconds: { key: CACHE_DAYS_KEY, convert: numberTo((s) => (s > 0 ? Math.min(CACHE_DAYS_MAX, Math.ceil(s / DAY_SECONDS)) : 0)) },
-  ban_window_hours: { key: 'ban_window_seconds', convert: numberTo((h) => h * HOUR_SECONDS) }
+  // 0 = cache off, else whole days, rounded up, at most 7 (the old maximum of 604800 s)
+  cache_ttl_seconds: { key: CACHE_DAYS_KEY, convert: numberTo((s) => (s > 0 ? Math.ceil(Math.min(s, CACHE_TTL_MAX_DAYS * DAY_SECONDS) / DAY_SECONDS) : 0)) },
+  ban_window_hours: { key: 'ban_window_seconds', convert: numberTo((h) => h * HOUR_SECONDS) },
+  // 0.1 kept every record retention_days: the hits are kept at least as long
+  retention_days: { key: 'hit_retention_days', convert: numberTo((d) => Math.max(HIT_DAYS.default, Math.min(HIT_DAYS.max, Math.round(d)))) }
 }
 
 /**

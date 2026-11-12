@@ -27,18 +27,20 @@ const (
 
 // lockList is a list: the level of its entries and the history reasons.
 type lockList struct {
-	level                    string
-	added, imported, removed string
+	level                              string
+	added, imported, unlisted, removed string
 }
 
 var lockLists = map[string]lockList{
 	LockAllowlist: {LevelObserve,
 		"加入只后台审核名单 / added to the background-only list",
 		"从设置导入只后台审核名单 / imported from the background-only list of the settings",
+		"从设置导入名单：不在只后台审核名单上 / imported from the settings: not on the background-only list",
 		"移出只后台审核名单 / removed from the background-only list"},
 	LockBlocklist: {LevelEnforce,
 		"加入总是先审名单 / added to the always-check-first list",
 		"从设置导入总是先审名单 / imported from the always-check-first list of the settings",
+		"从设置导入名单：不在总是先审名单上 / imported from the settings: not on the always-check-first list",
 		"移出总是先审名单 / removed from the always-check-first list"},
 }
 
@@ -108,7 +110,10 @@ func (p *Plugin) lockWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 		return resp, nil
 	}
 	return p.changeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, now time.Time) (Watch, error) {
-		w, _, err := lockEntry(ctx, tx, w, found, in.List, now, watchChange{uid: uid, reason: lockLists[in.List].added, operator: callerID(req)})
+		w, changed, err := lockEntry(ctx, tx, w, found, in.List, now, watchChange{uid: uid, reason: lockLists[in.List].added, operator: callerID(req)})
+		if err == nil && !changed {
+			err = errUnchanged
+		}
 		return w, err
 	})
 }
@@ -123,7 +128,12 @@ func (p *Plugin) unlockWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		if !found || !w.Locked {
 			return w, errNotLocked
 		}
-		return w, removeEntry(ctx, tx, watchChange{uid: uid, action: "unlock", from: w.Level, reason: lockLists[w.Lock].removed,
-			operator: callerID(req)})
+		return w, unlockEntry(ctx, tx, w, lockLists[w.Lock].removed, callerID(req))
 	})
+}
+
+// unlockEntry removes w, a locked entry, recorded as an unlock with reason
+// by operator (nil = the list import). The caller holds the user's lock.
+func unlockEntry(ctx context.Context, tx pgx.Tx, w Watch, reason string, operator *int64) error {
+	return removeEntry(ctx, tx, watchChange{uid: w.UserID, action: "unlock", from: w.Level, reason: reason, operator: operator})
 }

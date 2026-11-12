@@ -69,11 +69,17 @@ const cost30d: Record<number, any> = {
 // Plugin settings (GET/PUT /plugins/moderation/settings); secrets come back masked.
 const MASK = '******'
 const SECRET_SETTINGS = ['notify_webhook_url', 'notify_webhook_secret']
+/** Moderators (staff): cannot be watched or locked. */
+const isStaff = (uid: number) => uid === 1
+// Stored before 0.11.0: retired keys the console folds into their new keys
+// (ban_window_hours, cache_ttl_seconds, retention_days) or drops
+// (analysis_every_violations) when it saves.
 const settings: Record<string, any> = {
   mode: 'observe', block_status: 403, auto_watch: true, watch_days: 30,
-  hit_replay: 'new_content', fail_policy: 'open', escalate_violations: 3, escalate_window_seconds: 600, ban_window_seconds: 43200,
+  hit_replay: 'new_content', fail_policy: 'open', escalate_violations: 3, escalate_window_seconds: 600,
   error_rate_alert_percent: 5, stats_retention_days: 90,
-  notify_webhook_url: 'https://hooks.example.com/moderation', notify_webhook_secret: 's3cr3t', jev_default_set: null
+  notify_webhook_url: 'https://hooks.example.com/moderation', notify_webhook_secret: 's3cr3t', jev_default_set: null,
+  ban_window_hours: 12, cache_ttl_seconds: 172800, retention_days: 365, analysis_every_violations: 30
 }
 /** Today's share of the 30-day cost of a channel, by source. */
 function channelStats(id: number) {
@@ -335,6 +341,7 @@ on('GET', '/p/moderation/status', () => {
     today_from: DAY_START(),
     watch: { watching: observe.length, watching_with_new: observe.filter((w) => w.hits_since_seen).length, blocking: watch.filter((w) => w.level === 'enforce').length },
     stale_bindings: allBindings().filter((b) => fallbackReason(b.flow_id)).length,
+    lists_imported: true,
     auditors: [health(1, 1820, 64, 2), health(2, 64, 41, 9, 3), health(4, 0, 0, 0)],
     channels: [health(1, 1820, 0, 2), health(2, 64, 0, 9), health(5, 2, 0, 0)],
     funnels: [
@@ -441,8 +448,16 @@ const settingsView = () => ({
   secret_fields: SECRET_SETTINGS
 })
 on('GET', '/plugins/moderation/settings', settingsView)
+/** The core's schema error of the keys the schema does not declare (additionalProperties: false). */
+function undeclaredError(values: Record<string, unknown>) {
+  const keys = settingsSchema ? Object.keys(values).filter((k) => !(k in settingsSchema.properties)) : []
+  if (!keys.length) return null
+  return fail(400, 'invalid_argument', 'invalid settings', { fields: [{ field: 'values', code: 'schema', message: `additional properties ${keys.map((k) => `'${k}'`).join(', ')} not allowed` }] })
+}
 on('PUT', '/plugins/moderation/settings', (req) => {
   const values = { ...(req.body?.values || {}) }
+  const undeclared = undeclaredError(values)
+  if (undeclared) return undeclared
   const status = Number(values.block_status)
   if (!(status >= 400 && status <= 599)) return fail(400, 'invalid_argument', 'invalid settings', { fields: [{ field: 'values.block_status', code: 'range', message: 'must be between 400 and 599 / 必须在 400–599 之间' }] })
   for (const k of SECRET_SETTINGS) if (values[k] === MASK) values[k] = settings[k]
@@ -479,7 +494,7 @@ function listFlags(uid: number) {
 function userState(uid: number) {
   const w = watch.find((x) => x.user_id === uid)
   const b = blocks.find((x) => x.user_id === uid)
-  return { watch: w ?? null, ...listFlags(uid), staff: uid === 1, blocked: !!b, blocked_until: b?.expires_at ?? null }
+  return { watch: w ?? null, ...listFlags(uid), staff: isStaff(uid), blocked: !!b, blocked_until: b?.expires_at ?? null }
 }
 on('GET', '/p/moderation/events/:id', (req) => {
   const e = events.find((x) => x.id === Number(req.params.id))
@@ -539,6 +554,7 @@ function watchItem(w: any) {
   return {
     ...w,
     ...listFlags(w.user_id),
+    staff: isStaff(w.user_id),
     group_id: group,
     other_groups: groups.filter((g) => g !== group),
     flow: f ? { flow_id: f.id, name: f.name, version: f.version } : null,
@@ -618,7 +634,7 @@ const levelExpiry = (level: string) => (level === 'observe' ? now(settings.watch
 on('POST', '/p/moderation/watchlist', (req) => {
   const uid = Number(req.body?.user_id)
   if (watch.some((w) => w.user_id === uid)) return fail(409, 'already_watched', 'user is already on the watch list / 该用户已在观察名单中')
-  if (uid === 1) return fail(400, 'invalid_argument', 'staff cannot be watched', { fields: [{ field: 'user_id', code: 'staff', message: 'staff users cannot be watched / 管理员不能加入名单' }] })
+  if (isStaff(uid)) return fail(400, 'invalid_argument', 'staff cannot be watched', { fields: [{ field: 'user_id', code: 'staff', message: 'staff users cannot be watched / 管理员不能加入名单' }] })
   const w = { user_id: uid, level: req.body.level || 'observe', source: 'manual', since_at: now(), expires_at: expiryOf(req.body, levelExpiry(req.body.level || 'observe')), hit_count: 0, violation_count: 0, hits_since_seen: 0, last_hit_at: null, note: req.body.note || '', updated_at: now() }
   watch.push(w)
   logWatch(uid, 'add', '', w.level, req.body)
@@ -655,8 +671,10 @@ on('PUT', '/p/moderation/watchlist/:id/lock', (req) => {
   const uid = Number(req.params.id)
   const lock = req.body?.list
   if (lock !== 'allowlist' && lock !== 'blocklist') return fail(400, 'invalid_argument', 'list must be allowlist or blocklist', { fields: [{ field: 'list', code: 'enum', message: 'allowlist or blocklist / 只能是 allowlist 或 blocklist' }] })
-  if (uid === 1) return fail(400, 'invalid_argument', 'staff cannot be watched', { fields: [{ field: 'user_id', code: 'staff', message: 'staff users cannot be watched / 管理员不能加入名单' }] })
+  if (isStaff(uid)) return fail(400, 'invalid_argument', 'staff cannot be watched', { fields: [{ field: 'user_id', code: 'staff', message: 'staff users cannot be watched / 管理员不能加入名单' }] })
   let w = watch.find((x) => x.user_id === uid)
+  // already a locked entry of the list: nothing changes, no history
+  if (w?.locked && w.lock === lock && !w.expires_at) return w
   if (!w) watch.push((w = { user_id: uid, source: 'manual', since_at: now(), hit_count: 0, violation_count: 0, hits_since_seen: 0, last_hit_at: null, note: '' }))
   const from = w.level || ''
   Object.assign(w, { level: lock === 'blocklist' ? 'enforce' : 'observe', locked: true, lock, expires_at: null, updated_at: now() })
@@ -666,10 +684,10 @@ on('PUT', '/p/moderation/watchlist/:id/lock', (req) => {
 // DELETE /watchlist/:id/lock: removes the locked entry.
 on('DELETE', '/p/moderation/watchlist/:id/lock', (req) => {
   const i = watch.findIndex((x) => x.user_id === Number(req.params.id) && x.locked)
-  if (i < 0) return fail(404, 'not_found', 'no locked entry / 该用户没有锁定条目')
+  if (i < 0) return fail(404, 'not_locked', 'user is on neither list / 该用户不在“只后台审核”或“总是先审”名单中')
   logWatch(watch[i].user_id, 'unlock', watch[i].level, '', {})
   watch.splice(i, 1)
-  return {}
+  return { user_id: Number(req.params.id), removed: true }
 })
 on('GET', '/p/moderation/watchlist/:id/events', (req) => watchEvents.filter((e) => e.user_id === Number(req.params.id)))
 

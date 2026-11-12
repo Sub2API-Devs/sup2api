@@ -283,11 +283,13 @@ func startNode(t *testing.T, fh *pluginsdktest.FakeHost, cfg any, opts ...nodeOp
 }
 
 // startDB starts a plugin instance with settings on a host of its own with
-// a fresh database (newDBHost).
+// a fresh database (newDBHost), once its one-time upgrade is done: the list
+// import would otherwise remove the entries a test locks meanwhile.
 func startDB(t *testing.T, settings map[string]any, opts ...nodeOpt) (*Plugin, *pluginsdktest.Harness, *pluginsdktest.FakeHost) {
 	t.Helper()
 	fh := newDBHost(t)
 	p, h := startNode(t, fh, settings, opts...)
+	waitFor(t, "the one-time upgrade", p.upgraded.Load)
 	return p, h, fh
 }
 

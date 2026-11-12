@@ -439,12 +439,19 @@ func TestSpecValidate(t *testing.T) {
 }
 
 func TestDecodeSettings(t *testing.T) {
-	// retention_days (0.1) is retired and no longer read.
+	// retention_days (0.1, retired) keeps the hits at least as long while
+	// hit_retention_days is absent (retiredKeys).
+	for raw, want := range map[string]int{`{"retention_days":30}`: 180, `{"retention_days":9999}`: 3650, `{"retention_days":"x"}`: 180,
+		`{"retention_days":400,"hit_retention_days":20}`: 20} {
+		if s, _ := DecodeSettings([]byte(raw)); s.HitRetentionDays != want {
+			t.Errorf("%s: hit_retention_days = %d, want %d", raw, s.HitRetentionDays, want)
+		}
+	}
 	s, err := DecodeSettings([]byte(`{"mode":"OBSERVE","block_status":500,"retention_days":400,"pass_retention_days":9,"watch_days":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Mode != ModeObserve || s.BlockStatus != 500 || s.HitRetentionDays != 180 || s.PassRetentionDays != 3 ||
+	if s.Mode != ModeObserve || s.BlockStatus != 500 || s.HitRetentionDays != 400 || s.PassRetentionDays != 3 ||
 		s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch || s.setup01 {
 		t.Fatalf("settings = %+v", s)
 	}

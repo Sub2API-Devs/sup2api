@@ -13,4 +13,9 @@ describe('lock actions', () => {
     expect(lockActions('blocklist')).toEqual(['allowlist', 'unlock'])
     expect(lockActions('allowlist')).toEqual(['blocklist', 'unlock'])
   })
+
+  it('offers a moderator no list, only the unlock of an entry from before', () => {
+    expect(lockActions(null, true)).toEqual([])
+    expect(lockActions('blocklist', true)).toEqual(['unlock'])
+  })
 })

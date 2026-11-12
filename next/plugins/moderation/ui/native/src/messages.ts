@@ -1166,6 +1166,7 @@ export default {
       clearCacheConfirm: '清空后所有内容会按当前配置重新审核，一段时间内审核调用和费用会上升。',
       cacheCleared: '已清空',
       cacheOff: '判定缓存目前是关闭的（缓存天数为 0）。在上面填写 1–30 天并保存后开启。',
+      listsPending: '名单导入尚未完成，暂时不能保存设置',
     },
   },
   en: {
@@ -2256,6 +2257,7 @@ export default {
       clearCacheConfirm: 'After clearing, all content is moderated again under the current configuration; moderation calls and cost rise for a while.',
       cacheCleared: 'Cleared',
       cacheOff: 'The verdict cache is off (the cache days are 0). Enter 1–30 days above and save to turn it on.',
+      listsPending: 'The import of the user lists has not finished yet; the settings cannot be saved for now',
     },
   }
 }

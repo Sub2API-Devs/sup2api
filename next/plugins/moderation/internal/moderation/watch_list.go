@@ -47,6 +47,7 @@ type WatchItem struct {
 	// (Watch.Lock).
 	Allowlisted     bool            `json:"allowlisted"`
 	Blocklisted     bool            `json:"blocklisted"`
+	Staff           bool            `json:"staff"`    // a moderator (isStaff), not to be locked: the entry predates that
 	GroupID         int64           `json:"group_id"` // group of the latest record
 	OtherGroups     []int64         `json:"other_groups"`
 	Flow            *FlowRef        `json:"flow"` // flow bound to group_id now
@@ -169,7 +170,7 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 	r := &watchRows{byID: map[int64]*WatchItem{}, categories: map[int64]map[string]int64{}, grouped: map[int64]bool{}}
 	for i, w := range list {
 		items[i] = WatchItem{Watch: w, Allowlisted: w.Lock == LockAllowlist, Blocklisted: w.Lock == LockBlocklist,
-			OtherGroups: []int64{}, TopCategories: []CategoryCount{}}
+			Staff: p.isStaff(ctx, w.UserID), OtherGroups: []int64{}, TopCategories: []CategoryCount{}}
 		r.ids = append(r.ids, w.UserID)
 		r.byID[w.UserID] = &items[i]
 	}

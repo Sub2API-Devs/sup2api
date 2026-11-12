@@ -28,6 +28,7 @@ import { CACHE_DAYS_KEY, currentSettings, displayValues, editableKeys, schemaKey
 import type { SectionKey } from './nav'
 import { useAsync } from './useAsync'
 import { DurationWidget } from './durationWidget'
+import { listsImportPending, useStatus } from './status'
 import { fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, useModHost } from './host'
 import type { JevQuestions } from './types'
 
@@ -43,6 +44,8 @@ import type { JevQuestions } from './types'
 // currentSettings): retired keys are shown folded into their new keys and
 // any save drops what the schema no longer declares and the 0.1 API key.
 // The user lists are the locked entries of the watch list (userLock.ts).
+// Until the status says the one-time import of the lists of the stored
+// settings is done, the page does not save (a save would drop them).
 // Under the cache days, moderation:manage users can empty the verdict cache
 // of every node (VerdictCacheRow).
 //
@@ -70,6 +73,9 @@ const kept = reactive<Record<string, boolean>>({})
 const jev = ref<JevQuestions | null>(null)
 const errs = reactive<FieldErrors>({})
 const saving = ref(false)
+/** The status (loaded by the dashboard) says the lists are not imported yet: no save. */
+const status = useStatus()
+const listsPending = computed(() => listsImportPending(status.data.value))
 /** Collapsed groups opened by the user. */
 const opened = reactive<Record<string, boolean>>({})
 
@@ -171,6 +177,7 @@ function validate(current: PageValues): boolean {
 }
 
 async function save() {
+  if (listsPending.value) return
   clearErrors(errs)
   const current = pageValues()
   if (!validate(current)) return
@@ -233,6 +240,7 @@ const jevOptions = computed(() => [
     <SAlert v-else-if="error" tone="danger">{{ error }}</SAlert>
     <SAlert v-else-if="!sections.length" tone="danger">{{ t('settingsTab.noSchema') }}</SAlert>
     <form v-else class="mod-form mod-form-page" @submit.prevent="save">
+      <SAlert v-if="listsPending" tone="warning">{{ t('settingsTab.listsPending') }}</SAlert>
       <SSettingsGroup
         v-for="g in sections"
         :key="g.id"
@@ -299,7 +307,7 @@ const jevOptions = computed(() => [
 
       <div class="mod-editor-footer">
         <SHint v-if="dirty" size="xs" tone="warning" class="mod-mr-auto">{{ t('settingsTab.unsaved') }}</SHint>
-        <SButton type="submit" variant="primary" :loading="saving">{{ t('save') }}</SButton>
+        <SButton type="submit" variant="primary" :loading="saving" :disabled="listsPending">{{ t('save') }}</SButton>
       </div>
     </form>
   </div>

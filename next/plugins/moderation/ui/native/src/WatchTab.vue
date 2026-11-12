@@ -148,11 +148,14 @@ function ask(r: WatchItem, a: WatchAction) {
   action.value = a
 }
 const lock = useUserLock(() => void list.reload())
-/** "more": lock / unlock, then remove (not for a locked entry). */
-const moreActions = (r: WatchItem) => [...lock.items(userListOf(r)), { key: 'remove', label: t('watch.remove'), danger: true, disabled: watchLocked(r), divider: true }]
+/** "more": lock / unlock (a moderator only unlock), then remove (not for a locked entry). */
+const moreActions = (r: WatchItem) => [
+  ...lock.items(userListOf(r), r.staff),
+  { key: 'remove', label: t('watch.remove'), danger: true, disabled: watchLocked(r), divider: true }
+]
 async function onMore(r: WatchItem, key: string) {
   if (key === 'remove') ask(r, { kind: 'release', level: null })
-  else await lock.run(r.user_id, key, userListOf(r))
+  else await lock.run(r.user_id, key, userListOf(r), r.staff)
 }
 
 // ---- detail drawer

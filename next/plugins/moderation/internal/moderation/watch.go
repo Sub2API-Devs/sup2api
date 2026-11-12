@@ -362,6 +362,9 @@ var (
 	errConflict  = errors.New("conflict")
 	errLocked    = errors.New("locked")
 	errNotLocked = errors.New("not locked")
+	// errUnchanged ends a change that wrote nothing: the entry is answered
+	// without a bump or broadcast.
+	errUnchanged = errors.New("unchanged")
 )
 
 // watchChangeFn changes uid's live entry w (found = there is one) at now.
@@ -380,7 +383,8 @@ func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid 
 }
 
 // changeWatch runs one manual watch change under the user's lock (an
-// expired entry is removed first), then reloads and broadcasts.
+// expired entry is removed first), then reloads and broadcasts; a change
+// that wrote nothing (errUnchanged) answers the entry as it is.
 func (p *Plugin) changeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid int64, fn watchChangeFn) (*pluginv1.HTTPResponse, error) {
 	db, err := p.db(ctx)
 	if err != nil {
@@ -402,6 +406,8 @@ func (p *Plugin) changeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid
 		return bumpWatch(ctx, tx)
 	})
 	switch {
+	case errors.Is(err, errUnchanged):
+		return pluginsdk.DataResponse(out), nil
 	case errors.Is(err, errNotFound):
 		return pluginsdk.ErrorResponse(http.StatusNotFound, "not_found", "user is not on the watch list / 该用户不在观察名单中"), nil
 	case errors.Is(err, errConflict):

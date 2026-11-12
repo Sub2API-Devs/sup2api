@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
-import { currentSettings, CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, RETIRED, schemaKeys, sectionsOf, sentValue, settingSections, settingsKey } from './settingsForm'
+import { currentSettings, CUSTOM_KEYS, displayValues, editableKeys, HIT_DAYS, LEGACY_KEY, RETIRED, schemaKeys, sectionsOf, sentValue, settingSections, settingsKey } from './settingsForm'
 import { NAV_GROUPS } from './nav'
 import { mergeSettings, type PageValues } from './settingsMerge'
 
@@ -94,14 +94,15 @@ describe('currentSettings', () => {
     for (const v of [MASK, 'sk-old']) expect(currentSettings(schema, { mode: 'enforce', [LEGACY_KEY]: v })).toEqual({ mode: 'enforce' })
   })
 
-  it('folds cache_ttl_seconds into the cache days never stored: 0 = off, else whole days rounded up, 1 to 30', () => {
+  it('folds cache_ttl_seconds into the cache days never stored: 0 = off, else whole days rounded up, at most 7', () => {
     const days = (ttl: unknown, s: Record<string, unknown> = {}) => currentSettings(schema, { ...s, cache_ttl_seconds: ttl }).verdict_cache_days
     expect(days(0)).toBe(0)
     expect(days(600)).toBe(1)
     expect(days(86400)).toBe(1)
     expect(days(86401)).toBe(2)
     expect(days(604800)).toBe(7)
-    expect(days(86400 * 90)).toBe(30)
+    expect(days(604801)).toBe(7)
+    expect(days(86400 * 90)).toBe(7)
     expect(days(600, { verdict_cache_days: 14 })).toBe(14)
     expect(days('x')).toBeUndefined()
   })
@@ -109,6 +110,17 @@ describe('currentSettings', () => {
   it('folds ban_window_hours into ban_window_seconds never stored', () => {
     expect(currentSettings(schema, { ban_window_hours: 12 })).toEqual({ ban_window_seconds: 43200 })
     expect(currentSettings(schema, { ban_window_hours: 12, ban_window_seconds: 600 })).toEqual({ ban_window_seconds: 600 })
+  })
+
+  it('folds retention_days into hit_retention_days never stored: never below its default, at most its maximum', () => {
+    const hit = schema.properties.hit_retention_days
+    expect(HIT_DAYS).toEqual({ default: hit.default, max: hit.maximum })
+    const days = (v: unknown, s: Record<string, unknown> = {}) => currentSettings(schema, { ...s, retention_days: v }).hit_retention_days
+    expect(days(30)).toBe(180)
+    expect(days(400)).toBe(400)
+    expect(days(9999)).toBe(3650)
+    expect(days(400, { hit_retention_days: 20 })).toBe(20)
+    expect(days('x')).toBeUndefined()
   })
 
   it('leaves settings already current as they are', () => {
@@ -139,7 +151,8 @@ describe('the save of the settings tab', () => {
     blocklist_user_ids: ['8'],
     analysis_every_violations: 30,
     cache_ttl_seconds: 3600,
-    ban_window_hours: 12
+    ban_window_hours: 12,
+    retention_days: 400
   }
   // the page loads, and saves over, the stored values brought to the current schema
   const stored = currentSettings(schema, raw)
@@ -152,6 +165,7 @@ describe('the save of the settings tab', () => {
   it('shows the folded values of the retired keys, and schema defaults for keys never stored', () => {
     expect(form.verdict_cache_days).toBe(1)
     expect(form.ban_window_seconds).toBe(43200)
+    expect(form.hit_retention_days).toBe(400)
     expect(form.block_status).toBe(403)
     expect(form.auto_watch).toBe(true)
   })
@@ -159,7 +173,7 @@ describe('the save of the settings tab', () => {
   it('saves the settings brought to the current schema even when nothing was edited', () => {
     const m = save({})
     expect(m.changed).toEqual([])
-    expect(m.values).toEqual({ mode: 'observe', watch_days: 14, notify_webhook_url: MASK, notify_webhook_secret: MASK, verdict_cache_days: 1, ban_window_seconds: 43200 })
+    expect(m.values).toEqual({ mode: 'observe', watch_days: 14, notify_webhook_url: MASK, notify_webhook_secret: MASK, verdict_cache_days: 1, ban_window_seconds: 43200, hit_retention_days: 400 })
     // differs from what is stored, so the page PUTs it (SettingsTab save)
     expect(JSON.stringify(m.values)).not.toBe(JSON.stringify(raw))
   })

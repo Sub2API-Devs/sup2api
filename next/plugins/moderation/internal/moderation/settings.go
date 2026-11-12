@@ -309,6 +309,13 @@ var retiredKeys = []retiredKey{
 		d.integer("ban_window_hours", &hours, 1, 8760)
 		s.BanWindowSeconds = hours * 3600
 	}},
+	// 0.1 kept every record retention_days: settings without
+	// hit_retention_days keep the hits at least as long (as 0.10.0 did).
+	{"retention_days", "hit_retention_days", func(d decoder, s *Settings) {
+		days := 0
+		d.integer("retention_days", &days, 1, 3650)
+		s.HitRetentionDays = max(s.HitRetentionDays, days)
+	}},
 	// The user lists, only for the one-time import (upgrade.go).
 	{"allowlist_user_ids", "", func(d decoder, s *Settings) { s.lists.readAllow(d, "allowlist_user_ids") }},
 	{"exempt_user_ids", "allowlist_user_ids", func(d decoder, s *Settings) { s.lists.readAllow(d, "exempt_user_ids") }},
