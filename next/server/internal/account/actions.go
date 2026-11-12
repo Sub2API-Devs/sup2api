@@ -91,7 +91,7 @@ func (s *Service) executeAccountAction(c *gin.Context) {
 	}
 	// Special handling for ccgateway refresh_auth action.
 	if pluginKey == "ccgateway" && actionID == "refresh_auth" {
-		s.handleCCGatewayRefreshAuth(c, ctx, id, scope)
+		s.handleCCGatewayRefreshAuth(c, ctx, id)
 		return
 	}
 
@@ -103,7 +103,7 @@ func (s *Service) executeAccountAction(c *gin.Context) {
 
 // handleCCGatewayRefreshAuth handles the refresh_auth action for CCGateway accounts
 // by initiating a re-authorization flow.
-func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context, id int64, scope *int64) {
+func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context, id int64) {
 	if s.d.CCGateway == nil {
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("Account runtimes are not configured.").
 			WithDetails(map[string]any{"reason": "not_configured"}))
@@ -159,16 +159,26 @@ func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType
 // visibleActions are the actions of account a that the caller may invoke:
 // every action when the caller may update that account (its own, or any with
 // the "all" key; declared actions all require account:update), otherwise
-// only the ones that require nothing. Never nil.
-func (s *Service) visibleActions(ctx context.Context, a *row) []AccountAction {
+// only the ones that require nothing. update is the caller's update range
+// (updateRange). Never nil.
+func (s *Service) visibleActions(ctx context.Context, a *row, update updateRange) []AccountAction {
 	actions := s.listAccountActions(ctx, a.PluginKey, a.Type)
-	if len(actions) == 0 {
-		return actions
-	}
-	if scope, ok := core.ScopeOf(ctx, s.d.Authorizer, core.AccountScope("update")); ok && core.Allows(scope, a.CreatedBy) {
+	if update.ok && core.Allows(update.scope, a.CreatedBy) {
 		return actions
 	}
 	return slices.DeleteFunc(actions, func(action AccountAction) bool { return action.Permission != "" })
+}
+
+// updateRange is which accounts the caller may update: core.ScopeOf of
+// account:update, read once for a whole list.
+type updateRange struct {
+	scope *int64
+	ok    bool
+}
+
+func (s *Service) updateRange(ctx context.Context) (r updateRange) {
+	r.scope, r.ok = core.ScopeOf(ctx, s.d.Authorizer, core.AccountScope("update"))
+	return r
 }
 
 // getAccountActions serves GET /accounts/:id/actions: lists available actions for an account.
@@ -186,5 +196,5 @@ func (s *Service) getAccountActions(c *gin.Context) {
 		return
 	}
 
-	httpapi.OK(c, gin.H{"actions": s.visibleActions(ctx, a)})
+	httpapi.OK(c, gin.H{"actions": s.visibleActions(ctx, a, s.updateRange(ctx))})
 }

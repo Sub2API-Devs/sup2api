@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -13,7 +12,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/environment"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
@@ -108,7 +106,7 @@ func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64
 // ccgReauthScope is the key range of the re-authorization endpoints: that of
 // the other per-account runtime writes (the §49.5 rule), account:update for
 // every account, account:own:update for the accounts the caller created.
-var ccgReauthScope = ccgateway.RuntimeScope(http.MethodPost)
+var ccgReauthScope = core.AccountScope("update")
 
 // ccgReauthAccount loads the CCGateway account of a re-authorization
 // request; ok=false after the failure was written.

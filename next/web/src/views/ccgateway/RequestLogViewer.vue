@@ -339,7 +339,7 @@ const yesNo = (v: boolean | null) => (v === null ? '—' : v ? t('ccgateway.logV
             <SDescItem :label="t('ccgateway.logViewer.cols.time')"><SDateTime :value="current.time" mode="absolute" /></SDescItem>
             <SDescItem :label="t('ccgateway.logViewer.cols.stage')" mono :value="metaText('stage')" />
             <SDescItem :label="t('ccgateway.logViewer.cols.status')" :value="metaText('status')" />
-            <SDescItem :label="t('ccgateway.logViewer.fields.error')" :value="current.error_type ? `${current.error_type}: ${current.error || ''}` : '—'" />
+            <SDescItem :label="t('ccgateway.logViewer.fields.error')" :value="[current.error_type, current.error].filter(Boolean).join(': ') || '—'" />
             <SDescItem :label="t('ccgateway.logViewer.cols.model')" :value="metaText('model')" />
             <SDescItem :label="t('ccgateway.logViewer.fields.messages')" :value="metaText('message_count')" />
             <SDescItem :label="t('ccgateway.logViewer.fields.execution')" mono :value="metaText('execution_mode')" />

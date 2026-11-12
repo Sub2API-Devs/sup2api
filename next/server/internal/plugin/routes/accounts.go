@@ -15,18 +15,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
 
-var (
-	errNoAccountAccess = core.ErrUnavailable.WithMessage("account checks of plugin routes are not configured")
-	errTooManyAccounts = core.ErrInvalidArgument.WithMessage(fmt.Sprintf("at most %d accounts per request", manifest.MaxAccountBatch))
-)
+var errTooManyAccounts = core.ErrInvalidArgument.WithMessage(fmt.Sprintf("at most %d accounts per request", manifest.MaxAccountBatch))
 
 // authorizeAccounts checks that the caller may act on every account the
 // request names (manifest.RouteAccounts) and answers the request when not.
 func (h *Handler) authorizeAccounts(c *gin.Context, acc *manifest.RouteAccounts, params map[string]string, body []byte) bool {
-	if h.accounts == nil {
-		httpapi.Fail(c, errNoAccountAccess)
-		return false
-	}
 	ids, err := accountIDs(acc.From, params, c.Request.URL.Query(), body)
 	if err == nil {
 		ctx := c.Request.Context()

@@ -369,8 +369,12 @@ func AccountsDenied(action string) *Error {
 // AuthorizeAccounts is the strict form of AccountsInScope every caller uses:
 // the "all" scope passes; the "own" scope needs at least one id (else
 // AccountsDenied) and every id in scope (else ErrNotFound, as for an account
-// outside the scope).
+// outside the scope). A caller whose account module is not wired passes nil
+// and gets ErrUnavailable.
 func AuthorizeAccounts(ctx context.Context, aa AccountAccess, userID int64, action string, ids []int64) error {
+	if aa == nil {
+		return ErrUnavailable.WithMessage("account checks are not configured")
+	}
 	all, allowed, err := aa.AccountsInScope(ctx, userID, action, ids)
 	if err != nil || all {
 		return err
