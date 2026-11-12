@@ -1,17 +1,13 @@
-import type { JSONSchema, MenuAction } from '@sub2api/ui'
-import { fetchPluginSettings, savePluginSettings, toastError, useModHost } from './host'
-import { displayValues, USER_LIST_KEYS, withRetiredMirrored } from './settingsForm'
-import { mergeSettings } from './settingsMerge'
+import type { MenuAction } from '@sub2api/ui'
+import { lockWatch, toastError, unlockWatch, useModHost } from './host'
 import type { UserList } from './types'
 
-// Locked watch list entries (design D5, 0.10.0): a user on a user list of
-// the settings has a locked entry, whose level the list fixes (blocklist =
-// enforce, allowlist = observe) and which never expires. The settings stay
-// the source of truth: locking or unlocking saves allowlist_user_ids /
-// blocklist_user_ids, and the plugin mirrors them into the entries. The
-// save re-reads the stored settings and writes back only the list that
-// changed, the retired exempt_user_ids mirrored for older nodes, as the
-// settings page does (settingsMerge.ts, withRetiredMirrored).
+// Locked watch list entries (design D5): the allowlist and the blocklist
+// are the locked entries of the watch list (0.11.0), whose level the list
+// fixes (blocklist = enforce, allowlist = observe) and which never expire.
+// Locking puts the user's entry on a list (PUT /watchlist/:id/lock, created
+// or converted), unlocking removes it (DELETE /watchlist/:id/lock); both
+// take effect at once.
 
 export const USER_LISTS: readonly UserList[] = ['blocklist', 'allowlist']
 
@@ -25,35 +21,9 @@ export const userListOf = (u: { allowlisted?: boolean; blocklisted?: boolean }):
 export const lockActions = (current: UserList | null): LockAction[] => [...USER_LISTS.filter((l) => l !== current), ...(current ? (['unlock'] as const) : [])]
 
 /**
- * The settings to PUT that put `userId` on `lock` alone (null = on neither
- * list), from the stored settings: the lists as the plugin reads them (the
- * allowlist from the retired key until saved); null when nothing changes.
- */
-export function lockedSettings(schema: JSONSchema | null | undefined, stored: Record<string, unknown>, userId: number, lock: UserList | null): Record<string, unknown> | null {
-  const keys = USER_LISTS.map((l) => USER_LIST_KEYS[l])
-  const before = displayValues(schema, stored, keys)
-  const id = String(userId)
-  const after: Record<string, unknown> = {}
-  for (const l of USER_LISTS) {
-    const k = USER_LIST_KEYS[l]
-    const list = Array.isArray(before[k]) ? (before[k] as unknown[]) : []
-    const others = list.filter((x) => String(x) !== id)
-    // a list the user is on already stays as it is
-    after[k] = l !== lock ? others : others.length < list.length ? list : [...list, id]
-  }
-  const m = mergeSettings(keys, stored, stored, before, after)
-  return m.changed.length ? withRetiredMirrored(m.values, m.changed) : null
-}
-
-/**
  * The lock actions of a user as menu items (keyed by LockAction), and `run`
- * for a picked one: confirms, saves the settings and toasts; once saved it
- * calls reload, and again after LOCK_SETTLE_MS: the locked entry follows the
- * settings when the plugin reconciles them, a few seconds after the save.
+ * for a picked one: confirms, locks or unlocks, toasts and calls reload.
  */
-/** The plugin reconciles the lists within its 5 s refresh; one more reload after that. */
-export const LOCK_SETTLE_MS = 6000
-
 export function useUserLock(reload: () => void) {
   const host = useModHost()
   const t = host.t
@@ -65,12 +35,9 @@ export function useUserLock(reload: () => void) {
     const message = t(`lock.confirm.${action}`, { id: userId, list: current ? t(`lists.name.${current}`) : '' })
     if (!(await host.confirm({ title: t(`lock.action.${action}`), message, confirmText: t('lock.save'), danger: action === 'blocklist' }))) return
     try {
-      const s = await fetchPluginSettings()
-      const values = lockedSettings(s.schema, s.values || {}, userId, action === 'unlock' ? null : action)
-      if (values) await savePluginSettings(values)
+      await (action === 'unlock' ? unlockWatch(userId) : lockWatch(userId, action))
       host.toast(t(action === 'unlock' ? 'lock.unlocked' : 'lock.locked', { id: userId }), 'success')
       reload()
-      setTimeout(reload, LOCK_SETTLE_MS)
     } catch (e) {
       toastError(e)
     }

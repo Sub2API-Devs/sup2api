@@ -24,7 +24,7 @@ import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
-import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sectionsOf, sentSetting, settingSections, settingsKey, verdictCacheDisabled, type SettingSection } from './settingsForm'
+import { CACHE_DAYS_KEY, currentSettings, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sectionsOf, sentValue, settingSections, settingsKey, type SettingSection } from './settingsForm'
 import type { SectionKey } from './nav'
 import { useAsync } from './useAsync'
 import { DurationWidget } from './durationWidget'
@@ -37,14 +37,14 @@ import type { JevQuestions } from './types'
 // forms/settings.ui.json whose page is this one (nav.ts), rendered by the
 // schema widgets, except a few with their own editor here: the block
 // response preview per API format, the webhook address and secret ("set" / clear) and the Jev default question
-// set. The converted 0.1 fields are hidden and go back as stored; a stored
-// 0.1 API key can only be cleared.
+// set. A stored 0.1 API key is hidden and can only be cleared.
 //
-// 0.8.0: `mode` is the switch and the default level; the verdict cache
-// days start from the retired cache_ttl_seconds (settingsForm.ts). The user
-// lists are hidden since 0.10.0: they are edited by locking users on the
-// watch list (userLock.ts). Under the cache days, moderation:manage users
-// can empty the verdict cache of every node (VerdictCacheRow).
+// The stored values are brought to the current schema (settingsForm.ts
+// currentSettings): retired keys are shown folded into their new keys and
+// any save drops what the schema no longer declares. The user lists are the
+// locked entries of the watch list (userLock.ts). Under the cache days,
+// moderation:manage users can empty the verdict cache of every node
+// (VerdictCacheRow).
 //
 // A save re-reads the stored values and writes back only the keys of this
 // page edited since it loaded (settingsMerge.ts), so a change made elsewhere
@@ -74,9 +74,9 @@ const saving = ref(false)
 const opened = reactive<Record<string, boolean>>({})
 
 const copyQuestions = (q: JevQuestions): JevQuestions => ({ preamble: q.preamble || '', items: q.items.map((x) => ({ ...x })) })
-/** The stored values when the page loaded, and this page's values then (what a save compares with). */
+/** The stored values when the page loaded (currentSettings), and this page's values then (what a save compares with). */
 let loaded: Record<string, unknown> = {}
-/** The stored settings keep the verdict cache off (the retired cache_ttl_seconds = 0). */
+/** The stored settings keep the verdict cache off (verdict_cache_days = 0). */
 const cacheOff = ref(false)
 const initial = ref<PageValues>({})
 
@@ -103,7 +103,7 @@ const schemaDefault = (k: string) => {
 
 watch(data, (v) => {
   if (!v) return
-  const stored = v[0].values || {}
+  const stored = currentSettings(v[0].schema, v[0].values || {})
   for (const k of Object.keys(form)) delete form[k]
   Object.assign(form, displayValues(v[0].schema, stored, widgetKeys.value))
   for (const k of [...WEBHOOK, LEGACY_KEY]) kept[k] = stored[k] === SETTINGS_MASK
@@ -114,8 +114,8 @@ watch(data, (v) => {
   const set = stored.jev_default_set as JevQuestions | null | undefined
   jev.value = set ? copyQuestions(set) : null
   clearErrors(errs)
-  loaded = { ...stored }
-  cacheOff.value = verdictCacheDisabled(stored)
+  loaded = stored
+  cacheOff.value = stored[CACHE_DAYS_KEY] === 0
   initial.value = pageValues()
 })
 onMounted(reload)
@@ -129,7 +129,7 @@ function webhookValue(k: WebhookKey) {
 /** The keys of this page as sent; undefined = removed (its default applies). */
 function pageValues(): PageValues {
   const out: PageValues = {}
-  for (const k of widgetKeys.value) out[k] = sentSetting(prop(k), loaded, k, form[k])
+  for (const k of widgetKeys.value) out[k] = sentValue(prop(k), form[k])
   for (const k of WEBHOOK) if (keys.value.includes(k)) out[k] = webhookValue(k)
   if (keys.value.includes('jev_default_set')) out.jev_default_set = jev.value ? jevPayload(jev.value) : null
   if (keys.value.includes(LEGACY_KEY)) out[LEGACY_KEY] = kept[LEGACY_KEY] ? SETTINGS_MASK : undefined
@@ -182,8 +182,10 @@ async function save() {
   saving.value = true
   try {
     const latest = await fetchPluginSettings()
-    const m = mergeSettings(keys.value, loaded, latest.values || {}, initial.value, current)
-    if (!m.changed.length) {
+    const stored = latest.values || {}
+    const m = mergeSettings(keys.value, loaded, currentSettings(latest.schema, stored), initial.value, current)
+    // nothing edited still saves what currentSettings drops or folds
+    if (JSON.stringify(m.values) === JSON.stringify(stored)) {
       host.toast(t('settingsTab.noChanges'), 'info')
       return
     }

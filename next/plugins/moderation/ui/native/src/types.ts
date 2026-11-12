@@ -216,9 +216,9 @@ export interface RelatedEvent {
 /** The record user's moderation state now. */
 export interface UserState {
   watch: Watch | null
-  /** on the allowlist of the settings: only moderated after the request, never refused or banned */
+  /** on the allowlist (a locked entry): only moderated after the request, never refused or banned */
   allowlisted: boolean
-  /** on the blocklist of the settings: always moderated first (a user on both lists is blocklisted) */
+  /** on the blocklist (a locked entry): always moderated first */
   blocklisted: boolean
   staff: boolean
   blocked: boolean
@@ -280,13 +280,13 @@ export interface Watch {
   hits_since_seen?: number
   note: string
   updated_at: string
-  /** a locked entry (0.10.0) mirrors a user list of the settings: its level is fixed, it never expires, the watch API refuses a level change or a removal (409 locked) */
+  /** a locked entry (0.10.0) is the user's place on a user list: its level is fixed, it never expires, the watch API refuses a level change or a removal (409 locked); PUT / DELETE /watchlist/:id/lock (0.11.0) lock and unlock */
   locked?: boolean
-  /** the user list a locked entry mirrors; absent while it is still locked after the user left the lists (the plugin unlocks it shortly) */
+  /** the user list of a locked entry */
   lock?: UserList
 }
 
-/** The user lists of the settings: allowlist = background only (observe), blocklist = always checked first (enforce). */
+/** The user lists (locked watch entries): allowlist = background only (observe), blocklist = always checked first (enforce). */
 export type UserList = 'allowlist' | 'blocklist'
 
 export interface SeverityCounts {
@@ -308,7 +308,7 @@ export interface WatchItem extends Watch {
   top_categories: Array<{ category: string; label?: string; count: number }>
   /** records whose highest category is not among top_categories */
   top_other: number
-  /** the user lists of the settings (a user on both is blocklisted) */
+  /** the user list of the user's locked entry */
   allowlisted?: boolean
   blocklisted?: boolean
 }

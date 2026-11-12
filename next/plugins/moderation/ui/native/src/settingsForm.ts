@@ -1,26 +1,16 @@
 import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@sub2api/ui'
-import type { UserList } from './types'
 
 // The settings tab as a whole settings page (CONTRACTS §72.15, §75.5): the
 // fields of forms/settings.schema.json in the order and ui:section groups of
-// forms/settings.ui.json, without the hidden ones (the converted 0.1 fields
-// and the keys retired in 0.8.0, kept in the schema so the core still
-// validates and masks them). The values of the keys this page does not edit
-// go back as stored (settingsMerge.ts).
+// forms/settings.ui.json, without the hidden ones (the 0.1 API key). The
+// values of the keys this page does not edit go back as stored
+// (settingsMerge.ts).
 //
-// Two keys of 0.8.0 replace a retired one that the plugin still reads until
-// the new key is stored (settings.go DecodeSettings); what the plugin reads
-// is shown and the new key is written:
-//   allowlist_user_ids  ← exempt_user_ids
-//   verdict_cache_days  ← cache_ttl_seconds (0 = cache off, else whole days, rounded up, 1–30);
-//                         verdict_cache_days = 0 turns the cache off too
-// Cleared cache days are not removed while the retired key would be read
-// again (sentSetting). The user lists are hidden on the page since 0.10.0
-// and saved by locking a user on the watch list (userLock.ts), which stores
-// an emptied list as [] (the retired key is not read again) and writes "the
-// allowlist without the blocklisted users" to the retired exempt_user_ids
-// too (withRetiredMirrored): nodes still on 0.7.2 read only that key and do
-// not moderate its users at all.
+// The plugin cannot rewrite its stored settings, so the page brings them to
+// the current schema (currentSettings) before it shows or saves them: a key
+// the schema no longer declares is dropped (the core refuses it), and the
+// value of a retired key is folded into the key that replaced it while that
+// was never stored (RETIRED).
 
 /** Keys with their own editor on the settings tab instead of the schema widget. */
 export const CUSTOM_KEYS = ['notify_webhook_url', 'notify_webhook_secret', 'jev_default_set'] as const
@@ -78,97 +68,48 @@ export const schemaKeys = (keys: readonly string[]) => keys.filter((k) => k !== 
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
-/** The settings key of each user list. */
-export const USER_LIST_KEYS: Readonly<Record<UserList, string>> = { allowlist: 'allowlist_user_ids', blocklist: 'blocklist_user_ids' }
-const ALLOWLIST_KEY = USER_LIST_KEYS.allowlist
-const BLOCKLIST_KEY = USER_LIST_KEYS.blocklist
 export const CACHE_DAYS_KEY = 'verdict_cache_days'
-const RETIRED_ALLOWLIST = 'exempt_user_ids'
-const RETIRED_CACHE_TTL = 'cache_ttl_seconds'
 const DAY_SECONDS = 86400
 const CACHE_DAYS_MAX = 30
+const HOUR_SECONDS = 3600
 
-/** The stored settings turn the verdict cache off: only the retired cache_ttl_seconds = 0 does, until verdict_cache_days is saved. */
-export const verdictCacheOff = (stored: Record<string, unknown>) => stored[CACHE_DAYS_KEY] === undefined && stored[RETIRED_CACHE_TTL] === 0
+/** A finite number through f, else undefined (nothing to fold). */
+const numberTo = (f: (n: number) => number) => (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? f(v) : undefined)
 
-/** The stored settings keep the verdict cache off: verdict_cache_days = 0, or the retired key's 0 (verdictCacheOff). */
-export const verdictCacheDisabled = (stored: Record<string, unknown>) => stored[CACHE_DAYS_KEY] === 0 || verdictCacheOff(stored)
-
-/** What the plugin reads for a key never stored whose retired key is: undefined = nothing (the schema default applies). */
-function retiredValue(stored: Record<string, unknown>, k: string): unknown {
-  if (k === ALLOWLIST_KEY) return stored[RETIRED_ALLOWLIST]
-  const ttl = stored[RETIRED_CACHE_TTL]
-  if (k !== CACHE_DAYS_KEY || typeof ttl !== 'number' || !(ttl > 0)) return undefined
-  return Math.min(CACHE_DAYS_MAX, Math.max(1, Math.ceil(ttl / DAY_SECONDS)))
+/** Retired keys and the key that replaced each, with the conversion of a stored value. */
+export const RETIRED: Readonly<Record<string, { key: string; convert: (v: unknown) => unknown }>> = {
+  // 0 = cache off, else whole days, rounded up, 1–30
+  cache_ttl_seconds: { key: CACHE_DAYS_KEY, convert: numberTo((s) => (s > 0 ? Math.min(CACHE_DAYS_MAX, Math.ceil(s / DAY_SECONDS)) : 0)) },
+  ban_window_hours: { key: 'ban_window_seconds', convert: numberTo((h) => h * HOUR_SECONDS) }
 }
 
 /**
- * The value a schema widget shows for each key: the stored one, else what
- * its retired key gives, else the schema default. The cache days stay empty
- * while the retired key keeps the cache off (the default would look like
- * a running cache).
+ * The stored settings as the current schema reads them: each retired value
+ * folded into its new key when that was never stored, then every key the
+ * schema does not declare dropped. Without a schema they are kept as stored.
  */
-export function displayValues(schema: JSONSchema | null | undefined, stored: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const k of keys) {
-    const v = stored[k] !== undefined ? stored[k] : retiredValue(stored, k)
-    out[k] = clone(v !== undefined || (k === CACHE_DAYS_KEY && verdictCacheOff(stored)) ? v : schema?.properties?.[k]?.default)
+export function currentSettings(schema: JSONSchema | null | undefined, stored: Record<string, unknown>): Record<string, unknown> {
+  const declared = schema?.properties
+  if (!declared) return stored
+  const out: Record<string, unknown> = { ...stored }
+  for (const [old, r] of Object.entries(RETIRED)) {
+    const v = out[r.key] === undefined ? r.convert(stored[old]) : undefined
+    if (v !== undefined) out[r.key] = v
   }
+  for (const k of Object.keys(out)) if (!(k in declared)) delete out[k]
   return out
 }
 
+/** The value a schema widget shows for each key: the stored one (currentSettings), else the schema default. */
+export function displayValues(schema: JSONSchema | null | undefined, stored: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.map((k) => [k, clone(stored[k] !== undefined ? stored[k] : schema?.properties?.[k]?.default)]))
+}
+
 /** A widget value as sent: null, and a blank in a field that is not a string (a cleared number), are undefined, so the default applies. */
-function sentValue(schema: JSONSchema | undefined, v: unknown): unknown {
+export function sentValue(schema: JSONSchema | undefined, v: unknown): unknown {
   if (v === undefined || v === null) return undefined
   if (typeof v === 'string' && v.trim() === '' && schema?.type !== 'string') return undefined
   return v
-}
-
-/**
- * sentValue of a key of the page. Cleared cache days are not removed while
- * the plugin would then read its retired key again instead of the schema
- * default: they are sent as the schema default (7) while a retired
- * cache_ttl_seconds is stored (it would give "off" for 0, else its own
- * days). The one exception is the field left empty because the retired key
- * keeps the cache off (verdictCacheOff: nothing was cleared, the page says
- * the cache is off and it stays off).
- */
-export function sentSetting(schema: JSONSchema | undefined, stored: Record<string, unknown>, k: string, v: unknown): unknown {
-  const sent = sentValue(schema, v)
-  if (sent !== undefined) return sent
-  if (k === CACHE_DAYS_KEY && stored[RETIRED_CACHE_TTL] !== undefined && !verdictCacheOff(stored)) return schema?.default
-  return undefined
-}
-
-/**
- * The values to PUT (mergeSettings) with the retired exempt_user_ids made
- * "the allowlist without the blocklisted users" when this save changes
- * either list: nodes still on 0.7.2 (a rollout in progress, or after a
- * rollback) read only the retired list and do not moderate its users at
- * all, so it must hold the allowlisted users, nobody taken off the
- * allowlist and nobody on the blocklist (whom 0.8.0 moderates before the
- * request is sent on, allowlisted or not).
- * - An allowlist removed by this save (its default, empty) empties a stored
- *   retired list and adds none.
- * - A blocklist saved while allowlist_user_ids was never stored: the
- *   allowlist is the retired list itself. When a blocklisted user is on it,
- *   the list is stored as allowlist_user_ids as it is (0.8.0 keeps reading
- *   the same allowlist) and the retired key gets it without those users.
- */
-export function withRetiredMirrored(values: Record<string, unknown>, changed: readonly string[]): Record<string, unknown> {
-  const allowSaved = changed.includes(ALLOWLIST_KEY)
-  if (!allowSaved && !changed.includes(BLOCKLIST_KEY)) return values
-  const retired = values[RETIRED_ALLOWLIST]
-  const stored = values[ALLOWLIST_KEY]
-  // the allowlist 0.8.0 reads: the new key, else (never stored) the retired one
-  const allow: unknown[] = Array.isArray(stored) ? stored : !allowSaved && Array.isArray(retired) ? retired : []
-  if (!Array.isArray(stored) && retired === undefined) return values
-  const block = values[BLOCKLIST_KEY]
-  const blocked = new Set((Array.isArray(block) ? block : []).map(String))
-  const mirror = allow.filter((id) => !blocked.has(String(id)))
-  if (Array.isArray(stored) || allowSaved) return { ...values, [RETIRED_ALLOWLIST]: mirror }
-  if (mirror.length === allow.length) return values
-  return { ...values, [ALLOWLIST_KEY]: [...allow], [RETIRED_ALLOWLIST]: mirror }
 }
 
 /** The settings key of an API field path: "values.<key>[.<path>]", "values/<key>/…" or "<key>". */

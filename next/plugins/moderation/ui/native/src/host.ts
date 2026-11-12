@@ -34,6 +34,7 @@ import type {
   TrendResult,
   TryResult,
   UserDetail,
+  UserList,
   Watch,
   WatchChange,
   WatchEvent,
@@ -137,6 +138,10 @@ export const createWatch = (body: WatchChange & { user_id: number }) => api().po
 export const updateWatch = (userId: number, body: WatchChange) => api().patch<Watch>(`${WATCHLIST_PATH}/${userId}`, body)
 /** body: the reason of a release, written to the history. */
 export const deleteWatch = (userId: number, body?: { reason?: string }) => api().del(`${WATCHLIST_PATH}/${userId}`, body)
+/** Makes the user's entry a locked entry of `list` (PUT /watchlist/:id/lock, 0.11.0): creates, converts or moves it. */
+export const lockWatch = (userId: number, list: UserList) => api().put<Watch>(`${WATCHLIST_PATH}/${userId}/lock`, { list })
+/** Removes the user's locked entry (DELETE /watchlist/:id/lock; 404 when not locked). */
+export const unlockWatch = (userId: number) => api().del(`${WATCHLIST_PATH}/${userId}/lock`)
 export const markWatchSeen = (userId: number) => api().post(`${WATCHLIST_PATH}/${userId}/seen`, {})
 export const fetchWatchEvents = (userId: number) => api().get<WatchEvent[]>(`${WATCHLIST_PATH}/${userId}/events`)
 

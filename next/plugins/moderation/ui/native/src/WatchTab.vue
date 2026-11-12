@@ -34,7 +34,7 @@ import { useCategoryOptions } from './categories'
 import { filterChips, type FilterField } from './eventFilters'
 import { applyFilters } from './forms'
 import { enumLabel, enumOptions, joinList, num } from './format'
-import { canManage, canManageSettings, errorMessage, useModHost, useWatchList } from './host'
+import { canManage, errorMessage, useModHost, useWatchList } from './host'
 import { watchNew } from './status'
 import { levelTone } from './tones'
 import type { Watch, WatchItem, WatchLevel, WatchListMeta } from './types'
@@ -45,16 +45,16 @@ import { watchLocked, type WatchAction } from './watchLevels'
 // Watch list (new-api watchlist): observe = moderated in the background and
 // counted; enforce = moderated before the upstream call, a hit is refused.
 // Filters, sort, header counts and per-user aggregates come from GET
-// /watchlist, with each user's allowlist / blocklist mark of the settings:
+// /watchlist, with each user's allowlist / blocklist mark (a locked entry):
 // an allowlisted user is never moderated first whatever the level, a
 // blocklisted user always. The filter bar holds the common filters (user,
 // picked with the host's EntityPicker; level, sort, new records only), the
 // others fold under "more filters" (applied ones are chips under the bar).
 // Each table cell keeps to one line; the level changes and the removal are
-// row actions, confirmed in a dialog. A locked entry or a user on a user
-// list (0.10.0, userLock.ts) is not changed here until unlocked; those who
-// may edit the settings lock a user on a list or unlock it under "more", and
-// "locked" filters the entries (GET /watchlist?locked).
+// row actions, confirmed in a dialog. A locked entry (a user on a user list,
+// userLock.ts) is not changed here until unlocked; "more" locks a user on a
+// list or unlocks it, and "locked" filters the entries (GET
+// /watchlist?locked).
 const emit = defineEmits<{ (e: 'show-user', userId: number): void }>()
 const host = useModHost()
 const t = host.t
@@ -148,12 +148,8 @@ function ask(r: WatchItem, a: WatchAction) {
   action.value = a
 }
 const lock = useUserLock(() => void list.reload())
-const lockable = computed(() => canManageSettings())
 /** "more": lock / unlock, then remove (not for a locked entry). */
-const moreActions = (r: WatchItem) => [
-  ...(lockable.value ? lock.items(userListOf(r)) : []),
-  { key: 'remove', label: t('watch.remove'), danger: true, disabled: watchLocked(r), divider: lockable.value }
-]
+const moreActions = (r: WatchItem) => [...lock.items(userListOf(r)), { key: 'remove', label: t('watch.remove'), danger: true, disabled: watchLocked(r), divider: true }]
 async function onMore(r: WatchItem, key: string) {
   if (key === 'remove') ask(r, { kind: 'release', level: null })
   else await lock.run(r.user_id, key, userListOf(r))
