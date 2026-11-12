@@ -1086,11 +1086,10 @@ func (s *Service) keyPrices(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	gp := &groupPrices{group: pricedGroup{GroupInfo: pr.Group}, prices: prices,
-		models: slices.DeleteFunc(prices.models(), func(model string) bool { return !pr.Group.AllowsModel(model) })}
+	models := slices.DeleteFunc(prices.models(), func(model string) bool { return !pr.Group.AllowsModel(model) })
 	out := KeyPrices{Prices: []syncPrice{}, RateMultiplier: pr.Group.RateMultiplier}
 	out.Group.ID, out.Group.Name = pr.Group.ID, pr.Group.Name
-	err = gp.eachPrice(ctx, s.db.Pool, pr.SegmentID, func(model string, base PriceDef, levels ruleLevels) {
+	err = eachPrice(ctx, s.db.Pool, prices, models, pr.Group.ID, pr.SegmentID, func(model string, base PriceDef, levels ruleLevels) {
 		p, err := exportPrice(model, base, levels)
 		if err != nil {
 			// Left out rather than listed at a price that is not the owner's.

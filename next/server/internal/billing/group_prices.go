@@ -118,18 +118,18 @@ func loadGroupPrices(ctx context.Context, q store.Querier, cond string, args ...
 	return gp, nil
 }
 
-// eachPrice calls add with the global price of each of gp.models that has
-// one and the rules that price it for segmentID (0 = none) in the group. It
-// is the one place the list prices of a group's models for one segment are
-// read; the caller says what to make of each.
-func (gp *groupPrices) eachPrice(ctx context.Context, q store.Querier, segmentID int64, add func(model string, base PriceDef, levels ruleLevels)) error {
-	on := core.PriceQuery{GroupID: gp.group.ID, SegmentID: segmentID}
+// eachPrice calls add with the global price of each of models that has one
+// and the rules that price it for segmentID (0 = none) in groupID. It is the
+// one place the list prices of a group's models for one segment are read;
+// the caller says which models and what to make of each.
+func eachPrice(ctx context.Context, q store.Querier, prices catalog, models []string, groupID, segmentID int64, add func(model string, base PriceDef, levels ruleLevels)) error {
+	on := core.PriceQuery{GroupID: groupID, SegmentID: segmentID}
 	rules, err := loadRules(ctx, q, rulesFor, on.GroupID, on.SegmentID)
 	if err != nil {
 		return err
 	}
-	for _, model := range gp.models {
-		base, ok := gp.prices[model]
+	for _, model := range models {
+		base, ok := prices[model]
 		if !ok {
 			continue
 		}
@@ -333,7 +333,7 @@ func (gp *groupPrices) check(ctx context.Context, q store.Querier, items []ruleP
 func (gp *groupPrices) checkPatch(ctx context.Context, known []int64, item rulePatch) (*storedRule, error) {
 	switch {
 	case item.SegmentID != nil && !slices.Contains(known, *item.SegmentID):
-		return nil, errors.New(segment.Unknown(ctx))
+		return nil, errors.New(segment.UnknownMessage(ctx))
 	case item.Rule == nil:
 		return nil, nil
 	case !slices.Contains(gp.models, item.Model):

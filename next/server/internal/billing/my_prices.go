@@ -113,7 +113,7 @@ func (s *Service) pricesInGroup(ctx context.Context, uid, groupID int64) (*MyPri
 	}
 	group := gp.group.ref()
 	out := &MyPrices{Group: &group, RateMultiplier: t.Rate, RateSource: t.RateSource, Prices: []MyPriceRow{}}
-	err = gp.eachPrice(ctx, s.db.Pool, t.SegmentID, func(model string, base PriceDef, levels ruleLevels) {
+	err = eachPrice(ctx, s.db.Pool, gp.prices, gp.models, gp.group.ID, t.SegmentID, func(model string, base PriceDef, levels ruleLevels) {
 		price, source := levels.listPrice(base)
 		out.Prices = append(out.Prices, MyPriceRow{Model: model, PriceDef: price, Source: source})
 	})

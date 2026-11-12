@@ -3,7 +3,7 @@ import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SButton, SField, SGrid, SHint, SInput, SModal, SSegmented, SSelect, SSpinner, type SelectOption } from '@sub2api/ui'
-import type { GroupModelPrices, PricingQuote, PricingQuoteRequest } from '@/api/pricing'
+import { QUOTE_MAX_TOKENS, type GroupModelPrices, type PricingQuote, type PricingQuoteRequest } from '@/api/pricing'
 import type { Group, User } from '@/api/types'
 import EntityPicker from '@/components/EntityPicker.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
@@ -47,9 +47,8 @@ const groupId = ref<number | null>(null)
 const model = ref<string | null>(null)
 const usage = reactive<{ p: number | null; c: number | null }>({ p: 100_000, c: 10_000 })
 /** The most tokens of a kind the server quotes for, as it takes a request's (core.ValidatePricedUsage). */
-const MAX_TOKENS = 1_000_000_000_000
-/** Why a token count cannot be quoted for: it must be a whole number from 0 to MAX_TOKENS; blank is 0. */
-const tokensError = (v: number | null) => (v === null || (Number.isInteger(v) && v >= 0 && v <= MAX_TOKENS) ? undefined : t('pricingTools.sim.tokensInvalid', { max: formatNumber(MAX_TOKENS) }))
+/** Why a token count cannot be quoted for: it must be a whole number from 0 to QUOTE_MAX_TOKENS; blank is 0. */
+const tokensError = (v: number | null) => (v === null || (Number.isInteger(v) && v >= 0 && v <= QUOTE_MAX_TOKENS) ? undefined : t('pricingTools.sim.tokensInvalid', { max: formatNumber(QUOTE_MAX_TOKENS) }))
 const usageErrors = computed(() => ({ p: tokensError(usage.p), c: tokensError(usage.c) }))
 const usageInvalid = computed(() => !!(usageErrors.value.p || usageErrors.value.c))
 
@@ -178,10 +177,10 @@ const groupName = computed(() => groups.value.find((g) => g.id === groupId.value
           />
         </SField>
         <SField :label="t('pricingTools.sim.inputTokens')" :hint="formatNumber(usage.p)" :error="usageErrors.p">
-          <SInput v-model="usage.p" type="number" min="0" :max="MAX_TOKENS" step="1" data-testid="price-sim-input-tokens" />
+          <SInput v-model="usage.p" type="number" min="0" :max="QUOTE_MAX_TOKENS" step="1" data-testid="price-sim-input-tokens" />
         </SField>
         <SField :label="t('pricingTools.sim.outputTokens')" :hint="formatNumber(usage.c)" :error="usageErrors.c">
-          <SInput v-model="usage.c" type="number" min="0" :max="MAX_TOKENS" step="1" data-testid="price-sim-output-tokens" />
+          <SInput v-model="usage.c" type="number" min="0" :max="QUOTE_MAX_TOKENS" step="1" data-testid="price-sim-output-tokens" />
         </SField>
       </SGrid>
 

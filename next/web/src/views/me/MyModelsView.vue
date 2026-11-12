@@ -14,7 +14,7 @@ import type { Group } from '@/api/types'
 import { fetchMyGroups } from '@/composables/lookups'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
-import { priceCells, priceText, rateText, type PriceCells } from '@/components/pricing/pricingFormat'
+import { priceCells, priceText, rateText, round, type PriceCells } from '@/components/pricing/pricingFormat'
 import { myGroupLabel } from '@/views/keys/myGroup'
 import { num } from '@/views/prices/priceExpr'
 import { notifyError } from '@/utils/errors'
@@ -77,7 +77,7 @@ const money = (v: number | null | undefined) => priceText(v, rate.value)
  * caller's rate in the group, as one number.
  */
 function opaqueText(price: PriceCells): string {
-  const times = Number((num(price.multiplier, 1) * rate.value).toFixed(6))
+  const times = round(num(price.multiplier, 1) * rate.value)
   return price.multiplier === undefined && times === 1 ? t('me.models.custom') : t('me.models.customTimes', { rate: rateText(times) })
 }
 

@@ -87,7 +87,8 @@ function ownCells(def: PriceDef): PriceCells {
   return { tiers: 1, opaque: true }
 }
 
-const round = (n: number) => Number(n.toFixed(6))
+/** A product of multipliers as shown: six decimals at most. */
+export const round = (n: number) => Number(n.toFixed(6))
 
 /**
  * What every pricing view shows of a price: its cells, times the multiplier

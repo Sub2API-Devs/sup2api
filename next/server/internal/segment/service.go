@@ -69,9 +69,9 @@ func NotFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "user group not found", "用户组不存在")).WithCause(core.ErrNotFound)
 }
 
-// Unknown is the message of a field that names a user group that does not
+// UnknownMessage is the message of a field that names a user group that does not
 // exist, or not one it may name.
-func Unknown(ctx context.Context) string {
+func UnknownMessage(ctx context.Context) string {
 	return t(ctx, "unknown user group", "用户组不存在")
 }
 

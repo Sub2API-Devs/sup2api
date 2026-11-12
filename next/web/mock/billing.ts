@@ -1496,7 +1496,9 @@ function disconnectFields(b: any) {
 
 on('GET', '/settings/billing', () => billingSettings)
 on('PUT', '/settings/billing', (req) => {
-  const b = req.body || {}
+  const b = { ...(req.body || {}) }
+  // A null pointer field binds as left out, as in Go.
+  for (const k of ['client_disconnect_policy', 'client_disconnect_wait_seconds']) if (b[k] === null) delete b[k]
   if (!disconnectBinds(b)) return fail(400, 'invalid_argument', 'invalid request body')
   if (!['reject', 'free'].includes(b.missing_price_policy)) {
     return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'missing_price_policy', code: 'enum', message: 'must be reject or free' }] })

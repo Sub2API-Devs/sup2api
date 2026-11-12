@@ -52,8 +52,9 @@ type Member struct {
 
 const fromSegments = ` FROM segments s LEFT JOIN users u ON u.id = s.user_id`
 
-// selectSegment reads a segment with its counts in one statement. A deleted
-// user is no member.
+// selectSegment reads a segment with its member count, grants and rates in
+// one statement; its price_rule_count comes from countRules. A deleted user
+// is no member.
 const selectSegment = `SELECT ` + RefColumns + `, s.description, s.discount, s.is_default, s.created_at,
 	(SELECT count(*) FROM users m WHERE m.segment_id = s.id AND m.deleted_at IS NULL),
 	(SELECT COALESCE(jsonb_agg(jsonb_build_object('id', g.id, 'name', g.name) ORDER BY g.id), '[]')
