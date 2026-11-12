@@ -109,7 +109,7 @@ func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context
 		return
 	}
 
-	// Start a re-authorization draft (or return the existing one).
+	// Re-authorization runs in place: this returns the account's runtime.
 	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id)
 	if err != nil {
 		httpapi.Fail(c, err)

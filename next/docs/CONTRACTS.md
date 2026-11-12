@@ -3484,7 +3484,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - 未开启 `account_runtimes` → 503 `not_configured`；`apikey` 账号 → 400 `api_key_account`；账号已删除 → 400 `account_deleted`；绑定的代理不可用 → 400 `proxy_unavailable`。账号停用、代理停用都不影响重新授权（§49.22）。
 - 草稿 key 同 §49.9（`d` + 16 hex），`proxy_id` = 账号当前代理，`created_by` = 调用者，`for_account` = 账号 id；建好立即 Kick。审计 `account.ccgateway_reauthorize_start`（只在新建时）。
 - 每个账号最多一个未过期的重新授权草稿（按账号的 PG advisory 锁串行）。已有时返回它，并刷新 `last_seen_at`、把 `proxy_id` 改成账号当前代理。**调用者看不到它时（不是创建者、也没有 `settings:manage`）把 `created_by` 改成调用者（接管）**：能更新这个账号的人总能继续流程，原创建者之后对该草稿得到 `draft_not_found`（控制台按"重新开始"处理，再调 `reauthorize` 会接管回来）。闲置超过 15 分钟或存在超过 2 小时的草稿不再复用（留给清理任务），新建一个。
-- 草稿用 §49.9 的草稿接口驱动（`status/health/session/sync/start/complete/cancel`、`DELETE`），可见性规则不变（创建者或 `settings:manage`）。（T37 起按 key 的草稿接口不再接受 `account:update`、`account:own:update`：重新授权原地进行，用账号的运行环境接口驱动。）重新授权草稿**不能** `PUT drafts/:key` 改代理（404 `draft_not_found`），也**不能**在 `POST /accounts` 的 `ccgateway_runtime` 里使用（400 `draft_not_found`）。
+- （历史：换新运行环境的流程，已被原地重新授权取代。现在没有重新授权草稿，用账号的运行环境接口 `/system/ccgateway/accounts/:id/:action` 驱动，取消 = `POST accounts/:id/cancel`；T37 起按 key 的草稿接口不再接受 `account:update`、`account:own:update`。以下两条只描述旧流程。）草稿用 §49.9 的草稿接口驱动（`status/health/session/sync/start/complete/cancel`、`DELETE`），可见性规则不变（创建者或 `settings:manage`）。重新授权草稿**不能** `PUT drafts/:key` 改代理（404 `draft_not_found`），也**不能**在 `POST /accounts` 的 `ccgateway_runtime` 里使用（400 `draft_not_found`）。
 - 取消 = `DELETE /system/ccgateway/drafts/:key`（§49.9 原接口），账号不受影响。
 
 `commit`：
@@ -3507,7 +3507,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 **与原契约文件的偏差：**
 - 原文写 "`error_message` empty"：`accounts` 没有 `error_message` 列，实现清的是 `status_reason`。2026-10-11 起成功重新授权恢复 `error/auto_disabled`，管理员停用与来源不明的旧 `disabled` 记录仍需显式启用或重置，见 §42.5。
 - 原文没处理"已有草稿属于别人"的情况：实现为接管（见上）。
-- 原文让账号只有 `account:update` 的人用草稿接口，但草稿接口原权限只有 `settings:manage` / `account:create` / `account:own:create`：实现为按 key 的草稿接口加上两个 update 权限。
+- 原文让账号只有 `account:update` 的人用草稿接口，但草稿接口原权限只有 `settings:manage` / `account:create` / `account:own:create`：实现为按 key 的草稿接口加上两个 update 权限。（T37 起已撤销，见 §49.9。）
 - 提交前预先 `PUT config`（原文只说提交后 Kick）：避免提交后几秒内网关拿到控制器 409。
 
 **部署：** 控制器须先升级到支持 `X-CCG-Delete-Account` 的版本，否则退役数字 key 的删除每分钟失败一次（行保留、记 WARN），升级后自动删掉。旧核心节点不读新列，会把退役行当成未认领草稿（reconcile 它、草稿 key 的退役行会被旧节点的草稿清理提前删掉）：全部节点升级后再使用重新授权。
