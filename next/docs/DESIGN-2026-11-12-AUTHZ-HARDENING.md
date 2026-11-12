@@ -199,7 +199,7 @@
 
 ## T30 M3、W1-F4、W1-F8、W1-F9：代理拨号守卫与代理写范围收敛
 
-- 改动：`proxy.newTransport(proxyURL, allowPrivate)` 改用 `netguard.Dialer`，连接代理时按解析后的 IP 拒绝私网、回环、链路本地地址（socks5 同样经过）；已存代理用 `allow_private || AllowPrivateUpstream`，`proxy_url` 的临时客户端只看 `AllowPrivateUpstream`，探测按调用者的写范围。`proxy.checkPrivate` / `privateScope` 成为“能否写私网代理、是否存 `allow_private`”的唯一判断（新建、修改、探测、`FindOrCreate` 共用），写路由用同一个 `writeScope`（`proxy:manage` / `proxy:own:manage`）注册。`PATCH /proxies/:id` 带 `host` 时按新建判断并同步 `allow_private`。探测保存改用写范围（此前按 `proxy:read` 判断，而这条路由不会匹配它，管理员被当成 own）。账号的 `proxy_url` 用 `core.ScopeOf` 一次得到“是否允许 + 写范围”；`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 走同一个 `parseProxyURL`。CONTRACTS §21.4、§43.3 同步。无迁移。
+- 改动：`proxy.newTransport(proxyURL, allowPrivate)` 改用 `netguard.Dialer`，连接代理时按解析后的 IP 拒绝私网、回环、链路本地地址（socks5 同样经过）；已存代理用 `allow_private || AllowPrivateUpstream`，`proxy_url` 的临时客户端只看 `AllowPrivateUpstream`，探测按调用者的写范围。`proxy.checkPrivate` / `privateScope` 成为“能否写私网代理、是否存 `allow_private`”的唯一判断（新建、修改、探测、`FindOrCreate` 共用），写路由用同一个 `writeScope`（`proxy:manage` / `proxy:own:manage`）注册。`PATCH /proxies/:id` 的地址（protocol、host、port）与现值不同时按新建判断并同步 `allow_private`（行先加锁读出现值）。探测保存改用写范围（此前按 `proxy:read` 判断，而这条路由不会匹配它，管理员被当成 own）。账号的 `proxy_url` 用 `core.ScopeOf` 一次得到“是否允许 + 写范围”；`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 走同一个 `parseProxyURL`。CONTRACTS §21.4、§43.3 同步。无迁移。
 - 影响对象：
   - `AllowPrivateUpstream` 关闭（生产默认）时，`allow_private = false` 的代理（own 级建的，或 0027 之后经 `proxy_url` 自动建的）如果域名解析到非公网地址，测试与实际请求由成功变为失败。非公网按 `netguard.BlockedAddr`：除私网、回环、链路本地外，还包括 100.64.0.0/10（CGNAT、Tailscale）、198.18.0.0/15（Clash/Surge 类 fake-IP DNS）、NAT64、6to4 等；服务器使用 fake-IP DNS 时，所有按域名填写的 `allow_private = false` 代理都会失败。升级前可查 `SELECT id, name, host FROM proxies WHERE NOT allow_private` 并在服务器上逐个确认解析结果；确需保留的由持 `proxy:manage` 的人把地址改动一次再改回（如先改端口再改回，两次 PATCH），存为 `allow_private = true`。
   - `PATCH /proxies/:id` 只在地址（protocol、host、port）与现值不同时重新判断：只持 `proxy:own:manage` 把自己的代理改到私网地址，或改动管理员放在私网地址上的代理的端口、协议，由成功变为 403；own 级改地址会把 `allow_private` 置回 `false`，`proxy:manage` 改地址置为 `true`。原样带回地址的编辑（控制台每次都带全部字段）不改 `allow_private`。
@@ -213,7 +213,7 @@
 ## T31 W1-F12：他人账号在用的 own 代理，属主不能改连接字段
 
 - 改动：`PATCH /proxies/:id` 在 own 范围、且连接字段（protocol、host、port、username、password）与现值不同时，统计该代理上不是调用者创建的未删除账号（`proxy.inUseByOthers`，与修改在同一事务、代理行已加锁），大于 0 返回 409 `proxy_in_use`（`details.account_count`）。删除的占用计数改用同一函数（统计全部账号，行为不变）。CONTRACTS §21.2 同步。无迁移。
-- 影响对象：供应商（只持 `proxy:own:manage`）的代理被管理员挂到别人的账号上之后，供应商改地址、用户名、密码由成功变为 409，需由持 `proxy:manage` 的人修改，或先把那些账号换到别的代理；改名称、启停不受影响（停用仍会让这些账号不可用，未改）。`proxy:manage` 不受影响。
+- 影响对象：供应商（只持 `proxy:own:manage`）的代理被管理员挂到别人的账号上之后，供应商改地址、用户名、密码由成功变为 409，需由持 `proxy:manage` 的人修改，或先把那些账号换到别的代理；改名称、启停不受影响（停用仍会让这些账号不可用，未改）。`proxy:manage` 不受影响。只统计账号：他人尚未建成账号的预备容器与 ccgateway 草稿运行环境（`account_preparations.proxy_id`、`ccgateway_runtimes.proxy_id`，短期存在）引用该代理时不拦（已知缺口，删除代理的占用计数同样不含它们）。host 只有大小写不同视为未改，也不写入。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
 ## T36 W1-F5：ccgateway 请求日志设置不再接受 own 级（产品性收紧，单独提交）

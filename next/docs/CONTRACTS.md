@@ -1091,7 +1091,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 | GET `/account-types`、GET `/account-types/:p/:t/form`、GET `/platforms` | `account:read` / `account:own:read` / `account:own:create` | form 按调用者权限改写（§21.3） |
 | GET `/proxies`、GET `/proxies/:id` | `proxy:read` / `proxy:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（`strconv.ParseBool`） |
 | POST `/proxies` | `proxy:manage` / `proxy:own:manage` | `created_by` = 调用者 |
-| PATCH/DELETE `/proxies/:id`、POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage` | 范围外（含 `created_by` 为空的历史行）一律 404，**先判可见再判占用**；自己级下删除时 409 的 `account_count` 仍是引用它的全部账号数；自己级下 PATCH 改了连接字段（`protocol`、`host`、`port`、`username`、`password` 任一与现值不同，原样带回不算）而代理正被他人创建的账号（含 `created_by` 为空的）使用时，返回 409 `proxy_in_use`，`details.account_count` 为这些账号的数量（2026-11-12 权限加固 T31）；改名称、状态不受限，`proxy:manage` 不受限 |
+| PATCH/DELETE `/proxies/:id`、POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage` | 范围外（含 `created_by` 为空的历史行）一律 404，**先判可见再判占用**；自己级下删除时 409 的 `account_count` 仍是引用它的全部账号数；自己级下 PATCH 改了连接字段（`protocol`、`host`、`port`、`username`、`password` 任一与现值不同，原样带回不算，`host` 只有大小写不同也不算且不写入）而代理正被他人创建的账号（含 `created_by` 为空的）使用时，返回 409 `proxy_in_use`，`details.account_count` 为这些账号的数量（2026-11-12 权限加固 T31）；改名称、状态不受限，`proxy:manage` 不受限 |
 
 菜单（`/me/menus`、前端回退表、路由 meta）：账号/平台菜单 anyOf `account:read account:own:read account:own:create`（§90 第四版起没有平台菜单）；代理菜单 anyOf `proxy:read proxy:own:read proxy:own:manage`。
 

@@ -18,11 +18,12 @@ func TestUpdateInUseByOthers(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := context.Background()
 	svc := New(db, testCipher(t), nil, Options{})
-	admin, alice := addUser(t, db, "admin@x.com"), addUser(t, db, "alice@x.com")
+	admin, alice, bob := addUser(t, db, "admin@x.com"), addUser(t, db, "alice@x.com"), addUser(t, db, "bob@x.com")
 	engine := gin.New()
 	svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{
 		admin: {"proxy:read", "proxy:manage"},
 		alice: {"proxy:own:read", "proxy:own:manage"},
+		bob:   {"proxy:own:read", "proxy:own:manage"},
 	}}))
 	stored := map[string]any{"name": "p", "protocol": "http", "host": "h.example", "port": 8080, "username": "u", "password": "pw"}
 	code, out := do(t, engine, alice, "POST", "/proxies", stored)
@@ -54,12 +55,21 @@ func TestUpdateInUseByOthers(t *testing.T) {
 	for field, value := range map[string]any{"protocol": "socks5", "host": "h3.example", "port": 9, "username": "v", "password": "other"} {
 		code, out = do(t, engine, alice, "PATCH", path, map[string]any{field: value})
 		e, _ := out["error"].(map[string]any)
-		if code != 409 || e["code"] != "proxy_in_use" || e["details"].(map[string]any)["account_count"].(float64) != 2 {
+		details, _ := e["details"].(map[string]any)
+		if code != 409 || e["code"] != "proxy_in_use" || details["account_count"] != float64(2) {
 			t.Fatalf("patch %s in use: %d %v", field, code, out)
 		}
 	}
 	if code, out = do(t, engine, alice, "PATCH", path, map[string]any{"password": ""}); code != 409 {
 		t.Fatalf("clear password in use: %d %v", code, out)
+	}
+	// Visibility comes first: another own-level user gets 404, not 409.
+	if code, out = do(t, engine, bob, "PATCH", path, map[string]any{"host": "h3.example"}); code != 404 {
+		t.Fatalf("foreign patch in use: %d %v", code, out)
+	}
+	// A host in another case is the stored host, and stays as stored.
+	if code, out = do(t, engine, alice, "PATCH", path, map[string]any{"host": "H2.Example"}); code != 200 || data(out)["host"] != "h2.example" {
+		t.Fatalf("patch host case in use: %d %v", code, out)
 	}
 	// The name, the status and the stored connection sent back by the
 	// console are not a connection change.

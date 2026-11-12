@@ -520,10 +520,9 @@ func (in *input) validate(ctx context.Context, create bool) error {
 }
 
 // addressChanged reports whether the PATCH moves the proxy: a protocol, host
-// (compared without case) or port other than the stored one.
+// or port other than the stored one.
 func (in *input) addressChanged(cur *row) bool {
-	return differs(in.Protocol, cur.Protocol) || differs(in.Port, cur.Port) ||
-		(in.Host != nil && !strings.EqualFold(*in.Host, cur.Host))
+	return differs(in.Protocol, cur.Protocol) || differs(in.Host, cur.Host) || differs(in.Port, cur.Port)
 }
 
 // connectionChanged reports whether the PATCH changes how the proxy is
@@ -676,6 +675,11 @@ func (s *Service) update(c *gin.Context) {
 		if err != nil {
 			return err
 		}
+		// A host spelled in another case is the stored host: not written, so
+		// "unchanged" below means exactly that.
+		if in.Host != nil && strings.EqualFold(*in.Host, cur.Host) {
+			in.Host = nil
+		}
 		// A new address (protocol, host or port) is judged like a new proxy,
 		// and allow_private follows whoever set the address last. The
 		// console sends every field, so only a value that differs counts.
@@ -694,7 +698,7 @@ func (s *Service) update(c *gin.Context) {
 		// Accounts of other users go through this proxy too: where they
 		// connect is not the owner's to change (the full key may).
 		if scope != nil && s.connectionChanged(&in, &cur) {
-			n, err := inUseByOthers(ctx, tx, id, uid)
+			n, err := inUseByOthers(ctx, tx, id, *scope)
 			if err != nil {
 				return err
 			}
@@ -757,6 +761,7 @@ func (s *Service) delete(c *gin.Context) {
 		if err != nil {
 			return err
 		}
+		// No user has id 0: every account counts.
 		n, err := inUseByOthers(ctx, tx, id, 0)
 		if err != nil {
 			return err
