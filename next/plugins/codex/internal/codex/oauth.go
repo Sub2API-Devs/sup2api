@@ -158,7 +158,40 @@ func (p *Plugin) kv() (pluginsdk.KV, error) {
 	return p.host.KV(), nil
 }
 
-func (p *Plugin) loadSession(ctx context.Context, ns, id string, v any) (bool, error) {
+// Authorization sessions are caller sessions (pluginsdk.SaveCallerSession):
+// only the console user who started one can continue it, and to anyone else
+// it looks expired.
+
+// loadSession reads session id of req's caller.
+func (p *Plugin) loadSession(ctx context.Context, ns, id string, req *pluginv1.HTTPRequest, v any) (bool, error) {
+	kv, err := p.kv()
+	if err != nil {
+		return false, err
+	}
+	return pluginsdk.LoadCallerSession(ctx, kv, ns, id, req, v)
+}
+
+// newSession stores v as a new session of req's caller and returns its id.
+func (p *Plugin) newSession(ctx context.Context, ns string, req *pluginv1.HTTPRequest, v any, ttl time.Duration) (string, error) {
+	kv, err := p.kv()
+	if err != nil {
+		return "", err
+	}
+	return pluginsdk.SaveCallerSession(ctx, kv, ns, req, v, ttl)
+}
+
+// saveSession rewrites the session loadSession returned for req.
+func (p *Plugin) saveSession(ctx context.Context, ns, id string, req *pluginv1.HTTPRequest, v any, ttl time.Duration) error {
+	kv, err := p.kv()
+	if err != nil {
+		return err
+	}
+	return pluginsdk.UpdateCallerSession(ctx, kv, ns, id, req, v, ttl)
+}
+
+// loadCached and saveCached keep plugin-wide JSON in the KV (the reset count
+// cache): unlike a session it belongs to no caller.
+func (p *Plugin) loadCached(ctx context.Context, ns, id string, v any) (bool, error) {
 	kv, err := p.kv()
 	if err != nil {
 		return false, err
@@ -170,7 +203,7 @@ func (p *Plugin) loadSession(ctx context.Context, ns, id string, v any) (bool, e
 	return true, json.Unmarshal(raw, v)
 }
 
-func (p *Plugin) saveSession(ctx context.Context, ns, id string, v any, ttl time.Duration) error {
+func (p *Plugin) saveCached(ctx context.Context, ns, id string, v any, ttl time.Duration) error {
 	kv, err := p.kv()
 	if err != nil {
 		return err
@@ -230,7 +263,6 @@ func internalError(msg string, err error) *pluginv1.HTTPResponse {
 }
 
 const (
-	msgSessionID = "cannot create the session id / 无法生成会话 ID"
 	msgRandom    = "cannot generate random values / 无法生成随机数"
 	msgHostID    = "cannot create the host id / 无法生成宿主 ID"
 )
@@ -324,7 +356,7 @@ func parseInterval(r gjson.Result) int {
 }
 
 // handleDeviceStart asks the issuer for a user code (one request).
-func (p *Plugin) handleDeviceStart(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+func (p *Plugin) handleDeviceStart(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	a, err := p.postJSON(ctx, p.ep.Auth+"/api/accounts/deviceauth/usercode", map[string]string{"client_id": CodexClientID})
 	if err != nil {
 		return upstreamError("upstream_unavailable", "cannot reach the OpenAI authorization server / 无法连接 OpenAI 授权服务器: "+err.Error()), nil
@@ -343,16 +375,13 @@ func (p *Plugin) handleDeviceStart(ctx context.Context, _ *pluginv1.HTTPRequest)
 	if deviceAuthID == "" || userCode == "" {
 		return upstreamError("upstream_error", "the device code answer has no device_auth_id or user_code / 设备码响应缺少 device_auth_id 或 user_code"), nil
 	}
-	sessionID, err := randomToken(24)
-	if err != nil {
-		return internalError(msgSessionID, err), nil
-	}
 	s := deviceSession{
 		DeviceAuthID: deviceAuthID, UserCode: userCode,
 		Interval:  parseInterval(gjson.GetBytes(a.body, "interval")),
 		ExpiresAt: p.now().Add(deviceTTL).Unix(),
 	}
-	if err := p.saveSession(ctx, kvDevice, sessionID, s, deviceTTL); err != nil {
+	sessionID, err := p.newSession(ctx, kvDevice, req, s, deviceTTL)
+	if err != nil {
 		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error()), nil
 	}
 	return pluginsdk.DataResponse(DeviceStartResponse{
@@ -395,7 +424,7 @@ func (p *Plugin) handleDevicePoll(ctx context.Context, req *pluginv1.HTTPRequest
 		return pollAnswer(DevicePollResponse{Status: pollPending}), nil
 	}
 	defer p.releaseLock(ctx, lock)
-	return p.pollDevice(ctx, id), nil
+	return p.pollDevice(ctx, req, id), nil
 }
 
 // Device code poll states (DevicePollResponse.Status).
@@ -430,10 +459,10 @@ func (p *Plugin) releaseLock(ctx context.Context, l *pluginsdk.Lock) {
 	}
 }
 
-// pollDevice is one poll of session id, under its lock.
-func (p *Plugin) pollDevice(ctx context.Context, id string) *pluginv1.HTTPResponse {
+// pollDevice is one poll of session id of req's caller, under its lock.
+func (p *Plugin) pollDevice(ctx context.Context, req *pluginv1.HTTPRequest, id string) *pluginv1.HTTPResponse {
 	var s deviceSession
-	found, err := p.loadSession(ctx, kvDevice, id, &s)
+	found, err := p.loadSession(ctx, kvDevice, id, req, &s)
 	if err != nil {
 		return pluginsdk.Unavailable("read the session / 读取会话失败: " + err.Error())
 	}
@@ -453,7 +482,7 @@ func (p *Plugin) pollDevice(ctx context.Context, id string) *pluginv1.HTTPRespon
 	}
 	s.LastPollMs = now.UnixMilli()
 	ttl := max(time.Unix(s.ExpiresAt, 0).Sub(now), time.Second)
-	if err := p.saveSession(ctx, kvDevice, id, s, ttl); err != nil {
+	if err := p.saveSession(ctx, kvDevice, id, req, s, ttl); err != nil {
 		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error())
 	}
 
@@ -468,7 +497,7 @@ func (p *Plugin) pollDevice(ctx context.Context, id string) *pluginv1.HTTPRespon
 		return pending("")
 	case a.status == http.StatusTooManyRequests:
 		s.Interval = min(s.Interval+slowDownStep, maxInterval)
-		if err := p.saveSession(ctx, kvDevice, id, s, ttl); err != nil {
+		if err := p.saveSession(ctx, kvDevice, id, req, s, ttl); err != nil {
 			p.log.Warn("codex: store the slowed-down device code session", "error", err.Error())
 		}
 		return pending("")
@@ -598,11 +627,8 @@ func (p *Plugin) handleSIWCStart(ctx context.Context, req *pluginv1.HTTPRequest)
 	if s.Verifier, err = randomToken(48); err != nil { // 64 characters
 		return internalError(msgRandom, err), nil
 	}
-	sessionID, err := randomToken(24)
+	sessionID, err := p.newSession(ctx, kvSIWC, req, s, siwcTTL)
 	if err != nil {
-		return internalError(msgSessionID, err), nil
-	}
-	if err := p.saveSession(ctx, kvSIWC, sessionID, s, siwcTTL); err != nil {
 		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error()), nil
 	}
 	q := url.Values{}
@@ -698,7 +724,7 @@ func (p *Plugin) handleSIWCExchange(ctx context.Context, req *pluginv1.HTTPReque
 		return flowError("invalid_callback", err.Error()), nil
 	}
 	var s siwcSession
-	found, err := p.loadSession(ctx, kvSIWC, id, &s)
+	found, err := p.loadSession(ctx, kvSIWC, id, req, &s)
 	if err != nil {
 		return pluginsdk.Unavailable("read the session / 读取会话失败: " + err.Error()), nil
 	}

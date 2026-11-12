@@ -437,7 +437,15 @@ func TestSIWCStart(t *testing.T) {
 	if !kv.GetFound() {
 		t.Fatal("no session stored")
 	}
-	mustJSON(t, kv.GetValue(), &sess)
+	// The session is bound to its caller (Harness.Do is user 1).
+	stored := struct {
+		UserID  int64        `json:"uid"`
+		Session *siwcSession `json:"v"`
+	}{Session: &sess}
+	mustJSON(t, kv.GetValue(), &stored)
+	if stored.UserID != 1 {
+		t.Fatalf("session owner = %d", stored.UserID)
+	}
 	if pkceChallenge(sess.Verifier) != q.Get("code_challenge") || sess.State != q.Get("state") || sess.Nonce != q.Get("nonce") ||
 		sess.HostID != q.Get("ext_agent_host_id") || sess.ClientID != "" {
 		t.Fatalf("session = %+v", sess)
@@ -639,5 +647,54 @@ func TestRouteJSONNames(t *testing.T) {
 	b, _ = json.Marshal(SIWCStartResponse{SessionID: "s", AuthorizeURL: "u"})
 	if string(b) != `{"session_id":"s","authorize_url":"u"}` {
 		t.Fatalf("siwc start JSON = %s", b)
+	}
+}
+
+// A session belongs to the user who started it: to anyone else it looks
+// expired, is not touched, and nothing is asked of OpenAI.
+func TestSessionsBelongToTheirCaller(t *testing.T) {
+	iss := newFakeIssuer(t)
+	h := startPlugin(t, newTestPlugin(testEndpoints(iss.srv.URL)))
+	iss.on(pathUserCode, reply(200, `{"device_auth_id":"dev-1","usercode":"ABCD-1234","interval":"5"}`))
+	iss.on(pathDeviceToken, func(w http.ResponseWriter, body []byte) {
+		t.Error("another user's poll reached the issuer")
+		reply(403, `{}`)(w, body)
+	})
+	var device DeviceStartResponse
+	mustData(t, h.Do("POST", "/auth/device/start", nil, map[string]any{}).GetBody(), &device)
+	var siwc SIWCStartResponse
+	mustData(t, h.Do("POST", "/auth/siwc/start", nil, nil).GetBody(), &siwc)
+	stored := func(ns, id string) bool {
+		kv, _ := h.Host.KVGet(context.Background(), &pluginv1.KVGetRequest{Namespace: ns, Key: id})
+		return kv.GetFound()
+	}
+
+	for _, uid := range []int64{2, 0} {
+		for _, id := range []string{device.SessionID, "no-such-session"} {
+			var out DevicePollResponse
+			r := h.DoAs(uid, "POST", "/auth/device/poll", nil, map[string]string{"session_id": id})
+			mustData(t, r.GetBody(), &out)
+			if r.GetStatus() != 200 || out.Status != pollExpired {
+				t.Fatalf("user %d poll of %q = %d %s, want expired", uid, id, r.GetStatus(), r.GetBody())
+			}
+		}
+		u, _ := url.Parse(siwc.AuthorizeURL)
+		cb := "?code=code-1&state=" + u.Query().Get("state")
+		for _, id := range []string{siwc.SessionID, "no-such-session"} {
+			r := h.DoAs(uid, "POST", "/auth/siwc/exchange", nil, map[string]string{"session_id": id, "callback_url": cb})
+			if r.GetStatus() != 404 || decodeError(t, r).Error.Code != "session_expired" {
+				t.Fatalf("user %d exchange of %q = %d %s, want 404 session_expired", uid, id, r.GetStatus(), r.GetBody())
+			}
+		}
+	}
+	if !stored(kvDevice, device.SessionID) || !stored(kvSIWC, siwc.SessionID) {
+		t.Fatal("another user's attempt removed a session")
+	}
+
+	// A flow cannot be started without a caller.
+	for _, path := range []string{"/auth/device/start", "/auth/siwc/start"} {
+		if r := h.DoAs(0, "POST", path, nil, map[string]any{}); r.GetStatus() < 400 {
+			t.Fatalf("%s without a caller = %d %s", path, r.GetStatus(), r.GetBody())
+		}
 	}
 }
