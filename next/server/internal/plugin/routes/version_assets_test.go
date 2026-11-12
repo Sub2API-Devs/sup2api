@@ -51,7 +51,10 @@ func TestVersionAssetsRefusedBeforeLoadingThePackage(t *testing.T) {
 		{"runtimes/linux-amd64/plugin", 404, 0},
 		{"migrations/0001.sql", 404, 0},
 		{"assets/logo.svg.bak", 404, 0},
+		{"assets/logo", 404, 0},
+		{"ui", 404, 0},
 		{"ui/", 404, 0},
+		{"ui//", 404, 0},
 		{"ui/main.js", 200, 1},
 		{"forms/settings.schema.json", 200, 1},
 		{"i18n/zh.json", 200, 1},
@@ -59,15 +62,22 @@ func TestVersionAssetsRefusedBeforeLoadingThePackage(t *testing.T) {
 		{"assets/type.PNG", 200, 1},
 		{"assets/other.svg", 404, 1}, // icon-like, but not an icon of this package
 		{"assets/logo.webp", 404, 1},
+		{"assets/photo.jpeg", 404, 1},
 	} {
-		assets.calls = 0
-		rec := httptest.NewRecorder()
-		engine.ServeHTTP(rec, httptest.NewRequest("GET", "/plugin-ui/demo/0.9.0-12345678/"+tc.path, nil))
-		if rec.Code != tc.status || assets.calls != tc.loads {
-			t.Errorf("%s: status %d (want %d), package loads %d (want %d)", tc.path, rec.Code, tc.status, assets.calls, tc.loads)
+		for _, method := range []string{"GET", "HEAD"} {
+			assets.calls = 0
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, httptest.NewRequest(method, "/plugin-ui/demo/0.9.0-12345678/"+tc.path, nil))
+			if rec.Code != tc.status || assets.calls != tc.loads {
+				t.Errorf("%s %s: status %d (want %d), package loads %d (want %d)", method, tc.path, rec.Code, tc.status, assets.calls, tc.loads)
+			}
+			if method == "GET" && tc.status == 200 && rec.Body.String() != "old asset" {
+				t.Errorf("%s: body %q", tc.path, rec.Body.String())
+			}
 		}
 	}
 }
+
 func TestVersionAssetsSurviveDifferentLocalGeneration(t *testing.T) {
 	engine, _, _, _ := setup(t, routes.WithVersionAssets(&oldVersionAssets{}))
 	for _, tc := range []struct {

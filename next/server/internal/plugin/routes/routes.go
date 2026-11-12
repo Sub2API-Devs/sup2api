@@ -347,7 +347,7 @@ func (h *Handler) serveAsset(c *gin.Context) {
 	if !current {
 		// A version this node does not serve costs a package load: refuse
 		// what no package may serve before paying for it.
-		if h.assets == nil || !(prefixAllowed(name) || looksLikeIcon(name)) {
+		if h.assets == nil || (!prefixAllowed(name) && !looksLikeIcon(name)) {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
@@ -435,10 +435,9 @@ func iconAllowed(info core.PluginInfo, name string) bool {
 	return false
 }
 
-// iconExtensions are the image types an icon outside the public directories
-// may have when it is asked of a version this node does not serve: only such
-// a name is worth loading that version's package to consult its manifest.
-var iconExtensions = []string{".svg", ".png", ".webp", ".ico"}
+// iconExtensions are the image types the core serves (registry.ContentType):
+// what a manifest icon outside the public directories can be.
+var iconExtensions = []string{".svg", ".png", ".webp", ".ico", ".jpg", ".jpeg", ".gif"}
 
 // looksLikeIcon reports whether name could be a manifest icon, by extension.
 func looksLikeIcon(name string) bool {
