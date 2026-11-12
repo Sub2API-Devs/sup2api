@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 
@@ -102,7 +103,7 @@ func (a *API) settingsForm(c *gin.Context, key, corePerm string) (*SettingsView,
 // The packaging check refuses a schema with markers no value path leads to;
 // for a package installed before that check, the top-level settings holding
 // such markers are masked whole as credentials, and all settings are when a
-// marker belongs to no single one.
+// marker belongs to no single one or the file is no JSON object.
 func schemaSecrets(schema []byte) (fields []manifest.SecretField, maskAll bool) {
 	fields, unreachable := manifest.SettingsSecrets(schema)
 	whole, all := manifest.UnmaskableFields(unreachable)
@@ -136,15 +137,13 @@ func (v *SettingsView) secrets(values ...map[string]any) []manifest.SecretField 
 	if !v.maskAll {
 		return v.fields
 	}
-	var names []string
+	seen := map[string]bool{}
 	for _, m := range values {
 		for k := range m {
-			if !slices.Contains(names, k) {
-				names = append(names, k)
-			}
+			seen[k] = true
 		}
 	}
-	return sortSecrets(topLevelCredentials(names))
+	return sortSecrets(topLevelCredentials(slices.Collect(maps.Keys(seen))))
 }
 
 // valueAt returns the value at path inside nested objects.

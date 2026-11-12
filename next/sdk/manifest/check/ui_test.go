@@ -780,9 +780,10 @@ func TestSettingsSecretsMustBeMaskable(t *testing.T) {
 		t.Fatalf("maskable secrets are valid: %v", c)
 	}
 	for name, schema := range map[string]string{
-		"items":      `{"properties":{"hooks":{"type":"array","items":{"properties":{"token":{"writeOnly":true}}}}}}`,
-		"$ref":       `{"properties":{"a":{"$ref":"#/$defs/s"}},"$defs":{"s":{"format":"password"}}}`,
-		"root allOf": `{"allOf":[{"properties":{"x":{"x-sensitive":true}}}]}`,
+		"items":         `{"properties":{"hooks":{"type":"array","items":{"properties":{"token":{"writeOnly":true}}}}}}`,
+		"$ref":          `{"properties":{"a":{"$ref":"#/$defs/s"}},"$defs":{"s":{"format":"password"}}}`,
+		"root allOf":    `{"allOf":[{"properties":{"x":{"x-sensitive":true}}}]}`,
+		"not an object": `true`,
 	} {
 		if c := validate(schema); c["ui.settings.schema"] != "unmaskable_secret" {
 			t.Fatalf("%s: a secret that cannot be masked must be rejected: %v", name, c)

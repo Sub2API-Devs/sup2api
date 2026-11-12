@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // nested wraps leaf in depth object properties named p1..p<depth>.
@@ -30,8 +31,11 @@ func TestSettingsSecrets(t *testing.T) {
 		fields       map[string]bool // pointer -> credential
 		unreachable  []string
 	}{
-		{name: "not a schema", schema: `not json`},
-		{name: "null", schema: `null`},
+		{name: "not a schema", schema: `not json`, unreachable: []string{""}},
+		{name: "null", schema: `null`, unreachable: []string{""}},
+		{name: "boolean schema", schema: `true`, unreachable: []string{""}},
+		{name: "array", schema: `[{"writeOnly":true}]`, unreachable: []string{""}},
+		{name: "empty schema", schema: `{}`},
 		{name: "classification", schema: `{"properties":{
 			"plain":{"type":"string"},
 			"url":{"type":"string","x-sensitive":true},
@@ -68,7 +72,7 @@ func TestSettingsSecrets(t *testing.T) {
 		{name: "$defs and the $ref using it", schema: `{"properties":{"a":{"$ref":"#/$defs/secret"},"b":{"$ref":"#/$defs/plain"},
 			"c":{"type":"array","items":{"$ref":"#/$defs/via"}}},
 			"$defs":{"secret":{"writeOnly":true},"plain":{"type":"string"},"via":{"properties":{"k":{"$ref":"#/$defs/secret"}}}}}`,
-			unreachable: []string{"/$defs/secret", "/$defs/via/properties/k/$ref", "/properties/a/$ref", "/properties/c/items/$ref"}},
+			unreachable: []string{"/$defs/secret", "/$defs/via/properties/k/$ref", "/properties/a/$ref", "/properties/b/$ref", "/properties/c/items/$ref"}},
 		{name: "$ref to a reachable field", schema: `{"properties":{"a":{"writeOnly":true},"b":{"$ref":"#/properties/a"}}}`,
 			fields: map[string]bool{"a": true}, unreachable: []string{"/properties/b/$ref"}},
 		{name: "recursive $ref", schema: `{"properties":{"tree":{"$ref":"#/$defs/node"}},
@@ -84,6 +88,22 @@ func TestSettingsSecrets(t *testing.T) {
 			"r":{"$ref":"#/$defs/const"}},"$defs":{"const":{"properties":{"examples":{"format":"password"}}}}}`,
 			fields:      map[string]bool{"default": true},
 			unreachable: []string{"/$defs/const/properties/examples", "/properties/list/items/properties/enum", "/properties/r/$ref"}},
+		{name: "$recursiveRef and $dynamicRef", schema: `{"$recursiveAnchor":true,"properties":{"key":{"writeOnly":true},
+			"child":{"$recursiveRef":"#"},"dyn":{"$dynamicRef":"#node"}}}`,
+			fields: map[string]bool{"key": true}, unreachable: []string{"/properties/child/$recursiveRef", "/properties/dyn/$dynamicRef"}},
+		{name: "draft-07 dependencies", schema: `{"properties":{"default":{"type":"boolean"}},
+			"dependencies":{"default":{"properties":{"k":{"writeOnly":true}}},"enum":["default"]}}`,
+			unreachable: []string{"/dependencies/default/properties/k"}},
+		{name: "percent-encoded $ref", schema: `{"properties":{"a":{"properties":{"k":{"writeOnly":true}}},"b":{"$ref":"#/properties/%61"},"%61":{}}}`,
+			fields: map[string]bool{"a/k": true}, unreachable: []string{"/properties/b/$ref"}},
+		{name: "$ref below an embedded $id", schema: `{"properties":{"s":{},"b":{"$id":"http://e/x",
+			"properties":{"c":{"$ref":"#/properties/s"},"s":{"properties":{"k":{"writeOnly":true}}}}}}}`,
+			fields: map[string]bool{"b/s/k": true}, unreachable: []string{"/properties/b/properties/c/$ref"}},
+		{name: "$ref into a data keyword", schema: `{"properties":{"a":{"$ref":"#/properties/x/default"},
+			"x":{"default":{"properties":{"k":{"writeOnly":true}}}}}}`,
+			unreachable: []string{"/properties/a/$ref"}},
+		{name: "a property named $ref is not a reference", schema: `{"properties":{"k":{"writeOnly":true},"$ref":{"type":"string"}}}`,
+			fields: map[string]bool{"k": true}},
 		{name: "data keywords are not schemas", schema: `{"properties":{"a":{"type":"object","default":{"writeOnly":true},
 			"examples":[{"format":"password"}],"const":{"x-sensitive":true},"enum":[{"writeOnly":true}]}}}`},
 	}
@@ -135,5 +155,25 @@ func TestUnmaskableFields(t *testing.T) {
 				t.Fatalf("= %q, %v; want %q, %v", fields, all, tc.fields, tc.all)
 			}
 		})
+	}
+}
+
+// A schema is uploaded with a package: reading it must stay cheap however its
+// references are arranged.
+func TestSettingsSecretsCostIsLinear(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`{"properties":{"k":{"writeOnly":true}`)
+	const n = 20000
+	for i := range n {
+		fmt.Fprintf(&b, `,"p%d":{"allOf":[{"$ref":"#"},{"$ref":"#/properties/p%d"},{"$ref":"#anchor"}]}`, i, (i+1)%n)
+	}
+	b.WriteString(`}}`)
+	start := time.Now()
+	fields, unreachable := SettingsSecrets([]byte(b.String()))
+	if len(fields) != 1 || len(unreachable) != 3*n {
+		t.Fatalf("fields %d, unreachable %d", len(fields), len(unreachable))
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("took %s", d)
 	}
 }

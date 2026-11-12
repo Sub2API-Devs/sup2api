@@ -47,16 +47,22 @@ const MaxSecretDepth = 8
 // unreachable are the schema locations (JSON pointers, sorted) of the markers
 // no fixed value path leads to, which therefore cannot be masked one by one:
 // those under items, additionalProperties, patternProperties, allOf/anyOf/
-// oneOf, if/then/else, $defs and every other keyword holding a schema, those
-// deeper than MaxSecretDepth, and each "$ref" whose target carries one. A
-// package whose settings schema has any is refused at packaging time;
-// UnmaskableFields says what the core masks for one that is already installed.
+// oneOf, if/then/else, $defs and every other keyword holding a schema, and
+// those deeper than MaxSecretDepth. In a schema that holds any marker, every
+// reference ("$ref", "$dynamicRef", "$recursiveRef") is unreachable too: where
+// it leads is not worked out, so a schema with secrets does without them. The
+// root itself ("") is unreachable when it is marked or the schema is not a
+// JSON object. A package whose settings schema has any is refused at
+// packaging time; UnmaskableFields says what the core masks for one that is
+// already installed.
+//
+// The walk is linear in the size of the schema.
 func SettingsSecrets(schema []byte) (fields []SecretField, unreachable []string) {
 	var root map[string]any
 	if json.Unmarshal(schema, &root) != nil || root == nil {
-		return []SecretField{}, nil
+		return []SecretField{}, []string{""}
 	}
-	w := &secretWalk{root: root, fields: []SecretField{}}
+	w := &secretWalk{refsUnreachable: holdsMarker(root), fields: []SecretField{}}
 	if secret, _ := marked(root); secret {
 		w.unreachable = append(w.unreachable, "")
 	}
@@ -69,8 +75,8 @@ func SettingsSecrets(schema []byte) (fields []SecretField, unreachable []string)
 // UnmaskableFields turns the unreachable markers of SettingsSecrets into what
 // has to be masked instead: the top-level settings that contain them, or all
 // of them when a marker is not below one top-level property. Markers inside
-// $defs/definitions are skipped: they only matter where a "$ref" uses them,
-// and that location is reported on its own.
+// $defs/definitions are skipped: they only matter where a reference uses
+// them, and every reference of such a schema is reported on its own.
 func UnmaskableFields(unreachable []string) (fields []string, all bool) {
 	for _, loc := range unreachable {
 		parts := strings.Split(strings.TrimPrefix(loc, "/"), "/")
@@ -88,17 +94,24 @@ func UnmaskableFields(unreachable []string) (fields []string, all bool) {
 
 // secretWalk collects the result of SettingsSecrets.
 type secretWalk struct {
-	root        map[string]any
-	fields      []SecretField
-	unreachable []string
+	// refsUnreachable: the schema holds a marker somewhere, so no reference
+	// in it can be trusted to lead away from one.
+	refsUnreachable bool
+	fields          []SecretField
+	unreachable     []string
 }
 
 // dataKeywords hold instance data, not schemas: nothing in them is a marker.
 var dataKeywords = map[string]bool{"default": true, "examples": true, "const": true, "enum": true}
 
 // schemaMaps are the keywords whose value maps names to schemas: its keys are
-// names chosen by the author, not keywords.
-var schemaMaps = map[string]bool{"properties": true, "patternProperties": true, "$defs": true, "definitions": true, "dependentSchemas": true}
+// names chosen by the author, not keywords. ("dependencies" is the draft-07
+// form of dependentSchemas.)
+var schemaMaps = map[string]bool{"properties": true, "patternProperties": true, "$defs": true, "definitions": true,
+	"dependentSchemas": true, "dependencies": true}
+
+// refKeywords reference another schema.
+var refKeywords = []string{"$ref", "$dynamicRef", "$recursiveRef"}
 
 // marked classifies the node's own markers.
 func marked(node map[string]any) (secret, credential bool) {
@@ -109,12 +122,41 @@ func marked(node map[string]any) (secret, credential bool) {
 	return credential || sensitive, credential
 }
 
+// holdsMarker reports whether any object below val looks marked. It reads
+// every value, data keywords included: a reference may point anywhere.
+func holdsMarker(val any) bool {
+	switch v := val.(type) {
+	case []any:
+		return slices.ContainsFunc(v, holdsMarker)
+	case map[string]any:
+		if secret, _ := marked(v); secret {
+			return true
+		}
+		for _, child := range v {
+			if holdsMarker(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// refs records the references of a schema node when they count as unreachable.
+func (w *secretWalk) refs(node map[string]any, loc string) {
+	if !w.refsUnreachable {
+		return
+	}
+	for _, kw := range refKeywords {
+		if _, ok := node[kw].(string); ok {
+			w.unreachable = append(w.unreachable, loc+"/"+kw)
+		}
+	}
+}
+
 // object walks a schema whose value is reached by path: its properties are
 // reachable fields, everything else it holds is not.
 func (w *secretWalk) object(node map[string]any, path []string, loc string) {
-	if w.refMarked(node) {
-		w.unreachable = append(w.unreachable, loc+"/$ref")
-	}
+	w.refs(node, loc)
 	for key, val := range node {
 		if key != "properties" {
 			w.scan(key, val, loc+"/"+pointerEscaper.Replace(key))
@@ -145,8 +187,8 @@ func (w *secretWalk) property(prop map[string]any, path []string, loc string) {
 	}
 }
 
-// scan records every marker below val, a keyword's value no value path leads
-// through, as unreachable.
+// scan records every marker below val, the value of keyword key ("" for a
+// schema) that no value path leads through, as unreachable.
 func (w *secretWalk) scan(key string, val any, loc string) {
 	if dataKeywords[key] {
 		return
@@ -167,96 +209,9 @@ func (w *secretWalk) scan(key string, val any, loc string) {
 			w.unreachable = append(w.unreachable, loc)
 			return
 		}
-		if w.refMarked(v) {
-			w.unreachable = append(w.unreachable, loc+"/$ref")
-		}
+		w.refs(v, loc)
 		for k, child := range v {
 			w.scan(k, child, loc+"/"+pointerEscaper.Replace(k))
 		}
 	}
-}
-
-// refMarked reports whether node references ("$ref", "$dynamicRef") a schema
-// that carries a marker.
-func (w *secretWalk) refMarked(node map[string]any) bool {
-	for _, kw := range []string{"$ref", "$dynamicRef"} {
-		if ref, ok := node[kw].(string); ok && w.targetMarked(ref, map[string]bool{}) {
-			return true
-		}
-	}
-	return false
-}
-
-// targetMarked reports whether the schema ref points to holds a marker,
-// following further references. A reference that cannot be resolved inside the
-// document (an anchor, another document) counts as marked when the document
-// has any marker at all.
-func (w *secretWalk) targetMarked(ref string, seen map[string]bool) bool {
-	if seen[ref] {
-		return false
-	}
-	seen[ref] = true
-	target, ok := w.resolve(ref)
-	if !ok {
-		return w.holdsMarker("", w.root, nil)
-	}
-	return w.holdsMarker("", target, seen)
-}
-
-// resolve follows a same-document JSON pointer reference ("#", "#/a/b").
-func (w *secretWalk) resolve(ref string) (any, bool) {
-	if ref == "#" {
-		return w.root, true
-	}
-	rest, ok := strings.CutPrefix(ref, "#/")
-	if !ok {
-		return nil, false
-	}
-	var cur any = w.root
-	for _, part := range strings.Split(rest, "/") {
-		part = pointerUnescaper.Replace(part)
-		switch v := cur.(type) {
-		case map[string]any:
-			if cur, ok = v[part]; !ok {
-				return nil, false
-			}
-		case []any:
-			i, err := strconv.Atoi(part)
-			if err != nil || i < 0 || i >= len(v) {
-				return nil, false
-			}
-			cur = v[i]
-		default:
-			return nil, false
-		}
-	}
-	return cur, true
-}
-
-// holdsMarker reports whether val, the value of keyword key ("" for a schema),
-// or anything below it carries a marker. References are followed unless seen
-// is nil.
-func (w *secretWalk) holdsMarker(key string, val any, seen map[string]bool) bool {
-	if dataKeywords[key] {
-		return false
-	}
-	switch v := val.(type) {
-	case string:
-		return seen != nil && (key == "$ref" || key == "$dynamicRef") && w.targetMarked(v, seen)
-	case []any:
-		return slices.ContainsFunc(v, func(item any) bool { return w.holdsMarker("", item, seen) })
-	case map[string]any:
-		if secret, _ := marked(v); secret && !schemaMaps[key] {
-			return true
-		}
-		for k, child := range v {
-			if schemaMaps[key] {
-				k = ""
-			}
-			if w.holdsMarker(k, child, seen) {
-				return true
-			}
-		}
-	}
-	return false
 }

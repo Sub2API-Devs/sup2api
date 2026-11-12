@@ -210,6 +210,15 @@ func TestSchemaSecretsLegacyUnreachable(t *testing.T) {
 	assert.Empty(t, changed)
 	assert.Equal(t, old, shown)
 
+	// A schema that cannot be read as an object masks them all.
+	for _, schema := range []string{`true`, `not json`, `null`, `[]`} {
+		_, maskAll = schemaSecrets([]byte(schema))
+		assert.True(t, maskAll, schema)
+	}
+	// So does a reference at the root of a schema with secrets.
+	_, maskAll = schemaSecrets([]byte(`{"$ref":"#/$defs/s","$defs":{"s":{"properties":{"k":{"writeOnly":true}}}}}`))
+	assert.True(t, maskAll)
+
 	// A marker belonging to no single setting masks them all.
 	_, maskAll = schemaSecrets([]byte(`{"properties":{"a":{"type":"string"}},"additionalProperties":{"writeOnly":true}}`))
 	assert.True(t, maskAll)

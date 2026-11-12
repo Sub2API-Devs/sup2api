@@ -491,12 +491,24 @@ func sortedKeys[V any](m map[string]V) []string {
 }
 
 // maskableSecrets refuses a settings schema that marks secrets where the core
-// cannot mask them one by one (manifest.SettingsSecrets).
+// cannot mask them one by one (manifest.SettingsSecrets). A missing file is
+// reported by needFile.
 func (v *validator) maskableSecrets(field, schema string) {
-	if _, unreachable := manifest.SettingsSecrets(v.files[schema]); len(unreachable) > 0 {
-		v.add(field, "unmaskable_secret", "writeOnly, format password and x-sensitive are only masked on properties of nested objects (at most %d deep); found at %s",
-			manifest.MaxSecretDepth, strings.Join(unreachable, ", "))
+	raw, ok := v.files[schema]
+	if !ok {
+		return
 	}
+	_, unreachable := manifest.SettingsSecrets(raw)
+	if len(unreachable) == 0 {
+		return
+	}
+	for i, loc := range unreachable {
+		if loc == "" {
+			unreachable[i] = "(the schema itself, which must be a JSON object without a marker)"
+		}
+	}
+	v.add(field, "unmaskable_secret", "writeOnly, format password and x-sensitive are only masked on properties of nested objects (at most %d deep), and a schema using them takes no $ref; found at %s",
+		manifest.MaxSecretDepth, strings.Join(unreachable, ", "))
 }
 
 // form validates a console form; settings=true for ui.settings.
