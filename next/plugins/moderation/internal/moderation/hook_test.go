@@ -47,15 +47,6 @@ func hookReqAs(user int64, id, text string) *pluginv1.GatewayRequestHookRequest 
 
 func hookReq(text string) *pluginv1.GatewayRequestHookRequest { return hookReqAs(3, "", text) }
 
-// settingsMap is a 0.1 single-model setup (converted on first start).
-func settingsMap(base string, mode string, extra map[string]any) map[string]any {
-	m := map[string]any{"mode": mode, "base_url": base, "api_key": "sk-test", "model": "mod-model", "record_pass": true}
-	for k, v := range extra {
-		m[k] = v
-	}
-	return m
-}
-
 // mustHook sends a hook request to the node h when the verdicts of the runs
 // before it are in the cache, and returns when those of its own run are (the
 // writes that failed are over as well): a run stores its verdicts after the
@@ -110,13 +101,6 @@ func nodeOf(t *testing.T, h *pluginsdktest.Harness) *Plugin {
 
 func denied(r *pluginv1.GatewayRequestHookResponse) bool {
 	return r.GetDecision() == pluginv1.GatewayRequestHookResponse_DECISION_DENY
-}
-
-// mockLLM answers like mock-upstream (CONTRACTS §20.9) through the tool.
-func mockLLM(t *testing.T) *fakeLLM {
-	return newFakeLLM(t, func(req fakeReq, _ int) (int, any) {
-		return 200, toolCallResp("c1", ToolName, verdictFor(req.lastUser()))
-	})
 }
 
 // fakeMod serves /v1/moderations and /v1/systemone: every category scores
@@ -298,10 +282,18 @@ func startNode(t *testing.T, fh *pluginsdktest.FakeHost, cfg any, opts ...nodeOp
 	return n.Plugin, h
 }
 
-// startDB starts a plugin instance on a host of its own with a fresh
-// database. With llm the settings are the 0.1 single-model setup on it
-// (settingsMap), extra added.
-func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, opts ...nodeOpt) (*Plugin, *pluginsdktest.Harness, *pluginsdktest.FakeHost) {
+// startDB starts a plugin instance with settings on a host of its own with
+// a fresh database (newDBHost).
+func startDB(t *testing.T, settings map[string]any, opts ...nodeOpt) (*Plugin, *pluginsdktest.Harness, *pluginsdktest.FakeHost) {
+	t.Helper()
+	fh := newDBHost(t)
+	p, h := startNode(t, fh, settings, opts...)
+	return p, h, fh
+}
+
+// newDBHost is a host with a fresh, migrated database: users 1-100 exist in
+// the core, nobody is a moderator.
+func newDBHost(t *testing.T) *pluginsdktest.FakeHost {
 	t.Helper()
 	dsn, schema := pluginsdktest.NewSchema(t, "plg_moderation_t")
 	pluginsdktest.ApplyMigrations(t, dsn, schema, filepath.Join("..", "..", "migrations"))
@@ -314,12 +306,7 @@ func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, opts ...nodeOpt) 
 	for id := int64(1); id <= 100; id++ {
 		fh.Users[id] = &pluginv1.UserInfo{Id: id, DisplayName: fmt.Sprintf("user %d", id), Status: "active"}
 	}
-	var cfg any = extra
-	if llm != nil {
-		cfg = settingsMap(llm.srv.URL, ModeEnforce, extra)
-	}
-	p, h := startNode(t, fh, cfg, opts...)
-	return p, h, fh
+	return fh
 }
 
 func decodeData[T any](t *testing.T, resp *pluginv1.HTTPResponse) T {
@@ -410,52 +397,9 @@ func setupFlow(t *testing.T, h *pluginsdktest.Harness, base string, groups []int
 	return publishFlow(t, h, spec, groups...)
 }
 
-func TestLegacyConversion(t *testing.T) {
-	llm := mockLLM(t)
-	p, h, fh := startDB(t, llm, map[string]any{"group_ids": []int{9}, "model_patterns": []string{"claude-*"}})
-	waitFor(t, "conversion", func() bool { return p.snap.Load().bound() })
-	chans := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
-	if len(chans) != 1 || chans[0].Type != ChannelLLM || chans[0].APIKeyTail != "test" || !chans[0].HasKey {
-		t.Fatalf("channels = %+v", chans)
-	}
-	db, _ := p.db(context.Background())
-	var enc []byte
-	if err := db.QueryRow(context.Background(), `SELECT api_key_enc FROM channels`).Scan(&enc); err != nil || strings.Contains(string(enc), "sk-test") {
-		t.Fatalf("key stored in clear: %v", err)
-	}
-	flows := decodeData[[]FlowView](t, h.Do("GET", "/flows", nil, nil))
-	if len(flows) != 1 || flows[0].Version != 1 || len(flows[0].Groups) != 1 || flows[0].Groups[0] != 9 {
-		t.Fatalf("flows = %+v", flows)
-	}
-	r := mustHook(t, h, hookReq("please MOD-BLOCK this"))
-	if !denied(r) || r.GetDenyStatus() != 403 || r.GetDenyCode() != DenyBlocked || !strings.Contains(r.GetNote(), "hit flow=") {
-		t.Fatalf("block = %+v", r)
-	}
-	if r := mustHook(t, h, hookReq("quicksort in Go")); denied(r) {
-		t.Fatalf("pass denied: %+v", r)
-	}
-	other := hookReq("MOD-BLOCK other group")
-	other.Meta.GroupId = 10
-	if r := mustHook(t, h, other); denied(r) || r.GetNote() != "" {
-		t.Fatalf("unbound group moderated: %+v", r)
-	}
-	ev := waitEvents(t, h, map[string]string{"result": "block"}, 1)
-	if ev[0].Timing != TimingPre || ev[0].FlowVersion != 1 || ev[0].Verdict != VerdictBlock || ev[0].HighestCategory != "illegal" {
-		t.Fatalf("event = %+v", ev[0])
-	}
-	// A second node on the same database does not convert again.
-	fh2 := pluginsdktest.NewFakeHost()
-	fh2.SetDSN(fh.DSNValue, fh.SchemaValue)
-	p2, _ := startNode(t, fh2, settingsMap(llm.srv.URL, ModeEnforce, nil))
-	waitFor(t, "second node snapshot", func() bool { return p2.snap.Load().bound() })
-	if n := len(decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))); n != 1 {
-		t.Fatalf("channels after second start = %d", n)
-	}
-}
-
 func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	first := hookReqAs(3, "req-a", "MOD-HIT-sexual one")
 	first.Meta.SessionFingerprint = "fp-a"
@@ -564,7 +508,7 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 
 func TestTwoStageFlowCacheAndFailOpen(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe})
 	// hate is an OpenAI category only: the Jev stage overturns it.
 	if r := mustHook(t, h, hookReq("MOD-HIT-hate words")); denied(r) || !strings.Contains(r.GetNote(), "overturned") {
@@ -661,7 +605,7 @@ func TestTwoStageFlowCacheAndFailOpen(t *testing.T) {
 
 func TestTestAndTryRoutes(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAll, []string{AuditorOpenAI, AuditorTypeSafe})
 	res := decodeData[TestResult](t, h.Do("POST", "/test", nil, map[string]any{"text": "MOD-HIT-sexual"}))
 	if res.FlowID != flow || res.Result != ResultHit || len(res.Trace.Stages) != 1 || len(res.Trace.Stages[0].Outcomes) != 2 {
@@ -688,7 +632,7 @@ func TestTestAndTryRoutes(t *testing.T) {
 
 func TestConfigValidation(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{0, 9}, CombineAny, []string{AuditorOpenAI})
 	if r := h.Do("POST", "/channels", nil, map[string]any{"type": "openai_moderation", "name": "x", "base_url": "ftp://x"}); r.GetStatus() != 400 {
 		t.Fatalf("bad base_url = %d", r.GetStatus())
@@ -749,11 +693,12 @@ func TestConfigValidation(t *testing.T) {
 
 func TestBansExemptAndModeOff(t *testing.T) {
 	mod := newFakeMod(t)
-	// exempt_user_ids is the retired name of the allowlist: user 8 is
-	// moderated after the request and recorded, but never watched
-	// automatically, refused or banned.
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "ban_threshold": 2, "exempt_user_ids": []string{"8"}})
+	// exempt_user_ids is the older name of the allowlist, imported on the
+	// first start (upgradeOnce): user 8 is moderated after the request and
+	// recorded, but never watched automatically, refused or banned.
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "ban_threshold": 2, "exempt_user_ids": []string{"8"}})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
+	waitFor(t, "the imported list", func() bool { return p.userLock(8) == LockAllowlist })
 	mustHook(t, h, hookReq("MOD-HIT-sexual 1"))
 	mustHook(t, h, hookReq("MOD-HIT-sexual 2"))
 	waitFor(t, "auto ban", func() bool { return p.isBlocked(3) })
@@ -773,7 +718,7 @@ func TestBansExemptAndModeOff(t *testing.T) {
 		t.Fatalf("blocks = %d, want only user 3", n)
 	}
 	// By hand an allowlisted user cannot be banned, nor watched: the user's
-	// entry is the locked entry of the list (locks.go).
+	// entry is locked (locks.go).
 	if resp := h.Do("POST", "/blocks", nil, map[string]any{"user_id": 8}); resp.GetStatus() != 400 || !strings.Contains(string(resp.GetBody()), `"allowlisted"`) {
 		t.Fatalf("ban of an allowlisted user = %d %s", resp.GetStatus(), resp.GetBody())
 	}
@@ -791,7 +736,7 @@ func TestBansExemptAndModeOff(t *testing.T) {
 // The retention purge runs on the node holding the advisory lock and deletes
 // in batches until nothing is left (new-api cleanup.go deleteRecordBatches).
 func TestRetentionPurgeBatchesOnOneNode(t *testing.T) {
-	p, _, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, _, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	ctx := context.Background()
 	db, _ := p.db(ctx)
 	defer func(b int, d time.Duration) { purgeBatch, purgePause = b, d }(purgeBatch, purgePause)
@@ -831,7 +776,7 @@ func TestRetentionPurgeBatchesOnOneNode(t *testing.T) {
 }
 
 func TestCleanupAndImport(t *testing.T) {
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	ctx := context.Background()
 	db, _ := p.db(ctx)
 	if _, err := db.Exec(ctx, `INSERT INTO events (user_id, mode, verdict, action, result, keep_until) VALUES
@@ -987,7 +932,7 @@ func BenchmarkHookOff(b *testing.B) {
 // (no escaping the watch list by disconnecting), a pass is not.
 func TestPreCanceledClient(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true, "cache_ttl_seconds": 0})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true, "verdict_cache_days": 0})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	mod.delay.Store(int64(500 * time.Millisecond))
 	for _, tc := range []struct{ id, text string }{{"cancel-hit", "MOD-HIT-sexual gone"}, {"cancel-pass", "clean and gone"}} {
@@ -1018,7 +963,7 @@ func TestPreCanceledClient(t *testing.T) {
 // event writer.
 func TestShutdownKeepsLatePreHit(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "cache_ttl_seconds": 0})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "verdict_cache_days": 0})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	mod.delay.Store(int64(500 * time.Millisecond))
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
@@ -1096,7 +1041,7 @@ func TestMigration0010Idempotent(t *testing.T) {
 // count the stages by their number in the spec.
 func TestFallbackStageHitEndToEnd(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	channels := map[string]int64{}
 	auditor := func(typ string) int64 { return newAuditor(t, h, mod.srv.URL, typ, channels) }
 	// Group 9: Jev, Jev, then OpenAI as a fallback stage. "hate" is an
@@ -1166,7 +1111,7 @@ func TestFallbackStageHitEndToEnd(t *testing.T) {
 // process: the job is recorded as an error and the workers go on.
 func TestPostWorkerSurvivesPanic(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true, "record_errors": true})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "record_pass": true, "record_errors": true})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	snap := p.snap.Load()
 	m := &moderation{cfg: p.cfg.Load(), flow: snap.flows[flow], snap: snap, timing: TimingPost, queued: p.now(),
@@ -1207,7 +1152,7 @@ func TestFinishBuildsInputMessageOnlyForRecords(t *testing.T) {
 	settings := func(recordPass bool) map[string]any {
 		return map[string]any{"mode": ModeEnforce, "store_text": true, "record_pass_input_message": true, "record_pass": recordPass}
 	}
-	p, h, _ := startDB(t, nil, settings(false))
+	p, h, _ := startDB(t, settings(false))
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	// One user message with a 3 MiB inline image, different for each request
 	// (the first one's pass is cached).
@@ -1270,7 +1215,7 @@ func TestFinishBuildsInputMessageOnlyForRecords(t *testing.T) {
 func TestPreRunStoresVerdictsOnce(t *testing.T) {
 	mod := newFakeMod(t)
 	kv := &kvFake{}
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce}, withKV(kv))
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce}, withKV(kv))
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	calls := func() int64 { return mod.count("/v1/moderations") }
 
@@ -1359,7 +1304,7 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 	mod := newFakeMod(t)
 	// Without the periodic refresh: nothing but this test reads the snapshot
 	// while the test has taken it away (below).
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_errors": true}, noRefreshTicks)
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce, "record_errors": true}, noRefreshTicks)
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	snap := p.snap.Load()
 	job := func(rid string) *moderation {
@@ -1468,7 +1413,7 @@ func TestPreRunSurvivesPanic(t *testing.T) {
 // hit decides.
 func TestHitStandsWhenRecordingPanics(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	// Without its event writer the plugin panics where a record is handed
 	// over (finish, replay).
@@ -1519,7 +1464,7 @@ func TestHitStandsWhenRecordingPanics(t *testing.T) {
 // contained and logged too.
 func TestPostPanicIsCountedOnce(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true, "record_errors": true})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeObserve, "record_pass": true, "record_errors": true})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	ctx := context.Background()
 	job := func(rid string) *moderation {

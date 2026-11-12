@@ -439,20 +439,22 @@ func TestSpecValidate(t *testing.T) {
 }
 
 func TestDecodeSettings(t *testing.T) {
-	s, err := DecodeSettings([]byte(`{"mode":"OBSERVE","block_status":500,"retention_days":400,"pass_retention_days":9,"exempt_user_ids":["7",8,"x"],"watch_days":0}`))
+	// retention_days (0.1) is retired and no longer read.
+	s, err := DecodeSettings([]byte(`{"mode":"OBSERVE","block_status":500,"retention_days":400,"pass_retention_days":9,"watch_days":0}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Mode != ModeObserve || s.BlockStatus != 500 || s.HitRetentionDays != 400 || s.PassRetentionDays != 3 ||
-		strings.Join(s.AllowlistUserIDs, ",") != "7,8" || s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch {
+	if s.Mode != ModeObserve || s.BlockStatus != 500 || s.HitRetentionDays != 180 || s.PassRetentionDays != 3 ||
+		s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch || s.setup01 {
 		t.Fatalf("settings = %+v", s)
 	}
-	// exempt_user_ids is the retired name of the allowlist; a missing
-	// record_pass_input_message is on.
+	// A missing record_pass_input_message is on.
 	c := compile(s)
-	if !c.enabled || !c.allowlisted(7) || !c.allowlisted(8) || c.allowlisted(9) || c.blocklisted(7) || c.defaultLevel != LevelObserve ||
-		c.retention[ResultPass] != 3*24*time.Hour || c.legacyReady || !s.RecordPassInputMessage {
+	if !c.enabled || c.defaultLevel != LevelObserve || c.retention[ResultPass] != 3*24*time.Hour || !s.RecordPassInputMessage {
 		t.Fatalf("config = %+v", c)
+	}
+	if s, _ := DecodeSettings([]byte(`{"base_url":"https://x","model":"m","api_key":"k"}`)); !s.setup01 {
+		t.Fatal("a 0.1 setup is not noticed")
 	}
 	if s, _ := DecodeSettings([]byte(`{"record_pass_input_message":false}`)); s.RecordPassInputMessage {
 		t.Fatal("record_pass_input_message false ignored")
@@ -484,8 +486,8 @@ func TestDecodeSettings(t *testing.T) {
 }
 
 // verdict_cache_days is the cache TTL, 0 = off (P11); settings saved before
-// 0.8.0 only have cache_ttl_seconds, which is read until the new key is
-// saved.
+// 0.8.0 only have cache_ttl_seconds, which is read (retiredKeys) until the
+// new key is saved.
 func TestVerdictCacheTTLSettings(t *testing.T) {
 	day := 24 * time.Hour
 	for _, tc := range []struct {
@@ -506,9 +508,11 @@ func TestVerdictCacheTTLSettings(t *testing.T) {
 		{`{"verdict_cache_days":5,"cache_ttl_seconds":0}`, 5},
 		{`{"verdict_cache_days":5,"cache_ttl_seconds":86400}`, 5},
 		{`{"verdict_cache_days":0,"cache_ttl_seconds":86400}`, 0},
-		// Values of the wrong type are ignored like everywhere else.
-		{`{"verdict_cache_days":"x","cache_ttl_seconds":172800}`, 2},
+		// Values of the wrong type are ignored like everywhere else; the new
+		// key, once there, wins whatever it holds.
+		{`{"verdict_cache_days":"x","cache_ttl_seconds":172800}`, 7},
 		{`{"cache_ttl_seconds":"x"}`, 7},
+		{`{"cache_ttl_seconds":9999999}`, 7},
 	} {
 		s, err := DecodeSettings([]byte(tc.raw))
 		if err != nil {
@@ -516,6 +520,38 @@ func TestVerdictCacheTTLSettings(t *testing.T) {
 		}
 		if c := compile(s); s.VerdictCacheDays != tc.days || c.cacheTTL != time.Duration(tc.days)*day {
 			t.Errorf("%s: days = %d, ttl = %s, want %d days", tc.raw, s.VerdictCacheDays, c.cacheTTL, tc.days)
+		}
+	}
+}
+
+// ban_window_seconds (0.11.0) replaces ban_window_hours, which is read
+// (retiredKeys) until the new key is saved; the ban reason names the window
+// in its largest whole unit.
+func TestBanWindowSettings(t *testing.T) {
+	for _, tc := range []struct {
+		raw string
+		sec int
+	}{
+		{`{}`, 86400},
+		{`{"ban_window_seconds":90}`, 90},
+		{`{"ban_window_seconds":0}`, 1},
+		{`{"ban_window_seconds":99999999}`, 31536000},
+		{`{"ban_window_hours":2}`, 7200},
+		{`{"ban_window_hours":"x"}`, 86400},
+		{`{"ban_window_hours":2,"ban_window_seconds":600}`, 600},
+	} {
+		s, err := DecodeSettings([]byte(tc.raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c := compile(s); s.BanWindowSeconds != tc.sec || c.banWindow != time.Duration(tc.sec)*time.Second {
+			t.Errorf("%s: %d s, want %d", tc.raw, s.BanWindowSeconds, tc.sec)
+		}
+	}
+	for sec, want := range map[int]string{86400: "3 violations within 24h / 24 小时内违规 3 次", 600: "3 violations within 10m / 10 分钟内违规 3 次",
+		90: "3 violations within 90s / 90 秒内违规 3 次"} {
+		if got := violationsReason(3, sec); got != want {
+			t.Errorf("%d s: %q", sec, got)
 		}
 	}
 }

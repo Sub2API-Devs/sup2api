@@ -2,196 +2,128 @@ package moderation
 
 import (
 	"context"
-	"maps"
-	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 )
 
-// Locked entries (CONTRACTS §72.8, 0.10.0): the users of allowlist_user_ids
-// and blocklist_user_ids are mirrored into the watch list as locked entries
-// - blocklist at enforce, allowlist at observe, no expiry, source manual (the
-// CHECK of watchlist.source has no value for them). The settings lists stay
-// the source of truth: 0.9.x nodes still read them during a rolling upgrade,
-// so the lists keep deciding (decideHandling) and the locked entries only
-// show them in the watch list. Each node reconciles after the settings or
-// the watch list changed: a listed user gets a locked entry at the list's
-// level (replacing whatever entry the user had), and a locked entry whose
-// user left the lists is removed (not restored to an earlier state); every
-// change writes a history row (lock / unlock). Locked entries are changed
-// through the lists only (writeWatch); a 0.9.x node may still change or
-// remove one, and the next reconcile restores it.
+// Locked entries (CONTRACTS §72.8; the source of truth since 0.11.0): the
+// background-only list (allowlist) and the always-check-first list
+// (blocklist) are the locked entries of the watch list, and the level of a
+// locked entry is its list - observe = allowlist, enforce = blocklist. A
+// locked entry never expires, has source manual (the CHECK of
+// watchlist.source has no value for it) and is changed only through PUT and
+// DELETE /watchlist/:user_id/lock; the other watch routes answer 409 locked
+// (writeWatch).
 
-// Lock kinds (Watch.Lock): the list that locks an entry.
+// Lock kinds (Watch.Lock): the list of a locked entry.
 const (
 	LockAllowlist = "allowlist"
 	LockBlocklist = "blocklist"
 )
 
-// lockLevels is the level of a locked entry by its list.
-var lockLevels = map[string]string{LockAllowlist: LevelObserve, LockBlocklist: LevelEnforce}
-
-// lockReasons names the list in the history; unlockReason is the reason of
-// a removal.
-var lockReasons = map[string]string{
-	LockAllowlist: "只后台审核名单 / background-only list (allowlist_user_ids)",
-	LockBlocklist: "总是先审名单 / always-check-first list (blocklist_user_ids)",
+// lockList is a list: the level of its entries and the history reasons.
+type lockList struct {
+	level                    string
+	added, imported, removed string
 }
 
-const unlockReason = "已移出固定名单 / removed from the background-only and always-check-first lists"
+var lockLists = map[string]lockList{
+	LockAllowlist: {LevelObserve,
+		"加入只后台审核名单 / added to the background-only list",
+		"从设置导入只后台审核名单 / imported from the background-only list of the settings",
+		"移出只后台审核名单 / removed from the background-only list"},
+	LockBlocklist: {LevelEnforce,
+		"加入总是先审名单 / added to the always-check-first list",
+		"从设置导入总是先审名单 / imported from the always-check-first list of the settings",
+		"移出总是先审名单 / removed from the always-check-first list"},
+}
 
-// lockKind is the list that locks uid's entry ("" = none); the blocklist
-// wins.
-func (c *config) lockKind(uid int64) string {
+// lockOf names the list of an entry at level ("" = not locked).
+func lockOf(locked bool, level string) string {
 	switch {
-	case c.blocklisted(uid):
+	case !locked:
+		return ""
+	case level == LevelEnforce:
 		return LockBlocklist
-	case c.allowlisted(uid):
-		return LockAllowlist
 	}
-	return ""
+	return LockAllowlist
 }
 
-// withLock names the list of a locked entry.
-func (c *config) withLock(w Watch) Watch {
-	if w.Locked {
-		w.Lock = c.lockKind(w.UserID)
+// lockEntry makes w, uid's live entry (found = there is one), a locked
+// entry of list, recorded as a lock with c's reason and operator. A new
+// level opens a new counting window, as a level change by hand does
+// (updateWatch). An entry that is one already is left alone (changed =
+// false). The caller holds the user's lock and bumps watch_version.
+func lockEntry(ctx context.Context, tx pgx.Tx, w Watch, found bool, list string, now time.Time, c watchChange) (Watch, bool, error) {
+	if found && w.Lock == list && w.ExpiresAt == nil {
+		return w, false, nil
 	}
-	return w
-}
-
-// locksState is what the last complete reconcile saw.
-type locksState struct {
-	cfg   *config
-	watch int64 // watch_version
-}
-
-// reconcileLocks brings the locked entries in line with the lists of c. It
-// compares the watch list in memory, so it only writes what differs, and
-// skips the comparison while neither the settings nor the watch list
-// changed since the last complete run. Every user is changed in their own
-// transaction under the user's lock after reading the row again, so nodes
-// running it at the same time change each entry once.
-func (p *Plugin) reconcileLocks(ctx context.Context) error {
-	if !p.configured.Load() {
-		return nil // the defaults have no lists: never unlock with them
+	c.action, c.from, c.to = "lock", "", lockLists[list].level
+	if found {
+		c.from = w.Level
 	}
-	c := p.cfg.Load()
-	seen := locksState{cfg: c, watch: p.watchVersion.Load()}
-	if last := p.locks.Load(); last != nil && *last == seen {
-		return nil
-	}
-	var err error
-	if users := lockDiff(c, *p.watch.Load()); len(users) > 0 {
-		err = p.reconcileUsers(ctx, c, users)
-	}
-	if err == nil {
-		p.locks.Store(&seen)
-	}
-	return err
-}
-
-// reconcileUsers reconciles the entries of users, then reloads and
-// broadcasts if one changed (which changes watch_version: the next run
-// compares again and finds nothing to do).
-func (p *Plugin) reconcileUsers(ctx context.Context, c *config, users []int64) error {
-	db, err := p.db(ctx)
+	w, err := scanWatch(tx.QueryRow(ctx, `INSERT INTO watchlist (user_id, level, source, since_at, expires_at, violation_epoch, locked, updated_at)
+		VALUES ($1, $2, 'manual', $3, NULL, $4, true, $3)
+		ON CONFLICT (user_id) DO UPDATE SET level = EXCLUDED.level, source = 'manual', expires_at = NULL, locked = true,
+			updated_at = EXCLUDED.updated_at,
+			since_at = CASE WHEN watchlist.level = EXCLUDED.level THEN watchlist.since_at ELSE EXCLUDED.since_at END,
+			violation_count = CASE WHEN watchlist.level = EXCLUDED.level THEN watchlist.violation_count ELSE 0 END,
+			violation_epoch = CASE WHEN watchlist.level = EXCLUDED.level THEN watchlist.violation_epoch ELSE EXCLUDED.violation_epoch END
+		RETURNING `+watchColumns, c.uid, c.to, now, newEpoch()))
 	if err != nil {
-		return err
+		return w, false, err
 	}
-	now := p.now().UTC()
-	changed := false
-	for _, uid := range users {
-		var ok bool
-		if ok, err = reconcileLock(ctx, db, c, uid, now); err != nil {
-			break
-		}
-		changed = changed || ok
-	}
-	if changed {
-		p.watchChanged(ctx)
-	}
-	return err
+	return w, true, watchEvent(ctx, tx, c)
 }
 
-// lockDiff lists the users whose entry in m differs from the lists of c:
-// listed users without a live locked entry at the list's level and without
-// expiry, and locked entries of users who left the lists.
-func lockDiff(c *config, m map[int64]watchEntry) []int64 {
-	var users []int64
-	for uid := range c.block {
-		users = appendLockDiff(users, c, m, uid)
-	}
-	for uid := range c.allow {
-		if !c.block[uid] {
-			users = appendLockDiff(users, c, m, uid)
-		}
-	}
-	for uid, e := range m {
-		if e.Locked && c.lockKind(uid) == "" {
-			users = append(users, uid)
-		}
-	}
-	slices.Sort(users)
-	return users
+// lockInput is the PUT /watchlist/:user_id/lock body.
+type lockInput struct {
+	List string `json:"list"`
 }
 
-func appendLockDiff(users []int64, c *config, m map[int64]watchEntry, uid int64) []int64 {
-	e, ok := m[uid]
-	if ok && e.Locked && e.Level == lockLevels[c.lockKind(uid)] && e.Expires.IsZero() {
-		return users
+// lockWatch puts a user on a list: the user's entry, or a new one, becomes
+// a locked entry of the list. Moderators cannot be locked, as they cannot
+// be watched.
+func (p *Plugin) lockWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	uid, bad := parseID(req, "user_id")
+	if bad != nil {
+		return bad, nil
 	}
-	return append(users, uid)
-}
-
-// reconcileLock locks or unlocks one user's entry; changed = it wrote.
-func reconcileLock(ctx context.Context, db *pgxpool.Pool, c *config, uid int64, now time.Time) (changed bool, err error) {
-	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		changed = false
-		if err := lockBlockSubject(ctx, tx, uid); err != nil {
-			return err
-		}
-		w, found, err := loadWatch(ctx, tx, uid)
-		if err != nil {
-			return err
-		}
-		kind := c.lockKind(uid)
-		level := lockLevels[kind]
-		switch {
-		case kind == "" && found && w.Locked:
-			changed = true
-			return removeEntry(ctx, tx, watchChange{uid: uid, action: "unlock", from: w.Level, reason: unlockReason})
-		case kind == "" || (found && w.Locked && w.Level == level && w.ExpiresAt == nil):
-			return nil
-		}
-		from := ""
-		if found && (w.ExpiresAt == nil || now.Before(*w.ExpiresAt)) {
-			from = w.Level
-		}
-		// A new level opens a new counting window, as a manual level change
-		// does (updateWatch).
-		if _, err := tx.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, since_at, expires_at, violation_epoch, locked, updated_at)
-			VALUES ($1, $2, 'manual', $3, NULL, $4, true, $3)
-			ON CONFLICT (user_id) DO UPDATE SET level = EXCLUDED.level, source = 'manual', expires_at = NULL, locked = true,
-				updated_at = EXCLUDED.updated_at,
-				since_at = CASE WHEN watchlist.level = EXCLUDED.level THEN watchlist.since_at ELSE EXCLUDED.since_at END,
-				violation_count = CASE WHEN watchlist.level = EXCLUDED.level THEN watchlist.violation_count ELSE 0 END,
-				violation_epoch = CASE WHEN watchlist.level = EXCLUDED.level THEN watchlist.violation_epoch ELSE EXCLUDED.violation_epoch END`,
-			uid, level, now, newEpoch()); err != nil {
-			return err
-		}
-		if err := watchEvent(ctx, tx, watchChange{uid: uid, action: "lock", from: from, to: level, reason: lockReasons[kind]}); err != nil {
-			return err
-		}
-		changed = true
-		return bumpWatch(ctx, tx)
+	var in lockInput
+	if bad := decodeBody(req, &in); bad != nil {
+		return bad, nil
+	}
+	errs := p.staffUser(ctx, uid)
+	if _, ok := lockLists[in.List]; !ok {
+		errs = errs.Add("list", "enum", "list must be allowlist or blocklist / list 取值为 allowlist、blocklist")
+	}
+	if len(errs) > 0 {
+		return pluginsdk.FieldErrorResponse("invalid lock / 锁定参数无效", errs), nil
+	}
+	if resp := p.missingUser(ctx, uid); resp != nil {
+		return resp, nil
+	}
+	return p.changeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, now time.Time) (Watch, error) {
+		w, _, err := lockEntry(ctx, tx, w, found, in.List, now, watchChange{uid: uid, reason: lockLists[in.List].added, operator: callerID(req)})
+		return w, err
 	})
-	return changed && err == nil, err
 }
 
-// listsChanged reports whether the user lists differ between old and c.
-func listsChanged(old, c *config) bool {
-	return old == nil || !maps.Equal(old.allow, c.allow) || !maps.Equal(old.block, c.block)
+// unlockWatch takes a user off their list: the locked entry is removed.
+func (p *Plugin) unlockWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	uid, bad := parseID(req, "user_id")
+	if bad != nil {
+		return bad, nil
+	}
+	return p.changeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, _ time.Time) (Watch, error) {
+		if !found || !w.Locked {
+			return w, errNotLocked
+		}
+		return w, removeEntry(ctx, tx, watchChange{uid: uid, action: "unlock", from: w.Level, reason: lockLists[w.Lock].removed,
+			operator: callerID(req)})
+	})
 }

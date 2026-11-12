@@ -22,10 +22,6 @@ const (
 	ModeEnforce = "enforce" // on, default level enforce: pre unless the user is at the observe level
 )
 
-// maxUserList caps allowlist_user_ids and blocklist_user_ids (new-api
-// maxUserListSize).
-const maxUserList = 1000
-
 // Verdicts and actions of the 0.1 columns events.verdict / events.action, and
 // the LLM verdicts of submit_verdict.
 const (
@@ -54,17 +50,10 @@ type Category struct {
 }
 
 // Settings is the plugin configuration (forms/settings.schema.json, CONTRACTS
-// §72.10). The retired keys stay in the schema as hidden legacy keys (stored
-// settings must still validate); only those still deciding something for
-// settings that were never saved again are read (§72.10 0.10.0).
+// §72.10). Of the keys retired in 0.11.0 only those of retiredKeys are read,
+// from settings not saved since.
 type Settings struct {
 	Mode string `json:"mode"`
-	// AllowlistUserIDs are only moderated after the request and never
-	// refused; BlocklistUserIDs always before it. A user on both lists is
-	// blocklisted. Both are mirrored into the watch list as locked entries
-	// (locks.go).
-	AllowlistUserIDs []string `json:"allowlist_user_ids"`
-	BlocklistUserIDs []string `json:"blocklist_user_ids"`
 
 	InputMaxChars int `json:"input_max_chars"`
 	MinChars      int `json:"min_chars"`
@@ -110,7 +99,7 @@ type Settings struct {
 	EscalateWindowSeconds int `json:"escalate_window_seconds"`
 
 	BanThreshold     int `json:"ban_threshold"`
-	BanWindowHours   int `json:"ban_window_hours"`
+	BanWindowSeconds int `json:"ban_window_seconds"`
 	BanDurationHours int `json:"ban_duration_hours"`
 
 	JevDefaultSet *JevQuestions `json:"jev_default_set"`
@@ -121,15 +110,21 @@ type Settings struct {
 	NotifyWebhookURL      string `json:"notify_webhook_url"`
 	NotifyWebhookSecret   string `json:"notify_webhook_secret"`
 
-	// legacy is the 0.1 single-model setup, only read by the one-time
-	// conversion (legacy.go, §72.12).
-	legacy legacySetup
+	// lists: the retired user lists, read only by the one-time import into
+	// locked watch entries (upgrade.go).
+	lists retiredLists
+	// setup01: the settings hold a 0.1 single-model setup (base_url and
+	// model), which 0.11.0 no longer converts (upgradeOnce logs it).
+	setup01 bool
+}
 
-	// truncated names the user lists cut to maxUserList, droppedIDs the
-	// lists that held entries which are no user id, with how many
-	// (Configure warns about both).
-	truncated  []string
-	droppedIDs map[string]int
+// retiredLists are the user lists of the settings before 0.11.0: the
+// allowlist (allowlist_user_ids, or the older exempt_user_ids while that key
+// is absent) and the blocklist, which wins. invalid counts the entries that
+// are no user id.
+type retiredLists struct {
+	allow, block []int64
+	invalid      int
 }
 
 // DefaultBlockMessage is the default deny message of a hit.
@@ -175,9 +170,8 @@ func DefaultSettings() Settings {
 		RecordOverturned: true, RecordErrors: true, StoreText: true, RecordPassInputMessage: true,
 		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
 		AutoWatch: true, WatchDays: 30, EscalateWindowSeconds: 3600,
-		BanWindowHours: 24, BanDurationHours: 24,
+		BanWindowSeconds: 86400, BanDurationHours: 24,
 		ErrorRateAlertPercent: 5, StatsRetentionDays: 90,
-		legacy: defaultLegacySetup(),
 	}
 }
 
@@ -203,7 +197,7 @@ func DecodeSettings(raw []byte) (Settings, error) {
 	d.storage(&s)
 	d.watch(&s)
 	d.notify(&s)
-	s.legacy = d.legacySetup()
+	d.retired(&s)
 	return s, nil
 }
 
@@ -268,74 +262,80 @@ func (d decoder) strList(k string) []string {
 	return out
 }
 
-// userList reads a list of decimal user ids: entries that are no integer
-// (or too long for one: the form takes up to 18 digits) are dropped and
-// counted, more than maxUserList are cut (cut = true). present = the key
-// holds an array.
-func (d decoder) userList(k string) (ids []string, present, cut bool, dropped int) {
-	if v, ok := d.m[k]; ok {
-		var xs []any
-		present = json.Unmarshal(v, &xs) == nil && xs != nil
-	}
+// has: the key holds a value (null counts as absent).
+func (d decoder) has(k string) bool {
+	v, ok := d.m[k]
+	return ok && string(v) != "null"
+}
+
+// userIDs reads a list of user ids (strings or numbers); invalid counts the
+// entries that are no positive integer.
+func (d decoder) userIDs(k string) (ids []int64, invalid int) {
 	for _, u := range d.strList(k) {
 		if u = strings.TrimSpace(u); u == "" {
 			continue
 		}
-		if _, err := strconv.ParseInt(u, 10, 64); err != nil {
-			dropped++
-			continue
+		if id, err := strconv.ParseInt(u, 10, 64); err == nil && id > 0 {
+			ids = append(ids, id)
+		} else {
+			invalid++
 		}
-		if len(ids) == maxUserList {
-			return ids, present, true, dropped
-		}
-		ids = append(ids, u)
 	}
-	return ids, present, false, dropped
+	return ids, invalid
 }
 
-// userLists reads the allowlist and the blocklist. Settings saved before
-// 0.8.0 have no allowlist_user_ids: their exempt_user_ids (the retired name,
-// still read for them) are the allowlist.
-func (d decoder) userLists(s *Settings) {
-	note := func(key string, dropped int) {
-		if dropped > 0 {
-			if s.droppedIDs == nil {
-				s.droppedIDs = map[string]int{}
-			}
-			s.droppedIDs[key] = dropped
-		}
-	}
-	exempt, _, exemptCut, dropped := d.userList("exempt_user_ids")
-	allow, present, cut, allowDropped := d.userList("allowlist_user_ids")
-	if !present {
-		allow, cut = exempt, exemptCut
-		note("exempt_user_ids", dropped) // the retired list only counts while it is read
-	}
-	note("allowlist_user_ids", allowDropped)
-	if s.AllowlistUserIDs = allow; cut {
-		s.truncated = append(s.truncated, "allowlist_user_ids")
-	}
-	if s.BlocklistUserIDs, _, cut, dropped = d.userList("blocklist_user_ids"); cut {
-		s.truncated = append(s.truncated, "blocklist_user_ids")
-	}
-	note("blocklist_user_ids", dropped)
+// retiredKey is a key 0.11.0 removed from the schema that is still read
+// while its successor is absent ("" = none: always). The core keeps the
+// stored values until the settings are saved again, and the console drops
+// keys the schema does not declare when it saves, so only settings not saved
+// since 0.11.0 hold them (CONTRACTS §72 0.11.0).
+type retiredKey struct {
+	key, successor string
+	read           func(d decoder, s *Settings)
 }
 
-// verdictCache reads verdict_cache_days (0 = cache off). Settings saved
-// before 0.8.0 only have the retired cache_ttl_seconds, still read for them:
-// 0 keeps the cache off, anything else is rounded up to whole days.
-func (d decoder) verdictCache(s *Settings) {
-	var f float64
-	if legacy := d.num("cache_ttl_seconds", &f); d.num("verdict_cache_days", &f) || !legacy {
-		d.integer("verdict_cache_days", &s.VerdictCacheDays, 0, 30)
-		return
+// retiredKeys are the only retired keys read; nothing else of them is.
+var retiredKeys = []retiredKey{
+	// 0 keeps the verdict cache off, anything else is rounded up to whole
+	// days (at most 7, the old maximum of 604800 seconds).
+	{"cache_ttl_seconds", "verdict_cache_days", func(d decoder, s *Settings) {
+		var ttl float64
+		if d.num("cache_ttl_seconds", &ttl) {
+			s.VerdictCacheDays = clampInt(int(math.Ceil(min(ttl, 604800)/86400)), 0, 7)
+		}
+	}},
+	{"ban_window_hours", "ban_window_seconds", func(d decoder, s *Settings) {
+		hours := 24
+		d.integer("ban_window_hours", &hours, 1, 8760)
+		s.BanWindowSeconds = hours * 3600
+	}},
+	// The user lists, only for the one-time import (upgrade.go).
+	{"allowlist_user_ids", "", func(d decoder, s *Settings) { s.lists.readAllow(d, "allowlist_user_ids") }},
+	{"exempt_user_ids", "allowlist_user_ids", func(d decoder, s *Settings) { s.lists.readAllow(d, "exempt_user_ids") }},
+	{"blocklist_user_ids", "", func(d decoder, s *Settings) {
+		var invalid int
+		s.lists.block, invalid = d.userIDs("blocklist_user_ids")
+		s.lists.invalid += invalid
+	}},
+}
+
+func (l *retiredLists) readAllow(d decoder, key string) {
+	var invalid int
+	l.allow, invalid = d.userIDs(key)
+	l.invalid += invalid
+}
+
+// retired applies retiredKeys, and notes a 0.1 setup (setup01).
+func (d decoder) retired(s *Settings) {
+	for _, r := range retiredKeys {
+		if d.has(r.key) && (r.successor == "" || !d.has(r.successor)) {
+			r.read(d, s)
+		}
 	}
-	ttl := 0
-	d.integer("cache_ttl_seconds", &ttl, 0, 604800)
-	s.VerdictCacheDays = 0
-	if ttl > 0 {
-		s.VerdictCacheDays = clampInt((ttl+86399)/86400, 1, 30)
-	}
+	var base, model string
+	d.str("base_url", &base)
+	d.str("model", &model)
+	s.setup01 = strings.TrimSpace(base) != "" && strings.TrimSpace(model) != ""
 }
 
 func (d decoder) enum(k string, dst *string, allowed ...string) {
@@ -352,10 +352,9 @@ func (d decoder) enum(k string, dst *string, allowed ...string) {
 
 func (d decoder) general(s *Settings) {
 	d.enum("mode", &s.Mode, ModeOff, ModeObserve, ModeEnforce)
-	d.userLists(s)
 	d.integer("input_max_chars", &s.InputMaxChars, 256, 100000)
 	d.integer("min_chars", &s.MinChars, 0, 1000)
-	d.verdictCache(s)
+	d.integer("verdict_cache_days", &s.VerdictCacheDays, 0, 30)
 	d.integer("cache_entries", &s.CacheEntries, 1000, 1000000)
 	d.integer("max_concurrency", &s.MaxConcurrency, 1, 256)
 	d.integer("ttft_timeout_ms", &s.TTFTTimeoutMs, 1000, 60000)
@@ -387,14 +386,6 @@ func (d decoder) storage(s *Settings) {
 	d.boolean("record_errors", &s.RecordErrors)
 	d.boolean("store_text", &s.StoreText)
 	d.boolean("record_pass_input_message", &s.RecordPassInputMessage)
-	// 0.1 kept every record retention_days (retired, still read for
-	// settings saved without hit_retention_days); the hit retention never
-	// drops below it (§72.10).
-	if _, ok := d.m["hit_retention_days"]; !ok {
-		legacy := 0
-		d.integer("retention_days", &legacy, 1, 3650)
-		s.HitRetentionDays = max(s.HitRetentionDays, legacy)
-	}
 	d.integer("hit_retention_days", &s.HitRetentionDays, 1, 3650)
 	d.integer("overturned_retention_days", &s.OverturnedRetentionDays, 1, 3650)
 	d.integer("error_retention_days", &s.ErrorRetentionDays, 1, 3650)
@@ -407,7 +398,7 @@ func (d decoder) watch(s *Settings) {
 	d.integer("escalate_violations", &s.EscalateViolations, 0, 1000)
 	d.integer("escalate_window_seconds", &s.EscalateWindowSeconds, 1, 31536000)
 	d.integer("ban_threshold", &s.BanThreshold, 0, 1000)
-	d.integer("ban_window_hours", &s.BanWindowHours, 1, 8760)
+	d.integer("ban_window_seconds", &s.BanWindowSeconds, 1, 31536000)
 	d.integer("ban_duration_hours", &s.BanDurationHours, 0, 87600)
 }
 
@@ -440,16 +431,12 @@ type config struct {
 	enabled      bool   // mode != off
 	defaultLevel string // level of a user without a watch entry (mode)
 	settingsHash string
-	// allow, block: allowlist_user_ids and blocklist_user_ids (see
-	// allowlisted, blocklisted).
-	allow, block map[int64]bool
 	cacheTTL     time.Duration
 	ttft         time.Duration
 	banWindow    time.Duration
 	banDuration  time.Duration // 0 = until unblocked
 	watchFor     time.Duration
 	retention    map[string]time.Duration // by result
-	legacyReady  bool                     // the 0.1 setup is complete enough to convert
 	jevDefault   JevQuestions
 	limits       planLimits // chunking of the moderated content
 	maxInflight  int64      // bytes of hook requests in progress (max_inflight_mb)
@@ -468,10 +455,9 @@ func compile(s Settings) *config {
 	if s.Mode == ModeEnforce {
 		c.defaultLevel = LevelEnforce
 	}
-	c.allow, c.block = userSet(s.AllowlistUserIDs), userSet(s.BlocklistUserIDs)
 	c.cacheTTL = time.Duration(s.VerdictCacheDays) * 24 * time.Hour
 	c.ttft = time.Duration(s.TTFTTimeoutMs) * time.Millisecond
-	c.banWindow = time.Duration(s.BanWindowHours) * time.Hour
+	c.banWindow = time.Duration(s.BanWindowSeconds) * time.Second
 	c.escalateWindow = time.Duration(s.EscalateWindowSeconds) * time.Second
 	c.banDuration = time.Duration(s.BanDurationHours) * time.Hour
 	c.watchFor = time.Duration(s.WatchDays) * 24 * time.Hour
@@ -481,19 +467,8 @@ func compile(s Settings) *config {
 		ResultOverturned: time.Duration(s.OverturnedRetentionDays) * day,
 		ResultError:      time.Duration(s.ErrorRetentionDays) * day, ResultPass: time.Duration(s.PassRetentionDays) * day,
 	}
-	c.legacyReady = s.legacy.BaseURL != "" && s.legacy.Model != ""
 	c.jevDefault, _ = DefaultQuestions(s.JevDefaultSet)
 	return c
-}
-
-func userSet(ids []string) map[int64]bool {
-	set := make(map[int64]bool, len(ids))
-	for _, u := range ids {
-		if id, err := strconv.ParseInt(u, 10, 64); err == nil {
-			set[id] = true
-		}
-	}
-	return set
 }
 
 // replayMessage is the deny message of a replayed hit.
@@ -503,13 +478,6 @@ func (c *config) replayMessage() string {
 	}
 	return c.BlockMessage + " " + MsgHistoryHit
 }
-
-// blocklisted: every request of the user is moderated before it is sent on.
-func (c *config) blocklisted(uid int64) bool { return c.block[uid] }
-
-// allowlisted: the user is only moderated after the request, never refused,
-// banned or escalated. The blocklist wins.
-func (c *config) allowlisted(uid int64) bool { return c.allow[uid] && !c.block[uid] }
 
 // retentionCut reports whether c keeps some records or statistics for a
 // shorter time than old.

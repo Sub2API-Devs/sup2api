@@ -245,7 +245,7 @@ func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 		watchChanged = watchChanged || changed
 		// Allowlisted users are never banned (nor watched automatically,
 		// enterWatch).
-		if !c.allowlisted(e.UserID) {
+		if p.userLock(e.UserID) != LockAllowlist {
 			banned[e.UserID] = true
 		}
 	}
@@ -319,8 +319,9 @@ func liveWatchEntry(ctx context.Context, tx pgx.Tx, uid int64, now time.Time) (w
 // auto_watch adds a user who is not on the list at the default level, so
 // that under default enforce the new entry does not lower the user to
 // observe (new-api autoAddModerationWatch). One change, one history row. An
-// allowlisted user is only moderated in the background, so auto_watch never
-// adds one. entered: an entry was added or raised.
+// allowlisted user is only moderated in the background and already has an
+// entry (the locked one), so auto_watch never adds one. entered: an entry
+// was added or raised.
 func enterWatch(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, uid int64, now time.Time) (Watch, bool, bool, error) {
 	n, up, err := escalates(ctx, tx, c, w, found, uid, now)
 	if err != nil {
@@ -330,7 +331,7 @@ func enterWatch(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, 
 	case up:
 		w, err = escalateEntry(ctx, tx, c, w, found, uid, n, now)
 		return w, true, true, err
-	case found || !c.AutoWatch || c.allowlisted(uid):
+	case found || !c.AutoWatch:
 		return w, found, false, nil
 	}
 	exp := now.Add(c.watchFor)
@@ -347,13 +348,14 @@ func enterWatch(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, 
 // escalate_violations violations within escalate_window_seconds, counted
 // like the ban threshold (countViolations) and only after the user's latest
 // manual watch change (one through the watch API, or a lock / unlock from
-// saving the lists), so that an administrator's downgrade, removal or list
-// change is not undone by the violations it already judged. Never for N = 0, the
-// users of the lists, a locked entry or an entry at enforce already, nor
-// when the same violations ban the user (the ban refuses every request).
+// the lock routes or the one-time import of the lists), so that an
+// administrator's downgrade, removal or list change is not undone by the
+// violations it already judged. Never for N = 0, a locked entry (the users
+// of the lists) or an entry at enforce already, nor when the same
+// violations ban the user (the ban refuses every request).
 // n is the count.
 func escalates(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, uid int64, now time.Time) (n int64, up bool, err error) {
-	if c.EscalateViolations <= 0 || c.lockKind(uid) != "" || (found && (w.Locked || w.Level == LevelEnforce)) {
+	if c.EscalateViolations <= 0 || (found && (w.Locked || w.Level == LevelEnforce)) {
 		return 0, false, nil
 	}
 	since := now.Add(-c.escalateWindow)
@@ -389,9 +391,16 @@ func escalateEntry(ctx context.Context, tx pgx.Tx, c *config, w Watch, found boo
 			violation_epoch = $4, violation_count = 0, updated_at = $2`, w.UserID, now, exp, w.ViolationEpoch); err != nil {
 		return w, err
 	}
-	en, zh := windowText(c.EscalateWindowSeconds)
 	return w, watchEvent(ctx, tx, watchChange{uid: w.UserID, action: "auto_escalate", from: from, to: LevelEnforce,
-		reason: fmt.Sprintf("%d violations within %s / %s内违规 %d 次", n, en, zh, n)})
+		reason: violationsReason(n, c.EscalateWindowSeconds)})
+}
+
+// violationsReason is the reason of an escalation or a ban after n
+// violations within a window of sec seconds, e.g. "3 violations within 10m
+// / 10 分钟内违规 3 次".
+func violationsReason(n int64, sec int) string {
+	en, zh := windowText(sec)
+	return fmt.Sprintf("%d violations within %s / %s内违规 %d 次", n, en, zh, n)
 }
 
 // windowText formats a window of seconds in its largest whole unit (h, m
@@ -473,7 +482,7 @@ func (p *Plugin) applyBans(ctx context.Context, users map[int64]bool) {
 				t := now.Add(c.banDuration)
 				expires = &t
 			}
-			reason := fmt.Sprintf("%d violations within %dh / %d 小时内违规 %d 次", n, c.BanWindowHours, c.BanWindowHours, n)
+			reason := violationsReason(n, c.BanWindowSeconds)
 			tag, err := tx.Exec(ctx, `INSERT INTO blocks (user_id, reason, violations, source, created_at, expires_at, created_by)
 				VALUES ($1, $2, $3, 'auto', $4, $5, NULL)
 				ON CONFLICT (user_id) DO UPDATE SET reason = EXCLUDED.reason, violations = EXCLUDED.violations,
@@ -623,17 +632,13 @@ func (p *Plugin) refreshLoop(ctx context.Context) {
 		case <-p.refreshNow:
 		}
 		rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		p.convertLegacyOnce(rctx)
+		p.upgradeOnce(rctx)
 		p.convertParityOnce(rctx)
 		if err := p.reloadBlocks(rctx); err != nil && ctx.Err() == nil {
 			p.log.Debug("moderation: block list reload failed", "error", err.Error())
 		}
-		if err := p.pollVersions(rctx); err != nil {
-			if ctx.Err() == nil {
-				p.log.Debug("moderation: config reload failed", "error", err.Error())
-			}
-		} else if err := p.reconcileLocks(rctx); err != nil && ctx.Err() == nil {
-			p.log.Warn("moderation: reconciling the locked watch entries failed, retrying later", "error", err.Error())
+		if err := p.pollVersions(rctx); err != nil && ctx.Err() == nil {
+			p.log.Debug("moderation: config reload failed", "error", err.Error())
 		}
 		cancel()
 	}

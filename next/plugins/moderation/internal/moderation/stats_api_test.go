@@ -21,7 +21,7 @@ import (
 
 func TestStatsAPIs(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe})
 	mustHook(t, h, hookReq("MOD-HIT-hate words"))   // overturned by stage 2
 	mustHook(t, h, hookReq("MOD-HIT-sexual words")) // blocked
@@ -132,7 +132,7 @@ func TestStatsAPIs(t *testing.T) {
 // a latency sample.
 func TestStatsCountReplays(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	for i := range 3 {
 		if r := mustHook(t, h, hookReq("MOD-HIT-sexual counted")); !denied(r) || strings.Contains(r.GetNote(), "replay") != (i > 0) {
@@ -161,7 +161,7 @@ func TestStatsCountReplays(t *testing.T) {
 
 func TestFlowDraftTimeoutAndDelete(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe})
 	f := decodeData[FlowView](t, h.Do("GET", fmt.Sprintf("/flows/%d", flow), nil, nil))
 	draft, _ := ParseSpec(f.Draft)
@@ -193,11 +193,11 @@ func TestFlowDraftTimeoutAndDelete(t *testing.T) {
 
 func TestWatchListFiltersAndSeen(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "allowlist_user_ids": []string{"12"}})
+	p, h, fh := startDB(t, map[string]any{"mode": ModeObserve})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	// auto_watch skips the allowlisted user 12, whose entry is the locked
-	// entry of the list.
-	waitFor(t, "locked entry", func() bool { return p.watchLevel(12) == LevelObserve })
+	// one.
+	lockUser(t, h, 12, LockAllowlist)
 	mustHook(t, h, hookReqAs(11, "", "MOD-HIT-violence one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual two"))
@@ -318,7 +318,7 @@ func TestErrorRateAlertAndNotice(t *testing.T) {
 		mu.Unlock()
 	}))
 	t.Cleanup(hook.Close)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "notify_webhook_url": hook.URL, "notify_webhook_secret": "s3"})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "notify_webhook_url": hook.URL, "notify_webhook_secret": "s3"})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	for i := range minAlertSamples {
 		mustHook(t, h, hookReqAs(3, "", fmt.Sprintf("MOD-500 %d", i)))
@@ -362,7 +362,7 @@ func TestDraftTryAndChannelProxy(t *testing.T) {
 		_, _ = io.Copy(w, resp.Body)
 	}))
 	t.Cleanup(proxy.Close)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	_, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	ch := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelOpenAI, "name": "o", "base_url": "http://upstream.invalid",
 		"api_key": "k", "proxy": "http://user:pw@" + strings.TrimPrefix(proxy.URL, "http://")}))
 	if !ch.HasProxy || strings.Contains(ch.Proxy, "pw") || !strings.Contains(ch.Proxy, "user") {
@@ -450,7 +450,7 @@ func testRec(uid int64, requestID, result, highest string, cats ...string) event
 // background (the hook does not wait).
 func TestSuspiciousRecordsAreKept(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "record_pass": true})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	ctx := context.Background()
 	bad := testRec(40, "bad", ResultPass, "")
@@ -496,7 +496,7 @@ func TestSuspiciousRecordsAreKept(t *testing.T) {
 // P1-5).
 func TestSuspiciousRecordWithNULIsStored(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "ban_threshold": 1})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "ban_threshold": 1})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	// Through the hook: the text, the stored first-stage messages and the
 	// metadata all carry NUL.
@@ -532,7 +532,7 @@ func TestSuspiciousRecordWithNULIsStored(t *testing.T) {
 // The watch list ranks and filters by the highest category of each record;
 // reviews only touch suspicious records.
 func TestWatchHighestCategoryAndReview(t *testing.T) {
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve, "record_pass": true})
 	ctx := context.Background()
 	evs := []eventRec{testRec(51, "a", ResultHit, "violence", "violence", "hate"), testRec(51, "b", ResultHit, ""),
 		testRec(51, "c", ResultPass, "")}
@@ -580,7 +580,7 @@ func (h failingAuthz) AuthzCheck(ctx context.Context, uid int64, perm string) (b
 // A user whose moderator check fails keeps the daily counts for a later
 // flush instead of being written as a non-moderator.
 func TestStaffCheckFailureKeepsDailyCounts(t *testing.T) {
-	p, _, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, _, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	var fail atomic.Bool
 	fail.Store(true)
 	q := New()
@@ -610,7 +610,7 @@ func TestStaffCheckFailureKeepsDailyCounts(t *testing.T) {
 
 // Day buckets of /costs start at the caller's midnight, like the statistics.
 func TestCostDaysFollowCallerOffset(t *testing.T) {
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	ctx := context.Background()
 	db, err := p.db(ctx)
 	if err != nil {
@@ -659,7 +659,7 @@ func TestDayStartIgnoresTimeZoneOfTime(t *testing.T) {
 // level enforce that is where users with new hits are.
 func TestStatusBlockingWithNew(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeEnforce})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 5, "level": LevelObserve}))
 	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 6, "level": LevelEnforce}))
@@ -700,7 +700,7 @@ func TestStatusBlockingWithNew(t *testing.T) {
 // alert that is going on during an upgrade does not fire again.
 func TestAlertStateKeepsItsNamespace(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, _ := startDB(t, map[string]any{"mode": ModeObserve})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	ctx := context.Background()
 	if alertNamespace != "pass" || alertNamespace == kvNamespace {

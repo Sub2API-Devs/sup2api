@@ -308,6 +308,15 @@ func (p *Plugin) storeKey(ctx context.Context, tx pgx.Tx, id int64, key *string)
 	return err
 }
 
+// keyTail is the last 4 characters shown for a key.
+func keyTail(k string) string {
+	r := []rune(k)
+	if len(r) <= 4 {
+		return ""
+	}
+	return string(r[len(r)-4:])
+}
+
 func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	id, bad := parseID(req, "id")
 	if bad != nil {
