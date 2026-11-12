@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
@@ -183,25 +184,16 @@ func superadminLogins(t *testing.T, s *Service) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err != nil {
-			t.Fatal(err)
-		}
-		out = append(out, v)
+	out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
 	}
 	return out
 }
 
 func TestSuperadminLoginIsAudited(t *testing.T) {
 	t.Parallel()
-	e := setup(t)
-	s, ctx := e.svc, context.Background()
-	if err := s.Bootstrap(ctx); err != nil {
-		t.Fatal(err)
-	}
+	s, ctx := setupAdmin(t).svc, context.Background()
 	login := context.WithValue(ctx, sessionMetaKey{}, sessionMeta{method: loginMethodPassword, ip: testIP})
 	root, err := s.Login(login, adminEmail, adminPassword, testIP)
 	if err != nil {
