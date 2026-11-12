@@ -3,10 +3,10 @@ package payment
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -217,24 +217,35 @@ func (h *HTTPHandler) handleWebhook(ctx context.Context, req *pluginv1.HTTPReque
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Provider not specified"), nil
 	}
 
-	body := string(req.GetBody())
-
-	if err := h.orders.HandlePaymentNotification(ctx, providerKey, body); err != nil {
+	if err := h.orders.HandlePaymentNotification(ctx, providerKey, req); err != nil {
 		slog.Error("webhook notification failed", "provider", providerKey, "error", err)
-		// Return 200 to prevent provider retry for order_not_found
-		if strings.Contains(err.Error(), "order not found") {
-			return &pluginv1.HTTPResponse{
-				Status: http.StatusOK,
-				Body:   []byte("OK"),
-			}, nil
-		}
-		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", err.Error()), nil
+		return webhookFailure(err), nil
 	}
+	return webhookOK(), nil
+}
 
-	return &pluginv1.HTTPResponse{
-		Status: http.StatusOK,
-		Body:   []byte("OK"),
-	}, nil
+// webhookOK is the acknowledgement providers expect.
+func webhookOK() *pluginv1.HTTPResponse {
+	return &pluginv1.HTTPResponse{Status: http.StatusOK, Body: []byte("OK")}
+}
+
+// webhookFailure maps a notification error to the webhook answer. The caller
+// is unauthenticated, so the message never carries the underlying error. A
+// verified notification for an order we do not have is acknowledged, so the
+// provider stops retrying it.
+func webhookFailure(err error) *pluginv1.HTTPResponse {
+	switch {
+	case errors.Is(err, ErrOrderNotFound):
+		return webhookOK()
+	case errors.Is(err, ErrProviderNotConfigured):
+		return pluginsdk.ErrorResponse(http.StatusNotFound, "not_found", "Unknown payment provider")
+	case errors.Is(err, ErrProviderNotImplemented):
+		return pluginsdk.ErrorResponse(http.StatusNotImplemented, "unimplemented", "Payment provider notifications are not implemented")
+	case errors.Is(err, ErrNotificationRejected), errors.Is(err, ErrAmountMismatch):
+		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "Notification rejected")
+	default:
+		return pluginsdk.ErrorResponse(http.StatusInternalServerError, "internal", "Notification processing failed")
+	}
 }
 
 // Admin handlers (stub implementations)

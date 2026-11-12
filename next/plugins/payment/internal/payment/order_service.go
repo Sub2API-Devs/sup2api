@@ -2,11 +2,13 @@ package payment
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -16,13 +18,14 @@ import (
 
 // OrderService handles payment order operations
 type OrderService struct {
-	db     dbFunc
-	credit creditFunc
+	db        dbFunc
+	credit    creditFunc
+	verifiers map[string]NotificationVerifier
 }
 
 // NewOrderService creates a new OrderService
 func NewOrderService(db dbFunc, credit creditFunc) *OrderService {
-	return &OrderService{db: db, credit: credit}
+	return &OrderService{db: db, credit: credit, verifiers: map[string]NotificationVerifier{}}
 }
 
 // CreateOrderRequest represents order creation request
@@ -142,24 +145,24 @@ func (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	}, nil
 }
 
-// HandlePaymentNotification processes payment provider webhook notifications
-func (s *OrderService) HandlePaymentNotification(ctx context.Context, providerKey, rawBody string) error {
+// HandlePaymentNotification applies one provider webhook call. It fails
+// closed: the provider must have an enabled instance (ErrProviderNotConfigured)
+// and a registered NotificationVerifier (ErrProviderNotImplemented), and one
+// instance must accept the request (ErrNotificationRejected). Only a verified
+// success notification reaches the order; every failure leaves it untouched.
+func (s *OrderService) HandlePaymentNotification(ctx context.Context, providerKey string, req *pluginv1.HTTPRequest) error {
 	slog.Info("payment notification received", "provider", providerKey)
 	db, err := s.db(ctx)
 	if err != nil {
 		return err
 	}
-
-	// TODO: Verify signature based on provider
-	// For MVP, assume notification is valid
-
-	// Mock: extract order info from notification
-	// In real implementation, parse provider-specific format
-	notification := &PaymentNotification{
-		OutTradeNo: "mock_out_trade_no",
-		TradeNo:    "mock_trade_no",
-		Amount:     decimal.NewFromInt(100),
-		Status:     NotificationStatusSuccess,
+	notification, err := s.verifyNotification(ctx, db, providerKey, req)
+	if err != nil {
+		return err
+	}
+	if notification.Status != NotificationStatusSuccess {
+		slog.Info("payment notification ignored", "provider", providerKey, "status", notification.Status)
+		return nil
 	}
 
 	// Find order
@@ -171,8 +174,8 @@ func (s *OrderService) HandlePaymentNotification(ctx context.Context, providerKe
 	`, notification.OutTradeNo).Scan(
 		&order.ID, &order.UserID, &order.Amount, &order.PayAmount, &order.Status, &order.Currency,
 	)
-	if err == pgx.ErrNoRows {
-		return fmt.Errorf("order not found: %s", notification.OutTradeNo)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: %s", ErrOrderNotFound, notification.OutTradeNo)
 	}
 	if err != nil {
 		return fmt.Errorf("query order: %w", err)
@@ -188,7 +191,7 @@ func (s *OrderService) HandlePaymentNotification(ctx context.Context, providerKe
 	tolerance := decimal.NewFromFloat(AmountToleranceCNY)
 	diff := notification.Amount.Sub(order.PayAmount).Abs()
 	if diff.GreaterThan(tolerance) {
-		return fmt.Errorf("amount mismatch: expected %s, got %s", order.PayAmount.String(), notification.Amount.String())
+		return fmt.Errorf("%w: expected %s, got %s", ErrAmountMismatch, order.PayAmount.String(), notification.Amount.String())
 	}
 
 	// Update order to paid
