@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
@@ -170,6 +171,24 @@ func TestParseSup2APISkipsPriceWithoutConfig(t *testing.T) {
 	}
 	if len(f.prices) != 1 || f.skipped != 2 || f.prices["ok"] == nil {
 		t.Fatalf("prices %v skipped %d", f.prices, f.skipped)
+	}
+}
+
+// An expression price needs no config to carry the multiplier: without one,
+// null or missing, it gets the surcharge rule as before (scalePrice).
+func TestParseSup2APIScalesExpressionWithoutConfig(t *testing.T) {
+	body := `{"data": {"prices": [
+		{"model": "null-config", "mode": "expression", "config": null, "expression": "tier(\"base\", p*2)"},
+		{"model": "no-config", "mode": "expression", "expression": "tier(\"base\", p*2)"}],
+		"rate_multiplier": "1.5", "group": {"id": 3, "name": "g"}}}`
+	f, err := parseSup2API([]byte(body), true)
+	require.NoError(t, err)
+	require.Zero(t, f.skipped)
+	for _, model := range []string{"null-config", "no-config"} {
+		p := f.prices[model]
+		require.NotNil(t, p, model)
+		require.Equal(t, []string{"expression", "{}", `tier("base", p*2) ||| true ? 1.5 : 1`},
+			[]string{p.Mode, string(p.Config), p.Expression}, model)
 	}
 }
 

@@ -49,7 +49,7 @@ func userSegmentKind(ctx context.Context, q store.Querier, userID int64) (string
 	err := q.QueryRow(ctx, `SELECT s.kind FROM users u JOIN segments s ON s.id = u.segment_id
 		WHERE u.id = $1 AND u.deleted_at IS NULL`, userID).Scan(&kind)
 	if store.IsNoRows(err) {
-		return "", userNotFound(ctx)
+		return "", UserNotFound(ctx)
 	}
 	return kind, err
 }

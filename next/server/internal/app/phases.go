@@ -513,7 +513,8 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 	b.idm.RegisterRoutes(r)
 	b.az.RegisterRoutes(r)
 	b.grp.RegisterRoutes(r)
-	segment.New(segment.Deps{DB: b.db, Authz: b.az, Platforms: b.grp.Platforms, PriceRulesChanged: b.bill.PriceRulesChanged}).RegisterRoutes(r)
+	segment.New(segment.Deps{DB: b.db, Authz: b.az, Platforms: b.grp.Platforms, PriceRulesChanged: b.bill.PriceRulesChanged,
+		RuleCounts: b.grp.SegmentRuleCounts}).RegisterRoutes(r)
 	b.env.RegisterRoutes(r)
 	b.ntf.RegisterRoutes(r)
 	b.keys.RegisterRoutes(r)

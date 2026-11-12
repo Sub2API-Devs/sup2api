@@ -30,7 +30,8 @@ type Setting struct {
 	// follows the group. Rate is what its members pay there.
 	RateOverride *decimal.Decimal `json:"rate_override"`
 	Rate         EffectiveRate    `json:"rate"`
-	// PriceRuleCount counts the model prices of the segment in the group.
+	// PriceRuleCount counts the model prices of the segment in the group, on
+	// the models the group provides now (Deps.RuleCounts).
 	PriceRuleCount int64 `json:"price_rule_count"`
 	MemberCount    int64 `json:"member_count"`
 }
@@ -162,11 +163,10 @@ func idsOf(rows []*Setting, id func(*Setting) int64) []int64 {
 }
 
 // settingRows reads the pairs of a segment and a group that cond picks, with
-// the counts of each; complete fills in the rest.
+// the member count of each; complete fills in the rest.
 func (s *Service) settingRows(ctx context.Context, cond string, args ...any) ([]*Setting, error) {
 	rows, err := s.db.Pool.Query(ctx, `SELECT `+RefColumns+`, mc.n,
-			g.id, g.name, g.description, g.status, g.visibility,
-			(SELECT count(*) FROM price_rules pr WHERE pr.segment_id = s.id AND pr.group_id = g.id)`+fromSegments+`
+			g.id, g.name, g.description, g.status, g.visibility`+fromSegments+`
 		CROSS JOIN LATERAL (SELECT count(*) AS n FROM users m WHERE m.segment_id = s.id AND m.deleted_at IS NULL) mc
 		CROSS JOIN groups g `+cond, args...)
 	if err != nil {
@@ -177,7 +177,7 @@ func (s *Service) settingRows(ctx context.Context, cond string, args ...any) ([]
 	for rows.Next() {
 		var r Setting
 		if err := rows.Scan(&r.Segment.ID, &r.Segment.Kind, &r.Segment.Name, &r.Segment.UserID, &r.MemberCount,
-			&r.Group.ID, &r.Group.Name, &r.Group.Description, &r.Group.Status, &r.Group.Visibility, &r.PriceRuleCount); err != nil {
+			&r.Group.ID, &r.Group.Name, &r.Group.Description, &r.Group.Status, &r.Group.Visibility); err != nil {
 			return nil, err
 		}
 		out = append(out, &r)
@@ -185,8 +185,9 @@ func (s *Service) settingRows(ctx context.Context, cond string, args ...any) ([]
 	return out, rows.Err()
 }
 
-// complete fills in what the rows do not carry themselves: the terms of each
-// pair, the platforms of the groups, and the names as the caller may see them.
+// complete fills in what the rows do not carry themselves: the terms and the
+// price rule count of each pair, the platforms of the groups, and the names
+// as the caller may see them.
 func (s *Service) complete(ctx context.Context, rows []*Setting, terms func(*Setting) Terms) ([]*Setting, error) {
 	show, err := ShowUsers(ctx, s.authz)
 	if err != nil {
@@ -196,7 +197,12 @@ func (s *Service) complete(ctx context.Context, rows []*Setting, terms func(*Set
 	if err != nil {
 		return nil, err
 	}
+	rules, err := s.ruleCounts(ctx, idsOf(rows, segmentID))
+	if err != nil {
+		return nil, err
+	}
 	for _, r := range rows {
+		r.PriceRuleCount = rules[r.Segment.ID][r.Group.ID]
 		tm := terms(r)
 		r.Segment = Masked(r.Segment, show)
 		r.Group.RateMultiplier, r.Group.Platforms = tm.GroupRate, platforms[r.Group.ID]

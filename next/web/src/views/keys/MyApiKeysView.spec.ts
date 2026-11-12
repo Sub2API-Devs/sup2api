@@ -182,7 +182,7 @@ describe('API key list', () => {
     const row = rowOf(w, 'laptop')
     expect(badge(row)).toBe('已启用')
     expect(row.get(tid('key-quota')).text().replace(/\s+/g, '')).toBe('$6.00/$10.00')
-    expect(row.get(tid('group-badge')).text()).toBe('default1x')
+    expect(row.get(tid('group-badge')).text()).toBe('default×1')
     expect(row.get(tid('api-key')).text()).toBe('sk-s2a-lap07******')
     expect(row.get(tid('key-ip-restricted')).text()).toBe('1 条')
     expect(row.text()).toContain('从未')
@@ -557,7 +557,7 @@ describe('API key row actions', () => {
     await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/me/api-keys/7', { group_id: 2 })
     // The rate on the badge is the owner's own in the group, not its default.
-    expect(rowOf(w, 'laptop').get(tid('group-badge')).text()).toBe('vip0.72x')
+    expect(rowOf(w, 'laptop').get(tid('group-badge')).text()).toBe('vip×0.72')
     expect(mocks.list).not.toHaveBeenCalled()
   })
 

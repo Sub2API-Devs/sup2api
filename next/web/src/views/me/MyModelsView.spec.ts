@@ -129,6 +129,16 @@ describe('models and prices', () => {
     expect(row(w, 'custom').get('[data-testid="models-opaque"]').text()).toBe('按规则计费 ×1.5')
   })
 
+  it('works the caller’s rate into a price it cannot break down, as into the others', async () => {
+    const custom = { ...prices[3], groups: undefined, source: 'group' }
+    const rated = { group: vip, rate_multiplier: '1.5', rate_source: 'segment', prices: [{ ...custom, multiplier: '0.8' }, { ...custom, model: 'plain' }] }
+    get.mockImplementation(async (path: string) => (path === '/me/groups' ? groups : rated))
+    const { w } = await render('/me/models?group=2')
+    expect(unit(w)).toContain('×1.5')
+    expect(row(w, 'custom').get('[data-testid="models-opaque"]').text()).toBe('按规则计费 ×1.2')
+    expect(row(w, 'plain').get('[data-testid="models-opaque"]').text()).toBe('按规则计费 ×1.5')
+  })
+
   it('opens the group named in the address', async () => {
     const { w } = await render('/me/models?group=2')
     expect(get.mock.calls.filter(([path]) => path === '/me/prices')).toEqual([['/me/prices', { group_id: '2' }]])
@@ -144,6 +154,11 @@ describe('models and prices', () => {
     })
     const { w, router } = await render('/me/models?group=999')
     expect(router.currentRoute.value.query).toEqual({})
+    // Every group is asked for once, by the choice going back to it.
+    expect(get.mock.calls.filter(([path]) => path === '/me/prices')).toEqual([
+      ['/me/prices', { group_id: '999' }],
+      ['/me/prices', {}]
+    ])
     expect(w.get('[data-testid="models-group-unavailable"]').text()).toBe('链接里的分组不对你开放，已改为显示全部分组。')
     expect(w.find('[role="alert"]').exists()).toBe(false)
     expect((w.get('[data-testid="models-group"]').element as HTMLSelectElement).selectedIndex).toBe(0)

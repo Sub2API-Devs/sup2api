@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -737,7 +738,9 @@ func parseSup2API(body []byte, apply bool) (*fetched, error) {
 }
 
 // scalePrice multiplies a price by m: visual configs are scaled in place,
-// other expressions get a constant surcharge rule.
+// other expressions get a constant surcharge rule. Only a per-request or
+// per-token price needs its config to be an object; an expression price
+// without one (null, as an upstream may send it) gets the rule.
 func scalePrice(p *syncPrice, m decimal.Decimal) error {
 	scale := func(v any) any {
 		switch x := v.(type) {
@@ -755,7 +758,8 @@ func scalePrice(p *syncPrice, m decimal.Decimal) error {
 	var cfg map[string]any
 	dec := json.NewDecoder(strings.NewReader(string(p.Config)))
 	dec.UseNumber()
-	if dec.Decode(&cfg) != nil || cfg == nil {
+	_ = dec.Decode(&cfg) // cfg stays nil unless the config is an object
+	if cfg == nil && (p.Mode == expr.ModePerRequest || p.Mode == expr.ModePerToken) {
 		return errors.New("price config is not an object")
 	}
 	switch p.Mode {
@@ -1082,26 +1086,22 @@ func (s *Service) keyPrices(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	on := core.PriceQuery{GroupID: pr.Group.ID, SegmentID: pr.SegmentID}
-	rules, err := loadRules(ctx, s.db.Pool, rulesFor, on.GroupID, on.SegmentID)
+	gp := &groupPrices{group: pricedGroup{GroupInfo: pr.Group}, prices: prices,
+		models: slices.DeleteFunc(prices.models(), func(model string) bool { return !pr.Group.AllowsModel(model) })}
+	out := KeyPrices{Prices: []syncPrice{}, RateMultiplier: pr.Group.RateMultiplier}
+	out.Group.ID, out.Group.Name = pr.Group.ID, pr.Group.Name
+	err = gp.eachPrice(ctx, s.db.Pool, pr.SegmentID, func(model string, base PriceDef, levels ruleLevels) {
+		p, err := exportPrice(model, base, levels)
+		if err != nil {
+			// Left out rather than listed at a price that is not the owner's.
+			slog.WarnContext(ctx, "billing: key prices: model left out", "model", model, "group_id", pr.Group.ID, "err", err)
+			return
+		}
+		out.Prices = append(out.Prices, p)
+	})
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
-	}
-	out := KeyPrices{Prices: []syncPrice{}, RateMultiplier: pr.Group.RateMultiplier}
-	out.Group.ID, out.Group.Name = pr.Group.ID, pr.Group.Name
-	for _, model := range prices.models() {
-		if !pr.Group.AllowsModel(model) {
-			continue
-		}
-		on.Model = model
-		p, err := exportPrice(model, prices[model], rules.levels(on))
-		if err != nil {
-			// Left out rather than listed at a price that is not the owner's.
-			slog.WarnContext(ctx, "billing: key prices: model left out", "model", model, "group_id", on.GroupID, "err", err)
-			continue
-		}
-		out.Prices = append(out.Prices, p)
 	}
 	httpapi.OK(c, out)
 }

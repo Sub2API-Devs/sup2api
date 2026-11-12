@@ -1,40 +1,14 @@
 // @vitest-environment node
-// The group pricing endpoints of the dev mock (web/mock, vite --mode mock)
-// hold to what the server answers (CONTRACTS §97.6): the shape of a list
-// price, who may read what, and the errors. The mock is node code outside
-// the app's type program, so it is loaded by path and its answers are untyped.
+// The group pricing endpoints of the dev mock hold to what the server answers
+// (CONTRACTS §97.6): the shape of a list price, who may read what, and the
+// errors.
 import { beforeAll, describe, expect, it } from 'vitest'
+import { mockServer, type MockServer } from '@/testing/mockServer'
 
-type Answer = { status: number; body: any }
-type Route = { method: string; re: RegExp; keys: string[]; handler: (req: unknown) => unknown }
-
-const mockFile = (name: string) => new URL(`../../../mock/${name}.ts`, import.meta.url).pathname
-let routes: Route[] = []
-
+let call: MockServer['call'], signIn: MockServer['signIn'], fields: MockServer['fields']
 beforeAll(async () => {
-  routes = (await import(/* @vite-ignore */ mockFile('router'))).routes
-  for (const area of ['core', 'accounts', 'resources', 'billing', 'pricing']) await import(/* @vite-ignore */ mockFile(area))
+  ;({ call, signIn, fields } = await mockServer('core', 'accounts', 'resources', 'billing', 'pricing', 'lookup'))
 })
-
-/** Answers a request as the mock server does: a plain value is wrapped in {data}. */
-async function call(method: string, url: string, body?: unknown, token?: string): Promise<Answer> {
-  const u = new URL(url, 'http://mock')
-  for (const r of routes) {
-    const m = r.method === method ? r.re.exec(u.pathname) : null
-    if (!m) continue
-    const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]))
-    const out: any = await r.handler({ method, path: u.pathname, params, query: Object.fromEntries(u.searchParams), body, headers: token ? { authorization: `Bearer ${token}` } : {} })
-    return out && typeof out === 'object' && '__status' in out ? { status: out.__status, body: out.body } : { status: 200, body: { data: out } }
-  }
-  throw new Error(`no mock route for ${method} ${url}`)
-}
-
-/** The access token of a mock identity (password admin). */
-async function signIn(email: string): Promise<string> {
-  return (await call('POST', '/auth/login', { email, password: 'admin' })).body.data.access_token
-}
-
-const fields = (a: Answer) => a.body.error?.details?.fields?.map((f: { field: string }) => f.field)
 
 describe('the list price of a multiplier rule in the mock', () => {
   it('is the global price as it is with the multiplier beside it, in the model prices of a group', async () => {
@@ -73,11 +47,32 @@ describe('the quote in the mock', () => {
     }
   })
 
-  it('answers a usage the price cannot be evaluated with by a 400 without fields', async () => {
-    const a = await call('POST', '/pricing/quote', { segment_id: 2, group_id: 1, model: 'gpt-4o', usage: { p: -1_000_000, c: 0 } })
+  it('takes 0 to 10^12 tokens of each kind, naming each count out of bounds as usage.<variable>', async () => {
+    const a = await call('POST', '/pricing/quote', { segment_id: 2, group_id: 1, model: 'gpt-4o', usage: { p: -1_000_000, c: 0, cr: 1e12 + 1 } })
     expect(a.status).toBe(400)
     expect(a.body.error.code).toBe('invalid_argument')
-    expect(a.body.error.details?.fields).toBeUndefined()
+    expect(fields(a)).toEqual(['usage.p', 'usage.cr'])
+    expect((await call('POST', '/pricing/quote', { segment_id: 2, group_id: 1, model: 'gpt-4o', usage: { p: 1e12, c: 0 } })).status).toBe(200)
+    const unbound = await call('POST', '/pricing/quote', { segment_id: 2, group_id: 1, model: 'gpt-4o', usage: { p: '1', c: 0 } })
+    expect([unbound.status, fields(unbound)]).toEqual([400, undefined])
+  })
+
+  it('needs group:read, and user:read or segment:read for whom it names, besides price:read', async () => {
+    const pricer = await signIn('pricer@example.com')
+    const user = await call('POST', '/pricing/quote', { user_id: 104, group_id: 2, model: 'claude-sonnet-4-5', usage: { p: 1, c: 1 } }, pricer)
+    expect([user.status, user.body.error.details]).toEqual([403, { permission: 'user:read' }])
+    // Both named: each is checked before the request is found wrong.
+    const both = await call('POST', '/pricing/quote', { user_id: 104, segment_id: 11, group_id: 2, model: 'claude-sonnet-4-5', usage: { p: 1, c: 1 } }, pricer)
+    expect([both.status, both.body.error.details]).toEqual([403, { permission: 'user:read' }])
+    const readonly = await signIn('readonly@example.com')
+    const segment = await call('POST', '/pricing/quote', { segment_id: 2, group_id: 1, model: 'gpt-4o', usage: { p: 1, c: 1 } }, readonly)
+    expect([segment.status, segment.body.error.details]).toEqual([403, { permission: 'price:read' }])
+  })
+
+  it('says which of a user and a user group it cannot find', async () => {
+    const user = await call('POST', '/pricing/quote', { user_id: 99999, group_id: 1, model: 'gpt-4o', usage: { p: 1, c: 1 } })
+    const segment = await call('POST', '/pricing/quote', { segment_id: 99999, group_id: 1, model: 'gpt-4o', usage: { p: 1, c: 1 } })
+    expect([user.status, user.body.error.message, segment.status, segment.body.error.message]).toEqual([404, 'user not found', 404, 'user group not found'])
   })
 })
 
@@ -100,7 +95,8 @@ describe('what a caller without user:read sees in the mock', () => {
   it('masks it in the rows of a group and in a quote too', async () => {
     const rows = (await call('GET', '/groups/2/segments', undefined, pricer)).body.data
     expect(rows.filter((r: { segment: { kind: string } }) => r.segment.kind === 'personal').map((r: { segment: { name: string } }) => r.segment.name)).toEqual(['#104', '#107'])
-    const quote = (await call('POST', '/pricing/quote', { user_id: 104, group_id: 2, model: 'claude-sonnet-4-5', usage: { p: 1, c: 1 } }, pricer)).body.data
+    // A quote for the user himself takes user:read (CONTRACTS §97.6); one for his personal user group does not.
+    const quote = (await call('POST', '/pricing/quote', { segment_id: 11, group_id: 2, model: 'claude-sonnet-4-5', usage: { p: 1, c: 1 } }, pricer)).body.data
     expect(quote.segment).toEqual({ id: 11, kind: 'personal', name: '#104', user_id: 104 })
   })
 
@@ -123,6 +119,24 @@ describe('the rest of the group pricing mock', () => {
     expect(access(2).personal_count).toBe(2)
   })
 
+  it('counts only the model prices on models a group provides now, as its pricing table lists them', async () => {
+    const group = async () => (await call('GET', '/groups?page_size=200')).body.data.data.find((g: { id: number }) => g.id === 1)
+    const vip = async () => (await call('GET', '/segments/2')).body.data.price_rule_count
+    const vipIn = async () => (await call('GET', '/groups/1/segments')).body.data.find((r: { segment: { id: number } }) => r.segment.id === 2).price_rule_count
+    const before = await group()
+    expect([before.price_rule_count, before.segment_rule_count, await vip(), await vipIn()]).toEqual([3, 1, 1, 1])
+
+    // The group stops providing gpt-4o and gpt-4o-mini: the rules on them stay, but are no longer counted.
+    await call('PATCH', '/groups/1', { model_filter_mode: 'blacklist', model_allowlist: ['gpt-4o', 'gpt-4o-mini'] })
+    const after = await group()
+    const listed = (await call('GET', '/groups/1/model-prices')).body.data.models.filter((m: { group_rule: unknown }) => m.group_rule).length
+    expect([after.price_rule_count, after.segment_rule_count, await vip(), await vipIn()]).toEqual([listed, 0, 0, 0])
+    expect(listed).toBe(2)
+
+    await call('PATCH', '/groups/1', { model_allowlist: [] })
+    expect((await group()).price_rule_count).toBe(3)
+  })
+
   it('gives the caller’s groups the fields of the server, no more', async () => {
     const [first] = (await call('GET', '/me/groups')).body.data
     expect(Object.keys(first).sort()).toEqual(['description', 'effective_rate', 'exclusive', 'id', 'model_allowlist', 'model_filter_mode', 'name', 'platforms', 'rate_multiplier', 'rate_source'])
@@ -133,5 +147,30 @@ describe('the rest of the group pricing mock', () => {
     expect([taken.status, fields(taken)]).toEqual([400, ['name']])
     const long = await call('POST', '/segments', { name: 'x'.repeat(101) })
     expect([long.status, fields(long)]).toEqual([400, ['name']])
+  })
+})
+
+describe('the groups a caller may use in the mock', () => {
+  let pricer = ''
+  beforeAll(async () => {
+    pricer = await signIn('pricer@example.com')
+  })
+  const ids = (rows: Array<{ id: number }>) => rows.map((g) => g.id).sort((a, b) => a - b)
+
+  it('are the caller’s in the lookup too, as in GET /me/groups', async () => {
+    for (const token of [undefined, pricer]) {
+      const mine = ids((await call('GET', '/me/groups', undefined, token)).body.data)
+      expect(ids((await call('GET', '/lookup/groups?mine=true&limit=50', undefined, token)).body.data.items)).toEqual(mine)
+    }
+    const admin = ids((await call('GET', '/me/groups')).body.data)
+    expect(ids((await call('GET', '/me/groups', undefined, pricer)).body.data)).not.toEqual(admin)
+  })
+
+  it('are the only groups the caller may put a key in', async () => {
+    const mine = ids((await call('GET', '/me/groups', undefined, pricer)).body.data)
+    const other = ids((await call('GET', '/me/groups')).body.data).find((id) => !mine.includes(id))
+    const created = await call('POST', '/me/api-keys', { name: 'k', group_id: other }, pricer)
+    expect([created.status, fields(created)]).toEqual([400, ['group_id']])
+    expect((await call('POST', '/me/api-keys', { name: 'k', group_id: mine[0] }, pricer)).status).toBe(200)
   })
 })

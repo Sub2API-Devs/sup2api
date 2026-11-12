@@ -27,7 +27,8 @@ type Segment struct {
 	// GrantedGroups are the private groups the segment is granted.
 	GrantedGroups []core.GroupRef `json:"granted_groups"`
 	// RateOverrideCount counts the groups whose rate it overrides and
-	// PriceRuleCount its own model prices, over all groups.
+	// PriceRuleCount its own model prices, over all groups, on the models
+	// each group provides now (Deps.RuleCounts).
 	RateOverrideCount int64 `json:"rate_override_count"`
 	PriceRuleCount    int64 `json:"price_rule_count"`
 	*Personal
@@ -59,7 +60,6 @@ const selectSegment = `SELECT ` + RefColumns + `, s.description, s.discount, s.i
 	  FROM segment_groups sg JOIN groups g ON g.id = sg.group_id
 	  WHERE sg.segment_id = s.id AND sg.granted AND g.visibility = 'restricted'),
 	(SELECT count(*) FROM segment_groups sg WHERE sg.segment_id = s.id AND sg.rate_override IS NOT NULL),
-	(SELECT count(*) FROM price_rules pr WHERE pr.segment_id = s.id),
 	COALESCE(u.display_name, ''), o.id, o.kind, o.name` + fromSegments + `
 	LEFT JOIN segments o ON o.id = s.origin_id`
 
@@ -70,7 +70,7 @@ func scanSegment(row pgx.Row, showUsers bool) (*Segment, error) {
 	var originID *int64
 	var originKind, originName *string
 	if err := row.Scan(&sg.ID, &sg.Kind, &sg.Name, &sg.UserID, &sg.Description, &sg.Discount, &sg.IsDefault, &sg.CreatedAt,
-		&sg.MemberCount, &sg.GrantedGroups, &sg.RateOverrideCount, &sg.PriceRuleCount,
+		&sg.MemberCount, &sg.GrantedGroups, &sg.RateOverrideCount,
 		&displayName, &originID, &originKind, &originName); err != nil {
 		return nil, err
 	}
@@ -95,9 +95,31 @@ func (s *Service) load(ctx context.Context, id int64) (*Segment, error) {
 	}
 	sg, err := scanSegment(s.db.Pool.QueryRow(ctx, selectSegment+` WHERE s.id = $1`, id), show)
 	if store.IsNoRows(err) {
-		return nil, segmentNotFound(ctx)
+		return nil, NotFound(ctx)
 	}
-	return sg, err
+	if err != nil {
+		return nil, err
+	}
+	return sg, s.countRules(ctx, sg)
+}
+
+// countRules sets the price rule counts of the segments (Deps.RuleCounts).
+func (s *Service) countRules(ctx context.Context, segments ...*Segment) error {
+	ids := make([]int64, len(segments))
+	for i, sg := range segments {
+		ids[i] = sg.ID
+	}
+	counts, err := s.ruleCounts(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, sg := range segments {
+		sg.PriceRuleCount = 0
+		for _, n := range counts[sg.ID] {
+			sg.PriceRuleCount += n
+		}
+	}
+	return nil
 }
 
 // render answers with the segment as the caller may see it.
@@ -165,6 +187,10 @@ func (s *Service) list(c *gin.Context) {
 		items = append(items, sg)
 	}
 	if err := rows.Err(); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if err := s.countRules(ctx, items...); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

@@ -1472,19 +1472,43 @@ on('GET', '/me/ledger', (req) => paginate(ledgerFilter(ledgerRows.filter((l) => 
 
 // ------------------------------------------------------------------ settings
 
-const billingSettings = { pre_consume_tokens: 500, missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10' }
+const billingSettings = { pre_consume_tokens: 500, missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10', client_disconnect_policy: 'continue', client_disconnect_wait_seconds: 120 }
 const stickySettings = { enabled: true, default_ttl_seconds: 3600, keep_on_account_disabled: false }
+const DISCONNECT_POLICIES = ['precharge', 'continue', 'free']
+const DISCONNECT_WAIT = { min: 5, max: 1800 }
+
+/** Whether Go would bind the client disconnect policy of the body: a string, and a whole number of seconds. */
+const disconnectBinds = (b: any) =>
+  ['string', 'undefined'].includes(typeof b.client_disconnect_policy) && (b.client_disconnect_wait_seconds === undefined || Number.isInteger(b.client_disconnect_wait_seconds))
+
+/** The fields of the client disconnect policy (CONTRACTS §25.8) the body gets wrong; one it leaves out keeps its value. */
+function disconnectFields(b: any) {
+  const fields: Array<{ field: string; code: string; message: string }> = []
+  if (b.client_disconnect_policy !== undefined && !DISCONNECT_POLICIES.includes(b.client_disconnect_policy)) {
+    fields.push({ field: 'client_disconnect_policy', code: 'invalid', message: 'must be precharge, continue or free' })
+  }
+  const wait = b.client_disconnect_wait_seconds
+  if (wait !== undefined && (wait < DISCONNECT_WAIT.min || wait > DISCONNECT_WAIT.max)) {
+    fields.push({ field: 'client_disconnect_wait_seconds', code: 'invalid', message: `must be an integer from ${DISCONNECT_WAIT.min} to ${DISCONNECT_WAIT.max}` })
+  }
+  return fields
+}
 
 on('GET', '/settings/billing', () => billingSettings)
 on('PUT', '/settings/billing', (req) => {
   const b = req.body || {}
+  if (!disconnectBinds(b)) return fail(400, 'invalid_argument', 'invalid request body')
   if (!['reject', 'free'].includes(b.missing_price_policy)) {
     return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'missing_price_policy', code: 'enum', message: 'must be reject or free' }] })
   }
   if (!Number.isInteger(b.pre_consume_tokens) || b.pre_consume_tokens < 0 || b.pre_consume_tokens > 100000000) {
     return fail(400, 'invalid_argument', 'invalid', { fields: [{ field: 'pre_consume_tokens', code: 'invalid', message: 'must be an integer from 0 to 100000000' }] })
   }
+  const fields = disconnectFields(b)
+  if (fields.length) return fail(400, 'invalid_argument', 'invalid', { fields })
   Object.assign(billingSettings, { pre_consume_tokens: b.pre_consume_tokens, missing_price_policy: b.missing_price_policy, min_balance: String(b.min_balance), big_cost_warning_usd: String(b.big_cost_warning_usd) })
+  if (b.client_disconnect_policy !== undefined) billingSettings.client_disconnect_policy = b.client_disconnect_policy
+  if (b.client_disconnect_wait_seconds !== undefined) billingSettings.client_disconnect_wait_seconds = b.client_disconnect_wait_seconds
   return billingSettings
 })
 on('GET', '/settings/sticky', () => stickySettings)

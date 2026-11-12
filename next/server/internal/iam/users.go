@@ -264,7 +264,7 @@ func lockNamedSegment(ctx context.Context, tx pgx.Tx, id *int64) error {
 	}
 	_, err := segment.LockNamed(ctx, tx, id)
 	if errors.Is(err, core.ErrNotFound) {
-		return core.InvalidFields(core.FieldError{Field: "segment_id", Code: "invalid", Message: "unknown user group"})
+		return core.InvalidFields(core.FieldError{Field: "segment_id", Code: "invalid", Message: segment.Unknown(ctx)})
 	}
 	return err
 }

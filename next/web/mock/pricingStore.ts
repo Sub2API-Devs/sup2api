@@ -46,7 +46,7 @@ interface Pair {
 }
 
 /** A model price of a group (`segment_id` null) or of a segment in a group. */
-interface RuleRow {
+export interface RuleRow {
   segment_id: number | null
   group_id: number
   model: string
@@ -154,12 +154,6 @@ export function groupAccess(g: PricedGroup) {
   const ids = new Set(pairsWhere({ group_id: g.id, granted: true }).map((p) => p.segment_id))
   const granted = segments.filter((s) => ids.has(s.id))
   return { segments: granted.filter((s) => s.kind === 'named').map((s) => segmentRef(s)), personal_count: granted.filter((s) => s.kind === 'personal').length }
-}
-
-/** How many model prices a group has: its own, and those of segments in it. */
-export function groupRuleCounts(groupId: number) {
-  const own = rulesWhere({ group_id: groupId, segment_id: null }).length
-  return { price_rule_count: own, segment_rule_count: rulesWhere({ group_id: groupId }).length - own }
 }
 
 // ------------------------------------------------------------------ resolving

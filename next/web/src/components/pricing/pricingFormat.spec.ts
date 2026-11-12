@@ -70,6 +70,10 @@ describe('the price a view shows', () => {
   it('makes a price free at ×0 and leaves it as it is at ×1', () => {
     expect(priceCells(times(perToken, '0')).tokens).toMatchObject({ p: 0, c: 0, cr: 0, cc: null })
     expect(priceCells(times(perRequest, '0')).perRequest).toBe(0)
+    // A draft's blank price per request stays blank, as a blank token price does.
+    const blank: PriceDef = { mode: 'per_request', config: { price: null }, expression: '' }
+    expect(priceCells(blank)).toEqual({ perRequest: null, tiers: 1 })
+    expect(priceCells(times(blank, '1.5')).perRequest).toBeNull()
     expect(priceCells(times(perToken, '1'))).toEqual(priceCells(perToken))
   })
   it('rewrites neither the config nor the expression for it', () => {

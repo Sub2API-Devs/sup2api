@@ -21,6 +21,7 @@ const (
 type priceSnapshot struct {
 	at      time.Time
 	byModel map[string]core.PriceRule // one price per complete model id
+	bases   catalog                   // the same prices as the pricing endpoints show them
 	rules   ruleSet                   // price rules of groups and segments
 }
 
@@ -43,7 +44,7 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	snap = &priceSnapshot{at: time.Now(), byModel: map[string]core.PriceRule{}}
+	snap = &priceSnapshot{at: time.Now(), byModel: map[string]core.PriceRule{}, bases: catalog{}}
 	for rows.Next() {
 		var r core.PriceRule
 		var config json.RawMessage
@@ -62,6 +63,7 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 			}
 		}
 		snap.byModel[r.Model] = r
+		snap.bases[r.Model] = PriceDef{Mode: r.Mode, Config: config, Expression: r.Expression}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

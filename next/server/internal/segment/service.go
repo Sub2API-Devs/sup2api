@@ -19,6 +19,9 @@ type Deps struct {
 	Platforms func(ctx context.Context, groupIDs []int64) (map[int64][]string, error)
 	// PriceRulesChanged drops the cached price rules on every node (billing.Service.PriceRulesChanged).
 	PriceRulesChanged func(ctx context.Context)
+	// RuleCounts counts the price rules of each segment by group id, on the
+	// models each group provides now (group.Service.SegmentRuleCounts).
+	RuleCounts func(ctx context.Context, segmentIDs []int64) (map[int64]map[int64]int64, error)
 }
 
 // Service serves the segment endpoints.
@@ -27,11 +30,13 @@ type Service struct {
 	authz             core.Authorizer
 	platforms         func(ctx context.Context, groupIDs []int64) (map[int64][]string, error)
 	priceRulesChanged func(ctx context.Context)
+	ruleCounts        func(ctx context.Context, segmentIDs []int64) (map[int64]map[int64]int64, error)
 }
 
 // New builds the segment service.
 func New(d Deps) *Service {
-	return &Service{db: d.DB, authz: d.Authz, platforms: d.Platforms, priceRulesChanged: d.PriceRulesChanged}
+	return &Service{db: d.DB, authz: d.Authz, platforms: d.Platforms, priceRulesChanged: d.PriceRulesChanged,
+		ruleCounts: d.RuleCounts}
 }
 
 // RegisterRoutes mounts the segment endpoints. The members of a segment are
@@ -57,12 +62,23 @@ func fieldError(ctx context.Context, field, code, en, zh string) core.FieldError
 	return core.FieldError{Field: field, Code: code, Message: t(ctx, en, zh)}
 }
 
-func segmentNotFound(ctx context.Context) error {
-	return core.ErrNotFound.WithMessage(t(ctx, "user group not found", "用户组不存在"))
+// NotFound is the not_found of a user group that does not exist. It is the
+// one wording of it: iam and billing answer with it too. It is
+// core.ErrNotFound to errors.Is.
+func NotFound(ctx context.Context) error {
+	return core.ErrNotFound.WithMessage(t(ctx, "user group not found", "用户组不存在")).WithCause(core.ErrNotFound)
 }
 
-func userNotFound(ctx context.Context) error {
-	return core.ErrNotFound.WithMessage(t(ctx, "user not found", "用户不存在"))
+// Unknown is the message of a field that names a user group that does not
+// exist, or not one it may name.
+func Unknown(ctx context.Context) string {
+	return t(ctx, "unknown user group", "用户组不存在")
+}
+
+// UserNotFound is the not_found of a user that does not exist or was
+// deleted. It is core.ErrNotFound to errors.Is.
+func UserNotFound(ctx context.Context) error {
+	return core.ErrNotFound.WithMessage(t(ctx, "user not found", "用户不存在")).WithCause(core.ErrNotFound)
 }
 
 // tx runs fn in a transaction. A row the writes refer to that was deleted
@@ -81,7 +97,7 @@ func (s *Service) tx(ctx context.Context, fn func(tx pgx.Tx) error) error {
 func segmentKind(ctx context.Context, q store.Querier, id int64, lock string) (kind string, isDefault bool, err error) {
 	err = q.QueryRow(ctx, `SELECT kind, is_default FROM segments WHERE id = $1 `+lock, id).Scan(&kind, &isDefault)
 	if store.IsNoRows(err) {
-		return "", false, segmentNotFound(ctx)
+		return "", false, NotFound(ctx)
 	}
 	return kind, isDefault, err
 }

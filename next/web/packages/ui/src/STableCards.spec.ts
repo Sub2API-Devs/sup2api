@@ -187,6 +187,13 @@ describe('STable phone cards', () => {
     expect(w.emitted('expand')).toEqual([[rows[0], true], [rows[0], false], [rows[1], true]])
   })
 
+  it('gives a cell of a card a closed row and a toggle that does nothing when rows do not expand', async () => {
+    const w = mountPinned(STable, { props: { columns: declared, rows }, slots: { 'cell-actions': '<button class="open" @click.stop="params.toggleExpand()">{{ params.expanded }}</button>' } })
+    await cards(w)[0].get('.open').trigger('click')
+    expect(cards(w).map(c => c.get('.open').text())).toEqual(rows.map(() => 'false'))
+    expect(w.emitted('expand')).toBeUndefined()
+  })
+
   it('reorders cards from their handles', async () => {
     const list = [
       { id: 'a', name: 'A' },

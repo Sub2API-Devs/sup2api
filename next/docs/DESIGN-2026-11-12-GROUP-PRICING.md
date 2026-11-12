@@ -167,7 +167,7 @@
 |---|---|---|
 | `GET /groups/:id/model-prices?segment_id=` | `group:read` | `GroupModelPrices`：分组提供的模型（不并入分组已不提供的模型上的旧规则），每行 `base`、`group_rule`、`segment_rule`（给了 `segment_id` 时）或 `segment_rule_count`、`list_price`、`source`；失效的规则带 `inactive: true`。`list_price` 是 `PriceDef`（`{mode, config, expression, multiplier?}`）：按倍数的规则返回全局价原样加 `multiplier`，自定义价返回规则自己的价格，无规则返回全局价。没有全局价时 `list_price` 为 null、`source` 为 `global`。`segment_id` 不是正整数 400 |
 | `PUT /groups/:id/model-prices?segment_id=` `{items: [{segment_id, model, rule}]}` | `group:manage` | `rule: null` 删除；校验见 mock 的 `ruleError`、`rulePatchError`，另加倍数 < 1000000、最多 4 位小数；整批一个事务；返回最新 `GroupModelPrices` |
-| `POST /pricing/quote` | `price:read` | `user_id` 和 `segment_id` 必须恰好给一个，都给或都不给 400（字段 `user_id`）；`usage` 是 `{p, c, cr?, cc?, cc1h?}`；分组不提供该模型 400（字段 `model`）；价格无法用给定用量求值 400 `invalid_argument`（没有 `details.fields`）；无全局价时 `base / list_price` 为 null、`price_source` 为 `global`、费用 "0"。`list_price` 与定价表同形；`price_levels` 里失效的规则带 `inactive: true`。金额用与真实计费同一条路径算：`Resolve` + `core.SegmentRate` + `Quote` |
+| `POST /pricing/quote` | `price:read` 且 `group:read`；带 `user_id` 还要 `user:read`，带 `segment_id` 还要 `segment:read`（与控制台入口相同，缺权限 403） | `user_id` 和 `segment_id` 必须恰好给一个，都给或都不给 400（字段 `user_id`）；`usage` 是 `{p, c, cr?, cc?, cc1h?}`；分组不提供该模型 400（字段 `model`）；价格无法用给定用量求值 400 `invalid_argument`（没有 `details.fields`）；无全局价时 `base / list_price` 为 null、`price_source` 为 `global`、费用 "0"。`list_price` 与定价表同形；`price_levels` 里失效的规则带 `inactive: true`。`usage` 每项 0 到 1e12（越界 400，字段 `usage.<k>`）。金额用与真实计费同一条路径算：`Resolve` + `core.SegmentRate` + `Quote`；展示的价格与费用出自同一份价格快照 |
 | `GET /me/prices` | `apikey:self:manage` | 不带 `group_id`：全部已启用全局价 + 每行 `groups`（调用者可用且提供该模型的分组），`rate_multiplier: "1"`；带 `group_id`：该分组提供且能计费的模型，每行是规则后的标价，与定价表的 `list_price` 同形（按倍数的规则带 `multiplier`，表达式和配置不动，不追加规则），另带 `source`；响应带实际倍率和 `rate_source`；不可用的分组 404，`group_id` 不是正整数 400 |
 | `GET /key/prices` | API Key | 仍是分组模型名单允许的全部已启用模型；价格换成该 Key 所有者在该分组的标价，`rate_multiplier` 是实际倍率。响应形状不变，下游读不到规则，所以这是唯一把倍数折进价格的地方（`exportPrice`）：按次、按 token、视频模板的价格缩放配置并重新生成表达式，其余的表达式追加常数规则 `\|\|\| true ? N : 1`；倍数为 1 不追加；追加后重新编译校验（规则条数必须多 1），不通过的模型跳过并记日志。用的是同步价格的 `scalePrice`，“从上游同步并应用倍率”的结果不因此改变 |
 
@@ -177,7 +177,7 @@
 
 | 接口 | 变化 |
 |---|---|
-| `GET /groups` | 每行加 `access: {segments: SegmentRef[], personal_count}`（私有分组被授权的命名用户组和个人专属数；公开分组恒为 `{segments: [], personal_count: 0}`）、`price_rule_count`、`segment_rule_count`、`model_count`；新筛选 `?model=`（只留提供该模型的分组） |
+| `GET /groups` | 每行加 `access: {segments: SegmentRef[], personal_count}`（私有分组被授权的命名用户组和个人专属数；公开分组恒为 `{segments: [], personal_count: 0}`）、`price_rule_count`、`segment_rule_count`（只算分组现在提供的模型上的规则，与定价表一致）、`model_count`；新筛选 `?model=`（只留提供该模型的分组） |
 | `GET /me/groups` | 可见性按调用者的用户组；每行只比原来多 `effective_rate`、`rate_source`、`exclusive`（私有分组）。`rate_multiplier` 仍是分组默认倍率。读不到调用者在某个分组里的条件时（两次查询之间分组被删等）略去这个分组 |
 | `GET /users`、`GET /users/:id` | 加 `segment: SegmentRef`（个人专属的 `name` 是用户邮箱）；去掉 `group_ids`；新筛选 `segment=<id>` 或 `segment=personal`。登录、刷新返回的 `user` 不带 `segment` |
 | `POST /users` | 可带 `segment_id`（必须是命名用户组；需要 `segment:manage`，没带就是默认组） |
@@ -189,7 +189,7 @@
 
 - `authz/catalog.go`：新模块 `segment`（“用户组”），`segment:read`、`segment:manage`。`admin` 自动拥有；`operator` 拥有（它只排除 `settings / sticky / plugin / publisher` 模块）；`user` 没有。
 - `authz/menus.go`：`users` 段加 `{"segments", "User groups" / "用户组", "publisher", "/segments", ["segment:read"]}`，排在“用户”之后、“角色与权限”之前。
-- 分组侧的授权、倍率、模型定价沿用 `group:read / group:manage`；价格试算接口要 `price:read`，控制台的试算入口要 `price:read` 和 `group:read`（按用户试算还要 `user:read`，按用户组试算要 `segment:read`）；成员列表要 `segment:read` 和 `user:read`。
+- 分组侧的授权、倍率、模型定价沿用 `group:read / group:manage`；价格试算接口和控制台的试算入口都要 `price:read` 和 `group:read`（按用户试算还要 `user:read`，按用户组试算还要 `segment:read`）；成员列表要 `segment:read` 和 `user:read`。
 
 ## 7. 前端接入
 
