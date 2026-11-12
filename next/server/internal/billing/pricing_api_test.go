@@ -3,9 +3,11 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -67,6 +69,14 @@ func multiplier(n string) map[string]any {
 
 func custom(mode string, config map[string]any) map[string]any {
 	return map[string]any{"kind": "custom", "mode": mode, "config": config}
+}
+
+// timesPrice is a price as the API shows it under a multiplier rule: as it is,
+// with the multiplier beside it.
+func timesPrice(price any, n string) map[string]any {
+	out := maps.Clone(price.(map[string]any))
+	out["multiplier"] = n
+	return out
 }
 
 // patch is an item of PUT /groups/:id/model-prices; segment 0 is the group's own rule.
@@ -142,8 +152,8 @@ func TestGroupModelPrices(t *testing.T) {
 	require.Equal(t, 1.0, row["segment_rule_count"])
 	require.NotContains(t, row, "segment_rule")
 	require.Equal(t, "group", row["source"])
-	require.Equal(t, map[string]any{"mode": "per_token", "config": map[string]any{"p": 1.2, "c": 6.0, "cr": 0.12, "cc": 1.5, "cc1h": 2.4},
-		"expression": `tier("base", p*1.2 + c*6 + cr*0.12 + cc*1.5 + cc1h*2.4)`}, row["list_price"])
+	// A multiplier goes beside the global price; nothing of it is scaled.
+	require.Equal(t, timesPrice(haiku, "1.2"), row["list_price"])
 	require.Equal(t, haiku, row["base"])
 	row = rows["web-search"]
 	require.Equal(t, custom("per_request", map[string]any{"price": 0.008}), row["group_rule"])
@@ -171,10 +181,11 @@ func TestGroupModelPrices(t *testing.T) {
 	require.NotContains(t, row, "segment_rule_count")
 	require.Equal(t, "segment", row["source"])
 	require.Equal(t, map[string]any{"mode": "per_token", "config": own, "expression": `tier("base", p*0.8 + c*4)`}, row["list_price"])
-	// A multiplier leaves a hand-written expression as it is.
+	// The same over a hand-written expression.
 	row = rows["claude-sonnet-4-5"]
 	require.Equal(t, "segment", row["source"])
-	require.Equal(t, sonnet, row["list_price"])
+	require.Equal(t, timesPrice(sonnet, "0.5"), row["list_price"])
+	require.Equal(t, sonnet, row["base"])
 	require.Contains(t, rows["web-search"], "segment_rule")
 	require.Nil(t, rows["web-search"]["segment_rule"])
 	require.Equal(t, "group", rows["web-search"]["source"])
@@ -201,7 +212,8 @@ func TestGroupModelPrices(t *testing.T) {
 	row = rows["claude-haiku-4-5"]
 	require.Equal(t, map[string]any{"kind": "custom", "mode": "per_token", "config": own, "inactive": true}, row["segment_rule"])
 	require.Equal(t, "group", row["source"])
-	require.Equal(t, map[string]any{"mode": "per_request", "config": map[string]any{"price": 2.0}, "expression": `tier("base", flat(2))`}, row["list_price"])
+	require.Equal(t, map[string]any{"mode": "per_request", "config": map[string]any{"price": 1.0}, "expression": `tier("base", flat(1))`,
+		"multiplier": "2"}, row["list_price"])
 	r, err := e.svc.Resolve(ctx, core.PriceQuery{Model: "claude-haiku-4-5", GroupID: e.open, SegmentID: e.vip})
 	require.NoError(t, err)
 	require.Equal(t, core.PriceSourceGroup, r.Source)
@@ -254,6 +266,44 @@ func TestGroupModelPricesValidation(t *testing.T) {
 	_, rows := e.modelPrices(e.open, e.vip, patch(0, "claude-haiku-4-5", multiplier("0")), patch(e.vip, "claude-haiku-4-5", multiplier("1")))
 	require.Equal(t, "segment", rows["claude-haiku-4-5"]["source"])
 	require.Equal(t, map[string]any{"kind": "multiplier", "multiplier": "0"}, rows["claude-haiku-4-5"]["group_rule"])
+}
+
+// A segment is deleted while a rule of it is being saved: the write waits for
+// the delete and, once that commits, fails on the foreign key. That is a
+// conflict to retry, and nothing of the request is saved.
+func TestGroupModelPricesConflict(t *testing.T) {
+	e := newPricingEnv(t, allowAll{})
+	ctx := context.Background()
+	leaving := e.one(`INSERT INTO segments (name) VALUES ('leaving') RETURNING id`)
+	tx, err := e.db.Pool.Begin(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, `DELETE FROM segments WHERE id = $1`, leaving)
+	require.NoError(t, err)
+
+	type answer struct {
+		code int
+		body map[string]any
+	}
+	saved := make(chan answer, 1)
+	go func() {
+		code, body := e.call(e.admin, "PUT", "/groups/"+itoa(e.open)+"/model-prices", map[string]any{"items": []any{
+			patch(0, "web-search", multiplier("3")), patch(leaving, "web-search", multiplier("2"))}})
+		saved <- answer{code, body}
+	}()
+	// The write is there once it waits for the lock the delete holds.
+	require.Eventually(t, func() bool {
+		var waiting int
+		err := e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity
+			WHERE datname = current_database() AND wait_event_type = 'Lock'`).Scan(&waiting)
+		return err == nil && waiting > 0
+	}, 10*time.Second, 5*time.Millisecond)
+	require.NoError(t, tx.Commit(ctx))
+
+	got := <-saved
+	require.Equal(t, 409, got.code, "%v", got.body)
+	require.Equal(t, "conflict", errCode(got.body))
+	require.Zero(t, e.one(`SELECT count(*) FROM price_rules`))
 }
 
 // Who may read and change the model prices of a group, and who sees the
@@ -365,7 +415,8 @@ func TestPricingQuote(t *testing.T) {
 	require.Equal(t, map[string]any{"value": "0.5", "source": "segment", "group_default": "2", "discount": "0.8"}, out["rate"])
 	require.Equal(t, []any{"0.5", "7.2", "3.6"}, []any{out["rate_override"], out["list_cost"], out["cost"]})
 	require.Equal(t, 1.0, out["base"].(map[string]any)["config"].(map[string]any)["p"])
-	require.Equal(t, 1.2, out["list_price"].(map[string]any)["config"].(map[string]any)["p"])
+	require.NotContains(t, out["base"], "multiplier")
+	require.Equal(t, timesPrice(out["base"], "1.2"), out["list_price"])
 
 	// The same for the segment itself; its own price applies per request.
 	out = quote("segment_id", e.vip, e.private, "web-search")
@@ -385,14 +436,14 @@ func TestPricingQuote(t *testing.T) {
 
 	// A public group at the discounted rate and the global price; a
 	// multiplier on a hand-written expression (28.5 at this length) is in
-	// the costs, not in the list price shown.
+	// the costs and beside the list price shown.
 	out = quote("user_id", e.member, e.open, "claude-haiku-4-5")
 	require.Equal(t, []any{true, "public", "global", "6", "7.2"},
 		[]any{out["accessible"], out["access_source"], out["price_source"], out["list_cost"], out["cost"]})
 	require.Equal(t, "discount", out["rate"].(map[string]any)["source"])
 	out = quote("segment_id", e.personal, e.private, "claude-sonnet-4-5")
 	require.Equal(t, []any{"segment", "14.25", "28.5"}, []any{out["price_source"], out["list_cost"], out["cost"]})
-	require.Equal(t, out["base"], out["list_price"])
+	require.Equal(t, timesPrice(out["base"], "0.5"), out["list_price"])
 	require.Equal(t, map[string]any{"id": float64(e.personal), "kind": "personal", "name": "solo@example.com", "user_id": float64(e.solo)}, out["segment"])
 
 	// A model without a global price cannot be billed.
@@ -430,8 +481,8 @@ func TestMyPricesInGroup(t *testing.T) {
 	e := newPricingEnv(t, allowAll{})
 	e.modelPrices(e.private, 0,
 		patch(0, "claude-haiku-4-5", multiplier("1.2")),
-		patch(e.vip, "web-search", custom("per_request", map[string]any{"price": 0.008})),
-		patch(e.personal, "web-search", multiplier("0")))
+		patch(e.vip, "web-search", custom("per_request", map[string]any{"price": 0.008})))
+	e.modelPrices(e.open, 0, patch(e.personal, "web-search", multiplier("0")))
 	byModel := func(d map[string]any) map[string]map[string]any {
 		rows := map[string]map[string]any{}
 		for _, row := range d["prices"].([]any) {
@@ -445,17 +496,23 @@ func TestMyPricesInGroup(t *testing.T) {
 	require.Equal(t, []any{"0.5", "segment"}, []any{d["rate_multiplier"], d["rate_source"]})
 	rows := byModel(d)
 	require.Len(t, rows, 3, "a model without a global price is left out")
-	require.Equal(t, map[string]any{"model": "claude-haiku-4-5", "mode": "per_token", "source": "group",
-		"config":     map[string]any{"p": 1.2, "c": 6.0, "cr": 0.12, "cc": 1.5, "cc1h": 2.4},
-		"expression": `tier("base", p*1.2 + c*6 + cr*0.12 + cc*1.5 + cc1h*2.4)`}, rows["claude-haiku-4-5"])
+	require.Equal(t, map[string]any{"model": "claude-haiku-4-5", "mode": "per_token", "source": "group", "multiplier": "1.2",
+		"config":     map[string]any{"p": 1.0, "c": 5.0, "cr": 0.1, "cc": 1.25, "cc1h": 2.0},
+		"expression": `tier("base", p*1 + c*5 + cr*0.1 + cc*1.25 + cc1h*2)`}, rows["claude-haiku-4-5"])
 	require.Equal(t, map[string]any{"model": "web-search", "mode": "per_request", "source": "segment",
 		"config": map[string]any{"price": 0.008}, "expression": `tier("base", flat(0.008))`}, rows["web-search"])
 	require.Equal(t, "global", rows["claude-sonnet-4-5"]["source"])
+	require.NotContains(t, rows["claude-sonnet-4-5"], "multiplier")
 
-	// The public group, at the discounted rate; no rules there.
+	// The public group, at the discounted rate; no rules for vip there.
 	d = data(e.mustCall(e.member, 200, "GET", "/me/prices?group_id="+itoa(e.open), nil))
 	require.Equal(t, []any{"1.2", "discount"}, []any{d["rate_multiplier"], d["rate_source"]})
 	require.Equal(t, "global", byModel(d)["claude-haiku-4-5"]["source"])
+	require.Equal(t, "global", byModel(d)["web-search"]["source"])
+	// A personal segment's own rule there, a multiplier of 0, is its user's alone.
+	free := byModel(data(e.mustCall(e.solo, 200, "GET", "/me/prices?group_id="+itoa(e.open), nil)))["web-search"]
+	require.Equal(t, map[string]any{"model": "web-search", "mode": "per_request", "source": "segment", "multiplier": "0",
+		"config": map[string]any{"price": 0.01}, "expression": `tier("base", flat(0.01))`}, free)
 
 	// Without a group the prices are the global ones and no rule shows.
 	d = data(e.mustCall(e.member, 200, "GET", "/me/prices", nil))
@@ -476,12 +533,12 @@ func TestMyPricesInGroup(t *testing.T) {
 	e.mustCall(e.member, 404, "GET", "/me/prices?group_id="+itoa(e.private), nil)
 	require.Equal(t, both[:1], byModel(data(e.mustCall(e.member, 200, "GET", "/me/prices", nil)))["web-search"]["groups"])
 
-	// A multiplier over a hand-written expression shows in the expression:
-	// the user sees no rule beside the price.
+	// A multiplier over a hand-written expression goes beside it: the
+	// expression is the global price's.
+	global := byModel(data(e.mustCall(e.member, 200, "GET", "/me/prices", nil)))["claude-sonnet-4-5"]["expression"]
 	e.modelPrices(e.open, 0, patch(0, "claude-sonnet-4-5", multiplier("2")))
 	sonnet := byModel(data(e.mustCall(e.member, 200, "GET", "/me/prices?group_id="+itoa(e.open), nil)))["claude-sonnet-4-5"]
-	require.Equal(t, "group", sonnet["source"])
-	require.True(t, strings.HasSuffix(sonnet["expression"].(string), "||| true ? 2 : 1"), sonnet["expression"])
+	require.Equal(t, []any{"group", "2", global}, []any{sonnet["source"], sonnet["multiplier"], sonnet["expression"]})
 }
 
 // GET /key/prices: the list prices of the key's owner in the key's group, in
@@ -503,10 +560,14 @@ func TestKeyPricesFollowRules(t *testing.T) {
 		require.Equal(t, 200, w.Code, w.Body.String())
 		var body struct {
 			Data struct {
-				RateMultiplier string `json:"rate_multiplier"`
+				RateMultiplier string      `json:"rate_multiplier"`
+				Prices         []syncPrice `json:"prices"`
 			} `json:"data"`
 		}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		for _, p := range body.Data.Prices {
+			require.NotEmpty(t, p.Expression, p.Model)
+		}
 		// What a downstream instance makes of the answer, rate left aside.
 		f, err := parseSup2API(w.Body.Bytes(), false)
 		require.NoError(t, err)
@@ -529,4 +590,27 @@ func TestKeyPricesFollowRules(t *testing.T) {
 	_, got = prices(e.personal)
 	require.Equal(t, `v1:tier("base", p*0.8 + c*4)`, got["claude-haiku-4-5"].Expression)
 	require.NotContains(t, got["claude-sonnet-4-5"].Expression, "true ?")
+
+	// Free over a hand-written expression: a rule that makes it cost nothing.
+	// A multiplier of 1 is the global price, with nothing appended.
+	e.modelPrices(e.private, 0,
+		patch(e.personal, "claude-sonnet-4-5", multiplier("0")),
+		patch(e.personal, "claude-haiku-4-5", multiplier("1")))
+	_, got = prices(e.personal)
+	require.True(t, strings.HasSuffix(got["claude-sonnet-4-5"].Expression, ` ||| true ? 0 : 1`), got["claude-sonnet-4-5"].Expression)
+	require.Equal(t, "0", costOf(t, got["claude-sonnet-4-5"].Expression))
+	require.Equal(t, `v1:tier("base", p*1 + c*5 + cr*0.1 + cc*1.25 + cc1h*2)`, got["claude-haiku-4-5"].Expression)
+
+	// An expression that ends in a comment with a quote in it takes no rule
+	// after it: the model is left out where a multiplier applies, not listed
+	// at the global price, and the others are still there.
+	sonnetID := e.one(`SELECT id FROM model_prices WHERE model = 'claude-sonnet-4-5'`)
+	e.mustCall(e.admin, 200, "PATCH", "/prices/"+itoa(sonnetID), map[string]any{"expression": `tier("base", p*3 + c*15) // don't`})
+	_, got = prices(e.vip)
+	require.Len(t, got, 1)
+	require.Contains(t, got, "claude-haiku-4-5")
+	e.modelPrices(e.private, 0, patch(e.vip, "claude-sonnet-4-5", nil), patch(e.personal, "claude-sonnet-4-5", nil))
+	_, got = prices(e.vip)
+	require.Len(t, got, 2)
+	require.Equal(t, "18", costOf(t, got["claude-sonnet-4-5"].Expression))
 }

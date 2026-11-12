@@ -82,10 +82,11 @@ func callerIs(cond string) func(context.Context, store.Querier, int64, *store.Fi
 	}
 }
 
-// usableModels leaves the models the caller can call: an enabled price that
-// at least one of the caller's groups allows. GET /me/prices applies the same
-// rule to one group; the picker on a user's own pages is not tied to a group,
-// so this is the union over all of them. The group policy is a glob list
+// usableModels leaves the models the caller's groups allow: an enabled price
+// that the model policy of at least one of them lets through. The picker on a
+// user's own pages is not tied to a group, so this is the union over all of
+// them. GET /me/prices?group_id= lists a subset of it: of these, only the
+// models the accounts of that group provide. The group policy is a glob list
 // (core.GroupInfo.AllowsModel), evaluated here rather than rewritten in SQL.
 func usableModels(ctx context.Context, q store.Querier, uid int64, f *store.Filter) error {
 	var open store.Filter

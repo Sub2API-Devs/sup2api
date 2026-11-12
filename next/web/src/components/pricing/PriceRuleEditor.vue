@@ -11,7 +11,8 @@ import { priceLabel } from './ruleText'
 // level above, named by `inheritLabel`), a multiplier of the global price, or
 // a price of its own in the global price's mode. An expression price takes a
 // multiplier only; a model without a global price takes no rule at all.
-// Every edit emits a whole new rule, valid or not: `valid` says which.
+// Every edit emits a whole new rule, valid or not: one that is not says so
+// under its fields, and the table that holds it refuses to save it.
 type Kind = 'inherit' | PriceRule['kind']
 
 const props = defineProps<{
@@ -53,8 +54,6 @@ function choose(next: Kind) {
 function setPrice(rule: Extract<PriceRule, { kind: 'custom' }>, key: string, price: number | null) {
   emit('update:modelValue', { kind: 'custom', mode: rule.mode, config: { ...rule.config, [key]: price } })
 }
-
-defineExpose({ valid })
 </script>
 
 <template>

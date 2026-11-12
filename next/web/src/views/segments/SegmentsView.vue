@@ -6,7 +6,9 @@ import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SDropdown, SHint, SInput, SLink, SPageHeader, SPagination, confirm, type MenuAction, type TableColumn } from '@sub2api/ui'
 import type { Segment } from '@/api/pricing'
 import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
+import { canSimulatePrices } from '@/components/pricing/quoteSubjects'
 import { useSegmentsLookup } from '@/components/pricing/segmentLookup'
+import { canListMembers } from '@/components/pricing/segmentMembers'
 import { deleteResource } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -20,12 +22,15 @@ import SegmentTable from './SegmentTable.vue'
 // which private groups he may use and at what rate and prices. The list has
 // the named ones; the users priced individually, each a segment of his own,
 // are summed up under it and listed by PersonalSegments. A caller who may
-// not manage segments opens them read-only.
+// not manage segments opens them read-only; the members of one are listed
+// only to a caller who reads users.
 const { t } = useI18n()
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const canManage = computed(() => auth.has('segment:manage'))
+const canMembers = computed(() => canListMembers(auth))
+const canSimulate = computed(() => canSimulatePrices(auth))
 const list = useList<Segment>('/segments', { q: '' })
 
 const lead = computed<TableColumn[]>(() => [
@@ -35,8 +40,8 @@ const lead = computed<TableColumn[]>(() => [
 
 function rowActions(s: Segment): MenuAction[] {
   return [
-    { key: 'members', label: t('segments.tabs.members') },
-    { key: 'simulate', label: t('pricingTools.sim.title'), hidden: !auth.has('price:read') },
+    { key: 'members', label: t('segments.tabs.members'), hidden: !canMembers.value },
+    { key: 'simulate', label: t('pricingTools.sim.title'), hidden: !canSimulate.value },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !canManage.value, disabled: s.is_default }
   ]
 }
@@ -130,7 +135,8 @@ async function remove(s: Segment) {
         <SHint v-if="row.description" size="xs" class="max-w-xs truncate">{{ row.description }}</SHint>
       </template>
       <template #cell-member_count="{ row }">
-        <SLink as="button" class="font-mono" data-testid="segment-members-link" @click="openEditor(row, 'members')">{{ formatNumber(row.member_count) }}</SLink>
+        <SLink v-if="canMembers" as="button" class="font-mono" data-testid="segment-members-link" @click="openEditor(row, 'members')">{{ formatNumber(row.member_count) }}</SLink>
+        <span v-else class="font-mono" data-testid="segment-member-count">{{ formatNumber(row.member_count) }}</span>
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
@@ -140,7 +146,7 @@ async function remove(s: Segment) {
       </template>
       <template #footer>
         <SAlert tone="accent" icon="user" class="mt-3" data-testid="segments-personal">
-          <template #title>{{ t('segments.personal.summary', { n: formatNumber(personalCount) }) }}</template>
+          <template #title>{{ t('segments.personal.summary', { n: formatNumber(personalCount) }, personalCount) }}</template>
           {{ t('segments.personal.summaryHint') }}
           <template #actions>
             <SButton size="sm" data-testid="segments-personal-open" @click="personalOpen = true">{{ t('common.view') }}</SButton>
@@ -152,6 +158,6 @@ async function remove(s: Segment) {
 
     <SegmentEditor v-model:open="editorOpen" :segment="editing" :tab="editorTab" :readonly="!canManage" @changed="changed" />
     <PersonalSegments v-model:open="personalOpen" @changed="changed" />
-    <PriceSimulatorModal v-model:open="simulatorOpen" :preset="simulatorPreset" />
+    <PriceSimulatorModal v-if="canSimulate" v-model:open="simulatorOpen" :preset="simulatorPreset" />
   </div>
 </template>

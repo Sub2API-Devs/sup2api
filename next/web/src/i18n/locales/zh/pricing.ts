@@ -26,7 +26,7 @@ export default {
     tokenInvalid: '输入、输出价格必填，各项都不能为负数',
     requestInvalid: '请填写不小于 0 的单价',
     expressionOnly: '该模型按表达式计费，只能按倍数调整。',
-    noBase: '该模型还没有全局价格，请先到“模型价格”里设置。',
+    noBase: '该模型还没有全局价，请先到“模型价格”里设置。',
     inactive: '规则未生效',
     inactiveHint: '计费方式已变，规则未生效：全局价改了计费方式，这条自定义价不再适用。请重新设置或清除。',
     requestPrice: '单价'
@@ -34,6 +34,7 @@ export default {
   price: {
     perRequest: '{price} / 次',
     expression: '表达式计费',
+    expressionTimes: '表达式计费 {rate}',
     none: '未定价',
     tiered: '{n} 档，显示第一档'
   },

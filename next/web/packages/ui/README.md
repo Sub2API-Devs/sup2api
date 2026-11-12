@@ -367,4 +367,4 @@ const columns: TableColumn[] = [
 
 - 每个 `cell-<key>` 插槽多两个参数：`expanded`（该行是否展开）和 `toggleExpand()`（展开或收起该行，照常触发 `expand` 事件），需要 `expandable`；手机卡片里的单元格插槽同样有，与 `#card` 插槽的同名参数一致。
 - `:expand-toggle="false"` 去掉行首的箭头列，只由单元格打开；手机卡片仍保留“详情”折叠。默认 `true`，与以前一样。
-- `expand-single`：展开一行时收起其它行。默认关闭。
+- `expand-single`：展开一行时收起其它行。默认关闭。被它收起的每一行也触发 `expand`（`row, false`），在新展开那一行的 `expand`（`row, true`）之前；依赖 `expand` 事件记录展开状态的页面因此不会留下已收起的行。

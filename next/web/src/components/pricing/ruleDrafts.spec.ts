@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ModelPriceRow, PriceDef, PriceRule } from '@/api/pricing'
-import { draftedRow, rulePatches, sameRule, setDraft, startRule, validRule, withRule, type RuleDrafts } from './ruleDrafts'
+import { draftedRow, rulePatches, sameRule, setRuleDraft, startRule, validRule, withRule, type RuleDrafts } from './ruleDrafts'
 
 const perToken: PriceDef = { mode: 'per_token', config: { p: 3, c: 15, cr: 0.3, cc: 3.75, cc1h: 6 }, expression: '' }
 const perRequest: PriceDef = { mode: 'per_request', config: { price: 0.02 }, expression: '' }
@@ -56,16 +56,16 @@ describe('rules that price alike', () => {
 describe('a row under a rule', () => {
   it('takes its list price from the first rule that applies', () => {
     const group = withRule(row(), 'group', times('2'))
-    expect(group).toMatchObject({ source: 'group', list_price: { config: { p: 6, c: 30 } } })
+    expect(group).toMatchObject({ source: 'group', list_price: { ...perToken, multiplier: '2' } })
     const own = withRule({ ...group, segment_rule: null }, 'segment', custom({ p: 1, c: 8 }))
     expect(own).toMatchObject({ source: 'segment', list_price: { mode: 'per_token', config: { p: 1, c: 8 } } })
-    expect(withRule(own, 'segment', null)).toMatchObject({ source: 'group', list_price: { config: { p: 6 } } })
+    expect(withRule(own, 'segment', null)).toMatchObject({ source: 'group', list_price: { ...perToken, multiplier: '2' } })
     expect(withRule(group, 'group', null)).toMatchObject({ source: 'global', list_price: perToken })
   })
   it('skips a rule that is not in effect, and takes no rule without a global price', () => {
     const stale = { ...custom({ p: 1, c: 8 }), inactive: true }
     const skipped = withRule(row({ segment_rule: stale }), 'group', times('2'))
-    expect(skipped).toMatchObject({ source: 'group', segment_rule: stale, list_price: { config: { p: 6, c: 30 } } })
+    expect(skipped).toMatchObject({ source: 'group', segment_rule: stale, list_price: { ...perToken, multiplier: '2' } })
     expect(withRule(row({ group_rule: stale }), 'segment', null)).toMatchObject({ source: 'global', list_price: perToken })
     expect(withRule(row({ base: null, group_rule: times('2'), list_price: null }), 'segment', null)).toMatchObject({ source: 'global', list_price: null })
   })
@@ -82,15 +82,15 @@ describe('the drafts of a table', () => {
 
   it('keep only the rules that differ from the saved ones', () => {
     let drafts: RuleDrafts = new Map()
-    drafts = setDraft(drafts, saved, times('3'))
-    drafts = setDraft(drafts, fresh, custom({ p: 1, c: 8 }))
+    drafts = setRuleDraft(drafts, saved, times('3'))
+    drafts = setRuleDraft(drafts, fresh, custom({ p: 1, c: 8 }))
     expect([...drafts.keys()]).toEqual(['gpt-4o', 'o3'])
-    drafts = setDraft(drafts, saved, times('2.0'))
-    drafts = setDraft(drafts, fresh, null)
+    drafts = setRuleDraft(drafts, saved, times('2.0'))
+    drafts = setRuleDraft(drafts, fresh, null)
     expect(drafts.size).toBe(0)
   })
   it('become one patch per model, null removing the rule', () => {
-    const drafts = setDraft(setDraft(new Map(), saved, null), fresh, times('1.2'))
+    const drafts = setRuleDraft(setRuleDraft(new Map(), saved, null), fresh, times('1.2'))
     expect(rulePatches(drafts, null)).toEqual([
       { segment_id: null, model: 'gpt-4o', rule: null },
       { segment_id: null, model: 'o3', rule: times('1.2') }

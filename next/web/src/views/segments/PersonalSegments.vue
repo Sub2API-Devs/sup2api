@@ -42,9 +42,14 @@ function changed() {
   emit('changed')
 }
 
-/** The member of a personal segment, as the dialogs take a user. */
+/**
+ * The member of a personal segment, as the dialogs take a user. A caller who
+ * does not read users is told no `user`: the member's id and the segment's
+ * name ("#id" to him) stand in, which is all moving him back takes.
+ */
 function userOf(s: Segment | null): PersonalDialogUser | null {
-  return s?.user ? { ...s.user, segment: s } : null
+  if (!s || s.user_id === undefined) return null
+  return { id: s.user_id, email: s.user?.email ?? s.name, display_name: s.user?.display_name ?? '', segment: s }
 }
 
 // ------------------------------------------------------------------ edit

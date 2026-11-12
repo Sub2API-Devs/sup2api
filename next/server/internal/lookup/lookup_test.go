@@ -113,8 +113,6 @@ func newFixture(t *testing.T) *fixture {
 	f.acctC = f.insert(account, "lk acct c", "disabled", nil, nil)
 	f.insert(account, "lk acct d", "active", f.admin, "2026-01-01T00:00:00Z")
 	f.insert(`INSERT INTO account_groups (account_id, group_id) VALUES ($1, $3), ($2, $3) RETURNING group_id`, f.acctB, f.acctC, f.zeta)
-	// alpha has an account too: a group provides the models of its accounts.
-	f.insert(`INSERT INTO account_groups (account_id, group_id) VALUES ($1, $2) RETURNING group_id`, f.acctA, f.alpha)
 
 	proxy := `INSERT INTO proxies (name, protocol, host, port, created_by) VALUES ($1, 'http', 'proxy.example', 3128, $2) RETURNING id`
 	f.proxyA = f.insert(proxy, "lk proxy a", f.alice)
@@ -378,8 +376,9 @@ func TestLookupAccessKey(t *testing.T) {
 }
 
 // mine=true is defined by the self-service lists (CONTRACTS §96.3), whose
-// conditions entities.go repeats: the groups are those of GET /me/groups, the
-// models those GET /me/prices lists for any of these groups.
+// conditions entities.go repeats: the groups are those of GET /me/groups. The
+// models are a superset of what GET /me/prices lists for these groups: a
+// group may allow a model that none of its accounts provides.
 func TestLookupMineIsTheSelfServiceRange(t *testing.T) {
 	f := newFixture(t)
 	alice := strconv.FormatInt(f.alice, 10)
@@ -392,10 +391,12 @@ func TestLookupMineIsTheSelfServiceRange(t *testing.T) {
 		}
 	}
 	require.Len(t, groups, 2)
-	require.Len(t, models, 2)
+	require.Equal(t, []string{"lk-claude-a"}, models)
 
 	got, _ := found(t, f.get(f.alice, "groups?mine=true"))
 	require.ElementsMatch(t, names(groups), got)
 	got, _ = found(t, f.get(f.alice, "models?mine=true"))
-	require.ElementsMatch(t, models, got)
+	require.Subset(t, got, models)
+	// alpha allows lk-gemini-1 but has no account: its prices do not list it.
+	require.Contains(t, got, "lk-gemini-1")
 }

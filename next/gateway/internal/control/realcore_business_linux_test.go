@@ -120,10 +120,14 @@ func (c *apiClient) ok(method, path string, body any, headers ...map[string]stri
 }
 
 // grantGroup lets user use a private group, through a personal segment of
-// the user (CONTRACTS §97).
+// the user (CONTRACTS §97); one the user has already is kept.
 func (c *apiClient) grantGroup(user, group int64) {
 	c.t.Helper()
-	segment := c.ok(http.MethodPost, fmt.Sprintf("/users/%d/personal-segment", user), map[string]any{"copy": false}).id("data.id")
+	current := c.ok(http.MethodGet, fmt.Sprintf("/users/%d", user), nil)
+	segment := current.id("data.segment.id")
+	if current.str("data.segment.kind") != "personal" {
+		segment = c.ok(http.MethodPost, fmt.Sprintf("/users/%d/personal-segment", user), map[string]any{"copy": false}).id("data.id")
+	}
 	c.ok(http.MethodPut, fmt.Sprintf("/segments/%d/groups", segment), map[string]any{"items": []map[string]any{{"group_id": group, "granted": true}}})
 }
 

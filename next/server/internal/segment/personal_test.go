@@ -67,6 +67,22 @@ func TestMakePersonalRace(t *testing.T) {
 	require.Equal(t, int64(1), e.id(`SELECT count(*) FROM segments WHERE kind = 'personal'`))
 }
 
+// Moving one personal user back twice at once, to different segments: one
+// request does it, the other finds no personal segment left.
+func TestRemovePersonalRace(t *testing.T) {
+	e := setup(t)
+	targets := []string{"", path("?to=%d", e.segment("VIP", "1"))}
+	for round := range 10 {
+		e.personal(e.plain)
+		codes := concurrently(4, func(i int) int {
+			return e.do(e.admin, "DELETE", path("/users/%d/personal-segment%s", e.plain, targets[i%2]), nil).code
+		})
+		require.Equal(t, 1, count(codes, 204), "round %d: %v", round, codes)
+		require.Equal(t, 3, count(codes, 404), "round %d: %v", round, codes)
+		require.Zero(t, e.id(`SELECT count(*) FROM segments WHERE kind = 'personal'`))
+	}
+}
+
 func TestRemovePersonal(t *testing.T) {
 	e := setup(t)
 	vip, def := e.segment("VIP", "1"), e.defaultSegment()

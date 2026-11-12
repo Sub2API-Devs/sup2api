@@ -6,37 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
-
-// priceAmounts prices a pending charge as settlement does, without a
-// database: the billing module's Quote reads none.
-func priceAmounts(p *pending) (amounts, BillingDetail, string, error) {
-	s := &Service{quoter: billing.New(nil, nil, nil, nil, nil)}
-	return s.priceOf(context.Background(), p)
-}
-
-// priceOf is priceAmounts for the tests that read the charge alone.
-func priceOf(p *pending) (decimal.Decimal, BillingDetail, string, error) {
-	cost, detail, hash, err := priceAmounts(p)
-	return cost.total, detail, hash, err
-}
-
-func dec(s string) decimal.Decimal { return decimal.RequireFromString(s) }
-
-func decPtr(s string) *decimal.Decimal {
-	d := dec(s)
-	return &d
-}
-
-func requireDec(t *testing.T, want string, got decimal.Decimal, msg string) {
-	t.Helper()
-	require.True(t, dec(want).Equal(got), "%s = %s, want %s", msg, got, want)
-}
 
 // The three amounts of one priced usage (CONTRACTS §97): a multiplier rule
 // scales the list cost and leaves the base cost and the breakdown at the

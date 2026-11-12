@@ -2,7 +2,9 @@
 // rule may be saved, and the unsaved rules of a model price table: what its
 // rows show meanwhile and what saving sends.
 import type { ListedPriceRule, ModelPriceRow, PriceDef, PriceRule, PriceRulePatch, PriceSource } from '@/api/pricing'
-import { RULE_TOKEN_VARS, applyRule, priceCells, validRate } from './pricingFormat'
+import { TOKEN_VARS } from '@/views/prices/priceExpr'
+import { applyRule, priceCells, sameRate, validRate } from './pricingFormat'
+import { withDraft } from './drafts'
 
 /** The rule of a row a table edits: the group's own, or that of the segment asked for. */
 export type RuleScope = 'group' | 'segment'
@@ -15,7 +17,7 @@ export const ruleOf = (row: ModelPriceRow, scope: RuleScope): ListedPriceRule | 
  * (CUSTOM_PRICES in mock/pricing.ts stands in for it): keep the two alike.
  */
 export function customFields(mode: 'per_request' | 'per_token'): { keys: readonly string[]; required: number } {
-  return mode === 'per_request' ? { keys: ['price'], required: 1 } : { keys: RULE_TOKEN_VARS, required: 2 }
+  return mode === 'per_request' ? { keys: ['price'], required: 1 } : { keys: TOKEN_VARS, required: 2 }
 }
 
 /** The rule a mode starts from: ×1, or the global price as a price of its own. An expression price takes a multiplier only. */
@@ -35,8 +37,6 @@ export function validRule(rule: PriceRule | null): boolean {
   const { keys, required } = customFields(rule.mode)
   return keys.every((k, i) => isPrice(rule.config[k]) || (i >= required && (rule.config[k] ?? null) === null))
 }
-
-const sameRate = (a: string, b: string) => (validRate(a) && validRate(b) ? Number(a) === Number(b) : a === b)
 
 /** Rules that price alike: nothing to save between them. */
 export function sameRule(a: PriceRule | null, b: PriceRule | null): boolean {
@@ -74,12 +74,9 @@ export function draftedRow(row: ModelPriceRow, scope: RuleScope, drafts: RuleDra
   return { ...withRule(row, scope, drafts.get(row.model) ?? null), saved, dirty: true }
 }
 
-/** The drafts with `rule` on `row`; a rule that prices like the saved one is no draft. */
-export function setDraft(drafts: RuleDrafts, row: Pick<DraftedRow, 'model' | 'saved'>, rule: PriceRule | null): RuleDrafts {
-  const next = new Map(drafts)
-  if (sameRule(rule, row.saved)) next.delete(row.model)
-  else next.set(row.model, rule)
-  return next
+/** The drafts with `rule` as the rule of `row`; a rule that prices like the saved one is no draft. */
+export function setRuleDraft(drafts: RuleDrafts, row: Pick<DraftedRow, 'model' | 'saved'>, rule: PriceRule | null): RuleDrafts {
+  return withDraft(drafts, row.model, sameRule(rule, row.saved) ? undefined : rule)
 }
 
 /** What saving the drafts sends; `segmentId` null = the group's own rules. */

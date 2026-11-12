@@ -11,6 +11,11 @@
 -- working on the new schema (they read user_groups and
 -- groups.rate_multiplier, both untouched), so an upgrade may be rolled back
 -- without touching the database.
+
+-- Fail fast when a lock is not to be had, rather than queue for it: whoever
+-- reads users would queue behind this migration in turn.
+SET LOCAL lock_timeout = '10s';
+
 CREATE TABLE IF NOT EXISTS segments (
     id          bigserial PRIMARY KEY,
     kind        varchar(20)   NOT NULL DEFAULT 'named' CHECK (kind IN ('named', 'personal')),
@@ -75,11 +80,13 @@ CREATE TABLE IF NOT EXISTS price_rules (
         OR (kind = 'custom' AND multiplier IS NULL AND mode IS NOT NULL AND config IS NOT NULL AND expression <> ''))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS price_rules_group_uq ON price_rules (group_id, model) WHERE segment_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS price_rules_segment_uq ON price_rules (group_id, segment_id, model) WHERE segment_id IS NOT NULL;
+-- Over every row, not only those of a segment (NULLs are distinct, so the
+-- rules of the group itself are left to the index above): it is also the
+-- index that finds the rules of a group.
+CREATE UNIQUE INDEX IF NOT EXISTS price_rules_segment_uq ON price_rules (group_id, segment_id, model);
 CREATE INDEX IF NOT EXISTS price_rules_segment_idx ON price_rules (segment_id) WHERE segment_id IS NOT NULL;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS segment_id bigint REFERENCES segments(id);
-CREATE INDEX IF NOT EXISTS users_segment_idx ON users (segment_id);
 
 -- Backfill, once: only users without a segment are touched, so a re-run (or
 -- a run after administrators moved users around) changes nothing.
@@ -109,6 +116,9 @@ ON CONFLICT (segment_id, group_id) DO NOTHING;
 UPDATE users u
 SET segment_id = COALESCE((SELECT s.id FROM segments s WHERE s.kind = 'personal' AND s.user_id = u.id), default_segment_id())
 WHERE u.segment_id IS NULL;
+
+-- After the backfill: built once, not kept up to date row by row.
+CREATE INDEX IF NOT EXISTS users_segment_idx ON users (segment_id);
 
 ALTER TABLE users ALTER COLUMN segment_id SET DEFAULT default_segment_id();
 ALTER TABLE users ALTER COLUMN segment_id SET NOT NULL;

@@ -26,7 +26,7 @@ export default {
   multiplierHint: '实付 = 标价 × 倍率，例如 0.8 表示八折。没有专属倍率的用户组按它乘全场折扣计费。',
   conversionDefault: '默认（允许）',
   conversionHint: '本组账号的请求经协议转换会丢失内容时如何处理；账号自己的设置优先。允许：照常服务并记录丢失；安全：工具会丢失时跳过账号；严格：有任何丢失都跳过账号。',
-  multiplierInvalid: '请输入非负数',
+  multiplierInvalid: '请输入非负数，小于 1000000，最多 4 位小数',
   modelAllowlist: '模型白名单',
   allowlistHint: '留空表示不限。支持通配符，例如 claude-*。',
   allowlistPlaceholder: '输入模型匹配规则后按回车',
@@ -89,16 +89,12 @@ export default {
     groupTarget: '分组内定价（所有人）',
     namedTargets: '用户组',
     notGrantedOption: '{name}（未授权）',
-    groupScope: '分组内定价对所有使用这个分组的人生效，没单独定价的模型跟随全局价格。实付 = 标价 × 各自的倍率（分组默认 {rate}）。',
+    groupScope: '分组内定价对所有使用这个分组的人生效，没单独定价的模型跟随全局价。实付 = 标价 × 各自的倍率（分组默认 {rate}）。',
     segmentScope: '正在给「{name}」定专属价：只对它生效，没设的模型跟随分组内定价。',
     segmentScopeReadonly: '「{name}」的专属价：只对它生效，没设的模型跟随分组内定价。',
     segmentRate: '它在本分组的实际倍率是 {rate}，实付 = 标价 {rate}。',
     segmentNotGranted: '它还没被授权使用这个私有分组，专属价要等授权后才用得上。',
     emptyNew: '先保存分组并加入账号后再定价。',
-    unsavedTitle: '定价改动还没保存',
-    unsavedText: '当前对象的定价有改动还没保存。切换前先保存，还是放弃这些改动？',
-    unsavedStay: '继续编辑',
-    unsavedDiscard: '放弃改动',
     unsavedSave: '保存并切换'
   }
 }

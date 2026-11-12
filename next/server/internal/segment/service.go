@@ -65,18 +65,12 @@ func userNotFound(ctx context.Context) error {
 	return core.ErrNotFound.WithMessage(t(ctx, "user not found", "用户不存在"))
 }
 
-// showUsers reports whether the caller may read users: only then does a
-// personal segment go by its user's email (Masked).
-func (s *Service) showUsers(ctx context.Context) (bool, error) {
-	uid, _ := core.UserID(ctx)
-	return s.authz.Can(ctx, uid, "user:read")
-}
-
 // tx runs fn in a transaction. A row the writes refer to that was deleted
-// meanwhile (a foreign key violation) is a conflict, not a failure.
+// meanwhile (a foreign key violation) is a conflict, not a failure, and so is
+// a deadlock with another writer, should the lock order leave one possible.
 func (s *Service) tx(ctx context.Context, fn func(tx pgx.Tx) error) error {
 	err := s.db.Tx(ctx, fn)
-	if store.IsForeignKeyViolation(err) {
+	if store.IsForeignKeyViolation(err) || store.IsDeadlock(err) {
 		return core.ErrConflict.WithMessage(t(ctx, "the data changed meanwhile, try again", "数据已被其他操作修改，请重试")).WithCause(err)
 	}
 	return err

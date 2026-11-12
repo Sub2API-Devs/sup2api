@@ -211,6 +211,6 @@ function runRowAction(key: string, p: Price) {
       </template>
     </STable>
 
-    <PriceSimulatorModal v-model:open="simulator.open" :preset="simulator.preset" />
+    <PriceSimulatorModal v-if="canSimulate" v-model:open="simulator.open" :preset="simulator.preset" />
   </div>
 </template>

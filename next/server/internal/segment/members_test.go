@@ -78,3 +78,60 @@ func TestSegmentDeleteRace(t *testing.T) {
 		require.Zero(t, e.id(`SELECT count(*) FROM segments s JOIN users u ON u.id = s.user_id WHERE u.segment_id <> s.id`))
 	}
 }
+
+// Every writer of the package at once, on the same users, segments and
+// groups: none fails, and what they leave is consistent.
+func TestMixedWritersRace(t *testing.T) {
+	e := setup(t)
+	groups := []int64{e.group("g1", "restricted", "1"), e.group("g2", "restricted", "2"), e.group("g3", "public", "1")}
+	users := make([]int64, 12)
+	for i := range users {
+		users[i] = e.user(path("s%d@x.com", i))
+	}
+	call := func(method, path string, body any) func() int {
+		return func() int { return e.do(e.admin, method, path, body).code }
+	}
+	for round := range 25 {
+		a, b := e.segment(path("a %d", round), "0.9"), e.segment(path("b %d", round), "0.8")
+		e.exec(`UPDATE users SET segment_id = $1 WHERE id = ANY($2) AND segment_id IN (SELECT id FROM segments WHERE kind = 'named')`, a, users[:6])
+		e.pair(a, groups[0], true, "0.5")
+		e.rule(groups[0], a, "m1")
+		calls := []func() int{
+			call("DELETE", path("/segments/%d", a), nil),
+			call("DELETE", path("/segments/%d", b), nil),
+			call("POST", path("/segments/%d/members", b), map[string]any{"user_ids": users}),
+			call("POST", path("/segments/%d/members", a), map[string]any{"user_ids": users}),
+			call("POST", path("/segments/%d/members", e.defaultSegment()), map[string]any{"user_ids": users[3:9]}),
+			call("GET", "/segments?kind=personal", nil),
+		}
+		for _, u := range users[:8] {
+			calls = append(calls,
+				call("POST", path("/users/%d/personal-segment", u), map[string]any{"copy": true}),
+				call("DELETE", path("/users/%d/personal-segment?to=%d", u, b), nil))
+		}
+		for _, g := range groups {
+			calls = append(calls, call("PUT", path("/groups/%d/segments", g), map[string]any{"items": []any{
+				map[string]any{"segment_id": b, "granted": true, "rate_override": "0.3"},
+				map[string]any{"segment_id": a, "granted": false, "rate_override": nil},
+			}}))
+		}
+		for _, s := range []int64{a, b} {
+			calls = append(calls,
+				call("GET", path("/segments/%d/groups", s), nil),
+				call("PUT", path("/segments/%d/groups", s), map[string]any{"items": []any{
+					map[string]any{"group_id": groups[2], "rate_override": "0.7"},
+					map[string]any{"group_id": groups[0], "granted": true},
+					map[string]any{"group_id": groups[1], "granted": false, "rate_override": nil},
+				}}))
+		}
+		codes := concurrently(len(calls), func(i int) int { return calls[i]() })
+		for _, code := range codes {
+			require.Less(t, code, 500, "round %d: %v", round, codes)
+		}
+		require.Zero(t, e.id(`SELECT count(*) FROM segments s JOIN users u ON u.id = s.user_id WHERE u.segment_id <> s.id`),
+			"a personal segment without its user")
+		require.Zero(t, e.id(`SELECT count(*) FROM users u JOIN segments s ON s.id = u.segment_id WHERE s.kind = 'personal' AND s.user_id <> u.id`),
+			"a user in the personal segment of another")
+		require.Zero(t, e.id(`SELECT count(*) FROM segment_groups WHERE NOT granted AND rate_override IS NULL`), "a pair that says nothing")
+	}
+}

@@ -42,19 +42,20 @@ const (
 	PriceRuleCustom     = "custom"     // a price of its own
 )
 
-// RateScale is the number of decimals a rate keeps and MaxRate the largest
-// one, as usage_logs.rate_multiplier stores it (numeric(10,4)): a settlement
-// retry reads the rate back from that column and must find the number the
-// request was priced with.
-const RateScale = 4
+// rateScale is the number of decimals a rate keeps, as
+// usage_logs.rate_multiplier stores it (numeric(10,4)): a settlement retry
+// reads the rate back from that column and must find the number the request
+// was priced with.
+const rateScale = 4
 
-var MaxRate = decimal.New(9999999999, -RateScale)
+// maxRate is the largest rate that column holds: 999999.9999.
+var maxRate = decimal.New(9999999999, -rateScale)
 
 // ParseRate reads a rate, a discount or a multiplier as a client sends it: a
-// decimal from 0 to MaxRate with RateScale decimals at most.
+// decimal from 0 to 999999.9999 with 4 decimals at most.
 func ParseRate(s string) (decimal.Decimal, bool) {
 	d, err := decimal.NewFromString(strings.TrimSpace(s))
-	return d, err == nil && !d.IsNegative() && !d.GreaterThan(MaxRate) && d.Exponent() >= -RateScale
+	return d, err == nil && !d.IsNegative() && !d.GreaterThan(maxRate) && d.Exponent() >= -rateScale
 }
 
 // SegmentRef names a segment where other rows refer to it. Name of a personal
@@ -64,6 +65,12 @@ type SegmentRef struct {
 	Kind   string `json:"kind"`
 	Name   string `json:"name"`
 	UserID *int64 `json:"user_id,omitempty"`
+}
+
+// GroupRef names a group where other rows refer to it.
+type GroupRef struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // SegmentRate is the rate a segment pays in a group and where it comes from:
@@ -76,7 +83,7 @@ func SegmentRate(groupDefault, discount decimal.Decimal, override *decimal.Decim
 	if discount.Equal(decimal.NewFromInt(1)) {
 		return groupDefault, RateSourceGroup
 	}
-	return decimal.Min(groupDefault.Mul(discount).Round(RateScale), MaxRate), RateSourceDiscount
+	return decimal.Min(groupDefault.Mul(discount).Round(rateScale), maxRate), RateSourceDiscount
 }
 
 // PriceQuery asks for the list price of a model. GroupID and SegmentID select

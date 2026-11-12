@@ -3,9 +3,9 @@
 // its segments, one segment lists its groups; both edit the same settings, so
 // the rules are here once. Pure: an editor only holds the state.
 import type { Group } from '@/api/types'
-import type { EffectiveRate, Segment, SegmentGroupPatch, SegmentGroupSetting } from '@/api/pricing'
-import { num } from '@/views/prices/priceExpr'
-import { inheritedRate, validRate } from './pricingFormat'
+import type { Segment, SegmentGroupPatch, SegmentGroupSetting } from '@/api/pricing'
+import { effectiveRate, sameRate, validRate } from './pricingFormat'
+import { withDraft } from './drafts'
 
 /** The end of a setting the rows of an editor differ in: the segments of one group, or the groups of one segment. */
 export type SettingSide = 'segment' | 'group'
@@ -35,16 +35,6 @@ export interface DraftedSetting extends SegmentGroupSetting {
 /** An override that may be saved: none, or a rate. */
 export const validOverride = (v: string | null): boolean => v === null || validRate(v)
 
-/**
- * The rate that applies, first hit wins: the override, the group's default
- * times the discount, the group's default. An override still being typed
- * gives no value.
- */
-export function effectiveRate(base: Pick<EffectiveRate, 'group_default' | 'discount'>, override: string | null): EffectiveRate {
-  if (override !== null) return { ...base, value: validRate(override) ? override : '', source: 'segment' }
-  return { ...base, value: String(inheritedRate(base)), source: num(base.discount, 1) === 1 ? 'group' : 'discount' }
-}
-
 /** A rate of the form once it is one, the saved one until then. */
 const rated = (typed: string | undefined, saved: string) => (typed !== undefined && validRate(typed) ? typed.trim() : saved)
 
@@ -67,18 +57,13 @@ export function draftedSetting(side: SettingSide, saved: SegmentGroupSetting, dr
   }
 }
 
-const sameOverride = (a: string | null, b: string | null) => (validRate(a) && validRate(b) ? Number(a) === Number(b) : a === b)
-
-/** The drafts with `change` on `row`; what reads like the saved setting is no draft. */
-export function setDraft(drafts: SettingDrafts, row: Pick<DraftedSetting, 'id' | 'saved'>, change: SettingDraft): SettingDrafts {
+/** The drafts with `change` added to what `row` changes already; a field that reads like the saved setting again is none, and a row without any is no draft. */
+export function mergeSettingDraft(drafts: SettingDrafts, row: Pick<DraftedSetting, 'id' | 'saved'>, change: SettingDraft): SettingDrafts {
   const merged = { ...drafts.get(row.id), ...change }
   const draft: SettingDraft = {}
   if (merged.granted !== undefined && merged.granted !== row.saved.granted) draft.granted = merged.granted
-  if (merged.rate_override !== undefined && !sameOverride(merged.rate_override, row.saved.rate_override)) draft.rate_override = merged.rate_override
-  const next = new Map(drafts)
-  if (Object.keys(draft).length) next.set(row.id, draft)
-  else next.delete(row.id)
-  return next
+  if (merged.rate_override !== undefined && !sameRate(merged.rate_override, row.saved.rate_override)) draft.rate_override = merged.rate_override
+  return withDraft(drafts, row.id, Object.keys(draft).length ? draft : undefined)
 }
 
 /** What saving the drafts sends: per changed row, only what changed (PUT /groups/:id/segments, PUT /segments/:id/groups). */

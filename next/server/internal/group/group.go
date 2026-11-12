@@ -197,11 +197,17 @@ func (s *Service) fillPlatforms(ctx context.Context, gs []*Group) error {
 	return nil
 }
 
-func (s *Service) load(ctx context.Context, id int64) (*Group, error) {
+// loadRow reads the row of a group, without what fill adds.
+func (s *Service) loadRow(ctx context.Context, id int64) (*Group, error) {
 	g, err := scanGroup(s.db.Pool.QueryRow(ctx, selectGroup("$2")+` WHERE g.id = $1`, id, core.ActivePluginKeys(s.reg)))
 	if store.IsNoRows(err) {
 		return nil, core.ErrNotFound.WithMessage(t(ctx, "group not found", "分组不存在"))
 	}
+	return g, err
+}
+
+func (s *Service) load(ctx context.Context, id int64) (*Group, error) {
+	g, err := s.loadRow(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +408,7 @@ func (s *Service) update(c *gin.Context) {
 		httpapi.Fail(c, core.ErrNotFound.WithMessage(t(ctx, "group not found", "分组不存在")))
 		return
 	}
-	s.dropKeyCache(ctx, `SELECT key_hash FROM api_keys WHERE group_id = $1`, id)
+	s.dropKeyCache(ctx, id)
 	g, err := s.load(ctx, id)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -520,22 +526,28 @@ func (s *Service) myGroups(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	for i := range out {
-		g := &out[i]
+	// A group deleted since it was listed has no terms: it is left out.
+	mine := out[:0]
+	for _, g := range out {
+		tm, ok := terms[g.ID]
+		if !ok {
+			continue
+		}
 		g.Platforms = ps[g.ID]
-		g.EffectiveRate, g.RateSource = terms[g.ID].Rate, terms[g.ID].RateSource
+		g.EffectiveRate, g.RateSource = tm.Rate, tm.RateSource
+		mine = append(mine, g)
 	}
-	httpapi.OK(c, out)
+	httpapi.OK(c, mine)
 }
 
 // dropKeyCache deletes cached API key principals ("apikey:{sha256}", see
-// CONTRACTS §7) for the keys selected by query, so group/user changes apply
+// CONTRACTS §7) for the keys of the group, so a change of the group applies
 // immediately instead of after the cache TTL.
-func (s *Service) dropKeyCache(ctx context.Context, query string, arg int64) {
+func (s *Service) dropKeyCache(ctx context.Context, groupID int64) {
 	if s.rdb == nil {
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, query, arg)
+	rows, err := s.db.Pool.Query(ctx, `SELECT key_hash FROM api_keys WHERE group_id = $1`, groupID)
 	if err != nil {
 		slog.WarnContext(ctx, "group: list api keys for cache drop", "err", err)
 		return

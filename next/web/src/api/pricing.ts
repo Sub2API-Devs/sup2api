@@ -126,6 +126,12 @@ export interface PriceDef {
   mode: PriceMode
   config: Record<string, any> | null
   expression: string
+  /**
+   * Only on the list price a multiplier rule gives, 0 and 1 included: the
+   * list price is this price, which is the global one as it is, times it.
+   * A global price and a custom price have none.
+   */
+  multiplier?: Money
 }
 
 /** One model a group provides, with the rules on it. */
@@ -138,7 +144,7 @@ export interface ModelPriceRow {
   segment_rule?: ListedPriceRule | null
   /** Segments with a rule of their own on this model (asked without a segment). */
   segment_rule_count?: number
-  /** The price after the first rule in effect; null without a global price. */
+  /** The price after the first rule in effect (a multiplier rule: the global price with `multiplier`); null without a global price. */
   list_price: PriceDef | null
   source: PriceSource
 }
@@ -159,13 +165,13 @@ export interface PriceRulePatch {
   rule: PriceRule | null
 }
 
-/** POST /pricing/quote: what a user (or any member of a segment) pays for a sample call. */
+/** POST /pricing/quote: what a user (or any member of a segment) pays for a sample call. Exactly one of `user_id` and `segment_id` is given. */
 export interface PricingQuoteRequest {
   user_id?: number
   segment_id?: number
   group_id: number
   model: string
-  usage: { p: number; c: number; cr?: number; cc?: number }
+  usage: { p: number; c: number; cr?: number; cc?: number; cc1h?: number }
 }
 
 export interface PricingQuote {
@@ -175,8 +181,8 @@ export interface PricingQuote {
   base: PriceDef | null
   list_price: PriceDef | null
   price_source: PriceSource
-  /** The three levels of the list price, as configured; the one in `price_source` applies. */
-  price_levels: { segment: PriceRule | null; group: PriceRule | null }
+  /** The two rule levels of the list price, as configured; the one in `price_source` applies, the global price when it says so. */
+  price_levels: { segment: ListedPriceRule | null; group: ListedPriceRule | null }
   rate: EffectiveRate
   /** The override of this segment in this group, if any. */
   rate_override: Money | null

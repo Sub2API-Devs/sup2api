@@ -917,10 +917,7 @@ func (s *Service) loadReserved(ctx context.Context, usageLogID int64) (*reserved
 		       u.input_tokens, u.output_tokens, u.cache_read_tokens, u.cache_creation_tokens,
 		       u.cache_creation_1h_tokens, u.metrics, u.latency_ms, u.created_at, u.rate_multiplier,
 		       COALESCE(u.price_id, 0), u.billing_mode, u.billing_detail, u.billing_status, u.total_cost,
-		       COALESCE(h.expression, mp.expression, '')
-		FROM usage_logs u
-		LEFT JOIN model_price_history h ON h.expr_hash = u.expr_hash
-		LEFT JOIN model_prices mp ON mp.id = u.price_id AND h.expr_hash IS NULL
+		       COALESCE(h.expression, mp.expression, '')`+frozenPriceJoins+`
 		WHERE u.id = $1`, usageLogID).
 		Scan(&p.RequestID, &p.UserID, &p.APIKeyID, &p.GroupID, &p.AccountID, &p.PluginKey, &p.Platform,
 			&p.Protocol, &p.AccountType, &p.UpstreamProtocol, &p.Model, &p.Success, &p.StatusCode, &p.ErrorType,

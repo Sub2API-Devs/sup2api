@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"maps"
@@ -24,30 +25,13 @@ func (s *Service) registerPricingRoutes(r *httpapi.Router) {
 	r.Perm("POST", "/pricing/quote", "price:read", s.quotePricing)
 }
 
-// showsUsers reports whether the caller may read users: only then is a
-// personal segment named by its user's email (segment.Masked).
-func (s *Service) showsUsers(ctx context.Context) bool {
-	if s.Authz == nil {
-		return false
-	}
-	uid, _ := core.UserID(ctx)
-	ok, err := s.Authz.Can(ctx, uid, "user:read")
-	return err == nil && ok
-}
-
-// GroupRef names a group where a pricing row refers to it.
-type GroupRef struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-}
-
 // pricedGroup is what pricing reads of a group.
 type pricedGroup struct {
 	core.GroupInfo
 	public bool
 }
 
-func (g pricedGroup) ref() GroupRef { return GroupRef{ID: g.ID, Name: g.Name} }
+func (g pricedGroup) ref() core.GroupRef { return core.GroupRef{ID: g.ID, Name: g.Name} }
 
 // loadGroups reads the groups cond selects.
 func loadGroups(ctx context.Context, q store.Querier, cond string, args ...any) ([]pricedGroup, error) {
@@ -96,22 +80,13 @@ func (c catalog) base(model string) *PriceDef {
 }
 
 // offeredModels returns the models each of the groups provides
-// (group.Models.Offered), by group id.
+// (group.OfferedModels), by group id.
 func offeredModels(ctx context.Context, q store.Querier, groups []pricedGroup, prices catalog) (map[int64][]string, error) {
-	ids := make([]int64, len(groups))
+	infos := make([]core.GroupInfo, len(groups))
 	for i, g := range groups {
-		ids[i] = g.ID
+		infos[i] = g.GroupInfo
 	}
-	provided, err := group.ProvidedModels(ctx, q, ids)
-	if err != nil {
-		return nil, err
-	}
-	priced := prices.models()
-	out := make(map[int64][]string, len(groups))
-	for _, g := range groups {
-		out[g.ID] = provided[g.ID].Offered(priced, g.GroupInfo)
-	}
-	return out, nil
+	return group.OfferedModels(ctx, q, infos, prices.models())
 }
 
 // groupPrices is what the models of one group are priced against: the group,
@@ -161,23 +136,22 @@ type ModelPriceRow struct {
 }
 
 // row prices model for the segment of the levels: its global price (nil =
-// none), both rules as configured and the list price after the first that
-// applies. Without a global price no rule applies.
+// none), the group's rule as configured and the list price after the first
+// rule that applies. Without a global price no rule applies. What it says of
+// the segments is the caller's to add.
 func (l ruleLevels) row(model string, base *PriceDef) ModelPriceRow {
-	segmentRule := l.segment.view(base)
-	row := ModelPriceRow{Model: model, Base: base, GroupRule: l.group.view(base), SegmentRule: &segmentRule, Source: core.PriceSourceGlobal}
+	row := ModelPriceRow{Model: model, Base: base, GroupRule: l.group.view(base), Source: core.PriceSourceGlobal}
 	if base == nil {
 		return row
 	}
-	rule, source := l.applied(base.Mode)
-	price, _ := listPrice(*base, rule)
+	price, source := l.listPrice(*base)
 	row.ListPrice, row.Source = &price, source
 	return row
 }
 
 // GroupModelPrices is the response of GET and PUT /groups/:id/model-prices.
 type GroupModelPrices struct {
-	Group   GroupRef         `json:"group"`
+	Group   core.GroupRef    `json:"group"`
 	Segment *core.SegmentRef `json:"segment,omitempty"`
 	// Rate is the rate of the segment asked for, else the group's default.
 	Rate   segment.EffectiveRate `json:"rate"`
@@ -231,10 +205,14 @@ func (gp *groupPrices) fill(ctx context.Context, q store.Querier, out *GroupMode
 	out.Models = make([]ModelPriceRow, 0, len(gp.models))
 	for _, model := range gp.models {
 		on.Model = model
-		row := rules.levels(on).row(model, gp.prices.base(model))
+		base, levels := gp.prices.base(model), rules.levels(on)
+		row := levels.row(model, base)
 		if out.Segment == nil {
 			count := ofSegments[model]
-			row.SegmentRule, row.SegmentRuleCount = nil, &count
+			row.SegmentRuleCount = &count
+		} else {
+			rule := levels.segment.view(base)
+			row.SegmentRule = &rule
 		}
 		out.Models = append(out.Models, row)
 	}
@@ -266,12 +244,17 @@ func (s *Service) showGroupPrices(c *gin.Context) {
 	if !ok {
 		return
 	}
+	showUsers, err := segment.ShowUsers(ctx, s.Authz)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	gp, err := loadGroupPrices(ctx, s.db.Pool, ` WHERE g.id = $1`, groupID)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	out, err := gp.scope(ctx, s.db.Pool, segmentID, s.showsUsers(ctx))
+	out, err := gp.scope(ctx, s.db.Pool, segmentID, showUsers)
 	if err == nil {
 		err = gp.fill(ctx, s.db.Pool, out)
 	}
@@ -352,9 +335,13 @@ func (s *Service) saveGroupPrices(c *gin.Context) {
 		return
 	}
 	uid, _ := core.UserID(ctx)
-	showUsers := s.showsUsers(ctx)
+	showUsers, err := segment.ShowUsers(ctx, s.Authz)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	var out *GroupModelPrices
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
 		gp, err := loadGroupPrices(ctx, tx, ` WHERE g.id = $1`, groupID)
 		if err != nil {
 			return err
@@ -366,10 +353,8 @@ func (s *Service) saveGroupPrices(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		for _, change := range changes {
-			if err := change.apply(ctx, tx, uid); err != nil {
-				return err
-			}
+		if err := applyChanges(ctx, tx, changes, uid); err != nil {
+			return err
 		}
 		return gp.fill(ctx, tx, out)
 	})
@@ -385,9 +370,23 @@ func (s *Service) saveGroupPrices(c *gin.Context) {
 	httpapi.OK(c, out)
 }
 
-func (ch ruleChange) apply(ctx context.Context, tx pgx.Tx, updatedBy int64) error {
-	if ch.rule == nil {
-		return deleteRule(ctx, tx, ch.on)
+// applyChanges writes the changes in one round trip. They go in the order of
+// what they are on, whatever order the request gave them in: two requests
+// that change the same rules then lock them in the same order, and neither
+// waits for the other in a circle.
+func applyChanges(ctx context.Context, tx pgx.Tx, changes []ruleChange, updatedBy int64) error {
+	slices.SortStableFunc(changes, func(a, b ruleChange) int {
+		return cmp.Or(cmp.Compare(a.on.SegmentID, b.on.SegmentID), cmp.Compare(a.on.Model, b.on.Model))
+	})
+	b := &pgx.Batch{}
+	for _, ch := range changes {
+		if ch.rule == nil {
+			queueDelete(b, ch.on)
+			continue
+		}
+		if err := queueSave(b, ch.on, ch.rule, updatedBy); err != nil {
+			return err
+		}
 	}
-	return saveRule(ctx, tx, ch.on, ch.rule, updatedBy)
+	return tx.SendBatch(ctx, b).Close()
 }

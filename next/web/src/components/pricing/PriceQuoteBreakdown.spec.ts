@@ -54,7 +54,7 @@ describe('price quote breakdown', () => {
 
   it('says that a model without a global price cannot be billed, in place of a sum of zero', () => {
     const w = render({ base: null, list_price: null, list_cost: '0', cost: '0' })
-    expect(w.get('[data-testid="price-quote-unpriced"]').text()).toContain('这个模型还没有全局价格，无法计费')
+    expect(w.get('[data-testid="price-quote-unpriced"]').text()).toContain('这个模型还没有全局价，无法计费')
     expect(w.find('[data-testid="price-quote-paid"]').exists()).toBe(false)
   })
 })

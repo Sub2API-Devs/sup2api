@@ -12,10 +12,10 @@ function render(modelValue: string | null, rate = { group_default: '1.2', discou
 
 describe('rate override field', () => {
   it('follows the group default times the discount while empty', () => {
-    const { w, input, source } = render(null)
+    const { input, source } = render(null)
     expect(input.attributes('placeholder')).toBe('Follows ×1.08')
     expect(source()).toBe('Group default ×1.2 × discount ×0.9')
-    expect(w.vm.valid).toBe(true)
+    expect(input.attributes('aria-invalid')).toBeUndefined()
   })
   it('names the group default alone without a discount', () => {
     expect(render(null, { group_default: '1.2', discount: '1' }).source()).toBe('Group default ×1.2')
@@ -30,9 +30,8 @@ describe('rate override field', () => {
     expect(w.emitted('update:modelValue')?.[1]).toEqual([null])
   })
   it('marks a value that is not a rate', () => {
-    const { w, input, source } = render('abc')
+    const { input, source } = render('abc')
     expect(input.attributes('aria-invalid')).toBe('true')
     expect(source()).toBe('Enter a number from 0 to below 1000000, up to 4 decimals')
-    expect(w.vm.valid).toBe(false)
   })
 })

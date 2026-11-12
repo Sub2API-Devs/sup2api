@@ -14,7 +14,7 @@ const { t } = useI18n()
 
 const lines = computed(() => {
   const { price_rule_count: own, segment_rule_count: ofSegments } = props.group
-  return [own ? t('groups.pricingSummary.models', { n: own }) : '', ofSegments ? t('groups.pricingSummary.segments', { n: ofSegments }) : ''].filter(Boolean)
+  return [own ? t('groups.pricingSummary.models', { n: own }, own) : '', ofSegments ? t('groups.pricingSummary.segments', { n: ofSegments }, ofSegments) : ''].filter(Boolean)
 })
 </script>
 

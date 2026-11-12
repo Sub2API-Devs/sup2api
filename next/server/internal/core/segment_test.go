@@ -51,6 +51,27 @@ func TestPriceRuleMultiplier(t *testing.T) {
 	}
 }
 
+func TestPriceRuleClone(t *testing.T) {
+	var none *PriceRule
+	if none.Clone() != nil {
+		t.Error("no price clones to none")
+	}
+	scale := decimal.RequireFromString("0.8")
+	rule := &PriceRule{ID: 7, Expression: "p", Scale: &scale, Base: &PriceBase{Expression: "g", ExprHash: "h"}}
+	c := rule.Clone()
+	if c == rule || c.ID != 7 || c.Expression != "p" || !c.Scale.Equal(scale) || *c.Base != *rule.Base {
+		t.Fatalf("clone differs: %+v", c)
+	}
+	*c.Scale = decimal.Zero
+	c.Base.Expression = "changed"
+	if !rule.Scale.Equal(decimal.RequireFromString("0.8")) || rule.Base.Expression != "g" {
+		t.Errorf("changing the clone changed the rule: %s %+v", rule.Scale, rule.Base)
+	}
+	if c := (&PriceRule{ID: 1}).Clone(); c.Scale != nil || c.Base != nil {
+		t.Errorf("a rule without scale or base clones without them: %+v", c)
+	}
+}
+
 func TestParseRate(t *testing.T) {
 	for _, tc := range []struct {
 		in   string

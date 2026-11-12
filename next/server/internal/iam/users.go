@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"errors"
 	"net/mail"
 	"slices"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -44,7 +46,7 @@ type User struct {
 const userSelect = `
 SELECT u.id, u.email, u.display_name, u.status, u.last_login_at, u.created_at, u.updated_at,
     COALESCE((SELECT array_agg(r.key ORDER BY r.key) FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id), '{}'),
-    s.id, s.kind, CASE WHEN s.user_id IS NULL THEN s.name ELSE u.email END, s.user_id,
+    ` + segment.RefColumns + `,
     COALESCE((SELECT b.balance FROM user_balances b WHERE b.user_id = u.id), 0)::numeric(20,8)::text
 FROM users u JOIN segments s ON s.id = u.segment_id`
 
@@ -260,9 +262,8 @@ func lockNamedSegment(ctx context.Context, tx pgx.Tx, id *int64) error {
 	if id == nil {
 		return nil
 	}
-	var found bool
-	err := tx.QueryRow(ctx, `SELECT true FROM segments WHERE id = $1 AND kind = $2 FOR KEY SHARE`, *id, core.SegmentNamed).Scan(&found)
-	if store.IsNoRows(err) {
+	_, err := segment.LockNamed(ctx, tx, id)
+	if errors.Is(err, core.ErrNotFound) {
 		return core.InvalidFields(core.FieldError{Field: "segment_id", Code: "invalid", Message: "unknown user group"})
 	}
 	return err
@@ -565,6 +566,7 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	}
 
 	var v int64
+	var dropped bool // a personal segment went, with its price rules
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		var err error
 		if v, err = s.authz.Bump(ctx, tx); err != nil {
@@ -587,7 +589,7 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 		if _, err := tx.Exec(ctx, `UPDATE users SET deleted_at = now(), updated_at = now(), segment_id = default_segment_id() WHERE id = $1`, id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM segments WHERE user_id = $1`, id); err != nil {
+		if dropped, err = segment.DropPersonal(ctx, tx, id); err != nil {
 			return err
 		}
 		if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
@@ -611,6 +613,9 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	}
 	s.forgetStatus(id)
 	s.authz.Committed(ctx, v)
+	if dropped {
+		s.priceRulesChanged(ctx)
+	}
 	return nil
 }
 

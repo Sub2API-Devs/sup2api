@@ -63,7 +63,7 @@ export default {
     defaultHint: 'Members of the default user group cannot be removed here: add them to the user group they should be in.'
   },
   personal: {
-    summary: 'Personal · {n} user(s)',
+    summary: 'Personal · {n} user | Personal · {n} users',
     summaryHint: 'Users priced individually; each is a user group of their own.',
     title: 'Personal',
     description: 'Users priced individually. Each is a user group of their own, created by the system and not named.',

@@ -373,11 +373,6 @@
   .modal-content {
     @apply max-h-[95vh] w-full rounded-card border border-gray-200 bg-white shadow-modal outline-none sm:max-h-[90vh] dark:border-dark-700 dark:bg-dark-800;
   }
-  /* A table in a dialog: its sticky actions column (STable) paints the
-     surface under it, which in dark is the dialog's, not the page's. */
-  .modal-content .table td.s-table-actions {
-    @apply dark:bg-dark-800;
-  }
   .modal-header {
     @apply flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-5 py-3.5 dark:border-dark-700;
   }

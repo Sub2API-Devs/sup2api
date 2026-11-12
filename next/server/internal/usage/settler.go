@@ -716,13 +716,15 @@ func fromRecord(rec *core.UsageRecord) *pending {
 	return p
 }
 
-// price is the list price the row is priced at: its expression with the
-// rule frozen in its inputs. A retry and a reconcile rebuild it from the row
-// alone, so a rule changed after the request does not change the charge.
+// price is the price rule frozen in the row's inputs, as far as priceOne
+// reads one: the multiplier and the base. It is a core.PriceRule because
+// PriceRule.Multiplier is where a rule's multiplier meets the rate. A retry
+// and a reconcile rebuild it from the row alone, so a rule changed after the
+// request does not change the charge.
 func (p *pending) price() *core.PriceRule {
-	rule := &core.PriceRule{ID: p.PriceID, Mode: p.Mode, Expression: p.Expression}
+	rule := &core.PriceRule{}
 	if trace := p.Inputs.Pricing; trace != nil {
-		rule.Source, rule.Scale, rule.Base = trace.PriceSource, trace.Scale, trace.Base
+		rule.Scale, rule.Base = trace.Scale, trace.Base
 	}
 	return rule
 }
@@ -931,6 +933,18 @@ func (s *Service) RetryTaskSpec() core.TaskSpec {
 	}
 }
 
+// frozenPriceJoins is the FROM clause of a query that reads usage_logs u
+// back for pricing: h holds the expression the row froze, by its hash in the
+// price history, and mp the current expression of its price for a row whose
+// hash is not there. A row under a custom price rule gets no mp: its
+// price_id is the global price, not what it was priced at, so without its
+// history it has no expression and priceOne refuses it.
+const frozenPriceJoins = `
+		FROM usage_logs u
+		LEFT JOIN model_price_history h ON h.expr_hash = u.expr_hash
+		LEFT JOIN model_prices mp ON mp.id = u.price_id AND h.expr_hash IS NULL
+			AND u.billing_detail #> '{inputs,pricing,base}' IS NULL`
+
 // RetryPending settles pending/failed rows older than Options.RetryAfter
 // that have not exhausted their attempts. It returns the rows examined.
 func (s *Service) RetryPending(ctx context.Context) (int, error) {
@@ -952,10 +966,7 @@ func (s *Service) RetryPending(ctx context.Context) (int, error) {
 		       u.input_tokens, u.output_tokens,
 		       u.cache_read_tokens, u.cache_creation_tokens, u.cache_creation_1h_tokens, u.metrics, u.latency_ms,
 		       u.created_at, u.rate_multiplier, COALESCE(u.price_id, 0), u.billing_mode, u.billing_detail,
-		       COALESCE(h.expression, mp.expression, '')
-		FROM usage_logs u
-		LEFT JOIN model_price_history h ON h.expr_hash = u.expr_hash
-		LEFT JOIN model_prices mp ON mp.id = u.price_id AND h.expr_hash IS NULL
+		       COALESCE(h.expression, mp.expression, '')`+frozenPriceJoins+`
 		WHERE u.billing_status IN ('pending', 'failed')
 		  AND u.created_at < now() - make_interval(secs => $1)
 		  AND COALESCE((u.billing_detail->>'attempts')::int, 0) < $2

@@ -2,65 +2,52 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SEmpty, SField, SHint, SInput, SRowAction, SSwitch, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SEmpty, SField, SHint, SInput, SRowAction, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
 import type { GroupModelPrices, ModelPriceRow, PriceRule, PriceSource, SegmentRef } from '@/api/pricing'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
 import PriceRuleEditor from './PriceRuleEditor.vue'
+import RuleInactiveBadge from './RuleInactiveBadge.vue'
 import { priceCells } from './pricingFormat'
-import { draftedRow, ruleOf, rulePatches, setDraft, validRule, type DraftedRow, type RuleDrafts, type RuleScope } from './ruleDrafts'
+import { draftedRow, ruleOf, rulePatches, setRuleDraft, validRule, type DraftedRow, type RuleScope } from './ruleDrafts'
 import { priceLabel, ruleText } from './ruleText'
+import { useDrafts } from './useDrafts'
 
 // The models a group provides and what each costs there. Without a segment
 // the table edits the group's own rules; with one it edits that segment's
 // rules and shows the group's read-only. "Set" opens the rule's editor under
-// the row, one row at a time. Edits stay in drafts (the list price follows
-// them at once) until the parent calls save(), as it does with
-// its other sub-editors after saving the main form. Loading again, also when
-// the group or the segment changes, drops the drafts: a parent that lets the
-// user switch should look at `dirty` first.
+// the row, one row at a time. Edits stay in drafts (useDrafts; the list price
+// follows them at once, through the same priceLabel as a saved one) until the
+// parent calls save(), as it does with its other sub-editors after saving the
+// main form. Loading again, as happens when the group or the segment
+// changes, drops the drafts: a parent that lets the user switch should look
+// at `dirty` first.
 const props = defineProps<{ groupId: number | null; segment?: SegmentRef | null; editable?: boolean }>()
 const { t } = useI18n()
 
 /** Search and the filter appear from this many models on. */
 const TOOLS_FROM = 8
 
-const data = ref<GroupModelPrices | null>(null)
-const loading = ref(false)
-const error = ref<unknown>(null)
-const drafts = ref<RuleDrafts>(new Map())
 /** The table keeps which editor is open: a new key closes it. */
 const tableKey = ref(0)
 const q = ref('')
 const onlyRuled = ref(false)
-let request = 0
 
 const scope = computed<RuleScope>(() => (props.segment ? 'segment' : 'group'))
 const path = computed(() => `/groups/${props.groupId}/model-prices`)
 const query = computed(() => (props.segment ? { segment_id: props.segment.id } : undefined))
 
-function reset() {
-  drafts.value = new Map()
-  tableKey.value++
-}
+// A group not saved yet has no prices to ask for.
+const fetchPrices = async () => (props.groupId === null ? null : api.get<GroupModelPrices>(path.value, query.value))
+const state = useDrafts<GroupModelPrices | null, string, PriceRule | null>({ empty: () => null, fetch: fetchPrices, problem: incomplete })
+const { saved: data, drafts, loading, error, dirty } = state
 
-async function load() {
-  const current = ++request
-  reset()
-  data.value = null
-  error.value = null
-  loading.value = props.groupId !== null
-  if (props.groupId === null) return
-  try {
-    const result = await api.get<GroupModelPrices>(path.value, query.value)
-    if (current === request) data.value = result
-  } catch (e) {
-    if (current === request) error.value = e
-  } finally {
-    if (current === request) loading.value = false
-  }
+/** Loads the prices anew: the drafts and the open editor go. */
+function load() {
+  tableKey.value++
+  return state.load()
 }
 // By id: the same segment handed over as a new object must not drop the drafts.
-watch([() => props.groupId, () => props.segment?.id], () => load(), { immediate: true })
+watch([() => props.groupId, () => props.segment?.id], load, { immediate: true })
 
 function viewRow(saved: ModelPriceRow) {
   const row = draftedRow(saved, scope.value, drafts.value)
@@ -73,7 +60,6 @@ const shown = computed(() => {
   // A rule being removed keeps its row in sight until it is saved; so does one that is not in effect.
   return rows.value.filter((r) => (!s || r.model.toLowerCase().includes(s)) && (!onlyRuled.value || r.source !== 'global' || r.dirty || r.inactive))
 })
-const dirty = computed(() => drafts.value.size > 0)
 
 /** The rule columns, and what a model without a rule of that level follows. */
 const levels = computed(() => {
@@ -104,29 +90,33 @@ function sourceTone(source: PriceSource): Tone {
 const rowAttrs = (row: DraftedRow) => ({ 'data-testid': 'model-price-row', 'data-model': row.model })
 
 function draft(row: DraftedRow, rule: PriceRule | null) {
-  drafts.value = setDraft(drafts.value, row, rule)
+  drafts.value = setRuleDraft(drafts.value, row, rule)
+}
+
+/** Why the drafts cannot be saved yet: one is not filled in. The toast names its model; its row is marked, comes into sight, and its editor says why. */
+function incomplete(): string | null {
+  const invalid = rows.value.find((r) => r.invalid)
+  if (!invalid) return null
+  q.value = ''
+  return t('pricing.table.invalid', { model: invalid.model })
 }
 
 /**
  * Saves the drafts and shows what the server answers. False when a draft
- * cannot be saved yet: a toast names its model, whose row is marked and
- * whose editor says why. A failed request rejects and keeps the drafts.
+ * cannot be saved yet (see `incomplete`). A failed request rejects and keeps
+ * the drafts.
  */
 async function save(): Promise<boolean> {
-  if (props.groupId === null || !dirty.value) return true
-  const invalid = rows.value.find((r) => r.invalid)
-  if (invalid) {
-    q.value = ''
-    toast(t('pricing.table.invalid', { model: invalid.model }), 'error')
-    return false
-  }
-  const result = await api.put<GroupModelPrices>(path.value, { items: rulePatches(drafts.value, props.segment?.id ?? null) }, { query: query.value })
-  reset()
-  data.value = result
-  return true
+  if (props.groupId === null) return true
+  return state.save(async (sent) => {
+    const result = await api.put<GroupModelPrices>(path.value, { items: rulePatches(sent, props.segment?.id ?? null) }, { query: query.value })
+    // The editor that was open goes with what it edited.
+    tableKey.value++
+    return result
+  })
 }
 
-defineExpose({ load, save, dirty, reset })
+defineExpose({ save, dirty })
 </script>
 
 <template>
@@ -167,8 +157,10 @@ defineExpose({ load, save, dirty, reset })
           <SHint v-if="row.tiers > 1" size="xs">{{ t('pricing.price.tiered', { n: row.tiers }) }}</SHint>
         </template>
         <template v-for="level in levels" :key="level.scope" #[`cell-${level.scope}`]="{ row }">
-          <span v-if="ruleOf(row, level.scope)" class="text-xs" :data-testid="`model-price-${level.scope}-rule`">{{ ruleText(t, ruleOf(row, level.scope)) }}</span>
-          <SBadge v-if="ruleOf(row, level.scope)?.inactive" tone="warning" size="xs" class="ml-1.5" :title="t('pricing.rule.inactiveHint')" data-testid="model-price-inactive">{{ t('pricing.rule.inactive') }}</SBadge>
+          <template v-if="ruleOf(row, level.scope)">
+            <span class="text-xs" :data-testid="`model-price-${level.scope}-rule`">{{ ruleText(t, ruleOf(row, level.scope)) }}</span>
+            <RuleInactiveBadge v-if="ruleOf(row, level.scope)?.inactive" class="ml-1.5" data-testid="model-price-inactive" />
+          </template>
           <span v-else class="text-xs text-fg-muted" :data-testid="`model-price-${level.scope}-rule`">{{ level.follows }}</span>
           <SHint v-if="!segment && row.segment_rule_count" size="xs" data-testid="model-price-segment-rules">{{ t('pricing.table.segmentRules', row.segment_rule_count) }}</SHint>
         </template>

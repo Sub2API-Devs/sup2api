@@ -12,7 +12,12 @@ export function quoteSubjects(auth = useAuthStore()): QuoteSubject[] {
   return (Object.keys(SUBJECT_PERMS) as QuoteSubject[]).filter((subject) => auth.has(SUBJECT_PERMS[subject]))
 }
 
-/** Whether the price simulator is of use to the caller: a quote takes price:read and someone to quote for. */
+/**
+ * Whether the price simulator is of use to the caller: a quote takes
+ * price:read, the groups to quote in take group:read, and there must be
+ * someone to quote for. Every entry to the simulator asks this, and mounts
+ * the dialog only when it holds: the dialog reads the groups as it is set up.
+ */
 export function canSimulatePrices(auth = useAuthStore()): boolean {
-  return auth.has('price:read') && quoteSubjects(auth).length > 0
+  return auth.has('price:read') && auth.has('group:read') && quoteSubjects(auth).length > 0
 }

@@ -112,7 +112,7 @@ export default {
     groups: '可用分组',
     viewGroup: '查看你在 {name} 的实付价',
     noGroups: '暂无分组提供',
-    baseNote: '这里是全部模型的基础价（倍率 ×1）。实付 = 基础价 × 你在所选分组的倍率，个别模型在分组里可能另有定价；选一个分组查看你的实付价。',
+    baseNote: '这里是全部模型的基础价（倍率 ×1）。实付 = 标价 × 你在所选分组的倍率；标价一般就是基础价，个别模型在分组里另有定价。选一个分组查看你的实付价。',
     unit: 'USD / 百万 Token',
     basePrice: '基础价，未乘倍率',
     rated: '已按你在该分组的倍率 {rate} 计算',
@@ -123,6 +123,7 @@ export default {
     perRequest: '{price} / 次',
     tiered: '{n} 档，显示第一档',
     custom: '按规则计费',
+    customTimes: '按规则计费 {rate}',
     empty: '这个分组没有可用模型',
     emptyAll: '还没有可用的模型',
     groupUnavailable: '链接里的分组不对你开放，已改为显示全部分组。'

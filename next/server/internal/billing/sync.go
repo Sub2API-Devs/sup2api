@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -735,15 +736,73 @@ func parseSup2API(body []byte, apply bool) (*fetched, error) {
 	return out, nil
 }
 
-// scalePrice multiplies a price by m: visual configs are scaled in place
-// (scaleConfig), other expressions get a constant surcharge rule.
+// scalePrice multiplies a price by m: visual configs are scaled in place,
+// other expressions get a constant surcharge rule.
 func scalePrice(p *syncPrice, m decimal.Decimal) error {
-	config, expression, ok := scaleConfig(p.Mode, p.Config, m)
-	if !ok {
+	scale := func(v any) any {
+		switch x := v.(type) {
+		case float64:
+			return json.Number(decimal.NewFromFloat(x).Mul(m).String())
+		case json.Number:
+			d, err := decimal.NewFromString(string(x))
+			if err != nil {
+				return x
+			}
+			return json.Number(d.Mul(m).String())
+		}
+		return v
+	}
+	var cfg map[string]any
+	dec := json.NewDecoder(strings.NewReader(string(p.Config)))
+	dec.UseNumber()
+	_ = dec.Decode(&cfg)
+	switch p.Mode {
+	case expr.ModePerRequest:
+		cfg["price"] = scale(cfg["price"])
+	case expr.ModePerToken:
+		for _, k := range []string{"p", "c", "cr", "cc", "cc1h"} {
+			if v, ok := cfg[k]; ok {
+				cfg[k] = scale(v)
+			}
+		}
+	default:
+		if scaleVideoConfig(cfg, scale) {
+			break
+		}
 		return scaleAsExpression(p, m)
 	}
-	p.Config, p.Expression = config, expression
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	p.Config, p.Expression = b, ""
 	return nil
+}
+
+// scaleVideoConfig scales every per-video price in cfg. It reports whether cfg
+// carried a video block; other modes then fall back to an expression rule.
+func scaleVideoConfig(cfg map[string]any, scale func(any) any) bool {
+	video, ok := cfg["video"].(map[string]any)
+	if !ok {
+		return false
+	}
+	entries := []map[string]any{video}
+	if rows, ok := video["resolution_prices"].([]any); ok {
+		for _, row := range rows {
+			if r, ok := row.(map[string]any); ok {
+				entries = append(entries, r)
+			}
+		}
+	}
+	keys := []string{"price_per_million_tokens", "video_input_price_per_million_tokens", "video_price_per_second"}
+	for _, entry := range entries {
+		for _, key := range keys {
+			if value, ok := entry[key]; ok {
+				entry[key] = scale(value)
+			}
+		}
+	}
+	return true
 }
 
 // scaleAsExpression rewrites a config-based price as an expression with a
@@ -757,9 +816,32 @@ func scaleAsExpression(p *syncPrice, m decimal.Decimal) error {
 		}
 		p.Expression = src
 	}
-	p.Mode, p.Config = expr.ModeExpression, json.RawMessage("{}")
-	p.Expression = strings.TrimSpace(p.Expression) + " " + expr.RuleSeparator + " true ? " + m.String() + " : 1"
+	src, err := appendRule(p.Expression, "true ? "+m.String()+" : 1")
+	if err != nil {
+		return err
+	}
+	p.Mode, p.Config, p.Expression = expr.ModeExpression, json.RawMessage("{}"), src
 	return nil
+}
+
+// appendRule returns the expression src with a request rule after it. It is
+// an error when the result does not compile to one rule more than src: after
+// an expression that ends in a comment with a quote in it the rule would be
+// part of that comment, and the price would silently stay as it was.
+func appendRule(src, rule string) (string, error) {
+	before, err := expr.CompileCached(src)
+	if err != nil {
+		return "", err
+	}
+	out := strings.TrimSpace(src) + " " + expr.RuleSeparator + " " + rule
+	after, err := expr.CompileCached(out)
+	if err != nil {
+		return "", err
+	}
+	if len(after.RuleConds()) != len(before.RuleConds())+1 {
+		return "", errors.New("the expression takes no rule after it")
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------- preview and apply
@@ -1011,27 +1093,36 @@ func (s *Service) keyPrices(c *gin.Context) {
 			continue
 		}
 		on.Model = model
-		p, _, err := exportPrice(model, prices[model], rules.levels(on))
+		p, err := exportPrice(model, prices[model], rules.levels(on))
 		if err != nil {
-			httpapi.Fail(c, err)
-			return
+			// Left out rather than listed at a price that is not the owner's.
+			slog.WarnContext(ctx, "billing: key prices: model left out", "model", model, "group_id", on.GroupID, "err", err)
+			continue
 		}
 		out.Prices = append(out.Prices, p)
 	}
 	httpapi.OK(c, out)
 }
 
-// exportPrice returns the list price of a model, and where it comes from,
-// for a reader that sees no rule beside it: a downstream sup2api, a user's
-// own price list. A multiplier over a hand-written expression, which
-// listPrice leaves in the rule, becomes a constant rule on the expression
-// here: the expression alone must be the price.
-func exportPrice(model string, base PriceDef, levels ruleLevels) (syncPrice, string, error) {
-	rule, source := levels.applied(base.Mode)
-	price, applied := listPrice(base, rule)
+// exportPrice returns the list price of a model for a downstream sup2api,
+// which sees no rule beside the price: here, and nowhere else, the multiplier
+// of a rule goes into the price (scalePrice). The expression is always there.
+// An error means the price cannot carry the multiplier.
+func exportPrice(model string, base PriceDef, levels ruleLevels) (syncPrice, error) {
+	price, _ := levels.listPrice(base)
 	p := syncPrice{Model: model, Mode: price.Mode, Config: price.Config, Expression: price.Expression}
-	if applied {
-		return p, source, nil
+	if price.Multiplier == nil || price.Multiplier.Equal(decimal.NewFromInt(1)) {
+		return p, nil
 	}
-	return p, source, scaleAsExpression(&p, rule.scale)
+	scaled := p
+	if err := scalePrice(&scaled, *price.Multiplier); err != nil || scaled.Expression != "" {
+		return scaled, err
+	}
+	// A scaled config: its expression is generated, as on import.
+	var err error
+	if scaled.Expression, err = expressionFor(scaled.Mode, scaled.Config, ""); err != nil {
+		// No such config at this multiplier (a video template cannot be free).
+		return p, scaleAsExpression(&p, *price.Multiplier)
+	}
+	return scaled, nil
 }

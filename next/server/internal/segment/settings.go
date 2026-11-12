@@ -164,11 +164,9 @@ func idsOf(rows []*Setting, id func(*Setting) int64) []int64 {
 // settingRows reads the pairs of a segment and a group that cond picks, with
 // the counts of each; complete fills in the rest.
 func (s *Service) settingRows(ctx context.Context, cond string, args ...any) ([]*Setting, error) {
-	rows, err := s.db.Pool.Query(ctx, `SELECT s.id, s.kind, COALESCE(u.email, s.name), s.user_id, mc.n,
+	rows, err := s.db.Pool.Query(ctx, `SELECT `+RefColumns+`, mc.n,
 			g.id, g.name, g.description, g.status, g.visibility,
-			(SELECT count(*) FROM price_rules pr WHERE pr.segment_id = s.id AND pr.group_id = g.id)
-		FROM segments s
-		LEFT JOIN users u ON u.id = s.user_id
+			(SELECT count(*) FROM price_rules pr WHERE pr.segment_id = s.id AND pr.group_id = g.id)`+fromSegments+`
 		CROSS JOIN LATERAL (SELECT count(*) AS n FROM users m WHERE m.segment_id = s.id AND m.deleted_at IS NULL) mc
 		CROSS JOIN groups g `+cond, args...)
 	if err != nil {
@@ -190,7 +188,7 @@ func (s *Service) settingRows(ctx context.Context, cond string, args ...any) ([]
 // complete fills in what the rows do not carry themselves: the terms of each
 // pair, the platforms of the groups, and the names as the caller may see them.
 func (s *Service) complete(ctx context.Context, rows []*Setting, terms func(*Setting) Terms) ([]*Setting, error) {
-	show, err := s.showUsers(ctx)
+	show, err := ShowUsers(ctx, s.authz)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +253,9 @@ func (s *Service) savePairs(ctx context.Context, items []pairInput) error {
 		return nil
 	}
 	// One order for every writer: two saves of the same pairs cannot deadlock.
-	slices.SortFunc(items, func(a, b pairInput) int {
+	// Items on one pair keep the order sent, and items itself is left as
+	// sent: field errors name its positions.
+	ordered := slices.SortedStableFunc(slices.Values(items), func(a, b pairInput) int {
 		return cmp.Or(cmp.Compare(a.SegmentID, b.SegmentID), cmp.Compare(a.GroupID, b.GroupID))
 	})
 	return s.tx(ctx, func(tx pgx.Tx) error {
@@ -263,7 +263,7 @@ func (s *Service) savePairs(ctx context.Context, items []pairInput) error {
 		if err != nil {
 			return err
 		}
-		for _, it := range items {
+		for _, it := range ordered {
 			if _, err := tx.Exec(ctx, `INSERT INTO segment_groups (segment_id, group_id, granted, rate_override)
 				VALUES ($1, $2, COALESCE($3, false), $5::numeric)
 				ON CONFLICT (segment_id, group_id) DO UPDATE SET

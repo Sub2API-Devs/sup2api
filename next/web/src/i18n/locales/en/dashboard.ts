@@ -17,7 +17,7 @@ export default {
     todayRequests: 'Requests today',
     last30dRequests: 'last 30 days {n}',
     todayCost: 'Cost today',
-    standard: 'list price {cost}',
+    standard: 'base price {cost}',
     last30dCost: 'last 30 days {cost}',
     todayTokens: 'Tokens today',
     tokensSub: 'in {input} · out {output}',

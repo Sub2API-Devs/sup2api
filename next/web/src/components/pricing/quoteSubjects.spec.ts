@@ -11,10 +11,12 @@ describe('whom a quote may be for', () => {
     expect(quoteSubjects(holding('segment:read'))).toEqual(['segment'])
     expect(quoteSubjects(holding('price:read'))).toEqual([])
   })
-  it('opens the simulator to a caller who reads prices and has someone to quote for', () => {
-    expect(canSimulatePrices(holding('price:read', 'segment:read'))).toBe(true)
-    expect(canSimulatePrices(holding('price:read', 'user:read'))).toBe(true)
-    expect(canSimulatePrices(holding('price:read'))).toBe(false)
-    expect(canSimulatePrices(holding('user:read', 'segment:read'))).toBe(false)
+  it('opens the simulator to a caller who reads prices and groups and has someone to quote for', () => {
+    expect(canSimulatePrices(holding('price:read', 'group:read', 'segment:read'))).toBe(true)
+    expect(canSimulatePrices(holding('price:read', 'group:read', 'user:read'))).toBe(true)
+    expect(canSimulatePrices(holding('price:read', 'group:read'))).toBe(false)
+    expect(canSimulatePrices(holding('group:read', 'user:read', 'segment:read'))).toBe(false)
+    // The groups to quote in are read with group:read: without it the dialog would only be refused.
+    expect(canSimulatePrices(holding('price:read', 'user:read', 'segment:read'))).toBe(false)
   })
 })

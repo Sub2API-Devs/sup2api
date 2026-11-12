@@ -25,7 +25,7 @@ const personal = computed(() => props.group.access?.personal_count ?? 0)
     <SHint v-if="segments.length > SHOWN" inline size="xs" :title="segments.map((s) => s.name).join(', ')">+{{ segments.length - SHOWN }}</SHint>
     <SBadge v-if="personal" tone="purple" data-testid="group-access-personal">
       <SIcon name="user" class="h-3 w-3 shrink-0" />
-      {{ t('groups.access.personal', { n: personal }) }}
+      {{ t('groups.access.personal', { n: personal }, personal) }}
     </SBadge>
   </span>
 </template>

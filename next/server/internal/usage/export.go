@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/shopspring/decimal"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -65,14 +64,8 @@ var exportColumns = []exportColumn{
 		return strconv.FormatInt(r.CacheCreationTokens+r.CacheCreation1hTokens, 10)
 	}},
 	{"费用", "Cost", false, false, func(r *Record, _ *time.Location) string { return r.TotalCost.String() }},
-	{"原价", "List price", false, false, func(r *Record, _ *time.Location) string {
-		if r.BaseCost != nil {
-			return r.BaseCost.String()
-		}
-		if r.RateMultiplier.IsPositive() {
-			return r.TotalCost.DivRound(r.RateMultiplier, 8).String()
-		}
-		return decimal.Zero.String()
+	{"原价", "Base price", false, false, func(r *Record, _ *time.Location) string {
+		return r.StandardCost.Round(8).String() // a row from before base_cost is a quotient, with more digits
 	}},
 	{"倍率", "Multiplier", false, false, func(r *Record, _ *time.Location) string { return r.RateMultiplier.String() }},
 	{"计费状态", "Billing status", false, false, func(r *Record, _ *time.Location) string { return r.BillingStatus }},

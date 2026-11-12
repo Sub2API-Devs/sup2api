@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -47,6 +50,7 @@ func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 type env struct {
 	t                    *testing.T
 	db                   *store.DB
+	svc                  *Service
 	h                    http.Handler
 	admin, masked, plain int64
 	// rulesChanged counts the PriceRulesChanged calls.
@@ -63,7 +67,7 @@ func setup(t *testing.T) *env {
 		e.masked: func(p string) bool { return p != "user:read" },
 	}
 	engine := gin.New()
-	New(Deps{
+	e.svc = New(Deps{
 		DB: e.db, Authz: authz,
 		Platforms: func(_ context.Context, ids []int64) (map[int64][]string, error) {
 			out := map[int64][]string{}
@@ -73,9 +77,40 @@ func setup(t *testing.T) *env {
 			return out, nil
 		},
 		PriceRulesChanged: func(context.Context) { e.rulesChanged.Add(1) },
-	}).RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, authz))
+	})
+	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, authz))
 	e.h = engine
 	return e
+}
+
+// What another writer did to a transaction is a conflict to try again, not a
+// failure; any other error stays what it is.
+func TestTxConflicts(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	failure := errors.New("failure")
+	for _, tc := range []struct {
+		name     string
+		fn       func(tx pgx.Tx) error
+		conflict bool
+	}{
+		{"a row referred to is gone", func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO segment_groups (segment_id, group_id, granted) VALUES (default_segment_id(), 999999, true)`)
+			return err
+		}, true},
+		{"a deadlock", func(pgx.Tx) error { return &pgconn.PgError{Code: "40P01"} }, true},
+		{"another error", func(pgx.Tx) error { return failure }, false},
+	} {
+		err := e.svc.tx(ctx, tc.fn)
+		if !tc.conflict {
+			require.Equal(t, failure, err, tc.name)
+			continue
+		}
+		var ce *core.Error
+		require.ErrorAs(t, err, &ce, tc.name)
+		require.Equal(t, core.ErrConflict.Code, ce.Code, tc.name)
+	}
+	require.NoError(t, e.svc.tx(ctx, func(pgx.Tx) error { return nil }))
 }
 
 // id runs an INSERT ... RETURNING id (or any query of one integer).

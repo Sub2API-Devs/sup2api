@@ -111,6 +111,8 @@ func TestSetSegmentGroups(t *testing.T) {
 			invalid("items.1.rate_override")
 	}
 	put(map[string]any{"group_id": f.public, "granted": true}, map[string]any{"group_id": 999999, "granted": true}).invalid("items.1")
+	// The error names the item where the request has it, whatever its id.
+	put(map[string]any{"group_id": 999999, "granted": true}, map[string]any{"group_id": f.public, "granted": true}).invalid("items.0")
 	require.Equal(t, "false 0.0000", f.pairOf(f.vip, f.public))
 
 	f.do(f.admin, "PUT", "/segments/999999/groups", map[string]any{"items": []any{}}).failed(404, "not_found")
@@ -173,12 +175,41 @@ func TestSetGroupSegments(t *testing.T) {
 	require.Equal(t, true, rows[2]["granted"])
 
 	put("", map[string]any{"segment_id": def, "granted": false}, map[string]any{"segment_id": 999999, "granted": true}).invalid("items.1")
+	put("", map[string]any{"segment_id": 999999, "granted": true}, map[string]any{"segment_id": def, "granted": false}).invalid("items.0")
 	put("", map[string]any{"segment_id": def, "granted": false}, map[string]any{"segment_id": f.vip, "rate_override": "-1"}).
 		invalid("items.1.rate_override")
 	require.Equal(t, "true null", f.pairOf(def, f.other), "all or none")
 
 	f.do(f.admin, "PUT", "/groups/999999/segments", map[string]any{"items": []any{}}).failed(404, "not_found")
 	f.do(f.plain, "PUT", path("/groups/%d/segments", f.other), map[string]any{"items": []any{}}).failed(403, "permission_denied")
+}
+
+// Saves of the same pairs at once, from either side and in either order, all
+// go through, and each pair ends as one of them left it.
+func TestSettingsSaveRace(t *testing.T) {
+	f := newSettingsFixture(t)
+	// item grants the pair at the rate; nil says nothing, so the pair goes.
+	item := func(key string, id int64, rate any) map[string]any {
+		return map[string]any{key: id, "granted": rate != nil, "rate_override": rate}
+	}
+	ofSegment, ofGroup := path("/segments/%d/groups", f.vip), path("/groups/%d/segments", f.other)
+	saves := []struct {
+		path  string
+		items []map[string]any
+	}{
+		{ofSegment, []map[string]any{item("group_id", f.other, "0.1"), item("group_id", f.public, "0.1")}},
+		{ofSegment, []map[string]any{item("group_id", f.public, "0.2"), item("group_id", f.other, "0.2")}},
+		{ofGroup, []map[string]any{item("segment_id", f.vip, "0.3")}},
+		{ofGroup, []map[string]any{item("segment_id", f.vip, nil)}},
+	}
+	for range 10 {
+		codes := concurrently(len(saves), func(i int) int {
+			return f.do(f.admin, "PUT", saves[i].path, map[string]any{"items": saves[i].items}).code
+		})
+		require.Equal(t, len(saves), count(codes, 200), "%v", codes)
+		require.Contains(t, []string{"true 0.1000", "true 0.2000", "true 0.3000", "none"}, f.pairOf(f.vip, f.other))
+		require.Contains(t, []string{"true 0.1000", "true 0.2000"}, f.pairOf(f.vip, f.public))
+	}
 }
 
 // A caller that may not read users sees a personal segment as "#<user id>":

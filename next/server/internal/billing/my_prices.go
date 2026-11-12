@@ -18,20 +18,20 @@ type MyPriceRow struct {
 	Model string `json:"model"`
 	PriceDef
 	// Groups (without a group): the caller's groups that provide the model.
-	Groups []GroupRef `json:"groups,omitzero"`
+	Groups []core.GroupRef `json:"groups,omitzero"`
 	// Source (with a group): where the list price comes from.
 	Source string `json:"source,omitempty"`
 }
 
 // MyPrices is the response of GET /me/prices.
 type MyPrices struct {
-	Group          *GroupRef       `json:"group"`
+	Group          *core.GroupRef  `json:"group"`
 	RateMultiplier decimal.Decimal `json:"rate_multiplier"`
 	RateSource     string          `json:"rate_source,omitempty"`
 	Prices         []MyPriceRow    `json:"prices"`
 }
 
-// myPrices answers GET /me/prices?group_id= (CONTRACTS §79.4). Without a
+// myPrices answers GET /me/prices?group_id= (CONTRACTS §79.5). Without a
 // group it is every model at its global price, with the caller's groups that
 // provide it. With one it is the models that group provides and can bill, at
 // the list price and the rate the caller gets there. A group the caller
@@ -85,7 +85,7 @@ func (s *Service) pricesOfGroups(ctx context.Context, uid int64) (*MyPrices, err
 	}
 	out := &MyPrices{RateMultiplier: decimal.NewFromInt(1), Prices: []MyPriceRow{}}
 	for _, model := range prices.models() {
-		row := MyPriceRow{Model: model, PriceDef: prices[model], Groups: []GroupRef{}}
+		row := MyPriceRow{Model: model, PriceDef: prices[model], Groups: []core.GroupRef{}}
 		for _, g := range groups {
 			if _, ok := slices.BinarySearch(offered[g.ID], model); ok {
 				row.Groups = append(row.Groups, g.ref())
@@ -124,11 +124,8 @@ func (s *Service) pricesInGroup(ctx context.Context, uid, groupID int64) (*MyPri
 			continue
 		}
 		on.Model = model
-		p, source, err := exportPrice(model, *base, rules.levels(on))
-		if err != nil {
-			return nil, err
-		}
-		out.Prices = append(out.Prices, MyPriceRow{Model: model, PriceDef: PriceDef{Mode: p.Mode, Config: p.Config, Expression: p.Expression}, Source: source})
+		price, source := rules.levels(on).listPrice(*base)
+		out.Prices = append(out.Prices, MyPriceRow{Model: model, PriceDef: price, Source: source})
 	}
 	return out, nil
 }

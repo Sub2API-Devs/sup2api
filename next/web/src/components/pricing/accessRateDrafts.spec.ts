@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Segment, SegmentGroupSetting } from '@/api/pricing'
-import { blankSetting, draftedSetting, effectiveRate, setDraft, settingPatches, validOverride, type SettingDraft, type SettingDrafts } from './accessRateDrafts'
+import { blankSetting, draftedSetting, mergeSettingDraft, settingPatches, validOverride, type SettingDraft, type SettingDrafts } from './accessRateDrafts'
+import { effectiveRate } from './pricingFormat'
 
 function setting(group: number, over: Partial<SegmentGroupSetting> = {}, visibility: 'public' | 'restricted' = 'public'): SegmentGroupSetting {
   return {
@@ -16,7 +17,7 @@ function setting(group: number, over: Partial<SegmentGroupSetting> = {}, visibil
 }
 const none: SettingDrafts = new Map()
 /** The drafts after `change` on the row of `saved` among the groups of a segment. */
-const drafted = (saved: SegmentGroupSetting, change: SettingDraft, drafts = none) => setDraft(drafts, draftedSetting('group', saved, drafts.get(saved.group.id)), change)
+const drafted = (saved: SegmentGroupSetting, change: SettingDraft, drafts = none) => mergeSettingDraft(drafts, draftedSetting('group', saved, drafts.get(saved.group.id)), change)
 
 describe('the rate that applies', () => {
   it('is the override, else the default times the discount, else the default', () => {

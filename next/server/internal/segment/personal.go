@@ -2,6 +2,7 @@ package segment
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -115,18 +116,24 @@ func (s *Service) removePersonal(c *gin.Context) {
 	}
 	var dropped bool
 	err := s.tx(ctx, func(tx pgx.Tx) error {
+		notPersonal := core.ErrNotFound.WithMessage(t(ctx, "the user has no personal user group", "该用户不是个人专属"))
 		kind, err := userSegmentKind(ctx, tx, uid)
 		if err != nil {
 			return err
 		}
 		if kind != core.SegmentPersonal {
-			return core.ErrNotFound.WithMessage(t(ctx, "the user has no personal user group", "该用户不是个人专属"))
+			return notPersonal
 		}
 		to, err := moveTarget(ctx, tx, c.Query("to"))
 		if err != nil {
 			return err
 		}
-		_, dropped, err = moveUsers(ctx, tx, to, []int64{uid})
+		// The user was not locked when checked: only one still personal moves.
+		var moved int
+		moved, dropped, err = moveUsers(ctx, tx, to, []int64{uid}, core.SegmentPersonal)
+		if err == nil && moved == 0 {
+			return notPersonal
+		}
 		return err
 	})
 	if err != nil {
@@ -151,11 +158,23 @@ func moveTarget(ctx context.Context, tx pgx.Tx, to string) (int64, error) {
 		}
 		want = &n
 	}
-	var id int64
-	err := tx.QueryRow(ctx, `SELECT id FROM segments
-		WHERE kind = 'named' AND CASE WHEN $1::bigint IS NULL THEN is_default ELSE id = $1 END FOR KEY SHARE`, want).Scan(&id)
-	if store.IsNoRows(err) {
+	id, err := LockNamed(ctx, tx, want)
+	if errors.Is(err, core.ErrNotFound) {
 		return 0, unknown
 	}
 	return id, err
+}
+
+// LockNamed returns the named segment id names, the default one when id is
+// nil, locked against deletion until the transaction ends, so a user about
+// to join it cannot be left pointing at nothing. It is core.ErrNotFound when
+// id names no named segment.
+func LockNamed(ctx context.Context, tx pgx.Tx, id *int64) (int64, error) {
+	var found int64
+	err := tx.QueryRow(ctx, `SELECT id FROM segments
+		WHERE kind = 'named' AND CASE WHEN $1::bigint IS NULL THEN is_default ELSE id = $1 END FOR KEY SHARE`, id).Scan(&found)
+	if store.IsNoRows(err) {
+		return 0, core.ErrNotFound
+	}
+	return found, err
 }

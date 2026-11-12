@@ -13,6 +13,8 @@ import { policyOptions } from '@/utils/conversion'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import { markUnsaved, useTabbedSave, type SaveStep } from '@/composables/useTabbedSave'
 import type { DraftedSetting } from '@/components/pricing/accessRateDrafts'
+import { validRate } from '@/components/pricing/pricingFormat'
+import { confirmDiscard } from '@/composables/confirmDiscard'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
 import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
@@ -24,8 +26,9 @@ import { GROUP_EDIT_TABS, changedTabs, tabOfErrors, type GroupEditTab } from './
 // group's own fields; its accounts, user groups and model prices are
 // sub-editors with drafts of their own, saved in that order once the group
 // itself is. A step that fails keeps the dialog open on its tab; a tab with
-// unsaved changes is marked. Only the Save button submits: Enter in a rate or
-// a search field of a tab must not save the whole group.
+// unsaved changes is marked, and closing with one asks first. Only the Save
+// button submits: Enter in a rate or a search field of a tab must not save
+// the whole group.
 const props = defineProps<{ open: boolean; group: Group | null; initialTab?: GroupEditTab }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved'): void }>()
 const { t } = useI18n()
@@ -94,7 +97,7 @@ const formOf = (g: Group): GroupForm => ({
 
 const errors = ref<Record<string, string>>({})
 const form = reactive(blankForm())
-/** The form as it was opened: what a changed tab is compared with. */
+/** The form as it was opened or last saved: what a changed tab is compared with. */
 const opened = ref(blankForm())
 /** The group a first save created: saving again after a later step failed must not create another. */
 const created = ref<Group | null>(null)
@@ -160,8 +163,10 @@ async function saveForm(): Promise<boolean> {
   errors.value = {}
   if (!form.name.trim()) errors.value.name = t('common.required')
   const rm = String(form.rate_multiplier).trim()
-  if (!/^\d+(\.\d+)?$/.test(rm) || Number(rm) < 0) errors.value.rate_multiplier = t('groups.multiplierInvalid')
+  if (!validRate(rm)) errors.value.rate_multiplier = t('groups.multiplierInvalid')
   if (Object.keys(errors.value).length) return false
+  // What is sent, not what the fields hold when the answer comes: a change made meanwhile stays unsaved.
+  const sent: GroupForm = JSON.parse(JSON.stringify(form))
   const body = {
     name: form.name.trim(),
     description: form.description.trim(),
@@ -180,6 +185,7 @@ async function saveForm(): Promise<boolean> {
     applyFormError(e, errors)
     return false
   }
+  opened.value = sent
   groupSaved = true
   return true
 }
@@ -211,6 +217,8 @@ async function submit() {
   toast(t(props.group ? 'common.updated' : 'common.created'), 'success')
   emit('update:open', false)
 }
+
+const leave = async () => (await confirmDiscard(dirtyTabs.value.length > 0)) && emit('update:open', false)
 </script>
 
 <template>
@@ -223,7 +231,7 @@ async function submit() {
     :submit-attrs="{ 'data-testid': 'group-edit-submit' }"
     :enter-submit="false"
     data-testid="group-edit"
-    @update:open="emit('update:open', $event)"
+    @update:open="leave"
     @submit="submit"
   >
     <STabs v-if="open" v-model="tab" :tabs="tabs" :aria-label="t('groups.title')" data-testid="group-edit-tabs">

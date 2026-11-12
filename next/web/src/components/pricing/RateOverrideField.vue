@@ -3,8 +3,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SHint, SInput } from '@sub2api/ui'
 import type { EffectiveRate } from '@/api/pricing'
-import { num } from '@/views/prices/priceExpr'
-import { inheritedRate, rateText, validRate } from './pricingFormat'
+import { validOverride } from './accessRateDrafts'
+import { effectiveRate, inheritedRate, rateText } from './pricingFormat'
 
 // The rate of a segment in a group, compact enough for a table cell. Empty
 // (null) follows the group's default times the segment's discount, which the
@@ -20,15 +20,19 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string | null): void }>()
 const { t } = useI18n()
 
 const inherited = computed(() => rateText(inheritedRate(props.rate)))
-const valid = computed(() => props.modelValue === null || validRate(props.modelValue))
+const valid = computed(() => validOverride(props.modelValue))
 const source = computed(() => {
   if (!valid.value) return t('pricing.rate.invalid')
-  if (props.modelValue !== null) return t('pricing.rate.override', { rate: inherited.value })
   const group = rateText(props.rate.group_default)
-  return num(props.rate.discount, 1) === 1 ? t('pricing.rate.groupDefault', { group }) : t('pricing.rate.discounted', { group, discount: rateText(props.rate.discount) })
+  switch (effectiveRate(props.rate, props.modelValue).source) {
+    case 'segment':
+      return t('pricing.rate.override', { rate: inherited.value })
+    case 'discount':
+      return t('pricing.rate.discounted', { group, discount: rateText(props.rate.discount) })
+    default:
+      return t('pricing.rate.groupDefault', { group })
+  }
 })
-
-defineExpose({ valid })
 </script>
 
 <template>

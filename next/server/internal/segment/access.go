@@ -110,13 +110,29 @@ func queryTerms(ctx context.Context, q store.Querier, sql string, key func(group
 	return out, rows.Err()
 }
 
+// ShowUsers reports whether the caller may read users: only then does a
+// personal segment go by its user's email (Masked). Without an authorizer
+// nobody may.
+func ShowUsers(ctx context.Context, authz core.Authorizer) (bool, error) {
+	if authz == nil {
+		return false, nil
+	}
+	uid, _ := core.UserID(ctx)
+	return authz.Can(ctx, uid, "user:read")
+}
+
+// RefColumns are the columns of a core.SegmentRef (id, kind, name, user id)
+// of the segments row s; u is the users row of the user of a personal
+// segment, its only member. It is the one place a personal segment is named
+// by its user's email.
+const RefColumns = `s.id, s.kind, CASE WHEN s.user_id IS NULL THEN s.name ELSE u.email END, s.user_id`
+
 // Ref names a segment. A personal segment goes by its user's email; callers
 // that may not read users (showUsers false) get "#<user id>" instead, so a
 // role that only reads groups or prices cannot list users through it.
 func Ref(ctx context.Context, q store.Querier, id int64, showUsers bool) (core.SegmentRef, error) {
 	ref := core.SegmentRef{ID: id}
-	err := q.QueryRow(ctx, `SELECT s.kind, COALESCE(u.email, s.name), s.user_id
-		FROM segments s LEFT JOIN users u ON u.id = s.user_id WHERE s.id = $1`, id).Scan(&ref.Kind, &ref.Name, &ref.UserID)
+	err := q.QueryRow(ctx, `SELECT `+RefColumns+fromSegments+` WHERE s.id = $1`, id).Scan(&ref.ID, &ref.Kind, &ref.Name, &ref.UserID)
 	if store.IsNoRows(err) {
 		return ref, core.ErrNotFound
 	}

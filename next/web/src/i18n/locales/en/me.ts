@@ -112,7 +112,7 @@ export default {
     groups: 'Groups',
     viewGroup: 'See what you pay in {name}',
     noGroups: 'No group provides it',
-    baseNote: 'These are the base prices of every model (rate ×1). You pay the base price times your rate in the group you use, and a group may price some models on its own. Choose a group to see what you pay there.',
+    baseNote: 'These are the base prices of every model (rate ×1). You pay the list price times your rate in the group you use; the list price is the base price unless the group prices the model on its own. Choose a group to see what you pay there.',
     unit: 'USD per million tokens',
     basePrice: 'base price, no rate applied',
     rated: 'your rate in this group, {rate}, included',
@@ -123,6 +123,7 @@ export default {
     perRequest: '{price} per request',
     tiered: '{n} tiers, first shown',
     custom: 'Billed by rules',
+    customTimes: 'Billed by rules {rate}',
     empty: 'This group has no models',
     emptyAll: 'No models yet',
     groupUnavailable: 'The group in the link is not open to you. Showing all groups instead.'

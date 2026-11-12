@@ -24,7 +24,7 @@ func (s *Service) models(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	if _, err := s.load(ctx, id); err != nil {
+	if _, err := s.loadRow(ctx, id); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -81,43 +81,38 @@ func ProvidedModels(ctx context.Context, q store.Querier, groupIDs []int64) (map
 	return out, nil
 }
 
-// Offered returns the models a group with these accounts provides, sorted:
-// the declared ones and, when an account declares none, every model in priced
-// (those with an enabled global price), through the model policy of the
-// group.
-func (m Models) Offered(priced []string, policy core.GroupInfo) []string {
-	names := m.Models
-	if m.UnrestrictedAccounts > 0 {
-		names = append(slices.Clone(names), priced...)
-		slices.Sort(names)
-		names = slices.Compact(names)
-	}
-	out := []string{}
-	for _, name := range names {
-		if policy.AllowsModel(name) {
-			out = append(out, name)
-		}
-	}
-	return out
+// Offers reports whether a group with these accounts provides model: an
+// account declares it, or one declares none and the model has an enabled
+// global price (priced), and the model policy of the group allows it. It is
+// the one place the rule is written. Models must be sorted, as
+// ProvidedModels returns them.
+func (m Models) Offers(model string, priced bool, policy core.GroupInfo) bool {
+	_, declared := slices.BinarySearch(m.Models, model)
+	return (declared || priced && m.UnrestrictedAccounts > 0) && policy.AllowsModel(model)
 }
 
-// offeredModels returns the models each of the groups provides
-// (Models.Offered), by group id. Of a group it reads the id and the model
-// policy.
-func offeredModels(ctx context.Context, q store.Querier, groups []core.GroupInfo) (map[int64][]string, error) {
-	ids := make([]int64, len(groups))
-	for i, g := range groups {
-		ids[i] = g.ID
+// Offered returns the models a group with these accounts provides (Offers),
+// sorted; priced are the models with an enabled global price.
+func (m Models) Offered(priced []string, policy core.GroupInfo) []string {
+	out := []string{}
+	keep := func(names []string, havePrice bool) {
+		for _, name := range names {
+			if m.Offers(name, havePrice, policy) {
+				out = append(out, name)
+			}
+		}
 	}
-	provided, err := ProvidedModels(ctx, q, ids)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := q.Query(ctx, `SELECT model FROM model_prices WHERE enabled`)
-	if err != nil {
-		return nil, err
-	}
-	priced, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	keep(m.Models, false)
+	keep(priced, true)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// OfferedModels returns the models each of the groups provides
+// (Models.Offered), by group id; priced are the models with an enabled global
+// price. Of a group it reads the id and the model policy.
+func OfferedModels(ctx context.Context, q store.Querier, groups []core.GroupInfo, priced []string) (map[int64][]string, error) {
+	provided, err := providedModels(ctx, q, groups)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +123,31 @@ func offeredModels(ctx context.Context, q store.Querier, groups []core.GroupInfo
 	return out, nil
 }
 
-// groupsProviding returns the ids of the groups that provide model; never nil.
+// providedModels returns ProvidedModels of the groups.
+func providedModels(ctx context.Context, q store.Querier, groups []core.GroupInfo) (map[int64]Models, error) {
+	ids := make([]int64, len(groups))
+	for i, g := range groups {
+		ids[i] = g.ID
+	}
+	return ProvidedModels(ctx, q, ids)
+}
+
+// offeredModels returns OfferedModels of the groups against the models that
+// have an enabled global price now.
+func offeredModels(ctx context.Context, q store.Querier, groups []core.GroupInfo) (map[int64][]string, error) {
+	rows, err := q.Query(ctx, `SELECT model FROM model_prices WHERE enabled`)
+	if err != nil {
+		return nil, err
+	}
+	priced, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	return OfferedModels(ctx, q, groups, priced)
+}
+
+// groupsProviding returns the ids of the groups that provide model
+// (Models.Offers); never nil.
 func (s *Service) groupsProviding(ctx context.Context, model string) ([]int64, error) {
 	rows, err := s.db.Pool.Query(ctx, `SELECT id, model_allowlist, model_filter_mode FROM groups`)
 	if err != nil {
@@ -141,13 +160,17 @@ func (s *Service) groupsProviding(ctx context.Context, model string) ([]int64, e
 	if err != nil {
 		return nil, err
 	}
-	offered, err := offeredModels(ctx, s.db.Pool, groups)
+	provided, err := providedModels(ctx, s.db.Pool, groups)
 	if err != nil {
+		return nil, err
+	}
+	var priced bool
+	if err := s.db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM model_prices WHERE model = $1 AND enabled)`, model).Scan(&priced); err != nil {
 		return nil, err
 	}
 	ids := []int64{}
 	for _, g := range groups {
-		if slices.Contains(offered[g.ID], model) {
+		if provided[g.ID].Offers(model, priced, g) {
 			ids = append(ids, g.ID)
 		}
 	}

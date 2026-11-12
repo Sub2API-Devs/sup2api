@@ -4,6 +4,9 @@
 import type { Segment } from '@/api/pricing'
 import { validRate } from '@/components/pricing/pricingFormat'
 
+// Whether a segment has a discount to show is a rule of every pricing view.
+export { hasDiscount } from '@/components/pricing/pricingFormat'
+
 export interface SegmentForm {
   name: string
   description: string
@@ -17,9 +20,6 @@ export function formOf(segment: Segment | null): SegmentForm {
 
 /** A discount is a rate above zero; "1" is none. */
 export const validDiscount = (v: string): boolean => validRate(v) && Number(v) > 0
-
-/** Whether a segment has a discount to show. */
-export const hasDiscount = (segment: Pick<Segment, 'discount'>): boolean => Number(segment.discount) !== 1
 
 /** The body of POST /segments and PATCH /segments/:id. */
 export function segmentBody(form: SegmentForm, personal: boolean): Partial<SegmentForm> {

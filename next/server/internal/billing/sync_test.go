@@ -126,6 +126,38 @@ func TestParseSup2APIAppliesMultiplier(t *testing.T) {
 	}
 }
 
+// How the upstream rate goes into a price that is not per token or per
+// request: tiers keep no config, the rate becomes a rule after the expression
+// generated from them; a video template is scaled in its config.
+func TestParseSup2APIMultiplierOnVisualExpression(t *testing.T) {
+	body := `{"data": {"prices": [
+		{"model": "tiered", "mode": "expression", "expression": "x", "config": {"tiers": [
+			{"name": "standard", "max_len": 200000, "p": 3, "c": 15}, {"name": "long_context", "max_len": null, "p": 6, "c": 22.5}]}},
+		{"model": "video", "mode": "expression", "expression": "x", "config": {"video": {"price_per_million_tokens": 7, "video_price_per_second": 0.2}}}],
+		"rate_multiplier": "1.5", "group": {"id": 3, "name": "g"}}}`
+	f, err := parseSup2API([]byte(body), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.prices) != 2 || f.skipped != 0 {
+		t.Fatalf("prices %v skipped %d", f.prices, f.skipped)
+	}
+	for _, p := range f.prices {
+		if err := p.compile(); err != nil {
+			t.Fatalf("%s: %v", p.Model, err)
+		}
+	}
+	tiered := f.prices["tiered"]
+	if tiered.Mode != "expression" || string(tiered.Config) != "{}" || tiered.Expression !=
+		`v1:len <= 200000 ? tier("standard", p*3 + c*15) : tier("long_context", p*6 + c*22.5) ||| true ? 1.5 : 1` {
+		t.Fatalf("tiers: %+v", tiered)
+	}
+	video := cfgOf(t, f.prices["video"])["video"].(map[string]any)
+	if video["price_per_million_tokens"] != 10.5 || video["video_price_per_second"] != 0.3 || strings.Contains(f.prices["video"].Expression, "|||") {
+		t.Fatalf("video: %+v", f.prices["video"])
+	}
+}
+
 // fakeKeys authenticates "sk-good" into a group with multiplier 2. Group and
 // Segment, when set, are the group of the key and the segment of its owner.
 type fakeKeys struct {

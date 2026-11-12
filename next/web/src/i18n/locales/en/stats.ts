@@ -56,7 +56,7 @@ export default {
     successRate: 'success rate {p}',
     last30dRequests: 'last 30 days {n}',
     todayRevenue: 'Revenue today',
-    standard: 'list price {cost}',
+    standard: 'base price {cost}',
     last30dCost: 'last 30 days {cost}',
     activeUsers: 'Active users',
     usersSub: '{n} new today · {total} in total',
@@ -78,7 +78,7 @@ export default {
     tokensSub: 'in {input} · out {output}',
     cacheSub: 'cache read {read} · write {write}',
     cost: 'Cost',
-    standard: 'List price {cost}',
+    standard: 'Base price {cost}',
     estimated: 'incl. estimates {cost}',
     latency: 'Average duration',
     firstToken: 'first token {t}'

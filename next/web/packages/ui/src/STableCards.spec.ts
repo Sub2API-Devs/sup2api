@@ -184,6 +184,7 @@ describe('STable phone cards', () => {
     expect(cards(w)[0].get('button[aria-expanded]').attributes('aria-expanded')).toBe('true')
     await cards(w)[1].get('.open').trigger('click')
     expect(w.findAll('.more').map(e => e.text())).toEqual(['2'])
+    expect(w.emitted('expand')).toEqual([[rows[0], true], [rows[0], false], [rows[1], true]])
   })
 
   it('reorders cards from their handles', async () => {

@@ -11,10 +11,11 @@ import type { DraftedSetting, SettingDraft, SettingSide } from './accessRateDraf
 // way. The caller names a row in #lead (chips on one line) and #note (a line
 // under them). Editable, a row has a switch and a rate field and reports what
 // they change (`change`); read-only it says the same in words. `prices` asks
-// for the model prices of a row; `noPrices` leaves that column out. Other
-// attributes (loading, error, @retry) are STable's.
+// for the model prices of a row; `noPrices` leaves that column out, and
+// `readonlyPrices` says they are only looked at where the rest is edited.
+// Other attributes (loading, error, @retry) are STable's.
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ rows: DraftedSetting[]; side: SettingSide; editable?: boolean; disabled?: boolean; noPrices?: boolean }>()
+const props = defineProps<{ rows: DraftedSetting[]; side: SettingSide; editable?: boolean; disabled?: boolean; noPrices?: boolean; readonlyPrices?: boolean }>()
 const emit = defineEmits<{ (e: 'change', row: DraftedSetting, draft: SettingDraft): void; (e: 'prices', row: DraftedSetting): void }>()
 const { t } = useI18n()
 
@@ -75,7 +76,7 @@ const nameOf = (row: DraftedSetting) => row[props.side].name
         <span class="text-xs" :class="row.price_rule_count ? '' : 'text-fg-muted'" data-testid="access-rate-price-count">
           {{ row.price_rule_count ? t('pricingAccess.priceCount', row.price_rule_count) : t('common.none') }}
         </span>
-        <SRowAction :label="t(editable ? 'pricingAccess.setPrices' : 'common.view')" data-testid="access-rate-prices" @click="emit('prices', row)" />
+        <SRowAction :label="t(editable && !readonlyPrices ? 'pricingAccess.setPrices' : 'common.view')" data-testid="access-rate-prices" @click="emit('prices', row)" />
       </span>
     </template>
   </STable>

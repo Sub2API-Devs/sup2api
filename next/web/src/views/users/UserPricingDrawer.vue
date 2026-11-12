@@ -2,11 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SDrawer, SHint, SLink, SSectionTitle, SSpinner, confirm, toast } from '@sub2api/ui'
+import { SAlert, SButton, SDrawer, SHint, SLink, SSectionTitle, SSpinner, toast } from '@sub2api/ui'
 import type { Segment } from '@/api/pricing'
 import type { User } from '@/api/types'
 import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
 import SegmentBadge from '@/components/pricing/SegmentBadge.vue'
+import { canSimulatePrices } from '@/components/pricing/quoteSubjects'
+import { confirmDiscard } from '@/composables/confirmDiscard'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -17,13 +19,14 @@ import UserSegmentPanel from './UserSegmentPanel.vue'
 // Groups and pricing of one user: the segment he belongs to and what it gives
 // him in every group. The settings of a named segment are every member's, so
 // they are shown read-only; those of a personal segment are edited here and
-// saved with the button in the footer. `changed` tells the list that the
-// user is in another segment now.
+// saved with the button in the footer; closing with something not saved asks
+// first. `changed` tells the list that the user is in another segment now.
 const props = defineProps<{ open: boolean; user: User | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'changed'): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('segment:manage'))
+const canSimulate = computed(() => canSimulatePrices(auth))
 
 // ------------------------------------------------------------------ the user's segment
 
@@ -73,11 +76,7 @@ async function save() {
   }
 }
 
-async function close() {
-  const discard = { title: t('users.pricing.discardTitle'), message: t('users.pricing.discard'), cancelText: t('users.pricing.discardStay'), confirmText: t('users.pricing.discardSubmit'), danger: true }
-  if (dirty.value && !(await confirm(discard))) return
-  emit('update:open', false)
-}
+const close = async () => (await confirmDiscard(dirty.value)) && emit('update:open', false)
 
 const simulatorOpen = ref(false)
 </script>
@@ -109,17 +108,17 @@ const simulatorOpen = ref(false)
               <SLink :to="{ path: '/segments', query: { edit: segment.id } }" data-testid="user-pricing-segment-link">{{ t(canManage ? 'users.pricing.editSegment' : 'users.pricing.viewSegment') }}</SLink>
             </template>
           </SAlert>
-          <SegmentGroupsEditor ref="editor" :segment-id="segment.id" :editable="editable" :discount="discount" />
+          <SegmentGroupsEditor ref="editor" :segment-id="segment.id" :editable="editable" :disabled="saving" :discount="discount" />
         </section>
       </template>
     </div>
 
     <template #footer>
-      <SButton v-permission="'price:read'" icon="price" class="me-auto" data-testid="user-pricing-simulate" @click="simulatorOpen = true">{{ t('users.pricing.simulate') }}</SButton>
+      <SButton v-if="canSimulate" icon="price" class="me-auto" data-testid="user-pricing-simulate" @click="simulatorOpen = true">{{ t('users.pricing.simulate') }}</SButton>
       <SButton data-testid="user-pricing-close" @click="close">{{ t('common.close') }}</SButton>
       <SButton v-if="editable" variant="primary" :loading="saving" :disabled="!savable" data-testid="user-pricing-save" @click="save">{{ t('common.save') }}</SButton>
     </template>
   </SDrawer>
 
-  <PriceSimulatorModal v-model:open="simulatorOpen" :preset="{ userId: user?.id }" />
+  <PriceSimulatorModal v-if="canSimulate" v-model:open="simulatorOpen" :preset="{ userId: user?.id }" />
 </template>

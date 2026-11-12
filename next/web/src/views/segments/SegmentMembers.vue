@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { SAlert, SField, SHint, SInput, SLink, SPagination, SRowAction, SStatusBadge, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
 import type { User } from '@/api/types'
 import type { Segment } from '@/api/pricing'
-import UserSearchSelect from '@/components/pricing/UserSearchSelect.vue'
+import UserPick from '@/components/pricing/UserPick.vue'
 import { useSegmentsLookup } from '@/components/pricing/segmentLookup'
 import { moveToSegment } from '@/components/pricing/segmentMembers'
 import { confirmAction } from '@/composables/crud'
@@ -16,7 +16,8 @@ import { notifyError } from '@/utils/errors'
 // one here moves him out of where he was (his personal settings go with a
 // personal segment), and removing one moves him to the default segment. Both
 // happen at once: they are not part of the form the list sits in. A caller
-// who may not manage segments only sees the list.
+// who may not manage segments only sees the list. The list is one of users:
+// the opener shows it only to a caller who reads them (canListMembers).
 const props = defineProps<{ segment: Segment }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 const { t } = useI18n()
@@ -25,8 +26,6 @@ const { segments } = useSegmentsLookup()
 
 const list = useList<User>(`/segments/${props.segment.id}/members`, { q: '' })
 const canManage = computed(() => auth.has('segment:manage'))
-// Finding a user to add is a search of the users list.
-const canAdd = computed(() => canManage.value && auth.has('user:read'))
 /** Where a removed member goes; the default segment keeps its members. */
 const fallback = computed(() => segments.value.find((s) => s.is_default && s.id !== props.segment.id))
 
@@ -87,15 +86,15 @@ function remove(u: User) {
 <template>
   <div class="space-y-4" data-testid="segment-members">
     <SAlert v-if="canManage" tone="info" dense>{{ t('segments.members.notice') }}</SAlert>
-    <SField v-if="canAdd" :label="t('segments.members.add')" :hint="t('segments.members.addHint', { segment: segment.name })">
-      <UserSearchSelect :placeholder="t('segments.members.addPlaceholder')" @select="add" />
+    <SField v-if="canManage" :label="t('segments.members.add')" :hint="t('segments.members.addHint', { segment: segment.name })">
+      <UserPick :placeholder="t('segments.members.addPlaceholder')" @select="add" />
     </SField>
     <div class="space-y-2">
       <SHint v-if="segment.is_default && canManage" size="xs" data-testid="segment-members-default">{{ t('segments.members.defaultHint') }}</SHint>
       <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <!-- Enter filters the list; it must not submit the surrounding form. -->
         <SInput v-model="list.filters.q" class="w-64" size="sm" icon="search" clearable :aria-label="t('segments.members.search')" :placeholder="t('segments.members.search')" data-testid="segment-member-search" @keydown.enter.prevent />
-        <SLink v-if="auth.has('user:read')" :to="{ path: '/users', query: { segment: segment.id } }" class="text-xs" data-testid="segment-members-users">{{ t('segments.members.inUsers') }}</SLink>
+        <SLink :to="{ path: '/users', query: { segment: segment.id } }" class="text-xs" data-testid="segment-members-users">{{ t('segments.members.inUsers') }}</SLink>
       </div>
       <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" dense :empty-text="t('segments.members.empty')" :row-attrs="rowAttrs" @retry="list.reload">
         <template #cell-email="{ row }">

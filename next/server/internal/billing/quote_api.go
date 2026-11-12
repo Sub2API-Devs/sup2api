@@ -18,11 +18,26 @@ import (
 // or of any member of a segment, in a group. Exactly one of user_id and
 // segment_id is given.
 type QuoteRequest struct {
-	UserID    *int64       `json:"user_id"`
-	SegmentID *int64       `json:"segment_id"`
-	GroupID   int64        `json:"group_id"`
-	Model     string       `json:"model"`
-	Usage     PreviewUsage `json:"usage"`
+	UserID    *int64     `json:"user_id"`
+	SegmentID *int64     `json:"segment_id"`
+	GroupID   int64      `json:"group_id"`
+	Model     string     `json:"model"`
+	Usage     QuoteUsage `json:"usage"`
+}
+
+// QuoteUsage is the usage of the sample call: tokens, by the variables of a
+// price expression. Numbers as a form sends them; whole tokens are billed.
+type QuoteUsage struct {
+	P    float64 `json:"p"`
+	C    float64 `json:"c"`
+	CR   float64 `json:"cr"`
+	CC   float64 `json:"cc"`
+	CC1h float64 `json:"cc1h"`
+}
+
+func (u QuoteUsage) tokens() core.UsageTokens {
+	return core.UsageTokens{Input: int64(u.P), Output: int64(u.C), CacheRead: int64(u.CR),
+		CacheCreation: int64(u.CC), CacheCreation1h: int64(u.CC1h)}
 }
 
 // PricingQuote is the response of POST /pricing/quote: what the call costs
@@ -98,7 +113,11 @@ func (s *Service) quote(ctx context.Context, in QuoteRequest) (*PricingQuote, er
 		return nil, core.InvalidFields(core.FieldError{Field: "model", Code: "invalid",
 			Message: core.Text(ctx, "the group does not provide this model", "该分组不提供此模型")})
 	}
-	ref, err := segment.Ref(ctx, s.db.Pool, terms.SegmentID, s.showsUsers(ctx))
+	showUsers, err := segment.ShowUsers(ctx, s.Authz)
+	if err != nil {
+		return nil, err
+	}
+	ref, err := segment.Ref(ctx, s.db.Pool, terms.SegmentID, showUsers)
 	if err != nil {
 		return nil, err
 	}
@@ -107,10 +126,11 @@ func (s *Service) quote(ctx context.Context, in QuoteRequest) (*PricingQuote, er
 	if err != nil {
 		return nil, err
 	}
-	row := rules.levels(on).row(on.Model, gp.prices.base(on.Model))
+	base, levels := gp.prices.base(on.Model), rules.levels(on)
+	row := levels.row(on.Model, base)
 	out := &PricingQuote{Segment: ref, Accessible: terms.Open, AccessSource: accessSource(gp.group.public, terms.Granted),
 		Base: row.Base, ListPrice: row.ListPrice, PriceSource: row.Source, Rate: terms.EffectiveRate(), RateOverride: terms.Override}
-	out.PriceLevels.Segment, out.PriceLevels.Group = *row.SegmentRule, row.GroupRule
+	out.PriceLevels.Segment, out.PriceLevels.Group = levels.segment.view(base), row.GroupRule
 	out.ListCost, out.Cost, err = s.quoteCosts(ctx, on, in.Usage, terms.Rate)
 	return out, err
 }
@@ -131,7 +151,7 @@ func accessSource(public, granted bool) string {
 // before the rate and cost after it. Both are zero for a model without a
 // global price, whatever the missing-price policy. A price the usage cannot
 // be evaluated with is an error, as it is for a request.
-func (s *Service) quoteCosts(ctx context.Context, on core.PriceQuery, u PreviewUsage, rate decimal.Decimal) (listCost, cost decimal.Decimal, err error) {
+func (s *Service) quoteCosts(ctx context.Context, on core.PriceQuery, u QuoteUsage, rate decimal.Decimal) (listCost, cost decimal.Decimal, err error) {
 	snap, err := s.snapshot(ctx)
 	if err != nil {
 		return decimal.Zero, decimal.Zero, err
@@ -140,8 +160,7 @@ func (s *Service) quoteCosts(ctx context.Context, on core.PriceQuery, u PreviewU
 	if rule == nil {
 		return decimal.Zero, decimal.Zero, nil
 	}
-	in := core.QuoteInputs{Expression: rule.Expression, UsageSemantics: expr.SemanticsExclusive, Tokens: core.UsageTokens{
-		Input: int64(u.P), Output: int64(u.C), CacheRead: int64(u.CR), CacheCreation: int64(u.CC), CacheCreation1h: int64(u.CC1h)}}
+	in := core.QuoteInputs{Expression: rule.Expression, UsageSemantics: expr.SemanticsExclusive, Tokens: u.tokens()}
 	quote := func(rate decimal.Decimal) (decimal.Decimal, error) {
 		in.RateMultiplier = rule.Multiplier(rate)
 		amount, err := s.Quote(ctx, in)

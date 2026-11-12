@@ -10,6 +10,19 @@ export interface LatestRequest<R> {
 }
 
 /**
+ * Tells the latest of a row of requests from the earlier ones. Each call of
+ * the function it gives starts a request and returns the check to make once
+ * its answer is there: true until the next request starts.
+ */
+export function latestOnly(): () => () => boolean {
+  let seq = 0
+  return () => {
+    const my = ++seq
+    return () => my === seq
+  }
+}
+
+/**
  * Asks `load` for the answer to `input` each time it changes, `delay` ms after
  * the last change (typing, dragging a number). Only the latest input counts:
  * the answers of earlier ones are dropped. A null input asks nothing.
@@ -18,19 +31,19 @@ export function useLatestRequest<I, R>(input: WatchSource<I | null>, load: (inpu
   const result = shallowRef<R | null>(null)
   const loading = ref(false)
   const error = ref('')
-  let seq = 0
+  const begin = latestOnly()
   let timer: ReturnType<typeof setTimeout> | undefined
 
-  async function run(value: I, my: number) {
+  async function run(value: I, latest: () => boolean) {
     try {
       const r = await load(value)
-      if (my === seq) result.value = r
+      if (latest()) result.value = r
     } catch (e) {
-      if (my !== seq) return
+      if (!latest()) return
       result.value = null
       error.value = errorMessage(e)
     } finally {
-      if (my === seq) loading.value = false
+      if (latest()) loading.value = false
     }
   }
 
@@ -38,11 +51,11 @@ export function useLatestRequest<I, R>(input: WatchSource<I | null>, load: (inpu
     input,
     (value) => {
       clearTimeout(timer)
-      const my = ++seq
+      const latest = begin()
       error.value = ''
       loading.value = value !== null
       if (value === null) result.value = null
-      else timer = setTimeout(() => run(value, my), delay)
+      else timer = setTimeout(() => run(value, latest), delay)
     },
     { immediate: true }
   )

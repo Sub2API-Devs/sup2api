@@ -41,7 +41,8 @@ describe('model price table', () => {
   it('lists what each model costs in the group and where the price comes from', async () => {
     const { w, row } = await render({ groupId: 3 })
     expect(mocks.get).toHaveBeenCalledWith('/groups/3/model-prices', undefined)
-    expect(row('gpt-4o').text()).toContain('Global ×1.5')
+    // A rule in effect is all its cell says: what the model would follow shows only without one.
+    expect(row('gpt-4o').findAll('[data-testid="model-price-group-rule"]').map((c) => c.text())).toEqual(['Global ×1.5'])
     expect(row('gpt-4o').get('[data-testid="model-price-list"]').text()).toBe('$4.5 / $22.5')
     expect(row('gpt-4o').get('[data-testid="model-price-source"]').text()).toBe('Group pricing')
     expect(row('gpt-4o').get('[data-testid="model-price-segment-rules"]').text()).toBe('2 user groups have a price of their own')

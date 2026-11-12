@@ -19,6 +19,7 @@ import GroupPricingSummary from './GroupPricingSummary.vue'
 import type { GroupEditTab, GroupPricingTab } from './groupEditTabs'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
 import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
+import { rateText } from '@/components/pricing/pricingFormat'
 import { canSimulatePrices } from '@/components/pricing/quoteSubjects'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 
@@ -42,11 +43,6 @@ const columns = computed<TableColumn[]>(() => {
   if (canManage.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
   return cols
 })
-
-function multiplier(v: string | number) {
-  const n = Number(v)
-  return Number.isFinite(n) ? n.toFixed(2) : String(v)
-}
 
 /** API key count; the server calls it api_key_count. */
 function keyCount(g: Group): number | undefined {
@@ -160,11 +156,11 @@ async function onAction(listed: Group, key: string) {
       </template>
       <template #cell-access="{ row }"><GroupAccessSummary :group="row" /></template>
       <template #cell-rate_multiplier="{ row }">
-        <span class="font-mono">{{ multiplier(row.rate_multiplier) }}</span>
+        <span class="font-mono" data-testid="group-rate">{{ rateText(row.rate_multiplier) }}</span>
       </template>
       <template #cell-pricing="{ row }"><GroupPricingSummary :group="row" link @open="openPricing(row, 'pricing')" /></template>
       <template #cell-model_allowlist="{ row }">
-        <SHint v-if="row.model_count !== undefined" size="xs" class="whitespace-nowrap" data-testid="group-model-count">{{ t('groups.modelCount', { n: row.model_count }) }}</SHint>
+        <SHint v-if="row.model_count !== undefined" size="xs" class="whitespace-nowrap" data-testid="group-model-count">{{ t('groups.modelCount', { n: row.model_count }, row.model_count) }}</SHint>
         <div v-if="row.model_allowlist && row.model_allowlist.length" class="flex max-w-xs flex-wrap items-center gap-1">
           <SBadge :tone="row.model_filter_mode === 'blacklist' ? 'danger' : 'primary'">{{ t(row.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</SBadge>
           <ModelBadge v-for="m in row.model_allowlist.slice(0, 4)" :key="m" :model="m" />
@@ -201,7 +197,7 @@ async function onAction(listed: Group, key: string) {
     <GroupPricingModal v-model:open="viewOpen" :group="viewing" :initial-tab="viewTab" />
 
     <GroupDeleteModal v-model:open="deleteOpen" :group="deleting" :key-count="deleting ? keyCount(deleting) ?? 0 : 0" @deleted="changed" />
-    <PriceSimulatorModal v-model:open="simOpen" :preset="simPreset" />
+    <PriceSimulatorModal v-if="canSimulate" v-model:open="simOpen" :preset="simPreset" />
 
     <!-- detail -->
     <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="lg">
@@ -212,7 +208,7 @@ async function onAction(listed: Group, key: string) {
           <SDescItem :label="t('common.status')"><SStatusBadge :status="detail.status" /></SDescItem>
           <SDescItem :label="t('groups.visibility')">{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</SDescItem>
           <SDescItem :label="t('groups.whoCanUse')"><GroupAccessSummary :group="detail" /></SDescItem>
-          <SDescItem :label="t('groups.rateMultiplier')"><span class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</span></SDescItem>
+          <SDescItem :label="t('groups.rateMultiplier')"><span class="font-mono">{{ rateText(detail.rate_multiplier) }}</span></SDescItem>
           <SDescItem :label="t('groups.modelPricing')"><GroupPricingSummary :group="detail" /></SDescItem>
           <SDescItem><template #label>{{ t('groups.modelRules') }} · {{ t(detail.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</template>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</SDescItem>
           <SDescItem :label="t('accounts.conversion.title')"><span data-testid="group-detail-conversion">{{ conversionText(detail) }}</span></SDescItem>

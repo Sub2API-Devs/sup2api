@@ -1,27 +1,28 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SChip, SField, SGrid, SHint, SInput, SModal, SSegmented, SSelect, SSpinner, type SelectOption } from '@sub2api/ui'
+import { SButton, SField, SGrid, SHint, SInput, SModal, SSegmented, SSelect, SSpinner, type SelectOption } from '@sub2api/ui'
 import type { GroupModelPrices, PricingQuote, PricingQuoteRequest } from '@/api/pricing'
 import type { Group, User } from '@/api/types'
+import EntityPicker from '@/components/EntityPicker.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
 import { fetchFirstPage, useGroupsLookup } from '@/composables/lookups'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import { useAuthStore } from '@/stores/auth'
-import { notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
 import PriceQuoteBreakdown from './PriceQuoteBreakdown.vue'
 import { quoteSubjects, type QuoteSubject } from './quoteSubjects'
 import SegmentBadge from './SegmentBadge.vue'
 import SegmentSelect from './SegmentSelect.vue'
-import UserSearchSelect from './UserSearchSelect.vue'
 
 // Price simulator (POST /pricing/quote): what a user, or any member of a
 // segment, pays for a sample call of a model in a group (PriceQuoteBreakdown
 // shows where that comes from). A tool in a dialog: it asks again whenever a
 // condition changes and saves nothing. `preset` fills conditions in on
 // opening; a model named without a group brings a group that provides it.
+// It reads the groups as it is set up: an opener mounts it only for a caller
+// who may simulate (canSimulatePrices).
 interface Preset {
   userId?: number
   segmentId?: number
@@ -39,7 +40,8 @@ const { groups } = useGroupsLookup()
 // The quote is for whom the caller may pick: a user (user:read), else a segment (segment:read).
 const allowed = quoteSubjects(auth)
 const subject = ref<QuoteSubject>(allowed[0] ?? 'segment')
-const user = ref<User | null>(null)
+/** The user quoted for, as the picker hands him over ('' = none). */
+const userId = ref('')
 const segmentId = ref<number | null>(null)
 const groupId = ref<number | null>(null)
 const model = ref<string | null>(null)
@@ -47,44 +49,46 @@ const usage = reactive<{ p: number | null; c: number | null }>({ p: 100_000, c: 
 
 const subjects = computed<SelectOption[]>(() => allowed.map((value) => ({ value, label: t(`pricingTools.sim.subject.${value}`) })))
 
-async function presetUser(id: number) {
-  if (user.value?.id !== id) user.value = null
-  try {
-    user.value = await api.get<User>(`/users/${id}`)
-  } catch (e) {
-    notifyError(e)
-  }
-}
+// The row of the user picked (GET /users/:id) says which user group he is in. Only the latest pick counts.
+const picked = useLatestRequest(
+  () => (props.open && subject.value === 'user' && userId.value ? userId.value : null),
+  (id) => api.get<User>(`/users/${id}`),
+  0
+)
+/** The user quoted for, once his row is here; null while it loads. */
+const user = computed(() => {
+  const loaded = picked.result.value
+  return loaded && String(loaded.id) === userId.value ? loaded : null
+})
 
 /** A preset model that no group provides: the result says so until a model is chosen. */
 const unprovided = ref<string | null>(null)
-
-/** Chooses a model named without a group: in the chosen group when that one provides it, else in the first group that does (GET /groups?model=). */
-async function presetModel(name: string) {
-  try {
-    const providers = await fetchFirstPage<Group>('/groups', { model: name })
-    const group = providers.find((g) => g.id === groupId.value) ?? providers[0]
-    if (group) groupId.value = group.id
-    model.value = group ? name : null
-    unprovided.value = group ? null : name
-  } catch (e) {
-    notifyError(e)
-  }
-}
+/** A model the opener names without a group. A new object each time: naming the same model again asks again. */
+const named = shallowRef<{ name: string } | null>(null)
+// The groups that provide it (GET /groups?model=). Only the latest model named counts.
+const providers = useLatestRequest(named, async ({ name }) => ({ name, groups: await fetchFirstPage<Group>('/groups', { model: name }) }), 0)
+// Chooses the model in the chosen group when that one provides it, else in the first group that does.
+watch(providers.result, (found) => {
+  if (!found) return
+  const group = found.groups.find((g) => g.id === groupId.value) ?? found.groups[0]
+  if (group) groupId.value = group.id
+  model.value = group ? found.name : null
+  unprovided.value = group ? null : found.name
+})
 
 /** Takes what the opener names and leaves the other conditions as they were. */
 function applyPreset(preset: Preset) {
   unprovided.value = null
   if (preset.groupId !== undefined) groupId.value = preset.groupId
   if (preset.model !== undefined && preset.groupId !== undefined) model.value = preset.model
-  else if (preset.model !== undefined) presetModel(preset.model)
+  named.value = preset.model !== undefined && preset.groupId === undefined ? { name: preset.model } : null
   if (preset.segmentId !== undefined) {
     subject.value = 'segment'
     segmentId.value = preset.segmentId
   }
   if (preset.userId === undefined) return
   subject.value = 'user'
-  presetUser(preset.userId)
+  userId.value = String(preset.userId)
 }
 // Compared by value: an opener may hand over a new object on every render.
 const presetKey = computed(() => (props.open && props.preset ? JSON.stringify(props.preset) : ''))
@@ -136,27 +140,26 @@ const groupName = computed(() => groups.value.find((g) => g.id === groupId.value
     <div class="space-y-4" data-testid="price-sim">
       <SHint>{{ t('pricingTools.sim.description') }}</SHint>
 
-      <SField :label="t('pricingTools.sim.who')">
+      <SField :label="t('pricingTools.sim.who')" :error="picked.error.value">
         <div class="flex flex-wrap items-center gap-3">
           <SSegmented v-if="subjects.length > 1" v-model="subject" :options="subjects" :aria-label="t('pricingTools.sim.who')" data-testid="price-sim-subject" />
           <div class="min-w-0 flex-1 basis-64">
             <SegmentSelect v-if="subject === 'segment'" v-model="segmentId" data-testid="price-sim-segment" />
-            <div v-else-if="user" class="flex min-h-control flex-wrap items-center gap-2" data-testid="price-sim-user">
-              <SChip closable :close-label="t('pricingTools.sim.changeUser')" @close="user = null">{{ user.email }}</SChip>
-              <SegmentBadge :segment="user.segment" />
+            <div v-else class="flex flex-wrap items-center gap-2" data-testid="price-sim-user">
+              <EntityPicker v-model:id="userId" kind="user" class="min-w-0 flex-1 basis-56" />
+              <SegmentBadge v-if="user" :segment="user.segment" class="shrink-0" />
             </div>
-            <UserSearchSelect v-else @select="user = $event" />
           </div>
         </div>
       </SField>
       <SGrid :cols="2">
-        <SField :label="t('common.group')">
+        <SField :label="t('common.group')" :error="providers.error.value">
           <!-- GroupPicker keeps attributes off its root (it is a schema widget too): the test id sits on a wrapper. -->
           <div data-testid="price-sim-group">
             <GroupPicker :model-value="groupId" @update:model-value="groupId = typeof $event === 'number' ? $event : null" />
           </div>
         </SField>
-        <SField :label="t('common.model')" :hint="t('pricingTools.sim.modelHint')">
+        <SField :label="t('common.model')" :hint="t('pricingTools.sim.modelHint')" :error="groupModels.error.value">
           <SSelect
             :model-value="model"
             :options="modelOptions"

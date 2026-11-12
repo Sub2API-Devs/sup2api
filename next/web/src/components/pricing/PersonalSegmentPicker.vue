@@ -5,7 +5,7 @@ import type { User } from '@/api/types'
 import type { SegmentRef } from '@/api/pricing'
 import { useAuthStore } from '@/stores/auth'
 import PersonalConvertDialog from './PersonalConvertDialog.vue'
-import UserSearchSelect from './UserSearchSelect.vue'
+import UserPick from './UserPick.vue'
 
 // Picks one user to price on his own and answers with his personal segment:
 // the one he has, or the one the convert dialog gives him when he is still in
@@ -30,7 +30,7 @@ function pick(user: User) {
 <template>
   <div v-if="allowed" data-testid="personal-segment-picker">
     <SField :label="label" :hint="hint">
-      <UserSearchSelect :disabled="disabled" @select="pick" />
+      <UserPick :disabled="disabled" @select="pick" />
     </SField>
     <PersonalConvertDialog v-model:open="convertOpen" :user="converting" @done="emit('select', $event, true)" />
   </div>

@@ -34,6 +34,7 @@ export default {
   price: {
     perRequest: '{price} per request',
     expression: 'Billed by expression',
+    expressionTimes: 'Billed by expression {rate}',
     none: 'No price',
     tiered: '{n} tiers, first shown'
   },

@@ -57,7 +57,7 @@ const nobody = computed(() => props.visibility === 'restricted' && !loading.valu
 /** Saves the changed rows for group `gid`: false when a rate cannot be saved yet, a failed request rejects. */
 const save = (gid: number) => drafts.save((items) => api.put<SegmentGroupSetting[]>(`/groups/${gid}/segments`, { items }, { query: query.value }))
 
-defineExpose({ load, save, dirty, include })
+defineExpose({ save, dirty, include })
 </script>
 
 <template>
@@ -85,7 +85,7 @@ defineExpose({ load, save, dirty, include })
     >
       <template #lead="{ row }">
         <SegmentBadge :segment="row.segment" with-name />
-        <SHint v-if="row.segment.kind === 'named'" inline size="xs" class="whitespace-nowrap">{{ t('groups.segments.members', { n: row.member_count ?? 0 }) }}</SHint>
+        <SHint v-if="row.segment.kind === 'named'" inline size="xs" class="whitespace-nowrap">{{ t('groups.segments.members', { n: row.member_count ?? 0 }, row.member_count ?? 0) }}</SHint>
       </template>
     </AccessRateTable>
   </div>

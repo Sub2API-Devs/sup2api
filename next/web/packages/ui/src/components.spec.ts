@@ -382,7 +382,8 @@ describe('STable', () => {
     expect(open.map(b => b.text())).toEqual(['false', 'true', 'false'])
     expect(w.findAll('.more').map(e => e.text())).toEqual(['2'])
     expect(w.get('.s-table-expand td').attributes('colspan')).toBe(String(columns.length))
-    expect(w.emitted('expand')).toEqual([[rows[0], true], [rows[1], true]])
+    // The row expandSingle closes says so before the one that opens.
+    expect(w.emitted('expand')).toEqual([[rows[0], true], [rows[0], false], [rows[1], true]])
     await w.setProps({ expandSingle: false })
     await open[0].trigger('click')
     expect(w.findAll('.more').map(e => e.text())).toEqual(['1', '2'])

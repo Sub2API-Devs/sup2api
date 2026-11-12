@@ -4,10 +4,6 @@ export default {
     default: '新用户默认',
     discount: '全场 {rate}'
   },
-  userSearch: {
-    placeholder: '按邮箱或昵称搜索用户',
-    empty: '没有匹配的用户'
-  },
   convert: {
     title: '把 {name} 设为个人专属',
     intro: '设为个人专属后，他不再属于「{from}」，之后「{from}」的改动不再影响他。',
@@ -35,7 +31,6 @@ export default {
       user: '用户',
       segment: '用户组'
     },
-    changeUser: '换一个用户',
     modelPlaceholder: '选择模型',
     modelHint: '只列这个分组提供的模型。',
     inputTokens: '输入 tokens',
@@ -56,7 +51,7 @@ export default {
       hint: '从上往下，第一层设置了的生效。价格为每百万 token 的输入 / 输出价。',
       segment: '专属价（{segment}）',
       group: '分组内定价（{group}）',
-      global: '全局价格',
+      global: '全局价',
       tiered: '分段计价：单价显示的是第一档，费用按这次用量所在的档计算。'
     },
     rate: {
@@ -71,7 +66,7 @@ export default {
     applies: '生效',
     paid: '实付',
     paidIfGranted: '授权后的价格',
-    unpriced: '这个模型还没有全局价格，无法计费。请先到“模型价格”里设置。',
+    unpriced: '这个模型还没有全局价，无法计费。请先到“模型价格”里设置。',
     listCost: '标价费用',
     rateName: '倍率'
   }

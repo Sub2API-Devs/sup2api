@@ -50,11 +50,7 @@ export default {
     inheritedEdit: 'To change them, edit the user group or price this user individually.',
     editSegment: 'Edit this user group',
     viewSegment: 'View this user group',
-    simulate: 'Price simulator',
-    discardTitle: 'Discard unsaved changes?',
-    discard: 'The changes to groups and pricing are not saved and are lost on closing.',
-    discardStay: 'Keep editing',
-    discardSubmit: 'Discard changes'
+    simulate: 'Price simulator'
   },
   ledger: 'Balance ledger',
   adjustBalance: 'Adjust balance',

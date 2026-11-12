@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SSelect, type SelectOption } from '@sub2api/ui'
 import type { Segment } from '@/api/pricing'
-import { rateText } from './pricingFormat'
+import { hasDiscount, rateText } from './pricingFormat'
 import { useSegmentsLookup } from './segmentLookup'
 
 // Picks one named segment. An option reads "VIP · ×0.9 on every group"; the
@@ -15,7 +15,7 @@ const { t } = useI18n()
 const { segments } = useSegmentsLookup()
 
 function label(s: Segment): string {
-  const marks = [s.is_default ? t('pricingTools.segment.default') : '', Number(s.discount) === 1 ? '' : t('pricingTools.segment.discount', { rate: rateText(s.discount) })]
+  const marks = [s.is_default ? t('pricingTools.segment.default') : '', hasDiscount(s) ? t('pricingTools.segment.discount', { rate: rateText(s.discount) }) : '']
   return [s.name, ...marks.filter(Boolean)].join(' · ')
 }
 

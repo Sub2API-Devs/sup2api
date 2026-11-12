@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, nextTick, ref } from 'vue'
-import { useLatestRequest } from './useLatestRequest'
+import { latestOnly, useLatestRequest } from './useLatestRequest'
 
 /** A `load` whose answers the test hands out one by one. */
 function deferredLoad() {
@@ -90,5 +90,18 @@ describe('latest request', () => {
     scope.stop()
     await vi.advanceTimersByTimeAsync(300)
     expect(load).not.toHaveBeenCalled()
+  })
+})
+
+describe('latest only', () => {
+  it('holds for a request until the next one starts, each row of requests on its own', () => {
+    const begin = latestOnly()
+    const first = begin()
+    expect(first()).toBe(true)
+    const second = begin()
+    expect([first(), second()]).toEqual([false, true])
+
+    const other = latestOnly()()
+    expect([second(), other()]).toEqual([true, true])
   })
 })

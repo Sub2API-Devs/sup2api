@@ -138,10 +138,14 @@ func loadRules(ctx context.Context, q store.Querier, cond string, args ...any) (
 		if multiplier.Valid {
 			r.setScale(multiplier.Decimal)
 		}
+		out[on] = r
+		// Only a custom price has an expression of its own.
+		if r.Kind != core.PriceRuleCustom {
+			continue
+		}
 		if prog, err := expr.CompileCached(r.expression); err == nil {
 			r.exprVersion = prog.Version()
 		}
-		out[on] = r
 	}
 	return out, rows.Err()
 }
@@ -154,7 +158,7 @@ var customPrices = map[string]struct {
 	required int
 }{
 	expr.ModePerRequest: {[]string{"price"}, 1},
-	expr.ModePerToken:   {tokenPriceKeys, 2},
+	expr.ModePerToken:   {[]string{"p", "c", "cr", "cc", "cc1h"}, 2},
 }
 
 // checkRule validates a rule over the global price of its model (nil = the
@@ -218,36 +222,33 @@ func checkCustom(ctx context.Context, in Rule, mode string) (*storedRule, error)
 		expression: src, exprHash: prog.Hash(), exprVersion: prog.Version()}, nil
 }
 
-// saveRule stores the rule on on, replacing the one there. The expression of
-// a custom price also goes to model_price_history, as a global price's does:
-// a settlement retry reads it back by expr_hash on any node.
-func saveRule(ctx context.Context, tx pgx.Tx, on core.PriceQuery, r *storedRule, updatedBy int64) error {
+// queueSave queues storing the rule on on, replacing the one there. The
+// expression of a custom price also goes to model_price_history, as a global
+// price's does: a settlement retry reads it back by expr_hash on any node.
+func queueSave(b *pgx.Batch, on core.PriceQuery, r *storedRule, updatedBy int64) error {
 	if r.Kind == core.PriceRuleCustom {
 		prog, err := expr.CompileCached(r.expression)
 		if err != nil {
 			return err
 		}
-		if err := recordHistory(ctx, tx, prog); err != nil {
-			return err
-		}
+		b.Queue(recordHistorySQL, prog.Hash(), prog.Expression(), prog.Version())
 	}
 	target := `(group_id, model) WHERE segment_id IS NULL`
 	if on.SegmentID != 0 {
 		target = `(group_id, segment_id, model) WHERE segment_id IS NOT NULL`
 	}
-	_, err := tx.Exec(ctx, `
+	b.Queue(`
 		INSERT INTO price_rules (group_id, segment_id, model, kind, multiplier, mode, config, expression, expr_hash, updated_by)
 		VALUES ($1, $2, $3, $4, $5::numeric, NULLIF($6, ''), $7, $8, $9, $10)
 		ON CONFLICT `+target+` DO UPDATE SET kind = EXCLUDED.kind, multiplier = EXCLUDED.multiplier,
 			mode = EXCLUDED.mode, config = EXCLUDED.config, expression = EXCLUDED.expression,
 			expr_hash = EXCLUDED.expr_hash, updated_by = EXCLUDED.updated_by, updated_at = now()`,
 		on.GroupID, nullID(on.SegmentID), on.Model, r.Kind, r.Multiplier, r.Mode, r.Config, r.expression, r.exprHash, nullID(updatedBy))
-	return err
+	return nil
 }
 
-// deleteRule removes the rule on on, if there is one.
-func deleteRule(ctx context.Context, tx pgx.Tx, on core.PriceQuery) error {
-	_, err := tx.Exec(ctx, `DELETE FROM price_rules WHERE group_id = $1 AND model = $2
+// queueDelete queues removing the rule on on, if there is one.
+func queueDelete(b *pgx.Batch, on core.PriceQuery) {
+	b.Queue(`DELETE FROM price_rules WHERE group_id = $1 AND model = $2
 		AND segment_id IS NOT DISTINCT FROM $3`, on.GroupID, on.Model, nullID(on.SegmentID))
-	return err
 }

@@ -7,6 +7,11 @@
 -- NULL on rows from before this migration, which had no price rules: for
 -- them it is total_cost / rate_multiplier, as it always was. A nullable
 -- column without a default: no rewrite.
+
+-- Fail fast when a lock is not to be had, rather than queue for it: whoever
+-- reads usage_logs would queue behind this migration in turn.
+SET LOCAL lock_timeout = '10s';
+
 ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS base_cost numeric(20,8);
 
 -- The hourly rollup reads base_cost (usage/stats.go standardCost), so an

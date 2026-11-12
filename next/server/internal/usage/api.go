@@ -67,9 +67,9 @@ type Record struct {
 	// converted the request, null when native and nothing was refused.
 	// Hidden from self-service views like upstream_protocol.
 	Conversion json.RawMessage `json:"conversion"`
-	// BaseCost is usage_logs.base_cost, the cost at the global price; nil on
-	// a row from before the column. The export reads it.
-	BaseCost *decimal.Decimal `json:"-"`
+	// StandardCost is the cost at the global price (standardCost). The
+	// export reads it.
+	StandardCost decimal.Decimal `json:"-"`
 }
 
 // PriceRef identifies the price rule used for a record.
@@ -146,7 +146,7 @@ const recordColumns = `u.id, u.request_id, u.client_request_id, u.created_at, u.
 	u.error_type, u.error_message, u.attempts, u.input_tokens, u.output_tokens, u.cache_read_tokens,
 	u.cache_creation_tokens, u.cache_creation_1h_tokens, u.total_cost, u.rate_multiplier, u.billing_status,
 	u.billing_mode, u.matched_tier, u.latency_ms, u.first_token_ms, u.upload_ms, u.sticky_hit, u.client_ip, u.conversion,
-	u.base_cost`
+	` + standardCost
 
 const recordJoins = ` FROM usage_logs u
 	LEFT JOIN users us ON us.id = u.user_id
@@ -162,7 +162,7 @@ func (r *Record) scanTargets() []any {
 		&r.ErrorMessage, &r.Attempts, &r.InputTokens, &r.OutputTokens, &r.CacheReadTokens,
 		&r.CacheCreationTokens, &r.CacheCreation1hTokens, &r.TotalCost, &r.RateMultiplier, &r.BillingStatus,
 		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.UploadMs, &r.StickyHit, &r.ClientIP, &r.Conversion,
-		&r.BaseCost}
+		&r.StandardCost}
 }
 
 // hideUpstream removes upstream account details (account, account type,

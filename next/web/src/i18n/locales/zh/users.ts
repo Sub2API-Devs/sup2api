@@ -50,11 +50,7 @@ export default {
     inheritedEdit: '要修改请编辑这个用户组，或为他单独定价。',
     editSegment: '编辑这个用户组',
     viewSegment: '查看这个用户组',
-    simulate: '价格试算',
-    discardTitle: '放弃未保存的改动？',
-    discard: '「分组与定价」里的改动还没保存，关闭后会丢失。',
-    discardStay: '继续编辑',
-    discardSubmit: '放弃改动'
+    simulate: '价格试算'
   },
   ledger: '余额流水',
   adjustBalance: '调整余额',

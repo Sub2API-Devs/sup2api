@@ -4,10 +4,6 @@ export default {
     default: 'default for new users',
     discount: '{rate} on every group'
   },
-  userSearch: {
-    placeholder: 'Search users by email or name',
-    empty: 'No matching users'
-  },
   convert: {
     title: 'Set {name} to Personal',
     intro: 'Once Personal, this user no longer belongs to "{from}", and later changes to "{from}" no longer affect them.',
@@ -35,7 +31,6 @@ export default {
       user: 'User',
       segment: 'User group'
     },
-    changeUser: 'Choose another user',
     modelPlaceholder: 'Choose a model',
     modelHint: 'Only the models this group provides.',
     inputTokens: 'Input tokens',

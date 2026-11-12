@@ -39,7 +39,7 @@ func (s *Service) addMembers(c *gin.Context) {
 		if err := requireUsers(ctx, tx, in.UserIDs); err != nil {
 			return err
 		}
-		moved, dropped, err = moveUsers(ctx, tx, id, in.UserIDs)
+		moved, dropped, err = moveUsers(ctx, tx, id, in.UserIDs, "")
 		return err
 	})
 	if err != nil {
@@ -70,21 +70,42 @@ func requireUsers(ctx context.Context, q store.Querier, ids []int64) error {
 }
 
 // moveUsers puts the users into the named segment to and deletes the
-// personal segment of each one who had one, with its settings. It returns
-// how many moved (a user already there does not) and whether a personal
-// segment went: its price rules went with it.
-func moveUsers(ctx context.Context, tx pgx.Tx, to int64, userIDs []int64) (moved int, dropped bool, err error) {
-	// Users are locked in id order, so concurrent moves cannot deadlock.
-	rows, err := tx.Query(ctx, `WITH m AS (SELECT id FROM users
-			WHERE id = ANY($2) AND deleted_at IS NULL AND segment_id <> $1 ORDER BY id FOR NO KEY UPDATE)
-		UPDATE users u SET segment_id = $1 FROM m WHERE u.id = m.id RETURNING u.id`, to, userIDs)
+// personal segment of each one who had one, with its settings. Only users in
+// a segment of the kind from move ("" = of either kind). It returns how many
+// moved (a user already there does not) and whether a personal segment went:
+// its price rules went with it.
+func moveUsers(ctx context.Context, tx pgx.Tx, to int64, userIDs []int64, from string) (moved int, dropped bool, err error) {
+	ids, err := lockUsers(ctx, tx, `id = ANY($1) AND deleted_at IS NULL AND segment_id <> $2
+		AND ($3 = '' OR segment_id IN (SELECT id FROM segments WHERE kind = $3))`, userIDs, to, from)
 	if err != nil {
 		return 0, false, err
 	}
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
-	if err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE users SET segment_id = $1 WHERE id = ANY($2)`, to, ids); err != nil {
 		return 0, false, err
 	}
-	tag, err := tx.Exec(ctx, `DELETE FROM segments WHERE kind = 'personal' AND user_id = ANY($1)`, ids)
-	return len(ids), tag.RowsAffected() > 0, err
+	dropped, err = DropPersonal(ctx, tx, ids...)
+	return len(ids), dropped, err
+}
+
+// lockUsers locks the users cond picks, in id order, until the transaction
+// ends, and returns their ids. Every writer of users.segment_id locks first
+// and updates in a statement of its own: an UPDATE in the statement that
+// locks starts from the row versions of that statement's snapshot and, where
+// another writer replaced one meanwhile, queues on it behind the key-share
+// holders (inserts that refer to the user), which can close a cycle.
+func lockUsers(ctx context.Context, tx pgx.Tx, cond string, args ...any) ([]int64, error) {
+	rows, err := tx.Query(ctx, `SELECT id FROM users WHERE `+cond+` ORDER BY id FOR NO KEY UPDATE`, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[int64])
+}
+
+// DropPersonal deletes the personal segments of the users, who have left
+// them, with their grants, rates and model prices. It reports whether one
+// went: the cached price rules are then stale, and the caller drops them
+// after the transaction (Deps.PriceRulesChanged).
+func DropPersonal(ctx context.Context, tx pgx.Tx, userIDs ...int64) (bool, error) {
+	tag, err := tx.Exec(ctx, `DELETE FROM segments WHERE kind = 'personal' AND user_id = ANY($1)`, userIDs)
+	return tag.RowsAffected() > 0, err
 }

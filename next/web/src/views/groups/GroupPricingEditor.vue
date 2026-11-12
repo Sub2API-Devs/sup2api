@@ -14,7 +14,8 @@ import { notifyError } from '@/utils/errors'
 // beside it, so the choice and the rate shown follow what is being edited
 // there; a user picked here joins those rows through `include`. The table
 // holds the drafts of one target at a time: changing the target asks first
-// when there are any.
+// when there are any, in the words of every "unsaved changes" question
+// (confirmDiscard) and with one more way out, saving them on the way.
 const props = defineProps<{ groupId: number | null; segments: DraftedSetting[]; defaultRate: string; editable?: boolean }>()
 const emit = defineEmits<{ (e: 'include', segment: SegmentRef): void }>()
 const { t } = useI18n()
@@ -65,12 +66,6 @@ function failed(e: unknown) {
   return false
 }
 
-function load() {
-  segment.value = null
-  pending.value = null
-  return table.value?.load()
-}
-
 /** Saves the drafts of the current target. False when one cannot be saved yet (the table says which). */
 async function save(): Promise<boolean> {
   saving.value = true
@@ -81,7 +76,7 @@ async function save(): Promise<boolean> {
   }
 }
 
-defineExpose({ load, save, dirty, select })
+defineExpose({ save, dirty, select })
 </script>
 
 <template>
@@ -100,11 +95,11 @@ defineExpose({ load, save, dirty, select })
     </SAlert>
     <ModelPriceTable ref="table" :group-id="groupId" :segment="segment" :editable="editable" />
 
-    <SModal :open="!!pending" :title="t('groups.pricing.unsavedTitle')" width="sm" top :closable="!saving" :persistent="saving" @update:open="pending = null">
-      <p class="text-sm text-fg-muted" data-testid="group-pricing-unsaved">{{ t('groups.pricing.unsavedText') }}</p>
+    <SModal :open="!!pending" :title="t('common.unsaved.title')" width="sm" top :closable="!saving" :persistent="saving" @update:open="pending = null">
+      <p class="text-sm text-fg-muted" data-testid="group-pricing-unsaved">{{ t('common.unsaved.message') }}</p>
       <template #footer>
-        <SButton :disabled="saving" data-testid="group-pricing-unsaved-stay" @click="pending = null">{{ t('groups.pricing.unsavedStay') }}</SButton>
-        <SButton variant="danger" :disabled="saving" data-testid="group-pricing-unsaved-discard" @click="settle(false)">{{ t('groups.pricing.unsavedDiscard') }}</SButton>
+        <SButton :disabled="saving" data-testid="group-pricing-unsaved-stay" @click="pending = null">{{ t('common.unsaved.stay') }}</SButton>
+        <SButton variant="danger" :disabled="saving" data-testid="group-pricing-unsaved-discard" @click="settle(false)">{{ t('common.unsaved.discard') }}</SButton>
         <SButton variant="primary" :loading="saving" data-testid="group-pricing-unsaved-save" @click="settle(true)">{{ t('groups.pricing.unsavedSave') }}</SButton>
       </template>
     </SModal>

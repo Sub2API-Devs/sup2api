@@ -33,7 +33,7 @@ describe('price rule editor', () => {
   })
   it('says so when the multiplier is not a rate', async () => {
     const { w } = render({ kind: 'multiplier', multiplier: 'x' })
-    expect(w.vm.valid).toBe(false)
+    expect(w.get('[data-testid="price-rule-multiplier"]').attributes('aria-invalid')).toBe('true')
     expect(w.get('[data-testid="price-rule-preview"]').text()).toBe('Enter a number from 0 to below 1000000, up to 4 decimals')
   })
   it('starts a custom price from the global one and edits one price at a time', async () => {

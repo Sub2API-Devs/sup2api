@@ -7,6 +7,7 @@ import type { SegmentGroupSetting } from '@/api/pricing'
 import GroupBadge from '@/components/platform/GroupBadge.vue'
 import AccessRateTable from '@/components/pricing/AccessRateTable.vue'
 import { useAccessRateDrafts } from '@/components/pricing/useAccessRateDrafts'
+import { useAuthStore } from '@/stores/auth'
 import SegmentGroupPricesModal from './SegmentGroupPricesModal.vue'
 
 // What a segment (a user group, or the personal one of a user) gets in every
@@ -14,10 +15,18 @@ import SegmentGroupPricesModal from './SegmentGroupPricesModal.vue'
 // own model prices. Grants and rates stay in drafts (the rate that applies
 // follows them at once) until the parent calls save(), as it does with its
 // other sub-editors after saving the main form. Model prices are saved by
-// their own dialog. `discount` is the segment's discount as the parent's
-// form has it now, so the rates here follow it before it is saved.
-const props = defineProps<{ segmentId: number | null; editable?: boolean; discount?: string }>()
+// their own dialog, and `changed` says their count is another now. They are
+// the group's to read and to set (GET / PUT /groups/:id/model-prices): the
+// column takes group:read and setting them group:manage, whatever the caller
+// may do to segments. `discount` is the segment's discount as the parent's
+// form has it now, so the rates here follow it before it is saved; `disabled`
+// holds the fields still while the parent saves.
+const props = defineProps<{ segmentId: number | null; editable?: boolean; disabled?: boolean; discount?: string }>()
+const emit = defineEmits<{ (e: 'changed'): void }>()
 const { t } = useI18n()
+const auth = useAuthStore()
+const canReadPrices = computed(() => auth.has('group:read'))
+const canSetPrices = computed(() => !!props.editable && auth.has('group:manage'))
 
 const path = computed(() => `/segments/${props.segmentId}/groups`)
 // A segment not saved yet has no settings to ask for.
@@ -43,13 +52,19 @@ function openPrices(row: SegmentGroupSetting) {
   pricesOpen.value = true
 }
 
-defineExpose({ load, save, dirty })
+/** The rows count the rules again, and so does whoever lists the segment. */
+function pricesSaved() {
+  refresh()
+  emit('changed')
+}
+
+defineExpose({ save, dirty })
 </script>
 
 <template>
   <div data-testid="segment-groups">
     <SEmpty v-if="segmentId === null" size="sm" icon="group" :text="t('segments.groups.emptyNew')" data-testid="segment-groups-empty" />
-    <AccessRateTable v-else side="group" :rows="rows" :editable="editable" :loading="loading" :error="error" @retry="refresh" @change="change" @prices="openPrices">
+    <AccessRateTable v-else side="group" :rows="rows" :editable="editable" :disabled="disabled" :no-prices="!canReadPrices" :readonly-prices="!canSetPrices" :loading="loading" :error="error" @retry="refresh" @change="change" @prices="openPrices">
       <template #lead="{ row }">
         <GroupBadge :name="row.group.name" :platforms="row.group.platforms" :rate="row.group.rate_multiplier" />
         <SBadge v-if="row.group.visibility === 'restricted'" size="xs" data-testid="segment-group-private">
@@ -62,6 +77,6 @@ defineExpose({ load, save, dirty })
         <SHint v-if="row.group.description" size="xs" class="truncate">{{ row.group.description }}</SHint>
       </template>
     </AccessRateTable>
-    <SegmentGroupPricesModal v-model:open="pricesOpen" :setting="pricing" :editable="editable" @saved="refresh" />
+    <SegmentGroupPricesModal v-if="canReadPrices" v-model:open="pricesOpen" :setting="pricing" :editable="canSetPrices" @saved="pricesSaved" />
   </div>
 </template>

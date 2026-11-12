@@ -25,7 +25,7 @@ type Segment struct {
 	IsDefault   bool            `json:"is_default"`
 	MemberCount int64           `json:"member_count"`
 	// GrantedGroups are the private groups the segment is granted.
-	GrantedGroups []GroupName `json:"granted_groups"`
+	GrantedGroups []core.GroupRef `json:"granted_groups"`
 	// RateOverrideCount counts the groups whose rate it overrides and
 	// PriceRuleCount its own model prices, over all groups.
 	RateOverrideCount int64 `json:"rate_override_count"`
@@ -49,17 +49,11 @@ type Member struct {
 	DisplayName string `json:"display_name"`
 }
 
-// GroupName names a group.
-type GroupName struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-}
-
 const fromSegments = ` FROM segments s LEFT JOIN users u ON u.id = s.user_id`
 
 // selectSegment reads a segment with its counts in one statement. A deleted
 // user is no member.
-const selectSegment = `SELECT s.id, s.kind, COALESCE(u.email, s.name), s.user_id, s.description, s.discount, s.is_default, s.created_at,
+const selectSegment = `SELECT ` + RefColumns + `, s.description, s.discount, s.is_default, s.created_at,
 	(SELECT count(*) FROM users m WHERE m.segment_id = s.id AND m.deleted_at IS NULL),
 	(SELECT COALESCE(jsonb_agg(jsonb_build_object('id', g.id, 'name', g.name) ORDER BY g.id), '[]')
 	  FROM segment_groups sg JOIN groups g ON g.id = sg.group_id
@@ -95,7 +89,7 @@ func scanSegment(row pgx.Row, showUsers bool) (*Segment, error) {
 }
 
 func (s *Service) load(ctx context.Context, id int64) (*Segment, error) {
-	show, err := s.showUsers(ctx)
+	show, err := ShowUsers(ctx, s.authz)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +126,7 @@ func searchSegments(f *store.Filter, q string, showUsers bool) {
 // ?kind=personal of the personal ones.
 func (s *Service) list(c *gin.Context) {
 	ctx := c.Request.Context()
-	show, err := s.showUsers(ctx)
+	show, err := ShowUsers(ctx, s.authz)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -287,7 +281,8 @@ func (s *Service) update(c *gin.Context) {
 }
 
 // delete removes a named segment with its grants, rates and model prices
-// (they cascade). Its members fall back to the default segment.
+// (they cascade). Its members fall back to the default segment. A personal
+// segment only goes this way once its user is deleted (requireOrphan).
 func (s *Service) delete(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, ok := httpapi.PathID(c, "id")
@@ -303,13 +298,17 @@ func (s *Service) delete(c *gin.Context) {
 		case isDefault:
 			return core.ErrConflict.WithMessage(t(ctx, "the default user group cannot be deleted", "默认用户组不能删除"))
 		case kind == core.SegmentPersonal:
-			return core.ErrConflict.WithMessage(t(ctx, "a personal user group is deleted by moving its user to a user group",
-				"个人专属通过把用户移回用户组来删除"))
+			if err := requireOrphan(ctx, tx, id); err != nil {
+				return err
+			}
 		}
 		// Deleted users leave too: users.segment_id references the row.
-		// Members are locked in id order, as moveUsers locks them.
-		if _, err := tx.Exec(ctx, `WITH m AS (SELECT id FROM users WHERE segment_id = $1 ORDER BY id FOR NO KEY UPDATE)
-			UPDATE users u SET segment_id = default_segment_id() FROM m WHERE u.id = m.id`, id); err != nil {
+		// Members are locked before they are moved, as moveUsers does.
+		members, err := lockUsers(ctx, tx, `segment_id = $1`, id)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE users SET segment_id = default_segment_id() WHERE id = ANY($1)`, members); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM segments WHERE id = $1`, id)
@@ -321,4 +320,18 @@ func (s *Service) delete(c *gin.Context) {
 	}
 	s.priceRulesChanged(ctx)
 	httpapi.NoContent(c)
+}
+
+// requireOrphan fails unless the user of the personal segment is deleted. A
+// personal segment goes when its user leaves it; one a deleted user is still
+// in was left by a node of the version before segments, which deletes a user
+// without the user's segment, and can only be deleted itself.
+func requireOrphan(ctx context.Context, q store.Querier, id int64) error {
+	var live bool
+	err := q.QueryRow(ctx, `SELECT u.deleted_at IS NULL FROM segments s JOIN users u ON u.id = s.user_id WHERE s.id = $1`, id).Scan(&live)
+	if err == nil && live {
+		return core.ErrConflict.WithMessage(t(ctx, "a personal user group is deleted by moving its user to a user group",
+			"个人专属通过把用户移回用户组来删除"))
+	}
+	return err
 }

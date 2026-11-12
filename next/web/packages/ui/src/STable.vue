@@ -7,7 +7,8 @@
 //   cell slot gets `expanded` and `toggleExpand()` of its row, so a cell (a
 //   row action) can open it too. expandToggle false leaves the chevron column
 //   out for a table opened from a cell only (phone cards keep their Details
-//   toggle); expandSingle closes the other rows when one opens;
+//   toggle); expandSingle closes the other rows when one opens, each with
+//   an `expand` (row, false) before the (row, true) of the one that opens;
 // - selectable + v-model:selected (array of row keys, see rowKey): checkbox
 //   column with a select-all header (indeterminate when partly selected);
 //   rowSelectable(row) disables individual rows; Shift+click on a checkbox
@@ -139,10 +140,13 @@ const attrsOf = (row: T, i: number) => (props.reorderable ? { ...props.rowAttrs?
 
 function toggle(row: T, key: unknown) {
   const open = !expanded.value.has(key)
+  // expandSingle closes the other rows; the ones still listed report it, before the row that opens.
+  const closed = open && props.expandSingle ? keyed.value.filter(k => k.key !== key && expanded.value.has(k.key)) : []
   const s = new Set(open && props.expandSingle ? [] : expanded.value)
   if (open) s.add(key)
   else s.delete(key)
   expanded.value = s
+  for (const k of closed) emit('expand', k.row, false)
   emit('expand', row, open)
 }
 /** What a cell slot gets of its row's expansion, in the table and in a card. */
@@ -572,5 +576,10 @@ function onRowKey(e: KeyboardEvent, row: T) {
 }
 .table tbody tr:hover > .s-table-actions {
   background: rgb(var(--surface-2, 249 250 251));
+}
+/* In a dialog or a drawer the sticky cell paints the overlay's surface,
+   which in dark is the second one (OverlaySurface), not the page's. */
+:global(.dark .modal-content td.s-table-actions) {
+  background: rgb(var(--surface-2, 30 41 59));
 }
 </style>

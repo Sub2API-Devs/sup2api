@@ -143,6 +143,16 @@ func TestSegmentDelete(t *testing.T) {
 	e.do(e.admin, "DELETE", "/segments/999999", nil).failed(404, "not_found")
 	require.Zero(t, e.rulesChanged.Load())
 
+	// A node of the version before segments deletes a user and leaves the
+	// personal segment behind: that one can go.
+	gone := e.user("gone@x.com")
+	orphan := e.personal(gone)
+	e.exec(`UPDATE users SET deleted_at = now() WHERE id = $1`, gone)
+	e.do(e.admin, "DELETE", path("/segments/%d", orphan), nil).ok(204)
+	require.Equal(t, def, e.segmentOf(gone), "the deleted user falls back to the default segment")
+	require.Zero(t, e.id(`SELECT count(*) FROM segments WHERE id = $1`, orphan))
+	e.rulesChanged.Store(0)
+
 	e.do(e.admin, "DELETE", path("/segments/%d", vip), nil).ok(204)
 	e.do(e.admin, "GET", path("/segments/%d", vip), nil).failed(404, "not_found")
 	require.Equal(t, def, e.segmentOf(e.masked), "its members, deleted ones too, fall back to the default segment")
