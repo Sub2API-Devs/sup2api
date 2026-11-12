@@ -457,6 +457,16 @@ func TestDecodeSettings(t *testing.T) {
 	if s, _ := DecodeSettings([]byte(`{"record_pass_input_message":false}`)); s.RecordPassInputMessage {
 		t.Fatal("record_pass_input_message false ignored")
 	}
+	// hit_replay and fail_policy (0.10.0): defaults, a value, an unknown one.
+	if s.HitReplay != HitReplayNewContent || s.FailPolicy != FailOpen {
+		t.Fatalf("defaults %q %q", s.HitReplay, s.FailPolicy)
+	}
+	if s, _ := DecodeSettings([]byte(`{"hit_replay":"whole","fail_policy":"close_pre"}`)); s.HitReplay != HitReplayWhole || s.FailPolicy != FailClosePre {
+		t.Fatalf("set %q %q", s.HitReplay, s.FailPolicy)
+	}
+	if s, _ := DecodeSettings([]byte(`{"hit_replay":"x","fail_policy":"close_all"}`)); s.HitReplay != HitReplayNewContent || s.FailPolicy != FailOpen {
+		t.Fatalf("unknown %q %q", s.HitReplay, s.FailPolicy)
+	}
 	for mode, want := range map[string]string{ModeOff: LevelObserve, ModeObserve: LevelObserve, ModeEnforce: LevelEnforce} {
 		s := DefaultSettings()
 		s.Mode = mode
@@ -1104,8 +1114,8 @@ func TestFingerprint(t *testing.T) {
 		2: {ID: 2, Name: "b", Type: ChannelTypeSafe, BaseURL: "https://b.example", Model: "m", BillingModel: "bm"},
 	}
 	def := []byte(`{"preamble":"p","items":[]}`)
-	base := fingerprint(spec, auditors, channels, def)
-	if len(base) != 16 || base != fingerprint(spec, auditors, channels, def) {
+	base := fingerprint(spec, ScopeAll, auditors, channels, def)
+	if len(base) != 16 || base != fingerprint(spec, ScopeAll, auditors, channels, def) {
 		t.Fatalf("fingerprint = %q", base)
 	}
 	same := func(name string, got string) {
@@ -1122,30 +1132,37 @@ func TestFingerprint(t *testing.T) {
 	}
 	s := *spec
 	s.SampleRate, s.TotalTimeoutMs, s.ModelFilter = 10, 9000, ModelFilter{Type: FilterOnly, Models: []string{"x"}}
-	same("sample rate, timeout and model filter", fingerprint(&s, auditors, channels, def))
+	same("sample rate, timeout and model filter", fingerprint(&s, ScopeAll, auditors, channels, def))
 	ch := map[int64]*liveChannel{1: {ID: 1, Name: "renamed", Type: ChannelOpenAI, BaseURL: "https://a.example", Key: "k2", Timeout: time.Minute, BillingModel: "x"}, 2: channels[2]}
-	same("channel name, key, timeout and billing model", fingerprint(spec, auditors, ch, def))
+	same("channel name, key, timeout and billing model", fingerprint(spec, ScopeAll, auditors, ch, def))
 
 	s = *spec
 	s.Stages = []Stage{{Auditors: []int64{1, 2}, Combine: CombineAny}, spec.Stages[1]}
-	differs("combine", fingerprint(&s, auditors, channels, def))
+	differs("combine", fingerprint(&s, ScopeAll, auditors, channels, def))
 	s.Stages = []Stage{spec.Stages[0], {Auditors: []int64{3}, Combine: CombineAny}}
-	differs("fallback", fingerprint(&s, auditors, channels, def))
+	differs("fallback", fingerprint(&s, ScopeAll, auditors, channels, def))
 	s.Stages = []Stage{{Auditors: []int64{2, 1}, Combine: CombineAtLeast, N: 2}, spec.Stages[1]}
-	differs("auditor order", fingerprint(&s, auditors, channels, def))
+	differs("auditor order", fingerprint(&s, ScopeAll, auditors, channels, def))
 	a := map[int64]storedAuditor{1: {typ: AuditorOpenAI, channel: 1, config: []byte(`{"thresholds": {"sexual": 0.6}}`)}, 2: auditors[2]}
-	differs("auditor config", fingerprint(spec, a, channels, def))
+	differs("auditor config", fingerprint(spec, ScopeAll, a, channels, def))
 	a = map[int64]storedAuditor{1: auditors[1], 2: auditors[2], 3: {typ: AuditorOpenAI, channel: 1, config: []byte(`{}`)}}
-	differs("a missing auditor that exists", fingerprint(spec, a, channels, def))
+	differs("a missing auditor that exists", fingerprint(spec, ScopeAll, a, channels, def))
 	ch = map[int64]*liveChannel{1: channels[1], 2: {ID: 2, Type: ChannelTypeSafe, BaseURL: "https://b.example", Model: "m2"}}
-	differs("channel model", fingerprint(spec, auditors, ch, def))
+	differs("channel model", fingerprint(spec, ScopeAll, auditors, ch, def))
 	ch = map[int64]*liveChannel{1: {ID: 1, Type: ChannelOpenAI, BaseURL: "https://c.example"}, 2: channels[2]}
-	differs("channel base URL", fingerprint(spec, auditors, ch, def))
-	differs("an unusable channel", fingerprint(spec, auditors, map[int64]*liveChannel{2: channels[2]}, def))
-	differs("the default question set", fingerprint(spec, auditors, channels, []byte(`{"preamble":"q","items":[]}`)))
+	differs("channel base URL", fingerprint(spec, ScopeAll, auditors, ch, def))
+	differs("an unusable channel", fingerprint(spec, ScopeAll, auditors, map[int64]*liveChannel{2: channels[2]}, def))
+	differs("the default question set", fingerprint(spec, ScopeAll, auditors, channels, []byte(`{"preamble":"q","items":[]}`)))
+	// The audit scope (0.10.0): all hashes as before it existed, so the flows
+	// that keep it keep their cache; a narrower one is another verdict.
+	differs("scope input", fingerprint(spec, ScopeInput, auditors, channels, def))
+	differs("scope tools", fingerprint(spec, ScopeTools, auditors, channels, def))
+	if fingerprint(spec, ScopeInput, auditors, channels, def) == fingerprint(spec, ScopeTools, auditors, channels, def) {
+		t.Error("scopes input and tools share a fingerprint")
+	}
 	// The default set only matters to the auditors that use it.
 	own := map[int64]storedAuditor{1: auditors[1], 2: {typ: AuditorTypeSafe, channel: 2, config: []byte(`{"questions": {}}`)}}
-	if fingerprint(spec, own, channels, def) != fingerprint(spec, own, channels, []byte(`{"preamble":"q","items":[]}`)) {
+	if fingerprint(spec, ScopeAll, own, channels, def) != fingerprint(spec, ScopeAll, own, channels, []byte(`{"preamble":"q","items":[]}`)) {
 		t.Error("the default question set changed the fingerprint of a flow that does not use it")
 	}
 }
@@ -1158,13 +1175,13 @@ func TestFingerprintJudgingVersion(t *testing.T) {
 	spec := &Spec{Stages: []Stage{{Auditors: []int64{1}, Combine: CombineAny}}}
 	auditors := map[int64]storedAuditor{1: {typ: AuditorOpenAI, channel: 1, config: []byte(`{}`)}}
 	channels := map[int64]*liveChannel{1: {ID: 1, Type: ChannelOpenAI, BaseURL: "https://a.example"}}
-	base := fingerprint(spec, auditors, channels, nil)
+	base := fingerprint(spec, ScopeAll, auditors, channels, nil)
 	const version, want = 2, "8049a4172a7adeec"
 	if judgingVersion != version || base != want {
 		t.Fatalf("fingerprint of judging version %d = %s, want %s of version %d: a change of what the fingerprint covers needs a new judgingVersion, and both belong here",
 			judgingVersion, base, want, version)
 	}
-	if base == fingerprintAt(judgingVersion+1, spec, auditors, channels, nil) {
+	if base == fingerprintAt(judgingVersion+1, spec, ScopeAll, auditors, channels, nil) {
 		t.Fatal("another judging version kept the fingerprint")
 	}
 }

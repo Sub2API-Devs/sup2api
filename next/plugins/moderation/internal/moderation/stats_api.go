@@ -324,6 +324,9 @@ type Status struct {
 	Queue        []QueueStatus `json:"queue"`
 	Costs        StatusCosts   `json:"costs"`
 	Runtime      Runtime       `json:"runtime"`
+	// StaleBindings counts the bindings that do not apply (Binding.Inactive,
+	// 0.10.0): the overview points to the bindings page.
+	StaleBindings int `json:"stale_bindings"`
 }
 
 func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -356,6 +359,15 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 		Costs: StatusCosts{Channels: []CostRef{}, Auditors: costRefs(sum.auditorCosts)}, Channels: []HealthRow{}}
 	if err := p.addChannelStatus(ctx, db, out, from, today, lastHour, c.ErrorRateAlertPercent); err != nil {
 		return nil, err
+	}
+	bindings, err := loadBindings(ctx, db, p.snap.Load())
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range bindings {
+		if b.Inactive {
+			out.StaleBindings++
+		}
 	}
 	out.Watch, err = p.watchCounts(ctx, db)
 	return out, err

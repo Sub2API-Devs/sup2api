@@ -87,6 +87,10 @@ type Settings struct {
 
 	BlockStatus  int    `json:"block_status"`
 	BlockMessage string `json:"block_message"`
+	// HitReplay and FailPolicy (CONTRACTS §72.5, 0.10.0): what is beside a
+	// replayed hit, and what a request whose moderation failed gets.
+	HitReplay  string `json:"hit_replay"`
+	FailPolicy string `json:"fail_policy"`
 
 	RecordPass       bool `json:"record_pass"`
 	RecordOverturned bool `json:"record_overturned"`
@@ -152,6 +156,27 @@ const (
 	OverflowBlock  = "block"  // pre: refused; post: sampled like OverflowSample
 )
 
+// hit_replay: what a request holding a cached hit set gets.
+const (
+	// HitReplayNewContent: the hit is replayed (a pre request is refused,
+	// replayMessage) and, after the request, what is beside the hit set is
+	// moderated.
+	HitReplayNewContent = "new_content"
+	// HitReplayWhole: the replay decides the whole request (0.9.3).
+	HitReplayWhole = "whole"
+)
+
+// fail_policy: what a request whose moderation failed gets (failResponse).
+const (
+	FailOpen     = "open"      // it passes, recorded as an error
+	FailClosePre = "close_pre" // a pre request is refused with 503
+)
+
+// MsgHistoryHit follows the deny message of a replayed hit under hit_replay
+// = new_content: the hit is in content the request sent again - the history
+// of a conversation, mostly - so rewording the new message does not help.
+const MsgHistoryHit = "The conversation history contains content that was already flagged; please clear the context and try again."
+
 // DefaultSettings returns the schema defaults.
 func DefaultSettings() Settings {
 	return Settings{
@@ -160,7 +185,7 @@ func DefaultSettings() Settings {
 		VerdictCacheDays: 7, CacheTTLSeconds: 86400, CacheEntries: 100000,
 		MaxConcurrency: 16, QueueSize: 1000, TTFTTimeoutMs: 10000,
 		InputMaxChunks: 8, InputOverflow: OverflowSample, InputMaxImages: 8, MaxInflightMB: 128, ErrorTextMaxChars: 2000,
-		BlockStatus: 403, BlockMessage: DefaultBlockMessage,
+		BlockStatus: 403, BlockMessage: DefaultBlockMessage, HitReplay: HitReplayNewContent, FailPolicy: FailOpen,
 		RecordOverturned: true, RecordErrors: true, StoreText: true, RecordPassInputMessage: true,
 		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
 		AutoWatch: true, WatchDays: 30,
@@ -360,6 +385,8 @@ func (d decoder) general(s *Settings) {
 	if s.BlockMessage == "" {
 		s.BlockMessage = DefaultBlockMessage
 	}
+	d.enum("hit_replay", &s.HitReplay, HitReplayNewContent, HitReplayWhole)
+	d.enum("fail_policy", &s.FailPolicy, FailOpen, FailClosePre)
 	if v, ok := d.m["jev_default_set"]; ok {
 		var q JevQuestions
 		if json.Unmarshal(v, &q) == nil && q.Validate() == nil {
@@ -529,6 +556,14 @@ func userSet(ids []string) map[int64]bool {
 		}
 	}
 	return set
+}
+
+// replayMessage is the deny message of a replayed hit.
+func (c *config) replayMessage() string {
+	if c.HitReplay == HitReplayWhole {
+		return c.BlockMessage
+	}
+	return c.BlockMessage + " " + MsgHistoryHit
 }
 
 // blocklisted: every request of the user is moderated before it is sent on,

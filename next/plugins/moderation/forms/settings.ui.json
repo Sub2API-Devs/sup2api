@@ -1,7 +1,9 @@
 {
   "ui:order": [
     "mode",
+    "fail_policy",
     "verdict_cache_days",
+    "hit_replay",
     "cache_entries",
     "min_chars",
     "input_max_chars",
@@ -100,6 +102,27 @@
         "en": "Whether a request is checked before it is sent on or in the background, and what happens when moderation fails. What is moderated and by which auditors is set on the flows.",
         "zh": "决定请求先审后发还是后台审核，以及审核失败时怎么办。审什么、用哪些审核器在“审核流程”里配置。"
       }
+    }
+  },
+  "fail_policy": {
+    "ui:widget": "segmented",
+    "ui:title": {
+      "en": "When moderation fails",
+      "zh": "审核失败时"
+    },
+    "ui:enumNames": [
+      {
+        "en": "Let through, record an error",
+        "zh": "放行并记为出错"
+      },
+      {
+        "en": "Refuse checked-first requests (503)",
+        "zh": "先审的请求拒绝（503）"
+      }
+    ],
+    "ui:help": {
+      "en": "Covers auditor errors, the total timeout and overload (too much in progress). Background moderation always lets requests through.",
+      "zh": "覆盖审核器出错、总超时和繁忙（处理中的请求超限）。后台审核总是放行。"
     }
   },
   "allowlist_user_ids": {
@@ -472,6 +495,27 @@
         "zh": "判定缓存与重放"
       },
       "page": "cache"
+    }
+  },
+  "hit_replay": {
+    "ui:widget": "segmented",
+    "ui:title": {
+      "en": "Replaying a cached hit",
+      "zh": "缓存命中的重放"
+    },
+    "ui:enumNames": [
+      {
+        "en": "Replay the hit, moderate new content",
+        "zh": "只重放命中部分，新内容照常审核"
+      },
+      {
+        "en": "Treat the whole request as a hit",
+        "zh": "整个请求按命中处理"
+      }
+    ],
+    "ui:help": {
+      "en": "When a request still holds content that hit, such as the history of a conversation: the recommended choice replays only that part and moderates what is new in the background; the old behaviour treats the whole request as a hit and moderates nothing new. A request checked first is refused either way; with the recommended choice the message asks the user to clear the conversation.",
+      "zh": "请求里仍含有已命中的内容（例如对话历史）时：推荐只把那部分按原结论处理，其余新内容在后台照常送审；旧行为是整个请求直接按命中处理，新内容不再送审。先审的请求两种方式都会被拒绝，推荐方式的提示会请用户清理上下文。"
     }
   },
   "cache_entries": {

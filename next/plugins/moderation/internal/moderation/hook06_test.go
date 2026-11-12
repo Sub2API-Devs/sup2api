@@ -216,12 +216,14 @@ func TestBanHookAllProtocols(t *testing.T) {
 	}
 }
 
-// Too many request bytes in progress: the hook answers at once (pass, 503
-// for enforce-level users) instead of growing towards the memory limit; a
-// single request is admitted whatever its size.
+// Too many request bytes in progress: the hook answers at once instead of
+// growing towards the memory limit - a pass, and under fail_policy =
+// close_pre 503 for enforce-level users; a single request is admitted
+// whatever its size.
 func TestHookBusyAnswersAtOnce(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "max_inflight_mb": 16})
+	settings := map[string]any{"mode": ModeObserve, "max_inflight_mb": 16, "fail_policy": FailClosePre}
+	p, h, _ := startDB(t, nil, settings)
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	c := p.cfg.Load()
 	if !p.admitBytes(c, 64<<20) || p.admitBytes(c, 1) {
@@ -235,6 +237,14 @@ func TestHookBusyAnswersAtOnce(t *testing.T) {
 	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 4, "level": LevelEnforce}))
 	if r := mustHook(t, h, hookReqAs(4, "", "anything")); !denied(r) || r.GetDenyCode() != DenyBusy || r.GetDenyStatus() != http.StatusServiceUnavailable {
 		t.Fatalf("busy enforce = %+v", r)
+	}
+	// fail_policy = open (the default, 0.10.0): busy passes everyone.
+	settings["fail_policy"] = FailOpen
+	if errs := h.Configure(settings, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if r := mustHook(t, h, hookReqAs(4, "", "anything")); denied(r) || r.GetNote() != notePrefix+"busy" {
+		t.Fatalf("busy enforce, fail open = %+v", r)
 	}
 	// Banned users are refused before the admission.
 	decodeData[map[string]any](t, h.Do("POST", "/blocks", nil, map[string]any{"user_id": 7}))

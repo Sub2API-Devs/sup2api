@@ -28,6 +28,9 @@ type FlowView struct {
 	PublishedAt *time.Time      `json:"published_at"`
 	PublishedBy *int64          `json:"published_by"`
 	Groups      []int64         `json:"groups"`
+	// Scope is the audit scope (ScopeInput ...), null for a flow nobody
+	// chose one for: it moderates everything, as all (§72.4, 0.10.0).
+	Scope *string `json:"scope"`
 	// Accounts are the account bindings of the flow (§72.17).
 	Accounts []AccountBinding `json:"accounts"`
 	// Dirty: the draft differs from the published spec (a draft total
@@ -49,7 +52,7 @@ type querier interface {
 }
 
 func (p *Plugin) flowViews(ctx context.Context, q querier, where string, args ...any) ([]FlowView, error) {
-	rows, err := q.Query(ctx, `SELECT f.id, f.name, f.enabled, f.draft, f.published, f.version, f.published_at, f.published_by,
+	rows, err := q.Query(ctx, `SELECT f.id, f.name, f.enabled, f.draft, f.published, f.version, f.published_at, f.published_by, f.scope,
 			coalesce((SELECT array_agg(group_id ORDER BY group_id) FROM flow_groups g WHERE g.flow_id = f.id), '{}'),
 			coalesce((SELECT jsonb_agg(jsonb_build_object('group_id', a.group_id, 'account_id', a.account_id) ORDER BY a.account_id, a.group_id)
 				FROM flow_accounts a WHERE a.flow_id = f.id), '[]'),
@@ -61,7 +64,7 @@ func (p *Plugin) flowViews(ctx context.Context, q querier, where string, args ..
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (FlowView, error) {
 		var f FlowView
-		err := r.Scan(&f.ID, &f.Name, &f.Enabled, &f.Draft, &f.Published, &f.Version, &f.PublishedAt, &f.PublishedBy,
+		err := r.Scan(&f.ID, &f.Name, &f.Enabled, &f.Draft, &f.Published, &f.Version, &f.PublishedAt, &f.PublishedBy, &f.Scope,
 			&f.Groups, &f.Accounts, &f.PublishedAutoTimeout, &f.CreatedAt, &f.UpdatedAt)
 		f.CreatedAt, f.UpdatedAt, f.PublishedAt = f.CreatedAt.UTC(), f.UpdatedAt.UTC(), utcPtr(f.PublishedAt)
 		f.Dirty = draftChanged(f.Draft, f.Published)
@@ -143,9 +146,23 @@ func (p *Plugin) getFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*plugi
 	return pluginsdk.DataResponse(list[0]), nil
 }
 
+// flowInput is the body of a create or an update. Scope, when given, takes
+// effect at once, without a publish, like enabled and the bindings: it is a
+// column of the flow, not a part of its spec (scope.go). A create without it
+// gives ScopeNew, an update without it leaves the scope as it is.
 type flowInput struct {
 	Name  string          `json:"name"`
 	Draft json.RawMessage `json:"draft"`
+	Scope *string         `json:"scope"`
+}
+
+// check validates the name and the scope.
+func (in *flowInput) check() (string, pluginsdk.FieldErrors) {
+	name, errs := flowName(in.Name)
+	if in.Scope != nil && !validScope(*in.Scope) {
+		errs = errs.Add("scope", "invalid_scope", "scope must be input, tools or all / 审核范围只能是 input、tools 或 all")
+	}
+	return name, errs
 }
 
 // checkDraft parses and validates a draft against the live auditors.
@@ -181,11 +198,11 @@ func flowName(s string) (string, pluginsdk.FieldErrors) {
 }
 
 func (p *Plugin) createFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	var in flowInput
+	in := flowInput{Scope: new(ScopeNew)}
 	if bad := decodeBody(req, &in); bad != nil {
 		return bad, nil
 	}
-	name, errs := flowName(in.Name)
+	name, errs := in.check()
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid flow / 流程参数无效", errs), nil
 	}
@@ -199,7 +216,8 @@ func (p *Plugin) createFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 		}
 		raw, _ := json.Marshal(spec)
 		now := p.now().UTC()
-		return tx.QueryRow(ctx, `INSERT INTO flows (name, draft, created_at, updated_at) VALUES ($1,$2,$3,$3) RETURNING id`, name, raw, now).Scan(&id)
+		return tx.QueryRow(ctx, `INSERT INTO flows (name, draft, scope, created_at, updated_at) VALUES ($1,$2,$3,$4,$4) RETURNING id`,
+			name, raw, in.Scope, now).Scan(&id)
 	})
 	if resp != nil {
 		return resp, nil
@@ -210,8 +228,8 @@ func (p *Plugin) createFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	return p.getFlow(ctx, withParam(req, "id", id))
 }
 
-// updateFlow saves the name and the draft; the published version stays
-// until publish.
+// updateFlow saves the name and the draft, the published version stays
+// until publish; and the scope, which applies at once (flowInput).
 func (p *Plugin) updateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	id, bad := parseID(req, "id")
 	if bad != nil {
@@ -221,7 +239,7 @@ func (p *Plugin) updateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if bad := decodeBody(req, &in); bad != nil {
 		return bad, nil
 	}
-	name, errs := flowName(in.Name)
+	name, errs := in.check()
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid flow / 流程参数无效", errs), nil
 	}
@@ -233,7 +251,8 @@ func (p *Plugin) updateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 			return errRollback
 		}
 		raw, _ := json.Marshal(spec)
-		tag, err := tx.Exec(ctx, `UPDATE flows SET name=$2, draft=$3, updated_at=$4 WHERE id=$1 AND deleted_at IS NULL`, id, name, raw, p.now().UTC())
+		tag, err := tx.Exec(ctx, `UPDATE flows SET name=$2, draft=$3, scope=coalesce($5, scope), updated_at=$4 WHERE id=$1 AND deleted_at IS NULL`,
+			id, name, raw, p.now().UTC(), in.Scope)
 		if err == nil && tag.RowsAffected() == 0 {
 			resp = notFound("flow")
 			return errRollback

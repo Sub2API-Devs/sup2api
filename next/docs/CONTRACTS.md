@@ -5101,6 +5101,13 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **第二步（以后，要迁移）**：删 `user_analyses`、名单行的分析列和索引、记录的 `ai_*` 列和 schema 里的 `analysis_*` 旧键；`watch_events.analysis_id` 留作审计。
 - 同版本的两处改动：`auto_watch` 不再加入白名单用户（P8，72.8）；`verdict_cache_days` 可以设为 0，表示关闭判定缓存（P11，72.10）。
 
+**0.10.0 审核逻辑（设计 §4.1、§4.2、§4.4、§4.6，D1/D3/D4 用户已确认；迁移 0011）**：
+- **审核范围（72.4）**：流程新增 `scope`：`input`（system、developer、user 文本，user 的图片和文档）、`tools`（`input` + 工具结果）、`all`（全部，即以前的行为；工具定义只在 `all` 下送审）。按片段的角色过滤（`scope.go` 一张角色表），抽取本身不变；`document` 角色在哪都算输入，客户端自造的角色在所有范围下都送审。**存为列 `flows.scope`，不放进 spec**：0.9.3 的 `ParseSpec` 拒绝未知字段，会把带 `scope` 的已发布 spec 当作无效、丢掉整个流程。因此范围和 `enabled`、绑定一样**保存即生效，不随发布走版本**。`NULL` = `all`：已有流程和老配置转换出的流程保持 `all`（D1），0.10.0 新建且没带 `scope` 的流程是 `input`。范围不是 `all` 时计入判定指纹（`all` 与 `NULL` 的指纹和 0.9.3 相同，已有缓存不失效）。`all_but_own`（跳过网关自己返回过的 assistant 片段）**推迟**：核心没有响应结束的钩子（manifest 只有 `gateway.request` / `gateway.attempt`）。
+- **命中重放（72.5 第 8 步）**：新设置 `hit_replay`，`new_content`（默认）| `whole`（0.9.3 的行为）。`new_content`：命中集合照常记一条重放记录；先审照样拒绝，提示在 `block_message` 后加一句"历史里有已命中的内容，请清理上下文"（`MsgHistoryHit`）；后审时命中集合之外的新内容照常送审——钩子只在请求里除命中集合外全是已放行内容时直接重放，其余照常入队，由 worker 重放一次再把所有完整在请求里的命中集合的片段拿掉、审剩下的（`plan.without`）。**默认行为变化**：后审会多送审新内容（成本略增），新内容里的命中算新的违规。
+- **失败策略（72.5）**：新设置 `fail_policy`，`open`（默认）| `close_pre`。所有失败（审核出错、总超时 / 客户端离开、处理中字节超限）走同一个 `failResponse`：`open` 放行（出错照常记 error 记录；繁忙只计 `runtime.busy`，不写记录）；`close_pre` 对先审的请求返回 503（繁忙 `moderation_busy`，出错 / 超时 `moderation_unavailable`）；后审总是放行。**默认行为变化**：以前处理中字节超限时先审用户得到 503，现在默认放行。`on_error` 不变（另一工作流处理）。
+- **流程匹配来源（72.17）**：记录新增 `flow_source`（`group` | `account` | `account_any` | `default` | `fallback`）；`fallback` 表示请求更具体的一条绑定因流程不在运行而没生效，由更宽的绑定决定，此时 `flow_fallback = {flow_id, reason}`，`reason` 是 `deleted` | `disabled` | `unpublished` | `invalid`（已发布的 spec 本节点读不了，例如更新版本写的）。取更具体的那条失效绑定。0.10.0 以前的记录两者都没有（字段不出现）。`GET /bindings` 每行加 `effective_flow_id`（这条绑定覆盖的请求实际跑的流程，0 = 不审；任意分组的账号绑定按"没有自己绑定的分组"算）和 `fallback_reason`（生效时为 `""`）；`inactive` 照旧。`GET /status` 加 `stale_bindings`（不生效的绑定数）。
+- **rolling**：0011 只加可空列（`flows.scope`，`events.flow_source`、`flow_fallback_id`、`flow_fallback_reason`），0.9.3 对这两张表的语句都列出了列名（测试 `TestMigration0011Rolling` 用 0.9.3 的原句在迁移前后读写）。0.9.3 节点忽略 `scope`，照 `all` 审（范围更宽，安全），写的记录没有来源；新设置键旧节点忽略（`DecodeSettings` 宽松）。混跑期间范围收窄只在新节点生效，`hit_replay`、`fail_policy` 同理。
+
 下面各小节里 AI 分析的内容是 0.9.x 及以前的行为，标"0.10.0 删除"。
 
 用户已确认的取舍：
@@ -5169,7 +5176,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - `gemini.generate`、`gemini.stream_generate`：`systemInstruction`（或 `system_instruction`）+ `contents` + `tools`；
   - `volcengine.images`：`prompt` + `image`；`volcengine.video_submit`：`content`；
   - 其他协议不审内容（只有封禁钩子，72.3）。此前按"`messages` 存在就用 `messages`"选择，Responses / Gemini 请求附带一个假的 `messages` 数组就能绕过（P1-3）。重复键（`{"messages":[良性],"messages":[违规]}`）由核心在网关统一拒绝（400），插件不处理。
-- **审核范围 = 请求里客户端可控的全部内容**：
+- **审核范围 = 请求里客户端可控的全部内容**（0.10.0 起这是流程 `scope = all` 的内容，`input`、`tools` 只审其中一部分，见 72 开头"0.10.0 审核逻辑"）：
   - 所有角色的消息：user、assistant（含预填）、system、developer、tool / function；
   - system 提示词、Responses `instructions`、Gemini `systemInstruction`；
   - 工具调用的参数（Anthropic `tool_use.input`、chat `tool_calls[].function.arguments`、Responses `function_call.arguments`、Gemini `functionCall.args`）和工具结果（Anthropic `tool_result`、chat `role:tool`、Responses `function_call_output`、Gemini `functionResponse`）；参数和结果是 JSON 时取其中的字符串值；
@@ -5525,6 +5532,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `allowlist_user_ids` | `[]`，最多 1000 项，每项是 1–18 位数字的字符串 | 白名单：只后审，永不先审、永不被拒绝；照常有记录、照常进名单；不能手动设为拦截级，AI 不升级，不会被封禁 |
 | `blocklist_user_ids` | `[]`，同上 | 黑名单：总是先审。AI 不降级、不移出。不是封禁。同时在两个名单上的用户算黑名单 |
 | `verdict_cache_days` | 7（0–30；0.10.0 前是 1–30） | 判定缓存保留天数（72.5 第 8 步）；0 = 关闭判定缓存（0.10.0，P11；此前只有旧键 `cache_ttl_seconds = 0` 能关） |
+| `hit_replay` | `new_content`（`new_content` \| `whole`），0.10.0 | 请求含完整的缓存命中集合时：只重放命中部分、新内容照常后审，或整个请求按命中处理（72 开头"0.10.0 审核逻辑"） |
+| `fail_policy` | `open`（`open` \| `close_pre`），0.10.0 | 审核出错、超时、繁忙时：放行，或先审的请求返回 503 |
 | `record_pass_input_message` | true | `store_text` 开着时，没有命中过的记录（通过、被推翻）也保存原始消息（72.9） |
 
   - **退役 `exempt_user_ids`**：留在 schema 里并隐藏，只作白名单的旧名读取。取值规则（`DecodeSettings`）：文档里有 `allowlist_user_ids` 这个键（是数组）就用它，否则用 `exempt_user_ids` 的值。"完全不审核"这个语义不再存在：原来列在里面的用户升级后变成后台审核、有记录、可能进名单、永不被拦截。设置页保存白名单或黑名单时同时把 `exempt_user_ids` 写成"白名单减去黑名单"（镜像）：仍在跑 0.7.2 的节点只读这个键、对里面的用户完全不审，这样它们豁免的正好是白名单里且不在黑名单里的用户，已移出白名单或被加进黑名单的用户不再豁免。
@@ -5556,9 +5565,9 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/channels`，GET/PUT/DELETE `/channels/:id`，POST `/channels/:id/test` | read / manage | 不返回 key 和代理明文，只返回 `api_key_tail` 和 `has_proxy` |
 | GET/POST `/auditors`，GET/PUT/DELETE `/auditors/:id`，POST `/auditors/:id/try`，POST `/auditors/try` | read / manage | try 的请求体是 `{text, images?, draft?}`，返回分数和是否命中，不写记录。`draft` 是 `{name, type, channel_id, config}` 中的任意字段，覆盖已保存的审核器，用来试跑未保存的修改。`/auditors/try` 试跑全新的草稿，此时必须带 `draft`。草稿格式错误、渠道类型不符时返回 400 |
 | GET `/jev/default-questions` | read | 内置题集，以及 `jev_default_set` |
-| GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled` | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict` |
-| GET/PUT `/bindings`，DELETE `/bindings/:group_id/:account_id`（0.7.0） | read / manage | 全部绑定（分组、分组下的账号、任意分组的账号），见 72.17。0.8.0：`GET` 的每行可带 `inactive: true`（绑定的流程本节点没有在运行，这条绑定不生效） |
-| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version`、`endpoint`、`session_fp`（都是精确匹配，照 new-api）；0.8.0 加 `replayed=true\|false`，每行返回 `replayed`。`GET /events/:id` 的 `user_state` 用 `allowlisted`、`blocklisted` 取代原来的 `exempt` |
+| GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled` | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict`。0.10.0：流程带 `scope`（`input` \| `tools` \| `all`；`null` = 没选过，按 `all` 审）；POST、PUT 可带 `scope`，保存即生效、不需要发布，POST 不带时为 `input`，PUT 不带时不变，取值无效返回 400，字段错误码 `invalid_scope` |
+| GET/PUT `/bindings`，DELETE `/bindings/:group_id/:account_id`（0.7.0） | read / manage | 全部绑定（分组、分组下的账号、任意分组的账号），见 72.17。0.8.0：`GET` 的每行可带 `inactive: true`（绑定的流程本节点没有在运行，这条绑定不生效）。0.10.0：每行加 `effective_flow_id`、`fallback_reason` |
+| GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version`、`endpoint`、`session_fp`（都是精确匹配，照 new-api）；0.8.0 加 `replayed=true\|false`，每行返回 `replayed`。0.10.0：列表和详情返回 `flow_source`、`flow_fallback`（没有时不出现）。`GET /events/:id` 的 `user_state` 用 `allowlisted`、`blocklisted` 取代原来的 `exempt` |
 | GET `/events/:id/input` | read | 原文，按需加载 |
 | POST `/events/review` | manage | 请求体 `{ids, status}`；只处理结果为 hit 或 block 的记录，其他记录不变。改为误报或从误报改回时，按 72.8 调整违规计数。0.8.0：处理后同步判定缓存（72.9），响应 `{updated, status, cache_synced}`，`cache_synced` 是缓存改动全部写成功的记录数 |
 | POST `/verdict-cache/clear`（0.8.0） | manage | 清空判定缓存，无请求体，返回 `{epoch}`（新的清空计数）。所有内容按当前配置重新审核，一段时间内审核调用和费用上升。各节点最多晚 5 秒生效（72.5 第 8 步） |
@@ -5939,6 +5948,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 绑定指向 flow 0（“不审核”，即免审）：匹配到就停，不审核，更宽的绑定不再看。
 - **0.8.0（照 new-api `runtime.go`）**：绑定指向已停用、未发布或已删除的流程时，这条绑定**视为不存在**，接着找更宽的绑定；各级都没有生效的绑定才不审核。0.7.x 把这种绑定和免审同样对待（匹配到就不审核）。
 - 后果：升级前靠"绑一个停用的流程"来让某个分组或账号不审核的，升级后会按更宽的绑定（通常是默认流程）审核。要继续不审核，升级前把绑定改成“不审核（免审）”（0.7.2 已支持）；发布说明里有列出这类绑定的查询。迁移不自动改它们：分不清是有意不审还是流程临时停用。
+- **0.10.0**：这样回退的请求，记录写 `flow_source = fallback` 和 `flow_fallback = {flow_id, reason}`（跳过的最具体的那条绑定）；`GET /bindings` 每行给出 `fallback_reason` 和实际生效的 `effective_flow_id`，`GET /status` 给出 `stale_bindings`（72 开头"0.10.0 审核逻辑"）。
 
 **存储**（迁移 `0009_account_bindings.sql`，幂等）：
 - 分组绑定仍在 `flow_groups`，不迁移、不改写。`flow_id=0` 是新增的“不审核”（免审）：0.6.x 把它读成指向不存在的流程，结果同样是不审核。

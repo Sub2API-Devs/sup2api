@@ -184,7 +184,7 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 	for i := range items {
 		it := &items[i]
 		it.TopCategories, it.TopOther = topCategories(r.categories[it.UserID], it.SuspiciousTotal, labels)
-		if f := snap.flowFor(it.GroupID); r.grouped[it.UserID] && f != nil {
+		if f, _ := snap.flowFor(it.GroupID); r.grouped[it.UserID] && f != nil {
 			it.Flow = &FlowRef{FlowID: f.ID, Name: f.Name, Version: f.Version}
 		}
 	}

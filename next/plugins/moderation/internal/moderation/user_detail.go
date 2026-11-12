@@ -112,7 +112,7 @@ func (p *Plugin) loadUserContext(ctx context.Context, db *pgxpool.Pool, d *UserD
 		return err
 	}
 	snap := p.snap.Load()
-	if f := snap.flowFor(group); uc.GroupID != nil && f != nil {
+	if f, _ := snap.flowFor(group); uc.GroupID != nil && f != nil {
 		uc.Flow = &FlowRef{FlowID: f.ID, Name: f.Name, Version: f.Version}
 	}
 	uc.Sources, err = p.loadSources(ctx, db, d.UserID, now.Add(-recentDays*24*time.Hour), uc.GroupID, uc.Flow)

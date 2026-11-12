@@ -375,15 +375,16 @@ func stageOf(fallback bool, ids ...int64) Stage {
 }
 
 // publishFlow creates the flow of spec through the API (every request; every
-// model unless spec has a filter), binds it to groups and publishes it;
-// returns the flow id.
+// model unless spec has a filter; scope all, everything the client sent, as
+// before scopes existed), binds it to groups and publishes it; returns the
+// flow id.
 func publishFlow(t *testing.T, h *pluginsdktest.Harness, spec Spec, groups ...int64) int64 {
 	t.Helper()
 	spec.SampleRate = 100
 	if spec.ModelFilter.Type == "" {
 		spec.ModelFilter.Type = FilterAll
 	}
-	f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": spec}))
+	f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": spec, "scope": ScopeAll}))
 	decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/groups", f.ID), nil, map[string]any{"groups": groups}))
 	pub := decodeData[FlowView](t, h.Do("POST", fmt.Sprintf("/flows/%d/publish", f.ID), nil, map[string]any{"expected_version": 0}))
 	if pub.Version != 1 || pub.Dirty {
@@ -1223,7 +1224,7 @@ func TestFinishBuildsInputMessageOnlyForRecords(t *testing.T) {
 		in := hookReqAs(3, rid, "")
 		in.Fields[FieldMessages] = string(msgs)
 		snap := p.snap.Load()
-		m, early := p.admit(context.Background(), p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
+		m, early := p.admit(context.Background(), p.cfg.Load(), in, snap, snap.flows[flow], flowMatch{}, requestModel(in))
 		if early != nil || len(m.chunks) != 1 || len(m.chunks[0].in.Images) != 1 {
 			t.Fatalf("admit = %+v, %+v", m, early)
 		}

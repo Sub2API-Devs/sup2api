@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"unicode"
@@ -780,6 +781,40 @@ func (r *request) makePlan(lim planLimits, cached func([32]byte) bool) *plan {
 	}
 	pl.trace.Chunks = len(pl.chunks)
 	return pl
+}
+
+// without leaves the segments of covered (hex keys: the hit sets of a replay,
+// hit_replay = new_content) out of the chunks of the plan, and reports
+// whether a chunk is left. A chunk keeps its place among the others; its
+// Input is built again from what is left of it. The trace counts the images
+// left out no more (one a flow without an image auditor dropped, dropImages,
+// is no part and stays counted, as admit counts it).
+func (pl *plan) without(covered map[string]bool) bool {
+	kept := pl.chunks[:0]
+	pl.trace.Chars = 0
+	for _, c := range pl.chunks {
+		parts, segs := c.parts[:0], c.segs[:0]
+		for _, p := range c.parts {
+			switch {
+			case !covered[hex.EncodeToString(pl.keys[p.seg][:])]:
+				parts = append(parts, p)
+			case p.img != nil:
+				pl.trace.Images--
+			}
+		}
+		for _, s := range c.segs {
+			if !covered[hex.EncodeToString(pl.keys[s][:])] {
+				segs = append(segs, s)
+			}
+		}
+		if c.parts, c.segs = parts, segs; len(parts) > 0 {
+			c.finish()
+			pl.trace.Chars += utf8.RuneCountInString(c.in.Text)
+			kept = append(kept, c)
+		}
+	}
+	pl.chunks, pl.trace.Chunks = kept, len(kept)
+	return len(kept) > 0
 }
 
 // sendsImage reports whether makePlan keeps the cached text of r beside an

@@ -14,6 +14,15 @@
       ],
       "default": "off"
     },
+    "fail_policy": {
+      "type": "string",
+      "title": "When moderation fails",
+      "enum": [
+        "open",
+        "close_pre"
+      ],
+      "default": "open"
+    },
     "allowlist_user_ids": {
       "type": "array",
       "title": "Allowlist user IDs",
@@ -266,6 +275,15 @@
       "minimum": 0,
       "maximum": 30,
       "default": 7
+    },
+    "hit_replay": {
+      "type": "string",
+      "title": "Cached hit replay",
+      "enum": [
+        "new_content",
+        "whole"
+      ],
+      "default": "new_content"
     },
     "cache_entries": {
       "type": "integer",

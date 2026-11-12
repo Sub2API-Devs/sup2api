@@ -47,6 +47,10 @@ type eventRec struct {
 	// Replayed: a cached hit replayed (hook.go replay), not a new violation.
 	Replayed   bool
 	WatchLevel string // level when admitted (not stored)
+	// FlowSource and FlowFallback: how the request found its flow
+	// (flowMatch, CONTRACTS §72.17, 0.10.0); NULL when "".
+	FlowSource   string
+	FlowFallback *StaleBinding
 }
 
 // fillFromTrace derives result, categories and severity.
@@ -81,6 +85,15 @@ func (r *eventRec) legacyColumns() (verdict, action string) {
 		return VerdictError, ActionAllow
 	}
 	return VerdictPass, ActionAllow
+}
+
+// fallbackColumns are events.flow_fallback_id and flow_fallback_reason (NULL
+// without a fallback).
+func (r *eventRec) fallbackColumns() (*int64, *string) {
+	if r.FlowFallback == nil {
+		return nil, nil
+	}
+	return &r.FlowFallback.FlowID, &r.FlowFallback.Reason
 }
 
 // dropInputMessages removes the input messages of a batch that failed to
@@ -176,6 +189,7 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 		evs[i].storable()
 		e := evs[i]
 		verdict, action := e.legacyColumns()
+		fallbackID, fallbackReason := e.fallbackColumns()
 		mode := e.Mode
 		if mode != ModeEnforce {
 			mode = ModeObserve
@@ -184,13 +198,16 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 				verdict, action, categories, severity, reason, error, text, text_chars, text_hash, cached,
 				llm_model, turns, latency_ms, prompt_tokens, completion_tokens,
 				result, timing, flow_id, flow_version, highest_category, highest_score, hit_categories, trace,
-				input_format, input_message, input_message_size, image_count, keep_until, queue_ms, endpoint, session_fp, replayed)
+				input_format, input_message, input_message_size, image_count, keep_until, queue_ms, endpoint, session_fp, replayed,
+				flow_source, flow_fallback_id, flow_fallback_reason)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'','',$13,$14,$15,false,'',0,$16,0,0,
-				$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33) RETURNING id`,
+				$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,
+				NULLIF($34,''),$35,$36) RETURNING id`,
 			e.At, e.RequestID, e.UserID, e.APIKeyID, e.GroupID, e.Model, e.Protocol, mode,
 			verdict, action, e.HitCategories, e.Severity, e.Text, e.TextChars, e.TextHash, e.LatencyMs,
 			e.Result, e.Timing, e.FlowID, e.FlowVersion, e.HighestCategory, e.HighestScore, e.HitCategories, e.Trace,
-			e.InputFormat, e.InputMessage, e.InputMessageSize, e.ImageCount, e.KeepUntil, e.QueueMs, e.Endpoint, e.SessionFp, e.Replayed)
+			e.InputFormat, e.InputMessage, e.InputMessageSize, e.ImageCount, e.KeepUntil, e.QueueMs, e.Endpoint, e.SessionFp, e.Replayed,
+			e.FlowSource, fallbackID, fallbackReason)
 	}
 	ids := make([]int64, len(evs))
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {

@@ -289,11 +289,11 @@ func TestAllowlistedCannotBeEnforcedByHand(t *testing.T) {
 	}
 }
 
-// Beyond max_inflight_mb the hook answers at once: 503 for a user who is
-// moderated first, a pass for everyone else.
+// Beyond max_inflight_mb the hook answers at once: under fail_policy =
+// close_pre 503 for a user who is moderated first, a pass for everyone else.
 func TestBusyUsesPreModerated(t *testing.T) {
 	mod := newFakeMod(t)
-	lists := map[string]any{"max_inflight_mb": 16, "allowlist_user_ids": []string{"8"}, "blocklist_user_ids": []string{"9"}}
+	lists := map[string]any{"max_inflight_mb": 16, "allowlist_user_ids": []string{"8"}, "blocklist_user_ids": []string{"9"}, "fail_policy": FailClosePre}
 	settings := func(mode string) map[string]any {
 		m := map[string]any{"mode": mode}
 		for k, v := range lists {

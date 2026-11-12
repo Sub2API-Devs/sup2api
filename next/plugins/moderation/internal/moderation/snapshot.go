@@ -38,6 +38,9 @@ type liveFlow struct {
 	Name    string
 	Version int
 	Spec    *Spec
+	// scope is the audit scope (auditScope): a column of the flow, applied at
+	// once like enabled, not a part of the published version.
+	scope   string
 	timeout time.Duration
 	// fp is the verdict fingerprint (fingerprint): part of the flow's cache
 	// keys.
@@ -53,12 +56,19 @@ type snapshot struct {
 	channels   map[int64]*liveChannel
 	auditors   map[int64]*liveAuditor
 	flows      map[int64]*liveFlow
+	// dead maps the flows that are not live to the reason (FallbackDisabled
+	// ...); a flow in neither map is gone.
+	dead map[int64]string
 	// byGroup maps the bound groups to their flow; nil = exempt (flow 0, the
 	// group is not moderated). A binding to a flow that is disabled,
 	// unpublished or gone is left out, so a wider binding applies. 0 =
 	// default.
 	byGroup map[int64]*liveFlow
-	groups  map[int64][]int64 // flow id -> bound groups
+	// stale are the bindings left out of byGroup and byAccount, by group and
+	// account (account 0 = a group binding): what flowFor reports as the
+	// fallback of a request (§72.17).
+	stale  map[accountKey]StaleBinding
+	groups map[int64][]int64 // flow id -> bound groups
 	// byAccount maps the account bindings (group 0 = the account in any
 	// group) to their flow; nil and left out as in byGroup (§72.17).
 	byAccount map[accountKey]*liveFlow
@@ -76,18 +86,57 @@ type accountKey struct{ group, account int64 }
 
 func emptySnapshot() *snapshot {
 	return &snapshot{version: -1, channels: map[int64]*liveChannel{}, auditors: map[int64]*liveAuditor{},
-		flows: map[int64]*liveFlow{}, byGroup: map[int64]*liveFlow{}, groups: map[int64][]int64{},
-		byAccount: map[accountKey]*liveFlow{}, accountGroups: map[int64]bool{}}
+		flows: map[int64]*liveFlow{}, dead: map[int64]string{}, byGroup: map[int64]*liveFlow{}, groups: map[int64][]int64{},
+		stale: map[accountKey]StaleBinding{}, byAccount: map[accountKey]*liveFlow{}, accountGroups: map[int64]bool{}}
+}
+
+// Flow sources (events.flow_source, CONTRACTS §72.17, 0.10.0): how a request
+// found its flow.
+const (
+	FlowSourceGroup      = "group"       // the binding of its group
+	FlowSourceAccount    = "account"     // the binding of its account within the group
+	FlowSourceAccountAny = "account_any" // the binding of its account in any group
+	FlowSourceDefault    = "default"     // the default flow (group 0)
+	// FlowSourceFallback: a binding of the request does not apply (its flow
+	// is not live) and a wider one decided.
+	FlowSourceFallback = "fallback"
+)
+
+// Why a binding does not apply (StaleBinding.Reason), checked in this order.
+const (
+	FallbackDeleted     = "deleted"
+	FallbackDisabled    = "disabled"
+	FallbackUnpublished = "unpublished"
+	// FallbackInvalid: the published spec does not parse on this node (one
+	// written by a later version).
+	FallbackInvalid = "invalid"
+)
+
+// StaleBinding is a binding that does not apply: its flow and why.
+type StaleBinding struct {
+	FlowID int64  `json:"flow_id"`
+	Reason string `json:"reason"`
+}
+
+// flowMatch is how a request found its flow; fallback is set with
+// FlowSourceFallback: the most specific binding of the request that did not
+// apply.
+type flowMatch struct {
+	source   string
+	fallback *StaleBinding
 }
 
 // flowFor returns the flow of a group; a group without a binding of its own
 // (or bound to a flow that is disabled or unpublished) falls back to the
 // default flow (group 0). nil = not moderated.
-func (s *snapshot) flowFor(group int64) *liveFlow {
+func (s *snapshot) flowFor(group int64) (*liveFlow, flowMatch) {
 	if f, ok := s.byGroup[group]; ok {
-		return f
+		if group == 0 {
+			return f, flowMatch{source: FlowSourceDefault}
+		}
+		return f, flowMatch{source: FlowSourceGroup}
 	}
-	return s.byGroup[0]
+	return s.byGroup[0], s.fallback(flowMatch{source: FlowSourceDefault}, accountKey{group, 0})
 }
 
 // flowForAccount returns the flow of a request of group sent to account
@@ -96,13 +145,43 @@ func (s *snapshot) flowFor(group int64) *liveFlow {
 // A binding to flow 0 is not moderated and the less specific ones do not
 // apply; a binding to a disabled or unpublished flow counts as absent, so
 // the next less specific one decides (new-api runtime.go).
-func (s *snapshot) flowForAccount(group, account int64) *liveFlow {
-	for _, k := range [2]accountKey{{group, account}, {0, account}} {
+func (s *snapshot) flowForAccount(group, account int64) (*liveFlow, flowMatch) {
+	keys := [2]accountKey{{group, account}, {0, account}}
+	for i, k := range keys {
 		if f, ok := s.byAccount[k]; ok {
-			return f
+			m := flowMatch{source: FlowSourceAccount}
+			if i == 1 {
+				m.source = FlowSourceAccountAny
+			}
+			return f, s.fallback(m, keys[:i]...)
 		}
 	}
-	return s.flowFor(group)
+	f, m := s.flowFor(group)
+	return f, s.fallback(m, keys[:]...)
+}
+
+// effectiveFlow is the id of the flow a request of group sent to account
+// runs (account 0: any account), 0 = none.
+func (s *snapshot) effectiveFlow(group, account int64) int64 {
+	f, _ := s.flowFor(group)
+	if account != 0 {
+		f, _ = s.flowForAccount(group, account)
+	}
+	if f == nil {
+		return 0
+	}
+	return f.ID
+}
+
+// fallback is m, unless one of the more specific bindings passed over is
+// stale: then a fallback from the first of them.
+func (s *snapshot) fallback(m flowMatch, passed ...accountKey) flowMatch {
+	for _, k := range passed {
+		if st, ok := s.stale[k]; ok {
+			return flowMatch{source: FlowSourceFallback, fallback: &st}
+		}
+	}
+	return m
 }
 
 // perAccount reports whether the flow of a request of group depends on the
@@ -115,18 +194,37 @@ func (s *snapshot) perAccount(group int64) bool {
 // groupsOf lists the groups bound to a flow.
 func (s *snapshot) groupsOf(flowID int64) []int64 { return s.groups[flowID] }
 
+// staleReason is why a binding to flowID does not apply, "" when it does
+// (flow 0 exempts: that applies too).
+func (s *snapshot) staleReason(flowID int64) string {
+	if flowID == 0 || s.flows[flowID] != nil {
+		return ""
+	}
+	if r, ok := s.dead[flowID]; ok {
+		return r
+	}
+	return FallbackDeleted
+}
+
+// stalled records a binding that does not apply (staleReason) and reports
+// whether it is one.
+func (s *snapshot) stalled(k accountKey, flowID int64) bool {
+	r := s.staleReason(flowID)
+	if r != "" {
+		s.stale[k] = StaleBinding{FlowID: flowID, Reason: r}
+	}
+	return r != ""
+}
+
 // bindGroup records a group binding. Flow 0 exempts the group; a flow that
 // is disabled, unpublished or gone leaves the group without a binding, so
 // the default flow applies (the console still lists the group, groupsOf).
 func (s *snapshot) bindGroup(group, flowID int64) {
-	switch f := s.flows[flowID]; {
-	case flowID == 0:
-		s.byGroup[group] = nil
-	case f != nil:
-		s.byGroup[group] = f
-	}
 	if flowID != 0 {
 		s.groups[flowID] = append(s.groups[flowID], group)
+	}
+	if !s.stalled(accountKey{group, 0}, flowID) {
+		s.byGroup[group] = s.flows[flowID]
 	}
 }
 
@@ -134,11 +232,10 @@ func (s *snapshot) bindGroup(group, flowID int64) {
 // flow that is disabled, unpublished or gone is left out: a wider binding
 // applies, and the binding does not make its group per account.
 func (s *snapshot) bindAccount(k accountKey, flowID int64) {
-	f := s.flows[flowID]
-	if flowID != 0 && f == nil {
+	if s.stalled(k, flowID) {
 		return
 	}
-	s.byAccount[k] = f
+	s.byAccount[k] = s.flows[flowID]
 	if k.group == 0 {
 		s.anyGroupAccounts = true
 	} else {
@@ -314,24 +411,39 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}); err != nil {
 		return nil, err
 	}
-	rows, err = db.Query(ctx, `SELECT id, name, version, published FROM flows
-		WHERE deleted_at IS NULL AND enabled AND published IS NOT NULL`)
+	// Every flow: the live ones run, the others are why a binding does not
+	// apply (dead).
+	rows, err = db.Query(ctx, `SELECT id, name, version, published, scope, deleted_at IS NOT NULL, enabled FROM flows`)
 	if err != nil {
 		return nil, err
 	}
 	var (
-		fid     int64
-		fname   string
-		version int
-		pub     []byte
+		fid              int64
+		fname            string
+		version          int
+		pub              []byte
+		scope            *string
+		deleted, enabled bool
 	)
-	if _, err := pgx.ForEachRow(rows, []any{&fid, &fname, &version, &pub}, func() error {
+	if _, err := pgx.ForEachRow(rows, []any{&fid, &fname, &version, &pub, &scope, &deleted, &enabled}, func() error {
+		switch {
+		case deleted:
+			s.dead[fid] = FallbackDeleted
+		case !enabled:
+			s.dead[fid] = FallbackDisabled
+		case pub == nil:
+			s.dead[fid] = FallbackUnpublished
+		}
+		if s.dead[fid] != "" {
+			return nil
+		}
 		spec, err := ParseSpec(pub)
 		if err != nil {
 			p.log.Warn("moderation: published flow is invalid", "flow_id", fid, "error", err.Error())
+			s.dead[fid] = FallbackInvalid
 			return nil
 		}
-		f := &liveFlow{ID: fid, Name: fname, Version: version, Spec: spec}
+		f := &liveFlow{ID: fid, Name: fname, Version: version, Spec: spec, scope: auditScope(scope)}
 		f.timeout = time.Duration(spec.TotalTimeoutMs) * time.Millisecond
 		if f.timeout <= 0 {
 			f.timeout = maxTotalTimeoutMs * time.Millisecond
@@ -343,7 +455,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	}
 	defaultSet, _ := json.Marshal(c.jevDefault)
 	for _, f := range s.flows {
-		f.fp = fingerprint(f.Spec, stored, s.channels, defaultSet)
+		f.fp = fingerprint(f.Spec, f.scope, stored, s.channels, defaultSet)
 	}
 	rows, err = db.Query(ctx, `SELECT group_id, flow_id FROM flow_groups ORDER BY group_id`)
 	if err != nil {
@@ -405,19 +517,24 @@ const judgingVersion = 2
 // hash of everything that decides what the flow answers for given content -
 // the stages (combine, n, fallback, auditors), every auditor (type, channel,
 // stored config), the channel's type, protocol, base URL and model, the
-// default question set of the auditors that use it, and judgingVersion for
-// the defaults in the code. It is part of the flow's cache keys, so changing
+// default question set of the auditors that use it, judgingVersion for the
+// defaults in the code, and the audit scope unless it is all (0.10.0: a
+// verdict is of the content the scope keeps; all and NULL hash as the 0.9.3
+// fingerprint did, so the flows of before keep their cache). It is part of the flow's cache keys, so changing
 // any of these makes the cached verdicts of the flow unreachable, while the
 // flow's name, model filter, sample rate and timeout and a channel's name,
 // key, proxy, timeout and billing model leave them in place.
-func fingerprint(spec *Spec, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
-	return fingerprintAt(judgingVersion, spec, auditors, channels, defaultSet)
+func fingerprint(spec *Spec, scope string, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
+	return fingerprintAt(judgingVersion, spec, scope, auditors, channels, defaultSet)
 }
 
 // fingerprintAt is fingerprint under a judging version.
-func fingerprintAt(version int, spec *Spec, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
+func fingerprintAt(version int, spec *Spec, scope string, auditors map[int64]storedAuditor, channels map[int64]*liveChannel, defaultSet []byte) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "judging %d\n", version)
+	if scope != ScopeAll {
+		fmt.Fprintf(h, "scope %s\n", scope)
+	}
 	for _, st := range spec.Stages {
 		fmt.Fprintf(h, "stage %q %d %t %v\n", st.Combine, st.N, st.Fallback, st.Auditors)
 		for _, id := range st.Auditors {

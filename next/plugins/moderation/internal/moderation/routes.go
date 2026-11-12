@@ -192,6 +192,13 @@ type Event struct {
 	KeepUntil        *time.Time `json:"keep_until"`
 	// Replayed: decided by a cached hit (trace.cache), not a new violation.
 	Replayed bool `json:"replayed"`
+	// FlowSource is how the request found its flow (FlowSourceGroup ...);
+	// FlowFallback, with source fallback, the binding that did not apply.
+	// Both are left out on the records of before 0.10.0 (§72.17).
+	FlowSource     *string       `json:"flow_source,omitempty"`
+	FlowFallback   *StaleBinding `json:"flow_fallback,omitempty"`
+	fallbackID     *int64
+	fallbackReason *string
 	// 0.1 records only.
 	Verdict  string `json:"verdict"`
 	Reason   string `json:"reason"`
@@ -251,19 +258,22 @@ type UserState struct {
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, endpoint, session_fp, mode, timing, result,
 	flow_id, flow_version, severity, hit_categories, highest_category, highest_score, review_status, reviewed_by, reviewed_at,
 	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until, replayed,
-	verdict, reason, error, llm_model`
+	verdict, reason, error, llm_model, flow_source, flow_fallback_id, flow_fallback_reason`
 
 func (e *Event) scanTargets() []any {
 	return []any{&e.ID, &e.CreatedAt, &e.RequestID, &e.UserID, &e.APIKeyID, &e.GroupID, &e.Model, &e.Protocol, &e.Endpoint, &e.SessionFp, &e.Mode, &e.Timing, &e.Result,
 		&e.FlowID, &e.FlowVersion, &e.Severity, &e.HitCategories, &e.HighestCategory, &e.HighestScore, &e.ReviewStatus, &e.ReviewedBy, &e.ReviewedAt,
 		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil, &e.Replayed,
-		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel}
+		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel, &e.FlowSource, &e.fallbackID, &e.fallbackReason}
 }
 
 func (e *Event) normalize() {
 	e.CreatedAt, e.ReviewedAt, e.KeepUntil = e.CreatedAt.UTC(), utcPtr(e.ReviewedAt), utcPtr(e.KeepUntil)
 	if e.HitCategories == nil {
 		e.HitCategories = []string{}
+	}
+	if e.fallbackID != nil && e.fallbackReason != nil {
+		e.FlowFallback = &StaleBinding{FlowID: *e.fallbackID, Reason: *e.fallbackReason}
 	}
 }
 
