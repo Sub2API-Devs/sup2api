@@ -369,8 +369,8 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 
 	// SEC-H2: Actor must be able to act on the target user (what the target's
 	// roles grant must not exceed the actor's; a disabled target is measured
-	// by its roles too, see CanActOnUser).
-	if err := s.CanActOnUser(ctx, actorID, userID); err != nil {
+	// by its roles too, see CanActOnUsers). Checks read through tx (C-L4).
+	if err := s.canActOnUsers(ctx, tx, actorID, userID); err != nil {
 		return 0, err
 	}
 
@@ -390,14 +390,10 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 			superChanged = true
 		}
 	}
-	if superChanged && actorID != 0 {
-		// The effective set: an access key is never a superuser (H1).
-		actor, err := s.permissionSetCached(ctx, actorID)
-		if err != nil {
+	if superChanged {
+		// An access key is never a superuser (H1).
+		if err := s.covers(ctx, tx, actorID, core.PermissionSet{Superuser: true}, errSuperuserGrantor); err != nil {
 			return 0, err
-		}
-		if !actor.Superuser {
-			return 0, errSuperuserGrantor
 		}
 	}
 	if len(curSuper) > 0 && !newSuper {
@@ -422,7 +418,7 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 			if err != nil {
 				return 0, err
 			}
-			if err := s.canGrantSet(ctx, actorID, want); err != nil {
+			if err := s.covers(ctx, tx, actorID, want, cannotGrant(ctx)); err != nil {
 				return 0, err
 			}
 		}

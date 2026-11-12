@@ -1,6 +1,8 @@
 package core
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"testing"
 )
@@ -44,5 +46,42 @@ func TestMissingDetails(t *testing.T) {
 	d := Missing{Superuser: true}.Details()
 	if keys, ok := d["missing"].([]string); !ok || keys == nil || len(keys) != 0 || d["superuser"] != true {
 		t.Fatalf("details = %#v", d)
+	}
+}
+
+// guardFunc adapts a function to UserGuard.
+type guardFunc func(actorID int64, targetIDs ...int64) error
+
+func (f guardFunc) CanActOnUsers(_ context.Context, actorID int64, targetIDs ...int64) error {
+	return f(actorID, targetIDs...)
+}
+
+func TestActOnOthers(t *testing.T) {
+	ctx := context.Background()
+	asked := false
+	g := guardFunc(func(int64, ...int64) error { asked = true; return nil })
+	if err := ActOnOthers(ctx, g, 7, 3, 7); !errors.Is(err, ErrSelfTarget) || asked {
+		t.Fatalf("self among targets: err = %v, asked = %v", err, asked)
+	}
+	if err := ActOnOthers(ctx, g, 7, 3, 4); err != nil || !asked {
+		t.Fatalf("others: err = %v, asked = %v", err, asked)
+	}
+	asked = false
+	if err := ActOnOthers(ctx, g, 0, 0, 3); err != nil || !asked {
+		t.Fatalf("system: err = %v, asked = %v", err, asked)
+	}
+	denied := guardFunc(func(int64, ...int64) error { return ErrPermissionDenied })
+	if err := ActOnOthers(ctx, denied, 7, 3); !errors.Is(err, ErrPermissionDenied) {
+		t.Fatalf("guard's denial: %v", err)
+	}
+}
+
+func TestGuardOrDeny(t *testing.T) {
+	if err := GuardOrDeny(nil).CanActOnUsers(context.Background(), 0); !errors.Is(err, ErrInternal) {
+		t.Fatalf("nil guard: %v", err)
+	}
+	g := guardFunc(func(int64, ...int64) error { return nil })
+	if err := GuardOrDeny(g).CanActOnUsers(context.Background(), 1, 2); err != nil {
+		t.Fatalf("wired guard: %v", err)
 	}
 }

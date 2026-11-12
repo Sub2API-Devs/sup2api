@@ -75,7 +75,7 @@ func TestCanGrant(t *testing.T) {
 
 // H1: granting a superuser role needs the superuser flag, which an access
 // key never carries, even one of a superuser.
-func TestCanGrantSetSuperuser(t *testing.T) {
+func TestCoversSuperuser(t *testing.T) {
 	s := &Service{
 		users: map[int64]core.PermissionSet{
 			1: {Keys: map[string]struct{}{"role:manage": {}}, Version: 1},
@@ -98,9 +98,9 @@ func TestCanGrantSetSuperuser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := s.canGrantSet(tt.ctx, tt.actorID, want)
+			err := s.covers(tt.ctx, nil, tt.actorID, want, cannotGrant(tt.ctx))
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("canGrantSet() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("covers() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			var e *core.Error
 			if tt.wantErr && (!errors.As(err, &e) || e.Details["superuser"] != true) {
@@ -190,6 +190,53 @@ func TestCanActOn(t *testing.T) {
 			err := s.CanActOnUser(context.Background(), tt.actorID, tt.targetID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CanActOnUser() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+var _ core.UserGuard = (*Service)(nil)
+
+func TestCanActOnUsers(t *testing.T) {
+	s := &Service{
+		users: map[int64]core.PermissionSet{
+			1: {Keys: map[string]struct{}{"users:read": {}, "users:write": {}}, Version: 1},
+			2: {Superuser: true, Version: 1},
+			3: {Keys: map[string]struct{}{"users:read": {}}, Version: 1},
+			4: {Keys: map[string]struct{}{"users:read": {}, "settings:manage": {}}, Version: 1},
+			5: {Superuser: true, Version: 1},
+		},
+		minVersion: 1,
+	}
+	keyed := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 2, Permissions: []string{"users:read"}})
+	bg := context.Background()
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		actorID int64
+		targets []int64
+		wantErr string // "" = allowed, else the message
+	}{
+		{"no targets", bg, 1, nil, ""},
+		{"only itself", bg, 3, []int64{3, 3}, ""},
+		{"system acts on a superuser", bg, 0, []int64{2, 4}, ""},
+		{"all within, duplicates and itself ignored", bg, 1, []int64{3, 1, 3}, ""},
+		{"one beyond rejects the batch", bg, 1, []int64{3, 4}, "you cannot modify a user with higher privileges"},
+		{"superuser target", bg, 1, []int64{3, 2}, "you cannot modify a superuser"},
+		{"superuser acts on anyone", bg, 2, []int64{1, 4}, ""},
+		{"superuser's key within its keys", keyed, 2, []int64{3}, ""},
+		{"superuser's key on a wider user", keyed, 2, []int64{1}, "you cannot modify a user with higher privileges"},
+		{"superuser's key on another superuser", keyed, 2, []int64{2, 5}, "you cannot modify a superuser"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := s.CanActOnUsers(tt.ctx, tt.actorID, tt.targets...)
+			var e *core.Error
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Fatalf("CanActOnUsers() = %v, want nil", err)
+			case tt.wantErr != "" && (!errors.As(err, &e) || e.Code != "permission_denied" || e.Message != tt.wantErr):
+				t.Fatalf("CanActOnUsers() = %v, want %q", err, tt.wantErr)
 			}
 		})
 	}

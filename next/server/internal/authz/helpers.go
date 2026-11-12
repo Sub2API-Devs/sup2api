@@ -2,33 +2,107 @@ package authz
 
 import (
 	"context"
+	"fmt"
+	"maps"
+	"slices"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 func t(ctx context.Context, en, zh string) string { return core.Text(ctx, en, zh) }
 
-// rolePermissionSet is what userID's roles grant, whatever the user's status
-// (and never narrowed by the caller's access key): the measure of a TARGET in
-// SEC-H2 comparisons. PermissionSet, the effective set, is empty for a
-// disabled user, which is right for authorizing that user and wrong for
-// deciding who may act on it. Tests without a database seed the cache and
-// are answered from it.
-func (s *Service) rolePermissionSet(ctx context.Context, userID int64) (core.PermissionSet, error) {
+// querier is the pool checks read through outside a transaction; nil for
+// tests without a database, which never query.
+func (s *Service) querier() store.Querier {
 	if s.db == nil {
-		s.mu.RLock()
-		set, ok := s.users[userID]
-		s.mu.RUnlock()
-		if ok {
-			return set, nil
-		}
-		return core.PermissionSet{Keys: map[string]struct{}{}}, nil
+		return nil
 	}
-	keys, err := s.UserRoleKeys(ctx, s.db.Pool, userID)
+	return s.db.Pool
+}
+
+// usersRoleSet is the union of what the roles of userIDs grant (the grant
+// view of RolesPermissions), whatever the users' status and never narrowed by
+// an access key: the measure of a TARGET in SEC-H2 comparisons, and the base
+// of grantSet. PermissionSet, the effective set, is empty for a disabled
+// user, which is right for authorizing that user and wrong for deciding who
+// may act on it. Tests without a database seed the cache and are answered
+// from it.
+func (s *Service) usersRoleSet(ctx context.Context, q store.Querier, userIDs []int64) (core.PermissionSet, error) {
+	if s.db == nil {
+		return s.cachedUnion(userIDs), nil
+	}
+	var keys []string
+	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(DISTINCT r.key), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ANY($1)`, userIDs).Scan(&keys); err != nil {
+		return core.PermissionSet{}, err
+	}
+	return s.RolesPermissions(ctx, q, keys)
+}
+
+// cachedUnion is usersRoleSet for tests without a database.
+func (s *Service) cachedUnion(userIDs []int64) core.PermissionSet {
+	set := core.PermissionSet{Keys: map[string]struct{}{}}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, id := range userIDs {
+		u := s.users[id]
+		set.Superuser = set.Superuser || u.Superuser
+		maps.Copy(set.Keys, u.Keys)
+	}
+	return set
+}
+
+// grantSet is what actorID may hand out and act upon: what its roles grant,
+// narrowed by its access key, which never leaves a superuser. It reads
+// through q, so a check inside a transaction sees that transaction and never
+// this node's cache, which may lag another node's change (C-L4).
+func (s *Service) grantSet(ctx context.Context, q store.Querier, actorID int64) (core.PermissionSet, error) {
+	set, err := s.usersRoleSet(ctx, q, []int64{actorID})
 	if err != nil {
 		return core.PermissionSet{}, err
 	}
-	return s.RolesPermissions(ctx, s.db.Pool, keys)
+	return core.RestrictToAccessKey(ctx, actorID, set), nil
+}
+
+// covers fails with deny, detailed by what is missing, unless actorID's
+// grantSet holds all of want, the superuser flag included. The system (actor
+// 0) is always covered.
+func (s *Service) covers(ctx context.Context, q store.Querier, actorID int64, want core.PermissionSet, deny *core.Error) error {
+	if actorID == 0 {
+		return nil
+	}
+	set, err := s.grantSet(ctx, q, actorID)
+	if err != nil {
+		return err
+	}
+	if m := set.Missing(want); !m.Empty() {
+		return deny.WithDetails(m.Details())
+	}
+	return nil
+}
+
+// cannotGrant is the denial of a grant beyond the actor's own.
+func cannotGrant(ctx context.Context) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"you cannot grant permissions you don't have",
+		"你不能授予自己没有的权限"))
+}
+
+// cannotActOn is the denial of an action on a target holding more than the
+// actor. Only a non-superuser misses anything, so it misses the flag of a
+// superuser target.
+func cannotActOn(ctx context.Context, target core.PermissionSet) *core.Error {
+	if target.Superuser {
+		return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a superuser", "你不能修改超级用户"))
+	}
+	return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a user with higher privileges", "你不能修改权限更高的用户"))
+}
+
+// audit records one audit_logs row of an authz change through q, the
+// change's transaction.
+func (s *Service) audit(ctx context.Context, q store.Querier, actorID int64, action, targetType string, id any, detail any) error {
+	return audit.Audit(ctx, q, actorID, action, targetType, fmt.Sprint(id), detail)
 }
 
 // CanGrant checks whether the actor can grant the given permissions. Returns
@@ -36,82 +110,43 @@ func (s *Service) rolePermissionSet(ctx context.Context, userID int64) (core.Per
 // privilege escalation where a user grants themselves or others permissions
 // they don't have (CONTRACTS §4.1, SEC-H2).
 func (s *Service) CanGrant(ctx context.Context, actorID int64, perms []string) error {
-	return s.canGrantSet(ctx, actorID, core.PermissionSetOf(perms...))
-}
-
-// canGrantSet fails unless the actor holds all of want, the superuser flag
-// included: only a superuser grants a superuser role (H1).
-func (s *Service) canGrantSet(ctx context.Context, actorID int64, want core.PermissionSet) error {
-	m, err := s.actorMissing(ctx, actorID, want)
-	if err != nil || m.Empty() {
-		return err
-	}
-	return core.ErrPermissionDenied.WithMessage(t(ctx,
-		"you cannot grant permissions you don't have",
-		"你不能授予自己没有的权限")).WithDetails(m.Details())
+	return s.covers(ctx, s.querier(), actorID, core.PermissionSetOf(perms...), cannotGrant(ctx))
 }
 
 // CanActOn validates the actor may act on a target with the given permissions (CONTRACTS §4.1, SEC-H2).
 // Returns an error if the target holds any permission the actor doesn't have.
 func (s *Service) CanActOn(ctx context.Context, actorID int64, targetPerms []string) error {
-	return s.canActOnSet(ctx, actorID, core.PermissionSetOf(targetPerms...))
+	target := core.PermissionSetOf(targetPerms...)
+	return s.covers(ctx, s.querier(), actorID, target, cannotActOn(ctx, target))
 }
 
-// canActOnSet fails unless the actor holds all of target, the superuser flag
-// included.
-func (s *Service) canActOnSet(ctx context.Context, actorID int64, target core.PermissionSet) error {
-	m, err := s.actorMissing(ctx, actorID, target)
-	if err != nil || m.Empty() {
-		return err
-	}
-	msg := t(ctx, "you cannot modify a user with higher privileges", "你不能修改权限更高的用户")
-	if m.Superuser {
-		msg = t(ctx, "you cannot modify a superuser", "你不能修改超级用户")
-	}
-	return core.ErrPermissionDenied.WithMessage(msg).WithDetails(m.Details())
-}
-
-// actorMissing is what want holds beyond the actor's effective set, which
-// its access key narrows and never leaves a superuser. The system (actor 0)
-// misses nothing, and nothing is missed from an empty want, so neither needs
-// the actor's set.
-func (s *Service) actorMissing(ctx context.Context, actorID int64, want core.PermissionSet) (core.Missing, error) {
-	if actorID == 0 || (!want.Superuser && len(want.Keys) == 0) {
-		return core.Missing{}, nil
-	}
-	set, err := s.permissionSetCached(ctx, actorID)
-	if err != nil {
-		return core.Missing{}, err
-	}
-	return set.Missing(want), nil
-}
-
-// CanActOnUser checks whether the actor can act on the target user by comparing
-// their permission sets. This is a convenience wrapper around CanActOn for user-to-user checks.
-//
-// The target's side is what its ROLES grant, not what it can do right now:
-// a disabled user can do nothing, and comparing against that would let anyone
-// with user:update re-enable a disabled admin or set its password and take
-// the account over (SEC-H2).
+// CanActOnUser is CanActOnUsers for one target.
 func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) error {
-	if actorID == 0 || actorID == targetID {
+	return s.CanActOnUsers(ctx, actorID, targetID)
+}
+
+// CanActOnUsers implements core.UserGuard: what the targets' roles grant
+// together must be within the actor's grantSet. Each target within the actor
+// is the same as their union within it, so one query serves any number of
+// targets. The target's side is what its ROLES grant, not what it can do
+// right now: a disabled user can do nothing, and comparing against that
+// would let anyone with user:update re-enable a disabled admin or set its
+// password and take the account over (SEC-H2). The actor itself among the
+// targets and the system (actor 0) pass; ActOnOthers refuses the former.
+func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error {
+	return s.canActOnUsers(ctx, s.querier(), actorID, targetIDs...)
+}
+
+// canActOnUsers is CanActOnUsers reading through q.
+func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID int64, targetIDs ...int64) error {
+	ids := slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == actorID })
+	if actorID == 0 || len(ids) == 0 {
 		return nil
 	}
-	targetSet, err := s.rolePermissionSet(ctx, targetID)
+	slices.Sort(ids)
+	target, err := s.usersRoleSet(ctx, q, slices.Compact(ids))
 	if err != nil {
 		return err
 	}
-	return s.canActOnSet(ctx, actorID, targetSet)
-}
-
-// permissionSetCached returns the cached permission set or falls back to PermissionSet.
-func (s *Service) permissionSetCached(ctx context.Context, userID int64) (core.PermissionSet, error) {
-	s.mu.RLock()
-	set, ok := s.users[userID]
-	min := s.minVersion
-	s.mu.RUnlock()
-	if ok && set.Version >= min {
-		return core.RestrictToAccessKey(ctx, userID, set), nil
-	}
-	return s.PermissionSet(ctx, userID)
+	return s.covers(ctx, q, actorID, target, cannotActOn(ctx, target))
 }

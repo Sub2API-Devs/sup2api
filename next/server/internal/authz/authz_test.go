@@ -640,6 +640,109 @@ func TestSuperAdminRules(t *testing.T) {
 	}
 }
 
+// M6: grants are compared in the grant view, where a disabled plugin's
+// permissions still count, on the actor's side and on the granted roles'.
+func TestGrantViewCountsDisabledPermissions(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard","zh":"守卫"}', 'installed')`); err != nil {
+		t.Fatal(err)
+	}
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
+	operator := addUser(t, s, "op@x.com", RoleOperator)
+	alice := addUser(t, s, "alice@x.com", RoleUser)
+	tx := func(fn func(tx pgx.Tx) error) {
+		t.Helper()
+		if err := db.Tx(ctx, fn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tx(func(tx pgx.Tx) error {
+		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read", Label: lt("View stats", "查看统计")}}, []string{RoleAdmin})
+	})
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "guardian", Name: lt("Guardian", "守卫"),
+		PermissionKeys: []string{"plugin.guard:stats:read"}}); err != nil {
+		t.Fatal(err)
+	}
+	tx(func(tx pgx.Tx) error { return s.SetPluginActive(ctx, tx, "guard", false) })
+	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return !ok })
+
+	// The operator lacks the disabled permission and cannot hand it out.
+	err := setRoles(s, operator, alice, RoleUser, "guardian")
+	var ce *core.Error
+	if !errors.As(err, &ce) || ce.Code != "permission_denied" || !slices.Equal(ce.Details["missing"].([]string), []string{"plugin.guard:stats:read"}) {
+		t.Fatalf("operator grants a disabled permission it lacks: %v", err)
+	}
+	// The admin's role carries it, disabled or not.
+	if err := s.CanGrant(ctx, admin, []string{"plugin.guard:stats:read"}); err != nil {
+		t.Fatalf("admin grants its disabled permission: %v", err)
+	}
+	if err := setRoles(s, admin, alice, RoleUser, "guardian"); err != nil {
+		t.Fatalf("admin assigns guardian: %v", err)
+	}
+	// Alice now holds what the operator lacks, so it cannot act on her.
+	if err := s.CanActOnUser(ctx, operator, alice); !isCode(err, "permission_denied") {
+		t.Fatalf("operator acts on a holder of a disabled permission: %v", err)
+	}
+}
+
+// C-L4: grant checks read the database, not this node's cache, which may lag
+// a change made on another node.
+func TestGrantChecksIgnoreStaleCache(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	a := newService(t, db, nil, nil) // no bus: a misses b's changes
+	b := newService(t, db, nil, nil)
+	ctx := context.Background()
+
+	root := addUser(t, b, "root@x.com", RoleSuperAdmin)
+	granter, err := b.CreateRole(ctx, root, CreateRoleInput{Key: "granter", Name: lt("Granter", "授权"),
+		PermissionKeys: []string{"user:read", "account:read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateRole(ctx, root, CreateRoleInput{Key: "reader", Name: lt("Reader", "只读"),
+		PermissionKeys: []string{"account:read"}}); err != nil {
+		t.Fatal(err)
+	}
+	actor := addUser(t, b, "g@x.com", "granter")
+	alice := addUser(t, b, "alice@x.com")
+	mustCan(t, a, actor, "account:read", true) // cached on a
+	if _, err := b.SetRolePermissions(ctx, root, granter.ID, []string{"user:read"}); err != nil {
+		t.Fatal(err)
+	}
+	mustCan(t, a, actor, "account:read", true) // stale on a
+
+	if err := a.CanGrant(ctx, actor, []string{"account:read"}); !isCode(err, "permission_denied") {
+		t.Fatalf("CanGrant used the stale cache: %v", err)
+	}
+	if err := setRoles(a, actor, alice, "reader"); !isCode(err, "permission_denied") {
+		t.Fatalf("SetUserRoles used the stale cache: %v", err)
+	}
+}
+
+func TestAuditHelper(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, nil, nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	if err := s.audit(ctx, db.Pool, root, "role.test", "role", int64(42), map[string]any{"k": "v"}); err != nil {
+		t.Fatal(err)
+	}
+	var uid int64
+	var target, detail string
+	if err := db.Pool.QueryRow(ctx, `SELECT user_id, target_id, detail::text FROM audit_logs WHERE action = 'role.test' AND target_type = 'role'`).Scan(&uid, &target, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if uid != root || target != "42" || detail != `{"k": "v"}` {
+		t.Fatalf("audit row: user %d target %q detail %s", uid, target, detail)
+	}
+}
+
 func TestPluginCatalog(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)

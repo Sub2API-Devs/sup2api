@@ -334,7 +334,9 @@ WHERE ur.user_id = $1`, userID)
 }
 
 // RolesPermissions returns the union of all permissions granted by the given
-// role keys. Used for authorization checks when granting roles to others.
+// role keys, in the grant view: disabled (plugin) permissions count, removed
+// ones do not (M6). Used to compare what roles carry in grant checks; the
+// effective set (loadPermissionSet) counts active ones only.
 func (s *Service) RolesPermissions(ctx context.Context, q store.Querier, roleKeys []string) (core.PermissionSet, error) {
 	if len(roleKeys) == 0 {
 		return core.PermissionSet{Keys: map[string]struct{}{}}, nil
@@ -344,7 +346,7 @@ func (s *Service) RolesPermissions(ctx context.Context, q store.Querier, roleKey
 SELECT r.superuser, p.key
 FROM roles r
 LEFT JOIN role_permissions rp ON rp.role_id = r.id
-LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status = 'active'
+LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status <> 'removed'
 WHERE r.key = ANY($1)`, roleKeys)
 	if err != nil {
 		return core.PermissionSet{}, err

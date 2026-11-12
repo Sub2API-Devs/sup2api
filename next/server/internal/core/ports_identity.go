@@ -141,6 +141,39 @@ type Authorizer interface {
 	CanActOn(ctx context.Context, actorID int64, targetPerms []string) error
 }
 
+// UserGuard is SEC-H2 for actions on users (authz implements it).
+type UserGuard interface {
+	// CanActOnUsers fails unless what the targets' roles grant is within
+	// what actorID may grant (a superuser target: only a superuser). The
+	// actor itself among the targets and actor 0 (the system) pass.
+	CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error
+}
+
+// ErrSelfTarget refuses an action nobody may take on themselves.
+var ErrSelfTarget = ErrConflict.WithMessage("you cannot do this to yourself")
+
+// ActOnOthers is UserGuard for actions nobody takes on themselves, such as
+// moving money to oneself or choosing one's own user group (M7, C-L7).
+func ActOnOthers(ctx context.Context, g UserGuard, actorID int64, targetIDs ...int64) error {
+	if actorID != 0 && slices.Contains(targetIDs, actorID) {
+		return ErrSelfTarget
+	}
+	return g.CanActOnUsers(ctx, actorID, targetIDs...)
+}
+
+// GuardOrDeny is g, or a guard refusing everything with ErrInternal when g
+// is nil (not wired): failing closed instead of panicking.
+func GuardOrDeny(g UserGuard) UserGuard {
+	if g == nil {
+		return denyAllUsers{}
+	}
+	return g
+}
+
+type denyAllUsers struct{}
+
+func (denyAllUsers) CanActOnUsers(context.Context, int64, ...int64) error { return ErrInternal }
+
 // PermissionDef describes one permission in the catalog.
 type PermissionDef struct {
 	Key         string
