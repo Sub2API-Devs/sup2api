@@ -960,7 +960,8 @@ func TestAccessKeyCannotManageSignIn(t *testing.T) {
 	k := newKeyEnv(t)
 	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
 	key := k.createKey(t, root, adminPassword, "user:read")
-	// Plugin routes and anything else that only verifies JWTs refuse it.
+	// Anything that only verifies JWTs refuses it (plugin routes refuse keys
+	// explicitly with 403).
 	if _, err := k.s.VerifyAccessToken(context.Background(), key.Key); err == nil {
 		t.Fatal("a key passed as a console token")
 	}

@@ -160,43 +160,21 @@ func (h *Handler) serveAPI(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-	var userID int64
 	switch chosen.Route.Scope {
 	case "admin", "user":
-		token, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
-		if !ok || token == "" || h.tokens == nil {
-			httpapi.Fail(c, core.ErrUnauthenticated)
+		// Access keys never reach plugins (their keys cannot hold plugin.*);
+		// a route without a permission matches nothing and is denied.
+		if !httpapi.Authenticate(c, h.tokens) || !httpapi.RejectAccessKey(c) ||
+			!httpapi.CanAny(c, h.authz, manifest.PermissionKey(key, chosen.Route.Permission)) {
 			return
-		}
-		uid, err := h.tokens.VerifyAccessToken(ctx, token)
-		if err != nil {
-			httpapi.Fail(c, core.ErrUnauthenticated.WithCause(err))
-			return
-		}
-		userID = uid
-		ctx = core.WithUserID(ctx, uid)
-		if perm := chosen.Route.Permission; perm != "" {
-			full := manifest.PermissionKey(key, perm)
-			if h.authz == nil {
-				httpapi.Fail(c, core.ErrPermissionDenied)
-				return
-			}
-			allowed, err := h.authz.Can(ctx, uid, full)
-			if err != nil {
-				httpapi.Fail(c, err)
-				return
-			}
-			if !allowed {
-				httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": full}))
-				return
-			}
 		}
 	case "public", "webhook":
 	default:
 		httpapi.Fail(c, errRouteNotFound)
 		return
 	}
+	ctx := c.Request.Context()
+	userID, _ := core.UserID(ctx) // 0 on public and webhook routes
 
 	body, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, MaxBodyBytes))
 	if err != nil {

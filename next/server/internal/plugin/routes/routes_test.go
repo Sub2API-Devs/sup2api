@@ -61,6 +61,11 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return 0, errors.New("bad token")
 }
 
+// VerifyAccessKey accepts any key as the admin holding the route permission.
+func (tokens) VerifyAccessKey(context.Context, string, string) (core.AccessKeyIdentity, error) {
+	return core.AccessKeyIdentity{UserID: 1, KeyID: 1, Permissions: []string{"plugin.demo:rules:read"}}, nil
+}
+
 type authz struct{}
 
 func (authz) Can(_ context.Context, uid int64, perm string) (bool, error) {
@@ -105,13 +110,7 @@ func TestPluginAPISelfFencing(t *testing.T) {
 	e, h, _, pkg := setup(t, routes.WithHealth(hc))
 
 	w := do(e, "POST", "/api/v1/p/demo/hook", "", `{}`)
-	var out struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	_ = json.Unmarshal(w.Body.Bytes(), &out)
-	if w.Code != http.StatusServiceUnavailable || out.Error.Code != "unavailable" || h.last != nil {
+	if w.Code != http.StatusServiceUnavailable || errorCode(w) != "unavailable" || h.last != nil {
 		t.Fatalf("unhealthy: %d %s", w.Code, w.Body)
 	}
 	if w.Header().Get("Retry-After") == "" {
@@ -172,6 +171,11 @@ func TestPluginAPIRoutes(t *testing.T) {
 	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "nobody", ""); w.Code != 403 {
 		t.Fatalf("no permission: %d", w.Code)
 	}
+	// Access keys are refused outright, even one holding the permission.
+	h.last = nil
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", core.AccessKeyPrefix+"x", ""); w.Code != 403 || errorCode(w) != "permission_denied" || h.last != nil {
+		t.Fatalf("access key: %d %s", w.Code, w.Body)
+	}
 	if w := do(e, "POST", "/api/v1/p/demo/echo/42", "admin", ""); w.Code != 405 {
 		t.Fatalf("wrong method: %d", w.Code)
 	}
@@ -191,6 +195,29 @@ func TestPluginAPIRoutes(t *testing.T) {
 	if w := do(e, "GET", "/api/v1/p/demo/echo/1", "admin", ""); w.Code != 503 {
 		t.Fatalf("disabled plugin: %d", w.Code)
 	}
+}
+
+// A route without a permission (a package that skipped validation) is
+// denied to everyone rather than open to any signed-in user.
+func TestPluginAPIRouteWithoutPermissionDenied(t *testing.T) {
+	m := registrytest.Manifest("demo", "1.0.0")
+	m.Routes = append(m.Routes, manifest.Route{Method: "GET", Path: "/open", Scope: "admin"})
+	e, h, _, _ := setupManifest(t, m)
+	for _, tok := range []string{"admin", "nobody"} {
+		if w := do(e, "GET", "/api/v1/p/demo/open", tok, ""); w.Code != 403 || errorCode(w) != "permission_denied" || h.last != nil {
+			t.Fatalf("%s: %d %s", tok, w.Code, w.Body)
+		}
+	}
+}
+
+func errorCode(w *httptest.ResponseRecorder) string {
+	var out struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	return out.Error.Code
 }
 
 type auditor struct{ writes []core.PluginWrite }
