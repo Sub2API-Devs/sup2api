@@ -254,25 +254,31 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 	}, nil
 }
 
+// lookupSQL reads what authenticating a key ($1, its hash) needs in one
+// statement: the key, its owner and the owner's segment, the key's group and
+// what the segment gets there. Whether the owner may use the group is
+// segment.OpenToUserSQL, as for the key endpoints and /me/groups.
+var lookupSQL = `SELECT k.id, k.user_id, k.status, k.expires_at,
+		(u.status = 'active' AND u.deleted_at IS NULL),
+		COALESCE(g.id, 0), COALESCE(g.name, ''), COALESCE(g.status, 'deleted'), COALESCE(g.rate_multiplier, 1),
+		COALESCE(g.model_allowlist, '[]'), COALESCE(g.model_filter_mode, 'blacklist'), COALESCE(g.environment, '{}'),
+		COALESCE(` + segment.OpenToUserSQL("g", "k.user_id") + `, false), k.allowed_ips,
+		k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used, COALESCE(g.conversion_loss_policy, ''),
+		s.id, s.discount, sg.rate_override
+	FROM api_keys k
+	JOIN users u ON u.id = k.user_id
+	JOIN segments s ON s.id = u.segment_id
+	LEFT JOIN groups g ON g.id = k.group_id
+	LEFT JOIN segment_groups sg ON sg.segment_id = s.id AND sg.group_id = g.id
+	WHERE k.key_hash = $1 AND k.deleted_at IS NULL`
+
 func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	e := &cached{}
 	// The group's default rate, the segment's discount and its own rate in
 	// the group (NULL = none).
 	var groupRate, discount decimal.Decimal
 	var override *decimal.Decimal
-	err := s.db.Pool.QueryRow(ctx, `SELECT k.id, k.user_id, k.status, k.expires_at,
-			(u.status = 'active' AND u.deleted_at IS NULL),
-			COALESCE(g.id, 0), COALESCE(g.name, ''), COALESCE(g.status, 'deleted'), COALESCE(g.rate_multiplier, 1),
-			COALESCE(g.model_allowlist, '[]'), COALESCE(g.model_filter_mode, 'blacklist'), COALESCE(g.environment, '{}'),
-			COALESCE(g.visibility = 'public' OR sg.granted, false), k.allowed_ips,
-			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used, COALESCE(g.conversion_loss_policy, ''),
-			s.id, s.discount, sg.rate_override
-		FROM api_keys k
-		JOIN users u ON u.id = k.user_id
-		JOIN segments s ON s.id = u.segment_id
-		LEFT JOIN groups g ON g.id = k.group_id
-		LEFT JOIN segment_groups sg ON sg.segment_id = s.id AND sg.group_id = g.id
-		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
+	err := s.db.Pool.QueryRow(ctx, lookupSQL, hash).Scan(
 		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive,
 		&e.GroupID, &e.GroupName, &e.GroupStatus, &groupRate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupEnvironment, &e.GroupAvailable, &e.AllowedIPs,
 		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency, &e.KeyQuota.Limit, &e.KeyQuota.Used, &e.GroupLossPolicy,

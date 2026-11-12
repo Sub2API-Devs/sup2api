@@ -77,10 +77,37 @@ func setup(t *testing.T) *env {
 			return out, nil
 		},
 		PriceRulesChanged: func(context.Context) { e.rulesChanged.Add(1) },
+		RuleCounts:        e.ruleCounts,
 	})
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, authz))
 	e.h = engine
 	return e
+}
+
+// goneModel is a model no group provides any more: its rules stay stored, and
+// group.Service.SegmentRuleCounts, which ruleCounts stands in for, leaves
+// them out. Which models a group provides is the group package's to tell.
+const goneModel = "gone"
+
+func (e *env) ruleCounts(ctx context.Context, segmentIDs []int64) (map[int64]map[int64]int64, error) {
+	rows, err := e.db.Pool.Query(ctx, `SELECT segment_id, group_id, count(*) FROM price_rules
+		WHERE segment_id = ANY($1) AND model <> $2 GROUP BY 1, 2`, segmentIDs, goneModel)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]map[int64]int64{}
+	for rows.Next() {
+		var segment, group, n int64
+		if err := rows.Scan(&segment, &group, &n); err != nil {
+			return nil, err
+		}
+		if out[segment] == nil {
+			out[segment] = map[int64]int64{}
+		}
+		out[segment][group] = n
+	}
+	return out, rows.Err()
 }
 
 // What another writer did to a transaction is a conflict to try again, not a

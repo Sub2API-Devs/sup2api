@@ -7,7 +7,7 @@ import { fail, noContent, on, paginate, type MockHandler, type MockRequest, type
 import { caller, hasPerm } from './core'
 import { groupPlatforms } from './accounts'
 import { globalPrice, money, priceCost, pricedModels, type PriceDef } from './billing'
-import { groupModels, groups, invalid, match, myGroups, userOut, users, type MockGroup, type MockUser } from './resources'
+import { groupModels, groups, invalid, match, myGroups, offeredRules, userOut, users, type MockGroup, type MockUser } from './resources'
 import {
   accessOf,
   addSegment,
@@ -36,10 +36,13 @@ import {
 /** The 403 of a caller without `perm`. */
 const denied = (perm: string) => fail(403, 'permission_denied', `${perm} is required`, { permission: perm })
 
+/** The first of `perms` the caller does not hold. */
+const missingPerm = (req: MockRequest, perms: string[]) => perms.find((perm) => !hasPerm(caller(req), perm))
+
 /** Registers a handler that needs every permission of `perms`; the first one missing is named. */
 function route(method: string, path: string, perms: string | string[], handler: MockHandler) {
   on(method, path, (req) => {
-    const missing = [perms].flat().find((perm) => !hasPerm(caller(req), perm))
+    const missing = missingPerm(req, [perms].flat())
     return missing ? denied(missing) : handler(req)
   })
 }
@@ -84,7 +87,7 @@ function segmentOut(s: MockSegment, showUsers: boolean) {
     member_count: membersOf(s).length,
     granted_groups: groups.filter((g) => g.visibility === 'restricted' && granted.includes(g.id)).map((g) => ({ id: g.id, name: g.name })),
     rate_override_count: pairsWhere({ segment_id: s.id }).filter((p) => p.rate_override !== null).length,
-    price_rule_count: rulesWhere({ segment_id: s.id }).length,
+    price_rule_count: offeredRules({ segment_id: s.id }).length,
     ...(s.kind === 'personal' ? personalOut(s, showUsers) : {}),
     created_at: s.created_at
   }
@@ -107,7 +110,7 @@ function settingOut(s: MockSegment, g: MockGroup, showUsers: boolean) {
     granted: access.granted,
     rate_override: rateOverrideOf(s.id, g.id),
     rate: rateOf(s, g),
-    price_rule_count: rulesWhere({ segment_id: s.id, group_id: g.id }).length,
+    price_rule_count: offeredRules({ segment_id: s.id, group_id: g.id }).length,
     member_count: membersOf(s).length
   }
 }
@@ -324,14 +327,33 @@ function quoteSegment(b: any): MockSegment | undefined {
   return users.some((u) => u.id === Number(b.user_id)) ? segmentOfUser(Number(b.user_id)) : undefined
 }
 
-// POST /pricing/quote, in the order the server checks: the subject, the group, the segment, the model, then the costs.
+/** What a quote takes besides price:read, as the console's entry to it: the group's rules, and those of the user or the segment it names. */
+const quotePerms = (b: any) => ['group:read', ...(b.user_id != null ? ['user:read'] : []), ...(b.segment_id != null ? ['segment:read'] : [])]
+
+/** The token variables of a quote's usage and their bound (core.MaxUsageTokens). */
+const QUOTE_USAGE = ['p', 'c', 'cr', 'cc', 'cc1h']
+const MAX_USAGE_TOKENS = 1e12
+
+/** The 400 of a usage the server would not take: a count that is no number does not bind, one out of bounds is a field usage.<variable>. */
+function usageFailure(usage: any): MockResult | undefined {
+  const counts = QUOTE_USAGE.map((k) => [k, usage?.[k] ?? 0] as const)
+  if (counts.some(([, v]) => typeof v !== 'number')) return fail(400, 'invalid_argument', 'invalid request body')
+  const fields = counts.filter(([, v]) => v < 0 || v > MAX_USAGE_TOKENS).map(([k]) => ({ field: `usage.${k}`, code: 'invalid', message: `must be 0 to ${MAX_USAGE_TOKENS} tokens` }))
+  return fields.length ? fail(400, 'invalid_argument', 'invalid', { fields }) : undefined
+}
+
+// POST /pricing/quote, in the order the server checks: the permissions, the subject, the usage, the group, the segment, the model, then the costs.
 route('POST', '/pricing/quote', 'price:read', (req) => {
   const b = req.body || {}
+  const missing = missingPerm(req, quotePerms(b))
+  if (missing) return denied(missing)
   if ((b.user_id == null) === (b.segment_id == null)) return invalid('user_id', 'give either user_id or segment_id')
+  const badUsage = usageFailure(b.usage)
+  if (badUsage) return badUsage
   const g = groups.find((x) => x.id === Number(b.group_id))
   if (!g) return fail(404, 'not_found', 'group not found')
   const s = quoteSegment(b)
-  if (!s) return fail(404, 'not_found', 'user or user group not found')
+  if (!s) return fail(404, 'not_found', b.user_id == null ? 'user group not found' : 'user not found')
   if (!groupModels(g).includes(b.model)) return invalid('model', 'the group does not provide this model')
   const access = accessOf(s, g)
   const base = globalPrice(b.model)

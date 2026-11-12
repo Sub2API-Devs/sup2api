@@ -69,6 +69,16 @@ describe('groups and pricing of a user', () => {
     expect(w.get('[data-testid="groups"]').attributes('data-editable')).toBe('true')
   })
 
+  it('says so, instead of waiting, when the user comes without a user group', async () => {
+    mocks.get.mockImplementation(async () => ({ ...amy, segment: undefined }))
+    const w = mount(UserPricingDrawer, { props: { open: true, user: amy }, global: { plugins: [i18n], stubs: { Teleport: true, PriceSimulatorModal: true } } })
+    await flushPromises()
+    await new Promise((r) => setTimeout(r))
+    await flushPromises()
+    expect(w.get('[data-testid="user-pricing-drawer"] [role="alert"]').text()).toBe('读不到他所在的用户组，请稍后重试。')
+    expect(mocks.get).not.toHaveBeenCalledWith(expect.stringMatching(/^\/segments\//))
+  })
+
   it('saves the discount of a personal segment first, then the groups rated by it', async () => {
     const { w, click } = await render(solo)
     await w.get('[data-testid="discount"]').setValue('0.8')

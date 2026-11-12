@@ -61,7 +61,7 @@ const KINDS: Record<string, Kind> = {
   groups: {
     rows(_req, who, mine) {
       if (!mine && !hasPerm(who, 'group:read')) return denied('group:read')
-      return (mine ? myGroups() : groups).map((g) => ({ id: g.id, name: g.name, status: g.status }))
+      return (mine ? myGroups(who.id) : groups).map((g) => ({ id: g.id, name: g.name, status: g.status }))
     }
   },
   'api-keys': {

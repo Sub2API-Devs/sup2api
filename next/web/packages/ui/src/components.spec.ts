@@ -391,6 +391,17 @@ describe('STable', () => {
     expect(w.findAll('.more').map(e => e.text())).toEqual(['2'])
   })
 
+  it('gives cell slots a closed row and a toggle that does nothing when rows do not expand', async () => {
+    const slots = { 'cell-name': '<button class="open" @click="params.toggleExpand()">{{ params.expanded }}</button>' }
+    const w = mount(STable, { props: { columns, rows }, slots })
+    await w.findAll('.open')[0].trigger('click')
+    expect(w.findAll('.open').map(e => e.text())).toEqual(['false', 'false', 'false'])
+    expect(w.emitted('expand')).toBeUndefined()
+    // Made expandable later, the row clicked before is still closed.
+    await w.setProps({ expandable: true })
+    expect(w.findAll('.open').map(e => e.text())).toEqual(['false', 'false', 'false'])
+  })
+
   it('renders an IP column from configuration for any row schema and keeps actions off the row', async () => {
     const column: TableColumn = { key: 'network.remote', label: 'Remote address', format: 'ip', filterable: true }
     const row = { id: 1, network: { remote: '2001:db8::7' } }

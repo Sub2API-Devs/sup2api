@@ -32,7 +32,7 @@ function editor(name: keyof typeof answers): Component {
     }
   }
 }
-const policy: Component = { setup: (_: unknown, { expose }: SetupContext) => (expose({ commit: () => true }), () => h('div')) }
+const policy: Component = { props: ['options'], setup: (_: unknown, { expose }: SetupContext) => (expose({ commit: () => true }), () => h('div')) }
 
 const vip = { id: 2, name: 'vip', description: '', status: 'active', rate_multiplier: '0.8', visibility: 'restricted', model_allowlist: [] } as Group
 
@@ -83,6 +83,19 @@ describe('group editor', () => {
     expect(calls).toEqual(['POST /groups', 'accounts:9', 'pricing'])
     // A saved group answers with its own user groups, which takes group:read only.
     expect(tabsOf((await render(vip)).w)).toContain('授权与倍率')
+  })
+
+  it('lists the models of the group opened last, whichever answers first', async () => {
+    const answers: Record<string, (v: object) => void> = {}
+    mocks.get.mockImplementation((path: string) => new Promise((r) => (answers[path] = r)))
+    const { w } = await render(vip)
+    await w.setProps({ open: false })
+    await w.setProps({ open: true, group: { ...vip, id: 3, name: 'trial' } })
+    await flushPromises()
+    answers['/groups/3/models']({ models: ['new'], unrestricted_accounts: 0 })
+    answers['/groups/2/models']({ models: ['old'], unrestricted_accounts: 0 })
+    await flushPromises()
+    expect(w.findComponent(policy).props('options')).toEqual(['new'])
   })
 
   it('saves the group, then its accounts, user groups and model prices', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n'
 import type { PriceDef } from '@/api/pricing'
-import { priceLabel } from './ruleText'
+import { priceLabel, ruleText } from './ruleText'
 
 const t = i18n.global.t
 i18n.global.locale.value = 'en'
@@ -21,6 +21,11 @@ describe('a price in a table cell', () => {
     expect(priceLabel(t, opaque)).toBe('Billed by expression')
     expect(priceLabel(t, { ...opaque, multiplier: '1.5' })).toBe('Billed by expression ×1.5')
     expect(priceLabel(t, { ...opaque, multiplier: '0' })).toBe('Billed by expression ×0')
+  })
+  it('leaves a blank price of a custom rule blank, per request as per token', () => {
+    expect(ruleText(t, { kind: 'custom', mode: 'per_request', config: { price: null } })).toBe(t('pricing.rule.customText', { price: '— per request' }))
+    expect(priceLabel(t, { mode: 'per_request', config: { price: null }, expression: '' })).toBe('— per request')
+    expect(priceLabel(t, { mode: 'per_token', config: { p: null, c: 15 }, expression: '' })).toBe('— / $15')
   })
   it('says that there is none', () => {
     expect(priceLabel(t, null)).toBe('No price')

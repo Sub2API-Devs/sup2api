@@ -4,7 +4,7 @@ import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './
 import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, pricerUser, readonlyUser, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 import { pricedModels } from './billing'
-import { accessOf, findSegment, forgetGroup, forgetUser, groupAccess, groupRuleCounts, moveUser, rateOf, segmentOfUser, segmentRef } from './pricingStore'
+import { accessOf, findSegment, forgetGroup, forgetUser, groupAccess, moveUser, rateOf, rulesWhere, segmentOfUser, segmentRef, type RuleRow } from './pricingStore'
 
 type L = { en: string; zh: string }
 const L = (en: string, zh: string): L => ({ en, zh })
@@ -241,6 +241,30 @@ export function groupModels(g: Pick<MockGroup, 'id' | 'model_allowlist' | 'model
   const declared: string[] = members.flatMap((a) => a.models || [])
   const open = members.some((a) => !a.models?.length)
   return [...new Set([...declared, ...(open ? pricedModels() : [])])].filter((m) => allowsModel(g, m)).sort()
+}
+
+/**
+ * The price rules `by` picks that are on a model their group provides now:
+ * the ones its pricing table lists. A rule on a model the group no longer
+ * provides stays stored but is neither listed nor counted (CONTRACTS §97.6).
+ */
+export function offeredRules(by: Partial<RuleRow>): RuleRow[] {
+  const offered = new Map<number, string[]>()
+  const modelsOf = (id: number) => {
+    if (!offered.has(id)) {
+      const g = groups.find((x) => x.id === id)
+      offered.set(id, g ? groupModels(g) : [])
+    }
+    return offered.get(id)!
+  }
+  return rulesWhere(by).filter((r) => modelsOf(r.group_id).includes(r.model))
+}
+
+/** How many model prices a group has, as its pricing table lists them: its own, and those of segments in it. */
+function groupRuleCounts(groupId: number) {
+  const rules = offeredRules({ group_id: groupId })
+  const own = rules.filter((r) => r.segment_id === null).length
+  return { price_rule_count: own, segment_rule_count: rules.length - own }
 }
 
 function validateGroup(b: any) {
@@ -499,7 +523,7 @@ function randomToken(n: number) {
 }
 
 /** The active groups the segment of a user may use, each with the rate that user gets in it. */
-export function myGroups(userId = ME_ID) {
+export function myGroups(userId: number) {
   const s = segmentOfUser(userId)
   return groups
     .filter((g) => g.status === 'active' && accessOf(s, g).accessible)
@@ -538,7 +562,7 @@ on('GET', '/me/api-keys', (req) => paginate(keys.filter((k) => k.user_id === ME_
 on('POST', '/me/api-keys', (req) => {
   const b = req.body || {}
   if (!String(b.name || '').trim()) return invalid('name', 'name is required')
-  if (!myGroups().some((g) => g.id === Number(b.group_id))) return invalid('group_id', 'group not available')
+  if (!myGroups(caller(req).id).some((g) => g.id === Number(b.group_id))) return invalid('group_id', 'group not available')
   for (const f of LIMIT_FIELDS) if (b[f] !== undefined && !(Number(b[f]) >= 0)) return invalid(f, 'must be between 0 (unlimited) and the maximum')
   const k: MockKey = { id: nextId(), user_id: ME_ID, group_id: Number(b.group_id), rpm_limit: Number(b.rpm_limit) || 0, tpm_limit: Number(b.tpm_limit) || 0, max_concurrency: Number(b.max_concurrency) || 0, quota_limit: String(Number(b.quota_limit) || 0), quota_used: '0', allowed_ips: b.allowed_ips || [], name: b.name, key_prefix: '', status: 'active', expires_at: b.expires_at || null, last_used_at: null, created_at: now() }
   const key = issueKey(k)
@@ -552,7 +576,7 @@ on('PATCH', '/me/api-keys/:id', (req) => {
   if (b.status === undefined && b.group_id === undefined && LIMIT_FIELDS.every((f) => b[f] === undefined) && b.quota_limit === undefined && !b.reset_quota && b.name === undefined && b.expires_at === undefined && b.allowed_ips === undefined) return fail(400, 'invalid_argument', 'nothing to update')
   for (const f of LIMIT_FIELDS) if (b[f] !== undefined && !(Number(b[f]) >= 0)) return invalid(f, 'must be between 0 (unlimited) and the maximum')
   if (b.status !== undefined && b.status !== 'active' && b.status !== 'disabled') return invalid('status', 'status must be active or disabled')
-  if (b.group_id !== undefined && !myGroups().some((g) => g.id === Number(b.group_id))) return invalid('group_id', 'group not available')
+  if (b.group_id !== undefined && !myGroups(caller(req).id).some((g) => g.id === Number(b.group_id))) return invalid('group_id', 'group not available')
   if (b.status !== undefined) k.status = b.status
   if (b.group_id !== undefined) k.group_id = Number(b.group_id)
   for (const f of LIMIT_FIELDS) if (b[f] !== undefined) k[f] = Number(b[f])

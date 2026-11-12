@@ -5,7 +5,7 @@
 // while columns scroll underneath it. Options:
 // - expandable: chevron column + the `expand` slot under an open row; every
 //   cell slot gets `expanded` and `toggleExpand()` of its row, so a cell (a
-//   row action) can open it too. expandToggle false leaves the chevron column
+//   row action) can open it too (without expandable: false and a no-op). expandToggle false leaves the chevron column
 //   out for a table opened from a cell only (phone cards keep their Details
 //   toggle); expandSingle closes the other rows when one opens, each with
 //   an `expand` (row, false) before the (row, true) of the one that opens;
@@ -149,8 +149,11 @@ function toggle(row: T, key: unknown) {
   for (const k of closed) emit('expand', k.row, false)
   emit('expand', row, open)
 }
-/** What a cell slot gets of its row's expansion, in the table and in a card. */
-const expansion = (row: T, key: unknown) => ({ expanded: expanded.value.has(key), toggleExpand: () => toggle(row, key) })
+/** What a cell slot gets of its row's expansion, in the table and in a card: closed, and a toggle that does nothing, when rows do not expand. */
+const expansion = (row: T, key: unknown) => ({
+  expanded: !!props.expandable && expanded.value.has(key),
+  toggleExpand: () => (props.expandable ? toggle(row, key) : undefined)
+})
 /** The props of a page slot rendered by the cards: a cell slot gets its row's expansion there too. */
 function cardSlotProps(name: string | number, scope: Record<string, any> | undefined) {
   if (!scope || !String(name).startsWith('cell-')) return scope ?? {}

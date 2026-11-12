@@ -118,6 +118,27 @@ func loadGroupPrices(ctx context.Context, q store.Querier, cond string, args ...
 	return gp, nil
 }
 
+// eachPrice calls add with the global price of each of models that has one
+// and the rules that price it for segmentID (0 = none) in groupID. It is the
+// one place the list prices of a group's models for one segment are read;
+// the caller says which models and what to make of each.
+func eachPrice(ctx context.Context, q store.Querier, prices catalog, models []string, groupID, segmentID int64, add func(model string, base PriceDef, levels ruleLevels)) error {
+	on := core.PriceQuery{GroupID: groupID, SegmentID: segmentID}
+	rules, err := loadRules(ctx, q, rulesFor, on.GroupID, on.SegmentID)
+	if err != nil {
+		return err
+	}
+	for _, model := range models {
+		base, ok := prices[model]
+		if !ok {
+			continue
+		}
+		on.Model = model
+		add(model, base, rules.levels(on))
+	}
+	return nil
+}
+
 // ModelPriceRow is one model a group provides, with the rules on it.
 type ModelPriceRow struct {
 	Model string `json:"model"`
@@ -175,7 +196,7 @@ func (gp *groupPrices) scope(ctx context.Context, q store.Querier, segmentID int
 	}
 	t, ok := terms[g.ID]
 	if !ok {
-		return nil, core.ErrNotFound.WithMessage(core.Text(ctx, "user group not found", "用户组不存在"))
+		return nil, segment.NotFound(ctx)
 	}
 	ref, err := segment.Ref(ctx, q, segmentID, showUsers)
 	if err != nil {
@@ -312,7 +333,7 @@ func (gp *groupPrices) check(ctx context.Context, q store.Querier, items []ruleP
 func (gp *groupPrices) checkPatch(ctx context.Context, known []int64, item rulePatch) (*storedRule, error) {
 	switch {
 	case item.SegmentID != nil && !slices.Contains(known, *item.SegmentID):
-		return nil, errors.New(core.Text(ctx, "unknown user group", "用户组不存在"))
+		return nil, errors.New(segment.UnknownMessage(ctx))
 	case item.Rule == nil:
 		return nil, nil
 	case !slices.Contains(gp.models, item.Model):

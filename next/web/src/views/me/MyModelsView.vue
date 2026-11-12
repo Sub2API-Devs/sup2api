@@ -14,7 +14,7 @@ import type { Group } from '@/api/types'
 import { fetchMyGroups } from '@/composables/lookups'
 import { useLatestRequest } from '@/composables/useLatestRequest'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
-import { priceCells, priceText, rateText, type PriceCells } from '@/components/pricing/pricingFormat'
+import { priceCells, priceText, rateText, round, type PriceCells } from '@/components/pricing/pricingFormat'
 import { myGroupLabel } from '@/views/keys/myGroup'
 import { num } from '@/views/prices/priceExpr'
 import { notifyError } from '@/utils/errors'
@@ -36,15 +36,19 @@ watch(groupID, (id) => {
   if (id) unavailable.value = false
 })
 
-/** GET /me/prices of the choice. A group the caller cannot use is a 404: the choice goes back to every group, answered here too so that no error shows meanwhile. */
-async function loadPrices(id: string): Promise<MyPrices> {
+/**
+ * GET /me/prices of the choice. A group the caller cannot use is a 404: the
+ * choice goes back to every group, whose own request answers it; meanwhile
+ * the rows shown stay, so that no error shows.
+ */
+async function loadPrices(id: string): Promise<MyPrices | null> {
   try {
     return await api.get<MyPrices>('/me/prices', id ? { group_id: id } : {})
   } catch (e) {
     if (!id || !isApiError(e) || e.status !== 404) throw e
     unavailable.value = true
     groupID.value = ''
-    return api.get<MyPrices>('/me/prices', {})
+    return prices.value
   }
 }
 // The answer stays while the next choice loads: what describes the rows below reads it, not the choice.
@@ -67,8 +71,15 @@ onMounted(async () => {
 const atBase = computed(() => prices.value?.group === null)
 const rate = computed(() => num(prices.value?.rate_multiplier, 1))
 const money = (v: number | null | undefined) => priceText(v, rate.value)
-/** A price that cannot be broken down: billed by its rules, times the multiplier of the group's or the caller's own rule when there is one. */
-const opaqueText = (price: PriceCells) => (price.multiplier === undefined ? t('me.models.custom') : t('me.models.customTimes', { rate: rateText(price.multiplier) }))
+/**
+ * A price that cannot be broken down: billed by its rules, times what the
+ * cells beside it are multiplied by, the multiplier of a rule on it and the
+ * caller's rate in the group, as one number.
+ */
+function opaqueText(price: PriceCells): string {
+  const times = round(num(price.multiplier, 1) * rate.value)
+  return price.multiplier === undefined && times === 1 ? t('me.models.custom') : t('me.models.customTimes', { rate: rateText(times) })
+}
 
 /** What the prices of the rows are: the base ones, or the caller's in the group, and where their rate comes from unless it is the group's own. */
 function priceNotes(p: MyPrices): string[] {

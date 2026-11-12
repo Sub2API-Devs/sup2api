@@ -23,3 +23,13 @@ describe('style.css component classes', () => {
     expect(unused).toEqual([])
   })
 })
+
+// CONTRACTS §23.4: `purple` is only an alias of `accent` kept for old code;
+// the group pricing pages (0.1.281) write `accent`.
+describe('badge tones of the group pricing pages', () => {
+  it('use accent, not the purple alias', () => {
+    const dirs = ['src/components/pricing', 'src/views/groups', 'src/views/segments', 'src/views/keys', 'src/views/users', 'src/views/me']
+    const code = dirs.flatMap(sources).join('\n')
+    expect(code).not.toMatch(/tone="purple"|'purple'/)
+  })
+})

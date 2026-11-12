@@ -222,7 +222,7 @@ func TestGroupModelPrices(t *testing.T) {
 
 	// Not found and malformed.
 	e.mustCall(e.admin, 404, "GET", "/groups/999999/model-prices", nil)
-	e.mustCall(e.admin, 404, "GET", "/groups/"+itoa(e.open)+"/model-prices?segment_id=999999", nil)
+	require.Equal(t, "user group not found", e.mustCall(e.admin, 404, "GET", "/groups/"+itoa(e.open)+"/model-prices?segment_id=999999", nil)["error"].(map[string]any)["message"])
 	e.mustCall(e.admin, 400, "GET", "/groups/"+itoa(e.open)+"/model-prices?segment_id=vip", nil)
 	e.mustCall(e.admin, 404, "PUT", "/groups/999999/model-prices", map[string]any{"items": []any{}})
 	e.mustCall(e.admin, 404, "PUT", "/groups/"+itoa(e.open)+"/model-prices?segment_id=999999", map[string]any{"items": []any{}})
@@ -395,7 +395,7 @@ func TestResolveFollowsRules(t *testing.T) {
 
 func TestPricingQuote(t *testing.T) {
 	const reader, outsider = 1001, 1002
-	e := newPricingEnv(t, limited{perms: map[int64][]string{reader: {"price:read"}, outsider: {"group:read", "user:read"}}})
+	e := newPricingEnv(t, limited{perms: map[int64][]string{reader: {"price:read", "group:read", "segment:read"}, outsider: {"group:read", "user:read"}}})
 	usage := map[string]any{"p": 1_000_000, "c": 1_000_000}
 	quote := func(who string, id, group int64, model string) map[string]any {
 		t.Helper()
@@ -464,15 +464,95 @@ func TestPricingQuote(t *testing.T) {
 	require.Equal(t, 400, code)
 	field, message := fieldError(t, resp)
 	require.Equal(t, []string{"model", "the group does not provide this model"}, []string{field, message})
-	e.mustCall(e.admin, 404, "POST", "/pricing/quote", map[string]any{"user_id": 999999, "group_id": e.open, "model": "web-search"})
-	e.mustCall(e.admin, 404, "POST", "/pricing/quote", map[string]any{"segment_id": 999999, "group_id": e.open, "model": "web-search"})
+	resp = e.mustCall(e.admin, 404, "POST", "/pricing/quote", map[string]any{"user_id": 999999, "group_id": e.open, "model": "web-search"})
+	require.Equal(t, "user not found", resp["error"].(map[string]any)["message"])
+	resp = e.mustCall(e.admin, 404, "POST", "/pricing/quote", map[string]any{"segment_id": 999999, "group_id": e.open, "model": "web-search"})
+	require.Equal(t, "user group not found", resp["error"].(map[string]any)["message"])
 	e.mustCall(e.admin, 404, "POST", "/pricing/quote", map[string]any{"segment_id": e.vip, "group_id": 999999, "model": "web-search"})
 
-	// price:read quotes; without user:read a personal segment has no email.
+	// price:read, group:read and segment:read quote for a segment; without
+	// user:read a personal segment has no email.
 	body := map[string]any{"segment_id": e.personal, "group_id": e.open, "model": "web-search"}
 	e.mustCall(outsider, 403, "POST", "/pricing/quote", body)
 	e.mustCall(outsider, 403, "GET", "/me/prices", nil)
 	require.Equal(t, "#"+itoa(e.solo), data(e.mustCall(reader, 200, "POST", "/pricing/quote", body))["segment"].(map[string]any)["name"])
+}
+
+// A quote needs what the console's entry to it needs: price:read and
+// group:read, and user:read for a user or segment:read for a segment. Without
+// them it would tell which users exist and where they are priced.
+func TestPricingQuotePermissions(t *testing.T) {
+	const pricer, grouper, users, segments = 1001, 1002, 1003, 1004
+	e := newPricingEnv(t, limited{perms: map[int64][]string{
+		pricer:   {"price:read"},
+		grouper:  {"price:read", "group:read"},
+		users:    {"price:read", "group:read", "user:read"},
+		segments: {"price:read", "group:read", "segment:read"},
+	}})
+	ofUser := map[string]any{"user_id": e.member, "group_id": e.open, "model": "web-search"}
+	ofSegment := map[string]any{"segment_id": e.vip, "group_id": e.open, "model": "web-search"}
+	denied := func(uid int64, body map[string]any, permission string) {
+		t.Helper()
+		code, resp := e.call(uid, "POST", "/pricing/quote", body)
+		require.Equal(t, 403, code, "%v", resp)
+		require.Equal(t, permission, resp["error"].(map[string]any)["details"].(map[string]any)["permission"])
+	}
+	denied(pricer, ofUser, "group:read")
+	denied(pricer, ofSegment, "group:read")
+	denied(grouper, ofUser, "user:read")
+	denied(grouper, ofSegment, "segment:read")
+	denied(segments, ofUser, "user:read")
+	denied(users, ofSegment, "segment:read")
+	// A user that does not exist is not told apart from one that does.
+	denied(grouper, map[string]any{"user_id": 999999, "group_id": e.open, "model": "web-search"}, "user:read")
+
+	require.Equal(t, "vip", data(e.mustCall(users, 200, "POST", "/pricing/quote", ofUser))["segment"].(map[string]any)["name"])
+	require.Equal(t, "vip", data(e.mustCall(segments, 200, "POST", "/pricing/quote", ofSegment))["segment"].(map[string]any)["name"])
+}
+
+// The usage of a quote is bounded as a request's is: 0 to 1e12 tokens of
+// each kind. Beyond that it would be a cost no request can have.
+func TestPricingQuoteUsageBounds(t *testing.T) {
+	e := newPricingEnv(t, allowAll{})
+	quote := func(usage map[string]any) (int, map[string]any) {
+		return e.call(e.admin, "POST", "/pricing/quote", map[string]any{"user_id": e.member, "group_id": e.open,
+			"model": "claude-haiku-4-5", "usage": usage})
+	}
+	code, resp := quote(map[string]any{"p": 1000, "c": -1, "cr": 1e30, "cc": 1e12 + 1, "cc1h": 0})
+	require.Equal(t, 400, code, "%v", resp)
+	var fields []string
+	for _, f := range resp["error"].(map[string]any)["details"].(map[string]any)["fields"].([]any) {
+		fields = append(fields, f.(map[string]any)["field"].(string))
+	}
+	require.Equal(t, []string{"usage.c", "usage.cr", "usage.cc"}, fields)
+
+	// The bounds themselves are a usage: 1e12 input tokens at 1 per million.
+	code, resp = quote(map[string]any{"p": 1e12, "c": 0})
+	require.Equal(t, 200, code, "%v", resp)
+	require.Equal(t, "1000000", data(resp)["list_cost"])
+}
+
+// The prices a quote shows and the costs it gives come from one price
+// snapshot: a rule this node has not heard of yet (its change broadcast was
+// lost) is in neither, rather than shown beside costs without it.
+func TestPricingQuoteOneSnapshot(t *testing.T) {
+	e := newPricingEnv(t, allowAll{})
+	body := map[string]any{"user_id": e.member, "group_id": e.open, "model": "claude-haiku-4-5",
+		"usage": map[string]any{"p": 1_000_000, "c": 1_000_000}}
+	before := data(e.mustCall(e.admin, 200, "POST", "/pricing/quote", body))
+	require.Equal(t, []any{"global", "6"}, []any{before["price_source"], before["list_cost"]})
+
+	// Written behind the service's back, as another node would.
+	e.exec(`INSERT INTO price_rules (group_id, model, kind, multiplier) VALUES ($1, 'claude-haiku-4-5', 'multiplier', 2)`, e.open)
+	stale := data(e.mustCall(e.admin, 200, "POST", "/pricing/quote", body))
+	require.Equal(t, before, stale)
+
+	// Once the change is heard of, both show it.
+	e.svc.PriceRulesChanged(context.Background())
+	after := data(e.mustCall(e.admin, 200, "POST", "/pricing/quote", body))
+	require.Equal(t, []any{"group", "12"}, []any{after["price_source"], after["list_cost"]})
+	require.Equal(t, multiplier("2"), after["price_levels"].(map[string]any)["group"])
+	require.Equal(t, timesPrice(after["base"], "2"), after["list_price"])
 }
 
 // GET /me/prices?group_id=: what the group provides and can bill, at the

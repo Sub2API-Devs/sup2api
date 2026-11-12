@@ -15,6 +15,7 @@ import { markUnsaved, useTabbedSave, type SaveStep } from '@/composables/useTabb
 import type { DraftedSetting } from '@/components/pricing/accessRateDrafts'
 import { validRate } from '@/components/pricing/pricingFormat'
 import { confirmDiscard } from '@/composables/confirmDiscard'
+import { latestOnly } from '@/composables/useLatestRequest'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
 import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
@@ -48,13 +49,13 @@ const modelSource = ref<ModelSource>({ models: [], unrestricted_accounts: 0 })
 const selectedModelSource = ref<ModelSource | null>(null)
 const modelsLoading = ref(false)
 const modelLoadError = ref('')
-let modelRequest = 0
+const beginModels = latestOnly()
 const currentModelSource = computed(() => canEditAccounts.value && auth.has('account:read') && selectedModelSource.value ? selectedModelSource.value : {
   models: [...new Set([...modelSource.value.models, ...(selectedModelSource.value?.models || [])])].sort(),
   unrestricted_accounts: modelSource.value.unrestricted_accounts
 })
 async function loadModels(gid: number | null) {
-  const request = ++modelRequest
+  const latest = beginModels()
   modelSource.value = { models: [], unrestricted_accounts: 0 }
   selectedModelSource.value = null
   modelLoadError.value = ''
@@ -62,11 +63,11 @@ async function loadModels(gid: number | null) {
   if (!gid) return
   try {
     const result = await api.get<ModelSource>(`/groups/${gid}/models`)
-    if (request === modelRequest) modelSource.value = result
+    if (latest()) modelSource.value = result
   } catch (e) {
-    if (request === modelRequest) modelLoadError.value = t('groups.modelsLoadFailed')
+    if (latest()) modelLoadError.value = t('groups.modelsLoadFailed')
     notifyError(e)
-  } finally { if (request === modelRequest) modelsLoading.value = false }
+  } finally { if (latest()) modelsLoading.value = false }
 }
 
 // ------------------------------------------------------------------ form
