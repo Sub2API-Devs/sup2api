@@ -66,6 +66,9 @@ var exportColumns = []exportColumn{
 	}},
 	{"费用", "Cost", false, false, func(r *Record, _ *time.Location) string { return r.TotalCost.String() }},
 	{"原价", "List price", false, false, func(r *Record, _ *time.Location) string {
+		if r.BaseCost != nil {
+			return r.BaseCost.String()
+		}
 		if r.RateMultiplier.IsPositive() {
 			return r.TotalCost.DivRound(r.RateMultiplier, 8).String()
 		}
