@@ -4,6 +4,19 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-13 核心 **0.1.284** + moderation **0.10.0**（`75780e65a`，develop 头，合并了 `feat/moderation-redesign` `85f046a1b`；北京时间 06:42–06:44；计划 `27d93d22ebdf397aa959a48fb6077c16` rolling-v1 completed，06:42:50→06:44:03 约 73 秒，两节点轮流让出（先 ccp 后 ovh），`/readyz` 全程 200；无核心迁移，schema 仍 `a9befa8c…1e11`；Host API 仍 9）：
+- 内容：moderation 0.10.0 重设计（侧栏子导航、设置拆 7 页、改名、删除 AI 分析代码、审核范围 scope、命中只重放命中部分、统一失败策略 fail_policy、记录匹配来源 flow_source / level_source、名单锁定条目、窗口内违规 N 次自动升拦截级，CONTRACTS §72）；平台插件页侧栏子导航（控制台 UI 3.14，sdk/manifest `Page.Nav`，server `visibleNav`，CONTRACTS §90.7）。设计与评估：本机 `/home/erio/rc/tmp/moderation-redesign/`、`/home/erio/rc/tmp/moderation-eval/`。
+- 插件迁移（rollout 时执行，都只加列、带 `SET LOCAL lock_timeout = '10s'`）：0011 `flows.scope`、`events.flow_source / flow_fallback_id / flow_fallback_reason`；0012 `watchlist.locked`、`events.level / level_source`。下一版 contract：删 `user_analyses`、分析相关列与 `analysis_*` / `on_error` / 0.1 旧键，名单改由观察名单为唯一依据。
+- 发布前核对：自 0.1.283（`beb06edbb`）起只改 `next/plugins/moderation`、`next/sdk/manifest`（3 个文件）、`next/server/internal/plugin/api`、`next/web`、`next/docs`、CHANGELOG 与本文件；`runtime-contract`、核心迁移未变（最后仍是 0096）。
+- 上线前测试：本机隔离环境用线上库只读导出（审核记录只导结构），所有渠道与上游指向模拟服务、网络不能出网；先起 0.1.283 + moderation 0.9.3，再起 0.1.284，迁移在副本上毫秒级完成；端到端 14 个用例 13 通过、1 个按设计跳过（rollout 中“旧插件 + 新库”的几秒窗口），包含旧核心跑 0.10.0、线上设置写入读回、AI 分析已删、scope、重放、失败策略、D10、锁定条目；88 个上游请求全部打到模拟服务。测试后容器、网络、测试库、导出文件均已删除。
+- 构建：`stage/0.1.284/`（单插件重建模板，取自 `stage/0.1.264/` 并合入 0.1.283 的迁移断言；env.sh 加 `SDK_ALLOWED`）。内置集合 = 0.1.283 的 stage 去掉 `moderation-0.9.2`、加 `moderation-0.10.0`（sha256 `d5dd1ea83c7a79e9d58f447b8686353ea2f1ae727545f838e45ae0281baf94ff`，hostCompat `>=0.1.280 <0.2.0`、hostUICompat `^3.12`），其余逐字节相同（`diff -r`）。核心 sha256 `037e3c861232dde12aeb0eac93462dac45167b2edc16764b18c1b7e04bd72681`（与测试用二进制相同）。
+- 测试：`test.sh` 全部通过：server 全量 57 个包、`-race` lookup / usage、sdk 15 个包、moderation（数据库测试开）；控制台 vitest 240 个文件 1988 条，moderation 界面 19 个文件 177 条，dynweight 界面 4 个文件 50 条。TEST-OK。
+- 清单 `c908e08b01644e3ff4872a08ac8236b190650dcaf4a97a1f22d847b36223358b`，bundle `0a15a5e43c28ba531789208a38d2d7b3781063fccd7fda79dbda8c5df4036d56`，strategy rolling。`release.sh` 只 import（06:42:22），`--preflight-only` 选中 rolling-v1、无 blocker 后正式执行。内置同步 06:44:14→06:44:20 把 moderation 0.9.3 升到 0.10.0（rollout 266，phase active）。
+- new-api 渠道没有关（用户要求滚动发布、不停渠道）；不备份数据库。
+- 核验（`~/rel284/`，只读）：两节点 `sub2api version` 0.1.284；10 个插件 active=current=desired，moderation 两节点 serving 0.10.0、ready、restarts 0；线上设置保留（mode enforce，28 个已存键原样）；`/ui/plugins` 返回 moderation 0.10.0 的 5 组侧栏；06:54:19 起新记录带 `flow_source=account_any`、`level=enforce`、`level_source=default`；两节点日志自发布起只有让出 / 重启时的 WARN；`errs.sh` 06:30–06:52 共 36 次，5xx 0、499 0。
+- 回滚：核心导入 0.1.283 清单 `b1d4066abdfe9250aac67cbf84b456eb74e371d8d888ab0a55f8d9798836a1ef` 建反向计划（同一 schema，rolling）；moderation 用 `stage/moderation-0.9.3/rollout.py upload-prev`（改为上传 `stage/moderation-0.9.3/packages/moderation-0.9.3.s2plugin`）再 `rollback`。0011/0012 只加列，0.9.3 可直接运行，不需要删列。
+- 脚本 `stage/0.1.284/`；工作树 `~/sup2api/release-0.1.284`；观察与核验脚本、输出在 `~/rel284/`。上游同步 PR 未提（需要用户原话同意）。
+
 2026-11-13 moderation **0.9.3**（`ed988819c`；只升级插件，核心 0.1.283 不动；北京时间 00:07:50→00:07:54，rollout 265 约 4 秒，两节点同时切换；无迁移）：
 - 内容：`DefaultBlockMessage` 与 `forms/settings.schema.json` 的 `block_message.default` 改为英文 “Your request was blocked by content moderation. Please revise your input and try again.”，新增测试断言两处一致（CONTRACTS §20.3、§72）。已保存的值原样使用，不归一化、不迁移；线上存的旧中文由管理员在设置页手动修改。
 - 发布前核对：ovh 工作树 `~/sup2api/release-moderation-0.9.3` 在 `ed988819c`；自核心 0.1.283（`beb06edbb`）起只改了 `next/plugins/moderation`、`next/web/mock`、`next/docs`；线上 0.9.2 = 核心 0.1.280–0.1.283 内置包（sha256 `169f200b…7c2d`，构建自 0.1.280 的 `531e6f4e3`），`plugins/moderation/migrations` 自那以来未变。
