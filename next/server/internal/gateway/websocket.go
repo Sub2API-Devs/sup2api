@@ -111,7 +111,7 @@ func (g *Gateway) serveWebSocket(ctx context.Context, cl *call) {
 		return
 	}
 	conn.SetReadLimit(cl.bodyLimit())
-	s := &wsSession{g: g, base: cl, client: conn, id: cl.rid}
+	s := &wsSession{g: g, base: cl, client: conn, id: cl.rid, key: key, ip: cl.c.ClientIP()}
 	s.run(ctx)
 }
 
@@ -123,6 +123,9 @@ type wsSession struct {
 	base   *call // the upgrade request: endpoint, principal, headers
 	client *websocket.Conn
 	id     string
+	// key and ip are the upgrade request's API key and client address; every
+	// turn authenticates with them again (refresh).
+	key, ip string
 
 	// The upstream connection and the account the first turn chose; every
 	// later turn of the session uses them.
@@ -230,6 +233,14 @@ func (s *wsSession) run(ctx context.Context) {
 				return
 			}
 			asked = true
+			if e, code := s.refresh(sctx); e != nil {
+				s.sendError(sctx, e)
+				if code == 0 {
+					continue
+				}
+				end(code, truncateUTF8(e.Message, 120))
+				return
+			}
 			var fatal bool
 			if turn, fatal = s.begin(sctx, m); fatal {
 				end(websocket.StatusInternalError, "upstream connection failed; reconnect")
@@ -373,6 +384,32 @@ func (s *wsSession) sendError(ctx context.Context, e *gwError) {
 	body, _ := json.Marshal(map[string]any{"type": "error", "status": status,
 		"error": map[string]any{"type": t, "code": code, "message": msg, "param": nil}})
 	_ = s.write(ctx, websocket.MessageText, body)
+}
+
+// refresh authenticates the session's API key again before a turn, so the
+// turn runs under the key's present state: a key revoked, disabled or
+// refused since the upgrade ends the session, new limits and quota apply at
+// once. A non-zero closeCode ends the session with it; an error without one
+// fails only this turn (the key store may be back for the next). No usage is
+// recorded for a turn refused here, as for a request that fails to
+// authenticate on HTTP.
+func (s *wsSession) refresh(ctx context.Context) (e *gwError, closeCode websocket.StatusCode) {
+	p, err := s.g.d.Auth.Authenticate(core.WithClientIP(ctx, s.ip), s.key)
+	if err != nil {
+		e = fromCore(core.AsError(err), "")
+		if e.Status == http.StatusUnauthorized || e.Status == http.StatusForbidden {
+			return e, websocket.StatusPolicyViolation
+		}
+		return e, 0
+	}
+	// The upstream connection belongs to an account of the group the first
+	// turn ran in; a key moved to another group reconnects to be scheduled there.
+	if s.up != nil && p.Group.ID != s.base.principal.Group.ID {
+		return &gwError{Status: http.StatusConflict, Code: "api_key_group_changed", Type: "invalid_request_error",
+			Message: "the API key moved to another group; reconnect"}, wsCloseRestart
+	}
+	s.base.principal = p
+	return nil, 0
 }
 
 // newCall is the per-turn request: a fresh request id (the usage and ledger
