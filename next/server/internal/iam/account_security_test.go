@@ -25,8 +25,10 @@ import (
 	"github.com/pquerna/otp/hotp"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 )
 
 func setupAdmin(t *testing.T) *env {
@@ -766,6 +768,7 @@ type keyEnv struct {
 	*env
 	s      *Service
 	h      *gin.Engine
+	r      *httpapi.Router
 	userID int64
 }
 
@@ -781,7 +784,7 @@ func newKeyEnv(t *testing.T) *keyEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &keyEnv{env: e, s: e.svc, h: engine, userID: u.ID}
+	return &keyEnv{env: e, s: e.svc, h: engine, r: r, userID: u.ID}
 }
 
 func (k *keyEnv) call(token, method, path string, body any) (int, map[string]any) {
@@ -924,14 +927,17 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 	}
 }
 
-// H1: a superuser's access key holding role:assign and user:create is no
-// superuser, so it cannot hand out the super admin role; the superuser's own
-// session still can.
+// H1: a superuser's access key cannot hand out the super admin role, not even
+// one stored with role:assign (sessionOnly, dropped at verification); the
+// superuser's own session still can.
 func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
-	key := k.createKey(t, login.User.ID, adminPassword, "role:assign", "user:create")
+	key := k.createKey(t, login.User.ID, adminPassword, "user:create")
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'role:assign') WHERE id = $1`, key.ID); err != nil {
+		t.Fatal(err)
+	}
 	// A target without roles, so acting on it needs nothing.
 	if _, err := k.s.db.Pool.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1`, k.userID); err != nil {
 		t.Fatal(err)
@@ -1147,5 +1153,70 @@ func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
 	}
 	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"user:read"}) {
 		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	}
+}
+
+// The session-only permissions (CONTRACTS §80) are never offered to a key,
+// not even a superuser's, cannot be chosen, and a stored key carrying one
+// lists it as lost and is refused on the routes it guards.
+func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	cipher, err := secret.New(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ccgateway.New(k.s.db, cipher).RegisterRoutes(k.r)
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	root := login.User.ID
+	sessionOnly := []string{"role:define", "role:assign", "settings:manage", "user:password:reset"}
+
+	mods, err := k.s.AccessKeyPermissions(ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	offered := map[string]bool{}
+	for _, m := range mods {
+		for _, p := range m.Permissions {
+			offered[p.Key] = true
+		}
+	}
+	if !offered["settings:read"] {
+		t.Fatalf("catalog = %v", offered)
+	}
+	for _, p := range sessionOnly {
+		if offered[p] || authz.KeyAllowed(p) {
+			t.Fatalf("%s is offered to access keys", p)
+		}
+	}
+
+	body := map[string]any{"name": "x", "password": adminPassword, "permissions": []string{"settings:read", "settings:manage"}}
+	code, out := k.call(login.AccessToken, "POST", "/me/access-keys", body)
+	e, _ := out["error"].(map[string]any)
+	details, _ := e["details"].(map[string]any)
+	if missing, _ := details["missing"].([]any); code != 403 || !slices.Contains(missing, any("settings:manage")) {
+		t.Fatalf("choosing settings:manage: %d %v", code, out)
+	}
+
+	key := k.createKey(t, root, adminPassword, "settings:read")
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'settings:manage') WHERE id = $1`, key.ID); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := k.call(key.Key, "GET", "/system/ccgateway/remote-config", nil); code != 200 {
+		t.Fatalf("settings:read: %d %v", code, out)
+	}
+	if code, out := k.call(key.Key, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 403 {
+		t.Fatalf("stored settings:manage: %d %v", code, out)
+	}
+	if code, out := k.call(login.AccessToken, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 200 {
+		t.Fatalf("session: %d %v", code, out)
+	}
+	code, out = k.call(login.AccessToken, "GET", "/me/access-keys", nil)
+	list, _ := out["data"].([]any)
+	if code != 200 || len(list) != 1 {
+		t.Fatalf("list: %d %v", code, out)
+	}
+	if lost, _ := list[0].(map[string]any)["lost"].([]any); !slices.Equal(lost, []any{"settings:manage"}) {
+		t.Fatalf("lost = %v", lost)
 	}
 }

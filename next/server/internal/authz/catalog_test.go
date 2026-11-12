@@ -42,6 +42,43 @@ func TestCatalogFlagInvariants(t *testing.T) {
 	}
 }
 
+// The flagged sets are pinned: sensitive covers credentials, money, trust
+// roots, code execution and identity or authorization (display only);
+// sessionOnly is the decided list kept out of access keys (CONTRACTS §80).
+func TestCatalogFlaggedSets(t *testing.T) {
+	t.Parallel()
+	var sensitive, session []string
+	for _, m := range coreModules {
+		for _, p := range m.perms {
+			if p.sensitive {
+				sensitive = append(sensitive, p.key)
+			}
+			if p.sessionOnly {
+				session = append(session, p.key)
+			}
+		}
+	}
+	wantSensitive := []string{
+		"account:credential:view", "account:delete", "account:own:credential:view", "account:own:delete", "account:relay",
+		"balance:adjust", "group:manage",
+		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
+		"plugin:install", "plugin:manage", "plugin:uninstall",
+		"price:manage", "proxy:manage", "publisher:manage",
+		"role:assign", "role:define", "settings:manage",
+		"system:update:execute", "system:update:recover",
+		"task:manage", "task:run", "usage:settle", "user:delete", "user:password:reset",
+	}
+	wantSession := []string{"role:assign", "role:define", "settings:manage", "user:password:reset"}
+	slices.Sort(sensitive)
+	slices.Sort(session)
+	if !slices.Equal(sensitive, wantSensitive) {
+		t.Errorf("sensitive = %v\nwant %v", sensitive, wantSensitive)
+	}
+	if !slices.Equal(session, wantSession) {
+		t.Errorf("sessionOnly = %v, want %v", session, wantSession)
+	}
+}
+
 // Not parallel: it extends the package catalog while it runs. A new core
 // permission inheriting a split one reaches that one's holders once, the
 // built-in roles accepting it get it by default, and every such grant to an

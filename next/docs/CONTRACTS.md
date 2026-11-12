@@ -75,25 +75,25 @@
 
 ## 4. 权限清单（核心）
 
-模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3）。
+模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`session_only`）表示只能由登录会话使用，访问密钥不能带（§80）。
 
 | 模块 | 权限 |
 |---|---|
-| user | `user:read` `user:create` `user:update` `user:delete`🔐 `user:password:reset`🔐 |
-| role | `role:read` `role:define`🔐 `role:assign`🔐（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色；升级时持有 `role:manage` 的角色同时获得两者，`role:manage` 标为 removed） |
-| group | `group:read` `group:manage` |
+| user | `user:read` `user:create` `user:update` `user:delete`🔐 `user:password:reset`🔐🔑 |
+| role | `role:read` `role:define`🔐🔑 `role:assign`🔐🔑（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色；升级时持有 `role:manage` 的角色同时获得两者，`role:manage` 标为 removed） |
+| group | `group:read` `group:manage`🔐 |
 | segment | `segment:read` `segment:manage`（用户组，§97.7） |
-| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（§21）`account:group:bind` `account:relay` |
-| proxy | `proxy:read` `proxy:manage`；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
-| price | `price:read` `price:manage` |
+| account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（§21）`account:group:bind` `account:relay`🔐 |
+| proxy | `proxy:read` `proxy:manage`🔐；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
+| price | `price:read` `price:manage`🔐 |
 | balance | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
 | usage | `usage:self:read` `usage:all:read` |
 | sticky | `sticky:read` `sticky:manage` |
-| plugin | `plugin:read` `plugin:install`🔐 `plugin:manage` `plugin:uninstall`🔐 `plugin:grant:high` `plugin:grant:critical`🔐 `plugin:egress:read` `plugin:market:read` |
+| plugin | `plugin:read` `plugin:install`🔐 `plugin:manage`🔐 `plugin:uninstall`🔐 `plugin:grant:high`🔐 `plugin:grant:critical`🔐 `plugin:egress:read` `plugin:market:read` |
 | publisher | `publisher:read` `publisher:manage`🔐 |
 | node | `node:read` |
 | gateway | `gateway:use` |
-| settings | `settings:read` `settings:manage` |
+| settings | `settings:read` `settings:manage`🔐🔑 |
 
 内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（全部核心权限）、`operator`（运维：除 `settings` `sticky` `plugin` `publisher` 模块以外的全部核心权限，即没有系统设置、插件、插件市场和发布者页面）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的权限可以编辑；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。
 
@@ -1052,7 +1052,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 | 模块 | 新增 key | 说明 |
 |---|---|---|
-| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3），均无需二次验证 |
+| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3），均无需二次验证 |
 | account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
 | account | `account:group:bind` | 允许 own 级用户绑定账号到分组（与 `group:manage` 二选一即可） |
 | account | `account:relay` | 允许 own 级用户新建可自定义上游的账号类型（如 relay）或修改其上游地址（§21.3.1） |
@@ -6827,6 +6827,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **`Authorization: Bearer sak_…`**：只有核心路由（`httpapi`）接受，走 `core.AuthenticateBearer`。插件路由和其他认证入口只认 JWT，遇到密钥回 401：插件拿到的是用户 id，在插件内部做的权限判断限制不到密钥，所以插件权限也不能选给密钥。以后要开放，得先让插件的权限判断带上密钥的限制。
 - **子集在两处保证**：创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）。每次检查权限时，`authz.PermissionSet` 取“用户现有权限 ∩ 密钥权限”，所以用户失去权限，密钥立刻跟着失去；重新获得时也恢复。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn`、`guardTarget` 看到的也是这个限制后的集合。只限制密钥所属用户，查询其他用户的权限不受影响。
 - **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/system/version`（`AuthedRead`，`/system/version` 只返回版本号、是否托管、节点 id、boot id），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。
+- **只认会话的权限**（2026-11-12，`session_only`）：`user:password:reset`、`role:define`、`role:assign`、`settings:manage` 不能选给访问密钥，超级管理员也不行。判断只有 `authz.KeyAllowed` 一处：可选列表不显示，创建、修改时选了回 403（`details.missing`），已存的密钥在校验时丢掉它们（`GET /me/access-keys` 的 `lost` 含它们），所以以这些权限注册的路由（`settings:manage` 下 30 来条、`/roles` 写操作、`PUT /users/:id/roles`、改他人密码等）一律拒绝密钥（403 `permission_denied`）。`PermAny` 组合路由仍按其他 key 放行。
 - **明文回显只认登录会话**（2026-11-12）：回显已有密文的接口用 `SessionOnly()` 视图注册，有权限也拒绝密钥（403 `access keys cannot use this endpoint`）：`POST /me/api-keys/:id/reveal`、`POST /proxies/:id/reveal-url`、`POST /accounts/:id/credentials/reveal`。泄露的密钥因此拿不到 API Key、代理密码和账号凭证的明文。`/me/api-keys` 的创建与轮换返回的是新密钥，属于自动化的正当用途，照常接受密钥。`settings:manage` 下的 `remote-fingerprint` 会拨号到任意 host:port，但 SSH 安装控制器到内网主机是正当用途，不接 netguard；它靠 `settings:manage` 只认会话来防止被泄露的密钥利用（wontfix）。
 - **接口**（都只能用登录会话调用）：`GET /me/access-keys`（含 `lost`：已选但用户不再持有的权限）、`GET /me/access-keys/permissions`（可选的权限，只含自己持有的）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。

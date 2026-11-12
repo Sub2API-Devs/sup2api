@@ -995,7 +995,7 @@ func join(s []string) string {
 }
 
 // TestOwnershipCatalog pins the CONTRACTS §21.1 keys: labels in both
-// languages, only the credential views are sensitive, the user role is
+// languages, credential views and own deletion are sensitive, the user role is
 // unchanged and the account/proxy menus accept the own keys.
 func TestOwnershipCatalog(t *testing.T) {
 	t.Parallel()
@@ -1005,7 +1005,7 @@ func TestOwnershipCatalog(t *testing.T) {
 	}
 	want := map[string]bool{ // key -> sensitive
 		"account:own:read": false, "account:own:create": false, "account:own:update": false,
-		"account:own:delete": false, "account:own:test": false, "account:own:credential:view": true,
+		"account:own:delete": true, "account:own:test": false, "account:own:credential:view": true,
 		"account:settings:custom": false, "proxy:own:read": false, "proxy:own:manage": false,
 	}
 	for key, sensitive := range want {

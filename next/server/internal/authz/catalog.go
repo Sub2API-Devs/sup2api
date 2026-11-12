@@ -22,13 +22,17 @@ type coreModule struct {
 }
 
 type corePerm struct {
-	key       string
-	en, zh    string
+	key    string
+	en, zh string
+	// sensitive flags credentials, money, trust roots, code execution and
+	// identity or authorization in the role editor; display only, it has no
+	// bearing on access keys.
 	sensitive bool
 	// superOnly: no built-in role's defaults may accept the permission
 	// (TestCatalogFlagInvariants); only a superuser grants it explicitly.
 	superOnly bool
-	// sessionOnly keeps the permission out of access keys (KeyAllowed).
+	// sessionOnly keeps the permission out of access keys (KeyAllowed):
+	// identity takeover and host-level control (CONTRACTS §80).
 	sessionOnly bool
 	// inherits: when the permission is first created, every role holding
 	// one of these keys gets it too (splitting a permission keeps its
@@ -46,20 +50,20 @@ var coreModules = []coreModule{
 		{key: "user:create", en: "Create users", zh: "新建用户"},
 		{key: "user:update", en: "Edit users", zh: "编辑用户"},
 		{key: "user:delete", en: "Delete users", zh: "删除用户", sensitive: true},
-		{key: "user:password:reset", en: "Reset user passwords", zh: "重置他人密码", sensitive: true},
+		{key: "user:password:reset", en: "Reset user passwords", zh: "重置他人密码", sensitive: true, sessionOnly: true},
 	}},
 	{"role", lt("Roles", "角色"), []corePerm{
 		{key: "role:read", en: "View roles and permissions", zh: "查看角色与权限"},
 		// role:manage was split in two; its holders keep both halves.
-		{key: "role:define", en: "Define roles", zh: "定义角色", sensitive: true, inherits: []string{"role:manage"}},
-		{key: "role:assign", en: "Assign roles to users", zh: "给用户分配角色", sensitive: true, inherits: []string{"role:manage"}},
+		{key: "role:define", en: "Define roles", zh: "定义角色", sensitive: true, sessionOnly: true, inherits: []string{"role:manage"}},
+		{key: "role:assign", en: "Assign roles to users", zh: "给用户分配角色", sensitive: true, sessionOnly: true, inherits: []string{"role:manage"}},
 	}},
 	{"apikey", lt("API keys", "API Key"), []corePerm{
 		{key: "apikey:self:manage", en: "Manage own API keys", zh: "管理自己的 API Key"},
 	}},
 	{"group", lt("Groups", "分组"), []corePerm{
 		{key: "group:read", en: "View groups", zh: "查看分组"},
-		{key: "group:manage", en: "Manage groups", zh: "管理分组"},
+		{key: "group:manage", en: "Manage groups", zh: "管理分组", sensitive: true},
 	}},
 	// User groups (segments, CONTRACTS §97): who is in which one, the private
 	// groups it may use and what it pays there.
@@ -79,22 +83,22 @@ var coreModules = []coreModule{
 		{key: "account:own:read", en: "Read own accounts", zh: "查看自己创建的账号"},
 		{key: "account:own:create", en: "Create own accounts", zh: "新建账号（归自己所有）"},
 		{key: "account:own:update", en: "Edit own accounts", zh: "编辑自己创建的账号"},
-		{key: "account:own:delete", en: "Delete own accounts", zh: "删除自己创建的账号"},
+		{key: "account:own:delete", en: "Delete own accounts", zh: "删除自己创建的账号", sensitive: true},
 		{key: "account:own:test", en: "Test own accounts", zh: "测试自己创建的账号"},
 		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true},
 		{key: "account:settings:custom", en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）"},
 		{key: "account:group:bind", en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）"},
-		{key: "account:relay", en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号"},
+		{key: "account:relay", en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号", sensitive: true},
 	}},
 	{"proxy", lt("Proxies", "代理"), []corePerm{
 		{key: "proxy:read", en: "View proxies", zh: "查看代理"},
-		{key: "proxy:manage", en: "Manage proxies", zh: "管理代理"},
+		{key: "proxy:manage", en: "Manage proxies", zh: "管理代理", sensitive: true},
 		{key: "proxy:own:read", en: "View own proxies", zh: "查看自己创建的代理"},
 		{key: "proxy:own:manage", en: "Manage own proxies", zh: "管理自己创建的代理"},
 	}},
 	{"price", lt("Model prices", "模型价格"), []corePerm{
 		{key: "price:read", en: "View model prices", zh: "查看模型价格"},
-		{key: "price:manage", en: "Manage model prices", zh: "管理模型价格"},
+		{key: "price:manage", en: "Manage model prices", zh: "管理模型价格", sensitive: true},
 	}},
 	{"balance", lt("Balance", "余额"), []corePerm{
 		{key: "balance:self:read", en: "View own balance", zh: "查看自己的余额"},
@@ -116,9 +120,9 @@ var coreModules = []coreModule{
 	{"plugin", lt("Plugins", "插件"), []corePerm{
 		{key: "plugin:read", en: "View plugins", zh: "查看插件"},
 		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true},
-		{key: "plugin:manage", en: "Manage plugins", zh: "管理插件"},
+		{key: "plugin:manage", en: "Manage plugins", zh: "管理插件", sensitive: true},
 		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true},
-		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限"},
+		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true},
 		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true},
 		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true},
 		{key: "plugin:egress:read", en: "View plugin egress traffic", zh: "查看插件出口流量"},
@@ -142,7 +146,7 @@ var coreModules = []coreModule{
 	}},
 	{"settings", lt("Settings", "设置"), []corePerm{
 		{key: "settings:read", en: "View settings", zh: "查看设置"},
-		{key: "settings:manage", en: "Manage settings", zh: "管理设置"},
+		{key: "settings:manage", en: "Manage settings", zh: "管理设置", sensitive: true, sessionOnly: true},
 	}},
 	{"system_update", lt("Core updates", "核心升级"), []corePerm{
 		{key: "system:update:read", en: "View core updates", zh: "查看核心升级"},
