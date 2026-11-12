@@ -64,23 +64,34 @@ func New(d Deps) *Service {
 }
 
 // Start syncs the core catalog and built-in roles and subscribes to
-// authz:changed (stopped with ctx); the fallback version poll is the node
-// task RegisterTasks registers.
+// authz:changed and bus reconnects (stopped with ctx); the fallback version
+// poll is the node task RegisterTasks registers.
 func (s *Service) Start(ctx context.Context) error {
 	if err := s.SyncCore(ctx); err != nil {
 		return err
 	}
-	if s.bus != nil {
-		cancel := s.bus.Subscribe(core.ChannelAuthzChanged, func(payload []byte) {
-			v, err := strconv.ParseInt(string(payload), 10, 64)
-			if err != nil {
-				s.refreshVersion(context.Background())
-				return
-			}
-			s.invalidate(v)
-		})
-		go func() { <-ctx.Done(); cancel() }()
+	if s.bus == nil {
+		return nil
 	}
+	cancels := []func(){s.bus.Subscribe(core.ChannelAuthzChanged, func(payload []byte) {
+		v, err := strconv.ParseInt(string(payload), 10, 64)
+		if err != nil {
+			s.refreshVersion(context.Background())
+			return
+		}
+		s.invalidate(v)
+	})}
+	if r, ok := s.bus.(core.BusReconnects); ok {
+		// Broadcasts sent while disconnected are lost: read the version again
+		// (off the bus goroutine, which must not block).
+		cancels = append(cancels, r.OnReconnect(func() { go s.refreshVersion(context.Background()) }))
+	}
+	go func() {
+		<-ctx.Done()
+		for _, cancel := range cancels {
+			cancel()
+		}
+	}()
 	return nil
 }
 
@@ -124,10 +135,16 @@ func (s *Service) OnChange(fn func()) {
 
 // Bump increments the authz version inside tx and returns the new value. It
 // also takes the authz_meta row lock, serializing all authz mutations.
+// Holding the lock, v-1 is the latest committed version, so entries this node
+// cached before it are dropped: checks made inside tx never trust a cache
+// that missed a broadcast.
 func (s *Service) Bump(ctx context.Context, tx pgx.Tx) (int64, error) {
 	var v int64
-	err := tx.QueryRow(ctx, `UPDATE authz_meta SET version = version + 1 WHERE id = 1 RETURNING version`).Scan(&v)
-	return v, err
+	if err := tx.QueryRow(ctx, `UPDATE authz_meta SET version = version + 1 WHERE id = 1 RETURNING version`).Scan(&v); err != nil {
+		return 0, err
+	}
+	s.invalidate(v - 1)
+	return v, nil
 }
 
 // Committed must be called after a transaction that called Bump has

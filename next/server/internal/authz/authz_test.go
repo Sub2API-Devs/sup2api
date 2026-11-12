@@ -44,6 +44,29 @@ func (b *memBus) Subscribe(ch string, fn func([]byte)) func() {
 	return func() {}
 }
 
+// reconnBus is a memBus whose subscription can be re-established.
+type reconnBus struct {
+	*memBus
+	rmu        sync.Mutex
+	reconnects []func()
+}
+
+func (b *reconnBus) OnReconnect(fn func()) func() {
+	b.rmu.Lock()
+	b.reconnects = append(b.reconnects, fn)
+	b.rmu.Unlock()
+	return func() {}
+}
+
+func (b *reconnBus) reconnect() {
+	b.rmu.Lock()
+	fns := append([]func(){}, b.reconnects...)
+	b.rmu.Unlock()
+	for _, fn := range fns {
+		fn()
+	}
+}
+
 type fakeGen struct {
 	core.Generation
 	plugins []core.PluginInfo
@@ -360,6 +383,77 @@ func bump(t *testing.T, s *Service) int64 {
 		t.Fatal(err)
 	}
 	return v
+}
+
+func TestBusReconnectRefreshesVersion(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	bus := &reconnBus{memBus: newMemBus()}
+	s := newService(t, db, bus, nil)
+	changed := make(chan struct{}, 1)
+	s.OnChange(func() {
+		select {
+		case changed <- struct{}{}:
+		default:
+		}
+	})
+
+	// A change whose broadcast this node missed while disconnected.
+	var v int64
+	if err := db.Pool.QueryRow(context.Background(), `UPDATE authz_meta SET version = version + 1 WHERE id = 1 RETURNING version`).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	minVersion := func() int64 {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		return s.minVersion
+	}
+	if minVersion() >= v {
+		t.Fatalf("minVersion %d already at %d before reconnect", minVersion(), v)
+	}
+	bus.reconnect()
+	eventually(t, func() bool { return minVersion() == v })
+	select {
+	case <-changed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnChange listener not called after reconnect")
+	}
+}
+
+func TestBumpDropsStaleCache(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	a := newService(t, db, nil, nil) // no bus: a misses b's changes
+	b := newService(t, db, nil, nil)
+	ctx := context.Background()
+
+	uid := addUser(t, b, "u@x.com", RoleUser)
+	admin := addUser(t, b, "admin@x.com", RoleAdmin)
+	mustCan(t, a, uid, "user:read", false) // cached on a
+	if _, err := b.SetRolePermissions(ctx, admin, roleID(t, b, RoleUser), append(slices.Clone(userRolePermissions), "user:read")); err != nil {
+		t.Fatal(err)
+	}
+	mustCan(t, a, uid, "user:read", false) // stale on a
+
+	// Under the authz lock a no longer trusts what it cached before.
+	errRollback := errors.New("rollback")
+	var got bool
+	err := db.Tx(ctx, func(tx pgx.Tx) error {
+		if _, err := a.Bump(ctx, tx); err != nil {
+			return err
+		}
+		var err error
+		if got, err = a.Can(ctx, uid, "user:read"); err != nil {
+			return err
+		}
+		return errRollback
+	})
+	if !errors.Is(err, errRollback) {
+		t.Fatalf("tx: %v", err)
+	}
+	if !got {
+		t.Fatal("Can inside the bumping tx used the stale cache")
+	}
 }
 
 func TestRoleManagement(t *testing.T) {
