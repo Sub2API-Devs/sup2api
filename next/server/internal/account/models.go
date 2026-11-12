@@ -126,7 +126,8 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 			return
 		}
 	}
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, core.OwnerScope(ctx, "account:test"), false)
+	scope := core.OwnerScope(ctx, "account:test")
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -145,6 +146,10 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 	secret, settings := base.secret, a.Settings
 	if creds := strings.TrimSpace(string(in.Credentials)); creds != "" && creds != "null" {
 		p, err := s.prepare(ctx, bt, in.Credentials, base)
+		if err == nil && p.addressChanged {
+			// Same rule as saving the moved address (G2).
+			err = s.checkCustomUpstream(ctx, scope, bt)
+		}
 		if err != nil {
 			httpapi.Fail(c, err)
 			return

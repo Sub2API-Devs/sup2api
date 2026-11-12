@@ -930,4 +930,8 @@ func TestOwnCustomUpstream(t *testing.T) {
 			t.Fatalf("move base_url (key %s): %d %v", key, code, out)
 		}
 	}
+	moved := map[string]any{"credentials": map[string]any{"api_key": "sk-good-key-123", "base_url": "https://other.example"}}
+	if code, out := e.doAs(alice, "POST", path+"/models/fetch", moved); code != 403 {
+		t.Fatalf("fetch models at a moved base_url: %d %v", code, out)
+	}
 }

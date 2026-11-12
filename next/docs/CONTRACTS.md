@@ -1113,7 +1113,7 @@ own 级用户（只有 `account:own:create` / `account:own:update`，无全部�
    - `max_concurrency`：1–1000（全部级用户可用 0–100000）
    - `schedulable`：无限制（全部级和 own 级相同）
    超出范围且与账号现值不同时返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"restricted"}]`。
-3. **可自定义上游的账号类型**（`AccountType.CustomUpstream()`：有未被 guardedSettings 限定的上游地址字段；未声明 `upstreamFields` 且无法推出时按“无 guardedSettings”判断，如 relay）：新建、修改时改了上游地址字段，以及 `POST /account-types/:p/:t/models/fetch`、`POST /account-types/:p/:t/preparations`，需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "account:relay"`）。改名、启停、改模型等不改地址的修改不需要。
+3. **可自定义上游的账号类型**（`AccountType.CustomUpstream()`：有未被 guardedSettings 限定的上游地址字段；未声明 `upstreamFields` 且无法推出时按“无 guardedSettings”判断，如 relay）：新建、修改时改了上游地址字段，以及 `POST /account-types/:p/:t/models/fetch`、`POST /account-types/:p/:t/preparations`、用改过上游地址的凭证调用 `POST /accounts/:id/models/fetch`，需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "account:relay"`）。改名、启停、改模型等不改地址的修改不需要。
 
 全部级用户（有 `account:create` / `account:update`）不受上述限制。
 
