@@ -14,7 +14,7 @@
 - 清单 `c908e08b01644e3ff4872a08ac8236b190650dcaf4a97a1f22d847b36223358b`，bundle `0a15a5e43c28ba531789208a38d2d7b3781063fccd7fda79dbda8c5df4036d56`，strategy rolling。`release.sh` 只 import（06:42:22），`--preflight-only` 选中 rolling-v1、无 blocker 后正式执行。内置同步 06:44:14→06:44:20 把 moderation 0.9.3 升到 0.10.0（rollout 266，phase active）。
 - new-api 渠道没有关（用户要求滚动发布、不停渠道）；不备份数据库。
 - 核验（`~/rel284/`，只读）：两节点 `sub2api version` 0.1.284；10 个插件 active=current=desired，moderation 两节点 serving 0.10.0、ready、restarts 0；线上设置保留（mode enforce，28 个已存键原样）；`/ui/plugins` 返回 moderation 0.10.0 的 5 组侧栏；06:54:19 起新记录带 `flow_source=account_any`、`level=enforce`、`level_source=default`；两节点日志自发布起只有让出 / 重启时的 WARN；`errs.sh` 06:30–06:52 共 36 次，5xx 0、499 0。
-- 回滚：核心导入 0.1.283 清单 `b1d4066abdfe9250aac67cbf84b456eb74e371d8d888ab0a55f8d9798836a1ef` 建反向计划（同一 schema，rolling）；moderation 用 `stage/moderation-0.9.3/rollout.py upload-prev`（改为上传 `stage/moderation-0.9.3/packages/moderation-0.9.3.s2plugin`）再 `rollback`。0011/0012 只加列，0.9.3 可直接运行，不需要删列。
+- 回滚：核心导入 0.1.283 清单 `b1d4066abdfe9250aac67cbf84b456eb74e371d8d888ab0a55f8d9798836a1ef` 建反向计划（同一 schema，rolling）；moderation 在 `stage/moderation-0.9.3/` 执行 `python3 -I rollout.py upload`（重新上传 0.9.3 包）再 `rollout.py upgrade`（升级接口切到 0.9.3，即降回；`rollout.py rollback` 是降到 0.9.2，不要用）。0011/0012 只加列，0.9.3 可直接运行，不需要删列。
 - 脚本 `stage/0.1.284/`；工作树 `~/sup2api/release-0.1.284`；观察与核验脚本、输出在 `~/rel284/`。上游同步 PR 未提（需要用户原话同意）。
 
 2026-11-13 moderation **0.9.3**（`ed988819c`；只升级插件，核心 0.1.283 不动；北京时间 00:07:50→00:07:54，rollout 265 约 4 秒，两节点同时切换；无迁移）：
