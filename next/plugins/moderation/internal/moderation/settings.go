@@ -157,7 +157,7 @@ type Settings struct {
 const maxAnalysisGuidelines = 16 << 10
 
 // DefaultBlockMessage is the default deny message of a hit.
-const DefaultBlockMessage = "提示词审核未通过，请调整输入后重试"
+const DefaultBlockMessage = "Your request was blocked by content moderation. Please revise your input and try again."
 
 // input_overflow: what a request with more chunks than input_max_chunks
 // gets (CONTRACTS §72.4).

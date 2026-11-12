@@ -959,7 +959,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 | `exempt_user_ids` | string[]（`^[0-9]+$`） | `[]` | 不审核这些用户 |
 | `cache_ttl_seconds` | 0–604800 | 3600 | 相同文本（同一策略版本）的结论缓存，0 关闭；内存 LRU（1 万条）+ KV 跨节点 |
 | `block_status` | 400–599 | 403 | |
-| `block_message` | string ≤500 | `提示词审核未通过，请调整输入后重试` | |
+| `block_message` | string ≤500 | `Your request was blocked by content moderation. Please revise your input and try again.`（0.9.3 起改为英文） | |
 | `record_pass` | bool | false | 是否记录通过的审核 |
 | `store_text` | bool | true | 记录里是否保存被审核文本（截断后的） |
 | `retention_days` | 1–3650 | 30 | |
@@ -5150,6 +5150,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **0.9.0**：版本 0.9.0，只改原生界面（审核记录页的筛选收成常用 4 项 + 更多筛选、已生效条件以标签显示，各标签页表格单元格只占一行）。用到 UI 3.10 的 `SFilterBar` `#advanced`、`SFilterChips`、`SChipList`、`TableColumn.grow`，**`hostUICompat` 改为 `^3.10`，`hostCompat` 抬到 `>=0.1.277 <0.2.0`**（UI 3.10 随核心 0.1.277 发布，更老的核心的控制台按 `hostUICompat` 不加载这个界面，所以也不让它装上）。能力、钩子、任务、路由、宿主权限、用户权限、迁移和设置都不变，升级不需要管理员重新批准。
 - **0.9.1（2026-11-12）**：只改原生界面。审核记录页的用户、分组、API Key 筛选和观察名单页的用户筛选改用宿主的 `EntityPicker`（§96.6）：用户可以从列表选、按名称搜、按 ID；“名称包含”仍由界面经核心 `GET /users?q=` 解析成 `user_ids`；默认分组 0 由界面作为候选提供；换了用户就清掉已选的 API Key。**`hostUICompat` 改为 `^3.11`，`hostCompat` 抬到 `>=0.1.279 <0.2.0`**。接口、能力、宿主权限、迁移和设置都不变，升级不需要管理员重新批准。
 - **0.9.2（2026-11-12）**：只改原生界面和设置表单的 UI schema。封禁、添加观察、绑定和绑定预览里的用户 / 分组 / 账号改用宿主的实体选择器（§96.7）；设置页的白名单 / 黑名单改用 `entity-select` 部件（值仍是字符串数组）；提示词预览、流程和性能卡的分组筛选同样改用选择器。绑定页不再拉全量账号，只按 id 查已绑定账号的名称。**`hostUICompat` 改为 `^3.12`，`hostCompat` 抬到 `>=0.1.280 <0.2.0`**。接口、能力、宿主权限、迁移、设置 schema 都不变。
+- **0.9.3（2026-11-12）**：`block_message` 的默认值改为英文 `Your request was blocked by content moderation. Please revise your input and try again.`（`settings.go` 的 `DefaultBlockMessage`，`forms/settings.schema.json` 的 `default` 与它一致，有测试比对）。只影响没有保存过 `block_message` 的安装；已保存的值（包括以前的中文默认）原样使用，不做迁移。`hostCompat`、`hostUICompat`、接口、能力、宿主权限、迁移都不变。
 
 ### 72.4 抽取
 

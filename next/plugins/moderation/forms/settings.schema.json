@@ -44,7 +44,7 @@
     "block_message": {
       "type": "string",
       "title": "Block message",
-      "default": "提示词审核未通过，请调整输入后重试",
+      "default": "Your request was blocked by content moderation. Please revise your input and try again.",
       "maxLength": 500
     },
     "auto_watch": {
