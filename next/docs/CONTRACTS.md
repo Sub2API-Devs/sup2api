@@ -1053,7 +1053,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 | account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3），均无需二次验证 |
 | account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
 | account | `account:group:bind` | 允许 own 级用户绑定账号到分组（与 `group:manage` 二选一即可） |
-| account | `account:relay` | 允许创建和管理不受限制的账号类型（无 guardedSettings 的类型，如 relay） |
+| account | `account:relay` | 允许 own 级用户新建可自定义上游的账号类型（如 relay）或修改其上游地址（§21.3.1） |
 | proxy | `proxy:own:read` `proxy:own:manage` | 只作用于 `created_by` = 调用者的代理 |
 
 - 全部级 key 覆盖自己级 key：同时拥有时按全部处理。
@@ -1104,16 +1104,16 @@ manifest `accountTypes[].upstreamFields`（可选）：决定请求发往哪里�
 
 ### 21.3.1 own 级用户的账号创建限制
 
-own 级用户（只有 `account:own:create` / `account:own:update`，无全部级 key）在创建和修改账号时受以下限制：
+own 级用户（只有 `account:own:create` / `account:own:update`，无全部级 key）在创建和修改账号时受以下限制，只判断这次写入改变的内容（管理员设过的值原样提交不受限）：
 
-1. **分组绑定**：绑定账号到分组（`group_ids` 非空）需要 `group:manage` 或 `account:group:bind` 权限；无权限时返回 403 `permission_denied`（`details.permission = "account:group:bind"`）。
+1. **分组绑定**：`group_ids` 与账号现有分组不同（新增、移除，含 `[]` 全部解绑）时需要 `group:manage` 或 `account:group:bind` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "group:manage or account:group:bind"`）。只有 `account:group:bind` 时，新增的分组必须是调用者自己可用的分组（与 `/me/groups` 同一范围），否则 400 `fields[{field:"group_ids", code:"not_bindable"}]`。
 2. **调度字段限制**：
    - `priority`：0–100（全部级用户可用 0–1000000）
    - `weight`：1–100（全部级用户可用任意正整数）
    - `max_concurrency`：1–1000（全部级用户可用 0–100000）
    - `schedulable`：无限制（全部级和 own 级相同）
-   超出范围返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"out_of_range"}]`。
-3. **不受限账号类型**：创建或修改不受限账号类型（`guardedSettings` 为空或未声明的类型，如 relay）需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.permission = "account:relay"`）。
+   超出范围且与账号现值不同时返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"restricted"}]`。
+3. **可自定义上游的账号类型**（`AccountType.CustomUpstream()`：有未被 guardedSettings 限定的上游地址字段；未声明 `upstreamFields` 且无法推出时按“无 guardedSettings”判断，如 relay）：新建、修改时改了上游地址字段，以及 `POST /account-types/:p/:t/models/fetch`、`POST /account-types/:p/:t/preparations`，需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "account:relay"`）。改名、启停、改模型等不改地址的修改不需要。
 
 全部级用户（有 `account:create` / `account:update`）不受上述限制。
 

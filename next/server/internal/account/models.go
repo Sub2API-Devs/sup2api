@@ -54,6 +54,10 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 			Message: t(ctx, "unknown account type (is its plugin enabled?)", "未知的账号类型（插件是否已启用？）")}))
 		return
 	}
+	if err := s.checkCustomUpstream(ctx, core.OwnerScope(ctx, "account:create"), bt); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	proxyURL := ""
 	if in.ProxyURL != nil {
 		proxyURL = strings.TrimSpace(*in.ProxyURL)
@@ -79,7 +83,7 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 	default:
 		if in.ProxyID != nil {
 			// Same visibility rule as POST /accounts (§21.2).
-			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create"), nil); err != nil {
+			if err := checkRefs(ctx, s.d.DB.Pool, in.ProxyID, s.proxyRangeFor(ctx, "account:create")); err != nil {
 				httpapi.Fail(c, err)
 				return
 			}

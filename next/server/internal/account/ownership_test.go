@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -813,6 +815,119 @@ func TestAddressChanged(t *testing.T) {
 		}
 		if got := addressChanged([]byte(c.b), old, c.at); got != c.changed {
 			t.Errorf("case %d: addressChanged = %v, want %v", i, got, c.changed)
+		}
+	}
+}
+
+// TestOwnChangeGroupsAndCaps: an own-level write is judged on what it
+// changes (G1, M10, W2-G4), so a supplier can save a form an administrator
+// adjusted as is.
+func TestOwnChangeGroupsAndCaps(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e := setupWith(t, authz)
+	admin, alice := e.uid, e.addUser("alice@x.com")
+	authz.keys[admin], authz.keys[alice] = adminKeys, supplierKeys
+	g1 := e.exec1(`INSERT INTO groups (name) VALUES ('g1') RETURNING id`)
+	g2 := e.exec1(`INSERT INTO groups (name) VALUES ('g2') RETURNING id`)
+	private := e.exec1(`INSERT INTO groups (name, visibility) VALUES ('private', 'restricted') RETURNING id`)
+	path := fmt.Sprintf("/accounts/%d", int64(e.createAs(alice, "a", nil)["id"].(float64)))
+	if code, out := e.doAs(admin, "PATCH", path, map[string]any{"group_ids": []int64{g1, private}, "priority": 200}); code != 200 {
+		t.Fatalf("admin patch: %d %v", code, out)
+	}
+	// save sends the whole edit form as alice reads it, with change applied.
+	save := func(change map[string]any) (int, map[string]any) {
+		t.Helper()
+		_, out := e.doAs(alice, "GET", path, nil)
+		v := data(out)
+		body := map[string]any{"name": v["name"], "group_ids": v["group_ids"], "priority": v["priority"], "weight": v["weight"],
+			"max_concurrency": v["max_concurrency"], "status": v["status"], "credentials": map[string]any{"api_key": Mask}}
+		maps.Copy(body, change)
+		return e.doAs(alice, "PATCH", path, body)
+	}
+	expect := func(name string, change map[string]any, code int, fields string) {
+		t.Helper()
+		got, out := save(change)
+		if got != code || (fields != "" && fmt.Sprint(fieldsOf(out)) != fields) {
+			t.Fatalf("%s: %d %v", name, got, out)
+		}
+	}
+	expect("unchanged form", nil, 200, "")
+	expect("add without bind", map[string]any{"group_ids": []int64{g1, private, g2}}, 403, "")
+	expect("unbind all without bind", map[string]any{"group_ids": []int64{}}, 403, "")
+	expect("priority above the cap", map[string]any{"priority": 150}, 400, "[priority:restricted]")
+
+	authz.keys[alice] = append(slices.Clone(supplierKeys), "account:group:bind")
+	expect("add usable", map[string]any{"group_ids": []int64{g1, private, g2}}, 200, "")
+	expect("remove", map[string]any{"group_ids": []int64{g2}}, 200, "")
+	expect("add private", map[string]any{"group_ids": []int64{g2, private}}, 400, "[group_ids:not_bindable]")
+	expect("missing group", map[string]any{"group_ids": []int64{g2, private + 1000}}, 400, "[group_ids:not_found]")
+
+	authz.keys[alice] = append(slices.Clone(supplierKeys), "group:manage")
+	expect("group:manage", map[string]any{"group_ids": []int64{g2, private}}, 200, "")
+	if _, out := e.doAs(alice, "GET", path, nil); fmt.Sprint(data(out)["group_ids"]) != fmt.Sprint([]any{float64(g2), float64(private)}) ||
+		data(out)["priority"] != float64(200) {
+		t.Fatalf("saved: %v", data(out))
+	}
+}
+
+// TestOwnCustomUpstream: account:relay is needed by an own-level caller only
+// to create an account whose upstream address can be set freely, or to move
+// its address (G2); the same rule covers fetching models and preparations.
+func TestOwnCustomUpstream(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e, _, _, _ := preparationFixtureWith(t, authz)
+	alice := e.addUser("alice@x.com")
+	authz.keys[e.uid], authz.keys[alice] = adminKeys, supplierKeys
+	oauth := core.PluginInfo{Key: "oauth", Manifest: &manifest.Manifest{Name: manifest.LocalizedText{"en": "OAuth"}}}
+	e.gen.plugins = append(e.gen.plugins, oauth)
+	for _, id := range []string{"claude_oauth", "managed"} {
+		e.gen.types = append(e.gen.types, core.AccountTypeBinding{Plugin: oauth, Client: e.plat,
+			Type:       manifest.AccountType{ID: id, Form: manifest.Form{Mode: "schema"}, UpstreamFields: []string{}},
+			FormSchema: json.RawMessage(`{"type":"object"}`)})
+	}
+	post := func(pk, typ string, creds map[string]any) (int, map[string]any) {
+		t.Helper()
+		return e.doAs(alice, "POST", "/accounts", map[string]any{"name": typ, "plugin_key": pk, "type": typ, "credentials": creds})
+	}
+	for _, typ := range []string{"claude_oauth", "managed"} {
+		if code, out := post("oauth", typ, map[string]any{}); code != 201 {
+			t.Fatalf("create %s: %d %v", typ, code, out)
+		}
+	}
+	relayCreds := map[string]any{"api_key": "sk-good-key-123", "base_url": "https://relay.example"}
+	if code, out := post("relay", "relay_key", relayCreds); code != 403 {
+		t.Fatalf("create custom: %d %v", code, out)
+	}
+	if code, out := e.doAs(alice, "POST", "/account-types/relay/relay_key/models/fetch", map[string]any{"credentials": relayCreds}); code != 403 {
+		t.Fatalf("fetch custom: %d %v", code, out)
+	}
+	// The fixture's managed type declares no address fields and no guard:
+	// custom under the legacy rule.
+	if code, out := e.doAs(alice, "POST", "/account-types/fixture/managed/preparations", map[string]any{}); code != 403 {
+		t.Fatalf("prepare custom: %d %v", code, out)
+	}
+	fixture := slices.IndexFunc(e.gen.types, func(b core.AccountTypeBinding) bool { return b.Plugin.Key == "fixture" })
+	e.gen.types[fixture].Type.UpstreamFields = []string{}
+	if code, out := e.doAs(alice, "POST", "/account-types/fixture/managed/preparations", map[string]any{}); code != 201 {
+		t.Fatalf("prepare managed: %d %v", code, out)
+	}
+
+	authz.keys[alice] = append(slices.Clone(supplierKeys), "account:relay")
+	code, out := post("relay", "relay_key", relayCreds)
+	if code != 201 {
+		t.Fatalf("create custom with relay: %d %v", code, out)
+	}
+	authz.keys[alice] = supplierKeys
+	path := fmt.Sprintf("/accounts/%d", int64(data(out)["id"].(float64)))
+	for _, change := range []map[string]any{{"name": "renamed"}, {"status": "disabled"}, {"status": "active"},
+		{"credentials": map[string]any{"api_key": Mask, "base_url": "https://relay.example"}}} {
+		if code, out := e.doAs(alice, "PATCH", path, change); code != 200 {
+			t.Fatalf("patch %v: %d %v", change, code, out)
+		}
+	}
+	for _, key := range []string{Mask, "sk-good-key-123"} {
+		if code, out := e.doAs(alice, "PATCH", path, map[string]any{"credentials": map[string]any{"api_key": key, "base_url": "https://other.example"}}); code != 403 {
+			t.Fatalf("move base_url (key %s): %d %v", key, code, out)
 		}
 	}
 }

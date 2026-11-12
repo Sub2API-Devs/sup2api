@@ -282,6 +282,7 @@ func (p controlPlan) convergeUsageLimit(ctx context.Context, q store.Querier, id
 type ownCap struct {
 	name, zh string // the field, and its name in the Chinese message
 	field    func(*input) **int
+	current  func(*row) int // the stored value
 	min, max int
 	// below is what a default under min clamps to: min, or for
 	// max_concurrency (0 = unlimited, which own-level callers cannot set)
@@ -290,9 +291,9 @@ type ownCap struct {
 }
 
 var ownCapped = []ownCap{
-	{"priority", "优先级", func(in *input) **int { return &in.Priority }, 0, ownMaxPriority, 0},
-	{"weight", "权重", func(in *input) **int { return &in.Weight }, 1, ownMaxWeight, 1},
-	{"max_concurrency", "最大并发", func(in *input) **int { return &in.MaxConcurrency }, 1, ownMaxConcurrency, ownDefaultConcurrency},
+	{"priority", "优先级", func(in *input) **int { return &in.Priority }, func(a *row) int { return a.Priority }, 0, ownMaxPriority, 0},
+	{"weight", "权重", func(in *input) **int { return &in.Weight }, func(a *row) int { return a.Weight }, 1, ownMaxWeight, 1},
+	{"max_concurrency", "最大并发", func(in *input) **int { return &in.MaxConcurrency }, func(a *row) int { return a.MaxConcurrency }, 1, ownMaxConcurrency, ownDefaultConcurrency},
 }
 
 // clamp fits v into the cap.
@@ -304,8 +305,9 @@ func (f ownCap) clamp(v int) int {
 }
 
 // restricted is the error of a sent value outside the cap, nil otherwise.
-func (f ownCap) restricted(ctx context.Context, in *input) error {
-	if v := *f.field(in); v == nil || (*v >= f.min && *v <= f.max) {
+// The value cur (nil on create) already has passes: an administrator set it.
+func (f ownCap) restricted(ctx context.Context, in *input, cur *row) error {
+	if v := *f.field(in); v == nil || (*v >= f.min && *v <= f.max) || (cur != nil && *v == f.current(cur)) {
 		return nil
 	}
 	return core.InvalidFields(core.FieldError{Field: f.name, Code: "restricted",

@@ -79,7 +79,14 @@ func preparationFixture(t *testing.T) (*env, *preparationResource, int64) {
 
 func preparationPluginFixture(t *testing.T) (*env, *preparationResource, int64, *preparationPlugin) {
 	t.Helper()
-	e := setup(t)
+	return preparationFixtureWith(t, fakeAuthz{})
+}
+
+// preparationFixtureWith is preparationPluginFixture with the given
+// authorizer.
+func preparationFixtureWith(t *testing.T, authz fakeAuthz) (*env, *preparationResource, int64, *preparationPlugin) {
+	t.Helper()
+	e := setupWith(t, authz)
 	if _, err := e.db.Pool.Exec(t.Context(), `INSERT INTO plugins(key,name,status) VALUES('fixture','{"en":"Fixture"}','enabled')`); err != nil {
 		t.Fatal(err)
 	}
