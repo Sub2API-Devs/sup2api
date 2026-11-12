@@ -25,7 +25,8 @@ type corePerm struct {
 	key       string
 	en, zh    string
 	sensitive bool
-	// superOnly keeps the permission out of every built-in role's defaults.
+	// superOnly: no built-in role's defaults may accept the permission
+	// (TestCatalogFlagInvariants); only a superuser grants it explicitly.
 	superOnly bool
 	// sessionOnly keeps the permission out of access keys (KeyAllowed).
 	sessionOnly bool

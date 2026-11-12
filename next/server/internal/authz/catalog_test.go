@@ -96,16 +96,20 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 		return out
 	}
 
+	want := map[grant]int{{custom, "inherit"}: 1}
+	for _, r := range builtinRoles {
+		if r.grants != nil && r.grants("role", "role:probe") {
+			want[grant{roleID(t, s, r.key), "default"}] = 1
+		}
+	}
+	if len(want) < 2 {
+		t.Fatal("no built-in role accepts role:probe by default")
+	}
 	for range 2 {
 		if err := s.SyncCore(ctx); err != nil {
 			t.Fatal(err)
 		}
 		got := audited()
-		want := map[grant]int{
-			{custom, "inherit"}:                     1,
-			{roleID(t, s, RoleAdmin), "default"}:    1,
-			{roleID(t, s, RoleOperator), "default"}: 1,
-		}
 		if len(got) != len(want) {
 			t.Fatalf("audited = %v, want %v", got, want)
 		}
