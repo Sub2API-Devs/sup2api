@@ -83,6 +83,7 @@ export default {
     ui_menu: 'Console menus',
     ui_iframe: 'Sandboxed iframe pages',
     accounts_read: 'Read accounts',
+    authz_read: 'Check users\' core and other plugins\' permissions',
     accounts_auto_state: 'Change account automatic state',
     lock: 'Cross-node lock',
     db_schema: 'Dedicated database schema',

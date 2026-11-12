@@ -101,7 +101,8 @@ type HostServiceClient interface {
 	// db.schema: restricted DSN for the plugin schema. The connection must go
 	// through EgressService (the SDK dialer does this automatically).
 	GetDSN(ctx context.Context, in *GetDSNRequest, opts ...grpc.CallOption) (*GetDSNResponse, error)
-	// authz (always granted): does a console user hold a permission?
+	// authz: does a console user hold a permission? Own keys always; others
+	// need authz.read.
 	AuthzCheck(ctx context.Context, in *AuthzCheckRequest, opts ...grpc.CallOption) (*AuthzCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.
@@ -656,7 +657,8 @@ type HostServiceServer interface {
 	// db.schema: restricted DSN for the plugin schema. The connection must go
 	// through EgressService (the SDK dialer does this automatically).
 	GetDSN(context.Context, *GetDSNRequest) (*GetDSNResponse, error)
-	// authz (always granted): does a console user hold a permission?
+	// authz: does a console user hold a permission? Own keys always; others
+	// need authz.read.
 	AuthzCheck(context.Context, *AuthzCheckRequest) (*AuthzCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.

@@ -3644,7 +3644,9 @@ type AuthzCheckRequest struct {
 	unknownFields protoimpl.UnknownFields
 
 	UserId int64 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	// Plugin-local key ("rules:manage") or fully qualified key.
+	// Plugin-local key ("rules:manage") or fully qualified key. The plugin's
+	// own keys need no grant; a core key or another plugin's key needs
+	// "authz.read".
 	Permission string `protobuf:"bytes,2,opt,name=permission,proto3" json:"permission,omitempty"`
 }
 

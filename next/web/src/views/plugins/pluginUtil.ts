@@ -22,6 +22,7 @@ export const HOST_PERMISSION_RISK: Record<string, Risk> = {
   'ui.menu': 'medium',
   'ui.iframe': 'medium',
   'accounts.read': 'medium',
+  'authz.read': 'medium',
   lock: 'medium',
   'db.schema': 'high',
   net: 'high',

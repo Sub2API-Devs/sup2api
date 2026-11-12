@@ -1,0 +1,100 @@
+package grpcruntime
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
+)
+
+// recordingAuthz allows everything and records the keys it was asked about.
+type recordingAuthz struct{ asked []string }
+
+func (a *recordingAuthz) Can(_ context.Context, _ int64, perm string) (bool, error) {
+	a.asked = append(a.asked, perm)
+	return true, nil
+}
+func (*recordingAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
+	return core.PermissionSet{}, nil
+}
+func (*recordingAuthz) CanGrant(context.Context, int64, []string) error { return nil }
+func (*recordingAuthz) CanActOn(context.Context, int64, []string) error { return nil }
+
+// hostEnv is a host server of plugin "volc" (which declares the local
+// permission "rules:read") over the given options and grants.
+func hostEnv(t *testing.T, o Options, grants registry.Grants) *hostServer {
+	t.Helper()
+	pkg, err := registry.LoadPackage(t.TempDir(), registrytest.Package(t, registrytest.Manifest("volc", "1.0.0"), []byte("bin"), nil), "", "unsigned")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pkg.Close() })
+	o.Node, o.DataDir = staticNode{"n", "b"}, t.TempDir()
+	o.Concurrency = Concurrency{Hot: 4, Console: 4, Background: 4, Execute: 4}
+	rt := &Runtime{o: o, log: slog.Default()}
+	return &hostServer{i: newInstance(rt, pkg, "", "", &settings{configJSON: "{}", grants: grants})}
+}
+
+// AuthzCheck answers for the plugin's own keys without a grant; a core key or
+// another plugin's key needs "authz.read" and never reaches the authorizer
+// without it.
+func TestHostAuthzCheckOwnKeysOnly(t *testing.T) {
+	granted := registry.Grants{"authz.read": json.RawMessage(`{}`)}
+	cases := []struct {
+		name, perm string
+		grants     registry.Grants
+		code       codes.Code
+		asked      string // the key the authorizer sees; "" when refused
+	}{
+		{name: "own local key", perm: "rules:read", code: codes.OK, asked: "plugin.volc:rules:read"},
+		{name: "own qualified key", perm: "plugin.volc:rules:read", code: codes.OK, asked: "plugin.volc:rules:read"},
+		{name: "own qualified undeclared key", perm: "plugin.volc:other:do", code: codes.OK, asked: "plugin.volc:other:do"},
+		{name: "core key without grant", perm: "user:read", code: codes.PermissionDenied},
+		{name: "core key with grant", perm: "user:read", grants: granted, code: codes.OK, asked: "user:read"},
+		{name: "undeclared local key is a core key", perm: "rules:manage", code: codes.PermissionDenied},
+		{name: "other plugin key without grant", perm: "plugin.other:rules:read", code: codes.PermissionDenied},
+		{name: "other plugin key with grant", perm: "plugin.other:rules:read", grants: granted, code: codes.OK, asked: "plugin.other:rules:read"},
+		{name: "prefix of own module is another plugin", perm: "plugin.volcano:rules:read", code: codes.PermissionDenied},
+		{name: "own module without local part", perm: "plugin.volc:", code: codes.PermissionDenied},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			authz := &recordingAuthz{}
+			h := hostEnv(t, Options{Authorizer: authz}, tc.grants)
+			out, err := h.AuthzCheck(t.Context(), &pluginv1.AuthzCheckRequest{UserId: 7, Permission: tc.perm})
+			if status.Code(err) != tc.code {
+				t.Fatalf("code = %v (%v), want %v", status.Code(err), err, tc.code)
+			}
+			if tc.code == codes.OK && !out.GetAllowed() {
+				t.Fatal("allowed = false")
+			}
+			var asked string
+			if len(authz.asked) > 0 {
+				asked = authz.asked[0]
+			}
+			if asked != tc.asked || len(authz.asked) > 1 {
+				t.Fatalf("authorizer asked %v, want %q", authz.asked, tc.asked)
+			}
+		})
+	}
+}
+
+func TestHostAuthzCheckArguments(t *testing.T) {
+	h := hostEnv(t, Options{Authorizer: &recordingAuthz{}}, nil)
+	for _, in := range []*pluginv1.AuthzCheckRequest{{Permission: "rules:read"}, {UserId: 7}} {
+		if _, err := h.AuthzCheck(t.Context(), in); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("%v: %v", in, err)
+		}
+	}
+	if _, err := hostEnv(t, Options{}, nil).AuthzCheck(t.Context(), &pluginv1.AuthzCheckRequest{UserId: 7, Permission: "rules:read"}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("no authorizer: %v", err)
+	}
+}

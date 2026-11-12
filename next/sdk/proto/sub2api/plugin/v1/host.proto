@@ -97,7 +97,8 @@ service HostService {
   // through EgressService (the SDK dialer does this automatically).
   rpc GetDSN(GetDSNRequest) returns (GetDSNResponse);
 
-  // authz (always granted): does a console user hold a permission?
+  // authz: does a console user hold a permission? Own keys always; others
+  // need authz.read.
   rpc AuthzCheck(AuthzCheckRequest) returns (AuthzCheckResponse);
 
   // ledger.credit / ledger.debit: bounded by the approved scope
@@ -614,7 +615,9 @@ message GetDSNResponse {
 
 message AuthzCheckRequest {
   int64 user_id = 1;
-  // Plugin-local key ("rules:manage") or fully qualified key.
+  // Plugin-local key ("rules:manage") or fully qualified key. The plugin's
+  // own keys need no grant; a core key or another plugin's key needs
+  // "authz.read".
   string permission = 2;
 }
 

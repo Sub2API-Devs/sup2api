@@ -375,6 +375,9 @@ func (h *hostServer) GetDSN(ctx context.Context, _ *pluginv1.GetDSNRequest) (*pl
 
 // ------------------------------------------------------------------ authz
 
+// AuthzCheck answers for the plugin's own permissions without a grant; asking
+// about any other key reads the deployment's role assignments and needs the
+// "authz.read" grant.
 func (h *hostServer) AuthzCheck(ctx context.Context, in *pluginv1.AuthzCheckRequest) (*pluginv1.AuthzCheckResponse, error) {
 	if in.GetUserId() <= 0 || in.GetPermission() == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id and permission are required")
@@ -382,26 +385,37 @@ func (h *hostServer) AuthzCheck(ctx context.Context, in *pluginv1.AuthzCheckRequ
 	if h.i.rt.o.Authorizer == nil {
 		return nil, status.Error(codes.Unavailable, "authorizer unavailable")
 	}
-	ok, err := h.i.rt.o.Authorizer.Can(ctx, in.GetUserId(), h.qualify(in.GetPermission()))
+	key, own := h.qualify(in.GetPermission())
+	if !own {
+		if err := h.require(ctx, "authz.read"); err != nil {
+			return nil, err
+		}
+	}
+	ok, err := h.i.rt.o.Authorizer.Can(ctx, in.GetUserId(), key)
 	if err != nil {
 		return nil, toStatus(err)
 	}
 	return &pluginv1.AuthzCheckResponse{Allowed: ok}, nil
 }
 
-// qualify turns a plugin-local permission key into "plugin.<key>:<local>".
-// Keys already starting with "plugin." and keys the plugin does not declare
-// (core permissions such as "user:read") are used as given.
-func (h *hostServer) qualify(perm string) string {
+// qualify resolves the permission a plugin asks about to its RBAC key. own
+// reports that the key belongs to this plugin: its fully qualified key, or a
+// local key its manifest declares, which becomes "plugin.<key>:<local>". Every
+// other key (a core permission such as "user:read", another plugin's key) is
+// used as given and is not the plugin's own.
+func (h *hostServer) qualify(perm string) (key string, own bool) {
+	if _, ok := manifest.LocalPermission(h.key(), perm); ok {
+		return perm, true
+	}
 	if strings.HasPrefix(perm, "plugin.") {
-		return perm
+		return perm, false
 	}
 	for _, up := range h.i.pkg.Manifest.UserPermissions {
 		if up.Key == perm {
-			return manifest.PermissionKey(h.key(), perm)
+			return manifest.PermissionKey(h.key(), perm), true
 		}
 	}
-	return perm
+	return perm, false
 }
 
 // ------------------------------------------------------------------ ledger
