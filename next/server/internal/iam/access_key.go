@@ -65,7 +65,9 @@ func normalizeAccessKeyName(name string) (string, error) {
 // grantablePermissions checks a key's permissions against what the user holds
 // right now, the rule of §80: a key is a subset of its user. It returns them
 // sorted without duplicates. A superuser may choose any active permission.
-// Permissions no access key may carry (authz.KeyAllowed) are not offered.
+// Permissions no access key may carry (authz.KeyAllowed) are not offered and,
+// when held, are refused with their own detail (session_only) rather than as
+// missing.
 func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted []string) ([]string, error) {
 	if len(wanted) == 0 {
 		return nil, core.InvalidFields(core.FieldError{Field: "permissions", Code: "required", Message: "choose at least one permission"})
@@ -85,16 +87,23 @@ func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted
 	out := slices.Clone(wanted)
 	slices.Sort(out)
 	out = slices.Compact(out)
-	var denied []string
+	var missing, sessionOnly []string
 	for _, p := range out {
-		if _, ok := known[p]; !ok || !set.Has(p) || !authz.KeyAllowed(p) {
-			denied = append(denied, p)
+		if _, ok := known[p]; !ok || !set.Has(p) {
+			missing = append(missing, p)
+		} else if !authz.KeyAllowed(p) {
+			sessionOnly = append(sessionOnly, p)
 		}
 	}
-	if len(denied) > 0 {
+	if len(missing) > 0 {
 		return nil, core.ErrPermissionDenied.WithMessage(t(ctx,
 			"an access key can only have permissions you hold",
-			"访问密钥只能拥有你自己的权限")).WithDetails(map[string]any{"missing": denied})
+			"访问密钥只能拥有你自己的权限")).WithDetails(map[string]any{"missing": missing})
+	}
+	if len(sessionOnly) > 0 {
+		return nil, core.ErrPermissionDenied.WithMessage(t(ctx,
+			"these permissions can only be used in a signed-in session, not by an access key",
+			"这些权限只能在登录会话中使用，不能授予访问密钥")).WithDetails(map[string]any{"session_only": sessionOnly})
 	}
 	return out, nil
 }

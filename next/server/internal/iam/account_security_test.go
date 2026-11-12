@@ -1237,7 +1237,7 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	code, out := k.call(login.AccessToken, "POST", "/me/access-keys", body)
 	e, _ := out["error"].(map[string]any)
 	details, _ := e["details"].(map[string]any)
-	if missing, _ := details["missing"].([]any); code != 403 || !slices.Contains(missing, any("settings:manage")) {
+	if held, _ := details["session_only"].([]any); code != 403 || !slices.Contains(held, any("settings:manage")) || details["missing"] != nil {
 		t.Fatalf("choosing settings:manage: %d %v", code, out)
 	}
 
