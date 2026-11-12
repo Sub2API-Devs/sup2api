@@ -29,7 +29,7 @@ const EntitySelect: FunctionalComponent = (_, { attrs }) => {
   const { schema, ui, ...field } = attrs as Omit<InstanceType<typeof EntityInput>['$props'], 'kind'> & { schema?: JSONSchema; ui?: UISchema }
   const options = uiGet<{ kind?: EntityKind; mine?: boolean; max?: number }>(ui, 'options') ?? {}
   // A schema that names no entity the console knows gets no control: the bare label shows the mistake.
-  if (!options.kind || !(options.kind in ENTITIES)) return null
+  if (!options.kind || !Object.hasOwn(ENTITIES, options.kind)) return null
   const stored = field.multiple ? schema?.items : schema
   return h(EntityInput, { ...field, kind: options.kind, mine: options.mine, max: options.max, numeric: NUMBER_TYPES.has(schemaType(stored)) })
 }

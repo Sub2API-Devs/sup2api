@@ -93,6 +93,38 @@ describe('bulk account dialogs', () => {
     expect(mocks.patch.mock.calls.map((c) => [c[0], c[1]])).toEqual([['/accounts/1', { group_ids: [2, 5], proxy_id: 9 }]])
   })
 
+  it('"no proxy" is the ticked field with none picked: ticked alone, or a picked proxy cleared', async () => {
+    mocks.patch.mockImplementation(async (path: string, body: object) => ({ id: Number(path.split('/')[2]), ...body }))
+    const w = mount(AccountBulkEditDialog, {
+      props: { open: true, accounts: [acc(1), acc(2, { proxy_id: 9 })], typeOf: () => undefined },
+      global: { plugins: [i18n], stubs: { SModal } }
+    })
+    // Asked for anew: reopening renders the dialog again.
+    const tick = () => w.get<HTMLInputElement>('[data-testid="bulk-field-proxy"] input[type="checkbox"]')
+    const picker = () => w.getComponent(ProxyPicker).getComponent(EntityPicker)
+    const apply = async () => {
+      await w.get('[data-testid="bulk-edit-apply"]').trigger('click')
+      await flushPromises()
+      return mocks.patch.mock.calls.map((c) => [c[0], c[1]])
+    }
+    await tick().setValue(true)
+    // The first account has no proxy already.
+    expect(await apply()).toEqual([['/accounts/2', { proxy_id: null }]])
+
+    mocks.patch.mockClear()
+    await w.setProps({ open: false })
+    await w.setProps({ open: true })
+    expect(tick().element.checked).toBe(false)
+    picker().vm.$emit('update:id', '9')
+    await flushPromises()
+    expect(picker().props('id')).toBe('9')
+    picker().vm.$emit('update:id', '')
+    await flushPromises()
+    expect(tick().element.checked).toBe(true)
+    expect(picker().props('id')).toBe('')
+    expect(await apply()).toEqual([['/accounts/2', { proxy_id: null }]])
+  })
+
   it('disables every number field a selected type fixes or locks', async () => {
     const types: Record<number, AccountType> = {
       1: { common_controls: { weight: { locked: true, default: 2 } } } as unknown as AccountType,

@@ -77,11 +77,11 @@ manifest `accountTypes[].commonControls`：键 = 通用项名，值 = 声明。
 | `kind` | `'user' \| 'group' \| 'api_key' \| 'account' \| 'model' \| 'proxy'` |
 | `v-model:id` | 选中的 id（字符串，`''` = 未选）；model 的 id 就是模型名 |
 | `v-model:text` | 可选。绑定了才有“名称包含 “xxx””一行，值是用户输入的文本；与 id 互斥 |
-| `placeholder` | 占位文字，同时是 aria-label；缺省为实体名（“用户”） |
+| `placeholder` | 占位文字，缺省为实体名（“用户”）。同时是 aria-label；放在带标签的表单项（`SField` / `SSettingRow`）里时不设 aria-label，由表单项的标签命名（否则“探测代理”一栏会被读成“不使用代理”） |
 | `size` | `'sm' \| 'md'` |
 | `mine` | 只列调用者自己的（个人页面）：查找接口带 `mine=true`，按 id 反查名称时也带 |
 | `scope` | 该 kind 的额外查找参数：api_key 用 `{ user_id }`（只列该用户的密钥），account 用 `{ prefer_group_id }`（该分组的账号排前面）；列表顶部会写明范围 |
-| `exclude` | UI 3.12。`(string \| number)[]`：这些 id 不出现在候选里（多选里已选的、表单其它行已占用的），手输它也不算选中（没有“使用 ID #n”一行，文本框也不接受）；已选值照常显示。给了它时查找多要同样多行（上限 50），列表不会因为被排除的排在前面而变短 |
+| `exclude` | UI 3.12。`(string \| number)[]`：这些 id 不出现在候选里（多选里已选的、表单其它行已占用的），手输它也不算选中（没有“使用 ID #n”一行，文本框也不接受）；已选值照常显示。给了它时查找多要同样多行（上限 50），列表不会因为被排除的排在前面而变短；排除的超过 30 个时列表可能变短，查到的行全被排除而还有更多匹配时列表写“还有更多未列出，输入以缩小范围”，不写“没有匹配” |
 | `extra` | `{ id, name, hint? }[]`：页面自己提供的候选（如所选时间范围内日志里出现过的模型），排在查找结果之前，同 id 以查找结果为准。可以带查找接口没有的 id（如“默认分组 0”）：这类 id 不反查名称，手输它也算选中。手输的文本与某个候选的 id 完全相同时，该候选就是第一行，搜索返回之前也是（回车选中什么不取决于按得早晚） |
 | `disabled` | 禁用 |
 
@@ -116,7 +116,7 @@ label('group', '3')   // 'cc-低注入 #3'；名称未到或查不到时 '#3'；
 name('user', 7)       // 'zhangsan@example.com' | undefined
 ```
 
-两个函数都是响应式读取（在模板或 computed 里用），没见过的 id 会自动排进下一次反查。需要自己查候选时用同文件的 `lookupEntities(kind, { q?, ids?, mine?, scope? })`，例如 `lookupEntities('api_key', { ids: [keyId], scope: { user_id } })` 返回空即“这个密钥不属于该用户”。
+两个函数都是响应式读取（在模板或 computed 里用），没见过的 id 会自动排进下一次反查。选项里还可以给 `extra`（页面自己的候选，同 `EntityPicker` 的 `extra`）：查找接口不认识的 id（如“默认分组 0”）用它的名称。需要自己查候选时用同文件的 `lookupEntities(kind, { q?, ids?, limit?, mine?, scope? })`，例如 `lookupEntities('api_key', { ids: [keyId], scope: { user_id } })` 返回空即“这个密钥不属于该用户”。
 
 ### 6.1 多选：EntityMultiPicker（UI 3.12）
 
@@ -131,7 +131,7 @@ name('user', 7)       // 'zhangsan@example.com' | undefined
 |---|---|
 | `kind` | 同 `EntityPicker` |
 | `v-model:ids` | 已选的 id，`string[]`（model 是模型名），顺序 = 添加顺序 |
-| `placeholder` | “添加”选择器的占位和 aria-label，缺省“添加{实体名}” |
+| `placeholder` | “添加”选择器的 `placeholder`（占位和 aria-label，规则同上），缺省“添加{实体名}” |
 | `max` | 选满后不再显示“添加”选择器 |
 | `size`、`mine`、`scope`、`extra`、`disabled` | 同 `EntityPicker`，原样传给“添加”选择器；`extra` 还用来给查找接口不认识的 id 命名 |
 
@@ -140,6 +140,7 @@ name('user', 7)       // 'zhangsan@example.com' | undefined
 - 已选项是可关闭的标签（“名称 #id”，名称未知时“#id”，名称由组件用 `useEntityNames` 反查），后面是一个只绑 `id` 的 `EntityPicker`：选中即追加，自己保持为空，候选里排除已选（`exclude`）。没有已选时只有这个选择器。重复的 id 不追加。
 - `disabled` 时标签不能关闭、没有选择器；此时一个都没选显示“—”。
 - 没有查找权限时“添加”选择器是 `EntityPicker` 退化成的文本框：输入 id 后回车或离开即追加，框清空。这个回车不会提交外层的 `<form>`（框是空的时候回车照常交给表单）。
+- 粘贴一串 id（逗号、空白或换行分隔，两个以上）一次全部追加：已选的、重复的、不是 id 的跳过，到 `max` 为止；两种形态都支持（它替换的标签输入框能这样批量维护名单）。只粘贴一个词时交给选择器，当作搜索词。
 - 宽度随所在位置（最窄 12rem），标签和选择器放不下就换行；它不会把窄表单（手机）撑宽。**直接把单选的 `EntityPicker` 放进表单网格时**要自己保证这一点：它是带图标、`#id`、× 的文本框，选中后的自然宽度有三百多像素，放在没有 `min-w-0` / `grid-cols-1` 的网格格子里会把一列撑出手机屏幕。表单里优先用下面的 `EntityInput` 或 schema 部件，它们已经处理了。
 
 ### 6.2 表单里的值：EntityInput、GroupPicker、ProxyPicker

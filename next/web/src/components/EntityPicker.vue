@@ -20,9 +20,9 @@
 // id, other text the name search, or no pick at all (it clears the id) where
 // `text` is not bound. Also a host component for plugins
 // (HOST_COMPONENT_NAMES). What a kind is comes from entity/entities.ts.
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SInput, SSelect, type SelectOption } from '@sub2api/ui'
+import { FIELD_KEY, SInput, SSelect, type SelectOption } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ENTITIES, isEntityId, lookupPermissions, type EntityKind } from './entity/entities'
 import { lookupEntities, lookupUnavailable, useEntityNames, type EntityItem, type LookupResult } from './entity/lookup'
@@ -32,7 +32,7 @@ const props = withDefaults(
     kind: EntityKind
     id?: string
     text?: string
-    /** Also the accessible name; the entity's name by default. */
+    /** Also the accessible name, unless a form item's label names the picker; the entity's name by default. */
     placeholder?: string
     size?: 'sm' | 'md'
     mine?: boolean
@@ -62,6 +62,10 @@ const TEXT = '~'
 
 const entity = computed(() => ENTITIES[props.kind])
 const label = computed(() => props.placeholder ?? t(entity.value.label))
+// The label of a form item around (SField, SSettingRow) names the picker: an
+// aria-label would put the placeholder ("No proxy", "Add Group") in its place.
+const field = inject(FIELD_KEY, null)
+const ariaLabel = computed(() => (field?.labelId.value ? undefined : label.value))
 const searchesText = computed(() => props.text !== undefined)
 const available = computed(() => auth.has(lookupPermissions(props.kind, props.mine)) && !lookupUnavailable(props.kind, props.mine))
 const excluded = computed(() => new Set(props.exclude.map(String)))
@@ -156,7 +160,14 @@ const options = computed<SelectOption[]>(() => {
   if (q && searchesText.value) first.push({ value: TEXT + q, label: t('entity.contains', { text: q }), description: t('entity.containsHint'), accent: true })
   return [...first, ...candidates.value.filter((item) => item !== hit).map(row), ...last]
 })
-const footer = computed(() => (more.value && !loading.value ? t('entity.more', { n: listed.value.length }) : undefined))
+/** More match, and every row the lookup gave is excluded: nothing to list, which is not "no match". */
+const unlisted = computed(() => more.value && !listed.value.length)
+const footer = computed(() => (more.value && !loading.value && !unlisted.value ? t('entity.more', { n: listed.value.length }) : undefined))
+/** The line of an empty list; it names the entity, not the field the placeholder may name. */
+const empty = computed(() => {
+  if (failed.value) return t('entity.failed')
+  return unlisted.value ? t('entity.moreUnlisted') : t('entity.none', { name: t(entity.value.label) })
+})
 /** What a scope parameter did to the list ("Only keys of a@x"), for the first one set. */
 const note = computed(() => {
   for (const [param, target] of Object.entries(entity.value.scopes ?? {})) {
@@ -224,12 +235,12 @@ function typed(v: unknown) {
     :loading="loading"
     :icon="entity.icon"
     :placeholder="label"
-    :aria-label="label"
+    :aria-label="ariaLabel"
     :size="size"
     :disabled="disabled"
     :note="note"
     :footer="footer"
-    :no-results="failed ? t('entity.failed') : t('entity.none', { name: label })"
+    :no-results="empty"
     @search="search"
     @update:model-value="pick"
   />
@@ -238,7 +249,7 @@ function typed(v: unknown) {
     :model-value="box"
     :icon="entity.icon"
     :placeholder="boxPlaceholder"
-    :aria-label="label"
+    :aria-label="ariaLabel"
     :inputmode="entity.numeric && !searchesText ? 'numeric' : undefined"
     :size="size"
     :disabled="disabled"

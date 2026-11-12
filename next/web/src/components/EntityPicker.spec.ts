@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { h } from 'vue'
 import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { ApiError, type Query } from '@sub2api/host'
-import { uiMessages } from '@sub2api/ui'
+import { SField, uiMessages } from '@sub2api/ui'
 import entity from '@/i18n/locales/en/entity'
 import EntityPicker from './EntityPicker.vue'
 import { resetEntityLookups, type EntityItem } from './entity/lookup'
@@ -224,6 +225,20 @@ describe('EntityPicker list', () => {
     expect(w.get('[role="listbox"]').text()).toContain('Showing the first 2. Type to narrow the list.')
   })
 
+  it('says that more match, not "no match", when every row the lookup gave is excluded', async () => {
+    mocks.get.mockResolvedValue({ items: USERS, more: true })
+    const w = picker({ exclude: USERS.map((u) => u.id) })
+    await open(w)
+    expect(w.get('[role="listbox"]').text()).toBe('More match than the list shows. Type to narrow the list.')
+  })
+
+  it('an empty list names the entity, whatever field the placeholder names', async () => {
+    mocks.get.mockResolvedValue({ items: [], more: false })
+    const w = picker({ kind: 'proxy', placeholder: 'No proxy' })
+    await open(w)
+    expect(w.get('[role="listbox"]').text()).toBe('No matching Proxy')
+  })
+
   it('shows a picked id that is excluded like any other', async () => {
     const w = picker({ id: '7', exclude: ['7'] })
     await flushPromises()
@@ -274,6 +289,23 @@ describe('EntityPicker value', () => {
     await flushPromises()
     expect(lookups()).toEqual([['/lookup/api-keys', { ids: '5', mine: true }]])
     expect(shown(w)).toBe('#5')
+  })
+
+  it('leaves its name to the label of a form item around: no aria-label of the placeholder over it', async () => {
+    const field = (props: Record<string, unknown>, label?: string) =>
+      mount(SField, { props: { label }, slots: { default: () => h(EntityPicker, { kind: 'proxy', placeholder: 'No proxy', ...props }) }, global: { plugins: [i18n] } })
+    const select = field({}, 'Probe proxy')
+    await flushPromises()
+    expect(select.get('input').attributes()).toMatchObject({ id: select.get('label').attributes('for'), placeholder: 'No proxy' })
+    expect(select.get('input').attributes('aria-label')).toBeUndefined()
+    // A form item without a label names nothing.
+    expect(field({}).get('input').attributes('aria-label')).toBe('No proxy')
+    // The text box of a caller without the lookup likewise.
+    mocks.denied = ['proxy:read', 'proxy:own:read']
+    const box = field({}, 'Probe proxy')
+    await flushPromises()
+    expect(box.get('input').attributes()).toMatchObject({ id: box.get('label').attributes('for'), placeholder: 'No proxy (Proxy ID)' })
+    expect(box.get('input').attributes('aria-label')).toBeUndefined()
   })
 
   it('shows a name search, and clear empties both', async () => {

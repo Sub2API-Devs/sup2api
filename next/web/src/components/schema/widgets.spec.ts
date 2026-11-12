@@ -152,8 +152,9 @@ describe('entity widgets (docs/COMMON-CONTROLS.md §6)', () => {
     expect(multi(await render({}, form), 'user').props('ids')).toEqual([])
   })
 
-  it('entity-select without a kind the console knows renders no control', async () => {
-    const w = await render({ owner: 7 }, { schema: { type: 'object', properties: { owner: { type: 'integer' } } }, uiSchema: { owner: entity('tenant') } })
+  // "constructor" is on every object: only the table's own entries are kinds.
+  it.each(['tenant', 'constructor'])('entity-select with the kind "%s", which the console does not know, renders no control', async (kind) => {
+    const w = await render({ owner: 7 }, { schema: { type: 'object', properties: { owner: { type: 'integer' } } }, uiSchema: { owner: entity(kind) } })
     expect(w.findComponent(EntityPicker).exists()).toBe(false)
     expect(w.find('input').exists()).toBe(false)
     expect(w.text()).toContain('Owner')

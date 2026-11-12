@@ -15,6 +15,7 @@ export default {
   asTypedHint: '列表里没有这个名称；仍可直接使用',
   inactive: '已停用',
   more: '只显示前 {n} 个，输入以缩小范围',
+  moreUnlisted: '还有更多未列出，输入以缩小范围',
   none: '没有匹配的{name}',
   failed: '列表加载失败',
   typeId: '{name} ID',

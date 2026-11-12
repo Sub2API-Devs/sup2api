@@ -6,19 +6,20 @@
 // `change` follows every add and remove. `max` ends the adding, `disabled`
 // leaves the chips alone. The other props are the EntityPicker's; a caller who
 // may not look the kind up adds ids through its text box (Enter or leaving
-// it). Also a host component for plugins (HOST_COMPONENT_NAMES).
+// it), and anyone pastes a list of ids to add them all. Also a host component
+// for plugins (HOST_COMPONENT_NAMES).
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SChip } from '@sub2api/ui'
 import EntityPicker from './EntityPicker.vue'
-import { ENTITIES, type EntityKind } from './entity/entities'
+import { ENTITIES, isEntityId, type EntityKind } from './entity/entities'
 import { useEntityNames, type EntityItem } from './entity/lookup'
 
 const props = withDefaults(
   defineProps<{
     kind: EntityKind
     ids?: string[]
-    /** Of the picker that adds, also its accessible name; "Add <entity>" by default. */
+    /** Of the picker that adds, as the EntityPicker's; "Add <entity>" by default. */
     placeholder?: string
     size?: 'sm' | 'md'
     mine?: boolean
@@ -45,17 +46,31 @@ function set(ids: string[]) {
 function add(id: string) {
   if (id && !props.ids.includes(id)) set([...props.ids, id])
 }
+/**
+ * A pasted list (commas, blanks or line breaks between the ids) adds every id
+ * of it that can be picked and is not yet, up to `max`, as the tag input this
+ * picker replaces did. One word is left to the picker: it is searched for.
+ */
+function paste(e: ClipboardEvent) {
+  const words = [...new Set((e.clipboardData?.getData('text') ?? '').split(/[\s,，;；]+/).filter(Boolean))]
+  if (words.length < 2) return
+  e.preventDefault()
+  const pickable = (id: string) => !ENTITIES[props.kind].numeric || isEntityId(id) || props.extra.some((x) => String(x.id) === id)
+  const added = words.filter((id) => pickable(id) && !props.ids.includes(id)).slice(0, (props.max ?? Infinity) - props.ids.length)
+  if (added.length) set([...props.ids, ...added])
+}
 function remove(id: string) {
   set(props.ids.filter((picked) => picked !== id))
 }
 /**
  * Enter in the text box of a caller without the lookup adds the typed id: the
  * box takes its text on `change`, and a form around must not read the key as
- * "submit". The select answers its own Enter, and an empty box has nothing to add.
+ * "submit". The select answers its own Enter, an empty box has nothing to add,
+ * and an Enter that ends an input method's composition belongs to the typing.
  */
 function enter(e: KeyboardEvent) {
   const box = e.target as HTMLInputElement
-  if (box.getAttribute('role') === 'combobox' || !box.value.trim()) return
+  if (e.isComposing || box.getAttribute('role') === 'combobox' || !box.value.trim()) return
   e.preventDefault()
   box.dispatchEvent(new Event('change'))
 }
@@ -89,6 +104,7 @@ function enter(e: KeyboardEvent) {
         :exclude="ids"
         @update:id="add"
         @keydown.enter="enter"
+        @paste="paste"
       />
       <span v-else-if="!ids.length" class="text-sm text-fg-subtle">—</span>
     </div>

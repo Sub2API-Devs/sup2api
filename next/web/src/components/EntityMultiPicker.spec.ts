@@ -192,8 +192,8 @@ describe('EntityMultiPicker', () => {
     mocks.denied = ['group:read']
     const w = picker()
     const box = w.get('input')
-    const press = async () => {
-      const key = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true })
+    const press = async (init: KeyboardEventInit = {}) => {
+      const key = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true, ...init })
       box.element.dispatchEvent(key)
       await flushPromises()
       return key.defaultPrevented
@@ -203,10 +203,37 @@ describe('EntityMultiPicker', () => {
     ;(box.element as HTMLInputElement).value = '7'
     await box.trigger('input')
     expect(w.emitted('update:ids')).toBeUndefined()
+    // The Enter that ends an input method's composition is part of the typing.
+    expect(await press({ isComposing: true })).toBe(false)
+    expect(w.emitted('update:ids')).toBeUndefined()
     expect(await press()).toBe(true)
     expect(w.emitted('update:ids')).toEqual([[['7']]])
     expect((box.element as HTMLInputElement).value).toBe('')
     expect(await press()).toBe(false)
+  })
+
+  it('a pasted list adds its ids at once, without the ones picked, repeated or not ids, up to max; one word is left to the picker', async () => {
+    const w = picker({ ids: ['2'], max: 4 })
+    const paste = async (text: string) => {
+      const e = Object.assign(new Event('paste', { cancelable: true, bubbles: true }), { clipboardData: { getData: () => text } })
+      w.get('input').element.dispatchEvent(e)
+      await flushPromises()
+      return e.defaultPrevented
+    }
+    expect(await paste('7')).toBe(false)
+    expect(w.emitted('update:ids')).toBeUndefined()
+    expect(await paste('3, 2\n7 abc，007;7\r\n9 11')).toBe(true)
+    expect(w.emitted('update:ids')).toEqual([[['2', '3', '7', '9']]])
+    expect(w.emitted('change')).toEqual([[['2', '3', '7', '9']]])
+    expect(w.find('input').exists()).toBe(false)
+  })
+
+  it('a pasted list of model names is taken as it is', async () => {
+    const w = picker({ kind: 'model' })
+    const e = Object.assign(new Event('paste', { cancelable: true, bubbles: true }), { clipboardData: { getData: () => 'gpt-4o,claude-opus-5' } })
+    w.get('input').element.dispatchEvent(e)
+    await flushPromises()
+    expect(w.emitted('update:ids')).toEqual([[['gpt-4o', 'claude-opus-5']]])
   })
 
   it('leaves Enter to the select: it picks the highlighted row', async () => {
