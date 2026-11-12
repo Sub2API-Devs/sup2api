@@ -1,6 +1,9 @@
 package manifest
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // Core routes. The core owns these path prefixes and nothing else: /api/v1
 // (the console and admin API, including plugin routes under /api/v1/p), the
@@ -125,4 +128,50 @@ func prefixMatches(prefix, segs []string) bool {
 		}
 	}
 	return true
+}
+
+// routeRefRe matches a manifest route reference such as "GET /models" or
+// "/models" (method defaulting to the caller's). It is the Go mirror of
+// parseRouteRef() in web/src/components/plugin/declarative.ts, which is what
+// actually turns Page.Source and Page.Submit into requests; the two must agree
+// on what parses, or the host would accept a reference the console cannot
+// call.
+var routeRefRe = regexp.MustCompile(`^\s*(?i:(GET|POST|PUT|PATCH|DELETE)\s+)?(/\S*)\s*$`)
+
+// ParseRouteRef parses a manifest route reference ("GET /models", "/models")
+// into an upper-case method and a path. defaultMethod is used when the
+// reference names none: GET for Page.Source, POST for Page.Submit, matching
+// the console.
+func ParseRouteRef(ref, defaultMethod string) (method, path string, ok bool) {
+	m := routeRefRe.FindStringSubmatch(ref)
+	if m == nil {
+		return "", "", false
+	}
+	method = strings.ToUpper(m[1])
+	if method == "" {
+		method = strings.ToUpper(defaultMethod)
+	}
+	return method, m[2], true
+}
+
+// NormalizeRoutePath replaces gin parameter names so "/v1/:a" and "/v1/:b"
+// compare equal.
+func NormalizeRoutePath(p string) string {
+	segs := strings.Split(p, "/")
+	for i, s := range segs {
+		switch {
+		case strings.HasPrefix(s, ":"):
+			segs[i] = ":"
+		case strings.HasPrefix(s, "*"):
+			segs[i] = "*"
+		}
+	}
+	return strings.TrimSuffix(strings.Join(segs, "/"), "/")
+}
+
+// RouteSignature identifies a plugin route by method and NormalizeRoutePath,
+// so "/assets/:id" and "/assets/:asset" are the same route (gin binds by
+// position).
+func RouteSignature(method, path string) string {
+	return strings.ToUpper(method) + " " + NormalizeRoutePath(path)
 }

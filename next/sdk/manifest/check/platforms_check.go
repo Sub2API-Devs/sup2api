@@ -342,20 +342,8 @@ func checkEndpointPath(p string) string {
 	return ""
 }
 
-// NormalizeRoutePath replaces gin parameter names so "/v1/:a" and "/v1/:b"
-// compare equal.
-func NormalizeRoutePath(p string) string {
-	segs := strings.Split(p, "/")
-	for i, s := range segs {
-		switch {
-		case strings.HasPrefix(s, ":"):
-			segs[i] = ":"
-		case strings.HasPrefix(s, "*"):
-			segs[i] = "*"
-		}
-	}
-	return strings.TrimSuffix(strings.Join(segs, "/"), "/")
-}
+// NormalizeRoutePath is manifest.NormalizeRoutePath.
+func NormalizeRoutePath(p string) string { return manifest.NormalizeRoutePath(p) }
 
 // The scheduler.affinity extension (a plugin computing sticky-session
 // values) was removed; a manifest still naming it gets a precise error.

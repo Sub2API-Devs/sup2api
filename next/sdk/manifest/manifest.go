@@ -851,6 +851,10 @@ type Route struct {
 	Path       string `json:"path"`
 	Scope      string `json:"scope"`                // admin | user | public | webhook
 	Permission string `json:"permission,omitempty"` // plugin-local key; required for admin/user
+	// Accounts makes the core check, before forwarding, that the caller may
+	// act on the accounts the request names (admin/user routes only; see
+	// EffectiveRouteAccounts for the routes account actions post to).
+	Accounts *RouteAccounts `json:"accounts,omitempty"`
 }
 
 type UI struct {

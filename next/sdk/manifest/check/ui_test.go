@@ -672,6 +672,17 @@ func TestAccountActions(t *testing.T) {
 	if c := uiCodes(withAccountAction(">=0.1.256 <0.2.0", act)); len(c) > 0 {
 		t.Fatalf("a bare path means POST: %v", c)
 	}
+	// A route that declares accounts itself must still read what the console
+	// posts.
+	m = withAccountAction(">=0.1.256 <0.2.0", good)
+	m.Routes[2].Accounts = &manifest.RouteAccounts{Action: "update", From: []string{"body:account_id"}}
+	if c := uiCodes(m); c["ui.accountActions[0].route"] != "accounts_mismatch" {
+		t.Errorf("an action route whose accounts miss body:account_ids must be rejected: %v", c)
+	}
+	m.Routes[2].Accounts.From = append(m.Routes[2].Accounts.From, manifest.AccountActionIDs)
+	if c := uiCodes(m); len(c) > 0 {
+		t.Errorf("an action route reading body:account_ids is valid: %v", c)
+	}
 	// visibleFor takes its two values; empty means "editable".
 	for _, vf := range []string{"editable", "all", ""} {
 		act := good
