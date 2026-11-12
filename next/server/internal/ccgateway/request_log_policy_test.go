@@ -287,25 +287,30 @@ func TestRequestLogCacheInvalidation(t *testing.T) {
 	require.NotEqual(t, gen, s.cache.gen)
 }
 
-// GET is open to readers of the account, PUT to whoever may update it; an
-// owner-level caller only reaches accounts it created.
+// GET is open to readers of the account (an own-level caller only reaches
+// accounts it created); PUT takes account:update or settings:manage, never
+// the own key.
 func TestRequestLogsPermissions(t *testing.T) {
 	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
 	owner := f.user("owner@test")
 	outsider := f.user("outsider@test")
 	reader := f.user("reader@test")
+	updater := f.user("updater@test")
 	f.auth.keys[owner] = []string{"account:own:read", "account:own:update"}
 	f.auth.keys[outsider] = []string{"account:own:read", "account:own:update"}
 	f.auth.keys[reader] = []string{"settings:read"}
+	f.auth.keys[updater] = []string{"account:update"}
 	id := f.account(false)
 	_, err := f.db.Pool.Exec(context.Background(), "UPDATE accounts SET created_by=$1 WHERE id=$2", owner, id)
 	require.NoError(t, err)
 	code, out := f.callAs(owner, "PUT", id, "request-logs", `{"level":"off"}`)
+	require.Equal(t, 403, code, out)
+	code, out = f.callAs(owner, "GET", id, "request-logs", "")
+	require.Equal(t, 200, code, out)
+	code, out = f.callAs(updater, "PUT", id, "request-logs", `{"level":"off"}`)
 	require.Equal(t, 200, code, out)
 	require.Equal(t, "off", data(out)["effective"])
 	require.Nil(t, data(out)["worker"], "the Worker answered 404")
-	code, _ = f.callAs(outsider, "PUT", id, "request-logs", `{"level":"summary"}`)
-	require.Equal(t, 404, code)
 	code, _ = f.callAs(outsider, "GET", id, "request-logs", "")
 	require.Equal(t, 404, code)
 	code, _ = f.callAs(reader, "PUT", id, "request-logs", `{"level":"summary"}`)
@@ -315,5 +320,5 @@ func TestRequestLogsPermissions(t *testing.T) {
 	require.Equal(t, map[string]any{"level": "off", "full_until": nil}, data(out)["setting"])
 	var by int64
 	require.NoError(t, f.db.Pool.QueryRow(context.Background(), `SELECT updated_by FROM ccgateway_account_request_logs WHERE account_id=$1`, id).Scan(&by))
-	require.Equal(t, owner, by)
+	require.Equal(t, updater, by)
 }

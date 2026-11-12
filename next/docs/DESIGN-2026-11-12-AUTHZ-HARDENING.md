@@ -215,3 +215,9 @@
 - 改动：`PATCH /proxies/:id` 在 own 范围、且连接字段（protocol、host、port、username、password）与现值不同时，统计该代理上不是调用者创建的未删除账号（`proxy.inUseByOthers`，与修改在同一事务、代理行已加锁），大于 0 返回 409 `proxy_in_use`（`details.account_count`）。删除的占用计数改用同一函数（统计全部账号，行为不变）。CONTRACTS §21.2 同步。无迁移。
 - 影响对象：供应商（只持 `proxy:own:manage`）的代理被管理员挂到别人的账号上之后，供应商改地址、用户名、密码由成功变为 409，需由持 `proxy:manage` 的人修改，或先把那些账号换到别的代理；改名称、启停不受影响（停用仍会让这些账号不可用，未改）。`proxy:manage` 不受影响。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T36 W1-F5：ccgateway 请求日志设置不再接受 own 级（产品性收紧，单独提交）
+
+- 改动：`PUT /system/ccgateway/accounts/:id/request-logs` 只接受 `settings:manage`、`account:update`，去掉 `account:own:update`；控制台运行环境页的日志级别、开关、清除按钮按同一口径判断（`canLogs`）。GET 不变。CONTRACTS §65 同步。无迁移。
+- 影响对象：只有 `account:own:update` 的用户（供应商）不能再修改自己账号的请求日志级别、开启完整记录或清除日志，接口由 200 变为 403，控制台里对应控件置灰或隐藏；仍可查看当前设置。已保存的账号级别设置保持生效。admin、operator 不受影响。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。

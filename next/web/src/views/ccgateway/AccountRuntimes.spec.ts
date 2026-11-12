@@ -10,7 +10,8 @@ const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof
 const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn(), confirm: vi.fn(), manage: true, granted: null as string[] | null }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), confirm: (...a: unknown[]) => mocks.confirm(...a), toast: vi.fn() }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => mocks.granted ? mocks.granted.includes(key) : key === 'settings:manage' ? mocks.manage : key === 'account:read', me: { id: 1 } }) }))
+const holds = (key: string) => mocks.granted ? mocks.granted.includes(key) : key === 'settings:manage' ? mocks.manage : key === 'account:read'
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string | string[]) => [key].flat().some(holds), me: { id: 1 } }) }))
 
 describe('account runtime debug log switches', () => {
   beforeEach(() => {
@@ -627,6 +628,17 @@ describe('account runtime actions of an own-level caller', () => {
     expect([shown('ccgateway-runtime-start-25'), shown('ccgateway-runtime-refresh-25')]).toEqual([true, true])
     expect([shown('ccgateway-runtime-start-26'), shown('ccgateway-runtime-refresh-26')]).toEqual([false, false])
     expect(w.findAll('[data-testid="ccgateway-runtime-edit"]')).toHaveLength(2)
+    w.unmount()
+  })
+
+  it('cannot change the request logs, not even of its own rows', async () => {
+    const w = mount(AccountRuntimes, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    await flushPromises()
+    const toggle = w.get('[data-testid="request-logs-25"]')
+    expect(toggle.attributes('disabled') ?? toggle.attributes('aria-disabled')).toBeDefined()
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(mocks.put).not.toHaveBeenCalled()
     w.unmount()
   })
 })

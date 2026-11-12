@@ -36,7 +36,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 			return
 		}
 		s.accountManage(c)
-	}, "settings:manage", "account:update", "account:own:update")
+		// Request log settings are not an own-level action: no own key.
+	}, "settings:manage", "account:update")
 	// Reading the request logs (REQUEST-LOG-VIEWER-DESIGN.md §6).
 	s.registerRequestLogViewer(r)
 	// Draft runtimes of accounts being created (CONTRACTS §49.9).
