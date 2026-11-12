@@ -117,10 +117,10 @@
 | 方法 路径 | 权限 |
 |---|---|
 | GET `/users`（`?q=&status=&role=&segment=`） | `user:read`；`segment` 是用户组 id 或 `personal`（§97.6） |
-| POST `/users` `{email, display_name, password, role_keys[], segment_id?}` | `user:create`；授予的 role_keys 必须是操作者持有权限的子集；指定非默认角色另需 `role:assign`；带 `segment_id`（命名用户组）另需 `segment:manage`，不带时进默认用户组（§97.6） |
+| POST `/users` `{email, display_name, password, role_keys[], segment_id?}` | `user:create`；授予的 role_keys 按 PUT `/users/:id/roles` 的分配规则检查（默认角色 `user` 免可分配清单，仍须是操作者持有权限的子集）；指定非默认角色另需 `role:assign`；带 `segment_id`（命名用户组）另需 `segment:manage`，不带时进默认用户组（§97.6） |
 | GET/PATCH `/users/:id` | `user:read` / `user:update`；更新他人时目标用户权限集不得超出操作者；修改他人密码需 `user:password:reset`🔐；修改影响认证的字段（密码、status、禁用）会递增 `token_version` 使旧 token 失效 |
 | DELETE `/users/:id` | `user:delete`；目标用户权限集不得超出操作者 |
-| PUT `/users/:id/roles` `{role_keys[]}` | `role:assign`；新增的 role_keys 所含权限必须是操作者持有权限的子集（给自己分配也一样，否则 403 `details.missing`）；只有超级管理员能授予/撤销 `super_admin` |
+| PUT `/users/:id/roles` `{role_keys[]}` | `role:assign`；新增和撤销的角色都必须在操作者的可分配清单内（否则 403 `details.role`）；新增角色所含权限与可分配角色必须在操作者之内（给自己分配也一样，否则 403 `details.missing`/`missing_assignable`）；`super_admin` 任何人都不能经此授予或撤销（403，只能移交）；有变化时记一条 `user.roles` 审计 `{added, removed}`（§43.6） |
 | GET `/segments`（`?q=&kind=named\|personal`），GET `/segments/:id` | `segment:read`；用户组，对象与各接口的细节见 §97.6 |
 | POST `/segments` `{name, description, discount}`，PATCH/DELETE `/segments/:id` | `segment:manage`；默认用户组和个人专属不能用 DELETE 删除（409） |
 | GET `/segments/:id/members`（`?q=`） | `segment:read` 且 `user:read`；行同 GET `/users` |
@@ -687,7 +687,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/roles/:id` | `role:read` | | 不存在 404 |
 | POST `/roles` | `role:define` | `{key, name, description?, permission_keys?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；已移除的权限忽略；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`） |
 | PATCH `/roles/:id` | `role:define` | `{name?, description?}` | 内置角色也可改名称和描述；给了 `name` 时 `name.en` 不能为空 |
-| DELETE `/roles/:id` | `role:define` | | 内置角色 409；用户的该角色随之删除 |
+| DELETE `/roles/:id` | `role:define` | | 内置角色 409；用户的该角色随之删除，所以角色仍有持有者时它须在操作者的可分配清单内（否则 403 `details.role`） |
 | PUT `/roles/:id/permissions` | `role:define` | `{permission_keys}` | 整体替换；操作者须持有**新增**的权限（否则 403 `details.missing`）；已移除（`status=removed`）的权限忽略，角色上已有的授权行保留（原样保存不报错）；完全不存在的 key 仍按未知报错 |
 | POST `/roles/:id/reset` | `role:define` | | 内置角色恢复默认：名称、描述和核心权限（§4）；角色上的插件权限不动；自定义角色 409；操作者须持有全部默认权限（同上，否则 403） |
 
@@ -2722,6 +2722,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 两类检查都比较超管标志（`core.PermissionSet.Missing`）：缺超管标志时 403 带 `details.superuser = true`。访问密钥收窄后的权限集永远不是超管，所以超管的访问密钥不能授予 `super_admin`（2026-11-12 修正 H1：之前授予检查只比权限 key，超管角色不含 key，带 `role:manage` 的超管密钥可以授予 `super_admin`）。
 - 两类检查也比较可分配角色（2026-11-12，决策 4、5）：角色可以带一份可分配角色清单（`role_assignable_roles`，永不含超管角色）和“以及全部自定义角色”标志（`roles.assign_custom`）。新增角色或目标用户的角色能分配的角色必须在操作者的可分配范围内，否则 403，`details.missing_assignable` 列出缺的角色、`details.missing_assign_custom = true` 表示缺“全部自定义角色”，与 `details.missing` 分开。因此能分配 admin 的委派者不会被 admin 改动。访问密钥收窄后没有可分配角色。内置默认清单：admin = operator、user 与全部自定义角色；operator = user。
 - 角色写入口（`editableRole`，2026-11-12 修正 M5）：改名称描述、改权限、重置、删除角色前，先在同一事务里锁住角色行；超级管理员角色对任何人（含超管和系统）都 409；其余角色当前授予的权限（授予视角，不含已移除的）与可分配角色必须在操作者之内，否则 403 `you cannot change a role with permissions you don't have`。此前持 `role:manage` 的人可以先把权限比自己大的角色削到自己以下，再对持有该角色的用户改密码、禁用，接管账号。改权限因此只需检查新增部分（现有部分已在操作者之内）；重置删掉的权限同样已在操作者之内（C-L2）。
+- 分配角色（PUT `/users/:id/roles`、POST `/users`，2026-11-12，决策 1、4）：只比较新增与撤销的角色，无变化直接成功。`super_admin` 任何人（含超管本人、超管的访问密钥）都不能授予或撤销，403 `the super admin role cannot be assigned or revoked; transfer it instead`；系统（actor 0）只能授予初始超管（引导），不能撤销。其余每个新增或撤销的角色都必须在操作者的可分配清单内（超管可分配全部），否则 403 `details.role`；唯一例外是给当前没有任何角色的用户授予默认角色 `user`，所以只有 `user:create` 的人仍能建默认用户。然后检查操作者能作用于目标（给自己分配除外），再检查新增角色所含权限与可分配角色都在操作者之内（`Missing`）。访问密钥没有可分配角色，不能分配任何角色。
 - 所有授权写操作（角色写入、POST `/roles`、PUT `/users/:id/roles`）的授权检查都放在同一事务的 `Bump` 之后、用该事务读库：`Bump` 串行化了授权变更，检查看到的是最新且不会被并发改动的状态，不读本节点可能落后的缓存。
 - 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制（超级管理员角色冻结除外）。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
 - 插件安装、升级的授权确认（consent）：只有插件声明的权限里**有核心还没有的新权限**时，才需要 `role:define` 并对这些新权限做 `CanGrant`。升级不新增权限时只需要插件管理权限。2026-10-05 修正：之前每次安装、升级都要求 `role:manage`。

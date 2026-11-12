@@ -36,8 +36,6 @@ var (
 	errNotBuiltinRole      = core.ErrConflict.WithMessage("only built-in roles can be reset")
 	errSuperuserRoleFrozen = core.ErrConflict.WithMessage("the super admin role cannot be changed")
 	errLastSuperAdmin      = core.ErrConflict.WithMessage("the last super admin cannot be removed")
-	errOwnSuperAdmin       = core.ErrConflict.WithMessage("you cannot revoke your own super admin role")
-	errSuperuserGrantor    = core.ErrPermissionDenied.WithMessage("only a super admin can grant or revoke the super admin role")
 )
 
 const roleSelect = `
@@ -208,7 +206,8 @@ func nilIfEmpty(t core.LocalizedText) any {
 }
 
 // DeleteRole deletes a custom role actorID may edit (editableRole); its
-// assignments cascade.
+// assignments cascade, so while it has holders deleting it revokes it and
+// the role must be on the actor's assignable list.
 func (s *Service) DeleteRole(ctx context.Context, actorID, id int64) error {
 	return s.mutate(ctx, func(tx pgx.Tx) error {
 		r, err := s.editableRole(ctx, tx, actorID, id)
@@ -217,6 +216,15 @@ func (s *Service) DeleteRole(ctx context.Context, actorID, id int64) error {
 		}
 		if r.Builtin {
 			return errBuiltinRole
+		}
+		if r.UserCount > 0 && actorID != 0 {
+			actor, err := s.grantSet(ctx, tx, actorID)
+			if err != nil {
+				return err
+			}
+			if !actor.CanAssign(r.Key) {
+				return notAssignable(ctx, r.Key)
+			}
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM roles WHERE id = $1`, id); err != nil {
 			return err
@@ -357,127 +365,144 @@ WHERE rp.role_id = $1 AND p.id = rp.permission_id AND p.status <> 'removed' AND 
 
 // ------------------------------------------------------------ user roles (used by iam)
 
-// UserRoleKeys returns the role keys of a user, sorted.
-func (s *Service) UserRoleKeys(ctx context.Context, q store.Querier, userID int64) ([]string, error) {
-	var keys []string
-	err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(r.key ORDER BY r.key), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1`, userID).Scan(&keys)
-	return keys, err
-}
-
 // SetUserRoles replaces a user's roles inside tx, bumping the authz version
 // (call Committed with the returned version after commit). actorID is the
-// acting user (0 = system, which bypasses the actor checks). Rules: only a
-// superuser may add or remove a superuser role; nobody may revoke their own
-// superuser role; the last active superuser cannot lose it; the actor must
-// hold every permission carried by the roles being added (CanGrant,
-// CONTRACTS §43.6), the target user included when it is the actor itself.
+// acting user (0 = system); checkAssignment judges what the change adds and
+// removes, and a change is audited as user.roles.
 func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID int64, roleKeys []string) (int64, error) {
 	v, err := s.Bump(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
-	roleKeys = dedupe(roleKeys)
-	rows, err := tx.Query(ctx, `SELECT id, key, superuser FROM roles WHERE key = ANY($1)`, roleKeys)
+	want, err := resolveRoles(ctx, tx, dedupe(roleKeys))
 	if err != nil {
 		return 0, err
 	}
-	type roleRow struct {
-		id        int64
-		superuser bool
-	}
-	found := map[string]roleRow{}
-	for rows.Next() {
-		var r roleRow
-		var k string
-		if err := rows.Scan(&r.id, &k, &r.superuser); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		found[k] = r
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	cur, err := queryRoles(ctx, tx, `SELECT r.id, r.key, r.superuser FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1 ORDER BY r.key`, userID)
+	if err != nil {
 		return 0, err
 	}
-	var unknown []string
-	ids := []int64{}
-	newSuper := false
-	for _, k := range roleKeys {
-		r, ok := found[k]
-		if !ok {
-			unknown = append(unknown, k)
-			continue
-		}
-		ids = append(ids, r.id)
-		newSuper = newSuper || r.superuser
+	added, removed := diffRoles(want, cur), diffRoles(cur, want)
+	if len(added)+len(removed) == 0 {
+		return v, nil
 	}
-	if len(unknown) > 0 {
-		return 0, core.InvalidFields(core.FieldError{Field: "role_keys", Code: "unknown", Message: "unknown roles: " + strings.Join(unknown, ", ")})
+	if err := s.checkAssignment(ctx, tx, actorID, userID, len(cur) == 0, added, removed); err != nil {
+		return 0, err
 	}
+	if err := writeUserRoles(ctx, tx, userID, want); err != nil {
+		return 0, err
+	}
+	return v, s.audit(ctx, tx, actorID, "user.roles", "user", userID, map[string]any{"added": roleKeysOf(added), "removed": roleKeysOf(removed)})
+}
 
-	// SEC-H2: Actor must be able to act on the target user (what the target's
-	// roles grant must not exceed the actor's; a disabled target is measured
-	// by its roles too, see CanActOnUsers). Checks read through tx (C-L4).
-	if err := s.canActOnUsers(ctx, tx, actorID, userID); err != nil {
-		return 0, err
+// checkAssignment fails unless actorID may add and remove these roles on
+// userID: the super admin role is never assigned or revoked here (it is
+// transferred); every role must be on the actor's assignable list, except
+// the default role for a user who has none yet (roleless); the actor must
+// be able to act on the user; and the added roles, with what they may assign
+// in turn, must be within the actor's grantSet. The system (actor 0) may
+// grant the initial super admin, never revoke one.
+func (s *Service) checkAssignment(ctx context.Context, q store.Querier, actorID, userID int64, roleless bool, added, removed []roleRef) error {
+	if actorID == 0 {
+		if slices.ContainsFunc(removed, func(r roleRef) bool { return r.superuser }) {
+			return superAdminTransferOnly(ctx)
+		}
+		return nil
 	}
-
-	// Current superuser role ids of the user.
-	var curSuper []int64
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(r.id), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = $1 AND r.superuser`, userID).Scan(&curSuper); err != nil {
-		return 0, err
+	actor, err := s.grantSet(ctx, q, actorID)
+	if err != nil {
+		return err
 	}
-	superChanged := false
-	for _, id := range curSuper {
-		if !slices.Contains(ids, id) {
-			superChanged = true
+	for _, r := range slices.Concat(added, removed) {
+		if err := assignable(ctx, actor, r, roleless); err != nil {
+			return err
 		}
 	}
-	for _, k := range roleKeys {
-		if r := found[k]; r.superuser && !slices.Contains(curSuper, r.id) {
-			superChanged = true
-		}
-	}
-	if superChanged {
-		// An access key is never a superuser (H1).
-		if err := s.covers(ctx, tx, actorID, core.PermissionSet{Superuser: true}, errSuperuserGrantor); err != nil {
-			return 0, err
-		}
-	}
-	if len(curSuper) > 0 && !newSuper {
-		if actorID == userID {
-			return 0, errOwnSuperAdmin
-		}
-		if err := s.ensureOtherSuperuser(ctx, tx, userID); err != nil {
-			return 0, err
-		}
-	}
-	// Adding a role grants its permissions: the actor must hold all of them.
-	// Roles the user already has are not a grant, so only the added ones are
-	// checked; that keeps removing or re-saving roles possible for an actor
-	// who could not grant the user's existing set.
-	if actorID != 0 {
-		cur, err := s.UserRoleKeys(ctx, tx, userID)
+	if actorID != userID {
+		target, err := s.usersRoleSet(ctx, q, []int64{userID})
 		if err != nil {
-			return 0, err
+			return err
 		}
-		if added := addedKeys(roleKeys, cur); len(added) > 0 {
-			want, err := s.RolesPermissions(ctx, tx, added)
-			if err != nil {
-				return 0, err
-			}
-			if err := s.covers(ctx, tx, actorID, want, cannotGrant(ctx)); err != nil {
-				return 0, err
-			}
+		if err := within(actor, target, cannotActOn(ctx, target)); err != nil {
+			return err
 		}
+	}
+	grant, err := s.RolesPermissions(ctx, q, roleKeysOf(added))
+	if err != nil {
+		return err
+	}
+	return within(actor, grant, cannotGrant(ctx))
+}
+
+// assignable fails unless actor may assign or revoke r (see checkAssignment).
+func assignable(ctx context.Context, actor core.PermissionSet, r roleRef, roleless bool) error {
+	switch {
+	case r.superuser:
+		return superAdminTransferOnly(ctx)
+	case actor.CanAssign(r.key), roleless && r.key == RoleUser:
+		return nil
+	}
+	return notAssignable(ctx, r.key)
+}
+
+// roleRef is a role as a user's assignment holds it.
+type roleRef struct {
+	id        int64
+	key       string
+	superuser bool
+}
+
+// queryRoles runs sql, which selects id, key and superuser of roles.
+func queryRoles(ctx context.Context, q store.Querier, sql string, args ...any) ([]roleRef, error) {
+	rows, err := q.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (roleRef, error) {
+		var r roleRef
+		err := row.Scan(&r.id, &r.key, &r.superuser)
+		return r, err
+	})
+}
+
+// resolveRoles returns the roles of keys, failing on unknown ones.
+func resolveRoles(ctx context.Context, q store.Querier, keys []string) ([]roleRef, error) {
+	roles, err := queryRoles(ctx, q, `SELECT id, key, superuser FROM roles WHERE key = ANY($1) ORDER BY key`, keys)
+	if err != nil {
+		return nil, err
+	}
+	if unknown := addedKeys(keys, roleKeysOf(roles)); len(unknown) > 0 {
+		return nil, core.InvalidFields(core.FieldError{Field: "role_keys", Code: "unknown", Message: "unknown roles: " + strings.Join(unknown, ", ")})
+	}
+	return roles, nil
+}
+
+// diffRoles returns the roles in a that are not in b.
+func diffRoles(a, b []roleRef) []roleRef {
+	return slices.DeleteFunc(slices.Clone(a), func(r roleRef) bool {
+		return slices.ContainsFunc(b, func(o roleRef) bool { return o.id == r.id })
+	})
+}
+
+func roleKeysOf(roles []roleRef) []string {
+	keys := make([]string, len(roles))
+	for i, r := range roles {
+		keys[i] = r.key
+	}
+	return keys
+}
+
+// writeUserRoles makes roles the user's roles.
+func writeUserRoles(ctx context.Context, tx pgx.Tx, userID int64, roles []roleRef) error {
+	ids := make([]int64, len(roles))
+	for i, r := range roles {
+		ids[i] = r.id
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1 AND role_id <> ALL($2)`, userID, ids); err != nil {
-		return 0, err
+		return err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO user_roles (user_id, role_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, userID, ids); err != nil {
-		return 0, err
-	}
-	return v, nil
+	_, err := tx.Exec(ctx, `INSERT INTO user_roles (user_id, role_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, userID, ids)
+	return err
 }
 
 // EnsureNotLastSuperAdmin fails with conflict when userID is a superuser and

@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"testing"
@@ -9,6 +10,16 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
+
+// letAssign puts roles on roleKey's assignable list, as the database holds
+// it, without any check.
+func letAssign(t *testing.T, s *Service, roleKey string, roles ...string) {
+	t.Helper()
+	if _, err := s.db.Pool.Exec(context.Background(), `INSERT INTO role_assignable_roles (role_id, assignable_role_id)
+		SELECT r.id, a.id FROM roles r, roles a WHERE r.key = $1 AND a.key = ANY($2)`, roleKey, roles); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // assignableOf is the sorted Assignable of roleKeys in the grant view and
 // their assign-custom flag.
@@ -125,5 +136,133 @@ SELECT r.id, a.id FROM roles r JOIN roles a ON (r.key, a.key) IN (('admin_maker'
 	}
 	if err := s.CanActOnUsers(ctx, root, adminMaker, userMaker); err != nil {
 		t.Fatalf("superuser: %v", err)
+	}
+}
+
+// detail is the details[key] of a core error.
+func detail(err error, key string) any {
+	if e := core.AsError(err); e != nil {
+		return e.Details[key]
+	}
+	return nil
+}
+
+// Assigning a role, or revoking one, needs it on the actor's assignable
+// list and everything it carries within the actor's own (decision 4).
+func TestAssignmentRules(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
+	operator := addUser(t, s, "op@x.com", RoleOperator)
+	alice := addUser(t, s, "alice@x.com", RoleUser)
+	bob := addUser(t, s, "bob@x.com")
+
+	// The operator assigns user, not admin, and revokes nothing else either.
+	if err := setRoles(s, operator, bob, RoleUser); err != nil {
+		t.Fatalf("operator assigns user: %v", err)
+	}
+	if err := setRoles(s, operator, bob, RoleUser, RoleAdmin); !isCode(err, "permission_denied") || detail(err, "role") != RoleAdmin {
+		t.Fatalf("operator assigns admin: %v", err)
+	}
+	if err := setRoles(s, operator, admin, RoleUser); !isCode(err, "permission_denied") || detail(err, "role") != RoleAdmin {
+		t.Fatalf("operator revokes admin: %v", err)
+	}
+
+	// On the list but beyond the operator's permissions.
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "installer", Name: lt("Installer", "安装"),
+		PermissionKeys: []string{"plugin:install"}}); err != nil {
+		t.Fatal(err)
+	}
+	letAssign(t, s, RoleOperator, "installer")
+	if err := setRoles(s, operator, alice, RoleUser, "installer"); !isCode(err, "permission_denied") ||
+		!slices.Equal(detail(err, "missing").([]string), []string{"plugin:install"}) {
+		t.Fatalf("operator assigns installer: %v", err)
+	}
+
+	// A custom role that may assign admin is beyond the admin, who may
+	// assign every custom role but not admin.
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name) VALUES ('admin_maker', '{"en":"x"}')`); err != nil {
+		t.Fatal(err)
+	}
+	letAssign(t, s, "admin_maker", RoleAdmin)
+	if err := setRoles(s, admin, alice, RoleUser, "admin_maker"); !isCode(err, "permission_denied") ||
+		!slices.Equal(detail(err, "missing_assignable").([]string), []string{RoleAdmin}) {
+		t.Fatalf("admin assigns admin_maker: %v", err)
+	}
+
+	// An access key assigns nothing, role:assign or not.
+	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: admin, Permissions: []string{"role:assign", "user:read"}})
+	if err := setRolesAs(keyed, s, admin, alice, RoleUser, RoleOperator); !isCode(err, "permission_denied") {
+		t.Fatalf("access key assigns operator: %v", err)
+	}
+
+	// The default role for a user without any needs no list, only the
+	// permissions it carries: user:create plus those creates the user.
+	user, err := s.RolesPermissions(ctx, db.Pool, []string{RoleUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "creator", Name: lt("Creator", "创建"),
+		PermissionKeys: append(slices.Collect(maps.Keys(user.Keys)), "user:create")}); err != nil {
+		t.Fatal(err)
+	}
+	creator := addUser(t, s, "creator@x.com", "creator")
+	carol := addUser(t, s, "carol@x.com")
+	if err := setRoles(s, creator, carol, RoleUser); err != nil {
+		t.Fatalf("creator assigns the default role: %v", err)
+	}
+	if err := setRoles(s, creator, carol); !isCode(err, "permission_denied") {
+		t.Fatalf("creator revokes the default role: %v", err)
+	}
+
+	// A change is audited once, with what it added and removed; a no-op is not.
+	if err := setRoles(s, admin, alice, RoleOperator); err != nil {
+		t.Fatal(err)
+	}
+	if err := setRoles(s, admin, alice, RoleOperator); err != nil {
+		t.Fatal(err)
+	}
+	var details []string
+	if err := db.Pool.QueryRow(ctx, `SELECT COALESCE(array_agg(detail::text), '{}') FROM audit_logs
+WHERE action = 'user.roles' AND user_id = $1 AND target_type = 'user' AND target_id = $2`, admin, fmt.Sprint(alice)).Scan(&details); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(details, []string{`{"added": ["operator"], "removed": ["user"]}`}) {
+		t.Fatalf("audit = %v", details)
+	}
+}
+
+// Deleting a role with holders revokes it from them, so the actor must be
+// able to assign it; a role without holders only needs editableRole.
+func TestDeleteRoleRevokes(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	for _, key := range []string{"held", "unheld"} {
+		if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt("x", "x"), PermissionKeys: []string{"user:read"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "definer", Name: lt("Definer", "定义"),
+		PermissionKeys: []string{"role:define", "user:read"}}); err != nil {
+		t.Fatal(err)
+	}
+	definer := addUser(t, s, "definer@x.com", "definer")
+	addUser(t, s, "holder@x.com", "held")
+
+	if err := s.DeleteRole(ctx, definer, roleID(t, s, "held")); !isCode(err, "permission_denied") || detail(err, "role") != "held" {
+		t.Fatalf("definer deletes a held role: %v", err)
+	}
+	if err := s.DeleteRole(ctx, definer, roleID(t, s, "unheld")); err != nil {
+		t.Fatalf("definer deletes an unheld role: %v", err)
+	}
+	letAssign(t, s, "definer", "held")
+	if err := s.DeleteRole(ctx, definer, roleID(t, s, "held")); err != nil {
+		t.Fatalf("definer deletes a role it may assign: %v", err)
 	}
 }

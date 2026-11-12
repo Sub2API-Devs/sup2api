@@ -928,8 +928,8 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 }
 
 // H1: a superuser's access key cannot hand out the super admin role, not even
-// one stored with role:assign (sessionOnly, dropped at verification); the
-// superuser's own session still can.
+// one stored with role:assign (sessionOnly, dropped at verification); nor can
+// the superuser's own session, since the role only changes hands by transfer.
 func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
@@ -954,10 +954,10 @@ func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	if code, out := k.call(key.Key, "POST", "/users", create("key-super@example.com")); code != 403 {
 		t.Fatalf("key POST users: %d %v", code, out)
 	}
-	if code, out := k.call(login.AccessToken, "PUT", path, grant); code != 200 {
+	if code, out := k.call(login.AccessToken, "PUT", path, grant); code != 403 {
 		t.Fatalf("session PUT roles: %d %v", code, out)
 	}
-	if code, out := k.call(login.AccessToken, "POST", "/users", create("jwt-super@example.com")); code != 201 {
+	if code, out := k.call(login.AccessToken, "POST", "/users", create("jwt-super@example.com")); code != 403 {
 		t.Fatalf("session POST users: %d %v", code, out)
 	}
 }
@@ -979,6 +979,10 @@ func TestRoleRoutesSplitDefineAndAssign(t *testing.T) {
 	k.grantRole(t, k.userID, "definer", "role:define", "user:create")
 	k.grantRole(t, newUser("assigner@example.com"), "assigner", "role:assign", "user:create")
 	target := newUser("target@example.com")
+	// The assigner may assign every custom role; the definer none.
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE roles SET assign_custom = true WHERE key = 'assigner'`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := k.s.db.Pool.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1`, target); err != nil {
 		t.Fatal(err)
 	}

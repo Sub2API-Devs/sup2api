@@ -76,6 +76,12 @@ func (s *Service) covers(ctx context.Context, q store.Querier, actorID int64, wa
 	if err != nil {
 		return err
 	}
+	return within(set, want, deny)
+}
+
+// within fails with deny, detailed by what is missing, unless set holds all
+// of want.
+func within(set, want core.PermissionSet, deny *core.Error) error {
 	if m := set.Missing(want); !m.Empty() {
 		return deny.WithDetails(m.Details())
 	}
@@ -87,6 +93,22 @@ func cannotGrant(ctx context.Context) *core.Error {
 	return core.ErrPermissionDenied.WithMessage(t(ctx,
 		"you cannot grant permissions you don't have",
 		"你不能授予自己没有的权限"))
+}
+
+// notAssignable is the denial of assigning or revoking a role that is not on
+// the actor's assignable list.
+func notAssignable(ctx context.Context, roleKey string) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"you cannot assign or revoke this role",
+		"你不能分配或撤销这个角色")).WithDetails(map[string]any{"role": roleKey})
+}
+
+// superAdminTransferOnly is the denial of assigning or revoking the super
+// admin role, which only changes hands by transfer.
+func superAdminTransferOnly(ctx context.Context) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"the super admin role cannot be assigned or revoked; transfer it instead",
+		"超级管理员角色不能分配或撤销，只能移交"))
 }
 
 // cannotActOn is the denial of an action on a target holding more than the

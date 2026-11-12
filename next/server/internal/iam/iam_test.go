@@ -296,7 +296,7 @@ func TestUserLifecycle(t *testing.T) {
 	if _, err := s.SetUserRoles(ctx, admin.ID, admin.ID, []string{authz.RoleSuperAdmin}); !isCode(err, "permission_denied") {
 		t.Fatalf("admin self-promotion: %v", err)
 	}
-	if _, err := s.SetUserRoles(ctx, root, root, []string{authz.RoleAdmin}); !isCode(err, "conflict") {
+	if _, err := s.SetUserRoles(ctx, root, root, []string{authz.RoleAdmin}); !isCode(err, "permission_denied") {
 		t.Fatalf("revoke own super admin: %v", err)
 	}
 	if err := s.DeleteUser(ctx, 0, root); !isCode(err, "conflict") {

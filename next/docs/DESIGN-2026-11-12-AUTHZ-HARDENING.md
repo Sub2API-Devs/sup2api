@@ -141,3 +141,13 @@
 - 改动：目录把 `user:password:reset`、`role:define`、`role:assign`、`settings:manage` 标为 sessionOnly，经 T08 的 `authz.KeyAllowed` 自动生效：访问密钥的可选列表不再显示（超管也一样），创建或修改密钥时选它们 403（`details.missing`），已存密钥在校验时丢掉它们并在 `GET /me/access-keys` 的 `lost` 里列出；以它们注册的路由（`settings:manage` 下 30 条 `Perm`、`/roles` 写操作、`PUT /users/:id/roles`、带非默认角色的 `POST /users`、改他人密码等）对访问密钥一律 403，`PermAny` 组合路由仍按其他 key 放行。`sensitive` 口径定为凭证、资金、信任根、代码执行、身份与授权，补标 `account:own:delete`、`account:relay`、`group:manage`、`proxy:manage`、`price:manage`、`plugin:manage`、`plugin:grant:high`、`settings:manage`；它只用于展示，与访问密钥无关。不改路由、无迁移。
 - 影响对象：存量带上述 4 个权限的访问密钥失去这些能力（其余权限照常），调用相应接口改为 403；用访问密钥改设置、管理角色、分配角色、重置他人密码的脚本需改用登录会话。`remote-fingerprint` 拨号任意 host:port 不接 netguard（wontfix，CONTRACTS §80），它属于 `settings:manage`，泄露的密钥不再能利用。角色编辑器里 8 个补标的权限多显示敏感标记；SyncCore 首次运行时更新 `permissions.sensitive`。
 - 回滚：revert 这个提交即可，无迁移。回滚后存量密钥里仍保存着这些权限，会立即恢复生效；SyncCore 把 `sensitive` 改回原值。
+
+## T14 设计 3.3、H1 第二道防线、决策 1、4：分配角色走可分配清单，super_admin 只能移交
+
+- 改动：`authz.SetUserRoles` 改为只判断差集（新增、撤销的角色）：无变化直接成功、不写库；`super_admin` 任何人（含超管本人、超管的访问密钥）都不能经分配接口授予或撤销（403 `permission_denied`，提示走移交），系统（actor 0）只能授予初始超管（引导），不能撤销；每个新增或撤销的角色必须在操作者的可分配清单内（超管全部可分配），否则 403 `details.role`；唯一例外是给没有任何角色的用户授予默认角色 `user`；其后检查能作用于目标（给自己分配除外），以及新增角色的权限与可分配角色都在操作者之内（`details.missing` / `missing_assignable`）。有变化时写一条 `user.roles` 审计 `{added, removed}`。删除仍有持有者的自定义角色时，该角色须在操作者的可分配清单内（删除等于撤销）。删除 `errOwnSuperAdmin`、`errSuperuserGrantor`、`superChanged` 分支与未再使用的 `UserRoleKeys`；`EnsureNotLastSuperAdmin` 保留（禁用、删除用户）。
+- 影响对象：
+  - 超管不能再在用户页授予或撤销 `super_admin`（原先可以；撤销自己的原为 409，现为 403），也不能在创建用户时指定 `super_admin`；在超管移交（T16）合入前，换超管只能直接改库。
+  - 持 `role:assign` 的非超管只能分配和撤销自己清单内的角色：存量 admin、operator（T13 迁移后为 operator、user + 全部自定义角色）不能再授予或撤销 admin；没有清单的自定义角色持有者（新建的自定义角色在 T15 接口前没有清单）不能再分配任何角色，只能建默认用户。访问密钥不能分配任何角色（`role:assign` 已是 sessionOnly，此项为纵深防御）。
+  - 对权限比自己大的用户原样保存角色（无变化）不再 403。
+  - 审计日志多出 `user.roles` 记录（引导与创建用户也会写一条）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化（已写入的 `user.roles` 审计行可保留）。

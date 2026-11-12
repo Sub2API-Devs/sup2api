@@ -113,7 +113,11 @@ func addUser(t *testing.T, s *Service, email string, roles ...string) int64 {
 }
 
 func setRoles(s *Service, actor, user int64, roles ...string) error {
-	ctx := context.Background()
+	return setRolesAs(context.Background(), s, actor, user, roles...)
+}
+
+// setRolesAs is setRoles in ctx, which may carry an access key.
+func setRolesAs(ctx context.Context, s *Service, actor, user int64, roles ...string) error {
 	var v int64
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		var err error
@@ -542,7 +546,10 @@ func TestRoleGrantEscalation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Assigning roles: the operator cannot give itself admin or installer.
+	// Assigning roles: let the operator assign both custom roles, so only
+	// their permissions stand in its way. It cannot give itself admin (not
+	// assignable) or installer (beyond its permissions).
+	letAssign(t, s, RoleOperator, "readers", "installer")
 	if err := setRoles(s, operator, operator, RoleOperator, RoleAdmin); !isCode(err, "permission_denied") {
 		t.Fatalf("operator self-assigns admin: %v", err)
 	}
@@ -563,14 +570,13 @@ func TestRoleGrantEscalation(t *testing.T) {
 	if err := setRoles(s, operator, operator, RoleOperator, "readers"); err != nil {
 		t.Fatalf("operator self-assigns readers: %v", err)
 	}
-	// Re-saving a role the user already holds is not a grant: the admin
-	// gives alice "installer", and the operator (who cannot grant it) can
-	// still keep it while changing the rest.
+	// Once the admin gives alice "installer", she holds more than the
+	// operator, which can no longer change her roles at all.
 	if err := setRoles(s, admin, alice, "installer"); err != nil {
 		t.Fatalf("admin assigns installer: %v", err)
 	}
 	mustCan(t, s, alice, "plugin:install", true)
-	if err := setRoles(s, operator, alice, "installer"); !isCode(err, "permission_denied") {
+	if err := setRoles(s, operator, alice, "installer", RoleUser); !isCode(err, "permission_denied") {
 		t.Fatalf("operator acts on a higher user: %v", err)
 	}
 	// Admin can assign operator; the super admin can assign anything.
@@ -583,7 +589,7 @@ func TestRoleGrantEscalation(t *testing.T) {
 		t.Fatalf("root assigns: %v", err)
 	}
 	mustCan(t, s, bob, "plugin:install", true)
-	// Only a super admin may grant super_admin, even to an admin.
+	// Nobody assigns super_admin.
 	if err := setRoles(s, admin, bob, RoleSuperAdmin); !isCode(err, "permission_denied") {
 		t.Fatalf("admin grants super_admin: %v", err)
 	}
@@ -592,41 +598,50 @@ func TestRoleGrantEscalation(t *testing.T) {
 	}
 }
 
+// The super admin role changes hands only by transfer: nobody, the super
+// admin itself and its access keys included, assigns or revokes it, and the
+// system only grants the initial one (bootstrap).
 func TestSuperAdminRules(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
 	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
 
-	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin) // as bootstrap: actor 0
+	if su, err := s.IsSuperuser(ctx, db.Pool, root); err != nil || !su {
+		t.Fatalf("bootstrap super admin: %v %v", su, err)
+	}
 	admin := addUser(t, s, "admin@x.com", RoleAdmin)
-
-	// Cannot revoke own super_admin, nor remove the last one.
-	if err := setRoles(s, root, root, RoleAdmin); !isCode(err, "conflict") {
-		t.Fatalf("self revoke: %v", err)
+	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"role:assign"}})
+	denied := []struct {
+		name        string
+		ctx         context.Context
+		actor, user int64
+		roles       []string
+	}{
+		{"revoke own", ctx, root, root, []string{RoleAdmin}},
+		{"grant to another", ctx, root, admin, []string{RoleSuperAdmin}},
+		{"key revokes own", keyed, root, root, []string{RoleAdmin}},
+		{"key grants to another", keyed, root, admin, []string{RoleSuperAdmin}},
+		{"self-promotion", ctx, admin, admin, []string{RoleSuperAdmin}},
+		{"system revokes", ctx, 0, root, []string{RoleAdmin}},
 	}
-	if err := setRoles(s, 0, root, RoleAdmin); !isCode(err, "conflict") {
-		t.Fatalf("last super admin: %v", err)
+	for _, tt := range denied {
+		if err := setRolesAs(tt.ctx, s, tt.actor, tt.user, tt.roles...); !isCode(err, "permission_denied") {
+			t.Errorf("%s: %v", tt.name, err)
+		}
 	}
-	// A non-superuser cannot grant super_admin.
-	if err := setRoles(s, admin, admin, RoleSuperAdmin); !isCode(err, "permission_denied") {
-		t.Fatalf("escalation: %v", err)
-	}
-	// Root can promote admin; then root can be demoted by the new super admin.
-	if err := setRoles(s, root, admin, RoleSuperAdmin); err != nil {
-		t.Fatal(err)
-	}
-	if err := setRoles(s, admin, root, RoleAdmin); err != nil {
-		t.Fatal(err)
+	if su, err := s.IsSuperuser(ctx, db.Pool, admin); err != nil || su {
+		t.Fatalf("admin promoted: %v %v", su, err)
 	}
 	if err := setRoles(s, 0, admin, "nope"); !isCode(err, "invalid_argument") {
 		t.Fatalf("unknown role: %v", err)
 	}
-	ctx := context.Background()
 	err := db.Tx(ctx, func(tx pgx.Tx) error {
 		if _, err := s.Bump(ctx, tx); err != nil {
 			return err
 		}
-		return s.EnsureNotLastSuperAdmin(ctx, tx, admin)
+		return s.EnsureNotLastSuperAdmin(ctx, tx, root)
 	})
 	if !isCode(err, "conflict") {
 		t.Fatalf("ensure last: %v", err)
@@ -661,6 +676,8 @@ func TestGrantViewCountsDisabledPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	tx(func(tx pgx.Tx) error { return s.SetPluginActive(ctx, tx, "guard", false) })
+	// Both may assign guardian, so only its permission decides.
+	letAssign(t, s, RoleOperator, "guardian")
 	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return !ok })
 
 	// The operator lacks the disabled permission and cannot hand it out.
@@ -701,6 +718,7 @@ func TestGrantChecksIgnoreStaleCache(t *testing.T) {
 		PermissionKeys: []string{"account:read"}}); err != nil {
 		t.Fatal(err)
 	}
+	letAssign(t, b, "granter", "reader")
 	actor := addUser(t, b, "g@x.com", "granter")
 	alice := addUser(t, b, "alice@x.com")
 	mustCan(t, a, actor, "account:read", true) // cached on a
@@ -712,7 +730,8 @@ func TestGrantChecksIgnoreStaleCache(t *testing.T) {
 	if err := a.CanGrant(ctx, actor, []string{"account:read"}); !isCode(err, "permission_denied") {
 		t.Fatalf("CanGrant used the stale cache: %v", err)
 	}
-	if err := setRoles(a, actor, alice, "reader"); !isCode(err, "permission_denied") {
+	var ce *core.Error
+	if err := setRoles(a, actor, alice, "reader"); !errors.As(err, &ce) || !slices.Equal(ce.Details["missing"].([]string), []string{"account:read"}) {
 		t.Fatalf("SetUserRoles used the stale cache: %v", err)
 	}
 }
@@ -771,6 +790,8 @@ func TestPluginCatalog(t *testing.T) {
 
 	// Disable -> permission treated as absent; enable restores it.
 	tx(func(tx pgx.Tx) error { return s.SetPluginActive(ctx, tx, "guard", false) })
+	// Both may assign guardian, so only its permission decides.
+	letAssign(t, s, RoleOperator, "guardian")
 	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return !ok })
 	tx(func(tx pgx.Tx) error { return s.SetPluginActive(ctx, tx, "guard", true) })
 	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return ok })
