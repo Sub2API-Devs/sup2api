@@ -158,6 +158,20 @@ export default {
     minBalanceHint: '余额不高于该值时，请求返回 402 余额不足（默认 0）。',
     bigCost: '高额费用警告阈值',
     bigCostHint: '保存价格时，若 100 万输入 token 的费用超过该值，需要二次确认。',
-    decimalInvalid: '请输入数字，最多 8 位小数'
+    decimalInvalid: '请输入数字，最多 8 位小数',
+    disconnectPolicy: '客户端中途断开时',
+    disconnect: {
+      precharge: '按预扣计费',
+      continue: '读完再计费',
+      free: '不计费'
+    },
+    disconnectHint: {
+      precharge: '立即中止上游请求，按请求前的预扣估算计费。',
+      continue: '不再向客户端发送，但继续读完上游响应，按上游报告的实际用量计费。读取期间仍占用账号并发；读不完时按预扣估算计费。默认。',
+      free: '立即中止上游请求，这次请求不计费。客户端收完正文再断开即可不付输出费用，只建议在内部或可信环境使用。'
+    },
+    disconnectWait: '断开后最长继续读取',
+    disconnectWaitHint: '超过这个时间仍未读完就中止上游请求，按预扣估算计费（{min} 到 {max} 秒，默认 {default}）。',
+    disconnectWaitInvalid: '请输入 {min} 到 {max} 之间的整数'
   }
 }

@@ -33,6 +33,33 @@ type Pricer interface {
 	Inputs(rule *PriceRule) (bodyPaths []string, headerNames []string)
 }
 
+// What a request pays when its client hangs up while the upstream is
+// answering (settings "billing".client_disconnect_policy, CONTRACTS §25.8).
+const (
+	// DisconnectPrecharge stops the upstream and bills the pre-charge
+	// estimate: what every request paid before the setting existed.
+	DisconnectPrecharge = "precharge"
+	// DisconnectContinue, the default, reads the upstream to its end and
+	// bills what it reports; a read that cannot finish falls back to
+	// DisconnectPrecharge.
+	DisconnectContinue = "continue"
+	// DisconnectFree stops the upstream and bills nothing.
+	DisconnectFree = "free"
+)
+
+// ClientDisconnect is the configured policy and, for DisconnectContinue, how
+// long the upstream may still be read once the client is gone.
+type ClientDisconnect struct {
+	Policy string
+	Wait   time.Duration
+}
+
+// ClientDisconnectSource is implemented by a BalanceGate that carries the
+// setting; a gateway whose gate does not uses DisconnectPrecharge.
+type ClientDisconnectSource interface {
+	ClientDisconnect(ctx context.Context) (ClientDisconnect, error)
+}
+
 // BalanceGate requires both the cached balance check and atomic precharge;
 // a gateway must never silently run with only the cached check.
 type BalanceGate interface {

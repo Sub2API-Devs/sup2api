@@ -46,10 +46,11 @@ type Service struct {
 }
 
 var (
-	_ core.Pricer      = (*Service)(nil)
-	_ core.BalanceGate = (*Service)(nil)
-	_ core.Ledger      = (*Service)(nil)
-	_ core.Quoter      = (*Service)(nil)
+	_ core.Pricer                 = (*Service)(nil)
+	_ core.BalanceGate            = (*Service)(nil)
+	_ core.Ledger                 = (*Service)(nil)
+	_ core.Quoter                 = (*Service)(nil)
+	_ core.ClientDisconnectSource = (*Service)(nil)
 )
 
 // New builds the billing service. bus and registry may be nil: without a

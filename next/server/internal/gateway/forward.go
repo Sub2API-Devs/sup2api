@@ -69,11 +69,22 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	case c.resourceAccess != nil && c.resourceAccess.outputs || c.creditAccess != nil:
 		err = c.forwardResourceResponse(ctx, rt, resp, u, cap)
 	case sse:
+		c.drain.arm()
 		err = c.forwardSSE(ctx, resp, u, rt.conv, cap)
 	case rt.conv != nil:
+		c.drain.arm()
 		err = c.forwardJSONConverted(resp, u, cap, rt.conv)
 	default:
+		c.drain.arm()
 		err = c.forwardJSON(resp, u, cap)
+	}
+	if err == nil && c.drain.outputDropped() {
+		// Nobody received the end of it. An upstream that finished has
+		// reported its usage in full, which is billed as it stands
+		// (settleCanceled); one that ended on an error event has not, and the
+		// request falls back to the estimate like any other hang-up.
+		c.drained = u.StreamError == ""
+		err = errClientGone
 	}
 	c.rec.Tokens = u.Tokens()
 	c.recordAdditionalUsage(u, rt)
@@ -197,7 +208,7 @@ func (c *call) checkResponseShape(ctx context.Context, rt *typeRoute, resp *http
 }
 
 func (c *call) forwardJSON(resp *http.Response, u *usageAcc, cap *usageCapture) error {
-	w := c.c.Writer
+	w := c.relayWriter()
 	ct := resp.Header.Get("Content-Type")
 	if ct == "" {
 		ct = "application/json"
@@ -226,6 +237,9 @@ func (c *call) forwardJSON(resp *http.Response, u *usageAcc, cap *usageCapture) 
 			break
 		}
 		if rerr != nil {
+			if c.drain.outputDropped() {
+				return errClientGone
+			}
 			return rerr
 		}
 	}
@@ -257,7 +271,7 @@ func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, cap *usage
 	if err != nil {
 		return &convertError{err: err}
 	}
-	w := c.c.Writer
+	w := c.relayWriter()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	if _, err := w.Write(out); err != nil {
@@ -276,7 +290,7 @@ func (c *call) forwardJSONConverted(resp *http.Response, u *usageAcc, cap *usage
 // elements of one JSON array instead of SSE.
 func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc, conv convert.Converter, cap *usageCapture) error {
 	arr := c.jsonArrayStream()
-	w := c.c.Writer
+	w := c.relayWriter()
 	h := w.Header()
 	if arr {
 		h.Set("Content-Type", "application/json; charset=utf-8")
@@ -405,7 +419,7 @@ func (c *call) forwardSSE(ctx context.Context, resp *http.Response, u *usageAcc,
 			if rerr == io.EOF {
 				return nil
 			}
-			if ctx.Err() != nil {
+			if ctx.Err() != nil || c.drain.outputDropped() {
 				return errClientGone
 			}
 			return rerr

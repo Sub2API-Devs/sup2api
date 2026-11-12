@@ -1236,6 +1236,10 @@ export interface BillingSettings {
   missing_price_policy: 'reject' | 'free'
   min_balance: Money
   big_cost_warning_usd: Money
+  /** What a request pays when its client hangs up mid-answer (CONTRACTS §25.8). */
+  client_disconnect_policy: 'precharge' | 'continue' | 'free'
+  /** How long the upstream is still read under "continue", 5-1800. */
+  client_disconnect_wait_seconds: number
 }
 
 /** GET/PUT /settings/gateway (CONTRACTS §8, §14.4). */
