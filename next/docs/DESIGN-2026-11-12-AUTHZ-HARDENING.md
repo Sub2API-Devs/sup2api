@@ -202,3 +202,13 @@
 - 改动：`gateway/websocket.go` 的会话记住握手时的 API key 与客户端地址；每条客户端消息在开始一轮之前先 `wsSession.refresh`（`Auth.Authenticate`，与握手同一路径），成功后这一轮用新的 principal（限速、额度、分组信息、倍率）。401/403（密钥被撤销、禁用、过期，用户被禁用，IP 不在白名单等）→ 发 error 事件并以 1008 关闭会话；其他鉴权错误（如存储暂不可用）→ 只这一轮失败，会话保留；首轮之后密钥换了分组 → 409 `api_key_group_changed` 并以 1012 关闭（上游连接属于旧分组的账号，客户端重连后按新分组调度）。在这一步被拒的轮次不写用量记录（与 HTTP 鉴权失败一致）。进行中的那一轮不打断；空闲会话的定时复检延后。
 - 影响对象：此前 WebSocket 会话整个生命周期使用握手时的 principal，密钥撤销、额度用尽、限速修改要等客户端重连才生效；现在在下一轮生效。长连接客户端在密钥失效后会收到 1008（不应重连），换分组后收到 1012（应重连）。每轮多一次 `Authenticate`（与一次 HTTP 请求相同的开销）。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T33 M7、C-L7：调余额与用户组成员、个人专属接入 core.ActOnOthers（产品性收紧）
+
+- 改动：`billing.Service` 增加 `Users core.UserGuard`，`adjustBalance` 在 `Apply` 之前 `core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id)`；`segment.Deps` 增加 `Users`（`New` 里 `core.GuardOrDeny`），`addMembers`（整批 `user_ids`，事务之前，一条 SQL）、`makePersonal`、`removePersonal`（路径上的用户）经 `Service.actOnOthers` 做同一检查；`app/phases.go` 把 authz 注入两处。未注入时一律拒绝（500），不会 panic 或放行。CONTRACTS §5.2、§97.6 同步（含 wontfix：`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、分组专属价作用于整个用户组，不做目标用户检查；`POST /usage/:id/refund` 延后）。
+- 影响对象：
+  - 持有 `balance:adjust` 的任何人（包括超管，决策 D6）给自己调余额：由 200 变为 409 `you cannot do this to yourself`。超管需要给自己加余额时由另一个持有 `balance:adjust` 且能操作超管的人来做——目前没有这样的人（只有超管能操作超管），即超管的余额不能再经这个接口调整；需要时走充值/兑换等正常入账途径，或临时回滚。
+  - 持有 `balance:adjust` / `segment:manage` 的非超管给超管、或给角色权限超出自己可授予范围的用户调余额、移用户组、设/取消个人专属：由成功变为 403（`you cannot modify a superuser` / `you cannot modify a user with higher privileges`）。
+  - 持有 `segment:manage` 的人把自己移入用户组、给自己设/取消个人专属：由成功变为 409；批量移入的 `user_ids` 里含本人或不可操作的用户时整批拒绝。经访问密钥调用同样适用（密钥主人不能给自己调）。
+  - 前端未改：用户列表里对本人、对超管的“调整余额”“设为个人专属”等按钮仍显示，点击后得到上述 409/403 提示（按钮按目标隐藏可在前端任务里跟进）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。

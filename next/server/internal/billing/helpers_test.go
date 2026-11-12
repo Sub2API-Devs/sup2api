@@ -62,8 +62,9 @@ func (allowAll) Can(context.Context, int64, string) (bool, error) { return true,
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
-func (allowAll) CanGrant(context.Context, int64, []string) error { return nil }
-func (allowAll) CanActOn(context.Context, int64, []string) error { return nil }
+func (allowAll) CanGrant(context.Context, int64, []string) error      { return nil }
+func (allowAll) CanActOn(context.Context, int64, []string) error      { return nil }
+func (allowAll) CanActOnUsers(context.Context, int64, ...int64) error { return nil }
 
 type env struct {
 	t   *testing.T
@@ -99,6 +100,7 @@ func newEnvAs(t *testing.T, authz core.Authorizer) *env {
 	bus := &memBus{}
 	svc := New(db, rdb, bus, event.NewPublisher(db), nil)
 	svc.Authz = authz
+	svc.Users = allowAll{}
 	t.Cleanup(svc.Close)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()

@@ -207,6 +207,12 @@ func (s *Service) adjustBalance(c *gin.Context) {
 		return
 	}
 	operator, _ := core.UserID(ctx)
+	// Nobody adjusts their own balance, a superuser included, nor that of a
+	// user whose roles grant more than their own (M7).
+	if err := core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
 	if key == "" {
 		key = uuid.NewString()

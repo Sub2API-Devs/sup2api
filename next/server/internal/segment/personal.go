@@ -27,6 +27,10 @@ func (s *Service) makePersonal(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
+	if err := s.actOnOthers(ctx, uid); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	var id int64
 	err := s.tx(ctx, func(tx pgx.Tx) (err error) {
 		id, err = createPersonal(ctx, tx, uid, in.Copy)
@@ -112,6 +116,10 @@ func (s *Service) removePersonal(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid, ok := httpapi.PathID(c, "id")
 	if !ok {
+		return
+	}
+	if err := s.actOnOthers(ctx, uid); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	var dropped bool

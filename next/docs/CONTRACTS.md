@@ -126,9 +126,9 @@
 | GET `/segments`（`?q=&kind=named\|personal`），GET `/segments/:id` | `segment:read`；用户组，对象与各接口的细节见 §97.6 |
 | POST `/segments` `{name, description, discount}`，PATCH/DELETE `/segments/:id` | `segment:manage`；默认用户组和个人专属不能用 DELETE 删除（409） |
 | GET `/segments/:id/members`（`?q=`） | `segment:read` 且 `user:read`；行同 GET `/users` |
-| POST `/segments/:id/members` `{user_ids[]}` → `{moved}` | `segment:manage`；把用户移入命名用户组 |
+| POST `/segments/:id/members` `{user_ids[]}` → `{moved}` | `segment:manage`；把用户移入命名用户组；目标用户须通过 `core.ActOnOthers`（§97.6） |
 | GET `/segments/:id/groups`，PUT `/segments/:id/groups` `{items:[{group_id, granted?, rate_override?}]}` | `segment:read` / `segment:manage`；用户组在各分组的授权与专属倍率 |
-| POST `/users/:id/personal-segment` `{copy}`，DELETE `/users/:id/personal-segment`（`?to=`） | `segment:manage`；设为个人专属 / 移回命名用户组 |
+| POST `/users/:id/personal-segment` `{copy}`，DELETE `/users/:id/personal-segment`（`?to=`） | `segment:manage`；设为个人专属 / 移回命名用户组；目标用户须通过 `core.ActOnOthers`（§97.6） |
 | GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:define`；POST 授予的 permission_keys 必须是操作者持有权限的子集，可分配清单必须在操作者可分配范围内 |
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:define`；新增的 permission_keys 必须是操作者持有权限的子集，角色当前的权限也不能超出操作者（§43.6） |
 | PUT `/roles/:id/assignable` `{role_keys[], assign_custom}` | `role:define`；新增的可分配角色必须在操作者可分配范围内，角色当前的清单也不能超出操作者（§43.6） |
@@ -178,7 +178,7 @@
 | GET `/prices/history/:expr_hash` | `price:read` |
 | GET `/me/balance` → `{balance}`；GET `/me/ledger`（`?kind=&from=&to=`） | `balance:self:read` |
 | GET `/ledger`（`?user_id=&kind=&from=&to=`） | `balance:all:read` |
-| POST `/users/:id/balance/adjust` `{amount, credit:bool, note}`，支持请求头 `Idempotency-Key` | `balance:adjust` |
+| POST `/users/:id/balance/adjust` `{amount, credit:bool, note}`，支持请求头 `Idempotency-Key` | `balance:adjust`；目标须通过 `core.ActOnOthers`：给自己调一律 409 `you cannot do this to yourself`（超管也不行），目标角色的权限超出操作者可授予范围或目标是超管而操作者不是 → 403 |
 | GET `/me/usage`，GET `/me/usage/:id`，GET `/usage`，GET `/usage/:id`（筛选参数见 §15.2；`/me/usage` 不支持 `user_id`、`account_id`、`account_type`） | `usage:self:read` / `usage:all:read` |
 | GET `/usage/summary`（`/usage` 的全部筛选参数，加 `group_by=day\|model\|user\|ip`）；GET `/me/usage/summary`（限定当前用户，`group_by=day\|model\|ip`） | `usage:all:read` / `usage:self:read` |
 | GET/PUT `/settings/billing` `{missing_price_policy: reject\|free, min_balance, big_cost_warning_usd}` | `settings:read` / `settings:manage` |
@@ -7996,13 +7996,15 @@ kind: users | groups | api-keys | accounts | models | proxies
 | PATCH `/segments/:id` | `segment:manage` | 字段都可选，校验同上。个人专属只能改 `discount`，带 `name` 或 `description` 回 400（字段 `name`） |
 | DELETE `/segments/:id` | `segment:manage` | 204。成员回默认用户组，它的授权、专属倍率、专属价一并删除；以它为 `origin` 的个人专属 `origin` 变成 `null`。默认用户组 409；个人专属 409（用下面的移回接口），只有一个例外：唯一成员已被软删除的个人专属可以经此删除（升级窗口里旧节点软删除用户会留下这种行，97.8） |
 | GET `/segments/:id/members?q=` | `segment:read` 且 `user:read` | 分页，行同 GET `/users`；`q` 匹配邮箱或显示名。这个接口在 `iam` 包里，它就是带用户组条件的用户列表 |
-| POST `/segments/:id/members` `{user_ids}` | `segment:manage` | 把用户移入这个用户组，返回 `{moved}`（实际移动的人数，已在组内的不算）。目标只能是命名用户组，个人专属 409；不存在的用户 400（字段 `user_ids`）。原来是个人专属的用户，个人专属随之删除 |
+| POST `/segments/:id/members` `{user_ids}` | `segment:manage` | 把用户移入这个用户组，返回 `{moved}`（实际移动的人数，已在组内的不算）。目标只能是命名用户组，个人专属 409；不存在的用户 400（字段 `user_ids`）。原来是个人专属的用户，个人专属随之删除。`user_ids` 里有调用者本人 409，有调用者不能操作的用户 403（见表后“目标用户检查”），都在事务之前判断，整批不动 |
 | GET `/segments/:id/groups` | `segment:read` | `SegmentGroupSetting[]`，每个分组一行，不分页 |
 | PUT `/segments/:id/groups` `{items: [{group_id, granted?, rate_override?}]}` | `segment:manage` | 只改列出的分组，整批一个事务，返回最新的列表。`granted` 没传 = 不动。`rate_override` 区分三种：没传 = 不动，`null` = 跟随，值 = 专属倍率，校验同分组倍率（不小于 0、小于 1000000、最多 4 位小数；字段 `items.<i>.rate_override`）。分组不存在 400（字段 `items.<i>`）。字段错误里的 `<i>` 是该项在请求 `items` 里的原始位置。同一个分组出现多条时按请求里的顺序应用，后面的生效。任何一项不合法，整批不改 |
 | GET `/groups/:id/segments?include=` | `group:read` | 同一种行，从分组一侧看，不分页：全部命名用户组，后面跟在本分组有授权、专属倍率或专属价的个人专属，以及 `include`（逗号分隔的 id）点名的个人专属 |
 | PUT `/groups/:id/segments?include=` `{items: [{segment_id, granted?, rate_override?}]}` | `group:manage` | 同 PUT `/segments/:id/groups`，另一个方向（`<i>` 同样是原始位置，同一个用户组出现多条时后面的生效）；用户组不存在 400（字段 `items.<i>`） |
-| POST `/users/:id/personal-segment` `{copy}` | `segment:manage` | 把用户设为个人专属，201，返回 `Segment`。`copy` 为真时复制原用户组的全场折扣、各分组的授权与专属倍率、专属价；否则从空白开始（折扣 1，没有授权，原用户组带来的私有分组不再可用）。用户不存在（含已软删除）404；已是个人专属 409 |
-| DELETE `/users/:id/personal-segment?to=` | `segment:manage` | 把用户移回命名用户组，个人专属及其设置删除，204。`to` 缺省是默认用户组，必须是命名用户组（否则 400，字段 `to`）。用户不是个人专属时 404；请求处理期间用户已被别的请求移出个人专属的，同样回 404，不会把他再移一次 |
+| POST `/users/:id/personal-segment` `{copy}` | `segment:manage` | 把用户设为个人专属，201，返回 `Segment`。`copy` 为真时复制原用户组的全场折扣、各分组的授权与专属倍率、专属价；否则从空白开始（折扣 1，没有授权，原用户组带来的私有分组不再可用）。用户不存在（含已软删除）404；已是个人专属 409；目标是本人 409、是不能操作的用户 403（“目标用户检查”） |
+| DELETE `/users/:id/personal-segment?to=` | `segment:manage` | 把用户移回命名用户组，个人专属及其设置删除，204。`to` 缺省是默认用户组，必须是命名用户组（否则 400，字段 `to`）。用户不是个人专属时 404；请求处理期间用户已被别的请求移出个人专属的，同样回 404，不会把他再移一次；目标是本人 409、是不能操作的用户 403（“目标用户检查”） |
+
+**目标用户检查**（2026-11-12，M7、C-L7）：选择某个用户所属的用户组（POST `/segments/:id/members`、POST/DELETE `/users/:id/personal-segment`）和调整余额（POST `/users/:id/balance/adjust`）都经 `core.ActOnOthers`：目标里有调用者本人 → 409 `you cannot do this to yourself`（超管也不例外，访问密钥同样）；目标的角色所授予的权限超出调用者可授予的范围、或目标是超管而调用者不是 → 403（`authz.CanActOnUsers`，一条 SQL 判断整批）。未注入 `core.UserGuard` 时一律拒绝（`core.GuardOrDeny`）。不在此列（wontfix）：PUT `/segments/:id/groups`、PUT `/groups/:id/segments` 与分组的专属价（PUT `/groups/:id/model-prices?segment_id=`）作用于整个用户组而不是某个用户，调用者自己或权限更高的用户恰好是组内成员时也照常执行，由 `segment:manage` / `group:manage` 把关；POST `/usage/:id/refund` 的目标检查延后。
 
 **分组内定价与试算**
 
