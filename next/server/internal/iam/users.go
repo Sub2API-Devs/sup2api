@@ -402,8 +402,9 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 		}
 	}
 
-	// SEC-H1: password reset for others requires user:password:reset
-	changingOthersPassword := in.Password != nil && actorID != id
+	// SEC-H1: password reset for others requires user:password:reset; the
+	// system (actor 0, the server CLI) holds no roles and is not checked.
+	changingOthersPassword := in.Password != nil && actorID != id && actorID != 0
 	if changingOthersPassword {
 		if !core.Can(core.WithUserID(ctx, actorID), s.authz, "user:password:reset") {
 			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset").

@@ -40,6 +40,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "dev" {
 		os.Exit(runDev(os.Args[2:]))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		os.Exit(runAdmin(os.Args[2:]))
+	}
 
 	cfg, err := config.Load(runtime.GOOS)
 	if err != nil {

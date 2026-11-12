@@ -163,3 +163,14 @@
 - 改动：新增 `authz.TransferSuperAdmin(ctx, tx, actor, target)`（`authz/superadmin.go`），是 `super_admin` 换人的唯一路径：`Bump` 后锁住超管持有行，操作者须是当前持有者（actor 0 = 服务器 CLI，T17 复用，同时可修复无超管或多超管），目标须未删除、启用中且不是本人；其余持有者先删超管行再补 `admin`，然后给目标加超管行；审计 `superadmin.transfer {from, to, via}`。新增 `POST /system/super-admin/transfer {target_user_id, current_password, code}`（`iam/superadmin.go`，`Authed`，访问密钥 403）：先判断调用者是超管（否则 403，不消耗登录限流），再确认本人（密码 + 两步验证），同一事务里移交并让降级者与目标的全部会话失效，提交后 `Committed` 与 `iam:user:changed` 广播。不强制目标已开启两步验证（D13 推荐默认，前端提示）。无迁移，不建唯一约束（T18）。CONTRACTS §5.2、§43.6 同步。
 - 影响对象：只新增接口，已有接口行为不变。移交成功后原超管变为 `admin`（保留其他角色），原超管与新超管的所有登录会话立即失效、需重新登录；访问密钥不受影响（原超管的密钥随即按 `admin` 的权限收窄）。
 - 回滚：revert 这个提交即可，无迁移；已完成的移交不会回退（如需恢复，按 T14 前的方式直接改 `user_roles`，或等 T17 的 CLI）。
+
+## T17 设计 3.1.6、决策 2：服务器 CLI 恢复超管
+
+- 改动：新增 `sub2api admin recover-superadmin --email <已有用户> [--reset-password] [--reset-2fa]`（`cmd/sub2api/admin.go`）与 `iam.RecoverSuperAdmin`：按邮箱找未删除用户，被禁用则先启用，再经 `authz.TransferSuperAdmin(actor 0)` 成为唯一超管（其余持有者降为 `admin`，双方全部会话失效）；`--reset-password` 设 24 位随机密码并只在 stdout 打印一次；`--reset-2fa` 清除两步验证与通行密钥。审计 actor 为 0（`superadmin.transfer` 的 `via` 为 `cli`）。命令读与服务相同的环境变量（`DATABASE_URL` 等），不跑迁移、不连 Redis、不广播，运行中的节点最长 30 秒后生效。不新增 HTTP 恢复入口。`UpdateUser` 改他人密码时对系统（actor 0）不再检查 `user:password:reset`（系统没有角色，此前会被拒；HTTP 入口的 actor 永远不是 0）。CONTRACTS §43.6 同步。
+- 影响对象：只新增命令，已有接口行为不变。
+- 运维：多超管人工处理（T18 的超管唯一迁移检测到多个未删除的超管持有者时报错，服务不启动）：
+  1. 从报错信息里的 user id 与邮箱中选出要保留的超管；
+  2. 在服务器上以与服务相同的环境变量（配置校验需要 `DATABASE_URL`、`REDIS_URL`、`SUB2API_MASTER_KEY`、`SUB2API_JWT_SECRET`，Redis 并不连接）执行 `sub2api admin recover-superadmin --email <要保留的人>`；容器部署可用同一镜像起一次性容器，如 `docker compose run --rm <core 服务> sub2api admin recover-superadmin --email ...`。其余持有者降为 `admin`，相关会话全部失效；
+  3. 重新启动服务，迁移即可通过。
+  丢失超管密码或两步验证时同样用此命令，加 `--reset-password`、`--reset-2fa`，新密码只打印一次，登录后请立即修改。
+- 回滚：revert 这个提交即可，无迁移；已执行的恢复不会回退。

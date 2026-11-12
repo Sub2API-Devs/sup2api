@@ -2,13 +2,18 @@ package iam
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 // TransferSuperAdmin hands the caller's super admin role to targetID (POST
@@ -55,6 +60,59 @@ func (s *Service) transferSuperAdmin(ctx context.Context, actorID, targetID int6
 	s.authz.Committed(ctx, v)
 	s.sessionsChanged(ctx, ended...)
 	return nil
+}
+
+// RecoverOptions are the flags of `sub2api admin recover-superadmin`.
+type RecoverOptions struct {
+	ResetPassword  bool
+	ResetTwoFactor bool
+}
+
+// RecoverSuperAdmin is the server CLI's way back in: the undeleted user with
+// email, re-enabled when disabled, becomes the only super admin; every other
+// holder becomes an admin and every session of them all ends. It only
+// composes the system (actor 0) paths and returns the new password when
+// ResetPassword is set. Without a bus the other nodes catch up through the
+// version poll and the status cache TTL. ctx should carry audit.WithSource.
+func (s *Service) RecoverSuperAdmin(ctx context.Context, email string, opts RecoverOptions) (password string, err error) {
+	var id int64
+	var status string
+	err = s.db.Pool.QueryRow(ctx, `SELECT id, status FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL`,
+		strings.TrimSpace(email)).Scan(&id, &status)
+	if store.IsNoRows(err) {
+		return "", core.ErrNotFound.WithMessage("user not found")
+	}
+	if err != nil {
+		return "", err
+	}
+	if status != StatusActive {
+		active := StatusActive
+		if _, err := s.UpdateUser(ctx, 0, id, UpdateUserInput{Status: &active}, ""); err != nil {
+			return "", err
+		}
+	}
+	if err := s.transferSuperAdmin(ctx, 0, id); err != nil {
+		return "", err
+	}
+	if opts.ResetPassword {
+		password = randomPassword()
+		if _, err := s.UpdateUser(ctx, 0, id, UpdateUserInput{Password: &password}, ""); err != nil {
+			return "", err
+		}
+	}
+	if opts.ResetTwoFactor {
+		if err := s.ResetSecurity(ctx, 0, id, SelfConfirmation{}, ""); err != nil {
+			return "", err
+		}
+	}
+	return password, nil
+}
+
+// randomPassword returns 24 URL-safe characters (144 random bits).
+func randomPassword() string {
+	var b [18]byte
+	_, _ = rand.Read(b[:]) // never fails (crypto/rand since Go 1.24)
+	return base64.RawURLEncoding.EncodeToString(b[:])
 }
 
 func (s *Service) handleTransferSuperAdmin(c *gin.Context) {
