@@ -209,3 +209,9 @@
   - 账号 `proxy_url`：有 `proxy:read` 但只有 `proxy:own:manage` 的用户不再匹配他人的代理（另建自己的行），建出的行 `allow_private = false`；有 `proxy:manage` 而没有 `proxy:read` 的用户反过来能匹配全部。
   - 没有任何代理写权限的用户在 `models/fetch` 带 `proxy_url` 由成功变为 403（`details.permission = "proxy:own:manage"`）；`proxy_id` 不受影响。
 - 回滚：revert 这个提交（与 review fixes）即可，无迁移；期间由 PATCH 改写的 `allow_private` 保留，旧代码按其现值使用。
+
+## T31 W1-F12：他人账号在用的 own 代理，属主不能改连接字段
+
+- 改动：`PATCH /proxies/:id` 在 own 范围、且连接字段（protocol、host、port、username、password）与现值不同时，统计该代理上不是调用者创建的未删除账号（`proxy.inUseByOthers`，与修改在同一事务、代理行已加锁），大于 0 返回 409 `proxy_in_use`（`details.account_count`）。删除的占用计数改用同一函数（统计全部账号，行为不变）。CONTRACTS §21.2 同步。无迁移。
+- 影响对象：供应商（只持 `proxy:own:manage`）的代理被管理员挂到别人的账号上之后，供应商改地址、用户名、密码由成功变为 409，需由持 `proxy:manage` 的人修改，或先把那些账号换到别的代理；改名称、启停不受影响（停用仍会让这些账号不可用，未改）。`proxy:manage` 不受影响。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。

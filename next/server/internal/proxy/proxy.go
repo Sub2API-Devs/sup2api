@@ -205,17 +205,25 @@ type row struct {
 func (s *Service) proxyURL(r *row) (*url.URL, error) {
 	u := &url.URL{Scheme: r.Protocol, Host: net.JoinHostPort(r.Host, strconv.Itoa(r.Port))}
 	if r.Username != "" || len(r.PasswordEnc) > 0 {
-		pw := ""
-		if len(r.PasswordEnc) > 0 {
-			b, err := s.cipher.Decrypt(r.PasswordEnc, passwordAAD)
-			if err != nil {
-				return nil, fmt.Errorf("decrypt proxy password: %w", err)
-			}
-			pw = string(b)
+		pw, err := s.password(r)
+		if err != nil {
+			return nil, err
 		}
 		u.User = url.UserPassword(r.Username, pw)
 	}
 	return u, nil
+}
+
+// password is the stored password of r in plain text ("" when none).
+func (s *Service) password(r *row) (string, error) {
+	if len(r.PasswordEnc) == 0 {
+		return "", nil
+	}
+	b, err := s.cipher.Decrypt(r.PasswordEnc, passwordAAD)
+	if err != nil {
+		return "", fmt.Errorf("decrypt proxy password: %w", err)
+	}
+	return string(b), nil
 }
 
 func (s *Service) buildClient(r *row) (*http.Client, error) {
@@ -511,6 +519,39 @@ func (in *input) validate(ctx context.Context, create bool) error {
 	return nil
 }
 
+// addressChanged reports whether the PATCH moves the proxy: a protocol, host
+// (compared without case) or port other than the stored one.
+func (in *input) addressChanged(cur *row) bool {
+	return differs(in.Protocol, cur.Protocol) || differs(in.Port, cur.Port) ||
+		(in.Host != nil && !strings.EqualFold(*in.Host, cur.Host))
+}
+
+// connectionChanged reports whether the PATCH changes how the proxy is
+// reached: its address or its credentials. A stored password that cannot be
+// decrypted counts as different from any given one.
+func (s *Service) connectionChanged(in *input, cur *row) bool {
+	if in.addressChanged(cur) || differs(in.Username, cur.Username) {
+		return true
+	}
+	if in.Password == nil {
+		return false
+	}
+	pw, err := s.password(cur)
+	return err != nil || *in.Password != pw
+}
+
+// errInUse refuses an owner changing the connection of a proxy that accounts
+// of other users go through (details.account_count).
+var errInUse = core.NewError(http.StatusConflict, "proxy_in_use", "proxy in use")
+
+// inUseByOthers counts the live accounts on proxy id that uid did not create
+// (uid 0: every account).
+func inUseByOthers(ctx context.Context, q store.Querier, id, uid int64) (n int64, err error) {
+	err = q.QueryRow(ctx, `SELECT count(*) FROM accounts
+		WHERE proxy_id = $1 AND deleted_at IS NULL AND created_by IS DISTINCT FROM $2`, id, uid).Scan(&n)
+	return n, err
+}
+
 // differs reports whether a PATCH field is present with a value other than
 // the stored one.
 func differs[T comparable](in *T, cur T) bool { return in != nil && *in != cur }
@@ -639,10 +680,9 @@ func (s *Service) update(c *gin.Context) {
 		// and allow_private follows whoever set the address last. The
 		// console sends every field, so only a value that differs counts.
 		var allowPriv *bool
-		hostChanged := in.Host != nil && !strings.EqualFold(*in.Host, cur.Host)
-		if hostChanged || differs(in.Protocol, cur.Protocol) || differs(in.Port, cur.Port) {
+		if in.addressChanged(&cur) {
 			host := cur.Host
-			if hostChanged {
+			if in.Host != nil {
 				host = *in.Host
 			}
 			allow, err := s.checkPrivate(ctx, scope, host)
@@ -650,6 +690,20 @@ func (s *Service) update(c *gin.Context) {
 				return err
 			}
 			allowPriv = &allow
+		}
+		// Accounts of other users go through this proxy too: where they
+		// connect is not the owner's to change (the full key may).
+		if scope != nil && s.connectionChanged(&in, &cur) {
+			n, err := inUseByOthers(ctx, tx, id, uid)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return errInUse.WithMessage(t(ctx,
+					"accounts of other users use this proxy; its connection settings can only be changed with proxy:manage",
+					"该代理正被其他用户的账号使用，连接设置只能由持有 proxy:manage 的人修改")).
+					WithDetails(map[string]any{"account_count": n})
+			}
 		}
 		if _, err := tx.Exec(ctx, `UPDATE proxies SET
 			name = COALESCE($2, name),
@@ -703,8 +757,8 @@ func (s *Service) delete(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		var n int64
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM accounts WHERE proxy_id = $1 AND deleted_at IS NULL`, id).Scan(&n); err != nil {
+		n, err := inUseByOthers(ctx, tx, id, 0)
+		if err != nil {
 			return err
 		}
 		if n > 0 {
