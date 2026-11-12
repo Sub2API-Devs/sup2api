@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 )
 
 // addKey stores a key of owner in group as the database holds it, without the
@@ -64,6 +65,11 @@ func TestAuthenticateSegmentTerms(t *testing.T) {
 				e.exec(`INSERT INTO segment_groups (segment_id, group_id, granted, rate_override) VALUES ($1, $2, $3, $4::numeric)`, seg, group, c.row[0], c.row[1])
 			}
 			p, err := e.svc.Authenticate(t.Context(), e.addKey(e.user, group))
+			// Authentication and the key endpoints tell alike whether the
+			// owner may use the group: by the one rule, segment.OpenToUserSQL.
+			open, qerr := groupAvailable(t.Context(), e.db.Pool, e.user, group)
+			require.NoError(t, qerr)
+			require.Equal(t, c.rate != "", open)
 			if c.rate == "" {
 				require.Equal(t, CodeGroupNotAllowed, codeOf(err))
 				return
@@ -72,6 +78,14 @@ func TestAuthenticateSegmentTerms(t *testing.T) {
 			require.Equal(t, []any{seg, c.rate, c.source}, []any{p.SegmentID, p.Group.RateMultiplier.String(), p.RateSource})
 		})
 	}
+}
+
+// Authentication asks whether the owner may use the key's group by the one
+// rule every other reader uses (CONTRACTS §97.9), not a copy of it that a
+// change to the rule would leave behind.
+func TestLookupUsesOpenToUser(t *testing.T) {
+	require.Contains(t, lookupSQL, segment.OpenToUserSQL("g", "k.user_id"))
+	require.Contains(t, selectKey, segment.OpenToUserSQL("g", "k.user_id"))
 }
 
 // Nothing of a segment is cached: moving the owner to another segment, or

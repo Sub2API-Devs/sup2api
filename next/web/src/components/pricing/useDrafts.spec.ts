@@ -112,4 +112,21 @@ describe('an editor that keeps drafts', () => {
     expect(state.saved.value).toEqual(['saved'])
     expect(state.loading.value).toBe(false)
   })
+
+  it('leaves out the answer of a save that comes after another object is loaded', async () => {
+    const { answers, state } = setup()
+    state.drafts.value = withDraft(state.drafts.value, 'a', 1)
+    const answer = deferred<string[]>()
+    const saving = state.save(() => answer.promise)
+    state.load()
+    state.drafts.value = withDraft(state.drafts.value, 'b', 2)
+
+    answer.resolve(['of the one before'])
+    expect(await saving).toBe(true)
+    expect([...state.drafts.value]).toEqual([['b', 2]])
+    expect([state.saved.value, state.loading.value]).toEqual([[], true])
+    answers[0].resolve(['loaded'])
+    await flushPromises()
+    expect([state.saved.value, state.loading.value]).toEqual([['loaded'], false])
+  })
 })

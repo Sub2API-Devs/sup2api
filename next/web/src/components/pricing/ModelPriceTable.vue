@@ -85,7 +85,7 @@ const columns = computed<TableColumn[]>(() => [
 function sourceTone(source: PriceSource): Tone {
   if (source === 'global') return 'gray'
   if (source === 'group') return 'info'
-  return props.segment?.kind === 'personal' ? 'purple' : 'primary'
+  return props.segment?.kind === 'personal' ? 'accent' : 'primary'
 }
 const rowAttrs = (row: DraftedRow) => ({ 'data-testid': 'model-price-row', 'data-model': row.model })
 

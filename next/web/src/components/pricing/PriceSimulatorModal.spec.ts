@@ -74,6 +74,14 @@ describe('price simulator', () => {
     expect(segments.find('[data-testid="price-sim-segment"]').exists()).toBe(true)
   })
 
+  it('leaves out a user a preset names for a caller who may not read users', async () => {
+    denied.add('user:read')
+    const w = await open({ userId: 7, groupId: 1, model: 'gpt-4o' })
+    expect(api.get).not.toHaveBeenCalledWith('/users/7')
+    expect(w.find('[data-testid="price-sim-segment"]').exists()).toBe(true)
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   it('says so when no group provides the model', async () => {
     const w = await open({ model: 'claude-opus-9' })
     expect(w.get('[data-testid="price-sim-unprovided"]').text()).toBe('还没有分组提供 claude-opus-9，无法试算。')
@@ -103,6 +111,26 @@ describe('price simulator', () => {
     answers['gpt-4o']({ items: [GROUPS[0]] })
     await settle()
     expect(chosen(w)).toEqual({ group: 2, model: 'claude-haiku-4-5' })
+  })
+
+  it('quotes for whole numbers of tokens from 0 to 10^12 only', async () => {
+    api.get.mockImplementation(async (path: string) => (path.startsWith('/users/') ? { id: 7, email: 'a@x', segment: { id: 2, kind: 'named', name: 'VIP' } } : { models: [{ model: 'gpt-4o' }] }))
+    api.post.mockResolvedValue(null)
+    const w = await open({ userId: 7, groupId: 1, model: 'gpt-4o' })
+    await new Promise((r) => setTimeout(r, 450))
+    expect(api.post).toHaveBeenLastCalledWith('/pricing/quote', { user_id: 7, group_id: 1, model: 'gpt-4o', usage: { p: 100_000, c: 10_000 } })
+    api.post.mockClear()
+
+    for (const [field, value] of [['input', '-1'], ['input', '1.5'], ['output', '1000000000001']]) {
+      await w.get(`input[data-testid="price-sim-${field}-tokens"]`).setValue(value)
+      await new Promise((r) => setTimeout(r, 450))
+      expect(w.get('[data-testid="price-sim"]').text()).toContain('填 0 到 1,000,000,000,000 之间的整数')
+      expect(w.find('[data-testid="price-sim-usage-invalid"]').exists()).toBe(true)
+      expect(api.post).not.toHaveBeenCalled()
+      await w.get(`input[data-testid="price-sim-${field}-tokens"]`).setValue('0')
+    }
+    await new Promise((r) => setTimeout(r, 450))
+    expect(api.post).toHaveBeenLastCalledWith('/pricing/quote', expect.objectContaining({ usage: { p: 0, c: 0 } }))
   })
 
   it('says why the models of the group could not be listed', async () => {

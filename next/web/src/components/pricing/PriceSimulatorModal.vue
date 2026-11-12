@@ -3,7 +3,7 @@ import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SButton, SField, SGrid, SHint, SInput, SModal, SSegmented, SSelect, SSpinner, type SelectOption } from '@sub2api/ui'
-import type { GroupModelPrices, PricingQuote, PricingQuoteRequest } from '@/api/pricing'
+import { QUOTE_MAX_TOKENS, type GroupModelPrices, type PricingQuote, type PricingQuoteRequest } from '@/api/pricing'
 import type { Group, User } from '@/api/types'
 import EntityPicker from '@/components/EntityPicker.vue'
 import GroupPicker from '@/components/GroupPicker.vue'
@@ -46,6 +46,11 @@ const segmentId = ref<number | null>(null)
 const groupId = ref<number | null>(null)
 const model = ref<string | null>(null)
 const usage = reactive<{ p: number | null; c: number | null }>({ p: 100_000, c: 10_000 })
+/** The most tokens of a kind the server quotes for, as it takes a request's (core.ValidatePricedUsage). */
+/** Why a token count cannot be quoted for: it must be a whole number from 0 to QUOTE_MAX_TOKENS; blank is 0. */
+const tokensError = (v: number | null) => (v === null || (Number.isInteger(v) && v >= 0 && v <= QUOTE_MAX_TOKENS) ? undefined : t('pricingTools.sim.tokensInvalid', { max: formatNumber(QUOTE_MAX_TOKENS) }))
+const usageErrors = computed(() => ({ p: tokensError(usage.p), c: tokensError(usage.c) }))
+const usageInvalid = computed(() => !!(usageErrors.value.p || usageErrors.value.c))
 
 const subjects = computed<SelectOption[]>(() => allowed.map((value) => ({ value, label: t(`pricingTools.sim.subject.${value}`) })))
 
@@ -76,17 +81,17 @@ watch(providers.result, (found) => {
   unprovided.value = group ? null : found.name
 })
 
-/** Takes what the opener names and leaves the other conditions as they were. */
+/** Takes what the opener names and leaves the other conditions as they were; whom the caller may not quote for is left out. */
 function applyPreset(preset: Preset) {
   unprovided.value = null
   if (preset.groupId !== undefined) groupId.value = preset.groupId
   if (preset.model !== undefined && preset.groupId !== undefined) model.value = preset.model
   named.value = preset.model !== undefined && preset.groupId === undefined ? { name: preset.model } : null
-  if (preset.segmentId !== undefined) {
+  if (preset.segmentId !== undefined && allowed.includes('segment')) {
     subject.value = 'segment'
     segmentId.value = preset.segmentId
   }
-  if (preset.userId === undefined) return
+  if (preset.userId === undefined || !allowed.includes('user')) return
   subject.value = 'user'
   userId.value = String(preset.userId)
 }
@@ -128,6 +133,7 @@ const who = computed<Pick<PricingQuoteRequest, 'user_id' | 'segment_id'> | null>
 })
 const request = computed<PricingQuoteRequest | null>(() => {
   if (!props.open || !who.value || groupId.value === null || !model.value || !provided.value?.includes(model.value)) return null
+  if (usageInvalid.value) return null
   return { ...who.value, group_id: groupId.value, model: model.value, usage: { p: usage.p ?? 0, c: usage.c ?? 0 } }
 })
 const { result: quote, loading: quoting, error: quoteError } = useLatestRequest(request, (body) => api.post<PricingQuote>('/pricing/quote', body), 400)
@@ -170,16 +176,17 @@ const groupName = computed(() => groups.value.find((g) => g.id === groupId.value
             @update:model-value="model = typeof $event === 'string' ? $event : null"
           />
         </SField>
-        <SField :label="t('pricingTools.sim.inputTokens')" :hint="formatNumber(usage.p)">
-          <SInput v-model="usage.p" type="number" min="0" data-testid="price-sim-input-tokens" />
+        <SField :label="t('pricingTools.sim.inputTokens')" :hint="formatNumber(usage.p)" :error="usageErrors.p">
+          <SInput v-model="usage.p" type="number" min="0" :max="QUOTE_MAX_TOKENS" step="1" data-testid="price-sim-input-tokens" />
         </SField>
-        <SField :label="t('pricingTools.sim.outputTokens')" :hint="formatNumber(usage.c)">
-          <SInput v-model="usage.c" type="number" min="0" data-testid="price-sim-output-tokens" />
+        <SField :label="t('pricingTools.sim.outputTokens')" :hint="formatNumber(usage.c)" :error="usageErrors.c">
+          <SInput v-model="usage.c" type="number" min="0" :max="QUOTE_MAX_TOKENS" step="1" data-testid="price-sim-output-tokens" />
         </SField>
       </SGrid>
 
       <div class="rounded-xl border border-line p-4" data-testid="price-sim-result">
         <SHint v-if="unprovided" tone="warning" data-testid="price-sim-unprovided">{{ t('pricingTools.sim.unprovided', { model: unprovided }) }}</SHint>
+        <SHint v-else-if="usageInvalid" tone="warning" data-testid="price-sim-usage-invalid">{{ t('pricingTools.sim.usageInvalid') }}</SHint>
         <SHint v-else-if="!request">{{ t('pricingTools.sim.incomplete') }}</SHint>
         <SHint v-else-if="quoteError" tone="danger">{{ quoteError }}</SHint>
         <PriceQuoteBreakdown v-else-if="quote" :quote="quote" :group-name="groupName" class="transition-opacity" :class="quoting ? 'opacity-60' : ''" :aria-busy="quoting" />

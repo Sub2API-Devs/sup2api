@@ -27,6 +27,9 @@ export function useDrafts<S, K, D>(options: DraftsOptions<S>) {
   const loading = ref(false)
   const error = ref<unknown>(null)
   const begin = latestOnly()
+  // Each load() is of another object (another group, user group or user): an answer to a save of the one before is not this one's.
+  const nextLoad = latestOnly()
+  let sameLoad = nextLoad()
   const dirty = computed(() => drafts.value.size > 0)
 
   /** Fetches the saved state again; the drafts stay on it. Only the latest request counts. */
@@ -46,6 +49,7 @@ export function useDrafts<S, K, D>(options: DraftsOptions<S>) {
 
   /** Starts over: no drafts, the saved state fetched anew. */
   function load() {
+    sameLoad = nextLoad()
     drafts.value = new Map()
     saved.value = options.empty()
     return refresh()
@@ -55,7 +59,8 @@ export function useDrafts<S, K, D>(options: DraftsOptions<S>) {
    * Sends the drafts through `put` and shows what the server answers. False
    * when they cannot be saved yet (a toast says why). A failed request
    * rejects and keeps the drafts. Only what was sent is saved: a draft made
-   * or changed while the request was under way stays.
+   * or changed while the request was under way stays. An answer that comes
+   * after a load() is left out: it is of the object loaded before.
    */
   async function save(put: (sent: ReadonlyMap<K, D>) => Promise<S>): Promise<boolean> {
     if (!dirty.value) return true
@@ -65,7 +70,9 @@ export function useDrafts<S, K, D>(options: DraftsOptions<S>) {
       return false
     }
     const sent = drafts.value
+    const loaded = sameLoad
     const state = await put(sent)
+    if (!loaded()) return true
     // The answer is newer than that of a fetch still under way.
     begin()
     loading.value = false

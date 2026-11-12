@@ -111,21 +111,11 @@ func (s *Service) pricesInGroup(ctx context.Context, uid, groupID int64) (*MyPri
 	if !ok {
 		return nil, core.ErrNotFound
 	}
-	on := core.PriceQuery{GroupID: groupID, SegmentID: t.SegmentID}
-	rules, err := loadRules(ctx, s.db.Pool, rulesFor, on.GroupID, on.SegmentID)
-	if err != nil {
-		return nil, err
-	}
 	group := gp.group.ref()
 	out := &MyPrices{Group: &group, RateMultiplier: t.Rate, RateSource: t.RateSource, Prices: []MyPriceRow{}}
-	for _, model := range gp.models {
-		base := gp.prices.base(model)
-		if base == nil {
-			continue
-		}
-		on.Model = model
-		price, source := rules.levels(on).listPrice(*base)
+	err = eachPrice(ctx, s.db.Pool, gp.prices, gp.models, gp.group.ID, t.SegmentID, func(model string, base PriceDef, levels ruleLevels) {
+		price, source := levels.listPrice(base)
 		out.Prices = append(out.Prices, MyPriceRow{Model: model, PriceDef: price, Source: source})
-	}
-	return out, nil
+	})
+	return out, err
 }

@@ -62,7 +62,8 @@ export function applyRule(base: PriceDef | null, rule: PriceRule | null): PriceD
 
 /** The cells of a price in a table: a per-request price, the tokens' prices (first tier of a tiered price), or neither. */
 export interface PriceCells {
-  perRequest?: number
+  /** Null while the price of a draft is blank, as a token price is. */
+  perRequest?: number | null
   tokens?: TokenPrices
   /** Length tiers; 1 when the price has none. */
   tiers: number
@@ -75,7 +76,8 @@ export interface PriceCells {
 /** The cells of a price as it stands, whatever multiplier is on it. */
 function ownCells(def: PriceDef): PriceCells {
   const s = summarize(def.mode, def.config, def.expression)
-  if (s.kind === 'per_request') return { perRequest: s.price, tiers: 1 }
+  // summarize reads a blank price as 0; a draft's blank price is no price yet.
+  if (s.kind === 'per_request') return { perRequest: def.config?.price === null ? null : s.price, tiers: 1 }
   if (s.kind === 'per_token') return { tokens: s.prices, tiers: 1 }
   if (s.kind === 'visual') {
     const v = hasVisualConfig(def.config) ? normalizeVisual(def.config) : parseExpression(def.expression)
@@ -85,7 +87,8 @@ function ownCells(def: PriceDef): PriceCells {
   return { tiers: 1, opaque: true }
 }
 
-const round = (n: number) => Number(n.toFixed(6))
+/** A product of multipliers as shown: six decimals at most. */
+export const round = (n: number) => Number(n.toFixed(6))
 
 /**
  * What every pricing view shows of a price: its cells, times the multiplier
@@ -100,9 +103,9 @@ export function priceCells(def: PriceDef | null | undefined): PriceCells {
   if (def.multiplier === undefined) return cells
   if (cells.opaque) return { ...cells, multiplier: def.multiplier }
   const k = num(def.multiplier, 1)
-  if (cells.perRequest !== undefined) return { ...cells, perRequest: round(cells.perRequest * k) }
-  const { tokens } = cells
   const times = (v: number | null) => (v === null ? null : round(v * k))
+  if (cells.perRequest !== undefined) return { ...cells, perRequest: times(cells.perRequest) }
+  const { tokens } = cells
   return tokens ? { ...cells, tokens: tokenPricesFrom(Object.fromEntries(TOKEN_VARS.map((v) => [v, times(tokens[v])]))) } : cells
 }
 

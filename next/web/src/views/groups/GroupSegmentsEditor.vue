@@ -9,8 +9,8 @@ import AccessRateTable from '@/components/pricing/AccessRateTable.vue'
 import PersonalSegmentPicker from '@/components/pricing/PersonalSegmentPicker.vue'
 import SegmentBadge from '@/components/pricing/SegmentBadge.vue'
 import { blankSetting, type DraftedSetting } from '@/components/pricing/accessRateDrafts'
+import { fetchNamedSegments } from '@/components/pricing/segmentLookup'
 import { useAccessRateDrafts } from '@/components/pricing/useAccessRateDrafts'
-import { fetchFirstPage } from '@/composables/lookups'
 
 // Who may use a group and at which rate: one row per user group, the named
 // ones first, then the personal ones that have something in this group or
@@ -30,7 +30,7 @@ const query = computed(() => (included.value.length ? { include: included.value.
 
 async function fetchSettings(): Promise<SegmentGroupSetting[]> {
   if (props.groupId !== null) return api.get<SegmentGroupSetting[]>(`/groups/${props.groupId}/segments`, query.value)
-  const [named, personal] = await Promise.all([fetchFirstPage<Segment>('/segments'), Promise.all(included.value.map((id) => api.get<Segment>(`/segments/${id}`)))])
+  const [named, personal] = await Promise.all([fetchNamedSegments(), Promise.all(included.value.map((id) => api.get<Segment>(`/segments/${id}`)))])
   return [...named, ...personal].map(blankSetting)
 }
 

@@ -19,7 +19,7 @@ const problem = (w: Cell) => {
 describe('API key group cell', () => {
   it('shows the group as a badge of its name and rate, and nothing else while it serves the key', () => {
     const w = render({ multiplier: '0.8', platforms: ['anthropic'], status: 'active' })
-    expect(badge(w).text()).toBe('vip0.8x')
+    expect(badge(w).text()).toBe('vip×0.8')
     expect(problem(w)).toBeUndefined()
     // Platforms the server did not report are not a problem either.
     expect(problem(render({}))).toBeUndefined()

@@ -16,7 +16,7 @@ describe('group badge', () => {
   it('shows the name and the rate, without platform marks', () => {
     const w = render({ platforms: ['anthropic', 'volcengine'], rate: '1.50' })
     expect(w.find('[data-platform]').exists()).toBe(false)
-    expect(w.text()).toBe('team1.5x')
+    expect(w.text()).toBe('team×1.5')
     expect(render({ rate: null }).text()).toBe('team')
   })
 })

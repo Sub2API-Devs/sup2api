@@ -6,6 +6,7 @@ import type { Group } from '@/api/types'
 import type { Segment, SegmentGroupPatch, SegmentGroupSetting } from '@/api/pricing'
 import { effectiveRate, sameRate, validRate } from './pricingFormat'
 import { withDraft } from './drafts'
+import { validDiscount } from './segmentForm'
 
 /** The end of a setting the rows of an editor differ in: the segments of one group, or the groups of one segment. */
 export type SettingSide = 'segment' | 'group'
@@ -35,15 +36,15 @@ export interface DraftedSetting extends SegmentGroupSetting {
 /** An override that may be saved: none, or a rate. */
 export const validOverride = (v: string | null): boolean => v === null || validRate(v)
 
-/** A rate of the form once it is one, the saved one until then. */
-const rated = (typed: string | undefined, saved: string) => (typed !== undefined && validRate(typed) ? typed.trim() : saved)
+/** A value of the form once `valid` takes it (a rate, a discount), the saved one until then. */
+const rated = (typed: string | undefined, saved: string, valid: (v: string) => boolean) => (typed !== undefined && valid(typed.trim()) ? typed.trim() : saved)
 
 /** A row as it reads under `draft` and `terms`: the group's visibility, access and the rate follow both. */
 export function draftedSetting(side: SettingSide, saved: SegmentGroupSetting, draft?: SettingDraft, terms: SettingTerms = {}): DraftedSetting {
   const granted = draft?.granted ?? saved.granted
   const rate_override = draft?.rate_override === undefined ? saved.rate_override : draft.rate_override
   const visibility = terms.visibility ?? saved.group.visibility
-  const base = { group_default: rated(terms.groupDefault, saved.rate.group_default), discount: rated(terms.discount, saved.rate.discount) }
+  const base = { group_default: rated(terms.groupDefault, saved.rate.group_default, validRate), discount: rated(terms.discount, saved.rate.discount, validDiscount) }
   return {
     ...saved,
     id: saved[side].id,

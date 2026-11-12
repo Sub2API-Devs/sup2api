@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -224,6 +225,60 @@ func TestRetryNeedsHistoryOfCustomPrice(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 	require.Equal(t, "billed 0.20800000 0.70800000 2.0000", f.moneyColumns("lost-custom"))
+}
+
+// With items beside it, a custom price's primary usage still needs its
+// expression: without it in the history the row fails, as one without items
+// does, instead of charging the items and leaving the primary usage free.
+func TestRetryNeedsHistoryOfCustomPriceWithItems(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	before := f.balance()
+	rec := f.customPriced("lost-custom-items")
+	rec.Additional = []core.PricedUsage{{Kind: "advisor", Model: "other-model", Price: &core.PriceRule{Expression: `tier("extra",p)`, Mode: "expression"},
+		UsageSemantics: "exclusive", Tokens: core.UsageTokens{Input: 1_000_000}, RateMultiplier: decimal.NewFromInt(1)}}
+	_, err := f.svc.insert(ctx, []*core.UsageRecord{rec})
+	require.NoError(t, err)
+	f.loseHistory()
+	time.Sleep(5 * time.Millisecond)
+
+	n, err := f.svc.RetryPending(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, "failed 0.00000000 null 2.0000", f.moneyColumns("lost-custom-items"))
+	require.Equal(t, "price expression not found", f.billingDetail("lost-custom-items").Get("error").String())
+	require.True(t, before.Equal(f.balance()), "charged %s", before.Sub(f.balance()))
+
+	// Once the history has it again: the primary usage at the custom price
+	// (0.104 x 2) and the item (1).
+	f.customPrice()
+	n, err = f.svc.RetryPending(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, "billed 1.20800000", f.scalar(`SELECT billing_status || ' ' || total_cost::text FROM usage_logs WHERE request_id = 'lost-custom-items'`))
+}
+
+// The inputs a record is first settled by are the inputs a retry or a
+// reconcile reads back from billing_detail: one function takes both from the
+// record (recordInputs), the price rule's trace included.
+func TestStoredInputsAreFirstSettlementInputs(t *testing.T) {
+	f := newFixture(t)
+	rec := f.scaled("inputs-same", "0.5")
+	rec.PriceParams = map[string]string{"speed": `"fast"`}
+	rec.Additional = []core.PricedUsage{{Kind: "advisor", Model: "other-model", Price: &core.PriceRule{Expression: `tier("extra",p)`, Mode: "expression"},
+		UsageSemantics: "exclusive", Tokens: core.UsageTokens{Input: 1_000_000}, RateMultiplier: decimal.NewFromInt(1)}}
+	_, err := f.svc.insert(t.Context(), []*core.UsageRecord{rec})
+	require.NoError(t, err)
+
+	var stored pendingDetail
+	require.NoError(t, json.Unmarshal([]byte(f.scalar(`SELECT billing_detail::text FROM usage_logs WHERE request_id = 'inputs-same'`)), &stored))
+	first, err := json.Marshal(fromRecord(rec).Inputs)
+	require.NoError(t, err)
+	again, err := json.Marshal(stored.Inputs)
+	require.NoError(t, err)
+	require.JSONEq(t, string(first), string(again))
+	require.Equal(t, "0.5", gjson.GetBytes(again, "pricing.scale").String())
+	require.Equal(t, "other-model", gjson.GetBytes(again, "additional.0.Model").String())
 }
 
 // A reconcile reprices the real usage with the rule the reservation froze,

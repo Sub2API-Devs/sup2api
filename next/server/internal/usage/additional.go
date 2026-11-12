@@ -39,7 +39,11 @@ func priceComponents(p *pending, price func(*pending) (amounts, BillingDetail, s
 	var sum amounts
 	detail := BillingDetail{Inputs: p.Inputs, Attempts: p.Attempts + 1}
 	hash := ""
-	if p.Expression != "" && len(p.Inputs.Replacement) == 0 {
+	// The primary usage is priced unless it is replaced or has no price. A
+	// custom price whose expression the price history no longer has is not
+	// "no price": priceOne refuses it and the row fails, as it does without
+	// items (CONTRACTS §97.4), rather than the primary usage going free.
+	if (p.Expression != "" || p.price().Base != nil) && len(p.Inputs.Replacement) == 0 {
 		var err error
 		sum, detail, hash, err = price(&primary)
 		if err != nil {
