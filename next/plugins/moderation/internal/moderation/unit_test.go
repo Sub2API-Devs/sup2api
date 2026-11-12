@@ -444,7 +444,7 @@ func TestDecodeSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.Mode != ModeObserve || s.BlockStatus != 500 || s.HitRetentionDays != 400 || s.PassRetentionDays != 3 ||
-		strings.Join(s.ExemptUserIDs, ",") != "7,8" || s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch {
+		strings.Join(s.AllowlistUserIDs, ",") != "7,8" || s.WatchDays != 1 || s.InputMaxChars != 12000 || !s.AutoWatch {
 		t.Fatalf("settings = %+v", s)
 	}
 	// exempt_user_ids is the retired name of the allowlist; a missing

@@ -45,12 +45,15 @@ type eventRec struct {
 	QueueMs          int
 	KeepUntil        time.Time
 	// Replayed: a cached hit replayed (hook.go replay), not a new violation.
-	Replayed   bool
-	WatchLevel string // level when admitted (not stored)
+	Replayed bool
 	// FlowSource and FlowFallback: how the request found its flow
 	// (flowMatch, CONTRACTS §72.17, 0.10.0); NULL when "".
 	FlowSource   string
 	FlowFallback *StaleBinding
+	// Level, LevelSource: the handling that applied (decideHandling); ""
+	// is stored as NULL.
+	Level       string
+	LevelSource string
 }
 
 // fillFromTrace derives result, categories and severity.
@@ -199,15 +202,15 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 				llm_model, turns, latency_ms, prompt_tokens, completion_tokens,
 				result, timing, flow_id, flow_version, highest_category, highest_score, hit_categories, trace,
 				input_format, input_message, input_message_size, image_count, keep_until, queue_ms, endpoint, session_fp, replayed,
-				flow_source, flow_fallback_id, flow_fallback_reason)
+				flow_source, flow_fallback_id, flow_fallback_reason, level, level_source)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'','',$13,$14,$15,false,'',0,$16,0,0,
 				$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,
-				NULLIF($34,''),$35,$36) RETURNING id`,
+				NULLIF($34,''),$35,$36, NULLIF($37, ''), NULLIF($38, '')) RETURNING id`,
 			e.At, e.RequestID, e.UserID, e.APIKeyID, e.GroupID, e.Model, e.Protocol, mode,
 			verdict, action, e.HitCategories, e.Severity, e.Text, e.TextChars, e.TextHash, e.LatencyMs,
 			e.Result, e.Timing, e.FlowID, e.FlowVersion, e.HighestCategory, e.HighestScore, e.HitCategories, e.Trace,
 			e.InputFormat, e.InputMessage, e.InputMessageSize, e.ImageCount, e.KeepUntil, e.QueueMs, e.Endpoint, e.SessionFp, e.Replayed,
-			e.FlowSource, fallbackID, fallbackReason)
+			e.FlowSource, fallbackID, fallbackReason, e.Level, e.LevelSource)
 	}
 	ids := make([]int64, len(evs))
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
@@ -241,7 +244,7 @@ func (p *Plugin) afterWrite(ctx context.Context, evs []eventRec, ids []int64) {
 		}
 		watchChanged = watchChanged || changed
 		// Allowlisted users are never banned (nor watched automatically,
-		// liveWatchEntry).
+		// enterWatch).
 		if !c.allowlisted(e.UserID) {
 			banned[e.UserID] = true
 		}
@@ -260,9 +263,10 @@ func newEpoch() int64 {
 	return int64(binary.BigEndian.Uint64(b[:]) >> 1)
 }
 
-// recordWatchHit adds the user to the watch list or counts the violation
-// (one per request id; see countWatchHit for the levels that count).
-// changed = the level set changed.
+// recordWatchHit applies a violation to the watch list: escalation or
+// auto_watch (enterWatch), then the count on the user's entry (one per
+// request id; see countWatchHit for the levels that count). changed = the
+// level set changed.
 func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, eventID int64) (changed bool, err error) {
 	db, err := p.db(ctx)
 	if err != nil {
@@ -274,11 +278,15 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 		if err := lockBlockSubject(ctx, tx, e.UserID); err != nil {
 			return err
 		}
-		w, found, entryChanged, err := liveWatchEntry(ctx, tx, c, e.UserID, now)
+		w, found, expired, err := liveWatchEntry(ctx, tx, e.UserID, now)
 		if err != nil {
 			return err
 		}
-		changed = entryChanged
+		w, found, entered, err := enterWatch(ctx, tx, c, w, found, e.UserID, now)
+		if err != nil {
+			return err
+		}
+		changed = expired || entered
 		if found {
 			if err := countWatchHit(ctx, tx, c, w, e, eventID, now); err != nil {
 				return err
@@ -292,25 +300,38 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 	return changed, err
 }
 
-// liveWatchEntry returns the user's unexpired watch entry: an expired one
-// is removed first, and with auto_watch a user not on the list joins it at
-// the default level, so that under default enforce the new entry does not
-// lower the user to observe (§72.8, new-api autoAddModerationWatch). An
-// allowlisted user is only moderated in the background, so auto_watch never
-// adds one (a manual entry still may, at the observe level). changed: an
-// entry was removed or added; found=false: the user is not watched.
-func liveWatchEntry(ctx context.Context, tx pgx.Tx, c *config, uid int64, now time.Time) (w Watch, found, changed bool, err error) {
-	if w, found, err = loadWatch(ctx, tx, uid); err != nil {
+// liveWatchEntry returns the user's unexpired watch entry (found=false: the
+// user is not watched); an expired one is removed first (expired).
+func liveWatchEntry(ctx context.Context, tx pgx.Tx, uid int64, now time.Time) (w Watch, found, expired bool, err error) {
+	if w, found, err = loadWatch(ctx, tx, uid); err != nil || !found {
 		return w, false, false, err
 	}
-	if found && w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
-		if err := expireEntry(ctx, tx, w); err != nil {
-			return w, false, false, err
-		}
-		found, changed = false, true
+	if w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
+		return w, false, true, expireEntry(ctx, tx, w)
 	}
-	if found || !c.AutoWatch || c.allowlisted(uid) {
-		return w, found, changed, nil
+	return w, true, false, nil
+}
+
+// enterWatch applies a violation's automatic watch changes in the order
+// ban > escalation > auto_watch (CONTRACTS §72.8 0.10.0): the ban
+// (applyBans, after this) wins, so escalates skips a user the same
+// violations ban; escalation puts the user at the enforce level, else
+// auto_watch adds a user who is not on the list at the default level, so
+// that under default enforce the new entry does not lower the user to
+// observe (new-api autoAddModerationWatch). One change, one history row. An
+// allowlisted user is only moderated in the background, so auto_watch never
+// adds one. entered: an entry was added or raised.
+func enterWatch(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, uid int64, now time.Time) (Watch, bool, bool, error) {
+	n, up, err := escalates(ctx, tx, c, w, found, uid, now)
+	if err != nil {
+		return w, found, false, err
+	}
+	switch {
+	case up:
+		w, err = escalateEntry(ctx, tx, c, w, found, uid, n, now)
+		return w, true, true, err
+	case found || !c.AutoWatch || c.allowlisted(uid):
+		return w, found, false, nil
 	}
 	exp := now.Add(c.watchFor)
 	w = Watch{UserID: uid, Level: c.defaultLevel, Source: "auto", SinceAt: now, ExpiresAt: &exp, ViolationEpoch: newEpoch()}
@@ -318,10 +339,70 @@ func liveWatchEntry(ctx context.Context, tx pgx.Tx, c *config, uid int64, now ti
 		VALUES ($1, $2, $3, $4, $5, $6, $4)`, w.UserID, w.Level, w.Source, now, exp, w.ViolationEpoch); err != nil {
 		return w, false, false, err
 	}
-	if err := watchEvent(ctx, tx, watchChange{uid: uid, action: "auto_add", to: w.Level, reason: "首次可疑记录 / first suspicious record"}); err != nil {
-		return w, false, false, err
+	err = watchEvent(ctx, tx, watchChange{uid: uid, action: "auto_add", to: w.Level, reason: "首次可疑记录 / first suspicious record"})
+	return w, err == nil, err == nil, err
+}
+
+// escalates reports whether a violation puts uid at the enforce level:
+// escalate_violations violations within escalate_window_seconds, counted
+// like the ban threshold (countViolations) and only after the user's latest
+// manual watch change, so that an administrator's downgrade or removal is
+// not undone by the violations it already judged. Never for N = 0, the
+// users of the lists, a locked entry or an entry at enforce already, nor
+// when the same violations ban the user (the ban refuses every request).
+// n is the count.
+func escalates(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, uid int64, now time.Time) (n int64, up bool, err error) {
+	if c.EscalateViolations <= 0 || c.lockKind(uid) != "" || (found && (w.Locked || w.Level == LevelEnforce)) {
+		return 0, false, nil
 	}
-	return w, true, true, nil
+	since := now.Add(-c.escalateWindow)
+	var manual *time.Time
+	if err := tx.QueryRow(ctx, `SELECT max(created_at) FROM watch_events WHERE user_id = $1 AND operator_id IS NOT NULL`, uid).Scan(&manual); err != nil {
+		return 0, false, err
+	}
+	if manual != nil && manual.After(since) {
+		since = *manual
+	}
+	if n, err = countViolations(ctx, tx, uid, since); err != nil || n < int64(c.EscalateViolations) {
+		return n, false, err
+	}
+	_, banned, err := banReached(ctx, tx, c, uid, now)
+	return n, !banned, err
+}
+
+// escalateEntry puts the user at the enforce level for watch_days: a new
+// entry, or the observe entry raised, which opens a new counting window as
+// a level change by hand does (updateWatch). The source is auto (the CHECK
+// of watchlist.source has no other value for it); the history action
+// auto_escalate tells it apart.
+func escalateEntry(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, uid, n int64, now time.Time) (Watch, error) {
+	from := ""
+	if found {
+		from = w.Level
+	}
+	exp := now.Add(c.watchFor)
+	w.UserID, w.Level, w.Source, w.SinceAt, w.ExpiresAt, w.ViolationEpoch, w.ViolationCount = uid, LevelEnforce, "auto", now, &exp, newEpoch(), 0
+	if _, err := tx.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, since_at, expires_at, violation_epoch, updated_at)
+		VALUES ($1, 'enforce', 'auto', $2, $3, $4, $2)
+		ON CONFLICT (user_id) DO UPDATE SET level = 'enforce', source = 'auto', since_at = $2, expires_at = $3,
+			violation_epoch = $4, violation_count = 0, updated_at = $2`, w.UserID, now, exp, w.ViolationEpoch); err != nil {
+		return w, err
+	}
+	en, zh := windowText(c.EscalateWindowSeconds)
+	return w, watchEvent(ctx, tx, watchChange{uid: w.UserID, action: "auto_escalate", from: from, to: LevelEnforce,
+		reason: fmt.Sprintf("%d violations within %s / %s内违规 %d 次", n, en, zh, n)})
+}
+
+// windowText formats a window of seconds in its largest whole unit (h, m
+// or s), in English and Chinese.
+func windowText(sec int) (en, zh string) {
+	switch {
+	case sec%3600 == 0:
+		return fmt.Sprintf("%dh", sec/3600), fmt.Sprintf("%d 小时", sec/3600)
+	case sec%60 == 0:
+		return fmt.Sprintf("%dm", sec/60), fmt.Sprintf("%d 分钟", sec/60)
+	}
+	return fmt.Sprintf("%ds", sec), fmt.Sprintf("%d 秒", sec)
 }
 
 // countWatchHit counts a hit on the entry w. An observe entry, and under
@@ -381,9 +462,9 @@ func (p *Plugin) applyBans(ctx context.Context, users map[int64]bool) {
 			if err := lockBlockSubject(ctx, tx, uid); err != nil {
 				return err
 			}
+			var reached bool
 			var err error
-			n, err = countViolations(ctx, tx, uid, now.Add(-c.banWindow))
-			if err != nil || n < int64(c.BanThreshold) {
+			if n, reached, err = banReached(ctx, tx, c, uid, now); err != nil || !reached {
 				return err
 			}
 			var expires *time.Time
@@ -423,6 +504,17 @@ func lockBlockSubject(ctx context.Context, tx pgx.Tx, uid int64) error {
 	}
 	_, err := tx.Exec(ctx, `SELECT user_id FROM block_subjects WHERE user_id = $1 FOR UPDATE`, uid)
 	return err
+}
+
+// banReached counts uid's violations of the ban window (countViolations);
+// reached = they reach ban_threshold (never while it is 0). The caller holds
+// the user's lock.
+func banReached(ctx context.Context, tx pgx.Tx, c *config, uid int64, now time.Time) (n int64, reached bool, err error) {
+	if c.BanThreshold <= 0 {
+		return 0, false, nil
+	}
+	n, err = countViolations(ctx, tx, uid, now.Add(-c.banWindow))
+	return n, err == nil && n >= int64(c.BanThreshold), err
 }
 
 // countViolations counts suspicious requests (one per request id; false
@@ -535,8 +627,12 @@ func (p *Plugin) refreshLoop(ctx context.Context) {
 		if err := p.reloadBlocks(rctx); err != nil && ctx.Err() == nil {
 			p.log.Debug("moderation: block list reload failed", "error", err.Error())
 		}
-		if err := p.pollVersions(rctx); err != nil && ctx.Err() == nil {
-			p.log.Debug("moderation: config reload failed", "error", err.Error())
+		if err := p.pollVersions(rctx); err != nil {
+			if ctx.Err() == nil {
+				p.log.Debug("moderation: config reload failed", "error", err.Error())
+			}
+		} else if err := p.reconcileLocks(rctx); err != nil && ctx.Err() == nil {
+			p.log.Warn("moderation: reconciling the locked watch entries failed, retrying later", "error", err.Error())
 		}
 		cancel()
 	}

@@ -17,7 +17,7 @@ import (
 )
 
 // GET /watchlist like new-api ListModerationWatch: filters level, new_only,
-// category, user_id / user_ids (the console resolves usernames to ids
+// locked, category, user_id / user_ids (the console resolves usernames to ids
 // through the core), sort new | last_hit | severity | total, and per-row
 // aggregates of the user's suspicious records.
 
@@ -72,6 +72,7 @@ func watchFilter(req *pluginv1.HTTPRequest, now time.Time) (string, []any, plugi
 	default:
 		f.errs = f.errs.Add("new_only", "enum", "new_only must be true or false / new_only 取值为 true、false")
 	}
+	f.flag(req, "locked", "w.locked")
 	if v := pluginsdk.Query(req, "category"); v != "" {
 		if !jevCategoryRe.MatchString(v) && !categoryIDRe.MatchString(v) {
 			f.errs = f.errs.Add("category", "invalid", "category is invalid / 分类格式无效")
@@ -167,7 +168,7 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 	r := &watchRows{byID: map[int64]*WatchItem{}, categories: map[int64]map[string]int64{}, grouped: map[int64]bool{}}
 	c := p.cfg.Load()
 	for i, w := range list {
-		items[i] = WatchItem{Watch: w, Allowlisted: c.allowlisted(w.UserID), Blocklisted: c.blocklisted(w.UserID),
+		items[i] = WatchItem{Watch: c.withLock(w), Allowlisted: c.allowlisted(w.UserID), Blocklisted: c.blocklisted(w.UserID),
 			OtherGroups: []int64{}, TopCategories: []CategoryCount{}}
 		r.ids = append(r.ids, w.UserID)
 		r.byID[w.UserID] = &items[i]

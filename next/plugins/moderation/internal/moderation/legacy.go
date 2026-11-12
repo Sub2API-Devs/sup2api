@@ -3,9 +3,108 @@ package moderation
 import (
 	"context"
 	"encoding/json"
+	"math"
+	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
 )
+
+// legacySetup is the 0.1 single-model setup (the retired keys base_url …
+// model_patterns of the settings), read only by the one-time conversion: an
+// installation upgraded from 0.1 straight to a later version still converts
+// it. on_error is not read any more (0.10.0): moderation errors always let
+// the request pass, which the conversion used to log.
+type legacySetup struct {
+	BaseURL       string
+	APIKey        string
+	Model         string
+	SystemPrompt  string
+	Categories    []Category
+	ToolChoice    string
+	MaxTurns      int
+	Temperature   float64
+	MaxTokens     int
+	TimeoutMs     int
+	SampleRate    int
+	GroupIDs      []int64
+	ModelPatterns []string
+}
+
+// defaultLegacySetup is the schema defaults of the 0.1 keys.
+func defaultLegacySetup() legacySetup {
+	return legacySetup{ToolChoice: "required", MaxTurns: 3, MaxTokens: 512, TimeoutMs: 10000, SampleRate: 100}
+}
+
+// legacySetup reads the 0.1 single-model setup (converted once, §72.12).
+func (d decoder) legacySetup() legacySetup {
+	s := defaultLegacySetup()
+	d.str("base_url", &s.BaseURL)
+	s.BaseURL = strings.TrimSpace(s.BaseURL)
+	if s.BaseURL != "" && !baseURLRe.MatchString(s.BaseURL) {
+		s.BaseURL = ""
+	}
+	d.str("api_key", &s.APIKey)
+	s.APIKey = strings.TrimSpace(s.APIKey)
+	d.str("model", &s.Model)
+	s.Model = textutil.TruncateRunes(strings.TrimSpace(s.Model), 200)
+	d.str("system_prompt", &s.SystemPrompt)
+	s.SystemPrompt = textutil.TruncateRunes(s.SystemPrompt, 20000)
+	s.Categories = d.legacyCategories()
+	d.enum("tool_choice", &s.ToolChoice, "required", "function", "auto")
+	d.integer("max_turns", &s.MaxTurns, 1, 5)
+	if d.num("temperature", &s.Temperature) {
+		s.Temperature = math.Max(0, math.Min(2, s.Temperature))
+	}
+	d.integer("max_tokens", &s.MaxTokens, 64, 4096)
+	d.integer("timeout_ms", &s.TimeoutMs, 1000, 25000)
+	d.integer("sample_rate", &s.SampleRate, 1, 100)
+	for _, g := range d.strList("group_ids") {
+		if id, err := strconv.ParseInt(strings.TrimSpace(g), 10, 64); err == nil && id > 0 {
+			s.GroupIDs = append(s.GroupIDs, id)
+		}
+	}
+	for _, p := range d.strList("model_patterns") {
+		if p = strings.TrimSpace(p); p != "" {
+			s.ModelPatterns = append(s.ModelPatterns, p)
+		}
+	}
+	return s
+}
+
+// legacyCategories reads the categories of the 0.1 setup (at most 50,
+// invalid and repeated ids dropped).
+func (d decoder) legacyCategories() []Category {
+	v, ok := d.m["categories"]
+	if !ok {
+		return nil
+	}
+	var cats []struct {
+		ID          any `json:"id"`
+		Description any `json:"description"`
+	}
+	if json.Unmarshal(v, &cats) != nil {
+		return nil
+	}
+	var out []Category
+	seen := map[string]bool{}
+	for _, c := range cats {
+		id, _ := c.ID.(string)
+		desc, _ := c.Description.(string)
+		id = strings.TrimSpace(id)
+		if !categoryIDRe.MatchString(id) || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, Category{ID: id, Description: textutil.TruncateRunes(strings.TrimSpace(desc), 500)})
+		if len(out) == 50 {
+			break
+		}
+	}
+	return out
+}
 
 // convertLegacyOnce turns the 0.1 single-model setup into a channel, an
 // llm_verdict auditor and a published flow, once per installation
@@ -34,7 +133,7 @@ func (p *Plugin) convertLegacyOnce(ctx context.Context) {
 			return err
 		}
 		if channels == 0 && c.legacyReady {
-			if err := p.convertLegacy(ctx, tx, c); err != nil {
+			if err := p.convertLegacy(ctx, tx, c.legacy); err != nil {
 				return err
 			}
 			converted = true
@@ -48,16 +147,13 @@ func (p *Plugin) convertLegacyOnce(ctx context.Context) {
 	}
 	p.legacyDone.Store(true)
 	if converted {
-		msg := "moderation: converted the 0.1 settings into channel, auditor and flow"
-		if c.OnError == "block" {
-			msg += "; on_error=block is no longer supported, moderation errors now always let the request pass"
-		}
-		p.log.Info(msg, "groups", len(c.GroupIDs), "model_patterns", len(c.ModelPatterns))
+		p.log.Info("moderation: converted the 0.1 settings into channel, auditor and flow",
+			"groups", len(c.legacy.GroupIDs), "model_patterns", len(c.legacy.ModelPatterns))
 		p.configChanged(ctx)
 	}
 }
 
-func (p *Plugin) convertLegacy(ctx context.Context, tx pgx.Tx, c *config) error {
+func (p *Plugin) convertLegacy(ctx context.Context, tx pgx.Tx, c legacySetup) error {
 	now := p.now().UTC()
 	var chID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO channels (type, protocol, name, base_url, api_key_tail, model, timeout_ms, created_at, updated_at)

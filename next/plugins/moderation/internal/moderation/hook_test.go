@@ -772,13 +772,13 @@ func TestBansExemptAndModeOff(t *testing.T) {
 	if n := len(decodeData[[]Block](t, h.Do("GET", "/blocks", nil, nil))); n != 1 {
 		t.Fatalf("blocks = %d, want only user 3", n)
 	}
-	// By hand an allowlisted user cannot be banned, but can be put on the
-	// watch list (no entry was added automatically).
+	// By hand an allowlisted user cannot be banned, nor watched: the user's
+	// entry is the locked entry of the list (locks.go).
 	if resp := h.Do("POST", "/blocks", nil, map[string]any{"user_id": 8}); resp.GetStatus() != 400 || !strings.Contains(string(resp.GetBody()), `"allowlisted"`) {
 		t.Fatalf("ban of an allowlisted user = %d %s", resp.GetStatus(), resp.GetBody())
 	}
-	if w := decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 8})); w.Source != "manual" || w.Level != LevelObserve {
-		t.Fatalf("watch of an allowlisted user = %+v", w)
+	if resp := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 8}); resp.GetStatus() != 409 || p.watchLevel(8) != LevelObserve {
+		t.Fatalf("watch of an allowlisted user = %d %s", resp.GetStatus(), resp.GetBody())
 	}
 	if errs := h.Configure(map[string]any{"mode": ModeOff}, nil); len(errs) > 0 {
 		t.Fatal(errs)

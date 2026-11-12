@@ -2,9 +2,7 @@ package moderation
 
 import (
 	"context"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -51,38 +49,13 @@ const (
 	ai_verdict, ai_severity, ai_category, ai_evidence, ai_reason, ai_analysis_id, verdict, reason, error, llm_model, text, trace FROM events WHERE id = $1`
 )
 
-// migrationsUpTo copies the migrations whose names sort up to last into a
-// directory of their own.
-func migrationsUpTo(t *testing.T, last string) string {
-	t.Helper()
-	src := filepath.Join("..", "..", "migrations")
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := t.TempDir()
-	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), ".sql") || e.Name() > last {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(src, e.Name()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, e.Name()), b, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
-}
-
 // Migration 0011 during a rolling upgrade: 0.9.3 nodes write and read flows
 // and records with their own statements before and after it, and a 0.10.0
 // node reads what they wrote - a flow without a scope runs with all and shows
 // null, a record without a flow source shows none.
 func TestMigration0011Rolling(t *testing.T) {
 	dsn, schema := pluginsdktest.NewSchema(t, "plg_moderation_t")
-	pluginsdktest.ApplyMigrations(t, dsn, schema, migrationsUpTo(t, "0010_~"))
+	pluginsdktest.ApplyMigrations(t, dsn, schema, migrationDir(t, func(n string) bool { return n < "0011" }))
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {

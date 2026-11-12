@@ -317,6 +317,7 @@ func (s *snapshot) isSelf(text string) bool {
 type watchEntry struct {
 	Level   string
 	Expires time.Time // zero = no expiry
+	Locked  bool      // mirrors a user list (locks.go)
 }
 
 func secretContext(id int64, what string) string {
@@ -582,18 +583,19 @@ func (p *Plugin) reloadWatch(ctx context.Context) error {
 	if err := db.QueryRow(ctx, `SELECT watch_version FROM config_state WHERE id = 1`).Scan(&version); err != nil {
 		return err
 	}
-	rows, err := db.Query(ctx, `SELECT user_id, level, expires_at FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC())
+	rows, err := db.Query(ctx, `SELECT user_id, level, expires_at, locked FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC())
 	if err != nil {
 		return err
 	}
 	m := map[int64]watchEntry{}
 	var (
-		uid   int64
-		level string
-		exp   *time.Time
+		uid    int64
+		level  string
+		exp    *time.Time
+		locked bool
 	)
-	if _, err := pgx.ForEachRow(rows, []any{&uid, &level, &exp}, func() error {
-		e := watchEntry{Level: level}
+	if _, err := pgx.ForEachRow(rows, []any{&uid, &level, &exp, &locked}, func() error {
+		e := watchEntry{Level: level, Locked: locked}
 		if exp != nil {
 			e.Expires = *exp
 		}
@@ -607,13 +609,13 @@ func (p *Plugin) reloadWatch(ctx context.Context) error {
 	return nil
 }
 
-// watchLevel returns the user's active watch level ("" = not watched).
-func (p *Plugin) watchLevel(uid int64) string {
+// liveWatch returns the user's live watch entry (ok = watched).
+func (p *Plugin) liveWatch(uid int64) (watchEntry, bool) {
 	e, ok := (*p.watch.Load())[uid]
 	if !ok || (!e.Expires.IsZero() && !p.now().Before(e.Expires)) {
-		return ""
+		return watchEntry{}, false
 	}
-	return e.Level
+	return e, true
 }
 
 // pollVersions reloads what changed since the last load (config_state).

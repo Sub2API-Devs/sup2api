@@ -64,6 +64,10 @@ type Plugin struct {
 	watchMu      sync.Mutex
 	watchVersion atomic.Int64
 
+	// locks: what the last complete reconcile of the locked entries saw
+	// (reconcileLocks).
+	locks atomic.Pointer[locksState]
+
 	legacyDone atomic.Bool
 	// parityDone: the one-time 0.8.0 conversion of the watch list ran
 	// (convertParityOnce).
@@ -259,7 +263,7 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 			}()
 		}
 	}
-	if !p.configured.Swap(true) || (c.enabled && (old == nil || !old.enabled)) {
+	if !p.configured.Swap(true) || (c.enabled && (old == nil || !old.enabled)) || listsChanged(old, c) {
 		p.kickRefresh()
 	}
 	return nil

@@ -251,6 +251,9 @@ type WatchCounts struct {
 	// seen. Under the default level enforce new entries join at enforce, so
 	// this is where users with new hits show.
 	BlockingWithNew int64 `json:"blocking_with_new"`
+	// Locked: the entries of the user lists (locks.go), counted in the
+	// levels above too.
+	Locked int64 `json:"locked"`
 }
 
 // HealthRow is the last-hour health of an auditor or a channel.
@@ -501,8 +504,8 @@ func (r *channelStat) health() bool { return r.source == SourceAudit }
 func (p *Plugin) watchCounts(ctx context.Context, db *pgxpool.Pool) (WatchCounts, error) {
 	var w WatchCounts
 	err := db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE level = 'observe'), count(*) FILTER (WHERE level = 'observe' AND hits_since_seen > 0),
-			count(*) FILTER (WHERE level = 'enforce'), count(*) FILTER (WHERE level = 'enforce' AND hits_since_seen > 0)
-		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking, &w.BlockingWithNew)
+			count(*) FILTER (WHERE level = 'enforce'), count(*) FILTER (WHERE level = 'enforce' AND hits_since_seen > 0), count(*) FILTER (WHERE locked)
+		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking, &w.BlockingWithNew, &w.Locked)
 	return w, err
 }
 

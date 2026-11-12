@@ -135,8 +135,8 @@
       "zh": "只后台审核的用户（从不拦截）"
     },
     "ui:help": {
-      "en": "Only moderated after their requests were sent on, never refused, never banned and never added to the watch list automatically. Someone also on the always-check-first list is checked first.",
-      "zh": "只在请求放行后审核：从不拦截、不会被封禁、也不会被自动加入观察名单。同时在“总是先审”名单里的用户按先审处理。"
+      "en": "Only moderated after their requests were sent on, never refused, never banned and never escalated. They show in the watch list as locked observe entries. Someone also on the always-check-first list is checked first.",
+      "zh": "只在请求放行后审核：从不拦截、不会被封禁、也不会被自动升级。在观察名单里显示为锁定的观察级条目。同时在“总是先审”名单里的用户按先审处理。"
     },
     "ui:details": {
       "en": "Moderators (users with moderation:read) are recognised automatically and are never put on the watch list.",
@@ -164,8 +164,8 @@
       "zh": "总是先审的用户"
     },
     "ui:help": {
-      "en": "Every request is checked before it is sent on and refused on a hit. This is not a ban: bans are under Banned users.",
-      "zh": "每个请求都先审后发，命中即拒绝。这不是封禁：封禁在“封禁用户”。"
+      "en": "Every request is checked before it is sent on and refused on a hit. They show in the watch list as locked enforce entries. This is not a ban: bans are under Banned users.",
+      "zh": "每个请求都先审后发，命中即拒绝。在观察名单里显示为锁定的拦截级条目。这不是封禁：封禁在“封禁用户”。"
     }
   },
   "block_status": {
@@ -249,8 +249,8 @@
       "zh": "自动升为拦截级"
     },
     "ui:help": {
-      "en": "Violations within the window that put a user at the enforce level (counted like the ban threshold; allowlisted, blocklisted and moderation staff excluded). A user not on the list is added at the enforce level. 0 disables it.",
-      "zh": "窗口内违规达到该次数，用户自动升为拦截级（计数口径同封禁阈值；“只后台审核”“总是先审”名单用户和审核管理员除外）。不在名单上的用户直接以拦截级加入。0 表示关闭。"
+      "en": "Violations within the window that put a user at the enforce level (counted like the ban threshold, from the last manual change of the user's entry; background-only and always-check-first users and moderation staff excluded; a ban reached by the same violations wins). A user not on the list is added at the enforce level. 0 disables it.",
+      "zh": "窗口内违规达到该次数，用户自动升为拦截级（计数口径同封禁阈值，从该用户最近一次人工调整名单之后算；“只后台审核”“总是先审”名单用户和审核管理员除外；同时达到封禁阈值时只封禁）。不在名单上的用户直接以拦截级加入。0 表示关闭。"
     }
   },
   "escalate_window_seconds": {
@@ -848,8 +848,8 @@
       "zh": "审核失败时"
     },
     "ui:help": {
-      "en": "No longer used: a stage that fails is skipped and the hits before it are kept; when no stage reaches a verdict the request passes.",
-      "zh": "已不再生效：某一级审核出错时跳过这一级、保留前面的命中；所有级都没有结论时放行。"
+      "en": "Not read since 0.10.0: a stage that fails is skipped and the hits before it are kept; when no stage reaches a verdict the request passes.",
+      "zh": "0.10.0 起不再读取：某一级审核出错时跳过这一级、保留前面的命中；所有级都没有结论时放行。"
     }
   },
   "sample_rate": {

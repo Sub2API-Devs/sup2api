@@ -135,7 +135,7 @@ func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRe
 	size := hookRequestSize(in)
 	if !p.admitBytes(c, size) {
 		p.stats.busy.Add(1)
-		return failResponse(c, p.preModerated(c, in.GetMeta().GetUserId()), DenyBusy, MsgBusy, notePrefix+"busy")
+		return failResponse(c, p.handlingOf(c, in.GetMeta().GetUserId()).pre(), DenyBusy, MsgBusy, notePrefix+"busy")
 	}
 	defer p.inflightBytes.Add(-size)
 	m, early := p.admit(ctx, c, in, snap, flow, match, model)
@@ -180,27 +180,49 @@ func (p *Plugin) precheck(c *config, in *pluginv1.GatewayRequestHookRequest) *pl
 	return nil
 }
 
-// effectiveLevel is the user's watch level, or the default level without a
-// live entry (new-api gate.go effectiveLevel).
-func (p *Plugin) effectiveLevel(c *config, uid int64) string {
-	if level := p.watchLevel(uid); level != "" {
-		return level
-	}
-	return c.defaultLevel
+// Level sources (events.level_source): what decided the level of a request
+// (decideHandling).
+const (
+	LevelSourceBlocklist = "blocklist"
+	LevelSourceAllowlist = "allowlist"
+	LevelSourceWatch     = "watch"
+	LevelSourceDefault   = "default"
+)
+
+// handling is the level a request is moderated at and what decided it.
+type handling struct {
+	level, source string
 }
 
-// preModerated reports whether the user's requests are moderated before
-// they are sent on (and refused on a hit): blocklisted users always,
-// allowlisted users never, everyone else at the enforce level (new-api
-// gate.go preModerated).
-func (p *Plugin) preModerated(c *config, uid int64) bool {
+// pre: the request is moderated before it is sent on (and refused on a
+// hit).
+func (h handling) pre() bool { return h.level == LevelEnforce }
+
+// decideHandling is the one decision of a request's level (CONTRACTS §72.5,
+// new-api gate.go preModerated): blocklisted users enforce, allowlisted
+// users observe (the blocklist wins), everyone else the level of their live
+// watch entry w (watched = there is one), or the default level of mode
+// without one. A locked entry only mirrors the lists (locks.go) and never
+// decides by itself: while the lists of the settings decide (0.10.0), the
+// locked entry of a user who just left them is ignored until it is removed.
+// Moderators are moderated like everyone (staff.go).
+func decideHandling(c *config, w watchEntry, watched bool, uid int64) handling {
 	switch {
 	case c.blocklisted(uid):
-		return true
+		return handling{LevelEnforce, LevelSourceBlocklist}
 	case c.allowlisted(uid):
-		return false
+		return handling{LevelObserve, LevelSourceAllowlist}
+	case watched && !w.Locked:
+		return handling{w.Level, LevelSourceWatch}
 	}
-	return p.effectiveLevel(c, uid) == LevelEnforce
+	return handling{c.defaultLevel, LevelSourceDefault}
+}
+
+// handlingOf decides the level of uid's request with the watch list in
+// memory.
+func (p *Plugin) handlingOf(c *config, uid int64) handling {
+	w, watched := p.liveWatch(uid)
+	return decideHandling(c, w, watched, uid)
 }
 
 // requestModel is the client model of a hook request: the model field, or
@@ -259,7 +281,8 @@ func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayReque
 		return nil, allowEmpty
 	}
 	m := &moderation{cfg: c, flow: flow, snap: snap, timing: TimingPost}
-	if p.preModerated(c, uid) {
+	h := p.handlingOf(c, uid)
+	if h.pre() {
 		m.timing = TimingPre
 	}
 	if m.timing == TimingPost && !sampled(req.hash, flow.Spec.SampleRate) {
@@ -270,7 +293,7 @@ func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayReque
 		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(model, 200), Protocol: protocol, Mode: c.Mode,
 		Endpoint: textutil.TruncateRunes(meta.GetEndpoint(), 255), SessionFp: textutil.TruncateRunes(meta.GetSessionFingerprint(), 64),
 		Timing: m.timing, FlowID: flow.ID, FlowVersion: flow.Version, InputFormat: protocol,
-		TextHash: hex.EncodeToString(req.hash[:]), WatchLevel: p.watchLevel(uid),
+		TextHash: hex.EncodeToString(req.hash[:]), Level: h.level, LevelSource: h.source,
 		FlowSource: match.source, FlowFallback: match.fallback,
 	}
 	pl, early := p.planUncached(ctx, m, req)

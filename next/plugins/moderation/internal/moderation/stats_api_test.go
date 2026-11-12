@@ -195,8 +195,9 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	mod := newFakeMod(t)
 	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "allowlist_user_ids": []string{"12"}})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
-	// auto_watch skips the allowlisted user 12: watched by hand.
-	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 12}))
+	// auto_watch skips the allowlisted user 12, whose entry is the locked
+	// entry of the list.
+	waitFor(t, "locked entry", func() bool { return p.watchLevel(12) == LevelObserve })
 	mustHook(t, h, hookReqAs(11, "", "MOD-HIT-violence one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual two"))
@@ -252,10 +253,10 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 		t.Fatalf("unknown user detail = %+v", d)
 	}
 	// Removing can record the reason.
-	if resp := h.Do("DELETE", "/watchlist/12", map[string]string{"reason": "no longer suspicious"}, nil); resp.GetStatus() != 200 {
+	if resp := h.Do("DELETE", "/watchlist/11", map[string]string{"reason": "no longer suspicious"}, nil); resp.GetStatus() != 200 {
 		t.Fatalf("delete with reason = %d %s", resp.GetStatus(), resp.GetBody())
 	}
-	if evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/12/events", nil, nil)); evs[0].Action != "remove" || evs[0].Reason != "no longer suspicious" {
+	if evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/11/events", nil, nil)); evs[0].Action != "remove" || evs[0].Reason != "no longer suspicious" {
 		t.Fatalf("remove history = %+v", evs[0])
 	}
 	// Without days or expires_at, enforce never expires and observe gets

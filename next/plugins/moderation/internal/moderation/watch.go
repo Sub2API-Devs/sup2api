@@ -32,13 +32,19 @@ type Watch struct {
 	HitsSinceSeen int       `json:"hits_since_seen"`
 	Note          string    `json:"note"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	// Locked: the entry mirrors a user list of the settings (locks.go) and
+	// is changed through the list only; Lock names that list (allowlist |
+	// blocklist), absent while a user who left the lists still has the
+	// entry (the next reconcile removes it).
+	Locked bool   `json:"locked"`
+	Lock   string `json:"lock,omitempty"`
 }
 
-const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, hits_since_seen, note, updated_at`
+const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, hits_since_seen, note, updated_at, locked`
 
 func scanWatch(r pgx.Row) (Watch, error) {
 	var w Watch
-	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.HitsSinceSeen, &w.Note, &w.UpdatedAt)
+	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.HitsSinceSeen, &w.Note, &w.UpdatedAt, &w.Locked)
 	w.SinceAt, w.UpdatedAt = w.SinceAt.UTC(), w.UpdatedAt.UTC()
 	w.ExpiresAt, w.LastHitAt = utcPtr(w.ExpiresAt), utcPtr(w.LastHitAt)
 	return w, err
@@ -207,15 +213,6 @@ func (p *Plugin) unbannableUser(ctx context.Context, c *config, uid int64) plugi
 	return p.staffUser(ctx, uid)
 }
 
-// allowlistedEnforce refuses the enforce level for an allowlisted user
-// (new-api moderationWatchChange).
-func allowlistedEnforce(c *config, uid int64, level *string) pluginsdk.FieldErrors {
-	if level != nil && *level == LevelEnforce && c.allowlisted(uid) {
-		return pluginsdk.FieldErrors{}.Add("level", "allowlisted", "allowlisted users can only be observed / 白名单用户只能设为观察")
-	}
-	return nil
-}
-
 func decodeBody(req *pluginv1.HTTPRequest, v any) *pluginv1.HTTPResponse {
 	dec := json.NewDecoder(strings.NewReader(string(req.GetBody())))
 	dec.UseNumber()
@@ -236,7 +233,7 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
 	uid := v.uid
-	if errs := append(allowlistedEnforce(c, uid, in.Level), p.staffUser(ctx, uid)...); len(errs) > 0 {
+	if errs := p.staffUser(ctx, uid); len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
 	if resp := p.missingUser(ctx, uid); resp != nil {
@@ -293,9 +290,6 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	c := p.cfg.Load()
 	v, errs := in.validate(false)
-	if len(errs) == 0 {
-		errs = allowlistedEnforce(c, uid, in.Level)
-	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
@@ -364,10 +358,14 @@ func (p *Plugin) deleteWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	})
 }
 
-var errConflict = errors.New("conflict")
+var (
+	errConflict = errors.New("conflict")
+	errLocked   = errors.New("locked")
+)
 
 // writeWatch runs one manual watch change under the user's lock, then
-// reloads and broadcasts.
+// reloads and broadcasts. A user of the lists, and a locked entry, is
+// changed through the lists only (locks.go): the change is refused.
 func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid int64, fn func(pgx.Tx, Watch, bool, time.Time) (Watch, error)) (*pluginv1.HTTPResponse, error) {
 	db, err := p.db(ctx)
 	if err != nil {
@@ -382,6 +380,9 @@ func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid 
 		w, found, err := loadWatch(ctx, tx, uid)
 		if err != nil {
 			return err
+		}
+		if p.cfg.Load().lockKind(uid) != "" || (found && w.Locked) {
+			return errLocked
 		}
 		if found && w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
 			if err := expireEntry(ctx, tx, w); err != nil {
@@ -399,6 +400,9 @@ func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid 
 		return pluginsdk.ErrorResponse(http.StatusNotFound, "not_found", "user is not on the watch list / 该用户不在观察名单中"), nil
 	case errors.Is(err, errConflict):
 		return pluginsdk.ErrorResponse(http.StatusConflict, "already_watched", "user is already on the watch list / 该用户已在观察名单中"), nil
+	case errors.Is(err, errLocked):
+		return pluginsdk.ErrorResponse(http.StatusConflict, "locked",
+			"the entry follows the background-only / always-check-first list of the settings: change the list / 该条目来自“只后台审核”或“总是先审”名单，请修改名单"), nil
 	case err != nil:
 		return nil, err
 	}

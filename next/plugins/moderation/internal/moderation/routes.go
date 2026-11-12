@@ -199,6 +199,11 @@ type Event struct {
 	FlowFallback   *StaleBinding `json:"flow_fallback,omitempty"`
 	fallbackID     *int64
 	fallbackReason *string
+	// Level, LevelSource: the handling that applied (observe | enforce,
+	// blocklist | allowlist | watch | default); absent on records written
+	// before 0.10.0 or by 0.9.x nodes.
+	Level       *string `json:"level,omitempty"`
+	LevelSource *string `json:"level_source,omitempty"`
 	// 0.1 records only.
 	Verdict  string `json:"verdict"`
 	Reason   string `json:"reason"`
@@ -258,13 +263,13 @@ type UserState struct {
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, endpoint, session_fp, mode, timing, result,
 	flow_id, flow_version, severity, hit_categories, highest_category, highest_score, review_status, reviewed_by, reviewed_at,
 	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until, replayed,
-	verdict, reason, error, llm_model, flow_source, flow_fallback_id, flow_fallback_reason`
+	verdict, reason, error, llm_model, flow_source, flow_fallback_id, flow_fallback_reason, level, level_source`
 
 func (e *Event) scanTargets() []any {
 	return []any{&e.ID, &e.CreatedAt, &e.RequestID, &e.UserID, &e.APIKeyID, &e.GroupID, &e.Model, &e.Protocol, &e.Endpoint, &e.SessionFp, &e.Mode, &e.Timing, &e.Result,
 		&e.FlowID, &e.FlowVersion, &e.Severity, &e.HitCategories, &e.HighestCategory, &e.HighestScore, &e.ReviewStatus, &e.ReviewedBy, &e.ReviewedAt,
 		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil, &e.Replayed,
-		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel, &e.FlowSource, &e.fallbackID, &e.fallbackReason}
+		&e.Verdict, &e.Reason, &e.Error, &e.LLMModel, &e.FlowSource, &e.fallbackID, &e.fallbackReason, &e.Level, &e.LevelSource}
 }
 
 func (e *Event) normalize() {
@@ -288,15 +293,7 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 	f.enum(req, "severity", "high", "medium", "low")
 	f.enum(req, "review_status", reviewStatuses...)
 	f.enum(req, "timing", TimingPre, TimingPost)
-	switch v := pluginsdk.Query(req, "replayed"); v {
-	case "":
-	case "true":
-		f.conds = append(f.conds, "replayed")
-	case "false":
-		f.conds = append(f.conds, "NOT replayed")
-	default:
-		f.errs = f.errs.Add("replayed", "enum", "replayed must be true or false / replayed 取值为 true、false")
-	}
+	f.flag(req, "replayed", "replayed")
 	f.enum(req, "verdict", VerdictPass, VerdictFlag, VerdictBlock, VerdictError)
 	f.enum(req, "action", ActionAllow, ActionDeny)
 	f.enum(req, "mode", ModeObserve, ModeEnforce)
@@ -558,6 +555,7 @@ func (p *Plugin) userState(ctx context.Context, db *pgxpool.Pool, uid int64) (Us
 	w, err := scanWatch(db.QueryRow(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, uid, now))
 	switch {
 	case err == nil:
+		w = c.withLock(w)
 		st.Watch = &w
 	case !errors.Is(err, pgx.ErrNoRows):
 		return st, err
