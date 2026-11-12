@@ -76,8 +76,50 @@ func AuthenticateBearer(ctx context.Context, tokens TokenVerifier, token, ip str
 	return WithAccessKey(WithUserID(ctx, id.UserID), id), id.UserID, nil
 }
 
+// PermissionSetOf is the set holding exactly keys, not a superuser.
+func PermissionSetOf(keys ...string) PermissionSet {
+	set := PermissionSet{Keys: make(map[string]struct{}, len(keys))}
+	for _, k := range keys {
+		set.Keys[k] = struct{}{}
+	}
+	return set
+}
+
+// Missing is what a wanted set holds beyond the set it is compared to: the
+// superuser flag and permission keys (sorted).
+type Missing struct {
+	Superuser bool
+	Keys      []string
+}
+
+// Empty reports whether nothing is missing.
+func (m Missing) Empty() bool { return !m.Superuser && len(m.Keys) == 0 }
+
+// Details is m as the details of a permission_denied error.
+func (m Missing) Details() map[string]any {
+	return map[string]any{"missing": append([]string{}, m.Keys...), "superuser": m.Superuser}
+}
+
+// Missing returns what want holds that s does not. A superuser misses
+// nothing; anyone else misses the superuser flag when want has it.
+func (s PermissionSet) Missing(want PermissionSet) Missing {
+	if s.Superuser {
+		return Missing{}
+	}
+	m := Missing{Superuser: want.Superuser}
+	for k := range want.Keys {
+		if _, ok := s.Keys[k]; !ok {
+			m.Keys = append(m.Keys, k)
+		}
+	}
+	slices.Sort(m.Keys)
+	return m
+}
+
 // Restrict returns the part of the set that keys allow: never more than the
-// set itself, and no longer a superuser, whose Has is true for anything.
+// set itself, and no longer a superuser, whose Has is true for anything. The
+// loss of the flag is deliberate: an access key never acts as a superuser,
+// so it cannot grant or act on what only a superuser may (Missing).
 func (s PermissionSet) Restrict(keys []string) PermissionSet {
 	out := PermissionSet{Keys: make(map[string]struct{}, len(keys)), Version: s.Version}
 	for _, k := range keys {

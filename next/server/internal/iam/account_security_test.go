@@ -888,6 +888,38 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 	}
 }
 
+// H1: a superuser's access key holding role:manage and user:create is no
+// superuser, so it cannot hand out the super admin role; the superuser's own
+// session still can.
+func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	key := k.createKey(t, login.User.ID, adminPassword, "role:manage", "user:create")
+	// A target without roles, so acting on it needs nothing.
+	if _, err := k.s.db.Pool.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1`, k.userID); err != nil {
+		t.Fatal(err)
+	}
+	k.bump(t)
+	path := "/users/" + strconv.FormatInt(k.userID, 10) + "/roles"
+	grant := map[string]any{"role_keys": []string{authz.RoleSuperAdmin}}
+	if code, out := k.call(key.Key, "PUT", path, grant); code != 403 {
+		t.Fatalf("key PUT roles: %d %v", code, out)
+	}
+	create := func(email string) map[string]any {
+		return map[string]any{"email": email, "display_name": "x", "password": adminPassword, "role_keys": []string{authz.RoleSuperAdmin}}
+	}
+	if code, out := k.call(key.Key, "POST", "/users", create("key-super@example.com")); code != 403 {
+		t.Fatalf("key POST users: %d %v", code, out)
+	}
+	if code, out := k.call(login.AccessToken, "PUT", path, grant); code != 200 {
+		t.Fatalf("session PUT roles: %d %v", code, out)
+	}
+	if code, out := k.call(login.AccessToken, "POST", "/users", create("jwt-super@example.com")); code != 201 {
+		t.Fatalf("session POST users: %d %v", code, out)
+	}
+}
+
 func TestAccessKeyCannotManageSignIn(t *testing.T) {
 	k := newKeyEnv(t)
 	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID

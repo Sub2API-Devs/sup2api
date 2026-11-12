@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 
@@ -67,6 +68,43 @@ func TestCanGrant(t *testing.T) {
 			err := s.CanGrant(context.Background(), tt.actorID, tt.perms)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CanGrant() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// H1: granting a superuser role needs the superuser flag, which an access
+// key never carries, even one of a superuser.
+func TestCanGrantSetSuperuser(t *testing.T) {
+	s := &Service{
+		users: map[int64]core.PermissionSet{
+			1: {Keys: map[string]struct{}{"role:manage": {}}, Version: 1},
+			2: {Superuser: true, Version: 1},
+		},
+		minVersion: 1,
+	}
+	want := core.PermissionSet{Superuser: true, Keys: map[string]struct{}{}}
+	keyed := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 2, Permissions: []string{"role:manage"}})
+	tests := []struct {
+		name    string
+		ctx     context.Context
+		actorID int64
+		wantErr bool
+	}{
+		{"system", context.Background(), 0, false},
+		{"superuser", context.Background(), 2, false},
+		{"superuser's access key", keyed, 2, true},
+		{"not a superuser", context.Background(), 1, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := s.canGrantSet(tt.ctx, tt.actorID, want)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("canGrantSet() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			var e *core.Error
+			if tt.wantErr && (!errors.As(err, &e) || e.Details["superuser"] != true) {
+				t.Fatalf("details = %v", err)
 			}
 		})
 	}

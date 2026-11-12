@@ -201,21 +201,6 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 		return nil, 0, err
 	}
 
-	// SEC-H1: check authorization to grant the requested roles
-	if actorID != 0 && !IsDefaultRoles(in.RoleKeys) {
-		requestedPerms, err := s.authz.RolesPermissions(ctx, s.db.Pool, in.RoleKeys)
-		if err != nil {
-			return nil, 0, err
-		}
-		var permKeys []string
-		for k := range requestedPerms.Keys {
-			permKeys = append(permKeys, k)
-		}
-		if err := s.authz.CanGrant(ctx, actorID, permKeys); err != nil {
-			return nil, 0, err
-		}
-	}
-
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), s.cost)
 	if err != nil {
 		return nil, 0, err
@@ -234,6 +219,7 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 	if len(roles) == 0 {
 		roles = []string{authz.RoleUser}
 	}
+	// SetUserRoles checks the actor may grant the roles (SEC-H1).
 	v, err := s.authz.SetUserRoles(ctx, tx, actorID, id, roles)
 	if err != nil {
 		return nil, 0, err

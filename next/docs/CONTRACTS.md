@@ -2714,7 +2714,8 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 ### 43.6 授予与操作他人的权限检查
 
 - 授予角色或权限（`CanGrant`）：只能授予自己拥有的权限，否则 403，`details.missing` 列出缺的权限。覆盖 POST `/roles`、PUT `/roles/:id/permissions`、POST `/roles/:id/reset`、POST `/users`（带 role_keys）和 PUT `/users/:id/roles`；后者只检查**新增**的角色所含权限，用户已有的角色不算授予，给自己分配角色同样检查（2026-11-05 修正：之前 POST `/roles` 和 PUT `/users/:id/roles` 没有做这项检查，持 `role:manage` 的运维可以建一个带 `plugin:install` 的角色再分配给自己）。
-- 修改、禁用、删除其他用户（`CanActOnUser`、`CanActOn`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing_permissions`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。
+- 修改、禁用、删除其他用户（`CanActOnUser`、`CanActOn`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。
+- 两类检查都比较超管标志（`core.PermissionSet.Missing`）：缺超管标志时 403 带 `details.superuser = true`。访问密钥收窄后的权限集永远不是超管，所以超管的访问密钥不能授予 `super_admin`（2026-11-12 修正 H1：之前授予检查只比权限 key，超管角色不含 key，带 `role:manage` 的超管密钥可以授予 `super_admin`）。
 - 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
 - 插件安装、升级的授权确认（consent）：只有插件声明的权限里**有核心还没有的新权限**时，才需要 `role:manage` 并对这些新权限做 `CanGrant`。升级不新增权限时只需要插件管理权限。2026-10-05 修正：之前每次安装、升级都要求 `role:manage`。
 

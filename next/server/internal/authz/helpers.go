@@ -36,65 +36,53 @@ func (s *Service) rolePermissionSet(ctx context.Context, userID int64) (core.Per
 // privilege escalation where a user grants themselves or others permissions
 // they don't have (CONTRACTS §4.1, SEC-H2).
 func (s *Service) CanGrant(ctx context.Context, actorID int64, perms []string) error {
-	if actorID == 0 || len(perms) == 0 { // 0 is the system, as everywhere else
-		return nil
-	}
-	set, err := s.permissionSetCached(ctx, actorID)
-	if err != nil {
+	return s.canGrantSet(ctx, actorID, core.PermissionSetOf(perms...))
+}
+
+// canGrantSet fails unless the actor holds all of want, the superuser flag
+// included: only a superuser grants a superuser role (H1).
+func (s *Service) canGrantSet(ctx context.Context, actorID int64, want core.PermissionSet) error {
+	m, err := s.actorMissing(ctx, actorID, want)
+	if err != nil || m.Empty() {
 		return err
 	}
-	// superusers can grant anything
-	if set.Has("*") {
-		return nil
-	}
-	var missing []string
-	for _, p := range perms {
-		if !set.Has(p) {
-			missing = append(missing, p)
-		}
-	}
-	if len(missing) > 0 {
-		return core.ErrPermissionDenied.WithMessage(t(ctx,
-			"you cannot grant permissions you don't have",
-			"你不能授予自己没有的权限")).
-			WithDetails(map[string]any{"missing": missing})
-	}
-	return nil
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"you cannot grant permissions you don't have",
+		"你不能授予自己没有的权限")).WithDetails(m.Details())
 }
 
 // CanActOn validates the actor may act on a target with the given permissions (CONTRACTS §4.1, SEC-H2).
 // Returns an error if the target holds any permission the actor doesn't have.
 func (s *Service) CanActOn(ctx context.Context, actorID int64, targetPerms []string) error {
-	if actorID == 0 || len(targetPerms) == 0 { // 0 is the system, as everywhere else
-		return nil
-	}
-	actorSet, err := s.permissionSetCached(ctx, actorID)
-	if err != nil {
+	return s.canActOnSet(ctx, actorID, core.PermissionSetOf(targetPerms...))
+}
+
+// canActOnSet fails unless the actor holds all of target, the superuser flag
+// included.
+func (s *Service) canActOnSet(ctx context.Context, actorID int64, target core.PermissionSet) error {
+	m, err := s.actorMissing(ctx, actorID, target)
+	if err != nil || m.Empty() {
 		return err
 	}
-	// superusers can act on anyone
-	if actorSet.Has("*") {
-		return nil
+	msg := t(ctx, "you cannot modify a user with higher privileges", "你不能修改权限更高的用户")
+	if m.Superuser {
+		msg = t(ctx, "you cannot modify a superuser", "你不能修改超级用户")
 	}
-	// check if target has any permission actor doesn't have
-	var missing []string
-	for _, p := range targetPerms {
-		if p == "*" {
-			return core.ErrPermissionDenied.WithMessage(t(ctx,
-				"you cannot modify a superuser",
-				"你不能修改超级用户"))
-		}
-		if !actorSet.Has(p) {
-			missing = append(missing, p)
-		}
+	return core.ErrPermissionDenied.WithMessage(msg).WithDetails(m.Details())
+}
+
+// actorMissing is what want holds beyond the actor's effective set, which
+// its access key narrows and never leaves a superuser. The system (actor 0)
+// misses nothing.
+func (s *Service) actorMissing(ctx context.Context, actorID int64, want core.PermissionSet) (core.Missing, error) {
+	if actorID == 0 {
+		return core.Missing{}, nil
 	}
-	if len(missing) > 0 {
-		return core.ErrPermissionDenied.WithMessage(t(ctx,
-			"you cannot modify a user with higher privileges",
-			"你不能修改权限更高的用户")).
-			WithDetails(map[string]any{"missing_permissions": missing})
+	set, err := s.permissionSetCached(ctx, actorID)
+	if err != nil {
+		return core.Missing{}, err
 	}
-	return nil
+	return set.Missing(want), nil
 }
 
 // CanActOnUser checks whether the actor can act on the target user by comparing
@@ -112,15 +100,7 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) err
 	if err != nil {
 		return err
 	}
-	targetKeys := make([]string, 0, len(targetSet.Keys))
-	if targetSet.Has("*") {
-		targetKeys = append(targetKeys, "*")
-	} else {
-		for k := range targetSet.Keys {
-			targetKeys = append(targetKeys, k)
-		}
-	}
-	return s.CanActOn(ctx, actorID, targetKeys)
+	return s.canActOnSet(ctx, actorID, targetSet)
 }
 
 // permissionSetCached returns the cached permission set or falls back to PermissionSet.

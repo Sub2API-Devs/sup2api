@@ -391,11 +391,12 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 		}
 	}
 	if superChanged && actorID != 0 {
-		actorSuper, err := s.isSuperuserTx(ctx, tx, actorID)
+		// The effective set: an access key is never a superuser (H1).
+		actor, err := s.permissionSetCached(ctx, actorID)
 		if err != nil {
 			return 0, err
 		}
-		if !actorSuper {
+		if !actor.Superuser {
 			return 0, errSuperuserGrantor
 		}
 	}
@@ -417,15 +418,11 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 			return 0, err
 		}
 		if added := addedKeys(roleKeys, cur); len(added) > 0 {
-			perms, err := s.RolesPermissions(ctx, tx, added)
+			want, err := s.RolesPermissions(ctx, tx, added)
 			if err != nil {
 				return 0, err
 			}
-			keys := make([]string, 0, len(perms.Keys))
-			for k := range perms.Keys {
-				keys = append(keys, k)
-			}
-			if err := s.CanGrant(ctx, actorID, keys); err != nil {
+			if err := s.canGrantSet(ctx, actorID, want); err != nil {
 				return 0, err
 			}
 		}
@@ -437,15 +434,6 @@ func (s *Service) SetUserRoles(ctx context.Context, tx pgx.Tx, actorID, userID i
 		return 0, err
 	}
 	return v, nil
-}
-
-// isSuperuserTx reports whether userID currently holds a superuser role.
-func (s *Service) isSuperuserTx(ctx context.Context, tx pgx.Tx, userID int64) (bool, error) {
-	var su bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
-        JOIN users u ON u.id = ur.user_id AND u.deleted_at IS NULL AND u.status = 'active'
-        WHERE ur.user_id = $1 AND r.superuser)`, userID).Scan(&su)
-	return su, err
 }
 
 // EnsureNotLastSuperAdmin fails with conflict when userID is a superuser and
