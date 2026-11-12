@@ -182,7 +182,7 @@ func newFamilyID() (string, error) {
 }
 
 // issueTokens issues an access token and a refresh token in familyID (a new
-// family when empty, i.e. on login).
+// family when empty, i.e. on login, which is audited for a superuser).
 func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64, familyID string) (*TokenPair, error) {
 	var tokenVersion int
 	if err := tx.QueryRow(ctx, `SELECT token_version FROM users WHERE id = $1`, userID).Scan(&tokenVersion); err != nil {
@@ -195,6 +195,9 @@ func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64, fami
 	newFamily := familyID == ""
 	if newFamily {
 		if familyID, err = newFamilyID(); err != nil {
+			return nil, err
+		}
+		if err := s.auditSuperuserLogin(ctx, tx, userID); err != nil {
 			return nil, err
 		}
 	}

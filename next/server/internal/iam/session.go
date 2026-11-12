@@ -74,6 +74,22 @@ func (s *Service) touchLoginSession(ctx context.Context, tx pgx.Tx, userID int64
 	return err
 }
 
+// auditSuperuserLogin records a new login of a superuser in tx, with how it
+// started and from where, and logs a warning.
+func (s *Service) auditSuperuserLogin(ctx context.Context, tx pgx.Tx, userID int64) error {
+	su, err := s.authz.IsSuperuser(ctx, tx, userID)
+	if err != nil || !su {
+		return err
+	}
+	meta, _ := ctx.Value(sessionMetaKey{}).(sessionMeta)
+	if err := audit.Audit(audit.WithClientIP(ctx, meta.ip), tx, userID, "auth.superadmin_login", "user", strconv.FormatInt(userID, 10),
+		map[string]any{"method": meta.method, "ip": meta.ip}); err != nil {
+		return err
+	}
+	slog.WarnContext(ctx, "iam: super admin login", "user_id", userID, "method", meta.method, "ip", meta.ip)
+	return nil
+}
+
 // Sessions lists the user's live login sessions, most recently used first.
 // currentFamily marks the caller's own.
 func (s *Service) Sessions(ctx context.Context, userID int64, currentFamily string) ([]LoginSession, error) {

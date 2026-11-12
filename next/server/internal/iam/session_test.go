@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -170,5 +171,58 @@ func TestChangePasswordAndStatusUpdateDoNotDeadlock(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// superadminLogins reads the auth.superadmin_login audit rows as user, method
+// and ip.
+func superadminLogins(t *testing.T, s *Service) []string {
+	t.Helper()
+	rows, err := s.db.Pool.Query(context.Background(), `SELECT user_id || ' ' || (detail->>'method') || ' ' || (detail->>'ip') || ' ' || ip
+		FROM audit_logs WHERE action = 'auth.superadmin_login' ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+func TestSuperadminLoginIsAudited(t *testing.T) {
+	t.Parallel()
+	e := setup(t)
+	s, ctx := e.svc, context.Background()
+	if err := s.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	login := context.WithValue(ctx, sessionMetaKey{}, sessionMeta{method: loginMethodPassword, ip: testIP})
+	root, err := s.Login(login, adminEmail, adminPassword, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strconv.FormatInt(root.User.ID, 10) + " password " + testIP + " " + testIP
+	if got := superadminLogins(t, s); len(got) != 1 || got[0] != want {
+		t.Fatalf("after super admin login: %q, want [%q]", got, want)
+	}
+
+	// A refresh and an ordinary user's login are not audited.
+	if _, err := s.Refresh(ctx, root.RefreshToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateUser(ctx, root.User.ID, CreateUserInput{Email: "plain@example.com", Password: "password-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Login(login, "plain@example.com", "password-1", testIP); err != nil {
+		t.Fatal(err)
+	}
+	if got := superadminLogins(t, s); len(got) != 1 {
+		t.Fatalf("after refresh and user login: %q", got)
 	}
 }
