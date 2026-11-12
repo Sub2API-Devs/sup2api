@@ -331,29 +331,11 @@ func (s *Service) pluginActive(key string) bool {
 // the first generation is loaded (then nothing is filtered).
 func (s *Service) activePluginKeys() []string { return core.ActivePluginKeys(s.d.Registry) }
 
-// can asks the Authorizer whether the caller holds key; errors and a missing
-// Authorizer count as "no".
-func (s *Service) can(ctx context.Context, key string) bool {
-	if s.d.Authorizer == nil {
-		return false
-	}
-	uid, ok := core.UserID(ctx)
-	if !ok {
-		return false
-	}
-	granted, err := s.d.Authorizer.Can(ctx, uid, key)
-	if err != nil {
-		slog.WarnContext(ctx, "account: permission check", "permission", key, "err", err)
-		return false
-	}
-	return granted
-}
-
 // customSettings reports whether the caller may set guarded settings to
 // values other than the official ones (account:settings:custom, CONTRACTS
 // §21.3).
 func (s *Service) customSettings(ctx context.Context) bool {
-	return s.can(ctx, "account:settings:custom")
+	return core.Can(ctx, s.d.Authorizer, "account:settings:custom")
 }
 
 // proxyRange is the set of proxies a caller may reference (by proxy_id) or
@@ -372,10 +354,10 @@ var allProxies = proxyRange{}
 // proxy:read sees every proxy; proxy:own:read or proxy:own:manage see the
 // caller's own; anything else sees none.
 func (s *Service) proxyRangeOf(ctx context.Context) proxyRange {
-	if s.can(ctx, "proxy:read") {
+	if core.Can(ctx, s.d.Authorizer, "proxy:read") {
 		return allProxies
 	}
-	if s.can(ctx, "proxy:own:read") || s.can(ctx, "proxy:own:manage") {
+	if core.Can(ctx, s.d.Authorizer, "proxy:own:read") || core.Can(ctx, s.d.Authorizer, "proxy:own:manage") {
 		uid, _ := core.UserID(ctx)
 		return proxyRange{scope: &uid}
 	}

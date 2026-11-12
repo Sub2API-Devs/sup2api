@@ -9,6 +9,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/gin-gonic/gin"
 )
 
@@ -176,7 +177,7 @@ func (s *Service) getAccountActions(c *gin.Context) {
 	// Filter by permission.
 	filtered := make([]AccountAction, 0, len(actions))
 	for _, action := range actions {
-		if action.Permission == "" || s.can(ctx, action.Permission) || s.can(ctx, "account:own:update") {
+		if action.Permission == "" || core.Can(ctx, s.d.Authorizer, perm.Key(action.Permission)) || core.Can(ctx, s.d.Authorizer, "account:own:update") {
 			filtered = append(filtered, action)
 		}
 	}

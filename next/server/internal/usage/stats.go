@@ -203,8 +203,7 @@ func (s *Service) overview(c *gin.Context, self *int64) {
 	if self != nil {
 		out, err = s.loadOverview(ctx, tz, loc, self, false, false)
 	} else {
-		uid, _ := core.UserID(ctx)
-		users, accounts := s.can(ctx, uid, "user:read"), s.can(ctx, uid, "account:read")
+		users, accounts := core.Can(ctx, s.Authz, "user:read"), core.Can(ctx, s.Authz, "account:read")
 		var hit bool
 		out, hit, err = s.overviews.get(ctx, fmt.Sprintf("%s|%t|%t", tz, users, accounts), func(ctx context.Context) (Overview, error) {
 			return s.loadOverview(ctx, tz, loc, nil, users, accounts)
@@ -353,15 +352,6 @@ func (s *Service) realtime(c *gin.Context, self *int64) {
 		return
 	}
 	httpapi.OK(c, out)
-}
-
-// can asks the Authorizer; no Authorizer or an error count as "no".
-func (s *Service) can(ctx context.Context, uid int64, perm string) bool {
-	if s.Authz == nil {
-		return false
-	}
-	ok, err := s.Authz.Can(ctx, uid, perm)
-	return err == nil && ok
 }
 
 type windows struct{ today, yesterday, last30d, last5m time.Time }

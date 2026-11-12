@@ -382,7 +382,7 @@ func (s *Service) requestLogDetail(c *gin.Context) {
 	if !ok {
 		return
 	}
-	content := granted(ctx, "settings:manage")
+	content := core.HasGranted(ctx, "settings:manage")
 	raw, ok := s.viewerJSON(c, ctx, d, "detail", map[string]any{"id": log, "content": content}, requestLogDetailLimit)
 	if !ok {
 		return
@@ -405,15 +405,6 @@ func (s *Service) requestLogDetail(c *gin.Context) {
 	out.RequestHeaders, out.ResponseHeaders = maskHeaders(out.RequestHeaders), maskHeaders(out.ResponseHeaders)
 	out.UpstreamRequest = maskUpstreamRequest(out.UpstreamRequest)
 	httpapi.OK(c, out)
-}
-
-func granted(ctx context.Context, key string) bool {
-	for _, k := range core.Granted(ctx) {
-		if k == key {
-			return true
-		}
-	}
-	return false
 }
 
 // requestLogFile sends a content file: a 1 MiB chunk from ?offset, or the

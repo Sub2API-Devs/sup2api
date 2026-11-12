@@ -184,12 +184,7 @@ func (r *Record) hideAccount() { r.AccountID, r.AccountName = nil, "" }
 // record: operator views only, and only with account:read (CONTRACTS §66.5),
 // like the accounts section of the overview.
 func (s *Service) seesAccounts(ctx context.Context, self *int64) bool {
-	return self == nil && s.can(ctx, uidOf(ctx), "account:read")
-}
-
-func uidOf(ctx context.Context) int64 {
-	uid, _ := core.UserID(ctx)
-	return uid
+	return self == nil && core.Can(ctx, s.Authz, "account:read")
 }
 
 // requestLogPlugin is the plugin whose rows have a request log in the core
@@ -504,7 +499,7 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 		d.Anomalies = nil
 	} else {
 		accounts := s.seesAccounts(ctx, self)
-		if d.PluginKey == requestLogPlugin && d.AccountID != nil && (accounts || s.can(ctx, uidOf(ctx), "settings:read")) {
+		if d.PluginKey == requestLogPlugin && d.AccountID != nil && (accounts || core.Can(ctx, s.Authz, "settings:read")) {
 			d.RequestLogAccountID = d.AccountID
 		}
 		if e, err := s.loadSettlement(ctx, s.db.Pool, d.ID); err == nil {

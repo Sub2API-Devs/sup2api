@@ -97,18 +97,11 @@ func (s *Service) canProxies(ctx context.Context) (scope *int64, none bool) {
 	if core.OwnerScope(ctx, "account:create") == nil {
 		return nil, false
 	}
-	uid, _ := core.UserID(ctx)
-	can := func(key string) bool {
-		if s.Authorizer == nil {
-			return false
-		}
-		ok, e := s.Authorizer.Can(ctx, uid, key)
-		return e == nil && ok
-	}
-	if can("proxy:read") {
+	if core.Can(ctx, s.Authorizer, "proxy:read") {
 		return nil, false
 	}
-	if can("proxy:own:read") || can("proxy:own:manage") {
+	if core.Can(ctx, s.Authorizer, "proxy:own:read") || core.Can(ctx, s.Authorizer, "proxy:own:manage") {
+		uid, _ := core.UserID(ctx)
 		return &uid, false
 	}
 	return nil, true

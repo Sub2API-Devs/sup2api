@@ -2,6 +2,9 @@ package account
 
 import (
 	"context"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // fillActions populates the actions field for each view.
@@ -11,7 +14,7 @@ func (s *Service) fillActions(ctx context.Context, rows []*row, out []*View) {
 		// Filter by permission.
 		filtered := make([]AccountAction, 0, len(actions))
 		for _, action := range actions {
-			if action.Permission == "" || s.can(ctx, action.Permission) || s.can(ctx, "account:own:update") {
+			if action.Permission == "" || core.Can(ctx, s.d.Authorizer, perm.Key(action.Permission)) || core.Can(ctx, s.d.Authorizer, "account:own:update") {
 				filtered = append(filtered, action)
 			}
 		}

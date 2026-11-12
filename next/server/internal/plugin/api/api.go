@@ -76,6 +76,8 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodGet, "/plugins/:key/rollouts/current", PermRead, a.currentRollout)
 	r.Perm(http.MethodPost, "/plugins/:key/rollouts/:id/cancel", PermManage, a.cancelRollout)
 	// plugin:read / plugin:manage, or the plugin's ui.settings.permission.
+	// Authed with CanAny in the handler: that key comes from the manifest, a
+	// dynamic key no static route can name.
 	r.Authed(http.MethodGet, "/plugins/:key/settings", a.getSettings)
 	r.Authed(http.MethodPut, "/plugins/:key/settings", a.putSettings)
 	r.Perm(http.MethodGet, "/plugins/:key/grants", PermRead, a.listGrants)

@@ -103,7 +103,7 @@ func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64
 			WithDetails(map[string]any{"reason": "not_configured"})
 	}
 	var scope *int64
-	if !s.can(ctx, "settings:manage") {
+	if !core.Can(ctx, s.d.Authorizer, "settings:manage") {
 		uid, _ := core.UserID(ctx)
 		scope = &uid
 	}
@@ -113,7 +113,7 @@ func (s *Service) checkCCGatewayRuntime(ctx context.Context, key string) (*int64
 
 func (s *Service) connectCCGateway(c *gin.Context) {
 	ctx := c.Request.Context()
-	if !s.can(ctx, "account:create") {
+	if !core.Can(ctx, s.d.Authorizer, "account:create") {
 		httpapi.Fail(c, core.ErrPermissionDenied)
 		return
 	}

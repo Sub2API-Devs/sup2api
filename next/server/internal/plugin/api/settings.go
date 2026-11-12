@@ -321,7 +321,7 @@ func (a *API) putSettings(c *gin.Context) {
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("settings encryption unavailable"))
 		return
 	}
-	manager := slices.Contains(httpapi.Granted(c), PermManage)
+	manager := core.HasGranted(c.Request.Context(), PermManage)
 	var changed []string
 	err := a.d.DB.Tx(c.Request.Context(), func(tx pgx.Tx) error {
 		old, err := a.loadValues(c, tx, key, true)

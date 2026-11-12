@@ -1000,7 +1000,7 @@ func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, i
 	}
 	// H3.1: Binding to groups requires group:manage or account:group:bind
 	if in.GroupIDs != nil && len(*in.GroupIDs) > 0 {
-		if !s.can(ctx, "group:manage") && !s.can(ctx, "account:group:bind") {
+		if !core.Can(ctx, s.d.Authorizer, "group:manage") && !core.Can(ctx, s.d.Authorizer, "account:group:bind") {
 			return core.ErrPermissionDenied.WithMessage(t(ctx,
 				"binding accounts to groups requires group:manage or account:group:bind permission",
 				"将账号绑定到分组需要 group:manage 或 account:group:bind 权限")).
@@ -1014,7 +1014,7 @@ func (s *Service) checkOwnLevelRestrictions(ctx context.Context, scope *int64, i
 		}
 	}
 	// H3.3: Relay type accounts require account:relay permission
-	if isRelay && !s.can(ctx, "account:relay") {
+	if isRelay && !core.Can(ctx, s.d.Authorizer, "account:relay") {
 		return core.ErrPermissionDenied.WithMessage(t(ctx,
 			"creating or managing relay accounts requires account:relay permission",
 			"创建或管理中继账号需要 account:relay 权限")).
@@ -1064,7 +1064,7 @@ func (s *Service) parseProxyURL(ctx context.Context, raw string) (*proxyByURL, e
 	if s.d.Resolver == nil {
 		return nil, core.ErrUnsupported.WithMessage("proxy_url is not supported")
 	}
-	if !s.can(ctx, "proxy:manage") && !s.can(ctx, "proxy:own:manage") {
+	if !core.Can(ctx, s.d.Authorizer, "proxy:manage") && !core.Can(ctx, s.d.Authorizer, "proxy:own:manage") {
 		return nil, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "proxy:own:manage"})
 	}
 	spec, err := core.ParseProxyURL(raw)

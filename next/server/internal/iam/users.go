@@ -405,12 +405,9 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	// SEC-H1: password reset for others requires user:password:reset
 	changingOthersPassword := in.Password != nil && actorID != id
 	if changingOthersPassword {
-		actor, err := s.authz.PermissionSet(ctx, actorID)
-		if err != nil {
-			return nil, err
-		}
-		if !actor.Has("user:password:reset") {
-			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset")
+		if !core.Can(core.WithUserID(ctx, actorID), s.authz, "user:password:reset") {
+			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset").
+				WithDetails(map[string]any{"permission": "user:password:reset"})
 		}
 		// SEC-H2: target permissions must not exceed actor's
 		if err := s.assertTargetPermissionsWithinActor(ctx, actorID, id); err != nil {

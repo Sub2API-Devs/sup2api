@@ -10,8 +10,10 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -305,6 +307,40 @@ func TestSelfUpdateRequiresConfirmation(t *testing.T) {
 	}
 	if _, err := s.UpdateUser(ctx, root, staff.ID, UpdateUserInput{Password: &newPassword}, testIP); err != nil {
 		t.Fatalf("operator reset: %v", err)
+	}
+}
+
+// SEC-H1: setting someone else's password needs user:password:reset, even
+// for an editor who may otherwise update the target.
+func TestOthersPasswordNeedsReset(t *testing.T) {
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	roles, err := e.authz.ListRoles(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(roles, func(r *authz.Role) bool { return r.Key == authz.RoleOperator })
+	keys := slices.DeleteFunc(slices.Clone(roles[i].PermissionKeys), func(k string) bool { return k == "user:password:reset" })
+	if _, err := e.authz.CreateRole(ctx, root, authz.CreateRoleInput{Key: "editor", Name: core.LocalizedText{"en": "Editor"}, PermissionKeys: keys}); err != nil {
+		t.Fatal(err)
+	}
+	editor, err := s.CreateUser(ctx, root, CreateUserInput{Email: "editor@example.com", Password: "editor-password-1", RoleKeys: []string{"editor"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := s.CreateUser(ctx, root, CreateUserInput{Email: "plain@example.com", Password: "plain-password-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, pw := "renamed", "taken-over-1"
+	if _, err := s.UpdateUser(ctx, editor.ID, plain.ID, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+		t.Fatalf("editor update: %v", err)
+	}
+	_, err = s.UpdateUser(ctx, editor.ID, plain.ID, UpdateUserInput{Password: &pw}, testIP)
+	var ce *core.Error
+	if !errors.As(err, &ce) || ce.Code != "permission_denied" || ce.Details["permission"] != "user:password:reset" {
+		t.Fatalf("editor set a password: %v", err)
 	}
 }
 
