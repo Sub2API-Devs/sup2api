@@ -4,15 +4,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
-
-var _ core.AuthzVersioner = (*Service)(nil)
 
 // Version is the authz version the node knows: the database's from the
 // start, raised by every change it commits or hears of, without a query.
 func TestVersion(t *testing.T) {
+	t.Parallel()
 	db := testutil.DB(t)
 	bus := newMemBus()
 	s := newService(t, db, bus, nil)
