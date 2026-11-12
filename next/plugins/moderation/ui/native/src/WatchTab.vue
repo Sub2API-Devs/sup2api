@@ -34,12 +34,13 @@ import { useCategoryOptions } from './categories'
 import { filterChips, type FilterField } from './eventFilters'
 import { applyFilters } from './forms'
 import { enumLabel, enumOptions, joinList, num } from './format'
-import { canManage, errorMessage, useModHost, useWatchList } from './host'
+import { canManage, canManageSettings, errorMessage, useModHost, useWatchList } from './host'
 import { watchNew } from './status'
 import { levelTone } from './tones'
 import type { Watch, WatchItem, WatchLevel, WatchListMeta } from './types'
 import { useUserFilter } from './users'
-import { levelRefused, userListHint, type WatchAction } from './watchLevels'
+import { userListOf, useUserLock } from './userLock'
+import { watchLocked, type WatchAction } from './watchLevels'
 
 // Watch list (new-api watchlist): observe = moderated in the background and
 // counted; enforce = moderated before the upstream call, a hit is refused.
@@ -50,7 +51,10 @@ import { levelRefused, userListHint, type WatchAction } from './watchLevels'
 // picked with the host's EntityPicker; level, sort, new records only), the
 // others fold under "more filters" (applied ones are chips under the bar).
 // Each table cell keeps to one line; the level changes and the removal are
-// row actions, confirmed in a dialog.
+// row actions, confirmed in a dialog. A locked entry or a user on a user
+// list (0.10.0, userLock.ts) is not changed here until unlocked; those who
+// may edit the settings lock a user on a list or unlock it under "more", and
+// "locked" filters the entries (GET /watchlist?locked).
 const emit = defineEmits<{ (e: 'show-user', userId: number): void }>()
 const host = useModHost()
 const t = host.t
@@ -61,15 +65,15 @@ const { compact } = useViewport()
 
 const meta = ref<WatchListMeta | null>(null)
 // user_id / user_text: the user picker's picked id or name search, never both
-const emptyFilter = () => ({ level: '', new_only: false, category: '', sort: 'new', user_id: '', user_text: '' })
+const emptyFilter = () => ({ level: '', new_only: false, category: '', locked: '', sort: 'new', user_id: '', user_text: '' })
 const filter = reactive(emptyFilter())
 const users = useUserFilter()
-const query = () => ({ level: filter.level, new_only: filter.new_only || '', category: filter.category, sort: filter.sort, user_id: users.query.value.user_id ?? '', user_ids: users.query.value.user_ids ?? '' })
+const query = () => ({ level: filter.level, new_only: filter.new_only || '', category: filter.category, locked: filter.locked, sort: filter.sort, user_id: users.query.value.user_id ?? '', user_ids: users.query.value.user_ids ?? '' })
 
 const list = useWatchList(query(), (m) => (meta.value = m))
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('watch.loadFailed')) : ''))
 const apply = () => applyFilters(list.filters, query())
-watch(() => [filter.level, filter.new_only, filter.category, filter.sort], apply)
+watch(() => [filter.level, filter.new_only, filter.category, filter.locked, filter.sort], apply)
 
 async function search() {
   if ((await users.resolve(filter.user_id, filter.user_text)) && !apply()) list.reload()
@@ -88,15 +92,18 @@ const categories = useCategoryOptions()
 const categoryOptions = computed(() => anyOf(t('watchList.category'), categories.value))
 
 // The "more filters"; the ones in effect are removable chips under the bar.
-const advanced = computed<Array<FilterField<'category'> & { searchable?: boolean }>>(() => [
-  { key: 'category', label: t('watchList.category'), options: categoryOptions.value, searchable: true }
+type AdvancedKey = 'category' | 'locked'
+const lockedOptions = computed(() => anyOf(t('watchList.locked'), enumOptions('watchList.lockedOpt', ['true', 'false'])))
+const advanced = computed<Array<FilterField<AdvancedKey> & { searchable?: boolean }>>(() => [
+  { key: 'category', label: t('watchList.category'), options: categoryOptions.value, searchable: true },
+  { key: 'locked', label: t('watchList.locked'), options: lockedOptions.value }
 ])
 const chips = computed(() => filterChips(advanced.value, filter))
 /** Bar filters off their default (the phone sheet adds the chips to its badge). */
 const activeCount = computed(() => [filter.level, filter.new_only, filter.sort !== 'new'].filter(Boolean).length)
 const dirty = computed(() => activeCount.value + chips.value.length > 0 || filter.user_id !== '' || filter.user_text !== '')
 function removeChip(key: string) {
-  filter[key as 'category'] = ''
+  filter[key as AdvancedKey] = ''
 }
 function clearChips() {
   for (const f of advanced.value) filter[f.key] = ''
@@ -140,7 +147,17 @@ function ask(r: WatchItem, a: WatchAction) {
   acting.value = r
   action.value = a
 }
-const moreActions = computed(() => [{ key: 'remove', label: t('watch.remove'), danger: true }])
+const lock = useUserLock()
+const lockable = computed(() => canManageSettings())
+/** "more": lock / unlock, then remove (not for a locked entry). */
+const moreActions = (r: WatchItem) => [
+  ...(lockable.value ? lock.items(userListOf(r)) : []),
+  { key: 'remove', label: t('watch.remove'), danger: true, disabled: watchLocked(r), divider: lockable.value }
+]
+async function onMore(r: WatchItem, key: string) {
+  if (key === 'remove') ask(r, { kind: 'release', level: null })
+  else if (await lock.run(r.user_id, key, userListOf(r))) void list.reload()
+}
 
 // ---- detail drawer
 // The drawer is the address: ?tab=watch&user=<id> opens it, closing it drops
@@ -211,6 +228,7 @@ const showUser = (id: number) => emit('show-user', id)
         <SBadge tone="info">{{ t('watchList.counts.watching', { n: num(meta.counts.watching) }) }}</SBadge>
         <SBadge tone="warning">{{ t('watchList.counts.withNew', { n: num(watchNew(meta.counts).total) }) }}</SBadge>
         <SBadge tone="danger">{{ t('watchList.counts.blocking', { n: num(meta.counts.blocking) }) }}</SBadge>
+        <SBadge v-if="meta.counts.locked" tone="gray">{{ t('watchList.counts.locked', { n: num(meta.counts.locked) }) }}</SBadge>
       </template>
       <span class="mod-ml-auto mod-inline mod-gap">
         <SButton v-if="manage" size="sm" variant="primary" icon="plus" @click="openEdit(null)">{{ t('watch.add') }}</SButton>
@@ -233,12 +251,12 @@ const showUser = (id: number) => emit('show-user', id)
         <template #cell-user_id="{ row }">
           <span class="mod-cell-line">
             <UserRef :user-id="row.user_id" link :title="t('watch.showRecords')" @click="emit('show-user', $event)" />
-            <UserListBadge :allowlisted="row.allowlisted" :blocklisted="row.blocklisted" size="xs" />
+            <UserListBadge :allowlisted="row.allowlisted" :blocklisted="row.blocklisted" :locked="row.locked" size="xs" />
             <SBadge v-if="row.hits_since_seen" tone="warning" size="xs">{{ t('watchList.newHits', { n: row.hits_since_seen }) }}</SBadge>
           </span>
         </template>
         <template #cell-level="{ row }">
-          <SBadge :tone="levelTone(row.level)" :title="userListHint(row) || undefined">{{ enumLabel('level', row.level) }}</SBadge>
+          <SBadge :tone="levelTone(row.level)" :title="watchLocked(row) ? t('lock.fixed') : undefined">{{ enumLabel('level', row.level) }}</SBadge>
         </template>
         <template #cell-suspicious="{ row }">
           <span class="mod-num" :title="sevText(row)">{{ num(row.suspicious_total) }}</span>
@@ -265,12 +283,12 @@ const showUser = (id: number) => emit('show-user', id)
             <SRowAction
               :label="t(`watchActions.set.${otherLevel(row)}`)"
               :tone="otherLevel(row) === 'enforce' ? 'danger' : 'default'"
-              :disabled="levelRefused(otherLevel(row), row.allowlisted)"
-              :title="levelRefused(otherLevel(row), row.allowlisted) ? userListHint(row) : undefined"
+              :disabled="watchLocked(row)"
+              :title="watchLocked(row) ? t('lock.fixed') : undefined"
               @click="ask(row, { kind: 'level', level: otherLevel(row) })"
             />
-            <SRowAction :label="t('edit')" @click="openEdit(row)" />
-            <SDropdown :actions="moreActions" @select="$event === 'remove' && ask(row, { kind: 'release', level: null })" />
+            <SRowAction :label="t('edit')" :disabled="watchLocked(row)" :title="watchLocked(row) ? t('lock.fixed') : undefined" @click="openEdit(row)" />
+            <SDropdown :actions="moreActions(row)" @select="onMore(row, $event)" />
           </span>
         </template>
       </STable>
@@ -279,8 +297,8 @@ const showUser = (id: number) => emit('show-user', id)
       </div>
     </SCard>
 
-    <WatchActionDialog v-model:action="action" :user-id="acting?.user_id ?? null" :allowlisted="acting?.allowlisted" :blocklisted="acting?.blocklisted" @changed="onAction" />
-    <WatchEditModal v-model:open="editOpen" :entry="editing" :allowlisted="editing?.allowlisted" :blocklisted="editing?.blocklisted" @saved="list.reload" />
+    <WatchActionDialog v-model:action="action" :user-id="acting?.user_id ?? null" @changed="onAction" />
+    <WatchEditModal v-model:open="editOpen" :entry="editing" @saved="list.reload" />
     <WatchDetail v-model:open="detailOpen" :user-id="detailUser" :item="detailItem" @changed="patchRow(detailUser, $event)" @show-user="showUser" />
   </div>
 </template>

@@ -24,6 +24,7 @@ import type {
   PerformanceResult,
   PluginSettings,
   ReviewStatus,
+  Scope,
   SimulateBody,
   SourceFilter,
   Spec,
@@ -167,7 +168,7 @@ export const jevPayload = (q: JevQuestions): JevQuestions => ({ preamble: q.prea
 
 export const fetchFlows = () => api().get<Flow[]>('/flows')
 export const fetchFlow = (id: number) => api().get<Flow>(`/flows/${id}`)
-export const saveFlow = (id: number | null, body: { name: string; draft: Spec }) =>
+export const saveFlow = (id: number | null, body: { name: string; draft: Spec; scope?: Scope }) =>
   id ? api().put<Flow>(`/flows/${id}`, body) : api().post<Flow>('/flows', body)
 export const deleteFlow = (id: number) => api().del(`/flows/${id}`)
 export const setFlowGroups = (id: number, groups: number[], force = false) => api().put<Flow>(`/flows/${id}/groups`, { groups, force })

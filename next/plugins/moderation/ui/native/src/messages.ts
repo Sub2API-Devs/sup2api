@@ -97,7 +97,7 @@ export default {
         overview: '今日审核量、命中与出错，以及需要处理的事项。',
         events: '每一次审核的结论、逐级过程和送审内容。',
         test: '用任意文本试跑流程或单个审核器。',
-        flows: '审哪些模型、抽样多少，以及怎么判（复核链与补审）。',
+        flows: '审什么（审核范围、模型）、抽样多少，以及怎么判（复核链与补审）。',
         bindings: '哪个分组或账号使用哪个流程；失效的绑定会在这里标出。',
         policy: '先审后发还是后台审核，以及审核失败时的处理。',
         cache: '判定缓存、命中重放和每个请求的送审上限。',
@@ -126,6 +126,7 @@ export default {
       cacheSynced: '已同步判定缓存 {n} 条'
     },
     level: { observe: '观察', enforce: '拦截' },
+    fallbackReason: { disabled: '已停用', unpublished: '未发布', deleted: '已删除', invalid: '无法读取' },
     severity: { high: '高', medium: '中', low: '低', none: '无', critical: '严重' },
     userStatus: { active: '正常', disabled: '已禁用' },
     source: { auto: '自动', manual: '手动' },
@@ -144,7 +145,10 @@ export default {
       auto_downgrade: '自动降为观察级',
       downgrade_skipped: '仍有违规或趋势偏重，未降级或移出',
       auto_remove: '自动移出',
-      auto_not_allowed: '自动调整未获允许'
+      auto_not_allowed: '自动调整未获允许',
+      lock: '锁定',
+      unlock: '解锁',
+      auto_escalate: '规则自动升级'
     },
     deniedAction: {
       auto_upgrade: '升为拦截级',
@@ -205,6 +209,7 @@ export default {
       runtime: '运行状态（本节点）',
       notConfigured: '还没有绑定到分组的已发布流程，请求不会被审核。请先配置渠道、审核器，再建流程并绑定分组（分组 0 为默认）。',
       offHint: '审核处于未启用状态，钩子会直接放行所有请求。请在设置中把“审核与默认级别”改为默认观察或默认拦截。',
+      staleBindings: '{n} 条绑定不生效：绑定的流程已停用、未发布、已删除或无法读取，这些请求落到了更宽的绑定（通常是默认流程）。',
       loadFailed: '加载概览失败'
     },
     runtime: {
@@ -289,6 +294,22 @@ export default {
     },
     detail: {
       title: '审核详情',
+      match: {
+        group: '分组绑定',
+        account: '账号绑定（分组内）',
+        account_any: '账号绑定（任意分组）',
+        default: '默认流程（分组未绑定）',
+        fallback: '默认流程（回退：绑定的流程{reason}）'
+      },
+      level: {
+        blocklist: '先审 · 来自“总是先审”名单',
+        allowlist: '后台 · 来自“只后台审核”名单',
+        watch_enforce: '先审 · 观察名单拦截级',
+        watch_observe: '后台 · 观察名单观察级',
+        default_enforce: '先审 · 全局默认处理',
+        default_observe: '后台 · 全局默认处理'
+      },
+      matchFallbackHint: '这个请求绑定的流程 #{id} {reason}，绑定没有生效，请求落到了默认流程。到“流程绑定”处理。',
       sessionRecords: '该会话的全部记录',
       endpointRecords: '只看该端点的记录',
       trace: '逐级审核',
@@ -304,6 +325,8 @@ export default {
       deleted: '记录已删除',
       loadFailed: '加载审核详情失败',
       f: {
+        match: '匹配来源',
+        handling: '处理方式',
         id: '记录 ID',
         request: '请求 ID',
         severity: '严重度',
@@ -352,7 +375,7 @@ export default {
       empty: '没有审核调用'
     },
     watch: {
-      hint: '观察级：请求照常放行，后台审核并计违规次数。拦截级：请求先审核，命中就拒绝。首次出现可疑记录的用户会自动以默认级别加入（可在设置中关闭）。“只后台审核”名单里的用户只在放行后审核，名单级别不会让他们被拦截；“总是先审”名单里的用户总是先审。管理员不会加入名单。',
+      hint: '观察级：请求照常放行，后台审核并计违规次数。拦截级：请求先审核，命中就拒绝。首次出现可疑记录的用户会自动以默认级别加入（可在设置中关闭）。“只后台审核”名单里的用户只在放行后审核，名单级别不会让他们被拦截；“总是先审”名单里的用户总是先审。这两个名单的用户是锁定条目：级别固定、不会到期，在行操作“更多”或用户详情里锁定、解锁。管理员不会加入名单。',
       add: '加入名单',
       editTitle: '编辑用户 #{id}',
       levelHint: '拦截级的用户每个请求都先审核，命中即拒绝。',
@@ -425,11 +448,9 @@ export default {
       noMatch: '没有符合筛选条件的绑定',
       exempt: '不审核',
       exemptOption: '不审核（免审）',
-      flowState: { disabled: '流程已停用', unpublished: '流程未发布', missing: '流程已删除' },
-      rowInactive: '{state}，这条绑定不生效',
-      fallbackBy: '现在按「{scope}」的绑定：{target}',
-      fallbackNone: '现在不审核',
-      fallbackPerGroup: '现在按各请求所在分组的绑定审核',
+      rowInactive: '流程{reason}，这条绑定不生效',
+      effective: '实际生效：{target}',
+      effectivePerGroup: '实际生效：各请求所在分组的绑定',
       previewSkipped: '已跳过未启用的绑定：{scopes}',
       deleteConfirm: '确定删除 {scope} 的绑定吗？删除后它按优先级更低的绑定审核。',
       accountAnyGroup: '账号 {account}（任意分组）',
@@ -472,6 +493,17 @@ export default {
       deleteConfirm: '确定删除流程 {name} 吗？它的分组和账号绑定一并删除，这些请求改按优先级更低的绑定审核。',
       move: '改绑',
       modelFilter: '模型范围',
+      scopeTitle: '审核范围',
+      scopeHint: '送审请求里的哪些内容。只审用户输入时，模型自己的回复和工具输出不会被送审。修改立即生效，不需要发布。',
+      scope: {
+        input: '只审用户输入（system + user，含图片、文档）',
+        tools: '用户输入 + 工具结果',
+        all: '全部内容（含 AI 回复与工具调用，旧行为）'
+      },
+      scopeWarn: '审核 AI 回复与工具输出会显著增加误报、成本和延迟：编码代理每次工具调用都会触发一次审核。',
+      scopeLegacy: '这个流程沿用旧行为（全部内容）。只审用户输入可以明显减少误报，可在这里切换。',
+      scopeSaved: '已保存审核范围',
+      invalidScope: '审核范围无效',
       models: '模型',
       modelsHint: '按客户端模型匹配，支持 * 和 ? 通配。',
       sampleRate: '抽样比例（%）',
@@ -920,10 +952,13 @@ export default {
       },
       category: '最高类别',
       newOnly: '只看有新记录的',
+      locked: '锁定',
+      lockedOpt: { true: '只看锁定条目', false: '只看未锁定条目' },
       counts: {
         watching: '观察中 {n}',
         withNew: '有新记录 {n}',
         blocking: '拦截中 {n}',
+        locked: '锁定 {n}',
       },
       newHits: '新记录 {n}',
       noFlow: '未绑定流程',
@@ -1086,12 +1121,23 @@ export default {
       count: '重放 {n}'
     },
     lists: {
-      allow: '只后台审核',
-      block: '总是先审',
-      allowHint: '只后审，永不拦截',
-      blockHint: '总是先审',
-      allowOnlyObserve: '“只后台审核”名单里的用户只能设为观察',
-      blockAlwaysPre: '“总是先审”名单里的用户总是先审，名单级别不影响时机'
+      name: { allowlist: '只后台审核', blocklist: '总是先审' },
+      hint: { allowlist: '只后审，永不拦截', blocklist: '总是先审' }
+    },
+    lock: {
+      menu: '锁定',
+      action: { blocklist: '锁定为总是先审', allowlist: '锁定为只后台审核', unlock: '解锁' },
+      confirm: {
+        blocklist: '用户 #{id} 的每个请求都先审后发，命中即拒绝（这不是封禁）。名单条目锁定为拦截级，不会到期，也不会被规则调整。',
+        allowlist: '用户 #{id} 只在请求放行后审核：从不拦截、不会被封禁。名单条目锁定为观察级，不会到期，也不会被规则调整。',
+        unlock: '用户 #{id} 移出“{list}”名单，名单条目不再锁定。'
+      },
+      save: '保存',
+      locked: '已锁定用户 #{id}',
+      unlocked: '已解锁用户 #{id}',
+      fixed: '锁定：级别由名单决定、不会到期，解锁后才能修改或移出',
+      badge: '锁定',
+      refused: '该用户在名单里或条目已锁定，请先解锁'
     },
     settingsTab: {
       leaveTitle: '离开这一页？',
@@ -1170,7 +1216,7 @@ export default {
         overview: 'Today\'s volume, hits and errors, and what needs attention.',
         events: 'The verdict, stages and moderated content of every run.',
         test: 'Run a flow or an auditor on any text.',
-        flows: 'Which models are moderated, at what sample rate, and how they are judged (review chain and fallback).',
+        flows: 'What is moderated (scope, models), at what sample rate, and how it is judged (review chain and fallback).',
         bindings: 'Which group or account uses which flow; bindings that no longer apply are flagged here.',
         policy: 'Check first or in the background, and what happens when moderation fails.',
         cache: 'Verdict cache, hit replay and how much of a request is moderated.',
@@ -1199,6 +1245,7 @@ export default {
       cacheSynced: '{n} cached verdicts synced'
     },
     level: { observe: 'Observe', enforce: 'Enforce' },
+    fallbackReason: { disabled: 'disabled', unpublished: 'not published', deleted: 'deleted', invalid: 'unreadable' },
     severity: { high: 'High', medium: 'Medium', low: 'Low', none: 'None', critical: 'Critical' },
     userStatus: { active: 'Active', disabled: 'Disabled' },
     source: { auto: 'Automatic', manual: 'Manual' },
@@ -1217,7 +1264,10 @@ export default {
       auto_downgrade: 'Lowered to observe',
       downgrade_skipped: 'Violations remain or the trend is serious; not lowered or removed',
       auto_remove: 'Removed automatically',
-      auto_not_allowed: 'Automatic change not allowed'
+      auto_not_allowed: 'Automatic change not allowed',
+      lock: 'Locked',
+      unlock: 'Unlocked',
+      auto_escalate: 'Escalated by rule'
     },
     deniedAction: {
       auto_upgrade: 'Raising to enforce',
@@ -1278,6 +1328,7 @@ export default {
       runtime: 'Runtime (this node)',
       notConfigured: 'No published flow is bound to a group, so nothing is moderated. Create channels and auditors, then a flow bound to groups (group 0 is the default).',
       offHint: 'Moderation is off; the hook lets every request through. Turn it on in the settings (Moderation and default level: observe or enforce by default).',
+      staleBindings: '{n} binding(s) do not apply: their flow is disabled, not published, deleted or unreadable, so their requests go by a wider binding (usually the default flow).',
       loadFailed: 'Failed to load the overview'
     },
     runtime: {
@@ -1349,6 +1400,22 @@ export default {
     },
     detail: {
       title: 'Record',
+      match: {
+        group: 'Group binding',
+        account: 'Account binding (in the group)',
+        account_any: 'Account binding (any group)',
+        default: 'Default flow (group not bound)',
+        fallback: 'Default flow (fallback: the bound flow is {reason})'
+      },
+      level: {
+        blocklist: 'Checked first · always-check-first list',
+        allowlist: 'Background · background-only list',
+        watch_enforce: 'Checked first · watch list, enforce level',
+        watch_observe: 'Background · watch list, observe level',
+        default_enforce: 'Checked first · default handling',
+        default_observe: 'Background · default handling'
+      },
+      matchFallbackHint: 'The flow #{id} bound for this request is {reason}: the binding did not apply and the request fell back to the default flow. See Bindings.',
       sessionRecords: 'Every record of this session',
       endpointRecords: 'Only this endpoint',
       trace: 'Stages',
@@ -1364,6 +1431,8 @@ export default {
       deleted: 'Record deleted',
       loadFailed: 'Failed to load the record',
       f: {
+        match: 'Matched by',
+        handling: 'Handling',
         id: 'Record ID',
         request: 'Request ID',
         severity: 'Severity',
@@ -1412,7 +1481,7 @@ export default {
       empty: 'No auditor calls'
     },
     watch: {
-      hint: 'Observe: requests pass and are moderated in the background, violations are counted. Enforce: requests are moderated first and refused on a hit. Users with a first suspicious record join at the default level (configurable). Users on the background-only list are only moderated after their requests, whatever their level; users on the always-check-first list are always moderated first. Staff never join the list.',
+      hint: 'Observe: requests pass and are moderated in the background, violations are counted. Enforce: requests are moderated first and refused on a hit. Users with a first suspicious record join at the default level (configurable). Users on the background-only list are only moderated after their requests, whatever their level; users on the always-check-first list are always moderated first. Users on these two lists are locked entries: their level is fixed and they do not expire; lock or unlock them under “more” or in the user detail. Staff never join the list.',
       add: 'Add user',
       editTitle: 'Edit user #{id}',
       levelHint: 'Every request of an enforce-level user is moderated first and refused on a hit.',
@@ -1476,11 +1545,9 @@ export default {
       noMatch: 'No binding matches the filters',
       exempt: 'Not moderated',
       exemptOption: 'Not moderated (exempt)',
-      flowState: { disabled: 'Flow disabled', unpublished: 'Flow not published', missing: 'Flow deleted' },
-      rowInactive: '{state}: this binding does not apply',
-      fallbackBy: 'Now by the binding of “{scope}”: {target}',
-      fallbackNone: 'Not moderated now',
-      fallbackPerGroup: 'Now by the binding of the group of each request',
+      rowInactive: 'Flow {reason}: this binding does not apply',
+      effective: 'In effect: {target}',
+      effectivePerGroup: 'In effect: the binding of the group of each request',
       previewSkipped: 'Passed over, flow not live: {scopes}',
       deleteConfirm: 'Delete the binding of {scope}? Its requests then go by a less specific binding.',
       accountAnyGroup: 'account {account} (any group)',
@@ -1523,6 +1590,17 @@ export default {
       deleteConfirm: 'Delete flow {name}? Its group and account bindings go with it; their requests then go by a less specific binding.',
       move: 'Move',
       modelFilter: 'Models',
+      scopeTitle: 'Scope',
+      scopeHint: 'Which parts of a request are moderated. With user input only, the model\'s own replies and tool output are not sent. A change applies at once, without publishing.',
+      scope: {
+        input: 'User input only (system + user, with images and documents)',
+        tools: 'User input + tool results',
+        all: 'Everything, AI replies and tool calls included (old behaviour)'
+      },
+      scopeWarn: 'Moderating AI replies and tool output adds false positives, cost and latency: a coding agent triggers a run on every tool call.',
+      scopeLegacy: 'This flow keeps the old behaviour (everything). Moderating user input only cuts false positives a lot; switch it here.',
+      scopeSaved: 'Scope saved',
+      invalidScope: 'Unknown scope',
       models: 'Model patterns',
       modelsHint: 'Client model, * and ? wildcards.',
       sampleRate: 'Sample rate (%)',
@@ -1971,10 +2049,13 @@ export default {
       },
       category: 'Top category',
       newOnly: 'With new records only',
+      locked: 'Locked',
+      lockedOpt: { true: 'Locked entries only', false: 'Unlocked entries only' },
       counts: {
         watching: 'Observing {n}',
         withNew: 'With new records {n}',
         blocking: 'Enforcing {n}',
+        locked: 'Locked {n}',
       },
       newHits: '{n} new',
       noFlow: 'No flow',
@@ -2137,12 +2218,23 @@ export default {
       count: '{n} replayed'
     },
     lists: {
-      allow: 'Background only',
-      block: 'Always check first',
-      allowHint: 'Only moderated after the request, never refused',
-      blockHint: 'Always moderated first',
-      allowOnlyObserve: 'Users on the background-only list can only be observed',
-      blockAlwaysPre: 'Users on the always-check-first list are always moderated first; the watch level does not change the timing'
+      name: { allowlist: 'Background only', blocklist: 'Always check first' },
+      hint: { allowlist: 'Only moderated after the request, never refused', blocklist: 'Always moderated first' }
+    },
+    lock: {
+      menu: 'Lock',
+      action: { blocklist: 'Lock as always check first', allowlist: 'Lock as background only', unlock: 'Unlock' },
+      confirm: {
+        blocklist: 'Every request of user #{id} is checked before it is sent on and refused on a hit (this is not a ban). The watch entry is locked at the enforce level: it does not expire and no rule changes it.',
+        allowlist: 'User #{id} is only moderated after the requests were sent on: never refused, never banned. The watch entry is locked at the observe level: it does not expire and no rule changes it.',
+        unlock: 'User #{id} leaves the “{list}” list; the watch entry is no longer locked.'
+      },
+      save: 'Save',
+      locked: 'User #{id} locked',
+      unlocked: 'User #{id} unlocked',
+      fixed: 'Locked: the list sets the level and it does not expire; unlock it to change or remove it',
+      badge: 'Locked',
+      refused: 'The user is on a list or the entry is locked; unlock it first'
     },
     settingsTab: {
       leaveTitle: 'Leave this page?',

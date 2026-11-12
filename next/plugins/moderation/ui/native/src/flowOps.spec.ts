@@ -3,6 +3,7 @@ import { applyDrop } from './canvasDrag'
 import {
   addStage,
   canonicalSpec,
+  flowBody,
   hasQuestions,
   hitOutcome,
   isAuditorType,
@@ -132,6 +133,16 @@ describe('canonicalSpec', () => {
     expect(JSON.stringify(out)).not.toContain('"fallback":false')
     expect(sameSpec(spec(review(1), { ...review(2), fallback: false }), spec(review(1), review(2)))).toBe(true)
     expect(sameSpec(spec(review(1), fallback(2)), spec(review(1), review(2)))).toBe(false)
+  })
+})
+
+describe('flowBody', () => {
+  it('sends the scope beside the spec, and none for a flow from before it existed', () => {
+    const spec = newSpec()
+    expect(flowBody('a', spec, 'input')).toEqual({ name: 'a', draft: canonicalSpec(spec), scope: 'input' })
+    expect(flowBody('a', spec, 'all').scope).toBe('all')
+    expect(flowBody('a', spec, null)).toEqual({ name: 'a', draft: canonicalSpec(spec) })
+    expect('scope' in flowBody('a', spec, null).draft).toBe(false)
   })
 })
 

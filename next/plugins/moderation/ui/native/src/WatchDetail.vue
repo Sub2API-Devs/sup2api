@@ -105,7 +105,7 @@ function onDeleted(id: number) {
     <div v-else-if="detail && userId" class="mod-detail">
       <!-- a failed reload keeps the user shown; the next load clears it -->
       <SAlert v-if="error" tone="warning" dense>{{ t('watch.refreshFailed', { error }) }}</SAlert>
-      <UserStateSection :user-id="detail.user_id" :state="detail" @watch-changed="refreshWatch" @show-user="emit('show-user', $event)" />
+      <UserStateSection :user-id="detail.user_id" :state="detail" @watch-changed="refreshWatch" @lists-changed="refreshWatch" @show-user="emit('show-user', $event)" />
 
       <div v-if="entry">
         <SSectionTitle tag="p">{{ t('watch.info') }}</SSectionTitle>

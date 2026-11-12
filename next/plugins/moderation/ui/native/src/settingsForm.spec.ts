@@ -6,8 +6,8 @@ import { NAV_GROUPS } from './nav'
 import { mergeSettings, type PageValues } from './settingsMerge'
 
 const MASK = '******'
-/** The converted 0.1 fields, the keys retired in 0.8.0 and the analysis_* keys of the removed AI analysis: in the schema (the core validates and masks them), never on the page. */
-const LEGACY = ['base_url', 'api_key', 'model', 'system_prompt', 'categories', 'tool_choice', 'max_turns', 'temperature', 'max_tokens', 'timeout_ms', 'on_error', 'sample_rate', 'group_ids', 'model_patterns', 'retention_days', 'exempt_user_ids', 'cache_ttl_seconds', 'analysis_every_violations', 'analysis_channel_id', 'analysis_guidelines', 'analysis_timeout_ms', 'analysis_concurrency', 'analysis_context_kb', 'analysis_keep_per_user', 'analysis_allow_upgrade', 'analysis_allow_downgrade', 'analysis_allow_remove']
+/** The user lists (locked on the watch list since 0.10.0), the converted 0.1 fields, the keys retired in 0.8.0 and the analysis_* keys of the removed AI analysis: in the schema (the core validates and masks them), never on the page. */
+const LEGACY = ['allowlist_user_ids', 'blocklist_user_ids', 'base_url', 'api_key', 'model', 'system_prompt', 'categories', 'tool_choice', 'max_turns', 'temperature', 'max_tokens', 'timeout_ms', 'on_error', 'sample_rate', 'group_ids', 'model_patterns', 'retention_days', 'exempt_user_ids', 'cache_ttl_seconds', 'analysis_every_violations', 'analysis_channel_id', 'analysis_guidelines', 'analysis_timeout_ms', 'analysis_concurrency', 'analysis_context_kb', 'analysis_keep_per_user', 'analysis_allow_upgrade', 'analysis_allow_downgrade', 'analysis_allow_remove']
 
 const sections = settingSections(schema, ui)
 const zh = (v: unknown) => (v as { zh: string }).zh
@@ -18,7 +18,6 @@ describe('settingSections', () => {
       'policy/执行方式',
       'cache/判定缓存与重放',
       'cache/送审输入上限',
-      'lists/固定名单',
       'lists/自动观察与封禁',
       'jev/Jev 默认题集',
       'response/拦截响应',
@@ -41,8 +40,8 @@ describe('settingSections', () => {
   })
 
   it('shows the 0.8.0 settings where the design puts them', () => {
-    expect(sections[0].keys).toEqual(['mode'])
-    expect(sectionsOf(sections, 'lists')[0].keys).toEqual(['allowlist_user_ids', 'blocklist_user_ids'])
+    expect(sections[0].keys).toEqual(['mode', 'fail_policy'])
+    expect(sectionsOf(sections, 'lists')[0].keys[0]).toBe('auto_watch')
     const shown = sections.flatMap((g) => g.keys)
     expect(shown[shown.indexOf('store_text') + 1]).toBe('record_pass_input_message')
     expect(sections.find((g) => g.keys.includes('verdict_cache_days'))?.keys).toContain('cache_entries')
@@ -125,9 +124,9 @@ describe('the save of the settings tab', () => {
     const oldInitial = page(old, oldForm)
 
     it('starts from the stored exempt_user_ids while allowlist_user_ids was never stored', () => {
-      expect(oldForm.allowlist_user_ids).toEqual(['5', '9'])
-      expect(oldForm.blocklist_user_ids).toEqual([])
-      expect(oldKeys).not.toContain('exempt_user_ids')
+      expect(displayValues(schema, old, ['allowlist_user_ids', 'blocklist_user_ids'])).toEqual({ allowlist_user_ids: ['5', '9'], blocklist_user_ids: [] })
+      // the page edits neither list (they are locked on the watch list, userLock.ts) nor the retired key
+      for (const k of ['allowlist_user_ids', 'blocklist_user_ids', 'exempt_user_ids']) expect(oldKeys).not.toContain(k)
       // nothing is written while nothing is edited
       const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, oldForm))
       expect(m.changed).toEqual([])
@@ -139,18 +138,6 @@ describe('the save of the settings tab', () => {
       expect(displayValues(schema, both, ['allowlist_user_ids']).allowlist_user_ids).toEqual(['7'])
       expect(displayValues(schema, { ...old, allowlist_user_ids: [] }, ['allowlist_user_ids']).allowlist_user_ids).toEqual([])
       expect(displayValues(schema, stored, ['allowlist_user_ids']).allowlist_user_ids).toEqual([])
-    })
-
-    it('writes allowlist_user_ids and the same list to the retired key, so a 0.7.2 node exempts exactly the allowlisted users', () => {
-      const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: ['9', '12'] }))
-      expect(m.changed).toEqual(['allowlist_user_ids'])
-      expect(m.values).toEqual({ ...old, allowlist_user_ids: ['9', '12'] })
-      // user 9 stays exempt on a 0.7.2 node, the removed user 5 does not, the added user 12 is
-      const sent = withRetiredMirrored(m.values, m.changed)
-      expect(sent).toEqual({ ...old, allowlist_user_ids: ['9', '12'], exempt_user_ids: ['9', '12'] })
-      expect(sent.exempt_user_ids).not.toBe(sent.allowlist_user_ids)
-      // m.values itself is not mutated
-      expect(m.values.exempt_user_ids).toEqual(['5', '9'])
     })
 
     it('leaves the retired key alone when the allowlist is not saved', () => {
@@ -183,32 +170,6 @@ describe('the save of the settings tab', () => {
       expect(withRetiredMirrored({ ...both, blocklist_user_ids: [8] }, ['blocklist_user_ids']).exempt_user_ids).toEqual(['7'])
       // no retired key stored yet: a saved blocklist adds the mirror too
       expect(withRetiredMirrored({ ...stored, allowlist_user_ids: ['7', '8'], blocklist_user_ids: ['8'] }, ['blocklist_user_ids']).exempt_user_ids).toEqual(['7'])
-    })
-
-    it('saving the blocklist while the allowlist is still the retired list', () => {
-      // a blocklisted user on it: the list becomes allowlist_user_ids as it is, the retired key loses the user
-      const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, blocklist_user_ids: ['9'] }))
-      expect(m.changed).toEqual(['blocklist_user_ids'])
-      expect(withRetiredMirrored(m.values, m.changed)).toEqual({ ...old, blocklist_user_ids: ['9'], allowlist_user_ids: ['5', '9'], exempt_user_ids: ['5'] })
-      expect(m.values.exempt_user_ids).toEqual(['5', '9'])
-      // nobody on both: nothing else is written
-      const other = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, blocklist_user_ids: ['12'] }))
-      expect(withRetiredMirrored(other.values, other.changed)).toBe(other.values)
-      // neither an allowlist nor a retired list: nothing to mirror
-      const none = { ...stored, blocklist_user_ids: ['12'] }
-      expect(withRetiredMirrored(none, ['blocklist_user_ids'])).toBe(none)
-    })
-
-    it('stores an emptied allowlist as [], so the retired list is not read again', () => {
-      for (const emptied of [[], undefined, null]) {
-        const m = mergeSettings(oldKeys, old, old, oldInitial, page(old, { ...oldForm, allowlist_user_ids: emptied }))
-        expect(m.changed).toEqual(['allowlist_user_ids'])
-        expect(m.values.allowlist_user_ids).toEqual([])
-        expect(withRetiredMirrored(m.values, m.changed).exempt_user_ids).toEqual([])
-      }
-      // without a retired list an emptied allowlist is simply removed
-      expect(sentSetting(schema.properties.allowlist_user_ids, stored, 'allowlist_user_ids', undefined)).toBeUndefined()
-      expect(sentSetting(schema.properties.blocklist_user_ids, old, 'blocklist_user_ids', undefined)).toBeUndefined()
     })
   })
 

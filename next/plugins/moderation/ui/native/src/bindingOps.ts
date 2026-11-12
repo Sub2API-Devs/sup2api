@@ -1,4 +1,4 @@
-import type { Binding, BindingKind, Flow } from './types'
+import type { Binding, BindingKind, FallbackReason, Flow } from './types'
 
 // Bindings of flows to groups and accounts (CONTRACTS §72.17), mirroring
 // snapshot.flowForAccount: the most specific binding that applies decides. A
@@ -40,18 +40,18 @@ export function resolveSteps(bindings: readonly Binding[], groupId: number, acco
 /** The binding a request goes by (resolveSteps().hit); undefined when none applies (not moderated). */
 export const resolveBinding = (bindings: readonly Binding[], groupId: number, accountId: number): Binding | undefined => resolveSteps(bindings, groupId, accountId).hit
 
-/**
- * What the requests of an inactive binding go by now: the next binding that
- * applies (undefined = not moderated). For an account bound in any group the
- * answer depends on the group of each request; this gives the default
- * group's.
- */
-export const fallbackOf = (bindings: readonly Binding[], b: Pick<Binding, 'group_id' | 'account_id'>): Binding | undefined =>
-  resolveBinding(
-    bindings.filter((x) => bindingKey(x) !== bindingKey(b)),
-    b.group_id,
-    b.account_id
-  )
+/** A binding that does not apply (GET /bindings fallback_reason): why, and the flow its requests go by now. */
+export interface StaleBinding {
+  reason: FallbackReason
+  /** 0 = not moderated; null = an account bound in any group, whose requests go by the binding of their own group */
+  effective: number | null
+}
+
+/** Why a binding does not apply and what applies instead; null when it applies. */
+export function staleBinding(b: Pick<Binding, 'group_id' | 'account_id' | 'fallback_reason' | 'effective_flow_id'>): StaleBinding | null {
+  if (!b.fallback_reason) return null
+  return { reason: b.fallback_reason, effective: bindingKind(b.group_id, b.account_id) === 'account' ? null : (b.effective_flow_id ?? 0) }
+}
 
 /** Bindings ordered as the plugin looks them up: kind, then account, then group. */
 export function sortBindings(list: readonly Binding[]): Binding[] {

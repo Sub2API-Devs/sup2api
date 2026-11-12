@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SLink, SSpinner } from '@sub2api/ui'
 import FlowCanvas from './FlowCanvas.vue'
@@ -10,14 +10,16 @@ import FlowVersions from './FlowVersions.vue'
 import { useCatalog } from './catalog'
 import { joinList } from './format'
 import { canManage, errorMessage, fetchFlow, publishFlow, saveFlow, setFlowEnabled, toastError, useModHost } from './host'
-import type { Flow, Spec } from './types'
-import { applyTemplate, auditorIndex, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec } from './flowOps'
+import type { Flow, Scope, Spec } from './types'
+import { applyTemplate, auditorIndex, autoTimeoutMs, canonicalSpec, canvasAuditors, flowBody, isAuditorType, newSpec, NEW_FLOW_SCOPE, sameSpec } from './flowOps'
 import { validateSpec, type SpecIssue } from './flowValidate'
 
 // Flow editor (new-api flow-editor-form.tsx): name + draft kept locally and
 // compared with the saved draft ("unsaved") and the published version
 // ("unpublished"). Saving writes the draft; publishing saves first when
-// needed and then publishes with expected_version.
+// needed and then publishes with expected_version. The enabled switch and
+// the scope are columns of the flow, not of the spec: a change saves at once
+// (before the first save it goes with the new flow).
 const props = defineProps<{ flowId: number | null; groupLabel: (id: number) => string }>()
 const emit = defineEmits<{
   (e: 'close'): void
@@ -36,8 +38,10 @@ const loadError = ref('')
 const saved = ref<Flow | null>(null)
 const name = ref('')
 const draft = ref<Spec>(newSpec())
-const enabled = ref(true)
-const busy = ref<'save' | 'publish' | 'discard' | 'enabled' | null>(null)
+/** The fields that apply at once. */
+const live = reactive<{ enabled: boolean; scope: Scope | null }>({ enabled: true, scope: NEW_FLOW_SCOPE })
+type LiveField = keyof typeof live
+const busy = ref<'save' | 'publish' | 'discard' | LiveField | null>(null)
 const publishOpen = ref(false)
 const versionsOpen = ref(false)
 const simulateOpen = ref(false)
@@ -51,7 +55,7 @@ function resetFrom(f: Flow) {
   saved.value = f
   name.value = f.name
   draft.value = canonicalSpec(f.draft)
-  enabled.value = f.enabled
+  Object.assign(live, { enabled: f.enabled, scope: f.scope })
 }
 
 async function load() {
@@ -105,7 +109,8 @@ function issueText(i: SpecIssue): string {
 
 function fail(e: unknown) {
   const fields = isApiError(e) ? Object.values(e.fields) : []
-  if (fields.length) host.toast(joinList(fields, 'clauseSep'), 'error')
+  if (isApiError(e) && e.fieldCodes.scope === 'invalid_scope') host.toast(t('flows.invalidScope'), 'error')
+  else if (fields.length) host.toast(joinList(fields, 'clauseSep'), 'error')
   else toastError(e)
 }
 
@@ -115,25 +120,25 @@ function fail(e: unknown) {
  * never makes the next save create it again.
  */
 async function persist(): Promise<Flow> {
-  const body = { name: name.value.trim(), draft: canonicalSpec(draft.value) }
+  const body = flowBody(name.value.trim(), draft.value, live.scope)
   const creating = !saved.value
   const f = await saveFlow(saved.value?.id ?? null, body)
   saved.value = { ...f, draft: f.draft ?? body.draft }
   name.value = f.name
   if (creating) emit('created', f.id)
   emit('changed')
-  if (creating && f.enabled !== enabled.value) await applyInitialEnabled(f)
+  if (creating && f.enabled !== live.enabled) await applyInitialEnabled(f)
   return saved.value
 }
 
 /** The enabled switch chosen before the first save, applied to the new flow. */
 async function applyInitialEnabled(f: Flow) {
   try {
-    await setFlowEnabled(f.id, enabled.value)
-    saved.value = { ...saved.value!, enabled: enabled.value }
+    await setFlowEnabled(f.id, live.enabled)
+    saved.value = { ...saved.value!, enabled: live.enabled }
     emit('changed')
   } catch (e) {
-    enabled.value = f.enabled
+    live.enabled = f.enabled
     fail(e)
   }
 }
@@ -179,7 +184,7 @@ async function discard() {
     // its auditors.
     const spec = canonicalSpec(f.published)
     if (f.published_auto_timeout) spec.total_timeout_ms = 0
-    await saveFlow(f.id, { name: f.name, draft: spec })
+    await saveFlow(f.id, flowBody(f.name, spec, f.scope))
     host.toast(t('flows.discarded', { v: f.version }), 'success')
     await refresh()
   } catch (e) {
@@ -189,19 +194,19 @@ async function discard() {
   }
 }
 
-async function setEnabled(v: boolean) {
+/** Saves a field that applies at once; before the first save it is only kept (persist sends it). */
+async function saveLive<K extends LiveField>(field: K, v: (typeof live)[K], call: (f: Flow) => Promise<unknown>) {
   const f = saved.value
   if (!f) {
-    // applied right after the first save
-    enabled.value = v
+    live[field] = v
     return
   }
-  busy.value = 'enabled'
+  busy.value = field
   try {
-    await setFlowEnabled(f.id, v)
-    enabled.value = v
-    saved.value = { ...f, enabled: v }
-    host.toast(t('flows.enabledSaved'), 'success')
+    await call(f)
+    live[field] = v
+    saved.value = { ...f, [field]: v }
+    host.toast(t(`flows.${field}Saved`), 'success')
     emit('changed')
   } catch (e) {
     fail(e)
@@ -209,6 +214,9 @@ async function setEnabled(v: boolean) {
     busy.value = null
   }
 }
+const setEnabled = (v: boolean) => saveLive('enabled', v, (f) => setFlowEnabled(f.id, v))
+/** The scope goes with the saved name and draft: the unsaved edits of the draft stay unsaved. */
+const setScope = (v: Scope) => saveLive('scope', v, (f) => saveFlow(f.id, flowBody(f.name, f.draft, v)))
 
 function openSimulate() {
   if (dirty.value) host.toast(t('flows.simulateUnsaved'), 'warning')
@@ -275,14 +283,16 @@ onBeforeUnmount(() => {
       <FlowConfigCard
         v-model:name="name"
         v-model:draft="draft"
-        :enabled="enabled"
+        :enabled="live.enabled"
+        :scope="live.scope"
         :groups="groupNames"
         :accounts="accountBindings"
         :auto-ms="autoMs"
         :is-new="isNew"
         :disabled="!manage"
-        :enabled-busy="busy === 'enabled'"
+        :busy="busy"
         @update:enabled="setEnabled"
+        @update:scope="setScope"
         @go-list="requestClose"
       />
 
@@ -311,7 +321,7 @@ onBeforeUnmount(() => {
       v-model:open="publishOpen"
       :name="name.trim()"
       :next-version="publishedVersion + 1"
-      :enabled="enabled"
+      :enabled="live.enabled"
       :draft="draft"
       :groups="groupNames"
       :accounts="accountBindings"

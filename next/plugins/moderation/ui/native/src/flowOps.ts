@@ -1,4 +1,4 @@
-import type { Auditor, AuditorType, Channel, Spec, Stage } from './types'
+import type { Auditor, AuditorType, Channel, Scope, Spec, Stage } from './types'
 
 // Flow editing operations of the canvas editor (CONTRACTS §72.7), ported from
 // new-api web/shared/src/content-moderation/ops.ts (the publish check is in
@@ -217,6 +217,17 @@ export function canonicalSpec(spec: Spec): Spec {
 }
 
 export const sameSpec = (a: Spec, b: Spec) => JSON.stringify(canonicalSpec(a)) === JSON.stringify(canonicalSpec(b))
+
+/** What a new flow moderates (design D1): the user's input only. */
+export const NEW_FLOW_SCOPE: Scope = 'input'
+
+/**
+ * The body of POST /flows and PUT /flows/:id. The scope is a column of the
+ * flow beside the spec and applies at once (it is not published); a flow
+ * from before it existed (null, moderating everything) is saved without one
+ * and keeps it until a scope is picked.
+ */
+export const flowBody = (name: string, draft: Spec, scope: Scope | null) => ({ name, draft: canonicalSpec(draft), ...(scope ? { scope } : {}) })
 
 // ---- templates
 

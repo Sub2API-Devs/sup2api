@@ -24,7 +24,7 @@ import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
-import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sectionsOf, sentSetting, settingSections, settingsKey, verdictCacheDisabled, withRetiredMirrored, type SettingSection } from './settingsForm'
+import { CACHE_DAYS_KEY, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sectionsOf, sentSetting, settingSections, settingsKey, verdictCacheDisabled, type SettingSection } from './settingsForm'
 import type { SectionKey } from './nav'
 import { useAsync } from './useAsync'
 import { DurationWidget } from './durationWidget'
@@ -34,21 +34,17 @@ import type { JevQuestions } from './types'
 // One page of the moderation settings (CONTRACTS §72.15; the plugin page is
 // where they are edited, ui.settings mode native, §75.5): the fields of
 // forms/settings.schema.json in the ui:section groups of
-// forms/settings.ui.json whose page is this one (nav.ts), rendered by the schema widgets (the console's own
-// among them: the allowlist and the blocklist pick their users with
-// entity-select), except a few with their own editor here: the block
+// forms/settings.ui.json whose page is this one (nav.ts), rendered by the
+// schema widgets, except a few with their own editor here: the block
 // response preview per API format, the webhook address and secret ("set" / clear) and the Jev default question
 // set. The converted 0.1 fields are hidden and go back as stored; a stored
 // 0.1 API key can only be cleared.
 //
-// 0.8.0: `mode` is the switch and the default level; the allowlist starts
-// from the retired exempt_user_ids until it is saved, and the verdict cache
-// days from the retired cache_ttl_seconds (settingsForm.ts). Of the retired
-// keys only exempt_user_ids is written: a save of the allowlist or of the
-// blocklist puts the allowlist without the blocklisted users there, for
-// nodes still on 0.7.2 (withRetiredMirrored). Under the cache days,
-// moderation:manage users can empty the verdict cache of every node
-// (VerdictCacheRow).
+// 0.8.0: `mode` is the switch and the default level; the verdict cache
+// days start from the retired cache_ttl_seconds (settingsForm.ts). The user
+// lists are hidden since 0.10.0: they are edited by locking users on the
+// watch list (userLock.ts). Under the cache days, moderation:manage users
+// can empty the verdict cache of every node (VerdictCacheRow).
 //
 // A save re-reads the stored values and writes back only the keys of this
 // page edited since it loaded (settingsMerge.ts), so a change made elsewhere
@@ -195,7 +191,7 @@ async function save() {
       const names = joinList(m.conflicts.map((k) => (k === LEGACY_KEY ? t('settingsTab.legacyKey') : label(k))))
       if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys: names }), confirmText: t('settingsTab.overwrite') }))) return
     }
-    await savePluginSettings(withRetiredMirrored(m.values, m.changed))
+    await savePluginSettings(m.values)
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {

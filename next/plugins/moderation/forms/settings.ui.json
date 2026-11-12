@@ -89,8 +89,8 @@
       "zh": "审核开关与默认处理"
     },
     "ui:help": {
-      "zh": "没有名单条目的用户按这里处理。决定顺序：总是先审名单 → 只后台审核名单 → 观察名单级别 → 这里的默认处理。",
-      "en": "How users without a list entry are handled. Order: always-check-first list → background-only list → watch level → this default."
+      "zh": "没有名单条目的用户按这里处理。决定顺序：锁定为“总是先审”的用户 → 锁定为“只后台审核”的用户 → 观察名单级别 → 这里的默认处理。",
+      "en": "How users without a list entry are handled. Order: users locked as always-check-first → users locked as background-only → watch level → this default."
     },
     "ui:section": {
       "title": {
@@ -126,46 +126,25 @@
     }
   },
   "allowlist_user_ids": {
-    "ui:widget": "entity-select",
-    "ui:options": {
-      "kind": "user"
-    },
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Background-only users (never refused)",
       "zh": "只后台审核的用户（从不拦截）"
     },
     "ui:help": {
-      "en": "Only moderated after their requests were sent on, never refused, never banned and never escalated. They show in the watch list as locked observe entries. Someone also on the always-check-first list is checked first.",
-      "zh": "只在请求放行后审核：从不拦截、不会被封禁、也不会被自动升级。在观察名单里显示为锁定的观察级条目。同时在“总是先审”名单里的用户按先审处理。"
-    },
-    "ui:details": {
-      "en": "Moderators (users with moderation:read) are recognised automatically and are never put on the watch list.",
-      "zh": "持有 moderation:read 的审核管理员会被自动识别，不进观察名单（但照常审核）。"
-    },
-    "ui:section": {
-      "title": {
-        "en": "Fixed lists",
-        "zh": "固定名单"
-      },
-      "page": "lists",
-      "description": {
-        "en": "These lists come before watch levels and the default level.",
-        "zh": "名单优先于观察名单级别和默认级别。"
-      }
+      "en": "Only moderated after their requests were sent on, never refused, never banned and never escalated. They show in the watch list as locked observe entries. Someone also on the always-check-first list is checked first. Edited by locking or unlocking users on the watch list.",
+      "zh": "只在请求放行后审核：从不拦截、不会被封禁、也不会被自动升级。在观察名单里显示为锁定的观察级条目。同时在“总是先审”名单里的用户按先审处理。在观察名单里锁定或解锁用户来修改。"
     }
   },
   "blocklist_user_ids": {
-    "ui:widget": "entity-select",
-    "ui:options": {
-      "kind": "user"
-    },
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Always check first",
       "zh": "总是先审的用户"
     },
     "ui:help": {
-      "en": "Every request is checked before it is sent on and refused on a hit. They show in the watch list as locked enforce entries. This is not a ban: bans are under Banned users.",
-      "zh": "每个请求都先审后发，命中即拒绝。在观察名单里显示为锁定的拦截级条目。这不是封禁：封禁在“封禁用户”。"
+      "en": "Every request is checked before it is sent on and refused on a hit. They show in the watch list as locked enforce entries. This is not a ban: bans are under Banned users. Edited by locking or unlocking users on the watch list.",
+      "zh": "每个请求都先审后发，命中即拒绝。在观察名单里显示为锁定的拦截级条目。这不是封禁：封禁在“封禁用户”。在观察名单里锁定或解锁用户来修改。"
     }
   },
   "block_status": {

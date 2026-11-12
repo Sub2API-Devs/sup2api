@@ -1,4 +1,5 @@
 import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@sub2api/ui'
+import type { UserList } from './types'
 
 // The settings tab as a whole settings page (CONTRACTS §72.15, §75.5): the
 // fields of forms/settings.schema.json in the order and ui:section groups of
@@ -8,13 +9,15 @@ import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@su
 // go back as stored (settingsMerge.ts).
 //
 // Two keys of 0.8.0 replace a retired one that the plugin still reads until
-// the new key is stored (settings.go DecodeSettings); the page shows what
-// the plugin reads and writes the new key:
+// the new key is stored (settings.go DecodeSettings); what the plugin reads
+// is shown and the new key is written:
 //   allowlist_user_ids  ← exempt_user_ids
 //   verdict_cache_days  ← cache_ttl_seconds (0 = cache off, else whole days, rounded up, 1–30);
 //                         verdict_cache_days = 0 turns the cache off too
-// A new key is never removed while its retired key would be read again
-// (sentSetting), and a save of the allowlist or of the blocklist writes "the
+// Cleared cache days are not removed while the retired key would be read
+// again (sentSetting). The user lists are hidden on the page since 0.10.0
+// and saved by locking a user on the watch list (userLock.ts), which stores
+// an emptied list as [] (the retired key is not read again) and writes "the
 // allowlist without the blocklisted users" to the retired exempt_user_ids
 // too (withRetiredMirrored): nodes still on 0.7.2 read only that key and do
 // not moderate its users at all.
@@ -75,8 +78,10 @@ export const schemaKeys = (keys: readonly string[]) => keys.filter((k) => k !== 
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
-const ALLOWLIST_KEY = 'allowlist_user_ids'
-const BLOCKLIST_KEY = 'blocklist_user_ids'
+/** The settings key of each user list. */
+export const USER_LIST_KEYS: Readonly<Record<UserList, string>> = { allowlist: 'allowlist_user_ids', blocklist: 'blocklist_user_ids' }
+const ALLOWLIST_KEY = USER_LIST_KEYS.allowlist
+const BLOCKLIST_KEY = USER_LIST_KEYS.blocklist
 export const CACHE_DAYS_KEY = 'verdict_cache_days'
 const RETIRED_ALLOWLIST = 'exempt_user_ids'
 const RETIRED_CACHE_TTL = 'cache_ttl_seconds'
@@ -120,23 +125,17 @@ function sentValue(schema: JSONSchema | undefined, v: unknown): unknown {
 }
 
 /**
- * sentValue of a key of the page. A new key is not removed while the plugin
- * would then read its retired key again instead of the schema default:
- * - an allowlist emptied while the retired exempt_user_ids still holds users
- *   is sent as [];
- * - cleared cache days are sent as the schema default (7) while a retired
- *   cache_ttl_seconds is stored (it would give "off" for 0, else its own
- *   days). The one exception is the field left empty because the retired
- *   key keeps the cache off (verdictCacheOff: nothing was cleared, the page
- *   says the cache is off and it stays off).
+ * sentValue of a key of the page. Cleared cache days are not removed while
+ * the plugin would then read its retired key again instead of the schema
+ * default: they are sent as the schema default (7) while a retired
+ * cache_ttl_seconds is stored (it would give "off" for 0, else its own
+ * days). The one exception is the field left empty because the retired key
+ * keeps the cache off (verdictCacheOff: nothing was cleared, the page says
+ * the cache is off and it stays off).
  */
 export function sentSetting(schema: JSONSchema | undefined, stored: Record<string, unknown>, k: string, v: unknown): unknown {
   const sent = sentValue(schema, v)
   if (sent !== undefined) return sent
-  if (k === ALLOWLIST_KEY) {
-    const retired = stored[RETIRED_ALLOWLIST]
-    return Array.isArray(retired) && retired.length ? [] : undefined
-  }
   if (k === CACHE_DAYS_KEY && stored[RETIRED_CACHE_TTL] !== undefined && !verdictCacheOff(stored)) return schema?.default
   return undefined
 }

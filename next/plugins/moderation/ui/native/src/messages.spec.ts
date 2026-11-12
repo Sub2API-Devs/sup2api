@@ -22,7 +22,8 @@ describe('messages', () => {
       expect(['first', 'review', 'fallback'].filter((k) => !(k in lang.flows.role))).toEqual([])
       expect(['hit', 'pass', 'skipped', 'error', 'failed'].filter((k) => !(k in lang.stageResult))).toEqual([])
       for (const group of [lang.mode, lang.statusLine.levelHint]) expect(Object.keys(group).sort()).toEqual(['enforce', 'observe', 'off'])
-      expect(Object.keys(lang.bindings.flowState).sort()).toEqual(['disabled', 'missing', 'unpublished'])
+      expect(Object.keys(lang.fallbackReason).sort()).toEqual(['deleted', 'disabled', 'invalid', 'unpublished'])
+      expect(Object.keys(lang.flows.scope).sort()).toEqual(['all', 'input', 'tools'])
     }
   })
 

@@ -170,7 +170,8 @@ html.dark {
   height: 0.875rem;
 }
 /* the replay mark at the end of a result badge (ResultBadge) */
-svg.mod-replay-mark {
+svg.mod-replay-mark,
+svg.mod-lock-icon {
   width: 0.75rem;
   height: 0.75rem;
 }

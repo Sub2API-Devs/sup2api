@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ApiError, type PluginHost } from '@sub2api/host'
-import { SAlert, SCHEMA_WIDGETS_KEY, SField, SFormModal, SSegmented } from '@sub2api/ui'
+import { SAlert, SCHEMA_WIDGETS_KEY, SDropdown, SField, SFormModal, SSegmented } from '@sub2api/ui'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
 import BindingEditModal from './BindingEditModal.vue'
 import BindingsTab from './BindingsTab.vue'
 import BlocksTab from './BlocksTab.vue'
 import SettingsTab from './SettingsTab.vue'
+import UserStateSection from './UserStateSection.vue'
 import WatchEditModal from './WatchEditModal.vue'
 import { fetchAccountGroups, fetchAccountNames, setHost } from './host'
 import { resetSessionCaches } from './session'
@@ -421,39 +422,28 @@ describe('fetchAccountNames', () => {
 describe('the user lists of the settings', () => {
   const LISTS = ['allowlist_user_ids', 'blocklist_user_ids'] as const
 
-  it('are picked with the entity-select widget and stored as lists of id strings', () => {
+  it('are hidden in the settings and stored as lists of id strings', async () => {
     for (const k of LISTS) {
-      expect([ui[k]['ui:widget'], ui[k]['ui:options']]).toEqual(['entity-select', { kind: 'user' }])
+      expect(ui[k]['ui:widget']).toBe('hidden')
       expect([schema.properties[k].type, schema.properties[k].items.type, schema.properties[k].maxItems]).toEqual(['array', 'string', 1000])
     }
+    const w = mount(SettingsTab, { props: { page: 'lists' }, global: { provide: { [SCHEMA_WIDGETS_KEY as symbol]: { 'entity-select': EntitySelect } } } })
+    await flushPromises()
+    expect(w.findAllComponents(EntitySelect)).toHaveLength(0)
   })
 
-  it("render the console's widget and save what it picks, with the retired list kept in line", async () => {
-    stored = { mode: 'observe', allowlist_user_ids: ['8'], blocklist_user_ids: [] }
-    const w = mount(SettingsTab, { attachTo: document.body, props: { page: 'lists' }, global: { provide: { [SCHEMA_WIDGETS_KEY as symbol]: { 'entity-select': EntitySelect } } } })
+  it('are saved by locking a user in the user drawer, with the retired list kept in line', async () => {
+    stored = { mode: 'observe', allowlist_user_ids: ['8', '9'], blocklist_user_ids: [] }
+    const state = { watch: null, allowlisted: true, blocklisted: false, staff: false, blocked: false, blocked_until: null }
+    const w = mount(UserStateSection, { props: { userId: 9, state } })
     await flushPromises()
-    const [allow, block] = w.findAllComponents(EntitySelect)
-    expect([allow.props('modelValue'), allow.props('multiple')]).toEqual([['8'], true])
-    expect([block.props('modelValue'), block.props('multiple')]).toEqual([[], true])
-
-    allow.vm.$emit('update:modelValue', ['8', '9'])
-    block.vm.$emit('update:modelValue', ['9'])
-    await flushPromises()
-    await w.find('form').trigger('submit')
+    const menu = w.findComponent(SDropdown)
+    expect(menu.props('actions').map((a: { key: string }) => a.key)).toEqual(['blocklist', 'unlock'])
+    menu.vm.$emit('select', 'blocklist')
     await flushPromises()
     expect(corePut).toHaveBeenCalledTimes(1)
     const sent = (corePut.mock.calls[0][1] as { values: Record<string, unknown> }).values
-    expect(sent).toEqual({ mode: 'observe', allowlist_user_ids: ['8', '9'], blocklist_user_ids: ['9'], exempt_user_ids: ['8'] })
-  })
-
-  it('refuse more than 1000 users before anything is sent', async () => {
-    stored = { mode: 'observe' }
-    const w = mount(SettingsTab, { attachTo: document.body, props: { page: 'lists' }, global: { provide: { [SCHEMA_WIDGETS_KEY as symbol]: { 'entity-select': EntitySelect } } } })
-    await flushPromises()
-    w.findAllComponents(EntitySelect)[0].vm.$emit('update:modelValue', Array.from({ length: 1001 }, (_, i) => String(i + 1)))
-    await flushPromises()
-    await w.find('form').trigger('submit')
-    await flushPromises()
-    expect(corePut).not.toHaveBeenCalled()
+    expect(sent).toEqual({ mode: 'observe', allowlist_user_ids: ['8'], blocklist_user_ids: ['9'], exempt_user_ids: ['8'] })
+    expect(w.emitted('lists-changed')).toHaveLength(1)
   })
 })

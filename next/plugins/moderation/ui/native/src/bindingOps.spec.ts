@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bindingKind, exemptGroups, fallbackOf, flowBindingsInactive, groupCoverage, hasAccountBindings, resolveBinding, resolveSteps, sortBindings } from './bindingOps'
+import { bindingKind, exemptGroups, flowBindingsInactive, groupCoverage, hasAccountBindings, resolveBinding, resolveSteps, sortBindings, staleBinding } from './bindingOps'
 import type { Binding } from './types'
 
 describe('flowBindingsInactive', () => {
@@ -92,11 +92,19 @@ describe('resolveBinding with inactive bindings', () => {
     expect(resolveSteps(all([0, 0, 4]), 0, 0)).toEqual({ hit: undefined, skipped: all([0, 0, 4]) })
   })
 
-  it('tells what an inactive binding falls back to', () => {
-    const list = all([0, 0, 1], [9, 0, 2], [9, 7, 4], [0, 7, 3], [8, 0, 5])
-    expect(keyOf(fallbackOf(list, { group_id: 9, account_id: 7 }))).toBe('0:7')
-    expect(keyOf(fallbackOf(list, { group_id: 8, account_id: 0 }))).toBe('0:0')
-    expect(fallbackOf(all([0, 0, 4], [9, 0, 2]), { group_id: 0, account_id: 0 })).toBeUndefined()
+})
+
+describe('staleBinding', () => {
+  it('tells why a binding does not apply and the flow its requests go by now (GET /bindings)', () => {
+    expect(staleBinding({ ...b(9, 0, 4), fallback_reason: '', effective_flow_id: 4 })).toBeNull()
+    expect(staleBinding(b(9, 0, 4))).toBeNull()
+    expect(staleBinding({ ...b(9, 0, 4), fallback_reason: 'disabled', effective_flow_id: 1 })).toEqual({ reason: 'disabled', effective: 1 })
+    expect(staleBinding({ ...b(9, 7, 4), fallback_reason: 'deleted', effective_flow_id: 0 })).toEqual({ reason: 'deleted', effective: 0 })
+    expect(staleBinding({ ...b(9, 0, 4), fallback_reason: 'invalid', effective_flow_id: 1 })).toEqual({ reason: 'invalid', effective: 1 })
+    // nothing else applies: not moderated
+    expect(staleBinding({ ...b(0, 0, 4), fallback_reason: 'unpublished' })).toEqual({ reason: 'unpublished', effective: 0 })
+    // an account in any group falls back within the group of each request
+    expect(staleBinding({ ...b(0, 7, 4), fallback_reason: 'disabled', effective_flow_id: 1 })).toEqual({ reason: 'disabled', effective: null })
   })
 })
 

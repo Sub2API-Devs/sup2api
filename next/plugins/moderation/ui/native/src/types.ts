@@ -51,6 +51,11 @@ export interface Runtime {
 /** Record filters a record detail can set (click-to-filter). */
 export type EventFilter = { endpoint?: string; session_fp?: string; request_id?: string }
 
+/** How a request found its flow (0.10.0): a binding, the default flow, or the default flow after the binding stopped applying. */
+export type FlowSource = 'group' | 'account' | 'account_any' | 'default' | 'fallback'
+/** Why a binding does not apply: its flow is disabled, unpublished or deleted, or its published spec could not be read on the node (invalid). */
+export type FallbackReason = 'disabled' | 'unpublished' | 'deleted' | 'invalid'
+
 export interface ModEvent {
   id: number
   created_at: string
@@ -69,6 +74,14 @@ export interface ModEvent {
   result: Result | ''
   flow_id: number
   flow_version: number
+  /** how the flow was found (0.10.0; absent on older records) */
+  flow_source?: FlowSource
+  /** flow_source fallback: the bound flow and why it did not apply */
+  flow_fallback?: { flow_id: number; reason: FallbackReason }
+  /** what decided checking first or in the background (0.10.0; absent on older records, which show the mode instead) */
+  level_source?: 'blocklist' | 'allowlist' | 'watch' | 'default'
+  /** the level that applied: enforce = checked first */
+  level?: WatchLevel
   severity: string
   hit_categories: string[]
   highest_category: string
@@ -267,7 +280,14 @@ export interface Watch {
   hits_since_seen?: number
   note: string
   updated_at: string
+  /** a locked entry (0.10.0) mirrors a user list of the settings: its level is fixed, it never expires, the watch API refuses a level change or a removal (409 locked) */
+  locked?: boolean
+  /** the user list a locked entry mirrors; absent while it is still locked after the user left the lists (the plugin unlocks it shortly) */
+  lock?: UserList
 }
+
+/** The user lists of the settings: allowlist = background only (observe), blocklist = always checked first (enforce). */
+export type UserList = 'allowlist' | 'blocklist'
 
 export interface SeverityCounts {
   high: number
@@ -299,6 +319,8 @@ export interface WatchCounts {
   blocking: number
   /** enforce-level entries with new hits since last seen; absent before 0.8.0 */
   blocking_with_new?: number
+  /** locked entries (0.10.0), also counted in watching / blocking */
+  locked?: number
 }
 
 /** Envelope members of GET /watchlist besides data and page. */
@@ -494,6 +516,8 @@ export interface Status {
   today: TodayCounts
   today_from: string
   watch: WatchCounts
+  /** bindings whose flow is disabled, unpublished or deleted (0.10.0): their requests go by a wider binding */
+  stale_bindings?: number
   auditors: HealthRow[]
   channels: HealthRow[]
   funnels: Funnel[]
@@ -698,10 +722,21 @@ export interface Spec {
   stages: Stage[]
 }
 
+/**
+ * What of a request a flow moderates (0.10.0, design D1): input = system,
+ * developer and user text with the user's images and documents; tools adds
+ * the tool results; all = everything the client sent (assistant turns and
+ * tool definitions included).
+ */
+export const SCOPES = ['input', 'tools', 'all'] as const
+export type Scope = (typeof SCOPES)[number]
+
 export interface Flow {
   id: number
   name: string
   enabled: boolean
+  /** a column of the flow, not part of the spec: applies at once, not versioned; null = a flow from before 0.10.0, which moderates everything */
+  scope: Scope | null
   draft: Spec
   published: Spec | null
   version: number
@@ -750,6 +785,10 @@ export interface Binding {
   flow_id: number
   /** the flow is disabled, unpublished or gone: the binding does not apply and a wider one decides */
   inactive?: boolean
+  /** why the binding does not apply ('' = it applies; 0.10.0) */
+  fallback_reason?: FallbackReason | ''
+  /** the flow its requests go by now (0 = not moderated; 0.10.0) */
+  effective_flow_id?: number
 }
 
 export interface BindingsView {

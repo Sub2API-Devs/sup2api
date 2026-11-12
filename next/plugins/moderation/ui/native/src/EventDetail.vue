@@ -15,7 +15,7 @@ import { useCatalog } from './catalog'
 import { dt, enumLabel, idText, isSuspicious, ms, num } from './format'
 import { canManage, deleteEvent, fetchEvent, reviewDoneText, reviewEvents, toastError, useModHost } from './host'
 import { modeTone, severityTone } from './tones'
-import type { EventFilter, ModEventDetail, ReviewStatus, Watch } from './types'
+import type { EventFilter, ModEvent, ModEventDetail, ReviewStatus, Watch } from './types'
 import { useAsync } from './useAsync'
 
 // Record detail (GET /events/:id, new-api record-detail-drawer): result, the
@@ -25,7 +25,9 @@ import { useAsync } from './useAsync'
 // block) or delete any. userLink=false (the user drawer, already showing
 // the user) leaves the user as plain text. filterable (the records tab)
 // offers to filter the list by the record's endpoint or session, and by the
-// request a replayed hit took its verdict from (filter).
+// request a replayed hit took its verdict from (filter). A 0.10.0 record
+// says how its flow was found (a warning when its binding did not apply) and
+// what decided checking first or in the background, instead of the mode.
 const props = withDefaults(defineProps<{ open: boolean; eventId: number | null; userLink?: boolean; filterable?: boolean }>(), { userLink: true })
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
@@ -115,6 +117,21 @@ function filterBy(q: EventFilter) {
   emit('filter', q)
 }
 
+/** Why the bound flow did not apply. */
+const fallbackReason = (e: ModEvent) => (e.flow_fallback ? enumLabel('fallbackReason', e.flow_fallback.reason) : '')
+
+/** How the flow was found ('' on older records). */
+function matchText(e: ModEvent): string {
+  if (!e.flow_source) return ''
+  return e.flow_source === 'fallback' ? t('detail.match.fallback', { reason: fallbackReason(e) }) : enumLabel('detail.match', e.flow_source)
+}
+
+/** Checked first or in the background, and what decided it ('' on older records). */
+function handlingText(e: ModEvent): string {
+  if (!e.level_source || !e.level) return ''
+  return enumLabel('detail.level', e.level_source === 'watch' || e.level_source === 'default' ? `${e.level_source}_${e.level}` : e.level_source)
+}
+
 const fields = computed<DescItem[]>(() => {
   const e = ev.value
   if (!e) return []
@@ -133,6 +150,9 @@ const fields = computed<DescItem[]>(() => {
     { key: 'counted', label: t('detail.f.counted'), value: e.counted ? t('yes') : t('no') },
     { key: 'keep', label: t('detail.f.keepUntil'), value: e.keep_until ? dt(e.keep_until) : '' }
   ]
+  for (const [key, value] of [['match', matchText(e)], ['handling', handlingText(e)]] as const) {
+    if (value) items.push({ key, label: t(`detail.f.${key}`), value })
+  }
   if (e.reviewed_at) items.push({ key: 'reviewed', label: t('detail.f.reviewed'), value: `${dt(e.reviewed_at)} ${idText(e.reviewed_by)}` })
   if (e.session_fp) items.push({ key: 'session', label: t('detail.f.session'), value: e.session_fp, mono: true, copyable: true, full: true })
   if (e.llm_model) items.push({ key: 'llm', label: t('detail.f.llmModel'), value: e.llm_model })
@@ -150,15 +170,18 @@ const fields = computed<DescItem[]>(() => {
         <ReplayBadge v-if="ev.replayed" />
         <VerdictBadge :event="ev" />
         <SBadge v-if="ev.timing">{{ enumLabel('timing', ev.timing) }}</SBadge>
-        <SBadge v-if="ev.mode" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>
+        <SBadge v-if="ev.mode && !ev.level_source" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>
         <SBadge v-if="ev.severity" :tone="severityTone(ev.severity)">{{ t('detail.f.severity') }}: {{ enumLabel('severity', ev.severity) }}</SBadge>
         <SHint inline size="xs" class="mod-detail-time">{{ dt(ev.created_at) }}</SHint>
       </div>
 
+      <SAlert v-if="ev.flow_fallback" tone="warning" data-testid="mod-match-fallback">
+        {{ t('detail.matchFallbackHint', { id: ev.flow_fallback.flow_id, reason: fallbackReason(ev) }) }}
+      </SAlert>
       <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
 
-      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" :openable="userLink" @watch-changed="onWatchChanged" @show-user="showUser" @open-user="openUser" />
+      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" :openable="userLink" @watch-changed="onWatchChanged" @lists-changed="reload" @show-user="showUser" @open-user="openUser" />
 
       <div v-if="ev.trace">
         <SSectionTitle tag="p">{{ t('detail.trace') }}</SSectionTitle>

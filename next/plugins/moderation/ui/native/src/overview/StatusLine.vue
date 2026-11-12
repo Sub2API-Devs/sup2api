@@ -12,7 +12,8 @@ import type { SectionKey } from '../nav'
 // Running state (new-api status-line) as short label + badge entries:
 // moderation (switch and the default level: the level of users without a
 // watch entry, `mode` of the settings), flows, moderated / unmoderated groups,
-// channels; plus the setup hint when nothing is bound or moderation is off.
+// channels; plus the setup hint when nothing is bound or moderation is off,
+// and a hint when bindings do not apply (GET /status stale_bindings).
 // Long explanations (group names) are the badges' tooltips.
 const props = defineProps<{ status: Status }>()
 const emit = defineEmits<{ (e: 'go-tab', tab: SectionKey): void }>()
@@ -72,10 +73,22 @@ const entries = computed(() =>
   ].filter((e): e is { key: string; badges: Badge[] } => !!e.badges)
 )
 
-const notice = computed<{ tone: 'warning' | 'info'; text: string; action: 'flows' | 'policy' | '' } | null>(() => {
-  if (!props.status.runtime.configured) return { tone: 'warning', text: t('overview.notConfigured'), action: canManage() ? 'flows' : '' }
-  if (props.status.mode === 'off') return { tone: 'info', text: t('overview.offHint'), action: settingsLink.value ? 'policy' : '' }
-  return null
+interface Notice {
+  tone: 'warning' | 'info'
+  text: string
+  /** the section its button opens ('' = none) */
+  action: 'flows' | 'policy' | 'bindings' | ''
+}
+const ACTION_LABEL = { flows: 'tabs.flows', policy: 'settings', bindings: 'tabs.bindings' } as const
+
+/** The setup hint (not configured, else off), then stale bindings. */
+const notices = computed<Notice[]>(() => {
+  const list: Notice[] = []
+  if (!props.status.runtime.configured) list.push({ tone: 'warning', text: t('overview.notConfigured'), action: canManage() ? 'flows' : '' })
+  else if (props.status.mode === 'off') list.push({ tone: 'info', text: t('overview.offHint'), action: settingsLink.value ? 'policy' : '' })
+  const stale = props.status.stale_bindings ?? 0
+  if (stale > 0) list.push({ tone: 'warning', text: t('overview.staleBindings', { n: stale }), action: 'bindings' })
+  return list
 })
 </script>
 
@@ -89,12 +102,10 @@ const notice = computed<{ tone: 'warning' | 'info'; text: string; action: 'flows
     </div>
   </dl>
 
-  <SAlert v-if="notice" :tone="notice.tone" class="mod-block">
-    {{ notice.text }}
-    <template v-if="notice.action" #actions>
-      <SButton :variant="notice.action === 'flows' ? 'primary' : 'secondary'" size="sm" @click="emit('go-tab', notice.action)">
-        {{ notice.action === 'flows' ? t('tabs.flows') : t('settings') }}
-      </SButton>
+  <SAlert v-for="n in notices" :key="n.text" :tone="n.tone" class="mod-block">
+    {{ n.text }}
+    <template v-if="n.action" #actions>
+      <SButton :variant="n.action === 'flows' ? 'primary' : 'secondary'" size="sm" @click="emit('go-tab', n.action)">{{ t(ACTION_LABEL[n.action]) }}</SButton>
     </template>
   </SAlert>
 </template>
