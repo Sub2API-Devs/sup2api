@@ -3277,7 +3277,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 ### 49.6 `POST /system/ccgateway/connect`（已删除）
 
-2026-11-12 权限加固 T39（D7）删除了这条接口（现在 404）：控制台早已不调用它，而它以 `settings:manage` 注册、再在请求上下文里补一个 `account:create` 去走创建账号的流程，等于伪造路由命中的权限。CCGateway 账号统一用 `POST /accounts {plugin_key:"ccgateway", type:"managed", credentials:{}, proxy_id | proxy_url, …}` 创建（创建即 Kick，§49.1），权限与范围按 §21。共享容器模式的“先检查共享容器已授权”随接口一并删除。
+2026-11-12 权限加固 T39（D7）删除了这条接口（现在 404）：控制台早已不调用它，而它以 `settings:manage` 注册、再在请求上下文里补一个 `account:create` 去走创建账号的流程，等于伪造路由命中的权限。CCGateway 账号统一用 `POST /accounts` 创建，权限与范围按 §21：`managed` 类型要求先准备运行环境（manifest `lifecycle.preparation.required`），即先走草稿流程（§49.9、§49.10：`POST /system/ccgateway/drafts` → 授权 → `POST /accounts` 带 `ccgateway_runtime`）或账号预备（§59 的 `preparation_key`）。connect 两者都不带，对真实的 `managed` 类型早已只会返回 400。共享容器模式的“先检查共享容器已授权”随接口一并删除。
 
 ### 49.7 运行环境 key
 

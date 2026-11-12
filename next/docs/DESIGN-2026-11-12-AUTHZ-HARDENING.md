@@ -237,6 +237,6 @@
 
 ## T39 W5-A6、D7：删除 /system/ccgateway/connect
 
-- 改动：删除 `POST /system/ccgateway/connect` 的路由与处理函数（连同只为它服务的 `ccgateway.Service.Ready`、请求体上限与 503 文案）。它以 `settings:manage` 注册，再用 `core.WithGranted` 给请求补上 `account:create` 走创建流程，是代码里唯一伪造路由命中权限的地方。控制台不调用它（已 grep 确认，`next/web` 无引用）。原测试改用 `POST /accounts`。CONTRACTS §41.5、§49.6 同步。无迁移。
-- 影响对象：仍调用这条接口的外部脚本收到 404，改用 `POST /accounts {plugin_key:"ccgateway", type:"managed", credentials:{}, …}`（需要 `account:create` 或 `account:own:create`，不再需要 `settings:manage`）。控制台不受影响。
+- 改动：删除 `POST /system/ccgateway/connect` 的路由与处理函数（连同只为它服务的 `ccgateway.Service.Ready`、请求体上限与 503 文案）。它以 `settings:manage` 注册，再用 `core.WithGranted` 给请求补上 `account:create` 走创建流程，是代码里唯一伪造路由命中权限的地方。控制台不调用它（已 grep 确认，`next/web/src` 无引用；开发 mock 里残留的处理器一并删除）。它创建时既不带 `ccgateway_runtime` 也不带 `preparation_key`，而真实的 `managed` 类型要求先准备运行环境，所以这条接口在生产上本就只会返回 400。原测试改用 `POST /accounts`。CONTRACTS §41.5、§49.6 同步。无迁移。
+- 影响对象：仍调用这条接口的外部脚本收到 404，改用草稿流程（CONTRACTS §49.9、§49.10：`POST /system/ccgateway/drafts` → 授权 → `POST /accounts` 带 `ccgateway_runtime`；需要 `account:create` 或 `account:own:create`）。控制台不受影响。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。

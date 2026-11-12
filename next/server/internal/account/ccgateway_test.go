@@ -67,9 +67,10 @@ func (e *env) withCCGateway(runtimes bool, ctl http.HandlerFunc) *ccgateway.Serv
 	return ccg
 }
 
-// TestCreateCCGatewayAccountPreparesRuntime: with per-account runtimes no
-// shared /admin/status is asked, the account is created with its proxy and
-// its runtime is prepared at once (CONTRACTS §49.1).
+// TestCreateCCGatewayAccountPreparesRuntime: a ccgateway type without a
+// preparation lifecycle (the fixture's; in production that is apikey) is
+// created with its proxy and its runtime is prepared at once (CONTRACTS
+// §49.1); no shared /admin/status is asked.
 func TestCreateCCGatewayAccountPreparesRuntime(t *testing.T) {
 	e := setup(t)
 	var mu sync.Mutex

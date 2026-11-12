@@ -36,7 +36,6 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       controller_ca_fingerprint:scheme==='https'&&!domain?'0f'.repeat(32):'',user:'',auth_mode:'',host_key_fingerprint:'',has_password:false,has_private_key:false,has_passphrase:false}
     return domain?{...config,warnings:['dns_mismatch']}:config
   })
-  on('POST',`${base}/connect`,()=>({id:99001}))
 
   // Per-account containers and drafts (docs/CCGATEWAY-DRAFT-RUNTIMES.md). Runtimes are keyed like
   // the core: an account id, or a draft key (d + 16 hex) that a new account adopts on save.
