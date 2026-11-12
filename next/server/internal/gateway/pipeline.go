@@ -173,9 +173,16 @@ type call struct {
 	// precharged is the estimate the request was pre-charged for (nil before
 	// precharge, or when the endpoint bills nothing); upstreamResponded says
 	// an upstream answer started to be relayed. Together they decide what a
-	// client that hangs up early is billed (billCanceledFromPrecharge).
-	precharged               *prechargeEstimate
-	upstreamResponded        bool
+	// client that hangs up early is billed (settleCanceled).
+	precharged        *prechargeEstimate
+	upstreamResponded bool
+	// What a client hang-up costs (disconnect.go): the policy once read, the
+	// watcher of the current upstream exchange, whether that exchange was
+	// read to its end after the client left (its usage is then complete and
+	// billed as reported).
+	disconnect               *core.ClientDisconnect
+	drain                    *upstreamDrain
+	drained                  bool
 	task                     *core.TaskSnapshot
 	taskPublicID             string
 	taskPersisted            bool
@@ -367,6 +374,8 @@ func (c *call) newRecord() *core.UsageRecord {
 		UserID:          p.UserID,
 		APIKeyID:        p.KeyID,
 		GroupID:         p.Group.ID,
+		SegmentID:       p.SegmentID,
+		RateSource:      p.RateSource,
 		PluginKey:       c.plugin.Key,
 		PluginVersion:   c.plugin.Version,
 		Platform:        c.platform,
@@ -379,6 +388,12 @@ func (c *call) newRecord() *core.UsageRecord {
 		CreatedAt:       c.start,
 		HookDecisions:   []core.HookDecision{},
 	}
+}
+
+// priceQuery asks for model's list price as the key's group and its owner's
+// segment see it.
+func (c *call) priceQuery(model string) core.PriceQuery {
+	return core.PriceQuery{Model: model, GroupID: c.principal.Group.ID, SegmentID: c.principal.SegmentID}
 }
 
 // bodyLimit is the largest client request body (or WebSocket message).
@@ -584,7 +599,7 @@ func (c *call) prepareBilling(ctx context.Context) *gwError {
 	if strings.EqualFold(c.ep.Billing, "free") {
 		return nil
 	}
-	rule, err := c.g.d.Pricer.Resolve(ctx, c.model)
+	rule, err := c.g.d.Pricer.Resolve(ctx, c.priceQuery(c.model))
 	if err != nil {
 		e := core.AsError(err)
 		rt := errTypePriceNotConfigured
@@ -900,9 +915,10 @@ func (c *call) finishSubmit(ctx context.Context, rec *core.UsageRecord, billing 
 
 func (c *call) finalizeBillability(ctx context.Context, rec *core.UsageRecord, billing string) {
 	// completed: the upstream did the work this record is priced for - it
-	// answered, or the client left while it was answering and is billed the
-	// estimate (a per_request price is owed in both cases).
-	completed := rec.Success || c.billCanceledFromPrecharge(rec, billing)
+	// answered, or the client left while it was answering and still owes for
+	// it (a per_request price is due in both cases).
+	owed, waived := c.settleCanceled(ctx, rec, billing)
+	completed := rec.Success || owed
 	hasUsage := rec.Tokens != (core.UsageTokens{}) || len(rec.Metrics) > 0
 	priced := rec.Price != nil && (hasUsage || (completed && rec.Price.Mode == "per_request"))
 	for _, item := range append(append([]core.PricedUsage(nil), rec.Additional...), rec.Replacement...) {
@@ -910,34 +926,46 @@ func (c *call) finalizeBillability(ctx context.Context, rec *core.UsageRecord, b
 		hasUsage = hasUsage || itemUsage
 		priced = priced || (item.Price != nil && (itemUsage || (completed && item.Price.Mode == "per_request")))
 	}
-	rec.Billable = !strings.EqualFold(billing, "free") && (priced || rec.BillingError != "")
+	rec.Billable = !strings.EqualFold(billing, "free") && !waived && (priced || rec.BillingError != "")
 	if !rec.Billable {
 		c.dropReservation(ctx, rec, billing, hasUsage)
 		rec.Price = nil
 	}
 }
 
-// billCanceledFromPrecharge makes a request the client abandoned while the
-// upstream was answering pay the estimate it was pre-charged for, instead of
-// the nothing the cut-off stream reported (CONTRACTS §25.8): the usage event
-// comes last in every streaming protocol, so hanging up just before it would
-// otherwise release the hold and give the output away. Each token count is
-// the larger of what the response had shown and the estimate, so a response
-// that did report more than estimated is still billed in full. It reports
-// whether it filled the record.
+// settleCanceled decides what a request pays whose client hung up while the
+// upstream was answering, by core.ClientDisconnect's policy (CONTRACTS
+// §25.8). owed says the upstream's work is to be paid for, which is what
+// makes a per_request price due; waived says the policy lets this record go
+// free whatever it holds.
+//
+// An answer read to its end already holds the real usage and is billed as it
+// stands. Any other one that is not waived pays the estimate it was
+// pre-charged for instead of the nothing a cut-off stream reports: the usage
+// event comes last in every streaming protocol, so hanging up just before it
+// would otherwise release the hold and give the output away.
 //
 // Not applied when the client left before any upstream answer (nothing was
 // consumed), when the endpoint bills nothing, or when a plugin accounted for
 // the work itself (Replacement attempts, a Reservation).
-func (c *call) billCanceledFromPrecharge(rec *core.UsageRecord, billing string) bool {
-	est := c.precharged
-	if est == nil || rec.ErrorType != errTypeClientCanceled || !c.upstreamResponded {
-		return false
+func (c *call) settleCanceled(ctx context.Context, rec *core.UsageRecord, billing string) (owed, waived bool) {
+	if rec.ErrorType != errTypeClientCanceled || !c.upstreamResponded {
+		return false, false
 	}
 	if strings.EqualFold(billing, "free") || rec.Price == nil || rec.Reservation != nil || len(rec.Replacement) > 0 {
-		return false
+		return false, false
 	}
-	rec.Tokens = maxTokens(rec.Tokens, est.tokens)
+	if c.drained {
+		return true, false
+	}
+	if c.disconnectPolicy(ctx).Policy == core.DisconnectFree {
+		return false, true
+	}
+	est := c.precharged
+	if est == nil {
+		return false, false
+	}
+	rec.Tokens = canceledTokens(rec.Tokens, est.tokens)
 	if len(rec.Additional) == 0 {
 		rec.Additional = est.additional
 	}
@@ -948,18 +976,29 @@ func (c *call) billCanceledFromPrecharge(rec *core.UsageRecord, billing string) 
 		rec.UsageSemantics = est.semantics
 	}
 	rec.UsageExtract = core.UsageExtractPrecharge
-	return true
+	return true, false
 }
 
-// maxTokens is the field-wise maximum of two token counts.
-func maxTokens(a, b core.UsageTokens) core.UsageTokens {
-	return core.UsageTokens{
-		Input:           max(a.Input, b.Input),
-		Output:          max(a.Output, b.Output),
-		CacheRead:       max(a.CacheRead, b.CacheRead),
-		CacheCreation:   max(a.CacheCreation, b.CacheCreation),
-		CacheCreation1h: max(a.CacheCreation1h, b.CacheCreation1h),
+// canceledTokens is the usage of a request cut off mid-answer: what the
+// answer had reported, completed from the pre-charge estimate.
+//
+// The prompt side (input and the three cache counts) is taken from one source
+// only. The estimate counts the whole prompt as input, while a response
+// counts the cached part of the same prompt under the cache fields, so mixing
+// the two per field bills the prompt twice wherever input excludes cache. A
+// response that reported any of the four reported all of them (they arrive
+// together, in the first event of the protocols that send them early), so it
+// wins; the estimate stands only when the response had said nothing.
+//
+// Output is the larger of the two: the response's count is whatever had been
+// produced when the client left, the estimate is the reserve.
+func canceledTokens(reported, est core.UsageTokens) core.UsageTokens {
+	out := reported
+	if reported.Input == 0 && reported.CacheRead == 0 && reported.CacheCreation == 0 && reported.CacheCreation1h == 0 {
+		out = est
 	}
+	out.Output = max(reported.Output, est.Output)
+	return out
 }
 
 // dropReservation clears a Reservation from a record that turned out not to

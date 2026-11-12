@@ -79,6 +79,20 @@ func IsUniqueViolation(err error, constraint string) bool {
 	return constraint == "" || pg.ConstraintName == constraint
 }
 
+// IsForeignKeyViolation reports a write that refers to a row that is not
+// there (any more).
+func IsForeignKeyViolation(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && pg.Code == "23503"
+}
+
+// IsDeadlock reports a transaction the server aborted to break a deadlock
+// (40P01); nothing of it was applied.
+func IsDeadlock(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && pg.Code == "40P01"
+}
+
 // IsNoRows reports pgx.ErrNoRows.
 func IsNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 

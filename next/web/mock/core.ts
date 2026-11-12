@@ -4,6 +4,7 @@ import { fail, now, on, type MockRequest } from './router'
 
 export const ALL_PERMISSIONS = [
   'user:read', 'user:create', 'user:update', 'user:delete',
+  'segment:read', 'segment:manage',
   'role:read', 'role:manage',
   'apikey:self:manage',
   'group:read', 'group:manage',
@@ -96,7 +97,22 @@ export const moderatorUser: Identity = {
   superuser: false
 }
 
-const identities = [me, plainUser, vendorUser, readonlyUser, moderatorUser]
+/**
+ * Sign in as pricer@example.com (password admin): reads user groups, groups
+ * and prices but not users, so a personal user group goes by "#<user id>",
+ * its members cannot be listed and no user may be put in a user group
+ * (CONTRACTS §97.6, §97.7).
+ */
+export const pricerUser: Identity = {
+  id: 9,
+  email: 'pricer@example.com',
+  display_name: 'Pricer',
+  roles: ['pricer'],
+  permissions: ['segment:read', 'group:read', 'group:manage', 'price:read', 'gateway:use'],
+  superuser: false
+}
+
+const identities = [me, plainUser, vendorUser, readonlyUser, moderatorUser, pricerUser]
 
 /** Email of a (possibly deleted) user id, for created_by_email. */
 export function userEmail(id: number | null | undefined): string | null {
@@ -307,6 +323,7 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/usage': 'usage:all:read',
   '/usage/overview': 'usage:all:read',
   '/users': 'user:read',
+  '/segments': 'segment:read',
   '/roles': 'role:read',
   '/plugins': 'plugin:read',
   '/market': 'plugin:market:read',
@@ -366,6 +383,7 @@ const MENUS = [
     label: L('Users', '用户'),
     items: [
       { id: 'users', label: L('Users', '用户'), icon: 'user', path: '/users' },
+      { id: 'segments', label: L('User groups', '用户组'), icon: 'publisher', path: '/segments' },
       { id: 'roles', label: L('Roles & permissions', '角色与权限'), icon: 'role', path: '/roles' }
     ]
   },

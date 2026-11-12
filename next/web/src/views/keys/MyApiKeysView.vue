@@ -27,6 +27,7 @@ import { useKeyBulk } from './keyBulk'
 import { gatewayBase } from './keyClients'
 import { groupOptions } from './keyForm'
 import { KEY_STATE_FILTERS, KEY_STATE_TONES, KEY_STATES, isExpired, keyState, matchesKeyFilter } from './keyState'
+import { myRate } from './myGroup'
 import { useKeyUsage } from './keyUsage'
 import { searchQuery } from './reveal'
 
@@ -56,17 +57,18 @@ const groupOf = (k: ApiKey) => (k.group_id == null ? undefined : groups.value.fi
 /** The platforms a key reaches, as reported on the key (none once its group was deleted), else those of its group. */
 const platformsOf = (k: ApiKey) => k.platforms ?? groupOf(k)?.platforms
 
-/** The key's group cell: name and group state as reported on the key, rate and platforms of its group. */
+/** The key's group cell: name and group state as reported on the key; the owner's rate, the platforms and the exclusive mark of its group. */
 function groupCell(k: ApiKey) {
   const g = groupOf(k)
   return {
     name: k.group_name || g?.name || (k.group_id == null ? '' : `#${k.group_id}`),
-    multiplier: g?.rate_multiplier,
+    multiplier: g && myRate(g),
     platforms: platformsOf(k),
-    status: k.group_status
+    status: k.group_status,
+    exclusive: g?.exclusive
   }
 }
-const moveOptions = computed(() => groupOptions(groups.value, platforms.label))
+const moveOptions = computed(() => groupOptions(groups.value, platforms.label, t('pricing.exclusive')))
 
 const stateLabels = computed(() => Object.fromEntries(KEY_STATES.map((s) => [s, t(`apikeys.state.${s}`)])))
 const statusFilterOptions = computed(() => [{ value: '', label: t('apikeys.filter.allStatus') }, ...KEY_STATE_FILTERS.map((s) => ({ value: s, label: stateLabels.value[s] }))])

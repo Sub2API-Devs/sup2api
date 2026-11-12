@@ -27,7 +27,7 @@ func TestFinalizeBillabilityCanceledStreamBillsPrecharge(t *testing.T) {
 			t.Fatalf("tokens = %+v semantics = %q extract = %q", rec.Tokens, rec.UsageSemantics, rec.UsageExtract)
 		}
 	})
-	t.Run("cut after message_start keeps the larger counts", func(t *testing.T) {
+	t.Run("cut after message_start keeps the reported prompt", func(t *testing.T) {
 		c := &call{precharged: est, upstreamResponded: true}
 		rec := canceled()
 		rec.Tokens = core.UsageTokens{Input: 150, Output: 1, CacheRead: 50}
@@ -36,6 +36,66 @@ func TestFinalizeBillabilityCanceledStreamBillsPrecharge(t *testing.T) {
 		want := core.UsageTokens{Input: 150, Output: 4000, CacheRead: 50}
 		if !rec.Billable || rec.Tokens != want || rec.UsageSemantics != "inclusive" {
 			t.Fatalf("billable = %v tokens = %+v semantics = %q", rec.Billable, rec.Tokens, rec.UsageSemantics)
+		}
+	})
+	t.Run("cached prompt is not billed twice", func(t *testing.T) {
+		// The estimate holds the whole prompt as input; message_start said
+		// most of it was a 1h cache write. Input excludes cache here, so a
+		// field-wise maximum would charge the prompt as input and as cache.
+		c := &call{precharged: &prechargeEstimate{tokens: core.UsageTokens{Input: 100000, Output: 4000}, semantics: "exclusive"}, upstreamResponded: true}
+		rec := canceled()
+		rec.Tokens = core.UsageTokens{Input: 10, Output: 1, CacheRead: 20, CacheCreation: 30, CacheCreation1h: 99940}
+		rec.UsageSemantics = "exclusive"
+		c.finalizeBillability(context.Background(), rec, "paid")
+		want := core.UsageTokens{Input: 10, Output: 4000, CacheRead: 20, CacheCreation: 30, CacheCreation1h: 99940}
+		if !rec.Billable || rec.Tokens != want || rec.UsageExtract != core.UsageExtractPrecharge {
+			t.Fatalf("billable = %v tokens = %+v extract = %q", rec.Billable, rec.Tokens, rec.UsageExtract)
+		}
+	})
+	t.Run("read to its end: billed as reported", func(t *testing.T) {
+		c := &call{precharged: est, upstreamResponded: true, drained: true}
+		rec := canceled()
+		rec.Tokens = core.UsageTokens{Input: 10, Output: 7, CacheRead: 50}
+		c.finalizeBillability(context.Background(), rec, "paid")
+		if !rec.Billable || rec.Tokens != (core.UsageTokens{Input: 10, Output: 7, CacheRead: 50}) || rec.UsageExtract != "" {
+			t.Fatalf("billable = %v tokens = %+v extract = %q", rec.Billable, rec.Tokens, rec.UsageExtract)
+		}
+	})
+	t.Run("read to its end: per_request price is owed", func(t *testing.T) {
+		c := &call{upstreamResponded: true, drained: true}
+		rec := canceled()
+		rec.Price = &core.PriceRule{Mode: "per_request"}
+		c.finalizeBillability(context.Background(), rec, "paid")
+		if !rec.Billable {
+			t.Fatalf("not billable: %+v", rec)
+		}
+	})
+	t.Run("free policy bills nothing", func(t *testing.T) {
+		c := &call{precharged: est, upstreamResponded: true, disconnect: &core.ClientDisconnect{Policy: core.DisconnectFree}}
+		rec := canceled()
+		rec.Tokens = core.UsageTokens{Input: 150, CacheRead: 50}
+		c.finalizeBillability(context.Background(), rec, "paid")
+		if rec.Billable || rec.Price != nil || rec.UsageExtract != "" {
+			t.Fatalf("billed under the free policy: %+v", rec)
+		}
+		if rec.Tokens != (core.UsageTokens{Input: 150, CacheRead: 50}) {
+			t.Fatalf("reported usage was rewritten: %+v", rec.Tokens)
+		}
+		// A plugin's own accounting is not the policy's to waive, also on a
+		// record of the same request finalized after a waived one.
+		settled := canceled()
+		settled.Replacement = []core.PricedUsage{{Price: perToken, Tokens: core.UsageTokens{Input: 10}}}
+		c.finalizeBillability(context.Background(), settled, "paid")
+		if !settled.Billable {
+			t.Fatalf("the waiver of one record reached a plugin-settled one: %+v", settled)
+		}
+	})
+	t.Run("free policy leaves a completed request alone", func(t *testing.T) {
+		c := &call{precharged: est, upstreamResponded: true, disconnect: &core.ClientDisconnect{Policy: core.DisconnectFree}}
+		rec := &core.UsageRecord{Success: true, StatusCode: 200, Price: perToken, Tokens: core.UsageTokens{Input: 10, Output: 5}}
+		c.finalizeBillability(context.Background(), rec, "paid")
+		if !rec.Billable {
+			t.Fatalf("a served request went free: %+v", rec)
 		}
 	})
 	t.Run("per_request price is owed", func(t *testing.T) {

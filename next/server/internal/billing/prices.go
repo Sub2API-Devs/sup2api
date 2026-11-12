@@ -592,9 +592,13 @@ func expressionFor(mode string, config json.RawMessage, expression string) (stri
 	return "", fmt.Errorf("unknown mode %q", mode)
 }
 
-func recordHistory(ctx context.Context, q store.Querier, p *expr.Program) error {
-	_, err := q.Exec(ctx, `
+// recordHistorySQL keeps an expression (hash, canonical text, version) where
+// a settlement retry reads it back.
+const recordHistorySQL = `
 		INSERT INTO model_price_history (expr_hash, expression, expr_version) VALUES ($1, $2, $3)
-		ON CONFLICT (expr_hash) DO NOTHING`, p.Hash(), p.Expression(), p.Version())
+		ON CONFLICT (expr_hash) DO NOTHING`
+
+func recordHistory(ctx context.Context, q store.Querier, p *expr.Program) error {
+	_, err := q.Exec(ctx, recordHistorySQL, p.Hash(), p.Expression(), p.Version())
 	return err
 }

@@ -81,6 +81,12 @@ export default {
     dark: '深色模式'
   },
   language: '语言',
+  unsaved: {
+    title: '放弃未保存的改动？',
+    message: '这里有改动还没保存，离开后会丢失。',
+    stay: '继续编辑',
+    discard: '放弃改动'
+  },
   secondsAgo: '{n} 秒前',
   minutesAgo: '{n} 分钟前',
   hoursAgo: '{n} 小时前',

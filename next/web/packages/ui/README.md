@@ -371,3 +371,19 @@ const { EntityMultiPicker } = host.components
 </template>
 ```
 
+## 从单元格展开行（UI SDK 3.13）
+
+`STable` 的展开行除了行首的箭头，也可以由单元格里的按钮打开（例如操作列的“设置”），用于在行下方就地编辑。不传本节的 prop、不用新的插槽参数时，表格的渲染和交互与 3.11 相同。原生插件用到本节任一项时声明 `hostUICompat: "^3.12"`，`hostCompat` 要求核心 `>=0.1.280`（0.1.279 是最后一个带 UI 3.11 的核心）。
+
+```vue
+<STable :columns="columns" :rows="rows" row-key="model" expandable :expand-toggle="false" expand-single>
+  <template #cell-actions="{ expanded, toggleExpand }">
+    <SRowAction :label="expanded ? t('common.close') : t('common.edit')" :aria-expanded="expanded" @click="toggleExpand()" />
+  </template>
+  <template #expand="{ row }">…</template>
+</STable>
+```
+
+- 每个 `cell-<key>` 插槽多两个参数：`expanded`（该行是否展开）和 `toggleExpand()`（展开或收起该行，照常触发 `expand` 事件），需要 `expandable`；手机卡片里的单元格插槽同样有，与 `#card` 插槽的同名参数一致。
+- `:expand-toggle="false"` 去掉行首的箭头列，只由单元格打开；手机卡片仍保留“详情”折叠。默认 `true`，与以前一样。
+- `expand-single`：展开一行时收起其它行。默认关闭。被它收起的每一行也触发 `expand`（`row, false`），在新展开那一行的 `expand`（`row, true`）之前；依赖 `expand` 事件记录展开状态的页面因此不会留下已收起的行。

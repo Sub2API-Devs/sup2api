@@ -126,15 +126,70 @@ func TestParseSup2APIAppliesMultiplier(t *testing.T) {
 	}
 }
 
-// fakeKeys authenticates "sk-good" into a group with multiplier 2.
-type fakeKeys struct{ Mode string }
+// How the upstream rate goes into a price that is not per token or per
+// request: tiers keep no config, the rate becomes a rule after the expression
+// generated from them; a video template is scaled in its config.
+func TestParseSup2APIMultiplierOnVisualExpression(t *testing.T) {
+	body := `{"data": {"prices": [
+		{"model": "tiered", "mode": "expression", "expression": "x", "config": {"tiers": [
+			{"name": "standard", "max_len": 200000, "p": 3, "c": 15}, {"name": "long_context", "max_len": null, "p": 6, "c": 22.5}]}},
+		{"model": "video", "mode": "expression", "expression": "x", "config": {"video": {"price_per_million_tokens": 7, "video_price_per_second": 0.2}}}],
+		"rate_multiplier": "1.5", "group": {"id": 3, "name": "g"}}}`
+	f, err := parseSup2API([]byte(body), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.prices) != 2 || f.skipped != 0 {
+		t.Fatalf("prices %v skipped %d", f.prices, f.skipped)
+	}
+	for _, p := range f.prices {
+		if err := p.compile(); err != nil {
+			t.Fatalf("%s: %v", p.Model, err)
+		}
+	}
+	tiered := f.prices["tiered"]
+	if tiered.Mode != "expression" || string(tiered.Config) != "{}" || tiered.Expression !=
+		`v1:len <= 200000 ? tier("standard", p*3 + c*15) : tier("long_context", p*6 + c*22.5) ||| true ? 1.5 : 1` {
+		t.Fatalf("tiers: %+v", tiered)
+	}
+	video := cfgOf(t, f.prices["video"])["video"].(map[string]any)
+	if video["price_per_million_tokens"] != 10.5 || video["video_price_per_second"] != 0.3 || strings.Contains(f.prices["video"].Expression, "|||") {
+		t.Fatalf("video: %+v", f.prices["video"])
+	}
+}
+
+func TestParseSup2APISkipsPriceWithoutConfig(t *testing.T) {
+	body := `{"data": {"prices": [
+		{"model": "no-config", "mode": "per_token", "expression": ""},
+		{"model": "null-config", "mode": "per_request", "config": null},
+		{"model": "ok", "mode": "per_token", "config": {"p": 1, "c": 2}}],
+		"rate_multiplier": "2", "group": {"id": 3, "name": "g"}}}`
+	f, err := parseSup2API([]byte(body), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.prices) != 1 || f.skipped != 2 || f.prices["ok"] == nil {
+		t.Fatalf("prices %v skipped %d", f.prices, f.skipped)
+	}
+}
+
+// fakeKeys authenticates "sk-good" into a group with multiplier 2. Group and
+// Segment, when set, are the group of the key and the segment of its owner.
+type fakeKeys struct {
+	Mode           string
+	Group, Segment int64
+}
 
 func (f fakeKeys) Authenticate(_ context.Context, raw string) (*core.APIKeyPrincipal, error) {
 	if raw != "sk-good" {
 		return nil, core.ErrUnauthenticated
 	}
-	return &core.APIKeyPrincipal{KeyID: 1, UserID: 1, Group: core.GroupInfo{ID: 7, Name: "vip",
-		RateMultiplier: decimal.NewFromInt(2), ModelAllowlist: []string{"claude-*"}, ModelFilterMode: f.Mode}}, nil
+	pr := &core.APIKeyPrincipal{KeyID: 1, UserID: 1, SegmentID: f.Segment, Group: core.GroupInfo{ID: 7, Name: "vip",
+		RateMultiplier: decimal.NewFromInt(2), ModelAllowlist: []string{"claude-*"}, ModelFilterMode: f.Mode}}
+	if f.Group != 0 {
+		pr.Group.ID = f.Group
+	}
+	return pr, nil
 }
 
 func TestPriceSourcesSync(t *testing.T) {
@@ -186,7 +241,7 @@ func TestPriceSourcesSync(t *testing.T) {
 		t.Fatalf("apply: %v", res)
 	}
 	// The manual price was not selected and stays manual.
-	r, err := e.svc.Resolve(ctx, "claude-opus-5-5")
+	r, err := e.svc.Resolve(ctx, core.PriceQuery{Model: "claude-opus-5-5"})
 	if err != nil || r.Expression != `v1:tier("base", p*1 + c*1)` && r.Expression != `tier("base", p*1 + c*1)` {
 		t.Fatalf("manual kept: %+v %v", r, err)
 	}
@@ -199,7 +254,7 @@ func TestPriceSourcesSync(t *testing.T) {
 	if synced["page"].(map[string]any)["total"].(float64) != 3 {
 		t.Fatalf("synced prices: %v", synced)
 	}
-	if r, _ := e.svc.Resolve(ctx, "claude-opus-5-5"); !strings.Contains(r.Expression, "cc1h*8") {
+	if r, _ := e.svc.Resolve(ctx, core.PriceQuery{Model: "claude-opus-5-5"}); !strings.Contains(r.Expression, "cc1h*8") {
 		t.Fatalf("opus after sync: %+v", r)
 	}
 
@@ -283,7 +338,8 @@ func TestKeyPriceListBlacklist(t *testing.T) {
 	}
 }
 
-// GET /me/prices: the groups the caller can see, each with its allowlist and rate.
+// GET /me/prices: every priced model with the caller's groups that provide it,
+// or the models of one of those groups at the caller's rate there.
 func TestMyPrices(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -303,7 +359,13 @@ func TestMyPrices(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	e.exec(`INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2)`, uid, mine)
+	// The caller's segment is granted "mine"; an account that declares no
+	// models makes every group provide every priced model its policy allows.
+	e.exec(`INSERT INTO segments (name) VALUES ('granted')`)
+	e.exec(`UPDATE users SET segment_id = (SELECT id FROM segments WHERE name = 'granted') WHERE id = $1`, uid)
+	e.exec(`INSERT INTO segment_groups (segment_id, group_id, granted) SELECT id, $1, true FROM segments WHERE name = 'granted'`, mine)
+	e.exec(`INSERT INTO accounts (name, plugin_key, type, credentials_enc) VALUES ('a', 'anthropic', 'apikey', '\x00'::bytea)`)
+	e.exec(`INSERT INTO account_groups (account_id, group_id) SELECT a.id, g.id FROM accounts a, groups g`)
 	e.exec(`DELETE FROM model_prices`)
 	for _, m := range []string{"claude-opus-5-5", "gemini-3"} {
 		e.exec(`INSERT INTO model_prices (model, mode, config, expression, expr_hash, source, enabled) VALUES ($1, 'per_request', '{"price": 1}', 'tier("base", flat(1))', 'h', 'manual', true)`, m)
@@ -331,9 +393,21 @@ func TestMyPrices(t *testing.T) {
 	if code, _ := e.call(uid, "GET", "/me/prices?group_id=x", nil); code != 400 {
 		t.Fatalf("a bad id: %d", code)
 	}
-	// Without a group: the first the caller can see.
+	// Without a group: every priced model at the global price, with the
+	// caller's groups that provide it.
 	d = data(e.mustCall(uid, 200, "GET", "/me/prices", nil))
-	if d["group"].(map[string]any)["name"] != "public" {
-		t.Fatalf("default group: %v", d)
+	if d["group"] != nil || d["rate_multiplier"] != "1" || models(d) != "claude-opus-5-5,gemini-3" {
+		t.Fatalf("every group: %v", d)
+	}
+	groups := func(row any) string {
+		var out []string
+		for _, g := range row.(map[string]any)["groups"].([]any) {
+			out = append(out, g.(map[string]any)["name"].(string))
+		}
+		return strings.Join(out, ",")
+	}
+	rows := d["prices"].([]any)
+	if groups(rows[0]) != "public,mine" || groups(rows[1]) != "mine" {
+		t.Fatalf("groups of the models: %v", rows)
 	}
 }

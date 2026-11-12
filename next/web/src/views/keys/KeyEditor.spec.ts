@@ -16,7 +16,7 @@ const key = { id: 7, name: 'laptop', group_id: 1, key_prefix: 'sk-s2a-old00', st
   expires_at: null, rpm_limit: 60, tpm_limit: 0, max_concurrency: 0, quota_limit: '10', quota_used: '4' } as ApiKey
 const render = (apiKey: ApiKey | null) => {
   i18n.global.locale.value = 'zh'
-  return mount(KeyEditor, { props: { open: true, apiKey, groups }, global: { plugins: [i18n], stubs: { Teleport: true } } })
+  return mount(KeyEditor, { props: { open: true, apiKey, groups }, global: { plugins: [i18n], stubs: { Teleport: true, RouterLink: true } } })
 }
 const input = (w: ReturnType<typeof render>, id: string) => w.get(`[data-testid="${id}"]`)
 

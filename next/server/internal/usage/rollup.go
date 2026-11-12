@@ -44,8 +44,8 @@ var rollupDims = []string{"user_id", "api_key_id", "group_id", "account_id", "mo
 
 // statMeasure is one additive column of the statistics: row is a usage_logs
 // row's share, and usage_hourly keeps the sum of its hour under name. A
-// column row reads must be in the update trigger's column list (0092;
-// TestRollupTriggerCoversMeasures).
+// column row reads must be in the update trigger's column list (0092,
+// redefined by 0096; TestRollupTriggerCoversMeasures).
 type statMeasure struct{ name, row string }
 
 // rowIf is then for a row where cond holds, else 0 (a NULL cond included).

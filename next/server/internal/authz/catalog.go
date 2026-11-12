@@ -49,6 +49,12 @@ var coreModules = []coreModule{
 		{"group:read", "View groups", "查看分组", false},
 		{"group:manage", "Manage groups", "管理分组", false},
 	}},
+	// User groups (segments, CONTRACTS §97): who is in which one, the private
+	// groups it may use and what it pays there.
+	{"segment", lt("User groups", "用户组"), []corePerm{
+		{"segment:read", "View user groups", "查看用户组", false},
+		{"segment:manage", "Manage user groups", "管理用户组", false},
+	}},
 	{"account", lt("Accounts", "账号"), []corePerm{
 		{"account:read", "View accounts", "查看账号", false},
 		{"account:create", "Create accounts", "新建账号", false},

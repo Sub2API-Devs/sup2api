@@ -76,7 +76,7 @@ func (e *Env) newVideoTenant(admin *Session) *Tenant {
 		e.controlVideo(key, "running", true)
 	}
 	tn.User = e.CreateUser(admin, UserSpec{})
-	e.SetUserGroups(admin, tn.User.UserID, []int64{tn.GroupID})
+	e.GrantGroups(admin, tn.User.UserID, []int64{tn.GroupID})
 	e.AdjustBalance(admin, tn.User.UserID, "20", true, "video E2E initial credit")
 	tn.KeyID, tn.APIKey = e.CreateAPIKey(tn.User, tn.GroupID)
 	return tn

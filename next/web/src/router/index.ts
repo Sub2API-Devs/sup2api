@@ -46,6 +46,7 @@ const children: RouteRecordRaw[] = [
   { path: 'dashboard', component: () => import('@/views/dashboard/DashboardView.vue'), meta: { title: 'nav.items.dashboard' } },
 
   { path: 'users', component: () => import('@/views/users/UsersView.vue'), meta: { perm: 'user:read', title: 'nav.items.users' } },
+  { path: 'segments', component: () => import('@/views/segments/SegmentsView.vue'), meta: { perm: 'segment:read', title: 'nav.items.segments' } },
   { path: 'roles', component: () => import('@/views/roles/RolesView.vue'), meta: { perm: 'role:read', title: 'nav.items.roles' } },
   { path: 'api-keys', redirect: '/me/api-keys' },
   { path: 'me/api-keys', component: () => import('@/views/keys/MyApiKeysView.vue'), meta: { perm: 'apikey:self:manage', title: 'nav.items.myApiKeys' } },

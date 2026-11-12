@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/billing/expr"
@@ -182,6 +183,31 @@ func (f *fixture) balance() decimal.Decimal {
 	var d decimal.Decimal
 	_ = f.db.Pool.QueryRow(context.Background(), `SELECT balance FROM user_balances WHERE user_id = $1`, f.user).Scan(&d)
 	return d
+}
+
+// priceAmounts prices a pending charge as settlement does, without a
+// database: the billing module's Quote reads none.
+func priceAmounts(p *pending) (amounts, BillingDetail, string, error) {
+	s := &Service{quoter: billing.New(nil, nil, nil, nil, nil)}
+	return s.priceOf(context.Background(), p)
+}
+
+// priceOf is priceAmounts for the tests that read the charge alone.
+func priceOf(p *pending) (decimal.Decimal, BillingDetail, string, error) {
+	cost, detail, hash, err := priceAmounts(p)
+	return cost.total, detail, hash, err
+}
+
+func dec(s string) decimal.Decimal { return decimal.RequireFromString(s) }
+
+func decPtr(s string) *decimal.Decimal {
+	d := dec(s)
+	return &d
+}
+
+func requireDec(t *testing.T, want string, got decimal.Decimal, msg string) {
+	t.Helper()
+	require.True(t, dec(want).Equal(got), "%s = %s, want %s", msg, got, want)
 }
 
 func TestRecordedEventPayload(t *testing.T) {

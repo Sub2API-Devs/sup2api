@@ -214,6 +214,7 @@ func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64, fami
 		return nil, err
 	}
 	u.Balance = nil
+	u.Segment = core.SegmentRef{}
 	return &TokenPair{AccessToken: access, RefreshToken: refresh, ExpiresIn: int64(s.cfg.AccessTokenTTL / time.Second), User: u}, nil
 }
 

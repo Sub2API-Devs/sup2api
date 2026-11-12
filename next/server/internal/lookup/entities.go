@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -69,8 +70,8 @@ var entities = []*Entity{
 }
 
 // groupOpenTo holds for the groups a user ("?") can use: active, and public or
-// assigned to the user. It is the range of GET /me/groups.
-const groupOpenTo = `g.status = 'active' AND (g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.group_id = g.id AND ug.user_id = ?))`
+// granted to the user's segment. It is the range of GET /me/groups.
+var groupOpenTo = `g.status = 'active' AND ` + segment.OpenToUserSQL("g", "?")
 
 // callerIs is the Scope of a kind whose own rows one condition selects; its
 // "?" takes the caller's id.
@@ -81,10 +82,11 @@ func callerIs(cond string) func(context.Context, store.Querier, int64, *store.Fi
 	}
 }
 
-// usableModels leaves the models the caller can call: an enabled price that
-// at least one of the caller's groups allows. GET /me/prices applies the same
-// rule to one group; the picker on a user's own pages is not tied to a group,
-// so this is the union over all of them. The group policy is a glob list
+// usableModels leaves the models the caller's groups allow: an enabled price
+// that the model policy of at least one of them lets through. The picker on a
+// user's own pages is not tied to a group, so this is the union over all of
+// them. GET /me/prices?group_id= lists a subset of it: of these, only the
+// models the accounts of that group provide. The group policy is a glob list
 // (core.GroupInfo.AllowsModel), evaluated here rather than rewritten in SQL.
 func usableModels(ctx context.Context, q store.Querier, uid int64, f *store.Filter) error {
 	var open store.Filter

@@ -11,8 +11,10 @@ import (
 
 // ============================================================ billing (owner: B billing)
 
-// PriceRule is a resolved model_prices row. Prices are global per model
-// (ARCHITECTURE 7.3): the base price, adjusted only by multipliers.
+// PriceRule is the list price of a model for one caller: the global
+// model_prices row (ARCHITECTURE 7.3), or what a price rule of the caller's
+// group or segment makes of it (CONTRACTS §97). ID and VideoOnly are always
+// the global price's.
 type PriceRule struct {
 	ID          int64
 	Model       string // complete model id (exact match, no wildcards)
@@ -21,16 +23,80 @@ type PriceRule struct {
 	ExprVersion int
 	ExprHash    string
 	VideoOnly   bool // video templates and video_* expressions require declared video support
+	// Source is where the list price comes from (PriceSource*); "" on prices
+	// stored before price rules existed, which were all global.
+	Source string `json:",omitempty"`
+	// Scale is the multiplier of a multiplier rule: the list price is the
+	// expression times it. nil = none.
+	Scale *decimal.Decimal `json:",omitempty"`
+	// Base is the global price when a custom rule replaced the expression;
+	// nil otherwise. It tells what the usage costs at the global price.
+	Base *PriceBase `json:",omitempty"`
+}
+
+// Multiplier is what the expression's result is multiplied by to charge at
+// rate: the rate times the rule's scale. It is the one place the two meet,
+// so precharge and settlement cannot disagree.
+func (r *PriceRule) Multiplier(rate decimal.Decimal) decimal.Decimal {
+	if r == nil || r.Scale == nil {
+		return rate
+	}
+	return rate.Mul(*r.Scale)
+}
+
+// Clone copies the rule with its scale and base.
+func (r *PriceRule) Clone() *PriceRule {
+	if r == nil {
+		return nil
+	}
+	c := *r
+	if r.Scale != nil {
+		scale := *r.Scale
+		c.Scale = &scale
+	}
+	if r.Base != nil {
+		base := *r.Base
+		c.Base = &base
+	}
+	return &c
 }
 
 // Pricer resolves price rules and tells the gateway which request inputs an
 // expression reads (param()/header()), so they can be captured at request
 // time and evaluated later during settlement.
 type Pricer interface {
-	// Resolve returns ErrPriceNotConfigured when nothing matches and the
-	// missing-price policy is "reject"; (nil, nil) when policy is "free".
-	Resolve(ctx context.Context, model string) (*PriceRule, error)
+	// Resolve returns the list price q asks for. ErrPriceNotConfigured when
+	// the model has no global price and the missing-price policy is "reject";
+	// (nil, nil) when policy is "free".
+	Resolve(ctx context.Context, q PriceQuery) (*PriceRule, error)
 	Inputs(rule *PriceRule) (bodyPaths []string, headerNames []string)
+}
+
+// What a request pays when its client hangs up while the upstream is
+// answering (settings "billing".client_disconnect_policy, CONTRACTS §25.8).
+const (
+	// DisconnectPrecharge stops the upstream and bills the pre-charge
+	// estimate: what every request paid before the setting existed.
+	DisconnectPrecharge = "precharge"
+	// DisconnectContinue, the default, reads the upstream to its end and
+	// bills what it reports; a read that cannot finish falls back to
+	// DisconnectPrecharge.
+	DisconnectContinue = "continue"
+	// DisconnectFree stops the upstream and bills nothing.
+	DisconnectFree = "free"
+)
+
+// ClientDisconnect is the configured policy and, for DisconnectContinue, how
+// long the upstream may still be read once the client is gone.
+type ClientDisconnect struct {
+	Policy string
+	Wait   time.Duration
+}
+
+// ClientDisconnectSource is implemented by a BalanceGate that carries the
+// setting; a gateway whose gate does not uses DisconnectPrecharge.
+type ClientDisconnectSource interface {
+	ClientDisconnect(ctx context.Context) (ClientDisconnect, error)
 }
 
 // BalanceGate requires both the cached balance check and atomic precharge;
@@ -197,6 +263,8 @@ type UsageRecord struct {
 	PriceParams        map[string]string // body path -> raw JSON value captured at request time
 	PriceHeaders       map[string]string // lower-case header -> value captured at request time
 	RateMultiplier     decimal.Decimal
+	RateSource         string // where RateMultiplier comes from (RateSource*); "" = the group's rate
+	SegmentID          int64  // segment the user was in when the request was priced
 	LatencyMs          int
 	FirstTokenMs       int
 	UploadMs           int // request start until the body was read (CONTRACTS §63)

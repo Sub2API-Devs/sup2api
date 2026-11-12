@@ -493,3 +493,84 @@ func TestAccountUsageMigrationAndTrigger(t *testing.T) {
 	migrate()
 	require.Equal(t, "2.60000000 2.40000000 4 464", totals("a"), "a re-run does not backfill again")
 }
+
+// 0095 adds segments (CONTRACTS §97): every user joins the default one,
+// except those who were granted private groups one by one, who become
+// personal and keep exactly those grants. A re-run does not undo what an
+// administrator changed since, and a user inserted without a segment joins
+// the default one.
+func TestSegmentsMigrationBackfill(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql)
+		require.NoError(t, err)
+	}
+	text := func(sql string) (v string) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, sql).Scan(&v))
+		return v
+	}
+	migrate := func() []string {
+		t.Helper()
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		return done
+	}
+	// segmentOf is "default", "personal" or the name of a named segment.
+	segmentOf := func(email string) string {
+		return text(`SELECT CASE WHEN s.is_default THEN 'default' WHEN s.kind = 'personal' THEN 'personal' ELSE s.name END
+			FROM users u JOIN segments s ON s.id = u.segment_id WHERE u.email = '` + email + `'`)
+	}
+	// grantsOf lists the private groups granted to the personal segment of a user.
+	grantsOf := func(email string) string {
+		return text(`SELECT string_agg(g.name, ',' ORDER BY g.name) FROM segment_groups sg
+			JOIN groups g ON g.id = sg.group_id JOIN segments s ON s.id = sg.segment_id
+			JOIN users u ON u.id = s.user_id WHERE u.email = '` + email + `' AND sg.granted`)
+	}
+	const forget = `DELETE FROM schema_migrations WHERE id='0095_segments.sql'`
+	exec(`ALTER TABLE users DROP COLUMN segment_id;
+		DROP TABLE price_rules, segment_groups, segments;
+		DROP FUNCTION default_segment_id();
+		INSERT INTO groups(name, visibility) VALUES ('seg-private', 'restricted'), ('seg-private-2', 'restricted'), ('seg-public', 'public');
+		INSERT INTO users(email, password_hash) VALUES ('granted@seg', ''), ('other@seg', ''), ('public-only@seg', ''), ('plain@seg', '');
+		INSERT INTO users(email, password_hash, deleted_at) VALUES ('deleted@seg', '', now());
+		INSERT INTO user_groups(user_id, group_id)
+		SELECT u.id, g.id FROM users u JOIN groups g ON (u.email, g.name) IN (
+			('granted@seg', 'seg-private'), ('granted@seg', 'seg-private-2'), ('granted@seg', 'seg-public'),
+			('other@seg', 'seg-private-2'),
+			('public-only@seg', 'seg-public'), ('deleted@seg', 'seg-private'));
+		` + forget)
+	require.Equal(t, []string{"0095_segments.sql"}, migrate())
+
+	require.Equal(t, "personal", segmentOf("granted@seg"))
+	require.Equal(t, "personal", segmentOf("other@seg"))
+	require.Equal(t, "default", segmentOf("public-only@seg"), "a grant of a public group made a user personal")
+	require.Equal(t, "default", segmentOf("plain@seg"))
+	require.Equal(t, "default", segmentOf("deleted@seg"), "a deleted user got a personal segment")
+	require.Equal(t, "seg-private,seg-private-2", grantsOf("granted@seg"), "the personal segment keeps every private grant, and those only")
+	require.Equal(t, "seg-private-2", grantsOf("other@seg"), "a personal segment got the grants of another user")
+	require.Equal(t, "3", text(`SELECT count(*)::text FROM segment_groups`))
+	require.Equal(t, "default", text(`SELECT string_agg(DISTINCT CASE WHEN o.is_default THEN 'default' ELSE o.name END, ',') FROM segments s
+		JOIN segments o ON o.id = s.origin_id WHERE s.kind = 'personal'`))
+
+	// An insert that does not name the column, as an older binary makes it.
+	exec(`INSERT INTO users(email, password_hash) VALUES ('later@seg', '')`)
+	require.Equal(t, "default", segmentOf("later@seg"))
+
+	// Moved back to the default segment since: a re-run leaves the user there.
+	exec(`UPDATE users SET segment_id = default_segment_id() WHERE email IN ('granted@seg', 'other@seg');
+		DELETE FROM segments WHERE kind = 'personal'; ` + forget)
+	migrate()
+	require.Equal(t, "default", segmentOf("granted@seg"), "a rerun made the user personal again")
+	require.Equal(t, "default", segmentOf("other@seg"), "a rerun made the user personal again")
+	require.Equal(t, "1", text(`SELECT count(*)::text FROM segments`))
+
+	_, err := db.Pool.Exec(ctx, `INSERT INTO segments(kind, name) VALUES ('named', '默认')`)
+	require.Error(t, err, "two segments share a name")
+	_, err = db.Pool.Exec(ctx, `INSERT INTO segments(kind, name) VALUES ('personal', '')`)
+	require.Error(t, err, "a personal segment without its user")
+	_, err = db.Pool.Exec(ctx, `UPDATE segments SET discount = 0 WHERE is_default`)
+	require.Error(t, err, "a discount of 0")
+}

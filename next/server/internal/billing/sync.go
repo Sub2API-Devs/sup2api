@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -754,7 +755,9 @@ func scalePrice(p *syncPrice, m decimal.Decimal) error {
 	var cfg map[string]any
 	dec := json.NewDecoder(strings.NewReader(string(p.Config)))
 	dec.UseNumber()
-	_ = dec.Decode(&cfg)
+	if dec.Decode(&cfg) != nil || cfg == nil {
+		return errors.New("price config is not an object")
+	}
 	switch p.Mode {
 	case expr.ModePerRequest:
 		cfg["price"] = scale(cfg["price"])
@@ -815,9 +818,32 @@ func scaleAsExpression(p *syncPrice, m decimal.Decimal) error {
 		}
 		p.Expression = src
 	}
-	p.Mode, p.Config = expr.ModeExpression, json.RawMessage("{}")
-	p.Expression = strings.TrimSpace(p.Expression) + " " + expr.RuleSeparator + " true ? " + m.String() + " : 1"
+	src, err := appendRule(p.Expression, "true ? "+m.String()+" : 1")
+	if err != nil {
+		return err
+	}
+	p.Mode, p.Config, p.Expression = expr.ModeExpression, json.RawMessage("{}"), src
 	return nil
+}
+
+// appendRule returns the expression src with a request rule after it. It is
+// an error when the result does not compile to one rule more than src: after
+// an expression that ends in a comment with a quote in it the rule would be
+// part of that comment, and the price would silently stay as it was.
+func appendRule(src, rule string) (string, error) {
+	before, err := expr.CompileCached(src)
+	if err != nil {
+		return "", err
+	}
+	out := strings.TrimSpace(src) + " " + expr.RuleSeparator + " " + rule
+	after, err := expr.CompileCached(out)
+	if err != nil {
+		return "", err
+	}
+	if len(after.RuleConds()) != len(before.RuleConds())+1 {
+		return "", errors.New("the expression takes no rule after it")
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------- preview and apply
@@ -1029,9 +1055,9 @@ func (s *Service) applySync(c *gin.Context) {
 // ---------------------------------------------------------------- GET /key/prices
 
 // keyPrices lists the enabled prices for the holder of an API key (another
-// sup2api syncing from this one): only models the key's group allows, plus
-// the group's rate multiplier. The key goes in Authorization: Bearer or
-// x-api-key.
+// sup2api syncing from this one): only models the key's group allows, at the
+// list price the key's owner gets in the group, plus the rate the owner pays
+// there. The key goes in Authorization: Bearer or x-api-key.
 func (s *Service) keyPrices(c *gin.Context) {
 	ctx := c.Request.Context()
 	if s.sync.Keys == nil {
@@ -1051,27 +1077,54 @@ func (s *Service) keyPrices(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, `SELECT model, mode, config, expression FROM model_prices WHERE enabled ORDER BY model`)
+	prices, err := loadCatalog(ctx, s.db.Pool)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	defer rows.Close()
-	out := KeyPrices{Prices: []syncPrice{}, RateMultiplier: pr.Group.RateMultiplier}
-	out.Group.ID, out.Group.Name = pr.Group.ID, pr.Group.Name
-	for rows.Next() {
-		var p syncPrice
-		if err := rows.Scan(&p.Model, &p.Mode, &p.Config, &p.Expression); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		if pr.Group.AllowsModel(p.Model) {
-			out.Prices = append(out.Prices, p)
-		}
-	}
-	if err := rows.Err(); err != nil {
+	on := core.PriceQuery{GroupID: pr.Group.ID, SegmentID: pr.SegmentID}
+	rules, err := loadRules(ctx, s.db.Pool, rulesFor, on.GroupID, on.SegmentID)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	out := KeyPrices{Prices: []syncPrice{}, RateMultiplier: pr.Group.RateMultiplier}
+	out.Group.ID, out.Group.Name = pr.Group.ID, pr.Group.Name
+	for _, model := range prices.models() {
+		if !pr.Group.AllowsModel(model) {
+			continue
+		}
+		on.Model = model
+		p, err := exportPrice(model, prices[model], rules.levels(on))
+		if err != nil {
+			// Left out rather than listed at a price that is not the owner's.
+			slog.WarnContext(ctx, "billing: key prices: model left out", "model", model, "group_id", on.GroupID, "err", err)
+			continue
+		}
+		out.Prices = append(out.Prices, p)
+	}
 	httpapi.OK(c, out)
+}
+
+// exportPrice returns the list price of a model for a downstream sup2api,
+// which sees no rule beside the price: here, and nowhere else, the multiplier
+// of a rule goes into the price (scalePrice). The expression is always there.
+// An error means the price cannot carry the multiplier.
+func exportPrice(model string, base PriceDef, levels ruleLevels) (syncPrice, error) {
+	price, _ := levels.listPrice(base)
+	p := syncPrice{Model: model, Mode: price.Mode, Config: price.Config, Expression: price.Expression}
+	if price.Multiplier == nil || price.Multiplier.Equal(decimal.NewFromInt(1)) {
+		return p, nil
+	}
+	scaled := p
+	if err := scalePrice(&scaled, *price.Multiplier); err != nil || scaled.Expression != "" {
+		return scaled, err
+	}
+	// A scaled config: its expression is generated, as on import.
+	var err error
+	if scaled.Expression, err = expressionFor(scaled.Mode, scaled.Config, ""); err != nil {
+		// No such config at this multiplier (a video template cannot be free).
+		return p, scaleAsExpression(&p, *price.Multiplier)
+	}
+	return scaled, nil
 }

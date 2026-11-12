@@ -100,18 +100,32 @@ export default {
   },
   models: {
     title: 'Models & prices',
-    description: 'The models your group can use and what they cost you: the model price times the group rate.',
+    description: 'Every model, which of your groups provide it and what it costs you there: the list price times your rate.',
     group: 'Group',
+    allGroups: 'All groups · base price',
     search: 'Search models',
     model: 'Model',
     input: 'Input',
     output: 'Output',
     cacheRead: 'Cache read',
     cacheWrite: 'Cache write',
-    unit: 'USD per million tokens, group rate ×{rate} included',
+    groups: 'Groups',
+    viewGroup: 'See what you pay in {name}',
+    noGroups: 'No group provides it',
+    baseNote: 'These are the base prices of every model (rate ×1). You pay the list price times your rate in the group you use; the list price is the base price unless the group prices the model on its own. Choose a group to see what you pay there.',
+    unit: 'USD per million tokens',
+    basePrice: 'base price, no rate applied',
+    rated: 'your rate in this group, {rate}, included',
+    rateSource: {
+      segment: 'you have a rate of your own in this group',
+      discount: 'your discount on every group included'
+    },
     perRequest: '{price} per request',
     tiered: '{n} tiers, first shown',
     custom: 'Billed by rules',
-    empty: 'This group has no models'
+    customTimes: 'Billed by rules {rate}',
+    empty: 'This group has no models',
+    emptyAll: 'No models yet',
+    groupUnavailable: 'The group in the link is not open to you. Showing all groups instead.'
   }
 }

@@ -81,11 +81,11 @@ func (r *platformResolver) platforms(types []core.AccountTypeKey) []string {
 	return out
 }
 
-// groupPlatforms returns, for each group, the platforms its API keys can
+// Platforms returns, for each group, the platforms its API keys can
 // reach: those served by the account types of its live accounts (CONTRACTS
 // §13). Every requested id gets a non-nil slice; without a registry or
 // generation the slices are empty.
-func (s *Service) groupPlatforms(ctx context.Context, ids []int64) (map[int64][]string, error) {
+func (s *Service) Platforms(ctx context.Context, ids []int64) (map[int64][]string, error) {
 	out := make(map[int64][]string, len(ids))
 	var gen core.Generation
 	if s.reg != nil {

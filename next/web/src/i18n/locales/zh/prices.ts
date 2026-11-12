@@ -13,7 +13,11 @@ export default {
   },
   title: '模型价格',
   description: '按模型配置计费表达式。价格由管理员维护：手动填写，或从同步源导入。',
-  scopeNote: '价格按模型全局设置，与由哪个端点、哪种账号类型提供服务无关。表达式算出的是基础价格，实际扣费 = 基础价格 × 分组倍率。',
+  scopeNote: '这里是全局价。分组可以对模型单独定价，用户组可以有专属价和专属倍率；实付 = 标价 × 倍率。',
+  scopeNoteEdit: '价格按模型全局设置，与由哪个端点、哪种账号类型提供服务无关。这里填的是全局价：分组和用户组可以在它之上单独定价，实付 = 标价 × 倍率。',
+  scopeLinks: { groups: '分组', segments: '用户组' },
+  simulate: '价格试算',
+  simulateModel: '试算这个模型',
   new: '新增价格',
   newTitle: '新增价格',
   editTitle: '编辑价格 · {name}',
@@ -105,6 +109,7 @@ export default {
     subtotal: '小计',
     rules: '条件总倍率',
     base: '基础费用',
+    listScale: '标价倍数',
     groupRate: '分组倍率'
   },
   summary: {

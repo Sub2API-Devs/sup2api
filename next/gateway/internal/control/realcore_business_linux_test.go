@@ -119,6 +119,18 @@ func (c *apiClient) ok(method, path string, body any, headers ...map[string]stri
 	return r
 }
 
+// grantGroup lets user use a private group, through a personal segment of
+// the user (CONTRACTS §97); one the user has already is kept.
+func (c *apiClient) grantGroup(user, group int64) {
+	c.t.Helper()
+	current := c.ok(http.MethodGet, fmt.Sprintf("/users/%d", user), nil)
+	segment := current.id("data.segment.id")
+	if current.str("data.segment.kind") != "personal" {
+		segment = c.ok(http.MethodPost, fmt.Sprintf("/users/%d/personal-segment", user), map[string]any{"copy": false}).id("data.id")
+	}
+	c.ok(http.MethodPut, fmt.Sprintf("/segments/%d/groups", segment), map[string]any{"items": []map[string]any{{"group_id": group, "granted": true}}})
+}
+
 func (c *apiClient) login(email, password string) *apiClient {
 	c.t.Helper()
 	s := newAPIClient(c.t, c.base)
@@ -154,7 +166,7 @@ func newVideoTenant(t *testing.T, admin *apiClient, mockURL, suffix string) vide
 	}).id("data.id")
 	email, password := "video-"+suffix+"@real.test", "Real-"+suffix+"-pass!"
 	tn.userID = admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}}).id("data.id")
-	admin.ok(http.MethodPut, fmt.Sprintf("/users/%d/groups", tn.userID), map[string]any{"group_ids": []int64{group}})
+	admin.grantGroup(tn.userID, group)
 	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", tn.userID), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"})
 	tn.user = admin.login(email, password)
 	tn.apiKey = tn.user.ok(http.MethodPost, "/me/api-keys", map[string]any{"name": "video-" + suffix, "group_id": group}).str("data.key")
@@ -185,7 +197,7 @@ func newStreamTenant(t *testing.T, admin *apiClient, mockURL, suffix string) str
 	})
 	email, password := "stream-"+suffix+"@real.test", "Real-"+suffix+"-pass!"
 	user := admin.ok(http.MethodPost, "/users", map[string]any{"email": email, "display_name": email, "password": password, "role_keys": []string{"user"}}).id("data.id")
-	admin.ok(http.MethodPut, fmt.Sprintf("/users/%d/groups", user), map[string]any{"group_ids": []int64{group}})
+	admin.grantGroup(user, group)
 	admin.ok(http.MethodPost, fmt.Sprintf("/users/%d/balance/adjust", user), map[string]any{"amount": "20", "credit": true, "note": "real-core credit"})
 	tn.apiKey = admin.login(email, password).ok(http.MethodPost, "/me/api-keys", map[string]any{"name": "stream-" + suffix, "group_id": group}).str("data.key")
 	return tn

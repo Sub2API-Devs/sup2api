@@ -6,7 +6,7 @@ import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './
 type PriceMode = 'per_request' | 'per_token' | 'expression'
 type LText = { en: string; zh: string }
 const msg = (en: string, zh: string): LText => ({ en, zh })
-const money = (n: number) => n.toFixed(8)
+export const money = (n: number) => n.toFixed(8)
 const hashOf = (s: string) => createHash('sha256').update(s).digest('hex')
 
 // ------------------------------------------------------------------ tiny expression engine (mock only)
@@ -559,6 +559,38 @@ on('DELETE', '/prices/:id', (req) => {
   return noContent()
 })
 
+// ------------------------------------------------------------------ price math of group pricing (pricingStore.ts, pricing.ts)
+
+/** A price as the pricing endpoints return it. `multiplier` is only on the list price of a multiplier rule: that price (the global one, as it is) times it. */
+export interface PriceDef {
+  mode: PriceMode
+  config: Record<string, any> | null
+  expression: string
+  multiplier?: string
+}
+
+/** The enabled global price of a model; null when it has none. */
+export function globalPrice(model: string): PriceDef | null {
+  const p = priceFor(model)
+  return p && { mode: p.mode, config: p.config, expression: p.expression }
+}
+
+/** The models with an enabled global price, sorted. */
+export function pricedModels(): string[] {
+  return prices.filter((p) => p.enabled).map((p) => p.model).sort()
+}
+
+/** A price given as a config: what a custom price rule holds. */
+export function configPrice(mode: PriceMode, config: Record<string, any>): PriceDef {
+  return { mode, config, expression: genExpr(mode, config) }
+}
+
+/** What a call with `usage` costs at a price, in USD, its multiplier included; null when the expression cannot be evaluated with that usage (an error, or a result that is not a finite non-negative number, as expr.Eval refuses). */
+export function priceCost(def: PriceDef, usage: Partial<Usage>): number | null {
+  const cost = tryEvaluate(def.expression, { usage })?.cost
+  return cost !== undefined && Number.isFinite(cost) && cost >= 0 ? cost * Number(def.multiplier ?? 1) : null
+}
+
 // ------------------------------------------------------------------ price sync sources
 
 type SourceKind = 'litellm' | 'models_dev' | 'sup2api'
@@ -887,7 +919,82 @@ function priceFor(model: string) {
   return prices.find((p) => p.enabled && p.model === model) || null
 }
 
+/**
+ * How group pricing priced a record (billing_detail.inputs.pricing): the
+ * segment of the user, where the rate comes from and the rule that gave the
+ * list price, if one did. A record at the global price and the group's
+ * default rate has none.
+ */
+interface PricingTerms {
+  segment_id: number
+  rate_source: 'segment' | 'discount' | 'group'
+  /** A rule of the segment or of the group: a multiplier of the global price, or a price of its own. */
+  rule?: { source: 'segment' | 'group'; scale?: number; custom?: PriceDef }
+}
+
+/**
+ * Bills one call at a global price, as usage_logs keeps it; null when the
+ * price cannot be evaluated.
+ *
+ *   paid = list cost × rate
+ *
+ * A multiplier rule scales the cost at the global price and leaves the
+ * breakdown alone; a custom rule is evaluated in its place, and `cost` stays
+ * what the global price would have charged.
+ */
+function charge(price: MockPrice, input: EvalInput, rate: number, terms?: PricingTerms) {
+  const { source, scale, custom } = terms?.rule ?? {}
+  const global = tryEvaluate(price.expression, input)
+  const ev = custom ? tryEvaluate(custom.expression, input) : global
+  if (!ev || !global) return null
+  const listCost = ev.cost * (scale ?? 1)
+  const total = listCost * rate
+  const pricing = terms && {
+    segment_id: terms.segment_id,
+    rate_source: terms.rate_source,
+    ...(source ? { price_source: source } : {}),
+    ...(scale === undefined ? {} : { scale: String(scale) }),
+    ...(custom ? { base: { expression: price.expression, expr_hash: price.expr_hash } } : {})
+  }
+  return {
+    status: 'billed',
+    total,
+    tier: ev.tier,
+    detail: {
+      tier: ev.tier,
+      rules: ev.rules,
+      breakdown: {
+        vars: ev.tokens,
+        tiers: tierBounds(custom?.expression ?? price.expression),
+        items: ev.items,
+        subtotal: money(ev.subtotal),
+        base: money(ev.cost),
+        rules_multiplier: ev.multiplier
+      },
+      cost: money(global.cost),
+      ...(source ? { list_cost: money(listCost) } : {}),
+      rate_multiplier: rate.toFixed(2),
+      total_cost: money(total),
+      expr_version: 1,
+      ...(pricing ? { inputs: { pricing } } : {})
+    }
+  }
+}
+
 const usageRows: any[] = []
+
+/**
+ * The base cost of a record (usage_logs.base_cost, CONTRACTS §97.5): the
+ * global price times the usage, before any rule and any rate. It is the
+ * billing_detail.cost a record keeps; one without a detail falls back to
+ * total_cost / rate_multiplier, as rows from before 0096 do (0 at a rate of 0).
+ * A record priced by a rule shows why it matters: there the fallback would be
+ * its list cost.
+ */
+function baseCost(u: any): number {
+  if (u._detail?.cost !== undefined) return Number(u._detail.cost)
+  return Number(u.rate_multiplier) > 0 ? Number(u.total_cost) / Number(u.rate_multiplier) : 0
+}
 const ledgerRows: any[] = []
 
 for (let i = 0; i < 90; i++) {
@@ -918,35 +1025,8 @@ for (let i = 0; i < 90; i++) {
   const hook_decisions = [
     { plugin_key: 'guard', hook_id: 'content-filter', decision: blocked ? 'deny' : 'allow', latency_ms: 3 + Math.floor(r(15) * 20), note: blocked ? 'matched rule "no-secrets"' : undefined }
   ]
-  let billing: any = { status: 'free' }
-  if (success && price) {
-    const vars = { p: inTok, c: outTok, cr, cc, cc1h: 0 }
-    const ev = tryEvaluate(price.expression, { usage: vars, headers: fast ? { 'anthropic-beta': 'fast-mode' } : {}, at })
-    if (ev) {
-      const total = ev.cost * group.rate
-      billing = {
-        status: 'billed',
-        total,
-        tier: ev.tier,
-        detail: {
-          tier: ev.tier,
-          rules: ev.rules,
-          breakdown: {
-            vars: ev.tokens,
-            tiers: tierBounds(price.expression),
-            items: ev.items,
-            subtotal: money(ev.subtotal),
-            base: money(ev.cost),
-            rules_multiplier: ev.multiplier
-          },
-          cost: money(ev.cost),
-          rate_multiplier: group.rate.toFixed(2),
-          total_cost: money(total),
-          expr_version: 1
-        }
-      }
-    }
-  }
+  const vars = { p: inTok, c: outTok, cr, cc, cc1h: 0 }
+  const billing: any = (success && price && charge(price, { usage: vars, headers: fast ? { 'anthropic-beta': 'fast-mode' } : {}, at }, group.rate)) || { status: 'free' }
   const row: any = {
     id: 5000 + i,
     request_id: requestId,
@@ -1056,6 +1136,43 @@ for (let i = 0; i < 90; i++) {
       ],
       guard: [{ account_id: 27, model: 'claude-fable-4', decision: 'block', reason: 'guard_models_changed', attempt: 1 }]
     }) }
+  })
+}
+// Four records priced by group pricing, as mock/pricingStore.ts sets it up
+// for the console user (segment VIP: ×0.9 on every group, a rate of its own
+// of ×0.7 in the vip group, gpt-4o-mini at ×0.8 in the default group; the vip
+// group sells claude-haiku-4-5 at a price of its own). One each of a
+// multiplier rule, a custom price, the segment's own rate and its discount.
+{
+  const VIP = 2
+  const haiku = configPrice('per_token', { p: 0.8, c: 4, cr: 0.08, cc: 1 })
+  const tokens = { input: 12000, output: 1800 }
+  const samples: Array<{ group: (typeof GROUPS)[number]; model: string; rate: number; terms: PricingTerms }> = [
+    { group: GROUPS[0], model: 'gpt-4o-mini', rate: 0.9, terms: { segment_id: VIP, rate_source: 'discount', rule: { source: 'segment', scale: 0.8 } } },
+    { group: GROUPS[1], model: 'claude-haiku-4-5', rate: 0.7, terms: { segment_id: VIP, rate_source: 'segment', rule: { source: 'group', custom: haiku } } },
+    { group: GROUPS[1], model: 'claude-sonnet-4-5', rate: 0.7, terms: { segment_id: VIP, rate_source: 'segment' } },
+    { group: GROUPS[0], model: 'claude-sonnet-x', rate: 0.9, terms: { segment_id: VIP, rate_source: 'discount' } }
+  ]
+  samples.forEach(({ group, model, rate, terms }, i) => {
+    const price = priceFor(model)!
+    const at = new Date(Date.now() - (15 + i * 10) * 60000)
+    const billing = charge(price, { usage: { p: tokens.input, c: tokens.output }, at }, rate, terms)!
+    const account = ACCOUNTS.find((a) => (OWN_MODELS[a.plugin_key] ?? MODELS).includes(model))!
+    const native = NATIVE_ENDPOINT[account.upstream]
+    const custom = terms.rule?.custom
+    usageRows.push({
+      id: 4992 + i, request_id: `req_grouppricing000${i + 1}`, client_request_id: '', created_at: at.toISOString(),
+      user_id: 1, user_email: USERS[0].email, api_key_id: 1, api_key_name: `${USERS[0].name}-key`, client_ip: CLIENT_IPS[1][0],
+      group_id: group.id, group_name: group.name, account_id: account.id, account_name: account.name, plugin_key: account.plugin_key, account_type: account.type,
+      platform: native?.platform ?? 'anthropic', protocol: native?.protocol ?? 'anthropic.messages', upstream_protocol: account.upstream, conversion: null,
+      endpoint: native?.endpoint ?? '/v1/messages', model, upstream_model: model, stream: true, status_code: 200, success: true, error_type: '', error_message: '',
+      input_tokens: tokens.input, output_tokens: tokens.output, cache_read_tokens: 0, cache_creation_tokens: 0, cache_creation_1h_tokens: 0,
+      total_cost: money(billing.total), rate_multiplier: rate.toFixed(2), billing_status: billing.status, billing_mode: price.mode, matched_tier: billing.tier,
+      // The price is the global one whatever rule applied; the expression is the one that was evaluated.
+      price_id: price.id, expr_hash: custom ? remember(custom.expression) : price.expr_hash,
+      latency_ms: 2600, first_token_ms: 700, upload_ms: 40, sticky_rule: 'claude-code-session', sticky_hit: true, hook_decisions: [],
+      _detail: billing.detail, _price: { id: price.id, model: price.model, source: price.source }
+    })
   })
 }
 usageRows.sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -1212,7 +1329,7 @@ function usageSummary(rows: any[], query: Record<string, string>) {
     // The mock generator's input_tokens are the exclusive pricing variable p.
     s.prompt_tokens += u.input_tokens + u.cache_read_tokens + u.cache_creation_tokens + (u.cache_creation_1h_tokens || 0)
     s.total_cost += Number(u.total_cost)
-    s.standard_cost += Number(u.rate_multiplier) > 0 ? Number(u.total_cost) / Number(u.rate_multiplier) : 0
+    s.standard_cost += baseCost(u)
     map.set(key, s)
   }
   const empty = { key: '', requests: 0, success: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, prompt_tokens: 0, total_cost: 0, standard_cost: 0, _lat: 0, _ft: 0, _n: 0 }
@@ -1305,21 +1422,7 @@ on('GET', '/me/usage/summary', (req) =>
     ? fail(400, 'invalid_argument', 'group_by must be day, hour, none, model, api_key, group, endpoint, platform, protocol or ip')
     : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
 )
-// GET /me/prices (CONTRACTS §79.4).
-const MY_PRICES = [
-  { model: 'claude-sonnet-4-5', mode: 'per_token', config: { p: 3, c: 15, cr: 0.3, cc: 3.75 }, expression: '' },
-  { model: 'gemini-2.5-flash', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075 }, expression: '' },
-  { model: 'seedance-pro', mode: 'per_request', config: { price: 0.2 }, expression: '' }
-]
-on('GET', '/me/prices', (req) => ({
-  group: { id: Number(req.query.group_id) || 1, name: 'default' },
-  rate_multiplier: req.query.group_id === '2' ? '1.5' : '1',
-  prices: MY_PRICES
-}))
-/** Model names for the lookup mock: every priced model, or with `mine` the ones /me/prices shows the caller. */
-export function mockModelNames(mine: boolean): string[] {
-  return (mine ? MY_PRICES : prices).map((p) => p.model)
-}
+// GET /me/prices lives in pricing.ts: it depends on the caller's segment and groups.
 // GET /me/usage/overview (CONTRACTS §66): the windows from the same rows.
 on('GET', '/me/usage/overview', (req) => ({ ...overviewOf(usageRows.filter((u) => u.user_id === 1), req.query.tz || 'UTC'), api_keys: { total: 2, active: 2 } }))
 // GET /usage/overview (CONTRACTS §66.6): all users, plus users and accounts.
@@ -1425,7 +1528,7 @@ on('PUT', '/settings/scheduling', req => {
   const b = { ...SCHEDULING_DEFAULTS, ...body }
   const fields: Array<{ field: string; code: string; message: string }> = []
   if (!['default', 'traffic'].includes(b.mode)) fields.push({ field: 'mode', code: 'invalid', message: 'invalid value' })
-  if (!['rpm', 'concurrency', 'tpm'].includes(b.metric)) fields.push({ field: 'metric', code: 'invalid', message: 'invalid value' })
+  if (!['rpm', 'concurrency', 'tpm', 'sessions'].includes(b.metric)) fields.push({ field: 'metric', code: 'invalid', message: 'invalid value' })
   if (fields.length) return fail(400, 'invalid_argument', 'invalid scheduling settings', { fields })
   return Object.assign(schedulingSettings, { mode: b.mode, metric: b.metric, limit_load: b.limit_load, model_limits: b.model_limits })
 })

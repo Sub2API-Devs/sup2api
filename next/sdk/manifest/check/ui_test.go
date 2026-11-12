@@ -419,6 +419,10 @@ func TestHostUICompatNeedsMatchingHostCompat(t *testing.T) {
 		{"^3.12", ">=0.1.279 <0.2.0", true},
 		{"^3.12", ">=0.1.280 <0.2.0", false},
 		{"~3.12.1", ">=0.1.279 <0.2.0", true},
+		// UI 3.13 starts at core 0.1.281; 0.1.280 is the last core with 3.12.
+		{"^3.13", ">=0.1.279 <0.2.0", true},
+		{"^3.13", ">=0.1.280 <0.2.0", true},
+		{"^3.13", ">=0.1.281 <0.2.0", false},
 	}
 	for _, tc := range cases {
 		c := uiCodes(uiNativeManifest(tc.ui, tc.host))

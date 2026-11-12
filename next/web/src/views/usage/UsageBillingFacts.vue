@@ -2,9 +2,11 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, SCard, SCode, SDescItem, SDescriptions, SDisclosure, SHint, SIcon, SLink } from '@sub2api/ui'
+import type { UsagePricing } from '@/api/pricing'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
+import { ruleText } from '@/components/pricing/ruleText'
 import { useAuthStore } from '@/stores/auth'
-import { formatNumber } from '@/utils/format'
+import { formatMoney, formatNumber } from '@/utils/format'
 import { useOptionalT } from '@/composables/optionalText'
 import BillingBreakdown from '@/views/prices/BillingBreakdown.vue'
 import ExprHistoryModal from '@/views/prices/ExprHistoryModal.vue'
@@ -26,6 +28,16 @@ const tierName = computed(() => props.u.matched_tier || bd.value.tier || '')
 const rules = computed<Rule[]>(() => (Array.isArray(bd.value.rules) ? bd.value.rules : []))
 const ledgerId = computed(() => props.u.ledger_id ?? bd.value.ledger_id ?? null)
 const rate = computed(() => bd.value.rate_multiplier ?? props.u.rate_multiplier ?? null)
+// Group pricing (inputs.pricing, list_cost): a record at the global price and the group's default rate has neither.
+const pricing = computed<UsagePricing>(() => bd.value.inputs?.pricing || {})
+const rateSource = computed(() => (pricing.value.rate_source ? label('pricingAccess.source', pricing.value.rate_source) : undefined))
+/** The rule that gave the list price, when one did: whose it is and what it makes of the global price. */
+const listRule = computed(() => {
+  const { price_source: source, scale, base } = pricing.value
+  if (!source || source === 'global') return null
+  const multiplier = scale === undefined ? '' : ruleText(t, { kind: 'multiplier', multiplier: scale })
+  return { source, text: base ? t('pricing.rule.custom') : multiplier }
+})
 const inputs = computed(() => [
   ...Object.entries(bd.value.inputs?.params || {}).map(([key, value]) => ({ name: `param("${key}")`, value })),
   ...Object.entries(bd.value.inputs?.headers || {}).map(([key, value]) => ({ name: `header("${key}")`, value }))
@@ -68,13 +80,24 @@ function label(prefix: string, value: string) {
         <span class="font-mono">{{ tierName }}</span>
         <SHint v-if="tierLen !== undefined" inline size="xs" class="ml-1"> ({{ t('usage.billing.len', { n: formatNumber(tierLen) }) }}) </SHint>
       </SDescItem>
+
+      <SDescItem v-if="listRule" :label="t('usage.billing.listPrice')"><div class="flex flex-wrap items-center gap-2" data-testid="usage-list-price">
+        <SBadge :tone="listRule.source === 'segment' ? 'primary' : 'info'">{{ label('pricing.source', listRule.source) }}</SBadge>
+        <span>{{ listRule.text }}</span>
+      </div></SDescItem>
+
+      <SDescItem v-if="bd.list_cost != null" :label="t('usage.billing.listCost')">
+        <span class="font-mono" data-testid="usage-list-cost">{{ formatMoney(bd.list_cost, 8) }}</span>
+      </SDescItem>
     </SDescriptions>
 
     <div class="mt-3 border-t border-line pt-3">
       <BillingBreakdown
         v-if="Object.keys(breakdown).length || u.total_cost"
         :breakdown="breakdown"
+        :scale="pricing.scale"
         :rate-multiplier="rate"
+        :rate-source="rateSource"
         :total="u.total_cost"
         :rules="rules"
         :cache-write-labels="{ default: t('usage.tokens.cacheDefaultBucket'), oneHour: t('usage.tokens.cache1hBucket') }"

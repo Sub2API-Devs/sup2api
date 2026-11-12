@@ -821,10 +821,15 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrUnavailable.WithCause(err), errTypeInternal)}
 	}
 
-	// Send. Canceling ctx (client gone) cancels the upstream request.
+	// Send. The upstream request does not hang off ctx: when the client goes
+	// the watcher cancels it - at once, or after the configured wait when the
+	// answer is being read to its end for billing (disconnect.go). Plugin
+	// executions and task submissions settle on their own and are never kept.
 	// The cause names the timeout that cut the request (forward records it).
-	uctx, ucancel := context.WithCancelCause(ctx)
+	uctx, ucancel := context.WithCancelCause(context.WithoutCancel(ctx))
 	defer ucancel(nil)
+	c.drain = c.watchClient(ctx, ucancel, execution == nil && !c.ep.TaskSubmit())
+	defer c.drain.stop()
 	method := strings.ToUpper(built.GetMethod())
 	if method == "" {
 		method = http.MethodPost

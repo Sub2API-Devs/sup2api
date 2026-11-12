@@ -88,14 +88,14 @@ func invalidModelReference(message string) *gwError {
 func (c *call) prepareReferencedPrices(ctx context.Context) *gwError {
 	for i := range c.modelRefs {
 		ref := &c.modelRefs[i]
-		rule, err := c.g.d.Pricer.Resolve(ctx, ref.model)
+		rule, err := c.g.d.Pricer.Resolve(ctx, c.priceQuery(ref.model))
 		if err != nil {
 			return fromCore(core.AsError(err), errTypePriceNotConfigured)
 		}
 		if rule != nil && (rule.VideoOnly || !c.ep.SupportsBillingType(rule.Mode)) {
 			return invalidModelReference("referenced model " + ref.model + " has an incompatible billing type")
 		}
-		ref.priced = core.PricedUsage{Kind: ref.kind, Model: ref.model, Price: clonePriceRule(rule),
+		ref.priced = core.PricedUsage{Kind: ref.kind, Model: ref.model, Price: rule.Clone(),
 			RateMultiplier: c.rec.RateMultiplier}
 		body, err := c.referencePriceBody(*ref)
 		if err != nil {
@@ -104,14 +104,6 @@ func (c *call) prepareReferencedPrices(ctx context.Context) *gwError {
 		ref.priced.PriceParams, ref.priced.PriceHeaders = c.priceInputsFrom(rule, body)
 	}
 	return nil
-}
-
-func clonePriceRule(rule *core.PriceRule) *core.PriceRule {
-	if rule == nil {
-		return nil
-	}
-	copy := *rule
-	return &copy
 }
 
 func (c *call) servesAllModels(ref *core.AccountRef) bool {
@@ -240,7 +232,7 @@ func (c *call) recordAdditionalUsage(u *usagerules.Acc, rt *typeRoute) {
 	for _, actual := range u.Additional() {
 		priced, ok := c.upstreamRefs[actual.Kind+"\x00"+actual.Model]
 		if !ok && actual.Model == c.upstreamPrimaryModel && primaryUsageKind(rt, actual.Kind) {
-			priced = core.PricedUsage{Kind: actual.Kind, Model: c.model, Price: clonePriceRule(c.rec.Price),
+			priced = core.PricedUsage{Kind: actual.Kind, Model: c.model, Price: c.rec.Price.Clone(),
 				PriceParams: c.rec.PriceParams, PriceHeaders: c.rec.PriceHeaders, RateMultiplier: c.rec.RateMultiplier}
 			ok = true
 		}

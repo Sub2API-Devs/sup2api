@@ -1,0 +1,97 @@
+import { describe, expect, it } from 'vitest'
+import type { PriceDef } from '@/api/pricing'
+import { applyRule, effectiveRate, hasDiscount, inheritedRate, priceCells, sameRate, validRate } from './pricingFormat'
+
+describe('a rate typed in a form', () => {
+  it('is a decimal of 0 or more with at most four decimals', () => {
+    expect(['0', '1', ' 0.8 ', '1.2345'].every(validRate)).toBe(true)
+    expect(['', null, undefined, '-1', '0.', '.5', 'x', '1.23456'].some(validRate)).toBe(false)
+  })
+  it('stays below 1000000, as the server keeps it', () => {
+    expect(validRate('999999.9999')).toBe(true)
+    expect(validRate('1000000')).toBe(false)
+  })
+})
+
+describe('the rate a segment inherits', () => {
+  const rate = (group_default: string, discount: string) => inheritedRate({ group_default, discount })
+
+  it('is the default of the group times the discount', () => {
+    expect(rate('1.2', '0.9')).toBe(1.08)
+    expect(rate('1.2', '1')).toBe(1.2)
+  })
+  it('keeps four decimals, rounded half up as the server rounds', () => {
+    expect(rate('0.3333', '0.3333')).toBe(0.1111)
+    expect(rate('0.5125', '0.5')).toBe(0.2563)
+    expect(rate('0.0001', '0.4')).toBe(0)
+  })
+  it('is capped at the largest rate', () => {
+    expect(rate('999999', '2')).toBe(999999.9999)
+  })
+})
+
+describe('the rate helpers every pricing view shares', () => {
+  it('compare rates as numbers, and one still being typed only with itself', () => {
+    expect(sameRate('0.80', '0.8')).toBe(true)
+    expect(sameRate(null, null)).toBe(true)
+    expect(sameRate('0.', '0')).toBe(false)
+    expect(sameRate('0.8', null)).toBe(false)
+  })
+  it('tell a discount from none', () => {
+    expect(hasDiscount({ discount: '0.9' })).toBe(true)
+    expect(hasDiscount({ discount: '1.0' })).toBe(false)
+  })
+  it('say where the rate comes from', () => {
+    expect(effectiveRate({ group_default: '1.2', discount: '0.9' }, null)).toMatchObject({ value: '1.08', source: 'discount' })
+    expect(effectiveRate({ group_default: '1.2', discount: '1' }, null)).toMatchObject({ value: '1.2', source: 'group' })
+    expect(effectiveRate({ group_default: '1.2', discount: '0.9' }, '0.5')).toMatchObject({ value: '0.5', source: 'segment' })
+  })
+})
+
+describe('the price a view shows', () => {
+  const perToken: PriceDef = { mode: 'per_token', config: { p: 3, c: 15, cr: 0.3 }, expression: 'p*3 + c*15 + cr*0.3' }
+  const perRequest: PriceDef = { mode: 'per_request', config: { price: 0.02 }, expression: 'flat(0.02)' }
+  const parsed: PriceDef = { mode: 'expression', config: null, expression: 'len <= 200000 ? tier("a", p*3 + c*15) : tier("b", p*6 + c*22.5)' }
+  const opaque: PriceDef = { mode: 'expression', config: null, expression: 'p * 2 + unknown(1)' }
+  const times = (def: PriceDef, multiplier: string): PriceDef => ({ ...def, multiplier })
+
+  it('works the multiplier of a rule into the cells of a per-token and a per-request price', () => {
+    expect(priceCells(times(perToken, '1.5')).tokens).toMatchObject({ p: 4.5, c: 22.5, cr: 0.45, cc: null })
+    expect(priceCells(times(perRequest, '1.5'))).toEqual({ perRequest: 0.03, tiers: 1 })
+  })
+  it('works it into the first tier of an expression the console can read', () => {
+    expect(priceCells(times(parsed, '2'))).toMatchObject({ tokens: { p: 6, c: 30 }, tiers: 2 })
+    expect(priceCells(times(parsed, '2')).multiplier).toBeUndefined()
+  })
+  it('keeps it beside an expression the console cannot break down', () => {
+    expect(priceCells(times(opaque, '1.5'))).toEqual({ tiers: 1, opaque: true, multiplier: '1.5' })
+    expect(priceCells(opaque).multiplier).toBeUndefined()
+  })
+  it('makes a price free at ×0 and leaves it as it is at ×1', () => {
+    expect(priceCells(times(perToken, '0')).tokens).toMatchObject({ p: 0, c: 0, cr: 0, cc: null })
+    expect(priceCells(times(perRequest, '0')).perRequest).toBe(0)
+    expect(priceCells(times(perToken, '1'))).toEqual(priceCells(perToken))
+  })
+  it('rewrites neither the config nor the expression for it', () => {
+    const shown = times(parsed, '2')
+    priceCells(shown)
+    expect(shown).toEqual({ ...parsed, multiplier: '2' })
+  })
+})
+
+describe('the list price a rule being edited gives', () => {
+  const base: PriceDef = { mode: 'per_token', config: { p: 3, c: 15 }, expression: 'p*3 + c*15' }
+
+  it('is the global price with the multiplier, as the server returns it once saved', () => {
+    expect(applyRule(base, { kind: 'multiplier', multiplier: '1.5' })).toEqual({ ...base, multiplier: '1.5' })
+    expect(applyRule(base, { kind: 'multiplier', multiplier: '0' })).toEqual({ ...base, multiplier: '0' })
+    expect(applyRule(base, { kind: 'multiplier', multiplier: '1' })).toEqual({ ...base, multiplier: '1' })
+  })
+  it('leaves the price alone while the multiplier is still being typed, and has none without a global price', () => {
+    expect(applyRule(base, { kind: 'multiplier', multiplier: '1.' })).toBe(base)
+    expect(applyRule(null, { kind: 'multiplier', multiplier: '2' })).toBeNull()
+  })
+  it('is a price of its own for a custom rule', () => {
+    expect(applyRule(base, { kind: 'custom', mode: 'per_token', config: { p: 1, c: 8 } })).toEqual({ mode: 'per_token', config: { p: 1, c: 8 }, expression: '' })
+  })
+})

@@ -11,7 +11,11 @@ import { useOptionalT } from '@/composables/optionalText'
 //    subtotal, base, rules_multiplier}
 const props = defineProps<{
   breakdown: unknown
+  /** The multiplier of a group pricing rule on the cost at the global price; the rate applies after it. */
+  scale?: string | number | null
   rateMultiplier?: string | number | null
+  /** Where the rate comes from, said after it. */
+  rateSource?: string
   total?: string | number | null
   rules?: Array<{ multiplier: number | string; matched: boolean }>
   cacheWriteLabels?: { default: string; oneHour: string }
@@ -44,6 +48,7 @@ function isNum(v: unknown) {
 }
 
 const rulesMult = computed(() => (isNum(bd.value.rules_multiplier) ? bd.value.rules_multiplier : null))
+const scale = computed(() => (isNum(props.scale) ? Number(props.scale) : null))
 const rate = computed(() => (isNum(props.rateMultiplier) ? Number(props.rateMultiplier) : null))
 const matchedMultipliers = computed(() => (props.rules || []).filter((r) => r.matched).map((r) => r.multiplier))
 </script>
@@ -65,7 +70,8 @@ const matchedMultipliers = computed(() => (props.rules || []).filter((r) => r.ma
       <template v-if="isNum(bd.base)">
         {{ t('prices.items.base') }} {{ formatMoney(bd.base, 8) }}
         <template v-if="rulesMult !== null"> × {{ t('prices.items.rules') }} {{ rulesMult }}</template>
-        <template v-if="rate !== null"> × {{ t('prices.items.groupRate') }} {{ rate }}</template>
+        <template v-if="scale !== null"> × {{ t('prices.items.listScale') }} {{ scale }}</template>
+        <template v-if="rate !== null"> × {{ t('prices.items.groupRate') }} {{ rate }}<SHint v-if="rateSource" inline size="xs" class="font-sans" data-testid="rate-source"> ({{ rateSource }})</SHint></template>
       </template>
       <template v-if="isNum(total)"><template v-if="isNum(bd.base)"> = </template><span class="font-semibold">{{ formatMoney(total, 8) }}</span></template>
     </p>

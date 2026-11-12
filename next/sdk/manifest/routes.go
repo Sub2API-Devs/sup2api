@@ -86,7 +86,7 @@ func CoreGatewayPath(p string) bool {
 // server/internal/webui tests keep the list in step with the console.
 var ConsoleSegments = []string{
 	"assets", "index.html", "favicon.svg", "LOBE-ICONS-LICENSE.txt",
-	"login", "forbidden", "dashboard", "me", "usage", "ledger", "users", "groups", "roles",
+	"login", "forbidden", "dashboard", "me", "usage", "ledger", "users", "segments", "groups", "roles",
 	"accounts", "api-keys", "proxies", "platforms", "prices", "sticky", "settings",
 	"plugins", "p", "market", "publishers", "nodes", "system",
 }

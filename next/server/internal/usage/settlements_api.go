@@ -203,7 +203,7 @@ func (s *Service) refundAbandoned(c *gin.Context) {
 		}
 		marker, _ := json.Marshal(map[string]string{core.AnomalyReconcile: "refunded"})
 		if _, err := tx.Exec(ctx, `
-			UPDATE usage_logs SET total_cost = 0, billing_status = 'free', anomalies = anomalies || $2::jsonb
+			UPDATE usage_logs SET total_cost = 0, base_cost = 0, billing_status = 'free', anomalies = anomalies || $2::jsonb
 			WHERE id = $1`, id, marker); err != nil {
 			return err
 		}

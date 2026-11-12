@@ -78,10 +78,20 @@ func (e *Env) SetUserRoles(admin *Session, userID int64, roles []string) {
 	admin.OK(e.T, http.MethodPut, fmt.Sprintf("/users/%d/roles", userID), map[string]any{"role_keys": roles})
 }
 
-// SetUserGroups replaces the groups a user may use.
-func (e *Env) SetUserGroups(admin *Session, userID int64, groupIDs []int64) {
+// GrantGroups lets a user use the private groups, through a personal segment
+// of the user (CONTRACTS §97).
+func (e *Env) GrantGroups(admin *Session, userID int64, groupIDs []int64) {
 	e.T.Helper()
-	admin.OK(e.T, http.MethodPut, fmt.Sprintf("/users/%d/groups", userID), map[string]any{"group_ids": groupIDs})
+	segment := admin.OK(e.T, http.MethodGet, fmt.Sprintf("/users/%d", userID), nil).Get("segment")
+	id := segment.Get("id").Int()
+	if segment.Get("kind").String() != "personal" {
+		id = admin.OK(e.T, http.MethodPost, fmt.Sprintf("/users/%d/personal-segment", userID), map[string]any{"copy": false}).Get("id").Int()
+	}
+	items := make([]map[string]any, len(groupIDs))
+	for i, gid := range groupIDs {
+		items[i] = map[string]any{"group_id": gid, "granted": true}
+	}
+	admin.OK(e.T, http.MethodPut, fmt.Sprintf("/segments/%d/groups", id), map[string]any{"items": items})
 }
 
 // ------------------------------------------------------------------ groups, keys

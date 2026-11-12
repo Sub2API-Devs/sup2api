@@ -150,7 +150,7 @@ func TestPlatformResolver(t *testing.T) {
 func TestGroupPlatformsWithoutRegistry(t *testing.T) {
 	// No registry: no database access, every group gets [].
 	s := New(nil, nil, nil, nil)
-	ps, err := s.groupPlatforms(context.Background(), []int64{1, 2})
+	ps, err := s.Platforms(context.Background(), []int64{1, 2})
 	if err != nil || len(ps) != 2 || ps[1] == nil || len(ps[2]) != 0 {
 		t.Fatalf("platforms: %v %v", ps, err)
 	}
@@ -253,20 +253,20 @@ func TestGroupCRUDAndVisibility(t *testing.T) {
 		VALUES ($1, $2, 'k', 'sk-s2a-xxxxx', 'h1')`, e.user, int64(def["id"].(float64))); err != nil {
 		t.Fatal(err)
 	}
-	code, out = e.do(e.admin, "PUT", fmt.Sprintf("/users/%d/groups", e.user), map[string]any{"group_ids": []int64{vipID, vipID}})
-	if code != 200 {
-		t.Fatalf("set user groups: %d %v", code, out)
+	if code, out = e.do(e.admin, "PATCH", fmt.Sprintf("/groups/%d", int64(def["id"].(float64))), map[string]any{"description": "for everyone"}); code != 200 {
+		t.Fatalf("patch default: %d %v", code, out)
 	}
 	if e.mr.Exists("apikey:h1") {
 		t.Fatal("api key cache not dropped")
 	}
+	// A private group opens to the user once their segment is granted it.
+	if _, err := e.db.Pool.Exec(context.Background(), `INSERT INTO segment_groups (segment_id, group_id, granted)
+		SELECT segment_id, $2, true FROM users WHERE id = $1`, e.user, vipID); err != nil {
+		t.Fatal(err)
+	}
 	_, out = e.do(e.user, "GET", "/me/groups", nil)
 	if n := len(out["data"].([]any)); n != 2 {
-		t.Fatalf("user sees %d groups after assignment", n)
-	}
-	code, _ = e.do(e.admin, "PUT", fmt.Sprintf("/users/%d/groups", e.user), map[string]any{"group_ids": []int64{999}})
-	if code != 400 {
-		t.Fatalf("unknown group: %d", code)
+		t.Fatalf("user sees %d groups after the grant", n)
 	}
 
 	code, out = e.do(e.admin, "PATCH", fmt.Sprintf("/groups/%d", vipID), map[string]any{"status": "disabled", "model_allowlist": []string{}})

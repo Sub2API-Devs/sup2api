@@ -42,6 +42,10 @@ type Deps struct {
 	Cipher *secret.Cipher
 	// BcryptCost defaults to bcrypt.DefaultCost (tests lower it).
 	BcryptCost int
+	// PriceRulesChanged drops the cached price rules on every node
+	// (billing.Service.PriceRulesChanged): deleting a user deletes those of
+	// their personal segment. Optional.
+	PriceRulesChanged func(ctx context.Context)
 }
 
 // Service is the iam module.
@@ -53,6 +57,8 @@ type Service struct {
 	authz  *authz.Service
 	cipher *secret.Cipher
 	cost   int
+
+	priceRulesChanged func(ctx context.Context)
 
 	limiter *loginLimiter
 
@@ -80,8 +86,11 @@ func New(d Deps) *Service {
 	if d.BcryptCost == 0 {
 		d.BcryptCost = bcrypt.DefaultCost
 	}
+	if d.PriceRulesChanged == nil {
+		d.PriceRulesChanged = func(context.Context) {}
+	}
 	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, cipher: d.Cipher, cost: d.BcryptCost, status: map[int64]statusEntry{},
-		limiter: newLoginLimiter(d.Redis)}
+		priceRulesChanged: d.PriceRulesChanged, limiter: newLoginLimiter(d.Redis)}
 	s.dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), s.cost)
 	if d.Authz != nil {
 		// Status changes (disable/delete) bump the authz version.

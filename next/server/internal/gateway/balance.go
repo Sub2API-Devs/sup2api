@@ -46,6 +46,12 @@ var balanceMetricTable = map[string]balanceMetric{
 		rate:      func(u core.RateUsage) int64 { return u.TPM },
 		listRate:  func(u core.ModelRateUsage) int64 { return u.TPM },
 	},
+	balanceMetricSessions: {
+		limit:     func(a *core.AccountRef) float64 { return float64(a.SPMLimit) },
+		listLimit: func(l *core.ModelLimit) float64 { return float64(l.SPMLimit) },
+		rate:      func(u core.RateUsage) int64 { return u.Sessions },
+		listRate:  func(u core.ModelRateUsage) int64 { return u.Sessions },
+	},
 	balanceMetricConcurrency: {
 		limit:     func(a *core.AccountRef) float64 { return float64(a.MaxConcurrency) },
 		listLimit: func(l *core.ModelLimit) float64 { return float64(l.MaxConcurrency) },

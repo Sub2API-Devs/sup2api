@@ -65,7 +65,7 @@ func TestAC24_ManagedVideoAcrossNodes(t *testing.T) {
 			}
 			// Another user in the SAME group still cannot read the task.
 			other := e.CreateUser(admin, UserSpec{})
-			e.SetUserGroups(admin, other.UserID, []int64{tn.GroupID})
+			e.GrantGroups(admin, other.UserID, []int64{tn.GroupID})
 			_, otherKey := e.CreateAPIKey(other, tn.GroupID)
 			if r := e.queryVideo(e.NodeURLs[1], otherKey, v.PublicID); r.Status != http.StatusNotFound {
 				t.Fatalf("cross-user task access: %s", r)
@@ -77,7 +77,7 @@ func TestAC24_ManagedVideoAcrossNodes(t *testing.T) {
 			}
 			// An owner key in another group is not authority over this task.
 			otherGroup := e.CreateGroup(admin, e.Name("other-video-group"), "restricted", 1, nil)
-			e.SetUserGroups(admin, tn.User.UserID, []int64{tn.GroupID, otherGroup})
+			e.GrantGroups(admin, tn.User.UserID, []int64{tn.GroupID, otherGroup})
 			_, wrongGroupKey := e.CreateAPIKey(tn.User, otherGroup)
 			if r := e.queryVideo(e.NodeURLs[1], wrongGroupKey, v.PublicID); r.Status != http.StatusNotFound {
 				t.Fatalf("cross-group task access: %s", r)

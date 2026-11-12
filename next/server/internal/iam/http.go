@@ -11,10 +11,11 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 )
 
-// RegisterRoutes mounts /auth/*, /me, /me/password and /users*.
-// (PUT /users/:id/groups belongs to the group module.)
+// RegisterRoutes mounts /auth/*, /me, /me/password, /users* and the members
+// of a segment, which are a users list.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/login", s.handleLogin)
 	r.Public(http.MethodPost, "/auth/refresh", s.handleRefresh)
@@ -29,6 +30,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPatch, "/users/:id", "user:update", s.handleUpdateUser)
 	r.Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
 	r.Perm(http.MethodPut, "/users/:id/roles", "role:manage", s.handleSetUserRoles)
+	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers)
 	s.registerSecurityRoutes(r)
 }
 
@@ -142,10 +144,31 @@ func (s *Service) redactBalance(c *gin.Context, users ...*User) error {
 }
 
 func (s *Service) handleListUsers(c *gin.Context) {
-	page, size := httpapi.Pagination(c)
-	users, total, err := s.ListUsers(c.Request.Context(), ListUsersFilter{
-		Query: c.Query("q"), Status: c.Query("status"), Role: c.Query("role"), Page: page, PageSize: size,
-	})
+	s.listUsers(c, ListUsersFilter{Query: c.Query("q"), Status: c.Query("status"), Role: c.Query("role"), Segment: c.Query("segment")})
+}
+
+// handleSegmentMembers lists the members of a segment (CONTRACTS §97): the
+// users list with one more condition, so it needs user:read besides the
+// route's segment:read.
+func (s *Service) handleSegmentMembers(c *gin.Context) {
+	if !httpapi.CanAny(c, s.authz, "user:read") {
+		return
+	}
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	if _, err := segment.Ref(c.Request.Context(), s.db.Pool, id, true); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.listUsers(c, ListUsersFilter{Query: c.Query("q"), Segment: c.Param("id")})
+}
+
+// listUsers responds with the page of the users f selects.
+func (s *Service) listUsers(c *gin.Context, f ListUsersFilter) {
+	f.Page, f.PageSize = httpapi.Pagination(c)
+	users, total, err := s.ListUsers(c.Request.Context(), f)
 	if err == nil {
 		err = s.redactBalance(c, users...)
 	}
@@ -153,7 +176,7 @@ func (s *Service) handleListUsers(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	httpapi.List(c, users, httpapi.Page{Page: page, PageSize: size, Total: total})
+	httpapi.List(c, users, httpapi.Page{Page: f.Page, PageSize: f.PageSize, Total: total})
 }
 
 func (s *Service) handleGetUser(c *gin.Context) {
@@ -191,6 +214,11 @@ func (s *Service) handleCreateUser(c *gin.Context) {
 			httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "role:manage"}))
 			return
 		}
+	}
+	// Choosing the segment is a segment assignment: it needs segment:manage
+	// as well.
+	if in.SegmentID != nil && !httpapi.CanAny(c, s.authz, "segment:manage") {
+		return
 	}
 	u, err := s.CreateUser(ctx, uid, in)
 	if err == nil {

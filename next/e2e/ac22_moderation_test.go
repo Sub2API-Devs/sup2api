@@ -228,7 +228,7 @@ func TestAC22_PromptModeration(t *testing.T) {
 	e.CreateAccount(admin, AccountSpec{PluginKey: OpenAIPlugin, Type: APIKeyType, GroupIDs: []int64{gid}, APIKey: oaKey})
 	defer m.ClearRule(t, oaKey)
 	self := e.CreateUser(admin, UserSpec{})
-	e.SetUserGroups(admin, self.UserID, []int64{gid})
+	e.GrantGroups(admin, self.UserID, []int64{gid})
 	e.AdjustBalance(admin, self.UserID, "10", true, "e2e moderation llm")
 	_, selfKey := e.CreateAPIKey(self, gid)
 	admin.OK(t, http.MethodPut, fmt.Sprintf("/p/moderation/channels/%d", fx.ChannelID), map[string]any{

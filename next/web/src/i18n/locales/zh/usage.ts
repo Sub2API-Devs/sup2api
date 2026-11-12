@@ -140,6 +140,8 @@ export default {
     title: '计费详情',
     price: '价格规则',
     tier: '档位',
+    listPrice: '标价',
+    listCost: '标价费用',
     rules: '加价规则',
     matched: '命中',
     notMatched: '未命中',

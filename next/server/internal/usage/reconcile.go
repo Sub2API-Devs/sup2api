@@ -623,7 +623,7 @@ func (s *Service) settleReconciled(ctx context.Context, e *settleEntry, row *res
 	if m := s.reconciledFacts(ctx, e, p, res.GetFacts()); m != nil {
 		p.Metrics = m
 	}
-	total, detail, exprHash, err := s.priceOf(ctx, p)
+	cost, detail, exprHash, err := s.priceOf(ctx, p)
 	if err != nil {
 		if e.monitor != nil {
 			e.monitor.err = err
@@ -633,6 +633,7 @@ func (s *Service) settleReconciled(ctx context.Context, e *settleEntry, row *res
 		s.reschedule(ctx, e, s.reconcileSettings(ctx), 0, "pricing failed: "+err.Error())
 		return
 	}
+	total := cost.total
 	diff := total.Sub(row.totalCost)
 	var ledgerRes *core.LedgerResult
 	ctx, cancel := bookkeeping(ctx)
@@ -678,10 +679,11 @@ func (s *Service) settleReconciled(ctx context.Context, e *settleEntry, row *res
 		if _, err := tx.Exec(ctx, `
 			UPDATE usage_logs SET input_tokens = $2, output_tokens = $3, cache_read_tokens = $4,
 				cache_creation_tokens = $5, cache_creation_1h_tokens = $6, metrics = $7,
-				total_cost = $8, billing_status = 'billed', billing_detail = $9, matched_tier = $10, expr_hash = $11
+				total_cost = $8, billing_status = 'billed', billing_detail = $9, matched_tier = $10, expr_hash = $11,
+				base_cost = $12
 			WHERE id = $1`,
 			e.usageLogID, tk.Input, tk.Output, tk.CacheRead, tk.CacheCreation, tk.CacheCreation1h,
-			jsonOr(p.Metrics, "{}"), total, jsonOr(detail, "{}"), trunc(detail.Tier, 100), exprHash); err != nil {
+			jsonOr(p.Metrics, "{}"), total, jsonOr(detail, "{}"), trunc(detail.Tier, 100), exprHash, cost.base); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE pending_settlements SET state = $2, attempts = attempts + 1, last_error = ''
@@ -741,7 +743,7 @@ func (s *Service) refundFailed(ctx context.Context, e *settleEntry, row *reserve
 		// owed. It is also not in usage_logs_billing_pending_idx, so the
 		// settlement retry loop will not pick the row up and bill it again.
 		if _, err := tx.Exec(ctx, `
-			UPDATE usage_logs SET total_cost = 0, billing_status = 'free', success = false,
+			UPDATE usage_logs SET total_cost = 0, base_cost = 0, billing_status = 'free', success = false,
 				error_type = $2, error_message = $3
 			WHERE id = $1`, e.usageLogID, trunc(reason, 50), trunc(reason, 1000)); err != nil {
 			return err
@@ -915,10 +917,7 @@ func (s *Service) loadReserved(ctx context.Context, usageLogID int64) (*reserved
 		       u.input_tokens, u.output_tokens, u.cache_read_tokens, u.cache_creation_tokens,
 		       u.cache_creation_1h_tokens, u.metrics, u.latency_ms, u.created_at, u.rate_multiplier,
 		       COALESCE(u.price_id, 0), u.billing_mode, u.billing_detail, u.billing_status, u.total_cost,
-		       COALESCE(h.expression, mp.expression, '')
-		FROM usage_logs u
-		LEFT JOIN model_price_history h ON h.expr_hash = u.expr_hash
-		LEFT JOIN model_prices mp ON mp.id = u.price_id AND h.expr_hash IS NULL
+		       COALESCE(h.expression, mp.expression, '')`+frozenPriceJoins+`
 		WHERE u.id = $1`, usageLogID).
 		Scan(&p.RequestID, &p.UserID, &p.APIKeyID, &p.GroupID, &p.AccountID, &p.PluginKey, &p.Platform,
 			&p.Protocol, &p.AccountType, &p.UpstreamProtocol, &p.Model, &p.Success, &p.StatusCode, &p.ErrorType,
