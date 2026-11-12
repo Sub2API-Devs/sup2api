@@ -6,10 +6,10 @@ import { CCGATEWAY_PAGE } from '@/views/plugins/pluginUtil'
 import { useSettingsMenu } from '@/views/settings/settingsNav'
 import { router } from './index'
 
-const auth = vi.hoisted(() => ({ denied: [] as string[] }))
+const auth = vi.hoisted(() => ({ denied: [] as string[], me: {} as object | null, loadMe: vi.fn() }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), session: { get: () => 'token' } }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ me: {}, has: (perm: string | string[]) => [perm].flat().some(p => !auth.denied.includes(p)) })
+  useAuthStore: () => ({ me: auth.me, loadMe: auth.loadMe, has: (perm: string | string[]) => [perm].flat().some(p => !auth.denied.includes(p)) })
 }))
 // The pages the navigations below end on; the routes are what is under test.
 const Page = vi.hoisted(() => ({ default: { render: () => null } }))
@@ -38,6 +38,7 @@ function viewOf(path: string): string | undefined {
 
 beforeEach(() => {
   auth.denied = []
+  auth.me = {}
 })
 
 describe('where pages belong (CONTRACTS §90)', () => {
@@ -162,5 +163,29 @@ describe('links to plugin settings as a tab', () => {
   it('leave the configuration pages where they are', async () => {
     expect(await follow('/settings?tab=sticky')).toBe('/settings?tab=sticky')
     expect(await follow('/sticky')).toBe('/settings?tab=sticky')
+  })
+})
+
+describe('a caller whose account could not be loaded', () => {
+  beforeEach(async () => {
+    await follow('/forbidden')
+    auth.me = null
+    auth.loadMe.mockRejectedValue(new Error('network'))
+    // Without the caller nothing is held, as the store's has() answers.
+    auth.denied = ['group:read']
+  })
+
+  it('is offered a retry of the page, not told a permission is missing', async () => {
+    await follow('/groups')
+    const { path, query } = router.currentRoute.value
+    expect([path, query]).toEqual(['/forbidden', { reason: 'load_failed', redirect: '/groups' }])
+  })
+
+  it('reaches the page once the account loads', async () => {
+    auth.loadMe.mockImplementation(async () => {
+      auth.me = {}
+      auth.denied = []
+    })
+    expect(await follow('/groups')).toBe('/groups')
   })
 })

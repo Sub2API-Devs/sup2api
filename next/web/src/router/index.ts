@@ -109,7 +109,8 @@ const children: RouteRecordRaw[] = [
   },
   // ccgateway's settings are a core page of its own.
   { path: 'plugins/ccgateway/settings', redirect: CCGATEWAY_PAGE },
-  // Access is the plugin's settings permission or plugin:read, checked by the core.
+  // Access is the plugin's settings permission or plugin:read, checked by the core: no meta.perm
+  // here or on p/:plugin/:page, whose views handle 403 and hidden pages themselves.
   {
     path: 'plugins/:key/settings',
     component: () => import('@/views/plugins/PluginSettingsView.vue'),
@@ -151,6 +152,8 @@ router.beforeEach(async (to) => {
       await auth.loadMe()
     } catch {
       if (!session.get()) return { path: '/login', query: { redirect: to.fullPath } }
+      // The session is still there: a failed load (network, server) is no missing permission.
+      if (to.path !== '/forbidden') return { path: '/forbidden', query: { reason: 'load_failed', redirect: to.fullPath } }
     }
   }
   const moved = to.meta.movedTo?.(to)
