@@ -1274,7 +1274,7 @@ export interface SchedulingSettings {
   /** default: weighted random; traffic: favour accounts using less than their weight's share. */
   mode: 'default' | 'traffic'
   /** The usage both the traffic balance and the limit load are computed on. */
-  metric: 'rpm' | 'concurrency' | 'tpm'
+  metric: 'rpm' | 'concurrency' | 'tpm' | 'sessions'
   /** Lower the weight as the metric nears the account's limit. */
   limit_load: boolean
   /** Balance by the request's model: the traffic balance compares that model's own usage; with limit_load, also count the model list holding it. */

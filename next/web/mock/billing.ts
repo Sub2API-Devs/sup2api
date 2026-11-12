@@ -1425,7 +1425,7 @@ on('PUT', '/settings/scheduling', req => {
   const b = { ...SCHEDULING_DEFAULTS, ...body }
   const fields: Array<{ field: string; code: string; message: string }> = []
   if (!['default', 'traffic'].includes(b.mode)) fields.push({ field: 'mode', code: 'invalid', message: 'invalid value' })
-  if (!['rpm', 'concurrency', 'tpm'].includes(b.metric)) fields.push({ field: 'metric', code: 'invalid', message: 'invalid value' })
+  if (!['rpm', 'concurrency', 'tpm', 'sessions'].includes(b.metric)) fields.push({ field: 'metric', code: 'invalid', message: 'invalid value' })
   if (fields.length) return fail(400, 'invalid_argument', 'invalid scheduling settings', { fields })
   return Object.assign(schedulingSettings, { mode: b.mode, metric: b.metric, limit_load: b.limit_load, model_limits: b.model_limits })
 })

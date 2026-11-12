@@ -87,15 +87,32 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
     expect(disabled(w, 'balance-model-limits')).toBe(false)
     await w.get('[data-testid="balance-limit-load"]').setValue(true)
     await w.get('[data-testid="balance-model-limits"]').setValue(true)
-    await w.get('[data-testid="balance-metric"] input[value="concurrency"]').setValue(true)
+    expect(w.findAll('[data-testid="balance-metric"] label').map(l => l.text())).toEqual(['RPM', '并发', 'TPM', '会话'])
+    await w.get('[data-testid="balance-metric"] input[value="sessions"]').setValue(true)
     await w.get('[data-testid="settings-save"]').trigger('click')
     await flushPromises()
     expect(api.put).toHaveBeenCalledWith('/settings/scheduling', {
       mode: 'traffic',
-      metric: 'concurrency',
+      metric: 'sessions',
       limit_load: true,
       model_limits: true
     })
+  })
+
+  it('describes the default strategy by whether limit-aware load lowers its weights', async () => {
+    route.query = { tab: 'failure', sub: 'balance' }
+    const w = await render()
+    // The strategy row's own description, which its control names in aria-describedby.
+    const modeHint = () => w.get(`[id="${w.get('[data-testid="balance-mode"]').attributes('aria-describedby')}"]`).text()
+    expect(modeHint()).toBe('同优先级内按权重随机选号。')
+    await w.get('[data-testid="balance-limit-load"]').setValue(true)
+    expect(modeHint()).toBe('同优先级内按权重随机选号，权重先按上限负载折减。')
+    // The traffic strategy reads the same either way.
+    await w.get('[data-testid="balance-mode"] input[value="traffic"]').setValue(true)
+    const traffic = modeHint()
+    expect(traffic).toContain('权重份额')
+    await w.get('[data-testid="balance-limit-load"]').setValue(false)
+    expect(modeHint()).toBe(traffic)
   })
 
   it('shows server field errors on their rows', async () => {

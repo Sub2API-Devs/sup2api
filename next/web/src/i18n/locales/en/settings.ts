@@ -24,13 +24,15 @@ export default {
     modes: { default: 'Default', traffic: 'Traffic' },
     modeHints: {
       default: 'Accounts of the same priority are picked at random by weight.',
+      defaultLimitLoad: 'Accounts of the same priority are picked at random by weight, after Limit-aware load has lowered the weights.',
       traffic: "Accounts using less than their weight's share are preferred, so traffic follows the weight ratio."
     },
     limitLoad: 'Limit-aware load',
     limitLoadHint: 'The closer an account is to its limit, the lower its weight. E.g. RPM limit 100 with 90 used: weight ×10%. Accounts without a limit (nor, when balancing by model, a per-model limit for the requested model) are not affected.',
     metric: 'Metric',
-    metricHint: 'Both the traffic balance and the limit load use this metric. For accounts without a TPM limit, and always when balancing by model, tokens are counted only when a request finishes, so TPM lags slightly. Only used with the Traffic strategy or Limit-aware load.',
-    metrics: { rpm: 'RPM', concurrency: 'Concurrency', tpm: 'TPM' },
+    metricHint: 'Both the traffic balance and the limit load use this metric. Only used with the Traffic strategy or Limit-aware load.',
+    metricDetails: "TPM: for accounts without a TPM limit, and always when balancing by model, tokens are counted only when a request finishes, so it lags slightly. Sessions: the sessions active on each account within its own session period (60 seconds by default); every request that matches no sticky rule counts as one session, and the limit load measures them against the account's session limit. The session counts of accounts of the same priority with different session periods are not comparable, so give them the same period when balancing traffic by sessions.",
+    metrics: { rpm: 'RPM', concurrency: 'Concurrency', tpm: 'TPM', sessions: 'Sessions' },
     modelLimits: 'Balance by model',
     modelLimitsHint: "Balance by the requested model: the traffic balance compares that model's own usage on each account, and when the model is in one of the account's per-model limit lists, the limit-aware load also uses that list's usage and limit, and the higher load wins. Only used with the Traffic strategy or Limit-aware load."
   },

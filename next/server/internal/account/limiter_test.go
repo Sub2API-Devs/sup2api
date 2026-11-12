@@ -179,6 +179,9 @@ func TestLimiterSessionWindows(t *testing.T) {
 	if n, _ := rdb.ZCard(ctx, "rl:account:3:spms:300").Result(); n != 1 {
 		t.Fatal("a request alone was remembered", n)
 	}
+	if got, _ := l.ModelUsage(ctx, []core.AccountRef{ref}, "opus"); got[3].Sessions != 1 {
+		t.Fatal("the model's session not counted", got)
+	}
 	// 8 minutes later the account forgot s1, the list has not.
 	now = now.Add(8 * time.Minute)
 	if ok, _ := l.TryHit(ctx, ref, "opus", "s2"); ok {
