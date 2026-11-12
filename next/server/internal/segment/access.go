@@ -63,24 +63,35 @@ const joinTerms = `
 	WHERE g.id = ANY($2)`
 
 // UserTerms returns the terms of the user's segment in each of the groups
-// that exist, by group id.
+// that exist, by group id. A deleted user has none.
 func UserTerms(ctx context.Context, q store.Querier, userID int64, groupIDs []int64) (map[int64]Terms, error) {
-	return queryTerms(ctx, q, selectTerms+`(SELECT u.segment_id FROM users u WHERE u.id = $1)`+joinTerms, userID, groupIDs)
+	return queryTerms(ctx, q, selectTerms+`(SELECT u.segment_id FROM users u WHERE u.id = $1 AND u.deleted_at IS NULL)`+joinTerms, byGroup, userID, groupIDs)
 }
 
 // SegmentTerms returns the terms of the segment in each of the groups that
 // exist, by group id.
 func SegmentTerms(ctx context.Context, q store.Querier, segmentID int64, groupIDs []int64) (map[int64]Terms, error) {
-	return queryTerms(ctx, q, selectTerms+`$1`+joinTerms, segmentID, groupIDs)
+	return queryTerms(ctx, q, selectTerms+`$1`+joinTerms, byGroup, segmentID, groupIDs)
 }
 
-func queryTerms(ctx context.Context, q store.Querier, sql string, id int64, groupIDs []int64) (map[int64]Terms, error) {
-	rows, err := q.Query(ctx, sql, id, groupIDs)
+// GroupTerms returns the terms each of the segments that exist gets in the
+// group, by segment id.
+func GroupTerms(ctx context.Context, q store.Querier, groupID int64, segmentIDs []int64) (map[int64]Terms, error) {
+	return queryTerms(ctx, q, selectTerms+`ANY($1)`+joinTerms, bySegment, segmentIDs, []int64{groupID})
+}
+
+func byGroup(groupID int64, _ Terms) int64 { return groupID }
+
+func bySegment(_ int64, t Terms) int64 { return t.SegmentID }
+
+// queryTerms runs a terms query and files each row under what key picks.
+func queryTerms(ctx context.Context, q store.Querier, sql string, key func(groupID int64, t Terms) int64, args ...any) (map[int64]Terms, error) {
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := make(map[int64]Terms, len(groupIDs))
+	out := map[int64]Terms{}
 	for rows.Next() {
 		var groupID int64
 		var t Terms
@@ -94,7 +105,7 @@ func queryTerms(ctx context.Context, q store.Querier, sql string, id int64, grou
 		}
 		t.Open = public || t.Granted
 		t.Rate, t.RateSource = core.SegmentRate(t.GroupRate, t.Discount, t.Override)
-		out[groupID] = t
+		out[key(groupID, t)] = t
 	}
 	return out, rows.Err()
 }

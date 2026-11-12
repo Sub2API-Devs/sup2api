@@ -89,6 +89,15 @@ func TestTerms(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, got, bySegment)
 
+	var def int64
+	require.NoError(t, f.db.Pool.QueryRow(ctx, `SELECT default_segment_id()`).Scan(&def))
+	byGroup, err := GroupTerms(ctx, f.db.Pool, f.granted, []int64{f.vip, def, 0})
+	require.NoError(t, err)
+	require.Len(t, byGroup, 2, "a segment that does not exist has no terms")
+	require.Equal(t, got[f.granted], byGroup[f.vip])
+	require.Equal(t, "2", byGroup[def].Rate.String())
+	require.False(t, byGroup[def].Open)
+
 	require.Equal(t, EffectiveRate{Value: got[f.public].Rate, Source: core.RateSourceDiscount,
 		GroupDefault: got[f.public].GroupRate, Discount: got[f.public].Discount}, got[f.public].EffectiveRate())
 	require.Equal(t, "0.5", got[f.granted].Override.String())
