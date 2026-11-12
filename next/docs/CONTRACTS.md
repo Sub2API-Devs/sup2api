@@ -3320,7 +3320,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 ### 49.9 草稿接口
 
-权限：`settings:manage`、`account:create`、`account:own:create` 任一（`Router.PermAny`）；按 key 访问的草稿接口（`PUT`/`DELETE drafts/:key`、`drafts/:key/:action`）另外接受 `account:update`、`account:own:update`（驱动重新授权草稿，§49.17），`POST drafts` 不变。草稿只对创建者可见；持有 `settings:manage` 的调用者看得到所有草稿；其他人（以及已认领、已删除、不存在的 key、数字 key）一律 404，`details.reason: draft_not_found`。**每次草稿调用（含 GET status/health/session）都更新 `last_seen_at`**——控制台在草稿存在期间每 60 秒发一次 `GET status` 作心跳，用户在授权后填写其他字段时草稿不会被当作闲置清理。
+权限：`settings:manage`、`account:create`、`account:own:create` 任一（`Router.PermAny`）；五条草稿路由同一组 key（2026-11-12 权限加固 T37：重新授权已改为在账号现有运行环境上原地进行，不再建草稿，按 key 的草稿接口不再接受 `account:update`、`account:own:update`）。草稿只对创建者可见；持有 `settings:manage` 的调用者看得到所有草稿；其他人（以及已认领、已删除、不存在的 key、数字 key）一律 404，`details.reason: draft_not_found`。**每次草稿调用（含 GET status/health/session）都更新 `last_seen_at`**——控制台在草稿存在期间每 60 秒发一次 `GET status` 作心跳，用户在授权后填写其他字段时草稿不会被当作闲置清理。
 
 | 方法 | 路径 | 请求 → 结果 |
 |---|---|---|
@@ -3484,7 +3484,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
 - 未开启 `account_runtimes` → 503 `not_configured`；`apikey` 账号 → 400 `api_key_account`；账号已删除 → 400 `account_deleted`；绑定的代理不可用 → 400 `proxy_unavailable`。账号停用、代理停用都不影响重新授权（§49.22）。
 - 草稿 key 同 §49.9（`d` + 16 hex），`proxy_id` = 账号当前代理，`created_by` = 调用者，`for_account` = 账号 id；建好立即 Kick。审计 `account.ccgateway_reauthorize_start`（只在新建时）。
 - 每个账号最多一个未过期的重新授权草稿（按账号的 PG advisory 锁串行）。已有时返回它，并刷新 `last_seen_at`、把 `proxy_id` 改成账号当前代理。**调用者看不到它时（不是创建者、也没有 `settings:manage`）把 `created_by` 改成调用者（接管）**：能更新这个账号的人总能继续流程，原创建者之后对该草稿得到 `draft_not_found`（控制台按"重新开始"处理，再调 `reauthorize` 会接管回来）。闲置超过 15 分钟或存在超过 2 小时的草稿不再复用（留给清理任务），新建一个。
-- 草稿用 §49.9 的草稿接口驱动（`status/health/session/sync/start/complete/cancel`、`DELETE`），可见性规则不变（创建者或 `settings:manage`）。按 key 的草稿接口为此另外接受 `account:update`、`account:own:update`。重新授权草稿**不能** `PUT drafts/:key` 改代理（404 `draft_not_found`），也**不能**在 `POST /accounts` 的 `ccgateway_runtime` 里使用（400 `draft_not_found`）。
+- 草稿用 §49.9 的草稿接口驱动（`status/health/session/sync/start/complete/cancel`、`DELETE`），可见性规则不变（创建者或 `settings:manage`）。（T37 起按 key 的草稿接口不再接受 `account:update`、`account:own:update`：重新授权原地进行，用账号的运行环境接口驱动。）重新授权草稿**不能** `PUT drafts/:key` 改代理（404 `draft_not_found`），也**不能**在 `POST /accounts` 的 `ccgateway_runtime` 里使用（400 `draft_not_found`）。
 - 取消 = `DELETE /system/ccgateway/drafts/:key`（§49.9 原接口），账号不受影响。
 
 `commit`：

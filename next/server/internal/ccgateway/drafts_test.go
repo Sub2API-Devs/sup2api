@@ -79,6 +79,16 @@ func TestDraftLifecycle(t *testing.T) {
 		t.Fatalf("status did not touch the draft: %v", seen)
 	}
 
+	// Drafts belong to creating accounts: the update keys open none of the
+	// draft routes (re-authorization runs on the account's own runtime).
+	updater := f.user("updater@x")
+	f.auth.keys[updater] = []string{"account:update", "account:own:update"}
+	for _, r := range [][2]string{{"POST", "/system/ccgateway/drafts"}, {"PUT", base}, {"DELETE", base}, {"GET", base + "/status"}, {"POST", base + "/sync"}} {
+		if code, out = f.request(updater, r[0], r[1], `{}`); code != 403 {
+			t.Fatalf("updater %s %s: %d %v", r[0], r[1], code, out)
+		}
+	}
+
 	// Another creator does not see it; a settings administrator does.
 	for _, path := range []string{"/status", "/health", "/session"} {
 		if code, out = f.request(stranger, "GET", base+path, ""); code != 404 || reason(out) != "draft_not_found" {

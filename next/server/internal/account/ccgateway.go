@@ -227,7 +227,7 @@ func (s *Service) reauthorizeCCGateway(c *gin.Context) {
 		httpapi.Fail(c, core.ErrInvalidArgument)
 		return
 	}
-	key, _, err := s.d.CCGateway.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
+	key, _, err := s.d.CCGateway.ReauthDraft(ctx, id)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -255,7 +255,7 @@ func (s *Service) commitCCGatewayReauth(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	tctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	_, err := s.d.CCGateway.CommitReauth(tctx, id, key, core.OwnerScope(ctx, "settings:manage"), func(tx pgx.Tx, retired string) error {
+	_, err := s.d.CCGateway.CommitReauth(tctx, id, key, func(tx pgx.Tx, retired string) error {
 		a, err := s.loadRow(tctx, tx, id, scope, true)
 		if err != nil {
 			return err

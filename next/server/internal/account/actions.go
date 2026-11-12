@@ -109,10 +109,8 @@ func (s *Service) handleCCGatewayRefreshAuth(c *gin.Context, ctx context.Context
 		return
 	}
 
-	uid, _ := core.UserID(ctx)
-
 	// Start a re-authorization draft (or return the existing one).
-	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id, uid, core.OwnerScope(ctx, "settings:manage"))
+	key, created, err := s.d.CCGateway.ReauthDraft(ctx, id)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

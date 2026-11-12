@@ -16,7 +16,7 @@ const reauthLockSQL = `SELECT pg_advisory_xact_lock(hashtextextended('ccg-reauth
 // ReauthDraft keeps its compatibility name, but returns the existing runtime.
 // It never creates a draft, copies credentials, or replaces Docker resources.
 // The account API checks ownership before invoking this resource.
-func (s *Service) ReauthDraft(ctx context.Context, accountID, _ int64, _ *int64) (string, bool, error) {
+func (s *Service) ReauthDraft(ctx context.Context, accountID int64) (string, bool, error) {
 	if !s.runtimesOn(ctx) {
 		return "", false, reasonError(core.ErrUnavailable, "not_configured")
 	}
@@ -60,7 +60,7 @@ func (s *Service) ReauthDraft(ctx context.Context, accountID, _ int64, _ *int64)
 
 // CommitReauth verifies login on the same runtime and resets account-side
 // failure/quota state. Runtime mappings, sessions and volumes are retained.
-func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string, _ *int64, fn func(pgx.Tx, string) error) (string, error) {
+func (s *Service) CommitReauth(ctx context.Context, accountID int64, key string, fn func(pgx.Tx, string) error) (string, error) {
 	if !s.runtimesOn(ctx) {
 		return "", reasonError(core.ErrUnavailable, "not_configured")
 	}
