@@ -13,6 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -179,6 +181,50 @@ func (r *Record) hideUpstream() {
 // hideAccount removes which account served the request. An operator who may
 // not read accounts (no account:read) sees neither its id nor its name.
 func (r *Record) hideAccount() { r.AccountID, r.AccountName = nil, "" }
+
+// hideAccounts is hideAccount for a detail: the account goes from the record,
+// from the hook decisions (a gateway.attempt hook's decision names its
+// attempt's account) and from the settlement entry. Decisions that are not
+// the array they should be go altogether rather than unredacted.
+func (d *Detail) hideAccounts() {
+	d.Record.hideAccount()
+	d.HookDecisions = withoutAccountIDs(d.HookDecisions)
+	if d.Settlement != nil {
+		d.Settlement.AccountID = nil
+	}
+}
+
+// withoutAccountIDs is the JSON array raw without the account_id of its items.
+func withoutAccountIDs(raw json.RawMessage) json.RawMessage {
+	items := gjson.ParseBytes(raw)
+	if len(raw) == 0 || items.Type == gjson.Null {
+		return raw
+	}
+	if !gjson.ValidBytes(raw) || !items.IsArray() {
+		return nil
+	}
+	for i := range items.Array() {
+		out, err := sjson.DeleteBytes(raw, strconv.Itoa(i)+".account_id")
+		if err != nil {
+			return nil
+		}
+		raw = out
+	}
+	return raw
+}
+
+// redactForSelf leaves what the owner of the request may know about it
+// (GET /me/usage/:id): what was asked, how it went and what it cost. The
+// upstream side and the host's internals go: accounts, the plugin's version
+// and what it said about the upstream, the sticky rule, the expression hash,
+// the node, anomalies and the settlement entry. metrics stay whole: they are
+// the usage facts the price was computed from, shown with the tokens.
+func (d *Detail) redactForSelf() {
+	d.Record.hideUpstream()
+	d.hideAccounts()
+	d.PluginVersion, d.StickyRule, d.ExprHash, d.NodeID = "", "", "", ""
+	d.PluginDetail, d.Anomalies, d.Settlement, d.RequestLogAccountID = nil, nil, nil, nil
+}
 
 // seesAccounts reports whether the caller may see the account of a usage
 // record: operator views only, and only with account:read (CONTRACTS §66.5),
@@ -493,10 +539,7 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 		d.LedgerID = &ledgerID
 	}
 	if self != nil {
-		d.hideUpstream()
-		d.NodeID = ""
-		d.PluginDetail = nil
-		d.Anomalies = nil
+		d.redactForSelf()
 	} else {
 		accounts := s.seesAccounts(ctx, self)
 		if d.PluginKey == requestLogPlugin && d.AccountID != nil && (accounts || core.Can(ctx, s.Authz, "settings:read")) {
@@ -506,10 +549,7 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 			d.Settlement = e
 		}
 		if !accounts {
-			d.hideAccount()
-			if d.Settlement != nil {
-				d.Settlement.AccountID = nil
-			}
+			d.hideAccounts()
 		}
 		d.Anomalies = s.shapeAnomalies(ctx, d.Anomalies, accounts)
 	}
