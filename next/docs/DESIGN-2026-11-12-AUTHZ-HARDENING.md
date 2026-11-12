@@ -174,3 +174,12 @@
   3. 重新启动服务，迁移即可通过。
   丢失超管密码或两步验证时同样用此命令，加 `--reset-password`、`--reset-2fa`，新密码只打印一次，登录后请立即修改。
 - 回滚：revert 这个提交即可，无迁移；已执行的恢复不会回退。
+
+## T18 设计 3.1.1、3.1.3、决策 1、2、W4-A4：超管全局唯一，删除 guardTarget
+
+- 改动：迁移 `0098_one_super_admin.sql`：删除软删除用户的超管行；未删除的超管持有者（不论启用、禁用）多于一个时 `RAISE EXCEPTION`，信息列出 user id 与邮箱和处理命令 `sub2api admin recover-superadmin --email <要保留的人>`；`roles_one_superuser` 部分唯一索引（最多一个超管角色）；`user_roles` 上的延迟约束触发器 `user_roles_one_superuser`（提交时检查最多一个持有者，advisory 锁串行化并发，违反时 23505），移交的先删后插不受影响。不种角色、不依赖运行时 id，CLI 在迁移前后的库上都能用。iam 删除 `guardTarget`、`errProtectedTarget` 与别名 `assertTargetPermissionsWithinActor`：UpdateUser、DeleteUser、ResetSecurity 只经 `CanActOnUser` 判断目标（改他人密码时不再重复检查；改状态时仍在 `Bump` 之后复查一次）。CONTRACTS §43.6 同步。
+- 影响对象：
+  - 存量多个未删除超管的部署升级时迁移失败、服务不启动，须先按 T17 的运维步骤用 CLI 保留一个（生产核查只有 1 个超管，不受影响）。软删除用户残留的超管行被删除。
+  - 非超管（含超管的访问密钥）修改、删除超管或重置其安全设置仍是 403，错误文案由 `only a super admin can modify a super admin` 变为 `you cannot modify a superuser`，并带 `details.superuser = true`；依赖旧文案的脚本需调整。
+  - 直接改库再加一个超管持有者会在提交时失败（23505 `user_roles_one_superuser`）。
+- 回滚：revert 这个提交，并手工 `DROP TRIGGER user_roles_one_superuser ON user_roles; DROP FUNCTION user_roles_one_superuser(); DROP INDEX roles_one_superuser; DELETE FROM schema_migrations WHERE id = '0098_one_super_admin.sql';`（不删也可，旧代码不会写第二个超管）。已删除的软删除用户超管行无需恢复。

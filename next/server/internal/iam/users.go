@@ -317,32 +317,7 @@ func (s *Service) confirmSelf(ctx context.Context, userID int64, in SelfConfirma
 	return err
 }
 
-var (
-	errSelfDisable     = core.ErrConflict.WithMessage("you cannot disable or delete yourself")
-	errProtectedTarget = core.ErrPermissionDenied.WithMessage("only a super admin can modify a super admin")
-)
-
-// guardTarget rejects changes to a superuser by a non-superuser.
-func (s *Service) guardTarget(ctx context.Context, actorID, targetID int64) error {
-	if actorID == 0 || actorID == targetID {
-		return nil
-	}
-	targetSuper, err := s.authz.IsSuperuser(ctx, s.db.Pool, targetID)
-	if err != nil {
-		return err
-	}
-	if !targetSuper {
-		return nil
-	}
-	actor, err := s.authz.PermissionSet(ctx, actorID)
-	if err != nil {
-		return err
-	}
-	if !actor.Superuser {
-		return errProtectedTarget
-	}
-	return nil
-}
+var errSelfDisable = core.ErrConflict.WithMessage("you cannot disable or delete yourself")
 
 // validateUpdate normalizes the partial update in place (email casing,
 // display-name trimming) and collects field errors in response order.
@@ -367,14 +342,6 @@ func validateUpdate(in UpdateUserInput) (email string, fields []core.FieldError)
 	return email, fields
 }
 
-// assertTargetPermissionsWithinActor is SEC-H2: the actor may not touch a
-// target whose roles grant any permission the actor does not hold. The roles
-// are measured, not the effective set, so that a disabled target (whose
-// effective set is empty) stays as protected as an active one.
-func (s *Service) assertTargetPermissionsWithinActor(ctx context.Context, actorID, id int64) error {
-	return s.authz.CanActOnUser(ctx, actorID, id)
-}
-
 // UpdateUser applies a partial update. ip is the caller's address, for the
 // login rate limit when a user confirms a change to their own sign-in.
 func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput, ip string) (*User, error) {
@@ -382,15 +349,10 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	if len(fields) > 0 {
 		return nil, core.InvalidFields(fields...)
 	}
-	if err := s.guardTarget(ctx, actorID, id); err != nil {
+	// SEC-H1: the target's roles, a superuser's flag included, must be
+	// within the actor's.
+	if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
 		return nil, err
-	}
-
-	// SEC-H1: check authorization to modify target user
-	if actorID != id {
-		if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
-			return nil, err
-		}
 	}
 
 	// SEC-H3: a user's own email or password changes only with proof of the
@@ -409,10 +371,6 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 		if !core.Can(core.WithUserID(ctx, actorID), s.authz, "user:password:reset") {
 			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset").
 				WithDetails(map[string]any{"permission": "user:password:reset"})
-		}
-		// SEC-H2: target permissions must not exceed actor's
-		if err := s.assertTargetPermissionsWithinActor(ctx, actorID, id); err != nil {
-			return nil, err
 		}
 	}
 
@@ -470,7 +428,8 @@ func (s *Service) applyUpdateTx(ctx context.Context, tx pgx.Tx, actorID, id int6
 		// SEC-H2: target permissions must not exceed actor's - in both
 		// directions. Re-enabling a disabled account hands its holder every
 		// permission its roles grant, so it is as sensitive as disabling.
-		if err := s.assertTargetPermissionsWithinActor(ctx, actorID, id); err != nil {
+		// Checked again after Bump, which holds role changes off until commit.
+		if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
 			return 0, nil, err
 		}
 		if *in.Status == StatusDisabled {
@@ -532,9 +491,6 @@ WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, nilBytes(hash))
 func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	if actorID == id {
 		return errSelfDisable
-	}
-	if err := s.guardTarget(ctx, actorID, id); err != nil {
-		return err
 	}
 
 	// SEC-H1: check authorization to delete target user

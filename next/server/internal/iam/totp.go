@@ -380,9 +380,6 @@ func removeTwoFactor(ctx context.Context, tx pgx.Tx, userID int64) error {
 // the operator holds; a user resetting their own factors proves them first
 // (confirm, under the login rate limit for ip).
 func (s *Service) ResetSecurity(ctx context.Context, actorID, targetID int64, confirm SelfConfirmation, ip string) error {
-	if err := s.guardTarget(ctx, actorID, targetID); err != nil {
-		return err
-	}
 	if actorID == targetID {
 		// SEC-H3: one's own factors go only with proof of them, as on
 		// /me/two-factor/disable; a user who lost them needs an operator.

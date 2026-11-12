@@ -133,6 +133,28 @@ func ensureTemplate(ctx context.Context, base string) (string, error) {
 	return name, nil
 }
 
+// ExecWithoutTrigger runs sql with trigger on table disabled, to set up a
+// state the trigger refuses, as a database from before it may hold.
+func ExecWithoutTrigger(t testing.TB, db *store.DB, table, trigger, sql string, args ...any) {
+	t.Helper()
+	toggle := func(tx pgx.Tx, state string) error {
+		_, err := tx.Exec(context.Background(), fmt.Sprintf("ALTER TABLE %s %s TRIGGER %s", table, state, trigger))
+		return err
+	}
+	err := db.Tx(context.Background(), func(tx pgx.Tx) error {
+		if err := toggle(tx, "DISABLE"); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(context.Background(), sql, args...); err != nil {
+			return err
+		}
+		return toggle(tx, "ENABLE")
+	})
+	if err != nil {
+		t.Fatalf("exec without trigger %s: %v", trigger, err)
+	}
+}
+
 func migrationsHash() (string, error) {
 	names, err := fs.Glob(migrations.FS, "*.sql")
 	if err != nil {

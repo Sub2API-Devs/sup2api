@@ -135,7 +135,7 @@ func TestCanActOn(t *testing.T) {
 		},
 		{
 			// Actor 0 is the system (CLI recovery, the last-super-admin
-			// check), as in guardTarget and the audit log.
+			// check), as in the audit log.
 			name:     "system can act on a superuser",
 			actorID:  0,
 			targetID: 2,

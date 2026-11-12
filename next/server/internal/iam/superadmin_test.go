@@ -9,6 +9,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
 func TestTransferSuperAdminHTTP(t *testing.T) {
@@ -73,7 +74,8 @@ func TestTransferSuperAdminHTTP(t *testing.T) {
 }
 
 // RecoverSuperAdmin leaves the target the only holder from any start: no
-// holder, one, or several (what the one-super-admin migration refuses).
+// holder, one, or several (what the one-super-admin migration refuses; set
+// up past its trigger, which then checks the recovery).
 func TestRecoverSuperAdmin(t *testing.T) {
 	for _, holders := range []int{0, 1, 2} {
 		t.Run(strconv.Itoa(holders), func(t *testing.T) {
@@ -153,7 +155,5 @@ func setSuperAdmin(t *testing.T, s *Service, uid int64, on bool) {
 	if on {
 		q = `INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE superuser`
 	}
-	if _, err := s.db.Pool.Exec(context.Background(), q, uid); err != nil {
-		t.Fatal(err)
-	}
+	testutil.ExecWithoutTrigger(t, s.db, "user_roles", "user_roles_one_superuser", q, uid)
 }

@@ -962,6 +962,45 @@ func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	}
 }
 
+// Decision 1: no one but the super admin changes the super admin; an admin,
+// in a session or through an access key, misses the superuser flag.
+func TestAdminCannotModifySuperAdmin(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	root := login.User.ID
+	makeAdmin := map[string]any{"role_keys": []string{authz.RoleAdmin}}
+	if code, out := k.call(login.AccessToken, "PUT", "/users/"+strconv.FormatInt(k.userID, 10)+"/roles", makeAdmin); code != 200 {
+		t.Fatalf("make admin: %d %v", code, out)
+	}
+	session := mustLogin(t, k.s, "key-user@example.com", adminPassword).AccessToken
+	key := k.createKey(t, k.userID, adminPassword, "user:update", "user:delete").Key
+	target := "/users/" + strconv.FormatInt(root, 10)
+	for _, token := range []string{session, key} {
+		for _, r := range []struct {
+			method, path string
+			body         any
+		}{
+			{"PATCH", target, map[string]any{"display_name": "taken"}},
+			{"DELETE", target, nil},
+			{"DELETE", target + "/security", nil},
+			{"PUT", target + "/roles", map[string]any{"role_keys": []string{authz.RoleUser}}},
+		} {
+			if code, out := k.call(token, r.method, r.path, r.body); code != 403 {
+				t.Fatalf("%s %s: %d %v", r.method, r.path, code, out)
+			}
+		}
+	}
+	code, out := k.call(session, "PATCH", target, map[string]any{"display_name": "taken"})
+	details, _ := out["error"].(map[string]any)["details"].(map[string]any)
+	if code != 403 || details["superuser"] != true {
+		t.Fatalf("PATCH denial: %d %v", code, out)
+	}
+	if u, err := k.s.GetUser(ctx, root); err != nil || !slices.Contains(u.Roles, authz.RoleSuperAdmin) || u.DisplayName == "taken" {
+		t.Fatalf("super admin changed: %+v %v", u, err)
+	}
+}
+
 // role:manage was split: the /roles writes need role:define, assigning roles
 // (PUT /users/:id/roles, POST /users with non-default roles) role:assign, and
 // holding one grants nothing of the other.

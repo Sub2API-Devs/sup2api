@@ -121,9 +121,8 @@ func TestTransferSuperAdminRepairs(t *testing.T) {
 	a := addUser(t, s, "a@x.com", RoleSuperAdmin)
 	b := addUser(t, s, "b@x.com", RoleUser)
 	c := addUser(t, s, "c@x.com", RoleUser)
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`, b, roleID(t, s, RoleSuperAdmin)); err != nil {
-		t.Fatal(err)
-	}
+	testutil.ExecWithoutTrigger(t, db, "user_roles", "user_roles_one_superuser",
+		`INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`, b, roleID(t, s, RoleSuperAdmin))
 	demoted, err := transfer(s, 0, b)
 	if err != nil || !slices.Equal(demoted, []int64{a}) || !slices.Equal(superAdminsNow(t, s), []int64{b}) {
 		t.Fatalf("several holders: demoted %v, holders %v, %v", demoted, superAdminsNow(t, s), err)

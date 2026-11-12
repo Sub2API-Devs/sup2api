@@ -632,3 +632,67 @@ func TestRoleAssignableMigrationBackfill(t *testing.T) {
 	require.Equal(t, "false:", assignable("delegator"), "a rerun widened the role again")
 	require.Equal(t, "true:operator,user", assignable("admin"))
 }
+
+// 0098 keeps one super admin (decisions 1 and 2): a soft-deleted holder loses
+// the role, two undeleted holders (whatever their status) stop the
+// migration naming both, and afterwards a second superuser role or holder
+// fails at commit while a transfer, deleting before it inserts, commits.
+func TestOneSuperAdminMigration(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql)
+		require.NoError(t, err)
+	}
+	id := func(email string) (v int64) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, email).Scan(&v))
+		return v
+	}
+	holders := func() []int64 {
+		t.Helper()
+		rows, err := db.Pool.Query(ctx, `SELECT user_id FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.superuser`)
+		require.NoError(t, err)
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		require.NoError(t, err)
+		return ids
+	}
+	migrate := func() ([]string, error) {
+		return store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+	}
+	const grant = `INSERT INTO user_roles (user_id, role_id) SELECT u.id, r.id FROM users u, roles r WHERE r.superuser AND u.email = `
+	exec(`DROP TRIGGER user_roles_one_superuser ON user_roles;
+		DROP FUNCTION user_roles_one_superuser();
+		DROP INDEX roles_one_superuser;
+		DELETE FROM schema_migrations WHERE id = '0098_one_super_admin.sql';
+		INSERT INTO roles (key, name, builtin, superuser) VALUES ('super_admin', '{}', true, true);
+		INSERT INTO users (email, password_hash) VALUES ('a@su', ''), ('b@su', '');
+		INSERT INTO users (email, password_hash, status) VALUES ('disabled@su', '', 'disabled');
+		INSERT INTO users (email, password_hash, deleted_at) VALUES ('deleted@su', '', now());
+		` + grant + `'a@su';` + grant + `'disabled@su';` + grant + `'deleted@su'`)
+
+	_, err := migrate()
+	require.ErrorContains(t, err, fmt.Sprintf("several super admins: %d (a@su), %d (disabled@su);", id("a@su"), id("disabled@su")))
+	require.ErrorContains(t, err, "sub2api admin recover-superadmin --email")
+
+	exec(`DELETE FROM user_roles WHERE user_id = (SELECT id FROM users WHERE email = 'disabled@su')`)
+	done, err := migrate()
+	require.NoError(t, err)
+	require.Equal(t, []string{"0098_one_super_admin.sql"}, done)
+	require.Equal(t, []int64{id("a@su")}, holders(), "the deleted holder kept the role")
+
+	_, err = db.Pool.Exec(ctx, grant+`'b@su'`)
+	require.True(t, store.IsUniqueViolation(err, "user_roles_one_superuser"), "a second holder: %v", err)
+	_, err = db.Pool.Exec(ctx, `INSERT INTO roles (key, name, builtin, superuser) VALUES ('root2', '{}', false, true)`)
+	require.True(t, store.IsUniqueViolation(err, "roles_one_superuser"), "a second superuser role: %v", err)
+
+	require.NoError(t, db.Tx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, grant+`'b@su'`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1`, id("a@su"))
+		return err
+	}), "a transfer, checked at commit")
+	require.Equal(t, []int64{id("b@su")}, holders())
+}
