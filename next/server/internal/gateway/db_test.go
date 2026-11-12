@@ -420,43 +420,50 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 func TestSchedulingSettingsAPIDB(t *testing.T) {
 	e := newDBEnv(t)
 	code, res := e.api("GET", "/settings/scheduling", nil)
-	if code != 200 || res.Get("data").Raw != `{"mode":"default","metric":"rpm","limit_load":false,"model_limits":false}` {
+	if code != 200 || res.Get("data").Raw != `{"mode":"traffic","metric":"sessions","limit_load":false,"model_limits":false}` {
 		t.Fatalf("defaults: %d %s", code, res.Raw)
 	}
 	if sc := e.gw.settings.get(context.Background()).scheduling; sc != defaultSchedulingSettings() { // primes the cache
 		t.Fatalf("cached defaults %+v", sc)
 	}
+	// The mode is not checked: only the metric is.
 	if code, res := e.api("PUT", "/settings/scheduling", map[string]any{"mode": "least", "metric": "tokens"}); code != 400 ||
 		res.Get("error.code").String() != "invalid_argument" || res.Get("error.details.fields.0.code").String() != "invalid" ||
-		res.Get("error.details.fields.0.field").String() != "mode" || res.Get("error.details.fields.1.field").String() != "metric" {
+		res.Get("error.details.fields.0.field").String() != "metric" || res.Get("error.details.fields.#").Int() != 1 {
 		t.Fatalf("invalid: %d %s", code, res.Raw)
 	}
-	if code, res := e.api("PUT", "/settings/scheduling", map[string]any{"metric": "sessions", "model_limits": true}); code != 200 ||
-		res.Get("data.metric").String() != "sessions" {
+	// Whatever mode is sent, "traffic" is stored, and the metric is kept.
+	if code, res := e.api("PUT", "/settings/scheduling", map[string]any{"mode": "default", "metric": "rpm", "model_limits": true}); code != 200 ||
+		res.Get("data.mode").String() != "traffic" || res.Get("data.metric").String() != "rpm" {
 		t.Fatalf("first put: %d %s", code, res.Raw)
 	}
-	if sc := e.gw.settings.get(context.Background()).scheduling; sc.Metric != balanceMetricSessions || !sc.ModelLimits {
+	if sc := e.gw.settings.get(context.Background()).scheduling; sc.Mode != balanceModeTraffic || sc.Metric != balanceMetricRPM || !sc.ModelLimits {
 		t.Fatalf("stored row not served: %+v", sc)
 	}
 	// The row is replaced, not merged: absent fields take their defaults.
-	code, res = e.api("PUT", "/settings/scheduling", map[string]any{"mode": "traffic", "limit_load": true})
-	if code != 200 || res.Get("data.mode").String() != "traffic" || res.Get("data.metric").String() != "rpm" || !res.Get("data.limit_load").Bool() ||
+	code, res = e.api("PUT", "/settings/scheduling", map[string]any{"limit_load": true})
+	if code != 200 || res.Get("data.mode").String() != "traffic" || res.Get("data.metric").String() != "sessions" || !res.Get("data.limit_load").Bool() ||
 		res.Get("data.model_limits").Bool() {
 		t.Fatalf("put: %d %s", code, res.Raw)
 	}
 	sc := e.gw.settings.get(context.Background()).scheduling
-	if sc.Mode != balanceModeTraffic || sc.Metric != balanceMetricRPM || !sc.LimitLoad || sc.ModelLimits {
+	if sc.Mode != balanceModeTraffic || sc.Metric != balanceMetricSessions || !sc.LimitLoad || sc.ModelLimits {
 		t.Fatalf("settings cache not refreshed: %+v", sc)
 	}
+	var mode string
 	var by *int64
-	if err := e.db.Pool.QueryRow(context.Background(), `SELECT updated_by FROM settings WHERE key = 'scheduling'`).Scan(&by); err != nil || by == nil || *by != e.uid {
-		t.Fatalf("updated_by %v %v", by, err)
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT value->>'mode', updated_by FROM settings WHERE key = 'scheduling'`).Scan(&mode, &by); err != nil ||
+		mode != "traffic" || by == nil || *by != e.uid {
+		t.Fatalf("stored mode %q, updated_by %v %v", mode, by, err)
 	}
-	// A hand-edited row with an unknown value reads as the default.
-	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE settings SET value = '{"mode":"x","metric":"tpm"}' WHERE key = 'scheduling'`); err != nil {
+	// A row of the former default mode with the limit load off balances by
+	// sessions, without model limits (TestSchedulingSettingsNormalized has the
+	// other rows).
+	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE settings SET value = '{"mode":"default","metric":"tpm","limit_load":false,"model_limits":true}' WHERE key = 'scheduling'`); err != nil {
 		t.Fatal(err)
 	}
-	if code, res := e.api("GET", "/settings/scheduling", nil); code != 200 || res.Get("data.mode").String() != "default" || res.Get("data.metric").String() != "tpm" {
+	if code, res := e.api("GET", "/settings/scheduling", nil); code != 200 || res.Get("data.mode").String() != "traffic" || res.Get("data.metric").String() != "sessions" ||
+		res.Get("data.model_limits").Bool() {
 		t.Fatalf("normalized: %d %s", code, res.Raw)
 	}
 }
