@@ -187,7 +187,7 @@
 ## 期 1 生产备份验证修复（第 2 轮）
 
 - 改动：
-  - 决策 1：`authz.CanActOnUsers` 只对本人的登录会话免检“作用于自己”；经访问密钥时（`core.ByAccessKey`）密钥主人和其他目标一样比较（密钥收窄后不是超管，也小于主人的角色）。超管自己带 `user:update` 的访问密钥 `PATCH /users/<超管>` 改显示名由 200 变为 403 `you cannot modify a superuser`；非超管的访问密钥经 `/users/:id` 改自己的资料，密钥权限不覆盖主人角色时同样 403（改自己的资料走 `/me` 或登录会话）。
+  - 决策 1：`authz.CanActOnUsers` 只对本人的登录会话免检“作用于自己”；经访问密钥时（`core.ByAccessKey`）密钥主人和其他目标一样比较（密钥收窄后不是超管，也小于主人的角色）。超管自己带 `user:update` 的访问密钥 `PATCH /users/<超管>` 改显示名、带当前密码 `DELETE /users/<超管>/security` 清两步验证与通行密钥，由 200/204 变为 403 `you cannot modify a superuser`（后者在核对密码之前拒绝）；非超管的访问密钥经 `/users/:id` 改自己的资料，密钥权限不覆盖主人角色时同样 403（改自己的资料走 `/me` 或登录会话）。
   - dynweight 原生界面：没有 `group:read` 时不再请求 `GET /groups`（分组名显示 `#id`），没有全量级 `account:read` 时账号列表工具栏的降级标记不再请求 `GET /p/dynweight/degraded`、不显示。own 级用户打开账号页不再出现这两个 403。随 dynweight 重新打包（T84 升版本）生效。
 - 发布前提（T25/T84）：codex、dynweight、volcengine 的 manifest 改了路由的 `accounts` 但没有升版本。生产库已按 codex 0.1.3、dynweight 0.5.7、volcengine 0.12.6 存了旧 manifest，内置安装器遇到同版本不同内容会保留已存的行，registry 从库里的 manifest 读路由，所以不升版本上线时这三个插件路由的账号归属检查不生效（核心逻辑已在备份实例上用新 manifest 验证通过）。期 1 单独上线时必须先做 T84 的版本升级。
 - 滚动升级与回滚（无代码改动，按此操作）：

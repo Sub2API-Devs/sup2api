@@ -912,6 +912,10 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 	if code, out := k.call(login.AccessToken, "PATCH", self, map[string]any{"display_name": "x"}); code != 200 {
 		t.Fatalf("session PATCH itself: %d %v", code, out)
 	}
+	// Nor its factors, proof of the sign-in notwithstanding.
+	if code, out := k.call(key.Key, "DELETE", self+"/security", map[string]any{"current_password": adminPassword}); code != 403 {
+		t.Fatalf("key DELETE its superuser's security: %d %v", code, out)
+	}
 	for _, p := range []struct{ method, path string }{{"GET", "/permissions"}, {"DELETE", "/users/" + strconv.FormatInt(k.userID, 10)}} {
 		if code, _ := k.call(key.Key, p.method, p.path, nil); code != 403 {
 			t.Fatalf("%s %s: %d", p.method, p.path, code)
