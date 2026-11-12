@@ -15,7 +15,7 @@ import PermissionTree from './PermissionTree.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
-const canManage = computed(() => auth.has('role:manage'))
+const canManage = computed(() => auth.has('role:define'))
 
 const roles = ref<RoleRow[]>([])
 const modules = ref<PermissionModule[]>([])
@@ -229,7 +229,7 @@ async function restoreDefaults() {
   <div>
     <SPageHeader :title="t('roles.title')" :description="t('roles.description')">
       <template #actions>
-        <SButton v-permission="'role:manage'" variant="primary" icon="plus" @click="openCreate">{{ t('roles.create') }}</SButton>
+        <SButton v-permission="'role:define'" variant="primary" icon="plus" @click="openCreate">{{ t('roles.create') }}</SButton>
       </template>
     </SPageHeader>
 

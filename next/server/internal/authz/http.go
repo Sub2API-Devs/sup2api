@@ -14,11 +14,11 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.AuthedRead("/me/menus", s.handleMenus)
 	r.Perm(http.MethodGet, "/roles", "role:read", s.handleListRoles)
 	r.Perm(http.MethodGet, "/roles/:id", "role:read", s.handleGetRole)
-	r.Perm(http.MethodPost, "/roles", "role:manage", s.handleCreateRole)
-	r.Perm(http.MethodPatch, "/roles/:id", "role:manage", s.handleUpdateRole)
-	r.Perm(http.MethodDelete, "/roles/:id", "role:manage", s.handleDeleteRole)
-	r.Perm(http.MethodPut, "/roles/:id/permissions", "role:manage", s.handleSetRolePermissions)
-	r.Perm(http.MethodPost, "/roles/:id/reset", "role:manage", s.handleResetRole)
+	r.Perm(http.MethodPost, "/roles", "role:define", s.handleCreateRole)
+	r.Perm(http.MethodPatch, "/roles/:id", "role:define", s.handleUpdateRole)
+	r.Perm(http.MethodDelete, "/roles/:id", "role:define", s.handleDeleteRole)
+	r.Perm(http.MethodPut, "/roles/:id/permissions", "role:define", s.handleSetRolePermissions)
+	r.Perm(http.MethodPost, "/roles/:id/reset", "role:define", s.handleResetRole)
 	r.Perm(http.MethodGet, "/permissions", "role:read", s.handleListPermissions)
 }
 

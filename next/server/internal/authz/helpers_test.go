@@ -78,13 +78,13 @@ func TestCanGrant(t *testing.T) {
 func TestCoversSuperuser(t *testing.T) {
 	s := &Service{
 		users: map[int64]core.PermissionSet{
-			1: {Keys: map[string]struct{}{"role:manage": {}}, Version: 1},
+			1: {Keys: map[string]struct{}{"role:assign": {}}, Version: 1},
 			2: {Superuser: true, Version: 1},
 		},
 		minVersion: 1,
 	}
 	want := core.PermissionSet{Superuser: true, Keys: map[string]struct{}{}}
-	keyed := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 2, Permissions: []string{"role:manage"}})
+	keyed := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 2, Permissions: []string{"role:assign"}})
 	tests := []struct {
 		name    string
 		ctx     context.Context

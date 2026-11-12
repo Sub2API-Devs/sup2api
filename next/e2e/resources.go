@@ -38,7 +38,7 @@ func (e *Env) CreateUser(admin *Session, u UserSpec) *Session {
 	if u.Roles == nil {
 		u.Roles = []string{"user"}
 	}
-	// Assigning a non-default role at creation needs role:manage.
+	// Assigning a non-default role at creation needs role:assign.
 	d := admin.OK(e.T, http.MethodPost, "/users", map[string]any{
 		"email": u.Email, "display_name": u.DisplayName, "password": u.Password,
 		"role_keys": u.Roles,

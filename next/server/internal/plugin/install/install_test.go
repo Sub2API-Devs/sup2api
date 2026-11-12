@@ -240,11 +240,13 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 
 	// Success; net (optional) narrowed then denied is fine: grant with narrower scope.
 	grants := append(explicitGuardGrants(), GrantInput{Permission: "net", Scope: map[string]any{"domains": []any{}}})
-	// Handing the new plugin permissions to roles needs role:manage (SEC-H2).
+	// Handing the new plugin permissions to roles needs role:define (SEC-H2);
+	// role:assign alone is not enough.
+	e.authz.perms[e.admin]["role:assign"] = true
 	if _, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: grants, RoleKeysForNewPermissions: []string{"admin"}}, e.admin); core.AsError(err).Code != "permission_denied" {
-		t.Fatalf("role grant without role:manage: %v", err)
+		t.Fatalf("role grant without role:define: %v", err)
 	}
-	e.authz.perms[e.admin]["role:manage"] = true
+	e.authz.perms[e.admin]["role:define"] = true
 	res, err := e.svc.Consent(ctx, "guard", "0.1.0", ConsentRequest{Grants: grants, RoleKeysForNewPermissions: []string{"admin"}}, e.admin)
 	if err != nil {
 		t.Fatalf("consent: %v", err)
@@ -313,8 +315,8 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 		t.Fatalf("upgrade consent without events: %v", err)
 	}
 	// Carried-over grants need no critical right; events is medium. 0.2.0
-	// adds a user permission, and handing it to a role needs role:manage.
-	e.authz.perms[e.limited]["role:manage"] = true
+	// adds a user permission, and handing it to a role needs role:define.
+	e.authz.perms[e.limited]["role:define"] = true
 	res, err = e.svc.Consent(ctx, "guard", "0.2.0", ConsentRequest{Grants: []GrantInput{{Permission: "events"}}, RoleKeysForNewPermissions: []string{"admin"}}, e.limited)
 	if err != nil {
 		t.Fatalf("upgrade consent: %v", err)

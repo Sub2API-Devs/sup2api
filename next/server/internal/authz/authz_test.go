@@ -500,8 +500,9 @@ func TestRoleManagement(t *testing.T) {
 	}
 }
 
-// An actor with role:manage can only hand out permissions it holds itself,
-// whether by creating a role or by assigning one (to anyone, itself included).
+// An actor with role:define or role:assign can only hand out permissions it
+// holds itself, whether by creating a role or by assigning one (to anyone,
+// itself included).
 func TestRoleGrantEscalation(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)

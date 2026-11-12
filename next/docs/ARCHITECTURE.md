@@ -1405,7 +1405,7 @@ flowchart TD
 | 模块 | 权限 |
 |---|---|
 | 用户 | `user:read` `user:create` `user:update` `user:delete` |
-| 角色 | `role:read` `role:manage` |
+| 角色 | `role:read` `role:define` `role:assign` |
 | API Key | `apikey:self:manage` `apikey:all:read` `apikey:all:manage` |
 | 分组 | `group:read` `group:manage` |
 | 用户组 | `segment:read` `segment:manage`（7.1，CONTRACTS §97.7） |

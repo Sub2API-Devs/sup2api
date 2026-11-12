@@ -50,7 +50,9 @@ var coreModules = []coreModule{
 	}},
 	{"role", lt("Roles", "角色"), []corePerm{
 		{key: "role:read", en: "View roles and permissions", zh: "查看角色与权限"},
-		{key: "role:manage", en: "Manage roles and assignments", zh: "管理角色与分配", sensitive: true},
+		// role:manage was split in two; its holders keep both halves.
+		{key: "role:define", en: "Define roles", zh: "定义角色", sensitive: true, inherits: []string{"role:manage"}},
+		{key: "role:assign", en: "Assign roles to users", zh: "给用户分配角色", sensitive: true, inherits: []string{"role:manage"}},
 	}},
 	{"apikey", lt("API keys", "API Key"), []corePerm{
 		{key: "apikey:self:manage", en: "Manage own API keys", zh: "管理自己的 API Key"},

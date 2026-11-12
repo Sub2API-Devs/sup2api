@@ -80,7 +80,7 @@
 | 模块 | 权限 |
 |---|---|
 | user | `user:read` `user:create` `user:update` `user:delete`🔐 `user:password:reset`🔐 |
-| role | `role:read` `role:manage`🔐 |
+| role | `role:read` `role:define`🔐 `role:assign`🔐（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色；升级时持有 `role:manage` 的角色同时获得两者，`role:manage` 标为 removed） |
 | group | `group:read` `group:manage` |
 | segment | `segment:read` `segment:manage`（用户组，§97.7） |
 | account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（§21）`account:group:bind` `account:relay` |
@@ -117,19 +117,19 @@
 | 方法 路径 | 权限 |
 |---|---|
 | GET `/users`（`?q=&status=&role=&segment=`） | `user:read`；`segment` 是用户组 id 或 `personal`（§97.6） |
-| POST `/users` `{email, display_name, password, role_keys[], segment_id?}` | `user:create`；授予的 role_keys 必须是操作者持有权限的子集；指定非默认角色另需 `role:manage`；带 `segment_id`（命名用户组）另需 `segment:manage`，不带时进默认用户组（§97.6） |
+| POST `/users` `{email, display_name, password, role_keys[], segment_id?}` | `user:create`；授予的 role_keys 必须是操作者持有权限的子集；指定非默认角色另需 `role:assign`；带 `segment_id`（命名用户组）另需 `segment:manage`，不带时进默认用户组（§97.6） |
 | GET/PATCH `/users/:id` | `user:read` / `user:update`；更新他人时目标用户权限集不得超出操作者；修改他人密码需 `user:password:reset`🔐；修改影响认证的字段（密码、status、禁用）会递增 `token_version` 使旧 token 失效 |
 | DELETE `/users/:id` | `user:delete`；目标用户权限集不得超出操作者 |
-| PUT `/users/:id/roles` `{role_keys[]}` | `role:manage`；新增的 role_keys 所含权限必须是操作者持有权限的子集（给自己分配也一样，否则 403 `details.missing`）；只有超级管理员能授予/撤销 `super_admin` |
+| PUT `/users/:id/roles` `{role_keys[]}` | `role:assign`；新增的 role_keys 所含权限必须是操作者持有权限的子集（给自己分配也一样，否则 403 `details.missing`）；只有超级管理员能授予/撤销 `super_admin` |
 | GET `/segments`（`?q=&kind=named\|personal`），GET `/segments/:id` | `segment:read`；用户组，对象与各接口的细节见 §97.6 |
 | POST `/segments` `{name, description, discount}`，PATCH/DELETE `/segments/:id` | `segment:manage`；默认用户组和个人专属不能用 DELETE 删除（409） |
 | GET `/segments/:id/members`（`?q=`） | `segment:read` 且 `user:read`；行同 GET `/users` |
 | POST `/segments/:id/members` `{user_ids[]}` → `{moved}` | `segment:manage`；把用户移入命名用户组 |
 | GET `/segments/:id/groups`，PUT `/segments/:id/groups` `{items:[{group_id, granted?, rate_override?}]}` | `segment:read` / `segment:manage`；用户组在各分组的授权与专属倍率 |
 | POST `/users/:id/personal-segment` `{copy}`，DELETE `/users/:id/personal-segment`（`?to=`） | `segment:manage`；设为个人专属 / 移回命名用户组 |
-| GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:manage`；POST 授予的 permission_keys 必须是操作者持有权限的子集 |
-| PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:manage`；授予的 permission_keys 必须是操作者持有权限的子集 |
-| POST `/roles/:id/reset` | `role:manage`；内置角色恢复默认（§15.7） |
+| GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:define`；POST 授予的 permission_keys 必须是操作者持有权限的子集 |
+| PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:define`；授予的 permission_keys 必须是操作者持有权限的子集 |
+| POST `/roles/:id/reset` | `role:define`；内置角色恢复默认（§15.7） |
 | GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,session_only,status}]}]`（`session_only`：只能由会话使用，访问密钥不能带） |
 
 原来的 GET / PUT `/users/:id/groups`（给单个用户分配分组）已删除：私有分组改为授权给用户组，每个用户只属于一个用户组（§97）。
@@ -685,11 +685,11 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 |---|---|---|---|
 | GET `/roles` | `role:read` | | 不分页，内置在前 |
 | GET `/roles/:id` | `role:read` | | 不存在 404 |
-| POST `/roles` | `role:manage` | `{key, name, description?, permission_keys?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`） |
-| PATCH `/roles/:id` | `role:manage` | `{name?, description?}` | 内置角色也可改名称和描述；给了 `name` 时 `name.en` 不能为空 |
-| DELETE `/roles/:id` | `role:manage` | | 内置角色 409；用户的该角色随之删除 |
-| PUT `/roles/:id/permissions` | `role:manage` | `{permission_keys}` | 整体替换；超级管理员角色 409；已移除（`status=removed`）的权限视为未知 |
-| POST `/roles/:id/reset` | `role:manage` | | 内置角色恢复默认：名称、描述和核心权限（§4）；角色上的插件权限不动；超级管理员只恢复名称和描述；自定义角色 409；操作者须持有全部默认权限（同上，否则 403） |
+| POST `/roles` | `role:define` | `{key, name, description?, permission_keys?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`） |
+| PATCH `/roles/:id` | `role:define` | `{name?, description?}` | 内置角色也可改名称和描述；给了 `name` 时 `name.en` 不能为空 |
+| DELETE `/roles/:id` | `role:define` | | 内置角色 409；用户的该角色随之删除 |
+| PUT `/roles/:id/permissions` | `role:define` | `{permission_keys}` | 整体替换；超级管理员角色 409；已移除（`status=removed`）的权限视为未知 |
+| POST `/roles/:id/reset` | `role:define` | | 内置角色恢复默认：名称、描述和核心权限（§4）；角色上的插件权限不动；超级管理员只恢复名称和描述；自定义角色 409；操作者须持有全部默认权限（同上，否则 403） |
 
 ### 15.8 插件设置与前端扩展（`plugin/api/settings.go`、`plugin/api/ui.go`）
 
@@ -2719,7 +2719,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 修改、禁用、删除其他用户（`CanActOnUser`、`CanActOn`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。
 - 两类检查都比较超管标志（`core.PermissionSet.Missing`）：缺超管标志时 403 带 `details.superuser = true`。访问密钥收窄后的权限集永远不是超管，所以超管的访问密钥不能授予 `super_admin`（2026-11-12 修正 H1：之前授予检查只比权限 key，超管角色不含 key，带 `role:manage` 的超管密钥可以授予 `super_admin`）。
 - 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
-- 插件安装、升级的授权确认（consent）：只有插件声明的权限里**有核心还没有的新权限**时，才需要 `role:manage` 并对这些新权限做 `CanGrant`。升级不新增权限时只需要插件管理权限。2026-10-05 修正：之前每次安装、升级都要求 `role:manage`。
+- 插件安装、升级的授权确认（consent）：只有插件声明的权限里**有核心还没有的新权限**时，才需要 `role:define` 并对这些新权限做 `CanGrant`。升级不新增权限时只需要插件管理权限。2026-10-05 修正：之前每次安装、升级都要求 `role:manage`。
 
 ### 43.7 迁移从 0026 起必须可重跑
 

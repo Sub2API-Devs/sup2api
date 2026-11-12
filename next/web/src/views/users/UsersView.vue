@@ -110,7 +110,7 @@ const roleOptions = computed(() => [
 function rowActions(u: User): MenuAction[] {
   return [
     { key: 'edit', label: t('common.edit'), hidden: !auth.has('user:update') },
-    { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:manage') },
+    { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:assign') },
     { key: 'pricing', label: t('users.pricing.action'), hidden: !auth.has('segment:read') },
     { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
     { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:update') || u.id === auth.me?.id },

@@ -377,11 +377,11 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 }
 
 // checkRoleGrantRights verifies the operator may hand the plugin permissions
-// this version adds to roles (SEC-H2): role:manage, and holding each of them.
+// this version adds to roles (SEC-H2): role:define, and holding each of them.
 // Only permissions the catalog does not have yet are handed out (authz
 // SyncPlugin), so an upgrade adding none needs neither - the console always
 // sends its default role, and carrying a running plugin forward must not
-// require role:manage.
+// require role:define.
 func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, roleKeys []string) error {
 	if isSystem(ctx) || len(roleKeys) == 0 || len(m.UserPermissions) == 0 {
 		return nil
@@ -398,12 +398,12 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 	if len(perms) == 0 {
 		return nil
 	}
-	ok, err := s.d.Authz.Can(ctx, actorID, "role:manage")
+	ok, err := s.d.Authz.Can(ctx, actorID, "role:define")
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return core.ErrPermissionDenied.WithMessage("granting permissions to roles requires role:manage")
+		return core.ErrPermissionDenied.WithMessage("granting permissions to roles requires role:define")
 	}
 	// Actor must hold all permissions being granted to roles
 	if err := s.d.Authz.CanGrant(ctx, actorID, perms); err != nil {

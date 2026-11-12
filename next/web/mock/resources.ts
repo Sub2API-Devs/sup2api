@@ -43,7 +43,8 @@ const MODULES: ModuleDef[] = [
   { module: 'segment', label: L('User groups', '用户组'), source: 'core', status: 'active', permissions: [
     { key: 'segment:read', label: L('View', '查看') }, { key: 'segment:manage', label: L('Manage', '管理') }] },
   { module: 'role', label: L('Roles', '角色'), source: 'core', status: 'active', permissions: [
-    { key: 'role:read', label: L('View', '查看') }, { key: 'role:manage', label: L('Manage', '管理'), sensitive: true }] },
+    { key: 'role:read', label: L('View', '查看') }, { key: 'role:define', label: L('Define', '定义'), sensitive: true },
+    { key: 'role:assign', label: L('Assign', '分配'), sensitive: true }] },
   { module: 'apikey', label: L('API keys', 'API Key'), source: 'core', status: 'active', permissions: [
     { key: 'apikey:self:manage', label: L('Manage own', '管理自己的') }] },
   { module: 'group', label: L('Groups', '分组'), source: 'core', status: 'active', permissions: [

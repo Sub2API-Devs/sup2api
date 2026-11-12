@@ -34,9 +34,9 @@ watch(
   }
 )
 
-/** Without role:manage only the default "user" role can be given at creation. */
+/** Without role:assign only the default "user" role can be given at creation. */
 function roleSelectable(key: string) {
-  return auth.has('role:manage') || key === 'user'
+  return auth.has('role:assign') || key === 'user'
 }
 
 function toggleKey(listRef: string[], key: string) {

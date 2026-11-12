@@ -5,7 +5,7 @@ import { fail, now, on, type MockRequest } from './router'
 export const ALL_PERMISSIONS = [
   'user:read', 'user:create', 'user:update', 'user:delete',
   'segment:read', 'segment:manage',
-  'role:read', 'role:manage',
+  'role:read', 'role:define', 'role:assign',
   'apikey:self:manage',
   'group:read', 'group:manage',
   'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'account:credential:view',

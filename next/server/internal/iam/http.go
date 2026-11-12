@@ -29,7 +29,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodGet, "/users/:id", "user:read", s.handleGetUser)
 	r.Perm(http.MethodPatch, "/users/:id", "user:update", s.handleUpdateUser)
 	r.Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
-	r.Perm(http.MethodPut, "/users/:id/roles", "role:manage", s.handleSetUserRoles)
+	r.Perm(http.MethodPut, "/users/:id/roles", "role:assign", s.handleSetUserRoles)
 	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers)
 	s.registerSecurityRoutes(r)
 }
@@ -203,17 +203,9 @@ func (s *Service) handleCreateUser(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid := actor(c)
 	// Choosing roles other than the default is a role assignment: it needs
-	// role:manage as well.
-	if !IsDefaultRoles(in.RoleKeys) {
-		ok, err := s.authz.Can(ctx, uid, "role:manage")
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		if !ok {
-			httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": "role:manage"}))
-			return
-		}
+	// role:assign as well.
+	if !IsDefaultRoles(in.RoleKeys) && !httpapi.CanAny(c, s.authz, "role:assign") {
+		return
 	}
 	// Choosing the segment is a segment assignment: it needs segment:manage
 	// as well.

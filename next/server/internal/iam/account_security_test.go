@@ -924,14 +924,14 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 	}
 }
 
-// H1: a superuser's access key holding role:manage and user:create is no
+// H1: a superuser's access key holding role:assign and user:create is no
 // superuser, so it cannot hand out the super admin role; the superuser's own
 // session still can.
 func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
-	key := k.createKey(t, login.User.ID, adminPassword, "role:manage", "user:create")
+	key := k.createKey(t, login.User.ID, adminPassword, "role:assign", "user:create")
 	// A target without roles, so acting on it needs nothing.
 	if _, err := k.s.db.Pool.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1`, k.userID); err != nil {
 		t.Fatal(err)
@@ -954,6 +954,60 @@ func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	if code, out := k.call(login.AccessToken, "POST", "/users", create("jwt-super@example.com")); code != 201 {
 		t.Fatalf("session POST users: %d %v", code, out)
 	}
+}
+
+// role:manage was split: the /roles writes need role:define, assigning roles
+// (PUT /users/:id/roles, POST /users with non-default roles) role:assign, and
+// holding one grants nothing of the other.
+func TestRoleRoutesSplitDefineAndAssign(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	newUser := func(email string) int64 {
+		t.Helper()
+		u, err := k.s.CreateUser(ctx, 0, CreateUserInput{Email: email, DisplayName: "x", Password: adminPassword})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.ID
+	}
+	k.grantRole(t, k.userID, "definer", "role:define", "user:create")
+	k.grantRole(t, newUser("assigner@example.com"), "assigner", "role:assign", "user:create")
+	target := newUser("target@example.com")
+	if _, err := k.s.db.Pool.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1`, target); err != nil {
+		t.Fatal(err)
+	}
+	k.bump(t)
+	definer := mustLogin(t, k.s, "key-user@example.com", adminPassword).AccessToken
+	assigner := mustLogin(t, k.s, "assigner@example.com", adminPassword).AccessToken
+	call := func(token, method, path string, body any, want int, perm string) map[string]any {
+		t.Helper()
+		code, out := k.call(token, method, path, body)
+		e, _ := out["error"].(map[string]any)
+		details, _ := e["details"].(map[string]any)
+		if code != want || (perm != "" && details["permission"] != perm) {
+			t.Fatalf("%s %s: %d %v, want %d %s", method, path, code, out, want, perm)
+		}
+		return out
+	}
+	created := call(definer, "POST", "/roles", map[string]any{"key": "split_probe", "name": map[string]string{"en": "Probe"}}, 201, "")
+	role := "/roles/" + strconv.FormatInt(int64(created["data"].(map[string]any)["id"].(float64)), 10)
+	for _, r := range []struct{ method, path string }{
+		{"POST", "/roles"}, {"PATCH", role}, {"DELETE", role}, {"PUT", role + "/permissions"}, {"POST", role + "/reset"},
+	} {
+		call(assigner, r.method, r.path, map[string]any{}, 403, "role:define")
+	}
+	call(definer, "PATCH", role, map[string]any{"name": map[string]string{"en": "Probe 2"}}, 200, "")
+
+	assign := map[string]any{"role_keys": []string{"split_probe"}}
+	roles := "/users/" + strconv.FormatInt(target, 10) + "/roles"
+	call(definer, "PUT", roles, assign, 403, "role:assign")
+	call(assigner, "PUT", roles, assign, 200, "")
+	create := func(email string, roleKeys ...string) map[string]any {
+		return map[string]any{"email": email, "display_name": "x", "password": adminPassword, "role_keys": roleKeys}
+	}
+	call(definer, "POST", "/users", create("by-definer@example.com", "split_probe"), 403, "role:assign")
+	call(definer, "POST", "/users", create("plain@example.com"), 201, "")
+	call(assigner, "POST", "/users", create("by-assigner@example.com", "split_probe"), 201, "")
 }
 
 func TestAccessKeyCannotManageSignIn(t *testing.T) {
@@ -1058,7 +1112,7 @@ func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
 			seen[p.Key] = true
 		}
 	}
-	if !seen["user:read"] || seen["user:delete"] || seen["role:manage"] {
+	if !seen["user:read"] || seen["user:delete"] || seen["role:assign"] {
 		t.Fatalf("catalog = %v", seen)
 	}
 	// A plugin permission cannot be chosen: plugin routes do not take keys.
