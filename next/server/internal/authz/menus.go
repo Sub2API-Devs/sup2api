@@ -62,10 +62,11 @@ var coreMenus = []coreMenuSection{
 		{"usage-overview", lt("Site overview", "全站概览"), "chart", "/usage/overview", []string{"usage:all:read"}},
 		{"usage", lt("Site usage logs", "全站日志"), "usage", "/usage", []string{"usage:all:read"}},
 	}},
-	// Accounts and the proxies they go out through.
+	// Accounts and the proxies they go out through, each for the keys of its
+	// list endpoint (GET /accounts, GET /proxies).
 	{"gateway", lt("Gateway", "网关"), []coreMenuItem{
-		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read", "account:own:read", "account:own:create"}},
-		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}},
+		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read", "account:own:read"}},
+		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read"}},
 	}},
 	// No core items: request guards and moderation are plugins and join it.
 	{"security", lt("Security", "安全"), nil},

@@ -18,6 +18,7 @@ vi.mock('@/views/settings/SettingsView.vue', () => Page)
 vi.mock('@/views/groups/GroupsView.vue', () => Page)
 vi.mock('@/views/prices/PricesView.vue', () => Page)
 vi.mock('@/views/accounts/AccountsView.vue', () => Page)
+vi.mock('@/views/proxies/ProxiesView.vue', () => Page)
 vi.mock('@/views/plugins/PluginSettingsView.vue', () => Page)
 vi.mock('@/views/ccgateway/CCGatewayView.vue', () => Page)
 vi.mock('@/views/errors/ForbiddenView.vue', () => Page)
@@ -163,6 +164,20 @@ describe('links to plugin settings as a tab', () => {
   it('leave the configuration pages where they are', async () => {
     expect(await follow('/settings?tab=sticky')).toBe('/settings?tab=sticky')
     expect(await follow('/sticky')).toBe('/settings?tab=sticky')
+  })
+})
+
+describe('the accounts and proxies pages', () => {
+  beforeEach(() => follow('/forbidden'))
+
+  it('open for the keys of their lists, not for the create keys alone', async () => {
+    auth.denied = ['account:read', 'proxy:read']
+    expect(await follow('/accounts')).toBe('/accounts')
+    expect(await follow('/proxies')).toBe('/proxies')
+    // account:own:create and proxy:own:manage are still held.
+    auth.denied.push('account:own:read', 'proxy:own:read')
+    expect(await follow('/accounts')).toMatch(/^\/forbidden\?perm=/)
+    expect(await follow('/proxies')).toMatch(/^\/forbidden\?perm=/)
   })
 })
 

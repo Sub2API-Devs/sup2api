@@ -29,10 +29,10 @@ export const PROXY_KEYS = {
   manage: ['proxy:manage', 'proxy:own:manage']
 } as const satisfies Record<string, readonly [string, string]>
 
-/** Any of these opens the accounts page (menus, routes). */
-export const ACCOUNT_PAGE_PERMS = ['account:read', 'account:own:read', 'account:own:create']
-/** Any of these opens the proxies page. */
-export const PROXY_PAGE_PERMS = ['proxy:read', 'proxy:own:read', 'proxy:own:manage']
+/** Any of these opens the accounts page (menus, routes): the keys of its list, GET /accounts. */
+export const ACCOUNT_PAGE_PERMS: string[] = [...ACCOUNT_KEYS.read]
+/** Any of these opens the proxies page: the keys of GET /proxies. */
+export const PROXY_PAGE_PERMS: string[] = [...PROXY_KEYS.read]
 
 export function useOwnership() {
   const auth = useAuthStore()

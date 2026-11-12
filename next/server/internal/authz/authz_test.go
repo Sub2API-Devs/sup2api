@@ -830,6 +830,17 @@ func TestMenus(t *testing.T) {
 		t.Fatalf("vendor menus = %s", got)
 	}
 
+	// The menus follow the list endpoints: the create keys alone, which
+	// GET /accounts and GET /proxies refuse, open neither page.
+	role, err = s.CreateRole(ctx, admin, CreateRoleInput{Key: "creator", Name: core.LocalizedText{"en": "Creator"},
+		PermissionKeys: []string{"account:own:create", "proxy:own:manage"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sectionPaths(t, s, addUser(t, s, "c@x.com", role.Key), "gateway"); got != "" {
+		t.Fatalf("creator gateway = %s", got)
+	}
+
 	// One page of the settings view alone opens its entry and nothing else of
 	// system: sticky sessions, or groups or model prices, which the operator
 	// role has without any settings permission.
@@ -925,12 +936,12 @@ func TestOwnershipCatalog(t *testing.T) {
 			menuKeys[it.id] = join(it.anyOf)
 		}
 	}
-	if menuKeys["accounts"] != "account:read,account:own:read,account:own:create" ||
-		menuKeys["proxies"] != "proxy:read,proxy:own:read,proxy:own:manage" {
+	if menuKeys["accounts"] != "account:read,account:own:read" ||
+		menuKeys["proxies"] != "proxy:read,proxy:own:read" {
 		t.Fatalf("menus: %v", menuKeys)
 	}
-	set := core.PermissionSet{Keys: map[string]struct{}{"proxy:own:manage": {}}}
-	if !hasAny(set, []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}) || hasAny(set, []string{"proxy:read"}) {
+	set := core.PermissionSet{Keys: map[string]struct{}{"proxy:own:read": {}}}
+	if !hasAny(set, []string{"proxy:read", "proxy:own:read"}) || hasAny(set, []string{"proxy:read"}) {
 		t.Fatal("hasAny")
 	}
 }
