@@ -266,3 +266,183 @@ func TestDeleteRoleRevokes(t *testing.T) {
 		t.Fatalf("definer deletes a role it may assign: %v", err)
 	}
 }
+
+// PUT /roles/:id/assignable: the super admin role is frozen, keys must exist
+// and not name it, and the actor must be able to assign what is added.
+func TestSetRoleAssignable(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
+	for _, key := range []string{"definer", "team"} {
+		if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt(key, key),
+			PermissionKeys: []string{"role:define", "user:read"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	letAssign(t, s, "definer", RoleUser)
+	definer := addUser(t, s, "definer@x.com", "definer")
+	teamID := roleID(t, s, "team")
+	set := func(actor, id int64, custom bool, keys ...string) (*Role, error) {
+		return s.SetRoleAssignable(ctx, actor, id, AssignableInput{RoleKeys: keys, AssignCustom: custom})
+	}
+
+	r, err := set(root, teamID, false, RoleUser, RoleOperator, RoleUser)
+	if err != nil || !slices.Equal(r.AssignableRoleKeys, []string{RoleOperator, RoleUser}) || r.AssignCustom {
+		t.Fatalf("root sets team: %+v %v", r, err)
+	}
+	var audited string
+	if err := db.Pool.QueryRow(ctx, `SELECT detail::text FROM audit_logs WHERE action = 'role.assignable' AND user_id = $1 AND target_id = $2`,
+		root, fmt.Sprint(teamID)).Scan(&audited); err != nil || audited != `{"added": ["operator", "user"], "role_keys": ["operator", "user"], "assign_custom": false}` {
+		t.Fatalf("audit %s: %v", audited, err)
+	}
+
+	if _, err := set(root, roleID(t, s, RoleSuperAdmin), false, RoleUser); !isCode(err, "conflict") {
+		t.Fatalf("super_admin role: %v", err)
+	}
+	for _, keys := range [][]string{{RoleUser, RoleSuperAdmin}, {"nobody"}} {
+		if _, err := set(root, teamID, false, keys...); !isCode(err, "invalid_argument") {
+			t.Fatalf("list %v: %v", keys, err)
+		}
+	}
+
+	// The definer assigns user only: it may keep or drop what team has
+	// within it, never add operator or every custom role.
+	if _, err := set(root, teamID, false, RoleUser); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := set(definer, teamID, false, RoleUser, RoleOperator); !isCode(err, "permission_denied") ||
+		!slices.Equal(detail(err, "missing_assignable").([]string), []string{RoleOperator}) {
+		t.Fatalf("definer adds operator: %v", err)
+	}
+	if _, err := set(definer, teamID, true, RoleUser); !isCode(err, "permission_denied") || detail(err, "missing_assign_custom") != true {
+		t.Fatalf("definer adds every custom role: %v", err)
+	}
+	if r, err := set(definer, teamID, false); err != nil || len(r.AssignableRoleKeys) != 0 {
+		t.Fatalf("definer drops user: %+v %v", r, err)
+	}
+	if _, err := set(definer, roleID(t, s, RoleAdmin), false); !isCode(err, "permission_denied") {
+		t.Fatalf("definer edits admin: %v", err)
+	}
+
+	// The admin assigns every custom role but not admin.
+	if _, err := set(admin, teamID, true, RoleAdmin); !isCode(err, "permission_denied") ||
+		!slices.Equal(detail(err, "missing_assignable").([]string), []string{RoleAdmin}) {
+		t.Fatalf("admin adds admin: %v", err)
+	}
+	if r, err := set(admin, teamID, true, RoleOperator); err != nil || !r.AssignCustom {
+		t.Fatalf("admin sets team: %+v %v", r, err)
+	}
+	if keys, custom := assignableOf(t, s, "team"); !slices.Equal(keys, []string{"definer", RoleOperator, "team"}) || !custom {
+		t.Fatalf("team grants %v custom %v", keys, custom)
+	}
+}
+
+// POST /roles takes the assignable list under the same rule.
+func TestCreateRoleAssignable(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
+	create := func(key string, custom bool, keys ...string) (*Role, error) {
+		return s.CreateRole(ctx, admin, CreateRoleInput{Key: key, Name: lt(key, key),
+			PermissionKeys: []string{"user:read"}, AssignableRoleKeys: keys, AssignCustom: custom})
+	}
+	if _, err := create("admin_maker", false, RoleAdmin); !isCode(err, "permission_denied") ||
+		!slices.Equal(detail(err, "missing_assignable").([]string), []string{RoleAdmin}) {
+		t.Fatalf("admin creates an admin assigner: %v", err)
+	}
+	if _, err := create("root_maker", false, RoleSuperAdmin); !isCode(err, "invalid_argument") {
+		t.Fatalf("admin creates a super admin assigner: %v", err)
+	}
+	r, err := create("lead", true, RoleUser, RoleOperator)
+	if err != nil || !slices.Equal(r.AssignableRoleKeys, []string{RoleOperator, RoleUser}) || !r.AssignCustom {
+		t.Fatalf("admin creates lead: %+v %v", r, err)
+	}
+}
+
+// GET /me/assignable-roles lists the caller's assignable roles with whether
+// it may grant each; an access key assigns nothing.
+func TestAssignableRoles(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name) VALUES ('admin_maker', '{"en":"x"}')`); err != nil {
+		t.Fatal(err)
+	}
+	letAssign(t, s, "admin_maker", RoleAdmin)
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
+	operator := addUser(t, s, "op@x.com", RoleOperator)
+
+	type row struct {
+		key       string
+		grantable bool
+	}
+	rowsOf := func(ctx context.Context, actor int64) []row {
+		t.Helper()
+		roles, err := s.AssignableRoles(ctx, actor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []row{}
+		for _, r := range roles {
+			out = append(out, row{r.Key, r.Grantable})
+		}
+		return out
+	}
+	tests := []struct {
+		name  string
+		ctx   context.Context
+		actor int64
+		want  []row
+	}{
+		{"root", ctx, root, []row{{RoleAdmin, true}, {RoleOperator, true}, {RoleUser, true}, {"admin_maker", true}}},
+		{"admin", ctx, admin, []row{{RoleOperator, true}, {RoleUser, true}, {"admin_maker", false}}},
+		{"operator", ctx, operator, []row{{RoleUser, true}}},
+		{"admin key", core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: admin, Permissions: []string{"role:assign", "user:read"}}), admin, []row{}},
+		{"root key", core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"user:read"}}), root, []row{}},
+	}
+	for _, tt := range tests {
+		if got := rowsOf(tt.ctx, tt.actor); !slices.Equal(got, tt.want) {
+			t.Errorf("%s: %v, want %v", tt.name, got, tt.want)
+		}
+	}
+
+	roles, err := s.AssignableRoles(ctx, admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maker := roles[len(roles)-1]
+	if !slices.Equal(maker.MissingAssignable, []string{RoleAdmin}) || len(maker.Missing) != 0 || maker.MissingAssignCustom {
+		t.Fatalf("admin_maker for admin: %+v", maker)
+	}
+}
+
+// A reset restores the default assignable list too.
+func TestResetRoleAssignable(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	for _, role := range []string{RoleAdmin, RoleOperator, RoleUser} {
+		id := roleID(t, s, role)
+		if _, err := s.SetRoleAssignable(ctx, root, id, AssignableInput{RoleKeys: []string{RoleAdmin}, AssignCustom: true}); err != nil {
+			t.Fatal(err)
+		}
+		def, _ := builtinRoleByKey(role)
+		r, err := s.ResetRole(ctx, root, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := slices.Sorted(slices.Values(def.assignable))
+		if !slices.Equal(r.AssignableRoleKeys, want) || r.AssignCustom != def.assignCustom {
+			t.Errorf("%s reset to %v custom %v, want %v %v", role, r.AssignableRoleKeys, r.AssignCustom, want, def.assignCustom)
+		}
+	}
+}

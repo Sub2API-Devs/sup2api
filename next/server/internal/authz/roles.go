@@ -23,9 +23,13 @@ type Role struct {
 	Builtin        bool               `json:"builtin"`
 	Superuser      bool               `json:"superuser"`
 	PermissionKeys []string           `json:"permission_keys"`
-	UserCount      int64              `json:"user_count"`
-	CreatedAt      time.Time          `json:"created_at"`
-	UpdatedAt      time.Time          `json:"updated_at"`
+	// AssignableRoleKeys lists the roles its holders may assign, and
+	// AssignCustom adds every custom role (role_assignable_roles).
+	AssignableRoleKeys []string  `json:"assignable_role_keys"`
+	AssignCustom       bool      `json:"assign_custom"`
+	UserCount          int64     `json:"user_count"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 var roleKeyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
@@ -42,13 +46,16 @@ const roleSelect = `
 SELECT r.id, r.key, r.name, r.description, r.builtin, r.superuser, r.created_at, r.updated_at,
     COALESCE((SELECT array_agg(p.key ORDER BY p.sort, p.key) FROM role_permissions rp
         JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = r.id), '{}'),
+    COALESCE((SELECT array_agg(ar.key ORDER BY ar.key) FROM role_assignable_roles ra
+        JOIN roles ar ON ar.id = ra.assignable_role_id AND NOT ar.superuser WHERE ra.role_id = r.id), '{}'),
+    r.assign_custom,
     (SELECT count(*) FROM user_roles ur JOIN users u ON u.id = ur.user_id
         WHERE ur.role_id = r.id AND u.deleted_at IS NULL)
 FROM roles r`
 
 func scanRole(row pgx.Row) (*Role, error) {
 	var r Role
-	err := row.Scan(&r.ID, &r.Key, &r.Name, &r.Description, &r.Builtin, &r.Superuser, &r.CreatedAt, &r.UpdatedAt, &r.PermissionKeys, &r.UserCount)
+	err := row.Scan(&r.ID, &r.Key, &r.Name, &r.Description, &r.Builtin, &r.Superuser, &r.CreatedAt, &r.UpdatedAt, &r.PermissionKeys, &r.AssignableRoleKeys, &r.AssignCustom, &r.UserCount)
 	if err != nil {
 		return nil, err
 	}
@@ -123,11 +130,15 @@ type CreateRoleInput struct {
 	Name           core.LocalizedText `json:"name"`
 	Description    core.LocalizedText `json:"description"`
 	PermissionKeys []string           `json:"permission_keys"`
+	// AssignableRoleKeys and AssignCustom are the role's assignable list.
+	AssignableRoleKeys []string `json:"assignable_role_keys"`
+	AssignCustom       bool     `json:"assign_custom"`
 }
 
 // CreateRole creates a custom (non-superuser) role. The actor must hold all
-// permissions being granted, as for SetRolePermissions (CONTRACTS §43.6),
-// checked inside the transaction after Bump.
+// permissions being granted and be able to assign every role the new role
+// may assign, as for SetRolePermissions and SetRoleAssignable (CONTRACTS
+// §43.6), checked inside the transaction after Bump.
 func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleInput) (*Role, error) {
 	var fields []core.FieldError
 	if !roleKeyRe.MatchString(in.Key) {
@@ -148,7 +159,11 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 		if err != nil {
 			return err
 		}
-		if err := s.covers(ctx, tx, actorID, core.PermissionSetOf(keys...), cannotGrant(ctx)); err != nil {
+		assign, err := assignableRoles(ctx, tx, in.AssignableRoleKeys)
+		if err != nil {
+			return err
+		}
+		if err := s.covers(ctx, tx, actorID, grantOf(keys, roleKeysOf(assign), in.AssignCustom), cannotGrant(ctx)); err != nil {
 			return err
 		}
 		err = tx.QueryRow(ctx, `INSERT INTO roles (key, name, description) VALUES ($1, $2, $3) RETURNING id`,
@@ -162,7 +177,11 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 		if err := setRolePermissions(ctx, tx, id, ids); err != nil {
 			return err
 		}
-		return s.audit(ctx, tx, actorID, "role.create", "role", id, map[string]any{"key": in.Key, "permission_keys": keys})
+		if err := setRoleAssignable(ctx, tx, id, assign, in.AssignCustom); err != nil {
+			return err
+		}
+		return s.audit(ctx, tx, actorID, "role.create", "role", id, map[string]any{"key": in.Key, "permission_keys": keys,
+			"assignable_role_keys": roleKeysOf(assign), "assign_custom": in.AssignCustom})
 	})
 	if err != nil {
 		return nil, err
@@ -234,11 +253,12 @@ func (s *Service) DeleteRole(ctx context.Context, actorID, id int64) error {
 }
 
 // ResetRole restores a built-in role actorID may edit (editableRole) to its
-// defaults: name, description and core permissions. Plugin permissions on
-// the role are left alone, since they are granted per plugin at consent
-// time. The actor must hold every default permission, as for
-// SetRolePermissions; what the reset drops is within the actor already
-// (editableRole), so it cannot weaken a role above the actor (C-L2).
+// defaults: name, description, core permissions and assignable list. Plugin
+// permissions on the role are left alone, since they are granted per plugin
+// at consent time. The actor must hold every default, as for
+// SetRolePermissions and SetRoleAssignable; what the reset drops is within
+// the actor already (editableRole), so it cannot weaken a role above the
+// actor (C-L2).
 func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, error) {
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
 		r, err := s.editableRole(ctx, tx, actorID, id)
@@ -250,7 +270,16 @@ func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, erro
 			return errNotBuiltinRole
 		}
 		keys := def.defaultPermissions()
-		if err := s.covers(ctx, tx, actorID, core.PermissionSetOf(keys...), cannotGrant(ctx)); err != nil {
+		// Defaults naming a built-in role not created yet are skipped, as
+		// SyncCore does.
+		assign, err := queryRoles(ctx, tx, `SELECT id, key, superuser FROM roles WHERE key = ANY($1) AND builtin AND NOT superuser ORDER BY key`, def.assignable)
+		if err != nil {
+			return err
+		}
+		if err := s.covers(ctx, tx, actorID, grantOf(keys, roleKeysOf(assign), def.assignCustom), cannotGrant(ctx)); err != nil {
+			return err
+		}
+		if err := setRoleAssignable(ctx, tx, id, assign, def.assignCustom); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE roles SET name = $2, description = $3, updated_at = now() WHERE id = $1`,
@@ -305,6 +334,78 @@ func (s *Service) SetRolePermissions(ctx context.Context, actorID, id int64, key
 		return nil, err
 	}
 	return s.GetRole(ctx, id)
+}
+
+// AssignableInput is the body of PUT /roles/:id/assignable.
+type AssignableInput struct {
+	RoleKeys     []string `json:"role_keys"`
+	AssignCustom bool     `json:"assign_custom"`
+}
+
+// SetRoleAssignable replaces the assignable list of a role actorID may edit
+// (editableRole). The actor must be able to assign what is added (the
+// "every custom role" flag included); what the role keeps is within it
+// already.
+func (s *Service) SetRoleAssignable(ctx context.Context, actorID, id int64, in AssignableInput) (*Role, error) {
+	err := s.mutate(ctx, func(tx pgx.Tx) error {
+		r, err := s.editableRole(ctx, tx, actorID, id)
+		if err != nil {
+			return err
+		}
+		assign, err := assignableRoles(ctx, tx, in.RoleKeys)
+		if err != nil {
+			return err
+		}
+		keys := roleKeysOf(assign)
+		added := addedKeys(keys, r.AssignableRoleKeys)
+		if err := s.covers(ctx, tx, actorID, grantOf(nil, added, in.AssignCustom && !r.AssignCustom), cannotGrant(ctx)); err != nil {
+			return err
+		}
+		if err := setRoleAssignable(ctx, tx, id, assign, in.AssignCustom); err != nil {
+			return err
+		}
+		return s.audit(ctx, tx, actorID, "role.assignable", "role", id, map[string]any{"role_keys": keys, "assign_custom": in.AssignCustom, "added": added})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetRole(ctx, id)
+}
+
+// assignableRoles resolves keys for an assignable list: each must exist and
+// none may be a superuser role, which is only ever transferred.
+func assignableRoles(ctx context.Context, q store.Querier, keys []string) ([]roleRef, error) {
+	roles, err := resolveRoles(ctx, q, dedupe(keys))
+	if err != nil {
+		return nil, err
+	}
+	if slices.ContainsFunc(roles, func(r roleRef) bool { return r.superuser }) {
+		return nil, core.InvalidFields(core.FieldError{Field: "role_keys", Code: "superuser", Message: "the super admin role cannot be assignable"})
+	}
+	return roles, nil
+}
+
+// grantOf is what a role write hands out: perms, and roles plus every
+// custom role when custom as what its holders may assign.
+func grantOf(perms, roles []string, custom bool) core.PermissionSet {
+	set := core.PermissionSetOf(perms...)
+	set.Assignable = core.PermissionSetOf(roles...).Keys
+	set.AssignCustom = custom
+	return set
+}
+
+// setRoleAssignable makes roles, plus every custom role when custom, the
+// role's assignable list.
+func setRoleAssignable(ctx context.Context, tx pgx.Tx, roleID int64, roles []roleRef, custom bool) error {
+	ids := roleIDsOf(roles)
+	if _, err := tx.Exec(ctx, `DELETE FROM role_assignable_roles WHERE role_id = $1 AND assignable_role_id <> ALL($2)`, roleID, ids); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO role_assignable_roles (role_id, assignable_role_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, roleID, ids); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `UPDATE roles SET assign_custom = $2, updated_at = now() WHERE id = $1`, roleID, custom)
+	return err
 }
 
 // resolvePermissions dedupes keys and resolves them to permission ids,
@@ -492,12 +593,17 @@ func roleKeysOf(roles []roleRef) []string {
 	return keys
 }
 
-// writeUserRoles makes roles the user's roles.
-func writeUserRoles(ctx context.Context, tx pgx.Tx, userID int64, roles []roleRef) error {
+func roleIDsOf(roles []roleRef) []int64 {
 	ids := make([]int64, len(roles))
 	for i, r := range roles {
 		ids[i] = r.id
 	}
+	return ids
+}
+
+// writeUserRoles makes roles the user's roles.
+func writeUserRoles(ctx context.Context, tx pgx.Tx, userID int64, roles []roleRef) error {
+	ids := roleIDsOf(roles)
 	if _, err := tx.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1 AND role_id <> ALL($2)`, userID, ids); err != nil {
 		return err
 	}
@@ -531,6 +637,59 @@ func (s *Service) ensureOtherSuperuser(ctx context.Context, tx pgx.Tx, userID in
 		return errLastSuperAdmin
 	}
 	return nil
+}
+
+// AssignableRole is one role in GET /me/assignable-roles.
+type AssignableRole struct {
+	Key     string             `json:"key"`
+	Name    core.LocalizedText `json:"name"`
+	Builtin bool               `json:"builtin"`
+	// Grantable: what the role carries is within the caller, so assigning
+	// it passes; the Missing fields say what is not, as in a denial.
+	Grantable           bool     `json:"grantable"`
+	Missing             []string `json:"missing"`
+	MissingAssignable   []string `json:"missing_assignable"`
+	MissingAssignCustom bool     `json:"missing_assign_custom"`
+}
+
+// AssignableRoles lists the roles on actorID's assignable list (its
+// grantSet, so none under an access key), built-in first, never a superuser
+// role, each with whether the actor may grant it.
+func (s *Service) AssignableRoles(ctx context.Context, actorID int64) ([]AssignableRole, error) {
+	q := s.db.Pool
+	actor, err := s.grantSet(ctx, q, actorID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.Query(ctx, `SELECT key, name, builtin FROM roles WHERE NOT superuser ORDER BY builtin DESC, id`)
+	if err != nil {
+		return nil, err
+	}
+	roles, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (AssignableRole, error) {
+		var r AssignableRole
+		err := row.Scan(&r.Key, &r.Name, &r.Builtin)
+		return r, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := []AssignableRole{}
+	for _, r := range roles {
+		if !actor.CanAssign(r.Key) {
+			continue
+		}
+		grant, err := s.RolesPermissions(ctx, q, []string{r.Key})
+		if err != nil {
+			return nil, err
+		}
+		m := actor.Missing(grant)
+		r.Grantable = m.Empty()
+		r.Missing = append([]string{}, m.Keys...)
+		r.MissingAssignable = append([]string{}, m.Assign...)
+		r.MissingAssignCustom = m.AssignCustom
+		out = append(out, r)
+	}
+	return out, nil
 }
 
 // ------------------------------------------------------------ permission listing

@@ -109,6 +109,7 @@
 | POST `/auth/refresh` | - | `{refresh_token}` → 同上（轮换 refresh token） |
 | POST `/auth/logout` | auth | 请求体 `{refresh_token?}` 可选；结束该 refresh token 所在的会话（整个家族），不带时结束全部会话；立即生效（§43.2） |
 | GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser}` |
+| GET `/me/assignable-roles` | auth | 可分配角色：`[{key, name:{en,zh}, builtin, grantable, missing:[key], missing_assignable:[key], missing_assign_custom}]`，只含调用者可分配清单内的角色（超管为全部），不含 `super_admin`，内置在前；`grantable=false` 表示角色所含权限或可分配角色超出调用者，`missing*` 同 403 的 details（前端置灰提示）；不列默认角色 `user` 对无角色用户的豁免；访问密钥下为 `[]`（§80） |
 | GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/security/finance/users/plugins/system/me` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
 | PUT `/me/password` | auth | `{old_password, new_password}` |
 
@@ -127,8 +128,9 @@
 | POST `/segments/:id/members` `{user_ids[]}` → `{moved}` | `segment:manage`；把用户移入命名用户组 |
 | GET `/segments/:id/groups`，PUT `/segments/:id/groups` `{items:[{group_id, granted?, rate_override?}]}` | `segment:read` / `segment:manage`；用户组在各分组的授权与专属倍率 |
 | POST `/users/:id/personal-segment` `{copy}`，DELETE `/users/:id/personal-segment`（`?to=`） | `segment:manage`；设为个人专属 / 移回命名用户组 |
-| GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:define`；POST 授予的 permission_keys 必须是操作者持有权限的子集 |
+| GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:define`；POST 授予的 permission_keys 必须是操作者持有权限的子集，可分配清单必须在操作者可分配范围内 |
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:define`；新增的 permission_keys 必须是操作者持有权限的子集，角色当前的权限也不能超出操作者（§43.6） |
+| PUT `/roles/:id/assignable` `{role_keys[], assign_custom}` | `role:define`；新增的可分配角色必须在操作者可分配范围内，角色当前的清单也不能超出操作者（§43.6） |
 | POST `/roles/:id/reset` | `role:define`；内置角色恢复默认（§15.7） |
 | GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,session_only,status}]}]`（`session_only`：只能由会话使用，访问密钥不能带） |
 
@@ -677,7 +679,8 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 
 ### 15.7 角色（`authz/roles.go`、`authz/http.go`）
 
-角色对象：`{id, key, name:{en,zh}, description:{en,zh}, builtin, superuser, permission_keys:[key], user_count, created_at, updated_at}`。
+角色对象：`{id, key, name:{en,zh}, description:{en,zh}, builtin, superuser, permission_keys:[key], assignable_role_keys:[key], assign_custom, user_count, created_at, updated_at}`。
+- `assignable_role_keys` 是持有者可分配的角色（显式清单，按 key 排序，永不含 `super_admin`），`assign_custom=true` 表示另可分配全部自定义角色（含以后新建的）。
 - `permission_keys` 按权限目录的 `sort`、`key` 排序；`superuser=true` 的角色（`super_admin`）不存权限行，`permission_keys` 为 `[]`，但拥有全部权限，前端应按 `superuser` 判断。
 - `user_count` 为持有该角色的未删除用户数。
 
@@ -685,13 +688,14 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 |---|---|---|---|
 | GET `/roles` | `role:read` | | 不分页，内置在前 |
 | GET `/roles/:id` | `role:read` | | 不存在 404 |
-| POST `/roles` | `role:define` | `{key, name, description?, permission_keys?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；已移除的权限忽略；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`） |
+| POST `/roles` | `role:define` | `{key, name, description?, permission_keys?, assignable_role_keys?, assign_custom?}` | `key` 匹配 `^[a-z][a-z0-9_]{1,49}$`；`name.en` 必填；key 重复 409；未知权限 `details.fields[{field:"permission_keys", code:"unknown"}]`；已移除的权限忽略；操作者须持有全部 `permission_keys`（同 PUT `/roles/:id/permissions`，否则 403 `details.missing`）；可分配清单同 PUT `/roles/:id/assignable` 校验（字段错误记在 `role_keys` 下） |
 | PATCH `/roles/:id` | `role:define` | `{name?, description?}` | 内置角色也可改名称和描述；给了 `name` 时 `name.en` 不能为空 |
 | DELETE `/roles/:id` | `role:define` | | 内置角色 409；用户的该角色随之删除，所以角色仍有持有者时它须在操作者的可分配清单内（否则 403 `details.role`） |
 | PUT `/roles/:id/permissions` | `role:define` | `{permission_keys}` | 整体替换；操作者须持有**新增**的权限（否则 403 `details.missing`）；已移除（`status=removed`）的权限忽略，角色上已有的授权行保留（原样保存不报错）；完全不存在的 key 仍按未知报错 |
-| POST `/roles/:id/reset` | `role:define` | | 内置角色恢复默认：名称、描述和核心权限（§4）；角色上的插件权限不动；自定义角色 409；操作者须持有全部默认权限（同上，否则 403） |
+| PUT `/roles/:id/assignable` | `role:define` | `{role_keys, assign_custom}` | 整体替换可分配清单；未知角色 422 `details.fields[{field:"role_keys", code:"unknown"}]`，含 `super_admin` 422（`code:"superuser"`）；操作者须能分配**新增**的角色，新开 `assign_custom` 时自己也须有它（否则 403 `details.missing_assignable` / `missing_assign_custom`） |
+| POST `/roles/:id/reset` | `role:define` | | 内置角色恢复默认：名称、描述、核心权限（§4）和默认可分配清单（admin = operator、user 与全部自定义角色；operator = user；尚未建出的内置角色跳过）；角色上的插件权限不动；自定义角色 409；操作者须持有全部默认权限并能分配默认清单（同上，否则 403） |
 
-以上 PATCH、DELETE、PUT permissions、reset 共用一个入口（§43.6 角色写入口）：超级管理员角色一律 409；角色当前授予的权限超出操作者时 403。每次写入记一条审计（`role.create`、`role.update`、`role.delete`、`role.permissions`、`role.reset`，目标为该角色）。
+以上 PATCH、DELETE、PUT permissions、PUT assignable、reset 共用一个入口（§43.6 角色写入口）：超级管理员角色一律 409；角色当前授予的权限或可分配角色超出操作者时 403。每次写入记一条审计（`role.create`、`role.update`、`role.delete`、`role.permissions`、`role.assignable`、`role.reset`，目标为该角色）。
 
 ### 15.8 插件设置与前端扩展（`plugin/api/settings.go`、`plugin/api/ui.go`）
 
@@ -2721,7 +2725,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 修改、禁用、删除其他用户（`CanActOnUser`、`CanActOn`）：目标的权限必须是操作者权限的子集，否则 403（`details.missing`），因此不能改动权限比自己大的用户；持 `*` 的目标只有持 `*` 的人能改。
 - 两类检查都比较超管标志（`core.PermissionSet.Missing`）：缺超管标志时 403 带 `details.superuser = true`。访问密钥收窄后的权限集永远不是超管，所以超管的访问密钥不能授予 `super_admin`（2026-11-12 修正 H1：之前授予检查只比权限 key，超管角色不含 key，带 `role:manage` 的超管密钥可以授予 `super_admin`）。
 - 两类检查也比较可分配角色（2026-11-12，决策 4、5）：角色可以带一份可分配角色清单（`role_assignable_roles`，永不含超管角色）和“以及全部自定义角色”标志（`roles.assign_custom`）。新增角色或目标用户的角色能分配的角色必须在操作者的可分配范围内，否则 403，`details.missing_assignable` 列出缺的角色、`details.missing_assign_custom = true` 表示缺“全部自定义角色”，与 `details.missing` 分开。因此能分配 admin 的委派者不会被 admin 改动。访问密钥收窄后没有可分配角色。内置默认清单：admin = operator、user 与全部自定义角色；operator = user。
-- 角色写入口（`editableRole`，2026-11-12 修正 M5）：改名称描述、改权限、重置、删除角色前，先在同一事务里锁住角色行；超级管理员角色对任何人（含超管和系统）都 409；其余角色当前授予的权限（授予视角，不含已移除的）与可分配角色必须在操作者之内，否则 403 `you cannot change a role with permissions you don't have`。此前持 `role:manage` 的人可以先把权限比自己大的角色削到自己以下，再对持有该角色的用户改密码、禁用，接管账号。改权限因此只需检查新增部分（现有部分已在操作者之内）；重置删掉的权限同样已在操作者之内（C-L2）。
+- 角色写入口（`editableRole`，2026-11-12 修正 M5）：改名称描述、改权限、改可分配清单、重置、删除角色前，先在同一事务里锁住角色行；超级管理员角色对任何人（含超管和系统）都 409；其余角色当前授予的权限（授予视角，不含已移除的）与可分配角色必须在操作者之内，否则 403 `you cannot change a role with permissions you don't have`。此前持 `role:manage` 的人可以先把权限比自己大的角色削到自己以下，再对持有该角色的用户改密码、禁用，接管账号。改权限、改可分配清单（PUT `/roles/:id/assignable`）因此只需检查新增部分（现有部分已在操作者之内）；重置删掉的权限与可分配角色同样已在操作者之内（C-L2）。
 - 分配角色（PUT `/users/:id/roles`、POST `/users`，2026-11-12，决策 1、4）：只比较新增与撤销的角色，无变化直接成功。`super_admin` 任何人（含超管本人、超管的访问密钥）都不能授予或撤销，403 `the super admin role cannot be assigned or revoked; transfer it instead`；系统（actor 0）只能授予初始超管（引导），不能撤销。其余每个新增或撤销的角色都必须在操作者的可分配清单内（超管可分配全部），否则 403 `details.role`；唯一例外是给当前没有任何角色的用户授予默认角色 `user`，所以只有 `user:create` 的人仍能建默认用户。然后检查操作者能作用于目标（给自己分配除外），再检查新增角色所含权限与可分配角色都在操作者之内（`Missing`）。访问密钥没有可分配角色，不能分配任何角色。
 - 所有授权写操作（角色写入、POST `/roles`、PUT `/users/:id/roles`）的授权检查都放在同一事务的 `Bump` 之后、用该事务读库：`Bump` 串行化了授权变更，检查看到的是最新且不会被并发改动的状态，不读本节点可能落后的缓存。
 - 持 `*` 的超级用户和系统自身（actor 0：内置插件安装、引导管理员等）不受这些检查限制（超级管理员角色冻结除外）。2026-10-05 修正：之前系统也被当成没有权限的用户拦下。
@@ -6827,7 +6831,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - **`Authorization: Bearer sak_…`**：只有核心路由（`httpapi`）接受，走 `core.AuthenticateBearer`。插件路由和其他认证入口只认 JWT，遇到密钥回 401：插件拿到的是用户 id，在插件内部做的权限判断限制不到密钥，所以插件权限也不能选给密钥。以后要开放，得先让插件的权限判断带上密钥的限制。
 - **子集在两处保证**：创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）。每次检查权限时，`authz.PermissionSet` 取“用户现有权限 ∩ 密钥权限”，所以用户失去权限，密钥立刻跟着失去；重新获得时也恢复。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn`、`guardTarget` 看到的也是这个限制后的集合。只限制密钥所属用户，查询其他用户的权限不受影响。
-- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/system/version`（`AuthedRead`，`/system/version` 只返回版本号、是否托管、节点 id、boot id），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。
+- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/me/assignable-roles`、`/system/version`（`AuthedRead`，`/system/version` 只返回版本号、是否托管、节点 id、boot id），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。这些自身只读接口都按密钥收窄后的权限计算，只返回调用者自己能看到的东西，所以接受任意访问密钥（C-T1，按此口径不改）：`/me` 与菜单用收窄后的 `PermissionSet`，lookup 用 `CanAny` 和 `OwnerScope`，`/me/assignable-roles` 在密钥下为 `[]`（收窄后没有可分配角色）。
 - **只认会话的权限**（2026-11-12，`session_only`）：`user:password:reset`、`role:define`、`role:assign`、`settings:manage` 不能选给访问密钥，超级管理员也不行。判断只有 `authz.KeyAllowed` 一处：可选列表不显示，创建、修改时选了回 403（`details.missing`），已存的密钥在校验时丢掉它们（`GET /me/access-keys` 的 `lost` 含它们），所以以这些权限注册的路由（`settings:manage` 下 30 来条、`/roles` 写操作、`PUT /users/:id/roles`、改他人密码等）一律拒绝密钥（403 `permission_denied`）。`PermAny` 组合路由仍按其他 key 放行。
 - **明文回显只认登录会话**（2026-11-12）：回显已有密文的接口用 `SessionOnly()` 视图注册，有权限也拒绝密钥（403 `access keys cannot use this endpoint`）：`POST /me/api-keys/:id/reveal`、`POST /proxies/:id/reveal-url`、`POST /accounts/:id/credentials/reveal`。泄露的密钥因此拿不到 API Key、代理密码和账号凭证的明文。`/me/api-keys` 的创建与轮换返回的是新密钥，属于自动化的正当用途，照常接受密钥。`settings:manage` 下的 `remote-fingerprint` 会拨号到任意 host:port，但 SSH 安装控制器到内网主机是正当用途，不接 netguard；它靠 `settings:manage` 只认会话来防止被泄露的密钥利用（wontfix）。
 - **接口**（都只能用登录会话调用）：`GET /me/access-keys`（含 `lost`：已选但用户不再持有的权限）、`GET /me/access-keys/permissions`（可选的权限，只含自己持有的）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。

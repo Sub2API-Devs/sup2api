@@ -9,15 +9,18 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
 
-// RegisterRoutes mounts /roles, /permissions and /me/menus.
+// RegisterRoutes mounts /roles, /permissions, /me/menus and
+// /me/assignable-roles.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.AuthedRead("/me/menus", s.handleMenus)
+	r.AuthedRead("/me/assignable-roles", s.handleAssignableRoles)
 	r.Perm(http.MethodGet, "/roles", "role:read", s.handleListRoles)
 	r.Perm(http.MethodGet, "/roles/:id", "role:read", s.handleGetRole)
 	r.Perm(http.MethodPost, "/roles", "role:define", s.handleCreateRole)
 	r.Perm(http.MethodPatch, "/roles/:id", "role:define", s.handleUpdateRole)
 	r.Perm(http.MethodDelete, "/roles/:id", "role:define", s.handleDeleteRole)
 	r.Perm(http.MethodPut, "/roles/:id/permissions", "role:define", s.handleSetRolePermissions)
+	r.Perm(http.MethodPut, "/roles/:id/assignable", "role:define", s.handleSetRoleAssignable)
 	r.Perm(http.MethodPost, "/roles/:id/reset", "role:define", s.handleResetRole)
 	r.Perm(http.MethodGet, "/permissions", "role:read", s.handleListPermissions)
 }
@@ -30,6 +33,16 @@ func (s *Service) handleMenus(c *gin.Context) {
 		return
 	}
 	httpapi.OK(c, menus)
+}
+
+func (s *Service) handleAssignableRoles(c *gin.Context) {
+	uid, _ := core.UserID(c.Request.Context())
+	roles, err := s.AssignableRoles(c.Request.Context(), uid)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, roles)
 }
 
 func (s *Service) handleListRoles(c *gin.Context) {
@@ -112,6 +125,24 @@ func (s *Service) handleSetRolePermissions(c *gin.Context) {
 	}
 	actorID, _ := core.UserID(c.Request.Context())
 	role, err := s.SetRolePermissions(c.Request.Context(), actorID, id, in.PermissionKeys)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, role)
+}
+
+func (s *Service) handleSetRoleAssignable(c *gin.Context) {
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	var in AssignableInput
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	actorID, _ := core.UserID(c.Request.Context())
+	role, err := s.SetRoleAssignable(c.Request.Context(), actorID, id, in)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
