@@ -9,7 +9,7 @@ import FlowSimulate from './FlowSimulate.vue'
 import FlowVersions from './FlowVersions.vue'
 import { useCatalog } from './catalog'
 import { joinList } from './format'
-import { canManage, errorMessage, fetchFlow, publishFlow, saveFlow, setFlowEnabled, toastError, useModHost } from './host'
+import { canManage, errorMessage, fetchFlow, publishFlow, saveFlow, setFlowEnabled, setFlowScope, toastError, useModHost } from './host'
 import type { Flow, Scope, Spec } from './types'
 import { applyTemplate, auditorIndex, autoTimeoutMs, canonicalSpec, canvasAuditors, flowBody, isAuditorType, newSpec, NEW_FLOW_SCOPE, sameSpec } from './flowOps'
 import { validateSpec, type SpecIssue } from './flowValidate'
@@ -215,8 +215,7 @@ async function saveLive<K extends LiveField>(field: K, v: (typeof live)[K], call
   }
 }
 const setEnabled = (v: boolean) => saveLive('enabled', v, (f) => setFlowEnabled(f.id, v))
-/** The scope goes with the saved name and draft: the unsaved edits of the draft stay unsaved. */
-const setScope = (v: Scope) => saveLive('scope', v, (f) => saveFlow(f.id, flowBody(f.name, f.draft, v)))
+const setScope = (v: Scope) => saveLive('scope', v, (f) => setFlowScope(f.id, v))
 
 function openSimulate() {
   if (dirty.value) host.toast(t('flows.simulateUnsaved'), 'warning')

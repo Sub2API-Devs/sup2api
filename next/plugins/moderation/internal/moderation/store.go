@@ -346,8 +346,9 @@ func enterWatch(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, 
 // escalates reports whether a violation puts uid at the enforce level:
 // escalate_violations violations within escalate_window_seconds, counted
 // like the ban threshold (countViolations) and only after the user's latest
-// manual watch change, so that an administrator's downgrade or removal is
-// not undone by the violations it already judged. Never for N = 0, the
+// manual watch change (one through the watch API, or a lock / unlock from
+// saving the lists), so that an administrator's downgrade, removal or list
+// change is not undone by the violations it already judged. Never for N = 0, the
 // users of the lists, a locked entry or an entry at enforce already, nor
 // when the same violations ban the user (the ban refuses every request).
 // n is the count.
@@ -357,7 +358,7 @@ func escalates(ctx context.Context, tx pgx.Tx, c *config, w Watch, found bool, u
 	}
 	since := now.Add(-c.escalateWindow)
 	var manual *time.Time
-	if err := tx.QueryRow(ctx, `SELECT max(created_at) FROM watch_events WHERE user_id = $1 AND operator_id IS NOT NULL`, uid).Scan(&manual); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT max(created_at) FROM watch_events WHERE user_id = $1 AND (operator_id IS NOT NULL OR action IN ('lock', 'unlock'))`, uid).Scan(&manual); err != nil {
 		return 0, false, err
 	}
 	if manual != nil && manual.After(since) {

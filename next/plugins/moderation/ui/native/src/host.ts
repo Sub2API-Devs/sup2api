@@ -178,6 +178,7 @@ export const putBinding = (b: Omit<Binding, 'kind'>, replace = false) => api().p
 export const deleteBinding = (b: Pick<Binding, 'group_id' | 'account_id'>) => api().del<BindingsView>(`/bindings/${b.group_id}/${b.account_id}`)
 export const publishFlow = (id: number, expected: number) => api().post<Flow>(`/flows/${id}/publish`, { expected_version: expected })
 export const setFlowEnabled = (id: number, enabled: boolean) => api().put<Flow>(`/flows/${id}/enabled`, { enabled })
+export const setFlowScope = (id: number, scope: Scope) => api().put<Flow>(`/flows/${id}/scope`, { scope })
 
 export const runTest = (text: string, images: string[], flowId?: number) =>
   postChecked<TestResult>('/test', { text, images, flow_id: flowId || undefined })

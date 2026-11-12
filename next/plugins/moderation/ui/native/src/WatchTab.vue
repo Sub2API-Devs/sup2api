@@ -147,7 +147,7 @@ function ask(r: WatchItem, a: WatchAction) {
   acting.value = r
   action.value = a
 }
-const lock = useUserLock()
+const lock = useUserLock(() => void list.reload())
 const lockable = computed(() => canManageSettings())
 /** "more": lock / unlock, then remove (not for a locked entry). */
 const moreActions = (r: WatchItem) => [
@@ -156,7 +156,7 @@ const moreActions = (r: WatchItem) => [
 ]
 async function onMore(r: WatchItem, key: string) {
   if (key === 'remove') ask(r, { kind: 'release', level: null })
-  else if (await lock.run(r.user_id, key, userListOf(r))) void list.reload()
+  else await lock.run(r.user_id, key, userListOf(r))
 }
 
 // ---- detail drawer

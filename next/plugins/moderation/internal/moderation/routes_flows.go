@@ -476,20 +476,37 @@ func auditorTimeouts(ctx context.Context, q querier) (map[int64]int, error) {
 	return out, err
 }
 
+// setFlowEnabled and setFlowScope change a column that takes effect at once,
+// without a publish (PUT /flows/:id/enabled, /flows/:id/scope).
 func (p *Plugin) setFlowEnabled(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	id, bad := parseID(req, "id")
-	if bad != nil {
-		return bad, nil
-	}
 	var in struct {
 		Enabled *bool `json:"enabled"`
 	}
 	if err := json.Unmarshal(req.GetBody(), &in); err != nil || in.Enabled == nil {
 		return pluginsdk.FieldErrorResponse("invalid body / 参数无效", pluginsdk.FieldErrors{}.Add("enabled", "required", "enabled is required / 请指定 enabled")), nil
 	}
+	return p.setFlowColumn(ctx, req, "enabled", *in.Enabled)
+}
+
+func (p *Plugin) setFlowScope(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	var in struct {
+		Scope string `json:"scope"`
+	}
+	if err := json.Unmarshal(req.GetBody(), &in); err != nil || !validScope(in.Scope) {
+		return pluginsdk.FieldErrorResponse("invalid body / 参数无效", pluginsdk.FieldErrors{}.Add("scope", "invalid_scope", "scope must be input, tools or all / 审核范围只能是 input、tools 或 all")), nil
+	}
+	return p.setFlowColumn(ctx, req, "scope", in.Scope)
+}
+
+// setFlowColumn sets column (a constant name) of the flow of the path to v.
+func (p *Plugin) setFlowColumn(ctx context.Context, req *pluginv1.HTTPRequest, column string, v any) (*pluginv1.HTTPResponse, error) {
+	id, bad := parseID(req, "id")
+	if bad != nil {
+		return bad, nil
+	}
 	var resp *pluginv1.HTTPResponse
 	err := p.configTx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE flows SET enabled=$2, updated_at=$3 WHERE id=$1 AND deleted_at IS NULL`, id, *in.Enabled, p.now().UTC())
+		tag, err := tx.Exec(ctx, `UPDATE flows SET `+column+`=$2, updated_at=$3 WHERE id=$1 AND deleted_at IS NULL`, id, v, p.now().UTC())
 		if err == nil && tag.RowsAffected() == 0 {
 			resp = notFound("flow")
 			return errRollback

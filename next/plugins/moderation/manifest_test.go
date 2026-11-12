@@ -114,7 +114,7 @@ func TestManifest(t *testing.T) {
 			t.Errorf("route %s is still declared", gone)
 		}
 	}
-	if len(routes) != 53 {
+	if len(routes) != 54 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}

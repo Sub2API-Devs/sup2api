@@ -30,12 +30,10 @@ const w = computed(() => props.state.watch)
 const canWatch = computed(() => canManage() && !props.state.staff)
 /** core account status and roles (when user:read is granted) */
 const account = computed(() => coreUser(props.userId))
-const lock = useUserLock()
+const lock = useUserLock(() => emit('lists-changed'))
 const lockable = computed(() => canManageSettings() && !props.state.staff)
 const list = computed(() => userListOf(props.state))
-async function onLock(key: string) {
-  if (await lock.run(props.userId, key, list.value)) emit('lists-changed')
-}
+const onLock = (key: string) => lock.run(props.userId, key, list.value)
 </script>
 
 <template>

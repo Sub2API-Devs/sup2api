@@ -47,28 +47,32 @@ export function lockedSettings(schema: JSONSchema | null | undefined, stored: Re
 
 /**
  * The lock actions of a user as menu items (keyed by LockAction), and `run`
- * for a picked one: confirms, saves the settings and toasts; resolves true
- * once saved (the caller reloads: the entry follows the settings).
+ * for a picked one: confirms, saves the settings and toasts; once saved it
+ * calls reload, and again after LOCK_SETTLE_MS: the locked entry follows the
+ * settings when the plugin reconciles them, a few seconds after the save.
  */
-export function useUserLock() {
+/** The plugin reconciles the lists within its 5 s refresh; one more reload after that. */
+export const LOCK_SETTLE_MS = 6000
+
+export function useUserLock(reload: () => void) {
   const host = useModHost()
   const t = host.t
   const items = (current: UserList | null): MenuAction[] => lockActions(current).map((a) => ({ key: a, label: t(`lock.action.${a}`), icon: 'lock' }))
-  /** false for a key that is not one of items(current), or when not confirmed or failed. */
-  async function run(userId: number, key: string, current: UserList | null): Promise<boolean> {
+  /** Does nothing for a key that is not one of items(current). */
+  async function run(userId: number, key: string, current: UserList | null): Promise<void> {
     const action = lockActions(current).find((a) => a === key)
-    if (!action) return false
+    if (!action) return
     const message = t(`lock.confirm.${action}`, { id: userId, list: current ? t(`lists.name.${current}`) : '' })
-    if (!(await host.confirm({ title: t(`lock.action.${action}`), message, confirmText: t('lock.save'), danger: action === 'blocklist' }))) return false
+    if (!(await host.confirm({ title: t(`lock.action.${action}`), message, confirmText: t('lock.save'), danger: action === 'blocklist' }))) return
     try {
       const s = await fetchPluginSettings()
       const values = lockedSettings(s.schema, s.values || {}, userId, action === 'unlock' ? null : action)
       if (values) await savePluginSettings(values)
       host.toast(t(action === 'unlock' ? 'lock.unlocked' : 'lock.locked', { id: userId }), 'success')
-      return true
+      reload()
+      setTimeout(reload, LOCK_SETTLE_MS)
     } catch (e) {
       toastError(e)
-      return false
     }
   }
   return { items, run }

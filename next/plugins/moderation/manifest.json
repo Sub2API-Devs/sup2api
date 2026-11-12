@@ -367,6 +367,12 @@
       "permission": "moderation:manage"
     },
     {
+      "method": "PUT",
+      "path": "/flows/:id/scope",
+      "scope": "admin",
+      "permission": "moderation:manage"
+    },
+    {
       "method": "POST",
       "path": "/import",
       "scope": "admin",

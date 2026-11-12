@@ -53,6 +53,17 @@ func TestFlowScopeAPI(t *testing.T) {
 	if got := put(map[string]any{}); got.Scope == nil || *got.Scope != ScopeAll {
 		t.Fatalf("update without scope = %v", got.Scope)
 	}
+	// PUT /flows/:id/scope changes only the scope: the saved draft stays as it is.
+	if got := decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/scope", f.ID), nil, map[string]any{"scope": ScopeTools})); got.Scope == nil || *got.Scope != ScopeTools || got.Dirty {
+		t.Fatalf("scope endpoint = %+v", got)
+	}
+	if resp := h.Do("PUT", fmt.Sprintf("/flows/%d/scope", f.ID), nil, map[string]any{"scope": "all_but_own"}); resp.GetStatus() != http.StatusBadRequest ||
+		!strings.Contains(string(resp.GetBody()), "invalid_scope") {
+		t.Fatalf("scope endpoint, unknown scope = %d %s", resp.GetStatus(), resp.GetBody())
+	}
+	if resp := h.Do("PUT", "/flows/99999/scope", nil, map[string]any{"scope": ScopeAll}); resp.GetStatus() != http.StatusNotFound {
+		t.Fatalf("scope endpoint, unknown flow = %d", resp.GetStatus())
+	}
 	if resp := h.Do("PUT", fmt.Sprintf("/flows/%d", f.ID), nil, map[string]any{"name": "f", "draft": draft, "scope": "everything"}); resp.GetStatus() != http.StatusBadRequest ||
 		!strings.Contains(string(resp.GetBody()), "invalid_scope") {
 		t.Fatalf("unknown scope = %d %s", resp.GetStatus(), resp.GetBody())

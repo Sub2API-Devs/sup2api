@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -992,9 +991,4 @@ func withParam(req *pluginv1.HTTPRequest, name string, id int64) *pluginv1.HTTPR
 	}
 	r.PathParams[name] = fmt.Sprint(id)
 	return r
-}
-
-func isUniqueViolation(err error) bool {
-	var pe *pgconn.PgError
-	return errors.As(err, &pe) && pe.Code == "23505"
 }

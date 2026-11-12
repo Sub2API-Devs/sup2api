@@ -66,6 +66,7 @@ func (p *Plugin) routes() {
 	p.Handle("DELETE", "/bindings/:group_id/:account_id", p.deleteBinding)
 	p.Handle("POST", "/flows/:id/publish", p.publishFlow)
 	p.Handle("PUT", "/flows/:id/enabled", p.setFlowEnabled)
+	p.Handle("PUT", "/flows/:id/scope", p.setFlowScope)
 	p.Handle("GET", "/flows/:id/versions", p.listFlowVersions)
 	p.Handle("GET", "/flows/:id/versions/:version", p.getFlowVersion)
 	p.Handle("POST", "/flows/:id/rollback", p.rollbackFlow)

@@ -203,3 +203,28 @@ func TestEscalateAfterManualDecision(t *testing.T) {
 		t.Fatalf("history = %s", h)
 	}
 }
+
+// A list change is a manual decision too: violations counted while the user
+// was locked do not escalate them after an unlock.
+func TestEscalateAfterUnlock(t *testing.T) {
+	base := map[string]any{"mode": ModeObserve, "escalate_violations": 2, "escalate_window_seconds": 7200}
+	locked := map[string]any{"blocklist_user_ids": []string{"29"}}
+	for k, v := range base {
+		locked[k] = v
+	}
+	e := startEscalation(t, locked)
+	waitFor(t, "locked entry", func() bool { w := e.entry(29); return w != nil && w.Locked })
+	e.violate(29, 0)
+	e.violate(29, 0)
+	e.configure(base)
+	waitFor(t, "unlocked", func() bool { return e.entry(29) == nil })
+	e.ahead.Add(int64(time.Hour)) // after the unlock (the database clock)
+	e.violate(29, 0)
+	if w := e.entry(29); w == nil || w.Level != LevelObserve {
+		t.Fatalf("escalated by the violations of the locked time: %+v", w)
+	}
+	e.violate(29, 0)
+	if w := e.entry(29); w.Level != LevelEnforce {
+		t.Fatalf("not escalated by two new violations: %+v", w)
+	}
+}

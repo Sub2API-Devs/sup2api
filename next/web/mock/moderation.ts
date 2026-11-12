@@ -842,6 +842,11 @@ on('POST', '/p/moderation/flows/:id/publish', (req) => {
   return f
 })
 on('PUT', '/p/moderation/flows/:id/enabled', (req) => Object.assign(flowOr404(req.params.id) || {}, { enabled: !!req.body.enabled }))
+on('PUT', '/p/moderation/flows/:id/scope', (req) =>
+  ['input', 'tools', 'all'].includes(req.body.scope)
+    ? Object.assign(flowOr404(req.params.id) || {}, { scope: req.body.scope })
+    : INVALID_SCOPE()
+)
 on('GET', '/p/moderation/flows/:id/versions', (req) => {
   const f = flowOr404(req.params.id)
   if (!f) return fail(404, 'not_found', 'flow not found')
