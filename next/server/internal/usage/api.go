@@ -196,11 +196,17 @@ func (d *Detail) hideAccounts() {
 
 // withoutAccountIDs is the JSON array raw without the account_id of its items.
 func withoutAccountIDs(raw json.RawMessage) json.RawMessage {
-	items := gjson.ParseBytes(raw)
-	if len(raw) == 0 || items.Type == gjson.Null {
+	if len(raw) == 0 {
 		return raw
 	}
-	if !gjson.ValidBytes(raw) || !items.IsArray() {
+	if !gjson.ValidBytes(raw) {
+		return nil
+	}
+	items := gjson.ParseBytes(raw)
+	if items.Type == gjson.Null {
+		return raw
+	}
+	if !items.IsArray() {
 		return nil
 	}
 	for i := range items.Array() {
@@ -213,16 +219,56 @@ func withoutAccountIDs(raw json.RawMessage) json.RawMessage {
 	return raw
 }
 
+// Where usage_logs.billing_detail holds price expressions and their hashes:
+// in the global price behind a custom rule (core.PricingTrace), and in every
+// additional or replacement component (AdditionalBillingDetail, and the whole
+// price rule of its core.PricedUsage under inputs).
+var (
+	billingExpressionPaths = []string{"inputs.pricing.base.expression", "inputs.pricing.base.expr_hash"}
+	billingComponentFields = map[string]string{
+		"additional": "expression_hash", "replacement": "expression_hash",
+		"inputs.additional": "Price", "inputs.replacement": "Price",
+	}
+)
+
+// withoutExpressions is billing_detail without the price expressions and
+// hashes in it; what the amounts were computed from stays. A detail that
+// cannot be read goes altogether rather than unredacted.
+func withoutExpressions(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	if !gjson.ValidBytes(raw) {
+		return nil
+	}
+	paths := slices.Clone(billingExpressionPaths)
+	for list, field := range billingComponentFields {
+		for i := range gjson.GetBytes(raw, list).Array() {
+			paths = append(paths, list+"."+strconv.Itoa(i)+"."+field)
+		}
+	}
+	for _, path := range paths {
+		out, err := sjson.DeleteBytes(raw, path)
+		if err != nil {
+			return nil
+		}
+		raw = out
+	}
+	return raw
+}
+
 // redactForSelf leaves what the owner of the request may know about it
 // (GET /me/usage/:id): what was asked, how it went and what it cost. The
 // upstream side and the host's internals go: accounts, the plugin's version
 // and what it said about the upstream, the sticky rule, the expression hash,
-// the node, anomalies and the settlement entry. metrics stay whole: they are
-// the usage facts the price was computed from, shown with the tokens.
+// (also where billing_detail repeats it, with the expression), the node,
+// anomalies and the settlement entry. metrics stay whole: they are the usage
+// facts the price was computed from, shown with the tokens.
 func (d *Detail) redactForSelf() {
 	d.Record.hideUpstream()
 	d.hideAccounts()
 	d.PluginVersion, d.StickyRule, d.ExprHash, d.NodeID = "", "", "", ""
+	d.BillingDetail = withoutExpressions(d.BillingDetail)
 	d.PluginDetail, d.Anomalies, d.Settlement, d.RequestLogAccountID = nil, nil, nil, nil
 }
 

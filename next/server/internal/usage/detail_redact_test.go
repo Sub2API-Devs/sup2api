@@ -45,10 +45,27 @@ func TestWithoutAccountIDs(t *testing.T) {
 		`[]`:   `[]`,
 		`[{"hook_id":"a","account_id":7},{"hook_id":"b"},{"account_id":8,"note":"n"}]`: `[{"hook_id":"a"},{"hook_id":"b"},{"note":"n"}]`,
 		// Not the array it should be: nothing is shown rather than unredacted.
-		`{"account_id":7}`:  ``,
-		`[{"account_id":7}`: ``,
+		`{"account_id":7}`:        ``,
+		`[{"account_id":7}`:       ``,
+		`null [{"account_id":7}]`: ``,
 	} {
 		require.Equal(t, want, string(withoutAccountIDs(json.RawMessage(in))), in)
+	}
+}
+
+func TestWithoutExpressions(t *testing.T) {
+	for in, want := range map[string]string{
+		``:     ``,
+		`null`: `null`,
+		`{}`:   `{}`,
+		`{"tier":"standard","inputs":{"params":{"a":"b"},"pricing":{"rate_source":"segment","base":{"expression":"p*1","expr_hash":"h"}}}}`: `{"tier":"standard","inputs":{"params":{"a":"b"},"pricing":{"rate_source":"segment","base":{}}}}`,
+		`{"additional":[{"kind":"k","model":"m","expression_hash":"h","detail":{"tier":"t"}}],"replacement":[{"expression_hash":"h"},{"model":"m"}],` +
+			`"inputs":{"additional":[{"Kind":"k","Price":{"Expression":"p*2","ExprHash":"h"},"Tokens":{"Input":1},"Metrics":{"x":1}}],"replacement":[{"Price":{"ID":3}},{"Tokens":{}}]}}`: `{"additional":[{"kind":"k","model":"m","detail":{"tier":"t"}}],"replacement":[{},{"model":"m"}],` +
+			`"inputs":{"additional":[{"Kind":"k","Tokens":{"Input":1},"Metrics":{"x":1}}],"replacement":[{},{"Tokens":{}}]}}`,
+		// Not JSON: nothing is shown rather than unredacted.
+		`{"inputs":`: ``,
+	} {
+		require.Equal(t, want, string(withoutExpressions(json.RawMessage(in))), in)
 	}
 }
 
@@ -80,7 +97,8 @@ func TestSelfDetailHidesInternals(t *testing.T) {
 	}
 	// What the user's own page shows stays (web UsageDetail.vue).
 	require.Equal(t, map[string]any{"web_search_requests": float64(2)}, self["metrics"])
-	require.Equal(t, d["billing_detail"], self["billing_detail"])
+	require.Equal(t, d["billing_detail"], self["billing_detail"], "nothing to hide in an ordinary detail")
+	require.Nil(t, self["conversion"])
 	require.Equal(t, d["total_cost"], self["total_cost"])
 	require.Equal(t, d["price_id"], self["price_id"])
 	require.Equal(t, d["ledger_id"], self["ledger_id"])
@@ -95,9 +113,11 @@ func TestRedactForSelfClearsEveryInternalField(t *testing.T) {
 		Record:        Record{AccountID: &account, AccountName: "a", AccountType: "oauth", UpstreamProtocol: "p", UpstreamModel: "m", Conversion: json.RawMessage(`{}`)},
 		PluginVersion: "1", StickyRule: "r", ExprHash: "h", NodeID: "n",
 		HookDecisions: json.RawMessage(`[{"hook_id":"a","account_id":7}]`),
+		BillingDetail: json.RawMessage(`{"inputs":{"pricing":{"base":{"expression":"p","expr_hash":"h"}}}}`),
 		PluginDetail:  json.RawMessage(`{}`), Anomalies: json.RawMessage(`{}`),
 		Settlement: &Settlement{AccountID: &account}, RequestLogAccountID: &account,
 	}
 	d.redactForSelf()
-	require.Equal(t, Detail{HookDecisions: json.RawMessage(`[{"hook_id":"a"}]`)}, d)
+	require.Equal(t, Detail{HookDecisions: json.RawMessage(`[{"hook_id":"a"}]`),
+		BillingDetail: json.RawMessage(`{"inputs":{"pricing":{"base":{}}}}`)}, d)
 }

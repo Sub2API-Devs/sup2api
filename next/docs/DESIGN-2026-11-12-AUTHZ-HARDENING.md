@@ -220,6 +220,8 @@
 - 影响对象：
   - `GET /me/usage/:id` 与没有 `account:read` 的 `GET /usage/:id`：`gateway.attempt` 钩子决定里的 `account_id` 不再返回（此前泄露了尝试的账号 id）。
   - `GET /me/usage/:id`：`plugin_version`、`sticky_rule`、`expr_hash` 由原值变为空串。用户自己的用量详情页因此不再显示“粘性规则”卡片和计价表达式的哈希行（两处都是有值才渲染，前端无需改动；`sticky_hit` 仍在）。`metrics` 没有动：前端把其中每一项都展示给用户（缓存写入依据与 `u("key")` 用量事实），也是计价的输入，没有可判定为内部的子集。
+  - `GET /me/usage/:id` 的 `billing_detail` 不再带计价表达式与哈希（`withoutExpressions`：`inputs.pricing.base.{expression,expr_hash}`、各附加/替换组件的 `expression_hash` 与 `inputs` 里的整条 `Price`）；前端只用 `base` 是否存在与组件的 `Tokens`/`Metrics`，不受影响。
+  - 已知未处理（不在本任务范围，改的是网关的计费记录）：ccgateway helper 轮次的替换组件用上游模型名记账（`gateway/helper_history_response.go`），`billing_detail.replacement[].model` 因此对本人视图仍可见上游模型；`hook_decisions[].note` 是插件的自由文本，原样返回。
   - 有 `account:read` 的 `GET /usage/:id` 不变。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
