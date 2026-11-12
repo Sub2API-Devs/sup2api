@@ -81,6 +81,19 @@ func (f *sqlFilter) times(req *pluginv1.HTTPRequest) (from, to time.Time) {
 	return from, to
 }
 
+// flag adds cond for the parameter name = true and NOT (cond) for false.
+func (f *sqlFilter) flag(req *pluginv1.HTTPRequest, name, cond string) {
+	switch pluginsdk.Query(req, name) {
+	case "":
+	case "true":
+		f.conds = append(f.conds, cond)
+	case "false":
+		f.conds = append(f.conds, "NOT ("+cond+")")
+	default:
+		f.errs = f.errs.Add(name, "enum", name+" must be true or false / "+name+" 取值为 true、false")
+	}
+}
+
 // cond adds prefix followed by the placeholder of v ("group_id = $3").
 func (f *sqlFilter) cond(prefix string, v any) {
 	f.conds = append(f.conds, prefix+f.arg(v))

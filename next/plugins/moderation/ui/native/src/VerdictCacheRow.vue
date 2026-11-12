@@ -4,8 +4,8 @@ import { SButton, SHint, SSettingRow } from '@sub2api/ui'
 import { canManage, clearVerdictCache, toastError, useModHost } from './host'
 
 // The row under the verdict cache days of the settings tab: says when the
-// stored settings keep the cache off (`off`: the retired cache_ttl_seconds
-// = 0), and lets moderation:manage users empty the verdict cache of every
+// stored settings keep the cache off (`off`: verdict_cache_days = 0 or the
+// retired cache_ttl_seconds = 0), and lets moderation:manage users empty the verdict cache of every
 // node (POST /verdict-cache/clear) — its own action, not part of the save.
 // Renders nothing when there is neither to show.
 defineProps<{ off: boolean }>()

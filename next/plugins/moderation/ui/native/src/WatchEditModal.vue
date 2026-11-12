@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { isApiError } from '@sub2api/host'
 import { SButton, SField, SInput, SModal, SSegmented, fromLocalInput, toLocalInput } from '@sub2api/ui'
 import { applyErrorsOrToast, clearErrors, idNumber, type FieldErrors } from './forms'
+import { enumOptions } from './format'
 import { canManageSettings, createWatch, fetchPluginSettings, settingValue, updateWatch, useModHost } from './host'
 import type { Watch, WatchChange, WatchLevel } from './types'
-import { userListHint, watchLevelOptions } from './watchLevels'
+import { WATCH_LEVELS } from './watchLevels'
 
 // Add a user to the watch list or edit an entry (new-api watch-add-dialog /
 // watch-change-dialogs): level, absolute expiry or none, note and a reason
@@ -13,11 +15,10 @@ import { userListHint, watchLevelOptions } from './watchLevels'
 // note change. An untouched expiry is left to the backend, which on a new
 // entry or a level change sets watch_days at observe and none at enforce; the
 // form shows that default for the chosen level until the expiry is edited.
-// allowlisted / blocklisted are the user lists of the entry's user (known
-// for an edit): an allowlisted user cannot be set to the enforce level, and
-// for the user picked for a new entry the backend's level/allowlisted error
-// shows at the level.
-const props = defineProps<{ open: boolean; entry: Watch | null; allowlisted?: boolean; blocklisted?: boolean }>()
+// A locked entry is not edited here (the watch list offers no edit for it);
+// the user picked for a new entry may be on a user list: the backend then
+// answers 409 locked, shown at the user.
+const props = defineProps<{ open: boolean; entry: Watch | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved'): void }>()
 const host = useModHost()
 const t = host.t
@@ -76,10 +77,7 @@ watch(
 )
 watch(() => form.level, followLevel)
 
-/** The user lists count for an edit only: the user of a new entry is not known yet. */
-const listed = computed<{ allowlisted?: boolean; blocklisted?: boolean }>(() => (props.entry ? { allowlisted: !!props.allowlisted, blocklisted: !!props.blocklisted } : {}))
-const levelOptions = computed(() => watchLevelOptions(listed.value.allowlisted))
-const levelHint = computed(() => userListHint(listed.value) || t('watch.levelHint'))
+const levelOptions = computed(() => enumOptions('level', WATCH_LEVELS))
 const expiryOptions = computed(() => [
   { value: 'at', label: t('watchEdit.expiresAt') },
   { value: 'never', label: t('watch.noExpiry') }
@@ -128,7 +126,8 @@ async function save() {
     emit('update:open', false)
     emit('saved')
   } catch (e) {
-    applyErrorsOrToast(errs, e)
+    if (isApiError(e) && e.code === 'locked') errs.user_id = t('lock.refused')
+    else applyErrorsOrToast(errs, e)
   } finally {
     saving.value = false
   }
@@ -142,7 +141,7 @@ async function save() {
       <SField v-if="!entry" :label="t('events.user')" required :error="errs.user_id">
         <EntityPicker v-model:id="form.user" kind="user" />
       </SField>
-      <SField :label="t('watch.col.level')" :hint="levelHint" :error="errs.level">
+      <SField :label="t('watch.col.level')" :hint="t('watch.levelHint')" :error="errs.level">
         <SSegmented v-model="form.level" :options="levelOptions" />
       </SField>
       <SField :label="t('watch.col.expires')" :hint="expiryHint" :error="errs.expires_at || errs.days">

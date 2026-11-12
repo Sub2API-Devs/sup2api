@@ -7,14 +7,15 @@ import { onOverviewTick } from './tick'
 import { useAsync } from '../useAsync'
 import { categoryLabel, enumLabel } from '../format'
 import { fetchWatchList, useModHost } from '../host'
-import type { TabKey, WatchItem } from '../types'
-import { levelTone, trendTone } from '../tones'
+import type { WatchItem } from '../types'
+import type { SectionKey } from '../nav'
+import { levelTone } from '../tones'
 
 // "最需关注的人": the first six of the watch list in its default order (new
 // records since last seen first), one line a user: level, top categories
 // (the rest behind "+N"), new records and trend. A row opens the user's
 // watch detail.
-const emit = defineEmits<{ (e: 'open-watch', userId: number): void; (e: 'go-tab', tab: TabKey): void }>()
+const emit = defineEmits<{ (e: 'open-watch', userId: number): void; (e: 'go-tab', tab: SectionKey): void }>()
 const t = useModHost().t
 
 const list = useAsync(() => fetchWatchList({ page: 1, page_size: 6, sort: 'new' }), () => t('watch.loadFailed'))
@@ -46,7 +47,6 @@ const categoryChips = (w: WatchItem) => [
           <span class="mod-attention-cats"><SChipList :items="categoryChips(w)" :max="1" /></span>
           <span v-if="w.hits_since_seen" class="mod-text-warning mod-sub">{{ t('attention.new', { n: w.hits_since_seen }) }}</span>
           <span v-else class="mod-sub">{{ t('attention.noNew') }}</span>
-          <SBadge v-if="w.latest_trend" size="xs" :tone="trendTone(w.latest_trend)">{{ enumLabel('trend', w.latest_trend) }}</SBadge>
         </button>
       </li>
     </ul>

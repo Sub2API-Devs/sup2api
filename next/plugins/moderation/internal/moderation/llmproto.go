@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/tidwall/gjson"
 )
@@ -204,8 +202,7 @@ func (p *llmProtocol) read(ctx context.Context, ch *liveChannel, req llmRequest,
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
 		head, _ := io.ReadAll(io.LimitReader(resp.Body, drainLimit))
-		return llmTurn{}, &UpstreamError{Status: resp.StatusCode, message: upstreamMessage(head, ch.Key),
-			retryAfter: retryAfterOf(resp.Header.Get("Retry-After"))}
+		return llmTurn{}, &UpstreamError{Status: resp.StatusCode, message: upstreamMessage(head, ch.Key)}
 	}
 	if !req.Stream {
 		data, err := io.ReadAll(io.LimitReader(resp.Body, maxJSONResponse+1))
@@ -227,20 +224,6 @@ func (p *llmProtocol) read(ctx context.Context, ch *liveChannel, req llmRequest,
 		err = ctxErr(ctx, err)
 	}
 	return st.turn(), err
-}
-
-// retryAfterOf reads Retry-After: seconds or an HTTP date; 0 when absent.
-func retryAfterOf(v string) time.Duration {
-	if v == "" {
-		return 0
-	}
-	if s, err := strconv.Atoi(v); err == nil {
-		return max(time.Duration(s)*time.Second, 0)
-	}
-	if at, err := http.ParseTime(v); err == nil {
-		return max(time.Until(at), 0)
-	}
-	return 0
 }
 
 // llmUserMessage is a plain user message; the same in all three protocols.

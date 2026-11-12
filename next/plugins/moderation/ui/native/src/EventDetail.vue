@@ -6,27 +6,28 @@ import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
 import VerdictBadge from './VerdictBadge.vue'
-import AnalysisModal from './AnalysisModal.vue'
 import FlowRef from './FlowRef.vue'
 import FlowSnapshotCard from './FlowSnapshotCard.vue'
 import InputMessage from './InputMessage.vue'
 import UserRef from './UserRef.vue'
 import UserStateSection from './UserStateSection.vue'
 import { useCatalog } from './catalog'
-import { categoryLabel, dt, enumLabel, idText, isSuspicious, ms, num } from './format'
+import { dt, enumLabel, idText, isSuspicious, ms, num } from './format'
 import { canManage, deleteEvent, fetchEvent, reviewDoneText, reviewEvents, toastError, useModHost } from './host'
-import { aiVerdictTone, modeTone, severityTone } from './tones'
-import type { EventFilter, ModEventDetail, ReviewStatus, Watch } from './types'
+import { modeTone, severityTone } from './tones'
+import type { EventFilter, ModEvent, ModEventDetail, ReviewStatus, Watch } from './types'
 import { useAsync } from './useAsync'
 
 // Record detail (GET /events/:id, new-api record-detail-drawer): result, the
-// user's state with inline watch actions, AI review, per-stage trace, the
+// user's state with inline watch actions, per-stage trace, the
 // flow version it ran with, other records of the same request, text and the
 // structured input message; manage users review a suspicious record (hit,
 // block) or delete any. userLink=false (the user drawer, already showing
 // the user) leaves the user as plain text. filterable (the records tab)
 // offers to filter the list by the record's endpoint or session, and by the
-// request a replayed hit took its verdict from (filter).
+// request a replayed hit took its verdict from (filter). A 0.10.0 record
+// says how its flow was found (a warning when its binding did not apply) and
+// what decided checking first or in the background, instead of the mode.
 const props = withDefaults(defineProps<{ open: boolean; eventId: number | null; userLink?: boolean; filterable?: boolean }>(), { userLink: true })
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
@@ -43,7 +44,7 @@ const catalog = useCatalog()
 const busy = ref(false)
 const manage = computed(() => canManage())
 
-// The shown record: the prop, or a record opened from the AI analysis.
+// The shown record: the prop, or a related record opened from it.
 const currentId = ref<number | null>(props.eventId)
 watch(
   () => [props.eventId, props.open] as const,
@@ -116,23 +117,19 @@ function filterBy(q: EventFilter) {
   emit('filter', q)
 }
 
-// AI verdict of the record (§72.13.4) and the analysis that wrote it.
-const hasAI = computed(() => !!ev.value?.ai_verdict)
-const aiFields = computed<DescItem[]>(() => {
-  const e = ev.value
-  if (!e?.ai_verdict) return []
-  const items: DescItem[] = [{ key: 'verdict', label: t('detail.f.aiVerdict') }]
-  if (e.ai_severity) items.push({ key: 'severity', label: t('detail.f.aiSeverity') })
-  if (e.ai_category) items.push({ key: 'category', label: t('detail.f.aiCategory'), value: categoryLabel(e.ai_category) })
-  if (e.ai_evidence) items.push({ key: 'evidence', label: t('detail.f.aiEvidence'), full: true })
-  if (e.ai_reason) items.push({ key: 'reason', label: t('detail.f.aiReason'), value: e.ai_reason, full: true })
-  if (e.ai_analyzed_at) items.push({ key: 'analyzed', label: t('detail.f.aiAnalyzedAt'), value: dt(e.ai_analyzed_at) })
-  return items
-})
-const analysisOpen = ref(false)
-function openRecord(id: number) {
-  analysisOpen.value = false
-  currentId.value = id
+/** Why the bound flow did not apply. */
+const fallbackReason = (e: ModEvent) => (e.flow_fallback ? enumLabel('fallbackReason', e.flow_fallback.reason) : '')
+
+/** How the flow was found ('' on older records). */
+function matchText(e: ModEvent): string {
+  if (!e.flow_source) return ''
+  return e.flow_source === 'fallback' ? t('detail.match.fallback', { reason: fallbackReason(e) }) : enumLabel('detail.match', e.flow_source)
+}
+
+/** Checked first or in the background, and what decided it ('' on older records). */
+function handlingText(e: ModEvent): string {
+  if (!e.level_source || !e.level) return ''
+  return enumLabel('detail.level', e.level_source === 'watch' || e.level_source === 'default' ? `${e.level_source}_${e.level}` : e.level_source)
 }
 
 const fields = computed<DescItem[]>(() => {
@@ -153,6 +150,9 @@ const fields = computed<DescItem[]>(() => {
     { key: 'counted', label: t('detail.f.counted'), value: e.counted ? t('yes') : t('no') },
     { key: 'keep', label: t('detail.f.keepUntil'), value: e.keep_until ? dt(e.keep_until) : '' }
   ]
+  for (const [key, value] of [['match', matchText(e)], ['handling', handlingText(e)]] as const) {
+    if (value) items.push({ key, label: t(`detail.f.${key}`), value })
+  }
   if (e.reviewed_at) items.push({ key: 'reviewed', label: t('detail.f.reviewed'), value: `${dt(e.reviewed_at)} ${idText(e.reviewed_by)}` })
   if (e.session_fp) items.push({ key: 'session', label: t('detail.f.session'), value: e.session_fp, mono: true, copyable: true, full: true })
   if (e.llm_model) items.push({ key: 'llm', label: t('detail.f.llmModel'), value: e.llm_model })
@@ -170,29 +170,18 @@ const fields = computed<DescItem[]>(() => {
         <ReplayBadge v-if="ev.replayed" />
         <VerdictBadge :event="ev" />
         <SBadge v-if="ev.timing">{{ enumLabel('timing', ev.timing) }}</SBadge>
-        <SBadge v-if="ev.mode" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>
+        <SBadge v-if="ev.mode && !ev.level_source" :tone="modeTone(ev.mode)">{{ enumLabel('mode', ev.mode) }}</SBadge>
         <SBadge v-if="ev.severity" :tone="severityTone(ev.severity)">{{ t('detail.f.severity') }}: {{ enumLabel('severity', ev.severity) }}</SBadge>
         <SHint inline size="xs" class="mod-detail-time">{{ dt(ev.created_at) }}</SHint>
       </div>
 
+      <SAlert v-if="ev.flow_fallback" tone="warning" data-testid="mod-match-fallback">
+        {{ t('detail.matchFallbackHint', { id: ev.flow_fallback.flow_id, reason: fallbackReason(ev) }) }}
+      </SAlert>
       <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
 
-      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" :openable="userLink" @watch-changed="onWatchChanged" @show-user="showUser" @open-user="openUser" />
-
-      <div v-if="hasAI">
-        <SSectionTitle tag="p">
-          {{ t('detail.ai') }}
-          <template v-if="ev.ai_analysis_id" #actions>
-            <SButton size="sm" variant="ghost" icon="eyeglass" @click="analysisOpen = true">{{ t('detail.viewAnalysis') }}</SButton>
-          </template>
-        </SSectionTitle>
-        <SDescriptions :items="aiFields" :columns="2" dense>
-          <template #item-verdict><SBadge :tone="aiVerdictTone(ev.ai_verdict)">{{ enumLabel('aiVerdict', ev.ai_verdict) }}</SBadge></template>
-          <template #item-severity><SBadge :tone="severityTone(ev.ai_severity || '')">{{ enumLabel('severity', ev.ai_severity) }}</SBadge></template>
-          <template #item-evidence><q class="mod-evidence mod-prewrap">{{ ev.ai_evidence }}</q></template>
-        </SDescriptions>
-      </div>
+      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" :openable="userLink" @watch-changed="onWatchChanged" @lists-changed="reload" @show-user="showUser" @open-user="openUser" />
 
       <div v-if="ev.trace">
         <SSectionTitle tag="p">{{ t('detail.trace') }}</SSectionTitle>
@@ -256,5 +245,4 @@ const fields = computed<DescItem[]>(() => {
       <SButton @click="close">{{ host.i18n.t('ui.close') }}</SButton>
     </template>
   </SModal>
-  <AnalysisModal v-model:open="analysisOpen" :analysis-id="ev?.ai_analysis_id ?? null" @open-record="openRecord" />
 </template>

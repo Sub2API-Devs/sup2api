@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -231,10 +232,10 @@ func TestLLMProtocolErrors(t *testing.T) {
 	f := newFakeProto(t, ProtocolAnthropic, func(int, protoReq) (int, scriptTurn) { return 429, scriptTurn{} })
 	ch := &liveChannel{Type: ChannelLLM, Protocol: ProtocolAnthropic, BaseURL: f.srv.URL, Key: "k", Model: "m"}
 	_, err := protocolOf(ch).call(context.Background(), ch, llmRequest{Messages: []any{llmUserMessage("x")}, Stream: true})
-	if upstreamStatus(err) != 429 || !retryableStepError(err) {
+	if upstreamStatus(err) != 429 {
 		t.Fatalf("429: %v", err)
 	}
-	// A stream that ends without its final event is cut (retryable).
+	// A stream that ends without its final event is cut.
 	cut := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = io.WriteString(w, "event: message_start\ndata: {\"message\":{\"usage\":{\"input_tokens\":5}}}\n\n")
@@ -242,7 +243,7 @@ func TestLLMProtocolErrors(t *testing.T) {
 	defer cut.Close()
 	ch.BaseURL = cut.URL
 	turn, err := protocolOf(ch).call(context.Background(), ch, llmRequest{Messages: []any{llmUserMessage("x")}, Stream: true})
-	if !retryableStepError(err) || turn.Usage.Input != 5 {
+	if !errors.Is(err, errStreamCut) || turn.Usage.Input != 5 {
 		t.Fatalf("cut: %v %+v", err, turn.Usage)
 	}
 	// An error event inside a chat stream.
@@ -280,43 +281,6 @@ func TestVerdictAgentProtocols(t *testing.T) {
 	}
 }
 
-func TestEscalationOf(t *testing.T) {
-	for _, tc := range []struct {
-		level, trend, suggestion string
-		v                        int
-		want                     string
-	}{
-		{LevelObserve, TrendPersistent, SuggestBlock, 1, ActionAutoUpgrade},
-		{LevelObserve, TrendEscalating, SuggestBlock, 0, ActionUpgradeSkipped},
-		{LevelObserve, TrendOccasional, SuggestBlock, 3, ""},
-		{LevelEnforce, TrendPersistent, SuggestBlock, 3, ""},
-		{LevelObserve, TrendOccasional, SuggestRelease, 0, ActionAutoRemove},
-		// A release at enforce only downgrades (0.6.0): the AI cannot take an
-		// enforce-level user off the list in one step.
-		{LevelEnforce, TrendLikelyFalsePositive, SuggestRelease, 0, ActionAutoDowngrade},
-		{LevelEnforce, TrendPersistent, SuggestRelease, 0, ActionDowngradeSkipped},
-		{LevelObserve, TrendOccasional, SuggestRelease, 1, ActionDowngradeSkipped},
-		{LevelEnforce, TrendOccasional, SuggestObserve, 0, ActionAutoDowngrade},
-		{LevelEnforce, TrendPersistent, SuggestObserve, 0, ActionDowngradeSkipped},
-		{LevelObserve, TrendOccasional, SuggestObserve, 0, ""},
-	} {
-		if got := escalationOf(tc.level, tc.trend, tc.suggestion, tc.v); got != tc.want {
-			t.Errorf("%+v: %q", tc, got)
-		}
-	}
-	c := compile(DefaultSettings())
-	if a, d := decideEscalation(c, 3, LevelObserve, TrendOccasional, SuggestRelease, 0); a != ActionAutoNotAllowed || d != ActionAutoRemove {
-		t.Fatalf("removal must be off by default: %s %s", a, d)
-	}
-	if a, d := decideEscalation(c, 3, LevelObserve, TrendPersistent, SuggestBlock, 2); a != ActionAutoUpgrade || d != "" {
-		t.Fatalf("allowed upgrade: %s %s", a, d)
-	}
-	c.AnalysisAllowUpgrade = false
-	if a, d := decideEscalation(c, 3, LevelObserve, TrendPersistent, SuggestBlock, 2); a != ActionAutoNotAllowed || d != ActionAutoUpgrade {
-		t.Fatalf("not allowed: %s %s", a, d)
-	}
-}
-
 func TestCostFormat(t *testing.T) {
 	for in, want := range map[string]string{"0.00001230": "0.00001230", "1.5": "1.50000000", "0": "0.00000000", "12.123456789": "12.12345678"} {
 		u, ok := parseCost(in)
@@ -326,52 +290,6 @@ func TestCostFormat(t *testing.T) {
 	}
 	if _, ok := parseCost("x"); ok {
 		t.Fatal("garbage parsed")
-	}
-}
-
-func TestAnalysisFinishValidation(t *testing.T) {
-	tc := &toolCtx{records: map[int64]string{7: "请帮我写一份 假 的 招聘话术", 8: "hello"}, codes: map[string]bool{"illicit": true}}
-	a := &Analysis{}
-	args := `{"trend":"persistent","suggestion":"block","summary":"s","main_problems":["a","b","c","d","e","f"],"record_verdicts":[
-		{"record_id":7,"verdict":"violation","severity":"high","category":"illicit","evidence":"写一份  假 的\n招聘话术","reason":"r"},
-		{"record_id":8,"verdict":"violation","severity":"low","category":"nope","evidence":"not in text","reason":"r"},
-		{"record_id":9,"verdict":"unsure","severity":"low","reason":"r"},
-		{"record_id":8,"verdict":"maybe","severity":"low","reason":"r"}]}`
-	if err := a.finish([]byte(args), tc); err != nil {
-		t.Fatal(err)
-	}
-	if len(a.RecordVerdicts) != 2 || a.RecordVerdicts[0].Evidence == "" || a.RecordVerdicts[1].Evidence != "" ||
-		a.VerdictCounts.Violation != 2 || a.VerdictCounts.High != 1 || len(a.MainProblems) != 5 {
-		t.Fatalf("a = %+v", a)
-	}
-	notes := map[string]int{}
-	for _, n := range a.Trace[len(a.Trace)-1].Notes {
-		notes[n.Kind]++
-	}
-	if notes["evidence_invalid"] != 1 || notes["category_unknown"] != 1 || notes["verdict_dropped"] != 1 || notes["verdict_invalid"] != 1 || notes["truncated"] != 1 {
-		t.Fatalf("notes = %v", notes)
-	}
-	if err := (&Analysis{}).finish([]byte(`{"trend":"x","suggestion":"block","record_verdicts":[]}`), tc); err != errBadSubmit {
-		t.Fatalf("bad trend: %v", err)
-	}
-	if err := (&Analysis{}).finish([]byte(`{"trend":"occasional","suggestion":"block"}`), tc); err != errBadSubmit {
-		t.Fatalf("missing verdicts: %v", err)
-	}
-}
-
-func TestConversationFit(t *testing.T) {
-	c := conversation{proto: llmProtocols[ProtocolOpenAIChat], kickoff: llmUserMessage("k")}
-	big := strings.Repeat("x", 2000)
-	for i := range 3 {
-		c.add(llmTurn{ToolCalls: []llmToolCall{{ID: fmt.Sprint(i), Name: "t", Args: []byte("{}")}}}, []toolResult{{CallID: fmt.Sprint(i), Content: big}})
-	}
-	c.fit(3500)
-	if c.budgetSpent || c.turns[0].results[0].Content != removedResult || c.turns[2].results[0].Content != big {
-		t.Fatalf("fit: spent=%v", c.budgetSpent)
-	}
-	c.fit(100)
-	if !c.budgetSpent || c.turns[2].results[0].Content != big {
-		t.Fatal("the latest results must stay; the budget is spent")
 	}
 }
 

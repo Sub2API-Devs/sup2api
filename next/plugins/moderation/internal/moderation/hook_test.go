@@ -375,15 +375,16 @@ func stageOf(fallback bool, ids ...int64) Stage {
 }
 
 // publishFlow creates the flow of spec through the API (every request; every
-// model unless spec has a filter), binds it to groups and publishes it;
-// returns the flow id.
+// model unless spec has a filter; scope all, everything the client sent, as
+// before scopes existed), binds it to groups and publishes it; returns the
+// flow id.
 func publishFlow(t *testing.T, h *pluginsdktest.Harness, spec Spec, groups ...int64) int64 {
 	t.Helper()
 	spec.SampleRate = 100
 	if spec.ModelFilter.Type == "" {
 		spec.ModelFilter.Type = FilterAll
 	}
-	f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": spec}))
+	f := decodeData[FlowView](t, h.Do("POST", "/flows", nil, map[string]any{"name": "f", "draft": spec, "scope": ScopeAll}))
 	decodeData[FlowView](t, h.Do("PUT", fmt.Sprintf("/flows/%d/groups", f.ID), nil, map[string]any{"groups": groups}))
 	pub := decodeData[FlowView](t, h.Do("POST", fmt.Sprintf("/flows/%d/publish", f.ID), nil, map[string]any{"expected_version": 0}))
 	if pub.Version != 1 || pub.Dirty {
@@ -749,8 +750,8 @@ func TestConfigValidation(t *testing.T) {
 func TestBansExemptAndModeOff(t *testing.T) {
 	mod := newFakeMod(t)
 	// exempt_user_ids is the retired name of the allowlist: user 8 is
-	// moderated after the request, recorded and watched, but never refused
-	// or banned.
+	// moderated after the request and recorded, but never watched
+	// automatically, refused or banned.
 	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "ban_threshold": 2, "exempt_user_ids": []string{"8"}})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	mustHook(t, h, hookReq("MOD-HIT-sexual 1"))
@@ -765,22 +766,18 @@ func TestBansExemptAndModeOff(t *testing.T) {
 		}
 	}
 	waitEvents(t, h, map[string]string{"result": "hit", "user_id": "8"}, 3)
-	waitFor(t, "allowlisted user watched", func() bool {
-		w := decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "8"}, nil))
-		return len(w) == 1 && w[0].ViolationCount == 3 && w[0].Allowlisted && !w[0].Blocklisted
-	})
 	if p.isBlocked(8) {
 		t.Fatal("allowlisted user banned")
 	}
 	if n := len(decodeData[[]Block](t, h.Do("GET", "/blocks", nil, nil))); n != 1 {
 		t.Fatalf("blocks = %d, want only user 3", n)
 	}
-	// By hand an allowlisted user cannot be banned, but can be on the watch
-	// list (the entry exists already).
+	// By hand an allowlisted user cannot be banned, nor watched: the user's
+	// entry is the locked entry of the list (locks.go).
 	if resp := h.Do("POST", "/blocks", nil, map[string]any{"user_id": 8}); resp.GetStatus() != 400 || !strings.Contains(string(resp.GetBody()), `"allowlisted"`) {
 		t.Fatalf("ban of an allowlisted user = %d %s", resp.GetStatus(), resp.GetBody())
 	}
-	if resp := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 8}); resp.GetStatus() != http.StatusConflict {
+	if resp := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 8}); resp.GetStatus() != 409 || p.watchLevel(8) != LevelObserve {
 		t.Fatalf("watch of an allowlisted user = %d %s", resp.GetStatus(), resp.GetBody())
 	}
 	if errs := h.Configure(map[string]any{"mode": ModeOff}, nil); len(errs) > 0 {
@@ -888,9 +885,9 @@ func TestCleanupAndImport(t *testing.T) {
 	if prev["channels"] != float64(1) || len(decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))) != 0 {
 		t.Fatalf("preview = %v", prev)
 	}
-	// The guidelines come back for the console to save; what the import
-	// does not read is reported, not dropped silently.
-	if prev["analysis_guidelines"] != "my guidelines" || fmt.Sprint(prev["unsupported"]) != "[flows channels[0].proxy]" {
+	// What the import does not read is reported, not dropped silently: the
+	// analysis guidelines of a 0.9 export too (the AI analysis is gone).
+	if _, ok := prev["analysis_guidelines"]; ok || fmt.Sprint(prev["unsupported"]) != "[analysis_guidelines flows channels[0].proxy]" {
 		t.Fatalf("preview = %v", prev)
 	}
 	doc["preview"] = false
@@ -1099,7 +1096,7 @@ func TestMigration0010Idempotent(t *testing.T) {
 // count the stages by their number in the spec.
 func TestFallbackStageHitEndToEnd(t *testing.T) {
 	mod := newFakeMod(t)
-	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	channels := map[string]int64{}
 	auditor := func(typ string) int64 { return newAuditor(t, h, mod.srv.URL, typ, channels) }
 	// Group 9: Jev, Jev, then OpenAI as a fallback stage. "hate" is an
@@ -1125,13 +1122,6 @@ func TestFallbackStageHitEndToEnd(t *testing.T) {
 	tr := traceOf(t, ev)
 	if ev.Result != ResultBlock || tr.Decider != 1 || len(tr.Stages) != 2 || tr.Stages[0].Stage != 1 || tr.Stages[1].Stage != 3 || !tr.Stages[1].Fallback {
 		t.Fatalf("record %s, trace %s", ev.Result, ev.Trace)
-	}
-	// The analysis tools show the stage of the spec as well.
-	tc := &toolCtx{p: p, snap: p.snap.Load()}
-	rec := tc.recordOf(&toolRow{ID: ev.ID, Trace: ev.Trace}, 100, true)
-	if len(rec.Stages) != 2 || rec.Stages[0].Stage != 1 || rec.Stages[1].Stage != 3 || rec.Stages[1].Role != stageRoleNames[RoleFallback] ||
-		len(rec.Stages[1].Hits) != 1 || rec.Stages[1].Hits[0].Stage != 3 || len(rec.HitCategories) != 1 || rec.HitCategories[0].Stage != 3 {
-		t.Fatalf("tool record = %+v", rec)
 	}
 	ev = recordOf(t, h, "failed-review")
 	tr = traceOf(t, ev)
@@ -1234,7 +1224,7 @@ func TestFinishBuildsInputMessageOnlyForRecords(t *testing.T) {
 		in := hookReqAs(3, rid, "")
 		in.Fields[FieldMessages] = string(msgs)
 		snap := p.snap.Load()
-		m, early := p.admit(context.Background(), p.cfg.Load(), in, snap, snap.flows[flow], requestModel(in))
+		m, early := p.admit(context.Background(), p.cfg.Load(), in, snap, snap.flows[flow], flowMatch{}, requestModel(in))
 		if early != nil || len(m.chunks) != 1 || len(m.chunks[0].in.Images) != 1 {
 			t.Fatalf("admit = %+v, %+v", m, early)
 		}

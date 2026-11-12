@@ -19,12 +19,13 @@ import {
   type TableColumn
 } from '@sub2api/ui'
 import BindingEditModal from './BindingEditModal.vue'
-import { bindingKey, bindingKind, fallbackOf, hasAccountBindings, resolveSteps, sortBindings } from './bindingOps'
+import { bindingKey, bindingKind, hasAccountBindings, resolveSteps, sortBindings, staleBinding } from './bindingOps'
 import { useCatalog } from './catalog'
-import { joinList } from './format'
+import { enumLabel, joinList } from './format'
 import { defaultGroupCandidate, groupAccountsFirst, idNumber } from './forms'
 import { canManage, deleteBinding, errorMessage, fetchAccountNames, toastError, useModHost } from './host'
-import type { Binding, BindingKind, TabKey } from './types'
+import type { Binding, BindingKind } from './types'
+import type { SectionKey } from './nav'
 import { useAsync } from './useAsync'
 
 // Bindings of flows to groups and accounts (CONTRACTS §72.17): every
@@ -32,21 +33,20 @@ import { useAsync } from './useAsync'
 // binding a request of a group sent to an account goes by (both picked with
 // the host's EntityPicker). The table names the bound accounts through the
 // core's lookup, asked for those accounts only. Group bindings are the same
-// ones the flows list edits. A binding to a disabled,
-// unpublished or deleted flow is inactive (GET /bindings `inactive`): it
-// does not apply, its row says what its requests go by instead, and the
-// preview passes over it. Each table cell keeps to one line: the scope
-// reads "account · in group", the fallback of an inactive binding is in the
-// tooltip (on a phone card, under the flow).
+// ones the flows list edits. A binding to a disabled, unpublished or deleted
+// flow does not apply (GET /bindings `inactive`, `fallback_reason`): its row
+// is marked red with the flow its requests go by now (`effective_flow_id`),
+// and the preview passes over it. Each table cell keeps to one line: the
+// scope reads "account · in group".
 const host = useModHost()
 const t = host.t
 const { EntityPicker } = host.components
 const manage = computed(() => canManage())
-const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
+const emit = defineEmits<{ (e: 'go-tab', tab: SectionKey): void }>()
 const { compact } = useViewport()
 
 const catalog = useCatalog()
-const rows = computed(() => sortBindings(catalog.state.bindings).map((b) => ({ ...b, key: bindingKey(b) })))
+const rows = computed(() => sortBindings(catalog.state.bindings).map((b) => ({ ...b, key: bindingKey(b), stale: staleText(b) })))
 /** The accounts the bindings name; their names are asked for again when a binding names another one. */
 const boundAccounts = computed(() => [...new Set(rows.value.map((b) => b.account_id).filter((id) => id > 0))])
 const accounts = useAsync(() => fetchAccountNames(boundAccounts.value), () => t('bindings.loadFailed'))
@@ -98,17 +98,14 @@ const columnState = useTableColumns(columns, 'moderation-bindings')
 const kindTone = (k: BindingKind) => (k === 'group_account' ? 'accent' : k === 'account' ? 'info' : 'gray')
 /** What a binding leads to: its flow, or "not moderated" (flow 0). */
 const flowText = (id: number) => (id ? catalog.flowName(id) : t('bindings.exempt'))
-/** Why the flow of an inactive binding does not run. */
-function flowState(id: number): string {
-  const f = catalog.flow(id)
-  return t(`bindings.flowState.${!f ? 'missing' : !f.enabled ? 'disabled' : 'unpublished'}`)
-}
-/** What the requests of an inactive binding go by now (the same lookup as the preview). */
-function fallbackText(b: Binding): string {
-  // an account bound in any group: each request falls back within its own group
-  if (bindingKind(b.group_id, b.account_id) === 'account') return t('bindings.fallbackPerGroup')
-  const next = fallbackOf(rows.value, b)
-  return next ? t('bindings.fallbackBy', { scope: scopeText(next), target: flowText(next.flow_id) }) : t('bindings.fallbackNone')
+/** A binding that does not apply: why, and what its requests go by now. */
+function staleText(b: Binding): { state: string; effective: string } | null {
+  const s = staleBinding(b)
+  if (!s) return null
+  return {
+    state: t('bindings.rowInactive', { reason: enumLabel('fallbackReason', s.reason) }),
+    effective: s.effective === null ? t('bindings.effectivePerGroup') : t('bindings.effective', { target: flowText(s.effective) })
+  }
 }
 
 async function openFlow(id: number) {
@@ -142,9 +139,6 @@ function scopeNote(b: Binding): string {
   if (b.account_id) return b.group_id ? t('bindings.inGroup', { group: groupLabel(b.group_id) }) : t('bindings.anyGroup')
   return b.group_id ? t('bindings.allAccounts') : t('bindings.defaultScope')
 }
-/** The tooltip of an inactive binding: why it does not apply and what its requests go by now. */
-const inactiveText = (b: Binding) => `${t('bindings.rowInactive', { state: flowState(b.flow_id) })} · ${fallbackText(b)}`
-
 function scopeText(b: Binding): string {
   switch (bindingKind(b.group_id, b.account_id)) {
     case 'group':
@@ -217,11 +211,13 @@ const previewResult = computed(() => {
         </template>
         <template #cell-flow="{ row, layout }">
           <SBadge v-if="!row.flow_id" tone="warning">{{ t('bindings.exempt') }}</SBadge>
-          <span v-else class="mod-cell-line">
+          <span v-else :class="layout === 'card' ? 'mod-inline mod-wrap mod-gap' : 'mod-cell-line'">
             <SLink as="button" class="mod-ellipsis" @click="openFlow(row.flow_id)">{{ flowText(row.flow_id) }}</SLink>
-            <SBadge v-if="row.inactive" tone="gray" :title="inactiveText(row)">{{ t('bindings.rowInactive', { state: flowState(row.flow_id) }) }}</SBadge>
+            <template v-if="row.stale">
+              <SBadge tone="danger">{{ row.stale.state }}</SBadge>
+              <span class="mod-text-danger" data-testid="mod-binding-effective">{{ row.stale.effective }}</span>
+            </template>
           </span>
-          <div v-if="row.flow_id && row.inactive && layout === 'card'" class="mod-sub">{{ fallbackText(row) }}</div>
         </template>
         <template #cell-actions="{ row }">
           <span class="mod-row-actions">

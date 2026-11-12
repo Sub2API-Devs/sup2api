@@ -39,26 +39,3 @@ export function severityTone(s: string | undefined): Tone {
       return 'gray'
   }
 }
-
-export function aiVerdictTone(v: string | null | undefined): Tone {
-  return v === 'violation' ? 'danger' : v === 'false_positive' ? 'success' : v === 'unsure' ? 'warning' : 'gray'
-}
-
-export function trendTone(v: string | null | undefined): Tone {
-  switch (v) {
-    case 'escalating':
-      return 'danger'
-    case 'persistent':
-      return 'warning'
-    case 'occasional':
-      return 'info'
-    case 'likely_false_positive':
-      return 'success'
-    default:
-      return 'gray'
-  }
-}
-
-export function suggestionTone(v: string | null | undefined): Tone {
-  return v === 'block' ? 'danger' : v === 'observe' ? 'warning' : v === 'release' ? 'success' : 'gray'
-}

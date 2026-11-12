@@ -23,9 +23,11 @@ const (
 	DenyUserBlocked   = "moderation_user_blocked"
 	DenyBusy          = "moderation_busy"
 	DenyInputTooLarge = "moderation_input_too_large"
+	DenyUnavailable   = "moderation_unavailable" // fail_policy = close_pre
 	MsgUserBlocked    = "该用户因多次违规已被暂停使用，请联系管理员"
 	MsgBusy           = "提示词审核繁忙，请稍后重试 / moderation is busy, please retry later"
 	MsgInputTooLarge  = "请求内容超出审核上限，请缩短后重试 / the request is too long to moderate, please shorten it"
+	MsgUnavailable    = "提示词审核暂不可用，请稍后重试 / moderation is unavailable, please retry later"
 	maxNoteBytes      = 1024
 	notePrefix        = "moderation: "
 	textMaxChars      = 100000
@@ -97,7 +99,8 @@ func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayReque
 			return early, nil
 		}
 		snap := p.snap.Load()
-		return p.moderate(ctx, c, in, snap, p.attemptFlow(snap, meta)), nil
+		flow, match := p.attemptFlow(snap, meta)
+		return p.moderate(ctx, c, in, snap, flow, match), nil
 	}
 	if early == nil {
 		snap := p.snap.Load()
@@ -105,13 +108,15 @@ func (p *Plugin) OnGatewayRequest(ctx context.Context, in *pluginv1.GatewayReque
 			p.attempts.leave(meta.GetRequestId())
 			return allow(notePrefix + "per account"), nil
 		}
-		early = p.moderate(ctx, c, in, snap, snap.flowFor(meta.GetGroupId()))
+		flow, match := snap.flowFor(meta.GetGroupId())
+		early = p.moderate(ctx, c, in, snap, flow, match)
 	}
 	return settled(early), nil
 }
 
-// moderate runs flow on the request (steps 3–10); nil flow = not moderated.
-func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow) *pluginv1.GatewayRequestHookResponse {
+// moderate runs flow, found by match, on the request (steps 3–10); nil flow
+// = not moderated.
+func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow, match flowMatch) *pluginv1.GatewayRequestHookResponse {
 	// What is known without reading the body: a request no flow moderates
 	// (flow == nil: its group has none, or the binding exempts it) and a
 	// model the flow's filter leaves out are not moderated whatever is in
@@ -125,19 +130,15 @@ func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRe
 	}
 	// The hook request is held until this returns: admit it by its bytes
 	// before reading it, and answer at once when too much is in progress
-	// (instead of growing towards the memory limit). A request that would
-	// be moderated first fails closed (503): under mode = enforce that is
-	// every user who is not on the allowlist or at the observe level.
+	// (instead of growing towards the memory limit): a failure like any
+	// other (failResponse).
 	size := hookRequestSize(in)
 	if !p.admitBytes(c, size) {
 		p.stats.busy.Add(1)
-		if p.preModerated(c, in.GetMeta().GetUserId()) {
-			return deny(http.StatusServiceUnavailable, DenyBusy, MsgBusy, notePrefix+"busy")
-		}
-		return allow(notePrefix + "busy")
+		return failResponse(c, p.handlingOf(c, in.GetMeta().GetUserId()).pre(), DenyBusy, MsgBusy, notePrefix+"busy")
 	}
 	defer p.inflightBytes.Add(-size)
-	m, early := p.admit(ctx, c, in, snap, flow, model)
+	m, early := p.admit(ctx, c, in, snap, flow, match, model)
 	if early != nil {
 		return early
 	}
@@ -155,6 +156,18 @@ func (p *Plugin) moderate(ctx context.Context, c *config, in *pluginv1.GatewayRe
 	return p.runPre(ctx, m)
 }
 
+// failResponse answers a request whose moderation failed - an error, a
+// timeout, too much in progress (fail_policy, CONTRACTS §72.5, 0.10.0): it
+// passes, unless fail_policy is close_pre and the request is moderated
+// first (pre); then it is refused with 503 and code. Moderation in the
+// background never holds a request back.
+func failResponse(c *config, pre bool, code, msg, note string) *pluginv1.GatewayRequestHookResponse {
+	if pre && c.FailPolicy == FailClosePre {
+		return deny(http.StatusServiceUnavailable, code, msg, note)
+	}
+	return allow(note)
+}
+
 // precheck applies the steps every hook takes (CONTRACTS §72.5 steps 1–2):
 // off passes, banned users are refused. nil = go on.
 func (p *Plugin) precheck(c *config, in *pluginv1.GatewayRequestHookRequest) *pluginv1.GatewayRequestHookResponse {
@@ -167,27 +180,49 @@ func (p *Plugin) precheck(c *config, in *pluginv1.GatewayRequestHookRequest) *pl
 	return nil
 }
 
-// effectiveLevel is the user's watch level, or the default level without a
-// live entry (new-api gate.go effectiveLevel).
-func (p *Plugin) effectiveLevel(c *config, uid int64) string {
-	if level := p.watchLevel(uid); level != "" {
-		return level
-	}
-	return c.defaultLevel
+// Level sources (events.level_source): what decided the level of a request
+// (decideHandling).
+const (
+	LevelSourceBlocklist = "blocklist"
+	LevelSourceAllowlist = "allowlist"
+	LevelSourceWatch     = "watch"
+	LevelSourceDefault   = "default"
+)
+
+// handling is the level a request is moderated at and what decided it.
+type handling struct {
+	level, source string
 }
 
-// preModerated reports whether the user's requests are moderated before
-// they are sent on (and refused on a hit): blocklisted users always,
-// allowlisted users never, everyone else at the enforce level (new-api
-// gate.go preModerated).
-func (p *Plugin) preModerated(c *config, uid int64) bool {
+// pre: the request is moderated before it is sent on (and refused on a
+// hit).
+func (h handling) pre() bool { return h.level == LevelEnforce }
+
+// decideHandling is the one decision of a request's level (CONTRACTS §72.5,
+// new-api gate.go preModerated): blocklisted users enforce, allowlisted
+// users observe (the blocklist wins), everyone else the level of their live
+// watch entry w (watched = there is one), or the default level of mode
+// without one. A locked entry only mirrors the lists (locks.go) and never
+// decides by itself: while the lists of the settings decide (0.10.0), the
+// locked entry of a user who just left them is ignored until it is removed.
+// Moderators are moderated like everyone (staff.go).
+func decideHandling(c *config, w watchEntry, watched bool, uid int64) handling {
 	switch {
 	case c.blocklisted(uid):
-		return true
+		return handling{LevelEnforce, LevelSourceBlocklist}
 	case c.allowlisted(uid):
-		return false
+		return handling{LevelObserve, LevelSourceAllowlist}
+	case watched && !w.Locked:
+		return handling{w.Level, LevelSourceWatch}
 	}
-	return p.effectiveLevel(c, uid) == LevelEnforce
+	return handling{c.defaultLevel, LevelSourceDefault}
+}
+
+// handlingOf decides the level of uid's request with the watch list in
+// memory.
+func (p *Plugin) handlingOf(c *config, uid int64) handling {
+	w, watched := p.liveWatch(uid)
+	return decideHandling(c, w, watched, uid)
 }
 
 // requestModel is the client model of a hook request: the model field, or
@@ -220,10 +255,11 @@ func (p *Plugin) admitBytes(c *config, size int64) bool {
 }
 
 // admit applies the remaining preconditions (steps 4–8) for flow, a flow of
-// snap whose model filter takes model, the request's model. A non-nil
-// response ends the hook; otherwise m is ready to run. ctx is the hook
-// call's (planUncached).
-func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow, model string) (*moderation, *pluginv1.GatewayRequestHookResponse) {
+// snap found by match whose model filter takes model, the request's model.
+// A non-nil response ends the hook; otherwise m is ready to run. ctx is the
+// hook call's (planUncached). What the flow moderates is what its scope
+// keeps of the pieces (scopeFilter).
+func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayRequestHookRequest, snap *snapshot, flow *liveFlow, match flowMatch, model string) (*moderation, *pluginv1.GatewayRequestHookResponse) {
 	meta := in.GetMeta()
 	uid := meta.GetUserId()
 	protocol := meta.GetClientProtocol()
@@ -234,7 +270,7 @@ func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayReque
 	if !moderated {
 		return nil, allowEmpty
 	}
-	req := buildRequest(pieces)
+	req := buildRequest(scopeFilter(flow.scope, pieces))
 	if len(req.segs) == 0 {
 		return nil, allowEmpty
 	}
@@ -245,7 +281,8 @@ func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayReque
 		return nil, allowEmpty
 	}
 	m := &moderation{cfg: c, flow: flow, snap: snap, timing: TimingPost}
-	if p.preModerated(c, uid) {
+	h := p.handlingOf(c, uid)
+	if h.pre() {
 		m.timing = TimingPre
 	}
 	if m.timing == TimingPost && !sampled(req.hash, flow.Spec.SampleRate) {
@@ -256,7 +293,8 @@ func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayReque
 		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(model, 200), Protocol: protocol, Mode: c.Mode,
 		Endpoint: textutil.TruncateRunes(meta.GetEndpoint(), 255), SessionFp: textutil.TruncateRunes(meta.GetSessionFingerprint(), 64),
 		Timing: m.timing, FlowID: flow.ID, FlowVersion: flow.Version, InputFormat: protocol,
-		TextHash: hex.EncodeToString(req.hash[:]), WatchLevel: p.watchLevel(uid),
+		TextHash: hex.EncodeToString(req.hash[:]), Level: h.level, LevelSource: h.source,
+		FlowSource: match.source, FlowFallback: match.fallback,
 	}
 	pl, early := p.planUncached(ctx, m, req)
 	if early != nil {
@@ -266,13 +304,8 @@ func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayReque
 		return nil, deny(c.BlockStatus, DenyInputTooLarge, MsgInputTooLarge,
 			fmt.Sprintf("%sinput too large (%d chunks, limit %d)", notePrefix, pl.trace.ChunksTotal, c.InputMaxChunks))
 	}
-	m.chunks, m.plan = pl.chunks, pl
+	m.setPlan(pl)
 	m.key = runKey(snap, flow, pl.chunks)
-	m.rec.TextChars, m.rec.ImageCount = pl.trace.Chars, pl.trace.Images
-	if c.StoreText {
-		t := textutil.TruncateRunes(m.text(), textMaxChars)
-		m.rec.Text = &t
-	}
 	if !snap.sendsImages(flow) {
 		for _, ch := range m.chunks {
 			// image_count is already taken. The chunk still lists the
@@ -295,7 +328,11 @@ func (p *Plugin) admit(ctx context.Context, c *config, in *pluginv1.GatewayReque
 // that is not cached and is sent, the cached text of the request too
 // (makePlan). A non-nil response ends the hook: a cached hit whose whole
 // segment set is in the request decides it at once (replay), and a request
-// whose segments have all passed is not sent again.
+// whose segments have all passed is not sent again. Under hit_replay =
+// new_content (CONTRACTS §72.5, 0.10.0) a post request with a hit is replayed
+// here only when nothing is beside its hit sets but what has passed; any
+// other is queued as it is, and the worker replays the hit and moderates the
+// rest (runPost) - one replay for the request, and with the KV.
 //
 // Under pre timing the lookup asks the KV too, on ctx, the hook call
 // (lookupVerdicts). When that ends first, what was not read is unknown: the
@@ -308,14 +345,7 @@ func (p *Plugin) planUncached(ctx context.Context, m *moderation, req *request) 
 	}
 	cached := p.lookupVerdicts(ctx, m.snap.scopeOf(m.flow), hashes, m.timing == TimingPre)
 	m.asked = cached.asked
-	if cached.hit != nil {
-		// Known limitation, kept as in new-api (gate.go planAudit: a cached
-		// hit ends the plan): the replay decides the whole request, so what
-		// the request holds beside the hit set - new content after a hit in
-		// the history of a conversation - is not moderated in this request.
-		// Under post timing such a conversation is recorded as a replayed
-		// hit on every turn and its new content is never sent to an
-		// auditor; under pre timing the request is refused anyway.
+	if cached.hit != nil && (!m.replayRest() || cached.coversAll(hashes)) {
 		return nil, p.replaySafely(m, req, cached.hit, cached.hitID)
 	}
 	lim := m.cfg.limits
@@ -330,6 +360,26 @@ func (p *Plugin) planUncached(ctx context.Context, m *moderation, req *request) 
 	p.stats.cacheHits.Add(1)
 	p.countCacheHit(m, m.rec.UserID, m.rec.GroupID)
 	return nil, allow(notePrefix + "pass (cached)")
+}
+
+// replayRest reports whether a request with a replayed hit goes on with what
+// is beside its hit sets: under hit_replay = new_content, after the request
+// (a pre request is refused anyway). new-api (gate.go planAudit), and whole,
+// let the replay decide the whole request: new content after a hit in the
+// history of a conversation was then never moderated, the conversation being
+// recorded as a replayed hit on every turn.
+func (m *moderation) replayRest() bool {
+	return m.timing == TimingPost && m.cfg.HitReplay == HitReplayNewContent
+}
+
+// setPlan makes pl the plan of m and describes it on the record.
+func (m *moderation) setPlan(pl *plan) {
+	m.chunks, m.plan = pl.chunks, pl
+	m.rec.TextChars, m.rec.ImageCount = pl.trace.Chars, pl.trace.Images
+	if m.cfg.StoreText {
+		t := textutil.TruncateRunes(m.text(), textMaxChars)
+		m.rec.Text = &t
+	}
 }
 
 // text is the moderated text of every chunk (the record text).
@@ -415,17 +465,26 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 				p.concludePre(m, r, start)
 			}
 		})
-		return allow(notePrefix + "error canceled")
+		return failResponse(m.cfg, true, DenyUnavailable, MsgUnavailable, notePrefix+"error canceled")
 	}
 	refused := r.tr.Final == Hit
 	if ctx.Err() != nil && !refused {
-		return allow(traceNote(m, r.tr))
+		return m.passed(r.tr)
 	}
 	p.concludeSafely(m, r, start)
 	if refused {
 		return deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, traceNote(m, r.tr))
 	}
-	return allow(traceNote(m, r.tr))
+	return m.passed(r.tr)
+}
+
+// passed answers a pre run that did not hit: it passes, unless nothing was
+// judged (an error) and fail_policy says otherwise (failResponse).
+func (m *moderation) passed(tr Trace) *pluginv1.GatewayRequestHookResponse {
+	if tr.verdict() == ResultError {
+		return failResponse(m.cfg, true, DenyUnavailable, MsgUnavailable, traceNote(m, tr))
+	}
+	return allow(traceNote(m, tr))
 }
 
 // concludeSafely is concludePre on the goroutine of the hook. A panic while
@@ -453,7 +512,7 @@ func (p *Plugin) replaySafely(m *moderation, req *request, hit *storedHit, id st
 				"panic", fmt.Sprint(v), "stack", string(debug.Stack()))
 			resp = allow(notePrefix + "hit (replay)")
 			if m.timing == TimingPre {
-				resp = deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, notePrefix+"hit replay")
+				resp = deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.replayMessage(), notePrefix+"hit replay")
 			}
 		}
 	}()
@@ -516,8 +575,10 @@ func (p *Plugin) runPost(m *moderation) {
 	m.rec.QueueMs = int(p.now().Sub(m.queued).Milliseconds())
 	if m.plan != nil {
 		// What the cache learned since the job was queued, now with the KV:
-		// a cached hit is replayed, and nothing runs when every moderated
-		// segment has passed meanwhile (another request with the same
+		// a cached hit is replayed - under hit_replay = new_content the
+		// segments of the hit sets are then left out and the rest goes on
+		// (plan.without) - and nothing runs when every moderated segment
+		// has passed meanwhile (another request with the same
 		// content, or a review). The cache is asked under the clear counter
 		// of now (scopeNow), not of the snapshot the job was queued with:
 		// after a clear the job is answered by what the cache learned since
@@ -527,7 +588,10 @@ func (p *Plugin) runPost(m *moderation) {
 		m.asked = cached.asked
 		if cached.hit != nil {
 			p.replay(m, nil, cached.hit, cached.hitID)
-			return
+			if !m.replayRest() || !m.plan.without(cached.covered) {
+				return
+			}
+			m.setPlan(m.plan)
 		}
 		if m.allPassed(cached.passed) {
 			p.stats.cacheHits.Add(1)
@@ -816,7 +880,7 @@ func (p *Plugin) replay(m *moderation, req *request, hit *storedHit, id string) 
 	p.countReplay(m)
 	p.record(m.cfg, rec)
 	if refused {
-		return deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, traceNote(m, tr)+" replay")
+		return deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.replayMessage(), traceNote(m, tr)+" replay")
 	}
 	return allow(notePrefix + "hit (replay)")
 }

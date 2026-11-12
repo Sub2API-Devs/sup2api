@@ -298,8 +298,8 @@ func (p *Plugin) hour() time.Time { return p.now().UTC().Truncate(time.Hour) }
 
 func (p *Plugin) day() time.Time { return p.now().UTC().Truncate(24 * time.Hour) }
 
-// countCall counts one upstream call of a channel (audit and analysis only:
-// manual calls do not change a channel's health).
+// countCall counts one upstream call of a channel (audit only: manual calls
+// do not change a channel's health).
 func (p *Plugin) countCall(source string, ch *liveChannel, calls int, err error, ms int64) {
 	if ch == nil || calls == 0 {
 		return

@@ -230,26 +230,16 @@ func flowCounters(rows []statRow, since time.Time) (all, pre map[int64]*counters
 // TodayCounts are today's totals of the overview. Replayed counts the
 // suspicious requests decided by a cached hit; they are in Suspicious too.
 type TodayCounts struct {
-	Audited           int64 `json:"audited"`
-	Suspicious        int64 `json:"suspicious"`
-	Replayed          int64 `json:"replayed"`
-	Blocked           int64 `json:"blocked"`
-	Overturned        int64 `json:"overturned"`
-	Errors            int64 `json:"errors"`
-	CacheSkipped      int64 `json:"cache_skipped"`
-	AuditorCalls      int64 `json:"auditor_calls"`
-	TokensIn          int64 `json:"tokens_in"`
-	TokensOut         int64 `json:"tokens_out"`
-	Analyses          int64 `json:"analyses"`
-	AnalysesFailed    int64 `json:"analyses_failed"`
-	AnalysisTokensIn  int64 `json:"analysis_tokens_in"`
-	AnalysisTokensOut int64 `json:"analysis_tokens_out"`
-}
-
-// AIReviewCounts add up the record verdicts of today's analyses.
-type AIReviewCounts struct {
-	Reviewed int64 `json:"reviewed"`
-	VerdictTally
+	Audited      int64 `json:"audited"`
+	Suspicious   int64 `json:"suspicious"`
+	Replayed     int64 `json:"replayed"`
+	Blocked      int64 `json:"blocked"`
+	Overturned   int64 `json:"overturned"`
+	Errors       int64 `json:"errors"`
+	CacheSkipped int64 `json:"cache_skipped"`
+	AuditorCalls int64 `json:"auditor_calls"`
+	TokensIn     int64 `json:"tokens_in"`
+	TokensOut    int64 `json:"tokens_out"`
 }
 
 // WatchCounts are the watch list header counts.
@@ -261,6 +251,9 @@ type WatchCounts struct {
 	// seen. Under the default level enforce new entries join at enforce, so
 	// this is where users with new hits show.
 	BlockingWithNew int64 `json:"blocking_with_new"`
+	// Locked: the entries of the user lists (locks.go), counted in the
+	// levels above too.
+	Locked int64 `json:"locked"`
 }
 
 // HealthRow is the last-hour health of an auditor or a channel.
@@ -311,7 +304,6 @@ type CostRef struct {
 type StatusCosts struct {
 	Total    CostSummary `json:"total"`
 	Audit    CostSummary `json:"audit"`
-	Analysis CostSummary `json:"analysis"`
 	Manual   CostSummary `json:"manual"`
 	Channels []CostRef   `json:"channels"`
 	Auditors []CostRef   `json:"auditors"`
@@ -324,18 +316,20 @@ type Status struct {
 	Mode    string `json:"mode"`
 	// DefaultLevel is the level mode gives a user without a watch entry
 	// (observe when mode is off).
-	DefaultLevel string         `json:"default_level"`
-	AlertPercent int            `json:"error_rate_alert_percent"`
-	Today        TodayCounts    `json:"today"`
-	TodayFrom    time.Time      `json:"today_from"`
-	AIReview     AIReviewCounts `json:"ai_review"`
-	Watch        WatchCounts    `json:"watch"`
-	Auditors     []HealthRow    `json:"auditors"`
-	Channels     []HealthRow    `json:"channels"`
-	Funnels      []Funnel       `json:"funnels"`
-	Queue        []QueueStatus  `json:"queue"`
-	Costs        StatusCosts    `json:"costs"`
-	Runtime      Runtime        `json:"runtime"`
+	DefaultLevel string        `json:"default_level"`
+	AlertPercent int           `json:"error_rate_alert_percent"`
+	Today        TodayCounts   `json:"today"`
+	TodayFrom    time.Time     `json:"today_from"`
+	Watch        WatchCounts   `json:"watch"`
+	Auditors     []HealthRow   `json:"auditors"`
+	Channels     []HealthRow   `json:"channels"`
+	Funnels      []Funnel      `json:"funnels"`
+	Queue        []QueueStatus `json:"queue"`
+	Costs        StatusCosts   `json:"costs"`
+	Runtime      Runtime       `json:"runtime"`
+	// StaleBindings counts the bindings that do not apply (Binding.Inactive,
+	// 0.10.0): the overview points to the bindings page.
+	StaleBindings int `json:"stale_bindings"`
 }
 
 func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -364,13 +358,19 @@ func (p *Plugin) status(ctx context.Context, db *pgxpool.Pool, ck clock) (*Statu
 	}
 	sum := sumStatusRows(rows, today, lastHour)
 	out := &Status{Enabled: c.enabled, Running: p.host != nil, Mode: c.Mode, DefaultLevel: c.defaultLevel, AlertPercent: c.ErrorRateAlertPercent, TodayFrom: today,
-		Today: sum.today, Auditors: sum.health(c.ErrorRateAlertPercent), Funnels: sum.funnels(names), Queue: p.queues(), Runtime: p.runtimeState(ctx),
+		Today: sum.today, Auditors: sum.health(c.ErrorRateAlertPercent), Funnels: sum.funnels(names), Queue: p.queues(), Runtime: p.runtimeState(),
 		Costs: StatusCosts{Channels: []CostRef{}, Auditors: costRefs(sum.auditorCosts)}, Channels: []HealthRow{}}
 	if err := p.addChannelStatus(ctx, db, out, from, today, lastHour, c.ErrorRateAlertPercent); err != nil {
 		return nil, err
 	}
-	if err := addAnalysisCounts(ctx, db, out, today); err != nil {
+	bindings, err := loadBindings(ctx, db, p.snap.Load())
+	if err != nil {
 		return nil, err
+	}
+	for _, b := range bindings {
+		if b.Inactive {
+			out.StaleBindings++
+		}
 	}
 	out.Watch, err = p.watchCounts(ctx, db)
 	return out, err
@@ -478,7 +478,8 @@ func (p *Plugin) addChannelStatus(ctx context.Context, db *pgxpool.Pool, out *St
 		case SourceAudit:
 			out.Costs.Audit.add(cost)
 		case SourceAnalysis:
-			out.Costs.Analysis.add(cost)
+			// The retired AI analysis (still run by 0.9 nodes during a
+			// rolling upgrade) counts in the total only.
 		default:
 			out.Costs.Manual.add(cost)
 		}
@@ -492,23 +493,9 @@ func (p *Plugin) addChannelStatus(ctx context.Context, db *pgxpool.Pool, out *St
 	return nil
 }
 
-// health reports whether the row counts in a channel's health: audit and
-// analysis calls (manual calls are left out, CONTRACTS §72.14).
-func (r *channelStat) health() bool { return r.source == SourceAudit || r.source == SourceAnalysis }
-
-// addAnalysisCounts adds today's analyses, their tokens and the AI review
-// counts (verdict_counts of today's successful analyses).
-func addAnalysisCounts(ctx context.Context, db *pgxpool.Pool, out *Status, today time.Time) error {
-	ai := &out.AIReview
-	err := db.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE status <> 'ok'), coalesce(sum(tokens_in), 0), coalesce(sum(tokens_out), 0),
-			coalesce(sum((verdict_counts->>'violation')::bigint) FILTER (WHERE status = 'ok'), 0),
-			coalesce(sum((verdict_counts->>'false_positive')::bigint) FILTER (WHERE status = 'ok'), 0),
-			coalesce(sum((verdict_counts->>'unsure')::bigint) FILTER (WHERE status = 'ok'), 0)
-		FROM user_analyses WHERE created_at >= $1`, today).Scan(&out.Today.Analyses, &out.Today.AnalysesFailed,
-		&out.Today.AnalysisTokensIn, &out.Today.AnalysisTokensOut, &ai.Violation, &ai.FalsePositive, &ai.Unsure)
-	ai.Reviewed = ai.Violation + ai.FalsePositive + ai.Unsure
-	return err
-}
+// health reports whether the row counts in a channel's health: audit calls
+// only (manual calls are left out, CONTRACTS §72.14).
+func (r *channelStat) health() bool { return r.source == SourceAudit }
 
 // watchCounts: watching and watching_with_new count the observe level,
 // blocking the enforce level (new-api GetModerationWatchCounts);
@@ -517,8 +504,8 @@ func addAnalysisCounts(ctx context.Context, db *pgxpool.Pool, out *Status, today
 func (p *Plugin) watchCounts(ctx context.Context, db *pgxpool.Pool) (WatchCounts, error) {
 	var w WatchCounts
 	err := db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE level = 'observe'), count(*) FILTER (WHERE level = 'observe' AND hits_since_seen > 0),
-			count(*) FILTER (WHERE level = 'enforce'), count(*) FILTER (WHERE level = 'enforce' AND hits_since_seen > 0)
-		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking, &w.BlockingWithNew)
+			count(*) FILTER (WHERE level = 'enforce'), count(*) FILTER (WHERE level = 'enforce' AND hits_since_seen > 0), count(*) FILTER (WHERE locked)
+		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, p.now().UTC()).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking, &w.BlockingWithNew, &w.Locked)
 	return w, err
 }
 

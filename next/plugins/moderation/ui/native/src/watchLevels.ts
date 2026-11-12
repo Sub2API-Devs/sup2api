@@ -1,11 +1,10 @@
-import type { SelectOption } from '@sub2api/ui'
-import { enumOptions } from './format'
-import { useModHost } from './host'
 import type { WatchLevel } from './types'
 
-// The watch levels a user can be set to, given the user lists of the
-// settings (CONTRACTS §72.15): shared by the inline watch actions and the
-// watch entry editor.
+// The watch levels and actions shared by the inline watch actions, the watch
+// list rows and the watch entry editor. Since 0.10.0 a user on a user list
+// of the settings, or with a locked entry, cannot be added, set to a level
+// or removed (the watch API answers 409 locked): the list decides, and the
+// user is unlocked first (userLock.ts).
 
 export const WATCH_LEVELS: readonly WatchLevel[] = ['observe', 'enforce']
 
@@ -15,15 +14,5 @@ export interface WatchAction {
   level: WatchLevel | null
 }
 
-/** An allowlisted user cannot be set to the enforce level (the backend answers level/allowlisted). */
-export const levelRefused = (level: unknown, allowlisted: boolean | undefined) => level === 'enforce' && !!allowlisted
-
-/** The level choices; enforce is disabled for an allowlisted user. */
-export const watchLevelOptions = (allowlisted: boolean | undefined): SelectOption[] =>
-  enumOptions('level', WATCH_LEVELS).map((o) => ({ ...o, disabled: levelRefused(o.value, allowlisted) }))
-
-/** What a user list changes about the levels ('' = on neither list); a user on both lists is blocklisted. */
-export function userListHint(lists: { allowlisted?: boolean; blocklisted?: boolean }): string {
-  const t = useModHost().t
-  return lists.blocklisted ? t('lists.blockAlwaysPre') : lists.allowlisted ? t('lists.allowOnlyObserve') : ''
-}
+/** The watch actions are refused for the user: on a user list, or the entry is locked. */
+export const watchLocked = (u: { allowlisted?: boolean; blocklisted?: boolean; locked?: boolean }) => !!(u.locked || u.allowlisted || u.blocklisted)
