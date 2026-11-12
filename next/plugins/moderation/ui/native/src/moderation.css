@@ -126,10 +126,14 @@ html.dark {
   padding: 0 1rem;
 }
 .mod-filter-q {
-  flex: 1 1 16rem;
+  flex: 1 1 12rem;
 }
 .mod-filter-md {
   width: 11.5rem;
+}
+/* a user picker: room for "email #id" */
+.mod-filter-lg {
+  width: 15rem;
 }
 .mod-filter-chips {
   margin-top: 0.75rem;
@@ -267,6 +271,10 @@ tr:focus-within .mod-row-tool {
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
+}
+/* a dialog's form that takes the opening focus itself (its first field is an entity picker): no ring around the whole form */
+.mod-form:focus {
+  outline: none;
 }
 /* a form page (the settings tab) limits its own width, as the console's
    schema settings forms do (max-w-4xl); the console main is full width */
@@ -503,8 +511,10 @@ p.mod-text-danger {
   width: 16rem;
   max-width: 100%;
 }
+/* room for the default group's name: "默认（未单独绑定的分组） #0" */
 .mod-flows-group {
-  width: 12rem;
+  width: 18rem;
+  max-width: 100%;
 }
 /* the group coverage under the table: a summary, short counts (names in tooltips), the stats note */
 .mod-flows-coverage {
@@ -530,7 +540,7 @@ p.mod-text-danger {
   gap: 0.75rem;
 }
 .mod-bindings-preview > * {
-  width: 16rem;
+  width: 18rem;
 }
 .mod-bindings-result {
   margin: 0.75rem 0 0;

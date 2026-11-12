@@ -60,4 +60,15 @@ describe('filter chips', () => {
     ])
     expect(filterChips(fields, {})).toEqual([])
   })
+
+  it('names a picked id with the text of its field', () => {
+    const picked: FilterField[] = [
+      { key: 'group_id', label: '分组', text: (id) => (id === '0' ? '默认分组' : `vip #${id}`) },
+      { key: 'api_key_id', label: 'API Key', text: (id) => `#${id}` }
+    ]
+    expect(filterChips(picked, { group_id: '0', api_key_id: 12 })).toEqual([
+      { key: 'group_id', label: '分组', value: '默认分组' },
+      { key: 'api_key_id', label: 'API Key', value: '#12' }
+    ])
+  })
 })

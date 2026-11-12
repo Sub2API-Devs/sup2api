@@ -25,11 +25,42 @@ export function applyErrorsOrToast(errs: FieldErrors, e: unknown, shown?: readon
 }
 
 /**
+ * An entity picker's id as the number the API takes: NaN for none, for text
+ * that is no id as it stands ("007") and for digits a number cannot hold
+ * exactly. "0" is 0: the default group, where a form offers it.
+ */
+export function idNumber(v: string): number {
+  const id = /^(0|[1-9]\d*)$/.test(v) ? Number(v) : NaN
+  return Number.isSafeInteger(id) ? id : NaN
+}
+
+/**
+ * Group 0, the default group, as a group picker's own candidate (`extra`):
+ * the core's lookup has no row for it. `name` is what the page calls it.
+ */
+export const defaultGroupCandidate = (name: string) => [{ id: 0, name }]
+
+/**
+ * The lookup scope of an account picker beside a group picker: the accounts
+ * of the picked group come first. None for no group and for the default
+ * group, which the lookup refuses (400).
+ */
+export const groupAccountsFirst = (group: string) => (idNumber(group) > 0 ? { prefer_group_id: group } : undefined)
+
+/** Filters a query was put into during the current task: their list is about to reload by itself. */
+const fresh = new WeakSet<object>()
+
+/**
  * Puts a filter query into a useList's filters. Returns false when nothing
  * changed: the list then does not reload by itself and the caller reloads.
+ * A change made earlier in the same task still counts: Enter in an entity
+ * picker's text box applies the pick and submits the form, and the form's
+ * search must not load the same filters a second time.
  */
 export function applyFilters(filters: Record<string, unknown>, next: Record<string, unknown>): boolean {
-  if (Object.entries(next).every(([k, v]) => filters[k] === v)) return false
+  if (Object.entries(next).every(([k, v]) => filters[k] === v)) return fresh.has(filters)
   Object.assign(filters, next)
+  fresh.add(filters)
+  setTimeout(() => fresh.delete(filters))
   return true
 }

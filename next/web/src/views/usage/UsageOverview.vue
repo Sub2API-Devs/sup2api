@@ -14,7 +14,7 @@ import UsageCharts from '@/components/stats/UsageCharts.vue'
 import { autoGranularity, hourAllowed, type Granularity } from '@/components/stats/stats'
 import { useAuthStore } from '@/stores/auth'
 import UsageFilters from './UsageFilters.vue'
-import { baseUsageFilters, queryUsageFilters } from './usageFilters'
+import { baseUsageFilters, entityPatch, queryUsageFilters } from './usageFilters'
 import { useUsageSummary } from './useUsageSummary'
 
 const props = withDefaults(
@@ -22,11 +22,10 @@ const props = withDefaults(
     summaryPath: string
     defaultRange: RangeKey
     admin?: boolean
-    groupOptions?: Array<{ value: string | number; label: string }>
     /** Bumped by the page's refresh button: reload everything (the page owns the header). */
     revision?: number
   }>(),
-  { admin: false, groupOptions: undefined, revision: 0 }
+  { admin: false, revision: 0 }
 )
 const emit = defineEmits<{ (e: 'update:loading', value: boolean): void }>()
 const { t } = useI18n()
@@ -35,7 +34,7 @@ const auth = useAuthStore()
 
 const showAccount = computed(() => props.admin && auth.has('account:read'))
 
-const fromQuery = queryUsageFilters(route.query, props.admin)
+const fromQuery = queryUsageFilters(route.query, props.admin, showAccount.value)
 const range = ref<RangeKey>(fromQuery.from || fromQuery.to ? 'custom' : props.defaultRange)
 const filters = reactive<Record<string, string>>({ ...baseUsageFilters(props.defaultRange), ...fromQuery })
 
@@ -57,6 +56,9 @@ const totals = useUsageSummary(props.summaryPath, filters, 'none')
 // The request types under the search, for the type select (see UsageRecords).
 const protocols = useUsageSummary(props.summaryPath, filters, 'protocol', true, () => ({ protocol: '' }))
 const protocolOptions = computed(() => protocols.rows.value.map((r) => r.key).filter((k) => k !== ''))
+// The models under the search, for the model picker (see UsageRecords).
+const models = useUsageSummary(props.summaryPath, filters, 'model', true, () => ({ model: '', model_contains: '' }))
+const modelOptions = computed(() => models.rows.value.map((r) => r.key).filter((k) => k !== ''))
 
 // The caller's API key names for the "by API key" breakdown (keyed by id).
 const keyNames = reactive(new Map<string, string>())
@@ -78,6 +80,7 @@ watch(
   () => {
     totals.reload()
     protocols.reload()
+    models.reload()
     revisionCharts.value++
   }
 )
@@ -90,7 +93,7 @@ function filterBy(patch: Record<string, string>) {
 
 <template>
   <div class="flex flex-col gap-4">
-    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :group-options="groupOptions" :protocol-options="protocolOptions" @update:model-value="Object.assign(filters, $event)">
+    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :protocol-options="protocolOptions" :model-options="modelOptions" @update:model-value="Object.assign(filters, $event)">
       <template #range>
         <div class="flex flex-wrap items-center gap-2">
           <SDateRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
@@ -117,8 +120,8 @@ function filterBy(patch: Record<string, string>) {
       :revision="revisionCharts"
       :group="admin ? 'usage-admin' : 'usage-mine'"
       :model-sources="admin"
-      @select-model="filterBy({ model_contains: $event })"
-      @select-secondary="(k: string) => filterBy(admin ? { group_name: k } : { api_key_id: k })"
+      @select-model="filterBy(entityPatch('model', { text: $event }))"
+      @select-secondary="(k: string) => filterBy(admin ? { group_name: k } : entityPatch('api_key', { id: k }))"
     />
   </div>
 </template>

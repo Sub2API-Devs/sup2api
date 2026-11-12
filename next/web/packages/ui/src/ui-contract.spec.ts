@@ -13,7 +13,7 @@ describe('host UI 3 contract', () => {
     expect('TabBar' in ui).toBe(false)
   })
   it('rejects unported UI 1 plugins and accepts the migrated compatibility range', () => {
-    expect(HOST_UI_VERSION).toBe('3.10.0')
+    expect(HOST_UI_VERSION).toBe('3.12.0')
     expect(satisfiesRange(HOST_UI_VERSION, '^1.0')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^2.0')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^3.0')).toBe(true)
@@ -36,6 +36,10 @@ describe('host UI 3 contract', () => {
     expect(satisfiesRange('3.8.0', '^3.9')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^3.10')).toBe(true)
     expect(satisfiesRange('3.9.0', '^3.10')).toBe(false)
+    expect(satisfiesRange(HOST_UI_VERSION, '^3.11')).toBe(true)
+    expect(satisfiesRange('3.10.0', '^3.11')).toBe(false)
+    expect(satisfiesRange(HOST_UI_VERSION, '^3.12')).toBe(true)
+    expect(satisfiesRange('3.11.0', '^3.12')).toBe(false)
   })
   it('keeps the plugin preset and the shared packages on the host UI version', () => {
     expect(PRESET_UI_VERSION).toBe(HOST_UI_VERSION)
@@ -48,7 +52,7 @@ describe('host UI 3 contract', () => {
     expectTypeOf<ui.FilterChipItem>().toEqualTypeOf<{ key: string; label: string; value: string }>()
     expectTypeOf<ui.TableColumn['grow']>().toEqualTypeOf<boolean | undefined>()
   })
-  it('names the core editors handed to plugins (UI 3.7)', () => {
+  it('names the core editors (UI 3.7) and the entity pickers (UI 3.11, the multiple one 3.12) handed to plugins', () => {
     expect(HOST_COMPONENT_NAMES).toEqual([
       'ParamOverrideEditor',
       'RateLimitEditor',
@@ -56,7 +60,9 @@ describe('host UI 3 contract', () => {
       'HeaderPassthroughEditor',
       'ProxyPicker',
       'ModelMappingEditor',
-      'UpstreamEditor'
+      'UpstreamEditor',
+      'EntityPicker',
+      'EntityMultiPicker'
     ])
   })
   it('locks the account batch size shared with the core (UI 3.6)', () => {

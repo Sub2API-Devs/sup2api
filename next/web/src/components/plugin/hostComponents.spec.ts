@@ -3,7 +3,7 @@ import { HOST_COMPONENT_NAMES } from '@sub2api/host'
 import { hostComponents } from './hostComponents'
 
 describe('host components', () => {
-  it('exposes every core editor of UI 3.7 as a read-only object', async () => {
+  it('exposes every core editor (UI 3.7) and the entity pickers (UI 3.11, 3.12) as a read-only object', async () => {
     expect(Object.keys(hostComponents)).toEqual([...HOST_COMPONENT_NAMES])
     expect(Object.isFrozen(hostComponents)).toBe(true)
     for (const c of Object.values(hostComponents)) {

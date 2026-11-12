@@ -15,7 +15,12 @@ export default defineConfig({
       // Before '@sub2api/ui', which would otherwise claim the subpath.
       '@sub2api/ui/testing': r('./packages/ui/src/testViewport.ts'),
       '@sub2api/ui': r('./packages/ui/src/index.ts'),
-      '@sub2api/host': r('./packages/host/src/index.ts')
+      '@sub2api/host': r('./packages/host/src/index.ts'),
+      // A plugin's native UI runs its specs with this config from its own
+      // directory: it takes the console's Vue and test utils, so its
+      // components and the @sub2api/ui ones they render share one Vue.
+      vue: r('./node_modules/vue'),
+      '@vue/test-utils': r('./node_modules/@vue/test-utils')
     }
   },
   define: {

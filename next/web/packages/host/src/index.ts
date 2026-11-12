@@ -12,7 +12,7 @@ export * from './bridge-protocol'
 export { useList, type UseListOptions, type UseListResult } from './useList'
 
 /** Version of the host UI contract; plugins declare hostUICompat against it. */
-export const HOST_UI_VERSION = '3.10.0'
+export const HOST_UI_VERSION = '3.12.0'
 
 /**
  * Accounts per plugin account action request and per `GET /accounts?ids=`
@@ -53,9 +53,10 @@ export interface HostPermissions {
 }
 
 /**
- * Core account editors handed to plugins (UI 3.7, docs/COMMON-CONTROLS.md §3).
- * Each v-model is the account API field as the core executes it; all take
- * `disabled`:
+ * Core components handed to plugins (docs/COMMON-CONTROLS.md §3): the account
+ * editors (UI 3.7) and the entity pickers (UI 3.11; `exclude` and the multiple
+ * one UI 3.12). An editor's v-model is the
+ * account API field as the core executes it; all take `disabled`:
  * - ParamOverrideEditor: `param_override` object | null; `models?: string[]` (preview suggestions)
  * - RateLimitEditor: `{ rpm_limit, tpm_limit, spm_limit, spm_window_seconds? }` (the window only once given or changed); `errors?: Record<string, string>`
  * - ModelLimitsEditor: `model_limits` array; `options?: string[]` (model suggestions), `errors?`
@@ -63,6 +64,17 @@ export interface HostPermissions {
  * - ProxyPicker: `proxy_id` number | null
  * - ModelMappingEditor: `model_mapping` object; `models?: string[]` (the account's model list)
  * - UpstreamEditor: the account layer of `upstream`; `accountType` (its resolved declaration), `errors?`
+ * - EntityPicker: picks a user / group / api_key / account / model / proxy (`kind`) by name or id from
+ *   GET /lookup/{kind}. `v-model:id` string ('' = none; a model's id is its name); `v-model:text?` string
+ *   (bound: typed text can be kept as a "name contains" search; id and text exclude each other); `change`
+ *   ({ id, text }) after a pick or clear. `placeholder?`, `size?: 'sm' | 'md'`, `mine?` (the caller's own),
+ *   `scope?` ({ user_id } for api_key, { prefer_group_id } for account), `extra?: { id, name, hint? }[]`
+ *   (more candidates), `exclude?: (string | number)[]` (ids kept out of the list). A plain text box for a
+ *   caller who may not look the kind up.
+ * - EntityMultiPicker: picks several of a `kind`: chips of the picked ones, then an EntityPicker that adds
+ *   one and lists only what is not picked yet. `v-model:ids` string[] in the order added; `change` (ids)
+ *   after an add or remove. `max?` (no adding once reached); `placeholder?`, `size?`, `mine?`, `scope?`,
+ *   `extra?` and `disabled?` as the EntityPicker's.
  */
 export const HOST_COMPONENT_NAMES = [
   'ParamOverrideEditor',
@@ -71,14 +83,16 @@ export const HOST_COMPONENT_NAMES = [
   'HeaderPassthroughEditor',
   'ProxyPicker',
   'ModelMappingEditor',
-  'UpstreamEditor'
+  'UpstreamEditor',
+  'EntityPicker',
+  'EntityMultiPicker'
 ] as const
 export type HostComponentName = (typeof HOST_COMPONENT_NAMES)[number]
 export type HostComponents = Readonly<Record<HostComponentName, Component>>
 
 export interface HostContext {
   version: string
-  /** Core editors (UI 3.7): see HOST_COMPONENT_NAMES. */
+  /** Core editors (UI 3.7) and the entity pickers (UI 3.11, 3.12): see HOST_COMPONENT_NAMES. */
   components: HostComponents
   api: ApiClient
   router: Router

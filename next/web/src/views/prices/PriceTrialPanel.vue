@@ -99,11 +99,11 @@ const resultLen = computed(() => (result.value?.breakdown as { vars?: { len?: nu
     <SGrid :cols-base="2" :cols="3" :lg-cols="6" :gap="3">
       <label v-for="k in TOKEN_VARS" :key="k" class="text-xs">
         <SHint inline size="xs">{{ t(`prices.vars.${k}`) }}</SHint>
-        <SInput size="sm" v-model.number="usage[k]" type="number" min="0" class="mt-1" />
+        <SInput v-model.number="usage[k]" size="sm" type="number" min="0" class="mt-1" />
       </label>
       <label class="text-xs">
         <SHint inline size="xs">{{ t('prices.trial.len') }}</SHint>
-        <SInput size="sm" v-model.number="len" type="number" min="0" class="mt-1" :placeholder="String(defaultLen)" />
+        <SInput v-model.number="len" size="sm" type="number" min="0" class="mt-1" :placeholder="String(defaultLen)" />
       </label>
     </SGrid>
     <SGrid :cols="1" :lg-cols="2">
@@ -115,7 +115,7 @@ const resultLen = computed(() => (result.value?.breakdown as { vars?: { len?: nu
       </SField>
     </SGrid>
     <SField :label="t('prices.video.metrics')" :hint="t('prices.video.metricsHint')">
-      <div class="mb-2 flex gap-2">
+      <div class="mb-2 flex flex-wrap gap-2">
         <SButton size="sm" @click="videoSample(true)">{{ t('prices.video.reserveSample') }}</SButton>
         <SButton size="sm" @click="videoSample(false)">{{ t('prices.video.settleSample') }}</SButton>
       </div>
@@ -126,7 +126,7 @@ const resultLen = computed(() => (result.value?.breakdown as { vars?: { len?: nu
         <SInput v-model="at" type="datetime-local" class="w-56" />
       </SField>
       <SField v-if="auth.has('group:read')" :label="t('prices.trial.group')">
-        <div class="w-48"><GroupPicker :model-value="groupId" @update:model-value="groupId = typeof $event === 'number' ? $event : null" /></div>
+        <div class="w-64"><GroupPicker :model-value="groupId" @update:model-value="groupId = typeof $event === 'number' ? $event : null" /></div>
       </SField>
       <SButton size="sm" variant="primary" :loading="loading" :disabled="!source" @click="run">{{ t('prices.trial.calculate') }}</SButton>
     </div>

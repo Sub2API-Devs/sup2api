@@ -59,6 +59,16 @@ export interface SelectOption {
   value: string | number | boolean | null
   label: string
   disabled?: boolean
+  /** Searchable select: short grey monospace text ending the row (an id, "#7"); the closed field shows it after the label. */
+  hint?: string
+  /** Searchable select: a second, smaller grey line under the label. */
+  description?: string
+  /** Searchable select: a small grey tag after the label ("Disabled"). */
+  tag?: string
+  /** Searchable select: dims the label (an inactive entry that can still be picked). */
+  muted?: boolean
+  /** Searchable select: a row that is not a listed value ("Name contains …"): primary label, a dashed line under it. */
+  accent?: boolean
   /** Group entry (<optgroup>): `label` + nested `options`; its own `value` is ignored. */
   options?: SelectOption[]
 }

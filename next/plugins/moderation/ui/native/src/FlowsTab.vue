@@ -14,7 +14,6 @@ import {
   SInput,
   SLink,
   SRowAction,
-  SSelect,
   SSwitch,
   STable,
   STableColumnSettings,
@@ -33,6 +32,7 @@ import FlowSimulate from './FlowSimulate.vue'
 import ImportDialog from './ImportDialog.vue'
 import { useCatalog } from './catalog'
 import { enumLabel, joinList, ms, num, pct } from './format'
+import { defaultGroupCandidate, idNumber } from './forms'
 import { canManage, confirmDelete, deleteFlow, errorMessage, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Group, Spec, TabKey } from './types'
 import { exemptGroups, flowBindingsInactive, flowBound, groupCoverage, type GroupOwner } from './bindingOps'
@@ -44,6 +44,7 @@ import { exemptGroups, flowBindingsInactive, flowBound, groupCoverage, type Grou
 // configuration (channels, auditors) here.
 const host = useModHost()
 const t = host.t
+const { EntityPicker } = host.components
 const manage = computed(() => canManage())
 const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
 const { compact } = useViewport()
@@ -75,19 +76,18 @@ const groupChips = (f: Flow) => f.groups.map((id) => ({ key: String(id), label: 
 
 // ---- filters
 const nameQuery = ref('')
-const groupFilter = ref<number | null>(null)
-const groupOptions = computed(() => {
-  const ids = allGroups.value.length ? allGroups.value.map((g) => g.id) : [...owners.value.keys()].sort((a, b) => a - b)
-  return [{ value: null, label: t('flows.allGroups') }, ...ids.map((id) => ({ value: id, label: groupLabel(id) }))]
-})
+/** The group picker's id ('' = every group). */
+const groupFilter = ref('')
+const defaultGroup = computed(() => defaultGroupCandidate(t('flows.defaultGroup')))
 const filtered = computed(() => {
   const q = nameQuery.value.trim().toLowerCase()
-  return rows.value.filter((f) => (groupFilter.value === null || f.groups.includes(groupFilter.value)) && (!q || f.name.toLowerCase().includes(q)))
+  const group = idNumber(groupFilter.value)
+  return rows.value.filter((f) => (!groupFilter.value || f.groups.includes(group)) && (!q || f.name.toLowerCase().includes(q)))
 })
-const filtersOn = computed(() => groupFilter.value !== null)
+const filtersOn = computed(() => groupFilter.value !== '')
 function resetFilters() {
   nameQuery.value = ''
-  groupFilter.value = null
+  groupFilter.value = ''
 }
 
 const hasStats = computed(() => rows.value.some((f) => f.stats_24h))
@@ -243,7 +243,7 @@ function onCreated(id: number) {
         <template #primary>
           <SInput v-model="nameQuery" type="search" size="sm" icon="search" :placeholder="t('flows.searchName')" :aria-label="t('flows.searchName')" class="mod-flows-search" clearable />
         </template>
-        <SSelect :model-value="groupFilter" size="sm" :options="groupOptions" :aria-label="t('flows.groupFilter')" class="mod-flows-group" @update:model-value="groupFilter = $event as number | null" />
+        <EntityPicker v-model:id="groupFilter" kind="group" size="sm" :extra="defaultGroup" :placeholder="t('flows.groupFilter')" class="mod-flows-group" />
         <template #end>
           <STableColumnSettings :state="columnState" />
           <template v-if="!compact">

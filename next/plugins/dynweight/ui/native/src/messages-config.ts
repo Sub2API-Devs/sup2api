@@ -65,6 +65,7 @@ const zh = {
     edit: '分组配置 · {group}',
     group: '分组',
     groupHint: '新的分组配置从全局复制，再按需修改。',
+    taken: '这个分组已有单独配置，请在分组列表里编辑它。',
     enabled: '启用调整',
     enabledHint: '关闭时这个分组只统计，权重保持基准。'
   },
@@ -89,6 +90,7 @@ const zh = {
     add: '添加账号覆盖',
     edit: '账号覆盖 · {account}',
     account: '账号',
+    taken: '这个账号已有覆盖，请在账号列表里编辑它。',
     inGroups: '所在分组：{groups}',
     noGroups: '不在任何分组，沿用全局配置',
     groupsUnknown: '读不到所在分组，沿用值按全局显示',
@@ -189,6 +191,7 @@ const en: typeof zh = {
     edit: 'Group · {group}',
     group: 'Group',
     groupHint: 'A new group configuration starts as a copy of the global one.',
+    taken: 'This group already has a configuration of its own: edit it from the group list.',
     enabled: 'Adjust',
     enabledHint: 'Off: the group is only counted, its weights stay at base.'
   },
@@ -213,6 +216,7 @@ const en: typeof zh = {
     add: 'Add account override',
     edit: 'Account override · {account}',
     account: 'Account',
+    taken: 'This account already has an override: edit it from the account list.',
     inGroups: 'Groups: {groups}',
     noGroups: 'In no group: inherits the global configuration',
     groupsUnknown: 'Its groups cannot be read: inherited values are the global ones',

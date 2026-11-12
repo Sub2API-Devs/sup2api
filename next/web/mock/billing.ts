@@ -1135,10 +1135,7 @@ function usageFilter(rows: any[], q: Record<string, string>) {
     if (q.stream && String(u.stream) !== q.stream) return false
     if (q.billing_status && u.billing_status !== q.billing_status) return false
     if (q.conversion && !conversionMatch(u.conversion, q.conversion)) return false
-    if (q.model) {
-      const pat = q.model
-      if (pat.endsWith('*') ? !u.model.startsWith(pat.slice(0, -1)) : !u.model.includes(pat)) return false
-    }
+    if (q.model && u.model !== q.model) return false
     if (q.success === 'true' && !u.success) return false
     if (q.success === 'false' && u.success) return false
     return true
@@ -1309,15 +1306,20 @@ on('GET', '/me/usage/summary', (req) =>
     : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
 )
 // GET /me/prices (CONTRACTS §79.4).
+const MY_PRICES = [
+  { model: 'claude-sonnet-4-5', mode: 'per_token', config: { p: 3, c: 15, cr: 0.3, cc: 3.75 }, expression: '' },
+  { model: 'gemini-2.5-flash', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075 }, expression: '' },
+  { model: 'seedance-pro', mode: 'per_request', config: { price: 0.2 }, expression: '' }
+]
 on('GET', '/me/prices', (req) => ({
   group: { id: Number(req.query.group_id) || 1, name: 'default' },
   rate_multiplier: req.query.group_id === '2' ? '1.5' : '1',
-  prices: [
-    { model: 'claude-sonnet-4-5', mode: 'per_token', config: { p: 3, c: 15, cr: 0.3, cc: 3.75 }, expression: '' },
-    { model: 'gemini-2.5-flash', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075 }, expression: '' },
-    { model: 'seedance-pro', mode: 'per_request', config: { price: 0.2 }, expression: '' }
-  ]
+  prices: MY_PRICES
 }))
+/** Model names for the lookup mock: every priced model, or with `mine` the ones /me/prices shows the caller. */
+export function mockModelNames(mine: boolean): string[] {
+  return (mine ? MY_PRICES : prices).map((p) => p.model)
+}
 // GET /me/usage/overview (CONTRACTS §66): the windows from the same rows.
 on('GET', '/me/usage/overview', (req) => ({ ...overviewOf(usageRows.filter((u) => u.user_id === 1), req.query.tz || 'UTC'), api_keys: { total: 2, active: 2 } }))
 // GET /usage/overview (CONTRACTS §66.6): all users, plus users and accounts.

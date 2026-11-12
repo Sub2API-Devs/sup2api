@@ -12,6 +12,8 @@ vi.mock('@sub2api/host', () => ({
   ApiError: class extends Error { constructor(public status: number, public error: unknown) { super('api error') } },
   isApiError: () => false,
 }))
+// The list's model picker is a plain text box here: nothing is looked up.
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
 
 const LOG = 'log-1'
 const RID = 'req_0123456789'

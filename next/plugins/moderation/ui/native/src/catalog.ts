@@ -118,9 +118,6 @@ export function useCatalog() {
     auditorName: (id: number) => byId(state.auditors, id)?.name || `#${id}`,
     channelName: (id: number) => byId(state.channels, id)?.name || `#${id}`,
     /** group 0 is the default group */
-    groupName: (id: number) => (id ? byId(state.groups, id)?.name || `#${id}` : useModHost().t('defaultGroup')),
-    /** group select options with the default group 0; empty when groups are not readable */
-    groupOptions: () =>
-      state.groups.length ? [{ value: 0, label: useModHost().t('defaultGroup') }, ...state.groups.map((g) => ({ value: g.id, label: `${g.name} #${g.id}` }))] : []
+    groupName: (id: number) => (id ? byId(state.groups, id)?.name || `#${id}` : useModHost().t('defaultGroup'))
   }
 }

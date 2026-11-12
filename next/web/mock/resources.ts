@@ -1,7 +1,7 @@
 // Mock handlers: users, roles, permissions, API keys, groups, proxies, nodes,
 // publishers. (Accounts and account types live in their own mock module.)
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
-import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
+import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 
 type L = { en: string; zh: string }
@@ -123,7 +123,8 @@ const roles: MockRole[] = [
   { id: 4, key: 'operator', name: L('Operator', '运维'), description: 'Core permissions except settings and plugins', builtin: true, superuser: false, permission_keys: [...OPERATOR_KEYS, 'plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read'], created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
   // CONTRACTS §21.1 typical roles: vendor (own-level only, no settings:custom) and read-only.
   { id: 5, key: 'vendor', name: L('Vendor', '供应商'), description: 'Maintains only the accounts and proxies it created', builtin: false, superuser: false, permission_keys: [...vendorUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
+  { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: 7, key: 'moderator', name: L('Moderator', '审核员'), description: 'Runs the moderation plugin; looks up no user, group or account', builtin: false, superuser: false, permission_keys: [...moderatorUser.permissions], created_at: now(-86400 * 2), updated_at: now(-86400) }
 ]
 
 function roleOut(r: MockRole) {
@@ -198,7 +199,7 @@ interface MockGroup {
   created_at: string
 }
 
-const groups: MockGroup[] = [
+export const groups: MockGroup[] = [
   { id: 1, name: 'default', description: 'Default group for everyone', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], account_count: 8, created_at: now(-86400 * 60) },
   { id: 2, name: 'vip', description: 'Discounted Claude access', status: 'active', rate_multiplier: '0.8', visibility: 'restricted', model_allowlist: ['claude-*'], account_count: 3, created_at: now(-86400 * 30) },
   { id: 3, name: 'haiku-only', description: 'Cheap models for batch jobs', status: 'disabled', rate_multiplier: '0.5', visibility: 'restricted', model_allowlist: ['claude-3-5-haiku*', 'claude-haiku-4*'], account_count: 1, created_at: now(-86400 * 5) },
@@ -288,14 +289,15 @@ interface MockUser {
   updated_at: string
 }
 
-const users: MockUser[] = [
+export const users: MockUser[] = [
   { id: 1, email: 'admin@example.com', display_name: 'Admin', status: 'active', roles: ['super_admin'], group_ids: [1, 2], balance: '12.34000000', last_login_at: now(-60), created_at: now(-86400 * 90), updated_at: now(-86400) },
   { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', roles: ['operator', 'user'], group_ids: [1], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
   { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', roles: ['operator'], group_ids: [1, 2], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
   { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', roles: ['user'], group_ids: [2], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
   { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', roles: ['user'], group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
   { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', roles: ['vendor'], group_ids: [1], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], group_ids: [], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
+  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], group_ids: [], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: moderatorUser.id, email: moderatorUser.email, display_name: moderatorUser.display_name, status: 'active', roles: ['moderator'], group_ids: [], balance: '0.00000000', last_login_at: now(-3600), created_at: now(-86400 * 2), updated_at: now(-86400) }
 ]
 for (let i = 0; i < 18; i++) {
   users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', roles: ['user'], group_ids: [1], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
@@ -384,8 +386,8 @@ interface MockKey {
   created_at: string
 }
 
-const ME_ID = 1
-const keys: MockKey[] = [
+export const ME_ID = 1
+export const keys: MockKey[] = [
   { id: 1, user_id: 1, group_id: 1, name: 'laptop', key_prefix: 'sk-s2a-a1b2c', status: 'active', expires_at: null, last_used_at: now(-42), created_at: now(-86400 * 30) },
   { id: 2, user_id: 1, group_id: 2, rpm_limit: 60, tpm_limit: 200000, max_concurrency: 2, quota_limit: '20', quota_used: '17.3', name: 'ci-runner', key_prefix: 'sk-s2a-c3d4e', status: 'active', expires_at: now(86400 * 60), last_used_at: now(-3600 * 3), created_at: now(-86400 * 12) },
   { id: 3, user_id: 1, group_id: 1, name: 'old-script', key_prefix: 'sk-s2a-e5f6g', status: 'active', expires_at: now(-86400), last_used_at: now(-86400 * 3), created_at: now(-86400 * 50) },
@@ -444,7 +446,7 @@ function randomToken(n: number) {
   return s
 }
 
-function myGroups() {
+export function myGroups() {
   const me = users.find((u) => u.id === ME_ID)
   return groups.filter((g) => g.status === 'active' && (g.visibility === 'public' || me?.group_ids.includes(g.id))).map(groupOut)
 }
@@ -539,7 +541,7 @@ interface MockProxy {
   created_at: string
 }
 
-const proxies: MockProxy[] = [
+export const proxies: MockProxy[] = [
   { id: 1, name: 'us-west-1', protocol: 'http', host: '10.0.1.20', port: 3128, username: '', password: '', status: 'active', created_by: 1, created_at: now(-86400 * 40) },
   { id: 2, name: 'jp-residential', protocol: 'socks5', host: 'jp.proxy.example.net', port: 1080, username: 'acme', password: 's3cret', status: 'active', created_by: vendorUser.id, created_at: now(-86400 * 15) },
   { id: 3, name: 'eu-backup', protocol: 'https', host: 'eu.proxy.example.net', port: 443, username: 'backup', password: 'pw', status: 'disabled', created_by: null, created_at: now(-86400 * 3) }
