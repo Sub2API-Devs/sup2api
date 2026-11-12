@@ -182,7 +182,8 @@ type Authorizer interface {
 type UserGuard interface {
 	// CanActOnUsers fails unless what the targets' roles grant is within
 	// what actorID may grant (a superuser target: only a superuser). The
-	// actor itself among the targets and actor 0 (the system) pass.
+	// actor itself among the targets (unless acting through its access
+	// key) and actor 0 (the system) pass.
 	CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error
 }
 

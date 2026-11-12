@@ -41,6 +41,12 @@ func AccessKey(ctx context.Context) (AccessKeyIdentity, bool) {
 	return id, ok
 }
 
+// ByAccessKey reports whether userID acts through the request's access key.
+func ByAccessKey(ctx context.Context, userID int64) bool {
+	id, ok := AccessKey(ctx)
+	return ok && id.UserID == userID
+}
+
 // RestrictToAccessKey applies the request's access key to the permissions of
 // userID. Only the key's own user is limited: questions about anyone else get
 // the true answer.

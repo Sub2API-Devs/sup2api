@@ -897,10 +897,20 @@ func TestAccessKeyIsASubsetOfItsUser(t *testing.T) {
 func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
-	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
-	key := k.createKey(t, root, adminPassword, "user:read")
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	root := login.User.ID
+	key := k.createKey(t, root, adminPassword, "user:read", "user:update")
 	if code, _ := k.call(key.Key, "GET", "/users", nil); code != 200 {
 		t.Fatalf("granted: %d", code)
+	}
+	// Decision 1: no access key changes the super admin, its own included;
+	// the superuser's session still may.
+	self := "/users/" + strconv.FormatInt(root, 10)
+	if code, out := k.call(key.Key, "PATCH", self, map[string]any{"display_name": "x"}); code != 403 {
+		t.Fatalf("key PATCH its superuser: %d %v", code, out)
+	}
+	if code, out := k.call(login.AccessToken, "PATCH", self, map[string]any{"display_name": "x"}); code != 200 {
+		t.Fatalf("session PATCH itself: %d %v", code, out)
 	}
 	for _, p := range []struct{ method, path string }{{"GET", "/permissions"}, {"DELETE", "/users/" + strconv.FormatInt(k.userID, 10)}} {
 		if code, _ := k.call(key.Key, p.method, p.path, nil); code != 403 {
@@ -909,7 +919,7 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 	}
 	code, me := k.call(key.Key, "GET", "/me", nil)
 	data := me["data"].(map[string]any)
-	if code != 200 || data["superuser"] != false || len(data["permissions"].([]any)) != 1 {
+	if code != 200 || data["superuser"] != false || len(data["permissions"].([]any)) != 2 {
 		t.Fatalf("/me: %d %v", code, me)
 	}
 	// Grant checks see the key, not the superuser behind it.

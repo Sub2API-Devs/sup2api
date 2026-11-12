@@ -209,6 +209,7 @@ func TestCanActOnUsers(t *testing.T) {
 		minVersion: 1,
 	}
 	keyed := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 2, Permissions: []string{"users:read"}})
+	ownKey := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 1, Permissions: []string{"users:read"}})
 	bg := context.Background()
 	tests := []struct {
 		name    string
@@ -227,6 +228,9 @@ func TestCanActOnUsers(t *testing.T) {
 		{"superuser's key within its keys", keyed, 2, []int64{3}, ""},
 		{"superuser's key on a wider user", keyed, 2, []int64{1}, "you cannot modify a user with higher privileges"},
 		{"superuser's key on another superuser", keyed, 2, []int64{2, 5}, "you cannot modify a superuser"},
+		{"superuser's key on its owner", keyed, 2, []int64{2}, "you cannot modify a superuser"},
+		{"another user's key leaves the actor itself", keyed, 3, []int64{3}, ""},
+		{"a narrower key on its owner", ownKey, 1, []int64{1}, "you cannot modify a user with higher privileges"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

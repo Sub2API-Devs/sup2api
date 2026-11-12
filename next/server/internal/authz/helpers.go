@@ -162,14 +162,21 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) err
 // right now: a disabled user can do nothing, and comparing against that
 // would let anyone with user:update re-enable a disabled admin or set its
 // password and take the account over (SEC-H2). The actor itself among the
-// targets and the system (actor 0) pass; ActOnOthers refuses the former.
+// targets and the system (actor 0) pass; ActOnOthers refuses the former. An
+// access key acts with less than its owner's roles, so its owner is a target
+// like any other: no access key changes a superuser, its own included
+// (decision 1).
 func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error {
 	return s.canActOnUsers(ctx, s.querier(), actorID, targetIDs...)
 }
 
 // canActOnUsers is CanActOnUsers reading through q.
 func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID int64, targetIDs ...int64) error {
-	ids := slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == actorID })
+	self := actorID
+	if core.ByAccessKey(ctx, actorID) {
+		self = 0
+	}
+	ids := slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == self })
 	if actorID == 0 || len(ids) == 0 {
 		return nil
 	}
