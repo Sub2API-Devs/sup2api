@@ -6,16 +6,19 @@ package account
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -337,6 +340,36 @@ func (s *Service) activePluginKeys() []string { return core.ActivePluginKeys(s.d
 // §21.3).
 func (s *Service) customSettings(ctx context.Context) bool {
 	return core.Can(ctx, s.d.Authorizer, "account:settings:custom")
+}
+
+var _ core.AccountAccess = (*Service)(nil)
+
+// accessActions are the actions AccountsInScope answers.
+var accessActions = []string{"read", "update", "test"}
+
+// AccountsInScope implements core.AccountAccess with the ownership condition
+// loadRow uses; the "own" result follows the order of ids, deduplicated.
+func (s *Service) AccountsInScope(ctx context.Context, userID int64, action string, ids []int64) (bool, []int64, error) {
+	if !slices.Contains(accessActions, action) {
+		return false, nil, core.InvalidFields(core.FieldError{Field: "action", Code: "invalid",
+			Message: t(ctx, "Unknown account action", "未知的账号操作")})
+	}
+	keys := perm.Pair(perm.Key("account:"+action), perm.Key("account:own:"+action))
+	scope, ok := core.ScopeOf(core.WithUserID(ctx, userID), s.d.Authorizer, keys)
+	if !ok {
+		return false, nil, core.AccountsDenied(action)
+	}
+	if scope == nil {
+		return true, nil, nil
+	}
+	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id FROM accounts a
+		WHERE a.id = ANY($1) AND a.deleted_at IS NULL AND `+scoped("$2")+`
+		ORDER BY array_position($1, a.id)`, ids, scope)
+	if err != nil {
+		return false, nil, err
+	}
+	allowed, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	return false, allowed, err
 }
 
 // proxyRange is the set of proxies a caller may reference (by proxy_id) or

@@ -85,3 +85,45 @@ func TestGuardOrDeny(t *testing.T) {
 		t.Fatalf("wired guard: %v", err)
 	}
 }
+
+// accessFunc is an AccountAccess answering from a function.
+type accessFunc func(ids []int64) (bool, []int64, error)
+
+func (f accessFunc) AccountsInScope(_ context.Context, _ int64, _ string, ids []int64) (bool, []int64, error) {
+	return f(ids)
+}
+
+func TestAuthorizeAccounts(t *testing.T) {
+	all := accessFunc(func([]int64) (bool, []int64, error) { return true, nil, nil })
+	own := accessFunc(func([]int64) (bool, []int64, error) { return false, []int64{1, 2}, nil })
+	none := accessFunc(func([]int64) (bool, []int64, error) { return false, nil, AccountsDenied("update") })
+	tests := []struct {
+		name string
+		aa   AccountAccess
+		ids  []int64
+		code string // "" = allowed
+	}{
+		{"all scope", all, []int64{9}, ""},
+		{"all scope without ids", all, nil, ""},
+		{"own scope, every id in scope", own, []int64{2, 1, 2}, ""},
+		{"own scope, one id outside", own, []int64{1, 3}, "not_found"},
+		{"own scope without ids", own, nil, "permission_denied"},
+		{"no key", none, []int64{1}, "permission_denied"},
+	}
+	for _, tt := range tests {
+		err := AuthorizeAccounts(context.Background(), tt.aa, 7, "update", tt.ids)
+		if got := codeOf(err); got != tt.code {
+			t.Errorf("%s: code = %q, want %q (%v)", tt.name, got, tt.code, err)
+		}
+		if tt.code == "permission_denied" && AsError(err).Details["permission"] != "account:update" {
+			t.Errorf("%s: details = %v", tt.name, AsError(err).Details)
+		}
+	}
+}
+
+func codeOf(err error) string {
+	if err == nil {
+		return ""
+	}
+	return AsError(err).Code
+}

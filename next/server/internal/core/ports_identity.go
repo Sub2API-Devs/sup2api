@@ -301,6 +301,41 @@ type APIKeyAuthenticator interface {
 
 // ============================================================ accounts & proxies (owner: A)
 
+// AccountAccess answers which accounts a console user may act on
+// (CONTRACTS §21.1); account implements it. action is "read", "update" or
+// "test": account:<action> reaches every account, account:own:<action> the
+// ones the user created. ctx may carry an access key, which narrows as usual.
+type AccountAccess interface {
+	// AccountsInScope returns all=true under the "all" key; under the "own"
+	// key the ids that are live accounts the user created (order kept,
+	// deduplicated); ErrPermissionDenied with neither key.
+	AccountsInScope(ctx context.Context, userID int64, action string, ids []int64) (all bool, allowed []int64, err error)
+}
+
+// AccountsDenied is the ErrPermissionDenied of an account action, naming its
+// "all" key.
+func AccountsDenied(action string) *Error {
+	return ErrPermissionDenied.WithDetails(map[string]any{"permission": "account:" + action})
+}
+
+// AuthorizeAccounts is the strict form of AccountsInScope every caller uses:
+// the "all" scope passes; the "own" scope needs at least one id (else
+// AccountsDenied) and every id in scope (else ErrNotFound, as for an account
+// outside the scope).
+func AuthorizeAccounts(ctx context.Context, aa AccountAccess, userID int64, action string, ids []int64) error {
+	all, allowed, err := aa.AccountsInScope(ctx, userID, action, ids)
+	if err != nil || all {
+		return err
+	}
+	if len(ids) == 0 {
+		return AccountsDenied(action)
+	}
+	if slices.ContainsFunc(ids, func(id int64) bool { return !slices.Contains(allowed, id) }) {
+		return ErrNotFound.WithMessage(Text(ctx, "account not found", "账号不存在"))
+	}
+	return nil
+}
+
 // AccountRef is the scheduling view of an account (no secrets).
 type AccountRef struct {
 	ID             int64
