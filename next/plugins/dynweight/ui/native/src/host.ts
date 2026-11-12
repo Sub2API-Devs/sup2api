@@ -366,6 +366,8 @@ export interface Degraded {
   account_ids: number[]
 }
 export const fetchDegraded = () => api().get<Degraded>('/degraded')
+/** GET /degraded covers every account: the core asks the full account:read (own-level viewers get a 403). */
+export const canSeeDegraded = () => useDwHost().permissions.has('account:read')
 
 // The account list renders the slot once per row: ids asked for in the same
 // tick are fetched together, MAX_ACCOUNT_BATCH per GET /weights (its limit).

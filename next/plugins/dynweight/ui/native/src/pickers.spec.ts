@@ -23,7 +23,8 @@ beforeEach(() => {
     t: (key: string) => key,
     components: { EntityPicker },
     // The catalog's group names: none known.
-    api: { list: async () => ({ items: [], total: 0 }) }
+    api: { list: async () => ({ items: [], total: 0 }) },
+    permissions: { has: () => true }
   } as unknown as PluginHost)
 })
 afterEach(() => setHost(null))

@@ -4,7 +4,8 @@ import { useDwHost, type Named } from './host'
 
 // Names of the core groups and accounts for the tables and texts, read
 // through the core API with the viewer's own permissions (group:read,
-// account:read). The groups are few: loaded once, again after a failure. The
+// account:read). The groups are few: loaded once, again after a failure, and
+// not at all without group:read (an own-level viewer would get a 403). The
 // accounts are looked up by id as they are shown: the ids asked for in one
 // tick together, MAX_ACCOUNT_BATCH per GET /accounts?ids=. Without the
 // permissions the names read "#id"; after a first refusal no more accounts
@@ -22,6 +23,7 @@ const named = ({ id, name }: Named): Named => ({ id, name })
 const label = (name: string | undefined, id: number) => (name ? `${name} #${id}` : `#${id}`)
 
 function loadGroups() {
+  if (!useDwHost().permissions.has('group:read')) return
   loading ??= listAll<Named>(useDwHost().api, '/groups', { max: MAX_GROUPS }).then(
     (groups) => {
       state.groups = groups.map(named)
