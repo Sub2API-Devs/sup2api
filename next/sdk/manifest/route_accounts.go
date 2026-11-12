@@ -1,6 +1,9 @@
 package manifest
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // RouteAccounts declares the accounts a plugin route acts on. The core passes
 // a request when the caller holds account:<Action>, or account:own:<Action>
@@ -35,14 +38,18 @@ func ValidAccountsAction(a string) bool {
 	return a == AccountsRead || a == AccountsUpdate || a == AccountsTest
 }
 
+// accountsFromName is a plain parameter or field name: the DSL names one
+// value, never a path into it ("body:data.ids" is not a top-level field).
+var accountsFromName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
 // ParseAccountsFrom splits a RouteAccounts.From entry into its source and
 // name; ok is false unless the source is path, query or body and the name is
-// not empty.
+// a plain name.
 func ParseAccountsFrom(from string) (source, name string, ok bool) {
 	source, name, _ = strings.Cut(from, ":")
 	switch source {
 	case AccountsFromPath, AccountsFromQuery, AccountsFromBody:
-		return source, name, name != ""
+		return source, name, accountsFromName.MatchString(name)
 	}
 	return source, name, false
 }

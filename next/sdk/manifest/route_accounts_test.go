@@ -15,6 +15,8 @@ func TestParseAccountsFrom(t *testing.T) {
 		{"query:ids", "query", "ids", true},
 		{"body:account_ids", "body", "account_ids", true},
 		{"body:", "body", "", false},
+		{"body:data.ids", "body", "data.ids", false},
+		{"query:ids:x", "query", "ids:x", false},
 		{"header:x", "header", "x", false},
 		{"account_ids", "account_ids", "", false},
 		{"", "", "", false},

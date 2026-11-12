@@ -44,6 +44,7 @@ func TestRouteAccounts(t *testing.T) {
 		{"empty action", 3, &manifest.RouteAccounts{From: []string{"path:id"}}, "assets:manage", "routes[3].accounts.action", "invalid"},
 		{"unknown prefix", 3, &manifest.RouteAccounts{Action: "read", From: []string{"header:x-id"}}, "assets:manage", "routes[3].accounts.from[0]", "invalid"},
 		{"expression", 3, &manifest.RouteAccounts{Action: "read", From: []string{"body.account_ids"}}, "assets:manage", "routes[3].accounts.from[0]", "invalid"},
+		{"nested field", 3, &manifest.RouteAccounts{Action: "read", From: []string{"body:data.account_ids"}}, "assets:manage", "routes[3].accounts.from[0]", "invalid"},
 		{"empty name", 3, &manifest.RouteAccounts{Action: "read", From: []string{"path:id", "query:"}}, "assets:manage", "routes[3].accounts.from[1]", "invalid"},
 		{"not a param", 3, &manifest.RouteAccounts{Action: "read", From: []string{"path:account_id"}}, "assets:manage", "routes[3].accounts.from[0]", "unknown_param"},
 		{"public accounts", 5, &manifest.RouteAccounts{Action: "read"}, "", "routes[5].accounts", "unsupported"},
