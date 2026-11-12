@@ -407,9 +407,8 @@ func (h *hostServer) qualify(perm string) (key string, own bool) {
 	if _, ok := manifest.LocalPermission(h.key(), perm); ok {
 		return perm, true
 	}
-	if strings.HasPrefix(perm, "plugin.") {
-		return perm, false
-	}
+	// A declared key never contains a ".", so another plugin's qualified key
+	// cannot match here and falls through as not own.
 	for _, up := range h.i.pkg.Manifest.UserPermissions {
 		if up.Key == perm {
 			return manifest.PermissionKey(h.key(), perm), true

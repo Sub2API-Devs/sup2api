@@ -64,6 +64,7 @@ func TestHostAuthzCheckOwnKeysOnly(t *testing.T) {
 		{name: "other plugin key with grant", perm: "plugin.other:rules:read", grants: granted, code: codes.OK, asked: "plugin.other:rules:read"},
 		{name: "prefix of own module is another plugin", perm: "plugin.volcano:rules:read", code: codes.PermissionDenied},
 		{name: "own module without local part", perm: "plugin.volc:", code: codes.PermissionDenied},
+		{name: "own module without local part, granted, is asked as given", perm: "plugin.volc:", grants: granted, code: codes.OK, asked: "plugin.volc:"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
