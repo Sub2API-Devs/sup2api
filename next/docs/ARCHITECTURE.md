@@ -237,8 +237,11 @@ erDiagram
   groups ||--o{ api_keys : binds
   groups ||--o{ account_groups : contains
   accounts ||--o{ account_groups : member
-  groups ||--o{ user_groups : visible_to
-  users ||--o{ user_groups : allowed
+  segments ||--o{ users : has_members
+  segments ||--o{ segment_groups : granted_and_rated
+  groups ||--o{ segment_groups : open_to
+  groups ||--o{ price_rules : prices
+  segments ||--o{ price_rules : own_prices
   proxies ||--o{ accounts : used_by
   plugins ||--o{ accounts : defines_type
   plugins ||--o{ model_prices : default_price
@@ -259,6 +262,33 @@ erDiagram
     string email
     string password_hash
     string status
+    bigint segment_id FK
+  }
+  segments {
+    bigint id PK
+    string kind
+    string name
+    numeric discount
+    boolean is_default
+    bigint user_id FK
+    bigint origin_id FK
+  }
+  segment_groups {
+    bigint segment_id FK
+    bigint group_id FK
+    boolean granted
+    numeric rate_override
+  }
+  price_rules {
+    bigint id PK
+    bigint group_id FK
+    bigint segment_id FK
+    string model
+    string kind
+    numeric multiplier
+    string mode
+    jsonb config
+    string expr_hash
   }
   user_balances {
     bigint user_id PK
@@ -358,7 +388,9 @@ erDiagram
   }
 ```
 
-`roles`、`user_roles`、`role_permissions`、`proxies`、`user_groups`、`account_groups`、`plugin_permission_grants`、`plugin_migrations`、`plugin_rollouts`、`events`、`plugin_event_cursors`、`plugin_event_deadletters`、`plugin_job_runs`、`plugin_egress_logs` 的字段见各章节。
+`roles`、`user_roles`、`role_permissions`、`proxies`、`account_groups`、`segments`、`segment_groups`、`price_rules`、`plugin_permission_grants`、`plugin_migrations`、`plugin_rollouts`、`events`、`plugin_event_cursors`、`plugin_event_deadletters`、`plugin_job_runs`、`plugin_egress_logs` 的字段见各章节。
+
+用户组三张表（`segments`、`segment_groups`、`price_rules`）和 `users.segment_id` 是 2026-11-12 加的（迁移 0095，7.1、7.3，CONTRACTS §97）：每个用户属于一个用户组，私有分组授权给用户组，用户组在分组里可以有专属倍率和专属价。原来的“用户 ↔ 分组”授权表 `user_groups` 由它们取代，表还在，但不再读写。
 
 ### 4.2 PostgreSQL schema 划分
 
@@ -693,7 +725,7 @@ sequenceDiagram
   participant Q as 异步队列
 
   C->>GW: POST /v1/messages（x-api-key 或 Authorization）
-  GW->>GW: API Key 鉴权 → 用户状态、gateway:use 权限 → 分组（可用性、模型白名单）
+  GW->>GW: API Key 鉴权 → 用户状态、gateway:use 权限 → 分组（按用户组的可用性与实际倍率、模型白名单）
   GW->>GW: gjson 读取 model、stream
   GW->>R: 获取 API Key 并发槽位，原子检查并计入 RPM，预占 TPM，超限返回 429
   GW->>H: OnGatewayRequest（meta + model + prompt_text）
@@ -900,7 +932,7 @@ flowchart LR
 
 顶层 `gateway` 与 `platform` 字段删除（端点归属平台）。
 
-**计费**：价格只按模型全局设置（7.3）。**凭证授权**：`accounts.credentials`（`{"types":"own"}`）授权后，插件的账号类型才注册。**控制台**：账号类型显示支持的平台和可服务的端点；分组可放任意类型账号，并显示分组能服务哪些平台（由其账号类型推出）；API Key 显示所属分组能访问的平台和端点。
+**计费**：全局价只按模型设置，不区分平台和账号类型；全局价之上可以按分组、按用户组另设标价（7.3）。**凭证授权**：`accounts.credentials`（`{"types":"own"}`）授权后，插件的账号类型才注册。**控制台**：账号类型显示支持的平台和可服务的端点；分组可放任意类型账号，并显示分组能服务哪些平台（由其账号类型推出）；API Key 显示所属分组能访问的平台和端点。
 
 
 ---
@@ -912,12 +944,29 @@ flowchart LR
 | 字段 | 说明 |
 |---|---|
 | `name` / `description` / `status` | |
-| `rate_multiplier` | 费用倍率，默认 1 |
+| `rate_multiplier` | 分组默认倍率，默认 1。某个用户在这个分组实际按什么倍率付费，还要看他所在的用户组（见下） |
 | `model_allowlist` | 允许的模型（通配符列表），为空表示不限制 |
-| `visibility` | `public` 所有用户可用；`restricted` 只有 `user_groups` 中的用户可用 |
+| `visibility` | `public`（公开）所有用户可用；`restricted`（界面叫“私有”）只有被授权的用户组的成员可用 |
 | `account_groups(account_id, group_id)` | 分组包含哪些账号，一个账号可以属于多个分组 |
 
 API Key 创建时选择分组（只能选自己可用的分组），网关按 Key 的分组调度。
+
+#### 用户组与私有分组授权（2026-11-12，CONTRACTS §97）
+
+私有分组原来逐个用户授权（`user_groups`）。现在授权的对象是**用户组**：
+
+- 每个用户属于且只属于一个用户组（`users.segment_id`）。代码、表名和接口路径里用户组叫 segment：`user_groups` 已经是旧授权表的名字，`tier` 在价格里指档位。
+- 新用户进内置的“默认”用户组。管理员可以建命名用户组，把用户移进去。
+- 要给单个用户单独授权或定价，把他设为**个人专属**：系统为他建一个只有他一个成员的用户组，可以复制原用户组的设置，也可以从空白开始；移回命名用户组时个人专属删除。旧的逐人授权在迁移时就是这样变成个人专属的。
+- 分组是否对某个用户可用只有一个条件：分组是公开的，或他所在的用户组被授权了这个分组。创建 Key 时的校验、Key 的分组状态、网关鉴权、“我的分组”列表用的是同一段条件。授权每个请求从库里读，改完立即生效。
+
+| 表 | 说明 |
+|---|---|
+| `segments` | 用户组：`kind`（`named` 命名 / `personal` 个人专属）、名称、全场折扣 `discount`、`is_default`（内置的默认用户组） |
+| `segment_groups(segment_id, group_id)` | 用户组在一个分组里的授权（`granted`，只对私有分组有意义）和专属倍率（`rate_override`，空 = 跟随分组） |
+| `price_rules` | 分组内定价与用户组专属价，见 7.3 |
+
+`user_groups` 表保留，不再读写。
 
 ### 7.2 余额与账本
 
@@ -961,10 +1010,14 @@ CREATE TABLE balance_ledger (
 
 三种方式最终都保存为一条表达式，**计费只以表达式为准**；"按次"和"按 token"只是表达式的可视化编辑方式。
 
-#### 定价范围（2026-09-24 决定）
+#### 定价范围（2026-09-24 决定；2026-11-12 加分组内定价、专属价和三层倍率，CONTRACTS §97）
 
-- **价格只按模型全局设置**：同一个模型不论由哪个平台的端点、哪种账号类型提供服务，都用同一个价格；价格表不区分平台
-- 价格表达式算出的是**基础价格**，之后只能通过倍率调整（本期为分组倍率）
+一次调用的实付 = 标价 × 倍率。标价和倍率各自解析，都是取先命中的一层，两条链互不影响。
+
+- **全局价只按模型设置**：同一个模型不论由哪个平台的端点、哪种账号类型提供服务，全局价都是同一个；价格表不区分平台
+- **全局价之上有两层按分组设置的标价**，存在 `price_rules`：分组内定价（分组 × 模型）和用户组专属价（用户组 × 分组 × 模型）。标价取先命中的一层：专属价 → 分组内定价 → 全局价。规则有两种：按倍数（全局价 × N，全局价变化时跟着变；0 是免费，专属价设 ×1 表示这个用户组按全局价、不吃分组内定价）和自定义价（固定价，沿用全局价的计费方式，只用于按 token 或按次计费的模型）。规则建立在全局价之上：模型没有启用的全局价时不能计费，规则不生效
+- **倍率有三层**，同样取先命中的一层，是替换不是连乘：用户组在该分组的专属倍率 → 分组默认倍率 × 用户组的全场折扣 → 分组默认倍率。算出的实际倍率保留 4 位小数，与使用记录里存倍率的列一致，首次结算和重试用的是同一个数
+- 价格表达式算出的仍是**基础价格**：规则和倍率都是乘在表达式结果外面的数，表达式文本不拼接、不改写（自定义价是另一条完整的表达式）
 - 价格按**完整模型 ID** 设置、精确匹配，**不支持通配符**（2026-09-25 决定）：别名和带日期的 ID 是不同的模型，需要分别定价。**价格归核心所有，只能由管理员配置**，插件不提供价格；管理员可以手动录入，也可以从价格同步源（LiteLLM、models.dev 等公开价格库，或上游 sup2api）预览后选择导入，见 CONTRACTS §17
 
 #### 表达式语言（v1）
@@ -1038,11 +1091,11 @@ CREATE TABLE model_price_history (
 
 #### 匹配与计算
 
-- 匹配：按完整模型 ID 精确匹配（每个模型只有一条价格）
-- 费用 = 表达式结果 × 分组倍率
-- 找不到价格：默认拒绝请求（返回 403 `model_price_not_configured`），可配置为免费放行
-- 编译结果按 `expr_hash` 缓存；价格变更通过 `config:changed` 广播，各节点立即生效
-- 价格试算接口 `POST /api/prices/preview`：输入用量样本、请求头、请求参数，返回费用、命中档位、加价规则；页面上的计算器和保存前的预览都用它
+- 匹配：先按完整模型 ID 精确匹配全局价（每个模型只有一条）；再按请求的分组和 Key 所有者所在的用户组取定价规则（专属价 → 分组内定价），没有规则就用全局价
+- 费用 = 表达式结果 × 倍率。倍率是 Key 所有者在该分组的实际倍率，鉴权时算出；命中按倍数的规则时另乘规则倍数，这两个数只在一处相乘（`PriceRule.Multiplier`），预扣和结算用的是同一个乘数。命中自定义价时执行的是规则自己的表达式
+- 找不到全局价：默认拒绝请求（返回 403 `model_price_not_configured`），可配置为免费放行；这时定价规则不生效
+- 编译结果按 `expr_hash` 缓存；价格变更通过 `config:changed` 广播，各节点立即生效。定价规则与全局价在同一个价格快照里，同样失效；授权、全场折扣和专属倍率不经缓存，每个请求鉴权时读库
+- 价格试算接口 `POST /api/prices/preview`：输入用量样本、请求头、请求参数，返回费用、命中档位、加价规则；页面上的计算器和保存前的预览都用它。它试的是一条全局价；“某个用户在某个分组调用某个模型实际付多少”用 `POST /pricing/quote`，它走真实计费的同一条路径（CONTRACTS §97.6）
 
 #### 保存时校验
 
@@ -1054,12 +1107,16 @@ CREATE TABLE model_price_history (
 
 使用记录保存 `price_id`、`expr_hash`、`billing_mode`、`matched_tier`，以及 `billing_detail`（各变量取值、分项费用、加价规则命中情况）。配合 `model_price_history`，任何一笔扣费都能还原当时的计算过程。
 
+倍率不是分组默认倍率，或标价命中了定价规则时，`billing_detail.inputs.pricing` 另外冻结当时的用户组、倍率来源、标价来源和规则（按倍数的规则存倍数；自定义价存它背后的全局价表达式，自定义价自己的表达式在保存规则时已写进 `model_price_history`）。结算重试和对账用冻结的值，不重新解析规则，所以请求之后改规则不影响这笔账。
+
+一条使用记录有三个金额：原价（全局价 × 用量，`usage_logs.base_cost`）、标价费用（标价 × 用量，`billing_detail.list_cost`，命中规则时才有）、实付（标价费用 × 倍率，`total_cost`）。统计里的“原价”和账号的原始费用都按全局价口径，不随某个分组或用户组的售价变化。
+
 #### 价格同步
 
 价格不来自插件。管理员可以配置价格同步源：
 
 - LiteLLM、models.dev 公开价格库；
-- 上游 sup2api，用上游发的 API Key 读取 `GET /api/v1/key/prices`，可以按上游分组倍率换算。
+- 上游 sup2api，用上游发的 API Key 读取 `GET /api/v1/key/prices`，可以按上游返回的倍率换算（上游返回的是这个 Key 的所有者在那个分组的标价和实际倍率）。
 
 同步时先预览差异（新增、更新、与手动价格不同、未变化），勾选后导入，导入的价格记为 `source=sync`。同步价格被修改后变成 `manual`，之后同步不会自动覆盖。详见 CONTRACTS §17。
 
@@ -1067,19 +1124,24 @@ CREATE TABLE model_price_history (
 
 ```mermaid
 flowchart TD
-  a["请求进入"] --> b{"余额缓存 > 最低余额？<br/>（默认 0）"}
+  a["请求进入"] --> k["API Key 鉴权<br/>分组对所有者的用户组是否可用<br/>实际倍率：专属倍率 → 分组默认 × 全场折扣 → 分组默认"]
+  k -- 分组不可用 --> y["返回 403 group_not_allowed"]
+  k --> p["标价解析<br/>专属价 → 分组内定价 → 全局价"]
+  p -- 没有全局价且策略为拒绝 --> z["返回 403 model_price_not_configured"]
+  p --> b{"余额缓存 > 最低余额？<br/>（默认 0）"}
   b -- 否 --> x["返回 402 余额不足"]
   b -- 是 --> c["转发请求（API Key 并发槽位已在钩子之前取得）"]
   c --> d["请求结束：得到 token 用量"]
-  d --> e["结算任务进入异步队列"]
-  e --> f["计算费用<br/>执行价格表达式 × 分组倍率<br/>记录命中的档位和加价规则"]
+  d --> e["结算任务进入异步队列<br/>标价、规则和实际倍率随记录冻结"]
+  e --> f["计算费用<br/>执行标价的表达式 ×（规则倍数 × 实际倍率）<br/>记录原价、标价费用、命中的档位和加价规则"]
   f --> g["同一事务：写使用记录的费用字段<br/>插入账本（幂等键 usage:request_id）<br/>更新余额"]
   g --> h["刷新 Redis 余额缓存 · 写事件 usage.recorded"]
   g -- 失败 --> r["重试（指数退避）<br/>多次失败标记 billing_status=failed 并告警"]
 ```
 
 - **允许短暂透支**：余额检查在请求前，结算在请求后，同一用户的并发请求可能让余额短暂变为负数；API Key 的并发与 TPM 上限（设置时）控制了透支的幅度，余额为负后下一次请求会被拒绝
-- 使用记录新增字段：`total_cost`、`rate_multiplier`、`price_id`、`expr_hash`、`billing_mode`、`matched_tier`、`billing_detail`（JSONB：各变量取值、分项费用、加价规则命中情况）、`billing_status`（pending / billed / failed / free）
+- 使用记录新增字段：`total_cost`、`rate_multiplier`、`price_id`、`expr_hash`、`billing_mode`、`matched_tier`、`billing_detail`（JSONB：各变量取值、分项费用、加价规则命中情况）、`billing_status`（pending / billed / failed / free）。2026-11-12 起另有 `base_cost`（原价）；`rate_multiplier` 存的是这次请求的实际倍率，不含规则倍数；`price_id` 始终指向全局价
+- **标价与倍率在请求时定下，结算时不再解析**（CONTRACTS §97.3、§97.4）：实际倍率在鉴权时由一个函数算出（`core.SegmentRate`），标价在转发前解析；两者随使用记录冻结，结算、重试、对账都用冻结的值。WebSocket 连接沿用升级时的鉴权结果，连接期间倍率不变，标价每一轮重新解析
 - 被钩子拒绝、上游失败没有用量的请求，`billing_status=free`
 
 ---
@@ -1346,6 +1408,7 @@ flowchart TD
 | 角色 | `role:read` `role:manage` |
 | API Key | `apikey:self:manage` `apikey:all:read` `apikey:all:manage` |
 | 分组 | `group:read` `group:manage` |
+| 用户组 | `segment:read` `segment:manage`（7.1，CONTRACTS §97.7） |
 | 账号 | `account:read` `account:create` `account:update` `account:delete` `account:test` `account:credential:view`🔐；只作用于自己创建的账号：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view`🔐；`account:settings:custom`（允许受限设置如 base_url 用官方地址以外的值） |
 | 代理 | `proxy:read` `proxy:manage`；只作用于自己创建的代理：`proxy:own:read` `proxy:own:manage` |
 | 价格 | `price:read` `price:manage` |
@@ -1739,7 +1802,7 @@ flowchart LR
 │ 名称 │ 可见性   │ 倍率 │ 模型白名单   │ 账号数   │ Key 数   │ 操作     │
 ├──────┼──────────┼──────┼──────────────┼──────────┼──────────┼──────────┤
 │ 默认 │ 公开     │ 1.00 │ 不限         │ 8        │ 120      │ 编辑 ⋯   │
-│ VIP  │ 指定用户 │ 0.80 │ claude-*     │ 3        │ 12       │ 编辑 ⋯   │
+│ VIP  │ 私有     │ 0.80 │ claude-*     │ 3        │ 12       │ 编辑 ⋯   │
 └──────┴──────────┴──────┴──────────────┴──────────┴──────────┴──────────┘
 ```
 
