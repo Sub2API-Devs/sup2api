@@ -32,7 +32,7 @@ import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue
 import type { AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
-import { useEnvironmentLayer, useGroupsLookup, useProxiesLookup } from '@/composables/lookups'
+import { useEnvironmentLayer, useGroupsWith, useProxiesLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
@@ -227,7 +227,7 @@ const forwardingSummary = computed(() => {
 })
 
 // Conversion loss policy (CONVERT-MATRIX §6.3): null inherits each group's, the hint shows what applies.
-const { groups: groupList } = useGroupsLookup()
+const groupList = useGroupsWith(() => basic.group_ids)
 const conversionOptions = computed(() => policyOptions(t, t('accounts.conversion.inherit')))
 const conversionHint = computed(() => policySourceHint(t, basic.conversion_loss_policy, groupPolicies(basic.group_ids, groupList.value)))
 

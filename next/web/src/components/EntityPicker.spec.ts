@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { h } from 'vue'
 import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { ApiError, type Query } from '@sub2api/host'
-import { uiMessages } from '@sub2api/ui'
+import { SField, uiMessages } from '@sub2api/ui'
 import entity from '@/i18n/locales/en/entity'
 import EntityPicker from './EntityPicker.vue'
 import { resetEntityLookups, type EntityItem } from './entity/lookup'
@@ -198,6 +199,53 @@ describe('EntityPicker list', () => {
     expect(model(w)).toEqual({ id: 'gpt-4o', text: '' })
   })
 
+  it('leaves the excluded ids out of the list, asks for as many rows more and does not offer them by id', async () => {
+    const w = picker({ exclude: [7, '31'], extra: [{ id: 31, name: 'takeout (page)' }, { id: 40, name: 'page-only' }] })
+    await open(w)
+    expect(lookups()).toEqual([['/lookup/users', { limit: 22 }]])
+    expect(rows(w)).toEqual(['page-only#40', 'lisi@example.comDisabled#12'])
+    // Typed, an excluded id is no row either: neither the entity nor "Use ID".
+    await w.get('input').setValue('7')
+    expect(rows(w)).toEqual([])
+    await settle()
+    expect(rows(w)).toEqual([])
+    expect(w.get('[role="listbox"]').text()).toBe('No matching User')
+    await w.get('input').trigger('keydown', { key: 'Enter' })
+    expect(w.emitted('update:id')).toBeUndefined()
+    // An id that is not excluded is offered as before.
+    await type(w, '999')
+    expect(rows(w)[0]).toContain('Use ID #999')
+  })
+
+  it('counts the rows it lists in the footer and never asks for more rows than the lookup gives', async () => {
+    mocks.get.mockResolvedValue({ items: USERS, more: true })
+    const w = picker({ exclude: [12, ...Array.from({ length: 40 }, (_, i) => 1000 + i)] })
+    await open(w)
+    expect(lookups()).toEqual([['/lookup/users', { limit: 50 }]])
+    expect(w.get('[role="listbox"]').text()).toContain('Showing the first 2. Type to narrow the list.')
+  })
+
+  it('says that more match, not "no match", when every row the lookup gave is excluded', async () => {
+    mocks.get.mockResolvedValue({ items: USERS, more: true })
+    const w = picker({ exclude: USERS.map((u) => u.id) })
+    await open(w)
+    expect(w.get('[role="listbox"]').text()).toBe('More match than the list shows. Type to narrow the list.')
+  })
+
+  it('an empty list names the entity, whatever field the placeholder names', async () => {
+    mocks.get.mockResolvedValue({ items: [], more: false })
+    const w = picker({ kind: 'proxy', placeholder: 'No proxy' })
+    await open(w)
+    expect(w.get('[role="listbox"]').text()).toBe('No matching Proxy')
+  })
+
+  it('shows a picked id that is excluded like any other', async () => {
+    const w = picker({ id: '7', exclude: ['7'] })
+    await flushPromises()
+    expect(shown(w)).toBe('zhangsan@example.com')
+    expect(w.text()).toContain('#7')
+  })
+
   it('says so when the list cannot be loaded', async () => {
     mocks.get.mockRejectedValue(new ApiError(500, { code: 'internal', message: 'boom' }))
     const w = picker({})
@@ -243,6 +291,23 @@ describe('EntityPicker value', () => {
     expect(shown(w)).toBe('#5')
   })
 
+  it('leaves its name to the label of a form item around: no aria-label of the placeholder over it', async () => {
+    const field = (props: Record<string, unknown>, label?: string) =>
+      mount(SField, { props: { label }, slots: { default: () => h(EntityPicker, { kind: 'proxy', placeholder: 'No proxy', ...props }) }, global: { plugins: [i18n] } })
+    const select = field({}, 'Probe proxy')
+    await flushPromises()
+    expect(select.get('input').attributes()).toMatchObject({ id: select.get('label').attributes('for'), placeholder: 'No proxy' })
+    expect(select.get('input').attributes('aria-label')).toBeUndefined()
+    // A form item without a label names nothing.
+    expect(field({}).get('input').attributes('aria-label')).toBe('No proxy')
+    // The text box of a caller without the lookup likewise.
+    mocks.denied = ['proxy:read', 'proxy:own:read']
+    const box = field({}, 'Probe proxy')
+    await flushPromises()
+    expect(box.get('input').attributes()).toMatchObject({ id: box.get('label').attributes('for'), placeholder: 'No proxy (Proxy ID)' })
+    expect(box.get('input').attributes('aria-label')).toBeUndefined()
+  })
+
   it('shows a name search, and clear empties both', async () => {
     const w = picker({ id: '', text: 'opus' })
     expect(shown(w)).toBe('Name contains “opus”')
@@ -284,12 +349,33 @@ describe('EntityPicker without the lookup', () => {
     await flushPromises()
     expect(mocks.get).not.toHaveBeenCalled()
     expect(box(w).attributes('placeholder')).toBe('User ID')
-    await commit(w, 'ann@')
-    expect(w.emitted('update:id')).toBeUndefined()
-    await flushPromises()
-    expect((box(w).element as HTMLInputElement).value).toBe('7')
+    // A placeholder of the page names the field: what to type follows it.
+    expect(box(picker({ placeholder: 'Created by' })).attributes('placeholder')).toBe('Created by (User ID)')
     await commit(w, '9')
     expect(model(w)).toEqual({ id: '9', text: '' })
+    await commit(w, 'ann@')
+    expect(model(w)).toEqual({ id: '', text: '' })
+  })
+
+  it('text that is no id clears the id picked before: a form does not submit what was typed over', async () => {
+    mocks.denied = ['user:read']
+    const w = picker({ id: '54', 'onUpdate:id': (id: string) => w.setProps({ id }) })
+    await flushPromises()
+    expect(shown(w)).toBe('54')
+    await commit(w, 'xyz')
+    expect(w.emitted('update:id')).toEqual([['']])
+    expect(w.emitted('change')).toEqual([[{ id: '', text: '' }]])
+    await flushPromises()
+    // The id the form reads is empty, and so is the box: the old id does not come back.
+    expect(w.props('id')).toBe('')
+    expect(shown(w)).toBe('')
+  })
+
+  it('with text bound, text that is no id stays the name search', async () => {
+    mocks.denied = ['user:read']
+    const w = picker({ id: '54', text: '' })
+    await commit(w, 'xyz')
+    expect(model(w)).toEqual({ id: '', text: 'xyz' })
   })
 
   it('the text box takes the id of a page candidate the lookup does not have', async () => {
@@ -297,6 +383,20 @@ describe('EntityPicker without the lookup', () => {
     const w = picker({ kind: 'group', extra: [{ id: 0, name: 'Default group' }] })
     await commit(w, '0')
     expect(model(w)).toEqual({ id: '0', text: '' })
+  })
+
+  it('the text box does not take an excluded id, and shows the value in effect once the text is handed over', async () => {
+    mocks.denied = ['user:read']
+    const w = picker({ id: '', exclude: [7] })
+    await commit(w, '7')
+    expect(model(w)).toEqual({ id: '', text: '' })
+    await flushPromises()
+    expect((box(w).element as HTMLInputElement).value).toBe('')
+    // A page that keeps the id elsewhere (a list of ids) leaves `id` empty: the box is ready for the next one.
+    await commit(w, '9')
+    expect(model(w)).toEqual({ id: '9', text: '' })
+    await flushPromises()
+    expect((box(w).element as HTMLInputElement).value).toBe('')
   })
 
   it('asks the permission of a mine lookup, which every signed-in user has for groups', async () => {

@@ -104,8 +104,10 @@
     }
   },
   "allowlist_user_ids": {
-    "ui:widget": "tags",
-    "ui:placeholder": "42",
+    "ui:widget": "entity-select",
+    "ui:options": {
+      "kind": "user"
+    },
     "ui:title": {
       "en": "Allowlist (observe only)",
       "zh": "白名单（只观察）"
@@ -120,8 +122,10 @@
     }
   },
   "blocklist_user_ids": {
-    "ui:widget": "tags",
-    "ui:placeholder": "42",
+    "ui:widget": "entity-select",
+    "ui:options": {
+      "kind": "user"
+    },
     "ui:title": {
       "en": "Blocklist (always moderated first)",
       "zh": "黑名单（总是先审）"

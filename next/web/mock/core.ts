@@ -82,7 +82,21 @@ export const readonlyUser: Identity = {
   superuser: false
 }
 
-const identities = [me, plainUser, vendorUser, readonlyUser]
+/**
+ * Sign in as moderator@example.com (password admin): runs the moderation
+ * plugin and may look up no user, group or account, so its entity pickers are
+ * the text boxes of a caller without GET /lookup.
+ */
+export const moderatorUser: Identity = {
+  id: 8,
+  email: 'moderator@example.com',
+  display_name: 'Moderator',
+  roles: ['moderator'],
+  permissions: ['plugin.moderation:moderation:read', 'plugin.moderation:moderation:manage', 'gateway:use'],
+  superuser: false
+}
+
+const identities = [me, plainUser, vendorUser, readonlyUser, moderatorUser]
 
 /** Email of a (possibly deleted) user id, for created_by_email. */
 export function userEmail(id: number | null | undefined): string | null {

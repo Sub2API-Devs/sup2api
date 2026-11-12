@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type PluginHost } from '@sub2api/host'
 import { setHost } from './host'
 import { resetSessionCaches } from './session'
-import { resolveUserIds, useUserFilter } from './users'
+import { useUserFilter } from './users'
 
 // The core's user search (GET /users?q=) answers from `search`.
 const search = vi.fn<(path: string, query: { q: string }) => Promise<{ items: Array<{ id: number }> }>>()
@@ -62,14 +62,5 @@ describe('user filter of a list', () => {
     answerFirst({ items: [{ id: 7 }] })
     expect(await first).toBe(false)
     expect(f.query.value).toEqual({ user_id: 12 })
-  })
-})
-
-describe("a form's user box", () => {
-  it('reads digits as the id and other text as a name', async () => {
-    search.mockResolvedValue({ items: [{ id: 12 }] })
-    expect(await resolveUserIds(' 7 ')).toEqual([7])
-    expect(search).not.toHaveBeenCalled()
-    expect(await resolveUserIds('li')).toEqual([12])
   })
 })

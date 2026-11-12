@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const get = vi.fn()
-vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get } }))
+const list = vi.fn()
+vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get, list } }))
 
 // lookups.ts caches module-wide: every test gets a fresh copy (and the
 // ApiError class of that copy, which isApiError checks against).
@@ -52,5 +53,80 @@ describe('environment variables lookup', () => {
     await useEnvironmentVariables().ready
     expect(get).toHaveBeenCalledTimes(2)
     expect(useEnvironmentLayer('account').value).toBe(true)
+  })
+})
+
+describe('refreshing the groups or the proxies', () => {
+  beforeEach(() => {
+    get.mockReset()
+    list.mockReset()
+  })
+
+  it('drops the names the entity pickers know of that kind, and of no other', async () => {
+    list.mockResolvedValue({ items: [] })
+    get.mockResolvedValue({ items: [{ id: 3, name: 'before' }], more: false })
+    const { useGroupsLookup, useProxiesLookup } = await fresh()
+    const { lookupEntities, useEntityNames } = await import('@/components/entity/lookup')
+    await Promise.all([lookupEntities('group'), lookupEntities('proxy')])
+    const names = useEntityNames()
+    expect([names.name('group', 3), names.name('proxy', 3)]).toEqual(['before', 'before'])
+    useGroupsLookup(true)
+    expect([names.name('group', 3), names.name('proxy', 3)]).toEqual([undefined, 'before'])
+    useProxiesLookup(true)
+    expect(names.name('proxy', 3)).toBeUndefined()
+    // The cached read keeps them.
+    await lookupEntities('group')
+    useGroupsLookup()
+    expect(names.name('group', 3)).toBe('before')
+  })
+})
+
+describe('groups with the picked ones past the first page', () => {
+  beforeEach(() => {
+    get.mockReset()
+    list.mockReset()
+  })
+
+  const group = (id: number, policy?: string) => ({ id, name: `g${id}`, conversion_loss_policy: policy })
+  const firstPage = (n: number) => ({ items: Array.from({ length: n }, (_, i) => group(i + 1)) })
+  const settled = () => new Promise((resolve) => setTimeout(resolve))
+  const asked = () => get.mock.calls.map((c) => c[0])
+
+  it('asks for nothing more while the first page is the whole set', async () => {
+    list.mockResolvedValue(firstPage(3))
+    const { useGroupsWith } = await fresh()
+    const groups = useGroupsWith(() => [2, 900])
+    await settled()
+    expect(groups.value.map((g) => g.id)).toEqual([1, 2, 3])
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it('reads each picked group a full first page lacks, once, until the groups are refreshed', async () => {
+    list.mockResolvedValue(firstPage(200))
+    get.mockImplementation(async (path: string) => {
+      if (path !== '/groups/900') throw new Error('not found')
+      return group(900, 'strict')
+    })
+    const { useGroupsWith, useGroupsLookup } = await fresh()
+    // The copy of vue that the fresh lookups.ts watches with.
+    const { ref } = await import('vue')
+    const ids = ref([2, 900, 901])
+    const groups = useGroupsWith(() => ids.value)
+    await settled()
+    expect(asked()).toEqual(['/groups/900', '/groups/901'])
+    // The one the core does not show is left out.
+    expect(groups.value).toHaveLength(201)
+    expect(groups.value.at(-1)).toEqual(group(900, 'strict'))
+
+    ids.value = [900, 901, 5]
+    await settled()
+    expect(get).toHaveBeenCalledTimes(2)
+
+    // A group was changed: what was read of it is dropped with the list.
+    useGroupsLookup(true)
+    expect(groups.value.some((g) => g.id === 900)).toBe(false)
+    ids.value = [900]
+    await settled()
+    expect(asked()).toEqual(['/groups/900', '/groups/901', '/groups/900'])
   })
 })

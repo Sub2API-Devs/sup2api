@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, nextTick } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { ApiError, session, type Query } from '@sub2api/host'
-import { lookupEntities, lookupUnavailable, resetEntityLookups, useEntityNames } from './lookup'
+import { forgetEntityNames, lookupEntities, lookupUnavailable, resetEntityLookups, useEntityNames } from './lookup'
 
 const get = vi.hoisted(() => vi.fn())
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get } }))
@@ -85,6 +85,31 @@ describe('useEntityNames', () => {
     expect(get).toHaveBeenCalledTimes(3)
   })
 
+  it('names an id the lookup does not know after the page\'s own candidates', async () => {
+    const { label, name } = useEntityNames({ extra: () => [{ id: 0, name: 'Default group' }, { id: 3, name: 'stale name' }, { id: 9, name: 'page-only' }] })
+    expect([label('group', 0), label('group', 3), label('group', 9)]).toEqual(['Default group #0', 'stale name #3', 'page-only #9'])
+    await flushPromises()
+    // The lookup's name wins once it is known; 0 was never asked for.
+    expect(queries()).toEqual([['/lookup/groups', { ids: '3,9' }]])
+    expect([name('group', 0), name('group', 3), name('group', 9)]).toEqual(['Default group', 'cc-low', 'page-only'])
+  })
+
+  it('asks again for the names of a kind a page changed, in both realms, leaving the other kinds', async () => {
+    const all = useEntityNames()
+    const own = useEntityNames({ mine: true })
+    all.name('group', 3)
+    own.name('group', 3)
+    all.name('user', 3)
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(3)
+    get.mockResolvedValue({ items: [{ id: 3, name: 'renamed' }], more: false })
+    forgetEntityNames('group')
+    expect([all.name('group', 3), own.name('group', 3)]).toEqual([undefined, undefined])
+    await flushPromises()
+    expect([all.name('group', 3), own.name('group', 3), all.name('user', 3)]).toEqual(['renamed', 'renamed', 'cc-low'])
+    expect(get).toHaveBeenCalledTimes(5)
+  })
+
   it('forgets everything when the session ends', async () => {
     const { name } = useEntityNames()
     name('group', 3)
@@ -113,6 +138,12 @@ describe('useEntityNames', () => {
 })
 
 describe('lookupEntities', () => {
+  it('asks for a number of rows only when given one', async () => {
+    await lookupEntities('group', { q: 'cc', limit: 23 })
+    await lookupEntities('group', { q: 'cc' })
+    expect(queries()).toEqual([['/lookup/groups', { q: 'cc', limit: 23 }], ['/lookup/groups', { q: 'cc' }]])
+  })
+
   it('narrows given ids by the scope, for "is this key that user\'s"', async () => {
     get.mockResolvedValue({ items: [], more: false })
     expect(await lookupEntities('api_key', { ids: [5], scope: { user_id: 9 } })).toEqual({ items: [], more: false })

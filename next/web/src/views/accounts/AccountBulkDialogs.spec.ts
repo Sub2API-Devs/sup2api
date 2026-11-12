@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
-import { ref } from 'vue'
 import type { Account, AccountType } from '@/api/types'
+import EntityMultiPicker from '@/components/EntityMultiPicker.vue'
+import EntityPicker from '@/components/EntityPicker.vue'
+import ProxyPicker from '@/components/ProxyPicker.vue'
 import { i18n } from '@/i18n'
 import AccountBulkEditDialog from './AccountBulkEditDialog.vue'
 import AccountBulkDeleteDialog from './AccountBulkDeleteDialog.vue'
 
 const mocks = vi.hoisted(() => ({ patch: vi.fn(), del: vi.fn(), toast: vi.fn() }))
-vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { patch: mocks.patch, del: mocks.del } }))
+// The group and proxy pickers look entities up; nothing answers here.
+vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { patch: mocks.patch, del: mocks.del, get: async () => ({ items: [], more: false }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), toast: mocks.toast }))
-vi.mock('@/composables/lookups', () => ({ useGroupsLookup: () => ({ groups: ref([{ id: 1, name: 'g1' }, { id: 2, name: 'g2' }]) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 enableAutoUnmount(afterEach)
 
 const acc = (id: number, over: Partial<Account> = {}) => ({ id, name: `a${id}`, plugin_key: 'p', type: 't', priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, group_ids: [1], proxy_id: null, auto_disable: true, ...over }) as unknown as Account
@@ -69,6 +72,57 @@ describe('bulk account dialogs', () => {
     await w.get('[data-testid="bulk-edit-apply"]').trigger('click')
     await flushPromises()
     expect(mocks.patch.mock.calls.map((c) => [c[0], c[1]])).toEqual([['/accounts/1', { spm_limit: 20, spm_window_seconds: 3600 }]])
+  })
+
+  it('picking groups or a proxy ticks the field and patches their ids as numbers', async () => {
+    mocks.patch.mockImplementation(async (path: string, body: object) => ({ id: Number(path.split('/')[2]), ...body }))
+    const w = mount(AccountBulkEditDialog, {
+      props: { open: true, accounts: [acc(1), acc(2, { group_ids: [2, 5], proxy_id: 9 })], typeOf: () => undefined },
+      global: { plugins: [i18n], stubs: { SModal } }
+    })
+    const ticked = (k: string) => (w.get(`[data-testid="bulk-field-${k}"] input[type="checkbox"]`).element as HTMLInputElement).checked
+    expect([ticked('groups'), ticked('proxy')]).toEqual([false, false])
+    w.getComponent(EntityMultiPicker).vm.$emit('update:ids', ['2', '5'])
+    w.getComponent(ProxyPicker).getComponent(EntityPicker).vm.$emit('update:id', '9')
+    await flushPromises()
+    expect([ticked('groups'), ticked('proxy')]).toEqual([true, true])
+    expect(w.getComponent(EntityMultiPicker).props('ids')).toEqual(['2', '5'])
+    await w.get('[data-testid="bulk-edit-apply"]').trigger('click')
+    await flushPromises()
+    // The second account has them already.
+    expect(mocks.patch.mock.calls.map((c) => [c[0], c[1]])).toEqual([['/accounts/1', { group_ids: [2, 5], proxy_id: 9 }]])
+  })
+
+  it('"no proxy" is the ticked field with none picked: ticked alone, or a picked proxy cleared', async () => {
+    mocks.patch.mockImplementation(async (path: string, body: object) => ({ id: Number(path.split('/')[2]), ...body }))
+    const w = mount(AccountBulkEditDialog, {
+      props: { open: true, accounts: [acc(1), acc(2, { proxy_id: 9 })], typeOf: () => undefined },
+      global: { plugins: [i18n], stubs: { SModal } }
+    })
+    // Asked for anew: reopening renders the dialog again.
+    const tick = () => w.get<HTMLInputElement>('[data-testid="bulk-field-proxy"] input[type="checkbox"]')
+    const picker = () => w.getComponent(ProxyPicker).getComponent(EntityPicker)
+    const apply = async () => {
+      await w.get('[data-testid="bulk-edit-apply"]').trigger('click')
+      await flushPromises()
+      return mocks.patch.mock.calls.map((c) => [c[0], c[1]])
+    }
+    await tick().setValue(true)
+    // The first account has no proxy already.
+    expect(await apply()).toEqual([['/accounts/2', { proxy_id: null }]])
+
+    mocks.patch.mockClear()
+    await w.setProps({ open: false })
+    await w.setProps({ open: true })
+    expect(tick().element.checked).toBe(false)
+    picker().vm.$emit('update:id', '9')
+    await flushPromises()
+    expect(picker().props('id')).toBe('9')
+    picker().vm.$emit('update:id', '')
+    await flushPromises()
+    expect(tick().element.checked).toBe(true)
+    expect(picker().props('id')).toBe('')
+    expect(await apply()).toEqual([['/accounts/2', { proxy_id: null }]])
   })
 
   it('disables every number field a selected type fixes or locks', async () => {
