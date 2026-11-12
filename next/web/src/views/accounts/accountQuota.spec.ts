@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { QuotaSnapshot } from '@/api/types'
-import { formatPercent, hasQuota, quotaCountdown, quotaLevel, sortWindows, useQuotaRefresh } from './accountQuota'
+import { formatPercent, hasQuota, quotaCountdown, quotaLevel, refreshAccountBalance, sortWindows, useQuotaRefresh } from './accountQuota'
+
+const http = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
+vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: http }))
 
 const snap = (over: Partial<QuotaSnapshot> = {}): QuotaSnapshot => ({ supported: true, source: 'passive', updated_at: null, error: '', windows: [], ...over })
 
@@ -107,5 +110,14 @@ describe('useQuotaRefresh', () => {
     expect(s.fetcher).toHaveBeenCalledTimes(2)
     s.resolve(snap())
     expect(await retry).toBe('ok')
+  })
+})
+
+describe('refreshAccountBalance', () => {
+  it('forces GET /accounts/:id/balance', async () => {
+    http.get.mockResolvedValueOnce({ balance: 1 })
+    await expect(refreshAccountBalance(7)).resolves.toEqual({ balance: 1 })
+    expect(http.get).toHaveBeenCalledWith('/accounts/7/balance', { force: true })
+    expect(http.post).not.toHaveBeenCalled()
   })
 })

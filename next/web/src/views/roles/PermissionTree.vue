@@ -27,21 +27,25 @@ const grantedCount = (m: PermissionModule) => m.permissions.filter((p) => isChec
 const inactive = (status: string) => status !== 'active' && status !== ''
 const moduleInactive = (m: PermissionModule) => inactive(m.status)
 const permInactive = (m: PermissionModule, p: PermissionItem) => moduleInactive(m) || inactive(p.status)
+// A removed permission can only be unticked; disabled plugin ones stay selectable.
+const selectable = (p: PermissionItem) => p.status !== 'removed' || isChecked(p.key)
+const selectables = (m: PermissionModule) => m.permissions.filter(selectable)
 
+// Ticked permissions are always selectable, so "all" means every selectable one.
 function moduleState(m: PermissionModule): 'all' | 'some' | 'none' {
   const n = grantedCount(m)
   if (n === 0) return 'none'
-  return n === m.permissions.length ? 'all' : 'some'
+  return n === selectables(m).length ? 'all' : 'some'
 }
 
-function toggle(key: string) {
-  if (!props.readOnly) emit('update:granted', flip(props.granted, key))
+function toggle(p: PermissionItem) {
+  if (!props.readOnly && selectable(p)) emit('update:granted', flip(props.granted, p.key))
 }
 
 function toggleModule(m: PermissionModule) {
   if (props.readOnly) return
   const on = moduleState(m) !== 'all'
-  emit('update:granted', m.permissions.reduce((s, p) => flip(s, p.key, on), props.granted))
+  emit('update:granted', selectables(m).reduce((s, p) => flip(s, p.key, on), props.granted))
 }
 </script>
 
@@ -71,7 +75,7 @@ function toggleModule(m: PermissionModule) {
               class="shrink-0"
               :model-value="moduleState(m) === 'all'"
               :indeterminate="moduleState(m) === 'some'"
-              :disabled="readOnly || !m.permissions.length"
+              :disabled="readOnly || !selectables(m).length"
               :label="t('roles.selectAll')"
               @update:model-value="toggleModule(m)"
             />
@@ -84,13 +88,16 @@ function toggleModule(m: PermissionModule) {
               :key="p.key"
               class="min-w-0 [&>span]:min-w-0"
               :model-value="isChecked(p.key)"
-              :disabled="readOnly"
-              @update:model-value="toggle(p.key)"
+              :disabled="readOnly || !selectable(p)"
+              @update:model-value="toggle(p)"
             >
               <span class="flex min-w-0 items-center gap-2" :class="permInactive(m, p) ? 'text-fg-subtle' : ''" :title="p.key">
                 <span class="truncate">{{ lt(p.label) || p.key }}</span>
                 <span v-if="p.sensitive" class="shrink-0 text-warning-500 dark:text-warning-400" :title="t('roles.sensitive')" :aria-label="t('roles.sensitive')" role="img"><SIcon name="lock" class="h-3.5 w-3.5" /></span>
-                <SBadge v-if="p.status === 'disabled' && !moduleInactive(m)" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
+                <template v-if="!moduleInactive(m)">
+                  <SBadge v-if="p.status === 'disabled'" tone="warning">{{ t('roles.pluginDisabled') }}</SBadge>
+                  <SBadge v-else-if="p.status === 'removed'" tone="gray">{{ t('roles.removed') }}</SBadge>
+                </template>
               </span>
             </SCheckbox>
           </div>

@@ -156,7 +156,8 @@ function openCreate() {
 async function submitCreate() {
   createErrors.value = {}
   const key = createForm.key.trim()
-  if (!/^[a-z][a-z0-9_]{1,63}$/.test(key)) createErrors.value.key = t('roles.keyInvalid')
+  // Same rule as roleKeyRe in server/internal/authz/roles.go.
+  if (!/^[a-z][a-z0-9_]{1,49}$/.test(key)) createErrors.value.key = t('roles.keyInvalid')
   if (!createForm.nameEn.trim() && !createForm.nameZh.trim()) createErrors.value.name = t('common.required')
   if (Object.keys(createErrors.value).length) return
   creating.value = true

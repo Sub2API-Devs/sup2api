@@ -4,7 +4,7 @@ export default {
   create: 'New role',
   key: 'Key',
   keyHint: 'Lowercase letters, digits and underscores; cannot be changed later.',
-  keyInvalid: 'Use 2-64 lowercase letters, digits or underscores, starting with a letter',
+  keyInvalid: 'Use 2-50 lowercase letters, digits or underscores, starting with a letter',
   nameEn: 'Name (English)',
   nameZh: 'Name (Chinese)',
   builtin: 'Built-in',
