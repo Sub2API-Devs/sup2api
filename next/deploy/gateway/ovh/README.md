@@ -4,6 +4,14 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-13 moderation **0.9.3**（`ed988819c`；只升级插件，核心 0.1.283 不动；北京时间 00:07:50→00:07:54，rollout 265 约 4 秒，两节点同时切换；无迁移）：
+- 内容：`DefaultBlockMessage` 与 `forms/settings.schema.json` 的 `block_message.default` 改为英文 “Your request was blocked by content moderation. Please revise your input and try again.”，新增测试断言两处一致（CONTRACTS §20.3、§72）。已保存的值原样使用，不归一化、不迁移；线上存的旧中文由管理员在设置页手动修改。
+- 发布前核对：ovh 工作树 `~/sup2api/release-moderation-0.9.3` 在 `ed988819c`；自核心 0.1.283（`beb06edbb`）起只改了 `next/plugins/moderation`、`next/web/mock`、`next/docs`；线上 0.9.2 = 核心 0.1.280–0.1.283 内置包（sha256 `169f200b…7c2d`，构建自 0.1.280 的 `531e6f4e3`），`plugins/moderation/migrations` 自那以来未变。
+- 构建：`stage/moderation-0.9.3/`（独立插件模板，取自 `stage/dynweight-0.5.6/`）：Dockerfile ui 阶段出 native UI，go vet / test 通过，pack、sign（sup2api-plugins-2026）、verify；包 sha256 `762265443fa569ef2a7b1bc31ec05247b1347f903d5260cca6001f4cf7c82ef1`，manifest hostCompat `>=0.1.280 <0.2.0`、hostUICompat `^3.12` 不变。
+- 升级：`rollout.py upload` → `review`（signature valid、consent approved、host_compat_ok，没有新权限）→ `upgrade`；两节点 serving 0.9.3（ready、restarts 0），节点随后删除本地 0.9.2 包。new-api 渠道没有关；不备份数据库。用户本人在线程里回“上线”。上游同步 PR 未提。
+- 核验（只读，`~/rel283/verify093.py`、`nodeplugins.py moderation`、`errs.sh`）：active/current/desired 都是 0.9.3；升级后审核事件照常写入（mode enforce，error 为空）；23:52–00:07:50 共 1463 次请求 5xx 0，00:07:50 起 5xx 0；ovh moderation 日志只有 rollout INFO。
+- 回滚：`python3 -I rollout.py upload-prev`（从 `stage/0.1.283/payload/builtin/moderation-0.9.2.s2plugin` 重新上传）后 `rollout.py rollback`。0.9.3 只改默认文案，数据库结构不变。下一个核心版本的内置包要换成 0.9.3（内置同步只升不降，0.9.2 不会把它降回去）。
+
 2026-11-12 核心 **0.1.283**（`beb06edbb`，develop 头；北京时间 22:16–22:25；计划 `1d71581aa3ab9a0409676bd24760cf2c` rolling-v1 completed，22:16:13→22:25:12 约 9 分钟，没有暂停，两节点轮流让出（先 ccp 后 ovh），ovh 3130 和 api.prophey.ai `/readyz` 全程 200；stop 等在途请求排空 ccp 约 5 分 5 秒（22:16:33→22:21:39）、ovh 约 2 分 44 秒（22:22:18→22:25:01）；无核心迁移，schema 仍 `a9befa8c…1e11`；Host API 仍 9）：
 - 内容（均衡负载去掉“默认”策略，CONTRACTS §89，设计 `next/docs/DESIGN-2026-11-12-BALANCE-DROP-DEFAULT.md`；只改 `next/server/internal/gateway`、`next/web`、`next/docs`）：流量均衡始终开着，开箱即用为“流量 + 会话”；设置行仍写 `mode:"traffic"`（旧核心按它开流量均衡）；旧 default 行（上限负载关）归一为 sessions、model_limits 关，上限负载开的保留原选择；单候选不读用量；控制台去掉策略一行。
 - 发布前核对：ovh 工作树 `~/sup2api/release-0.1.283` 在 `beb06edbb`（origin/develop 头，合并了 `a1e391567`）；自 0.1.282（`8c9b189a2`）起只改了上述目录和 0.1.282 的发布记录；`plugins/`、`runtime-contract`、核心迁移未变（最后一个迁移仍是 0096）。版本号 0.1.283 无人占用。线上 `GET /settings/scheduling` 发布前为 `{"mode":"traffic","metric":"rpm","limit_load":false,"model_limits":true}`，存的是 mode traffic，新核心按原样保留。
