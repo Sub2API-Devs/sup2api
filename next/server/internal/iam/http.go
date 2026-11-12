@@ -122,7 +122,7 @@ func (s *Service) handleChangePassword(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := s.ChangePassword(c.Request.Context(), actor(c), in.OldPassword, in.NewPassword); err != nil {
+	if err := s.ChangePassword(c.Request.Context(), actor(c), s.currentFamily(c), in.OldPassword, in.NewPassword); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

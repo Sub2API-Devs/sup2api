@@ -108,6 +108,9 @@ const (
 	ChannelAuthzChanged   = "authz:changed"
 	ChannelAccountChanged = "account:changed"
 	ChannelConfigChanged  = "config:changed"
+	// ChannelUserSessionsChanged carries a user id whose sessions were ended
+	// (token_version moved): nodes drop that user's cached token status.
+	ChannelUserSessionsChanged = "iam:user:changed"
 )
 
 // PublishAccountChanged announces on account:changed that account id

@@ -435,7 +435,7 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	if err != nil {
 		return nil, err
 	}
-	s.forgetStatus(id)
+	s.sessionsChanged(ctx, id)
 	if v != 0 {
 		s.authz.Committed(ctx, v)
 	}
@@ -482,14 +482,6 @@ func (s *Service) applyUpdateTx(ctx context.Context, tx pgx.Tx, actorID, id int6
 		}
 	}
 
-	// SEC-M1: increment token_version when password changes or user is disabled
-	bumpTokenVersion := hash != nil || (statusChange && *in.Status == StatusDisabled)
-	if bumpTokenVersion {
-		if _, err := tx.Exec(ctx, `UPDATE users SET token_version = token_version + 1 WHERE id = $1`, id); err != nil {
-			return 0, nil, err
-		}
-	}
-
 	_, err = tx.Exec(ctx, `
 UPDATE users SET
     email = COALESCE($2, email),
@@ -504,8 +496,9 @@ WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, nilBytes(hash))
 	if err != nil {
 		return 0, nil, err
 	}
-	if bumpTokenVersion {
-		if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
+	// SEC-M1: a new password or disabling ends every session
+	if hash != nil || (statusChange && *in.Status == StatusDisabled) {
+		if _, err := invalidateSessions(ctx, tx, id, allSessions); err != nil {
 			return 0, nil, err
 		}
 	}
@@ -537,7 +530,7 @@ WHERE id = $1`, id, nilStr(email), in.DisplayName, in.Status, nilBytes(hash))
 	return v, u, nil
 }
 
-// DeleteUser soft-deletes a user and revokes their refresh tokens.
+// DeleteUser soft-deletes a user and ends their sessions.
 func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	if actorID == id {
 		return errSelfDisable
@@ -578,7 +571,7 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 		if dropped, err = segment.DropPersonal(ctx, tx, id); err != nil {
 			return err
 		}
-		if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
+		if _, err := invalidateSessions(ctx, tx, id, allSessions); err != nil {
 			return err
 		}
 		// The user's API keys go with the user: authentication already
@@ -597,7 +590,7 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	if err != nil {
 		return err
 	}
-	s.forgetStatus(id)
+	s.sessionsChanged(ctx, id)
 	s.authz.Committed(ctx, v)
 	if dropped {
 		s.priceRulesChanged(ctx)
@@ -674,14 +667,6 @@ func lockRefreshUser(ctx context.Context, tx pgx.Tx, userID int64) error {
 	if store.IsNoRows(err) {
 		return errBadRefresh
 	}
-	return err
-}
-
-func revokeAllRefreshTokens(ctx context.Context, tx pgx.Tx, userID int64) error {
-	if err := lockRefreshUser(ctx, tx, userID); err != nil {
-		return err
-	}
-	_, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, userID)
 	return err
 }
 

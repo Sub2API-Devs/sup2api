@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -99,23 +100,18 @@ func (s *Service) Sessions(ctx context.Context, userID int64, currentFamily stri
 	return out, rows.Err()
 }
 
-// RevokeSession ends one of the user's login sessions. Its refresh token stops
-// at once; its access token runs out by itself, within the access token's
-// lifetime.
+// RevokeSession ends one of the user's login sessions at once: its refresh
+// token stops and its access token is rejected; the other sessions renew on
+// their next 401.
 func (s *Service) RevokeSession(ctx context.Context, userID int64, familyID string) error {
-	return s.db.Tx(ctx, func(tx pgx.Tx) error {
-		if err := lockRefreshUser(ctx, tx, userID); err != nil {
+	return s.changeSessions(ctx, userID, oneSession(familyID), func(tx pgx.Tx) error {
+		var live bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM refresh_tokens WHERE user_id = $1 AND family_id = $2 AND revoked_at IS NULL)`,
+			userID, familyID).Scan(&live); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND family_id = $2 AND revoked_at IS NULL`, userID, familyID)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
+		if !live {
 			return core.ErrNotFound
-		}
-		if _, err := tx.Exec(ctx, `DELETE FROM login_sessions WHERE family_id = $1 AND user_id = $2`, familyID, userID); err != nil {
-			return err
 		}
 		return audit.Audit(ctx, tx, userID, "user.session.revoke", "user", strconv.FormatInt(userID, 10), nil)
 	})
@@ -123,18 +119,79 @@ func (s *Service) RevokeSession(ctx context.Context, userID int64, familyID stri
 
 // RevokeOtherSessions ends every login session of the user but keepFamily.
 func (s *Service) RevokeOtherSessions(ctx context.Context, userID int64, keepFamily string) error {
-	return s.db.Tx(ctx, func(tx pgx.Tx) error {
+	return s.changeSessions(ctx, userID, otherSessions(keepFamily), func(tx pgx.Tx) error {
+		return audit.Audit(ctx, tx, userID, "user.session.revoke_others", "user", strconv.FormatInt(userID, 10), nil)
+	})
+}
+
+// sessionsToEnd picks the refresh-token families invalidateSessions revokes:
+// only that one family, or every family but keep (empty fields select all).
+type sessionsToEnd struct{ only, keep string }
+
+var allSessions = sessionsToEnd{}
+
+func otherSessions(keep string) sessionsToEnd { return sessionsToEnd{keep: keep} }
+
+func oneSession(family string) sessionsToEnd { return sessionsToEnd{only: family} }
+
+// invalidateSessions stops every access token of userID at once
+// (token_version+1, CONTRACTS §43.2) and revokes the refresh tokens and
+// login sessions `which` selects; a session whose refresh token survives
+// renews on its next 401. Callers lock the user row first and call
+// sessionsChanged after commit.
+func invalidateSessions(ctx context.Context, tx pgx.Tx, userID int64, which sessionsToEnd) (revoked int64, err error) {
+	if _, err := tx.Exec(ctx, `UPDATE users SET token_version = token_version + 1 WHERE id = $1`, userID); err != nil {
+		return 0, err
+	}
+	const families = `($2 = '' OR family_id = $2) AND ($3 = '' OR family_id IS DISTINCT FROM $3)`
+	tag, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL AND `+families,
+		userID, which.only, which.keep)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM login_sessions WHERE user_id = $1 AND `+families, userID, which.only, which.keep); err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// changeSessions runs fn (optional) and invalidateSessions in one transaction
+// holding the user row lock, then announces the change. It takes no authz
+// lock; a caller that needs one opens its own transaction in the authz ->
+// user lock order and calls invalidateSessions and sessionsChanged itself.
+func (s *Service) changeSessions(ctx context.Context, userID int64, which sessionsToEnd, fn func(tx pgx.Tx) error) error {
+	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		if err := lockRefreshUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND family_id IS DISTINCT FROM $2 AND revoked_at IS NULL`, userID, keepFamily); err != nil {
-			return err
+		if fn != nil {
+			if err := fn(tx); err != nil {
+				return err
+			}
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM login_sessions WHERE user_id = $1 AND family_id <> $2`, userID, keepFamily); err != nil {
-			return err
-		}
-		return audit.Audit(ctx, tx, userID, "user.session.revoke_others", "user", strconv.FormatInt(userID, 10), nil)
+		_, err := invalidateSessions(ctx, tx, userID, which)
+		return err
 	})
+	if err != nil {
+		return err
+	}
+	s.sessionsChanged(ctx, userID)
+	return nil
+}
+
+// sessionsChanged drops the cached status of uids on this node and asks the
+// other nodes to do the same (iam:user:changed). A lost message is covered by
+// the reconnect reset and statusCacheTTL.
+func (s *Service) sessionsChanged(ctx context.Context, uids ...int64) {
+	for _, uid := range uids {
+		s.forgetStatus(uid)
+		if s.bus == nil {
+			continue
+		}
+		if err := s.bus.Publish(ctx, core.ChannelUserSessionsChanged, []byte(strconv.FormatInt(uid, 10))); err != nil {
+			slog.WarnContext(ctx, "iam: publish iam:user:changed failed", "user_id", uid, "err", err)
+		}
+	}
 }
 
 // currentFamily reads the session id from the caller's verified access token.

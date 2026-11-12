@@ -28,7 +28,8 @@ import (
 )
 
 // statusCacheTTL bounds how long a disabled user's access token keeps
-// working on a node that missed the authz:changed broadcast.
+// working on a node that missed the authz:changed or iam:user:changed
+// broadcast.
 const statusCacheTTL = 30 * time.Second
 
 // Deps are the dependencies of Service.
@@ -38,6 +39,9 @@ type Deps struct {
 	Config *config.Config
 	Events core.EventPublisher
 	Authz  *authz.Service
+	// Bus announces ended sessions to the other nodes (iam:user:changed).
+	// Optional: without it only this node's status cache is dropped.
+	Bus core.Bus
 	// Cipher seals the two-factor secrets.
 	Cipher *secret.Cipher
 	// BcryptCost defaults to bcrypt.DefaultCost (tests lower it).
@@ -55,6 +59,7 @@ type Service struct {
 	cfg    *config.Config
 	events core.EventPublisher
 	authz  *authz.Service
+	bus    core.Bus
 	cipher *secret.Cipher
 	cost   int
 
@@ -89,14 +94,33 @@ func New(d Deps) *Service {
 	if d.PriceRulesChanged == nil {
 		d.PriceRulesChanged = func(context.Context) {}
 	}
-	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, cipher: d.Cipher, cost: d.BcryptCost, status: map[int64]statusEntry{},
+	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, bus: d.Bus, cipher: d.Cipher, cost: d.BcryptCost, status: map[int64]statusEntry{},
 		priceRulesChanged: d.PriceRulesChanged, limiter: newLoginLimiter(d.Redis)}
 	s.dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), s.cost)
 	if d.Authz != nil {
 		// Status changes (disable/delete) bump the authz version.
 		d.Authz.OnChange(s.clearStatusCache)
 	}
+	if d.Bus != nil {
+		s.subscribe(d.Bus)
+	}
 	return s
+}
+
+// subscribe keeps the status cache in step with sessions ended on other
+// nodes; after a reconnect, whose missed messages are lost, it drops it all.
+func (s *Service) subscribe(bus core.Bus) {
+	bus.Subscribe(core.ChannelUserSessionsChanged, func(payload []byte) {
+		uid, err := strconv.ParseInt(string(payload), 10, 64)
+		if err != nil {
+			s.clearStatusCache()
+			return
+		}
+		s.forgetStatus(uid)
+	})
+	if r, ok := bus.(core.BusReconnects); ok {
+		r.OnReconnect(s.clearStatusCache)
+	}
 }
 
 func (s *Service) clearStatusCache() {

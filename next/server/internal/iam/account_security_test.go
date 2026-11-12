@@ -184,7 +184,7 @@ func TestPasswordChangeEndsAPendingSecondStep(t *testing.T) {
 	secret, _ := enableTwoFactor(t, s, id)
 	clearLastStep(t, s, id)
 	step := mustLogin(t, s, adminEmail, adminPassword)
-	if err := s.ChangePassword(ctx, id, adminPassword, "another-password-1"); err != nil {
+	if err := s.ChangePassword(ctx, id, "", adminPassword, "another-password-1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.LoginSecondFactor(ctx, step.FlowToken, codeAt(t, secret, time.Now()), testIP); err == nil {

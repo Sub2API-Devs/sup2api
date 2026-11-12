@@ -80,6 +80,7 @@ func (f *fakeEvents) types() []string {
 
 type env struct {
 	svc    *Service
+	bus    *memBus
 	authz  *authz.Service
 	redis  *miniredis.Miniredis
 	events *fakeEvents
@@ -113,8 +114,8 @@ func setup(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := New(Deps{DB: db, Redis: redis.NewClient(&redis.Options{Addr: mr.Addr()}), Config: cfg, Events: ev, Authz: az, Cipher: cipher, BcryptCost: bcrypt.MinCost})
-	return &env{svc: svc, authz: az, redis: mr, events: ev, cfg: cfg}
+	svc := New(Deps{DB: db, Redis: redis.NewClient(&redis.Options{Addr: mr.Addr()}), Config: cfg, Events: ev, Authz: az, Bus: bus, Cipher: cipher, BcryptCost: bcrypt.MinCost})
+	return &env{svc: svc, bus: bus, authz: az, redis: mr, events: ev, cfg: cfg}
 }
 
 func isCode(err error, code string) bool {
@@ -197,13 +198,13 @@ func TestBootstrapLoginRefreshLogout(t *testing.T) {
 
 	// Password change revokes refresh tokens and requires the old password.
 	p3 := mustLogin(t, s, adminEmail, adminPassword)
-	if err := s.ChangePassword(ctx, uid, "wrong", "new-password-1"); !isCode(err, "invalid_argument") {
+	if err := s.ChangePassword(ctx, uid, "", "wrong", "new-password-1"); !isCode(err, "invalid_argument") {
 		t.Fatalf("wrong old password: %v", err)
 	}
-	if err := s.ChangePassword(ctx, uid, adminPassword, "short"); !isCode(err, "invalid_argument") {
+	if err := s.ChangePassword(ctx, uid, "", adminPassword, "short"); !isCode(err, "invalid_argument") {
 		t.Fatalf("short password: %v", err)
 	}
-	if err := s.ChangePassword(ctx, uid, adminPassword, "new-password-1"); err != nil {
+	if err := s.ChangePassword(ctx, uid, "", adminPassword, "new-password-1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Refresh(ctx, p3.RefreshToken); err == nil {
@@ -461,7 +462,7 @@ func TestHTTP(t *testing.T) {
 		t.Fatalf("list roles: %d %v", code, out)
 	}
 
-	// Logout revokes the refresh token.
+	// Logout ends that session; the others renew on their next 401.
 	_, out = c.do("POST", "/auth/login", "", map[string]any{"email": adminEmail, "password": adminPassword})
 	rt := out["data"].(map[string]any)["refresh_token"].(string)
 	if code, _ = c.do("POST", "/auth/logout", tok, map[string]any{"refresh_token": rt}); code != 204 {
@@ -470,9 +471,23 @@ func TestHTTP(t *testing.T) {
 	if code, _ = c.do("POST", "/auth/refresh", "", map[string]any{"refresh_token": rt}); code != 401 {
 		t.Fatalf("refresh after logout: %d", code)
 	}
+	if code, _ = c.do("GET", "/me", tok, nil); code != 401 {
+		t.Fatalf("access token after another session's logout: %d", code)
+	}
+	renew := func(refresh string) (access, next string) {
+		code, out := c.do("POST", "/auth/refresh", "", map[string]any{"refresh_token": refresh})
+		if code != 200 {
+			t.Fatalf("renew: %d %v", code, out)
+		}
+		d := out["data"].(map[string]any)
+		return d["access_token"].(string), d["refresh_token"].(string)
+	}
+	tok, rt = renew(data["refresh_token"].(string))
+	// Changing the password keeps the caller's own session.
 	if code, out = c.do("PUT", "/me/password", tok, map[string]any{"old_password": adminPassword, "new_password": "another-pass-1"}); code != 204 {
 		t.Fatalf("change password: %d %v", code, out)
 	}
+	renew(rt)
 }
 
 // sectionKeys lists the section keys of a /me/menus response, in order.

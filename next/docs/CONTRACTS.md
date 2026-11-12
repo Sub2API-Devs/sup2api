@@ -107,7 +107,7 @@
 |---|---|---|
 | POST `/auth/login` | - | `{email, password}` → `{access_token, refresh_token, expires_in, user}`；`user` 是 `/users` 列表项的形状（§15.2），但不带 `balance` 和 `segment`（用户组，§97.6） |
 | POST `/auth/refresh` | - | `{refresh_token}` → 同上（轮换 refresh token） |
-| POST `/auth/logout` | auth | 请求体 `{refresh_token?}` 可选；吊销该 refresh token |
+| POST `/auth/logout` | auth | 请求体 `{refresh_token?}` 可选；结束该 refresh token 所在的会话（整个家族），不带时结束全部会话；立即生效（§43.2） |
 | GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser}` |
 | GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/security/finance/users/plugins/system/me` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
 | PUT `/me/password` | auth | `{old_password, new_password}` |
@@ -2674,9 +2674,9 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 ### 43.2 改密、禁用后旧令牌失效
 
 - 迁移 0027：`users.token_version bigint NOT NULL DEFAULT 0`。
-- 修改密码、把用户禁用时 `token_version + 1`。
-- access token 里带 `tv`（签发时的 `token_version`）；校验时与库里的值不一致即 401 `token has been invalidated`。
-- 校验结果在节点内缓存 30 秒。本节点的修改立即生效；其他节点要等缓存过期，或等权限版本变化把缓存清掉（禁用会触发）。
+- 修改密码（本人或管理员重置）、把用户禁用、删除用户、登出、撤销会话时 `token_version + 1`（2026-11-12 权限加固 M8，`iam.invalidateSessions`），同时按场景吊销 refresh token 家族：本人改密码保留当前会话，撤销会话、登出只吊销对应家族，其余吊销全部。
+- access token 里带 `tv`（签发时的 `token_version`）；校验时与库里的值不一致即 401 `token has been invalidated`。refresh token 未被吊销的会话在下一次 401 后静默续期（控制台自动 `/auth/refresh`），被吊销的会话立即下线。
+- 校验结果在节点内缓存 30 秒。上述操作提交后在本节点清掉该用户的缓存，并在 `iam:user:changed`（载荷为用户 id）上广播，其他节点立即清掉；总线重连时整表清空，广播丢失时以 30 秒过期兜底。这个频道与权限版本无关：登出、撤销会话、改密码不推进 `authz:changed`。
 
 ### 43.3 代理的私网地址
 
@@ -6793,7 +6793,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 ### 79.4 登录会话和资料
 
 - `GET /me/sessions`：每个 refresh token 家族一行，`{id, method, ip, user_agent, created_at, last_used_at, current}`。access token 增加声明 `fam`，用来标出当前会话；升级前签发的 token 没有它，这时不标当前会话，`POST /me/sessions/revoke-others` 回 409，刷新后恢复。
-- `DELETE /me/sessions/:id`、`POST /me/sessions/revoke-others`：吊销 refresh token。已签发的 access token 不会立刻失效，最长等到过期（2 小时）。
+- `DELETE /me/sessions/:id`、`POST /me/sessions/revoke-others`：吊销 refresh token，被撤销会话的 access token 立即失效；保留的会话下一次请求 401 后静默续期（§43.2，2026-11-12 起）。
 - `PUT /me {display_name}`：改自己的显示名称，回 `GET /me` 的内容。语言存在浏览器里。
 - 上面所有修改都写审计日志（`user.two_factor.*`、`user.passkey.*`、`user.session.*`、`user.profile.update`、`user.security.reset`）。
 

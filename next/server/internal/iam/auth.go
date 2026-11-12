@@ -352,24 +352,28 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	return pair, nil
 }
 
-// Logout revokes refreshToken (only that token, not its family) if it
-// belongs to userID; an empty token revokes every refresh token of the user.
+// Logout ends the session refreshToken belongs to, if it is a live token of
+// userID; an empty token ends every session of the user.
 func (s *Service) Logout(ctx context.Context, userID int64, refreshToken string) error {
-	return s.db.Tx(ctx, func(tx pgx.Tx) error {
-		if err := lockRefreshUser(ctx, tx, userID); err != nil {
+	which := allSessions
+	if refreshToken != "" {
+		var family string
+		err := s.db.Pool.QueryRow(ctx, `SELECT family_id FROM refresh_tokens
+			WHERE token_hash = $1 AND user_id = $2 AND revoked_at IS NULL AND family_id <> ''`, hashToken(refreshToken), userID).Scan(&family)
+		if store.IsNoRows(err) {
+			return nil
+		}
+		if err != nil {
 			return err
 		}
-		if refreshToken == "" {
-			return revokeAllRefreshTokens(ctx, tx, userID)
-		}
-		_, err := tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = now() WHERE token_hash = $1 AND user_id = $2 AND revoked_at IS NULL`, hashToken(refreshToken), userID)
-		return err
-	})
+		which = oneSession(family)
+	}
+	return s.changeSessions(ctx, userID, which, nil)
 }
 
-// ChangePassword changes the caller's password and revokes all refresh
-// tokens (other sessions end when their access tokens expire).
-func (s *Service) ChangePassword(ctx context.Context, userID int64, oldPassword, newPassword string) error {
+// ChangePassword changes the caller's password and ends every other session
+// at once; keepFamily, the caller's own, renews on its next 401.
+func (s *Service) ChangePassword(ctx context.Context, userID int64, keepFamily, oldPassword, newPassword string) error {
 	if f := validatePassword("new_password", newPassword); f != nil {
 		return core.InvalidFields(*f)
 	}
@@ -388,18 +392,16 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, oldPassword,
 	if err != nil {
 		return err
 	}
-	return s.db.Tx(ctx, func(tx pgx.Tx) error {
+	return s.changeSessions(ctx, userID, otherSessions(keepFamily), func(tx pgx.Tx) error {
 		var currentHash string
-		if err := tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&currentHash); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1 AND deleted_at IS NULL`, userID).Scan(&currentHash); err != nil {
 			return err
 		}
 		if currentHash != hash {
 			return core.ErrConflict.WithMessage("password changed concurrently; retry")
 		}
-		if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, string(newHash)); err != nil {
-			return err
-		}
-		return revokeAllRefreshTokens(ctx, tx, userID)
+		_, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, string(newHash))
+		return err
 	})
 }
 
