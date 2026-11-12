@@ -30,7 +30,7 @@ beforeEach(() => {
     Promise.resolve(
       {
         '/settings/failure-policy': { configured: true, policy: emptyFailurePolicy() },
-        '/settings/scheduling': { mode: 'default', metric: 'rpm', limit_load: false, model_limits: false }
+        '/settings/scheduling': { mode: 'default', metric: 'sessions', limit_load: false, model_limits: false }
       }[path as string] ?? {}
     )
   )
@@ -71,59 +71,45 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
     expect(w.findAll('[role="tab"]')[0].attributes('aria-selected')).toBe('true')
   })
 
-  it('greys the metric and balancing by model until something balances', async () => {
+  it('always balances by traffic, by sessions out of the box', async () => {
     route.query = { tab: 'failure', sub: 'balance' }
+    api.get.mockResolvedValueOnce({})
     const w = await render()
-    expect(disabled(w, 'balance-metric')).toBe(true)
-    expect(disabled(w, 'balance-model-limits')).toBe(true)
-    // Limit-aware load alone, strategy still default, enables both.
-    await w.get('[data-testid="balance-limit-load"]').setValue(true)
-    expect(disabled(w, 'balance-metric')).toBe(false)
-    expect(disabled(w, 'balance-model-limits')).toBe(false)
-    await w.get('[data-testid="balance-limit-load"]').setValue(false)
-    expect(disabled(w, 'balance-metric')).toBe(true)
-    await w.get('[data-testid="balance-mode"] input[value="traffic"]').setValue(true)
-    expect(disabled(w, 'balance-metric')).toBe(false)
-    expect(disabled(w, 'balance-model-limits')).toBe(false)
-    await w.get('[data-testid="balance-limit-load"]').setValue(true)
-    await w.get('[data-testid="balance-model-limits"]').setValue(true)
+    expect(w.find('[data-testid="balance-mode"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('均衡策略')
+    expect(w.text()).toContain('优先选用量低于权重份额的账号，让流量按权重比分配。')
     expect(w.findAll('[data-testid="balance-metric"] label').map(l => l.text())).toEqual(['RPM', '并发', 'TPM', '会话'])
-    await w.get('[data-testid="balance-metric"] input[value="sessions"]').setValue(true)
-    await w.get('[data-testid="settings-save"]').trigger('click')
-    await flushPromises()
-    expect(api.put).toHaveBeenCalledWith('/settings/scheduling', {
-      mode: 'traffic',
-      metric: 'sessions',
-      limit_load: true,
-      model_limits: true
-    })
+    expect(w.get<HTMLInputElement>('[data-testid="balance-metric"] input[value="sessions"]').element.checked).toBe(true)
+    // Freshly loaded, nothing to save.
+    expect(w.get('[data-testid="settings-save"]').attributes('disabled')).toBeDefined()
   })
 
-  it('describes the default strategy by whether limit-aware load lowers its weights', async () => {
+  it('lets a manager set the metric and balancing by model right away', async () => {
     route.query = { tab: 'failure', sub: 'balance' }
     const w = await render()
-    // The strategy row's own description, which its control names in aria-describedby.
-    const modeHint = () => w.get(`[id="${w.get('[data-testid="balance-mode"]').attributes('aria-describedby')}"]`).text()
-    expect(modeHint()).toBe('同优先级内按权重随机选号。')
-    await w.get('[data-testid="balance-limit-load"]').setValue(true)
-    expect(modeHint()).toBe('同优先级内按权重随机选号，权重先按上限负载折减。')
-    // The traffic strategy reads the same either way.
-    await w.get('[data-testid="balance-mode"] input[value="traffic"]').setValue(true)
-    const traffic = modeHint()
-    expect(traffic).toContain('权重份额')
-    await w.get('[data-testid="balance-limit-load"]').setValue(false)
-    expect(modeHint()).toBe(traffic)
+    for (const id of ['balance-limit-load', 'balance-metric', 'balance-model-limits']) expect(disabled(w, id)).toBe(false)
+    await w.get('[data-testid="balance-metric"] input[value="tpm"]').setValue(true)
+    await w.get('[data-testid="balance-model-limits"]').setValue(true)
+    await w.get('[data-testid="settings-save"]').trigger('click')
+    await flushPromises()
+    // An older core's "default" goes back as "traffic".
+    expect(api.put).toHaveBeenCalledWith('/settings/scheduling', {
+      mode: 'traffic',
+      metric: 'tpm',
+      limit_load: false,
+      model_limits: true
+    })
   })
 
   it('shows server field errors on their rows', async () => {
     route.query = { tab: 'failure', sub: 'balance' }
     const w = await render()
-    await w.get('[data-testid="balance-mode"] input[value="traffic"]').setValue(true)
+    await w.get('[data-testid="balance-metric"] input[value="rpm"]').setValue(true)
     api.put.mockRejectedValueOnce(
       new ApiError(400, {
         code: 'invalid_argument',
         message: 'invalid',
-        details: { fields: [{ field: 'mode', code: 'invalid', message: '取值无效' }] }
+        details: { fields: [{ field: 'metric', code: 'invalid', message: '取值无效' }] }
       })
     )
     await w.get('[data-testid="settings-save"]').trigger('click')
@@ -136,6 +122,6 @@ describe('scheduling policy tabs (CONTRACTS §89)', () => {
     route.query = { tab: 'failure', sub: 'balance' }
     const w = await render()
     expect(w.find('[data-testid="settings-save"]').exists()).toBe(false)
-    for (const id of ['balance-mode', 'balance-limit-load', 'balance-metric', 'balance-model-limits']) expect(disabled(w, id)).toBe(true)
+    for (const id of ['balance-limit-load', 'balance-metric', 'balance-model-limits']) expect(disabled(w, id)).toBe(true)
   })
 })

@@ -1273,8 +1273,8 @@ export type GatewayNumberSetting = Exclude<keyof GatewaySettings, 'claude_defaul
 
 /** Core load balancing of new sessions within a tier (GET/PUT /settings/scheduling, CONTRACTS §89). */
 export interface SchedulingSettings {
-  /** default: weighted random; traffic: favour accounts using less than their weight's share. */
-  mode: 'default' | 'traffic'
+  /** Always "traffic" since 2026-11-12; still sent so the cores before it balance by traffic too. */
+  mode: 'traffic'
   /** The usage both the traffic balance and the limit load are computed on. */
   metric: 'rpm' | 'concurrency' | 'tpm' | 'sessions'
   /** Lower the weight as the metric nears the account's limit. */
