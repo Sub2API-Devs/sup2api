@@ -574,3 +574,61 @@ func TestSegmentsMigrationBackfill(t *testing.T) {
 	_, err = db.Pool.Exec(ctx, `UPDATE segments SET discount = 0 WHERE is_default`)
 	require.Error(t, err, "a discount of 0")
 }
+
+// 0097 adds assignable roles (decisions 3-5): a non-superuser role holding
+// role:manage (removed since the split, still counted) or role:assign may
+// assign every custom role and the built-in ones but admin and the
+// superuser role; other roles get nothing. A re-run does not undo what an
+// administrator changed since.
+func TestRoleAssignableMigrationBackfill(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql)
+		require.NoError(t, err)
+	}
+	migrate := func() []string {
+		t.Helper()
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		return done
+	}
+	// assignable is "<assign_custom>:<assignable keys>" of a role.
+	assignable := func(key string) (v string) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT r.assign_custom::text || ':' || COALESCE(string_agg(a.key, ',' ORDER BY a.key), '')
+			FROM roles r LEFT JOIN role_assignable_roles ra ON ra.role_id = r.id LEFT JOIN roles a ON a.id = ra.assignable_role_id
+			WHERE r.key = $1 GROUP BY r.assign_custom`, key).Scan(&v))
+		return v
+	}
+	const forget = `DELETE FROM schema_migrations WHERE id='0097_role_assignable.sql'`
+	exec(`DROP TABLE role_assignable_roles;
+		ALTER TABLE roles DROP COLUMN assign_custom;
+		INSERT INTO roles (key, name, builtin, superuser) VALUES
+			('super_admin', '{}', true, true), ('admin', '{}', true, false), ('operator', '{}', true, false), ('user', '{}', true, false),
+			('delegator', '{}', false, false), ('assigner', '{}', false, false), ('plain', '{}', false, false);
+		INSERT INTO permissions (key, module, label, source, status) VALUES
+			('role:manage', 'role', '{}', 'core', 'removed'), ('role:assign', 'role', '{}', 'core', 'active'), ('user:read', 'user', '{}', 'core', 'active');
+		INSERT INTO role_permissions (role_id, permission_id)
+		SELECT r.id, p.id FROM roles r JOIN permissions p ON (r.key, p.key) IN (
+			('super_admin', 'role:manage'), ('admin', 'role:manage'), ('operator', 'role:manage'),
+			('delegator', 'role:manage'), ('assigner', 'role:assign'), ('plain', 'user:read'));
+		` + forget)
+	require.Equal(t, []string{"0097_role_assignable.sql"}, migrate())
+
+	for _, key := range []string{"admin", "operator", "delegator", "assigner"} {
+		require.Equal(t, "true:operator,user", assignable(key), key)
+	}
+	for _, key := range []string{"super_admin", "user", "plain"} {
+		require.Equal(t, "false:", assignable(key), key)
+	}
+
+	// Narrowed since: a re-run leaves it so.
+	exec(`UPDATE roles SET assign_custom = false WHERE key = 'delegator';
+		DELETE FROM role_assignable_roles WHERE role_id = (SELECT id FROM roles WHERE key = 'delegator');
+		` + forget)
+	require.Equal(t, []string{"0097_role_assignable.sql"}, migrate())
+	require.Equal(t, "false:", assignable("delegator"), "a rerun widened the role again")
+	require.Equal(t, "true:operator,user", assignable("admin"))
+}

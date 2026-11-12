@@ -335,15 +335,17 @@ WHERE ur.user_id = $1`, userID)
 
 // RolesPermissions returns the union of all permissions granted by the given
 // role keys, in the grant view: disabled (plugin) permissions count, removed
-// ones do not (M6). Used to compare what roles carry in grant checks; the
-// effective set (loadPermissionSet) counts active ones only.
+// ones do not (M6). It also holds the roles they may assign: those listed,
+// never a superuser role, plus every custom role when one of them has
+// assign_custom. Used to compare what roles carry in grant checks; the
+// effective set (loadPermissionSet) counts active permissions only.
 func (s *Service) RolesPermissions(ctx context.Context, q store.Querier, roleKeys []string) (core.PermissionSet, error) {
+	set := core.PermissionSet{Keys: map[string]struct{}{}, Assignable: map[string]struct{}{}}
 	if len(roleKeys) == 0 {
-		return core.PermissionSet{Keys: map[string]struct{}{}}, nil
+		return set, nil
 	}
-	set := core.PermissionSet{Keys: map[string]struct{}{}}
 	rows, err := q.Query(ctx, `
-SELECT r.superuser, p.key
+SELECT r.superuser, r.assign_custom, p.key
 FROM roles r
 LEFT JOIN role_permissions rp ON rp.role_id = r.id
 LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status <> 'removed'
@@ -353,19 +355,34 @@ WHERE r.key = ANY($1)`, roleKeys)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var su bool
+		var su, custom bool
 		var key *string
-		if err := rows.Scan(&su, &key); err != nil {
+		if err := rows.Scan(&su, &custom, &key); err != nil {
 			return core.PermissionSet{}, err
 		}
-		if su {
-			set.Superuser = true
-		}
+		set.Superuser = set.Superuser || su
+		set.AssignCustom = set.AssignCustom || custom
 		if key != nil {
 			set.Keys[*key] = struct{}{}
 		}
 	}
-	return set, rows.Err()
+	if err := rows.Err(); err != nil {
+		return core.PermissionSet{}, err
+	}
+	var assignable []string
+	if err := q.QueryRow(ctx, `
+SELECT COALESCE(array_agg(key), '{}') FROM (
+    SELECT ar.key FROM role_assignable_roles ra
+    JOIN roles r ON r.id = ra.role_id AND r.key = ANY($1)
+    JOIN roles ar ON ar.id = ra.assignable_role_id AND NOT ar.superuser
+    UNION
+    SELECT c.key FROM roles c WHERE NOT c.builtin AND $2) a`, roleKeys, set.AssignCustom).Scan(&assignable); err != nil {
+		return core.PermissionSet{}, err
+	}
+	for _, k := range assignable {
+		set.Assignable[k] = struct{}{}
+	}
+	return set, nil
 }
 
 // ActivePermissionKeys lists every active permission (used for superusers

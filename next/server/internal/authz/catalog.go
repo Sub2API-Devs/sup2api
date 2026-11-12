@@ -168,16 +168,21 @@ type builtinRole struct {
 	// nil means none. New core permissions are granted to the role when
 	// grants accepts them, and a reset restores exactly this set.
 	grants func(module, key string) bool
+	// assignable lists the built-in roles its holders may assign by
+	// default, and assignCustom adds every custom role (decision 5). A
+	// role created later is added to the lists naming it.
+	assignable   []string
+	assignCustom bool
 }
 
 var builtinRoles = []builtinRole{
-	{RoleSuperAdmin, lt("Super admin", "超级管理员"), lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), true, nil},
+	{RoleSuperAdmin, lt("Super admin", "超级管理员"), lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), true, nil, nil, false},
 	{RoleAdmin, lt("Admin", "管理员"), lt("All core permissions by default", "默认拥有全部核心权限"), false,
-		func(string, string) bool { return true }},
+		func(string, string) bool { return true }, []string{RoleOperator, RoleUser}, true},
 	{RoleOperator, lt("Operator", "运维"), lt("Core permissions except settings and plugins", "默认拥有除系统设置、插件和插件市场以外的核心权限"), false,
-		func(module, _ string) bool { return !slices.Contains(operatorExcludedModules, module) }},
+		func(module, _ string) bool { return !slices.Contains(operatorExcludedModules, module) }, []string{RoleUser}, false},
 	{RoleUser, lt("User", "普通用户"), lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"), false,
-		func(_, key string) bool { return slices.Contains(userRolePermissions, key) }},
+		func(_, key string) bool { return slices.Contains(userRolePermissions, key) }, nil, false},
 }
 
 func builtinRoleByKey(key string) (builtinRole, bool) {

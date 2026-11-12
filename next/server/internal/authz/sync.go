@@ -11,9 +11,10 @@ import (
 
 // SyncCore upserts the core permission catalog, marks core permissions no
 // longer in code as removed, seeds built-in roles and grants newly created
-// core permissions to the built-in roles whose defaults include them. Safe to run
-// concurrently from several nodes; set-based to keep round trips low. The
-// version is only bumped when something changed.
+// core permissions and built-in roles (as assignable) to the built-in roles
+// whose defaults include them. Safe to run concurrently from several nodes;
+// set-based to keep round trips low. The version is only bumped when
+// something changed.
 func (s *Service) SyncCore(ctx context.Context) error {
 	defs := CorePermissions()
 	var (
@@ -33,7 +34,7 @@ func (s *Service) SyncCore(ctx context.Context) error {
 		sorts = append(sorts, int32(d.Sort))
 	}
 	var rKeys, rNames, rDescs []string
-	var rSuper []bool
+	var rSuper, rCustom []bool
 	for _, r := range builtinRoles {
 		n, _ := json.Marshal(r.name)
 		d, _ := json.Marshal(r.description)
@@ -41,6 +42,7 @@ func (s *Service) SyncCore(ctx context.Context) error {
 		rNames = append(rNames, string(n))
 		rDescs = append(rDescs, string(d))
 		rSuper = append(rSuper, r.superuser)
+		rCustom = append(rCustom, r.assignCustom)
 	}
 
 	var changed bool
@@ -56,11 +58,11 @@ func (s *Service) SyncCore(ctx context.Context) error {
 			newRoles[k] = inserted
 			changed = true
 		}, `
-INSERT INTO roles (key, name, description, builtin, superuser)
-SELECT k, n::jsonb, d::jsonb, true, su FROM unnest($1::text[], $2::text[], $3::text[], $4::bool[]) AS t(k, n, d, su)
+INSERT INTO roles (key, name, description, builtin, superuser, assign_custom)
+SELECT k, n::jsonb, d::jsonb, true, su, ac FROM unnest($1::text[], $2::text[], $3::text[], $4::bool[], $5::bool[]) AS t(k, n, d, su, ac)
 ON CONFLICT (key) DO UPDATE SET builtin = true, superuser = EXCLUDED.superuser
     WHERE NOT roles.builtin OR roles.superuser IS DISTINCT FROM EXCLUDED.superuser
-RETURNING key, (xmax = 0)`, rKeys, rNames, rDescs, rSuper)
+RETURNING key, (xmax = 0)`, rKeys, rNames, rDescs, rSuper, rCustom)
 		if err != nil {
 			return err
 		}
@@ -84,29 +86,25 @@ RETURNING key, (xmax = 0)`, keys, modules, labels, sensitive, sorts)
 			return err
 		}
 
-		// A new built-in role gets all its defaults; an existing one only the
-		// newly created core permissions it accepts, which is audited. A
-		// role created now is seeded, not widened, so its grants are not.
+		// Built-in roles get their default permissions and assignable roles
+		// (grantDefaults).
 		for _, r := range builtinRoles {
-			var roleKeys []string
-			for _, k := range r.defaultPermissions() {
-				if newRoles[r.key] || slices.Contains(inserted, k) {
-					roleKeys = append(roleKeys, k)
-				}
-			}
-			if len(roleKeys) == 0 {
-				continue
-			}
-			var via map[string]any
-			if !newRoles[r.key] {
-				via = map[string]any{"via": "default"}
-			}
-			if err := s.syncGrant(ctx, tx, via, `
+			if err := s.grantDefaults(ctx, tx, r.key, newRoles[r.key], r.defaultPermissions(),
+				func(k string) bool { return slices.Contains(inserted, k) }, "default", `
 WITH ins AS (
     INSERT INTO role_permissions (role_id, permission_id)
     SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = $1 AND p.key = ANY($2)
     ON CONFLICT DO NOTHING RETURNING role_id, permission_id)
-SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, r.key, roleKeys); err != nil {
+SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`); err != nil {
+				return err
+			}
+			if err := s.grantDefaults(ctx, tx, r.key, newRoles[r.key], r.assignable,
+				func(k string) bool { return newRoles[k] }, "assignable", `
+WITH ins AS (
+    INSERT INTO role_assignable_roles (role_id, assignable_role_id)
+    SELECT r.id, a.id FROM roles r, roles a WHERE r.key = $1 AND a.key = ANY($2) AND a.builtin AND NOT a.superuser
+    ON CONFLICT DO NOTHING RETURNING role_id, assignable_role_id)
+SELECT ins.role_id, a.key FROM ins JOIN roles a ON a.id = ins.assignable_role_id`); err != nil {
 				return err
 			}
 		}
@@ -142,6 +140,23 @@ SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_i
 	return nil
 }
 
+// grantDefaults grants the built-in role roleKey its defaults through sql
+// ($1 the role key, $2 the defaults; returning what syncGrant reads). A role
+// created now (seed) gets all of them: it is seeded, not widened, so the
+// grants are not audited. An existing role gets only the defaults created
+// now, audited with via.
+func (s *Service) grantDefaults(ctx context.Context, tx pgx.Tx, roleKey string, seed bool, defaults []string, created func(string) bool, via, sql string) error {
+	var detail map[string]any
+	if !seed {
+		defaults = slices.DeleteFunc(slices.Clone(defaults), func(k string) bool { return !created(k) })
+		detail = map[string]any{"via": via}
+	}
+	if len(defaults) == 0 {
+		return nil
+	}
+	return s.syncGrant(ctx, tx, detail, sql, roleKey, defaults)
+}
+
 // grantInherited grants newKey to every role holding a key of from: a
 // permission split from others keeps their holders' rights. Run only when
 // newKey is first created, it is idempotent; each grant is audited.
@@ -156,10 +171,10 @@ WITH ins AS (
 SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, from, newKey)
 }
 
-// syncGrant runs sql, an automatic grant returning the role id and
-// permission key of each role_permissions row it adds, and audits each row
-// as authz.sync.grant by the system with via plus the key as detail. A nil
-// via grants without auditing.
+// syncGrant runs sql, an automatic grant returning the role id and the
+// granted key (a permission, or an assignable role) of each row it adds,
+// and audits each row as authz.sync.grant by the system with via plus the
+// key as detail. A nil via grants without auditing.
 func (s *Service) syncGrant(ctx context.Context, tx pgx.Tx, via map[string]any, sql string, args ...any) error {
 	type grant struct {
 		role int64

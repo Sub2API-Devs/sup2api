@@ -25,10 +25,15 @@ type TokenVerifier interface {
 }
 
 // PermissionSet is a user's effective permissions at a given authz version.
+// In the grant view (what roles carry, authz.RolesPermissions) it also holds
+// the roles the holder may assign: Assignable never holds a superuser role,
+// and AssignCustom ("and every custom role") is already expanded into it.
 type PermissionSet struct {
-	Superuser bool
-	Keys      map[string]struct{}
-	Version   int64
+	Superuser    bool
+	Keys         map[string]struct{}
+	Assignable   map[string]struct{}
+	AssignCustom bool
+	Version      int64
 }
 
 func (s PermissionSet) Has(key string) bool {
@@ -36,6 +41,16 @@ func (s PermissionSet) Has(key string) bool {
 		return true
 	}
 	_, ok := s.Keys[key]
+	return ok
+}
+
+// CanAssign reports whether the holder may assign or revoke role roleKey. A
+// superuser may assign any; callers exclude the superuser role themselves.
+func (s PermissionSet) CanAssign(roleKey string) bool {
+	if s.Superuser {
+		return true
+	}
+	_, ok := s.Assignable[roleKey]
 	return ok
 }
 
@@ -86,18 +101,29 @@ func PermissionSetOf(keys ...string) PermissionSet {
 }
 
 // Missing is what a wanted set holds beyond the set it is compared to: the
-// superuser flag and permission keys (sorted).
+// superuser flag, permission keys and assignable roles (both sorted), and
+// the "every custom role" flag.
 type Missing struct {
-	Superuser bool
-	Keys      []string
+	Superuser    bool
+	Keys         []string
+	Assign       []string
+	AssignCustom bool
 }
 
 // Empty reports whether nothing is missing.
-func (m Missing) Empty() bool { return !m.Superuser && len(m.Keys) == 0 }
+func (m Missing) Empty() bool {
+	return !m.Superuser && len(m.Keys) == 0 && len(m.Assign) == 0 && !m.AssignCustom
+}
 
-// Details is m as the details of a permission_denied error.
+// Details is m as the details of a permission_denied error; roles are kept
+// apart from permission keys.
 func (m Missing) Details() map[string]any {
-	return map[string]any{"missing": append([]string{}, m.Keys...), "superuser": m.Superuser}
+	return map[string]any{
+		"missing":               append([]string{}, m.Keys...),
+		"missing_assignable":    append([]string{}, m.Assign...),
+		"missing_assign_custom": m.AssignCustom,
+		"superuser":             m.Superuser,
+	}
 }
 
 // Missing returns what want holds that s does not. A superuser misses
@@ -106,20 +132,31 @@ func (s PermissionSet) Missing(want PermissionSet) Missing {
 	if s.Superuser {
 		return Missing{}
 	}
-	m := Missing{Superuser: want.Superuser}
-	for k := range want.Keys {
-		if _, ok := s.Keys[k]; !ok {
-			m.Keys = append(m.Keys, k)
+	return Missing{
+		Superuser:    want.Superuser,
+		Keys:         missingKeys(s.Keys, want.Keys),
+		Assign:       missingKeys(s.Assignable, want.Assignable),
+		AssignCustom: want.AssignCustom && !s.AssignCustom,
+	}
+}
+
+// missingKeys lists the keys of want not in have, sorted.
+func missingKeys(have, want map[string]struct{}) []string {
+	var out []string
+	for k := range want {
+		if _, ok := have[k]; !ok {
+			out = append(out, k)
 		}
 	}
-	slices.Sort(m.Keys)
-	return m
+	slices.Sort(out)
+	return out
 }
 
 // Restrict returns the part of the set that keys allow: never more than the
 // set itself, and no longer a superuser, whose Has is true for anything. The
 // loss of the flag is deliberate: an access key never acts as a superuser,
-// so it cannot grant or act on what only a superuser may (Missing).
+// so it cannot grant or act on what only a superuser may (Missing). Only
+// keys are copied, also deliberately: an access key never assigns roles.
 func (s PermissionSet) Restrict(keys []string) PermissionSet {
 	out := PermissionSet{Keys: make(map[string]struct{}, len(keys)), Version: s.Version}
 	for _, k := range keys {
