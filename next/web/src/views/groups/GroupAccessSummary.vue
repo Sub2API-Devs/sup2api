@@ -23,7 +23,7 @@ const personal = computed(() => props.group.access?.personal_count ?? 0)
   <span v-else class="inline-flex max-w-[15rem] flex-wrap items-center gap-1" data-testid="group-access">
     <SegmentBadge v-for="s in segments.slice(0, SHOWN)" :key="s.id" :segment="s" />
     <SHint v-if="segments.length > SHOWN" inline size="xs" :title="segments.map((s) => s.name).join(', ')">+{{ segments.length - SHOWN }}</SHint>
-    <SBadge v-if="personal" tone="purple" data-testid="group-access-personal">
+    <SBadge v-if="personal" tone="accent" data-testid="group-access-personal">
       <SIcon name="user" class="h-3 w-3 shrink-0" />
       {{ t('groups.access.personal', { n: personal }, personal) }}
     </SBadge>

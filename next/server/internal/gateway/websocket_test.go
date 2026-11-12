@@ -793,8 +793,9 @@ func TestWebSocketTurnsAreBalanced(t *testing.T) {
 	lim := newFakeLimiter()
 	lim.usage = map[int64]core.RateUsage{11: {RPM: 90}}
 	e.gw.d.Limiter = lim
-	e.setScheduling(SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true})
-	// Weights 1:1 would take oa-11 at 0.4; its load of 90 leaves it 0.1:1.
+	e.setScheduling(SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, LimitLoad: true})
+	// Weights 1:1 would take oa-11 at 0.4; its load of 90 (0.1:1), then the
+	// traffic balance against the idle oa-12, leave it almost nothing.
 	e.gw.randFloat = func() float64 { return 0.4 }
 	c := e.mustDial()
 	c.send(create(wsModel, "hi"))

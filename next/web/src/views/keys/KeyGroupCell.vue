@@ -33,7 +33,7 @@ const problem = computed(() => {
 <template>
   <div class="flex min-w-0 max-w-72 items-center gap-1.5 whitespace-nowrap" data-testid="key-group">
     <GroupBadge v-if="status !== 'deleted'" :name="name" :platforms="platforms" :rate="multiplier" />
-    <SBadge v-if="exclusive" tone="purple" size="xs" class="shrink-0" data-testid="key-group-exclusive">{{ t('pricing.exclusive') }}</SBadge>
+    <SBadge v-if="exclusive" tone="accent" size="xs" class="shrink-0" data-testid="key-group-exclusive">{{ t('pricing.exclusive') }}</SBadge>
     <ProblemIcon v-if="problem" :text="t(problem.message)" :tone="problem.tone" data-testid="key-group-problem" />
   </div>
 </template>

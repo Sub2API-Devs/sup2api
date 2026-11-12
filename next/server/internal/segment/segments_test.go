@@ -123,6 +123,18 @@ func TestSegmentCounts(t *testing.T) {
 
 	rows := e.do(e.admin, "GET", "/segments", nil).ok(200).rows()
 	require.Equal(t, got, rows[1], "the list carries the same counts")
+
+	// A rule on a model the group no longer provides is not in its pricing
+	// table, and not counted: by segment, nor by segment and group.
+	e.rule(private, vip, goneModel)
+	require.Equal(t, got, e.do(e.admin, "GET", path("/segments/%d", vip), nil).ok(200).data())
+	require.Equal(t, got, e.do(e.admin, "GET", "/segments", nil).ok(200).rows()[1])
+	counts := map[float64]any{}
+	for _, row := range e.do(e.admin, "GET", path("/segments/%d/groups", vip), nil).ok(200).rows() {
+		counts[row["group"].(map[string]any)["id"].(float64)] = row["price_rule_count"]
+	}
+	require.Equal(t, float64(1), counts[float64(private)])
+	require.Equal(t, float64(1), counts[float64(public)])
 	require.Equal(t, float64(1), rows[0]["member_count"])
 }
 

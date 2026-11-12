@@ -17,7 +17,6 @@ const settingsKeyScheduling = "scheduling"
 
 // Values of SchedulingSettings.Mode and SchedulingSettings.Metric (CONTRACTS §89).
 const (
-	balanceModeDefault = "default"
 	balanceModeTraffic = "traffic"
 
 	balanceMetricRPM         = "rpm"
@@ -26,17 +25,14 @@ const (
 	balanceMetricSessions    = "sessions"
 )
 
-var (
-	balanceModes   = []string{balanceModeDefault, balanceModeTraffic}
-	balanceMetrics = []string{balanceMetricRPM, balanceMetricConcurrency, balanceMetricTPM, balanceMetricSessions}
-)
+var balanceMetrics = []string{balanceMetricRPM, balanceMetricConcurrency, balanceMetricTPM, balanceMetricSessions}
 
 // SchedulingSettings is the "scheduling" row of the settings table: how the
 // core balances new sessions inside one (priority, route grade) tier
-// (CONTRACTS §89). The defaults change nothing.
+// (CONTRACTS §89). The traffic balance is always on.
 type SchedulingSettings struct {
-	// Mode "traffic" favours the accounts using less of Metric than their
-	// weight's share of the tier; "default" keeps the plain weighted draw.
+	// Mode is always "traffic": the field stays for the cores before
+	// 2026-11-12, which balance by traffic only when it says so.
 	Mode   string `json:"mode"`
 	Metric string `json:"metric"`
 	// LimitLoad lowers an account's weight as Metric nears its limit.
@@ -48,24 +44,23 @@ type SchedulingSettings struct {
 }
 
 func defaultSchedulingSettings() SchedulingSettings {
-	return SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM}
+	return SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricSessions}
 }
 
-// normalized turns unknown values (an old or hand-edited row) into the defaults.
+// normalized turns a stored row into the settings the core runs. A row of the
+// former "default" mode (or any other) with the limit load off had the metric
+// and model limits greyed out, not chosen: they take the defaults. Otherwise
+// they are kept, an unknown metric becoming the default.
 func (s SchedulingSettings) normalized() SchedulingSettings {
 	d := defaultSchedulingSettings()
-	if !slices.Contains(balanceModes, s.Mode) {
-		s.Mode = d.Mode
+	if s.Mode != balanceModeTraffic && !s.LimitLoad {
+		s.Metric, s.ModelLimits = d.Metric, d.ModelLimits
 	}
 	if !slices.Contains(balanceMetrics, s.Metric) {
 		s.Metric = d.Metric
 	}
+	s.Mode = d.Mode
 	return s
-}
-
-// active reports whether the core balancing has anything to do.
-func (s SchedulingSettings) active() bool {
-	return s.Mode == balanceModeTraffic || s.LimitLoad
 }
 
 func loadSchedulingSettings(ctx context.Context, q store.Querier) (SchedulingSettings, error) {
@@ -74,16 +69,14 @@ func loadSchedulingSettings(ctx context.Context, q store.Querier) (SchedulingSet
 	return v.normalized(), err
 }
 
-// validate checks the enums; messages follow the request locale.
+// validate checks the metric (the mode is not checked: it is always stored
+// as "traffic"); messages follow the request locale.
 func (s SchedulingSettings) validate(ctx context.Context) []core.FieldError {
 	msg := "invalid value"
 	if core.Locale(ctx) == "zh" {
 		msg = "取值无效"
 	}
 	var fe []core.FieldError
-	if !slices.Contains(balanceModes, s.Mode) {
-		fe = append(fe, core.FieldError{Field: "mode", Code: "invalid", Message: msg})
-	}
 	if !slices.Contains(balanceMetrics, s.Metric) {
 		fe = append(fe, core.FieldError{Field: "metric", Code: "invalid", Message: msg})
 	}
@@ -104,8 +97,9 @@ func (g *Gateway) getSchedulingHandler(c *gin.Context) {
 	httpapi.OK(c, v)
 }
 
-// putSchedulingHandler replaces the row (absent fields take their defaults),
-// then invalidates the local settings cache and broadcasts config:changed.
+// putSchedulingHandler replaces the row (absent fields take their defaults;
+// the mode sent is ignored and "traffic" stored), then invalidates the local
+// settings cache and broadcasts config:changed.
 func (g *Gateway) putSchedulingHandler(c *gin.Context) {
 	ctx := c.Request.Context()
 	db, err := g.db()
@@ -117,6 +111,7 @@ func (g *Gateway) putSchedulingHandler(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
+	in.Mode = balanceModeTraffic
 	if fe := in.validate(ctx); len(fe) > 0 {
 		httpapi.Fail(c, core.InvalidFields(fe...))
 		return

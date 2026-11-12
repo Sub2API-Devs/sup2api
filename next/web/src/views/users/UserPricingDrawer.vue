@@ -31,9 +31,11 @@ const canSimulate = computed(() => canSimulatePrices(auth))
 // ------------------------------------------------------------------ the user's segment
 
 // Asked for by user: the list row is out of date as soon as he is moved from here.
-async function segmentOf(userId: number): Promise<Segment | null> {
+// A core older than user groups (in a rolling update) names none: that is an error to show, not a wait.
+async function segmentOf(userId: number): Promise<Segment> {
   const { segment: own } = await api.get<User>(`/users/${userId}`)
-  return own ? api.get<Segment>(`/segments/${own.id}`) : null
+  if (!own) throw new Error(t('users.pricing.noSegment'))
+  return api.get<Segment>(`/segments/${own.id}`)
 }
 const revision = ref(0)
 const { result: segment, error } = useLatestRequest(

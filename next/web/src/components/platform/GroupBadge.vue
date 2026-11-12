@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { rateText } from '@/components/pricing/pricingFormat'
 import { brandVars, platformBrand } from './brands'
 
 // A group as a chip: the name and the rate multiplier. One platform tints the
@@ -10,7 +11,8 @@ const tone = computed(() => {
   if (single.value) return 'brand-tint'
   return props.platforms?.length ? 'border border-line bg-surface text-fg' : 'bg-surface-2 text-fg-muted'
 })
-const rate = computed(() => (props.rate === undefined || props.rate === null || props.rate === '' ? '' : `${Number(props.rate)}x`))
+// Written as every pricing view writes a rate ("×0.8"), none without one.
+const rate = computed(() => (props.rate === undefined || props.rate === null || props.rate === '' ? '' : rateText(props.rate)))
 </script>
 
 <template>

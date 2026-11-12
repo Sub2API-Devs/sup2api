@@ -32,6 +32,7 @@ export default {
   },
   pricing: {
     action: 'Groups and pricing',
+    noSegment: "This user's user group could not be read. Try again later.",
     membership: 'Membership',
     segmentHint: 'A user belongs to one user group. A change applies at once.',
     switchTitle: 'Change user group',

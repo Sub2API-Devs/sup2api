@@ -6,6 +6,7 @@ import { i18n } from '@/i18n'
 import { mountPinned } from '@sub2api/ui/testing'
 import GroupsView from './GroupsView.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
+import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
 
 const { get, denied } = vi.hoisted(() => ({ get: vi.fn(), denied: new Set<string>() }))
 vi.mock('@sub2api/host', () => ({ api: { get } }))
@@ -120,6 +121,23 @@ describe('groups page', () => {
     await w.get('[data-testid="group-detail-pricing"]').trigger('click')
     await flushPromises()
     expect(w.get('[role="tab"][aria-selected="true"]').text()).toBe('授权与倍率')
+  })
+
+  it('lets a caller who may simulate prices but not manage groups simulate one in a group, from its detail', async () => {
+    denied.add('group:manage')
+    const w = render()
+    await openDetail(w, 1)
+    await w.get('[data-testid="group-detail-simulate"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="group-detail"]').exists()).toBe(false)
+    expect(w.getComponent(PriceSimulatorModal).props()).toMatchObject({ open: true, preset: { groupId: 2 } })
+
+    // Without price:read there is no quote to ask for (CONTRACTS §97.6): no entry.
+    denied.add('price:read')
+    const blind = render()
+    await openDetail(blind, 0)
+    expect(blind.find('[data-testid="group-detail-simulate"]').exists()).toBe(false)
+    expect(blind.findComponent(PriceSimulatorModal).exists()).toBe(false)
   })
 
   it('warns beside the account count of a group without accounts, as an icon with the sentence behind it', () => {

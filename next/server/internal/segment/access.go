@@ -136,12 +136,13 @@ const RefColumns = `s.id, s.kind, CASE WHEN s.user_id IS NULL THEN s.name ELSE u
 
 // Ref names a segment. A personal segment goes by its user's email; callers
 // that may not read users (showUsers false) get "#<user id>" instead, so a
-// role that only reads groups or prices cannot list users through it.
+// role that only reads groups or prices cannot list users through it. A
+// segment that does not exist is NotFound.
 func Ref(ctx context.Context, q store.Querier, id int64, showUsers bool) (core.SegmentRef, error) {
 	ref := core.SegmentRef{ID: id}
 	err := q.QueryRow(ctx, `SELECT `+RefColumns+fromSegments+` WHERE s.id = $1`, id).Scan(&ref.ID, &ref.Kind, &ref.Name, &ref.UserID)
 	if store.IsNoRows(err) {
-		return ref, core.ErrNotFound
+		return ref, NotFound(ctx)
 	}
 	if err != nil {
 		return ref, err

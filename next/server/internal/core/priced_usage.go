@@ -6,6 +6,15 @@ import (
 	"strings"
 )
 
+// MaxUsageTokens is the most tokens of one kind a usage may count.
+const MaxUsageTokens = 1_000_000_000_000
+
+// ValidTokenCount reports whether n tokens of one kind is a usage that can
+// be priced: 0 to MaxUsageTokens. It is the one place the bound is checked.
+func ValidTokenCount[N int64 | float64](n N) bool {
+	return n >= 0 && n <= MaxUsageTokens
+}
+
 func ValidatePricedUsage(item PricedUsage) error {
 	if len(item.BillingReason) > 256 || strings.ContainsAny(item.BillingReason, "\r\n\x00") || item.Free && item.BillingReason == "" {
 		return fmt.Errorf("invalid usage billing disposition")
@@ -20,7 +29,7 @@ func ValidatePricedUsage(item PricedUsage) error {
 		return fmt.Errorf("invalid additional usage rate")
 	}
 	for _, n := range []int64{item.Tokens.Input, item.Tokens.Output, item.Tokens.CacheRead, item.Tokens.CacheCreation, item.Tokens.CacheCreation1h} {
-		if n < 0 || n > 1_000_000_000_000 {
+		if !ValidTokenCount(n) {
 			return fmt.Errorf("invalid additional token count")
 		}
 	}

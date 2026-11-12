@@ -344,6 +344,16 @@ type pendingInputs struct {
 	Pricing      *core.PricingTrace `json:"pricing,omitempty"` // price rule and rate source (CONTRACTS §97)
 }
 
+// recordInputs are the pricing inputs of a record: what its first settlement
+// prices it by and what billing_detail keeps for a retry or a reconcile to
+// price it by again. It is the one place they are taken from a record, so
+// the two cannot price a request differently (CONTRACTS §97.4).
+func recordInputs(rec *core.UsageRecord) pendingInputs {
+	return pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders,
+		Additional: core.ClonePricedUsage(rec.Additional), Replacement: core.ClonePricedUsage(rec.Replacement),
+		BillingError: rec.BillingError, Pricing: pricingTrace(rec.Price, rec.SegmentID, rec.RateSource)}
+}
+
 // pricingTrace is what a row freezes about its list price and its rate. It is
 // nil for the global price at the group's own rate, so such a row is stored
 // as it was before price rules existed.
@@ -454,9 +464,7 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 						exprHash = expr.Hash(rec.Price.Expression)
 					}
 				}
-				detail = jsonOr(pendingDetail{Inputs: pendingInputs{
-					Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: rec.Additional, Replacement: rec.Replacement, BillingError: rec.BillingError,
-					Pricing: pricingTrace(rec.Price, rec.SegmentID, rec.RateSource)}}, "{}")
+				detail = jsonOr(pendingDetail{Inputs: recordInputs(rec)}, "{}")
 			}
 			// The observability markers have their own column, so they are
 			// written once here and never touched again: settle() rewrites
@@ -705,7 +713,7 @@ func fromRecord(rec *core.UsageRecord) *pending {
 		Model: rec.Model, Success: rec.Success, StatusCode: rec.StatusCode, ErrorType: rec.ErrorType,
 		Tokens: rec.Tokens, Metrics: core.CloneUsageMetrics(rec.Metrics), LatencyMs: rec.LatencyMs, CreatedAt: rec.CreatedAt,
 		Rate:   rec.RateMultiplier,
-		Inputs: pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: core.ClonePricedUsage(rec.Additional), Replacement: core.ClonePricedUsage(rec.Replacement), BillingError: rec.BillingError, Pricing: pricingTrace(rec.Price, rec.SegmentID, rec.RateSource)},
+		Inputs: recordInputs(rec),
 	}
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = time.Now()
@@ -760,8 +768,6 @@ func (a amounts) add(b amounts) amounts {
 	return amounts{base: a.base.Add(b.base), list: a.list.Add(b.list), total: a.total.Add(b.total)}
 }
 
-// settle computes the cost and, in one transaction, writes the ledger row,
-// the usage billing fields and the usage.recorded event.
 // priceOne runs the administrator's price expression over one pending row and
 // returns what it costs (amounts), the breakdown that records how, and the
 // hash of the expression used. It is the single place a usage figure becomes
@@ -856,6 +862,8 @@ func baseCost(base *core.PriceBase, p *pending) (decimal.Decimal, error) {
 	return res.Cost, nil
 }
 
+// settle computes the cost and, in one transaction, writes the ledger row,
+// the usage billing fields and the usage.recorded event.
 func (s *Service) settle(ctx context.Context, p *pending, skipLocked bool) error {
 	var err error
 	var ledgerRes *core.LedgerResult

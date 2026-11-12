@@ -69,7 +69,7 @@ const cost30d: Record<number, any> = {
 const MASK = '******'
 const SECRET_SETTINGS = ['notify_webhook_url', 'notify_webhook_secret']
 const settings: Record<string, any> = {
-  mode: 'observe', exempt_user_ids: [], block_status: 403, block_message: '提示词审核未通过，请调整输入后重试', auto_watch: true, watch_days: 30,
+  mode: 'observe', exempt_user_ids: [], block_status: 403, auto_watch: true, watch_days: 30,
   analysis_every_violations: 30, error_rate_alert_percent: 5, stats_retention_days: 90, analysis_channel_id: 5,
   notify_webhook_url: 'https://hooks.example.com/moderation', notify_webhook_secret: 's3cr3t', jev_default_set: null
 }

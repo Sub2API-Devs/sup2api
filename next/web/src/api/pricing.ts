@@ -165,6 +165,9 @@ export interface PriceRulePatch {
   rule: PriceRule | null
 }
 
+/** The largest token count a quote takes (core.MaxUsageTokens). */
+export const QUOTE_MAX_TOKENS = 1_000_000_000_000
+
 /** POST /pricing/quote: what a user (or any member of a segment) pays for a sample call. Exactly one of `user_id` and `segment_id` is given. */
 export interface PricingQuoteRequest {
   user_id?: number

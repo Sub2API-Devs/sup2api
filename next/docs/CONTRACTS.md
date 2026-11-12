@@ -885,7 +885,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：粘性绑定不服务的挑选（未命中，或绑定账号失败后的切换）会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
-同一（优先级，路由等级）层内的加权随机用的是“有效权重”：插件权重套用负载（§67）后，再按系统设置“均衡负载”调整（§89，默认不调整）。
+同一（优先级，路由等级）层内的加权随机用的是“有效权重”：插件权重套用负载（§67）后，再按系统设置“均衡负载”调整（§89；2026-11-12 起均衡永远开启，默认按会话做流量均衡，之前默认不调整）。
 
 ### 18.3 接口变化
 
@@ -966,7 +966,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 | `exempt_user_ids` | string[]（`^[0-9]+$`） | `[]` | 不审核这些用户 |
 | `cache_ttl_seconds` | 0–604800 | 3600 | 相同文本（同一策略版本）的结论缓存，0 关闭；内存 LRU（1 万条）+ KV 跨节点 |
 | `block_status` | 400–599 | 403 | |
-| `block_message` | string ≤500 | `提示词审核未通过，请调整输入后重试` | |
+| `block_message` | string ≤500 | `Your request was blocked by content moderation. Please revise your input and try again.`（0.9.3 起改为英文） | |
 | `record_pass` | bool | false | 是否记录通过的审核 |
 | `store_text` | bool | true | 记录里是否保存被审核文本（截断后的） |
 | `retention_days` | 1–3650 | 30 | |
@@ -5167,6 +5167,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **0.9.0**：版本 0.9.0，只改原生界面（审核记录页的筛选收成常用 4 项 + 更多筛选、已生效条件以标签显示，各标签页表格单元格只占一行）。用到 UI 3.10 的 `SFilterBar` `#advanced`、`SFilterChips`、`SChipList`、`TableColumn.grow`，**`hostUICompat` 改为 `^3.10`，`hostCompat` 抬到 `>=0.1.277 <0.2.0`**（UI 3.10 随核心 0.1.277 发布，更老的核心的控制台按 `hostUICompat` 不加载这个界面，所以也不让它装上）。能力、钩子、任务、路由、宿主权限、用户权限、迁移和设置都不变，升级不需要管理员重新批准。
 - **0.9.1（2026-11-12）**：只改原生界面。审核记录页的用户、分组、API Key 筛选和观察名单页的用户筛选改用宿主的 `EntityPicker`（§96.6）：用户可以从列表选、按名称搜、按 ID；“名称包含”仍由界面经核心 `GET /users?q=` 解析成 `user_ids`；默认分组 0 由界面作为候选提供；换了用户就清掉已选的 API Key。**`hostUICompat` 改为 `^3.11`，`hostCompat` 抬到 `>=0.1.279 <0.2.0`**。接口、能力、宿主权限、迁移和设置都不变，升级不需要管理员重新批准。
 - **0.9.2（2026-11-12）**：只改原生界面和设置表单的 UI schema。封禁、添加观察、绑定和绑定预览里的用户 / 分组 / 账号改用宿主的实体选择器（§96.7）；设置页的白名单 / 黑名单改用 `entity-select` 部件（值仍是字符串数组）；提示词预览、流程和性能卡的分组筛选同样改用选择器。绑定页不再拉全量账号，只按 id 查已绑定账号的名称。**`hostUICompat` 改为 `^3.12`，`hostCompat` 抬到 `>=0.1.280 <0.2.0`**。接口、能力、宿主权限、迁移、设置 schema 都不变。
+- **0.9.3（2026-11-12）**：`block_message` 的默认值改为英文 `Your request was blocked by content moderation. Please revise your input and try again.`（`settings.go` 的 `DefaultBlockMessage`，`forms/settings.schema.json` 的 `default` 与它一致，有测试比对）。只影响没有保存过 `block_message` 的安装；已保存的值（包括以前的中文默认）原样使用，不做迁移。`hostCompat`、`hostUICompat`、接口、能力、宿主权限、迁移都不变。
 
 ### 72.4 抽取
 
@@ -7230,27 +7231,37 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 账号编辑器“高级”分区的“协议转换丢失策略”（继承分组 / 允许 / 安全 / 严格，提示各分组的生效值）；分组表单同一选项（默认 = 允许）与详情；系统设置网关卡片的 Claude 默认 max_tokens 键值表（`default` 行不可删）与媒体下载上限；使用记录的上游协议列转换徽标（等级，悬停显示步骤，有损时加标记）、详情的“协议转换”块（等级、步骤、策略、按类别的损失、被拒绝的类型）、`conversion` 筛选；账号类型端点列表的等级徽标。
 
-## 89. 同优先级均衡负载（2026-11-09，用户要求：粘性长会话让同权重账号流量悬殊；设计文档“均衡负载调度：设计文档与任务规划”；无迁移；2026-11-11 加会话指标，用户要求，设计文档“均衡负载：会话指标与默认策略说明”）
+## 89. 同优先级均衡负载（2026-11-09，用户要求：粘性长会话让同权重账号流量悬殊；设计文档“均衡负载调度：设计文档与任务规划”；无迁移；2026-11-11 加会话指标，用户要求，设计文档“均衡负载：会话指标与默认策略说明”；2026-11-12 去掉“默认”策略，均衡永远开启、默认按会话，用户要求，设计文档“均衡负载：去掉默认策略”）
 
 ### 89.1 设置行 `scheduling`
 
 `settings` 表新增一行 `scheduling`（缺行 = 默认值，不需要迁移）：
 
 ```json
-{"mode":"default","metric":"rpm","limit_load":false,"model_limits":false}
+{"mode":"traffic","metric":"sessions","limit_load":false,"model_limits":false}
 ```
+
+（2026-11-12 前的默认值是 `{"mode":"default","metric":"rpm",...}`。）
 
 | 字段 | 取值 | 默认 | 含义 |
 |------|------|------|------|
-| `mode` | `default` / `traffic` | `default` | 均衡策略：默认 = 按权重随机；流量 = 见 89.2 |
-| `metric` | `rpm` / `concurrency` / `tpm` / `sessions` | `rpm` | 均衡指标，流量均衡和上限负载共用；`sessions` 是 §71 的会话数（2026-11-11 加入） |
+| `mode` | 始终 `traffic` | `traffic` | 均衡策略，只有流量（89.2）。2026-11-12 起存库和响应里始终是 `traffic`，字段只为旧核心保留（见下）；之前还有 `default`（按权重随机、不读用量），是默认值 |
+| `metric` | `rpm` / `concurrency` / `tpm` / `sessions` | `sessions` | 均衡指标，流量均衡和上限负载共用；`sessions` 是 §71 的会话数（2026-11-11 加入；2026-11-12 起是默认值，之前是 `rpm`） |
 | `limit_load` | 布尔 | `false` | 基于上限负载调度，见 89.2 |
 | `model_limits` | 布尔 | `false` | 根据模型限速（按模型调度）：流量均衡比较请求模型在各账号上自己的用量；上限负载也算请求模型所在的指定模型限速列表（§68） |
 
-读入网关设置快照（10 秒 TTL，`config:changed` 广播失效）；读到未知枚举值按默认值处理。默认值下不读 Redis、调度结果与之前完全一致。还不认识 `sessions` 的旧核心读到它时按 `rpm` 调度，它的 `PUT` 拒绝这个值（2026-11-11）。
+读入网关设置快照（10 秒 TTL，`config:changed` 广播失效）。还不认识 `sessions` 的旧核心读到它时按 `rpm` 调度，它的 `PUT` 拒绝这个值（2026-11-11）。
+
+已存的行按下面归一（2026-11-12，不迁移，行在下次保存时才改写）：
+
+- `mode` 不是 `traffic`（旧的 `default`、空、未知）且 `limit_load` 关：当时指标和根据模型限速都是置灰的、不是用户选的，`metric` 按 `sessions`，`model_limits` 按 `false`。
+- `mode` 不是 `traffic` 但 `limit_load` 开：这两项是用户选的，保留。
+- 未知 `metric` 按 `sessions`；最后 `mode` 一律当作 `traffic`。缺 `mode` 字段的行按 `traffic` 处理。
+
+兼容与回滚（2026-11-12）：新核心存下的 `mode` 始终是 `traffic`，滚动更新期间的旧核心（0.1.282 及以前）和回滚后的旧核心读到它照样做流量均衡（0.1.281 起认识 `sessions`）。没有保存过的行（缺行，或旧的 `default` 行）在旧核心上仍是旧的默认行为：不读用量、按权重随机。滚动更新期间控制台的请求可能落到旧节点：旧节点的 `GET` 返回未归一的旧值（没保存过的行是 `default` + `rpm`），控制台把 `mode` 当作 `traffic`、指标照旧节点返回的显示，这时保存会存下 `traffic` 和那个指标（例如原来置灰的 `rpm`），之后不再归一成 `sessions`；`PUT` 落到旧节点时由旧节点写入，`mode` 也是 `traffic`。
 
 - `GET /settings/scheduling`（`settings:read`）：返回生效值。
-- `PUT /settings/scheduling`（`settings:manage`）：整行替换，缺省字段取默认值；非法枚举 400 `invalid_argument`，`details.fields[{field:"mode"|"metric", code:"invalid"}]`；写入记 `updated_by`，广播 `config:changed`（key `settings.scheduling`）。
+- `PUT /settings/scheduling`（`settings:manage`）：整行替换，缺省字段取默认值；`mode` 不校验，传什么或不传都存 `traffic`，`metric` 照传入的存（2026-11-12）；非法 `metric` 400 `invalid_argument`，`details.fields[{field:"metric", code:"invalid"}]`（2026-11-12 前也校验 `mode`）；响应是存下的值；写入记 `updated_by`，广播 `config:changed`（key `settings.scheduling`）。
 
 ### 89.2 计算
 
@@ -7258,7 +7269,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 1. 上限负载（`limit_load`）：`账号用量 ÷ 账号该指标上限 × 100`（上限是账号级的，始终用整个账号的用量），上限 0 时为 0；`model_limits` 开且请求模型在账号某个指定模型限速列表里时，再算“列表用量 ÷ 列表上限”，取较大值；截到 0–100。指标对应的上限：RPM → `rpm_limit`，并发 → `max_concurrency`，TPM → `tpm_limit`，会话 → `spm_limit`（2026-11-11 加入）；列表用同名字段。
 2. 负载 = max(上限负载, 插件负载)；`w1 = max(0.01, w × (100 − 负载) / 100)`（即 §67 公式）。
-3. 流量（`mode=traffic`）：`u` 为整个账号的用量；`model_limits` 开且请求带模型时，为请求模型在该账号上的用量（和 dynweight 一样按模型）。层内 `r = u ÷ (Σu × w1 ÷ Σw1)`，`w_eff = w1 ÷ (r + 0.25)²`；层内 Σu = 0 时不调整。指数 2、平滑 0.25 为常量。
+3. 流量（2026-11-12 起始终做；之前只在 `mode=traffic` 时做）：`u` 为整个账号的用量；`model_limits` 开且请求带模型时，为请求模型在该账号上的用量（和 dynweight 一样按模型）。层内 `r = u ÷ (Σu × w1 ÷ Σw1)`，`w_eff = w1 ÷ (r + 0.25)²`；层内 Σu = 0 时不调整。指数 2、平滑 0.25 为常量。
 4. 层内按 `w_eff` 不放回加权随机。
 
 例：权重 1:1、RPM 40 比 0 时 98.8% 的新会话去空闲号；100 比 90 时 54% 去 90 的那个；用量已按权重比分布时维持权重比。
@@ -7266,7 +7277,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 ### 89.3 生效范围与读数
 
 - 和权重一样只作用于粘性不命中的挑选（新会话、无粘性规则的请求、绑定账号失败后的换号，HTTP 与 WebSocket 每一轮相同）；粘性命中、`count_tokens` 不读不算；已绑定的会话不迁移。
-- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM/会话读 `AccountLimiter.Usage`（账号与其命中的模型列表：RPM、TPM 是近 60 秒窗口，会话是各自会话周期内的会话数；只按模型比较且未开上限负载时不读），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口，会话周期跟随账号）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`，几种并行读）。没设 TPM 上限的账号，以及按模型比较时（`md:<model>` 不设上限、不预留），TPM 在请求结束时才计入，有滞后。
+- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。2026-11-12 起均衡永远开启，每次不走绑定的挑选都读一次 Redis（之前默认值下不读）；能用的候选（经转换路由过滤后）只有一个时不读，单个账号没有可比较的对象。RPM/TPM/会话读 `AccountLimiter.Usage`（账号与其命中的模型列表：RPM、TPM 是近 60 秒窗口，会话是各自会话周期内的会话数；只按模型比较且未开上限负载时不读），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口，会话周期跟随账号）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`，几种并行读）。没设 TPM 上限的账号，以及按模型比较时（`md:<model>` 不设上限、不预留），TPM 在请求结束时才计入，有滞后。
 - 会话指标（2026-11-11）：用 §71 已有的会话数（账号的 `rate_usage.sessions`、模型列表的 `rate_usage.models[].sessions`，按模型比较时是 `md:<model>` 层的会话数），不新增计数、不新增 Redis key。
   - 它是会话周期内被准入过的会话数，不是进行中的会话数（§71.1）。没有粘性键的请求每个算一个会话，WebSocket 连接算一个（§71.2），所以没配粘性规则的分组，会话数接近周期内的请求数。
   - 会话在准入时计数（和 RPM 同一个脚本），没有 TPM 那样的滞后。
@@ -7281,12 +7292,12 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 89.5 控制台
 
-系统设置“调度策略”页分为“故障策略 / 均衡负载”两个标签（`?tab=failure&sub=balance`，默认故障策略，旧链接不变；切换设置页时去掉 `sub`）。均衡负载四项：均衡策略（默认 / 流量）、基于上限负载调度（开关）、均衡指标（RPM / 并发 / TPM / 会话，两项都关时置灰）、根据模型限速（开关，和均衡指标一样两项都关时置灰）。没有 `settings:manage` 时只读、不显示保存栏。
+系统设置“调度策略”页分为“故障策略 / 均衡负载”两个标签（`?tab=failure&sub=balance`，默认故障策略，旧链接不变；切换设置页时去掉 `sub`）。均衡负载三项（2026-11-12 起；之前第一项是均衡策略“默认 / 流量”，策略为默认且上限负载关时后两项置灰）：基于上限负载调度（开关）、均衡指标（RPM / 并发 / TPM / 会话，默认会话）、根据模型限速（开关）。三项都不置灰；没有 `settings:manage` 时只读、不显示保存栏。控制台始终提交 `mode: "traffic"`，旧核心返回的 `default` 也按 `traffic` 显示和保存。
 
 2026-11-11 起：
 
-- 均衡指标加第四个选项“会话”（`sessions`）。指标这一行的说明只留两句（两种用途共用、何时生效），TPM 的滞后和会话的口径（按各账号自己的会话周期统计，上限是会话数限制，同层账号周期不同时不能直接比较）收进折叠的详细说明，手机上不占多行。
-- 均衡策略选“默认”时，说明随上限负载开关变化：关着是“同优先级内按权重随机选号”，开着是“同优先级内按权重随机选号，权重先按上限负载折减”。上限负载开着时权重按所选指标折减，所以策略是“默认”时指标也可选。
+- 均衡指标加第四个选项“会话”（`sessions`）。指标这一行的说明只留两句（两种用途共用、何时生效；2026-11-12 去掉“何时生效”），TPM 的滞后和会话的口径（按各账号自己的会话周期统计，上限是会话数限制，同层账号周期不同时不能直接比较）收进折叠的详细说明，手机上不占多行。
+- 均衡策略选“默认”时，说明随上限负载开关变化（2026-11-12 随均衡策略一行去掉）。
 
 ### 89.6 实现位置
 
@@ -7770,7 +7781,7 @@ kind: users | groups | api-keys | accounts | models | proxies
 
 第一批（§96.6）把筛选栏换成了选择器；这一批是表单：还在手输 ID 的字段、只能输 ID 的多选、只取前 200 条的旧下拉。后端不变（`GET /lookup/{kind}` 已够用，§96.1 的 `limit` 现在被前端用到），没有迁移。用法和行为见 `COMMON-CONTROLS.md` §6.1–6.3。
 
-- `HOST_UI_VERSION` 3.12.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.12.0（`ui-contract.spec.ts` 锁定）。3.12 只加不改：
+- `HOST_UI_VERSION` 3.12.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.12.0（`ui-contract.spec.ts` 锁定）。0.1.281 起为 3.13.0，见 §23.1、§97.8。3.12 只加不改：
   - `EntityPicker` 新增 `exclude?: (string | number)[]`：这些 id 不出现在候选里，手输也不算选中；已选值照常显示。给了它时查找带 `limit = min(20 + 排除数, 50)`；查到的行全被排除而还有更多匹配时，列表写“还有更多未列出，输入以缩小范围”。
   - `EntityPicker`（多选里的“添加”选择器同）放在带标签的表单项（`SField` / `SSettingRow`）里时不再把占位文字设成 aria-label，可访问名称来自表单项的标签；不在表单项里时不变。空列表的“没有匹配的…”写实体名，不写占位文字。
   - `EntityPicker` 退化成的文本框（没有查找权限）在没绑 `text` 时，输入不是 id 的内容会清空已选（发 `update:id ''` 和 `change`，框清空），不再悄悄还原成原来的 id：表单不会按一个已经被改掉的 id 提交。绑了 `text` 时不变（其它输入是名称搜索）。
@@ -7787,7 +7798,7 @@ kind: users | groups | api-keys | accounts | models | proxies
 
 此前私有分组要逐个用户授权（`user_groups`），费用只有“全局价 × 分组倍率”一种算法。本节加三样东西：**用户组**（每个用户属于一个，决定他能用哪些私有分组、在各个分组按什么倍率付费）、**分组内定价**（一个分组对某个模型自己的标价）和**专属价**（一个用户组在某个分组对某个模型的标价）。设计文档：[DESIGN-2026-11-12-GROUP-PRICING.md](DESIGN-2026-11-12-GROUP-PRICING.md)。
 
-本节优先于前文中与之冲突的描述；§4、§5、§12、§15.1、§15.2、§17、§23.1、§66、§73.2、§79.5、§90.1、§90.4、§96.3、§96.5 里受影响的句子已按本节改过。
+本节优先于前文中与之冲突的描述；§4、§5、§12、§15.1、§15.2、§17、§23.1、§66、§73.2、§79.5、§90.1、§90.4、§96.3、§96.5、§96.7 里受影响的句子已按本节改过。
 
 ### 97.1 模型
 
@@ -7915,8 +7926,9 @@ kind: users | groups | api-keys | accounts | models | proxies
 
 - 倍率来源是分组默认、标价是全局价时，整个 `pricing` 省略：这样的记录，`billing_detail` 与本节之前逐字节相同。
 - 附加和替换分项（`core.PricedUsage`）本来就整条持久化自己的 `Price`，`Source`、`Scale`、`Base` 随它一起冻结。
+- 首次结算用的输入和写进 `billing_detail.inputs` 留给重试、对账的输入，由同一个函数从使用记录取出（`usage/settler.go` 的 `recordInputs`，含 `pricing`），两边逐字段相同：给待结算输入加字段只改这一处。
 - 结算重试（`usage/settler.go` 的 `RetryPending`）和对账（`usage/reconcile.go` 的 `loadReserved`）从库里重建待结算项时**不重新解析规则**：表达式照旧按 `expr_hash` 从 `model_price_history` 取（自定义价的表达式在保存规则时已经写进历史表，任何版本的节点都取得到），`scale` 和 `base` 从 `inputs.pricing` 取，倍率从 `usage_logs.rate_multiplier` 取。请求之后规则被修改或删除、用户换了用户组，都不影响这笔账。
-- 读回冻结价格的两条 SQL（重试、对账）共用同一段连接（`usage/settler.go` 的 `frozenPriceJoins`）：先按 `expr_hash` 在 `model_price_history` 里找；找不到时回退到 `price_id` 指向的那条全局价现在的表达式，但只对**不是自定义价**的记录回退（`inputs.pricing.base` 为空）。命中自定义价的记录 `price_id` 指的是全局价，不是它实际的标价，所以历史表里缺行时它没有表达式可用：重试进 `failed`（`price expression not found`）；对账保持 `reserved` 和预留时的估算值，并在 `pending_settlements.last_error` 留痕。两种情况都不会静默按全局价扣费。正常路径下不会缺行：保存规则和写历史表在同一个事务里。
+- 读回冻结价格的两条 SQL（重试、对账）共用同一段连接（`usage/settler.go` 的 `frozenPriceJoins`）：先按 `expr_hash` 在 `model_price_history` 里找；找不到时回退到 `price_id` 指向的那条全局价现在的表达式，但只对**不是自定义价**的记录回退（`inputs.pricing.base` 为空）。命中自定义价的记录 `price_id` 指的是全局价，不是它实际的标价，所以历史表里缺行时它没有表达式可用：重试进 `failed`（`price expression not found`）；对账保持 `reserved` 和预留时的估算值，并在 `pending_settlements.last_error` 留痕。两种情况都不会静默按全局价扣费。记录带附加分项时也一样：主项命中自定义价而表达式缺失，整条记录进 `failed`，不会只收分项、主项按 0 算（`usage/additional.go` 的 `priceComponents`；主项本来就没有价格，或被替换分项取代时，才不计主项）。正常路径下不会缺行：保存规则和写历史表在同一个事务里。
 
 ### 97.5 三个金额
 
@@ -7953,9 +7965,9 @@ kind: users | groups | api-keys | accounts | models | proxies
 | 对象 | 字段 |
 |---|---|
 | `SegmentRef` | `{id, kind, name, user_id?}`：别的行引用用户组时用它。`kind` 是 `named` \| `personal`；个人专属的 `name` 是成员的邮箱，`user_id` 是成员 |
-| `Segment` | `SegmentRef` 加 `description`、`discount`（全场折扣，`"1"` = 没有）、`is_default`、`member_count`、`granted_groups: [{id, name}]`（被授权的私有分组）、`rate_override_count`（设了专属倍率的分组数）、`price_rule_count`（专属价的条数，所有分组合计）、`created_at`；个人专属另有 `user: {id, email, display_name}` 和 `origin: SegmentRef \| null`（原来所在的用户组，已被删除时为 `null`） |
+| `Segment` | `SegmentRef` 加 `description`、`discount`（全场折扣，`"1"` = 没有）、`is_default`、`member_count`、`granted_groups: [{id, name}]`（被授权的私有分组）、`rate_override_count`（设了专属倍率的分组数）、`price_rule_count`（专属价的条数，所有分组合计；只算各分组现在提供的模型上的，口径见下面 GET `/groups` 一行）、`created_at`；个人专属另有 `user: {id, email, display_name}` 和 `origin: SegmentRef \| null`（原来所在的用户组，已被删除时为 `null`） |
 | `EffectiveRate` | `{value, source, group_default, discount}`：实际倍率、它的来源（`segment` \| `discount` \| `group`），以及算它用到的分组默认倍率和全场折扣 |
-| `SegmentGroupSetting` | 一个用户组在一个分组的设置：`segment: SegmentRef`、`group: {id, name, description, status, visibility, rate_multiplier, platforms?}`、`accessible`（公开或已授权）、`granted`（显式的授权，只对私有分组有意义）、`rate_override`（专属倍率，`null` = 跟随）、`rate: EffectiveRate`、`price_rule_count`（这个用户组在这个分组的专属价条数）、`member_count`（用户组的成员数，个人专属是 1） |
+| `SegmentGroupSetting` | 一个用户组在一个分组的设置：`segment: SegmentRef`、`group: {id, name, description, status, visibility, rate_multiplier, platforms?}`、`accessible`（公开或已授权）、`granted`（显式的授权，只对私有分组有意义）、`rate_override`（专属倍率，`null` = 跟随）、`rate: EffectiveRate`、`price_rule_count`（这个用户组在这个分组的专属价条数，只算分组现在提供的模型上的）、`member_count`（用户组的成员数，个人专属是 1） |
 | `PriceRule` | `{kind: "multiplier", multiplier}` 或 `{kind: "custom", mode, config}`（`mode` 是 `per_token` \| `per_request`，`config` 只含该方式的价格字段，没填的是 `null`）；规则失效（97.1）时另有 `inactive: true` |
 | `PriceDef` | `{mode, config, expression, multiplier?}`：一个价格。前三个字段与 `/prices` 的同名字段相同。`multiplier`（十进制字符串）只在“这个标价来自按倍数的规则”时出现，规则是 ×0、×1 时也照常出现，含义是：标价 = 这个价格 × `multiplier`。全局价（`base`）和自定义价给出的标价不带它 |
 | `ModelPriceRow` | 分组提供的一个模型：`model`、`base: PriceDef \| null`（全局价，`null` = 没有，不能计费）、`group_rule: PriceRule \| null`（分组内定价）、`segment_rule`（带 `segment_id` 查询时：该用户组的专属价）或 `segment_rule_count`（不带时：在这个模型上有专属价的用户组数）、`list_price: PriceDef \| null`（先命中的那条规则作用后的标价，见下）、`source`（`segment` \| `group` \| `global`）。模型没有全局价时 `list_price` 为 `null`、`source` 为 `global`，两条规则仍照配置返回，不带 `inactive`（失效是对着全局价现在的计费方式判断的） |
@@ -7998,13 +8010,13 @@ kind: users | groups | api-keys | accounts | models | proxies
 |---|---|---|
 | GET `/groups/:id/model-prices?segment_id=` | `group:read` | `GroupModelPrices`。行是分组提供的模型（97.1）；分组已不提供的模型上留下的旧规则不并入。不带 `segment_id` 时每行给 `segment_rule_count`，带时给该用户组的 `segment_rule`，`list_price`、`source`、`rate` 也按该用户组算。`segment_id` 不是正整数 400（字段 `segment_id`），指的用户组不存在 404 |
 | PUT `/groups/:id/model-prices?segment_id=` `{items: [{segment_id, model, rule}]}` | `group:manage` | 每项写一条规则：`segment_id` 为 `null` 是分组内定价，否则是该用户组的专属价；`rule` 为 `null` 删除这条规则。整批一个事务，任何一项不合法整批不改（400，字段 `items.<i>`）；返回最新的 `GroupModelPrices`（查询串的 `segment_id` 只决定返回哪个视图）。校验见下 |
-| POST `/pricing/quote` | `price:read` | 试算一个用户（或一个用户组的任何成员）在某个分组调用某个模型要付多少，见下。控制台的试算入口另外要 `group:read`（选分组），按用户试算要 `user:read`，按用户组试算要 `segment:read`（选择器各自的权限） |
+| POST `/pricing/quote` | `price:read` 且 `group:read`；带 `user_id` 还要 `user:read`，带 `segment_id` 还要 `segment:read` | 试算一个用户（或一个用户组的任何成员）在某个分组调用某个模型要付多少，见下。响应里有分组和用户组的规则与倍率、用户所在的用户组，所以接口要求的权限与控制台试算入口的相同（选分组、选用户、选用户组各自的权限）；缺哪一项回 403 `permission_denied`，`details.permission` 是缺的那一项。这个检查在请求体的其它校验之前：没有 `user:read` 的调用者分不出某个用户 id 存不存在 |
 
 规则的校验（删除规则总是允许）：用户组必须存在；分组必须提供这个模型；模型必须有启用的全局价；`rule.kind` 是 `multiplier` 或 `custom`；倍数不小于 0、小于 1000000、最多 4 位小数；自定义价不能设在表达式计费的模型上，`mode` 必须与全局价相同，价格字段必须是非负数，按 token 必须有 `p` 和 `c`，按次必须有 `price`。保存自定义价时，核心由 `mode` 和 `config` 生成表达式存下，并写进 `model_price_history`（97.4）。
 
 `POST /pricing/quote`：
 
-- 请求 `{user_id? | segment_id?, group_id, model, usage: {p, c, cr?, cc?, cc1h?}}`。`user_id` 和 `segment_id` 必须恰好给一个：给了用户就按他所在的用户组算；两个都给或都不给回 400（字段 `user_id`）。`usage` 是一次调用的 token 数（`p` 输入、`c` 输出、`cr` 缓存读、`cc` 缓存写、`cc1h` 1 小时缓存写），口径同 `POST /prices/preview`（§5）。
+- 请求 `{user_id? | segment_id?, group_id, model, usage: {p, c, cr?, cc?, cc1h?}}`。`user_id` 和 `segment_id` 必须恰好给一个：给了用户就按他所在的用户组算；两个都给或都不给回 400（字段 `user_id`）。`usage` 是一次调用的 token 数（`p` 输入、`c` 输出、`cr` 缓存读、`cc` 缓存写、`cc1h` 1 小时缓存写），口径同 `POST /prices/preview`（§5）。每项必须在 0 到 1000000000000 之间（与真实请求用量的上限相同，`core.MaxUsageTokens` / `core.ValidTokenCount`），否则 400，每个越界的项一条字段错误（字段 `usage.<p|c|cr|cc|cc1h>`）；小数按整 token 截断。
 - 用户、用户组或分组不存在 404；分组不提供该模型 400（字段 `model`）；价格无法用给定的用量求值（表达式求值出错，真实请求遇到同样的情况也算不出费用）400 `invalid_argument`，这时没有 `details.fields`。
 - 响应 `PricingQuote`：
 
@@ -8018,13 +8030,13 @@ kind: users | groups | api-keys | accounts | models | proxies
 | `rate`、`rate_override` | `EffectiveRate`，以及这个用户组在这个分组的专属倍率（没有为 `null`） |
 | `list_cost`、`cost` | 标价费用（标价 × 用量）和实付（标价费用 × 倍率）；没有全局价时都是 `"0"` |
 
-- 金额走真实计费的同一条路径：`Resolve`、`core.SegmentRate`、`Quote`。它与 `POST /prices/preview` 的分工：后者试的是一条全局价的表达式（档位、加价规则、分项），前者回答“这个人在这个分组实际付多少”。
+- 金额走真实计费的同一条路径：`Resolve`、`core.SegmentRate`、`Quote`。`base`、`list_price`、`price_source`、`price_levels` 与 `list_cost`、`cost` 出自本节点同一份价格快照（全局价和规则），也就是这个节点给真实请求计费用的那一份：别的节点刚改的规则或全局价，在本节点的快照失效之前（广播或 TTL，见下面“何时生效”）两边都还没有，不会出现“标价已变、费用未变”的响应。分组是否提供该模型、用户组的授权与倍率照旧每次读库。它与 `POST /prices/preview` 的分工：后者试的是一条全局价的表达式（档位、加价规则、分项），前者回答“这个人在这个分组实际付多少”。
 
 **现有接口的变化**
 
 | 接口 | 变化 |
 |---|---|
-| GET `/groups` | 每行加 `access: {segments: SegmentRef[], personal_count}`（私有分组授权给了哪些命名用户组，以及多少个个人专属；只统计私有分组，公开分组恒为 `{segments: [], personal_count: 0}`，留在公开分组上的授权行不计）、`price_rule_count`（分组内定价的条数）、`segment_rule_count`（本分组里各用户组专属价的条数）、`model_count`（分组提供的模型数）；新筛选 `?model=`，只留提供该模型的分组 |
+| GET `/groups` | 每行加 `access: {segments: SegmentRef[], personal_count}`（私有分组授权给了哪些命名用户组，以及多少个个人专属；只统计私有分组，公开分组恒为 `{segments: [], personal_count: 0}`，留在公开分组上的授权行不计）、`price_rule_count`（分组内定价的条数）、`segment_rule_count`（本分组里各用户组专属价的条数）、`model_count`（分组提供的模型数）。两个条数只算分组**现在提供**的模型上的规则，与定价表列出的一致：分组不再提供某个模型后（账号不再声明它，或不限模型的账号所依赖的全局价被停用），那个模型上的规则留在库里但不计入，重新提供时又计入；`Segment`、`SegmentGroupSetting` 的 `price_rule_count` 同一口径（`group` 包的 `offeredRules`，97.9）；新筛选 `?model=`，只留提供该模型的分组 |
 | GET `/me/groups` | 可用性按调用者所在的用户组。每行只比原来多三项：`effective_rate`（调用者在该分组的实际倍率）、`rate_source`、`exclusive`（私有分组）。`rate_multiplier` 仍是分组默认倍率（§15.2）。某个分组读不到调用者在其中的条件时（列出分组和读条件是两次查询，中间分组被删等），这个分组从结果里略去，不报错 |
 | GET `/users`、GET `/users/:id` | 加 `segment: SegmentRef`；去掉 `group_ids`；新筛选 `segment=<用户组 id>` 或 `segment=personal`（所有个人专属的用户） |
 | POST `/auth/login`、POST `/auth/refresh` | 不变：返回的 `user` 不带 `segment`（§5.1） |
@@ -8050,10 +8062,10 @@ kind: users | groups | api-keys | accounts | models | proxies
 ### 97.7 权限与菜单
 
 - 新权限模块 `segment`（“用户组”）：`segment:read`、`segment:manage`，都不是敏感权限（§4）。内置角色里 `admin` 有；`operator` 有（它只排除 `settings`、`sticky`、`plugin`、`publisher` 四个模块）；`user` 没有。
-- 分组一侧的授权、专属倍率和模型定价（`/groups/:id/segments`、`/groups/:id/model-prices`）沿用 `group:read` / `group:manage`；价格试算接口要 `price:read`，控制台的试算入口要 `price:read` 和 `group:read`（按用户试算还要 `user:read`，按用户组试算要 `segment:read`）；成员列表要 `segment:read` 和 `user:read`；新建用户时指定用户组要 `segment:manage`。
+- 分组一侧的授权、专属倍率和模型定价（`/groups/:id/segments`、`/groups/:id/model-prices`）沿用 `group:read` / `group:manage`；价格试算接口和控制台的试算入口要求相同：`price:read` 和 `group:read`，按用户试算还要 `user:read`，按用户组试算还要 `segment:read`（97.6）；成员列表要 `segment:read` 和 `user:read`；新建用户时指定用户组要 `segment:manage`。
 - 菜单（`authz/menus.go`，§90.1）：`users` 区加一项，id `segments`，标签“用户组 / User groups”，图标 `publisher`，地址 `/segments`，持有 `segment:read` 才返回；排在“用户”之后、“角色与权限”之前。
 - 控制台新增页面根 `/segments`，`manifest.ConsoleSegments` 加 `segments`：插件的 GET / HEAD 网关端点不能以它开头（§55）。
-- 分组编辑窗口的“授权与倍率”标签页要读 `GET /segments`，没有 `segment:read` 的角色不显示这个标签页。
+- 新建分组时，分组编辑窗口的“授权与倍率”标签页要读 `GET /segments`，没有 `segment:read` 的角色不显示这个标签页；编辑已有分组时它读 `GET /groups/:id/segments`（`group:read`），照常显示。
 
 ### 97.8 兼容、升级顺序与回滚
 
@@ -8065,18 +8077,19 @@ kind: users | groups | api-keys | accounts | models | proxies
 - **所有节点升级完之前，不要改授权，也不要建规则、设全场折扣或专属倍率。** 旧节点不认识它们：它按分组默认倍率和全局价给新请求计费，重试时也不认 `inputs.pricing` 里的规则倍数。
 - 使用记录：新记录多 `base_cost` 和可选的 `billing_detail` 字段（`list_cost`、`inputs.pricing`），旧二进制忽略它们。
 
-**新旧节点并存的窗口**里有四处不对称，都不丢数据：
+**新旧节点并存的窗口**里有五处不对称，都不丢数据：
 
 1. **helper history 的用量信封。** 信封（`core/helper_history_usage.go`）按“不认识的字段一律拒收”解码。`core.UsageRecord` 新增的 `RateSource`、`SegmentID` 每次都会写进信封，所以新节点写的信封旧二进制一律拒收：每分钟推迟一次，行留在 `provider_helper_usage_outbox` 里。滚动升级时这只是延迟，新节点会把它们入账。
 2. **旧节点对账新节点预留的行**时只改 `total_cost`，`base_cost` 停在预留时的估算值。
 3. **旧节点刷新小时汇总**（§66.8）用旧公式算 `standard_cost`，不读 `base_cost`：倍率为 0 的新记录计 0，其余的行与 `base_cost` 只有末位舍入的差别。窗口内被旧节点封存或重算过的小时，全部节点升级完之后要标脏重算（本节末的 C）。
 4. **旧节点软删除用户**时不删他的个人专属，留下一个唯一成员已软删除的个人专属。它不影响鉴权和计费（已删除的用户本来就被拒绝）。全部节点升级完之后用本节末的查询 D 找出来，逐个经 DELETE `/segments/:id` 删除（97.6）。
+5. **旧节点重启会暂时收回 `segment:*` 权限。** 第一个新节点启动时登记 `segment:read`、`segment:manage` 并授给内置角色；之后若有旧节点重启，它启动时同步核心权限（`authz` 的 `SyncCore`），把自己不认识的这两项标成 `removed`。从这时起，所有节点上非超级管理员访问用户组页面、成员列表、新建用户时指定用户组都回 403，菜单里的“用户组”也不显示，直到再有一个新节点启动（权限恢复 `active`；`role_permissions` 没被删，授权随之回来）。不影响鉴权和计费；每次新增权限都有这个现象。滚动窗口里遇到时，再启动一个新节点即可。
 
 **回滚**到旧二进制不需要改库，但要知道下面几件事：
 
 1. 新功能整体失效。旧二进制读的 `user_groups` 冻结在迁移时刻：升级后新做的授权它看不到，升级后撤销的授权会复活；全场折扣、专属倍率、规则对新请求不生效。回滚前把这期间撤销过的授权在 `user_groups` 里同步删掉（本节末的 B）。
 2. 回滚时还没结算的记录（`pending`、`failed`、`reserved`）由旧二进制结算。倍率和自定义价是对的（倍率在 `usage_logs.rate_multiplier` 里，自定义价的表达式在历史表里）；按倍数的规则会被忽略，按“全局价 × 倍率”结算。回滚前先让待结算清空，或先删掉按倍数的规则。旧二进制读回冻结价格时没有 97.4 里“不是自定义价才回退到全局价”的条件：自定义价的记录在历史表里缺行时，它仍会按全局价结算。正常路径下不会缺行，保存规则和写历史表在同一个事务里。
-3. 旧二进制退款、关闭记录或对账时只改 `total_cost`、不改 `base_cost`，这些记录在统计里的“原价”会停在改之前的值。
+3. 旧二进制退款、关闭记录或对账时只改 `total_cost`、不改 `base_cost`，这些记录在统计里的“原价”会停在改之前的值。旧二进制结算新节点留下的待结算行（`pending`、`failed`）时同样不写 `base_cost`，并且整体重写 `billing_detail`，把 `inputs.pricing` 抹掉：`base_cost` 为 `NULL` 的行统计回退成 `total_cost / rate_multiplier`，命中按倍数规则的行（按第 2 条已按全局价结算）结果正好是原价；命中自定义价的行算出的是自定义价的费用，统计和导出里的“原价”（`standard_cost`）偏离真正的原价，再次升级后这些行的详情也不再显示倍率来源和标价来源。所以回滚前先让待结算清空（第 2 条）。
 4. **回滚前先让 `provider_helper_usage_outbox` 清空**（`SELECT count(*) FROM provider_helper_usage_outbox` 为 0）。新节点留在里面的信封，旧二进制一直拒收，这部分用量要到再次升级才入账。
 5. 回滚期间旧二进制封存的小时汇总同样按旧公式算，再次升级完成后一并标脏重算（C 的时间范围取到最后一个旧二进制节点停止）。
 
@@ -8149,15 +8162,17 @@ WHERE s.kind = 'personal' AND u.deleted_at IS NOT NULL;
 |---|---|---|---|
 | 实际倍率与来源 | `core.SegmentRate(groupDefault, discount decimal.Decimal, override *decimal.Decimal) (rate decimal.Decimal, source string)` | `apikey` 鉴权、`segment` 的各个 `Terms`、价格试算 | 三层替换、4 位小数取整和上限 999999.9999 都在这里（常量不导出）。`apikey` 鉴权为了一条 SQL 读完自己连表，但倍率同样只经这个函数 |
 | 倍率、折扣、规则倍数的写法 | `core.ParseRate(s string) (decimal.Decimal, bool)` | 分组默认倍率、专属倍率、全场折扣、规则倍数的保存校验 | 不小于 0、不超过 999999.9999、最多 4 位小数：保存进去的数一定原样存得进 `numeric(10,4)`。“全场折扣必须大于 0”由调用方另加 |
-| 用户能否使用分组 | `segment.OpenToUserSQL(groupAlias, userArg string) string`：一段 SQL 条件，“分组是公开的，或用户所在的用户组被授权了它” | `apikey`（创建和修改 Key 的校验、列表的 `group_status`、鉴权）、`group`（`/me/groups`）、`billing`（`/me/prices`）、`lookup`（`mine=true` 的范围） | 取代原来散在这 6 处的 `user_groups` 子查询。分组状态由调用方自己判断 |
+| 用户能否使用分组 | `segment.OpenToUserSQL(groupAlias, userArg string) string`：一段 SQL 条件，“分组是公开的，或用户所在的用户组被授权了它” | `apikey`（创建和修改 Key 的校验、列表的 `group_status`、鉴权）、`group`（`/me/groups`）、`billing`（`/me/prices`）、`lookup`（`mine=true` 的范围） | 取代原来散在这 6 处的 `user_groups` 子查询。分组状态由调用方自己判断。鉴权那条一次读完的连表 SQL（`apikey.lookupSQL`）也嵌入这段条件，不自己写可见性（`TestLookupUsesOpenToUser` 固定） |
 | 用户组在分组里的条件 | `segment.UserTerms / SegmentTerms(ctx, q, id, groupIDs) (map[int64]segment.Terms, error)`（一个用户或一个用户组在若干分组里，按分组 id）；`segment.GroupTerms(ctx, q, groupID, segmentIDs)`（若干用户组在一个分组里，按用户组 id） | 需要成批读取的接口（各列表里的 `accessible`、`rate`、`effective_rate`，两个方向的设置列表，定价表，试算，`/me/prices`） | `Terms` 带授权、是否可用、分组默认倍率、全场折扣、专属倍率，以及由 `core.SegmentRate` 算出的实际倍率和来源。三个函数是同一条查询的三种取法 |
-| 引用一个用户组时的名称 | `segment.Ref(ctx, q, id, showUsers) (core.SegmentRef, error)`；`segment.Masked(ref, showUsers)`；`segment.ShowUsers(ctx, authz) (bool, error)` | `segment` 的各接口、定价表、试算、成员列表 | 个人专属的名称是成员的邮箱；调用者没有 `user:read`（`ShowUsers` 为假）时给 `#<user_id>`（97.6）。读名称走 `Ref`，已经读到的引用走 `Masked`；连表读用户组引用的列清单只有 `segment.RefColumns` 一份（`iam` 的用户列表也引用它） |
+| 引用一个用户组时的名称 | `segment.Ref(ctx, q, id, showUsers) (core.SegmentRef, error)`；`segment.Masked(ref, showUsers)`；`segment.ShowUsers(ctx, authz) (bool, error)` | `segment` 的各接口、定价表、试算、成员列表 | 个人专属的名称是成员的邮箱；调用者没有 `user:read`（`ShowUsers` 为假）时给 `#<user_id>`（97.6）。读名称走 `Ref`，已经读到的引用走 `Masked`；连表读用户组引用的列清单只有 `segment.RefColumns` 一份（`iam` 的用户列表也引用它）。用户组不存在的 404 是 `segment.NotFound(ctx)`（带中英文案，`Ref` 返回它，`billing` 的定价表与试算、`iam` 的成员列表都经它），字段里点名了不存在的用户组时的文案是 `segment.UnknownMessage(ctx)`（`iam` 新建用户、`billing` 保存规则） |
 | 引用一个分组 | `core.GroupRef{ID, Name}` | 各接口里的 `{id, name}`（`granted_groups`、定价表和 `/me/prices` 的 `group`、`groups`） | 同一个形状只有一个类型 |
 | 锁定并校验命名用户组 | `segment.LockNamed(ctx, tx, id *int64) (int64, error)` | 把用户移回命名用户组（`to`）、`iam` 新建用户时指定用户组 | 返回 `id` 指的命名用户组（`nil` = 默认用户组），并锁住它直到事务结束，将要进组的用户不会指向一个正被删除的用户组；不是命名用户组时 `core.ErrNotFound` |
 | 删个人专属 | `segment.DropPersonal(ctx, tx, userIDs...) (bool, error)` | 成员移入命名用户组、移回接口、`iam` 软删除用户 | 连同它的授权、专属倍率、专属价一起删；返回是否真的删了，调用方据此在事务提交后通知价格快照（97.6） |
 | 分组提供的模型 | `group.Models.Offers(model, priced, policy) bool`：单个模型的判断，“有账号声明它，或有不限模型的账号且它有启用的全局价；并且分组的模型名单放行” | `Models.Offered`（一个分组的全部模型）、`GET /groups?model=`；对外的入口是 `group.OfferedModels(ctx, q, groups []core.GroupInfo, priced []string) (map[int64][]string, error)`，`model_count`、定价表、试算、`/me/prices` 都用它 | 账号声明的模型由 `group.ProvidedModels(ctx, q, groupIDs)` 读出（`Models` 带“不限模型的账号数”），GET `/groups/:id/models` 直接返回它；与全局价、模型名单的结合只在 `Offers` 里 |
+| 规则条数 | `group` 的 `offeredRules`：只留分组现在提供的模型上的规则；`segment` 经 `app` 注入的 `group.Service.SegmentRuleCounts(ctx, segmentIDs)` 取 | GET `/groups` 的 `price_rule_count`、`segment_rule_count`，`Segment` 与 `SegmentGroupSetting` 的 `price_rule_count` | 与定价表列出的规则一致（97.6） |
+| 待结算输入 | `usage` 的 `recordInputs(rec)` | 首次结算（`fromRecord`）、写入待结算行（`insertAtomic`），重试和对账读回的就是后者 | 两边逐字段相同（97.4） |
 | 规则倍数 × 倍率 | `(*core.PriceRule).Multiplier(rate)` | 预扣、结算、预留、对账、试算 | 两个数只在这里相乘，预扣和结算不可能算出不同的乘数（97.3） |
 | 规则到展示用标价 | `billing` 的 `listPrice(base, rule) PriceDef`（97.6 的 `list_price`） | 定价表、试算、`/me/prices?group_id=` | 无规则是全局价，自定义价是规则自己的价格，按倍数是全局价加 `multiplier`；不改写表达式、不缩放配置，三处同形 |
 | 规则到导出用价格 | `billing` 的 `exportPrice`：`listPrice` 之后，有 `multiplier` 且不等于 1 时用同步价格的 `scalePrice` 折进价格 | 只有 `GET /key/prices` | 下游读不到规则，所以只有这里把倍数折进价格；`scalePrice` 也是“从上游同步价格并应用倍率”用的函数，两处行为相同（97.6、§17.1） |
 
-包的分工与依赖方向：`segment` 管用户组的读写（增删改、成员、个人专属、两个方向的授权与专属倍率）和上表里它名下的那几个函数；`billing` 管 `price_rules` 的存取与校验、价格快照与 `Resolve`、定价表、试算、`/me/prices`、`/key/prices`；`group`、`apikey`、`iam`、`lookup`、`usage`、`gateway` 各改自己的接口和 SQL。依赖方向是 `billing → group, segment`，`apikey / group / iam / lookup → segment`，`segment` 不依赖它们，没有环；这几个包之间是直接 import（§1 的约定是只经 `core` 的接口依赖，这里按上面的方向放开）。为了不成环，成员列表（它要返回用户行）放在 `iam`；`SegmentGroupSetting.group.platforms` 所需的平台查询和价格快照的失效通知，由 `app` 组装时注入 `segment`。
+包的分工与依赖方向：`segment` 管用户组的读写（增删改、成员、个人专属、两个方向的授权与专属倍率）和上表里它名下的那几个函数；`billing` 管 `price_rules` 的存取与校验、价格快照与 `Resolve`、定价表、试算、`/me/prices`、`/key/prices`；`group`、`apikey`、`iam`、`lookup`、`usage`、`gateway` 各改自己的接口和 SQL。依赖方向是 `billing → group, segment`，`apikey / group / iam / lookup → segment`，`segment` 不依赖它们，没有环；这几个包之间是直接 import（§1 的约定是只经 `core` 的接口依赖，这里按上面的方向放开）。为了不成环，成员列表（它要返回用户行）放在 `iam`；`SegmentGroupSetting.group.platforms` 所需的平台查询、规则条数和价格快照的失效通知，由 `app` 组装时注入 `segment`。

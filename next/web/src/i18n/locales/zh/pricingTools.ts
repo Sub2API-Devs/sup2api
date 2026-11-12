@@ -35,6 +35,8 @@ export default {
     modelHint: '只列这个分组提供的模型。',
     inputTokens: '输入 tokens',
     outputTokens: '输出 tokens',
+    tokensInvalid: '填 0 到 {max} 之间的整数',
+    usageInvalid: '用量填写有误，改正后自动计算。',
     incomplete: '选好对象、分组和模型后自动计算。',
     unprovided: '还没有分组提供 {model}，无法试算。'
   },

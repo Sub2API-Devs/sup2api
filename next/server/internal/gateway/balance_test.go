@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"math/rand"
@@ -41,6 +42,41 @@ func TestTrafficWeights(t *testing.T) {
 		if got := share(trafficWeights(tc.w, tc.used), tc.i); math.Abs(got-tc.want) > 0.001 {
 			t.Errorf("%s: share %.4f, want %.3f", tc.name, got, tc.want)
 		}
+	}
+}
+
+// A stored row, decoded over the defaults as loadSchedulingSettings does,
+// always runs the traffic balance: the metric and model limits greyed out
+// under the former "default" mode take the defaults, chosen ones are kept.
+func TestSchedulingSettingsNormalized(t *testing.T) {
+	cases := []struct {
+		name, row string // row "" = no row
+		want      SchedulingSettings
+	}{
+		{"no row", "", SchedulingSettings{Mode: "traffic", Metric: "sessions"}},
+		{"default, limit load off", `{"mode":"default","metric":"rpm","limit_load":false,"model_limits":true}`,
+			SchedulingSettings{Mode: "traffic", Metric: "sessions"}},
+		{"default, limit load on", `{"mode":"default","metric":"tpm","limit_load":true,"model_limits":true}`,
+			SchedulingSettings{Mode: "traffic", Metric: "tpm", LimitLoad: true, ModelLimits: true}},
+		{"unknown mode", `{"mode":"x","metric":"tpm"}`, SchedulingSettings{Mode: "traffic", Metric: "sessions"}},
+		{"empty mode", `{"mode":"","metric":"tpm","model_limits":true}`, SchedulingSettings{Mode: "traffic", Metric: "sessions"}},
+		{"no mode", `{"metric":"tpm","model_limits":true}`, SchedulingSettings{Mode: "traffic", Metric: "tpm", ModelLimits: true}},
+		{"traffic", `{"mode":"traffic","metric":"rpm","model_limits":true}`, SchedulingSettings{Mode: "traffic", Metric: "rpm", ModelLimits: true}},
+		{"unknown metric", `{"mode":"traffic","metric":"tokens","limit_load":true}`,
+			SchedulingSettings{Mode: "traffic", Metric: "sessions", LimitLoad: true}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := defaultSchedulingSettings()
+			if tc.row != "" {
+				if err := json.Unmarshal([]byte(tc.row), &v); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := v.normalized(); got != tc.want {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -126,15 +162,16 @@ func coreDecision(rec *core.UsageRecord) *core.SchedDecision {
 	return nil
 }
 
-// The defaults read nothing and change nothing.
-func TestBalanceOffReadsNothing(t *testing.T) {
-	e, lim := balanceEnv(t, defaultSchedulingSettings(), map[int64]core.RateUsage{1: {RPM: 60}})
-	_, recs := serve(t, e, 5)
-	if lim.usageCalls != 0 {
-		t.Fatalf("usage read %d times with the balancing off", lim.usageCalls)
+// The defaults balance the traffic by sessions: every pick reads the usage,
+// and the other metrics do not count.
+func TestBalanceDefaultsBySessions(t *testing.T) {
+	e, lim := balanceEnv(t, defaultSchedulingSettings(), map[int64]core.RateUsage{1: {Sessions: 60}, 2: {RPM: 60}})
+	served, _ := serve(t, e, 200)
+	if served["acc-1"] > 6 || served["acc-2"] < 70 || served["acc-3"] < 70 {
+		t.Fatalf("served %v", served)
 	}
-	if d := coreDecision(recs[0]); d != nil {
-		t.Fatalf("core decision with the balancing off: %+v", d)
+	if lim.usageCalls != 200 {
+		t.Fatalf("usage read %d times for 200 requests", lim.usageCalls)
 	}
 }
 
@@ -161,7 +198,10 @@ func TestBalanceTrafficFavoursIdleAccounts(t *testing.T) {
 }
 
 // The limit load lowers the weight in proportion to the use of the metric's
-// limit and is recorded; the traffic balance is off.
+// limit and is recorded. Model limits are on only to take the traffic balance
+// out: it then compares the request's model's usage, empty on every account,
+// so the weights are the load's alone (TestBalanceLimitLoadThenTraffic has
+// both).
 func TestBalanceLimitLoad(t *testing.T) {
 	cases := []struct {
 		metric string
@@ -173,7 +213,7 @@ func TestBalanceLimitLoad(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.metric, func(t *testing.T) {
-			cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: tc.metric, LimitLoad: true}
+			cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: tc.metric, LimitLoad: true, ModelLimits: true}
 			e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: tc.used, 2: tc.used})
 			e.accounts.set(1, tc.limit)
 			served, recs := serve(t, e, 300)
@@ -186,6 +226,26 @@ func TestBalanceLimitLoad(t *testing.T) {
 				t.Fatalf("core decision %+v", d)
 			}
 		})
+	}
+}
+
+// With the limit load on the traffic balance still runs, on the weights the
+// load leaves (CONTRACTS §89.2), and the record carries both.
+func TestBalanceLimitLoadThenTraffic(t *testing.T) {
+	tier := []core.AccountRef{{ID: 1, Weight: 1}, {ID: 2, Weight: 1}, {ID: 3, Weight: 1}}
+	c := &call{rec: &core.UsageRecord{}, balance: &balanceState{
+		cfg:   SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, LimitLoad: true},
+		usage: map[int64]accountUsage{1: {used: 90, limit: 100}, 2: {used: 90}, 3: {}}, entry: -1}}
+	got := c.tierWeights(tier)
+	want := trafficWeights([]float64{0.1, 1, 1}, []float64{90, 90, 0})
+	for i := range want {
+		if math.Abs(got[i]-want[i]) > 1e-9 {
+			t.Fatalf("weights %v, want %v", got, want)
+		}
+	}
+	d := coreDecision(c.rec)
+	if d == nil || d.Changed[0].AccountID != 1 || d.Changed[0].Load != 90 || d.Changed[0].Weight != max(1, int(math.Round(want[0]*100))) {
+		t.Fatalf("core decision %+v", d)
 	}
 }
 
@@ -211,7 +271,7 @@ func TestBalanceLimitLoadModelList(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.metric, func(t *testing.T) {
-			cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: tc.metric, LimitLoad: true, ModelLimits: true}
+			cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: tc.metric, LimitLoad: true, ModelLimits: true}
 			e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: tc.used})
 			e.accounts.set(1, tc.limits)
 			_, recs := serve(t, e, 1)
@@ -226,7 +286,7 @@ func TestBalanceLimitLoadModelList(t *testing.T) {
 // Without model limits the model list is ignored: only the account's own
 // limit loads it.
 func TestBalanceLimitLoadIgnoresListWithoutModelLimits(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true}
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, LimitLoad: true}
 	usage := map[int64]core.RateUsage{1: {RPM: 30, Models: []core.ModelRateUsage{{Models: []string{testModel}, RPM: 18}}}}
 	e, _ := balanceEnv(t, cfg, usage)
 	e.accounts.set(1, func(a *core.Account) {
@@ -243,7 +303,7 @@ func TestBalanceLimitLoadIgnoresListWithoutModelLimits(t *testing.T) {
 // The same load on every account of the tier keeps everyone's chance: nothing
 // is recorded (CONTRACTS §89.4).
 func TestBalanceWholeTierScaledNotRecorded(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true}
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, LimitLoad: true}
 	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 50}, 2: {RPM: 50}, 3: {RPM: 50}})
 	for id := int64(1); id <= 3; id++ {
 		e.accounts.set(id, func(a *core.Account) { a.RPMLimit = 100 })
@@ -256,7 +316,7 @@ func TestBalanceWholeTierScaledNotRecorded(t *testing.T) {
 
 // The concurrency of a model list is read from its own slots.
 func TestBalanceConcurrencyModelListSlots(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricConcurrency, LimitLoad: true, ModelLimits: true}
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricConcurrency, LimitLoad: true, ModelLimits: true}
 	e, _ := balanceEnv(t, cfg, nil)
 	list := core.ModelLimit{Models: []string{testModel}, MaxConcurrency: 4}
 	e.accounts.set(1, func(a *core.Account) { a.ModelLimits = []core.ModelLimit{list} })
@@ -272,7 +332,7 @@ func TestBalanceConcurrencyModelListSlots(t *testing.T) {
 
 // Concurrency is read from the account slots.
 func TestBalanceConcurrencyFromSlots(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricConcurrency, LimitLoad: true}
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricConcurrency, LimitLoad: true}
 	e, lim := balanceEnv(t, cfg, nil)
 	e.slots.mu.Lock()
 	e.slots.inUse["account:1"] = 4 // of MaxConcurrency 5
@@ -296,6 +356,17 @@ func TestBalanceReadFailureFailsOpen(t *testing.T) {
 	_, recs := serve(t, e, 3)
 	if d := coreDecision(recs[0]); d != nil {
 		t.Fatalf("core decision after a failed read: %+v", d)
+	}
+}
+
+// A single candidate has nothing to be balanced against: no usage is read.
+func TestBalanceNotReadForSingleCandidate(t *testing.T) {
+	e, lim := balanceEnv(t, defaultSchedulingSettings(), map[int64]core.RateUsage{1: {Sessions: 60}})
+	for _, id := range []int64{2, 3} {
+		e.accounts.set(id, func(a *core.Account) { a.Models = []string{"another-model"} })
+	}
+	if served, _ := serve(t, e, 2); served["acc-1"] != 2 || lim.usageCalls != 0 {
+		t.Fatalf("served %v, usage read %d times", served, lim.usageCalls)
 	}
 }
 
@@ -358,9 +429,10 @@ func TestBalanceNotReadForTokenCounting(t *testing.T) {
 }
 
 // A plugin's load and the limit load merge by the larger and apply once; an
-// account the core does not change is not recorded by it.
+// account the core does not change is not recorded by it. Model limits are on
+// only to take the traffic balance out, as in TestBalanceLimitLoad.
 func TestBalanceMergesPluginLoad(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true}
+	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, LimitLoad: true, ModelLimits: true}
 	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 90}, 2: {RPM: 10}})
 	e.accounts.set(1, func(a *core.Account) { a.RPMLimit = 100 })
 	e.accounts.set(2, func(a *core.Account) { a.RPMLimit = 100 })

@@ -32,6 +32,7 @@ export default {
   },
   pricing: {
     action: '分组与定价',
+    noSegment: '读不到他所在的用户组，请稍后重试。',
     membership: '所属用户组',
     segmentHint: '每个用户只属于一个用户组，换组立即生效。',
     switchTitle: '换用户组',

@@ -35,6 +35,8 @@ export default {
     modelHint: 'Only the models this group provides.',
     inputTokens: 'Input tokens',
     outputTokens: 'Output tokens',
+    tokensInvalid: 'Enter a whole number from 0 to {max}',
+    usageInvalid: 'Correct the usage above: the price is calculated once it is valid.',
     incomplete: 'Pick who, a group and a model: the price is calculated at once.',
     unprovided: 'No group provides {model} yet, so there is nothing to simulate.'
   },

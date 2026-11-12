@@ -58,6 +58,8 @@ describe('the terms of the form around the rows', () => {
   it('take the discount of a segment form once it is a rate', () => {
     expect(draftedSetting('group', setting(1), undefined, { discount: '0.5' }).rate).toMatchObject({ value: '0.6', discount: '0.5' })
     expect(draftedSetting('group', setting(1), undefined, { discount: '1' }).rate).toMatchObject({ value: '1.2', source: 'group' })
+    // A discount of 0 is none the form may save: the saved one stays.
+    expect(draftedSetting('group', setting(1), undefined, { discount: '0' }).rate).toMatchObject({ value: '1.08', discount: '0.9' })
     expect(draftedSetting('group', setting(1), undefined, { discount: '0.' }).rate).toMatchObject({ value: '1.08', discount: '0.9' })
   })
   it('take the visibility and the default rate of a group form', () => {

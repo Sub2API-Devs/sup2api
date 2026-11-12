@@ -67,10 +67,11 @@ async function openDetail(g: Group) {
   }
 }
 
-function editFromDetail() {
+/** Closes the detail and goes on with its group (to edit it, to simulate a price in it). */
+function fromDetail(next: (g: Group) => void) {
   const g = detail.value
   detailOpen.value = false
-  if (g) openEdit(g)
+  if (g) next(g)
 }
 
 function changed() {
@@ -218,7 +219,8 @@ async function onAction(listed: Group, key: string) {
         </SDescriptions>
       </template>
       <template #footer>
-        <SButton v-if="canManage && detail" @click="editFromDetail">{{ t('common.edit') }}</SButton>
+        <SButton v-if="canSimulate && detail" data-testid="group-detail-simulate" @click="fromDetail(simulate)">{{ t('pricingTools.sim.title') }}</SButton>
+        <SButton v-if="canManage && detail" @click="fromDetail(openEdit)">{{ t('common.edit') }}</SButton>
         <SButton v-else-if="detail" data-testid="group-detail-pricing" @click="openPricing(detail)">{{ t('groups.viewPricing') }}</SButton>
         <SButton variant="primary" @click="detailOpen = false">{{ t('common.close') }}</SButton>
       </template>
