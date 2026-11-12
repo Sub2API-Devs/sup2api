@@ -2,6 +2,8 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { logRangeBounds, rangeBounds, type RangeKey } from '@sub2api/ui'
 import type { LocationQuery } from 'vue-router'
+import { ENTITIES, isEntityId, type EntityKind } from '@/components/entity/entities'
+import { lookupEntities, useEntityNames } from '@/components/entity/lookup'
 
 /**
  * The search bar's starting filters: the range, and the fields it always
@@ -26,42 +28,82 @@ export const CONVERSION_FILTERS = ['native', 'converted', 'good', 'fair', 'disco
 export const conversionFilterLabel = (v: string) =>
   v === 'converted' || v === 'lossy' ? `usage.conversion.filters.${v}` : `accounts.conversion.grades.${v}`
 
-const QUERY_FILTERS = ['user_id', 'group_name', 'model_contains', 'api_key_id', 'from', 'to'] as const
+const QUERY_FILTERS = ['user_id', 'group_id', 'group_name', 'model', 'model_contains', 'api_key_id', 'account_id', 'from', 'to'] as const
+/** Link filters of an operator only: a user cannot preset another user. */
+const OPERATOR_QUERY_FILTERS: readonly string[] = ['user_id', 'group_name', 'account_id']
 
-/** The filters a link presets (?user_id=…&from=…&to=…); a user cannot preset another user. */
-export function queryUsageFilters(query: LocationQuery, admin: boolean): Record<string, string> {
+/**
+ * The filters a link presets (?user_id=…&from=…&to=…). `accounts`: the
+ * operator may read accounts (the API refuses the account filter to any
+ * other). An id that is not one (?user_id=abc) is dropped rather than sent to
+ * the list and the lookup.
+ */
+export function queryUsageFilters(query: LocationQuery, admin: boolean, accounts = false): Record<string, string> {
   const out: Record<string, string> = {}
   for (const k of QUERY_FILTERS) {
     const v = query[k]
-    if (typeof v === 'string' && v !== '' && (admin || (k !== 'user_id' && k !== 'group_name'))) out[k] = v
+    if (typeof v !== 'string' || v === '') continue
+    if (OPERATOR_QUERY_FILTERS.includes(k) && !admin) continue
+    if (k === 'account_id' && !accounts) continue
+    if (NUMERIC_ID_PARAMS.has(k) && !isEntityId(v)) continue
+    out[k] = v
   }
+  // The model picker shows one of the two: the exact model leaves no search beside it.
+  if (out.model) delete out.model_contains
   return out
 }
 
-// A search field is named after the query parameter it sets, except the
-// boxes that take an id or a name: all digits set the id (user 7 is
-// user_id=7), any other text the name (user_email contains "ann").
-const ID_OR_NAME: Record<string, readonly [id: string, name: string]> = {
-  user: ['user_id', 'user_email'],
-  api_key: ['api_key_id', 'api_key_name'],
-  account: ['account_id', 'account_name']
+// A search field is named after the query parameter it sets, except those
+// that pick an entity (EntityPicker): they set the picked id (`id`) or, where
+// the entity is also searched by name, the text typed in place of a pick
+// (`text`). The two exclude each other; reading typed digits as an id is the
+// picker's business alone.
+export interface EntityField {
+  kind: EntityKind
+  id: string
+  text?: string
 }
+export const ENTITY_FIELDS: Record<string, EntityField> = {
+  model: { kind: 'model', id: 'model', text: 'model_contains' },
+  user: { kind: 'user', id: 'user_id', text: 'user_email' },
+  api_key: { kind: 'api_key', id: 'api_key_id', text: 'api_key_name' },
+  // Picked only: group_name stays a parameter a link may bring (HIDDEN).
+  group: { kind: 'group', id: 'group_id' },
+  account: { kind: 'account', id: 'account_id', text: 'account_name' }
+}
+/** The entity an id parameter names (group_id: a group), for showing its value by name. */
+const ID_PARAM_KINDS: Record<string, EntityKind> = Object.fromEntries(Object.values(ENTITY_FIELDS).map(e => [e.id, e.kind]))
+/** The id parameters whose value is a number (all but the model's, which is its name). */
+const NUMERIC_ID_PARAMS = new Set(Object.keys(ID_PARAM_KINDS).filter(param => ENTITIES[ID_PARAM_KINDS[param]].numeric))
 
 /** The query parameters a search field sets. */
-export const fieldParams = (field: string): readonly string[] => ID_OR_NAME[field] ?? [field]
-
-/** What a search field shows for the parameters `values`: the id, else the name. */
-export function fieldText(values: Record<string, unknown>, field: string): string {
-  const [id, name] = ID_OR_NAME[field] ?? [field]
-  return String(values[id] || (name && values[name]) || '')
+export function fieldParams(field: string): string[] {
+  const entity = ENTITY_FIELDS[field]
+  if (!entity) return [field]
+  return entity.text ? [entity.id, entity.text] : [entity.id]
 }
 
-/** The parameters a search field sets for the text typed in it (the other one of an id-or-name box cleared). */
-export function fieldPatch(field: string, text: string): Record<string, string> {
-  const pair = ID_OR_NAME[field]
-  if (!pair) return { [field]: text }
-  const isId = /^\d+$/.test(text.trim())
-  return { [pair[0]]: isId ? text : '', [pair[1]]: isId ? '' : text }
+/** The parameters that set an entity field to a picked id or to a name search, the other one cleared; neither clears both. */
+export function entityPatch(field: string, picked: { id?: string; text?: string }): Record<string, string> {
+  const { id, text } = ENTITY_FIELDS[field]
+  return { [id]: picked.id ?? '', ...(text ? { [text]: picked.text ?? '' } : {}) }
+}
+
+/**
+ * Whether the API key filter holds once the user filter changed. Without a
+ * user or without a key there is nothing to settle. A picked key stays when
+ * the lookup lists it among the picked user's keys; where that cannot be told
+ * (a searched email, a searched key name, a failed lookup) the key goes.
+ */
+export async function keyHoldsForUser({ user_id, user_email, api_key_id, api_key_name }: Record<string, string>): Promise<boolean> {
+  if (!(user_id || user_email) || !(api_key_id || api_key_name)) return true
+  if (!user_id || !api_key_id) return false
+  try {
+    const { items } = await lookupEntities('api_key', { ids: [api_key_id], scope: { user_id } })
+    return items.length > 0
+  } catch {
+    return false
+  }
 }
 
 /** Who searches, and under which log type. */
@@ -69,14 +111,12 @@ export interface UsageSearchContext {
   admin: boolean
   /** An operator who may read accounts gets the account filter. */
   accounts: boolean
-  /** Groups are picked from a list (group_id), not typed (group_name). */
-  groupSelect: boolean
   /** The failed requests log type: the status is settled, the HTTP status and error type join. */
   errors: boolean
 }
 
 /** Parameters the search keeps without a field of its own: set by a link or a table action, shown as removable chips. */
-const HIDDEN = ['group_id', 'group_name', 'success', 'status_code', 'error_type', 'client_request_id', 'platform', 'endpoint', 'stream']
+const HIDDEN = ['group_name', 'success', 'status_code', 'error_type', 'client_request_id', 'platform', 'endpoint', 'stream']
 const ADMIN_HIDDEN = ['plugin_key', 'account_type', 'node_id', 'upstream_model', 'upstream_protocol']
 
 /**
@@ -87,10 +127,9 @@ const ADMIN_HIDDEN = ['plugin_key', 'account_type', 'node_id', 'upstream_model',
  * first row's, and the status the failed requests type sets itself).
  */
 export function usageSearchLayout(c: UsageSearchContext) {
-  const group = c.groupSelect ? 'group_id' : 'group_name'
-  const primary = ['model_contains', c.admin ? 'user' : group, 'api_key']
+  const primary = ['model', c.admin ? 'user' : 'group', 'api_key']
   const advanced = [
-    ...(c.admin ? [group, 'request_id'] : ['request_id']),
+    ...(c.admin ? ['group', 'request_id'] : ['request_id']),
     ...(c.admin && c.accounts ? ['account'] : []),
     'client_ip',
     'protocol',
@@ -114,26 +153,24 @@ const LABEL_KEYS: Record<string, string> = { success: 'common.status', billing_s
  * Labels of the usage search: `label` names a field or parameter, `options`
  * holds the choices of those picked from a list (the empty first choice names
  * the filter, as the fields carry no labels), `valueLabel` reads a set value
- * as its choice. `groupOptions` and `protocolOptions` (the request types under
- * the search) fill the group and type lists; a type already set stays listed.
+ * as the page shows it: a picked entity as "name #id" (looked up among the
+ * caller's own with `mine`), a listed choice by its label. `protocolOptions`
+ * (the request types under the search) fill the type list; a type already set
+ * stays listed.
  */
 export function useUsageSearchLabels(
-  groupOptions: MaybeRefOrGetter<Array<{ value: string | number; label: string }>>,
   protocolOptions: MaybeRefOrGetter<string[]>,
-  protocol: MaybeRefOrGetter<string>
+  protocol: MaybeRefOrGetter<string>,
+  mine: MaybeRefOrGetter<boolean> = false
 ) {
   const { t } = useI18n()
+  const names = useEntityNames({ mine })
   const label = (key: string) => t(LABEL_KEYS[key] ?? `usage.search.${key}`)
-  const choices = (key: string, list: Array<{ value: string | number; label: string }>) => [
-    { value: '', label: label(key) },
-    ...list.filter(o => o.value !== '').map(o => ({ value: String(o.value), label: o.label }))
-  ]
+  const choices = (key: string, list: Array<{ value: string; label: string }>) => [{ value: '', label: label(key) }, ...list]
   const options = computed<Record<string, Array<{ value: string; label: string }>>>(() => {
-    const groups = toValue(groupOptions)
     const types = toValue(protocolOptions)
     const current = toValue(protocol)
     return {
-      ...(groups.length ? { group_id: choices('group_id', groups) } : {}),
       protocol: choices('protocol', [...types, ...(current && !types.includes(current) ? [current] : [])].map(v => ({ value: v, label: v }))),
       conversion: choices('conversion', CONVERSION_FILTERS.map(v => ({ value: v, label: t(conversionFilterLabel(v)) }))),
       success: choices('success', [{ value: 'true', label: t('usage.success.ok') }, { value: 'false', label: t('usage.success.failed') }]),
@@ -141,6 +178,10 @@ export function useUsageSearchLabels(
       stream: choices('stream', [{ value: 'true', label: t('usage.stream') }, { value: 'false', label: t('usage.nonStream') }])
     }
   })
-  const valueLabel = (key: string, value: string) => options.value[key]?.find(o => o.value === value && value !== '')?.label ?? value
+  function valueLabel(key: string, value: string) {
+    const kind = ID_PARAM_KINDS[key]
+    if (kind) return names.label(kind, value)
+    return options.value[key]?.find(o => o.value === value && value !== '')?.label ?? value
+  }
   return { label, options, valueLabel }
 }

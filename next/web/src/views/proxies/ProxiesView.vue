@@ -35,6 +35,7 @@ import { fieldErrors, notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import { parseProxyURL, type ProxySpec } from '@/utils/proxyUrl'
 import { copyText } from '@/utils/clipboard'
+import EntityPicker from '@/components/EntityPicker.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -271,15 +272,7 @@ function onAction(p: Proxy, key: string) {
         <SButton v-if="canCreate" variant="primary" data-testid="proxy-new" icon="plus" fab @click="openCreate">{{ t('proxies.create') }}</SButton>
       </template>
       <template #filters>
-        <SInput
-          v-if="showOwner"
-          v-model="list.filters.created_by"
-          class="w-32"
-          inputmode="numeric"
-          data-testid="created-by-filter"
-          :aria-label="t('common.createdById')"
-          :placeholder="t('common.createdById')"
-        />
+        <EntityPicker v-if="showOwner" v-model:id="list.filters.created_by" kind="user" class="w-72" data-testid="created-by-filter" :placeholder="t('proxies.createdBy')" />
         <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
       </template>
     </SPageHeader>

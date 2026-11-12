@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SField, SHint, SInput, SFormModal, SRadioGroup, STextarea, toast, type SelectOption } from '@sub2api/ui'
-import type { User } from '@/api/types'
+import EntityPicker from '@/components/EntityPicker.vue'
 import { useAuthStore } from '@/stores/auth'
 import { applyFormError } from '@/utils/formErrors'
 import { formatMoney } from '@/utils/format'
@@ -14,11 +14,9 @@ const props = defineProps<{ open: boolean; userId?: number | null; currentBalanc
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'done'): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
-const canSearch = computed(() => auth.has('user:read'))
 
-const query = ref('')
-const results = ref<User[]>([])
-const selected = ref<User | null>(null)
+/** The picked user's id ('' = none); the picker only hands out ids. */
+const user = ref('')
 const credit = ref(true)
 const directionOptions = computed<SelectOption[]>(() => [
   { value: true, label: t('ledger.adjust.credit') },
@@ -28,15 +26,12 @@ const amount = ref('')
 const note = ref('')
 const errors = ref<Record<string, string>>({})
 const busy = ref(false)
-let timer: ReturnType<typeof setTimeout> | undefined
 
 watch(
   () => props.open,
   (v) => {
     if (!v) return
-    query.value = props.userId ? String(props.userId) : ''
-    results.value = []
-    selected.value = null
+    user.value = props.userId ? String(props.userId) : ''
     credit.value = true
     amount.value = ''
     note.value = ''
@@ -44,39 +39,7 @@ watch(
   }
 )
 
-const targetUserId = computed<number | null>(() => {
-  if (selected.value) return selected.value.id
-  const q = query.value.trim()
-  return /^\d+$/.test(q) ? Number(q) : null
-})
-
-watch(query, (q) => {
-  clearTimeout(timer)
-  if (selected.value && q !== label(selected.value)) selected.value = null
-  const s = q.trim()
-  if (!canSearch.value || !s || /^\d+$/.test(s) || selected.value) {
-    results.value = []
-    return
-  }
-  timer = setTimeout(async () => {
-    try {
-      const r = await api.list<User>('/users', { q: s, page_size: 8 })
-      results.value = r.items
-    } catch {
-      results.value = []
-    }
-  }, 300)
-})
-
-function label(u: User) {
-  return u.display_name ? `${u.email} (${u.display_name})` : u.email
-}
-
-function pick(u: User) {
-  selected.value = u
-  query.value = label(u)
-  results.value = []
-}
+const targetUserId = computed<number | null>(() => Number(user.value) || null)
 
 function uuid(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -122,17 +85,8 @@ async function submit() {
         <SHint inline>{{ t('ledger.adjust.currentBalance') }}:</SHint>
         <span class="ml-2 font-mono font-semibold">{{ formatMoney(currentBalance) }}</span>
       </div>
-      <SField :label="t('common.user')" :hint="canSearch ? t('ledger.adjust.userHintSearch') : t('ledger.adjust.userHintId')" :error="errors.user" required>
-        <div class="relative">
-          <SInput v-model="query" :placeholder="canSearch ? t('ledger.adjust.userPlaceholder') : t('common.id')" autocomplete="off" />
-          <div v-if="results.length" class="dropdown absolute left-0 right-0 z-10 mt-1">
-            <div v-for="u in results" :key="u.id" class="dropdown-item" @mousedown.prevent="pick(u)">
-              <span>{{ u.email }}</span>
-              <SHint inline size="xs" class="ml-2">#{{ u.id }} {{ u.display_name }}</SHint>
-            </div>
-          </div>
-        </div>
-        <SHint v-if="targetUserId" size="xs" class="mt-1">{{ t('ledger.adjust.target', { id: targetUserId }) }}</SHint>
+      <SField :label="t('common.user')" :error="errors.user" required>
+        <EntityPicker v-model:id="user" kind="user" data-testid="adjust-user" />
       </SField>
       <SField :label="t('ledger.adjust.direction')">
         <SRadioGroup v-model="credit" inline class="pt-1" :options="directionOptions" />
@@ -140,7 +94,8 @@ async function submit() {
       <SField :label="t('ledger.adjust.amount')" :error="errors.amount" required>
         <div class="flex items-center gap-2">
           <span class="font-mono text-lg" :class="credit ? 'text-success-600 dark:text-success-400' : 'text-danger-600 dark:text-danger-400'">{{ credit ? '+' : '-' }}</span>
-          <SInput v-model="amount" mono inputmode="decimal" placeholder="20.00" />
+          <!-- Opened on a user, the amount is what is left to type; without one focus goes to the picker, which lists the users. -->
+          <SInput v-model="amount" mono inputmode="decimal" placeholder="20.00" :data-autofocus="userId ? '' : undefined" />
           <SHint inline>{{ t('common.usd') }}</SHint>
         </div>
       </SField>

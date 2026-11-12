@@ -125,7 +125,8 @@ func TestRollupMatchesLive(t *testing.T) {
 	f := newFixture(t)
 	ctx := t.Context()
 	now := time.Now()
-	f.insertRollupRows(now, "rollup", f.rollupRows())
+	rows := f.rollupRows()
+	f.insertRollupRows(now, "rollup", rows)
 
 	live := func() map[string]string {
 		_, err := f.db.Pool.Exec(ctx, `UPDATE usage_hourly_state SET low = NULL, high = NULL`)
@@ -174,7 +175,8 @@ func TestRollupMatchesLive(t *testing.T) {
 
 	var low, high time.Time
 	require.NoError(t, f.db.Pool.QueryRow(ctx, `SELECT low, high FROM usage_hourly_state`).Scan(&low, &high))
-	require.Equal(t, now.Add(-40*24*time.Hour).Truncate(time.Hour), low)
+	// The hour of the oldest row, which in the first minutes of an hour is not the hour of 40 days ago.
+	require.Equal(t, now.Add(-rows[len(rows)-1].age).Truncate(time.Hour), low)
 	var sealed time.Time
 	require.NoError(t, f.db.Pool.QueryRow(ctx, sealedSQL).Scan(&sealed))
 	require.Equal(t, sealed, high)

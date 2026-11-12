@@ -2,15 +2,15 @@ import { reactive } from 'vue'
 import { isApiError, listAll, MAX_ACCOUNT_BATCH } from '@sub2api/host'
 import { useDwHost, type Named } from './host'
 
-// Names of the core groups and accounts, read through the core API with the
-// viewer's own permissions (group:read, account:read). The groups are few:
-// loaded once, again after a failure. The accounts are searched by name as
-// typed (q=) and looked up by id as they are shown: the ids asked for in one
+// Names of the core groups and accounts for the tables and texts, read
+// through the core API with the viewer's own permissions (group:read,
+// account:read). The groups are few: loaded once, again after a failure. The
+// accounts are looked up by id as they are shown: the ids asked for in one
 // tick together, MAX_ACCOUNT_BATCH per GET /accounts?ids=. Without the
-// permissions the pickers still take a typed id and the names read "#id";
-// after a first refusal no more accounts are looked up by id.
+// permissions the names read "#id"; after a first refusal no more accounts
+// are looked up by id. Picking a group or an account is the core's entity
+// picker (host.components.EntityPicker), which keeps names of its own.
 const MAX_GROUPS = 1000
-const SEARCH_SIZE = 20
 
 const state = reactive({ groups: [] as Named[], accounts: {} as Record<number, string> })
 let loading: Promise<void> | null = null
@@ -55,18 +55,6 @@ function flushLookUps() {
       .catch((e) => {
         if (isApiError(e) && (e.status === 401 || e.status === 403)) accountsDenied = true
       })
-  }
-}
-
-/** The first accounts whose name contains q; [] when not readable. */
-export async function searchAccounts(q: string): Promise<Named[]> {
-  try {
-    const r = await useDwHost().api.list<Named>('/accounts', { q: q.trim(), page_size: SEARCH_SIZE })
-    const found = r.items.map(named)
-    for (const a of found) state.accounts[a.id] = a.name
-    return found
-  } catch {
-    return []
   }
 }
 

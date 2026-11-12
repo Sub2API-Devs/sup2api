@@ -12,7 +12,6 @@ import {
   SFilterBar,
   SFilterChips,
   SHint,
-  SInput,
   SPagination,
   SRowAction,
   SSelect,
@@ -49,19 +48,22 @@ import { levelRefused, userListHint, type WatchAction } from './watchLevels'
 // /watchlist, with each user's allowlist / blocklist mark of the settings:
 // an allowlisted user is never moderated first whatever the level, a
 // blocklisted user always. The filter bar holds the common filters (user,
-// level, sort, new records only), the others fold under "more filters"
-// (applied ones are chips under the bar). Each table cell keeps to one line;
-// the level changes and the removal are row actions, confirmed in a dialog.
+// picked with the host's EntityPicker; level, sort, new records only), the
+// others fold under "more filters" (applied ones are chips under the bar).
+// Each table cell keeps to one line; the level changes and the removal are
+// row actions, confirmed in a dialog.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const emit = defineEmits<{ (e: 'show-user', userId: number): void }>()
 const host = useModHost()
 const t = host.t
+const { EntityPicker } = host.components
 const manage = computed(() => canManage())
 const catalog = useCatalog()
 const { compact } = useViewport()
 
 const meta = ref<WatchListMeta | null>(null)
-const emptyFilter = () => ({ level: '', new_only: false, trend: '', category: '', sort: 'new', user: '' })
+// user_id / user_text: the user picker's picked id or name search, never both
+const emptyFilter = () => ({ level: '', new_only: false, trend: '', category: '', sort: 'new', user_id: '', user_text: '' })
 const filter = reactive(emptyFilter())
 const users = useUserFilter()
 const query = () => ({ level: filter.level, new_only: filter.new_only || '', trend: filter.trend, category: filter.category, sort: filter.sort, user_id: users.query.value.user_id ?? '', user_ids: users.query.value.user_ids ?? '' })
@@ -72,7 +74,7 @@ const apply = () => applyFilters(list.filters, query())
 watch(() => [filter.level, filter.new_only, filter.trend, filter.category, filter.sort], apply)
 
 async function search() {
-  if ((await users.resolve(filter.user)) && !apply()) list.reload()
+  if ((await users.resolve(filter.user_id, filter.user_text)) && !apply()) list.reload()
 }
 function reset() {
   Object.assign(filter, emptyFilter())
@@ -96,7 +98,7 @@ const advanced = computed<Array<FilterField<'trend' | 'category'> & { searchable
 const chips = computed(() => filterChips(advanced.value, filter))
 /** Bar filters off their default (the phone sheet adds the chips to its badge). */
 const activeCount = computed(() => [filter.level, filter.new_only, filter.sort !== 'new'].filter(Boolean).length)
-const dirty = computed(() => activeCount.value + chips.value.length > 0 || filter.user.trim() !== '')
+const dirty = computed(() => activeCount.value + chips.value.length > 0 || filter.user_id !== '' || filter.user_text !== '')
 function removeChip(key: string) {
   filter[key as 'trend' | 'category'] = ''
 }
@@ -189,8 +191,8 @@ const promptOpen = ref(false)
     <form @submit.prevent="search">
       <SFilterBar :aria-label="t('filter')" :active-count="activeCount" :advanced-count="chips.length" :dirty="dirty" :on-reset="reset" @done="search">
         <template #primary>
-          <SField :error="users.error.value" class="mod-filter-sm">
-            <SInput v-model="filter.user" type="search" size="sm" icon="search" :placeholder="t('events.userPlaceholder')" :aria-label="t('events.user')" />
+          <SField :error="users.error.value" class="mod-filter-lg">
+            <EntityPicker v-model:id="filter.user_id" v-model:text="filter.user_text" kind="user" size="sm" :placeholder="t('events.user')" @change="search" />
           </SField>
         </template>
         <SSelect v-model="filter.level" size="sm" class="mod-filter-sm" :options="levelOptions" :aria-label="t('watch.col.level')" :title="t('watch.col.level')" />

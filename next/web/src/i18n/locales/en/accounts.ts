@@ -90,7 +90,6 @@ export default {
   subtitle: 'Upstream accounts used by the gateway. Account types are declared by plugins; a group can mix accounts of different types.',
   new: 'New account',
   allTypes: 'All types',
-  allGroups: 'All groups',
   allStatus: 'All status',
   status: {
     active: 'Enabled',
@@ -348,7 +347,6 @@ export default {
   modelsHint: 'Empty = all models. Enter complete model ids; Enter or comma adds one.',
   modelsPlaceholder: 'Model id, press Enter',
   modelsTextPlaceholder: 'One model id per line, or comma separated',
-  modelFilter: 'Filter by model',
   allModels: 'All models',
   modelInvalid: 'Not a complete model id (wildcards are not allowed): {model}',
   modelsNotArray: 'Must be a JSON array of model id strings',

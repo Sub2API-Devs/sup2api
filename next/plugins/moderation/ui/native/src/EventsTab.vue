@@ -41,9 +41,10 @@ import { useBulkReview } from './useBulkReview'
 import { useUserFilter } from './users'
 
 // Records (new-api records): a filter bar + paginated table (useList). The
-// bar shows the common filters (search, time, result, user: a username,
-// resolved to ids through the core, or an id); the others fold under "more
-// filters". The applied ones of those, and the conditions only a link from
+// bar shows the common filters (search, time, result, user: picked, or a
+// name search resolved to ids through the core); the others fold under "more
+// filters". Users, groups and API keys are picked with the host's
+// EntityPicker. The applied ones of those, and the conditions only a link from
 // the detail sets (request, endpoint, session), are removable chips under
 // the bar. Each table cell keeps to one line; the secondary facts are in
 // tooltips and optional columns. A row opens the detail modal (?record=<id>
@@ -52,20 +53,23 @@ import { useUserFilter } from './users'
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const host = useModHost()
 const t = host.t
+const { EntityPicker } = host.components
 const manage = computed(() => canManage())
 const catalog = useCatalog()
 const { compact } = useViewport()
 
 const emptyForm = () => ({
   result: 'suspicious',
-  user: '',
+  // the user picker: a picked id or a name search, never both
+  user_id: '',
+  user_text: '',
   q: '',
   // more filters; conclusion and flow stand for two query parameters each (eventFilters)
   conclusion: '',
   severity: '',
   category: '',
   flow: '',
-  group_id: '' as number | '',
+  group_id: '',
   api_key_id: '',
   timing: '',
   watch_level: '',
@@ -77,7 +81,7 @@ const emptyForm = () => ({
 })
 type FormKey = keyof ReturnType<typeof emptyForm>
 const form = reactive(emptyForm())
-if (props.preset) form.user = String(props.preset.user_id)
+if (props.preset) form.user_id = String(props.preset.user_id)
 const range = ref<RangeKey>('all')
 const from = ref('')
 const to = ref('')
@@ -97,7 +101,7 @@ function query() {
     category: form.category,
     ...flowQuery(form.flow),
     group_id: form.group_id,
-    api_key_id: form.api_key_id.trim(),
+    api_key_id: form.api_key_id,
     user_id: users.query.value.user_id ?? '',
     user_ids: users.query.value.user_ids ?? '',
     request_id: form.request_id.trim(),
@@ -115,11 +119,22 @@ const error = computed(() => (list.error.value ? errorMessage(list.error.value, 
 const apply = () => applyFilters(list.filters, query())
 
 async function search() {
-  if ((await users.resolve(form.user)) && !apply()) list.reload()
+  if ((await users.resolve(form.user_id, form.user_text)) && !apply()) list.reload()
 }
 
-function reset(user = '') {
-  Object.assign(form, emptyForm(), { user })
+/**
+ * The user picker changed. The key picker lists only the picked user's keys,
+ * and this page cannot tell whose key an earlier pick is: a new user filter
+ * drops it (for another user it would match nothing), clearing the user
+ * filter keeps it.
+ */
+function pickUser() {
+  if (form.user_id || form.user_text) form.api_key_id = ''
+  search()
+}
+
+function reset(userId = '') {
+  Object.assign(form, emptyForm(), { user_id: userId })
   range.value = 'all'
   from.value = ''
   to.value = ''
@@ -135,10 +150,10 @@ const categories = useCategoryOptions()
 
 interface Field extends FilterField<FormKey> {
   searchable?: boolean
-  placeholder?: string
+  /** Picked with the EntityPicker instead: its kind, lookup scope and the page's own candidates. */
+  picker?: { kind: 'group' | 'api_key'; scope?: Record<string, string>; extra?: Array<{ id: number; name: string }> }
 }
 const advancedFields = computed<Field[]>(() => {
-  const groups = catalog.groupOptions()
   const fields: Field[] = [
     {
       key: 'conclusion',
@@ -169,8 +184,10 @@ const advancedFields = computed<Field[]>(() => {
         options: pairOptions(f.id, [{ value: '', label: t('events.allVersions') }, ...Array.from({ length: f.version }, (_, i) => ({ value: f.version - i, label: `v${f.version - i}` }))])
       }))
     },
-    { key: 'group_id', label: t('stats.group'), options: groups.length ? groups : undefined, searchable: true, placeholder: t('events.groupId') },
-    { key: 'api_key_id', label: t('events.apiKey') },
+    // group 0 (the default group) is no row of the lookup: offered as the page's own candidate
+    { key: 'group_id', label: t('stats.group'), text: (id) => catalog.groupName(Number(id)), picker: { kind: 'group', extra: [{ id: 0, name: t('defaultGroup') }] } },
+    // only the keys of the picked user, when one is picked
+    { key: 'api_key_id', label: t('events.apiKey'), text: (id) => idText(Number(id)), picker: { kind: 'api_key', scope: { user_id: form.user_id } } },
     { key: 'timing', label: t('events.timing'), options: enumOptions('timing', ['pre', 'post']) },
     { key: 'watch_level', label: t('events.watch'), options: [{ value: 'any', label: t('events.watched') }, ...enumOptions('level', ['observe', 'enforce'])] },
     {
@@ -212,9 +229,9 @@ function clearChips() {
   apply()
 }
 
-// Selects apply at once; text fields (the group id without a group list, the
-// key id) on search. Compared as a string: a catalog refresh that rebuilds the
-// fields with the same values does not apply what is typed.
+// Selects apply at once (the pickers on their `change`); typed text on search.
+// Compared as a string: a catalog refresh that rebuilds the fields with the
+// same values does not apply what is typed.
 watch(() => JSON.stringify([form.result, from.value, to.value, ...advancedFields.value.filter((f) => f.options).map((f) => form[f.key])]), apply)
 watch(
   () => props.preset,
@@ -268,7 +285,7 @@ function onReviewed(ids: number[], status: ReviewStatus) {
 
 function filterUser(id: number) {
   userOpen.value = false
-  form.user = String(id)
+  Object.assign(form, { user_id: String(id), user_text: '' })
   search()
 }
 
@@ -310,13 +327,13 @@ watch(() => list.items.value, () => (checked.value = []))
         </template>
         <SDateRange v-model:range="range" v-model:from="from" v-model:to="to" :keys="rangeKeys" size="sm" :label="false" />
         <SSelect v-model="form.result" size="sm" class="mod-filter-md" :options="resultOptions" :aria-label="t('events.result')" :title="t('events.result')" />
-        <SField :error="users.error.value" class="mod-filter-sm">
-          <SInput v-model="form.user" type="search" size="sm" :placeholder="t('events.userPlaceholder')" :aria-label="t('events.user')" />
+        <SField :error="users.error.value" class="mod-filter-lg">
+          <EntityPicker v-model:id="form.user_id" v-model:text="form.user_text" kind="user" size="sm" :placeholder="t('events.user')" @change="pickUser" />
         </SField>
         <template #advanced>
           <template v-for="f in advancedFields" :key="f.key">
             <SSelect v-if="f.options" v-model="form[f.key]" size="sm" :options="f.options" :searchable="f.searchable" :aria-label="f.label" :title="f.label" />
-            <SInput v-else v-model="form[f.key]" size="sm" inputmode="numeric" :placeholder="f.placeholder || f.label" :aria-label="f.label" :title="f.label" />
+            <EntityPicker v-else-if="f.picker" v-model:id="form[f.key]" v-bind="f.picker" size="sm" :placeholder="f.label" :title="f.label" @change="apply" />
           </template>
         </template>
         <template #end>

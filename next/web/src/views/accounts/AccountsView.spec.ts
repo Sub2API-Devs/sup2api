@@ -9,6 +9,7 @@ import AccountModelTest from './AccountModelTest.vue'
 import AccountEditor from './AccountEditor.vue'
 import AccountGroupsCell from './AccountGroupsCell.vue'
 import PlatformIcon from '@/components/platform/PlatformIcon.vue'
+import EntityPicker from '@/components/EntityPicker.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import type { PluginAccountActionEntry, SlotEntry } from '@/stores/plugins'
 
@@ -817,5 +818,31 @@ describe('account list layout', () => {
       { id: 3, name: 'batch', platforms: ['gemini', 'openai'] },
       { id: 9, name: '#9', platforms: undefined }
     ])
+  })
+})
+
+describe('account list filters', () => {
+  const renderFilters = () => render({ SPageHeader: { template: '<div><slot name="filters" /></div>' }, SButton: { template: '<button><slot /></button>' } })
+  /** [kind, test id] of the pickers on screen. */
+  const pickers = (w: ReturnType<typeof render>) => w.findAllComponents(EntityPicker).map((p) => [p.props('kind'), p.attributes('data-testid')])
+  beforeEach(() => {
+    for (const key of Object.keys(list.filters)) delete list.filters[key]
+  })
+
+  it('picks the group, and under the advanced filters the model and the creator, into the list filters', async () => {
+    const w = renderFilters()
+    expect(pickers(w)).toEqual([['group', 'group-filter']])
+    await w.get('[aria-expanded]').trigger('click')
+    expect(pickers(w)).toEqual([['group', 'group-filter'], ['model', 'model-filter'], ['user', 'created-by-filter']])
+    const pick = (testid: string, id: string) => w.getComponent<typeof EntityPicker>(`[data-testid="${testid}"]`).vm.$emit('update:id', id)
+    pick('group-filter', '3')
+    pick('model-filter', 'claude-opus-5')
+    pick('created-by-filter', '7')
+    expect(list.filters).toEqual({ group_id: '3', model: 'claude-opus-5', created_by: '7' })
+    await flushPromises()
+    expect(w.getComponent<typeof EntityPicker>('[data-testid="group-filter"]').props('id')).toBe('3')
+    // The filters count and clear as before.
+    await w.get('[data-testid="clear-filters"]').trigger('click')
+    expect(Object.values(list.filters).filter(Boolean)).toEqual([])
   })
 })

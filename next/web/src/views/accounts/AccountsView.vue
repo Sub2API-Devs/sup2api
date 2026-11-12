@@ -18,6 +18,7 @@ import AccountTypePicker from './AccountTypePicker.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import AccountTypePlatforms from './AccountTypePlatforms.vue'
 import PlatformIcon from '@/components/platform/PlatformIcon.vue'
+import EntityPicker from '@/components/EntityPicker.vue'
 import AccountGroupsCell from './AccountGroupsCell.vue'
 import AccountEditor from './AccountEditor.vue'
 import AccountNumberCell from './AccountNumberCell.vue'
@@ -609,7 +610,6 @@ const typeOptions = computed<SelectOption[]>(() => [
     options: g.types.map((at) => ({ value: typeKey(at.plugin_key, at.type), label: lt(at.label) || at.type }))
   }))
 ])
-const groupOptions = computed<SelectOption[]>(() => [{ value: '', label: t('accounts.allGroups') }, ...groups.value.map((g) => ({ value: g.id, label: g.name }))])
 const advancedFilters = ref(false)
 const denseRows = ref(true)
 const filterCount = computed(() => activeFilterCount(list.filters, ['plugin_key']))
@@ -631,7 +631,7 @@ function resetFilters() {
       </template>
       <template #filters>
         <SSelect v-model="typeFilter" :options="typeOptions" class="w-36 2xl:w-44" :aria-label="t('accounts.type')" />
-        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="w-32 2xl:w-36" :aria-label="t('accounts.groups')" />
+        <EntityPicker v-model:id="list.filters.group_id" kind="group" class="w-48" data-testid="group-filter" />
         <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="w-28 2xl:w-32" :aria-label="t('common.status')" />
         <SButton :variant="hasAdvancedFilters ? 'primary' : 'secondary'" :aria-expanded="advancedFilters" @click="advancedFilters = !advancedFilters">{{ t('accounts.listUi.advanced') }}</SButton>
         <SButton v-if="filterCount" variant="ghost" data-testid="clear-filters" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
@@ -646,8 +646,8 @@ function resetFilters() {
     </SPageHeader>
 
     <section v-if="advancedFilters" class="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2" :aria-label="t('accounts.listUi.filters')">
-      <SInput v-model="list.filters.model" class="w-56" mono data-testid="model-filter" :aria-label="t('accounts.modelFilter')" :placeholder="t('accounts.modelFilter')" />
-      <SInput v-if="showOwner" v-model="list.filters.created_by" class="w-40" inputmode="numeric" data-testid="created-by-filter" :aria-label="t('common.createdById')" :placeholder="t('common.createdById')" />
+      <EntityPicker v-model:id="list.filters.model" kind="model" class="w-full sm:w-64" data-testid="model-filter" />
+      <EntityPicker v-if="showOwner" v-model:id="list.filters.created_by" kind="user" class="w-full sm:w-72" data-testid="created-by-filter" :placeholder="t('accounts.createdBy')" />
       <SSwitch v-model="onlyMine" :label="t('common.onlyMine')" data-testid="only-mine" />
       <SSwitch v-model="showOrphaned" :label="t('accounts.showOrphaned')" data-testid="show-orphaned" />
     </section>

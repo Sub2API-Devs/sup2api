@@ -1186,10 +1186,10 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.10.0`，§95；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.11.0`，§96.6；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
-- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 用 `^3.6`；moderation 0.9.0 起用 `^3.10`（§95）；`sdk/manifest`：声明了 `ui.native` 时必填）。
+- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 0.5.7、moderation 0.9.1 起用 `^3.11`，因为它们用到 `host.components.EntityPicker`（§96.6）；`sdk/manifest`：声明了 `ui.native` 时必填）。
 - 插件的 `package.json` 只需 devDependencies：`@sub2api/vite-preset`、`@vitejs/plugin-vue`、`vite`、`vue`（类型用）；`@sub2api/ui`、`@sub2api/host` 通过 import map 在运行时解析，本地开发用 tsconfig `paths` 指到 `web/packages/*/src` 取类型。
 
 ### 23.2 `@sub2api/host`
@@ -5119,6 +5119,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **0.8.1**：版本 0.8.1。**`hostCompat` 抬到 `>=0.1.273 <0.2.0`**；能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。批量 KV 调用（§93）用的是已有的 `kv` 授权。不允许 0.8.1 装在 0.1.272 上的原因：没有这些调用的核心上 SDK 会换成逐键调用，结果相同，但一次 150 个键的写约 2 秒、期间几乎独占本节点的写，写入能力不够用（93.7 说的"依赖一次往返的开销的插件"；测试里量的数字在 `docs/RELEASE-MODERATION-0.8.0.md` 第 7 节"上线经过"）。下限写 0.1.273 而第一个发布的带这些调用的核心是 0.1.274，两者在已发布的核心里是一回事（93.7）。
 - **0.8.2**：版本 0.8.2。`hostCompat` 不变（`>=0.1.273 <0.2.0`），能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。
 - **0.9.0**：版本 0.9.0，只改原生界面（审核记录页的筛选收成常用 4 项 + 更多筛选、已生效条件以标签显示，各标签页表格单元格只占一行）。用到 UI 3.10 的 `SFilterBar` `#advanced`、`SFilterChips`、`SChipList`、`TableColumn.grow`，**`hostUICompat` 改为 `^3.10`，`hostCompat` 抬到 `>=0.1.277 <0.2.0`**（UI 3.10 随核心 0.1.277 发布，更老的核心的控制台按 `hostUICompat` 不加载这个界面，所以也不让它装上）。能力、钩子、任务、路由、宿主权限、用户权限、迁移和设置都不变，升级不需要管理员重新批准。
+- **0.9.1（2026-11-12）**：只改原生界面。审核记录页的用户、分组、API Key 筛选和观察名单页的用户筛选改用宿主的 `EntityPicker`（§96.6）：用户可以从列表选、按名称搜、按 ID；“名称包含”仍由界面经核心 `GET /users?q=` 解析成 `user_ids`；默认分组 0 由界面作为候选提供；换了用户就清掉已选的 API Key。**`hostUICompat` 改为 `^3.11`，`hostCompat` 抬到 `>=0.1.279 <0.2.0`**。接口、能力、宿主权限、迁移和设置都不变，升级不需要管理员重新批准。
 
 ### 72.4 抽取
 
@@ -6108,6 +6109,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **0.5.4（2026-11-10）**：manifest 只把菜单的 `section` 从 `gateway` 改成 `system`（0.5.5 改回）；`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。（0.5.3 只把控制台的操作按钮改成文字，同样可单独升级。）
 - **0.5.5（2026-11-10）**：manifest 只把菜单的 `section` 从 `system` 改回 `gateway`（§90：功能页归各自的区）；`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。0.5.4 的菜单仍在 `system` 区，排在 `/settings` 之后。
 - **0.5.6（2026-11-11）**：线上有人改了配置没保存，以为"改了不生效"。事件和配置接口多了字段，好让事件一眼看出按哪一版配置、执行了哪些动作：评估写的权重事件带 `detail.steps`（每个改变了有效权重的策略一步）和 `detail.config_version`，`GET /config`、`PUT /config` 返回 `updated_at`，见下文"接口"；控制台的改动见 §74.6。旧前端忽略新字段照常工作。`hostCompat`、`hostUICompat`、能力、授权、配置文档格式都不变，没有新迁移，可以单独升级插件。
+- **0.5.7（2026-11-12）**：只改原生界面。自写的 `IdPicker` 删除，账号、分组、模型筛选和批量重置、分组配置、账号覆盖弹窗都改用宿主的 `EntityPicker`（§96.6）；模型是精确匹配，候选是价格表里的模型加当前页出现过的模型，不在其中的名称可以按输入原样使用。新建分组配置 / 账号覆盖时，已有配置的分组 / 账号仍会列出，选中就报错并禁止保存（原来是不列出）；非规范写法的 id（`013`）不接受。**`hostUICompat` 改为 `^3.11`，`hostCompat` 抬到 `>=0.1.279 <0.2.0`**。接口、能力、授权、配置文档格式都不变，没有新迁移。
 - **只安装不启用**（`BUILTIN_PLUGINS_INSTALL_ONLY`）：启用后每次调度都会调用它，所以要由管理员有意打开。
 
 #### 计数
@@ -6776,7 +6778,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - **`Authorization: Bearer sak_…`**：只有核心路由（`httpapi`）接受，走 `core.AuthenticateBearer`。插件路由和其他认证入口只认 JWT，遇到密钥回 401：插件拿到的是用户 id，在插件内部做的权限判断限制不到密钥，所以插件权限也不能选给密钥。以后要开放，得先让插件的权限判断带上密钥的限制。
 - **子集在两处保证**：创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）。每次检查权限时，`authz.PermissionSet` 取“用户现有权限 ∩ 密钥权限”，所以用户失去权限，密钥立刻跟着失去；重新获得时也恢复。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn`、`guardTarget` 看到的也是这个限制后的集合。只限制密钥所属用户，查询其他用户的权限不受影响。
-- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`（`AuthedRead`），返回的权限和菜单也是限制后的。
+- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`（`AuthedRead`），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。
 - **接口**（都只能用登录会话调用）：`GET /me/access-keys`（含 `lost`：已选但用户不再持有的权限）、`GET /me/access-keys/permissions`（可选的权限，只含自己持有的）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。
 - 控制台入口在个人中心，权限选择复用角色页的权限树。
@@ -7612,4 +7614,84 @@ UI 3.8 及以前，`SPageHeader` 只有在自己的 `title` 与路由标题文�
 - `GET /usage`、`/me/usage`、`/usage/summary`、`/me/usage/summary`、`/usage/export`、`/me/usage/export` 的 `request_id` 参数在带 `from` 时改为 `(u.request_id = v OR u.client_request_id = v)`（不带 `from` 时仍只比 `u.request_id`，避免无索引全表扫描）：用户手里通常只有一个 ID（我方返回的请求 ID，或自己客户端发的 `X-Request-Id`），一个搜索框都能找到。`client_request_id` 参数不变，仍只精确比客户端请求 ID。两个参数同时给时同时生效（AND）。见 §14.4。
 - 旧核心（滚动窗口内）只比我方请求 ID，按客户端请求 ID 搜索返回空列表，不报错。
 - 测试：`usage/api_filter_test.go` 的 `TestParseFilterRequestIDs`（生成的条件与参数，表驱动）、`TestUsageSearchByRequestID`（PostgreSQL：列表、汇总、导出三处，全站与自助视图，表驱动）。
+
+## 96. 实体查找接口 `GET /lookup/{kind}`（2026-11-11，用户要求：控制台的实体选择器按名称或 ID 选用户、分组、API Key、账号、模型、代理，并把 ID 反查成名称；只读，无迁移；核心 0.1.279）
+
+各列表接口的 `q` 不匹配数字 id，也没有“查全部 API Key”的接口。选择器需要的只是“名称包含或 id 相等”的几行和按 id 取名称，所以另开一个轻量接口；现有列表接口的行为都不变。
+
+### 96.1 请求
+
+```
+GET /api/v1/lookup/{kind}
+kind: users | groups | api-keys | accounts | models | proxies
+```
+
+| 参数 | 说明 |
+|---|---|
+| `q` | 可选，去首尾空格。按名称列不区分大小写“包含”匹配，`%`、`_`、`\` 按字面匹配（`store.Like` 转义）。users 的 `q` 匹配 `email` 或 `display_name` 任一（同 `GET /users` 的 `q`），其它 kind 只匹配名称列。`q` 全是数字且不超出 int64 时同时按 id 精确匹配，id 命中的那一行排最前；超出 int64 的数字串只按名称匹配。models 没有数字 id，只按名称 |
+| `ids` | 可选，逗号分隔的正整数（models 传模型名），最多 100 个。给了就只返回这些 id 对应的行：忽略 `q` 和 `limit`，`more` 恒为 `false`；不存在、已软删除、不在调用者可见范围内的 id 直接省略，不报错。`mine`、`user_id` 照常生效。空串等同没给 |
+| `limit` | 1..50，默认 20 |
+| `mine` | 布尔，默认 `false`。`true` 只查调用者自己的，范围见 96.3 |
+| `user_id` | 仅 api-keys：只列该用户的密钥。与 `mine=true` 同时给时两个条件都生效 |
+| `prefer_group_id` | 仅 accounts：属于该分组的账号排在前面，不是过滤 |
+
+- 排序：id 等于 `q` 的行 → `prefer_group_id` 命中的行 → `name` 升序（数据库排序规则）→ `id`。
+- 其它 kind 收到 `user_id`、`prefer_group_id` 时忽略。
+- 错误：`limit` 不在 1..50、`ids` 里有非正整数或空项、`ids` 超过 100 个、`mine` 不是布尔值、`user_id` / `prefer_group_id` 不是正整数、`q` 超过 256 字节或含非法 UTF-8 / NUL，返回 400 `invalid_argument`；该 kind 不支持 `mine=true`（users）也是 400。未知的 kind 返回 404 `not_found`。没有权限返回 403 `permission_denied`，`details.permission` 是该 kind 的全量权限键（`mine=true` 时是 96.3 该列的第一个）。
+
+### 96.2 响应
+
+`200`，照例包在 `data` 里：
+
+```json
+{ "data": { "items": [ { "id": 7, "name": "zhangsan@example.com", "hint": "张三", "status": "active" } ], "more": false } }
+```
+
+- `id`：数字；models 是字符串，等于模型名。
+- `name`、`hint`、`status` 各 kind 的来源见 96.3。`hint` 是帮助辨认同名行的数据，不含翻译文案；为空时省略该字段。`status` 是实体自己的状态值，原样返回，没有状态概念的（models）省略。
+- `more`：还有更多匹配、被 `limit` 截断时为 `true`（服务端多取一行判断，不另数总数）。
+- 没有匹配时 `items` 是 `[]`。
+
+### 96.3 各 kind 的数据来源、范围与权限
+
+| kind | 表 | `name` | `hint` | `status` | 不返回 |
+|---|---|---|---|---|---|
+| users | `users` | `email`（`q` 还匹配 `display_name`） | `display_name` | `status` | 已软删除（`deleted_at`） |
+| groups | `groups` | `name` | 无（分组没有平台字段，平台由账号类型推出，§13） | `status` | — |
+| api-keys | `api_keys`（所属用户取自 `users`） | `name` | 全量：所属用户的 `email`；`mine=true`：`key_prefix` | `status`（不反映过期） | 已软删除 |
+| accounts | `accounts` | `name` | `plugin_key` | `status` | 已软删除 |
+| models | `model_prices` | `model` | 无 | 无 | — |
+| proxies | `proxies` | `name` | `protocol://host:port` | `status` | — |
+
+| kind | 全量（不带 `mine`） | `mine=true` |
+|---|---|---|
+| users | `user:read` | 不支持（400） |
+| groups | `group:read`：全部分组，含已停用 | 任何登录用户：`GET /me/groups` 的范围（状态 `active`，且公开或已分配给调用者） |
+| api-keys | `usage:all:read`：全部用户的密钥（使用记录本来就向它展示所有密钥的 id、名称、所属用户） | `apikey:self:manage`：调用者自己的密钥 |
+| accounts | `account:read`：全部账号；只有 `account:own:read` 时自动只看自己创建的（同 `GET /accounts`，§21.2） | `account:read` 或 `account:own:read`：只看自己创建的 |
+| models | `price:read`：价格表里的全部模型，含已停用的价格 | `apikey:self:manage`：已启用的价格里，调用者任一可用分组（`/me/groups` 的范围）的模型名单放行的模型，即 `GET /me/prices` 对每个可用分组结果的并集 |
+| proxies | `proxy:read`：全部代理；只有 `proxy:own:read` 时自动只看自己创建的（同 `GET /proxies`） | `proxy:read` 或 `proxy:own:read`：只看自己创建的 |
+
+- accounts 与 `GET /accounts` 的一处不同：插件已停用或卸载的账号也能查到（列表默认隐藏它们）。选择器用来筛使用记录，这些账号的记录还在。
+- “自己创建的”按 `created_by` 判断，`created_by` 为空的行只有全量权限能看到（§21.1）。
+- models 的 `mine` 范围在核心里用 `core.GroupInfo.AllowsModel` 逐个判断（与 `/me/prices`、`/key/prices` 同一个函数），没有在 SQL 里另写一套通配规则。
+
+### 96.4 访问密钥
+
+路由用 `AuthedRead` 注册（§80）：权限随 kind 和 `mine` 变化，由处理函数自己检查（`httpapi.CanAny`）。访问密钥可以调用，能查的 kind 受密钥自己的权限限制；`groups?mine=true` 和 `/me/groups` 一样不要权限。
+
+### 96.5 实现与兼容
+
+- 查找协议（参数解析、“名称包含或 id 相等”、排序、`more`、响应）只在 `server/internal/lookup/lookup.go` 实现一次；每个 kind 是 `entities.go` 里的一条 `Entity` 描述（表、id 列、名称列、额外参与 `q` 匹配的列 `Search`、hint 表达式、状态列、软删除条件、权限、`mine` 范围、附加参数）。新增 kind 只加一条描述。描述集中放在 lookup 包而不是分散到各模块：每条只有几行，读的表使用记录模块本来就按名称连接，放在一起就是这张权限表。
+- 没有迁移和新索引。名称匹配是 `ILIKE '%q%'`，不带 `q` 时按名称取前 `limit + 1` 行，都是顺序扫描加 top-N 排序，与现有列表接口的 `q` 同一量级。只有 users、api-keys 的全量查找会扫大表（要 `user:read` / `usage:all:read`）；`mine`、“自己创建的”、`user_id` 和 `ids` 走已有索引或只读小表。api-keys 的所属用户用子查询取，只对截断后返回的行读 `users`。合成数据实测（PostgreSQL 16，100 万用户、200 万密钥）：这两种全量查找每次约 0.1 到 0.5 秒（不并行时约 1 秒），其余在 30 毫秒内。表到这个规模以后再给名称列加 `pg_trgm` 索引。
+- 旧核心（滚动窗口内）没有这条路由，返回 404 `not_found`。
+- 测试：`server/internal/lookup/lookup_test.go` 的 `TestLookup`（PostgreSQL，表驱动：匹配与排序、`ids`、`limit` 与 `more`、通配符转义、按显示名找用户、软删除、各 kind 的权限与范围、范围外的行用 `ids` 或 `q` 里的 id 也查不到、`user_id`、`prefer_group_id`、响应形状、400 / 403 / 404）、`TestLookupAccessKey`（访问密钥按自己的权限调用）、`TestLookupMineIsTheSelfServiceRange`（`mine=true` 的分组、模型与同一个库上真实的 `/me/groups`、`/me/prices` 结果一致）。
+
+### 96.6 控制台：UI 3.11 与 `EntityPicker`
+
+- `HOST_UI_VERSION` 3.11.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.11.0（`ui-contract.spec.ts` 锁定）。3.11 只加不改：`SSelect` 的可搜索形态新增 `icon`、`clearable`、`tinted`、`remote`（+ `search` 事件）、`loading`、`selected`、`note`、`footer`，选项新增 `hint`、`description`、`tag`、`muted`、`accent`（`web/packages/ui/README.md` 的 3.11 一节）；`SDateRange` 的 `time` 模式在任何宽度都完整显示起止时间到秒，放不下时起止各占一行；`HOST_COMPONENT_NAMES` 新增 `EntityPicker`。
+- `EntityPicker`（`web/src/components/EntityPicker.vue`，用法和行为见 `COMMON-CONTROLS.md` §6）是这条查找接口在控制台的唯一入口：`v-model:id` 加可选的 `v-model:text`（“名称包含”），选中即发 `change`；没有查找权限或接口返回 403 / 404 时自己退化成文本框。页面只描述“这是哪种实体、id 和名称各写到哪个参数”，不再各写一套“ID 或名称”的拆分。把 id 显示成名称用 `useEntityNames`（同一 kind 的反查合并成一次 `ids=` 请求，本次登录内缓存）。
+- 接入的页面：使用记录三页（模型、用户、API Key、分组、账号；选中即查询，手输的文本仍等回车或“搜索”；换用户后 API Key 不属于新用户就清掉；链接参数新增 `model`、`group_id`、`account_id`（后者只对能读账号的管理员），链接里不是正整数的 id 直接丢弃）、账号列表（分组、模型、创建人）、代理列表（创建人）、余额流水和调整余额弹窗（用户）、ccgateway 请求日志（模型）。
+- 原生插件用到 3.11 任一项时声明 `hostUICompat: "^3.11"`，`hostCompat` 要求核心 `>=0.1.279`（0.1.278 是最后一个带 UI 3.10 的核心；`sdk/manifest/check/ui.go` 的 `uiFloors`）。moderation 0.9.1、dynweight 0.5.7 是头两个使用者。
+- 回滚顺序：两个插件的 `hostCompat` 都抬到了 `>=0.1.279`，核心退回 0.1.278 之前先把 moderation 退回 0.9.0、dynweight 退回 0.5.6。
 

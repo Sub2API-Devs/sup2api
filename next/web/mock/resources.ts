@@ -440,8 +440,8 @@ interface MockKey {
   created_at: string
 }
 
-const ME_ID = 1
-const keys: MockKey[] = [
+export const ME_ID = 1
+export const keys: MockKey[] = [
   { id: 1, user_id: 1, group_id: 1, name: 'laptop', key_prefix: 'sk-s2a-a1b2c', status: 'active', expires_at: null, last_used_at: now(-42), created_at: now(-86400 * 30) },
   { id: 2, user_id: 1, group_id: 2, rpm_limit: 60, tpm_limit: 200000, max_concurrency: 2, quota_limit: '20', quota_used: '17.3', name: 'ci-runner', key_prefix: 'sk-s2a-c3d4e', status: 'active', expires_at: now(86400 * 60), last_used_at: now(-3600 * 3), created_at: now(-86400 * 12) },
   { id: 3, user_id: 1, group_id: 1, name: 'old-script', key_prefix: 'sk-s2a-e5f6g', status: 'active', expires_at: now(-86400), last_used_at: now(-86400 * 3), created_at: now(-86400 * 50) },
@@ -600,7 +600,7 @@ interface MockProxy {
   created_at: string
 }
 
-const proxies: MockProxy[] = [
+export const proxies: MockProxy[] = [
   { id: 1, name: 'us-west-1', protocol: 'http', host: '10.0.1.20', port: 3128, username: '', password: '', status: 'active', created_by: 1, created_at: now(-86400 * 40) },
   { id: 2, name: 'jp-residential', protocol: 'socks5', host: 'jp.proxy.example.net', port: 1080, username: 'acme', password: 's3cret', status: 'active', created_by: vendorUser.id, created_at: now(-86400 * 15) },
   { id: 3, name: 'eu-backup', protocol: 'https', host: 'eu.proxy.example.net', port: 443, username: 'backup', password: 'pw', status: 'disabled', created_by: null, created_at: now(-86400 * 3) }

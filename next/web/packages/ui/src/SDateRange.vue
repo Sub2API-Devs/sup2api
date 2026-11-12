@@ -6,11 +6,13 @@
 // typed is inclusive: Apply sends `to` = the local midnight after it.
 // Picking a preset applies it and closes; Escape closes and returns focus to
 // the trigger. `label` = false hides the field label (the trigger keeps an
-// aria-label). On a compact screen the trigger shows only the preset and the
-// panel is a bottom sheet: the presets as a grid, the date pair under them.
+// aria-label). On a compact screen the trigger shows only the preset (with
+// `time` the ends too) and the panel is a bottom sheet: the presets as a
+// grid, the date pair under them.
 // `time` works to the second, as new-api's log filter does: the trigger shows
-// both ends in full, the pair is two date-time inputs, and a preset fills
-// both ends (an open end closes at the end of today).
+// both ends in full at any width (the end under the start where one line does
+// not hold both), the pair is two date-time inputs, and a preset fills both
+// ends (an open end closes at the end of today).
 import { computed, nextTick, onBeforeUnmount, ref, useId } from 'vue'
 import SField from './SField.vue'
 import { useUiT } from './i18n'
@@ -41,21 +43,21 @@ const floating = useFloating(anchor, panel, { align: 'start', onLost: () => clos
 const presets = computed(() => props.keys.filter(k => k !== 'custom'))
 const customAllowed = computed(() => props.keys.includes('custom'))
 
-/** "MM-DD ~ MM-DD" of the current bounds (the end inclusive), or '' for an open start. */
-const span = computed(() => {
-  if (!props.from) return ''
+/** The ends of the current bounds as the trigger shows them ("MM-DD", the end inclusive; one entry for a single day), none for an open start. */
+const span = computed<string[]>(() => {
+  if (!props.from) return []
   const a = new Date(props.from)
-  if (Number.isNaN(a.getTime())) return ''
+  if (Number.isNaN(a.getTime())) return []
   if (props.time) {
     // The last second in range: `to` is exclusive.
     const end = props.to ? new Date(new Date(props.to).getTime() - 1000) : null
     const text = (d: Date) => toLocalSecondsInput(d).replace('T', ' ')
-    return `${text(a)} ~ ${end && !Number.isNaN(end.getTime()) ? text(end) : t('ui.now')}`
+    return [text(a), end && !Number.isNaN(end.getTime()) ? text(end) : t('ui.now')]
   }
   const b = props.to ? new Date(new Date(props.to).getTime() - 1) : new Date()
   const s = dayKey(a).slice(5)
   const e = Number.isNaN(b.getTime()) ? '' : dayKey(b).slice(5)
-  return s === e ? s : `${s} ~ ${e}`
+  return s === e ? [s] : [s, e]
 })
 
 const draftStart = ref('')
@@ -138,7 +140,7 @@ defineExpose({ open: show, close: () => close(false) })
           :range="range"
           :open="open"
           :label="label"
-          :span="compact ? '' : span"
+          :span="compact && !time ? [] : span"
           :size="size"
           :controls="compact ? undefined : panelId"
           data-testid="date-range-trigger"

@@ -19,6 +19,13 @@ export function globalLayer(c: Config): Layer {
   return omit(c, 'groups', 'accounts', 'notify', 'log_events')
 }
 
+/**
+ * An id as the draft's groups and accounts are keyed: a positive integer in
+ * its plain decimal form. The plugin reads the key "013" as 13, so an entry
+ * saved under another spelling would replace the one the id already has.
+ */
+export const isDraftKey = (id: string): boolean => /^[1-9]\d*$/.test(id)
+
 /** Ids of a map sorted as numbers. */
 export const sortedIds = (m: Record<string, unknown>) => Object.keys(m).sort((a, b) => Number(a) - Number(b))
 

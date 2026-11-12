@@ -153,6 +153,20 @@ export function applyQuery(list: UseListResult<unknown>, next: Record<string, st
 /** Query of a filter, trimmed. */
 export const filterQuery = (f: Filter): Filter => ({ account_id: f.account_id.trim(), group_id: f.group_id.trim(), model: f.model.trim() })
 
+/** A model offered by the model pickers beside the core's own (EntityPicker `extra`). */
+export interface ModelCandidate {
+  id: string
+  name: string
+}
+
+/**
+ * The models of the rows shown, as candidates of the model pickers: the core
+ * looks up the models of its price table, while a key's model is whatever
+ * the client asked for.
+ */
+export const modelCandidates = (rows: Array<{ model: string }>): ModelCandidate[] =>
+  [...new Set(rows.map(r => r.model))].filter(Boolean).map(model => ({ id: model, name: model }))
+
 export interface RuleResult {
   name: string
   scope: 'all' | 'stream' | 'non_stream'
