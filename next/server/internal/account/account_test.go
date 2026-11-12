@@ -358,6 +358,12 @@ func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
 }
 
+// VerifyAccessKey reads "sak_<uid>" as an access key acting for uid.
+func (fakeTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	uid, err := strconv.ParseInt(strings.TrimPrefix(raw, core.AccessKeyPrefix), 10, 64)
+	return core.AccessKeyIdentity{UserID: uid, KeyID: 1}, err
+}
+
 // fakeAuthz grants each user a fixed key set; a nil map allows everything.
 type fakeAuthz struct{ keys map[int64][]string }
 
@@ -789,12 +795,18 @@ func (e *env) doAs(uid int64, method, path string, body any) (int, map[string]an
 // doRaw calls the API as uid and returns the raw body.
 func (e *env) doRaw(uid int64, method, path string, body any) (int, []byte) {
 	e.t.Helper()
+	return e.callRaw(fmt.Sprintf("u%d", uid), method, path, body)
+}
+
+// callRaw calls the API with bearer as the token and returns the raw body.
+func (e *env) callRaw(bearer, method, path string, body any) (int, []byte) {
+	e.t.Helper()
 	var b []byte
 	if body != nil {
 		b, _ = json.Marshal(body)
 	}
 	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(b))
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer u%d", uid))
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	w := httptest.NewRecorder()
 	e.h.ServeHTTP(w, req)
 	return w.Code, w.Body.Bytes()
@@ -966,6 +978,11 @@ func TestAccountLifecycle(t *testing.T) {
 	plain := out["data"].(map[string]any)["credentials"].(map[string]any)
 	if plain["api_key"] != "sk-good-key-123" || plain["base_url"] != "https://b.example.com" {
 		t.Fatalf("reveal: %v", plain)
+	}
+	key := core.AccessKeyPrefix + strconv.FormatInt(e.uid, 10)
+	if code, raw := e.callRaw(key, "POST", fmt.Sprintf("/accounts/%d/credentials/reveal", id), nil); code != 403 ||
+		!strings.Contains(string(raw), "access keys cannot use this endpoint") {
+		t.Fatalf("access key reveal: %d %s", code, raw)
 	}
 	var audits int
 	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action = 'account.credentials.reveal'`).Scan(&audits)

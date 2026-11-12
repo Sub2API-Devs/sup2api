@@ -2527,7 +2527,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 ## 40. 核心版本提示、GitHub 更新源及拓扑视角（2026-10-03）
 
-- 左上角品牌旁显示当前核心版本，基础 `GET /system/version` 仅要求登录，返回 `version/managed`。托管模式下有 `system:update:read` 权限的用户可以打开更新面板，查看稳定版与发布说明、手动检测；其他用户不获得更新源读取或导入权限。
+- 左上角品牌旁显示当前核心版本，基础 `GET /system/version` 仅要求登录（访问密钥也可调用，§80），返回 `version/managed`。托管模式下有 `system:update:read` 权限的用户可以打开更新面板，查看稳定版与发布说明、手动检测；其他用户不获得更新源读取或导入权限。
 - 更新源在 PG `updater.clusters.update_repository` 持久保存。`GET /system/update-source` 要求 `settings:read`，`PUT` 要求 `settings:manage` 并显式二次认证。接受 GitHub.com 公开仓库的 `owner/repo` 或完整 HTTPS 仓库地址，空值关闭。此设置不改变网关信任密钥、不支持任意 URL、私人 token 或预发布版本。
 - `GET /system/update-check?force=true` 使用固定 GitHub API 查询 latest stable Release。响应包含当前/最新版本、是否有更新、兼容性、阻断原因、tag、发布说明、检查时间和缓存标记。检测不仅看 tag，还验证 `next-core-manifest.json` 的签名、语义版本绑定、当前平台和摘要包资产，并检查当前基线的 schema/协议兼容性。网络失败或不兼容不能冒充已经最新。
 - `POST /system/releases/import` 要求 `system:update:execute` 及既有二次认证，输入当前规范化 `repository` 与 `tag`。网关重新获取并验签，在 PG 事务持有集群行共享锁时复核来源，登记后仍走原有预检与升级计划。相同摘要已存在于其他来源时不静默改写下载地址，不影响已执行中的计划。核心桥记录 `system.update_source.update` 和 `system.release.import` 审计。
@@ -6821,7 +6821,8 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - **`Authorization: Bearer sak_…`**：只有核心路由（`httpapi`）接受，走 `core.AuthenticateBearer`。插件路由和其他认证入口只认 JWT，遇到密钥回 401：插件拿到的是用户 id，在插件内部做的权限判断限制不到密钥，所以插件权限也不能选给密钥。以后要开放，得先让插件的权限判断带上密钥的限制。
 - **子集在两处保证**：创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）。每次检查权限时，`authz.PermissionSet` 取“用户现有权限 ∩ 密钥权限”，所以用户失去权限，密钥立刻跟着失去；重新获得时也恢复。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn`、`guardTarget` 看到的也是这个限制后的集合。只限制密钥所属用户，查询其他用户的权限不受影响。
-- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`（`AuthedRead`），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。
+- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/system/version`（`AuthedRead`，`/system/version` 只返回版本号、是否托管、节点 id、boot id），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。
+- **明文回显只认登录会话**（2026-11-12）：回显已有密文的接口用 `SessionOnly()` 视图注册，有权限也拒绝密钥（403 `access keys cannot use this endpoint`）：`POST /me/api-keys/:id/reveal`、`POST /proxies/:id/reveal-url`、`POST /accounts/:id/credentials/reveal`。泄露的密钥因此拿不到 API Key、代理密码和账号凭证的明文。`/me/api-keys` 的创建与轮换返回的是新密钥，属于自动化的正当用途，照常接受密钥。`settings:manage` 下的 `remote-fingerprint` 会拨号到任意 host:port，但 SSH 安装控制器到内网主机是正当用途，不接 netguard；它靠 `settings:manage` 只认会话来防止被泄露的密钥利用（wontfix）。
 - **接口**（都只能用登录会话调用）：`GET /me/access-keys`（含 `lost`：已选但用户不再持有的权限）、`GET /me/access-keys/permissions`（可选的权限，只含自己持有的）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。
 - 控制台入口在个人中心，权限选择复用角色页的权限树。

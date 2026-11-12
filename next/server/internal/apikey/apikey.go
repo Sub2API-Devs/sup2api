@@ -71,7 +71,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("POST", "/me/api-keys", "apikey:self:manage", s.createMine)
 	r.Perm("PATCH", "/me/api-keys/:id", "apikey:self:manage", s.updateMine)
 	r.Perm("PUT", "/me/api-keys/:id/ip-allowlist", "apikey:self:manage", s.updateIPAllowlist)
-	r.Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
+	// Reveal returns an existing key in plain text: sessions only (CONTRACTS §80).
+	r.SessionOnly().Perm("POST", "/me/api-keys/:id/reveal", "apikey:self:manage", s.revealMine)
 	r.Perm("POST", "/me/api-keys/:id/rotate", "apikey:self:manage", s.rotateMine)
 	r.Perm("DELETE", "/me/api-keys/:id", "apikey:self:manage", s.deleteMine)
 }

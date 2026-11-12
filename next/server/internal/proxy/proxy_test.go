@@ -32,6 +32,12 @@ func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
 }
 
+// VerifyAccessKey reads "sak_<uid>" as an access key acting for uid.
+func (fakeTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	uid, err := strconv.ParseInt(strings.TrimPrefix(raw, core.AccessKeyPrefix), 10, 64)
+	return core.AccessKeyIdentity{UserID: uid, KeyID: 1}, err
+}
+
 // fakeAuthz grants each user a fixed key set; a nil map allows everything.
 type fakeAuthz struct{ keys map[int64][]string }
 
@@ -131,12 +137,18 @@ func forwardProxy(t *testing.T) (*httptest.Server, *atomic.Value, *atomic.Int64)
 
 func do(t *testing.T, h http.Handler, uid int64, method, path string, body any) (int, map[string]any) {
 	t.Helper()
+	return call(t, h, "u"+strconv.FormatInt(uid, 10), method, path, body)
+}
+
+// call sends the request with bearer as the token.
+func call(t *testing.T, h http.Handler, bearer, method, path string, body any) (int, map[string]any) {
+	t.Helper()
 	var b []byte
 	if body != nil {
 		b, _ = json.Marshal(body)
 	}
 	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(b))
-	req.Header.Set("Authorization", "Bearer u"+strconv.FormatInt(uid, 10))
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	var out map[string]any
@@ -230,6 +242,10 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 	code, out = do(t, engine, admin, "POST", fmt.Sprintf("/proxies/%d/reveal-url", id), nil)
 	if want := fmt.Sprintf("http://bob:s3cret@%s:%d", host, port); code != 200 || data(out)["url"] != want {
 		t.Fatalf("reveal-url: %d %v, want %s", code, out, want)
+	}
+	code, out = call(t, engine, core.AccessKeyPrefix+strconv.FormatInt(admin, 10), "POST", fmt.Sprintf("/proxies/%d/reveal-url", id), nil)
+	if fail, _ := out["error"].(map[string]any); code != 403 || fail["message"] != "access keys cannot use this endpoint" {
+		t.Fatalf("access key reveal-url: %d %v", code, out)
 	}
 
 	// Directory: cached client per proxy.

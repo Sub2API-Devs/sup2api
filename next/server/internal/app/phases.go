@@ -506,7 +506,7 @@ func (b *boot) startBackground() error {
 // registerRoutes mounts every module's console API and the gateway.
 func (b *boot) registerRoutes(r *httpapi.Router) {
 	cfg := b.cfg
-	r.Authed(http.MethodGet, "/system/version", systemVersionHandler(b.version, cfg.Managed.Enabled, cfg.NodeID, b.cl.Registry.BootID()))
+	r.AuthedRead("/system/version", systemVersionHandler(b.version, cfg.Managed.Enabled, cfg.NodeID, b.cl.Registry.BootID()))
 	updater.RegisterRoutes(r, cfg.Managed.UpdaterSocket, cfg.Managed.UpdaterToken, b.db)
 	b.ccg.RegisterRoutes(r)
 	audit.RegisterRoutes(r, b.db)
