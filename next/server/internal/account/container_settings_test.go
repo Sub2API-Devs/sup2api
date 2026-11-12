@@ -96,7 +96,7 @@ func TestPreparePreservesContainerSettingsOutsideCredentials(t *testing.T) {
 	s.d.Cipher = cipher
 	bt := core.AccountTypeBinding{Plugin: core.PluginInfo{Key: "ccgateway"}, Type: manifest.AccountType{ID: "managed"}, FormSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`)}
 	old := []byte(`{"locale":"zh-CN","timezone":"Asia/Shanghai"}`)
-	p, err := s.prepare(context.Background(), bt, old, old, true)
+	p, err := s.prepare(context.Background(), bt, old, &credBase{old: old})
 	if err != nil {
 		t.Fatal(err)
 	}

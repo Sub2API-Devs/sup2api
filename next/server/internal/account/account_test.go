@@ -1340,9 +1340,10 @@ func TestCredentialHelpers(t *testing.T) {
 		gjson.GetBytes(masked, "nested.x").Int() != 1 || gjson.GetBytes(masked, "missing").Exists() {
 		t.Fatalf("mask: %s", masked)
 	}
-	back := unmask(masked, mustJSON(all), []string{"api_key", "nested.token"})
-	if gjson.GetBytes(back, "api_key").String() != "k" || gjson.GetBytes(back, "nested.token").String() != "t" {
-		t.Fatalf("unmask: %s", back)
+	back, restored := unmask(masked, mustJSON(all), []string{"api_key", "nested.token"})
+	if gjson.GetBytes(back, "api_key").String() != "k" || gjson.GetBytes(back, "nested.token").String() != "t" ||
+		!slices.Equal(restored, []string{"api_key", "nested.token"}) {
+		t.Fatalf("unmask: %s %v", back, restored)
 	}
 }
 

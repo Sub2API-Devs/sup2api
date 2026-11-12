@@ -725,3 +725,94 @@ func TestInputProxyURL(t *testing.T) {
 		t.Fatalf("changedFields creds: %s", got)
 	}
 }
+
+// TestMaskedSecretToNewAddress covers M2: a Mask value is restored from the
+// stored secret only when the caller may reveal it or the upstream address
+// stays; otherwise the secret must be typed again and the plugin never sees
+// the request.
+func TestMaskedSecretToNewAddress(t *testing.T) {
+	authz := fakeAuthz{keys: map[int64][]string{}}
+	e := setupWith(t, authz)
+	admin := e.uid
+	op, ownViewer := e.addUser("op@x.com"), e.addUser("ownview@x.com")
+	authz.keys[admin] = adminKeys
+	authz.keys[op] = []string{"account:read", "account:update", "account:test"}
+	authz.keys[ownViewer] = []string{"account:read", "account:create", "account:update", "account:test", "account:own:credential:view"}
+
+	key := "sk-good-key-123"
+	acc := e.createAs(admin, "relay", map[string]any{"plugin_key": "relay", "type": "relay_key",
+		"credentials": map[string]any{"api_key": key, "base_url": "https://a.example"}})
+	path := fmt.Sprintf("/accounts/%d", int64(acc["id"].(float64)))
+	moved := map[string]any{"credentials": map[string]any{"api_key": Mask, "base_url": "https://evil.example"}}
+	calls := func() int {
+		e.plat.mu.Lock()
+		defer e.plat.mu.Unlock()
+		return len(e.plat.calls)
+	}
+
+	// Without credential:view over the account (the own key does not reach an
+	// account created by someone else) both endpoints refuse before the plugin.
+	for _, uid := range []int64{op, ownViewer} {
+		before := calls()
+		for _, req := range []struct{ method, path string }{{"PATCH", path}, {"POST", path + "/models/fetch"}} {
+			if code, out := e.doAs(uid, req.method, req.path, moved); code != 400 ||
+				fmt.Sprint(fieldsOf(out)) != "[credentials.api_key:reenter_required]" {
+				t.Fatalf("%d %s %s: %d %v", uid, req.method, req.path, code, out)
+			}
+		}
+		if n := calls(); n != before {
+			t.Fatalf("plugin validated %d times for %d", n-before, uid)
+		}
+	}
+	// Mask with an unchanged address (after normalization) passes.
+	if code, out := e.doAs(op, "PATCH", path, map[string]any{"name": "kept",
+		"credentials": map[string]any{"api_key": Mask, "base_url": "https://A.example/"}}); code != 200 {
+		t.Fatalf("same address: %d %v", code, out)
+	}
+	// A new address with the secret typed again passes.
+	if code, out := e.doAs(op, "PATCH", path, map[string]any{
+		"credentials": map[string]any{"api_key": key, "base_url": "https://b.example"}}); code != 200 ||
+		data(out)["settings"].(map[string]any)["base_url"] != "https://b.example" {
+		t.Fatalf("reentered: %d %v", code, out)
+	}
+	// account:credential:view may move a masked secret.
+	if code, out := e.doAs(admin, "PATCH", path, moved); code != 200 ||
+		data(out)["settings"].(map[string]any)["base_url"] != "https://evil.example" {
+		t.Fatalf("admin: %d %v", code, out)
+	}
+
+	// The own key reveals the caller's own accounts.
+	ownAcc := e.createAs(ownViewer, "mine", map[string]any{"plugin_key": "relay", "type": "relay_key",
+		"credentials": map[string]any{"api_key": key, "base_url": "https://a.example"}})
+	if code, out := e.doAs(ownViewer, "PATCH", fmt.Sprintf("/accounts/%d", int64(ownAcc["id"].(float64))), moved); code != 200 {
+		t.Fatalf("own viewer on own account: %d %v", code, out)
+	}
+}
+
+func TestAddressChanged(t *testing.T) {
+	declared := manifest.AccountType{UpstreamFields: []string{"endpoint"}}
+	legacy := manifest.AccountType{GuardedSettings: []manifest.GuardedSetting{{Field: "region"}}}
+	cases := []struct {
+		at      manifest.AccountType
+		b, old  string
+		changed bool
+	}{
+		{declared, `{"endpoint":"https://a","base_url":"x"}`, `{"endpoint":"https://a/","base_url":"y"}`, false},
+		{declared, `{"endpoint":"https://b"}`, `{"endpoint":"https://a"}`, true},
+		{legacy, `{"base_url":"https://a","region":"eu"}`, `{"base_url":"https://a","region":"us"}`, true},
+		{legacy, `{"base_url":null}`, `{}`, false},
+		{legacy, `{"base_url":"https://a"}`, ``, true},
+		{manifest.AccountType{UpstreamFields: []string{}}, `{"base_url":"https://b"}`, `{"base_url":"https://a"}`, false},
+		{manifest.AccountType{UpstreamFields: []string{"upstream"}}, `{"upstream":{ "url": "u" }}`, `{"upstream":{"url":"u"}}`, false},
+		{manifest.AccountType{UpstreamFields: []string{"upstream"}}, `{"upstream":{"url":"v"}}`, `{"upstream":{"url":"u"}}`, true},
+	}
+	for i, c := range cases {
+		var old []byte
+		if c.old != "" {
+			old = []byte(c.old)
+		}
+		if got := addressChanged([]byte(c.b), old, c.at); got != c.changed {
+			t.Errorf("case %d: addressChanged = %v, want %v", i, got, c.changed)
+		}
+	}
+}

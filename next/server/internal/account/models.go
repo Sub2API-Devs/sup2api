@@ -90,7 +90,7 @@ func (s *Service) fetchTypeModels(c *gin.Context) {
 			return
 		}
 	}
-	p, err := s.prepare(ctx, bt, in.Credentials, nil, s.customSettings(ctx))
+	p, err := s.prepare(ctx, bt, in.Credentials, nil)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -133,19 +133,14 @@ func (s *Service) fetchAccountModels(c *gin.Context) {
 			"the plugin providing this account type is not enabled", "提供该账号类型的插件未启用")))
 		return
 	}
-	plain, err := s.decrypt(a.PluginKey, a.CredEnc)
+	base, err := s.credBase(ctx, a)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	secret, settings := plain, a.Settings
+	secret, settings := base.secret, a.Settings
 	if creds := strings.TrimSpace(string(in.Credentials)); creds != "" && creds != "null" {
-		old, err := merge(plain, a.Settings)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		p, err := s.prepare(ctx, bt, in.Credentials, mustJSON(old), s.customSettings(ctx))
+		p, err := s.prepare(ctx, bt, in.Credentials, base)
 		if err != nil {
 			httpapi.Fail(c, err)
 			return

@@ -1144,7 +1144,7 @@ func (s *Service) create(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	p, err := s.prepare(ctx, bt, in.Credentials, nil, s.customSettings(ctx))
+	p, err := s.prepare(ctx, bt, in.Credentials, nil)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -1332,24 +1332,19 @@ func (s *Service) update(c *gin.Context) {
 				"提供该账号类型的插件未启用，无法修改凭证")))
 			return
 		}
-		plain, err := s.decrypt(cur.PluginKey, cur.CredEnc)
+		base, err := s.credBase(ctx, cur)
 		if err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
-		old, err := merge(plain, cur.Settings)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		if p, err = s.prepare(ctx, bt, in.Credentials, mustJSON(old), s.customSettings(ctx)); err != nil {
+		if p, err = s.prepare(ctx, bt, in.Credentials, base); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
 		// Unchanged credentials keep their ciphertext: a fresh nonce would
 		// look like a credential change to whatever compares the stored bytes
 		// (CCGateway reapplies the account runtime on it).
-		if stored, err := parseObject(plain); err == nil && bytes.Equal(mustJSON(stored), p.secret) {
+		if stored, err := parseObject(base.secret); err == nil && bytes.Equal(mustJSON(stored), p.secret) {
 			p.enc = cur.CredEnc
 		}
 	}
