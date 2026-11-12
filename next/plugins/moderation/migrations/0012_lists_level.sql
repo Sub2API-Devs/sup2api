@@ -4,6 +4,14 @@
 -- its columns, so they ignore these (a 0.9.x insert leaves locked false and
 -- the record columns NULL).
 
+-- The ALTERs take an ACCESS EXCLUSIVE lock (each is metadata only: no
+-- rewrite). Fail fast rather than queue behind a long query on events: the
+-- gateway's inserts would queue behind this migration in turn. The plugin
+-- migrator runs each file in its own transaction (store.Migrate), so SET
+-- LOCAL ends with it; a timeout rolls the file back, fails the rollout with
+-- the active version still serving, and a retry runs the file again.
+SET LOCAL lock_timeout = '10s';
+
 -- The users of allowlist_user_ids / blocklist_user_ids, mirrored as locked
 -- entries (locks.go). Which list locks an entry is read from the settings.
 ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS locked boolean NOT NULL DEFAULT false;
