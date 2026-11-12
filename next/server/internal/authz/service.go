@@ -70,6 +70,8 @@ func (s *Service) Start(ctx context.Context) error {
 	if err := s.SyncCore(ctx); err != nil {
 		return err
 	}
+	// Version answers from the first request on, not from the first change.
+	s.refreshVersion(ctx)
 	if s.bus == nil {
 		return nil
 	}
@@ -213,6 +215,15 @@ func (s *Service) refreshVersion(ctx context.Context) {
 		return
 	}
 	s.invalidate(v)
+}
+
+// Version implements core.AuthzVersioner: the newest authz version this node
+// knows of (the last authz:changed it heard, or the version poll's answer). It
+// reads no database, so it may trail a change by the time the broadcast takes.
+func (s *Service) Version() int64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.minVersion
 }
 
 // invalidate drops cache entries older than version.

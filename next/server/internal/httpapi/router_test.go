@@ -216,3 +216,55 @@ func TestAuthenticateAndRejectAccessKey(t *testing.T) {
 		}
 	}
 }
+
+// versionedAuthz is fakeAuthz telling its version (core.AuthzVersioner).
+type versionedAuthz struct {
+	fakeAuthz
+	version int64
+}
+
+func (a versionedAuthz) Version() int64 { return a.version }
+
+// Every authenticated response carries the authorizer's version, also the
+// one refused for a missing permission; a request that did not authenticate
+// learns nothing, and an authorizer without a version sets no header.
+func TestAuthzVersionHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	header := func(authz core.Authorizer, path, bearer string) (int, string) {
+		engine := gin.New()
+		r := NewRouter(engine, keyTokens{}, authz)
+		ok := func(c *gin.Context) { OK(c, nil) }
+		r.Perm("GET", "/perm", "x:read", ok)
+		r.AuthedRead("/read", ok)
+		r.SessionOnly().Perm("GET", "/strict", "x:read", ok)
+		req := httptest.NewRequest("GET", "/api/v1"+path, nil)
+		if bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		return w.Code, w.Header().Get(HeaderAuthzVersion)
+	}
+	plain := fakeAuthz{keys: map[int64][]string{1: {"x:read"}}}
+	versioned := versionedAuthz{fakeAuthz: plain, version: 42}
+	for _, tc := range []struct {
+		name         string
+		authz        core.Authorizer
+		path, bearer string
+		code         int
+		want         string
+	}{
+		{"permitted", versioned, "/perm", "u1", 200, "42"},
+		{"authenticated only", versioned, "/read", "u2", 200, "42"},
+		{"permission denied", versioned, "/perm", "u2", 403, "42"},
+		{"access key", versioned, "/perm", core.AccessKeyPrefix + "1", 200, "42"},
+		{"access key refused by a session-only view", versioned, "/strict", core.AccessKeyPrefix + "1", 403, "42"},
+		{"no token", versioned, "/perm", "", 401, ""},
+		{"bad token", versioned, "/perm", "bad", 401, ""},
+		{"authorizer without a version", plain, "/perm", "u1", 200, ""},
+	} {
+		if code, got := header(tc.authz, tc.path, tc.bearer); code != tc.code || got != tc.want {
+			t.Errorf("%s: %d %s=%q, want %d %q", tc.name, code, HeaderAuthzVersion, got, tc.code, tc.want)
+		}
+	}
+}

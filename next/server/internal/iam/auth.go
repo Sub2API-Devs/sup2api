@@ -416,6 +416,9 @@ type Me struct {
 	Roles       []string `json:"roles"`
 	Permissions []string `json:"permissions"`
 	Superuser   bool     `json:"superuser"`
+	// AuthzVersion is the authz version Permissions were read at; a larger
+	// X-Authz-Version on a later response means they may have changed.
+	AuthzVersion int64 `json:"authz_version"`
 }
 
 // GetMe returns the caller's profile and effective permissions (superusers
@@ -429,7 +432,7 @@ func (s *Service) GetMe(ctx context.Context, userID int64) (*Me, error) {
 	if err != nil {
 		return nil, err
 	}
-	me := &Me{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Roles: u.Roles, Superuser: set.Superuser}
+	me := &Me{ID: u.ID, Email: u.Email, DisplayName: u.DisplayName, Roles: u.Roles, Superuser: set.Superuser, AuthzVersion: set.Version}
 	if set.Superuser {
 		if me.Permissions, err = s.authz.ActivePermissionKeys(ctx); err != nil {
 			return nil, err

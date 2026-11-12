@@ -108,7 +108,7 @@
 | POST `/auth/login` | - | `{email, password}` → `{access_token, refresh_token, expires_in, user}`；`user` 是 `/users` 列表项的形状（§15.2），但不带 `balance` 和 `segment`（用户组，§97.6） |
 | POST `/auth/refresh` | - | `{refresh_token}` → 同上（轮换 refresh token） |
 | POST `/auth/logout` | auth | 请求体 `{refresh_token?}` 可选；结束该 refresh token 所在的会话（整个家族），不带时结束全部会话；立即生效（§43.2） |
-| GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser}` |
+| GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser, authz_version}`。`authz_version` 是读取 `permissions` 时的 authz 版本。控制台 API 每个通过认证的响应（含 403）带响应头 `X-Authz-Version`：本节点已知的最新 authz 版本（`core.AuthzVersioner`，不查库；角色、授权、权限目录的任何变更都会推进它，会话失效走 `iam:user:changed`，不推进）。头的值大于手里 `/me` 的 `authz_version` 时权限可能已变，应重新取 `/me`；头可能短暂落后（广播未到、其他节点），只按“更大”判断。401 与插件代理路由不带这个头 |
 | GET `/me/assignable-roles` | auth | 可分配角色：`[{key, name:{en,zh}, builtin, grantable, missing:[key], missing_assignable:[key], missing_assign_custom}]`，只含调用者可分配清单内的角色（超管为全部），不含 `super_admin`，内置在前；`grantable=false` 表示角色所含权限或可分配角色超出调用者，`missing*` 同 403 的 details（前端置灰提示）；不列默认角色 `user` 对无角色用户的豁免；访问密钥下为 `[]`（§80） |
 | GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/security/finance/users/plugins/system/me` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
 | PUT `/me/password` | auth | `{old_password, new_password}` |
