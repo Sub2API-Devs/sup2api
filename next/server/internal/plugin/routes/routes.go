@@ -31,6 +31,9 @@ type Handler struct {
 	health HealthChecker
 	assets VersionAssets
 	audit  core.PluginWriteAuditor
+	// accounts checks the accounts a route declaring manifest.RouteAccounts
+	// names; without it such routes answer 503.
+	accounts core.AccountAccess
 }
 
 // VersionAssets reads an approved immutable package independently of whichever
@@ -44,6 +47,9 @@ func WithVersionAssets(assets VersionAssets) Option { return func(h *Handler) { 
 // WithAudit records every POST/PUT/PATCH/DELETE an admin route served
 // (CONTRACTS §75.2).
 func WithAudit(a core.PluginWriteAuditor) Option { return func(h *Handler) { h.audit = a } }
+
+// WithAccountAccess enforces manifest.RouteAccounts (CONTRACTS §21.1).
+func WithAccountAccess(aa core.AccountAccess) Option { return func(h *Handler) { h.accounts = aa } }
 
 // HealthChecker reports whether this node may serve traffic
 // (core.NodeRegistry satisfies it).
@@ -184,6 +190,9 @@ func (h *Handler) serveAPI(c *gin.Context) {
 			return
 		}
 		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("read request body").WithCause(err))
+		return
+	}
+	if acc := chosen.Route.Accounts; acc != nil && !h.authorizeAccounts(c, acc, params, body) {
 		return
 	}
 

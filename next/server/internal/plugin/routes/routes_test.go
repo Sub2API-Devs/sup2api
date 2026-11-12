@@ -57,6 +57,10 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 		return 1, nil
 	case "nobody":
 		return 2, nil
+	case "owner": // account:own:* (see accounts)
+		return 3, nil
+	case "plain": // no account key
+		return 4, nil
 	}
 	return 0, errors.New("bad token")
 }
@@ -68,8 +72,9 @@ func (tokens) VerifyAccessKey(context.Context, string, string) (core.AccessKeyId
 
 type authz struct{}
 
+// Can grants the demo plugin's keys to every user but "nobody".
 func (authz) Can(_ context.Context, uid int64, perm string) (bool, error) {
-	return uid == 1 && perm == "plugin.demo:rules:read", nil
+	return uid != 2 && (perm == "plugin.demo:rules:read" || perm == "plugin.demo:reset"), nil
 }
 func (authz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil

@@ -544,7 +544,8 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 		case <-wait.Done():
 		}
 	})
-	pr := routes.New(b.reg, b.idm, b.az, routes.WithHealth(b.cl.Registry), routes.WithVersionAssets(b.pkgs), routes.WithAudit(writes))
+	pr := routes.New(b.reg, b.idm, b.az, routes.WithHealth(b.cl.Registry), routes.WithVersionAssets(b.pkgs), routes.WithAudit(writes),
+		routes.WithAccountAccess(b.acc))
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(b.engine)
 	b.gw.RegisterRoutes(r)
