@@ -241,12 +241,12 @@
 - 影响对象：仍调用这条接口的外部脚本收到 404，改用草稿流程（CONTRACTS §49.9、§49.10：`POST /system/ccgateway/drafts` → 授权 → `POST /accounts` 带 `ccgateway_runtime`；需要 `account:create` 或 `account:own:create`）。控制台不受影响。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
-## T43 D22：ccgateway 请求日志详情的 metadata 按白名单投影
+## T43 D22：ccgateway 请求日志的 metadata 按白名单投影，错误原文只给 settings:manage
 
-- 改动：`GET /system/ccgateway/accounts/:id/request-logs/requests/:log` 的 `metadata` 经 `projectMetadata`：命中 `settings:manage` 原样返回，否则只保留 `requestLogSummaryKeys` 列出的摘要字段，默认拒绝（Worker 新增字段默认只给 `settings:manage`）。CONTRACTS §64.2 同步。无迁移，不改 Worker。
-- 影响对象：只有 `account:read` 或 `settings:read` 的查看者在详情里不再看到上游错误原文 `error`、设备与账号标识（`device_id`、`account_uuid`）、Worker 上的日志目录、消息摘要 `messages`、会话运行标识等，“元数据”页签的 JSON 相应变短；`error_type` / `error_code` / `error_source`、状态、模型、耗时、摘要值等仍可见。`settings:manage` 不受影响。
-- 未覆盖：列表接口的每行 `error`（Worker 索引里的错误文本）仍对 `settings:read` / `account:read` 可见，本项范围只含详情；若 D22 也要覆盖列表，需要给列表路由加上 `settings:manage` 以识别调用者并对其余人清空该字段（待确认）。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
+- 改动：`GET /system/ccgateway/accounts/:id/request-logs/requests/:log` 的 `metadata` 经 `projectMetadata`：命中 `settings:manage` 原样返回，否则只保留 `requestLogSummaryKeys` 列出的摘要字段，且值必须是标量或字符串数组；默认拒绝（Worker 新增字段默认只给 `settings:manage`）。审查补充（超出任务原定的“详情”范围，D22 要求）：列表每行的 `error` 是同一段上游错误原文，控制台详情概览里的“错误”一行也取自列表行，所以列表路由增加 `settings:manage` 这个 key，未命中它的调用者 `error` 置空。CONTRACTS §64.2 同步。无迁移，不改 Worker。
+- 影响对象：只有 `account:read` 或 `settings:read` 的查看者不再看到上游错误原文（列表悬浮提示、详情概览的错误行只剩 `error_type`），详情概览“全部字段”里的 JSON 只剩摘要字段（`messages`、`log_directory` 以及可能出现的身份字段等不再出现）；`error_type` / `error_code` / `error_source`、状态、模型、耗时、会话标识、摘要值等仍可见。`settings:manage` 不受影响；只有 `settings:manage`（没有 `settings:read`、`account:read`）的调用者现在也能读列表（此前只能读详情）。
+- 未覆盖（已知缺口，待确认是否另立任务）：详情的 `events` 没有投影，`content:false` 只让 Worker 把每个字符串截到 256 字节，资源类事件的 detail 仍可能带错误文本、`principal_id`、路径与查询串、上传文件名；`upstream_request` 与请求、响应头只按名字遮蔽密钥头，其余键与头原样透传（含会话标识、`anthropic-beta`）；白名单里的 `error_type`、`error_code` 在来源为上游时取自上游响应体（各 ≤512 字符），`path`、`model`、`anthropic_beta` 等是客户端或 CLI 给出的短字符串，未做字符集检查。
+- 回滚：revert T43 的两个提交（实现与 review fixes）即可，无迁移、无数据变化；只想恢复列表的错误原文时 revert review fixes 这一个。
 
 ## T49 W5-A9：账号动作可见性按行归属判断
 
