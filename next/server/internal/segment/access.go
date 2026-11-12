@@ -5,6 +5,7 @@ package segment
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/shopspring/decimal"
 
@@ -26,16 +27,33 @@ func OpenToUserSQL(group, user string) string {
 // Terms is what a segment gets in a group.
 type Terms struct {
 	SegmentID int64
-	// Open reports whether members may use the group: it is public or
-	// granted to the segment.
-	Open bool
+	// Granted is the explicit grant; Open reports whether members may use
+	// the group: it is public or granted.
+	Granted, Open bool
+	// GroupRate is the group's default rate, Discount the segment's and
+	// Override the segment's own rate in the group (nil = none).
+	GroupRate, Discount decimal.Decimal
+	Override            *decimal.Decimal
 	// Rate is the rate members pay there and RateSource where it comes from
 	// (core.SegmentRate).
 	Rate       decimal.Decimal
 	RateSource string
 }
 
-const selectTerms = `SELECT g.id, s.id, g.visibility = 'public' OR COALESCE(sg.granted, false),
+// EffectiveRate is a rate with what it was made of, as the console shows it.
+type EffectiveRate struct {
+	Value        decimal.Decimal `json:"value"`
+	Source       string          `json:"source"`
+	GroupDefault decimal.Decimal `json:"group_default"`
+	Discount     decimal.Decimal `json:"discount"`
+}
+
+// EffectiveRate returns the terms' rate for the console.
+func (t Terms) EffectiveRate() EffectiveRate {
+	return EffectiveRate{Value: t.Rate, Source: t.RateSource, GroupDefault: t.GroupRate, Discount: t.Discount}
+}
+
+const selectTerms = `SELECT g.id, s.id, COALESCE(sg.granted, false), g.visibility = 'public',
 		g.rate_multiplier, s.discount, sg.rate_override
 	FROM groups g
 	JOIN segments s ON s.id = `
@@ -66,21 +84,43 @@ func queryTerms(ctx context.Context, q store.Querier, sql string, id int64, grou
 	for rows.Next() {
 		var groupID int64
 		var t Terms
-		var groupRate, discount decimal.Decimal
+		var public bool
 		var override decimal.NullDecimal
-		if err := rows.Scan(&groupID, &t.SegmentID, &t.Open, &groupRate, &discount, &override); err != nil {
+		if err := rows.Scan(&groupID, &t.SegmentID, &t.Granted, &public, &t.GroupRate, &t.Discount, &override); err != nil {
 			return nil, err
 		}
-		t.Rate, t.RateSource = core.SegmentRate(groupRate, discount, nullable(override))
+		if override.Valid {
+			t.Override = &override.Decimal
+		}
+		t.Open = public || t.Granted
+		t.Rate, t.RateSource = core.SegmentRate(t.GroupRate, t.Discount, t.Override)
 		out[groupID] = t
 	}
 	return out, rows.Err()
 }
 
-// nullable turns a nullable column into the pointer core.SegmentRate takes.
-func nullable(d decimal.NullDecimal) *decimal.Decimal {
-	if !d.Valid {
-		return nil
+// Ref names a segment. A personal segment goes by its user's email; callers
+// that may not read users (showUsers false) get "#<user id>" instead, so a
+// role that only reads groups or prices cannot list users through it.
+func Ref(ctx context.Context, q store.Querier, id int64, showUsers bool) (core.SegmentRef, error) {
+	ref := core.SegmentRef{ID: id}
+	err := q.QueryRow(ctx, `SELECT s.kind, COALESCE(u.email, s.name), s.user_id
+		FROM segments s LEFT JOIN users u ON u.id = s.user_id WHERE s.id = $1`, id).Scan(&ref.Kind, &ref.Name, &ref.UserID)
+	if store.IsNoRows(err) {
+		return ref, core.ErrNotFound
 	}
-	return &d.Decimal
+	if err != nil {
+		return ref, err
+	}
+	return Masked(ref, showUsers), nil
+}
+
+// Masked returns ref as a caller may see it: the name of a personal segment
+// is its user's email only for callers that may read users.
+func Masked(ref core.SegmentRef, showUsers bool) core.SegmentRef {
+	if showUsers || ref.UserID == nil {
+		return ref
+	}
+	ref.Name = "#" + strconv.FormatInt(*ref.UserID, 10)
+	return ref
 }

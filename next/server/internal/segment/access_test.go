@@ -2,6 +2,7 @@ package segment
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -88,9 +89,37 @@ func TestTerms(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, got, bySegment)
 
+	require.Equal(t, EffectiveRate{Value: got[f.public].Rate, Source: core.RateSourceDiscount,
+		GroupDefault: got[f.public].GroupRate, Discount: got[f.public].Discount}, got[f.public].EffectiveRate())
+	require.Equal(t, "0.5", got[f.granted].Override.String())
+	require.Nil(t, got[f.public].Override)
+
 	other, err := UserTerms(ctx, f.db.Pool, f.other, groups)
 	require.NoError(t, err)
 	require.Equal(t, "2", other[f.granted].Rate.String())
 	require.Equal(t, core.RateSourceGroup, other[f.granted].RateSource)
 	require.False(t, other[f.granted].Open)
+}
+
+func TestRef(t *testing.T) {
+	f := newAccessFixture(t)
+	ctx := context.Background()
+	var personal int64
+	require.NoError(t, f.db.Pool.QueryRow(ctx, `INSERT INTO segments (kind, user_id) VALUES ('personal', $1) RETURNING id`, f.other).Scan(&personal))
+
+	named, err := Ref(ctx, f.db.Pool, f.vip, false)
+	require.NoError(t, err)
+	require.Equal(t, core.SegmentRef{ID: f.vip, Kind: core.SegmentNamed, Name: "vip"}, named)
+
+	shown, err := Ref(ctx, f.db.Pool, personal, true)
+	require.NoError(t, err)
+	require.Equal(t, core.SegmentRef{ID: personal, Kind: core.SegmentPersonal, Name: "default@test", UserID: &f.other}, shown)
+
+	masked, err := Ref(ctx, f.db.Pool, personal, false)
+	require.NoError(t, err)
+	require.Equal(t, "#"+strconv.FormatInt(f.other, 10), masked.Name)
+	require.Equal(t, &f.other, masked.UserID)
+
+	_, err = Ref(ctx, f.db.Pool, 0, true)
+	require.ErrorIs(t, err, core.ErrNotFound)
 }
