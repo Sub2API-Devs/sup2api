@@ -55,6 +55,9 @@ func (s *Store) Handler() http.Handler {
 			return
 		}
 		v, e := s.Preflight(r.Context(), req.Digest)
+		if e == nil && tokenlessStats.enabled.Load() {
+			v.Warnings = append(v.Warnings, tokenlessWarning)
+		}
 		reply(w, v, e)
 	})
 	mux.HandleFunc("POST /system/upgrades", func(w http.ResponseWriter, r *http.Request) {
