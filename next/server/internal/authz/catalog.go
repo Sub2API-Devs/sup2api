@@ -2,6 +2,7 @@ package authz
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
@@ -24,6 +25,14 @@ type corePerm struct {
 	key       string
 	en, zh    string
 	sensitive bool
+	// superOnly keeps the permission out of every built-in role's defaults.
+	superOnly bool
+	// sessionOnly keeps the permission out of access keys (KeyAllowed).
+	sessionOnly bool
+	// inherits: when the permission is first created, every role holding
+	// one of these keys gets it too (splitting a permission keeps its
+	// holders' rights; grantInherited).
+	inherits []string
 }
 
 func lt(en, zh string) core.LocalizedText { return core.LocalizedText{"en": en, "zh": zh} }
@@ -32,110 +41,110 @@ func lt(en, zh string) core.LocalizedText { return core.LocalizedText{"en": en, 
 // here defines the sort order shown in the role editor.
 var coreModules = []coreModule{
 	{"user", lt("Users", "用户"), []corePerm{
-		{"user:read", "View users", "查看用户", false},
-		{"user:create", "Create users", "新建用户", false},
-		{"user:update", "Edit users", "编辑用户", false},
-		{"user:delete", "Delete users", "删除用户", true},
-		{"user:password:reset", "Reset user passwords", "重置他人密码", true},
+		{key: "user:read", en: "View users", zh: "查看用户"},
+		{key: "user:create", en: "Create users", zh: "新建用户"},
+		{key: "user:update", en: "Edit users", zh: "编辑用户"},
+		{key: "user:delete", en: "Delete users", zh: "删除用户", sensitive: true},
+		{key: "user:password:reset", en: "Reset user passwords", zh: "重置他人密码", sensitive: true},
 	}},
 	{"role", lt("Roles", "角色"), []corePerm{
-		{"role:read", "View roles and permissions", "查看角色与权限", false},
-		{"role:manage", "Manage roles and assignments", "管理角色与分配", true},
+		{key: "role:read", en: "View roles and permissions", zh: "查看角色与权限"},
+		{key: "role:manage", en: "Manage roles and assignments", zh: "管理角色与分配", sensitive: true},
 	}},
 	{"apikey", lt("API keys", "API Key"), []corePerm{
-		{"apikey:self:manage", "Manage own API keys", "管理自己的 API Key", false},
+		{key: "apikey:self:manage", en: "Manage own API keys", zh: "管理自己的 API Key"},
 	}},
 	{"group", lt("Groups", "分组"), []corePerm{
-		{"group:read", "View groups", "查看分组", false},
-		{"group:manage", "Manage groups", "管理分组", false},
+		{key: "group:read", en: "View groups", zh: "查看分组"},
+		{key: "group:manage", en: "Manage groups", zh: "管理分组"},
 	}},
 	// User groups (segments, CONTRACTS §97): who is in which one, the private
 	// groups it may use and what it pays there.
 	{"segment", lt("User groups", "用户组"), []corePerm{
-		{"segment:read", "View user groups", "查看用户组", false},
-		{"segment:manage", "Manage user groups", "管理用户组", false},
+		{key: "segment:read", en: "View user groups", zh: "查看用户组"},
+		{key: "segment:manage", en: "Manage user groups", zh: "管理用户组"},
 	}},
 	{"account", lt("Accounts", "账号"), []corePerm{
-		{"account:read", "View accounts", "查看账号", false},
-		{"account:create", "Create accounts", "新建账号", false},
-		{"account:update", "Edit accounts", "编辑账号", false},
-		{"account:delete", "Delete accounts", "删除账号", true},
-		{"account:test", "Test accounts", "测试账号", false},
-		{"account:credential:view", "View account credentials", "查看账号凭证", true},
+		{key: "account:read", en: "View accounts", zh: "查看账号"},
+		{key: "account:create", en: "Create accounts", zh: "新建账号"},
+		{key: "account:update", en: "Edit accounts", zh: "编辑账号"},
+		{key: "account:delete", en: "Delete accounts", zh: "删除账号", sensitive: true},
+		{key: "account:test", en: "Test accounts", zh: "测试账号"},
+		{key: "account:credential:view", en: "View account credentials", zh: "查看账号凭证", sensitive: true},
 		// Ownership (CONTRACTS §21): "own" keys only reach accounts the caller
 		// created; a full key above overrides its own counterpart.
-		{"account:own:read", "Read own accounts", "查看自己创建的账号", false},
-		{"account:own:create", "Create own accounts", "新建账号（归自己所有）", false},
-		{"account:own:update", "Edit own accounts", "编辑自己创建的账号", false},
-		{"account:own:delete", "Delete own accounts", "删除自己创建的账号", false},
-		{"account:own:test", "Test own accounts", "测试自己创建的账号", false},
-		{"account:own:credential:view", "View own account credentials", "查看自己创建账号的凭证", true},
-		{"account:settings:custom", "Custom guarded settings (e.g. base URL)", "自定义受限设置（如 Base URL）", false},
-		{"account:group:bind", "Bind accounts to groups (own level)", "将账号绑定到分组（own 级）", false},
-		{"account:relay", "Create relay-type accounts with custom upstream", "创建自定义上游的 relay 类账号", false},
+		{key: "account:own:read", en: "Read own accounts", zh: "查看自己创建的账号"},
+		{key: "account:own:create", en: "Create own accounts", zh: "新建账号（归自己所有）"},
+		{key: "account:own:update", en: "Edit own accounts", zh: "编辑自己创建的账号"},
+		{key: "account:own:delete", en: "Delete own accounts", zh: "删除自己创建的账号"},
+		{key: "account:own:test", en: "Test own accounts", zh: "测试自己创建的账号"},
+		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true},
+		{key: "account:settings:custom", en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）"},
+		{key: "account:group:bind", en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）"},
+		{key: "account:relay", en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号"},
 	}},
 	{"proxy", lt("Proxies", "代理"), []corePerm{
-		{"proxy:read", "View proxies", "查看代理", false},
-		{"proxy:manage", "Manage proxies", "管理代理", false},
-		{"proxy:own:read", "View own proxies", "查看自己创建的代理", false},
-		{"proxy:own:manage", "Manage own proxies", "管理自己创建的代理", false},
+		{key: "proxy:read", en: "View proxies", zh: "查看代理"},
+		{key: "proxy:manage", en: "Manage proxies", zh: "管理代理"},
+		{key: "proxy:own:read", en: "View own proxies", zh: "查看自己创建的代理"},
+		{key: "proxy:own:manage", en: "Manage own proxies", zh: "管理自己创建的代理"},
 	}},
 	{"price", lt("Model prices", "模型价格"), []corePerm{
-		{"price:read", "View model prices", "查看模型价格", false},
-		{"price:manage", "Manage model prices", "管理模型价格", false},
+		{key: "price:read", en: "View model prices", zh: "查看模型价格"},
+		{key: "price:manage", en: "Manage model prices", zh: "管理模型价格"},
 	}},
 	{"balance", lt("Balance", "余额"), []corePerm{
-		{"balance:self:read", "View own balance", "查看自己的余额", false},
-		{"balance:all:read", "View all balances", "查看全部余额", false},
-		{"balance:adjust", "Adjust balances", "调整余额", true},
+		{key: "balance:self:read", en: "View own balance", zh: "查看自己的余额"},
+		{key: "balance:all:read", en: "View all balances", zh: "查看全部余额"},
+		{key: "balance:adjust", en: "Adjust balances", zh: "调整余额", sensitive: true},
 	}},
 	{"usage", lt("Usage", "使用记录"), []corePerm{
-		{"usage:self:read", "View own usage", "查看自己的用量", false},
-		{"usage:all:read", "View all usage", "查看全部使用记录", false},
+		{key: "usage:self:read", en: "View own usage", zh: "查看自己的用量"},
+		{key: "usage:all:read", en: "View all usage", zh: "查看全部使用记录"},
 		// Reconcile again, or refund, a pre-charged request the core gave up
 		// on (CONTRACTS §25.4). It moves money, so it is sensitive and is
 		// not implied by reading usage.
-		{"usage:settle", "Reconcile or refund pre-charged usage", "重新核对或退款预扣费用", true},
+		{key: "usage:settle", en: "Reconcile or refund pre-charged usage", zh: "重新核对或退款预扣费用", sensitive: true},
 	}},
 	{"sticky", lt("Sticky sessions", "粘性会话"), []corePerm{
-		{"sticky:read", "View sticky sessions", "查看粘性会话", false},
-		{"sticky:manage", "Manage sticky sessions", "管理粘性会话", false},
+		{key: "sticky:read", en: "View sticky sessions", zh: "查看粘性会话"},
+		{key: "sticky:manage", en: "Manage sticky sessions", zh: "管理粘性会话"},
 	}},
 	{"plugin", lt("Plugins", "插件"), []corePerm{
-		{"plugin:read", "View plugins", "查看插件", false},
-		{"plugin:install", "Install plugins", "安装插件", true},
-		{"plugin:manage", "Manage plugins", "管理插件", false},
-		{"plugin:uninstall", "Uninstall plugins", "卸载插件", true},
-		{"plugin:grant:high", "Grant high-risk plugin permissions", "授予插件高风险权限", false},
-		{"plugin:grant:critical", "Grant critical plugin permissions", "授予插件关键权限", true},
-		{"plugin:grant:db_schema_unconfined", "Grant db.schema to non-official plugins without role isolation", "在无角色隔离时授予非官方插件 db.schema", true},
-		{"plugin:egress:read", "View plugin egress traffic", "查看插件出口流量", false},
-		{"plugin:market:read", "Browse the plugin market", "浏览插件市场", false},
+		{key: "plugin:read", en: "View plugins", zh: "查看插件"},
+		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true},
+		{key: "plugin:manage", en: "Manage plugins", zh: "管理插件"},
+		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true},
+		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限"},
+		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true},
+		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true},
+		{key: "plugin:egress:read", en: "View plugin egress traffic", zh: "查看插件出口流量"},
+		{key: "plugin:market:read", en: "Browse the plugin market", zh: "浏览插件市场"},
 	}},
 	{"publisher", lt("Publishers", "发布者"), []corePerm{
-		{"publisher:read", "View publishers", "查看发布者", false},
-		{"publisher:manage", "Manage publishers and keys", "管理发布者与密钥", true},
+		{key: "publisher:read", en: "View publishers", zh: "查看发布者"},
+		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true},
 	}},
 	{"node", lt("Cluster", "集群"), []corePerm{
-		{"node:read", "View cluster nodes", "查看集群节点", false},
-		{"audit:read", "View audit logs", "查看审计日志", false},
+		{key: "node:read", en: "View cluster nodes", zh: "查看集群节点"},
+		{key: "audit:read", en: "View audit logs", zh: "查看审计日志"},
 	}},
 	{"task", lt("Scheduled tasks", "定时任务"), []corePerm{
-		{"task:read", "View scheduled tasks", "查看定时任务", false},
-		{"task:run", "Run scheduled tasks manually", "手动运行定时任务", true},
-		{"task:manage", "Switch plugin scheduled tasks on and off", "启用或停用插件定时任务", true},
+		{key: "task:read", en: "View scheduled tasks", zh: "查看定时任务"},
+		{key: "task:run", en: "Run scheduled tasks manually", zh: "手动运行定时任务", sensitive: true},
+		{key: "task:manage", en: "Switch plugin scheduled tasks on and off", zh: "启用或停用插件定时任务", sensitive: true},
 	}},
 	{"gateway", lt("Gateway", "网关"), []corePerm{
-		{"gateway:use", "Call the gateway", "调用网关", false},
+		{key: "gateway:use", en: "Call the gateway", zh: "调用网关"},
 	}},
 	{"settings", lt("Settings", "设置"), []corePerm{
-		{"settings:read", "View settings", "查看设置", false},
-		{"settings:manage", "Manage settings", "管理设置", false},
+		{key: "settings:read", en: "View settings", zh: "查看设置"},
+		{key: "settings:manage", en: "Manage settings", zh: "管理设置"},
 	}},
 	{"system_update", lt("Core updates", "核心升级"), []corePerm{
-		{"system:update:read", "View core updates", "查看核心升级", false},
-		{"system:update:execute", "Execute core updates", "执行核心升级", true},
-		{"system:update:recover", "Recover core updates", "恢复核心升级", true},
+		{key: "system:update:read", en: "View core updates", zh: "查看核心升级"},
+		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true},
+		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true},
 	}},
 }
 
@@ -207,6 +216,26 @@ func CorePermissions() []core.PermissionDef {
 		}
 	}
 	return out
+}
+
+// sessionOnly reports whether key is a core permission only a session may use.
+func sessionOnly(key string) bool {
+	for _, m := range coreModules {
+		for _, p := range m.perms {
+			if p.key == key {
+				return p.sessionOnly
+			}
+		}
+	}
+	return false
+}
+
+// KeyAllowed reports whether an access key may carry key: no plugin
+// permission (plugin routes take no access keys) and no sessionOnly core
+// one. It is the only such test; iam applies it wherever a key's
+// permissions are chosen, listed or used.
+func KeyAllowed(key string) bool {
+	return !strings.HasPrefix(key, "plugin.") && !sessionOnly(key)
 }
 
 var (

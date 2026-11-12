@@ -468,6 +468,7 @@ type PermissionItem struct {
 	Label       core.LocalizedText `json:"label"`
 	Description core.LocalizedText `json:"description"`
 	Sensitive   bool               `json:"sensitive"`
+	SessionOnly bool               `json:"session_only"`
 	Status      string             `json:"status"`
 }
 
@@ -505,6 +506,7 @@ ORDER BY p.source, p.module, p.sort, p.key`)
 		if it.Description == nil {
 			it.Description = core.LocalizedText{}
 		}
+		it.SessionOnly = sessionOnly(it.Key)
 		m := byModule[module]
 		if m == nil {
 			m = &PermissionModule{Module: module, Source: source, PluginKey: pluginKey, Permissions: []PermissionItem{}}

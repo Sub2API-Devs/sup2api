@@ -130,7 +130,7 @@
 | GET `/roles` / GET `/roles/:id` / POST `/roles` / PATCH `/roles/:id` / DELETE `/roles/:id` | `role:read` / `role:manage`；POST 授予的 permission_keys 必须是操作者持有权限的子集 |
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:manage`；授予的 permission_keys 必须是操作者持有权限的子集 |
 | POST `/roles/:id/reset` | `role:manage`；内置角色恢复默认（§15.7） |
-| GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,status}]}]` |
+| GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,session_only,status}]}]`（`session_only`：只能由会话使用，访问密钥不能带） |
 
 原来的 GET / PUT `/users/:id/groups`（给单个用户分配分组）已删除：私有分组改为授权给用户组，每个用户只属于一个用户组（§97）。
 

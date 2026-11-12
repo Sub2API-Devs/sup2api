@@ -3,6 +3,7 @@ package authz
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 
 	"github.com/jackc/pgx/v5"
@@ -83,18 +84,9 @@ RETURNING key, (xmax = 0)`, keys, modules, labels, sensitive, sorts)
 			return err
 		}
 
-		grant := func(role string, keys []string) error {
-			if len(keys) == 0 {
-				return nil
-			}
-			_, err := tx.Exec(ctx, `
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = $1 AND p.key = ANY($2)
-ON CONFLICT DO NOTHING`, role, keys)
-			return err
-		}
 		// A new built-in role gets all its defaults; an existing one only the
-		// newly created core permissions it accepts.
+		// newly created core permissions it accepts, which is audited. A
+		// role created now is seeded, not widened, so its grants are not.
 		for _, r := range builtinRoles {
 			var roleKeys []string
 			for _, k := range r.defaultPermissions() {
@@ -102,8 +94,30 @@ ON CONFLICT DO NOTHING`, role, keys)
 					roleKeys = append(roleKeys, k)
 				}
 			}
-			if err := grant(r.key, roleKeys); err != nil {
+			if len(roleKeys) == 0 {
+				continue
+			}
+			var via map[string]any
+			if !newRoles[r.key] {
+				via = map[string]any{"via": "default"}
+			}
+			if err := s.syncGrant(ctx, tx, via, `
+WITH ins AS (
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = $1 AND p.key = ANY($2)
+    ON CONFLICT DO NOTHING RETURNING role_id, permission_id)
+SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, r.key, roleKeys); err != nil {
 				return err
+			}
+		}
+		for _, m := range coreModules {
+			for _, p := range m.perms {
+				if len(p.inherits) == 0 || !slices.Contains(inserted, p.key) {
+					continue
+				}
+				if err := s.grantInherited(ctx, tx, p.key, p.inherits); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -124,6 +138,50 @@ ON CONFLICT DO NOTHING`, role, keys)
 	}
 	if changed {
 		s.Committed(ctx, v)
+	}
+	return nil
+}
+
+// grantInherited grants newKey to every role holding a key of from: a
+// permission split from others keeps their holders' rights. Run only when
+// newKey is first created, it is idempotent; each grant is audited.
+func (s *Service) grantInherited(ctx context.Context, tx pgx.Tx, newKey string, from []string) error {
+	return s.syncGrant(ctx, tx, map[string]any{"via": "inherit", "from": from}, `
+WITH ins AS (
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT DISTINCT rp.role_id, np.id FROM role_permissions rp
+    JOIN permissions op ON op.id = rp.permission_id AND op.key = ANY($1)
+    JOIN permissions np ON np.key = $2
+    ON CONFLICT DO NOTHING RETURNING role_id, permission_id)
+SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, from, newKey)
+}
+
+// syncGrant runs sql, an automatic grant returning the role id and
+// permission key of each role_permissions row it adds, and audits each row
+// as authz.sync.grant by the system with via plus the key as detail. A nil
+// via grants without auditing.
+func (s *Service) syncGrant(ctx context.Context, tx pgx.Tx, via map[string]any, sql string, args ...any) error {
+	type grant struct {
+		role int64
+		key  string
+	}
+	rows, err := tx.Query(ctx, sql, args...)
+	if err != nil {
+		return err
+	}
+	grants, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (grant, error) {
+		var g grant
+		return g, r.Scan(&g.role, &g.key)
+	})
+	if err != nil || via == nil {
+		return err
+	}
+	for _, g := range grants {
+		detail := maps.Clone(via)
+		detail["key"] = g.key
+		if err := s.audit(ctx, tx, 0, "authz.sync.grant", "role", g.role, detail); err != nil {
+			return err
+		}
 	}
 	return nil
 }

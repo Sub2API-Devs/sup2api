@@ -1083,4 +1083,15 @@ func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
 			t.Fatalf("catalog offers %s", m.Module)
 		}
 	}
+	// A stored key carrying one anyway lists it as lost and never uses it.
+	key := k.createKey(t, root, adminPassword, "user:read")
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'plugin.demo:read') WHERE id = $1`, key.ID); err != nil {
+		t.Fatal(err)
+	}
+	if list, err := k.s.AccessKeys(ctx, root); err != nil || len(list) != 1 || !slices.Equal(list[0].Lost, []string{"plugin.demo:read"}) {
+		t.Fatalf("lost = %+v, %v", list, err)
+	}
+	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"user:read"}) {
+		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	}
 }
