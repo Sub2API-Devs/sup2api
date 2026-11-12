@@ -1,27 +1,27 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { SButton, SField, SInput, SModal, SSegmented, fromLocalInput, toLocalInput } from '@sub2api/ui'
-import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
+import { applyErrorsOrToast, clearErrors, idNumber, type FieldErrors } from './forms'
 import { canManageSettings, createWatch, fetchPluginSettings, settingValue, updateWatch, useModHost } from './host'
 import type { Watch, WatchChange, WatchLevel } from './types'
-import { resolveUserIds } from './users'
 import { userListHint, watchLevelOptions } from './watchLevels'
 
 // Add a user to the watch list or edit an entry (new-api watch-add-dialog /
 // watch-change-dialogs): level, absolute expiry or none, note and a reason
-// for the history. The user is a username (resolved through the core) or an
-// id. Only changed fields are sent, and a note alone is logged as a note
-// change. An untouched expiry is left to the backend, which on a new entry
-// or a level change sets watch_days at observe and none at enforce; the form
-// shows that default for the chosen level until the expiry is edited.
+// for the history. The user of a new entry is picked with the host's
+// EntityPicker. Only changed fields are sent, and a note alone is logged as a
+// note change. An untouched expiry is left to the backend, which on a new
+// entry or a level change sets watch_days at observe and none at enforce; the
+// form shows that default for the chosen level until the expiry is edited.
 // allowlisted / blocklisted are the user lists of the entry's user (known
 // for an edit): an allowlisted user cannot be set to the enforce level, and
-// for a user typed into a new entry the backend's level/allowlisted error
+// for the user picked for a new entry the backend's level/allowlisted error
 // shows at the level.
 const props = defineProps<{ open: boolean; entry: Watch | null; allowlisted?: boolean; blocklisted?: boolean }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved'): void }>()
 const host = useModHost()
 const t = host.t
+const { EntityPicker } = host.components
 
 type Expiry = 'never' | 'at'
 const form = reactive({ user: '', level: 'observe' as WatchLevel, expiry: 'at' as Expiry, expiresAt: '', note: '', reason: '' })
@@ -97,11 +97,11 @@ function body(): WatchChange {
   return b
 }
 
-/** The user of a new entry: one id, else a field error. */
-async function userId(): Promise<number | null> {
-  const ids = await resolveUserIds(form.user)
-  if (ids?.length === 1 && ids[0] > 0) return ids[0]
-  errs.user_id = ids === null ? t('events.userSearchDenied') : ids.length > 1 ? t('watchEdit.ambiguous', { n: ids.length }) : t('blocks.invalidUser')
+/** The user picked for a new entry, else a field error. */
+function userId(): number | null {
+  const id = idNumber(form.user)
+  if (id > 0) return id
+  errs.user_id = t('blocks.invalidUser')
   return null
 }
 
@@ -120,7 +120,7 @@ async function save() {
   try {
     if (props.entry) await updateWatch(props.entry.user_id, b)
     else {
-      const uid = await userId()
+      const uid = userId()
       if (uid === null) return
       await createWatch({ user_id: uid, ...b })
     }
@@ -137,9 +137,10 @@ async function save() {
 
 <template>
   <SModal :open="open" :title="entry ? t('watch.editTitle', { id: entry.user_id }) : t('watch.add')" width="md" @update:open="emit('update:open', $event)">
-    <form class="mod-form" @submit.prevent="save">
-      <SField v-if="!entry" :label="t('events.user')" :hint="t('watchEdit.userHint')" required :error="errs.user_id">
-        <SInput v-model="form.user" :placeholder="t('events.userPlaceholder')" />
+    <!-- A new entry: focus starts on the form, not in the user picker, which would drop its list over the other fields. -->
+    <form class="mod-form" v-bind="entry ? {} : { tabindex: -1, 'data-autofocus': '' }" @submit.prevent="save">
+      <SField v-if="!entry" :label="t('events.user')" required :error="errs.user_id">
+        <EntityPicker v-model:id="form.user" kind="user" />
       </SField>
       <SField :label="t('watch.col.level')" :hint="levelHint" :error="errs.level">
         <SSegmented v-model="form.level" :options="levelOptions" />

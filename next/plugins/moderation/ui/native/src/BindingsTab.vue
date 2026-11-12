@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   SAlert,
   SBadge,
@@ -22,14 +22,17 @@ import BindingEditModal from './BindingEditModal.vue'
 import { bindingKey, bindingKind, fallbackOf, hasAccountBindings, resolveSteps, sortBindings } from './bindingOps'
 import { useCatalog } from './catalog'
 import { joinList } from './format'
-import { canManage, deleteBinding, errorMessage, fetchAccounts, toastError, useModHost } from './host'
-import type { Binding, BindingKind, CoreAccount, TabKey } from './types'
+import { idNumber } from './forms'
+import { canManage, deleteBinding, errorMessage, fetchAccountNames, toastError, useModHost } from './host'
+import type { Binding, BindingKind, TabKey } from './types'
 import { useAsync } from './useAsync'
 
 // Bindings of flows to groups and accounts (CONTRACTS §72.17): every
 // binding, most specific first, edited in a dialog; a preview tells which
-// binding a request of a group sent to an account goes by. Group bindings
-// are the same ones the flows list edits. A binding to a disabled,
+// binding a request of a group sent to an account goes by (both picked with
+// the host's EntityPicker). The table names the bound accounts through the
+// core's lookup, asked for those accounts only. Group bindings are the same
+// ones the flows list edits. A binding to a disabled,
 // unpublished or deleted flow is inactive (GET /bindings `inactive`): it
 // does not apply, its row says what its requests go by instead, and the
 // preview passes over it. Each table cell keeps to one line: the scope
@@ -37,24 +40,26 @@ import { useAsync } from './useAsync'
 // tooltip (on a phone card, under the flow).
 const host = useModHost()
 const t = host.t
+const { EntityPicker } = host.components
 const manage = computed(() => canManage())
 const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
 const { compact } = useViewport()
 
 const catalog = useCatalog()
-const accounts = useAsync<CoreAccount[]>(fetchAccounts, () => t('bindings.loadFailed'))
-onMounted(accounts.reload)
-const accountList = computed(() => accounts.data.value ?? [])
+const rows = computed(() => sortBindings(catalog.state.bindings).map((b) => ({ ...b, key: bindingKey(b) })))
+/** The accounts the bindings name; their names are asked for again when a binding names another one. */
+const boundAccounts = computed(() => [...new Set(rows.value.map((b) => b.account_id).filter((id) => id > 0))])
+const accounts = useAsync(() => fetchAccountNames(boundAccounts.value), () => t('bindings.loadFailed'))
+watch(() => boundAccounts.value.join(), accounts.reload, { immediate: true })
 const reload = () => Promise.all([catalog.refresh(['bindings', 'flows', 'groups']), accounts.reload()])
 defineExpose({ reload })
 
-const rows = computed(() => sortBindings(catalog.state.bindings).map((b) => ({ ...b, key: bindingKey(b) })))
 const error = computed(() => (catalog.state.errors.bindings ? errorMessage(catalog.state.errors.bindings, t('bindings.loadFailed')) : ''))
 const inactive = computed(() => !catalog.state.accountBindingsActive && hasAccountBindings(rows.value))
 
 const accountLabel = (id: number) => {
-  const a = accountList.value.find((x) => x.id === id)
-  return a ? `${a.name} #${id}` : `#${id}`
+  const name = accounts.data.value?.get(id)
+  return name ? `${name} #${id}` : `#${id}`
 }
 const groupLabel = (id: number) => (id === 0 ? t('flows.defaultGroup') : catalog.groupName(id))
 
@@ -153,20 +158,11 @@ function scopeText(b: Binding): string {
 
 // ---- preview: which binding a request goes by
 const preview = ref<{ group: string; account: string }>({ group: '', account: '' })
-const previewGroups = computed(() =>
-  catalog
-    .groupOptions()
-    .filter((o) => o.value !== 0)
-    .map((o) => ({ value: String(o.value), label: o.label }))
-)
-const previewAccounts = computed(() => [
-  { value: '', label: t('bindings.previewNoAccount') },
-  ...accountList.value.map((a) => ({ value: String(a.id), label: `${a.name} #${a.id}` }))
-])
 const previewResult = computed(() => {
-  const g = Number(preview.value.group)
-  if (!preview.value.group || !Number.isInteger(g)) return null
-  const a = Number(preview.value.account) || 0
+  // a request's group is a real one: none picked (or 0, the default group) previews nothing
+  const g = idNumber(preview.value.group)
+  if (!(g > 0)) return null
+  const a = idNumber(preview.value.account) || 0
   const { hit, skipped } = resolveSteps(rows.value, g, a)
   const note = skipped.length ? t('bindings.previewSkipped', { scopes: joinList(skipped.map(scopeText)) }) : ''
   if (!hit) return { text: t('bindings.previewNone'), note, tone: 'gray' as const }
@@ -238,12 +234,10 @@ const previewResult = computed(() => {
     <SCard :title="t('bindings.previewTitle')" class="mod-section">
       <div class="mod-bindings-preview">
         <SField :label="t('bindings.col.group')">
-          <SSelect v-if="previewGroups.length" v-model="preview.group" :options="previewGroups" :placeholder="t('bindings.pickGroup')" searchable />
-          <SInput v-else v-model="preview.group" inputmode="numeric" :placeholder="t('bindings.groupIdPlaceholder')" />
+          <EntityPicker v-model:id="preview.group" kind="group" />
         </SField>
-        <SField :label="t('bindings.col.account')">
-          <SSelect v-if="accountList.length" v-model="preview.account" :options="previewAccounts" searchable />
-          <SInput v-else v-model="preview.account" inputmode="numeric" :placeholder="t('bindings.accountIdPlaceholder')" />
+        <SField :label="t('bindings.col.account')" :hint="t('bindings.previewNoAccount')">
+          <EntityPicker v-model:id="preview.account" kind="account" :scope="{ prefer_group_id: preview.group }" />
         </SField>
       </div>
       <p v-if="previewResult" class="mod-bindings-result">
@@ -253,6 +247,6 @@ const previewResult = computed(() => {
       <SHint v-else size="xs">{{ t('bindings.previewHint') }}</SHint>
     </SCard>
 
-    <BindingEditModal v-model:open="editOpen" :binding="editing" :accounts="accountList" :account-label="accountLabel" @saved="refreshBindings" />
+    <BindingEditModal v-model:open="editOpen" :binding="editing" @saved="refreshBindings" />
   </div>
 </template>

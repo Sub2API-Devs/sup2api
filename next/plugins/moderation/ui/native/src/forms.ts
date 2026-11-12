@@ -24,6 +24,16 @@ export function applyErrorsOrToast(errs: FieldErrors, e: unknown, shown?: readon
   if (!applyFieldErrors(errs, e, shown, key)) toastError(e)
 }
 
+/**
+ * An entity picker's id as the number the API takes: NaN for none, for text
+ * that is no id as it stands ("007") and for digits a number cannot hold
+ * exactly. "0" is 0: the default group, where a form offers it.
+ */
+export function idNumber(v: string): number {
+  const id = /^(0|[1-9]\d*)$/.test(v) ? Number(v) : NaN
+  return Number.isSafeInteger(id) ? id : NaN
+}
+
 /** Filters a query was put into during the current task: their list is about to reload by itself. */
 const fresh = new WeakSet<object>()
 

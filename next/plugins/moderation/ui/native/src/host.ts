@@ -12,7 +12,6 @@ import type {
   Channel,
   ChannelTestResult,
   CategoryStats,
-  CoreAccount,
   CoreUser,
   Costs,
   Defaults,
@@ -283,9 +282,23 @@ export const savePluginSettings = (values: Record<string, unknown>) => useModHos
 /** A setting as stored, else its schema default; undefined when neither is known. */
 export const settingValue = (s: PluginSettings | null | undefined, key: string): unknown => s?.values?.[key] ?? s?.schema?.properties?.[key]?.default
 
-/** Accounts of the console (needs account:read); [] when not readable. */
-export async function fetchAccounts(): Promise<CoreAccount[]> {
-  return listAll<CoreAccount>(useModHost().api, '/accounts').catch(() => [])
+/** Ids one lookup request takes (the core's cap, CONTRACTS §96.1). */
+const LOOKUP_IDS = 100
+/**
+ * Names of the console's accounts by id, through the core's lookup (GET
+ * /lookup/accounts: account:read, or the caller's own with
+ * account:own:read). An account the caller may not see has no name, and none
+ * has when the lookup is refused or fails.
+ */
+export async function fetchAccountNames(ids: readonly number[]): Promise<Map<number, string>> {
+  const names = new Map<number, string>()
+  for (let i = 0; i < ids.length; i += LOOKUP_IDS) {
+    const found = await useModHost()
+      .api.get<{ items?: Array<{ id: number; name: string }> } | null>('/lookup/accounts', { ids: ids.slice(i, i + LOOKUP_IDS).join(',') })
+      .catch(() => null)
+    for (const a of found?.items ?? []) names.set(a.id, a.name)
+  }
+  return names
 }
 
 /** Groups of the console (needs group:read); [] when not readable. */

@@ -272,6 +272,10 @@ tr:focus-within .mod-row-tool {
   flex-direction: column;
   gap: 0.875rem;
 }
+/* a dialog's form that takes the opening focus itself (its first field is an entity picker): no ring around the whole form */
+.mod-form:focus {
+  outline: none;
+}
 /* a form page (the settings tab) limits its own width, as the console's
    schema settings forms do (max-w-4xl); the console main is full width */
 .mod-form-page {

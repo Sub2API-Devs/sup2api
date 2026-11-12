@@ -20,16 +20,18 @@ import UserRef from './UserRef.vue'
 import { enumLabel, num } from './format'
 import { canManage, createBlock, deleteBlock, fetchBlocks, toastError, useModHost } from './host'
 import type { Block } from './types'
-import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
+import { applyErrorsOrToast, clearErrors, idNumber, type FieldErrors } from './forms'
 import { useAsync } from './useAsync'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
-// manual block (POST /blocks, in a dialog opened from the toolbar). Actions
-// need the manage permission. A moderator or an allowlisted user cannot be
-// banned: the backend's field error (user_id/staff, user_id/allowlisted)
-// shows at the user id. Each table cell keeps to one line.
+// manual block (POST /blocks, in a dialog opened from the toolbar; the user
+// is picked with the host's EntityPicker). Actions need the manage
+// permission. A moderator or an allowlisted user cannot be banned: the
+// backend's field error (user_id/staff, user_id/allowlisted) shows at the
+// user. Each table cell keeps to one line.
 const host = useModHost()
 const t = host.t
+const { EntityPicker } = host.components
 const manage = computed(() => canManage())
 
 const { data, loading, error, reload } = useAsync(fetchBlocks, () => t('blocks.loadFailed'))
@@ -82,8 +84,8 @@ function openForm() {
 
 async function submit() {
   clearErrors(formErr)
-  const uid = Number(form.user_id.trim())
-  if (!/^\d+$/.test(form.user_id.trim()) || !Number.isSafeInteger(uid) || uid <= 0) formErr.user_id = t('blocks.invalidUser')
+  const uid = idNumber(form.user_id)
+  if (!(uid > 0)) formErr.user_id = t('blocks.invalidUser')
   // SInput type=number hands back a number (null when empty)
   const rawDh = String(form.duration_hours ?? '').trim()
   const dh = rawDh === '' ? 0 : Number(rawDh)
@@ -136,9 +138,10 @@ async function submit() {
     </SCard>
 
     <SFormModal v-model:open="formOpen" :title="t('blocks.manual')" width="md" :loading="saving" :submit-text="t('blocks.submit')" submit-variant="danger" @submit="submit">
-      <div class="mod-form">
-        <SField :label="t('blocks.userId')" required :error="formErr.user_id">
-          <SInput v-model="form.user_id" inputmode="numeric" />
+      <!-- Focus starts on the form, not in the user picker: that would drop its list over the other fields. -->
+      <div class="mod-form" tabindex="-1" data-autofocus>
+        <SField :label="t('blocks.col.user')" required :error="formErr.user_id">
+          <EntityPicker v-model:id="form.user_id" kind="user" />
         </SField>
         <SField :label="t('blocks.reason')">
           <SInput v-model="form.reason" :maxlength="500" :placeholder="t('blocks.reasonPlaceholder')" />

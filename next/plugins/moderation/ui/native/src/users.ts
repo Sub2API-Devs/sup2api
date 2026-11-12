@@ -125,12 +125,6 @@ async function searchUserIds(q: string): Promise<number[] | null> {
   }
 }
 
-/** Resolves a form's user box (an id, or a name / email fragment as in searchUserIds) to user ids. */
-export async function resolveUserIds(q: string): Promise<number[] | null> {
-  const v = q.trim()
-  return /^\d+$/.test(v) ? [Number(v)] : searchUserIds(v)
-}
-
 /** user_id / user_ids query of a resolved search ({} when the search is empty). */
 export function userQuery(ids: number[] | null): { user_id?: number; user_ids?: string } {
   if (!ids?.length) return {}

@@ -1,29 +1,26 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SButton, SField, SHint, SInput, SModal, SSegmented, SSelect } from '@sub2api/ui'
+import { SAlert, SButton, SField, SHint, SModal, SSegmented, SSelect } from '@sub2api/ui'
 import { bindingKind } from './bindingOps'
 import { useCatalog } from './catalog'
+import { idNumber } from './forms'
 import { putBinding, toastError, useModHost } from './host'
-import type { Binding, BindingKind, CoreAccount } from './types'
+import type { Binding, BindingKind } from './types'
 
 // Adds or edits one binding (PUT /bindings, CONTRACTS §72.17): what it
 // covers (a group, an account within a group, an account in any group) and
-// the flow it runs, or "not moderated". An edit keeps what the binding
-// covers and only changes the flow. Adding a binding that exists asks before
-// it replaces the flow. Saving takes effect at once and creates no version.
-// A binding to a disabled or unpublished flow does not apply (requests go by
-// a wider binding): the form warns and points to "not moderated".
-const props = defineProps<{
-  open: boolean
-  binding: Binding | null
-  /** the console's accounts; [] when not readable (ids are typed then) */
-  accounts: CoreAccount[]
-  accountLabel: (id: number) => string
-}>()
+// the flow it runs, or "not moderated". The group and the account are picked
+// with the host's EntityPicker. An edit keeps what the binding covers and
+// only changes the flow. Adding a binding that exists asks before it replaces
+// the flow. Saving takes effect at once and creates no version. A binding to
+// a disabled or unpublished flow does not apply (requests go by a wider
+// binding): the form warns and points to "not moderated".
+const props = defineProps<{ open: boolean; binding: Binding | null }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'saved'): void }>()
 const host = useModHost()
 const t = host.t
+const { EntityPicker } = host.components
 const catalog = useCatalog()
 
 const form = reactive({ kind: 'group_account' as BindingKind, group: '' as string, account: '' as string, flow: 0 as number })
@@ -49,20 +46,18 @@ const kindOptions = computed(() => (['group_account', 'account', 'group'] as con
 const needsGroup = computed(() => form.kind !== 'account')
 const needsAccount = computed(() => form.kind !== 'group')
 
-/** Groups for the binding: the default group only for a group binding. */
-const groupOptions = computed(() => {
-  const all = catalog.groupOptions().map((o) => ({ value: String(o.value), label: o.value === 0 ? t('flows.defaultGroup') : o.label }))
-  return form.kind === 'group' ? all : all.filter((o) => o.value !== '0')
-})
-
-/** Accounts of the chosen group first (the others cannot serve its requests). */
-const accountOptions = computed(() => {
-  const g = Number(form.group)
-  const inGroup = (a: CoreAccount) => form.kind !== 'group_account' || !g || !a.group_ids || a.group_ids.includes(g)
-  const list = props.accounts.filter(inGroup).map((a) => ({ value: String(a.id), label: `${a.name} #${a.id}` }))
-  if (form.account && !list.some((o) => o.value === form.account)) list.unshift({ value: form.account, label: props.accountLabel(Number(form.account)) })
-  return list
-})
+// The default group (0) is no row of the lookup, and only a group binding
+// takes it: the group picker's own candidate there, dropped when the kind
+// changes.
+const defaultGroup = computed(() => (form.kind === 'group' ? [{ id: 0, name: t('flows.defaultGroup') }] : []))
+watch(
+  () => form.kind,
+  (kind) => {
+    if (kind !== 'group' && form.group === '0') form.group = ''
+  }
+)
+/** Within a group, its accounts are listed first (the others cannot serve its requests). */
+const accountScope = computed(() => (form.kind === 'group_account' && idNumber(form.group) > 0 ? { prefer_group_id: form.group } : undefined))
 
 const flowOptions = computed(() => [
   { value: 0, label: t('bindings.exemptOption') },
@@ -76,17 +71,12 @@ const flowWarning = computed(() => {
   return f && (!f.enabled || !f.version) ? t('bindings.inactiveFlowWarn') : ''
 })
 
-const idOf = (v: unknown) => {
-  const s = String(v ?? '').trim()
-  return /^\d+$/.test(s) ? Number(s) : NaN
-}
-
 async function save() {
   errs.group = errs.account = undefined
-  const group = needsGroup.value ? idOf(form.group) : 0
-  const account = needsAccount.value ? idOf(form.account) : 0
-  if (!Number.isSafeInteger(group) || (form.kind === 'group_account' && group <= 0)) errs.group = t('bindings.groupRequired')
-  if (!Number.isSafeInteger(account) || (needsAccount.value && account <= 0)) errs.account = t('bindings.accountRequired')
+  const group = needsGroup.value ? idNumber(form.group) : 0
+  const account = needsAccount.value ? idNumber(form.account) : 0
+  if (Number.isNaN(group) || (form.kind === 'group_account' && group <= 0)) errs.group = t('bindings.groupRequired')
+  if (Number.isNaN(account) || (needsAccount.value && account <= 0)) errs.account = t('bindings.accountRequired')
   if (errs.group || errs.account) return
   const body = { group_id: group, account_id: account, flow_id: form.flow }
   saving.value = true
@@ -118,26 +108,10 @@ async function save() {
         <SSegmented v-model="form.kind" :options="kindOptions" :disabled="!!binding" block />
       </SField>
       <SField v-if="needsGroup" :label="t('bindings.col.group')" required :error="errs.group">
-        <SSelect
-          v-if="groupOptions.length"
-          v-model="form.group"
-          :options="groupOptions"
-          :disabled="!!binding"
-          :placeholder="t('bindings.pickGroup')"
-          searchable
-        />
-        <SInput v-else v-model="form.group" inputmode="numeric" :disabled="!!binding" :placeholder="t('bindings.groupIdPlaceholder')" />
+        <EntityPicker v-model:id="form.group" kind="group" :extra="defaultGroup" :disabled="!!binding" />
       </SField>
-      <SField v-if="needsAccount" :label="t('bindings.col.account')" required :error="errs.account" :hint="accounts.length ? '' : t('bindings.accountIdsHint')">
-        <SSelect
-          v-if="accounts.length"
-          v-model="form.account"
-          :options="accountOptions"
-          :disabled="!!binding"
-          :placeholder="t('bindings.pickAccount')"
-          searchable
-        />
-        <SInput v-else v-model="form.account" inputmode="numeric" :disabled="!!binding" :placeholder="t('bindings.accountIdPlaceholder')" />
+      <SField v-if="needsAccount" :label="t('bindings.col.account')" required :error="errs.account">
+        <EntityPicker v-model:id="form.account" kind="account" :scope="accountScope" :disabled="!!binding" />
       </SField>
       <SField :label="t('bindings.col.flow')" :hint="t('bindings.flowHint')">
         <SSelect v-model="form.flow" :options="flowOptions" searchable />
