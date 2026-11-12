@@ -3,7 +3,10 @@
 // override, locks the weight, fixes the RPM limit, prefills header
 // passthrough and a model mapping and needs a proxy; and an editor section
 // (account.editor.section) whose native component edits a value of its own
-// with the host's HeaderPassthroughEditor (host.components, UI 3.7).
+// with the host's HeaderPassthroughEditor (host.components, UI 3.7). Its
+// credential form also picks entities with the console's schema widgets
+// (docs/COMMON-CONTROLS.md §6): `entity-select` (one user, up to three
+// groups) and `proxy-select`.
 
 export const controlsAccountTypes = [
   {
@@ -32,8 +35,22 @@ export const controlsAccountTypes = [
 ]
 
 export const controlsForm = {
-  schema: { type: 'object', required: ['api_key'], properties: { api_key: { type: 'string', title: 'API Key', writeOnly: true } } },
-  ui_schema: { api_key: { 'ui:widget': 'secret' } }
+  schema: {
+    type: 'object',
+    required: ['api_key'],
+    properties: {
+      api_key: { type: 'string', title: 'API Key', writeOnly: true },
+      billing_user_id: { type: ['integer', 'null'] },
+      fallback_group_ids: { type: 'array', items: { type: 'integer' }, maxItems: 3 },
+      probe_proxy_id: { type: ['integer', 'null'] }
+    }
+  },
+  ui_schema: {
+    api_key: { 'ui:widget': 'secret' },
+    billing_user_id: { 'ui:widget': 'entity-select', 'ui:options': { kind: 'user' }, 'ui:title': { en: 'Billed user', zh: '计费用户' }, 'ui:help': { en: 'Usage of this account is billed to this user', zh: '该账号的用量记到这个用户名下' } },
+    fallback_group_ids: { 'ui:widget': 'entity-select', 'ui:options': { kind: 'group', max: 3 }, 'ui:title': { en: 'Fallback groups', zh: '备用分组' }, 'ui:help': { en: 'Up to three', zh: '最多三个' } },
+    probe_proxy_id: { 'ui:widget': 'proxy-select', 'ui:title': { en: 'Probe proxy', zh: '探测代理' } }
+  }
 }
 
 export const controlsUIPlugin = {

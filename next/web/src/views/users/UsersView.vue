@@ -382,7 +382,15 @@ function remove(u: User) {
     </SFormModal>
 
     <!-- groups -->
-    <SFormModal v-model:open="groupsOpen" :title="t('users.assignGroupsTitle', { name: groupsUser?.email || '' })" :loading="saving" :enter-submit="false" @submit="submitGroups">
+    <!-- Focus starts on Cancel: on the picker, the dialog's only field, it would open its list over the dialog at once. -->
+    <SFormModal
+      v-model:open="groupsOpen"
+      :title="t('users.assignGroupsTitle', { name: groupsUser?.email || '' })"
+      :loading="saving"
+      :enter-submit="false"
+      :cancel-attrs="{ 'data-autofocus': '' }"
+      @submit="submitGroups"
+    >
       <SField :hint="t('users.groupsHint')">
         <GroupPicker :model-value="groupsSel" multiple @update:model-value="onGroupsPicked" />
       </SField>

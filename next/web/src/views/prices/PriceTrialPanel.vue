@@ -126,7 +126,7 @@ const resultLen = computed(() => (result.value?.breakdown as { vars?: { len?: nu
         <SInput v-model="at" type="datetime-local" class="w-56" />
       </SField>
       <SField v-if="auth.has('group:read')" :label="t('prices.trial.group')">
-        <div class="w-48"><GroupPicker :model-value="groupId" @update:model-value="groupId = typeof $event === 'number' ? $event : null" /></div>
+        <div class="w-64"><GroupPicker :model-value="groupId" @update:model-value="groupId = typeof $event === 'number' ? $event : null" /></div>
       </SField>
       <SButton size="sm" variant="primary" :loading="loading" :disabled="!source" @click="run">{{ t('prices.trial.calculate') }}</SButton>
     </div>

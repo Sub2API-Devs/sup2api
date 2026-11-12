@@ -19,6 +19,9 @@ export default {
   failed: 'Could not load the list',
   typeId: '{name} ID',
   typeIdOrName: '{name} ID or name',
+  typeFor: '{label} ({what})',
+  add: 'Add {name}',
+  remove: 'Remove {name}',
   scope: {
     userKeys: 'Only the keys of {name}',
     groupAccountsFirst: 'Accounts of {name} come first'

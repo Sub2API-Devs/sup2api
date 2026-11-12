@@ -1,9 +1,11 @@
 import { computed, ref } from 'vue'
 import { api, isApiError, type Query } from '@sub2api/host'
 import type { EnvironmentLayer, EnvironmentValues, EnvironmentVariable, Group, Proxy } from '@/api/types'
+import { forgetEntityNames } from '@/components/entity/lookup'
 
-// Small cached lookups for selects (groups, proxies). Call refresh after
-// mutations that change them.
+// Small cached lists of the groups and proxies (their first page), for pages
+// that need more of them than a name. Call refresh (`force`) after mutations
+// that change them: the entity pickers' names of them are dropped with it.
 
 /** One page (200 by default) of a list endpoint: the whole set for a select. `query` adds filters. */
 export async function fetchFirstPage<T>(path: string, query: Query = {}, pageSize = 200): Promise<T[]> {
@@ -28,6 +30,7 @@ let groupsP: Promise<void> | null = null
 let proxiesP: Promise<void> | null = null
 
 export function useGroupsLookup(force = false) {
+  if (force) forgetEntityNames('group')
   if (force || !groupsP) {
     groupsP = fetchFirstPage<Group>('/groups')
       .then((items) => {
@@ -41,6 +44,7 @@ export function useGroupsLookup(force = false) {
 }
 
 export function useProxiesLookup(force = false) {
+  if (force) forgetEntityNames('proxy')
   if (force || !proxiesP) {
     proxiesP = fetchFirstPage<Proxy>('/proxies')
       .then((items) => {

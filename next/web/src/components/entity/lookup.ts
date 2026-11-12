@@ -25,6 +25,8 @@ export interface LookupQuery {
   q?: string
   /** Only these ids (q is ignored); `mine` and `scope.user_id` still narrow them. */
   ids?: Array<string | number>
+  /** Rows to return, 1..50; the core's default (20) when left out. */
+  limit?: number
   /** Only the caller's own rows. */
   mine?: boolean
   /** Parameters of the kind: `user_id` (api_key), `prefer_group_id` (account). */
@@ -59,6 +61,11 @@ export function resetEntityLookups() {
   asked.clear()
   queued.clear()
 }
+/** Forgets what is known of a kind's entities (a page created, renamed or deleted one): where shown, their names are asked for again. */
+export function forgetEntityNames(kind: EntityKind) {
+  // Both realms of the kind: "group:3" and "group:mine:3".
+  for (const key of [...known.keys()]) if (key.startsWith(`${kind}:`)) known.delete(key)
+}
 // What was learnt belongs to the signed-in user. Bound by the first lookup,
 // not on import: a page that only imports a picker does not touch the session.
 let bound = false
@@ -80,10 +87,10 @@ export function lookupUnavailable(kind: EntityKind, mine = false): boolean {
  * `ids`. Remembers the names it returns; a refusal (403 / 404) is remembered
  * and rethrown like any other failure.
  */
-export async function lookupEntities(kind: EntityKind, { q, ids, mine = false, scope }: LookupQuery = {}): Promise<LookupResult> {
+export async function lookupEntities(kind: EntityKind, { q, ids, limit, mine = false, scope }: LookupQuery = {}): Promise<LookupResult> {
   bindToSession()
   const realm = realmOf(kind, mine)
-  const query: Query = { ...scope, q: q || undefined, ids: ids?.join(','), mine: mine || undefined }
+  const query: Query = { ...scope, q: q || undefined, ids: ids?.join(','), limit, mine: mine || undefined }
   const from = era
   try {
     const result = await api.get<LookupResult | null>(`/lookup/${ENTITIES[kind].path}`, query)
@@ -134,10 +141,11 @@ function ask(kind: EntityKind, mine: boolean, id: string) {
  * Names of entities by id for a page (filter chips, cells), from the cache
  * the pickers fill. Both functions are reactive reads (use them in a template
  * or a computed): an id not seen yet is looked up, and the text changes once
- * its name arrives. `mine` = the page lists the caller's own entities.
+ * its name arrives. `mine` = the page lists the caller's own entities;
+ * `extra` = its own candidates, which name the ids the lookup does not.
  */
-export function useEntityNames(options: { mine?: MaybeRefOrGetter<boolean | undefined> } = {}) {
-  /** The entity's name; undefined while unknown, for an id the lookup does not know or cannot hold (0, of a page's own candidate), and for ''. */
+export function useEntityNames(options: { mine?: MaybeRefOrGetter<boolean | undefined>; extra?: MaybeRefOrGetter<EntityItem[] | undefined> } = {}) {
+  /** The entity's name; undefined while unknown, for an id neither the lookup nor `extra` knows, and for ''. */
   function name(kind: EntityKind, id: string | number | null | undefined): string | undefined {
     const text = String(id ?? '')
     if (!text) return undefined
@@ -145,7 +153,7 @@ export function useEntityNames(options: { mine?: MaybeRefOrGetter<boolean | unde
     const mine = !!toValue(options.mine)
     const key = keyOf(realmOf(kind, mine), text)
     if (!known.has(key) && isEntityId(text)) ask(kind, mine, text)
-    return known.get(key)?.name
+    return known.get(key)?.name ?? toValue(options.extra)?.find((item) => String(item.id) === text)?.name
   }
   /** "name #id"; "#id" while the name is unknown; the bare name for a kind whose id is its name; '' for no id. */
   function label(kind: EntityKind, id: string | number | null | undefined): string {

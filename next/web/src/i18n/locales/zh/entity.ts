@@ -19,6 +19,9 @@ export default {
   failed: '列表加载失败',
   typeId: '{name} ID',
   typeIdOrName: '{name} ID 或名称',
+  typeFor: '{label}（{what}）',
+  add: '添加{name}',
+  remove: '移除 {name}',
   scope: {
     userKeys: '只列 {name} 的密钥',
     groupAccountsFirst: '{name} 里的账号排在前面'
