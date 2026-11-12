@@ -2,8 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SField, SFormModal, SHint, SRadioGroup, SSelect, toast, type SelectOption } from '@sub2api/ui'
+import { SAlert, SField, SFormModal, SHint, SRadioGroup, toast, type SelectOption } from '@sub2api/ui'
 import type { Group } from '@/api/types'
+import EntityPicker from '@/components/EntityPicker.vue'
 import { useGroupsLookup } from '@/composables/lookups'
 import { applyFormError } from '@/utils/formErrors'
 import { formatNumber } from '@/utils/format'
@@ -19,22 +20,19 @@ const { t } = useI18n()
 const { groups } = useGroupsLookup()
 
 const chosen = ref<'move' | 'unbind'>('move')
-const target = ref<number | null>(null)
+const target = ref('')
 const errors = ref<Record<string, string>>({})
 const busy = ref(false)
 
-const targets = computed<SelectOption[]>(() =>
-  groups.value
-    .filter(g => g.id !== props.group?.id)
-    .map(g => ({ value: g.id, label: g.status === 'active' ? g.name : `${g.name} · ${t('common.disabled')}` }))
-)
-// Nothing to move to: only unbinding is possible.
+// Nothing to move to (no other group; the first page of the list tells): only
+// unbinding is possible. The target itself is picked from every group.
+const movable = computed(() => groups.value.some(g => g.id !== props.group?.id))
 const mode = computed({
-  get: () => (targets.value.length ? chosen.value : 'unbind'),
+  get: () => (movable.value ? chosen.value : 'unbind'),
   set: (v: 'move' | 'unbind') => (chosen.value = v)
 })
 const modeOptions = computed<SelectOption[]>(() => [
-  { value: 'move', label: t('groups.deleteKeys.move'), disabled: !targets.value.length },
+  { value: 'move', label: t('groups.deleteKeys.move'), disabled: !movable.value },
   { value: 'unbind', label: t('groups.deleteKeys.unbind') }
 ])
 
@@ -43,7 +41,7 @@ watch(
   v => {
     if (!v) return
     useGroupsLookup(true)
-    target.value = null
+    target.value = ''
     errors.value = {}
     chosen.value = 'move'
   }
@@ -59,7 +57,7 @@ async function submit() {
   }
   busy.value = true
   try {
-    await api.del(`/groups/${g.id}`, mode.value === 'move' ? { move_keys_to: target.value } : undefined)
+    await api.del(`/groups/${g.id}`, mode.value === 'move' ? { move_keys_to: Number(target.value) } : undefined)
     toast(t('common.deleted'), 'success')
     emit('update:open', false)
     emit('deleted')
@@ -93,7 +91,7 @@ async function submit() {
       :hint="t('groups.deleteKeys.moveHint')"
       :error="errors.move_keys_to"
     >
-      <SSelect v-model="target" :options="targets" :disabled="busy" data-testid="group-delete-target" />
+      <EntityPicker v-model:id="target" kind="group" :exclude="group ? [group.id] : []" :disabled="busy" data-testid="group-delete-target" />
     </SField>
     <SHint v-else size="xs">{{ t('groups.deleteKeys.unbindHint') }}</SHint>
     <SHint v-if="group?.account_count" size="xs">{{ t('groups.deleteWithAccounts', { a: formatNumber(group.account_count) }) }}</SHint>

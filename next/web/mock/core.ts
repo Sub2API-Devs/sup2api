@@ -84,13 +84,27 @@ export const readonlyUser: Identity = {
 }
 
 /**
+ * Sign in as moderator@example.com (password admin): runs the moderation
+ * plugin and may look up no user, group or account, so its entity pickers are
+ * the text boxes of a caller without GET /lookup.
+ */
+export const moderatorUser: Identity = {
+  id: 8,
+  email: 'moderator@example.com',
+  display_name: 'Moderator',
+  roles: ['moderator'],
+  permissions: ['plugin.moderation:moderation:read', 'plugin.moderation:moderation:manage', 'gateway:use'],
+  superuser: false
+}
+
+/**
  * Sign in as pricer@example.com (password admin): reads user groups, groups
  * and prices but not users, so a personal user group goes by "#<user id>",
  * its members cannot be listed and no user may be put in a user group
  * (CONTRACTS §97.6, §97.7).
  */
 export const pricerUser: Identity = {
-  id: 8,
+  id: 9,
   email: 'pricer@example.com',
   display_name: 'Pricer',
   roles: ['pricer'],
@@ -98,7 +112,7 @@ export const pricerUser: Identity = {
   superuser: false
 }
 
-const identities = [me, plainUser, vendorUser, readonlyUser, pricerUser]
+const identities = [me, plainUser, vendorUser, readonlyUser, moderatorUser, pricerUser]
 
 /** Email of a (possibly deleted) user id, for created_by_email. */
 export function userEmail(id: number | null | undefined): string | null {

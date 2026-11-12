@@ -6,15 +6,19 @@ import { onOverviewTick } from './tick'
 import { useCatalog } from '../catalog'
 import { bucketLabel, lineChart } from '../charts'
 import { enumLabel, enumOptions, latency, num } from '../format'
+import { defaultGroupCandidate, idNumber } from '../forms'
 import { fetchPerformance, useModHost } from '../host'
 import type { StatsQuery } from '../types'
 import { useAsync } from '../useAsync'
 
 // Performance impact (new-api performance-section): only pre moderation
 // (enforce-level users, enforce mode) adds latency. Quantiles approximate the
-// 9 latency buckets; filter by group or flow (the flow's pre runs) in the
-// filter strip on top, the granularity in the card head.
-const t = useModHost().t
+// 9 latency buckets; filter by group (picked with the host's EntityPicker)
+// or flow (the flow's pre runs) in the filter strip on top, the granularity
+// in the card head.
+const host = useModHost()
+const t = host.t
+const { EntityPicker } = host.components
 const catalog = useCatalog()
 
 const q = reactive<Required<StatsQuery>>({ granularity: 'hour', group_id: '', flow_id: '' })
@@ -23,7 +27,12 @@ watch(q, perf.reload, { immediate: true })
 onOverviewTick(perf.reload)
 
 const granularityOptions = computed(() => enumOptions('stats.granularity', ['hour', 'day']))
-const groupOptions = computed(() => [{ value: '', label: t('stats.allGroups') }, ...catalog.groupOptions()])
+const defaultGroup = computed(() => defaultGroupCandidate(t('defaultGroup')))
+/** The group picker's id as the query takes it ('' = every group). */
+function pickGroup(id: string) {
+  const group = idNumber(id)
+  q.group_id = Number.isNaN(group) ? '' : group
+}
 const flowOptions = computed(() => [{ value: '', label: t('perf.byRequest') }, ...catalog.state.flows.map((f) => ({ value: f.id, label: t('perf.flowPre', { name: f.name }) }))])
 
 const filtered = computed(() => [q.group_id, q.flow_id].filter((v) => v !== '').length)
@@ -72,7 +81,7 @@ const columns = computed<TableColumn[]>(() => [
     </template>
     <div class="mod-stack">
       <SFilterBar :card="false" :aria-label="t('filter')" :active-count="filtered" :dirty="filtered > 0" :on-reset="resetFilters">
-        <SSelect v-model="q.group_id" :options="groupOptions" size="sm" :aria-label="t('stats.group')" class="mod-filter-md" />
+        <EntityPicker :id="String(q.group_id)" kind="group" size="sm" :extra="defaultGroup" :placeholder="t('stats.group')" class="mod-filter-md" @update:id="pickGroup" />
         <SSelect v-model="q.flow_id" :options="flowOptions" size="sm" :aria-label="t('events.col.flow')" class="mod-filter-md" />
       </SFilterBar>
       <SGrid variant="stats" :cols="3" :gap="3">

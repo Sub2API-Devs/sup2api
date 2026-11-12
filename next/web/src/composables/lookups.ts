@@ -1,12 +1,17 @@
-import { computed, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { api, isApiError, type Query } from '@sub2api/host'
 import type { EnvironmentLayer, EnvironmentValues, EnvironmentVariable, Group, Proxy } from '@/api/types'
+import { forgetEntityNames } from '@/components/entity/lookup'
 
-// Small cached lookups for selects (groups, proxies). Call refresh after
-// mutations that change them.
+// Small cached lists of the groups and proxies (their first page), for pages
+// that need more of them than a name. Call refresh (`force`) after mutations
+// that change them: the entity pickers' names of them are dropped with it.
+
+/** Rows of a first page: one that holds as many may not be the whole set. */
+const FIRST_PAGE = 200
 
 /** One page (200 by default) of a list endpoint: the whole set for a select. `query` adds filters. */
-export async function fetchFirstPage<T>(path: string, query: Query = {}, pageSize = 200): Promise<T[]> {
+export async function fetchFirstPage<T>(path: string, query: Query = {}, pageSize = FIRST_PAGE): Promise<T[]> {
   return (await api.list<T>(path, { ...query, page_size: pageSize })).items
 }
 
@@ -27,7 +32,14 @@ const proxies = ref<Proxy[]>([])
 let groupsP: Promise<void> | null = null
 let proxiesP: Promise<void> | null = null
 
+/** Groups past the first page, read by id; null while asked for and where the core shows none. */
+const farGroups = reactive(new Map<number, Group | null>())
+
 export function useGroupsLookup(force = false) {
+  if (force) {
+    forgetEntityNames('group')
+    farGroups.clear()
+  }
   if (force || !groupsP) {
     groupsP = fetchFirstPage<Group>('/groups')
       .then((items) => {
@@ -40,7 +52,34 @@ export function useGroupsLookup(force = false) {
   return { groups, ready: groupsP }
 }
 
+/**
+ * The cached groups and, of `ids`, those past the first page: the entity
+ * picker picks among every group, and a page that reads more of the picked
+ * ones than a name (their conversion policies) must not miss them. Each is
+ * read once (GET /groups/:id); nothing is asked while the first page is the
+ * whole set.
+ */
+export function useGroupsWith(ids: () => number[]) {
+  const { groups, ready } = useGroupsLookup()
+  watch(
+    ids,
+    async (wanted) => {
+      await ready
+      if (groups.value.length < FIRST_PAGE) return
+      for (const id of wanted) {
+        if (farGroups.has(id) || groups.value.some((g) => g.id === id)) continue
+        farGroups.set(id, null)
+        // An id the core has no group for (deleted, mistyped) stays unknown.
+        void api.get<Group>(`/groups/${id}`).then((g) => farGroups.set(id, g), () => undefined)
+      }
+    },
+    { immediate: true }
+  )
+  return computed(() => [...groups.value, ...[...farGroups.values()].filter((g) => g !== null)])
+}
+
 export function useProxiesLookup(force = false) {
+  if (force) forgetEntityNames('proxy')
   if (force || !proxiesP) {
     proxiesP = fetchFirstPage<Proxy>('/proxies')
       .then((items) => {

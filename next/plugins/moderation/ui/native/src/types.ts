@@ -909,13 +909,6 @@ export interface AccountBinding {
   account_id: number
 }
 
-/** An account of the console (GET /accounts, needs account:read). */
-export interface CoreAccount {
-  id: number
-  name: string
-  group_ids?: number[]
-}
-
 export interface Defaults {
   builtin: JevQuestions
   builtin_version: string

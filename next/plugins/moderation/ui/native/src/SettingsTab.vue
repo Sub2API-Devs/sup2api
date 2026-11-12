@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, inject, onMounted, reactive, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
 import {
   SAlert,
@@ -13,6 +13,7 @@ import {
   SSettingRow,
   SSettingsGroup,
   SSpinner,
+  SCHEMA_WIDGETS_KEY,
   childUI,
   fieldHelp,
   fieldLabel,
@@ -33,11 +34,13 @@ import type { JevQuestions } from './types'
 // All the moderation settings (CONTRACTS §72.15; the plugin page is where
 // they are edited, ui.settings mode native, §75.5): the fields of
 // forms/settings.schema.json in the ui:section groups of
-// forms/settings.ui.json, rendered by the schema widgets, except a few with
-// their own editor here: the block response preview per API format, the AI
-// analysis channel picker, the webhook address and secret ("set" / clear)
-// and the Jev default question set. The converted 0.1 fields are hidden and
-// go back as stored; a stored 0.1 API key can only be cleared.
+// forms/settings.ui.json, rendered by the schema widgets (the console's own
+// among them: the allowlist and the blocklist pick their users with
+// entity-select), except a few with their own editor here: the block
+// response preview per API format, the AI analysis channel picker, the
+// webhook address and secret ("set" / clear) and the Jev default question
+// set. The converted 0.1 fields are hidden and go back as stored; a stored
+// 0.1 API key can only be cleared.
 //
 // 0.8.0: `mode` is the switch and the default level; the allowlist starts
 // from the retired exempt_user_ids until it is saved, and the verdict cache
@@ -58,6 +61,8 @@ const host = useModHost()
 const t = host.t
 const text = (v: unknown) => (v ? host.i18n.text(v as never) : '')
 const catalog = useCatalog()
+/** The console's schema widgets (a SchemaForm injects them itself; the fields here are rendered one by one). */
+const widgets = inject(SCHEMA_WIDGETS_KEY, undefined)
 
 const WEBHOOK = ['notify_webhook_url', 'notify_webhook_secret'] as const
 type WebhookKey = (typeof WEBHOOK)[number]
@@ -317,6 +322,7 @@ const jevOptions = computed(() => [
             :model-value="form[k]"
             :root="form"
             :errors="errs"
+            :widgets="widgets"
             layout="settings"
             @update:model-value="setField(k, $event)"
           />

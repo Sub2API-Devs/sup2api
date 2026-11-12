@@ -1,7 +1,7 @@
 // Mock handlers: users, roles, permissions, API keys, groups, proxies, nodes,
 // publishers. (Accounts and account types live in their own mock module.)
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
-import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, pricerUser, readonlyUser, userEmail, vendorUser } from './core'
+import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, pricerUser, readonlyUser, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 import { pricedModels } from './billing'
 import { accessOf, findSegment, forgetGroup, forgetUser, groupAccess, groupRuleCounts, moveUser, rateOf, segmentOfUser, segmentRef } from './pricingStore'
@@ -128,8 +128,9 @@ const roles: MockRole[] = [
   // CONTRACTS §21.1 typical roles: vendor (own-level only, no settings:custom) and read-only.
   { id: 5, key: 'vendor', name: L('Vendor', '供应商'), description: 'Maintains only the accounts and proxies it created', builtin: false, superuser: false, permission_keys: [...vendorUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
   { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: 7, key: 'moderator', name: L('Moderator', '审核员'), description: 'Runs the moderation plugin; looks up no user, group or account', builtin: false, superuser: false, permission_keys: [...moderatorUser.permissions], created_at: now(-86400 * 2), updated_at: now(-86400) },
   // Group pricing without users (CONTRACTS §97.6): personal user groups go by "#<user id>".
-  { id: 7, key: 'pricer', name: L('Pricer', '定价员'), description: 'Prices groups and user groups, sees no users', builtin: false, superuser: false, permission_keys: [...pricerUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
+  { id: 8, key: 'pricer', name: L('Pricer', '定价员'), description: 'Prices groups and user groups, sees no users', builtin: false, superuser: false, permission_keys: [...pricerUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
 ]
 
 function roleOut(r: MockRole) {
@@ -332,7 +333,8 @@ export const users: MockUser[] = [
   { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', roles: ['user'], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
   { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', roles: ['vendor'], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
   { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: pricerUser.id, email: pricerUser.email, display_name: pricerUser.display_name, status: 'active', roles: ['pricer'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
+  { id: pricerUser.id, email: pricerUser.email, display_name: pricerUser.display_name, status: 'active', roles: ['pricer'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: moderatorUser.id, email: moderatorUser.email, display_name: moderatorUser.display_name, status: 'active', roles: ['moderator'], balance: '0.00000000', last_login_at: now(-3600), created_at: now(-86400 * 2), updated_at: now(-86400) }
 ]
 for (let i = 0; i < 18; i++) {
   users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', roles: ['user'], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })

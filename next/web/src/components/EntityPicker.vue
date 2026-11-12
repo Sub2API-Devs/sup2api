@@ -14,13 +14,15 @@
 // link) is looked up, and stays "#id" when the lookup does not know it.
 // `mine` lists the caller's own entities, `scope` passes the kind's lookup
 // parameters ({ user_id } for api_key, { prefer_group_id } for account) and
-// `extra` adds the page's own candidates. A caller who may not look the kind
-// up (by permission, or the core answered 403 / 404) gets a text box: digits
-// are an id, other text the name search. Also a host component for plugins
+// `extra` adds the page's own candidates; `exclude` keeps ids out of the list
+// (those a form holds already). A caller who may not look the kind up (by
+// permission, or the core answered 403 / 404) gets a text box: digits are an
+// id, other text the name search, or no pick at all (it clears the id) where
+// `text` is not bound. Also a host component for plugins
 // (HOST_COMPONENT_NAMES). What a kind is comes from entity/entities.ts.
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SInput, SSelect, type SelectOption } from '@sub2api/ui'
+import { FIELD_KEY, SInput, SSelect, type SelectOption } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ENTITIES, isEntityId, lookupPermissions, type EntityKind } from './entity/entities'
 import { lookupEntities, lookupUnavailable, useEntityNames, type EntityItem, type LookupResult } from './entity/lookup'
@@ -30,33 +32,43 @@ const props = withDefaults(
     kind: EntityKind
     id?: string
     text?: string
-    /** Also the accessible name; the entity's name by default. */
+    /** Also the accessible name, unless a form item's label names the picker; the entity's name by default. */
     placeholder?: string
     size?: 'sm' | 'md'
     mine?: boolean
     scope?: Record<string, string | number | undefined>
     extra?: EntityItem[]
+    /** Ids that are no candidates (picked already elsewhere in the form); the picked id shows all the same. */
+    exclude?: Array<string | number>
     disabled?: boolean
   }>(),
-  { id: '', text: undefined, placeholder: undefined, size: undefined, scope: undefined, extra: () => [] }
+  { id: '', text: undefined, placeholder: undefined, size: undefined, scope: undefined, extra: () => [], exclude: () => [] }
 )
 const emit = defineEmits<{ 'update:id': [id: string]; 'update:text': [text: string]; change: [value: { id: string; text: string }] }>()
 const { t } = useI18n()
 const auth = useAuthStore()
-const names = useEntityNames({ mine: () => props.mine })
+const names = useEntityNames({ mine: () => props.mine, extra: () => props.extra })
 /** A scope parameter names an entity of another kind, whatever `mine` narrows this one to. */
 const scopeNames = useEntityNames()
 
 /** Pause after the last keystroke before the typed text is looked up. */
 const SEARCH_DELAY_MS = 250
+/** Rows a lookup is asked for (the core's default), and the most it gives. */
+const PAGE = 20
+const MAX_PAGE = 50
 // Option values: an id or a name search, told apart by the first character.
 const ID = '#'
 const TEXT = '~'
 
 const entity = computed(() => ENTITIES[props.kind])
 const label = computed(() => props.placeholder ?? t(entity.value.label))
+// The label of a form item around (SField, SSettingRow) names the picker: an
+// aria-label would put the placeholder ("No proxy", "Add Group") in its place.
+const field = inject(FIELD_KEY, null)
+const ariaLabel = computed(() => (field?.labelId.value ? undefined : label.value))
 const searchesText = computed(() => props.text !== undefined)
 const available = computed(() => auth.has(lookupPermissions(props.kind, props.mine)) && !lookupUnavailable(props.kind, props.mine))
+const excluded = computed(() => new Set(props.exclude.map(String)))
 
 function set(id: string, text: string) {
   emit('update:id', id)
@@ -86,7 +98,9 @@ function search(text: string) {
 async function load(asked: number) {
   let result: LookupResult | null = null
   try {
-    result = await lookupEntities(props.kind, { q: query.value, mine: props.mine, scope: props.scope })
+    // The excluded ids may fill the first rows: as many more are asked for, so the list is as long without them.
+    const limit = excluded.value.size ? Math.min(PAGE + excluded.value.size, MAX_PAGE) : undefined
+    result = await lookupEntities(props.kind, { q: query.value, limit, mine: props.mine, scope: props.scope })
   } catch {
     // Shown as "could not load"; a refused lookup turns the picker into the text box.
   }
@@ -98,14 +112,17 @@ async function load(asked: number) {
 }
 onBeforeUnmount(() => clearTimeout(timer))
 
+const offered = (item: EntityItem) => !excluded.value.has(String(item.id))
+/** The lookup's rows that are candidates. */
+const listed = computed(() => found.value.filter(offered))
 /** The page's own candidates matching the typed text, then the lookup's; one row an id, the lookup's when both know it. */
 const candidates = computed<EntityItem[]>(() => {
   if (loading.value) return []
   const q = query.value.toLowerCase()
-  const looked = new Map(found.value.map((item) => [String(item.id), item]))
-  const own = props.extra.filter((item) => !q || String(item.id) === query.value || item.name.toLowerCase().includes(q))
+  const looked = new Map(listed.value.map((item) => [String(item.id), item]))
+  const own = props.extra.filter((item) => offered(item) && (!q || String(item.id) === query.value || item.name.toLowerCase().includes(q)))
   const ownIds = new Set(own.map((item) => String(item.id)))
-  return [...own.map((item) => looked.get(String(item.id)) ?? item), ...found.value.filter((item) => !ownIds.has(String(item.id)))]
+  return [...own.map((item) => looked.get(String(item.id)) ?? item), ...listed.value.filter((item) => !ownIds.has(String(item.id)))]
 })
 
 function row(item: EntityItem): SelectOption {
@@ -119,8 +136,9 @@ function row(item: EntityItem): SelectOption {
     tag: inactive ? t('entity.inactive') : undefined
   }
 }
-/** Typed text that is an id as it stands: one of the page's own candidates, digits, or any text where the id is the name and names are not searched. */
+/** Typed text that is an id as it stands: one of the page's own candidates, digits, or any text where the id is the name and names are not searched. Never an excluded id. */
 function typedIsId(v: string): boolean {
+  if (excluded.value.has(v)) return false
   if (props.extra.some((item) => String(item.id) === v)) return true
   return entity.value.numeric ? isEntityId(v) : !searchesText.value
 }
@@ -142,7 +160,14 @@ const options = computed<SelectOption[]>(() => {
   if (q && searchesText.value) first.push({ value: TEXT + q, label: t('entity.contains', { text: q }), description: t('entity.containsHint'), accent: true })
   return [...first, ...candidates.value.filter((item) => item !== hit).map(row), ...last]
 })
-const footer = computed(() => (more.value && !loading.value ? t('entity.more', { n: found.value.length }) : undefined))
+/** More match, and every row the lookup gave is excluded: nothing to list, which is not "no match". */
+const unlisted = computed(() => more.value && !listed.value.length)
+const footer = computed(() => (more.value && !loading.value && !unlisted.value ? t('entity.more', { n: listed.value.length }) : undefined))
+/** The line of an empty list; it names the entity, not the field the placeholder may name. */
+const empty = computed(() => {
+  if (failed.value) return t('entity.failed')
+  return unlisted.value ? t('entity.moreUnlisted') : t('entity.none', { name: t(entity.value.label) })
+})
 /** What a scope parameter did to the list ("Only keys of a@x"), for the first one set. */
 const note = computed(() => {
   for (const [param, target] of Object.entries(entity.value.scopes ?? {})) {
@@ -161,7 +186,7 @@ const value = computed(() => {
 const selected = computed<SelectOption | undefined>(() => {
   if (props.text && !props.id) return { value: value.value, label: t('entity.contains', { text: props.text }) }
   if (!props.id) return undefined
-  const name = names.name(props.kind, props.id) ?? props.extra.find((item) => String(item.id) === props.id)?.name
+  const name = names.name(props.kind, props.id)
   return { value: value.value, label: name ?? `#${props.id}`, hint: name && entity.value.numeric ? `#${props.id}` : undefined }
 })
 function pick(v: SelectOption['value']) {
@@ -177,17 +202,23 @@ watch(
   (v) => (box.value = v),
   { immediate: true }
 )
+/** What to type: "User ID"; after the page's own placeholder, which names the field and not the entity ("Created by (User ID)", "No proxy (Proxy ID)"). */
 const boxPlaceholder = computed(() => {
   if (!entity.value.numeric) return label.value
-  return searchesText.value ? t('entity.typeIdOrName', { name: label.value }) : t('entity.typeId', { name: label.value })
+  const name = t(entity.value.label)
+  const what = searchesText.value ? t('entity.typeIdOrName', { name }) : t('entity.typeId', { name })
+  return props.placeholder ? t('entity.typeFor', { label: props.placeholder, what }) : what
 })
 function typed(v: unknown) {
   const text = String(v ?? '').trim()
   box.value = text
-  if (!text || typedIsId(text)) return set(text, '')
-  if (searchesText.value) return set('', text)
-  // Only an id is taken here: back to the one in effect.
-  nextTick(() => (box.value = props.id))
+  const id = text && typedIsId(text) ? text : ''
+  // Text that is no id here picks nothing, and unpicks: a form must not go on
+  // to submit the id its user has just typed over.
+  set(id, id || !searchesText.value ? '' : text)
+  // The box shows the value in effect: text that was not taken, or that the
+  // page keeps elsewhere (a list of ids), leaves it.
+  nextTick(() => (box.value = props.id || props.text || ''))
 }
 </script>
 
@@ -204,12 +235,12 @@ function typed(v: unknown) {
     :loading="loading"
     :icon="entity.icon"
     :placeholder="label"
-    :aria-label="label"
+    :aria-label="ariaLabel"
     :size="size"
     :disabled="disabled"
     :note="note"
     :footer="footer"
-    :no-results="failed ? t('entity.failed') : t('entity.none', { name: label })"
+    :no-results="empty"
     @search="search"
     @update:model-value="pick"
   />
@@ -218,7 +249,7 @@ function typed(v: unknown) {
     :model-value="box"
     :icon="entity.icon"
     :placeholder="boxPlaceholder"
-    :aria-label="label"
+    :aria-label="ariaLabel"
     :inputmode="entity.numeric && !searchesText ? 'numeric' : undefined"
     :size="size"
     :disabled="disabled"

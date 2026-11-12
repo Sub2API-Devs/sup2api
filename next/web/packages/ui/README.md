@@ -352,7 +352,26 @@ const columns: TableColumn[] = [
 
 **其它。** 新文案 `ui.searching`、`ui.clearItem`。
 
-## 从单元格展开行（UI SDK 3.12）
+## 表单里的实体选择器（UI SDK 3.12）
+
+本包的组件没有变化；3.12 加的是核心交给插件的宿主组件和 schema 部件（都在控制台里实现，见 docs/COMMON-CONTROLS.md §6.1–6.3、docs/CONTRACTS.md §96.7）。原生插件用到任一项时声明 `hostUICompat: "^3.12"`，`hostCompat` 要求核心 `>=0.1.280`（0.1.279 是最后一个带 UI 3.11 的核心）。
+
+- `host.components.EntityPicker` 新增 `exclude`：这些 id 不出现在候选里（多选里已选的、表单其它行已占用的）。
+- `host.components.EntityMultiPicker`：选多个同类实体。已选项是 `SChip` 标签（“名称 #id”），后面是“添加”用的 `EntityPicker`；`v-model:ids` 是 `string[]`，`max` 限制个数。
+- `SchemaForm` 的宿主部件 `entity-select`：`{ "ui:widget": "entity-select", "ui:options": { "kind": "user" } }`，数组 schema 是多选，其余单选，值的类型跟随 schema。与 `proxy-select`、`group-select` 一样由控制台注入（`SCHEMA_WIDGETS_KEY`），插件自己的 `SchemaForm` 也能用。
+
+```vue
+<script setup lang="ts">
+const { EntityMultiPicker } = host.components
+</script>
+<template>
+  <SField :label="t('rule.users')">
+    <EntityMultiPicker v-model:ids="form.user_ids" kind="user" :max="20" />
+  </SField>
+</template>
+```
+
+## 从单元格展开行（UI SDK 3.13）
 
 `STable` 的展开行除了行首的箭头，也可以由单元格里的按钮打开（例如操作列的“设置”），用于在行下方就地编辑。不传本节的 prop、不用新的插槽参数时，表格的渲染和交互与 3.11 相同。原生插件用到本节任一项时声明 `hostUICompat: "^3.12"`，`hostCompat` 要求核心 `>=0.1.280`（0.1.279 是最后一个带 UI 3.11 的核心）。
 

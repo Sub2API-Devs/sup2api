@@ -1198,10 +1198,10 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.12.0`，§97.8；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.13.0`，§96.7、§97.8；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 0.1.6 的下限因此提到 0.1.229）。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
-- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 0.5.7、moderation 0.9.1 起用 `^3.11`，因为它们用到 `host.components.EntityPicker`（§96.6）；`sdk/manifest`：声明了 `ui.native` 时必填）。
+- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 growth、guard 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；dynweight 0.5.7、moderation 0.9.1 起用 `^3.11`，因为它们用到 `host.components.EntityPicker`（§96.6）；moderation 0.9.2 起用 `^3.12`（§96.7）；`sdk/manifest`：声明了 `ui.native` 时必填）。
 - 插件的 `package.json` 只需 devDependencies：`@sub2api/vite-preset`、`@vitejs/plugin-vue`、`vite`、`vue`（类型用）；`@sub2api/ui`、`@sub2api/host` 通过 import map 在运行时解析，本地开发用 tsconfig `paths` 指到 `web/packages/*/src` 取类型。
 
 ### 23.2 `@sub2api/host`
@@ -1341,7 +1341,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 - **`ui:options`**：`rows`（textarea/json）、`mono`（textarea/text 等宽；textarea 默认不再等宽）、`unit`（LocalizedText，数字/文本框右侧单位）、`presets`（url-presets）、`keyLabel` / `valueLabel` / `keyPlaceholder` / `valuePlaceholder`（key-value、model-mapping；model-mapping 不再内置具体模型名作占位）、`itemTitle`（object-list 每项标题，LocalizedText，`{n}` = 从 1 开始的序号，默认 `ui.item`）、`searchable`（select）、`inline`（radio 横排）、`stacked`（settings 布局下宿主 widget 的位置）。
 - **`ui:details`**：LocalizedText，字段的长说明，收在「查看说明」后。**`ui:errorMessages`**：`{required|minLength|maxLength|pattern|format|minimum|maximum|minItems|maxItems: LocalizedText}`。
 - **只读**：`schema.readOnly: true` 或 `ui:readonly: true` 时，文本类控件用 `readonly`（可选中复制），选择类控件禁用；`disabled` prop 禁用全部。
-- **宿主 widget**：`ui:widget` 命中 widgets（`SCHEMA_WIDGETS_KEY` 注入的 + `widgets` prop）时渲染该组件（包在 `SField`/`SSettingRow` 里，传 `modelValue`、`schema`、`ui`、`multiple`（schema 为 array）、`disabled`，组件要 emit `update:modelValue`）。控制台在启动时 `app.provide(SCHEMA_WIDGETS_KEY, schemaWidgets)` 注入 `proxy-select` / `group-select`，原生插件里的 `SchemaForm` 因此也能用；插件可再用 `widgets` prop 加自己的控件。**不认识的 widget 名**按 schema 类型推断（开发模式下控制台警告一次），不再一律退回文本框。
+- **宿主 widget**：`ui:widget` 命中 widgets（`SCHEMA_WIDGETS_KEY` 注入的 + `widgets` prop）时渲染该组件（包在 `SField`/`SSettingRow` 里，传 `modelValue`、`schema`、`ui`、`multiple`（schema 为 array）、`disabled`，组件要 emit `update:modelValue`）。控制台在启动时 `app.provide(SCHEMA_WIDGETS_KEY, schemaWidgets)` 注入 `proxy-select` / `group-select` / `entity-select`（后者 UI 3.12，§96.7），原生插件里的 `SchemaForm` 因此也能用；插件可再用 `widgets` prop 加自己的控件。**不认识的 widget 名**按 schema 类型推断（开发模式下控制台警告一次），不再一律退回文本框。
 
 `schema.ts` 的辅助导出：`type JSONSchema` / `UISchema`（都是 `Record<string, any>`）、`EnumOption {value, label}`、`ValidateMessages`（`required` `minLength(n)` `maxLength(n)` `pattern` `minimum(n)` `maximum(n)` `integer` `url`，可选 `email` `minItems(n)` `maxItems(n)` `text(v)`（解析 `ui:errorMessages`））、`SECRET_MASK`（`'******'`）、`BUILTIN_WIDGETS`、`SCHEMA_WIDGETS_KEY`、`localizedText(v, locale = 'en')`（`{en, zh}` 或字符串取 `locale`，回退 en；和 `host.i18n.text` 同义但显式传 locale）、`uiGet(ui, key)`（`ui:key` 或 `key`）、`childUI(ui, key)`、`schemaType(s)`、`isSecret(s, ui?)`、`enumOptions(s, ui?, locale?)`、`resolveWidget(s, ui?, known?)`（给了 `known` 时 `ui:widget` 不在其中就按类型推断）、`fieldLabel(key, s, ui?, locale?)`、`fieldHelp(s, ui?, locale?)`、`orderedKeys(s, ui?)`、`getPath(obj, 'a.b')`、`isVisible(ui, root)`、`schemaWithDefaults(s, value)`（递归补 `default`）、`validateSchema(s, ui, value, msgs) → {path: message}`。文案键 `ui.schema.secretKeep` `ui.schema.presets` `ui.schema.setByAdmin` `ui.schema.mappingFrom` `ui.schema.mappingTo` `ui.schema.invalidJSON` 及 `ui.schema.v.{required,minLength,maxLength,pattern,minimum,maximum,integer,url,email,minItems,maxItems}` 在 `uiMessages` 里。
 
@@ -5132,6 +5132,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **0.8.2**：版本 0.8.2。`hostCompat` 不变（`>=0.1.273 <0.2.0`），能力、钩子、任务、路由、宿主权限和用户权限都不变，升级不需要管理员重新批准。
 - **0.9.0**：版本 0.9.0，只改原生界面（审核记录页的筛选收成常用 4 项 + 更多筛选、已生效条件以标签显示，各标签页表格单元格只占一行）。用到 UI 3.10 的 `SFilterBar` `#advanced`、`SFilterChips`、`SChipList`、`TableColumn.grow`，**`hostUICompat` 改为 `^3.10`，`hostCompat` 抬到 `>=0.1.277 <0.2.0`**（UI 3.10 随核心 0.1.277 发布，更老的核心的控制台按 `hostUICompat` 不加载这个界面，所以也不让它装上）。能力、钩子、任务、路由、宿主权限、用户权限、迁移和设置都不变，升级不需要管理员重新批准。
 - **0.9.1（2026-11-12）**：只改原生界面。审核记录页的用户、分组、API Key 筛选和观察名单页的用户筛选改用宿主的 `EntityPicker`（§96.6）：用户可以从列表选、按名称搜、按 ID；“名称包含”仍由界面经核心 `GET /users?q=` 解析成 `user_ids`；默认分组 0 由界面作为候选提供；换了用户就清掉已选的 API Key。**`hostUICompat` 改为 `^3.11`，`hostCompat` 抬到 `>=0.1.279 <0.2.0`**。接口、能力、宿主权限、迁移和设置都不变，升级不需要管理员重新批准。
+- **0.9.2（2026-11-12）**：只改原生界面和设置表单的 UI schema。封禁、添加观察、绑定和绑定预览里的用户 / 分组 / 账号改用宿主的实体选择器（§96.7）；设置页的白名单 / 黑名单改用 `entity-select` 部件（值仍是字符串数组）；提示词预览、流程和性能卡的分组筛选同样改用选择器。绑定页不再拉全量账号，只按 id 查已绑定账号的名称。**`hostUICompat` 改为 `^3.12`，`hostCompat` 抬到 `>=0.1.280 <0.2.0`**。接口、能力、宿主权限、迁移、设置 schema 都不变。
 
 ### 72.4 抽取
 
@@ -7718,8 +7719,24 @@ kind: users | groups | api-keys | accounts | models | proxies
 - 原生插件用到 3.11 任一项时声明 `hostUICompat: "^3.11"`，`hostCompat` 要求核心 `>=0.1.279`（0.1.278 是最后一个带 UI 3.10 的核心；`sdk/manifest/check/ui.go` 的 `uiFloors`）。moderation 0.9.1、dynweight 0.5.7 是头两个使用者。
 - 回滚顺序：两个插件的 `hostCompat` 都抬到了 `>=0.1.279`，核心退回 0.1.278 之前先把 moderation 退回 0.9.0、dynweight 退回 0.5.6。
 
+### 96.7 控制台：UI 3.12，表单里的实体选择器（2026-11-12，用户要求）
 
-## 97. 分组定价：用户组、私有分组授权、倍率与分组内模型定价（2026-11-12，用户要求；迁移 0095、0096；核心 0.1.280）
+第一批（§96.6）把筛选栏换成了选择器；这一批是表单：还在手输 ID 的字段、只能输 ID 的多选、只取前 200 条的旧下拉。后端不变（`GET /lookup/{kind}` 已够用，§96.1 的 `limit` 现在被前端用到），没有迁移。用法和行为见 `COMMON-CONTROLS.md` §6.1–6.3。
+
+- `HOST_UI_VERSION` 3.12.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.12.0（`ui-contract.spec.ts` 锁定）。3.12 只加不改：
+  - `EntityPicker` 新增 `exclude?: (string | number)[]`：这些 id 不出现在候选里，手输也不算选中；已选值照常显示。给了它时查找带 `limit = min(20 + 排除数, 50)`；查到的行全被排除而还有更多匹配时，列表写“还有更多未列出，输入以缩小范围”。
+  - `EntityPicker`（多选里的“添加”选择器同）放在带标签的表单项（`SField` / `SSettingRow`）里时不再把占位文字设成 aria-label，可访问名称来自表单项的标签；不在表单项里时不变。空列表的“没有匹配的…”写实体名，不写占位文字。
+  - `EntityPicker` 退化成的文本框（没有查找权限）在没绑 `text` 时，输入不是 id 的内容会清空已选（发 `update:id ''` 和 `change`，框清空），不再悄悄还原成原来的 id：表单不会按一个已经被改掉的 id 提交。绑了 `text` 时不变（其它输入是名称搜索）。
+  - `HOST_COMPONENT_NAMES` 新增 `EntityMultiPicker`（`web/src/components/EntityMultiPicker.vue`）：`kind`、`v-model:ids`（`string[]`，添加顺序）、`placeholder?`、`size?`、`mine?`、`scope?`、`extra?`、`disabled?`、`max?`；事件 `update:ids`，随后 `change(ids)`（只在用户添加或移除后）。已选项是可关闭的标签，后面是只绑 id、排除已选的 `EntityPicker`；没有查找权限时那是个文本框，输入 id 回车追加（这个回车不提交外层表单）。粘贴一串 id（逗号、空白或换行分隔）一次全部追加。
+  - schema 部件 `entity-select`：`{ "ui:widget": "entity-select", "ui:options": { "kind": "user", "mine"?: true, "max"?: 3 } }`。schema 是 `array` → 多选，否则单选；值按 schema 的类型读写（`integer` / `number` → 数字，否则字符串；单选未选写 `null` 或 `''`，读时 `null`、`''`、`0` 都算未选）。
+- `GroupPicker`、`ProxyPicker`（后者也是宿主组件）和 `group-select` / `proxy-select` 部件对外不变，内部改成上面这套：候选和名称来自查找接口，不再只取 `/groups`、`/proxies` 的前 200 条；`ProxyPicker` 的 `null` 仍是“不使用代理”（占位文案不变，点 × 清除），调用者看不到的已选代理仍显示 `#id` 并保持选中。提交给后端的字段名、类型、空值都不变。接入处：账号编辑器（分组、代理）、批量编辑账号（分组、代理）、用户的“分配分组”、价格试算的分组。删除带 API Key 的分组时“迁移到哪个分组”也改成 `EntityPicker`（排除被删的分组自己，仍提交 `move_keys_to=<数字 id>`；“有没有别的分组可迁”仍看分组列表的第一页）。
+- 查找权限：分组要 `group:read`，代理要 `proxy:read` 或 `proxy:own:read`（§96.2）。没有权限、或核心没有这条路由（滚动更新中的旧核心返回 404）时是文本框，直接输入 id；改造前这种情况下拉是空的，只能保留或清除已有值。
+- 页面改了分组或代理后（`useGroupsLookup(true)` / `useProxiesLookup(true)`），选择器缓存的这类实体名称一并作废（`forgetEntityNames`），再显示时重新反查。
+- 原生插件用到 3.12 任一项时声明 `hostUICompat: "^3.12"`，`hostCompat` 要求核心 `>=0.1.280`（0.1.279 是最后一个带 UI 3.11 的核心；`sdk/manifest/check/ui.go` 的 `uiFloors`）。moderation 0.9.2 是第一个使用者（`hostUICompat: "^3.12"`、`hostCompat: ">=0.1.280 <0.2.0"`；设置表单用到 `entity-select`，见 §72 的版本记录）。`sdk/manifest/check` 不校验 `ui:widget` 的名字；UI 3.11 及更早的控制台遇到 `entity-select` 按 schema 类型推断控件（整数 → 数字框，字符串 → 文本框，数组 → 标签输入框，后者写字符串），所以用它的插件靠 `hostCompat` 下限挡住旧核心。
+- 回滚顺序：核心退回 0.1.279 之前先把 moderation 退回 0.9.1。
+
+
+## 97. 分组定价：用户组、私有分组授权、倍率与分组内模型定价（2026-11-12，用户要求；迁移 0095、0096；核心 0.1.281）
 
 此前私有分组要逐个用户授权（`user_groups`），费用只有“全局价 × 分组倍率”一种算法。本节加三样东西：**用户组**（每个用户属于一个，决定他能用哪些私有分组、在各个分组按什么倍率付费）、**分组内定价**（一个分组对某个模型自己的标价）和**专属价**（一个用户组在某个分组对某个模型的标价）。设计文档：[DESIGN-2026-11-12-GROUP-PRICING.md](DESIGN-2026-11-12-GROUP-PRICING.md)。
 
@@ -8019,7 +8036,7 @@ kind: users | groups | api-keys | accounts | models | proxies
 **接口与控制台**
 
 - 接口：GET / PUT `/users/:id/groups` 和用户的 `group_ids` 已删除，仍在用它们的旧控制台（滚动窗口内）或脚本会得到 404 或读不到字段；`GET /me/prices` 不带 `group_id` 时不再返回第一个可见分组的价格（§79.5）。
-- 控制台：`STable` 的行展开（`expanded` / `toggleExpand`、`expandToggle`、`expandSingle`）计入 UI 3.12，见 `web/packages/ui/README.md`。`HOST_UI_VERSION` 3.12.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.12.0（`ui-contract.spec.ts` 锁定）。3.12 只加不改，`hostUICompat: "^3.x"` 的现有声明都满足。原生插件用到 3.12 任一项时声明 `hostUICompat: "^3.12"`，`hostCompat` 要求核心 `>=0.1.280`（0.1.279 是最后一个带 UI 3.11 的核心；`sdk/manifest/check/ui.go` 的 `uiFloors`）。
+- 控制台：`STable` 的行展开（`expanded` / `toggleExpand`、`expandToggle`、`expandSingle`）计入 UI 3.13，见 `web/packages/ui/README.md`。`HOST_UI_VERSION` 3.13.0；`@sub2api/host`、`@sub2api/ui`、`@sub2api/vite-preset` 版本 3.13.0（`ui-contract.spec.ts` 锁定）。3.13 只加不改，`hostUICompat: "^3.x"` 的现有声明都满足。原生插件用到 3.13 任一项时声明 `hostUICompat: "^3.13"`，`hostCompat` 要求核心 `>=0.1.281`（0.1.280 是最后一个带 UI 3.12 的核心，3.12 见 §96.7；`sdk/manifest/check/ui.go` 的 `uiFloors`）。
 
 **本节用到的 SQL**
 

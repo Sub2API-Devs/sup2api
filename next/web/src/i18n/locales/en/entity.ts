@@ -15,10 +15,14 @@ export default {
   asTypedHint: 'This name is not in the list; you can still use it',
   inactive: 'Disabled',
   more: 'Showing the first {n}. Type to narrow the list.',
+  moreUnlisted: 'More match than the list shows. Type to narrow the list.',
   none: 'No matching {name}',
   failed: 'Could not load the list',
   typeId: '{name} ID',
   typeIdOrName: '{name} ID or name',
+  typeFor: '{label} ({what})',
+  add: 'Add {name}',
+  remove: 'Remove {name}',
   scope: {
     userKeys: 'Only the keys of {name}',
     groupAccountsFirst: 'Accounts of {name} come first'

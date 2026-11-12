@@ -197,7 +197,7 @@
 
 1. 使用记录详情：倍率旁显示来源（专属倍率 / 分组默认 × 全场折扣 / 分组默认），命中规则时显示标价来源、规则倍数或自定义价、“标价费用”。读 `billing_detail.inputs.pricing`、`list_cost`。
 2. 清理：`User.group_ids`、mock 里的 `PUT /users/:id/groups`。
-3. UI SDK：`STable` 的 `expanded / toggleExpand`、`expandToggle`、`expandSingle` 计入 **UI 3.12**（`HOST_UI_VERSION`、README 小节标题、`ui-contract.spec.ts`、vite-preset、服务端声明处一起改）。UI 3.12.0 对应核心 >= 0.1.280。
+3. UI SDK：`STable` 的 `expanded / toggleExpand`、`expandToggle`、`expandSingle` 计入 **UI 3.13**（`HOST_UI_VERSION`、README 小节标题、`ui-contract.spec.ts`、vite-preset、服务端声明处一起改）。UI 3.13.0 对应核心 >= 0.1.281（3.12 已由表单实体选择器随核心 0.1.280 占用）。
 4. 与后端对齐的四处小改：实际倍率按 4 位小数（mock `rateOf`、`pricingFormat.inheritedRate` 现在是 6 位）；专属倍率和规则倍数加 < 1000000 的校验；mock 里自定义价在没有全局价时 `list_price` 应为 null；失效规则（`inactive`）在模型定价表里标出“计费方式已变，规则未生效”。
 5. 分组编辑弹窗的“授权与倍率”在新建分组时调 `GET /segments`：没有 `segment:read` 的角色不显示这个标签页。
 6. 以真实后端联调。联调阶段发现的契约出入先按 mock 修后端；实现后的审查改为以后端为准，mock 和页面跟随（§13）。
@@ -207,7 +207,7 @@
 
 - `docs/CONTRACTS.md`：新 §97“分组定价”（本文 §1–§6 的契约部分）；§4 权限表加 `segment`；§5 REST 表增删；§12 改写（价格解析带分组和用户组；“表达式结果 × 倍率”中的倍率是实际倍率）；§15.1 分组可用性按用户组；§17 `/key/prices`；§66 `standard_cost` 口径；§73 原始费用说明 `billing_detail.cost` 是全局价口径；§79 `/me/prices`；§90 菜单；§23.1 `HOST_UI_VERSION`；§96 查找接口 `mine` 的范围。
 - `docs/ARCHITECTURE.md`：§7.1 分组（可见性与授权）、§7.3 定价范围（不再是“只按模型全局设置”）、§7.4 计费流程图加标价解析。
-- `web/packages/ui/README.md`：UI 3.12 小节。
+- `web/packages/ui/README.md`：UI 3.13 小节。
 
 ## 9. 兼容与回滚
 

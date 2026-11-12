@@ -2,17 +2,20 @@
 import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SButton, SCode, SCopyButton, SDisclosure, SField, SHint, SModal, SSectionTitle, SSegmented, SSelect, SSpinner, STable, type TableColumn } from '@sub2api/ui'
 import { categoryLabel, enumLabel } from './format'
+import { defaultGroupCandidate, idNumber } from './forms'
 import { fetchAnalysisPrompt, fetchAnalysisTools, useModHost } from './host'
 import type { AnalysisTool } from './types'
 import { useCatalog } from './catalog'
 import { useAsync } from './useAsync'
 
 // Preview of the system prompt an AI analysis sends (GET /analysis/prompt,
-// by group or by flow) and the tool table (GET /analysis/tools).
+// by group or by flow) and the tool table (GET /analysis/tools). The group is
+// picked with the host's EntityPicker; none picked is the default group.
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
 const host = useModHost()
 const t = host.t
+const { EntityPicker } = host.components
 
 const by = ref<'group' | 'flow'>('group')
 const groupId = ref<number>(0)
@@ -59,7 +62,7 @@ watch(flows, (list) => {
   if (!list.some((f) => f.id === flowId.value)) flowId.value = list[0]?.id ?? 0
 })
 
-const groupOptions = computed(() => [{ value: 0, label: t('flows.defaultGroup') }, ...catalog.state.groups.map((g) => ({ value: g.id, label: g.name }))])
+const defaultGroup = computed(() => defaultGroupCandidate(t('flows.defaultGroup')))
 const flowOptions = computed(() => flows.value.map((f) => ({ value: f.id, label: `${f.name} v${f.version}` })))
 const byOptions = computed(() => [
   { value: 'group', label: t('prompt.byGroup') },
@@ -90,7 +93,7 @@ const promptBytes = computed(() => data.value?.bytes ?? new TextEncoder().encode
           <SSegmented v-model="by" size="sm" :options="byOptions" />
         </SField>
         <SField v-if="by === 'group'" :label="t('prompt.group')" size="sm" class="mod-grow">
-          <SSelect v-model="groupId" :options="groupOptions" size="sm" />
+          <EntityPicker :id="String(groupId)" kind="group" size="sm" :extra="defaultGroup" @update:id="groupId = idNumber($event) || 0" />
         </SField>
         <SField v-else :label="t('prompt.flow')" size="sm" class="mod-grow">
           <SSelect v-model="flowId" :options="flowOptions" size="sm" :disabled="!flowOptions.length" />

@@ -5,8 +5,9 @@ import { i18n } from '@/i18n'
 import type { Group } from '@/api/types'
 import GroupDeleteModal from './GroupDeleteModal.vue'
 
-const { del } = vi.hoisted(() => ({ del: vi.fn() }))
-vi.mock('@sub2api/host', () => ({ api: { del } }))
+const { del, get } = vi.hoisted(() => ({ del: vi.fn(), get: vi.fn() }))
+vi.mock('@sub2api/host', async original => ({ ...(await original<typeof import('@sub2api/host')>()), api: { del, get } }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 const groups = ref<Partial<Group>[]>([])
 vi.mock('@/composables/lookups', () => ({ useGroupsLookup: () => ({ groups, ready: Promise.resolve() }) }))
 enableAutoUnmount(afterEach)
@@ -22,6 +23,8 @@ describe('group delete with API keys', () => {
     vi.clearAllMocks()
     del.mockResolvedValue(null)
     groups.value = [{ id: 1, name: 'default', status: 'active' }, doomed]
+    // The lookup the target is picked from.
+    get.mockResolvedValue({ items: [{ id: 1, name: 'default', status: 'active' }, { id: 3, name: 'old', status: 'active' }], more: false })
   })
 
   it('moves the keys to the picked group (never the group itself)', async () => {
@@ -30,12 +33,15 @@ describe('group delete with API keys', () => {
     expect(w.text()).toContain('该分组下还有 4 个 API Key')
     expect(w.text()).toContain('2 个账号只会移出分组')
     expect(w.get('[data-testid="group-delete-pricing"]').text()).toBe('该分组上的授权、专属倍率和模型定价会一并删除。')
-    const select = w.get('[data-testid="group-delete-target"]')
-    expect(select.findAll('option').map(o => o.text())).not.toContain('old')
     await w.get('[data-testid="group-delete-confirm"]').trigger('click')
     expect(del).not.toHaveBeenCalled()
     expect(w.text()).toContain('必填')
-    await select.setValue('1')
+    await w.get('[data-testid="group-delete-target"] input').trigger('focus')
+    await flushPromises()
+    expect(get).toHaveBeenCalledWith('/lookup/groups', expect.anything())
+    const rows = w.findAll('[role="option"]')
+    expect(rows.map(o => o.text())).toEqual([expect.stringContaining('default')])
+    await rows[0].trigger('click')
     await w.get('[data-testid="group-delete-confirm"]').trigger('click')
     await flushPromises()
     expect(del).toHaveBeenCalledWith('/groups/3', { move_keys_to: 1 })

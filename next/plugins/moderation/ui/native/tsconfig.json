@@ -14,7 +14,8 @@
     "paths": {
       "@sub2api/ui": ["../../../../web/packages/ui/src/index.ts"],
       "@sub2api/host": ["../../../../web/packages/host/src/index.ts"],
-      "vitest": ["../../../../web/node_modules/vitest"]
+      "vitest": ["../../../../web/node_modules/vitest"],
+      "@vue/test-utils": ["../../../../web/node_modules/@vue/test-utils"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]
