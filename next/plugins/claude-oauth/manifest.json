@@ -32,6 +32,7 @@
   "accountTypes": [
     {
       "id": "claude_oauth",
+      "upstreamFields": [],
       "label": {
         "en": "Claude OAuth",
         "zh": "Claude OAuth"
@@ -106,6 +107,7 @@
     },
     {
       "id": "claude_setup_token",
+      "upstreamFields": [],
       "label": {
         "en": "Claude Setup Token",
         "zh": "Claude Setup Token"

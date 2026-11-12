@@ -835,7 +835,7 @@ func TestAccountTypes(t *testing.T) {
 	ty := list[0].(map[string]any)
 	if len(list) != 3 || ty["plugin_key"] != "anthropic" || ty["type"] != "apikey" || ty["form"].(map[string]any)["mode"] != "schema" ||
 		ty["plugin_name"].(map[string]any)["en"] != "Anthropic" || ty["sensitive_fields"].([]any)[0] != "api_key" ||
-		ty["trust"] != "official" || ty["protocols"] != nil || ty["platform"] != nil ||
+		ty["trust"] != "official" || ty["protocols"] != nil || ty["platform"] != nil || ty["custom_upstream"] != false ||
 		ty["platforms"].([]any)[0].(map[string]any)["id"] != "anthropic" {
 		t.Fatalf("type view: %v", ty)
 	}
@@ -844,7 +844,7 @@ func TestAccountTypes(t *testing.T) {
 		eps[2].(map[string]any)["platform"] != "openai" || eps[0].(map[string]any)["native"] != true {
 		t.Fatalf("endpoints: %v", eps)
 	}
-	if rl := list[1].(map[string]any); rl["plugin_key"] != "relay" || rl["type"] != "relay_key" {
+	if rl := list[1].(map[string]any); rl["plugin_key"] != "relay" || rl["type"] != "relay_key" || rl["custom_upstream"] != true {
 		t.Fatalf("relay type: %v", rl)
 	}
 	code, out = e.do("GET", "/account-types/anthropic/apikey/form", nil)

@@ -338,8 +338,14 @@ type AccountType struct {
 	// callers without the account:settings:custom permission (CONTRACTS
 	// §21.3), e.g. base_url may only be the official endpoint. Types that
 	// declare none are unrestricted.
-	GuardedSettings []GuardedSetting  `json:"guardedSettings,omitempty"`
-	Platforms       []AccountPlatform `json:"platforms"`
+	GuardedSettings []GuardedSetting `json:"guardedSettings,omitempty"`
+	// UpstreamFields are the top-level credentials/settings keys that say
+	// where requests go (base_url, endpoints, the per-account "upstream"
+	// template). nil: not declared (derived from Upstream, otherwise the
+	// legacy rule applies); []: the type has no caller-set address (OAuth
+	// and managed types). omitzero keeps [] apart from nil.
+	UpstreamFields []string          `json:"upstreamFields,omitzero"`
+	Platforms      []AccountPlatform `json:"platforms"`
 	// DefaultModels and DefaultModelMapping prefill the core account fields
 	// models / model_mapping when the console creates an account of this
 	// type (CONTRACTS §41). They are suggestions only: the host never applies
@@ -382,6 +388,37 @@ type AccountType struct {
 	// (docs/UPSTREAM-DECLARATIVE.md). nil: the plugin implements the
 	// platform calls.
 	Upstream *Upstream `json:"upstream,omitempty"`
+}
+
+// AddressFields returns the upstream address fields of the type and whether
+// they are known: declared in UpstreamFields, or derived from a declarative
+// Upstream (the core builds requests from base_url, plus the account's
+// "upstream" layer when AccountConfig is set).
+func (at AccountType) AddressFields() ([]string, bool) {
+	switch {
+	case at.UpstreamFields != nil:
+		return at.UpstreamFields, true
+	case at.Upstream != nil:
+		if at.Upstream.AccountConfig {
+			return []string{"base_url", "upstream"}, true
+		}
+		return []string{"base_url"}, true
+	}
+	return nil, false
+}
+
+// CustomUpstream reports whether a caller without account:settings:custom
+// can still point an account of the type anywhere: some address field is
+// not pinned by a guardedSetting. Unknown address fields keep the legacy
+// rule (no guardedSettings = custom).
+func (at AccountType) CustomUpstream() bool {
+	fields, known := at.AddressFields()
+	if !known {
+		return len(at.GuardedSettings) == 0
+	}
+	return slices.ContainsFunc(fields, func(f string) bool {
+		return !slices.ContainsFunc(at.GuardedSettings, func(g GuardedSetting) bool { return g.Field == f })
+	})
 }
 
 type AccountLifecycle struct {

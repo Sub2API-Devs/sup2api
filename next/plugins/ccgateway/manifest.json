@@ -34,6 +34,7 @@
   "accountTypes": [
     {
       "id": "managed",
+      "upstreamFields": [],
       "modelAvailability": true,
       "quota": {
         "query": true,
@@ -113,6 +114,7 @@
     },
     {
       "id": "apikey",
+      "upstreamFields": ["base_url"],
       "lifecycle": {"deletion": {"retentionDays": 3}},
       "label": {
         "en": "Claude Code",

@@ -152,7 +152,7 @@
 
 | 方法 路径 | 权限 | 说明 |
 |---|---|---|
-| GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields, guarded_settings:[{field, allowed[]}]}]`（`guarded_settings` 来自 manifest `guardedSettings`，§21.3；未声明时为 `[]`） |
+| GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields, guarded_settings:[{field, allowed[]}], custom_upstream}]`（`guarded_settings` 来自 manifest `guardedSettings`，§21.3；未声明时为 `[]`；`custom_upstream` 见 §21.3） |
 | GET `/account-types/:platform/:type/form` | `account:read` | `{schema, ui_schema}` |
 | GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=&model=&created_by=&mine=&orphaned=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned`、`rate_usage`（§18）、`created_by`、`created_by_email`（§21）。**默认不列出孤立账号**（所属插件已禁用/卸载，数据仍在）；`orphaned=true` 只列孤立的，`orphaned=all` 都列；详情 `GET /accounts/:id` 不受影响 |
 | POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id \| proxy_url, priority, weight, max_concurrency, schedulable, auto_disable, models[], model_mapping{}, rpm_limit, tpm_limit, credentials:{...}}`（§18、§21.4、§42.3）；响应另带 `proxy_created` |
@@ -1093,6 +1093,8 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 ### 21.3 受限设置（base_url 只能用官方地址）
 
 manifest `accountTypes[].guardedSettings`（可选）：`[{field, allowed:[...]}]`。`field` 必须在 `settingsFields` 中；`allowed` 非空、每项为绝对 `http(s)` URL。三个内置账号类型插件声明 `[{field:"base_url", allowed:["https://api.anthropic.com"]}]`（openai `https://api.openai.com`，gemini `https://generativelanguage.googleapis.com`）；relay 不声明（它本来就是自定义地址），没声明的类型不受限。
+
+manifest `accountTypes[].upstreamFields`（可选）：决定请求发往哪里的顶层凭证/设置字段（`base_url`、各类 endpoint、账号级 `upstream` 模板）。未声明时由声明式 `upstream` 推出（`base_url`，`accountConfig` 时再加 `upstream`），也推不出则按旧规则；`[]` 表示调用者无法设置地址（OAuth、managed 类型）。校验：非空串、不重复；schema 表单里出现 `base_url` 或 `*_endpoint` 却未声明也推不出时，打包工具给警告（`check.Warnings`），不阻止安装。`manifest.AccountType.CustomUpstream()`：地址字段已知时，存在未被 `guardedSettings` 钉住的地址字段即为 true；未知时沿用旧规则（未声明 `guardedSettings` 即为 true）。`GET /account-types` 的 `custom_upstream` 就是它的结果。
 
 校验（`account/creds.go` `prepare`，在插件 `ValidateCredentials` 归一化**之后**；`prepare` 的每个调用方都会做，所以 POST/PATCH `/accounts` 和两个 `models/fetch` 接口里带的 `credentials` 都受限）：调用者没有 `account:settings:custom` 且类型声明了 guard 时，每个受限字段的值必须满足其一：为空/缺省/`null`（由插件归一化为默认）；等于 `allowed` 之一；PATCH（以及 `/accounts/:id/models/fetch`）时等于该账号原来的值（管理员建的自定义地址，供应商编辑其他字段不被卡死）。比较前两边都做：去首尾空白、去尾部 `/`（全部）、值能按绝对 URL 解析（有 scheme 和 host）时 scheme 与 host 小写，否则原样比；非字符串值（数字、对象）一律不满足。不满足返回 400 `invalid_argument`，`details.fields[{field:"credentials.base_url", code:"forbidden"}]`。
 

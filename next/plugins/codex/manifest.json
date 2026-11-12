@@ -24,6 +24,7 @@
   "accountTypes": [
     {
       "id": "codex_device",
+      "upstreamFields": [],
       "label": { "en": "ChatGPT (Codex)", "zh": "ChatGPT（Codex）" },
       "description": {
         "en": "Your own ChatGPT subscription, authorized with the Codex device code login. Requests go to the ChatGPT Codex backend and use your plan's Codex usage. Own use only; pooling or reselling accounts is not allowed.",
@@ -66,6 +67,7 @@
     },
     {
       "id": "chatgpt_siwc",
+      "upstreamFields": [],
       "label": { "en": "ChatGPT (Codex)", "zh": "ChatGPT（Codex）" },
       "description": {
         "en": "Your own ChatGPT subscription through OpenAI's Sign in with ChatGPT (ChatGPT plan usage). Requests go to api.openai.com and use your plan's usage. Own use only; pooling or reselling accounts is not allowed.",
