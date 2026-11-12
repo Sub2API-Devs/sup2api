@@ -537,15 +537,15 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "unauthenticated" {
 		t.Fatalf("disabled key: %v", err)
 	}
-	e.exec(`INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2)`, e.user, restricted)
+	e.exec(`INSERT INTO segment_groups (segment_id, group_id, granted) SELECT segment_id, $2, true FROM users WHERE id = $1`, e.user, restricted)
 	e.exec(`UPDATE api_keys SET status='active', group_id=$2, expires_at=$3 WHERE id=$1`, keyID, restricted, time.Now().Add(time.Hour))
 
 	p, err = e.svc.Authenticate(ctx, raw)
 	if err != nil || p.Group.ID != restricted {
 		t.Fatalf("after move: %+v %v", p, err)
 	}
-	// Removing membership takes effect without waiting for cache expiry.
-	e.exec(`DELETE FROM user_groups WHERE user_id = $1`, e.user)
+	// Revoking the grant takes effect without waiting for cache expiry.
+	e.exec(`UPDATE segment_groups SET granted = false WHERE group_id = $1`, restricted)
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != CodeGroupNotAllowed {
 		t.Fatalf("group not available: %v", err)
 	}

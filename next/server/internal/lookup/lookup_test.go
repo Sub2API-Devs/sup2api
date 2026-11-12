@@ -58,7 +58,8 @@ func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 //	admin  reads every kind in full; owns account "lk acct b" and proxy
 //	       "lk proxy b"
 //	alice  has the self-service and "own" permissions; owns key "lk key one",
-//	       account "lk acct a" and proxy "lk proxy a"; is assigned group alpha
+//	       account "lk acct a" and proxy "lk proxy a"; her segment is granted
+//	       group alpha
 //	bob    has no permission; owns key "lk key bob"; only his display name
 //	       holds "zhang" and "_"
 type fixture struct {
@@ -67,8 +68,8 @@ type fixture struct {
 	h  http.Handler
 
 	admin, alice, bob int64
-	// zeta is public, alpha restricted (alice only) and named after zeta's
-	// id, hidden restricted with no member; oddGroup is disabled.
+	// zeta is public, alpha restricted (alice's segment only) and named after
+	// zeta's id, hidden restricted and granted to nobody; oddGroup is disabled.
 	zeta, alpha, hidden int64
 	keyOne, keyBob      int64
 	acctA, acctB, acctC int64 // acctC has no creator
@@ -93,7 +94,12 @@ func newFixture(t *testing.T) *fixture {
 	f.alpha = f.insert(groupRow, fmt.Sprintf("lk alpha %d", f.zeta), "restricted", "active", `["lk-gemini-*"]`)
 	f.hidden = f.insert(groupRow, "lk hidden", "restricted", "active", `[]`)
 	f.insert(groupRow, oddGroup, "public", "disabled", `[]`)
-	f.insert(`INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2) RETURNING group_id`, f.alice, f.alpha)
+	// alice alone is in the segment granted alpha. Its rate in hidden is not a
+	// grant.
+	members := f.insert(`INSERT INTO segments (name) VALUES ('lk alpha members') RETURNING id`)
+	f.insert(`UPDATE users SET segment_id = $2 WHERE id = $1 RETURNING id`, f.alice, members)
+	f.insert(`INSERT INTO segment_groups (segment_id, group_id, granted) VALUES ($1, $2, true) RETURNING group_id`, members, f.alpha)
+	f.insert(`INSERT INTO segment_groups (segment_id, group_id, rate_override) VALUES ($1, $2, 0.5) RETURNING group_id`, members, f.hidden)
 
 	key := `INSERT INTO api_keys (user_id, name, key_prefix, key_hash, deleted_at) VALUES ($1, $2, $3, $2, $4::timestamptz) RETURNING id`
 	f.keyOne = f.insert(key, f.alice, "lk key one", "sk-s2a-aaaa", nil)
@@ -107,6 +113,8 @@ func newFixture(t *testing.T) *fixture {
 	f.acctC = f.insert(account, "lk acct c", "disabled", nil, nil)
 	f.insert(account, "lk acct d", "active", f.admin, "2026-01-01T00:00:00Z")
 	f.insert(`INSERT INTO account_groups (account_id, group_id) VALUES ($1, $3), ($2, $3) RETURNING group_id`, f.acctB, f.acctC, f.zeta)
+	// alpha has an account too: a group provides the models of its accounts.
+	f.insert(`INSERT INTO account_groups (account_id, group_id) VALUES ($1, $2) RETURNING group_id`, f.acctA, f.alpha)
 
 	proxy := `INSERT INTO proxies (name, protocol, host, port, created_by) VALUES ($1, 'http', 'proxy.example', 3128, $2) RETURNING id`
 	f.proxyA = f.insert(proxy, "lk proxy a", f.alice)
@@ -217,7 +225,7 @@ func TestLookup(t *testing.T) {
 		{"deleted user", f.admin, "users?q=lk-gone", []string{}, false},
 		{"deleted key", f.admin, "api-keys?q=lk", []string{"lk key bob", "lk key one"}, false},
 
-		{"groups mine: public and assigned, active", f.alice, "groups?mine=true", []string{alphaName, "lk zeta"}, false},
+		{"groups mine: public and granted, active", f.alice, "groups?mine=true", []string{alphaName, "lk zeta"}, false},
 		{"groups mine needs no permission", f.bob, "groups?mine=true", []string{"lk zeta"}, false},
 		{"api-keys of one user", f.admin, "api-keys?user_id=" + strconv.FormatInt(f.alice, 10), []string{"lk key one"}, false},
 		{"api-keys by id, of one user", f.admin, "api-keys?ids=" + keyOne + "," + keyBob + "&user_id=" + bob, []string{"lk key bob"}, false},

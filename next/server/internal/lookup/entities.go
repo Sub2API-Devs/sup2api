@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -69,8 +70,8 @@ var entities = []*Entity{
 }
 
 // groupOpenTo holds for the groups a user ("?") can use: active, and public or
-// assigned to the user. It is the range of GET /me/groups.
-const groupOpenTo = `g.status = 'active' AND (g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.group_id = g.id AND ug.user_id = ?))`
+// granted to the user's segment. It is the range of GET /me/groups.
+var groupOpenTo = `g.status = 'active' AND ` + segment.OpenToUserSQL("g", "?")
 
 // callerIs is the Scope of a kind whose own rows one condition selects; its
 // "?" takes the caller's id.
