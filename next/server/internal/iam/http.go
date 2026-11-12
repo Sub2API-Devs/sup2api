@@ -14,8 +14,8 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 )
 
-// RegisterRoutes mounts /auth/*, /me, /me/password, /users* and the members
-// of a segment, which are a users list.
+// RegisterRoutes mounts /auth/*, /me, /me/password, /users*, the members of
+// a segment, which are a users list, and the super admin transfer.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/login", s.handleLogin)
 	r.Public(http.MethodPost, "/auth/refresh", s.handleRefresh)
@@ -31,6 +31,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
 	r.Perm(http.MethodPut, "/users/:id/roles", "role:assign", s.handleSetUserRoles)
 	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers)
+	r.Authed(http.MethodPost, "/system/super-admin/transfer", s.handleTransferSuperAdmin)
 	s.registerSecurityRoutes(r)
 }
 
