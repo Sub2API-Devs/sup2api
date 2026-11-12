@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
-import { currentSettings, CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, LEGACY_KEY_PAGE, RETIRED, schemaKeys, sectionsOf, sentValue, settingSections, settingsKey } from './settingsForm'
+import { currentSettings, CUSTOM_KEYS, displayValues, editableKeys, LEGACY_KEY, RETIRED, schemaKeys, sectionsOf, sentValue, settingSections, settingsKey } from './settingsForm'
 import { NAV_GROUPS } from './nav'
 import { mergeSettings, type PageValues } from './settingsMerge'
 
@@ -75,14 +75,9 @@ describe('settingSections', () => {
   })
 })
 
-describe('editableKeys', () => {
-  it('adds the 0.1 API key only while one is stored, and never renders it with a schema widget', () => {
-    expect(editableKeys(sections, {}, LEGACY_KEY_PAGE)).not.toContain(LEGACY_KEY)
-    const keys = editableKeys(sections, { api_key: MASK }, LEGACY_KEY_PAGE)
-    expect(keys).toContain(LEGACY_KEY)
-    expect(editableKeys(sections, { api_key: MASK }, 'cache')).not.toContain(LEGACY_KEY)
-    const widgets = schemaKeys(keys)
-    expect(widgets).not.toContain(LEGACY_KEY)
+describe('schemaKeys', () => {
+  it('leaves the keys with a custom editor to it', () => {
+    const widgets = schemaKeys(editableKeys(sections))
     for (const k of CUSTOM_KEYS) expect(widgets).not.toContain(k)
     expect(widgets).toContain('mode')
   })
@@ -90,9 +85,13 @@ describe('editableKeys', () => {
 
 describe('currentSettings', () => {
   it('drops every key the schema does not declare, and keeps the declared ones', () => {
-    const stored = { mode: 'enforce', api_key: MASK, notify_webhook_secret: MASK, allowlist_user_ids: ['7'], exempt_user_ids: ['7'], base_url: 'https://old.example', analysis_channel_id: 5 }
-    expect(currentSettings(schema, stored)).toEqual({ mode: 'enforce', api_key: MASK, notify_webhook_secret: MASK })
+    const stored = { mode: 'enforce', notify_webhook_secret: MASK, allowlist_user_ids: ['7'], exempt_user_ids: ['7'], base_url: 'https://old.example', analysis_channel_id: 5 }
+    expect(currentSettings(schema, stored)).toEqual({ mode: 'enforce', notify_webhook_secret: MASK })
     expect(currentSettings(null, stored)).toBe(stored)
+  })
+
+  it('drops the 0.1 API key, masked or not, though the schema declares it', () => {
+    for (const v of [MASK, 'sk-old']) expect(currentSettings(schema, { mode: 'enforce', [LEGACY_KEY]: v })).toEqual({ mode: 'enforce' })
   })
 
   it('folds cache_ttl_seconds into the cache days never stored: 0 = off, else whole days rounded up, 1 to 30', () => {
@@ -122,11 +121,10 @@ describe('the save of the settings tab', () => {
   // What the page sends for a key: the widget value, or the mask of a kept secret.
   const page = (stored: Record<string, unknown>, form: Record<string, unknown>): PageValues => {
     const out: PageValues = {}
-    for (const k of schemaKeys(editableKeys(sections, stored, LEGACY_KEY_PAGE))) out[k] = sentValue((schema.properties as Record<string, any>)[k], form[k])
+    for (const k of schemaKeys(editableKeys(sections))) out[k] = sentValue((schema.properties as Record<string, any>)[k], form[k])
     out.notify_webhook_url = stored.notify_webhook_url === MASK ? MASK : undefined
     out.notify_webhook_secret = stored.notify_webhook_secret === MASK ? MASK : undefined
     out.jev_default_set = (stored.jev_default_set as unknown) ?? null
-    if (stored.api_key) out.api_key = form.api_key
     return out
   }
   /** Settings stored by an older version: current keys, retired keys and removed ones. */
@@ -145,8 +143,8 @@ describe('the save of the settings tab', () => {
   }
   // the page loads, and saves over, the stored values brought to the current schema
   const stored = currentSettings(schema, raw)
-  const keys = editableKeys(sections, stored, LEGACY_KEY_PAGE)
-  const form: Record<string, unknown> = { ...displayValues(schema, stored, schemaKeys(keys)), api_key: MASK }
+  const keys = editableKeys(sections)
+  const form = displayValues(schema, stored, schemaKeys(keys))
   const initial = page(stored, form)
   const save = (edit: Record<string, unknown>) => mergeSettings(keys, stored, stored, initial, page(stored, { ...form, ...edit }))
   const RETIRED_KEYS = Object.keys(RETIRED)
@@ -161,7 +159,7 @@ describe('the save of the settings tab', () => {
   it('saves the settings brought to the current schema even when nothing was edited', () => {
     const m = save({})
     expect(m.changed).toEqual([])
-    expect(m.values).toEqual({ mode: 'observe', watch_days: 14, notify_webhook_url: MASK, notify_webhook_secret: MASK, api_key: MASK, verdict_cache_days: 1, ban_window_seconds: 43200 })
+    expect(m.values).toEqual({ mode: 'observe', watch_days: 14, notify_webhook_url: MASK, notify_webhook_secret: MASK, verdict_cache_days: 1, ban_window_seconds: 43200 })
     // differs from what is stored, so the page PUTs it (SettingsTab save)
     expect(JSON.stringify(m.values)).not.toBe(JSON.stringify(raw))
   })
@@ -170,7 +168,7 @@ describe('the save of the settings tab', () => {
     const m = save({ mode: 'enforce', verdict_cache_days: 3 })
     expect(m.changed.sort()).toEqual(['mode', 'verdict_cache_days'])
     expect(m.values).toEqual({ ...stored, mode: 'enforce', verdict_cache_days: 3 })
-    for (const k of [...RETIRED_KEYS, ...REMOVED]) expect(m.values).not.toHaveProperty(k)
+    for (const k of [...RETIRED_KEYS, ...REMOVED, LEGACY_KEY]) expect(m.values).not.toHaveProperty(k)
   })
 
   it('removes cleared cache days: the retired key is gone, so the schema default applies', () => {
@@ -190,13 +188,6 @@ describe('the save of the settings tab', () => {
     expect(m.values).not.toHaveProperty('watch_days')
     expect(sentValue({ type: 'integer' }, '')).toBeUndefined()
     expect(sentValue({ type: 'string' }, '')).toBe('')
-  })
-
-  it('clears the stored 0.1 API key on request', () => {
-    const m = save({ api_key: undefined })
-    expect(m.changed).toEqual([LEGACY_KEY])
-    const { api_key: _, ...rest } = stored
-    expect(m.values).toEqual(rest)
   })
 })
 

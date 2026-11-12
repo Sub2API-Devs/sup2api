@@ -24,7 +24,7 @@ import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
-import { CACHE_DAYS_KEY, currentSettings, displayValues, editableKeys, LEGACY_KEY, schemaKeys, sectionsOf, sentValue, settingSections, settingsKey, type SettingSection } from './settingsForm'
+import { CACHE_DAYS_KEY, currentSettings, displayValues, editableKeys, schemaKeys, sectionsOf, sentValue, settingSections, settingsKey, type SettingSection } from './settingsForm'
 import type { SectionKey } from './nav'
 import { useAsync } from './useAsync'
 import { DurationWidget } from './durationWidget'
@@ -36,15 +36,15 @@ import type { JevQuestions } from './types'
 // forms/settings.schema.json in the ui:section groups of
 // forms/settings.ui.json whose page is this one (nav.ts), rendered by the
 // schema widgets, except a few with their own editor here: the block
-// response preview per API format, the webhook address and secret ("set" / clear) and the Jev default question
-// set. A stored 0.1 API key is hidden and can only be cleared.
+// response preview per API format, the webhook address and secret ("set" /
+// clear) and the Jev default question set.
 //
 // The stored values are brought to the current schema (settingsForm.ts
 // currentSettings): retired keys are shown folded into their new keys and
-// any save drops what the schema no longer declares. The user lists are the
-// locked entries of the watch list (userLock.ts). Under the cache days,
-// moderation:manage users can empty the verdict cache of every node
-// (VerdictCacheRow).
+// any save drops what the schema no longer declares and the 0.1 API key.
+// The user lists are the locked entries of the watch list (userLock.ts).
+// Under the cache days, moderation:manage users can empty the verdict cache
+// of every node (VerdictCacheRow).
 //
 // A save re-reads the stored values and writes back only the keys of this
 // page edited since it loaded (settingsMerge.ts), so a change made elsewhere
@@ -87,7 +87,7 @@ const schema = computed(() => settings.value?.schema ?? null)
 const ui = computed(() => settings.value?.ui_schema ?? null)
 const sections = computed<SettingSection[]>(() => sectionsOf(settingSections(schema.value, ui.value), props.page))
 /** The keys of this page (errors on other keys are toasted; the other pages' keys go back as stored). */
-const keys = computed(() => editableKeys(sections.value, settings.value?.values || {}, props.page))
+const keys = computed(() => editableKeys(sections.value))
 const widgetKeys = computed(() => schemaKeys(keys.value))
 
 const prop = (k: string) => schema.value?.properties?.[k] ?? {}
@@ -106,9 +106,9 @@ watch(data, (v) => {
   const stored = currentSettings(v[0].schema, v[0].values || {})
   for (const k of Object.keys(form)) delete form[k]
   Object.assign(form, displayValues(v[0].schema, stored, widgetKeys.value))
-  for (const k of [...WEBHOOK, LEGACY_KEY]) kept[k] = stored[k] === SETTINGS_MASK
   for (const k of WEBHOOK) {
     const x = stored[k]
+    kept[k] = x === SETTINGS_MASK
     webhook[k] = kept[k] || typeof x !== 'string' ? '' : x
   }
   const set = stored.jev_default_set as JevQuestions | null | undefined
@@ -132,7 +132,6 @@ function pageValues(): PageValues {
   for (const k of widgetKeys.value) out[k] = sentValue(prop(k), form[k])
   for (const k of WEBHOOK) if (keys.value.includes(k)) out[k] = webhookValue(k)
   if (keys.value.includes('jev_default_set')) out.jev_default_set = jev.value ? jevPayload(jev.value) : null
-  if (keys.value.includes(LEGACY_KEY)) out[LEGACY_KEY] = kept[LEGACY_KEY] ? SETTINGS_MASK : undefined
   return out
 }
 const dirty = computed(() => !!settings.value && JSON.stringify(pageValues()) !== JSON.stringify(initial.value))
@@ -144,10 +143,6 @@ function setField(k: string, v: unknown) {
   delete errs[k]
 }
 const clearError = (k: string) => delete errs[k]
-function toggleLegacyKey() {
-  kept[LEGACY_KEY] = !kept[LEGACY_KEY]
-  clearError(LEGACY_KEY)
-}
 
 /** Schema checks of the changed keys before the request (the core checks again). */
 function validate(current: PageValues): boolean {
@@ -190,7 +185,7 @@ async function save() {
       return
     }
     if (m.conflicts.length) {
-      const names = joinList(m.conflicts.map((k) => (k === LEGACY_KEY ? t('settingsTab.legacyKey') : label(k))))
+      const names = joinList(m.conflicts.map(label))
       if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys: names }), confirmText: t('settingsTab.overwrite') }))) return
     }
     await savePluginSettings(m.values)
@@ -199,12 +194,12 @@ async function save() {
   } catch (e) {
     // The first error of a key is shown at its input; others are toasted. A
     // kept secret the core asks to re-enter (§75.1) says so in the plugin's
-    // words; the hidden 0.1 key cannot be re-entered, only cleared.
+    // words.
     applyErrorsOrToast(errs, e, keys.value, settingsKey)
     if (isApiError(e)) {
       for (const [path, code] of Object.entries(e.fieldCodes)) {
         const k = settingsKey(path)
-        if (code === 'reenter') errs[k] = k === LEGACY_KEY ? t('settingsTab.legacyKeyReenter') : t('settingsTab.reenter')
+        if (code === 'reenter') errs[k] = t('settingsTab.reenter')
       }
     }
   } finally {
@@ -238,17 +233,6 @@ const jevOptions = computed(() => [
     <SAlert v-else-if="error" tone="danger">{{ error }}</SAlert>
     <SAlert v-else-if="!sections.length" tone="danger">{{ t('settingsTab.noSchema') }}</SAlert>
     <form v-else class="mod-form mod-form-page" @submit.prevent="save">
-      <SAlert v-if="keys.includes(LEGACY_KEY)" :tone="kept[LEGACY_KEY] ? 'warning' : 'info'" data-testid="mod-legacy-key">
-        {{ kept[LEGACY_KEY] ? t('settingsTab.legacyKeyKept') : t('settingsTab.legacyKeyCleared') }}
-        <template v-if="errs[LEGACY_KEY]">
-          <br />
-          <span class="mod-text-danger">{{ errs[LEGACY_KEY] }}</span>
-        </template>
-        <template #actions>
-          <SButton size="sm" @click="toggleLegacyKey">{{ kept[LEGACY_KEY] ? t('settingsTab.legacyKeyClear') : t('settingsTab.legacyKeyUndo') }}</SButton>
-        </template>
-      </SAlert>
-
       <SSettingsGroup
         v-for="g in sections"
         :key="g.id"

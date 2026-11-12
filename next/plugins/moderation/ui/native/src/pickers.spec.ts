@@ -450,4 +450,13 @@ describe('the save of a settings page', () => {
     expect(corePut).toHaveBeenCalledTimes(1)
     expect((corePut.mock.calls[0][1] as { values: Record<string, unknown> }).values).toEqual({ mode: 'observe', verdict_cache_days: 0, ban_window_seconds: 7200 })
   })
+
+  it.each(['policy', 'cache', 'advanced'] as const)('drops the stored 0.1 API key on a save of the %s page', async (page) => {
+    stored = { mode: 'observe', api_key: '******' }
+    const w = mount(SettingsTab, { props: { page } })
+    await flushPromises()
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect((corePut.mock.calls[0][1] as { values: Record<string, unknown> }).values).toEqual({ mode: 'observe' })
+  })
 })

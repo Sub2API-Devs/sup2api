@@ -10,11 +10,15 @@ import { childUI, orderedKeys, uiGet, type JSONSchema, type UISchema } from '@su
 // the current schema (currentSettings) before it shows or saves them: a key
 // the schema no longer declares is dropped (the core refuses it), and the
 // value of a retired key is folded into the key that replaced it while that
-// was never stored (RETIRED).
+// was never stored (RETIRED); the 0.1 API key is dropped too (LEGACY_KEY).
 
 /** Keys with their own editor on the settings tab instead of the schema widget. */
 export const CUSTOM_KEYS = ['notify_webhook_url', 'notify_webhook_secret', 'jev_default_set'] as const
-/** The stored 0.1 API key: hidden, but the page offers to clear it (a kept credential makes moderation:manage re-enter it, §75.1). */
+/**
+ * The stored 0.1 API key: no longer read, declared (hidden, writeOnly) only
+ * so the core keeps masking it in GET /settings. currentSettings drops it, so
+ * every save removes it (a key absent from the PUT is deleted, no re-entry).
+ */
 export const LEGACY_KEY = 'api_key'
 
 /** A ui:section group of visible fields; title / description are LocalizedText; page = the settings page showing it (nav.ts). */
@@ -51,20 +55,14 @@ export function settingSections(schema: JSONSchema | null | undefined, ui: UISch
   return out.filter((g) => g.keys.length)
 }
 
-/** The page that offers to clear a stored 0.1 API key. */
-export const LEGACY_KEY_PAGE = 'policy'
-
 /** The sections of one settings page. */
 export const sectionsOf = (sections: SettingSection[], page: string) => sections.filter((g) => g.page === page)
 
-/** The keys a page edits: its visible fields, and on LEGACY_KEY_PAGE the 0.1 API key while one is stored (to clear it). */
-export function editableKeys(sections: SettingSection[], stored: Record<string, unknown>, page: string): string[] {
-  const keys = sections.flatMap((g) => g.keys)
-  return stored[LEGACY_KEY] && page === LEGACY_KEY_PAGE ? [...keys, LEGACY_KEY] : keys
-}
+/** The keys a page edits: the fields of its sections. */
+export const editableKeys = (sections: SettingSection[]) => sections.flatMap((g) => g.keys)
 
 /** The keys rendered by the schema widgets (editable keys without a custom editor). */
-export const schemaKeys = (keys: readonly string[]) => keys.filter((k) => k !== LEGACY_KEY && !(CUSTOM_KEYS as readonly string[]).includes(k))
+export const schemaKeys = (keys: readonly string[]) => keys.filter((k) => !(CUSTOM_KEYS as readonly string[]).includes(k))
 
 const clone = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
@@ -86,7 +84,8 @@ export const RETIRED: Readonly<Record<string, { key: string; convert: (v: unknow
 /**
  * The stored settings as the current schema reads them: each retired value
  * folded into its new key when that was never stored, then every key the
- * schema does not declare dropped. Without a schema they are kept as stored.
+ * schema does not declare dropped, and LEGACY_KEY, declared only to be
+ * masked. Without a schema they are kept as stored.
  */
 export function currentSettings(schema: JSONSchema | null | undefined, stored: Record<string, unknown>): Record<string, unknown> {
   const declared = schema?.properties
@@ -96,7 +95,7 @@ export function currentSettings(schema: JSONSchema | null | undefined, stored: R
     const v = out[r.key] === undefined ? r.convert(stored[old]) : undefined
     if (v !== undefined) out[r.key] = v
   }
-  for (const k of Object.keys(out)) if (!(k in declared)) delete out[k]
+  for (const k of Object.keys(out)) if (k === LEGACY_KEY || !(k in declared)) delete out[k]
   return out
 }
 
