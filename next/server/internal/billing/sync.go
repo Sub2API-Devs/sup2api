@@ -735,73 +735,15 @@ func parseSup2API(body []byte, apply bool) (*fetched, error) {
 	return out, nil
 }
 
-// scalePrice multiplies a price by m: visual configs are scaled in place,
-// other expressions get a constant surcharge rule.
+// scalePrice multiplies a price by m: visual configs are scaled in place
+// (scaleConfig), other expressions get a constant surcharge rule.
 func scalePrice(p *syncPrice, m decimal.Decimal) error {
-	scale := func(v any) any {
-		switch x := v.(type) {
-		case float64:
-			return json.Number(decimal.NewFromFloat(x).Mul(m).String())
-		case json.Number:
-			d, err := decimal.NewFromString(string(x))
-			if err != nil {
-				return x
-			}
-			return json.Number(d.Mul(m).String())
-		}
-		return v
-	}
-	var cfg map[string]any
-	dec := json.NewDecoder(strings.NewReader(string(p.Config)))
-	dec.UseNumber()
-	_ = dec.Decode(&cfg)
-	switch p.Mode {
-	case expr.ModePerRequest:
-		cfg["price"] = scale(cfg["price"])
-	case expr.ModePerToken:
-		for _, k := range []string{"p", "c", "cr", "cc", "cc1h"} {
-			if v, ok := cfg[k]; ok {
-				cfg[k] = scale(v)
-			}
-		}
-	default:
-		if scaleVideoConfig(cfg, scale) {
-			break
-		}
+	config, expression, ok := scaleConfig(p.Mode, p.Config, m)
+	if !ok {
 		return scaleAsExpression(p, m)
 	}
-	b, err := json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	p.Config, p.Expression = b, ""
+	p.Config, p.Expression = config, expression
 	return nil
-}
-
-// scaleVideoConfig scales every per-video price in cfg. It reports whether cfg
-// carried a video block; other modes then fall back to an expression rule.
-func scaleVideoConfig(cfg map[string]any, scale func(any) any) bool {
-	video, ok := cfg["video"].(map[string]any)
-	if !ok {
-		return false
-	}
-	entries := []map[string]any{video}
-	if rows, ok := video["resolution_prices"].([]any); ok {
-		for _, row := range rows {
-			if r, ok := row.(map[string]any); ok {
-				entries = append(entries, r)
-			}
-		}
-	}
-	keys := []string{"price_per_million_tokens", "video_input_price_per_million_tokens", "video_price_per_second"}
-	for _, entry := range entries {
-		for _, key := range keys {
-			if value, ok := entry[key]; ok {
-				entry[key] = scale(value)
-			}
-		}
-	}
-	return true
 }
 
 // scaleAsExpression rewrites a config-based price as an expression with a
@@ -1029,9 +971,9 @@ func (s *Service) applySync(c *gin.Context) {
 // ---------------------------------------------------------------- GET /key/prices
 
 // keyPrices lists the enabled prices for the holder of an API key (another
-// sup2api syncing from this one): only models the key's group allows, plus
-// the group's rate multiplier. The key goes in Authorization: Bearer or
-// x-api-key.
+// sup2api syncing from this one): only models the key's group allows, at the
+// list price the key's owner gets in the group, plus the rate the owner pays
+// there. The key goes in Authorization: Bearer or x-api-key.
 func (s *Service) keyPrices(c *gin.Context) {
 	ctx := c.Request.Context()
 	if s.sync.Keys == nil {
@@ -1051,27 +993,45 @@ func (s *Service) keyPrices(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, `SELECT model, mode, config, expression FROM model_prices WHERE enabled ORDER BY model`)
+	prices, err := loadCatalog(ctx, s.db.Pool)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	defer rows.Close()
-	out := KeyPrices{Prices: []syncPrice{}, RateMultiplier: pr.Group.RateMultiplier}
-	out.Group.ID, out.Group.Name = pr.Group.ID, pr.Group.Name
-	for rows.Next() {
-		var p syncPrice
-		if err := rows.Scan(&p.Model, &p.Mode, &p.Config, &p.Expression); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		if pr.Group.AllowsModel(p.Model) {
-			out.Prices = append(out.Prices, p)
-		}
-	}
-	if err := rows.Err(); err != nil {
+	on := core.PriceQuery{GroupID: pr.Group.ID, SegmentID: pr.SegmentID}
+	rules, err := loadRules(ctx, s.db.Pool, rulesFor, on.GroupID, on.SegmentID)
+	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
+	out := KeyPrices{Prices: []syncPrice{}, RateMultiplier: pr.Group.RateMultiplier}
+	out.Group.ID, out.Group.Name = pr.Group.ID, pr.Group.Name
+	for _, model := range prices.models() {
+		if !pr.Group.AllowsModel(model) {
+			continue
+		}
+		on.Model = model
+		p, _, err := exportPrice(model, prices[model], rules.levels(on))
+		if err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+		out.Prices = append(out.Prices, p)
+	}
 	httpapi.OK(c, out)
+}
+
+// exportPrice returns the list price of a model, and where it comes from,
+// for a reader that sees no rule beside it: a downstream sup2api, a user's
+// own price list. A multiplier over a hand-written expression, which
+// listPrice leaves in the rule, becomes a constant rule on the expression
+// here: the expression alone must be the price.
+func exportPrice(model string, base PriceDef, levels ruleLevels) (syncPrice, string, error) {
+	rule, source := levels.applied(base.Mode)
+	price, applied := listPrice(base, rule)
+	p := syncPrice{Model: model, Mode: price.Mode, Config: price.Config, Expression: price.Expression}
+	if applied {
+		return p, source, nil
+	}
+	return p, source, scaleAsExpression(&p, rule.scale)
 }

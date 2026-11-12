@@ -32,7 +32,7 @@ func quoteRecord(ctx context.Context, q core.Quoter, r *core.UsageRecord) (decim
 		for k, v := range item.PriceParams {
 			params[k] = v
 		}
-		amount, err := q.Quote(ctx, core.QuoteInputs{Expression: item.Price.Expression, UsageSemantics: item.UsageSemantics, Tokens: item.Tokens, Metrics: item.Metrics, PriceParams: params, PriceHeaders: item.PriceHeaders, RateMultiplier: item.RateMultiplier, CreatedAt: r.CreatedAt})
+		amount, err := q.Quote(ctx, core.QuoteInputs{Expression: item.Price.Expression, UsageSemantics: item.UsageSemantics, Tokens: item.Tokens, Metrics: item.Metrics, PriceParams: params, PriceHeaders: item.PriceHeaders, RateMultiplier: item.Price.Multiplier(item.RateMultiplier), CreatedAt: r.CreatedAt})
 		if err != nil {
 			return decimal.Zero, err
 		}

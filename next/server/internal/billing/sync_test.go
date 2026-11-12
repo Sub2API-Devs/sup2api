@@ -126,15 +126,23 @@ func TestParseSup2APIAppliesMultiplier(t *testing.T) {
 	}
 }
 
-// fakeKeys authenticates "sk-good" into a group with multiplier 2.
-type fakeKeys struct{ Mode string }
+// fakeKeys authenticates "sk-good" into a group with multiplier 2. Group and
+// Segment, when set, are the group of the key and the segment of its owner.
+type fakeKeys struct {
+	Mode           string
+	Group, Segment int64
+}
 
 func (f fakeKeys) Authenticate(_ context.Context, raw string) (*core.APIKeyPrincipal, error) {
 	if raw != "sk-good" {
 		return nil, core.ErrUnauthenticated
 	}
-	return &core.APIKeyPrincipal{KeyID: 1, UserID: 1, Group: core.GroupInfo{ID: 7, Name: "vip",
-		RateMultiplier: decimal.NewFromInt(2), ModelAllowlist: []string{"claude-*"}, ModelFilterMode: f.Mode}}, nil
+	pr := &core.APIKeyPrincipal{KeyID: 1, UserID: 1, SegmentID: f.Segment, Group: core.GroupInfo{ID: 7, Name: "vip",
+		RateMultiplier: decimal.NewFromInt(2), ModelAllowlist: []string{"claude-*"}, ModelFilterMode: f.Mode}}
+	if f.Group != 0 {
+		pr.Group.ID = f.Group
+	}
+	return pr, nil
 }
 
 func TestPriceSourcesSync(t *testing.T) {
@@ -283,7 +291,8 @@ func TestKeyPriceListBlacklist(t *testing.T) {
 	}
 }
 
-// GET /me/prices: the groups the caller can see, each with its allowlist and rate.
+// GET /me/prices: every priced model with the caller's groups that provide it,
+// or the models of one of those groups at the caller's rate there.
 func TestMyPrices(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
@@ -303,7 +312,13 @@ func TestMyPrices(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	e.exec(`INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2)`, uid, mine)
+	// The caller's segment is granted "mine"; an account that declares no
+	// models makes every group provide every priced model its policy allows.
+	e.exec(`INSERT INTO segments (name) VALUES ('granted')`)
+	e.exec(`UPDATE users SET segment_id = (SELECT id FROM segments WHERE name = 'granted') WHERE id = $1`, uid)
+	e.exec(`INSERT INTO segment_groups (segment_id, group_id, granted) SELECT id, $1, true FROM segments WHERE name = 'granted'`, mine)
+	e.exec(`INSERT INTO accounts (name, plugin_key, type, credentials_enc) VALUES ('a', 'anthropic', 'apikey', '\x00'::bytea)`)
+	e.exec(`INSERT INTO account_groups (account_id, group_id) SELECT a.id, g.id FROM accounts a, groups g`)
 	e.exec(`DELETE FROM model_prices`)
 	for _, m := range []string{"claude-opus-5-5", "gemini-3"} {
 		e.exec(`INSERT INTO model_prices (model, mode, config, expression, expr_hash, source, enabled) VALUES ($1, 'per_request', '{"price": 1}', 'tier("base", flat(1))', 'h', 'manual', true)`, m)
@@ -331,9 +346,21 @@ func TestMyPrices(t *testing.T) {
 	if code, _ := e.call(uid, "GET", "/me/prices?group_id=x", nil); code != 400 {
 		t.Fatalf("a bad id: %d", code)
 	}
-	// Without a group: the first the caller can see.
+	// Without a group: every priced model at the global price, with the
+	// caller's groups that provide it.
 	d = data(e.mustCall(uid, 200, "GET", "/me/prices", nil))
-	if d["group"].(map[string]any)["name"] != "public" {
-		t.Fatalf("default group: %v", d)
+	if d["group"] != nil || d["rate_multiplier"] != "1" || models(d) != "claude-opus-5-5,gemini-3" {
+		t.Fatalf("every group: %v", d)
+	}
+	groups := func(row any) string {
+		var out []string
+		for _, g := range row.(map[string]any)["groups"].([]any) {
+			out = append(out, g.(map[string]any)["name"].(string))
+		}
+		return strings.Join(out, ",")
+	}
+	rows := d["prices"].([]any)
+	if groups(rows[0]) != "public,mine" || groups(rows[1]) != "mine" {
+		t.Fatalf("groups of the models: %v", rows)
 	}
 }
