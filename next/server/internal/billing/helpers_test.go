@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -74,7 +75,22 @@ type env struct {
 	h   http.Handler
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T) *env { return newEnvAs(t, allowAll{}) }
+
+// limited is an authorizer under which the users listed hold only the
+// permissions given; everyone else holds all.
+type limited struct {
+	allowAll
+	perms map[int64][]string
+}
+
+func (l limited) Can(_ context.Context, uid int64, permission string) (bool, error) {
+	perms, ok := l.perms[uid]
+	return !ok || slices.Contains(perms, permission), nil
+}
+
+// newEnvAs is newEnv with authz deciding who holds which permission.
+func newEnvAs(t *testing.T, authz core.Authorizer) *env {
 	t.Helper()
 	db := testutil.DB(t)
 	mr := miniredis.RunT(t)
@@ -82,10 +98,11 @@ func newEnv(t *testing.T) *env {
 	t.Cleanup(func() { _ = rdb.Close() })
 	bus := &memBus{}
 	svc := New(db, rdb, bus, event.NewPublisher(db), nil)
+	svc.Authz = authz
 	t.Cleanup(svc.Close)
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	r := httpapi.NewRouter(engine, allowAll{}, allowAll{})
+	r := httpapi.NewRouter(engine, allowAll{}, authz)
 	svc.RegisterRoutes(r)
 	return &env{t: t, db: db, mr: mr, rdb: rdb, bus: bus, svc: svc, h: engine}
 }

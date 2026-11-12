@@ -33,7 +33,7 @@ const saving = ref(false)
 const editing = computed(() => !!props.apiKey)
 const quota = computed(() => (props.apiKey ? quotaOf(props.apiKey) : null))
 const selectedGroup = computed(() => props.groups.find((g) => g.id === form.value.group_id) ?? null)
-const options = computed(() => groupOptions(props.groups, platforms.label))
+const options = computed(() => groupOptions(props.groups, platforms.label, t('pricing.exclusive')))
 
 watch(() => props.open, (open) => {
   if (!open) return

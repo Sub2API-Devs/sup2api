@@ -1,6 +1,8 @@
 package billing
 
 import (
+	"context"
+	"slices"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -8,13 +10,32 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 )
 
-// myPrices answers GET /me/prices?group_id= (CONTRACTS §79.4): the models one
-// of the caller's groups may use, with their prices, the same data an API key
-// of that group reads from GET /key/prices. Without group_id it is the first
-// group the caller can see. A group the caller cannot see is a 404.
+// MyPriceRow is a row of GET /me/prices.
+type MyPriceRow struct {
+	Model string `json:"model"`
+	PriceDef
+	// Groups (without a group): the caller's groups that provide the model.
+	Groups []core.GroupRef `json:"groups,omitzero"`
+	// Source (with a group): where the list price comes from.
+	Source string `json:"source,omitempty"`
+}
+
+// MyPrices is the response of GET /me/prices.
+type MyPrices struct {
+	Group          *core.GroupRef  `json:"group"`
+	RateMultiplier decimal.Decimal `json:"rate_multiplier"`
+	RateSource     string          `json:"rate_source,omitempty"`
+	Prices         []MyPriceRow    `json:"prices"`
+}
+
+// myPrices answers GET /me/prices?group_id= (CONTRACTS §79.5). Without a
+// group it is every model at its global price, with the caller's groups that
+// provide it. With one it is the models that group provides and can bill, at
+// the list price and the rate the caller gets there. A group the caller
+// cannot use is a 404.
 func (s *Service) myPrices(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid, _ := core.UserID(ctx)
@@ -27,44 +48,84 @@ func (s *Service) myPrices(c *gin.Context) {
 		}
 		groupID = id
 	}
-	var out KeyPrices
-	var group core.GroupInfo
-	err := s.db.Pool.QueryRow(ctx, `SELECT g.id, g.name, g.rate_multiplier, g.model_allowlist, g.model_filter_mode FROM groups g
-		WHERE g.status = 'active' AND ($2::bigint = 0 OR g.id = $2)
-		  AND (g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.group_id = g.id AND ug.user_id = $1))
-		ORDER BY g.id LIMIT 1`, uid, groupID).Scan(&out.Group.ID, &out.Group.Name, &out.RateMultiplier, &group.ModelAllowlist, &group.ModelFilterMode)
-	if store.IsNoRows(err) {
-		if groupID != 0 {
-			httpapi.Fail(c, core.ErrNotFound)
-			return
-		}
-		httpapi.OK(c, KeyPrices{Prices: []syncPrice{}, RateMultiplier: decimal.NewFromInt(1)})
-		return
+	var out *MyPrices
+	var err error
+	if groupID == 0 {
+		out, err = s.pricesOfGroups(ctx, uid)
+	} else {
+		out, err = s.pricesInGroup(ctx, uid, groupID)
 	}
 	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	out.Prices = []syncPrice{}
-	rows, err := s.db.Pool.Query(ctx, `SELECT model, mode, config, expression FROM model_prices WHERE enabled ORDER BY model`)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var p syncPrice
-		if err := rows.Scan(&p.Model, &p.Mode, &p.Config, &p.Expression); err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		if group.AllowsModel(p.Model) {
-			out.Prices = append(out.Prices, p)
-		}
-	}
-	if err := rows.Err(); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, out)
+}
+
+// usableBy selects the active groups a user may use; user is the placeholder
+// of the user's id.
+func usableBy(user string) string {
+	return ` WHERE g.status = 'active' AND ` + segment.OpenToUserSQL("g", user)
+}
+
+// pricesOfGroups lists every model with a global price, at that price, with
+// the groups of the user that provide it.
+func (s *Service) pricesOfGroups(ctx context.Context, uid int64) (*MyPrices, error) {
+	groups, err := loadGroups(ctx, s.db.Pool, usableBy("$1")+` ORDER BY g.id`, uid)
+	if err != nil {
+		return nil, err
+	}
+	prices, err := loadCatalog(ctx, s.db.Pool)
+	if err != nil {
+		return nil, err
+	}
+	offered, err := offeredModels(ctx, s.db.Pool, groups, prices)
+	if err != nil {
+		return nil, err
+	}
+	out := &MyPrices{RateMultiplier: decimal.NewFromInt(1), Prices: []MyPriceRow{}}
+	for _, model := range prices.models() {
+		row := MyPriceRow{Model: model, PriceDef: prices[model], Groups: []core.GroupRef{}}
+		for _, g := range groups {
+			if _, ok := slices.BinarySearch(offered[g.ID], model); ok {
+				row.Groups = append(row.Groups, g.ref())
+			}
+		}
+		out.Prices = append(out.Prices, row)
+	}
+	return out, nil
+}
+
+// pricesInGroup lists the models one of the user's groups provides and can
+// bill, at the list price and the rate the user gets there.
+func (s *Service) pricesInGroup(ctx context.Context, uid, groupID int64) (*MyPrices, error) {
+	gp, err := loadGroupPrices(ctx, s.db.Pool, usableBy("$1")+` AND g.id = $2`, uid, groupID)
+	if err != nil {
+		return nil, err
+	}
+	terms, err := segment.UserTerms(ctx, s.db.Pool, uid, []int64{groupID})
+	if err != nil {
+		return nil, err
+	}
+	t, ok := terms[groupID]
+	if !ok {
+		return nil, core.ErrNotFound
+	}
+	on := core.PriceQuery{GroupID: groupID, SegmentID: t.SegmentID}
+	rules, err := loadRules(ctx, s.db.Pool, rulesFor, on.GroupID, on.SegmentID)
+	if err != nil {
+		return nil, err
+	}
+	group := gp.group.ref()
+	out := &MyPrices{Group: &group, RateMultiplier: t.Rate, RateSource: t.RateSource, Prices: []MyPriceRow{}}
+	for _, model := range gp.models {
+		base := gp.prices.base(model)
+		if base == nil {
+			continue
+		}
+		on.Model = model
+		price, source := rules.levels(on).listPrice(*base)
+		out.Prices = append(out.Prices, MyPriceRow{Model: model, PriceDef: price, Source: source})
+	}
+	return out, nil
 }

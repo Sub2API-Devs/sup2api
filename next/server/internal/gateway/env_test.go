@@ -450,13 +450,15 @@ type fakePricer struct {
 	params  []string
 	headers []string
 	calls   int
+	queries []core.PriceQuery
 }
 
-func (p *fakePricer) Resolve(_ context.Context, model string) (*core.PriceRule, error) {
+func (p *fakePricer) Resolve(_ context.Context, q core.PriceQuery) (*core.PriceRule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.calls++
-	if r, ok := p.rules[model]; ok {
+	p.queries = append(p.queries, q)
+	if r, ok := p.rules[q.Model]; ok {
 		return r, nil
 	}
 	if p.free {

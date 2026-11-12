@@ -23,6 +23,7 @@ type rollupRow struct {
 	in, out, cacheRead        int64
 	semantics                 string // billing_detail inputs.semantics; "" leaves it out
 	cost, multiplier          string
+	base                      string // base_cost; "" leaves it NULL, as on rows from before the column
 	anomalies                 string
 	latency, firstToken       int
 }
@@ -34,13 +35,17 @@ func (f *fixture) insertRollupRows(now time.Time, prefix string, rows []rollupRo
 		if r.semantics != "" {
 			detail = `{"inputs": {"semantics": "` + r.semantics + `"}}`
 		}
+		var base *string
+		if r.base != "" {
+			base = &r.base
+		}
 		_, err := f.db.Pool.Exec(f.t.Context(), `INSERT INTO usage_logs (request_id, user_id, api_key_id, group_id, account_id,
 			platform, protocol, endpoint, model, upstream_model, status_code, success, input_tokens, output_tokens, cache_read_tokens,
-			billing_detail, total_cost, rate_multiplier, anomalies, latency_ms, first_token_ms, client_ip, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, '/v1/messages', $8::text, $8::text || '-up', 200, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+			billing_detail, total_cost, rate_multiplier, anomalies, latency_ms, first_token_ms, client_ip, created_at, base_cost)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, '/v1/messages', $8::text, $8::text || '-up', 200, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
 			fmt.Sprintf("%s-%d", prefix, i), r.user, r.user*10, f.group, r.user*100, r.platform, r.protocol, r.model, r.success,
 			r.in, r.out, r.cacheRead, detail, r.cost, r.multiplier, r.anomalies, r.latency, r.firstToken,
-			fmt.Sprintf("10.0.0.%d", i%3), now.Add(-r.age))
+			fmt.Sprintf("10.0.0.%d", i%3), now.Add(-r.age), base)
 		require.NoError(f.t, err)
 	}
 }
@@ -48,7 +53,8 @@ func (f *fixture) insertRollupRows(now time.Time, prefix string, rows []rollupRo
 // rollupRows spans the live part (the last half hour and the current hour),
 // sealed hours of today and yesterday and days of the history, with every
 // measure's cases: failures, cached input with and without semantics, a
-// free group, anomalies and estimates, timed and untimed requests.
+// free group, rows with and without a base cost, anomalies and estimates,
+// timed and untimed requests.
 func (f *fixture) rollupRows() []rollupRow {
 	anomalies := []string{`{}`, `{"usage_extract": "plugin"}`, `{"usage_extract": "fallback"}`, `{"reconcile": "estimated"}`,
 		`{"reconcile": "retrying"}`, `{"failure_policy": "x", "availability": "y"}`}
@@ -63,7 +69,7 @@ func (f *fixture) rollupRows() []rollupRow {
 				model: []string{"claude-a", "claude-b", "gpt-c"}[k%3], protocol: []string{"anthropic.messages", "openai.chat"}[k%2],
 				platform: []string{"anthropic", "openai"}[k%2], success: k%4 != 3,
 				in: int64(100 + k), out: int64(10 + k), semantics: semantics[k%len(semantics)],
-				cost: fmt.Sprintf("0.%04d", 1000+k*37), multiplier: []string{"1", "0.5", "0"}[k%3],
+				cost: fmt.Sprintf("0.%04d", 1000+k*37), multiplier: []string{"1", "0.5", "0"}[k%3], base: []string{"", "0.75", "", "1.25"}[k%4],
 				anomalies: anomalies[k%len(anomalies)], latency: []int{0, 1200 + k, 800}[k%3], firstToken: []int{300 + k, 0}[k%2],
 			}
 			if k%3 != 0 {
@@ -189,6 +195,8 @@ func TestRollupMatchesLive(t *testing.T) {
 		platform: "anthropic", success: true, in: 7, out: 3, cost: "2", multiplier: "1", anomalies: `{}`, latency: 50}})
 	_, err = f.db.Pool.Exec(ctx, `DELETE FROM usage_logs WHERE request_id = 'rollup-30'`)
 	require.NoError(t, err)
+	_, err = f.db.Pool.Exec(ctx, `UPDATE usage_logs SET base_cost = 9 WHERE request_id = 'rollup-27'`) // nothing else marks its hour
+	require.NoError(t, err)
 	var marks int
 	require.NoError(t, f.db.Pool.QueryRow(ctx, `SELECT count(*) FROM usage_hourly_dirty`).Scan(&marks))
 	require.Positive(t, marks)
@@ -280,15 +288,25 @@ func TestHourAligned(t *testing.T) {
 }
 
 // An update of a rolled-up hour marks it only through the columns the update
-// trigger of 0092 lists: every column the rollup's keys and measures read
-// must be among them, or such a change would stay out of the statistics.
+// trigger lists (0092, redefined by later migrations): every column the
+// rollup's keys and measures read must be among them, or such a change would
+// stay out of the statistics.
 func TestRollupTriggerCoversMeasures(t *testing.T) {
-	sql, err := migrations.FS.ReadFile("0092_usage_hourly.sql")
+	// The trigger as the last migration defining it leaves it.
+	files, err := migrations.FS.ReadDir(".") // in file name order
 	require.NoError(t, err)
-	m := regexp.MustCompile(`(?s)AFTER UPDATE OF(.*?)ON usage_logs`).FindSubmatch(sql)
-	require.NotNil(t, m)
+	define := regexp.MustCompile(`(?s)TRIGGER usage_hourly_mark_update AFTER UPDATE OF(.*?)ON usage_logs`)
+	var columns string
+	for _, file := range files {
+		sql, err := migrations.FS.ReadFile(file.Name())
+		require.NoError(t, err)
+		for _, m := range define.FindAllSubmatch(sql, -1) {
+			columns = string(m[1])
+		}
+	}
+	require.NotEmpty(t, columns)
 	listed := map[string]bool{}
-	for _, c := range strings.Split(string(m[1]), ",") {
+	for _, c := range strings.Split(columns, ",") {
 		listed[strings.TrimSpace(c)] = true
 	}
 	read := append([]string{"created_at"}, rollupDims...)

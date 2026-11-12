@@ -37,10 +37,14 @@ type Service struct {
 	mu       sync.Mutex
 	epoch    uint64
 	prices   *priceSnapshot
-	resolved map[string]resolved // model
+	resolved map[core.PriceQuery]resolved
 	settings *settingsSnapshot
 
 	sync SyncDeps
+
+	// Authz tells whether a caller may read users, which decides how the
+	// pricing endpoints name a personal segment; nil counts as "no".
+	Authz core.Authorizer
 
 	unsubscribe func()
 }
@@ -64,7 +68,7 @@ func New(db *store.DB, rdb redis.UniversalClient, bus core.Bus, events core.Even
 		events:   events,
 		registry: registry,
 		cacheTTL: time.Minute,
-		resolved: map[string]resolved{},
+		resolved: map[core.PriceQuery]resolved{},
 	}
 	if bus != nil {
 		s.unsubscribe = bus.Subscribe(core.ChannelConfigChanged, func([]byte) { s.invalidate() })
@@ -85,7 +89,7 @@ func (s *Service) invalidate() {
 	s.epoch++
 	s.prices = nil
 	s.settings = nil
-	s.resolved = map[string]resolved{}
+	s.resolved = map[core.PriceQuery]resolved{}
 	s.mu.Unlock()
 }
 
@@ -101,12 +105,18 @@ func (s *Service) changed(ctx context.Context, key string) {
 	}
 }
 
+// PriceRulesChanged drops the cached price rules on every node. Packages
+// that delete or copy price_rules rows on their own (a segment going away)
+// call it after their transaction committed.
+func (s *Service) PriceRulesChanged(ctx context.Context) { s.changed(ctx, "price_rules") }
+
 // RegisterRoutes mounts the billing console API.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	s.registerPriceRoutes(r)
 	s.registerSyncRoutes(r)
 	s.registerBalanceRoutes(r)
 	s.registerSettingsRoutes(r)
+	s.registerPricingRoutes(r)
 }
 
 // Quote is the single entry point for turning usage into money. It compiles

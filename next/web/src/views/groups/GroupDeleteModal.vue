@@ -12,7 +12,8 @@ import { formatNumber } from '@/utils/format'
 // Deletes a group that still has API keys. Keys are only loosely bound to a
 // group: DELETE /groups/:id?move_keys_to=<id> moves them to another group,
 // without it they stay unbound (they answer group_deleted until their owner
-// picks another group). The group's accounts only leave the group.
+// picks another group). The group's accounts only leave the group; its
+// grants, rate overrides and model prices go with it.
 const props = defineProps<{ open: boolean; group: Group | null; keyCount: number }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'deleted'): void }>()
 const { t } = useI18n()
@@ -94,5 +95,6 @@ async function submit() {
     </SField>
     <SHint v-else size="xs">{{ t('groups.deleteKeys.unbindHint') }}</SHint>
     <SHint v-if="group?.account_count" size="xs">{{ t('groups.deleteWithAccounts', { a: formatNumber(group.account_count) }) }}</SHint>
+    <SHint size="xs" data-testid="group-delete-pricing">{{ t('groups.deleteWithPricing') }}</SHint>
   </SFormModal>
 </template>

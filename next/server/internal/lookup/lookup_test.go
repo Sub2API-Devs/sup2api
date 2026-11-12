@@ -58,7 +58,8 @@ func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 //	admin  reads every kind in full; owns account "lk acct b" and proxy
 //	       "lk proxy b"
 //	alice  has the self-service and "own" permissions; owns key "lk key one",
-//	       account "lk acct a" and proxy "lk proxy a"; is assigned group alpha
+//	       account "lk acct a" and proxy "lk proxy a"; her segment is granted
+//	       group alpha
 //	bob    has no permission; owns key "lk key bob"; only his display name
 //	       holds "zhang" and "_"
 type fixture struct {
@@ -67,8 +68,8 @@ type fixture struct {
 	h  http.Handler
 
 	admin, alice, bob int64
-	// zeta is public, alpha restricted (alice only) and named after zeta's
-	// id, hidden restricted with no member; oddGroup is disabled.
+	// zeta is public, alpha restricted (alice's segment only) and named after
+	// zeta's id, hidden restricted and granted to nobody; oddGroup is disabled.
 	zeta, alpha, hidden int64
 	keyOne, keyBob      int64
 	acctA, acctB, acctC int64 // acctC has no creator
@@ -93,7 +94,12 @@ func newFixture(t *testing.T) *fixture {
 	f.alpha = f.insert(groupRow, fmt.Sprintf("lk alpha %d", f.zeta), "restricted", "active", `["lk-gemini-*"]`)
 	f.hidden = f.insert(groupRow, "lk hidden", "restricted", "active", `[]`)
 	f.insert(groupRow, oddGroup, "public", "disabled", `[]`)
-	f.insert(`INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2) RETURNING group_id`, f.alice, f.alpha)
+	// alice alone is in the segment granted alpha. Its rate in hidden is not a
+	// grant.
+	members := f.insert(`INSERT INTO segments (name) VALUES ('lk alpha members') RETURNING id`)
+	f.insert(`UPDATE users SET segment_id = $2 WHERE id = $1 RETURNING id`, f.alice, members)
+	f.insert(`INSERT INTO segment_groups (segment_id, group_id, granted) VALUES ($1, $2, true) RETURNING group_id`, members, f.alpha)
+	f.insert(`INSERT INTO segment_groups (segment_id, group_id, rate_override) VALUES ($1, $2, 0.5) RETURNING group_id`, members, f.hidden)
 
 	key := `INSERT INTO api_keys (user_id, name, key_prefix, key_hash, deleted_at) VALUES ($1, $2, $3, $2, $4::timestamptz) RETURNING id`
 	f.keyOne = f.insert(key, f.alice, "lk key one", "sk-s2a-aaaa", nil)
@@ -217,7 +223,7 @@ func TestLookup(t *testing.T) {
 		{"deleted user", f.admin, "users?q=lk-gone", []string{}, false},
 		{"deleted key", f.admin, "api-keys?q=lk", []string{"lk key bob", "lk key one"}, false},
 
-		{"groups mine: public and assigned, active", f.alice, "groups?mine=true", []string{alphaName, "lk zeta"}, false},
+		{"groups mine: public and granted, active", f.alice, "groups?mine=true", []string{alphaName, "lk zeta"}, false},
 		{"groups mine needs no permission", f.bob, "groups?mine=true", []string{"lk zeta"}, false},
 		{"api-keys of one user", f.admin, "api-keys?user_id=" + strconv.FormatInt(f.alice, 10), []string{"lk key one"}, false},
 		{"api-keys by id, of one user", f.admin, "api-keys?ids=" + keyOne + "," + keyBob + "&user_id=" + bob, []string{"lk key bob"}, false},
@@ -370,8 +376,9 @@ func TestLookupAccessKey(t *testing.T) {
 }
 
 // mine=true is defined by the self-service lists (CONTRACTS §96.3), whose
-// conditions entities.go repeats: the groups are those of GET /me/groups, the
-// models those GET /me/prices lists for any of these groups.
+// conditions entities.go repeats: the groups are those of GET /me/groups. The
+// models are a superset of what GET /me/prices lists for these groups: a
+// group may allow a model that none of its accounts provides.
 func TestLookupMineIsTheSelfServiceRange(t *testing.T) {
 	f := newFixture(t)
 	alice := strconv.FormatInt(f.alice, 10)
@@ -384,10 +391,12 @@ func TestLookupMineIsTheSelfServiceRange(t *testing.T) {
 		}
 	}
 	require.Len(t, groups, 2)
-	require.Len(t, models, 2)
+	require.Equal(t, []string{"lk-claude-a"}, models)
 
 	got, _ := found(t, f.get(f.alice, "groups?mine=true"))
 	require.ElementsMatch(t, names(groups), got)
 	got, _ = found(t, f.get(f.alice, "models?mine=true"))
-	require.ElementsMatch(t, models, got)
+	require.Subset(t, got, models)
+	// alpha allows lk-gemini-1 but has no account: its prices do not list it.
+	require.Contains(t, got, "lk-gemini-1")
 }

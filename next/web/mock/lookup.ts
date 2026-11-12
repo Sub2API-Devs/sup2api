@@ -8,7 +8,7 @@
 import { fail, on, type MockRequest } from './router'
 import { caller, filterOwned, hasPerm, ownerScope, type Identity } from './core'
 import { accounts } from './accounts'
-import { mockModelNames } from './billing'
+import { pricedModels } from './billing'
 import { ME_ID, groups, keys, myGroups, proxies, users } from './resources'
 
 interface Row {
@@ -95,7 +95,7 @@ const KINDS: Record<string, Kind> = {
     rows(_req, who, mine) {
       const permission = mine ? 'apikey:self:manage' : 'price:read'
       if (!hasPerm(who, permission)) return denied(permission)
-      return mockModelNames(mine).map((model) => ({ id: model, name: model }))
+      return pricedModels().map((model) => ({ id: model, name: model }))
     }
   },
   proxies: {

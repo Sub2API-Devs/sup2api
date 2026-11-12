@@ -21,12 +21,12 @@ func TestResolveExactModel(t *testing.T) {
 		       ('gpt-4o', 'per_token', 'tier("base", p*2.5)', 'h3', 'manual')`)
 	e.exec(`UPDATE model_prices SET enabled = false WHERE model = 'gpt-4o'`)
 	e.svc.invalidate()
-	if r, err := e.svc.Resolve(ctx, "claude-sonnet-4-5"); err != nil || r.Model != "claude-sonnet-4-5" || r.Mode != "per_token" {
+	if r, err := e.svc.Resolve(ctx, core.PriceQuery{Model: "claude-sonnet-4-5"}); err != nil || r.Model != "claude-sonnet-4-5" || r.Mode != "per_token" {
 		t.Fatalf("resolve: %+v %v", r, err)
 	}
 	// Exact match only; a disabled price counts as missing.
 	for _, m := range []string{"claude-sonnet-4-5-20250929", "claude-sonnet", "gpt-4o"} {
-		if _, err := e.svc.Resolve(ctx, m); core.AsError(err).Code != "model_price_not_configured" {
+		if _, err := e.svc.Resolve(ctx, core.PriceQuery{Model: m}); core.AsError(err).Code != "model_price_not_configured" {
 			t.Fatalf("resolve %s: err = %v", m, err)
 		}
 	}
@@ -42,11 +42,11 @@ func TestResolveExactModel(t *testing.T) {
 	}
 	// The bus invalidates the cache.
 	e.exec(`UPDATE model_prices SET expression = 'tier("base", p*9)' WHERE model = 'claude-sonnet-4-5'`)
-	if r, _ := e.svc.Resolve(ctx, "claude-sonnet-4-5"); r.Expression == `tier("base", p*9)` {
+	if r, _ := e.svc.Resolve(ctx, core.PriceQuery{Model: "claude-sonnet-4-5"}); r.Expression == `tier("base", p*9)` {
 		t.Fatal("cache should still serve the old answer before invalidation")
 	}
 	_ = e.bus.Publish(ctx, core.ChannelConfigChanged, []byte(`{"key":"prices"}`))
-	if r, _ := e.svc.Resolve(ctx, "claude-sonnet-4-5"); r.Expression != `tier("base", p*9)` {
+	if r, _ := e.svc.Resolve(ctx, core.PriceQuery{Model: "claude-sonnet-4-5"}); r.Expression != `tier("base", p*9)` {
 		t.Fatalf("after invalidation: %+v", r)
 	}
 	bodies, headers := e.svc.Inputs(&core.PriceRule{Expression: `tier("b", p) ||| param("service_tier") == "x" ? 2 : 1 ||| has(header("Anthropic-Beta"), "f") ? 2 : 1`})
@@ -56,7 +56,7 @@ func TestResolveExactModel(t *testing.T) {
 	// Free policy.
 	e.exec(`INSERT INTO settings (key, value) VALUES ('billing', '{"missing_price_policy":"free"}')`)
 	e.svc.invalidate()
-	if r, err := e.svc.Resolve(ctx, "gemini-2.5-pro"); r != nil || err != nil {
+	if r, err := e.svc.Resolve(ctx, core.PriceQuery{Model: "gemini-2.5-pro"}); r != nil || err != nil {
 		t.Fatalf("free policy: %v %v", r, err)
 	}
 }

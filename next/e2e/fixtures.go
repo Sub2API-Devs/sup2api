@@ -59,7 +59,7 @@ func (e *Env) NewTenant(admin *Session, o TenantOpts) *Tenant {
 		tn.Accounts = append(tn.Accounts, TenantAccount{ID: id, Key: key})
 	}
 	tn.User = e.CreateUser(admin, UserSpec{})
-	e.SetUserGroups(admin, tn.User.UserID, []int64{tn.GroupID})
+	e.GrantGroups(admin, tn.User.UserID, []int64{tn.GroupID})
 	if o.Balance != "0" {
 		e.AdjustBalance(admin, tn.User.UserID, o.Balance, true, "e2e initial credit")
 	}

@@ -371,6 +371,26 @@ describe('STable', () => {
     expect(b.attributes('aria-expanded')).toBe('true')
   })
 
+  it('lets a cell open its row, without the chevron column and one row at a time when asked', async () => {
+    const slots = { 'cell-name': '<button class="open" @click="params.toggleExpand()">{{ params.expanded }}</button>', expand: '<i class="more">{{ params.row.id }}</i>' }
+    const w = mount(STable, { props: { columns, rows, expandable: true, expandToggle: false, expandSingle: true }, slots })
+    expect(w.findAll('th')).toHaveLength(columns.length)
+    expect(w.find('button[aria-expanded]').exists()).toBe(false)
+    const open = w.findAll('.open')
+    await open[0].trigger('click')
+    await open[1].trigger('click')
+    expect(open.map(b => b.text())).toEqual(['false', 'true', 'false'])
+    expect(w.findAll('.more').map(e => e.text())).toEqual(['2'])
+    expect(w.get('.s-table-expand td').attributes('colspan')).toBe(String(columns.length))
+    // The row expandSingle closes says so before the one that opens.
+    expect(w.emitted('expand')).toEqual([[rows[0], true], [rows[0], false], [rows[1], true]])
+    await w.setProps({ expandSingle: false })
+    await open[0].trigger('click')
+    expect(w.findAll('.more').map(e => e.text())).toEqual(['1', '2'])
+    await open[0].trigger('click')
+    expect(w.findAll('.more').map(e => e.text())).toEqual(['2'])
+  })
+
   it('renders an IP column from configuration for any row schema and keeps actions off the row', async () => {
     const column: TableColumn = { key: 'network.remote', label: 'Remote address', format: 'ip', filterable: true }
     const row = { id: 1, network: { remote: '2001:db8::7' } }

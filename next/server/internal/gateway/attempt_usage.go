@@ -85,7 +85,7 @@ func (c *call) recordReplacementUsage(u *usagerules.Acc, rt *typeRoute) {
 	for _, attempt := range actual {
 		priced, ok := c.upstreamRefs[attempt.Kind+"\x00"+attempt.Model]
 		if attempt.Model == c.upstreamPrimaryModel && rt.usage.Attempts != nil && attempt.Kind == rt.usage.Attempts.Name {
-			priced = core.PricedUsage{Kind: attempt.Kind, Model: c.model, Price: clonePriceRule(c.rec.Price), PriceParams: c.rec.PriceParams, PriceHeaders: c.rec.PriceHeaders, RateMultiplier: c.rec.RateMultiplier}
+			priced = core.PricedUsage{Kind: attempt.Kind, Model: c.model, Price: c.rec.Price.Clone(), PriceParams: c.rec.PriceParams, PriceHeaders: c.rec.PriceHeaders, RateMultiplier: c.rec.RateMultiplier}
 			ok = true
 		}
 		if !ok {

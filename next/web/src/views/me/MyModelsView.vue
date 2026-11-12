@@ -1,81 +1,87 @@
 <script setup lang="ts">
-// Mine > Models & prices: what one of the caller's groups can use and what it
-// costs there, the model's price times the group's rate (CONTRACTS §79.4).
+// Mine > Models & prices: every model at its base price with the caller's
+// groups that provide it, or what one of those groups provides at what the
+// caller pays there, the list price times their rate (CONTRACTS §79.5). The
+// list price of a multiplier rule is the global price with `multiplier`:
+// priceCells works it into the numbers, as in the admin's tables.
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '@sub2api/host'
-import { SAlert, SBadge, SCard, SInput, SPageHeader, SSelect, STable, type TableColumn } from '@sub2api/ui'
+import { useRoute, useRouter } from 'vue-router'
+import { api, isApiError } from '@sub2api/host'
+import { SAlert, SBadge, SCard, SChip, SInput, SPageHeader, SSelect, STable, type TableColumn } from '@sub2api/ui'
+import type { MyPrices } from '@/api/pricing'
 import type { Group } from '@/api/types'
 import { fetchMyGroups } from '@/composables/lookups'
+import { useLatestRequest } from '@/composables/useLatestRequest'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
-import { num, parseExpression, summarize, tokenPricesFrom, normalizeVisual, hasVisualConfig, type PriceMode, type TokenPrices } from '@/views/prices/priceExpr'
-import { errorMessage } from '@/utils/errors'
-
-interface PriceRow {
-  model: string
-  mode: PriceMode
-  config: Record<string, any> | null
-  expression: string
-}
+import { priceCells, priceText, rateText, type PriceCells } from '@/components/pricing/pricingFormat'
+import { myGroupLabel } from '@/views/keys/myGroup'
+import { num } from '@/views/prices/priceExpr'
+import { notifyError } from '@/utils/errors'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const groups = ref<Group[]>([])
-const groupID = ref('')
-const rows = ref<PriceRow[]>([])
-const rate = ref(1)
-const loading = ref(false)
-const error = ref('')
 const search = ref('')
 
-const groupOptions = computed(() => groups.value.map((g) => ({ value: String(g.id), label: `${g.name} · ×${Number(g.rate_multiplier)}` })))
+/** The chosen group, kept in ?group= so that a link can open it; '' is every group, at the base price. */
+const groupID = computed({
+  get: () => (typeof route.query.group === 'string' && /^\d+$/.test(route.query.group) ? route.query.group : ''),
+  set: (id: string) => void router.replace({ query: { ...route.query, group: id || undefined } })
+})
+/** The link named a group the caller cannot use (any more): every group is shown instead, with a note, until a group is chosen. */
+const unavailable = ref(false)
+watch(groupID, (id) => {
+  if (id) unavailable.value = false
+})
 
-async function load() {
-  loading.value = true
-  error.value = ''
+/** GET /me/prices of the choice. A group the caller cannot use is a 404: the choice goes back to every group, answered here too so that no error shows meanwhile. */
+async function loadPrices(id: string): Promise<MyPrices> {
   try {
-    const r = await api.get<{ group?: { id: number }; prices: PriceRow[]; rate_multiplier: string }>('/me/prices', groupID.value ? { group_id: groupID.value } : {})
-    rows.value = r.prices || []
-    rate.value = Number(r.rate_multiplier) || 0
-    if (!groupID.value && r.group?.id) groupID.value = String(r.group.id)
+    return await api.get<MyPrices>('/me/prices', id ? { group_id: id } : {})
   } catch (e) {
-    rows.value = []
-    error.value = errorMessage(e)
-  } finally {
-    loading.value = false
+    if (!id || !isApiError(e) || e.status !== 404) throw e
+    unavailable.value = true
+    groupID.value = ''
+    return api.get<MyPrices>('/me/prices', {})
   }
 }
+// The answer stays while the next choice loads: what describes the rows below reads it, not the choice.
+const { result: prices, loading, error } = useLatestRequest(groupID, loadPrices, 0)
+
+const groupOptions = computed(() => [
+  { value: '', label: t('me.models.allGroups') },
+  ...groups.value.map((g) => ({ value: String(g.id), label: myGroupLabel(g, t('pricing.exclusive')) }))
+])
+
 onMounted(async () => {
   try {
     groups.value = await fetchMyGroups()
   } catch (e) {
-    error.value = errorMessage(e)
+    notifyError(e)
   }
-  await load()
-})
-watch(groupID, (v, old) => {
-  if (old) load()
 })
 
-/** The tokens' prices of a row, or a per-request price; a tiered model shows its first tier. */
-function priceOf(row: PriceRow): { perRequest?: number; tokens?: TokenPrices; tiers: number; custom?: boolean } {
-  const s = summarize(row.mode, row.config, row.expression)
-  if (s.kind === 'per_request') return { perRequest: s.price, tiers: 1 }
-  if (s.kind === 'per_token') return { tokens: s.prices, tiers: 1 }
-  if (s.kind === 'visual') {
-    const v = hasVisualConfig(row.config) ? normalizeVisual(row.config) : parseExpression(row.expression)
-    const first = v?.tiers[0]
-    if (first) return { tokens: tokenPricesFrom(first), tiers: s.tiers }
-  }
-  return { tiers: 1, custom: true }
+/** Whether the rows are every model at its base price, not those of one group. */
+const atBase = computed(() => prices.value?.group === null)
+const rate = computed(() => num(prices.value?.rate_multiplier, 1))
+const money = (v: number | null | undefined) => priceText(v, rate.value)
+/** A price that cannot be broken down: billed by its rules, times the multiplier of the group's or the caller's own rule when there is one. */
+const opaqueText = (price: PriceCells) => (price.multiplier === undefined ? t('me.models.custom') : t('me.models.customTimes', { rate: rateText(price.multiplier) }))
+
+/** What the prices of the rows are: the base ones, or the caller's in the group, and where their rate comes from unless it is the group's own. */
+function priceNotes(p: MyPrices): string[] {
+  if (!p.group) return [t('me.models.basePrice')]
+  const rated = t('me.models.rated', { rate: rateText(p.rate_multiplier) })
+  return p.rate_source && p.rate_source !== 'group' ? [rated, t(`me.models.rateSource.${p.rate_source}`)] : [rated]
 }
-function money(v: number | null | undefined): string {
-  if (v == null) return '—'
-  const n = num(v) * rate.value
-  return `$${Number(n.toFixed(4))}`
-}
+const unit = computed(() => [t('me.models.unit'), ...(prices.value ? priceNotes(prices.value) : [])].join(' · '))
+
 const shown = computed(() => {
   const q = search.value.trim().toLowerCase()
-  return (q ? rows.value.filter((r) => r.model.toLowerCase().includes(q)) : rows.value).map((r) => ({ ...r, price: priceOf(r) }))
+  const rows = prices.value?.prices ?? []
+  return (q ? rows.filter((r) => r.model.toLowerCase().includes(q)) : rows).map((r) => ({ ...r, price: priceCells(r) }))
 })
 
 const columns = computed<TableColumn[]>(() => [
@@ -83,7 +89,8 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'input', label: t('me.models.input'), align: 'right', width: '120px' },
   { key: 'output', label: t('me.models.output'), align: 'right', width: '120px' },
   { key: 'cacheRead', label: t('me.models.cacheRead'), align: 'right', width: '120px' },
-  { key: 'cacheWrite', label: t('me.models.cacheWrite'), align: 'right', width: '120px' }
+  { key: 'cacheWrite', label: t('me.models.cacheWrite'), align: 'right', width: '120px' },
+  ...(atBase.value ? [{ key: 'groups', label: t('me.models.groups') }] : [])
 ])
 </script>
 
@@ -93,23 +100,34 @@ const columns = computed<TableColumn[]>(() => [
     <div class="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface p-3 shadow-sm">
       <SSelect v-model="groupID" class="w-64" size="sm" :aria-label="t('me.models.group')" :options="groupOptions" data-testid="models-group" />
       <SInput v-model="search" class="w-64" size="sm" icon="search" clearable :placeholder="t('me.models.search')" :aria-label="t('me.models.search')" data-testid="models-search" />
-      <span class="ms-auto text-xs text-fg-muted" data-testid="models-unit">{{ t('me.models.unit', { rate }) }}</span>
+      <span class="ms-auto text-xs text-fg-muted" data-testid="models-unit">{{ unit }}</span>
     </div>
     <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
+    <SAlert v-if="unavailable" tone="warning" dense data-testid="models-group-unavailable">{{ t('me.models.groupUnavailable') }}</SAlert>
+    <SAlert v-if="atBase" tone="primary" dense data-testid="models-base-note">{{ t('me.models.baseNote') }}</SAlert>
     <SCard :padded="false" data-testid="models-table">
-      <STable :columns="columns" :rows="shown" :loading="loading" row-key="model" dense :empty-text="t('me.models.empty')">
+      <STable :columns="columns" :rows="shown" :loading="loading" row-key="model" dense :empty-text="t(atBase ? 'me.models.emptyAll' : 'me.models.empty')">
         <template #cell-model="{ row }">
-          <ModelBadge :model="row.model" />
-          <SBadge v-if="row.price.tiers > 1" tone="gray" class="ms-2">{{ t('me.models.tiered', { n: row.price.tiers }) }}</SBadge>
+          <div class="flex flex-wrap items-center gap-2">
+            <ModelBadge :model="row.model" />
+            <SBadge v-if="row.source === 'segment'" tone="primary" size="xs" data-testid="models-own-price">{{ t('pricing.source.segment') }}</SBadge>
+            <SBadge v-if="row.price.tiers > 1" tone="gray">{{ t('me.models.tiered', { n: row.price.tiers }) }}</SBadge>
+          </div>
         </template>
         <template #cell-input="{ row }">
-          <span v-if="row.price.perRequest != null" class="font-mono text-xs" data-testid="models-per-request">{{ t('me.models.perRequest', { price: money(row.price.perRequest) }) }}</span>
-          <span v-else-if="row.price.custom" class="text-xs text-fg-muted">{{ t('me.models.custom') }}</span>
+          <span v-if="row.price.perRequest != null" class="whitespace-nowrap font-mono text-xs" data-testid="models-per-request">{{ t('me.models.perRequest', { price: money(row.price.perRequest) }) }}</span>
+          <span v-else-if="row.price.opaque" class="text-xs text-fg-muted" data-testid="models-opaque">{{ opaqueText(row.price) }}</span>
           <span v-else class="font-mono text-xs">{{ money(row.price.tokens?.p) }}</span>
         </template>
         <template #cell-output="{ row }"><span class="font-mono text-xs">{{ money(row.price.tokens?.c) }}</span></template>
         <template #cell-cacheRead="{ row }"><span class="font-mono text-xs">{{ money(row.price.tokens?.cr) }}</span></template>
         <template #cell-cacheWrite="{ row }"><span class="font-mono text-xs">{{ money(row.price.tokens?.cc) }}</span></template>
+        <template #cell-groups="{ row }">
+          <div v-if="row.groups?.length" class="flex flex-wrap gap-1">
+            <SChip v-for="g in row.groups" :key="g.id" clickable size="xs" :title="t('me.models.viewGroup', { name: g.name })" data-testid="models-row-group" @click="groupID = String(g.id)">{{ g.name }}</SChip>
+          </div>
+          <span v-else class="text-xs text-fg-subtle">{{ t('me.models.noGroups') }}</span>
+        </template>
       </STable>
     </SCard>
   </div>

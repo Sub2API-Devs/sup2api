@@ -341,6 +341,22 @@ type pendingInputs struct {
 	Semantics    string             `json:"semantics"`
 	Params       map[string]string  `json:"params,omitempty"`
 	Headers      map[string]string  `json:"headers,omitempty"`
+	Pricing      *core.PricingTrace `json:"pricing,omitempty"` // price rule and rate source (CONTRACTS §97)
+}
+
+// pricingTrace is what a row freezes about its list price and its rate. It is
+// nil for the global price at the group's own rate, so such a row is stored
+// as it was before price rules existed.
+func pricingTrace(price *core.PriceRule, segmentID int64, rateSource string) *core.PricingTrace {
+	ruled := price != nil && (price.Scale != nil || price.Base != nil || price.Source != "" && price.Source != core.PriceSourceGlobal)
+	if !ruled && (rateSource == "" || rateSource == core.RateSourceGroup) {
+		return nil
+	}
+	trace := &core.PricingTrace{SegmentID: segmentID, RateSource: rateSource}
+	if price != nil {
+		trace.PriceSource, trace.Scale, trace.Base = price.Source, price.Scale, price.Base
+	}
+	return trace
 }
 
 type pendingDetail struct {
@@ -439,7 +455,8 @@ func (s *Service) insertAtomic(ctx context.Context, batch []*core.UsageRecord, b
 					}
 				}
 				detail = jsonOr(pendingDetail{Inputs: pendingInputs{
-					Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: rec.Additional, Replacement: rec.Replacement, BillingError: rec.BillingError}}, "{}")
+					Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: rec.Additional, Replacement: rec.Replacement, BillingError: rec.BillingError,
+					Pricing: pricingTrace(rec.Price, rec.SegmentID, rec.RateSource)}}, "{}")
 			}
 			// The observability markers have their own column, so they are
 			// written once here and never touched again: settle() rewrites
@@ -584,10 +601,11 @@ type balanceUpdate struct {
 func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, r reservedRow) (*core.LedgerResult, error) {
 	rec := r.rec
 	p := fromRecord(rec)
-	total, detail, _, err := s.priceOf(ctx, p)
+	cost, detail, _, err := s.priceOf(ctx, p)
 	if err != nil {
 		return nil, fmt.Errorf("price reservation: %w", err)
 	}
+	total := cost.total
 	res, err := s.settleLedgerTx(ctx, tx, p.UserID, p.RequestID, total)
 	if err != nil {
 		return nil, err
@@ -596,8 +614,8 @@ func (s *Service) reserveTx(ctx context.Context, tx pgx.Tx, r reservedRow) (*cor
 		detail.LedgerID = &res.LedgerID
 	}
 	if _, err := tx.Exec(ctx, `
-		UPDATE usage_logs SET total_cost = $2, billing_detail = $3, matched_tier = $4
-		WHERE id = $1`, r.id, total, jsonOr(detail, "{}"), trunc(detail.Tier, 100)); err != nil {
+		UPDATE usage_logs SET total_cost = $2, base_cost = $5, billing_detail = $3, matched_tier = $4
+		WHERE id = $1`, r.id, total, jsonOr(detail, "{}"), trunc(detail.Tier, 100), cost.base); err != nil {
 		return nil, err
 	}
 	rv := rec.Reservation
@@ -687,7 +705,7 @@ func fromRecord(rec *core.UsageRecord) *pending {
 		Model: rec.Model, Success: rec.Success, StatusCode: rec.StatusCode, ErrorType: rec.ErrorType,
 		Tokens: rec.Tokens, Metrics: core.CloneUsageMetrics(rec.Metrics), LatencyMs: rec.LatencyMs, CreatedAt: rec.CreatedAt,
 		Rate:   rec.RateMultiplier,
-		Inputs: pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: core.ClonePricedUsage(rec.Additional), Replacement: core.ClonePricedUsage(rec.Replacement), BillingError: rec.BillingError},
+		Inputs: pendingInputs{Semantics: rec.UsageSemantics, Params: rec.PriceParams, Headers: rec.PriceHeaders, Additional: core.ClonePricedUsage(rec.Additional), Replacement: core.ClonePricedUsage(rec.Replacement), BillingError: rec.BillingError, Pricing: pricingTrace(rec.Price, rec.SegmentID, rec.RateSource)},
 	}
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = time.Now()
@@ -696,6 +714,19 @@ func fromRecord(rec *core.UsageRecord) *pending {
 		p.PriceID, p.Mode, p.Expression = rec.Price.ID, rec.Price.Mode, rec.Price.Expression
 	}
 	return p
+}
+
+// price is the price rule frozen in the row's inputs, as far as priceOne
+// reads one: the multiplier and the base. It is a core.PriceRule because
+// PriceRule.Multiplier is where a rule's multiplier meets the rate. A retry
+// and a reconcile rebuild it from the row alone, so a rule changed after the
+// request does not change the charge.
+func (p *pending) price() *core.PriceRule {
+	rule := &core.PriceRule{}
+	if trace := p.Inputs.Pricing; trace != nil {
+		rule.Scale, rule.Base = trace.Scale, trace.Base
+	}
+	return rule
 }
 
 // BillingDetail is stored in usage_logs.billing_detail once billed. It holds
@@ -708,7 +739,8 @@ type BillingDetail struct {
 	Tier           string                    `json:"tier"`
 	Rules          []expr.RuleResult         `json:"rules"`
 	Breakdown      expr.Breakdown            `json:"breakdown"`
-	Cost           decimal.Decimal           `json:"cost"` // before the group multiplier
+	Cost           decimal.Decimal           `json:"cost"`                // at the global price, before the rate
+	ListCost       *decimal.Decimal          `json:"list_cost,omitempty"` // at the list price, before the rate; only when a price rule applied
 	RateMultiplier decimal.Decimal           `json:"rate_multiplier"`
 	TotalCost      decimal.Decimal           `json:"total_cost"` // charged
 	LedgerID       *int64                    `json:"ledger_id,omitempty"`
@@ -718,38 +750,49 @@ type BillingDetail struct {
 
 var errNotPending = errors.New("usage row is not pending")
 
+// amounts are the three figures of priced usage (CONTRACTS §97): base is its
+// cost at the global price and list its cost at the list price, both before
+// the rate; total is what is charged. Without a price rule base and list are
+// the same.
+type amounts struct{ base, list, total decimal.Decimal }
+
+func (a amounts) add(b amounts) amounts {
+	return amounts{base: a.base.Add(b.base), list: a.list.Add(b.list), total: a.total.Add(b.total)}
+}
+
 // settle computes the cost and, in one transaction, writes the ledger row,
 // the usage billing fields and the usage.recorded event.
-// priceOf runs the administrator's price expression over one pending row and
-// returns what it costs, the breakdown that records how, and the hash of the
-// expression used. It is the single place a usage figure becomes money:
-// settlement, a plugin's reservation and a reconcile that brings back the
-// real usage all go through it, so none of them can price a request
+// priceOne runs the administrator's price expression over one pending row and
+// returns what it costs (amounts), the breakdown that records how, and the
+// hash of the expression used. It is the single place a usage figure becomes
+// money: settlement, a plugin's reservation and a reconcile that brings back
+// the real usage all go through it, so none of them can price a request
 // differently from the others.
-func (s *Service) priceOne(ctx context.Context, p *pending) (total decimal.Decimal, detail BillingDetail, exprHash string, err error) {
+func priceOne(ctx context.Context, q core.Quoter, p *pending) (amounts, BillingDetail, string, error) {
 	if p.Expression == "" {
-		return decimal.Zero, BillingDetail{}, "", errors.New("price expression not found")
+		return amounts{}, BillingDetail{}, "", errors.New("price expression not found")
 	}
 	prog, err := expr.CompileCached(p.Expression)
 	if err != nil {
-		return decimal.Zero, BillingDetail{}, "", fmt.Errorf("compile price expression: %w", err)
+		return amounts{}, BillingDetail{}, "", fmt.Errorf("compile price expression: %w", err)
 	}
+	rule := p.price()
 	params := make(map[string]any, len(p.Inputs.Params))
 	for k, v := range p.Inputs.Params {
 		params[k] = v
 	}
-	amount, err := s.quoter.Quote(ctx, core.QuoteInputs{
+	amount, err := q.Quote(ctx, core.QuoteInputs{
 		Expression:     p.Expression,
 		UsageSemantics: p.Inputs.Semantics,
 		Tokens:         core.UsageTokens{Input: p.Tokens.Input, Output: p.Tokens.Output, CacheRead: p.Tokens.CacheRead, CacheCreation: p.Tokens.CacheCreation, CacheCreation1h: p.Tokens.CacheCreation1h},
 		Metrics:        p.Metrics,
 		PriceParams:    params,
 		PriceHeaders:   p.Inputs.Headers,
-		RateMultiplier: p.Rate,
+		RateMultiplier: rule.Multiplier(p.Rate),
 		CreatedAt:      p.CreatedAt,
 	})
 	if err != nil {
-		return decimal.Zero, BillingDetail{}, "", err
+		return amounts{}, BillingDetail{}, "", err
 	}
 
 	// Rebuild detail from the expression evaluation for the response.
@@ -760,45 +803,57 @@ func (s *Service) priceOne(ctx context.Context, p *pending) (total decimal.Decim
 	// exposes. Do not "optimise" the Quote call away: it applies the rate
 	// multiplier and rounding, so amount and res.Cost are not interchangeable.
 	// A future core.Quoter method returning both would remove this second pass.
-	t := p.Tokens
-	vars := expr.Normalize(p.Inputs.Semantics, expr.Tokens{
-		Input: t.Input, Output: t.Output, CacheRead: t.CacheRead,
-		CacheCreation: t.CacheCreation, CacheCreation1h: t.CacheCreation1h,
-	}, prog.Uses)
-	res, err := prog.Eval(expr.Input{Vars: vars, Metrics: p.Metrics, Params: p.Inputs.Params, Headers: p.Inputs.Headers, At: p.CreatedAt})
+	res, err := evaluate(prog, p)
 	if err != nil {
-		return decimal.Zero, BillingDetail{}, "", err
+		return amounts{}, BillingDetail{}, "", err
 	}
-
-	return amount, BillingDetail{
+	cost := amounts{base: res.Cost, list: res.Cost, total: amount}
+	detail := BillingDetail{
 		ExprVersion: prog.Version(), Tier: res.Tier, Rules: res.Rules, Breakdown: res.Breakdown,
 		Cost: res.Cost, RateMultiplier: p.Rate, TotalCost: amount, Inputs: p.Inputs, Attempts: p.Attempts + 1,
-	}, prog.Hash(), nil
+	}
+	if rule.Scale == nil && rule.Base == nil {
+		return cost, detail, prog.Hash(), nil
+	}
+	// A multiplier rule scales the global price: tier, rules and breakdown
+	// stay the global price's. A custom rule replaces it: they are the
+	// rule's, and the global price is evaluated for the base cost alone.
+	if rule.Scale != nil {
+		cost.list = res.Cost.Mul(*rule.Scale)
+	}
+	if rule.Base != nil {
+		if cost.base, err = baseCost(rule.Base, p); err != nil {
+			return amounts{}, BillingDetail{}, "", err
+		}
+	}
+	detail.Cost, detail.ListCost = cost.base, &cost.list
+	return cost, detail, prog.Hash(), nil
 }
 
-// priceOf is a test helper that prices a pending charge without a database.
-func priceOne(p *pending) (decimal.Decimal, BillingDetail, string, error) {
-	if p.Expression == "" {
-		return decimal.Zero, BillingDetail{}, "", errors.New("price expression not found")
-	}
-	prog, err := expr.CompileCached(p.Expression)
-	if err != nil {
-		return decimal.Zero, BillingDetail{}, "", fmt.Errorf("compile price expression: %w", err)
-	}
+// evaluate runs prog over the row's usage, normalized for the token classes
+// prog prices.
+func evaluate(prog *expr.Program, p *pending) (*expr.Result, error) {
 	t := p.Tokens
 	vars := expr.Normalize(p.Inputs.Semantics, expr.Tokens{
 		Input: t.Input, Output: t.Output, CacheRead: t.CacheRead,
 		CacheCreation: t.CacheCreation, CacheCreation1h: t.CacheCreation1h,
 	}, prog.Uses)
-	res, err := prog.Eval(expr.Input{Vars: vars, Metrics: p.Metrics, Params: p.Inputs.Params, Headers: p.Inputs.Headers, At: p.CreatedAt})
+	return prog.Eval(expr.Input{Vars: vars, Metrics: p.Metrics, Params: p.Inputs.Params, Headers: p.Inputs.Headers, At: p.CreatedAt})
+}
+
+// baseCost is what the row's usage costs at the global price a custom rule
+// replaced. The usage is normalized again: the two expressions may price
+// different cache classes.
+func baseCost(base *core.PriceBase, p *pending) (decimal.Decimal, error) {
+	prog, err := expr.CompileCached(base.Expression)
 	if err != nil {
-		return decimal.Zero, BillingDetail{}, "", err
+		return decimal.Zero, fmt.Errorf("compile base price expression: %w", err)
 	}
-	amount := res.Cost.Mul(p.Rate)
-	return amount, BillingDetail{
-		ExprVersion: prog.Version(), Tier: res.Tier, Rules: res.Rules, Breakdown: res.Breakdown,
-		Cost: res.Cost, RateMultiplier: p.Rate, TotalCost: amount, Inputs: p.Inputs, Attempts: p.Attempts + 1,
-	}, prog.Hash(), nil
+	res, err := evaluate(prog, p)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return res.Cost, nil
 }
 
 func (s *Service) settle(ctx context.Context, p *pending, skipLocked bool) error {
@@ -878,6 +933,18 @@ func (s *Service) RetryTaskSpec() core.TaskSpec {
 	}
 }
 
+// frozenPriceJoins is the FROM clause of a query that reads usage_logs u
+// back for pricing: h holds the expression the row froze, by its hash in the
+// price history, and mp the current expression of its price for a row whose
+// hash is not there. A row under a custom price rule gets no mp: its
+// price_id is the global price, not what it was priced at, so without its
+// history it has no expression and priceOne refuses it.
+const frozenPriceJoins = `
+		FROM usage_logs u
+		LEFT JOIN model_price_history h ON h.expr_hash = u.expr_hash
+		LEFT JOIN model_prices mp ON mp.id = u.price_id AND h.expr_hash IS NULL
+			AND u.billing_detail #> '{inputs,pricing,base}' IS NULL`
+
 // RetryPending settles pending/failed rows older than Options.RetryAfter
 // that have not exhausted their attempts. It returns the rows examined.
 func (s *Service) RetryPending(ctx context.Context) (int, error) {
@@ -899,10 +966,7 @@ func (s *Service) RetryPending(ctx context.Context) (int, error) {
 		       u.input_tokens, u.output_tokens,
 		       u.cache_read_tokens, u.cache_creation_tokens, u.cache_creation_1h_tokens, u.metrics, u.latency_ms,
 		       u.created_at, u.rate_multiplier, COALESCE(u.price_id, 0), u.billing_mode, u.billing_detail,
-		       COALESCE(h.expression, mp.expression, '')
-		FROM usage_logs u
-		LEFT JOIN model_price_history h ON h.expr_hash = u.expr_hash
-		LEFT JOIN model_prices mp ON mp.id = u.price_id AND h.expr_hash IS NULL
+		       COALESCE(h.expression, mp.expression, '')`+frozenPriceJoins+`
 		WHERE u.billing_status IN ('pending', 'failed')
 		  AND u.created_at < now() - make_interval(secs => $1)
 		  AND COALESCE((u.billing_detail->>'attempts')::int, 0) < $2
@@ -944,10 +1008,11 @@ func (s *Service) RetryPending(ctx context.Context) (int, error) {
 }
 
 func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, p *pending, skipLocked bool) (*core.LedgerResult, error) {
-	total, detail, exprHash, err := s.priceOf(ctx, p)
+	cost, detail, exprHash, err := s.priceOf(ctx, p)
 	if err != nil {
 		return nil, err
 	}
+	total := cost.total
 	var ledgerRes *core.LedgerResult
 	lock := `SELECT billing_status FROM usage_logs WHERE request_id = $1 FOR UPDATE`
 	if skipLocked {
@@ -976,9 +1041,9 @@ func (s *Service) settleTx(ctx context.Context, tx pgx.Tx, p *pending, skipLocke
 	}
 	_, err = tx.Exec(ctx, `
 			UPDATE usage_logs SET total_cost = $2, billing_status = 'billed', billing_detail = $3, matched_tier = $4,
-				expr_hash = $5, billing_mode = $6, price_id = $7, rate_multiplier = $8
+				expr_hash = $5, billing_mode = $6, price_id = $7, rate_multiplier = $8, base_cost = $9
 			WHERE request_id = $1`,
-		p.RequestID, total, jsonOr(detail, "{}"), trunc(detail.Tier, 100), exprHash, p.Mode, priceID, p.Rate)
+		p.RequestID, total, jsonOr(detail, "{}"), trunc(detail.Tier, 100), exprHash, p.Mode, priceID, p.Rate, cost.base)
 	if err != nil {
 		return nil, err
 	}

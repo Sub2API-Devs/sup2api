@@ -1,19 +1,21 @@
 // Mock handlers: users, roles, permissions, API keys, groups, proxies, nodes,
 // publishers. (Accounts and account types live in their own mock module.)
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
-import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
+import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, pricerUser, readonlyUser, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
+import { pricedModels } from './billing'
+import { accessOf, findSegment, forgetGroup, forgetUser, groupAccess, groupRuleCounts, moveUser, rateOf, segmentOfUser, segmentRef } from './pricingStore'
 
 type L = { en: string; zh: string }
 const L = (en: string, zh: string): L => ({ en, zh })
 
-function match(q: string | undefined, ...fields: Array<string | undefined | null>) {
+export function match(q: string | undefined, ...fields: Array<string | undefined | null>) {
   if (!q) return true
   const s = q.toLowerCase()
   return fields.some((f) => (f || '').toLowerCase().includes(s))
 }
 
-function invalid(field: string, message: string) {
+export function invalid(field: string, message: string) {
   return fail(400, 'invalid_argument', message, { fields: [{ field, code: 'invalid', message }] })
 }
 
@@ -38,6 +40,8 @@ const MODULES: ModuleDef[] = [
   { module: 'user', label: L('Users', '用户'), source: 'core', status: 'active', permissions: [
     { key: 'user:read', label: L('View', '查看') }, { key: 'user:create', label: L('Create', '新建') },
     { key: 'user:update', label: L('Edit', '编辑') }, { key: 'user:delete', label: L('Delete', '删除'), sensitive: true }] },
+  { module: 'segment', label: L('User groups', '用户组'), source: 'core', status: 'active', permissions: [
+    { key: 'segment:read', label: L('View', '查看') }, { key: 'segment:manage', label: L('Manage', '管理') }] },
   { module: 'role', label: L('Roles', '角色'), source: 'core', status: 'active', permissions: [
     { key: 'role:read', label: L('View', '查看') }, { key: 'role:manage', label: L('Manage', '管理'), sensitive: true }] },
   { module: 'apikey', label: L('API keys', 'API Key'), source: 'core', status: 'active', permissions: [
@@ -124,7 +128,9 @@ const roles: MockRole[] = [
   // CONTRACTS §21.1 typical roles: vendor (own-level only, no settings:custom) and read-only.
   { id: 5, key: 'vendor', name: L('Vendor', '供应商'), description: 'Maintains only the accounts and proxies it created', builtin: false, superuser: false, permission_keys: [...vendorUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
   { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: 7, key: 'moderator', name: L('Moderator', '审核员'), description: 'Runs the moderation plugin; looks up no user, group or account', builtin: false, superuser: false, permission_keys: [...moderatorUser.permissions], created_at: now(-86400 * 2), updated_at: now(-86400) }
+  { id: 7, key: 'moderator', name: L('Moderator', '审核员'), description: 'Runs the moderation plugin; looks up no user, group or account', builtin: false, superuser: false, permission_keys: [...moderatorUser.permissions], created_at: now(-86400 * 2), updated_at: now(-86400) },
+  // Group pricing without users (CONTRACTS §97.6): personal user groups go by "#<user id>".
+  { id: 8, key: 'pricer', name: L('Pricer', '定价员'), description: 'Prices groups and user groups, sees no users', builtin: false, superuser: false, permission_keys: [...pricerUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
 ]
 
 function roleOut(r: MockRole) {
@@ -186,7 +192,7 @@ on('POST', '/roles/:id/reset', (req) => {
 
 // ------------------------------------------------------------------ groups
 
-interface MockGroup {
+export interface MockGroup {
   id: number
   name: string
   description: string
@@ -209,7 +215,32 @@ export const groups: MockGroup[] = [
 // account_count and platforms come from the accounts mock (CONTRACTS §13);
 // the key count uses the server spelling api_key_count.
 function groupOut(g: MockGroup) {
-  return { ...g, account_count: groupAccountCount(g.id), platforms: groupPlatforms(g.id), api_key_count: keys.filter((k) => k.group_id === g.id).length }
+  return { ...g, account_count: groupAccountCount(g.id), platforms: groupPlatforms(g.id), api_key_count: keys.filter((k) => k.group_id === g.id).length, access: groupAccess(g), ...groupRuleCounts(g.id), model_count: groupModels(g).length }
+}
+
+const GLOB_SPECIALS = /[.+^${}()|[\]\\]/g
+
+function globMatch(pattern: string, s: string): boolean {
+  return new RegExp('^' + pattern.replace(GLOB_SPECIALS, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$').test(s)
+}
+
+/** The model policy of a group (core.GroupInfo.AllowsModel): an empty list allows every model. */
+function allowsModel(g: Pick<MockGroup, 'model_allowlist' | 'model_filter_mode'>, model: string): boolean {
+  if (!g.model_allowlist.length) return true
+  const listed = g.model_allowlist.some((p) => globMatch(p, model))
+  return g.model_filter_mode === 'blacklist' ? !listed : listed
+}
+
+/**
+ * The models a group provides: those its accounts declare, through its model
+ * policy. An account that declares none serves every model, which here is
+ * every model with a global price.
+ */
+export function groupModels(g: Pick<MockGroup, 'id' | 'model_allowlist' | 'model_filter_mode'>): string[] {
+  const members = accounts.filter((a) => a.group_ids.includes(g.id))
+  const declared: string[] = members.flatMap((a) => a.models || [])
+  const open = members.some((a) => !a.models?.length)
+  return [...new Set([...declared, ...(open ? pricedModels() : [])])].filter((m) => allowsModel(g, m)).sort()
 }
 
 function validateGroup(b: any) {
@@ -219,7 +250,12 @@ function validateGroup(b: any) {
   return null
 }
 
-on('GET', '/groups', (req) => paginate(groups.filter((g) => match(req.query.q, g.name, g.description)).map(groupOut), req.query))
+// ?model=<name> keeps the groups that provide that model.
+on('GET', '/groups', (req) => {
+  const { q, model } = req.query
+  const rows = groups.filter((g) => match(q, g.name, g.description) && (!model || groupModels(g).includes(model)))
+  return paginate(rows.map(groupOut), req.query)
+})
 on('GET', '/groups/:id/models', req => {
  const gid = Number(req.params.id)
  if (!groups.some(g => g.id === gid)) return fail(404, 'not_found', 'group not found')
@@ -271,18 +307,18 @@ on('DELETE', '/groups/:id', (req) => {
   }
   for (const k of keys) if (k.group_id === g.id) k.group_id = to
   groups.splice(groups.indexOf(g), 1)
+  forgetGroup(g.id)
   return noContent()
 })
 
 // ------------------------------------------------------------------ users
 
-interface MockUser {
+export interface MockUser {
   id: number
   email: string
   display_name: string
   status: string
   roles: string[]
-  group_ids: number[]
   balance: string
   last_login_at: string | null
   created_at: string
@@ -290,38 +326,60 @@ interface MockUser {
 }
 
 export const users: MockUser[] = [
-  { id: 1, email: 'admin@example.com', display_name: 'Admin', status: 'active', roles: ['super_admin'], group_ids: [1, 2], balance: '12.34000000', last_login_at: now(-60), created_at: now(-86400 * 90), updated_at: now(-86400) },
-  { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', roles: ['operator', 'user'], group_ids: [1], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
-  { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', roles: ['operator'], group_ids: [1, 2], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
-  { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', roles: ['user'], group_ids: [2], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
-  { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', roles: ['user'], group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
-  { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', roles: ['vendor'], group_ids: [1], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], group_ids: [], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: moderatorUser.id, email: moderatorUser.email, display_name: moderatorUser.display_name, status: 'active', roles: ['moderator'], group_ids: [], balance: '0.00000000', last_login_at: now(-3600), created_at: now(-86400 * 2), updated_at: now(-86400) }
+  { id: 1, email: 'admin@example.com', display_name: 'Admin', status: 'active', roles: ['super_admin'], balance: '12.34000000', last_login_at: now(-60), created_at: now(-86400 * 90), updated_at: now(-86400) },
+  { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', roles: ['operator', 'user'], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
+  { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', roles: ['operator'], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
+  { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', roles: ['user'], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
+  { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', roles: ['user'], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
+  { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', roles: ['vendor'], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: pricerUser.id, email: pricerUser.email, display_name: pricerUser.display_name, status: 'active', roles: ['pricer'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: moderatorUser.id, email: moderatorUser.email, display_name: moderatorUser.display_name, status: 'active', roles: ['moderator'], balance: '0.00000000', last_login_at: now(-3600), created_at: now(-86400 * 2), updated_at: now(-86400) }
 ]
 for (let i = 0; i < 18; i++) {
-  users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', roles: ['user'], group_ids: [1], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
+  users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', roles: ['user'], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
 }
 
 function findUser(req: MockRequest) {
   return users.find((u) => u.id === Number(req.params.id))
 }
 
+/** A user as the API returns it: with its segment. */
+export function userOut(u: MockUser) {
+  return { ...u, segment: segmentRef(segmentOfUser(u.id)) }
+}
+
+/** The ?segment= filter of the users list: a segment id, or "personal" for every personal segment. */
+function inSegment(u: MockUser, want: string | undefined) {
+  if (!want) return true
+  const s = segmentOfUser(u.id)
+  return want === 'personal' ? s.kind === 'personal' : s.id === Number(want)
+}
+
 on('GET', '/users', (req) => {
-  const { q, status, role } = req.query
-  const items = users.filter((u) => match(q, u.email, u.display_name) && (!status || u.status === status) && (!role || u.roles.includes(role)))
-  return paginate(items, req.query)
+  const { q, status, role, segment } = req.query
+  const items = users.filter((u) => match(q, u.email, u.display_name) && (!status || u.status === status) && (!role || u.roles.includes(role)) && inSegment(u, segment))
+  return paginate(items.map(userOut), req.query)
 })
-on('GET', '/users/:id', (req) => findUser(req) || fail(404, 'not_found', 'user not found'))
+on('GET', '/users/:id', (req) => {
+  const u = findUser(req)
+  return u ? userOut(u) : fail(404, 'not_found', 'user not found')
+})
 on('POST', '/users', (req) => {
   const b = req.body || {}
+  // Choosing the user group is a segment assignment: it needs segment:manage as well, checked before the fields.
+  if (b.segment_id != null && !hasPerm(caller(req), 'segment:manage')) return fail(403, 'permission_denied', 'segment:manage is required', { permission: 'segment:manage' })
   if (!/^[^@\s]+@[^@\s]+$/.test(b.email || '')) return invalid('email', 'invalid email')
   if (users.some((u) => u.email === b.email)) return invalid('email', 'email already registered')
   if (!b.password || String(b.password).length < 8) return invalid('password', 'password must be at least 8 characters')
+  // segment_id: the named user group the user starts in; without it, the default one.
+  const segment = b.segment_id == null ? null : findSegment(Number(b.segment_id))
+  if (segment !== null && segment?.kind !== 'named') return invalid('segment_id', 'unknown user group')
   const roleKeys: string[] = Array.isArray(b.role_keys) && b.role_keys.length ? b.role_keys : ['user']
-  const u: MockUser = { id: nextId(), email: b.email, display_name: b.display_name || '', status: 'active', roles: roleKeys, group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(), updated_at: now() }
+  const u: MockUser = { id: nextId(), email: b.email, display_name: b.display_name || '', status: 'active', roles: roleKeys, balance: '0.00000000', last_login_at: null, created_at: now(), updated_at: now() }
   users.unshift(u)
-  return u
+  if (segment) moveUser(u.id, segment)
+  return userOut(u)
 })
 on('PATCH', '/users/:id', (req) => {
   const u = findUser(req)
@@ -330,13 +388,14 @@ on('PATCH', '/users/:id', (req) => {
   if (b.display_name !== undefined) u.display_name = b.display_name
   if (b.status !== undefined) u.status = b.status
   u.updated_at = now()
-  return u
+  return userOut(u)
 })
 on('DELETE', '/users/:id', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
   if (u.roles.includes('super_admin') && users.filter((x) => x.roles.includes('super_admin')).length <= 1) return fail(409, 'conflict', 'at least one super_admin must remain')
   users.splice(users.indexOf(u), 1)
+  forgetUser(u.id)
   return noContent()
 })
 on('PUT', '/users/:id/roles', (req) => {
@@ -346,13 +405,7 @@ on('PUT', '/users/:id/roles', (req) => {
   const bad = keys.find((k) => !roles.some((r) => r.key === k))
   if (bad) return invalid('role_keys', `unknown role ${bad}`)
   u.roles = keys
-  return u
-})
-on('PUT', '/users/:id/groups', (req) => {
-  const u = findUser(req)
-  if (!u) return fail(404, 'not_found', 'user not found')
-  u.group_ids = Array.isArray(req.body?.group_ids) ? req.body.group_ids.map(Number) : []
-  return u
+  return userOut(u)
 })
 on('POST', '/users/:id/balance/adjust', (req) => {
   const u = findUser(req)
@@ -413,8 +466,7 @@ function keyGroupStatus(k: MockKey) {
   const g = groups.find((x) => x.id === k.group_id)
   if (!g) return 'deleted'
   if (g.status !== 'active') return 'disabled'
-  const owner = users.find((u) => u.id === k.user_id)
-  return g.visibility === 'public' || owner?.group_ids.includes(g.id) ? 'active' : 'unavailable'
+  return accessOf(segmentOfUser(k.user_id), g).accessible ? 'active' : 'unavailable'
 }
 
 /** How much of a key the server keeps readable (key_prefix). */
@@ -446,12 +498,23 @@ function randomToken(n: number) {
   return s
 }
 
-export function myGroups() {
-  const me = users.find((u) => u.id === ME_ID)
-  return groups.filter((g) => g.status === 'active' && (g.visibility === 'public' || me?.group_ids.includes(g.id))).map(groupOut)
+/** The active groups the segment of a user may use, each with the rate that user gets in it. */
+export function myGroups(userId = ME_ID) {
+  const s = segmentOfUser(userId)
+  return groups
+    .filter((g) => g.status === 'active' && accessOf(s, g).accessible)
+    .map((g) => {
+      const rate = rateOf(s, g)
+      return { ...groupOut(g), effective_rate: rate.value, rate_source: rate.source, exclusive: g.visibility === 'restricted' }
+    })
 }
 
-on('GET', '/me/groups', () => myGroups())
+/** A row of GET /me/groups: the fields the server's group.MyGroup has, no more. */
+function myGroupOut(g: ReturnType<typeof myGroups>[number]) {
+  const { id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms, effective_rate, rate_source, exclusive } = g
+  return { id, name, description, rate_multiplier, model_allowlist, model_filter_mode, platforms, effective_rate, rate_source, exclusive }
+}
+on('GET', '/me/groups', (req) => myGroups(caller(req).id).map(myGroupOut))
 /** A key under the status filter: one that is switched off is "disabled" even past its expiry. */
 function keyListStatus(k: MockKey) {
   if (k.status !== 'active') return 'disabled'

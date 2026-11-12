@@ -7,9 +7,9 @@ import { mountPinned } from '@sub2api/ui/testing'
 import GroupsView from './GroupsView.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 
-const { get } = vi.hoisted(() => ({ get: vi.fn() }))
+const { get, denied } = vi.hoisted(() => ({ get: vi.fn(), denied: new Set<string>() }))
 vi.mock('@sub2api/host', () => ({ api: { get } }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !denied.has(key) }) }))
 vi.mock('@/composables/lookups', async original => ({ ...(await original<object>()), useGroupsLookup: vi.fn() }))
 const group = (id: number, name: string, over: Partial<Group> = {}): Group => ({
   id,
@@ -40,7 +40,10 @@ const options = {
       EnvironmentEditor: true,
       GroupAccountsEditor: true,
       GroupModelPolicyEditor: true,
-      GroupDeleteModal: true
+      GroupSegmentsEditor: true,
+      GroupPricingEditor: true,
+      GroupDeleteModal: true,
+      PriceSimulatorModal: true
     }
   }
 }
@@ -56,6 +59,7 @@ async function openDetail(w: View, index: number) {
 describe('groups page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    denied.clear()
     i18n.global.locale.value = 'zh'
     items.value = [group(1, 'default', { platforms: ['anthropic', 'openai'] }), group(2, 'trial', { account_count: 0, platforms: [] })]
     get.mockImplementation(async (path: string) =>
@@ -65,15 +69,63 @@ describe('groups page', () => {
 
   it('lists the groups without the platforms they serve', () => {
     const w = render()
-    expect(w.findAll('thead th').map(th => th.text())).toEqual(['名称', '可见性', '倍率', '模型名单', '账号数', 'Key 数', '状态', '操作'])
+    expect(w.findAll('thead th').map(th => th.text())).toEqual(['名称', '谁能用', '默认倍率', '模型定价', '模型名单', '账号数', 'Key 数', '状态', '操作'])
     expect(rows(w).map(r => r.get('[data-testid="group-name"]').text())).toEqual(['default', 'trial'])
     expect(w.find('[data-testid="platform-badge"], [data-platform]').exists()).toBe(false)
+  })
+
+  it('says who can use a group: everyone, the user groups a private one is granted to, or nobody yet', () => {
+    const named = (id: number, name: string) => ({ id, kind: 'named' as const, name })
+    items.value = [
+      group(1, 'open'),
+      group(2, 'vip', { visibility: 'restricted', access: { segments: [named(2, 'VIP'), named(3, 'Corp'), named(4, 'Staff')], personal_count: 2 } }),
+      group(3, 'closed', { visibility: 'restricted', access: { segments: [], personal_count: 0 } })
+    ]
+    const access = rows(render()).map(r => r.get('[data-testid="group-access"]'))
+    expect(access[0].text()).toBe('所有人')
+    expect(access[1].findAll('[data-testid="segment-badge"]').map(b => b.text())).toEqual(['VIP', 'Corp'])
+    expect(access[1].text()).toContain('+1')
+    expect(access[1].get('[data-testid="group-access-personal"]').text()).toBe('2 位个人专属')
+    expect(access[2].text()).toBe('还没授权给任何人')
+  })
+
+  it('sums up the model pricing of a group and opens its editor on that tab', async () => {
+    items.value = [group(1, 'default', { model_count: 7 }), group(2, 'vip', { price_rule_count: 1, segment_rule_count: 2, model_count: 3 })]
+    const w = render()
+    const [plain, priced] = rows(w)
+    expect(plain.get('[data-testid="group-pricing-summary"]').text()).toBe('跟随全局')
+    expect(plain.get('[data-testid="group-model-count"]').text()).toBe('提供 7 个模型')
+    const summary = priced.get('[data-testid="group-pricing-summary"]')
+    expect(summary.findAll('span').map(s => s.text())).toEqual(['1 个模型单独定价', '2 条用户组专属价'])
+    await summary.trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('编辑分组 vip')
+    expect(w.get('[role="tab"][aria-selected="true"]').text()).toBe('模型定价')
+  })
+
+  it('shows access and pricing read-only to a caller who may not manage groups', async () => {
+    denied.add('group:manage')
+    items.value = [group(2, 'vip', { visibility: 'restricted', price_rule_count: 1 })]
+    const w = render()
+    expect(w.findAll('thead th').map(th => th.text())).not.toContain('操作')
+    await rows(w)[0].get('[data-testid="group-pricing-summary"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid="group-pricing-view"]').findAll('[role="tab"]').map(t => t.text())).toEqual(['授权与倍率', '模型定价'])
+    expect(w.get('[role="tab"][aria-selected="true"]').text()).toBe('模型定价')
+    expect(w.text()).toContain('vip 的授权与定价')
+    expect(w.text()).not.toContain('编辑分组')
+    await w.get('[data-testid="group-pricing-view-close"]').trigger('click')
+
+    await openDetail(w, 0)
+    await w.get('[data-testid="group-detail-pricing"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[role="tab"][aria-selected="true"]').text()).toBe('授权与倍率')
   })
 
   it('warns beside the account count of a group without accounts, as an icon with the sentence behind it', () => {
     const [served, empty] = rows(render())
     expect(served.find('[data-testid="group-no-accounts"]').exists()).toBe(false)
-    const count = empty.findAll('td')[4]
+    const count = empty.findAll('td')[5]
     expect(count.get('[data-testid="group-no-accounts"]').attributes('aria-label')).toBe('暂无账号，无法提供服务。')
     expect(count.text()).toBe('0')
   })
@@ -103,6 +155,8 @@ describe('groups page', () => {
     const detail = await openDetail(w, 0)
     expect(get).toHaveBeenCalledWith('/groups/1')
     expect(detail.text()).not.toContain('平台')
+    expect(detail.get('[data-testid="group-access"]').text()).toBe('所有人')
+    expect(detail.get('[data-testid="group-pricing-summary"]').text()).toBe('跟随全局')
     expect(detail.find('[data-testid="group-no-accounts"]').exists()).toBe(false)
     expect(w.getComponent(PlatformEndpointsPreview).props()).toMatchObject({ ids: ['anthropic', 'openai'] })
   })

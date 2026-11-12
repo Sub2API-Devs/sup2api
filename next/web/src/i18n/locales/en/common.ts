@@ -81,6 +81,12 @@ export default {
     dark: 'Dark mode'
   },
   language: 'Language',
+  unsaved: {
+    title: 'Discard unsaved changes?',
+    message: 'Some changes here are not saved yet and are lost if you leave.',
+    stay: 'Keep editing',
+    discard: 'Discard changes'
+  },
   secondsAgo: '{n}s ago',
   minutesAgo: '{n}m ago',
   hoursAgo: '{n}h ago',

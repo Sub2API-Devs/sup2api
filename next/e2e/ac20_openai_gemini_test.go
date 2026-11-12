@@ -86,7 +86,7 @@ func TestAC20_OpenAIGeminiAPIKeys(t *testing.T) {
 	geminiID := e.CreateAccount(admin, AccountSpec{PluginKey: GeminiPlugin, Type: APIKeyType, GroupIDs: []int64{gid}, APIKey: geminiKey})
 	defer m.ClearRule(t, openaiKey)
 	defer m.ClearRule(t, geminiKey)
-	e.SetUserGroups(admin, tn.User.UserID, []int64{tn.GroupID, gid})
+	e.GrantGroups(admin, tn.User.UserID, []int64{tn.GroupID, gid})
 	keyID, key := e.CreateAPIKey(tn.User, gid)
 	if ids := e.GroupPlatforms(admin, gid); !slices.Equal(ids, []string{"gemini", "openai"}) {
 		t.Fatalf("group platforms = %v, want [gemini openai]", ids)

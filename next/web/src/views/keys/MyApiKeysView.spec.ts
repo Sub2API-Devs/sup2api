@@ -43,7 +43,7 @@ enableAutoUnmount(afterEach)
 
 const GROUPS = [
   { id: 1, name: 'default', rate_multiplier: '1', platforms: ['anthropic'], model_allowlist: [] },
-  { id: 2, name: 'vip', rate_multiplier: '0.8', platforms: ['anthropic', 'openai'], model_allowlist: ['claude-sonnet-4-5'] }
+  { id: 2, name: 'vip', rate_multiplier: '0.8', effective_rate: '0.72', exclusive: true, platforms: ['anthropic', 'openai'], model_allowlist: ['claude-sonnet-4-5'] }
 ]
 const key = (k: Partial<ApiKey> = {}): ApiKey => ({
   id: 7,
@@ -93,6 +93,7 @@ const lastListQuery = () => listQueries().at(-1)!
 const stubs = {
   Teleport: true,
   SChart: true,
+  RouterLink: true,
   KeyUseMenu: {
     props: ['apiKey', 'platforms'],
     emits: ['guide'],
@@ -549,13 +550,14 @@ describe('API key row actions', () => {
     // The menu itself is SDropdown's (it closes at once without layout here).
     const move = rowOf(w, 'laptop').getComponent(KeyGroupSwitch)
     expect(move.props('options')).toEqual([
-      { value: 1, label: 'default · anthropic' },
-      { value: 2, label: 'vip · anthropic, openai' }
+      { value: 1, label: 'default · ×1 · anthropic' },
+      { value: 2, label: 'vip · ×0.72 · 专属 · anthropic, openai' }
     ])
     move.vm.$emit('change', 2)
     await flushPromises()
     expect(mocks.patch).toHaveBeenCalledWith('/me/api-keys/7', { group_id: 2 })
-    expect(rowOf(w, 'laptop').get(tid('group-badge')).text()).toBe('vip0.8x')
+    // The rate on the badge is the owner's own in the group, not its default.
+    expect(rowOf(w, 'laptop').get(tid('group-badge')).text()).toBe('vip0.72x')
     expect(mocks.list).not.toHaveBeenCalled()
   })
 

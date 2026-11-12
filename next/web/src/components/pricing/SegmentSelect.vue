@@ -1,0 +1,34 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { SSelect, type SelectOption } from '@sub2api/ui'
+import type { Segment } from '@/api/pricing'
+import { hasDiscount, rateText } from './pricingFormat'
+import { useSegmentsLookup } from './segmentLookup'
+
+// Picks one named segment. An option reads "VIP · ×0.9 on every group"; the
+// default segment says so. Personal segments are not offered: a user gets one
+// through PersonalConvertDialog.
+const props = defineProps<{ modelValue: number | null; disabled?: boolean; placeholder?: string; exclude?: number[] }>()
+const emit = defineEmits<{ (e: 'update:modelValue', v: number | null): void }>()
+const { t } = useI18n()
+const { segments } = useSegmentsLookup()
+
+function label(s: Segment): string {
+  const marks = [s.is_default ? t('pricingTools.segment.default') : '', hasDiscount(s) ? t('pricingTools.segment.discount', { rate: rateText(s.discount) }) : '']
+  return [s.name, ...marks.filter(Boolean)].join(' · ')
+}
+
+const options = computed<SelectOption[]>(() => segments.value.filter((s) => !props.exclude?.includes(s.id)).map((s) => ({ value: s.id, label: label(s) })))
+</script>
+
+<template>
+  <SSelect
+    :model-value="modelValue"
+    :options="options"
+    :placeholder="placeholder ?? t('pricingTools.segment.placeholder')"
+    :disabled="disabled"
+    data-testid="segment-select"
+    @update:model-value="emit('update:modelValue', typeof $event === 'number' ? $event : null)"
+  />
+</template>

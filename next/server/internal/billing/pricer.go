@@ -21,6 +21,7 @@ const (
 type priceSnapshot struct {
 	at      time.Time
 	byModel map[string]core.PriceRule // one price per complete model id
+	rules   ruleSet                   // price rules of groups and segments
 }
 
 type resolved struct {
@@ -65,10 +66,13 @@ func (s *Service) snapshot(ctx context.Context) (*priceSnapshot, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if snap.rules, err = loadRules(ctx, s.db.Pool, ""); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	if s.epoch == epoch {
 		s.prices = snap
-		s.resolved = map[string]resolved{}
+		s.resolved = map[core.PriceQuery]resolved{}
 	}
 	s.mu.Unlock()
 	return snap, nil
@@ -83,12 +87,25 @@ func (snap *priceSnapshot) match(model string) *core.PriceRule {
 	return &r
 }
 
+// resolve returns the list price q asks for, or nil when the model has no
+// global price: the first price rule that applies to the group and segment of
+// q, else the global price (CONTRACTS §97).
+func (snap *priceSnapshot) resolve(q core.PriceQuery) *core.PriceRule {
+	global := snap.match(q.Model)
+	if global == nil {
+		return nil
+	}
+	rule, source := snap.rules.levels(q).applied(global.Mode)
+	return rule.price(*global, source)
+}
+
 // Resolve implements core.Pricer. Prices are global per model: the platform
-// and account type serving the request do not matter (ARCHITECTURE 7.3).
-func (s *Service) Resolve(ctx context.Context, model string) (*core.PriceRule, error) {
-	key := model
+// and account type serving the request do not matter (ARCHITECTURE 7.3). A
+// price rule of the caller's group or segment may replace or scale the
+// global price; without a global price no rule applies.
+func (s *Service) Resolve(ctx context.Context, q core.PriceQuery) (*core.PriceRule, error) {
 	s.mu.Lock()
-	hit, ok := s.resolved[key]
+	hit, ok := s.resolved[q]
 	s.mu.Unlock()
 	var rule *core.PriceRule
 	if ok && time.Since(hit.at) < s.cacheTTL {
@@ -98,16 +115,15 @@ func (s *Service) Resolve(ctx context.Context, model string) (*core.PriceRule, e
 		if err != nil {
 			return nil, err
 		}
-		rule = snap.match(model)
+		rule = snap.resolve(q)
 		s.mu.Lock()
 		if s.prices == snap {
-			s.resolved[key] = resolved{at: snap.at, rule: rule}
+			s.resolved[q] = resolved{at: snap.at, rule: rule}
 		}
 		s.mu.Unlock()
 	}
 	if rule != nil {
-		r := *rule
-		return &r, nil
+		return rule.Clone(), nil
 	}
 	st, err := s.Settings(ctx)
 	if err != nil {
@@ -116,7 +132,7 @@ func (s *Service) Resolve(ctx context.Context, model string) (*core.PriceRule, e
 	if st.MissingPricePolicy == PolicyFree {
 		return nil, nil
 	}
-	return nil, core.ErrPriceNotConfigured.WithDetails(map[string]any{"model": model})
+	return nil, core.ErrPriceNotConfigured.WithDetails(map[string]any{"model": q.Model})
 }
 
 // Inputs implements core.Pricer: the body paths and header names the

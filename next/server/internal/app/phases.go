@@ -57,6 +57,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/proxy"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ratelimit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/updater"
@@ -189,7 +190,8 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	}
 	b.az = az
 	b.settler.Authz = az
-	b.idm = iam.New(iam.Deps{DB: b.db, Redis: b.rdb, Config: cfg, Events: b.events, Authz: az, Cipher: b.cipher})
+	b.bill.Authz = az
+	b.idm = iam.New(iam.Deps{DB: b.db, Redis: b.rdb, Config: cfg, Events: b.events, Authz: az, Cipher: b.cipher, PriceRulesChanged: b.bill.PriceRulesChanged})
 	if b.managed == nil || b.managed.prepare.Bootstrap {
 		if err := b.idm.Bootstrap(b.ctx); err != nil {
 			return nil, fmt.Errorf("bootstrap admin: %w", err)
@@ -511,6 +513,7 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 	b.idm.RegisterRoutes(r)
 	b.az.RegisterRoutes(r)
 	b.grp.RegisterRoutes(r)
+	segment.New(segment.Deps{DB: b.db, Authz: b.az, Platforms: b.grp.Platforms, PriceRulesChanged: b.bill.PriceRulesChanged}).RegisterRoutes(r)
 	b.env.RegisterRoutes(r)
 	b.ntf.RegisterRoutes(r)
 	b.keys.RegisterRoutes(r)

@@ -13,7 +13,11 @@ export default {
   },
   title: 'Model prices',
   description: 'Billing expressions per model. Prices are maintained by admins: entered manually or imported from a sync source.',
-  scopeNote: 'Prices are set globally per model, whatever endpoint or account type serves the request. The expression gives the base price; the amount charged = base price × group rate multiplier.',
+  scopeNote: 'These are the global prices. A group can price a model on its own, and a user group can have prices and rates of its own; the amount charged = list price × rate.',
+  scopeNoteEdit: 'Prices are set globally per model, whatever endpoint or account type serves the request. This is the global price: a group or a user group can price the model on its own, and the amount charged = list price × rate.',
+  scopeLinks: { groups: 'Groups', segments: 'User groups' },
+  simulate: 'Price simulator',
+  simulateModel: 'Simulate this model',
   new: 'New price',
   newTitle: 'New price',
   editTitle: 'Edit price · {name}',
@@ -105,6 +109,7 @@ export default {
     subtotal: 'Subtotal',
     rules: 'combined rule multiplier',
     base: 'Base cost',
+    listScale: 'list price multiplier',
     groupRate: 'group rate'
   },
   summary: {

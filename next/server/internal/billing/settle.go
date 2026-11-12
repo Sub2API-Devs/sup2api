@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 // The ledger's row lock on user_balances serialises every charge of one user,
@@ -23,7 +24,7 @@ import (
 // ensureBalanceSQL creates the balance row a later statement locks. It is a
 // statement of its own because a data-modifying CTE's rows are invisible to
 // the rest of the same statement. An unknown user fails here with the users
-// foreign key (isFKViolation → not found).
+// foreign key (store.IsForeignKeyViolation → not found).
 const ensureBalanceSQL = `INSERT INTO user_balances (user_id) VALUES ($1::bigint) ON CONFLICT DO NOTHING`
 
 // applySQL is ApplyTx in one statement: find an existing ledger row for the
@@ -221,7 +222,7 @@ func (s *Service) SettleTx(ctx context.Context, tx pgx.Tx, userID int64, request
 	br := tx.SendBatch(ctx, b)
 	if _, err := br.Exec(); err != nil {
 		_ = br.Close()
-		if isFKViolation(err) {
+		if store.IsForeignKeyViolation(err) {
 			return nil, core.ErrNotFound.WithMessage("user not found").WithCause(err)
 		}
 		return nil, err

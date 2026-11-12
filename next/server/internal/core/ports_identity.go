@@ -138,10 +138,16 @@ type GroupInfo struct {
 	ConversionLossPolicy string
 }
 
-// APIKeyPrincipal is the result of gateway authentication.
+// APIKeyPrincipal is the result of gateway authentication. Group.RateMultiplier
+// is the rate the key's owner pays in the group (SegmentRate), not the
+// group's default.
 type APIKeyPrincipal struct {
 	KeyID  int64
 	UserID int64
+	// SegmentID is the segment of the key's owner; RateSource is where
+	// Group.RateMultiplier comes from (RateSource*).
+	SegmentID  int64
+	RateSource string
 	// KeyLimits and KeyQuota are the caps the key's owner set on it.
 	KeyLimits KeyLimits
 	KeyQuota  KeyQuota

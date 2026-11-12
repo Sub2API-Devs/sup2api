@@ -2,14 +2,12 @@ package billing
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redis/go-redis/v9"
 	"github.com/shopspring/decimal"
 
@@ -103,7 +101,7 @@ func (s *Service) ApplyTx(ctx context.Context, tx pgx.Tx, ch core.LedgerChange) 
 	br := tx.SendBatch(ctx, b)
 	if _, err := br.Exec(); err != nil {
 		_ = br.Close()
-		if isFKViolation(err) {
+		if store.IsForeignKeyViolation(err) {
 			return nil, core.ErrNotFound.WithMessage("user not found").WithCause(err)
 		}
 		return nil, err
@@ -211,9 +209,4 @@ func (s *Service) CheckBalance(ctx context.Context, userID int64) error {
 // meetsMin checks if balance meets the minimum threshold: balance > min.
 func meetsMin(balance, min decimal.Decimal) bool {
 	return balance.GreaterThan(min)
-}
-
-func isFKViolation(err error) bool {
-	var pg *pgconn.PgError
-	return errors.As(err, &pg) && pg.Code == "23503"
 }

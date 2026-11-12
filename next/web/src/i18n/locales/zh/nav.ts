@@ -20,6 +20,7 @@ export default {
     usage: '全站日志',
     ledger: '余额流水',
     users: '用户',
+    segments: '用户组',
     roles: '角色与权限',
     plugins: '已安装插件',
     market: '插件市场',

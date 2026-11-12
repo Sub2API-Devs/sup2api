@@ -25,6 +25,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -185,6 +186,10 @@ type cached struct {
 	KeyQuota         core.KeyQuota
 	// GroupLossPolicy is the group's conversion loss policy (§88).
 	GroupLossPolicy string `json:"group_loss_policy,omitempty"`
+	// SegmentID is the owner's segment. RateMultiplier is the rate the segment
+	// pays in the group and RateSource where it comes from (core.SegmentRate).
+	SegmentID  int64  `json:"segment_id,omitempty"`
+	RateSource string `json:"rate_source,omitempty"`
 }
 
 // Authenticate resolves a raw client key into a principal.
@@ -230,10 +235,12 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 	}
 	s.touch(e.KeyID)
 	return &core.APIKeyPrincipal{
-		KeyID:     e.KeyID,
-		UserID:    e.UserID,
-		KeyLimits: e.KeyLimits,
-		KeyQuota:  e.KeyQuota,
+		KeyID:      e.KeyID,
+		UserID:     e.UserID,
+		SegmentID:  e.SegmentID,
+		RateSource: e.RateSource,
+		KeyLimits:  e.KeyLimits,
+		KeyQuota:   e.KeyQuota,
 		Group: core.GroupInfo{
 			ID:                   e.GroupID,
 			Name:                 e.GroupName,
@@ -249,20 +256,27 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 
 func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	e := &cached{}
-	var rate string
+	// The group's default rate, the segment's discount and its own rate in
+	// the group (NULL = none).
+	var groupRate, discount decimal.Decimal
+	var override *decimal.Decimal
 	err := s.db.Pool.QueryRow(ctx, `SELECT k.id, k.user_id, k.status, k.expires_at,
 			(u.status = 'active' AND u.deleted_at IS NULL),
-			COALESCE(g.id, 0), COALESCE(g.name, ''), COALESCE(g.status, 'deleted'), COALESCE(g.rate_multiplier, 1)::text,
+			COALESCE(g.id, 0), COALESCE(g.name, ''), COALESCE(g.status, 'deleted'), COALESCE(g.rate_multiplier, 1),
 			COALESCE(g.model_allowlist, '[]'), COALESCE(g.model_filter_mode, 'blacklist'), COALESCE(g.environment, '{}'),
-			COALESCE(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id), false), k.allowed_ips,
-			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used, COALESCE(g.conversion_loss_policy, '')
+			COALESCE(g.visibility = 'public' OR sg.granted, false), k.allowed_ips,
+			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used, COALESCE(g.conversion_loss_policy, ''),
+			s.id, s.discount, sg.rate_override
 		FROM api_keys k
 		JOIN users u ON u.id = k.user_id
+		JOIN segments s ON s.id = u.segment_id
 		LEFT JOIN groups g ON g.id = k.group_id
+		LEFT JOIN segment_groups sg ON sg.segment_id = s.id AND sg.group_id = g.id
 		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
 		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive,
-		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupEnvironment, &e.GroupAvailable, &e.AllowedIPs,
-		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency, &e.KeyQuota.Limit, &e.KeyQuota.Used, &e.GroupLossPolicy)
+		&e.GroupID, &e.GroupName, &e.GroupStatus, &groupRate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupEnvironment, &e.GroupAvailable, &e.AllowedIPs,
+		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency, &e.KeyQuota.Limit, &e.KeyQuota.Used, &e.GroupLossPolicy,
+		&e.SegmentID, &discount, &override)
 	switch {
 	case store.IsNoRows(err):
 		e = &cached{Found: false}
@@ -270,7 +284,8 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 		return nil, err
 	default:
 		e.Found = true
-		e.RateMultiplier = rate
+		rate, source := core.SegmentRate(groupRate, discount, override)
+		e.RateMultiplier, e.RateSource = rate.String(), source
 	}
 	return e, nil
 }
@@ -343,10 +358,10 @@ type APIKey struct {
 	Key string `json:"key,omitempty"`
 }
 
-const selectKey = `SELECT k.id, k.user_id, u.email, k.name, k.key_prefix, g.id, COALESCE(g.name, ''),
+var selectKey = `SELECT k.id, k.user_id, u.email, k.name, k.key_prefix, g.id, COALESCE(g.name, ''),
 		CASE WHEN g.id IS NULL THEN 'deleted'
 			WHEN g.status <> 'active' THEN 'disabled'
-			WHEN g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id) THEN 'active'
+			WHEN ` + segment.OpenToUserSQL("g", "k.user_id") + ` THEN 'active'
 			ELSE 'unavailable' END,
 		k.status, k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL, k.allowed_ips,
 		k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used
@@ -499,7 +514,7 @@ func (s *Service) loadKey(ctx context.Context, id, ownerID int64) (*APIKey, erro
 func groupAvailable(ctx context.Context, q store.Querier, userID, groupID int64) (bool, error) {
 	var ok bool
 	err := q.QueryRow(ctx, `SELECT true FROM groups g WHERE g.id = $2 AND g.status = 'active'
-		AND (g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.group_id = g.id AND ug.user_id = $1))
+		AND `+segment.OpenToUserSQL("g", "$1")+`
 		FOR KEY SHARE OF g`,
 		userID, groupID).Scan(&ok)
 	if store.IsNoRows(err) {

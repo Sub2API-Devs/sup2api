@@ -141,6 +141,8 @@ export default {
     title: 'Billing',
     price: 'Price rule',
     tier: 'Tier',
+    listPrice: 'List price',
+    listCost: 'List cost',
     rules: 'Markup rules',
     matched: 'matched',
     notMatched: 'not matched',

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
 func TestVideoConfigOverridesStaleExpression(t *testing.T) {
@@ -29,7 +31,7 @@ func TestVideoPriceAPIRoundTrip(t *testing.T) {
 	admin := e.user("video-admin@example.com")
 	cfg := map[string]any{"video": map[string]any{"price_per_million_tokens": 7, "video_input_price_per_million_tokens": 4.3, "video_price_per_second": 0.2}}
 	created := data(e.mustCall(admin, 201, "POST", "/prices", map[string]any{"model": "seedance-video", "mode": "expression", "config": cfg, "expression": "flat(0)", "confirm": true}))
-	r, err := e.svc.Resolve(context.Background(), "seedance-video")
+	r, err := e.svc.Resolve(context.Background(), core.PriceQuery{Model: "seedance-video"})
 	if err != nil || r == nil || !r.VideoOnly || r.Expression == "flat(0)" {
 		t.Fatalf("rule %+v %v", r, err)
 	}

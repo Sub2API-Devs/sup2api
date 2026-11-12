@@ -707,7 +707,7 @@ func TestMenus(t *testing.T) {
 	if got := menuPaths(byKey["gateway"]); got != "/accounts,/proxies,/p/mod/rules" {
 		t.Fatalf("core section with plugin item = %s", got)
 	}
-	if sec := byKey["users"]; menuPaths(sec) != "/users,/roles" || sec.Label.Get("zh") != "用户" {
+	if sec := byKey["users"]; menuPaths(sec) != "/users,/segments,/roles" || sec.Label.Get("zh") != "用户" {
 		t.Fatalf("users = %+v", sec)
 	}
 	// Operations pages, then system settings as the last core item; a plugin

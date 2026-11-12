@@ -72,9 +72,11 @@ var coreMenus = []coreMenuSection{
 	// No core items: the balance ledger is opened from the users list, and
 	// plugins (growth) join the section.
 	{"finance", lt("Finance", "财务"), nil},
-	// Roles are part of managing users.
+	// Roles are part of managing users, and so are the user groups they
+	// belong to (CONTRACTS §97).
 	{"users", lt("Users", "用户"), []coreMenuItem{
 		{"users", lt("Users", "用户"), "user", "/users", []string{"user:read"}},
+		{"segments", lt("User groups", "用户组"), "publisher", "/segments", []string{"segment:read"}},
 		{"roles", lt("Roles & permissions", "角色与权限"), "role", "/roles", []string{"role:read"}},
 	}},
 	// Plugin management; plugin menus with section "plugins" (the default)
