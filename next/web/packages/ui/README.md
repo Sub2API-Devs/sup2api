@@ -352,9 +352,9 @@ const columns: TableColumn[] = [
 
 **其它。** 新文案 `ui.searching`、`ui.clearItem`。
 
-## 从单元格展开行（暂未计入 UI SDK 版本号）
+## 从单元格展开行（UI SDK 3.12）
 
-`STable` 的展开行除了行首的箭头，也可以由单元格里的按钮打开（例如操作列的“设置”），用于在行下方就地编辑。本节三项还没有对应的 UI SDK 版本号（`HOST_UI_VERSION` 仍是 3.10.0）：控制台自己的页面可以用，原生插件在版本号提升、能用 `hostUICompat` 声明之前不要依赖。
+`STable` 的展开行除了行首的箭头，也可以由单元格里的按钮打开（例如操作列的“设置”），用于在行下方就地编辑。不传本节的 prop、不用新的插槽参数时，表格的渲染和交互与 3.11 相同。原生插件用到本节任一项时声明 `hostUICompat: "^3.12"`，`hostCompat` 要求核心 `>=0.1.280`（0.1.279 是最后一个带 UI 3.11 的核心）。
 
 ```vue
 <STable :columns="columns" :rows="rows" row-key="model" expandable :expand-toggle="false" expand-single>

@@ -448,9 +448,11 @@ type uiFloor struct {
 // 0.1.256); 0.1.261 is the last with UI 3.6 (3.7 starts at 0.1.262);
 // 0.1.268 is the last with UI 3.7 (3.8 starts at 0.1.269); 0.1.276 is the
 // last with UI 3.9 (3.10 starts at 0.1.277); 0.1.278 is the last with UI
-// 3.10 (3.11 starts at 0.1.279). 3.10 and 3.11 add components, no manifest
-// declaration, so only hostUICompat asks for them.
+// 3.10 (3.11 starts at 0.1.279); 0.1.279 is the last with UI 3.11 (3.12
+// starts at 0.1.280). 3.10, 3.11 and 3.12 add components and props, no
+// manifest declaration, so only hostUICompat asks for them.
 var uiFloors = []uiFloor{
+	{minor: 12, lastUI: "3.11.0", lastCore: "0.1.279", firstCore: "0.1.280"},
 	{minor: 11, lastUI: "3.10.0", lastCore: "0.1.278", firstCore: "0.1.279"},
 	{minor: 10, lastUI: "3.9.0", lastCore: "0.1.276", firstCore: "0.1.277"},
 	{minor: 8, lastUI: "3.7.0", lastCore: "0.1.268", firstCore: "0.1.269", uses: usesUI38},
