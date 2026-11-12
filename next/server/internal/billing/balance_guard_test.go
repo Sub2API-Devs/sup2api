@@ -26,6 +26,7 @@ func TestAdjustBalanceActsOnOthers(t *testing.T) {
 	adjust := func(actor, target int64) (int, map[string]any) {
 		return e.call(actor, "POST", "/users/"+itoa(target)+"/balance/adjust", map[string]any{"amount": "1", "credit": true})
 	}
+	adjusted := 0
 	for _, tc := range []struct {
 		name          string
 		actor, target int64
@@ -43,10 +44,13 @@ func TestAdjustBalanceActsOnOthers(t *testing.T) {
 		if status != tc.status || (tc.code != "" && errCode(resp) != tc.code) {
 			t.Fatalf("adjusting %s: %d %v", tc.name, status, resp)
 		}
+		if status == 200 {
+			adjusted++
+		}
 	}
 	// Refused adjustments moved no money.
 	var n int
-	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM balance_ledger`).Scan(&n); err != nil || n != 2 {
+	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM balance_ledger`).Scan(&n); err != nil || n != adjusted {
 		t.Fatalf("ledger rows: %d %v", n, err)
 	}
 	// Not wired, nobody adjusts anything.

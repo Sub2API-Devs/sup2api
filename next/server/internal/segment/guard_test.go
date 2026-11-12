@@ -17,7 +17,8 @@ func TestMembershipActsOnOthers(t *testing.T) {
 	az := authz.New(authz.Deps{DB: e.db})
 	require.NoError(t, az.SyncCore(context.Background()))
 	e.svc.users = az
-	for user, role := range map[int64]string{e.admin: authz.RoleAdmin, e.masked: authz.RoleOperator} {
+	super := e.user("super@x.com")
+	for user, role := range map[int64]string{e.admin: authz.RoleAdmin, e.masked: authz.RoleOperator, super: authz.RoleSuperAdmin} {
 		e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, user, role)
 	}
 	operator, vip := e.masked, e.segment("VIP", "1")
@@ -32,12 +33,16 @@ func TestMembershipActsOnOthers(t *testing.T) {
 	}
 
 	add(e.plain, operator).failed(409, "conflict")
+	require.NotEqual(t, vip, e.segmentOf(e.plain), "nobody moves when the caller is among them")
 	add(e.plain, e.admin).failed(403, "permission_denied")
+	add(e.plain, super).failed(403, "permission_denied")
+	e.do(e.admin, "POST", path("/segments/%d/members", vip), map[string]any{"user_ids": []int64{super}}).failed(403, "permission_denied")
 	require.NotEqual(t, vip, e.segmentOf(e.plain), "nobody moves when one may not be moved")
 	require.Equal(t, float64(1), add(e.plain).ok(200).data()["moved"])
 
 	personalize(operator).failed(409, "conflict")
 	personalize(e.admin).failed(403, "permission_denied")
+	personalize(super).failed(403, "permission_denied")
 	personalize(e.plain).ok(201)
 
 	e.personal(operator)

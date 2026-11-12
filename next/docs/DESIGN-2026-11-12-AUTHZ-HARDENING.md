@@ -205,12 +205,13 @@
 
 ## T33 M7、C-L7：调余额与用户组成员、个人专属接入 core.ActOnOthers（产品性收紧）
 
-- 改动：`billing.Service` 增加 `Users core.UserGuard`，`adjustBalance` 在 `Apply` 之前 `core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id)`；`segment.Deps` 增加 `Users`（`New` 里 `core.GuardOrDeny`），`addMembers`（整批 `user_ids`，事务之前，一条 SQL）、`makePersonal`、`removePersonal`（路径上的用户）经 `Service.actOnOthers` 做同一检查；`app/phases.go` 把 authz 注入两处。未注入时一律拒绝（500），不会 panic 或放行。CONTRACTS §5.2、§97.6 同步（含 wontfix：`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、分组专属价作用于整个用户组，不做目标用户检查；`POST /usage/:id/refund` 延后）。
+- 改动：`billing.Service` 增加 `Users core.UserGuard`，`adjustBalance` 在 `Apply` 之前 `core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id)`；`segment.Deps` 增加 `Users`（`New` 里 `core.GuardOrDeny`），`addMembers`（整批 `user_ids`，事务之前，一条 SQL）、`makePersonal`、`removePersonal`（路径上的用户）经 `Service.actOnOthers` 做同一检查；`app/phases.go` 把 authz 注入两处。未注入时一律拒绝（500），不会 panic 或放行。CONTRACTS §5.2、§5.5、§97.6 同步（含 wontfix：`PATCH/DELETE /segments/:id`、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、分组专属价作用于用户组本身，不做目标用户检查，个人专属（只有一个成员）也按用户组处理；`POST /usage/:id/refund` 延后）。
 - 影响对象：
-  - 持有 `balance:adjust` 的任何人（包括超管，决策 D6）给自己调余额：由 200 变为 409 `you cannot do this to yourself`。超管需要给自己加余额时由另一个持有 `balance:adjust` 且能操作超管的人来做——目前没有这样的人（只有超管能操作超管），即超管的余额不能再经这个接口调整；需要时走充值/兑换等正常入账途径，或临时回滚。
+  - 持有 `balance:adjust` 的任何人（包括超管，决策 D6）给自己调余额：由 200 变为 409 `you cannot do this to yourself`。超管全局唯一（T18）且只有超管能操作超管，所以超管的余额不能再由任何人经这个接口调整；核心里没有别的人工入账途径（账本只有用量、`admin_adjust`、插件入账/扣款、退款），需要时由支付类插件入账，或用另一个账号调用网关。
   - 持有 `balance:adjust` / `segment:manage` 的非超管给超管、或给角色权限超出自己可授予范围的用户调余额、移用户组、设/取消个人专属：由成功变为 403（`you cannot modify a superuser` / `you cannot modify a user with higher privileges`）。
   - 持有 `segment:manage` 的人把自己移入用户组、给自己设/取消个人专属：由成功变为 409；批量移入的 `user_ids` 里含本人或不可操作的用户时整批拒绝。经访问密钥调用同样适用（密钥主人不能给自己调）。
   - 前端未改：用户列表里对本人、对超管的“调整余额”“设为个人专属”等按钮仍显示，点击后得到上述 409/403 提示（按钮按目标隐藏可在前端任务里跟进）。
+  - 已知未覆盖：持有 `segment:manage` 的人不能把自己移入别的用户组，但仍能修改自己所在用户组（含自己的个人专属）的折扣、授权、专属倍率与专属价（wontfix，见 CONTRACTS §97.6“目标用户检查”）；软删除但仍留有角色行的高权限用户作为目标时回 403 而不是 404/400。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
 ## T34 M11：用量详情的账号与本人视图字段（Detail.hideAccounts / redactForSelf）
