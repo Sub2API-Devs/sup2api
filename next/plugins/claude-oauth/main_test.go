@@ -299,6 +299,19 @@ func TestAuthExchangeNeedsTheStartingUser(t *testing.T) {
 	if !sessionStored(t, h, id) {
 		t.Fatal("another user's attempt removed the session")
 	}
+	if resp := h.DoAs(0, "POST", "/auth/start", nil, map[string]any{"scope": "oauth"}); resp.GetStatus() != 401 {
+		t.Fatalf("auth/start without a caller = %d %s", resp.GetStatus(), resp.GetBody())
+	}
+}
+
+// Whitespace pasted around the code or its state is not a different state.
+func TestAuthExchangeStateIgnoresPastedWhitespace(t *testing.T) {
+	h := authHarness(t)
+	id, state := startAuth(t, h)
+	resp := h.Do("POST", "/auth/exchange", nil, map[string]any{"session_id": id, "code": "  code-1#" + state + " \n"})
+	if errorCode(t, resp) == "state_mismatch" || !sessionStored(t, h, id) {
+		t.Fatalf("padded state = %d %s, session kept %v", resp.GetStatus(), resp.GetBody(), sessionStored(t, h, id))
+	}
 }
 
 // A code carrying another authorization's state is refused before anything

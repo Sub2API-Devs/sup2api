@@ -180,6 +180,15 @@ func (p *Plugin) newSession(ctx context.Context, ns string, req *pluginv1.HTTPRe
 	return pluginsdk.SaveCallerSession(ctx, kv, ns, req, v, ttl)
 }
 
+// sessionNotStored answers a failed newSession: 401 without a caller, else
+// the store is unavailable.
+func sessionNotStored(err error) *pluginv1.HTTPResponse {
+	if errors.Is(err, pluginsdk.ErrNoCaller) {
+		return pluginsdk.Unauthenticated()
+	}
+	return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error())
+}
+
 // saveSession rewrites the session loadSession returned for req.
 func (p *Plugin) saveSession(ctx context.Context, ns, id string, req *pluginv1.HTTPRequest, v any, ttl time.Duration) error {
 	kv, err := p.kv()
@@ -263,8 +272,8 @@ func internalError(msg string, err error) *pluginv1.HTTPResponse {
 }
 
 const (
-	msgRandom    = "cannot generate random values / 无法生成随机数"
-	msgHostID    = "cannot create the host id / 无法生成宿主 ID"
+	msgRandom = "cannot generate random values / 无法生成随机数"
+	msgHostID = "cannot create the host id / 无法生成宿主 ID"
 )
 
 // ---------------------------------------------------------------- credentials
@@ -382,7 +391,7 @@ func (p *Plugin) handleDeviceStart(ctx context.Context, req *pluginv1.HTTPReques
 	}
 	sessionID, err := p.newSession(ctx, kvDevice, req, s, deviceTTL)
 	if err != nil {
-		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error()), nil
+		return sessionNotStored(err), nil
 	}
 	return pluginsdk.DataResponse(DeviceStartResponse{
 		SessionID: sessionID, VerificationURL: p.ep.Auth + "/codex/device", UserCode: userCode,
@@ -414,6 +423,13 @@ func (p *Plugin) handleDevicePoll(ctx context.Context, req *pluginv1.HTTPRequest
 	}
 	if p.host == nil {
 		return errNotReady(), nil
+	}
+	// Whose session it is comes before its lock: someone else's id must
+	// neither answer "pending" while its owner polls nor hold the owner up.
+	if found, err := p.loadSession(ctx, kvDevice, id, req, new(deviceSession)); err != nil {
+		return sessionUnreadable(err), nil
+	} else if !found {
+		return deviceExpired(), nil
 	}
 	lock, ok, err := p.host.Locks().TryAcquire(ctx, pollLockName(id), pollLockTTL)
 	if err != nil {
@@ -459,19 +475,29 @@ func (p *Plugin) releaseLock(ctx context.Context, l *pluginsdk.Lock) {
 	}
 }
 
+// deviceExpired is the poll answer of a session that is over, was never there
+// or belongs to someone else.
+func deviceExpired() *pluginv1.HTTPResponse {
+	return pollAnswer(DevicePollResponse{Status: pollExpired, Message: "the device code expired; start again / 设备码已过期，请重新开始"})
+}
+
+func sessionUnreadable(err error) *pluginv1.HTTPResponse {
+	return pluginsdk.Unavailable("read the session / 读取会话失败: " + err.Error())
+}
+
 // pollDevice is one poll of session id of req's caller, under its lock.
 func (p *Plugin) pollDevice(ctx context.Context, req *pluginv1.HTTPRequest, id string) *pluginv1.HTTPResponse {
 	var s deviceSession
 	found, err := p.loadSession(ctx, kvDevice, id, req, &s)
 	if err != nil {
-		return pluginsdk.Unavailable("read the session / 读取会话失败: " + err.Error())
+		return sessionUnreadable(err)
 	}
 	now := p.now()
 	if !found || now.Unix() >= s.ExpiresAt {
 		if found {
 			p.deleteSession(ctx, kvDevice, id)
 		}
-		return pollAnswer(DevicePollResponse{Status: pollExpired, Message: "the device code expired; start again / 设备码已过期，请重新开始"})
+		return deviceExpired()
 	}
 	pending := func(msg string) *pluginv1.HTTPResponse {
 		return pollAnswer(DevicePollResponse{Status: pollPending, Interval: s.Interval, Message: msg})
@@ -629,7 +655,7 @@ func (p *Plugin) handleSIWCStart(ctx context.Context, req *pluginv1.HTTPRequest)
 	}
 	sessionID, err := p.newSession(ctx, kvSIWC, req, s, siwcTTL)
 	if err != nil {
-		return pluginsdk.Unavailable("store the session / 保存会话失败: " + err.Error()), nil
+		return sessionNotStored(err), nil
 	}
 	q := url.Values{}
 	if clientID == "" {

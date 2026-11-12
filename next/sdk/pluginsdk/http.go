@@ -244,6 +244,12 @@ func Param(req *pluginv1.HTTPRequest, name string) string {
 	return ""
 }
 
+// Unauthenticated is the 401 of a route that needs a console user and was
+// called without one.
+func Unauthenticated() *pluginv1.HTTPResponse {
+	return ErrorResponse(http.StatusUnauthorized, "unauthenticated", "authentication required / 需要登录")
+}
+
 // Unavailable is a 503 for "database unavailable" or similar errors.
 func Unavailable(msg string) *pluginv1.HTTPResponse {
 	return ErrorResponse(http.StatusServiceUnavailable, "unavailable", msg)

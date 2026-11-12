@@ -691,10 +691,33 @@ func TestSessionsBelongToTheirCaller(t *testing.T) {
 		t.Fatal("another user's attempt removed a session")
 	}
 
+	// While the owner's poll holds the session lock, someone else's poll
+	// still reads expired, not pending.
+	ctx, name := context.Background(), pollLockName(device.SessionID)
+	if r, err := h.Host.LockAcquire(ctx, &pluginv1.LockAcquireRequest{Name: name, TtlMs: 60_000, Token: "the-owner-is-polling"}); err != nil || !r.GetAcquired() {
+		t.Fatalf("hold the lock: %v %v", r, err)
+	}
+	var locked DevicePollResponse
+	mustData(t, h.DoAs(2, "POST", "/auth/device/poll", nil, map[string]string{"session_id": device.SessionID}).GetBody(), &locked)
+	if locked.Status != pollExpired {
+		t.Fatalf("another user's poll of a locked session = %+v, want expired", locked)
+	}
+	if _, err := h.Host.LockRelease(ctx, &pluginv1.LockReleaseRequest{Name: name, Token: "the-owner-is-polling"}); err != nil {
+		t.Fatal(err)
+	}
+
 	// A flow cannot be started without a caller.
 	for _, path := range []string{"/auth/device/start", "/auth/siwc/start"} {
-		if r := h.DoAs(0, "POST", path, nil, map[string]any{}); r.GetStatus() < 400 {
+		if r := h.DoAs(0, "POST", path, nil, map[string]any{}); r.GetStatus() != 401 {
 			t.Fatalf("%s without a caller = %d %s", path, r.GetStatus(), r.GetBody())
 		}
+	}
+
+	// The owner goes on as if nothing happened.
+	iss.on(pathDeviceToken, reply(403, `{"error":"authorization_pending"}`))
+	var out DevicePollResponse
+	mustData(t, h.Do("POST", "/auth/device/poll", nil, map[string]string{"session_id": device.SessionID}).GetBody(), &out)
+	if out.Status != pollPending {
+		t.Fatalf("owner poll after foreign attempts = %+v", out)
 	}
 }

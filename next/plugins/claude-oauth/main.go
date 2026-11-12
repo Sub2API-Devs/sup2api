@@ -270,6 +270,9 @@ func (p *Plugin) handleAuthStart(ctx context.Context, req *pluginv1.HTTPRequest)
 	// 存储会话（KV，绑定发起人：只有同一用户能用 session_id 换取凭证）
 	session := authSession{State: state, CodeVerifier: verifier, Scope: scope, CreatedAt: time.Now().Unix()}
 	sessionID, err := pluginsdk.SaveCallerSession(ctx, p.host.KV(), kvOAuthSession, req, session, 30*time.Minute)
+	if errors.Is(err, pluginsdk.ErrNoCaller) {
+		return pluginsdk.Unauthenticated(), nil
+	}
 	if err != nil {
 		return pluginsdk.ErrorResponse(500, "internal", "failed to store session"), nil
 	}
@@ -304,16 +307,13 @@ func (p *Plugin) handleAuthExchange(ctx context.Context, req *pluginv1.HTTPReque
 		return pluginsdk.ErrorResponse(404, "not_found", "session not found or expired"), nil
 	}
 
-	// 解析 code（可能包含 state）
-	code := input.Code
-	codeState := ""
-	if idx := strings.Index(code, "#"); idx != -1 {
-		code = input.Code[:idx]
-		codeState = input.Code[idx+1:]
-	}
+	// 解析 code（可能包含 state）；粘贴时带上的首尾空白不算内容
+	code, codeState, _ := strings.Cut(strings.TrimSpace(input.Code), "#")
+	code, codeState = strings.TrimSpace(code), strings.TrimSpace(codeState)
 
 	// code 带回的 state 必须是本会话发出的；不一致说明 code 属于另一次授权，
-	// 会话作废，需重新发起。
+	// 会话作废，需重新发起。这只防止粘错：不带 state 的 code 仍会转给上游，
+	// 由 PKCE verifier 保证它属于本会话。
 	if codeState != "" && subtle.ConstantTimeCompare([]byte(codeState), []byte(session.State)) != 1 {
 		_ = p.host.KV().Delete(ctx, kvOAuthSession, input.SessionID)
 		return pluginsdk.ErrorResponse(400, "state_mismatch", "the code does not belong to this authorization session; start again"), nil

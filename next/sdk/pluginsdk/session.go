@@ -35,10 +35,14 @@ type callerSession struct {
 }
 
 // SaveCallerSession stores v as a new session of req's caller in namespace
-// ns, for ttl, and returns its fresh random id.
+// ns, for ttl, and returns its fresh random id. It fails with ErrNoCaller
+// (answer it with Unauthenticated) when the request has no user.
 func SaveCallerSession(ctx context.Context, kv KV, ns string, req *pluginv1.HTTPRequest, v any, ttl time.Duration) (id string, err error) {
 	id = randomToken(sessionIDBytes)
-	return id, UpdateCallerSession(ctx, kv, ns, id, req, v, ttl)
+	if err := UpdateCallerSession(ctx, kv, ns, id, req, v, ttl); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 // UpdateCallerSession rewrites session id with v and ttl, bound to req's
@@ -77,7 +81,10 @@ func LoadCallerSession(ctx context.Context, kv KV, ns, id string, req *pluginv1.
 	if json.Unmarshal(raw, &s) != nil || s.UserID != uid || len(s.Payload) == 0 {
 		return false, nil
 	}
-	return true, json.Unmarshal(s.Payload, v)
+	if err := json.Unmarshal(s.Payload, v); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // sessionIDBytes is the entropy of a caller session id (192 bits).

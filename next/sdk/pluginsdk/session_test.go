@@ -122,7 +122,7 @@ func TestUpdateCallerSessionKeepsTheBinding(t *testing.T) {
 func TestCallerSessionErrors(t *testing.T) {
 	ctx, kv := context.Background(), newMapKV()
 	for _, req := range []*pluginv1.HTTPRequest{nil, {}, callerReq(0), callerReq(-1)} {
-		if id, err := SaveCallerSession(ctx, kv, "oauth", req, flowState{}, time.Minute); !errors.Is(err, ErrNoCaller) || len(kv.values) != 0 {
+		if id, err := SaveCallerSession(ctx, kv, "oauth", req, flowState{}, time.Minute); !errors.Is(err, ErrNoCaller) || id != "" || len(kv.values) != 0 {
 			t.Fatalf("save without a caller: %q %v, stored %d", id, err, len(kv.values))
 		}
 	}
@@ -131,14 +131,14 @@ func TestCallerSessionErrors(t *testing.T) {
 	}
 	id, _ := SaveCallerSession(ctx, kv, "oauth", callerReq(7), flowState{Verifier: "v"}, time.Minute)
 	var wrong []int
-	if ok, err := LoadCallerSession(ctx, kv, "oauth", id, callerReq(7), &wrong); !ok || err == nil {
+	if ok, err := LoadCallerSession(ctx, kv, "oauth", id, callerReq(7), &wrong); ok || err == nil {
 		t.Fatalf("a payload that does not fit: %v %v", ok, err)
 	}
 	kv.err = errors.New("kv down")
 	if ok, err := LoadCallerSession(ctx, kv, "oauth", id, callerReq(7), &flowState{}); ok || err == nil || !strings.Contains(err.Error(), "kv down") {
 		t.Fatalf("kv failure: %v %v", ok, err)
 	}
-	if _, err := SaveCallerSession(ctx, kv, "oauth", callerReq(7), flowState{}, time.Minute); err == nil {
-		t.Fatal("a failed Set must fail the save")
+	if id, err := SaveCallerSession(ctx, kv, "oauth", callerReq(7), flowState{}, time.Minute); err == nil || id != "" {
+		t.Fatal("a failed Set must fail the save and return no id")
 	}
 }

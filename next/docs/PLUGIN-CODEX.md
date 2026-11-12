@@ -61,6 +61,7 @@
   - `POST /auth/device/poll` `{session_id}` → `{status: "pending"|"done"|"expired"|"error", credentials?, message?, interval?}`；`interval` 为 pending 时的轮询间隔（秒，OpenAI 返回 429 时加长）；done 时返回完整凭证对象（见下），同时删除会话。同一会话的“读会话 → 问 OpenAI → 写回/删除”在集群锁（`Host.Locks`，锁名为会话 id 的哈希，ttl 50 秒）下进行：两个标签页或两个节点并发轮询时，拿不到锁的一方直接回 `pending`，不会两边都去用一次性授权码换令牌；锁服务不可用时回 503 `unavailable`。
   - `POST /auth/siwc/start` `{client_id?, ext_agent_host_id?}`（重新授权时带上） → `{session_id, authorize_url}`；PKCE verifier、state、nonce、host_id 存 KV。
   - `POST /auth/siwc/exchange` `{session_id, callback_url}` → `{credentials}` 或错误。
+  - 两种会话都绑定发起它的登录用户（`pluginsdk.SaveCallerSession`，2026-11-12）：其他用户拿到 `session_id` 也无法继续，得到的回答与会话不存在时相同（轮询 `expired`，exchange 404 `session_expired`）；没有登录用户时 start 回 401。
 - 凭证对象：
   - 共有：`access_token`、`refresh_token`、`id_token`、`expires_at`（Unix 秒）、`email`、`plan_type`（从令牌读出，两种类型都可能有）；除 `access_token` 外缺值时省略。
   - `codex_device`：`chatgpt_account_id`。
