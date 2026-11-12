@@ -892,10 +892,14 @@ func TestWebSocketTurnUsesFreshKeyLimits(t *testing.T) {
 func TestWebSocketGroupChangeAsksToReconnect(t *testing.T) {
 	e := newWSEnv(t)
 	c := e.mustDial()
-	// Before any turn there is no upstream connection to keep.
-	e.auth.change(func(a *fakeAuth) { a.keys[testKey].Group.Name = "renamed" })
-	e.turn(c, "first")
+	// Before any turn there is no upstream connection to keep: the first
+	// turn is scheduled in the group the key is in by then.
+	e.accounts.addTyped(testGroup+1, 13, 99, "oa-13", "openai", "apikey")
 	e.auth.change(func(a *fakeAuth) { a.keys[testKey].Group.ID = testGroup + 1 })
+	if r := e.turn(c, "first"); r.AccountID == nil || *r.AccountID != 13 {
+		t.Fatalf("first turn after a group change: %+v", r)
+	}
+	e.auth.change(func(a *fakeAuth) { a.keys[testKey].Group.ID = testGroup })
 	c.send(create(wsModel, "second"))
 	if ev := c.until("error"); ev[0].Get("status").Int() != 409 || ev[0].Get("error.code").String() != "api_key_group_changed" {
 		t.Fatalf("group change: %v", ev)
@@ -908,16 +912,27 @@ func TestWebSocketGroupChangeAsksToReconnect(t *testing.T) {
 
 func TestWebSocketAuthUnavailableFailsOnlyTheTurn(t *testing.T) {
 	e := newWSEnv(t)
+	e.gw.ws.firstMessage = 300 * time.Millisecond
 	c := e.mustDial()
-	e.turn(c, "first")
-	e.auth.change(func(a *fakeAuth) { a.err = core.ErrUnavailable.WithMessage("key store unavailable") })
-	c.send(create(wsModel, "second"))
-	if ev := c.until("error"); ev[0].Get("status").Int() != 503 {
-		t.Fatalf("auth unavailable: %v", ev)
+	unavailable := func(input string) {
+		t.Helper()
+		e.auth.change(func(a *fakeAuth) { a.err = core.ErrUnavailable.WithMessage("key store unavailable") })
+		c.send(create(wsModel, input))
+		if ev := c.until("error"); ev[0].Get("status").Int() != 503 {
+			t.Fatalf("auth unavailable: %v", ev)
+		}
+		e.noRecord()
+		e.auth.change(func(a *fakeAuth) { a.err = nil })
 	}
-	e.noRecord()
-	e.auth.change(func(a *fakeAuth) { a.err = nil })
-	if r := e.turn(c, "third"); !r.Success {
+	// The failed message is the session's first: the first-message timer
+	// stops with it and does not close the session later.
+	unavailable("first")
+	time.Sleep(400 * time.Millisecond)
+	if r := e.turn(c, "second"); !r.Success {
+		t.Fatalf("turn after auth came back: %+v", r)
+	}
+	unavailable("third")
+	if r := e.turn(c, "fourth"); !r.Success {
 		t.Fatalf("turn after auth came back: %+v", r)
 	}
 	if keys, msgs := e.wsUp.snapshot(); len(keys) != 1 || len(msgs) != 2 {

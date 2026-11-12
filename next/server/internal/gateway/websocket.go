@@ -84,7 +84,8 @@ func (g *Gateway) serveWebSocket(ctx context.Context, cl *call) {
 		writeError(cl.c, cl.format, fromCore(core.ErrUnauthenticated.WithMessage("missing api key"), ""))
 		return
 	}
-	p, err := g.d.Auth.Authenticate(core.WithClientIP(ctx, cl.c.ClientIP()), key)
+	ip := cl.c.ClientIP()
+	p, err := g.d.Auth.Authenticate(core.WithClientIP(ctx, ip), key)
 	if err != nil {
 		writeError(cl.c, cl.format, fromCore(core.AsError(err), ""))
 		return
@@ -111,7 +112,7 @@ func (g *Gateway) serveWebSocket(ctx context.Context, cl *call) {
 		return
 	}
 	conn.SetReadLimit(cl.bodyLimit())
-	s := &wsSession{g: g, base: cl, client: conn, id: cl.rid, key: key, ip: cl.c.ClientIP()}
+	s := &wsSession{g: g, base: cl, client: conn, id: cl.rid, key: key, ip: ip}
 	s.run(ctx)
 }
 
@@ -120,7 +121,7 @@ func (g *Gateway) draining() bool { return g.d.Draining != nil && g.d.Draining()
 // wsSession is one client connection.
 type wsSession struct {
 	g      *Gateway
-	base   *call // the upgrade request: endpoint, principal, headers
+	base   *call // the upgrade request: endpoint, headers; its principal is refreshed every turn
 	client *websocket.Conn
 	id     string
 	// key and ip are the upgrade request's API key and client address; every
@@ -236,6 +237,7 @@ func (s *wsSession) run(ctx context.Context) {
 			if e, code := s.refresh(sctx); e != nil {
 				s.sendError(sctx, e)
 				if code == 0 {
+					resetIdle(s.g.ws.idle)
 					continue
 				}
 				end(code, truncateUTF8(e.Message, 120))
@@ -400,6 +402,7 @@ func (s *wsSession) refresh(ctx context.Context) (e *gwError, closeCode websocke
 		if e.Status == http.StatusUnauthorized || e.Status == http.StatusForbidden {
 			return e, websocket.StatusPolicyViolation
 		}
+		slog.WarnContext(ctx, "gateway: websocket turn authentication failed", "request_id", s.id, "err", err)
 		return e, 0
 	}
 	// The upstream connection belongs to an account of the group the first
@@ -413,8 +416,8 @@ func (s *wsSession) refresh(ctx context.Context) (e *gwError, closeCode websocke
 }
 
 // newCall is the per-turn request: a fresh request id (the usage and ledger
-// idempotency key), the upgrade request's endpoint, headers and principal,
-// and the message as the body.
+// idempotency key), the upgrade request's endpoint and headers, the principal
+// as refresh last saw it, and the message as the body.
 func (s *wsSession) newCall(body []byte) *call {
 	b := s.base
 	cl := &call{g: s.g, c: b.c, gen: b.gen, ep: b.ep, plugin: b.plugin, platform: b.platform, pf: b.pf, params: b.params,
