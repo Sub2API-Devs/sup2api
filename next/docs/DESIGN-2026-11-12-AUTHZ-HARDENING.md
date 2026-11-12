@@ -240,3 +240,10 @@
 - 改动：删除 `POST /system/ccgateway/connect` 的路由与处理函数（连同只为它服务的 `ccgateway.Service.Ready`、请求体上限与 503 文案）。它以 `settings:manage` 注册，再用 `core.WithGranted` 给请求补上 `account:create` 走创建流程，是代码里唯一伪造路由命中权限的地方。控制台不调用它（已 grep 确认，`next/web/src` 无引用；开发 mock 里残留的处理器一并删除）。它创建时既不带 `ccgateway_runtime` 也不带 `preparation_key`，而真实的 `managed` 类型要求先准备运行环境，所以这条接口在生产上本就只会返回 400。原测试改用 `POST /accounts`。CONTRACTS §41.5、§49.6 同步。无迁移。
 - 影响对象：仍调用这条接口的外部脚本收到 404，改用草稿流程（CONTRACTS §49.9、§49.10：`POST /system/ccgateway/drafts` → 授权 → `POST /accounts` 带 `ccgateway_runtime`；需要 `account:create` 或 `account:own:create`）。控制台不受影响。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T43 D22：ccgateway 请求日志详情的 metadata 按白名单投影
+
+- 改动：`GET /system/ccgateway/accounts/:id/request-logs/requests/:log` 的 `metadata` 经 `projectMetadata`：命中 `settings:manage` 原样返回，否则只保留 `requestLogSummaryKeys` 列出的摘要字段，默认拒绝（Worker 新增字段默认只给 `settings:manage`）。CONTRACTS §64.2 同步。无迁移，不改 Worker。
+- 影响对象：只有 `account:read` 或 `settings:read` 的查看者在详情里不再看到上游错误原文 `error`、设备与账号标识（`device_id`、`account_uuid`）、Worker 上的日志目录、消息摘要 `messages`、会话运行标识等，“元数据”页签的 JSON 相应变短；`error_type` / `error_code` / `error_source`、状态、模型、耗时、摘要值等仍可见。`settings:manage` 不受影响。
+- 未覆盖：列表接口的每行 `error`（Worker 索引里的错误文本）仍对 `settings:read` / `account:read` 可见，本项范围只含详情；若 D22 也要覆盖列表，需要给列表路由加上 `settings:manage` 以识别调用者并对其余人清空该字段（待确认）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。

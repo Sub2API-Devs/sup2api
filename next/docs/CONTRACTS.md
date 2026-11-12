@@ -4701,6 +4701,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 64.2 详情 `GET …/requests/:log`
 
 - 新字段 `upstream_request`（对象，可省略）= Worker 返回的 `upstream-request.json` 内容，原样透传，只对其中 `headers` 再遮蔽一次：名字（不区分大小写）在 `requestLogSecretHeaders`（`authorization`、`proxy-authorization`、`x-api-key`、`cookie`、`set-cookie`、`x-ccg-revision`）里的值改成 `"[REDACTED]"`（字符串值直接替换，数组逐项替换，其他类型整体替换）；`headers` 不是对象时删掉该键。`upstream_request` 不是对象时整个详情 503（与其他字段一致）。
+- `metadata` 按白名单投影（2026-11-12 权限加固 T43，D22）：调用者命中 `settings:manage`（即 `content: true`）时原样返回；否则只保留 `requestLogSummaryKeys` 里的摘要字段（请求标识、状态与阶段、模型、耗时、`http_status`、`error_type` / `error_code` / `error_source`、日志级别与用量、正文大小与摘要值、会话标识、上游请求类别与 betas、响应捕获状态等），其余一律删除，包括上游错误原文 `error`、`device_id`、`account_uuid`、`log_directory`、`messages`，以及 Worker 以后新增的任何字段（默认只给 `settings:manage`，要放开须加入白名单）。
 - `upstream-request.json` 加入摘要文件集合：不出现在 `files`，`…/files/upstream-request.json` 读取一律 400。`upstream-request.body` 是正文文件，照常出现在 `files`、仅 `settings:manage` 可读并审计。
 
 ### 64.3 状态 `GET …/request-logs`

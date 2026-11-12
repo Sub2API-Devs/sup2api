@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -149,6 +150,50 @@ func TestRequestLogListRejectsMalformedWorkerAnswers(t *testing.T) {
 		if w := get(readers, ""); w.Code != 503 {
 			t.Fatalf("%s: %d", answer, w.Code)
 		}
+	}
+}
+
+// The detail's metadata is projected by default: without settings:manage only
+// the listed summary fields come through, so identity, the upstream's error
+// text, Worker paths and fields added later stay with settings:manage.
+func TestRequestLogDetailProjectsMetadataWithoutContent(t *testing.T) {
+	const metadata = `{"request_id":"rid","http_status":529,"status":"error","stage":"upstream","model":"claude-x","duration_ms":12,` +
+		`"error_type":"overloaded_error","error_code":"overloaded","error_source":"http","mode":"build","body_sha256":"ab","upstream_betas":["b1"],` +
+		`"device_id":"dev-1","account_uuid":"acc-uuid","error":"upstream said: secret detail","log_directory":"/work/data/request-logs/x",` +
+		`"messages":[{"role":"user"}],"future_field":"new"}`
+	_, _, _, get := viewerFixture(t, func(w http.ResponseWriter, _ string, _ map[string]any) {
+		_, _ = w.Write([]byte(`{"metadata":` + metadata + `,"events":[],"events_truncated":false,"files":[]}`))
+	})
+	read := func(keys viewerAuth) map[string]any {
+		t.Helper()
+		w := get(keys, "/"+viewerLogID)
+		var out struct {
+			Data struct {
+				Metadata map[string]any `json:"metadata"`
+			} `json:"data"`
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.Data.Metadata == nil {
+			t.Fatalf("detail: %d %s", w.Code, w.Body)
+		}
+		return out.Data.Metadata
+	}
+	var whole map[string]any
+	_ = json.Unmarshal([]byte(metadata), &whole)
+	for _, keys := range []viewerAuth{{"account:read": true}, {"settings:read": true}} {
+		got := read(keys)
+		for _, hidden := range []string{"device_id", "account_uuid", "error", "log_directory", "messages", "future_field"} {
+			if _, ok := got[hidden]; ok {
+				t.Errorf("%v reads %s: %v", keys, hidden, got[hidden])
+			}
+		}
+		for _, kept := range []string{"request_id", "http_status", "status", "stage", "model", "duration_ms", "error_type", "error_code", "error_source", "mode", "body_sha256", "upstream_betas"} {
+			if !reflect.DeepEqual(got[kept], whole[kept]) {
+				t.Errorf("%v lost %s: %v", keys, kept, got[kept])
+			}
+		}
+	}
+	if got := read(viewerAuth{"settings:manage": true}); !reflect.DeepEqual(got, whole) {
+		t.Errorf("settings:manage metadata: %v", got)
 	}
 }
 
