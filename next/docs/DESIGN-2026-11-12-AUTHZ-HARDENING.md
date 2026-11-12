@@ -187,7 +187,7 @@
 ## 期 1 生产备份验证修复（第 2 轮）
 
 - 改动：
-  - 决策 1：`authz.CanActOnUsers` 只对本人的登录会话免检“作用于自己”；经访问密钥时（`core.ByAccessKey`）密钥主人和其他目标一样比较（密钥收窄后不是超管，也小于主人的角色）。超管自己带 `user:update` 的访问密钥 `PATCH /users/<超管>` 改显示名、带当前密码 `DELETE /users/<超管>/security` 清两步验证与通行密钥，由 200/204 变为 403 `you cannot modify a superuser`（后者在核对密码之前拒绝）；非超管的访问密钥经 `/users/:id` 改自己的资料，密钥权限不覆盖主人角色时同样 403（改自己的资料走 `/me` 或登录会话）。
+  - 决策 1：`authz.CanActOnUsers` 只对本人的登录会话免检“作用于自己”；经访问密钥时（`core.ByAccessKey`）密钥主人和其他目标一样比较（密钥收窄后不是超管，也小于主人的角色）。超管自己带 `user:update` 的访问密钥 `PATCH /users/<超管>` 改显示名、带当前密码 `DELETE /users/<超管>/security` 清两步验证与通行密钥，由 200/204 变为 403 `you cannot modify a superuser`（后者在核对密码之前拒绝；T48 起 `DELETE /users/:id/security` 改用只限登录会话的 `user:password:reset`，访问密钥在权限阶段即 403 `details.permission = user:password:reset`，到不了这一步）；非超管的访问密钥经 `/users/:id` 改自己的资料，密钥权限不覆盖主人角色时同样 403（改自己的资料走 `/me` 或登录会话）。
   - dynweight 原生界面：没有 `group:read` 时不再请求 `GET /groups`（分组名显示 `#id`），没有全量级 `account:read` 时账号列表工具栏的降级标记不再请求 `GET /p/dynweight/degraded`、不显示。own 级用户打开账号页不再出现这两个 403。随 dynweight 重新打包（T84 升版本）生效。
 - 发布前提（T25/T84）：codex、dynweight、volcengine 的 manifest 改了路由的 `accounts` 但没有升版本。生产库已按 codex 0.1.3、dynweight 0.5.7、volcengine 0.12.6 存了旧 manifest，内置安装器遇到同版本不同内容会保留已存的行，registry 从库里的 manifest 读路由，所以不升版本上线时这三个插件路由的账号归属检查不生效（核心逻辑已在备份实例上用新 manifest 验证通过）。期 1 单独上线时必须先做 T84 的版本升级。
 - 滚动升级与回滚（无代码改动，按此操作）：
@@ -196,6 +196,8 @@
   - 回滚到旧版本后，用旧版本给第二个用户授予 `super_admin` 会被 0098 的触发器拒绝，旧版本返回 500（日志 23505 `only one user may hold the super admin role`），数据不变式成立。
 - 待确认（不改代码）：0097 按决策 3、T13 做存量等价迁移，生产 operator 得到 `assign_custom = true` 与 {operator, user}，宽于决策 5 的新库默认（operator = supplier、user）。生产 operator 目前 0 个持有者。若上线即按决策 5，超管执行 `POST /roles/<operator id>/reset`（同时恢复默认权限与默认可分配清单），或在 T55 一并收紧。
 - 回滚：revert 对应提交即可，无迁移、无数据变化。
+
+> 以下为期 2（T30–T49，三组分别开发后合并，按任务编号排列；整合审查的补充写在各条内，标“期 2 整合审查”）。
 
 ## T30 M3、W1-F4、W1-F8、W1-F9：代理拨号守卫与代理写范围收敛
 
@@ -216,9 +218,43 @@
 - 影响对象：供应商（只持 `proxy:own:manage`）的代理被管理员挂到别人的账号上之后，供应商改地址、用户名、密码由成功变为 409，需由持 `proxy:manage` 的人修改，或先把那些账号换到别的代理；改名称、启停不受影响（停用仍会让这些账号不可用，未改）。`proxy:manage` 不受影响。只统计账号：他人尚未建成账号的预备容器与 ccgateway 草稿运行环境（`account_preparations.proxy_id`、`ccgateway_runtimes.proxy_id`，短期存在）引用该代理时不拦（已知缺口，删除代理的占用计数同样不含它们）。host 只有大小写不同视为未改，也不写入。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
+## T32 M4：WebSocket 每轮重新鉴权
+
+- 改动：`gateway/websocket.go` 的会话记住握手时的 API key 与客户端地址；每条客户端消息在开始一轮之前先 `wsSession.refresh`（`Auth.Authenticate`，与握手同一路径），成功后这一轮用新的 principal（限速、额度、分组信息、倍率）。401/403（密钥被撤销、禁用、过期，用户被禁用，IP 不在白名单等）→ 发 error 事件并以 1008 关闭会话；其他鉴权错误（如存储暂不可用）→ 只这一轮失败，会话保留；首轮之后密钥换了分组 → 409 `api_key_group_changed` 并以 1012 关闭（上游连接属于旧分组的账号，客户端重连后按新分组调度）。在这一步被拒的轮次不写用量记录（与 HTTP 鉴权失败一致）。进行中的那一轮不打断；空闲会话的定时复检延后。 期 2 整合审查补充：消息的格式检查（JSON 对象、形状限制、`type=response.create`）移到 `refresh` 之前（`wsMessageError`），垃圾消息不再各触发一次查库；`refresh` 加 10 s 期限（`wsLimits.auth`），会话上下文本身没有期限，存储挂起时不能卡住会话循环（ping、排空、客户端关闭）。
+- 影响对象：此前 WebSocket 会话整个生命周期使用握手时的 principal，密钥撤销、额度用尽、限速修改要等客户端重连才生效；现在在下一轮生效。长连接客户端在密钥失效后会收到 1008（不应重连），换分组后收到 1012（应重连）。每轮多一次 `Authenticate`（与一次 HTTP 请求相同的开销）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T33 M7、C-L7：调余额与用户组成员、个人专属接入 core.ActOnOthers（产品性收紧）
+
+- 改动：`billing.Service` 增加 `Users core.UserGuard`，`adjustBalance` 在 `Apply` 之前 `core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id)`；`segment.Deps` 增加 `Users`（`New` 里 `core.GuardOrDeny`），`addMembers`（整批 `user_ids`，事务之前，一条 SQL）、`makePersonal`、`removePersonal`（路径上的用户）经 `Service.actOnOthers` 做同一检查；`app/phases.go` 把 authz 注入两处。未注入时一律拒绝（500），不会 panic 或放行。CONTRACTS §5.2、§5.5、§97.6 同步（含 wontfix：`PATCH/DELETE /segments/:id`、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、分组专属价作用于用户组本身，不做目标用户检查，个人专属（只有一个成员）也按用户组处理；`POST /usage/:id/refund` 延后）。
+- 影响对象：
+  - 持有 `balance:adjust` 的任何人（包括超管，决策 D6）给自己调余额：由 200 变为 409 `you cannot do this to yourself`。超管全局唯一（T18）且只有超管能操作超管，所以超管的余额不能再由任何人经这个接口调整；核心里没有别的人工入账途径（账本只有用量、`admin_adjust`、插件入账/扣款、退款），需要时由支付类插件入账，或用另一个账号调用网关。
+  - 持有 `balance:adjust` / `segment:manage` 的非超管给超管、或给角色权限超出自己可授予范围的用户调余额、移用户组、设/取消个人专属：由成功变为 403（`you cannot modify a superuser` / `you cannot modify a user with higher privileges`）。
+  - 持有 `segment:manage` 的人把自己移入用户组、给自己设/取消个人专属：由成功变为 409；批量移入的 `user_ids` 里含本人或不可操作的用户时整批拒绝。经访问密钥调用同样适用（密钥主人不能给自己调）。
+  - 前端未改：用户列表里对本人、对超管的“调整余额”“设为个人专属”等按钮仍显示，点击后得到上述 409/403 提示（按钮按目标隐藏可在前端任务里跟进）。
+  - 已知未覆盖：持有 `segment:manage` 的人不能把自己移入别的用户组，但仍能修改自己所在用户组（含自己的个人专属）的折扣、授权、专属倍率与专属价（wontfix，见 CONTRACTS §97.6“目标用户检查”）；软删除但仍留有角色行的高权限用户作为目标时回 403 而不是 404/400。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T34 M11：用量详情的账号与本人视图字段（Detail.hideAccounts / redactForSelf）
+
+- 改动：`usage/api.go` 新增 `Detail.hideAccounts`（记录的账号 + `hook_decisions` 各项的 `account_id` + `settlement.account_id`；`hook_decisions` 不是数组时整个不返回）与 `Detail.redactForSelf`（`hideUpstream`、`hideAccounts`，并清空 `plugin_version`、`sticky_rule`、`expr_hash`、`node_id`、`plugin_detail`、`anomalies`、`settlement`、`request_log_account_id`）。`GET /usage/:id` 没有 `account:read` 的分支改调前者，`GET /me/usage/:id` 只调后者。CONTRACTS §5.5、§15.2 同步。
+- 影响对象：
+  - `GET /me/usage/:id` 与没有 `account:read` 的 `GET /usage/:id`：`gateway.attempt` 钩子决定里的 `account_id` 不再返回（此前泄露了尝试的账号 id）。
+  - `GET /me/usage/:id`：`plugin_version`、`sticky_rule`、`expr_hash` 由原值变为空串。用户自己的用量详情页因此不再显示“粘性规则”卡片和计价表达式的哈希行（两处都是有值才渲染，前端无需改动；`sticky_hit` 仍在）。`metrics` 没有动：前端把其中每一项都展示给用户（缓存写入依据与 `u("key")` 用量事实），也是计价的输入，没有可判定为内部的子集。
+  - `GET /me/usage/:id` 的 `billing_detail` 不再带计价表达式与哈希（`withoutExpressions`：`inputs.pricing.base.{expression,expr_hash}`、各附加/替换组件的 `expression_hash` 与 `inputs` 里的整条 `Price`）；前端只用 `base` 是否存在与组件的 `Tokens`/`Metrics`，不受影响。
+  - 已知未处理（不在本任务范围，改的是网关的计费记录）：ccgateway helper 轮次的替换组件用上游模型名记账（`gateway/helper_history_response.go`），`billing_detail.replacement[].model` 因此对本人视图仍可见上游模型；`hook_decisions[].note` 是插件的自由文本，原样返回。
+  - 有 `account:read` 的 `GET /usage/:id` 不变。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T35 M12：payment webhook 删除 mock，未注册验签器时 501
+
+- 改动：`HandlePaymentNotification` 不再用写死的 `mock_out_trade_no` 当作已验证通知。按 `:provider` 查 `payment_provider_instances` 里启用的实例：没有则 404；渠道没有注册 `NotificationVerifier`（`notification.go`，以后接入真实验签的接口，`OrderService.RegisterVerifier`）则 501；验签器对所有实例都不接受则 400；只有验证通过且状态为成功的通知才会改订单并入账，金额不符 400，其他内部错误 500（原先一律 400 并回显错误文本）。任何失败都不改订单状态。本次不实现任何具体渠道的验签。
+- 影响对象：payment 插件的 webhook 现在对所有渠道回 404 或 501（仓库里没有任何验签器），在真实验签接入前不会有订单经 webhook 入账。原实现只会查找 `mock_out_trade_no` 这一个不存在的订单并回 200，从未入账，所以没有可用功能被关掉；对接方会从 200 变为收到 404/501。错误响应不再带内部错误文本。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
 ## T36 W1-F5：ccgateway 请求日志设置不再接受 own 级（产品性收紧，单独提交）
 
-- 改动：`PUT /system/ccgateway/accounts/:id/request-logs` 只接受 `settings:manage`、`account:update`，去掉 `account:own:update`；控制台运行环境页的日志级别、开关、清除按钮按同一口径判断（`canLogs`）。GET 不变。CONTRACTS §65 同步。无迁移。
+- 改动：`PUT /system/ccgateway/accounts/:id/request-logs` 只接受 `settings:manage`、`account:update`，去掉 `account:own:update`（T38 起连 `settings:manage` 也不再接受，只剩 `account:update`，以 T38 与 CONTRACTS §65 为准）；控制台运行环境页的日志级别、开关、清除按钮按同一口径判断（`canLogs`）。GET 不变。CONTRACTS §65 同步。无迁移。
 - 影响对象：只有 `account:own:update` 的用户（供应商）不能再修改自己账号的请求日志级别、开启完整记录或清除日志，接口由 200 变为 403，控制台里对应控件置灰或隐藏；仍可查看当前设置。已保存的账号级别设置保持生效。持有 `account:update` 或 `settings:manage` 的角色（内置 admin、operator 的默认权限）不受影响。未覆盖的间接途径：own 级仍可重新授权、删除自己的账号，运行环境被替换或清理时其中的日志随之消失（接受，不在本项范围）。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
@@ -239,25 +275,6 @@
 
 - 改动：删除 `POST /system/ccgateway/connect` 的路由与处理函数（连同只为它服务的 `ccgateway.Service.Ready`、请求体上限与 503 文案）。它以 `settings:manage` 注册，再用 `core.WithGranted` 给请求补上 `account:create` 走创建流程，是代码里唯一伪造路由命中权限的地方。控制台不调用它（已 grep 确认，`next/web/src` 无引用；开发 mock 里残留的处理器一并删除）。它创建时既不带 `ccgateway_runtime` 也不带 `preparation_key`，而真实的 `managed` 类型要求先准备运行环境，所以这条接口在生产上本就只会返回 400。原测试改用 `POST /accounts`。CONTRACTS §41.5、§49.6 同步。无迁移。
 - 影响对象：仍调用这条接口的外部脚本收到 404，改用草稿流程（CONTRACTS §49.9、§49.10：`POST /system/ccgateway/drafts` → 授权 → `POST /accounts` 带 `ccgateway_runtime`；需要 `account:create` 或 `account:own:create`）。控制台不受影响。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## T43 D22：ccgateway 请求日志的 metadata 按白名单投影，错误原文只给 settings:manage
-
-- 改动：`GET /system/ccgateway/accounts/:id/request-logs/requests/:log` 的 `metadata` 经 `projectMetadata`：命中 `settings:manage` 原样返回，否则只保留 `requestLogSummaryKeys` 列出的摘要字段，且值必须是标量或字符串数组；默认拒绝（Worker 新增字段默认只给 `settings:manage`）。审查补充（超出任务原定的“详情”范围，D22 要求）：列表每行的 `error` 是同一段上游错误原文，控制台详情概览里的“错误”一行也取自列表行，所以列表路由增加 `settings:manage` 这个 key，未命中它的调用者 `error` 置空。CONTRACTS §64.2 同步。无迁移，不改 Worker。
-- 影响对象：只有 `account:read` 或 `settings:read` 的查看者不再看到上游错误原文（列表悬浮提示、详情概览的错误行只剩 `error_type`），详情概览“全部字段”里的 JSON 只剩摘要字段（`messages`、`log_directory` 以及可能出现的身份字段等不再出现）；`error_type` / `error_code` / `error_source`、状态、模型、耗时、会话标识、摘要值等仍可见。`settings:manage` 不受影响；只有 `settings:manage`（没有 `settings:read`、`account:read`）的调用者现在也能读列表（此前只能读详情）。
-- 未覆盖（已知缺口，待确认是否另立任务）：详情的 `events` 没有投影，`content:false` 只让 Worker 把每个字符串截到 256 字节，资源类事件的 detail 仍可能带错误文本、`principal_id`、路径与查询串、上传文件名；`upstream_request` 与请求、响应头只按名字遮蔽密钥头，其余键与头原样透传（含会话标识、`anthropic-beta`）；白名单里的 `error_type`、`error_code` 在来源为上游时取自上游响应体（各 ≤512 字符），`path`、`model`、`anthropic_beta` 等是客户端或 CLI 给出的短字符串，未做字符集检查。
-- 回滚：revert T43 的两个提交（实现与 review fixes）即可，无迁移、无数据变化；只想恢复列表的错误原文时 revert review fixes 这一个。
-
-## T49 W5-A9：账号动作可见性按行归属判断
-
-- 改动：`account.visibleActions(ctx, row)` 取代列表（`fillActions`）与 `GET /accounts/:id/actions` 里两份相同的过滤：调用者能修改这一行（`core.ScopeOf(core.AccountScope("update"))` 与 `core.Allows(scope, created_by)`）时返回该账号类型的全部动作（声明的动作都要求 `account:update`），否则只返回不要求权限的动作。此前只要持有 `account:own:update`，就对看得到的每个账号都列出动作。无迁移。
-- 影响对象：读全量、改 own 级的用户（`account:read` + `account:own:update`）在别人创建的账号（含 `created_by` 为空的历史账号）上，列表的 `actions` 字段与 `GET /accounts/:id/actions` 不再返回动作（重新授权、刷新令牌等）；这些动作此前调用也是 404。控制台此前已按行归属隐藏这些菜单项（`accountRowActions.ts` 的 `canUpdate`），界面无变化，变化只对直接调接口或用访问密钥的调用方可见。自己创建的账号、持有 `account:update` 的用户（admin、operator）不变。`GET /accounts/:id/actions` 的 `actions` 在没有可见动作时仍是 `[]`。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## T35 M12：payment webhook 删除 mock，未注册验签器时 501
-
-- 改动：`HandlePaymentNotification` 不再用写死的 `mock_out_trade_no` 当作已验证通知。按 `:provider` 查 `payment_provider_instances` 里启用的实例：没有则 404；渠道没有注册 `NotificationVerifier`（`notification.go`，以后接入真实验签的接口，`OrderService.RegisterVerifier`）则 501；验签器对所有实例都不接受则 400；只有验证通过且状态为成功的通知才会改订单并入账，金额不符 400，其他内部错误 500（原先一律 400 并回显错误文本）。任何失败都不改订单状态。本次不实现任何具体渠道的验签。
-- 影响对象：payment 插件的 webhook 现在对所有渠道回 404 或 501（仓库里没有任何验签器），在真实验签接入前不会有订单经 webhook 入账。原实现只会查找 `mock_out_trade_no` 这一个不存在的订单并回 200，从未入账，所以没有可用功能被关掉；对接方会从 200 变为收到 404/501。错误响应不再带内部错误文本。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
 ## T40 C-T2、W5-C3：AuthzCheck 只免授权查询本插件的权限
@@ -291,49 +308,17 @@
   - 随插件重新打包生效（版本在期 4 统一升）。
 - 回滚：revert 这个提交即可，无迁移；进行中的会话需重新发起。
 
+## T43 D22：ccgateway 请求日志的 metadata 按白名单投影，错误原文只给 settings:manage
+
+- 改动：`GET /system/ccgateway/accounts/:id/request-logs/requests/:log` 的 `metadata` 经 `projectMetadata`：命中 `settings:manage` 原样返回，否则只保留 `requestLogSummaryKeys` 列出的摘要字段，且值必须是标量或字符串数组；默认拒绝（Worker 新增字段默认只给 `settings:manage`）。审查补充（超出任务原定的“详情”范围，D22 要求）：列表每行的 `error` 是同一段上游错误原文，控制台详情概览里的“错误”一行也取自列表行，所以列表路由增加 `settings:manage` 这个 key，未命中它的调用者 `error` 置空。CONTRACTS §64.2 同步。无迁移，不改 Worker。
+- 影响对象：只有 `account:read` 或 `settings:read` 的查看者不再看到上游错误原文（列表悬浮提示、详情概览的错误行只剩 `error_type`），详情概览“全部字段”里的 JSON 只剩摘要字段（`messages`、`log_directory` 以及可能出现的身份字段等不再出现）；`error_type` / `error_code` / `error_source`、状态、模型、耗时、会话标识、摘要值等仍可见。`settings:manage` 不受影响；只有 `settings:manage`（没有 `settings:read`、`account:read`）的调用者现在也能读列表（此前只能读详情）。
+- 未覆盖（已知缺口，待确认是否另立任务）：详情的 `events` 没有投影，`content:false` 只让 Worker 把每个字符串截到 256 字节，资源类事件的 detail 仍可能带错误文本、`principal_id`、路径与查询串、上传文件名；`upstream_request` 与请求、响应头只按名字遮蔽密钥头，其余键与头原样透传（含会话标识、`anthropic-beta`）；白名单里的 `error_type`、`error_code` 在来源为上游时取自上游响应体（各 ≤512 字符），`path`、`model`、`anthropic_beta` 等是客户端或 CLI 给出的短字符串，未做字符集检查。
+- 回滚：revert T43 的两个提交（实现与 review fixes）即可，无迁移、无数据变化；只想恢复列表的错误原文时 revert review fixes 这一个。
+
 ## T44：/plugin-ui 非当前版本的资源，先按路径拒绝再加载包
 
 - 改动：`GET|HEAD /plugin-ui/:key/:vh/*path` 请求的不是本节点当前版本时，原先一律先 `ReadVersionAsset`（加载该版本的包）再用 `assetAllowed` 判断；现在路径既不在公开目录（`ui/`、`forms/`、`i18n/`，`prefixAllowed`）下、扩展名也不像图标（核心能当图片返回的类型：`.svg`、`.png`、`.webp`、`.ico`、`.jpg`、`.jpeg`、`.gif`，不分大小写，`looksLikeIcon`；任务说明只列了前四种，后三种是审查后补的，避免旧版本的 jpg/gif 图标取不到）时直接 404，不加载包。通过预检的请求在读到包后仍按完整的 `assetAllowed`（公开目录或 manifest 声明的图标，`iconAllowed`）判定。当前版本的路径不变。不加缓存（LRU、singleflight 延后）。
 - 影响对象：这个接口不需要登录，原先任何人都能用任意路径让节点反复加载旧版本的包；现在只有公开目录和图标样式的路径才会触发加载。正常页面不受影响。可见的变化：被预检拒绝的路径一律是空 body 的 404，不再出现版本不存在时的 JSON 404 或加载包失败时的 5xx；旧版本（非当前版本）的 manifest 图标放在公开目录之外且扩展名不在上述列表里（如 `.bmp`、无扩展名）时，按旧版本地址取它会 404，当前版本不受影响，仓库插件的图标都是 `.svg`。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## T47 M1-b：宿主 AccountScopeCheck 与 SDK 的账号范围、权限助手
-
-- 改动：
-  - proto：`HostService.AccountScopeCheck(AccountScopeCheckRequest{user_id, action, account_ids}) → AccountScopeCheckResponse{all, allowed_ids}`，需要宿主授权 `accounts.read`（风险表里已有的中风险权限，`ListAccounts` 用的同一个，不新增概念），生成代码已重新生成。
-  - 宿主（`grpcruntime/host.go`）：先 `h.require("accounts.read")`；再校验参数（`user_id > 0`、`action` 非空、id 为正且不超过 `manifest.MaxAccountBatch` = 500）；再要求 `user_id` 是本实例正在处理的 `HandleHTTP` 请求的调用者（`grpcruntime/callers.go` 的 `callerSet`：`httpAdapter.HandleHTTP` 在转发期间按 `Caller.user_id` 计数，返回即减；不在其中 → `PERMISSION_DENIED`）；然后把 `Accounts` 断言为 `core.AccountAccess` 转调 `AccountsInScope`，即核心代理检查插件路由账号归属用的同一个实现；错误经 `toStatus` 映射（两种 account key 都没有 → `PERMISSION_DENIED`，未知 action → `INVALID_ARGUMENT`），没有接入时 `UNAVAILABLE`。
-  - SDK（`pluginsdk/accounts_scope.go`）：`AccountScope{All}` 及 `Allows`、`Filter`；`ResolveAccountScope(ctx, host, req, action, ids...)`（去重、按 500 分批，调用者取自 `req.Caller`）；`RequireAccounts(...) *HTTPResponse`，nil 表示全部可操作，否则给出与核心 `core.AuthorizeAccounts` 相同的回答：无登录 401、两种 key 都没有 403、own 范围不带 id 403、含不在自己范围内的账号 404、宿主答不了 503；未知 action 或非正数 id 是插件自己的错误，一律 400（核心代理对非正数 id 是按不存在处理，这是两者唯一的差别）。鉴权器自身出错时共享原语按“没有权限”处理，所以表现为 403 而不是 503，与核心代理一致。这部分判定在 SDK 里是照 `AuthorizeAccounts` 的语义写的（SDK 不能依赖 server 包），范围计算本身只在核心。
-  - SDK（`pluginsdk/http.go`）：`RequirePermission(host, perm, next)`：没有登录用户 401，没有权限统一 403（不说明缺哪个权限），宿主答不了 503；`Forbidden()`、`Unauthenticated()` 两个信封助手。
-  - `pluginsdktest.FakeHost.AccountScope` 回调（不设时回答“全部账号”），参数校验与宿主一致；`FakeHost.Serve(userID)` 标记“正在处理该用户的请求”，`Harness.Do`/`DoAs` 自动调用，不在其中的 `user_id` 与宿主一样 `PERMISSION_DENIED`（fake 不模拟授权，`accounts.read` 不检查）。
-- 影响对象：只新增接口，已有行为不变；本次没有插件改用它们（期 3 接入）。旧核心对 `AccountScopeCheck` 回 `UNIMPLEMENTED`，`RequireAccounts` 因此回 503（失败收紧），依赖它的插件需把 `hostCompat` 设为包含本提交的核心版本；Host API 版本号不升（与 `SendAccountRequest` 的做法一致，避免滚动升级时被拒）。`AccountScopeCheck` 按用户的角色权限计算，不带访问密钥的收窄：插件的 admin/user 路由本来就不接受访问密钥。调用边界（期 2 整合审查后收紧，原方案“总是授予”作废）：最初任何已启用的插件不需要授权就能问任意 `user_id`，等于绕过 `authz.read` 读到 6 个核心 account key，并能按 500 一批扫描某用户创建了哪些账号，无限速、无审计。现在 (1) 插件必须持有 `accounts.read`（管理员在安装时批准，中风险）；(2) 只能问自己正在处理的请求的调用者，该用户此刻本来就在用这个插件，所以插件得不到别的用户的信息，也无法在后台批量扫描。`user_id` 仍由插件传入（Host 调用与请求走的是两条独立的 gRPC 通道，没有可靠的请求上下文可取），由宿主校验它与在途请求的调用者一致；同一用户并发多个请求时任一在途即可。使用这两个助手的插件必须在 manifest 的 `hostPermissions` 里声明 `accounts.read`，并且只在 HTTP 处理函数内调用；缺授权或请求已结束时 `RequireAccounts` 回 403。`FakeHost` 不设回调时回答“全部账号”，测试账号路由时应设置回调覆盖 own 范围；未知 action 在 fake 里同样 400。
-- 回滚：revert 这个提交即可，无迁移；回滚后已改用这些助手的插件会收到 `UNIMPLEMENTED` 并回 503。
-
-## T32 M4：WebSocket 每轮重新鉴权
-
-- 改动：`gateway/websocket.go` 的会话记住握手时的 API key 与客户端地址；每条客户端消息在开始一轮之前先 `wsSession.refresh`（`Auth.Authenticate`，与握手同一路径），成功后这一轮用新的 principal（限速、额度、分组信息、倍率）。401/403（密钥被撤销、禁用、过期，用户被禁用，IP 不在白名单等）→ 发 error 事件并以 1008 关闭会话；其他鉴权错误（如存储暂不可用）→ 只这一轮失败，会话保留；首轮之后密钥换了分组 → 409 `api_key_group_changed` 并以 1012 关闭（上游连接属于旧分组的账号，客户端重连后按新分组调度）。在这一步被拒的轮次不写用量记录（与 HTTP 鉴权失败一致）。进行中的那一轮不打断；空闲会话的定时复检延后。 期 2 整合审查补充：消息的格式检查（JSON 对象、形状限制、`type=response.create`）移到 `refresh` 之前（`wsMessageError`），垃圾消息不再各触发一次查库；`refresh` 加 10 s 期限（`wsLimits.auth`），会话上下文本身没有期限，存储挂起时不能卡住会话循环（ping、排空、客户端关闭）。
-- 影响对象：此前 WebSocket 会话整个生命周期使用握手时的 principal，密钥撤销、额度用尽、限速修改要等客户端重连才生效；现在在下一轮生效。长连接客户端在密钥失效后会收到 1008（不应重连），换分组后收到 1012（应重连）。每轮多一次 `Authenticate`（与一次 HTTP 请求相同的开销）。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## T33 M7、C-L7：调余额与用户组成员、个人专属接入 core.ActOnOthers（产品性收紧）
-
-- 改动：`billing.Service` 增加 `Users core.UserGuard`，`adjustBalance` 在 `Apply` 之前 `core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id)`；`segment.Deps` 增加 `Users`（`New` 里 `core.GuardOrDeny`），`addMembers`（整批 `user_ids`，事务之前，一条 SQL）、`makePersonal`、`removePersonal`（路径上的用户）经 `Service.actOnOthers` 做同一检查；`app/phases.go` 把 authz 注入两处。未注入时一律拒绝（500），不会 panic 或放行。CONTRACTS §5.2、§5.5、§97.6 同步（含 wontfix：`PATCH/DELETE /segments/:id`、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、分组专属价作用于用户组本身，不做目标用户检查，个人专属（只有一个成员）也按用户组处理；`POST /usage/:id/refund` 延后）。
-- 影响对象：
-  - 持有 `balance:adjust` 的任何人（包括超管，决策 D6）给自己调余额：由 200 变为 409 `you cannot do this to yourself`。超管全局唯一（T18）且只有超管能操作超管，所以超管的余额不能再由任何人经这个接口调整；核心里没有别的人工入账途径（账本只有用量、`admin_adjust`、插件入账/扣款、退款），需要时由支付类插件入账，或用另一个账号调用网关。
-  - 持有 `balance:adjust` / `segment:manage` 的非超管给超管、或给角色权限超出自己可授予范围的用户调余额、移用户组、设/取消个人专属：由成功变为 403（`you cannot modify a superuser` / `you cannot modify a user with higher privileges`）。
-  - 持有 `segment:manage` 的人把自己移入用户组、给自己设/取消个人专属：由成功变为 409；批量移入的 `user_ids` 里含本人或不可操作的用户时整批拒绝。经访问密钥调用同样适用（密钥主人不能给自己调）。
-  - 前端未改：用户列表里对本人、对超管的“调整余额”“设为个人专属”等按钮仍显示，点击后得到上述 409/403 提示（按钮按目标隐藏可在前端任务里跟进）。
-  - 已知未覆盖：持有 `segment:manage` 的人不能把自己移入别的用户组，但仍能修改自己所在用户组（含自己的个人专属）的折扣、授权、专属倍率与专属价（wontfix，见 CONTRACTS §97.6“目标用户检查”）；软删除但仍留有角色行的高权限用户作为目标时回 403 而不是 404/400。
-- 回滚：revert 这个提交即可，无迁移、无数据变化。
-
-## T34 M11：用量详情的账号与本人视图字段（Detail.hideAccounts / redactForSelf）
-
-- 改动：`usage/api.go` 新增 `Detail.hideAccounts`（记录的账号 + `hook_decisions` 各项的 `account_id` + `settlement.account_id`；`hook_decisions` 不是数组时整个不返回）与 `Detail.redactForSelf`（`hideUpstream`、`hideAccounts`，并清空 `plugin_version`、`sticky_rule`、`expr_hash`、`node_id`、`plugin_detail`、`anomalies`、`settlement`、`request_log_account_id`）。`GET /usage/:id` 没有 `account:read` 的分支改调前者，`GET /me/usage/:id` 只调后者。CONTRACTS §5.5、§15.2 同步。
-- 影响对象：
-  - `GET /me/usage/:id` 与没有 `account:read` 的 `GET /usage/:id`：`gateway.attempt` 钩子决定里的 `account_id` 不再返回（此前泄露了尝试的账号 id）。
-  - `GET /me/usage/:id`：`plugin_version`、`sticky_rule`、`expr_hash` 由原值变为空串。用户自己的用量详情页因此不再显示“粘性规则”卡片和计价表达式的哈希行（两处都是有值才渲染，前端无需改动；`sticky_hit` 仍在）。`metrics` 没有动：前端把其中每一项都展示给用户（缓存写入依据与 `u("key")` 用量事实），也是计价的输入，没有可判定为内部的子集。
-  - `GET /me/usage/:id` 的 `billing_detail` 不再带计价表达式与哈希（`withoutExpressions`：`inputs.pricing.base.{expression,expr_hash}`、各附加/替换组件的 `expression_hash` 与 `inputs` 里的整条 `Price`）；前端只用 `base` 是否存在与组件的 `Tokens`/`Metrics`，不受影响。
-  - 已知未处理（不在本任务范围，改的是网关的计费记录）：ccgateway helper 轮次的替换组件用上游模型名记账（`gateway/helper_history_response.go`），`billing_detail.replacement[].model` 因此对本人视图仍可见上游模型；`hook_decisions[].note` 是插件的自由文本，原样返回。
-  - 有 `account:read` 的 `GET /usage/:id` 不变。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
 ## T45：外壳 tokenless 管理开关的指标与 preflight 警告
@@ -348,6 +333,17 @@
 - 影响对象：只新增输出。控制台 API 所有通过认证的响应多一个头；`GET /me` 多一个字段。登出、撤销会话、改密码走 iam 自己的 `iam:user:changed`，不推进这个版本，前端不会因他人登出而刷新权限（创建、删除、启用/禁用用户与角色、授权、目录变更一样会推进）。头是本节点在认证那一刻已知的版本：变更请求自身的响应不反映该变更，多节点下可能短暂落后或领先于取 `/me` 的节点，前端按“头大于 `max(/me 的 authz_version, 上次触发重取的头值)` 才重新取”判断，同一个头值至多重取一次；跨域部署读取这个头需要 `Access-Control-Expose-Headers`（核心目前不发 CORS 头，同源部署不受影响）。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
+## T47 M1-b：宿主 AccountScopeCheck 与 SDK 的账号范围、权限助手
+
+- 改动：
+  - proto：`HostService.AccountScopeCheck(AccountScopeCheckRequest{user_id, action, account_ids}) → AccountScopeCheckResponse{all, allowed_ids}`，需要宿主授权 `accounts.read`（风险表里已有的中风险权限，`ListAccounts` 用的同一个，不新增概念），生成代码已重新生成。
+  - 宿主（`grpcruntime/host.go`）：先 `h.require("accounts.read")`；再校验参数（`user_id > 0`、`action` 非空、id 为正且不超过 `manifest.MaxAccountBatch` = 500）；再要求 `user_id` 是本实例正在处理的 `HandleHTTP` 请求的调用者（`grpcruntime/callers.go` 的 `callerSet`：`httpAdapter.HandleHTTP` 在转发期间按 `Caller.user_id` 计数，返回即减；不在其中 → `PERMISSION_DENIED`）；然后把 `Accounts` 断言为 `core.AccountAccess` 转调 `AccountsInScope`，即核心代理检查插件路由账号归属用的同一个实现；错误经 `toStatus` 映射（两种 account key 都没有 → `PERMISSION_DENIED`，未知 action → `INVALID_ARGUMENT`），没有接入时 `UNAVAILABLE`。
+  - SDK（`pluginsdk/accounts_scope.go`）：`AccountScope{All}` 及 `Allows`、`Filter`；`ResolveAccountScope(ctx, host, req, action, ids...)`（去重、按 500 分批，调用者取自 `req.Caller`）；`RequireAccounts(...) *HTTPResponse`，nil 表示全部可操作，否则给出与核心 `core.AuthorizeAccounts` 相同的回答：无登录 401、两种 key 都没有 403、own 范围不带 id 403、含不在自己范围内的账号 404、宿主答不了 503；未知 action 或非正数 id 是插件自己的错误，一律 400（核心代理对非正数 id 是按不存在处理，这是两者唯一的差别）。鉴权器自身出错时共享原语按“没有权限”处理，所以表现为 403 而不是 503，与核心代理一致。这部分判定在 SDK 里是照 `AuthorizeAccounts` 的语义写的（SDK 不能依赖 server 包），范围计算本身只在核心。
+  - SDK（`pluginsdk/http.go`）：`RequirePermission(host, perm, next)`：没有登录用户 401，没有权限统一 403（不说明缺哪个权限），宿主答不了 503；`Forbidden()`、`Unauthenticated()` 两个信封助手。
+  - `pluginsdktest.FakeHost.AccountScope` 回调（不设时回答“全部账号”），参数校验与宿主一致；`FakeHost.Serve(userID)` 标记“正在处理该用户的请求”，`Harness.Do`/`DoAs` 自动调用，不在其中的 `user_id` 与宿主一样 `PERMISSION_DENIED`（fake 不模拟授权，`accounts.read` 不检查）。
+- 影响对象：只新增接口，已有行为不变；本次没有插件改用它们（期 3 接入）。旧核心对 `AccountScopeCheck` 回 `UNIMPLEMENTED`，`RequireAccounts` 因此回 503（失败收紧），依赖它的插件需把 `hostCompat` 设为包含本提交的核心版本；Host API 版本号不升（与 `SendAccountRequest` 的做法一致，避免滚动升级时被拒）。`AccountScopeCheck` 按用户的角色权限计算，不带访问密钥的收窄：插件的 admin/user 路由本来就不接受访问密钥。调用边界（期 2 整合审查后收紧，原方案“总是授予”作废）：最初任何已启用的插件不需要授权就能问任意 `user_id`，等于绕过 `authz.read` 读到 6 个核心 account key，并能按 500 一批扫描某用户创建了哪些账号，无限速、无审计。现在 (1) 插件必须持有 `accounts.read`（管理员在安装时批准，中风险）；(2) 只能问自己正在处理的请求的调用者，该用户此刻本来就在用这个插件，所以插件得不到别的用户的信息，也无法在后台批量扫描。`user_id` 仍由插件传入（Host 调用与请求走的是两条独立的 gRPC 通道，没有可靠的请求上下文可取），由宿主校验它与在途请求的调用者一致；同一用户并发多个请求时任一在途即可。使用这两个助手的插件必须在 manifest 的 `hostPermissions` 里声明 `accounts.read`，并且只在 HTTP 处理函数内调用；缺授权或请求已结束时 `RequireAccounts` 回 403。`FakeHost` 不设回调时回答“全部账号”，测试账号路由时应设置回调覆盖 own 范围；未知 action 在 fake 里同样 400。
+- 回滚：revert 这个提交即可，无迁移；回滚后已改用这些助手的插件会收到 `UNIMPLEMENTED` 并回 503。
+
 ## T48 W2-F8、决策 D16：清除他人两步验证改需 user:password:reset（产品性收紧）
 
 - 改动：`DELETE /users/:id/security` 的权限由 `user:update` 改为 `user:password:reset`（`iam/security_http.go`）；权限目录里该权限的标签改为“重置他人密码与两步验证 / Reset user passwords and two-factor”（SyncCore 启动时更新 `permissions.label`）；用户列表“重置二次验证和通行密钥”按钮的判断键同步改（`UsersView.vue`）。不新增权限，无迁移。目标检查（`CanActOnUser`）与重置自己时的二次确认不变。CONTRACTS §14.2、§79.2、§80 同步。
@@ -356,3 +352,9 @@
   - 访问密钥：`user:password:reset` 只认会话（T10），带 `user:update` 的密钥此前能清他人的两步验证，现在一律 403，需改用登录会话。
   - 经 `DELETE /users/<自己>/security` 重置自己因子的人同样需要这个权限；没有的人用 `/me/two-factor/disable`。
 - 回滚：revert 这个提交即可；标签在旧版本下次启动时由 SyncCore 改回，无数据变化。
+
+## T49 W5-A9：账号动作可见性按行归属判断
+
+- 改动：`account.visibleActions(ctx, row)` 取代列表（`fillActions`）与 `GET /accounts/:id/actions` 里两份相同的过滤：调用者能修改这一行（`core.ScopeOf(core.AccountScope("update"))` 与 `core.Allows(scope, created_by)`）时返回该账号类型的全部动作（声明的动作都要求 `account:update`），否则只返回不要求权限的动作。此前只要持有 `account:own:update`，就对看得到的每个账号都列出动作。无迁移。
+- 影响对象：读全量、改 own 级的用户（`account:read` + `account:own:update`）在别人创建的账号（含 `created_by` 为空的历史账号）上，列表的 `actions` 字段与 `GET /accounts/:id/actions` 不再返回动作（重新授权、刷新令牌等）；这些动作此前调用也是 404。控制台此前已按行归属隐藏这些菜单项（`accountRowActions.ts` 的 `canUpdate`），界面无变化，变化只对直接调接口或用访问密钥的调用方可见。自己创建的账号、持有 `account:update` 的用户（admin、operator）不变。`GET /accounts/:id/actions` 的 `actions` 在没有可见动作时仍是 `[]`。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。

@@ -56,7 +56,8 @@ const MaxSecretDepth = 8
 // packaging time; UnmaskableFields says what the core masks for one that is
 // already installed.
 //
-// The walk is linear in the size of the schema.
+// The walk visits every schema node once; each level copies its location
+// path, so the cost also grows with the nesting depth.
 func SettingsSecrets(schema []byte) (fields []SecretField, unreachable []string) {
 	var root map[string]any
 	if json.Unmarshal(schema, &root) != nil || root == nil {
