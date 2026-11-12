@@ -21,5 +21,5 @@ export default {
   priceCount: '{n} 条',
   setPrices: '设置',
   unsaved: '未保存',
-  invalidRate: '「{name}」的专属倍率填得不对：请输入不小于 0 的数字，最多 4 位小数。'
+  invalidRate: '「{name}」的专属倍率填得不对：请输入不小于 0、小于 1000000 的数字，最多 4 位小数。'
 }

@@ -943,6 +943,68 @@ function priceFor(model: string) {
   return prices.find((p) => p.enabled && p.model === model) || null
 }
 
+/**
+ * How group pricing priced a record (billing_detail.inputs.pricing): the
+ * segment of the user, where the rate comes from and the rule that gave the
+ * list price, if one did. A record at the global price and the group's
+ * default rate has none.
+ */
+interface PricingTerms {
+  segment_id: number
+  rate_source: 'segment' | 'discount' | 'group'
+  /** A rule of the segment or of the group: a multiplier of the global price, or a price of its own. */
+  rule?: { source: 'segment' | 'group'; scale?: number; custom?: PriceDef }
+}
+
+/**
+ * Bills one call at a global price, as usage_logs keeps it; null when the
+ * price cannot be evaluated.
+ *
+ *   paid = list cost × rate
+ *
+ * A multiplier rule scales the cost at the global price and leaves the
+ * breakdown alone; a custom rule is evaluated in its place, and `cost` stays
+ * what the global price would have charged.
+ */
+function charge(price: MockPrice, input: EvalInput, rate: number, terms?: PricingTerms) {
+  const { source, scale, custom } = terms?.rule ?? {}
+  const global = tryEvaluate(price.expression, input)
+  const ev = custom ? tryEvaluate(custom.expression, input) : global
+  if (!ev || !global) return null
+  const listCost = ev.cost * (scale ?? 1)
+  const total = listCost * rate
+  const pricing = terms && {
+    segment_id: terms.segment_id,
+    rate_source: terms.rate_source,
+    ...(source ? { price_source: source } : {}),
+    ...(scale === undefined ? {} : { scale: String(scale) }),
+    ...(custom ? { base: { expression: price.expression, expr_hash: price.expr_hash } } : {})
+  }
+  return {
+    status: 'billed',
+    total,
+    tier: ev.tier,
+    detail: {
+      tier: ev.tier,
+      rules: ev.rules,
+      breakdown: {
+        vars: ev.tokens,
+        tiers: tierBounds(custom?.expression ?? price.expression),
+        items: ev.items,
+        subtotal: money(ev.subtotal),
+        base: money(ev.cost),
+        rules_multiplier: ev.multiplier
+      },
+      cost: money(global.cost),
+      ...(source ? { list_cost: money(listCost) } : {}),
+      rate_multiplier: rate.toFixed(2),
+      total_cost: money(total),
+      expr_version: 1,
+      ...(pricing ? { inputs: { pricing } } : {})
+    }
+  }
+}
+
 const usageRows: any[] = []
 const ledgerRows: any[] = []
 
@@ -974,35 +1036,8 @@ for (let i = 0; i < 90; i++) {
   const hook_decisions = [
     { plugin_key: 'guard', hook_id: 'content-filter', decision: blocked ? 'deny' : 'allow', latency_ms: 3 + Math.floor(r(15) * 20), note: blocked ? 'matched rule "no-secrets"' : undefined }
   ]
-  let billing: any = { status: 'free' }
-  if (success && price) {
-    const vars = { p: inTok, c: outTok, cr, cc, cc1h: 0 }
-    const ev = tryEvaluate(price.expression, { usage: vars, headers: fast ? { 'anthropic-beta': 'fast-mode' } : {}, at })
-    if (ev) {
-      const total = ev.cost * group.rate
-      billing = {
-        status: 'billed',
-        total,
-        tier: ev.tier,
-        detail: {
-          tier: ev.tier,
-          rules: ev.rules,
-          breakdown: {
-            vars: ev.tokens,
-            tiers: tierBounds(price.expression),
-            items: ev.items,
-            subtotal: money(ev.subtotal),
-            base: money(ev.cost),
-            rules_multiplier: ev.multiplier
-          },
-          cost: money(ev.cost),
-          rate_multiplier: group.rate.toFixed(2),
-          total_cost: money(total),
-          expr_version: 1
-        }
-      }
-    }
-  }
+  const vars = { p: inTok, c: outTok, cr, cc, cc1h: 0 }
+  const billing: any = (success && price && charge(price, { usage: vars, headers: fast ? { 'anthropic-beta': 'fast-mode' } : {}, at }, group.rate)) || { status: 'free' }
   const row: any = {
     id: 5000 + i,
     request_id: requestId,
@@ -1112,6 +1147,43 @@ for (let i = 0; i < 90; i++) {
       ],
       guard: [{ account_id: 27, model: 'claude-fable-4', decision: 'block', reason: 'guard_models_changed', attempt: 1 }]
     }) }
+  })
+}
+// Four records priced by group pricing, as mock/pricingStore.ts sets it up
+// for the console user (segment VIP: ×0.9 on every group, a rate of its own
+// of ×0.7 in the vip group, gpt-4o-mini at ×0.8 in the default group; the vip
+// group sells claude-haiku-4-5 at a price of its own). One each of a
+// multiplier rule, a custom price, the segment's own rate and its discount.
+{
+  const VIP = 2
+  const haiku = configPrice('per_token', { p: 0.8, c: 4, cr: 0.08, cc: 1 })
+  const tokens = { input: 12000, output: 1800 }
+  const samples: Array<{ group: (typeof GROUPS)[number]; model: string; rate: number; terms: PricingTerms }> = [
+    { group: GROUPS[0], model: 'gpt-4o-mini', rate: 0.9, terms: { segment_id: VIP, rate_source: 'discount', rule: { source: 'segment', scale: 0.8 } } },
+    { group: GROUPS[1], model: 'claude-haiku-4-5', rate: 0.7, terms: { segment_id: VIP, rate_source: 'segment', rule: { source: 'group', custom: haiku } } },
+    { group: GROUPS[1], model: 'claude-sonnet-4-5', rate: 0.7, terms: { segment_id: VIP, rate_source: 'segment' } },
+    { group: GROUPS[0], model: 'claude-sonnet-x', rate: 0.9, terms: { segment_id: VIP, rate_source: 'discount' } }
+  ]
+  samples.forEach(({ group, model, rate, terms }, i) => {
+    const price = priceFor(model)!
+    const at = new Date(Date.now() - (15 + i * 10) * 60000)
+    const billing = charge(price, { usage: { p: tokens.input, c: tokens.output }, at }, rate, terms)!
+    const account = ACCOUNTS.find((a) => (OWN_MODELS[a.plugin_key] ?? MODELS).includes(model))!
+    const native = NATIVE_ENDPOINT[account.upstream]
+    const custom = terms.rule?.custom
+    usageRows.push({
+      id: 4992 + i, request_id: `req_grouppricing000${i + 1}`, client_request_id: '', created_at: at.toISOString(),
+      user_id: 1, user_email: USERS[0].email, api_key_id: 1, api_key_name: `${USERS[0].name}-key`, client_ip: CLIENT_IPS[1][0],
+      group_id: group.id, group_name: group.name, account_id: account.id, account_name: account.name, plugin_key: account.plugin_key, account_type: account.type,
+      platform: native?.platform ?? 'anthropic', protocol: native?.protocol ?? 'anthropic.messages', upstream_protocol: account.upstream, conversion: null,
+      endpoint: native?.endpoint ?? '/v1/messages', model, upstream_model: model, stream: true, status_code: 200, success: true, error_type: '', error_message: '',
+      input_tokens: tokens.input, output_tokens: tokens.output, cache_read_tokens: 0, cache_creation_tokens: 0, cache_creation_1h_tokens: 0,
+      total_cost: money(billing.total), rate_multiplier: rate.toFixed(2), billing_status: billing.status, billing_mode: price.mode, matched_tier: billing.tier,
+      // The price is the global one whatever rule applied; the expression is the one that was evaluated.
+      price_id: price.id, expr_hash: custom ? remember(custom.expression) : price.expr_hash,
+      latency_ms: 2600, first_token_ms: 700, upload_ms: 40, sticky_rule: 'claude-code-session', sticky_hit: true, hook_decisions: [],
+      _detail: billing.detail, _price: { id: price.id, model: price.model, source: price.source }
+    })
   })
 }
 usageRows.sort((a, b) => b.created_at.localeCompare(a.created_at))

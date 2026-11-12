@@ -13,7 +13,7 @@ describe('the form of a segment', () => {
   })
   it('takes a rate above zero as the discount', () => {
     expect(['1', '0.9', '1.25'].every(validDiscount)).toBe(true)
-    expect(['', '0', '-1', '0.', 'x'].some(validDiscount)).toBe(false)
+    expect(['', '0', '-1', '0.', 'x', '1000000', '0.12345'].some(validDiscount)).toBe(false)
     expect(hasDiscount(segment())).toBe(true)
     expect(hasDiscount(segment({ discount: '1.0' }))).toBe(false)
   })

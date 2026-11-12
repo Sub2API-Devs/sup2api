@@ -32,7 +32,7 @@ describe('rate override field', () => {
   it('marks a value that is not a rate', () => {
     const { w, input, source } = render('abc')
     expect(input.attributes('aria-invalid')).toBe('true')
-    expect(source()).toBe('Enter a number of 0 or more, up to 4 decimals')
+    expect(source()).toBe('Enter a number from 0 to below 1000000, up to 4 decimals')
     expect(w.vm.valid).toBe(false)
   })
 })

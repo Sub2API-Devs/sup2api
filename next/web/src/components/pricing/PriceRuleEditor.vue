@@ -51,7 +51,7 @@ function choose(next: Kind) {
   if (props.base) emit('update:modelValue', startRule(next, props.base))
 }
 function setPrice(rule: Extract<PriceRule, { kind: 'custom' }>, key: string, price: number | null) {
-  emit('update:modelValue', { ...rule, config: { ...rule.config, [key]: price } })
+  emit('update:modelValue', { kind: 'custom', mode: rule.mode, config: { ...rule.config, [key]: price } })
 }
 
 defineExpose({ valid })

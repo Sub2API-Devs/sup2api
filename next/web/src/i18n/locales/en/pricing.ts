@@ -10,7 +10,7 @@ export default {
     groupDefault: 'Group default {group}',
     discounted: 'Group default {group} × discount {discount}',
     override: 'Own rate, no longer follows {rate}',
-    invalid: 'Enter a number of 0 or more, up to 4 decimals'
+    invalid: 'Enter a number from 0 to below 1000000, up to 4 decimals'
   },
   rule: {
     mode: 'Pricing',
@@ -20,13 +20,15 @@ export default {
     customText: 'Custom {price}',
     applied: 'Comes to {price}; follows the global price',
     appliedOpaque: 'Every price is multiplied by it; follows the global price',
-    multiplierInvalid: 'Enter a number of 0 or more, up to 4 decimals',
+    multiplierInvalid: 'Enter a number from 0 to below 1000000, up to 4 decimals',
     tokenUnit: 'A fixed price that does not follow the global price. In $ per 1M tokens',
     requestUnit: 'A fixed price that does not follow the global price. In $ per request',
     tokenInvalid: 'Input and output prices are required; no price may be negative',
     requestInvalid: 'Enter a price of 0 or more',
     expressionOnly: 'This model is billed by an expression: only a multiplier applies.',
     noBase: 'This model has no global price yet. Set one under Model prices first.',
+    inactive: 'Not in effect',
+    inactiveHint: 'The billing mode changed, so this rule is not in effect: the global price is billed another way now and this custom price no longer fits it. Set the rule again or clear it.',
     requestPrice: 'Price'
   },
   price: {

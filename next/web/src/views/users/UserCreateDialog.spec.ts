@@ -45,8 +45,8 @@ describe('user create dialog', () => {
     expect(w.emitted('update:open')).toEqual([[false]])
   })
 
-  it('leaves the segment to the server for a caller who may not manage segments', async () => {
-    mocks.denied.add('segment:manage')
+  it.each(['segment:read', 'segment:manage'])('leaves the segment to the server for a caller without %s', async (perm) => {
+    mocks.denied.add(perm)
     const { w, submit } = await render()
     expect(w.find('[data-testid="user-create-segment"]').exists()).toBe(false)
     await submit()

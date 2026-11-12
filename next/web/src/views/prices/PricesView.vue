@@ -7,6 +7,7 @@ import { SAlert, SBadge, SButton, SChip, SDropdown, SHint, SInput, SLink, SPageH
 import type { Price } from '@/api/types'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
 import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
+import { canSimulatePrices } from '@/components/pricing/quoteSubjects'
 import { deleteWithConfirm, useRowSwitch } from '@/composables/crud'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
@@ -18,6 +19,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('price:manage'))
+const canSimulate = computed(() => canSimulatePrices(auth))
 
 function queryStr(k: string): string {
   const v = route.query[k]
@@ -123,7 +125,7 @@ const simulator = ref<{ open: boolean; preset?: { model: string } }>({ open: fal
 const simulate = (model?: string) => (simulator.value = { open: true, preset: model ? { model } : undefined })
 
 const rowActions = computed<MenuAction[]>(() => [
-  { key: 'simulate', label: t('prices.simulateModel') },
+  { key: 'simulate', label: t('prices.simulateModel'), hidden: !canSimulate.value },
   { key: 'delete', label: t('common.delete'), danger: true, hidden: !canManage.value }
 ])
 function runRowAction(key: string, p: Price) {
@@ -136,7 +138,7 @@ function runRowAction(key: string, p: Price) {
   <div>
     <SPageHeader :title="t('prices.title')" :description="t('prices.description')" :filters-active-count="activeFilterCount(filters)">
       <template #actions>
-        <SButton data-testid="price-simulate" @click="simulate()">{{ t('prices.simulate') }}</SButton>
+        <SButton v-if="canSimulate" data-testid="price-simulate" @click="simulate()">{{ t('prices.simulate') }}</SButton>
         <SButton v-if="canManage" data-testid="price-sync" @click="router.push('/prices/sources')">{{ t('prices.syncPrices') }}</SButton>
         <SButton v-else variant="ghost" data-testid="price-sources" @click="router.push('/prices/sources')">{{ t('prices.viewSources') }}</SButton>
         <SButton v-if="canManage" variant="primary" icon="plus" @click="router.push('/prices/new')">{{ t('prices.new') }}</SButton>
@@ -201,7 +203,7 @@ function runRowAction(key: string, p: Price) {
       <template #cell-actions="{ row }">
         <div class="flex justify-end gap-1">
           <SButton size="sm" variant="ghost" @click="router.push(`/prices/${row.id}`)">{{ t(canManage ? 'common.edit' : 'common.view') }}</SButton>
-          <SDropdown :actions="rowActions" data-testid="price-row-menu" @select="runRowAction($event, row)" />
+          <SDropdown v-if="rowActions.some((a) => !a.hidden)" :actions="rowActions" data-testid="price-row-menu" @select="runRowAction($event, row)" />
         </div>
       </template>
       <template #footer>

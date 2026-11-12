@@ -1,13 +1,13 @@
 // Price rules while they are edited: the rule a mode starts from, whether a
 // rule may be saved, and the unsaved rules of a model price table: what its
 // rows show meanwhile and what saving sends.
-import type { ModelPriceRow, PriceDef, PriceRule, PriceRulePatch, PriceSource } from '@/api/pricing'
+import type { ListedPriceRule, ModelPriceRow, PriceDef, PriceRule, PriceRulePatch, PriceSource } from '@/api/pricing'
 import { RULE_TOKEN_VARS, applyRule, priceCells, validRate } from './pricingFormat'
 
 /** The rule of a row a table edits: the group's own, or that of the segment asked for. */
 export type RuleScope = 'group' | 'segment'
 
-export const ruleOf = (row: ModelPriceRow, scope: RuleScope): PriceRule | null => (scope === 'segment' ? row.segment_rule : row.group_rule) ?? null
+export const ruleOf = (row: ModelPriceRow, scope: RuleScope): ListedPriceRule | null => (scope === 'segment' ? row.segment_rule : row.group_rule) ?? null
 
 /**
  * The prices a custom rule sets, in the order shown: the first `required` of
@@ -46,12 +46,16 @@ export function sameRule(a: PriceRule | null, b: PriceRule | null): boolean {
   return customFields(a.mode).keys.every((k) => (a.config[k] ?? null) === (b.config[k] ?? null))
 }
 
-/** A row as it reads with `rule` in `scope`: the list price and its source follow the first rule that applies. */
+/**
+ * A row as it reads with `rule` in `scope`: the list price and its source
+ * follow the first rule in effect, as the server resolves them. An inactive
+ * rule is skipped, and without a global price no rule applies.
+ */
 export function withRule(row: ModelPriceRow, scope: RuleScope, rule: PriceRule | null): ModelPriceRow {
   const next: ModelPriceRow = scope === 'segment' ? { ...row, segment_rule: rule } : { ...row, group_rule: rule }
-  const applied = next.segment_rule ?? next.group_rule
-  const source: PriceSource = next.segment_rule ? 'segment' : next.group_rule ? 'group' : 'global'
-  return { ...next, list_price: applyRule(row.base, applied), source }
+  const levels: Array<[PriceSource, ListedPriceRule | null | undefined]> = row.base ? [['segment', next.segment_rule], ['group', next.group_rule]] : []
+  const [source, applied] = levels.find(([, r]) => r && !r.inactive) ?? ['global', null]
+  return { ...next, list_price: applyRule(row.base, applied ?? null), source }
 }
 
 /** The unsaved rules of a table by model; null removes the saved one. */

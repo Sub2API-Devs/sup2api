@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { formatNumber } from '@/utils/format'
 import PriceQuoteBreakdown from './PriceQuoteBreakdown.vue'
+import { quoteSubjects, type QuoteSubject } from './quoteSubjects'
 import SegmentBadge from './SegmentBadge.vue'
 import SegmentSelect from './SegmentSelect.vue'
 import UserSearchSelect from './UserSearchSelect.vue'
@@ -35,19 +36,16 @@ const { groups } = useGroupsLookup()
 
 // ------------------------------------------------------------------ conditions
 
-// Looking a user up takes user:read; without it the quote is for a segment.
-const canPickUser = computed(() => auth.has('user:read'))
-const subject = ref<'user' | 'segment'>(canPickUser.value ? 'user' : 'segment')
+// The quote is for whom the caller may pick: a user (user:read), else a segment (segment:read).
+const allowed = quoteSubjects(auth)
+const subject = ref<QuoteSubject>(allowed[0] ?? 'segment')
 const user = ref<User | null>(null)
 const segmentId = ref<number | null>(null)
 const groupId = ref<number | null>(null)
 const model = ref<string | null>(null)
 const usage = reactive<{ p: number | null; c: number | null }>({ p: 100_000, c: 10_000 })
 
-const subjects = computed<SelectOption[]>(() => [
-  { value: 'user', label: t('pricingTools.sim.subject.user') },
-  { value: 'segment', label: t('pricingTools.sim.subject.segment') }
-])
+const subjects = computed<SelectOption[]>(() => allowed.map((value) => ({ value, label: t(`pricingTools.sim.subject.${value}`) })))
 
 async function presetUser(id: number) {
   if (user.value?.id !== id) user.value = null
@@ -140,7 +138,7 @@ const groupName = computed(() => groups.value.find((g) => g.id === groupId.value
 
       <SField :label="t('pricingTools.sim.who')">
         <div class="flex flex-wrap items-center gap-3">
-          <SSegmented v-if="canPickUser" v-model="subject" :options="subjects" :aria-label="t('pricingTools.sim.who')" data-testid="price-sim-subject" />
+          <SSegmented v-if="subjects.length > 1" v-model="subject" :options="subjects" :aria-label="t('pricingTools.sim.who')" data-testid="price-sim-subject" />
           <div class="min-w-0 flex-1 basis-64">
             <SegmentSelect v-if="subject === 'segment'" v-model="segmentId" data-testid="price-sim-segment" />
             <div v-else-if="user" class="flex min-h-control flex-wrap items-center gap-2" data-testid="price-sim-user">

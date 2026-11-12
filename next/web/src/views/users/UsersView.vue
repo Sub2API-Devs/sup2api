@@ -70,7 +70,8 @@ function roleName(key: string) {
 
 // ------------------------------------------------------------------ user groups (segments)
 
-const canManageSegments = computed(() => auth.has('segment:manage'))
+// Moving users takes the user groups to choose from (segment:read) and the right to change who is in them.
+const canManageSegments = computed(() => auth.has('segment:read') && auth.has('segment:manage'))
 const segments = useNamedSegments()
 const segmentOptions = computed(() => segmentFilterOptions(segments.value, { all: t('users.allSegments'), personal: t('pricing.segment.personal') }))
 
@@ -345,7 +346,7 @@ function remove(u: User) {
     </SFormModal>
 
     <!-- move to a user group -->
-    <UserSegmentMoveDialog v-model:open="moveOpen" :users="selection.rows.value" @done="onMoved" />
+    <UserSegmentMoveDialog v-if="canManageSegments" v-model:open="moveOpen" :users="selection.rows.value" @done="onMoved" />
 
     <!-- groups and pricing -->
     <UserPricingDrawer v-model:open="pricingOpen" :user="pricingUser" @changed="list.reload()" />

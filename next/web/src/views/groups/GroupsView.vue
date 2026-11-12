@@ -19,12 +19,13 @@ import GroupPricingSummary from './GroupPricingSummary.vue'
 import type { GroupEditTab, GroupPricingTab } from './groupEditTabs'
 import ModelBadge from '@/components/platform/ModelBadge.vue'
 import PriceSimulatorModal from '@/components/pricing/PriceSimulatorModal.vue'
+import { canSimulatePrices } from '@/components/pricing/quoteSubjects'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('group:manage'))
-const canSimulate = computed(() => auth.has('price:read'))
+const canSimulate = computed(() => canSimulatePrices(auth))
 const list = useList<Group>('/groups')
 
 const columns = computed<TableColumn[]>(() => {

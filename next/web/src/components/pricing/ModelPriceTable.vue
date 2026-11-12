@@ -64,13 +64,14 @@ watch([() => props.groupId, () => props.segment?.id], () => load(), { immediate:
 
 function viewRow(saved: ModelPriceRow) {
   const row = draftedRow(saved, scope.value, drafts.value)
-  return { ...row, tiers: priceCells(row.base).tiers, invalid: row.dirty && !validRule(ruleOf(row, scope.value)) }
+  // Inactive: a rule the server skips, a custom price in another mode than the global price has now.
+  return { ...row, tiers: priceCells(row.base).tiers, invalid: row.dirty && !validRule(ruleOf(row, scope.value)), inactive: !!(row.group_rule?.inactive || row.segment_rule?.inactive) }
 }
 const rows = computed(() => (data.value?.models ?? []).map(viewRow))
 const shown = computed(() => {
   const s = q.value.trim().toLowerCase()
-  // A rule being removed keeps its row in sight until it is saved.
-  return rows.value.filter((r) => (!s || r.model.toLowerCase().includes(s)) && (!onlyRuled.value || r.source !== 'global' || r.dirty))
+  // A rule being removed keeps its row in sight until it is saved; so does one that is not in effect.
+  return rows.value.filter((r) => (!s || r.model.toLowerCase().includes(s)) && (!onlyRuled.value || r.source !== 'global' || r.dirty || r.inactive))
 })
 const dirty = computed(() => drafts.value.size > 0)
 
@@ -167,6 +168,7 @@ defineExpose({ load, save, dirty, reset })
         </template>
         <template v-for="level in levels" :key="level.scope" #[`cell-${level.scope}`]="{ row }">
           <span v-if="ruleOf(row, level.scope)" class="text-xs" :data-testid="`model-price-${level.scope}-rule`">{{ ruleText(t, ruleOf(row, level.scope)) }}</span>
+          <SBadge v-if="ruleOf(row, level.scope)?.inactive" tone="warning" size="xs" class="ml-1.5" :title="t('pricing.rule.inactiveHint')" data-testid="model-price-inactive">{{ t('pricing.rule.inactive') }}</SBadge>
           <span v-else class="text-xs text-fg-muted" :data-testid="`model-price-${level.scope}-rule`">{{ level.follows }}</span>
           <SHint v-if="!segment && row.segment_rule_count" size="xs" data-testid="model-price-segment-rules">{{ t('pricing.table.segmentRules', row.segment_rule_count) }}</SHint>
         </template>

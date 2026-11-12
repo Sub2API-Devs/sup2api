@@ -4,7 +4,7 @@ import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './
 import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, ownerScope, readonlyUser, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 import { pricedModels } from './billing'
-import { accessOf, findSegment, forgetGroup, forgetUser, grantedGroupIds, groupAccess, groupRuleCounts, moveUser, rateOf, segmentOfUser, segmentRef } from './pricingStore'
+import { accessOf, findSegment, forgetGroup, forgetUser, groupAccess, groupRuleCounts, moveUser, rateOf, segmentOfUser, segmentRef } from './pricingStore'
 
 type L = { en: string; zh: string }
 const L = (en: string, zh: string): L => ({ en, zh })
@@ -316,7 +316,6 @@ export interface MockUser {
   display_name: string
   status: string
   roles: string[]
-  group_ids: number[]
   balance: string
   last_login_at: string | null
   created_at: string
@@ -324,26 +323,25 @@ export interface MockUser {
 }
 
 export const users: MockUser[] = [
-  { id: 1, email: 'admin@example.com', display_name: 'Admin', status: 'active', roles: ['super_admin'], group_ids: [1, 2], balance: '12.34000000', last_login_at: now(-60), created_at: now(-86400 * 90), updated_at: now(-86400) },
-  { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', roles: ['operator', 'user'], group_ids: [1], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
-  { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', roles: ['operator'], group_ids: [1, 2], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
-  { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', roles: ['user'], group_ids: [2], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
-  { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', roles: ['user'], group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
-  { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', roles: ['vendor'], group_ids: [1], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], group_ids: [], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
+  { id: 1, email: 'admin@example.com', display_name: 'Admin', status: 'active', roles: ['super_admin'], balance: '12.34000000', last_login_at: now(-60), created_at: now(-86400 * 90), updated_at: now(-86400) },
+  { id: 2, email: 'ops@example.com', display_name: '张三', status: 'active', roles: ['operator', 'user'], balance: '85.50000000', last_login_at: now(-3600 * 5), created_at: now(-86400 * 40), updated_at: now(-86400 * 3) },
+  { id: 3, email: 'li.si@example.com', display_name: '李四', status: 'active', roles: ['operator'], balance: '3.21000000', last_login_at: now(-86400 * 2), created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
+  { id: 4, email: 'dev@acme.io', display_name: 'Acme Dev', status: 'active', roles: ['user'], balance: '250.00000000', last_login_at: now(-600), created_at: now(-86400 * 10), updated_at: now(-86400) },
+  { id: 5, email: 'old@example.com', display_name: 'Former user', status: 'disabled', roles: ['user'], balance: '0.00000000', last_login_at: null, created_at: now(-86400 * 80), updated_at: now(-86400 * 30) },
+  { id: vendorUser.id, email: vendorUser.email, display_name: vendorUser.display_name, status: 'active', roles: ['vendor'], balance: '0.00000000', last_login_at: now(-7200), created_at: now(-86400 * 5), updated_at: now(-86400) },
+  { id: readonlyUser.id, email: readonlyUser.email, display_name: readonlyUser.display_name, status: 'active', roles: ['readonly'], balance: '0.00000000', last_login_at: now(-86400), created_at: now(-86400 * 5), updated_at: now(-86400) }
 ]
 for (let i = 0; i < 18; i++) {
-  users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', roles: ['user'], group_ids: [1], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
+  users.push({ id: 100 + i, email: `user${i + 1}@example.org`, display_name: `User ${i + 1}`, status: i % 7 === 6 ? 'disabled' : 'active', roles: ['user'], balance: (Math.random() * 50).toFixed(8), last_login_at: i % 3 ? now(-3600 * i) : null, created_at: now(-86400 * (i + 1)), updated_at: now(-3600 * i) })
 }
 
 function findUser(req: MockRequest) {
   return users.find((u) => u.id === Number(req.params.id))
 }
 
-/** A user as the API returns it: with its segment, and group_ids as the groups that segment is granted. */
+/** A user as the API returns it: with its segment. */
 export function userOut(u: MockUser) {
-  const s = segmentOfUser(u.id)
-  return { ...u, group_ids: grantedGroupIds(s.id), segment: segmentRef(s) }
+  return { ...u, segment: segmentRef(segmentOfUser(u.id)) }
 }
 
 /** The ?segment= filter of the users list: a segment id, or "personal" for every personal segment. */
@@ -371,7 +369,7 @@ on('POST', '/users', (req) => {
   const segment = b.segment_id == null ? null : findSegment(Number(b.segment_id))
   if (segment !== null && segment?.kind !== 'named') return invalid('segment_id', 'unknown user group')
   const roleKeys: string[] = Array.isArray(b.role_keys) && b.role_keys.length ? b.role_keys : ['user']
-  const u: MockUser = { id: nextId(), email: b.email, display_name: b.display_name || '', status: 'active', roles: roleKeys, group_ids: [], balance: '0.00000000', last_login_at: null, created_at: now(), updated_at: now() }
+  const u: MockUser = { id: nextId(), email: b.email, display_name: b.display_name || '', status: 'active', roles: roleKeys, balance: '0.00000000', last_login_at: null, created_at: now(), updated_at: now() }
   users.unshift(u)
   if (segment) moveUser(u.id, segment)
   return userOut(u)
@@ -401,12 +399,6 @@ on('PUT', '/users/:id/roles', (req) => {
   if (bad) return invalid('role_keys', `unknown role ${bad}`)
   u.roles = keys
   return userOut(u)
-})
-on('PUT', '/users/:id/groups', (req) => {
-  const u = findUser(req)
-  if (!u) return fail(404, 'not_found', 'user not found')
-  u.group_ids = Array.isArray(req.body?.group_ids) ? req.body.group_ids.map(Number) : []
-  return u
 })
 on('POST', '/users/:id/balance/adjust', (req) => {
   const u = findUser(req)

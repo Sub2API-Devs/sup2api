@@ -31,7 +31,7 @@ export default {
     label: 'Discount',
     hint: 'Multiplies the default rate of every group; a group with an own rate ignores it. 1 means no discount.',
     example: 'E.g. group default {group} → effective {rate}',
-    invalid: 'Enter a number above 0, up to 4 decimals; 1 for no discount.'
+    invalid: 'Enter a number above 0 and below 1000000, up to 4 decimals; 1 for no discount.'
   },
   groups: {
     hint: 'Whether "{name}" may use each group, and at what rate. Grants and rates take effect on Save; own model prices are saved in their own dialog.',

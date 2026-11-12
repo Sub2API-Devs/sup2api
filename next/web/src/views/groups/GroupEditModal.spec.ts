@@ -6,10 +6,11 @@ import type { Group } from '@/api/types'
 import GroupEditModal from './GroupEditModal.vue'
 import type { GroupEditTab } from './groupEditTabs'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), toast: vi.fn() }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), toast: vi.fn(), denied: new Set<string>() }))
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get: mocks.get, post: mocks.post, patch: mocks.patch } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...(await original<object>()), toast: (...a: unknown[]) => mocks.toast(...a) }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
+// Any of the keys asked for, as the store answers.
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (keys: string | string[]) => [keys].flat().some((key) => !mocks.denied.has(key)) }) }))
 enableAutoUnmount(afterEach)
 
 /** What ran, in order: the group's own request and each sub-editor's save with the id it got. */
@@ -57,6 +58,7 @@ beforeEach(() => {
   calls.length = 0
   Object.assign(answers, { accounts: [], segments: true, pricing: true })
   dirty.segments = false
+  mocks.denied.clear()
   mocks.get.mockReset().mockResolvedValue({ models: [], unrestricted_accounts: 0 })
   mocks.toast.mockReset()
   mocks.patch.mockReset().mockImplementation(async (path: string) => void calls.push(`PATCH ${path}`))
@@ -68,6 +70,18 @@ describe('group editor', () => {
     const { w, selected } = await render(vip, 'pricing')
     expect(w.findAll('[role="tab"]').map((t) => t.text())).toEqual(['基本信息', '授权与倍率', '模型定价', '模型名单', '账号', '高级'])
     expect(selected()).toBe('模型定价')
+  })
+
+  it('leaves the user groups of a new group for later when the caller may not list them', async () => {
+    mocks.denied.add('segment:read')
+    const tabsOf = (w: Awaited<ReturnType<typeof render>>['w']) => w.findAll('[role="tab"]').map((t) => t.text())
+    const { w, submit } = await render(null)
+    expect(tabsOf(w)).toEqual(['基本信息', '模型定价', '模型名单', '账号', '高级'])
+    await w.get('input').setValue('new')
+    await submit()
+    expect(calls).toEqual(['POST /groups', 'accounts:9', 'pricing'])
+    // A saved group answers with its own user groups, which takes group:read only.
+    expect(tabsOf((await render(vip)).w)).toContain('授权与倍率')
   })
 
   it('saves the group, then its accounts, user groups and model prices', async () => {

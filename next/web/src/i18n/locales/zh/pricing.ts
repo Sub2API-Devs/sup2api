@@ -10,7 +10,7 @@ export default {
     groupDefault: '分组默认 {group}',
     discounted: '分组默认 {group} × 全场折扣 {discount}',
     override: '专属倍率，不再跟随 {rate}',
-    invalid: '请输入不小于 0 的数字，最多 4 位小数'
+    invalid: '请输入不小于 0、小于 1000000 的数字，最多 4 位小数'
   },
   rule: {
     mode: '定价方式',
@@ -20,13 +20,15 @@ export default {
     customText: '自定义 {price}',
     applied: '套用后 {price}，全局价变化时跟着变',
     appliedOpaque: '各项价格同乘该倍数，全局价变化时跟着变',
-    multiplierInvalid: '请输入不小于 0 的数字，最多 4 位小数',
+    multiplierInvalid: '请输入不小于 0、小于 1000000 的数字，最多 4 位小数',
     tokenUnit: '固定价格，不随全局价变化。单位：$ / 1M tokens',
     requestUnit: '固定价格，不随全局价变化。单位：$ / 次',
     tokenInvalid: '输入、输出价格必填，各项都不能为负数',
     requestInvalid: '请填写不小于 0 的单价',
     expressionOnly: '该模型按表达式计费，只能按倍数调整。',
     noBase: '该模型还没有全局价格，请先到“模型价格”里设置。',
+    inactive: '规则未生效',
+    inactiveHint: '计费方式已变，规则未生效：全局价改了计费方式，这条自定义价不再适用。请重新设置或清除。',
     requestPrice: '单价'
   },
   price: {

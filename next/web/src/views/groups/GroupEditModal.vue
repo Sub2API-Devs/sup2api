@@ -33,6 +33,9 @@ const auth = useAuthStore()
 // Account membership is stored on accounts, so editing it needs account rights
 // (all-level or own-level, CONTRACTS §21; the editor disables rows the caller cannot edit).
 const canEditAccounts = computed(() => auth.has([...ACCOUNT_KEYS.read]) && auth.has([...ACCOUNT_KEYS.update]))
+// A saved group answers with its own user groups (group:read); one not created yet has to list
+// them all (GET /segments), which takes segment:read. Without it they are set once the group is saved.
+const canSetSegments = computed(() => props.group !== null || auth.has('segment:read'))
 const accountsEditor = ref<InstanceType<typeof GroupAccountsEditor>>()
 const modelPolicyEditor = ref<InstanceType<typeof GroupModelPolicyEditor>>()
 const segmentsEditor = ref<InstanceType<typeof GroupSegmentsEditor>>()
@@ -130,7 +133,8 @@ const dirtyTabs = computed<string[]>(() => {
   return [...changedTabs(form, opened.value), ...GROUP_EDIT_TABS.filter((key) => editors[key])]
 })
 const tabs = computed<TabItem[]>(() => {
-  const shown = GROUP_EDIT_TABS.filter((key) => key !== 'accounts' || canEditAccounts.value)
+  const hidden: Partial<Record<GroupEditTab, boolean>> = { accounts: !canEditAccounts.value, segments: !canSetSegments.value }
+  const shown = GROUP_EDIT_TABS.filter((key) => !hidden[key])
   return markUnsaved(shown.map((key) => ({ key, label: t(`groups.tabs.${key}`) })), (key) => dirtyTabs.value.includes(key))
 })
 
@@ -245,6 +249,7 @@ async function submit() {
           </SField>
         </div>
         <GroupSegmentsEditor
+          v-if="canSetSegments"
           v-show="tab === 'segments'"
           ref="segmentsEditor"
           :group-id="group?.id ?? null"

@@ -100,7 +100,9 @@ const rules: RuleRow[] = [
   { segment_id: VIP, group_id: 1, model: 'gpt-4o-mini', rule: { kind: 'multiplier', multiplier: '0.8' } },
   { segment_id: ENTERPRISE, group_id: 2, model: 'claude-haiku-4-5', rule: { kind: 'custom', mode: 'per_token', config: { p: 0.7, c: 3.5, cr: 0.07, cc: 0.9 } } },
   // An expression price takes a multiplier only.
-  { segment_id: PERSONAL_104, group_id: 2, model: 'claude-sonnet-4-5', rule: { kind: 'multiplier', multiplier: '0.9' } }
+  { segment_id: PERSONAL_104, group_id: 2, model: 'claude-sonnet-4-5', rule: { kind: 'multiplier', multiplier: '0.9' } },
+  // Set while the model was billed per request; its global price is per token now, so the rule is inactive.
+  { segment_id: null, group_id: 1, model: 'gemini-2.5-flash', rule: { kind: 'custom', mode: 'per_request', config: { price: 0.002 } } }
 ]
 
 // ------------------------------------------------------------------ reads
@@ -156,8 +158,10 @@ export function groupRuleCounts(groupId: number) {
 
 // ------------------------------------------------------------------ resolving
 
-/** A decimal as the API writes a rate. */
-const decimal = (n: number) => String(Number(n.toFixed(6)))
+/** The largest rate, at the four decimals a rate keeps (usage_logs.rate_multiplier is numeric(10,4)). */
+const MAX_RATE = 999999.9999
+/** A discounted rate as the server writes it: rounded half up to four decimals (scaled first: a float is a little under a tie such as 0.25625) and capped. */
+const discounted = (n: number) => String(Math.min(Math.round(Number((n * 1e4).toFixed(4))) / 1e4, MAX_RATE))
 
 /** Whether a segment may use a group: public, or granted. */
 export function accessOf(s: MockSegment, g: PricedGroup): { accessible: boolean; granted: boolean; source: 'public' | 'grant' | 'none' } {
@@ -175,27 +179,37 @@ export function rateOf(s: MockSegment | null, g: PricedGroup): { value: string; 
   const levels = { group_default: g.rate_multiplier, discount: s?.discount ?? '1' }
   const override = s ? rateOverrideOf(s.id, g.id) : null
   if (override !== null) return { ...levels, value: override, source: 'segment' }
-  if (Number(levels.discount) !== 1) return { ...levels, value: decimal(Number(g.rate_multiplier) * Number(levels.discount)), source: 'discount' }
+  if (Number(levels.discount) !== 1) return { ...levels, value: discounted(Number(g.rate_multiplier) * Number(levels.discount)), source: 'discount' }
   return { ...levels, value: g.rate_multiplier, source: 'group' }
 }
 
-/** The list price a rule gives over the global price `base`. */
+/** The list price a rule gives over the global price `base`; a model without a global price has none. */
 export function applyRule(base: PriceDef | null, rule: PriceRule | null): PriceDef | null {
-  if (!rule) return base
-  if (rule.kind === 'custom') return configPrice(rule.mode, rule.config)
-  return base && scalePrice(base, Number(rule.multiplier))
+  if (!base || !rule) return base
+  return rule.kind === 'custom' ? configPrice(rule.mode, rule.config) : scalePrice(base, Number(rule.multiplier))
+}
+
+/** A rule as a row of model prices carries it. */
+type ListedRule = PriceRule & { inactive?: true }
+
+/** A rule as configured; a custom price in another mode than the global price has now is marked inactive. */
+function listedRule(rule: PriceRule | undefined, base: PriceDef | null): ListedRule | null {
+  if (!rule) return null
+  return rule.kind === 'custom' && base && rule.mode !== base.mode ? { ...rule, inactive: true } : rule
 }
 
 /**
  * The list price of a model in a group for a segment, first hit: the rule of
- * the segment there, the rule of the group, the global price. Both rules are
- * returned as configured.
+ * the segment there, the rule of the group, the global price. An inactive
+ * rule is skipped, and without a global price no rule applies. Both rules
+ * are returned as configured.
  */
 export function listPriceOf(s: MockSegment | null, groupId: number, model: string, base: PriceDef | null) {
-  const group_rule = rulesWhere({ segment_id: null, group_id: groupId, model })[0]?.rule ?? null
-  const segment_rule = (s && rulesWhere({ segment_id: s.id, group_id: groupId, model })[0]?.rule) || null
-  const source: PriceSource = segment_rule ? 'segment' : group_rule ? 'group' : 'global'
-  return { group_rule, segment_rule, source, list_price: applyRule(base, segment_rule ?? group_rule) }
+  const group_rule = listedRule(rulesWhere({ segment_id: null, group_id: groupId, model })[0]?.rule, base)
+  const segment_rule = s && listedRule(rulesWhere({ segment_id: s.id, group_id: groupId, model })[0]?.rule, base)
+  const levels: Array<[PriceSource, ListedRule | null]> = base ? [['segment', segment_rule], ['group', group_rule]] : []
+  const [source, rule] = levels.find(([, r]) => r && !r.inactive) ?? ['global', null]
+  return { group_rule, segment_rule, source, list_price: applyRule(base, rule) }
 }
 
 // ------------------------------------------------------------------ changes

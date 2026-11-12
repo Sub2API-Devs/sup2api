@@ -29,6 +29,7 @@ describe('a rule that may be saved', () => {
     expect(validRule(times('1.5'))).toBe(true)
     expect(validRule(times(''))).toBe(false)
     expect(validRule(times('-1'))).toBe(false)
+    expect(validRule(times('1000000'))).toBe(false)
   })
   it('has its input and output prices, cache prices only when given, none negative', () => {
     expect(validRule(custom({ p: 1, c: 8, cr: null, cc: null }))).toBe(true)
@@ -60,6 +61,13 @@ describe('a row under a rule', () => {
     expect(own).toMatchObject({ source: 'segment', list_price: { mode: 'per_token', config: { p: 1, c: 8 } } })
     expect(withRule(own, 'segment', null)).toMatchObject({ source: 'group', list_price: { config: { p: 6 } } })
     expect(withRule(group, 'group', null)).toMatchObject({ source: 'global', list_price: perToken })
+  })
+  it('skips a rule that is not in effect, and takes no rule without a global price', () => {
+    const stale = { ...custom({ p: 1, c: 8 }), inactive: true }
+    const skipped = withRule(row({ segment_rule: stale }), 'group', times('2'))
+    expect(skipped).toMatchObject({ source: 'group', segment_rule: stale, list_price: { config: { p: 6, c: 30 } } })
+    expect(withRule(row({ group_rule: stale }), 'segment', null)).toMatchObject({ source: 'global', list_price: perToken })
+    expect(withRule(row({ base: null, group_rule: times('2'), list_price: null }), 'segment', null)).toMatchObject({ source: 'global', list_price: null })
   })
   it('shows its draft and remembers the saved rule', () => {
     const saved = row({ group_rule: times('2'), source: 'group' })

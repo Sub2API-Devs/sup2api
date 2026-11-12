@@ -69,6 +69,21 @@ export interface EffectiveRate {
   discount: Money
 }
 
+/**
+ * billing_detail.inputs.pricing of a usage record: how group pricing priced
+ * it, frozen with the record. Left out at the global price and the group's
+ * default rate.
+ */
+export interface UsagePricing {
+  segment_id?: number
+  rate_source?: RateSource
+  price_source?: PriceSource
+  /** The multiplier of a multiplier rule. */
+  scale?: Money
+  /** The global price a custom rule replaced. */
+  base?: { expression: string; expr_hash: string }
+}
+
 /** The settings of one segment in one group. */
 export interface SegmentGroupSetting {
   segment: SegmentRef
@@ -101,6 +116,12 @@ export type PriceRule =
   /** A price of its own, in the mode of the global one (an expression price takes a multiplier only). */
   | { kind: 'custom'; mode: Exclude<PriceMode, 'expression'>; config: Record<string, number | null> }
 
+/** A rule as a row of model prices carries it. */
+export type ListedPriceRule = PriceRule & {
+  /** A custom price in another mode than the global price has now: it is skipped, and the next level prices the model. */
+  inactive?: boolean
+}
+
 export interface PriceDef {
   mode: PriceMode
   config: Record<string, any> | null
@@ -112,12 +133,12 @@ export interface ModelPriceRow {
   model: string
   /** The global price; null = the model has none and cannot be billed. */
   base: PriceDef | null
-  group_rule: PriceRule | null
+  group_rule: ListedPriceRule | null
   /** Only when a segment was asked for. */
-  segment_rule?: PriceRule | null
+  segment_rule?: ListedPriceRule | null
   /** Segments with a rule of their own on this model (asked without a segment). */
   segment_rule_count?: number
-  /** The price after the first rule that applies. */
+  /** The price after the first rule in effect; null without a global price. */
   list_price: PriceDef | null
   source: PriceSource
 }

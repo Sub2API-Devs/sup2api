@@ -52,7 +52,6 @@ export interface User {
   display_name: string
   status: string
   roles?: string[] // assumed
-  group_ids?: number[] // assumed
   balance?: Money // assumed
   /** The user group the user is priced by (api/pricing.ts). */
   segment?: SegmentRef

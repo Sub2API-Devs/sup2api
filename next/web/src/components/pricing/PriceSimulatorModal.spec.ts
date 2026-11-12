@@ -6,8 +6,9 @@ import GroupPicker from '@/components/GroupPicker.vue'
 import PriceSimulatorModal from './PriceSimulatorModal.vue'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn(), post: vi.fn() }))
+const denied = vi.hoisted(() => new Set<string>())
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !denied.has(key) }) }))
 enableAutoUnmount(afterEach)
 
 const GROUPS = [
@@ -36,6 +37,7 @@ describe('price simulator', () => {
   beforeEach(() => {
     i18n.global.locale.value = 'zh'
     vi.clearAllMocks()
+    denied.clear()
     api.list.mockImplementation(async (_path: string, q: { model?: string }) => ({ items: GROUPS.filter((g) => !q.model || g.models.includes(q.model)) }))
     api.get.mockImplementation(async (path: string) => ({ models: GROUPS.find((g) => path === `/groups/${g.id}/model-prices`)!.models.map((model) => ({ model })) }))
   })
@@ -52,6 +54,24 @@ describe('price simulator', () => {
     await w.setProps({ open: true, preset: { model: 'gpt-4o' } })
     await settle()
     expect(chosen(w)).toEqual({ group: 2, model: 'gpt-4o' })
+  })
+
+  it('quotes for a user or a user group, and only for what the caller may read', async () => {
+    const both = await open({})
+    expect(both.find('[data-testid="price-sim-subject"]').exists()).toBe(true)
+    expect(both.find('[data-testid="user-search"]').exists()).toBe(true)
+
+    denied.add('segment:read')
+    const users = await open({})
+    expect(users.find('[data-testid="price-sim-subject"]').exists()).toBe(false)
+    expect(users.find('[data-testid="user-search"]').exists()).toBe(true)
+    expect(api.list).not.toHaveBeenCalledWith('/segments', expect.anything())
+
+    denied.clear()
+    denied.add('user:read')
+    const segments = await open({})
+    expect(segments.find('[data-testid="price-sim-subject"]').exists()).toBe(false)
+    expect(segments.find('[data-testid="price-sim-segment"]').exists()).toBe(true)
   })
 
   it('says so when no group provides the model', async () => {

@@ -8,16 +8,25 @@ export function rateText(v: string | number | null | undefined): string {
   return v === null || v === undefined || v === '' ? '—' : `×${Number(v)}`
 }
 
-/** A rate or a multiplier as typed in a form: a non-negative decimal. */
+/** The largest rate, at the four decimals the server keeps of one (numeric(10,4)). */
+const MAX_RATE = 999999.9999
+
+/** A rate, a discount or a multiplier as typed in a form: a non-negative decimal of at most four decimals, below 1000000. */
 export function validRate(v: string | null | undefined): boolean {
-  return !!v && /^\d+(\.\d{1,4})?$/.test(v.trim())
+  return !!v && /^\d+(\.\d{1,4})?$/.test(v.trim()) && Number(v) <= MAX_RATE
 }
 
 const round = (n: number) => Number(n.toFixed(6))
 
-/** The rate a segment gets in a group without an override of its own: the group's default times the segment's discount. */
+/**
+ * The rate a segment gets in a group without an override of its own: the
+ * group's default times the segment's discount, as the server works it out,
+ * rounded half up to four decimals and capped. The product is scaled before
+ * it is rounded: 0.5125 × 0.5 is 0.25625 to the server and a little less to a float.
+ */
 export function inheritedRate(rate: Pick<EffectiveRate, 'group_default' | 'discount'>): number {
-  return round(num(rate.group_default, 1) * num(rate.discount, 1))
+  const scaled = Number((num(rate.group_default, 1) * num(rate.discount, 1) * 1e4).toFixed(4))
+  return Math.min(Math.round(scaled) / 1e4, MAX_RATE)
 }
 
 /** The fields of a price config that are prices: the tokens', a tier's flat fee, a per-request price. */

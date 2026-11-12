@@ -51,8 +51,10 @@ const onSegment = (handler: (s: MockSegment, req: MockRequest) => MockResult) =>
 const onGroup = (handler: (g: MockGroup, req: MockRequest) => MockResult) => onRow('group', (req) => groups.find((g) => g.id === idOf(req)), handler)
 const onUser = (handler: (u: MockUser, req: MockRequest) => MockResult) => onRow('user', (req) => users.find((u) => u.id === idOf(req)), handler)
 
-/** A rate, a discount or a multiplier: a non-negative decimal. */
-const validRate = (v: unknown) => /^\d+(\.\d+)?$/.test(String(v))
+/** A rate, a discount or a multiplier: a non-negative decimal of at most four decimals, below 1000000. */
+const validRate = (v: unknown) => /^\d+(\.\d{1,4})?$/.test(String(v)) && Number(v) < 1000000
+/** What the message of a value that is no rate ends with. */
+const RATE_LIMITS = 'below 1000000, with at most 4 decimals'
 const itemsOf = (req: MockRequest): any[] => (Array.isArray(req.body?.items) ? req.body.items : [])
 
 // ------------------------------------------------------------------ rows
@@ -137,7 +139,7 @@ function segmentError(b: any, self?: MockSegment) {
   if (self?.kind === 'personal' && (b.name !== undefined || b.description !== undefined)) return invalid('name', 'a personal user group only has a discount')
   if (b.name !== undefined && !name) return invalid('name', 'name is required')
   if (name && segments.some((s) => s !== self && s.kind === 'named' && s.name === name)) return invalid('name', 'name already in use')
-  if (b.discount !== undefined && !(validRate(b.discount) && Number(b.discount) > 0)) return invalid('discount', 'must be a positive number')
+  if (b.discount !== undefined && !(validRate(b.discount) && Number(b.discount) > 0)) return invalid('discount', `must be above 0 and ${RATE_LIMITS}`)
   return null
 }
 
@@ -191,7 +193,7 @@ function savePairs(items: any[], pairOf: (item: any) => { s?: MockSegment; g?: M
   for (const [i, item] of items.entries()) {
     const { s, g } = pairOf(item)
     if (!s || !g) return invalid(`items.${i}`, 'unknown user group or group')
-    if (item.rate_override != null && !validRate(item.rate_override)) return invalid(`items.${i}.rate_override`, 'must be a non-negative number')
+    if (item.rate_override != null && !validRate(item.rate_override)) return invalid(`items.${i}.rate_override`, `must be 0 or more and ${RATE_LIMITS}`)
     changes.push({ s, g, item })
   }
   for (const { s, g, item } of changes) setPair(s.id, g.id, { granted: item.granted, rate_override: item.rate_override == null ? item.rate_override : String(item.rate_override) })
@@ -226,7 +228,7 @@ const CUSTOM_PRICES = {
 /** Why a rule cannot be saved over the global price `base`; null when it can. */
 function ruleError(rule: any, base: PriceDef | null): string | null {
   if (!base) return 'the model has no global price'
-  if (rule?.kind === 'multiplier') return validRate(rule.multiplier) ? null : 'multiplier must be a non-negative number'
+  if (rule?.kind === 'multiplier') return validRate(rule.multiplier) ? null : `multiplier must be 0 or more and ${RATE_LIMITS}`
   if (rule?.kind !== 'custom') return 'rule must be a multiplier or a custom price'
   if (base.mode === 'expression') return 'an expression price takes a multiplier only'
   if (rule.mode !== base.mode) return `a custom price is ${base.mode}, as the global price`

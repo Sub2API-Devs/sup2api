@@ -21,5 +21,5 @@ export default {
   priceCount: '{n} price | {n} prices',
   setPrices: 'Set',
   unsaved: 'Unsaved',
-  invalidRate: 'The own rate of "{name}" is not valid: enter a number of 0 or more, up to 4 decimals.'
+  invalidRate: 'The own rate of "{name}" is not valid: enter a number from 0 to below 1000000, up to 4 decimals.'
 }

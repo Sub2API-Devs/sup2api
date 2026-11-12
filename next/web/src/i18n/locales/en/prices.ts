@@ -109,6 +109,7 @@ export default {
     subtotal: 'Subtotal',
     rules: 'combined rule multiplier',
     base: 'Base cost',
+    listScale: 'list price multiplier',
     groupRate: 'group rate'
   },
   summary: {

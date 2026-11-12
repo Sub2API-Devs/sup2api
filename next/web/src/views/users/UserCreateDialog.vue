@@ -11,15 +11,15 @@ import { applyFormError } from '@/utils/formErrors'
 import { useNamedSegments } from './userSegments'
 
 // New user (POST /users), with the roles the page has loaded. A caller who
-// manages segments also says which one the user joins (`segment_id`); left
-// out, the server puts him in the default segment.
+// lists and manages segments also says which one the user joins
+// (`segment_id`); left out, the server puts him in the default segment.
 const props = defineProps<{ open: boolean; roles: Role[] }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'created'): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const segments = useNamedSegments()
 const defaultSegmentId = computed(() => segments.value.find((s) => s.is_default)?.id ?? null)
-const canPlace = computed(() => auth.has('segment:manage'))
+const canPlace = computed(() => auth.has('segment:read') && auth.has('segment:manage'))
 
 const creating = ref(false)
 const errors = ref<Record<string, string>>({})

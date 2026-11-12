@@ -109,6 +109,7 @@ export default {
     subtotal: '小计',
     rules: '条件总倍率',
     base: '基础费用',
+    listScale: '标价倍数',
     groupRate: '分组倍率'
   },
   summary: {
