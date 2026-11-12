@@ -23,11 +23,12 @@ const (
 	balanceMetricRPM         = "rpm"
 	balanceMetricConcurrency = "concurrency"
 	balanceMetricTPM         = "tpm"
+	balanceMetricSessions    = "sessions"
 )
 
 var (
 	balanceModes   = []string{balanceModeDefault, balanceModeTraffic}
-	balanceMetrics = []string{balanceMetricRPM, balanceMetricConcurrency, balanceMetricTPM}
+	balanceMetrics = []string{balanceMetricRPM, balanceMetricConcurrency, balanceMetricTPM, balanceMetricSessions}
 )
 
 // SchedulingSettings is the "scheduling" row of the settings table: how the

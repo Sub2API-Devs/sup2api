@@ -602,7 +602,10 @@ func (b *boot) startHTTP() error {
 	// before the console fallback instead of being registered as routes.
 	b.engine.NoRoute(b.gw.Middleware(), ui.Serve)
 
-	requestCtx, cancelRequests := context.WithCancel(context.Background())
+	requestCtx, cancelRequestContexts := context.WithCancel(context.Background())
+	// Requests whose client already left are no longer tied to their context:
+	// the gateway is told separately to stop reading their upstreams.
+	cancelRequests := func() { b.gw.AbandonReads(); cancelRequestContexts() }
 	defer cancelRequests()
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: b.gate.wrap(b.engine), ReadHeaderTimeout: 10 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return requestCtx }}

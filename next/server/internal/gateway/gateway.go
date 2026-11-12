@@ -132,10 +132,13 @@ type Gateway struct {
 	availabilityBreakers availabilityBreakers
 	availabilityWarns    warnSampler
 
-	stop    chan struct{}
-	wg      sync.WaitGroup
-	cancels []func()
-	closed  sync.Once
+	stop chan struct{}
+	// readsAbandoned ends when AbandonReads is called (disconnect.go).
+	readsAbandoned context.Context
+	abandonReads   context.CancelFunc
+	wg             sync.WaitGroup
+	cancels        []func()
+	closed         sync.Once
 }
 
 var (
@@ -165,6 +168,7 @@ func New(d Deps) *Gateway {
 		resourceSpools: make(chan struct{}, 4),
 		stop:           make(chan struct{}),
 	}
+	g.readsAbandoned, g.abandonReads = context.WithCancel(context.Background())
 	g.conv = d.Converters
 	if g.conv == nil {
 		g.conv = convert.Default()
@@ -216,6 +220,7 @@ func New(d Deps) *Gateway {
 // Close stops background work and subscriptions and flushes hook stats.
 func (g *Gateway) Close() {
 	g.closed.Do(func() {
+		g.abandonReads()
 		for _, c := range g.cancels {
 			if c != nil {
 				c()

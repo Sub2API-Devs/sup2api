@@ -1238,6 +1238,10 @@ export interface BillingSettings {
   missing_price_policy: 'reject' | 'free'
   min_balance: Money
   big_cost_warning_usd: Money
+  /** What a request pays when its client hangs up mid-answer (CONTRACTS §25.8). */
+  client_disconnect_policy: 'precharge' | 'continue' | 'free'
+  /** How long the upstream is still read under "continue", 5-1800. */
+  client_disconnect_wait_seconds: number
 }
 
 /** GET/PUT /settings/gateway (CONTRACTS §8, §14.4). */
@@ -1272,7 +1276,7 @@ export interface SchedulingSettings {
   /** default: weighted random; traffic: favour accounts using less than their weight's share. */
   mode: 'default' | 'traffic'
   /** The usage both the traffic balance and the limit load are computed on. */
-  metric: 'rpm' | 'concurrency' | 'tpm'
+  metric: 'rpm' | 'concurrency' | 'tpm' | 'sessions'
   /** Lower the weight as the metric nears the account's limit. */
   limit_load: boolean
   /** Balance by the request's model: the traffic balance compares that model's own usage; with limit_load, also count the model list holding it. */

@@ -296,7 +296,7 @@
 
 | key | 值 | 默认 |
 |---|---|---|
-| `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd}` | `reject`、`"0"`、`"10"` |
+| `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd, client_disconnect_policy, client_disconnect_wait_seconds}`（后两项见 §25.8） | `reject`、`"0"`、`"10"`、`continue`、120 |
 | `sticky` | `{enabled, default_ttl_seconds, keep_on_account_disabled}` | `true`、3600、`false` |
 | `gateway` | `{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}` | 3、2000、300 |
 | `auto_disable` | `{enabled, status_codes, keywords}`（§42.2） | `true`、`"401"`、new-api 的 7 条关键词 |
@@ -2069,6 +2069,23 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 **日志**：Unimplemented 触发本地 tokenizer 回退时，记录 `slog.Info("plugin EstimateUsage unimplemented, using local tokenizer", "plugin", pluginKey)`，方便排查。
 
 **客户端在 usage 事件前断开，按预扣估算计费（2026-11-08 审计）**：所有流式协议的 usage 都在流末尾（Anthropic `message_delta`、OpenAI 最后一个 chunk / `response.completed`），此前客户端收完内容再挂断，记录无 usage → `billing_status=free` → 预扣原样退回，输出白送。现在 `UsageRecord.ErrorType=client_canceled` 且上游**已经开始应答**（`call.upstreamResponded`，`forward()` 收到响应、WebSocket 轮次收到第一条上游消息时置位）的请求，按 `precharge()` 保存的估算计费：每项 token 取「响应已报告的数」与「估算」的较大值（估算的输出项即 `output_reserve_tokens`），`Additional`/`Metrics`/`UsageSemantics` 为空时也取估算；`per_request` 价格同样计费；记录 `usage_logs.anomalies.usage_extract = "precharge"`，统计口径与 `reconcile=estimated` 一样算"估算行"。不适用于：排队时就离开（没有上游应答，预扣照旧释放）、端点 `billing=free`、插件自带结算（`Replacement` 或 `Reservation`）、上游错误。单测 `gateway/precharge_cancel_test.go`。
+
+**客户端断开时的计费策略（2026-11-12，设计见 `DESIGN-2026-11-12-CLIENT-DISCONNECT-BILLING.md`）**：上一段的行为成为三种策略之一，由 `settings.billing.client_disconnect_policy` 选择，控制台在「系统设置 → 计费」。适用条件不变（上游已开始应答；排队时离开、端点 `billing=free`、插件自带结算、上游错误都不适用）。
+
+| 取值 | 行为 |
+|---|---|
+| `precharge` | 立即中止上游，按预扣估算计费，即上一段。 |
+| `continue`（默认，2026-11-12 用户决定） | 不再向客户端写，继续把上游响应读完，按上游报告的用量计费；记录仍为 `client_canceled` / 499，`usage_extract` 不写 `precharge`。读不完时按 `precharge` 处理。 |
+| `free` | 立即中止上游，`billable=false`，已报告的 token 仍留在记录里。 |
+
+- **估算与已报告用量的合并改为分侧取值**，取代上一段的「每项取较大值」：输入侧四项（`input`、`cache_read`、`cache_creation`、`cache_creation_1h`）只要响应报告过任意一项就整体采用响应的数，否则整体采用估算；输出取两者较大值。原因：估算把整段提示算作输入，响应把同一段提示的缓存部分算在缓存项下，逐项取较大值在输入不含缓存的协议（Anthropic）上把提示计了两遍。实现 `gateway/pipeline.go` 的 `canceledTokens`。
+- **`continue` 的等待上限** `client_disconnect_wait_seconds`，5–1800，默认 120。到时以 `errDisconnectWaitTimeout` 取消上游。流空闲超时、`relay_timeout_seconds` 照常生效。读取期间请求不退出，账号与 API Key 的并发名额照常占用。
+- **上游请求的 context 不再派生自客户端请求**（`gateway/dispatch.go` 的 `forwardBuilt`）：由 `gateway/disconnect.go` 的 `upstreamDrain` 在客户端 context 结束时取消它，`continue` 且 `forward` 正在转发成功响应时改为启动等待计时器。
+- **`continue` 只覆盖核心直接转发的响应**（`forwardSSE`、`forwardJSON`、`forwardJSONConverted`）。插件 `Execute` 执行的请求、`task.submit`、资源与额度流、WebSocket 不续读，按 `precharge` 处理。
+- 旧的 `billing` 行没有这两个字段，读出默认值，**所以升级后既有部署即按 `continue` 运行**；存储值不在取值集合内时策略取默认值，等待秒数夹到范围内。设置读取失败时网关按 `precharge` 处理。
+- **什么算「读完」**：有输出因客户端已离开而被丢弃，且上游正常结束、没有以流内错误事件收尾。客户端收完最后一个字节才断开的请求没有丢输出，照常记为成功。关停不再等待在途请求时调用 `Gateway.AbandonReads()`（`app/phases.go` 的 `cancelRequests`），续读立即中止，按 `precharge` 处理。
+- 策略经 `core.ClientDisconnectSource` 读取，`billing.Service` 实现；网关拿不到时按 `precharge` 处理。网关包的测试环境同样默认 `precharge`，只有针对 `continue` 的用例显式开启。
+- 测试：`gateway/disconnect_test.go`（三种策略、等待超时、续读中关停的端到端，`canceledTokens`）、`e2e/ac26_client_disconnect_test.go`（整机验收）、`gateway/precharge_cancel_test.go`（判定）、`billing/settings_disconnect_test.go`（设置读写与校验）。
 
 ### 25.9 请求体里重复的对象键与过深嵌套一律拒绝（2026-10-31，团队审核 P1）
 
@@ -5027,7 +5044,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 粘性会话已在该层周期内（ZSCORE ≥ cur − 20）→ 总是放行；最后段不是当前段时，旧段 −1、当前段 +1、更新 score（会话数不变）。
   - 新的粘性会话 → 该层会话数 < 上限才放行；当前段 +1，写入 ZSET。
   - `req:{请求 ID}`（没有粘性会话的请求）→ 会话数 < 上限才放行；只给当前段 +1，**不写 ZSET**（它不会再出现，记成员只会占内存）。它计在哪一段只有网关知道：准入返回的 `core.RateHold.At` 是准入时的 Redis 时间，网关记在 `call.sessionAt`，释放时据此找到那一段（§71.3）。网关用 `core.RequestSession` 生成、`account` 用 `core.IsRequestSession` 识别，在 `ratelimit.Session.Once` 里显式标出，Lua 里不认前缀。
-- 准入和 RPM / TPM 在**同一个 Lua 脚本**里完成（`ratelimit.Minute.AdmitAll`，`core.AccountLimiter.TryHit(ctx, ref, model, session)`）：任何一层的 RPM、TPM、SPM 到了，整次都不计；都没到时每层 RPM +1，且（有会话时）每层按上面的规则计会话（只在准入时更新，请求进行中和结束时都不更新），并删除 score < cur − 20 的成员和窗口外的段。会话数在每一层都计，不论该层是否设了上限，用于展示。key 名带周期秒数，改周期就换新计数，不同段长的段号不会混用；key TTL = 周期 + 一段。
+- 准入和 RPM / TPM 在**同一个 Lua 脚本**里完成（`ratelimit.Minute.AdmitAll`，`core.AccountLimiter.TryHit(ctx, ref, model, session)`）：任何一层的 RPM、TPM、SPM 到了，整次都不计；都没到时每层 RPM +1，且（有会话时）每层按上面的规则计会话（只在准入时更新，请求进行中和结束时都不更新），并删除 score < cur − 20 的成员和窗口外的段。会话数在每一层都计，不论该层是否设了上限，用于展示和 §89 的会话指标（2026-11-11）。key 名带周期秒数，改周期就换新计数，不同段长的段号不会混用；key TTL = 周期 + 一段。
 - 被 SPM 挡住和被 RPM / TPM 挡住效果一样（§18.1、§68.2）：本次跳过该账号，不改状态、不发事件；都不可用时 429 `rate_limited`（`all accounts are busy or rate limited, please retry later`）。`ratelimit` 给出的 retry 为腾出名额的那一段整段过期的时间（最少 1 秒）；账号路径与 RPM / TPM 一样不向客户端返回 `Retry-After`。
 - **同一请求在同一账号上只算 1 个会话**。网关对同一账号再次准入同一会话只有两处：失败策略的同号重试（`retry`，`prepareRetry` 把下一次挑号限定为该账号），和 WebSocket 连接的后续轮次（`wsSession.reuse`）。其余路径都把离开的账号排除在本次请求之外（换号、`switch_reset`、可用性守卫、被限流拒绝），不会再准入。
   - 同号重试：粘性会话在 ZSET 里，再次准入时已持有，不重复计；`req:` 会话在重试前先从该账号释放上一次准入计的那 1 个（`releaseSession`，按 `RateHold.At`），再走预判和准入。所以它只计 1 个，也不会被自己占的名额挡住（SPM = 1 时同号重试照常进行）。
@@ -7194,7 +7211,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 账号编辑器“高级”分区的“协议转换丢失策略”（继承分组 / 允许 / 安全 / 严格，提示各分组的生效值）；分组表单同一选项（默认 = 允许）与详情；系统设置网关卡片的 Claude 默认 max_tokens 键值表（`default` 行不可删）与媒体下载上限；使用记录的上游协议列转换徽标（等级，悬停显示步骤，有损时加标记）、详情的“协议转换”块（等级、步骤、策略、按类别的损失、被拒绝的类型）、`conversion` 筛选；账号类型端点列表的等级徽标。
 
-## 89. 同优先级均衡负载（2026-11-09，用户要求：粘性长会话让同权重账号流量悬殊；设计文档“均衡负载调度：设计文档与任务规划”；无迁移）
+## 89. 同优先级均衡负载（2026-11-09，用户要求：粘性长会话让同权重账号流量悬殊；设计文档“均衡负载调度：设计文档与任务规划”；无迁移；2026-11-11 加会话指标，用户要求，设计文档“均衡负载：会话指标与默认策略说明”）
 
 ### 89.1 设置行 `scheduling`
 
@@ -7207,11 +7224,11 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | 字段 | 取值 | 默认 | 含义 |
 |------|------|------|------|
 | `mode` | `default` / `traffic` | `default` | 均衡策略：默认 = 按权重随机；流量 = 见 89.2 |
-| `metric` | `rpm` / `concurrency` / `tpm` | `rpm` | 均衡指标，流量均衡和上限负载共用 |
+| `metric` | `rpm` / `concurrency` / `tpm` / `sessions` | `rpm` | 均衡指标，流量均衡和上限负载共用；`sessions` 是 §71 的会话数（2026-11-11 加入） |
 | `limit_load` | 布尔 | `false` | 基于上限负载调度，见 89.2 |
 | `model_limits` | 布尔 | `false` | 根据模型限速（按模型调度）：流量均衡比较请求模型在各账号上自己的用量；上限负载也算请求模型所在的指定模型限速列表（§68） |
 
-读入网关设置快照（10 秒 TTL，`config:changed` 广播失效）；读到未知枚举值按默认值处理。默认值下不读 Redis、调度结果与之前完全一致。
+读入网关设置快照（10 秒 TTL，`config:changed` 广播失效）；读到未知枚举值按默认值处理。默认值下不读 Redis、调度结果与之前完全一致。还不认识 `sessions` 的旧核心读到它时按 `rpm` 调度，它的 `PUT` 拒绝这个值（2026-11-11）。
 
 - `GET /settings/scheduling`（`settings:read`）：返回生效值。
 - `PUT /settings/scheduling`（`settings:manage`）：整行替换，缺省字段取默认值；非法枚举 400 `invalid_argument`，`details.fields[{field:"mode"|"metric", code:"invalid"}]`；写入记 `updated_by`，广播 `config:changed`（key `settings.scheduling`）。
@@ -7220,7 +7237,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 核心均衡夹在 `rankOverrides`（§24）之后、`orderPool` 层内加权随机之前，只在同一（优先级，路由等级）层内比较；层的划分、权重 0 的排除、筛选、槽位与限流都不变。`w` 为插件处理后的权重（≤0 按 1）：
 
-1. 上限负载（`limit_load`）：`账号用量 ÷ 账号该指标上限 × 100`（上限是账号级的，始终用整个账号的用量），上限 0 时为 0；`model_limits` 开且请求模型在账号某个指定模型限速列表里时，再算“列表用量 ÷ 列表上限”，取较大值；截到 0–100。指标对应的上限：RPM → `rpm_limit`，并发 → `max_concurrency`，TPM → `tpm_limit`（列表同名字段）。
+1. 上限负载（`limit_load`）：`账号用量 ÷ 账号该指标上限 × 100`（上限是账号级的，始终用整个账号的用量），上限 0 时为 0；`model_limits` 开且请求模型在账号某个指定模型限速列表里时，再算“列表用量 ÷ 列表上限”，取较大值；截到 0–100。指标对应的上限：RPM → `rpm_limit`，并发 → `max_concurrency`，TPM → `tpm_limit`，会话 → `spm_limit`（2026-11-11 加入）；列表用同名字段。
 2. 负载 = max(上限负载, 插件负载)；`w1 = max(0.01, w × (100 − 负载) / 100)`（即 §67 公式）。
 3. 流量（`mode=traffic`）：`u` 为整个账号的用量；`model_limits` 开且请求带模型时，为请求模型在该账号上的用量（和 dynweight 一样按模型）。层内 `r = u ÷ (Σu × w1 ÷ Σw1)`，`w_eff = w1 ÷ (r + 0.25)²`；层内 Σu = 0 时不调整。指数 2、平滑 0.25 为常量。
 4. 层内按 `w_eff` 不放回加权随机。
@@ -7230,7 +7247,13 @@ node 任务（可工作节点各跑，`RequireWork`）：
 ### 89.3 生效范围与读数
 
 - 和权重一样只作用于粘性不命中的挑选（新会话、无粘性规则的请求、绑定账号失败后的换号，HTTP 与 WebSocket 每一轮相同）；粘性命中、`count_tokens` 不读不算；已绑定的会话不迁移。
-- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM 读 `AccountLimiter.Usage`（账号与其命中的模型列表的近 60 秒窗口；只按模型比较且未开上限负载时不读），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`，几种并行读）。没设 TPM 上限的账号，以及按模型比较时（`md:<model>` 不设上限、不预留），TPM 在请求结束时才计入，有滞后。
+- 每个请求在第一次不走绑定的挑选时读一次，失败换号复用同一份读数。RPM/TPM/会话读 `AccountLimiter.Usage`（账号与其命中的模型列表：RPM、TPM 是近 60 秒窗口，会话是各自会话周期内的会话数；只按模型比较且未开上限负载时不读），按模型时再读 `AccountLimiter.ModelUsage`（每个请求模型本来就单独计数、不设上限的 `md:<model>` 窗口，会话周期跟随账号）；并发读 `Slots.InUseMany`（kind `account`，列表为 `core.ModelLimitSlots(key)`，按模型为 `core.ModelSlots(model)`，几种并行读）。没设 TPM 上限的账号，以及按模型比较时（`md:<model>` 不设上限、不预留），TPM 在请求结束时才计入，有滞后。
+- 会话指标（2026-11-11）：用 §71 已有的会话数（账号的 `rate_usage.sessions`、模型列表的 `rate_usage.models[].sessions`，按模型比较时是 `md:<model>` 层的会话数），不新增计数、不新增 Redis key。
+  - 它是会话周期内被准入过的会话数，不是进行中的会话数（§71.1）。没有粘性键的请求每个算一个会话，WebSocket 连接算一个（§71.2），所以没配粘性规则的分组，会话数接近周期内的请求数。
+  - 会话在准入时计数（和 RPM 同一个脚本），没有 TPM 那样的滞后。
+  - 上限负载：`会话数 ÷ spm_limit`，两者在同一个会话周期内，周期长短不影响这个比值。
+  - 流量均衡：直接比较各账号的会话数，而会话数按各账号自己的会话周期（`spm_window_seconds`，默认 60 秒）统计。同一层的账号周期不同时，会话数不可直接比较，周期长的账号显得更忙。不做换算：长会话在任何周期里都只算一次，短会话的数量随周期增长，没有对两者都正确的换算。同一层的账号应设成相同的会话周期。
+  - 周期越长，新加入或刚恢复的账号集中接收新会话的时间越长：它的会话数从 0 起算，追上份额之前权重一直被放大（89.2 第 3 步），能挡住它的只有它自己的上限。
 - 读失败记 WARN，本次按插件的值调度（仍套用插件负载），不拒绝请求；换号时出现首次读数没覆盖到的账号，它保持插件权重、不参与流量均衡。
 
 ### 89.4 记录
@@ -7239,7 +7262,12 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 ### 89.5 控制台
 
-系统设置“调度策略”页分为“故障策略 / 均衡负载”两个标签（`?tab=failure&sub=balance`，默认故障策略，旧链接不变；切换设置页时去掉 `sub`）。均衡负载四项：均衡策略（默认 / 流量）、基于上限负载调度（开关）、均衡指标（RPM / 并发 / TPM，两项都关时置灰）、根据模型限速（开关，和均衡指标一样两项都关时置灰）。没有 `settings:manage` 时只读、不显示保存栏。
+系统设置“调度策略”页分为“故障策略 / 均衡负载”两个标签（`?tab=failure&sub=balance`，默认故障策略，旧链接不变；切换设置页时去掉 `sub`）。均衡负载四项：均衡策略（默认 / 流量）、基于上限负载调度（开关）、均衡指标（RPM / 并发 / TPM / 会话，两项都关时置灰）、根据模型限速（开关，和均衡指标一样两项都关时置灰）。没有 `settings:manage` 时只读、不显示保存栏。
+
+2026-11-11 起：
+
+- 均衡指标加第四个选项“会话”（`sessions`）。指标这一行的说明只留两句（两种用途共用、何时生效），TPM 的滞后和会话的口径（按各账号自己的会话周期统计，上限是会话数限制，同层账号周期不同时不能直接比较）收进折叠的详细说明，手机上不占多行。
+- 均衡策略选“默认”时，说明随上限负载开关变化：关着是“同优先级内按权重随机选号”，开着是“同优先级内按权重随机选号，权重先按上限负载折减”。上限负载开着时权重按所选指标折减，所以策略是“默认”时指标也可选。
 
 ### 89.6 实现位置
 

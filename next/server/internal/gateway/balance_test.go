@@ -73,6 +73,13 @@ func TestLoadedWeightAndUsageLoad(t *testing.T) {
 	}
 }
 
+// busyUsage is a busy account's usage under each rate metric the traffic
+// tests run on.
+var busyUsage = map[string]core.RateUsage{
+	balanceMetricRPM:      {RPM: 60},
+	balanceMetricSessions: {Sessions: 60},
+}
+
 // balanceEnv is the test env with the three accounts in one tier, a limiter
 // reporting usage and the given scheduling settings.
 func balanceEnv(t *testing.T, cfg SchedulingSettings, usage map[int64]core.RateUsage) (*env, *fakeLimiter) {
@@ -133,53 +140,86 @@ func TestBalanceOffReadsNothing(t *testing.T) {
 
 // Traffic mode sends new sessions away from the busy account of the tier.
 func TestBalanceTrafficFavoursIdleAccounts(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM}
-	e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}})
-	served, recs := serve(t, e, 200)
-	// r = 3 against 0 and 0: acc-1 keeps 0.3% of the draws.
-	if served["acc-1"] > 6 || served["acc-2"] < 70 || served["acc-3"] < 70 {
-		t.Fatalf("served %v", served)
-	}
-	if lim.usageCalls != 200 {
-		t.Fatalf("usage read %d times for 200 requests", lim.usageCalls)
-	}
-	d := coreDecision(recs[0])
-	if d == nil || len(d.Changed) != 3 {
-		t.Fatalf("core decision %+v", d)
+	for metric, busy := range busyUsage {
+		t.Run(metric, func(t *testing.T) {
+			cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: metric}
+			e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: busy})
+			served, recs := serve(t, e, 200)
+			// r = 3 against 0 and 0: acc-1 keeps 0.3% of the draws.
+			if served["acc-1"] > 6 || served["acc-2"] < 70 || served["acc-3"] < 70 {
+				t.Fatalf("served %v", served)
+			}
+			if lim.usageCalls != 200 {
+				t.Fatalf("usage read %d times for 200 requests", lim.usageCalls)
+			}
+			d := coreDecision(recs[0])
+			if d == nil || len(d.Changed) != 3 {
+				t.Fatalf("core decision %+v", d)
+			}
+		})
 	}
 }
 
-// The limit load lowers the weight in proportion to the use of the limit and
-// is recorded; the traffic balance is off.
+// The limit load lowers the weight in proportion to the use of the metric's
+// limit and is recorded; the traffic balance is off.
 func TestBalanceLimitLoad(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true}
-	e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 90}, 2: {RPM: 90}})
-	e.accounts.set(1, func(a *core.Account) { a.RPMLimit = 100 })
-	served, recs := serve(t, e, 300)
-	// 0.1 : 1 : 1 is about 14, 143 and 143; acc-2 has no limit.
-	if served["acc-1"] > 35 || served["acc-2"] < 110 || served["acc-3"] < 110 {
-		t.Fatalf("served %v", served)
+	cases := []struct {
+		metric string
+		used   core.RateUsage
+		limit  func(*core.Account)
+	}{
+		{balanceMetricRPM, core.RateUsage{RPM: 90}, func(a *core.Account) { a.RPMLimit = 100 }},
+		{balanceMetricSessions, core.RateUsage{Sessions: 90}, func(a *core.Account) { a.SPMLimit = 100 }},
 	}
-	d := coreDecision(recs[0])
-	if d == nil || len(d.Changed) != 1 || d.Changed[0].AccountID != 1 || d.Changed[0].Load != 90 || d.Changed[0].Weight != 10 {
-		t.Fatalf("core decision %+v", d)
+	for _, tc := range cases {
+		t.Run(tc.metric, func(t *testing.T) {
+			cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: tc.metric, LimitLoad: true}
+			e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: tc.used, 2: tc.used})
+			e.accounts.set(1, tc.limit)
+			served, recs := serve(t, e, 300)
+			// 0.1 : 1 : 1 is about 14, 143 and 143; acc-2 has no limit.
+			if served["acc-1"] > 35 || served["acc-2"] < 110 || served["acc-3"] < 110 {
+				t.Fatalf("served %v", served)
+			}
+			d := coreDecision(recs[0])
+			if d == nil || len(d.Changed) != 1 || d.Changed[0].AccountID != 1 || d.Changed[0].Load != 90 || d.Changed[0].Weight != 10 {
+				t.Fatalf("core decision %+v", d)
+			}
+		})
 	}
 }
 
 // With model limits on, the model list holding the request's model counts
 // when it is tighter than the account.
 func TestBalanceLimitLoadModelList(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: balanceMetricRPM, LimitLoad: true, ModelLimits: true}
-	usage := map[int64]core.RateUsage{1: {RPM: 30, Models: []core.ModelRateUsage{{Models: []string{testModel}, RPM: 18}}}}
-	e, _ := balanceEnv(t, cfg, usage)
-	e.accounts.set(1, func(a *core.Account) {
-		a.RPMLimit = 100
-		a.ModelLimits = []core.ModelLimit{{Models: []string{testModel}, RPMLimit: 20}}
-	})
-	_, recs := serve(t, e, 1)
-	d := coreDecision(recs[0])
-	if d == nil || d.Changed[0].Load != 90 {
-		t.Fatalf("core decision %+v", d)
+	models := []string{testModel}
+	cases := []struct {
+		metric string
+		used   core.RateUsage
+		limits func(*core.Account)
+	}{
+		{balanceMetricRPM, core.RateUsage{RPM: 30, Models: []core.ModelRateUsage{{Models: models, RPM: 18}}},
+			func(a *core.Account) {
+				a.RPMLimit = 100
+				a.ModelLimits = []core.ModelLimit{{Models: models, RPMLimit: 20}}
+			}},
+		{balanceMetricSessions, core.RateUsage{Sessions: 30, Models: []core.ModelRateUsage{{Models: models, Sessions: 18}}},
+			func(a *core.Account) {
+				a.SPMLimit = 100
+				a.ModelLimits = []core.ModelLimit{{Models: models, SPMLimit: 20}}
+			}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.metric, func(t *testing.T) {
+			cfg := SchedulingSettings{Mode: balanceModeDefault, Metric: tc.metric, LimitLoad: true, ModelLimits: true}
+			e, _ := balanceEnv(t, cfg, map[int64]core.RateUsage{1: tc.used})
+			e.accounts.set(1, tc.limits)
+			_, recs := serve(t, e, 1)
+			d := coreDecision(recs[0])
+			if d == nil || d.Changed[0].Load != 90 {
+				t.Fatalf("core decision %+v", d)
+			}
+		})
 	}
 }
 
@@ -342,18 +382,22 @@ func TestBalanceMergesPluginLoad(t *testing.T) {
 // With model limits on, the traffic balance compares the request's model's
 // own usage, not the account's.
 func TestBalanceTrafficByModel(t *testing.T) {
-	cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: balanceMetricRPM, ModelLimits: true}
-	e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: {RPM: 60}}) // acc-1 busy with other models
-	lim.modelUsage = map[string]map[int64]core.RateUsage{testModel: {2: {RPM: 60}}}
-	served, _ := serve(t, e, 200)
-	if served["acc-2"] > 6 || served["acc-1"] < 70 || served["acc-3"] < 70 {
-		t.Fatalf("served %v", served)
-	}
-	if !slices.Contains(lim.modelAsked, testModel) {
-		t.Fatalf("model usage asked for %v, want %s", lim.modelAsked, testModel)
-	}
-	if lim.usageCalls != 0 { // without limit load the account's own use is not needed
-		t.Fatalf("account usage read %d times", lim.usageCalls)
+	for metric, busy := range busyUsage {
+		t.Run(metric, func(t *testing.T) {
+			cfg := SchedulingSettings{Mode: balanceModeTraffic, Metric: metric, ModelLimits: true}
+			e, lim := balanceEnv(t, cfg, map[int64]core.RateUsage{1: busy}) // acc-1 busy with other models
+			lim.modelUsage = map[string]map[int64]core.RateUsage{testModel: {2: busy}}
+			served, _ := serve(t, e, 200)
+			if served["acc-2"] > 6 || served["acc-1"] < 70 || served["acc-3"] < 70 {
+				t.Fatalf("served %v", served)
+			}
+			if !slices.Contains(lim.modelAsked, testModel) {
+				t.Fatalf("model usage asked for %v, want %s", lim.modelAsked, testModel)
+			}
+			if lim.usageCalls != 0 { // without limit load the account's own use is not needed
+				t.Fatalf("account usage read %d times", lim.usageCalls)
+			}
+		})
 	}
 }
 

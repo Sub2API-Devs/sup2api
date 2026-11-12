@@ -24,13 +24,15 @@ export default {
     modes: { default: '默认', traffic: '流量' },
     modeHints: {
       default: '同优先级内按权重随机选号。',
+      defaultLimitLoad: '同优先级内按权重随机选号，权重先按上限负载折减。',
       traffic: '同优先级内优先选用量低于权重份额的账号，让流量按权重比分配。'
     },
     limitLoad: '基于上限负载调度',
     limitLoadHint: '用量越接近上限，权重越低。例：RPM 上限 100、已用 90，权重 ×10%。没设上限（按模型调度时也没给该模型设指定模型限速）的账号不受影响。',
     metric: '均衡指标',
-    metricHint: '流量均衡和上限负载都按这个指标计算。没设 TPM 上限或按模型调度时，TPM 在请求结束后才计入，会稍有滞后。仅在流量策略或基于上限负载调度开启时生效。',
-    metrics: { rpm: 'RPM', concurrency: '并发', tpm: 'TPM' },
+    metricHint: '流量均衡和上限负载都按这个指标计算。仅在流量策略或基于上限负载调度开启时生效。',
+    metricDetails: 'TPM：没设 TPM 上限或按模型调度时，在请求结束后才计入，会稍有滞后。会话：各账号在自己的会话周期（默认 60 秒）内活跃的会话数，没有命中粘性规则的请求每个都算一个会话，对应的上限是会话数限制。同优先级的账号会话周期不同时，会话数不能直接比较，按会话均衡流量时请设成相同的周期。',
+    metrics: { rpm: 'RPM', concurrency: '并发', tpm: 'TPM', sessions: '会话' },
     modelLimits: '根据模型限速',
     modelLimitsHint: '按请求的模型调度：流量均衡比较各账号上这个模型自己的用量；上限负载在该模型设了指定模型限速时，也按该列表的用量和上限算，取较高的一个。仅在流量策略或基于上限负载调度开启时生效。'
   },
@@ -158,6 +160,20 @@ export default {
     minBalanceHint: '余额不高于该值时，请求返回 402 余额不足（默认 0）。',
     bigCost: '高额费用警告阈值',
     bigCostHint: '保存价格时，若 100 万输入 token 的费用超过该值，需要二次确认。',
-    decimalInvalid: '请输入数字，最多 8 位小数'
+    decimalInvalid: '请输入数字，最多 8 位小数',
+    disconnectPolicy: '客户端中途断开时',
+    disconnect: {
+      precharge: '按预扣计费',
+      continue: '读完再计费',
+      free: '不计费'
+    },
+    disconnectHint: {
+      precharge: '立即中止上游请求，按请求前的预扣估算计费。',
+      continue: '不再向客户端发送，但继续读完上游响应，按上游报告的实际用量计费。读取期间仍占用账号并发；读不完时按预扣估算计费。默认。',
+      free: '立即中止上游请求，这次请求不计费。客户端收完正文再断开即可不付输出费用，只建议在内部或可信环境使用。'
+    },
+    disconnectWait: '断开后最长继续读取',
+    disconnectWaitHint: '超过这个时间仍未读完就中止上游请求，按预扣估算计费（{min} 到 {max} 秒，默认 {default}）。',
+    disconnectWaitInvalid: '请输入 {min} 到 {max} 之间的整数'
   }
 }
