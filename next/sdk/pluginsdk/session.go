@@ -1,6 +1,7 @@
 package pluginsdk
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -34,21 +35,38 @@ type callerSession struct {
 	Payload json.RawMessage `json:"v"`
 }
 
+// ErrNoSession is returned by UpdateCallerSession when the caller holds no
+// session with that id (never stored, expired, or someone else's).
+var ErrNoSession = errors.New("pluginsdk: the caller has no such session")
+
 // SaveCallerSession stores v as a new session of req's caller in namespace
 // ns, for ttl, and returns its fresh random id. It fails with ErrNoCaller
 // (answer it with Unauthenticated) when the request has no user.
 func SaveCallerSession(ctx context.Context, kv KV, ns string, req *pluginv1.HTTPRequest, v any, ttl time.Duration) (id string, err error) {
 	id = randomToken(sessionIDBytes)
-	if err := UpdateCallerSession(ctx, kv, ns, id, req, v, ttl); err != nil {
+	if err := putCallerSession(ctx, kv, ns, id, req, v, ttl); err != nil {
 		return "", err
 	}
 	return id, nil
 }
 
-// UpdateCallerSession rewrites session id with v and ttl, bound to req's
-// caller. Use it on a session LoadCallerSession just returned for the same
-// request: it does not check who held the id before.
+// UpdateCallerSession rewrites session id of req's caller with v and ttl.
+// The session must be the caller's, as for LoadCallerSession: an id nobody
+// holds or another user's is ErrNoSession and nothing is written, so an id
+// taken from the request can neither create a session nor take one over.
 func UpdateCallerSession(ctx context.Context, kv KV, ns, id string, req *pluginv1.HTTPRequest, v any, ttl time.Duration) error {
+	if req.GetCaller().GetUserId() <= 0 {
+		return ErrNoCaller
+	}
+	var held json.RawMessage
+	if ok, err := LoadCallerSession(ctx, kv, ns, id, req, &held); err != nil || !ok {
+		return cmp.Or(err, ErrNoSession)
+	}
+	return putCallerSession(ctx, kv, ns, id, req, v, ttl)
+}
+
+// putCallerSession writes session id bound to req's caller.
+func putCallerSession(ctx context.Context, kv KV, ns, id string, req *pluginv1.HTTPRequest, v any, ttl time.Duration) error {
 	uid := req.GetCaller().GetUserId()
 	if uid <= 0 {
 		return ErrNoCaller

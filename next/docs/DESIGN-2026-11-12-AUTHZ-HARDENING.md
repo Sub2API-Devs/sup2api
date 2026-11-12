@@ -282,7 +282,7 @@
 
 - 改动：SDK 新增 `pluginsdk.SaveCallerSession` / `LoadCallerSession` / `UpdateCallerSession`（`sdk/pluginsdk/session.go`）：把多次请求的流程状态存进插件 KV，存储形式 `{"uid": 发起人, "v": 内容}`，会话 id 由 SDK 生成（192 位随机）；读取时比对调用者，会话不存在、已过期、属于他人、或不是这种格式，一律返回 `ok=false`，无法区分；没有登录调用者的请求不能创建会话（`ErrNoCaller`）。`UpdateCallerSession` 是任务说明之外补的第三个函数：codex 设备码轮询要原地改写已有会话（记录上次轮询时间、放慢间隔），它只能用于刚由 `LoadCallerSession` 读到的会话。测试工具 `pluginsdktest.Harness` 增加 `DoAs(userID, ...)`。
   - claude-oauth：`/auth/start`、`/auth/exchange` 的会话改用上述助手；`exchange` 时 code 里带的 state（`code#state`）非空且与会话的 state 不一致（常量时间比较）回 400 `state_mismatch` 并删除会话，不向上游发请求。
-  - codex：设备码与 Sign in with ChatGPT 两种会话改用上述助手；重置次数缓存不是会话，改名为 `loadCached` / `saveCached`，行为不变。
+  - codex：设备码与 Sign in with ChatGPT 两种会话改用上述助手；重置次数缓存不是会话，改名为 `loadCached` / `saveCached`，行为不变。 期 2 整合审查补充：`UpdateCallerSession` 原先不检查 id 之前属于谁（注释要求调用方先 `LoadCallerSession`），现在自己先按调用者读一次，不是调用者的会话（不存在、过期、别人的）返回 `ErrNoSession` 且不写入，避免以后有插件拿请求里的 id 直接调用时变成会话固定/覆盖原语。
 - 影响对象：
   - 他人拿到 `session_id` 也无法继续别人的授权：claude-oauth `exchange` 回 404 `not_found`，codex 设备码轮询回 `expired`（与会话不存在时的回答相同，仍是 200 的轮询结果，不是 HTTP 404），codex SIWC `exchange` 回 404 `session_expired`；会话保留给发起人。
   - 升级时尚未完成的授权会话（旧格式，没有 `uid`）一律按不存在处理，需重新发起授权（claude-oauth 会话最长 30 分钟，codex 设备码 15 分钟，SIWC 以其会话有效期为准）。回滚时同理：新格式的会话旧代码读不出内容，需重新发起。

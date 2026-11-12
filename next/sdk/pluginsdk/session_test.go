@@ -117,6 +117,19 @@ func TestUpdateCallerSessionKeepsTheBinding(t *testing.T) {
 	if ok, _ := LoadCallerSession(ctx, kv, "device", id, callerReq(8), &got); ok {
 		t.Fatal("another user reads the updated session")
 	}
+	// Another user, or an id nobody holds, writes nothing.
+	before := len(kv.values)
+	for name, tc := range map[string]struct {
+		id  string
+		uid int64
+	}{"another user": {id, 8}, "unknown id": {"made-up", 7}} {
+		if err := UpdateCallerSession(ctx, kv, "device", tc.id, callerReq(tc.uid), flowState{Polls: 9}, time.Minute); !errors.Is(err, ErrNoSession) {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if ok, _ := LoadCallerSession(ctx, kv, "device", id, callerReq(7), &got); !ok || got.Polls != 2 || len(kv.values) != before {
+		t.Fatalf("a refused update changed the store: %v %+v", ok, got)
+	}
 }
 
 func TestCallerSessionErrors(t *testing.T) {
