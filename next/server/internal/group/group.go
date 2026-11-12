@@ -1,5 +1,5 @@
-// Package group implements scheduling groups: CRUD, the groups visible to the
-// current user, and the per-user restricted group assignment.
+// Package group implements scheduling groups: CRUD and the groups visible to
+// the current user.
 package group
 
 import (
@@ -19,8 +19,8 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/x"
 )
 
 // Service serves the group endpoints.
@@ -46,8 +46,6 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/groups/:id/models", "group:read", s.models)
 	r.Perm("PATCH", "/groups/:id", "group:manage", s.update)
 	r.Perm("DELETE", "/groups/:id", "group:manage", s.delete)
-	r.Perm("GET", "/users/:id/groups", "group:read", s.userGroups)
-	r.Perm("PUT", "/users/:id/groups", "group:manage", s.setUserGroups)
 }
 
 // Group is the API view of a groups row.
@@ -71,6 +69,7 @@ type Group struct {
 	Platforms []string  `json:"platforms"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	PricingSummary
 }
 
 // MyGroup is the reduced view returned by GET /me/groups.
@@ -82,6 +81,13 @@ type MyGroup struct {
 	ModelAllowlist  []string `json:"model_allowlist"`
 	ModelFilterMode string   `json:"model_filter_mode"`
 	Platforms       []string `json:"platforms"`
+	// EffectiveRate is the rate the caller pays in the group and RateSource
+	// where it comes from (core.SegmentRate); RateMultiplier stays the
+	// group's default.
+	EffectiveRate decimal.Decimal `json:"effective_rate"`
+	RateSource    string          `json:"rate_source"`
+	// Exclusive marks a private group the caller's segment is granted.
+	Exclusive bool `json:"exclusive"`
 }
 
 // selectGroup lists the group columns; account_count only counts accounts of
@@ -125,13 +131,22 @@ func (s *Service) list(c *gin.Context) {
 	page, size := httpapi.Pagination(c)
 	q := strings.TrimSpace(c.Query("q"))
 	status := c.Query("status")
-	where := ` WHERE ($1 = '' OR g.name ILIKE '%' || $1 || '%') AND ($2 = '' OR g.status = $2)`
+	var providing []int64 // the groups ?model= leaves; nil = all
+	if model := strings.TrimSpace(c.Query("model")); model != "" {
+		var err error
+		if providing, err = s.groupsProviding(ctx, model); err != nil {
+			httpapi.Fail(c, err)
+			return
+		}
+	}
+	where := ` WHERE ($1 = '' OR g.name ILIKE '%' || $1 || '%') AND ($2 = '' OR g.status = $2)
+		AND ($3::bigint[] IS NULL OR g.id = ANY($3))`
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM groups g`+where, q, status).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM groups g`+where, q, status, providing).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(ctx, selectGroup("$5")+where+` ORDER BY g.id LIMIT $3 OFFSET $4`, q, status, size, (page-1)*size, core.ActivePluginKeys(s.reg))
+	rows, err := s.db.Pool.Query(ctx, selectGroup("$6")+where+` ORDER BY g.id LIMIT $4 OFFSET $5`, q, status, providing, size, (page-1)*size, core.ActivePluginKeys(s.reg))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -151,11 +166,19 @@ func (s *Service) list(c *gin.Context) {
 		return
 	}
 	rows.Close()
-	if err := s.fillPlatforms(ctx, items); err != nil {
+	if err := s.fill(ctx, items); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
+}
+
+// fill sets what a group row carries beyond its own columns.
+func (s *Service) fill(ctx context.Context, gs []*Group) error {
+	if err := s.fillPlatforms(ctx, gs); err != nil {
+		return err
+	}
+	return s.fillSummary(ctx, gs)
 }
 
 // fillPlatforms sets Platforms of the groups with one query.
@@ -182,7 +205,7 @@ func (s *Service) load(ctx context.Context, id int64) (*Group, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := s.fillPlatforms(ctx, []*Group{g}); err != nil {
+	if err := s.fill(ctx, []*Group{g}); err != nil {
 		return nil, err
 	}
 	return g, nil
@@ -240,8 +263,8 @@ func (in *groupInput) validate(ctx context.Context, create bool) error {
 		add("visibility", "invalid", "visibility must be public or restricted", "可见性必须为 public 或 restricted")
 	}
 	if in.RateMultiplier != nil {
-		d, err := decimal.NewFromString(strings.TrimSpace(*in.RateMultiplier))
-		if err != nil || d.IsNegative() || d.GreaterThanOrEqual(decimal.NewFromInt(1000000)) || d.Exponent() < -4 {
+		d, ok := core.ParseRate(*in.RateMultiplier)
+		if !ok {
 			add("rate_multiplier", "invalid", "rate multiplier must be a non-negative number with at most 4 decimals",
 				"倍率必须为非负数，最多 4 位小数")
 		} else {
@@ -454,10 +477,10 @@ func (s *Service) delete(c *gin.Context) {
 func (s *Service) myGroups(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid, _ := core.UserID(ctx)
-	rows, err := s.db.Pool.Query(ctx, `SELECT g.id, g.name, g.description, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode
+	rows, err := s.db.Pool.Query(ctx, `SELECT g.id, g.name, g.description, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode,
+			g.visibility = 'restricted'
 		FROM groups g
-		WHERE g.status = 'active'
-		  AND (g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.group_id = g.id AND ug.user_id = $1))
+		WHERE g.status = 'active' AND `+segment.OpenToUserSQL("g", "$1")+`
 		ORDER BY g.id`, uid)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -468,7 +491,7 @@ func (s *Service) myGroups(c *gin.Context) {
 	for rows.Next() {
 		var g MyGroup
 		var rate string
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &rate, &g.ModelAllowlist, &g.ModelFilterMode); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &rate, &g.ModelAllowlist, &g.ModelFilterMode, &g.Exclusive); err != nil {
 			httpapi.Fail(c, err)
 			return
 		}
@@ -492,123 +515,18 @@ func (s *Service) myGroups(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	terms, err := segment.UserTerms(ctx, s.db.Pool, uid, ids)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	for i := range out {
-		out[i].Platforms = ps[out[i].ID]
+		g := &out[i]
+		g.Platforms = ps[g.ID]
+		g.EffectiveRate, g.RateSource = terms[g.ID].Rate, terms[g.ID].RateSource
 	}
 	httpapi.OK(c, out)
 }
-
-func (s *Service) userExists(ctx context.Context, q store.Querier, id int64) error {
-	var ok bool
-	err := q.QueryRow(ctx, `SELECT true FROM users WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&ok)
-	if store.IsNoRows(err) {
-		return core.ErrNotFound.WithMessage(t(ctx, "user not found", "用户不存在"))
-	}
-	return err
-}
-
-type userGroupsView struct {
-	UserID   int64     `json:"user_id"`
-	GroupIDs []int64   `json:"group_ids"`
-	Groups   []groupID `json:"groups"`
-}
-
-type groupID struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Visibility string `json:"visibility"`
-	Status     string `json:"status"`
-}
-
-func (s *Service) loadUserGroups(ctx context.Context, uid int64) (*userGroupsView, error) {
-	rows, err := s.db.Pool.Query(ctx, `SELECT g.id, g.name, g.visibility, g.status FROM user_groups ug
-		JOIN groups g ON g.id = ug.group_id WHERE ug.user_id = $1 ORDER BY g.id`, uid)
-	if err != nil {
-		return nil, err
-	}
-	gs, err := pgx.CollectRows(rows, pgx.RowToStructByPos[groupID])
-	if err != nil {
-		return nil, err
-	}
-	v := &userGroupsView{UserID: uid, GroupIDs: []int64{}, Groups: []groupID{}}
-	for _, g := range gs {
-		v.GroupIDs = append(v.GroupIDs, g.ID)
-		v.Groups = append(v.Groups, g)
-	}
-	return v, nil
-}
-
-func (s *Service) userGroups(c *gin.Context) {
-	ctx := c.Request.Context()
-	uid, ok := httpapi.PathID(c, "id")
-	if !ok {
-		return
-	}
-	if err := s.userExists(ctx, s.db.Pool, uid); err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	v, err := s.loadUserGroups(ctx, uid)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	httpapi.OK(c, v)
-}
-
-func (s *Service) setUserGroups(c *gin.Context) {
-	ctx := c.Request.Context()
-	uid, ok := httpapi.PathID(c, "id")
-	if !ok {
-		return
-	}
-	var in struct {
-		GroupIDs []int64 `json:"group_ids"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	ids := uniqueIDs(in.GroupIDs)
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
-		var parent int64
-		if err := tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, uid).Scan(&parent); err != nil {
-			if store.IsNoRows(err) {
-				return core.ErrNotFound.WithMessage("user not found")
-			}
-			return err
-		}
-		if err := s.userExists(ctx, tx, uid); err != nil {
-			return err
-		}
-		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM groups WHERE id = ANY($1)`, ids).Scan(&n); err != nil {
-			return err
-		}
-		if n != len(ids) {
-			return core.InvalidFields(core.FieldError{Field: "group_ids", Code: "not_found",
-				Message: t(ctx, "some groups do not exist", "部分分组不存在")})
-		}
-		if _, err := tx.Exec(ctx, `DELETE FROM user_groups WHERE user_id = $1 AND NOT (group_id = ANY($2))`, uid, ids); err != nil {
-			return err
-		}
-		_, err := tx.Exec(ctx, `INSERT INTO user_groups (user_id, group_id) SELECT $1, unnest($2::bigint[])
-			ON CONFLICT DO NOTHING`, uid, ids)
-		return err
-	})
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	s.dropKeyCache(ctx, `SELECT key_hash FROM api_keys WHERE user_id = $1`, uid)
-	v, err := s.loadUserGroups(ctx, uid)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	httpapi.OK(c, v)
-}
-
-func uniqueIDs(in []int64) []int64 { return x.Unique(in) }
 
 // dropKeyCache deletes cached API key principals ("apikey:{sha256}", see
 // CONTRACTS §7) for the keys selected by query, so group/user changes apply

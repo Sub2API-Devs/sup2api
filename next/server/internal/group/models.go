@@ -2,9 +2,12 @@ package group
 
 import (
 	"context"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -76,4 +79,77 @@ func ProvidedModels(ctx context.Context, q store.Querier, groupIDs []int64) (map
 		sort.Strings(m.Models)
 	}
 	return out, nil
+}
+
+// Offered returns the models a group with these accounts provides, sorted:
+// the declared ones and, when an account declares none, every model in priced
+// (those with an enabled global price), through the model policy of the
+// group.
+func (m Models) Offered(priced []string, policy core.GroupInfo) []string {
+	names := m.Models
+	if m.UnrestrictedAccounts > 0 {
+		names = append(slices.Clone(names), priced...)
+		slices.Sort(names)
+		names = slices.Compact(names)
+	}
+	out := []string{}
+	for _, name := range names {
+		if policy.AllowsModel(name) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// offeredModels returns the models each of the groups provides
+// (Models.Offered), by group id. Of a group it reads the id and the model
+// policy.
+func offeredModels(ctx context.Context, q store.Querier, groups []core.GroupInfo) (map[int64][]string, error) {
+	ids := make([]int64, len(groups))
+	for i, g := range groups {
+		ids[i] = g.ID
+	}
+	provided, err := ProvidedModels(ctx, q, ids)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.Query(ctx, `SELECT model FROM model_prices WHERE enabled`)
+	if err != nil {
+		return nil, err
+	}
+	priced, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64][]string, len(groups))
+	for _, g := range groups {
+		out[g.ID] = provided[g.ID].Offered(priced, g)
+	}
+	return out, nil
+}
+
+// groupsProviding returns the ids of the groups that provide model; never nil.
+func (s *Service) groupsProviding(ctx context.Context, model string) ([]int64, error) {
+	rows, err := s.db.Pool.Query(ctx, `SELECT id, model_allowlist, model_filter_mode FROM groups`)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (g core.GroupInfo, err error) {
+		err = r.Scan(&g.ID, &g.ModelAllowlist, &g.ModelFilterMode)
+		return g, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	offered, err := offeredModels(ctx, s.db.Pool, groups)
+	if err != nil {
+		return nil, err
+	}
+	ids := []int64{}
+	for _, g := range groups {
+		if slices.Contains(offered[g.ID], model) {
+			ids = append(ids, g.ID)
+		}
+	}
+	return ids, nil
 }

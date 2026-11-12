@@ -31,25 +31,28 @@ type User struct {
 	DisplayName string     `json:"display_name"`
 	Status      string     `json:"status"`
 	Roles       []string   `json:"roles"`
-	GroupIDs    []int64    `json:"group_ids"`
 	Balance     *string    `json:"balance,omitempty"` // only for callers with balance:all:read
 	LastLoginAt *time.Time `json:"last_login_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
+	// Segment is the user group the user is priced by (CONTRACTS §97). A
+	// personal one goes by the user's own email, so there is nothing to mask.
+	// It is an administrator's label: the user's own token response omits it.
+	Segment core.SegmentRef `json:"segment,omitzero"`
 }
 
 const userSelect = `
 SELECT u.id, u.email, u.display_name, u.status, u.last_login_at, u.created_at, u.updated_at,
     COALESCE((SELECT array_agg(r.key ORDER BY r.key) FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id), '{}'),
-    COALESCE((SELECT array_agg(ug.group_id ORDER BY ug.group_id) FROM user_groups ug WHERE ug.user_id = u.id), '{}'),
+    s.id, s.kind, CASE WHEN s.user_id IS NULL THEN s.name ELSE u.email END, s.user_id,
     COALESCE((SELECT b.balance FROM user_balances b WHERE b.user_id = u.id), 0)::numeric(20,8)::text
-FROM users u`
+FROM users u JOIN segments s ON s.id = u.segment_id`
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
 	var balance string
 	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.Status, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt,
-		&u.Roles, &u.GroupIDs, &balance)
+		&u.Roles, &u.Segment.ID, &u.Segment.Kind, &u.Segment.Name, &u.Segment.UserID, &balance)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +102,7 @@ type ListUsersFilter struct {
 	Query    string // matches email or display name
 	Status   string
 	Role     string // role key
+	Segment  string // a segment id, or "personal" for the users with a personal segment
 	Page     int
 	PageSize int
 }
@@ -116,6 +120,14 @@ func (s *Service) ListUsers(ctx context.Context, f ListUsersFilter) ([]*User, in
 	}
 	if f.Role != "" {
 		filter.And(`EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id AND r.key = ?)`, f.Role)
+	}
+	switch {
+	case f.Segment == core.SegmentPersonal:
+		filter.And(`u.segment_id IN (SELECT id FROM segments WHERE kind = ?)`, core.SegmentPersonal)
+	case f.Segment != "":
+		// A value that is not a segment id selects nobody.
+		id, _ := strconv.ParseInt(f.Segment, 10, 64)
+		filter.And("u.segment_id = ?", id)
 	}
 	where, args := filter.Cond(), filter.Args()
 	var total int64
@@ -145,6 +157,8 @@ type CreateUserInput struct {
 	DisplayName string   `json:"display_name"`
 	Password    string   `json:"password"`
 	RoleKeys    []string `json:"role_keys"`
+	// SegmentID is the named segment the user starts in; nil = the default one.
+	SegmentID *int64 `json:"segment_id"`
 }
 
 // IsDefaultRoles reports whether keys is empty or exactly the default role.
@@ -181,6 +195,9 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 	if len(fields) > 0 {
 		return nil, 0, core.InvalidFields(fields...)
 	}
+	if err := lockNamedSegment(ctx, tx, in.SegmentID); err != nil {
+		return nil, 0, err
+	}
 
 	// SEC-H1: check authorization to grant the requested roles
 	if actorID != 0 && !IsDefaultRoles(in.RoleKeys) {
@@ -202,8 +219,9 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 		return nil, 0, err
 	}
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO users (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id`,
-		email, in.DisplayName, string(hash)).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO users (email, display_name, password_hash, segment_id)
+		VALUES ($1, $2, $3, COALESCE($4, default_segment_id())) RETURNING id`,
+		email, in.DisplayName, string(hash), in.SegmentID).Scan(&id)
 	if store.IsUniqueViolation(err, "") {
 		return nil, 0, emailTaken()
 	}
@@ -233,6 +251,21 @@ func (s *Service) createUserTx(ctx context.Context, tx pgx.Tx, actorID int64, in
 
 	u, err := s.getUser(ctx, tx, id)
 	return u, v, err
+}
+
+// lockNamedSegment checks that id, when given, is a named segment and keeps
+// the segment from being deleted until the transaction ends, so the user
+// about to join it cannot be left pointing at nothing.
+func lockNamedSegment(ctx context.Context, tx pgx.Tx, id *int64) error {
+	if id == nil {
+		return nil
+	}
+	var found bool
+	err := tx.QueryRow(ctx, `SELECT true FROM segments WHERE id = $1 AND kind = $2 FOR KEY SHARE`, *id, core.SegmentNamed).Scan(&found)
+	if store.IsNoRows(err) {
+		return core.InvalidFields(core.FieldError{Field: "segment_id", Code: "invalid", Message: "unknown user group"})
+	}
+	return err
 }
 
 // UpdateUserInput is the body of PATCH /users/:id (all fields optional).
@@ -548,7 +581,13 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 		if err := s.authz.EnsureNotLastSuperAdmin(ctx, tx, id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE users SET deleted_at = now(), updated_at = now() WHERE id = $1`, id); err != nil {
+		// A soft delete does not fire the cascade of segments.user_id: the
+		// user goes back to the default segment and a personal one is removed
+		// here, with its grants, rates and prices.
+		if _, err := tx.Exec(ctx, `UPDATE users SET deleted_at = now(), updated_at = now(), segment_id = default_segment_id() WHERE id = $1`, id); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM segments WHERE user_id = $1`, id); err != nil {
 			return err
 		}
 		if err := revokeAllRefreshTokens(ctx, tx, id); err != nil {
