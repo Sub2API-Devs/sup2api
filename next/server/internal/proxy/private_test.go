@@ -19,7 +19,7 @@ import (
 // The guard sits on the dial to the proxy, so it judges the resolved address
 // and not the spelling of the host.
 func TestTransportDialGuard(t *testing.T) {
-	fp, _, _ := forwardProxy(t)
+	fp, _, hits := forwardProxy(t)
 	u, _ := url.Parse(fp.URL)
 	get := func(allowPrivate bool) (*http.Response, error) {
 		tr := newTransport(u, allowPrivate)
@@ -29,6 +29,9 @@ func TestTransportDialGuard(t *testing.T) {
 	}
 	if _, err := get(false); !errors.Is(err, netguard.ErrPrivate) {
 		t.Fatalf("guarded dial to a loopback proxy: %v", err)
+	}
+	if hits.Load() != 0 {
+		t.Fatal("the guarded transport reached the proxy")
 	}
 	resp, err := get(true)
 	if err != nil {
@@ -84,12 +87,41 @@ func TestUpdateHostPrivate(t *testing.T) {
 	if !allowPrivate(t, svc, id) {
 		t.Fatal("manage patch did not set allow_private")
 	}
-	// Other fields leave the flag alone; a host the owner sets clears it.
-	if code, out = do(t, engine, alice, "PATCH", path, map[string]any{"name": "renamed", "port": 3128}); code != 200 || !allowPrivate(t, svc, id) {
-		t.Fatalf("own patch without host: %d %v", code, out)
+	// Fields outside the address, and the unchanged address the console
+	// sends along, leave the flag alone for either caller.
+	if code, out = do(t, engine, alice, "PATCH", path, map[string]any{"name": "renamed", "host": "10.0.0.8", "port": 8080, "protocol": "http"}); code != 200 || !allowPrivate(t, svc, id) {
+		t.Fatalf("own patch with the stored address: %d %v", code, out)
 	}
+	// The owner may not aim an approved private host at another port.
+	if code, out = do(t, engine, alice, "PATCH", path, map[string]any{"port": 22}); code != 403 {
+		t.Fatalf("own patch of the port of a private host: %d %v", code, out)
+	}
+	// An address the owner sets clears the flag; an administrator's edit
+	// that keeps the address does not set it again.
 	if code, out = do(t, engine, alice, "PATCH", path, map[string]any{"host": "other.example"}); code != 200 || allowPrivate(t, svc, id) {
 		t.Fatalf("own patch to a public host: %d %v", code, out)
+	}
+	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"name": "by admin", "host": "Other.Example"}); code != 200 || allowPrivate(t, svc, id) {
+		t.Fatalf("manage patch with the stored host: %d %v", code, out)
+	}
+	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"port": 3128}); code != 200 || !allowPrivate(t, svc, id) {
+		t.Fatalf("manage patch of the port: %d %v", code, out)
+	}
+	if code, out = do(t, engine, alice, "PATCH", path, map[string]any{"port": 3129}); code != 200 || allowPrivate(t, svc, id) {
+		t.Fatalf("own patch of the port: %d %v", code, out)
+	}
+}
+
+// A refused dial does not tell the caller what the name resolved to.
+func TestProbeHidesRefusedAddress(t *testing.T) {
+	fp, _, hits := forwardProxy(t)
+	u, _ := url.Parse(fp.URL)
+	svc := New(nil, nil, nil, Options{ProbeURL: "http://probe.example.invalid/generate_204"})
+	client := &http.Client{Transport: newTransport(u, false)}
+	defer client.CloseIdleConnections()
+	res := svc.probe(t.Context(), client)
+	if res.OK || strings.Contains(res.Message, u.Hostname()) || !strings.Contains(res.Message, "private") || hits.Load() != 0 {
+		t.Fatalf("probe result %+v hits=%d", res, hits.Load())
 	}
 }
 

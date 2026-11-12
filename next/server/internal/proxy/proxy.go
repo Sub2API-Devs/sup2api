@@ -5,6 +5,7 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -510,6 +511,10 @@ func (in *input) validate(ctx context.Context, create bool) error {
 	return nil
 }
 
+// differs reports whether a PATCH field is present with a value other than
+// the stored one.
+func differs[T comparable](in *T, cur T) bool { return in != nil && *in != cur }
+
 func (s *Service) encryptPassword(pw *string) ([]byte, error) {
 	if pw == nil || *pw == "" {
 		return nil, nil
@@ -616,20 +621,37 @@ func (s *Service) update(c *gin.Context) {
 		return
 	}
 	scope := core.OwnerScopeOf(ctx, writeScope)
-	// A new host is judged like a new proxy; allow_private follows whoever
-	// set the host last.
-	var allowPriv *bool
-	if in.Host != nil {
-		ok, err := s.checkPrivate(ctx, scope, *in.Host)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return
-		}
-		allowPriv = &ok
-	}
 	uid, _ := core.UserID(ctx)
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE proxies p SET
+		// Visibility first (404 outside the caller's range); the lock keeps
+		// what the checks below read true until the commit.
+		var cur row
+		err := tx.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
+			WHERE p.id = $1 AND `+scoped("$2")+` FOR UPDATE`, id, scope).
+			Scan(&cur.Protocol, &cur.Host, &cur.Port, &cur.Username, &cur.PasswordEnc)
+		if store.IsNoRows(err) {
+			return notFound(ctx)
+		}
+		if err != nil {
+			return err
+		}
+		// A new address (protocol, host or port) is judged like a new proxy,
+		// and allow_private follows whoever set the address last. The
+		// console sends every field, so only a value that differs counts.
+		var allowPriv *bool
+		hostChanged := in.Host != nil && !strings.EqualFold(*in.Host, cur.Host)
+		if hostChanged || differs(in.Protocol, cur.Protocol) || differs(in.Port, cur.Port) {
+			host := cur.Host
+			if hostChanged {
+				host = *in.Host
+			}
+			allow, err := s.checkPrivate(ctx, scope, host)
+			if err != nil {
+				return err
+			}
+			allowPriv = &allow
+		}
+		if _, err := tx.Exec(ctx, `UPDATE proxies SET
 			name = COALESCE($2, name),
 			protocol = COALESCE($3, protocol),
 			host = COALESCE($4, host),
@@ -637,15 +659,11 @@ func (s *Service) update(c *gin.Context) {
 			username = COALESCE($6, username),
 			password_enc = CASE WHEN $7 THEN $8 ELSE password_enc END,
 			status = COALESCE($9, status),
-			allow_private = COALESCE($11, allow_private),
+			allow_private = COALESCE($10, allow_private),
 			updated_at = clock_timestamp()
-			WHERE p.id = $1 AND `+scoped("$10"),
-			id, in.Name, in.Protocol, in.Host, in.Port, in.Username, in.Password != nil, enc, in.Status, scope, allowPriv)
-		if err != nil {
+			WHERE id = $1`,
+			id, in.Name, in.Protocol, in.Host, in.Port, in.Username, in.Password != nil, enc, in.Status, allowPriv); err != nil {
 			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return notFound(ctx)
 		}
 		if err := s.notifyAccountProxyChange(ctx, tx, id, "proxy"); err != nil {
 			return err
@@ -858,6 +876,10 @@ func (s *Service) probe(ctx context.Context, client *http.Client) TestResult {
 	start := time.Now()
 	resp, err := client.Do(req)
 	latency := time.Since(start).Milliseconds()
+	if errors.Is(err, netguard.ErrPrivate) {
+		// The refused address is what the name resolved to: not echoed.
+		return TestResult{LatencyMs: latency, Message: "proxy address is private and not allowed"}
+	}
 	if err != nil {
 		return TestResult{LatencyMs: latency, Message: err.Error()}
 	}
