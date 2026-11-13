@@ -71,7 +71,7 @@ const children: RouteRecordRaw[] = [
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
   // The old usage statistics page.
   { path: 'me/stats', redirect: '/me/usage/overview' },
-  // Opened from a row of the users list.
+  // Its own entry in the finance section; a row of the users list opens it filtered.
   { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
   { path: 'me/ledger', redirect: '/me/wallet' },
   { path: 'me/balance', redirect: '/me/wallet' },

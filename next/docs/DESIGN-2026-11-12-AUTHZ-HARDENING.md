@@ -694,7 +694,7 @@
 - 测试：新增 `UsersView.spec`（可管理才显示改动类操作、不可授予角色的持有者不可管理、超管管理所有人含自己但不删除自己、锁定角色原样提交、选 supplier 补 user、不可授予角色不能新加）；`UserCreateDialog.spec` 补可管理角色与 user 可选、无 role:assign 只能选 user。
 - 回滚：revert 提交即可，纯前端。
 
-## T80 U6-2、决策 D24：财务区“余额流水”菜单
+## T80：财务区“余额流水”菜单
 
 - 改动：`authz/menus.go` 的 finance 区加核心项 `{ledger, /ledger, anyOf: balance:all:read}`（图标 balance），删除“从用户列表打开”的注释；控制台 `/ledger` 路由去掉 `parent: '/users'`（有了自己的菜单项，面包屑与高亮跟随它）；web mock 菜单同步。用户列表行操作“余额流水”保留。
 - 影响对象：持有 `balance:all:read` 的角色（admin、operator 与自定义角色）侧栏多出财务区的“余额流水”；只有 `balance:all:read` 没有 `user:read` 的角色此前只能凭地址打开，现在有入口。
