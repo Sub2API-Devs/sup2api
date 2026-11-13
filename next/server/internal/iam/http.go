@@ -19,10 +19,10 @@ import (
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/login", s.handleLogin)
 	r.Public(http.MethodPost, "/auth/refresh", s.handleRefresh)
-	r.Authed(http.MethodPost, "/auth/logout", s.handleLogout)
+	r.SessionOnly().Handle(http.MethodPost, "/auth/logout", s.handleLogout)
 	r.AuthedRead("/me", s.handleMe)
-	r.Authed(http.MethodPut, "/me", s.handleUpdateMe)
-	r.SessionOnly().StepUp(core.StepUpSelfPassword).Handle(http.MethodPut, "/me/password", s.handleChangePassword)
+	r.Self(http.MethodPut, "/me", "self:profile", s.handleUpdateMe)
+	r.StepUp(core.StepUpSelfPassword).Self(http.MethodPut, "/me/password", selfSecurity, s.handleChangePassword)
 
 	r.Perm(http.MethodGet, "/users", "user:read", s.handleListUsers)
 	r.Perm(http.MethodPost, "/users", "user:create", s.handleCreateUser)
@@ -31,7 +31,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.StepUp(core.StepUpUserDelete).Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
 	r.Perm(http.MethodPut, "/users/:id/roles", "role:assign", s.handleSetUserRoles)
 	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers)
-	r.SessionOnly().StepUp(core.StepUpSuperAdminTransfer).Handle(http.MethodPost, "/system/super-admin/transfer", s.handleTransferSuperAdmin)
+	// The super admin's own standing: under self:security for an access key.
+	r.StepUp(core.StepUpSuperAdminTransfer).Self(http.MethodPost, "/system/super-admin/transfer", selfSecurity, s.handleTransferSuperAdmin)
 	s.registerSecurityRoutes(r)
 }
 

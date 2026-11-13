@@ -177,7 +177,7 @@ func TestBootstrapLoginRefreshLogout(t *testing.T) {
 		t.Fatal("tampered token accepted")
 	}
 	me, err := s.GetMe(ctx, uid)
-	if err != nil || !me.Superuser || len(me.Permissions) != len(authz.CorePermissions()) {
+	if err != nil || !me.Superuser || len(me.Permissions) != len(authz.CorePermissions())+len(authz.SelfPermissionKeys()) {
 		t.Fatalf("me: %+v %v", me, err)
 	}
 

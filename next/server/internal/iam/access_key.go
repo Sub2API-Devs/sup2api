@@ -258,8 +258,9 @@ func (s *Service) DeleteAccessKey(ctx context.Context, userID, id int64) error {
 	})
 }
 
-// AccessKeyPermissions is the catalog a user chooses from: the core modules of
-// the permissions they hold, with only those.
+// AccessKeyPermissions is the catalog a user chooses from: the self module,
+// which every user holds, then the core modules of the permissions they
+// hold, with only those.
 func (s *Service) AccessKeyPermissions(ctx context.Context, userID int64) ([]*authz.PermissionModule, error) {
 	set, err := s.authz.PermissionSet(ctx, userID)
 	if err != nil {
@@ -269,7 +270,7 @@ func (s *Service) AccessKeyPermissions(ctx context.Context, userID int64) ([]*au
 	if err != nil {
 		return nil, err
 	}
-	out := []*authz.PermissionModule{}
+	out := []*authz.PermissionModule{authz.SelfPermissionModule()}
 	for _, m := range modules {
 		kept := m.Permissions[:0:0]
 		for _, p := range m.Permissions {

@@ -52,6 +52,7 @@ const (
 	PermPubRead    = "publisher:read"
 	PermPubManage  = "publisher:manage"
 	PermNodeRead   = "node:read"
+	PermSelfUI     = "self:plugin_ui"
 )
 
 // RegisterRoutes mounts every route of the module.
@@ -76,11 +77,12 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPost, "/plugins/:key/upgrade", PermManage, a.upgrade)
 	r.Perm(http.MethodGet, "/plugins/:key/rollouts/current", PermRead, a.currentRollout)
 	r.Perm(http.MethodPost, "/plugins/:key/rollouts/:id/cancel", PermManage, a.cancelRollout)
-	// plugin:read / plugin:manage, or the plugin's ui.settings.permission.
-	// Authed with CanAny in the handler: that key comes from the manifest, a
-	// dynamic key no static route can name.
-	r.Authed(http.MethodGet, "/plugins/:key/settings", a.getSettings)
-	r.Authed(http.MethodPut, "/plugins/:key/settings", a.putSettings)
+	// plugin:read / plugin:manage, or the plugin's ui.settings.permission,
+	// checked with CanAny in the handler: that key comes from the manifest,
+	// a dynamic key no static route can name. The route's own key is the
+	// plugin pages' self permission, which an access key must carry too.
+	r.Self(http.MethodGet, "/plugins/:key/settings", PermSelfUI, a.getSettings)
+	r.Self(http.MethodPut, "/plugins/:key/settings", PermSelfUI, a.putSettings)
 	r.Perm(http.MethodGet, "/plugins/:key/grants", PermRead, a.listGrants)
 	r.Perm(http.MethodDelete, "/plugins/:key/grants/:permission", PermManage, a.revokeGrant)
 	r.Perm(http.MethodPut, "/plugins/:key/resources", PermManage, a.putResources)
@@ -92,7 +94,7 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPost, "/plugins/:key/jobs/:job_id/run", task.PermRun, a.runJob)
 	r.Perm(http.MethodGet, "/plugins/:key/events", PermRead, a.events)
 
-	r.Authed(http.MethodGet, "/ui/plugins", a.uiPlugins)
+	r.Self(http.MethodGet, "/ui/plugins", PermSelfUI, a.uiPlugins)
 	r.Perm(http.MethodGet, "/nodes", PermNodeRead, a.nodes)
 
 	r.Perm(http.MethodGet, "/market/sources", PermMarketRead, a.marketSources)

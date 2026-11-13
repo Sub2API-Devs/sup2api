@@ -51,13 +51,6 @@ func (r *Router) Handle(method, path string, h ...gin.HandlerFunc) {
 	r.handle(method, path, nil, h)
 }
 
-// Authed registers a route for any logged-in user, not for an access key: a
-// route without a permission has nothing to limit a key by, and most of them
-// manage how the user signs in (CONTRACTS §80).
-func (r *Router) Authed(method, path string, h ...gin.HandlerFunc) {
-	r.SessionOnly().Handle(method, path, h...)
-}
-
 // AuthedRead registers a read-only route for any logged-in user or access key:
 // who the caller is and what they can see, under the key's own limits.
 func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) {

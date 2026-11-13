@@ -60,18 +60,20 @@ func (a authz) Can(ctx context.Context, uid int64, p string) (bool, error) {
 	ps, err := a.PermissionSet(ctx, uid)
 	return ps.Has(p), err
 }
+// Every signed-in user holds the self permissions, as authz gives them.
 func (authz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
+	var keys []string
 	switch uid {
 	case 1:
 		return core.PermissionSet{Superuser: true}, nil
 	case 2:
-		return core.PermissionSet{Keys: map[string]struct{}{"plugin.guard:stats:read": {}}}, nil
+		keys = []string{"plugin.guard:stats:read"}
 	case 4:
-		return core.PermissionSet{Keys: map[string]struct{}{PermRead: {}, PermManage: {}}}, nil
+		keys = []string{PermRead, PermManage}
 	case 5:
-		return core.PermissionSet{Keys: map[string]struct{}{task.PermRun: {}}}, nil
+		keys = []string{task.PermRun}
 	}
-	return core.PermissionSet{}, nil
+	return core.PermissionSetOf(append(keys, PermSelfUI)...), nil
 }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
 func (authz) CanActOn(context.Context, int64, []string) error { return nil }

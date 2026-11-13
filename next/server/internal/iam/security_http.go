@@ -12,6 +12,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
 
+// selfSecurity is the self permission of one's own sign-in: password,
+// two-factor, passkeys.
+const selfSecurity = "self:security"
+
 // registerSecurityRoutes mounts the second login step, passkeys, two-factor
 // and login sessions (CONTRACTS §79).
 func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
@@ -19,33 +23,36 @@ func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/passkey/begin", s.handlePasskeyLoginBegin)
 	r.Public(http.MethodPost, "/auth/passkey/finish", s.handlePasskeyLoginFinish)
 
-	r.Authed(http.MethodGet, "/me/two-factor", s.handleTwoFactor)
-	r.Authed(http.MethodPost, "/me/two-factor/setup", s.handleTwoFactorSetup)
-	r.Authed(http.MethodPost, "/me/two-factor/enable", s.handleTwoFactorEnable)
-	session := r.SessionOnly()
-	session.StepUp(core.StepUpSelf2FADisable).Handle(http.MethodPost, "/me/two-factor/disable", s.handleTwoFactorDisable)
-	session.StepUp(core.StepUpSelfBackupCodes).Handle(http.MethodPost, "/me/two-factor/backup-codes", s.handleBackupCodes)
+	r.Self(http.MethodGet, "/me/two-factor", selfSecurity, s.handleTwoFactor)
+	r.Self(http.MethodPost, "/me/two-factor/setup", selfSecurity, s.handleTwoFactorSetup)
+	r.Self(http.MethodPost, "/me/two-factor/enable", selfSecurity, s.handleTwoFactorEnable)
+	r.StepUp(core.StepUpSelf2FADisable).Self(http.MethodPost, "/me/two-factor/disable", selfSecurity, s.handleTwoFactorDisable)
+	r.StepUp(core.StepUpSelfBackupCodes).Self(http.MethodPost, "/me/two-factor/backup-codes", selfSecurity, s.handleBackupCodes)
 
-	r.Authed(http.MethodGet, "/me/passkeys", s.handlePasskeys)
-	session.StepUp(core.StepUpSelfPasskeyAdd).Handle(http.MethodPost, "/me/passkeys/begin", s.handlePasskeyAddBegin)
-	r.Authed(http.MethodPost, "/me/passkeys/finish", s.handlePasskeyAddFinish)
-	r.Authed(http.MethodPatch, "/me/passkeys/:id", s.handlePasskeyRename)
-	session.StepUp(core.StepUpSelfPasskeyDelete).Handle(http.MethodDelete, "/me/passkeys/:id", s.handlePasskeyDelete)
+	r.Self(http.MethodGet, "/me/passkeys", selfSecurity, s.handlePasskeys)
+	r.StepUp(core.StepUpSelfPasskeyAdd).Self(http.MethodPost, "/me/passkeys/begin", selfSecurity, s.handlePasskeyAddBegin)
+	r.Self(http.MethodPost, "/me/passkeys/finish", selfSecurity, s.handlePasskeyAddFinish)
+	r.Self(http.MethodPatch, "/me/passkeys/:id", selfSecurity, s.handlePasskeyRename)
+	r.StepUp(core.StepUpSelfPasskeyDelete).Self(http.MethodDelete, "/me/passkeys/:id", selfSecurity, s.handlePasskeyDelete)
 
 	// Step-up verification (§80.2): any caller, a session or an access key.
 	r.AuthedRead("/me/verify/methods", s.handleVerifyMethods)
 	r.Handle(http.MethodPost, "/me/verify/begin", s.handleVerifyBegin)
 	r.Handle(http.MethodPost, "/me/verify", s.handleVerify)
 
-	r.Authed(http.MethodGet, "/me/sessions", s.handleSessions)
-	r.Authed(http.MethodPost, "/me/sessions/revoke-others", s.handleSessionsRevokeOthers)
-	r.Authed(http.MethodDelete, "/me/sessions/:id", s.handleSessionRevoke)
+	// Only a login session manages login sessions and access keys: a key
+	// could otherwise end its owner's sessions, or renew or widen itself
+	// (§80).
+	session := r.SessionOnly()
+	session.Handle(http.MethodGet, "/me/sessions", s.handleSessions)
+	session.Handle(http.MethodPost, "/me/sessions/revoke-others", s.handleSessionsRevokeOthers)
+	session.Handle(http.MethodDelete, "/me/sessions/:id", s.handleSessionRevoke)
 
-	r.Authed(http.MethodGet, "/me/access-keys", s.handleAccessKeys)
-	r.Authed(http.MethodGet, "/me/access-keys/permissions", s.handleAccessKeyPermissions)
-	r.Authed(http.MethodPost, "/me/access-keys", s.handleAccessKeyCreate)
-	r.Authed(http.MethodPatch, "/me/access-keys/:id", s.handleAccessKeyUpdate)
-	r.Authed(http.MethodDelete, "/me/access-keys/:id", s.handleAccessKeyDelete)
+	session.Handle(http.MethodGet, "/me/access-keys", s.handleAccessKeys)
+	session.Handle(http.MethodGet, "/me/access-keys/permissions", s.handleAccessKeyPermissions)
+	session.Handle(http.MethodPost, "/me/access-keys", s.handleAccessKeyCreate)
+	session.Handle(http.MethodPatch, "/me/access-keys/:id", s.handleAccessKeyUpdate)
+	session.Handle(http.MethodDelete, "/me/access-keys/:id", s.handleAccessKeyDelete)
 
 	// Removing someone's second factor leaves the account one password away,
 	// like resetting the password: the same permission and a step-up (D16).

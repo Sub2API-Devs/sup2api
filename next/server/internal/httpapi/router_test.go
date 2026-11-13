@@ -149,7 +149,8 @@ func TestSessionOnly(t *testing.T) {
 	r.Perm("GET", "/perm", "x:read", ok)
 	r.PermAny("GET", "/any", ok, "x:read", "x:own:read")
 	r.AuthedRead("/read", ok)
-	r.Authed("GET", "/authed", ok)
+	strict.Handle("GET", "/authed", ok)
+	r.Handle("GET", "/handle", ok)
 
 	cases := []struct {
 		path     string
@@ -161,7 +162,8 @@ func TestSessionOnly(t *testing.T) {
 		{"/perm", 200, 200, "Perm on the original router"},
 		{"/any", 200, 200, "PermAny on the original router"},
 		{"/read", 200, 200, "AuthedRead"},
-		{"/authed", 200, http.StatusForbidden, "Authed"},
+		{"/authed", 200, http.StatusForbidden, "SessionOnly Handle"},
+		{"/handle", 200, 200, "Handle"},
 	}
 	for _, tc := range cases {
 		if got := serve(engine, "GET", tc.path, "u1"); got != tc.jwt {
@@ -340,4 +342,24 @@ func TestStepUp(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("no verifier = %d, want 500", w.Code)
 	}
+}
+
+// Self is Perm under a self permission; any other key is a programming error.
+func TestSelf(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	r := NewRouter(engine, keyTokens{}, fakeAuthz{keys: map[int64][]string{1: {"self:profile"}}})
+	r.Self("GET", "/me", "self:profile", func(c *gin.Context) { OK(c, Granted(c)) })
+	if got := serve(engine, "GET", "/me", "u1"); got != 200 {
+		t.Errorf("holder = %d", got)
+	}
+	if got := serve(engine, "GET", "/me", "u2"); got != http.StatusForbidden {
+		t.Errorf("without the permission = %d", got)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("Self accepted a key outside the self module")
+		}
+	}()
+	r.Self("GET", "/x", "user:read", func(*gin.Context) {})
 }

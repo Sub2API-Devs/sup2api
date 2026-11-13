@@ -41,6 +41,10 @@ type corePerm struct {
 	// identity takeover, host-level control, code execution, trust roots and
 	// plaintext credentials (CONTRACTS §80).
 	sessionOnly bool
+	// stepUp marks a permission some of whose routes need a step-up proof
+	// (httpapi.Router.StepUp, where the rule is); display only, for the
+	// access key selector. Always sensitive (TestCatalogFlagInvariants).
+	stepUp bool
 	// inherits: when the permission is first created, every role holding
 	// one of these keys gets it too (splitting a permission keeps its
 	// holders' rights; grantInherited).

@@ -729,6 +729,8 @@ type PermissionItem struct {
 	Description core.LocalizedText `json:"description"`
 	Sensitive   bool               `json:"sensitive"`
 	SessionOnly bool               `json:"session_only"`
+	// StepUp: using it may need a step-up proof (catalog stepUp).
+	StepUp bool `json:"step_up"`
 	Status      string             `json:"status"`
 }
 
