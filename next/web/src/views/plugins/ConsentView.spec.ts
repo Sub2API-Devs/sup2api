@@ -91,7 +91,7 @@ describe('plugin consent page', () => {
     expect((roleBox(w, 'demo.read', 'admin').element as HTMLInputElement).checked).toBe(true)
     expect(w.find('[data-permission="demo.old"] [data-testid="permission-roles"]').exists()).toBe(false)
     await roleBox(w, 'demo.write', 'auditor').setValue(true)
-    await w.get('[data-testid="hp-http.client"] input, input[type="checkbox"]:not([data-role])').setValue(true)
+    await w.get('[data-testid="host-permissions"] input[type="checkbox"]').setValue(true)
     await w.get('[data-testid="consent-approve"]').trigger('click')
     await flushPromises()
     expect(mocks.post).toHaveBeenCalledWith('/plugins/demo/versions/1.2.0/consent', {
@@ -100,6 +100,29 @@ describe('plugin consent page', () => {
       new_permission_roles: { 'demo.write': ['admin', 'auditor'] }
     })
     expect(mocks.push).toHaveBeenCalledWith({ path: '/plugins/demo', query: { consented: '1.2.0' } })
+  })
+
+  it('unticking every default sends an empty list; ticking back to the defaults sends nothing', async () => {
+    const w = render(review({ user_permissions: [perm('demo.read'), perm('demo.write')], host_permissions: [{ id: 'storage.read', risk: 'low' }] }))
+    await flushPromises()
+    await roleBox(w, 'demo.read', 'admin').setValue(false)
+    await roleBox(w, 'demo.write', 'lead').setValue(true)
+    await roleBox(w, 'demo.write', 'lead').setValue(false)
+    await w.get('[data-testid="consent-approve"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post.mock.calls[0][1].new_permission_roles).toEqual({ 'demo.read': [] })
+  })
+
+  it('leaves the default grants of a permission given other roles out of the grant list', async () => {
+    const grants = [
+      { permission: 'plugin.demo:demo.read', role: 'admin', sensitive: false, via: 'default', needs_consent: false },
+      { permission: 'plugin.demo:demo.write', role: 'admin', sensitive: false, via: 'default', needs_consent: false }
+    ]
+    const w = render(review({ user_permissions: [perm('demo.read'), perm('demo.write')], new_role_grants: grants as never }))
+    await flushPromises()
+    expect(w.findAll('[data-testid="new-role-grants"] li')).toHaveLength(2)
+    await roleBox(w, 'demo.read', 'lead').setValue(true)
+    expect(w.findAll('[data-testid="new-role-grants"] li')).toHaveLength(1)
   })
 
   it('offers no role choice without role:define: the manifest defaults apply', async () => {
@@ -128,7 +151,7 @@ describe('plugin consent page', () => {
 
   it('tells beforehand when db.schema needs the unconfined override the caller lacks', async () => {
     mocks.lacks = new Set(['plugin:grant:db_schema_unconfined'])
-    const hp = [{ id: 'db.schema', risk: 'high' }] as never
+    const hp = [{ id: 'db.schema', risk: 'critical' }] as never
     const w = render(review({ host_permissions: hp, needs_db_schema_unconfined: true }))
     await flushPromises()
     expect((w.get('[data-testid="consent-approve"]').element as HTMLButtonElement).disabled).toBe(true)

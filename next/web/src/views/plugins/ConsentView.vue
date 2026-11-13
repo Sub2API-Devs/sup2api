@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner, confirm, toast } from '@sub2api/ui'
-import type { HostPermissionReview, PluginReview } from '@/api/types'
+import type { HostPermissionReview, PluginReview, PluginRoleGrant } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -39,6 +39,11 @@ const showMissing = ref(false)
 
 const checked = reactive<Record<string, boolean>>({})
 const permissionRoles = useNewPermissionRoles(review)
+/** The default grants, less those of permissions given other roles here (their choice is shown with them). */
+const shownRoleGrants = computed(() => {
+  const changed = new Set(Object.keys(permissionRoles.payload()).map((k) => `plugin.${key.value}:${k}`))
+  return asArray<PluginRoleGrant>(review.value?.new_role_grants).filter((g) => g.via !== 'default' || !changed.has(g.permission))
+})
 
 /** Granting db.schema to this plugin takes the override as well (review.needs_db_schema_unconfined). */
 const DB_SCHEMA = 'db.schema'
@@ -265,7 +270,7 @@ onMounted(load)
       <ProvidesSummary :review="review" :permission-roles="permissionRoles" />
 
       <!-- the role grants the new permissions get -->
-      <NewRoleGrants :grants="review.new_role_grants || []" :need-consent="!!review.role_grants_need_consent" class="mt-4" />
+      <NewRoleGrants :grants="shownRoleGrants" :need-consent="!!review.role_grants_need_consent" class="mt-4" />
 
       <!-- host permissions -->
       <HostPermissionTable :rows="rows" :checked="checked" :show-missing="showMissing" @toggle="toggle" />

@@ -28,7 +28,7 @@ const descOf = (id: string) => tr(`plugins.hpDesc.${hpKey(id)}`, undefined, '')
 </script>
 
 <template>
-  <SCard :title="t('plugins.consent.hostPermissions')" :subtitle="t('plugins.consent.hostPermissionsHint')" class="mt-4">
+  <SCard :title="t('plugins.consent.hostPermissions')" :subtitle="t('plugins.consent.hostPermissionsHint')" class="mt-4" data-testid="host-permissions">
     <SEmpty v-if="props.rows.length === 0" :text="t('plugins.consent.noHostPermissions')" />
     <ul v-else class="divide-y divide-gray-100 dark:divide-dark-700">
       <li
