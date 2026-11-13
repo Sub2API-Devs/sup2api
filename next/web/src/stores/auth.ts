@@ -17,7 +17,8 @@ export const useAuthStore = defineStore('auth', () => {
    * caller's permissions (assignable roles, the current route) is checked again.
    */
   const permissionsEpoch = ref(0)
-  let refreshingPermissions: Promise<void> | null = null
+  let reloading: Promise<void> | null = null
+  let queuedReload: Promise<void> | null = null
 
   session.onChange((s) => {
     loggedIn.value = !!s
@@ -66,17 +67,28 @@ export const useAuthStore = defineStore('auth', () => {
 
   /**
    * Reloads what depends on the caller's permissions: /me, then the plugin
-   * modules and menus. Concurrent callers share one reload.
+   * modules and menus. A call during a reload gets one more reload after it
+   * (the running one may have read /me before the change the caller knows
+   * of); calls meanwhile share that one.
    */
   function refreshPermissions(): Promise<void> {
-    refreshingPermissions ??= (async () => {
+    if (!reloading) return startReload()
+    queuedReload ??= reloading.catch(() => undefined).then(() => {
+      queuedReload = null
+      return startReload()
+    })
+    return queuedReload
+  }
+
+  function startReload(): Promise<void> {
+    reloading = (async () => {
       await loadMe()
       await refreshShell()
       permissionsEpoch.value++
     })().finally(() => {
-      refreshingPermissions = null
+      reloading = null
     })
-    return refreshingPermissions
+    return reloading
   }
 
   async function refreshBalance() {

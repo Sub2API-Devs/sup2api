@@ -221,6 +221,8 @@ describe('keep-alive', () => {
 })
 
 describe('authz hooks', () => {
+  afterEach(() => http.configureHttp({ onAuthzVersion: undefined, onForbidden: undefined }))
+
   it('reports X-Authz-Version of success and error responses, and 403 errors', async () => {
     const onAuthzVersion = vi.fn()
     const onForbidden = vi.fn()

@@ -36,6 +36,11 @@ export function createAuthzWatch(o: AuthzWatchOptions): AuthzWatch {
   let lastForbidden = -Infinity
   let timer: ReturnType<typeof setTimeout> | undefined
   const run = () => void o.refresh().catch(() => undefined)
+  // Signed out, or a /me read meanwhile already covers the version: nothing to do.
+  const runIfBehind = () => {
+    const known = o.known()
+    if (known != null && triggered > known) run()
+  }
 
   return {
     version(v) {
@@ -43,7 +48,7 @@ export function createAuthzWatch(o: AuthzWatchOptions): AuthzWatch {
       if (known == null || v <= Math.max(known, triggered)) return
       triggered = v
       clearTimeout(timer)
-      timer = setTimeout(run, debounceMs)
+      timer = setTimeout(runIfBehind, debounceMs)
     },
     forbidden() {
       if (o.known() == null) return

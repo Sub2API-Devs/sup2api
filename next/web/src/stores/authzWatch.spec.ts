@@ -55,6 +55,19 @@ describe('createAuthzWatch', () => {
     expect(none.refresh).not.toHaveBeenCalled()
   })
 
+  it('skips a pending reload once the /me in hand caught up, or after sign-out', () => {
+    let known: number | null = 5
+    const refresh = vi.fn(async () => undefined)
+    const w = createAuthzWatch({ known: () => known, refresh })
+    w.version(6)
+    known = 7 // the reload of another trigger read a newer /me
+    vi.advanceTimersByTime(1000)
+    w.version(8)
+    known = null
+    vi.advanceTimersByTime(1000)
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
   it('throttles reloads after permission denials to one per 10s', () => {
     const { w, refresh, tick } = setup()
     w.forbidden()
@@ -66,6 +79,28 @@ describe('createAuthzWatch', () => {
     tick(1)
     w.forbidden()
     expect(refresh).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('refreshPermissions', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mocks.get.mockReset()
+  })
+
+  it('a call during a reload gets one more reload after it, shared by later calls', async () => {
+    let release!: () => void
+    mocks.get.mockImplementationOnce(() => new Promise(r => (release = () => r({ id: 1, permissions: [] }))))
+    mocks.get.mockResolvedValue({ id: 1, permissions: ['user:read'] })
+    const auth = useAuthStore()
+    const first = auth.refreshPermissions()
+    const second = auth.refreshPermissions()
+    const third = auth.refreshPermissions()
+    release()
+    await Promise.all([first, second, third])
+    expect(mocks.get.mock.calls.filter(c => c[0] === '/me')).toHaveLength(2)
+    expect(auth.me?.permissions).toEqual(['user:read'])
+    expect(auth.permissionsEpoch).toBe(2)
   })
 })
 
@@ -103,6 +138,8 @@ describe('watchPermissions', () => {
 
     // Only permission_denied reloads; a step-up demand does not.
     hooks.onForbidden!(new ApiError(403, { code: 'verification_required', message: '' }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mocks.get.mock.calls.filter(c => c[0] === '/me')).toHaveLength(1)
     hooks.onForbidden!(new ApiError(403, { code: 'permission_denied', message: '' }))
     await vi.waitFor(() => expect(mocks.get.mock.calls.filter(c => c[0] === '/me')).toHaveLength(2))
   })
