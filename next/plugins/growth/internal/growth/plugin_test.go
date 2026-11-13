@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,12 +95,31 @@ func TestManifestValid(t *testing.T) {
 	if len(m.Routes) != 9 {
 		t.Fatalf("routes = %d", len(m.Routes))
 	}
-	perms := map[string]bool{}
+	// growth:use (renamed from growth:read) guards the /me routes and the
+	// user menus, growth:stats:read (renamed from growth:manage) the admin
+	// side; both inherit the old key's holders.
+	perms := map[string]manifest.UserPermission{}
 	for _, up := range m.UserPermissions {
-		perms[up.Key] = true
+		perms[up.Key] = up
 	}
-	if !perms["growth:read"] || !perms["growth:manage"] || len(perms) != 2 {
-		t.Fatalf("user permissions = %v", perms)
+	use, stats := perms["growth:use"], perms["growth:stats:read"]
+	if len(perms) != 2 || !slices.Equal(use.InheritFrom, []string{"growth:read"}) || len(use.DefaultRoles) != 4 ||
+		!slices.Equal(stats.InheritFrom, []string{"growth:manage"}) || !stats.Sensitive || !slices.Equal(stats.Roles(), []string{"admin"}) {
+		t.Fatalf("user permissions = %+v", perms)
+	}
+	for _, r := range m.Routes {
+		want := "growth:stats:read"
+		if strings.HasPrefix(r.Path, "/me/") {
+			want = "growth:use"
+		}
+		if r.Permission != want {
+			t.Errorf("%s %s: permission %q, want %q", r.Method, r.Path, r.Permission, want)
+		}
+	}
+	for _, mn := range m.UI.Menus {
+		if want := map[string]string{"me": "growth:use", "finance": "growth:stats:read"}[mn.Section]; mn.Permission != want {
+			t.Errorf("menu %s: permission %q, want %q", mn.ID, mn.Permission, want)
+		}
 	}
 }
 

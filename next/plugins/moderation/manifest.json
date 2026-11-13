@@ -128,6 +128,7 @@
   "userPermissions": [
     {
       "key": "moderation:read",
+      "defaultRoles": ["admin"],
       "label": {
         "en": "View prompt moderation",
         "zh": "查看提示词审核"
@@ -139,6 +140,7 @@
     },
     {
       "key": "moderation:manage",
+      "defaultRoles": ["admin"],
       "label": {
         "en": "Manage prompt moderation",
         "zh": "管理提示词审核"
@@ -146,6 +148,18 @@
       "description": {
         "en": "Change channels, auditors, flows, the watch list and bans; review records; run tests (paid upstream calls)",
         "zh": "修改渠道、审核器、流程、观察名单和封禁，处理记录，运行测试（会产生上游费用）"
+      }
+    },
+    {
+      "key": "moderation:exempt",
+      "inheritFrom": ["moderation:read"],
+      "label": {
+        "en": "Exempt from moderation watch and bans",
+        "zh": "免于审核观察与封禁"
+      },
+      "description": {
+        "en": "Requests are still moderated and recorded, but the user never enters the watch list, is never banned and is left out of the user statistics",
+        "zh": "请求照常审核并记录，但不会进入观察名单、不会被封禁，也不计入用户统计"
       }
     }
   ],

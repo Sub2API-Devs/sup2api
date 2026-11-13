@@ -68,6 +68,7 @@
   "userPermissions": [
     {
       "key": "model_catalog:read",
+      "defaultRoles": ["admin"],
       "label": { "en": "View model catalog", "zh": "查看模型目录" },
       "description": { "en": "List the Claude models known to the Anthropic plugin.", "zh": "查看 Anthropic 插件提供的 Claude 模型目录。" }
     }

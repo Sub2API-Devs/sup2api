@@ -938,7 +938,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 - 能力：`gateway.hook.v1`、`app.jobs.v1`、`app.broadcast.v1`、`http.routes.v1`；数据库 schema `plg_moderation`。
 - 钩子：`{id:"moderation", point:"gateway.request", order:200, match:{protocols:["anthropic.messages","openai.chat","openai.responses","gemini.generate","gemini.stream_generate"]}, needs:["model", "messages|@reverse|#(role==\"user\")", "input|@reverse|#(role==\"user\")", "[input]|#(%\"*\")", "contents|@reverse|#(role==\"user\")"], timeoutMs:30000, failure:"open"}`。order 200 让 guard（100）的关键词规则先跑，命中关键词就不再花 LLM 调用。
 - 任务：`cleanup`（`0 4 * * *`，按 `retention_days` 删旧记录、删已过期的封禁）。
-- 权限 `userPermissions`：`moderation:read`（查看概览、记录、封禁列表）、`moderation:manage`（删除记录、封禁/解封、在线测试）；下表"read/manage"即指这两个。
+- 权限 `userPermissions`：`moderation:read`（查看概览、记录、封禁列表）、`moderation:manage`（删除记录、封禁/解封、在线测试）；下表"read/manage"即指这两个。另有 `moderation:exempt`（免于审核观察与封禁，不守任何路由或菜单，`inheritFrom: [moderation:read]`，2026-11-12 权限加固 T60），工作人员判定看它。
 - 宿主权限：`kv`、`db.schema`、`gateway.hook`（上面的 fields）、`jobs`、`broadcast`、`routes.admin`、`ui.menu`、`ui.native`、`net`（`domains:["*"]`，optional）。
 - 界面：菜单"提示词审核"（section `plugins`，icon `shield`，permission `moderation:read`），native 页面 `ModerationDashboard`；设置用 schema 表单（插件详情"设置"页）。
 - 内置：`deploy/docker/build-go.sh` 的 `BUILTIN_PLUGINS` 默认加 `moderation`；首次安装即启用，但 `mode` 默认 `off`，不配置时钩子直接放行。
@@ -2895,9 +2895,9 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - 订阅事件：`user.created`、`usage.recorded`、`balance.changed`，每批 50 条。
 - 任务：`cleanup`，`0 3 * * *`，删除 90 天前的签到记录。
 - 数据库：`plg_growth`，迁移 `migrations/0001_init.sql`（全部 `IF NOT EXISTS`）。
-- 用户权限：`growth:read`（我的邀请、签到），`growth:manage`（管理页，`sensitive`）。
+- 用户权限（2026-11-12 权限加固 T60 改名，`inheritFrom` 保留存量授权）：`growth:use`（我的邀请、签到；`defaultRoles` user/supplier/operator/admin，继承 `growth:read`），`growth:stats:read`（“查看增长后台”，`sensitive`；继承 `growth:manage`）。旧的 `growth:read`、`growth:manage` 在同步后删除。
 - host 权限：`db.schema`、`events`（scope 同上三种事件）、`jobs`、`routes.user`、`routes.admin`、`ui.menu`、`ui.native`、`ledger.credit`（`{"maxPerTx": "10", "maxPerDay": "100"}`）。
-- 菜单：`me` 区的"我的邀请""每日签到"（`growth:read`），插件自己的 `growth` 区里的"增长管理"（`growth:manage`）。
+- 菜单：`me` 区的"我的邀请""每日签到"（`growth:use`），插件自己的 `growth` 区里的"增长管理"（`growth:stats:read`）。
 
 ### 45.2 表
 
@@ -2911,13 +2911,13 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
-| GET | `/me/referral` | `growth:read` | 我的邀请码（没有就生成）、邀请人、邀请人数、累计返利、返利最多的被邀请人、最近返利 |
-| POST | `/me/referral/bind` | `growth:read` | `{code}` 绑定邀请人；只能绑一次 |
-| GET | `/me/checkin/status` | `growth:read` | 今天是否已签到、今日奖励、连续天数、累计次数与金额、最近记录 |
-| POST | `/me/checkin` | `growth:read` | 签到 |
-| GET | `/admin/referrals`、`/admin/referrals/:user_id` | `growth:manage` | 邀请关系列表、单个用户详情 |
-| GET | `/admin/commissions`、`/admin/checkins` | `growth:manage` | 返利、签到记录 |
-| GET | `/admin/stats` | `growth:manage` | 汇总 |
+| GET | `/me/referral` | `growth:use` | 我的邀请码（没有就生成）、邀请人、邀请人数、累计返利、返利最多的被邀请人、最近返利 |
+| POST | `/me/referral/bind` | `growth:use` | `{code}` 绑定邀请人；只能绑一次 |
+| GET | `/me/checkin/status` | `growth:use` | 今天是否已签到、今日奖励、连续天数、累计次数与金额、最近记录 |
+| POST | `/me/checkin` | `growth:use` | 签到 |
+| GET | `/admin/referrals`、`/admin/referrals/:user_id` | `growth:stats:read` | 邀请关系列表、单个用户详情 |
+| GET | `/admin/commissions`、`/admin/checkins` | `growth:stats:read` | 返利、签到记录 |
+| GET | `/admin/stats` | `growth:stats:read` | 汇总 |
 
 绑定的规则：
 - 不能绑自己；
@@ -2961,7 +2961,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 1. **授权上限偏小**：`ledger.credit` 只有单笔 $10、整个插件每天 $100（UTC 日，所有用户合计），超出的返利和签到都不发。用户多了很快就会触顶。需要按运营规模调大 scope，或者把大额返利拆成多笔。
 2. **注册归因**：没有"注册时带邀请码"的入口。任何已登录用户随时都能绑定一次邀请人，不限于新用户。
-3. **默认可见性**：普通用户角色默认没有 `growth:read`，需要管理员授予后才能看到菜单。
+3. **默认可见性**：2026-11-12 起新装时 `growth:use` 默认授予 user、supplier、operator、admin（manifest `defaultRoles`）；此前普通用户角色默认没有 `growth:read`，需要管理员授予后才能看到菜单，升级后照旧按存量 `growth:read` 的持有者继承。
 4. 原生 UI 的 `dist/` 不在仓库里，打包前要先构建 `ui/native`。
 
 ## 46. 充值支付与兑换码插件 payment（0.1.0，2026-10-04 起草，2026-10-05 按合并后实现修正）
@@ -5485,7 +5485,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **升级到 0.8.0 时的名单转换**（`parity.go`）：0.7.x 下 `mode=enforce` 时所有人先审，自动加入的条目却都是 observe 级；按 0.8.0 的规则（条目的级别优先）这些用户会变成只后审。所以插件首次以 0.8.0 运行、且当时 `mode=enforce` 时，把未过期的、`source=auto` 的 observe 级条目改为 enforce 级（各写一条 `watch_events`：`set_level`，reason 以"0.8.0 升级"开头，没有操作人；有效期和计数不动）。手动设的（`manual`）和 AI 降下来的（`analysis`）observe 级条目不动，这些用户升级后只后审。首次转换后的 24 小时内（`config_state.parity_converted_at` 起）每 5 秒再查一次这段时间里新加入的自动 observe 级条目（滚动升级期间 0.7.x 节点加的），同样转换；之后不再转换。每个条目一个事务，取锁顺序与其他名单操作相同。日志 `moderation: 0.8.0 watch list conversion`（`mode`、`converted`、`first_run`）。
 
-**管理员**：持有 `moderation:read` 的用户（版主）由插件自动识别（72.14），不进观察名单、不会被封禁，不需要为此把他们加进任何名单。（0.2 时插件识别不了管理员，曾建议把管理员加进 `exempt_user_ids`；这条建议早已作废，该设置在 0.8.0 退役，读作白名单，72.10。）
+**管理员**：持有 `moderation:exempt` 的用户（工作人员；2026-11-12 起由 `moderation:read` 拆出，存量持有 read 的角色同步时自动获得 exempt，结果缓存 60 秒）由插件自动识别（72.14），不进观察名单、不会被封禁，不需要为此把他们加进任何名单。（0.2 时插件识别不了管理员，曾建议把管理员加进 `exempt_user_ids`；这条建议早已作废，该设置在 0.8.0 退役，读作白名单，72.10。）
 
 **手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。没指定天数或 `expires_at` 时，observe 级的有效期是 `watch_days`，enforce 级不过期（加入和改级别都一样，照 new-api）。改级别时开新的计数窗口（照 new-api）：新 `violation_epoch`、计数和新命中清零、`since_at` 重设、`source` 改为 manual，返回的条目就是存下的值。
 - **0.8.0**：白名单用户不能手动设为 enforce 级（`POST /watchlist`、`PATCH /watchlist/:user_id` 返回 400，字段 `level`，码 `allowlisted`，"白名单用户只能设为观察"），可以以 observe 级加入。黑名单用户可以设任何级别，但名单级别不影响他们的时机（总是先审）。版主不能加入（字段 `user_id`，码 `staff`）。**0.10.0**：两个名单的用户是锁定条目，手动操作一律 409 `locked`（见 72 节开头"0.10.0 第 4 期"）；`auto_escalate` 见同处。

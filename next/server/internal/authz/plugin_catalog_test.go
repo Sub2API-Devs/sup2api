@@ -2,6 +2,9 @@ package authz
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -9,6 +12,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
@@ -150,6 +154,61 @@ func TestCanGrantToRoles(t *testing.T) {
 	} {
 		if got := can(c.actor, c.roles...); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// Syncing the real growth and moderation manifests over their old keys:
+// holders of growth:read get growth:use, of growth:manage growth:stats:read,
+// of moderation:read moderation:exempt (T60).
+func TestSyncPluginSplitsGrowthAndModeration(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "moderator", Name: lt("Moderator", "审核员"), PermissionKeys: []string{"user:read"}}); err != nil {
+		t.Fatal(err)
+	}
+	sync := func(key string, defs []core.PermissionDef) {
+		t.Helper()
+		if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, key, defs) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	load := func(key string) *manifest.Manifest {
+		t.Helper()
+		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "plugins", key, "manifest.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m manifest.Manifest
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatal(err)
+		}
+		return &m
+	}
+	for _, key := range []string{"growth", "moderation"} {
+		if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ($1, '{"en":"x"}', 'enabled')`, key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sync("growth", []core.PermissionDef{{Key: "growth:read", GrantRoles: []string{RoleUser, RoleAdmin}}, {Key: "growth:manage", GrantRoles: []string{RoleAdmin}}})
+	sync("moderation", []core.PermissionDef{{Key: "moderation:read", GrantRoles: []string{RoleAdmin, "moderator"}}, {Key: "moderation:manage", GrantRoles: []string{RoleAdmin}}})
+
+	// Without the manifest defaults only inheritance hands the new keys out.
+	sync("growth", install.PermissionDefs(load("growth"), nil))
+	sync("moderation", install.PermissionDefs(load("moderation"), nil))
+	for key, want := range map[string][]string{
+		"plugin.growth:growth:use":            {RoleAdmin, RoleUser},
+		"plugin.growth:growth:stats:read":     {RoleAdmin},
+		"plugin.growth:growth:read":           nil,
+		"plugin.growth:growth:manage":         nil,
+		"plugin.moderation:moderation:exempt": {RoleAdmin, "moderator"},
+		"plugin.moderation:moderation:read":   {RoleAdmin, "moderator"},
+	} {
+		if got := permissionHolders(t, db, key); !slices.Equal(got, want) {
+			t.Errorf("holders of %s: %v, want %v", key, got, want)
 		}
 	}
 }

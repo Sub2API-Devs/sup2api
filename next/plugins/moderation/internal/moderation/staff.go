@@ -6,16 +6,18 @@ import (
 	"time"
 )
 
-// Moderators (users holding moderation:read, superusers included) are
+// Staff (users holding moderation:exempt, superusers included) are
 // moderated and recorded like everyone, but never enter the watch list, are
 // never banned and are left out of the user statistics: new-api does the
 // same for administrators. The answer comes from the host (AuthzCheck) and
-// is cached for staffTTL; it is only asked off the request path.
+// is cached for staffTTL, so a revoked exemption ends within a minute; it is
+// only asked off the request path.
 
-const staffTTL = 5 * time.Minute
+const staffTTL = time.Minute
 
-// PermRead is the plugin permission that makes a user staff.
-const PermRead = "moderation:read"
+// PermExempt is the plugin permission that makes a user staff. It was split
+// from moderation:read, whose holders inherit it (manifest inheritFrom).
+const PermExempt = "moderation:exempt"
 
 type staffEntry struct {
 	staff bool
@@ -27,7 +29,7 @@ type staffCache struct {
 	m  map[int64]staffEntry
 }
 
-// isStaff reports whether uid may read moderation; host errors count as not
+// isStaff reports whether uid is exempt; host errors count as not
 // staff (the user is then treated like any other).
 func (p *Plugin) isStaff(ctx context.Context, uid int64) bool {
 	staff, _ := p.checkStaff(ctx, uid)
@@ -54,7 +56,7 @@ func (p *Plugin) checkStaff(ctx context.Context, uid int64) (bool, error) {
 	now := p.now()
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	allowed, err := p.host.AuthzCheck(cctx, uid, PermRead)
+	allowed, err := p.host.AuthzCheck(cctx, uid, PermExempt)
 	if err != nil {
 		return false, err
 	}
