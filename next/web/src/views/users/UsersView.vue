@@ -37,6 +37,8 @@ import { applyFormError } from '@/utils/formErrors'
 import { formatMoney } from '@/utils/format'
 import SegmentBadge from '@/components/pricing/SegmentBadge.vue'
 import AdjustBalanceModal from '@/views/ledger/AdjustBalanceModal.vue'
+import ResetPasswordDialog from './ResetPasswordDialog.vue'
+import TransferSuperAdminDialog from './TransferSuperAdminDialog.vue'
 import UserCreateDialog from './UserCreateDialog.vue'
 import UserPricingDrawer from './UserPricingDrawer.vue'
 import UserSegmentMoveDialog from './UserSegmentMoveDialog.vue'
@@ -107,15 +109,22 @@ const roleOptions = computed(() => [
   ...roles.value.map((r) => ({ value: r.key, label: lt(r.name) || r.key }))
 ])
 
+const isSuper = (u: User) => !!u.roles?.includes('super_admin')
+
+// The super admin can only be changed by itself (CONTRACTS §43.6): no actions
+// on its row for others; its own row only hands the role over.
 function rowActions(u: User): MenuAction[] {
+  const self = u.id === auth.me?.id
+  if (isSuper(u)) return self ? [{ key: 'transfer', label: t('users.transfer.action'), danger: true }] : []
   return [
     { key: 'edit', label: t('common.edit'), hidden: !auth.has('user:update') },
     { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:assign') },
     { key: 'pricing', label: t('users.pricing.action'), hidden: !auth.has('segment:read') },
     { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
-    { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:password:reset') || u.id === auth.me?.id },
+    { key: 'password', label: t('users.resetPassword.action'), hidden: !auth.has('user:password:reset') || self },
+    { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:password:reset') || self },
     { key: 'balance', label: t('users.adjustBalance'), hidden: !auth.has('balance:adjust') },
-    { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('user:delete') || u.id === auth.me?.id }
+    { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('user:delete') || self }
   ]
 }
 
@@ -140,7 +149,9 @@ function onAction(u: User, key: string) {
   else if (key === 'pricing') openPricing(u)
   else if (key === 'ledger') router.push({ path: '/ledger', query: { user_id: String(u.id) } })
   else if (key === 'balance') openBalance(u)
+  else if (key === 'password') passwordUser.value = u
   else if (key === 'security') resetSecurity(u)
+  else if (key === 'transfer') transferOpen.value = true
   else if (key === 'delete') remove(u)
 }
 
@@ -248,6 +259,11 @@ function openBalance(u: User) {
   balanceOpen.value = true
 }
 
+// ------------------------------------------------------------------ password reset, super admin transfer
+
+const passwordUser = ref<User | null>(null)
+const transferOpen = ref(false)
+
 // ------------------------------------------------------------------ delete
 
 function remove(u: User) {
@@ -289,6 +305,7 @@ function remove(u: User) {
     <STable v-model:selected="selectionKeys" card :selectable="canManageSegments" :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" @retry="list.reload">
       <template #cell-email="{ row }">
         <span class="font-medium text-fg">{{ row.email }}</span>
+        <SBadge v-if="isSuper(row)" tone="accent" size="xs" class="ms-2" data-testid="super-admin-badge">{{ t('users.superAdminBadge') }}</SBadge>
       </template>
       <template #cell-roles="{ row }">
         <div class="flex flex-wrap gap-1">
@@ -350,6 +367,10 @@ function remove(u: User) {
 
     <!-- groups and pricing -->
     <UserPricingDrawer v-model:open="pricingOpen" :user="pricingUser" @changed="list.reload()" />
+
+    <!-- password reset, super admin transfer -->
+    <ResetPasswordDialog :open="!!passwordUser" :user="passwordUser" @update:open="(v) => !v && (passwordUser = null)" />
+    <TransferSuperAdminDialog v-model:open="transferOpen" />
 
     <!-- balance -->
     <AdjustBalanceModal v-model:open="balanceOpen" :user-id="balanceUser?.id ?? null" :current-balance="balanceUser?.balance" @done="list.reload()" />

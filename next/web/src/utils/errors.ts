@@ -1,4 +1,4 @@
-import { ApiError, isApiError } from '@sub2api/host'
+import { ApiError, VERIFICATION_CANCELLED, isApiError } from '@sub2api/host'
 import { i18n } from '@/i18n'
 import { toast } from '@sub2api/ui'
 
@@ -15,9 +15,13 @@ export function errorMessage(e: unknown): string {
   return String(e)
 }
 
-/** Shows an error toast unless it is an auth redirect or an aborted request. */
+/** The user dismissed the step-up verification of the request: nothing to report. */
+export const verificationCancelled = (e: unknown) => isApiError(e) && e.code === VERIFICATION_CANCELLED
+
+/** Shows an error toast unless it is an auth redirect, a dismissed verification or an aborted request. */
 export function notifyError(e: unknown) {
   if (isApiError(e) && e.code === 'unauthenticated') return
+  if (verificationCancelled(e)) return
   if (e instanceof DOMException && e.name === 'AbortError') return
   toast(errorMessage(e), 'error')
 }

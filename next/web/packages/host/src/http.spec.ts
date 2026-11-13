@@ -219,3 +219,51 @@ describe('keep-alive', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 })
+
+describe('step-up verification', () => {
+  const required = (details: Record<string, unknown> = {}) =>
+    json({ code: 'verification_required', message: 'verify', details: { scope: 'user.delete', context: 'DELETE /api/v1/users/5', methods: [], password_required: false, ...details } }, 403)
+
+  it('asks for a proof and replays the request once with X-Verify-Proof', async () => {
+    const ask = vi.fn(async () => 'proof-1')
+    http.configureHttp({ onVerificationRequired: ask })
+    const spy = stubFetch((_url, init) => (init.headers['X-Verify-Proof'] ? new Response(null, { status: 204 }) : required()))
+    const form = new FormData()
+    form.append('f', 'x')
+    expect(await http.api.upload('/users/5', form)).toBeNull()
+    expect(ask).toHaveBeenCalledWith({ scope: 'user.delete', context: 'DELETE /api/v1/users/5', password_required: false })
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(spy.mock.calls[1][1].headers['X-Verify-Proof']).toBe('proof-1')
+    expect(spy.mock.calls[1][1].body).toBe(form)
+  })
+
+  it('replays a JSON body unchanged and returns the replayed response', async () => {
+    http.configureHttp({ onVerificationRequired: async () => 'p' })
+    const spy = stubFetch((_url, init) => (init.headers['X-Verify-Proof'] ? json({ ok: 1 }) : required({ password_required: true })))
+    expect(await http.api.put('/me/password', { new_password: 'n' })).toEqual({ ok: 1 })
+    expect(spy.mock.calls.map((c) => c[1].body)).toEqual(['{"new_password":"n"}', '{"new_password":"n"}'])
+  })
+
+  it('fails with verification_cancelled when the user dismisses it', async () => {
+    http.configureHttp({ onVerificationRequired: async () => null })
+    const spy = stubFetch(() => required())
+    await expect(http.api.del('/users/5')).rejects.toMatchObject({ status: 403, code: http.VERIFICATION_CANCELLED })
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not ask twice: a replay still refused is the error', async () => {
+    const ask = vi.fn(async () => 'p')
+    http.configureHttp({ onVerificationRequired: ask })
+    stubFetch(() => required())
+    await expect(http.api.del('/users/5')).rejects.toMatchObject({ code: 'verification_required' })
+    expect(ask).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves other 403s alone', async () => {
+    const ask = vi.fn(async () => 'p')
+    http.configureHttp({ onVerificationRequired: ask })
+    stubFetch(() => json({ code: 'permission_denied', message: 'no' }, 403))
+    await expect(http.api.del('/users/5')).rejects.toMatchObject({ code: 'permission_denied' })
+    expect(ask).not.toHaveBeenCalled()
+  })
+})

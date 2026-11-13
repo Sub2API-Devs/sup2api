@@ -6977,6 +6977,8 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先校验新密码再消耗 proof。路由级 proof 在处理函数之前消耗，处理函数随后因请求体失败时需重新验证。proof 绑定的是 URL，不含请求体（例如超管移交的目标）。
 
+- **控制台**（期 4 S5）：`@sub2api/host` 的 HTTP 客户端遇到 403 `verification_required` 调 `HttpConfig.onVerificationRequired({scope, context, password_required})`，控制台弹出统一的 StepUpDialog（`components/stepUp/`），拿到 proof 后带 `X-Verify-Proof` 重放原请求一次；用户取消时请求以 `verification_cancelled` 失败（不提示）。页面不自己收密码或验证码，原生插件经宿主 `api` 的请求同样自动处理。权限树对 `step_up` 的权限显示“使用时需二次验证”。
+
 - **接口**（访问密钥管理，只能用登录会话调用）：`GET /me/access-keys`（含 `lost`）、`GET /me/access-keys/permissions`（可选的权限：`self` 模块，然后是自己持有的有效核心与插件权限，每项带 `step_up` 展示标记：使用时需二次验证）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。
 - 控制台入口在个人中心，权限选择复用角色页的权限树。

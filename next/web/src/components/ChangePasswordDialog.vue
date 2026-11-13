@@ -3,13 +3,15 @@ import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SField, SInput, SFormModal, toast } from '@sub2api/ui'
-import { errorMessage, fieldErrors } from '@/utils/errors'
+import { errorMessage, fieldErrors, verificationCancelled } from '@/utils/errors'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
 const { t } = useI18n()
 
-const form = reactive({ old_password: '', new_password: '', confirm: '' })
+// The current password (and a passkey or code, when set up) is asked by the
+// step-up dialog the request brings up (scope self.password.change).
+const form = reactive({ new_password: '', confirm: '' })
 const errors = ref<Record<string, string>>({})
 const busy = ref(false)
 
@@ -17,7 +19,6 @@ watch(
   () => props.open,
   (v) => {
     if (v) {
-      form.old_password = ''
       form.new_password = ''
       form.confirm = ''
       errors.value = {}
@@ -33,12 +34,13 @@ async function submit() {
   }
   busy.value = true
   try {
-    await api.put('/me/password', { old_password: form.old_password, new_password: form.new_password })
+    await api.put('/me/password', { new_password: form.new_password })
     toast(t('nav.password.changed'), 'success')
     emit('update:open', false)
   } catch (e) {
+    if (verificationCancelled(e)) return
     errors.value = fieldErrors(e)
-    if (!Object.keys(errors.value).length) errors.value = { old_password: errorMessage(e) }
+    if (!Object.keys(errors.value).length) errors.value = { new_password: errorMessage(e) }
   } finally {
     busy.value = false
   }
@@ -46,15 +48,12 @@ async function submit() {
 </script>
 
 <template>
-  <SFormModal :open="open" :title="t('nav.changePassword')" width="sm" :loading="busy" :submit-disabled="!form.old_password || !form.new_password" @update:open="emit('update:open', $event)" @submit="submit">
-    <SField :label="t('nav.password.old')" :error="errors.old_password" required>
-      <SInput v-model="form.old_password" type="password" autocomplete="current-password" revealable />
-    </SField>
+  <SFormModal :open="open" :title="t('nav.changePassword')" width="sm" :loading="busy" :submit-disabled="!form.new_password" @update:open="emit('update:open', $event)" @submit="submit">
     <SField :label="t('nav.password.new')" :error="errors.new_password" required>
-      <SInput v-model="form.new_password" type="password" autocomplete="new-password" revealable />
+      <SInput v-model="form.new_password" type="password" autocomplete="new-password" revealable data-testid="new-password" />
     </SField>
     <SField :label="t('nav.password.confirm')" :error="errors.confirm" required>
-      <SInput v-model="form.confirm" type="password" autocomplete="new-password" revealable />
+      <SInput v-model="form.confirm" type="password" autocomplete="new-password" revealable data-testid="confirm-password" />
     </SField>
   </SFormModal>
 </template>

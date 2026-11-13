@@ -707,7 +707,7 @@
   - plugin/routes、plugin/api：密钥经代理访问、经 settings 访问。
   - 其他模块测试嵌 `testutil.StepUpPassed`。
 - 影响对象：
-  - 控制台（S5 待做）：上面改为 proof 的接口在前端接入 StepUpDialog 之前一律 403 `verification_required`，不能和 S5 分开发布。会话调用这些接口，每次都要先完成二次验证。
+  - 控制台（S5 已接入，见下节）：上面改为 proof 的接口在前端接入 StepUpDialog 之前一律 403 `verification_required`，不能和 S5 分开发布。会话调用这些接口，每次都要先完成二次验证。
   - 访问密钥：勾了对应权限后，可以调用原先只允许会话的权限与路由，高危的每次还要 proof（只能用 2FA 或密码）。只有 `self:*` 也勾上，访问密钥才能调用自助接口。插件路由按插件权限放行。
   - 插件：经访问密钥调用时插件拿到的仍是用户 id。插件处理请求期间问宿主的 `AuthzCheck`、`AccountScopeCheck` 按该用户在途请求的密钥收窄（`grpcruntime.callerSet.narrow`；同一用户多个密钥请求在途时取交集，失败收紧；同时有会话请求在途时会话的回调也被收窄，属可接受的偏严）。admin 写操作审计（`audit.PluginWrites`）记 `via`、`access_key_id`。代理不再把 `X-Verify-Proof` 转发给插件。
 - 已知与接受：
@@ -715,6 +715,19 @@
   - 路由级 proof 在处理函数之前消费，处理函数随后因请求体校验失败时 proof 也已用掉；`PUT /me/password` 已改为先校验。
   - 超管密钥里已被禁用的插件权限，`Restrict` 仍然保留（超管 `Has` 恒真），与核心已删除的权限相同，属于此前就有的行为。
 - 回滚：revert S1–S4 及其 review fixes 的提交即可。无迁移；`auth_flows` 里残留的 `step_up_*` 行 5 分钟后过期，下次建流程时清除。已存的访问密钥里含原 sessionOnly 权限或插件权限的，回滚后重新按 KeyAllowed 丢弃。
+
+## 期 4 S5：控制台统一二次验证（StepUpDialog）+ 修复失效流程 + 超管行与移交（T79）
+
+- 改动：
+  - **HTTP 层一处拦截**（`@sub2api/host` `http.ts`）：`HttpConfig.onVerificationRequired(challenge)`。响应是 403 `verification_required` 时取 `details.scope`、`details.context` 交给它，拿到 proof 后带 `X-Verify-Proof` 把原请求（同一 body，含 FormData）重放一次；重放仍被拒就是请求的错误，不再问。用户取消时请求以 `verification_cancelled`（`VERIFICATION_CANCELLED`）失败，`notifyError` 不提示。匿名请求、未设置钩子时行为不变。插件经宿主 `api` 发的请求同样走这里，不需要声明新的 `hostUICompat`（`HOST_UI_VERSION` 不变）。
+  - **StepUpDialog**（`components/stepUp/`）：`App.vue` 挂一个 `StepUpHost`，`host.ts` 把 `requestStepUp` 设为钩子；同时有几个请求要验证时排队逐个弹。弹窗调 `GET /me/verify/methods?scope=`，只列可用的方式，默认通行密钥（浏览器支持时），可切到验证码；`password_required` 时同时收密码；只有都没配时才是密码。通行密钥走 `POST /me/verify/begin` + WebAuthn 断言，然后 `POST /me/verify` 换 proof。只配了通行密钥而当前浏览器不能用时提示换浏览器或开 2FA。各页面不再自己收确认信息。
+  - **修复 S1 后失效的流程**（按新请求体）：改密码（`ChangePasswordDialog` 只发 `{new_password}`，去掉“当前密码”栏）；关 2FA（确认框后无 body）、重新生成备用码（无 body）；添加通行密钥（begin 无 body，表单只填名称）、删除通行密钥；新增通行密钥改名（`PATCH /me/passkeys/:id {name}`）。凭证、API Key、代理明文回显、插件上传/市场安装/同意、核心升级、清他人安全设置、删除用户本来就不带确认字段，由拦截统一处理。
+  - **T79 用户页**：超管行在邮箱旁显示“超级管理员”徽标；别人看超管行没有任何操作，超管本人那一行只有“移交超管”（`TransferSuperAdminDialog`：选目标、危险确认，`POST /system/super-admin/transfer {target_user_id}`，二次验证由拦截弹出，成功后提示并登出到登录页）。新增“重置密码”（`ResetPasswordDialog`，`PATCH /users/:id {password}`，`user.password.reset`），条件：`user:password:reset`、不是本人、不是超管行。原计划的 `SelfConfirmFields` 不再需要（被 StepUpDialog 取代）。D13（目标未开 2FA 的提示）：用户列表不返回 2FA 状态，改为在目标选择处常驻提示建议对方先开启。
+  - **权限树**（角色页与访问密钥选择器共用 `PermissionTree`）：`step_up` 的权限旁显示盾牌图标“使用时需二次验证”，有这类权限时在图例里说明。访问密钥选择器按接口顺序展示 self 模块、核心模块与插件模块。
+  - mock 服务（`npm run dev`）补 `/me/verify*`、`X-Verify-Proof` 校验与通行密钥改名。
+- 测试：`http.spec`（重放一次、FormData 与 JSON body 原样、取消、不重复询问、其他 403 不拦截）；`StepUpDialog.spec`、`stepUp.spec`（默认通行密钥、切换验证码、密码 + 第二因素、仅密码、错码字段、只有通行密钥而浏览器不支持、取消通行密钥提示）；`ChangePasswordDialog.spec`、`TwoFactorCard.spec`、`PasskeysCard.spec`（新请求体、改名）；`TransferSuperAdminDialog.spec`、`ResetPasswordDialog.spec`、`UsersView.superAdmin.spec`（超管行操作、重置密码条件）；`PermissionTree.spec`、`AccessKeysCard.spec`（step_up 标记、模块顺序）。
+- 影响对象：控制台用户。高危操作每次弹出验证；改密码不再在表单里填当前密码（在验证弹窗里填）。必须与 S1–S4 同版本发布。
+- 回滚：revert S5 的提交。单独回滚 S5 而保留 S1–S4 会让上述流程重新 403，应一起回滚。
 
 ## 期 4 P4C：插件升级新增的角色授予需同意（决策“插件升级授权”C，产品性收紧）
 

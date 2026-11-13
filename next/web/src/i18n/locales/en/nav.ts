@@ -66,7 +66,6 @@ export default {
     desc: 'The page you are looking for does not exist.'
   },
   password: {
-    old: 'Current password',
     new: 'New password',
     confirm: 'Confirm new password',
     mismatch: 'Passwords do not match',

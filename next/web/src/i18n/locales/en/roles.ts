@@ -22,6 +22,8 @@ export default {
   removed: 'Removed',
   selectAll: 'Select all',
   sensitive: 'Sensitive: grant with care',
+  stepUp: 'Needs verification when used',
+  stepUpLegend: 'Needs verification when used: every call verifies it’s you on the spot (sessions and access keys alike)',
   sensitiveLegend: 'Sensitive permission: touches money, permissions or system settings; grant with care.',
   permsNotLoaded: 'The permissions currently granted to this role could not be loaded. Saving will replace them with the selection below.',
   overwriteUnknown: 'The current permissions of this role are unknown. Replace them with the selection shown?',

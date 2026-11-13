@@ -1,4 +1,4 @@
-import { fail, now, on, type MockRequest } from './router'
+import { fail, noContent, now, on, type MockHandler, type MockRequest } from './router'
 
 // auth, me, menus
 
@@ -266,26 +266,76 @@ on('POST', '/me/two-factor/enable', (req) => {
   twoFactor.left = 10
   return { backup_codes: backupCodes() }
 })
-on('POST', '/me/two-factor/disable', (req) => {
-  if (req.body?.code !== '123456') return codeError()
+// Step-up verification (CONTRACTS §80.2): the code is 123456, the password admin.
+const proofs = new Set<string>()
+const passwordTooScopes = new Set(['superadmin.transfer', 'self.password.change'])
+const verifyMethods = (scope: string) => ({
+  scope,
+  password_required: passwordTooScopes.has(scope),
+  methods: [
+    { method: 'passkey', available: false, reason: 'not_enrolled' },
+    { method: 'totp', available: twoFactor.enabled, ...(twoFactor.enabled ? {} : { reason: 'not_enrolled' }) },
+    { method: 'password', available: !twoFactor.enabled, ...(twoFactor.enabled ? { reason: 'strong_method' } : {}) }
+  ]
+})
+on('GET', '/me/verify/methods', (req) => verifyMethods(req.query.scope))
+on('POST', '/me/verify', (req) => {
+  const { scope, context, method, password, code } = req.body || {}
+  if ((passwordTooScopes.has(scope) || method === 'password') && password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
+  if (method === 'totp' && code !== '123456') return codeError()
+  const proof = `mock-proof-${scope}-${Date.now()}`
+  proofs.add(proof)
+  return { proof, expires_at: now(300), method, scope, context }
+})
+/** handler behind a one-time proof of scope, as Router.StepUp(scope). */
+const stepUp = (scope: string, handler: MockHandler): MockHandler => (req) => {
+  const proof = req.headers['x-verify-proof']
+  if (!proof || !proofs.delete(proof)) {
+    return fail(403, 'verification_required', "verify it's you to continue", { ...verifyMethods(scope), context: `${req.method} /api/v1${req.path}` })
+  }
+  return handler(req)
+}
+on('POST', '/me/two-factor/disable', stepUp('self.2fa.disable', () => {
   twoFactor.enabled = false
   twoFactor.left = 0
   return {}
+}))
+on('POST', '/me/two-factor/backup-codes', stepUp('self.2fa.backup_codes', () => ({ backup_codes: backupCodes() })))
+const passkeys = [{ id: 1, name: 'MacBook', rp_id: 'localhost', created_at: now(), last_used_at: null }]
+on('GET', '/me/passkeys', () => passkeys)
+on('PATCH', '/me/passkeys/:id', (req) => {
+  const pk = passkeys.find((p) => String(p.id) === req.params.id)
+  if (!pk) return fail(404, 'not_found', 'not found')
+  pk.name = String(req.body?.name || '')
+  return pk
 })
-on('POST', '/me/two-factor/backup-codes', (req) => (req.body?.code === '123456' ? { backup_codes: backupCodes() } : codeError()))
-on('GET', '/me/passkeys', () => [{ id: 1, name: 'MacBook', rp_id: 'localhost', created_at: now(), last_used_at: null }])
-on('DELETE', '/me/passkeys/:id', () => ({}))
+on('DELETE', '/me/passkeys/:id', stepUp('self.passkey.delete', (req) => {
+  const i = passkeys.findIndex((p) => String(p.id) === req.params.id)
+  if (i >= 0) passkeys.splice(i, 1)
+  return noContent()
+}))
 on('GET', '/me/sessions', () => [
   { id: 'a', method: 'passkey', ip: '203.0.113.10', user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0 Safari/537.36', created_at: now(), last_used_at: now(), current: true },
   { id: 'b', method: 'two_factor', ip: '203.0.113.11', user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1', created_at: now(), last_used_at: now(), current: false }
 ])
 on('DELETE', '/me/sessions/:id', () => ({}))
 on('POST', '/me/sessions/revoke-others', () => ({}))
-on('DELETE', '/users/:id/security', () => ({}))
+on('DELETE', '/users/:id/security', stepUp('user.security.reset', () => noContent()))
+on('POST', '/system/super-admin/transfer', stepUp('superadmin.transfer', () => noContent()))
 // Access keys (CONTRACTS §80): what the mock user holds is what can be chosen.
 const accessKeys: any[] = []
 on('GET', '/me/access-keys', () => accessKeys)
 on('GET', '/me/access-keys/permissions', () => [
+  {
+    module: 'self',
+    label: { en: 'My account', zh: '我的账号' },
+    source: 'core',
+    status: 'active',
+    permissions: [
+      { key: 'self:profile', label: { en: 'Edit own profile', zh: '修改自己的资料' }, description: {}, sensitive: false, step_up: false, status: 'active' },
+      { key: 'self:security', label: { en: 'Own sign-in security', zh: '自己的登录安全设置' }, description: {}, sensitive: true, step_up: true, status: 'active' }
+    ]
+  },
   {
     module: 'usage',
     label: { en: 'Usage', zh: '用量' },
@@ -314,7 +364,11 @@ on('DELETE', '/me/access-keys/:id', (req) => {
   if (i >= 0) accessKeys.splice(i, 1)
   return {}
 })
-on('PUT', '/me/password', (req) => (req.body?.old_password === 'admin' ? {} : fail(400, 'invalid_argument', 'wrong password', { fields: [{ field: 'old_password', code: 'mismatch', message: 'Current password is wrong' }] })))
+on('PUT', '/me/password', (req) =>
+  String(req.body?.new_password || '').length < 8
+    ? fail(400, 'invalid_argument', 'too short', { fields: [{ field: 'new_password', code: 'too_short', message: 'at least 8 characters' }] })
+    : stepUp('self.password.change', () => noContent())(req)
+)
 
 // Permission of each core menu path (CONTRACTS §21.2 for accounts / proxies); plugin items need their plugin permission.
 const MENU_PERMS: Record<string, string | string[]> = {

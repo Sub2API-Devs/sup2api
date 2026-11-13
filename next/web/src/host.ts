@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { hostComponents } from '@/components/plugin/hostComponents'
 import { formatDateTime, formatMoney, formatNumber } from '@/utils/format'
+import { requestStepUp } from '@/components/stepUp/stepUp'
 
 /** Wires the HTTP client and publishes the host context for plugins. */
 export function setupHost(router: Router) {
@@ -21,7 +22,9 @@ export function setupHost(router: Router) {
       if (reason === 'expired') auth.sessionExpired = true
       const cur = router.currentRoute.value
       if (!cur.meta.public) router.replace({ path: '/login', query: { redirect: cur.fullPath } })
-    }
+    },
+    // High-risk operations answer 403 verification_required: verify, then replay with the proof.
+    onVerificationRequired: requestStepUp
   })
   // A login lasts while it is used: renew the access token before it expires.
   startKeepAlive()

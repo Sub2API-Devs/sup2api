@@ -22,6 +22,8 @@ export default {
   removed: '已移除',
   selectAll: '全选',
   sensitive: '敏感权限：请谨慎授予',
+  stepUp: '使用时需二次验证',
+  stepUpLegend: '使用时需二次验证：每次调用都要当场验证身份（会话与访问密钥都一样）',
   sensitiveLegend: '敏感权限：涉及资金、权限或系统配置，请谨慎授予。',
   permsNotLoaded: '无法加载该角色当前拥有的权限。保存后将以下方的勾选结果替换现有权限。',
   overwriteUnknown: '该角色当前的权限未知，确定用当前勾选的结果替换吗？',

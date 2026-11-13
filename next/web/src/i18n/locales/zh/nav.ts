@@ -66,7 +66,6 @@ export default {
     desc: '你访问的页面不存在。'
   },
   password: {
-    old: '当前密码',
     new: '新密码',
     confirm: '确认新密码',
     mismatch: '两次输入的密码不一致',

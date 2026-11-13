@@ -78,4 +78,26 @@ describe('access keys card', () => {
     expect(w.get('[data-testid="access-key-error"]').text()).toContain('只能拥有你自己的权限')
     w.unmount()
   })
+
+  it('lists the self module first and plugin modules after, marking step-up permissions', async () => {
+    const item = (key: string, step_up = false) => ({ key, label: key, description: {}, sensitive: step_up, step_up, status: 'active' })
+    api.get.mockImplementation(async (path: string) =>
+      path.endsWith('/permissions')
+        ? [
+            { module: 'self', label: { zh: '我的账号', en: 'Self' }, source: 'core', status: 'active', permissions: [item('self:profile'), item('self:security', true)] },
+            ...modules,
+            { module: 'plugin.demo', label: { zh: '演示插件', en: 'Demo' }, source: 'plugin', plugin_key: 'demo', status: 'active', permissions: [item('plugin.demo.run')] }
+          ]
+        : []
+    )
+    const w = render()
+    await flushPromises()
+    await w.get('[data-testid="access-key-add"]').trigger('click')
+    await flushPromises()
+    const tree = w.get('[data-testid="access-key-permissions"]').text()
+    expect(tree.indexOf('我的账号')).toBeLessThan(tree.indexOf('用量'))
+    expect(tree.indexOf('用量')).toBeLessThan(tree.indexOf('演示插件'))
+    expect(w.findAll('[data-testid="permission-step-up"]')).toHaveLength(1)
+    w.unmount()
+  })
 })
