@@ -333,7 +333,7 @@ func (s *Service) handlePasskeyRename(c *gin.Context) {
 }
 
 func (s *Service) handleVerifyMethods(c *gin.Context) {
-	out, err := s.StepUpMethods(c.Request.Context(), actor(c), c.Query("scope"))
+	out, err := s.StepUpMethods(c.Request.Context(), actor(c), c.Query("scope"), c.Query("context"))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

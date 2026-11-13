@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Step-up verification (CONTRACTS §80.2): lists the ways the caller can
-// verify for `scope` (GET /me/verify/methods), a passkey first when there is
+// verify for `scope` and the operation `context` (GET /me/verify/methods), a passkey first when there is
 // one, and exchanges the chosen one for a proof (POST /me/verify) emitted as
 // `verified`. With password_required the password goes with the passkey or
 // code; the password alone only when neither is set up.
@@ -47,7 +47,8 @@ async function load() {
   code.value = ''
   errors.value = {}
   try {
-    info.value = await api.get<VerifyMethods>('/me/verify/methods', { scope: props.scope })
+    // With the operation: the super admin removing its last factor gives the password too.
+    info.value = await api.get<VerifyMethods>('/me/verify/methods', { scope: props.scope, context: props.context })
     method.value = (options.value[0]?.value as Method) || ''
   } catch (e) {
     errors.value = { form: errorMessage(e) }

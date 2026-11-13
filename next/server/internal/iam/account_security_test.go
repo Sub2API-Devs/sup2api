@@ -15,6 +15,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -1496,5 +1497,21 @@ func TestAccessKeyWriteNeedsAProof(t *testing.T) {
 
 	if code, out := k.call(session, "DELETE", path, nil); code != 204 {
 		t.Fatalf("delete without a proof: %d %v", code, out)
+	}
+}
+
+// GET /me/verify/methods takes the operation, so the console asks the super
+// admin for its password before it resets its own security.
+func TestVerifyMethodsTakeTheOperation(t *testing.T) {
+	k := newKeyEnv(t)
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	q := url.Values{"scope": {core.StepUpUserSecurityReset}, "context": {fmt.Sprintf("DELETE /api/v1/users/%d/security", login.User.ID)}}
+	code, out := k.call(login.AccessToken, "GET", "/me/verify/methods?"+q.Encode(), nil)
+	if code != 200 || out["data"].(map[string]any)["password_required"] != true {
+		t.Fatalf("methods = %d %v", code, out)
+	}
+	code, out = k.call(login.AccessToken, "DELETE", fmt.Sprintf("/users/%d/security", login.User.ID), nil)
+	if errCode(out) != "verification_required" || out["error"].(map[string]any)["details"].(map[string]any)["password_required"] != true {
+		t.Fatalf("challenge = %d %v", code, out)
 	}
 }

@@ -59,7 +59,7 @@ func TestStepUpMethodsPolicy(t *testing.T) {
 	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
 	check := func(ctx context.Context, scope string, wantPassword bool, want map[string]string) {
 		t.Helper()
-		m, err := s.StepUpMethods(ctx, id, scope)
+		m, err := s.StepUpMethods(ctx, id, scope, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -67,7 +67,7 @@ func TestStepUpMethodsPolicy(t *testing.T) {
 			t.Fatalf("%s: password_required=%v %v, want %v %v", scope, m.PasswordRequired, got, wantPassword, want)
 		}
 	}
-	if _, err := s.StepUpMethods(ctx, id, "no.such.scope"); !isCode(err, "invalid_argument") {
+	if _, err := s.StepUpMethods(ctx, id, "no.such.scope", ""); !isCode(err, "invalid_argument") {
 		t.Fatalf("unknown scope: %v", err)
 	}
 	check(ctx, core.StepUpUserDelete, false, map[string]string{"passkey": "not_enrolled", "totp": "not_enrolled", "password": "ok"})
@@ -391,4 +391,61 @@ func TestTwoFactorSetupNeedsAProof(t *testing.T) {
 	if code, out := k.callProof(session, proof, "POST", path, nil); code != 200 {
 		t.Fatalf("with a proof: %d %v", code, out)
 	}
+}
+
+// The super admin removing the last of its strong factors (its own security
+// reset, disabling two-factor without a passkey, deleting its only passkey
+// without two-factor) gives the password with the factor, as the transfer
+// does; the same operations of other users, or that leave a factor, do not.
+func TestSuperAdminLastFactorTakesThePassword(t *testing.T) {
+	t.Parallel()
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	if su, err := s.authz.IsSuperuser(ctx, s.db.Pool, root); err != nil || !su {
+		t.Fatalf("the bootstrap admin is not the super admin: %v", err)
+	}
+	plain, err := s.CreateUser(ctx, 0, CreateUserInput{Email: "plain@example.com", Password: adminPassword})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset := func(id int64) string { return fmt.Sprintf("DELETE /api/v1/users/%d/security", id) }
+	check := func(id int64, scope, operation string, want bool) {
+		t.Helper()
+		m, err := s.StepUpMethods(ctx, id, scope, operation)
+		if err != nil || m.PasswordRequired != want {
+			t.Fatalf("user %d %s %q: password_required=%v (%v), want %v", id, scope, operation, m != nil && m.PasswordRequired, err, want)
+		}
+	}
+	secret, _ := enableTwoFactor(t, s, root)
+	enableTwoFactor(t, s, plain.ID)
+	// Two-factor only.
+	check(root, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", true)
+	check(root, core.StepUpUserSecurityReset, reset(root), true)
+	check(root, core.StepUpUserSecurityReset, reset(plain.ID), false)
+	check(plain.ID, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", false)
+	check(plain.ID, core.StepUpUserSecurityReset, reset(plain.ID), false)
+	// A code alone is refused, with the password it issues a proof.
+	clearLastStep(t, s, root)
+	in := VerifyInput{Scope: core.StepUpSelf2FADisable, Context: "POST /api/v1/me/two-factor/disable", Method: methodTOTP, Code: codeAt(t, secret, time.Now())}
+	if _, err := s.VerifyStepUp(core.WithUserID(ctx, root), nil, root, in, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("code without the password: %v", err)
+	}
+	in.Password = adminPassword
+	if _, err := s.VerifyStepUp(core.WithUserID(ctx, root), nil, root, in, testIP); err != nil {
+		t.Fatalf("code and password: %v", err)
+	}
+
+	// Two-factor and a passkey: dropping one leaves the other.
+	addPasskey(t, s, newAuthenticator(t, consoleOrigin, consoleHost), root)
+	check(root, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", false)
+	check(root, core.StepUpSelfPasskeyDelete, "DELETE /api/v1/me/passkeys/1", false)
+	check(root, core.StepUpUserSecurityReset, reset(root), true)
+	// The only passkey, without two-factor.
+	if _, err := s.db.Pool.Exec(ctx, `DELETE FROM user_totp WHERE user_id = $1`, root); err != nil {
+		t.Fatal(err)
+	}
+	check(root, core.StepUpSelfPasskeyDelete, "DELETE /api/v1/me/passkeys/1", true)
+	// The console asks with the operation (GET /me/verify/methods?context=).
+	check(root, core.StepUpUserSecurityReset, "", false)
 }

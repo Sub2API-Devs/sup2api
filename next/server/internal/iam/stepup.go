@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -105,21 +107,30 @@ func unknownScope() error {
 	return core.InvalidFields(core.FieldError{Field: "scope", Code: "invalid", Message: "unknown verification scope"})
 }
 
-// StepUpMethods applies the policy (§8.1) to userID for scope: a passkey
-// (not through an access key) or a two-factor code when the user has set
-// one up, the password only when neither is; the password-too scopes ask
-// for the password with it.
-func (s *Service) StepUpMethods(ctx context.Context, userID int64, scope string) (*VerifyMethods, error) {
+// StepUpMethods applies the policy (§8.1) to userID for scope and the
+// operation verified for ("METHOD path", "" when unknown): a passkey (not
+// through an access key) or a two-factor code when the user has set one
+// up, the password only when neither is; the password-too scopes, and the
+// super admin removing its last factor (lastSuperFactor), ask for the
+// password with it.
+func (s *Service) StepUpMethods(ctx context.Context, userID int64, scope, operation string) (*VerifyMethods, error) {
 	passwordToo, ok := stepUpScopes[scope]
 	if !ok {
 		return nil, unknownScope()
 	}
-	var totp, passkey bool
+	var totp bool
+	var passkeys int
 	err := s.db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_totp WHERE user_id = $1),
-		EXISTS (SELECT 1 FROM user_passkeys WHERE user_id = $1)`, userID).Scan(&totp, &passkey)
+		(SELECT count(*) FROM user_passkeys WHERE user_id = $1)`, userID).Scan(&totp, &passkeys)
 	if err != nil {
 		return nil, err
 	}
+	if !passwordToo {
+		if passwordToo, err = s.lastSuperFactor(ctx, userID, scope, operation, totp, passkeys); err != nil {
+			return nil, err
+		}
+	}
+	passkey := passkeys > 0
 	pk := VerifyMethod{Method: methodPasskey, Available: passkey}
 	switch {
 	case !passkey:
@@ -136,6 +147,28 @@ func (s *Service) StepUpMethods(ctx context.Context, userID int64, scope string)
 		pw.Reason = reasonStrongFirst
 	}
 	return &VerifyMethods{Scope: scope, PasswordRequired: passwordToo, Methods: []VerifyMethod{pk, code, pw}}, nil
+}
+
+// lastSuperFactor reports the super admin about to remove the last of its
+// strong factors (passkeys, two-factor): its own security reset, disabling
+// two-factor without a passkey, deleting its only passkey without
+// two-factor. Like the transfer, that takes the password as well as a
+// factor: one factor alone must not be enough to leave the account to the
+// password. Other users are not affected.
+func (s *Service) lastSuperFactor(ctx context.Context, userID int64, scope, operation string, totp bool, passkeys int) (bool, error) {
+	var last bool
+	switch scope {
+	case core.StepUpUserSecurityReset:
+		last = operation == fmt.Sprintf("%s %s/users/%d/security", http.MethodDelete, httpapi.APIPrefix, userID)
+	case core.StepUpSelf2FADisable:
+		last = totp && passkeys == 0
+	case core.StepUpSelfPasskeyDelete:
+		last = !totp && passkeys == 1
+	}
+	if !last {
+		return false, nil
+	}
+	return s.authz.IsSuperuser(ctx, s.db.Pool, userID)
 }
 
 // stepUpSubject is the session or access key a proof is bound to.
@@ -182,7 +215,7 @@ var errMethodUnavailable = core.InvalidFields(core.FieldError{Field: "method", C
 // limit, a wrong code towards the two-factor lockout, a failed passkey
 // towards the IP limit.
 func (s *Service) VerifyStepUp(ctx context.Context, r *http.Request, userID int64, in VerifyInput, ip string) (*StepUpProof, error) {
-	methods, err := s.StepUpMethods(ctx, userID, in.Scope)
+	methods, err := s.StepUpMethods(ctx, userID, in.Scope, in.Context)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +284,7 @@ var errSecondFactorRequired = core.InvalidFields(core.FieldError{Field: "code", 
 // BeginStepUpPasskey starts the passkey assertion of a step-up (POST
 // /me/verify/begin): the login ceremony, for the caller's own passkeys.
 func (s *Service) BeginStepUpPasskey(ctx context.Context, r *http.Request, userID int64, scope, ip string) (*PasskeyCeremony, error) {
-	methods, err := s.StepUpMethods(ctx, userID, scope)
+	methods, err := s.StepUpMethods(ctx, userID, scope, "")
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +378,7 @@ func (s *Service) ConsumeStepUp(ctx context.Context, scope string) error {
 // verificationRequired is the 403 that tells the console what to verify:
 // the scope, the operation to bind the proof to and the methods.
 func (s *Service) verificationRequired(ctx context.Context, userID int64, scope, operation string) error {
-	methods, err := s.StepUpMethods(ctx, userID, scope)
+	methods, err := s.StepUpMethods(ctx, userID, scope, operation)
 	if err != nil {
 		return err
 	}

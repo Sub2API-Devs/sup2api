@@ -68,6 +68,7 @@
 | 25 | 插件升级在同意页批准需要同意的角色授予（敏感，或给 admin/operator/supplier 以外的角色），与确认内置插件暂缓授予同一规则：`role:define` + 能修改每个目标角色（内置角色只有超管）；非超管 admin 不能再批这类升级 | 插件管理者 | 期 4 收尾 F1 |
 | 26 | 目录 `apikey:self:manage` 带 `stepUp`、`sensitive` 标记（明文回显本来就每次二次验证，访问密钥选择器现在会提示）；启动自检要求挂 StepUp 的路由引用带 stepUp 标记的权限或在豁免表中 | 访问密钥、开发 | 期 4 收尾 F2 |
 | 27 | 新建、修改访问密钥每次二次验证 `self.access_key.write`（取代只要密码），删除不要 | 控制台用户、脚本 | 期 4 收尾 F3 |
+| 28 | 超管去掉自己最后一个强因素（清自己的安全设置、无通行密钥时关 2FA、无 2FA 时删唯一通行密钥）要密码 + 第二因素 | 超管 | 期 4 收尾 F4 |
 
 被后续任务取代、不再成立的中间口径：T10/T57 的 sessionOnly（S3 删除，改为二次验证）；T11 的明文回显拒绝访问密钥（S3 改为二次验证）；T33/FU5 的“不能作用于自己 / 超管自作用豁免”（FU6 改为可管理角色口径）；T41 的带密钥 schema 一律拒绝 `$ref`（FU4 支持本地引用）；own/all 成对 key（R1–R7 改为范围）。
 
@@ -161,7 +162,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 2. **已定（期 4 收尾 F2，本期就改）**：`apikey:self:manage` 没有 step-up 标记，而 `POST /me/api-keys/:id/reveal` 要 `apikey.reveal` proof，访问密钥选择器因此不提示。加标记按不变式还要 `sensitive=true`（目录行的列，滚动发布时新旧节点会来回改写），建议随 R2b 改；同时可把“step-up 路由必须引用带标记的 key”加进启动自检（本次试加后正是这一处报错，已撤回）。→ 本期加标记与自检，`sensitive` 列滚动发布期间的来回改写见发布约束 4。
 3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 7）。
 4. **已定（期 4 收尾 F3，改为二次验证）**：访问密钥的新建与修改仍只要密码，开了 2FA 的用户也可只凭密码签出宽权限的密钥；是否改为二次验证。
-5. **超管只用一个因素就能清掉自己的全部因素**（`user.security.reset` 或 `self.2fa.disable` 只要一种方式），此前要密码加验证码；是否让这两个 scope 对超管本人也要求密码。
+5. **已定（期 4 收尾 F4，要密码 + 第二因素）**：超管只用一个因素就能清掉自己的全部因素（`user.security.reset` 或 `self.2fa.disable` 只要一种方式），此前要密码加验证码；是否让这两个 scope 对超管本人也要求密码。
 6. **ccgateway 运行时镜像上传**（`runtime/uploads*` 创建与分片）不要二次验证，只有 `load` 要；DECISIONS 原文是“安装与上传”。
 
 ### 7. 契约索引
@@ -1413,5 +1414,14 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 控制台：访问密钥表单去掉“确认密码”，保存时由 StepUpDialog（HTTP 层拦截 403 `verification_required`）询问；用户取消验证时表单保持打开、不报错。弹窗文案补 `self_access_key_write`。mock 的新建与修改改走 `stepUp('self.access_key.write')`。
 - 测试：iam `TestAccessKeyWriteNeedsAProof`（无 proof 403 且挑战 scope 正确、`password_required=false`；有 proof 201；proof 一次性；改名与改权限各自要 proof；访问密钥带 proof 仍 403；删除无 proof 204），其余 iam 测试去掉密码字段；web `AccessKeysCard.spec`（请求体无 password、无密码栏、取消验证不报错）。
 - 影响对象：开了 2FA 或通行密钥的用户新建、修改访问密钥时要用第二因素验证（只凭密码不再能签出密钥）；都没配的仍用密码（在验证弹窗里）。脚本化调用需先 `POST /me/verify` 取 proof；旧控制台带 `password` 的请求 403 `verification_required`（发布约束 2）。
+- 回滚：revert 该提交（前后端同一提交）。无迁移。
+
+### F4 超管清掉自己的全部验证因素要密码 + 第二因素（产品性收紧，待决定 5）
+
+- 改动：`iam.StepUpMethods` 增加操作参数，`lastSuperFactor` 一处判断：超管本人 `user.security.reset` 作用于自己（操作 `DELETE /api/v1/users/<自己>/security`）、`self.2fa.disable` 而没有通行密钥、`self.passkey.delete` 删唯一的通行密钥而没有 2FA 时，`password_required = true`，与超管移交、改自己密码同一策略机制（`VerifyStepUp` 先验密码再验因素）。`GET /me/verify/methods` 接受可选 `context`，`POST /me/verify` 用请求的 `context`，403 `verification_required` 用本请求的操作，三处同一函数；`/me/verify/begin` 只看方式是否可用，不受影响。非超管、仍留有另一个强因素的操作不变。
+- 偏离说明：待决定 5 原文只列了 `user.security.reset` 与 `self.2fa.disable`；删唯一的通行密钥（且无 2FA）同样会清掉超管的全部强因素，一并纳入同一判断，否则是同一缺口的第三个入口。
+- 控制台：StepUpDialog 取方式时带上 `context`（即 403 的 `details.context`），超管清自己的因素时弹窗同时要密码。
+- 测试：iam `TestSuperAdminLastFactorTakesThePassword`（超管只有 2FA 时关 2FA、清自己安全设置要密码，清他人不要；只给验证码被拒、加密码签发；有 2FA 与通行密钥时关 2FA、删通行密钥不要，清自己仍要；只剩一个通行密钥时删它要；不带操作时按旧口径；普通用户都不要）、`TestVerifyMethodsTakeTheOperation`（HTTP：methods 带 context 与 403 的 `details.password_required`）；web `StepUpDialog.spec`。
+- 影响对象：超管本人。脚本化调用这几类操作取 proof 时要同时给密码。旧控制台不带 `context` 取方式时不显示密码栏，提交后得到密码字段错误（发布约束 2：与 S5 同版本发布）。
 - 回滚：revert 该提交（前后端同一提交）。无迁移。
 
