@@ -1,7 +1,7 @@
 // Shared helpers and DTOs of the plugin pages (list, consent, detail,
 // rollout, market). Shapes not frozen by CONTRACTS.md are typed loosely and
 // read tolerantly (camelCase or snake_case).
-import type { LText, PluginSummary, Trust, ResourceConflict } from '@/api/types'
+import type { LText, PluginRoleGrant, PluginSummary, Trust, ResourceConflict } from '@/api/types'
 import type { Tone } from '@sub2api/ui'
 import { useOptionalT } from '@/composables/optionalText'
 
@@ -392,6 +392,8 @@ export interface PluginDetail {
   status: string
   /** Non-empty: the plugin is abnormal (see ResourceConflict). */
   resource_conflicts?: ResourceConflict[]
+  /** Role grants an automatic (built-in) upgrade held back for review (CONTRACTS P4C). */
+  role_grants_to_review?: PluginRoleGrant[]
   /** Ships with the image: can be disabled, not uninstalled. */
   builtin?: boolean
   status_reason?: string

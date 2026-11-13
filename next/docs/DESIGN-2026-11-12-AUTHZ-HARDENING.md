@@ -765,3 +765,9 @@
 - 影响对象：插件同意页的操作者。非超管不再看到内置角色（原来勾了 403）；勾一个角色不再替换全部新权限的默认授予。
 - 测试：install `TestReviewConsentFlags`（官方不标记、new 只标目录里没有的、verified 无隔离标记且同意 403、开启隔离后两者都放行）；web `ConsentView.spec`（逐权限预填与只发改动、无 role:define 无选择、非超管只列可指定的自定义角色并提示去掉默认、db_schema_unconfined 预判、新授予列表）。CONTRACTS 同步。
 - 回滚：revert 提交即可；新增字段只读，旧控制台忽略。
+
+## P4C 前端：插件列表与详情的“有待确认的新授权”
+
+- 改动：`PluginSummary`/`PluginDetail` 类型补 `role_grants_to_review`。插件列表状态列在非空时提示“N 项授权待确认”；详情页顶部 `parts/RoleGrantsReview.vue`（复用同意页的 `NewRoleGrants` 列表，需要确认的高亮）：持有 `plugin:install` 与 `role:define` 时显示“确认”“全部拒绝”，按版本依次 POST `…/versions/:version/role-grants/confirm|reject`，完成后重新加载详情；没有资格的只显示提示与所需权限（角色级资格 `CanGrantToRoles` 由服务端裁决，403 照常提示）。
+- 测试：`RoleGrantsReview.spec`（列表与高亮、按版本确认、全部拒绝、缺任一权限不显示按钮）。
+- 回滚：revert 提交即可，纯前端。

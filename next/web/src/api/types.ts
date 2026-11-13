@@ -1371,6 +1371,8 @@ export interface ResourceConflict {
 
 export interface PluginSummary {
   has_settings?: boolean
+  /** Role grants an automatic (built-in) upgrade held back for review (CONTRACTS P4C). */
+  role_grants_to_review?: PluginRoleGrant[]
   /** Non-empty: the plugin is abnormal (another plugin claimed a resource first, or the core holds it). */
   resource_conflicts?: ResourceConflict[]
   key: string

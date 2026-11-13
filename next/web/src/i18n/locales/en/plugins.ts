@@ -1,5 +1,15 @@
 export default {
   colon: ': ',
+  roleGrants: {
+    title: 'New role grants awaiting confirmation',
+    short: '{n} role grants to confirm',
+    hint: 'An automatic upgrade held these grants back: they are sensitive, or go to roles other than admin, operator and supplier. Confirm gives them; reject drops them all.',
+    hintNoRight: 'An automatic upgrade held these grants back. Confirming them takes plugin:install and role:define.',
+    confirm: 'Confirm',
+    rejectAll: 'Reject all',
+    confirmed: 'Role grants confirmed',
+    rejected: 'Role grants rejected'
+  },
   listSep: ', ',
   key: 'Key',
   publisher: 'Publisher',

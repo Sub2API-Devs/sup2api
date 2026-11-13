@@ -1,5 +1,15 @@
 export default {
   colon: '：',
+  roleGrants: {
+    title: '有待确认的新授权',
+    short: '{n} 项授权待确认',
+    hint: '自动升级暂缓了这些授予：它们是敏感权限，或授予 admin、operator、supplier 以外的角色。确认后授予，拒绝则全部放弃。',
+    hintNoRight: '自动升级暂缓了这些授予。确认需要 plugin:install 与 role:define 权限。',
+    confirm: '确认',
+    rejectAll: '全部拒绝',
+    confirmed: '已确认授权',
+    rejected: '已拒绝授权'
+  },
   listSep: '、',
   key: '标识',
   publisher: '发布者',
