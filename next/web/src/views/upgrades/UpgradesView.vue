@@ -14,7 +14,7 @@ import type { ShellNode as Node } from '@/api/observability'
 
 interface Release { digest: string; manifest: { release_id: string; build_id: string; source_commit: string; created_at: string } }
 interface Plan { id: string; release_digest: string; status: string; cursor: number; error?: string; nodes: string[]; created_at: string; steps?: UpgradeStep[] }
-interface Preflight { release_digest: string; expected_revision: number; primary_node: string; nodes: string[]; blockers: string[]; strategy: string; /** Do not block the upgrade (e.g. tokenless management still on). */ warnings?: string[] }
+interface Preflight { release_digest: string; expected_revision: number; primary_node: string; nodes: string[]; blockers: string[]; strategy: string }
 const { t } = useI18n()
 const label = useUpgradeLabel()
 const auth = useAuthStore(), route = useRoute(), router = useRouter()
@@ -125,9 +125,6 @@ onBeforeUnmount(() => { disposed = true })
             <SAlert v-if="!preflight.blockers.length" tone="success" dense>{{ t('upgrades.preflightOK') }}</SAlert>
             <SAlert v-else tone="danger" dense data-testid="upgrade-blockers">
               <ul class="list-disc space-y-1 pl-5"><li v-for="reason in preflight.blockers" :key="reason">{{ reason }}</li></ul>
-            </SAlert>
-            <SAlert v-if="preflight.warnings?.length" tone="warning" dense :title="t('upgrades.preflightWarnings')" data-testid="upgrade-warnings">
-              <ul class="list-disc space-y-1 pl-5"><li v-for="w in preflight.warnings" :key="w">{{ w }}</li></ul>
             </SAlert>
           </div>
         </div>

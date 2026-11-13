@@ -1052,7 +1052,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 
 - 新建角色用了内置角色保留的 key：`fields[{field:"key", code:"reserved"}]` 按控制台语言显示（`roles.keyReserved`），不再只显示服务端英文。
 - web mock 默认角色集合按服务端更新：admin = 全部核心权限去掉超管专属（`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`）；operator 为 D3 显式白名单；新增内置 supplier；内置角色带默认可管理清单（D5），`PUT /roles/:id/assignable` 与 `GET /me/assignable-roles` 有 mock；权限目录补 `audit`、`system` 模块与 `user:password:reset`、`account:group:bind`、`account:relay`、`usage:settle`、`task:manage`、`plugin:grant:db_schema_unconfined`；保留 key 回 `reserved`。
-- 升级页（T45 跟进）：预检结果的 `warnings`（如 tokenless 管理开关仍开着）以“提醒（不阻断升级）”显示，不影响开始升级。
+- 升级页（T45 跟进）：预检结果的 `warnings`（如 tokenless 管理开关仍开着）以“提醒（不阻断升级）”显示，不影响开始升级。（2026-11-13 随 tokenless 开关一并删除：外壳不再给出 `warnings`。）
 - 用词：两步验证（TOTP）在中文界面统一为“两步验证”，“二次验证”留给高危操作前的再次确认（step-up）。
 - UsersView spec 已在 T78 补齐。
 - 访问密钥页（合并期 4 前端分支时补做）：`lost` 按新语义显示为“暂不可用”，说明原因（被收回或所属插件停用）、重新获得后自动恢复、保存修改会移除；选中带 `step_up` 的权限时提示用密钥调用要先 `POST /me/verify` 取 proof（`X-Verify-Proof`），密钥只能用两步验证或密码。不再有“你已经没有这些权限”的旧 sessionOnly 口径。中文合并时把 S5 新增文案里指 TOTP 的“二次验证”改为“两步验证”。
@@ -1460,7 +1460,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 | 访问密钥列表读出时规范化（为旧写法） | 删除：库里只有规范写法 |
 | 共享向量 `sdk/permvectors/vectors.json` 的别名用例 | 删除或改为规范写法；生成的 `web/src/generated/permissions.ts` 去掉 `LEGACY_OWN`、`LegacyOwnKey` |
 | 控制台 `implies.ts` 的别名表与 mock、单测里的旧写法 | 删除、改为规范写法（`vue-tsc -b` 与全部 vitest 通过） |
-| gateway 外壳 tokenless 管理开关（含 T45 指标与 preflight `warnings`） | 删除：线上核心 0.1.284 已带令牌，本版本不换网关，以后的网关忽略旧配置键与环境变量 |
+| gateway 外壳 tokenless 管理开关（含 T45 指标与 preflight `warnings`，控制台升级页的提醒展示） | 删除：线上核心 0.1.284 已带令牌，本版本不换网关，以后的网关忽略旧配置键与环境变量 |
 | 管理员禁用锁的“残留锁”处理（旧节点启用过的上锁账号：`checkAdminLock` 只拦 disabled、受限档禁用时清锁、重置时清锁的特例） | 删除：上锁的账号总是 disabled；受限档从不改锁 |
 | 插件 `hostCompat`/UI 3.15 下限 0.1.286 | 改为 0.1.285 |
 
