@@ -16,6 +16,12 @@ type RouteRules struct {
 	KnownKey func(key string) bool
 	// KnownStepUp reports whether a step-up scope exists.
 	KnownStepUp func(scope string) bool
+	// StepUpKey reports whether a permission carries the stepUp flag, which
+	// tells an access key's owner the key asks for a proof.
+	StepUpKey func(key string) bool
+	// StepUpExempt lists, by RouteSpec.ID with the reason, the step-up
+	// routes none of whose keys is flagged stepUp (StepUpKey).
+	StepUpExempt map[string]string
 	// Permissionless lists, by RouteSpec.ID, the routes allowed without a
 	// permission (ModePublic, ModeAuthed) and how each lets callers in. A
 	// new one needs an entry, so opening a route to every caller is a
@@ -25,7 +31,9 @@ type RouteRules struct {
 }
 
 // CheckRoutes checks the route table at start-up: every permission and
-// extra key is a core one, every step-up scope exists, and the routes
+// extra key is a core one, every step-up scope exists and one of its route's
+// keys is flagged stepUp unless the route is exempt (exactly the
+// rules.StepUpExempt), and the routes
 // without a permission are exactly rules.Permissionless, with the same
 // access. It returns every
 // failure joined, nil when there is none.
@@ -34,7 +42,7 @@ func CheckRoutes(specs []RouteSpec, rules RouteRules) error {
 	fail := func(s RouteSpec, format string, args ...any) {
 		errs = append(errs, fmt.Errorf("route %s: "+format, append([]any{s.ID()}, args...)...))
 	}
-	open := map[string]bool{}
+	open, exempt := map[string]bool{}, map[string]bool{}
 	for _, s := range specs {
 		for _, k := range slices.Concat(s.Keys, s.Extra) {
 			if !rules.KnownKey(string(k)) {
@@ -43,6 +51,12 @@ func CheckRoutes(specs []RouteSpec, rules RouteRules) error {
 		}
 		if s.StepUp != "" && !rules.KnownStepUp(s.StepUp) {
 			fail(s, "unknown step-up scope %q", s.StepUp)
+		}
+		if s.StepUp != "" && !slices.ContainsFunc(s.Keys, func(k perm.Key) bool { return rules.StepUpKey(string(k)) }) {
+			exempt[s.ID()] = true
+			if _, ok := rules.StepUpExempt[s.ID()]; !ok {
+				fail(s, "step-up route without a permission flagged stepUp is not on the exempt list")
+			}
 		}
 		if a := s.access(); a != "" {
 			open[s.ID()] = true
@@ -57,6 +71,11 @@ func CheckRoutes(specs []RouteSpec, rules RouteRules) error {
 	for _, id := range slices.Sorted(maps.Keys(rules.Permissionless)) {
 		if !open[id] {
 			errs = append(errs, fmt.Errorf("permissionless list: %s is not a route without a permission", id))
+		}
+	}
+	for _, id := range slices.Sorted(maps.Keys(rules.StepUpExempt)) {
+		if !exempt[id] {
+			errs = append(errs, fmt.Errorf("step-up exempt list: %s is not a step-up route without a flagged permission", id))
 		}
 	}
 	return errors.Join(errs...)

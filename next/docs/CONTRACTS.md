@@ -72,7 +72,7 @@
 - **已取消二次验证（2026-10-05 用户决定）**：不再有密码确认（step-up）。`POST /auth/step-up`、`X-Step-Up-Token` 请求头、`step_up_required` 错误码、`core.StepUpVerifier`、`Authorizer.IsSensitive`、`Router.PermStepUp` 全部删除；任何操作（调整余额、删除用户/账号、查看凭证、角色授权、插件安装/卸载、系统更新等）只看登录态 + RBAC 权限。旧前端仍发送 `X-Step-Up-Token` 时核心直接忽略。
 - **二次验证重新引入（2026-11-13，权限加固期 4，用户决定照 new-api）**：只用于少数高危操作，按 scope 换短时一次性 proof（`X-Verify-Proof`），会话与访问密钥同一套，见 §80.2。上面这条只说明旧的 step-up 机制已删除。
 - 路由注册：`r.Public` / `r.Self` / `r.Perm(method, path, permission, handler)` / `r.PermAny(method, path, handler, keys...)`（任一 key 即可）/ `r.PermScoped(method, path, handler, actions...)`（任一动作的任意范围，handler 用 `core.Scope` 取范围，§21.0）
-- 路由表与启动自检（期 4 T68）：上面每个注册方法（含 `Handle`/`AuthedRead` 与 `SessionOnly`、`StepUp` 视图）都返回并记录一条 `httpapi.RouteSpec{Method, Path, Mode, Keys, Extra, PluginKeys, StepUp, NoAccessKey}`，`Router.Routes()` 列出全部。handler 自己额外做的放行检查（例如字段级的 `account:group:bind`）用 `.Uses(keys...)` 登记到 `Extra`，只为脱敏或补充展示做的检查不登记；检查插件声明的动态 key 的用 `.UsesPluginKeys()`。两者都只是登记，不改变授权。启动时 `httpapi.CheckRoutes` 检查三件事，任何一项失败核心拒绝启动：所有 `Keys`、`Extra` 都是核心目录（含 `self`）里的 key；`StepUp` scope 都是已知的二次验证 scope；不需要权限的路由（`Public`、`Handle`、`AuthedRead`）与 `app/routecheck.go` 的白名单完全一致：多了或少了都报错，访问方式（公开、任意登录者或访问密钥、只允许登录会话）不一致也报错。`Public` 不能在 `SessionOnly`、`StepUp` 视图上注册（panic）。插件路由代理 `/p/:key/*path` 直接挂在 gin group 上，不在路由表里。
+- 路由表与启动自检（期 4 T68）：上面每个注册方法（含 `Handle`/`AuthedRead` 与 `SessionOnly`、`StepUp` 视图）都返回并记录一条 `httpapi.RouteSpec{Method, Path, Mode, Keys, Extra, PluginKeys, StepUp, NoAccessKey}`，`Router.Routes()` 列出全部。handler 自己额外做的放行检查（例如字段级的 `account:group:bind`）用 `.Uses(keys...)` 登记到 `Extra`，只为脱敏或补充展示做的检查不登记；检查插件声明的动态 key 的用 `.UsesPluginKeys()`。两者都只是登记，不改变授权。启动时 `httpapi.CheckRoutes` 检查四件事，任何一项失败核心拒绝启动：所有 `Keys`、`Extra` 都是核心目录（含 `self`）里的 key；`StepUp` scope 都是已知的二次验证 scope；挂 `StepUp` 的路由的 `Keys` 至少有一个在目录里带 `stepUp` 标记（`authz.StepUpKey`，访问密钥选择器据此提示“使用时需二次验证”），否则须在 `app/routecheck.go` 的 `stepUpExemptRoutes`（路由 ID → 理由）里，豁免表里不是这种路由的条目同样报错（期 4 收尾）；不需要权限的路由（`Public`、`Handle`、`AuthedRead`）与 `app/routecheck.go` 的白名单完全一致：多了或少了都报错，访问方式（公开、任意登录者或访问密钥、只允许登录会话）不一致也报错。`Public` 不能在 `SessionOnly`、`StepUp` 视图上注册（panic）。插件路由代理 `/p/:key/*path` 直接挂在 gin group 上，不在路由表里。
 - 前端权限目录（期 4 T69）：`web/src/generated/permissions.ts` 由核心目录生成，内容包括：
   - `P`：每个核心与 `self` 权限一个常量，名字由 key 转成驼峰。
   - `SCOPE_TYPE`：可带范围的动作及其资源。
@@ -547,7 +547,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | `key` | 明文 Key（`sk-s2a-` + 40 位 base62），只在创建和显式授权的复制响应中出现，列表不返回 |
 | `copyable` | 是否保存了可解密密钥；旧的仅哈希 Key 为 `false`，无法恢复 |
 
-新建 Key 除认证哈希外使用服务器主密钥 AES-GCM 加密保存，AAD 为 `apikey:{id}`。POST `/me/api-keys/:id/reveal` 要求 `apikey:self:manage` 并校验所有权，管理员也只可操作自己的 Key。响应 `{key}`、`Cache-Control: no-store`，返回前写 `apikey.reveal` 审计（不含密钥）。旧 Key 返回 409，删除或非本人 Key 返回 404。
+新建 Key 除认证哈希外使用服务器主密钥 AES-GCM 加密保存，AAD 为 `apikey:{id}`。POST `/me/api-keys/:id/reveal` 要求 `apikey:self:manage` 与每次二次验证 `apikey.reveal`（目录里 `apikey:self:manage` 带 `stepUp`、`sensitive` 标记，期 4 收尾）并校验所有权，管理员也只可操作自己的 Key。响应 `{key}`、`Cache-Control: no-store`，返回前写 `apikey.reveal` 审计（不含密钥）。旧 Key 返回 409，删除或非本人 Key 返回 404。
 
 POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理员绕过。原子替换认证哈希、前缀、加密密钥，写 `apikey.rotate` 审计，保留 ID、名称、分组、状态、有效期和历史记录。响应新 `APIKey`（含 `key`），旧密钥立即失效；前端要求用户确认后执行，入口在编辑窗口（2026-11-10 起，见 §92）。
 

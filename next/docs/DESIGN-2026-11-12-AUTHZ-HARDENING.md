@@ -13,7 +13,7 @@
 1. **一个版本发布全部迁移 0097–0103**：托管核心要求库里的迁移是本核心清单的连续前缀（`app/managed_checks.go` `appliedPrefix`）。发布前再合一次 develop：develop 若已新增 0097 及以后的迁移，本分支的迁移要整体后移重新编号（0098 的 checksum 已在期 4 P4F2 变过，测试库需重建；生产未跑过）。
 2. **S1–S4、S5、R0 与整合审查的 2FA 开启同版本发布**：后端改为 proof 之后，旧控制台的改密码、关 2FA、重新生成备用码、添加通行密钥、开启 2FA、超管移交、ccgateway 远程设置等都会 403 `verification_required`。只回滚其中一部分也会出同样的问题，要一起回滚。
 3. **资源范围两步走**：本版本是 R2a（0103 只新增，8 个旧 own key 作为别名保持 active）。R2b 在确认全部节点都已升级后的下一版本做：按旧 own 行重新同步新表 → 目录把旧 key 标 removed → 删除 `mirrorLegacyOwn`、`perm.WithLegacyOwn` 与 `/me` 的别名输出，清理密钥中的旧写法与冗余旧行（写审计）→ 前端删除 `LEGACY_OWN`（`implies.ts` 的别名表与 Go `Parse` 的别名表保留）。见“期 4 资源范围（R0–R7）发布说明”。
-4. **滚动发布期间（非托管多节点部署）不要修改角色权限**，全部节点升级后再改（R2a：旧节点撤销 own 授予只删旧行；新节点保存角色时不再保留冗余旧 own 行，旧节点的字面比较会失败）。旧节点上 admin（0099 收回超管专属权限）与 operator（0102 收回 `role:define`）暂时不能管理角色，由超管处理；旧节点重启时会把 `role:manage` 等目录行的状态改回，新节点重启后恢复。托管升级先停副本再迁移，没有新旧混跑阶段。
+4. **滚动发布期间（非托管多节点部署）不要修改角色权限**，全部节点升级后再改（R2a：旧节点撤销 own 授予只删旧行；新节点保存角色时不再保留冗余旧 own 行，旧节点的字面比较会失败）。旧节点上 admin（0099 收回超管专属权限）与 operator（0102 收回 `role:define`）暂时不能管理角色，由超管处理；旧节点重启时会把 `role:manage` 等目录行的状态改回，新节点重启后恢复；同理 `apikey:self:manage` 行的 `sensitive` 列（期 4 收尾 F2）会被新旧节点重启时来回改写，它只供角色编辑器与访问密钥选择器展示、不参与授权（与 T10/U7 改敏感标记时接受的抖动相同；`step_up` 由代码目录提供，不在库里），全部节点升级后稳定。托管升级先停副本再迁移，没有新旧混跑阶段。
 5. **插件与核心同发**（T84）：十个插件的 `hostCompat` 下限是 `>=0.1.286`，`sdk/manifest/check/ui.go` 记 UI 3.15 从核心 0.1.286 开始（moderation `hostUICompat ^3.15`）。发布号不是 0.1.286 时，把 `grep -rn 0.1.286 next/plugins next/sdk/manifest` 的结果与 `web/packages/ui/README.md`“UI SDK 3.15”一节一并改掉。dynweight 取 0.5.9（develop 已发布 0.5.8）。
 6. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 调用的 `tools/sub2api-plugin/scripts/build-demo.sh` 在原生 UI 未构建时加 `--allow-missing-ui`，设 `REQUIRE_UI=1` 时改为报错退出；`build-go.sh` 自己的通用回退分支（没有 build-demo.sh 时）不认这个变量，正式包不要走它。五个插件的原生 UI 需各自 `npm ci && npm run build`。
 7. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。发布前按运维清单第 8 条查；有安装时先卸载再装，或由用户决定一次性改 `publisher_id`（写审计）。
@@ -65,6 +65,7 @@
 | 22 | 资源范围：账号与代理的权限 key 可带范围（own、分组、分组内账号、指定账号或代理），多个取并集，授出不超过自己；受限档沿用 own 级限制；`created_by=<他人>` 对受限档返回空；新建与修改后的范围后置条件（`not_in_scope`、`would_leave_scope`） | 角色管理者、供应商 | R1–R8 |
 | 23 | 启动时自检路由表与菜单（不一致拒绝启动）；控制台权限目录由服务端生成 | 运维、开发 | T68（7698df4d65）、T69（bb27dc839f） |
 | 24 | 控制台：X-Authz-Version 与 403 触发重新取权限；用户页、角色页、同意页只给可管理的对象；仪表盘账号状态卡片；财务区“余额流水”菜单；iframe 插件可查本插件权限 | 控制台用户 | T74–T83 |
+| 26 | 目录 `apikey:self:manage` 带 `stepUp`、`sensitive` 标记（明文回显本来就每次二次验证，访问密钥选择器现在会提示）；启动自检要求挂 StepUp 的路由引用带 stepUp 标记的权限或在豁免表中 | 访问密钥、开发 | 期 4 收尾 F2 |
 | 25 | 插件升级在同意页批准需要同意的角色授予（敏感，或给 admin/operator/supplier 以外的角色），与确认内置插件暂缓授予同一规则：`role:define` + 能修改每个目标角色（内置角色只有超管）；非超管 admin 不能再批这类升级 | 插件管理者 | 期 4 收尾 F1 |
 
 被后续任务取代、不再成立的中间口径：T10/T57 的 sessionOnly（S3 删除，改为二次验证）；T11 的明文回显拒绝访问密钥（S3 改为二次验证）；T33/FU5 的“不能作用于自己 / 超管自作用豁免”（FU6 改为可管理角色口径）；T41 的带密钥 schema 一律拒绝 `$ref`（FU4 支持本地引用）；own/all 成对 key（R1–R7 改为范围）。
@@ -157,7 +158,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 ### 6. 待用户决定（期 4 整合审查提出，未改）
 
 1. **已定（期 4 收尾 F1，统一为严的）**：插件升级授权的两条路径规则不同：第三方插件升级的同意页里，来自 `defaultRoles`/`inheritFrom` 的需同意授予（敏感、或给 user、自定义角色）只要 `plugin:install` + 二次验证就能批准；内置插件同一授予在插件页确认要 `role:define` + 能修改每个角色（内置角色只有超管）。可以统一为严的（同意页对需同意的计划授予也跑 `checkRolesGrantable`，admin 不能再批这类升级）或宽的（确认只要 `plugin:install`）。→ 同意页对需同意的计划授予也跑 `checkRolesGrantable`，见“期 4 收尾”。
-2. **`apikey:self:manage` 没有 step-up 标记**，而 `POST /me/api-keys/:id/reveal` 要 `apikey.reveal` proof，访问密钥选择器因此不提示。加标记按不变式还要 `sensitive=true`（目录行的列，滚动发布时新旧节点会来回改写），建议随 R2b 改；同时可把“step-up 路由必须引用带标记的 key”加进启动自检（本次试加后正是这一处报错，已撤回）。
+2. **已定（期 4 收尾 F2，本期就改）**：`apikey:self:manage` 没有 step-up 标记，而 `POST /me/api-keys/:id/reveal` 要 `apikey.reveal` proof，访问密钥选择器因此不提示。加标记按不变式还要 `sensitive=true`（目录行的列，滚动发布时新旧节点会来回改写），建议随 R2b 改；同时可把“step-up 路由必须引用带标记的 key”加进启动自检（本次试加后正是这一处报错，已撤回）。→ 本期加标记与自检，`sensitive` 列滚动发布期间的来回改写见发布约束 4。
 3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 7）。
 4. **访问密钥的新建与修改**仍只要密码，开了 2FA 的用户也可只凭密码签出宽权限的密钥；是否改为二次验证。
 5. **超管只用一个因素就能清掉自己的全部因素**（`user.security.reset` 或 `self.2fa.disable` 只要一种方式），此前要密码加验证码；是否让这两个 scope 对超管本人也要求密码。
@@ -1397,4 +1398,12 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 - 测试：install `TestUpgradeConsentNeedsRightsOverTheRoles`（真实 authz `CanGrantToRoles`：非超管 admin 批准带敏感权限给内置 admin 的升级 → 403 且版本仍待同意；超管成功并授予）、`TestUpgradeRoleGrantsNeedConsent`（无 `role:define` 403、角色不可改 403、只查需同意的角色）；web `ConsentView.spec`（升级时非超管被拦、改授角色后放行、首次安装不受限、超管放行）。
 - 影响对象：只有 `plugin:install`（及 `role:define`）的非超管管理员，不能再批准把需同意授予给内置角色的第三方插件升级，由超管批准，或改授给自己可管理的自定义角色。
 - 回滚：revert 该提交（前后端同一提交）。无迁移。
+
+### F2 `apikey:self:manage` 标 stepUp，启动自检要求 step-up 路由引用带标记的权限（待决定 2）
+
+- 改动：目录 `apikey:self:manage` 加 `stepUp`（按不变式 stepUp ⇒ sensitive 一并加 `sensitive`），描述写明查看明文每次需要二次验证；`POST /me/api-keys/:id/reveal` 原本就挂 `StepUp(apikey.reveal)`，授权不变。`httpapi.RouteRules` 新增 `StepUpKey`（`authz.StepUpKey`）与 `StepUpExempt`（`app/routecheck.go` `stepUpExemptRoutes`，路由 ID → 理由）：`CheckRoutes` 要求挂 StepUp 的路由的 `Keys` 至少有一个带 stepUp 标记（只在 `Extra` 里不算），否则须在豁免表中；豁免表里不是这种路由的条目也报错。本提交时豁免表为空。前端 `generated/permissions.ts` 重新生成。
+- 测试：httpapi `TestCheckRoutes`（未标记、只在 Extra 里标记、豁免表过期）；authz `TestCatalogFlaggedSets`、`TestGeneratedPermissionsTS`；app `TestManagedRuntime*` 启动真实路由表（去掉这个标记时以 `route POST /me/api-keys/:id/reveal: step-up route without a permission flagged stepUp` 拒绝启动，已验证）。
+- 影响对象：访问密钥选择器与角色编辑器里 `apikey:self:manage` 显示“使用时需二次验证”与敏感标记；开发者新增 StepUp 路由时须引用带标记的权限或登记豁免理由。
+- 发布：`sensitive` 列滚动发布期间被新旧节点来回改写（发布约束 4），纯展示，不影响授权。
+- 回滚：revert 该提交。无迁移；回滚后下一次启动 SyncCore 把 `sensitive` 改回 false。
 
