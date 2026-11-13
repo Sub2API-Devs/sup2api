@@ -28,7 +28,7 @@ describe('user dashboard accounts card (T81)', () => {
     expect(mocks.get).toHaveBeenCalledWith('/accounts/summary')
     const card = w.get('[data-testid="card-accounts"]')
     expect(card.text()).toContain('0/4')
-    expect(card.text()).toContain('3')
+    expect(card.text()).toContain(i18n.global.t('stats.admin.accountsSub', { auto: '3', disabled: '1' }))
   })
 
   it('has no accounts card without an account read permission', async () => {

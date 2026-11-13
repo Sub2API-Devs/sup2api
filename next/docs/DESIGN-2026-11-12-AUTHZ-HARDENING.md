@@ -775,6 +775,7 @@
 ## T81 W2-G5 前端：仪表盘账号状态卡片
 
 - 改动：新增 `dashboard/AccountStatusCard.vue`（可用/总数、自动停用与手动禁用、无可用为红、有自动停用为琥珀），管理员仪表盘改用它（原内联卡片与 tone 计算移入）。非管理员仪表盘：持有 `account:read` 或 `account:own:read` 时取 `GET /accounts/summary` 显示该卡片，不依赖 `usage:self:read`（供应商只有 own 级账号权限也能看到自己的账号状态）；刷新按钮一并重取。`AccountCounts` 类型共用；web mock 增加 `/accounts/summary`。
+- 审查补充：mock 的 `/accounts/summary` 同样计入孤立账号（随 followups 提交）。已知：同时有 `usage:all:read` 与只有 `account:own:read`（没有 `account:read`）的少见组合走管理员仪表盘，其账号卡片来自 `/usage/overview`，不显示；加载失败时卡片显示“—”不弹提示（次要卡片）。
 - 测试：新增 `UserDashboard.spec`（own 级账号权限显示卡片与计数、无账号读权限不请求不显示）；`AdminDashboard.spec` 照常通过。
 - 回滚：revert 提交即可，纯前端。
 
