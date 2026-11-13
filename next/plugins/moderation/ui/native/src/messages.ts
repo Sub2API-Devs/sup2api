@@ -500,10 +500,10 @@ export default {
       scope: {
         input: '只审用户输入（system + user，含图片、文档）',
         tools: '用户输入 + 工具结果',
-        all: '全部内容（含 AI 回复与工具调用，旧行为）'
+        all: '全部内容（含 AI 回复与工具调用）'
       },
       scopeWarn: '审核 AI 回复与工具输出会显著增加误报、成本和延迟：编码代理每次工具调用都会触发一次审核。',
-      scopeLegacy: '这个流程没有设置审核范围，按“只审输入”执行；可在这里明确选择。',
+      scopeLegacy: '这个流程未设置审核范围，按“只审输入”执行。',
       scopeSaved: '已保存审核范围',
       invalidScope: '审核范围无效',
       models: '模型',
@@ -1593,10 +1593,10 @@ export default {
       scope: {
         input: 'User input only (system + user, with images and documents)',
         tools: 'User input + tool results',
-        all: 'Everything, AI replies and tool calls included (old behaviour)'
+        all: 'Everything, AI replies and tool calls included'
       },
       scopeWarn: 'Moderating AI replies and tool output adds false positives, cost and latency: a coding agent triggers a run on every tool call.',
-      scopeLegacy: 'No scope is set for this flow: it moderates the input only. Choose one here to make it explicit.',
+      scopeLegacy: 'No scope is set for this flow: it moderates the input only.',
       scopeSaved: 'Scope saved',
       invalidScope: 'Unknown scope',
       models: 'Model patterns',

@@ -350,7 +350,8 @@ textarea.mod-mono {
   white-space: nowrap;
   text-align: start;
 }
-.mod-expand-text {
+/* Running text of a reason: the expanded row of a table, a trace reason. */
+.mod-body-text {
   margin: 0;
   font-size: 0.875rem;
   line-height: 1.55;
@@ -358,12 +359,6 @@ textarea.mod-mono {
 /* TraceView: the reasons under the table, each in full (line breaks kept). */
 .mod-trace-reasons {
   margin-top: 0.75rem;
-}
-.mod-trace-reasons-title {
-  margin: 0 0 0.375rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgb(var(--fg-muted));
 }
 .mod-trace-reasons dl {
   margin: 0;
@@ -378,12 +373,10 @@ textarea.mod-mono {
 }
 .mod-trace-reason dt {
   font-size: 0.75rem;
-  color: rgb(var(--fg-subtle));
+  color: rgb(var(--fg-muted));
 }
 .mod-trace-reason dd {
-  margin: 0.125rem 0 0;
-  font-size: 0.875rem;
-  line-height: 1.55;
+  margin-top: 0.125rem;
 }
 .mod-trace-reason p {
   margin: 0;

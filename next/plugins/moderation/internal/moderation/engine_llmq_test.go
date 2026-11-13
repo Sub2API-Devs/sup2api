@@ -209,6 +209,8 @@ func TestClipReason(t *testing.T) {
 		{" " + atCap + " ", atCap},
 		{atCap + "b", strings.Repeat("a", llmReasonRunes-1) + "…"},
 		{strings.Repeat("长", llmReasonRunes*2), strings.Repeat("长", llmReasonRunes-1) + "…"},
+		// the cut ends in spaces: they go before the "…"
+		{strings.Repeat("a", llmReasonRunes-4) + " \n  tail", strings.Repeat("a", llmReasonRunes-4) + "…"},
 	} {
 		got := clipReason(c.in)
 		if got != c.want || utf8.RuneCountInString(got) > llmReasonRunes {

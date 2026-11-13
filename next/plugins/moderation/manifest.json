@@ -18,8 +18,8 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.280 <0.2.0",
-  "hostUICompat": "^3.12",
+  "hostCompat": ">=0.1.281 <0.2.0",
+  "hostUICompat": "^3.13",
   "capabilities": [
     {
       "id": "gateway.hook.v1"

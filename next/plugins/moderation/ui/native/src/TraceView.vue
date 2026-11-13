@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
-import { SAlert, SBadge, SCode, SHint, SIcon, SLink, STable, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SCode, SHint, SIcon, SLink, SSectionTitle, STable, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import { useCatalog } from './catalog'
 import { categoryLabel, enumLabel, ms, score } from './format'
@@ -123,11 +123,11 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
       <template #cell-latency_ms="{ row }"><span class="mod-num">{{ ms(row.latency_ms) }}</span></template>
     </STable>
     <section v-if="reasons.length" class="mod-trace-reasons" :aria-labelledby="reasonsId">
-      <p :id="reasonsId" class="mod-trace-reasons-title">{{ t('detail.f.reason') }}</p>
+      <SSectionTitle :id="reasonsId" tag="p">{{ t('detail.f.reason') }}</SSectionTitle>
       <dl>
         <div v-for="r in reasons" :key="r.key" class="mod-trace-reason">
           <dt>{{ stageText(r) }} · {{ catalog.auditorName(r.auditor_id) }}</dt>
-          <dd>
+          <dd class="mod-body-text">
             <p v-if="r.images_refused" class="mod-text-warning">{{ refusedText(r) }}</p>
             <p v-if="r.reason" class="mod-prewrap">{{ r.reason }}</p>
           </dd>

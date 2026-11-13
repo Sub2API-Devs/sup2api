@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
@@ -40,13 +41,14 @@ const (
 var errLLMNoVerdict = errors.New("llm auditor did not submit a verdict")
 
 // clipReason trims a verdict's reason and keeps it to llmReasonRunes runes,
-// the last one "…" when it was cut, so the console shows that it was.
+// the last one "…" when it was cut (after the cut's trailing space), so the
+// console shows that it was.
 func clipReason(s string) string {
 	s = strings.TrimSpace(s)
 	if utf8.RuneCountInString(s) <= llmReasonRunes {
 		return s
 	}
-	return textutil.TruncateRunes(s, llmReasonRunes-1) + "…"
+	return strings.TrimRightFunc(textutil.TruncateRunes(s, llmReasonRunes-1), unicode.IsSpace) + "…"
 }
 
 // llmQuestionsAudit makes one streaming call offering only submit_verdict,

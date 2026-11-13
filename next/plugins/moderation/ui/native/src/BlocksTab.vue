@@ -147,9 +147,9 @@ async function submit() {
             @click="toggleExpand()"
             >{{ row.reason }}</SLink
           >
-          <template v-else>{{ row.reason || '—' }}</template>
+          <span v-else class="mod-prewrap">{{ row.reason || '—' }}</span>
         </template>
-        <template #expand="{ row }"><p class="mod-prewrap mod-expand-text">{{ row.reason }}</p></template>
+        <template #expand="{ row }"><p class="mod-prewrap mod-body-text">{{ row.reason }}</p></template>
         <template #cell-violations="{ row }"><span class="mod-num">{{ num(row.violations) }}</span></template>
         <template #cell-created_at="{ row }"><SDateTime :value="row.created_at" mode="time" /></template>
         <template #cell-expires_at="{ row }">

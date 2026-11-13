@@ -43,7 +43,7 @@ describe('the reasons of a trace', () => {
       expect(items[0].find('dt').text()).toContain('#2')
       expect(items[0].find('.mod-text-warning').text()).toContain('trace.imagesRefused')
       expect(items[0].find('.mod-prewrap').element.textContent).toBe(long)
-      expect(w.find('.mod-trace-reasons').attributes('aria-labelledby')).toBe(w.find('.mod-trace-reasons-title').attributes('id'))
+      expect(w.find('.mod-trace-reasons').attributes('aria-labelledby')).toBe(w.find('.mod-trace-reasons .section-title').attributes('id'))
     })
   }
 
