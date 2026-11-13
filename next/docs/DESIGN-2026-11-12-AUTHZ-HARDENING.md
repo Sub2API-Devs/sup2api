@@ -757,3 +757,11 @@
 - 测试：account `TestAccountSummaryFollowsOwnerScope`（own 范围只计自己的、全量范围计全部、已删除不计、无账号读权限 403）。
 - 影响对象：新增只读接口；回滚：revert 这个提交。
 
+
+## T82 同意页：逐权限授予角色（P4-B）、按权限预填默认角色、无 role:define 不显示、预判 db_schema_unconfined、展示新授予（P4C 前端）
+
+- 后端（只加只读字段）：`Review.needs_db_schema_unconfined` = manifest 申请 db.schema 且 `dbSchemaUnconfined(trust == official)`；`dbSchemaUnconfined`（有 schema 管理、未启用角色隔离、不是官方发布者）是同意检查 `checkGrantRights` 与评审共用的唯一判断。同意时前端把勾选的宿主权限都作为显式授予发送，所以以前授予过的 db.schema 同样会被检查，字段不区分沿用。`ReviewUserPerm.new` = 目录里还没有该权限（`catalogKeys`）。上传与评审两处返回都填。
+- 前端：`consent/newPermissionRoles.ts`（`useNewPermissionRoles`）是逐权限角色的唯一状态：只有 `role:define` 才有选项；超管可选全部（`/me/assignable-roles`，不含超管角色），其他人只可选清单内、可授予、自己不持有的自定义角色（与服务端规则一致）。每个 `new` 权限从 manifest 默认角色起步，只发送改动过的权限（`new_permission_roles`，逐 key），未改动的保持 manifest 默认（含操作者不能指定的内置角色）；改动后操作者不能指定的默认角色会被去掉，界面提示。不再发送全局字段 `role_keys_for_new_permissions`。已存在的权限标注“其授予不变”。db.schema 行在 `needs_db_schema_unconfined` 且缺 `plugin:grant:db_schema_unconfined` 时与其他缺权限的行一样置灰并禁用同意按钮。新增 `consent/NewRoleGrants.vue` 列出 `new_role_grants`（需要确认的高亮）并在 `role_grants_need_consent` 时提示不会自动通过（插件页的待确认授予复用它）。
+- 影响对象：插件同意页的操作者。非超管不再看到内置角色（原来勾了 403）；勾一个角色不再替换全部新权限的默认授予。
+- 测试：install `TestReviewConsentFlags`（官方不标记、new 只标目录里没有的、verified 无隔离标记且同意 403、开启隔离后两者都放行）；web `ConsentView.spec`（逐权限预填与只发改动、无 role:define 无选择、非超管只列可指定的自定义角色并提示去掉默认、db_schema_unconfined 预判、新授予列表）。CONTRACTS 同步。
+- 回滚：revert 提交即可；新增字段只读，旧控制台忽略。

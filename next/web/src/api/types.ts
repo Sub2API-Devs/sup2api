@@ -1433,12 +1433,43 @@ export interface PluginReview {
   events: Array<string | Record<string, any>>
   routes: Array<Record<string, any>>
   menus: Array<Record<string, any>>
-  user_permissions: Array<{ key: string; label: LText; description?: LText; sensitive?: boolean; default_roles?: string[]; inherit_from?: string[] }>
+  user_permissions: ReviewUserPermission[]
   database?: { schema: string; migrations: string[] } | null
   resources?: Record<string, any> | null
   external_services: string[]
   host_permissions: HostPermissionReview[]
   diff?: { added: string[]; widened: string[]; removed: string[] } | null
+  /** Role grants the new permissions get without overrides (defaultRoles, inheritFrom holders). */
+  new_role_grants?: PluginRoleGrant[]
+  /** One of them needs consent: the upgrade is not carried over. */
+  role_grants_need_consent?: boolean
+  /** Granting the db.schema asked for takes plugin:grant:db_schema_unconfined. */
+  needs_db_schema_unconfined?: boolean
+}
+
+/** A user permission a plugin version declares (consent review). */
+export interface ReviewUserPermission {
+  key: string
+  label: LText
+  description?: LText
+  sensitive?: boolean
+  /** Roles it goes to when created, unless the consent names others. */
+  default_roles?: string[]
+  inherit_from?: string[]
+  /** Not in the catalog yet: the consent creates it, and only then do roles named for it apply. */
+  new?: boolean
+}
+
+/** One role grant of a plugin permission (CONTRACTS P4C). */
+export interface PluginRoleGrant {
+  /** The version whose consent withheld it (the list to review). */
+  version?: string
+  /** Qualified permission key. */
+  permission: string
+  role: string
+  sensitive: boolean
+  via: 'default' | 'inherit'
+  needs_consent: boolean
 }
 
 export interface RolloutNode {

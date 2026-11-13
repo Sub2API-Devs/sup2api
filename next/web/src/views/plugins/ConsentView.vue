@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner, confirm, toast } from '@sub2api/ui'
-import type { HostPermissionReview, PluginReview, Role } from '@/api/types'
+import type { HostPermissionReview, PluginReview } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -17,7 +17,8 @@ import HostPermissionTable from './consent/HostPermissionTable.vue'
 import type { HPRow } from './consent/hostPermission'
 import { useConsentLabels } from './consent/hostPermission'
 import { useOptionalT } from '@/composables/optionalText'
-import { fetchFirstPage } from '@/composables/lookups'
+import { useNewPermissionRoles } from './consent/newPermissionRoles'
+import NewRoleGrants from './consent/NewRoleGrants.vue'
 
 const { t } = useI18n()
 const tr = useOptionalT()
@@ -37,14 +38,23 @@ const rejecting = ref(false)
 const showMissing = ref(false)
 
 const checked = reactive<Record<string, boolean>>({})
-const roles = ref<Role[]>([])
-const roleKeys = ref<string[]>([])
+const permissionRoles = useNewPermissionRoles(review)
 
-function requiredPermOf(hp: HostPermissionReview, risk: Risk): string | null {
+/** Granting db.schema to this plugin takes the override as well (review.needs_db_schema_unconfined). */
+const DB_SCHEMA = 'db.schema'
+const DB_SCHEMA_UNCONFINED = 'plugin:grant:db_schema_unconfined'
+
+function riskPermOf(hp: HostPermissionReview, risk: Risk): string | null {
   if (hp.requires) return hp.requires
   if (risk === 'critical') return 'plugin:grant:critical'
   if (risk === 'high') return 'plugin:grant:high'
   return null
+}
+
+/** The console permissions granting `hp` takes; the first one the caller lacks is shown. */
+function requiredPermsOf(hp: HostPermissionReview, risk: Risk): string[] {
+  const out = [riskPermOf(hp, risk), hp.id === DB_SCHEMA && review.value?.needs_db_schema_unconfined ? DB_SCHEMA_UNCONFINED : null]
+  return out.filter((p): p is string => !!p)
 }
 
 const rows = computed<HPRow[]>(() => {
@@ -55,12 +65,13 @@ const rows = computed<HPRow[]>(() => {
   return asArray<HostPermissionReview>(r.host_permissions)
     .map((hp) => {
       const risk = riskOf(hp.id, hp.risk)
-      const requiredPerm = requiredPermOf(hp, risk)
+      const required = requiredPermsOf(hp, risk)
+      const lacking = required.find((p) => !auth.has(p))
       return {
         ...hp,
         risk,
-        requiredPerm,
-        allowed: !requiredPerm || auth.has(requiredPerm),
+        requiredPerm: lacking ?? required[0] ?? null,
+        allowed: !lacking,
         locked: risk === 'low',
         diffTag: added.has(hp.id) ? ('added' as const) : widened.has(hp.id) ? ('widened' as const) : null
       }
@@ -101,16 +112,6 @@ const capabilityIds = computed(() => capabilityIdsOf(review.value?.capabilities)
 
 // ------------------------------------------------------------------ load / submit
 
-async function loadRoles() {
-  if (!auth.has('role:read') || asArray(review.value?.user_permissions).length === 0) return
-  try {
-    const items = await fetchFirstPage<Role>('/roles')
-    roles.value = items
-  } catch {
-    roles.value = []
-  }
-}
-
 async function load() {
   loading.value = true
   loadError.value = ''
@@ -131,14 +132,7 @@ async function load() {
   } finally {
     loading.value = false
   }
-  if (review.value) {
-    initChecks()
-    loadRoles()
-  }
-}
-
-function toggleRole(k: string, v: boolean) {
-  roleKeys.value = v ? [...new Set([...roleKeys.value, k])] : roleKeys.value.filter((x) => x !== k)
+  if (review.value) initChecks()
 }
 
 async function submit() {
@@ -156,7 +150,7 @@ async function submit() {
     await api.post(`/plugins/${encodeURIComponent(key.value)}/versions/${encodeURIComponent(version.value)}/consent`, {
       grants,
       denied,
-      role_keys_for_new_permissions: roleKeys.value
+      new_permission_roles: permissionRoles.payload()
     })
     dropReview(key.value, version.value)
     toast(t('plugins.consent.approved', { name: lt(r.name) || r.plugin_key, version: r.version }), 'success')
@@ -268,7 +262,10 @@ onMounted(load)
       </SCard>
 
       <!-- what the plugin provides -->
-      <ProvidesSummary :review="review" :roles="roles" :role-keys="roleKeys" @toggle-role="toggleRole" />
+      <ProvidesSummary :review="review" :permission-roles="permissionRoles" />
+
+      <!-- the role grants the new permissions get -->
+      <NewRoleGrants :grants="review.new_role_grants || []" :need-consent="!!review.role_grants_need_consent" class="mt-4" />
 
       <!-- host permissions -->
       <HostPermissionTable :rows="rows" :checked="checked" :show-missing="showMissing" @toggle="toggle" />
