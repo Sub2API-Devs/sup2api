@@ -6974,7 +6974,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | `publisher.manage` | 发布者与公钥的写操作 | `publisher:manage` |
 | `system.update` | POST `/system/upgrades`、升级计划与节点的 recover 操作、`/system/releases/import` | `system:update:execute` / `recover` |
 | `system.update` | PUT `/system/update-source`（更新源决定下一次升级运行的代码；期 4 R0） | `settings:manage` |
-| `host.install` | ccgateway：PUT `/system/ccgateway/remote-config`，POST `remote-fingerprint`、`remote-test`、`controller/install`、`runtime/install`、`runtime/uploads/:id/load`、`runtime/bundled`、`runtime/workers`、`runtimes/:key/worker`（会让核心拨号到某台主机或在其上装载、运行代码；上传分片、清理、读取不要；期 4 R0） | `settings:manage` |
+| `host.install` | ccgateway：PUT `/system/ccgateway/remote-config`，POST `remote-fingerprint`、`remote-test`、`controller/install`、`runtime/install`、`runtime/uploads/:id/load`、`runtime/bundled`、`runtime/workers`、`runtimes/:key/worker`（会让核心拨号到某台主机或在其上装载、运行代码；remote-config 的其余字段随同一请求保存，也要；上传会话创建与分片、`cleanup`、`purge`、`cli`、读取不要；期 4 R0） | `settings:manage` |
 | `superadmin.identity` | 超管经访问密钥修改超管账号本身（§43.6，本请求已消耗过 proof 时不再要） | 路由本身的权限 |
 
 PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先校验新密码再消耗 proof。路由级 proof 在处理函数之前消耗，处理函数随后因请求体失败时需重新验证。proof 绑定的是 URL，不含请求体（例如超管移交的目标）。

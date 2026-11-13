@@ -77,7 +77,8 @@ func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 	}
 }
 
-// stepUpRouteAuth passes every permission and refuses every step-up proof.
+// stepUpRouteAuth passes every permission and refuses every step-up proof:
+// its StepUpRefused (depth 1) shadows ccgRouteAuth's StepUpPassed (depth 2).
 type stepUpRouteAuth struct {
 	ccgRouteAuth
 	testutil.StepUpRefused
@@ -88,6 +89,7 @@ type stepUpRouteAuth struct {
 func TestHostInstallRoutesStepUp(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
+	engine.Use(gin.Recovery()) // unconfigured handlers may panic; only the step-up answer matters
 	auth := stepUpRouteAuth{ccgRouteAuth: ccgRouteAuth{allowed: true}}
 	(&Service{}).RegisterRoutes(httpapi.NewRouter(engine, auth, auth))
 	for _, tc := range []struct {
@@ -109,16 +111,17 @@ func TestHostInstallRoutesStepUp(t *testing.T) {
 		{"POST runtime/cleanup", false},
 		{"GET remote-config", false},
 		{"GET runtime", false},
+		{"DELETE runtime/uploads/u1", false},
+		{"POST runtimes/k1/purge", false},
+		{"POST cli/1", false},
+		{"PUT cli/1", false},
 	} {
 		method, path, _ := strings.Cut(tc.route, " ")
 		req := httptest.NewRequest(method, "/api/v1/system/ccgateway/"+path, nil)
 		req.Header.Set("Authorization", "Bearer test")
 		w := httptest.NewRecorder()
-		func() {
-			defer func() { _ = recover() }() // unconfigured handlers may panic; only the step-up answer matters
-			engine.ServeHTTP(w, req)
-		}()
-		got := w.Code == 403 && strings.Contains(w.Body.String(), "verification_required")
+		engine.ServeHTTP(w, req)
+		got := w.Code == 403 && strings.Contains(w.Body.String(), `"scope":"host.install"`)
 		if got != tc.stepUp {
 			t.Errorf("%s: %d %s, step-up wanted %v", tc.route, w.Code, w.Body, tc.stepUp)
 		}
