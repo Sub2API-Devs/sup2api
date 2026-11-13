@@ -437,13 +437,13 @@
 
 ## T54 J3、决策 D2：迁移 0099 回收内置 admin、operator 上的超管专属权限（产品性收紧）
 
-- 改动：迁移 `0099_reclaim_super_only.sql`：删除内置（`builtin`）`admin`、`operator` 角色上 `plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover` 的 `role_permissions` 行；每删一行写一条审计（`user_id` 为空即系统，action `authz.reclaim.super_only`，target `role`/角色 id，`detail {role, key}`）；有回收时 `authz_meta.version + 1`，滚动升级中仍在运行的节点在 30 秒内丢掉缓存的权限集。一条语句（数据修改 CTE）完成，`SET LOCAL lock_timeout = '10s'`，只涉及几行。自定义角色、其他内置角色、其他权限不动；没有可回收的行时不写任何东西。CONTRACTS §4 同步。
+- 改动：迁移 `0099_reclaim_super_only.sql`：删除内置（`builtin`）`admin`、`operator` 角色上 `plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover` 的 `role_permissions` 行；每删一行写一条审计（`user_id` 为空即系统，action `authz.reclaim.super_only`，target `role`/角色 id，`detail {role, key}`）；有回收时 `authz_meta.version + 1`，滚动升级中仍在运行的节点在 30 秒内丢掉缓存的权限集。先取授权锁（`authz_meta` 行 `FOR UPDATE`，与运行时所有授权写入同一把锁、同一顺序：旧节点上正在进行的角色修改先提交，迁移再读），然后一条语句（数据修改 CTE）完成，`SET LOCAL lock_timeout = '10s'`，只涉及几行。自定义角色、其他内置角色、其他权限不动；没有可回收的行时不写任何东西。CONTRACTS §4 同步。
 - 影响对象：
-  - 存量库的内置 admin 失去这 5 个权限、operator 失去 `system:update:execute`、`system:update:recover`（它原默认集合里只有这两个）：其持有者不能再审批需要 critical 级宿主权限的插件（`ui.native`、无角色隔离的 `db.schema`）、管理发布者与公钥、执行或暂停、恢复、取消核心升级，相应接口由成功变为 403。这些操作改由超管做；确需委派时，超管在角色页把权限显式授给某个角色（内置或自定义均可，T51、T53），迁移不会再次回收。
+  - 存量库的内置 admin 失去这 5 个权限、operator 失去 `system:update:execute`、`system:update:recover`（它原默认集合里只有这两个）：其持有者不能再审批需要 critical 级宿主权限的插件（`ui.native`、无角色隔离的 `db.schema`）、管理发布者与公钥、执行或暂停、恢复、取消核心升级，相应接口由成功变为 403。这些操作改由超管做；确需委派时，超管在角色页把权限显式授给某个角色（内置或自定义均可，T51、T53），迁移不会再次回收（除非按下面的回滚步骤删掉了迁移记录后再次升级：迁移重新执行，超管授回给内置 admin、operator 的也会再被回收）。
   - 按旧默认集合，存量 admin 持有全部 5 个、operator 持有 2 个（未被手工改过时），迁移后各写 5 条与 2 条审计；生产 operator 目前 0 个持有者。
   - 升级依赖：只靠 admin 账号（非超管）执行核心升级或安装带 `ui.native` 插件的部署，升级后要改用超管账号，或先让超管把权限授给一个自定义角色。
-  - 滚动升级：迁移在第一个新节点启动时执行；旧节点重启不会把这些权限补回（对旧代码它们不是新建的权限）。但旧节点上对 admin、operator 点“恢复默认”会按旧默认集合把它们加回，混跑期间不要在旧节点上重置内置角色。
-- 回滚：revert 这个提交并 `DELETE FROM schema_migrations WHERE id = '0099_reclaim_super_only.sql';`（不删也可，旧代码不看）。被回收的授权不会自动恢复：由超管在角色页对 admin、operator 点“恢复默认”（旧代码的默认集合含这些权限），或按审计行手工补回：`INSERT INTO role_permissions (role_id, permission_id) SELECT a.target_id::bigint, p.id FROM audit_logs a JOIN permissions p ON p.key = a.detail->>'key' WHERE a.action = 'authz.reclaim.super_only' ON CONFLICT DO NOTHING; UPDATE authz_meta SET version = version + 1 WHERE id = 1;`。
+  - 滚动升级：迁移在第一个新节点启动时执行（托管部署在取得迁移许可时执行，其后重启的旧节点因库里有它不认识的迁移而不能启动）；非托管部署里旧节点重启不会把这些权限补回（对旧代码它们不是新建的权限）。但旧节点上对 admin、operator 点“恢复默认”会按旧默认集合把它们加回，混跑期间不要在旧节点上重置内置角色。
+- 回滚：revert 这个提交并 `DELETE FROM schema_migrations WHERE id = '0099_reclaim_super_only.sql';`（托管部署必须删：托管核心启动时核对迁移清单，库里有本版本不认识的迁移就拒绝启动；非托管部署不删也可）。被回收的授权不会自动恢复：由超管在角色页对 admin、operator 点“恢复默认”（旧代码的默认集合含这些权限），或按审计行手工补回：`INSERT INTO role_permissions (role_id, permission_id) SELECT a.target_id::bigint, p.id FROM audit_logs a JOIN permissions p ON p.key = a.detail->>'key' WHERE a.action = 'authz.reclaim.super_only' AND a.target_type = 'role' ON CONFLICT DO NOTHING; UPDATE authz_meta SET version = version + 1 WHERE id = 1;`（手工补回不写审计，各节点在 30 秒内生效）。
 
 ## T55 J4、R1、U8、决策 D3、5：operator 显式白名单，audit 独立模块，纠正 operator 的可分配清单（产品性收紧）
 

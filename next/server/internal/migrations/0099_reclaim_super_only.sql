@@ -13,6 +13,11 @@
 -- Fail fast when a lock is not to be had, rather than queue for it.
 SET LOCAL lock_timeout = '10s';
 
+-- The authz lock first, as every authz write takes it: a role change still
+-- running on another node commits before its grants are read here, and none
+-- starts until this is done.
+SELECT 1 FROM authz_meta WHERE id = 1 FOR UPDATE;
+
 WITH reclaimed AS (
     DELETE FROM role_permissions rp USING roles r, permissions p
     WHERE r.id = rp.role_id AND p.id = rp.permission_id

@@ -637,6 +637,8 @@ func TestRoleAssignableMigrationBackfill(t *testing.T) {
 // admin and operator roles, auditing each one as the system and moving the
 // authz version; custom roles, other permissions and a role holding none of
 // them are left alone, and a database with nothing to reclaim is untouched.
+// The key list in the file is the catalog's (authz TestCatalogFlaggedSets
+// pins the same five).
 func TestReclaimSuperOnlyMigration(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := t.Context()
@@ -666,13 +668,20 @@ func TestReclaimSuperOnlyMigration(t *testing.T) {
 	}
 	const all = "plugin:grant:critical,plugin:grant:db_schema_unconfined,plugin:grant:high,publisher:manage,system:update:execute,system:update:read,system:update:recover"
 
+	reclaims := func() (n int) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action = 'authz.reclaim.super_only'`).Scan(&n))
+		return n
+	}
+
 	// A new database: nothing to reclaim, nothing written.
 	v := version()
 	migrate()
 	require.Equal(t, v, version())
+	require.Zero(t, reclaims())
 
-	// The roles as the defaults before left them, a custom role granted the
-	// same permissions, and a custom role that only looks built-in by key.
+	// The roles as the defaults before left them and a custom role granted
+	// the same permissions.
 	exec(`INSERT INTO roles (key, name, builtin, superuser) VALUES
 			('super_admin', '{}', true, true), ('admin', '{}', true, false), ('operator', '{}', true, false), ('user', '{}', true, false),
 			('updater', '{}', false, false);
@@ -698,11 +707,19 @@ func TestReclaimSuperOnlyMigration(t *testing.T) {
 	require.Equal(t, "admin=plugin:grant:critical admin=plugin:grant:db_schema_unconfined admin=publisher:manage admin=system:update:execute admin=system:update:recover "+
 		"operator=system:update:execute operator=system:update:recover", audited)
 
-	// Granted again by a super admin since: only a forgotten migration row
-	// would run the file again, and then nothing else changes.
+	// Run again (only a forgotten migration row does that) with nothing left
+	// to reclaim: nothing is written.
 	migrate()
 	require.Equal(t, v+1, version())
+	require.Equal(t, 7, reclaims())
 	require.Equal(t, all, held("updater"))
+
+	// A role that is not built-in keeps its grants whatever its key.
+	exec(`UPDATE roles SET builtin = false WHERE key = 'operator';
+		INSERT INTO role_permissions (role_id, permission_id)
+		SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = 'operator' AND p.key = 'publisher:manage'`)
+	migrate()
+	require.Equal(t, "publisher:manage,system:update:read", held("operator"))
 }
 
 // 0101 narrows the built-in operator role's assignable list, which 0097
