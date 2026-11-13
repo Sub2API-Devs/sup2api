@@ -47,9 +47,9 @@ type Entity struct {
 	Status string // optional column, returned as stored
 	Live   string // optional condition leaving out soft-deleted rows
 
-	// Read reaches every row. OwnRead, a narrower permission, reaches the
-	// caller's rows only: a holder of OwnRead alone is narrowed by Mine
-	// instead of refused.
+	// Read reaches every row. OwnRead (kinds without a Table: groups, by
+	// account:group:bind) reaches the caller's rows only: a holder of
+	// OwnRead alone is narrowed by Mine instead of refused.
 	Read, OwnRead string
 	// Table makes Read a scoped action (CONTRACTS §21.0): the caller sees
 	// the rows of its scope of Read, any scope will do, and OwnRead is
@@ -192,6 +192,10 @@ func (s *Service) lookup(c *gin.Context) {
 // lookup is limited to the caller's own rows. When ok is false the error has
 // been rendered.
 func (s *Service) allow(c *gin.Context, e *Entity, mine bool) (own, ok bool) {
+	if mine && e.Mine == nil {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("mine is not supported for "+e.Kind))
+		return false, false
+	}
 	if e.Table != nil { // checked and narrowed by its scope
 		return mine, true
 	}
@@ -200,10 +204,6 @@ func (s *Service) allow(c *gin.Context, e *Entity, mine bool) (own, ok bool) {
 			return false, false
 		}
 		return core.OwnerScope(c.Request.Context(), e.Read) != nil, true
-	}
-	if e.Mine == nil {
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("mine is not supported for "+e.Kind))
-		return false, false
 	}
 	return true, len(e.Mine.Perms) == 0 || httpapi.CanAny(c, s.authz, e.Mine.Perms...)
 }
