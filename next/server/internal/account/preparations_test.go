@@ -155,7 +155,7 @@ func TestAccountPreparationCleanupHonorsRenewal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.svc.disposePreparation(ctx, preparation, true); err != nil || resource.cancelled != 0 {
+	if err := e.svc.disposePreparation(ctx, preparation, disposeExpired); err != nil || resource.cancelled != 0 {
 		t.Fatalf("active preparation was swept: %v", err)
 	}
 	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_preparations SET expires_at=now()-interval '1 minute' WHERE key=$1`, key); err != nil {
@@ -446,7 +446,7 @@ func TestAccountPatchSetsSchedulingAndLimits(t *testing.T) {
 // the full account:create is not limited.
 func TestAccountPreparationLimit(t *testing.T) {
 	authz := fakeAuthz{keys: map[int64][]string{}}
-	e, resource, _, _ := preparationFixtureWith(t, authz)
+	e, resource, _, plugin := preparationFixtureWith(t, authz)
 	admin := e.uid
 	alice := e.addUser("alice-preparation@example.test")
 	// The fixture type takes a custom upstream: an own-level caller needs
@@ -466,6 +466,14 @@ func TestAccountPreparationLimit(t *testing.T) {
 	}
 	if left := e.exec1(`SELECT count(*) FROM account_preparations`); left != 0 || resource.cancelled != core.MaxOpenDrafts+1 {
 		t.Fatalf("failed preparations left %d rows, %d cancelled", left, resource.cancelled)
+	}
+	// Each was disposed of like a cancel: the plugin heard of it and the
+	// creator's audit says why (P4F4).
+	if n := e.exec1(`SELECT count(*) FROM audit_logs WHERE action='account.preparation.cancel' AND user_id=$1 AND detail->>'reason'='abandoned'`, alice); n != core.MaxOpenDrafts+1 {
+		t.Fatalf("%d abandon audits", n)
+	}
+	if n := len(slices.DeleteFunc(slices.Clone(plugin.phases), func(p string) bool { return p != "cancel" })); n != core.MaxOpenDrafts+1 {
+		t.Fatalf("plugin heard %d cancels: %v", n, plugin.phases)
 	}
 	resource.prepareErr = nil
 

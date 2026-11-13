@@ -174,8 +174,6 @@ type Authorizer interface {
 	PermissionSet(ctx context.Context, userID int64) (PermissionSet, error)
 	// CanGrant validates the actor holds all permissions being granted (CONTRACTS §4.1, SEC-H2).
 	CanGrant(ctx context.Context, actorID int64, perms []string) error
-	// CanActOn validates the actor may act on a target with the given permissions (CONTRACTS §4.1, SEC-H2).
-	CanActOn(ctx context.Context, actorID int64, targetPerms []string) error
 }
 
 // AuthzVersioner is optionally implemented by an Authorizer: the newest

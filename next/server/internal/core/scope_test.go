@@ -21,7 +21,6 @@ func (fakeAuthorizer) PermissionSet(context.Context, int64) (PermissionSet, erro
 	return PermissionSet{}, nil
 }
 func (fakeAuthorizer) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthorizer) CanActOn(context.Context, int64, []string) error { return nil }
 
 func holding(keys ...string) fakeAuthorizer {
 	m := map[string]bool{}

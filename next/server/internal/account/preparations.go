@@ -157,32 +157,18 @@ func (s *Service) createPreparation(c *gin.Context) {
 	}
 	if err != nil {
 		if fresh {
-			s.abandonPreparation(ctx, resource, p)
+			// The key was never returned, so nobody could cancel it and it
+			// would hold a core.MaxOpenDrafts slot until the sweep.
+			abandon, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			if err := s.disposePreparation(abandon, p, disposeAbandoned); err != nil {
+				slog.WarnContext(abandon, "account: abandon failed preparation", "key", p.Key, "err", err)
+			}
+			cancel()
 		}
 		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.Created(c, gin.H{"key": p.Key})
-}
-
-// abandonPreparation gives back the slot of a preparation whose first
-// prepare failed (the caller holds its lock): the key was never returned, so
-// nobody could cancel it and it would count against core.MaxOpenDrafts until the
-// sweep. The row goes once the resource dropped what it may have started;
-// otherwise it stays cancelling, which no longer counts, for the sweep.
-func (s *Service) abandonPreparation(ctx context.Context, resource core.AccountLifecycleResource, p core.AccountPreparation) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
-	_, err := s.d.DB.Pool.Exec(ctx, `UPDATE account_preparations SET state='cancelling' WHERE key=$1 AND account_id IS NULL AND state='pending'`, p.Key)
-	if err == nil {
-		err = resource.CancelAccountPreparation(ctx, p)
-	}
-	if err == nil {
-		_, err = s.d.DB.Pool.Exec(ctx, `DELETE FROM account_preparations WHERE key=$1 AND account_id IS NULL AND state='cancelling'`, p.Key)
-	}
-	if err != nil {
-		slog.WarnContext(ctx, "account: abandon failed preparation", "key", p.Key, "err", err)
-	}
 }
 
 func (s *Service) loadPreparation(ctx context.Context, key string) (core.AccountPreparation, error) {
@@ -319,13 +305,7 @@ func (s *Service) cancelPreparation(c *gin.Context) {
 		err = core.ErrNotFound
 	}
 	if err == nil {
-		err = s.preparationCallback(ctx, p, "cancel", "")
-	}
-	if err == nil {
-		err = audit.Audit(ctx, s.d.DB.Pool, uid, "account.preparation.cancel", "account_preparation", p.Key, nil)
-	}
-	if err == nil {
-		err = s.disposePreparation(ctx, p, false)
+		err = s.disposePreparation(ctx, p, disposeCancelled)
 	}
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -349,22 +329,54 @@ func (s *Service) lockPreparation(ctx context.Context, key string) (context.Cont
 	return ctx, func() { cancel(); lock.Release() }, nil
 }
 
-func (s *Service) disposePreparation(ctx context.Context, p core.AccountPreparation, expiredOnly bool) error {
-	ctx, release, err := s.lockPreparation(ctx, p.Key)
-	if err != nil {
-		return err
+// Why a preparation is disposed of (disposePreparation).
+const (
+	// disposeCancelled: its creator cancels it (DELETE
+	// /account-preparations/:key); the plugin may refuse.
+	disposeCancelled = "cancelled"
+	// disposeAbandoned: its first prepare failed; the caller holds its lock.
+	// The row goes, giving back the core.MaxOpenDrafts slot and the
+	// idempotency key.
+	disposeAbandoned = "abandoned"
+	// disposeExpired: the sweep, for one that expired, was left alone or is
+	// still being cancelled.
+	disposeExpired = "expired"
+)
+
+// disposePreparation cancels p for reason: it tells the plugin (the cancel
+// phase; only a cancel by its creator stops on a refusal), marks the row
+// cancelling, which no longer counts as open, has the resource drop what it
+// started, then marks it cancelled (an abandoned one is deleted) and audits
+// it. A row not in a state reason applies to is a conflict, but for the
+// sweep. A failure leaves it cancelling for the sweep to retry.
+func (s *Service) disposePreparation(ctx context.Context, p core.AccountPreparation, reason string) error {
+	if reason != disposeAbandoned {
+		locked, release, err := s.lockPreparation(ctx, p.Key)
+		if err != nil {
+			return err
+		}
+		defer release()
+		ctx = locked
 	}
-	defer release()
 	resource, err := s.preparationResource(p)
 	if err != nil {
 		return err
 	}
-	tag, err := s.d.DB.Pool.Exec(ctx, `UPDATE account_preparations SET state='cancelling' WHERE key=$1 AND account_id IS NULL AND state IN ('pending','ready','cancelling') AND (NOT $2 OR state='cancelling' OR expires_at<=now() OR last_seen_at<now()-interval '15 minutes')`, p.Key, expiredOnly)
+	if err := s.preparationCallback(ctx, p, "cancel", ""); err != nil {
+		if reason == disposeCancelled {
+			return err
+		}
+		slog.WarnContext(ctx, "account: preparation cancel callback", "key", p.Key, "reason", reason, "err", err)
+	}
+	tag, err := s.d.DB.Pool.Exec(ctx, `UPDATE account_preparations SET state='cancelling' WHERE key=$1 AND account_id IS NULL
+		AND CASE $2::text WHEN 'abandoned' THEN state='pending'
+			WHEN 'expired' THEN state='cancelling' OR state IN ('pending','ready') AND (expires_at<=now() OR last_seen_at<now()-interval '15 minutes')
+			ELSE state IN ('pending','ready','cancelling') END`, p.Key, reason)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		if expiredOnly {
+		if reason == disposeExpired {
 			return nil
 		}
 		return core.ErrConflict
@@ -372,8 +384,18 @@ func (s *Service) disposePreparation(ctx context.Context, p core.AccountPreparat
 	if err := resource.CancelAccountPreparation(ctx, p); err != nil {
 		return err
 	}
-	_, err = s.d.DB.Pool.Exec(ctx, `UPDATE account_preparations SET state='cancelled' WHERE key=$1 AND account_id IS NULL AND state='cancelling'`, p.Key)
-	return err
+	final := `UPDATE account_preparations SET state='cancelled' WHERE key=$1 AND account_id IS NULL AND state='cancelling'`
+	if reason == disposeAbandoned {
+		final = `DELETE FROM account_preparations WHERE key=$1 AND account_id IS NULL AND state='cancelling'`
+	}
+	if _, err := s.d.DB.Pool.Exec(ctx, final, p.Key); err != nil {
+		return err
+	}
+	actor := p.CreatedBy
+	if reason == disposeExpired {
+		actor = 0
+	}
+	return audit.Audit(ctx, s.d.DB.Pool, actor, "account.preparation.cancel", "account_preparation", p.Key, map[string]any{"reason": reason})
 }
 
 // checkPreparationForCreate checks the preparation_key of POST /accounts and

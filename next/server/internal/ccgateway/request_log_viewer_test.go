@@ -27,7 +27,6 @@ func (a viewerAuth) PermissionSet(context.Context, int64) (core.PermissionSet, e
 func (a viewerAuth) VerifyAccessToken(context.Context, string) (int64, error) { return 1, nil }
 func (a viewerAuth) Can(_ context.Context, _ int64, key string) (bool, error) { return a[key], nil }
 func (a viewerAuth) CanGrant(context.Context, int64, []string) error          { return nil }
-func (a viewerAuth) CanActOn(context.Context, int64, []string) error          { return nil }
 
 const viewerLogID = "0b6f2a39-6f1e-4c5a-9a7b-2c3d4e5f6a7b"
 

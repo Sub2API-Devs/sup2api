@@ -35,7 +35,6 @@ func (f *fakeAuthz) PermissionSet(_ context.Context, uid int64) (core.Permission
 	return core.PermissionSet{Keys: ks}, nil
 }
 func (f *fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (f *fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type syncCall struct {
 	key   string
@@ -160,6 +159,10 @@ func newEnv(t *testing.T) *env {
 	e := &env{db: db, perms: &fakePerms{}, schemas: &fakeSchemas{},
 		accounts: &fakeAccounts{}, root: pkgtest.NewKey("root-1")}
 	e.rollout = &fakeRollout{db: db}
+	// The built-in roles a consent may name (the authz sync is not run).
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name, builtin) VALUES ('admin', '{}', true), ('operator', '{}', true), ('supplier', '{}', true), ('user', '{}', true) ON CONFLICT (key) DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
 	for _, email := range []string{"admin@x", "ops@x"} {
 		var id int64
 		if err := db.Pool.QueryRow(ctx, `INSERT INTO users (email, password_hash) VALUES ($1, 'x') RETURNING id`, email).Scan(&id); err != nil {

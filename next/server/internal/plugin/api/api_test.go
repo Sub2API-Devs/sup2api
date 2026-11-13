@@ -74,7 +74,6 @@ func (authz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, er
 	return core.PermissionSet{}, nil
 }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
-func (authz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type noopPerms struct{}
 

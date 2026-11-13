@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 
@@ -445,6 +446,9 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 // even with roles named - carrying a running plugin forward must not
 // require role:define.
 func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, req ConsentRequest, existing map[string]bool) error {
+	if err := checkNamedRolesExist(ctx, tx, req); err != nil {
+		return err
+	}
 	var roles []string
 	for _, up := range m.UserPermissions {
 		if named, ok := req.overrideRoles(up.Key); ok && !existing[manifest.PermissionKey(m.Key, up.Key)] {
@@ -474,6 +478,39 @@ func (s *Service) checkRolesGrantable(ctx context.Context, tx pgx.Tx, actorID in
 	roles = slices.Clone(roles)
 	slices.Sort(roles)
 	return s.d.Permissions.CanGrantToRoles(ctx, tx, actorID, slices.Compact(roles))
+}
+
+// checkNamedRolesExist fails (400) when the request names a role that does
+// not exist, under the request's own field, whether or not the permission
+// it is named for is created now.
+func checkNamedRolesExist(ctx context.Context, q store.Querier, req ConsentRequest) error {
+	named := slices.Clone(req.RoleKeysForNewPermissions)
+	for _, roles := range req.NewPermissionRoles {
+		named = append(named, roles...)
+	}
+	if len(named) == 0 {
+		return nil
+	}
+	var found []string
+	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM roles WHERE key = ANY($1)`, named).Scan(&found); err != nil {
+		return err
+	}
+	var errs []core.FieldError
+	check := func(field string, roles []string) {
+		for _, r := range roles {
+			if !slices.Contains(found, r) {
+				errs = append(errs, core.FieldError{Field: field, Code: "unknown", Message: fmt.Sprintf("role %q does not exist", r)})
+			}
+		}
+	}
+	check("role_keys_for_new_permissions", req.RoleKeysForNewPermissions)
+	for _, local := range slices.Sorted(maps.Keys(req.NewPermissionRoles)) {
+		check("new_permission_roles."+local, req.NewPermissionRoles[local])
+	}
+	if len(errs) > 0 {
+		return core.InvalidFields(errs...).WithMessage("the consent names unknown roles")
+	}
+	return nil
 }
 
 // catalogKeys are the keys of m's userPermissions and of their inheritFrom
