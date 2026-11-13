@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestSampled(t *testing.T) {
@@ -1203,6 +1204,11 @@ func TestFingerprint(t *testing.T) {
 	if fingerprint(spec, ScopeInput, auditors, channels, def) == fingerprint(spec, ScopeTools, auditors, channels, def) {
 		t.Error("scopes input and tools share a fingerprint")
 	}
+	// A flow without a scope (NULL) runs and hashes as input since 0.11.1, not as all.
+	if unset := fingerprint(spec, auditScope(nil), auditors, channels, def); unset != fingerprint(spec, ScopeInput, auditors, channels, def) ||
+		unset == fingerprint(spec, ScopeAll, auditors, channels, def) {
+		t.Error("a flow without a scope does not hash as input")
+	}
 	// The default set only matters to the auditors that use it.
 	own := map[int64]storedAuditor{1: auditors[1], 2: {typ: AuditorTypeSafe, channel: 2, config: []byte(`{"questions": {}}`)}}
 	if fingerprint(spec, ScopeAll, own, channels, def) != fingerprint(spec, ScopeAll, own, channels, []byte(`{"preamble":"q","items":[]}`)) {
@@ -1237,6 +1243,11 @@ func TestParseVerdict(t *testing.T) {
 	}
 	if _, err := parseVerdict(`{"verdict":"maybe"}`, known); err == nil {
 		t.Fatal("bad verdict accepted")
+	}
+	// The reason is clipped like the question-table auditor's (clipReason).
+	long := strings.Repeat("长", llmReasonRunes+100)
+	if v, err := parseVerdict(`{"verdict":"pass","reason":"`+long+`"}`, known); err != nil || v.Reason != strings.Repeat("长", llmReasonRunes-1)+"…" {
+		t.Fatalf("reason of %d runes, %v", utf8.RuneCountInString(v.Reason), err)
 	}
 }
 

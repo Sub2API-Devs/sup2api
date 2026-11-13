@@ -4,8 +4,9 @@ package moderation
 // flow moderates. The scope is a column of the flow and not a field of its
 // spec, because a 0.9.3 node drops a published spec with a field it does not
 // know (ParseSpec), and like enabled and the bindings it takes effect at once,
-// without a publish. NULL is all: every flow did that before the scope
-// existed, and a flow nobody chose a scope for keeps doing it (design D1).
+// without a publish. NULL (and a value no scope has) is ScopeNew, input
+// (0.11.1, was all, design D1): every flow moderates only the input unless
+// someone chose a wider scope for it.
 const (
 	ScopeInput = "input" // system, developer and user text, the user's images and documents
 	ScopeTools = "tools" // input and the tool results
@@ -35,10 +36,10 @@ func validScope(s string) bool {
 	return ok
 }
 
-// auditScope is the scope a flow runs with: its column, all when NULL.
+// auditScope is the scope a flow runs with: its column, ScopeNew when NULL or invalid.
 func auditScope(column *string) string {
 	if column == nil || !validScope(*column) {
-		return ScopeAll
+		return ScopeNew
 	}
 	return *column
 }

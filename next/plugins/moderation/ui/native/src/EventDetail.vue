@@ -178,7 +178,7 @@ const fields = computed<DescItem[]>(() => {
       <SAlert v-if="ev.flow_fallback" tone="warning" data-testid="mod-match-fallback">
         {{ t('detail.matchFallbackHint', { id: ev.flow_fallback.flow_id, reason: fallbackReason(ev) }) }}
       </SAlert>
-      <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
+      <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')"><span class="mod-prewrap">{{ ev.reason }}</span></SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
 
       <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" :openable="userLink" @watch-changed="onWatchChanged" @lists-changed="reload" @show-user="showUser" @open-user="openUser" />

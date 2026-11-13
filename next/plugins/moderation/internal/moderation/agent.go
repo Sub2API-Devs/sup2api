@@ -282,7 +282,7 @@ func parseVerdict(args string, known map[string]bool) (Verdict, error) {
 		if json.Unmarshal(*raw.Reason, &r) != nil {
 			return Verdict{}, errors.New("reason 必须是字符串")
 		}
-		v.Reason = textutil.TruncateRunes(strings.TrimSpace(r), 500)
+		v.Reason = clipReason(r)
 	}
 	if v.Verdict == VerdictPass {
 		v.Categories = []string{}
