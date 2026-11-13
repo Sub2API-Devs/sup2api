@@ -2961,7 +2961,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 1. **授权上限偏小**：`ledger.credit` 只有单笔 $10、整个插件每天 $100（UTC 日，所有用户合计），超出的返利和签到都不发。用户多了很快就会触顶。需要按运营规模调大 scope，或者把大额返利拆成多笔。
 2. **注册归因**：没有"注册时带邀请码"的入口。任何已登录用户随时都能绑定一次邀请人，不限于新用户。
-3. **默认可见性**：2026-11-12 起新装时 `growth:use` 默认授予 user、supplier、operator、admin（manifest `defaultRoles`）；此前普通用户角色默认没有 `growth:read`，需要管理员授予后才能看到菜单，升级后照旧按存量 `growth:read` 的持有者继承。
+3. **默认可见性**：2026-11-12 起新装时 `growth:use` 默认授予 user、supplier、operator、admin（manifest `defaultRoles`）；此前普通用户角色默认没有 `growth:read`，需要管理员授予后才能看到菜单。升级到带 `growth:use` 的版本时它也是新 key：既继承存量 `growth:read` 的持有者，也按 `defaultRoles` 授予这四个内置角色（同意时可以用 `new_permission_roles` 覆盖，例如 `{"growth:use": []}` 只保留继承）。
 4. 原生 UI 的 `dist/` 不在仓库里，打包前要先构建 `ui/native`。
 
 ## 46. 充值支付与兑换码插件 payment（0.1.0，2026-10-04 起草，2026-10-05 按合并后实现修正）
@@ -5797,7 +5797,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - **流程行 `errors` 的定义变了（0.8.0，照 new-api）**：按运行的 `errored` 计，即"有审核器出错或有级失败"的运行，不论最终结果是什么。0.7.2 及以前只在结果为 `error` 时加一。这样复核级坏了、初审命中仍然成立的运行，异常率还看得到。同一批流量下这个数只会变大或持平；它和"结果为 error 的记录数"不再是一回事。
   - 级行的级号是 spec 的级序号（补审级记在它自己的级号上）。
 - 渠道健康度不进 `stats_hourly`，记在 `costs` 的同一行（小时、渠道、来源）上：调用数、错误、延迟分桶。手动来源（test、try、simulate）不计入健康度。
-- `user_daily`：每个用户每个 UTC 日的审核数、可疑数、高危数、错误数、最近命中时间。共用一次 pre 审核的多个请求各记各的用户。持有 `moderation:read` 的用户（版主）不记。
+- `user_daily`：每个用户每个 UTC 日的审核数、可疑数、高危数、错误数、最近命中时间。共用一次 pre 审核的多个请求各记各的用户。持有 `moderation:exempt` 的用户（工作人员）不记。
 - 每个节点在内存里累加，每 10 秒写一次。写入串行，按固定键顺序 upsert，避免多节点死锁；失败的部分留到下一轮。读接口先写本节点的待写数据，其他节点最多晚 10 秒。
 - 不计入的情况：Shutdown 打断的运行，以及客户端已离开且没有命中的 pre 请求。
 - 清理：`stats_retention_days`（默认 90 天）删除 `stats_hourly`、`user_daily` 和 `costs`，与 72.10 的统计表一样在 `purgeRetention` 的锁内分批删除（0.5.1 起；此前 `costs` 固定保留 400 天、不分批）。

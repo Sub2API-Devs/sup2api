@@ -103,7 +103,7 @@ func TestManifestValid(t *testing.T) {
 		perms[up.Key] = up
 	}
 	use, stats := perms["growth:use"], perms["growth:stats:read"]
-	if len(perms) != 2 || !slices.Equal(use.InheritFrom, []string{"growth:read"}) || len(use.DefaultRoles) != 4 ||
+	if len(perms) != 2 || !slices.Equal(use.InheritFrom, []string{"growth:read"}) || !slices.Equal(use.DefaultRoles, []string{"user", "supplier", "operator", "admin"}) ||
 		!slices.Equal(stats.InheritFrom, []string{"growth:manage"}) || !stats.Sensitive || !slices.Equal(stats.Roles(), []string{"admin"}) {
 		t.Fatalf("user permissions = %+v", perms)
 	}

@@ -551,7 +551,8 @@
   - 其余插件按 T58 的表写 `defaultRoles: [admin]`：dynweight（`dynweight:read`、`dynweight:manage`）、volcengine（`assets:read`、`assets:manage`）、guard（三个）、anthropic（`model_catalog:read`）。与省略时的效果相同，只是写明。
   - 测试：`authz.TestSyncPluginSplitsGrowthAndModeration` 读取仓库里的真实 growth、moderation manifest，在旧 key 上同步：持有 `growth:read` 的角色获得 `growth:use`、持有 `growth:manage` 的获得 `growth:stats:read`、持有 `moderation:read` 的（含自定义角色）获得 `moderation:exempt`，旧 growth key 删除。`moderation.TestStaffIsExemptHolderCachedAMinute`。
 - 影响对象：
-  - 升级 growth 后：存量授权按继承原样保留，用户无感；角色页里 growth 的两个权限换了 key 与标签；直接写死旧 key 的外部脚本或自定义前端要改用新 key。旧 key 在激活新版本时删除，回到旧版本时旧 key 重新登记但不带授权（需要重新勾选）。新装 growth 时普通用户直接获得 `growth:use`（此前需要管理员手工授予）。
-  - 升级 moderation 后：持有 `moderation:read` 的角色同时获得 `moderation:exempt`，工作人员范围不变。此后两者可以分开：只读审核员可以取消 exempt 而照常被观察，被豁免者也不必能看审核页。取消豁免（或用户失去该权限）在 60 秒内生效（此前 5 分钟），每个用户每分钟最多问一次宿主。
+  - 生效时机：插件不升版本，已装这个版本的环境不会重新同步权限目录，以上变化要到下一次升版本（期 4 统一升）或重装时才生效。
+  - 升级 growth 后：存量授权按继承保留；但 `growth:use` 对目录来说是新 key，同意新版本时还会按 manifest `defaultRoles` 授予 user、supplier、operator、admin（T58 的规则，新装与升级相同）。于是此前没有给普通用户开 `growth:read` 的环境，升级后所有用户都能看到“我的邀请”“每日签到”并签到领奖励（审查发现，需要决定是否接受）；不想放开的，在升级同意时用 `new_permission_roles: {"growth:use": []}` 只保留继承（控制台目前只能整体勾选角色，需要直接调接口），或升级后在角色页取消。角色页里 growth 的两个权限换了 key 与标签；直接写死旧 key 的外部脚本或自定义前端要改用新 key。旧 key 在激活新版本时删除，回到旧版本时旧 key 重新登记但不带授权（需要重新勾选）。
+  - 升级 moderation 后：持有 `moderation:read` 的角色同时获得 `moderation:exempt`，工作人员范围不变；另外内置 admin 角色按省略 `defaultRoles` 的规则直接获得 exempt，即使它此前被取消了 `moderation:read`（与任务说明“exempt 只靠继承”有偏差：T58 的 manifest 写法无法表达“不授予任何角色”，`"defaultRoles": []` 等同省略。admin 默认就有 read，通常没有差别）。此后两者可以分开：只读审核员可以取消 exempt 而照常被观察，被豁免者也不必能看审核页。取消豁免（或用户失去该权限）在 60 秒内生效（此前 5 分钟），每个用户每分钟最多问一次宿主。
   - 命名一致性（`growth:stats:read` 与 `moderation:exempt` 的命名风格、`assets:*` 不带插件前缀等）：wontfix，key 改名会让存量授权依赖 `inheritFrom`，收益不足。
 - 回滚：revert 这个提交即可。已经同步过新 manifest 的环境回滚到旧代码后，旧 key 重新登记时没有授权（新 key 被删除），需要在角色页重新勾选 `growth:read`、`growth:manage`；moderation 回滚后 `moderation:exempt` 被删除、判定回到 read，无需处理。
