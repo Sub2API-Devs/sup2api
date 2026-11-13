@@ -52,6 +52,7 @@ const (
 	PermPubRead    = "publisher:read"
 	PermPubManage  = "publisher:manage"
 	PermNodeRead   = "node:read"
+	PermSelfUI     = "self:plugin_ui"
 )
 
 // RegisterRoutes mounts every route of the module.
@@ -60,8 +61,10 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodGet, "/plugins/rollouts", PermRead, a.listRollouts)
 	r.Perm(http.MethodGet, "/plugins/:key/rollouts", PermRead, a.listRollouts)
 	r.Perm(http.MethodGet, "/plugins/:key/history", PermRead, a.pluginHistory)
-	r.Perm(http.MethodPost, "/plugins/upload", PermInstall, a.upload)
-	r.Perm(http.MethodPost, "/plugins/install-from-market", PermInstall, a.installFromMarket)
+	// Code execution and trust roots: a step-up proof each time (§80.2).
+	install, grant, publishers := r.StepUp(core.StepUpPluginInstall), r.StepUp(core.StepUpPluginGrant), r.StepUp(core.StepUpPublisherManage)
+	install.Perm(http.MethodPost, "/plugins/upload", PermInstall, a.upload)
+	install.Perm(http.MethodPost, "/plugins/install-from-market", PermInstall, a.installFromMarket)
 	r.Perm(http.MethodGet, "/plugins/:key", PermRead, a.getPlugin)
 	r.Perm(http.MethodDelete, "/plugins/:key", PermUninstall, a.uninstall)
 	r.Perm(http.MethodGet, "/plugins/retired-keys", PermRead, a.listRetiredKeys)
@@ -69,18 +72,19 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodGet, "/plugins/:key/uninstall", PermRead, a.uninstallState)
 	r.Perm(http.MethodPost, "/plugins/:key/uninstall/confirm-stopped", PermUninstall, a.confirmStopped)
 	r.Perm(http.MethodGet, "/plugins/:key/versions/:version/review", PermRead, a.review)
-	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/consent", PermInstall, a.consent)
+	grant.Perm(http.MethodPost, "/plugins/:key/versions/:version/consent", PermInstall, a.consent)
 	r.Perm(http.MethodPost, "/plugins/:key/versions/:version/reject", PermInstall, a.reject)
 	r.Perm(http.MethodPost, "/plugins/:key/enable", PermManage, a.enable)
 	r.Perm(http.MethodPost, "/plugins/:key/disable", PermManage, a.disable)
 	r.Perm(http.MethodPost, "/plugins/:key/upgrade", PermManage, a.upgrade)
 	r.Perm(http.MethodGet, "/plugins/:key/rollouts/current", PermRead, a.currentRollout)
 	r.Perm(http.MethodPost, "/plugins/:key/rollouts/:id/cancel", PermManage, a.cancelRollout)
-	// plugin:read / plugin:manage, or the plugin's ui.settings.permission.
-	// Authed with CanAny in the handler: that key comes from the manifest, a
-	// dynamic key no static route can name.
-	r.Authed(http.MethodGet, "/plugins/:key/settings", a.getSettings)
-	r.Authed(http.MethodPut, "/plugins/:key/settings", a.putSettings)
+	// plugin:read / plugin:manage, or the plugin's ui.settings.permission,
+	// checked with CanAny in the handler: that key comes from the manifest,
+	// a dynamic key no static route can name. The route's own key is the
+	// plugin pages' self permission, which an access key must carry too.
+	r.Self(http.MethodGet, "/plugins/:key/settings", PermSelfUI, a.getSettings)
+	r.Self(http.MethodPut, "/plugins/:key/settings", PermSelfUI, a.putSettings)
 	r.Perm(http.MethodGet, "/plugins/:key/grants", PermRead, a.listGrants)
 	r.Perm(http.MethodDelete, "/plugins/:key/grants/:permission", PermManage, a.revokeGrant)
 	r.Perm(http.MethodPut, "/plugins/:key/resources", PermManage, a.putResources)
@@ -92,17 +96,17 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPost, "/plugins/:key/jobs/:job_id/run", task.PermRun, a.runJob)
 	r.Perm(http.MethodGet, "/plugins/:key/events", PermRead, a.events)
 
-	r.Authed(http.MethodGet, "/ui/plugins", a.uiPlugins)
+	r.Self(http.MethodGet, "/ui/plugins", PermSelfUI, a.uiPlugins)
 	r.Perm(http.MethodGet, "/nodes", PermNodeRead, a.nodes)
 
 	r.Perm(http.MethodGet, "/market/sources", PermMarketRead, a.marketSources)
 	r.Perm(http.MethodGet, "/market/plugins", PermMarketRead, a.marketPlugins)
 
 	r.Perm(http.MethodGet, "/publishers", PermPubRead, a.listPublishers)
-	r.Perm(http.MethodPost, "/publishers", PermPubManage, a.createPublisher)
-	r.Perm(http.MethodPost, "/publishers/:id/keys", PermPubManage, a.addPublisherKey)
-	r.Perm(http.MethodPost, "/publishers/:id/revoke", PermPubManage, a.revokePublisher)
-	r.Perm(http.MethodPost, "/publisher-keys/:key_id/revoke", PermPubManage, a.revokeKey)
+	publishers.Perm(http.MethodPost, "/publishers", PermPubManage, a.createPublisher)
+	publishers.Perm(http.MethodPost, "/publishers/:id/keys", PermPubManage, a.addPublisherKey)
+	publishers.Perm(http.MethodPost, "/publishers/:id/revoke", PermPubManage, a.revokePublisher)
+	publishers.Perm(http.MethodPost, "/publisher-keys/:key_id/revoke", PermPubManage, a.revokeKey)
 }
 
 // ctx returns the request context carrying the client IP for audit logs.

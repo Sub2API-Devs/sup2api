@@ -71,7 +71,7 @@ func TestAuthzVersionInMeAndHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustLogin(t, s, "v@example.com", "password-1")
-	if err := s.ChangePassword(ctx, u.ID, "", "password-1", "password-2"); err != nil {
+	if err := s.ChangePassword(ctx, u.ID, "", "password-2"); err != nil {
 		t.Fatal(err)
 	}
 	if h, m := versions(); h != header || m != me {

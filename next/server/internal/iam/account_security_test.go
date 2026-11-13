@@ -11,7 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -189,7 +189,7 @@ func TestPasswordChangeEndsAPendingSecondStep(t *testing.T) {
 	secret, _ := enableTwoFactor(t, s, id)
 	clearLastStep(t, s, id)
 	step := mustLogin(t, s, adminEmail, adminPassword)
-	if err := s.ChangePassword(ctx, id, "", adminPassword, "another-password-1"); err != nil {
+	if err := s.ChangePassword(ctx, id, "", "another-password-1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.LoginSecondFactor(ctx, step.FlowToken, codeAt(t, secret, time.Now()), testIP); err == nil {
@@ -197,19 +197,15 @@ func TestPasswordChangeEndsAPendingSecondStep(t *testing.T) {
 	}
 }
 
-func TestDisableTwoFactorNeedsPasswordAndCode(t *testing.T) {
+func TestDisableTwoFactor(t *testing.T) {
 	e := setupAdmin(t)
 	s, ctx := e.svc, context.Background()
 	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
-	secret, _ := enableTwoFactor(t, s, id)
-	clearLastStep(t, s, id)
-	if err := s.DisableTwoFactor(ctx, id, adminPassword, "000000", testIP); !isBadSecondFactor(err) {
-		t.Fatalf("wrong code: %v", err)
+	if err := s.DisableTwoFactor(ctx, id); !isCode(err, "conflict") {
+		t.Fatalf("disable without two-factor: %v", err)
 	}
-	if err := s.DisableTwoFactor(ctx, id, "wrong-password", codeAt(t, secret, time.Now()), testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("wrong password: %v", err)
-	}
-	if err := s.DisableTwoFactor(ctx, id, adminPassword, codeAt(t, secret, time.Now()), testIP); err != nil {
+	enableTwoFactor(t, s, id)
+	if err := s.DisableTwoFactor(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	if p := mustLogin(t, s, adminEmail, adminPassword); p.TwoFactorRequired {
@@ -221,33 +217,19 @@ func TestOperatorResetProtectsSuperusers(t *testing.T) {
 	e := setupAdmin(t)
 	s, ctx := e.svc, context.Background()
 	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
-	secret, _ := enableTwoFactor(t, s, root)
-	clearLastStep(t, s, root)
+	enableTwoFactor(t, s, root)
 	staff, err := s.CreateUser(ctx, root, CreateUserInput{Email: "staff@example.com", DisplayName: "Staff", Password: "staff-password-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ResetSecurity(ctx, staff.ID, root, SelfConfirmation{}, testIP); err == nil {
+	if err := s.ResetSecurity(ctx, staff.ID, root); err == nil {
 		t.Fatal("a non-superuser reset a superuser")
 	}
 	if st, _ := s.TwoFactor(ctx, root); !st.Enabled {
 		t.Fatal("the refused reset removed the factor")
 	}
-	// SEC-H3: one's own factors go only with the password and a code.
-	rootPassword := adminPassword
-	if err := s.ResetSecurity(ctx, root, root, SelfConfirmation{}, testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("self reset without confirmation: %v", err)
-	}
-	if err := s.ResetSecurity(ctx, root, root, SelfConfirmation{CurrentPassword: &rootPassword}, testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("self reset without a code: %v", err)
-	}
-	if err := s.ResetSecurity(ctx, root, root, SelfConfirmation{CurrentPassword: &rootPassword, Code: "000000"}, testIP); !isBadSecondFactor(err) {
-		t.Fatalf("self reset with a wrong code: %v", err)
-	}
-	if st, _ := s.TwoFactor(ctx, root); !st.Enabled {
-		t.Fatal("a refused self reset removed the factor")
-	}
-	if err := s.ResetSecurity(ctx, root, root, SelfConfirmation{CurrentPassword: &rootPassword, Code: codeAt(t, secret, time.Now())}, testIP); err != nil {
+	// Over HTTP the route verifies the caller (step-up user.security.reset).
+	if err := s.ResetSecurity(ctx, root, root); err != nil {
 		t.Fatal(err)
 	}
 	if st, _ := s.TwoFactor(ctx, root); st.Enabled {
@@ -256,59 +238,47 @@ func TestOperatorResetProtectsSuperusers(t *testing.T) {
 }
 
 // SEC-H3: a user changing their own password or email through the operator
-// route proves the current sign-in, as on /me/password; an operator changing
-// someone else's needs no such proof (they do not have it).
+// route spends a step-up proof of that scope, as on /me/password; an
+// operator changing someone else's password spends a user.password.reset one.
 func TestSelfUpdateRequiresConfirmation(t *testing.T) {
 	e := setupAdmin(t)
 	s, ctx := e.svc, context.Background()
 	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
-	newPassword, rootPassword, wrongPassword := "root-password-2", adminPassword, "not-the-password"
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Password: &newPassword}, testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("own password without confirmation: %v", err)
+	newPassword, email, name := "root-password-2", "root2@example.com", "Root"
+	if _, err := s.UpdateUser(noProof(ctx, root), root, root, UpdateUserInput{Password: &newPassword}); !isVerificationRequired(err) {
+		t.Fatalf("own password without a proof: %v", err)
 	}
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Password: &newPassword, SelfConfirmation: SelfConfirmation{CurrentPassword: &wrongPassword}}, testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("own password with a wrong current password: %v", err)
+	// A proof of another scope does not do.
+	if _, err := s.UpdateUser(withProof(t, s, ctx, root, core.StepUpSelfEmail), root, root, UpdateUserInput{Password: &newPassword}); !isVerificationRequired(err) {
+		t.Fatalf("own password with an email proof: %v", err)
 	}
 	if _, err := s.Login(ctx, adminEmail, newPassword, testIP); err == nil {
 		t.Fatal("the refused change took effect")
 	}
-	email := "root2@example.com"
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Email: &email}, testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("own email without confirmation: %v", err)
+	if _, err := s.UpdateUser(noProof(ctx, root), root, root, UpdateUserInput{Email: &email}); !isVerificationRequired(err) {
+		t.Fatalf("own email without a proof: %v", err)
 	}
-	name := "Root"
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
-		t.Fatalf("own display name needs no confirmation: %v", err)
+	if _, err := s.UpdateUser(noProof(ctx, root), root, root, UpdateUserInput{DisplayName: &name}); err != nil {
+		t.Fatalf("own display name needs no proof: %v", err)
 	}
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Password: &newPassword, SelfConfirmation: SelfConfirmation{CurrentPassword: &rootPassword}}, testIP); err != nil {
+	if _, err := s.UpdateUser(withProof(t, s, ctx, root, core.StepUpSelfPassword), root, root, UpdateUserInput{Password: &newPassword}); err != nil {
 		t.Fatal(err)
 	}
 	mustLogin(t, s, adminEmail, newPassword)
-	// Back to the password the two-factor helpers below sign in with.
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Password: &rootPassword, SelfConfirmation: SelfConfirmation{CurrentPassword: &newPassword}}, testIP); err != nil {
+	if _, err := s.UpdateUser(withProof(t, s, ctx, root, core.StepUpSelfEmail), root, root, UpdateUserInput{Email: &email}); err != nil {
 		t.Fatal(err)
 	}
+	mustLogin(t, s, email, newPassword)
 
-	// With two-factor authentication on, the password alone is not enough.
-	secret, _ := enableTwoFactor(t, s, root)
-	clearLastStep(t, s, root)
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Email: &email, SelfConfirmation: SelfConfirmation{CurrentPassword: &rootPassword}}, testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("own email without a code: %v", err)
-	}
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Email: &email, SelfConfirmation: SelfConfirmation{CurrentPassword: &rootPassword, Code: "000000"}}, testIP); !isBadSecondFactor(err) {
-		t.Fatalf("own email with a wrong code: %v", err)
-	}
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Email: &email, SelfConfirmation: SelfConfirmation{CurrentPassword: &rootPassword, Code: codeAt(t, secret, time.Now())}}, testIP); err != nil {
-		t.Fatal(err)
-	}
-	mustLogin(t, s, email, rootPassword)
-
-	// Operators still reset other users without any confirmation.
+	// An operator resetting someone else's password spends its own proof.
 	staff, err := s.CreateUser(ctx, root, CreateUserInput{Email: "staff2@example.com", Password: "staff-password-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.UpdateUser(ctx, root, staff.ID, UpdateUserInput{Password: &newPassword}, testIP); err != nil {
+	if _, err := s.UpdateUser(noProof(ctx, root), root, staff.ID, UpdateUserInput{Password: &newPassword}); !isVerificationRequired(err) {
+		t.Fatalf("operator reset without a proof: %v", err)
+	}
+	if _, err := s.UpdateUser(withProof(t, s, ctx, root, core.StepUpUserPasswordReset), root, staff.ID, UpdateUserInput{Password: &newPassword}); err != nil {
 		t.Fatalf("operator reset: %v", err)
 	}
 }
@@ -337,10 +307,10 @@ func TestOthersPasswordNeedsReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	name, pw := "renamed", "taken-over-1"
-	if _, err := s.UpdateUser(ctx, editor.ID, plain.ID, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+	if _, err := s.UpdateUser(ctx, editor.ID, plain.ID, UpdateUserInput{DisplayName: &name}); err != nil {
 		t.Fatalf("editor update: %v", err)
 	}
-	_, err = s.UpdateUser(ctx, editor.ID, plain.ID, UpdateUserInput{Password: &pw}, testIP)
+	_, err = s.UpdateUser(ctx, editor.ID, plain.ID, UpdateUserInput{Password: &pw})
 	var ce *core.Error
 	if !errors.As(err, &ce) || ce.Code != "permission_denied" || ce.Details["permission"] != "user:password:reset" {
 		t.Fatalf("editor set a password: %v", err)
@@ -363,20 +333,20 @@ func TestDisabledAdminStaysOutOfReach(t *testing.T) {
 		t.Fatal(err)
 	}
 	pw := "taken-over-1"
-	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Password: &pw}, testIP); !isCode(err, "permission_denied") {
+	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Password: &pw}); !isCode(err, "permission_denied") {
 		t.Fatalf("operator set an active admin's password: %v", err)
 	}
 	disabled, active := StatusDisabled, StatusActive
-	if _, err := s.UpdateUser(ctx, root, admin.ID, UpdateUserInput{Status: &disabled}, testIP); err != nil {
+	if _, err := s.UpdateUser(ctx, root, admin.ID, UpdateUserInput{Status: &disabled}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Password: &pw}, testIP); !isCode(err, "permission_denied") {
+	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Password: &pw}); !isCode(err, "permission_denied") {
 		t.Fatalf("operator set a disabled admin's password: %v", err)
 	}
-	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Status: &active}, testIP); !isCode(err, "permission_denied") {
+	if _, err := s.UpdateUser(ctx, operator.ID, admin.ID, UpdateUserInput{Status: &active}); !isCode(err, "permission_denied") {
 		t.Fatalf("operator re-enabled a disabled admin: %v", err)
 	}
-	if err := s.ResetSecurity(ctx, operator.ID, admin.ID, SelfConfirmation{}, testIP); !isCode(err, "permission_denied") {
+	if err := s.ResetSecurity(ctx, operator.ID, admin.ID); !isCode(err, "permission_denied") {
 		t.Fatalf("operator reset a disabled admin's factors: %v", err)
 	}
 	if err := s.DeleteUser(ctx, operator.ID, admin.ID); !isCode(err, "permission_denied") {
@@ -386,7 +356,7 @@ func TestDisabledAdminStaysOutOfReach(t *testing.T) {
 		t.Fatal("the disabled admin was taken over")
 	}
 	// The superuser, who outranks the admin, still can.
-	if _, err := s.UpdateUser(ctx, root, admin.ID, UpdateUserInput{Status: &active}, testIP); err != nil {
+	if _, err := s.UpdateUser(ctx, root, admin.ID, UpdateUserInput{Status: &active}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -418,14 +388,13 @@ func TestManagedUsersIncludeOneself(t *testing.T) {
 		return isCode(err, "permission_denied") && core.AsError(err).Details["reason"] == "not_manageable"
 	}
 	for _, actor := range []int64{admin, op} {
-		if _, err := s.UpdateUser(ctx, actor, actor, UpdateUserInput{DisplayName: &name}, testIP); !notManageable(err) {
+		if _, err := s.UpdateUser(ctx, actor, actor, UpdateUserInput{DisplayName: &name}); !notManageable(err) {
 			t.Errorf("user %d renames itself through /users/:id: %v", actor, err)
 		}
-		current := "self-password-1"
-		if _, err := s.UpdateUser(ctx, actor, actor, UpdateUserInput{Password: &pw, SelfConfirmation: SelfConfirmation{CurrentPassword: &current}}, testIP); !notManageable(err) {
+		if _, err := s.UpdateUser(withProof(t, s, ctx, actor, core.StepUpSelfPassword), actor, actor, UpdateUserInput{Password: &pw}); !notManageable(err) {
 			t.Errorf("user %d sets its password through /users/:id: %v", actor, err)
 		}
-		if err := s.ResetSecurity(ctx, actor, actor, SelfConfirmation{CurrentPassword: &current}, testIP); !notManageable(err) {
+		if err := s.ResetSecurity(ctx, actor, actor); !notManageable(err) {
 			t.Errorf("user %d resets its own security: %v", actor, err)
 		}
 		if _, err := s.SetUserRoles(ctx, actor, actor, []string{authz.RoleUser, authz.RoleSupplier}); !isCode(err, "permission_denied") {
@@ -433,16 +402,16 @@ func TestManagedUsersIncludeOneself(t *testing.T) {
 		}
 	}
 	// The operator manages suppliers and users.
-	if _, err := s.UpdateUser(ctx, op, supplier, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+	if _, err := s.UpdateUser(ctx, op, supplier, UpdateUserInput{DisplayName: &name}); err != nil {
 		t.Fatalf("operator renames a supplier: %v", err)
 	}
 	// The super admin manages itself.
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{DisplayName: &name}); err != nil {
 		t.Fatalf("super admin renames itself: %v", err)
 	}
 	// Nobody disables or deletes itself, the super admin included.
 	disabled := StatusDisabled
-	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}, testIP); !errors.Is(err, errSelfDisable) {
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}); !errors.Is(err, errSelfDisable) {
 		t.Fatalf("super admin disables itself: %v", err)
 	}
 	if err := s.DeleteUser(ctx, root, root); !errors.Is(err, errSelfDisable) {
@@ -471,9 +440,9 @@ func TestPeersCannotActOnEachOther(t *testing.T) {
 	// may revoke, so only the target check can refuse it.
 	acts := func(actor, target int64, roles ...string) map[string]error {
 		out := map[string]error{}
-		_, out["rename"] = s.UpdateUser(ctx, actor, target, UpdateUserInput{DisplayName: &name}, testIP)
-		_, out["password"] = s.UpdateUser(ctx, actor, target, UpdateUserInput{Password: &pw}, testIP)
-		out["reset security"] = s.ResetSecurity(ctx, actor, target, SelfConfirmation{}, testIP)
+		_, out["rename"] = s.UpdateUser(ctx, actor, target, UpdateUserInput{DisplayName: &name})
+		_, out["password"] = s.UpdateUser(withProof(t, s, ctx, actor, core.StepUpUserPasswordReset), actor, target, UpdateUserInput{Password: &pw})
+		out["reset security"] = s.ResetSecurity(ctx, actor, target)
 		_, out["roles"] = s.SetUserRoles(ctx, actor, target, roles)
 		out["delete"] = s.DeleteUser(ctx, actor, target)
 		return out
@@ -490,7 +459,7 @@ func TestPeersCannotActOnEachOther(t *testing.T) {
 	}
 	// Below them: the admin acts on the operator and on a user as before
 	// (the operator has no user:password:reset or user:delete by default).
-	if _, err := s.UpdateUser(ctx, op, plain, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+	if _, err := s.UpdateUser(ctx, op, plain, UpdateUserInput{DisplayName: &name}); err != nil {
 		t.Fatalf("operator renames a user: %v", err)
 	}
 	for target, roles := range map[int64][]string{op2: {authz.RoleOperator}, plain: {authz.RoleUser, authz.RoleOperator}} {
@@ -501,7 +470,7 @@ func TestPeersCannotActOnEachOther(t *testing.T) {
 		}
 	}
 	// The super admin is unaffected.
-	if _, err := s.UpdateUser(ctx, root, admin2, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+	if _, err := s.UpdateUser(ctx, root, admin2, UpdateUserInput{DisplayName: &name}); err != nil {
 		t.Fatalf("super admin renames an admin: %v", err)
 	}
 }
@@ -693,7 +662,7 @@ const consoleOrigin, consoleHost = "https://console.example.com", "console.examp
 func addPasskey(t *testing.T, s *Service, a *authenticator, userID int64) *Passkey {
 	t.Helper()
 	ctx, r := context.Background(), consoleRequest(consoleOrigin, consoleHost)
-	begin, err := s.BeginPasskeyRegistration(ctx, r, userID, adminPassword, testIP)
+	begin, err := s.BeginPasskeyRegistration(ctx, r, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -709,9 +678,6 @@ func TestPasskeyRegistrationAndLogin(t *testing.T) {
 	s, ctx := e.svc, context.Background()
 	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
 	r := consoleRequest(consoleOrigin, consoleHost)
-	if _, err := s.BeginPasskeyRegistration(ctx, r, id, "wrong-password", testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("wrong password: %v", err)
-	}
 	a := newAuthenticator(t, consoleOrigin, consoleHost)
 	p := addPasskey(t, s, a, id)
 	if p.Name != "My laptop" || p.RPID != consoleHost {
@@ -915,6 +881,33 @@ func (k *keyEnv) call(token, method, path string, body any) (int, map[string]any
 	return w.Code, out
 }
 
+// callProof is call with a step-up proof.
+func (k *keyEnv) callProof(token, proof, method, path string, body any) (int, map[string]any) {
+	raw, _ := json.Marshal(body)
+	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(core.HeaderVerifyProof, proof)
+	w := httptest.NewRecorder()
+	k.h.ServeHTTP(w, req)
+	var out map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	return w.Code, out
+}
+
+// proof verifies token's caller for scope and the operation "method path"
+// (path under /api/v1) with the fields of how, and returns the proof.
+func (k *keyEnv) proof(t *testing.T, token, scope, method, path string, how map[string]any) string {
+	t.Helper()
+	body := map[string]any{"scope": scope, "context": method + " /api/v1" + path}
+	maps.Copy(body, how)
+	code, out := k.call(token, "POST", "/me/verify", body)
+	if code != 200 {
+		t.Fatalf("verify %s: %d %v", scope, code, out)
+	}
+	return out["data"].(map[string]any)["proof"].(string)
+}
+
 func (k *keyEnv) createKey(t *testing.T, userID int64, password string, perms ...string) *AccessKey {
 	t.Helper()
 	key, err := k.s.CreateAccessKey(context.Background(), userID, CreateAccessKeyInput{Name: "ci", Password: password, Permissions: perms}, testIP)
@@ -1060,7 +1053,7 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 }
 
 // H1: a superuser's access key cannot hand out the super admin role, not even
-// one stored with role:assign (sessionOnly, dropped at verification); nor can
+// one with role:assign (a key is never a superuser); nor can
 // the superuser's own session, since the role only changes hands by transfer.
 func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	k := newKeyEnv(t)
@@ -1296,45 +1289,49 @@ func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
 	if !seen["user:read"] || seen["user:delete"] || seen["role:assign"] {
 		t.Fatalf("catalog = %v", seen)
 	}
-	// A plugin permission cannot be chosen: plugin routes do not take keys.
+	// A plugin permission the user holds can be chosen (§80, 期 4 S4).
 	if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('demo', '{"en":"x"}', 'enabled')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO permissions (key, module, label, source, plugin_key, status) VALUES ('plugin.demo:read', 'plugin.demo', '{"en":"x"}', 'plugin', 'demo', 'active')`); err != nil {
 		t.Fatal(err)
 	}
-	k.bump(t)
-	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
-	_, err = k.s.CreateAccessKey(ctx, root, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"plugin.demo:read"}}, testIP)
-	if !isCode(err, "permission_denied") {
-		t.Fatalf("a plugin permission: %v", err)
-	}
-	mods, err = k.s.AccessKeyPermissions(ctx, root)
+	k.grantRole(t, k.userID, "demo_reader", "plugin.demo:read")
+	mods, err = k.s.AccessKeyPermissions(ctx, k.userID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, m := range mods {
-		if m.Source == "plugin" {
-			t.Fatalf("catalog offers %s", m.Module)
-		}
+	if !slices.ContainsFunc(mods, func(m *authz.PermissionModule) bool { return m.Module == "plugin.demo" && m.Source == "plugin" }) {
+		t.Fatalf("the selector does not offer the held plugin permission: %+v", mods)
 	}
-	// A stored key carrying one anyway lists it as lost and never uses it.
-	key := k.createKey(t, root, adminPassword, "user:read")
-	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'plugin.demo:read') WHERE id = $1`, key.ID); err != nil {
+	key, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"plugin.demo:read", "user:read"}}, testIP)
+	if err != nil {
+		t.Fatalf("a plugin permission: %v", err)
+	}
+	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"plugin.demo:read", "user:read"}) {
+		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	}
+	// Disabled with its plugin, it is lost until the plugin is back.
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE permissions SET status = 'disabled' WHERE key = 'plugin.demo:read'`); err != nil {
 		t.Fatal(err)
 	}
-	if list, err := k.s.AccessKeys(ctx, root); err != nil || len(list) != 1 || !slices.Equal(list[0].Lost, []string{"plugin.demo:read"}) {
+	k.bump(t)
+	if list, err := k.s.AccessKeys(ctx, k.userID); err != nil || len(list) != 1 || !slices.Equal(list[0].Lost, []string{"plugin.demo:read"}) {
 		t.Fatalf("lost = %+v, %v", list, err)
 	}
-	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"user:read"}) {
-		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	mods, err = k.s.AccessKeyPermissions(ctx, k.userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(mods, func(m *authz.PermissionModule) bool { return m.Module == "plugin.demo" }) {
+		t.Fatal("the selector offers a disabled plugin permission")
 	}
 }
 
-// The session-only permissions (CONTRACTS §80) are never offered to a key,
-// not even a superuser's, cannot be chosen, and a stored key carrying one
-// lists it as lost and is refused on the routes it guards.
-func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
+// The former session-only permissions (期 4 S3) are offered to a key like any
+// other; the routes that execute code, reveal secrets or change trust roots
+// take a key with the permission only with a step-up proof.
+func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
 	cipher, err := secret.New(make([]byte, 32))
@@ -1344,13 +1341,12 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	ccgateway.New(k.s.db, cipher).RegisterRoutes(k.r)
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
 	root := login.User.ID
-	sessionOnly := []string{"role:define", "role:assign", "settings:manage", "user:password:reset",
-		// T57: code execution, trust roots and plaintext credentials.
+	former := []string{"role:define", "role:assign", "settings:manage", "user:password:reset",
 		"plugin:install", "plugin:uninstall", "plugin:grant:high", "plugin:grant:critical", "plugin:grant:db_schema_unconfined",
 		"publisher:manage", "system:update:execute", "system:update:recover",
 		"account:credential:view", "account:own:credential:view"}
-	// A stand-in for the plugin upload route, guarded by the same permission.
-	k.r.Perm(http.MethodPost, "/plugins/upload", "plugin:install", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	// A stand-in for the plugin upload route, guarded the same way.
+	k.r.StepUp(core.StepUpPluginInstall).Perm(http.MethodPost, "/plugins/upload", "plugin:install", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	mods, err := k.s.AccessKeyPermissions(ctx, root)
 	if err != nil {
@@ -1362,57 +1358,30 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 			offered[p.Key] = true
 		}
 	}
-	if !offered["settings:read"] {
-		t.Fatalf("catalog = %v", offered)
-	}
-	for _, p := range sessionOnly {
-		if offered[p] || authz.KeyAllowed(p) {
-			t.Fatalf("%s is offered to access keys", p)
+	for _, p := range former {
+		if !offered[p] {
+			t.Fatalf("%s is not offered to access keys", p)
 		}
 	}
-
-	body := map[string]any{"name": "x", "password": adminPassword, "permissions": []string{"settings:read", "settings:manage", "plugin:install"}}
-	code, out := k.call(login.AccessToken, "POST", "/me/access-keys", body)
-	e, _ := out["error"].(map[string]any)
-	details, _ := e["details"].(map[string]any)
-	if held, _ := details["session_only"].([]any); code != 403 || !slices.Contains(held, any("settings:manage")) || !slices.Contains(held, any("plugin:install")) || details["missing"] != nil {
-		t.Fatalf("choosing settings:manage: %d %v", code, out)
+	key := k.createKey(t, root, adminPassword, append([]string{"settings:read"}, former...)...)
+	if list, err := k.s.AccessKeys(ctx, root); err != nil || len(list[0].Lost) != 0 {
+		t.Fatalf("lost = %+v, %v", list, err)
 	}
-
-	key := k.createKey(t, root, adminPassword, "settings:read")
-	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = permissions || $2::text[] WHERE id = $1`, key.ID, sessionOnly); err != nil {
-		t.Fatal(err)
+	if code, out := k.call(key.Key, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 200 {
+		t.Fatalf("key with settings:manage: %d %v", code, out)
 	}
-	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"settings:read"}) {
-		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("key with plugin:install, no proof: %d %v", code, out)
 	}
-	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 || !strings.Contains(fmt.Sprint(out), "plugin:install") {
-		t.Fatalf("stored plugin:install: %d %v", code, out)
+	proof := k.proof(t, key.Key, core.StepUpPluginInstall, "POST", "/plugins/upload", map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(key.Key, proof, "POST", "/plugins/upload", nil); code != 204 {
+		t.Fatalf("key with plugin:install and a proof: %d %v", code, out)
 	}
-	if code, out := k.call(login.AccessToken, "POST", "/plugins/upload", nil); code != 204 {
-		t.Fatalf("session plugin:install: %d %v", code, out)
+	if code, out := k.callProof(key.Key, proof, "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("replayed proof: %d %v", code, out)
 	}
-	if code, out := k.call(key.Key, "GET", "/system/ccgateway/remote-config", nil); code != 200 {
-		t.Fatalf("settings:read: %d %v", code, out)
-	}
-	if code, out := k.call(key.Key, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 403 {
-		t.Fatalf("stored settings:manage: %d %v", code, out)
-	}
-	if code, out := k.call(login.AccessToken, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 200 {
-		t.Fatalf("session: %d %v", code, out)
-	}
-	code, out = k.call(login.AccessToken, "GET", "/me/access-keys", nil)
-	list, _ := out["data"].([]any)
-	if code != 200 || len(list) != 1 {
-		t.Fatalf("list: %d %v", code, out)
-	}
-	lost, _ := list[0].(map[string]any)["lost"].([]any)
-	if len(lost) != len(sessionOnly) {
-		t.Fatalf("lost = %v", lost)
-	}
-	for _, p := range sessionOnly {
-		if !slices.Contains(lost, any(p)) {
-			t.Fatalf("lost = %v, without %s", lost, p)
-		}
+	narrow := k.createKey(t, root, adminPassword, "settings:read")
+	if code, out := k.callProof(narrow.Key, k.proof(t, narrow.Key, core.StepUpPluginInstall, "POST", "/plugins/upload", map[string]any{"method": "password", "password": adminPassword}), "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "permission_denied" {
+		t.Fatalf("key without plugin:install: %d %v", code, out)
 	}
 }

@@ -115,12 +115,14 @@ func registerRoutes(r *httpapi.Router, available bool, client *http.Client, toke
 		r.Perm("GET", path, "system:update:read", handler)
 	}
 	r.Perm("POST", "/system/upgrades/preflight", "system:update:read", handler)
-	r.Perm("POST", "/system/upgrades", "system:update:execute", handler)
+	// Running other code on every node: a step-up proof each time (§80.2).
+	update := r.StepUp(core.StepUpSystemUpdate)
+	update.Perm("POST", "/system/upgrades", "system:update:execute", handler)
 	for _, action := range []string{"pause", "resume", "cancel", "rollback"} {
-		r.Perm("POST", "/system/upgrades/:id/"+action, "system:update:recover", handler)
+		update.Perm("POST", "/system/upgrades/:id/"+action, "system:update:recover", handler)
 	}
 	for _, action := range []string{"disable", "enable"} {
-		r.Perm("POST", "/system/nodes/:id/"+action, "system:update:recover", handler)
+		update.Perm("POST", "/system/nodes/:id/"+action, "system:update:recover", handler)
 	}
 	// CPU offload is a system setting of the managed cluster.
 	r.Perm("GET", "/system/offload", "settings:read", handler)
@@ -128,7 +130,7 @@ func registerRoutes(r *httpapi.Router, available bool, client *http.Client, toke
 	r.Perm("GET", "/system/update-source", "settings:read", handler)
 	r.Perm("PUT", "/system/update-source", "settings:manage", handler)
 	r.Perm("GET", "/system/update-check", "system:update:read", handler)
-	r.Perm("POST", "/system/releases/import", "system:update:execute", handler)
+	update.Perm("POST", "/system/releases/import", "system:update:execute", handler)
 }
 
 func auditAction(method, path string) (string, string) {

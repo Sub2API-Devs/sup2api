@@ -19,19 +19,22 @@ import (
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/login", s.handleLogin)
 	r.Public(http.MethodPost, "/auth/refresh", s.handleRefresh)
-	r.Authed(http.MethodPost, "/auth/logout", s.handleLogout)
+	r.SessionOnly().Handle(http.MethodPost, "/auth/logout", s.handleLogout)
 	r.AuthedRead("/me", s.handleMe)
-	r.Authed(http.MethodPut, "/me", s.handleUpdateMe)
-	r.Authed(http.MethodPut, "/me/password", s.handleChangePassword)
+	r.Self(http.MethodPut, "/me", "self:profile", s.handleUpdateMe)
+	// Step-up self.password.change in the handler, after the new password
+	// passes validation, so a rejected one does not spend the proof.
+	r.Self(http.MethodPut, "/me/password", selfSecurity, s.handleChangePassword)
 
 	r.Perm(http.MethodGet, "/users", "user:read", s.handleListUsers)
 	r.Perm(http.MethodPost, "/users", "user:create", s.handleCreateUser)
 	r.Perm(http.MethodGet, "/users/:id", "user:read", s.handleGetUser)
 	r.Perm(http.MethodPatch, "/users/:id", "user:update", s.handleUpdateUser)
-	r.Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
+	r.StepUp(core.StepUpUserDelete).Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
 	r.Perm(http.MethodPut, "/users/:id/roles", "role:assign", s.handleSetUserRoles)
 	r.Perm(http.MethodGet, "/segments/:id/members", "segment:read", s.handleSegmentMembers)
-	r.Authed(http.MethodPost, "/system/super-admin/transfer", s.handleTransferSuperAdmin)
+	// The super admin's own standing: under self:security for an access key.
+	r.StepUp(core.StepUpSuperAdminTransfer).Self(http.MethodPost, "/system/super-admin/transfer", selfSecurity, s.handleTransferSuperAdmin)
 	s.registerSecurityRoutes(r)
 }
 
@@ -117,13 +120,20 @@ func (s *Service) handleUpdateMe(c *gin.Context) {
 
 func (s *Service) handleChangePassword(c *gin.Context) {
 	var in struct {
-		OldPassword string `json:"old_password"`
 		NewPassword string `json:"new_password"`
 	}
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := s.ChangePassword(c.Request.Context(), actor(c), s.currentFamily(c), in.OldPassword, in.NewPassword); err != nil {
+	if f := validatePassword("new_password", in.NewPassword); f != nil {
+		httpapi.Fail(c, core.InvalidFields(*f))
+		return
+	}
+	if err := s.ConsumeStepUp(c.Request.Context(), core.StepUpSelfPassword); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if err := s.ChangePassword(c.Request.Context(), actor(c), s.currentFamily(c), in.NewPassword); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -233,12 +243,12 @@ func (s *Service) handleUpdateUser(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	u, err := s.UpdateUser(c.Request.Context(), actor(c), id, in, c.ClientIP())
+	u, err := s.UpdateUser(audit.Context(c), actor(c), id, in)
 	if err == nil {
 		err = s.redactBalance(c, u)
 	}
 	if err != nil {
-		failLogin(c, err) // Retry-After when the self-confirmation is rate limited
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, u)

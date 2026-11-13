@@ -8,6 +8,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
 // GET /market/plugins keeps data as the plugin array and reports the core
@@ -39,5 +40,45 @@ func TestResourcesMessage(t *testing.T) {
 	}
 	if m := resourcesMessage(false, install.StatusEnabled); !strings.Contains(m["en"], "next time") || m["zh"] == "" {
 		t.Fatalf("not notified = %v", m)
+	}
+}
+
+// refusingTokens refuses every step-up proof (shallower than the pass
+// tokens embeds), to show which routes ask for one.
+type refusingTokens struct {
+	tokens
+	testutil.StepUpRefused
+}
+
+// Code execution and trust roots take a step-up proof (CONTRACTS §80.2):
+// installing, consenting and the publishers' writes; rejecting, enabling,
+// uninstalling and reading do not.
+func TestPluginRoutesStepUp(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	New(Deps{}).RegisterRoutes(httpapi.NewRouter(engine, refusingTokens{}, authz{}))
+	h := &harness{t: t, engine: engine}
+	for _, tc := range []struct {
+		method, path string
+		stepUp       bool
+	}{
+		{"POST", "/plugins/upload", true},
+		{"POST", "/plugins/install-from-market", true},
+		{"POST", "/plugins/guard/versions/0.1.0/consent", true},
+		{"POST", "/publishers", true},
+		{"POST", "/publishers/1/keys", true},
+		{"POST", "/publishers/1/revoke", true},
+		{"POST", "/publisher-keys/k/revoke", true},
+		// Not these (no database here: they fail further on, not with 403).
+		{"POST", "/plugins/guard/versions/0.1.0/reject", false},
+		{"POST", "/plugins/guard/enable", false},
+		{"DELETE", "/plugins/guard", false},
+		{"GET", "/publishers", false},
+	} {
+		code, out := h.do(tc.method, tc.path, "admin", nil)
+		e, _ := out["error"].(map[string]any)
+		if got := code == 403 && e["code"] == "verification_required"; got != tc.stepUp {
+			t.Errorf("%s %s: %d %v, step-up wanted %v", tc.method, tc.path, code, out, tc.stepUp)
+		}
 	}
 }

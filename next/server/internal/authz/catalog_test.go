@@ -11,15 +11,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
-func TestKeyAllowed(t *testing.T) {
-	t.Parallel()
-	for key, want := range map[string]bool{"plugin.x:y": false, "user:read": true, "unknown:key": true} {
-		if got := KeyAllowed(key); got != want {
-			t.Fatalf("KeyAllowed(%q) = %v, want %v", key, got, want)
-		}
-	}
-}
-
 // superOnlyKeys are the catalog's super-only permissions, sorted.
 func superOnlyKeys() []string {
 	var keys []string
@@ -76,18 +67,15 @@ func TestBuiltinWhitelistsAreCatalogKeys(t *testing.T) {
 	}
 }
 
-// Catalog invariants: a session-only permission is one worth flagging, and a
+// Catalog invariants: a step-up permission is one worth flagging, and a
 // super-only one reaches no built-in role by default nor by inheriting from
 // a permission that is not super-only itself.
 func TestCatalogFlagInvariants(t *testing.T) {
 	t.Parallel()
-	for _, m := range coreModules {
+	for _, m := range slices.Concat(coreModules, []coreModule{selfModule}) {
 		for _, p := range m.perms {
-			if p.sessionOnly && !p.sensitive {
-				t.Errorf("%s is sessionOnly but not sensitive", p.key)
-			}
-			if p.sessionOnly && KeyAllowed(p.key) {
-				t.Errorf("%s is sessionOnly but allowed in access keys", p.key)
+			if p.stepUp && !p.sensitive {
+				t.Errorf("%s is stepUp but not sensitive", p.key)
 			}
 			if !p.superOnly {
 				continue
@@ -108,17 +96,18 @@ func TestCatalogFlagInvariants(t *testing.T) {
 
 // The flagged sets are pinned: sensitive covers credentials, money, trust
 // roots, code execution and identity or authorization (display only);
-// sessionOnly is the decided list kept out of access keys (CONTRACTS §80).
+// stepUp marks the permissions whose routes need a step-up proof
+// (CONTRACTS §80.2, display only).
 func TestCatalogFlaggedSets(t *testing.T) {
 	t.Parallel()
-	var sensitive, session []string
+	var sensitive, stepUp []string
 	for _, m := range coreModules {
 		for _, p := range m.perms {
 			if p.sensitive {
 				sensitive = append(sensitive, p.key)
 			}
-			if p.sessionOnly {
-				session = append(session, p.key)
+			if p.stepUp {
+				stepUp = append(stepUp, p.key)
 			}
 		}
 	}
@@ -132,25 +121,24 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		"system:update:execute", "system:update:recover",
 		"task:manage", "task:run", "usage:settle", "user:delete", "user:password:reset",
 	}
-	wantSession := []string{
+	wantStepUp := []string{
 		"account:credential:view", "account:own:credential:view",
 		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
-		"plugin:install", "plugin:uninstall", "publisher:manage",
-		"role:assign", "role:define", "settings:manage",
-		"system:update:execute", "system:update:recover", "user:password:reset",
+		"plugin:install", "proxy:manage", "publisher:manage",
+		"system:update:execute", "system:update:recover", "user:delete", "user:password:reset",
 	}
 	// Decision D2: what only the super admin holds by default.
 	wantSuper := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
 	slices.Sort(sensitive)
-	slices.Sort(session)
+	slices.Sort(stepUp)
 	if super := superOnlyKeys(); !slices.Equal(super, wantSuper) {
 		t.Errorf("superOnly = %v, want %v", super, wantSuper)
 	}
 	if !slices.Equal(sensitive, wantSensitive) {
 		t.Errorf("sensitive = %v\nwant %v", sensitive, wantSensitive)
 	}
-	if !slices.Equal(session, wantSession) {
-		t.Errorf("sessionOnly = %v, want %v", session, wantSession)
+	if !slices.Equal(stepUp, wantStepUp) {
+		t.Errorf("stepUp = %v, want %v", stepUp, wantStepUp)
 	}
 }
 
@@ -177,7 +165,7 @@ func TestSyncCoreInheritsAndAuditsGrants(t *testing.T) {
 	defer func() { coreModules = saved }()
 	coreModules = slices.Clone(coreModules)
 	i := coreModuleOrder["role"]
-	probe := corePerm{key: "role:probe", en: "Probe", zh: "探针", sensitive: true, sessionOnly: true, inherits: []string{"legacy:split"}}
+	probe := corePerm{key: "role:probe", en: "Probe", zh: "探针", sensitive: true, stepUp: true, inherits: []string{"legacy:split"}}
 	coreModules[i].perms = append(slices.Clone(coreModules[i].perms), probe)
 
 	type grant struct {
@@ -235,9 +223,6 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 		t.Fatalf("inherited grant: %v, %v", held, err)
 	}
 
-	if KeyAllowed("role:probe") {
-		t.Fatal("a sessionOnly permission is allowed in access keys")
-	}
 	mods, err := s.ListPermissions(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -245,11 +230,11 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 	only := map[string]bool{}
 	for _, m := range mods {
 		for _, p := range m.Permissions {
-			only[p.Key] = p.SessionOnly
+			only[p.Key] = p.StepUp
 		}
 	}
 	if !only["role:probe"] || only["role:read"] {
-		t.Fatalf("session_only: probe %v, role:read %v", only["role:probe"], only["role:read"])
+		t.Fatalf("step_up: probe %v, role:read %v", only["role:probe"], only["role:read"])
 	}
 }
 

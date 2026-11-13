@@ -9,7 +9,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
@@ -210,15 +209,9 @@ func (s *Service) sessionsChanged(ctx context.Context, uids ...int64) {
 	}
 }
 
-// currentFamily reads the session id from the caller's verified access token.
+// currentFamily is the caller's login session (core.Session).
 func (s *Service) currentFamily(c *gin.Context) string {
-	token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
-	var claims accessClaims
-	if _, err := jwt.ParseWithClaims(token, &claims, func(*jwt.Token) (any, error) { return s.cfg.JWTSecret, nil },
-		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()})); err != nil {
-		return ""
-	}
-	return claims.Family
+	return core.Session(c.Request.Context())
 }
 
 // UpdateProfile changes what the user may change about themselves.

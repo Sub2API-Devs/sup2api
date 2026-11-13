@@ -124,7 +124,7 @@ func (a *scopedAccounts) AccountsInScope(_ context.Context, uid int64, action st
 func scopeEnv(t *testing.T, o Options) *hostServer {
 	t.Helper()
 	h := hostEnv(t, o, registry.Grants{"accounts.read": json.RawMessage(`{}`)})
-	t.Cleanup(h.i.callers.enter(7))
+	t.Cleanup(h.i.callers.enter(context.Background(), 7))
 	return h
 }
 
@@ -170,7 +170,7 @@ func TestHostAccountScopeCheckNeedsGrantAndCaller(t *testing.T) {
 	acc := &scopedAccounts{fakeAccounts: &fakeAccounts{}, all: true}
 
 	ungranted := hostEnv(t, Options{Accounts: acc}, registry.Grants{"authz.read": json.RawMessage(`{}`)})
-	t.Cleanup(ungranted.i.callers.enter(7))
+	t.Cleanup(ungranted.i.callers.enter(context.Background(), 7))
 	if _, err := ungranted.AccountScopeCheck(t.Context(), in); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("without accounts.read: %v", err)
 	}
@@ -184,8 +184,8 @@ func TestHostAccountScopeCheckNeedsGrantAndCaller(t *testing.T) {
 	}
 
 	// The caller counts for as long as one of their requests is in flight.
-	second := h.i.callers.enter(8)
-	leave := h.i.callers.enter(8)
+	second := h.i.callers.enter(context.Background(), 8)
+	leave := h.i.callers.enter(context.Background(), 8)
 	leave()
 	if _, err := h.AccountScopeCheck(t.Context(), &pluginv1.AccountScopeCheckRequest{UserId: 8, Action: "read"}); err != nil {
 		t.Fatalf("one of two requests still in flight: %v", err)
@@ -195,7 +195,7 @@ func TestHostAccountScopeCheckNeedsGrantAndCaller(t *testing.T) {
 		t.Fatalf("after the request ended: %v", err)
 	}
 	// A request without a user (webhook, public route) admits nobody.
-	h.i.callers.enter(0)
+	h.i.callers.enter(context.Background(), 0)
 	if h.i.callers.has(0) {
 		t.Fatal("user 0 counted as a caller")
 	}

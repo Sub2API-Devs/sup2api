@@ -56,7 +56,7 @@
 | 失败 | HTTP 状态码 + `{"error": {"code": "...", "message": "...", "details": {...}}}` |
 | 字段校验失败 | `invalid_argument`，`details.fields = [{"field","code","message"}]` |
 
-错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`too_many_drafts` 429（未完成的账号草稿或预备容器达到单用户上限，§49.9）、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
+错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`verification_required` 403（缺少或无效的二次验证 proof，`details {scope, context, methods, password_required}`，§80.2，2026-11-13）、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`too_many_drafts` 429（未完成的账号草稿或预备容器达到单用户上限，§49.9）、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随 2026-10 的二次验证一起删除，§3.3；2026-11-13 的新二次验证用 `verification_required`，§80.2。）
 
 ### 3.2 数据格式
 
@@ -70,31 +70,32 @@
 
 - 控制台：`Authorization: Bearer <access_token>`（JWT，HS256，`sub` 为用户 ID，默认 2 小时有效）
 - **已取消二次验证（2026-10-05 用户决定）**：不再有密码确认（step-up）。`POST /auth/step-up`、`X-Step-Up-Token` 请求头、`step_up_required` 错误码、`core.StepUpVerifier`、`Authorizer.IsSensitive`、`Router.PermStepUp` 全部删除；任何操作（调整余额、删除用户/账号、查看凭证、角色授权、插件安装/卸载、系统更新等）只看登录态 + RBAC 权限。旧前端仍发送 `X-Step-Up-Token` 时核心直接忽略。
+- **二次验证重新引入（2026-11-13，权限加固期 4，用户决定照 new-api）**：只用于少数高危操作，按 scope 换短时一次性 proof（`X-Verify-Proof`），会话与访问密钥同一套，见 §80.2。上面这条只说明旧的 step-up 机制已删除。
 - 路由注册：`r.Public` / `r.Authed` / `r.Perm(method, path, permission, handler)` / `r.PermAny(method, path, handler, keys...)`（任一 key 即可，§21.1）
 - 网关：由插件声明的端点按 `auth.headers` 读取 API Key；错误格式按端点的 `errorFormat`
 
 ## 4. 权限清单（核心）
 
-模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`session_only`）表示只能由登录会话使用，访问密钥不能带（§80）。👑（`superOnly`，2026-11-12，决策 D2）表示超管专属：不在任何内置角色的默认权限里（新库、新增权限的自动授予、恢复默认都不给），默认只有超级管理员持有；授予检查只要求操作者自己持有（§43.6），所以委派总是从超级管理员开始（超管把它授给某个角色后，该角色的持有者若有 `role:define`、`role:assign` 也能继续授出，全程审计）；`GET /permissions` 不返回这个标记。存量库里内置 `admin`、`operator` 角色上的这 5 个权限由迁移 `0099_reclaim_super_only.sql` 回收一次（每条写审计 `authz.reclaim.super_only`，actor 为系统，`detail {role, key}`；自定义角色不动），之后超管可再显式授回。
+模块、key、是否敏感（🔐）。由 A 在 `authz` 中注册为 core 权限，启动时同步到 `permissions` 表。🔐（`sensitive`）现在只是**展示用的高危标记**（`GET /permissions` 返回，角色编辑器据此提示），不再触发任何额外验证（§3.3），也与访问密钥无关；口径是凭证、资金、信任根、代码执行、身份与授权（2026-11-12）。🔑（`step_up`，2026-11-13 期 4 起，取代此前的 `session_only`“只认会话”）表示使用它的部分高危接口每次要先完成二次验证（§80.2），会话与访问密钥一样；仅为展示标记，`GET /permissions` 返回 `step_up`，规则以路由为准。另有 `self` 虚拟权限模块（§80.1），不在本表和角色编辑器里。👑（`superOnly`，2026-11-12，决策 D2）表示超管专属：不在任何内置角色的默认权限里（新库、新增权限的自动授予、恢复默认都不给），默认只有超级管理员持有；授予检查只要求操作者自己持有（§43.6），所以委派总是从超级管理员开始（超管把它授给某个角色后，该角色的持有者若有 `role:define`、`role:assign` 也能继续授出，全程审计）；`GET /permissions` 不返回这个标记。存量库里内置 `admin`、`operator` 角色上的这 5 个权限由迁移 `0099_reclaim_super_only.sql` 回收一次（每条写审计 `authz.reclaim.super_only`，actor 为系统，`detail {role, key}`；自定义角色不动），之后超管可再显式授回。
 
 | 模块 | 权限 |
 |---|---|
-| user | `user:read` `user:create` `user:update` `user:delete`🔐 `user:password:reset`🔐🔑 |
-| role | `role:read` `role:define`🔐🔑 `role:assign`🔐🔑（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色；升级时持有 `role:manage` 的角色同时获得两者，`role:manage` 标为 removed） |
+| user | `user:read` `user:create` `user:update` `user:delete`🔐🔑 `user:password:reset`🔐🔑 |
+| role | `role:read` `role:define`🔐 `role:assign`🔐（2026-11-12 由 `role:manage` 拆分：定义角色 / 给用户分配角色；升级时持有 `role:manage` 的角色同时获得两者，`role:manage` 标为 removed） |
 | group | `group:read` `group:manage`🔐 |
 | segment | `segment:read` `segment:manage`（用户组，§97.7） |
 | account | `account:read` `account:create` `account:update` `account:delete`🔐 `account:test` `account:credential:view`🔐🔑；自己创建的：`account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐🔑；`account:settings:custom`（§21）`account:group:bind` `account:relay`🔐 |
-| proxy | `proxy:read` `proxy:manage`🔐；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
+| proxy | `proxy:read` `proxy:manage`🔐🔑；自己创建的：`proxy:own:read` `proxy:own:manage`（§21） |
 | price | `price:read` `price:manage`🔐 |
 | balance | `balance:self:read` `balance:all:read` `balance:adjust`🔐 |
 | usage | `usage:self:read` `usage:all:read` |
 | sticky | `sticky:read` `sticky:manage` |
-| plugin | `plugin:read` `plugin:install`🔐🔑 `plugin:manage`🔐 `plugin:uninstall`🔐🔑 `plugin:grant:high`🔐🔑 `plugin:grant:critical`🔐🔑👑 `plugin:grant:db_schema_unconfined`🔐🔑👑 `plugin:egress:read` `plugin:market:read` |
+| plugin | `plugin:read` `plugin:install`🔐🔑 `plugin:manage`🔐 `plugin:uninstall`🔐 `plugin:grant:high`🔐🔑 `plugin:grant:critical`🔐🔑👑 `plugin:grant:db_schema_unconfined`🔐🔑👑 `plugin:egress:read` `plugin:market:read` |
 | publisher | `publisher:read` `publisher:manage`🔐🔑👑 |
 | node | `node:read` |
 | audit | `audit:read`（2026-11-12 由 node 模块移出，key 不变） |
 | gateway | `gateway:use` |
-| settings | `settings:read` `settings:manage`🔐🔑 |
+| settings | `settings:read` `settings:manage`🔐 |
 | system_update | `system:update:read` `system:update:execute`🔐🔑👑 `system:update:recover`🔐🔑👑 |
 
 内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `supplier` 与 `user` 两个角色的默认权限（own 级账号与代理权限与全量级重复，保留是为了与角色编辑器“全部 = {all, own}”一致并能授出 supplier）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，核心默认权限只有这些（插件权限按 manifest `defaultRoles` 授予，payment 的 `recharge:use`、growth 的 `growth:use` 列了 supplier），暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。新登记的插件权限授予 manifest `userPermissions[].defaultRoles` 列出的内置角色（`admin`、`operator`、`supplier`、`user`，即 `manifest.BuiltinRoleKeys`；省略或 `null` 时为 `admin`，显式 `[]` 表示不授予任何角色；超管角色本来拥有全部权限，不写入），以及持有本插件 `inheritFrom` 所列旧 key 的角色（改名、拆分不丢授权，先授予再删除不再声明的旧 key）。声明了 `inheritFrom` 且目录里已有其中某个旧 key 时视为改名或拆分，只按继承授予、不叠加 `defaultRoles`；全新安装没有旧 key，才按 `defaultRoles`；每一条都写 `authz.sync.grant` 审计（`detail.via` 为 `default` 或 `inherit`）。同意请求可以显式覆盖：`new_permission_roles: {<本地 key>: [角色 key]}` 优先（空数组表示不授予任何角色，`inheritFrom` 照常生效），其次旧字段 `role_keys_for_new_permissions`（非空时作用于其余全部新权限），都没有时按 manifest 默认；已存在的权限不受影响（2026-11-12 权限加固 T58）。manifest 默认属于系统目录默认，同意时不要求操作者的任何权限（审计操作者为系统）；显式指定的角色要求操作者持有 `role:define`，且每个角色都必须是操作者能修改的角色（与 `PUT /roles/:id/permissions` 的 `editableRole` 同一判断：内置角色只有超管，自定义角色的现有权限须在操作者权限之内），并且必须在操作者的可分配清单内（与 `PUT /users/:id/roles` 的可分配判断相同，访问密钥没有可分配清单；不在清单内 403，`details.role`），非超管也不能指定自己持有的角色（即使清单按名字列出了它，403，`details.role`），超管角色一律 403，未知角色 400；新权限本身不要求操作者持有（这一点与 PUT `/roles/:id/permissions` 不同，那里新增的权限须在操作者之内），但因为不能指定自己持有的角色，操作者无法借此给自己新增权限。只有本次真正新建的权限才检查，升级不新增权限时带了角色也不需要 `role:define`（T59）。
@@ -113,7 +114,7 @@
 | GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser, authz_version}`。`authz_version` 是读取 `permissions` 时的 authz 版本。控制台 API 每个通过认证的响应（含 403，含插件 admin/user 路由 `/api/v1/p/:key/*`）带响应头 `X-Authz-Version`：本节点已知的最新 authz 版本（`core.AuthzVersioner`，不查库；角色、授权、权限目录的变更，以及创建、删除用户和改用户状态都会推进它；登出、撤销会话、改密码走 `iam:user:changed`，不推进）。头是认证那一刻的版本，变更请求自身的响应不反映该变更。头的值大于手里 `/me` 的 `authz_version` 时权限可能已变，应重新取 `/me`；头可能短暂落后或领先于取 `/me` 的节点（广播未到、多节点），所以同一个头值至多触发一次重取：记 `seen = max(me.authz_version, 上次触发重取的头值)`，只在头大于 `seen` 时重取。401 与插件代理路由不带这个头 |
 | GET `/me/assignable-roles` | auth | 可分配角色：`[{key, name:{en,zh}, builtin, grantable, missing:[key], missing_assignable:[key], missing_assign_custom}]`，只含调用者可分配清单内的角色（超管为全部），不含 `super_admin`，内置在前；`grantable=false` 表示角色所含权限或可分配角色超出调用者，`missing*` 同 403 的 details（前端置灰提示）；不列默认角色 `user` 对无角色用户的豁免；访问密钥下为 `[]`（§80） |
 | GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/security/finance/users/plugins/system/me` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
-| PUT `/me/password` | auth | `{old_password, new_password}` |
+| PUT `/me/password` | `self:security` | `{new_password}`，二次验证 `self.password.change`（密码 + 第二因素，§80.2；2026-11-13 起不再收 `old_password`，新密码先校验再消耗 proof） |
 
 ### 5.2 用户、角色、权限（A）
 
@@ -124,7 +125,7 @@
 | GET/PATCH `/users/:id` | `user:read` / `user:update`；更新须目标是操作者可管理的用户（可管理目标，§43.6），本人也按此判断（admin、operator 改自己走 `/me/*`）；修改他人密码需 `user:password:reset`🔐；修改影响认证的字段（密码、status、禁用）会递增 `token_version` 使旧 token 失效 |
 | DELETE `/users/:id` | `user:delete`；目标须是操作者可管理的用户（可管理目标，§43.6）；不能删除自己（安全约束） |
 | PUT `/users/:id/roles` `{role_keys[]}` | `role:assign`；新增和撤销的角色都必须在操作者的可分配清单内（否则 403 `details.role`）；新增角色所含权限与可分配角色必须在操作者之内（给自己分配也一样，否则 403 `details.missing`/`missing_assignable`）；`super_admin` 任何人都不能经此授予或撤销（403，只能移交）；有变化时记一条 `user.roles` 审计 `{added, removed}`（§43.6） |
-| POST `/system/super-admin/transfer` `{target_user_id, current_password, code}` → 204 | 仅超级管理员本人的登录会话（访问密钥 403，非超管 403 且不消耗登录限流）；先确认本人（密码 + 已开启的两步验证码，复用登录限流与 2FA 锁定，缺失 400）；目标须为未删除、启用中的其他用户（否则 400 `details.fields[{field:"target_user_id", code:"self"\|"not_found"\|"inactive"}]`）。同一事务内：目标获得 `super_admin`，原持有者全部降为 `admin`，双方全部会话立即失效（§43.2，需重新登录）；记一条 `superadmin.transfer` 审计 `{from:[id], to, via:"console"}`（§43.6） |
+| POST `/system/super-admin/transfer` `{target_user_id}` → 204 | 仅超级管理员本人（会话，或带 `self:security` 的访问密钥）；二次验证 `superadmin.transfer`（密码 + 一种第二因素，都没配只验密码，§80.2；2026-11-13 起取代请求体里的 `current_password`、`code`），非超管 403；目标须为未删除、启用中的其他用户（否则 400 `details.fields[{field:"target_user_id", code:"self"\|"not_found"\|"inactive"}]`）。同一事务内：目标获得 `super_admin`，原持有者全部降为 `admin`，双方全部会话立即失效（§43.2，需重新登录）；记一条 `superadmin.transfer` 审计 `{from:[id], to, via:"console"}`（§43.6） |
 | GET `/segments`（`?q=&kind=named\|personal`），GET `/segments/:id` | `segment:read`；用户组，对象与各接口的细节见 §97.6 |
 | POST `/segments` `{name, description, discount}`，PATCH/DELETE `/segments/:id` | `segment:manage`；默认用户组和个人专属不能用 DELETE 删除（409） |
 | GET `/segments/:id/members`（`?q=`） | `segment:read` 且 `user:read`；行同 GET `/users` |
@@ -135,7 +136,7 @@
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:define`；新增的 permission_keys 必须是操作者持有权限的子集，角色当前的权限也不能超出操作者（§43.6） |
 | PUT `/roles/:id/assignable` `{role_keys[], assign_custom}` | `role:define`；新增的可分配角色必须在操作者可分配范围内，角色当前的清单也不能超出操作者（§43.6） |
 | POST `/roles/:id/reset` | `role:define`；内置角色恢复默认（§15.7） |
-| GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,session_only,status}]}]`（`session_only`：只能由会话使用，访问密钥不能带） |
+| GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,step_up,status}]}]`（`step_up`：部分接口使用时需二次验证，展示用，§80.2；2026-11-13 取代 `session_only`）；不含 `self` 虚拟模块 |
 
 原来的 GET / PUT `/users/:id/groups`（给单个用户分配分组）已删除：私有分组改为授权给用户组，每个用户只属于一个用户组（§97）。
 
@@ -216,14 +217,14 @@
 | POST `/plugins/:key/upgrade` `{version}` | `plugin:manage` | 发起升级 → `rollout` |
 | GET `/plugins/:key/rollouts/current`，POST `/plugins/:key/rollouts/:id/cancel` | `plugin:read` / `plugin:manage` | |
 | DELETE `/plugins/:key?purge=true` | `plugin:uninstall` | |
-| GET/PUT `/plugins/:key/settings` | `plugin:read` / `plugin:manage` | |
+| GET/PUT `/plugins/:key/settings` | `self:plugin_ui`（§80.1），处理函数里再要 `plugin:read` / `plugin:manage` 或插件的设置权限（§75.1） | |
 | GET `/plugins/:key/grants`，DELETE `/plugins/:key/grants/:permission` | `plugin:read` / `plugin:manage` | |
 | PUT `/plugins/:key/resources` `{memory_mb, cpu, max_threads, max_open_files}` | `plugin:manage` | |
 | PUT `/plugins/:key/egress-policy` `{policy}` | `plugin:manage` | |
 | GET `/plugins/:key/egress`（`?from=&to=`） | `plugin:egress:read` | 按域名汇总 + 明细 |
 | GET `/plugins/:key/jobs`，POST `/plugins/:key/jobs/:job_id/run` | `plugin:read` / `task:run`🔐 | 手动运行与 POST `/system/tasks/:name/run` 同口径（2026-11-12 权限加固 W4-A4，此前为 `plugin:manage`）；审计动作仍是 `plugin.job.run` |
 | GET `/plugins/:key/events` | `plugin:read` | 游标、积压、死信 |
-| GET `/ui/plugins` | auth | 前端扩展：`[{key, version, asset_base, menus, pages, slots, account_actions, native_entry, trust}]`（按权限过滤） |
+| GET `/ui/plugins` | `self:plugin_ui`（§80.1：会话天然持有，访问密钥须勾选） | 前端扩展：`[{key, version, asset_base, menus, pages, slots, account_actions, native_entry, trust}]`（按权限过滤） |
 | GET `/nodes` | `node:read` | |
 | GET `/market/sources`、GET `/market/plugins?source_id=` | `plugin:market:read` | |
 | GET/POST `/publishers`，POST `/publishers/:id/keys`，POST `/publishers/:id/revoke`，POST `/publisher-keys/:key_id/revoke` | `publisher:read` / `publisher:manage` | |
@@ -244,7 +245,7 @@
 
 ### 5.8 插件自己的接口与静态资源（C）
 
-- `ANY /api/v1/p/:key/*path`：按 manifest `routes` 匹配；`scope=admin|user` 需要登录会话并检查 `plugin.<key>:<permission>`（访问密钥一律 403 `access keys cannot use this endpoint`，未声明 permission 的路由对所有人 403，2026-11-12 权限加固 W5-A1/W1-F15）；`webhook` 和 `public` 不鉴权；转发给插件 `HTTPService.HandleHTTP`。admin/user 路由可声明 `accounts: {action: read|update|test, from?: ["path:<参数>"|"query:<名>"|"body:<顶层字段>"]}`（`manifest.RouteAccounts`，只有这三种前缀，`path:` 必须是该路由的参数）声明它作用的账号；被 `ui.accountActions` 指向的路由未声明时推断为 `{update（指向它的操作都是 visibleFor=all 时 read）, ["body:account_ids"]}`，显式声明则必须含 `body:account_ids`（校验码 `accounts_mismatch`），见 `manifest.EffectiveRouteAccounts`。核心转发前按 `core.AuthorizeAccounts` 检查：`account:<action>` 放行；只有 `account:own:<action>` 时请求须带账号 id 且全部是自己创建的（否则 404，不带 id 403）；都没有 403。id 取自 from 指向的 path 参数、query 参数（全部取值）或 JSON 顶层字段（字段名大小写不敏感），可以是数字、数字数组或逗号分隔字符串，格式不对 400，去重后超过 `MaxAccountBatch` 400；未接入账号检查的节点对这些路由一律 503（2026-11-12 权限加固 M1）。manifest 说不出账号 id 的路由（id 在请求体深处、来自插件自己的表）由插件自己问核心：`HostService.AccountScopeCheck{user_id, action, account_ids≤500}` → `{all, allowed_ids}`（需要宿主授权 `accounts.read`，且 `user_id` 必须是该插件此刻正在处理的某个 `HandleHTTP` 请求的 `Caller.user_id`——宿主在转发请求期间按实例记下调用者，请求结束即失效，所以只能在处理请求的过程中调用，不能在后台任务里或替别的用户问；两条任一不满足 `PERMISSION_DENIED`，不进入账号模块。通过后转给 `core.AccountAccess`，错误码与其他核心错误同一映射：两种 key 都没有 `PERMISSION_DENIED`，未知 action `INVALID_ARGUMENT`）；SDK `pluginsdk.ResolveAccountScope`（得到 `AccountScope`，`Allows`/`Filter`，用于列表过滤）与 `pluginsdk.RequireAccounts`（与核心同样的回答：无登录 401，两种 key 都没有 403，own 范围不带 id 403，含不属于自己的账号 404；未知 action 或非正数 id 400，宿主答不了 503）。插件没有 `accounts.read` 或请求已结束时 `RequireAccounts` 同样回 403（失败收紧）。另有 `pluginsdk.RequirePermission(host, perm, next)` 给单个路由追加权限检查（401/403/503）（2026-11-12 权限加固 M1-b）。`webhook`/`public` 路由不带调用者，声明 `permission` 或 `accounts` 打包校验报 `unsupported`（2026-11-12 权限加固 W5-C6）
+- `ANY /api/v1/p/:key/*path`：按 manifest `routes` 匹配；`scope=admin|user` 需要登录（会话或访问密钥）并检查 `plugin.<key>:<permission>`（访问密钥按其权限收窄，须勾选该插件权限，2026-11-13 期 4 S4；此前访问密钥一律 403；插件拿到的仍是用户 id，不知道经由密钥；未声明 permission 的路由对所有人 403，2026-11-12 权限加固 W5-A1/W1-F15）；`webhook` 和 `public` 不鉴权；转发给插件 `HTTPService.HandleHTTP`。admin/user 路由可声明 `accounts: {action: read|update|test, from?: ["path:<参数>"|"query:<名>"|"body:<顶层字段>"]}`（`manifest.RouteAccounts`，只有这三种前缀，`path:` 必须是该路由的参数）声明它作用的账号；被 `ui.accountActions` 指向的路由未声明时推断为 `{update（指向它的操作都是 visibleFor=all 时 read）, ["body:account_ids"]}`，显式声明则必须含 `body:account_ids`（校验码 `accounts_mismatch`），见 `manifest.EffectiveRouteAccounts`。核心转发前按 `core.AuthorizeAccounts` 检查：`account:<action>` 放行；只有 `account:own:<action>` 时请求须带账号 id 且全部是自己创建的（否则 404，不带 id 403）；都没有 403。id 取自 from 指向的 path 参数、query 参数（全部取值）或 JSON 顶层字段（字段名大小写不敏感），可以是数字、数字数组或逗号分隔字符串，格式不对 400，去重后超过 `MaxAccountBatch` 400；未接入账号检查的节点对这些路由一律 503（2026-11-12 权限加固 M1）。manifest 说不出账号 id 的路由（id 在请求体深处、来自插件自己的表）由插件自己问核心：`HostService.AccountScopeCheck{user_id, action, account_ids≤500}` → `{all, allowed_ids}`（需要宿主授权 `accounts.read`，且 `user_id` 必须是该插件此刻正在处理的某个 `HandleHTTP` 请求的 `Caller.user_id`——宿主在转发请求期间按实例记下调用者，请求结束即失效，所以只能在处理请求的过程中调用，不能在后台任务里或替别的用户问；两条任一不满足 `PERMISSION_DENIED`，不进入账号模块。通过后转给 `core.AccountAccess`，错误码与其他核心错误同一映射：两种 key 都没有 `PERMISSION_DENIED`，未知 action `INVALID_ARGUMENT`）；SDK `pluginsdk.ResolveAccountScope`（得到 `AccountScope`，`Allows`/`Filter`，用于列表过滤）与 `pluginsdk.RequireAccounts`（与核心同样的回答：无登录 401，两种 key 都没有 403，own 范围不带 id 403，含不属于自己的账号 404；未知 action 或非正数 id 400，宿主答不了 503）。插件没有 `accounts.read` 或请求已结束时 `RequireAccounts` 同样回 403（失败收紧）。另有 `pluginsdk.RequirePermission(host, perm, next)` 给单个路由追加权限检查（401/403/503）（2026-11-12 权限加固 M1-b）。`webhook`/`public` 路由不带调用者，声明 `permission` 或 `accounts` 打包校验报 `unsupported`（2026-11-12 权限加固 W5-C6）
 - `GET /plugin-ui/:key/:version_hash/*path`：插件包内 `ui/`、`forms/`、`i18n/` 下的文件；带长缓存头
 
 ### 5.9 网关端点（G）
@@ -482,7 +483,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 - **SSRF 拨号时校验**：`proxy` 模块给**直连**（不经代理）的上游 HTTP 客户端设置拨号检查，拒绝回环、私有、链路本地、未指定地址，防 DNS 重绑定；`SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true` 时放行（`proxy.Options.AllowPrivate`）。经代理的连接不检查（由代理解析）。
 - **插件新外部域名告警**：出口隧道每次连接 upsert `plugin_egress_domains`；首次出现的 host 记 WARN 日志并写事件 `plugin.egress_new_domain`。`GET /plugins/:key/egress` 增加 `domains:[{host, first_seen_at, last_seen_at, connections, new}]`（`new` = 24 小时内首次出现）。
 - **出口日志长连接**：连接建立时即写一行（`result='open'`），关闭时更新 `result/duration_ms/bytes/closed_at`，控制台立即可见。
-- **操作员路由上改自己的登录方式要二次验证（SEC-H3，2026-11-08 审计）**：`PATCH /users/:id` 改**自己**的 `password` 或 `email`、`DELETE /users/:id/security` 重置**自己**的因子时，请求体必须带 `current_password`（走登录限速），已启用两步验证的用户还要带 `code`（TOTP 或备份码，错码计入 TOTP 锁定），与 `/me/password`、`/me/two-factor/disable` 要求一致；缺少时 400 `invalid_argument`，`details.fields[{field:"current_password"|"code", code:"required"}]`。此前这两条路由对本人不做任何校验，只持 `user:update` 的访问密钥或被盗的 access token 可以借此改密码、清两步验证，换成完整会话。改别人仍不需要（操作员没有对方的密码），`display_name`、`status` 也不需要。2026-11-12 FU6 起本人也要过可管理目标检查（§43.6）：admin、operator 等不在自己可分配清单里的角色经这条路由改自己一律 403，改自己的资料、密码、两步验证请走 `/me/*`；只有超管仍可用这条路由改自己（仍要二次验证）。超管的访问密钥改超管账号本身 403（会话专属，§43.6）。2026-11-12 起 `DELETE /users/:id/security` 需要只认会话的 `user:password:reset`（§79.2），访问密钥到不了这条路由（403 `details.permission`），上面关于密钥的说明只对 `PATCH /users/:id` 仍然适用。
+- **操作员路由上改自己的登录方式要二次验证（SEC-H3，2026-11-08 审计）**：`PATCH /users/:id` 改**自己**的 `password` 或 `email`、`DELETE /users/:id/security` 重置**自己**的因子时，必须带二次验证 proof（§80.2，2026-11-13 起取代请求体里的 `current_password`、`code`）：改密码 `self.password.change`（密码 + 第二因素），只改邮箱 `self.email.change`，重置因子 `user.security.reset`；缺少时 403 `verification_required`。改别人的密码要 `user:password:reset` 和 `user.password.reset` 的 proof。此前这两条路由对本人不做任何校验，只持 `user:update` 的访问密钥或被盗的 access token 可以借此改密码、清两步验证，换成完整会话。改别人仍不需要（操作员没有对方的密码），`display_name`、`status` 也不需要。2026-11-12 FU6 起本人也要过可管理目标检查（§43.6）：admin、operator 等不在自己可分配清单里的角色经这条路由改自己一律 403，改自己的资料、密码、两步验证请走 `/me/*`；只有超管仍可用这条路由改自己（仍要二次验证）。超管的访问密钥改超管账号本身须带 proof（2026-11-13 期 4 起，此前 403 会话专属，§43.6）。`DELETE /users/:id/security` 需要 `user:password:reset`（§79.2）。
 - **SEC-H2 以角色衡量目标，而不是生效权限（2026-11-08 审计）**：`CanActOnUser` 及 `PATCH /users/:id`（含 `status` 由 disabled 改回 active）、`DELETE /users/:id`、`PUT /users/:id/roles`、`DELETE /users/:id/security` 比较的是目标**角色所授予**的权限。此前用的是生效权限：被禁用用户的生效权限为空集，任何持 `user:update`（+ `user:password:reset`）的人都能给一个被禁用的管理员设密码再启用，接管该账号。`DELETE /users/:id/security` 此前也缺这项检查。
 - **客户端在 usage 事件前断开按预扣估算计费（§25.8，2026-11-08 审计）**：见 §25.8 末尾。
 
@@ -702,7 +703,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 
 ### 15.8 插件设置与前端扩展（`plugin/api/settings.go`、`plugin/api/ui.go`）
 
-GET `/plugins/:key/settings`（`plugin:read`）→
+GET `/plugins/:key/settings`（`plugin:read` 或插件的设置权限；路由本身要 `self:plugin_ui`，§80.1）→
 
 | 字段 | 说明 |
 |---|---|
@@ -714,13 +715,13 @@ GET `/plugins/:key/settings`（`plugin:read`）→
 | `values` | 当前配置值（解密后）；敏感字段非空时为 `"******"` |
 | `secret_fields` | 敏感字段名（Schema 顶层属性中 `writeOnly: true`、`format: "password"` 或 `x-sensitive: true` 的），排序 |
 
-PUT `/plugins/:key/settings`（`plugin:manage`）请求 `{values:{...}}`：
+PUT `/plugins/:key/settings`（`plugin:manage` 或插件的设置权限；路由本身要 `self:plugin_ui`，§80.1）请求 `{values:{...}}`：
 - `values` 是**完整**配置，整体替换（省略的键会被删除）；敏感字段传 `"******"` 表示保留原值。
 - `mode=schema` 时按 Schema 校验，失败返回 `invalid_argument`，`details.fields[].field` 为 `values` + JSON Pointer（如 `values/api_key`），`code` 为 `schema`。
 - 成功后返回与 GET 相同的结构；审计只记录变更的键名；并在 `plugin:events` 广播配置变更。
 - 插件没有可用版本时 GET/PUT 都返回 404（`plugin has no version`）。
 
-GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation 中已启用且声明了 `ui` 的插件：
+GET `/ui/plugins`（`self:plugin_ui`，会话天然持有，§80.1）→ 不分页数组，只含当前 generation 中已启用且声明了 `ui` 的插件：
 
 | 字段 | 说明 |
 |---|---|
@@ -1060,7 +1061,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 | 模块 | 新增 key | 说明 |
 |---|---|---|
-| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐🔑 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3），均无需二次验证 |
+| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐🔑 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3）；🔑 见 §80.2 |
 | account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
 | account | `account:group:bind` | 允许 own 级用户绑定账号到分组（与 `group:manage` 二选一即可） |
 | account | `account:relay` | 允许 own 级用户新建可自定义上游的账号类型（如 relay）或修改其上游地址（§21.3.1） |
@@ -1090,7 +1091,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 | DELETE `/accounts/:id` | `account:delete`🔐 / `account:own:delete` | |
 | POST `/accounts/:id/test`、POST `/accounts/:id/models/fetch` | `account:test` / `account:own:test` | |
 | POST `/account-types/:plugin_key/:type/models/fetch` | `account:create` / `account:own:create` | 可带 `proxy_url`：只解析、临时用它发请求，**不查找不创建**代理、不需要代理权限；与 `proxy_id` 同时给出 400 `fields[{proxy_url, conflict}]`；`proxy_id` 的可见性规则同 POST `/accounts` |
-| POST `/accounts/:id/credentials/reveal` | `account:credential:view`🔐🔑 / `account:own:credential:view`🔐🔑 | |
+| POST `/accounts/:id/credentials/reveal` | `account:credential:view`🔐🔑 / `account:own:credential:view`🔐🔑 | 二次验证 `credential.reveal`（§80.2） |
 | GET `/account-types`、GET `/account-types/:p/:t/form`、GET `/platforms` | `account:read` / `account:own:read` / `account:own:create` | form 按调用者权限改写（§21.3） |
 | GET `/proxies`、GET `/proxies/:id` | `proxy:read` / `proxy:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（`strconv.ParseBool`） |
 | POST `/proxies` | `proxy:manage` / `proxy:own:manage` | `created_by` = 调用者 |
@@ -2461,7 +2462,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 **插件。** 内建与第三方插件均使用自身发布生命周期。核心升级预检当前启用及 rollout 中插件的 `hostCompat`；准备、准入和运行就绪检查本机是否加载已批准且兼容的插件。随包内建插件仅是首次安装来源，不覆盖已安装版本、不复活已删除插件。任务轮询、调度和记账仍由现有核心机制负责，更新主节点不独占业务任务。
 
-**管理接口。** `/api/v1/system/releases`、`/system/upgrades` 与计划的详情/事件接口需要 `system:update:read`；创建需要 `system:update:execute`，暂停/恢复/取消需要 `system:update:recover`，沿用核心 RBAC（无二次验证，§3.3）；execute 与 recover 只认登录会话，访问密钥不能带（§80）。创建携带 `release_digest`、预检取得的 `expected_revision` 和 `idempotency_key`，过期预检或同幂等键不同请求被拒绝。核心仅转发认证后的操作到 mode 0600 本机 socket。
+**管理接口。** `/api/v1/system/releases`、`/system/upgrades` 与计划的详情/事件接口需要 `system:update:read`；创建需要 `system:update:execute`，暂停/恢复/取消需要 `system:update:recover`，沿用核心 RBAC；execute、recover 与 `releases/import` 每次要二次验证 `system.update`（§80.2，2026-11-13 起；此前只认登录会话），会话与带权限的访问密钥一样。创建携带 `release_digest`、预检取得的 `expected_revision` 和 `idempotency_key`，过期预检或同幂等键不同请求被拒绝。核心仅转发认证后的操作到 mode 0600 本机 socket。
 
 当前 v1 仅支持 schema/cluster/task/Host API 契约保持不变的滚动更新。维护迁移、跨协议转换、自动主节点选举、未经校验的任意目标强制回滚、网关自身更新不在此协议实现范围内。不能用新签名或更改声明绕过这些检查。
 
@@ -2736,7 +2737,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - **可管理目标**（2026-11-12 权限加固 FU6，产品性收紧）：所有“作用于某个用户”的入口——PATCH/DELETE `/users/:id`、DELETE `/users/:id/security`、PUT `/users/:id/roles`、POST `/users`（带角色）、余额调整、用户组成员变更与个人专属——分两层判断：
   1. 能不能做：接口的操作权限（`user:update`、`user:delete`、`user:password:reset`、`role:assign`、`balance:adjust`、`segment:manage` 等），由路由检查；访问密钥按“用户权限 ∩ 密钥权限”。
   2. 能对谁做：`core.UserGuard`（`authz.CanActOnUsers`，唯一一处）。操作者的可分配角色清单就是它“可管理的角色”：目标持有的每个非默认角色（`user` 除外，同 T56）都要在清单里，且目标角色授予的权限、可分配角色、超管标志都在操作者之内（SEC-H2 防提权）；超管管理所有人。**本人也按同一规则判断**，不再有“作用于自己直接放行”或“作用于自己一律 409”的特判：按默认清单 admin、operator 不能经这些入口动自己（403 `details.reason = not_manageable`，同级时还带 `details.role`），超管可以。“全部自定义角色”（`assign_custom`）这一通配**不含操作者自己持有的角色**（2026-11-13 期 3 审查）：带 `assign_custom` 的自定义角色管理其他自定义角色的持有者，不管理自己与同角色的其他持有者（403 `details.role` 为该角色），不能分配这个角色，也不能经新建或修改角色把覆盖它的通配交出去（见下文可分配角色）；只有在清单里按名字列出自己的角色时才按清单管理自己与同角色的持有者（含给自己调余额、改自己用户组的定价）。超管不受影响。操作者一侧按**操作者这个用户的角色**计算，不被访问密钥收窄：admin 带 `balance:adjust` 的密钥可以给 supplier、user 调余额，超管带 `balance:adjust` 的密钥可以给自己和任何人调。
-  - 保留（决策 1，期 3 过渡）：修改超管账号本身的身份类操作（`core.ActOnIdentity`：改资料、邮箱、密码，清两步验证与通行密钥，禁用、删除，分配或撤销角色）在目标是超管时只接受超管本人的登录会话，访问密钥 403 `a superuser's account changes only through the superuser's own session`（`details.reason = session_only`）；调余额、用户组成员这类数据类操作（`core.ActOnData`）不在此列。期 4 计划改为“密钥勾了权限可操作，但须当场二次验证”，`UserAction` 参数为此保留。
+  - 超管账号本身（2026-11-13 期 4 S3，取代决策 1 的期 3 过渡“访问密钥 403 session_only”）：修改超管账号本身的身份类操作（`core.ActOnIdentity`：改资料、邮箱、密码，清两步验证与通行密钥，禁用、删除，分配或撤销角色）仍只有超管本人能做；经访问密钥时（密钥须勾了路由的权限）还要二次验证：本请求已经消耗过的 proof（例如改自己密码的 `self.password.change`），或 scope 为 `superadmin.identity` 的 proof，否则 403 `verification_required`。调余额、用户组成员这类数据类操作（`core.ActOnData`）不在此列。
   - 审计：作用于自己的成功检查（按默认清单只有超管）由 `CanActOnUsers` 记一条 `user.act_on_self`（`target_type = user`，`target_id` 为本人，`detail = {self: true, via: "session" | "access_key", access_key_id?, request_id}`），在检查处写一次，不在各入口写；与操作本身的审计各写各的。
   - **安全约束（不是权限规则，不并入可管理目标）**：任何人（含超管）不能禁用或删除自己（409 `you cannot disable or delete yourself`，防止把自己锁在外面）；超级管理员角色不能撤销（含超管本人），只能移交（§43.7）。
   - 用户自助接口（`/me/*`）不经 `UserGuard`，不受影响。
@@ -6388,7 +6389,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **字段**：`ui.settings.permission`，值是插件自己 `userPermissions` 里的一个 key（插件内的本地 key，例如 `moderation:manage`）。
   - 应当是**管理级**权限（`*:manage` 一类）：持有它的人能改插件的全部设置，包括地址类设置（webhook、`base_url`）。不要用只读或日常操作级的权限。
   - `manifest/check` 校验：必须是已声明的 `userPermissions`（否则 `ui.settings.permission` `unknown`）；只有 `ui.settings` 可以写，账号类型表单等其他表单写了报 `unsupported`。
-- **核心接口**：`GET|PUT /plugins/:key/settings` 改为登录即可进入，处理函数里再判断：
+- **核心接口**：`GET|PUT /plugins/:key/settings` 改为登录即可进入（2026-11-13 期 4 起路由要 `self:plugin_ui`，会话天然持有，§80.1），处理函数里再判断：
   - `GET`：`plugin:read` **或** `plugin.<key>:<permission>`；
   - `PUT`：`plugin:manage` **或** `plugin.<key>:<permission>`。
   - 都没有时 403 `permission_denied`，`details.permission` 为核心权限。权限先于其他检查：插件不存在时，没有核心权限的人同样得到 403（不暴露插件是否存在），有核心权限的人得到 404；`PUT` 的请求体也在权限检查之后才读。
@@ -6888,13 +6889,13 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 - `GET`：`{enabled, enabled_at, backup_codes_left}`。
 - `POST /setup {password}`：返回 `{flow_token, secret, otpauth_url, qr_code}`（`qr_code` 是 PNG data URL，CSP 的 `img-src` 允许）。`POST /enable {flow_token, code}`：验证后开启，返回 10 个备用码，只显示这一次。
-- `POST /disable {password, code}`、`POST /backup-codes {password, code}`：都要密码和验证码（或备用码）。
+- `POST /disable`、`POST /backup-codes`：二次验证 `self.2fa.disable` / `self.2fa.backup_codes`（§80.2；2026-11-13 起取代请求体 `{password, code}`）。
 - TOTP：SHA-1、6 位、30 秒，前后各容忍一个时间步；`last_step` 保证同一个码不能用两次。密钥用主密钥加密（AAD 绑定用户 id），备用码只存 bcrypt 哈希。
-- `DELETE /users/:id/security`（`user:password:reset`🔐🔑，2026-11-12 起，此前是 `user:update`）：管理员给丢失设备的用户清除二次验证和全部通行密钥；非超级管理员不能对超级管理员操作。清掉第二因子后账号只剩密码，与重置密码同级，所以共用同一个权限（权限标签改为“重置他人密码与两步验证”）；该权限只认登录会话，访问密钥调用一律 403（`details.permission = user:password:reset`）。经这个路由重置自己的因子同样需要这个权限（没有的人走 `/me/two-factor/disable`）。
+- `DELETE /users/:id/security`（`user:password:reset`🔐🔑，2026-11-12 起，此前是 `user:update`）：管理员给丢失设备的用户清除二次验证和全部通行密钥；非超级管理员不能对超级管理员操作。清掉第二因子后账号只剩密码，与重置密码同级，所以共用同一个权限（权限标签改为“重置他人密码与两步验证”）；2026-11-13 起每次要二次验证 `user.security.reset`（§80.2，会话与带该权限的访问密钥一样；此前该权限只认会话），本人也一样，不再收请求体。经这个路由重置自己的因子同样需要这个权限（没有的人走 `/me/two-factor/disable`）。
 
 ### 79.3 通行密钥（`/me/passkeys`）
 
-- `GET` 列表；`POST /begin {password}`、`POST /finish {flow_token, name, credential}` 添加；`DELETE /:id` 删除（不要密码，删除不会给任何人访问权）。一个用户可以有多个。
+- `GET` 列表；`POST /begin`（二次验证 `self.passkey.add`，2026-11-13 起取代 `{password}`）、`POST /finish {flow_token, name, credential}` 添加；`PATCH /:id {name}` 改名（不要二次验证）；`DELETE /:id` 删除（二次验证 `self.passkey.delete`）。一个用户可以有多个。这些接口与 `/me/two-factor*`、`PUT /me/password` 需要 `self:security`（§80.1：会话天然持有，访问密钥须勾选）。
 - 依赖 `go-webauthn`（`attestation` 为 none，要求可发现凭据和 UV）。依赖 `pquerna/otp` 生成密钥和二维码。
 - **RP ID**：`SUB2API_WEBAUTHN_RP_ID`，留空时取控制台所在主机。留空时要求浏览器的 `Origin` 主机与请求的 `Host` 一致，否则回“此地址不可用”；IP 地址不能作 RP ID。凭据记录 `rp_id`，只能在同一个 RP 下使用。浏览器签名的 origin 才是校验依据，伪造 `Origin` 请求头不能绕过。
 - **已知限制**：`api.prophey.ai` 故障切换到 ovh 时，跳板把 `Host` 改成 sslip 域名，没设 `SUB2API_WEBAUTHN_RP_ID` 的节点这时通行密钥登录不可用，密码和二次验证不受影响。两个节点都设 `SUB2API_WEBAUTHN_RP_ID=api.prophey.ai` 可以消除。
@@ -6922,20 +6923,60 @@ node 任务（可工作节点各跑，`RequireWork`）：
 
 钱包不提供在线充值（§46，用户决定暂缓），只提示联系管理员。兑换码没有做：`payment` 插件没安装，且 §46.9 的第 7、8 项（`recharge:use` 默认授权、防爆破）要先解决。
 
-## 80. 访问密钥（2026-11-05，用户要求，参考 new-api 的访问令牌；迁移 0088）
+## 80. 访问密钥与二次验证（2026-11-05，用户要求，参考 new-api 的访问令牌；迁移 0088；2026-11-13 期 4 改写：按权限可配置 + 高危操作二次验证）
 
-**用户定的规则：访问密钥的权限只能是用户自己权限的子集。** 访问密钥（`sak_` 开头）让脚本和工具以用户身份调用控制台 API。调用模型用的 API Key（`/me/api-keys`）是另一回事，两者互不通用。
+**用户定的规则：访问密钥的权限只能是用户自己权限的子集；任何权限都可以配给密钥，用户有这个权限而密钥没配就不能用。** 访问密钥（`sak_` 开头）让脚本和工具以用户身份调用控制台 API。调用模型用的 API Key（`/me/api-keys`）是另一回事，两者互不通用。
 
-- **`Authorization: Bearer sak_…`**：只有核心路由（`httpapi`）接受，走 `core.AuthenticateBearer`。插件路由和其他认证入口只认 JWT，遇到密钥回 401：插件拿到的是用户 id，在插件内部做的权限判断限制不到密钥，所以插件权限也不能选给密钥。以后要开放，得先让插件的权限判断带上密钥的限制。
-- **子集在两处保证**：创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）。每次检查权限时，`authz.PermissionSet` 取“用户现有权限 ∩ 密钥权限”，所以用户失去权限，密钥立刻跟着失去；重新获得时也恢复。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn`、`CanActOnUser` 看到的也是这个限制后的集合；`CanActOnUser` 对密钥不免检密钥主人本身（主人按其角色比较）。只限制密钥所属用户，查询其他用户的权限不受影响。
-- **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/me/assignable-roles`、`/system/version`（`AuthedRead`，`/system/version` 只返回版本号、是否托管、节点 id、boot id），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。这些自身只读接口都按密钥收窄后的权限计算，只返回调用者自己能看到的东西，所以接受任意访问密钥（C-T1，按此口径不改）：`/me` 与菜单用收窄后的 `PermissionSet`，lookup 用 `CanAny` 和 `OwnerScope`，`/me/assignable-roles` 在密钥下为 `[]`（收窄后没有可分配角色）。
-- **只认会话的权限**（2026-11-12，`session_only`）：`user:password:reset`、`role:define`、`role:assign`、`settings:manage` 不能选给访问密钥，超级管理员也不行。判断只有 `authz.KeyAllowed` 一处：可选列表不显示，创建、修改时选了回 403（选了不持有的权限时先按 `details.missing` 拒绝；都持有时，只认会话的列在 `details.session_only`），已存的密钥在校验时丢掉它们（`GET /me/access-keys` 的 `lost` 含它们），所以以这些权限注册的路由（`settings:manage` 下 30 来条、`/roles` 写操作、`PUT /users/:id/roles`、改他人密码、清除他人两步验证 `DELETE /users/:id/security` 等）一律拒绝密钥（403 `permission_denied`）。`PermAny` 组合路由仍按其他 key 放行。
-- **只认会话的权限扩展**（2026-11-12，T57，决策 D4：代码执行、信任根、明文凭证）：`plugin:install`、`plugin:uninstall`、`plugin:grant:high`、`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`、`account:credential:view`、`account:own:credential:view` 同样不能选给访问密钥，规则与上一条相同（存量密钥里的列为 `lost`，运行时丢弃）。因此访问密钥不能上传、从市场安装、审批、卸载插件（`/plugins/upload` 等 403），不能管理发布者与公钥，不能执行或恢复核心升级；凭证明文回显本来就只认会话（上文）。访问密钥在 `PATCH /accounts/:id` 与 `POST /accounts/:id/models/fetch` 上按“不能查看凭证”处理：保留掩码密钥同时改上游地址时 400 `fields[{credentials.<f>, reenter_required}]`，重新输入该密钥即可。
-- **明文回显只认登录会话**（2026-11-12）：回显已有密文的接口用 `SessionOnly()` 视图注册，有权限也拒绝密钥（403 `access keys cannot use this endpoint`）：`POST /me/api-keys/:id/reveal`、`POST /proxies/:id/reveal-url`、`POST /accounts/:id/credentials/reveal`。泄露的密钥因此拿不到 API Key、代理密码和账号凭证的明文。`/me/api-keys` 的创建与轮换返回的是新密钥，属于自动化的正当用途，照常接受密钥。`settings:manage` 下的 `remote-fingerprint` 会拨号到任意 host:port，但 SSH 安装控制器到内网主机是正当用途，不接 netguard；它靠 `settings:manage` 只认会话来防止被泄露的密钥利用（wontfix）。
-- **接口**（都只能用登录会话调用）：`GET /me/access-keys`（含 `lost`：已选但用户不再持有的权限）、`GET /me/access-keys/permissions`（可选的权限，只含自己持有的）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
+- **`Authorization: Bearer sak_…`**：核心路由（`httpapi`）和插件路由（`/api/v1/p/:key/*`，期 4 S4 起）都接受，走 `core.AuthenticateBearer`。插件拿到的调用者仍是用户 id，不知道经由密钥；但插件在处理该请求期间问宿主的 `AuthzCheck`、`AccountScopeCheck`（SDK `RequirePermission`、`RequireAccounts`）会按该用户在途请求的密钥收窄（同一用户有多个密钥请求在途时取它们的交集，失败收紧）；admin 写操作审计行记 `via: "access_key"`、`access_key_id`。不在请求处理期间（后台任务）问到的仍是用户本身的权限。`X-Verify-Proof` 不转发给插件。
+- **一条规则**：密钥能做什么 = 用户实时权限 ∩ 密钥选中的权限（`core.RestrictToAccessKey`）。创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）；每次检查权限时取交集，所以用户失去权限，密钥立刻跟着失去；重新获得（含插件重新启用）时也恢复（`GET /me/access-keys` 的 `lost` 列出暂时失效的）。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn` 看到的也是这个限制后的集合；“能对谁做”（`UserGuard`）按用户本身的角色算（§43.6）。只限制密钥所属用户，查询其他用户的权限不受影响。此前（2026-11-12 至期 4）有一份“只认会话”的权限清单（`session_only`、`authz.KeyAllowed`），期 4 S3 删除：那些权限现在都可以选，高危接口改为二次验证。
+- **只允许登录会话**（结构性风险，不是配置问题）：访问密钥自身的管理（`/me/access-keys*`，否则密钥能给自己续命或扩权）、登录会话管理（`/me/sessions*`、`POST /auth/logout`，否则密钥能把主人踢下线）。用 `Router.SessionOnly().Handle` 注册，密钥 403 `access keys cannot use this endpoint`。
+- **只读自助接口**：`GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/me/assignable-roles`、`/system/version`、`/lookup/:kind`、`/me/verify/methods`（`AuthedRead`）接受任意密钥，返回按密钥收窄后的内容（`/me/assignable-roles` 在密钥下为 `[]`）。
+
+### 80.1 self 虚拟权限
+
+自助接口用虚拟权限表达，每个已认证、有效的用户隐式持有（`authz.loadPermissionSet` 一处并入，没有角色的用户也有）；不进 `permissions` 表、`role_permissions`，不出现在角色编辑器（`GET /permissions`），只出现在访问密钥选择器（排在最前，模块 `self`）。会话天然持有，访问密钥须显式勾选。路由用 `Router.Self(method, path, perm)` 注册（就是 `Perm`）。
+
+| 权限 | 接口 |
+|---|---|
+| `self:profile` | `PUT /me` |
+| `self:security`🔐🔑 | `PUT /me/password`、`/me/two-factor*`、`/me/passkeys*`、`POST /system/super-admin/transfer`（超管本人） |
+| `self:plugin_ui` | `GET /ui/plugins`；`/plugins/:key/settings`（另按插件声明的设置权限，处理函数里 `CanAny`） |
+
+### 80.2 二次验证（step-up）
+
+高危操作除了权限，还要当场证明“是本人”：先验证一次，换一个短时一次性凭证（proof），再带 `X-Verify-Proof: <proof>` 调用。会话与访问密钥同一套。参考 new-api `GET /api/verify/methods`、`POST /api/verify`、`ConsumeOperationProof`。
+
+- `GET /me/verify/methods?scope=<scope>` → `{scope, password_required, methods:[{method:"passkey"|"totp"|"password", available, reason?}]}`。`reason`：`not_enrolled`、`access_key`（通行密钥只用于浏览器会话）、`strong_method`（配了通行密钥或 2FA 后不再接受只用密码）。未知 scope 400。
+- **策略**：配了通行密钥或 2FA（TOTP，备份码也算）时只接受这两种；都没配才接受密码。例外 `password_required = true`（`superadmin.transfer`、`self.password.change`）：密码 + 一种第二因素；都没配只验密码。访问密钥只能用 2FA 或（无强方式时）密码。
+- `POST /me/verify/begin {scope}` → `{flow_token, expires_in, options}`：通行密钥断言（要求 UV，只列本人的通行密钥），计入登录 IP 限速与 begin 限速。
+- `POST /me/verify {scope, context, method, password?, code?, flow_token?, credential?}` → `{proof, expires_at, method, scope, context}`。`context` 是要执行的操作 `"METHOD /api/v1/path"`（就是 403 `details.context`，原样回传）。密码计入登录限速，错码计入 2FA 锁定（5 次锁 5 分钟），通行密钥失败计入 IP 限速；方法不可用 400 `fields[{field:"method", code:"unavailable"}]`。写审计 `user.security_verify`（`detail {method, scope, context, via, access_key_id?}`）。
+- **proof**：5 分钟、只能用一次，绑定用户 + 本次会话（JWT `fam`）或访问密钥 id + scope + 操作上下文；存在 `auth_flows`（各节点共用，`DELETE … RETURNING` 原子消费，不依赖 Redis）。拿去用于别的 scope、别的操作、别的会话或密钥时被拒并作废；别的用户出示无效。一个请求消费过 proof 后，同一请求里同 scope 的再次检查直接通过。
+- **接口**：路由视图 `Router.StepUp(scope)` 在权限检查之后消费 proof（没有权限的调用者不会耗掉 proof）；失败 403 `verification_required`，`details {scope, context, methods, password_required}`，前端据此弹出验证并带 proof 重放一次。
+
+| scope | 接口 | 所需权限 |
+|---|---|---|
+| `credential.reveal` | POST `/accounts/:id/credentials/reveal` | `account:credential:view` / `account:own:credential:view` |
+| `apikey.reveal` | POST `/me/api-keys/:id/reveal` | `apikey:self:manage` |
+| `proxy.reveal` | POST `/proxies/:id/reveal-url` | `proxy:manage` / `proxy:own:manage` |
+| `superadmin.transfer` | POST `/system/super-admin/transfer`（密码 + 第二因素） | `self:security`，且是超管本人 |
+| `self.password.change` | PUT `/me/password`、PATCH `/users/:id` 改自己的密码（密码 + 第二因素） | `self:security` / `user:update` |
+| `self.email.change` | PATCH `/users/:id` 只改自己的邮箱 | `user:update` |
+| `self.2fa.disable`、`self.2fa.backup_codes` | POST `/me/two-factor/disable`、`/backup-codes` | `self:security` |
+| `self.passkey.add`、`self.passkey.delete` | POST `/me/passkeys/begin`、DELETE `/me/passkeys/:id` | `self:security` |
+| `user.password.reset` | PATCH `/users/:id` 改他人密码 | `user:password:reset` |
+| `user.security.reset` | DELETE `/users/:id/security`（含本人） | `user:password:reset` |
+| `user.delete` | DELETE `/users/:id` | `user:delete` |
+| `plugin.install` | POST `/plugins/upload`、`/plugins/install-from-market` | `plugin:install` |
+| `plugin.grant` | POST `/plugins/:key/versions/:version/consent` | `plugin:install`（及授出所需的 `plugin:grant:*`） |
+| `publisher.manage` | 发布者与公钥的写操作 | `publisher:manage` |
+| `system.update` | POST `/system/upgrades`、升级计划与节点的 recover 操作、`/system/releases/import` | `system:update:execute` / `recover` |
+| `superadmin.identity` | 超管经访问密钥修改超管账号本身（§43.6，本请求已消耗过 proof 时不再要） | 路由本身的权限 |
+
+PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先校验新密码再消耗 proof。路由级 proof 在处理函数之前消耗，处理函数随后因请求体失败时需重新验证。proof 绑定的是 URL，不含请求体（例如超管移交的目标）。
+
+- **接口**（访问密钥管理，只能用登录会话调用）：`GET /me/access-keys`（含 `lost`）、`GET /me/access-keys/permissions`（可选的权限：`self` 模块，然后是自己持有的有效核心与插件权限，每项带 `step_up` 展示标记：使用时需二次验证）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。
 - 控制台入口在个人中心，权限选择复用角色页的权限树。
-
 
 ## 81. 账号请求头透传（2026-11-06，用户要求，参考 new-api 渠道的请求头覆盖；迁移 0089）
 

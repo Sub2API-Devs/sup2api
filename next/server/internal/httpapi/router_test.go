@@ -149,7 +149,8 @@ func TestSessionOnly(t *testing.T) {
 	r.Perm("GET", "/perm", "x:read", ok)
 	r.PermAny("GET", "/any", ok, "x:read", "x:own:read")
 	r.AuthedRead("/read", ok)
-	r.Authed("GET", "/authed", ok)
+	strict.Handle("GET", "/authed", ok)
+	r.Handle("GET", "/handle", ok)
 
 	cases := []struct {
 		path     string
@@ -161,7 +162,8 @@ func TestSessionOnly(t *testing.T) {
 		{"/perm", 200, 200, "Perm on the original router"},
 		{"/any", 200, 200, "PermAny on the original router"},
 		{"/read", 200, 200, "AuthedRead"},
-		{"/authed", 200, http.StatusForbidden, "Authed"},
+		{"/authed", 200, http.StatusForbidden, "SessionOnly Handle"},
+		{"/handle", 200, 200, "Handle"},
 	}
 	for _, tc := range cases {
 		if got := serve(engine, "GET", tc.path, "u1"); got != tc.jwt {
@@ -267,4 +269,97 @@ func TestAuthzVersionHeader(t *testing.T) {
 			t.Errorf("%s: %d %s=%q, want %d %q", tc.name, code, HeaderAuthzVersion, got, tc.code, tc.want)
 		}
 	}
+}
+
+// stepUpTokens accepts the proof "ok:<scope>" for the operation it was sent
+// on and records the spent scopes.
+type stepUpTokens struct {
+	keyTokens
+	spent *[]string
+}
+
+func (s stepUpTokens) ConsumeStepUp(ctx context.Context, scope string) error {
+	proof, operation, ok := core.StepUpRequest(ctx)
+	if !ok || proof != "ok:"+scope || !strings.HasPrefix(operation, "POST /api/v1/") {
+		return core.ErrVerificationRequired.WithDetails(map[string]any{"scope": scope, "context": operation})
+	}
+	*s.spent = append(*s.spent, scope)
+	return nil
+}
+
+// A StepUp view spends a proof after the permission check, on every kind of
+// route; a route outside the view needs none, and without a verifier the
+// view fails closed.
+func TestStepUp(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var spent []string
+	engine := gin.New()
+	r := NewRouter(engine, stepUpTokens{spent: &spent}, fakeAuthz{keys: map[int64][]string{1: {"x:manage"}}})
+	ok := func(c *gin.Context) { OK(c, nil) }
+	r.StepUp("x.reveal").Perm("POST", "/perm", "x:manage", ok)
+	r.StepUp("x.reveal").PermAny("POST", "/any", ok, "x:manage", "x:own:manage")
+	r.SessionOnly().StepUp("x.self").Handle("POST", "/self", ok)
+	r.Perm("POST", "/plain", "x:manage", ok)
+	call := func(path, bearer, proof string) int {
+		req := httptest.NewRequest("POST", "/api/v1"+path, nil)
+		req.Header.Set("Authorization", "Bearer "+bearer)
+		if proof != "" {
+			req.Header.Set(core.HeaderVerifyProof, proof)
+		}
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		return w.Code
+	}
+	for _, tc := range []struct {
+		name, path, bearer, proof string
+		want                      int
+	}{
+		{"no permission, no proof spent", "/perm", "u2", "ok:x.reveal", 403},
+		{"no proof", "/perm", "u1", "", 403},
+		{"proof of another scope", "/perm", "u1", "ok:x.self", 403},
+		{"proof", "/perm", "u1", "ok:x.reveal", 200},
+		{"PermAny with a proof", "/any", "u1", "ok:x.reveal", 200},
+		{"access key with a proof", "/perm", core.AccessKeyPrefix + "1", "ok:x.reveal", 200},
+		{"session-only Handle with a proof", "/self", "u2", "ok:x.self", 200},
+		{"session-only Handle refuses a key first", "/self", core.AccessKeyPrefix + "1", "ok:x.self", 403},
+		{"outside the view", "/plain", "u1", "", 200},
+	} {
+		if got := call(tc.path, tc.bearer, tc.proof); got != tc.want {
+			t.Errorf("%s = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+	if want := []string{"x.reveal", "x.reveal", "x.reveal", "x.self"}; strings.Join(spent, ",") != strings.Join(want, ",") {
+		t.Errorf("spent %v, want %v", spent, want)
+	}
+
+	plain := gin.New()
+	NewRouter(plain, keyTokens{}, fakeAuthz{keys: map[int64][]string{1: {"x:manage"}}}).StepUp("x.reveal").Perm("POST", "/perm", "x:manage", ok)
+	req := httptest.NewRequest("POST", "/api/v1/perm", nil)
+	req.Header.Set("Authorization", "Bearer u1")
+	req.Header.Set(core.HeaderVerifyProof, "ok:x.reveal")
+	w := httptest.NewRecorder()
+	plain.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("no verifier = %d, want 500", w.Code)
+	}
+}
+
+// Self is Perm under a self permission; any other key is a programming error.
+func TestSelf(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	r := NewRouter(engine, keyTokens{}, fakeAuthz{keys: map[int64][]string{1: {"self:profile"}}})
+	r.Self("GET", "/me", "self:profile", func(c *gin.Context) { OK(c, Granted(c)) })
+	if got := serve(engine, "GET", "/me", "u1"); got != 200 {
+		t.Errorf("holder = %d", got)
+	}
+	if got := serve(engine, "GET", "/me", "u2"); got != http.StatusForbidden {
+		t.Errorf("without the permission = %d", got)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("Self accepted a key outside the self module")
+		}
+	}()
+	r.Self("GET", "/x", "user:read", func(*gin.Context) {})
 }

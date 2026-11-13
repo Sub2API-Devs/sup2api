@@ -65,16 +65,23 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return 0, errors.New("bad token")
 }
 
-// VerifyAccessKey accepts any key as the admin holding the route permission.
-func (tokens) VerifyAccessKey(context.Context, string, string) (core.AccessKeyIdentity, error) {
-	return core.AccessKeyIdentity{UserID: 1, KeyID: 1, Permissions: []string{"plugin.demo:rules:read"}}, nil
+// VerifyAccessKey accepts any key as the admin's: sak_<permission> carries
+// plugin.demo:<permission>.
+func (tokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.AccessKeyIdentity, error) {
+	perm := "plugin.demo:" + strings.TrimPrefix(raw, core.AccessKeyPrefix)
+	return core.AccessKeyIdentity{UserID: 1, KeyID: 1, Permissions: []string{perm}}, nil
 }
 
 type authz struct{}
 
-// Can grants the demo plugin's keys to every user but "nobody".
-func (authz) Can(_ context.Context, uid int64, perm string) (bool, error) {
-	return uid != 2 && (perm == "plugin.demo:rules:read" || perm == "plugin.demo:reset"), nil
+// Can grants the demo plugin's keys to every user but "nobody", narrowed by
+// the request's access key as authz does.
+func (authz) Can(ctx context.Context, uid int64, perm string) (bool, error) {
+	set := core.PermissionSetOf()
+	if uid != 2 {
+		set = core.PermissionSetOf("plugin.demo:rules:read", "plugin.demo:reset")
+	}
+	return core.RestrictToAccessKey(ctx, uid, set).Has(perm), nil
 }
 func (authz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
@@ -182,10 +189,14 @@ func TestPluginAPIRoutes(t *testing.T) {
 	if w := do(e, "GET", "/api/v1/p/demo/echo/42", "nobody", ""); w.Code != 403 || w.Header().Get(httpapi.HeaderAuthzVersion) != "42" {
 		t.Fatalf("no permission: %d %v", w.Code, w.Header())
 	}
-	// Access keys are refused outright, even one holding the permission.
+	// An access key reaches the route with its permission (期 4 S4), as
+	// its user, and not without it.
 	h.last = nil
-	if w := do(e, "GET", "/api/v1/p/demo/echo/42", core.AccessKeyPrefix+"x", ""); w.Code != 403 || errorCode(w) != "permission_denied" || h.last != nil {
-		t.Fatalf("access key: %d %s", w.Code, w.Body)
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", core.AccessKeyPrefix+"reset", ""); w.Code != 403 || errorCode(w) != "permission_denied" || h.last != nil {
+		t.Fatalf("access key without the permission: %d %s", w.Code, w.Body)
+	}
+	if w := do(e, "GET", "/api/v1/p/demo/echo/42", core.AccessKeyPrefix+"rules:read", ""); w.Code != 201 || h.last == nil || h.last.Caller.UserId != 1 {
+		t.Fatalf("access key with the permission: %d %s", w.Code, w.Body)
 	}
 	if w := do(e, "POST", "/api/v1/p/demo/echo/42", "admin", ""); w.Code != 405 {
 		t.Fatalf("wrong method: %d", w.Code)

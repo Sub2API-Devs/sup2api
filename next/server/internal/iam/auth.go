@@ -375,35 +375,22 @@ func (s *Service) Logout(ctx context.Context, userID int64, refreshToken string)
 }
 
 // ChangePassword changes the caller's password and ends every other session
-// at once; keepFamily, the caller's own, renews on its next 401.
-func (s *Service) ChangePassword(ctx context.Context, userID int64, keepFamily, oldPassword, newPassword string) error {
+// at once; keepFamily, the caller's own ("" through an access key: none),
+// renews on its next 401. The route has verified the caller (step-up
+// self.password.change: the password and a second factor).
+func (s *Service) ChangePassword(ctx context.Context, userID int64, keepFamily, newPassword string) error {
 	if f := validatePassword("new_password", newPassword); f != nil {
 		return core.InvalidFields(*f)
-	}
-	var hash string
-	err := s.db.Pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&hash)
-	if store.IsNoRows(err) {
-		return core.ErrUnauthenticated
-	}
-	if err != nil {
-		return err
-	}
-	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(oldPassword)) != nil {
-		return core.InvalidFields(core.FieldError{Field: "old_password", Code: "incorrect", Message: "incorrect password"})
 	}
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), s.cost)
 	if err != nil {
 		return err
 	}
 	return s.changeSessions(ctx, userID, otherSessions(keepFamily), func(tx pgx.Tx) error {
-		var currentHash string
-		if err := tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1 AND deleted_at IS NULL`, userID).Scan(&currentHash); err != nil {
-			return err
+		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, userID, string(newHash))
+		if err == nil && tag.RowsAffected() == 0 {
+			err = core.ErrUnauthenticated
 		}
-		if currentHash != hash {
-			return core.ErrConflict.WithMessage("password changed concurrently; retry")
-		}
-		_, err := tx.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, string(newHash))
 		return err
 	})
 }

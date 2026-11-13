@@ -2,6 +2,7 @@ package iam
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strconv"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
@@ -22,23 +24,39 @@ func TestTransferSuperAdminHTTP(t *testing.T) {
 	clearLastStep(t, s, root)
 	targetLogin := mustLogin(t, s, "key-user@example.com", adminPassword)
 	target := k.userID
-	body := func(target int64, password, code string) map[string]any {
-		return map[string]any{"target_user_id": target, "current_password": password, "code": code}
+	body := func(target int64) map[string]any { return map[string]any{"target_user_id": target} }
+	verify := func(token string, how map[string]any) (int, map[string]any) {
+		in := map[string]any{"scope": core.StepUpSuperAdminTransfer, "context": "POST /api/v1" + path}
+		maps.Copy(in, how)
+		return k.call(token, "POST", "/me/verify", in)
 	}
 
-	if code, out := k.call(targetLogin.AccessToken, "POST", path, body(target, adminPassword, "")); code != 403 {
+	// A user without a second factor verifies with the password alone, and
+	// is still not the super admin.
+	proof := k.proof(t, targetLogin.AccessToken, core.StepUpSuperAdminTransfer, "POST", path, map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(targetLogin.AccessToken, proof, "POST", path, body(target)); code != 403 || errCode(out) != "permission_denied" {
 		t.Fatalf("non-superuser: %d %v", code, out)
 	}
 	key := k.createKey(t, root, adminPassword, "user:read")
-	if code, out := k.call(key.Key, "POST", path, body(target, adminPassword, codeAt(t, secret, time.Now()))); code != 403 {
+	if code, out := k.call(key.Key, "POST", path, body(target)); code != 403 {
 		t.Fatalf("access key: %d %v", code, out)
 	}
-	if code, out := k.call(rootLogin.AccessToken, "POST", path, body(target, "", "")); code != 400 || errCode(out) != "invalid_argument" {
-		t.Fatalf("no password: %d %v", code, out)
+	code, out := k.call(rootLogin.AccessToken, "POST", path, body(target))
+	details, _ := out["error"].(map[string]any)["details"].(map[string]any)
+	if code != 403 || errCode(out) != "verification_required" || details["password_required"] != true || details["scope"] != core.StepUpSuperAdminTransfer {
+		t.Fatalf("no proof: %d %v", code, out)
 	}
-	if code, out := k.call(rootLogin.AccessToken, "POST", path, body(target, adminPassword, "")); code != 400 || errCode(out) != "invalid_argument" {
+	// The password and a second factor, both.
+	if code, out := verify(rootLogin.AccessToken, map[string]any{"method": "password", "password": adminPassword}); code != 400 {
+		t.Fatalf("password alone: %d %v", code, out)
+	}
+	if code, out := verify(rootLogin.AccessToken, map[string]any{"method": "totp", "code": codeAt(t, secret, time.Now())}); code != 400 {
+		t.Fatalf("code alone: %d %v", code, out)
+	}
+	if code, out := verify(rootLogin.AccessToken, map[string]any{"method": "totp", "password": adminPassword}); code != 400 {
 		t.Fatalf("no code: %d %v", code, out)
 	}
+	clearLastStep(t, s, root)
 	disabled, err := s.CreateUser(ctx, root, CreateUserInput{Email: "disabled@example.com", DisplayName: "D", Password: adminPassword})
 	if err != nil {
 		t.Fatal(err)
@@ -46,12 +64,16 @@ func TestTransferSuperAdminHTTP(t *testing.T) {
 	if _, err := s.db.Pool.Exec(ctx, `UPDATE users SET status = 'disabled' WHERE id = $1`, disabled.ID); err != nil {
 		t.Fatal(err)
 	}
-	if code, out := k.call(rootLogin.AccessToken, "POST", path, body(disabled.ID, adminPassword, codeAt(t, secret, time.Now()))); code != 400 {
+	both := func() map[string]any {
+		clearLastStep(t, s, root)
+		return map[string]any{"method": "totp", "password": adminPassword, "code": codeAt(t, secret, time.Now())}
+	}
+	proof = k.proof(t, rootLogin.AccessToken, core.StepUpSuperAdminTransfer, "POST", path, both())
+	if code, out := k.callProof(rootLogin.AccessToken, proof, "POST", path, body(disabled.ID)); code != 400 {
 		t.Fatalf("disabled target: %d %v", code, out)
 	}
-	clearLastStep(t, s, root)
-
-	if code, out := k.call(rootLogin.AccessToken, "POST", path, body(target, adminPassword, codeAt(t, secret, time.Now()))); code != 204 {
+	proof = k.proof(t, rootLogin.AccessToken, core.StepUpSuperAdminTransfer, "POST", path, both())
+	if code, out := k.callProof(rootLogin.AccessToken, proof, "POST", path, body(target)); code != 204 {
 		t.Fatalf("transfer: %d %v", code, out)
 	}
 	for id, want := range map[int64][]string{root: {authz.RoleAdmin}, target: {authz.RoleSuperAdmin, authz.RoleUser}} {

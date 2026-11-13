@@ -261,60 +261,19 @@ type UpdateUserInput struct {
 	DisplayName *string `json:"display_name"`
 	Status      *string `json:"status"`
 	Password    *string `json:"password"`
-	// SelfConfirmation is required when a user changes their own email or
-	// password through this operator route (SEC-H3).
-	SelfConfirmation
 }
 
-// SelfConfirmation re-authenticates a user who changes their own sign-in
-// through an operator route (PATCH /users/:id, DELETE /users/:id/security):
-// the current password, and a verification code (TOTP or backup code) when
-// two-factor authentication is enabled - the same proof /me/password and
-// /me/two-factor/disable ask for. Without it a stolen access token, or an
-// access key granted only user:update, could set a new password and drop the
-// second factor, and so turn into a full session (SEC-H3).
-type SelfConfirmation struct {
-	CurrentPassword *string `json:"current_password"`
-	Code            string  `json:"code"`
-}
-
-var (
-	errCurrentPasswordRequired = core.InvalidFields(core.FieldError{Field: "current_password", Code: "required", Message: "enter your current password to change your own sign-in"})
-	errSecondFactorRequired    = core.InvalidFields(core.FieldError{Field: "code", Code: "required", Message: "enter a verification code: two-factor authentication is enabled"})
-)
-
-// confirmSelf checks a SelfConfirmation for userID: the password under the
-// login rate limit, then the second factor when one is enrolled (a wrong
-// code counts towards the TOTP lockout, as everywhere else).
-func (s *Service) confirmSelf(ctx context.Context, userID int64, in SelfConfirmation, ip string) error {
-	if in.CurrentPassword == nil || *in.CurrentPassword == "" {
-		return errCurrentPasswordRequired
+// consumeSelfChange spends the step-up proof a change of one's own sign-in
+// needs: the password scope when it changes the password, the email one
+// when only the email.
+func (s *Service) consumeSelfChange(ctx context.Context, in UpdateUserInput) error {
+	switch {
+	case in.Password != nil:
+		return s.ConsumeStepUp(ctx, core.StepUpSelfPassword)
+	case in.Email != nil:
+		return s.ConsumeStepUp(ctx, core.StepUpSelfEmail)
 	}
-	if _, err := s.confirmPassword(ctx, userID, *in.CurrentPassword, ip); err != nil {
-		return err
-	}
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
-		if err := lockRefreshUser(ctx, tx, userID); err != nil {
-			return err
-		}
-		var enrolled bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_totp WHERE user_id = $1)`, userID).Scan(&enrolled); err != nil {
-			return err
-		}
-		if !enrolled {
-			return nil
-		}
-		if strings.TrimSpace(in.Code) == "" {
-			return errSecondFactorRequired
-		}
-		return s.checkSecondFactor(ctx, tx, userID, in.Code)
-	})
-	if isBadSecondFactor(err) {
-		if ferr := s.recordSecondFactorFailure(ctx, userID); ferr != nil {
-			return ferr
-		}
-	}
-	return err
+	return nil
 }
 
 var errSelfDisable = core.ErrConflict.WithMessage("you cannot disable or delete yourself")
@@ -342,12 +301,21 @@ func validateUpdate(in UpdateUserInput) (email string, fields []core.FieldError)
 	return email, fields
 }
 
-// UpdateUser applies a partial update. ip is the caller's address, for the
-// login rate limit when a user confirms a change to their own sign-in.
-func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput, ip string) (*User, error) {
+// UpdateUser applies a partial update.
+func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUserInput) (*User, error) {
 	email, fields := validateUpdate(in)
 	if len(fields) > 0 {
 		return nil, core.InvalidFields(fields...)
+	}
+	// SEC-H3: a user's own email or password changes only with a step-up
+	// proof (the password one: the password and a second factor), as on
+	// /me/password; this route must not be the way around it for an access
+	// key or a stolen token. Spent before the guard, which then lets the
+	// super admin's own access key through on it.
+	if actorID == id {
+		if err := s.consumeSelfChange(ctx, in); err != nil {
+			return nil, err
+		}
 	}
 	// SEC-H1, FU6: the target, oneself included, must be a user the actor
 	// manages (its roles within the actor's and assignable by it).
@@ -355,22 +323,16 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 		return nil, err
 	}
 
-	// SEC-H3: a user's own email or password changes only with proof of the
-	// current sign-in, as on /me/password; this route must not be the way
-	// around it for an access key or a stolen token.
-	if actorID == id && (in.Password != nil || in.Email != nil) {
-		if err := s.confirmSelf(ctx, id, in.SelfConfirmation, ip); err != nil {
-			return nil, err
-		}
-	}
-
-	// SEC-H1: password reset for others requires user:password:reset; the
-	// system (actor 0, the server CLI) holds no roles and is not checked.
-	changingOthersPassword := in.Password != nil && actorID != id && actorID != 0
-	if changingOthersPassword {
+	// SEC-H1: password reset for others requires user:password:reset and a
+	// step-up proof; the system (actor 0, the server CLI) holds no roles and
+	// is not checked.
+	if in.Password != nil && actorID != id && actorID != 0 {
 		if !core.Can(core.WithUserID(ctx, actorID), s.authz, "user:password:reset") {
 			return nil, core.ErrPermissionDenied.WithMessage("missing permission: user:password:reset").
 				WithDetails(map[string]any{"permission": "user:password:reset"})
+		}
+		if err := s.ConsumeStepUp(ctx, core.StepUpUserPasswordReset); err != nil {
+			return nil, err
 		}
 	}
 
@@ -554,6 +516,20 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 
 // SetUserRoles replaces a user's roles (PUT /users/:id/roles).
 func (s *Service) SetUserRoles(ctx context.Context, actorID, id int64, roleKeys []string) (*User, error) {
+	// The super admin changing its own roles through an access key needs a
+	// step-up proof (UserGuard). Spend it before the transaction, which
+	// holds the authz lock: the guard inside then sees it spent.
+	if actorID == id && core.ByAccessKey(ctx, actorID) {
+		su, err := s.authz.IsSuperuser(ctx, s.db.Pool, actorID)
+		if err != nil {
+			return nil, err
+		}
+		if su {
+			if err := s.ConsumeStepUp(ctx, core.StepUpSuperAdminIdentity); err != nil {
+				return nil, err
+			}
+		}
+	}
 	var v int64
 	var u *User
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {

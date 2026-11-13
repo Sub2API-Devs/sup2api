@@ -27,7 +27,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
-type fakeTokens struct{}
+type fakeTokens struct{ testutil.StepUpPassed }
 
 func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
@@ -407,9 +407,10 @@ func TestCopyAPIKey(t *testing.T) {
 	if code != 200 || out["data"].(map[string]any)["key"] != raw {
 		t.Fatalf("owner reveal: %d", code)
 	}
-	// Reveal leaks an existing key, so the owner's access key cannot call it.
+	// The owner's access key reveals too, after the step-up (passed here;
+	// iam tests the proofs).
 	code, out = e.call(core.AccessKeyPrefix+strconv.FormatInt(e.user, 10), "POST", path, nil)
-	if fail, _ := out["error"].(map[string]any); code != 403 || fail["message"] != "access keys cannot use this endpoint" {
+	if code != 200 || out["data"].(map[string]any)["key"] != raw {
 		t.Fatalf("access key reveal: %d %v", code, out)
 	}
 	other := e.exec1(`INSERT INTO users (email,password_hash) VALUES ('other@copy.test','x') RETURNING id`)
@@ -425,7 +426,7 @@ func TestCopyAPIKey(t *testing.T) {
 	}
 	var count int
 	_ = e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action='apikey.reveal' AND target_id=$1`, strconv.FormatInt(id, 10)).Scan(&count)
-	if count != 1 {
+	if count != 2 {
 		t.Fatalf("audit count: %d", count)
 	}
 	e.exec(`UPDATE api_keys SET key_cipher=NULL WHERE id=$1`, id)

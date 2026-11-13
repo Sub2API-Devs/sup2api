@@ -185,6 +185,17 @@ func TestPluginWritesAndList(t *testing.T) {
 	if rows := list("from=" + time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)); len(rows) != 2 {
 		t.Fatalf("by time = %v", rows)
 	}
+	// A write through an access key records the key (CONTRACTS §80).
+	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: uid, KeyID: 42})
+	w.AuditPluginWrite(keyed, core.PluginWrite{UserID: uid, Plugin: "demo", Method: "DELETE", Path: "/rules/7", Route: "/rules/:id", Status: 204, RequestID: "req-2"})
+	if !w.Flush(ctx) {
+		t.Fatal("flush")
+	}
+	var via string
+	var keyID int64
+	if err := db.Pool.QueryRow(ctx, `SELECT detail->>'via', (detail->>'access_key_id')::bigint FROM audit_logs WHERE detail->>'request_id' = 'req-2'`).Scan(&via, &keyID); err != nil || via != "access_key" || keyID != 42 {
+		t.Fatalf("keyed write: %q %d %v", via, keyID, err)
+	}
 }
 
 type allowAll struct{}

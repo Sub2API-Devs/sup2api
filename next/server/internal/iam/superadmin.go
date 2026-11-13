@@ -17,19 +17,16 @@ import (
 )
 
 // TransferSuperAdmin hands the caller's super admin role to targetID (POST
-// /system/super-admin/transfer): only the super admin itself, in a session,
-// with its password and second factor. The caller becomes an admin.
-func (s *Service) TransferSuperAdmin(ctx context.Context, actorID, targetID int64, confirm SelfConfirmation, ip string) error {
-	// Refuse anyone else before the confirmation spends the login rate limit.
+// /system/super-admin/transfer): only the super admin itself, verified by
+// the route (step-up superadmin.transfer: the password and a second
+// factor). The caller becomes an admin.
+func (s *Service) TransferSuperAdmin(ctx context.Context, actorID, targetID int64) error {
 	su, err := s.authz.IsSuperuser(ctx, s.db.Pool, actorID)
 	if err != nil {
 		return err
 	}
 	if !su {
 		return authz.ErrNotTheSuperAdmin
-	}
-	if err := s.confirmSelf(ctx, actorID, confirm, ip); err != nil {
-		return err
 	}
 	return s.transferSuperAdmin(ctx, actorID, targetID)
 }
@@ -88,7 +85,7 @@ func (s *Service) RecoverSuperAdmin(ctx context.Context, email string, opts Reco
 	}
 	if status != StatusActive {
 		active := StatusActive
-		if _, err := s.UpdateUser(ctx, 0, id, UpdateUserInput{Status: &active}, ""); err != nil {
+		if _, err := s.UpdateUser(ctx, 0, id, UpdateUserInput{Status: &active}); err != nil {
 			return "", err
 		}
 	}
@@ -97,12 +94,12 @@ func (s *Service) RecoverSuperAdmin(ctx context.Context, email string, opts Reco
 	}
 	if opts.ResetPassword {
 		password = randomPassword()
-		if _, err := s.UpdateUser(ctx, 0, id, UpdateUserInput{Password: &password}, ""); err != nil {
+		if _, err := s.UpdateUser(ctx, 0, id, UpdateUserInput{Password: &password}); err != nil {
 			return "", err
 		}
 	}
 	if opts.ResetTwoFactor {
-		if err := s.ResetSecurity(ctx, 0, id, SelfConfirmation{}, ""); err != nil {
+		if err := s.ResetSecurity(ctx, 0, id); err != nil {
 			return "", err
 		}
 	}
@@ -119,13 +116,12 @@ func randomPassword() string {
 func (s *Service) handleTransferSuperAdmin(c *gin.Context) {
 	var in struct {
 		TargetUserID int64 `json:"target_user_id"`
-		SelfConfirmation
 	}
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := s.TransferSuperAdmin(audit.Context(c), actor(c), in.TargetUserID, in.SelfConfirmation, c.ClientIP()); err != nil {
-		failLogin(c, err) // Retry-After when the confirmation is rate limited
+	if err := s.TransferSuperAdmin(audit.Context(c), actor(c), in.TargetUserID); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.NoContent(c)

@@ -39,6 +39,7 @@ type Service struct {
 	users      map[int64]core.PermissionSet
 	catalog    *catalogSnapshot
 	listeners  []func()
+	stepUp     core.StepUpVerifier
 }
 
 type permMeta struct {
@@ -312,30 +313,37 @@ func (s *Service) readSnapshot(ctx context.Context, fn func(tx pgx.Tx) error) (i
 func (s *Service) loadPermissionSet(ctx context.Context, userID int64) (core.PermissionSet, error) {
 	set := core.PermissionSet{Keys: map[string]struct{}{}}
 	v, err := s.readSnapshot(ctx, func(tx pgx.Tx) error {
+		// One row at least for an active user, roles or not: a signed-in
+		// user holds the self permissions (withSelf).
 		rows, err := tx.Query(ctx, `
-SELECT r.superuser, p.key
-FROM user_roles ur
-JOIN users u ON u.id = ur.user_id AND u.deleted_at IS NULL AND u.status = 'active'
-JOIN roles r ON r.id = ur.role_id
+SELECT COALESCE(r.superuser, false), p.key
+FROM users u
+LEFT JOIN user_roles ur ON ur.user_id = u.id
+LEFT JOIN roles r ON r.id = ur.role_id
 LEFT JOIN role_permissions rp ON rp.role_id = r.id
 LEFT JOIN permissions p ON p.id = rp.permission_id AND p.status = 'active'
-WHERE ur.user_id = $1`, userID)
+WHERE u.id = $1 AND u.deleted_at IS NULL AND u.status = 'active'`, userID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
+		active := false
 		for rows.Next() {
 			var su bool
 			var key *string
 			if err := rows.Scan(&su, &key); err != nil {
 				return err
 			}
+			active = true
 			if su {
 				set.Superuser = true
 			}
 			if key != nil {
 				set.Keys[*key] = struct{}{}
 			}
+		}
+		if active {
+			set = withSelf(set)
 		}
 		return rows.Err()
 	})
@@ -402,15 +410,15 @@ SELECT COALESCE(array_agg(key), '{}') FROM (
 	return set, nil
 }
 
-// ActivePermissionKeys lists every active permission (used for superusers
-// in /me).
+// ActivePermissionKeys lists every active permission, the self ones
+// included (used for superusers in /me).
 func (s *Service) ActivePermissionKeys(ctx context.Context) ([]string, error) {
 	if err := s.ensureCatalog(ctx); err != nil {
 		return nil, err
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]string, 0, len(s.catalog.perms))
+	out := SelfPermissionKeys()
 	for k, m := range s.catalog.perms {
 		if m.status == "active" {
 			out = append(out, k)
