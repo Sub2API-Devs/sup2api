@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 
@@ -104,13 +105,13 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 // CanGrantToRoles implements core.PermissionCatalog: actorID may hand new
 // plugin permissions to each role of roleKeys, which is a change of that
 // role (editableRole: built-in roles are the super admin's alone, a custom
-// role must be within the actor's grantSet) and must be on the actor's
-// assignable list (CanAssign, T59), which leaves out the actor's own roles:
-// the new permissions need not be held, so without it an actor could hand
-// itself what PUT /roles/:id/permissions refuses. Super admin roles already
-// hold every permission and are refused; unknown keys are invalid. Like
-// every role write it bumps tx (serializing with other role changes) and
-// locks the roles; the SyncPlugin that follows publishes the new version.
+// role must be within the actor's grantSet) to a role the actor may assign
+// and does not hold itself (pluginGrantee, T59): the new permissions need
+// not be held, so an actor naming its own role would get what
+// PUT /roles/:id/permissions refuses. Super admin roles already hold every
+// permission and are refused; unknown keys are invalid. Like every role
+// write it bumps tx (serializing with other role changes) and locks the
+// roles; the SyncPlugin that follows publishes the new version.
 func (s *Service) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roleKeys []string) error {
 	if roleKeys = dedupe(roleKeys); len(roleKeys) == 0 {
 		return nil
@@ -122,7 +123,7 @@ func (s *Service) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64,
 	if err != nil {
 		return err
 	}
-	actor, err := s.grantSet(ctx, tx, actorID)
+	actor, held, err := s.pluginGrantor(ctx, tx, actorID)
 	if err != nil {
 		return err
 	}
@@ -135,9 +136,36 @@ func (s *Service) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64,
 		if _, err := s.editableRole(ctx, tx, actorID, r.id); err != nil {
 			return err
 		}
-		if !actor.CanAssign(r.key) {
-			return notAssignable(ctx, r.key)
+		if err := pluginGrantee(ctx, actor, held, r.key); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// pluginGrantor is actorID's grantSet with the keys of the roles it holds;
+// the system (actor 0) is a superuser, as editableRole lets it through.
+func (s *Service) pluginGrantor(ctx context.Context, tx pgx.Tx, actorID int64) (core.PermissionSet, []string, error) {
+	if actorID == 0 {
+		return core.PermissionSet{Superuser: true}, nil, nil
+	}
+	set, held, err := s.usersRoles(ctx, tx, []int64{actorID})
+	return core.RestrictToAccessKey(ctx, actorID, set), held, err
+}
+
+// pluginGrantee fails unless actor may hand new plugin permissions to role
+// key (T59): the role is on its assignable list and, but for a superuser,
+// is not one it holds. A list may name the holder's own role (only the
+// assign_custom wildcard leaves it out), and the new permissions need not
+// be held, so without the second check an actor could grow its own role.
+func pluginGrantee(ctx context.Context, actor core.PermissionSet, held []string, key string) error {
+	switch {
+	case !actor.CanAssign(key):
+		return notAssignable(ctx, key)
+	case !actor.Superuser && slices.Contains(held, key):
+		return core.ErrPermissionDenied.WithMessage(t(ctx,
+			"you cannot grant plugin permissions to a role you hold",
+			"不能把插件权限授予自己持有的角色")).WithDetails(map[string]any{"role": key})
 	}
 	return nil
 }

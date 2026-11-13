@@ -256,8 +256,8 @@ type PermissionCatalog interface {
 	SyncPlugin(ctx context.Context, tx pgx.Tx, pluginKey string, defs []PermissionDef) error
 	// CanGrantToRoles fails unless actorID may change every role of
 	// roleKeys (super admin roles never), as handing them a plugin's new
-	// permissions does, and each is on its assignable list (so none it
-	// holds itself).
+	// permissions does, and each is on its assignable list and, but for a
+	// superuser, not held by actorID.
 	CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roleKeys []string) error
 	// SetPluginActive flips status active/disabled (enable/disable).
 	SetPluginActive(ctx context.Context, tx pgx.Tx, pluginKey string, active bool) error

@@ -496,13 +496,14 @@
 
 ## T59 P1：新插件权限的授予资格（manifest 默认按系统目录默认，显式覆盖走 editableRole，产品性收紧）
 
-- 改动：`install.checkRoleGrantRights` 只看同意请求显式指定的角色（`new_permission_roles` 或旧字段 `role_keys_for_new_permissions`，只算本次目录里还不存在的权限）：要求 `role:define`（403 `details.permission = role:define`），再调用新的 `core.PermissionCatalog.CanGrantToRoles(ctx, tx, actor, roleKeys)`。authz 的实现对每个角色走核心 `editableRole`（内置角色只有超管能改，决策 6；自定义角色当前权限须 ⊆ 操作者，M5），且须在操作者的可分配清单内（`CanAssign`，见下面“已定”），超管角色 403，未知角色 400 `role_keys` `unknown`；与其他角色写入一样先 `Bump` 并锁住角色行。去掉了此前“操作者必须持有被授予的新权限”（`CanGrant`）的要求：新 key 本身不要求操作者持有。manifest `defaultRoles` 不检查任何权限，在同一事务里由 `SyncPlugin` 以系统身份（actor 0）授予并写 `authz.sync.grant` 审计，与 `SyncCore` 自动授予一致。插件域不另写角色判断。
+- 改动：`install.checkRoleGrantRights` 只看同意请求显式指定的角色（`new_permission_roles` 或旧字段 `role_keys_for_new_permissions`，只算本次目录里还不存在的权限）：要求 `role:define`（403 `details.permission = role:define`），再调用新的 `core.PermissionCatalog.CanGrantToRoles(ctx, tx, actor, roleKeys)`。authz 的实现对每个角色走核心 `editableRole`（内置角色只有超管能改，决策 6；自定义角色当前权限须 ⊆ 操作者，M5），且须在操作者的可分配清单内、不是操作者持有的角色（见下面“已定”），超管角色 403，未知角色 400 `role_keys` `unknown`；与其他角色写入一样先 `Bump` 并锁住角色行。去掉了此前“操作者必须持有被授予的新权限”（`CanGrant`）的要求：新 key 本身不要求操作者持有。manifest `defaultRoles` 不检查任何权限，在同一事务里由 `SyncPlugin` 以系统身份（actor 0）授予并写 `authz.sync.grant` 审计，与 `SyncCore` 自动授予一致。插件域不另写角色判断。
 - 测试：`authz.TestCanGrantToRoles`（真实库：operator 对权限 ⊆ 自己的自定义角色通过，对更大的自定义角色、内置角色、超管角色 403，未知 400；超管对内置与自定义通过、对超管角色 403），`install.TestConsentRoleGrantRights`（没有 `role:define` 带显式角色 403；目录拒绝时 403 且检查的是去重后的角色；不带显式角色时没有 `role:define` 也按 manifest 默认授予；升级不新增权限时带角色不需要 `role:define`）。
 - 影响对象：
   - 非超管（含内置 admin）在同意页勾选内置角色（admin、operator、supplier、user）或权限比自己大的自定义角色：由成功（期 3a 遗留路径，等于绕过决策 6 改内置角色）变为 403。不勾选时按 manifest 默认授予，不受影响。控制台列出全部角色，勾了不能改的角色会在提交时报错。
   - 旧控制台默认发 `role_keys_for_new_permissions: ["admin"]`：非超管用旧控制台安装带新权限的插件会 403，需要升级控制台或不勾选（发空数组）。
-  - 只有 `role:define` 而不持有插件新权限的人，现在可以把新权限交给自己能改、且在自己可分配清单内的自定义角色（新 key 不要求持有；自己持有的角色不在清单内）。
-  - 已定（期 3 审查发现 A，已改代码）：显式指定的每个角色除了 `editableRole`，还须在操作者的可分配清单内（`CanGrantToRoles` 里对操作者 `grantSet` 调 `CanAssign`，不在清单内 403 `details.role`）。期 3 审查 R1 之后 `assign_custom`（“全部自定义角色”）不含操作者自己持有的角色，所以操作者不能把新插件权限（含 sensitive 的，如 payment `config:manage`）授给自己的角色，与 PUT `/roles/:id/permissions` 拒绝同样改动的结果一致；能指定的只有清单内、权限 ⊆ 自己的其他自定义角色。内置角色照旧只有超管能指定（超管 `CanAssign` 全部），超管角色照旧 403。manifest `defaultRoles`（系统目录默认，actor 0）与升级不新增权限的情况不受影响。测试：`authz.TestCanGrantToRoles` 增加持有 `role:define` + `plugin:install` 的自定义角色：指定自己持有的角色 403、清单内的其他自定义角色通过、不在清单内的自定义角色 403、内置角色 403。
+  - 只有 `role:define` 而不持有插件新权限的人，现在可以把新权限交给自己能改、且在自己可分配清单内的自定义角色（新 key 不要求持有；自己持有的角色不行）。
+  - 用访问密钥调用时可分配清单为空（`RestrictToAccessKey` 去掉可分配集合，与 PUT `/users/:id/roles` 一致），所以访问密钥不能显式指定任何角色（403 `details.role`），只能按 manifest 默认。
+  - 已定（期 3 审查发现 A，已改代码）：显式指定的每个角色除了 `editableRole`，还须在操作者的可分配清单内（`CanGrantToRoles` → `pluginGrantee`，对操作者 `grantSet` 调 `CanAssign`，不在清单内 403 `details.role`），且非超管不能指定自己持有的角色（403 `details.role`）。期 3 审查 R1 之后 `assign_custom`（“全部自定义角色”）已不含操作者自己持有的角色，但可分配清单按名字列出的角色照旧可分配（例如角色清单列出自己，或操作者同时持有 A 与 A 清单里的 B），所以另外排除持有的角色（独立审查发现）。结果：操作者不能把新插件权限（含 sensitive 的，如 payment `config:manage`）授给自己的角色，与 PUT `/roles/:id/permissions` 拒绝同样改动一致；能指定的只有清单内、权限 ⊆ 自己、自己不持有的其他自定义角色。内置角色照旧只有超管能指定（超管 `CanAssign` 全部，也可以指定自己同时持有的角色），超管角色照旧 403；系统（actor 0）照旧通过。manifest `defaultRoles`（系统目录默认）与升级不新增权限的情况不受影响。测试：`authz.TestCanGrantToRoles` 增加持有 `role:define` + `plugin:install` 的自定义角色：清单内的其他自定义角色通过；不在清单内、经通配指向自己、清单按名字列出自己、持有的另一个清单内角色、内置角色都 403；超管指定自己同时持有的自定义角色通过。
 - 已知边界（审查发现，接受）：`role:define` 用权限缓存判断（与其他接口一致），角色本身的判断在事务里加锁进行；两者之间撤销 `role:define` 的极短窗口不处理。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 

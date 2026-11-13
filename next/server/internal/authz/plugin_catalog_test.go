@@ -156,7 +156,8 @@ func TestSyncPluginInheritsOnlyEarlierGrants(t *testing.T) {
 
 // Handing new plugin permissions to a role is a change of that role
 // (editableRole) on the actor's assignable list (T59): a custom role within
-// the actor and on its list only, never one it holds itself, built-in roles
+// the actor and on its list only, never one it holds itself (wildcard or
+// listed by name) unless it is the super admin, built-in roles
 // the super admin alone, super admin roles never; unknown roles are invalid.
 func TestCanGrantToRoles(t *testing.T) {
 	t.Parallel()
@@ -174,14 +175,32 @@ func TestCanGrantToRoles(t *testing.T) {
 		// crew may assign every custom role but its own.
 		{Key: "installer", PermissionKeys: installerPerms, AssignableRoleKeys: []string{"small", "big", RoleUser}},
 		{Key: "crew", PermissionKeys: installerPerms, AssignCustom: true},
+		// lead's list names lead; pair's names held, which pair holds too.
+		{Key: "lead", PermissionKeys: installerPerms},
+		{Key: "held", PermissionKeys: []string{"user:read"}},
+		{Key: "pair", PermissionKeys: installerPerms, AssignableRoleKeys: []string{"held"}},
 	} {
 		in.Name = lt(in.Key, in.Key)
-		if _, err := s.CreateRole(ctx, root, in); err != nil {
+		r, err := s.CreateRole(ctx, root, in)
+		if err != nil {
 			t.Fatal(err)
+		}
+		if in.Key == "lead" {
+			if _, err := s.SetRoleAssignable(ctx, root, r.ID, AssignableInput{RoleKeys: []string{"lead"}}); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	installer := addUser(t, s, "installer@x.com", "installer")
 	crew := addUser(t, s, "crew@x.com", "crew")
+	lead := addUser(t, s, "lead@x.com", "lead")
+	pair := addUser(t, s, "pair@x.com", "pair", "held")
+	if err := db.Tx(ctx, func(tx pgx.Tx) error {
+		_, err := s.SetUserRoles(ctx, tx, 0, root, []string{RoleSuperAdmin, "small"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	can := func(actor int64, roles ...string) string {
 		t.Helper()
 		var code string
@@ -206,12 +225,15 @@ func TestCanGrantToRoles(t *testing.T) {
 		{"own role", installer, []string{"installer"}, "permission_denied"},
 		{"every custom role but its own", crew, []string{"small", "other"}, ""},
 		{"own role under every custom role", crew, []string{"crew"}, "permission_denied"},
+		{"own role listed by name", lead, []string{"lead"}, "permission_denied"},
+		{"another held role listed by name", pair, []string{"held"}, "permission_denied"},
 		{"custom without assignable list", ops, []string{"small"}, "permission_denied"},
 		{"built-in", ops, []string{RoleUser}, "permission_denied"},
 		{"super admin role", ops, []string{RoleSuperAdmin}, "permission_denied"},
 		{"unknown", ops, []string{"nope"}, "invalid_argument"},
 		{"none", ops, nil, ""},
 		{"super admin on built-in and custom", root, []string{RoleAdmin, RoleUser, "big", "installer", "crew"}, ""},
+		{"super admin on a role it also holds", root, []string{"small"}, ""},
 		{"super admin on super admin role", root, []string{RoleSuperAdmin}, "permission_denied"},
 	} {
 		if got := can(c.actor, c.roles...); got != c.want {
