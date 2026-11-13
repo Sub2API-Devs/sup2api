@@ -1193,7 +1193,7 @@
 - 错误提示：
   - `would_leave_scope` 与 `permission_denied{permission: proxy:manage:own}`（不能新建代理）在控制台按当前语言显示（`errorMessage` 的 `KNOWN_ERRORS`）。
   - `group_ids` 字段的 `not_in_scope` 由账号保存的字段码表翻译。
-- 插件宿主：`HostPermissions` 增加可选的 `hasAction(a)` 与 `scope(a)`（返回规范 key）。旧控制台没有这两个方法，插件应先检测再用。moderation 改为 `hasAction?.('account:read')`，没有时回落到旧别名。`HOST_UI_VERSION` 不变（是否升 3.15 由 T84 决定）。
+- 插件宿主：`HostPermissions` 增加可选的 `hasAction(a)` 与 `scope(a)`（返回规范 key）。旧控制台没有这两个方法，插件应先检测再用。moderation 改为 `hasAction?.('account:read')`，没有时回落到旧别名。`HOST_UI_VERSION` 升到 3.15.0（期 4 整合审查），moderation 0.12.0 的 `hostUICompat` 改为 `^3.15`（版本号不再升）；`sdk/manifest` 记 UI 3.15 → 核心 0.1.286 的下限。
 - mock：`hasPerm` 按蕴含判断，`ownerScope(who, action)` 返回范围，行过滤复用 `scopeAllowsRow`。
   - `/permissions` 带 `scope_type`，不再列 8 个 own key。
   - 内置 supplier 与 vendor 使用规范 key，vendor 的 `/me` 附带旧别名。
