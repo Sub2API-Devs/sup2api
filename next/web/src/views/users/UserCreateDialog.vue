@@ -2,21 +2,25 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SCheckbox, SField, SFormModal, SHint, SInput, toast } from '@sub2api/ui'
+import { SCheckbox, SField, SFormModal, SInput, toast } from '@sub2api/ui'
 import type { Role } from '@/api/types'
 import SegmentSelect from '@/components/pricing/SegmentSelect.vue'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useAssignableRoles, withSupplierUser, DEFAULT_ROLE } from '@/composables/useAssignableRoles'
 import { applyFormError } from '@/utils/formErrors'
 import { useNamedSegments } from './userSegments'
 
-// New user (POST /users), with the roles the page has loaded. A caller who
-// lists and manages segments also says which one the user joins
-// (`segment_id`); left out, the server puts him in the default segment.
+// New user (POST /users). The roles offered are the caller's managed roles
+// (useAssignableRoles) and the default role, which needs no managed list
+// (CONTRACTS POST /users); `roles` (the page's role list) only names it. A
+// caller who lists and manages segments also says which one the user joins
+// (`segment_id`); left out, the server puts the user in the default segment.
 const props = defineProps<{ open: boolean; roles: Role[] }>()
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'created'): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
+const managed = useAssignableRoles()
 const segments = useNamedSegments()
 const defaultSegmentId = computed(() => segments.value.find((s) => s.is_default)?.id ?? null)
 const canPlace = computed(() => auth.has('segment:read') && auth.has('segment:manage'))
@@ -34,21 +38,23 @@ watch(
   }
 )
 
-/** Without role:assign only the default "user" role can be given at creation. */
+/** The default role, then the managed ones. */
+const roleOptions = computed(() => {
+  const def = props.roles.find((r) => r.key === DEFAULT_ROLE)
+  const first = managed.get(DEFAULT_ROLE) ? [] : [{ key: DEFAULT_ROLE, name: def?.name ?? DEFAULT_ROLE }]
+  return [...first, ...managed.roles.value]
+})
+
+/** Non-default roles take role:assign; any role must be one the caller may grant. */
 function roleSelectable(key: string) {
-  return auth.has('role:assign') || key === 'user'
+  if (key === DEFAULT_ROLE) return managed.defaultWithin()
+  return auth.has('role:assign') && managed.assignable(key)
 }
 
-function toggleKey(listRef: string[], key: string) {
-  const i = listRef.indexOf(key)
-  if (i >= 0) listRef.splice(i, 1)
-  else listRef.push(key)
-}
-
-/** Supplier is an add-on role: a supplier is a user too, so checking it checks the default role with it. */
+/** Supplier is an add-on role: checking it checks the default role with it. */
 function toggleRole(key: string) {
-  toggleKey(form.role_keys, key)
-  if (key === 'supplier' && form.role_keys.includes('supplier') && !form.role_keys.includes('user')) form.role_keys.push('user')
+  const keys = form.role_keys.includes(key) ? form.role_keys.filter((k) => k !== key) : [...form.role_keys, key]
+  form.role_keys = key === 'supplier' ? withSupplierUser(keys) : keys
 }
 
 async function submit() {
@@ -88,17 +94,17 @@ async function submit() {
       <SInput v-model="form.password" type="password" autocomplete="new-password" revealable />
     </SField>
     <SField :label="t('users.roles')" :error="errors.role_keys">
-      <div v-if="roles.length" class="flex flex-wrap gap-x-4 gap-y-2">
+      <div class="flex flex-wrap gap-x-4 gap-y-2">
         <SCheckbox
-          v-for="r in roles"
+          v-for="r in roleOptions"
           :key="r.key"
           :model-value="form.role_keys.includes(r.key)"
           :disabled="!roleSelectable(r.key)"
           :label="lt(r.name) || r.key"
+          :data-role="r.key"
           @update:model-value="toggleRole(r.key)"
         />
       </div>
-      <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
     </SField>
     <SField v-if="canPlace" :label="t('users.segment')" :hint="t('users.segmentHint')" :error="errors.segment_id">
       <SegmentSelect v-model="form.segment_id" data-testid="user-create-segment" />

@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sort"
 	"time"
 
@@ -51,6 +52,10 @@ type Review struct {
 	// needs consent, so an upgrade is not carried over (rolegrants.go).
 	NewRoleGrants         []RoleGrant `json:"new_role_grants"`
 	RoleGrantsNeedConsent bool        `json:"role_grants_need_consent"`
+	// NeedsDBSchemaUnconfined: granting the db.schema this version asks for
+	// takes plugin:grant:db_schema_unconfined (dbSchemaUnconfined), so the
+	// console can tell before the consent is sent.
+	NeedsDBSchemaUnconfined bool `json:"needs_db_schema_unconfined"`
 	UploadedAt            time.Time   `json:"uploaded_at"`
 }
 
@@ -131,6 +136,9 @@ type ReviewUserPerm struct {
 	// defaultRoles, none for a rename which only inherits from InheritFrom).
 	DefaultRoles []string `json:"default_roles"`
 	InheritFrom  []string `json:"inherit_from,omitempty"`
+	// New: the catalog has no such permission yet; the consent creates it,
+	// and only then do its roles (new_permission_roles) apply.
+	New bool `json:"new"`
 }
 
 type ReviewDatabase struct {
@@ -371,7 +379,9 @@ func (r *Review) resolveDefaultRoles(ctx context.Context, q store.Querier, m *ma
 	}
 	grants := roleGrants(m, ConsentRequest{}, existing)
 	for i := range r.UserPermissions {
-		r.UserPermissions[i].DefaultRoles = grants[r.UserPermissions[i].Key]
+		up := &r.UserPermissions[i]
+		up.DefaultRoles = grants[up.Key]
+		up.New = !existing[manifest.PermissionKey(m.Key, up.Key)]
 	}
 	plan, err := planRoleGrants(ctx, q, m, existing, grants)
 	if err != nil {
@@ -382,6 +392,14 @@ func (r *Review) resolveDefaultRoles(ctx context.Context, q store.Querier, m *ma
 		r.NewRoleGrants = []RoleGrant{}
 	}
 	return nil
+}
+
+// noteDBSchema sets NeedsDBSchemaUnconfined from the manifest's db.schema
+// request and the plugin's trust (the consent sends every checked host
+// permission as a grant, so a db.schema granted before is checked again).
+func (s *Service) noteDBSchema(r *Review, m *manifest.Manifest) {
+	asks := slices.ContainsFunc(m.HostPermissions, func(hp manifest.HostPermission) bool { return hp.ID == "db.schema" })
+	r.NeedsDBSchemaUnconfined = asks && s.dbSchemaUnconfined(r.Trust == pkg.TrustOfficial)
 }
 
 // Review returns the review of a stored version (for the consent page).
@@ -431,6 +449,7 @@ func (s *Service) Review(ctx context.Context, key, version string) (*Review, err
 	if err := r.resolveDefaultRoles(ctx, s.d.DB.Pool, p.Manifest); err != nil {
 		return nil, err
 	}
+	s.noteDBSchema(r, p.Manifest)
 	r.ConsentStatus = consent
 	r.PackageSHA256, r.PackageSize, r.UploadedAt = sha, size, uploadedAt
 	r.UpgradeFrom = upgradeFrom

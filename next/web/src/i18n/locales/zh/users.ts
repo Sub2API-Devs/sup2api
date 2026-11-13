@@ -11,7 +11,9 @@ export default {
   passwordTooShort: '密码至少 8 个字符',
   roles: '角色',
   allRoles: '全部角色',
-  rolesUnavailable: '无法加载角色（需要 role:read 权限）。',
+  roleNotGrantable: '不能新分配：超出你的权限（{keys}）',
+  roleLocked: '不在你的可管理角色内，保持不变',
+  noManagedRoles: '你没有可管理的角色。',
   superuser: '超级管理员',
   balance: '余额',
   lastLogin: '最近登录',
@@ -55,7 +57,7 @@ export default {
   },
   ledger: '余额流水',
   adjustBalance: '调整余额',
-  resetSecurity: '重置二次验证和通行密钥',
-  resetSecurityConfirm: '{name} 的二次验证和全部通行密钥都会被移除，之后只凭密码就能登录。确定吗？',
+  resetSecurity: '重置两步验证和通行密钥',
+  resetSecurityConfirm: '{name} 的两步验证和全部通行密钥都会被移除，之后只凭密码就能登录。确定吗？',
   resetSecurityDone: '已重置'
 }

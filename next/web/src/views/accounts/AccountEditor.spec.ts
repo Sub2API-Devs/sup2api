@@ -25,7 +25,8 @@ vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@
 const ownership = vi.hoisted(() => ({ scope: 'all' as 'all' | 'own' }))
 const pluginStore = vi.hoisted(() => ({ listed: true, pending: {} as Record<string, boolean>, errors: {} as Record<string, string>, plugin: () => null, component: (() => null) as (key: string, name?: string) => unknown, slotEntries: (() => []) as (slot: string) => unknown[] }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => pluginStore, assetURL: () => '' }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
+const perms = vi.hoisted(() => ({ denied: [] as string[] }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some(k => !perms.denied.includes(k)) }) }))
 vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true, scopeOf: () => ownership.scope }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useProxiesLookup: () => ({}) }))
 
@@ -898,5 +899,72 @@ describe('plugin sections (account.editor.section)', () => {
     const only = slots[0].props('only') as (e: unknown) => boolean
     expect(entries.map(only)).toEqual([true, false, false])
     expect(slots[0].element.closest('[data-editor-section]')?.getAttribute('data-editor-section')).toBe('plugin:demo:DemoSection')
+  })
+})
+
+// T75: what an own-level caller may set beyond editing (useAccountCaps).
+describe('account field permissions', () => {
+  const relayType = { ...accountType, plugin_key: 'relay', type: 'relay', creation_group: undefined, custom_upstream: true, guarded_settings: [] } as unknown as AccountType
+  beforeEach(() => {
+    vi.clearAllMocks()
+    i18n.global.locale.value = 'zh'
+    mocks.get.mockImplementation((path: string) => Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location))
+    mocks.patch.mockResolvedValue(savedAccount())
+    mocks.post.mockResolvedValue(savedAccount())
+  })
+  afterEach(() => {
+    ownership.scope = 'all'
+    perms.denied = []
+  })
+
+  it('locks the groups and leaves them out of the save without a bind permission', async () => {
+    ownership.scope = 'own'
+    perms.denied = ['group:manage', 'account:group:bind']
+    const w = render({ ...savedAccount(), group_ids: [3] } as Account)
+    await flushPromises()
+    expect(w.findComponent({ name: 'GroupPicker' }).props('disabled')).toBe(true)
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('group_ids')
+  })
+
+  it('sends group_ids only when they changed', async () => {
+    const w = render({ ...savedAccount(), group_ids: [3, 4] } as Account)
+    await flushPromises()
+    expect(w.findComponent({ name: 'GroupPicker' }).props('disabled')).toBe(false)
+    w.findComponent({ name: 'GroupPicker' }).vm.$emit('update:modelValue', [4, 3])
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('group_ids')
+    w.findComponent({ name: 'GroupPicker' }).vm.$emit('update:modelValue', [4])
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.patch.mock.calls[1][1]).toMatchObject({ group_ids: [4] })
+  })
+
+  it('offers pasting a proxy URL only with a proxy management key', async () => {
+    perms.denied = ['proxy:manage', 'proxy:own:manage']
+    const w = render(savedAccount())
+    await flushPromises()
+    expect(w.find('[data-testid="proxy-mode"]').exists()).toBe(false)
+    expect(w.find('[data-testid="proxy-url"]').exists()).toBe(false)
+  })
+
+  it('greys out a custom-upstream auth method for an own-level caller without account:relay', async () => {
+    ownership.scope = 'own'
+    perms.denied = ['account:relay']
+    const official = { ...accountType, plugin_key: 'relay', type: 'official', creation_group: 'relay', custom_upstream: false } as unknown as AccountType
+    const custom = { ...official, type: 'custom', custom_upstream: true } as unknown as AccountType
+    const w = shallowMount(AccountEditor, { props: { accountType: official, accountTypeOptions: [official, custom] }, global: { plugins: [i18n], stubs: { SCard: { template: '<div><slot /></div>' }, SField: { template: '<div><slot /></div>' } } } })
+    await flushPromises()
+    const options = w.findComponent({ name: 'SChoiceCards' }).props('options') as { value: string; disabled: boolean }[]
+    expect(options).toEqual([expect.objectContaining({ value: 'official', disabled: false }), expect.objectContaining({ value: 'custom', disabled: true })])
+  })
+
+  it('says guarded settings keep the official values without account:settings:custom', async () => {
+    perms.denied = ['account:settings:custom']
+    const guarded = { ...relayType, guarded_settings: [{ field: 'base_url', allowed: ['https://api.example.com'] }] } as unknown as AccountType
+    const w = render(savedAccount(), false, guarded)
+    await flushPromises()
+    expect(w.find('[data-testid="guarded-settings-hint"]').exists()).toBe(true)
+    perms.denied = []
+    expect(render(savedAccount(), false, guarded).find('[data-testid="guarded-settings-hint"]').exists()).toBe(false)
   })
 })

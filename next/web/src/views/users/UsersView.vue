@@ -30,6 +30,7 @@ import type { Role, User } from '@/api/types'
 import { deleteWithConfirm, useStatusOptions } from '@/composables/crud'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useSelection } from '@/composables/useSelection'
+import { useAssignableRoles, withSupplierUser } from '@/composables/useAssignableRoles'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -100,22 +101,29 @@ const columns = computed<TableColumn[]>(() => {
 const statusFilterOptions = useStatusOptions(true)
 const statusOptions = useStatusOptions()
 
-const roleChoices = computed<ChoiceOption[]>(() => roles.value.map((r) => ({ value: r.key, label: lt(r.name) || r.key, description: lt(r.description) || undefined })))
 
 const roleOptions = computed(() => [
   { value: '', label: t('users.allRoles') },
   ...roles.value.map((r) => ({ value: r.key, label: lt(r.name) || r.key }))
 ])
 
+// The users the caller may act on (CONTRACTS §43.6): actions that change a
+// user are only offered on them; the server decides either way.
+const managed = useAssignableRoles()
+
 function rowActions(u: User): MenuAction[] {
+  const may = (perm: string) => auth.has(perm) && managed.manageable(u.roles)
+  const self = u.id === auth.me?.id
   return [
-    { key: 'edit', label: t('common.edit'), hidden: !auth.has('user:update') },
-    { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:assign') },
+    { key: 'edit', label: t('common.edit'), hidden: !may('user:update') },
+    { key: 'roles', label: t('users.assignRoles'), hidden: !may('role:assign') },
     { key: 'pricing', label: t('users.pricing.action'), hidden: !auth.has('segment:read') },
     { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
-    { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:password:reset') || u.id === auth.me?.id },
-    { key: 'balance', label: t('users.adjustBalance'), hidden: !auth.has('balance:adjust') },
-    { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('user:delete') || u.id === auth.me?.id }
+    // One's own second factor is reset under /me with the current password and a code.
+    { key: 'security', label: t('users.resetSecurity'), hidden: !may('user:password:reset') || self },
+    { key: 'balance', label: t('users.adjustBalance'), hidden: !may('balance:adjust') },
+    // Nobody disables or deletes themselves (a lock-out guard, not a permission).
+    { key: 'delete', label: t('common.delete'), danger: true, hidden: !may('user:delete') || self }
   ]
 }
 
@@ -206,11 +214,35 @@ const rolesOpen = ref(false)
 const rolesUser = ref<User | null>(null)
 const rolesSel = ref<ChoiceOption['value'][]>([])
 
+// The managed roles, plus the roles the user holds that are not: those stay
+// checked and locked and go back unchanged (the server checks the difference).
+// A managed role the caller may not grant can be kept but not added.
+const roleChoices = computed<ChoiceOption[]>(() => {
+  const held = rolesUser.value?.roles || []
+  const locked = held.filter((k) => !managed.get(k))
+  return [
+    ...managed.roles.value.map((r) => ({
+      value: r.key,
+      label: lt(r.name) || r.key,
+      description: r.grantable ? undefined : t('users.roleNotGrantable', { keys: [...(r.missing || []), ...(r.missing_assignable || [])].join(', ') || r.key }),
+      disabled: !r.grantable && !held.includes(r.key)
+    })),
+    ...locked.map((k) => ({ value: k, label: roleName(k), description: t('users.roleLocked'), disabled: true }))
+  ]
+})
+
 function openRoles(u: User) {
   rolesUser.value = u
   rolesSel.value = [...(u.roles || [])]
   loadRoles()
+  void managed.load()
   rolesOpen.value = true
+}
+
+/** Checking supplier checks the default role with it, as when creating a user. */
+function setRolesSel(v: ChoiceOption['value'][]) {
+  const added = v.includes('supplier') && !rolesSel.value.includes('supplier')
+  rolesSel.value = added ? withSupplierUser(v.map(String)) : v
 }
 
 async function submitRoles() {
@@ -334,15 +366,15 @@ function remove(u: User) {
 
     <!-- roles -->
     <SFormModal v-model:open="rolesOpen" :title="t('users.assignRolesTitle', { name: rolesUser?.email || '' })" :loading="saving" :enter-submit="false" @submit="submitRoles">
-      <SChoiceCards v-if="roles.length" v-model="rolesSel" multiple :cols="1" :options="roleChoices" :aria-label="t('users.roles')">
-        <template v-for="r in roles" :key="r.key" #[`option-${r.key}`]>
+      <SChoiceCards v-if="roleChoices.length" :model-value="rolesSel" multiple :cols="1" :options="roleChoices" :aria-label="t('users.roles')" data-testid="user-roles-choices" @update:model-value="setRolesSel($event as ChoiceOption['value'][])">
+        <template v-for="o in roleChoices" :key="o.value" #[`option-${o.value}`]>
           <span class="mt-1 flex items-center gap-2">
-            <SHint inline size="xs" class="font-mono">{{ r.key }}</SHint>
-            <SBadge v-if="r.superuser" size="xs" tone="accent">{{ t('users.superuser') }}</SBadge>
+            <SHint inline size="xs" class="font-mono">{{ o.value }}</SHint>
+            <SBadge v-if="roles.find((r) => r.key === o.value)?.superuser" size="xs" tone="accent">{{ t('users.superuser') }}</SBadge>
           </span>
         </template>
       </SChoiceCards>
-      <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
+      <SHint v-else>{{ t('users.noManagedRoles') }}</SHint>
     </SFormModal>
 
     <!-- move to a user group -->

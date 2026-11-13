@@ -81,8 +81,9 @@ describe('where pages belong (CONTRACTS §90)', () => {
     expect(metaOf('/plugins/mailer').parent).toBe('/plugins')
   })
 
-  it('puts the balance ledger under the users list it is opened from', () => {
-    expect(metaOf('/ledger')).toMatchObject({ perm: 'balance:all:read', parent: '/users' })
+  it('gives the balance ledger its own place: the finance menu entry (T80)', () => {
+    expect(metaOf('/ledger')).toMatchObject({ perm: 'balance:all:read' })
+    expect(metaOf('/ledger').parent).toBeUndefined()
     expect(metaOf('/ledger').sidebar).toBeUndefined()
   })
 

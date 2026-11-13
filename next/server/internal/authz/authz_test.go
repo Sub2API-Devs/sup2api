@@ -1093,9 +1093,8 @@ func TestMenus(t *testing.T) {
 	for _, m := range menus {
 		sections = append(sections, m.Section)
 	}
-	// No finance: the balance ledger is opened from the users list, and no
-	// plugin of this test joins the section.
-	if got := join(sections); got != "overview,gateway,security,mod:safety,users,plugins,system,me" {
+	// Finance holds the site-wide balance ledger (balance:all:read).
+	if got := join(sections); got != "overview,gateway,security,mod:safety,finance,users,plugins,system,me" {
 		t.Fatalf("admin sections = %s", got)
 	}
 	byKey := map[string]MenuSection{}
@@ -1176,6 +1175,18 @@ func TestMenus(t *testing.T) {
 		if got := sectionPaths(t, s, viewer, "system"); got != "/settings" {
 			t.Fatalf("system with only %s = %s", perm, got)
 		}
+	}
+
+	// balance:all:read alone opens finance with the ledger.
+	role, err = s.CreateRole(ctx, admin, CreateRoleInput{Key: "bookkeeper", Name: core.LocalizedText{"en": "Bookkeeper"}, PermissionKeys: []string{"balance:all:read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sectionPaths(t, s, addUser(t, s, "b@x.com", role.Key), "finance"); got != "/ledger" {
+		t.Fatalf("finance with balance:all:read = %s", got)
+	}
+	if got := sectionPaths(t, s, user, "finance"); got != "" {
+		t.Fatalf("user finance = %s", got)
 	}
 
 	// Without a generation there are no plugin menus.

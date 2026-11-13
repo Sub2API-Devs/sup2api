@@ -15,8 +15,8 @@ export function match(q: string | undefined, ...fields: Array<string | undefined
   return fields.some((f) => (f || '').toLowerCase().includes(s))
 }
 
-export function invalid(field: string, message: string) {
-  return fail(400, 'invalid_argument', message, { fields: [{ field, code: 'invalid', message }] })
+export function invalid(field: string, message: string, code = 'invalid') {
+  return fail(400, 'invalid_argument', message, { fields: [{ field, code, message }] })
 }
 
 // ------------------------------------------------------------------ permissions
@@ -39,7 +39,8 @@ interface ModuleDef {
 const MODULES: ModuleDef[] = [
   { module: 'user', label: L('Users', '用户'), source: 'core', status: 'active', permissions: [
     { key: 'user:read', label: L('View', '查看') }, { key: 'user:create', label: L('Create', '新建') },
-    { key: 'user:update', label: L('Edit', '编辑') }, { key: 'user:delete', label: L('Delete', '删除'), sensitive: true }] },
+    { key: 'user:update', label: L('Edit', '编辑') }, { key: 'user:delete', label: L('Delete', '删除'), sensitive: true },
+    { key: 'user:password:reset', label: L('Reset passwords and 2FA', '重置密码与两步验证'), sensitive: true }] },
   { module: 'segment', label: L('User groups', '用户组'), source: 'core', status: 'active', permissions: [
     { key: 'segment:read', label: L('View', '查看') }, { key: 'segment:manage', label: L('Manage', '管理') }] },
   { module: 'role', label: L('Roles', '角色'), source: 'core', status: 'active', permissions: [
@@ -56,7 +57,9 @@ const MODULES: ModuleDef[] = [
     { key: 'account:own:read', label: L('View own', '查看自己的') }, { key: 'account:own:create', label: L('Create own', '新建自己的') },
     { key: 'account:own:update', label: L('Edit own', '编辑自己的') }, { key: 'account:own:delete', label: L('Delete own', '删除自己的') },
     { key: 'account:own:test', label: L('Test own', '测试自己的') }, { key: 'account:own:credential:view', label: L('View own credentials', '查看自己的凭证'), sensitive: true },
-    { key: 'account:settings:custom', label: L('Custom restricted settings', '自定义受限设置') }] },
+    { key: 'account:settings:custom', label: L('Custom restricted settings', '自定义受限设置') },
+    { key: 'account:group:bind', label: L('Bind accounts to groups (own level)', '将账号绑定到分组（own 级）') },
+    { key: 'account:relay', label: L('Create relay-type accounts with custom upstream', '创建自定义上游的 relay 类账号'), sensitive: true }] },
   { module: 'proxy', label: L('Proxies', '代理'), source: 'core', status: 'active', permissions: [
     { key: 'proxy:read', label: L('View', '查看') }, { key: 'proxy:manage', label: L('Manage', '管理') },
     { key: 'proxy:own:read', label: L('View own', '查看自己的') }, { key: 'proxy:own:manage', label: L('Manage own', '管理自己的') }] },
@@ -66,7 +69,8 @@ const MODULES: ModuleDef[] = [
     { key: 'balance:self:read', label: L('View own', '查看自己的') }, { key: 'balance:all:read', label: L('View all', '查看全部') },
     { key: 'balance:adjust', label: L('Adjust', '调整'), sensitive: true }] },
   { module: 'usage', label: L('Usage', '使用记录'), source: 'core', status: 'active', permissions: [
-    { key: 'usage:self:read', label: L('View own', '查看自己的') }, { key: 'usage:all:read', label: L('View all', '查看全部') }] },
+    { key: 'usage:self:read', label: L('View own', '查看自己的') }, { key: 'usage:all:read', label: L('View all', '查看全部') },
+    { key: 'usage:settle', label: L('Settle usage', '结算用量'), sensitive: true }] },
   { module: 'sticky', label: L('Sticky sessions', '粘性会话'), source: 'core', status: 'active', permissions: [
     { key: 'sticky:read', label: L('View', '查看') }, { key: 'sticky:manage', label: L('Manage', '管理') }] },
   { module: 'plugin', label: L('Plugins', '插件管理'), source: 'core', status: 'active', permissions: [
@@ -74,14 +78,19 @@ const MODULES: ModuleDef[] = [
     { key: 'plugin:manage', label: L('Manage', '管理') }, { key: 'plugin:uninstall', label: L('Uninstall', '卸载'), sensitive: true },
     { key: 'plugin:grant:high', label: L('Grant high risk', '授予高风险权限') },
     { key: 'plugin:grant:critical', label: L('Grant critical risk', '授予极高风险权限'), sensitive: true },
+    { key: 'plugin:grant:db_schema_unconfined', label: L('Grant db.schema without role isolation', '无角色隔离时授予 db.schema'), sensitive: true },
     { key: 'plugin:egress:read', label: L('View egress', '查看出口流量') }, { key: 'plugin:market:read', label: L('Browse market', '浏览市场') }] },
   { module: 'publisher', label: L('Publishers', '发布者'), source: 'core', status: 'active', permissions: [
     { key: 'publisher:read', label: L('View', '查看') }, { key: 'publisher:manage', label: L('Manage', '管理'), sensitive: true }] },
   { module: 'node', label: L('Cluster', '集群'), source: 'core', status: 'active', permissions: [{ key: 'node:read', label: L('View nodes', '查看节点') }] },
-  { module: 'task', label: L('Scheduled tasks', '定时任务'), source: 'core', status: 'active', permissions: [{ key: 'task:read', label: L('View scheduled tasks', '查看定时任务') }, { key: 'task:run', label: L('Run scheduled tasks manually', '手动运行定时任务') }] },
+  { module: 'audit', label: L('Audit logs', '审计日志'), source: 'core', status: 'active', permissions: [{ key: 'audit:read', label: L('View audit logs', '查看审计日志') }] },
+  { module: 'task', label: L('Scheduled tasks', '定时任务'), source: 'core', status: 'active', permissions: [{ key: 'task:read', label: L('View scheduled tasks', '查看定时任务') }, { key: 'task:run', label: L('Run scheduled tasks manually', '手动运行定时任务') }, { key: 'task:manage', label: L('Manage scheduled tasks', '管理定时任务'), sensitive: true }] },
   { module: 'gateway', label: L('Gateway', '网关'), source: 'core', status: 'active', permissions: [{ key: 'gateway:use', label: L('Call gateway', '调用网关') }] },
   { module: 'settings', label: L('Settings', '系统设置'), source: 'core', status: 'active', permissions: [
     { key: 'settings:read', label: L('View', '查看') }, { key: 'settings:manage', label: L('Manage', '管理') }] },
+  { module: 'system', label: L('Core updates', '核心升级'), source: 'core', status: 'active', permissions: [
+    { key: 'system:update:read', label: L('View', '查看') }, { key: 'system:update:execute', label: L('Upgrade', '升级'), sensitive: true },
+    { key: 'system:update:recover', label: L('Recover', '恢复'), sensitive: true }] },
   { module: 'plugin.anthropic', label: L('Anthropic', 'Anthropic'), source: 'plugin', plugin_key: 'anthropic', status: 'active', permissions: [
     { key: 'plugin.anthropic:model_catalog:read', label: L('View model catalog', '查看模型目录') }] },
   { module: 'plugin.guard', label: L('Guard', 'Guard'), source: 'plugin', plugin_key: 'guard', status: 'active', permissions: [
@@ -109,29 +118,48 @@ interface MockRole {
   builtin: boolean
   superuser: boolean
   permission_keys: string[]
+  assignable_role_keys: string[]
+  assign_custom: boolean
   created_at: string
   updated_at: string
 }
 
 const CORE_KEYS = ALL_PERMISSIONS.filter((k) => !k.startsWith('plugin.'))
-// Built-in defaults (CONTRACTS §4); operator lacks settings and plugin pages.
-const OPERATOR_KEYS = CORE_KEYS.filter((k) => !/^(settings|sticky|plugin|publisher):/.test(k))
-const BUILTIN_DEFAULTS: Record<string, { name: L; description: string; keys: string[] }> = {
-  admin: { name: L('Admin', '管理员'), description: 'All core permissions by default', keys: CORE_KEYS },
-  operator: { name: L('Operator', '运维'), description: 'Core permissions except settings and plugins', keys: OPERATOR_KEYS },
-  user: { name: L('User', '普通用户'), description: 'Own API keys, usage and balance; gateway access', keys: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'] }
+// Built-in defaults (CONTRACTS §4, authz/catalog.go): admin has every core
+// permission but the super-only ones; operator and supplier are explicit lists.
+const SUPER_ONLY = ['plugin:grant:critical', 'plugin:grant:db_schema_unconfined', 'publisher:manage', 'system:update:execute', 'system:update:recover']
+const USER_KEYS = ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use']
+const SUPPLIER_KEYS = ['account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view', 'proxy:own:read', 'proxy:own:manage']
+const OPERATOR_KEYS = [
+  'user:read', 'user:create', 'user:update', 'role:read', 'role:assign', 'group:read', 'group:manage', 'segment:read', 'segment:manage',
+  'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'proxy:read', 'proxy:manage', 'price:read',
+  'balance:all:read', 'usage:all:read', 'node:read', 'audit:read', 'task:read', 'task:run', ...SUPPLIER_KEYS, ...USER_KEYS
+]
+const ADMIN_KEYS = CORE_KEYS.filter((k) => !SUPER_ONLY.includes(k))
+const BUILTIN_DEFAULTS: Record<string, { name: L; description: string; keys: string[]; assignable: string[]; assignCustom: boolean }> = {
+  admin: { name: L('Admin', '管理员'), description: 'Every core permission except the super-only ones', keys: ADMIN_KEYS, assignable: ['operator', 'supplier', 'user'], assignCustom: true },
+  operator: { name: L('Operator', '运维'), description: 'Users, accounts, proxies and operations', keys: OPERATOR_KEYS, assignable: ['supplier', 'user'], assignCustom: false },
+  supplier: { name: L('Supplier', '供应商'), description: 'Own accounts and proxies (an add-on to user)', keys: SUPPLIER_KEYS, assignable: [], assignCustom: false },
+  user: { name: L('User', '普通用户'), description: 'Own API keys, usage and balance; gateway access', keys: USER_KEYS, assignable: [], assignCustom: false }
 }
+const at = (days: number) => now(-86400 * days)
+const builtin = (id: number, key: string, extra: string[] = []): MockRole => {
+  const d = BUILTIN_DEFAULTS[key]
+  return { id, key, name: d.name, description: d.description, builtin: true, superuser: false, permission_keys: [...d.keys, ...extra], assignable_role_keys: [...d.assignable], assign_custom: d.assignCustom, created_at: at(90), updated_at: at(10) }
+}
+const custom = (id: number, key: string, name: L, description: string, keys: string[]): MockRole => ({ id, key, name, description, builtin: false, superuser: false, permission_keys: [...keys], assignable_role_keys: [], assign_custom: false, created_at: at(5), updated_at: at(1) })
 const roles: MockRole[] = [
-  { id: 1, key: 'super_admin', name: L('Super admin', '超级管理员'), description: 'Has every permission', builtin: true, superuser: true, permission_keys: [], created_at: now(-86400 * 90), updated_at: now(-86400 * 90) },
-  { id: 2, key: 'admin', name: L('Administrator', '管理员'), description: 'All core permissions', builtin: true, superuser: false, permission_keys: [...CORE_KEYS], created_at: now(-86400 * 90), updated_at: now(-86400 * 10) },
-  { id: 3, key: 'user', name: L('User', '普通用户'), description: 'Own keys, usage and balance', builtin: true, superuser: false, permission_keys: ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use'], created_at: now(-86400 * 90), updated_at: now(-86400 * 90) },
-  { id: 4, key: 'operator', name: L('Operator', '运维'), description: 'Core permissions except settings and plugins', builtin: true, superuser: false, permission_keys: [...OPERATOR_KEYS, 'plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read'], created_at: now(-86400 * 20), updated_at: now(-86400 * 2) },
+  { id: 1, key: 'super_admin', name: L('Super admin', '超级管理员'), description: 'Has every permission', builtin: true, superuser: true, permission_keys: [], assignable_role_keys: [], assign_custom: false, created_at: at(90), updated_at: at(90) },
+  builtin(2, 'admin'),
+  builtin(3, 'user'),
+  builtin(4, 'operator', ['plugin.anthropic:model_catalog:read', 'plugin.guard:stats:read']),
+  builtin(9, 'supplier'),
   // CONTRACTS §21.1 typical roles: vendor (own-level only, no settings:custom) and read-only.
-  { id: 5, key: 'vendor', name: L('Vendor', '供应商'), description: 'Maintains only the accounts and proxies it created', builtin: false, superuser: false, permission_keys: [...vendorUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: 6, key: 'readonly', name: L('Read only', '只读'), description: 'Sees every account and proxy, changes nothing', builtin: false, superuser: false, permission_keys: [...readonlyUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) },
-  { id: 7, key: 'moderator', name: L('Moderator', '审核员'), description: 'Runs the moderation plugin; looks up no user, group or account', builtin: false, superuser: false, permission_keys: [...moderatorUser.permissions], created_at: now(-86400 * 2), updated_at: now(-86400) },
+  custom(5, 'vendor', L('Vendor', '供应商（自定义）'), 'Maintains only the accounts and proxies it created', vendorUser.permissions),
+  custom(6, 'readonly', L('Read only', '只读'), 'Sees every account and proxy, changes nothing', readonlyUser.permissions),
+  custom(7, 'moderator', L('Moderator', '审核员'), 'Runs the moderation plugin; looks up no user, group or account', moderatorUser.permissions),
   // Group pricing without users (CONTRACTS §97.6): personal user groups go by "#<user id>".
-  { id: 8, key: 'pricer', name: L('Pricer', '定价员'), description: 'Prices groups and user groups, sees no users', builtin: false, superuser: false, permission_keys: [...pricerUser.permissions], created_at: now(-86400 * 5), updated_at: now(-86400) }
+  custom(8, 'pricer', L('Pricer', '定价员'), 'Prices groups and user groups, sees no users', pricerUser.permissions)
 ]
 
 function roleOut(r: MockRole) {
@@ -141,9 +169,10 @@ function roleOut(r: MockRole) {
 on('GET', '/roles', (req) => paginate(roles.map(roleOut), req.query))
 on('POST', '/roles', (req) => {
   const b = req.body || {}
-  if (!/^[a-z][a-z0-9_]{1,63}$/.test(b.key || '')) return invalid('key', 'invalid role key')
+  if (!/^[a-z][a-z0-9_]{1,49}$/.test(b.key || '')) return invalid('key', 'invalid role key')
+  if (BUILTIN_DEFAULTS[b.key] || b.key === 'super_admin') return invalid('key', 'key is reserved for a built-in role', 'reserved')
   if (roles.some((r) => r.key === b.key)) return fail(409, 'conflict', 'role key already exists')
-  const r: MockRole = { id: nextId(), key: b.key, name: b.name || L(b.key, b.key), description: b.description || '', builtin: false, superuser: false, permission_keys: [], created_at: now(), updated_at: now() }
+  const r: MockRole = { id: nextId(), key: b.key, name: b.name || L(b.key, b.key), description: b.description || '', builtin: false, superuser: false, permission_keys: [], assignable_role_keys: [], assign_custom: false, created_at: now(), updated_at: now() }
   roles.push(r)
   return roleOut(r)
 })
@@ -176,6 +205,25 @@ on('PUT', '/roles/:id/permissions', (req) => {
   r.updated_at = now()
   return roleOut(r)
 })
+on('PUT', '/roles/:id/assignable', (req) => {
+  const r = roles.find((x) => x.id === Number(req.params.id))
+  if (!r) return fail(404, 'not_found', 'role not found')
+  if (r.superuser) return fail(409, 'conflict', 'superuser role cannot be edited')
+  const keys: string[] = Array.isArray(req.body?.role_keys) ? req.body.role_keys : []
+  const bad = keys.find((k) => !roles.some((x) => x.key === k && !x.superuser))
+  if (bad) return invalid('role_keys', `unknown role ${bad}`, 'unknown')
+  r.assignable_role_keys = [...new Set(keys)].sort()
+  r.assign_custom = !!req.body?.assign_custom
+  r.updated_at = now()
+  return roleOut(r)
+})
+// The caller's managed roles (CONTRACTS §43.6): every role but super_admin for the super admin, none for the other mock identities.
+on('GET', '/me/assignable-roles', (req) =>
+  (caller(req).superuser ? roles : [])
+    .filter((r) => !r.superuser)
+    .sort((a, b) => Number(b.builtin) - Number(a.builtin))
+    .map((r) => ({ key: r.key, name: r.name, builtin: r.builtin, grantable: true, missing: [], missing_assignable: [], missing_assign_custom: false }))
+)
 on('POST', '/roles/:id/reset', (req) => {
   const r = roles.find((x) => x.id === Number(req.params.id))
   if (!r) return fail(404, 'not_found', 'role not found')
@@ -184,6 +232,8 @@ on('POST', '/roles/:id/reset', (req) => {
   if (d) {
     // Plugin permissions on the role are kept.
     r.permission_keys = [...d.keys, ...r.permission_keys.filter((k) => k.startsWith('plugin.'))]
+    r.assignable_role_keys = [...d.assignable]
+    r.assign_custom = d.assignCustom
     r.name = d.name
     r.description = d.description
   }

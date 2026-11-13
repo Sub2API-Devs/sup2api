@@ -11,6 +11,7 @@ import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { refreshShell } from '@/stores/app'
 import { consentPath } from './reviewCache'
+import RoleGrantsReview from './parts/RoleGrantsReview.vue'
 import { compareVersions, conflictLines, consoleSettings, hasCoreSettings, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
 import TrustBadge from './parts/TrustBadge.vue'
 import OverviewTab from './detail/OverviewTab.vue'
@@ -236,6 +237,9 @@ onMounted(load)
           <li v-for="(line, i) in conflictLines(detail)" :key="i">{{ line }}</li>
         </ul>
       </SAlert>
+
+      <!-- role grants a built-in upgrade held back (CONTRACTS P4C) -->
+      <RoleGrantsReview v-if="detail.role_grants_to_review?.length" :plugin-key="detail.key" :grants="detail.role_grants_to_review" class="mb-4" @changed="load" />
 
       <!-- consent just recorded -->
       <SAlert v-if="consented" tone="success" dismissible class="mb-4" @dismiss="dismissConsented">

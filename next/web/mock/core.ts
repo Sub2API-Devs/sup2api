@@ -3,7 +3,7 @@ import { fail, now, on, type MockRequest } from './router'
 // auth, me, menus
 
 export const ALL_PERMISSIONS = [
-  'user:read', 'user:create', 'user:update', 'user:delete',
+  'user:read', 'user:create', 'user:update', 'user:delete', 'user:password:reset',
   'segment:read', 'segment:manage',
   'role:read', 'role:define', 'role:assign',
   'apikey:self:manage',
@@ -11,15 +11,15 @@ export const ALL_PERMISSIONS = [
   'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'account:credential:view',
   // CONTRACTS §21.1: own-level keys act on rows the caller created; settings:custom lifts the base_url guard.
   'account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view',
-  'account:settings:custom',
+  'account:settings:custom', 'account:group:bind', 'account:relay',
   'proxy:read', 'proxy:manage', 'proxy:own:read', 'proxy:own:manage',
   'price:read', 'price:manage',
   'balance:self:read', 'balance:all:read', 'balance:adjust',
-  'usage:self:read', 'usage:all:read',
+  'usage:self:read', 'usage:all:read', 'usage:settle',
   'sticky:read', 'sticky:manage',
-  'plugin:read', 'plugin:install', 'plugin:manage', 'plugin:uninstall', 'plugin:grant:high', 'plugin:grant:critical', 'plugin:egress:read', 'plugin:market:read',
+  'plugin:read', 'plugin:install', 'plugin:manage', 'plugin:uninstall', 'plugin:grant:high', 'plugin:grant:critical', 'plugin:grant:db_schema_unconfined', 'plugin:egress:read', 'plugin:market:read',
   'publisher:read', 'publisher:manage',
-  'node:read', 'gateway:use', 'settings:read', 'settings:manage',
+  'node:read', 'task:read', 'task:run', 'task:manage', 'gateway:use', 'settings:read', 'settings:manage',
   'audit:read', 'system:update:read', 'system:update:execute', 'system:update:recover',
   'plugin.guard:rules:read', 'plugin.guard:rules:manage', 'plugin.guard:stats:read',
   'plugin.dynweight:dynweight:read', 'plugin.dynweight:dynweight:manage',
@@ -338,6 +338,7 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/me/usage': 'usage:self:read',
   '/me/usage/overview': 'usage:self:read',
   '/me/wallet': 'balance:self:read',
+  '/ledger': 'balance:all:read',
   '/p/guard/dashboard': 'plugin.guard:stats:read',
   '/p/dynweight/dashboard': 'plugin.dynweight:dynweight:read'
 }
@@ -380,6 +381,11 @@ const MENUS = [
       { id: 'guard:guard', label: L('Guard', '请求守卫'), icon: 'shield', path: '/p/guard/dashboard', plugin_key: 'guard' },
       { id: 'moderation:moderation', label: L('Prompt Moderation', '提示词审核'), icon: 'shield', path: '/p/moderation/dashboard', plugin_key: 'moderation' }
     ]
+  },
+  {
+    section: 'finance',
+    label: L('Finance', '财务'),
+    items: [{ id: 'ledger', label: L('Balance ledger', '余额流水'), icon: 'balance', path: '/ledger' }]
   },
   {
     section: 'users',

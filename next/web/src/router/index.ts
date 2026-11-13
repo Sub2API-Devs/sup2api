@@ -7,6 +7,7 @@ import type { SidebarViewKey } from '@/layouts/sidebarViews'
 import { CCGATEWAY_PAGE, isPluginKey, pluginSettingsPath } from '@/views/plugins/pluginUtil'
 import { settingsLanding } from '@/views/settings/settingsNav'
 import { closeLayersOnBack } from './layerBack'
+import { deniedRoute } from './guard'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -70,8 +71,8 @@ const children: RouteRecordRaw[] = [
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
   // The old usage statistics page.
   { path: 'me/stats', redirect: '/me/usage/overview' },
-  // Opened from a row of the users list.
-  { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger', parent: '/users' } },
+  // Its own entry in the finance section; a row of the users list opens it filtered.
+  { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
   { path: 'me/ledger', redirect: '/me/wallet' },
   { path: 'me/balance', redirect: '/me/wallet' },
   { path: 'sticky', redirect: { path: '/settings', query: { tab: 'sticky' } } },
@@ -159,11 +160,5 @@ router.beforeEach(async (to) => {
   }
   const moved = to.meta.movedTo?.(to)
   if (moved) return moved
-  if (to.meta.perm && !auth.has(to.meta.perm)) {
-    const redirect = to.meta.deniedRedirect?.(to)
-    if (redirect) return redirect
-    const perm = Array.isArray(to.meta.perm) ? to.meta.perm.join(' / ') : to.meta.perm
-    return { path: '/forbidden', query: { perm } }
-  }
-  return true
+  return deniedRoute(to) ?? true
 })

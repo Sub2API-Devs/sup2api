@@ -32,7 +32,7 @@ function makeRouter() {
       { path: '/dashboard', component: Blank, meta: { title: 'nav.items.dashboard' } },
       { path: '/accounts', component: Blank, meta: { title: 'nav.items.accounts' } },
       { path: '/users', component: Blank, meta: { title: 'nav.items.users' } },
-      { path: '/ledger', component: Blank, meta: { title: 'nav.items.ledger', parent: '/users' } },
+      { path: '/users/:id/detail', component: Blank, meta: { title: 'nav.items.users', parent: '/users' } },
       { path: '/groups', component: Blank, meta: { title: 'nav.items.groups', parent: '/settings' } },
       { path: '/prices', component: Blank, meta: { title: 'nav.items.prices', parent: '/settings' } },
       { path: '/prices/sources', component: Blank, meta: { title: 'prices.sources.title', parent: '/prices' } },
@@ -170,10 +170,10 @@ describe('sidebar', () => {
 
   it('lights up the menu entry of the page, else of its nearest parent page, else of a path it starts with', async () => {
     expect(current((await mountSidebar(operatorMenu, '/accounts')).wrapper)).toEqual(['accounts'])
-    // The balance ledger has no entry: it is opened from the users list.
-    const ledger = await mountSidebar(operatorMenu, '/ledger?user_id=3')
-    expect(current(ledger.wrapper)).toEqual(['users'])
-    expect(ledger.wrapper.get('[data-testid="nav-submenu-users"]').attributes('aria-expanded')).toBe('true')
+    // A page whose menu (here) has no entry of its own lights up its parent's.
+    const detail = await mountSidebar(operatorMenu, '/users/3/detail')
+    expect(current(detail.wrapper)).toEqual(['users'])
+    expect(detail.wrapper.get('[data-testid="nav-submenu-users"]').attributes('aria-expanded')).toBe('true')
     expect(current((await mountSidebar(operatorMenu, '/accounts/5')).wrapper)).toEqual(['accounts'])
   })
 

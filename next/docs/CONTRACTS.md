@@ -239,7 +239,7 @@
 - 插件详情中的钩子统计来自 `core.HookStatsSource`（G），手动执行任务通过 `core.JobTrigger`（H）
 - 发布行为（C2）：Disable 立即提交，返回时状态已是 `disabled`；Enable 优先启用 `active_version`，否则取最新的已批准版本；`plugins` 行删除后，各节点在一次对账内停止实例
 - **内置插件**（`plugins.builtin=true`，本期为 anthropic）：随镜像提供（`SUB2API_BUILTIN_PLUGIN_DIR`，默认 `/opt/sub2api/builtin`），核心启动时在一个节点上（锁 `plugins:builtin`）自动上传、授予全部宿主权限（新插件权限授予 `admin` 角色）、首次安装后启用（**只安装**类的除外，见 §26.8），镜像带新版本时自动升级；管理员禁用后保持禁用。签名密钥由入口脚本通过 `SUB2API_BUILTIN_TRUST_KEY` 始终信任。`DELETE /plugins/:key` 对内置插件返回 403，`details.reason = "builtin"`；列表与详情返回 `builtin` 字段
-- 升级包的宿主权限没有新增或扩大时，上传即沿用原授权（版本直接为 `approved`）；否则进入 `awaiting_consent`，旧版本继续运行。另一个例外（2026-11-13 权限加固期 4 P4C）：新版本新建的插件权限经 `defaultRoles` 或 `inheritFrom` 授予角色时，只要其中有 `sensitive` 权限，或授予对象不是内置 `admin`、`operator`、`supplier`（如 `user`、自定义角色），就不沿用，留在 `awaiting_consent` 由有资格的人在同意页确认；否则沿用并写 `plugin.consent.auto` 审计（`detail`：`version`、`granted`、`pending: []`、`review_required: false`；每条授予照常有 `authz.sync.grant`）。`review` 增加 `new_role_grants: [RoleGrant]`（不覆盖角色时这次同意会做的授予）与 `role_grants_need_consent`。`RoleGrant` = `{version?, permission（完整 key）, role, sensitive, via: default|inherit, needs_consent}`
+- 升级包的宿主权限没有新增或扩大时，上传即沿用原授权（版本直接为 `approved`）；否则进入 `awaiting_consent`，旧版本继续运行。另一个例外（2026-11-13 权限加固期 4 P4C）：新版本新建的插件权限经 `defaultRoles` 或 `inheritFrom` 授予角色时，只要其中有 `sensitive` 权限，或授予对象不是内置 `admin`、`operator`、`supplier`（如 `user`、自定义角色），就不沿用，留在 `awaiting_consent` 由有资格的人在同意页确认；否则沿用并写 `plugin.consent.auto` 审计（`detail`：`version`、`granted`、`pending: []`、`review_required: false`；每条授予照常有 `authz.sync.grant`）。`review` 增加 `new_role_grants: [RoleGrant]`（不覆盖角色时这次同意会做的授予）与 `role_grants_need_consent`；另有 `needs_db_schema_unconfined`（同意会授予 db.schema 且需要 `plugin:grant:db_schema_unconfined`：未启用角色隔离、不是官方发布者，与同意时的检查同一函数）和 `user_permissions[].new`（目录里还没有、这次同意才登记的权限；`new_permission_roles` 只对它们生效）（期 4 T82）。`RoleGrant` = `{version?, permission（完整 key）, role, sensitive, via: default|inherit, needs_consent}`
 - 内置插件自动升级（系统同意，节点就绪与托管升级提交需要版本 `approved`）同样判断，但需要同意的授予不写入，记在 `plugin.consent.auto` 审计的 `pending` 里（`review_required: true`），其余照常写入；插件列表与详情的 `role_grants_to_review: [RoleGrant]` 列出各版本仍待确认的授予（权限与角色仍存在、角色尚未持有，且该版本之后没有 `plugin.role_grants.confirm`/`plugin.role_grants.reject` 审计），由上面的 confirm/reject 处理（两者要求相同资格；只计插件本次安装之后的审计）；自动同意时新建权限一律按计划按名字授予、不走 `inheritFrom`，激活时才新建的权限不授予任何角色（也不继承）；confirm 经权限目录 `GrantPluginPermission` 写入，`authz.sync.grant` 的 `via` 为 `review`
 - 插件设置：GET `/plugins/:key/settings` → `{mode, schema, ui_schema, values, page, component, secret_fields}`（`schema` 在非 schema 模式为 `null`）；PUT 请求体 `{values:{...}}`，整体替换（§15.8）
 - `/ui/plugins` 每项另含 `name`、`host_ui_compat`
@@ -1193,7 +1193,7 @@ type ProxyResolver interface {
 | overview 概览（§90 起叫“控制台”） | 100 | 仪表盘（§90 起还有 API 密钥、模型与价格、用量概览、使用日志、全站概览、全站日志） | |
 | gateway 网关 | 200 | 分组、账号、平台、代理、模型价格（§90 起使用记录移到控制台；§90 第四版起只剩账号、代理） | 模型目录（anthropic 0.2.9–0.3.0，0.3.1 删除）、动态权重（dynweight；只有 0.5.4 在 `system` 区） |
 | security 安全 | 300 | 无（空区不返回） | 请求守卫（guard 0.2.7）、提示词审核（moderation 0.6.2） |
-| finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`；§90 第四版起没有核心项，余额流水从用户列表打开） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
+| finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`；§90 第四版取消、2026-11-13 T80 恢复） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
 | users 用户与权限（§90 起叫“用户”） | 500 | 用户、角色与权限 | |
 | plugins 插件 | 600 | 已安装插件、插件市场、发布者；`section:"plugins"` 的插件菜单接在后面 | |
 | system 系统 | 700 | 集群节点、定时任务、核心升级、审计日志、设置（§90 起设置排在最后，侧栏单独显示为“系统设置”，分组、模型价格从它进入） | 动态权重（只有 dynweight 0.5.4） |
@@ -1259,7 +1259,7 @@ type ProxyResolver interface {
 - 自动带 `Authorization`、`Accept-Language`；401 自动刷新一次并重试（多标签页串行，§14.2）；204 返回 `null`。（原 403 `step_up_required` 弹密码确认重试的逻辑与 `noStepUp` 选项随二次验证删除，§3.3。）
 - 失败抛 `ApiError {status, code, message, details, fields}`：`fields` 是 `details.fields[]` 折平后的 `{field: message}`（`invalid_argument`，§3.1；message 为 `{en,zh}` 时按当前语言取），用 `isApiError(e)` 判断。响应没有 `error.code` 时按 HTTP 状态映射（400 `invalid_argument`、401 `unauthenticated`、403 `permission_denied`、404 `not_found`、409 `conflict`、429 `rate_limited`、503 `unavailable`，其余 `internal`）。
 - `listAll<T>(client, path, {query?, max?})`（UI 3.3）：按核心最大页长 200 逐页读完一个分页列表（`page`、`page_size` 由它填，`query` 是其余筛选），读到短页、`page.total` 或 `max` 条（缺省不限）为止；任何一页失败都整体 reject，不返回半截列表。插件读核心分组等整表时用它（moderation、dynweight）。
-- 其他导出：`createClient(prefix)`、`api`（= `/api/v1` 客户端）、`session`、`configureHttp`（控制台用，插件不要调）、`satisfiesRange`、`bridge-protocol.ts`（iframe 插件的 postMessage 协议，与原生 UI 无关）。
+- 其他导出：`createClient(prefix)`、`api`（= `/api/v1` 客户端）、`session`、`configureHttp`（控制台用，插件不要调）、`satisfiesRange`、`bridge-protocol.ts`（iframe 插件的 postMessage 协议，与原生 UI 无关；2026-11-13 T83 增加请求 `permissions.check` `{keys}` → `{[key]: boolean}`：只认本插件的本地 key，至多 `BRIDGE_MAX_PERMISSION_KEYS` = 50 个，超出或不是数组 `invalid_argument`；带 `plugin.` 前缀的 key（含本插件自己的）一律 false；判断看 `/me` 的权限列表本身而不走超管捷径（超管的列表是全部有效权限），所以未声明的 key 对超管也是 false，iframe 无从得知调用者是否超管；老核心回 `not_found`）。
 
 `useList`（`useList.ts`，分页列表状态，控制台的列表页和插件的列表页共用）：
 
@@ -7443,7 +7443,7 @@ PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先
 - 读数：`core.AccountLimiter.ModelUsage`（`account/limiter.go`），`core.AccountRef.ModelLimitIndex`（`core/ports_identity.go`）
 - 前端：`web/src/views/settings/SchedulingPolicyView.vue`、`LoadBalanceSettingsCard.vue`
 
-## 90. 侧栏三组：控制台、个人中心、管理员；系统设置视图（2026-11-10，用户要求：参考 new-api 的菜单，分三类；第四版：分组、模型价格进系统设置视图，插件设置只从已安装插件列表打开，平台、模型目录、余额流水的菜单取消；无迁移）
+## 90. 侧栏三组：控制台、个人中心、管理员；系统设置视图（2026-11-10，用户要求：参考 new-api 的菜单，分三类；第四版：分组、模型价格进系统设置视图，插件设置只从已安装插件列表打开，平台、模型目录、余额流水的菜单取消；无迁移；余额流水菜单 2026-11-13 T80 恢复）
 
 原则：设置归设置，功能归功能。功能页放在各自的区；系统设置只有 `/settings` 一个入口，配置页、分组、模型价格都在它打开的系统设置视图里（90.2）；插件的设置属于插件，侧栏和系统设置视图里都没有入口，从已安装插件列表的“设置”按钮打开。接口 `GET /me/menus` 的形状、区 id、SDK（`CoreMenuSections()`）和存储都不变。
 
@@ -7461,14 +7461,14 @@ PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先
 | --- | --- | --- |
 | gateway 网关 | 账号、代理 | 动态权重（dynweight；只有 0.5.4 在 `system` 区） |
 | security 安全 | 无 | 请求守卫、提示词审核 |
-| finance 财务 | 无 | 增长管理 |
+| finance 财务 | 余额流水（`balance:all:read`，T80） | 增长管理 |
 | users 用户（标签“用户 / Users”） | 用户、用户组（§97 起）、角色与权限 | |
 | plugins 插件 | 已安装插件、插件市场、发布者；`section:"plugins"` 的插件菜单接在后面 | |
 | system 系统（标签“系统 / System”） | 集群节点、定时任务、核心升级、审计日志、系统设置 `/settings` | |
 
 - 分组（`/groups`，`group:read`）、模型价格（`/prices`，`price:read`）没有菜单项，由控制台列在系统设置视图里（90.2）；CCGateway（`/system/ccgateway`，`settings:read`）没有菜单项，从已安装插件列表里 ccgateway 一行的“设置”按钮打开；页面、地址、权限和接口不变。有 `settings:read` 而没有 `plugin:read` 的自定义角色只能凭地址或账号授权对话框里的链接打开它。
 - 用户组（§97 起）：id `segments`，标签“用户组 / User groups”，图标 `publisher`，地址 `/segments`，持有 `segment:read` 才返回；排在“用户”之后、“角色与权限”之前，和它们一起进“用户”目录（90.3）。分组一侧的授权、专属倍率和分组内定价没有单独的菜单项，在分组页（系统设置视图，90.2）里。
-- 余额流水（`/ledger`，`balance:all:read`）没有菜单项，从用户列表的行操作打开；页面和接口不变。有 `balance:all:read` 而没有 `user:read` 的自定义角色只能凭地址打开它。
+- 余额流水（`/ledger`，`balance:all:read`）在核心 `finance` 区有菜单项“余额流水”（2026-11-13 权限加固 T80），也可从用户列表的行操作打开；页面和接口不变。
 - 平台页取消，没有菜单项（地址见 90.4）；接口 `GET /platforms`、`GET /me/platforms` 不变，控制台的平台列表一律取 `GET /me/platforms`。
 - 模型目录：anthropic 0.3.1 去掉了菜单 `anthropic-models`、页面 `models` 和宿主权限 `ui.menu`；插件接口 `GET /api/v1/p/anthropic/models` 和权限 `model_catalog:read` 保留。
 - 系统设置：id `settings`，是 `system` 区最后一个核心项，持有 `settings:read`、`sticky:read`、`group:read`、`price:read` 任意一个就返回：后两个是因为分组、模型价格从系统设置视图进入，内置运维角色有它们而没有 `settings` / `sticky` 权限。`section:"system"` 的插件菜单仍并入 `system` 区，排在 `/settings` 之后（如 dynweight 0.5.4 的动态权重），和其余项一起进“系统”目录。

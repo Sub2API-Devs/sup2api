@@ -365,6 +365,14 @@ func (s *Service) consent(ctx context.Context, key, version string, req ConsentR
 	return res, nil
 }
 
+// dbSchemaUnconfined reports that granting db.schema takes
+// plugin:grant:db_schema_unconfined: schemas are managed, without role
+// isolation, for a plugin not from an official publisher. The consent check
+// and the review (Review.NeedsDBSchemaUnconfined) both ask it.
+func (s *Service) dbSchemaUnconfined(official bool) bool {
+	return s.d.Schemas != nil && !s.opt.Plugins.DBRoleIsolation && !official
+}
+
 // checkGrantRights verifies the operator may approve every newly granted
 // high/critical permission (carried-over grants were approved before).
 // For db.schema: without role isolation, non-official plugins are rejected
@@ -401,10 +409,8 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 	}
 
 	// PL-P0-5: db.schema requires role isolation OR official trust OR explicit override
-	if needsDBSchema && s.d.Schemas != nil {
-		roleIsolation := s.opt.Plugins.DBRoleIsolation
-		isOfficial := hasPub && trust == pkg.TrustOfficial
-		if !roleIsolation && !isOfficial {
+	if needsDBSchema {
+		if s.dbSchemaUnconfined(hasPub && trust == pkg.TrustOfficial) {
 			// Require explicit override permission
 			ok, err := s.d.Authz.Can(ctx, actorID, "plugin:grant:db_schema_unconfined")
 			if err != nil {

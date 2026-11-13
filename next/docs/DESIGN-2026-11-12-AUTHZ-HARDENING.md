@@ -716,6 +716,55 @@
   - 超管密钥里已被禁用的插件权限，`Restrict` 仍然保留（超管 `Has` 恒真），与核心已删除的权限相同，属于此前就有的行为。
 - 回滚：revert S1–S4 及其 review fixes 的提交即可。无迁移；`auth_flows` 里残留的 `step_up_*` 行 5 分钟后过期，下次建流程时清除。已存的访问密钥里含原 sessionOnly 权限或插件权限的，回滚后重新按 KeyAllowed 丢弃。
 
+## T74 B1 前端：X-Authz-Version 与 403 触发重新取权限
+
+- 改动：`@sub2api/host` 的 `configureHttp` 增加 `onAuthzVersion(v)`（每个带 `X-Authz-Version` 的响应，含错误响应）与 `onForbidden(e)`（每个 403）。控制台 `stores/authzWatch.ts` 是唯一的判断处：头值大于 `max(me.authz_version, 已触发过的头值)` 时防抖 1 秒重取一次（多节点下同一版本至多一次，版本变小或相等不取）；`permission_denied` 的 403 节流 10 秒取一次（二次验证等其他 403 不算）；还没有 `/me` 时都不取。`auth.refreshPermissions()` = `loadMe()` + `refreshShell()`（插件模块与菜单），并发调用共用一次；完成后 `permissionsEpoch` 加一，当前路由按 `router/guard.ts` 的 `deniedRoute`（与导航守卫同一判断）不再允许时跳走（/forbidden 或该页的 deniedRedirect）。角色页改自己的角色后调 `refreshPermissions`（原来只 `loadMe`）。
+- 影响对象：控制台用户。权限被他人改动后，下一个带更大版本头的响应约 1 秒后刷新菜单与按钮；失去当前页权限时离开该页。跨域部署需服务端 `Access-Control-Expose-Headers: X-Authz-Version`，否则头读不到、只剩 403 触发。
+- 测试：`http.spec`（头与 403 钩子）、`authzWatch.spec`（版本变大只刷新一次、变小不刷新、403 节流、降权后当前页跳到 /forbidden）。
+- 回滚：revert 提交即可，纯前端。
+
+## T75 账号表单字段级权限 useAccountCaps（G1、G2、W5-B3、W5-B4 前端）
+
+- 改动：新增 `composables/useAccountCaps(editing)`，`ACCOUNT_FIELD_KEYS`（relay、groupBind、groupManage、settingsCustom）放在 `useOwnership.ts`。scope 取 `account:update`（编辑）或 `account:create`（新建）的 all/own 级；`bindGroups = all || group:manage || account:group:bind`、`relay = all || account:relay`（与后端 `checkOwnChange` 只对 own 级检查一致）、`proxyByURL = proxy:manage || proxy:own:manage`、`customSettings = account:settings:custom`；`creatable(t) = !t.custom_upstream || relay` 只在这里计算。账号编辑器：无 bindGroups 时分组只读并提示所需权限；保存（新建与编辑）只在 `group_ids` 与原值（新建为空）不同时带上；无 proxyByURL 时不出现“粘贴代理串”；认证方式里不可建的类型置灰；类型有 `guarded_settings` 且无 customSettings 时提示只能用官方值；新建时拉取模型同样要求 creatable。批量编辑：无 bindGroups 时分组项禁用并提示。类型选择器：不可建的类型置灰、不可选并提示需要 `account:relay`。`AccountType` 类型补 `guarded_settings`、`custom_upstream`。
+- 偏离：spec 写的 `useAccountCaps(account?)` 改为 `useAccountCaps(editing)`（只需要“新建还是编辑”，批量编辑没有单个账号）；另加 `customSettings` 只用于提示，受限设置的表单改写仍由服务端完成。
+- 影响对象：own 级账号用户（供应商）。原来提交后才 403 的分组、粘贴代理、relay 类型，现在在表单上直接不可操作。编辑账号不再总是带 `group_ids`：没改分组的保存不再触发分组权限检查。
+- 测试：`useAccountCaps.spec`、`AccountEditor.spec`（无 bind 权限分组只读不提交、group_ids 没变不带、无代理管理权限无粘贴 URL、own 且无 relay 时 custom 认证方式置灰、受限设置提示）、`AccountTypePicker.spec`、`AccountBulkDialogs.spec`。
+- 回滚：revert 提交即可，纯前端。
+
+## T77 角色页：role:define、可管理角色编辑、内置角色对非超管只读
+
+- 改动：`Role` 类型补 `assignable_role_keys`、`assign_custom`。角色页 `canDefine = role:define`；`readOnly = !canDefine || 超管角色 || (内置角色 && 非超管)`，只读时不显示保存、重置与“恢复默认/删除”菜单（原来对非超管的内置角色仍显示，点击 403）；有 role:define 的非超管查看内置角色时提示“只有超级管理员能修改”。权限树下新增“可管理角色”（`RoleAssignable.vue`，原“可分配角色”，界面统一称“可管理角色”）：多选全部非超管角色 +“全部自定义角色”开关（提示不含持有者自己持有的角色），说明它同时决定能分配哪些角色、能管理哪些用户，以及分配时被分配角色的权限须在操作者之内。保存时变化部分按需调用 PATCH、PUT permissions、PUT `/roles/:id/assignable {role_keys, assign_custom}`；403 的 `details.missing` / `missing_assignable` / `missing_assign_custom` 在编辑器内列出。新建按钮改为 `v-if="canDefine"`。
+- 审查补充：保存的三步依次执行、遇到拒绝即停；只要有一步写入（全部或拒绝前的部分），就重新加载角色并显示它现在的样子（未保存的其余改动丢弃，编辑器内列出缺项）。列表没有返回 `assignable_role_keys` 时不显示可管理角色编辑，避免整体替换未知清单。
+- 偏离：spec 中的快捷按钮“仅本角色”未做（含义不明确，清单可直接勾选本角色）；新建角色时不带可分配清单（建好后在编辑器里设置）。
+- 影响对象：有 role:define 的非超管（内置角色不再出现编辑入口）；超管与可编辑自定义角色的人多了可管理角色编辑。
+- 测试：`RolesView.spec`（非超管查看内置角色只读、超管可编辑、保存发出 PUT assignable 含 assign_custom 且不列超管角色、403 缺项回显、无 role:define 不显示新建与保存）。
+- 回滚：revert 提交即可，纯前端。
+
+## T78 用户页与新建用户：只列可管理角色，不可管理的角色锁定原样提交，不可管理的用户不显示改动类操作
+
+- 改动：新增 `composables/useAssignableRoles`：`GET /me/assignable-roles`，按“用户 id + `auth.permissionsEpoch`”缓存（T74 的 refreshPermissions 后失效）；`assignable(key)` = 在清单内且 `grantable`；`manageable(roles)` = 超管，或目标除默认 `user` 外的每个角色都 `assignable`（与后端 `CanActOnUsers` 同一口径，清单未加载时视为可以，由服务端裁决）；`withSupplierUser` 是“选 supplier 自动补 user”的唯一实现。
+  - 用户页“分配角色”对话框：选项 = 可管理角色（`grantable=false` 的不能新加，提示缺的权限）+ 目标已持有但不在清单内的角色（勾选、锁定，原样提交）；选 supplier 自动补 user（与新建对话框一致）。行操作：编辑（含禁用）、分配角色、清两步验证、调余额、删除只对可管理的用户显示（原来对本人与超管仍显示，点击 403）；删除对本人仍隐藏（防锁死约束）。查看类操作（用户组与定价、余额流水）不变。
+  - 新建用户对话框：只列默认角色 `user` 与可管理角色；`user` 总可选（D26），其余需要 `role:assign` 且可授予。
+- 审查补充：清两步验证对本人仍隐藏（本人走 `/me/*`，需当前密码与验证码）；默认角色 `user` 在清单里标为不可授予时，其持有者也视为不可管理（服务端比较目标全部角色的权限）；缓存在换用户、权限重载、登出时先清空，不再短暂给出上一份清单。未做：批量“移入用户组”与“用户组与定价”抽屉不按可管理过滤（仍由服务端 403），留待后续。
+- 影响对象：用户页的所有操作者。admin 不再看到对其他 admin、对自己的改动类按钮；operator 只对 supplier、user 显示。访问密钥下 `/me/assignable-roles` 为 `[]`，控制台按会话使用，不受影响。
+- 测试：新增 `UsersView.spec`（可管理才显示改动类操作、不可授予角色的持有者不可管理、超管管理所有人含自己但不删除自己、锁定角色原样提交、选 supplier 补 user、不可授予角色不能新加）；`UserCreateDialog.spec` 补可管理角色与 user 可选、无 role:assign 只能选 user。
+- 回滚：revert 提交即可，纯前端。
+
+## T80：财务区“余额流水”菜单
+
+- 改动：`authz/menus.go` 的 finance 区加核心项 `{ledger, /ledger, anyOf: balance:all:read}`（图标 balance），删除“从用户列表打开”的注释；控制台 `/ledger` 路由去掉 `parent: '/users'`（有了自己的菜单项，面包屑与高亮跟随它）；web mock 菜单同步。用户列表行操作“余额流水”保留。
+- 影响对象：持有 `balance:all:read` 的角色（admin、operator 与自定义角色）侧栏多出财务区的“余额流水”；只有 `balance:all:read` 没有 `user:read` 的角色此前只能凭地址打开，现在有入口。
+- 测试：authz `TestMenus`（admin 区序含 finance；只有 balance:all:read 的角色 finance 区为 /ledger；普通用户没有）、iam `TestHTTP` 超管区序；web `routes.spec`。CONTRACTS §22.1 区表、§90 同步。
+- 回滚：revert 提交即可，无迁移。
+
+## T83 W5-C2：iframe 插件桥 permissions.check
+
+- 改动：`bridge-protocol.ts` 协议注释增加 `permissions.check` 并导出 `BRIDGE_MAX_PERMISSION_KEYS = 50`；`PluginIframe.vue` 处理该请求：`keys` 不是数组或超过 50 个回 `invalid_argument`；每个 key 只有是本插件本地 key（非空字符串、不带 `plugin.` 前缀）时才按 `pluginPermissionKey(本插件, key)` + `auth.has` 判断（与原生 `host.can` 同源），否则 false。核心 key（如 `user:read`）按本插件的本地 key 理解，iframe 因此探测不到核心或其他插件的权限。
+- 审查补充：改用 `auth.holds`（`/me` 列表成员，无超管捷径），否则超管对未声明的 key 也得到 true，泄露“是否超管”；非字符串 key 整体 `invalid_argument`。
+- 影响对象：iframe 插件可以按权限隐藏自己的按钮；老核心对该方法回 `not_found`，插件应按“无此能力”处理。
+- 测试：新增 `PluginIframe.spec`（本地 key 判断、核心 key 与带前缀 key 为 false、超过 50 个或非数组 invalid_argument）。CONTRACTS §23 同步。
+- 回滚：revert 提交即可，纯前端。
+
 ## 期 4 P4C：插件升级新增的角色授予需同意（决策“插件升级授权”C，产品性收紧）
 
 - 改动：`plugin/install/rolegrants.go`。`planRoleGrants` 复用 `catalogKeys` + `roleGrants`，列出一次不覆盖角色的同意会做的授予（目录里还没有的权限的 `defaultRoles`，以及当下持有其 `inheritFrom` 旧 key 的角色；超管角色不计），`sensitive` 或授予对象不是内置 `admin`/`operator`/`supplier` 的标为需要同意。`Review.resolveDefaultRoles` 一并填 `new_role_grants`、`role_grants_need_consent`。
@@ -764,3 +813,34 @@
 - 测试：account `TestAccountSummaryFollowsOwnerScope`（own 范围只计自己的、全量范围计全部、已删除不计、无账号读权限 403）。
 - 影响对象：新增只读接口；回滚：revert 这个提交。
 
+
+## T82 同意页：逐权限授予角色（P4-B）、按权限预填默认角色、无 role:define 不显示、预判 db_schema_unconfined、展示新授予（P4C 前端）
+
+- 后端（只加只读字段）：`Review.needs_db_schema_unconfined` = manifest 申请 db.schema 且 `dbSchemaUnconfined(trust == official)`；`dbSchemaUnconfined`（有 schema 管理、未启用角色隔离、不是官方发布者）是同意检查 `checkGrantRights` 与评审共用的唯一判断。同意时前端把勾选的宿主权限都作为显式授予发送，所以以前授予过的 db.schema 同样会被检查，字段不区分沿用。`ReviewUserPerm.new` = 目录里还没有该权限（`catalogKeys`）。上传与评审两处返回都填。
+- 前端：`consent/newPermissionRoles.ts`（`useNewPermissionRoles`）是逐权限角色的唯一状态：只有 `role:define` 才有选项；超管可选全部（`/me/assignable-roles`，不含超管角色），其他人只可选清单内、可授予、自己不持有的自定义角色（与服务端规则一致）。每个 `new` 权限从 manifest 默认角色起步，只发送改动过的权限（`new_permission_roles`，逐 key），未改动的保持 manifest 默认（含操作者不能指定的内置角色）；改动后操作者不能指定的默认角色会被去掉，界面提示。不再发送全局字段 `role_keys_for_new_permissions`。已存在的权限标注“其授予不变”。db.schema 行在 `needs_db_schema_unconfined` 且缺 `plugin:grant:db_schema_unconfined` 时与其他缺权限的行一样置灰并禁用同意按钮。新增 `consent/NewRoleGrants.vue` 列出 `new_role_grants`（需要确认的高亮）并在 `role_grants_need_consent` 时提示不会自动通过（插件页的待确认授予复用它）。
+- 影响对象：插件同意页的操作者。非超管不再看到内置角色（原来勾了 403）；勾一个角色不再替换全部新权限的默认授予。
+- 测试：install `TestReviewConsentFlags`（官方不标记、new 只标目录里没有的、verified 无隔离标记且同意 403、开启隔离后两者都放行）；web `ConsentView.spec`（逐权限预填与只发改动、无 role:define 无选择、非超管只列可指定的自定义角色并提示去掉默认、db_schema_unconfined 预判、新授予列表）。CONTRACTS 同步。
+- 回滚：revert 提交即可；新增字段只读，旧控制台忽略。
+
+## P4C 前端：插件列表与详情的“有待确认的新授权”
+
+- 改动：`PluginSummary`/`PluginDetail` 类型补 `role_grants_to_review`。插件列表状态列在非空时提示“N 项授权待确认”；详情页顶部 `parts/RoleGrantsReview.vue`（复用同意页的 `NewRoleGrants` 列表，需要确认的高亮）：持有 `plugin:install` 与 `role:define` 时显示“确认”“全部拒绝”，按版本依次 POST `…/versions/:version/role-grants/confirm|reject`，完成后重新加载详情；没有资格的只显示提示与所需权限（角色级资格 `CanGrantToRoles` 由服务端裁决，403 照常提示）。
+- 测试：`RoleGrantsReview.spec`（列表与高亮、按版本确认、全部拒绝、缺任一权限不显示按钮）。
+- 回滚：revert 提交即可，纯前端。
+
+## T81 W2-G5 前端：仪表盘账号状态卡片
+
+- 改动：新增 `dashboard/AccountStatusCard.vue`（可用/总数、自动停用与手动禁用、无可用为红、有自动停用为琥珀），管理员仪表盘改用它（原内联卡片与 tone 计算移入）。非管理员仪表盘：持有 `account:read` 或 `account:own:read` 时取 `GET /accounts/summary` 显示该卡片，不依赖 `usage:self:read`（供应商只有 own 级账号权限也能看到自己的账号状态）；刷新按钮一并重取。`AccountCounts` 类型共用；web mock 增加 `/accounts/summary`。
+- 审查补充：mock 的 `/accounts/summary` 同样计入孤立账号（随 followups 提交）。已知：同时有 `usage:all:read` 与只有 `account:own:read`（没有 `account:read`）的少见组合走管理员仪表盘，其账号卡片来自 `/usage/overview`，不显示；加载失败时卡片显示“—”不弹提示（次要卡片）。
+- 测试：新增 `UserDashboard.spec`（own 级账号权限显示卡片与计数、无账号读权限不请求不显示）；`AdminDashboard.spec` 照常通过。
+- 回滚：revert 提交即可，纯前端。
+
+## 期 4 前端遗留（FOLLOWUPS）
+
+- 新建角色用了内置角色保留的 key：`fields[{field:"key", code:"reserved"}]` 按控制台语言显示（`roles.keyReserved`），不再只显示服务端英文。
+- web mock 默认角色集合按服务端更新：admin = 全部核心权限去掉超管专属（`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`）；operator 为 D3 显式白名单；新增内置 supplier；内置角色带默认可管理清单（D5），`PUT /roles/:id/assignable` 与 `GET /me/assignable-roles` 有 mock；权限目录补 `audit`、`system` 模块与 `user:password:reset`、`account:group:bind`、`account:relay`、`usage:settle`、`task:manage`、`plugin:grant:db_schema_unconfined`；保留 key 回 `reserved`。
+- 升级页（T45 跟进）：预检结果的 `warnings`（如 tokenless 管理开关仍开着）以“提醒（不阻断升级）”显示，不影响开始升级。
+- 用词：两步验证（TOTP）在中文界面统一为“两步验证”，“二次验证”留给高危操作前的再次确认（step-up）。
+- UsersView spec 已在 T78 补齐。未做：访问密钥页 sessionOnly 文案随 S 任务（删除 sessionOnly）由后端会话一并处理。
+- 测试：`RolesView.spec`（reserved 中文提示）、新增 `UpgradesView.spec`（warnings 显示且不阻断）。
+- 回滚：revert 提交即可，纯前端与 mock。

@@ -6,9 +6,11 @@ import type { Segment } from '@/api/pricing'
 import type { Role } from '@/api/types'
 import UserCreateDialog from './UserCreateDialog.vue'
 
-const mocks = vi.hoisted(() => ({ post: vi.fn(), denied: new Set<string>() }))
-vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { post: mocks.post } }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !mocks.denied.has(key) }) }))
+const mocks = vi.hoisted(() => ({ post: vi.fn(), get: vi.fn(), denied: new Set<string>(), epoch: 0 }))
+vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { post: mocks.post, get: mocks.get } }))
+// A new epoch per test: the managed roles are cached per permissions reload.
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => !mocks.denied.has(key), me: { id: 1, superuser: false }, permissionsEpoch: mocks.epoch }) }))
+const managed = (key: string, grantable = true) => ({ key, name: { en: key }, builtin: true, grantable, missing: grantable ? [] : ['x:y'] })
 const segments = ref([{ id: 1, name: 'Default', is_default: true, discount: '1' }, { id: 2, name: 'VIP', is_default: false, discount: '0.9' }] as Segment[])
 vi.mock('@/components/pricing/segmentLookup', () => ({ useSegmentsLookup: () => ({ segments }) }))
 enableAutoUnmount(afterEach)
@@ -16,6 +18,7 @@ enableAutoUnmount(afterEach)
 async function render(roles: Role[] = []) {
   const w = mount(UserCreateDialog, { props: { open: false, roles }, global: { plugins: [i18n], stubs: { Teleport: true } } })
   await w.setProps({ open: true })
+  await flushPromises()
   await w.get('input[type="email"]').setValue(' amy@example.com ')
   await w.get('input[type="password"]').setValue('password1')
   const submit = async () => {
@@ -28,7 +31,9 @@ async function render(roles: Role[] = []) {
 beforeEach(() => {
   i18n.global.locale.value = 'zh'
   mocks.denied.clear()
+  mocks.epoch++
   mocks.post.mockReset().mockResolvedValue({ id: 9 })
+  mocks.get.mockReset().mockResolvedValue([managed('user'), managed('supplier')])
 })
 
 describe('user create dialog', () => {
@@ -63,5 +68,23 @@ describe('user create dialog', () => {
     await boxes[1].setValue(true)
     await submit()
     expect(mocks.post.mock.calls[0][1].role_keys).toEqual(['supplier', 'user'])
+  })
+
+  it('offers only the managed roles and the default role; ungrantable ones are disabled', async () => {
+    mocks.get.mockResolvedValue([managed('supplier'), managed('operator', false)])
+    const { w } = await render([{ key: 'user', name: { en: 'User' } } as unknown as Role, { key: 'admin', name: { en: 'Admin' } } as unknown as Role])
+    const box = (k: string) => w.find(`input[data-role="${k}"]`)
+    expect(box('admin').exists()).toBe(false)
+    expect(box('user').attributes('disabled')).toBeUndefined()
+    expect(box('supplier').attributes('disabled')).toBeUndefined()
+    expect(box('operator').attributes('disabled')).toBeDefined()
+    expect(mocks.get).toHaveBeenCalledWith('/me/assignable-roles')
+  })
+
+  it('without role:assign only the default role is selectable', async () => {
+    mocks.denied.add('role:assign')
+    const { w } = await render()
+    expect(w.find('input[data-role="user"]').attributes('disabled')).toBeUndefined()
+    expect(w.find('input[data-role="supplier"]').attributes('disabled')).toBeDefined()
   })
 })

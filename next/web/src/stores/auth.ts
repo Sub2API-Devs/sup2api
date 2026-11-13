@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { api, session } from '@sub2api/host'
 import type { Me, TokenResponse } from '@/api/types'
 import { getPasskey } from '@/utils/webauthn'
+import { refreshShell } from './app'
 
 export const useAuthStore = defineStore('auth', () => {
   const me = ref<Me | null>(null)
@@ -11,6 +12,13 @@ export const useAuthStore = defineStore('auth', () => {
   /** The session ended because it could not be renewed (login page shows a notice). */
   const sessionExpired = ref(false)
   const permSet = computed(() => new Set(me.value?.permissions || []))
+  /**
+   * Bumped after every refreshPermissions: whatever is derived from the
+   * caller's permissions (assignable roles, the current route) is checked again.
+   */
+  const permissionsEpoch = ref(0)
+  let reloading: Promise<void> | null = null
+  let queuedReload: Promise<void> | null = null
 
   session.onChange((s) => {
     loggedIn.value = !!s
@@ -25,6 +33,15 @@ export const useAuthStore = defineStore('auth', () => {
     if (me.value?.superuser) return true
     const list = Array.isArray(perm) ? perm : [perm]
     return list.some((p) => permSet.value.has(p))
+  }
+
+  /**
+   * `perm` is in the /me permission list itself, with no superuser shortcut:
+   * for a superuser the list is every active permission, so a key that is
+   * not one says nothing about who the caller is (the plugin iframe bridge).
+   */
+  function holds(perm: string): boolean {
+    return permSet.value.has(perm)
   }
 
   /** Returns the flow token when the account asks for a second factor; the login is not done yet. */
@@ -57,6 +74,32 @@ export const useAuthStore = defineStore('auth', () => {
     return me.value
   }
 
+  /**
+   * Reloads what depends on the caller's permissions: /me, then the plugin
+   * modules and menus. A call during a reload gets one more reload after it
+   * (the running one may have read /me before the change the caller knows
+   * of); calls meanwhile share that one.
+   */
+  function refreshPermissions(): Promise<void> {
+    if (!reloading) return startReload()
+    queuedReload ??= reloading.catch(() => undefined).then(() => {
+      queuedReload = null
+      return startReload()
+    })
+    return queuedReload
+  }
+
+  function startReload(): Promise<void> {
+    reloading = (async () => {
+      await loadMe()
+      await refreshShell()
+      permissionsEpoch.value++
+    })().finally(() => {
+      reloading = null
+    })
+    return reloading
+  }
+
   async function refreshBalance() {
     if (!has('balance:self:read')) return
     try {
@@ -77,5 +120,20 @@ export const useAuthStore = defineStore('auth', () => {
     sessionExpired.value = false
   }
 
-  return { me, balance, loggedIn, sessionExpired, has, login, loginSecondFactor, loginWithPasskey, loadMe, refreshBalance, logout }
+  return {
+    me,
+    balance,
+    loggedIn,
+    sessionExpired,
+    permissionsEpoch,
+    has,
+    holds,
+    login,
+    loginSecondFactor,
+    loginWithPasskey,
+    loadMe,
+    refreshPermissions,
+    refreshBalance,
+    logout
+  }
 })

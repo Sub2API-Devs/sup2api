@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { flip } from './flip'
 import { SBadge, SCheckbox, SEmpty, SHint, SIcon, SSectionTitle } from '@sub2api/ui'
 import type { PermissionItem, PermissionModule } from '@/api/types'
 import { lt } from '@/i18n'
@@ -15,12 +16,6 @@ const { t } = useI18n()
 const groups = computed(() => [props.modules.filter((m) => m.source !== 'plugin'), props.modules.filter((m) => m.source === 'plugin')])
 const collapsed = ref(new Set<string>())
 
-function flip<T>(set: Set<T>, key: T, on = !set.has(key)): Set<T> {
-  const next = new Set(set)
-  if (on) next.add(key)
-  else next.delete(key)
-  return next
-}
 
 const isChecked = (key: string) => !!props.allGranted || props.granted.has(key)
 const grantedCount = (m: PermissionModule) => m.permissions.filter((p) => isChecked(p.key)).length

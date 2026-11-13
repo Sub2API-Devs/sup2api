@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({ patch: vi.fn(), del: vi.fn(), toast: vi.fn() }
 // The group and proxy pickers look entities up; nothing answers here.
 vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { patch: mocks.patch, del: mocks.del, get: async () => ({ items: [], more: false }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), toast: mocks.toast }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
+const perms = vi.hoisted(() => ({ has: (_: string | string[]): boolean => true }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string | string[]) => perms.has(p) }) }))
 enableAutoUnmount(afterEach)
 
 const acc = (id: number, over: Partial<Account> = {}) => ({ id, name: `a${id}`, plugin_key: 'p', type: 't', priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, group_ids: [1], proxy_id: null, auto_disable: true, ...over }) as unknown as Account
@@ -151,5 +152,17 @@ describe('bulk account dialogs', () => {
     expect(mocks.del.mock.calls.map((c) => [c[0], c[1]])).toEqual([['/accounts/1', undefined], ['/accounts/2', { retain_resources: 1 }]])
     expect(w.emitted('deleted')![0][0]).toEqual([1, 2])
     expect(w.emitted('update:open')![0]).toEqual([false])
+  })
+
+  it('locks the groups for an own-level caller without a bind permission', async () => {
+    perms.has = p => [p].flat().some(k => k === 'account:own:update')
+    try {
+      const w = mount(AccountBulkEditDialog, { props: { open: true, accounts: [acc(1)], typeOf: () => undefined }, global: { plugins: [i18n], stubs: { SModal } } })
+      const field = w.get('[data-testid="bulk-field-groups"]')
+      expect(field.get('input[type="checkbox"]').attributes('disabled')).toBeDefined()
+      expect(field.text()).toContain('修改分组需要')
+    } finally {
+      perms.has = () => true
+    }
   })
 })

@@ -72,6 +72,7 @@ func (s *Service) Upload(ctx context.Context, data []byte, actorID int64, opt Up
 	if err := r.resolveDefaultRoles(ctx, s.d.DB.Pool, p.Manifest); err != nil {
 		return nil, err
 	}
+	s.noteDBSchema(r, p.Manifest)
 	r.ConsentStatus = rec.consent
 	r.PackageSHA256, r.PackageSize, r.UploadedAt = p.SHA256, int64(len(p.Raw)), rec.uploadedAt
 	r.UpgradeFrom = rec.upgradeOf
