@@ -71,7 +71,7 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 		}
 	}
 	for _, d := range created {
-		if err := s.grantPluginDefault(ctx, tx, d.Key, dedupe(d.GrantRoles)); err != nil {
+		if err := s.grantPlugin(ctx, tx, "default", d.Key, dedupe(d.GrantRoles)); err != nil {
 			return err
 		}
 	}
@@ -90,7 +90,7 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 			}
 		}
 		if from = dedupe(from); len(from) > 0 {
-			if err := s.grantInherited(ctx, tx, d.Key, from); err != nil {
+			if err := s.grantInherited(ctx, tx, d.Key, from, nil); err != nil {
 				return err
 			}
 		}
@@ -170,16 +170,29 @@ func pluginGrantee(ctx context.Context, actor core.PermissionSet, held []string,
 	return nil
 }
 
-// grantPluginDefault grants the newly created plugin permission key to roles
-// but super admin ones (which hold every permission), audited.
-func (s *Service) grantPluginDefault(ctx context.Context, tx pgx.Tx, key string, roles []string) error {
+// GrantPluginPermission implements core.PermissionCatalog.
+func (s *Service) GrantPluginPermission(ctx context.Context, tx pgx.Tx, key string, roleKeys []string) error {
+	v, err := s.Bump(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if err := s.grantPlugin(ctx, tx, "review", key, dedupe(roleKeys)); err != nil {
+		return err
+	}
+	s.committedLater(v)
+	return nil
+}
+
+// grantPlugin grants the plugin permission key to roles but super admin
+// ones (which hold every permission), audited with via.
+func (s *Service) grantPlugin(ctx context.Context, tx pgx.Tx, via, key string, roles []string) error {
 	if len(roles) == 0 {
 		return nil
 	}
-	return s.syncGrant(ctx, tx, map[string]any{"via": "default"}, `
+	return s.syncGrant(ctx, tx, map[string]any{"via": via}, `
 WITH ins AS (
     INSERT INTO role_permissions (role_id, permission_id)
-    SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = ANY($1) AND NOT r.superuser AND p.key = $2
+    SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = ANY($1) AND NOT r.superuser AND p.key = $2 AND p.source = 'plugin'
     ON CONFLICT DO NOTHING RETURNING role_id, permission_id)
 SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, roles, key)
 }

@@ -62,7 +62,6 @@ func (a *keyAuth) PermissionSet(context.Context, int64) (core.PermissionSet, err
 	return core.PermissionSet{}, nil
 }
 func (a *keyAuth) CanGrant(context.Context, int64, []string) error { return nil }
-func (a *keyAuth) CanActOn(context.Context, int64, []string) error { return nil }
 
 // fixtureAccess stands in for the account module's core.AccountAccess, which
 // cannot be imported here (account imports this package).

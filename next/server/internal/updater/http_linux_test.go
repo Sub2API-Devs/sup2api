@@ -29,7 +29,6 @@ func (a bridgeAuth) PermissionSet(context.Context, int64) (core.PermissionSet, e
 	return core.PermissionSet{Superuser: true}, nil
 }
 func (a bridgeAuth) CanGrant(context.Context, int64, []string) error { return nil }
-func (a bridgeAuth) CanActOn(context.Context, int64, []string) error { return nil }
 
 func TestBridgeAuditsOnlySuccessfulMutations(t *testing.T) {
 	db := testutil.DB(t)

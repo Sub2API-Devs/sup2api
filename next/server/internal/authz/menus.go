@@ -179,7 +179,7 @@ func (s *Service) pluginMenus(set core.PermissionSet) []pluginMenu {
 		if p.Manifest == nil || p.Manifest.UI == nil {
 			continue
 		}
-		allowed := func(perm string) bool { return perm == "" || set.Has(manifest.PermissionKey(p.Key, perm)) }
+		allowed := func(perm string) bool { return set.Has(manifest.PermissionKey(p.Key, perm)) }
 		for _, m := range manifest.FilterUI(p.Manifest.UI, allowed, set.Has).Menus {
 			label := core.LocalizedText(m.Label)
 			if label == nil {

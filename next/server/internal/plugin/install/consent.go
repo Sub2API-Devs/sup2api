@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 
@@ -226,7 +227,7 @@ func (s *Service) loadConsentable(ctx context.Context, tx pgx.Tx, key, version s
 
 // decideAndApply records the operator's decisions and moves the plugin into
 // its post-consent state.
-func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version string, req ConsentRequest, actorID int64, c *consentable) (*ConsentResult, error) {
+func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version string, req ConsentRequest, actorID int64, c *consentable, auto bool) (*ConsentResult, error) {
 	m := c.manifest
 	decisions, ferrs := decide(m, req, c.current, c.upgrade)
 	if len(ferrs) > 0 {
@@ -243,6 +244,10 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 		return nil, err
 	}
 	roles := roleGrants(m, req, existing)
+	syncM, roles, err := s.autoRoleGrants(ctx, tx, actorID, key, version, c, existing, roles, auto)
+	if err != nil {
+		return nil, err
+	}
 	for _, d := range decisions {
 		scope, _ := json.Marshal(d.scope)
 		if _, err := tx.Exec(ctx, `
@@ -262,7 +267,7 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 	status := c.pluginStatus
 	switch {
 	case !c.upgrade:
-		if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, roles); err != nil {
+		if err := s.d.Defaults.ApplyDefaults(ctx, tx, syncM, roles); err != nil {
 			return nil, err
 		}
 		name, _ := json.Marshal(m.Name)
@@ -275,7 +280,7 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 	case c.activeVersion == nil:
 		// Nothing is running: the newest approved version becomes the
 		// one to enable, so its defaults apply now.
-		if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, roles); err != nil {
+		if err := s.d.Defaults.ApplyDefaults(ctx, tx, syncM, roles); err != nil {
 			return nil, err
 		}
 	default:
@@ -287,7 +292,7 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 			if err != nil {
 				return nil, err
 			}
-			defs := unionDefs(PermissionDefs(old, nil), PermissionDefs(m, roles))
+			defs := unionDefs(PermissionDefs(old, nil), PermissionDefs(syncM, roles))
 			if err := s.d.Permissions.SyncPlugin(ctx, tx, key, defs); err != nil {
 				return nil, err
 			}
@@ -312,6 +317,32 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 // plugin to installed; upgrades only approve the version (the runtime
 // applies defaults when it activates).
 func (s *Service) Consent(ctx context.Context, key, version string, req ConsentRequest, actorID int64) (*ConsentResult, error) {
+	return s.consent(ctx, key, version, req, actorID, false)
+}
+
+// autoRoleGrants applies the upgrade role grant rule (rolegrants.go) to a
+// consent nobody gave (auto: a carried-over upgrade; or the system's, for a
+// built-in plugin): it fails with errRoleGrantsNeedConsent when a grant needs
+// consent, except for the system, whose such grants are withheld for review,
+// and audits the rest. It returns the manifest and roles to sync with, which
+// grant exactly the planned grants made now (withholdGrants).
+func (s *Service) autoRoleGrants(ctx context.Context, tx pgx.Tx, actorID int64, key, version string, c *consentable, existing map[string]bool, roles map[string][]string, auto bool) (*manifest.Manifest, map[string][]string, error) {
+	m := c.manifest
+	if !c.upgrade || !(auto || isSystem(ctx)) {
+		return m, roles, nil
+	}
+	plan, err := planRoleGrants(ctx, tx, m, existing, roles)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !isSystem(ctx) && needConsent(plan) {
+		return nil, nil, errRoleGrantsNeedConsent
+	}
+	m, roles, pending := withholdGrants(m, existing, plan)
+	return m, roles, auditAutoGrants(ctx, tx, actorID, key, version, plan, pending)
+}
+
+func (s *Service) consent(ctx context.Context, key, version string, req ConsentRequest, actorID int64, auto bool) (*ConsentResult, error) {
 	ctx, release, guardErr := core.BeginPluginMutation(ctx, s.d.Mutations)
 	if guardErr != nil {
 		return nil, guardErr
@@ -324,7 +355,7 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 		if err != nil {
 			return err
 		}
-		res, err = s.decideAndApply(ctx, tx, key, version, req, actorID, c)
+		res, err = s.decideAndApply(ctx, tx, key, version, req, actorID, c, auto)
 		return err
 	})
 	if err != nil {
@@ -415,8 +446,8 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 // even with roles named - carrying a running plugin forward must not
 // require role:define.
 func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, req ConsentRequest, existing map[string]bool) error {
-	if isSystem(ctx) {
-		return nil
+	if err := checkNamedRolesExist(ctx, tx, req); err != nil {
+		return err
 	}
 	var roles []string
 	for _, up := range m.UserPermissions {
@@ -424,7 +455,13 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 			roles = append(roles, named...)
 		}
 	}
-	if len(roles) == 0 {
+	return s.checkRolesGrantable(ctx, tx, actorID, roles)
+}
+
+// checkRolesGrantable verifies the operator may hand plugin permissions to
+// roles it names (none needs nothing): role:define and CanGrantToRoles.
+func (s *Service) checkRolesGrantable(ctx context.Context, tx pgx.Tx, actorID int64, roles []string) error {
+	if isSystem(ctx) || len(roles) == 0 {
 		return nil
 	}
 	ok, err := s.d.Authz.Can(ctx, actorID, "role:define")
@@ -438,8 +475,42 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 	if s.d.Permissions == nil {
 		return core.ErrInternal.WithMessage("the permission catalog is not available")
 	}
+	roles = slices.Clone(roles)
 	slices.Sort(roles)
 	return s.d.Permissions.CanGrantToRoles(ctx, tx, actorID, slices.Compact(roles))
+}
+
+// checkNamedRolesExist fails (400) when the request names a role that does
+// not exist, under the request's own field, whether or not the permission
+// it is named for is created now.
+func checkNamedRolesExist(ctx context.Context, q store.Querier, req ConsentRequest) error {
+	named := slices.Clone(req.RoleKeysForNewPermissions)
+	for _, roles := range req.NewPermissionRoles {
+		named = append(named, roles...)
+	}
+	if len(named) == 0 {
+		return nil
+	}
+	var found []string
+	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM roles WHERE key = ANY($1)`, named).Scan(&found); err != nil {
+		return err
+	}
+	var errs []core.FieldError
+	check := func(field string, roles []string) {
+		for _, r := range roles {
+			if !slices.Contains(found, r) {
+				errs = append(errs, core.FieldError{Field: field, Code: "unknown", Message: fmt.Sprintf("role %q does not exist", r)})
+			}
+		}
+	}
+	check("role_keys_for_new_permissions", req.RoleKeysForNewPermissions)
+	for _, local := range slices.Sorted(maps.Keys(req.NewPermissionRoles)) {
+		check("new_permission_roles."+local, req.NewPermissionRoles[local])
+	}
+	if len(errs) > 0 {
+		return core.InvalidFields(errs...).WithMessage("the consent names unknown roles")
+	}
+	return nil
 }
 
 // catalogKeys are the keys of m's userPermissions and of their inheritFrom

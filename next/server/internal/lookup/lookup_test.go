@@ -51,7 +51,6 @@ func (a fakeAuthz) PermissionSet(ctx context.Context, uid int64) (core.Permissio
 	return core.RestrictToAccessKey(ctx, uid, set), nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 // fixture is one database with rows of every kind. Every name holds "lk".
 //

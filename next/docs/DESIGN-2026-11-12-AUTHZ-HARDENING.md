@@ -177,7 +177,7 @@
 
 ## T18 设计 3.1.1、3.1.3、决策 1、2、W4-A4：超管全局唯一，删除 guardTarget
 
-- 改动：迁移 `0098_one_super_admin.sql`：删除软删除用户的超管行；未删除的超管持有者（不论启用、禁用）多于一个时 `RAISE EXCEPTION`，信息列出 user id 与邮箱和处理命令 `sub2api admin recover-superadmin --email <要保留的人>`；`roles_one_superuser` 部分唯一索引（最多一个超管角色）；`user_roles` 上的延迟约束触发器 `user_roles_one_superuser`（提交时检查最多一个持有者，advisory 锁串行化并发，违反时 23505），移交的先删后插不受影响。不种角色、不依赖运行时 id，CLI 在迁移前后的库上都能用。iam 删除 `guardTarget`、`errProtectedTarget` 与别名 `assertTargetPermissionsWithinActor`：UpdateUser、DeleteUser、ResetSecurity 只经 `CanActOnUser` 判断目标（改他人密码时不再重复检查；改状态时仍在 `Bump` 之后复查一次）。CONTRACTS §43.6 同步。
+- 改动：迁移 `0098_one_super_admin.sql`：删除软删除用户的超管行；未删除的超管持有者（不论启用、禁用）多于一个时 `RAISE EXCEPTION`，信息列出 user id（期 4 P4F2 起不含邮箱）和处理命令 `sub2api admin recover-superadmin --email <要保留的人>`；`roles_one_superuser` 部分唯一索引（最多一个超管角色）；`user_roles` 上的延迟约束触发器 `user_roles_one_superuser`（提交时检查最多一个持有者，advisory 锁串行化并发，违反时 23505），移交的先删后插不受影响。不种角色、不依赖运行时 id，CLI 在迁移前后的库上都能用。iam 删除 `guardTarget`、`errProtectedTarget` 与别名 `assertTargetPermissionsWithinActor`：UpdateUser、DeleteUser、ResetSecurity 只经 `CanActOnUser` 判断目标（改他人密码时不再重复检查；改状态时仍在 `Bump` 之后复查一次）。CONTRACTS §43.6 同步。
 - 影响对象：
   - 存量多个未删除超管的部署升级时迁移失败、服务不启动，须先按 T17 的运维步骤用 CLI 保留一个（生产核查只有 1 个超管，不受影响）。软删除用户残留的超管行被删除。
   - 非超管（含超管的访问密钥）修改、删除超管或重置其安全设置仍是 403，错误文案由 `only a super admin can modify a super admin` 变为 `you cannot modify a superuser`，并带 `details.superuser = true`；依赖旧文案的脚本需调整。
@@ -715,3 +715,52 @@
   - 路由级 proof 在处理函数之前消费，处理函数随后因请求体校验失败时 proof 也已用掉；`PUT /me/password` 已改为先校验。
   - 超管密钥里已被禁用的插件权限，`Restrict` 仍然保留（超管 `Has` 恒真），与核心已删除的权限相同，属于此前就有的行为。
 - 回滚：revert S1–S4 及其 review fixes 的提交即可。无迁移；`auth_flows` 里残留的 `step_up_*` 行 5 分钟后过期，下次建流程时清除。已存的访问密钥里含原 sessionOnly 权限或插件权限的，回滚后重新按 KeyAllowed 丢弃。
+
+## 期 4 P4C：插件升级新增的角色授予需同意（决策“插件升级授权”C，产品性收紧）
+
+- 改动：`plugin/install/rolegrants.go`。`planRoleGrants` 复用 `catalogKeys` + `roleGrants`，列出一次不覆盖角色的同意会做的授予（目录里还没有的权限的 `defaultRoles`，以及当下持有其 `inheritFrom` 旧 key 的角色；超管角色不计），`sensitive` 或授予对象不是内置 `admin`/`operator`/`supplier` 的标为需要同意。`Review.resolveDefaultRoles` 一并填 `new_role_grants`、`role_grants_need_consent`。
+  - 上传或市场升级：`carryOverConsent` 在需要同意时不沿用；同意事务里（`autoRoleGrants`，与写入同一快照）再判断一次，需要同意就回滚、版本留在 `awaiting_consent`。沿用时写 `plugin.consent.auto`。
+  - 内置插件（系统同意）：版本照常 `approved`（`BuiltinsReady`/`BuiltinsCommitted` 需要，否则节点不就绪、托管升级无法提交），需要同意的授予不写入：涉及的权限改为按名字授予其余不需同意的角色、不再走 `inheritFrom`（持有者已在同一事务里解析），暂缓的授予写进 `plugin.consent.auto` 的 `pending`。插件列表与详情 `role_grants_to_review` 从这些审计算出；`POST …/role-grants/confirm` 需要同意页显式指定角色的同样资格（`checkRolesGrantable`：`role:define` + `CanGrantToRoles`），经新增的 `core.PermissionCatalog.GrantPluginPermission` 写入（`authz.sync.grant`，`via: review`，移动 authz 版本）；`…/reject` 不写入，只清除提示。均写审计（`plugin.role_grants.confirm`/`reject`）。不加迁移。
+  - 首次安装与操作者自己点同意不变。
+  - 审查后（P4C review fixes）：自动同意（沿用或系统）时，本次新建的每个权限都按计划**按名字**授予不需同意的角色、不再走 `inheritFrom`（`withholdGrants`），执行的授予就是计划的授予，避免计划之后才加入的旧 key 持有者被继承；这些授予的 `authz.sync.grant` 因此是 `via: default`，来源（default/inherit）见 `plugin.consent.auto` 的 `granted`。激活时（rollout 的 `ApplyDefaults(…, nil)`）新建的权限不再继承（`PermissionDefs` 对 nil grants 不带 `inheritFrom`）：那时才建出的只可能是同意后被删掉的权限，没有人审查过它的授予。reject 与 confirm 要求相同资格。待确认清单只看插件本次安装（`plugins.installed_at`）之后的审计。
+- 测试：install `TestUpgradeRoleGrantsNeedConsent`（新增 sensitive 授予、新增授予给 user、经 inheritFrom 授予自定义角色 → 不沿用，版本 `awaiting_consent`；只给 admin/operator/supplier 的非敏感授予 → 沿用并有审计；之后操作者同意照常授予）、`TestBuiltinUpgradeWithholdsRoleGrants`（EnsureBuiltin 升级批准版本，只写不需同意的授予，暂缓项列出；无 `role:define` 或角色不可改时 confirm 403；confirm 写入并清空；下一次升级再暂缓，reject 清空且不写入）；authz `TestGrantPluginPermission`；plugin/api `TestAPIRoleGrantsToReview`。
+- 影响对象：升级时 manifest 新增敏感权限或把新权限给 user、自定义角色的插件——上传不再自动批准，要有人在同意页确认；内置插件这类授予要在插件页确认后才生效（之前随升级直接生效）。前端（插件页提示与确认按钮、同意页展示 `new_role_grants`）由期 4 前端任务做；在此之前可直接调接口。
+- 回滚：revert 这个提交即可；回滚后暂缓的授予不会被自动补上（审计里有清单，需要时手工授予）。
+
+## 期 4 P4F1 决策 D3：内置 operator 不再持有 role:define（启动同步 + 迁移 0102，产品性收紧）
+
+- 来源：`role:manage` 的拆分由启动同步完成（catalog `role:define`/`role:assign` 的 `inherits`，`grantInherited` 在新 key 首次创建时授予所有持有 `role:manage` 的角色），不是迁移 0097。生产从 develop 升级时，迁移先跑、同步后跑，所以只靠迁移收不回来。
+- 改动：
+  1. `authz/sync.go`：核心权限拆分继承时跳过默认集合不含该 key 的内置角色（`builtinsWithout`）。内置角色的核心权限就是其默认集合，旧 key 上的授予来自旧默认、不是管理员选择，所以拆分不带过去；自定义角色照常继承。目前只影响 `role:define` 在内置 operator 上（admin 默认含两半，operator 默认含 `role:assign`；user、supplier 没有 `role:manage`）。插件权限的继承不受影响。
+  2. `0102_operator_reclaim_role_define.sql`：收回本版本更早启动已经给出的那条授予（测试库、预发、做过生产备份验证的库）。只删除内置（`builtin AND NOT superuser`）`operator` 上的核心权限 `role:define`，每条写 `authz.reclaim` 审计（actor 为系统，`detail.via = "migration 0102"`、`role`、`key`），有收回才移动 `authz_meta.version`。写法同 0099/0101：`SET LOCAL lock_timeout = '10s'`，先 `SELECT … FROM authz_meta FOR UPDATE`。自定义角色与 operator 的其他权限不动；超管之后仍可再授予。
+- 测试：authz `TestSyncCoreSplitsRoleManage`（持有 `role:manage` 的内置 admin、operator 与自定义角色首次同步后：operator 只有 `role:assign`，admin 两半都有，自定义角色两半都有并有继承审计）；migrations `TestOperatorReclaimRoleDefineMigration`（新库不写不移版本；收回 operator 的、保留 admin 与自定义角色的、一条审计、版本 +1；再跑无变化）。
+- 影响对象：内置 operator 的持有者不能再定义角色（新建、改权限、删除角色）（生产 operator 0 人）。发布说明草稿：回滚到旧版本后 admin（0099）与 operator（本项）暂时都不能管理角色，由超管处理。
+- 回滚：revert 同步改动即恢复拆分时的继承（只对之后首次创建的 key 生效）；迁移不可逆向执行，需要时由超管在角色页给 operator 重新勾选 `role:define`，或按 `authz.reclaim`（`via = migration 0102`）审计手工补回。
+
+## 期 4 P4F2：0098 多超管报错不再含用户邮箱
+
+- 改动：`0098_one_super_admin.sql` 的 `RAISE EXCEPTION` 只列 user id（`several super admins: user ids 3, 7; keep one with "sub2api admin recover-superadmin --email <the email of the one to keep>" …`）。迁移失败的信息原样成为启动失败的错误与日志，是唯一出处（启动代码不另行拼接用户信息）。处理时按 id 查邮箱：`SELECT id, email FROM users WHERE id IN (…)`。
+- 0098 尚未发布（只在 feat/authz-hardening），改文本会改变它的 checksum：已用旧 0098 跑过的测试库需重建；托管核心的迁移前缀校验（`managed_checks`）只在已发布版本之间比较，不受影响。
+- 测试：migrations `TestOneSuperAdminMigration` 断言错误列出两个 id、且不含 `@`。
+- 影响对象：无行为变化，仅错误信息。回滚：revert 这个提交（同样会改回 checksum，适用同一说明）。
+
+## 期 4 P4F3：SyncCore 新建内置角色的默认授予写审计
+
+- 改动：`authz/sync.go` `grantDefaults`（唯一一处）：新建的内置角色（新库的全部内置角色、升级带来的 supplier）得到的默认权限与可分配清单每一项都写 `authz.sync.grant`（actor 为系统，`detail.via` 为 `default` 或 `assignable`，另带 `role_created: true`）；已有角色只授予本次新建的默认，与之前相同。此前新建角色的授予不审计，生产验证时 supplier 的 8 项默认授权没有审计行。
+- 测试：authz `TestBuiltinAssignableDefaults`（新库可分配清单 5 项各一条、均标 `role_created`）、`TestSyncCoreAddsSupplierToExistingRoles`（supplier 的 8 项默认权限各一条）。
+- 影响对象：仅审计；新库首次启动多出一批 `authz.sync.grant` 行。回滚：revert 这个提交。
+
+## 期 4 P4F4：小清理（期 3 审查小问题）
+
+- 预备容器：`abandonPreparation` 并入 `disposePreparation(ctx, p, reason)`（`account/preparations.go`，唯一一处）。`reason` 为 `cancelled`（本人取消，插件 cancel 回调拒绝时中止，同前）、`abandoned`（首次准备失败，调用方已持锁；只处理 `pending`，成功后删行，归还名额与幂等键，同前）、`expired`（清理任务，筛选同前）。三者都回调插件 cancel 阶段：本人取消在改状态前回调（插件拒绝即中止，同前），放弃与清理在该行真正开始撤销（由非 `cancelling` 改为 `cancelling`）后回调一次，失败只记日志、不阻止清理，被续期而未清理的、重试中的不再回调（此前放弃与清理不回调；审查后修正回调时机），撤销资源后写 `account.preparation.cancel` 审计（`detail.reason`；actor 为创建者，清理任务为系统；此前放弃不写审计，取消在撤销前写）。
+- 插件同意：`new_permission_roles`、`role_keys_for_new_permissions` 里的未知角色由 install 先校验（`checkNamedRolesExist`），400 的字段名与请求一致，目录已有的权限写的未知角色也 400（此前静默忽略；authz `CanGrantToRoles` 的 `role_keys` 字段只作兜底）。
+- 删除：`buildReview` 里随即被 `resolveDefaultRoles` 覆盖的 `DefaultRoles` 赋值；无生产调用方的 `core.Authorizer.CanActOn` 与 `authz.Service.CanActOn`（以及各测试替身）；`authz/menus.go`、`plugin/api/ui.go` 传给 `manifest.FilterUI` 的判断里重复的 `perm == ""`（`FilterUI` 自己处理）。
+- 测试：account `TestAccountPreparationLimit`（放弃各有审计与插件 cancel 回调）；install `TestConsentRoleGrantRights`（未知角色的字段名，含已有权限）；其余为现有测试。
+- 影响对象：仅错误信息、审计与插件回调；回滚：revert 这个提交。
+
+## 期 4 P4F5 T81 后端：GET /accounts/summary（供应商仪表盘账号状态卡片）
+
+- 改动：`account/summary.go` 新增 `account.Counts` 与 `CountAccounts(ctx, q, scope)`（范围条件复用 `scoped`，`scope` 由 `core.OwnerScope(ctx, "account:read")` 决定：全量权限为全部，own 级为自己创建的），`GET /accounts/summary` 以 `PermAny(account:read, account:own:read)` 注册，返回 `{total, available, auto_disabled, disabled}`。`usage` 概览的 `accounts` 改为调用同一个函数（scope=nil），JSON 形状不变。前端卡片由期 4 前端任务做（决策 D25：只做账号状态，不显示用量与成本）。
+- 测试：account `TestAccountSummaryFollowsOwnerScope`（own 范围只计自己的、全量范围计全部、已删除不计、无账号读权限 403）。
+- 影响对象：新增只读接口；回滚：revert 这个提交。
+

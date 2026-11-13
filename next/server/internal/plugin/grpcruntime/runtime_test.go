@@ -36,7 +36,6 @@ func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, erro
 	return core.PermissionSet{}, nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type fakeLedger struct {
 	mu    sync.Mutex

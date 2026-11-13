@@ -30,7 +30,6 @@ func (*recordingAuthz) PermissionSet(context.Context, int64) (core.PermissionSet
 	return core.PermissionSet{}, nil
 }
 func (*recordingAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (*recordingAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 // hostEnv is a host server of plugin "volc" (which declares the local
 // permission "rules:read") over the given options and grants.

@@ -36,7 +36,6 @@ func (a permAuth) PermissionSet(context.Context, int64) (core.PermissionSet, err
 	return core.PermissionSet{Keys: keys}, nil
 }
 func (a permAuth) CanGrant(context.Context, int64, []string) error { return nil }
-func (a permAuth) CanActOn(context.Context, int64, []string) error { return nil }
 
 type fakeNodes []core.NodeStatus
 

@@ -169,13 +169,6 @@ func (s *Service) CanGrant(ctx context.Context, actorID int64, perms []string) e
 	return s.covers(ctx, s.querier(), actorID, core.PermissionSetOf(perms...), cannotGrant(ctx))
 }
 
-// CanActOn validates the actor may act on a target with the given permissions (CONTRACTS §4.1, SEC-H2).
-// Returns an error if the target holds any permission the actor doesn't have.
-func (s *Service) CanActOn(ctx context.Context, actorID int64, targetPerms []string) error {
-	target := core.PermissionSetOf(targetPerms...)
-	return s.covers(ctx, s.querier(), actorID, target, cannotActOn(ctx, target))
-}
-
 // CanActOnUser is CanActOnUsers for one target.
 func (s *Service) CanActOnUser(ctx context.Context, actorID int64, action core.UserAction, targetID int64) error {
 	return s.CanActOnUsers(ctx, actorID, action, targetID)
