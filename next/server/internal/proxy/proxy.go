@@ -107,7 +107,7 @@ func New(db *store.DB, cipher *secret.Cipher, bus core.Bus, opts Options) *Servi
 // key or its "own" counterpart (CONTRACTS §21.2); handlers narrow their SQL
 // with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	write := perm.Strings(writeScope.Keys())
+	write := writeScope.Keys()
 	r.PermAny("GET", "/proxies", s.list, "proxy:read", "proxy:own:read")
 	r.PermAny("POST", "/proxies", s.create, write...)
 	r.PermAny("GET", "/proxies/:id", s.get, "proxy:read", "proxy:own:read")

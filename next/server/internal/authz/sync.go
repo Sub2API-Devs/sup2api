@@ -118,10 +118,10 @@ SELECT ins.role_id, a.key FROM ins JOIN roles a ON a.id = ins.assignable_role_id
 		}
 		for _, m := range coreModules {
 			for _, p := range m.perms {
-				if len(p.inherits) == 0 || !slices.Contains(inserted, p.key) {
+				if len(p.inherits) == 0 || !slices.Contains(inserted, string(p.key)) {
 					continue
 				}
-				if err := s.grantInherited(ctx, tx, p.key, p.inherits, builtinsWithout(p.key)); err != nil {
+				if err := s.grantInherited(ctx, tx, string(p.key), p.inherits, builtinsWithout(string(p.key))); err != nil {
 					return err
 				}
 			}

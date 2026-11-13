@@ -154,10 +154,10 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("GET", "/accounts/:id/stats", s.getAccountStats, "account:read", "account:own:read")
 	// Re-authorizing a Claude Code account (CONTRACTS §49.17), next to the
 	// ccgateway module's /system/ccgateway/accounts/:id/:action.
-	reauth := perm.Strings(ccgReauthScope.Keys())
+	reauth := ccgReauthScope.Keys()
 	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize", s.reauthorizeCCGateway, reauth...)
 	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize/:key/commit", s.commitCCGatewayReauth, reauth...)
-	browse := []string{"account:read", "account:own:read", "account:own:create"}
+	browse := []perm.Key{"account:read", "account:own:read", "account:own:create"}
 	r.PermAny("GET", "/platforms", s.listPlatforms, browse...)
 	r.AuthedRead("/me/platforms", s.listMyPlatforms)
 	r.PermAny("GET", "/account-types", s.listTypes, browse...)

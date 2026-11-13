@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -26,7 +27,7 @@ import (
 // is accepted besides the contract's settings:manage / account:create:
 // own-level users may create accounts (POST /accounts), so they must be
 // able to prepare the runtime of a Claude Code account too.
-var draftKeys = []string{"settings:manage", "account:create", "account:own:create"}
+var draftKeys = []perm.Key{"settings:manage", "account:create", "account:own:create"}
 
 func (s *Service) registerDraftRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/system/ccgateway/drafts", s.draftCreate, draftKeys...)

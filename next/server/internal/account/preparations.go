@@ -15,13 +15,14 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
 
 func (s *Service) registerPreparationRoutes(r *httpapi.Router) {
-	permissions := []string{"account:create", "account:own:create"}
+	permissions := []perm.Key{"account:create", "account:own:create"}
 	r.PermAny("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, permissions...)
 	r.PermAny("GET", "/account-preparations/:key/:action", s.preparationAction, permissions...)
 	r.PermAny("POST", "/account-preparations/:key/:action", s.preparationAction, permissions...)

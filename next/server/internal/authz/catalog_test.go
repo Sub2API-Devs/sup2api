@@ -4,10 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
@@ -17,7 +22,7 @@ func superOnlyKeys() []string {
 	for _, m := range coreModules {
 		for _, p := range m.perms {
 			if p.superOnly {
-				keys = append(keys, p.key)
+				keys = append(keys, string(p.key))
 			}
 		}
 	}
@@ -81,7 +86,7 @@ func TestCatalogFlagInvariants(t *testing.T) {
 				continue
 			}
 			for _, r := range builtinRoles {
-				if slices.Contains(r.defaultPermissions(), p.key) {
+				if slices.Contains(r.defaultPermissions(), string(p.key)) {
 					t.Errorf("%s is superOnly but in the defaults of %s", p.key, r.key)
 				}
 			}
@@ -104,10 +109,10 @@ func TestCatalogFlaggedSets(t *testing.T) {
 	for _, m := range coreModules {
 		for _, p := range m.perms {
 			if p.sensitive {
-				sensitive = append(sensitive, p.key)
+				sensitive = append(sensitive, string(p.key))
 			}
 			if p.stepUp {
-				stepUp = append(stepUp, p.key)
+				stepUp = append(stepUp, string(p.key))
 			}
 		}
 	}
@@ -342,5 +347,51 @@ func TestSyncCoreRefusesCustomRoleOnBuiltinKey(t *testing.T) {
 	}
 	if err := db.Pool.QueryRow(ctx, `SELECT builtin FROM roles WHERE id = $1`, id).Scan(&builtin); err != nil || builtin {
 		t.Fatalf("renamed custom role: built-in %v, %v", builtin, err)
+	}
+}
+
+// Every catalog key (core and self modules) has its perm constant and every
+// constant names a catalog key, once each (T66); the former own-level keys
+// are perm aliases, not constants.
+func TestKeyConstantsMatchCatalog(t *testing.T) {
+	t.Parallel()
+	file, err := parser.ParseFile(token.NewFileSet(), "../perm/keys.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	constants := map[string]string{}
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			v := spec.(*ast.ValueSpec)
+			key, err := strconv.Unquote(v.Values[0].(*ast.BasicLit).Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if prev, dup := constants[key]; dup {
+				t.Errorf("%s and %s both name %s", prev, v.Names[0].Name, key)
+			}
+			constants[key] = v.Names[0].Name
+		}
+	}
+	catalog := map[string]bool{}
+	for _, m := range append(slices.Clone(coreModules), selfModule) {
+		for _, p := range m.perms {
+			if _, legacy := perm.LegacyOwnKeys()[string(p.key)]; legacy {
+				continue
+			}
+			catalog[string(p.key)] = true
+			if constants[string(p.key)] == "" {
+				t.Errorf("%s has no perm constant", p.key)
+			}
+		}
+	}
+	for key, name := range constants {
+		if !catalog[key] {
+			t.Errorf("perm.%s = %q is not in the catalog", name, key)
+		}
 	}
 }

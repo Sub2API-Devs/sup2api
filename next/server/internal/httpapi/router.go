@@ -13,6 +13,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 // APIPrefix is the path of the console API group, the core route
@@ -60,11 +61,11 @@ func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) {
 // Self registers a route of the caller's own account, under one of the self
 // permissions (authz.SelfPermissionKeys) every signed-in user holds: a login
 // session always passes, an access key only when it was given perm.
-func (r *Router) Self(method, path, perm string, h ...gin.HandlerFunc) {
-	if !strings.HasPrefix(perm, "self:") {
-		panic("httpapi: Self with a permission outside the self module: " + perm)
+func (r *Router) Self(method, path string, key perm.Key, h ...gin.HandlerFunc) {
+	if !strings.HasPrefix(string(key), "self:") {
+		panic("httpapi: Self with a permission outside the self module: " + string(key))
 	}
-	r.Perm(method, path, perm, h...)
+	r.Perm(method, path, key, h...)
 }
 
 // SessionOnly returns a view of r whose routes refuse access keys; r itself
@@ -90,8 +91,8 @@ func (r *Router) StepUp(scope string) *Router {
 }
 
 // Perm registers a route requiring permission.
-func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
-	r.handle(method, path, r.require(permission), h)
+func (r *Router) Perm(method, path string, permission perm.Key, h ...gin.HandlerFunc) {
+	r.handle(method, path, r.require(string(permission)), h)
 }
 
 // PermAny registers a route the caller may use with any one of keys, e.g.
@@ -99,11 +100,11 @@ func (r *Router) Perm(method, path, permission string, h ...gin.HandlerFunc) {
 // caller holds is recorded in the request context (Granted /
 // core.OwnerScope). Without a match the response is permission_denied with
 // details.permission = keys[0].
-func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...string) {
+func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...perm.Key) {
 	if len(keys) == 0 {
 		panic("httpapi: PermAny without permission keys")
 	}
-	r.handle(method, path, r.requireAny(keys), []gin.HandlerFunc{handler})
+	r.handle(method, path, r.requireAny(perm.Strings(keys)), []gin.HandlerFunc{handler})
 }
 
 // handle registers a route: authentication, then check (the permission,
