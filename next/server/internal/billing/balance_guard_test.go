@@ -13,60 +13,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
 
-// Who may adjust whose balance is authz's CanActOnUsers, and only a
-// superuser its own (M7, FU5). Every caller here holds balance:adjust
-// (allowAll); the roles decide.
-func TestAdjustBalanceActsOnOthers(t *testing.T) {
-	e := newEnv(t)
-	az := authz.New(authz.Deps{DB: e.db, Bus: e.bus})
-	if err := az.SyncCore(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	e.svc.Users = az
-	withRole := func(email, role string) int64 {
-		id := e.user(email)
-		e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, id, role)
-		return id
-	}
-	super, admin := withRole("super@example.com", authz.RoleSuperAdmin), withRole("admin@example.com", authz.RoleAdmin)
-	operator, user := withRole("operator@example.com", authz.RoleOperator), withRole("user@example.com", authz.RoleUser)
-	adjust := func(actor, target int64) (int, map[string]any) {
-		return e.call(actor, "POST", "/users/"+itoa(target)+"/balance/adjust", map[string]any{"amount": "1", "credit": true})
-	}
-	adjusted := 0
-	for _, tc := range []struct {
-		name          string
-		actor, target int64
-		status        int
-		code          string
-	}{
-		{"oneself", admin, admin, 409, "conflict"},
-		{"a superuser oneself", super, super, 200, ""},
-		{"a user with higher privileges", operator, admin, 403, "permission_denied"},
-		{"a superuser", admin, super, 403, "permission_denied"},
-		{"a user within one's own roles", operator, user, 200, ""},
-		{"an admin as the superuser", super, admin, 200, ""},
-	} {
-		status, resp := adjust(tc.actor, tc.target)
-		if status != tc.status || (tc.code != "" && errCode(resp) != tc.code) {
-			t.Fatalf("adjusting %s: %d %v", tc.name, status, resp)
-		}
-		if status == 200 {
-			adjusted++
-		}
-	}
-	// Refused adjustments moved no money.
-	var n int
-	if err := e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM balance_ledger`).Scan(&n); err != nil || n != adjusted {
-		t.Fatalf("ledger rows: %d %v", n, err)
-	}
-	// Not wired, nobody adjusts anything.
-	e.svc.Users = nil
-	if status, resp := adjust(super, user); status != 500 {
-		t.Fatalf("no guard: %d %v", status, resp)
-	}
-}
-
 // keyTokens is allowAll that also answers "sak_<name>" with keys[name].
 type keyTokens struct {
 	allowAll
@@ -81,54 +27,115 @@ func (k keyTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.Acces
 	return id, nil
 }
 
-// A superuser adjusts its own balance through its session, or through an
-// access key only when the key holds balance:adjust; nobody else does,
-// whichever way they come (FU5). Each exemption leaves one audit row.
-func TestAdjustBalanceSuperuserSelf(t *testing.T) {
+// Who may adjust whose balance (M7, FU6): balance:adjust decides whether
+// (the route, narrowed by an access key), and the roles the caller manages
+// decide whom (authz's CanActOnUsers, by the caller's roles, itself
+// included). The super admin manages everyone; an admin users, suppliers
+// and operators but no admin, itself included; an operator given
+// balance:adjust only suppliers and users. Each action on oneself leaves one
+// audit row.
+func TestAdjustBalanceManagedUsers(t *testing.T) {
 	e := newEnv(t)
+	ctx := context.Background()
 	az := authz.New(authz.Deps{DB: e.db, Bus: e.bus})
-	if err := az.SyncCore(context.Background()); err != nil {
+	if err := az.SyncCore(ctx); err != nil {
 		t.Fatal(err)
 	}
-	withRole := func(email, role string) int64 {
+	withRoles := func(email string, roles ...string) int64 {
 		id := e.user(email)
-		e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, id, role)
+		for _, role := range roles {
+			e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, id, role)
+		}
 		return id
 	}
-	super, admin := withRole("super@example.com", authz.RoleSuperAdmin), withRole("admin@example.com", authz.RoleAdmin)
-	engine := gin.New()
+	super := withRoles("super@example.com", authz.RoleSuperAdmin)
+	admin, admin2 := withRoles("admin@example.com", authz.RoleUser, authz.RoleAdmin), withRoles("admin2@example.com", authz.RoleUser, authz.RoleAdmin)
+	operator, operator2 := withRoles("op@example.com", authz.RoleUser, authz.RoleOperator), withRoles("op2@example.com", authz.RoleUser, authz.RoleOperator)
+	supplier, user := withRoles("supplier@example.com", authz.RoleUser, authz.RoleSupplier), withRoles("user@example.com", authz.RoleUser)
+	// adjusting holds only balance:adjust: an operator holding it too keeps
+	// the operator's assignable list.
+	if _, err := az.CreateRole(ctx, super, authz.CreateRoleInput{Key: "adjusting", Name: core.LocalizedText{"en": "Adjusting"},
+		PermissionKeys: []string{"balance:adjust"}}); err != nil {
+		t.Fatal(err)
+	}
+	adjusting := withRoles("op-adjusting@example.com", authz.RoleUser, authz.RoleOperator, "adjusting")
 	e.svc.Users = az
+	engine := gin.New()
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, keyTokens{keys: map[string]core.AccessKeyIdentity{
-		"adjust":       {UserID: super, KeyID: 11, Permissions: []string{"balance:adjust"}},
-		"read":         {UserID: super, KeyID: 12, Permissions: []string{"balance:read"}},
+		"super_adjust": {UserID: super, KeyID: 11, Permissions: []string{"balance:adjust"}},
+		"super_read":   {UserID: super, KeyID: 12, Permissions: []string{"balance:read"}},
 		"admin_adjust": {UserID: admin, KeyID: 13, Permissions: []string{"balance:adjust"}},
+		"admin_read":   {UserID: admin, KeyID: 14, Permissions: []string{"balance:read"}},
 	}}, az))
 	e.h = engine
-	adjust := func(actor int64, key string) (int, map[string]any) {
+	adjust := func(actor int64, key string, target int64) (int, map[string]any) {
 		var auth []string
 		if key != "" {
 			auth = []string{"Authorization", "Bearer " + core.AccessKeyPrefix + key}
 		}
-		return e.call(actor, "POST", "/users/"+itoa(actor)+"/balance/adjust", map[string]any{"amount": "1", "credit": true}, auth...)
+		return e.call(actor, "POST", "/users/"+itoa(target)+"/balance/adjust", map[string]any{"amount": "1", "credit": true}, auth...)
 	}
+	const allowed, noPermission, notManaged = "allowed", "permission", "not managed"
+	adjusted := 0
 	for _, tc := range []struct {
 		name   string
 		actor  int64
 		key    string
-		status int
-		code   string
+		target int64
+		want   string
 	}{
-		{"superuser session", super, "", 200, ""},
-		{"superuser key with balance:adjust", super, "adjust", 200, ""},
-		{"superuser key without it", super, "read", 403, "permission_denied"},
-		{"admin session", admin, "", 409, "conflict"},
-		{"admin key with balance:adjust", admin, "admin_adjust", 409, "conflict"},
+		{"super admin itself", super, "", super, allowed},
+		{"super admin an admin", super, "", admin, allowed},
+		{"super admin an operator", super, "", operator, allowed},
+		{"super admin's key with balance:adjust itself", super, "super_adjust", super, allowed},
+		{"super admin's key with balance:adjust a user", super, "super_adjust", user, allowed},
+		{"super admin's key without it", super, "super_read", super, noPermission},
+		{"admin a user", admin, "", user, allowed},
+		{"admin a supplier", admin, "", supplier, allowed},
+		{"admin an operator", admin, "", operator, allowed},
+		{"admin another admin", admin, "", admin2, notManaged},
+		{"admin the super admin", admin, "", super, notManaged},
+		{"admin itself", admin, "", admin, notManaged},
+		{"admin's key with balance:adjust a supplier", admin, "admin_adjust", supplier, allowed},
+		{"admin's key with balance:adjust another admin", admin, "admin_adjust", admin2, notManaged},
+		{"admin's key with balance:adjust itself", admin, "admin_adjust", admin, notManaged},
+		{"admin's key without it", admin, "admin_read", user, noPermission},
+		{"operator by default", operator, "", user, noPermission},
+		{"operator with balance:adjust a supplier", adjusting, "", supplier, allowed},
+		{"operator with balance:adjust a user", adjusting, "", user, allowed},
+		{"operator with balance:adjust another operator", adjusting, "", operator2, notManaged},
+		{"operator with balance:adjust an admin", adjusting, "", admin, notManaged},
+		{"operator with balance:adjust itself", adjusting, "", adjusting, notManaged},
+		{"a plain user", user, "", user, noPermission},
 	} {
-		if status, resp := adjust(tc.actor, tc.key); status != tc.status || (tc.code != "" && errCode(resp) != tc.code) {
-			t.Fatalf("%s: %d %v", tc.name, status, resp)
+		status, resp := adjust(tc.actor, tc.key, tc.target)
+		var details map[string]any
+		if er, ok := resp["error"].(map[string]any); ok {
+			details, _ = er["details"].(map[string]any)
+		}
+		switch tc.want {
+		case allowed:
+			if status != 200 {
+				t.Errorf("%s: %d %v", tc.name, status, resp)
+			}
+			adjusted++
+		case noPermission:
+			if status != 403 || details["permission"] != "balance:adjust" {
+				t.Errorf("%s: %d %v, want 403 for the permission", tc.name, status, resp)
+			}
+		case notManaged:
+			if status != 403 || details["reason"] != "not_manageable" {
+				t.Errorf("%s: %d %v, want 403 not manageable", tc.name, status, resp)
+			}
 		}
 	}
-	rows, err := e.db.Pool.Query(context.Background(), `SELECT user_id, target_id, detail FROM audit_logs WHERE action = 'user.act_on_self' ORDER BY id`)
+	// Refused adjustments moved no money.
+	var n int
+	if err := e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM balance_ledger`).Scan(&n); err != nil || n != adjusted {
+		t.Fatalf("ledger rows: %d %v", n, err)
+	}
+	// Two actions on oneself went through, both the super admin's.
+	rows, err := e.db.Pool.Query(ctx, `SELECT user_id, target_id, detail FROM audit_logs WHERE action = 'user.act_on_self' ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +149,7 @@ func TestAdjustBalanceSuperuserSelf(t *testing.T) {
 			t.Fatal(err)
 		}
 		var d map[string]any
-		if err := json.Unmarshal(raw, &d); err != nil || uid != super || target != itoa(super) || d["reason"] != "self_by_superuser" {
+		if err := json.Unmarshal(raw, &d); err != nil || uid != super || target != itoa(super) || d["self"] != true {
 			t.Fatalf("audit row: %d %s %s %v", uid, target, raw, err)
 		}
 		got = append(got, d)
@@ -150,5 +157,10 @@ func TestAdjustBalanceSuperuserSelf(t *testing.T) {
 	if len(got) != 2 || got[0]["via"] != "session" || got[0]["access_key_id"] != nil ||
 		got[1]["via"] != "access_key" || got[1]["access_key_id"] != float64(11) {
 		t.Fatalf("audit rows: %v", got)
+	}
+	// Not wired, nobody adjusts anything.
+	e.svc.Users = nil
+	if status, resp := adjust(super, "", user); status != 500 {
+		t.Fatalf("no guard: %d %v", status, resp)
 	}
 }

@@ -66,18 +66,22 @@ func fieldError(ctx context.Context, field, code, en, zh string) core.FieldError
 	return core.FieldError{Field: field, Code: code, Message: t(ctx, en, zh)}
 }
 
-// actOnOthers fails unless the caller may choose the user group of the
-// users: none of them is the caller (unless a superuser), and none holds
-// roles granting more than the caller's (C-L7, FU5).
-func (s *Service) actOnOthers(ctx context.Context, userIDs ...int64) error {
+// actOnUsers fails unless the caller may choose the user group of the users:
+// it manages every one of them, itself only as a superuser (C-L7, FU6).
+func (s *Service) actOnUsers(ctx context.Context, userIDs ...int64) error {
 	actor, _ := core.UserID(ctx)
-	return core.ActOnOthers(ctx, s.users, actor, userIDs...)
+	return s.users.CanActOnUsers(ctx, actor, core.ActOnData, userIDs...)
 }
+
+// errOwnSegment refuses a change to the terms of a user group the caller is
+// in (GuardOwnSegments).
+var errOwnSegment = core.ErrConflict.WithMessage("you cannot change the terms of a user group you are in")
 
 // GuardOwnSegments fails unless the caller may change what the segments
 // charge or grant (discount, grants, rates, model prices): the caller is a
-// member of none of them, or core.ActOnOthers lets it act on itself (a
-// superuser, FU2). It is the one check of every such write. Other members
+// member of none of them, or it manages itself (UserGuard on itself: only a
+// superuser with the built-in assignable lists, audited there; FU2, FU6).
+// It is the one check of every such write; refusals are 409. Other members
 // are not targets: these writes are on the segment. The default segment is
 // exempt: everyone is in it, so changing it is changing the platform's
 // prices, as price:manage and group:manage do, not one's own; dropping the
@@ -94,7 +98,11 @@ func GuardOwnSegments(ctx context.Context, q store.Querier, users core.UserGuard
 		actor, segmentIDs).Scan(&member); err != nil || !member {
 		return err
 	}
-	return core.ActOnOthers(ctx, users, actor, actor)
+	err := users.CanActOnUsers(ctx, actor, core.ActOnData, actor)
+	if err != nil && core.AsError(err).Code == core.ErrPermissionDenied.Code {
+		return errOwnSegment.WithCause(err)
+	}
+	return err
 }
 
 // NotFound is the not_found of a user group that does not exist. It is the

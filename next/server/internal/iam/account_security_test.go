@@ -394,6 +394,62 @@ func TestDisabledAdminStaysOutOfReach(t *testing.T) {
 // Peer protection (T56) reaches every entry acting on a user: an admin
 // cannot change, reset or delete another admin, nor an operator another
 // operator; users below them are unaffected.
+// FU6: whom a caller acts on is the roles it manages, itself included. An
+// admin or operator does not manage itself: changing its own account goes
+// through /me; the super admin manages itself too. Disabling or deleting
+// oneself stays refused for everyone (a safety rule, not a permission).
+func TestManagedUsersIncludeOneself(t *testing.T) {
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	mk := func(email string, roles ...string) int64 {
+		t.Helper()
+		u, err := s.CreateUser(ctx, root, CreateUserInput{Email: email, Password: "self-password-1", RoleKeys: roles})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.ID
+	}
+	admin := mk("admin@example.com", authz.RoleUser, authz.RoleAdmin)
+	op := mk("op@example.com", authz.RoleUser, authz.RoleOperator)
+	supplier := mk("supplier@example.com", authz.RoleUser, authz.RoleSupplier)
+	name, pw := "renamed", "self-password-2"
+	notManageable := func(err error) bool {
+		return isCode(err, "permission_denied") && core.AsError(err).Details["reason"] == "not_manageable"
+	}
+	for _, actor := range []int64{admin, op} {
+		if _, err := s.UpdateUser(ctx, actor, actor, UpdateUserInput{DisplayName: &name}, testIP); !notManageable(err) {
+			t.Errorf("user %d renames itself through /users/:id: %v", actor, err)
+		}
+		current := "self-password-1"
+		if _, err := s.UpdateUser(ctx, actor, actor, UpdateUserInput{Password: &pw, SelfConfirmation: SelfConfirmation{CurrentPassword: &current}}, testIP); !notManageable(err) {
+			t.Errorf("user %d sets its password through /users/:id: %v", actor, err)
+		}
+		if err := s.ResetSecurity(ctx, actor, actor, SelfConfirmation{CurrentPassword: &current}, testIP); !notManageable(err) {
+			t.Errorf("user %d resets its own security: %v", actor, err)
+		}
+		if _, err := s.SetUserRoles(ctx, actor, actor, []string{authz.RoleUser, authz.RoleSupplier}); !isCode(err, "permission_denied") {
+			t.Errorf("user %d assigns itself a role: %v", actor, err)
+		}
+	}
+	// The operator manages suppliers and users.
+	if _, err := s.UpdateUser(ctx, op, supplier, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+		t.Fatalf("operator renames a supplier: %v", err)
+	}
+	// The super admin manages itself.
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{DisplayName: &name}, testIP); err != nil {
+		t.Fatalf("super admin renames itself: %v", err)
+	}
+	// Nobody disables or deletes itself, the super admin included.
+	disabled := StatusDisabled
+	if _, err := s.UpdateUser(ctx, root, root, UpdateUserInput{Status: &disabled}, testIP); !errors.Is(err, errSelfDisable) {
+		t.Fatalf("super admin disables itself: %v", err)
+	}
+	if err := s.DeleteUser(ctx, root, root); !errors.Is(err, errSelfDisable) {
+		t.Fatalf("super admin deletes itself: %v", err)
+	}
+}
+
 func TestPeersCannotActOnEachOther(t *testing.T) {
 	e := setupAdmin(t)
 	s, ctx := e.svc, context.Background()

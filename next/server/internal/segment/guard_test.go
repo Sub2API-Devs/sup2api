@@ -9,9 +9,9 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 )
 
-// Whose user group a caller may choose is authz's CanActOnUsers, and only a
-// superuser its own (C-L7, FU5). admin and masked both hold segment:manage;
-// the roles decide.
+// Whose user group a caller may choose is authz's CanActOnUsers: the users
+// it manages, itself only as the super admin (C-L7, FU6). admin and masked
+// both hold segment:manage; the roles decide.
 func TestMembershipActsOnOthers(t *testing.T) {
 	e := setup(t)
 	az := authz.New(authz.Deps{DB: e.db})
@@ -22,6 +22,9 @@ func TestMembershipActsOnOthers(t *testing.T) {
 		e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, user, role)
 	}
 	operator, vip := e.masked, e.segment("VIP", "1")
+	operator2, supplier := e.user("op2@x.com"), e.user("supplier@x.com")
+	e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, operator2, authz.RoleOperator)
+	e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = ANY($2)`, supplier, []string{authz.RoleUser, authz.RoleSupplier})
 	add := func(users ...int64) response {
 		return e.do(operator, "POST", path("/segments/%d/members", vip), map[string]any{"user_ids": users})
 	}
@@ -32,29 +35,30 @@ func TestMembershipActsOnOthers(t *testing.T) {
 		return e.do(operator, "DELETE", path("/users/%d/personal-segment", user), nil)
 	}
 
-	add(e.plain, operator).failed(409, "conflict")
+	add(e.plain, operator).failed(403, "permission_denied")
 	require.NotEqual(t, vip, e.segmentOf(e.plain), "nobody moves when the caller is among them")
+	add(e.plain, operator2).failed(403, "permission_denied")
 	add(e.plain, e.admin).failed(403, "permission_denied")
 	add(e.plain, super).failed(403, "permission_denied")
 	e.do(e.admin, "POST", path("/segments/%d/members", vip), map[string]any{"user_ids": []int64{super}}).failed(403, "permission_denied")
 	require.NotEqual(t, vip, e.segmentOf(e.plain), "nobody moves when one may not be moved")
-	require.Equal(t, float64(1), add(e.plain).ok(200).data()["moved"])
+	require.Equal(t, float64(2), add(e.plain, supplier).ok(200).data()["moved"])
 
-	personalize(operator).failed(409, "conflict")
+	personalize(operator).failed(403, "permission_denied")
 	personalize(e.admin).failed(403, "permission_denied")
 	personalize(super).failed(403, "permission_denied")
 	personalize(e.plain).ok(201)
 
 	e.personal(operator)
 	e.personal(e.admin)
-	depersonalize(operator).failed(409, "conflict")
+	depersonalize(operator).failed(403, "permission_denied")
 	depersonalize(e.admin).failed(403, "permission_denied")
 	depersonalize(e.plain).ok(204)
 	require.Equal(t, int64(2), e.id(`SELECT count(*) FROM segments WHERE kind = 'personal'`))
 }
 
-// A superuser chooses its own user group like anyone else's, and each time
-// leaves an audit row (FU5).
+// The super admin chooses its own user group like anyone else's, and each
+// time leaves an audit row (FU6).
 func TestSuperuserChoosesOwnSegment(t *testing.T) {
 	e := setup(t)
 	az := authz.New(authz.Deps{DB: e.db})
@@ -67,7 +71,7 @@ func TestSuperuserChoosesOwnSegment(t *testing.T) {
 	e.do(e.admin, "POST", path("/users/%d/personal-segment", e.admin), map[string]any{}).ok(201)
 	e.do(e.admin, "DELETE", path("/users/%d/personal-segment", e.admin), nil).ok(204)
 	require.Equal(t, int64(3), e.id(`SELECT count(*) FROM audit_logs WHERE action = 'user.act_on_self' AND user_id = $1
-		AND target_id = $1::text AND detail->>'reason' = 'self_by_superuser' AND detail->>'via' = 'session'`, e.admin))
+		AND target_id = $1::text AND detail->>'self' = 'true' AND detail->>'via' = 'session'`, e.admin))
 }
 
 // A service built without a user guard refuses every change of membership.

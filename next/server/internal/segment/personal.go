@@ -27,7 +27,7 @@ func (s *Service) makePersonal(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	if err := s.actOnOthers(ctx, uid); err != nil {
+	if err := s.actOnUsers(ctx, uid); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -118,7 +118,7 @@ func (s *Service) removePersonal(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := s.actOnOthers(ctx, uid); err != nil {
+	if err := s.actOnUsers(ctx, uid); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

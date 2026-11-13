@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -330,10 +331,10 @@ func TestGroupModelPricesPermissions(t *testing.T) {
 
 // Nobody but a superuser sets the model prices of a user group they are in,
 // a personal one included; the group's own prices and the default segment
-// are not anyone's own (FU2). allowAll leaves the decision to the user
-// guard, under which nobody is a superuser.
+// are not anyone's own (FU2). Nobody here manages itself (no superuser).
 func TestGroupModelPricesOfOwnSegment(t *testing.T) {
 	e := newPricingEnv(t, allowAll{})
+	e.svc.Users = managesOthers{}
 	put := func(caller, segment int64) (int, map[string]any) {
 		return e.call(caller, "PUT", "/groups/"+itoa(e.open)+"/model-prices",
 			map[string]any{"items": []any{patch(segment, "web-search", multiplier("0.9"))}})
@@ -355,6 +356,17 @@ func TestGroupModelPricesOfOwnSegment(t *testing.T) {
 	}
 	require.Zero(t, e.one(`SELECT count(*) FROM price_rules WHERE segment_id = $1 OR (segment_id = $2 AND updated_by = $3)`, e.vip, e.personal, e.solo),
 		"refused saves wrote nothing")
+}
+
+// managesOthers is a user guard under which every caller manages everyone
+// but itself.
+type managesOthers struct{}
+
+func (managesOthers) CanActOnUsers(_ context.Context, actorID int64, _ core.UserAction, targetIDs ...int64) error {
+	if slices.Contains(targetIDs, actorID) {
+		return core.ErrPermissionDenied
+	}
+	return nil
 }
 
 // A rule prices requests as soon as it is saved, and a price handed out is

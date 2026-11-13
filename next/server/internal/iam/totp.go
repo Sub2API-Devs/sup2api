@@ -384,7 +384,7 @@ func (s *Service) ResetSecurity(ctx context.Context, actorID, targetID int64, co
 	// leave that account one password away from takeover. One's own session
 	// passes. (No access key gets here over HTTP: the route's permission is
 	// session only.)
-	if err := s.authz.CanActOnUser(ctx, actorID, targetID); err != nil {
+	if err := s.authz.CanActOnUser(ctx, actorID, core.ActOnIdentity, targetID); err != nil {
 		return err
 	}
 	// SEC-H3: one's own factors go only with proof of them, as on

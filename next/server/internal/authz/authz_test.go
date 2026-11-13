@@ -623,12 +623,13 @@ func TestRoleGrantEscalation(t *testing.T) {
 		t.Fatalf("operator assigns installer: %v", err)
 	}
 	mustCan(t, s, alice, "plugin:install", false)
-	// Roles within its permissions are fine, for itself and for others.
+	// Roles within its permissions are fine for others; not for itself,
+	// which it does not manage (operator is not on its list, FU6).
 	if err := setRoles(s, operator, alice, RoleUser, "readers"); err != nil {
 		t.Fatalf("operator assigns readers: %v", err)
 	}
 	mustCan(t, s, alice, "account:read", true)
-	if err := setRoles(s, operator, operator, RoleOperator, "readers"); err != nil {
+	if err := setRoles(s, operator, operator, RoleOperator, "readers"); !isCode(err, "permission_denied") || detail(err, "role") != RoleOperator {
 		t.Fatalf("operator self-assigns readers: %v", err)
 	}
 	// Once the admin gives alice "installer", she holds more than the
@@ -755,7 +756,7 @@ func TestGrantViewCountsDisabledPermissions(t *testing.T) {
 		t.Fatalf("admin assigns guardian: %v", err)
 	}
 	// Alice now holds what the operator lacks, so it cannot act on her.
-	if err := s.CanActOnUser(ctx, operator, alice); !isCode(err, "permission_denied") {
+	if err := s.CanActOnUser(ctx, operator, core.ActOnIdentity, alice); !isCode(err, "permission_denied") {
 		t.Fatalf("operator acts on a holder of a disabled permission: %v", err)
 	}
 }

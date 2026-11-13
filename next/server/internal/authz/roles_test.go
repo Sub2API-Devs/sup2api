@@ -262,7 +262,7 @@ func TestOperatorWhitelist(t *testing.T) {
 		t.Fatalf("operator assigns supplier: %v", err)
 	}
 	// ...and still act on the supplier afterwards, to take the role back.
-	if err := s.CanActOnUser(ctx, operator, plain); err != nil {
+	if err := s.CanActOnUser(ctx, operator, core.ActOnIdentity, plain); err != nil {
 		t.Fatalf("operator acts on a supplier: %v", err)
 	}
 	if err := setRoles(s, operator, plain, RoleUser); err != nil {
@@ -305,7 +305,7 @@ func TestRoleWritesNeedActOnRole(t *testing.T) {
 	if got := rolePermissionKeys(t, s, bigID); !slices.Equal(got, []string{"settings:manage", "user:read"}) {
 		t.Fatalf("big changed: %v", got)
 	}
-	if err := s.CanActOnUser(ctx, helper, victim); !isCode(err, "permission_denied") {
+	if err := s.CanActOnUser(ctx, helper, core.ActOnIdentity, victim); !isCode(err, "permission_denied") {
 		t.Fatalf("helper acts on victim: %v", err)
 	}
 

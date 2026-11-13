@@ -226,6 +226,8 @@
 
 ## T33 M7、C-L7：调余额与用户组成员、个人专属接入 core.ActOnOthers（产品性收紧）
 
+> FU6 已改写本条：`core.ActOnOthers` 与“作用于自己 409”删除，目标统一按可管理目标判断（本人同样），见 FU6。
+
 - 改动：`billing.Service` 增加 `Users core.UserGuard`，`adjustBalance` 在 `Apply` 之前 `core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id)`；`segment.Deps` 增加 `Users`（`New` 里 `core.GuardOrDeny`），`addMembers`（整批 `user_ids`，事务之前，一条 SQL）、`makePersonal`、`removePersonal`（路径上的用户）经 `Service.actOnOthers` 做同一检查；`app/phases.go` 把 authz 注入两处。未注入时一律拒绝（500），不会 panic 或放行。CONTRACTS §5.2、§5.5、§97.6 同步（含 wontfix：`PATCH/DELETE /segments/:id`、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、分组专属价作用于用户组本身，不做目标用户检查，个人专属（只有一个成员）也按用户组处理；`POST /usage/:id/refund` 延后）。
 - 影响对象：
   - 持有 `balance:adjust` 的非超管给自己调余额：由 200 变为 409 `you cannot do this to yourself`。（原文“包括超管，决策 D6”已由 FU5 推翻：超管可以给自己调余额、选自己的用户组，见 FU5。）
@@ -392,6 +394,8 @@
 
 ## T56 决策 D17：同级保护，作用于用户时目标的非默认角色须在操作者的可分配清单内（产品性收紧）
 
+> FU6 在此基础上合并为“可管理目标”：本人也按同一规则判断，操作者一侧按其角色而不被访问密钥收窄（下文“访问密钥没有可分配角色”一条不再成立），见 FU6。
+
 - 改动：`authz.CanActOnUsers` 在“目标角色授予的权限在操作者之内”之后追加：操作者不是超管时，目标们持有的每个角色（默认角色 `user` 除外）都必须 `grantSet(actor).CanAssign(role)`，否则 403 `you cannot modify a user holding a role you cannot assign`，`details.role` 为第一个不可分配的角色（按 key 排序）。`usersRoles` 一条查询同时给出目标的角色 key 与授予集合（不增加查询）。分配角色（`SetUserRoles` 的 `checkAssignment`）对目标的判断改为调用同一个 `targetsWithin`（`canActOnUsers` 的判断部分，复用已读出的操作者授予集合；原先内联只比较权限），所以 PUT `/users/:id/roles` 同样生效。系统（actor 0）、作用于自己（登录会话）、超管不受影响。CONTRACTS §43.6 同步。无迁移。
 - 影响对象（所有作用于用户的入口：PATCH/DELETE `/users/:id`、DELETE `/users/:id/security`、PUT `/users/:id/roles`、余额调整、用户组成员变更）：
   - admin 不能再修改、禁用、删除其他 admin，不能重置其密码与两步验证，不能调整其余额、用户组、角色（默认清单里 admin 不可分配 admin），由成功变为 403；需要时由超管操作。admin 对 operator、supplier（T52 建出并加入 admin 的清单后）、自定义角色持有者、普通用户不变。
@@ -517,6 +521,8 @@
 
 ## FU5 超管自作用豁免（T33 收紧的放宽，单独提交）
 
+> 已由 FU6 取代：`ActOnSelf`、`ErrSelfTarget`、`core.ActOnOthers` 删除；超管作用于自己由可管理目标规则直接放行，审计改为 `detail.self = true`。
+
 - 改动：`core.UserGuard` 增加 `ActOnSelf(ctx, actorID) error`；`core.ActOnOthers` 在目标含调用者本人时把本人从目标中去掉，其余目标先照常 `CanActOnUsers`，通过后再问 `ActOnSelf`（所以豁免审计只写给通过了其余检查的请求；非超管本人与不能操作的用户同在时由 409 变为 403）。调余额把 `Idempotency-Key` 长度校验移到守卫之前，校验失败的请求不留豁免审计。`authz.Service.ActOnSelf` 用 `usersRoleSet`（用户角色的授予集，不经访问密钥收窄）判断是否超管：不是 → `core.ErrSelfTarget`（409）；是 → 写一条审计 `user.act_on_self`（`detail = {reason: "self_by_superuser", via: "session" | "access_key", access_key_id?, request_id}`）后放行。审计只在这一处写，billing、segment 不做特判；`core.GuardOrDeny` 的未注入守卫对 `ActOnSelf` 同样回 500。路由的权限检查不变：访问密钥按“用户权限 ∩ 密钥权限”，超管的密钥只有显式带 `balance:adjust` / `segment:manage` 才能走到 `ActOnOthers`。
 - 测试：`core` `TestActOnOthers`（超管自作用放行且只把其余目标交给守卫、不改调用方切片；守卫拒绝仍生效）；`billing` `TestAdjustBalanceActsOnOthers` 超管自调改为 200，新增 `TestAdjustBalanceSuperuserSelf`（超管会话 200、超管带 `balance:adjust` 的密钥 200、超管不带该权限的密钥 403、非超管会话与密钥 409，两条审计分别为 session 与 `access_key_id`）；`segment` 新增 `TestSuperuserChoosesOwnSegment`（超管把自己移入用户组、设/取消自己的个人专属均成功，各有审计）。CONTRACTS 调余额一行、§97.6“目标用户检查”同步。无迁移。
 - 影响对象：超管（会话，或带相应权限的访问密钥）给自己调余额、把自己移入用户组、给自己设/取消个人专属由 409 变为成功，每次多一条 `user.act_on_self` 审计。非超管不变（仍 409，会话与密钥一样）。超管的访问密钥此前作用于本人时还会被 `CanActOnUsers` 以 `you cannot modify a superuser` 拒绝（决策 1），现在带了该接口权限即可作用于本人；作用于其他超管的规则不变（全局只有一个超管）。
@@ -537,3 +543,25 @@
 - 测试：`TestRequestLogDetailProjectsEventsWithoutContent`（`account:read` 读不到 `principal_id`、错误原文、路径与查询、上传文件名、`url`、`User-Agent`、未知字段、非对象事件；保留的事件、`upstream_request`、头与期望逐项相等；`settings:manage` 原样、密钥头遮蔽）；`TestRequestLogDetailContentFollowsPermission` 改为：只读者的密钥头直接不出现，管理者仍为 `[REDACTED]`。web：`requestLogViewer.spec.ts` 增加 host 回退用例；`npm run typecheck`、ccgateway 视图测试、`npm run lint`（0 error）。
 - 影响对象：只有 `account:read` 或 `settings:read` 的请求日志查看者，详情“事件”里只剩事件名、时间与摘要字段（错误文本、路径、文件名、身份字段不再出现；资源身份事件的 detail 变为空对象）；“上游请求”的 URL 只显示 host，头只剩白名单头（`user-agent`、`x-app`、`x-stainless-*` 等不再显示）；请求、响应头同理。`settings:manage` 不受影响。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## FU6 可管理目标：作用于用户统一为“能不能做 + 能对谁做”（产品性收紧，改写 T33、FU5）
+
+- 合并：先合并 `worker/authz-p3a`（T50–T57，提交 `authz(FU6): merge worker/authz-p3a`），FU6 依赖其中的 T52（supplier）、T55（operator 白名单与清单）、T56（同级保护）。
+- 改动：
+  - `core.UserGuard` 只剩一个方法 `CanActOnUsers(ctx, actorID, action core.UserAction, targetIDs...)`；删除 `core.ActOnOthers`、`core.ErrSelfTarget` 与 FU5 的 `ActOnSelf`。`UserAction` 分 `ActOnData`（余额、用户组）与 `ActOnIdentity`（资料、邮箱、密码、两步验证与通行密钥、状态、删除、角色）。
+  - `authz.CanActOnUsers`（`canActOnUsers`，唯一一处）：去掉“作用于自己直接放行”，本人与其他目标同一规则——操作者的可分配清单即可管理的角色，目标的每个非默认角色都要在清单里（T56），目标角色授予的权限、可分配角色、超管标志都在操作者之内（SEC-H2），超管管理所有人。操作者一侧改为 `usersRoleSet`（操作者这个用户的角色），不再经访问密钥收窄：密钥只决定“能不能做”（路由权限，用户权限 ∩ 密钥权限）。保留决策 1：`ActOnIdentity` 且目标是超管时，访问密钥 403 `session_only`（期 3 过渡；期 4 计划改为“密钥勾了权限可操作但须当场二次验证”，`UserAction` 参数正为此保留，届时在同一处接入二次验证）。作用于自己且通过时，在这里记一条 `user.act_on_self`（`detail.self = true`、`via`、`access_key_id`、`request_id`）；在事务里调用时（分配角色）随事务写，其余经连接池。拒绝的 `details` 增加 `reason: "not_manageable"`（`session_only` 用于上面的保留）。
+  - 入口：iam 的 PATCH/DELETE `/users/:id`、启用/禁用、DELETE `/users/:id/security` 传 `ActOnIdentity`；`checkAssignment`（PUT `/users/:id/roles`、POST `/users` 带角色）改为调用同一个 `canActOnUsers(..., ActOnIdentity, userID)`（不再排除本人）；billing 调余额、segment 成员变更与个人专属传 `ActOnData`，直接调用 `UserGuard`。
+  - FU2（用户组定价）保持原样（默认组豁免、409），`GuardOwnSegments` 不再用 `ActOnOthers`：自己判断“调用者是否该组成员”，是成员时问 `UserGuard` 能否管理自己（按默认清单只有超管能，会话或带权限的密钥均可，审计在 `UserGuard` 一处），被拒时转成 409 `you cannot change the terms of a user group you are in`。
+  - 安全约束不并入、保持原样：不能禁用或删除自己（`errSelfDisable`，含超管），超管角色不能撤销只能移交。CONTRACTS §43.6 写明这两条是安全约束而不是权限规则。
+- 测试：
+  - billing `TestAdjustBalanceManagedUsers` 取代 T33/FU5 的两个用例：超管给自己与 admin、operator 调 200（会话与带 `balance:adjust` 的密钥），超管不带该权限的密钥 403 `details.permission`；admin 给 user、supplier、operator 调 200，给另一个 admin、超管、自己调 403 `not_manageable`（会话与密钥一样）；admin 不带权限的密钥 403；operator 默认没有 `balance:adjust` 403，加一个只含 `balance:adjust` 的自定义角色后只能给 supplier、user 调，给其他 operator、admin、自己 403；普通用户 403；两条 `user.act_on_self` 审计（会话、密钥 11）。
+  - authz `TestCanActOnUsers` 密钥用例按新口径改写（超管密钥对更宽的用户、owner 的数据放行；对 owner 与其他超管的身份类操作 `session_only`；收窄的密钥作用于主人放行），`TestRoleGrantEscalation` 的 operator 给自己分配 readers 改为 403（role=operator）。
+  - T56 的 `TestCanActOnUsersPeerProtection` 按主节点确认改写三处：签名加 `UserAction`；`itself`（admin 对自己）改为 403 role=admin，并补超管对自己与 admin 放行；admin 密钥对 viewer 持有者改为放行，补 admin 密钥对另一个 admin 403、超管密钥对自己数据类放行、对自己身份类 `session_only`、对 admin 身份类放行。其余断言不动；iam `TestPeersCannotActOnEachOther` 原样通过。
+  - iam 新增 `TestManagedUsersIncludeOneself`：admin、operator 经 `/users/:id` 改自己的名字和密码、重置自己的安全设置、给自己分配角色均 403；operator 可改 supplier；超管可改自己；超管也不能禁用、删除自己（`errSelfDisable`）。
+  - segment `TestMembershipActsOnOthers` 把自己移入用户组与设/取消自己的个人专属由 409 改为 403，补 operator 对其他 operator 403、对 supplier 放行；`TestSuperuserChoosesOwnSegment` 审计条件改为 `detail.self`。
+- 影响对象：
+  - admin、operator 等（按默认清单不在自己清单里的角色）经管理接口作用于自己：调余额、把自己移入用户组、设/取消自己的个人专属由 409 变为 403；经 PATCH `/users/:id` 改自己的资料、密码、邮箱，经 DELETE `/users/:id/security` 重置自己的两步验证，经 PUT `/users/:id/roles` 改自己的角色，由成功变为 403——改自己的资料、密码、两步验证请走 `/me/*`（期 1 SEC-H3 的 `PATCH /users/:id` 自改 + 二次验证路径对非超管不再可用，超管仍可用）。控制台用户列表里对本人的这些按钮仍显示，点击后得到 403 提示。
+  - 访问密钥：“能对谁做”不再被密钥收窄。admin 带 `user:update` / `balance:adjust` 的密钥现在能作用于 supplier、operator 与自定义角色的持有者（此前只能动只有 `user` 角色的人）；超管带 `balance:adjust` / `segment:manage` 的密钥能作用于任何人（含自己）的数据。超管账号本身的身份类修改仍只接受超管本人的会话。
+  - 审计：作用于自己的成功检查记 `user.act_on_self`（`detail.self = true`，取代 FU5 的 `reason: self_by_superuser`）。
+  - 已知：检查先于操作写审计，操作随后失败时审计行留下（同 FU5）。
+- 回滚：revert FU6 的提交（与 review fixes）即可，回到 FU5 的行为；无迁移、无数据变化。合并提交无需回滚。

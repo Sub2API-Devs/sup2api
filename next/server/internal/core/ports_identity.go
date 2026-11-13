@@ -188,38 +188,30 @@ type AuthzVersioner interface {
 	Version() int64
 }
 
-// UserGuard is SEC-H2 for actions on users (authz implements it).
+// UserAction is what an action on users changes (UserGuard).
+type UserAction int
+
+const (
+	// ActOnData changes what users have on the platform: balance, user
+	// group.
+	ActOnData UserAction = iota
+	// ActOnIdentity changes the account itself: profile, email, password,
+	// second factors and passkeys, status, deletion, roles. A superuser's
+	// account changes only through its own session, never an access key
+	// (decision 1, FU6).
+	ActOnIdentity
+)
+
+// UserGuard decides whom a caller may act on (authz implements it); what the
+// caller may do is the route's permission, checked before (FU6).
 type UserGuard interface {
-	// CanActOnUsers fails unless what the targets' roles grant is within
-	// what actorID may grant (a superuser target: only a superuser) and
-	// every role a target holds, the default user role aside, is one actorID
-	// may assign (peer protection). The actor itself among the targets (unless acting through its access
-	// key) and actor 0 (the system) pass.
-	CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error
-	// ActOnSelf fails with ErrSelfTarget unless actorID's roles make it a
-	// superuser, whatever its access key narrows; each exemption is
-	// audited (self_by_superuser).
-	ActOnSelf(ctx context.Context, actorID int64) error
-}
-
-// ErrSelfTarget refuses an action only a superuser may take on itself.
-var ErrSelfTarget = ErrConflict.WithMessage("you cannot do this to yourself")
-
-// ActOnOthers is UserGuard for actions nobody but a superuser takes on
-// themselves, such as moving money to oneself or choosing one's own user
-// group (M7, C-L7, FU5). The route has already checked the permission, so a
-// superuser's access key reaches here only when it holds it. The other
-// targets go first, so an exemption is audited only for a request that
-// passes.
-func ActOnOthers(ctx context.Context, g UserGuard, actorID int64, targetIDs ...int64) error {
-	if actorID == 0 || !slices.Contains(targetIDs, actorID) {
-		return g.CanActOnUsers(ctx, actorID, targetIDs...)
-	}
-	others := slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == actorID })
-	if err := g.CanActOnUsers(ctx, actorID, others...); err != nil {
-		return err
-	}
-	return g.ActOnSelf(ctx, actorID)
+	// CanActOnUsers fails unless actorID may manage every target, itself
+	// included: by the actor's roles, not narrowed by its access key, every
+	// role a target holds, the default user role aside, is one the actor may
+	// assign, and what the targets' roles grant is within the actor's (a
+	// superuser manages everyone). For ActOnIdentity a superuser target is
+	// refused to an access key. Actor 0 (the system) passes.
+	CanActOnUsers(ctx context.Context, actorID int64, action UserAction, targetIDs ...int64) error
 }
 
 // GuardOrDeny is g, or a guard refusing everything with ErrInternal when g
@@ -233,9 +225,9 @@ func GuardOrDeny(g UserGuard) UserGuard {
 
 type denyAllUsers struct{}
 
-func (denyAllUsers) CanActOnUsers(context.Context, int64, ...int64) error { return ErrInternal }
-
-func (denyAllUsers) ActOnSelf(context.Context, int64) error { return ErrInternal }
+func (denyAllUsers) CanActOnUsers(context.Context, int64, UserAction, ...int64) error {
+	return ErrInternal
+}
 
 // PermissionDef describes one permission in the catalog.
 type PermissionDef struct {

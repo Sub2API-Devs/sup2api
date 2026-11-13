@@ -166,17 +166,17 @@ SELECT r.id, a.id FROM roles r JOIN roles a ON (r.key, a.key) IN (('admin_maker'
 	adminMaker := addUser(t, s, "am@x.com", "admin_maker")
 	userMaker := addUser(t, s, "um@x.com", "user_maker")
 
-	err := s.CanActOnUsers(ctx, admin, adminMaker)
+	err := s.CanActOnUsers(ctx, admin, core.ActOnIdentity, adminMaker)
 	if !isCode(err, "permission_denied") {
 		t.Fatalf("admin on an admin assigner: %v", err)
 	}
 	if got := core.AsError(err).Details["missing_assignable"]; !slices.Equal(got.([]string), []string{RoleAdmin}) {
 		t.Fatalf("missing_assignable = %v", got)
 	}
-	if err := s.CanActOnUsers(ctx, admin, userMaker); err != nil {
+	if err := s.CanActOnUsers(ctx, admin, core.ActOnIdentity, userMaker); err != nil {
 		t.Fatalf("admin on a user assigner: %v", err)
 	}
-	if err := s.CanActOnUsers(ctx, root, adminMaker, userMaker); err != nil {
+	if err := s.CanActOnUsers(ctx, root, core.ActOnIdentity, adminMaker, userMaker); err != nil {
 		t.Fatalf("superuser: %v", err)
 	}
 }
@@ -219,12 +219,14 @@ func TestCanActOnUsersPeerProtection(t *testing.T) {
 		{"operator on users", operator, []int64{plain, roleless}, ""},
 		{"no assignable list: users only", support, []int64{plain, roleless}, ""},
 		{"no assignable list: not a holder of the same role", support, []int64{viewer}, "viewer"},
-		{"itself", admin, []int64{admin}, ""},
+		// FU6: oneself by the same rule; admin is not on admin's list.
+		{"itself", admin, []int64{admin}, RoleAdmin},
+		{"super admin itself", root, []int64{root, admin}, ""},
 		{"super admin", root, []int64{admin, admin2, operator, viewer}, ""},
 		{"system", 0, []int64{admin, operator}, ""},
 	}
 	for _, tt := range tests {
-		err := s.CanActOnUsers(ctx, tt.actor, tt.targets...)
+		err := s.CanActOnUsers(ctx, tt.actor, core.ActOnData, tt.targets...)
 		switch {
 		case tt.role == "" && err != nil:
 			t.Errorf("%s: %v", tt.name, err)
@@ -241,12 +243,28 @@ func TestCanActOnUsersPeerProtection(t *testing.T) {
 	if err := setRoles(s, admin, plain, RoleUser, RoleOperator); err != nil {
 		t.Fatalf("admin assigns operator to a user: %v", err)
 	}
-	// An access key assigns nothing, so it only reaches users.
+	// FU6: an access key narrows what its owner may do, not whom: the
+	// admin's key reaches whom the admin manages, and no other admin.
 	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: admin, Permissions: []string{"user:read", "user:update"}})
-	if err := s.CanActOnUsers(keyed, admin, viewer); !isCode(err, "permission_denied") || detail(err, "role") != "viewer" {
+	if err := s.CanActOnUsers(keyed, admin, core.ActOnIdentity, viewer); err != nil {
 		t.Fatalf("admin's access key on a custom role holder: %v", err)
 	}
-	if err := s.CanActOnUsers(keyed, admin, roleless); err != nil {
+	if err := s.CanActOnUsers(keyed, admin, core.ActOnData, admin2); !isCode(err, "permission_denied") || detail(err, "role") != RoleAdmin {
+		t.Fatalf("admin's access key on another admin: %v", err)
+	}
+	// The super admin's key: data of its owner yes, its account no
+	// (decision 1, until second factors on keys).
+	rootKey := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"user:read", "user:update", "balance:adjust"}})
+	if err := s.CanActOnUsers(rootKey, root, core.ActOnData, root, admin); err != nil {
+		t.Fatalf("super admin's key on its own data: %v", err)
+	}
+	if err := s.CanActOnUsers(rootKey, root, core.ActOnIdentity, root); !isCode(err, "permission_denied") || detail(err, "reason") != "session_only" {
+		t.Fatalf("super admin's key on its own account: %v", err)
+	}
+	if err := s.CanActOnUsers(rootKey, root, core.ActOnIdentity, admin); err != nil {
+		t.Fatalf("super admin's key on an admin's account: %v", err)
+	}
+	if err := s.CanActOnUsers(keyed, admin, core.ActOnIdentity, roleless); err != nil {
 		t.Fatalf("admin's access key on a user: %v", err)
 	}
 }

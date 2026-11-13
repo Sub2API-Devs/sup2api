@@ -351,7 +351,7 @@ func (s *Service) UpdateUser(ctx context.Context, actorID, id int64, in UpdateUs
 	}
 	// SEC-H1: the target's roles, a superuser's flag included, must be
 	// within the actor's.
-	if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
+	if err := s.authz.CanActOnUser(ctx, actorID, core.ActOnIdentity, id); err != nil {
 		return nil, err
 	}
 
@@ -429,7 +429,7 @@ func (s *Service) applyUpdateTx(ctx context.Context, tx pgx.Tx, actorID, id int6
 		// directions. Re-enabling a disabled account hands its holder every
 		// permission its roles grant, so it is as sensitive as disabling.
 		// Checked again after Bump, which holds role changes off until commit.
-		if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
+		if err := s.authz.CanActOnUser(ctx, actorID, core.ActOnIdentity, id); err != nil {
 			return 0, nil, err
 		}
 		if *in.Status == StatusDisabled {
@@ -494,7 +494,7 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	}
 
 	// SEC-H1: check authorization to delete target user
-	if err := s.authz.CanActOnUser(ctx, actorID, id); err != nil {
+	if err := s.authz.CanActOnUser(ctx, actorID, core.ActOnIdentity, id); err != nil {
 		return err
 	}
 

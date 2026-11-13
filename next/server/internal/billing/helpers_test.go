@@ -62,10 +62,11 @@ func (allowAll) Can(context.Context, int64, string) (bool, error) { return true,
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
-func (allowAll) CanGrant(context.Context, int64, []string) error      { return nil }
-func (allowAll) CanActOn(context.Context, int64, []string) error      { return nil }
-func (allowAll) CanActOnUsers(context.Context, int64, ...int64) error { return nil }
-func (allowAll) ActOnSelf(context.Context, int64) error               { return core.ErrSelfTarget }
+func (allowAll) CanGrant(context.Context, int64, []string) error { return nil }
+func (allowAll) CanActOn(context.Context, int64, []string) error { return nil }
+func (allowAll) CanActOnUsers(context.Context, int64, core.UserAction, ...int64) error {
+	return nil
+}
 
 type env struct {
 	t   *testing.T
