@@ -25,7 +25,8 @@ func transferTargetError(code, message string) *core.Error {
 }
 
 // TransferSuperAdmin hands the super admin role to targetID inside tx, the
-// only way it changes hands; every other holder becomes an admin. actorID
+// only way it changes hands; every other holder becomes an admin, except a
+// deleted one, which only loses the role (as 0098 does). actorID
 // must hold it; 0 is the server CLI, which also repairs a database with no or
 // several holders. It returns the bumped version (call Committed after
 // commit) and the demoted users. Only roles, user_roles and users are read
@@ -50,7 +51,8 @@ func (s *Service) TransferSuperAdmin(ctx context.Context, tx pgx.Tx, actorID, ta
 	if _, err := tx.Exec(ctx, `DELETE FROM user_roles ur USING roles r WHERE r.id = ur.role_id AND r.superuser AND ur.user_id = ANY($1)`, demoted); err != nil {
 		return 0, nil, err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO user_roles (user_id, role_id) SELECT u, r.id FROM unnest($1::bigint[]) u, roles r WHERE r.key = $2 ON CONFLICT DO NOTHING`, demoted, RoleAdmin); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO user_roles (user_id, role_id) SELECT u.id, r.id FROM users u, roles r
+		WHERE u.id = ANY($1) AND u.deleted_at IS NULL AND r.key = $2 ON CONFLICT DO NOTHING`, demoted, RoleAdmin); err != nil {
 		return 0, nil, err
 	}
 	if !slices.Contains(holders, targetID) {

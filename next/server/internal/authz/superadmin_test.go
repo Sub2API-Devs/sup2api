@@ -112,7 +112,9 @@ func TestTransferSuperAdmin(t *testing.T) {
 	}
 }
 
-// The CLI (actor 0) also repairs a database with several holders or none.
+// The CLI (actor 0) also repairs a database with several holders or none. A
+// deleted holder loses the role without becoming an admin, so restoring the
+// user later brings back no privileges.
 func TestTransferSuperAdminRepairs(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -121,11 +123,23 @@ func TestTransferSuperAdminRepairs(t *testing.T) {
 	a := addUser(t, s, "a@x.com", RoleSuperAdmin)
 	b := addUser(t, s, "b@x.com", RoleUser)
 	c := addUser(t, s, "c@x.com", RoleUser)
-	testutil.ExecWithoutTrigger(t, db, "user_roles", "user_roles_one_superuser",
-		`INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`, b, roleID(t, s, RoleSuperAdmin))
+	d := addUser(t, s, "d@x.com", RoleUser)
+	for _, uid := range []int64{b, d} {
+		testutil.ExecWithoutTrigger(t, db, "user_roles", "user_roles_one_superuser",
+			`INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`, uid, roleID(t, s, RoleSuperAdmin))
+	}
+	if _, err := db.Pool.Exec(ctx, `UPDATE users SET deleted_at = now() WHERE id = $1`, d); err != nil {
+		t.Fatal(err)
+	}
 	demoted, err := transfer(s, 0, b)
-	if err != nil || !slices.Equal(demoted, []int64{a}) || !slices.Equal(superAdminsNow(t, s), []int64{b}) {
+	if err != nil || !slices.Equal(demoted, []int64{a, d}) || !slices.Equal(superAdminsNow(t, s), []int64{b}) {
 		t.Fatalf("several holders: demoted %v, holders %v, %v", demoted, superAdminsNow(t, s), err)
+	}
+	if got := userRoleKeys(t, s, a); !slices.Equal(got, []string{RoleAdmin}) {
+		t.Fatalf("demoted holder roles: %v", got)
+	}
+	if got := userRoleKeys(t, s, d); !slices.Equal(got, []string{RoleUser}) {
+		t.Fatalf("deleted holder roles: %v", got)
 	}
 	if _, err := db.Pool.Exec(ctx, `DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2`, b, roleID(t, s, RoleSuperAdmin)); err != nil {
 		t.Fatal(err)

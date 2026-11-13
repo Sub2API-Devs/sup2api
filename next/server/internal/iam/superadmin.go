@@ -70,7 +70,8 @@ type RecoverOptions struct {
 
 // RecoverSuperAdmin is the server CLI's way back in: the undeleted user with
 // email, re-enabled when disabled, becomes the only super admin; every other
-// holder becomes an admin and every session of them all ends. It only
+// holder becomes an admin (a deleted one only loses the role) and every
+// session of them all ends. It only
 // composes the system (actor 0) paths and returns the new password when
 // ResetPassword is set. Without a bus the other nodes catch up through the
 // version poll and the status cache TTL. ctx should carry audit.WithSource.
