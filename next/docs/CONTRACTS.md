@@ -7437,7 +7437,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 校验（SDK `check`）：只有 `type: "native"` 的页面能声明；至少一组；组和项的 `key` 符合 `^[a-z][a-z0-9_-]{0,31}$`，组 key 不重复，项 key 在整个页面内不重复（`?tab=` 不带组名）；标签不能为空；`icon` 必须是控制台图标集里的名字；`permission` 必须是 `userPermissions` 里声明的插件权限；`corePermission` 是核心权限 key，SDK 不认识核心权限，只检查不能是空白。
 - 权限过滤由核心做：`GET /ui/plugins` 返回页面前去掉调用者看不到的项。一项同时声明 `permission` 和 `corePermission` 时，持有任意一个就显示；两个都没有的项对能看到这个页面的人都显示。去掉后空的组不返回，一项都不剩时整个 `nav` 不返回。共享的清单不被改动。
 - 混跑：UI 3.13 及更早的控制台忽略 `nav`，所以插件页面自己要保留页内的分区切换（标签页等）作为回退；声明 `nav` 不提高插件要求的核心版本，`hostCompat` 不必因此改到 0.1.284 以上。UI 3.14 从核心 0.1.284 开始（0.1.283 是最后一个带 UI 3.13 的核心），`hostUICompat` 写 `^3.14` 时 `hostCompat` 要排除 0.1.283 及更早的核心。
-- 实现位置：`sdk/manifest/manifest.go`（`PageNav`、`NavGroup`、`NavItem`）、`sdk/manifest/check/ui.go`（`pageNav`、`uiFloors`）、`server/internal/plugin/api/ui.go`（`visibleNav`）；控制台见 `web/src/layouts/sidebarViews.ts`。
+- 实现位置：`sdk/manifest/manifest.go`（`PageNav`、`NavGroup`、`NavItem`）、`sdk/manifest/check/ui.go`（`pageNav`、`uiFloors`）、`sdk/manifest/visible_ui.go`（`FilterUI` 的 `visibleNav`）；控制台见 `web/src/layouts/sidebarViews.ts`。
 
 ## 91. 插件经账号代理发请求、CLEAR 清冷却（2026-11-10，codex 官方重置次数需要；核心 0.1.269）
 

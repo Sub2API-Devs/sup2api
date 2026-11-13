@@ -965,8 +965,8 @@ func TestMenus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The sidebar shows exactly the plugin menus GET /ui/plugins returns:
-	// both go through manifest.FilterUI with the same permission check.
+	// The sidebar shows exactly the plugin menus manifest.FilterUI leaves,
+	// the rule GET /ui/plugins answers by, with the same permission check.
 	sameAsUI := func(userID int64, menus []MenuSection) {
 		t.Helper()
 		set, err := s.PermissionSet(ctx, userID)
@@ -990,7 +990,7 @@ func TestMenus(t *testing.T) {
 		slices.Sort(want)
 		slices.Sort(got)
 		if !slices.Equal(got, want) {
-			t.Fatalf("user %d: sidebar plugin menus %v, /ui/plugins menus %v", userID, got, want)
+			t.Fatalf("user %d: sidebar plugin menus %v, FilterUI menus %v", userID, got, want)
 		}
 	}
 
