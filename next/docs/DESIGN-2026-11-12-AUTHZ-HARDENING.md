@@ -700,3 +700,9 @@
 - 测试：account `TestAccountPreparationLimit`（放弃各有审计与插件 cancel 回调）；install `TestConsentRoleGrantRights`（未知角色的字段名，含已有权限）；其余为现有测试。
 - 影响对象：仅错误信息、审计与插件回调；回滚：revert 这个提交。
 
+## 期 4 P4F5 T81 后端：GET /accounts/summary（供应商仪表盘账号状态卡片）
+
+- 改动：`account/summary.go` 新增 `account.Counts` 与 `CountAccounts(ctx, q, scope)`（范围条件复用 `scoped`，`scope` 由 `core.OwnerScope(ctx, "account:read")` 决定：全量权限为全部，own 级为自己创建的），`GET /accounts/summary` 以 `PermAny(account:read, account:own:read)` 注册，返回 `{total, available, auto_disabled, disabled}`。`usage` 概览的 `accounts` 改为调用同一个函数（scope=nil），JSON 形状不变。前端卡片由期 4 前端任务做（决策 D25：只做账号状态，不显示用量与成本）。
+- 测试：account `TestAccountSummaryFollowsOwnerScope`（own 范围只计自己的、全量范围计全部、已删除不计、无账号读权限 403）。
+- 影响对象：新增只读接口；回滚：revert 这个提交。
+

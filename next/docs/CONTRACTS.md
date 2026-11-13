@@ -160,6 +160,7 @@
 | GET `/account-types` | `account:read` | `[{plugin_key, plugin_name, plugin_version, asset_base, platform, type, label, description, form:{mode, page?, component?}, sensitive_fields, guarded_settings:[{field, allowed[]}], custom_upstream}]`（`guarded_settings` 来自 manifest `guardedSettings`，§21.3；未声明时为 `[]`；`custom_upstream` 见 §21.3） |
 | GET `/account-types/:platform/:type/form` | `account:read` | `{schema, ui_schema}` |
 | GET `/accounts`（`?plugin_key=&type=&group_id=&status=&q=&model=&created_by=&mine=&orphaned=`） | `account:read` | 列表含 `in_use`（实时并发）、`cooldown_until`、`orphaned`、`rate_usage`（§18）、`created_by`、`created_by_email`（§21）。**默认不列出孤立账号**（所属插件已禁用/卸载，数据仍在）；`orphaned=true` 只列孤立的，`orphaned=all` 都列；详情 `GET /accounts/:id` 不受影响 |
+| GET `/accounts/summary` | `account:read` 或 `account:own:read` | 调用者范围内（`core.OwnerScope`：有 `account:read` 为全部，否则只计自己创建的）未删除账号的状态计数 `{total, available, auto_disabled, disabled}`，口径同 `GET /usage/overview` 的 `accounts`（`available` = active 且可调度；`auto_disabled` 含旧 `error` 与 active 但不可调度；不区分孤立账号）；供应商仪表盘账号状态卡片（T81，2026-11-13 权限加固期 4 P4F5） |
 | POST `/accounts` | `account:create` | `{name, plugin_key, type, group_ids[], proxy_id \| proxy_url, priority, weight, max_concurrency, schedulable, auto_disable, models[], model_mapping{}, rpm_limit, tpm_limit, credentials:{...}}`（§18、§21.4、§42.3）；响应另带 `proxy_created` |
 | GET/PATCH `/accounts/:id` | `account:read` / `account:update` | 凭证中的敏感字段返回 `"******"`；PATCH 时敏感字段传 `"******"` 表示不修改 |
 | DELETE `/accounts/:id` | `account:delete` | |
