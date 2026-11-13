@@ -600,5 +600,366 @@
    "want": "account:update:own",
    "ok": false
   }
+ ],
+ "allows": [
+  {
+   "have": [
+    "account:read"
+   ],
+   "action": "account:read",
+   "me": 7,
+   "row": {
+    "id": 1,
+    "created_by": null,
+    "group_ids": []
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:own"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:own"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:update:account/125"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:account/126"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:update:group/12"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:group/14"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:update:group/*"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:group/13/account/125"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:group/14/account/125"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:update:group/*/account/125"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:group/12/account/126"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:update:group/*"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": null,
+    "group_ids": []
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:update:group/*/account/125"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": null,
+    "group_ids": []
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:update:account/125"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": null,
+    "group_ids": []
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:own"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": null,
+    "group_ids": []
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:own:update"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:update:group/14",
+    "account:update:account/125"
+   ],
+   "action": "account:update",
+   "me": 8,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "account:read"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": false
+  },
+  {
+   "have": [],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": [
+     12,
+     13
+    ]
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "proxy:manage:own"
+   ],
+   "action": "proxy:manage",
+   "me": 7,
+   "row": {
+    "id": 3,
+    "created_by": 7,
+    "group_ids": null
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "proxy:manage:proxy/3"
+   ],
+   "action": "proxy:manage",
+   "me": 7,
+   "row": {
+    "id": 3,
+    "created_by": 8,
+    "group_ids": null
+   },
+   "ok": true
+  },
+  {
+   "have": [
+    "proxy:own:manage"
+   ],
+   "action": "proxy:manage",
+   "me": 7,
+   "row": {
+    "id": 3,
+    "created_by": 8,
+    "group_ids": null
+   },
+   "ok": false
+  }
  ]
 }

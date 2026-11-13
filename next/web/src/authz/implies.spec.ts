@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 // The vectors the server's perm package runs too (CONTRACTS §21).
 import vectors from '../../../sdk/permvectors/vectors.json'
-import { canonicalPermission, implies, parsePermission, permissionIndex, reduceScopes, scopeAllowsRow, type Scope } from './implies'
+import { canonicalPermission, implies, parsePermission, permissionIndex, reduceScopes, scopeAllowsRow, type Scope, type ScopedRow } from './implies'
 
 interface CanonicalVector { in: string; out?: string; invalid?: boolean }
 interface ImpliesVector { have: string; want: string; ok: boolean }
+interface AllowsVector { have: string[]; action: string; me: number; row: ScopedRow; ok: boolean }
 
 describe('shared permission vectors', () => {
   it.each((vectors.canonical as CanonicalVector[]).map((v) => [v.in, v] as const))('canonical %s', (_, v) => {
@@ -16,6 +17,11 @@ describe('shared permission vectors', () => {
     const want = parsePermission(v.want)!
     expect(implies(have, want)).toBe(v.ok)
     expect(permissionIndex([v.have]).has(v.want)).toBe(v.ok)
+  })
+
+  // As useScope().can: any scope held for the action reaches the row.
+  it.each((vectors.allows as AllowsVector[]).map((v) => [`${v.have.join(',') || '-'} ${v.action} row ${JSON.stringify(v.row)} by ${v.me}`, v] as const))('allows %s', (_, v) => {
+    expect(permissionIndex(v.have).scopes(v.action).some((s) => scopeAllowsRow(s, v.row, v.me))).toBe(v.ok)
   })
 })
 

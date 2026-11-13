@@ -1200,7 +1200,7 @@
   - 新增示例角色 group_ops。
   - 新建账号校验 `not_in_scope`，修改账号校验 `would_leave_scope`（在关联代理之前）；新建代理要求 `proxy:manage:own`，按代理串关联已有代理只要求任意范围的 `proxy:manage`。
   - 角色写入接受任意写法，存成规范 key，未被蕴含的 key 返回 403 `missing`。
-- 已知限制：大于 2^53 的 id 在 TS 中会丢精度（Go 允许到 int64，实际 id 远小于此）。`scopeAllowsRow` 还没有 Go/TS 共享向量，目前只有 TS 用例。
+- 已知限制：大于 2^53 的 id 在 TS 中会丢精度（Go 允许到 int64，实际 id 远小于此）。`scopeAllowsRow` 与 Go `DataScope.AllowsRow` 的共享向量在期 4 整合审查补上（`sdk/permvectors/vectors.json` 的 `allows` 段）。
 - 测试：web vitest 全量（含共享向量 148 项、`scopeChoice`、`ScopePicker`、`PermissionTree` 范围、`useScope`、`mayOpen`、`AccessKeysCard` 范围、`lookup.gone`、`errors`）、vue-tsc、eslint；moderation UI vitest、vue-tsc。供应商相关 spec 的断言不变，只是 mock 增加了 `hasAction`/`scopes`。
 - 回滚：revert（纯前端）。旧控制台见 R0–R7 发布说明中的“前端（R8）上线前”。
 

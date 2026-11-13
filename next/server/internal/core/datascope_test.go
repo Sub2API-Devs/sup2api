@@ -1,9 +1,11 @@
 package core
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/permvectors"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
@@ -73,6 +75,35 @@ func TestAllowsRow(t *testing.T) {
 	for _, c := range cases {
 		if got := Compile(me, scopesOf(t, c.keys...)).AllowsRow(c.id, c.creator, c.groups); got != c.want {
 			t.Errorf("%v row %d by %v in %v: %v, want %v", c.keys, c.id, c.creator, c.groups, got, c.want)
+		}
+	}
+}
+
+// The shared vectors (sdk/permvectors "allows") pin the row check the
+// console's scopeAllowsRow repeats: the keys held, compiled for the action,
+// against one row.
+func TestAllowsRowVectors(t *testing.T) {
+	t.Parallel()
+	var v struct {
+		Allows []struct {
+			Have   []string
+			Action string
+			Me     int64
+			Row    struct {
+				ID        int64   `json:"id"`
+				CreatedBy *int64  `json:"created_by"`
+				GroupIDs  []int64 `json:"group_ids"`
+			}
+			OK bool
+		}
+	}
+	if err := json.Unmarshal(permvectors.JSON, &v); err != nil || len(v.Allows) == 0 {
+		t.Fatalf("vectors: %v", err)
+	}
+	for _, c := range v.Allows {
+		s := PermissionSetOf(c.Have...).DataScope(c.Me, perm.Key(c.Action))
+		if got := s.AllowsRow(c.Row.ID, c.Row.CreatedBy, c.Row.GroupIDs); got != c.OK {
+			t.Errorf("%v %s by %d on %+v: %v, want %v", c.Have, c.Action, c.Me, c.Row, got, c.OK)
 		}
 	}
 }
