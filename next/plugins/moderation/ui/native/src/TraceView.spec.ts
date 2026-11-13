@@ -48,7 +48,7 @@ describe('the reasons of a trace', () => {
   }
 
   it('list the error text of a failed call, also in its verdict tooltip', () => {
-    const detail = 'network: Post "https://up.example/v1/chat/completions": socks connect tcp 1.2.3.4:1080: EOF'
+    const detail = 'Post "https://up.example/v1/chat/completions": socks connect tcp 1.2.3.4:1080: EOF'
     const failed = { ...trace, stages: [{ stage: 1, result: 'failed', outcomes: [outcome({ err: 'network', err_detail: detail })] }] } as unknown as Trace
     const w = mountPinned(TraceView, { props: { trace: failed } }, { compact: false })
     const items = w.findAll('.mod-trace-reason')

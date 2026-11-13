@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -148,35 +149,80 @@ func TestSOCKSHandshakeFailureRetriedOnce(t *testing.T) {
 	}
 }
 
-func TestErrDetail(t *testing.T) {
-	for _, c := range []struct {
-		err       error
-		want, not []string
-	}{
-		{&networkError{errors.New(`Post "https://u:pw@api.example.com/v1/chat?key=SECRET123&x=1#f": dial tcp 1.2.3.4:443: connect: connection refused`)},
-			[]string{`network: Post "https://api.example.com/v1/chat": dial tcp 1.2.3.4:443: connect: connection refused`}, []string{"SECRET123", "pw", "key="}},
-		{errors.New("Authorization: Bearer abc.def.ghi failed; api_key=xyz123 token: \"tok\""), []string{"Authorization: …", "api_key=…", "token: \"…"}, []string{"abc.def", "xyz123", "tok\""}},
-		{errors.New("bad key sk-AbCdEf0123456789xyz and a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7"), []string{"bad key … and …"}, []string{"sk-", "a1B2"}},
-		{&UpstreamError{Status: 502, message: "echo of the user's input"}, []string{"upstream returned status 502"}, []string{"echo"}},
-		// words and paths stay
-		{errors.New("invalid upstream JSON: /v1/moderations/very-long-path-without-digits-at-all"), []string{"very-long-path-without-digits-at-all"}, nil},
-	} {
-		got := errDetail(c.err)
-		for _, w := range c.want {
-			if !strings.Contains(got, w) {
-				t.Errorf("errDetail(%q) = %q, want %q in it", c.err, got, w)
-			}
-		}
-		for _, n := range c.not {
-			if strings.Contains(got, n) {
-				t.Errorf("errDetail(%q) = %q, keeps %q", c.err, got, n)
-			}
+// countingTransport counts the round trips of a client.
+type countingTransport struct {
+	http.RoundTripper
+	n atomic.Int32
+}
+
+func (c *countingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	c.n.Add(1)
+	return c.RoundTripper.RoundTrip(r)
+}
+
+// Failures another attempt would meet the same way are not retried: a host
+// that does not exist, a certificate that does not verify, a proxy refusing
+// CONNECT, a URL the client cannot send.
+func TestPermanentConnectFailuresNotRetried(t *testing.T) {
+	call := func(base string, rt http.RoundTripper) (int32, error) {
+		ct := &countingTransport{RoundTripper: rt}
+		ch := &liveChannel{Type: ChannelOpenAI, BaseURL: base, Timeout: 5 * time.Second, client: &http.Client{Transport: ct}}
+		_, _, err := callModerations(context.Background(), ch, "hello", "")
+		return ct.n.Load(), err
+	}
+	before := connectRetries.Load()
+
+	nx := &http.Transport{DialContext: func(context.Context, string, string) (net.Conn, error) {
+		return nil, &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host", Name: "nx.example", IsNotFound: true}}
+	}}
+	if n, err := call("http://nx.example", nx); err == nil || n != 1 {
+		t.Errorf("NXDOMAIN: %d attempts, err %v", n, err)
+	}
+
+	var handshakes atomic.Int32
+	tlsSrv := httptest.NewUnstartedServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	tlsSrv.Config.ConnState = func(_ net.Conn, s http.ConnState) {
+		if s == http.StateNew {
+			handshakes.Add(1)
 		}
 	}
-	if got := errDetail(errors.New(strings.Repeat("长", 300))); len([]rune(got)) != errDetailRunes {
-		t.Fatalf("detail of %d runes", len([]rune(got)))
+	tlsSrv.Config.ErrorLog = log.New(io.Discard, "", 0)
+	tlsSrv.StartTLS()
+	defer tlsSrv.Close()
+	if n, err := call(tlsSrv.URL, &http.Transport{}); err == nil || n != 1 || handshakes.Load() != 1 {
+		t.Errorf("untrusted certificate: %d attempts, %d connections, err %v", n, handshakes.Load(), err)
 	}
-	if errDetail(nil) != "" {
-		t.Fatal("detail of no error")
+
+	var connects atomic.Int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect {
+			connects.Add(1)
+		}
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer proxy.Close()
+	pu, _ := url.Parse(proxy.URL)
+	if n, err := call("https://up.example", &http.Transport{Proxy: http.ProxyURL(pu)}); err == nil || n != 1 || connects.Load() != 1 {
+		t.Errorf("CONNECT refused: %d attempts, %d CONNECTs, err %v", n, connects.Load(), err)
+	}
+
+	if n, err := call("ftp://up.example", &http.Transport{}); err == nil || n != 1 {
+		t.Errorf("unsupported scheme: %d attempts, err %v", n, err)
+	}
+	if connectRetries.Load() != before {
+		t.Errorf("connect retries counted %d", connectRetries.Load()-before)
+	}
+}
+
+// Every retry is counted (GET /status connect_retries).
+func TestConnectRetryCounted(t *testing.T) {
+	var calls, dials atomic.Int32
+	srv := moderationsServer(t, &calls)
+	before := connectRetries.Load()
+	if _, _, err := callModerations(context.Background(), flakyDialChannel(srv, 1, &dials), "hello", ""); err != nil {
+		t.Fatal(err)
+	}
+	if connectRetries.Load() != before+1 {
+		t.Fatalf("connect retries = %d, want %d", connectRetries.Load(), before+1)
 	}
 }

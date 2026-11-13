@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { auditorConfig, auditorFormOf, fillDefaults, isLLMAuditor, llmTextOnly, questionDiff, restoreDefaults, tryImages, tryTextOnly, usesDefault, type AuditorForm } from './auditorForm'
+import { auditorConfig, auditorFormOf, fillDefaults, isLLMAuditor, llmTextOnly, matchesDefault, restoreDefaults, tryImages, tryTextOnly, usesDefault, type AuditorForm } from './auditorForm'
+import { questionDiff } from './questions'
 import { AUDITOR_TYPES } from './flowOps'
 import messages from './messages'
 import type { Auditor, AuditorConfig, AuditorType, Defaults } from './types'
@@ -208,5 +209,28 @@ describe('the defaults in the form', () => {
     expect(d.extra).toBe(1)
     edited.items[0].question = 'changed?'
     expect(questionDiff(edited, DEFAULTS.default).rows[0].state).toBe('changed')
+  })
+
+  it('tells when the edited table orders the default questions otherwise', () => {
+    expect(questionDiff(DEFAULTS.default, DEFAULTS.default).orderSame).toBe(true)
+    const swapped = { ...DEFAULTS.default, items: [...DEFAULTS.default.items].reverse() }
+    expect(questionDiff(swapped, DEFAULTS.default).orderSame).toBe(false)
+    expect(questionDiff(swapped, DEFAULTS.default).rows.map((r) => r.state)).toEqual(['same', 'same'])
+  })
+
+  it('compares the table of an llm_questions auditor without thresholds (it saves them as 1)', () => {
+    const own = { preamble: DEFAULTS.default.preamble, items: DEFAULTS.default.items.map((q) => ({ ...q, threshold: 1 })) }
+    expect(questionDiff(own, DEFAULTS.default, true).rows.map((r) => r.state)).toEqual(['same', 'same'])
+    expect(questionDiff(own, DEFAULTS.default).rows.map((r) => r.state)).toEqual(['changed', 'changed'])
+    expect(matchesDefault(auditorFormOf(stored('llm_questions', { questions: own }), DEFAULTS), DEFAULTS).questions).toBe(true)
+    expect(matchesDefault(auditorFormOf(stored('typesafe', { questions: own }), DEFAULTS), DEFAULTS).questions).toBe(false)
+    // a stored llm_questions table equal to the default but for thresholds stays its own
+    expect(usesDefault(auditorFormOf(stored('llm_questions', { questions: own }), DEFAULTS), DEFAULTS).questions).toBe(false)
+  })
+
+  it('takes a blank stored prompt for none', () => {
+    const f = auditorFormOf(stored('llm_verdict', { system_prompt: '  ' }), DEFAULTS)
+    expect(f.own.system_prompt).toBe(false)
+    expect(f.system_prompt).toBe(DEFAULTS.llm_system_prompt)
   })
 })

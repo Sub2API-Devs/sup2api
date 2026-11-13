@@ -3,10 +3,13 @@ package moderation
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptrace"
 	"strings"
@@ -232,17 +235,22 @@ func callJSON(ctx context.Context, ch *liveChannel, path string, header map[stri
 	return nil
 }
 
+// connectRetries counts the calls sent again after a connect failure
+// (liveChannel.do), on this node since it started.
+var connectRetries atomic.Int64
+
 // do sends req with the channel's client. A call that failed before it had
 // a connection (dial, proxy handshake, TLS: nothing of the request was sent)
-// is sent once more while its context lasts; a failure after that is not
-// retried, the upstream may have taken the request.
+// with a transient network error (retryableConnectErr) is sent once more
+// while its context lasts; a failure after that is not retried, the upstream
+// may have taken the request.
 func (ch *liveChannel) do(req *http.Request) (*http.Response, error) {
 	client := ch.client
 	if client == nil {
 		client = http.DefaultClient
 	}
 	resp, connected, err := doTraced(client, req)
-	if err == nil || connected || req.Context().Err() != nil || req.GetBody == nil {
+	if err == nil || connected || req.Context().Err() != nil || req.GetBody == nil || !retryableConnectErr(err) {
 		return resp, err
 	}
 	body, berr := req.GetBody()
@@ -251,8 +259,29 @@ func (ch *liveChannel) do(req *http.Request) (*http.Response, error) {
 	}
 	retry := req.Clone(req.Context())
 	retry.Body = body
+	connectRetries.Add(1)
 	resp, _, err = doTraced(client, retry)
 	return resp, err
+}
+
+// retryableConnectErr: a connect failure another attempt may not meet - a
+// network operation that failed (dial, proxy connect, SOCKS handshake, a
+// connection cut during the TLS handshake). Not: a host that does not exist,
+// a certificate that does not verify, a proxy that answered CONNECT with an
+// error status or a URL the client cannot send (none is a *net.OpError or
+// an EOF); the same again would fail the same way.
+func retryableConnectErr(err error) bool {
+	var dns *net.DNSError
+	var verify *tls.CertificateVerificationError
+	var unknownCA x509.UnknownAuthorityError
+	var host x509.HostnameError
+	var invalid x509.CertificateInvalidError
+	switch {
+	case errors.As(err, &dns) && dns.IsNotFound, errors.As(err, &verify), errors.As(err, &unknownCA), errors.As(err, &host), errors.As(err, &invalid):
+		return false
+	}
+	var op *net.OpError
+	return errors.As(err, &op) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 // doTraced sends req and reports whether it got a connection.

@@ -38,6 +38,8 @@ export interface Runtime {
   images_refused?: number
   /** image redraws that panicked in the decoder since the node started (the image is skipped, the text is still moderated) */
   redraw_panics?: number
+  /** auditor calls sent again after a connect failure since the node started (0.11.2) */
+  connect_retries?: number
   avg_latency_ms: number
   /** bumped by POST /verdict-cache/clear; absent before 0.8.0 */
   cache_epoch?: number

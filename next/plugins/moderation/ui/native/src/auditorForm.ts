@@ -1,6 +1,7 @@
 import { jevPayload } from './host'
 import { YES_NO_THRESHOLD, thresholdOverrides } from './thresholdPresets'
-import type { Auditor, AuditorConfig, AuditorTryTarget, AuditorType, Category, Defaults, JevQuestion, JevQuestions } from './types'
+import { copyQuestions, sameQuestions } from './questions'
+import type { Auditor, AuditorConfig, AuditorTryTarget, AuditorType, Category, Defaults, JevQuestions } from './types'
 
 // The auditor editor's form (AuditorEditModal.vue): what a stored auditor
 // shows, the config the form saves or tries, and whether an auditor's try
@@ -44,7 +45,7 @@ export interface AuditorForm {
 /** The form of a stored auditor, or of a new one (null); the parts it leaves empty show the defaults. */
 export function auditorFormOf(a: Auditor | null, d?: Defaults | null): AuditorForm {
   const c: AuditorConfig = a?.config || {}
-  const own: OwnParts = { questions: !!c.questions, system_prompt: !!c.system_prompt, categories: !!c.categories?.length }
+  const own: OwnParts = { questions: !!c.questions, system_prompt: !!c.system_prompt?.trim(), categories: !!c.categories?.length }
   return {
     name: a?.name || '',
     type: a?.type || 'openai_moderation',
@@ -63,9 +64,6 @@ export function auditorFormOf(a: Auditor | null, d?: Defaults | null): AuditorFo
   }
 }
 
-/** A deep copy of a question table (an empty one for none). */
-export const copyQuestions = (q: JevQuestions | null | undefined): JevQuestions => ({ preamble: q?.preamble || '', items: (q?.items || []).map((x) => ({ ...x })) })
-
 /** Categories as the form edits them: one "id: description" per line. */
 export const categoryText = (cats: Category[] | null | undefined) => (cats || []).map((x) => `${x.id}: ${x.description}`).join('\n')
 
@@ -81,19 +79,24 @@ export function parseCategories(text: string): Category[] {
     })
 }
 
-const rowKey = (q: JevQuestion) => JSON.stringify([q.category, q.label || '', q.question, q.answer_yes || '', q.answer_no || '', Number(q.threshold)])
-const sameRows = (a: JevQuestion[], b: JevQuestion[]) => a.length === b.length && a.every((q, i) => rowKey(q) === rowKey(b[i]))
-/** Whether two question tables say the same (a cleared label or answer equals an absent one). */
-export const sameQuestions = (a: JevQuestions, b: JevQuestions | null | undefined) => (a.preamble || '') === (b?.preamble || '') && sameRows(a.items, b?.items || [])
 const sameCategories = (a: Category[], b: Category[]) => JSON.stringify(a) === JSON.stringify(b.map((c) => ({ id: c.id, description: c.description })))
+
+/** The question-table LLM keeps no thresholds: its tables compare without them. */
+export const ignoresThreshold = (type: AuditorType) => type === 'llm_questions'
+
+/** Which parts of the form say the same as the defaults, whoever owns them. */
+export function matchesDefault(form: AuditorForm, d: Defaults | null | undefined): OwnParts {
+  return {
+    questions: sameQuestions(form.questions, d?.default, ignoresThreshold(form.type)),
+    system_prompt: form.system_prompt.trim() === (d?.llm_system_prompt || '').trim(),
+    categories: sameCategories(parseCategories(form.categories), d?.llm_categories || [])
+  }
+}
 
 /** Which parts of the form run on the default: not the auditor's own and unchanged from the default. */
 export function usesDefault(form: AuditorForm, d: Defaults | null | undefined): OwnParts {
-  return {
-    questions: !form.own.questions && sameQuestions(form.questions, d?.default),
-    system_prompt: !form.own.system_prompt && form.system_prompt.trim() === (d?.llm_system_prompt || '').trim(),
-    categories: !form.own.categories && sameCategories(parseCategories(form.categories), d?.llm_categories || [])
-  }
+  const same = matchesDefault(form, d)
+  return { questions: !form.own.questions && same.questions, system_prompt: !form.own.system_prompt && same.system_prompt, categories: !form.own.categories && same.categories }
 }
 
 /** Shows the defaults in the parts that run on them and show nothing yet (the defaults arrived after the form was filled). */
@@ -114,17 +117,6 @@ export function restoreDefaults(form: AuditorForm, d: Defaults | null | undefine
   }
   form.own.questions = false
   form.questions = copyQuestions(d?.default)
-}
-
-/** How a question table differs from the default, per default row by category: the same, changed or missing; extra counts the rows the default does not have. */
-export function questionDiff(current: JevQuestions, def: JevQuestions) {
-  const mine = new Map(current.items.map((q) => [q.category, q]))
-  const rows = def.items.map((q) => {
-    const m = mine.get(q.category)
-    return { question: q, state: !m ? ('missing' as const) : rowKey(m) === rowKey(q) ? ('same' as const) : ('changed' as const) }
-  })
-  const known = new Set(def.items.map((q) => q.category))
-  return { preambleSame: (current.preamble || '') === (def.preamble || ''), rows, extra: current.items.filter((q) => !known.has(q.category)).length }
 }
 
 /**

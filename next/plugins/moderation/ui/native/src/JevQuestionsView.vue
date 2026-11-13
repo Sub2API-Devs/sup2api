@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SBadge, SHint } from '@sub2api/ui'
-import { questionDiff } from './auditorForm'
+import { questionDiff } from './questions'
 import { categoryLabel } from './format'
 import { useModHost } from './host'
 import type { JevQuestions } from './types'
@@ -9,13 +9,15 @@ import type { JevQuestions } from './types'
 // A question table, read only: the preamble and every row with its
 // category, threshold, question and answers. With `compare` (the table being
 // edited) each row says whether the edited table has it the same, changed or
-// not at all, and how many rows the edited table adds. Used for the default
+// not at all, how many rows the edited table adds and whether it orders
+// them otherwise; without thresholds shown (hideThreshold) they are not
+// compared either. Used for the default
 // set in the auditor editor (AuditorDefaultsDrawer) and the settings tab.
 const props = defineProps<{ questions: JevQuestions; compare?: JevQuestions; hideThreshold?: boolean }>()
 const t = useModHost().t
 
 const TONE = { same: 'gray', changed: 'warning', missing: 'danger' } as const
-const diff = computed(() => (props.compare ? questionDiff(props.compare, props.questions) : null))
+const diff = computed(() => (props.compare ? questionDiff(props.compare, props.questions, props.hideThreshold) : null))
 const rows = computed(() => diff.value?.rows ?? props.questions.items.map((question) => ({ question, state: null })))
 </script>
 
@@ -40,5 +42,6 @@ const rows = computed(() => diff.value?.rows ?? props.questions.items.map((quest
       <SHint v-if="r.question.answer_no" size="xs">{{ t('auditors.answerNo') }}：{{ r.question.answer_no }}</SHint>
     </div>
     <SHint v-if="diff?.extra" size="xs">{{ t('auditors.diff.extra', { n: diff.extra }) }}</SHint>
+    <SHint v-if="diff && !diff.orderSame" size="xs">{{ t('auditors.diff.order') }}</SHint>
   </div>
 </template>

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { SBadge, SButton, SDrawer, SHint } from '@sub2api/ui'
 import JevQuestionsView from './JevQuestionsView.vue'
-import { parseCategories, usesDefault, type AuditorForm } from './auditorForm'
+import { matchesDefault, parseCategories, type AuditorForm } from './auditorForm'
 import { useModHost } from './host'
 import type { Defaults } from './types'
 
@@ -19,7 +19,7 @@ const host = useModHost()
 const t = host.t
 
 const verdict = computed(() => props.form.type === 'llm_verdict')
-const same = computed(() => usesDefault({ ...props.form, own: { questions: false, system_prompt: false, categories: false } }, props.defaults))
+const same = computed(() => matchesDefault(props.form, props.defaults))
 const title = computed(() => t(verdict.value ? 'auditors.defaultsTitle.llm' : 'auditors.defaultsTitle.questions'))
 const formCategories = computed(() => new Set(parseCategories(props.form.categories).map((c) => `${c.id}\u0000${c.description}`)))
 </script>

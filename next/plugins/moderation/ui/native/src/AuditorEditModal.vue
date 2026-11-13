@@ -56,12 +56,19 @@ function fill(a: Auditor | null) {
   form.channel_id ||= firstChannel()
   restored.value = false
 }
-// The defaults may arrive after the form opened: show them where it has nothing.
+const snapshot = () => JSON.stringify(form)
+/** The form as filled from a stored auditor: unchanged since, the fresh copy may replace it. */
+let shown = ''
+// The defaults may arrive after the form opened: show them where it has
+// nothing; that is no edit (the fresh copy of the auditor may still replace the form).
 watch(
   () => props.defaults,
-  (d) => fillDefaults(form, d)
+  (d) => {
+    const clean = snapshot() === shown
+    fillDefaults(form, d)
+    if (clean) shown = snapshot()
+  }
 )
-const snapshot = () => JSON.stringify(form)
 
 watch(open, async (v) => {
   if (!v) return
@@ -69,7 +76,7 @@ watch(open, async (v) => {
   clearErrors(errs)
   fill(a)
   if (!a) return
-  const shown = snapshot()
+  shown = snapshot()
   const fresh = await fetchAuditor(a.id).catch(() => null)
   if (fresh && open.value && props.auditor?.id === a.id && snapshot() === shown) fill(fresh)
 })
@@ -83,6 +90,12 @@ const defaultState = computed(() => {
   return parts.some((k) => form.own[k]) ? 'own' : 'edited'
 })
 const defaultsKind = computed(() => (isVerdict.value ? 'llm' : 'questions'))
+/** Without the defaults (not loaded, or failed) the parts that follow them show nothing to edit from: they are locked. */
+const locked = computed(() => {
+  const off = !props.defaults
+  return { questions: off && !form.own.questions, system_prompt: off && !form.own.system_prompt, categories: off && !form.own.categories }
+})
+const defaultsMissing = computed(() => (isVerdict.value ? locked.value.system_prompt || locked.value.categories : hasQuestions.value && locked.value.questions))
 
 async function restore() {
   const v = props.defaults?.default_version || ''
@@ -145,17 +158,22 @@ async function save() {
           </SField>
         </div>
         <SAlert v-if="errs.config" tone="danger" dense>{{ errs.config }}</SAlert>
+      </fieldset>
 
-        <div v-if="form.type !== 'openai_moderation'" class="mod-default-bar">
-          <SBadge :tone="defaultState === 'default' ? 'info' : defaultState === 'own' ? 'purple' : 'warning'" size="sm">
-            {{ t(`auditors.defaultState.${defaultState === 'default' && isVerdict ? 'defaultLLM' : defaultState}`, { v: defaults?.default_version || '' }) }}
-          </SBadge>
-          <span class="mod-ml-auto mod-inline mod-gap">
-            <SButton size="sm" variant="ghost" icon="eye" :disabled="!defaults" @click="defaultsOpen = true">{{ t(`auditors.viewDefault.${defaultsKind}`) }}</SButton>
-            <SButton size="sm" variant="ghost" icon="refresh" :disabled="!defaults || defaultState === 'default'" @click="restore">{{ t('auditors.restoreDefault') }}</SButton>
-          </span>
-        </div>
-        <SAlert v-if="restored" tone="info" dense>{{ t('auditors.restored') }}</SAlert>
+      <!-- outside the read-only fieldset: a read user may view the defaults -->
+      <div v-if="form.type !== 'openai_moderation'" class="mod-default-bar">
+        <SBadge :tone="defaultState === 'default' ? 'info' : defaultState === 'own' ? 'purple' : 'warning'" size="sm">
+          {{ t(`auditors.defaultState.${defaultState === 'default' && isVerdict ? 'defaultLLM' : defaultState}`, { v: defaults?.default_version || '' }) }}
+        </SBadge>
+        <span class="mod-ml-auto mod-inline mod-gap">
+          <SButton size="sm" variant="ghost" icon="eye" :disabled="!defaults" @click="defaultsOpen = true">{{ t(`auditors.viewDefault.${defaultsKind}`) }}</SButton>
+          <SButton size="sm" variant="ghost" icon="refresh" :disabled="readonly || !defaults || defaultState === 'default'" @click="restore">{{ t('auditors.restoreDefault') }}</SButton>
+        </span>
+      </div>
+      <SAlert v-if="restored" tone="info" dense>{{ t('auditors.restored') }}</SAlert>
+      <SAlert v-if="defaultsMissing" tone="warning" dense>{{ t('auditors.defaultsUnavailable') }}</SAlert>
+
+      <fieldset class="mod-fieldset" :disabled="readonly">
 
         <template v-if="form.type === 'openai_moderation'">
           <div class="mod-inline mod-gap">
@@ -176,16 +194,18 @@ async function save() {
             <SSwitch v-model="form.review_images" />
           </SField>
           <SHint size="xs">{{ t('auditors.questionsHint') }}</SHint>
-          <JevQuestionsEditor v-model="form.questions" :hide-threshold="form.type === 'llm_questions'" />
+          <fieldset class="mod-fieldset" :disabled="locked.questions">
+            <JevQuestionsEditor v-model="form.questions" :hide-threshold="form.type === 'llm_questions'" />
+          </fieldset>
           <SHint v-if="auditor?.rules_version" size="xs">{{ t('auditors.rulesVersion', { v: auditor.rules_version }) }}</SHint>
         </template>
 
         <template v-else>
           <SField :label="t('auditors.systemPrompt')" :hint="t('auditors.systemPromptHint')">
-            <STextarea v-model="form.system_prompt" :rows="10" />
+            <STextarea v-model="form.system_prompt" :rows="10" :disabled="locked.system_prompt" />
           </SField>
           <SField :label="t('auditors.categories')" :hint="t('auditors.categoriesHint')">
-            <STextarea v-model="form.categories" :rows="8" />
+            <STextarea v-model="form.categories" :rows="8" :disabled="locked.categories" />
           </SField>
           <div class="mod-form-row">
             <SField :label="t('auditors.toolChoice')">

@@ -20,7 +20,7 @@ import {
 } from '@sub2api/ui'
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import JevQuestionsView from './JevQuestionsView.vue'
-import { copyQuestions } from './auditorForm'
+import { copyQuestions } from './questions'
 import VerdictCacheRow from './VerdictCacheRow.vue'
 import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { enumOptions, joinList } from './format'

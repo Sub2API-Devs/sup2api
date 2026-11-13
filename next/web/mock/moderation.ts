@@ -299,7 +299,7 @@ const events: any[] = Array.from({ length: 37 }, (_, i) => {
     llm_model: '',
     text_excerpt: texts[i % texts.length],
     text: i === 8 ? null : texts[i % texts.length] + '（完整文本）',
-    trace: result === 'error' ? { stages: [{ outcomes: [{ auditor_id: 1, calls: 1, hit: false, top_score: 0, latency_ms: 3002, err: 'timeout' }, { auditor_id: 2, channel_id: 2, calls: 1, hit: false, top_score: 0, latency_ms: 5011, err: 'network', err_detail: 'network: Post "https://api.typesafe.ai/v1/systemone": socks connect tcp proxy.example.com:1080->api.typesafe.ai:443: unexpected EOF' }], result: 'pass', errored: true }], final: 'pass', decider: -1, errored: true, latency_ms: 3002 } : trace(hitLike, result === 'overturned')
+    trace: result === 'error' ? { stages: [{ outcomes: [{ auditor_id: 1, calls: 1, hit: false, top_score: 0, latency_ms: 3002, err: 'timeout' }, { auditor_id: 2, channel_id: 2, calls: 1, hit: false, top_score: 0, latency_ms: 5011, err: 'network', err_detail: 'Post "https://api.typesafe.ai/v1/systemone": socks connect tcp proxy.example.com:1080->api.typesafe.ai:443: unexpected EOF' }], result: 'pass', errored: true }], final: 'pass', decider: -1, errored: true, latency_ms: 3002 } : trace(hitLike, result === 'overturned')
   }
 })
 
