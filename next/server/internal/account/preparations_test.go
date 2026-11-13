@@ -441,7 +441,7 @@ func TestAccountPatchSetsSchedulingAndLimits(t *testing.T) {
 	}
 }
 
-// W1-F13: an own-level user holds at most maxOpenDrafts open preparations;
+// W1-F13: an own-level user holds at most core.MaxOpenDrafts open preparations;
 // repeating an idempotency key is not a new one, cancelling makes room, and
 // the full account:create is not limited.
 func TestAccountPreparationLimit(t *testing.T) {
@@ -459,18 +459,18 @@ func TestAccountPreparationLimit(t *testing.T) {
 	// A preparation whose first prepare fails never returned its key: it
 	// must not hold a slot, however often the caller retries.
 	resource.prepareErr = core.ErrUnavailable
-	for i := range maxOpenDrafts + 1 {
+	for i := range core.MaxOpenDrafts + 1 {
 		if code, out := prepare(alice, fmt.Sprintf("failed-%d", i)); code != http.StatusServiceUnavailable {
 			t.Fatalf("failing preparation %d: %d %v", i+1, code, out)
 		}
 	}
-	if left := e.exec1(`SELECT count(*) FROM account_preparations`); left != 0 || resource.cancelled != maxOpenDrafts+1 {
+	if left := e.exec1(`SELECT count(*) FROM account_preparations`); left != 0 || resource.cancelled != core.MaxOpenDrafts+1 {
 		t.Fatalf("failed preparations left %d rows, %d cancelled", left, resource.cancelled)
 	}
 	resource.prepareErr = nil
 
 	var keys []string
-	for i := range maxOpenDrafts {
+	for i := range core.MaxOpenDrafts {
 		code, out := prepare(alice, fmt.Sprintf("attempt-%d", i))
 		if code != 201 {
 			t.Fatalf("preparation %d: %d %v", i+1, code, out)
@@ -494,7 +494,7 @@ func TestAccountPreparationLimit(t *testing.T) {
 	if code, out = prepare(alice, "one-more"); code != 201 {
 		t.Fatalf("preparation after a cancel: %d %v", code, out)
 	}
-	for i := range maxOpenDrafts + 2 {
+	for i := range core.MaxOpenDrafts + 2 {
 		if code, out = prepare(admin, fmt.Sprintf("admin-%d", i)); code != 201 {
 			t.Fatalf("administrator's preparation %d: %d %v", i+1, code, out)
 		}

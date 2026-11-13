@@ -560,12 +560,12 @@
 
 ## T64 W1-F13：草稿与预备容器的单用户数量上限
 
-- 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，不用 advisory 锁：该用户未完成的数量达到上限（两个包各一个常量 `maxOpenDrafts = 3`）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。首次准备就失败的预备容器（控制器未配置、代理被拒、插件不可用等）不占名额：它的 key 从未返回给调用方，没人能取消，所以核心随即撤销并删行（`abandonPreparation`；撤销失败时留在 `cancelling`，不计数，由清理任务重试）。控制台为 `too_many_drafts` 增加中英文提示，且不再为它探测运行环境配置。无迁移。CONTRACTS §3.1 错误码、§49.9 路由表同步。
+- 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，在事务里先取该用户的 advisory 事务锁（`core.LockOpenDrafts`，期 3 审查补）：该用户未完成的数量达到上限（`core.MaxOpenDrafts = 3`，两处共用）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。首次准备就失败的预备容器（控制器未配置、代理被拒、插件不可用等）不占名额：它的 key 从未返回给调用方，没人能取消，所以核心随即撤销并删行（`abandonPreparation`；撤销失败时留在 `cancelling`，不计数，由清理任务重试）。控制台为 `too_many_drafts` 增加中英文提示，且不再为它探测运行环境配置。无迁移。CONTRACTS §3.1 错误码、§49.9 路由表同步。
 - 影响对象：
   - 控制台新建 Claude Code 账号走的是预备容器接口，所以实际受限的是 own 级用户（`account:own:create`）：同时未完成的不能超过 3 个；全量 `account:create`（admin、operator）在这条路径上不受限。草稿接口（旧路径）上，没有 `settings:manage` 的人（含只有 `account:create` 的）同样限 3 个。
   - 两个上限各算各的，不合并：ccgateway 的预备容器在 `ccgateway_runtimes` 里也有一行（`lifecycle.go`），会占草稿名额；草稿不占预备容器名额。own 级用户先建 3 个草稿再建 3 个预备容器，最多可以占 6 个运行环境容器；此前不限。
   - 正常使用一次只有一个：关闭编辑器（组件卸载）时控制台会删除。刷新页面、直接关标签页、请求超时或多个标签页会留下没删的，闲置 15 分钟（或创建满 2 小时）后由清理任务回收；15 分钟内这样攒到 3 个后，第 4 次会看到上面的提示。控制器不可达时删不掉的草稿在清理成功之前一直占名额（此时任何草稿都用不了）。
-  - 并发请求下可能多出 1 个（已接受）。
+  - 并发：原实现不加锁，“可能多出 1 个”的估计不对。READ COMMITTED 下每条语句只看到已提交的行，k 个并发请求在计数为 2 时都会插入（期 3 审查实测 12 个并发得到 5 个），上限可被并行请求任意突破。期 3 审查改为在计数插入前取按用户的 advisory 事务锁（`core.LockOpenDrafts`，草稿与预备容器共用同一把锁，只在有上限时取），`TestDraftCreateLimitConcurrent` 覆盖。
 - 回滚：revert 这两个提交即可，无迁移、无数据变化。
 
 ## T65 W4-A3、W4-P5：插件 UI 可见性过滤收敛为 manifest.FilterUI，插件权限排序修正

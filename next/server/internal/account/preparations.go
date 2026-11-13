@@ -20,12 +20,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// maxOpenDrafts is how many open preparations one user may hold (W1-F13);
-// a caller with the full account:create is not limited. A preparation takes
-// its resource (a runtime container) until it is adopted, cancelled or
-// expires.
-const maxOpenDrafts = 3
-
 func (s *Service) registerPreparationRoutes(r *httpapi.Router) {
 	permissions := []string{"account:create", "account:own:create"}
 	r.PermAny("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, permissions...)
@@ -107,16 +101,22 @@ func (s *Service) createPreparation(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	limit := maxOpenDrafts
+	// A preparation takes its resource (a runtime container) until it is
+	// adopted, cancelled or expires; the full account:create is not limited.
+	limit := core.MaxOpenDrafts
 	if core.OwnerScope(ctx, "account:create") == nil {
 		limit = 0 // no limit
 	}
 	var fresh bool // this request inserted the row
 	err = s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var matches, active bool
-		// The count and the insert are one statement, without a lock: two
-		// concurrent requests may leave one preparation over the limit. A
-		// repeated idempotency key is not a new preparation and passes.
+		// The count and the insert run under the user's lock. A repeated
+		// idempotency key is not a new preparation and passes.
+		if limit > 0 {
+			if err := core.LockOpenDrafts(ctx, tx, uid); err != nil {
+				return err
+			}
+		}
 		err := tx.QueryRow(ctx, `INSERT INTO account_preparations(key,plugin_key,account_type,proxy_id,settings,created_by,idempotency_key)
 			SELECT $1,$2::text,$3::text,$4,$5::jsonb,$6::bigint,NULLIF($7::text,'')
 			WHERE $8::int = 0
@@ -167,7 +167,7 @@ func (s *Service) createPreparation(c *gin.Context) {
 
 // abandonPreparation gives back the slot of a preparation whose first
 // prepare failed (the caller holds its lock): the key was never returned, so
-// nobody could cancel it and it would count against maxOpenDrafts until the
+// nobody could cancel it and it would count against core.MaxOpenDrafts until the
 // sweep. The row goes once the resource dropped what it may have started;
 // otherwise it stays cancelling, which no longer counts, for the sweep.
 func (s *Service) abandonPreparation(ctx context.Context, resource core.AccountLifecycleResource, p core.AccountPreparation) {

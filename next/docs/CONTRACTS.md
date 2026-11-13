@@ -3336,7 +3336,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 | 方法 | 路径 | 请求 → 结果 |
 |---|---|---|
-| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick。每个用户最多 3 个未完成的草稿（`account_id`、`retired_at` 都为空），超出返回 429 `too_many_drafts`；持有 `settings:manage` 不受限。计数与插入是一条语句、不加锁，并发时可能多出 1 个（2026-11-12 权限加固 W1-F13）。预备容器 `POST /account-types/:plugin_key/:type/preparations` 同理：每个用户最多 3 个未完成的（未被账号采用、`state` 为 `pending`/`ready`、未过期），重复的 `idempotency_key` 不算新的，首次准备就失败的不占名额（核心随即撤销并删行），全量 `account:create` 不受限。两个上限各算各的：ccgateway 的预备容器在 `ccgateway_runtimes` 里也有一行，会占草稿名额，反过来草稿不占预备容器名额 |
+| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick。每个用户最多 3 个未完成的草稿（`account_id`、`retired_at` 都为空），超出返回 429 `too_many_drafts`；持有 `settings:manage` 不受限。计数与插入在同一事务里、先取按用户的 advisory 事务锁，并发请求也不会超出（2026-11-12 权限加固 W1-F13，2026-11-13 期 3 审查加锁）。预备容器 `POST /account-types/:plugin_key/:type/preparations` 同理：每个用户最多 3 个未完成的（未被账号采用、`state` 为 `pending`/`ready`、未过期），重复的 `idempotency_key` 不算新的，首次准备就失败的不占名额（核心随即撤销并删行），全量 `account:create` 不受限。两个上限各算各的：ccgateway 的预备容器在 `ccgateway_runtimes` 里也有一行，会占草稿名额，反过来草稿不占预备容器名额 |
 | PUT | `/system/ccgateway/drafts/:key` | `{proxy_id}` → `{key}`；重新 Kick |
 | DELETE | `/system/ccgateway/drafts/:key` | → 204；在控制器上删除运行环境并删行。控制器删不掉时行保留并标记为过期（`last_seen_at` 提前一天），返回 503 + reason，清理任务下一分钟重试 |
 | GET | `/system/ccgateway/drafts/:key/status` | `{key, status: creating\|ready\|blocked, reason?, container}` |

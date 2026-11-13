@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -373,7 +374,7 @@ func TestSweepStopsWhenTheDraftQueryFails(t *testing.T) {
 	}
 }
 
-// W1-F13: a user holds at most maxOpenDrafts open drafts; deleting one makes
+// W1-F13: a user holds at most core.MaxOpenDrafts open drafts; deleting one makes
 // room, and a settings administrator is not limited.
 func TestDraftCreateLimit(t *testing.T) {
 	ctl := newFakeController(t)
@@ -387,7 +388,7 @@ func TestDraftCreateLimit(t *testing.T) {
 		return f.request(uid, "POST", "/system/ccgateway/drafts", `{}`)
 	}
 	var keys []string
-	for i := range maxOpenDrafts {
+	for i := range core.MaxOpenDrafts {
 		code, out := create(owner)
 		if code != 201 {
 			t.Fatalf("draft %d: %d %v", i+1, code, out)
@@ -400,7 +401,7 @@ func TestDraftCreateLimit(t *testing.T) {
 	}
 	// The limit is per user, and account:create without settings:manage is
 	// limited like the own level.
-	for i := range maxOpenDrafts {
+	for i := range core.MaxOpenDrafts {
 		if code, out := create(other); code != 201 {
 			t.Fatalf("another user's draft %d: %d %v", i+1, code, out)
 		}
@@ -414,9 +415,44 @@ func TestDraftCreateLimit(t *testing.T) {
 	if code, out := create(owner); code != 201 {
 		t.Fatalf("draft after a delete: %d %v", code, out)
 	}
-	for i := range maxOpenDrafts + 2 {
+	for i := range core.MaxOpenDrafts + 2 {
 		if code, out := create(admin); code != 201 {
 			t.Fatalf("administrator's draft %d: %d %v", i+1, code, out)
 		}
+	}
+}
+
+// W1-F13: concurrent creates cannot pass the limit together; the count and
+// the insert run under the user's lock (core.LockOpenDrafts).
+func TestDraftCreateLimitConcurrent(t *testing.T) {
+	ctl := newFakeController(t)
+	f := newRuntimeFixture(t, ctl.ServeHTTP)
+	owner := f.user("owner@x")
+	f.auth.keys[owner] = []string{"account:own:create"}
+	const n = 12
+	codes := make(chan int, n)
+	var wg sync.WaitGroup
+	for range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			code, _ := f.request(owner, "POST", "/system/ccgateway/drafts", `{}`)
+			codes <- code
+		}()
+	}
+	wg.Wait()
+	close(codes)
+	created := 0
+	for code := range codes {
+		switch code {
+		case 201:
+			created++
+		case http.StatusTooManyRequests:
+		default:
+			t.Errorf("concurrent create: %d", code)
+		}
+	}
+	if created != core.MaxOpenDrafts {
+		t.Fatalf("%d concurrent creates made %d drafts, want %d", n, created, core.MaxOpenDrafts)
 	}
 }
