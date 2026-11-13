@@ -328,6 +328,35 @@ func TestGroupModelPricesPermissions(t *testing.T) {
 	require.Equal(t, 1, int(e.one(`SELECT count(*) FROM price_rules WHERE segment_id = $1 AND updated_by = $2`, e.personal, manager)))
 }
 
+// Nobody but a superuser sets the model prices of a user group they are in,
+// a personal one included; the group's own prices and the default segment
+// are not anyone's own (FU2). allowAll leaves the decision to the user
+// guard, under which nobody is a superuser.
+func TestGroupModelPricesOfOwnSegment(t *testing.T) {
+	e := newPricingEnv(t, allowAll{})
+	put := func(caller, segment int64) (int, map[string]any) {
+		return e.call(caller, "PUT", "/groups/"+itoa(e.open)+"/model-prices",
+			map[string]any{"items": []any{patch(segment, "web-search", multiplier("0.9"))}})
+	}
+	for _, tc := range []struct {
+		name            string
+		caller, segment int64
+		status          int
+	}{
+		{"own named segment", e.member, e.vip, 409},
+		{"own personal segment", e.solo, e.personal, 409},
+		{"another's segment", e.member, e.personal, 200},
+		{"the group's own price", e.member, 0, 200},
+		{"the default segment", e.admin, e.defaultSegment, 200},
+	} {
+		if status, resp := put(tc.caller, tc.segment); status != tc.status {
+			t.Fatalf("%s: %d %v", tc.name, status, resp)
+		}
+	}
+	require.Zero(t, e.one(`SELECT count(*) FROM price_rules WHERE segment_id = $1 OR (segment_id = $2 AND updated_by = $3)`, e.vip, e.personal, e.solo),
+		"refused saves wrote nothing")
+}
+
 // A rule prices requests as soon as it is saved, and a price handed out is
 // the caller's to change.
 func TestResolveFollowsRules(t *testing.T) {

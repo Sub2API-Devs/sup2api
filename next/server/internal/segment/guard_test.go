@@ -78,3 +78,54 @@ func TestMembershipWithoutGuardIsRefused(t *testing.T) {
 	e.do(e.admin, "POST", path("/users/%d/personal-segment", e.plain), map[string]any{}).failed(500, "internal")
 	e.do(e.admin, "DELETE", path("/users/%d/personal-segment", e.plain), nil).failed(500, "internal")
 }
+
+// segment:manage and group:manage change what a user group charges or
+// grants only when the caller is not in it, a personal segment included;
+// the default segment, which everyone is in, is exempt, and a superuser
+// changes its own (FU2).
+func TestSettingsOfOwnSegment(t *testing.T) {
+	e := setup(t)
+	az := authz.New(authz.Deps{DB: e.db})
+	require.NoError(t, az.SyncCore(context.Background()))
+	e.svc.users = az
+	e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, e.masked, authz.RoleOperator)
+	operator, own, other := e.masked, e.segment("Own", "1"), e.segment("Other", "1")
+	grp := e.group("g", "public", "1")
+	e.exec(`UPDATE users SET segment_id = $2 WHERE id = $1`, operator, own)
+	discount := func(segment int64) response {
+		return e.do(operator, "PATCH", path("/segments/%d", segment), map[string]any{"discount": "0.5"})
+	}
+	grant := func(segment int64) response {
+		return e.do(operator, "PUT", path("/segments/%d/groups", segment), map[string]any{"items": []map[string]any{{"group_id": grp, "granted": true}}})
+	}
+	grantInGroup := func(segment int64) response {
+		return e.do(operator, "PUT", path("/groups/%d/segments", grp), map[string]any{"items": []map[string]any{{"segment_id": segment, "granted": true}}})
+	}
+
+	discount(own).failed(409, "conflict")
+	grant(own).failed(409, "conflict")
+	grantInGroup(own).failed(409, "conflict")
+	e.do(operator, "DELETE", path("/segments/%d", own), nil).failed(409, "conflict")
+	require.Equal(t, int64(0), e.id(`SELECT count(*) FROM segment_groups WHERE segment_id = $1`, own), "a refused save writes nothing")
+	require.Equal(t, int64(1), e.id(`SELECT count(*) FROM segments WHERE id = $1 AND discount = 1`, own), "a refused patch keeps the discount")
+	// Renaming is no change of terms; reads are not either.
+	e.do(operator, "PATCH", path("/segments/%d", own), map[string]any{"name": "Mine"}).ok(200)
+	e.do(operator, "GET", path("/segments/%d/groups", own), nil).ok(200)
+
+	discount(other).ok(200)
+	grant(other).ok(200)
+	grantInGroup(other).ok(200)
+	discount(e.defaultSegment()).ok(200)
+	grantInGroup(e.defaultSegment()).ok(200)
+
+	personal := e.personal(operator)
+	discount(personal).failed(409, "conflict")
+	grant(personal).failed(409, "conflict")
+
+	// A superuser changes its own user group, audited.
+	e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, e.admin, authz.RoleSuperAdmin)
+	e.exec(`UPDATE users SET segment_id = $2 WHERE id = $1`, e.admin, other)
+	e.do(e.admin, "PATCH", path("/segments/%d", other), map[string]any{"discount": "0.7"}).ok(200)
+	e.do(e.admin, "PUT", path("/segments/%d/groups", other), map[string]any{"items": []map[string]any{{"group_id": grp, "granted": false}}}).ok(200)
+	require.Equal(t, int64(2), e.id(`SELECT count(*) FROM audit_logs WHERE action = 'user.act_on_self' AND user_id = $1`, e.admin))
+}

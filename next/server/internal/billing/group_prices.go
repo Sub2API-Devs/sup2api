@@ -374,6 +374,9 @@ func (s *Service) saveGroupPrices(c *gin.Context) {
 		if err != nil {
 			return err
 		}
+		if err := segment.GuardOwnSegments(ctx, tx, core.GuardOrDeny(s.Users), segmentsOf(changes)); err != nil {
+			return err
+		}
 		if err := applyChanges(ctx, tx, changes, uid); err != nil {
 			return err
 		}
@@ -389,6 +392,18 @@ func (s *Service) saveGroupPrices(c *gin.Context) {
 	}
 	s.changed(ctx, "price_rules")
 	httpapi.OK(c, out)
+}
+
+// segmentsOf is the segments the changes give their own prices (0, the
+// group's own price, is none).
+func segmentsOf(changes []ruleChange) []int64 {
+	ids := []int64{}
+	for _, c := range changes {
+		if c.on.SegmentID != 0 {
+			ids = append(ids, c.on.SegmentID)
+		}
+	}
+	return ids
 }
 
 // applyChanges writes the changes in one round trip. They go in the order of

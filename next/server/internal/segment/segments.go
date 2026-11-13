@@ -290,6 +290,9 @@ func (s *Service) update(c *gin.Context) {
 	if err == nil {
 		err = in.validate(ctx, kind, false)
 	}
+	if err == nil && in.Discount != nil {
+		err = GuardOwnSegments(ctx, s.db.Pool, s.users, []int64{id})
+	}
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -328,6 +331,10 @@ func (s *Service) delete(c *gin.Context) {
 			if err := requireOrphan(ctx, tx, id); err != nil {
 				return err
 			}
+		}
+		// Its members fall back to the default segment's terms.
+		if err := GuardOwnSegments(ctx, tx, s.users, []int64{id}); err != nil {
+			return err
 		}
 		// Deleted users leave too: users.segment_id references the row.
 		// Members are locked before they are moved, as moveUsers does.

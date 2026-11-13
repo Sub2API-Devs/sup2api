@@ -74,6 +74,29 @@ func (s *Service) actOnOthers(ctx context.Context, userIDs ...int64) error {
 	return core.ActOnOthers(ctx, s.users, actor, userIDs...)
 }
 
+// GuardOwnSegments fails unless the caller may change what the segments
+// charge or grant (discount, grants, rates, model prices): the caller is a
+// member of none of them, or core.ActOnOthers lets it act on itself (a
+// superuser, FU2). It is the one check of every such write. Other members
+// are not targets: these writes are on the segment. The default segment is
+// exempt: everyone is in it, so changing it is changing the platform's
+// prices, as price:manage and group:manage do, not one's own; dropping the
+// is_default condition tightens it. q is the writer's transaction or the
+// pool.
+func GuardOwnSegments(ctx context.Context, q store.Querier, users core.UserGuard, segmentIDs []int64) error {
+	actor, _ := core.UserID(ctx)
+	if actor == 0 || len(segmentIDs) == 0 {
+		return nil
+	}
+	var member bool
+	if err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users u JOIN segments s ON s.id = u.segment_id
+		WHERE u.id = $1 AND s.id = ANY($2) AND NOT s.is_default)`,
+		actor, segmentIDs).Scan(&member); err != nil || !member {
+		return err
+	}
+	return core.ActOnOthers(ctx, users, actor, actor)
+}
+
 // NotFound is the not_found of a user group that does not exist. It is the
 // one wording of it: iam and billing answer with it too. It is
 // core.ErrNotFound to errors.Is.
