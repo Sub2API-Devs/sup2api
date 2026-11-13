@@ -7035,6 +7035,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | `publisher.manage` | 发布者与公钥的写操作 | `publisher:manage` |
 | `system.update` | POST `/system/upgrades`、升级计划与节点的 recover 操作、`/system/releases/import` | `system:update:execute` / `recover` |
 | `system.update` | PUT `/system/update-source`（更新源决定下一次升级运行的代码；期 4 R0） | `settings:manage` |
+| `self.access_key.write` | POST `/me/access-keys`、PATCH `/me/access-keys/:id`（只允许登录会话；期 4 收尾 F3） | 无（登录会话） |
 | `host.install` | ccgateway：PUT `/system/ccgateway/remote-config`，POST `remote-fingerprint`、`remote-test`、`controller/install`、`runtime/install`、`runtime/uploads/:id/load`、`runtime/bundled`、`runtime/workers`、`runtimes/:key/worker`（会让核心拨号到某台主机或在其上装载、运行代码；remote-config 的其余字段随同一请求保存，也要；上传会话创建与分片、`cleanup`、`purge`、`cli`、读取不要；期 4 R0） | `settings:manage` |
 | `superadmin.identity` | 超管经访问密钥修改超管账号本身（§43.6，本请求已消耗过 proof 时不再要） | 路由本身的权限 |
 
@@ -7042,7 +7043,7 @@ PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先
 
 - **控制台**（期 4 S5）：`@sub2api/host` 的 HTTP 客户端遇到 403 `verification_required` 调 `HttpConfig.onVerificationRequired({scope, context, password_required})`，控制台弹出统一的 StepUpDialog（`components/stepUp/`），拿到 proof 后带 `X-Verify-Proof` 重放原请求一次；用户取消时请求以 `verification_cancelled` 失败（不提示）。重放同样经过 401 续期；请求的 `signal` 中止时验证作废，请求以 AbortError 失败；会话结束（登出、续期失败）时排队中的验证全部取消。页面不自己收密码或验证码，原生插件经宿主 `api` 的请求同样自动处理。权限树对 `step_up` 的权限显示“使用时需二次验证”。
 
-- **接口**（访问密钥管理，只能用登录会话调用）：`GET /me/access-keys`（含 `lost`）、`GET /me/access-keys/permissions`（可选的权限：`self` 模块，然后是自己持有的有效核心与插件权限，每项带 `step_up` 展示标记：使用时需二次验证）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
+- **接口**（访问密钥管理，只能用登录会话调用）：`GET /me/access-keys`（含 `lost`）、`GET /me/access-keys/permissions`（可选的权限：`self` 模块，然后是自己持有的有效核心与插件权限，每项带 `step_up` 展示标记：使用时需二次验证）、`POST /me/access-keys {name, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?}`、`DELETE /me/access-keys/:id`。新建与修改（含只改名）每次二次验证 `self.access_key.write`（`SessionOnly().StepUp`，请求体不再收 `password`）；删除只会收回权限，不要 proof（期 4 收尾 F3）。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。
 - 控制台入口在个人中心，权限选择复用角色页的权限树。
 

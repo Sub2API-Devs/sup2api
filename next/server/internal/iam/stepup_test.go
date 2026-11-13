@@ -280,11 +280,11 @@ func TestSuperAdminKeyOnItsOwnAccountNeedsAProof(t *testing.T) {
 	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
 	path := "/users/" + strconv.FormatInt(root, 10)
 	body := map[string]any{"display_name": "Root"}
-	narrow := k.createKey(t, root, adminPassword, "user:read")
+	narrow := k.createKey(t, root, "user:read")
 	if code, out := k.call(narrow.Key, "PATCH", path, body); code != 403 || errCode(out) != "permission_denied" {
 		t.Fatalf("key without user:update: %d %v", code, out)
 	}
-	key := k.createKey(t, root, adminPassword, "user:read", "user:update")
+	key := k.createKey(t, root, "user:read", "user:update")
 	code, out := k.call(key.Key, "PATCH", path, body)
 	if code != 403 || errCode(out) != "verification_required" || out["error"].(map[string]any)["details"].(map[string]any)["scope"] != core.StepUpSuperAdminIdentity {
 		t.Fatalf("key without a proof: %d %v", code, out)
@@ -313,8 +313,8 @@ func TestStepUpMatrix(t *testing.T) {
 	t.Parallel()
 	k := newKeyEnv(t)
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
-	withPerm := k.createKey(t, login.User.ID, adminPassword, "user:read", "user:delete").Key
-	without := k.createKey(t, login.User.ID, adminPassword, "user:read").Key
+	withPerm := k.createKey(t, login.User.ID, "user:read", "user:delete").Key
+	without := k.createKey(t, login.User.ID, "user:read").Key
 	n := 0
 	target := func() string {
 		n++
@@ -365,7 +365,7 @@ func TestSuperAdminKeyOnItsOwnRolesNeedsAProof(t *testing.T) {
 	path := "/users/" + strconv.FormatInt(root, 10) + "/roles"
 	// A key assigns no roles (it has no assignable list): the same roles.
 	body := map[string]any{"role_keys": []string{"super_admin"}}
-	key := k.createKey(t, root, adminPassword, "user:read", "role:assign")
+	key := k.createKey(t, root, "user:read", "role:assign")
 	code, out := k.call(key.Key, "PUT", path, body)
 	if code != 403 || errCode(out) != "verification_required" {
 		t.Fatalf("key without a proof: %d %v", code, out)

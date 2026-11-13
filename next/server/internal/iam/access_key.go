@@ -43,7 +43,6 @@ type AccessKey struct {
 // CreateAccessKeyInput is the body of POST /me/access-keys.
 type CreateAccessKeyInput struct {
 	Name        string     `json:"name"`
-	Password    string     `json:"password"`
 	Permissions []string   `json:"permissions"`
 	ExpiresAt   *time.Time `json:"expires_at"`
 }
@@ -51,7 +50,6 @@ type CreateAccessKeyInput struct {
 // UpdateAccessKeyInput is the body of PATCH /me/access-keys/:id.
 type UpdateAccessKeyInput struct {
 	Name        *string  `json:"name"`
-	Password    string   `json:"password"`
 	Permissions []string `json:"permissions"`
 }
 
@@ -154,18 +152,15 @@ func (s *Service) AccessKeys(ctx context.Context, userID int64) ([]*AccessKey, e
 	return out, s.lostPermissions(ctx, userID, out)
 }
 
-// CreateAccessKey checks the password and the permissions and creates a key.
-// The secret appears only in this result.
-func (s *Service) CreateAccessKey(ctx context.Context, userID int64, in CreateAccessKeyInput, ip string) (*AccessKey, error) {
+// CreateAccessKey checks the permissions and creates a key (the route takes
+// a self.access_key.write step-up). The secret appears only in this result.
+func (s *Service) CreateAccessKey(ctx context.Context, userID int64, in CreateAccessKeyInput) (*AccessKey, error) {
 	name, err := normalizeAccessKeyName(in.Name)
 	if err != nil {
 		return nil, err
 	}
 	if in.ExpiresAt != nil && in.ExpiresAt.Before(time.Now().Add(accessKeyMinLifetime)) {
 		return nil, core.InvalidFields(core.FieldError{Field: "expires_at", Code: "too_soon", Message: "at least one hour from now"})
-	}
-	if _, err := s.confirmPassword(ctx, userID, in.Password, ip); err != nil {
-		return nil, err
 	}
 	perms, err := s.grantablePermissions(ctx, userID, in.Permissions)
 	if err != nil {
@@ -204,9 +199,9 @@ func (s *Service) CreateAccessKey(ctx context.Context, userID int64, in CreateAc
 	return key, nil
 }
 
-// UpdateAccessKey renames a key or replaces its permissions. Replacing them
-// asks for the password, as creating a key does.
-func (s *Service) UpdateAccessKey(ctx context.Context, userID, id int64, in UpdateAccessKeyInput, ip string) (*AccessKey, error) {
+// UpdateAccessKey renames a key or replaces its permissions (the route
+// takes a self.access_key.write step-up, as creating a key does).
+func (s *Service) UpdateAccessKey(ctx context.Context, userID, id int64, in UpdateAccessKeyInput) (*AccessKey, error) {
 	var name *string
 	if in.Name != nil {
 		v, err := normalizeAccessKeyName(*in.Name)
@@ -217,9 +212,6 @@ func (s *Service) UpdateAccessKey(ctx context.Context, userID, id int64, in Upda
 	}
 	var perms []string
 	if in.Permissions != nil {
-		if _, err := s.confirmPassword(ctx, userID, in.Password, ip); err != nil {
-			return nil, err
-		}
 		var err error
 		if perms, err = s.grantablePermissions(ctx, userID, in.Permissions); err != nil {
 			return nil, err

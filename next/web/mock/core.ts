@@ -371,18 +371,17 @@ on('GET', '/me/access-keys/permissions', () => [
     ]
   }
 ])
-on('POST', '/me/access-keys', (req) => {
-  if (req.body?.password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
+on('POST', '/me/access-keys', stepUp('self.access_key.write', (req) => {
   const key = { id: accessKeys.length + 1, name: req.body.name, hint: 'mock', permissions: canonicalKeys(req.body.permissions), lost: [], expires_at: req.body.expires_at, last_used_at: null, last_used_ip: '', created_at: now() }
   accessKeys.unshift(key)
   return { ...key, key: 'sak_mockmockmockmockmockmockmockmockmockmockmock' }
-})
-on('PATCH', '/me/access-keys/:id', (req) => {
+}))
+on('PATCH', '/me/access-keys/:id', stepUp('self.access_key.write', (req) => {
   const key = accessKeys.find((k) => String(k.id) === req.params.id)
   if (!key) return fail(404, 'not_found', 'not found')
   Object.assign(key, { name: req.body?.name ?? key.name, permissions: req.body?.permissions ? canonicalKeys(req.body.permissions) : key.permissions, lost: [] })
   return key
-})
+}))
 on('DELETE', '/me/access-keys/:id', (req) => {
   const i = accessKeys.findIndex((k) => String(k.id) === req.params.id)
   if (i >= 0) accessKeys.splice(i, 1)

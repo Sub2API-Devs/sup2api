@@ -57,9 +57,9 @@ func TestResetSecurityNeedsPasswordReset(t *testing.T) {
 	enroll()
 	denied("user:update alone", editor, "user:password:reset")
 	// An access key needs the permission, then a step-up proof (期 4 S3).
-	narrow := k.createKey(t, resetterID, adminPassword, "user:read", "user:update")
+	narrow := k.createKey(t, resetterID, "user:read", "user:update")
 	denied("an access key without it", narrow.Key, "user:password:reset")
-	withPerm := k.createKey(t, resetterID, adminPassword, "user:read", "user:password:reset")
+	withPerm := k.createKey(t, resetterID, "user:read", "user:password:reset")
 	if code, out := k.call(withPerm.Key, "DELETE", target, nil); code != 403 || errCode(out) != "verification_required" || !enrolled() {
 		t.Fatalf("an access key with it, no proof: %d %v", code, out)
 	}

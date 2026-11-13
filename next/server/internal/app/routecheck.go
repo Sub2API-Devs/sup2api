@@ -39,7 +39,12 @@ var permissionlessRoutes = func() map[string]httpapi.Access {
 // stepUpExemptRoutes are the step-up routes none of whose permissions is
 // flagged stepUp (which tells an access key's owner the key will be asked
 // for a proof), each with the reason it need not be.
-var stepUpExemptRoutes = map[string]string{}
+var stepUpExemptRoutes = map[string]string{
+	// Access keys are written from a login session only (no permission, so
+	// none to flag): an access key never sees these routes.
+	"POST /me/access-keys":      "session only, no permission",
+	"PATCH /me/access-keys/:id": "session only, no permission",
+}
 
 // checkRoutes holds the registered console routes to the start-up rules
 // (httpapi.CheckRoutes) and binds the core menus to their pages' main

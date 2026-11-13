@@ -51,8 +51,8 @@ func TestSelfPermissions(t *testing.T) {
 	}
 
 	session := mustLogin(t, k.s, "key-user@example.com", adminPassword).AccessToken
-	profile := k.createKey(t, k.userID, adminPassword, "self:profile").Key
-	security := k.createKey(t, k.userID, adminPassword, "self:security").Key
+	profile := k.createKey(t, k.userID, "self:profile").Key
+	security := k.createKey(t, k.userID, "self:security").Key
 	for _, tc := range []struct {
 		name, token, method, path string
 		want                      int

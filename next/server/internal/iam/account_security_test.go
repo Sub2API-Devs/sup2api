@@ -907,9 +907,9 @@ func (k *keyEnv) proof(t *testing.T, token, scope, method, path string, how map[
 	return out["data"].(map[string]any)["proof"].(string)
 }
 
-func (k *keyEnv) createKey(t *testing.T, userID int64, password string, perms ...string) *AccessKey {
+func (k *keyEnv) createKey(t *testing.T, userID int64, perms ...string) *AccessKey {
 	t.Helper()
-	key, err := k.s.CreateAccessKey(context.Background(), userID, CreateAccessKeyInput{Name: "ci", Password: password, Permissions: perms}, testIP)
+	key, err := k.s.CreateAccessKey(context.Background(), userID, CreateAccessKeyInput{Name: "ci", Permissions: perms})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -953,19 +953,16 @@ func TestAccessKeyIsASubsetOfItsUser(t *testing.T) {
 
 	// Permissions the user does not hold cannot be chosen, nor unknown ones.
 	for _, perms := range [][]string{{"user:delete"}, {"user:read", "user:delete"}, {"nonsense:key"}} {
-		_, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: perms}, testIP)
+		_, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Permissions: perms})
 		if !isCode(err, "permission_denied") {
 			t.Fatalf("%v: %v", perms, err)
 		}
 	}
-	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword}, testIP); !isCode(err, "invalid_argument") {
+	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x"}); !isCode(err, "invalid_argument") {
 		t.Fatalf("no permissions: %v", err)
 	}
-	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: "wrong", Permissions: []string{"user:read"}}, testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("wrong password: %v", err)
-	}
 
-	key := k.createKey(t, k.userID, adminPassword, "user:read")
+	key := k.createKey(t, k.userID, "user:read")
 	if !strings.HasPrefix(key.Key, core.AccessKeyPrefix) {
 		t.Fatalf("key = %q", key.Key)
 	}
@@ -1007,7 +1004,7 @@ func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
 	ctx := context.Background()
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
 	root := login.User.ID
-	key := k.createKey(t, root, adminPassword, "user:read", "user:update")
+	key := k.createKey(t, root, "user:read", "user:update")
 	if code, _ := k.call(key.Key, "GET", "/users", nil); code != 200 {
 		t.Fatalf("granted: %d", code)
 	}
@@ -1058,7 +1055,7 @@ func TestSuperuserKeyCannotGrantSuperAdmin(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
-	key := k.createKey(t, login.User.ID, adminPassword, "user:create")
+	key := k.createKey(t, login.User.ID, "user:create")
 	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'role:assign') WHERE id = $1`, key.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -1098,7 +1095,7 @@ func TestAdminCannotModifySuperAdmin(t *testing.T) {
 		t.Fatalf("make admin: %d %v", code, out)
 	}
 	session := mustLogin(t, k.s, "key-user@example.com", adminPassword).AccessToken
-	key := k.createKey(t, k.userID, adminPassword, "user:update", "user:delete").Key
+	key := k.createKey(t, k.userID, "user:update", "user:delete").Key
 	target := "/users/" + strconv.FormatInt(root, 10)
 	for _, token := range []string{session, key} {
 		for _, r := range []struct {
@@ -1186,7 +1183,7 @@ func TestRoleRoutesSplitDefineAndAssign(t *testing.T) {
 func TestAccessKeyCannotManageSignIn(t *testing.T) {
 	k := newKeyEnv(t)
 	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
-	key := k.createKey(t, root, adminPassword, "user:read")
+	key := k.createKey(t, root, "user:read")
 	// Anything that only verifies JWTs refuses it (plugin routes refuse keys
 	// explicitly with 403).
 	if _, err := k.s.VerifyAccessToken(context.Background(), key.Key); err == nil {
@@ -1212,10 +1209,10 @@ func TestAccessKeyLifecycle(t *testing.T) {
 
 	// Expired, rejected, deleted, disabled: 401.
 	soon := time.Now().Add(30 * time.Minute)
-	if _, err := k.s.CreateAccessKey(ctx, root, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"user:read"}, ExpiresAt: &soon}, testIP); !isCode(err, "invalid_argument") {
+	if _, err := k.s.CreateAccessKey(ctx, root, CreateAccessKeyInput{Name: "x", Permissions: []string{"user:read"}, ExpiresAt: &soon}); !isCode(err, "invalid_argument") {
 		t.Fatalf("too soon: %v", err)
 	}
-	expiring := k.createKey(t, root, adminPassword, "user:read")
+	expiring := k.createKey(t, root, "user:read")
 	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET expires_at = now() - interval '1 second' WHERE id = $1`, expiring.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -1226,7 +1223,7 @@ func TestAccessKeyLifecycle(t *testing.T) {
 		t.Fatalf("unknown: %d", code)
 	}
 
-	key := k.createKey(t, root, adminPassword, "user:read")
+	key := k.createKey(t, root, "user:read")
 	if code, _ := k.call(key.Key, "GET", "/users", nil); code != 200 {
 		t.Fatalf("live: %d", code)
 	}
@@ -1236,13 +1233,10 @@ func TestAccessKeyLifecycle(t *testing.T) {
 	}
 
 	// Editing checks the same rule, and only the owner can.
-	if _, err := k.s.UpdateAccessKey(ctx, k.userID, key.ID, UpdateAccessKeyInput{Name: ptr("x")}, testIP); !isCode(err, "not_found") {
+	if _, err := k.s.UpdateAccessKey(ctx, k.userID, key.ID, UpdateAccessKeyInput{Name: ptr("x")}); !isCode(err, "not_found") {
 		t.Fatalf("another user's: %v", err)
 	}
-	if _, err := k.s.UpdateAccessKey(ctx, root, key.ID, UpdateAccessKeyInput{Permissions: []string{"role:read"}, Password: "wrong"}, testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("wrong password: %v", err)
-	}
-	updated, err := k.s.UpdateAccessKey(ctx, root, key.ID, UpdateAccessKeyInput{Name: ptr("renamed"), Permissions: []string{"role:read"}, Password: adminPassword}, testIP)
+	updated, err := k.s.UpdateAccessKey(ctx, root, key.ID, UpdateAccessKeyInput{Name: ptr("renamed"), Permissions: []string{"role:read"}})
 	if err != nil || updated.Name != "renamed" {
 		t.Fatalf("update: %+v, %v", updated, err)
 	}
@@ -1253,7 +1247,7 @@ func TestAccessKeyLifecycle(t *testing.T) {
 	if err := k.s.DeleteAccessKey(ctx, k.userID, key.ID); !isCode(err, "not_found") {
 		t.Fatalf("another user's: %v", err)
 	}
-	limited := k.createKey(t, k.userID, adminPassword, "apikey:self:manage")
+	limited := k.createKey(t, k.userID, "apikey:self:manage")
 	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE users SET status = 'disabled' WHERE id = $1`, k.userID); err != nil {
 		t.Fatal(err)
 	}
@@ -1303,7 +1297,7 @@ func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
 	if !slices.ContainsFunc(mods, func(m *authz.PermissionModule) bool { return m.Module == "plugin.demo" && m.Source == "plugin" }) {
 		t.Fatalf("the selector does not offer the held plugin permission: %+v", mods)
 	}
-	key, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"plugin.demo:read", "user:read"}}, testIP)
+	key, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Permissions: []string{"plugin.demo:read", "user:read"}})
 	if err != nil {
 		t.Fatalf("a plugin permission: %v", err)
 	}
@@ -1363,7 +1357,7 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 			t.Fatalf("%s is not offered to access keys", p)
 		}
 	}
-	key := k.createKey(t, root, adminPassword, append([]string{"settings:read"}, former...)...)
+	key := k.createKey(t, root, append([]string{"settings:read"}, former...)...)
 	if list, err := k.s.AccessKeys(ctx, root); err != nil || len(list[0].Lost) != 0 {
 		t.Fatalf("lost = %+v, %v", list, err)
 	}
@@ -1385,7 +1379,7 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 	if code, out := k.callProof(key.Key, proof, "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "verification_required" {
 		t.Fatalf("replayed proof: %d %v", code, out)
 	}
-	narrow := k.createKey(t, root, adminPassword, "settings:read")
+	narrow := k.createKey(t, root, "settings:read")
 	if code, out := k.callProof(narrow.Key, k.proof(t, narrow.Key, core.StepUpPluginInstall, "POST", "/plugins/upload", map[string]any{"method": "password", "password": adminPassword}), "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "permission_denied" {
 		t.Fatalf("key without plugin:install: %d %v", code, out)
 	}
@@ -1401,16 +1395,16 @@ func TestAccessKeyScopes(t *testing.T) {
 	ctx := context.Background()
 	k.grantRole(t, k.userID, "seller", "account:own:read", "account:own:update", "proxy:own:manage")
 	for _, wide := range []string{"account:read", "account:update:group/3", "proxy:manage:proxy/1"} {
-		_, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "w", Password: adminPassword, Permissions: []string{wide}}, testIP)
+		_, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "w", Permissions: []string{wide}})
 		var ce *core.Error
 		if !errors.As(err, &ce) || ce.Code != "permission_denied" || fmt.Sprint(ce.Details["missing"]) != "["+wide+"]" {
 			t.Fatalf("%s: %v", wide, err)
 		}
 	}
-	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "bad", Password: adminPassword, Permissions: []string{"user:read:own"}}, testIP); errCodeOf(err) != "invalid_argument" {
+	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "bad", Permissions: []string{"user:read:own"}}); errCodeOf(err) != "invalid_argument" {
 		t.Fatalf("invalid key: %v", err)
 	}
-	key := k.createKey(t, k.userID, adminPassword, "account:own:read", "proxy:manage:own")
+	key := k.createKey(t, k.userID, "account:own:read", "proxy:manage:own")
 	if fmt.Sprint(key.Permissions) != "[account:read:own proxy:manage:own]" {
 		t.Fatalf("listed = %v", key.Permissions)
 	}
@@ -1428,10 +1422,10 @@ func TestAccessKeyScopes(t *testing.T) {
 		t.Fatal(err)
 	}
 	k.bump(t)
-	if sub := k.createKey(t, k.userID, adminPassword, "account:test:group/12/account/5"); fmt.Sprint(sub.Permissions) != "[account:test:group/12/account/5]" {
+	if sub := k.createKey(t, k.userID, "account:test:group/12/account/5"); fmt.Sprint(sub.Permissions) != "[account:test:group/12/account/5]" {
 		t.Fatalf("subset key = %v", sub.Permissions)
 	}
-	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"account:test:account/5"}}, testIP); errCodeOf(err) != "permission_denied" {
+	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Permissions: []string{"account:test:account/5"}}); errCodeOf(err) != "permission_denied" {
 		t.Fatalf("id outside the group syntax: %v", err)
 	}
 	// A key from before: account:update and account:delete for every row.
@@ -1451,4 +1445,56 @@ func errCodeOf(err error) string {
 		return ce.Code
 	}
 	return ""
+}
+
+// Creating or changing an access key takes a self.access_key.write proof
+// each time (no password in the body); deleting one takes none. A key
+// cannot reach these routes even with a proof.
+func TestAccessKeyWriteNeedsAProof(t *testing.T) {
+	k := newKeyEnv(t)
+	login := mustLogin(t, k.s, adminEmail, adminPassword)
+	session := login.AccessToken
+	pass := map[string]any{"method": "password", "password": adminPassword}
+	body := map[string]any{"name": "ci", "permissions": []string{"user:read"}}
+
+	code, out := k.call(session, "POST", "/me/access-keys", body)
+	if errCode(out) != "verification_required" || code != 403 {
+		t.Fatalf("create without a proof: %d %v", code, out)
+	}
+	if d := out["error"].(map[string]any)["details"].(map[string]any); d["scope"] != core.StepUpAccessKeyWrite || d["password_required"] != false {
+		t.Fatalf("challenge %v", d)
+	}
+	proof := k.proof(t, session, core.StepUpAccessKeyWrite, "POST", "/me/access-keys", pass)
+	code, out = k.callProof(session, proof, "POST", "/me/access-keys", body)
+	if code != 201 {
+		t.Fatalf("create with a proof: %d %v", code, out)
+	}
+	key := out["data"].(map[string]any)
+	path := fmt.Sprintf("/me/access-keys/%v", key["id"])
+	// The proof was spent.
+	if code, _ := k.callProof(session, proof, "POST", "/me/access-keys", body); code != 403 {
+		t.Fatalf("create with a spent proof: %d", code)
+	}
+
+	// Renaming or changing the permissions alike.
+	for _, patch := range []map[string]any{{"name": "renamed"}, {"permissions": []string{"user:read"}}} {
+		if code, out := k.call(session, "PATCH", path, patch); code != 403 || errCode(out) != "verification_required" {
+			t.Fatalf("patch %v without a proof: %d %v", patch, code, out)
+		}
+		proof := k.proof(t, session, core.StepUpAccessKeyWrite, "PATCH", path, pass)
+		if code, out := k.callProof(session, proof, "PATCH", path, patch); code != 200 {
+			t.Fatalf("patch %v with a proof: %d %v", patch, code, out)
+		}
+	}
+
+	// A key is refused before any proof is looked at.
+	other := k.createKey(t, login.User.ID, "user:read").Key
+	keyProof := k.proof(t, other, core.StepUpAccessKeyWrite, "POST", "/me/access-keys", pass)
+	if code, out := k.callProof(other, keyProof, "POST", "/me/access-keys", body); code != 403 || errCode(out) == "verification_required" {
+		t.Fatalf("key creates a key: %d %v", code, out)
+	}
+
+	if code, out := k.call(session, "DELETE", path, nil); code != 204 {
+		t.Fatalf("delete without a proof: %d %v", code, out)
+	}
 }

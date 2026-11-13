@@ -27,7 +27,7 @@ describe('access keys card', () => {
     api.get.mockImplementation(async (path: string) => (path.endsWith('/permissions') ? modules : []))
   })
 
-  it('offers only the catalog of the user, needs a permission and the password, and shows the secret once', async () => {
+  it('offers only the catalog of the user, needs a permission, sends no password (the step-up dialog asks) and shows the secret once', async () => {
     api.post.mockResolvedValue({ ...existing, key: 'sak_secret' })
     const w = render()
     await flushPromises()
@@ -36,7 +36,6 @@ describe('access keys card', () => {
     const tree = w.get('[data-testid="access-key-permissions"]')
     expect(tree.text()).toContain('用量')
     await w.get('[data-testid="access-key-name"] input, input[data-testid="access-key-name"]').setValue('ci')
-    await w.get('[data-testid="access-key-password"] input, input[data-testid="access-key-password"]').setValue('pw')
     // No permission chosen yet: the form does not submit.
     expect((w.findAll('button').find((b) => b.text() === '保存')!.element as HTMLButtonElement).disabled).toBe(true)
     const boxes = tree.findAll('input[type="checkbox"]')
@@ -45,7 +44,9 @@ describe('access keys card', () => {
     await flushPromises()
     const body = api.post.mock.calls[0][1]
     expect(api.post.mock.calls[0][0]).toBe('/me/access-keys')
-    expect(body).toMatchObject({ name: 'ci', password: 'pw', permissions: ['usage:self:read'] })
+    expect(body).toMatchObject({ name: 'ci', permissions: ['usage:self:read'] })
+    expect(body).not.toHaveProperty('password')
+    expect(w.find('[data-testid="access-key-password"]').exists()).toBe(false)
     expect(new Date(body.expires_at).getTime()).toBeGreaterThan(Date.now() + 80 * 86400_000)
     expect(w.get('[data-testid="access-key-secret"]').text()).toBe('sak_secret')
     w.unmount()
@@ -59,10 +60,9 @@ describe('access keys card', () => {
     expect(w.get('[data-testid="access-key-lost"]').text()).toContain('1')
     await w.get('[data-testid="access-key-edit"]').trigger('click')
     await flushPromises()
-    await w.get('[data-testid="access-key-password"] input, input[data-testid="access-key-password"]').setValue('pw')
     await w.get('form[data-testid="access-key-form"]').trigger('submit')
     await flushPromises()
-    expect(api.patch).toHaveBeenCalledWith('/me/access-keys/1', { name: 'ci', password: 'pw', permissions: ['usage:self:read'] })
+    expect(api.patch).toHaveBeenCalledWith('/me/access-keys/1', { name: 'ci', permissions: ['usage:self:read'] })
     w.unmount()
   })
 
@@ -82,6 +82,23 @@ describe('access keys card', () => {
     w.unmount()
   })
 
+  it('stays open without an error when the verification is cancelled', async () => {
+    const { ApiError, VERIFICATION_CANCELLED } = await import('@sub2api/host')
+    api.post.mockRejectedValue(new ApiError(403, { code: VERIFICATION_CANCELLED, message: 'cancelled' }))
+    const w = render()
+    await flushPromises()
+    await w.get('[data-testid="access-key-add"]').trigger('click')
+    await flushPromises()
+    await w.get('[data-testid="access-key-name"] input, input[data-testid="access-key-name"]').setValue('ci')
+    const boxes = w.get('[data-testid="access-key-permissions"]').findAll('input[type="checkbox"]')
+    await boxes[boxes.length - 1].setValue(true)
+    await w.get('form[data-testid="access-key-form"]').trigger('submit')
+    await flushPromises()
+    expect(w.find('[data-testid="access-key-error"]').exists()).toBe(false)
+    expect(w.find('form[data-testid="access-key-form"]').exists()).toBe(true)
+    w.unmount()
+  })
+
   it('shows the refusal when a permission is not the user\'s', async () => {
     const { ApiError } = await import('@sub2api/host')
     api.post.mockRejectedValue(new ApiError(403, { code: 'permission_denied', message: '访问密钥只能拥有你自己的权限', details: { missing: ['user:delete'] } }))
@@ -90,7 +107,6 @@ describe('access keys card', () => {
     await w.get('[data-testid="access-key-add"]').trigger('click')
     await flushPromises()
     await w.get('[data-testid="access-key-name"] input, input[data-testid="access-key-name"]').setValue('ci')
-    await w.get('[data-testid="access-key-password"] input, input[data-testid="access-key-password"]').setValue('pw')
     const boxes = w.get('[data-testid="access-key-permissions"]').findAll('input[type="checkbox"]')
     await boxes[boxes.length - 1].setValue(true)
     await w.get('form[data-testid="access-key-form"]').trigger('submit')
@@ -137,7 +153,6 @@ describe('access keys card', () => {
     expect((document.querySelector('input[data-testid="scope-own"]') as HTMLInputElement).checked).toBe(true)
     api.post.mockResolvedValue({ key: 'sak_x' })
     await w.get('[data-testid="access-key-name"] input, input[data-testid="access-key-name"]').setValue('k')
-    await w.get('[data-testid="access-key-password"] input, input[data-testid="access-key-password"]').setValue('pw')
     await w.get('form[data-testid="access-key-form"]').trigger('submit')
     await flushPromises()
     expect(api.post.mock.calls[0][1]).toMatchObject({ permissions: ['account:read:own'] })

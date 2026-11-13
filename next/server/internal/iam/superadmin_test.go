@@ -37,7 +37,7 @@ func TestTransferSuperAdminHTTP(t *testing.T) {
 	if code, out := k.callProof(targetLogin.AccessToken, proof, "POST", path, body(target)); code != 403 || errCode(out) != "permission_denied" {
 		t.Fatalf("non-superuser: %d %v", code, out)
 	}
-	key := k.createKey(t, root, adminPassword, "user:read")
+	key := k.createKey(t, root, "user:read")
 	if code, out := k.call(key.Key, "POST", path, body(target)); code != 403 {
 		t.Fatalf("access key: %d %v", code, out)
 	}
