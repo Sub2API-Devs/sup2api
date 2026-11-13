@@ -10,8 +10,11 @@ const flip = (el: Omit<DOMWrapper<Element>, 'exists'>) => (el.element instanceof
 const mocks = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn(), list: vi.fn(), confirm: vi.fn(), manage: true, granted: null as string[] | null }))
 vi.mock('@sub2api/host', () => ({ api: mocks }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), confirm: (...a: unknown[]) => mocks.confirm(...a), toast: vi.fn() }))
-const holds = (key: string) => mocks.granted ? mocks.granted.includes(key) : key === 'settings:manage' || key === 'account:update' ? mocks.manage : key === 'account:read'
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string | string[]) => [key].flat().some(holds), me: { id: 1 } }) }))
+const granted = () => mocks.granted ?? ['account:read', ...(mocks.manage ? ['settings:manage', 'account:update'] : [])]
+vi.mock('@/stores/auth', async () => {
+  const { grantedAuth } = await import('@/testing/authMock')
+  return { useAuthStore: () => ({ ...grantedAuth(granted), me: { id: 1 } }) }
+})
 
 describe('account runtime debug log switches', () => {
   beforeEach(() => {

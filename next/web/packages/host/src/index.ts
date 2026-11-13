@@ -48,8 +48,21 @@ export interface HostI18n {
 
 export interface HostPermissions {
   superuser(): boolean
+  /** The key is held: implied by a held key (CONTRACTS §21), so has("account:read") asks for every account. */
   has(key: string): boolean
   any(...keys: string[]): boolean
+  /**
+   * The scoped action (account:read, proxy:manage, ...) is held at any scope,
+   * as the pages listing the rows in reach ask. Left out by consoles before
+   * resource scopes: feature-detect (`hasAction?.(a) ?? has(legacy own key)`).
+   */
+  hasAction?(action: string): boolean
+  /**
+   * The canonical keys held for the scoped action: ["account:read"] for every
+   * row, else narrower ones ("account:read:own", "account:read:group/12");
+   * [] when not held. Left out like hasAction.
+   */
+  scope?(action: string): string[]
 }
 
 /**

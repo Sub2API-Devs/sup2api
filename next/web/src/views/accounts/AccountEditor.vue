@@ -32,7 +32,7 @@ import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue
 import type { AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useEnvironmentLayer, useGroupsWith, useProxiesLookup } from '@/composables/lookups'
-import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, useScope } from '@/composables/useScope'
 import { useAccountCaps } from '@/composables/useAccountCaps'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
@@ -63,16 +63,16 @@ const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
 const { t, locale: displayLocale } = useI18n()
 const plugins = usePluginStore()
-const own = useOwnership()
+const own = useScope()
 
 const editing = computed(() => !!props.account?.id)
 const caps = useAccountCaps(editing)
 
 const mode = computed(() => props.accountType?.form.mode || 'schema')
-// Row-level rights (CONTRACTS §21.1): editing an account needs the all-level
-// key or the own-level key on an account the caller created.
-const canEditAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_KEYS.update))
-const canTestAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_KEYS.test))
+// Row-level rights (CONTRACTS §21): editing an account needs a scope of
+// account:update that reaches it.
+const canEditAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_ACTIONS.update))
+const canTestAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_ACTIONS.test))
 const authOptions = computed(() => (props.accountTypeOptions || []).map(at => ({ value: at.type, label: lt(at.auth_method_label) || at.type, disabled: !caps.creatable(at) })))
 /** Guarded settings stay at the official values for this caller (the server enforces it). */
 const settingsGuarded = computed(() => !!props.accountType?.guarded_settings?.length && !caps.customSettings.value)
@@ -515,11 +515,11 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   applyValues(a ? savedAccountValues(a, coreValues()) : newAccountValues(at, coreValues(), ownCaller()))
 }
 
-/** Whether the caller creates own-level accounts (capped scheduling, CONTRACTS §15.9). */
-const ownCaller = () => own.scopeOf(ACCOUNT_KEYS.create) === 'own'
+/** Whether the caller creates accounts at a restricted scope (capped scheduling, CONTRACTS §15.9). */
+const ownCaller = () => own.level(ACCOUNT_ACTIONS.create) === 'own'
 /** The core's values of the controls (before the plugin's defaults). */
 const coreValues = (): ControlValues => ({
-  priority: 10, weight: 1, max_concurrency: newAccountConcurrency(own.scopeOf(ACCOUNT_KEYS.create)), schedulable: true, auto_disable: true,
+  priority: 10, weight: 1, max_concurrency: newAccountConcurrency(own.level(ACCOUNT_ACTIONS.create)), schedulable: true, auto_disable: true,
   rpm_limit: 0, tpm_limit: 0, spm_limit: 0, spm_window_seconds: SPM_WINDOW_DEFAULT, environment: {}, header_passthrough: [], param_override: null, model_limits: []
 })
 /** Controls kept outside `basic`. */

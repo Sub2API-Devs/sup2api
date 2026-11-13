@@ -9,6 +9,7 @@ import { watchPermissions } from '@/stores/authzWatch'
 import { hostComponents } from '@/components/plugin/hostComponents'
 import { formatDateTime, formatMoney, formatNumber } from '@/utils/format'
 import { cancelStepUps, requestStepUp } from '@/components/stepUp/stepUp'
+import { patternKey } from '@/authz/implies'
 
 /** Wires the HTTP client and publishes the host context for plugins. */
 export function setupHost(router: Router) {
@@ -50,7 +51,9 @@ export function setupHost(router: Router) {
     permissions: {
       superuser: () => !!auth.me?.superuser,
       has: k => auth.has(k),
-      any: (...keys) => auth.has(keys)
+      any: (...keys) => auth.has(keys),
+      hasAction: a => auth.hasAction(a),
+      scope: action => auth.scopes(action).map(scope => patternKey({ action, scope }))
     },
     theme: computed(() => app.theme) as any,
     toast: (m, kind) => toast(m, kind),

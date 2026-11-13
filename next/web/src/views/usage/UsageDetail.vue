@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SCode, SCopyButton, SDescItem, SDescriptions, SDisclosure, SGrid, SHint, SIcon, SIPAddress, SSpinner } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS } from '@/composables/useScope'
 import { formatMoney, formatNumber } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
@@ -30,7 +30,7 @@ const props = defineProps<{ row: UsageRow; path?: string }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const accountTypes = useAccountTypes()
-if (auth.has(ACCOUNT_PAGE_PERMS)) accountTypes.load()
+if (auth.hasAction(ACCOUNT_ACTIONS.read)) accountTypes.load()
 
 const detail = ref<UsageRow | null>(null)
 const loading = ref(false)

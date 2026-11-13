@@ -7,7 +7,7 @@ import AdminDashboard from './AdminDashboard.vue'
 const { get, push } = vi.hoisted(() => ({ get: vi.fn(), push: vi.fn() }))
 vi.mock('@sub2api/host', () => ({ api: { get } }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }), RouterLink: { props: ['to'], template: '<a><slot /></a>' } }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true, hasAction: () => true }) }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ theme: 'light' }) }))
 const summaries: Array<{ groupBy: string; extra: unknown }> = []
 vi.mock('@/views/usage/useUsageSummary', () => ({

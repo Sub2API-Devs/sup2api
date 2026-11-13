@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteLocationRaw, type RouteRecordRaw } from 'vue-router'
 import { session } from '@sub2api/host'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_PAGE_PERMS, PROXY_PAGE_PERMS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, PROXY_ACTIONS } from '@/composables/useScope'
 import AppLayout from '@/layouts/AppLayout.vue'
 import type { SidebarViewKey } from '@/layouts/sidebarViews'
 import { CCGATEWAY_PAGE, isPluginKey, pluginSettingsPath } from '@/views/plugins/pluginUtil'
@@ -13,6 +13,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     /** Required permission(s): any of them grants access. */
     perm?: string | string[]
+    /** Scoped action(s) (CONTRACTS §21): holding any of them at any scope grants access too; the page lists the rows in reach. */
+    action?: string | string[]
     /** i18n key of the page title. */
     title?: string
     /**
@@ -52,8 +54,8 @@ const children: RouteRecordRaw[] = [
   { path: 'api-keys', redirect: '/me/api-keys' },
   { path: 'me/api-keys', component: () => import('@/views/keys/MyApiKeysView.vue'), meta: { perm: 'apikey:self:manage', title: 'nav.items.myApiKeys' } },
   { path: 'groups', component: () => import('@/views/groups/GroupsView.vue'), meta: { perm: 'group:read', title: 'nav.items.groups', parent: '/settings' } },
-  { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { perm: PROXY_PAGE_PERMS, title: 'nav.items.proxies' } },
-  { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.accounts' } },
+  { path: 'proxies', component: () => import('@/views/proxies/ProxiesView.vue'), meta: { action: PROXY_ACTIONS.read, title: 'nav.items.proxies' } },
+  { path: 'accounts', component: () => import('@/views/accounts/AccountsView.vue'), meta: { action: ACCOUNT_ACTIONS.read, title: 'nav.items.accounts' } },
   // The old platforms page.
   { path: 'platforms', redirect: '/accounts' },
 
@@ -90,7 +92,7 @@ const children: RouteRecordRaw[] = [
   },
 
   // The settings, or the account containers alone for an account reader (the core checks them by account:*, not settings:*).
-  { path: CCGATEWAY_PAGE, component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: ['settings:read', ...ACCOUNT_PAGE_PERMS], title: 'ccgateway.title', parent: '/plugins' } },
+  { path: CCGATEWAY_PAGE, component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: 'settings:read', action: ACCOUNT_ACTIONS.read, title: 'ccgateway.title', parent: '/plugins' } },
   { path: 'plugins', component: () => import('@/views/plugins/PluginsView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
   {
     path: 'plugins/:key/versions/:version/consent',

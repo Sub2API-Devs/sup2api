@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SDescItem, SDescriptions, SHint, confirm, toast, type Tone } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS } from '@/composables/useScope'
 import { useOptionalT } from '@/composables/optionalText'
 import type { Account, CcgDraft, CcgRuntimeHealth, CcgRuntimeStatus, CcgSyncResult, CcgWorkerResult, CcgWorkersReport } from '@/api/types'
 import BusyText from '@/components/BusyText.vue'
@@ -37,7 +37,7 @@ const store = typeof window !== 'undefined' ? window.sessionStorage : null
 
 // The runtime of an account follows the account's own keys, as the core checks; settings keys open none of it.
 const canManage = computed(() => !!props.canEdit)
-const canRead = computed(() => canManage.value || auth.has([...ACCOUNT_KEYS.read]))
+const canRead = computed(() => canManage.value || auth.hasAction(ACCOUNT_ACTIONS.read))
 const base = computed(() => `${ACCOUNTS}/${props.accountId}`)
 
 // ---------------------------------------------------------------- the current runtime

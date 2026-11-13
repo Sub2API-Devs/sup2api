@@ -11,7 +11,7 @@ import { resetEntityLookups, type EntityItem } from './entity/lookup'
 const mocks = vi.hoisted(() => ({ get: vi.fn(), denied: [] as string[] }))
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<typeof import('@sub2api/host')>()), api: { get: mocks.get } }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ has: (perm: string[]) => !perm.length || perm.some((p) => !mocks.denied.includes(p)) })
+  useAuthStore: () => ({ has: (perm: string[]) => !perm.length || perm.some((p) => !mocks.denied.includes(p)), hasAction: (a: string) => [a, a.replace(':', ':own:')].some((p) => !mocks.denied.includes(p)) })
 }))
 
 enableAutoUnmount(afterEach)

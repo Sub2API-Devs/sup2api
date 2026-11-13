@@ -2,16 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { i18n } from '@/i18n'
-import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
 import { CCGATEWAY_PAGE } from '@/views/plugins/pluginUtil'
 import { useSettingsMenu } from '@/views/settings/settingsNav'
 import { router } from './index'
 
 const auth = vi.hoisted(() => ({ denied: [] as string[], me: {} as object | null, loadMe: vi.fn() }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), session: { get: () => 'token' } }))
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ me: auth.me, loadMe: auth.loadMe, has: (perm: string | string[]) => [perm].flat().some(p => !auth.denied.includes(p)) })
-}))
+vi.mock('@/stores/auth', async () => {
+  const { deniedAuth } = await import('@/testing/authMock')
+  return { useAuthStore: () => ({ me: auth.me, loadMe: auth.loadMe, ...deniedAuth(() => auth.denied) }) }
+})
 // The pages the navigations below end on; the routes are what is under test.
 const Page = vi.hoisted(() => ({ default: { render: () => null } }))
 vi.mock('@/layouts/AppLayout.vue', () => Page)
@@ -118,7 +118,7 @@ describe('the settings entry', () => {
 
 describe('the CCGateway page', () => {
   it('has an address of its own, for settings:read or a reader of the accounts', async () => {
-    expect(metaOf(CCGATEWAY_PAGE)).toMatchObject({ perm: ['settings:read', ...ACCOUNT_PAGE_PERMS], title: 'ccgateway.title' })
+    expect(metaOf(CCGATEWAY_PAGE)).toMatchObject({ perm: 'settings:read', action: 'account:read', title: 'ccgateway.title' })
     expect(await follow(CCGATEWAY_PAGE)).toBe(CCGATEWAY_PAGE)
   })
 
@@ -129,7 +129,7 @@ describe('the CCGateway page', () => {
   })
 
   it('is not for a caller with neither', async () => {
-    auth.denied = ['settings:read', ...ACCOUNT_PAGE_PERMS]
+    auth.denied = ['settings:read', 'account:read', 'account:own:read']
     // From another page: a link to the open page is no navigation.
     await follow('/forbidden')
     expect(await follow(CCGATEWAY_PAGE)).toMatch(/^\/forbidden\?perm=settings:read/)

@@ -14,7 +14,7 @@ import UsageCharts from '@/components/stats/UsageCharts.vue'
 import { autoGranularity, browserTZ, formatMs, formatTokens, hitRate, hourAllowed, num, rowTokens, type Granularity } from '@/components/stats/stats'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS } from '@/composables/useScope'
 import AccountStatusCard from './AccountStatusCard.vue'
 import { lt } from '@/i18n'
 import { errorMessage } from '@/utils/errors'
@@ -30,7 +30,7 @@ const canUsage = computed(() => auth.has('usage:self:read'))
 const canKeys = computed(() => auth.has('apikey:self:manage'))
 const canLedger = computed(() => auth.has('balance:self:read'))
 /** A supplier (own-level accounts) or any reader of accounts: the accounts in its scope by status. */
-const canAccounts = computed(() => auth.has([...ACCOUNT_KEYS.read]))
+const canAccounts = computed(() => auth.hasAction(ACCOUNT_ACTIONS.read))
 
 const accounts = ref<AccountCounts | null>(null)
 const loadingAccounts = ref(false)

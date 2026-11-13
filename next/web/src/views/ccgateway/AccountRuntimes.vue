@@ -9,7 +9,7 @@ import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCard, SHint, SFormModal, SSegmented, SSwitch, STable, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_KEYS, ACCOUNT_PAGE_PERMS, useOwnership } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, useScope } from '@/composables/useScope'
 import { fetchFirstPage } from '@/composables/lookups'
 import { runPool } from '@/views/accounts/pool'
 import type { CcgRuntimeHealth } from '@/api/types'
@@ -73,6 +73,7 @@ interface Row {
   checking: boolean
   error: boolean
   created_by?: number | null
+  group_ids?: number[]
   logsEnabled: boolean | null
   logsBusy: boolean
   logsError: boolean
@@ -92,9 +93,9 @@ const { blockedTitle, describe } = useCcgText()
 const auth = useAuthStore()
 /** Bumped by reload(): the retained list below reloads with the table. */
 const retainedRevision = ref(0)
-const own = useOwnership()
+const scope = useScope()
 // Changing a row (start, re-authorization) takes update on that row, as the core checks.
-const canUpdateRow = (r: Row) => own.can(r, ACCOUNT_KEYS.update)
+const canUpdateRow = (r: Row) => scope.can(r, ACCOUNT_ACTIONS.update)
 // Changing or clearing the request logs is not an own-level action: the core takes this key only.
 const canLogs = computed(() => auth.has('account:update'))
 // Reading the logs: settings or account readers, not own-level ones (§7).
@@ -113,8 +114,8 @@ const cleaning = ref(false)
 const error = ref('')
 // The list takes the keys of the accounts list, as the core checks a runtime by
 // account:*; a settings-only caller gets the cleanup and the retained runtimes.
-const canList = computed(() => auth.has(ACCOUNT_PAGE_PERMS))
-const canAccounts = computed(() => auth.has('account:read') || auth.has('account:own:read') || auth.has('account:update') || auth.has('account:own:update'))
+const canList = computed(() => auth.hasAction(ACCOUNT_ACTIONS.read))
+const canAccounts = computed(() => auth.hasAction([ACCOUNT_ACTIONS.read, ACCOUNT_ACTIONS.update]))
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('ccgateway.runtimes.account') },
@@ -162,8 +163,8 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const list = await fetchFirstPage<{ id: number; name: string; type: string; created_by?: number | null }>('/accounts', { plugin_key: 'ccgateway' })
-    rows.value = list.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null, logsPolicy: null }))
+    const list = await fetchFirstPage<{ id: number; name: string; type: string; created_by?: number | null; group_ids?: number[] }>('/accounts', { plugin_key: 'ccgateway' })
+    rows.value = list.map((a) => ({ id: a.id, name: a.name, type: a.type, created_by: a.created_by, group_ids: a.group_ids, status: '', reason: '', container: '', phase: 'unknown', loggedIn: null, cliVersion: '', checking: true, error: false, logsEnabled: null, logsBusy: false, logsError: false, logsLimits: null, logsLevels: null, logsPolicy: null }))
   } catch {
     error.value = t('ccgateway.runtimes.loadFailed')
     rows.value = []

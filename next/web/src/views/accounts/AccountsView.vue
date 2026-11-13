@@ -7,7 +7,7 @@ import { SAutoRefresh, SBadge, SBulkBar, SButton, SChip, SCode, SCopyButton, SDe
 import type { Account, AccountAction, AccountLastTest, AccountType } from '@/api/types'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
-import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, useScope } from '@/composables/useScope'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore, type PluginAccountActionEntry, type SlotEntry } from '@/stores/plugins'
 import { notifyError } from '@/utils/errors'
@@ -52,24 +52,23 @@ import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
 const { t, te } = useI18n()
 const auth = useAuthStore()
 const plugins = usePluginStore()
-const own = useOwnership()
+const scope = useScope()
 const accountTypes = useAccountTypes()
 accountTypes.load()
 /** The account type of `a` (undefined until the types load or for an orphaned type). */
 const typeOf = (a?: Pick<Account, 'plugin_key' | 'type'> | null) => (a ? accountTypes.find(a.plugin_key, a.type) : undefined)
 const { groups } = useGroupsLookup()
 
-// Ownership (CONTRACTS §21): all-level keys see every account, own-level keys
-// only the caller's (the server filters; row actions follow the same rule).
-const readScope = computed(() => own.scopeOf(ACCOUNT_KEYS.read))
-const showOwner = computed(() => readScope.value === 'all')
+// Scopes (CONTRACTS §21): account:read sees every account, a narrower scope
+// only the accounts in it (the server filters; row actions follow the same rule).
+const showOwner = computed(() => scope.level(ACCOUNT_ACTIONS.read) === 'all')
 // One creator on the whole page says nothing per row: the column only shows when creators differ.
 const mixedOwners = computed(() => new Set(list.items.value.map((a) => a.created_by)).size > 1)
-const canCreate = computed(() => auth.has([...ACCOUNT_KEYS.create]))
-const canUpdate = (a: Account) => own.can(a, ACCOUNT_KEYS.update)
-const canTest = (a: Account) => own.can(a, ACCOUNT_KEYS.test)
-const canDelete = (a: Account) => own.can(a, ACCOUNT_KEYS.delete)
-const canReveal = (a: Account) => own.can(a, ACCOUNT_KEYS.reveal)
+const canCreate = computed(() => auth.hasAction(ACCOUNT_ACTIONS.create))
+const canUpdate = (a: Account) => scope.can(a, ACCOUNT_ACTIONS.update)
+const canTest = (a: Account) => scope.can(a, ACCOUNT_ACTIONS.test)
+const canDelete = (a: Account) => scope.can(a, ACCOUNT_ACTIONS.delete)
+const canReveal = (a: Account) => scope.can(a, ACCOUNT_ACTIONS.reveal)
 
 // `mine=true` works at both levels; `created_by=<id>` only at the all level (ignored otherwise).
 // The usage column's "today" is the browser's day (CONTRACTS §73).
@@ -312,10 +311,10 @@ function onTestUpdated(saved: Account) {
 const testable = (a: Account) => canTest(a) && !a.orphaned
 const editable = (a: Account) => canUpdate(a) && !a.orphaned
 const toggleable = (a: Account) => editable(a) && accountControl(typeOf(a), 'schedulable').configurable
-// An account an administrator disabled (admin_locked, still disabled): a caller with only the own-level key can
+// An account an administrator disabled (admin_locked, still disabled): a caller with a restricted scope can
 // neither enable it nor reset its status (the server answers 403 account_locked_by_admin), so both are shown
 // disabled or left out. A stale lock on an account in another status holds nothing back, as on the server.
-const lockedByAdmin = (a: Account) => !!a.admin_locked && a.status === 'disabled' && own.scopeOf(ACCOUNT_KEYS.update) !== 'all'
+const lockedByAdmin = (a: Account) => !!a.admin_locked && a.status === 'disabled' && scope.level(ACCOUNT_ACTIONS.update) !== 'all'
 const canEnable = (a: Account) => toggleable(a) && !lockedByAdmin(a)
 const selectable = (a: Account) => testable(a) || editable(a) || canDelete(a)
 const selection = useSelection<Account>({ items: list.items, key: (a) => a.id, selectable, loadAll: loadAllAccounts })

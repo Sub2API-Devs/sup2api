@@ -431,6 +431,14 @@ describe('fetchAccountNames', () => {
     expect((await fetchAccountNames([1, 2])).get(1)).toBe('mine')
     expect(await fetchAccountGroups(1)).toEqual([2])
   })
+
+  it('asks a console with resource scopes whether account:read is held at any scope', async () => {
+    const hasAction = vi.fn((action: string) => action === 'account:read')
+    setHost({ api: { get: coreGet }, permissions: { has: () => false, hasAction } } as unknown as PluginHost)
+    coreGet.mockResolvedValue({ items: [{ id: 1, name: 'in group 12' }] })
+    expect((await fetchAccountNames([1])).get(1)).toBe('in group 12')
+    expect(hasAction).toHaveBeenCalledWith('account:read')
+  })
 })
 
 describe('the user lists', () => {

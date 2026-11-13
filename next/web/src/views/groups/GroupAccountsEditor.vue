@@ -5,7 +5,7 @@ import { api } from '@sub2api/host'
 import { SBadge, SCheckbox, SEmpty, SHint, SInput, SLink, SSelect, SSpinner } from '@sub2api/ui'
 import type { Account } from '@/api/types'
 import { lt } from '@/i18n'
-import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS, useScope } from '@/composables/useScope'
 import { fetchAllPages } from '@/composables/lookups'
 import { typeKey, useAccountTypes } from '@/views/accounts/accountTypes'
 import { accountStatusKey, accountStatusTone } from '@/views/accounts/accountStatus'
@@ -18,9 +18,9 @@ const emit = defineEmits<{ (e: 'models', data: { models: string[]; unrestricted_
 const { t } = useI18n()
 const accountTypes = useAccountTypes()
 accountTypes.load()
-const own = useOwnership()
-/** Membership is a PATCH of the account: all-level key, or own-level key on the caller's accounts (CONTRACTS §21). */
-const editable = (a: Account) => own.can(a, ACCOUNT_KEYS.update)
+const scope = useScope()
+/** Membership is a PATCH of the account: a scope of account:update that reaches it (CONTRACTS §21). */
+const editable = (a: Account) => scope.can(a, ACCOUNT_ACTIONS.update)
 
 const accounts = ref<Account[]>([])
 const selected = ref(new Set<number>())

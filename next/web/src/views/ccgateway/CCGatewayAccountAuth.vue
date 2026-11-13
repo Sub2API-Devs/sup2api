@@ -28,7 +28,7 @@ import { SAlert, SButton, SCopyButton, SField, SHint, SIcon, SInput, SLink, SSte
 import { useAuthStore } from '@/stores/auth'
 import type { CcgAuthSession, CcgDraft, CcgRuntimeHealth, CcgRuntimeStatus, CcgSyncResult } from '@/api/types'
 import { useProxiesLookup } from '@/composables/lookups'
-import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS } from '@/composables/useScope'
 import BusyText from '@/components/BusyText.vue'
 import { CCGATEWAY_PAGE } from '@/views/plugins/pluginUtil'
 import CcgAuthHeader from './CcgAuthHeader.vue'
@@ -81,7 +81,7 @@ const inPlace = computed(() => Number.isSafeInteger(props.reauthAccountId) && (p
 const reauthCompleted = ref(false)
 const reauth = computed(() => !props.draft && (inPlace.value || isDraftKey(props.reauthKey)))
 const mode = computed<CcgMode>(() => (reauth.value ? 'reauth' : 'draft'))
-const canManage = computed(() => (reauth.value ? !!props.canEdit : auth.has(['settings:manage', ...ACCOUNT_KEYS.create])))
+const canManage = computed(() => (reauth.value ? !!props.canEdit : auth.has('settings:manage') || auth.hasAction(ACCOUNT_ACTIONS.create)))
 
 /** New account: draft key once created, and the proxy the draft runs with. */
 const draftKey = ref<string | null>(null)

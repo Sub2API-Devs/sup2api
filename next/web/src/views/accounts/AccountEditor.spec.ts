@@ -26,8 +26,13 @@ const ownership = vi.hoisted(() => ({ scope: 'all' as 'all' | 'own' }))
 const pluginStore = vi.hoisted(() => ({ listed: true, pending: {} as Record<string, boolean>, errors: {} as Record<string, string>, plugin: () => null, component: (() => null) as (key: string, name?: string) => unknown, slotEntries: (() => []) as (slot: string) => unknown[] }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => pluginStore, assetURL: () => '' }))
 const perms = vi.hoisted(() => ({ denied: [] as string[] }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some(k => !perms.denied.includes(k)) }) }))
-vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true, scopeOf: () => ownership.scope }) }))
+// Keys compare in their canonical spelling (CONTRACTS §21): denying proxy:own:manage denies proxy:manage:own.
+vi.mock('@/stores/auth', async () => {
+  const { canonicalPermission } = await import('@/authz/implies')
+  const canonical = (k: string) => canonicalPermission(k) ?? k
+  return { useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some(k => !perms.denied.map(canonical).includes(canonical(k))) }) }
+})
+vi.mock('@/composables/useScope', async original => ({ ...await original<typeof import('@/composables/useScope')>(), useScope: () => ({ can: () => true, level: () => ownership.scope }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useProxiesLookup: () => ({}) }))
 
 enableAutoUnmount(afterEach)

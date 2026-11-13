@@ -21,10 +21,10 @@ vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import(
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), confirm: mocks.confirm, toast: mocks.toast }))
 vi.mock('@/utils/errors', () => ({ notifyError: mocks.notifyError, errorMessage: String }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false, hasAction: () => false }) }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ slotEntries: mocks.slotEntries, get accountActions() { return mocks.accountActions }, plugin: () => undefined, component: () => undefined }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useGroupsLookup: () => ({ groups: ref(mocks.groups) }), useProxiesLookup: () => ({ proxies: ref([]) }) }))
-vi.mock('@/composables/useOwnership', async (original) => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ scopeOf: () => mocks.scope, can: (_a: Account, keys: readonly string[]) => keys.includes('account:update') && mocks.canUpdate }) }))
+vi.mock('@/composables/useScope', async (original) => ({ ...await original<typeof import('@/composables/useScope')>(), useScope: () => ({ level: () => mocks.scope, can: (_a: Account, action: string) => action === 'account:update' && mocks.canUpdate }) }))
 vi.mock('./accountTypes', () => ({ typeKey: () => '', useAccountTypes: () => ({ load: vi.fn(), find: mocks.findType, grouped: ref([]), types: ref([]), pluginFacts: () => mocks.pluginFacts(), pluginName: (key: string) => key, typeLabel: (_key: string, type: string) => type }) }))
 vi.mock('@/composables/useList', async (original) => ({ ...await original<object>(), useList: () => list }))
 

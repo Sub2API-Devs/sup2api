@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn(async () => ({ items
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get: mocks.get, list: mocks.list } }))
 vi.mock('vue-router', () => ({ RouterLink: { props: ['to'], template: '<a><slot /></a>' } }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some((k) => mocks.perms.has(k)), balance: null, refreshBalance: vi.fn() })
+  useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some((k) => mocks.perms.has(k)), hasAction: (a: string) => [a, a.replace(':', ':own:')].some((k) => mocks.perms.has(k)), balance: null, refreshBalance: vi.fn() })
 }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ theme: 'light', menus: [] }) }))
 vi.mock('@/components/stats/UsageCharts.vue', () => ({ default: { template: '<div />' } }))

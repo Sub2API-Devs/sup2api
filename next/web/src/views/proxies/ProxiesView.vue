@@ -29,7 +29,7 @@ import type { Proxy, ProxyProbeResult, ProxyTestResult } from '@/api/types'
 import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useProxiesLookup } from '@/composables/lookups'
-import { PROXY_KEYS, useOwnership } from '@/composables/useOwnership'
+import { PROXY_ACTIONS, PROXY_CREATE_KEY, useScope } from '@/composables/useScope'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
@@ -39,12 +39,13 @@ import EntityPicker from '@/components/EntityPicker.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
-const own = useOwnership()
-// Ownership (CONTRACTS §21): proxy:manage acts on every proxy, proxy:own:manage
-// only on the caller's; the list is already scoped by the server.
-const canCreate = computed(() => auth.has([...PROXY_KEYS.manage]))
-const canEditRow = (p: Proxy) => own.can(p, PROXY_KEYS.manage)
-const showOwner = computed(() => own.scopeOf(PROXY_KEYS.read) === 'all')
+const scope = useScope()
+// Scopes (CONTRACTS §21): proxy:manage acts on every proxy, a narrower scope
+// on the proxies in it (own: the caller's, proxy/<id>: that one, which creates
+// none); the list is already scoped by the server.
+const canCreate = computed(() => auth.has(PROXY_CREATE_KEY))
+const canEditRow = (p: Proxy) => scope.can(p, PROXY_ACTIONS.manage)
+const showOwner = computed(() => scope.level(PROXY_ACTIONS.read) === 'all')
 const list = useList<Proxy>('/proxies', { mine: '', created_by: '' })
 const onlyMine = computed({
   get: () => list.filters.mine === 'true',

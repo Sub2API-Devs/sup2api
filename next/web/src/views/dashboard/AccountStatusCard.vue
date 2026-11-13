@@ -6,7 +6,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SStatCard } from '@sub2api/ui'
 import type { AccountCounts } from '@/api/types'
-import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import { ACCOUNT_ACTIONS } from '@/composables/useScope'
 import { useAuthStore } from '@/stores/auth'
 import { formatNumber } from '@/utils/format'
 
@@ -27,7 +27,7 @@ const tone = computed<'primary' | 'warning' | 'danger'>(() => {
     :sub="counts ? t('stats.admin.accountsSub', { auto: formatNumber(counts.auto_disabled), disabled: formatNumber(counts.disabled) }) : undefined"
     icon="account"
     :tone="tone"
-    :to="auth.has([...ACCOUNT_KEYS.read]) ? '/accounts' : undefined"
+    :to="auth.hasAction(ACCOUNT_ACTIONS.read) ? '/accounts' : undefined"
     :loading="loading"
     data-testid="card-accounts"
   />

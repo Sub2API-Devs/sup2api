@@ -4,6 +4,7 @@ import { api, session } from '@sub2api/host'
 import type { Me, TokenResponse } from '@/api/types'
 import { getPasskey } from '@/utils/webauthn'
 import { refreshShell } from './app'
+import { ALL_SCOPE, permissionIndex, type Scope } from '@/authz/implies'
 
 export const useAuthStore = defineStore('auth', () => {
   const me = ref<Me | null>(null)
@@ -12,6 +13,8 @@ export const useAuthStore = defineStore('auth', () => {
   /** The session ended because it could not be renewed (login page shows a notice). */
   const sessionExpired = ref(false)
   const permSet = computed(() => new Set(me.value?.permissions || []))
+  /** The held keys as patterns (CONTRACTS §21): a key is held when one of them implies it. */
+  const permIndex = computed(() => permissionIndex(me.value?.permissions || []))
   /**
    * Bumped after every refreshPermissions: whatever is derived from the
    * caller's permissions (assignable roles, the current route) is checked again.
@@ -28,11 +31,26 @@ export const useAuthStore = defineStore('auth', () => {
     }
   })
 
+  /**
+   * One of `perm` is held: implied by a held key (account:read:group/12 by
+   * account:read, account:read by nothing narrower). No `perm` asks nothing.
+   */
   function has(perm: string | string[] | undefined | null): boolean {
     if (!perm || (Array.isArray(perm) && perm.length === 0)) return true
     if (me.value?.superuser) return true
     const list = Array.isArray(perm) ? perm : [perm]
-    return list.some((p) => permSet.value.has(p))
+    return list.some((p) => permIndex.value.has(p))
+  }
+
+  /** One of the actions is held at any scope (a page that lists the rows in reach, CONTRACTS §21). */
+  function hasAction(action: string | string[]): boolean {
+    if (me.value?.superuser) return true
+    return [action].flat().some((a) => permIndex.value.hasAction(a))
+  }
+
+  /** The scopes of action held (all of them for a superuser); [] when not held. */
+  function scopes(action: string): Scope[] {
+    return me.value?.superuser ? [ALL_SCOPE] : permIndex.value.scopes(action)
   }
 
   /**
@@ -127,6 +145,8 @@ export const useAuthStore = defineStore('auth', () => {
     sessionExpired,
     permissionsEpoch,
     has,
+    hasAction,
+    scopes,
     holds,
     login,
     loginSecondFactor,
