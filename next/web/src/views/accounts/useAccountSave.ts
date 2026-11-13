@@ -20,10 +20,10 @@ import { fromCards, repeatedModel, type ModelLimitCard } from './modelLimits'
 import { windowOf } from './spmWindow'
 import { sameSet } from './bulkEdit'
 
-/** Editable basics of an account (AccountEditor's `basic`). */
 /** Field error codes of a save worded by the console: a restricted caller's account out of its groups (CONTRACTS §21). */
 const SCOPE_FIELD_CODES = { not_in_scope: 'accounts.scopeErrors.notInScope' }
 
+/** Editable basics of an account (AccountEditor's `basic`). */
 export interface AccountBasics {
   name: string
   group_ids: number[]

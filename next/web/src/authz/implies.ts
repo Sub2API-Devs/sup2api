@@ -35,6 +35,9 @@ const LEGACY_OWN: Readonly<Record<string, string>> = Object.fromEntries(
   })
 )
 
+/** Whether the scope of action may name rows (an id range means nothing for creating a row). */
+export const takesRowIds = (action: string) => action !== 'account:create'
+
 /** A group segment of "*": any group. */
 export const WILDCARD = -1
 
@@ -69,7 +72,7 @@ export function parsePermission(key: string): Pattern | null {
   if (i < 0 || (last !== '*' && last !== 'own' && !last.includes('/'))) return { action: k, scope: ALL_SCOPE }
   const action = k.slice(0, i)
   const resource = SCOPABLE[action]
-  const scope = resource && parseScope(resource, action === 'account:create', last)
+  const scope = resource && parseScope(resource, !takesRowIds(action), last)
   return scope ? { action, scope } : null
 }
 

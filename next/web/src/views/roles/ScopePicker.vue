@@ -10,7 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { SCheckbox, SChip, SHint } from '@sub2api/ui'
 import EntityPicker from '@/components/EntityPicker.vue'
 import type { EntityKind } from '@/components/entity/entities'
-import { scopeSuffix, type Scope, type ScopeResource } from '@/authz/implies'
+import { scopeSuffix, takesRowIds, type Scope, type ScopeResource } from '@/authz/implies'
 import { choiceOf, scopesOf, type Offer, type ScopeChoice, type ScopeOffer } from '@/authz/scopeChoice'
 import { useScopeLabels } from './scopeLabels'
 
@@ -24,6 +24,8 @@ const choice = computed(() => choiceOf(props.scopes))
 const narrowOff = computed(() => props.disabled || choice.value.all)
 const rowKind = computed<EntityKind>(() => props.resource)
 const grouped = computed(() => props.resource === 'account')
+/** Rows by id (account/X, proxy/X, group/G/account/X); not for account:create. */
+const rows = computed(() => takesRowIds(props.action))
 
 function set(patch: Partial<ScopeChoice>) {
   emit('update:scopes', scopesOf({ ...choice.value, ...patch }))
@@ -87,7 +89,7 @@ function addPair(account: string) {
     </div>
 
     <!-- account/<id>, proxy/<id> -->
-    <div v-if="offer.ids || choice.ids.length" class="flex flex-wrap items-center gap-1.5" :class="choice.all ? 'opacity-60' : ''" data-testid="scope-ids">
+    <div v-if="rows && (offer.ids || choice.ids.length)" class="flex flex-wrap items-center gap-1.5" :class="choice.all ? 'opacity-60' : ''" data-testid="scope-ids">
       <SHint inline size="xs" class="w-28 shrink-0">{{ t(grouped ? 'roles.scope.accounts' : 'roles.scope.proxies') }}</SHint>
       <SChip
         v-for="id in listed(offer.ids, choice.ids)"
@@ -104,7 +106,7 @@ function addPair(account: string) {
     </div>
 
     <!-- group/<g>/account/<id> -->
-    <div v-if="grouped && (offer.groups || choice.pairs.length)" class="flex flex-wrap items-center gap-1.5" :class="choice.all ? 'opacity-60' : ''" data-testid="scope-pairs">
+    <div v-if="grouped && rows && (offer.groups || choice.pairs.length)" class="flex flex-wrap items-center gap-1.5" :class="choice.all ? 'opacity-60' : ''" data-testid="scope-pairs">
       <SHint inline size="xs" class="w-28 shrink-0">{{ t('roles.scope.pairs') }}</SHint>
       <SChip
         v-for="[g, id] in choice.pairs"

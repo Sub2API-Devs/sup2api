@@ -928,17 +928,17 @@ on('PATCH', '/accounts/:id', (req) => {
   const { credentials, platform: _p, plugin_key: _k, type: _t, proxy_id: _pid, proxy_url: _purl, ...rest } = req.body || {}
   const guarded = checkGuarded(caller(req), a.plugin_key, credentials, a.credentials) || (a.plugin_key === 'custom' && credentials && customCredentialErrors(credentials))
   if (guarded) return guarded
+  const { who, scope } = accountScope(req, 'update')
+  // A restricted caller may not move the account out of its scope (CONTRACTS §21).
+  if (!inScope(scope, who, { ...a, group_ids: (rest.group_ids ?? a.group_ids ?? []).map(Number) })) {
+    return fail(403, 'would_leave_scope', 'the change would move the account out of your range')
+  }
   const proxy = resolveProxy(req, req.body || {})
   if ('__status' in proxy) return proxy
   // Enabling restores scheduling; a status change clears the release time and words the reason as the core does.
   if (rest.status === 'active' && rest.schedulable === undefined) rest.schedulable = true
   // The administrator lock (CONTRACTS §15.9 admin_locked): the full scope locks an account somebody else created when it
   // disables it and unlocks when it enables; an own-level caller cannot enable a locked account.
-  const { who, scope } = accountScope(req, 'update')
-  // A restricted caller may not move the account out of its scope (CONTRACTS §21).
-  if (!inScope(scope, who, { ...a, group_ids: (rest.group_ids ?? a.group_ids ?? []).map(Number) })) {
-    return fail(403, 'would_leave_scope', 'the change would move the account out of your range')
-  }
   if (scope?.level === 'own' && a.admin_locked && rest.status === 'active' && a.status !== 'active') return adminLocked()
   if (rest.status !== undefined && rest.status !== a.status) Object.assign(a, { auto_disabled_until: null, status_reason: rest.status !== 'disabled' ? '' : scope?.level === 'own' ? 'disabled by owner' : 'disabled by administrator' })
   if (scope?.level === 'all' && rest.status === 'active') a.admin_locked = false

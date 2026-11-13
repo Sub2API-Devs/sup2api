@@ -74,4 +74,11 @@ describe('ScopePicker', () => {
     const w = render('account:read', ['group/*'], [''])
     expect(w.get('[data-testid="scope-other"]').text()).toContain('group/*')
   })
+
+  it('names no row for account:create: groups and own only', () => {
+    const w = render('account:create', [], [''])
+    expect(w.find('[data-testid="scope-ids"]').exists()).toBe(false)
+    expect(w.find('[data-testid="scope-pairs"]').exists()).toBe(false)
+    expect(w.findAllComponents(EntityPicker).map((p) => p.props('kind'))).toEqual(['group'])
+  })
 })

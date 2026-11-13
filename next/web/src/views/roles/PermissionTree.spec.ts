@@ -113,4 +113,18 @@ describe('PermissionTree scoped actions', () => {
     w.findComponent(ScopePicker).vm.$emit('update:scopes', [parsePermission('account:read:own')!.scope])
     expect(lastEmitted(w)).toEqual(['account:read:own', 'account:relay'])
   })
+
+  it('keeps the scopes open while narrowing a loaded "all", and closes them when the row is unticked', async () => {
+    const w = renderScoped(['account:read'])
+    w.findComponent(ScopePicker).vm.$emit('update:scopes', [])
+    expect(lastEmitted(w)).toEqual([])
+    await w.setProps({ granted: new Set<string>() })
+    expect(w.find('[data-testid="scope-account:read"]').text()).toContain(i18n.global.t('roles.scope.none'))
+    await boxes(w)[1].setValue(true)
+    await w.setProps({ granted: new Set(['account:read']) })
+    await boxes(w)[1].setValue(false)
+    await w.setProps({ granted: new Set<string>() })
+    expect(w.find('[data-testid="scope-account:read"]').exists()).toBe(false)
+  })
 })
+

@@ -5,7 +5,7 @@ import { flip } from './flip'
 import { SBadge, SCheckbox, SEmpty, SHint, SIcon, SSectionTitle } from '@sub2api/ui'
 import type { PermissionItem, PermissionModule } from '@/api/types'
 import { lt } from '@/i18n'
-import { ALL_SCOPE, parsePermission, type Scope, type ScopeResource } from '@/authz/implies'
+import { ALL_SCOPE, parsePermission, reduceScopes, type Scope, type ScopeResource } from '@/authz/implies'
 import { defaultScopes, offerOf, withScopes } from '@/authz/scopeChoice'
 import ScopePicker from './ScopePicker.vue'
 
@@ -34,10 +34,12 @@ const grantedScopes = computed(() => {
     const p = parsePermission(k)
     if (p) out.set(p.action, [...(out.get(p.action) ?? []), p.scope])
   }
+  // Aliases and other spellings of one scope are one choice.
+  for (const [action, list] of out) out.set(action, reduceScopes(list))
   return out
 })
 const scopesOf = (key: string) => grantedScopes.value.get(key) ?? []
-const offerFor = (key: string) => offerOf(props.scopeLimit ? props.scopeLimit(key) : [ALL_SCOPE])
+const offerFor = (key: string) => offerOf(props.scopeLimit ? props.scopeLimit(key) : [ALL_SCOPE], key)
 const isChecked = (key: string) => !!props.allGranted || props.granted.has(key) || scopesOf(key).length > 0
 const showScopes = (p: PermissionItem) => scoped(p) && !props.allGranted && (isChecked(p.key) || opened.value.has(p.key))
 
@@ -45,7 +47,8 @@ const showScopes = (p: PermissionItem) => scoped(p) && !props.allGranted && (isC
 function withItem(granted: Set<string>, p: PermissionItem, on: boolean): Set<string> {
   if (!scoped(p)) return flip(granted, p.key, on)
   if (on && isChecked(p.key)) return granted
-  if (on) opened.value = flip(opened.value, p.key, true)
+  // Ticked, the scopes stay open while being chosen; unticked, they close.
+  opened.value = flip(opened.value, p.key, on)
   return withScopes(granted, p.key, on ? defaultScopes(offerFor(p.key)) : [])
 }
 const grantedCount = (m: PermissionModule) => m.permissions.filter((p) => isChecked(p.key)).length
@@ -65,9 +68,7 @@ function moduleState(m: PermissionModule): 'all' | 'some' | 'none' {
 
 function toggle(p: PermissionItem) {
   if (props.readOnly || !selectable(p)) return
-  const on = !isChecked(p.key)
-  if (!on) opened.value = flip(opened.value, p.key, false)
-  emit('update:granted', withItem(props.granted, p, on))
+  emit('update:granted', withItem(props.granted, p, !isChecked(p.key)))
 }
 
 function toggleModule(m: PermissionModule) {
@@ -77,6 +78,8 @@ function toggleModule(m: PermissionModule) {
 }
 
 function setScopes(p: PermissionItem, scopes: Scope[]) {
+  // Narrowing (all off, the last chip removed) keeps the scopes open to choose from.
+  opened.value = flip(opened.value, p.key, true)
   emit('update:granted', withScopes(props.granted, p.key, scopes))
 }
 </script>

@@ -1207,7 +1207,7 @@ type ProxyResolver interface {
 
 - 账号页、代理页：列表加"创建人"列（`created_by_email`，全部级才显示）与"只看我的"开关；行操作按范围判定（R8：`useScope().can`，与 `DataScope.AllowsRow` 同一规则：全部；own 比 `created_by === me.id`；`account/X`、`proxy/X` 比 id；分组比 `row.group_ids`），供账号页、代理页、分组页共用。
 - 权限判断（R8）：`auth.has(k)` 为“持有的某个模式蕴含 k”（`web/src/authz/implies.ts`，与 Go 共用 `sdk/permvectors/vectors.json`）；`auth.hasAction(a)` 为任意范围持有该动作。路由 `meta.action` 按 `hasAction` 放行，`meta.perm` 按 `has`，二者满足其一即可。新建代理需要 `proxy:manage:own`（被全部或 own 蕴含）。
-- 角色页与访问密钥（R8）：`scope_type` 非空的动作勾选后展开范围选择（全部 / 自己创建的 / 指定分组 / 指定账号或代理 / 分组内的指定账号，可叠加；选全部时其余置灰），提交规范 key；候选按操作者（密钥为用户自己）的范围裁剪；id 经 `/lookup/*` 显示名称，已删除显示“#id（已删除）”。用户页角色徽章的提示为该角色的范围摘要。
+- 角色页与访问密钥（R8）：`scope_type` 非空的动作勾选后展开范围选择（全部 / 自己创建的 / 指定分组 / 指定账号或代理 / 分组内的指定账号，可叠加；选全部时其余置灰；`account:create` 不指定账号，只有全部 / 自己创建的 / 指定分组），提交规范 key；候选按操作者（密钥为用户自己）的范围裁剪；id 经 `/lookup/*` 显示名称，已删除显示“#id（已删除）”。用户页角色徽章的提示为该角色的范围摘要。
 - 账号表单代理字段二选一：**选择已有**（`ProxyPicker`，列表来自 `/proxies`，后端已按范围过滤）| **粘贴代理串**（`proxy_url`，placeholder `socks5://user:pass@host:port`，前端只做形状提示）；保存后刷新代理缓存；`proxy_url` 的字段错误显示在该输入下。
 - 代理页表单加"粘贴代理串自动填充"（前端解析填到各字段，不依赖后端）。
 - `url-presets` 组件：schema 有 `enum` 时只能选预设；只读时显示"由管理员设置"提示。

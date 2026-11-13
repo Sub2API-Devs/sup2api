@@ -3,7 +3,7 @@
 // rows within a chosen group; scopes the editors do not offer (group/*,
 // group/*/account/X) are kept as they are. Pure; PermissionTree / ScopePicker
 // render it.
-import { ALL_SCOPE, OWN_SCOPE, WILDCARD, parsePermission, patternKey, reduceScopes, scopeImplies, type Scope } from './implies'
+import { ALL_SCOPE, OWN_SCOPE, WILDCARD, parsePermission, patternKey, reduceScopes, scopeImplies, takesRowIds, type Scope } from './implies'
 
 export interface ScopeChoice {
   all: boolean
@@ -59,6 +59,8 @@ export type Offer = 'any' | number[] | null
 /**
  * The options a caller holding `limit` (its scopes of the action) may grant:
  * only what its scopes imply (the server refuses the rest, details.missing).
+ * Pairs are offered by group (any account within it); a held pair alone
+ * offers nothing. account:create names no rows.
  */
 export interface ScopeOffer {
   all: boolean
@@ -69,7 +71,7 @@ export interface ScopeOffer {
   ids: Offer
 }
 
-export function offerOf(limit: readonly Scope[]): ScopeOffer {
+export function offerOf(limit: readonly Scope[], action = ''): ScopeOffer {
   const implied = (s: Scope) => limit.some((l) => scopeImplies(l, s))
   const all = implied(ALL_SCOPE)
   const anyGroup = implied(scope(WILDCARD, 0))
@@ -80,7 +82,7 @@ export function offerOf(limit: readonly Scope[]): ScopeOffer {
     all,
     own: implied(OWN_SCOPE),
     groups: listed(anyGroup, groups),
-    ids: listed(all, ids)
+    ids: takesRowIds(action) ? listed(all, ids) : null
   }
 }
 

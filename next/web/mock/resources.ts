@@ -771,23 +771,25 @@ export function validateProxyURL(raw: string) {
 
 /**
  * CONTRACTS §21.4 find-or-create for POST/PATCH /accounts proxy_url: needs
- * the own scope of proxy:manage or more (proxy/<id> creates none); matches protocol/host/port/username/
+ * proxy:manage at any scope, and its own scope or more to create one; matches protocol/host/port/username/
  * password among the proxies the caller can see (skipping disabled ones) or
  * creates one owned by the caller.
  */
 export function resolveProxyURL(req: MockRequest, raw: string): { id: number; created: boolean } | { __status: number; body: unknown } {
   const who = caller(req)
-  if (!hasPerm(who, 'proxy:manage:own')) {
-    return fail(403, 'permission_denied', 'creating a proxy requires proxy:manage for every proxy or your own', { permission: 'proxy:manage:own' })
-  }
+  const reach = ownerScope(who, 'proxy:manage')
+  if (!reach) return fail(403, 'permission_denied', 'proxy:manage is required to attach a proxy by URL', { permission: 'proxy:manage:own' })
   const spec = parseProxyURL(raw)
   if (!spec) return validateProxyURL(raw)!
-  const visible = ownerScope(who, 'proxy:read')
   const hit = proxies
-    .filter((p) => inScope(visible, who, p) && p.status !== 'disabled')
+    .filter((p) => inScope(reach, who, p) && p.status !== 'disabled')
     .filter((p) => p.protocol === spec.protocol && p.host.toLowerCase() === spec.host && p.port === spec.port && p.username === spec.username && p.password === spec.password)
     .sort((a, b) => a.id - b.id)[0]
   if (hit) return { id: hit.id, created: false }
+  // Creating one takes the own scope or more: proxy/<id> reaches existing proxies only.
+  if (!hasPerm(who, 'proxy:manage:own')) {
+    return fail(403, 'permission_denied', 'creating a proxy requires proxy:manage for every proxy or your own', { permission: 'proxy:manage:own' })
+  }
   const p: MockProxy = {
     id: nextId(),
     name: `${spec.protocol}://${spec.host}:${spec.port}`.slice(0, 100),

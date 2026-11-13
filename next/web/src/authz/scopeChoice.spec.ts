@@ -42,5 +42,7 @@ describe('offerOf', () => {
     expect(offerOf([s('group/*')])).toEqual({ all: false, own: false, groups: 'any', ids: null })
     expect(defaultScopes(offerOf([s('group/12')]))).toEqual([])
     expect(offerOf([])).toEqual({ all: false, own: false, groups: null, ids: null })
+    // account:create names no rows.
+    expect(offerOf([s('')], 'account:create')).toEqual({ all: true, own: true, groups: 'any', ids: null })
   })
 })
