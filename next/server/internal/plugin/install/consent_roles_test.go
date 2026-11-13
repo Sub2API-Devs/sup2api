@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/pkg/pkgtest"
 )
@@ -39,7 +40,8 @@ func TestConsentRoleGrantRights(t *testing.T) {
 		t.Fatalf("checked roles %v", e.perms.checked)
 	}
 	e.perms.denyRoles = nil
-	// An empty override names no role: nothing to check.
+	// An empty override names no role (nothing to check); the other
+	// permissions keep their manifest defaults, which need no rights.
 	none := ConsentRequest{Grants: explicitGuardGrants(), NewPermissionRoles: map[string][]string{"rules:read": {}}}
 	delete(e.authz.perms[e.admin], "role:define")
 	if _, err := e.svc.Consent(ctx, "guard", "0.1.0", none, e.admin); err != nil {
@@ -49,6 +51,9 @@ func TestConsentRoleGrantRights(t *testing.T) {
 	if len(e.perms.checked) != 1 || last.defs[0].GrantRoles == nil || len(last.defs[0].GrantRoles) != 0 || !slices.Equal(last.defs[1].GrantRoles, []string{"admin"}) {
 		t.Fatalf("checked %v, defs %+v", e.perms.checked, last.defs)
 	}
+	e.perms.mu.Lock()
+	e.perms.syncs = nil
+	e.perms.mu.Unlock()
 
 	// 0.1.1 declares the same permissions, which the catalog now has.
 	if _, err := e.db.Pool.Exec(ctx, `
@@ -60,5 +65,25 @@ SELECT 'plugin.guard:' || k, 'plugin.guard', '{"en":"x"}', 'plugin', 'guard', 'd
 	upgrade := ConsentRequest{Grants: explicitGuardGrants(), RoleKeysForNewPermissions: []string{"admin"}}
 	if _, err := e.svc.Consent(ctx, "guard", "0.1.1", upgrade, e.admin); err != nil || len(e.perms.checked) != 1 {
 		t.Fatalf("upgrade adding no permission: %v, checked %v", err, e.perms.checked)
+	}
+
+	// 0.1.2 adds a permission: with role:define and roles the catalog lets
+	// the operator change, the named roles go with it.
+	m := pkgtest.Guard("guard", "0.1.2", "sub2api")
+	m.UserPermissions = append(m.UserPermissions, manifest.UserPermission{Key: "rules:export", Label: manifest.LocalizedText{"en": "Export"}})
+	if _, err := e.svc.Upload(ctx, pkgtest.Build(m, e.root), e.admin, UploadOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	e.authz.perms[e.admin]["role:define"] = true
+	named := ConsentRequest{Grants: explicitGuardGrants(), NewPermissionRoles: map[string][]string{"rules:export": {"auditor"}}}
+	if _, err := e.svc.Consent(ctx, "guard", "0.1.2", named, e.admin); err != nil {
+		t.Fatalf("named role the operator may change: %v", err)
+	}
+	if len(e.perms.checked) != 2 || !slices.Equal(e.perms.checked[1], []string{"auditor"}) {
+		t.Fatalf("checked %v", e.perms.checked)
+	}
+	last = e.perms.syncs[len(e.perms.syncs)-1]
+	if d := last.defs[len(last.defs)-1]; d.Key != "plugin.guard:rules:export" || !slices.Equal(d.GrantRoles, []string{"auditor"}) {
+		t.Fatalf("new def %+v", d)
 	}
 }

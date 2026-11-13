@@ -540,6 +540,7 @@
   - 非超管（含内置 admin）在同意页勾选内置角色（admin、operator、supplier、user）或权限比自己大的自定义角色：由成功（期 3a 遗留路径，等于绕过决策 6 改内置角色）变为 403。不勾选时按 manifest 默认授予，不受影响。控制台列出全部角色，勾了不能改的角色会在提交时报错。
   - 旧控制台默认发 `role_keys_for_new_permissions: ["admin"]`：非超管用旧控制台安装带新权限的插件会 403，需要升级控制台或不勾选（发空数组）。
   - 只有 `role:define` 而不持有插件新权限的人，现在可以把新权限交给自己能改的自定义角色（新 key 不要求持有）。
+- 已知边界（审查发现，接受）：`role:define` 用权限缓存判断（与其他接口一致），角色本身的判断在事务里加锁进行；两者之间撤销 `role:define` 的极短窗口不处理。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
 ## T60：growth、moderation 权限语义拆分（inheritFrom 保留授权），moderation 工作人员缓存 60 秒，各插件写入 defaultRoles

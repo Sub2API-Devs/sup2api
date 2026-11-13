@@ -96,17 +96,16 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 // plugin permissions to each role of roleKeys, which is a change of that
 // role (editableRole: built-in roles are the super admin's alone, a custom
 // role must be within the actor's grantSet). Super admin roles already hold
-// every permission and are refused; unknown keys are invalid. The roles stay
-// locked in tx, which is bumped as for every role write.
+// every permission and are refused; unknown keys are invalid. Like every
+// role write it bumps tx (serializing with other role changes) and locks the
+// roles; the SyncPlugin that follows publishes the new version.
 func (s *Service) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roleKeys []string) error {
 	if roleKeys = dedupe(roleKeys); len(roleKeys) == 0 {
 		return nil
 	}
-	v, err := s.Bump(ctx, tx)
-	if err != nil {
+	if _, err := s.Bump(ctx, tx); err != nil {
 		return err
 	}
-	s.committedLater(v)
 	roles, err := resolveRoles(ctx, tx, roleKeys)
 	if err != nil {
 		return err
