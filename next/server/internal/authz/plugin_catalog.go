@@ -90,7 +90,7 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 			}
 		}
 		if from = dedupe(from); len(from) > 0 {
-			if err := s.grantInherited(ctx, tx, d.Key, from); err != nil {
+			if err := s.grantInherited(ctx, tx, d.Key, from, nil); err != nil {
 				return err
 			}
 		}

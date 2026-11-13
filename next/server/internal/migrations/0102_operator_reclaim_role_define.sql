@@ -1,10 +1,14 @@
 -- The built-in operator role defines no roles (decision D3: role:define is
--- not on its whitelist). 0097 split role:manage into role:define and
--- role:assign for every role holding it, the built-in operator included, so
--- an existing operator role still holds role:define. That grant came from
--- the old defaults, not from an administrator, so it is taken back here,
--- once, audited by the system. Custom roles and the operator's other
--- permissions are left alone; a super admin may grant it again afterwards.
+-- not on its whitelist). role:manage was split into role:define and
+-- role:assign by the core sync (catalog inherits, decision 3), which gave
+-- the halves to every role holding role:manage, the built-in operator
+-- included. The sync now leaves a built-in role out of a split its defaults
+-- do not have (authz builtinsWithout), so a database upgraded from a version
+-- with role:manage never gets this grant; one where an earlier start of
+-- this version made it (test, staging, a verified production backup) has it
+-- taken back here, once, audited by the system. Custom roles and the
+-- operator's other permissions are left alone; a super admin may grant it
+-- again afterwards.
 --
 -- The authz version moves when something was taken back, so that nodes still
 -- running during a rolling upgrade drop their cached permission sets.

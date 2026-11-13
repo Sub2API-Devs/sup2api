@@ -256,6 +256,8 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 // role:manage was split into role:define and role:assign (decision 3): the
 // first sync after the split gives a role holding role:manage both halves,
 // once, and keeps role:manage as a removed permission that grants nothing.
+// A built-in role gets only the halves its defaults have: the operator
+// role:assign, never role:define (decision D3), the admin both.
 func TestSyncCoreSplitsRoleManage(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -269,7 +271,8 @@ func TestSyncCoreSplitsRoleManage(t *testing.T) {
 	// The catalog before the split, with a custom role holding role:manage.
 	exec(`INSERT INTO permissions (key, module, label, source) VALUES ('role:manage', 'role', '{"en":"x"}', 'core')`)
 	exec(`INSERT INTO roles (key, name) VALUES ('delegator', '{"en":"x"}')`)
-	exec(`INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = 'delegator' AND p.key = 'role:manage'`)
+	exec(`INSERT INTO roles (key, name, builtin) VALUES ('admin', '{"en":"x"}', true), ('operator', '{"en":"x"}', true)`)
+	exec(`INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r, permissions p WHERE r.key IN ('delegator', 'admin', 'operator') AND p.key = 'role:manage'`)
 
 	s := newService(t, db, newMemBus(), nil) // Start runs the first sync.
 	if err := s.SyncCore(ctx); err != nil {
@@ -291,6 +294,22 @@ func TestSyncCoreSplitsRoleManage(t *testing.T) {
 	mustCan(t, s, uid, "role:define", true)
 	mustCan(t, s, uid, "role:assign", true)
 	mustCan(t, s, uid, "role:manage", false)
+
+	halves := func(role string) (v string) {
+		t.Helper()
+		if err := db.Pool.QueryRow(ctx, `SELECT COALESCE(string_agg(p.key, ',' ORDER BY p.key), '') FROM role_permissions rp
+    JOIN permissions p ON p.id = rp.permission_id JOIN roles r ON r.id = rp.role_id
+    WHERE r.key = $1 AND p.key IN ('role:define', 'role:assign')`, role).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	if got := halves(RoleOperator); got != "role:assign" {
+		t.Fatalf("operator holds %q", got)
+	}
+	if got := halves(RoleAdmin); got != "role:assign,role:define" {
+		t.Fatalf("admin holds %q", got)
+	}
 }
 
 // A custom role holding a built-in role key stops the sync (decision D5): it
