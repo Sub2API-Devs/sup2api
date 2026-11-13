@@ -203,8 +203,8 @@
 
 - 改动：`proxy.newTransport(proxyURL, allowPrivate)` 改用 `netguard.Dialer`，连接代理时按解析后的 IP 拒绝私网、回环、链路本地地址（socks5 同样经过）；已存代理用 `allow_private || AllowPrivateUpstream`，`proxy_url` 的临时客户端只看 `AllowPrivateUpstream`，探测按调用者的写范围。`proxy.checkPrivate` / `privateScope` 成为“能否写私网代理、是否存 `allow_private`”的唯一判断（新建、修改、探测、`FindOrCreate` 共用），写路由用同一个 `writeScope`（`proxy:manage` / `proxy:own:manage`）注册。`PATCH /proxies/:id` 的地址（protocol、host、port）与现值不同时按新建判断并同步 `allow_private`（行先加锁读出现值）。探测保存改用写范围（此前按 `proxy:read` 判断，而这条路由不会匹配它，管理员被当成 own）。账号的 `proxy_url` 用 `core.ScopeOf` 一次得到“是否允许 + 写范围”；`POST /account-types/:p/:t/models/fetch` 的 `proxy_url` 走同一个 `parseProxyURL`。CONTRACTS §21.4、§43.3 同步。无迁移。
 - 影响对象：
-  - `AllowPrivateUpstream` 关闭（生产默认）时，`allow_private = false` 的代理（own 级建的，或 0027 之后经 `proxy_url` 自动建的）如果域名解析到非公网地址，测试与实际请求由成功变为失败。非公网按 `netguard.BlockedAddr`：除私网、回环、链路本地外，还包括 100.64.0.0/10（CGNAT、Tailscale）、198.18.0.0/15（Clash/Surge 类 fake-IP DNS）、NAT64、6to4 等；服务器使用 fake-IP DNS 时，所有按域名填写的 `allow_private = false` 代理都会失败。升级前可查 `SELECT id, name, host FROM proxies WHERE NOT allow_private` 并在服务器上逐个确认解析结果；确需保留的由持 `proxy:manage` 的人把地址改动一次再改回（如先改端口再改回，两次 PATCH），存为 `allow_private = true`。
-  - `PATCH /proxies/:id` 只在地址（protocol、host、port）与现值不同时重新判断：只持 `proxy:own:manage` 把自己的代理改到私网地址，或改动管理员放在私网地址上的代理的端口、协议，由成功变为 403；own 级改地址会把 `allow_private` 置回 `false`，`proxy:manage` 改地址置为 `true`。原样带回地址的编辑（控制台每次都带全部字段）不改 `allow_private`。
+  - `AllowPrivateUpstream` 关闭（生产默认）时，`allow_private = false` 的代理（own 级建的，或 0027 之后经 `proxy_url` 自动建的）如果域名解析到非公网地址，测试与实际请求由成功变为失败。非公网按 `netguard.BlockedAddr`：除私网、回环、链路本地外，还包括 100.64.0.0/10（CGNAT、Tailscale）、198.18.0.0/15（Clash/Surge 类 fake-IP DNS）、NAT64、6to4 等；服务器使用 fake-IP DNS 时，所有按域名填写的 `allow_private = false` 代理都会失败。升级前可查 `SELECT id, name, host FROM proxies WHERE NOT allow_private` 并在服务器上逐个确认解析结果；确需保留的由持 `proxy:manage` 的人把地址改动一次再改回（如先改端口再改回，两次 PATCH），存为 `allow_private = true`（FU1 起只改端口、协议不再置 `true`，须改动 host 再改回）。
+  - `PATCH /proxies/:id` 只在地址（protocol、host、port）与现值不同时重新判断：只持 `proxy:own:manage` 把自己的代理改到私网地址，或改动管理员放在私网地址上的代理的端口、协议，由成功变为 403；own 级改地址会把 `allow_private` 置回 `false`，`proxy:manage` 改地址置为 `true`（FU1 起只在 host 变化时置 `true`，见 FU1）。原样带回地址的编辑（控制台每次都带全部字段）不改 `allow_private`。
   - `AllowPrivateUpstream` 开启的部署（测试环境）：own 级新建或经 `proxy_url` 自动建的代理此前存 `allow_private = true`，现在存 `false`（只反映写入者的权限，使用时仍由部署开关放行）；以后关掉开关时这些行不再默认可达私网。
   - 探测与测试结果里，被拨号守卫拒绝时的 `message` 为固定文案，不再带出域名解析到的内部地址。
   - 探测保存：`proxy:manage` 现在能复用他人的代理并存为 `allow_private = true`（此前会另建一行、`allow_private = false`）。
@@ -414,3 +414,9 @@
   - 正常使用一次只有一个：关闭编辑器（组件卸载）时控制台会删除。刷新页面、直接关标签页、请求超时或多个标签页会留下没删的，闲置 15 分钟（或创建满 2 小时）后由清理任务回收；15 分钟内这样攒到 3 个后，第 4 次会看到上面的提示。控制器不可达时删不掉的草稿在清理成功之前一直占名额（此时任何草稿都用不了）。
   - 并发请求下可能多出 1 个（已接受）。
 - 回滚：revert 这两个提交即可，无迁移、无数据变化。
+
+## FU1 T30 跟进：管理员只改端口、协议时不再置 allow_private
+
+- 改动：`PATCH /proxies/:id`（`proxy/proxy.go` `update`）在地址变化时照旧经 `checkPrivate` 判断（own 范围改到私网地址或改管理员放在私网地址上的代理的端口、协议仍 403），但写入 `allow_private` 的条件收窄为“host 变化（不分大小写与现值比较），或调用者只有 own 范围”。持 `proxy:manage` 只改 `port` / `protocol` 时保留原值。`private_test.go` `TestUpdateHostPrivate` 改断言：管理员对 `allow_private = false` 的 own 代理改端口、改协议后仍为 `false`；改 host 置 `true`，此后改端口保持 `true`；own 改端口照旧置回 `false`。CONTRACTS §43.3 同步。无迁移。
+- 影响对象：持 `proxy:manage` 的人（admin）编辑他人或自己的代理只动端口、协议时，`allow_private` 不再变成 `true`。此前这样编辑后，own 属主能把域名指向内网、经该代理连到私网地址。T30 升级说明里“改端口再改回以保留私网可达”的做法不再生效，需改动 host 再改回。own 级用户的行为不变。
+- 回滚：revert 这个提交即可，无迁移；期间写下的 `allow_private` 保留。

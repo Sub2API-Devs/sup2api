@@ -2696,7 +2696,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - 只有持 `proxy:manage` 的用户能把代理保存在私网地址（存为 `allow_private = true`）。只持 `proxy:own:manage` 时：
   - 保存私网地址 → 403，`details.permission = "proxy:manage"`；
   - 保存账号时自动关联代理（§21.4）遇到私网地址同样拒绝。
-- `PATCH /proxies/:id` 改了地址（`protocol`、`host`、`port` 任一与现值不同；`host` 不分大小写比较，原样带回的字段不算）时按新建判断：只持 `proxy:own:manage` 时结果地址是私网地址 → 403；成功时 `allow_private` 跟随本次修改者（`proxy:manage` 为 `true`，否则 `false`）。地址没变时不变。
+- `PATCH /proxies/:id` 改了地址（`protocol`、`host`、`port` 任一与现值不同；`host` 不分大小写比较，原样带回的字段不算）时按新建判断：只持 `proxy:own:manage` 时结果地址是私网地址 → 403；成功时 `allow_private` 按下面的规则写：`host` 变了时跟随本次修改者（`proxy:manage` 为 `true`，否则 `false`）；只持 `proxy:own:manage` 只改 `port` / `protocol` 时同样置 `false`；持 `proxy:manage` 只改 `port` / `protocol` 时保留原值（2026-11-12 权限加固 FU1 起，此前置 `true`）。地址没变时不变。
 - `POST /proxies/probe`：只持 `proxy:own:manage` 探测私网地址 → 403；带 `save` 时按调用者的写范围查找或创建（`proxy:manage` 可复用他人的代理，新建的行 `allow_private = true`；复用的行不改 `allow_private`，探测成功不代表该行在使用时可达私网）。拨号被拒时 `attempts[].message` / 测试结果的 `message` 为固定文案，不带解析出的地址。
 - 使用代理时，`allow_private = false` 的代理指向私网地址 → 不可用。字面私网地址在建客户端时拒绝；域名在**拨号时**按解析后的 IP 判断（`netguard.Dialer`，socks5 同样经过），指向私网、回环、链路本地地址的连接失败（`netguard.ErrPrivate`）。`proxy_url` 的临时客户端（`HTTPClientFor`）与 own 范围的探测同样在拨号时检查。
 - `SUB2API_GATEWAY_ALLOW_PRIVATE_UPSTREAM=true`（只用于测试）关闭以上检查。

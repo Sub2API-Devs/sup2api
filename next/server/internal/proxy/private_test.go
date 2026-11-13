@@ -52,7 +52,8 @@ func allowPrivate(t *testing.T, svc *Service, id int64) (v bool) {
 }
 
 // PATCH with a new host is judged like a new proxy: only proxy:manage may
-// move one to a private address, and allow_private follows the last writer.
+// move one to a private address, and allow_private follows whoever set the
+// host last.
 func TestUpdateHostPrivate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.DB(t)
@@ -104,11 +105,28 @@ func TestUpdateHostPrivate(t *testing.T) {
 	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"name": "by admin", "host": "Other.Example"}); code != 200 || allowPrivate(t, svc, id) {
 		t.Fatalf("manage patch with the stored host: %d %v", code, out)
 	}
-	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"port": 3128}); code != 200 || !allowPrivate(t, svc, id) {
+	// Only a new host takes the administrator's flag: moving the port or
+	// protocol of an owner's proxy keeps it false (FU1), so the owner
+	// cannot then aim the approved row at an internal name.
+	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"port": 3128}); code != 200 || allowPrivate(t, svc, id) {
 		t.Fatalf("manage patch of the port: %d %v", code, out)
 	}
+	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"protocol": "socks5"}); code != 200 || allowPrivate(t, svc, id) {
+		t.Fatalf("manage patch of the protocol: %d %v", code, out)
+	}
+	// ...and keeps true on a row it approved.
+	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"host": "approved.example"}); code != 200 || !allowPrivate(t, svc, id) {
+		t.Fatalf("manage patch of the host: %d %v", code, out)
+	}
+	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"port": 3130, "protocol": "http"}); code != 200 || !allowPrivate(t, svc, id) {
+		t.Fatalf("manage patch of the port of an approved row: %d %v", code, out)
+	}
+	// The owner's own address edits are judged as before and clear it.
 	if code, out = do(t, engine, alice, "PATCH", path, map[string]any{"port": 3129}); code != 200 || allowPrivate(t, svc, id) {
 		t.Fatalf("own patch of the port: %d %v", code, out)
+	}
+	if code, out = do(t, engine, admin, "PATCH", path, map[string]any{"host": "10.0.0.9"}); code != 200 || !allowPrivate(t, svc, id) {
+		t.Fatalf("manage patch to a private host: %d %v", code, out)
 	}
 }
 
