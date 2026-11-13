@@ -192,8 +192,9 @@ func auditAutoGrants(ctx context.Context, tx pgx.Tx, actorID int64, key, version
 // (version "" for every version) since it was installed, that nobody
 // confirmed or rejected since and that still mean something: the permission and the role exist and the role
 // does not hold it. A confirm or reject clears its version's list; a reject
-// also clears the same (permission, role) any version withheld before it,
-// since the list shows each pair once (under its earliest version).
+// also clears the same (permission, role) under every version whose consent
+// was recorded before it (earlier or later versions alike), since the list
+// shows each pair once (under its earliest version).
 func PendingRoleGrants(ctx context.Context, q store.Querier, key, version string) ([]RoleGrant, error) {
 	rows, err := q.Query(ctx, `
 SELECT a.detail->>'version', g->>'permission', g->>'role', COALESCE((g->>'sensitive')::boolean, false), COALESCE(g->>'via', '')

@@ -272,8 +272,9 @@ SELECT 'plugin.guard:' || k, 'plugin.guard', '{"en":"x"}', 'plugin', 'guard', 'a
 	if got := pending(); !slices.Equal(got, want[1:]) {
 		t.Fatalf("after rejecting 0.1.1: %+v", got)
 	}
-	if _, err := e.svc.ReviewRoleGrants(ctx, "guard", "0.1.2", false, e.admin); err != nil {
-		t.Fatal(err)
+	// The 0.1.2 reject audits only what was still pending under it.
+	if gs, err := e.svc.ReviewRoleGrants(ctx, "guard", "0.1.2", false, e.admin); err != nil || len(gs) != 1 || gs[0].Permission != "plugin.guard:stats:export" {
+		t.Fatalf("rejecting 0.1.2: %+v, %v", gs, err)
 	}
 	if got := pending(); len(got) != 0 || len(e.perms.granted) != 0 {
 		t.Fatalf("after rejecting 0.1.2: %+v, granted %v", got, e.perms.granted)
