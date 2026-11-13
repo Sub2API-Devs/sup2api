@@ -50,6 +50,8 @@ const zh = {
     hit: '命中',
     miss: '未命中',
     unjudged: '样本不足',
+    unused: '只观察',
+    unusedHint: '没有启用的调整项使用这条规则：照常判定，但命中不会降权或清理粘性会话。',
     samplesN: '{n}（回看 {lookback}）'
   }
 }
@@ -105,6 +107,8 @@ const en: typeof zh = {
     hit: 'Hit',
     miss: 'Miss',
     unjudged: 'Too few samples',
+    unused: 'Observe only',
+    unusedHint: 'No enabled item uses this rule: it is judged as usual, but a hit neither degrades the weight nor clears sticky sessions.',
     samplesN: '{n} (over {lookback})'
   }
 }

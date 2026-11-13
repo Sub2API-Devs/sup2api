@@ -131,13 +131,15 @@ interface MockKey {
 
 const keys: MockKey[] = [
   { account_id: 12, group_id: 1, model: 'claude-sonnet-4-5', base: 3, effective: 1.47, state: 'degrading', hits: ['错误率过高'], fired: '错误率过高', ago: 300 },
-  { account_id: 12, group_id: 2, model: 'claude-opus-4-1', base: 3, effective: 0, state: 'degrading', hits: ['首字挂死'], ago: 540 },
+  { account_id: 12, group_id: 2, model: 'claude-opus-4-1', base: 3, effective: 0, state: 'degrading', hits: ['首字挂死', '健康恢复'], ago: 540 },
   { account_id: 12, group_id: 1, model: 'claude-haiku-4-5', base: 3, effective: 3, state: 'normal' },
   { account_id: 21, group_id: 1, model: 'claude-sonnet-4-5', base: 2, effective: 1.2, state: 'climbing', ago: 900 },
   { account_id: 13, group_id: 1, model: 'claude-sonnet-4-5', base: 1, effective: 1, state: 'normal' }
 ]
 
 const degraded = (k: MockKey) => k.effective < k.base
+/** The rule names a strategy's `when` references (rules.Resolved.UsedRules). */
+const whenRefs = (w: any): string[] => (typeof w === 'string' ? [w] : (w?.all ?? w?.any ?? []).flatMap(whenRefs))
 const accountName = (id: number) => accounts.find((a) => a.id === id)?.name ?? ''
 const layerOf = (groupId: number) => config.groups?.[String(groupId)] ?? config
 
@@ -146,11 +148,13 @@ function statusOf(k: MockKey) {
   const layer = layerOf(k.group_id)
   const total = 40
   const fail = k.state === 'degrading' ? 14 : 1
+  const used = new Set((layer.strategies as any[]).filter((s) => s.enabled !== false).flatMap((s) => whenRefs(s.when)))
   const rules = (layer.rules as any[]).map((r) => {
     const hit = k.hits?.includes(r.name) ?? false
     return {
       name: r.name,
       scope: r.scope || 'all',
+      used: used.has(r.name),
       periods: r.periods,
       hit_periods: r.hit_periods,
       hit,
