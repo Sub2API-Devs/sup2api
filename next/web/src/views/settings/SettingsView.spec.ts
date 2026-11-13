@@ -103,41 +103,29 @@ describe('the settings page', () => {
     expect(api.list.mock.calls.filter(([path]) => path === '/plugins')).toHaveLength(0)
   })
 
-  it('offers the client-disconnect wait only under the continue policy and saves both', async () => {
-    api.get.mockImplementation(path => Promise.resolve(path === '/settings/billing'
-      ? { pre_consume_tokens: 500, missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10', client_disconnect_policy: 'precharge', client_disconnect_wait_seconds: 120 }
-      : {}))
+  it('saves the client-disconnect policy without a wait of its own', async () => {
+    api.get.mockImplementation(path =>
+      Promise.resolve(
+        path === '/settings/billing'
+          ? {
+              pre_consume_tokens: 500,
+              missing_price_policy: 'reject',
+              min_balance: '0',
+              big_cost_warning_usd: '10',
+              client_disconnect_policy: 'continue'
+            }
+          : {}
+      )
+    )
     const wrapper = mountSettings()
     await flushPromises()
     expect(wrapper.find('[data-testid="client-disconnect-policy"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="client-disconnect-wait"]').exists()).toBe(false)
-    wrapper.unmount()
-
-    api.get.mockImplementation(path => Promise.resolve(path === '/settings/billing'
-      ? { pre_consume_tokens: 500, missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10', client_disconnect_policy: 'continue', client_disconnect_wait_seconds: 30 }
-      : {}))
-    const continuing = mountSettings()
-    await flushPromises()
-    const wait = continuing.get('[data-testid="client-disconnect-wait"] input, input[data-testid="client-disconnect-wait"]')
-    expect((wait.element as HTMLInputElement).value).toBe('30')
-    await wait.setValue('45')
-    await continuing.get('[data-testid="settings-save"]').trigger('click')
-    await flushPromises()
-    expect(api.put).toHaveBeenCalledWith('/settings/billing', expect.objectContaining({ client_disconnect_policy: 'continue', client_disconnect_wait_seconds: 45 }))
-    continuing.unmount()
-  })
-
-  it('does not let a hidden, invalid client-disconnect wait block saving', async () => {
-    api.get.mockImplementation(path => Promise.resolve(path === '/settings/billing'
-      ? { pre_consume_tokens: 500, missing_price_policy: 'reject', min_balance: '0', big_cost_warning_usd: '10', client_disconnect_policy: 'precharge', client_disconnect_wait_seconds: 0 }
-      : {}))
-    const wrapper = mountSettings()
-    await flushPromises()
     await wrapper.get('[data-testid="billing-settings"] input[type="number"]').setValue('502')
     await wrapper.get('[data-testid="settings-save"]').trigger('click')
     await flushPromises()
     const body = api.put.mock.calls.find(([path]) => path === '/settings/billing')?.[1] as Record<string, unknown>
-    expect(body).toMatchObject({ pre_consume_tokens: 502, client_disconnect_policy: 'precharge', client_disconnect_wait_seconds: 120 })
+    expect(body).toMatchObject({ pre_consume_tokens: 502, client_disconnect_policy: 'continue' })
+    expect(body).not.toHaveProperty('client_disconnect_wait_seconds')
     wrapper.unmount()
   })
 

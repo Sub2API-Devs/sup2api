@@ -104,7 +104,7 @@ export default {
       queue_fallback_max_waiting: '全部账号满时每账号最多排队数',
       queue_fallback_wait_seconds: '全部账号满时最长等待',
       media_download_max_mb: '媒体下载上限',
-      claude_default_max_tokens: 'Claude 默认 max_tokens'
+      claude_max_tokens: 'Claude 默认 max_tokens（内置参数覆盖）'
     },
     hints: {
       max_attempts: '每个请求最多尝试的账号数（含首次，用于失败切换）。',
@@ -116,20 +116,22 @@ export default {
       default_hook_timeout_ms: 'manifest 未设置超时的钩子使用此值。',
       platform_hotpath_timeout_ms: '每个请求中不属于钩子的平台调用超时：调度前解析模型、响应发完后提取用量。',
       media_download_max_mb: '请求转换到 Gemini 时下载 http(s) 图片等媒体，单个文件的大小上限（MB）。',
-      claude_default_max_tokens: '请求转换到 Anthropic 时客户端没给输出上限，按客户端模型名精确匹配取 max_tokens，没有匹配用 default 行。default 行不能删除或改名，最多 200 行，取值 0–1048576。'
+      claude_max_tokens:
+        '开启后，发往 Anthropic 账号的请求没带 max_tokens 时按下表补上，带了不改；账号自己的参数覆盖在其后执行，可再修改。关闭时只有转换到 Anthropic 的请求按协议要求补 {fallback}。'
     },
     maxTokens: {
+      title: '各模型的 max_tokens',
+      hint: '按客户端模型名精确匹配，没有匹配用 default 行；没有 default 行时其他模型不补（转换到 Anthropic 的请求仍补 {fallback}）。最多 {models} 行，取值 {min}–{max}。',
       model: '模型',
       tokens: 'max_tokens',
-      modelPlaceholder: '客户端模型名',
+      modelPlaceholder: '客户端模型名或 default',
       add: '添加模型',
       remove: '删除 {model}',
-      defaultLocked: 'default 行不能删除或改名',
       errors: {
-        value: '每行都要填 0 到 {max} 之间的整数',
-        model: '模型名不能为空，最长 200 个字符',
+        value: '每行都要填 {min} 到 {max} 之间的整数',
+        model: '模型名不能为空，最长 {nameLength} 个字符',
         duplicate: '模型名重复',
-        too_many: '最多 {n} 行'
+        too_many: '最多 {models} 行'
       }
     },
     range: '范围 {min}–{max}。',
@@ -162,11 +164,9 @@ export default {
     },
     disconnectHint: {
       precharge: '立即中止上游请求，按请求前的预扣估算计费。',
-      continue: '不再向客户端发送，但继续读完上游响应，按上游报告的实际用量计费。读取期间仍占用账号并发；读不完时按预扣估算计费。默认。',
+      continue:
+        '不再向客户端发送，但继续读完上游响应，按上游报告的实际用量计费。读取期间仍占用账号并发，并和普通请求一样受上游整体超时、流式空闲超时限制；读不完时按预扣估算计费。默认。',
       free: '立即中止上游请求，这次请求不计费。客户端收完正文再断开即可不付输出费用，只建议在内部或可信环境使用。'
-    },
-    disconnectWait: '断开后最长继续读取',
-    disconnectWaitHint: '超过这个时间仍未读完就中止上游请求，按预扣估算计费（{min} 到 {max} 秒，默认 {default}）。',
-    disconnectWaitInvalid: '请输入 {min} 到 {max} 之间的整数'
+    }
   }
 }

@@ -132,8 +132,8 @@ type Options struct {
 	// download fail with RequestError.
 	Fetch MediaFetcher
 	// ClaudeDefaultMaxTokens gives max_tokens for a request converted to
-	// Anthropic without an output limit (gateway setting
-	// claude_default_max_tokens, CONVERT-MATRIX §9.4).
+	// Anthropic without an output limit (the gateway's claude_max_tokens
+	// rule, CONVERT-MATRIX §9.4); 0 or nil uses the converter's fallback.
 	ClaudeDefaultMaxTokens func(model string) int
 }
 

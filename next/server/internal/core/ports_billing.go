@@ -79,24 +79,18 @@ const (
 	// estimate: what every request paid before the setting existed.
 	DisconnectPrecharge = "precharge"
 	// DisconnectContinue, the default, reads the upstream to its end and
-	// bills what it reports; a read that cannot finish falls back to
-	// DisconnectPrecharge.
+	// bills what it reports. The reading is bounded by the same timeouts as
+	// any upstream exchange (environment variables, CONTRACTS §74.3); a read
+	// that cannot finish falls back to DisconnectPrecharge.
 	DisconnectContinue = "continue"
 	// DisconnectFree stops the upstream and bills nothing.
 	DisconnectFree = "free"
 )
 
-// ClientDisconnect is the configured policy and, for DisconnectContinue, how
-// long the upstream may still be read once the client is gone.
-type ClientDisconnect struct {
-	Policy string
-	Wait   time.Duration
-}
-
 // ClientDisconnectSource is implemented by a BalanceGate that carries the
 // setting; a gateway whose gate does not uses DisconnectPrecharge.
 type ClientDisconnectSource interface {
-	ClientDisconnect(ctx context.Context) (ClientDisconnect, error)
+	ClientDisconnectPolicy(ctx context.Context) (string, error)
 }
 
 // BalanceGate requires both the cached balance check and atomic precharge;

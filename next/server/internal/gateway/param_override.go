@@ -15,9 +15,10 @@ import (
 // Rewrites in the format of the request parameter override (CONTRACTS §84)
 // run before BuildUpstreamRequest (docs/UPSTREAM-DECLARATIVE.md §4.3): the
 // account type's declared upstream first (core.DeclaredUpstream.PrepareBody:
-// filtered fields, the manifest's paramOverride), then the account's own
-// override. The plugin builds from the result, with meta.model the model the
-// override settled on, and its patches may still change it (user decision,
+// filtered fields, the manifest's paramOverride), then the gateway's built-in
+// override (claude_max_tokens.go), then the account's own override. The
+// plugin builds from the result, with meta.model the model the override
+// settled on, and its patches may still change it (user decision,
 // 2026-11-09). The account override's header decisions still apply over the
 // plugin's headers (forwardBuilt).
 
@@ -75,13 +76,28 @@ func (c *call) prepareDeclared(ctx context.Context, acc *core.Account, rt *typeR
 }
 
 // rewriteBody runs the rewrites of an attempt's body before
-// BuildUpstreamRequest: the declaration's part, then the account's override.
+// BuildUpstreamRequest: the declaration's part, the built-in override, then
+// the account's override.
 func (c *call) rewriteBody(ctx context.Context, acc *core.Account, rt *typeRoute, pacct *pluginv1.Account, body []byte, upModel string, n int) ([]byte, string, *attemptResult) {
 	body, upModel, failure := c.prepareDeclared(ctx, acc, rt, pacct, body, upModel, n)
 	if failure != nil {
 		return nil, "", failure
 	}
+	if body, upModel, failure = c.overrideBuiltin(ctx, acc, rt, body, upModel, n); failure != nil {
+		return nil, "", failure
+	}
 	return c.overrideAccount(ctx, acc, rt, body, upModel, n)
+}
+
+// overrideBuiltin runs the gateway's built-in override of the route's
+// upstream protocol on body. It sets no headers.
+func (c *call) overrideBuiltin(ctx context.Context, acc *core.Account, rt *typeRoute, body []byte, upModel string, n int) ([]byte, string, *attemptResult) {
+	p := c.gw.ClaudeMaxTokens.overrideFor(rt.upstream)
+	if p == nil {
+		return body, upModel, nil
+	}
+	body, upModel, _, failure := c.overrideBody(ctx, acc, rt, body, upModel, n, p.Apply, builtinOverride)
+	return body, upModel, failure
 }
 
 // overrideAccount runs the account's override on body; its header
@@ -133,8 +149,11 @@ func failureErr(r *attemptResult) *gwError {
 	return r.err
 }
 
-// accountOverride names the account's override in errors.
-const accountOverride = "account request parameter override"
+// accountOverride and builtinOverride name the overrides in errors.
+const (
+	accountOverride = "account request parameter override"
+	builtinOverride = "built-in request parameter override"
+)
 
 // paramOverrideContext is the context the override's conditions read.
 func (c *call) paramOverrideContext(acc *core.Account, rt *typeRoute, upModel string, n int) *core.ParamOverrideContext {

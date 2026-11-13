@@ -180,7 +180,7 @@ type call struct {
 	// watcher of the current upstream exchange, whether that exchange was
 	// read to its end after the client left (its usage is then complete and
 	// billed as reported).
-	disconnect               *core.ClientDisconnect
+	disconnect               string
 	drain                    *upstreamDrain
 	drained                  bool
 	task                     *core.TaskSnapshot
@@ -934,7 +934,7 @@ func (c *call) finalizeBillability(ctx context.Context, rec *core.UsageRecord, b
 }
 
 // settleCanceled decides what a request pays whose client hung up while the
-// upstream was answering, by core.ClientDisconnect's policy (CONTRACTS
+// upstream was answering, by the client disconnect policy (CONTRACTS
 // §25.8). owed says the upstream's work is to be paid for, which is what
 // makes a per_request price due; waived says the policy lets this record go
 // free whatever it holds.
@@ -958,7 +958,7 @@ func (c *call) settleCanceled(ctx context.Context, rec *core.UsageRecord, billin
 	if c.drained {
 		return true, false
 	}
-	if c.disconnectPolicy(ctx).Policy == core.DisconnectFree {
+	if c.disconnectPolicy(ctx) == core.DisconnectFree {
 		return false, true
 	}
 	est := c.precharged
