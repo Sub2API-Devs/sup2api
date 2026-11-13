@@ -280,9 +280,11 @@ func TestSyncPluginSplitsGrowthAndModeration(t *testing.T) {
 	sync("growth", []core.PermissionDef{{Key: "growth:read", GrantRoles: []string{RoleUser, RoleAdmin}}, {Key: "growth:manage", GrantRoles: []string{RoleAdmin}}})
 	sync("moderation", []core.PermissionDef{{Key: "moderation:read", GrantRoles: []string{RoleAdmin, "moderator"}}, {Key: "moderation:manage", GrantRoles: []string{RoleAdmin}}})
 
-	// Without the manifest defaults only inheritance hands the new keys out.
-	sync("growth", install.PermissionDefs(load("growth"), nil))
-	sync("moderation", install.PermissionDefs(load("moderation"), nil))
+	// Without the manifest defaults (a consent naming no role) only
+	// inheritance hands the new keys out.
+	none := map[string][]string{}
+	sync("growth", install.PermissionDefs(load("growth"), none))
+	sync("moderation", install.PermissionDefs(load("moderation"), none))
 	for key, want := range map[string][]string{
 		"plugin.growth:growth:use":            {RoleAdmin, RoleUser},
 		"plugin.growth:growth:stats:read":     {RoleAdmin},

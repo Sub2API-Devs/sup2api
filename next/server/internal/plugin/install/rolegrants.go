@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 
 	"github.com/jackc/pgx/v5"
@@ -133,42 +134,36 @@ func needConsent(gs []RoleGrant) bool {
 }
 
 // withholdGrants splits plan into the grants made now and the ones withheld
-// for review, and returns the manifest and roles a consent making only the
-// former syncs with: a permission with a withheld grant goes to its other
-// planned roles by name and inherits nothing (its holders were resolved in
-// plan, in the same transaction). Permissions without one are left as they
-// are.
-func withholdGrants(m *manifest.Manifest, roles map[string][]string, plan []RoleGrant) (*manifest.Manifest, map[string][]string, []RoleGrant) {
+// for review (pending: the system's consent; none needs consent otherwise),
+// and returns the manifest and roles the consent syncs with: every
+// permission created now goes to exactly its planned roles that need no
+// consent, by name, and inherits nothing, so that what is granted is what
+// was planned (inheritance resolved now cannot pick up a holder added
+// meanwhile).
+func withholdGrants(m *manifest.Manifest, existing map[string]bool, plan []RoleGrant) (*manifest.Manifest, map[string][]string, []RoleGrant) {
+	mm := *m
+	mm.UserPermissions = slices.Clone(m.UserPermissions)
+	roles := map[string][]string{}
 	var pending []RoleGrant
 	for _, g := range plan {
 		if g.NeedsConsent {
 			pending = append(pending, g)
 		}
 	}
-	if len(pending) == 0 {
-		return m, roles, nil
-	}
-	mm := *m
-	mm.UserPermissions = slices.Clone(m.UserPermissions)
-	out := make(map[string][]string, len(roles))
-	for k, v := range roles {
-		out[k] = v
-	}
 	for i, up := range mm.UserPermissions {
 		key := manifest.PermissionKey(m.Key, up.Key)
-		if !slices.ContainsFunc(pending, func(g RoleGrant) bool { return g.Permission == key }) {
+		if existing[key] {
 			continue
 		}
-		granted := []string{}
+		roles[up.Key] = []string{}
 		for _, g := range plan {
 			if g.Permission == key && !g.NeedsConsent {
-				granted = append(granted, g.Role)
+				roles[up.Key] = append(roles[up.Key], g.Role)
 			}
 		}
-		out[up.Key] = granted
 		mm.UserPermissions[i].InheritFrom = nil
 	}
-	return &mm, out, pending
+	return &mm, roles, pending
 }
 
 // auditAutoGrants records the role grants of a consent nobody gave (an
@@ -194,8 +189,8 @@ func auditAutoGrants(ctx context.Context, tx pgx.Tx, actorID int64, key, version
 }
 
 // PendingRoleGrants lists the role grants consents of key withheld for review
-// (version "" for every version) that nobody confirmed or rejected since and
-// that still mean something: the permission and the role exist and the role
+// (version "" for every version) since it was installed, that nobody
+// confirmed or rejected since and that still mean something: the permission and the role exist and the role
 // does not hold it.
 func PendingRoleGrants(ctx context.Context, q store.Querier, key, version string) ([]RoleGrant, error) {
 	rows, err := q.Query(ctx, `
@@ -203,6 +198,7 @@ SELECT a.detail->>'version', g->>'permission', g->>'role', COALESCE((g->>'sensit
 FROM audit_logs a CROSS JOIN LATERAL jsonb_array_elements(a.detail->'pending') g
 WHERE a.action = $3 AND a.target_type = 'plugin' AND a.target_id = $1
   AND jsonb_typeof(a.detail->'pending') = 'array'
+  AND a.created_at >= (SELECT installed_at FROM plugins WHERE key = $1)
   AND ($2 = '' OR a.detail->>'version' = $2)
   AND NOT EXISTS (SELECT 1 FROM audit_logs b WHERE b.target_type = 'plugin' AND b.target_id = a.target_id
       AND b.action = ANY($4) AND b.id > a.id AND b.detail->>'version' = a.detail->>'version')
@@ -232,10 +228,10 @@ ORDER BY a.id, 2, 3`, key, version, AuditConsentAuto, []string{AuditRoleGrantsCo
 }
 
 // ReviewRoleGrants confirms (grants) or rejects the role grants the consent
-// of version withheld for review. Confirming needs what naming those roles
-// on the consent page needs (checkRoleGrantRights: role:define and
-// CanGrantToRoles); rejecting needs nothing more than the route's
-// permission and grants nothing. Either clears the version's list, audited.
+// of version withheld for review. Either needs what naming those roles on
+// the consent page needs (checkRolesGrantable: role:define and
+// CanGrantToRoles), and clears the version's list, audited; rejecting
+// grants nothing.
 func (s *Service) ReviewRoleGrants(ctx context.Context, key, version string, confirm bool, actorID int64) ([]RoleGrant, error) {
 	ctx, release, guardErr := core.BeginPluginMutation(ctx, s.d.Mutations)
 	if guardErr != nil {
@@ -254,10 +250,17 @@ func (s *Service) ReviewRoleGrants(ctx context.Context, key, version string, con
 		if len(gs) == 0 {
 			return core.ErrNotFound.WithMessage("no role grants of this version await review")
 		}
+		roles := make([]string, 0, len(gs))
+		for _, g := range gs {
+			roles = append(roles, g.Role)
+		}
+		if err := s.checkRolesGrantable(ctx, tx, actorID, roles); err != nil {
+			return err
+		}
 		action := AuditRoleGrantsReject
 		if confirm {
 			action = AuditRoleGrantsConfirm
-			if err := s.grantReviewed(ctx, tx, actorID, gs); err != nil {
+			if err := s.grantReviewed(ctx, tx, gs); err != nil {
 				return err
 			}
 		}
@@ -272,27 +275,17 @@ func (s *Service) ReviewRoleGrants(ctx context.Context, key, version string, con
 	return gs, nil
 }
 
-// grantReviewed grants gs as the operator confirmed them, after the checks
-// an explicit consent naming the same roles passes.
-func (s *Service) grantReviewed(ctx context.Context, tx pgx.Tx, actorID int64, gs []RoleGrant) error {
+// grantReviewed grants gs, which the operator confirmed (checked by the
+// caller).
+func (s *Service) grantReviewed(ctx context.Context, tx pgx.Tx, gs []RoleGrant) error {
 	if s.d.Permissions == nil {
 		return core.ErrInternal.WithMessage("the permission catalog is not available")
 	}
 	byKey := map[string][]string{}
-	var roles []string
 	for _, g := range gs {
 		byKey[g.Permission] = append(byKey[g.Permission], g.Role)
-		roles = append(roles, g.Role)
 	}
-	if err := s.checkRolesGrantable(ctx, tx, actorID, roles); err != nil {
-		return err
-	}
-	keys := make([]string, 0, len(byKey))
-	for k := range byKey {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	for _, k := range keys {
+	for _, k := range slices.Sorted(maps.Keys(byKey)) {
 		if err := s.d.Permissions.GrantPluginPermission(ctx, tx, k, byKey[k]); err != nil {
 			return err
 		}

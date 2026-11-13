@@ -147,8 +147,8 @@ func TestBuiltinUpgradeWithholdsRoleGrants(t *testing.T) {
 	got := map[string][]string{}
 	for _, d := range defs {
 		got[d.Key] = d.GrantRoles
-		if d.Key == "plugin.guard:rules:edit" && d.InheritFrom != nil {
-			t.Fatalf("withheld permission still inherits: %+v", d)
+		if d.InheritFrom != nil {
+			t.Fatalf("a new permission still inherits (grants are by name, as planned): %+v", d)
 		}
 	}
 	if !slices.Equal(got["plugin.guard:rules:export"], []string{}) || !slices.Equal(got["plugin.guard:rules:view"], []string{"admin"}) ||
@@ -218,7 +218,11 @@ VALUES ('plugin.guard:stats:export', 'plugin.guard', '{"en":"x"}', 'plugin', 'gu
 	if pending, err := PendingRoleGrants(ctx, e.db.Pool, "guard", ""); err != nil || len(pending) != 1 || pending[0].Role != "user" || pending[0].Version != "0.1.2" {
 		t.Fatalf("second upgrade pending %+v, %v", pending, err)
 	}
-	if _, err := e.svc.ReviewRoleGrants(ctx, "guard", "0.1.2", false, e.limited); err != nil {
+	// Rejecting needs the same rights.
+	if _, err := e.svc.ReviewRoleGrants(ctx, "guard", "0.1.2", false, e.limited); core.AsError(err).Details["permission"] != "role:define" {
+		t.Fatalf("reject without role:define: %v", err)
+	}
+	if _, err := e.svc.ReviewRoleGrants(ctx, "guard", "0.1.2", false, e.admin); err != nil {
 		t.Fatal(err)
 	}
 	if pending, err := PendingRoleGrants(ctx, e.db.Pool, "guard", ""); err != nil || len(pending) != 0 || len(e.perms.granted) != 3 {

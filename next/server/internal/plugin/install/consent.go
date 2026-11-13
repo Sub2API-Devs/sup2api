@@ -323,7 +323,8 @@ func (s *Service) Consent(ctx context.Context, key, version string, req ConsentR
 // consent nobody gave (auto: a carried-over upgrade; or the system's, for a
 // built-in plugin): it fails with errRoleGrantsNeedConsent when a grant needs
 // consent, except for the system, whose such grants are withheld for review,
-// and audits the rest. It returns the manifest and roles to sync with.
+// and audits the rest. It returns the manifest and roles to sync with, which
+// grant exactly the planned grants made now (withholdGrants).
 func (s *Service) autoRoleGrants(ctx context.Context, tx pgx.Tx, actorID int64, key, version string, c *consentable, existing map[string]bool, roles map[string][]string, auto bool) (*manifest.Manifest, map[string][]string, error) {
 	m := c.manifest
 	if !c.upgrade || !(auto || isSystem(ctx)) {
@@ -333,13 +334,10 @@ func (s *Service) autoRoleGrants(ctx context.Context, tx pgx.Tx, actorID int64, 
 	if err != nil {
 		return nil, nil, err
 	}
-	var pending []RoleGrant
-	switch {
-	case isSystem(ctx):
-		m, roles, pending = withholdGrants(m, roles, plan)
-	case needConsent(plan):
+	if !isSystem(ctx) && needConsent(plan) {
 		return nil, nil, errRoleGrantsNeedConsent
 	}
+	m, roles, pending := withholdGrants(m, existing, plan)
 	return m, roles, auditAutoGrants(ctx, tx, actorID, key, version, plan, pending)
 }
 
