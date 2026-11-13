@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { SAlert, SBadge, SCode, SHint, SIcon, SLink, STable, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import { useCatalog } from './catalog'
@@ -17,12 +17,15 @@ import { imagesRefusedNote, outcomeState, stageNumber, stageState, unjudgedStage
 // (show-request). A call whose images the upstream refused is marked with a
 // warning icon (only its text was reviewed). Each cell keeps to one line: the
 // stage result, the question set, the error and the images sent are in
-// tooltips, a long reason is cut (hover for all of it). A phone card, without
-// hover, shows the whole reason and the refused-images note.
+// tooltips. The reasons are not a column (a table wider than a dialog cut
+// them off): under the table, each call that gave one or whose images were
+// refused lists its stage and auditor, the refused-images note and the whole
+// reason (line breaks kept), the same on a desktop, in a dialog and on a phone.
 const props = defineProps<{ trace: Trace; requestLink?: boolean }>()
 const emit = defineEmits<{ (e: 'show-request', requestId: string): void }>()
 const t = useModHost().t
 const catalog = useCatalog()
+const reasonsId = useId()
 
 interface Row extends Outcome {
   key: string
@@ -42,11 +45,15 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'auditor', label: t('trace.auditor'), ellipsis: '10rem', mobile: 'title' },
   { key: 'verdict', label: t('trace.verdict'), nowrap: true, mobile: 'status' },
   { key: 'top', label: t('trace.top'), nowrap: true, mobile: 'meta' },
-  // LLM auditors give a reason (a phone card also says here that the images were refused); left out when no row has one
-  ...(rows.value.some((r) => r.reason || r.images_refused) ? [{ key: 'reason', label: t('detail.f.reason'), grow: true, mobile: 'meta', mobileSpan: 2 } satisfies TableColumn] : []),
   { key: 'model', label: t('trace.model'), ellipsis: '12rem', mobile: 'detail' },
   { key: 'latency_ms', label: t('trace.latency'), align: 'right', nowrap: true, mobile: 'detail' }
 ])
+
+/** The calls listed under the table: those with a reason (LLM auditors) or whose images were refused. */
+const reasons = computed(() => rows.value.filter((r) => r.reason || r.images_refused))
+
+/** "Stage 2 · fallback", in the stage cell and over a reason. */
+const stageText = (r: Row) => `${t('trace.stageN', { n: r.stage })}${r.fallback ? ` · ${t('flows.role.fallback')}` : ''}`
 
 const VERDICT_TONE: Record<OutcomeState, 'danger' | 'success' | 'gray' | 'warning'> = { hit: 'danger', pass: 'success', skipped: 'gray', error: 'warning' }
 
@@ -92,7 +99,7 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
     <STable :columns="columns" :rows="rows" row-key="key" dense :empty-text="t('trace.empty')">
       <template #cell-stage="{ row }">
         <span class="mod-cell-line" :title="enumLabel('stageResult', row.stageResult)">
-          {{ t('trace.stageN', { n: row.stage }) }}<template v-if="row.fallback"> · {{ t('flows.role.fallback') }}</template>
+          {{ stageText(row) }}
           <SBadge v-if="row.stageResult === 'failed' || row.stageResult === 'error'" tone="warning" size="xs">{{ enumLabel('stageResult', row.stageResult) }}</SBadge>
         </span>
       </template>
@@ -112,15 +119,20 @@ const replay = computed(() => (props.trace.cache?.hit ? { source: props.trace.ca
           <SHint v-else inline>—</SHint>
         </span>
       </template>
-      <template #cell-reason="{ row, layout }">
-        <template v-if="layout === 'card'">
-          <p v-if="row.images_refused" class="mod-text-warning">{{ refusedText(row) }}</p>
-          <p v-if="row.reason || !row.images_refused">{{ row.reason || '—' }}</p>
-        </template>
-        <span v-else class="mod-ellipsis" :title="row.reason || undefined">{{ row.reason || '—' }}</span>
-      </template>
       <template #cell-model="{ row }">{{ row.model || '—' }}</template>
       <template #cell-latency_ms="{ row }"><span class="mod-num">{{ ms(row.latency_ms) }}</span></template>
     </STable>
+    <section v-if="reasons.length" class="mod-trace-reasons" :aria-labelledby="reasonsId">
+      <p :id="reasonsId" class="mod-trace-reasons-title">{{ t('detail.f.reason') }}</p>
+      <dl>
+        <div v-for="r in reasons" :key="r.key" class="mod-trace-reason">
+          <dt>{{ stageText(r) }} · {{ catalog.auditorName(r.auditor_id) }}</dt>
+          <dd>
+            <p v-if="r.images_refused" class="mod-text-warning">{{ refusedText(r) }}</p>
+            <p v-if="r.reason" class="mod-prewrap">{{ r.reason }}</p>
+          </dd>
+        </div>
+      </dl>
+    </section>
   </div>
 </template>

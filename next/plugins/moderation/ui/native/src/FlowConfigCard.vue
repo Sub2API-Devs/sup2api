@@ -5,13 +5,14 @@ import FlowTimeoutField from './FlowTimeoutField.vue'
 import { enumOptions } from './format'
 import { useModHost } from './host'
 import { SCOPES, type Scope, type Spec } from './types'
-import { NAME_MAX } from './flowOps'
+import { NAME_MAX, NEW_FLOW_SCOPE } from './flowOps'
 
 // Name, enabled switch, bound groups (read-only, with the count of account
 // bindings), sample rate, model scope, moderated scope and total timeout of
 // a flow (new-api flow-config-card.tsx). The enabled switch and the scope
 // are columns of the flow (not in the spec) and save at once; a flow from
-// before the scope existed (null) moderates everything and is told so.
+// before the scope existed (null) moderates the input (NEW_FLOW_SCOPE, 0.11.1)
+// and is told so.
 const props = defineProps<{
   name: string
   enabled: boolean
@@ -104,7 +105,7 @@ function setRate(v: unknown) {
 
       <SField :label="t('flows.scopeTitle')" :hint="t('flows.scopeHint')" class="mod-config-wide" data-testid="mod-flow-scope">
         <div class="mod-form">
-          <SSelect :model-value="scope ?? 'all'" :options="scopeOptions" :disabled="disabled || busy === 'scope'" :aria-label="t('flows.scopeTitle')" @update:model-value="emit('update:scope', $event as Scope)" />
+          <SSelect :model-value="scope ?? NEW_FLOW_SCOPE" :options="scopeOptions" :disabled="disabled || busy === 'scope'" :aria-label="t('flows.scopeTitle')" @update:model-value="emit('update:scope', $event as Scope)" />
           <SAlert v-if="!scope || scope === 'all'" :tone="scope ? 'warning' : 'info'">{{ scope ? t('flows.scopeWarn') : t('flows.scopeLegacy') }}</SAlert>
         </div>
       </SField>

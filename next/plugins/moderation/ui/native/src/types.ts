@@ -739,7 +739,7 @@ export interface Flow {
   id: number
   name: string
   enabled: boolean
-  /** a column of the flow, not part of the spec: applies at once, not versioned; null = a flow from before 0.10.0, which moderates everything */
+  /** a column of the flow, not part of the spec: applies at once, not versioned; null = a flow from before 0.10.0, which moderates the input (NEW_FLOW_SCOPE, 0.11.1) */
   scope: Scope | null
   draft: Spec
   published: Spec | null

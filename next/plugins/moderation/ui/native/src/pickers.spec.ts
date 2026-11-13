@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ApiError, type PluginHost } from '@sub2api/host'
+import { mountPinned } from '@sub2api/ui/testing'
 import { SAlert, SDropdown, SField, SFormModal, SSegmented } from '@sub2api/ui'
 import schema from '../../../forms/settings.schema.json'
 import ui from '../../../forms/settings.ui.json'
@@ -49,7 +50,7 @@ beforeEach(() => {
   const t = (key: string) => key
   setHost({
     t,
-    i18n: { t, text: (v: { zh?: string } | string) => (typeof v === 'string' ? v : (v?.zh ?? '')), locale: { value: 'zh' } },
+    i18n: { t, text: (v: { zh?: string } | string) => (typeof v === 'string' ? v : (v?.zh ?? '')), formatNumber: String, locale: { value: 'zh' } },
     components: { EntityPicker },
     plugin: { key: 'moderation' },
     pluginApi: { get: pluginGet, post, put, del },
@@ -74,6 +75,24 @@ const click = async (w: ReturnType<typeof mount>, text: string) => {
   await flushPromises()
   return w
 }
+
+// A ban reason keeps to one line in the table; it opens its row, which shows all of it.
+describe('the block list', () => {
+  it('opens the whole reason under its row', async () => {
+    const reason = `${'很长的封禁原因'.repeat(30)}\n第二行`
+    pluginGet.mockImplementation(async (path) => (path === '/blocks' ? [{ user_id: 7, reason, source: 'manual', created_at: '2026-11-12T00:00:00Z', expires_at: null }] : []))
+    const w = mountPinned(BlocksTab, {}, { compact: false })
+    await flushPromises()
+    const toggle = w.find('button.mod-reason-toggle')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(w.find('.mod-expand-text').exists()).toBe(false)
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(w.find('.mod-expand-text').element.textContent).toBe(reason)
+    await toggle.trigger('click')
+    expect(w.find('.mod-expand-text').exists()).toBe(false)
+  })
+})
 
 describe('the block form', () => {
   async function opened() {

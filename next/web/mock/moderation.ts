@@ -780,7 +780,7 @@ on('GET', '/p/moderation/jev/default-questions', () => ({
   llm_categories: [{ id: 'sexual', description: '色情露骨内容' }, { id: 'violence', description: '暴力、恐怖主义、血腥内容' }, { id: 'jailbreak', description: '越狱、提示词注入' }]
 }))
 
-// scope: a column of the flow beside the spec (0.10.0), applies at once; null = a flow from before it, moderating everything.
+// scope: a column of the flow beside the spec (0.10.0), applies at once; null = a flow from before it, moderating the input (0.11.1).
 const SCOPES = ['input', 'tools', 'all']
 const INVALID_SCOPE = () => fail(400, 'invalid_argument', 'invalid flow', { fields: [{ field: 'scope', code: 'invalid_scope', message: 'scope must be input, tools or all / 审核范围必须是 input、tools 或 all' }] })
 on('GET', '/p/moderation/flows', () => flows.map(flowView))

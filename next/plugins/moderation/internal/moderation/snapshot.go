@@ -523,8 +523,9 @@ const judgingVersion = 2
 // stored config), the channel's type, protocol, base URL and model, the
 // default question set of the auditors that use it, judgingVersion for the
 // defaults in the code, and the audit scope unless it is all (0.10.0: a
-// verdict is of the content the scope keeps; all and NULL hash as the 0.9.3
-// fingerprint did, so the flows of before keep their cache). It is part of the flow's cache keys, so changing
+// verdict is of the content the scope keeps; all hashes as the 0.9.3
+// fingerprint did. The scope hashed is auditScope's, so since 0.11.1 NULL
+// hashes as input). It is part of the flow's cache keys, so changing
 // any of these makes the cached verdicts of the flow unreachable, while the
 // flow's name, model filter, sample rate and timeout and a channel's name,
 // key, proxy, timeout and billing model leave them in place.

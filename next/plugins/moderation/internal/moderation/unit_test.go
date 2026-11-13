@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestSampled(t *testing.T) {
@@ -1237,6 +1238,11 @@ func TestParseVerdict(t *testing.T) {
 	}
 	if _, err := parseVerdict(`{"verdict":"maybe"}`, known); err == nil {
 		t.Fatal("bad verdict accepted")
+	}
+	// The reason is clipped like the question-table auditor's (clipReason).
+	long := strings.Repeat("长", llmReasonRunes+100)
+	if v, err := parseVerdict(`{"verdict":"pass","reason":"`+long+`"}`, known); err != nil || v.Reason != strings.Repeat("长", llmReasonRunes-1)+"…" {
+		t.Fatalf("reason of %d runes, %v", utf8.RuneCountInString(v.Reason), err)
 	}
 }
 

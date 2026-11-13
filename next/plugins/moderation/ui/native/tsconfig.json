@@ -12,6 +12,7 @@
     "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
+      "@sub2api/ui/testing": ["../../../../web/packages/ui/src/testViewport.ts"],
       "@sub2api/ui": ["../../../../web/packages/ui/src/index.ts"],
       "@sub2api/host": ["../../../../web/packages/host/src/index.ts"],
       "vitest": ["../../../../web/node_modules/vitest"],

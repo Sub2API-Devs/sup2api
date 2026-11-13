@@ -51,7 +51,7 @@ const (
 
 // Migration 0011 during a rolling upgrade: 0.9.3 nodes write and read flows
 // and records with their own statements before and after it, and a 0.10.0
-// node reads what they wrote - a flow without a scope runs with all and shows
+// node reads what they wrote - a flow without a scope runs with input (0.11.1) and shows
 // null, a record without a flow source shows none.
 func TestMigration0011Rolling(t *testing.T) {
 	dsn, schema := pluginsdktest.NewSchema(t, "plg_moderation_t")
@@ -129,7 +129,7 @@ func TestMigration0011Rolling(t *testing.T) {
 	p, h := startNode(t, fh, map[string]any{"mode": ModeEnforce})
 	waitFor(t, "the flows of 0.9.3 in the snapshot", func() bool { return len(p.snap.Load().flows) == 2 })
 	for _, id := range []int64{before, after} {
-		if f := p.snap.Load().flows[id]; f.scope != ScopeAll {
+		if f := p.snap.Load().flows[id]; f.scope != ScopeNew {
 			t.Fatalf("flow %d runs with scope %q", id, f.scope)
 		}
 	}
