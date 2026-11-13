@@ -30,6 +30,10 @@ type Resolved struct {
 	// min_samples_strict, those an enabled strategy that does not climb
 	// references (indexed like Rules; nil = none).
 	StrictRules []bool
+	// UsedRules marks the rules an enabled strategy references (indexed like
+	// Rules). The others are still judged, but only for display: their hits
+	// act on nothing.
+	UsedRules []bool
 	// Thresholds / LatencyThresholds are the percentile thresholds of the
 	// enabled rules (sorted, unique): what observations count per bucket.
 	Thresholds        []int
@@ -73,6 +77,7 @@ func derive(l Layer) derived {
 	cfg.Thresholds, cfg.LatencyThresholds = percentileThresholds(cfg.Rules)
 	var enabled []Strategy
 	cfg.Strategies, enabled = resolveStrategies(l.Strategies, cfg.Rules)
+	cfg.UsedRules = referencedRules(len(cfg.Rules), cfg.Strategies, func(ResolvedStrategy) bool { return true })
 	if l.MinSamplesStrict {
 		cfg.StrictRules = strictRules(cfg.Rules, cfg.Strategies)
 	}
@@ -93,18 +98,24 @@ func derive(l Layer) derived {
 // samples must not do it. Climb-only rules stay lenient: a degraded key gets
 // less traffic, and would otherwise never gather enough to recover.
 func strictRules(rules []Rule, strategies []ResolvedStrategy) []bool {
-	strict := make([]bool, len(rules))
+	return referencedRules(len(rules), strategies, func(s ResolvedStrategy) bool { return s.Direction() != Climb })
+}
+
+// referencedRules marks the n rules that the strategies keep accepts
+// reference.
+func referencedRules(n int, strategies []ResolvedStrategy, keep func(ResolvedStrategy) bool) []bool {
+	marked := make([]bool, n)
 	for _, s := range strategies {
-		if s.Direction() == Climb {
+		if !keep(s) {
 			continue
 		}
 		// With every leaf true Eval visits all of them.
 		s.Tree.Eval(func(idx int) (bool, bool) {
-			strict[idx] = true
+			marked[idx] = true
 			return true, false
 		})
 	}
-	return strict
+	return marked
 }
 
 // percentileThresholds lists the thresholds of the TTFB and of the latency

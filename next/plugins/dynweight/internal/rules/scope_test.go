@@ -2,6 +2,7 @@ package rules
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -260,5 +261,32 @@ func TestZeroClearsSticky(t *testing.T) {
 	s = newSim(t, compiled(t, func(c *Config) { toZero(c); c.ClearStickyOnZero = false }), 100)
 	if out := s.step(1, 0, 61000); out.WeightTo != 0 || len(out.SideEffects) != 0 {
 		t.Fatalf("turned off: %+v", out.SideEffects)
+	}
+}
+
+// A strategy switched off leaves its rule judged: the status shows its hits
+// as unused, and nothing acts on them (no weight step, no event rule).
+func TestDisabledStrategyRuleOnlyObserves(t *testing.T) {
+	off := false
+	s := newSim(t, compiled(t, func(c *Config) {
+		c.WindowSeconds, c.MinSamples = 60, 3
+		c.Strategies[1].Enabled = &off // 首字 p95 过慢
+	}), 100)
+	if !reflect.DeepEqual(s.cfg.UsedRules, []bool{true, false, true, true, true}) {
+		t.Fatalf("used %v", s.cfg.UsedRules)
+	}
+	var out Output
+	for range 3 {
+		out = s.step(5, 0, 20000)
+	}
+	if out.WeightTo != 100 || len(out.Steps) != 0 || len(out.SideEffects) != 0 {
+		t.Fatalf("slow first tokens acted: %+v", out)
+	}
+	r := Describe(1, &out.State, &s.cfg, 100, true, nil, s.win+70).Rules[1]
+	if r.Name != "首字 p95 过慢" || !r.Hit || r.Used {
+		t.Fatalf("status %+v", r)
+	}
+	if fired := FiredRules(&s.cfg, strings.Repeat(string(ruleHitFired), 5)); !reflect.DeepEqual(fired, []string{"错误率过高", "首字挂死", "健康恢复", "复活探测"}) {
+		t.Fatalf("fired %v", fired)
 	}
 }

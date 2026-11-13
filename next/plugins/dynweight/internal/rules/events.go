@@ -118,17 +118,9 @@ func Events(cfg *Resolved, window int64, out Output) []Event {
 // FiredRules names the rules that fired, among those an enabled strategy
 // references (a rule of a disabled strategy acts on nothing).
 func FiredRules(cfg *Resolved, lastRules string) []string {
-	referenced := make([]bool, len(cfg.Rules))
-	for _, s := range cfg.Strategies {
-		// With every leaf true Eval visits all of them.
-		s.Tree.Eval(func(idx int) (bool, bool) {
-			referenced[idx] = true
-			return true, false
-		})
-	}
 	var names []string
 	for idx, r := range cfg.Rules {
-		if referenced[idx] && idx < len(lastRules) && RuleFired(lastRules[idx]) {
+		if cfg.UsedRules[idx] && idx < len(lastRules) && RuleFired(lastRules[idx]) {
 			names = append(names, r.Name)
 		}
 	}

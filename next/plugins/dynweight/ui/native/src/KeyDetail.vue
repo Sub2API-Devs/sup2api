@@ -124,7 +124,8 @@ const judged = computed(() => !!props.row.eval_window && props.row.adjusting)
           <tbody>
             <tr v-for="r in row.rules" :key="r.name">
               <td class="dw-acct-ellipsis" :title="r.name">
-                {{ r.name }}<span v-if="r.scope !== 'all'" class="dw-acct-muted"> · {{ t(`scope.${r.scope}`) }}</span>
+                {{ r.name }}<span v-if="r.scope !== 'all'" class="dw-acct-muted"> · {{ t(`scope.${r.scope}`) }}</span
+                ><span v-if="!r.used" class="dw-acct-muted" :title="t('acct.detail.unusedHint')"> · {{ t('acct.detail.unused') }}</span>
               </td>
               <td class="dw-num">
                 {{ t('acct.detail.mOfN', { m: r.hit_periods, n: r.periods }) }}

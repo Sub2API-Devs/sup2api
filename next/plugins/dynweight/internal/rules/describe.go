@@ -5,10 +5,13 @@ import "cmp"
 // RuleResult is an enabled rule of a key's layer and its last result:
 // whether it hit and fired, its hits of the last Periods windows (newest
 // last) and the evidence it was judged on. The results are left out while
-// the state is from other rules or the adjustment is off.
+// the state is from other rules or the adjustment is off. Used is whether an
+// enabled strategy references the rule: an unused rule is judged all the
+// same, but its hits act on nothing (its strategy was switched off).
 type RuleResult struct {
 	Name       string `json:"name"`
 	Scope      string `json:"scope"`
+	Used       bool   `json:"used"`
 	Periods    int    `json:"periods"`
 	HitPeriods int    `json:"hit_periods"`
 	Hit        bool   `json:"hit"`
@@ -155,7 +158,7 @@ func currentWindow(cur Counts, res *Resolved, start, now int64) CurrentWindow {
 func ruleResults(res *Resolved, last *State, matched bool) []RuleResult {
 	out := make([]RuleResult, len(res.Rules))
 	for i, r := range res.Rules {
-		out[i] = RuleResult{Name: r.Name, Scope: cmp.Or(r.Scope, ScopeAll), Periods: r.Periods, HitPeriods: r.HitPeriods}
+		out[i] = RuleResult{Name: r.Name, Scope: cmp.Or(r.Scope, ScopeAll), Used: res.UsedRules[i], Periods: r.Periods, HitPeriods: r.HitPeriods}
 		if !matched {
 			continue
 		}

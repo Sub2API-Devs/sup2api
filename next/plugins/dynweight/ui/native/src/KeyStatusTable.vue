@@ -8,9 +8,9 @@ import { canManage, keyOf, successRate, trendTone, useDwHost, weightOf, weightTo
 
 // The keys of a GET /status list with their pager, one line per key: the
 // configuration in force, weight against base and its direction, last
-// window, rules hit, last change, and a ⋯ menu with the key's events and a
-// reset (emitted, the owner confirms and reloads; `busy` is the key being
-// reset). A row expands to its KeyDetail. Shared by the status tab (every
+// window, rules hit (only those an enabled item uses: the others act on
+// nothing), last change, and a ⋯ menu with the key's events and a reset
+// (emitted, the owner confirms and reloads; `busy` is the key being reset). A row expands to its KeyDetail. Shared by the status tab (every
 // account, selectable) and the account tab (one account, no account column).
 const props = defineProps<{ list: UseListResult<KeyStatus>; busy: string; selectable?: boolean; hideAccount?: boolean }>()
 const emit = defineEmits<{ (e: 'reset', row: KeyStatus): void; (e: 'show-events', row: KeyStatus): void }>()
@@ -43,7 +43,7 @@ const columns = computed<TableColumn[]>(() => {
   ]
 })
 
-const rows = computed(() => props.list.items.value.map(r => ({ ...r, key: keyOf(r), hits: r.rules.filter(x => x.hit) })))
+const rows = computed(() => props.list.items.value.map(r => ({ ...r, key: keyOf(r), hits: r.rules.filter(x => x.hit && x.used) })))
 
 const menu = (r: KeyStatus): MenuAction[] => [
   { key: 'events', label: t('status.events'), icon: 'chart' },
