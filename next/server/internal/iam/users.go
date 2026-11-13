@@ -514,22 +514,10 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, id int64) error {
 	return nil
 }
 
-// SetUserRoles replaces a user's roles (PUT /users/:id/roles).
+// SetUserRoles replaces a user's roles (PUT /users/:id/roles). An access
+// key assigns no roles (it has no assignable list, §43.6), so the super
+// admin's own roles never reach the step-up of the guard through one.
 func (s *Service) SetUserRoles(ctx context.Context, actorID, id int64, roleKeys []string) (*User, error) {
-	// The super admin changing its own roles through an access key needs a
-	// step-up proof (UserGuard). Spend it before the transaction, which
-	// holds the authz lock: the guard inside then sees it spent.
-	if actorID == id && core.ByAccessKey(ctx, actorID) {
-		su, err := s.authz.IsSuperuser(ctx, s.db.Pool, actorID)
-		if err != nil {
-			return nil, err
-		}
-		if su {
-			if err := s.ConsumeStepUp(ctx, core.StepUpSuperAdminIdentity); err != nil {
-				return nil, err
-			}
-		}
-	}
 	var v int64
 	var u *User
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
