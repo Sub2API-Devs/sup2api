@@ -180,6 +180,9 @@ function resetEditor() {
 
 // ------------------------------------------------------------------ create / delete
 
+/** Field error codes of POST /roles shown in the console's language. */
+const CREATE_FIELD_CODES = { reserved: 'roles.keyReserved' }
+
 const createOpen = ref(false)
 const creating = ref(false)
 const createErrors = ref<Record<string, string>>({})
@@ -213,7 +216,7 @@ async function submitCreate() {
     }
   } catch (e) {
     // The name is one field in the form but two (name.en / name.zh) on the server.
-    if (applyFormError(e, createErrors)) {
+    if (applyFormError(e, createErrors, CREATE_FIELD_CODES)) {
       const fe = createErrors.value
       fe.name ||= fe['name.en'] || fe['name.zh'] || ''
     }

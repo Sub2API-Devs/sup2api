@@ -5,6 +5,7 @@ export default {
   key: 'Key',
   keyHint: 'Lowercase letters, digits and underscores; cannot be changed later.',
   keyInvalid: 'Use 2-50 lowercase letters, digits or underscores, starting with a letter',
+  keyReserved: 'This key is reserved for a built-in role; choose another',
   nameEn: 'Name (English)',
   nameZh: 'Name (Chinese)',
   builtin: 'Built-in',

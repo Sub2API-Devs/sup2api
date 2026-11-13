@@ -5,6 +5,7 @@ export default {
   key: '标识',
   keyHint: '小写字母、数字和下划线，创建后不能修改。',
   keyInvalid: '请使用 2-50 位小写字母、数字或下划线，以字母开头',
+  keyReserved: '这是内置角色保留的标识，请换一个',
   nameEn: '名称（英文）',
   nameZh: '名称（中文）',
   builtin: '内置',

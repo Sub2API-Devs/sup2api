@@ -53,6 +53,16 @@ describe('RolesView role key', () => {
   })
 })
 
+describe('RolesView reserved key', () => {
+  it('shows the reserved key error in the console language', async () => {
+    mocks.post.mockRejectedValueOnce(new ApiError(400, { code: 'invalid_argument', message: 'key is reserved', details: { fields: [{ field: 'key', code: 'reserved', message: 'key is reserved' }] } }))
+    i18n.global.locale.value = 'zh'
+    const w = await create('supplier')
+    expect(w.text()).toContain(i18n.global.t('roles.keyReserved'))
+    expect(w.text()).not.toContain('key is reserved')
+  })
+})
+
 describe('RolesView permissions (T77)', () => {
   const role = (over: object) => ({ id: 1, key: 'lead', name: 'Lead', builtin: false, superuser: false, permission_keys: ['user:read'], assignable_role_keys: ['user'], assign_custom: false, ...over })
   const roles = [

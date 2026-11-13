@@ -57,7 +57,7 @@ export default {
   },
   ledger: '余额流水',
   adjustBalance: '调整余额',
-  resetSecurity: '重置二次验证和通行密钥',
-  resetSecurityConfirm: '{name} 的二次验证和全部通行密钥都会被移除，之后只凭密码就能登录。确定吗？',
+  resetSecurity: '重置两步验证和通行密钥',
+  resetSecurityConfirm: '{name} 的两步验证和全部通行密钥都会被移除，之后只凭密码就能登录。确定吗？',
   resetSecurityDone: '已重置'
 }

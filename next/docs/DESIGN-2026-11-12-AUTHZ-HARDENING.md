@@ -777,3 +777,13 @@
 - 改动：新增 `dashboard/AccountStatusCard.vue`（可用/总数、自动停用与手动禁用、无可用为红、有自动停用为琥珀），管理员仪表盘改用它（原内联卡片与 tone 计算移入）。非管理员仪表盘：持有 `account:read` 或 `account:own:read` 时取 `GET /accounts/summary` 显示该卡片，不依赖 `usage:self:read`（供应商只有 own 级账号权限也能看到自己的账号状态）；刷新按钮一并重取。`AccountCounts` 类型共用；web mock 增加 `/accounts/summary`。
 - 测试：新增 `UserDashboard.spec`（own 级账号权限显示卡片与计数、无账号读权限不请求不显示）；`AdminDashboard.spec` 照常通过。
 - 回滚：revert 提交即可，纯前端。
+
+## 期 4 前端遗留（FOLLOWUPS）
+
+- 新建角色用了内置角色保留的 key：`fields[{field:"key", code:"reserved"}]` 按控制台语言显示（`roles.keyReserved`），不再只显示服务端英文。
+- web mock 默认角色集合按服务端更新：admin = 全部核心权限去掉超管专属（`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`）；operator 为 D3 显式白名单；新增内置 supplier；内置角色带默认可管理清单（D5），`PUT /roles/:id/assignable` 与 `GET /me/assignable-roles` 有 mock；权限目录补 `audit`、`system` 模块与 `user:password:reset`、`account:group:bind`、`account:relay`、`usage:settle`、`task:manage`、`plugin:grant:db_schema_unconfined`；保留 key 回 `reserved`。
+- 升级页（T45 跟进）：预检结果的 `warnings`（如 tokenless 管理开关仍开着）以“提醒（不阻断升级）”显示，不影响开始升级。
+- 用词：两步验证（TOTP）在中文界面统一为“两步验证”，“二次验证”留给高危操作前的再次确认（step-up）。
+- UsersView spec 已在 T78 补齐。未做：访问密钥页 sessionOnly 文案随 S 任务（删除 sessionOnly）由后端会话一并处理。
+- 测试：`RolesView.spec`（reserved 中文提示）、新增 `UpgradesView.spec`（warnings 显示且不阻断）。
+- 回滚：revert 提交即可，纯前端与 mock。
