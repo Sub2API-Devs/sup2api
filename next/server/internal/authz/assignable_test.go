@@ -264,6 +264,11 @@ func TestCanActOnUsersPeerProtection(t *testing.T) {
 	if err := s.CanActOnUsers(rootKey, root, core.ActOnIdentity, admin); err != nil {
 		t.Fatalf("super admin's key on an admin's account: %v", err)
 	}
+	// An admin's key on the super admin's account: not managed, whatever
+	// the session would say.
+	if err := s.CanActOnUsers(keyed, admin, core.ActOnIdentity, root); !isCode(err, "permission_denied") || detail(err, "reason") != "not_manageable" {
+		t.Fatalf("admin's access key on the super admin's account: %v", err)
+	}
 	if err := s.CanActOnUsers(keyed, admin, core.ActOnIdentity, roleless); err != nil {
 		t.Fatalf("admin's access key on a user: %v", err)
 	}

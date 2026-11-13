@@ -61,8 +61,9 @@ func (s *Service) cachedUnion(userIDs []int64) core.PermissionSet {
 	return set
 }
 
-// grantSet is what actorID may hand out and act upon: what its roles grant,
-// narrowed by its access key, which never leaves a superuser. It reads
+// grantSet is what actorID may hand out (grants and role assignment): what
+// its roles grant, narrowed by its access key, which never leaves a
+// superuser. Whom it acts on is its roles alone (canActOnUsers, FU6). It reads
 // through q, so a check inside a transaction sees that transaction and never
 // this node's cache, which may lag another node's change (C-L4).
 func (s *Service) grantSet(ctx context.Context, q store.Querier, actorID int64) (core.PermissionSet, error) {
@@ -202,7 +203,9 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID int64, action core.U
 // what the caller may do (the route's permission), not whom. One exception
 // keeps decision 1: ActOnIdentity on a superuser is refused to an access key.
 // An action on oneself that passes (only a superuser's, with the default
-// lists) is audited here, the one place.
+// lists; also a custom role with assign_custom, or listing itself, manages
+// its holders, themselves included) is audited here, the one place. The row
+// says the check passed, not that the action then succeeded.
 func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, action core.UserAction, targetIDs ...int64) error {
 	return s.canActOnUsers(ctx, s.querier(), actorID, action, targetIDs...)
 }
@@ -210,8 +213,7 @@ func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, action core.
 // canActOnUsers is CanActOnUsers reading through q, the transaction of the
 // change when there is one.
 func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID int64, action core.UserAction, targetIDs ...int64) error {
-	ids := slices.Sorted(slices.Values(targetIDs))
-	ids = slices.Compact(ids)
+	ids := slices.Compact(slices.Sorted(slices.Values(targetIDs)))
 	if actorID == 0 || len(ids) == 0 {
 		return nil
 	}
@@ -223,9 +225,6 @@ func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID in
 	if err != nil {
 		return err
 	}
-	if action == core.ActOnIdentity && target.Superuser && core.ByAccessKey(ctx, actorID) {
-		return superuserSessionOnly(ctx)
-	}
 	if err := within(actor, target, cannotActOn(ctx, target)); err != nil {
 		return err
 	}
@@ -233,6 +232,10 @@ func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID in
 		if key != RoleUser && !actor.CanAssign(key) {
 			return cannotActOnPeer(ctx, key)
 		}
+	}
+	// Only an actor that manages the superuser gets this far with one.
+	if action == core.ActOnIdentity && target.Superuser && core.ByAccessKey(ctx, actorID) {
+		return superuserSessionOnly(ctx)
 	}
 	if !slices.Contains(ids, actorID) {
 		return nil

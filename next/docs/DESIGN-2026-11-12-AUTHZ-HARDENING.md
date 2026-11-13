@@ -530,6 +530,8 @@
 
 ## FU2 segment:manage 不能改自己所在用户组的定价与授权（产品性收紧，单独提交）
 
+> FU6 改写了判断方式：`GuardOwnSegments` 不再经 `core.ActOnOthers`，改为问 `UserGuard` 调用者能否管理自己，被拒时 409 `you cannot change the terms of a user group you are in`（原为 `you cannot do this to yourself`），见 FU6。
+
 - 改动：新增 `segment.GuardOwnSegments(ctx, q, users, segmentIDs)`：调用者是其中任一用户组（默认用户组除外）的成员时经 `core.ActOnOthers(ctx, users, actor, actor)` 判断，非超管 409 `you cannot do this to yourself`，超管放行并由 `authz.ActOnSelf` 记 `user.act_on_self` 审计（FU5）。所有改变用户组定价或授权的入口只调这一个函数：`PATCH /segments/:id` 带 `discount` 时（只改名称、描述不检查）、`DELETE /segments/:id`（事务里，加锁之后）、`savePairs`（`PUT /segments/:id/groups` 与 `PUT /groups/:id/segments` 共用，事务里 `lockPairs` 之后，按 `items` 涉及的全部用户组）、billing `saveGroupPrices`（`PUT /groups/:id/model-prices`，事务里按 `segment_id` 非空的项，`segmentsOf`）。个人专属的设置走的就是这几个接口，设/取消个人专属已由 T33 检查。访问密钥照常先过路由权限（`segment:manage` / `group:manage`）。CONTRACTS §97.6 原“作用于用户组本身的写入不做目标用户检查（wontfix）”一段改写。无迁移。
 - 默认用户组豁免（主节点决定）：所有用户默认都在默认用户组，改它等同于改全平台定价，与 `price:manage`、`group:manage` 改全局价格同一性质，不算给自己定价；FU2 堵的是命名组与个人专属组里的自我定价。如需收紧，只要去掉 `GuardOwnSegments` SQL 里的 `NOT s.is_default`。
 - 测试：`segment` `TestSettingsOfOwnSegment`（自己所在命名组的折扣、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、删除均 409 且不写；改名与读取不受影响；不含自己的组与默认组成功；自己的个人专属同样 409；超管改自己所在组成功并有审计）；`billing` `TestGroupModelPricesOfOwnSegment`（自己所在命名组、个人专属的专属价 409，他人的组、分组自身价格、默认组 200）。
@@ -564,4 +566,6 @@
   - 访问密钥：“能对谁做”不再被密钥收窄。admin 带 `user:update` / `balance:adjust` 的密钥现在能作用于 supplier、operator 与自定义角色的持有者（此前只能动只有 `user` 角色的人）；超管带 `balance:adjust` / `segment:manage` 的密钥能作用于任何人（含自己）的数据。超管账号本身的身份类修改仍只接受超管本人的会话。
   - 审计：作用于自己的成功检查记 `user.act_on_self`（`detail.self = true`，取代 FU5 的 `reason: self_by_superuser`）。
   - 已知：检查先于操作写审计，操作随后失败时审计行留下（同 FU5）。
+- 审查补充：`session_only` 的判断移到可管理检查之后，所以只有真能管理超管的操作者（超管本人）会看到它，admin 的密钥对超管仍是 `not_manageable`；FU2 的 409 文案本地化；注释更新。
+- 待确认：带 `assign_custom`（“全部自定义角色”）或清单列了自己的自定义角色，按同一规则能管理自己和同角色的持有者（`RolesPermissions` 把 `assign_custom` 展开为全部自定义角色，含自己这个角色），例如带 `balance:adjust` + `assign_custom` 的自定义角色可以给自己调余额、改自己用户组的定价。这是规则的字面结果，已写入 CONTRACTS §43.6；若不希望，可在 `canActOnUsers` 里对本人排除其自身的非内置角色。
 - 回滚：revert FU6 的提交（与 review fixes）即可，回到 FU5 的行为；无迁移、无数据变化。合并提交无需回滚。

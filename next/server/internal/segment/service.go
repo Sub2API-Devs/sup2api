@@ -73,9 +73,11 @@ func (s *Service) actOnUsers(ctx context.Context, userIDs ...int64) error {
 	return s.users.CanActOnUsers(ctx, actor, core.ActOnData, userIDs...)
 }
 
-// errOwnSegment refuses a change to the terms of a user group the caller is
-// in (GuardOwnSegments).
-var errOwnSegment = core.ErrConflict.WithMessage("you cannot change the terms of a user group you are in")
+// errOwnSegment is the refusal of a change to the terms of a user group the
+// caller is in (GuardOwnSegments).
+func errOwnSegment(ctx context.Context) *core.Error {
+	return core.ErrConflict.WithMessage(t(ctx, "you cannot change the terms of a user group you are in", "你不能修改自己所在用户组的定价或授权"))
+}
 
 // GuardOwnSegments fails unless the caller may change what the segments
 // charge or grant (discount, grants, rates, model prices): the caller is a
@@ -100,7 +102,7 @@ func GuardOwnSegments(ctx context.Context, q store.Querier, users core.UserGuard
 	}
 	err := users.CanActOnUsers(ctx, actor, core.ActOnData, actor)
 	if err != nil && core.AsError(err).Code == core.ErrPermissionDenied.Code {
-		return errOwnSegment.WithCause(err)
+		return errOwnSegment(ctx).WithCause(err)
 	}
 	return err
 }

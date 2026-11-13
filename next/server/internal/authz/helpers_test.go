@@ -213,8 +213,9 @@ func TestCanActOnUsers(t *testing.T) {
 	bg := context.Background()
 	const sessionOnly = "a superuser's account changes only through the superuser's own session"
 	data, identity := core.ActOnData, core.ActOnIdentity
-	// Without a database there are no role keys: these cases judge what the
-	// roles grant, and the access key rule (FU6). Roles, peers and oneself:
+	// Without a database there are no role keys: these cases judge only what
+	// the roles grant and the access key rule (FU6), so a non-superuser on
+	// itself passes here. Roles, peers and oneself as they really are:
 	// TestCanActOnUsersPeerProtection.
 	tests := []struct {
 		name    string
