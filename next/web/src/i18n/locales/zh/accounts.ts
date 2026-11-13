@@ -13,6 +13,7 @@ export default {
     emptyFiltered: '没有符合筛选条件的账号，请调整或清除筛选。', empty: '暂无可见账号。', limitsColumn: '并发 / RPM / TPM / 会话',
     numberRange: '{label}须为 {min}–{max} 的整数', saved: '已保存', clearIds: '清除账号 ID 筛选', idsTruncated: '{label}（前 {n} 个）',
     enableAccount: '启用：{name}', disableAccount: '禁用：{name}', disableHint: '禁用账号，不再参与调度',
+    adminLockedHint: '已被管理员禁用，只有管理员可以重新启用',
     enableHint: '启用账号',
     enableAutoHint: '未启用（已自动禁用或关闭了调度）。点击即手动启用：清除自动禁用及原因，并恢复调度；冷却不清除（可用“重置状态”清除）',
     enabledDone: '已启用「{name}」', disabledDone: '已禁用「{name}」', disableByHand: '转为手动禁用'

@@ -81,6 +81,9 @@ type row struct {
 	// AutoDisabledSource says who wrote an automatic disable (0070):
 	// usageLimitSource or '' (plugins and failure policies).
 	AutoDisabledSource string
+	// AdminLocked: disabled by a caller with the full scope who did not
+	// create the account (0100); see checkAdminLock.
+	AdminLocked bool
 }
 
 // selectRow joins the creator's email (also for soft-deleted users); every
@@ -90,7 +93,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.spm_window_seconds, a.model_limits, a.environment, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough,a.param_override,a.conversion_loss_policy
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.rate_limit_tier,a.auto_models,a.auto_disabled_source,a.header_passthrough,a.param_override,a.conversion_loss_policy,a.admin_locked
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -100,7 +103,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.SPMWindowSeconds, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough, &a.ParamOverride, &a.LossPolicy)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.RateLimitTier, &a.AutoModels, &a.AutoDisabledSource, &a.HeaderPassthrough, &a.ParamOverride, &a.LossPolicy, &a.AdminLocked)
 	return &a, err
 }
 
@@ -183,14 +186,17 @@ type View struct {
 	Type            string                          `json:"type"`
 	// TypeLabel is the account type label; null when the type is no longer
 	// registered (plugin disabled or uninstalled).
-	TypeLabel         manifest.LocalizedText `json:"type_label"`
-	GroupIDs          []int64                `json:"group_ids"`
-	Groups            []GroupRef             `json:"groups"`
-	ProxyID           *int64                 `json:"proxy_id"`
-	Status            string                 `json:"status"`
-	StatusReason      string                 `json:"status_reason"`
-	AutoDisabledUntil *time.Time             `json:"auto_disabled_until"`
-	Schedulable       bool                   `json:"schedulable"`
+	TypeLabel    manifest.LocalizedText `json:"type_label"`
+	GroupIDs     []int64                `json:"group_ids"`
+	Groups       []GroupRef             `json:"groups"`
+	ProxyID      *int64                 `json:"proxy_id"`
+	Status       string                 `json:"status"`
+	StatusReason string                 `json:"status_reason"`
+	// AdminLocked: an administrator disabled the account; its creator cannot
+	// enable it or reset its status until an administrator does.
+	AdminLocked       bool       `json:"admin_locked"`
+	AutoDisabledUntil *time.Time `json:"auto_disabled_until"`
+	Schedulable       bool       `json:"schedulable"`
 	// AutoDisable lets the gateway disable the account on credential or quota
 	// failures; false only cools it down (CONTRACTS §42).
 	AutoDisable    bool `json:"auto_disable"`
@@ -298,7 +304,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		v := &View{
 			ID: a.ID, Name: a.Name, PluginKey: a.PluginKey, Type: a.Type, TypeLabel: s.typeLabel(a.PluginKey, a.Type),
 			GroupIDs: []int64{}, Groups: []GroupRef{}, ProxyID: a.ProxyID, Status: a.Status,
-			StatusReason: a.StatusReason, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
+			StatusReason: a.StatusReason, AdminLocked: a.AdminLocked, AutoDisabledUntil: a.AutoDisabledUntil, Schedulable: a.Schedulable, AutoDisable: a.AutoDisable, Priority: a.Priority, Weight: a.Weight,
 			MaxConcurrency: a.MaxConcurrency, Models: models, AutoModels: a.AutoModels, ModelMapping: a.mapping(),
 			RPMLimit: a.RPMLimit, TPMLimit: a.TPMLimit, SPMLimit: a.SPMLimit, SPMWindowSeconds: a.SPMWindowSeconds, ModelLimits: a.modelLimits(), Environment: a.Environment,
 			HeaderPassthrough: passthrough, ParamOverride: a.ParamOverride, ConversionLossPolicy: a.LossPolicy,
@@ -1039,8 +1045,9 @@ type ownChange struct {
 
 // checkOwnChange enforces the own-level restrictions (SEC-H3) on what the
 // write changes, so values an administrator set do not block saving the
-// form as is: group changes (G1, M10), capped fields (W2-G4) and a new or
-// moved custom upstream (G2).
+// form as is: group changes (G1, M10), capped fields (W2-G4), a new or
+// moved custom upstream (G2) and enabling an account an administrator
+// disabled (W1-F10).
 func (s *Service) checkOwnChange(ctx context.Context, scope *int64, ch ownChange) error {
 	if scope == nil {
 		return nil
@@ -1054,9 +1061,53 @@ func (s *Service) checkOwnChange(ctx context.Context, scope *int64, ch ownChange
 		}
 	}
 	if ch.cur == nil || ch.upstreamChanged {
-		return s.checkCustomUpstream(ctx, scope, ch.bt)
+		if err := s.checkCustomUpstream(ctx, scope, ch.bt); err != nil {
+			return err
+		}
+	}
+	return checkAdminLock(ctx, ch.cur, ch.in.Status)
+}
+
+// errAdminLocked answers an own-level caller who tries to bring back an
+// account an administrator disabled.
+var errAdminLocked = core.NewError(403, "account_locked_by_admin", "the account was disabled by an administrator")
+
+// checkAdminLock refuses an own-level caller moving a locked account (cur,
+// nil on create) to status: only active is refused, and only as a change.
+func checkAdminLock(ctx context.Context, cur *row, status *string) error {
+	if cur == nil || !cur.AdminLocked || status == nil || *status != "active" || cur.Status == "active" {
+		return nil
+	}
+	return errAdminLocked.WithMessage(t(ctx,
+		"this account was disabled by an administrator; only an administrator can enable it",
+		"该账号已被管理员禁用，只有管理员可以重新启用"))
+}
+
+// adminLockAfter is what a status change does to the lock, nil for no
+// change: the full scope locks when it disables an account somebody else
+// created and unlocks when it enables; an own-level caller never moves it
+// (checkAdminLock already refused enabling a locked account).
+func adminLockAfter(scope *int64, uid int64, cur *row, status string) *bool {
+	if scope != nil {
+		return nil
+	}
+	switch status {
+	case "active":
+		return new(false)
+	case "disabled":
+		if cur.CreatedBy == nil || *cur.CreatedBy != uid {
+			return new(true)
+		}
 	}
 	return nil
+}
+
+// disabledReason is the status_reason of a manual disable.
+func disabledReason(scope *int64) string {
+	if scope != nil {
+		return "disabled by owner"
+	}
+	return "disabled by administrator"
 }
 
 // checkGroupBind lets a changed group list (unbinding included) through
@@ -1558,9 +1609,18 @@ func (s *Service) update(c *gin.Context) {
 		if statusChanged {
 			r := ""
 			if *in.Status == "disabled" {
-				r = "disabled by administrator"
+				r = disabledReason(scope)
 			}
 			reason = &r
+		}
+		// Judged on the requested status, changed or not: an administrator
+		// disabling an account its owner already disabled takes it over.
+		var adminLocked *bool
+		if in.Status != nil {
+			adminLocked = adminLockAfter(scope, uid, locked, *in.Status)
+		}
+		if reason == nil && adminLocked != nil && *adminLocked && !locked.AdminLocked {
+			reason = new(disabledReason(scope))
 		}
 		var mapping, limits *string
 		if in.ModelMapping != nil {
@@ -1596,11 +1656,12 @@ func (s *Service) update(c *gin.Context) {
 			param_override = CASE WHEN $24 THEN $25::jsonb ELSE param_override END,
 			conversion_loss_policy = CASE WHEN $26 THEN $27 ELSE conversion_loss_policy END,
 			spm_window_seconds = COALESCE($28, spm_window_seconds),
+			admin_locked = COALESCE($29, admin_locked),
 			updated_at = clock_timestamp()
 			WHERE a.id = $1 AND `+scoped("$17"), id, in.Name, setProxy, proxyID, in.Priority, in.MaxConcurrency, in.Schedulable,
 			in.Status, reason, enc, settings, in.Weight, in.Models, mapping, in.RPMLimit, in.TPMLimit, scope,
 			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment, in.HeaderPassthrough,
-			len(in.ParamOverride) > 0, in.paramOverride(), in.ConversionLossPolicy.Set, in.ConversionLossPolicy.Stored(), in.SPMWindowSeconds); err != nil {
+			len(in.ParamOverride) > 0, in.paramOverride(), in.ConversionLossPolicy.Set, in.ConversionLossPolicy.Stored(), in.SPMWindowSeconds, adminLocked); err != nil {
 			return err
 		}
 		if statusChanged && *in.Status == "active" && limitDisabled(locked.Status, locked.AutoDisabledSource) {
@@ -1698,13 +1759,22 @@ func (s *Service) resetStatus(c *gin.Context) {
 			return err
 		}
 		a = loaded
+		// Resetting brings the account back: refused like enabling it.
+		if scope != nil {
+			if err := checkAdminLock(ctx, a, new("active")); err != nil {
+				return err
+			}
+		}
 		cleared, err := s.clearCooldown(ctx, id)
 		if err != nil {
 			return err
 		}
 		statusReset := a.Status != "active" || a.StatusReason != "" || a.AutoDisabledUntil != nil
 		if statusReset {
-			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL, updated_at = clock_timestamp()
+			// Only the full scope gets here with a locked account, and its
+			// reset unlocks.
+			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL,
+				admin_locked = false, updated_at = clock_timestamp()
 				WHERE id = $1`, id); err != nil {
 				return err
 			}

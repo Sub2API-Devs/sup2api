@@ -660,6 +660,8 @@ export interface Account {
   usage?: AccountUsage | null
   status: string
   status_reason?: string
+  /** An administrator disabled the account: its creator cannot enable it or reset its status. */
+  admin_locked?: boolean
   auto_disabled_until?: string | null
   credentials?: Record<string, unknown>
   settings?: { locale?: string; timezone?: string; [key: string]: unknown }

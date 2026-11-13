@@ -747,7 +747,8 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `groups` | `[{id, name}]`，按 id 升序 |
 | `proxy_id` | 可为 `null`（直连） |
 | `status` | `active` \| `disabled` |
-| `status_reason` | 管理员禁用时为 `"disabled by administrator"`，重新启用时清空 |
+| `status_reason` | 手动禁用时，全量范围（`account:update`）写 `"disabled by administrator"`，own 范围（`account:own:update`）写 `"disabled by owner"`；重新启用时清空 |
+| `admin_locked` | 管理员禁用锁（2026-11-12 权限加固 W1-F10，迁移 0100）：全量范围把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 true（账号已被属主禁用时同样置 true，原因改为管理员）；为 true 时 own 范围把 `status` 改为 `active` 或调用 `reset-status` 都返回 403 `account_locked_by_admin`，其余字段照常可改；全量范围启用或重置状态时清除。全量范围禁用自己创建的账号不上锁。存量账号为 false，不追溯 |
 | `schedulable`、`priority`、`max_concurrency` | `max_concurrency=0` 表示不限 |
 | `in_use` | 当前占用的并发槽位数（集群实时） |
 | `cooldown_until` | 冷却截止时间（按 Redis TTL 推算，精确到秒），未冷却为 `null` |
@@ -2839,7 +2840,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 **`GET /api/v1/accounts`**（以及 `GET /accounts/:id` 等返回账号视图的接口）每项新增 `quota: QuotaSnapshot | null`：一次批量读 PG，**从不**触发上游请求；不支持额度的类型为 null；支持但尚无数据时为 `{supported: true, source: "", updated_at: null, error: "", windows: []}`。
 
-**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：
+**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：own 范围遇到 `admin_locked` 的账号返回 403 `account_locked_by_admin`；全量范围重置时清除该锁（2026-11-12，见 §5 账号字段 `admin_locked`）。
 
 1. 在事务内按所属权限锁定账号，删除 Redis 冷却键 `cooldown:account:<id>`；
 2. 将账号 `status` 恢复为 `active`，清空 `status_reason`，包括 §42 自动禁用、管理员禁用及错误状态；**保留 `schedulable` 开关**，不会把手动关闭调度的账号重新放入请求池；
