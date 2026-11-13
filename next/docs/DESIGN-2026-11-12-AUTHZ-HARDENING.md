@@ -1393,7 +1393,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 ### F1 插件升级授权统一为严的规则（产品性收紧，待决定 1）
 
 - 改动：`plugin/install/consent.go` `upgradeRoleGrants`（原 `autoRoleGrants`）。操作者在同意页批准升级时，按 `planRoleGrants` 算出本次同意会做的授予，其中需要同意的（`needs_consent`：敏感，或授予对象不是内置 `admin`/`operator`/`supplier`）的每个目标角色都要过 `checkRolesGrantable`（`role:define` + `PermissionCatalog.CanGrantToRoles`：内置角色只有超管能改，自定义角色须在可分配清单内且不是自己持有的），与 `role-grants/confirm` 同一函数；请求里显式指定、已由 `checkRoleGrantRights` 查过的角色不再重复查。不需要同意的授予、首次安装、自动沿用与系统同意不变。失败 403，事务回滚，版本仍为 `awaiting_consent`。
-- 控制台：同意页（`ConsentView`）在升级时，若列出的需同意授予里有调用者不能指定的角色（`useNameableRoles`，与插件页确认按钮同一规则），禁用“确认升级”并提示是哪些角色；在上面把该权限改授给自己能指定的角色后，默认授予退出列表即可提交。
+- 控制台：同意页（`ConsentView`）在升级时，若列出的需同意授予里有调用者不能指定的角色（`useNameableRoles`，与插件页确认按钮同一规则），禁用“确认升级”，在授予列表里标出这些角色；在上面把该权限改授给自己能指定的角色或不授予（与 manifest 默认不同就发送，空列表也发送）后，默认授予退出列表即可提交；继承来的授予不能这样去掉。
 - 测试：install `TestUpgradeConsentNeedsRightsOverTheRoles`（真实 authz `CanGrantToRoles`：非超管 admin 批准带敏感权限给内置 admin 的升级 → 403 且版本仍待同意；超管成功并授予）、`TestUpgradeRoleGrantsNeedConsent`（无 `role:define` 403、角色不可改 403、只查需同意的角色）；web `ConsentView.spec`（升级时非超管被拦、改授角色后放行、首次安装不受限、超管放行）。
 - 影响对象：只有 `plugin:install`（及 `role:define`）的非超管管理员，不能再批准把需同意授予给内置角色的第三方插件升级，由超管批准，或改授给自己可管理的自定义角色。
 - 回滚：revert 该提交（前后端同一提交）。无迁移。

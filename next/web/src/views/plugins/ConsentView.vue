@@ -18,7 +18,6 @@ import type { HPRow } from './consent/hostPermission'
 import { useConsentLabels } from './consent/hostPermission'
 import { useOptionalT } from '@/composables/optionalText'
 import { useNewPermissionRoles } from './consent/newPermissionRoles'
-import { useAssignableRoles } from '@/composables/useAssignableRoles'
 import NewRoleGrants from './consent/NewRoleGrants.vue'
 import { P } from '@/generated/permissions'
 
@@ -41,8 +40,6 @@ const showMissing = ref(false)
 
 const checked = reactive<Record<string, boolean>>({})
 const permissionRoles = useNewPermissionRoles(review)
-const managedRoles = useAssignableRoles()
-const roleName = (key: string) => lt(managedRoles.get(key)?.name) || key
 /** The default grants, less those of permissions given other roles here (their choice is shown with them). */
 const shownRoleGrants = computed(() => {
   const changed = new Set(Object.keys(permissionRoles.payload()).map((k) => `plugin.${key.value}:${k}`))
@@ -285,7 +282,7 @@ onMounted(load)
       <ProvidesSummary :review="review" :permission-roles="permissionRoles" />
 
       <!-- the role grants the new permissions get -->
-      <NewRoleGrants :grants="shownRoleGrants" :need-consent="!!review.role_grants_need_consent" class="mt-4" />
+      <NewRoleGrants :grants="shownRoleGrants" :need-consent="!!review.role_grants_need_consent" :blocked-roles="blockedRoles" class="mt-4" />
 
       <!-- host permissions -->
       <HostPermissionTable :rows="rows" :checked="checked" :show-missing="showMissing" @toggle="toggle" />
@@ -300,7 +297,7 @@ onMounted(load)
             {{ t('plugins.consent.blockedByPermission', { list: blockedByPermission.map((x) => hpLabel(x.id)).join(', ') }) }}
           </p>
           <p v-else-if="blockedRoles.length" class="text-orange-700 dark:text-orange-300" data-testid="role-grants-blocked">
-            {{ t('plugins.consent.roleGrantsBlocked', { list: blockedRoles.map(roleName).join(t('plugins.listSep')) }) }}
+            {{ t('plugins.consent.roleGrantsBlocked') }}
           </p>
           <p v-else-if="missingRequired.length" class="text-gray-600 dark:text-gray-300">
             {{ t('plugins.consent.stillRequired', { n: missingRequired.length }) }}

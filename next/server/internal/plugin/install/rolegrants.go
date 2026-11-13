@@ -87,7 +87,9 @@ func planRoleGrants(ctx context.Context, q store.Querier, m *manifest.Manifest, 
 		}
 		for _, role := range roles[up.Key] {
 			// Manifest defaults name built-in roles only (manifest
-			// BuiltinRoleKeys); an explicit override is never planned.
+			// BuiltinRoleKeys). An operator's override may name custom
+			// roles: marked built-in here, they need consent all the same,
+			// no custom role being one of autoGrantRoles.
 			add(up, role, true, "default")
 		}
 		for _, k := range up.InheritFrom {

@@ -200,10 +200,17 @@ describe('plugin consent page', () => {
     const w = render(upgrade)
     await flushPromises()
     expect(approve(w)).toBe(true)
-    expect(w.get('[data-testid="role-grants-blocked"]').text()).toContain('管理员')
+    expect(w.find('[data-testid="role-grants-blocked"]').exists()).toBe(true)
+    expect(w.findAll('[data-testid="role-grant-blocked"]')).toHaveLength(1)
     // Giving the permission a role it may name instead takes the default grants out.
     await roleBox(w, 'demo.read', 'auditor').setValue(true)
     expect(approve(w)).toBe(false)
+    // Or none: an empty choice differs from the defaults and is sent.
+    await roleBox(w, 'demo.read', 'auditor').setValue(false)
+    expect(approve(w)).toBe(false)
+    await w.get('[data-testid="consent-approve"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post.mock.calls[0][1].new_permission_roles).toEqual({ 'demo.read': [] })
     // A first install is not held to it (the server checks upgrades only).
     const first = render({ ...upgrade, diff: null })
     await flushPromises()
