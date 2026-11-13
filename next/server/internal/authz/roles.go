@@ -109,7 +109,10 @@ func (s *Service) getRole(ctx context.Context, q store.Querier, id int64) (*Role
 // built-in role is the super admin's alone to change (decision 6), and a
 // custom role must be within the actor's grantSet (cannotActOnRole, M5: an
 // actor who could weaken a role above it could then act on that role's
-// holders). The system (actor 0) passes. Every role write goes through it.
+// holders) and, while it has holders, on the actor's assignable list: a
+// change to the role is a change to them, so it takes the role the actor
+// manages them by (§43.6; assign_custom never covers the actor's own
+// roles). The system (actor 0) passes. Every role write goes through it.
 func (s *Service) editableRole(ctx context.Context, tx pgx.Tx, actorID, id int64) (*Role, error) {
 	r, err := scanRole(tx.QueryRow(ctx, roleSelect+` WHERE r.id = $1 FOR UPDATE OF r`, id))
 	switch {
@@ -124,11 +127,21 @@ func (s *Service) editableRole(ctx context.Context, tx pgx.Tx, actorID, id int64
 	case r.Builtin:
 		return r, s.covers(ctx, tx, actorID, core.PermissionSet{Superuser: true}, builtinRoleSuperOnly(ctx))
 	}
+	actor, err := s.grantSet(ctx, tx, actorID)
+	if err != nil {
+		return nil, err
+	}
 	cur, err := s.RolesPermissions(ctx, tx, []string{r.Key})
 	if err != nil {
 		return nil, err
 	}
-	return r, s.covers(ctx, tx, actorID, cur, cannotActOnRole(ctx))
+	if err := within(actor, cur, cannotActOnRole(ctx)); err != nil {
+		return nil, err
+	}
+	if r.UserCount > 0 && !actor.CanAssign(r.Key) {
+		return nil, notAssignable(ctx, r.Key)
+	}
+	return r, nil
 }
 
 // CreateRoleInput is the body of POST /roles.
@@ -239,9 +252,9 @@ func nilIfEmpty(t core.LocalizedText) any {
 	return t
 }
 
-// DeleteRole deletes a custom role actorID may edit (editableRole); its
-// assignments cascade, so while it has holders deleting it revokes it and
-// the role must be on the actor's assignable list.
+// DeleteRole deletes a custom role actorID may edit (editableRole: while it
+// has holders, deleting it revokes it, and the role must be on the actor's
+// assignable list); its assignments cascade.
 func (s *Service) DeleteRole(ctx context.Context, actorID, id int64) error {
 	return s.mutate(ctx, func(tx pgx.Tx) error {
 		r, err := s.editableRole(ctx, tx, actorID, id)
@@ -250,15 +263,6 @@ func (s *Service) DeleteRole(ctx context.Context, actorID, id int64) error {
 		}
 		if r.Builtin {
 			return errBuiltinRole
-		}
-		if r.UserCount > 0 && actorID != 0 {
-			actor, err := s.grantSet(ctx, tx, actorID)
-			if err != nil {
-				return err
-			}
-			if !actor.CanAssign(r.Key) {
-				return notAssignable(ctx, r.Key)
-			}
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM roles WHERE id = $1`, id); err != nil {
 			return err

@@ -385,6 +385,54 @@ WHERE action = 'user.roles' AND user_id = $1 AND target_type = 'user' AND target
 	}
 }
 
+// Every write to a role with holders changes them, so the actor must be
+// able to assign it (editableRole): deleting it revokes it, and a definer
+// must not empty or rewrite the role of users it cannot manage, its peers
+// under assign_custom included (§43.6). A role without holders only needs
+// its grants within the actor.
+func TestHeldRoleWritesNeedAssign(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "lead", Name: lt("Lead", "组长"),
+		PermissionKeys: []string{"role:define", "user:read"}, AssignCustom: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "member", Name: lt("x", "x"), PermissionKeys: []string{"user:read"}}); err != nil {
+		t.Fatal(err)
+	}
+	lead1 := addUser(t, s, "lead1@x.com", "lead")
+	addUser(t, s, "lead2@x.com", "lead")
+	addUser(t, s, "member@x.com", "member")
+	lead := roleID(t, s, "lead")
+	writes := map[string]func(id int64) error{
+		"rename": func(id int64) error {
+			_, err := s.UpdateRole(ctx, lead1, id, UpdateRoleInput{Name: lt("Renamed", "改名")})
+			return err
+		},
+		"permissions": func(id int64) error { _, err := s.SetRolePermissions(ctx, lead1, id, []string{}); return err },
+		"assignable":  func(id int64) error { _, err := s.SetRoleAssignable(ctx, lead1, id, AssignableInput{}); return err },
+		"delete":      func(id int64) error { return s.DeleteRole(ctx, lead1, id) },
+	}
+	for name, write := range writes {
+		if err := write(lead); !isCode(err, "permission_denied") || detail(err, "role") != "lead" {
+			t.Errorf("lead1 may %s its own held role: %v", name, err)
+		}
+	}
+	if r, err := s.GetRole(ctx, lead); err != nil || len(r.PermissionKeys) != 2 || !r.AssignCustom {
+		t.Fatalf("lead changed: %+v %v", r, err)
+	}
+	// assign_custom covers a held custom role lead1 does not hold.
+	member := roleID(t, s, "member")
+	for _, name := range []string{"rename", "permissions", "assignable", "delete"} {
+		if err := writes[name](member); err != nil {
+			t.Errorf("lead1 may not %s a role it manages: %v", name, err)
+		}
+	}
+}
+
 // Deleting a role with holders revokes it from them, so the actor must be
 // able to assign it; a role without holders only needs editableRole.
 func TestDeleteRoleRevokes(t *testing.T) {
