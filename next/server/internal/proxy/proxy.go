@@ -769,6 +769,7 @@ func (s *Service) delete(c *gin.Context) {
 	}
 	scope := s.scopeOf(ctx, perm.ProxyManage)
 	uid, _ := core.UserID(ctx)
+	var authzVersion int64
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
 		// Visibility first: a proxy outside the caller's range is 404 even
 		// when it is in use.
@@ -795,7 +796,7 @@ func (s *Service) delete(c *gin.Context) {
 		if _, err := tx.Exec(ctx, `DELETE FROM proxies WHERE id = $1`, id); err != nil {
 			return err
 		}
-		if err := core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefProxy, []int64{id}); err != nil {
+		if authzVersion, err = core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefProxy, []int64{id}); err != nil {
 			return err
 		}
 		return audit.Audit(ctx, tx, uid, "proxy.delete", "proxy", strconv.FormatInt(id, 10), map[string]any{"name": name})
@@ -804,6 +805,7 @@ func (s *Service) delete(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	core.AnnounceAuthzChanged(ctx, s.bus, authzVersion)
 	s.changed(ctx, id)
 	httpapi.NoContent(c)
 }

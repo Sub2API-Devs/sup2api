@@ -157,11 +157,7 @@ func (s *Service) Bump(ctx context.Context, tx pgx.Tx) (int64, error) {
 // committed: it invalidates local caches and broadcasts authz:changed.
 func (s *Service) Committed(ctx context.Context, version int64) {
 	s.invalidate(version)
-	if s.bus != nil {
-		if err := s.bus.Publish(ctx, core.ChannelAuthzChanged, []byte(strconv.FormatInt(version, 10))); err != nil {
-			slog.WarnContext(ctx, "authz: publish authz:changed failed", "err", err)
-		}
-	}
+	core.AnnounceAuthzChanged(ctx, s.bus, version)
 }
 
 // committedLater is used when the transaction belongs to the caller: it waits

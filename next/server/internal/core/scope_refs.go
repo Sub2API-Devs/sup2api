@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -26,14 +27,16 @@ var scopeRefPatterns = map[string]string{
 // deleted rows ids of kind, audited as authz.scope.clear by actorID (0 =
 // the system) per role, and moves the authz version when any went. A grant
 // naming a deleted row reaches nothing anyway; clearing it keeps roles
-// readable and a reused id from being reached.
-func ClearScopeGrants(ctx context.Context, tx pgx.Tx, actorID int64, kind string, ids []int64) error {
+// readable and a reused id from being reached. It returns the new authz
+// version, 0 when nothing went: the caller announces it after commit
+// (AnnounceAuthzChanged), as every authz write does.
+func ClearScopeGrants(ctx context.Context, tx pgx.Tx, actorID int64, kind string, ids []int64) (int64, error) {
 	pattern, ok := scopeRefPatterns[kind]
 	if !ok {
-		return fmt.Errorf("core: unknown scope reference kind %q", kind)
+		return 0, fmt.Errorf("core: unknown scope reference kind %q", kind)
 	}
 	if len(ids) == 0 {
-		return nil
+		return 0, nil
 	}
 	patterns := make([]string, len(ids))
 	for i, id := range ids {
@@ -48,12 +51,13 @@ func ClearScopeGrants(ctx context.Context, tx pgx.Tx, actorID int64, kind string
 	// there is something to clear, so that deletes do not queue behind it.
 	var found bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM role_permission_scopes WHERE scope ~ ANY($1))`, patterns).Scan(&found); err != nil || !found {
-		return err
+		return 0, err
 	}
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM authz_meta WHERE id = 1 FOR UPDATE`); err != nil {
-		return err
+		return 0, err
 	}
-	_, err := tx.Exec(ctx, `WITH cleared AS (
+	var version int64
+	err := tx.QueryRow(ctx, `WITH cleared AS (
     DELETE FROM role_permission_scopes rs USING permissions p
     WHERE p.id = rs.permission_id AND rs.scope ~ ANY($1)
     RETURNING rs.role_id, p.key || ':' || rs.scope AS key
@@ -63,6 +67,10 @@ func ClearScopeGrants(ctx context.Context, tx pgx.Tx, actorID int64, kind string
         jsonb_build_object('kind', $3::text, 'ids', to_jsonb($4::bigint[]), 'keys', to_jsonb(array_agg(key ORDER BY key)))
     FROM cleared GROUP BY role_id
 )
-UPDATE authz_meta SET version = version + 1 WHERE id = 1 AND EXISTS (SELECT 1 FROM cleared)`, patterns, actor, kind, ids)
-	return err
+UPDATE authz_meta SET version = version + 1 WHERE id = 1 AND EXISTS (SELECT 1 FROM cleared)
+RETURNING version`, patterns, actor, kind, ids).Scan(&version)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil // cleared meanwhile, before the lock
+	}
+	return version, err
 }

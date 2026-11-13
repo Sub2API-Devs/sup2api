@@ -1896,6 +1896,7 @@ func (s *Service) delete(c *gin.Context) {
 	}
 	scope := s.scopeOf(ctx, perm.AccountDelete)
 	uid, _ := core.UserID(ctx)
+	var authzVersion int64
 	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
 		var pk, typ, name string
 		err := tx.QueryRow(ctx, `UPDATE accounts a SET deleted_at = now(), updated_at = now()
@@ -1910,7 +1911,7 @@ func (s *Service) delete(c *gin.Context) {
 		if _, err := tx.Exec(ctx, `DELETE FROM account_groups WHERE account_id = $1`, id); err != nil {
 			return err
 		}
-		if err := core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefAccount, []int64{id}); err != nil {
+		if authzVersion, err = core.ClearScopeGrants(ctx, tx, uid, core.ScopeRefAccount, []int64{id}); err != nil {
 			return err
 		}
 		retainUntil, err := s.markResourcesDeleted(ctx, tx, id, pk, typ, retain)
@@ -1930,6 +1931,7 @@ func (s *Service) delete(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	core.AnnounceAuthzChanged(ctx, s.d.Bus, authzVersion)
 	if s.d.Redis != nil {
 		_ = s.d.Redis.Del(ctx, cooldownKey(id)).Err()
 	}

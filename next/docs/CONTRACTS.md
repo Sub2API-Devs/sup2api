@@ -1087,7 +1087,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 - **账号（期 4 R3）**：列表、详情、写、删、测试、凭证、统计、汇总、动作、`AccountsInScope`（插件账号路由与宿主 RPC）都按调用者在对应动作上的范围过滤，越权一律 404。`mine=true`、`created_by=<id>` 在范围内再收窄（此前 own 级忽略 `created_by`）。受限档（范围不是全部）沿用 own 级的全部限制（并发默认与上限、管理员锁、受限设置、relay、绑定分组）。
   - 新建：范围不含 own、只有分组时，`group_ids` 必须含其中一个分组，否则 400 `fields[{group_ids, not_in_scope}]`。
   - 改分组：绑定或解绑自己范围内的分组（`group/G`、`group/*`）不需要 `account:group:bind`；写入后账号必须仍在调用者的 update 范围内，否则 403 `would_leave_scope`（整笔回滚）。
-  - 删除账号、删除分组时，清除点名它们的带范围授予（`core.ClearScopeGrants`，按角色审计 `authz.scope.clear`，推进 authz 版本）。
+  - 删除账号、删除分组时，清除点名它们的带范围授予（`core.ClearScopeGrants`，按角色审计 `authz.scope.clear`，推进 authz 版本并返回新版本；调用方提交后经 `core.AnnounceAuthzChanged` 广播 `authz:changed`，与其他授权写入一样立即作废各节点的权限缓存，广播丢失时由版本轮询兜底）。
 - **代理与引用（期 4 R4）**：
   - 代理的列表、详情、位置、改、删、测试、回显都按 `proxy:read` / `proxy:manage` 的范围过滤，`mine`、`created_by` 在范围内收窄。
   - 新建代理（POST `/proxies`、`/proxies/probe`、保存账号时经 `proxy_url` 自动建）要求 `proxy:manage` 的范围是全部或 own；只有 `proxy/X` 时 403，`details.permission = proxy:manage:own`。
