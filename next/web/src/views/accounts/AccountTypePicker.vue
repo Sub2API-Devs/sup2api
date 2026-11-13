@@ -11,7 +11,7 @@ import TrustBadge from '@/views/plugins/parts/TrustBadge.vue'
 import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import AccountTypePlatforms from './AccountTypePlatforms.vue'
 import { typeKey, useAccountTypes } from './accountTypes'
-import { creationChoices } from './accountTypeChoices'
+import { creationChoices, sameCreationGroup } from './accountTypeChoices'
 
 // Step 1 of "new account" (wireframe A.3 / CONTRACTS §18.4): one flat grid of
 // compact cards, one per account type. Endpoints are collapsed by default.
@@ -19,9 +19,14 @@ const emit = defineEmits<{ (e: 'pick', t: AccountType): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
 const caps = useAccountCaps()
-/** A type the caller cannot create is shown greyed with the permission it needs. */
+/**
+ * A card stands for its creation group: it opens on the first type of the
+ * group the caller can create; with none it is greyed with the permission it needs.
+ */
+const creatableOf = (at: AccountType) => items.value.find(x => (x === at || sameCreationGroup(at, x)) && caps.creatable(x))
 function pick(at: AccountType) {
-  if (caps.creatable(at)) emit('pick', at)
+  const target = creatableOf(at)
+  if (target) emit('pick', target)
 }
 const { grouped, loaded, load } = useAccountTypes()
 load(true)
@@ -57,8 +62,8 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
         role="button"
         tabindex="0"
         class="card flex flex-col gap-2 p-3 text-left transition"
-        :class="caps.creatable(at) ? 'cursor-pointer hover:border-primary-300 hover:shadow-card-hover dark:hover:border-primary-700' : 'cursor-not-allowed opacity-60'"
-        :aria-disabled="!caps.creatable(at)"
+        :class="creatableOf(at) ? 'cursor-pointer hover:border-primary-300 hover:shadow-card-hover dark:hover:border-primary-700' : 'cursor-not-allowed opacity-60'"
+        :aria-disabled="!creatableOf(at)"
         :data-type="typeKey(at.plugin_key, at.type)"
         @click="pick(at)"
         @keydown.enter.self.prevent="pick(at)"
@@ -79,7 +84,7 @@ const isOpen = (at: AccountType) => !!expanded.value[typeKey(at.plugin_key, at.t
         <AccountTypePlatforms :items="at.platforms" />
 
         <SHint v-if="at.description" size="xs" class="line-clamp-2">{{ lt(at.description) }}</SHint>
-        <SHint v-if="!caps.creatable(at)" size="xs" tone="warning" data-testid="type-needs-relay">{{ t('accounts.typeNeedsRelay') }}</SHint>
+        <SHint v-if="!creatableOf(at)" size="xs" tone="warning" data-testid="type-needs-relay">{{ t('accounts.typeNeedsRelay') }}</SHint>
 
         <div class="mt-auto border-t border-line pt-2">
           <SLink

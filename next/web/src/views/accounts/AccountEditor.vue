@@ -355,6 +355,10 @@ const proxyModeOptions = computed(() => [
   { value: 'existing', label: t('accounts.proxyPickExisting') },
   ...(caps.proxyByURL.value ? [{ value: 'url', label: t('accounts.proxyPasteUrl') }] : [])
 ])
+// The paste option withdrawn (permissions reloaded): back to picking one.
+watch(caps.proxyByURL, (ok) => {
+  if (!ok && proxyMode.value === 'url') setProxyMode('existing')
+})
 /** The proxy_url that will be sent, or '' (existing mode / empty input). */
 const proxyUrlToSend = computed(() => (proxyMode.value === 'url' ? proxyUrl.value.trim() : ''))
 const proxyError = computed(() => (proxyMode.value === 'url' ? errors.value.proxy_url : errors.value.proxy_id))
@@ -655,7 +659,7 @@ const { save } = useAccountSave({
                 <SInput v-model="basic.name" :maxlength="100" :placeholder="t('accounts.editorUi.namePlaceholder')" />
               </SField>
               <SField :label="t('accounts.groups')" :error="errors.group_ids" :hint="!caps.bindGroups.value ? t('accounts.groupsLocked') : basic.group_ids.length ? '' : t('accounts.editorUi.groupsHint')">
-                <GroupPicker :model-value="basic.group_ids" multiple :disabled="!caps.bindGroups.value" data-testid="account-groups" @update:model-value="basic.group_ids = $event as number[]" />
+                <GroupPicker :model-value="basic.group_ids" multiple :disabled="!caps.bindGroups.value" @update:model-value="basic.group_ids = $event as number[]" />
               </SField>
               <div ref="proxyFieldEl" class="md:col-span-2" data-testid="proxy-field">
                 <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2">

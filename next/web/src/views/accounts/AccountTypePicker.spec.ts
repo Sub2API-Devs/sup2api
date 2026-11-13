@@ -27,4 +27,15 @@ describe('AccountTypePicker', () => {
     await w.get('[data-type="p/official"]').trigger('click')
     expect(w.emitted('pick')).toHaveLength(1)
   })
+
+  it('opens a creation group on its first type the caller can create', async () => {
+    const base = { plugin_key: 'q', plugin_name: 'Q', label: 'L', form: { mode: 'schema' }, platforms: [], endpoints: [], sensitive_fields: [], pass_headers: [], creation_group: 'g' }
+    types.list = [{ ...base, type: 'custom', custom_upstream: true }, { ...base, type: 'official', custom_upstream: false }] as unknown as AccountType[]
+    const w = mount(AccountTypePicker, { global: { plugins: [i18n], stubs: { PluginAvatar: true, TrustBadge: true, AccountTypePlatforms: true, AccountTypeEndpoints: true } } })
+    await flushPromises()
+    const card = w.get('[data-type="q/custom"]')
+    expect(card.attributes('aria-disabled')).toBe('false')
+    await card.trigger('click')
+    expect((w.emitted('pick')![0][0] as AccountType).type).toBe('official')
+  })
 })
