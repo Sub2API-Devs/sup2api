@@ -682,7 +682,7 @@ func TestAccountActions(t *testing.T) {
 	}
 	// A route that declares accounts itself must still read what the console
 	// posts.
-	m = withAccountAction(">=0.1.256 <0.2.0", good)
+	m = withAccountAction(">=0.1.285 <0.2.0", good)
 	m.Routes[2].Accounts = &manifest.RouteAccounts{Action: "update", From: []string{"body:account_id"}}
 	if c := uiCodes(m); c["ui.accountActions[0].route"] != "accounts_mismatch" {
 		t.Errorf("an action route whose accounts miss body:account_ids must be rejected: %v", c)

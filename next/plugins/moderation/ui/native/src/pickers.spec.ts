@@ -12,7 +12,7 @@ import BlocksTab from './BlocksTab.vue'
 import SettingsTab from './SettingsTab.vue'
 import UserStateSection from './UserStateSection.vue'
 import WatchEditModal from './WatchEditModal.vue'
-import { fetchAccountGroups, fetchAccountNames, setHost } from './host'
+import { fetchAccountGroups, fetchAccountNames, fetchGroups, setHost } from './host'
 import { resetSessionCaches } from './session'
 import type { Binding, Watch } from './types'
 
@@ -442,6 +442,15 @@ describe('fetchAccountNames', () => {
     coreGet.mockResolvedValue({ items: [{ id: 1, name: 'in group 12' }] })
     expect((await fetchAccountNames([1])).get(1)).toBe('in group 12')
     expect(hasAction).toHaveBeenCalledWith('account:read')
+  })
+  it('lists the groups only with group:read', async () => {
+    const list = vi.fn(async () => ({ items: [{ id: 2, name: 'g' }], paged: false, page: {} }))
+    const as = (...permissions: string[]) => setHost({ api: { list }, permissions: { has: (key: string) => permissions.includes(key) } } as unknown as PluginHost)
+    as('plugin.moderation:moderation:read')
+    expect(await fetchGroups()).toEqual([])
+    expect(list).not.toHaveBeenCalled()
+    as('group:read')
+    expect(await fetchGroups()).toEqual([{ id: 2, name: 'g' }])
   })
 })
 

@@ -46,11 +46,11 @@ type FakeHost struct {
 	// Authz decides AuthzCheck; nil allows everything.
 	Authz func(userID int64, permission string) bool
 	// AccountScope decides AccountScopeCheck: whether the user reaches every
-	// account for the action, or else which of ids are theirs; an error is
-	// returned as is (status.Error(codes.PermissionDenied, ...) for a user
-	// with neither account key). nil answers that the user reaches all, so a
-	// test of a route that acts on accounts should set it to cover the own
-	// scope and its 404. The arguments are checked as the core checks them
+	// account for the action, or else which of ids are within their scope;
+	// an error is returned as is (status.Error(codes.PermissionDenied, ...)
+	// for a user holding the action at no scope). nil answers that the user
+	// reaches all, so a test of a route that acts on accounts should set it
+	// to cover a narrower scope and its 404. The arguments are checked as the core checks them
 	// (known action, positive ids, batch size) before it is called. As on
 	// the host, the call is PERMISSION_DENIED unless the user is the caller
 	// of a request in flight: Harness.Do and DoAs see to that, a test that

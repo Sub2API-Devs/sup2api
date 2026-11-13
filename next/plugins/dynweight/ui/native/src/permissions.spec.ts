@@ -18,7 +18,8 @@ async function fresh() {
     t: (key: string) => key,
     api: { list },
     pluginApi: { get, list: pluginList },
-    permissions: { has: (k: string) => held.includes(k) }
+    can: (k: string) => held.includes(k),
+    permissions: { has: (k: string) => held.includes(k), hasAction: (a: string) => held.some((k) => k === a || k.startsWith(a + ':')) }
   } as unknown as PluginHost)
   return host
 }
@@ -94,5 +95,31 @@ describe('keyListApi', () => {
     held = ['account:read']
     const host = await fresh()
     expect(host.keyListApi()).toBe(host.useDwHost().pluginApi)
+  })
+})
+
+// POST /reset names accounts (RouteAccounts update): the reset entries need
+// account:update at some scope besides dynweight:manage, and a reset naming
+// no account (a whole group) the full account:update.
+describe('canReset', () => {
+  it('needs dynweight:manage and account:update at some scope', async () => {
+    for (const [keys, want] of [
+      [['dynweight:manage'], false],
+      [['dynweight:manage', 'account:read'], false],
+      [['account:update'], false],
+      [['dynweight:manage', 'account:update:group/12'], true],
+      [['dynweight:manage', 'account:update'], true]
+    ] as const) {
+      held = [...keys]
+      const { canReset } = await fresh()
+      expect(canReset(), keys.join(' ')).toBe(want)
+    }
+  })
+
+  it('resets a whole group only with the full account:update', async () => {
+    held = ['dynweight:manage', 'account:update:own']
+    expect((await fresh()).resetsAllAccounts()).toBe(false)
+    held = ['dynweight:manage', 'account:update']
+    expect((await fresh()).resetsAllAccounts()).toBe(true)
   })
 })

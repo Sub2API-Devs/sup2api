@@ -20,6 +20,18 @@ export function canManage(): boolean {
   return useDwHost().can('dynweight:manage')
 }
 
+/**
+ * May reset effective weights: dynweight:manage and account:update at some
+ * scope (POST /reset names accounts, RouteAccounts update); the core still
+ * answers 404 for an account outside the scope.
+ */
+export function canReset(): boolean {
+  return canManage() && useDwHost().permissions.hasAction?.('account:update') === true
+}
+
+/** A reset naming no account (a whole group) covers every account: the full account:update. */
+export const resetsAllAccounts = () => useDwHost().permissions.has('account:update')
+
 const api = () => useDwHost().pluginApi
 
 // ------------------------------------------------------------------ config

@@ -20,13 +20,13 @@ func TestRouteAccounts(t *testing.T) {
 		"no from":        {Action: "test"},
 	}
 	for name, acc := range valid {
-		m := withAccountAction(">=0.1.256 <0.2.0", good)
+		m := withAccountAction(">=0.1.285 <0.2.0", good)
 		m.Routes[3].Accounts = acc
 		if c := uiCodes(m); len(c) > 0 {
 			t.Errorf("%s: a valid declaration was rejected: %v", name, c)
 		}
 	}
-	m := withAccountAction(">=0.1.256 <0.2.0", good)
+	m := withAccountAction(">=0.1.285 <0.2.0", good)
 	m.Routes[4].Accounts = &manifest.RouteAccounts{Action: "read", From: []string{"path:rest"}}
 	if c := uiCodes(m); len(c) > 0 {
 		t.Errorf("a catch-all parameter is a path parameter: %v", c)
@@ -51,7 +51,7 @@ func TestRouteAccounts(t *testing.T) {
 		{"public permission", 5, nil, "assets:manage", "routes[5].permission", "unsupported"},
 	}
 	for _, tc := range cases {
-		m := withAccountAction(">=0.1.256 <0.2.0", good)
+		m := withAccountAction(">=0.1.285 <0.2.0", good)
 		m.Routes[tc.route].Accounts, m.Routes[tc.route].Permission = tc.acc, tc.perm
 		if c := uiCodes(m); c[tc.field] != tc.code {
 			t.Errorf("%s: want %s = %s, got %v", tc.name, tc.field, tc.code, c)
@@ -59,10 +59,32 @@ func TestRouteAccounts(t *testing.T) {
 	}
 
 	// A webhook route is held to the same rule.
-	m = withAccountAction(">=0.1.256 <0.2.0", good)
+	m = withAccountAction(">=0.1.285 <0.2.0", good)
 	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "routes.webhook"})
 	m.Routes = append(m.Routes, manifest.Route{Method: "POST", Path: "/hook", Scope: "webhook", Permission: "assets:manage"})
 	if c := uiCodes(m); c["routes[6].permission"] != "unsupported" {
 		t.Errorf("a webhook route with a permission must be rejected: %v", c)
+	}
+}
+
+// An older core ignores routes[].accounts and forwards with no account
+// check, so hostCompat must keep it out.
+func TestRouteAccountsCoreFloor(t *testing.T) {
+	good := manifest.AccountAction{ID: "reset", Label: manifest.LocalizedText{"en": "Reset"},
+		Permission: "assets:manage", Route: "POST /assets/reset"}
+	for _, tc := range []struct {
+		hostCompat string
+		accounts   *manifest.RouteAccounts
+		floor      bool
+	}{
+		{">=0.1.284 <0.2.0", &manifest.RouteAccounts{Action: "read"}, true},
+		{">=0.1.285 <0.2.0", &manifest.RouteAccounts{Action: "read"}, false},
+		{">=0.1.256 <0.2.0", nil, false},
+	} {
+		m := withAccountAction(tc.hostCompat, good)
+		m.Routes[3].Accounts = tc.accounts
+		if got := uiCodes(m)["hostCompat"] == "below_feature_core"; got != tc.floor {
+			t.Errorf("%s accounts=%v: below_feature_core = %v, want %v", tc.hostCompat, tc.accounts != nil, got, tc.floor)
+		}
 	}
 }

@@ -7,7 +7,7 @@ import { useCatalog } from './catalog'
 import { floorText, overrideFields } from './configView'
 import {
   applyQuery,
-  canManage,
+  canReset,
   configRoute,
   dashboardRoute,
   errorMessage,
@@ -28,7 +28,7 @@ import {
 const props = defineProps<{ account: { id: number; name?: string } }>()
 const host = useDwHost()
 const t = host.t
-const manage = computed(() => canManage())
+const manage = computed(() => canReset())
 const catalog = useCatalog()
 
 const query = () => ({ account_id: String(props.account.id), group_id: '', model: '', degraded: '' })

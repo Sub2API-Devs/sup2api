@@ -409,4 +409,4 @@ const { EntityMultiPicker } = host.components
 
 ## 宿主权限的范围查询（UI SDK 3.15）
 
-资源范围（CONTRACTS §21）之后，`host.permissions` 增加两个可选方法：`hasAction(action)`（任意范围持有该动作即为真，如 `hasAction('account:read')` 对只持有 `account:read:own` 或 `account:read:group/12` 的人也为真）与 `scope(action)`（返回持有的规范 key，全部范围为 `["account:read"]`，未持有为 `[]`）。`has(key)` 不变，按蕴含判断（`has('account:read')` 只在全部范围时为真）。UI 3.14 及更早的控制台没有这两个方法：用到它们的插件声明 `hostUICompat: "^3.15"`，`hostCompat` 要求核心 `>=0.1.285`（0.1.284 是最后一个带 UI 3.14 的核心）。0.1.285 起核心与控制台都只认规范写法，不再有 `account:own:read` 这类旧写法可以回退。moderation 0.12.0 起声明 `^3.15`。
+资源范围（CONTRACTS §21）之后，`host.permissions` 增加两个可选方法：`hasAction(action)`（任意范围持有该动作即为真，如 `hasAction('account:read')` 对只持有 `account:read:own` 或 `account:read:group/12` 的人也为真）与 `scope(action)`（返回持有的规范 key，全部范围为 `["account:read"]`，未持有为 `[]`）。`has(key)` 不变，按蕴含判断（`has('account:read')` 只在全部范围时为真）。UI 3.14 及更早的控制台没有这两个方法：用到它们的插件声明 `hostUICompat: "^3.15"`，`hostCompat` 要求核心 `>=0.1.285`（0.1.284 是最后一个带 UI 3.14 的核心）。0.1.285 起核心与控制台都只认规范写法，不再有 `account:own:read` 这类旧写法可以回退。moderation 0.12.0、dynweight 0.5.9、codex 0.1.4 起声明 `^3.15`。

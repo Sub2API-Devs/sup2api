@@ -109,7 +109,7 @@ type HostServiceClient interface {
 	// plugin route applies it instead of deciding by itself. user_id must be
 	// the Caller of an HTTPService.HandleHTTP request this plugin is serving
 	// when it asks; any other user is PERMISSION_DENIED, as is a user holding
-	// account:<action> with no scope at all.
+	// account:<action> at no scope (not even own).
 	AccountScopeCheck(ctx context.Context, in *AccountScopeCheckRequest, opts ...grpc.CallOption) (*AccountScopeCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.
@@ -681,7 +681,7 @@ type HostServiceServer interface {
 	// plugin route applies it instead of deciding by itself. user_id must be
 	// the Caller of an HTTPService.HandleHTTP request this plugin is serving
 	// when it asks; any other user is PERMISSION_DENIED, as is a user holding
-	// account:<action> with no scope at all.
+	// account:<action> at no scope (not even own).
 	AccountScopeCheck(context.Context, *AccountScopeCheckRequest) (*AccountScopeCheckResponse, error)
 	// ledger.credit / ledger.debit: bounded by the approved scope
 	// (maxPerTx, maxPerDay), idempotent on idempotency_key.

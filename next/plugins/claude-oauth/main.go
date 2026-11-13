@@ -56,10 +56,12 @@ type credentials struct {
 type Plugin struct {
 	*pluginsdk.Router
 	host pluginsdk.Host
+	// tokenURL is where codes are exchanged: TokenURL, a fake in tests.
+	tokenURL string
 }
 
 func newPlugin() *Plugin {
-	p := &Plugin{Router: pluginsdk.NewRouter()}
+	p := &Plugin{Router: pluginsdk.NewRouter(), tokenURL: TokenURL}
 	p.Handle("POST", "/auth/start", p.handleAuthStart)
 	p.Handle("POST", "/auth/exchange", p.handleAuthExchange)
 	return p
@@ -393,7 +395,7 @@ func (p *Plugin) exchangeCode(ctx context.Context, code, verifier, state string)
 	}
 
 	bodyJSON, _ := json.Marshal(body)
-	req, err := http.NewRequestWithContext(ctx, "POST", TokenURL, strings.NewReader(string(bodyJSON)))
+	req, err := http.NewRequestWithContext(ctx, "POST", p.tokenURL, strings.NewReader(string(bodyJSON)))
 	if err != nil {
 		return nil, err
 	}
