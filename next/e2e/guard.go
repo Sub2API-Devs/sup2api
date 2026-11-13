@@ -12,11 +12,12 @@ import (
 //       replaces the whole rule set; ids are int64 and omitted for new rules
 //   GET /api/v1/p/guard/stats?from=&to=  {"data":{"requests_total","blocked_total","top_rules",...}}
 //   PUT /api/v1/plugins/guard/settings {"values":{"webhook_url","record_snippets"}}
-//   test build 0.1.1-test (not in index.json; market/test/guard-0.1.1-test.s2plugin):
+//   test build guardTestVersion (not in index.json; market/test/guard-<guardTestVersion>.s2plugin,
+//   the overlay plugins/guard/testdata/guardtest):
 //   POST /debug/dial {"address"} -> {"ok":false,"error"}; POST /debug/alloc?mb=N[&free=1]
 
 const (
-	guardTestVersion = "0.2.2-test"
+	guardTestVersion = "0.2.9-test"
 	guardTestPath    = "/market/test/guard-" + guardTestVersion + ".s2plugin"
 	guardDenyCode    = "guard_blocked"
 )
