@@ -1085,7 +1085,7 @@
 - 改动：
   - `authz/catalog.go` 的 `corePerm` 新增 `desc`（中英说明）与 `requires`（软依赖）；全部核心权限与 `self` 模块补齐说明。
   - `requires` 只用于编辑器提示，不参与授权。带范围的动作只依赖同资源的 key，前端按同一范围提示。例如 `account:update` 依赖 `account:read`，`role:assign` 依赖 `role:read` 与 `user:read`。
-  - 说明里写明的口径：`account:group:bind` 只对没有 `group:manage` 的人生效；`account:relay` 只对账号范围受限（仅自己、某分组或单个账号）的人生效；`usage:all:read` 包含用户邮箱（W1-F17）。
+  - 说明里写明的口径：`account:group:bind` 只对账号范围受限且没有 `group:manage` 的人生效；`account:relay`（新建或改动自定义上游）只对账号范围受限（仅自己、某分组或单个账号）的人生效；`usage:all:read` 包含用户邮箱（W1-F17）。
   - `SyncCore` 的 upsert 写入并比较 `description` 列。旧节点的 upsert 不写这一列，所以新旧节点混跑时不会来回改写。
   - `GET /permissions` 每项返回 `description`、`requires`（无则省略）、`scope_type`、`step_up`、`sensitive`。原规划里的 `pair` 已由 `scope_type` 取代，不再提供。
   - 前端：`PermissionItem` 类型补字段；权限树（角色编辑器与访问密钥选择器）悬浮提示显示 key 与说明，交互不变（交互归 R8）。

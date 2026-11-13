@@ -93,7 +93,7 @@ func req(keys ...perm.Key) []perm.Key { return keys }
 var coreModules = []coreModule{
 	{"user", lt("Users", "用户"), []corePerm{
 		{key: perm.UserRead, en: "View users", zh: "查看用户",
-			desc: lt("List users and open their profiles, roles and balances.", "查看用户列表与用户详情（资料、角色、余额）。")},
+			desc: lt("List users and open their profiles and roles (balances need balance:all:read).", "查看用户列表与用户详情（资料、角色；余额需要 balance:all:read）。")},
 		{key: perm.UserCreate, en: "Create users", zh: "新建用户",
 			desc: lt("Create user accounts; giving them roles also needs role:assign.", "新建用户；同时分配角色还需要 role:assign。"), requires: req(perm.UserRead)},
 		{key: perm.UserUpdate, en: "Edit users", zh: "编辑用户",
@@ -101,7 +101,7 @@ var coreModules = []coreModule{
 		{key: perm.UserDelete, en: "Delete users", zh: "删除用户", sensitive: true, stepUp: true,
 			desc: lt("Delete users you may manage; asks for verification each time.", "删除可管理的用户；每次需要二次验证。"), requires: req(perm.UserRead)},
 		{key: perm.UserPasswordReset, en: "Reset user passwords and two-factor", zh: "重置他人密码与两步验证", sensitive: true, stepUp: true,
-			desc: lt("Reset the password, two-factor and passkeys of users you may manage; asks for verification each time.", "重置可管理用户的密码、两步验证与通行密钥；每次需要二次验证。"), requires: req(perm.UserRead)},
+			desc: lt("Reset the password, two-factor and passkeys of users you may manage; asks for verification each time.", "重置可管理用户的密码、两步验证与通行密钥；每次需要二次验证。"), requires: req(perm.UserRead, perm.UserUpdate)},
 	}},
 	{"role", lt("Roles", "角色"), []corePerm{
 		{key: perm.RoleRead, en: "View roles and permissions", zh: "查看角色与权限",
@@ -120,7 +120,7 @@ var coreModules = []coreModule{
 		{key: perm.GroupRead, en: "View groups", zh: "查看分组",
 			desc: lt("View groups and the accounts bound to them.", "查看分组及其绑定的账号。")},
 		{key: perm.GroupManage, en: "Manage groups", zh: "管理分组", sensitive: true,
-			desc: lt("Create, edit and delete groups and bind any account to them.", "新建、修改、删除分组，并可把任意账号绑定到分组。"), requires: req(perm.GroupRead)},
+			desc: lt("Create, edit and delete groups and set which user groups may use them, at what rates and prices; also lets restricted account editors change any account's groups.", "新建、修改、删除分组，设置哪些用户组可用及其倍率与价格；账号范围受限的人有它时可改任意账号的分组。"), requires: req(perm.GroupRead)},
 	}},
 	// User groups (segments, CONTRACTS §97): who is in which one, the private
 	// groups it may use and what it pays there.
@@ -128,7 +128,7 @@ var coreModules = []coreModule{
 		{key: perm.SegmentRead, en: "View user groups", zh: "查看用户组",
 			desc: lt("View user groups, their members and pricing.", "查看用户组、成员与定价。")},
 		{key: perm.SegmentManage, en: "Manage user groups", zh: "管理用户组",
-			desc: lt("Edit user groups: members, private groups and prices.", "修改用户组：成员、专属分组与价格。"), requires: req(perm.SegmentRead)},
+			desc: lt("Create, edit and delete user groups: members, private groups and prices.", "新建、修改、删除用户组：成员、专属分组与价格。"), requires: req(perm.SegmentRead)},
 	}},
 	{"account", lt("Accounts", "账号"), slices.Concat([]corePerm{
 		// Scopable (perm.ScopeType): account:read reaches every account,
@@ -150,9 +150,9 @@ var coreModules = []coreModule{
 		{key: perm.AccountSettingsCustom, en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）",
 			desc: lt("Set guarded account settings (e.g. base URL) to values other than the official ones.", "把受限的账号设置（如 Base URL）改成非官方值。"), requires: req(perm.AccountUpdate)},
 		{key: perm.AccountGroupBind, en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）",
-			desc: lt("Bind accounts to groups you can use, without group:manage; only matters to callers without group:manage.", "无 group:manage 时把账号绑定到自己可用的分组；只对没有 group:manage 的人生效。"), requires: req(perm.AccountUpdate)},
+			desc: lt("Bind accounts to groups you can use; only matters to callers with a restricted account scope (own, a group or one account) and without group:manage.", "把账号绑定到自己可用的分组；只对账号范围受限（仅自己、某分组或单个账号）且没有 group:manage 的人生效。"), requires: req(perm.AccountUpdate)},
 		{key: perm.AccountRelay, en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号", sensitive: true,
-			desc: lt("Create account types whose upstream address is free (relay); only matters to callers with a restricted account scope (own, group or account).", "创建可自定义上游地址的账号类型（relay）；只对账号范围受限（仅自己、某分组或单个账号）的人生效。"), requires: req(perm.AccountCreate)},
+			desc: lt("Create accounts whose upstream address is free (relay) or re-point it; only matters to callers with a restricted account scope (own, group or account).", "创建或改动可自定义上游地址的账号（relay）；只对账号范围受限（仅自己、某分组或单个账号）的人生效。"), requires: req(perm.AccountCreate)},
 	})},
 	{"proxy", lt("Proxies", "代理"), slices.Concat([]corePerm{
 		{key: perm.ProxyRead, en: "View proxies", zh: "查看代理",
@@ -189,7 +189,7 @@ var coreModules = []coreModule{
 		{key: perm.StickyRead, en: "View sticky sessions", zh: "查看粘性会话",
 			desc: lt("View sticky session bindings.", "查看粘性会话绑定。")},
 		{key: perm.StickyManage, en: "Manage sticky sessions", zh: "管理粘性会话",
-			desc: lt("Clear sticky session bindings and edit their settings.", "清除粘性会话绑定并修改其设置。"), requires: req(perm.StickyRead)},
+			desc: lt("Manage sticky rules, clear sticky bindings and edit their settings.", "管理粘性规则、清除粘性绑定并修改其设置。"), requires: req(perm.StickyRead)},
 	}},
 	{"plugin", lt("Plugins", "插件"), []corePerm{
 		{key: perm.PluginRead, en: "View plugins", zh: "查看插件",
@@ -418,10 +418,12 @@ func (p corePerm) requiredKeys() []string {
 
 // corePermByKey finds a permission of the core catalog or the self module.
 func corePermByKey(key string) (corePerm, bool) {
-	for _, m := range append(slices.Clone(coreModules), selfModule) {
-		for _, p := range m.perms {
-			if string(p.key) == key {
-				return p, true
+	for _, mods := range [][]coreModule{coreModules, {selfModule}} {
+		for _, m := range mods {
+			for _, p := range m.perms {
+				if string(p.key) == key {
+					return p, true
+				}
 			}
 		}
 	}

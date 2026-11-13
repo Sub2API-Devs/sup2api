@@ -442,6 +442,21 @@ func TestSyncCoreWritesDescriptions(t *testing.T) {
 	if err := s.SyncCore(ctx); err != nil {
 		t.Fatal(err)
 	}
+	// Synced once, the descriptions change nothing more.
+	version := func() (v int64) {
+		t.Helper()
+		if err := db.Pool.QueryRow(ctx, `SELECT version FROM authz_meta WHERE id = 1`).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	before := version()
+	if err := s.SyncCore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if after := version(); after != before {
+		t.Fatalf("a second sync bumped the version: %d -> %d", before, after)
+	}
 	mods, err := s.ListPermissions(ctx)
 	if err != nil {
 		t.Fatal(err)
