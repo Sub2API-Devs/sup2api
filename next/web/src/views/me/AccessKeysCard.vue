@@ -8,7 +8,7 @@ import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SCopyButton, SDateTime, SField, SFormModal, SInput, SSelect, STable, confirm, type TableColumn } from '@sub2api/ui'
 import type { PermissionModule } from '@/api/types'
 import PermissionTree from '@/views/roles/PermissionTree.vue'
-import { canonicalPermission, parsePermission } from '@/authz/implies'
+import { parsePermission } from '@/authz/implies'
 import { useAuthStore } from '@/stores/auth'
 import { errorMessage, fieldErrors, notifyError, verificationCancelled } from '@/utils/errors'
 
@@ -63,8 +63,8 @@ async function start(row: AccessKey | null) {
   editing.value = row
   name.value = row?.name || ''
   expires.value = '90'
-  // Canonical, so a legacy own key and its scoped form are one choice (CONTRACTS §21).
-  granted.value = new Set((row?.permissions.filter((p) => !row.lost.includes(p)) || []).map((p) => canonicalPermission(p) ?? p))
+  // Stored canonical (CONTRACTS §80), as the picker writes them.
+  granted.value = new Set(row?.permissions.filter((p) => !row.lost.includes(p)) || [])
   try {
     modules.value = (await api.get<PermissionModule[]>('/me/access-keys/permissions')) || []
     open.value = true

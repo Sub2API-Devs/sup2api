@@ -53,8 +53,8 @@ export interface HostPermissions {
   any(...keys: string[]): boolean
   /**
    * The scoped action (account:read, proxy:manage, ...) is held at any scope,
-   * as the pages listing the rows in reach ask. Left out by consoles before
-   * resource scopes: feature-detect (`hasAction?.(a) ?? has(legacy own key)`).
+   * as the pages listing the rows in reach ask. Consoles before UI 3.15 do
+   * not have it: a plugin using it declares hostUICompat ^3.15.
    */
   hasAction?(action: string): boolean
   /**

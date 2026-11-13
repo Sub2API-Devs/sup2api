@@ -34,7 +34,7 @@ const grantedScopes = computed(() => {
     const p = parsePermission(k)
     if (p) out.set(p.action, [...(out.get(p.action) ?? []), p.scope])
   }
-  // Aliases and other spellings of one scope are one choice.
+  // A scope another granted one implies is not a choice of its own.
   for (const [action, list] of out) out.set(action, reduceScopes(list))
   return out
 })
