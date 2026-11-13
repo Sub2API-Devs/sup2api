@@ -170,8 +170,8 @@ export const modelCandidates = (rows: Array<{ model: string }>): ModelCandidate[
 export interface RuleResult {
   name: string
   scope: 'all' | 'stream' | 'non_stream'
-  /** An enabled strategy references the rule; an unused one is judged but its hits act on nothing. */
-  used: boolean
+  /** An enabled strategy references the rule; an unused one is judged but its hits act on nothing. Sent since 0.5.8 (absent = used). */
+  used?: boolean
   periods: number
   hit_periods: number
   hit: boolean

@@ -77,7 +77,7 @@ func derive(l Layer) derived {
 	cfg.Thresholds, cfg.LatencyThresholds = percentileThresholds(cfg.Rules)
 	var enabled []Strategy
 	cfg.Strategies, enabled = resolveStrategies(l.Strategies, cfg.Rules)
-	cfg.UsedRules = referencedRules(len(cfg.Rules), cfg.Strategies, func(ResolvedStrategy) bool { return true })
+	cfg.UsedRules = referencedRules(len(cfg.Rules), cfg.Strategies)
 	if l.MinSamplesStrict {
 		cfg.StrictRules = strictRules(cfg.Rules, cfg.Strategies)
 	}
@@ -98,17 +98,13 @@ func derive(l Layer) derived {
 // samples must not do it. Climb-only rules stay lenient: a degraded key gets
 // less traffic, and would otherwise never gather enough to recover.
 func strictRules(rules []Rule, strategies []ResolvedStrategy) []bool {
-	return referencedRules(len(rules), strategies, func(s ResolvedStrategy) bool { return s.Direction() != Climb })
+	return referencedRules(len(rules), slices.DeleteFunc(slices.Clone(strategies), func(s ResolvedStrategy) bool { return s.Direction() == Climb }))
 }
 
-// referencedRules marks the n rules that the strategies keep accepts
-// reference.
-func referencedRules(n int, strategies []ResolvedStrategy, keep func(ResolvedStrategy) bool) []bool {
+// referencedRules marks which of n rules the strategies reference.
+func referencedRules(n int, strategies []ResolvedStrategy) []bool {
 	marked := make([]bool, n)
 	for _, s := range strategies {
-		if !keep(s) {
-			continue
-		}
 		// With every leaf true Eval visits all of them.
 		s.Tree.Eval(func(idx int) (bool, bool) {
 			marked[idx] = true

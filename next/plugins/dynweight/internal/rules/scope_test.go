@@ -264,8 +264,9 @@ func TestZeroClearsSticky(t *testing.T) {
 	}
 }
 
-// A strategy switched off leaves its rule judged: the status shows its hits
-// as unused, and nothing acts on them (no weight step, no event rule).
+// A strategy switched off leaves its rule judged (lenient now: no enabled
+// degrade references it): the status shows its hits as unused, and nothing
+// acts on them (no weight step, no side effect, no event rule).
 func TestDisabledStrategyRuleOnlyObserves(t *testing.T) {
 	off := false
 	s := newSim(t, compiled(t, func(c *Config) {
@@ -275,12 +276,13 @@ func TestDisabledStrategyRuleOnlyObserves(t *testing.T) {
 	if !reflect.DeepEqual(s.cfg.UsedRules, []bool{true, false, true, true, true}) {
 		t.Fatalf("used %v", s.cfg.UsedRules)
 	}
+	// 20 samples a window: enough for p95, so an enabled strategy degrades
+	// on the second window.
 	var out Output
-	for range 3 {
-		out = s.step(5, 0, 20000)
-	}
-	if out.WeightTo != 100 || len(out.Steps) != 0 || len(out.SideEffects) != 0 {
-		t.Fatalf("slow first tokens acted: %+v", out)
+	for i := range 3 {
+		if out = s.step(20, 0, 20000); out.WeightTo != 100 || len(out.Steps) != 0 || len(out.SideEffects) != 0 {
+			t.Fatalf("window %d: slow first tokens acted: %+v", i, out)
+		}
 	}
 	r := Describe(1, &out.State, &s.cfg, 100, true, nil, s.win+70).Rules[1]
 	if r.Name != "首字 p95 过慢" || !r.Hit || r.Used {
