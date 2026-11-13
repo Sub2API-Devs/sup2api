@@ -705,6 +705,95 @@ func TestReclaimSuperOnlyMigration(t *testing.T) {
 	require.Equal(t, all, held("updater"))
 }
 
+// 0101 narrows the built-in operator role's assignable list, which 0097
+// generated, to decision 5: supplier and user, no custom roles. It is audited
+// as the system and moves the authz version; the operator's permissions,
+// every other role's list and a list already right are left alone.
+func TestOperatorAssignableMigration(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql)
+		require.NoError(t, err)
+	}
+	migrate := func() {
+		t.Helper()
+		exec(`DELETE FROM schema_migrations WHERE id='0101_operator_assignable.sql'`)
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		require.Equal(t, []string{"0101_operator_assignable.sql"}, done)
+	}
+	// assignable is "<assign_custom>:<assignable keys>" of a role.
+	assignable := func(key string) (v string) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT r.assign_custom::text || ':' || COALESCE(string_agg(a.key, ',' ORDER BY a.key), '')
+			FROM roles r LEFT JOIN role_assignable_roles ra ON ra.role_id = r.id LEFT JOIN roles a ON a.id = ra.assignable_role_id
+			WHERE r.key = $1 GROUP BY r.assign_custom`, key).Scan(&v))
+		return v
+	}
+	version := func() (v int64) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT version FROM authz_meta WHERE id = 1`).Scan(&v))
+		return v
+	}
+	audits := func() (n int, detail string) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*), COALESCE((array_agg(a.detail::text ORDER BY a.id DESC))[1], '')
+			FROM audit_logs a JOIN roles r ON r.id::text = a.target_id AND r.key = 'operator'
+			WHERE a.action = 'role.assignable' AND a.target_type = 'role' AND a.user_id IS NULL`).Scan(&n, &detail))
+		return n, detail
+	}
+
+	// A new database has no roles: nothing written.
+	v := version()
+	migrate()
+	require.Equal(t, v, version())
+
+	// Production after 0097, before the supplier role exists: operator and
+	// admin assign {operator, user} and every custom role. A custom role
+	// has a list too.
+	exec(`INSERT INTO roles (key, name, builtin, superuser, assign_custom) VALUES
+			('super_admin', '{}', true, true, false), ('admin', '{}', true, false, true), ('operator', '{}', true, false, true),
+			('user', '{}', true, false, false), ('helper', '{}', false, false, true);
+		INSERT INTO role_assignable_roles (role_id, assignable_role_id)
+		SELECT r.id, a.id FROM roles r JOIN roles a ON a.key IN ('operator', 'user', 'helper') WHERE r.key IN ('admin', 'operator', 'helper');
+		INSERT INTO permissions (key, module, label, source) VALUES ('user:read', 'user', '{}', 'core');
+		INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = 'operator'`)
+	migrate()
+	require.Equal(t, "false:user", assignable("operator"))
+	require.Equal(t, "true:helper,operator,user", assignable("admin"))
+	require.Equal(t, "true:helper,operator,user", assignable("helper"))
+	require.Equal(t, v+1, version())
+	var perms int
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM role_permissions rp JOIN roles r ON r.id = rp.role_id WHERE r.key = 'operator'`).Scan(&perms))
+	require.Equal(t, 1, perms, "the operator's permissions changed")
+	n, detail := audits()
+	require.Equal(t, 1, n)
+	require.JSONEq(t, `{"via":"migration 0101","role_keys":["user"],"assign_custom":false,"added":[],"removed":["helper","operator"],"removed_assign_custom":true}`, detail)
+
+	// With the supplier role there (an upgrade from a version that had it,
+	// or a forgotten migration row): both are on the list afterwards, also
+	// when an entry is missing; a list already right writes nothing.
+	exec(`INSERT INTO roles (key, name, builtin) VALUES ('supplier', '{}', true);
+		DELETE FROM role_assignable_roles WHERE role_id = (SELECT id FROM roles WHERE key = 'operator')`)
+	migrate()
+	require.Equal(t, "false:supplier,user", assignable("operator"))
+	require.Equal(t, v+2, version())
+	n, detail = audits()
+	require.Equal(t, 2, n)
+	require.JSONEq(t, `{"via":"migration 0101","role_keys":["supplier","user"],"assign_custom":false,"added":["supplier","user"],"removed":[],"removed_assign_custom":false}`, detail)
+	migrate()
+	require.Equal(t, v+2, version())
+	n, _ = audits()
+	require.Equal(t, 2, n)
+
+	// A custom role that merely has the key is not the built-in operator.
+	exec(`UPDATE roles SET builtin = false, assign_custom = true WHERE key = 'operator'`)
+	migrate()
+	require.Equal(t, "true:supplier,user", assignable("operator"))
+}
+
 // 0098 keeps one super admin (decisions 1 and 2): a soft-deleted holder loses
 // the role, two undeleted holders (whatever their status) stop the
 // migration naming both, and afterwards a second superuser role or holder

@@ -208,6 +208,61 @@ func TestSuperOnlyPermissions(t *testing.T) {
 	mustCan(t, s, admin, "publisher:manage", false)
 }
 
+// The operator whitelist (decision D3) is what a reset restores; a sync
+// leaves an existing operator's permissions as they are, moving audit:read
+// to its own module without touching who holds it.
+func TestOperatorWhitelist(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	opID := roleID(t, s, RoleOperator)
+
+	// The operator as an older version left it: beyond the whitelist here,
+	// short of it there, and audit:read still in the cluster module.
+	before := []string{"user:read", "user:delete", "role:define", "balance:adjust", "audit:read", "price:manage"}
+	if _, err := s.SetRolePermissions(ctx, root, opID, before); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `UPDATE permissions SET module = 'node' WHERE key = 'audit:read'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SyncCore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(before)
+	if got := rolePermissionKeys(t, s, opID); !slices.Equal(got, before) {
+		t.Fatalf("a sync changed the operator: %v, want %v", got, before)
+	}
+	var module string
+	if err := db.Pool.QueryRow(ctx, `SELECT module FROM permissions WHERE key = 'audit:read'`).Scan(&module); err != nil || module != "audit" {
+		t.Fatalf("audit:read module = %q, %v", module, err)
+	}
+
+	r, err := s.ResetRole(ctx, root, opID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(r.PermissionKeys, operatorDefaults) {
+		t.Fatalf("reset operator = %v\nwant %v", r.PermissionKeys, operatorDefaults)
+	}
+	// What the role is for, and what it is kept from.
+	operator := addUser(t, s, "op@x.com", RoleOperator)
+	for key, want := range map[string]bool{
+		"account:update": true, "role:assign": true, "audit:read": true, "task:run": true, "account:own:credential:view": true,
+		"role:define": false, "balance:adjust": false, "usage:settle": false, "user:delete": false, "user:password:reset": false,
+		"account:credential:view": false, "account:relay": false, "system:update:execute": false, "settings:read": false, "plugin:read": false,
+	} {
+		mustCan(t, s, operator, key, want)
+	}
+	// It can hand out the supplier role, which its assignable list names.
+	plain := addUser(t, s, "plain@x.com", RoleUser)
+	if err := setRoles(s, operator, plain, RoleUser, RoleSupplier); err != nil {
+		t.Fatalf("operator assigns supplier: %v", err)
+	}
+}
+
 // M5: a role:define holder cannot change or delete a role granting more than
 // it holds, so it cannot weaken a stronger user's role and then act on that
 // user. Roles within its own permissions stay editable.

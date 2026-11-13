@@ -34,6 +34,48 @@ func superOnlyKeys() []string {
 	return keys
 }
 
+// The module order is the order of the role editor; audit logs have a module
+// of their own (U8).
+func TestCatalogModuleOrder(t *testing.T) {
+	t.Parallel()
+	var got []string
+	for _, m := range coreModules {
+		got = append(got, m.key)
+		if m.label.Get("en") == "" || m.label.Get("zh") == "" {
+			t.Errorf("module %s has no label", m.key)
+		}
+	}
+	want := []string{"user", "role", "apikey", "group", "segment", "account", "proxy", "price", "balance", "usage", "sticky",
+		"plugin", "publisher", "node", "audit", "task", "gateway", "settings", "system_update"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("modules = %v\nwant %v", got, want)
+	}
+	for _, d := range CorePermissions() {
+		if (d.Key == "audit:read") != (d.Module == "audit") {
+			t.Errorf("%s is in module %s", d.Key, d.Module)
+		}
+	}
+}
+
+// Every key of a built-in role's whitelist is a catalog permission, listed
+// once.
+func TestBuiltinWhitelistsAreCatalogKeys(t *testing.T) {
+	t.Parallel()
+	known := map[string]bool{}
+	for _, d := range CorePermissions() {
+		known[d.Key] = true
+	}
+	for name, keys := range map[string][]string{"operator": operatorPermissions, "supplier": supplierPermissions, "user": userRolePermissions} {
+		seen := map[string]bool{}
+		for _, k := range keys {
+			if !known[k] || seen[k] {
+				t.Errorf("%s whitelist: %s is unknown or listed twice", name, k)
+			}
+			seen[k] = true
+		}
+	}
+}
+
 // Catalog invariants: a session-only permission is one worth flagging, and a
 // super-only one reaches no built-in role by default nor by inheriting from
 // a permission that is not super-only itself.

@@ -183,6 +183,30 @@ func fieldCode(err error, field string) string {
 	return ""
 }
 
+// operatorDefaults pins the built-in operator role's default permissions
+// (decision D3), in catalog order: users without delete or password reset,
+// assigning roles without defining them, groups, user groups, accounts
+// without other people's credentials or the guarded settings, proxies, and
+// read access to prices, balances, usage, nodes, audit logs and tasks (which
+// it may also run), next to what a user and a supplier have.
+var operatorDefaults = []string{
+	"user:read", "user:create", "user:update",
+	"role:read", "role:assign",
+	"apikey:self:manage",
+	"group:read", "group:manage",
+	"segment:read", "segment:manage",
+	"account:read", "account:create", "account:update", "account:delete", "account:test",
+	"account:own:read", "account:own:create", "account:own:update", "account:own:delete", "account:own:test", "account:own:credential:view",
+	"proxy:read", "proxy:manage", "proxy:own:read", "proxy:own:manage",
+	"price:read",
+	"balance:self:read", "balance:all:read",
+	"usage:self:read", "usage:all:read",
+	"node:read",
+	"audit:read",
+	"task:read", "task:run",
+	"gateway:use",
+}
+
 // ------------------------------------------------------------ tests
 
 func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
@@ -234,17 +258,10 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 			t.Fatalf("%s assigns %v, want %v", role, got, want)
 		}
 	}
+	// The operator holds exactly its whitelist (decision D3), in catalog order.
 	op := byKey[RoleOperator]
-	if op == nil || !op.Builtin || op.Superuser || len(op.PermissionKeys) == 0 || len(op.PermissionKeys) >= n {
-		t.Fatalf("operator: %+v", op)
-	}
-	for _, k := range op.PermissionKeys {
-		if strings.HasPrefix(k, "settings:") || strings.HasPrefix(k, "sticky:") || strings.HasPrefix(k, "plugin:") || strings.HasPrefix(k, "publisher:") {
-			t.Fatalf("operator has %s", k)
-		}
-	}
-	if !slices.Contains(op.PermissionKeys, "account:update") || slices.Contains(op.PermissionKeys, "system:update:execute") {
-		t.Fatalf("operator perms = %v", op.PermissionKeys)
+	if op == nil || !op.Builtin || op.Superuser || !slices.Equal(op.PermissionKeys, operatorDefaults) {
+		t.Fatalf("operator: %+v\nwant %v", op, operatorDefaults)
 	}
 
 	// Idempotent: a second sync does not bump the version.

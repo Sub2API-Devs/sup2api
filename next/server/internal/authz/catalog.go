@@ -141,6 +141,8 @@ var coreModules = []coreModule{
 	}},
 	{"node", lt("Cluster", "集群"), []corePerm{
 		{key: "node:read", en: "View cluster nodes", zh: "查看集群节点"},
+	}},
+	{"audit", lt("Audit", "审计"), []corePerm{
 		{key: "audit:read", en: "View audit logs", zh: "查看审计日志"},
 	}},
 	{"task", lt("Scheduled tasks", "定时任务"), []corePerm{
@@ -173,11 +175,35 @@ var supplierPermissions = []string{
 	"proxy:own:read", "proxy:own:manage",
 }
 
-// operatorExcludedModules are the core modules the built-in "operator" role
-// does not get: settings (sticky sessions live on the settings page) and the
-// plugin pages (plugins, market, publishers). Every key of these four
-// modules, and no other key, starts with "<module>:".
-var operatorExcludedModules = []string{"settings", "sticky", "plugin", "publisher"}
+// operatorPermissions are granted to the built-in "operator" role, an
+// explicit list (decision D3), so that a new core permission reaches the
+// role only by being added here: day-to-day users, groups, accounts and
+// proxies, read access to money and observability, and what a user has.
+// Left out on purpose: role:define, balance:adjust, usage:settle,
+// user:delete, user:password:reset, account:credential:view, the guarded
+// account settings (settings:custom, group:bind, relay), prices, sticky
+// sessions, settings, plugins, publishers and core updates.
+//
+// The own-level account and proxy keys are redundant next to the full-level
+// ones, and kept: the role editor stores "all" as {all, own}, and holding
+// them lets an operator assign the supplier role, whose defaults they are.
+// That is why account:own:credential:view is here while
+// account:credential:view is not: it shows the credentials of accounts the
+// operator created itself.
+var operatorPermissions = slices.Concat([]string{
+	"user:read", "user:create", "user:update",
+	"role:read", "role:assign",
+	"group:read", "group:manage",
+	"segment:read", "segment:manage",
+	"account:read", "account:create", "account:update", "account:delete", "account:test",
+	"proxy:read", "proxy:manage",
+	"price:read",
+	"balance:all:read",
+	"usage:all:read",
+	"node:read",
+	"audit:read",
+	"task:read", "task:run",
+}, supplierPermissions, userRolePermissions)
 
 type builtinRole struct {
 	key         string
@@ -206,10 +232,8 @@ var builtinRoles = []builtinRole{
 	{key: RoleAdmin, name: lt("Admin", "管理员"), description: lt("All core permissions by default, except those reserved for the super admin", "默认拥有除超级管理员专属权限以外的全部核心权限"),
 		grants:     func(corePerm) bool { return true },
 		assignable: []string{RoleOperator, RoleSupplier, RoleUser}, assignCustom: true},
-	{key: RoleOperator, name: lt("Operator", "运维"), description: lt("Core permissions except settings and plugins", "默认拥有除系统设置、插件和插件市场以外的核心权限"),
-		grants: func(p corePerm) bool {
-			return !slices.ContainsFunc(operatorExcludedModules, func(m string) bool { return strings.HasPrefix(p.key, m+":") })
-		},
+	{key: RoleOperator, name: lt("Operator", "运维"), description: lt("Day-to-day users, groups, accounts and proxies; read-only billing and monitoring", "日常管理用户、分组、账号和代理，查看余额、用量、节点、审计和定时任务"),
+		grants:     oneOf(operatorPermissions),
 		assignable: []string{RoleSupplier, RoleUser}},
 	{key: RoleSupplier, name: lt("Supplier", "供应商"), description: lt("Add-on role: own accounts and proxies", "附加角色：管理自己创建的账号和代理"),
 		grants: oneOf(supplierPermissions)},
