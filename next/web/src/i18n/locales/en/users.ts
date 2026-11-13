@@ -76,5 +76,6 @@ export default {
     inactive: 'Only an active user can become the super admin',
     submit: 'Transfer',
     done: 'Super admin transferred. Sign in again.'
-  }
+  },
+  roleScopes: 'Scopes of this role: {list}'
 }

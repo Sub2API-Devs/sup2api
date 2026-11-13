@@ -1099,3 +1099,41 @@
   - 旧控制台的角色页不认识 `…:own` 等规范 key，own 授予可能显示不出来，但后端照常接受新旧两种写法。
   - 账号页、代理页的“自己的”判断仍按旧别名（`/me` 仍输出旧别名），可以继续工作。
 - 回滚：revert 代码即可（新表、新列旧代码不读；访问密钥中的旧写法仍在）。回滚期间写入的分组或 id 范围授予不生效。
+
+## 期 4 R8：控制台的资源范围（判断、路由、范围选择、密钥、摘要、mock）
+
+- 影响对象：控制台（next/web）、moderation 插件 UI（只改代码，不升版本），没有后端改动。
+- 判断：
+  - `web/src/authz/implies.ts` 是 `perm.Parse/Canonical/Implies` 与 `DataScope.AllowsRow` 的 TS 版本（纯函数），与 Go 共用 `sdk/permvectors/vectors.json`（`implies.spec.ts`）。
+  - `auth.has(k)` 改为“持有的某个模式蕴含 k”：`has('account:read')` 仍然只对全量为真；`has('account:own:read')` 被 `account:read:own` 蕴含。
+  - 新增 `auth.hasAction(a)`（任意范围持有该动作）与 `auth.scopes(a)`（持有的范围，超管为全部）。
+  - `useOwnership` 改为 `useScope()`：`level(a)` 为 `'all' | 'own' | null`（`'own'` 即受限档，包括 own、分组、id 范围，沿用 own 级限制）；`can(row, a)` 按全部持有范围判断行（own 比 `created_by`，`account/X` 比 id，分组比 `row.group_ids`）。
+- 路由：`meta.action`（任意范围）与 `meta.perm` 二者满足其一即可进入（`mayOpen`，面包屑同样使用）。账号页、代理页与 CCGateway 改用 `action`，分组或 id 范围的用户不再“看得到菜单却进不了页面”。
+- 页面：
+  - 账号页、代理页、分组编辑、模型测试、账号编辑器的行按钮按 `useScope().can` 判断。
+  - 新建按钮：账号用 `hasAction('account:create')`；代理用 `has('proxy:manage:own')`，因为 `proxy/<id>` 范围不能新建代理。代理页的操作列按 `hasAction('proxy:manage')`。
+  - 分组范围的新建者或编辑者可以改分组（服务端对范围内的分组免 `account:group:bind`）。
+  - 实体查找（账号、代理）、仪表盘、用量详情、CCGateway 授权页改用 `hasAction`。
+  - 全量语义保持不变的判断：请求日志、用量的账号列、`/system/ccgateway/accounts` 动作。
+- 角色编辑器（`PermissionTree` + `ScopePicker`，取代原 T76 的 own/all 三态）：
+  - 每个动作一行。`scope_type` 非空的动作勾选后展开范围选择：全部 / 自己创建的 / 指定分组 / 指定账号（或指定代理）/ 分组内的指定账号（先选分组，再选账号，账号查找优先列出该分组），可以叠加。
+  - 选“全部”后只保留全部，其余选项置灰。
+  - 不提供的范围（`group/*` 等）显示为可删除的标签。
+  - id 经 `/lookup/*` 显示名称；查找已回答但没有该 id 时显示“#12（已删除）”（`useEntityNames().gone`）。
+  - 提交规范 key。候选按操作者自己的范围裁剪（`offerOf`）：操作者没有全部范围时，分组和 id 只能在自己持有的范围里勾选；后端仍然用 Missing 拒绝。
+- 访问密钥：复用同一个权限树，`scope-limit` 为用户自己的范围；打开已有密钥时，权限先做规范化（旧别名与规范写法合并为同一个选择）；二次验证提示按动作判断。
+- 用户页：角色徽章的提示显示该角色的范围摘要（`useScopeLabels().summary`）。
+- 错误提示：
+  - `would_leave_scope` 与 `permission_denied{permission: proxy:manage:own}`（不能新建代理）在控制台按当前语言显示（`errorMessage` 的 `KNOWN_ERRORS`）。
+  - `group_ids` 字段的 `not_in_scope` 由账号保存的字段码表翻译。
+- 插件宿主：`HostPermissions` 增加可选的 `hasAction(a)` 与 `scope(a)`（返回规范 key）。旧控制台没有这两个方法，插件应先检测再用。moderation 改为 `hasAction?.('account:read')`，没有时回落到旧别名。`HOST_UI_VERSION` 不变（是否升 3.15 由 T84 决定）。
+- mock：`hasPerm` 按蕴含判断，`ownerScope(who, action)` 返回范围，行过滤复用 `scopeAllowsRow`。
+  - `/permissions` 带 `scope_type`，不再列 8 个 own key。
+  - 内置 supplier 与 vendor 使用规范 key，vendor 的 `/me` 附带旧别名。
+  - 新增示例角色 group_ops。
+  - 新建账号校验 `not_in_scope`，修改账号校验 `would_leave_scope`，新建代理要求 `proxy:manage:own`。
+  - 角色写入接受任意写法，存成规范 key，未被蕴含的 key 返回 403 `missing`。
+- 已知限制：大于 2^53 的 id 在 TS 中会丢精度（Go 允许到 int64，实际 id 远小于此）。`scopeAllowsRow` 还没有 Go/TS 共享向量，目前只有 TS 用例。
+- 测试：web vitest 全量（含共享向量 148 项、`scopeChoice`、`ScopePicker`、`PermissionTree` 范围、`useScope`、`mayOpen`、`AccessKeysCard` 范围、`lookup.gone`、`errors`）、vue-tsc、eslint；moderation UI vitest、vue-tsc。供应商相关 spec 的断言不变，只是 mock 增加了 `hasAction`/`scopes`。
+- 回滚：revert（纯前端）。旧控制台见 R0–R7 发布说明中的“前端（R8）上线前”。
+

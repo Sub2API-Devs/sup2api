@@ -8,6 +8,8 @@ import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SCopyButton, SDateTime, SField, SFormModal, SInput, SSelect, STable, confirm, type TableColumn } from '@sub2api/ui'
 import type { PermissionModule } from '@/api/types'
 import PermissionTree from '@/views/roles/PermissionTree.vue'
+import { canonicalPermission, parsePermission } from '@/authz/implies'
+import { useAuthStore } from '@/stores/auth'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 
 interface AccessKey {
@@ -24,6 +26,7 @@ interface AccessKey {
 }
 
 const { t } = useI18n()
+const auth = useAuthStore()
 const rows = ref<AccessKey[]>([])
 const loading = ref(false)
 const modules = ref<PermissionModule[]>([])
@@ -62,7 +65,8 @@ async function start(row: AccessKey | null) {
   name.value = row?.name || ''
   password.value = ''
   expires.value = '90'
-  granted.value = new Set(row?.permissions.filter((p) => !row.lost.includes(p)) || [])
+  // Canonical, so a legacy own key and its scoped form are one choice (CONTRACTS §21).
+  granted.value = new Set((row?.permissions.filter((p) => !row.lost.includes(p)) || []).map((p) => canonicalPermission(p) ?? p))
   try {
     modules.value = (await api.get<PermissionModule[]>('/me/access-keys/permissions')) || []
     open.value = true
@@ -72,7 +76,8 @@ async function start(row: AccessKey | null) {
 }
 
 // Chosen permissions whose high-risk endpoints ask the key for a proof on every call (§80.2).
-const stepUpChosen = computed(() => modules.value.some((m) => m.permissions.some((p) => p.step_up && granted.value.has(p.key))))
+const chosenActions = computed(() => new Set([...granted.value].map((k) => parsePermission(k)?.action ?? k)))
+const stepUpChosen = computed(() => modules.value.some((m) => m.permissions.some((p) => p.step_up && chosenActions.value.has(p.key))))
 
 const canSubmit = computed(() => !!name.value.trim() && !!password.value && granted.value.size > 0)
 
@@ -160,7 +165,8 @@ const columns: TableColumn[] = [
       <p class="text-xs text-fg-muted">{{ t('me.accessKeys.subsetHint') }}</p>
       <SAlert v-if="stepUpChosen" tone="info" dense data-testid="access-key-step-up">{{ t('me.accessKeys.stepUpHint') }}</SAlert>
       <div class="max-h-80 overflow-y-auto" data-testid="access-key-permissions">
-        <PermissionTree v-model:granted="granted" :modules="modules" />
+        <!-- Scopes are offered within the user's own: a key never reaches beyond its user. -->
+        <PermissionTree v-model:granted="granted" :modules="modules" :scope-limit="auth.scopes" />
       </div>
       <SField :label="t('me.confirmPassword')" :error="errors.password" required>
         <SInput v-model="password" type="password" autocomplete="current-password" revealable data-testid="access-key-password" />

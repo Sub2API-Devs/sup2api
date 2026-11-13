@@ -2,7 +2,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { fail, noContent, on, type MockRequest } from './router'
 import { mockAccount, mockCcgReauthAccount, mockClearAccountHistory, registerCcgDrafts } from './accounts'
-import { caller, hasPerm } from './core'
+import { caller, hasAction, hasPerm } from './core'
 import { mockProxyStatus } from './resources'
 if (process.env.SUB2API_MOCK_CCGATEWAY) {
   const base = '/system/ccgateway'
@@ -495,7 +495,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     if (!s) return fault(400, 'proxy_not_found', 'The proxy does not exist')
     return s === 'disabled' ? fault(400, 'proxy_disabled', 'The proxy is disabled') : null
   }
-  const canDraft = (req: MockRequest) => hasPerm(caller(req), ['settings:manage', 'account:create', 'account:own:create'])
+  const canDraft = (req: MockRequest) => hasPerm(caller(req), 'settings:manage') || hasAction(caller(req), 'account:create')
   on('POST', `${base}/drafts`, async (req) => {
     if (!canDraft(req)) return fail(403, 'permission_denied', 'settings:manage or account:create is required')
     if (!configured()) return notConfigured()

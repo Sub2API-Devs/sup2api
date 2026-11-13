@@ -95,6 +95,8 @@ export interface PermissionItem {
   sensitive: boolean
   /** Using it needs a step-up verification each time (CONTRACTS §80.2); shown only. */
   step_up?: boolean
+  /** The rows its scope ranges over (CONTRACTS §21): '' none, the key is granted as it is. */
+  scope_type?: '' | 'account' | 'proxy'
   status: string // active | disabled | removed
 }
 

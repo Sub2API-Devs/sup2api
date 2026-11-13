@@ -41,5 +41,22 @@ export default {
   missingPermissions: '缺少权限：{keys}',
   missingAssignable: '缺少可管理角色：{keys}',
   missingAssignCustom: '你自己没有“全部自定义角色”',
-  selectRole: '请在左侧选择一个角色'
+  selectRole: '请在左侧选择一个角色',
+  scope: {
+    all: '全部',
+    own: '自己创建的',
+    groups: '指定分组',
+    accounts: '指定账号',
+    proxies: '指定代理',
+    pairs: '分组内的指定账号',
+    pairGroup: '先选分组',
+    pairAccount: '再选该分组内的账号',
+    other: '其他范围',
+    none: '未选择范围：不授予该权限',
+    allHint: '全部：已包含其余选项',
+    deleted: '{label}（已删除）',
+    summary: '{action}：{scopes}',
+    actions: { read: '查看', create: '新建', update: '编辑', delete: '删除', test: '测试', view: '查看凭证', manage: '管理' },
+    resources: { account: '账号', proxy: '代理' }
+  }
 }

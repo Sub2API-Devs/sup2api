@@ -601,5 +601,9 @@ export default {
     refreshThrottled: 'Too many requests, try again in {n} seconds',
     updatedAt: 'updated {time}',
     error: 'Query failed: {error}'
+  },
+  scopeErrors: {
+    notInScope: 'Bind the account to a group you manage',
+    wouldLeaveScope: 'The change would move the account out of your range'
   }
 }

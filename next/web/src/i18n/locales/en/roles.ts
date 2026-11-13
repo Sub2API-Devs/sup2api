@@ -41,5 +41,22 @@ export default {
   missingPermissions: 'Missing permissions: {keys}',
   missingAssignable: 'Missing managed roles: {keys}',
   missingAssignCustom: 'You do not have "all custom roles" yourself',
-  selectRole: 'Select a role on the left'
+  selectRole: 'Select a role on the left',
+  scope: {
+    all: 'All',
+    own: 'Created by them',
+    groups: 'Groups',
+    accounts: 'Accounts',
+    proxies: 'Proxies',
+    pairs: 'Accounts within a group',
+    pairGroup: 'Group first',
+    pairAccount: 'Then an account of it',
+    other: 'Other scopes',
+    none: 'No scope chosen: the permission is not granted',
+    allHint: 'Every row: the other choices are included',
+    deleted: '{label} (deleted)',
+    summary: '{action}: {scopes}',
+    actions: { read: 'View', create: 'Create', update: 'Edit', delete: 'Delete', test: 'Test', view: 'View credentials', manage: 'Manage' },
+    resources: { account: 'Accounts', proxy: 'Proxies' }
+  }
 }

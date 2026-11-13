@@ -163,5 +163,11 @@ export function useEntityNames(options: { mine?: MaybeRefOrGetter<boolean | unde
     const found = name(kind, text)
     return found ? `${found} #${text}` : `#${text}`
   }
-  return { name, label }
+  /** The lookup answered for the id and did not know it: deleted (or out of the caller's sight). Asks for it like name. */
+  function gone(kind: EntityKind, id: string | number): boolean {
+    if (name(kind, id) !== undefined) return false
+    const key = keyOf(realmOf(kind, !!toValue(options.mine)), String(id))
+    return known.has(key) && known.get(key) === null
+  }
+  return { name, label, gone }
 }

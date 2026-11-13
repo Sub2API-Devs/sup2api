@@ -1,4 +1,5 @@
 import { fail, noContent, now, on, type MockHandler, type MockRequest } from './router'
+import { canonicalPermission, permissionIndex, scopeAllowsRow, type Scope, type ScopedRow } from '../src/authz/implies'
 
 // auth, me, menus
 
@@ -8,11 +9,10 @@ export const ALL_PERMISSIONS = [
   'role:read', 'role:define', 'role:assign',
   'apikey:self:manage',
   'group:read', 'group:manage',
+  // CONTRACTS §21: the account and proxy actions take a scope (account:read:own, account:update:group/12, ...).
   'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'account:credential:view',
-  // CONTRACTS §21.1: own-level keys act on rows the caller created; settings:custom lifts the base_url guard.
-  'account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view',
   'account:settings:custom', 'account:group:bind', 'account:relay',
-  'proxy:read', 'proxy:manage', 'proxy:own:read', 'proxy:own:manage',
+  'proxy:read', 'proxy:manage',
   'price:read', 'price:manage',
   'balance:self:read', 'balance:all:read', 'balance:adjust',
   'usage:self:read', 'usage:all:read', 'usage:settle',
@@ -57,8 +57,9 @@ const plainUser: Identity = {
 
 /**
  * Sign in as vendor@example.com (password admin): the "vendor" role of
- * CONTRACTS §21.1 (own-level account and proxy keys, no settings:custom).
- * Sees and edits only the accounts / proxies it created.
+ * CONTRACTS §21 (the own scope of the account and proxy actions, no
+ * settings:custom; /me adds the former own-level keys for one version). Sees
+ * and edits only the accounts / proxies it created.
  */
 export const vendorUser: Identity = {
   id: 6,
@@ -66,6 +67,8 @@ export const vendorUser: Identity = {
   display_name: 'Vendor',
   roles: ['vendor'],
   permissions: [
+    'account:read:own', 'account:create:own', 'account:update:own', 'account:delete:own', 'account:test:own', 'account:credential:view:own',
+    'proxy:read:own', 'proxy:manage:own',
     'account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view',
     'proxy:own:read', 'proxy:own:manage',
     'group:read', 'gateway:use'
@@ -121,34 +124,44 @@ export function userEmail(id: number | null | undefined): string | null {
 }
 const KNOWN_EMAILS: Record<number, string> = { 2: 'ops@example.com', 3: 'li.si@example.com', 5: 'old@example.com' }
 
+/** One of the keys is held: implied by a held key (CONTRACTS §21, the console's implies.ts). */
 export function hasPerm(who: Identity, key: string | string[]): boolean {
   if (who.superuser) return true
-  const list = Array.isArray(key) ? key : [key]
-  return list.some((k) => who.permissions.includes(k))
+  const held = permissionIndex(who.permissions)
+  return [key].flat().some((k) => held.has(k))
+}
+
+/** One of the scoped actions is held at any scope. */
+export function hasAction(who: Identity, action: string | string[]): boolean {
+  return who.superuser || [action].flat().some((a) => permissionIndex(who.permissions).hasAction(a))
 }
 
 /**
- * Owner scope of a caller (CONTRACTS §21.1, core.OwnerScope): `all` with the
- * all-level key, `own` with only the own-level key, null with neither.
+ * The reach of a caller for a scoped action (core.DataScope): `all` every
+ * row, else `own` (the restricted tier: own, group and id scopes) with the
+ * scopes held; null without the action.
  */
-export function ownerScope(who: Identity, allKey: string, ownKey: string): 'all' | 'own' | null {
-  if (hasPerm(who, allKey)) return 'all'
-  if (hasPerm(who, ownKey)) return 'own'
-  return null
+export interface Reach {
+  level: 'all' | 'own'
+  scopes: Scope[]
+}
+export function ownerScope(who: Identity, action: string): Reach | null {
+  if (hasPerm(who, action)) return { level: 'all', scopes: [] }
+  const scopes = permissionIndex(who.permissions).scopes(action)
+  return scopes.length ? { level: 'own', scopes } : null
 }
 
-/** Whether `row` (created_by) is reachable by the caller under the scope; null owners need the all level. */
-export function inScope(scope: 'all' | 'own' | null, who: Identity, row: { created_by?: number | null }): boolean {
-  if (scope === 'all') return true
-  if (scope === 'own') return row.created_by != null && row.created_by === who.id
-  return false
+/** Whether `row` is in the caller's reach (core.DataScope.AllowsRow); null owners need the all level or an id or group scope. */
+export function inScope(scope: Reach | null, who: Identity, row: ScopedRow): boolean {
+  if (scope?.level === 'all') return true
+  return !!scope && scope.scopes.some((s) => scopeAllowsRow(s, row, who.id))
 }
 
 /** Applies the ?mine=true and ?created_by= list filters (the latter only at the all level). */
-export function filterOwned<T extends { created_by?: number | null }>(rows: T[], scope: 'all' | 'own' | null, who: Identity, q: Record<string, string>): T[] {
+export function filterOwned<T extends ScopedRow>(rows: T[], scope: Reach | null, who: Identity, q: Record<string, string>): T[] {
   let out = rows.filter((r) => inScope(scope, who, r))
   if (q.mine === 'true') out = out.filter((r) => r.created_by === who.id)
-  if (scope === 'all' && q.created_by) out = out.filter((r) => r.created_by === Number(q.created_by))
+  if (scope?.level === 'all' && q.created_by) out = out.filter((r) => r.created_by === Number(q.created_by))
   return out
 }
 
@@ -322,7 +335,8 @@ on('DELETE', '/me/sessions/:id', () => ({}))
 on('POST', '/me/sessions/revoke-others', () => ({}))
 on('DELETE', '/users/:id/security', stepUp('user.security.reset', () => noContent()))
 on('POST', '/system/super-admin/transfer', stepUp('superadmin.transfer', () => noContent()))
-// Access keys (CONTRACTS §80): what the mock user holds is what can be chosen.
+// Access keys (CONTRACTS §80): what the mock user holds is what can be chosen; stored canonical (§21).
+const canonicalKeys = (keys: string[] = []) => [...new Set(keys.map((k) => canonicalPermission(k) ?? k))]
 const accessKeys: any[] = []
 on('GET', '/me/access-keys', () => accessKeys)
 on('GET', '/me/access-keys/permissions', () => [
@@ -345,18 +359,29 @@ on('GET', '/me/access-keys/permissions', () => [
       { key: 'usage:self:read', label: { en: 'View own usage', zh: '查看自己的用量' }, description: {}, sensitive: false, status: 'active' },
       { key: 'balance:self:read', label: { en: 'View own balance', zh: '查看自己的余额' }, description: {}, sensitive: false, status: 'active' }
     ]
+  },
+  {
+    // Scoped actions (CONTRACTS §21): the key's scope stays within the user's.
+    module: 'account',
+    label: { en: 'Accounts', zh: '账号' },
+    source: 'core',
+    status: 'active',
+    permissions: [
+      { key: 'account:read', label: { en: 'View', zh: '查看' }, description: {}, sensitive: false, scope_type: 'account', status: 'active' },
+      { key: 'account:test', label: { en: 'Test', zh: '测试' }, description: {}, sensitive: false, scope_type: 'account', status: 'active' }
+    ]
   }
 ])
 on('POST', '/me/access-keys', (req) => {
   if (req.body?.password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
-  const key = { id: accessKeys.length + 1, name: req.body.name, hint: 'mock', permissions: req.body.permissions, lost: [], expires_at: req.body.expires_at, last_used_at: null, last_used_ip: '', created_at: now() }
+  const key = { id: accessKeys.length + 1, name: req.body.name, hint: 'mock', permissions: canonicalKeys(req.body.permissions), lost: [], expires_at: req.body.expires_at, last_used_at: null, last_used_ip: '', created_at: now() }
   accessKeys.unshift(key)
   return { ...key, key: 'sak_mockmockmockmockmockmockmockmockmockmockmock' }
 })
 on('PATCH', '/me/access-keys/:id', (req) => {
   const key = accessKeys.find((k) => String(k.id) === req.params.id)
   if (!key) return fail(404, 'not_found', 'not found')
-  Object.assign(key, { name: req.body?.name ?? key.name, permissions: req.body?.permissions ?? key.permissions, lost: [] })
+  Object.assign(key, { name: req.body?.name ?? key.name, permissions: req.body?.permissions ? canonicalKeys(req.body.permissions) : key.permissions, lost: [] })
   return key
 })
 on('DELETE', '/me/access-keys/:id', (req) => {
@@ -370,10 +395,10 @@ on('PUT', '/me/password', (req) =>
     : stepUp('self.password.change', () => noContent())(req)
 )
 
-// Permission of each core menu path (CONTRACTS §21.2 for accounts / proxies); plugin items need their plugin permission.
+// Scoped action of a core menu path, held at any scope (CONTRACTS §21, menus.go HasAction).
+const MENU_ACTIONS: Record<string, string> = { '/accounts': 'account:read', '/proxies': 'proxy:read' }
+// Permission of each other core menu path; plugin items need their plugin permission.
 const MENU_PERMS: Record<string, string | string[]> = {
-  '/accounts': ['account:read', 'account:own:read', 'account:own:create'],
-  '/proxies': ['proxy:read', 'proxy:own:read', 'proxy:own:manage'],
   '/usage': 'usage:all:read',
   '/usage/overview': 'usage:all:read',
   '/users': 'user:read',
@@ -399,7 +424,8 @@ const MENU_PERMS: Record<string, string | string[]> = {
 
 on('GET', '/me/menus', (req) => {
   const who = caller(req)
-  return MENUS.map((s) => ({ ...s, items: s.items.filter((i) => !MENU_PERMS[i.path] || hasPerm(who, MENU_PERMS[i.path])) })).filter((s) => s.items.length)
+  const allowed = (path: string) => (MENU_ACTIONS[path] ? hasAction(who, MENU_ACTIONS[path]) : !MENU_PERMS[path] || hasPerm(who, MENU_PERMS[path]))
+  return MENUS.map((s) => ({ ...s, items: s.items.filter((i) => allowed(i.path)) })).filter((s) => s.items.length)
 })
 
 // Mirrors server/internal/authz/menus.go (sections, labels and order, CONTRACTS

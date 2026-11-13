@@ -78,7 +78,7 @@ const KINDS: Record<string, Kind> = {
   accounts: {
     refs: ['prefer_group_id'],
     rows(req, who, mine) {
-      const scope = ownerScope(who, 'account:read', 'account:own:read')
+      const scope = ownerScope(who, 'account:read')
       if (!scope) return denied('account:read')
       const preferred = Number(req.query.prefer_group_id) || 0
       return filterOwned(accounts, scope, who, mine ? { mine: 'true' } : {}).map((a) => ({
@@ -100,7 +100,7 @@ const KINDS: Record<string, Kind> = {
   },
   proxies: {
     rows(_req, who, mine) {
-      const scope = ownerScope(who, 'proxy:read', 'proxy:own:read')
+      const scope = ownerScope(who, 'proxy:read')
       if (!scope) return denied('proxy:read')
       return filterOwned(proxies, scope, who, mine ? { mine: 'true' } : {}).map((p) => ({
         id: p.id,

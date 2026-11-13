@@ -592,5 +592,9 @@ export default {
     refreshThrottled: '请求过于频繁，请 {n} 秒后再试',
     updatedAt: '更新于 {time}',
     error: '查询失败：{error}'
+  },
+  scopeErrors: {
+    notInScope: '账号必须绑定到你管理的分组',
+    wouldLeaveScope: '修改后账号将不在你的管理范围内'
   }
 }

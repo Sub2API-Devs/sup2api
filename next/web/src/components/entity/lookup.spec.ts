@@ -31,6 +31,18 @@ describe('useEntityNames', () => {
     expect(get).toHaveBeenCalledTimes(1)
   })
 
+  it('tells an id the lookup answered without (deleted) from one not answered yet or refused', async () => {
+    const { gone } = useEntityNames()
+    expect([gone('group', 3), gone('group', 9)]).toEqual([false, false])
+    await flushPromises()
+    expect([gone('group', 3), gone('group', 9)]).toEqual([false, true])
+    resetEntityLookups()
+    get.mockRejectedValue(new ApiError(403, { code: 'permission_denied', message: 'no' }))
+    gone('group', 9)
+    await flushPromises()
+    expect(gone('group', 9)).toBe(false)
+  })
+
   it('does not ask for an id the lookup cannot hold, which the core would refuse with the whole batch', async () => {
     const { label } = useEntityNames()
     const past = '99999999999999999999' // more than an int64 holds

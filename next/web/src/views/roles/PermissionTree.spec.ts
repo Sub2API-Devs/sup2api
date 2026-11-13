@@ -1,10 +1,13 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { i18n } from '@/i18n'
 import type { PermissionItem, PermissionModule } from '@/api/types'
+import { parsePermission } from '@/authz/implies'
 import PermissionTree from './PermissionTree.vue'
+import ScopePicker from './ScopePicker.vue'
 
 enableAutoUnmount(afterEach)
+vi.mock('@/components/entity/lookup', () => ({ useEntityNames: () => ({ label: (_kind: string, id: number) => `#${id}`, gone: () => false }) }))
 
 const perm = (key: string, status = 'active'): PermissionItem => ({ key, label: key, sensitive: false, status })
 const mod: PermissionModule = {
@@ -64,5 +67,50 @@ describe('PermissionTree step-up marks', () => {
     expect(w.findAll('[data-testid="permission-step-up"]')).toHaveLength(1)
     expect(w.text()).toContain(i18n.global.t('roles.stepUpLegend'))
     expect(render([]).text()).not.toContain(i18n.global.t('roles.stepUpLegend'))
+  })
+})
+
+describe('PermissionTree scoped actions', () => {
+  const accountMod: PermissionModule = {
+    module: 'account',
+    label: 'Accounts',
+    source: 'core',
+    status: 'active',
+    permissions: [{ ...perm('account:read'), scope_type: 'account' }, perm('account:relay')]
+  }
+  const limitOf = (keys: string[]) => (action: string) => keys.filter((k) => k.startsWith(action)).map((k) => parsePermission(k)!.scope)
+  const renderScoped = (granted: string[], limit?: string[]) =>
+    mount(PermissionTree, { props: { modules: [accountMod], granted: new Set(granted), scopeLimit: limit && limitOf(limit) }, global: { plugins: [i18n], stubs: { EntityPicker: true } } })
+
+  it('shows one row per action, its scopes open while ticked', () => {
+    const w = renderScoped(['account:read:own', 'account:read:group/3'])
+    expect(boxes(w)[1].element.checked).toBe(true)
+    expect(w.find('[data-testid="scope-account:read"]').exists()).toBe(true)
+    expect(renderScoped([]).find('[data-testid="scope-account:read"]').exists()).toBe(false)
+  })
+
+  it('ticks an action at the widest scope the editor holds, and unticks every scope of it', async () => {
+    const w = renderScoped([], ['account:read:own'])
+    await boxes(w)[1].setValue(true)
+    expect(lastEmitted(w)).toEqual(['account:read:own'])
+    const full = renderScoped(['account:read:own', 'account:read:group/3'])
+    await boxes(full)[1].setValue(false)
+    expect(lastEmitted(full)).toEqual([])
+    const all = renderScoped([])
+    await boxes(all)[0].setValue(true)
+    expect(lastEmitted(all)).toEqual(['account:read', 'account:relay'])
+  })
+
+  it('opens the scopes to choose from when the editor holds no own or full scope', async () => {
+    const w = renderScoped([], ['account:read:group/3'])
+    await boxes(w)[1].setValue(true)
+    expect(lastEmitted(w)).toEqual([])
+    expect(w.find('[data-testid="scope-account:read"]').text()).toContain(i18n.global.t('roles.scope.none'))
+  })
+
+  it('emits the scopes chosen in the picker as canonical keys beside the others', async () => {
+    const w = renderScoped(['account:read', 'account:relay'])
+    w.findComponent(ScopePicker).vm.$emit('update:scopes', [parsePermission('account:read:own')!.scope])
+    expect(lastEmitted(w)).toEqual(['account:read:own', 'account:relay'])
   })
 })

@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { i18n } from '@/i18n'
+import type { Me } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
 import AccessKeysCard from './AccessKeysCard.vue'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), del: vi.fn() }))
@@ -16,6 +19,7 @@ const render = () => mount(AccessKeysCard, { global: { plugins: [i18n], stubs: {
 
 describe('access keys card', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     i18n.global.locale.value = 'zh'
     api.get.mockReset()
     api.post.mockReset()
@@ -115,5 +119,27 @@ describe('access keys card', () => {
     expect(tree.indexOf('用量')).toBeLessThan(tree.indexOf('演示插件'))
     expect(w.findAll('[data-testid="permission-step-up"]')).toHaveLength(1)
     w.unmount()
+  })
+
+  it('offers the scopes of a scoped permission within the user\'s own, and sends canonical keys', async () => {
+    useAuthStore().me = { id: 3, email: 'a@x', display_name: 'a', roles: [], permissions: ['account:read:own', 'account:own:read'], superuser: false } as Me
+    const scoped = [{ module: 'account', label: 'Accounts', source: 'core', status: 'active', permissions: [{ key: 'account:read', label: 'View', sensitive: false, scope_type: 'account', status: 'active' }] }]
+    api.get.mockImplementation(async (path: string) => (path.endsWith('/permissions') ? scoped : []))
+    const w = render()
+    await flushPromises()
+    await w.get('[data-testid="access-key-add"]').trigger('click')
+    await flushPromises()
+    const form = () => document.querySelector('[data-testid="access-key-permissions"]')!
+    ;(form().querySelector('input[type="checkbox"]:not([disabled])') as HTMLInputElement).click()
+    await flushPromises()
+    // Only the own rows: the user holds no wider scope, so "All" is not offered.
+    expect(document.querySelector('[data-testid="scope-all"]')).toBeNull()
+    expect((document.querySelector('input[data-testid="scope-own"]') as HTMLInputElement).checked).toBe(true)
+    api.post.mockResolvedValue({ key: 'sak_x' })
+    await w.get('[data-testid="access-key-name"] input, input[data-testid="access-key-name"]').setValue('k')
+    await w.get('[data-testid="access-key-password"] input, input[data-testid="access-key-password"]').setValue('pw')
+    await w.get('form[data-testid="access-key-form"]').trigger('submit')
+    await flushPromises()
+    expect(api.post.mock.calls[0][1]).toMatchObject({ permissions: ['account:read:own'] })
   })
 })

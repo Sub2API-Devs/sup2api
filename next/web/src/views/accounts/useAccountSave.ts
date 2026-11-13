@@ -21,6 +21,9 @@ import { windowOf } from './spmWindow'
 import { sameSet } from './bulkEdit'
 
 /** Editable basics of an account (AccountEditor's `basic`). */
+/** Field error codes of a save worded by the console: a restricted caller's account out of its groups (CONTRACTS §21). */
+const SCOPE_FIELD_CODES = { not_in_scope: 'accounts.scopeErrors.notInScope' }
+
 export interface AccountBasics {
   name: string
   group_ids: number[]
@@ -212,7 +215,7 @@ export function useAccountSave(deps: AccountSaveDeps) {
       ccg.showAuth()
       return
     }
-    const all = fieldErrors(e)
+    const all = fieldErrors(e, undefined, SCOPE_FIELD_CODES)
     const { cred, base } = splitFieldErrors(all)
     errors.value = base
     deps.showCredentialErrors(cred)

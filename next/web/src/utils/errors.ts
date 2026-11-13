@@ -2,10 +2,22 @@ import { ApiError, VERIFICATION_CANCELLED, isApiError } from '@sub2api/host'
 import { i18n } from '@/i18n'
 import { toast } from '@sub2api/ui'
 
+/**
+ * Refusals the console words itself whatever the server's message: by code,
+ * or by code and the permission a permission_denied names (resource scopes,
+ * CONTRACTS §21).
+ */
+const KNOWN_ERRORS: Record<string, string> = {
+  would_leave_scope: 'accounts.scopeErrors.wouldLeaveScope',
+  'permission_denied proxy:manage:own': 'proxies.cannotCreate'
+}
+
 /** Human readable, localized error message. */
 export function errorMessage(e: unknown): string {
   const t = i18n.global.t
   if (isApiError(e)) {
+    const known = KNOWN_ERRORS[e.code] ?? KNOWN_ERRORS[`${e.code} ${e.details.permission}`]
+    if (known) return t(known)
     const fallback = t(`auth.errors.${e.code}`)
     const base = e.message && e.message !== e.code ? e.message : fallback
     return base

@@ -2,21 +2,21 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { activePlatforms, platformById, platformLabel } from './platforms'
-import { caller, filterOwned, hasPerm, inScope, ownerScope, userEmail, type Identity } from './core'
+import { caller, filterOwned, hasAction, hasPerm, inScope, ownerScope, userEmail, type Identity } from './core'
 import { resolveProxyURL, validateProxyURL } from './resources'
 import { codexAccountTypes, codexCredentialErrors } from './codex'
 import { customAccountTypes, customCredentialErrors, customForm } from './custom'
 import { checkControls, controlsAccountTypes, controlsForm } from './controls'
 
 // Mock handlers: accounts, account types (form modes schema + iframe) and
-// GET /me/platforms (CONTRACTS §14.1). Ownership (CONTRACTS §21): own-level keys
-// only reach accounts the caller created; sign in as vendor@example.com to
-// try it (see core.ts).
+// GET /me/platforms (CONTRACTS §14.1). Scopes (CONTRACTS §21): a narrower
+// scope only reaches the accounts in it (own: those the caller created); sign
+// in as vendor@example.com to try it (see core.ts).
 
-/** Owner scope of the caller for an account key pair, e.g. ('account:read', 'account:own:read'). */
+/** The caller's reach for an account action, e.g. 'read' (account:read at any scope). */
 function accountScope(req: MockRequest, action: 'read' | 'create' | 'update' | 'delete' | 'test' | 'credential:view') {
   const who = caller(req)
-  return { who, scope: ownerScope(who, `account:${action}`, `account:own:${action}`) }
+  return { who, scope: ownerScope(who, `account:${action}`) }
 }
 
 /** Guarded settings (CONTRACTS §21.3): base_url of the built-in types is limited to the official address. */
@@ -599,8 +599,8 @@ export function registerCcgDrafts(d: MockCcgDrafts) {
 
 /**
  * Re-authorization of a Claude Code account (docs/CCGATEWAY-REAUTH.md): the
- * account when the caller may re-authorize it (settings:manage, account:update,
- * or account:own:update on an account it created), else the error response.
+ * account when the caller may re-authorize it (settings:manage, or a scope of
+ * account:update that reaches it), else the error response.
  */
 export function mockCcgReauthAccount(req: MockRequest): { a: any } | { __status: number; body: unknown } {
   if (hasPerm(caller(req), 'settings:manage')) {
@@ -672,7 +672,7 @@ const autoDisableSettings = {
 }
 on('GET', '/accounts/auto-disable', (req) => {
   const who = caller(req)
-  if (!['account:create', 'account:own:create', 'account:update', 'account:own:update'].some(key => hasPerm(who, key))) return fail(403, 'permission_denied', 'Permission denied')
+  if (!hasAction(who, ['account:create', 'account:update'])) return fail(403, 'permission_denied', 'Permission denied')
   return { enabled: autoDisableSettings.enabled }
 })
 on('GET', '/settings/auto-disable', (req) => hasPerm(caller(req), 'settings:read') ? autoDisableSettings : fail(403, 'permission_denied', 'Permission denied'))
@@ -796,13 +796,13 @@ on('GET', '/accounts', (req) => {
   return paginate(list.map(({ credentials: _c, ...a }) => withGroups(a)), q)
 })
 /**
- * The account of :id within the caller's scope for `action`: 403 without any
- * key of the pair, 404 when missing or not the caller's (the two are not told apart).
+ * The account of :id within the caller's scope for `action`: 403 without the
+ * action at any scope, 404 when missing or out of it (the two are not told apart).
  */
 const adminLocked = () => fail(403, 'account_locked_by_admin', 'this account was disabled by an administrator; only an administrator can enable it')
 function scopedAccount(req: MockRequest, action: 'read' | 'update' | 'delete' | 'test' | 'credential:view'): { a: any } | { __status: number; body: unknown } {
   const { who, scope } = accountScope(req, action)
-  if (!scope) return fail(403, 'permission_denied', `account:${action} or account:own:${action} is required`, { permission: `account:own:${action}` })
+  if (!scope) return fail(403, 'permission_denied', `account:${action} is required`, { permission: `account:${action}` })
   const a = accounts.find((x) => x.id === Number(req.params.id))
   return a && inScope(scope, who, a) ? { a } : fail(404, 'not_found', 'account not found')
 }
@@ -849,6 +849,12 @@ on('GET', '/accounts/:id', (req) => {
 on('POST', '/accounts', (req) => {
   const who = caller(req)
   const b = req.body || {}
+  // CONTRACTS §21: a restricted creator needs the own scope or one of its groups on the new account.
+  const reach = ownerScope(who, 'account:create')
+  if (!reach) return fail(403, 'permission_denied', 'account:create is required', { permission: 'account:create' })
+  if (!inScope(reach, who, { id: 0, created_by: who.id, group_ids: (b.group_ids || []).map(Number) })) {
+    return fail(400, 'invalid_argument', 'invalid group_ids', { fields: [{ field: 'group_ids', code: 'not_in_scope', message: 'bind the account to a group you manage' }] })
+  }
   const creds = b.credentials || {}
   if ('platform' in b) return fail(400, 'invalid_argument', 'unknown field "platform"')
   const at = accountTypeDecls.find((x) => x.plugin_key === b.plugin_key && x.type === b.type)
@@ -929,10 +935,14 @@ on('PATCH', '/accounts/:id', (req) => {
   // The administrator lock (CONTRACTS §15.9 admin_locked): the full scope locks an account somebody else created when it
   // disables it and unlocks when it enables; an own-level caller cannot enable a locked account.
   const { who, scope } = accountScope(req, 'update')
-  if (scope === 'own' && a.admin_locked && rest.status === 'active' && a.status !== 'active') return adminLocked()
-  if (rest.status !== undefined && rest.status !== a.status) Object.assign(a, { auto_disabled_until: null, status_reason: rest.status !== 'disabled' ? '' : scope === 'own' ? 'disabled by owner' : 'disabled by administrator' })
-  if (scope === 'all' && rest.status === 'active') a.admin_locked = false
-  if (scope === 'all' && rest.status === 'disabled' && a.created_by !== who.id) Object.assign(a, { admin_locked: true, status_reason: 'disabled by administrator' })
+  // A restricted caller may not move the account out of its scope (CONTRACTS §21).
+  if (!inScope(scope, who, { ...a, group_ids: (rest.group_ids ?? a.group_ids ?? []).map(Number) })) {
+    return fail(403, 'would_leave_scope', 'the change would move the account out of your range')
+  }
+  if (scope?.level === 'own' && a.admin_locked && rest.status === 'active' && a.status !== 'active') return adminLocked()
+  if (rest.status !== undefined && rest.status !== a.status) Object.assign(a, { auto_disabled_until: null, status_reason: rest.status !== 'disabled' ? '' : scope?.level === 'own' ? 'disabled by owner' : 'disabled by administrator' })
+  if (scope?.level === 'all' && rest.status === 'active') a.admin_locked = false
+  if (scope?.level === 'all' && rest.status === 'disabled' && a.created_by !== who.id) Object.assign(a, { admin_locked: true, status_reason: 'disabled by administrator' })
   // `models` and `model_mapping` are replaced as a whole (§18.3).
   Object.assign(a, rest)
   if (proxy.proxy_id !== undefined) a.proxy_id = proxy.proxy_id
@@ -1120,7 +1130,7 @@ on('POST', '/accounts/:id/refresh-credentials', (req) => {
 on('POST', '/accounts/:id/reset-status', (req) => {
   const r = scopedAccount(req, 'update')
   if (!('a' in r)) return r
-  if (r.a.admin_locked && r.a.status !== 'active' && accountScope(req, 'update').scope === 'own') return adminLocked()
+  if (r.a.admin_locked && r.a.status !== 'active' && accountScope(req, 'update').scope?.level === 'own') return adminLocked()
   r.a.admin_locked = false
   // Releasing an account the usage limit disabled waives the limit for that period (§73.4).
   const l = usageLimits.get(r.a.id)

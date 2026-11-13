@@ -1,5 +1,6 @@
 // Mock handlers: users, roles, permissions, API keys, groups, proxies, nodes,
 // publishers. (Accounts and account types live in their own mock module.)
+import { SCOPABLE, canonicalPermission, parsePermission } from '../src/authz/implies'
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, pricerUser, readonlyUser, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
@@ -54,15 +55,11 @@ const MODULES: ModuleDef[] = [
     { key: 'account:read', label: L('View', '查看') }, { key: 'account:create', label: L('Create', '新建') },
     { key: 'account:update', label: L('Edit', '编辑') }, { key: 'account:delete', label: L('Delete', '删除'), sensitive: true },
     { key: 'account:test', label: L('Test', '测试') }, { key: 'account:credential:view', label: L('View credentials', '查看凭证'), sensitive: true },
-    { key: 'account:own:read', label: L('View own', '查看自己的') }, { key: 'account:own:create', label: L('Create own', '新建自己的') },
-    { key: 'account:own:update', label: L('Edit own', '编辑自己的') }, { key: 'account:own:delete', label: L('Delete own', '删除自己的') },
-    { key: 'account:own:test', label: L('Test own', '测试自己的') }, { key: 'account:own:credential:view', label: L('View own credentials', '查看自己的凭证'), sensitive: true },
     { key: 'account:settings:custom', label: L('Custom restricted settings', '自定义受限设置') },
     { key: 'account:group:bind', label: L('Bind accounts to groups (own level)', '将账号绑定到分组（own 级）') },
     { key: 'account:relay', label: L('Create relay-type accounts with custom upstream', '创建自定义上游的 relay 类账号'), sensitive: true }] },
   { module: 'proxy', label: L('Proxies', '代理'), source: 'core', status: 'active', permissions: [
-    { key: 'proxy:read', label: L('View', '查看') }, { key: 'proxy:manage', label: L('Manage', '管理') },
-    { key: 'proxy:own:read', label: L('View own', '查看自己的') }, { key: 'proxy:own:manage', label: L('Manage own', '管理自己的') }] },
+    { key: 'proxy:read', label: L('View', '查看') }, { key: 'proxy:manage', label: L('Manage', '管理') }] },
   { module: 'price', label: L('Prices', '价格'), source: 'core', status: 'active', permissions: [
     { key: 'price:read', label: L('View', '查看') }, { key: 'price:manage', label: L('Manage', '管理') }] },
   { module: 'balance', label: L('Balance', '余额'), source: 'core', status: 'active', permissions: [
@@ -104,7 +101,8 @@ on('GET', '/permissions', () =>
   MODULES.map((m) => ({
     ...m,
     plugin_key: m.plugin_key ?? null,
-    permissions: m.permissions.map((p) => ({ key: p.key, label: p.label, sensitive: !!p.sensitive, status: p.status || m.status }))
+    // scope_type: the account and proxy actions take a scope (CONTRACTS §21).
+    permissions: m.permissions.map((p) => ({ key: p.key, label: p.label, sensitive: !!p.sensitive, scope_type: SCOPABLE[p.key] ?? '', status: p.status || m.status }))
   }))
 )
 
@@ -129,7 +127,7 @@ const CORE_KEYS = ALL_PERMISSIONS.filter((k) => !k.startsWith('plugin.'))
 // permission but the super-only ones; operator and supplier are explicit lists.
 const SUPER_ONLY = ['plugin:grant:critical', 'plugin:grant:db_schema_unconfined', 'publisher:manage', 'system:update:execute', 'system:update:recover']
 const USER_KEYS = ['apikey:self:manage', 'balance:self:read', 'usage:self:read', 'gateway:use']
-const SUPPLIER_KEYS = ['account:own:read', 'account:own:create', 'account:own:update', 'account:own:delete', 'account:own:test', 'account:own:credential:view', 'proxy:own:read', 'proxy:own:manage']
+const SUPPLIER_KEYS = ['account:read:own', 'account:create:own', 'account:update:own', 'account:delete:own', 'account:test:own', 'account:credential:view:own', 'proxy:read:own', 'proxy:manage:own']
 const OPERATOR_KEYS = [
   'user:read', 'user:create', 'user:update', 'role:read', 'role:assign', 'group:read', 'group:manage', 'segment:read', 'segment:manage',
   'account:read', 'account:create', 'account:update', 'account:delete', 'account:test', 'proxy:read', 'proxy:manage', 'price:read',
@@ -147,7 +145,9 @@ const builtin = (id: number, key: string, extra: string[] = []): MockRole => {
   const d = BUILTIN_DEFAULTS[key]
   return { id, key, name: d.name, description: d.description, builtin: true, superuser: false, permission_keys: [...d.keys, ...extra], assignable_role_keys: [...d.assignable], assign_custom: d.assignCustom, created_at: at(90), updated_at: at(10) }
 }
-const custom = (id: number, key: string, name: L, description: string, keys: string[]): MockRole => ({ id, key, name, description, builtin: false, superuser: false, permission_keys: [...keys], assignable_role_keys: [], assign_custom: false, created_at: at(5), updated_at: at(1) })
+/** Keys canonical, without duplicates (perm.CanonicalSet); a key that does not parse is dropped. */
+const canonicalSet = (keys: string[]) => [...new Set(keys.map(canonicalPermission).filter((k): k is string => !!k))].sort()
+const custom = (id: number, key: string, name: L, description: string, keys: string[]): MockRole => ({ id, key, name, description, builtin: false, superuser: false, permission_keys: canonicalSet(keys), assignable_role_keys: [], assign_custom: false, created_at: at(5), updated_at: at(1) })
 const roles: MockRole[] = [
   { id: 1, key: 'super_admin', name: L('Super admin', '超级管理员'), description: 'Has every permission', builtin: true, superuser: true, permission_keys: [], assignable_role_keys: [], assign_custom: false, created_at: at(90), updated_at: at(90) },
   builtin(2, 'admin'),
@@ -159,7 +159,12 @@ const roles: MockRole[] = [
   custom(6, 'readonly', L('Read only', '只读'), 'Sees every account and proxy, changes nothing', readonlyUser.permissions),
   custom(7, 'moderator', L('Moderator', '审核员'), 'Runs the moderation plugin; looks up no user, group or account', moderatorUser.permissions),
   // Group pricing without users (CONTRACTS §97.6): personal user groups go by "#<user id>".
-  custom(8, 'pricer', L('Pricer', '定价员'), 'Prices groups and user groups, sees no users', pricerUser.permissions)
+  custom(8, 'pricer', L('Pricer', '定价员'), 'Prices groups and user groups, sees no users', pricerUser.permissions),
+  // Resource scopes (CONTRACTS §21): the accounts of group 1, one more account of group 2, one proxy.
+  custom(10, 'group_ops', L('Group operator', '分组运维'), 'Runs the accounts of group 1', [
+    'account:read:group/1', 'account:create:group/1', 'account:update:group/1', 'account:test:group/1', 'account:update:group/2/account/13',
+    'proxy:read:proxy/1', 'proxy:manage:proxy/1', 'group:read', 'gateway:use'
+  ])
 ]
 
 function roleOut(r: MockRole) {
@@ -199,9 +204,14 @@ on('PUT', '/roles/:id/permissions', (req) => {
   if (r.superuser) return fail(403, 'permission_denied', 'superuser role cannot be edited')
   const known = new Set(MODULES.flatMap((m) => m.permissions.map((p) => p.key)))
   const keys: string[] = Array.isArray(req.body?.permission_keys) ? req.body.permission_keys : []
-  const bad = keys.find((k) => !known.has(k))
-  if (bad) return invalid('permission_keys', `unknown permission ${bad}`)
-  r.permission_keys = [...new Set(keys)]
+  // Any spelling (aliases, trailing /*) is taken and stored canonical; the actions must be in the catalog.
+  const bad = keys.find((k) => !known.has(parsePermission(k)?.action ?? ''))
+  if (bad) return invalid('permission_keys', `invalid permission key ${bad}`)
+  const canonical = canonicalSet(keys)
+  // Only keys the editor's own imply can be granted (Missing: the canonical keys refused).
+  const missing = canonical.filter((k) => !hasPerm(caller(req), k))
+  if (missing.length) return fail(403, 'permission_denied', 'you can only grant permissions you hold', { missing })
+  r.permission_keys = canonical
   r.updated_at = now()
   return roleOut(r)
 })
@@ -704,16 +714,16 @@ function validateProxy(b: any, partial: boolean) {
   return null
 }
 
-/** Owner scope of the caller for proxies: proxy:read / proxy:own:read (read) or proxy:manage / proxy:own:manage (manage). */
+/** The caller's reach for a proxy action: proxy:read or proxy:manage at any scope. */
 function proxyScope(req: MockRequest, action: 'read' | 'manage') {
   const who = caller(req)
-  return { who, scope: ownerScope(who, `proxy:${action}`, `proxy:own:${action}`) }
+  return { who, scope: ownerScope(who, `proxy:${action}`) }
 }
 
-/** The proxy of :id within the caller's manage scope: 403 without proxy:manage / proxy:own:manage, 404 when missing or not the caller's. */
+/** The proxy of :id within the caller's manage scope: 403 without proxy:manage at any scope, 404 when missing or out of it. */
 function managedProxy(req: MockRequest): { p: MockProxy } | { __status: number; body: unknown } {
   const { who, scope } = proxyScope(req, 'manage')
-  if (!scope) return fail(403, 'permission_denied', 'proxy:manage or proxy:own:manage is required', { permission: 'proxy:own:manage' })
+  if (!scope) return fail(403, 'permission_denied', 'proxy:manage is required', { permission: 'proxy:manage' })
   const p = proxies.find((x) => x.id === Number(req.params.id))
   return p && inScope(scope, who, p) ? { p } : fail(404, 'not_found', 'proxy not found')
 }
@@ -761,18 +771,18 @@ export function validateProxyURL(raw: string) {
 
 /**
  * CONTRACTS §21.4 find-or-create for POST/PATCH /accounts proxy_url: needs
- * proxy:manage or proxy:own:manage; matches protocol/host/port/username/
+ * the own scope of proxy:manage or more (proxy/<id> creates none); matches protocol/host/port/username/
  * password among the proxies the caller can see (skipping disabled ones) or
  * creates one owned by the caller.
  */
 export function resolveProxyURL(req: MockRequest, raw: string): { id: number; created: boolean } | { __status: number; body: unknown } {
   const who = caller(req)
-  if (!hasPerm(who, ['proxy:manage', 'proxy:own:manage'])) {
-    return fail(403, 'permission_denied', 'proxy:own:manage is required to attach a proxy by URL', { permission: 'proxy:own:manage' })
+  if (!hasPerm(who, 'proxy:manage:own')) {
+    return fail(403, 'permission_denied', 'creating a proxy requires proxy:manage for every proxy or your own', { permission: 'proxy:manage:own' })
   }
   const spec = parseProxyURL(raw)
   if (!spec) return validateProxyURL(raw)!
-  const visible = hasPerm(who, 'proxy:read') ? 'all' : 'own'
+  const visible = ownerScope(who, 'proxy:read')
   const hit = proxies
     .filter((p) => inScope(visible, who, p) && p.status !== 'disabled')
     .filter((p) => p.protocol === spec.protocol && p.host.toLowerCase() === spec.host && p.port === spec.port && p.username === spec.username && p.password === spec.password)
@@ -805,6 +815,10 @@ on('GET', '/proxies/:id', (req) => {
 })
 on('POST', '/proxies', (req) => {
   const b = req.body || {}
+  // proxy/<id> scopes reach existing proxies only (CONTRACTS §21).
+  if (!hasPerm(caller(req), 'proxy:manage:own')) {
+    return fail(403, 'permission_denied', 'creating a proxy requires proxy:manage for every proxy or your own', { permission: 'proxy:manage:own' })
+  }
   const err = validateProxy(b, false)
   if (err) return err
   const p: MockProxy = { id: nextId(), name: b.name, protocol: b.protocol, host: b.host, port: Number(b.port), username: b.username || '', password: b.password || '', status: 'active', created_by: caller(req).id, created_at: now() }

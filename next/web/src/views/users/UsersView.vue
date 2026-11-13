@@ -44,6 +44,7 @@ import UserCreateDialog from './UserCreateDialog.vue'
 import UserPricingDrawer from './UserPricingDrawer.vue'
 import UserSegmentMoveDialog from './UserSegmentMoveDialog.vue'
 import { segmentFilterOptions, useNamedSegments } from './userSegments'
+import { useScopeLabels } from '@/views/roles/scopeLabels'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -69,6 +70,13 @@ loadRoles()
 function roleName(key: string) {
   const r = roles.value.find((x) => x.key === key)
   return r ? lt(r.name) || key : key
+}
+
+const scopeLabels = useScopeLabels()
+/** The resource scopes of a role, for its badge's tooltip (CONTRACTS §21); undefined without any. */
+function roleScopes(key: string): string | undefined {
+  const text = scopeLabels.summary(roles.value.find((x) => x.key === key)?.permission_keys ?? [])
+  return text ? t('users.roleScopes', { list: text }) : undefined
 }
 
 // ------------------------------------------------------------------ user groups (segments)
@@ -347,7 +355,7 @@ function remove(u: User) {
       </template>
       <template #cell-roles="{ row }">
         <div class="flex flex-wrap gap-1">
-          <SBadge v-for="r in row.roles || []" :key="r" :tone="r === 'super_admin' ? 'accent' : 'primary'">{{ roleName(r) }}</SBadge>
+          <SBadge v-for="r in row.roles || []" :key="r" :tone="r === 'super_admin' ? 'accent' : 'primary'" :title="roleScopes(r)">{{ roleName(r) }}</SBadge>
           <SHint v-if="!row.roles || !row.roles.length" inline>—</SHint>
         </div>
       </template>

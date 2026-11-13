@@ -76,5 +76,6 @@ export default {
     inactive: '只能移交给状态正常的用户',
     submit: '移交',
     done: '已移交超级管理员，请重新登录'
-  }
+  },
+  roleScopes: '该角色的范围：{list}'
 }
