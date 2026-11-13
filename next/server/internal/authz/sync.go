@@ -23,18 +23,23 @@ import (
 func (s *Service) SyncCore(ctx context.Context) error {
 	defs := CorePermissions()
 	var (
-		keys, modules, labels, scopeTypes []string
-		sensitive                         []bool
-		sorts                             []int32
+		keys, modules, labels, descs, scopeTypes []string
+		sensitive                                []bool
+		sorts                                    []int32
 	)
 	for _, d := range defs {
 		lb, err := json.Marshal(d.Label)
 		if err != nil {
 			return err
 		}
+		dj, err := json.Marshal(d.Description)
+		if err != nil {
+			return err
+		}
 		keys = append(keys, d.Key)
 		modules = append(modules, d.Module)
 		labels = append(labels, string(lb))
+		descs = append(descs, string(dj))
 		sensitive = append(sensitive, d.Sensitive)
 		sorts = append(sorts, int32(d.Sort))
 		scopeTypes = append(scopeTypes, d.ScopeType)
@@ -84,13 +89,14 @@ RETURNING key, (xmax = 0)`, rKeys, rNames, rDescs, rSuper, rCustom)
 			}
 			changed = true
 		}, `
-INSERT INTO permissions (key, module, label, source, sensitive, status, sort, scope_type)
-SELECT k, m, l::jsonb, 'core', se, 'active', so, st FROM unnest($1::text[], $2::text[], $3::text[], $4::bool[], $5::int[], $6::text[]) AS t(k, m, l, se, so, st)
-ON CONFLICT (key) DO UPDATE SET module = EXCLUDED.module, label = EXCLUDED.label,
+INSERT INTO permissions (key, module, label, description, source, sensitive, status, sort, scope_type)
+SELECT k, m, l::jsonb, d::jsonb, 'core', se, 'active', so, st
+FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::bool[], $6::int[], $7::text[]) AS t(k, m, l, d, se, so, st)
+ON CONFLICT (key) DO UPDATE SET module = EXCLUDED.module, label = EXCLUDED.label, description = EXCLUDED.description,
     sensitive = EXCLUDED.sensitive, status = 'active', sort = EXCLUDED.sort, scope_type = EXCLUDED.scope_type
-    WHERE (permissions.module, permissions.label, permissions.sensitive, permissions.status, permissions.sort, permissions.scope_type)
-        IS DISTINCT FROM (EXCLUDED.module, EXCLUDED.label, EXCLUDED.sensitive, 'active'::varchar, EXCLUDED.sort, EXCLUDED.scope_type)
-RETURNING key, (xmax = 0)`, keys, modules, labels, sensitive, sorts, scopeTypes)
+    WHERE (permissions.module, permissions.label, permissions.description, permissions.sensitive, permissions.status, permissions.sort, permissions.scope_type)
+        IS DISTINCT FROM (EXCLUDED.module, EXCLUDED.label, EXCLUDED.description, EXCLUDED.sensitive, 'active'::varchar, EXCLUDED.sort, EXCLUDED.scope_type)
+RETURNING key, (xmax = 0)`, keys, modules, labels, descs, sensitive, sorts, scopeTypes)
 		if err != nil {
 			return err
 		}

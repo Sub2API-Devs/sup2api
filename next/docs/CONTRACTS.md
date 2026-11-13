@@ -136,7 +136,7 @@
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:define`；新增的 permission_keys 必须是操作者持有权限的子集，角色当前的权限也不能超出操作者（§43.6） |
 | PUT `/roles/:id/assignable` `{role_keys[], assign_custom}` | `role:define`；新增的可分配角色必须在操作者可分配范围内，角色当前的清单也不能超出操作者（§43.6） |
 | POST `/roles/:id/reset` | `role:define`；内置角色恢复默认（§15.7） |
-| GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,step_up,status}]}]`（`step_up`：部分接口使用时需二次验证，展示用，§80.2；2026-11-13 取代 `session_only`）；不含 `self` 虚拟模块 |
+| GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,description,sensitive,step_up,scope_type,requires?,status}]}]`（`step_up`：部分接口使用时需二次验证，展示用，§80.2；2026-11-13 取代 `session_only`。`description`：核心权限的中英说明（目录 `desc`，启动同步写入 `permissions.description`），插件权限为 `{}`。`scope_type`：范围的资源（`account`/`proxy`，§21），无范围为 `""`。`requires`：软依赖，没有它们这个权限基本用不上（例如 `account:update` 依赖同范围的 `account:read`），只给编辑器提示，不参与授权；没有时省略，只有核心权限有；期 4 T67）；不含 `self` 虚拟模块 |
 
 原来的 GET / PUT `/users/:id/groups`（给单个用户分配分组）已删除：私有分组改为授权给用户组，每个用户只属于一个用户组（§97）。
 

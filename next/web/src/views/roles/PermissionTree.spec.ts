@@ -66,3 +66,13 @@ describe('PermissionTree step-up marks', () => {
     expect(render([]).text()).not.toContain(i18n.global.t('roles.stepUpLegend'))
   })
 })
+
+describe('PermissionTree descriptions', () => {
+  it('shows the key and the description on hover', () => {
+    const described: PermissionModule = { ...mod, permissions: [{ ...perm('p.active'), description: { en: 'Does things', zh: '做事' } }, perm('p.plain')] }
+    const w = mount(PermissionTree, { props: { modules: [described], granted: new Set<string>() }, global: { plugins: [i18n] } })
+    const titles = w.findAll('span[title]').map((s) => s.attributes('title'))
+    expect(titles).toContain('p.active\nDoes things')
+    expect(titles).toContain('p.plain')
+  })
+})

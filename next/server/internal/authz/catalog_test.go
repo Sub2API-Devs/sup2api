@@ -396,3 +396,77 @@ func TestKeyConstantsMatchCatalog(t *testing.T) {
 		}
 	}
 }
+
+// Every listed permission explains itself in both languages, and its soft
+// dependencies are listed catalog keys: never itself, a deprecated or self
+// key, and of the same resource when both take a scope (the editor
+// suggests the same scope).
+func TestCatalogDescriptionsAndRequires(t *testing.T) {
+	t.Parallel()
+	for _, m := range slices.Concat(coreModules, []coreModule{selfModule}) {
+		for _, p := range m.perms {
+			if p.deprecated {
+				if p.desc != nil || p.requires != nil {
+					t.Errorf("deprecated %s has a description or requires", p.key)
+				}
+				continue
+			}
+			if en, zh := p.desc.Get("en"), p.desc.Get("zh"); en == "" || zh == "" || en == zh {
+				t.Errorf("%s description = %v", p.key, p.desc)
+			}
+			for _, k := range p.requires {
+				r, ok := corePermByKey(string(k))
+				_, self := selfKeys[string(k)]
+				switch {
+				case !ok || r.deprecated || self || k == p.key:
+					t.Errorf("%s requires %s, not a listed catalog key", p.key, k)
+				case perm.ScopeType(p.key) != "" && perm.ScopeType(k) != "" && perm.ScopeType(p.key) != perm.ScopeType(k):
+					t.Errorf("%s requires %s of another resource", p.key, k)
+				}
+			}
+		}
+	}
+}
+
+// SyncCore writes the catalog descriptions into an existing database, and
+// GET /permissions returns them with the soft dependencies.
+func TestSyncCoreWritesDescriptions(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	ctx := context.Background()
+	s := newService(t, db, newMemBus(), nil) // Start runs the first sync.
+	// A database synced by a core without descriptions.
+	if _, err := db.Pool.Exec(ctx, `UPDATE permissions SET description = '{}' WHERE source = 'core'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SyncCore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	mods, err := s.ListPermissions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := map[string]PermissionItem{}
+	for _, m := range mods {
+		for _, p := range m.Permissions {
+			items[p.Key] = p
+		}
+	}
+	upd, read := items["account:update"], items["account:read"]
+	if !strings.Contains(upd.Description.Get("en"), "scope") || upd.Description.Get("zh") == "" {
+		t.Fatalf("account:update description = %v", upd.Description)
+	}
+	if !slices.Equal(upd.Requires, []string{"account:read"}) || read.Requires != nil || upd.ScopeType != "account" {
+		t.Fatalf("account:update = %+v, account:read requires %v", upd, read.Requires)
+	}
+	if usage := items["usage:all:read"].Description.Get("en"); !strings.Contains(usage, "email") {
+		t.Fatalf("usage:all:read description = %q", usage)
+	}
+	if del := items["user:delete"]; !del.StepUp || !del.Sensitive || del.ScopeType != "" {
+		t.Fatalf("user:delete = %+v", del)
+	}
+	raw, err := json.Marshal(read)
+	if err != nil || strings.Contains(string(raw), "requires") {
+		t.Fatalf("requires is omitted when empty: %s, %v", raw, err)
+	}
+}
