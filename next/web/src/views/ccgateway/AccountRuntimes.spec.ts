@@ -656,3 +656,23 @@ describe('account runtime actions of an own-level caller', () => {
     w.unmount()
   })
 })
+
+describe('account runtimes of a settings administrator without account read', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.granted = ['settings:read', 'settings:manage']
+    mocks.get.mockResolvedValue({ runtimes: [] })
+    i18n.global.locale.value = 'zh'
+  })
+  afterEach(() => { mocks.granted = null })
+
+  it('keeps the cleanup and the retained runtimes, without the list the core would refuse', async () => {
+    const w = mount(AccountRuntimes, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
+    await flushPromises()
+    expect(mocks.list).not.toHaveBeenCalled()
+    expect(mocks.get.mock.calls.map(c => c[0])).toEqual(['/system/ccgateway/runtimes/retained'])
+    expect(w.find('[data-testid="ccgateway-runtimes"]').exists()).toBe(false)
+    expect(w.find('[data-testid="ccgateway-cleanup"]').exists()).toBe(true)
+    w.unmount()
+  })
+})

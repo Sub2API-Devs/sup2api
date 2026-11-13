@@ -9,7 +9,7 @@ import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import { SBadge, SButton, SCard, SHint, SFormModal, SSegmented, SSwitch, STable, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
+import { ACCOUNT_KEYS, ACCOUNT_PAGE_PERMS, useOwnership } from '@/composables/useOwnership'
 import { fetchFirstPage } from '@/composables/lookups'
 import { runPool } from '@/views/accounts/pool'
 import type { CcgRuntimeHealth } from '@/api/types'
@@ -111,6 +111,9 @@ const rows = ref<Row[]>([])
 const loading = ref(false)
 const cleaning = ref(false)
 const error = ref('')
+// The list takes the keys of the accounts list, as the core checks a runtime by
+// account:*; a settings-only caller gets the cleanup and the retained runtimes.
+const canList = computed(() => auth.has(ACCOUNT_PAGE_PERMS))
 const canAccounts = computed(() => auth.has('account:read') || auth.has('account:own:read') || auth.has('account:update') || auth.has('account:own:update'))
 
 const columns = computed<TableColumn[]>(() => [
@@ -155,6 +158,7 @@ async function inspect(r: Row) {
 }
 
 async function load() {
+  if (!canList.value) return
   loading.value = true
   error.value = ''
   try {
@@ -422,11 +426,11 @@ async function refreshAuth(r: Row) {
       <SButton v-if="canAccounts" size="sm" variant="primary" to="/accounts">{{ t('ccgateway.runtimes.openAccounts') }}</SButton>
     </template>
     <div class="space-y-3">
-      <SHint tone="warning">{{ t('ccgateway.runtime.switchHint') }}</SHint>
-      <SHint>{{ t('ccgateway.requestLogs.hint') }}</SHint>
+      <SHint v-if="canList" tone="warning">{{ t('ccgateway.runtime.switchHint') }}</SHint>
+      <SHint v-if="canList">{{ t('ccgateway.requestLogs.hint') }}</SHint>
       <SHint v-if="legacyRows" data-testid="request-log-legacy-hint">{{ t('ccgateway.requestLogs.legacyHint') }}</SHint>
       <SHint v-if="error" tone="danger">{{ error }}</SHint>
-      <STable :columns="columns" :rows="rows" :loading="loading" dense :empty-text="t('ccgateway.runtimes.empty')" data-testid="ccgateway-runtimes">
+      <STable v-if="canList" :columns="columns" :rows="rows" :loading="loading" dense :empty-text="t('ccgateway.runtimes.empty')" data-testid="ccgateway-runtimes">
         <template #cell-name="{ row }">
           <div class="whitespace-nowrap font-medium">{{ row.name }} <span class="font-mono text-xs text-fg-subtle">#{{ row.id }}</span></div>
           <div class="whitespace-nowrap text-xs text-fg-muted">{{ row.type === 'managed' ? t('ccgateway.runtimes.typeOAuth') : t('ccgateway.runtimes.typeApiKey') }}</div>
