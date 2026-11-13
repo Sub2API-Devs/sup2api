@@ -11,8 +11,9 @@ import (
 )
 
 // Counts are the live accounts by the console's three statuses: available
-// (active and schedulable), auto-disabled (a legacy "error" and an active
-// account out of scheduling read so too) and disabled.
+// (active and schedulable), auto-disabled (including a legacy "error" and an
+// active account out of scheduling) and disabled. Accounts of a disabled or
+// uninstalled plugin count, as in the usage overview.
 type Counts struct {
 	Total        int64 `json:"total"`
 	Available    int64 `json:"available"`

@@ -1,6 +1,7 @@
 package account
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -25,6 +26,11 @@ func TestAccountSummaryFollowsOwnerScope(t *testing.T) {
 	insert(alice, "active", true, true) // deleted: not counted
 	insert(admin, "active", true, false)
 	insert(admin, "error", true, false)
+	// Nobody's (created_by NULL): only the full range counts it.
+	e.exec1(`INSERT INTO accounts (name, plugin_key, type, credentials_enc, status) VALUES ('s', 'anthropic', 'apikey', ''::bytea, 'disabled') RETURNING id`)
+	// Holding both levels is the full range.
+	both := e.addUser("both-summary@example.test")
+	authz.keys[both] = append(slices.Clone(adminKeys), supplierKeys...)
 
 	summary := func(uid int64) (int, map[string]any) {
 		t.Helper()
@@ -35,7 +41,8 @@ func TestAccountSummaryFollowsOwnerScope(t *testing.T) {
 		total, available, autoDisabled, disabled float64
 	}{
 		{alice, 3, 1, 1, 1},
-		{admin, 5, 2, 2, 1},
+		{admin, 6, 2, 2, 2},
+		{both, 6, 2, 2, 2},
 	} {
 		code, out := summary(tc.uid)
 		d := data(out)
