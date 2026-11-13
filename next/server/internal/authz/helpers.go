@@ -129,6 +129,14 @@ func cannotActOnRole(ctx context.Context) *core.Error {
 		"你不能修改含有你所没有权限的角色"))
 }
 
+// builtinRoleSuperOnly is the denial of a change to a built-in role by anyone
+// but the super admin (editableRole).
+func builtinRoleSuperOnly(ctx context.Context) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"only the super admin can change built-in roles",
+		"只有超级管理员可以修改内置角色"))
+}
+
 // audit records one audit_logs row of an authz change through q, the
 // change's transaction.
 func (s *Service) audit(ctx context.Context, q store.Querier, actorID int64, action, targetType string, id any, detail any) error {

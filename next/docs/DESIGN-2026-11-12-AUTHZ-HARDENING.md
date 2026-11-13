@@ -377,3 +377,13 @@
   - 已有自定义角色的 key 等于某个内置角色 key 的部署（今后新增内置角色时才会出现，本期是 `supplier`）：升级后服务不启动，直到按错误信息里的 SQL 把该自定义角色改名（改 key 不影响它的权限、持有者和可分配清单；按 key 引用它的外部脚本需同步）。此前这种角色会被静默改成内置角色，其持有者因此得到内置角色的默认权限。生产库没有自定义角色，不受影响。
   - `POST /roles` 用上述 5 个 key 由 409（已存在）或 201（`supplier`）变为 400 `reserved`。
 - 回滚：revert 这个提交即可，无迁移、无数据变化（按提示改过的角色 key 保留）。
+
+## T51 决策 6：内置角色的名称、权限、可分配清单只允许超管修改（产品性收紧）
+
+- 改动：`authz.editableRole` 在超管角色冻结、系统（actor 0）放行之后加内置角色分支：角色是内置的，操作者就必须是超管（`covers` 比较超管标志），否则 403 `only the super admin can change built-in roles`，`details.superuser = true`。经它的五个写操作一起生效：PATCH `/roles/:id`、PUT `/roles/:id/permissions`、PUT `/roles/:id/assignable`、POST `/roles/:id/reset`、DELETE `/roles/:id`（内置角色对超管仍是 409）。自定义角色照旧按“角色在操作者之内”判断。CONTRACTS §4、§15.7、§43.6 同步。无迁移。
+- 影响对象：
+  - 持 `role:define` 的非超管（内置 admin、operator 默认都有）不能再改内置角色 `admin`、`operator`、`user`（以及 T52 的 `supplier`）的名称描述、权限、可分配清单，也不能重置它们，由 200 变为 403；此前只要角色在自己权限之内就可以（如 admin 给 `user` 角色加权限、改 operator 的权限）。需要调整内置角色时由超管操作，或另建自定义角色。
+  - 超管的访问密钥同样 403（密钥不是超管；这些接口本来就因 `role:define` 是 sessionOnly 而拒绝密钥）。
+  - 不经 `editableRole` 的写入不变：安装插件时把新插件权限授给内置角色（consent，`SyncPlugin`）仍按原规则（`role:define` + 持有该权限）。
+  - 控制台角色页对非超管仍显示内置角色的编辑入口，保存时收到 403（前端按钮收敛不在本任务范围）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。

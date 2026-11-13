@@ -52,6 +52,80 @@ func TestSuperuserRoleFrozen(t *testing.T) {
 	}
 }
 
+// Decision 6: a built-in role's name, permissions and assignable list are
+// the super admin's alone to change, whatever the actor holds; custom roles
+// follow the actor's own permissions as before.
+func TestBuiltinRolesSuperAdminOnly(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	admin := addUser(t, s, "admin@x.com", RoleAdmin)
+	operator := addUser(t, s, "op@x.com", RoleOperator)
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "helper", Name: lt("Helper", "助手"), PermissionKeys: []string{"user:read"}}); err != nil {
+		t.Fatal(err)
+	}
+	helperID := roleID(t, s, "helper")
+
+	writes := func(actor, id int64) map[string]error {
+		out := map[string]error{}
+		_, out["rename"] = s.UpdateRole(ctx, actor, id, UpdateRoleInput{Name: lt("x", "x")})
+		_, out["permissions"] = s.SetRolePermissions(ctx, actor, id, []string{"user:read"})
+		_, out["assignable"] = s.SetRoleAssignable(ctx, actor, id, AssignableInput{})
+		return out
+	}
+	// The admin holds everything each of these roles grants and may assign,
+	// and is refused all the same.
+	for _, key := range []string{RoleAdmin, RoleOperator, RoleUser} {
+		id := roleID(t, s, key)
+		before, err := s.GetRole(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, actor := range []int64{admin, operator} {
+			denied := writes(actor, id)
+			_, denied["reset"] = s.ResetRole(ctx, actor, id)
+			denied["delete"] = s.DeleteRole(ctx, actor, id)
+			for op, err := range denied {
+				if !isCode(err, "permission_denied") || detail(err, "superuser") != true {
+					t.Errorf("actor %d %s %s: %v", actor, op, key, err)
+				}
+			}
+		}
+		after, err := s.GetRole(ctx, id)
+		if err != nil || !slices.Equal(after.PermissionKeys, before.PermissionKeys) || !slices.Equal(after.AssignableRoleKeys, before.AssignableRoleKeys) ||
+			after.AssignCustom != before.AssignCustom || after.Name.Get("en") != before.Name.Get("en") {
+			t.Fatalf("%s changed by a non-super admin: %+v, %v", key, after, err)
+		}
+	}
+
+	// The super admin changes and resets them; deleting stays refused for
+	// everyone (built-in).
+	opID := roleID(t, s, RoleOperator)
+	for op, err := range writes(root, opID) {
+		if err != nil {
+			t.Errorf("super admin %s operator: %v", op, err)
+		}
+	}
+	if _, err := s.ResetRole(ctx, root, opID); err != nil {
+		t.Fatalf("super admin resets operator: %v", err)
+	}
+	if err := s.DeleteRole(ctx, root, opID); !isCode(err, "conflict") {
+		t.Fatalf("super admin deletes operator: %v", err)
+	}
+
+	// Custom roles are unchanged: the admin edits and deletes one within it.
+	for op, err := range writes(admin, helperID) {
+		if err != nil {
+			t.Errorf("admin %s helper: %v", op, err)
+		}
+	}
+	if err := s.DeleteRole(ctx, admin, helperID); err != nil {
+		t.Fatalf("admin deletes helper: %v", err)
+	}
+}
+
 // M5: a role:define holder cannot change or delete a role granting more than
 // it holds, so it cannot weaken a stronger user's role and then act on that
 // user. Roles within its own permissions stay editable.

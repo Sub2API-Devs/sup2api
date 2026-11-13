@@ -343,13 +343,13 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	ctx := context.Background()
 
 	uid := addUser(t, a, "u@x.com", RoleUser)
-	admin := addUser(t, a, "admin@x.com", RoleAdmin)
+	root := addUser(t, a, "root@x.com", RoleSuperAdmin)
 	mustCan(t, a, uid, "gateway:use", true)
 	mustCan(t, b, uid, "gateway:use", true)
 	mustCan(t, b, uid, "user:read", false) // cached on b
 
 	// Mutation on node a is visible on node b through the bus.
-	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), append(append([]string{}, userRolePermissions...), "user:read")); err != nil {
+	if _, err := a.SetRolePermissions(ctx, root, roleID(t, a, RoleUser), append(append([]string{}, userRolePermissions...), "user:read")); err != nil {
 		t.Fatal(err)
 	}
 	mustCan(t, a, uid, "user:read", true)
@@ -365,7 +365,7 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 		t.Fatalf("version poll spec: %+v", poll)
 	}
 	mustCan(t, c, uid, "user:read", true)
-	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), userRolePermissions); err != nil {
+	if _, err := a.SetRolePermissions(ctx, root, roleID(t, a, RoleUser), userRolePermissions); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := poll.Handler(ctx, core.TaskRun{Name: poll.Name}); err != nil {
@@ -374,7 +374,7 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	mustCan(t, c, uid, "user:read", false)
 
 	// Disabled users have no permissions.
-	su := addUser(t, a, "s@x.com", RoleSuperAdmin)
+	su := root
 	mustCan(t, a, su, "anything:at:all", true)
 	v := bump(t, a)
 	if _, err := db.Pool.Exec(ctx, `UPDATE users SET status = 'disabled' WHERE id = $1`, su); err != nil {
@@ -440,9 +440,9 @@ func TestBumpDropsStaleCache(t *testing.T) {
 	ctx := context.Background()
 
 	uid := addUser(t, b, "u@x.com", RoleUser)
-	admin := addUser(t, b, "admin@x.com", RoleAdmin)
+	root := addUser(t, b, "root@x.com", RoleSuperAdmin)
 	mustCan(t, a, uid, "user:read", false) // cached on a
-	if _, err := b.SetRolePermissions(ctx, admin, roleID(t, b, RoleUser), append(slices.Clone(userRolePermissions), "user:read")); err != nil {
+	if _, err := b.SetRolePermissions(ctx, root, roleID(t, b, RoleUser), append(slices.Clone(userRolePermissions), "user:read")); err != nil {
 		t.Fatal(err)
 	}
 	mustCan(t, a, uid, "user:read", false) // stale on a
