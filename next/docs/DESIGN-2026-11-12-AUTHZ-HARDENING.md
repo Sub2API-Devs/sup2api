@@ -413,13 +413,16 @@
 
 ## T52 J1、决策 5、7：内置角色声明化，新增内置 supplier 角色
 
-- 改动：`authz.builtinRole.grants` 改为 `func(p corePerm) bool`（按权限本身声明，`oneOf(keys)` 表示固定白名单）；admin、operator、user 的默认集合不变。新增内置角色 `supplier`（`authz.RoleSupplier`，供应商）：默认权限是显式白名单 `account:own:read`、`account:own:create`、`account:own:update`、`account:own:delete`、`account:own:test`、`account:own:credential:view`、`proxy:own:read`、`proxy:own:manage`；没有插件权限，暂不含 `account:group:bind`（D27）；没有可分配清单。默认可分配清单按决策 5：admin = operator、supplier、user + 全部自定义角色；operator = supplier、user。升级后第一次 `SyncCore` 建出 supplier（播种不审计），并把它追加到已有 admin、operator 的可分配清单（各一条审计 `authz.sync.grant`，via=`assignable`，key=`supplier`），清单上已有的项不动。`reservedRoleKey` 改为只看内置角色表。前端新建用户对话框勾选 supplier 时自动勾上 user（附加型，D1：供应商用户同时持有 `user` 与 `supplier`）。CONTRACTS §4、§15.7、§21、§43.6 同步。无迁移。
+- 改动：`authz.builtinRole.grants` 改为 `func(p corePerm) bool`（按权限本身声明，`oneOf(keys)` 表示固定白名单）；admin、operator、user 的默认集合不变。新增内置角色 `supplier`（`authz.RoleSupplier`，供应商）：默认权限是显式白名单 `account:own:read`、`account:own:create`、`account:own:update`、`account:own:delete`、`account:own:test`、`account:own:credential:view`、`proxy:own:read`、`proxy:own:manage`；没有插件权限，暂不含 `account:group:bind`（D27）；没有可分配清单。默认可分配清单按决策 5：admin = operator、supplier、user + 全部自定义角色；operator = supplier、user。升级后第一次 `SyncCore` 建出 supplier（播种不审计），并把它追加到已有 admin、operator 的可分配清单（各一条审计 `authz.sync.grant`，via=`assignable`，key=`supplier`），清单上已有的项不动。`reservedRoleKey` 改为只看内置角色表。前端新建用户对话框勾选 supplier 时自动勾上 user（附加型，D1：供应商用户同时持有 `user` 与 `supplier`；只有新建对话框这样做，用户页的“分配角色”对话框不自动补，自动勾上的 user 也可以再取消）。CONTRACTS §4、§15.7、§21、§43.6 同步。无迁移。
 - 影响对象：
   - 角色列表多一个内置角色“供应商”，只有超管能改（T51）；admin、operator 可以把它分配给用户（operator 能授出它的前提是自己持有这 8 个 own 级权限，默认集合里有；T55 的 operator 白名单见该条）。
   - 持有 supplier 的用户：能建声明了 `upstreamFields: []` 的 OAuth、managed 类账号（如 claude_oauth），建可自定义上游的账号 403（需 `account:relay`），绑定分组 403（需 `account:group:bind` 或 `group:manage`），看不到别人创建的账号与代理。supplier 本身不含 `gateway:use`、`apikey:self:manage` 等，单独持有时不能调用网关，所以按附加型与 `user` 一起分配；经 API 只给 `supplier` 不会自动补 `user`。
   - 已有自定义角色 key 为 `supplier` 的部署启动失败，见 T50。生产库没有这样的角色。
-  - 生产 operator 的存量清单（0097：{operator, user} + 全部自定义角色）追加 supplier 后为 {operator, supplier, user}，在 T55 的迁移 0101 纠正为 {supplier, user}。
-- 回滚：revert 这个提交即可，无迁移。回滚后 `supplier` 角色行仍在且保持 `builtin = true`（旧代码不认识它，不同步、不能删除、不能重置，仍可分配与编辑）；不需要时手工处理：`DELETE FROM roles WHERE key = 'supplier';`（持有关系与清单项随之级联删除），或 `UPDATE roles SET builtin = false WHERE key = 'supplier';` 把它留作自定义角色（再次升级前须改名，见 T50）。
+  - 生产 operator 的存量清单（0097：{operator, user} + 全部自定义角色）追加 supplier 后为 {operator, supplier, user} + 全部自定义角色，在 T55 的迁移 0101 纠正为 {supplier, user}、不含自定义角色。
+  - 与同级保护（T56）的关系：用户一旦持有 supplier，只有可分配清单含 supplier 的操作者（超管、admin、operator）能作用于他（改资料、禁用、余额、用户组、角色）；没有清单的自定义角色和所有访问密钥（如用访问密钥调余额的自动化脚本）对这些用户由成功变为 403 `details.role = supplier`。
+  - 角色列表与可分配角色列表按“内置在前、id 升序”排列：新库里 supplier 排在 user 之前，升级的库里排在 user 之后（仅顺序不同）。
+  - 滚动升级：混跑期间旧节点上重置 admin 或 operator 会按旧默认清单去掉 supplier，之后不会自动补回（supplier 已不是新建角色），需要超管在新节点上再重置一次或手工加回。
+- 回滚：revert 这个提交即可，无迁移。回滚后 `supplier` 角色行仍在且保持 `builtin = true`（旧代码不认识它，不同步、不能删除、不能重置，仍可分配与编辑）；不需要时手工处理：`DELETE FROM roles WHERE key = 'supplier'; UPDATE authz_meta SET version = version + 1 WHERE id = 1;`（持有关系与清单项随之级联删除；推进版本让各节点在 30 秒内丢掉缓存的权限，否则持有者的 own 级权限要到下一次授权变更或重启才消失），或 `UPDATE roles SET builtin = false WHERE key = 'supplier';` 把它留作自定义角色（再次升级前须改名，见 T50）。
 
 ## T53 J2、M9、决策 D2、D14：超管专属权限（superOnly），admin 默认不含（产品性收紧）
 

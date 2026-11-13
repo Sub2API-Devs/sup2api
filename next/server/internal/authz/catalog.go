@@ -174,8 +174,8 @@ var supplierPermissions = []string{
 
 // operatorExcludedModules are the core modules the built-in "operator" role
 // does not get: settings (sticky sessions live on the settings page) and the
-// plugin pages (plugins, market, publishers). Every key of a module starts
-// with "<module>:".
+// plugin pages (plugins, market, publishers). Every key of these four
+// modules, and no other key, starts with "<module>:".
 var operatorExcludedModules = []string{"settings", "sticky", "plugin", "publisher"}
 
 type builtinRole struct {
