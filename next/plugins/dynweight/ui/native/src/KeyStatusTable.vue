@@ -4,7 +4,7 @@ import type { UseListResult } from '@sub2api/host'
 import { SBadge, SCard, SDateTime, SDropdown, SHint, SPagination, STable, type MenuAction, type TableColumn } from '@sub2api/ui'
 import KeyDetail from './KeyDetail.vue'
 import { useCatalog } from './catalog'
-import { canManage, keyOf, successRate, trendTone, useDwHost, weightOf, weightTone, type KeyStatus } from './host'
+import { canReset, keyOf, successRate, trendTone, useDwHost, weightOf, weightTone, type KeyStatus } from './host'
 
 // The keys of a GET /status list with their pager, one line per key: the
 // configuration in force, weight against base and its direction, last
@@ -23,7 +23,7 @@ const setRef = <T,>(r: { value: T }, v: T) => void (r.value = v)
 const setPage = (page: number) => setRef(props.list.page, page)
 const setPageSize = (size: number) => setRef(props.list.pageSize, size)
 const t = host.t
-const manage = computed(() => canManage())
+const manage = computed(() => canReset())
 const catalog = useCatalog()
 
 // Phone cards: the key as title / subtitle, the weight as status. The account

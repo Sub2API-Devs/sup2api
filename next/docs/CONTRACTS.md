@@ -6433,6 +6433,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 详情标签页：`account.detail.tabs` 插槽（`DynweightAccountTab`，标签文案取 `plugin.dynweight.tabs.DynweightAccountTab`）列出该账号的全部键（`GET /status?account_id=`，不限已降权），表格与"有效权重"标签页共用 `KeyStatusTable`（展开 `KeyDetail`），没有账号列。0.5.1 起改紧凑：顶部一行摘要（键数、低于基准的键数、最低有效 / 基准、本账号覆盖和"设置"链接到 `?tab=config&override_account=<id>`），说明收进 ⓘ 提示，"事件""重置全部"（`POST /reset {account_id}`，确认后执行；只对 `dynweight:manage`）是同一行的小按钮；表格每键一行，"最近窗口"合成"成功率 · 次数"，"事件""重置"收进行尾菜单，只有一页时不显示分页；展开明细是"标签 · 值"网格加规则迷你表（触发条件、各窗口命中格子、本窗结果、样本数），没有回升项的告警是一行提示加"去配置"链接。行上的"事件"跳到 `?tab=events&account=&group=&model=`。
   - 插件页读 `?account=`（及 `group=`、`model=`）预填"有效权重"和"权重事件"标签页的键筛选；带预填进入"有效权重"时"只看已降权"默认关闭，以便看到该账号的全部键。
   - 只能查看部分账号的查看者（`account:read` 带 own、分组或账号范围，没有全量，`seesAllAccounts`）：`/status`、`/events` 不带 `account_id`、`/degraded`、`/stats` 覆盖全部账号，核心要求全量 `account:read`（manifest 路由的 `RouteAccounts`）。这类查看者的“有效权重”“权重事件”标签页在选定账号前不发请求，提示先选账号（`keyListApi` 把不带账号的查询在本地答成空表），不显示本节点计数（`/stats`），工具栏降权徽标不请求（权限加固期 4 验证修复，dynweight 0.5.9）。
+  - 重置入口（有效权重标签页的按行、批量、按筛选重置，账号详情的“重置全部”）：`POST /reset` 声明 `RouteAccounts` update，所以除 `dynweight:manage` 外还要求持有任意范围的 `account:update`（`canReset`，用 UI 3.15 的 `hasAction`，`hostUICompat` 因此为 `^3.15`）；只按分组、不带账号的“按筛选重置”覆盖全部账号，只对全量 `account:update` 显示（`resetsAllAccounts`）。范围外的账号仍由核心回答 404（权限加固发布审查，dynweight 0.5.9）。
 
 ### 74.6 发布
 

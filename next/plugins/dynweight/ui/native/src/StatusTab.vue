@@ -6,7 +6,7 @@ import KeyFilters from './KeyFilters.vue'
 import KeyStatusTable from './KeyStatusTable.vue'
 import StatsPanel from './StatsPanel.vue'
 import { useCatalog } from './catalog'
-import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, keyListApi, keyOf, modelCandidates, seesAllAccounts, useDwHost, useReset, type Filter, type KeyStatus } from './host'
+import { applyQuery, canReset, emptyFilter, errorMessage, filterQuery, keyListApi, keyOf, modelCandidates, resetsAllAccounts, seesAllAccounts, useDwHost, useReset, type Filter, type KeyStatus } from './host'
 
 // Effective weights per (account, group, model), degraded first, each with
 // its evaluation detail. A key, the selected accounts (optionally in one
@@ -20,7 +20,7 @@ const emit = defineEmits<{ (e: 'show-events', f: Filter): void }>()
 const host = useDwHost()
 const t = host.t
 const { EntityPicker } = host.components
-const manage = computed(() => canManage())
+const manage = computed(() => canReset())
 const catalog = useCatalog()
 
 const filter = reactive({ ...emptyFilter(), ...(props.preset ? filterQuery(props.preset) : {}) })
@@ -51,7 +51,7 @@ const resetRow = (r: KeyStatus) =>
 
 // Reset every key the applied filter's account and/or group covers (not what
 // is typed but not searched yet). A group alone covers every account: only a
-// viewer of all accounts gets it (the core refuses the others).
+// holder of the full account:update gets it (the core refuses the others).
 // null when an id is not a positive integer (the list then shows the error).
 const filtered = computed(() => {
   const f = list.filters as Filter
@@ -97,7 +97,7 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
       </KeyFilters>
     </SCard>
 
-    <div v-if="manage && filtered && !needsAccount" class="dw-toolbar">
+    <div v-if="manage && filtered && (filtered.account_id || resetsAllAccounts())" class="dw-toolbar">
       <SButton variant="danger" icon="refresh" :loading="busy === 'filter'" @click="resetFiltered">
         {{ t('status.resetFiltered') }}
       </SButton>
