@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -190,7 +191,9 @@ func (s *Service) VerifyAccessToken(ctx context.Context, token string) (int64, e
 // isActiveWithVersion reads the user's status through the cache. seen is the
 // token_version a signed token carries: a cached entry older than that missed
 // a change this node was not told about (the server CLI has no bus), so it is
-// read again instead of rejecting the new login for up to statusCacheTTL.
+// read again instead of rejecting the new login for up to statusCacheTTL. A
+// deleted user is cached with the highest version, since no token can be
+// newer than that: their leftover tokens do not read the row on every request.
 func (s *Service) isActiveWithVersion(ctx context.Context, uid int64, seen int) (bool, int, error) {
 	s.mu.Lock()
 	e, ok := s.status[uid]
@@ -203,7 +206,7 @@ func (s *Service) isActiveWithVersion(ctx context.Context, uid int64, seen int) 
 	var version int
 	err := s.db.Pool.QueryRow(ctx, `SELECT status = 'active', token_version FROM users WHERE id = $1 AND deleted_at IS NULL`, uid).Scan(&active, &version)
 	if store.IsNoRows(err) {
-		active, err = false, nil
+		active, version, err = false, math.MaxInt, nil
 	}
 	if err != nil {
 		return false, 0, err

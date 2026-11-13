@@ -364,6 +364,6 @@
 
 - 改动：
   - M3：`POST /account-types/:p/:t/models/fetch`（及 `/accounts/:id/models/fetch`）发请求失败时改用账号包共用的 `transportError` 渲染：拨号守卫拒绝的连接显示为 `netguard.ErrPrivate`（`upstream address is private, loopback or link-local`），不再回显代理名解析出的内网 `ip:port`；请求 URL 也换成去掉查询串的地址（查询串可能带密钥）。账号测试与额度探测本来就走 `transportError`，同样不再回显。
-  - 服务器 CLI 恢复超管后，运行中的节点上重新登录立即可用（见上文 T17 条）：`iam.isActiveWithVersion` 在令牌的 `token_version` 比状态缓存新时重读。旧会话仍在状态缓存 TTL（30 秒）内结束。
+  - 服务器 CLI 恢复超管后，运行中的节点上重新登录立即可用（见上文 T17 条）：`iam.isActiveWithVersion` 在令牌的 `token_version` 比状态缓存新时重读；已删除用户以最大版本缓存，残留令牌不会每个请求都读库。旧会话仍在状态缓存 TTL（30 秒）内结束。
 - 影响对象：models fetch 失败时的 503 文案变化（传输错误前缀由 `Get "<完整 URL>"` 变为 `Get <不含查询串的地址>`）；其余无变化。混跑时旧节点没有 `GET /me/assignable-roles`（404），控制台不调用该接口，无界面影响。
 - 回滚：revert 对应提交即可，无迁移、无数据变化。

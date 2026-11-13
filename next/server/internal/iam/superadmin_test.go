@@ -161,6 +161,30 @@ func TestRecoverSuperAdminNewSignInWorksOnARunningNode(t *testing.T) {
 	}
 }
 
+// A deleted user keeps their cached entry whatever version a leftover token
+// carries: the row is not read on every request (a token's version is above
+// anything a missing row could otherwise be cached with).
+func TestStatusCacheKeepsADeletedUser(t *testing.T) {
+	s, ctx := setupAdmin(t).svc, context.Background()
+	uid := mustCreateUser(t, s, "gone@example.com")
+	exec := func(q string) {
+		t.Helper()
+		if _, err := s.db.Pool.Exec(ctx, q, uid); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`UPDATE users SET token_version = token_version + 1 WHERE id = $1`)
+	p := mustLogin(t, s, "gone@example.com", adminPassword)
+	exec(`UPDATE users SET deleted_at = now() WHERE id = $1`)
+	if _, err := s.VerifyAccessToken(ctx, p.AccessToken); err == nil {
+		t.Fatal("a deleted user's token is accepted")
+	}
+	exec(`UPDATE users SET deleted_at = NULL WHERE id = $1`) // behind the cache's back
+	if _, err := s.VerifyAccessToken(ctx, p.AccessToken); err == nil {
+		t.Fatal("the cached entry of a deleted user was read again")
+	}
+}
+
 func TestRecoverSuperAdminUnknownUser(t *testing.T) {
 	s := setupAdmin(t).svc
 	if _, err := s.RecoverSuperAdmin(context.Background(), "nobody@example.com", RecoverOptions{}); !isCode(err, "not_found") {
