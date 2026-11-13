@@ -49,20 +49,16 @@ func (a *keyAuth) VerifyAccessToken(_ context.Context, tok string) (int64, error
 	}
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
 }
-func (a *keyAuth) Can(_ context.Context, uid int64, key string) (bool, error) {
+func (a *keyAuth) Can(ctx context.Context, uid int64, key string) (bool, error) {
+	set, err := a.PermissionSet(ctx, uid)
+	return set.Has(key), err
+}
+func (a *keyAuth) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
 	keys, ok := a.keys[uid]
 	if !ok {
-		return true, nil
+		return core.PermissionSet{Superuser: true}, nil
 	}
-	for _, k := range keys {
-		if k == key {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-func (a *keyAuth) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+	return core.PermissionSetOf(keys...), nil
 }
 func (a *keyAuth) CanGrant(context.Context, int64, []string) error { return nil }
 

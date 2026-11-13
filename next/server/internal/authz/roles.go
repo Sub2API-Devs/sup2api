@@ -44,8 +44,10 @@ var (
 
 const roleSelect = `
 SELECT r.id, r.key, r.name, r.description, r.builtin, r.superuser, r.created_at, r.updated_at,
-    COALESCE((SELECT array_agg(p.key ORDER BY p.sort, p.key) FROM role_permissions rp
-        JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = r.id), '{}'),
+    COALESCE((SELECT array_agg(g.key ORDER BY g.sort, g.key) FROM (
+        SELECT p.key, p.sort FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = r.id
+        UNION ALL
+        SELECT p.key || ':' || rs.scope, p.sort FROM role_permission_scopes rs JOIN permissions p ON p.id = rs.permission_id WHERE rs.role_id = r.id) g), '{}'),
     COALESCE((SELECT array_agg(ar.key ORDER BY ar.key) FROM role_assignable_roles ra
         JOIN roles ar ON ar.id = ra.assignable_role_id AND NOT ar.superuser WHERE ra.role_id = r.id), '{}'),
     r.assign_custom,
@@ -59,6 +61,7 @@ func scanRole(row pgx.Row) (*Role, error) {
 	if err != nil {
 		return nil, err
 	}
+	r.PermissionKeys = canonicalKeys(r.PermissionKeys)
 	if r.Name == nil {
 		r.Name = core.LocalizedText{}
 	}
@@ -162,7 +165,7 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 	}
 	var id int64
 	err := s.mutate(ctx, func(tx pgx.Tx) error {
-		keys, ids, err := resolvePermissions(ctx, tx, in.PermissionKeys)
+		keys, grants, err := resolvePermissions(ctx, tx, in.PermissionKeys)
 		if err != nil {
 			return err
 		}
@@ -185,7 +188,7 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 		if err != nil {
 			return err
 		}
-		if err := setRolePermissions(ctx, tx, id, ids); err != nil {
+		if err := writeGrants(ctx, tx, id, grants, false); err != nil {
 			return err
 		}
 		if err := setRoleAssignable(ctx, tx, id, assign, in.AssignCustom); err != nil {
@@ -280,7 +283,10 @@ func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, erro
 		if !r.Builtin || !ok {
 			return errNotBuiltinRole
 		}
-		keys := def.defaultPermissions()
+		keys, grants, err := resolvePermissions(ctx, tx, def.defaultPermissions())
+		if err != nil {
+			return err
+		}
 		// Defaults naming a built-in role not created yet are skipped, as
 		// SyncCore does.
 		assign, err := queryRoles(ctx, tx, `SELECT id, key, superuser FROM roles WHERE key = ANY($1) AND builtin AND NOT superuser ORDER BY key`, def.assignable)
@@ -301,13 +307,7 @@ func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, erro
 			id, def.name, def.description); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM role_permissions rp USING permissions p
-WHERE rp.role_id = $1 AND p.id = rp.permission_id AND p.source = 'core' AND p.key <> ALL($2)`, id, keys); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id)
-SELECT $1, p.id FROM permissions p WHERE p.source = 'core' AND p.status <> 'removed' AND p.key = ANY($2)
-ON CONFLICT DO NOTHING`, id, keys); err != nil {
+		if err := writeGrants(ctx, tx, id, grants, true); err != nil {
 			return err
 		}
 		return s.audit(ctx, tx, actorID, "role.reset", "role", id, map[string]any{"key": r.Key})
@@ -329,15 +329,15 @@ func (s *Service) SetRolePermissions(ctx context.Context, actorID, id int64, key
 		if err != nil {
 			return err
 		}
-		live, ids, err := resolvePermissions(ctx, tx, keys)
+		live, grants, err := resolvePermissions(ctx, tx, keys)
 		if err != nil {
 			return err
 		}
-		added := addedKeys(live, r.PermissionKeys)
+		added := notImplied(live, r.PermissionKeys)
 		if err := s.covers(ctx, tx, actorID, core.PermissionSetOf(added...), cannotGrant(ctx)); err != nil {
 			return err
 		}
-		if err := setRolePermissions(ctx, tx, id, ids); err != nil {
+		if err := writeGrants(ctx, tx, id, grants, false); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE roles SET updated_at = now() WHERE id = $1`, id); err != nil {
@@ -439,62 +439,6 @@ func setRoleAssignable(ctx context.Context, tx pgx.Tx, roleID int64, roles []rol
 		return err
 	}
 	_, err := tx.Exec(ctx, `UPDATE roles SET assign_custom = $2, updated_at = now() WHERE id = $1`, roleID, custom)
-	return err
-}
-
-// resolvePermissions dedupes keys and resolves them to permission ids,
-// dropping removed permissions. A key that does not exist at all is invalid.
-func resolvePermissions(ctx context.Context, tx pgx.Tx, keys []string) ([]string, []int64, error) {
-	keys = dedupe(keys)
-	rows, err := tx.Query(ctx, `SELECT key, id, status = 'removed' FROM permissions WHERE key = ANY($1)`, keys)
-	if err != nil {
-		return nil, nil, err
-	}
-	type perm struct {
-		id      int64
-		removed bool
-	}
-	found := map[string]perm{}
-	for rows.Next() {
-		var k string
-		var p perm
-		if err := rows.Scan(&k, &p.id, &p.removed); err != nil {
-			rows.Close()
-			return nil, nil, err
-		}
-		found[k] = p
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
-	}
-	var unknown []string
-	kept := make([]string, 0, len(keys))
-	ids := make([]int64, 0, len(keys))
-	for _, k := range keys {
-		p, ok := found[k]
-		switch {
-		case !ok:
-			unknown = append(unknown, k)
-		case !p.removed:
-			kept = append(kept, k)
-			ids = append(ids, p.id)
-		}
-	}
-	if len(unknown) > 0 {
-		return nil, nil, core.InvalidFields(core.FieldError{Field: "permission_keys", Code: "unknown", Message: "unknown permissions: " + strings.Join(unknown, ", ")})
-	}
-	return kept, ids, nil
-}
-
-// setRolePermissions makes ids the role's live permissions. Grant rows of
-// removed permissions stay: they grant nothing, and revive with the key.
-func setRolePermissions(ctx context.Context, tx pgx.Tx, roleID int64, ids []int64) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM role_permissions rp USING permissions p
-WHERE rp.role_id = $1 AND p.id = rp.permission_id AND p.status <> 'removed' AND rp.permission_id <> ALL($2)`, roleID, ids); err != nil {
-		return err
-	}
-	_, err := tx.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING`, roleID, ids)
 	return err
 }
 
@@ -729,8 +673,11 @@ type PermissionItem struct {
 	Description core.LocalizedText `json:"description"`
 	Sensitive   bool               `json:"sensitive"`
 	// StepUp: using it may need a step-up proof (catalog stepUp).
-	StepUp bool   `json:"step_up"`
-	Status string `json:"status"`
+	StepUp bool `json:"step_up"`
+	// ScopeType: the key takes a scope over this resource ("account",
+	// "proxy"; CONTRACTS §21), "" for none.
+	ScopeType string `json:"scope_type"`
+	Status    string `json:"status"`
 }
 
 // PermissionModule groups permissions by module.
@@ -744,12 +691,14 @@ type PermissionModule struct {
 }
 
 // ListPermissions returns the catalog grouped by module: core modules in
-// catalog order, then plugin modules by plugin key.
+// catalog order, then plugin modules by plugin key. The former own-level
+// keys are left out: the editor grants <action>:own instead.
 func (s *Service) ListPermissions(ctx context.Context) ([]*PermissionModule, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-SELECT p.key, p.module, p.label, p.description, p.source, p.plugin_key, p.sensitive, p.status, pl.name
+SELECT p.key, p.module, p.label, p.description, p.source, p.plugin_key, p.sensitive, p.status, p.scope_type, pl.name
 FROM permissions p LEFT JOIN plugins pl ON pl.key = p.plugin_key
-ORDER BY p.source, p.module, p.sort, p.key`)
+WHERE p.key <> ALL($1)
+ORDER BY p.source, p.module, p.sort, p.key`, legacyOwnKeys())
 	if err != nil {
 		return nil, err
 	}
@@ -761,7 +710,7 @@ ORDER BY p.source, p.module, p.sort, p.key`)
 		var module, source string
 		var pluginKey *string
 		var pluginName core.LocalizedText
-		if err := rows.Scan(&it.Key, &module, &it.Label, &it.Description, &source, &pluginKey, &it.Sensitive, &it.Status, &pluginName); err != nil {
+		if err := rows.Scan(&it.Key, &module, &it.Label, &it.Description, &source, &pluginKey, &it.Sensitive, &it.Status, &it.ScopeType, &pluginName); err != nil {
 			return nil, err
 		}
 		if it.Description == nil {

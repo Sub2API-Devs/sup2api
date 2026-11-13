@@ -147,46 +147,46 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	s.registerPreparationRoutes(r)
 	r.Perm("GET", "/settings/account-stats", "settings:read", s.getStatsSettings)
 	r.Perm("PUT", "/settings/account-stats", "settings:manage", s.putStatsSettings)
-	r.PermAny("GET", "/accounts/auto-disable", s.getAutoDisablePolicy, "account:create", "account:own:create", "account:update", "account:own:update")
-	r.PermAny("POST", "/accounts/param-override/preview", s.previewParamOverride, "account:create", "account:own:create", "account:update", "account:own:update")
-	r.PermAny("GET", "/accounts/stats", s.getAccountStats, "account:read", "account:own:read")
-	r.PermAny("GET", "/accounts/summary", s.summary, "account:read", "account:own:read")
-	r.PermAny("GET", "/accounts/:id/stats", s.getAccountStats, "account:read", "account:own:read")
+	r.PermScoped("GET", "/accounts/auto-disable", s.getAutoDisablePolicy, perm.AccountCreate, perm.AccountUpdate)
+	r.PermScoped("POST", "/accounts/param-override/preview", s.previewParamOverride, perm.AccountCreate, perm.AccountUpdate)
+	r.PermScoped("GET", "/accounts/stats", s.getAccountStats, perm.AccountRead)
+	r.PermScoped("GET", "/accounts/summary", s.summary, perm.AccountRead)
+	r.PermScoped("GET", "/accounts/:id/stats", s.getAccountStats, perm.AccountRead)
 	// Re-authorizing a Claude Code account (CONTRACTS §49.17), next to the
 	// ccgateway module's /system/ccgateway/accounts/:id/:action.
-	reauth := ccgReauthScope.Keys()
-	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize", s.reauthorizeCCGateway, reauth...)
-	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize/:key/commit", s.commitCCGatewayReauth, reauth...)
-	browse := []perm.Key{"account:read", "account:own:read", "account:own:create"}
-	r.PermAny("GET", "/platforms", s.listPlatforms, browse...)
+	r.PermScoped("POST", "/system/ccgateway/accounts/:id/reauthorize", s.reauthorizeCCGateway, perm.AccountUpdate)
+	r.PermScoped("POST", "/system/ccgateway/accounts/:id/reauthorize/:key/commit", s.commitCCGatewayReauth, perm.AccountUpdate)
+	// Browsing platforms and types: whoever reads or creates some accounts.
+	browse := []perm.Key{perm.AccountRead, perm.AccountCreate}
+	r.PermScoped("GET", "/platforms", s.listPlatforms, browse...)
 	r.AuthedRead("/me/platforms", s.listMyPlatforms)
-	r.PermAny("GET", "/account-types", s.listTypes, browse...)
-	r.PermAny("GET", "/account-types/:plugin_key/:type/form", s.typeForm, browse...)
-	r.PermAny("GET", "/accounts", s.list, "account:read", "account:own:read")
-	r.PermAny("POST", "/accounts", s.create, "account:create", "account:own:create")
-	r.PermAny("GET", "/accounts/:id", s.get, "account:read", "account:own:read")
-	r.PermAny("PATCH", "/accounts/:id", s.update, "account:update", "account:own:update")
-	r.PermAny("DELETE", "/accounts/:id", s.delete, "account:delete", "account:own:delete")
-	r.PermAny("POST", "/accounts/:id/test", s.test, "account:test", "account:own:test")
-	r.PermAny("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, "account:test", "account:own:test")
-	r.PermAny("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, "account:create", "account:own:create")
+	r.PermScoped("GET", "/account-types", s.listTypes, browse...)
+	r.PermScoped("GET", "/account-types/:plugin_key/:type/form", s.typeForm, browse...)
+	r.PermScoped("GET", "/accounts", s.list, perm.AccountRead)
+	r.PermScoped("POST", "/accounts", s.create, perm.AccountCreate)
+	r.PermScoped("GET", "/accounts/:id", s.get, perm.AccountRead)
+	r.PermScoped("PATCH", "/accounts/:id", s.update, perm.AccountUpdate)
+	r.PermScoped("DELETE", "/accounts/:id", s.delete, perm.AccountDelete)
+	r.PermScoped("POST", "/accounts/:id/test", s.test, perm.AccountTest)
+	r.PermScoped("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, perm.AccountTest)
+	r.PermScoped("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, perm.AccountCreate)
 	// Plain-text credentials: a step-up proof each time (CONTRACTS §80.2).
-	r.StepUp(core.StepUpCredentialReveal).PermAny("POST", "/accounts/:id/credentials/reveal", s.reveal, "account:credential:view", "account:own:credential:view")
+	r.StepUp(core.StepUpCredentialReveal).PermScoped("POST", "/accounts/:id/credentials/reveal", s.reveal, perm.AccountCredentialView)
 	// Subscription quota and balance (CONTRACTS §44, §51).
-	r.PermAny("GET", "/accounts/:id/quota", s.getQuota, "account:read", "account:own:read")
-	r.PermAny("GET", "/accounts/:id/balance", s.getBalance, "account:read", "account:own:read")
-	r.PermAny("POST", "/accounts/:id/reset-status", s.resetStatus, "account:update", "account:own:update")
+	r.PermScoped("GET", "/accounts/:id/quota", s.getQuota, perm.AccountRead)
+	r.PermScoped("GET", "/accounts/:id/balance", s.getBalance, perm.AccountRead)
+	r.PermScoped("POST", "/accounts/:id/reset-status", s.resetStatus, perm.AccountUpdate)
 	// Usage and usage limits (CONTRACTS §73).
-	r.PermAny("GET", "/accounts/:id/usage", s.getUsage, "account:read", "account:own:read")
+	r.PermScoped("GET", "/accounts/:id/usage", s.getUsage, perm.AccountRead)
 	// Requests in flight and rates by client model (CONTRACTS §68.7).
-	r.PermAny("GET", "/accounts/:id/rate-models", s.getRateModels, "account:read", "account:own:read")
-	r.PermAny("GET", "/accounts/:id/usage-limit", s.getUsageLimit, "account:read", "account:own:read")
-	r.PermAny("PUT", "/accounts/:id/usage-limit", s.putUsageLimit, "account:update", "account:own:update")
+	r.PermScoped("GET", "/accounts/:id/rate-models", s.getRateModels, perm.AccountRead)
+	r.PermScoped("GET", "/accounts/:id/usage-limit", s.getUsageLimit, perm.AccountRead)
+	r.PermScoped("PUT", "/accounts/:id/usage-limit", s.putUsageLimit, perm.AccountUpdate)
 	// Credential refresh (CONTRACTS §48).
-	r.PermAny("POST", "/accounts/:id/refresh-credentials", s.refreshCredentials, "account:update", "account:own:update")
+	r.PermScoped("POST", "/accounts/:id/refresh-credentials", s.refreshCredentials, perm.AccountUpdate)
 	// Account actions (CONTRACTS §52).
-	r.PermAny("GET", "/accounts/:id/actions", s.getAccountActions, "account:read", "account:own:read")
-	r.PermAny("POST", "/accounts/:id/actions/:plugin_key/:action_id", s.executeAccountAction, "account:update", "account:own:update")
+	r.PermScoped("GET", "/accounts/:id/actions", s.getAccountActions, perm.AccountRead)
+	r.PermScoped("POST", "/accounts/:id/actions/:plugin_key/:action_id", s.executeAccountAction, perm.AccountUpdate)
 }
 
 // Run subscribes to account:changed, flushes last_used_at every 10 s, writes

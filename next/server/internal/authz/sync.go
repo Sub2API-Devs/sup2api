@@ -23,9 +23,9 @@ import (
 func (s *Service) SyncCore(ctx context.Context) error {
 	defs := CorePermissions()
 	var (
-		keys, modules, labels []string
-		sensitive             []bool
-		sorts                 []int32
+		keys, modules, labels, scopeTypes []string
+		sensitive                         []bool
+		sorts                             []int32
 	)
 	for _, d := range defs {
 		lb, err := json.Marshal(d.Label)
@@ -37,6 +37,7 @@ func (s *Service) SyncCore(ctx context.Context) error {
 		labels = append(labels, string(lb))
 		sensitive = append(sensitive, d.Sensitive)
 		sorts = append(sorts, int32(d.Sort))
+		scopeTypes = append(scopeTypes, d.ScopeType)
 	}
 	var rKeys, rNames, rDescs []string
 	var rSuper, rCustom []bool
@@ -83,13 +84,13 @@ RETURNING key, (xmax = 0)`, rKeys, rNames, rDescs, rSuper, rCustom)
 			}
 			changed = true
 		}, `
-INSERT INTO permissions (key, module, label, source, sensitive, status, sort)
-SELECT k, m, l::jsonb, 'core', se, 'active', so FROM unnest($1::text[], $2::text[], $3::text[], $4::bool[], $5::int[]) AS t(k, m, l, se, so)
+INSERT INTO permissions (key, module, label, source, sensitive, status, sort, scope_type)
+SELECT k, m, l::jsonb, 'core', se, 'active', so, st FROM unnest($1::text[], $2::text[], $3::text[], $4::bool[], $5::int[], $6::text[]) AS t(k, m, l, se, so, st)
 ON CONFLICT (key) DO UPDATE SET module = EXCLUDED.module, label = EXCLUDED.label,
-    sensitive = EXCLUDED.sensitive, status = 'active', sort = EXCLUDED.sort
-    WHERE (permissions.module, permissions.label, permissions.sensitive, permissions.status, permissions.sort)
-        IS DISTINCT FROM (EXCLUDED.module, EXCLUDED.label, EXCLUDED.sensitive, 'active'::varchar, EXCLUDED.sort)
-RETURNING key, (xmax = 0)`, keys, modules, labels, sensitive, sorts)
+    sensitive = EXCLUDED.sensitive, status = 'active', sort = EXCLUDED.sort, scope_type = EXCLUDED.scope_type
+    WHERE (permissions.module, permissions.label, permissions.sensitive, permissions.status, permissions.sort, permissions.scope_type)
+        IS DISTINCT FROM (EXCLUDED.module, EXCLUDED.label, EXCLUDED.sensitive, 'active'::varchar, EXCLUDED.sort, EXCLUDED.scope_type)
+RETURNING key, (xmax = 0)`, keys, modules, labels, sensitive, sorts, scopeTypes)
 		if err != nil {
 			return err
 		}
@@ -97,7 +98,15 @@ RETURNING key, (xmax = 0)`, keys, modules, labels, sensitive, sorts)
 		// Built-in roles get their default permissions and assignable roles
 		// (grantDefaults).
 		for _, r := range builtinRoles {
-			if err := s.grantDefaults(ctx, tx, r.key, newRoles[r.key], r.defaultPermissions(),
+			// Scoped defaults are granted to a role created now only: the
+			// actions exist already, so none is new (0103 converted the
+			// existing roles' former own-level grants).
+			if newRoles[r.key] && len(r.scoped) > 0 {
+				if err := s.grantScopedDefaults(ctx, tx, r.key, r.scoped); err != nil {
+					return err
+				}
+			}
+			if err := s.grantDefaults(ctx, tx, r.key, newRoles[r.key], r.unscopedDefaults(),
 				func(k string) bool { return slices.Contains(inserted, k) }, "default", `
 WITH ins AS (
     INSERT INTO role_permissions (role_id, permission_id)
@@ -181,6 +190,29 @@ func (s *Service) grantDefaults(ctx context.Context, tx pgx.Tx, roleKey string, 
 		return nil
 	}
 	return s.syncGrant(ctx, tx, detail, sql, roleKey, defaults)
+}
+
+// grantScopedDefaults grants the built-in role roleKey its scoped defaults
+// (canonical keys), each audited as authz.sync.grant (via default,
+// role_created), with the former own-level alias rows (mirrorLegacyOwn).
+func (s *Service) grantScopedDefaults(ctx context.Context, tx pgx.Tx, roleKey string, keys []string) error {
+	err := s.syncGrant(ctx, tx, map[string]any{"via": "default", "role_created": true}, `
+WITH ins AS (
+    INSERT INTO role_permission_scopes (role_id, permission_id, scope)
+    SELECT r.id, p.id, d.scope FROM roles r,
+        (SELECT substring(k FROM '^(.*):[^:]*$') AS action, substring(k FROM '[^:]*$') AS scope FROM unnest($2::text[]) k) d
+    JOIN permissions p ON p.key = d.action AND p.source = 'core'
+    WHERE r.key = $1
+    ON CONFLICT DO NOTHING RETURNING role_id, permission_id, scope)
+SELECT ins.role_id, p.key || ':' || ins.scope FROM ins JOIN permissions p ON p.id = ins.permission_id`, roleKey, keys)
+	if err != nil {
+		return err
+	}
+	var id int64
+	if err := tx.QueryRow(ctx, `SELECT id FROM roles WHERE key = $1`, roleKey).Scan(&id); err != nil {
+		return err
+	}
+	return mirrorLegacyOwn(ctx, tx, id)
 }
 
 // grantInherited grants newKey to every role holding a key of from: a

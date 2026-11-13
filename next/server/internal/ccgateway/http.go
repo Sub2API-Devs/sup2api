@@ -9,6 +9,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/remotedocker"
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +22,7 @@ func detached(c *gin.Context, d time.Duration) (context.Context, context.CancelF
 }
 
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.PermAny("POST", "/system/ccgateway/accounts/:id/cc-features/preview", s.accountFeaturePreview, RuntimeScope(http.MethodPost).Keys()...)
+	r.PermScoped("POST", "/system/ccgateway/accounts/:id/cc-features/preview", s.accountFeaturePreview, perm.AccountAction(accountAction(http.MethodPost)))
 	r.Perm("GET", "/system/ccgateway/cli/:id", "settings:read", s.cliManagement)
 	r.Perm("POST", "/system/ccgateway/cli/:id", "settings:manage", s.cliManagement)
 	r.Perm("PUT", "/system/ccgateway/cli/:id", "settings:manage", s.cliManagement)
@@ -29,8 +30,8 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// Per-account runtime: whoever may read / update that account (own
 	// level: accounts it created), not settings administrators (CONTRACTS
 	// §49.5).
-	r.PermAny("GET", "/system/ccgateway/accounts/:id/:action", s.accountManage, RuntimeScope(http.MethodGet).Keys()...)
-	r.PermAny("POST", "/system/ccgateway/accounts/:id/:action", s.accountManage, RuntimeScope(http.MethodPost).Keys()...)
+	r.PermScoped("GET", "/system/ccgateway/accounts/:id/:action", s.accountManage, perm.AccountAction(accountAction(http.MethodGet)))
+	r.PermScoped("POST", "/system/ccgateway/accounts/:id/:action", s.accountManage, perm.AccountAction(accountAction(http.MethodPost)))
 	// PUT only sets the request logs, which is not an own-level action.
 	r.PermAny("PUT", "/system/ccgateway/accounts/:id/:action", func(c *gin.Context) {
 		if c.Param("action") != "request-logs" {

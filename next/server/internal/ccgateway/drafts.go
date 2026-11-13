@@ -23,18 +23,18 @@ import (
 // /accounts adopts it. A draft is only visible to its creator unless the
 // caller holds settings:manage.
 
-// draftKeys are the permissions of the draft endpoints. account:own:create
-// is accepted besides the contract's settings:manage / account:create:
-// own-level users may create accounts (POST /accounts), so they must be
-// able to prepare the runtime of a Claude Code account too.
-var draftKeys = []perm.Key{"settings:manage", "account:create", "account:own:create"}
+// draftActions are the permissions of the draft endpoints: settings:manage,
+// or account:create with any scope: whoever may create some accounts (POST
+// /accounts) must be able to prepare the runtime of a Claude Code account
+// too.
+var draftActions = []perm.Key{perm.SettingsManage, perm.AccountCreate}
 
 func (s *Service) registerDraftRoutes(r *httpapi.Router) {
-	r.PermAny("POST", "/system/ccgateway/drafts", s.draftCreate, draftKeys...)
-	r.PermAny("PUT", "/system/ccgateway/drafts/:key", s.draftUpdate, draftKeys...)
-	r.PermAny("DELETE", "/system/ccgateway/drafts/:key", s.draftDelete, draftKeys...)
-	r.PermAny("GET", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftKeys...)
-	r.PermAny("POST", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftKeys...)
+	r.PermScoped("POST", "/system/ccgateway/drafts", s.draftCreate, draftActions...)
+	r.PermScoped("PUT", "/system/ccgateway/drafts/:key", s.draftUpdate, draftActions...)
+	r.PermScoped("DELETE", "/system/ccgateway/drafts/:key", s.draftDelete, draftActions...)
+	r.PermScoped("GET", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftActions...)
+	r.PermScoped("POST", "/system/ccgateway/drafts/:key/:action", s.draftAction, draftActions...)
 }
 
 func newDraftKey() string {
@@ -48,7 +48,11 @@ func newDraftKey() string {
 // draftScope is nil for settings administrators (every draft), otherwise
 // the caller id (only drafts it created).
 func draftScope(ctx context.Context) *int64 {
-	return core.OwnerScope(ctx, "settings:manage")
+	if core.HasGranted(ctx, perm.SettingsManage) {
+		return nil
+	}
+	uid, _ := core.UserID(ctx)
+	return &uid
 }
 
 func draftNotFound(base *core.Error) *core.Error { return reasonError(base, "draft_not_found") }

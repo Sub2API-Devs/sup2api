@@ -53,8 +53,8 @@ func TestCatalogModuleOrder(t *testing.T) {
 	}
 }
 
-// Every key of a built-in role's whitelist is a catalog permission, listed
-// once.
+// Every key of a built-in role's whitelist is canonical, of a catalog
+// action, listed once.
 func TestBuiltinWhitelistsAreCatalogKeys(t *testing.T) {
 	t.Parallel()
 	known := map[string]bool{}
@@ -64,7 +64,8 @@ func TestBuiltinWhitelistsAreCatalogKeys(t *testing.T) {
 	for name, keys := range map[string][]string{"operator": operatorPermissions, "supplier": supplierPermissions, "user": userRolePermissions} {
 		seen := map[string]bool{}
 		for _, k := range keys {
-			if !known[k] || seen[k] {
+			p, err := perm.Parse(k)
+			if c, _ := perm.Canonical(k); err != nil || !known[string(p.Action)] || seen[k] || string(c) != k {
 				t.Errorf("%s whitelist: %s is unknown or listed twice", name, k)
 			}
 			seen[k] = true

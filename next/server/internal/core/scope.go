@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"slices"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
@@ -27,6 +28,43 @@ func Can(ctx context.Context, az Authorizer, k perm.Key) bool {
 	return granted
 }
 
+type scopesCtxKey struct{}
+
+// WithScope records the caller's range of action, as Router.PermScoped
+// computed it for the request.
+func WithScope(ctx context.Context, action perm.Key, s DataScope) context.Context {
+	prev := routeScopes(ctx)
+	next := make(map[perm.Key]DataScope, len(prev)+1)
+	maps.Copy(next, prev)
+	next[action] = s
+	return context.WithValue(ctx, scopesCtxKey{}, next)
+}
+
+// routeScopes are the scopes WithScope recorded.
+func routeScopes(ctx context.Context) map[perm.Key]DataScope {
+	m, _ := ctx.Value(scopesCtxKey{}).(map[perm.Key]DataScope)
+	return m
+}
+
+// Scope is the rows the caller (UserID) reaches with action in this
+// request, its access key applied: the route's (Router.PermScoped) when it
+// computed one, otherwise asked of az. No caller, or a nil az, reaches
+// nothing.
+func Scope(ctx context.Context, az Authorizer, action perm.Key) (DataScope, error) {
+	if s, ok := routeScopes(ctx)[action]; ok {
+		return s, nil
+	}
+	uid, ok := UserID(ctx)
+	if !ok || az == nil {
+		return DataScope{}, nil
+	}
+	set, err := az.PermissionSet(ctx, uid)
+	if err != nil {
+		return DataScope{}, err
+	}
+	return set.DataScope(uid, action), nil
+}
+
 // HasGranted reports whether the route middleware matched k for the caller
 // (Granted).
 func HasGranted(ctx context.Context, k perm.Key) bool {
@@ -37,6 +75,12 @@ func HasGranted(ctx context.Context, k perm.Key) bool {
 // Router.PermAny(..., s.Keys()...): nil when the route matched any of s.All,
 // otherwise a pointer to the caller id.
 func OwnerScopeOf(ctx context.Context, s perm.Scoped) *int64 {
+	scopes := routeScopes(ctx)
+	for _, k := range s.All {
+		if _, ok := scopes[k]; ok {
+			return OwnerScope(ctx, string(k))
+		}
+	}
 	if slices.ContainsFunc(s.All, func(k perm.Key) bool { return HasGranted(ctx, k) }) {
 		return nil
 	}

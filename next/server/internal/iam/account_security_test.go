@@ -29,6 +29,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 )
 
@@ -1359,7 +1360,8 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 		}
 	}
 	for _, p := range former {
-		if !offered[p] {
+		// The former own-level key is offered as its action (with a scope).
+		if c, _ := perm.Parse(p); !offered[string(c.Action)] {
 			t.Fatalf("%s is not offered to access keys", p)
 		}
 	}

@@ -774,3 +774,79 @@
 - 测试：ccgateway `TestHostInstallRoutesStepUp`（`testutil.StepUpRefused`，逐条断言哪些要、哪些不要）；updater `TestCoreUpdateRoutesStepUp` 增加 update-source；iam `TestFormerSessionOnlyPermissionsInAccessKeys`（带 `settings:manage` 的密钥改 remote-config：无 proof 403，带 `host.install` proof 200）；authz `TestCatalogFlaggedSets`。
 - 影响对象：控制台在 ccgateway 设置页、运行时安装与更新源设置时会弹出二次验证（S5 的 StepUpDialog 按 403 `verification_required` 自动处理）；脚本化调用需先 `POST /me/verify` 取 `host.install`/`system.update` proof。须与 S5 同版本发布。
 - 回滚：revert 这个提交。
+
+## 期 4 R1：带范围的权限 key 原语 + T66 常量化（设计：DESIGN-scoped-bindings.md §1、§3）
+
+- 改动：
+  - `perm`：`Parse`、`Canonical`、`Implies`、`Pattern`、`Scope`、`ScopeType`、`LegacyOwnKeys`、`CanonicalSet`。语法、规范化与蕴含都只在这里实现（CONTRACTS §21.0）。
+  - `perm/keys.go`：每个核心 key（含 self 模块）对应一个常量。目录 `corePerm.key` 改为引用常量，`Router.Perm/PermAny/Self` 的参数类型改为 `perm.Key`。
+  - `core/datascope.go`：`DataScope`、`Compile`、`AllowsRow`、`ScopeTable.Cond/SQL/Args`。谓词不会返回 NULL（创建者为 NULL 视为不匹配），放进 NOT 里或作为布尔列使用时结果也正确。
+  - 共享测试向量放在 `next/sdk/permvectors/vectors.json`，Go 测试与之后的 TS 实现读取同一份。
+- 测试：
+  - perm：向量（规范形式、非法 key、蕴含表），以及蕴含的自反性与传递性。
+  - core：`TestCompile`、`TestAllowsRow`，谓词文本快照。
+  - authz：`TestKeyConstantsMatchCatalog`（用 go/parser 核对常量与目录一一对应）。
+- 审查后：结尾的 `/*` 只在跟随本资源的行类型或单独出现时才去掉。此前 `foo/*`、`proxy/*` 会被当成全部。
+- 影响对象：无行为变化。回滚：revert。
+
+## 期 4 R2a：带范围授予的存储、迁移 0103 与蕴含匹配（两步走的第一步）
+
+- 改动：
+  - **匹配**（core）：
+    - `PermissionSet` 增加 `Scoped`，`Add` 先规范化再写入（旧 own key 读作 `:own`）。
+    - `Has` 改为蕴含判断。新增 `HasAction`、`DataScope(uid, action)`、`KeyList`。
+    - `Missing` 按“是否被蕴含”判断，所以 `CanGrant`、`editableRole`、`checkAssignment`、`canActOnUsers` 都自动比较范围。
+    - `Restrict` 按模式求交集，见下方 Restrict 一项。
+    - `core.Scope(ctx, az, action)`、`core.WithScope`。
+  - **路由**：`Router.PermScoped(method, path, h, actions...)` 取代全部 `PermAny(all, own)`，涉及 account、proxy、预备容器、ccgateway 运行时与草稿、ccgateway 重新授权、`/environment/variables`。
+    - 中间件为每个动作写入 `DataScope`（未持有的动作写空范围）。
+    - 菜单 anyOf 改用 `HasAction`，菜单项只列动作。
+    - `/platforms`、`/account-types` 改为 `PermScoped(account:read, account:create)`。此前全量 `account:create` 不在列表中，现在任何范围的 read 或 create 都可浏览，这是轻微放宽。
+  - **过渡适配**：`core.OwnerScope` / `OwnerScopeOf` 先读路由写入的范围。全部 → nil；own → 调用者 id；只有分组或 id 成分 → id 0，即任何行都不匹配（fail-closed），直到 R3/R4 改用 DataScope。草稿范围改用 `HasGranted(settings:manage)`。
+  - **存储**（迁移 `0103_scoped_permissions.sql`）：
+    - `permissions.scope_type`，新表 `role_permission_scopes`。
+    - 旧 own 授予逐字转换为 `(动作, 'own')`；角色已持有全量 key 时不转换，只写一次审计。
+    - 访问密钥在旧写法旁补上新写法。
+    - 写审计；有写入才推进 authz 版本；可重复执行；`role_permissions` 不动。
+  - **authz**：
+    - `resolvePermissions` 规范化后去掉被蕴含的 key（非法 key 400 `invalid`）。
+    - `writeGrants` 分两张表写入，并镜像旧 own 行（`mirrorLegacyOwn`）。
+    - `loadPermissionSet`、`RolesPermissions`、`roleSelect` 合并两张表读取（`roleGrantsJoin`）。
+    - `Role.permission_keys` 只列规范形式中不被其他 key 蕴含的部分。
+    - `SetRolePermissions` 的“新增”按“未被原有授予蕴含”计算，收窄不再要求操作者持有。
+    - `ResetRole` 同样走 `writeGrants`。
+    - `GET /permissions` 不再列出旧 own key，每项新增 `scope_type`。
+    - SyncCore 写入 `scope_type`；内置角色新建时授予带范围的默认值（`grantScopedDefaults`）。
+  - **目录与默认**：
+    - 8 个旧 own key 改由 `legacyOwnPerms` 生成，标签、标记、排序与旧版完全一致，新旧节点交替同步时目录行不会来回改动。它们标为 deprecated：不进入任何内置默认，也不在编辑器里列出。
+    - supplier 默认为 8 个 `…:own`。operator 去掉冗余的 own key，加上 `account:credential:view:own`。
+  - **iam**：
+    - 访问密钥创建/修改时规范化 key，并要求每个 key 被用户蕴含，存储时附带旧写法（`perm.WithLegacyOwn`），列表显示规范形式。
+    - 选择器按 `HasAction` 列出动作。
+    - `/me` 输出 `KeyList` 加旧 own 别名。
+- 测试：
+  - authz `TestScopedPermissionsMigrationIsVerbatim`，验收用：
+    - 在含内置与自定义角色旧 own 授予（含冗余的）、访问密钥的库上，迁移前（只有别名）与迁移后再把别名标 removed（模拟 R2b）相比，每个用户、每把密钥在 8 个动作上可达的账号、代理 id 集合逐一相等。
+    - 迁移不改动 `role_permissions`。
+    - 审计条数、版本、重跑无变化都已核对。
+  - `TestNewAndMigratedBuiltinRolesAgree`：新库与“旧库 + 0103”的内置角色授予一致。
+  - `TestScopedRoleGrants`：两张表、镜像、收窄、非法 key、目录 `scope_type`；只有 `account:read:own` 时 `Has("account:read")` 为 false。
+  - core `TestPermissionSetScoped`、`TestRestrictScoped`；httpapi `TestPermScoped`。
+  - 现有 account、proxy、ccgateway、iam 测试的测试替身改为 `Can = PermissionSet().Has`，与真实实现一致。
+- 混跑（新旧节点同库）：
+  - 旧节点读不到新表：分组或 id 范围的授予在旧节点上不生效（fail-closed，不会变成全量）。
+  - 旧 own key 及其授予行保持有效，supplier 不中断。
+  - 新节点写 own 范围时同时写旧行。
+  - 已知：滚动期间在旧节点上撤销某个 own 授予，不会删除新表里的对应行，新节点仍然认为它有效。发布说明要求升级期间不改角色权限，全部节点升级后再改。
+- R2b（下一版本，本期不做）：
+  - 确认全部节点都已升级后，在目录里把 8 个旧 key 标 removed（可写成 deprecated 改 removed 的同步规则或一次迁移）。
+  - 删除 `mirrorLegacyOwn` 与 `perm.WithLegacyOwn`，清理冗余的旧 own 行与密钥中的旧写法（写审计）。
+  - `/me` 不再输出别名。
+  - `Parse` 里的别名表保留，用于读取旧请求。
+- 发布说明（两步走）：
+  - 本版本可以滚动发布，不需要停机。0103 只做新增。
+  - 前端（R8）上线前，旧控制台角色页的权限树里没有 `…:own` 这类规范 key，own 授予可能显示不出来。后端照常接受 `account:own:*` 与新写法。
+- 回滚：
+  - revert 代码即可，新表与新列旧代码都不读。
+  - 访问密钥里的新写法在旧代码下被忽略，旧写法仍在，按审计 before 可还原。
+  - 回滚期间写入的分组或 id 范围授予不生效（fail-closed）。

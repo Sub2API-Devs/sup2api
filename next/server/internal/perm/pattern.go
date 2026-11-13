@@ -2,6 +2,7 @@ package perm
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -278,4 +279,35 @@ func ImpliesAny(have []Pattern, want Pattern) bool {
 		}
 	}
 	return false
+}
+
+// AccountAction is the account action key of action ("read" → account:read).
+func AccountAction(action string) Key { return "account:" + Key(action) }
+
+// CanonicalSet is keys canonical, sorted, without duplicates; a key that
+// does not parse is dropped.
+func CanonicalSet(keys []string) []string {
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if c, err := Canonical(k); err == nil {
+			out = append(out, string(c))
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// WithLegacyOwn is keys followed by the former own-level key of each
+// <action>:own among them that had one, for readers of the previous
+// version (R2a: access keys a previous core verifies, GET /me for plugin
+// pages). The next version drops it.
+func WithLegacyOwn(keys []string) []string {
+	out := slices.Clone(keys)
+	for old, k := range legacyOwn {
+		if slices.Contains(keys, string(k)) && !slices.Contains(keys, old) {
+			out = append(out, old)
+		}
+	}
+	slices.Sort(out)
+	return out
 }

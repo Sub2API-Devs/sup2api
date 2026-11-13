@@ -107,17 +107,16 @@ func New(db *store.DB, cipher *secret.Cipher, bus core.Bus, opts Options) *Servi
 // key or its "own" counterpart (CONTRACTS §21.2); handlers narrow their SQL
 // with core.OwnerScope.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	write := writeScope.Keys()
-	r.PermAny("GET", "/proxies", s.list, "proxy:read", "proxy:own:read")
-	r.PermAny("POST", "/proxies", s.create, write...)
-	r.PermAny("GET", "/proxies/:id", s.get, "proxy:read", "proxy:own:read")
-	r.PermAny("GET", "/proxies/:id/location", s.location, "proxy:read", "proxy:own:read")
-	r.PermAny("PATCH", "/proxies/:id", s.update, write...)
-	r.PermAny("DELETE", "/proxies/:id", s.delete, write...)
-	r.PermAny("POST", "/proxies/:id/test", s.test, write...)
+	r.PermScoped("GET", "/proxies", s.list, perm.ProxyRead)
+	r.PermScoped("POST", "/proxies", s.create, perm.ProxyManage)
+	r.PermScoped("GET", "/proxies/:id", s.get, perm.ProxyRead)
+	r.PermScoped("GET", "/proxies/:id/location", s.location, perm.ProxyRead)
+	r.PermScoped("PATCH", "/proxies/:id", s.update, perm.ProxyManage)
+	r.PermScoped("DELETE", "/proxies/:id", s.delete, perm.ProxyManage)
+	r.PermScoped("POST", "/proxies/:id/test", s.test, perm.ProxyManage)
 	// The URL carries the plain-text password: a step-up proof each time (CONTRACTS §80.2).
-	r.StepUp(core.StepUpProxyReveal).PermAny("POST", "/proxies/:id/reveal-url", s.revealURL, write...)
-	r.PermAny("POST", "/proxies/probe", s.probeURL, write...)
+	r.StepUp(core.StepUpProxyReveal).PermScoped("POST", "/proxies/:id/reveal-url", s.revealURL, perm.ProxyManage)
+	r.PermScoped("POST", "/proxies/probe", s.probeURL, perm.ProxyManage)
 }
 
 // changeMsg is published on config:changed when a proxy changes.

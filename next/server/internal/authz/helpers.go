@@ -3,7 +3,6 @@ package authz
 import (
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
@@ -56,7 +55,9 @@ func (s *Service) cachedUnion(userIDs []int64) core.PermissionSet {
 	for _, id := range userIDs {
 		u := s.users[id]
 		set.Superuser = set.Superuser || u.Superuser
-		maps.Copy(set.Keys, u.Keys)
+		for _, k := range u.KeyList() {
+			set.Add(k)
+		}
 	}
 	return set
 }

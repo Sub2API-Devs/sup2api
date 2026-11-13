@@ -13,6 +13,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -63,8 +64,10 @@ func normalizeAccessKeyName(name string) (string, error) {
 }
 
 // grantablePermissions checks a key's permissions against what the user holds
-// right now, the rule of §80: a key is a subset of its user. It returns them
-// sorted without duplicates. A superuser may choose any active permission.
+// right now, the rule of §80: a key is a subset of its user, scope by scope.
+// It returns them canonical, sorted, without duplicates, and with the former
+// own-level spelling of own scopes for cores of the previous version
+// (perm.WithLegacyOwn, R2a). A superuser may choose any active permission.
 func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted []string) ([]string, error) {
 	if len(wanted) == 0 {
 		return nil, core.InvalidFields(core.FieldError{Field: "permissions", Code: "required", Message: "choose at least one permission"})
@@ -77,13 +80,22 @@ func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted
 	if err != nil {
 		return nil, err
 	}
-	out := slices.Clone(wanted)
-	slices.Sort(out)
-	out = slices.Compact(out)
-	var missing []string
-	for _, p := range out {
-		if !slices.Contains(active, p) || !set.Has(p) {
-			missing = append(missing, p)
+	var invalid, missing []string
+	for _, k := range wanted {
+		if _, err := perm.Parse(k); err != nil {
+			invalid = append(invalid, k)
+		}
+	}
+	if len(invalid) > 0 {
+		return nil, core.InvalidFields(core.FieldError{Field: "permissions", Code: "invalid", Message: "invalid permission keys: " + strings.Join(invalid, ", ")})
+	}
+	// Canonical keys, each implied by the user's (CONTRACTS §21: a key's
+	// scope never reaches beyond its user's).
+	out := perm.CanonicalSet(wanted)
+	for _, k := range out {
+		p, _ := perm.Parse(k)
+		if !slices.Contains(active, string(p.Action)) || !set.Has(k) {
+			missing = append(missing, k)
 		}
 	}
 	if len(missing) > 0 {
@@ -91,7 +103,7 @@ func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted
 			"an access key can only have permissions you hold",
 			"访问密钥只能拥有你自己的权限")).WithDetails(map[string]any{"missing": missing})
 	}
-	return out, nil
+	return perm.WithLegacyOwn(out), nil
 }
 
 func (s *Service) lostPermissions(ctx context.Context, userID int64, keys []*AccessKey) error {
@@ -115,6 +127,9 @@ const accessKeyColumns = `id, name, token_hint, permissions, expires_at, last_us
 func scanAccessKey(row pgx.Row) (*AccessKey, error) {
 	k := &AccessKey{}
 	err := row.Scan(&k.ID, &k.Name, &k.Hint, &k.Permissions, &k.ExpiresAt, &k.LastUsedAt, &k.LastUsedIP, &k.CreatedAt)
+	// Shown canonical: the former own-level spelling kept for older cores
+	// (perm.WithLegacyOwn) is the same grant.
+	k.Permissions = perm.CanonicalSet(k.Permissions)
 	return k, err
 }
 
@@ -260,7 +275,9 @@ func (s *Service) AccessKeyPermissions(ctx context.Context, userID int64) ([]*au
 	for _, m := range modules {
 		kept := m.Permissions[:0:0]
 		for _, p := range m.Permissions {
-			if (p.Status == "active" || p.Status == "") && set.Has(p.Key) {
+			// Offered when the user holds the action with any scope; the
+			// key's scope must then be within the user's (grantablePermissions).
+			if (p.Status == "active" || p.Status == "") && set.HasAction(perm.Key(p.Key)) {
 				kept = append(kept, p)
 			}
 		}

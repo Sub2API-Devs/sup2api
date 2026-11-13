@@ -25,8 +25,8 @@ import (
 var (
 	adminKeys = []string{"account:read", "account:create", "account:update", "account:delete", "account:test",
 		"account:credential:view", "account:settings:custom", "proxy:read", "proxy:manage"}
-	supplierKeys = []string{"account:own:read", "account:own:create", "account:own:update", "account:own:delete",
-		"account:own:test", "account:own:credential:view", "proxy:own:read", "proxy:own:manage"}
+	supplierKeys = []string{"account:read:own", "account:create:own", "account:update:own", "account:delete:own",
+		"account:test:own", "account:credential:view:own", "proxy:read:own", "proxy:manage:own"}
 	readerKeys = []string{"account:read", "proxy:read"}
 )
 
@@ -990,7 +990,7 @@ func TestBuiltinSupplierRole(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return slices.Sorted(maps.Keys(set.Keys))
+		return set.KeyList()
 	}
 	if got := keysOf(authz.RoleSupplier); !slices.Equal(got, slices.Sorted(slices.Values(supplierKeys))) {
 		t.Fatalf("supplier role grants %v, want %v", got, supplierKeys)

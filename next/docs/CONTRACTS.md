@@ -1058,6 +1058,19 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 背景：需要"供应商"角色只维护自己创建的账号和代理、不能改 base_url（只能用官方地址）；"只读"角色能看全部账号但不能改、看不到密钥；保存账号时能直接填代理串，后端自动解析并复用已有代理或新建再关联。旧 sub2api 没有所有者模型，本节为新设计。
 
+### 21.0 带范围的权限 key（期 4 R1–R2a，取代下文的 own/all 成对 key；R7 重写本节）
+
+- **语法**：`<动作>[:<范围>]`，范围 = `*` | `own` | 路径。账号动作（`account:read/create/update/delete/test/credential:view`）的路径为 `group/<g>`、`group/<g>/account/<a>`、`account/<a>`（`<g>` 可为 `*`，表示绑定在任意分组下）；代理动作（`proxy:read/manage`）为 `proxy/<id>`。id 为不带前导 0 的正整数。省略范围 = `*` = 全部行；其余动作不接受范围。`account:create` 只接受 `*`、`own`、`group/…`（不接受 id）。最后一段是 `*`、`own` 或含 `/` 时才视为范围。
+- **规范形式**（`perm.Canonical`，唯一入口）：全部范围不带后缀（存量 key 一字不改）；结尾的 `/*` 只在跟着本资源的行类型或单独出现时去掉（`group/12/*` → `group/12`，`group/12/account/*` → `group/12`，`account/*` → 全部；`group/*` 保留）；8 个旧 key `account:own:<x>`、`proxy:own:<x>` 是 `<动作>:own` 的别名。不合法的 key 400 `permission_keys`（或 `permissions`）`invalid`。
+- **蕴含**（`perm.Implies`，纯语法，不按账号当前所在分组推导）：全部 ⊇ 一切；own 只蕴含 own；`group/*` ⊇ 任何 `group/…`；`group/G` ⊇ `group/G/account/X`；`account/X` ⊇ `group/…/account/X`；`group/*/account/X` ⊇ `group/G/account/X`。共享测试向量 `next/sdk/permvectors/vectors.json`（Go 与控制台 TS 共用）。
+- **匹配**：`PermissionSet.Has(k)` = 持有的某个模式蕴含 k，所以只持有 `account:read:own` 时 `Has("account:read")` 为 false（“全量才能做”的判断保持全量语义）；`HasAction(a)` = 持有 a 的任意范围。路由 `Router.PermScoped(method, path, h, actions...)` 要求任一动作的任意范围，并把每个动作的 `core.DataScope` 放进 ctx（`core.Scope(ctx, az, action)` 取用）；全部范围的动作也记入 `Granted`。
+- **数据范围**：`core.DataScope{All, Owner, Groups, IDs, PairG, PairID}` 由用户在该动作上的全部模式编译（`Compile`），谓词 `core.AccountRows` / `core.ProxyRows` 的 `SQL(n)` / `Cond()` / `Args(scope)`：文本固定，id 只是数组参数；分组成员关系实时读 `account_groups`（任一分组匹配即在范围内），不进缓存。
+- **存储**：`permissions.scope_type`（`''`/`account`/`proxy`）；全部范围的授予在 `role_permissions`，带范围的在 `role_permission_scopes(role_id, permission_id, scope)`。访问密钥仍是 `text[]`，存规范 key。
+- **两步升级（滚动发布）**：R2a（本版本）旧 own key 保持 active，作为别名被读取；写入带 own 范围的授予时同时写旧 own key 行（`mirrorLegacyOwn`），访问密钥同时存两种写法，旧节点照常工作；`GET /permissions` 不再列出旧 own key，每项新增 `scope_type`；`GET /me` 的 `permissions` 输出规范 key 并附带旧 own 别名（兼容一个小版本）。R2b（下一版本，所有节点升级后）：把 8 个旧 key 标 removed、删除镜像行与密钥里的旧写法。
+- **迁移 0103**：建表加列；每个未 removed 的旧 own 授予若角色未持有对应全量 key，则写入 `(动作, 'own')`（审计 `authz.scope.migrate`，`via: migration 0103`、`from`、`key`；冗余的只记一次 `redundant: true`）；访问密钥在旧写法旁补上 `<动作>:own`（审计 `user.access_key.migrate`，含 before/after）；有写入才推进 authz 版本；可重复执行；不删除也不修改 `role_permissions`。
+- **访问密钥取交集**：创建/修改时每个 key 须被用户蕴含；运行时 `Restrict` 逐模式取较窄者（存量不带后缀的 key 遇到只有 own 的用户收窄为 own），不可比（如 `group/12` 与 `own`）丢弃。
+- **内置角色默认**：supplier = 8 个 `…:own`；operator 去掉冗余 own key，加 `account:credential:view:own`。
+
 ### 21.1 权限（§4 表同步更新）
 
 现有 `account:*`、`proxy:*` 的 key **不改名**，语义固定为"全部"。新增：

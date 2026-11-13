@@ -41,20 +41,16 @@ func (fakeTokens) VerifyAccessKey(_ context.Context, raw, _ string) (core.Access
 // fakeAuthz grants each user a fixed key set; a nil map allows everything.
 type fakeAuthz struct{ keys map[int64][]string }
 
-func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
-	if a.keys == nil {
-		return true, nil
-	}
-	for _, k := range a.keys[uid] {
-		if k == key {
-			return true, nil
-		}
-	}
-	return false, nil
+func (a fakeAuthz) Can(ctx context.Context, uid int64, key string) (bool, error) {
+	set, err := a.PermissionSet(ctx, uid)
+	return set.Has(key), err
 }
 
-func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+func (a fakeAuthz) PermissionSet(ctx context.Context, uid int64) (core.PermissionSet, error) {
+	if a.keys == nil {
+		return core.PermissionSet{Superuser: true}, nil
+	}
+	return core.RestrictToAccessKey(ctx, uid, core.PermissionSetOf(a.keys[uid]...)), nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
 

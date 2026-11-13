@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 )
 
 type fakeTokens struct{}
@@ -32,8 +33,8 @@ func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
 	return false, nil
 }
 
-func (a fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
-	return core.PermissionSet{}, nil
+func (a fakeAuthz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
+	return core.PermissionSetOf(a.keys[uid]...), nil
 }
 
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
@@ -361,4 +362,54 @@ func TestSelf(t *testing.T) {
 		}
 	}()
 	r.Self("GET", "/x", "user:read", func(*gin.Context) {})
+}
+
+// PermScoped opens a route to any scope of its actions and hands the
+// handler each one's data scope; only a scope of every row is Granted.
+func TestPermScoped(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	r := NewRouter(engine, fakeTokens{}, fakeAuthz{keys: map[int64][]string{
+		1: {"account:read"},
+		2: {"account:read:own", "account:update:group/12"},
+		3: {"account:update:group/12"},
+		4: {"apikey:self:manage"},
+	}})
+	type view struct {
+		Granted []string       `json:"granted"`
+		Read    core.DataScope `json:"read"`
+		Update  core.DataScope `json:"update"`
+		Owner   *int64         `json:"owner"`
+	}
+	r.PermScoped("GET", "/accounts", func(c *gin.Context) {
+		ctx := c.Request.Context()
+		read, _ := core.Scope(ctx, nil, perm.AccountRead)
+		update, _ := core.Scope(ctx, nil, perm.AccountUpdate)
+		OK(c, view{Granted: Granted(c), Read: read, Update: update, Owner: core.OwnerScope(ctx, "account:read")})
+	}, perm.AccountRead, perm.AccountUpdate)
+	call := func(uid int64) (int, view, map[string]any) {
+		req := httptest.NewRequest("GET", "/api/v1/accounts", nil)
+		req.Header.Set("Authorization", "Bearer u"+strconv.FormatInt(uid, 10))
+		w := httptest.NewRecorder()
+		engine.ServeHTTP(w, req)
+		var out struct {
+			Data  view           `json:"data"`
+			Error map[string]any `json:"error"`
+		}
+		_ = json.Unmarshal(w.Body.Bytes(), &out)
+		return w.Code, out.Data, out.Error
+	}
+	if code, v, _ := call(1); code != 200 || !v.Read.All || v.Owner != nil || strings.Join(v.Granted, ",") != "account:read" || !v.Update.Empty() {
+		t.Fatalf("all: %d %+v", code, v)
+	}
+	if code, v, _ := call(2); code != 200 || v.Read.Owner != 2 || v.Read.All || len(v.Granted) != 0 || v.Owner == nil || *v.Owner != 2 || v.Update.Groups[0] != 12 {
+		t.Fatalf("own: %d %+v", code, v)
+	}
+	// A group scope only: the transitional OwnerScope fails closed (id 0).
+	if code, v, _ := call(3); code != 200 || !v.Read.Empty() || v.Owner == nil || *v.Owner != 0 {
+		t.Fatalf("group: %d %+v", code, v)
+	}
+	if code, _, e := call(4); code != http.StatusForbidden || e["details"].(map[string]any)["permission"] != "account:read" {
+		t.Fatalf("denied: %d %v", code, e)
+	}
 }

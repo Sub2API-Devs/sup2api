@@ -22,12 +22,11 @@ import (
 )
 
 func (s *Service) registerPreparationRoutes(r *httpapi.Router) {
-	permissions := []perm.Key{"account:create", "account:own:create"}
-	r.PermAny("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, permissions...)
-	r.PermAny("GET", "/account-preparations/:key/:action", s.preparationAction, permissions...)
-	r.PermAny("POST", "/account-preparations/:key/:action", s.preparationAction, permissions...)
-	r.PermAny("DELETE", "/account-preparations/:key", s.cancelPreparation, permissions...)
-	r.PermAny("PUT", "/account-preparations/:key", s.updatePreparation, permissions...)
+	r.PermScoped("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, perm.AccountCreate)
+	r.PermScoped("GET", "/account-preparations/:key/:action", s.preparationAction, perm.AccountCreate)
+	r.PermScoped("POST", "/account-preparations/:key/:action", s.preparationAction, perm.AccountCreate)
+	r.PermScoped("DELETE", "/account-preparations/:key", s.cancelPreparation, perm.AccountCreate)
+	r.PermScoped("PUT", "/account-preparations/:key", s.updatePreparation, perm.AccountCreate)
 }
 
 func (s *Service) preparationResource(p core.AccountPreparation) (core.AccountLifecycleResource, error) {
