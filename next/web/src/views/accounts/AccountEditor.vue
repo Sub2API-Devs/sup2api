@@ -63,7 +63,7 @@ const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
 const { t, locale: displayLocale } = useI18n()
 const plugins = usePluginStore()
-const own = useScope()
+const scope = useScope()
 
 const editing = computed(() => !!props.account?.id)
 const caps = useAccountCaps(editing)
@@ -71,8 +71,8 @@ const caps = useAccountCaps(editing)
 const mode = computed(() => props.accountType?.form.mode || 'schema')
 // Row-level rights (CONTRACTS §21): editing an account needs a scope of
 // account:update that reaches it.
-const canEditAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_ACTIONS.update))
-const canTestAccount = computed(() => editing.value && own.can(props.account, ACCOUNT_ACTIONS.test))
+const canEditAccount = computed(() => editing.value && scope.can(props.account, ACCOUNT_ACTIONS.update))
+const canTestAccount = computed(() => editing.value && scope.can(props.account, ACCOUNT_ACTIONS.test))
 const authOptions = computed(() => (props.accountTypeOptions || []).map(at => ({ value: at.type, label: lt(at.auth_method_label) || at.type, disabled: !caps.creatable(at) })))
 /** Guarded settings stay at the official values for this caller (the server enforces it). */
 const settingsGuarded = computed(() => !!props.accountType?.guarded_settings?.length && !caps.customSettings.value)
@@ -516,10 +516,10 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
 }
 
 /** Whether the caller creates accounts at a restricted scope (capped scheduling, CONTRACTS §15.9). */
-const ownCaller = () => own.level(ACCOUNT_ACTIONS.create) === 'own'
+const ownCaller = () => scope.level(ACCOUNT_ACTIONS.create) === 'own'
 /** The core's values of the controls (before the plugin's defaults). */
 const coreValues = (): ControlValues => ({
-  priority: 10, weight: 1, max_concurrency: newAccountConcurrency(own.level(ACCOUNT_ACTIONS.create)), schedulable: true, auto_disable: true,
+  priority: 10, weight: 1, max_concurrency: newAccountConcurrency(scope.level(ACCOUNT_ACTIONS.create)), schedulable: true, auto_disable: true,
   rpm_limit: 0, tpm_limit: 0, spm_limit: 0, spm_window_seconds: SPM_WINDOW_DEFAULT, environment: {}, header_passthrough: [], param_override: null, model_limits: []
 })
 /** Controls kept outside `basic`. */

@@ -12,10 +12,13 @@ import { ACCOUNT_ACTIONS, ACCOUNT_FIELD_KEYS, PROXY_CREATE_KEY, useScope } from 
 export function useAccountCaps(editing: MaybeRefOrGetter<boolean> = false) {
   const auth = useAuthStore()
   const scopes = useScope()
-  const scope = computed(() => scopes.level(toValue(editing) ? ACCOUNT_ACTIONS.update : ACCOUNT_ACTIONS.create))
+  const action = computed(() => (toValue(editing) ? ACCOUNT_ACTIONS.update : ACCOUNT_ACTIONS.create))
+  const scope = computed(() => scopes.level(action.value))
   const all = computed(() => scope.value === 'all')
+  /** A group scope binds the groups within it without the binding keys (the server checks the others). */
+  const groupScoped = computed(() => auth.scopes(action.value).some((s) => s.group !== 0))
   /** Changing the account's groups. */
-  const bindGroups = computed(() => all.value || auth.has([ACCOUNT_FIELD_KEYS.groupManage, ACCOUNT_FIELD_KEYS.groupBind]))
+  const bindGroups = computed(() => all.value || groupScoped.value || auth.has([ACCOUNT_FIELD_KEYS.groupManage, ACCOUNT_FIELD_KEYS.groupBind]))
   /** Creating, or changing the upstream address of, a type with a custom upstream. */
   const relay = computed(() => all.value || auth.has(ACCOUNT_FIELD_KEYS.relay))
   /** Pasting a proxy URL (the server finds or creates the proxy). */

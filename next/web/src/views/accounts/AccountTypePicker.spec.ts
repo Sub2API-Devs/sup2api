@@ -9,7 +9,7 @@ vi.mock('./accountTypes', async original => ({
   ...(await original<typeof import('./accountTypes')>()),
   useAccountTypes: () => ({ grouped: ref([{ types: types.list }]), loaded: ref(true), load: () => undefined })
 }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().includes('account:own:create'), hasAction: (a: string) => a === 'account:create' }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().includes('account:own:create'), hasAction: (a: string) => a === 'account:create', scopes: () => [] }) }))
 
 import AccountTypePicker from './AccountTypePicker.vue'
 

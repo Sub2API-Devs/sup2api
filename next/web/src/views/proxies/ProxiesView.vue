@@ -66,7 +66,7 @@ const columns = computed<TableColumn[]>(() => {
   ]
   if (showOwner.value) cols.push({ key: 'created_by', label: t('proxies.createdBy') })
   cols.push({ key: 'created_at', label: t('common.createdAt') })
-  if (canCreate.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
+  if (auth.hasAction(PROXY_ACTIONS.manage)) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
   return cols
 })
 

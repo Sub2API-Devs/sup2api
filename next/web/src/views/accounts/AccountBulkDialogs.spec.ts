@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({ patch: vi.fn(), del: vi.fn(), toast: vi.fn() }
 vi.mock('@sub2api/host', async (original) => ({ ...await original<typeof import('@sub2api/host')>(), api: { patch: mocks.patch, del: mocks.del, get: async () => ({ items: [], more: false }) } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), toast: mocks.toast }))
 const perms = vi.hoisted(() => ({ has: (_: string | string[]): boolean => true }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string | string[]) => perms.has(p), hasAction: (a: string) => perms.has([a, a.replace(':', ':own:')]) }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string | string[]) => perms.has(p), hasAction: (a: string) => perms.has([a, a.replace(':', ':own:')]), scopes: () => [] }) }))
 enableAutoUnmount(afterEach)
 
 const acc = (id: number, over: Partial<Account> = {}) => ({ id, name: `a${id}`, plugin_key: 'p', type: 't', priority: 10, weight: 1, max_concurrency: 10, tpm_limit: 0, rpm_limit: 0, group_ids: [1], proxy_id: null, auto_disable: true, ...over }) as unknown as Account

@@ -30,7 +30,7 @@ const perms = vi.hoisted(() => ({ denied: [] as string[] }))
 vi.mock('@/stores/auth', async () => {
   const { canonicalPermission } = await import('@/authz/implies')
   const canonical = (k: string) => canonicalPermission(k) ?? k
-  return { useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some(k => !perms.denied.map(canonical).includes(canonical(k))) }) }
+  return { useAuthStore: () => ({ has: (p: string | string[]) => [p].flat().some(k => !perms.denied.map(canonical).includes(canonical(k))), scopes: () => [] }) }
 })
 vi.mock('@/composables/useScope', async original => ({ ...await original<typeof import('@/composables/useScope')>(), useScope: () => ({ can: () => true, level: () => ownership.scope }) }))
 vi.mock('@/composables/lookups', async (original) => ({ ...await original<object>(), useProxiesLookup: () => ({}) }))

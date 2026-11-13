@@ -32,11 +32,20 @@ describe('useAccountCaps', () => {
     expect([c.bindGroups.value, c.creatable({ custom_upstream: true })]).toEqual([true, true])
   })
 
+  it('a group-scoped caller binds the groups of its scope without the binding keys', () => {
+    signIn('account:create:group/12', 'account:update:account/5')
+    expect([useAccountCaps().scope.value, useAccountCaps().bindGroups.value]).toEqual(['own', true])
+    expect(useAccountCaps(true).bindGroups.value).toBe(false)
+  })
+
   it('pasting a proxy URL takes a proxy management key; custom settings their own key', () => {
     signIn('account:create')
     const c = useAccountCaps()
     expect([c.proxyByURL.value, c.customSettings.value]).toEqual([false, false])
     signIn('account:create', 'proxy:own:manage', 'account:settings:custom')
     expect([c.proxyByURL.value, c.customSettings.value]).toEqual([true, true])
+    // proxy/<id> reaches existing proxies only: it creates none.
+    signIn('account:create', 'proxy:manage:proxy/8')
+    expect(c.proxyByURL.value).toBe(false)
   })
 })
