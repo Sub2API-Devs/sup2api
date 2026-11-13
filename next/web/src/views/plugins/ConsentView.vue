@@ -71,16 +71,12 @@ const rows = computed<HPRow[]>(() => {
   return asArray<HostPermissionReview>(r.host_permissions)
     .map((hp) => {
       const risk = riskOf(hp.id, hp.risk)
+      const diffTag = added.has(hp.id) ? ('added' as const) : widened.has(hp.id) ? ('widened' as const) : null
+      // The server carries over a grant that already covers the request (consent.go decide).
+      const carried = !!r.diff && hp.current_status === 'granted' && !diffTag
       const required = requiredPermsOf(hp, risk)
-      const lacking = required.find((p) => !auth.hasDynamic(p))
-      return {
-        ...hp,
-        risk,
-        requiredPerm: lacking ?? required[0] ?? null,
-        allowed: !lacking,
-        locked: risk === 'low',
-        diffTag: added.has(hp.id) ? ('added' as const) : widened.has(hp.id) ? ('widened' as const) : null
-      }
+      const lacking = carried ? undefined : required.find((p) => !auth.hasDynamic(p))
+      return { ...hp, risk, requiredPerm: lacking ?? required[0] ?? null, allowed: !lacking, locked: risk === 'low', diffTag, carried }
     })
     .sort((a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk] || a.id.localeCompare(b.id))
 })
@@ -88,7 +84,7 @@ const rows = computed<HPRow[]>(() => {
 function initChecks() {
   for (const k of Object.keys(checked)) delete checked[k]
   for (const row of rows.value) {
-    if (row.locked) checked[row.id] = true
+    if (row.locked || row.carried) checked[row.id] = true
     else if (!row.allowed) checked[row.id] = false
     else if (row.risk === 'medium') checked[row.id] = !row.optional
     else checked[row.id] = false
@@ -160,7 +156,8 @@ async function submit() {
     toast(t('plugins.consent.missingRequired', { list: missingRequired.value.map((x) => hpLabel(x.id)).join(', ') }), 'error')
     return
   }
-  const grants = rows.value.filter((x) => checked[x.id]).map((x) => (x.scope ? { permission: x.id, scope: x.scope } : { permission: x.id }))
+  // A carried grant left ticked is not sent: the server keeps it.
+  const grants = rows.value.filter((x) => checked[x.id] && !x.carried).map((x) => (x.scope ? { permission: x.id, scope: x.scope } : { permission: x.id }))
   const denied = rows.value.filter((x) => !checked[x.id]).map((x) => x.id)
   submitting.value = true
   try {

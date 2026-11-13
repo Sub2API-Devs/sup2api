@@ -64,10 +64,11 @@ type decision struct {
 
 // decide resolves the consent request against the requested permissions.
 // Rules: low-risk permissions are granted automatically; optional ones not
-// mentioned are denied; on upgrades an unmentioned permission whose current
-// grant already covers the request is carried over; every other required
-// permission must be granted explicitly. Granted scopes may be narrower than
-// requested, never wider.
+// mentioned are denied; on upgrades a permission whose current grant already
+// covers what is granted now is carried over, whether the request names it
+// or not (it was approved before, so granting it again takes no grant
+// right); every other required permission must be granted explicitly.
+// Granted scopes may be narrower than requested, never wider.
 func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, upgrade bool) ([]decision, []core.FieldError) {
 	var errs []core.FieldError
 	requested := map[string]manifest.HostPermission{}
@@ -105,6 +106,11 @@ func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, 
 		}
 	}
 
+	// carried reports whether the current grant of id covers scope.
+	carried := func(id string, scope map[string]any) bool {
+		cur, ok := current[id]
+		return upgrade && ok && cur.Status == GrantGranted && pkg.ScopeWithin(scope, cur.Scope)
+	}
 	var out []decision
 	for _, hp := range m.HostPermissions {
 		reqScope := pkg.NormalizeScope(hp.Scope)
@@ -119,7 +125,7 @@ func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, 
 					continue
 				}
 			}
-			out = append(out, decision{permission: hp.ID, scope: scope, status: GrantGranted})
+			out = append(out, decision{permission: hp.ID, scope: scope, status: GrantGranted, carried: carried(hp.ID, scope)})
 			continue
 		}
 		if denied[hp.ID] {
@@ -134,7 +140,7 @@ func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, 
 			out = append(out, decision{permission: hp.ID, scope: reqScope, status: GrantGranted})
 			continue
 		}
-		if cur, ok := current[hp.ID]; upgrade && ok && cur.Status == GrantGranted && pkg.ScopeWithin(reqScope, cur.Scope) {
+		if carried(hp.ID, reqScope) {
 			out = append(out, decision{permission: hp.ID, scope: reqScope, status: GrantGranted, carried: true})
 			continue
 		}

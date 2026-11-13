@@ -1,6 +1,7 @@
 package install
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -81,5 +82,35 @@ func TestDecideRejectsUnknownNewPermissionRoles(t *testing.T) {
 	_, errs := decide(m, ConsentRequest{NewPermissionRoles: map[string][]string{"growth:use": nil, "growth:nope": {"admin"}}}, nil, false)
 	if len(errs) != 1 || errs[0].Field != "new_permission_roles.growth:nope" || errs[0].Code != "unknown" {
 		t.Fatalf("errs = %+v", errs)
+	}
+}
+
+// On an upgrade a grant the current one covers is carried, named again or
+// not; one wider than the current grant, or on a first install, is new.
+func TestDecideCarriesCoveredGrants(t *testing.T) {
+	m := &manifest.Manifest{Key: "demo", HostPermissions: []manifest.HostPermission{
+		{ID: "ui.native"}, {ID: "accounts.credentials"},
+		{ID: "events", Scope: map[string]any{"subscribe": []any{"a", "b"}}},
+	}}
+	current := map[string]Grant{
+		"ui.native":            {Status: GrantGranted},
+		"accounts.credentials": {Status: GrantGranted},
+		"events":               {Status: GrantGranted, Scope: map[string]any{"subscribe": []any{"a"}}},
+	}
+	req := ConsentRequest{Grants: []GrantInput{{Permission: "ui.native"}, {Permission: "events"}}}
+	carried := func(ds []decision) map[string]bool {
+		out := map[string]bool{}
+		for _, d := range ds {
+			out[d.permission] = d.carried
+		}
+		return out
+	}
+	ds, errs := decide(m, req, current, true)
+	if len(errs) != 0 || fmt.Sprint(carried(ds)) != "map[accounts.credentials:true events:false ui.native:true]" {
+		t.Fatalf("upgrade: %v %+v", carried(ds), errs)
+	}
+	req.Grants = append(req.Grants, GrantInput{Permission: "accounts.credentials"})
+	if ds, _ := decide(m, req, current, false); fmt.Sprint(carried(ds)) != "map[accounts.credentials:false events:false ui.native:false]" {
+		t.Fatalf("first install: %v", carried(ds))
 	}
 }

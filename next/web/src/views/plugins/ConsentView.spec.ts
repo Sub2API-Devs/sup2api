@@ -233,6 +233,26 @@ describe('plugin consent page', () => {
     expect(w.text()).toContain('db.core_views')
   })
 
+  it('on an upgrade, keeps what was granted before without the grant right and sends only new grants', async () => {
+    mocks.lacks = new Set(['plugin:grant:critical'])
+    const w = render(review({
+      host_permissions: [
+        { id: 'ui.native', risk: 'critical', current_status: 'granted', current_scope: null },
+        { id: 'http.client', risk: 'high', current_status: 'granted' },
+        { id: 'db.core_views', risk: 'critical', optional: true }
+      ] as never,
+      diff: { added: ['db.core_views'], widened: ['http.client'], removed: [] } as never
+    }))
+    await flushPromises()
+    // ui.native is kept; http.client is widened, so it is a new grant; db.core_views is new and needs the right.
+    expect(w.findAll('[data-testid="hp-carried"]')).toHaveLength(1)
+    expect((w.get('[data-testid="consent-approve"]').element as HTMLButtonElement).disabled).toBe(false)
+    await w.findAll('[data-testid="host-permissions"] input[type="checkbox"]').find((b) => !(b.element as HTMLInputElement).disabled && !(b.element as HTMLInputElement).checked)!.setValue(true)
+    await w.get('[data-testid="consent-approve"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post.mock.calls[0][1]).toMatchObject({ grants: [{ permission: 'http.client' }], denied: ['db.core_views'] })
+  })
+
   it('asks for the missing required permissions instead of submitting', async () => {
     const w = render(review({ host_permissions: [{ id: 'http.client', risk: 'high' }] }))
     await flushPromises()

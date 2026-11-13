@@ -1413,6 +1413,9 @@ export interface HostPermissionReview {
   reason?: LText
   optional?: boolean
   requires?: string
+  /** The current grant (upgrades only). */
+  current_status?: string
+  current_scope?: Record<string, unknown> | null
 }
 
 export interface ReviewAccountType {

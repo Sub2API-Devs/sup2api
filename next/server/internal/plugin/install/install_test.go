@@ -354,10 +354,12 @@ func TestInstallConsentUpgradeUninstall(t *testing.T) {
 	if _, err := e.svc.Consent(ctx, "guard", "0.2.0", ConsentRequest{}, e.admin); fieldCode(err, "permission:events") != "consent_required" {
 		t.Fatalf("upgrade consent without events: %v", err)
 	}
-	// Carried-over grants need no critical right; events is medium. 0.2.0
-	// adds a user permission, and handing it to a role needs role:define.
+	// Carried-over grants need no critical right, named again or not (the
+	// consent page leaves them out; ui.native is named here); events is
+	// medium. 0.2.0 adds a user permission, and handing it to a role needs
+	// role:define.
 	e.authz.perms[e.limited]["role:define"] = true
-	res, err = e.svc.Consent(ctx, "guard", "0.2.0", ConsentRequest{Grants: []GrantInput{{Permission: "events"}}, RoleKeysForNewPermissions: []string{"admin"}}, e.limited)
+	res, err = e.svc.Consent(ctx, "guard", "0.2.0", ConsentRequest{Grants: []GrantInput{{Permission: "events"}, {Permission: "ui.native"}}, RoleKeysForNewPermissions: []string{"admin"}}, e.limited)
 	if err != nil {
 		t.Fatalf("upgrade consent: %v", err)
 	}
