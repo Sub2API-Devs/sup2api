@@ -8,6 +8,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -50,8 +51,8 @@ var (
 
 func (s *Service) registerRequestLogViewer(r *httpapi.Router) {
 	// settings:manage is listed so the handlers know whether the caller reads
-	// content: the error text in the list, whole metadata and event texts in
-	// the detail.
+	// content: the error text in the list, the whole metadata, events,
+	// upstream request and headers in the detail.
 	r.PermAny("GET", "/system/ccgateway/accounts/:id/request-logs/requests", s.requestLogList, "settings:read", "account:read", "settings:manage")
 	r.PermAny("GET", "/system/ccgateway/accounts/:id/request-logs/requests/:log", s.requestLogDetail, "settings:read", "account:read", "settings:manage")
 	r.Perm("GET", "/system/ccgateway/accounts/:id/request-logs/requests/:log/files/:name", "settings:manage", s.requestLogFile)
@@ -271,7 +272,7 @@ type requestLogPage struct {
 // message summaries, identity a Worker may record) and goes to
 // settings:manage only; a field the Worker adds later is content until it is
 // listed here.
-var requestLogSummaryKeys = map[string]bool{
+var requestLogSummaryKeys = fieldSet{
 	"request_id": true, "timestamp": true, "method": true, "path": true, "duration_ms": true,
 	"status": true, "http_status": true, "stage": true, "canceled": true, "test_mode": true,
 	"model": true, "upstream_model": true, "stream": true, "upstream_stream": true,
@@ -288,12 +289,50 @@ var requestLogSummaryKeys = map[string]bool{
 	"invalid_json": true, "messages_truncated": true, "metadata_details_truncated": true, "request_body_retained": true,
 }
 
+// requestLogEventKeys and requestLogEventDetailKeys are the parts of an
+// event (events.jsonl: {time, event, detail}) every reader sees: what
+// happened, when, and its states, codes, counts, timings and digests. Error
+// texts, paths and queries, header values, upload part names, resource
+// identities (principal ids) and any field added later are content
+// (D22, FU3).
+var (
+	requestLogEventKeys       = fieldSet{"time": true, "event": true}
+	requestLogEventDetailKeys = fieldSet{
+		"request_id": true, "stage": true, "status": true, "code": true, "source": true, "reason": true,
+		"mode": true, "configured_mode": true, "probe": true, "cli_version": true, "keyed": true, "replaced": true,
+		"response_started": true, "cancelled": true, "timed_out": true, "truncated": true,
+		"field": true, "carrier": true, "ready": true, "stream": true, "over_limit": true, "for": true,
+		"method": true, "content_type": true, "declared_bytes": true, "bytes": true, "writes": true, "sha256": true,
+		"body_retained": true, "body_omitted_reason": true, "body_hash_unavailable": true,
+		"read_error": true, "multipart_parse_failed": true, "parts_truncated": true,
+		"request_prepared": true, "response_received": true, "transport_failed": true, "response_status": true,
+		"backend": true, "op": true, "ms": true,
+	}
+	// requestLogUpstreamKeys are the facts of upstream-request.json every
+	// reader sees; the URL becomes its host.
+	requestLogUpstreamKeys = fieldSet{
+		"schema": true, "mode": true, "attempts": true, "method": true, "host": true, "status": true, "sent_at": true,
+		"body_encoding": true, "body_bytes": true, "body_sha256": true, "content_sha256": true, "model": true, "stream": true,
+	}
+	// requestLogSummaryHeaders are the header names (lower case) every
+	// reader sees, in the request, the response and the upstream request.
+	requestLogSummaryHeaders = fieldSet{
+		"content-type": true, "content-length": true, "content-encoding": true, "transfer-encoding": true,
+		"accept": true, "accept-encoding": true, "cache-control": true, "date": true, "retry-after": true,
+		"request-id": true, "x-request-id": true, "anthropic-version": true, "anthropic-beta": true,
+		"x-claude-code-session-id": true, "x-claude-code-request-class": true,
+	}
+)
+
+// fieldSet is a whitelist of field names, all lower case.
+type fieldSet map[string]bool
+
 // summaryValue reports whether v has the shape of a summary field: a scalar,
-// or a list of strings (upstream_betas). Nothing nested passes under a
-// listed name.
+// or a list of strings (upstream_betas, header values). Nothing nested
+// passes under a listed name.
 func summaryValue(v any) bool {
 	switch v := v.(type) {
-	case string, float64, bool:
+	case string, float64, bool, []string:
 		return true
 	case []any:
 		return !slices.ContainsFunc(v, func(e any) bool { _, ok := e.(string); return !ok })
@@ -301,13 +340,64 @@ func summaryValue(v any) bool {
 	return false
 }
 
-// projectMetadata is the metadata a caller reads: whole with content
-// (settings:manage), otherwise only requestLogSummaryKeys of a summary shape.
-func projectMetadata(m map[string]any, content bool) map[string]any {
-	if !content {
-		maps.DeleteFunc(m, func(k string, v any) bool { return !requestLogSummaryKeys[k] || !summaryValue(v) })
-	}
+// keepSummary is the projection of every part of a detail for a reader
+// without content: default deny, only the fields keep lists (names folded
+// to lower case) with a summary value. m is changed in place.
+func keepSummary[V any](m map[string]V, keep fieldSet) map[string]V {
+	maps.DeleteFunc(m, func(k string, v V) bool { return !keep[strings.ToLower(k)] || !summaryValue(v) })
 	return m
+}
+
+// summaryEvents keeps the summary of each event that is an object.
+func summaryEvents(events []any) []any {
+	out := make([]any, 0, len(events))
+	for _, e := range events {
+		ev, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		detail, _ := ev["detail"].(map[string]any)
+		ev = keepSummary(ev, requestLogEventKeys)
+		if detail != nil {
+			ev["detail"] = keepSummary(detail, requestLogEventDetailKeys)
+		}
+		out = append(out, ev)
+	}
+	return out
+}
+
+// summaryUpstreamRequest keeps the facts of the upstream request, its URL as
+// the host, and its summary headers.
+func summaryUpstreamRequest(up map[string]any) map[string]any {
+	if up == nil {
+		return nil
+	}
+	headers, _ := up["headers"].(map[string]any)
+	if raw, ok := up["url"].(string); ok {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			up["host"] = u.Host
+		}
+	}
+	up = keepSummary(up, requestLogUpstreamKeys)
+	if headers != nil {
+		up["headers"] = keepSummary(headers, requestLogSummaryHeaders)
+	}
+	return up
+}
+
+// project makes the detail what the caller reads: whole with content
+// (settings:manage), otherwise every part through keepSummary; secret
+// headers are masked for both.
+func (d *requestLogDetail) project(content bool) {
+	if !content {
+		d.Metadata = keepSummary(d.Metadata, requestLogSummaryKeys)
+		d.Events = summaryEvents(d.Events)
+		d.UpstreamRequest = summaryUpstreamRequest(d.UpstreamRequest)
+		d.RequestHeaders = keepSummary(d.RequestHeaders, requestLogSummaryHeaders)
+		d.ResponseHeaders = keepSummary(d.ResponseHeaders, requestLogSummaryHeaders)
+	}
+	d.RequestHeaders, d.ResponseHeaders = maskHeaders(d.RequestHeaders), maskHeaders(d.ResponseHeaders)
+	d.UpstreamRequest = maskUpstreamRequest(d.UpstreamRequest)
 }
 
 // decodeRequestLogPage keeps the fields the list shows, each checked.
@@ -457,9 +547,7 @@ func (s *Service) requestLogDetail(c *gin.Context) {
 	if out.Events == nil {
 		out.Events = []any{}
 	}
-	out.Metadata = projectMetadata(out.Metadata, content)
-	out.RequestHeaders, out.ResponseHeaders = maskHeaders(out.RequestHeaders), maskHeaders(out.ResponseHeaders)
-	out.UpstreamRequest = maskUpstreamRequest(out.UpstreamRequest)
+	out.project(content)
 	httpapi.OK(c, out)
 }
 

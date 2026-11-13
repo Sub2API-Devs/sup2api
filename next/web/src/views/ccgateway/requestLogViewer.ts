@@ -135,7 +135,8 @@ export interface UpstreamFacts {
 /**
  * The upstream request of a detail, every field type-checked. The headers
  * come from `upstream_request`; betas, session and class fall back to them
- * when metadata does not carry the flat fields. Null when not captured.
+ * when metadata does not carry the flat fields. Without settings:manage the
+ * core sends only the URL's host. Null when not captured.
  */
 export function upstreamFacts(d: Pick<RequestLogDetail, 'metadata' | 'upstream_request'>): UpstreamFacts | null {
   const u = d.upstream_request
@@ -156,7 +157,7 @@ export function upstreamFacts(d: Pick<RequestLogDetail, 'metadata' | 'upstream_r
     : header('anthropic-beta').split(',').map(b => b.trim()).filter(Boolean)
   const sha = str(u.body_sha256).toLowerCase()
   return {
-    method: str(u.method), url: str(u.url), attempts: count(u.attempts), sentAt: str(u.sent_at),
+    method: str(u.method), url: str(u.url) || str(u.host), attempts: count(u.attempts), sentAt: str(u.sent_at),
     encoding: str(u.body_encoding), bodyBytes: count(u.body_bytes), bodySha256: SHA256_RE.test(sha) ? sha : '',
     inputSha256: SHA256_RE.test(str(m.body_sha256)) ? str(m.body_sha256) : '',
     changed: bool(m.body_changed),
