@@ -174,8 +174,6 @@ type Authorizer interface {
 	PermissionSet(ctx context.Context, userID int64) (PermissionSet, error)
 	// CanGrant validates the actor holds all permissions being granted (CONTRACTS §4.1, SEC-H2).
 	CanGrant(ctx context.Context, actorID int64, perms []string) error
-	// CanActOn validates the actor may act on a target with the given permissions (CONTRACTS §4.1, SEC-H2).
-	CanActOn(ctx context.Context, actorID int64, targetPerms []string) error
 }
 
 // AuthzVersioner is optionally implemented by an Authorizer: the newest
@@ -259,6 +257,11 @@ type PermissionCatalog interface {
 	// permissions does, and each is on its assignable list and, but for a
 	// superuser, not held by actorID.
 	CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roleKeys []string) error
+	// GrantPluginPermission grants the existing plugin permission key to
+	// roleKeys (super admin roles skipped), each grant audited as
+	// authz.sync.grant: the role grants an upgrade withheld until someone
+	// confirmed them. Callers check the rights (CanGrantToRoles).
+	GrantPluginPermission(ctx context.Context, tx pgx.Tx, key string, roleKeys []string) error
 	// SetPluginActive flips status active/disabled (enable/disable).
 	SetPluginActive(ctx context.Context, tx pgx.Tx, pluginKey string, active bool) error
 	// DeletePlugin removes the plugin's permissions and grants (uninstall).

@@ -58,7 +58,7 @@ func (a *API) uiPlugins(c *gin.Context) {
 			continue
 		}
 		vis := manifest.FilterUI(m.UI,
-			func(perm string) bool { return perm == "" || ps.Has(manifest.PermissionKey(p.Key, perm)) }, ps.Has)
+			func(perm string) bool { return ps.Has(manifest.PermissionKey(p.Key, perm)) }, ps.Has)
 		item := UIPlugin{Key: p.Key, Version: p.Version, Name: core.LocalizedText(m.Name), AssetBase: p.AssetBase,
 			Menus: vis.Menus, Pages: vis.Pages, Slots: vis.Slots, AccountActions: vis.AccountActions,
 			Trust: p.Trust, HostUICompat: m.HostUICompat}

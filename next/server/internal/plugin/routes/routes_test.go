@@ -81,7 +81,6 @@ func (authz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
 func (authz) Version() int64                                  { return 42 }
-func (authz) CanActOn(context.Context, int64, []string) error { return nil }
 
 func setup(t *testing.T, opts ...routes.Option) (*gin.Engine, *echo, *registry.Registry, *registry.Package) {
 	return setupManifest(t, registrytest.Manifest("demo", "1.0.0"), opts...)

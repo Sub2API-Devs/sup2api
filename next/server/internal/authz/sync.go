@@ -121,7 +121,7 @@ SELECT ins.role_id, a.key FROM ins JOIN roles a ON a.id = ins.assignable_role_id
 				if len(p.inherits) == 0 || !slices.Contains(inserted, p.key) {
 					continue
 				}
-				if err := s.grantInherited(ctx, tx, p.key, p.inherits); err != nil {
+				if err := s.grantInherited(ctx, tx, p.key, p.inherits, builtinsWithout(p.key)); err != nil {
 					return err
 				}
 			}
@@ -166,14 +166,16 @@ func builtinKeyConflict(ctx context.Context, q store.Querier, builtinKeys []stri
 
 // grantDefaults grants the built-in role roleKey its defaults through sql
 // ($1 the role key, $2 the defaults; returning what syncGrant reads). A role
-// created now (seed) gets all of them: it is seeded, not widened, so the
-// grants are not audited. An existing role gets only the defaults created
-// now, audited with via.
+// created now (seed) gets all of them, an existing role only the defaults
+// created now; every grant is audited with via (and role_created for a
+// seed), so a role the sync creates on an upgrade (supplier) shows what it
+// was given.
 func (s *Service) grantDefaults(ctx context.Context, tx pgx.Tx, roleKey string, seed bool, defaults []string, created func(string) bool, via, sql string) error {
-	var detail map[string]any
-	if !seed {
+	detail := map[string]any{"via": via}
+	if seed {
+		detail["role_created"] = true
+	} else {
 		defaults = slices.DeleteFunc(slices.Clone(defaults), func(k string) bool { return !created(k) })
-		detail = map[string]any{"via": via}
 	}
 	if len(defaults) == 0 {
 		return nil
@@ -182,23 +184,42 @@ func (s *Service) grantDefaults(ctx context.Context, tx pgx.Tx, roleKey string, 
 }
 
 // grantInherited grants newKey to every role holding a key of from: a
-// permission split from others keeps their holders' rights. Run only when
-// newKey is first created, it is idempotent; each grant is audited.
-func (s *Service) grantInherited(ctx context.Context, tx pgx.Tx, newKey string, from []string) error {
+// permission split from others keeps their holders' rights. The built-in
+// roles of skip are left out (builtinsWithout). Run only when newKey is
+// first created, it is idempotent; each grant is audited.
+func (s *Service) grantInherited(ctx context.Context, tx pgx.Tx, newKey string, from, skip []string) error {
 	return s.syncGrant(ctx, tx, map[string]any{"via": "inherit", "from": from}, `
 WITH ins AS (
     INSERT INTO role_permissions (role_id, permission_id)
     SELECT DISTINCT rp.role_id, np.id FROM role_permissions rp
     JOIN permissions op ON op.id = rp.permission_id AND op.key = ANY($1)
     JOIN permissions np ON np.key = $2
+    JOIN roles r ON r.id = rp.role_id
+    WHERE NOT (r.builtin AND COALESCE(r.key = ANY($3), false))
     ON CONFLICT DO NOTHING RETURNING role_id, permission_id)
-SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, from, newKey)
+SELECT ins.role_id, p.key FROM ins JOIN permissions p ON p.id = ins.permission_id`, from, newKey, skip)
+}
+
+// builtinsWithout lists the built-in roles whose defaults leave the core
+// permission key out. A built-in role's core permissions are its defaults:
+// what it held under an old key came from the old defaults, not from an
+// administrator, so a split does not carry it over (role:define stays off
+// the built-in operator, decision D3; 0102 takes back what an earlier sync
+// of this version gave).
+func builtinsWithout(key string) []string {
+	var out []string
+	for _, r := range builtinRoles {
+		if !r.superuser && !slices.Contains(r.defaultPermissions(), key) {
+			out = append(out, r.key)
+		}
+	}
+	return out
 }
 
 // syncGrant runs sql, an automatic grant returning the role id and the
 // granted key (a permission, or an assignable role) of each row it adds,
 // and audits each row as authz.sync.grant by the system with via plus the
-// key as detail. A nil via grants without auditing.
+// key as detail.
 func (s *Service) syncGrant(ctx context.Context, tx pgx.Tx, via map[string]any, sql string, args ...any) error {
 	type grant struct {
 		role int64
@@ -212,7 +233,7 @@ func (s *Service) syncGrant(ctx context.Context, tx pgx.Tx, via map[string]any, 
 		var g grant
 		return g, r.Scan(&g.role, &g.key)
 	})
-	if err != nil || via == nil {
+	if err != nil {
 		return err
 	}
 	for _, g := range grants {

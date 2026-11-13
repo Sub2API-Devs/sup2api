@@ -12,12 +12,13 @@ DO $$
 DECLARE
     holders text;
 BEGIN
-    SELECT string_agg(format('%s (%s)', u.id, u.email), ', ' ORDER BY u.id) INTO holders
+    -- Ids only: the message ends up in the start-up log, emails do not belong there.
+    SELECT string_agg(u.id::text, ', ' ORDER BY u.id) INTO holders
     FROM users u
     WHERE EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.superuser AND ur.user_id = u.id)
     HAVING count(*) > 1;
     IF holders IS NOT NULL THEN
-        RAISE EXCEPTION 'several super admins: %; keep one with "sub2api admin recover-superadmin --email <the one to keep>" (the others become admins), then start again', holders;
+        RAISE EXCEPTION 'several super admins: user ids %; keep one with "sub2api admin recover-superadmin --email <the email of the one to keep>" (the others become admins), then start again', holders;
     END IF;
 END $$;
 

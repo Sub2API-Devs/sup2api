@@ -280,9 +280,11 @@ func TestSyncPluginSplitsGrowthAndModeration(t *testing.T) {
 	sync("growth", []core.PermissionDef{{Key: "growth:read", GrantRoles: []string{RoleUser, RoleAdmin}}, {Key: "growth:manage", GrantRoles: []string{RoleAdmin}}})
 	sync("moderation", []core.PermissionDef{{Key: "moderation:read", GrantRoles: []string{RoleAdmin, "moderator"}}, {Key: "moderation:manage", GrantRoles: []string{RoleAdmin}}})
 
-	// Without the manifest defaults only inheritance hands the new keys out.
-	sync("growth", install.PermissionDefs(load("growth"), nil))
-	sync("moderation", install.PermissionDefs(load("moderation"), nil))
+	// Without the manifest defaults (a consent naming no role) only
+	// inheritance hands the new keys out.
+	none := map[string][]string{}
+	sync("growth", install.PermissionDefs(load("growth"), none))
+	sync("moderation", install.PermissionDefs(load("moderation"), none))
 	for key, want := range map[string][]string{
 		"plugin.growth:growth:use":            {RoleAdmin, RoleUser},
 		"plugin.growth:growth:stats:read":     {RoleAdmin},
@@ -294,5 +296,45 @@ func TestSyncPluginSplitsGrowthAndModeration(t *testing.T) {
 		if got := permissionHolders(t, db, key); !slices.Equal(got, want) {
 			t.Errorf("holders of %s: %v, want %v", key, got, want)
 		}
+	}
+}
+
+// GrantPluginPermission grants an existing plugin permission to the named
+// roles but super admin ones, each grant audited (via review) and the authz
+// version moved; a core permission is never granted this way.
+func TestGrantPluginPermission(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	const key = "plugin.guard:rules:export"
+	grant := func(key string, roles ...string) {
+		t.Helper()
+		if err := db.Tx(ctx, func(tx pgx.Tx) error {
+			if err := s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "rules:export"}}); err != nil {
+				return err
+			}
+			return s.GrantPluginPermission(ctx, tx, key, roles)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := s.Version()
+	grant(key, RoleUser, RoleSuperAdmin, RoleUser)
+	if got := permissionHolders(t, db, key); !slices.Equal(got, []string{RoleUser}) {
+		t.Fatalf("holders %v", got)
+	}
+	if n := syncGrantAudits(t, db, key, "review"); n != 1 {
+		t.Fatalf("%d audits", n)
+	}
+	if s.Version() <= before {
+		t.Fatal("authz version did not move")
+	}
+	grant("user:read", RoleUser)
+	if got := permissionHolders(t, db, "user:read"); slices.Contains(got, RoleUser) {
+		t.Fatalf("a core permission was granted: %v", got)
 	}
 }

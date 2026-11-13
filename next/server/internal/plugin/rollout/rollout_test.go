@@ -117,7 +117,8 @@ type recorder struct {
 	events   []string
 }
 
-func (r *recorder) CanGrantToRoles(context.Context, pgx.Tx, int64, []string) error { return nil }
+func (r *recorder) CanGrantToRoles(context.Context, pgx.Tx, int64, []string) error        { return nil }
+func (r *recorder) GrantPluginPermission(context.Context, pgx.Tx, string, []string) error { return nil }
 func (r *recorder) SyncPlugin(context.Context, pgx.Tx, string, []core.PermissionDef) error {
 	return nil
 }

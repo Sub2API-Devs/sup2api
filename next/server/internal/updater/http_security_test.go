@@ -19,7 +19,6 @@ func (a updateRouteAuth) PermissionSet(context.Context, int64) (core.PermissionS
 func (a updateRouteAuth) VerifyAccessToken(context.Context, string) (int64, error) { return 1, nil }
 func (a updateRouteAuth) Can(context.Context, int64, string) (bool, error)         { return a.allowed, nil }
 func (a updateRouteAuth) CanGrant(context.Context, int64, []string) error          { return nil }
-func (a updateRouteAuth) CanActOn(context.Context, int64, []string) error          { return nil }
 
 // Update source and release import need the permission only; password
 // confirmation was removed (CONTRACTS §3.3).

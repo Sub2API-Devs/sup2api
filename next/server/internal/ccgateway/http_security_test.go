@@ -20,7 +20,6 @@ func (a ccgRouteAuth) PermissionSet(context.Context, int64) (core.PermissionSet,
 func (a ccgRouteAuth) VerifyAccessToken(context.Context, string) (int64, error) { return 1, nil }
 func (a ccgRouteAuth) Can(context.Context, int64, string) (bool, error)         { return a.allowed, nil }
 func (a ccgRouteAuth) CanGrant(context.Context, int64, []string) error          { return nil }
-func (a ccgRouteAuth) CanActOn(context.Context, int64, []string) error          { return nil }
 
 func TestManagementRequiresAuthorizationWithoutConfirmation(t *testing.T) {
 	gin.SetMode(gin.TestMode)

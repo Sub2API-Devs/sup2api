@@ -822,9 +822,86 @@ func TestOperatorAssignableMigration(t *testing.T) {
 	require.Equal(t, "true:supplier,user", assignable("operator"))
 }
 
+// 0102 takes role:define, which 0097 split from role:manage, back from the
+// built-in operator role (decision D3), audited as the system with the
+// authz version moved; custom roles, the operator's other permissions and a
+// database without the grant are left alone.
+func TestOperatorReclaimRoleDefineMigration(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql)
+		require.NoError(t, err)
+	}
+	migrate := func() {
+		t.Helper()
+		exec(`DELETE FROM schema_migrations WHERE id='0102_operator_reclaim_role_define.sql'`)
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		require.Equal(t, []string{"0102_operator_reclaim_role_define.sql"}, done)
+	}
+	held := func(role string) (v string) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT COALESCE(string_agg(p.key, ',' ORDER BY p.key), '')
+			FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id WHERE r.key = $1`, role).Scan(&v))
+		return v
+	}
+	version := func() (v int64) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT version FROM authz_meta WHERE id = 1`).Scan(&v))
+		return v
+	}
+	audits := func() (n int, detail string) {
+		t.Helper()
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*), COALESCE((array_agg(a.detail::text ORDER BY a.id DESC))[1], '')
+			FROM audit_logs a JOIN roles r ON r.id::text = a.target_id AND r.key = 'operator'
+			WHERE a.action = 'authz.reclaim' AND a.target_type = 'role' AND a.user_id IS NULL`).Scan(&n, &detail))
+		return n, detail
+	}
+
+	// A new database: nothing to take back, nothing written.
+	v := version()
+	migrate()
+	require.Equal(t, v, version())
+
+	// Production after 0097: the built-in operator and admin and a custom
+	// role hold both halves of role:manage.
+	exec(`INSERT INTO roles (key, name, builtin, superuser) VALUES
+			('super_admin', '{}', true, true), ('admin', '{}', true, false), ('operator', '{}', true, false), ('helper', '{}', false, false);
+		INSERT INTO permissions (key, module, label, source, status) VALUES
+			('role:define', 'role', '{}', 'core', 'active'), ('role:assign', 'role', '{}', 'core', 'active'), ('user:read', 'user', '{}', 'core', 'active');
+		INSERT INTO role_permissions (role_id, permission_id)
+		SELECT r.id, p.id FROM roles r, permissions p WHERE r.key IN ('admin', 'operator', 'helper')`)
+	migrate()
+	require.Equal(t, "role:assign,user:read", held("operator"))
+	require.Equal(t, "role:assign,role:define,user:read", held("admin"))
+	require.Equal(t, "role:assign,role:define,user:read", held("helper"), "a custom role lost its grant")
+	require.Equal(t, v+1, version())
+	n, detail := audits()
+	require.Equal(t, 1, n)
+	require.JSONEq(t, `{"via":"migration 0102","role":"operator","key":"role:define"}`, detail)
+
+	// Nothing left to take back (only a forgotten migration row reruns it):
+	// nothing written.
+	migrate()
+	require.Equal(t, v+1, version())
+	n, _ = audits()
+	require.Equal(t, 1, n)
+
+	// A custom role that merely has the key is not the built-in operator.
+	exec(`UPDATE roles SET builtin = false WHERE key = 'operator';
+		INSERT INTO role_permissions (role_id, permission_id)
+		SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = 'operator' AND p.key = 'role:define'`)
+	migrate()
+	require.Equal(t, "role:assign,role:define,user:read", held("operator"))
+	require.Equal(t, v+1, version())
+}
+
 // 0098 keeps one super admin (decisions 1 and 2): a soft-deleted holder loses
 // the role, two undeleted holders (whatever their status) stop the
-// migration naming both, and afterwards a second superuser role or holder
+// migration naming both by id (never by email, the error goes to the
+// start-up log), and afterwards a second superuser role or holder
 // fails at commit while a transfer, deleting before it inserts, commits.
 func TestOneSuperAdminMigration(t *testing.T) {
 	db := testutil.DB(t)
@@ -862,8 +939,9 @@ func TestOneSuperAdminMigration(t *testing.T) {
 		` + grant + `'a@su';` + grant + `'disabled@su';` + grant + `'deleted@su'`)
 
 	_, err := migrate()
-	require.ErrorContains(t, err, fmt.Sprintf("several super admins: %d (a@su), %d (disabled@su);", id("a@su"), id("disabled@su")))
+	require.ErrorContains(t, err, fmt.Sprintf("several super admins: user ids %d, %d;", id("a@su"), id("disabled@su")))
 	require.ErrorContains(t, err, "sub2api admin recover-superadmin --email")
+	require.NotContains(t, err.Error(), "@su", "the start-up error names a user's email")
 
 	exec(`DELETE FROM user_roles WHERE user_id = (SELECT id FROM users WHERE email = 'disabled@su')`)
 	done, err := migrate()

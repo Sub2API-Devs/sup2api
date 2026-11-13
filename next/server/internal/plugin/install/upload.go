@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -246,13 +247,20 @@ func insertVersionRow(ctx context.Context, tx pgx.Tx, p *pkg.Package, ver *pkg.V
 }
 
 // carryOverConsent approves an upgrade that neither adds nor widens host
-// permissions (ARCHITECTURE §5.5): every grant is carried over automatically.
+// permissions (ARCHITECTURE §5.5): every grant is carried over automatically,
+// unless a permission the version creates goes to a role in a way that needs
+// consent (RoleGrantsNeedConsent, checked again in the consent transaction),
+// which leaves the version awaiting consent like a first install.
 func (s *Service) carryOverConsent(ctx context.Context, r *Review, key, version string, actorID int64) error {
 	if r.UpgradeFrom == "" || r.ConsentStatus != ConsentAwaiting || r.Diff == nil ||
-		len(r.Diff.Added) != 0 || len(r.Diff.Widened) != 0 {
+		len(r.Diff.Added) != 0 || len(r.Diff.Widened) != 0 || (r.RoleGrantsNeedConsent && !isSystem(ctx)) {
 		return nil
 	}
-	if _, err := s.Consent(ctx, key, version, ConsentRequest{}, actorID); err != nil {
+	_, err := s.consent(ctx, key, version, ConsentRequest{}, actorID, true)
+	switch {
+	case errors.Is(err, errRoleGrantsNeedConsent):
+		return nil
+	case err != nil:
 		return fmt.Errorf("carry over consent: %w", err)
 	}
 	r.ConsentStatus = ConsentApproved

@@ -37,7 +37,6 @@ func (a fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, er
 }
 
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type scopeView struct {
 	Granted []string `json:"granted"`

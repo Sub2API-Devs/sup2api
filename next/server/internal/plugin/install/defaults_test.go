@@ -66,8 +66,12 @@ func TestRoleGrantsPriority(t *testing.T) {
 	if !slices.Equal(defs[0].GrantRoles, []string{"user", "admin"}) || !slices.Equal(defs[0].InheritFrom, []string{"growth:read"}) {
 		t.Fatalf("def = %+v", defs[0])
 	}
-	if defs := PermissionDefs(m, nil); defs[0].GrantRoles != nil || len(defs[0].InheritFrom) != 1 {
+	// Activation (nil) grants nothing, inheritance included.
+	if defs := PermissionDefs(m, nil); defs[0].GrantRoles != nil || defs[0].InheritFrom != nil {
 		t.Fatalf("no grants: %+v", defs[0])
+	}
+	if defs := PermissionDefs(m, map[string][]string{}); defs[0].GrantRoles != nil || len(defs[0].InheritFrom) != 1 {
+		t.Fatalf("no roles: %+v", defs[0])
 	}
 }
 

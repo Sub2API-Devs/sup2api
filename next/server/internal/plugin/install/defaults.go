@@ -49,10 +49,17 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 // PermissionDefs converts manifest userPermissions into catalog entries,
 // sorted in manifest order (10, 20, ...). A permission created now goes to
 // the roles grants holds for its local key (none when absent) and to the
-// holders of its inheritFrom keys.
+// holders of its inheritFrom keys. A nil grants (activation: no consent is
+// behind a permission created then, one deleted since the consent) grants
+// nothing, inheritance included, so a role never gets a permission nobody
+// reviewed (P4C).
 func PermissionDefs(m *manifest.Manifest, grants map[string][]string) []core.PermissionDef {
 	defs := make([]core.PermissionDef, 0, len(m.UserPermissions))
 	for i, up := range m.UserPermissions {
+		inherit := up.InheritFrom
+		if grants == nil {
+			inherit = nil
+		}
 		defs = append(defs, core.PermissionDef{
 			Key:         manifest.PermissionKey(m.Key, up.Key),
 			Module:      manifest.PermissionModule(m.Key),
@@ -61,7 +68,7 @@ func PermissionDefs(m *manifest.Manifest, grants map[string][]string) []core.Per
 			Sensitive:   up.Sensitive,
 			Sort:        (i + 1) * 10,
 			GrantRoles:  grants[up.Key],
-			InheritFrom: up.InheritFrom,
+			InheritFrom: inherit,
 		})
 	}
 	return defs

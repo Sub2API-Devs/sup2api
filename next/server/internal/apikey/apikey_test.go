@@ -62,7 +62,6 @@ func (a *fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, e
 	return core.PermissionSet{}, nil
 }
 func (*fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (*fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 // fakeGen implements the parts of core.Generation used for key platforms.
 type fakeGen struct {

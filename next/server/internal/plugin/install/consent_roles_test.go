@@ -24,6 +24,9 @@ func TestConsentRoleGrantRights(t *testing.T) {
 		}
 	}
 	upload("0.1.0")
+	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO roles (key, name, builtin) VALUES ('admin', '{}', true), ('auditor', '{}', false), ('ops', '{}', false) ON CONFLICT (key) DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
 	explicit := ConsentRequest{Grants: explicitGuardGrants(), NewPermissionRoles: map[string][]string{"rules:read": {"auditor"}, "stats:read": {"auditor", "ops"}}}
 
 	_, err := e.svc.Consent(ctx, "guard", "0.1.0", explicit, e.admin)
@@ -62,6 +65,13 @@ SELECT 'plugin.guard:' || k, 'plugin.guard', '{"en":"x"}', 'plugin', 'guard', 'd
 		t.Fatal(err)
 	}
 	upload("0.1.1")
+	// An unknown role is invalid under the field that names it, also for a
+	// permission the catalog has (P4F4).
+	unknown := ConsentRequest{Grants: explicitGuardGrants(), NewPermissionRoles: map[string][]string{"rules:read": {"nope"}}, RoleKeysForNewPermissions: []string{"gone"}}
+	_, err = e.svc.Consent(ctx, "guard", "0.1.1", unknown, e.admin)
+	if fieldCode(err, "new_permission_roles.rules:read") != "unknown" || fieldCode(err, "role_keys_for_new_permissions") != "unknown" {
+		t.Fatalf("unknown roles: %v", err)
+	}
 	upgrade := ConsentRequest{Grants: explicitGuardGrants(), RoleKeysForNewPermissions: []string{"admin"}}
 	if _, err := e.svc.Consent(ctx, "guard", "0.1.1", upgrade, e.admin); err != nil || len(e.perms.checked) != 1 {
 		t.Fatalf("upgrade adding no permission: %v, checked %v", err, e.perms.checked)

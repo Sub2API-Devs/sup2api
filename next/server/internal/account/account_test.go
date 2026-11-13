@@ -383,7 +383,6 @@ func (fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, erro
 	return core.PermissionSet{}, nil
 }
 func (fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 // fakeConverters converts openai.chat requests to anthropic.messages, and
 // (unused, the platform is unavailable) openai.embeddings to ghost.embed.

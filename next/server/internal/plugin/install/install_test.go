@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry/registrytest"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -34,7 +35,6 @@ func (f *fakeAuthz) PermissionSet(_ context.Context, uid int64) (core.Permission
 	return core.PermissionSet{Keys: ks}, nil
 }
 func (f *fakeAuthz) CanGrant(context.Context, int64, []string) error { return nil }
-func (f *fakeAuthz) CanActOn(context.Context, int64, []string) error { return nil }
 
 type syncCall struct {
 	key   string
@@ -49,6 +49,8 @@ type fakePerms struct {
 	// checked records CanGrantToRoles calls; denyRoles fails them.
 	checked   [][]string
 	denyRoles error
+	// granted records GrantPluginPermission calls as "key=role,...".
+	granted []string
 }
 
 func (f *fakePerms) SyncPlugin(_ context.Context, _ pgx.Tx, key string, defs []core.PermissionDef) error {
@@ -71,6 +73,14 @@ func (f *fakePerms) CanGrantToRoles(_ context.Context, _ pgx.Tx, _ int64, roles 
 	defer f.mu.Unlock()
 	f.checked = append(f.checked, roles)
 	return f.denyRoles
+}
+func (f *fakePerms) GrantPluginPermission(_ context.Context, tx pgx.Tx, key string, roles []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.granted = append(f.granted, key+"="+strings.Join(roles, ","))
+	_, err := tx.Exec(context.Background(), `INSERT INTO role_permissions (role_id, permission_id)
+		SELECT r.id, p.id FROM roles r, permissions p WHERE r.key = ANY($1) AND p.key = $2 ON CONFLICT DO NOTHING`, roles, key)
+	return err
 }
 func (f *fakePerms) SetPluginActive(context.Context, pgx.Tx, string, bool) error { return nil }
 func (f *fakePerms) DeletePlugin(_ context.Context, _ pgx.Tx, key string) error {
@@ -149,6 +159,10 @@ func newEnv(t *testing.T) *env {
 	e := &env{db: db, perms: &fakePerms{}, schemas: &fakeSchemas{},
 		accounts: &fakeAccounts{}, root: pkgtest.NewKey("root-1")}
 	e.rollout = &fakeRollout{db: db}
+	// The built-in roles a consent may name (the authz sync is not run).
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name, builtin) VALUES ('admin', '{}', true), ('operator', '{}', true), ('supplier', '{}', true), ('user', '{}', true) ON CONFLICT (key) DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
 	for _, email := range []string{"admin@x", "ops@x"} {
 		var id int64
 		if err := db.Pool.QueryRow(ctx, `INSERT INTO users (email, password_hash) VALUES ($1, 'x') RETURNING id`, email).Scan(&id); err != nil {
