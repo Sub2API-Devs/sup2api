@@ -30,14 +30,22 @@ func (s *Service) querier() store.Querier {
 // may act on it. Tests without a database seed the cache and are answered
 // from it.
 func (s *Service) usersRoleSet(ctx context.Context, q store.Querier, userIDs []int64) (core.PermissionSet, error) {
+	set, _, err := s.usersRoles(ctx, q, userIDs)
+	return set, err
+}
+
+// usersRoles is usersRoleSet with the keys of those roles, sorted; tests
+// without a database have no role keys.
+func (s *Service) usersRoles(ctx context.Context, q store.Querier, userIDs []int64) (core.PermissionSet, []string, error) {
 	if s.db == nil {
-		return s.cachedUnion(userIDs), nil
+		return s.cachedUnion(userIDs), nil, nil
 	}
 	var keys []string
-	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(DISTINCT r.key), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ANY($1)`, userIDs).Scan(&keys); err != nil {
-		return core.PermissionSet{}, err
+	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(DISTINCT r.key ORDER BY r.key), '{}') FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ANY($1)`, userIDs).Scan(&keys); err != nil {
+		return core.PermissionSet{}, nil, err
 	}
-	return s.RolesPermissions(ctx, q, keys)
+	set, err := s.RolesPermissions(ctx, q, keys)
+	return set, keys, err
 }
 
 // cachedUnion is usersRoleSet for tests without a database.
@@ -121,6 +129,14 @@ func cannotActOn(ctx context.Context, target core.PermissionSet) *core.Error {
 	return core.ErrPermissionDenied.WithMessage(t(ctx, "you cannot modify a user with higher privileges", "你不能修改权限更高的用户"))
 }
 
+// cannotActOnPeer is the denial of an action on a target holding roleKey, a
+// role the actor cannot assign (peer protection, canActOnUsers).
+func cannotActOnPeer(ctx context.Context, roleKey string) *core.Error {
+	return core.ErrPermissionDenied.WithMessage(t(ctx,
+		"you cannot modify a user holding a role you cannot assign",
+		"你不能修改持有你无权分配的角色的用户")).WithDetails(map[string]any{"role": roleKey})
+}
+
 // cannotActOnRole is the denial of a change to a role granting more than the
 // actor holds (editableRole).
 func cannotActOnRole(ctx context.Context) *core.Error {
@@ -164,9 +180,13 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) err
 }
 
 // CanActOnUsers implements core.UserGuard: what the targets' roles grant
-// together must be within the actor's grantSet. Each target within the actor
-// is the same as their union within it, so one query serves any number of
-// targets. The target's side is what its ROLES grant, not what it can do
+// together must be within the actor's grantSet, and every role a target
+// holds, the default user role aside, must be one the actor may assign (peer
+// protection: with the default lists an admin leaves other admins alone and
+// an operator other operators; the user role is left out so that a role with
+// user:update and no assignable list still serves plain users). Each target
+// within the actor is the same as their union within it, so one query serves
+// any number of targets. The target's side is what its ROLES grant, not what it can do
 // right now: a disabled user can do nothing, and comparing against that
 // would let anyone with user:update re-enable a disabled admin or set its
 // password and take the account over (SEC-H2). The actor itself among the
@@ -189,9 +209,21 @@ func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID in
 		return nil
 	}
 	slices.Sort(ids)
-	target, err := s.usersRoleSet(ctx, q, slices.Compact(ids))
+	target, roles, err := s.usersRoles(ctx, q, slices.Compact(ids))
 	if err != nil {
 		return err
 	}
-	return s.covers(ctx, q, actorID, target, cannotActOn(ctx, target))
+	actor, err := s.grantSet(ctx, q, actorID)
+	if err != nil {
+		return err
+	}
+	if err := within(actor, target, cannotActOn(ctx, target)); err != nil {
+		return err
+	}
+	for _, key := range roles {
+		if key != RoleUser && !actor.CanAssign(key) {
+			return cannotActOnPeer(ctx, key)
+		}
+	}
+	return nil
 }

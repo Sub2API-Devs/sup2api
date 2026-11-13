@@ -526,14 +526,8 @@ func (s *Service) checkAssignment(ctx context.Context, q store.Querier, actorID,
 			return err
 		}
 	}
-	if actorID != userID {
-		target, err := s.usersRoleSet(ctx, q, []int64{userID})
-		if err != nil {
-			return err
-		}
-		if err := within(actor, target, cannotActOn(ctx, target)); err != nil {
-			return err
-		}
+	if err := s.canActOnUsers(ctx, q, actorID, userID); err != nil {
+		return err
 	}
 	grant, err := s.RolesPermissions(ctx, q, roleKeysOf(added))
 	if err != nil {

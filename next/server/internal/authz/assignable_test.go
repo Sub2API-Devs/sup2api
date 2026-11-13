@@ -139,6 +139,76 @@ SELECT r.id, a.id FROM roles r JOIN roles a ON (r.key, a.key) IN (('admin_maker'
 	}
 }
 
+// Peer protection: every role a target holds, the default user role aside,
+// must be one the actor may assign. With the default lists an admin leaves
+// other admins alone and an operator other operators; a role with no
+// assignable list still acts on plain users.
+func TestCanActOnUsersPeerProtection(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	for _, key := range []string{"support", "viewer"} {
+		if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt(key, key), PermissionKeys: []string{"user:read", "user:update"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	admin := addUser(t, s, "admin@x.com", RoleUser, RoleAdmin)
+	admin2 := addUser(t, s, "admin2@x.com", RoleUser, RoleAdmin)
+	operator := addUser(t, s, "op@x.com", RoleOperator)
+	operator2 := addUser(t, s, "op2@x.com", RoleUser, RoleOperator)
+	support := addUser(t, s, "support@x.com", RoleUser, "support")
+	viewer := addUser(t, s, "viewer@x.com", "viewer")
+	plain := addUser(t, s, "plain@x.com", RoleUser)
+	roleless := addUser(t, s, "none@x.com")
+
+	tests := []struct {
+		name    string
+		actor   int64
+		targets []int64
+		role    string // "" = allowed, else details.role of the denial
+	}{
+		{"admin on another admin", admin, []int64{admin2}, RoleAdmin},
+		{"admin on an operator, a custom role holder and users", admin, []int64{operator, support, plain, roleless}, ""},
+		{"one peer rejects the batch", admin, []int64{plain, admin2}, RoleAdmin},
+		{"operator on another operator", operator, []int64{operator2}, RoleOperator},
+		{"operator on a custom role holder", operator, []int64{viewer}, "viewer"},
+		{"operator on users", operator, []int64{plain, roleless}, ""},
+		{"no assignable list: users only", support, []int64{plain, roleless}, ""},
+		{"no assignable list: not a holder of the same role", support, []int64{viewer}, "viewer"},
+		{"itself", admin, []int64{admin}, ""},
+		{"super admin", root, []int64{admin, admin2, operator, viewer}, ""},
+		{"system", 0, []int64{admin, operator}, ""},
+	}
+	for _, tt := range tests {
+		err := s.CanActOnUsers(ctx, tt.actor, tt.targets...)
+		switch {
+		case tt.role == "" && err != nil:
+			t.Errorf("%s: %v", tt.name, err)
+		case tt.role != "" && (!isCode(err, "permission_denied") || detail(err, "role") != tt.role):
+			t.Errorf("%s: %v, want a denial naming %s", tt.name, err, tt.role)
+		}
+	}
+
+	// Role assignment judges the target the same way: the admin may assign
+	// operator, but not to another admin.
+	if err := setRoles(s, admin, admin2, RoleUser, RoleAdmin, RoleOperator); !isCode(err, "permission_denied") || detail(err, "role") != RoleAdmin {
+		t.Fatalf("admin assigns operator to another admin: %v", err)
+	}
+	if err := setRoles(s, admin, plain, RoleUser, RoleOperator); err != nil {
+		t.Fatalf("admin assigns operator to a user: %v", err)
+	}
+	// An access key assigns nothing, so it only reaches users.
+	keyed := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: admin, Permissions: []string{"user:read", "user:update"}})
+	if err := s.CanActOnUsers(keyed, admin, viewer); !isCode(err, "permission_denied") || detail(err, "role") != "viewer" {
+		t.Fatalf("admin's access key on a custom role holder: %v", err)
+	}
+	if err := s.CanActOnUsers(keyed, admin, roleless); err != nil {
+		t.Fatalf("admin's access key on a user: %v", err)
+	}
+}
+
 // detail is the details[key] of a core error.
 func detail(err error, key string) any {
 	if e := core.AsError(err); e != nil {
