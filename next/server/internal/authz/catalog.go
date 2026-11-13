@@ -32,9 +32,10 @@ type corePerm struct {
 	// bearing on access keys.
 	sensitive bool
 	// superOnly: the permission is in no built-in role's defaults, whatever
-	// the role's grants say (builtinRole.accepts), so it is never granted
-	// automatically; only the super admin, who alone holds it, grants it
-	// explicitly to a role (decision D2).
+	// the role's grants say (builtinRole.accepts), and it inherits only from
+	// superOnly ones (TestCatalogFlagInvariants), so no role gets it
+	// automatically. By default only the super admin holds it; a grant needs
+	// a holder, so delegating it starts with the super admin (decision D2).
 	superOnly bool
 	// sessionOnly keeps the permission out of access keys (KeyAllowed):
 	// identity takeover, host-level control, code execution, trust roots and

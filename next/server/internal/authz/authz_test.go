@@ -211,7 +211,7 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	}
 	// The admin holds every core permission but the five reserved for the
 	// super admin (decision D2).
-	superOnly := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
+	superOnly := superOnlyKeys()
 	if got := byKey[RoleAdmin].PermissionKeys; len(got) != n-len(superOnly) || slices.ContainsFunc(superOnly, func(k string) bool { return slices.Contains(got, k) }) {
 		t.Fatalf("admin perms = %d of %d: %v", len(got), n, got)
 	}

@@ -1292,7 +1292,7 @@ cgroup 可以给每个插件单独设置硬性上限，超出直接被限制，�
 ```mermaid
 flowchart TD
   root["官方根公钥（编译进核心二进制）"] --> official["official：官方发布者"]
-  admin["管理员（publisher:manage 🔴）"] --> verified["verified：管理员确认过的发布者"]
+  admin["持有 publisher:manage 🔴 的人（默认只有超级管理员）"] --> verified["verified：管理员确认过的发布者"]
   admin --> community["community：已登记但未验证的发布者"]
   unsigned["未签名"] -.->|"仅 plugins.allow_unsigned=true 时"| devonly["仅开发环境"]
 ```
@@ -1399,7 +1399,7 @@ flowchart TD
 | 角色 | 说明 |
 |---|---|
 | `super_admin` | superuser，至少保留一个用户，不能删除 |
-| `admin` | 默认拥有除超管专属权限以外的全部核心权限，可修改（内置角色只有超级管理员能改） |
+| `admin` | 默认拥有除超管专属权限（CONTRACTS §4 标 👑 的 5 项）以外的全部核心权限，可修改（内置角色只有超级管理员能改） |
 | `user` | 管理自己的 API Key、查看自己的用量和余额流水、调用网关 |
 
 | 模块 | 权限 |

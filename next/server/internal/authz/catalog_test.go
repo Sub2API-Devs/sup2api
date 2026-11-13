@@ -20,8 +20,23 @@ func TestKeyAllowed(t *testing.T) {
 	}
 }
 
+// superOnlyKeys are the catalog's super-only permissions, sorted.
+func superOnlyKeys() []string {
+	var keys []string
+	for _, m := range coreModules {
+		for _, p := range m.perms {
+			if p.superOnly {
+				keys = append(keys, p.key)
+			}
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
 // Catalog invariants: a session-only permission is one worth flagging, and a
-// super-only one reaches no built-in role by default.
+// super-only one reaches no built-in role by default nor by inheriting from
+// a permission that is not super-only itself.
 func TestCatalogFlagInvariants(t *testing.T) {
 	t.Parallel()
 	for _, m := range coreModules {
@@ -36,8 +51,13 @@ func TestCatalogFlagInvariants(t *testing.T) {
 				continue
 			}
 			for _, r := range builtinRoles {
-				if r.accepts(p) || slices.Contains(r.defaultPermissions(), p.key) {
+				if slices.Contains(r.defaultPermissions(), p.key) {
 					t.Errorf("%s is superOnly but in the defaults of %s", p.key, r.key)
+				}
+			}
+			for _, from := range p.inherits {
+				if !slices.Contains(superOnlyKeys(), from) {
+					t.Errorf("%s is superOnly but inherits from %s, which is not", p.key, from)
 				}
 			}
 		}
@@ -49,14 +69,11 @@ func TestCatalogFlagInvariants(t *testing.T) {
 // sessionOnly is the decided list kept out of access keys (CONTRACTS §80).
 func TestCatalogFlaggedSets(t *testing.T) {
 	t.Parallel()
-	var sensitive, session, super []string
+	var sensitive, session []string
 	for _, m := range coreModules {
 		for _, p := range m.perms {
 			if p.sensitive {
 				sensitive = append(sensitive, p.key)
-			}
-			if p.superOnly {
-				super = append(super, p.key)
 			}
 			if p.sessionOnly {
 				session = append(session, p.key)
@@ -84,8 +101,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 	wantSuper := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
 	slices.Sort(sensitive)
 	slices.Sort(session)
-	slices.Sort(super)
-	if !slices.Equal(super, wantSuper) {
+	if super := superOnlyKeys(); !slices.Equal(super, wantSuper) {
 		t.Errorf("superOnly = %v, want %v", super, wantSuper)
 	}
 	if !slices.Equal(sensitive, wantSensitive) {

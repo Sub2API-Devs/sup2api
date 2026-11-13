@@ -426,11 +426,12 @@
 
 ## T53 J2、M9、决策 D2、D14：超管专属权限（superOnly），admin 默认不含（产品性收紧）
 
-- 改动：目录把 `plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover` 标为 superOnly。`builtinRole.accepts`（默认集合的唯一判断，`defaultPermissions` 与新增权限的自动授予都经它）先排除 superOnly，再看角色的 `grants`，所以从构造上任何内置角色的默认集合都不含它们，不需要每个角色的 `grants` 各自排除（与任务说明里“admin grants = !p.superOnly”等价，放在一处）。超管是 superuser，照旧拥有；超管可以把它们显式授给任何角色（含内置角色），其他人因自己不持有而授不出（`covers`）。本提交不回收存量（`SyncCore` 只加不减），存量回收在 T54 的迁移 0099。CONTRACTS §4 同步（👑）。无迁移。
+- 改动：目录把 `plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover` 标为 superOnly。`builtinRole.accepts`（默认集合的唯一判断，`defaultPermissions` 与新增权限的自动授予都经它）先排除 superOnly，再看角色的 `grants`，所以从构造上任何内置角色的默认集合都不含它们，不需要每个角色的 `grants` 各自排除（与任务说明里“admin grants = !p.superOnly”等价，放在一处）；拆分继承（`inherits`）不经 `accepts`，由测试约束 superOnly 权限只能继承自 superOnly 权限。超管是 superuser，照旧拥有，可以把它们显式授给任何角色（含内置角色）；授予检查只要求操作者自己持有（`covers`），默认没有别人持有，所以委派总是从超管开始。本提交不回收存量（`SyncCore` 只加不减），存量回收在 T54 的迁移 0099。CONTRACTS §4 同步（👑）。无迁移。
 - 影响对象：
-  - 新库：admin 没有这 5 个权限；operator 原默认集合里的 `system:update:execute`、`system:update:recover` 也不再默认授予。所以新库的 admin 不能审批需要 critical 级宿主权限的插件（如 `ui.native`、无角色隔离的 `db.schema`；consent 403，缺 `plugin:grant:critical`），不能管理发布者与公钥，admin、operator 不能执行、暂停、恢复核心升级；这些由超管做，或由超管把权限显式授给某个角色。
+  - 新库：admin 没有这 5 个权限；operator 原默认集合里的 `system:update:execute`、`system:update:recover` 也不再默认授予。所以新库的 admin 不能审批需要 critical 级宿主权限的插件（如 `ui.native`、无角色隔离的 `db.schema`；consent 403，缺 `plugin:grant:critical`），不能管理发布者与公钥，admin、operator 不能执行核心升级、导入发行包（POST `/system/upgrades`、`/system/releases/import`，`system:update:execute`），不能暂停、恢复、取消、回滚升级计划，也不能启用、停用集群节点（POST `/system/upgrades/:id/*`、`/system/nodes/:id/enable|disable`，`system:update:recover`；停用节点是运维日常动作，operator 默认不再能做）；这些由超管做，或由超管把权限显式授给某个角色。
   - 存量库：升级本身不改任何角色的权限（T54 之前 admin、operator 照旧持有）；但超管对内置角色点“恢复默认”（POST `/roles/:id/reset`）后，该角色失去这 5 个权限。
-  - 委派（D14）：`role:define` 不是 superOnly。admin 仍可新建与自己同权（不含这 5 个）的自定义角色并分配，全程有 `role.create`、`role.permissions`、`user.roles` 审计；持有 superOnly 权限的角色只有超管能建、能改、能分配给人（非超管缺该权限，授予与作用对象检查都 403）。
+  - 委派（D14）：`role:define` 不是 superOnly。admin 仍可新建与自己同权（不含这 5 个）的自定义角色并分配，全程有 `role.create`、`role.permissions`、`user.roles` 审计；持有 superOnly 权限的角色默认只有超管能建、能改、能分配给人（非超管缺该权限，授予与作用对象检查都 403）；超管把 superOnly 权限连同 `role:define`、`role:assign` 授给某个角色后，其持有者也能继续授出该权限。
+  - 存量库里内置角色的名称与描述不随升级改写（`SyncCore` 只在新建时写入）：admin 的描述仍是“默认拥有全部核心权限”，T54 回收后与实际不符，超管点“恢复默认”或手工改描述后更新。控制台的 mock 数据（`web/mock`）未同步这些默认值。
   - 超管把 superOnly 权限授给某个角色后，其持有者比默认 admin 权限大：默认 admin 不能再修改这些用户或该角色（`details.missing`）。
 - 回滚：revert 这个提交即可，无迁移。回滚后的 `SyncCore` 不会把这 5 个权限补回给期间被重置过或新建库的 admin、operator（它们不是新建的权限），需要超管重新勾选或再点一次“恢复默认”。
 
@@ -439,7 +440,7 @@
 - 改动：迁移 `0099_reclaim_super_only.sql`：删除内置（`builtin`）`admin`、`operator` 角色上 `plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover` 的 `role_permissions` 行；每删一行写一条审计（`user_id` 为空即系统，action `authz.reclaim.super_only`，target `role`/角色 id，`detail {role, key}`）；有回收时 `authz_meta.version + 1`，滚动升级中仍在运行的节点在 30 秒内丢掉缓存的权限集。一条语句（数据修改 CTE）完成，`SET LOCAL lock_timeout = '10s'`，只涉及几行。自定义角色、其他内置角色、其他权限不动；没有可回收的行时不写任何东西。CONTRACTS §4 同步。
 - 影响对象：
   - 存量库的内置 admin 失去这 5 个权限、operator 失去 `system:update:execute`、`system:update:recover`（它原默认集合里只有这两个）：其持有者不能再审批需要 critical 级宿主权限的插件（`ui.native`、无角色隔离的 `db.schema`）、管理发布者与公钥、执行或暂停、恢复、取消核心升级，相应接口由成功变为 403。这些操作改由超管做；确需委派时，超管在角色页把权限显式授给某个角色（内置或自定义均可，T51、T53），迁移不会再次回收。
-  - 生产库（只读核查）：admin 持有全部 5 个、operator 持有 2 个，迁移后各写 5 条与 2 条审计；operator 目前 0 个持有者。
+  - 按旧默认集合，存量 admin 持有全部 5 个、operator 持有 2 个（未被手工改过时），迁移后各写 5 条与 2 条审计；生产 operator 目前 0 个持有者。
   - 升级依赖：只靠 admin 账号（非超管）执行核心升级或安装带 `ui.native` 插件的部署，升级后要改用超管账号，或先让超管把权限授给一个自定义角色。
   - 滚动升级：迁移在第一个新节点启动时执行；旧节点重启不会把这些权限补回（对旧代码它们不是新建的权限）。但旧节点上对 admin、operator 点“恢复默认”会按旧默认集合把它们加回，混跑期间不要在旧节点上重置内置角色。
 - 回滚：revert 这个提交并 `DELETE FROM schema_migrations WHERE id = '0099_reclaim_super_only.sql';`（不删也可，旧代码不看）。被回收的授权不会自动恢复：由超管在角色页对 admin、operator 点“恢复默认”（旧代码的默认集合含这些权限），或按审计行手工补回：`INSERT INTO role_permissions (role_id, permission_id) SELECT a.target_id::bigint, p.id FROM audit_logs a JOIN permissions p ON p.key = a.detail->>'key' WHERE a.action = 'authz.reclaim.super_only' ON CONFLICT DO NOTHING; UPDATE authz_meta SET version = version + 1 WHERE id = 1;`。

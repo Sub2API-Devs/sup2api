@@ -141,8 +141,8 @@ func TestBuiltinRolesSuperAdminOnly(t *testing.T) {
 
 // Decision D2: the super-only permissions are in no built-in role's defaults,
 // on a new database or after a reset; a sync neither grants them nor takes
-// away what a role already holds; and only the super admin, who alone holds
-// them, hands them to a role.
+// away what a role already holds; and the super admin, who alone holds them
+// by default, is the one to hand them to a role.
 func TestSuperOnlyPermissions(t *testing.T) {
 	t.Parallel()
 	db := testutil.DB(t)
@@ -150,7 +150,7 @@ func TestSuperOnlyPermissions(t *testing.T) {
 	ctx := context.Background()
 	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
 	admin := addUser(t, s, "admin@x.com", RoleAdmin)
-	superOnly := []string{"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "publisher:manage", "system:update:execute", "system:update:recover"}
+	superOnly := superOnlyKeys()
 	holds := func(roleKey string) []string {
 		t.Helper()
 		var held []string
