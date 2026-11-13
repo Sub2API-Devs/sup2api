@@ -314,6 +314,9 @@ export async function fetchAccountGroups(id: number): Promise<number[] | null> {
 
 /** Groups of the console (needs group:read); [] when not readable. */
 export async function fetchGroups(): Promise<Group[]> {
+  // Not asked without group:read: a refused call is a console 403, which
+  // also makes the console reload the caller's permissions.
+  if (!useModHost().permissions.has('group:read')) return []
   // listAll never returns a partial list, which would show the missing
   // groups as unbound: none at all instead.
   return listAll<Group>(useModHost().api, '/groups').catch(() => [])
