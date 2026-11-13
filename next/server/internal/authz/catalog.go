@@ -12,7 +12,10 @@ const (
 	RoleSuperAdmin = "super_admin"
 	RoleAdmin      = "admin"
 	RoleOperator   = "operator"
-	RoleUser       = "user"
+	// RoleSupplier is an add-on role: a supplier holds it next to RoleUser
+	// and brings its own accounts and proxies (CONTRACTS §21).
+	RoleSupplier = "supplier"
+	RoleUser     = "user"
 )
 
 type coreModule struct {
@@ -159,9 +162,18 @@ var coreModules = []coreModule{
 // userRolePermissions are granted to the built-in "user" role.
 var userRolePermissions = []string{"apikey:self:manage", "balance:self:read", "usage:self:read", "gateway:use"}
 
+// supplierPermissions are granted to the built-in "supplier" role: its own
+// accounts and proxies and nothing else. account:group:bind is left out for
+// now (decision D27), so a supplier binds no groups.
+var supplierPermissions = []string{
+	"account:own:read", "account:own:create", "account:own:update", "account:own:delete", "account:own:test", "account:own:credential:view",
+	"proxy:own:read", "proxy:own:manage",
+}
+
 // operatorExcludedModules are the core modules the built-in "operator" role
 // does not get: settings (sticky sessions live on the settings page) and the
-// plugin pages (plugins, market, publishers).
+// plugin pages (plugins, market, publishers). Every key of a module starts
+// with "<module>:".
 var operatorExcludedModules = []string{"settings", "sticky", "plugin", "publisher"}
 
 type builtinRole struct {
@@ -172,7 +184,7 @@ type builtinRole struct {
 	// grants reports whether a core permission is in the role's defaults;
 	// nil means none. New core permissions are granted to the role when
 	// grants accepts them, and a reset restores exactly this set.
-	grants func(module, key string) bool
+	grants func(p corePerm) bool
 	// assignable lists the built-in roles its holders may assign by
 	// default, and assignCustom adds every custom role (decision 5). A
 	// role created later is added to the lists naming it.
@@ -180,23 +192,33 @@ type builtinRole struct {
 	assignCustom bool
 }
 
+// oneOf is the grants of a role whose defaults are exactly keys.
+func oneOf(keys []string) func(corePerm) bool {
+	return func(p corePerm) bool { return slices.Contains(keys, p.key) }
+}
+
 var builtinRoles = []builtinRole{
-	{RoleSuperAdmin, lt("Super admin", "超级管理员"), lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), true, nil, nil, false},
-	{RoleAdmin, lt("Admin", "管理员"), lt("All core permissions by default", "默认拥有全部核心权限"), false,
-		func(string, string) bool { return true }, []string{RoleOperator, RoleUser}, true},
-	{RoleOperator, lt("Operator", "运维"), lt("Core permissions except settings and plugins", "默认拥有除系统设置、插件和插件市场以外的核心权限"), false,
-		func(module, _ string) bool { return !slices.Contains(operatorExcludedModules, module) }, []string{RoleUser}, false},
-	{RoleUser, lt("User", "普通用户"), lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"), false,
-		func(_, key string) bool { return slices.Contains(userRolePermissions, key) }, nil, false},
+	{key: RoleSuperAdmin, name: lt("Super admin", "超级管理员"), description: lt("Has every permission, including future ones", "拥有全部权限（包括以后新增的）"), superuser: true},
+	{key: RoleAdmin, name: lt("Admin", "管理员"), description: lt("All core permissions by default", "默认拥有全部核心权限"),
+		grants:     func(corePerm) bool { return true },
+		assignable: []string{RoleOperator, RoleSupplier, RoleUser}, assignCustom: true},
+	{key: RoleOperator, name: lt("Operator", "运维"), description: lt("Core permissions except settings and plugins", "默认拥有除系统设置、插件和插件市场以外的核心权限"),
+		grants: func(p corePerm) bool {
+			return !slices.ContainsFunc(operatorExcludedModules, func(m string) bool { return strings.HasPrefix(p.key, m+":") })
+		},
+		assignable: []string{RoleSupplier, RoleUser}},
+	{key: RoleSupplier, name: lt("Supplier", "供应商"), description: lt("Add-on role: own accounts and proxies", "附加角色：管理自己创建的账号和代理"),
+		grants: oneOf(supplierPermissions)},
+	{key: RoleUser, name: lt("User", "普通用户"), description: lt("Own API keys, usage and balance; gateway access", "管理自己的 API Key、查看自己的用量和余额、调用网关"),
+		grants: oneOf(userRolePermissions)},
 }
 
 // reservedRoleKey reports whether key belongs to a built-in role, so that no
-// custom role may take it: every built-in role, and supplier, a built-in
-// role still to come. A custom role holding one stops SyncCore
+// custom role may take it. A custom role holding one stops SyncCore
 // (builtinKeyConflict).
 func reservedRoleKey(key string) bool {
 	_, ok := builtinRoleByKey(key)
-	return ok || key == "supplier"
+	return ok
 }
 
 func builtinRoleByKey(key string) (builtinRole, bool) {
@@ -216,7 +238,7 @@ func (r builtinRole) defaultPermissions() []string {
 	}
 	for _, m := range coreModules {
 		for _, p := range m.perms {
-			if r.grants(m.key, p.key) {
+			if r.grants(p) {
 				out = append(out, p.key)
 			}
 		}

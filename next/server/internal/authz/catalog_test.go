@@ -36,7 +36,7 @@ func TestCatalogFlagInvariants(t *testing.T) {
 				continue
 			}
 			for _, r := range builtinRoles {
-				if r.grants != nil && r.grants(m.key, p.key) {
+				if r.grants != nil && r.grants(p) {
 					t.Errorf("%s is superOnly but in the defaults of %s", p.key, r.key)
 				}
 			}
@@ -110,9 +110,8 @@ func TestSyncCoreInheritsAndAuditsGrants(t *testing.T) {
 	defer func() { coreModules = saved }()
 	coreModules = slices.Clone(coreModules)
 	i := coreModuleOrder["role"]
-	coreModules[i].perms = append(slices.Clone(coreModules[i].perms), corePerm{
-		key: "role:probe", en: "Probe", zh: "探针", sensitive: true, sessionOnly: true, inherits: []string{"legacy:split"},
-	})
+	probe := corePerm{key: "role:probe", en: "Probe", zh: "探针", sensitive: true, sessionOnly: true, inherits: []string{"legacy:split"}}
+	coreModules[i].perms = append(slices.Clone(coreModules[i].perms), probe)
 
 	type grant struct {
 		role int64
@@ -143,7 +142,7 @@ WHERE action = 'authz.sync.grant' AND target_type = 'role' AND user_id IS NULL A
 
 	want := map[grant]int{{custom, "inherit"}: 1}
 	for _, r := range builtinRoles {
-		if r.grants != nil && r.grants("role", "role:probe") {
+		if r.grants != nil && r.grants(probe) {
 			want[grant{roleID(t, s, r.key), "default"}] = 1
 		}
 	}
@@ -227,36 +226,30 @@ func TestSyncCoreSplitsRoleManage(t *testing.T) {
 	mustCan(t, s, uid, "role:manage", false)
 }
 
-// Not parallel: it extends the package's built-in roles while it runs. A
-// custom role holding a built-in role key stops the sync (decision D5): it
+// A custom role holding a built-in role key stops the sync (decision D5): it
 // is neither turned into the built-in role nor skipped, and the error names
 // the row and how to rename it. Once renamed, the sync creates the built-in
-// role.
+// role. The first sync runs before the service starts here, as on an upgrade
+// that brings the supplier role to a database with a custom one of that key.
 func TestSyncCoreRefusesCustomRoleOnBuiltinKey(t *testing.T) {
+	t.Parallel()
 	db := testutil.DB(t)
-	s := newService(t, db, newMemBus(), nil)
 	ctx := context.Background()
-	const key = "supplier"
-	if _, ok := builtinRoleByKey(key); !ok {
-		saved := builtinRoles
-		defer func() { builtinRoles = saved }()
-		builtinRoles = append(slices.Clone(builtinRoles), builtinRole{key: key, name: lt("Supplier", "供应商")})
-		if _, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name) VALUES ($1, '{"en":"x"}')`, key); err != nil {
-			t.Fatal(err)
-		}
-	} else if _, err := db.Pool.Exec(ctx, `UPDATE roles SET builtin = false WHERE key = $1`, key); err != nil {
+	const key = RoleSupplier
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name) VALUES ($1, '{"en":"x"}')`, key); err != nil {
 		t.Fatal(err)
 	}
+	s := New(Deps{DB: db})
 	id := roleID(t, s, key)
 	v1, err := s.currentVersion(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = s.SyncCore(ctx)
+	err = s.Start(ctx)
 	fix := fmt.Sprintf("UPDATE roles SET key = 'supplier_custom' WHERE id = %d;", id)
 	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("role id %d key %q", id, key)) || !strings.Contains(err.Error(), fix) {
-		t.Fatalf("sync with a custom role on a built-in key: %v", err)
+		t.Fatalf("start with a custom role on a built-in key: %v", err)
 	}
 	var builtin bool
 	if err := db.Pool.QueryRow(ctx, `SELECT builtin FROM roles WHERE id = $1`, id).Scan(&builtin); err != nil || builtin {

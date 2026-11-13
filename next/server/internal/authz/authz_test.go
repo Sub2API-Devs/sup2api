@@ -215,6 +215,22 @@ func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
 	if len(byKey[RoleUser].PermissionKeys) != len(userRolePermissions) {
 		t.Fatalf("user perms = %v", byKey[RoleUser].PermissionKeys)
 	}
+	// The supplier role: its own accounts and proxies, nothing of plugins,
+	// no group binding (decision 7), and nothing to assign.
+	sup := byKey[RoleSupplier]
+	wantSup := []string{
+		"account:own:create", "account:own:credential:view", "account:own:delete", "account:own:read", "account:own:test", "account:own:update",
+		"proxy:own:manage", "proxy:own:read",
+	}
+	if sup == nil || !sup.Builtin || sup.Superuser || !slices.Equal(slices.Sorted(slices.Values(sup.PermissionKeys)), wantSup) ||
+		len(sup.AssignableRoleKeys) != 0 || sup.AssignCustom {
+		t.Fatalf("supplier: %+v", sup)
+	}
+	for role, want := range map[string][]string{RoleAdmin: {RoleOperator, RoleSupplier, RoleUser}, RoleOperator: {RoleSupplier, RoleUser}} {
+		if got := byKey[role].AssignableRoleKeys; !slices.Equal(got, want) {
+			t.Fatalf("%s assigns %v, want %v", role, got, want)
+		}
+	}
 	op := byKey[RoleOperator]
 	if op == nil || !op.Builtin || op.Superuser || len(op.PermissionKeys) == 0 || len(op.PermissionKeys) >= n {
 		t.Fatalf("operator: %+v", op)
@@ -489,11 +505,7 @@ func TestRoleManagement(t *testing.T) {
 		t.Fatalf("bad key: %v", err)
 	}
 	// Built-in role keys are reserved, supplier included.
-	reserved := []string{"supplier"}
-	for _, b := range builtinRoles {
-		reserved = append(reserved, b.key)
-	}
-	for _, key := range reserved {
+	for _, key := range []string{RoleSuperAdmin, RoleAdmin, RoleOperator, RoleSupplier, RoleUser} {
 		_, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt("x", "x")})
 		if !isCode(err, "invalid_argument") || fieldCode(err, "key") != "reserved" {
 			t.Fatalf("create role %q: %v", key, err)

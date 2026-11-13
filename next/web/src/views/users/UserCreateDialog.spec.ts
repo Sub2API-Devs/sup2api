@@ -3,6 +3,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
 import { i18n } from '@/i18n'
 import type { Segment } from '@/api/pricing'
+import type { Role } from '@/api/types'
 import UserCreateDialog from './UserCreateDialog.vue'
 
 const mocks = vi.hoisted(() => ({ post: vi.fn(), denied: new Set<string>() }))
@@ -12,8 +13,8 @@ const segments = ref([{ id: 1, name: 'Default', is_default: true, discount: '1' 
 vi.mock('@/components/pricing/segmentLookup', () => ({ useSegmentsLookup: () => ({ segments }) }))
 enableAutoUnmount(afterEach)
 
-async function render() {
-  const w = mount(UserCreateDialog, { props: { open: false, roles: [] }, global: { plugins: [i18n], stubs: { Teleport: true } } })
+async function render(roles: Role[] = []) {
+  const w = mount(UserCreateDialog, { props: { open: false, roles }, global: { plugins: [i18n], stubs: { Teleport: true } } })
   await w.setProps({ open: true })
   await w.get('input[type="email"]').setValue(' amy@example.com ')
   await w.get('input[type="password"]').setValue('password1')
@@ -51,5 +52,16 @@ describe('user create dialog', () => {
     expect(w.find('[data-testid="user-create-segment"]').exists()).toBe(false)
     await submit()
     expect(mocks.post.mock.calls[0][1].segment_id).toBeUndefined()
+  })
+
+  it('checks the default role along with the add-on supplier role', async () => {
+    const roles = ['user', 'supplier'].map((key) => ({ key, name: { en: key } }) as unknown as Role)
+    const { w, submit } = await render(roles)
+    const boxes = w.findAll('input[type="checkbox"]')
+    // Unchecked first, so that supplier is chosen without the default role.
+    await boxes[0].setValue(false)
+    await boxes[1].setValue(true)
+    await submit()
+    expect(mocks.post.mock.calls[0][1].role_keys).toEqual(['supplier', 'user'])
   })
 })
