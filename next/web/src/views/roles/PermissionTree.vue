@@ -55,6 +55,8 @@ const grantedCount = (m: PermissionModule) => m.permissions.filter((p) => isChec
 const inactive = (status: string) => status !== 'active' && status !== ''
 const moduleInactive = (m: PermissionModule) => inactive(m.status)
 const permInactive = (m: PermissionModule, p: PermissionItem) => moduleInactive(m) || inactive(p.status)
+// The hover hint: the key, then what it allows.
+const hint = (p: PermissionItem) => [p.key, p.description && lt(p.description)].filter(Boolean).join('\n')
 // A removed permission can only be unticked; disabled plugin ones stay selectable.
 const selectable = (p: PermissionItem) => p.status !== 'removed' || isChecked(p.key)
 const selectables = (m: PermissionModule) => m.permissions.filter(selectable)
@@ -125,7 +127,7 @@ function setScopes(p: PermissionItem, scopes: Scope[]) {
                 :disabled="readOnly || !selectable(p)"
                 @update:model-value="toggle(p)"
               >
-                <span class="flex min-w-0 items-center gap-2" :class="permInactive(m, p) ? 'text-fg-subtle' : ''" :title="p.key">
+                <span class="flex min-w-0 items-center gap-2" :class="permInactive(m, p) ? 'text-fg-subtle' : ''" :title="hint(p)">
                   <span class="truncate">{{ lt(p.label) || p.key }}</span>
                   <span v-if="p.sensitive" class="shrink-0 text-warning-500 dark:text-warning-400" :title="t('roles.sensitive')" :aria-label="t('roles.sensitive')" role="img"><SIcon name="lock" class="h-3.5 w-3.5" /></span>
                   <span v-if="p.step_up" class="shrink-0 text-primary-500 dark:text-primary-400" :title="t('roles.stepUp')" :aria-label="t('roles.stepUp')" role="img" data-testid="permission-step-up"><SIcon name="shield" class="h-3.5 w-3.5" /></span>

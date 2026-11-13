@@ -92,11 +92,15 @@ export interface AssignableRole {
 export interface PermissionItem {
   key: string
   label: LText
+  /** What it allows (core catalog); shown as a hint. */
+  description?: LText
   sensitive: boolean
   /** Using it needs a step-up verification each time (CONTRACTS §80.2); shown only. */
   step_up?: boolean
-  /** The rows its scope ranges over (CONTRACTS §21): '' none, the key is granted as it is. */
-  scope_type?: '' | 'account' | 'proxy'
+  /** The resource its scope ranges over ("account", "proxy"; CONTRACTS §21), "" for none. */
+  scope_type?: string
+  /** Soft dependencies: keys it is of little use without, of the same scope; editor hints only. */
+  requires?: string[]
   status: string // active | disabled | removed
 }
 

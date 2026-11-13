@@ -28,6 +28,9 @@ type Router struct {
 	stepUp core.StepUpVerifier
 	noKeys bool
 	scope  string // step-up scope of the StepUp view
+	// routes records every route registered through r and its views
+	// (Routes), shared by all of them.
+	routes *[]*RouteSpec
 }
 
 // NewRouter mounts common middleware on engine and returns the /api/v1 router.
@@ -36,36 +39,41 @@ type Router struct {
 func NewRouter(engine *gin.Engine, tokens core.TokenVerifier, authz core.Authorizer) *Router {
 	engine.Use(RequestContext(), Recover())
 	stepUp, _ := tokens.(core.StepUpVerifier)
-	return &Router{api: engine.Group(APIPrefix), tokens: tokens, authz: authz, stepUp: stepUp}
+	return &Router{api: engine.Group(APIPrefix), tokens: tokens, authz: authz, stepUp: stepUp, routes: new([]*RouteSpec)}
 }
 
-// Public registers an unauthenticated route.
-func (r *Router) Public(method, path string, h ...gin.HandlerFunc) {
+// Public registers an unauthenticated route; on a SessionOnly or StepUp view
+// it panics, since it would enforce neither.
+func (r *Router) Public(method, path string, h ...gin.HandlerFunc) *RouteSpec {
+	if r.noKeys || r.scope != "" {
+		panic("httpapi: Public on a SessionOnly or StepUp view: " + method + " " + path)
+	}
 	r.api.Handle(method, path, h...)
+	return r.record(method, path, ModePublic, nil)
 }
 
 // Handle registers a route for any logged-in user or access key, without a
 // permission: the handler limits what the caller gets by itself. On a
 // SessionOnly view it is a route for login sessions only (CONTRACTS §80:
 // managing access keys and login sessions).
-func (r *Router) Handle(method, path string, h ...gin.HandlerFunc) {
-	r.handle(method, path, nil, h)
+func (r *Router) Handle(method, path string, h ...gin.HandlerFunc) *RouteSpec {
+	return r.handle(method, path, ModeAuthed, nil, nil, h)
 }
 
 // AuthedRead registers a read-only route for any logged-in user or access key:
 // who the caller is and what they can see, under the key's own limits.
-func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) {
-	r.handle(http.MethodGet, path, nil, h)
+func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) *RouteSpec {
+	return r.handle(http.MethodGet, path, ModeAuthed, nil, nil, h)
 }
 
 // Self registers a route of the caller's own account, under one of the self
 // permissions (authz.SelfPermissionKeys) every signed-in user holds: a login
 // session always passes, an access key only when it was given perm.
-func (r *Router) Self(method, path string, key perm.Key, h ...gin.HandlerFunc) {
+func (r *Router) Self(method, path string, key perm.Key, h ...gin.HandlerFunc) *RouteSpec {
 	if !strings.HasPrefix(string(key), "self:") {
 		panic("httpapi: Self with a permission outside the self module: " + string(key))
 	}
-	r.Perm(method, path, key, h...)
+	return r.Perm(method, path, key, h...)
 }
 
 // SessionOnly returns a view of r whose routes refuse access keys; r itself
@@ -91,19 +99,19 @@ func (r *Router) StepUp(scope string) *Router {
 }
 
 // Perm registers a route requiring permission.
-func (r *Router) Perm(method, path string, permission perm.Key, h ...gin.HandlerFunc) {
-	r.handle(method, path, r.require(string(permission)), h)
+func (r *Router) Perm(method, path string, permission perm.Key, h ...gin.HandlerFunc) *RouteSpec {
+	return r.handle(method, path, ModePerm, []perm.Key{permission}, r.require(string(permission)), h)
 }
 
 // PermAny registers a route the caller may use with any one of keys, each
 // unscoped (scoped actions use PermScoped). Every key the caller holds is
 // recorded in the request context (Granted). Without a match the response
 // is permission_denied with details.permission = keys[0].
-func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...perm.Key) {
+func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...perm.Key) *RouteSpec {
 	if len(keys) == 0 {
 		panic("httpapi: PermAny without permission keys")
 	}
-	r.handle(method, path, r.requireAny(perm.Strings(keys)), []gin.HandlerFunc{handler})
+	return r.handle(method, path, ModeAny, keys, r.requireAny(perm.Strings(keys)), []gin.HandlerFunc{handler})
 }
 
 // PermScoped registers a route of rows: the caller needs one of actions
@@ -112,11 +120,11 @@ func (r *Router) PermAny(method, path string, handler gin.HandlerFunc, keys ...p
 // the middleware fills for each action held. An action held for every row
 // is also recorded in Granted. Without any, the response is
 // permission_denied with details.permission = actions[0].
-func (r *Router) PermScoped(method, path string, handler gin.HandlerFunc, actions ...perm.Key) {
+func (r *Router) PermScoped(method, path string, handler gin.HandlerFunc, actions ...perm.Key) *RouteSpec {
 	if len(actions) == 0 {
 		panic("httpapi: PermScoped without an action")
 	}
-	r.handle(method, path, r.requireScoped(actions), []gin.HandlerFunc{handler})
+	return r.handle(method, path, ModeScoped, actions, r.requireScoped(actions), []gin.HandlerFunc{handler})
 }
 
 func (r *Router) requireScoped(actions []perm.Key) gin.HandlerFunc {
@@ -148,9 +156,10 @@ func (r *Router) requireScoped(actions []perm.Key) gin.HandlerFunc {
 	}
 }
 
-// handle registers a route: authentication, then check (the permission,
-// when there is one), then the step-up proof on a StepUp view, then h.
-func (r *Router) handle(method, path string, check gin.HandlerFunc, h []gin.HandlerFunc) {
+// handle registers a route of mode under keys: authentication, then check
+// (the permission, when there is one), then the step-up proof on a StepUp
+// view, then h.
+func (r *Router) handle(method, path string, mode Mode, keys []perm.Key, check gin.HandlerFunc, h []gin.HandlerFunc) *RouteSpec {
 	chain := r.auth()
 	if check != nil {
 		chain = append(chain, check)
@@ -159,6 +168,7 @@ func (r *Router) handle(method, path string, check gin.HandlerFunc, h []gin.Hand
 		chain = append(chain, r.requireStepUp(r.scope))
 	}
 	r.api.Handle(method, path, append(chain, h...)...)
+	return r.record(method, path, mode, keys)
 }
 
 // requireStepUp spends the request's step-up proof on scope.

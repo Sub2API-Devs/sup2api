@@ -15,6 +15,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/group"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/segment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -22,7 +23,7 @@ import (
 func (s *Service) registerPricingRoutes(r *httpapi.Router) {
 	r.Perm("GET", "/groups/:id/model-prices", "group:read", s.showGroupPrices)
 	r.Perm("PUT", "/groups/:id/model-prices", "group:manage", s.saveGroupPrices)
-	r.Perm("POST", "/pricing/quote", "price:read", s.quotePricing)
+	r.Perm("POST", "/pricing/quote", "price:read", s.quotePricing).Uses(perm.GroupRead, perm.UserRead, perm.SegmentRead)
 }
 
 // pricedGroup is what pricing reads of a group.

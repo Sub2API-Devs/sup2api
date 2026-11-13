@@ -50,8 +50,9 @@ export function setupHost(router: Router) {
     },
     permissions: {
       superuser: () => !!auth.me?.superuser,
-      has: k => auth.has(k),
-      any: (...keys) => auth.has(keys),
+      // Plugin keys come from the plugin, unchecked.
+      has: k => auth.hasDynamic(k),
+      any: (...keys) => auth.hasDynamic(keys),
       hasAction: a => auth.hasAction(a),
       scope: action => auth.scopes(action).map(scope => patternKey({ action, scope }))
     },

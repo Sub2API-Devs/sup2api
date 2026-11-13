@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { api, session } from '@sub2api/host'
 import type { Me, TokenResponse } from '@/api/types'
 import { getPasskey } from '@/utils/webauthn'
+import type { PermRef } from '@/generated/permissions'
 import { refreshShell } from './app'
 import { ALL_SCOPE, permissionIndex, type Scope } from '@/authz/implies'
 
@@ -32,18 +33,24 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   /**
-   * One of `perm` is held: implied by a held key (account:read:group/12 by
-   * account:read, account:read by nothing narrower). No `perm` asks nothing.
+   * Whether the caller holds `perm`, or any of a list (an empty one passes):
+   * implied by a held key (account:read:group/12 by account:read,
+   * account:read by nothing narrower). Keys the code names.
    */
-  function has(perm: string | string[] | undefined | null): boolean {
+  function has(perm: PermRef | readonly PermRef[] | undefined | null): boolean {
+    return hasDynamic(perm)
+  }
+
+  /** `has` for keys that come from data (plugin manifests, server responses, the plugin bridge). */
+  function hasDynamic(perm: string | readonly string[] | undefined | null): boolean {
     if (!perm || (Array.isArray(perm) && perm.length === 0)) return true
     if (me.value?.superuser) return true
-    const list = Array.isArray(perm) ? perm : [perm]
+    const list: readonly string[] = Array.isArray(perm) ? perm : [perm]
     return list.some((p) => permIndex.value.has(p))
   }
 
   /** One of the actions is held at any scope (a page that lists the rows in reach, CONTRACTS §21). */
-  function hasAction(action: string | string[]): boolean {
+  function hasAction(action: string | readonly string[]): boolean {
     if (me.value?.superuser) return true
     return [action].flat().some((a) => permIndex.value.hasAction(a))
   }
@@ -145,6 +152,7 @@ export const useAuthStore = defineStore('auth', () => {
     sessionExpired,
     permissionsEpoch,
     has,
+    hasDynamic,
     hasAction,
     scopes,
     holds,

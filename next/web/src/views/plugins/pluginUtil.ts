@@ -4,6 +4,7 @@
 import type { LText, PluginRoleGrant, PluginSummary, Trust, ResourceConflict } from '@/api/types'
 import type { Tone } from '@sub2api/ui'
 import { useOptionalT } from '@/composables/optionalText'
+import { P, type PermRef } from '@/generated/permissions'
 
 export type Risk = 'low' | 'medium' | 'high' | 'critical'
 
@@ -423,8 +424,8 @@ const CORE_SETTINGS_KEY = 'ccgateway'
 export const CCGATEWAY_PAGE = '/system/ccgateway'
 
 /** Whether the plugin's settings are that core view and the caller may open it. */
-export function hasCoreSettings(key: string, has: (perm: string) => boolean): boolean {
-  return key === CORE_SETTINGS_KEY && has('settings:read')
+export function hasCoreSettings(key: string, has: (perm: PermRef) => boolean): boolean {
+  return key === CORE_SETTINGS_KEY && has(P.SettingsRead)
 }
 
 /**
@@ -434,7 +435,7 @@ export function hasCoreSettings(key: string, has: (perm: string) => boolean): bo
  * renders (has_settings is false for native settings, §75.5); undefined
  * without either.
  */
-export function consoleSettingsPath(p: Pick<PluginSummary, 'key' | 'has_settings'>, has: (perm: string) => boolean): string | undefined {
+export function consoleSettingsPath(p: Pick<PluginSummary, 'key' | 'has_settings'>, has: (perm: PermRef) => boolean): string | undefined {
   if (hasCoreSettings(p.key, has)) return CCGATEWAY_PAGE
   return p.has_settings && p.key !== CORE_SETTINGS_KEY ? `/plugins/${encodeURIComponent(p.key)}?tab=settings` : undefined
 }

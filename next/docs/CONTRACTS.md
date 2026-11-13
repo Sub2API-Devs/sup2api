@@ -72,6 +72,18 @@
 - **已取消二次验证（2026-10-05 用户决定）**：不再有密码确认（step-up）。`POST /auth/step-up`、`X-Step-Up-Token` 请求头、`step_up_required` 错误码、`core.StepUpVerifier`、`Authorizer.IsSensitive`、`Router.PermStepUp` 全部删除；任何操作（调整余额、删除用户/账号、查看凭证、角色授权、插件安装/卸载、系统更新等）只看登录态 + RBAC 权限。旧前端仍发送 `X-Step-Up-Token` 时核心直接忽略。
 - **二次验证重新引入（2026-11-13，权限加固期 4，用户决定照 new-api）**：只用于少数高危操作，按 scope 换短时一次性 proof（`X-Verify-Proof`），会话与访问密钥同一套，见 §80.2。上面这条只说明旧的 step-up 机制已删除。
 - 路由注册：`r.Public` / `r.Self` / `r.Perm(method, path, permission, handler)` / `r.PermAny(method, path, handler, keys...)`（任一 key 即可）/ `r.PermScoped(method, path, handler, actions...)`（任一动作的任意范围，handler 用 `core.Scope` 取范围，§21.0）
+- 路由表与启动自检（期 4 T68）：上面每个注册方法（含 `Handle`/`AuthedRead` 与 `SessionOnly`、`StepUp` 视图）都返回并记录一条 `httpapi.RouteSpec{Method, Path, Mode, Keys, Extra, PluginKeys, StepUp, NoAccessKey}`，`Router.Routes()` 列出全部。handler 自己额外做的放行检查（例如字段级的 `account:group:bind`）用 `.Uses(keys...)` 登记到 `Extra`，只为脱敏或补充展示做的检查不登记；检查插件声明的动态 key 的用 `.UsesPluginKeys()`。两者都只是登记，不改变授权。启动时 `httpapi.CheckRoutes` 检查三件事，任何一项失败核心拒绝启动：所有 `Keys`、`Extra` 都是核心目录（含 `self`）里的 key；`StepUp` scope 都是已知的二次验证 scope；不需要权限的路由（`Public`、`Handle`、`AuthedRead`）与 `app/routecheck.go` 的白名单完全一致：多了或少了都报错，访问方式（公开、任意登录者或访问密钥、只允许登录会话）不一致也报错。`Public` 不能在 `SessionOnly`、`StepUp` 视图上注册（panic）。插件路由代理 `/p/:key/*path` 直接挂在 gin group 上，不在路由表里。
+- 前端权限目录（期 4 T69）：`web/src/generated/permissions.ts` 由核心目录生成，内容包括：
+  - `P`：每个核心与 `self` 权限一个常量，名字由 key 转成驼峰。
+  - `SCOPE_TYPE`：可带范围的动作及其资源。
+  - `LEGACY_OWN`：可带范围动作的旧 own 别名，R2b 删除别名时随之删除。
+  - `PERMISSIONS`：每个 key 的 module、sensitive、stepUp、requires 和中英 description。
+  - `ROLE_KEY_PATTERN`。
+  - 类型 `PermKey`、`ScopedPermKey`、`LegacyOwnKey`、`PluginPermKey`、`PermRef`。
+
+  生成方式：`sub2api permissions-ts` 输出到 stdout，或 `UPDATE_GOLDEN=1 go test ./internal/authz -run TestGeneratedPermissionsTS` 直接写文件。golden 测试 `TestGeneratedPermissionsTS` 在文件过期时失败，所以 CI 能拦住。
+
+  前端用法：`auth.has` 与 `v-permission` 的参数类型是 `PermRef`，代码里写错 key 会类型检查失败；来自数据的 key（路由以外的插件 manifest、服务端响应、插件桥）用 `auth.hasDynamic(string)`，实现与 `has` 相同。路由 meta 的 `perm` 也是 `PermRef`。
 - 网关：由插件声明的端点按 `auth.headers` 读取 API Key；错误格式按端点的 `errorFormat`
 
 ## 4. 权限清单（核心）
@@ -136,7 +148,7 @@
 | PUT `/roles/:id/permissions` `{permission_keys[]}` | `role:define`；新增的 permission_keys 必须是操作者持有权限的子集，角色当前的权限也不能超出操作者（§43.6） |
 | PUT `/roles/:id/assignable` `{role_keys[], assign_custom}` | `role:define`；新增的可分配角色必须在操作者可分配范围内，角色当前的清单也不能超出操作者（§43.6） |
 | POST `/roles/:id/reset` | `role:define`；内置角色恢复默认（§15.7） |
-| GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,sensitive,step_up,status}]}]`（`step_up`：部分接口使用时需二次验证，展示用，§80.2；2026-11-13 取代 `session_only`）；不含 `self` 虚拟模块 |
+| GET `/permissions` | `role:read`；按 module 分组：`[{module, label, source, plugin_key, status, permissions:[{key,label,description,sensitive,step_up,scope_type,requires?,status}]}]`（`step_up`：部分接口使用时需二次验证，展示用，§80.2；2026-11-13 取代 `session_only`。`description`：核心权限的中英说明（目录 `desc`，启动同步写入 `permissions.description`），插件权限为 `{}`。`scope_type`：范围的资源（`account`/`proxy`，§21），无范围为 `""`。`requires`：软依赖，没有它们这个权限基本用不上（例如 `account:update` 依赖同范围的 `account:read`），只给编辑器提示，不参与授权；没有时省略，只有核心权限有；期 4 T67）；不含 `self` 虚拟模块 |
 
 原来的 GET / PUT `/users/:id/groups`（给单个用户分配分组）已删除：私有分组改为授权给用户组，每个用户只属于一个用户组（§97）。
 
@@ -1143,7 +1155,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 | POST `/proxies` | `proxy:manage` / `proxy:own:manage` | `created_by` = 调用者 |
 | PATCH/DELETE `/proxies/:id`、POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage` | 范围外（含 `created_by` 为空的历史行）一律 404，**先判可见再判占用**；自己级下删除时 409 的 `account_count` 仍是引用它的全部账号数；自己级下 PATCH 改了连接字段（`protocol`、`host`、`port`、`username`、`password` 任一与现值不同，原样带回不算，`host` 只有大小写不同也不算且不写入）而代理正被他人创建的账号（含 `created_by` 为空的）使用时，返回 409 `proxy_in_use`，`details.account_count` 为这些账号的数量（2026-11-12 权限加固 T31）；改名称、状态不受限，`proxy:manage` 不受限 |
 
-菜单（`/me/menus`、前端回退表、路由 meta）：账号菜单 anyOf `account:read`、代理菜单 anyOf `proxy:read`，按“动作的任意范围”判断（`HasAction`，期 4 R2a；§90 第四版起没有平台菜单）。
+菜单（`/me/menus`、前端回退表、路由 meta）：账号菜单取 `GET /accounts` 的 `account:read`、代理菜单取 `GET /proxies` 的 `proxy:read`，按“动作的任意范围”判断（`HasAction`，期 4 R2a；§90 第四版起没有平台菜单）。期 4 T68 起，核心菜单项不再手写 anyOf，而是声明页面的主接口（例如账号菜单 `GET /accounts`、系统设置 `GET /settings/gateway`、`GET /sticky-rules`、`GET /groups`、`GET /prices`）。启动时 `authz.BindMenuRoutes` 从路由表取这些接口的 `Keys` 作为 anyOf；主接口不存在时拒绝启动，所以菜单与接口的权限口径不会再不一致。
 
 审计（新公共包 `server/internal/audit`，`plugin/install/audit.go` 的 helper 上提到这里，原调用方改用；API：`audit.Audit(ctx, q store.Querier, actorID int64, action, targetType, targetID string, detail any) error`（actorID 0 = 系统，detail nil 写 `{}`，q 可为 pool 或 tx）、`audit.WithClientIP(ctx, ip)` / `audit.ClientIP(ctx)`、`audit.Context(c *gin.Context) context.Context`（= `WithClientIP(c.Request.Context(), c.ClientIP())`，handler 里用它替代 `c.Request.Context()` 即可）；IP 超过 64 字符截断）：账号 `account.create`（detail `{name, plugin_key, type}`）、`account.update`（`{fields:[...]}`：请求体里出现的字段名，不记值；`credentials` 只记 `credentials` 一个名，`proxy_url` 记 `proxy_url`）、`account.delete`（`{name}`）；原有的 `account.credentials.reveal`（detail `{}`）改用本包写入，因此也带 IP；代理 `proxy.create`（手工创建 detail `{auto:false, name, protocol, host, port}`，自动创建 `{auto:true, account_id}`）、`proxy.update`（`{fields:[...]}`，字段名同请求体，密码只记 `password`）、`proxy.delete`（`{name}`）。`target_type` 为 `account` / `proxy`，`target_id` 为十进制 id 字符串，`user_id` 为操作人，IP 取 `audit.WithClientIP`。账号、代理的写操作与审计行在同一事务。
 

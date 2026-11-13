@@ -598,6 +598,9 @@ func (b *boot) startHTTP() error {
 		return err
 	}
 	b.registerRoutes(b.router)
+	if err := checkRoutes(b.router, b.az); err != nil {
+		return err
+	}
 	ui, err := webui.New(web.Dist, webui.WithSharedAssets(sharedAssets))
 	if err != nil {
 		return fmt.Errorf("console assets: %w", err)

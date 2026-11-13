@@ -13,6 +13,7 @@ import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import PermissionTree from './PermissionTree.vue'
 import RoleAssignable from './RoleAssignable.vue'
+import { ROLE_KEY_PATTERN } from '@/generated/permissions'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -198,7 +199,7 @@ async function submitCreate() {
   createErrors.value = {}
   const key = createForm.key.trim()
   // Same rule as roleKeyRe in server/internal/authz/roles.go.
-  if (!/^[a-z][a-z0-9_]{1,49}$/.test(key)) createErrors.value.key = t('roles.keyInvalid')
+  if (!ROLE_KEY_PATTERN.test(key)) createErrors.value.key = t('roles.keyInvalid')
   if (!createForm.nameEn.trim() && !createForm.nameZh.trim()) createErrors.value.name = t('common.required')
   if (Object.keys(createErrors.value).length) return
   creating.value = true

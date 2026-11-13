@@ -1080,6 +1080,73 @@
 - 测试：httpapi `TestPermAny` 改为无范围 key；全量 server 测试见期 4 R 组汇总。
 - 回滚：revert（纯代码）。
 
+## 期 4 T67：权限目录描述化（description、requires）
+
+- 改动：
+  - `authz/catalog.go` 的 `corePerm` 新增 `desc`（中英说明）与 `requires`（软依赖）；全部核心权限与 `self` 模块补齐说明。
+  - `requires` 只用于编辑器提示，不参与授权。带范围的动作只依赖同资源的 key，前端按同一范围提示。例如 `account:update` 依赖 `account:read`，`role:assign` 依赖 `role:read` 与 `user:read`。
+  - 说明里写明的口径：`account:group:bind` 只对账号范围受限且没有 `group:manage` 的人生效；`account:relay`（新建或改动自定义上游）只对账号范围受限（仅自己、某分组或单个账号）的人生效；`usage:all:read` 包含用户邮箱（W1-F17）。
+  - `SyncCore` 的 upsert 写入并比较 `description` 列。旧节点的 upsert 不写这一列，所以新旧节点混跑时不会来回改写。
+  - `GET /permissions` 每项返回 `description`、`requires`（无则省略）、`scope_type`、`step_up`、`sensitive`。原规划里的 `pair` 已由 `scope_type` 取代，不再提供。
+  - 前端：`PermissionItem` 类型补字段；权限树（角色编辑器与访问密钥选择器）悬浮提示显示 key 与说明，交互不变（交互归 R8）。
+- 影响对象：角色编辑器与访问密钥选择器（只多了悬浮说明）；数据库里核心权限的 `description` 列（原来全是 `{}`）。
+- 测试：authz `TestCatalogDescriptionsAndRequires`、`TestSyncCoreWritesDescriptions`；web `PermissionTree.spec` 的悬浮说明用例。
+- 回滚：revert（纯代码）。回滚后 `description` 列保留已写入的说明，旧代码只读不写，无害。
+
+## 期 4 T68：路由表 RouteSpec、启动自检 CheckRoutes、菜单引用主接口
+
+- 改动：
+  - `httpapi.Router` 的每个注册方法（`Public`、`Handle`、`AuthedRead`、`Perm`、`PermAny`、`PermScoped`、`Self`，以及 `SessionOnly`、`StepUp` 视图）都记录并返回 `*RouteSpec{Method, Path, Mode, Keys, Extra, PluginKeys, StepUp, NoAccessKey}`。原来忽略返回值的调用点不用改。
+  - `Router.Routes()` 列出全部路由。handler 内部额外检查的 key 用 `.Uses(...)` 登记，目前登记了：
+    - `POST /accounts`、`PATCH /accounts/:id`：`group:manage`、`account:group:bind`、`account:relay`、`account:settings:custom`。
+    - `POST /users`：`role:assign`、`segment:manage`。
+    - `PATCH /users/:id`：`user:password:reset`。
+    - `GET /segments/:id/members`：`user:read`。
+    - `POST /pricing/quote`：`group:read`、`user:read`、`segment:read`。
+    - 插件同意页 `POST /plugins/:key/versions/:version/consent`：`plugin:grant:*`、`role:define`。
+    - 插件设置的 GET 与 PUT：`plugin:read` / `plugin:manage`，并用 `.UsesPluginKeys()` 标记还检查插件声明的动态 key。
+    - 审查后补登：插件 `role-grants/confirm`、`reject`：`role:define`；两个 `models/fetch` 与 `preparations`：`account:relay`；`GET /account-types/:plugin_key/:type/form`：`account:settings:custom`；`POST /accounts`：`settings:manage`（Claude Code 运行环境）。
+    - 只登记放行检查；只为脱敏或补充展示做的检查（`redactBalance`、usage 统计、lookup 实体等）不登记。
+  - `httpapi.CheckRoutes`（`httpapi/check.go`）在启动时检查，失败就拒绝启动（`app/routecheck.go`，在 `registerRoutes` 之后执行）：
+    - `Keys` 与 `Extra` 都是核心目录或 `self` 里的 key（`authz.KnownKey`，旧 own 别名不算）。
+    - `StepUp` scope 是已知 scope（`iam.KnownStepUpScope`）。
+    - 不需要权限的路由与白名单 `permissionlessRoutes` 完全一致，多了或少了都报错；白名单还写明访问方式（`public`、`authed`、`session`），路由丢了认证或 `SessionOnly` 视图也报错。
+    - `Public` 在 `SessionOnly`、`StepUp` 视图上注册直接 panic，因为这两种限制它都不会执行。
+  - 菜单：`coreMenuItem.anyOf` 改为 `apis`，即页面主接口的 `RouteSpec.ID`。启动时 `authz.BindMenuRoutes(httpapi.RouteKeys(specs))` 取这些路由的 `Keys` 作为 anyOf，主接口不存在就拒绝启动；没有绑定之前，带 `apis` 的菜单项不显示（fail-closed）。现在每个菜单绑定的 key 与之前手写的完全一样，可见性不变。
+- 与 plan.json 原 spec 的出入：
+  - 记录 Extra 的方法叫 `Uses`，因为 Go 里字段和方法不能同名 `Extra`。
+  - 菜单不再保留手写 anyOf 再去比对，而是直接从路由表取。
+  - 白名单在 app 层。
+  - 插件路由代理 `/p/:key/*path` 直接挂在 gin group 上，不进路由表。
+- 影响对象：启动流程（路由表或菜单不一致时拒绝启动）。新增不需要权限的接口时，必须同时加进 `permissionlessRoutes`。
+- 测试：
+  - httpapi：`TestRoutesRecordSpecs`、`TestCheckRoutes`（未知 key、未知 Extra、未知 scope、不在白名单、白名单过期、丢了认证、丢了只允许会话）、`TestPublicOnAViewPanics`。
+  - authz：`TestBindMenuRoutes`（主接口换 key 时菜单跟着变；缺接口报错；未绑定时隐藏）。
+  - app：`TestManagedRuntime*` 走真实 `app.Run`，真实路由表自检通过。故意往白名单加一条不存在的路由，核心以 `route check: …` 失败。
+- 回滚：revert（纯代码）。
+
+## 期 4 T69：生成前端权限目录 permissions.ts 与 auth.has 类型化
+
+- 改动：
+  - `authz/tsgen.go` 的 `PermissionsTS()` 生成 `next/web/src/generated/permissions.ts`，内容见 CONTRACTS §3。生成物已是控制台的 prettier 风格。
+  - `cmd/sub2api` 新增子命令 `permissions-ts`，与 `schema-contract` 同一模式。
+  - golden 测试 `TestGeneratedPermissionsTS` 要求生成物与目录一致；`UPDATE_GOLDEN=1` 时重写文件。
+  - 前端：
+    - `auth.has(perm: PermRef | readonly PermRef[])` 与 `v-permission` 改为类型化，实现不变。
+    - 新增 `auth.hasDynamic(string | readonly string[])`，给服务端或插件提供的 key 用：插件桥 `permissions.has/any`、同意页里服务端给出的必需权限、插件 manifest 声明的设置权限。代码里写死的 key 一律走类型化的 `has`（含 `pluginUtil` 的回调与同意页的 `P.PluginGrant*`）。
+    - 路由 meta `perm`、设置页 `Page.perm`、实体查找的 `permissions` 改为 `PermRef`。
+    - `useOwnership` 的 `ACCOUNT_KEYS`、`PROXY_KEYS`、`ACCOUNT_FIELD_KEYS` 与 `entities.ts` 的 `OWN_OR_ALL` 改为引用生成常量（`P` 与 `LEGACY_OWN`），导出名与取值不变。
+    - `quoteSubjects` 改用 `P`；`RolesView` 的角色 key 正则改用 `ROLE_KEY_PATTERN`。
+  - 类型化后 vue-tsc 没有报出拼写错误。
+- 与 plan.json 原 spec 的出入：
+  - 没有生成 `PAIRS`：own/all 已由范围取代，改为 `SCOPE_TYPE` + `LEGACY_OWN`。
+  - 没有生成 `PAGE_PERMS`：菜单可见性现在在启动时从路由表绑定（T68），生成器拿不到路由表，前端菜单本来就来自 `/me/menus`。
+  - 没有生成 TS 版 Implies：`auth.has` 的实现归 R8。
+  - 旧 own 别名保留为 `LEGACY_OWN` 与 `LegacyOwnKey`：`/me` 在 R2b 之前仍输出这些别名，现有前端靠它们判断“自己的”。R8 的 useScope 会改用规范 key。
+- 影响对象：无运行时行为变化；前端写错权限 key 会在类型检查阶段失败；核心目录变化后必须重新生成前端文件，否则 Go 测试失败。
+- 测试：authz `TestGeneratedPermissionsTS`、`TestPermissionsTSNames`；web `src/generated/permissions.spec.ts`；ConsentView spec 的 auth mock 补了 `hasDynamic`。
+- 回滚：revert（纯代码）。
+
 ## 期 4 资源范围（R0–R7）发布说明
 
 - 两步走，滚动发布：

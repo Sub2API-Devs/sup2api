@@ -19,6 +19,7 @@ import { useConsentLabels } from './consent/hostPermission'
 import { useOptionalT } from '@/composables/optionalText'
 import { useNewPermissionRoles } from './consent/newPermissionRoles'
 import NewRoleGrants from './consent/NewRoleGrants.vue'
+import { P } from '@/generated/permissions'
 
 const { t } = useI18n()
 const tr = useOptionalT()
@@ -47,12 +48,12 @@ const shownRoleGrants = computed(() => {
 
 /** Granting db.schema to this plugin takes the override as well (review.needs_db_schema_unconfined). */
 const DB_SCHEMA = 'db.schema'
-const DB_SCHEMA_UNCONFINED = 'plugin:grant:db_schema_unconfined'
+const DB_SCHEMA_UNCONFINED = P.PluginGrantDbSchemaUnconfined
 
 function riskPermOf(hp: HostPermissionReview, risk: Risk): string | null {
   if (hp.requires) return hp.requires
-  if (risk === 'critical') return 'plugin:grant:critical'
-  if (risk === 'high') return 'plugin:grant:high'
+  if (risk === 'critical') return P.PluginGrantCritical
+  if (risk === 'high') return P.PluginGrantHigh
   return null
 }
 
@@ -71,7 +72,7 @@ const rows = computed<HPRow[]>(() => {
     .map((hp) => {
       const risk = riskOf(hp.id, hp.risk)
       const required = requiredPermsOf(hp, risk)
-      const lacking = required.find((p) => !auth.has(p))
+      const lacking = required.find((p) => !auth.hasDynamic(p))
       return {
         ...hp,
         risk,

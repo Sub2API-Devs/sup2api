@@ -10,11 +10,15 @@ const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), push: vi.fn(), ca
 vi.mock('@sub2api/host', () => ({ api: { get: mocks.get, post: mocks.post }, isApiError: () => false }))
 vi.mock('vue-router', () => ({ RouterLink: { template: '<a><slot /></a>' }, useRoute: () => ({ params: { key: 'demo', version: '1.2.0' } }), useRouter: () => ({ push: mocks.push }) }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({
-    has: (k: string | string[]) => mocks.can && ![k].flat().some((x) => mocks.lacks.has(x)),
-    me: { id: 1, roles: ['lead'], superuser: mocks.superuser },
-    permissionsEpoch: mocks.epoch
-  })
+  useAuthStore: () => {
+    const has = (k: string | string[]) => mocks.can && ![k].flat().some((x) => mocks.lacks.has(x))
+    return {
+      has,
+      hasDynamic: has,
+      me: { id: 1, roles: ['lead'], superuser: mocks.superuser },
+      permissionsEpoch: mocks.epoch
+    }
+  }
 }))
 vi.mock('./parts/PluginGatewayDecl.vue', () => ({ default: { name: 'PluginGatewayDecl', props: ['platforms', 'accountTypes', 'section'], template: '<div />' } }))
 enableAutoUnmount(afterEach)

@@ -3,6 +3,8 @@ package authz
 import (
 	"cmp"
 	"context"
+	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -32,9 +34,11 @@ type coreMenuItem struct {
 	label core.LocalizedText
 	icon  string // console icon name (see web/)
 	path  string
-	// anyOf lists the permissions granting visibility, each held with any
-	// scope (PermissionSet.HasAction); empty = any user.
-	anyOf []string
+	// apis are the page's main routes ("GET /accounts", httpapi.RouteSpec.ID):
+	// the item shows to holders of any of their permissions, each held with
+	// any scope (PermissionSet.HasAction), as bound by BindMenuRoutes; none =
+	// any user.
+	apis []string
 }
 
 type coreMenuSection struct {
@@ -57,54 +61,98 @@ var coreMenus = []coreMenuSection{
 	// usage overview.
 	{"overview", lt("Console", "控制台"), []coreMenuItem{
 		{"dashboard", lt("Dashboard", "仪表盘"), "dashboard", "/dashboard", nil},
-		{"my-api-keys", lt("API keys", "API 密钥"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
-		{"my-models", lt("Models & prices", "模型与价格"), "price", "/me/models", []string{"apikey:self:manage"}},
-		{"my-usage-overview", lt("Usage overview", "用量概览"), "chart", "/me/usage/overview", []string{"usage:self:read"}},
-		{"my-usage", lt("Usage logs", "使用日志"), "usage", "/me/usage", []string{"usage:self:read"}},
-		{"usage-overview", lt("Site overview", "全站概览"), "chart", "/usage/overview", []string{"usage:all:read"}},
-		{"usage", lt("Site usage logs", "全站日志"), "usage", "/usage", []string{"usage:all:read"}},
+		{"my-api-keys", lt("API keys", "API 密钥"), "key", "/me/api-keys", []string{"GET /me/api-keys"}},
+		{"my-models", lt("Models & prices", "模型与价格"), "price", "/me/models", []string{"GET /me/prices"}},
+		{"my-usage-overview", lt("Usage overview", "用量概览"), "chart", "/me/usage/overview", []string{"GET /me/usage/overview"}},
+		{"my-usage", lt("Usage logs", "使用日志"), "usage", "/me/usage", []string{"GET /me/usage"}},
+		{"usage-overview", lt("Site overview", "全站概览"), "chart", "/usage/overview", []string{"GET /usage/overview"}},
+		{"usage", lt("Site usage logs", "全站日志"), "usage", "/usage", []string{"GET /usage"}},
 	}},
 	// Accounts and the proxies they go out through, each for the keys of its
 	// list endpoint (GET /accounts, GET /proxies).
 	{"gateway", lt("Gateway", "网关"), []coreMenuItem{
-		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read"}},
-		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read"}},
+		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"GET /accounts"}},
+		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"GET /proxies"}},
 	}},
 	// No core items: request guards and moderation are plugins and join it.
 	{"security", lt("Security", "安全"), nil},
 	// The site-wide balance ledger; plugins (growth, payment) join the section.
 	{"finance", lt("Finance", "财务"), []coreMenuItem{
-		{"ledger", lt("Balance ledger", "余额流水"), "balance", "/ledger", []string{"balance:all:read"}},
+		{"ledger", lt("Balance ledger", "余额流水"), "balance", "/ledger", []string{"GET /ledger"}},
 	}},
 	// Roles are part of managing users, and so are the user groups they
 	// belong to (CONTRACTS §97).
 	{"users", lt("Users", "用户"), []coreMenuItem{
-		{"users", lt("Users", "用户"), "user", "/users", []string{"user:read"}},
-		{"segments", lt("User groups", "用户组"), "publisher", "/segments", []string{"segment:read"}},
-		{"roles", lt("Roles & permissions", "角色与权限"), "role", "/roles", []string{"role:read"}},
+		{"users", lt("Users", "用户"), "user", "/users", []string{"GET /users"}},
+		{"segments", lt("User groups", "用户组"), "publisher", "/segments", []string{"GET /segments"}},
+		{"roles", lt("Roles & permissions", "角色与权限"), "role", "/roles", []string{"GET /roles"}},
 	}},
 	// Plugin management; plugin menus with section "plugins" (the default)
 	// come after it.
 	{"plugins", lt("Plugins", "插件"), []coreMenuItem{
-		{"plugins", lt("Installed plugins", "已安装插件"), "plugin", "/plugins", []string{"plugin:read"}},
-		{"market", lt("Plugin market", "插件市场"), "market", "/market", []string{"plugin:market:read"}},
-		{"publishers", lt("Publishers", "发布者"), "publisher", "/publishers", []string{"publisher:read"}},
+		{"plugins", lt("Installed plugins", "已安装插件"), "plugin", "/plugins", []string{"GET /plugins"}},
+		{"market", lt("Plugin market", "插件市场"), "market", "/market", []string{"GET /market/plugins"}},
+		{"publishers", lt("Publishers", "发布者"), "publisher", "/publishers", []string{"GET /publishers"}},
 	}},
 	// Operations pages, then the one entry of system settings, shown to
 	// holders of a permission one of its core pages needs: a configuration
 	// page (settings, sticky sessions), groups or model prices. Plugin menus
 	// with section "system" still join it, after /settings (dynweight 0.5.4).
 	{"system", lt("System", "系统"), []coreMenuItem{
-		{"nodes", lt("Cluster nodes", "集群节点"), "node", "/nodes", []string{"node:read"}},
-		{"tasks", lt("Scheduled tasks", "定时任务"), "clock", "/system/tasks", []string{"task:read"}},
-		{"upgrades", lt("Core updates", "核心升级"), "refresh", "/system/upgrades", []string{"system:update:read"}},
-		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"audit:read"}},
-		{"settings", lt("System settings", "系统设置"), "settings", "/settings", []string{"settings:read", "sticky:read", "group:read", "price:read"}},
+		{"nodes", lt("Cluster nodes", "集群节点"), "node", "/nodes", []string{"GET /nodes"}},
+		{"tasks", lt("Scheduled tasks", "定时任务"), "clock", "/system/tasks", []string{"GET /system/tasks"}},
+		{"upgrades", lt("Core updates", "核心升级"), "refresh", "/system/upgrades", []string{"GET /system/upgrades"}},
+		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"GET /audit-logs"}},
+		// The first page of each kind the entry leads to: a configuration
+		// page, sticky sessions, groups, model prices.
+		{"settings", lt("System settings", "系统设置"), "settings", "/settings", []string{"GET /settings/gateway", "GET /sticky-rules", "GET /groups", "GET /prices"}},
 	}},
 	{"me", lt("Personal", "个人中心"), []coreMenuItem{
-		{"my-wallet", lt("Wallet", "钱包"), "balance", "/me/wallet", []string{"balance:self:read"}},
+		{"my-wallet", lt("Wallet", "钱包"), "balance", "/me/wallet", []string{"GET /me/balance"}},
 		{"my-profile", lt("Profile", "个人设置"), "user", "/me/profile", nil},
 	}},
+}
+
+// BindMenuRoutes gives the core menu items the permissions of their main
+// routes (coreMenuItem.apis): keysOf returns a route's keys by
+// httpapi.RouteSpec.ID, false when there is no such route. It fails on a
+// menu naming a route that does not exist; call it once the routes are
+// registered, before serving. Until then the items with routes stay hidden.
+func (s *Service) BindMenuRoutes(keysOf func(id string) ([]string, bool)) error {
+	anyOf := map[string][]string{}
+	var errs []error
+	for _, sec := range coreMenus {
+		for _, it := range sec.items {
+			var keys []string
+			for _, api := range it.apis {
+				k, ok := keysOf(api)
+				if !ok {
+					errs = append(errs, fmt.Errorf("menu %s: no route %s", it.id, api))
+				}
+				keys = append(keys, k...)
+			}
+			anyOf[it.id] = dedupe(keys)
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.menuKeys = anyOf
+	s.mu.Unlock()
+	return nil
+}
+
+// menuAnyOf is the permissions showing it, false when it names routes not
+// bound yet (BindMenuRoutes).
+func (s *Service) menuAnyOf(it coreMenuItem) ([]string, bool) {
+	if len(it.apis) == 0 {
+		return nil, true
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	keys, ok := s.menuKeys[it.id]
+	return keys, ok
 }
 
 // Core sections are placed by their manifest.CoreMenuSections order (the ids
@@ -139,7 +187,8 @@ func (s *Service) Menus(ctx context.Context, userID int64) ([]MenuSection, error
 		order, _ := manifest.CoreMenuSectionOrder(sec.id)
 		i := add(sec.id, sec.label, order)
 		for _, it := range sec.items {
-			if !hasAny(set, it.anyOf) {
+			anyOf, bound := s.menuAnyOf(it)
+			if !bound || !hasAny(set, anyOf) {
 				continue
 			}
 			out[i].Items = append(out[i].Items, MenuItem{ID: it.id, Label: it.label, Icon: it.icon, Path: it.path})

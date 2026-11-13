@@ -400,6 +400,11 @@ func TestHTTP(t *testing.T) {
 	r := httpapi.NewRouter(engine, e.svc, e.authz)
 	e.svc.RegisterRoutes(r)
 	e.authz.RegisterRoutes(r)
+	// The other modules' routes are not mounted here: every menu stands on a
+	// key the super admin holds (app binds the real route table).
+	if err := e.authz.BindMenuRoutes(func(string) ([]string, bool) { return []string{"user:read"}, true }); err != nil {
+		t.Fatal(err)
+	}
 	c := client{t, engine}
 
 	code, out := c.do("POST", "/auth/login", "", map[string]any{"email": adminEmail, "password": adminPassword})

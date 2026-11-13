@@ -71,6 +71,13 @@ var stepUpScopes = map[string]bool{
 	core.StepUpSuperAdminIdentity: false,
 }
 
+// KnownStepUpScope reports whether a proof can be issued for scope, for the
+// start-up route check.
+func KnownStepUpScope(scope string) bool {
+	_, ok := stepUpScopes[scope]
+	return ok
+}
+
 // VerifyMethod is one way to verify, for GET /me/verify/methods.
 type VerifyMethod struct {
 	Method    string `json:"method"`

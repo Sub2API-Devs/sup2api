@@ -45,6 +45,7 @@ import UserPricingDrawer from './UserPricingDrawer.vue'
 import UserSegmentMoveDialog from './UserSegmentMoveDialog.vue'
 import { segmentFilterOptions, useNamedSegments } from './userSegments'
 import { useScopeLabels } from '@/views/roles/scopeLabels'
+import type { PermRef } from '@/generated/permissions'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -128,7 +129,7 @@ const managed = useAssignableRoles()
 function rowActions(u: User): MenuAction[] {
   const self = u.id === auth.me?.id
   if (isSuper(u)) return self ? [{ key: 'transfer', label: t('users.transfer.action'), danger: true }] : []
-  const may = (perm: string) => auth.has(perm) && managed.manageable(u.roles)
+  const may = (perm: PermRef) => auth.has(perm) && managed.manageable(u.roles)
   return [
     { key: 'edit', label: t('common.edit'), hidden: !may('user:update') },
     { key: 'roles', label: t('users.assignRoles'), hidden: !may('role:assign') },

@@ -1,11 +1,12 @@
 // Whom the price simulator may quote for, by what the caller may read.
 import { useAuthStore } from '@/stores/auth'
+import { P, type PermKey } from '@/generated/permissions'
 
 /** A quote is for a user or for every member of a user group. */
 export type QuoteSubject = 'user' | 'segment'
 
 /** Looking a user up takes user:read; listing the user groups takes segment:read. */
-const SUBJECT_PERMS: Record<QuoteSubject, string> = { user: 'user:read', segment: 'segment:read' }
+const SUBJECT_PERMS: Record<QuoteSubject, PermKey> = { user: P.UserRead, segment: P.SegmentRead }
 
 /** The subjects the caller may pick, a user first. */
 export function quoteSubjects(auth = useAuthStore()): QuoteSubject[] {

@@ -11,28 +11,18 @@
 // only when it is "*", "own" or holds a "/". Both copies run the shared
 // vectors of next/sdk/permvectors/vectors.json (implies.spec.ts), so they
 // cannot drift. Pure: no Vue, no store (the mock server imports it too).
+// Relative: the mock server (tsconfig.node) imports this module without the @ alias.
+import { LEGACY_OWN, SCOPE_TYPE, type ScopableKey } from '../generated/permissions'
 
 /** The row kind the scope of an action ranges over (the catalog's scope_type). */
-export type ScopeResource = 'account' | 'proxy'
+export type ScopeResource = (typeof SCOPE_TYPE)[ScopableKey]
 
-/** The actions that take a scope, with their resource (perm.scopable). */
-export const SCOPABLE: Readonly<Record<string, ScopeResource>> = {
-  'account:read': 'account',
-  'account:create': 'account',
-  'account:update': 'account',
-  'account:delete': 'account',
-  'account:test': 'account',
-  'account:credential:view': 'account',
-  'proxy:read': 'proxy',
-  'proxy:manage': 'proxy'
-}
+/** The actions that take a scope, with their resource (perm.scopable; the generated catalog). */
+export const SCOPABLE: Readonly<Record<string, ScopeResource>> = SCOPE_TYPE
 
-/** The former own-level keys and their scoped form: accepted as aliases (R2a); the only place they are spelled. */
-const LEGACY_OWN: Readonly<Record<string, string>> = Object.fromEntries(
-  Object.keys(SCOPABLE).map((action) => {
-    const [resource, ...rest] = action.split(':')
-    return [`${resource}:own:${rest.join(':')}`, `${action}:own`]
-  })
+/** The former own-level keys and their scoped form: accepted as aliases (R2a). */
+const LEGACY_OWN_ALIAS: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(LEGACY_OWN).map(([action, old]) => [old, `${action}:own`])
 )
 
 /** Whether the scope of action may name rows (an id range means nothing for creating a row). */
@@ -66,7 +56,7 @@ const MAX_ID = 9223372036854775807n
 
 /** Reads a key, aliases and trailing wildcards included, into its canonical pattern; null when it does not parse. */
 export function parsePermission(key: string): Pattern | null {
-  const k = LEGACY_OWN[key] ?? key
+  const k = LEGACY_OWN_ALIAS[key] ?? key
   const i = k.lastIndexOf(':')
   const last = k.slice(i + 1)
   if (i < 0 || (last !== '*' && last !== 'own' && !last.includes('/'))) return { action: k, scope: ALL_SCOPE }

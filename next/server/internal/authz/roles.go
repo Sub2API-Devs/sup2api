@@ -675,6 +675,10 @@ type PermissionItem struct {
 	Sensitive   bool               `json:"sensitive"`
 	// StepUp: using it may need a step-up proof (catalog stepUp).
 	StepUp bool `json:"step_up"`
+	// Requires: soft dependencies, keys it is of little use without (catalog
+	// requires); editor hints only, never part of authorization. Core
+	// permissions only.
+	Requires []string `json:"requires,omitempty"`
 	// ScopeType: the key takes a scope over this resource ("account",
 	// "proxy"; CONTRACTS §21), "" for none.
 	ScopeType string `json:"scope_type"`
@@ -717,7 +721,9 @@ ORDER BY p.source, p.module, p.sort, p.key`, legacyOwnKeys())
 		if it.Description == nil {
 			it.Description = core.LocalizedText{}
 		}
-		it.StepUp = stepUpFlag(it.Key)
+		if p, ok := corePermByKey(it.Key); ok {
+			it.StepUp, it.Requires = p.stepUp, p.requiredKeys()
+		}
 		m := byModule[module]
 		if m == nil {
 			m = &PermissionModule{Module: module, Source: source, PluginKey: pluginKey, Permissions: []PermissionItem{}}

@@ -13,5 +13,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "mock/**/*.ts", "scripts/**/*.ts", "packages/ui/src/icons.ts", "src/authz/implies.ts"]
+  "include": ["vite.config.ts", "mock/**/*.ts", "scripts/**/*.ts", "packages/ui/src/icons.ts", "src/authz/implies.ts", "src/generated/permissions.ts"]
 }
