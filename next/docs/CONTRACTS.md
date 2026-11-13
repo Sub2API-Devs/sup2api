@@ -318,7 +318,7 @@
 
 | key | 值 | 默认 |
 |---|---|---|
-| `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd, client_disconnect_policy, client_disconnect_wait_seconds}`（后两项见 §25.8） | `reject`、`"0"`、`"10"`、`continue`、120 |
+| `billing` | `{missing_price_policy, min_balance, big_cost_warning_usd, client_disconnect_policy}`（最后一项见 §25.8；`client_disconnect_wait_seconds` 2026-11-14 删除，已存的值忽略） | `reject`、`"0"`、`"10"`、`continue` |
 | `sticky` | `{enabled, default_ttl_seconds, keep_on_account_disabled}` | `true`、3600、`false` |
 | `gateway` | `{max_attempts, platform_call_timeout_ms, default_hook_timeout_ms}` | 3、2000、300 |
 | `auto_disable` | `{enabled, status_codes, keywords}`（§42.2） | `true`、`"401"`、new-api 的 7 条关键词 |
@@ -2156,13 +2156,13 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 | `free` | 立即中止上游，`billable=false`，已报告的 token 仍留在记录里。 |
 
 - **估算与已报告用量的合并改为分侧取值**，取代上一段的「每项取较大值」：输入侧四项（`input`、`cache_read`、`cache_creation`、`cache_creation_1h`）只要响应报告过任意一项就整体采用响应的数，否则整体采用估算；输出取两者较大值。原因：估算把整段提示算作输入，响应把同一段提示的缓存部分算在缓存项下，逐项取较大值在输入不含缓存的协议（Anthropic）上把提示计了两遍。实现 `gateway/pipeline.go` 的 `canceledTokens`。
-- **`continue` 的等待上限** `client_disconnect_wait_seconds`，5–1800，默认 120。到时以 `errDisconnectWaitTimeout` 取消上游。流空闲超时、`relay_timeout_seconds` 照常生效。读取期间请求不退出，账号与 API Key 的并发名额照常占用。
-- **上游请求的 context 不再派生自客户端请求**（`gateway/dispatch.go` 的 `forwardBuilt`）：由 `gateway/disconnect.go` 的 `upstreamDrain` 在客户端 context 结束时取消它，`continue` 且 `forward` 正在转发成功响应时改为启动等待计时器。
+- **`continue` 不另设等待上限**（2026-11-14 用户决定：与请求本身的超时保持一致，不单独配置）：续读只受这次上游交换原有的超时约束，即环境变量 `relay_timeout_seconds`（上游整体超时）和 `streaming_idle_timeout_seconds`（流式空闲超时，§74.3），与客户端还在时相同（`relay_timeout_seconds` 未设置即不限，这时非流式响应读正文没有上限，流式只受空闲超时约束）；到时上游被取消，按 `precharge` 处理。原设置 `client_disconnect_wait_seconds`（5–1800，默认 120）删除，接口不再返回、PUT 不再接受，已存的值留在行里但不读；滚动期间旧核心仍按它等待。读取期间请求不退出，账号与 API Key 的并发名额照常占用。
+- **上游请求的 context 不再派生自客户端请求**（`gateway/dispatch.go` 的 `forwardBuilt`）：由 `gateway/disconnect.go` 的 `upstreamDrain` 在客户端 context 结束时取消它，`continue` 且 `forward` 正在转发成功响应时不取消，读到结束或被上游超时取消。
 - **`continue` 只覆盖核心直接转发的响应**（`forwardSSE`、`forwardJSON`、`forwardJSONConverted`）。插件 `Execute` 执行的请求、`task.submit`、资源与额度流、WebSocket 不续读，按 `precharge` 处理。
-- 旧的 `billing` 行没有这两个字段，读出默认值，**所以升级后既有部署即按 `continue` 运行**；存储值不在取值集合内时策略取默认值，等待秒数夹到范围内。设置读取失败时网关按 `precharge` 处理。
+- 旧的 `billing` 行没有这个字段，读出默认值，**所以升级后既有部署即按 `continue` 运行**；存储值不在取值集合内时策略取默认值。设置读取失败时网关按 `precharge` 处理。
 - **什么算「读完」**：有输出因客户端已离开而被丢弃，且上游正常结束、没有以流内错误事件收尾。客户端收完最后一个字节才断开的请求没有丢输出，照常记为成功。关停不再等待在途请求时调用 `Gateway.AbandonReads()`（`app/phases.go` 的 `cancelRequests`），续读立即中止，按 `precharge` 处理。
-- 策略经 `core.ClientDisconnectSource` 读取，`billing.Service` 实现；网关拿不到时按 `precharge` 处理。网关包的测试环境同样默认 `precharge`，只有针对 `continue` 的用例显式开启。
-- 测试：`gateway/disconnect_test.go`（三种策略、等待超时、续读中关停的端到端，`canceledTokens`）、`e2e/ac26_client_disconnect_test.go`（整机验收）、`gateway/precharge_cancel_test.go`（判定）、`billing/settings_disconnect_test.go`（设置读写与校验）。
+- 策略经 `core.ClientDisconnectSource.ClientDisconnectPolicy` 读取，`billing.Service` 实现；网关拿不到时按 `precharge` 处理。网关包的测试环境同样默认 `precharge`，只有针对 `continue` 的用例显式开启。
+- 测试：`gateway/disconnect_test.go`（三种策略、续读被上游整体超时结束、续读中关停的端到端，`canceledTokens`）、`e2e/ac26_client_disconnect_test.go`（整机验收）、`gateway/precharge_cancel_test.go`（判定）、`billing/settings_disconnect_test.go`（设置读写与校验）。
 
 ### 25.9 请求体里重复的对象键与过深嵌套一律拒绝（2026-10-31，团队审核 P1）
 
@@ -7267,6 +7267,17 @@ PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先
 - **未覆盖**：账号测试请求（`BuildTestRequest`）、WebSocket 端点的请求头、分组 / 全局层的覆盖、批量编辑。
 - 代码：`sdk/paramoverride`（校验、编译、执行，2026-11-09 从 core 迁出，供清单校验共用；`core/param_override.go` 保留别名）、`gateway/param_override.go`（挂接点）、`account/param_override_preview.go`。测试：`core/param_override_test.go`、`account/account_test.go`（`TestAccountParamOverride*`）、`gateway/param_override_test.go`（请求体和头到达上游、改模型不触发可用性不一致、return_error、运行失败换账号、执行路径）。
 
+### 84.1 内置参数覆盖：Claude 默认 `max_tokens`（2026-11-14，用户要求）
+
+用户原话要点：默认 max_tokens “不应该是必填，而应该是可以打开的参数覆盖功能……打开之后相当于每一个 Anthropic 账号的调用都加上了一个参数覆盖”。取代 §88 的 `claude_default_max_tokens`（必填 `default`、强制生效）。
+
+- **设置**：网关设置行 `gateway` 的 `claude_max_tokens`：`{"enabled": bool, "models": {"<客户端模型名>": 整数, "default": 整数}}`，默认 `{"enabled": false, "models": {"default": 8192}}`（行里没有这一项时 `models` 给出 `default` 8192 作为建议值，关闭时不生效）。`PUT /settings/gateway` 整体替换；`models` 最多 100 项（每项一条覆盖操作，同 §84 上限），模型名 1–200 个字符（按 Unicode 字符计，不按字节）且首尾无空格，值 1–1048576，`default` 可有可无，编译出的覆盖不得超过 §84 的 64 KiB；错误在字段 `claude_max_tokens`（`too_many`、`invalid_model`、`out_of_range`、`too_large`，控制台按这个字段名精确匹配）。存储值 ≤ 0 的项读时丢弃，超上限的夹到上限。旧键 `claude_default_max_tokens` 不再读写，保存设置后从行里消失；滚动期间旧核心读不到它时按 `{"default": 8192}` 运行。
+- **执行**：开启时编译成一个 §84 格式的覆盖（`gateway/claude_max_tokens.go`）：每个模型一条 `{"mode":"set","path":"max_tokens","value":N,"keep_origin":true,"conditions":[{"path":"original_model","mode":"full","value":"<模型>"}]}`，按模型名排序，最后一条不带条件的 `default`。与账号覆盖同一个引擎、同一个挂接点（`rewriteBody`），在声明式上游的部分之后、**账号自己的覆盖之前**执行，所以账号覆盖可以再改它；只作用于上游协议为 `anthropic.messages` 的尝试（含插件 Execute 路径），不设置请求头，运行失败按 §84 的运行失败处理（名称 `built-in request parameter override`）。客户端带了 `max_tokens` 不改；没有匹配的模型、也没有 `default` 时不补。
+- **转换请求**：转换到 Anthropic 的请求，`max_tokens` 是 Anthropic 必填字段，客户端没给输出上限时转换器必须写（CONVERT-MATRIX D5）：规则开启且有值时用规则的值，否则用转换器的兜底 8192；开 thinking 时的抬高规则不变。规则随后看到的已经是带 `max_tokens` 的请求体，不会重复写。
+- **关闭时**：原生 Anthropic 请求原样转发；转换请求按上一条兜底。
+- 控制台：网关设置“Claude 默认 max_tokens”一行改为开关，开启后才编辑模型表。
+- 测试：`gateway/param_override_test.go` 的 `TestClaudeMaxTokensBuiltinOverride`（默认关闭、按模型、按 default、保留客户端值、账号覆盖在后）、`gateway/round4_test.go` 的 `TestConversionGatewaySettings`（读写、校验与错误字段名、按字符计的模型名长度、总大小上限、只对 anthropic.messages 而不对 count_tokens）。
+
 ## 85. 钩子点 `gateway.attempt`：选定账号后、发往账号前（2026-11-08，moderation 0.7.0 需要，72.17；核心 0.1.258）
 
 `gateway.request` 在调度前执行，看不到请求会发往哪个账号。有些插件要按账号决定，例如流程绑定到账号的审核。为此新增通用钩子点 `gateway.attempt`，核心不针对任何插件做特殊处理。
@@ -7413,7 +7424,7 @@ PATCH `/users/:id` 只有改密码、邮箱时要 proof；PUT `/me/password` 先
 - 迁移 `0093_conversion_loss_policy.sql`：`accounts.conversion_loss_policy`、`groups.conversion_loss_policy`（`allow|safe|strict`，NULL 继承）、`usage_logs.conversion`（jsonb，NULL = 原生且无拒绝）。均为可空无默认值的列。
 - `GET/POST/PATCH /accounts`、`/accounts/:id` 与 `/groups`、`/groups/:id`：`conversion_loss_policy`：`"allow"|"safe"|"strict"|null`；PATCH 缺省保持、null 清除；非法值 400 `invalid_argument`，`details.fields[{field: "conversion_loss_policy", code: "invalid"}]`。权限与该资源的其他字段相同。账号的策略经调度快照（`core.AccountRef`）、分组的经 API Key 认证（`core.GroupInfo`）到达网关，随既有缓存失效。
 - `GET /account-types`：`endpoints[]` 增加 `grade`（native / good / fair / discouraged / local）与 `via`（经过的协议，客户端在前；组合时三项；原生与 local 省略）；`native` 保留（等于 grade 为 native）。按 88.2 计算，不区分流式（同等级的兄弟端点由网关按请求选）。
-- `GET/PUT /settings/gateway`：`claude_default_max_tokens`（对象，模型名 → 整数 0–1048576，默认 `{"default": 8192}`；PUT 整体替换，缺 `default` 时补 8192，最多 200 个模型，模型名 1–200 字符且首尾无空格）——转换到 Anthropic 且客户端没给输出上限时按客户端模型取值，否则取 `default`（D5）；`media_download_max_mb`（1–1024，默认 64）——转换到 Gemini 时下载单个媒体文件的上限（D6）。
+- `GET/PUT /settings/gateway`：`claude_max_tokens`（2026-11-14 取代 `claude_default_max_tokens`，见 §84.1）；`media_download_max_mb`（1–1024，默认 64）——转换到 Gemini 时下载单个媒体文件的上限（D6）。
 - 使用记录列表与详情：`conversion`（`/me/usage` 为 null，与 `upstream_protocol` 一致）；筛选 `conversion=native|converted|good|fair|discouraged|local|lossy`（`native` 含 NULL 与 grade native；`converted` 为三个转换等级；`lossy` 为有请求或响应侧损失），只对管理员视图。
 
 ### 88.6 使用记录 `conversion`

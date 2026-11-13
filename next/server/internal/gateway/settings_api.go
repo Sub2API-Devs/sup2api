@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -64,10 +63,9 @@ type gatewaySettingsInput struct {
 	QueueStickyWaitSeconds   *int `json:"queue_sticky_wait_seconds"`
 	QueueFallbackMaxWaiting  *int `json:"queue_fallback_max_waiting"`
 	QueueFallbackWaitSecond  *int `json:"queue_fallback_wait_seconds"`
-	// ClaudeDefaultMaxTokens replaces the map as a whole; a missing
-	// "default" key is filled in with 8192.
-	ClaudeDefaultMaxTokens *map[string]int `json:"claude_default_max_tokens"`
-	MediaDownloadMaxMB     *int            `json:"media_download_max_mb"`
+	// ClaudeMaxTokens replaces the rule as a whole.
+	ClaudeMaxTokens    *ClaudeMaxTokensRule `json:"claude_max_tokens"`
+	MediaDownloadMaxMB *int                 `json:"media_download_max_mb"`
 }
 
 // validate checks the provided fields against the accepted ranges
@@ -94,38 +92,10 @@ func (in *gatewaySettingsInput) validate(ctx context.Context) []core.FieldError 
 	check("queue_fallback_max_waiting", in.QueueFallbackMaxWaiting, 0, maxQueueWaiting)
 	check("queue_fallback_wait_seconds", in.QueueFallbackWaitSecond, 0, maxQueueWaitSeconds)
 	check("media_download_max_mb", in.MediaDownloadMaxMB, minMediaDownloadMaxMB, maxMediaDownloadMaxMB)
-	if in.ClaudeDefaultMaxTokens != nil {
-		fe = append(fe, validateClaudeMaxTokens(*in.ClaudeDefaultMaxTokens, zh)...)
+	if in.ClaudeMaxTokens != nil {
+		fe = append(fe, in.ClaudeMaxTokens.validate(zh)...)
 	}
 	return fe
-}
-
-// validateClaudeMaxTokens checks claude_default_max_tokens: at most
-// maxClaudeMaxTokensModels non-blank model names, values 0 to
-// maxClaudeMaxTokens.
-func validateClaudeMaxTokens(m map[string]int, zh bool) []core.FieldError {
-	const field = "claude_default_max_tokens"
-	msg := func(en, cn string) string {
-		if zh {
-			return cn
-		}
-		return en
-	}
-	if len(m) > maxClaudeMaxTokensModels {
-		return []core.FieldError{{Field: field, Code: "too_many",
-			Message: msg(fmt.Sprintf("at most %d models", maxClaudeMaxTokensModels), fmt.Sprintf("最多 %d 个模型", maxClaudeMaxTokensModels))}}
-	}
-	for k, v := range m {
-		if strings.TrimSpace(k) != k || k == "" || len(k) > 200 {
-			return []core.FieldError{{Field: field, Code: "invalid_model",
-				Message: msg("model names must be 1-200 characters without surrounding spaces", "模型名须为 1-200 个字符且首尾无空格")}}
-		}
-		if v < 0 || v > maxClaudeMaxTokens {
-			return []core.FieldError{{Field: field, Code: "out_of_range",
-				Message: msg(fmt.Sprintf("values must be between 0 and %d", maxClaudeMaxTokens), fmt.Sprintf("取值范围为 0 到 %d", maxClaudeMaxTokens))}}
-		}
-	}
-	return nil
 }
 
 func (in *gatewaySettingsInput) applyTo(v *GatewaySettings) {
@@ -153,8 +123,8 @@ func (in *gatewaySettingsInput) applyTo(v *GatewaySettings) {
 	if in.QueueFallbackWaitSecond != nil {
 		v.QueueFallbackWaitSecond = *in.QueueFallbackWaitSecond
 	}
-	if in.ClaudeDefaultMaxTokens != nil {
-		v.ClaudeDefaultMaxTokens = *in.ClaudeDefaultMaxTokens
+	if in.ClaudeMaxTokens != nil {
+		v.ClaudeMaxTokens = *in.ClaudeMaxTokens
 	}
 	if in.MediaDownloadMaxMB != nil {
 		v.MediaDownloadMaxMB = *in.MediaDownloadMaxMB

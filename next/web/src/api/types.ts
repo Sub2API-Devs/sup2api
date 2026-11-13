@@ -1280,8 +1280,6 @@ export interface BillingSettings {
   big_cost_warning_usd: Money
   /** What a request pays when its client hangs up mid-answer (CONTRACTS §25.8). */
   client_disconnect_policy: 'precharge' | 'continue' | 'free'
-  /** How long the upstream is still read under "continue", 5-1800. */
-  client_disconnect_wait_seconds: number
 }
 
 /** GET/PUT /settings/gateway (CONTRACTS §8, §14.4). */
@@ -1302,14 +1300,26 @@ export interface GatewaySettings {
   queue_fallback_max_waiting: number
   /** Longest wait in that queue, 0–600 s (default 30). */
   queue_fallback_wait_seconds: number
-  /** max_tokens of a request converted to Anthropic without an output limit: model name -> tokens, always with "default". */
-  claude_default_max_tokens: Record<string, number>
+  /** Built-in parameter override of Anthropic accounts: max_tokens of a request without one. */
+  claude_max_tokens: ClaudeMaxTokensRule
   /** Size cap of one http(s) media file downloaded for Gemini, 1–1024 MB (default 64). */
   media_download_max_mb: number
 }
 
+/**
+ * Off (default), only a request converted to Anthropic gets max_tokens when the
+ * client sets none (8192). On, every request to an anthropic.messages account
+ * without max_tokens gets models[client model] ?? models.default, before the
+ * account's own overrides; without "default" other models get none.
+ */
+export interface ClaudeMaxTokensRule {
+  enabled: boolean
+  /** Client model name -> max_tokens; kept while off. */
+  models: Record<string, number>
+}
+
 /** The numeric gateway settings (one value each). */
-export type GatewayNumberSetting = Exclude<keyof GatewaySettings, 'claude_default_max_tokens'>
+export type GatewayNumberSetting = Exclude<keyof GatewaySettings, 'claude_max_tokens'>
 
 /** Core load balancing of new sessions within a tier (GET/PUT /settings/scheduling, CONTRACTS §89). */
 export interface SchedulingSettings {
@@ -1323,8 +1333,8 @@ export interface SchedulingSettings {
   model_limits: boolean
 }
 
-/** Limits of claude_default_max_tokens, mirrored from the server. */
-export const CLAUDE_MAX_TOKENS = { fallbackKey: 'default', fallback: 8192, max: 1048576, models: 200, nameLength: 200 } as const
+/** Limits of claude_max_tokens.models, mirrored from the server; `fallback` is the value of a converted request without one. */
+export const CLAUDE_MAX_TOKENS = { fallbackKey: 'default', fallback: 8192, min: 1, max: 1048576, models: 100, nameLength: 200 } as const
 
 /** Validation ranges of GatewaySettings, mirrored from the server. */
 export const GATEWAY_SETTINGS_RANGES: Record<GatewayNumberSetting, [number, number]> = {

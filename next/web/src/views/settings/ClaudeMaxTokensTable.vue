@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// Rows of claude_default_max_tokens (CONVERT-MATRIX §6.1): model -> max_tokens.
-// The first row is the "default" fallback: it cannot be renamed or removed.
+// Rows of claude_max_tokens.models (CONVERT-MATRIX §6.1): model -> max_tokens.
 // Every edit emits a new list, so the settings form can restore the loaded one.
 import { useI18n } from 'vue-i18n'
 import { SButton, SInput } from '@sub2api/ui'
@@ -41,7 +40,6 @@ const remove = (i: number) =>
         :model-value="r.model"
         size="sm"
         mono
-        :readonly="i === 0"
         :disabled="disabled"
         :error="error"
         :maxlength="CLAUDE_MAX_TOKENS.nameLength"
@@ -54,7 +52,7 @@ const remove = (i: number) =>
         size="sm"
         type="number"
         step="1"
-        min="0"
+        :min="CLAUDE_MAX_TOKENS.min"
         :max="CLAUDE_MAX_TOKENS.max"
         :disabled="disabled"
         :error="error"
@@ -63,7 +61,6 @@ const remove = (i: number) =>
         @update:model-value="update(i, { tokens: typeof $event === 'number' ? $event : null })"
       />
       <SButton
-        v-if="i > 0"
         variant="ghost"
         tone="danger"
         size="sm"
@@ -73,7 +70,6 @@ const remove = (i: number) =>
         @click="remove(i)"
         >{{ t('common.remove') }}</SButton
       >
-      <span v-else :title="t('settings.gateway.maxTokens.defaultLocked')" />
     </div>
     <SButton
       size="sm"

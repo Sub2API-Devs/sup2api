@@ -166,8 +166,9 @@ func (gc goldenSpec) options() Options {
 		Fetch: fixtureFetcher(gc.Media), ClaudeDefaultMaxTokens: gc.maxTokens}
 }
 
-// maxTokens is the gateway setting claude_default_max_tokens of the case,
-// {"default": 8192} unless case.json gives one.
+// maxTokens stands for the models of the gateway's claude_max_tokens rule
+// (the fixture key keeps the setting's former name), {"default": 8192}
+// unless case.json gives one.
 func (gc goldenSpec) maxTokens(model string) int {
 	if n, ok := gc.MaxTokens[model]; ok {
 		return n

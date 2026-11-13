@@ -22,12 +22,11 @@ func (s *Service) OutputReserveTokens(ctx context.Context) (int64, error) {
 	return st.OutputReserveTokens, err
 }
 
-// ClientDisconnect implements the gateway's optional lookup of what a request
-// pays when its client hangs up mid-answer (CONTRACTS §25.8).
-func (s *Service) ClientDisconnect(ctx context.Context) (core.ClientDisconnect, error) {
+// ClientDisconnectPolicy implements the gateway's optional lookup of what a
+// request pays when its client hangs up mid-answer (CONTRACTS §25.8).
+func (s *Service) ClientDisconnectPolicy(ctx context.Context) (string, error) {
 	st, err := s.Settings(ctx)
-	return core.ClientDisconnect{Policy: st.ClientDisconnectPolicy,
-		Wait: time.Duration(st.ClientDisconnectWaitSeconds) * time.Second}, err
+	return st.ClientDisconnectPolicy, err
 }
 
 func (s *Service) Precharge(ctx context.Context, r *core.UsageRecord) error {

@@ -3,7 +3,6 @@ package billing
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,26 +32,17 @@ type Settings struct {
 	// ClientDisconnectPolicy is what a request pays when its client hangs up
 	// while the upstream is answering (CONTRACTS §25.8): the pre-charge
 	// estimate, the real usage after reading the upstream to its end, or
-	// nothing. ClientDisconnectWaitSeconds bounds that reading.
-	ClientDisconnectPolicy      string `json:"client_disconnect_policy"`
-	ClientDisconnectWaitSeconds int    `json:"client_disconnect_wait_seconds"`
+	// nothing. The reading has no timeout of its own: it keeps the
+	// upstream exchange's (environment variables, §74.3).
+	ClientDisconnectPolicy string `json:"client_disconnect_policy"`
 }
 
-// Accepted range and default of client_disconnect_wait_seconds.
-const (
-	minClientDisconnectWaitSeconds     = 5
-	maxClientDisconnectWaitSeconds     = 1800
-	defaultClientDisconnectWaitSeconds = 120
-)
-
 // normalizeClientDisconnect makes a stored document usable: a policy outside
-// the accepted set becomes the default rather than one nobody chose, and the
-// wait is brought into its range.
+// the accepted set becomes the default rather than one nobody chose.
 func (v *Settings) normalizeClientDisconnect() {
 	if !validDisconnectPolicy(v.ClientDisconnectPolicy) {
 		v.ClientDisconnectPolicy = DefaultSettings().ClientDisconnectPolicy
 	}
-	v.ClientDisconnectWaitSeconds = min(max(v.ClientDisconnectWaitSeconds, minClientDisconnectWaitSeconds), maxClientDisconnectWaitSeconds)
 }
 
 func validDisconnectPolicy(p string) bool {
@@ -62,14 +52,13 @@ func validDisconnectPolicy(p string) bool {
 // DefaultSettings are used when the row is absent.
 func DefaultSettings() Settings {
 	return Settings{
-		PreConsumeTokens:            500,
-		MissingPricePolicy:          PolicyReject,
-		MinBalance:                  decimal.Zero,
-		BigCostWarningUSD:           decimal.NewFromInt(10),
-		OutputReserveTokens:         4000,
-		MaxOverdraftPerUser:         decimal.NewFromInt(5),
-		ClientDisconnectPolicy:      core.DisconnectContinue,
-		ClientDisconnectWaitSeconds: defaultClientDisconnectWaitSeconds,
+		PreConsumeTokens:       500,
+		MissingPricePolicy:     PolicyReject,
+		MinBalance:             decimal.Zero,
+		BigCostWarningUSD:      decimal.NewFromInt(10),
+		OutputReserveTokens:    4000,
+		MaxOverdraftPerUser:    decimal.NewFromInt(5),
+		ClientDisconnectPolicy: core.DisconnectContinue,
 	}
 }
 
@@ -111,14 +100,13 @@ func loadSettings(ctx context.Context, q store.Querier) (Settings, error) {
 	}
 	// Fields absent from the stored document keep their defaults.
 	var partial struct {
-		PreConsumeTokens            *int64           `json:"pre_consume_tokens"`
-		MissingPricePolicy          *string          `json:"missing_price_policy"`
-		MinBalance                  *decimal.Decimal `json:"min_balance"`
-		BigCostWarningUSD           *decimal.Decimal `json:"big_cost_warning_usd"`
-		OutputReserveTokens         *int64           `json:"output_reserve_tokens"`
-		MaxOverdraftPerUser         *decimal.Decimal `json:"max_overdraft_per_user"`
-		ClientDisconnectPolicy      *string          `json:"client_disconnect_policy"`
-		ClientDisconnectWaitSeconds *int             `json:"client_disconnect_wait_seconds"`
+		PreConsumeTokens       *int64           `json:"pre_consume_tokens"`
+		MissingPricePolicy     *string          `json:"missing_price_policy"`
+		MinBalance             *decimal.Decimal `json:"min_balance"`
+		BigCostWarningUSD      *decimal.Decimal `json:"big_cost_warning_usd"`
+		OutputReserveTokens    *int64           `json:"output_reserve_tokens"`
+		MaxOverdraftPerUser    *decimal.Decimal `json:"max_overdraft_per_user"`
+		ClientDisconnectPolicy *string          `json:"client_disconnect_policy"`
 	}
 	if err := json.Unmarshal(raw, &partial); err != nil {
 		return v, err
@@ -144,9 +132,6 @@ func loadSettings(ctx context.Context, q store.Querier) (Settings, error) {
 	if partial.ClientDisconnectPolicy != nil {
 		v.ClientDisconnectPolicy = *partial.ClientDisconnectPolicy
 	}
-	if partial.ClientDisconnectWaitSeconds != nil {
-		v.ClientDisconnectWaitSeconds = *partial.ClientDisconnectWaitSeconds
-	}
 	v.normalizeClientDisconnect()
 	return v, nil
 }
@@ -169,12 +154,11 @@ func (s *Service) putSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	cur := DefaultSettings()
 	var in struct {
-		PreConsumeTokens            *int64           `json:"pre_consume_tokens"`
-		MissingPricePolicy          *string          `json:"missing_price_policy"`
-		MinBalance                  *decimal.Decimal `json:"min_balance"`
-		BigCostWarningUSD           *decimal.Decimal `json:"big_cost_warning_usd"`
-		ClientDisconnectPolicy      *string          `json:"client_disconnect_policy"`
-		ClientDisconnectWaitSeconds *int             `json:"client_disconnect_wait_seconds"`
+		PreConsumeTokens       *int64           `json:"pre_consume_tokens"`
+		MissingPricePolicy     *string          `json:"missing_price_policy"`
+		MinBalance             *decimal.Decimal `json:"min_balance"`
+		BigCostWarningUSD      *decimal.Decimal `json:"big_cost_warning_usd"`
+		ClientDisconnectPolicy *string          `json:"client_disconnect_policy"`
 	}
 	if !httpapi.BindJSON(c, &in) {
 		return
@@ -206,13 +190,6 @@ func (s *Service) putSettings(c *gin.Context) {
 			fields = append(fields, core.FieldError{Field: "client_disconnect_policy", Code: "invalid", Message: "must be precharge, continue or free"})
 		}
 		cur.ClientDisconnectPolicy = *in.ClientDisconnectPolicy
-	}
-	if in.ClientDisconnectWaitSeconds != nil {
-		if w := *in.ClientDisconnectWaitSeconds; w < minClientDisconnectWaitSeconds || w > maxClientDisconnectWaitSeconds {
-			fields = append(fields, core.FieldError{Field: "client_disconnect_wait_seconds", Code: "invalid",
-				Message: fmt.Sprintf("must be an integer from %d to %d", minClientDisconnectWaitSeconds, maxClientDisconnectWaitSeconds)})
-		}
-		cur.ClientDisconnectWaitSeconds = *in.ClientDisconnectWaitSeconds
 	}
 	if len(fields) > 0 {
 		httpapi.Fail(c, core.InvalidFields(fields...))

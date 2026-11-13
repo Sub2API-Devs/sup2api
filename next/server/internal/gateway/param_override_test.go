@@ -117,3 +117,35 @@ func TestAccountParamOverrideExecutePath(t *testing.T) {
 	assert.Equal(t, "claude-override", b.GetMeta().GetModel())
 	assert.Equal(t, `"claude-override"`, b.GetFields()["model"])
 }
+
+// The built-in claude_max_tokens override (CONTRACTS §84.1): off, nothing is
+// added; on, a body without max_tokens gets its client model's value, else
+// the default's; the client's own value is kept, and the account's override
+// runs after it.
+func TestClaudeMaxTokensBuiltinOverride(t *testing.T) {
+	e := newEnv(t)
+	noLimit := body(testModel, false)
+	delete(noLimit, "max_tokens")
+	maxTokens := func(b map[string]any) gjson.Result {
+		t.Helper()
+		r := e.messages(b)
+		require.Equal(t, 200, r.status, string(r.body))
+		e.record()
+		return gjson.GetBytes(e.up.last().body, "max_tokens")
+	}
+
+	assert.False(t, maxTokens(noLimit).Exists(), "off by default")
+
+	gw := noQueueSettings()
+	gw.ClaudeMaxTokens = ClaudeMaxTokensRule{Enabled: true, Models: map[string]int{"default": 100, testModel: 200}}
+	e.setSettings(gw, defaultStickySettings())
+	assert.Equal(t, int64(200), maxTokens(noLimit).Int(), "the client model's value")
+	assert.Equal(t, int64(64), maxTokens(body(testModel, false)).Int(), "the client's own value is kept")
+
+	gw.ClaudeMaxTokens.Models = map[string]int{"default": 100}
+	e.setSettings(gw, defaultStickySettings())
+	assert.Equal(t, int64(100), maxTokens(noLimit).Int(), "the default's value")
+
+	setParamOverride(t, e, 1, `{"operations":[{"mode":"set","path":"max_tokens","value":5}]}`)
+	assert.Equal(t, int64(5), maxTokens(noLimit).Int(), "the account's override runs after")
+}
