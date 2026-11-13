@@ -26,9 +26,9 @@ func transferTargetError(code, message string) *core.Error {
 
 // TransferSuperAdmin hands the super admin role to targetID inside tx, the
 // only way it changes hands; every other holder becomes an admin, except a
-// deleted one, which only loses the role (as 0098 does). actorID
-// must hold it; 0 is the server CLI, which also repairs a database with no or
-// several holders. It returns the bumped version (call Committed after
+// deleted one, which only loses the role (as 0098 does). actorID must hold
+// it; 0 is the server CLI, which also repairs a database with no or several
+// holders. It returns the bumped version (call Committed after
 // commit) and the demoted users. Only roles, user_roles and users are read
 // and written, so the CLI runs on any schema it may meet.
 func (s *Service) TransferSuperAdmin(ctx context.Context, tx pgx.Tx, actorID, targetID int64) (int64, []int64, error) {
