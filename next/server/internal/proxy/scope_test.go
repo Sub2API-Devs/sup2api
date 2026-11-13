@@ -3,11 +3,14 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -50,11 +53,30 @@ func TestProxyIDScope(t *testing.T) {
 	code, out = do(t, engine, keeper, "POST", "/proxies/probe", map[string]any{"proxy_url": "http://h.example:8080"})
 	require.Equal(t, 403, code, out)
 
+	// It matches its proxy by address (an account's proxy_url) without
+	// creating one; another address it may not create.
+	keeperScope := core.DataScope{IDs: []int64{mine}}
+	require.NoError(t, db.Tx(ctx, func(tx pgx.Tx) error {
+		id, created, err := svc.FindOrCreate(ctx, tx, Spec{Protocol: "http", Host: "h.example", Port: 8080}, keeper, keeperScope)
+		require.Equal(t, mine, id)
+		require.False(t, created)
+		return err
+	}))
+	require.Error(t, db.Tx(ctx, func(tx pgx.Tx) error {
+		_, _, err := svc.FindOrCreate(ctx, tx, Spec{Protocol: "http", Host: "other.example", Port: 8080}, keeper, keeperScope)
+		return err
+	}))
+	for _, route := range []string{"GET /proxies/%d/location", "POST /proxies/%d/test", "POST /proxies/%d/reveal-url"} {
+		method, path, _ := strings.Cut(fmt.Sprintf(route, other), " ")
+		code, _ = do(t, engine, keeper, method, path, nil)
+		require.Equal(t, 404, code, route)
+	}
+
 	role := scalar(t, db, `INSERT INTO roles (key, name) VALUES ('keeper', '{}') RETURNING id`)
-	perm := scalar(t, db, `INSERT INTO permissions (key, module, label, source) VALUES ('proxy:manage', 'proxy', '{}', 'core')
+	permID := scalar(t, db, `INSERT INTO permissions (key, module, label, source) VALUES ('proxy:manage', 'proxy', '{}', 'core')
 		ON CONFLICT (key) DO UPDATE SET key = EXCLUDED.key RETURNING id`)
 	_, err := db.Pool.Exec(ctx, `INSERT INTO role_permission_scopes (role_id, permission_id, scope) VALUES ($1, $2, $3), ($1, $2, $4)`,
-		role, perm, fmt.Sprintf("proxy/%d", mine), fmt.Sprintf("proxy/%d", other))
+		role, permID, fmt.Sprintf("proxy/%d", mine), fmt.Sprintf("proxy/%d", other))
 	require.NoError(t, err)
 	code, _ = do(t, engine, admin, "DELETE", fmt.Sprintf("/proxies/%d", mine), nil)
 	require.Equal(t, 204, code)

@@ -28,12 +28,6 @@ func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerI
 	if err := checkSpec(spec); err != nil {
 		return 0, false, err
 	}
-	// A restricted scope may not use a private proxy address, and is refused
-	// before creating anything (CONTRACTS §43.3).
-	allowPriv, err := s.checkPrivate(ctx, scope, spec.Host)
-	if err != nil {
-		return 0, false, err
-	}
 	// Serialise concurrent saves of the same URL for the rest of the
 	// transaction; the lock key ignores the password on purpose (same key
 	// space as the SQL pre-filter).
@@ -74,7 +68,14 @@ func (s *Service) FindOrCreate(ctx context.Context, tx pgx.Tx, spec Spec, ownerI
 	}
 	rows.Close()
 
+	// Creating: every-row or own scopes only, and a restricted one never at
+	// a private address (CONTRACTS §43.3). A proxy already in scope matches
+	// whatever its address.
 	if err := canCreate(ctx, scope); err != nil {
+		return 0, false, err
+	}
+	allowPriv, err := s.checkPrivate(ctx, scope, spec.Host)
+	if err != nil {
 		return 0, false, err
 	}
 	enc, err := s.encryptPassword(&spec.Password)

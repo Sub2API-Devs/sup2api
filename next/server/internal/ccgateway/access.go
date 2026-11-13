@@ -21,7 +21,6 @@ func accountAction(method string) string {
 	return "update"
 }
 
-
 // authorizeAccount checks that the caller may act on account id with method:
 // the "all" key reaches every account, the "own" key the ones the caller
 // created (others are not found). Whether the account exists and is a Claude

@@ -123,7 +123,9 @@ func i64(v int64) *int64 { return &v }
 // setAuthorizer answers from a fixed PermissionSet.
 type setAuthorizer struct{ set PermissionSet }
 
-func (a setAuthorizer) Can(_ context.Context, _ int64, k string) (bool, error) { return a.set.Has(k), nil }
+func (a setAuthorizer) Can(_ context.Context, _ int64, k string) (bool, error) {
+	return a.set.Has(k), nil
+}
 func (a setAuthorizer) PermissionSet(context.Context, int64) (PermissionSet, error) {
 	return a.set, nil
 }

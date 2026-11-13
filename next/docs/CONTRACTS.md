@@ -1081,7 +1081,9 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
   - 删除代理时清除 `proxy/X` 授予。
   - 账号表单（POST/PATCH `/accounts`、预备容器、类型 models/fetch、ccgateway 草稿）可引用的代理统一为 `core.ProxyRefScope`：账号动作是全部时为全部代理，否则为 `proxy:read` 与 `proxy:manage` 范围的并集。
   - 不持有任何 `proxy:manage` 时 `proxy_url` 返回 403，`details.permission` 为 `proxy:manage:own`（此前为 `proxy:own:manage`）。
-  - ccgateway 账号运行时路由改为 `PermScoped(account:read|update)`；PUT（请求日志）仍只对全量 `account:update` 开放。
+  - ccgateway 账号运行时路由的 PUT（请求日志）改为 `Perm(account:update)`，仍只对全量开放。
+  - `/proxies/probe` 不论是否保存，都要求能新建代理（全部或 own）。
+  - `FindOrCreate` 只在新建时检查私网地址；范围内已有的代理按地址匹配，不受这条限制。
 - **插件与 lookup（期 4 R5）**：
   - 插件账号路由（manifest `accounts`）与宿主 RPC `AccountScopeCheck` 都经 `AccountsInScope`，自动跟随范围。`all` 表示全部；否则 `allowed_ids` 是落在调用者范围内的 id。proto 与 SDK 注释已更新，接口形状不变。
   - `GET /lookup/accounts`、`/lookup/proxies` 按调用者 `account:read` / `proxy:read` 的范围过滤（任意范围都可调用），`mine=true` 在范围内再收窄。`/lookup/groups` 不变。
