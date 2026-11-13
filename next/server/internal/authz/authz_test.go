@@ -167,6 +167,22 @@ func isCode(err error, code string) bool {
 	return errors.As(err, &e) && e.Code == code
 }
 
+// fieldCode is the code of field's error in an invalid_argument err, "" when
+// it has none.
+func fieldCode(err error, field string) string {
+	var e *core.Error
+	if !errors.As(err, &e) {
+		return ""
+	}
+	fields, _ := e.Details["fields"].([]core.FieldError)
+	for _, f := range fields {
+		if f.Field == field {
+			return f.Code
+		}
+	}
+	return ""
+}
+
 // ------------------------------------------------------------ tests
 
 func TestSyncCoreSeedsCatalogAndRoles(t *testing.T) {
@@ -471,6 +487,13 @@ func TestRoleManagement(t *testing.T) {
 	}
 	if _, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "Bad Key", Name: lt("x", "x")}); !isCode(err, "invalid_argument") {
 		t.Fatalf("bad key: %v", err)
+	}
+	// Built-in role keys are reserved, supplier included.
+	for _, key := range reservedRoleKeys {
+		_, err := s.CreateRole(ctx, root, CreateRoleInput{Key: key, Name: lt("x", "x")})
+		if !isCode(err, "invalid_argument") || fieldCode(err, "key") != "reserved" {
+			t.Fatalf("create role %q: %v", key, err)
+		}
 	}
 	r, err := s.CreateRole(ctx, admin, CreateRoleInput{Key: "ops", Name: lt("Ops", "运营"), PermissionKeys: []string{"account:read", "account:test"}})
 	if err != nil {

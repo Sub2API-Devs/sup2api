@@ -3,14 +3,19 @@ package authz
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 // SyncCore upserts the core permission catalog, marks core permissions no
-// longer in code as removed, seeds built-in roles and grants newly created
+// longer in code as removed, seeds built-in roles (failing when a custom role
+// holds a built-in key, builtinKeyConflict) and grants newly created
 // core permissions and built-in roles (as assignable) to the built-in roles
 // whose defaults include them. Safe to run concurrently from several nodes;
 // set-based to keep round trips low. The version is only bumped when
@@ -52,6 +57,9 @@ func (s *Service) SyncCore(ctx context.Context) error {
 		if _, err := tx.Exec(ctx, `SELECT version FROM authz_meta WHERE id = 1 FOR UPDATE`); err != nil {
 			return err
 		}
+		if err := builtinKeyConflict(ctx, tx, rKeys); err != nil {
+			return err
+		}
 		// Built-in roles: returns only rows created or fixed now.
 		newRoles := map[string]bool{}
 		err := scanKeyFlags(ctx, tx, func(k string, inserted bool) {
@@ -60,8 +68,8 @@ func (s *Service) SyncCore(ctx context.Context) error {
 		}, `
 INSERT INTO roles (key, name, description, builtin, superuser, assign_custom)
 SELECT k, n::jsonb, d::jsonb, true, su, ac FROM unnest($1::text[], $2::text[], $3::text[], $4::bool[], $5::bool[]) AS t(k, n, d, su, ac)
-ON CONFLICT (key) DO UPDATE SET builtin = true, superuser = EXCLUDED.superuser
-    WHERE NOT roles.builtin OR roles.superuser IS DISTINCT FROM EXCLUDED.superuser
+ON CONFLICT (key) DO UPDATE SET superuser = EXCLUDED.superuser
+    WHERE roles.superuser IS DISTINCT FROM EXCLUDED.superuser
 RETURNING key, (xmax = 0)`, rKeys, rNames, rDescs, rSuper, rCustom)
 		if err != nil {
 			return err
@@ -138,6 +146,28 @@ SELECT ins.role_id, a.key FROM ins JOIN roles a ON a.id = ins.assignable_role_id
 		s.Committed(ctx, v)
 	}
 	return nil
+}
+
+// builtinKeyConflict fails when a custom role holds one of the built-in role
+// keys: the role is never turned into the built-in one, which would hand its
+// holders that role's defaults, and never skipped, which would leave the
+// built-in role missing. The error stops startup and says how to rename it.
+func builtinKeyConflict(ctx context.Context, q store.Querier, builtinKeys []string) error {
+	rows, err := q.Query(ctx, `SELECT id, key FROM roles WHERE key = ANY($1) AND NOT builtin ORDER BY id`, builtinKeys)
+	if err != nil {
+		return err
+	}
+	var fixes []string
+	var id int64
+	var key string
+	_, err = pgx.ForEachRow(rows, []any{&id, &key}, func() error {
+		fixes = append(fixes, fmt.Sprintf("role id %d key %q: UPDATE roles SET key = '%s_custom' WHERE id = %d;", id, key, key, id))
+		return nil
+	})
+	if err != nil || len(fixes) == 0 {
+		return err
+	}
+	return fmt.Errorf("authz: custom roles hold keys reserved for built-in roles; rename them and start again (%s)", strings.Join(fixes, " "))
 }
 
 // grantDefaults grants the built-in role roleKey its defaults through sql

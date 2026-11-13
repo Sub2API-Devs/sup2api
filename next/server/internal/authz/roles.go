@@ -135,7 +135,8 @@ type CreateRoleInput struct {
 	AssignCustom       bool     `json:"assign_custom"`
 }
 
-// CreateRole creates a custom (non-superuser) role. The actor must hold all
+// CreateRole creates a custom (non-superuser) role; its key may not be one
+// reserved for a built-in role (reservedRoleKeys). The actor must hold all
 // permissions being granted and be able to assign every role the new role
 // may assign, as for SetRolePermissions and SetRoleAssignable (CONTRACTS
 // §43.6), checked inside the transaction after Bump.
@@ -143,6 +144,9 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 	var fields []core.FieldError
 	if !roleKeyRe.MatchString(in.Key) {
 		fields = append(fields, core.FieldError{Field: "key", Code: "invalid", Message: "must match ^[a-z][a-z0-9_]{1,49}$"})
+	}
+	if slices.Contains(reservedRoleKeys, in.Key) {
+		fields = append(fields, core.FieldError{Field: "key", Code: "reserved", Message: "this key is reserved for a built-in role"})
 	}
 	if in.Name.Get("en") == "" {
 		fields = append(fields, core.FieldError{Field: "name", Code: "required", Message: "name is required"})

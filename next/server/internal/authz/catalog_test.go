@@ -3,7 +3,9 @@ package authz
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
@@ -217,4 +219,55 @@ func TestSyncCoreSplitsRoleManage(t *testing.T) {
 	mustCan(t, s, uid, "role:define", true)
 	mustCan(t, s, uid, "role:assign", true)
 	mustCan(t, s, uid, "role:manage", false)
+}
+
+// Not parallel: it extends the package's built-in roles while it runs. A
+// custom role holding a built-in role key stops the sync (decision D5): it
+// is neither turned into the built-in role nor skipped, and the error names
+// the row and how to rename it. Once renamed, the sync creates the built-in
+// role.
+func TestSyncCoreRefusesCustomRoleOnBuiltinKey(t *testing.T) {
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	const key = "supplier"
+	if _, ok := builtinRoleByKey(key); !ok {
+		saved := builtinRoles
+		defer func() { builtinRoles = saved }()
+		builtinRoles = append(slices.Clone(builtinRoles), builtinRole{key: key, name: lt("Supplier", "供应商")})
+		if _, err := db.Pool.Exec(ctx, `INSERT INTO roles (key, name) VALUES ($1, '{"en":"x"}')`, key); err != nil {
+			t.Fatal(err)
+		}
+	} else if _, err := db.Pool.Exec(ctx, `UPDATE roles SET builtin = false WHERE key = $1`, key); err != nil {
+		t.Fatal(err)
+	}
+	id := roleID(t, s, key)
+	v1, _ := s.currentVersion(ctx)
+
+	err := s.SyncCore(ctx)
+	fix := fmt.Sprintf("UPDATE roles SET key = 'supplier_custom' WHERE id = %d;", id)
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("role id %d key %q", id, key)) || !strings.Contains(err.Error(), fix) {
+		t.Fatalf("sync with a custom role on a built-in key: %v", err)
+	}
+	var builtin bool
+	if err := db.Pool.QueryRow(ctx, `SELECT builtin FROM roles WHERE id = $1`, id).Scan(&builtin); err != nil || builtin {
+		t.Fatalf("custom role became built-in: %v, %v", builtin, err)
+	}
+	if v2, _ := s.currentVersion(ctx); v2 != v1 {
+		t.Fatalf("a refused sync bumped the version: %d -> %d", v1, v2)
+	}
+
+	if _, err := db.Pool.Exec(ctx, fix); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SyncCore(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	if err := db.Pool.QueryRow(ctx, `SELECT array_agg(key ORDER BY key) FROM roles WHERE key LIKE 'supplier%' AND builtin`).Scan(&keys); err != nil || !slices.Equal(keys, []string{key}) {
+		t.Fatalf("built-in roles after the rename: %v, %v", keys, err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT builtin FROM roles WHERE id = $1`, id).Scan(&builtin); err != nil || builtin {
+		t.Fatalf("renamed custom role: built-in %v, %v", builtin, err)
+	}
 }
