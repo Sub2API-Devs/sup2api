@@ -668,3 +668,10 @@
 - 影响对象：升级时 manifest 新增敏感权限或把新权限给 user、自定义角色的插件——上传不再自动批准，要有人在同意页确认；内置插件这类授予要在插件页确认后才生效（之前随升级直接生效）。前端（插件页提示与确认按钮、同意页展示 `new_role_grants`）由期 4 前端任务做；在此之前可直接调接口。
 - 回滚：revert 这个提交即可；回滚后暂缓的授予不会被自动补上（审计里有清单，需要时手工授予）。
 
+## 期 4 P4F1 决策 D3：迁移 0102 收回存量内置 operator 的 role:define（产品性收紧）
+
+- 改动：`0102_operator_reclaim_role_define.sql`。0097 把 `role:manage` 等价拆成 `role:define` + `role:assign`，内置 operator 因此持有 `role:define`，而 D3 白名单（T55）没有它。迁移只删除内置（`builtin AND NOT superuser`）`operator` 角色上的核心权限 `role:define`，每条写 `authz.reclaim` 审计（actor 为系统，`detail.via = "migration 0102"`、`role`、`key`），有收回才移动 `authz_meta.version`。写法同 0099/0101：`SET LOCAL lock_timeout = '10s'`，先 `SELECT … FROM authz_meta FOR UPDATE`。自定义角色（包括 key 恰好是 operator 的非内置角色）与 operator 的其他权限都不动；超管之后仍可再授予。
+- 测试：migrations `TestOperatorReclaimRoleDefineMigration`（新库不写不移版本；存量库收回 operator 的、保留 admin 与自定义角色的、一条审计、版本 +1；再跑无变化；非内置同名角色不动）。
+- 影响对象：存量库中持有内置 operator 角色的用户失去定义角色（新建、改权限、删除角色）的能力（生产 operator 0 人）。发布说明草稿：滚动发布窗口内旧节点不会恢复这条授予，但回滚到旧版本后 admin（0099）与 operator（0102）暂时都不能管理角色，由超管处理。
+- 回滚：迁移不可逆向执行；需要时由超管在角色页给 operator 重新勾选 `role:define`，或按 `authz.reclaim`（`via = migration 0102`）审计手工补回。
+
