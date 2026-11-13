@@ -127,7 +127,7 @@ async function updateWorker(withCLI = false) {
   workerError.value = null
   try {
     const body = withCLI ? { components: ['worker', 'cli'] } : {}
-    const report = await api.post<CcgWorkersReport>(`/system/ccgateway/runtimes/${encodeURIComponent(key)}/worker`, body, { signal: AbortSignal.timeout(WORKER_TIMEOUT_MS) })
+    const report = await api.post<CcgWorkersReport>(`/system/ccgateway/runtimes/${encodeURIComponent(key)}/worker`, body, { timeoutMs: WORKER_TIMEOUT_MS })
     workerResult.value = report.results?.[0] ?? null
   } catch (e) {
     if (alive) workerError.value = failureOf(e)

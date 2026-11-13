@@ -323,6 +323,30 @@ describe('step-up verification', () => {
     expect(spy).toHaveBeenCalledTimes(1)
   })
 
+  it('bounds each send by timeoutMs, not the verification in between', async () => {
+    let seen: AbortSignal | undefined = new AbortController().signal
+    http.configureHttp({
+      onVerificationRequired: async (_c, signal) => {
+        seen = signal
+        // The user takes longer than the limit: the dialog is not closed under them.
+        await new Promise((resolve) => setTimeout(resolve, 60))
+        return signal?.aborted ? null : 'p'
+      }
+    })
+    const spy = stubFetch((_url, init) => (init.headers['X-Verify-Proof'] ? json({ ok: 1 }) : required()))
+    expect(await http.api.put('/system/ccgateway/remote-config', {}, { timeoutMs: 20 })).toEqual({ ok: 1 })
+    expect(seen).toBeUndefined()
+    // The replay gets a limit of its own.
+    const signals = spy.mock.calls.map((c) => c[1].signal as AbortSignal)
+    expect(signals).toHaveLength(2)
+    expect(signals[1]).not.toBe(signals[0])
+  })
+
+  it('aborts a send that outlives timeoutMs', async () => {
+    stubFetch((_url, init) => new Promise((_resolve, reject) => init.signal!.addEventListener('abort', () => reject(init.signal!.reason))))
+    await expect(http.api.get('/slow', undefined, { timeoutMs: 20 })).rejects.toMatchObject({ name: 'TimeoutError' })
+  })
+
   it('leaves other 403s alone', async () => {
     const ask = vi.fn(async () => 'p')
     http.configureHttp({ onVerificationRequired: ask })

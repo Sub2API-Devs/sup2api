@@ -273,7 +273,7 @@ async function save() {
     // Only to a core that reports the rule (an older one would not know it).
     ...(savedLogDefault.value !== null ? { request_logs: { level: requestLogDefault.value } } : {}),
     ...(savedParkHours.value !== null ? { park_after_hours: parkHoursValue.value } : {})
-  }, { signal: AbortSignal.timeout(55000) })
+  }, { timeoutMs: 55000 })
   assign(response)
   runtimeRevision.value++
   notice.value = t(rebuildNetwork ? 'ccgateway.remote.networkSaved' : 'ccgateway.remote.saved')

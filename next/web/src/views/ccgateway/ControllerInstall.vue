@@ -115,7 +115,7 @@ async function installController() {
   if (!ok || props.disabled) return
   installing.value = true
   try {
-    finish(await api.post<InstallResult>('/system/ccgateway/controller/install', body, { signal: AbortSignal.timeout(INSTALL_TIMEOUT_MS) }), false)
+    finish(await api.post<InstallResult>('/system/ccgateway/controller/install', body, { timeoutMs: INSTALL_TIMEOUT_MS }), false)
   } catch (e) {
     // Without a reason the request itself failed (a front proxy timeout, a dropped connection) while the
     // install may have finished in the core: the saved configuration tells.
@@ -138,7 +138,7 @@ async function probeFingerprint() {
   }
   probing.value = true
   try {
-    const data = await api.post<{ fingerprint: string }>('/system/ccgateway/remote-fingerprint', { host, port }, { signal: AbortSignal.timeout(55000) })
+    const data = await api.post<{ fingerprint: string }>('/system/ccgateway/remote-fingerprint', { host, port }, { timeoutMs: 55000 })
     if (sshForm.host.trim() === host && Number(sshForm.port) === port) installProbe.value = { fingerprint: data.fingerprint, host, port }
   } catch (e) {
     installError.value = describe(e) || t('ccgateway.remote.failed')

@@ -98,6 +98,13 @@ export interface RequestOptions {
   body?: unknown
   headers?: Record<string, string>
   signal?: AbortSignal
+  /**
+   * Time limit in ms of each send (the first one, a resend after renewing
+   * the session, the replay with a step-up proof). Unlike a timeout signal
+   * it does not run while the user verifies, so a slow verification neither
+   * closes the dialog nor shortens the replay.
+   */
+  timeoutMs?: number
   /** Do not attach the access token / do not try to refresh. */
   anonymous?: boolean
   /** Headers from the final successful response, after auth retries. */
@@ -427,7 +434,7 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
     if (sentToken) headers['Authorization'] = 'Bearer ' + sentToken
     const loc = config.locale?.()
     if (loc) headers['Accept-Language'] = loc
-    const res = await fetch(buildURL(path, opts.query), { method, headers, body, signal: opts.signal })
+    const res = await fetch(buildURL(path, opts.query), { method, headers, body, signal: sendSignal(opts) })
     const version = Number(res.headers.get(AUTHZ_VERSION_HEADER) || NaN)
     if (Number.isFinite(version)) config.onAuthzVersion?.(version)
     return res
@@ -468,6 +475,13 @@ export async function requestRaw(method: string, path: string, opts: RequestOpti
   }
   opts.onSuccessHeaders?.(new Headers(res.headers))
   return json
+}
+
+/** The signal of one send: the request's, bounded by its timeoutMs. */
+function sendSignal(opts: RequestOptions): AbortSignal | undefined {
+  if (!opts.timeoutMs) return opts.signal
+  const timeout = AbortSignal.timeout(opts.timeoutMs)
+  return opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout
 }
 
 /** The step-up a failed response asks for, when the console handles step-ups. */
