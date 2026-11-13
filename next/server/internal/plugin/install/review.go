@@ -55,8 +55,8 @@ type Review struct {
 	// NeedsDBSchemaUnconfined: granting the db.schema this version asks for
 	// takes plugin:grant:db_schema_unconfined (dbSchemaUnconfined), so the
 	// console can tell before the consent is sent.
-	NeedsDBSchemaUnconfined bool `json:"needs_db_schema_unconfined"`
-	UploadedAt            time.Time   `json:"uploaded_at"`
+	NeedsDBSchemaUnconfined bool      `json:"needs_db_schema_unconfined"`
+	UploadedAt              time.Time `json:"uploaded_at"`
 }
 
 // ReviewEndpoint is a gateway endpoint of a declared platform. In
