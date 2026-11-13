@@ -507,6 +507,7 @@ export default {
     },
     upstream: {
       hint: 'CLI 最终发给上游的请求；密钥类请求头的值已遮蔽。',
+      hintSummary: 'CLI 最终发给上游的请求：只显示 host 与摘要类请求头（其余需要 settings:manage）。',
       none: '没有记录发给上游的请求（旧日志、未到发送阶段，或 CLI 未写出记录）。',
       body: '上游请求体',
       method: '方法', url: 'URL', attempts: '发送次数', sentAt: '最后发送', encoding: '正文编码',
@@ -521,7 +522,7 @@ export default {
     contentGone: '这条日志的正文已过期或已删除。',
     eventFilter: '按事件名过滤',
     eventsTruncated: '事件太多，只显示了前一部分。',
-    eventsBounded: '事件里的文字只显示前 256 字节。',
+    eventsBounded: '事件只显示摘要字段；错误文本、路径与身份信息需要 settings:manage。',
     contentNotice: '正文包含用户对话内容，查看和下载都会记入审计。',
     kind: { request: '请求', build: '组装', history: '历史', cli: 'CLI', upstream: '上游', response: '响应', other: '其他' },
     content: {

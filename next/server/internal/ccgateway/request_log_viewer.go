@@ -311,7 +311,7 @@ var (
 	// requestLogUpstreamKeys are the facts of upstream-request.json every
 	// reader sees; the URL becomes its host.
 	requestLogUpstreamKeys = fieldSet{
-		"schema": true, "mode": true, "attempts": true, "method": true, "host": true, "status": true, "sent_at": true,
+		"schema": true, "mode": true, "attempts": true, "method": true, "host": true, "sent_at": true,
 		"body_encoding": true, "body_bytes": true, "body_sha256": true, "content_sha256": true, "model": true, "stream": true,
 	}
 	// requestLogSummaryHeaders are the header names (lower case) every
@@ -321,6 +321,7 @@ var (
 		"accept": true, "accept-encoding": true, "cache-control": true, "date": true, "retry-after": true,
 		"request-id": true, "x-request-id": true, "anthropic-version": true, "anthropic-beta": true,
 		"x-claude-code-session-id": true, "x-claude-code-request-class": true,
+		"x-ccgateway-error-source": true, "x-ccgateway-error-reason": true,
 	}
 )
 
