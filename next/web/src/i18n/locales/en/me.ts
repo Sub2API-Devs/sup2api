@@ -1,5 +1,4 @@
 export default {
-  confirmPassword: 'Current password',
   profile: {
     title: 'Account',
     description: 'Your profile, and how you sign in.',

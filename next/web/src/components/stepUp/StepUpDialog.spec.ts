@@ -42,7 +42,7 @@ describe('StepUpDialog', () => {
     webauthn.getPasskey.mockResolvedValue({ id: 'cred' })
     const w = render()
     await flushPromises()
-    expect(api.get).toHaveBeenCalledWith('/me/verify/methods', { scope: 'user.delete' })
+    expect(api.get).toHaveBeenCalledWith('/me/verify/methods', { scope: 'user.delete', context: CONTEXT })
     expect(w.text()).toContain('删除用户')
     expect(w.find('[data-testid="step-up-passkey-hint"]').exists()).toBe(true)
     expect(field(w, 'step-up-password').exists()).toBe(false)

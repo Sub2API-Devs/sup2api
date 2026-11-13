@@ -42,16 +42,18 @@ func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
 
 	// Only a login session manages login sessions and access keys: a key
 	// could otherwise end its owner's sessions, or renew or widen itself
-	// (§80).
+	// (§80). Creating or changing a key takes a step-up each time; deleting
+	// one only takes rights away.
 	session := r.SessionOnly()
+	keyWrite := session.StepUp(core.StepUpAccessKeyWrite)
 	session.Handle(http.MethodGet, "/me/sessions", s.handleSessions)
 	session.Handle(http.MethodPost, "/me/sessions/revoke-others", s.handleSessionsRevokeOthers)
 	session.Handle(http.MethodDelete, "/me/sessions/:id", s.handleSessionRevoke)
 
 	session.Handle(http.MethodGet, "/me/access-keys", s.handleAccessKeys)
 	session.Handle(http.MethodGet, "/me/access-keys/permissions", s.handleAccessKeyPermissions)
-	session.Handle(http.MethodPost, "/me/access-keys", s.handleAccessKeyCreate)
-	session.Handle(http.MethodPatch, "/me/access-keys/:id", s.handleAccessKeyUpdate)
+	keyWrite.Handle(http.MethodPost, "/me/access-keys", s.handleAccessKeyCreate)
+	keyWrite.Handle(http.MethodPatch, "/me/access-keys/:id", s.handleAccessKeyUpdate)
 	session.Handle(http.MethodDelete, "/me/access-keys/:id", s.handleAccessKeyDelete)
 
 	// Removing someone's second factor leaves the account one password away,
@@ -82,9 +84,9 @@ func (s *Service) handleAccessKeyCreate(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	out, err := s.CreateAccessKey(audit.Context(c), actor(c), in, c.ClientIP())
+	out, err := s.CreateAccessKey(audit.Context(c), actor(c), in)
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.Created(c, out)
@@ -99,9 +101,9 @@ func (s *Service) handleAccessKeyUpdate(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	out, err := s.UpdateAccessKey(audit.Context(c), actor(c), id, in, c.ClientIP())
+	out, err := s.UpdateAccessKey(audit.Context(c), actor(c), id, in)
 	if err != nil {
-		failLogin(c, err)
+		httpapi.Fail(c, err)
 		return
 	}
 	httpapi.OK(c, out)
@@ -331,7 +333,7 @@ func (s *Service) handlePasskeyRename(c *gin.Context) {
 }
 
 func (s *Service) handleVerifyMethods(c *gin.Context) {
-	out, err := s.StepUpMethods(c.Request.Context(), actor(c), c.Query("scope"))
+	out, err := s.StepUpMethods(c.Request.Context(), actor(c), c.Query("scope"), c.Query("context"))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

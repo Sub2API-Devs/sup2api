@@ -115,8 +115,22 @@ func TestUpgradeRoleGrantsNeedConsent(t *testing.T) {
 			t.Fatalf("audit %s lacks %s", detail, want)
 		}
 	}
-	// An operator consenting gives the grants as usual.
-	if _, err := e.svc.Consent(ctx, "guard", "0.1.2", ConsentRequest{Grants: explicitGuardGrants()}, e.admin); err != nil {
+	// An operator consenting makes the grants that need consent only when it
+	// may name every role they go to, as confirming withheld grants needs.
+	consent := ConsentRequest{Grants: explicitGuardGrants()}
+	if _, err := e.svc.Consent(ctx, "guard", "0.1.2", consent, e.admin); core.AsError(err).Details["permission"] != "role:define" {
+		t.Fatalf("consent without role:define: %v", err)
+	}
+	e.authz.perms[e.admin]["role:define"] = true
+	e.perms.denyRoles = core.ErrPermissionDenied.WithMessage("only the super admin can change built-in roles")
+	if _, err := e.svc.Consent(ctx, "guard", "0.1.2", consent, e.admin); core.AsError(err).Code != "permission_denied" {
+		t.Fatalf("consent naming a role the operator may not change: %v", err)
+	}
+	if got := e.perms.checked[len(e.perms.checked)-1]; !slices.Equal(got, []string{"user"}) {
+		t.Fatalf("checked %v (only the grant that needs consent)", got)
+	}
+	e.perms.denyRoles = nil
+	if _, err := e.svc.Consent(ctx, "guard", "0.1.2", consent, e.admin); err != nil {
 		t.Fatal(err)
 	}
 	last := e.perms.syncs[len(e.perms.syncs)-1].defs

@@ -277,19 +277,23 @@ on('POST', '/me/two-factor/enable', (req) => {
 // Step-up verification (CONTRACTS §80.2): the code is 123456, the password admin.
 const proofs = new Set<string>()
 const passwordTooScopes = new Set(['superadmin.transfer', 'self.password.change'])
-const verifyMethods = (scope: string) => ({
+/** The password goes with the factor for these scopes, and for the super admin removing its last factor (iam lastSuperFactor; the mock user has no passkey). */
+const passwordToo = (scope: string, context = '') =>
+  passwordTooScopes.has(scope) ||
+  (!!me.superuser && ((scope === 'self.2fa.disable' && twoFactor.enabled) || (scope === 'user.security.reset' && context === `DELETE /api/v1/users/${me.id}/security`)))
+const verifyMethods = (scope: string, context = '') => ({
   scope,
-  password_required: passwordTooScopes.has(scope),
+  password_required: passwordToo(scope, context),
   methods: [
     { method: 'passkey', available: false, reason: 'not_enrolled' },
     { method: 'totp', available: twoFactor.enabled, ...(twoFactor.enabled ? {} : { reason: 'not_enrolled' }) },
     { method: 'password', available: !twoFactor.enabled, ...(twoFactor.enabled ? { reason: 'strong_method' } : {}) }
   ]
 })
-on('GET', '/me/verify/methods', (req) => verifyMethods(req.query.scope))
+on('GET', '/me/verify/methods', (req) => verifyMethods(req.query.scope, req.query.context))
 on('POST', '/me/verify', (req) => {
   const { scope, context, method, password, code } = req.body || {}
-  if ((passwordTooScopes.has(scope) || method === 'password') && password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
+  if ((passwordToo(scope, context) || method === 'password') && password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
   if (method === 'totp' && code !== '123456') return codeError()
   const proof = `mock-proof-${scope}-${Date.now()}`
   proofs.add(proof)
@@ -299,7 +303,7 @@ on('POST', '/me/verify', (req) => {
 export const stepUp = (scope: string, handler: MockHandler): MockHandler => (req) => {
   const proof = req.headers['x-verify-proof']
   if (!proof || !proofs.delete(proof)) {
-    return fail(403, 'verification_required', "verify it's you to continue", { ...verifyMethods(scope), context: `${req.method} /api/v1${req.path}` })
+    return fail(403, 'verification_required', "verify it's you to continue", { ...verifyMethods(scope, `${req.method} /api/v1${req.path}`), context: `${req.method} /api/v1${req.path}` })
   }
   return handler(req)
 }
@@ -371,18 +375,17 @@ on('GET', '/me/access-keys/permissions', () => [
     ]
   }
 ])
-on('POST', '/me/access-keys', (req) => {
-  if (req.body?.password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
+on('POST', '/me/access-keys', stepUp('self.access_key.write', (req) => {
   const key = { id: accessKeys.length + 1, name: req.body.name, hint: 'mock', permissions: canonicalKeys(req.body.permissions), lost: [], expires_at: req.body.expires_at, last_used_at: null, last_used_ip: '', created_at: now() }
   accessKeys.unshift(key)
   return { ...key, key: 'sak_mockmockmockmockmockmockmockmockmockmockmock' }
-})
-on('PATCH', '/me/access-keys/:id', (req) => {
+}))
+on('PATCH', '/me/access-keys/:id', stepUp('self.access_key.write', (req) => {
   const key = accessKeys.find((k) => String(k.id) === req.params.id)
   if (!key) return fail(404, 'not_found', 'not found')
   Object.assign(key, { name: req.body?.name ?? key.name, permissions: req.body?.permissions ? canonicalKeys(req.body.permissions) : key.permissions, lost: [] })
   return key
-})
+}))
 on('DELETE', '/me/access-keys/:id', (req) => {
   const i = accessKeys.findIndex((k) => String(k.id) === req.params.id)
   if (i >= 0) accessKeys.splice(i, 1)

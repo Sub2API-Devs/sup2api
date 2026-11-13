@@ -9,7 +9,13 @@ import type { PluginRoleGrant } from '@/api/types'
 import { lt } from '@/i18n'
 import { useAssignableRoles } from '@/composables/useAssignableRoles'
 
-withDefaults(defineProps<{ grants: PluginRoleGrant[]; needConsent?: boolean; title?: string; hint?: string }>(), { needConsent: false, title: undefined, hint: undefined })
+// blockedRoles: roles the caller may not name, whose grants needing consent it cannot approve.
+withDefaults(defineProps<{ grants: PluginRoleGrant[]; needConsent?: boolean; title?: string; hint?: string; blockedRoles?: string[] }>(), {
+  needConsent: false,
+  title: undefined,
+  hint: undefined,
+  blockedRoles: () => []
+})
 const { t } = useI18n()
 const managed = useAssignableRoles()
 const roleName = (key: string) => lt(managed.get(key)?.name) || key
@@ -34,6 +40,7 @@ const roleName = (key: string) => lt(managed.get(key)?.name) || key
         <SHint inline size="xs">{{ g.via === 'inherit' ? t('plugins.consent.viaInherit') : t('plugins.consent.viaDefault') }}</SHint>
         <SHint v-if="g.version" inline size="xs" class="font-mono">v{{ g.version }}</SHint>
         <SBadge v-if="g.needs_consent" tone="warning">{{ t('plugins.consent.needsConsent') }}</SBadge>
+        <SBadge v-if="g.needs_consent && blockedRoles.includes(g.role)" tone="danger" data-testid="role-grant-blocked">{{ t('plugins.consent.roleNotNameable') }}</SBadge>
       </li>
     </ul>
     <slot name="actions" />

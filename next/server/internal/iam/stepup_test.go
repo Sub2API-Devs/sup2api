@@ -21,7 +21,7 @@ const testOperation = "TEST /op"
 func withProof(t *testing.T, s *Service, ctx context.Context, userID int64, scope string) context.Context {
 	t.Helper()
 	ctx = core.WithUserID(ctx, userID)
-	token, err := s.createFlow(ctx, flowStepUpProof, userID, proofPayload{Scope: scope, Operation: testOperation, Subject: stepUpSubject(ctx), Method: methodPassword})
+	token, err := s.createFlow(ctx, flowStepUpProof, userID, proofPayload{Scope: scope, Operation: testOperation, Subject: stepUpSubject(ctx), Method: methodPassword, Password: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestStepUpMethodsPolicy(t *testing.T) {
 	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
 	check := func(ctx context.Context, scope string, wantPassword bool, want map[string]string) {
 		t.Helper()
-		m, err := s.StepUpMethods(ctx, id, scope)
+		m, err := s.StepUpMethods(ctx, id, scope, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -67,7 +67,7 @@ func TestStepUpMethodsPolicy(t *testing.T) {
 			t.Fatalf("%s: password_required=%v %v, want %v %v", scope, m.PasswordRequired, got, wantPassword, want)
 		}
 	}
-	if _, err := s.StepUpMethods(ctx, id, "no.such.scope"); !isCode(err, "invalid_argument") {
+	if _, err := s.StepUpMethods(ctx, id, "no.such.scope", ""); !isCode(err, "invalid_argument") {
 		t.Fatalf("unknown scope: %v", err)
 	}
 	check(ctx, core.StepUpUserDelete, false, map[string]string{"passkey": "not_enrolled", "totp": "not_enrolled", "password": "ok"})
@@ -280,11 +280,11 @@ func TestSuperAdminKeyOnItsOwnAccountNeedsAProof(t *testing.T) {
 	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
 	path := "/users/" + strconv.FormatInt(root, 10)
 	body := map[string]any{"display_name": "Root"}
-	narrow := k.createKey(t, root, adminPassword, "user:read")
+	narrow := k.createKey(t, root, "user:read")
 	if code, out := k.call(narrow.Key, "PATCH", path, body); code != 403 || errCode(out) != "permission_denied" {
 		t.Fatalf("key without user:update: %d %v", code, out)
 	}
-	key := k.createKey(t, root, adminPassword, "user:read", "user:update")
+	key := k.createKey(t, root, "user:read", "user:update")
 	code, out := k.call(key.Key, "PATCH", path, body)
 	if code != 403 || errCode(out) != "verification_required" || out["error"].(map[string]any)["details"].(map[string]any)["scope"] != core.StepUpSuperAdminIdentity {
 		t.Fatalf("key without a proof: %d %v", code, out)
@@ -313,8 +313,8 @@ func TestStepUpMatrix(t *testing.T) {
 	t.Parallel()
 	k := newKeyEnv(t)
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
-	withPerm := k.createKey(t, login.User.ID, adminPassword, "user:read", "user:delete").Key
-	without := k.createKey(t, login.User.ID, adminPassword, "user:read").Key
+	withPerm := k.createKey(t, login.User.ID, "user:read", "user:delete").Key
+	without := k.createKey(t, login.User.ID, "user:read").Key
 	n := 0
 	target := func() string {
 		n++
@@ -365,7 +365,7 @@ func TestSuperAdminKeyOnItsOwnRolesNeedsAProof(t *testing.T) {
 	path := "/users/" + strconv.FormatInt(root, 10) + "/roles"
 	// A key assigns no roles (it has no assignable list): the same roles.
 	body := map[string]any{"role_keys": []string{"super_admin"}}
-	key := k.createKey(t, root, adminPassword, "user:read", "role:assign")
+	key := k.createKey(t, root, "user:read", "role:assign")
 	code, out := k.call(key.Key, "PUT", path, body)
 	if code != 403 || errCode(out) != "verification_required" {
 		t.Fatalf("key without a proof: %d %v", code, out)
@@ -390,5 +390,129 @@ func TestTwoFactorSetupNeedsAProof(t *testing.T) {
 	proof := k.proof(t, session, core.StepUpSelf2FAEnable, "POST", path, map[string]any{"method": "password", "password": adminPassword})
 	if code, out := k.callProof(session, proof, "POST", path, nil); code != 200 {
 		t.Fatalf("with a proof: %d %v", code, out)
+	}
+}
+
+// The super admin removing the last of its strong factors (its own security
+// reset, disabling two-factor without a passkey, deleting its only passkey
+// without two-factor) gives the password with the factor, as the transfer
+// does; the same operations of other users, or that leave a factor, do not.
+func TestSuperAdminLastFactorTakesThePassword(t *testing.T) {
+	t.Parallel()
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	if su, err := s.authz.IsSuperuser(ctx, s.db.Pool, root); err != nil || !su {
+		t.Fatalf("the bootstrap admin is not the super admin: %v", err)
+	}
+	plain, err := s.CreateUser(ctx, 0, CreateUserInput{Email: "plain@example.com", Password: adminPassword})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset := func(id int64) string { return fmt.Sprintf("DELETE /api/v1/users/%d/security", id) }
+	check := func(id int64, scope, operation string, want bool) {
+		t.Helper()
+		m, err := s.StepUpMethods(ctx, id, scope, operation)
+		if err != nil || m.PasswordRequired != want {
+			t.Fatalf("user %d %s %q: password_required=%v (%v), want %v", id, scope, operation, m != nil && m.PasswordRequired, err, want)
+		}
+	}
+	secret, _ := enableTwoFactor(t, s, root)
+	enableTwoFactor(t, s, plain.ID)
+	// Two-factor only.
+	check(root, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", true)
+	check(root, core.StepUpUserSecurityReset, reset(root), true)
+	check(root, core.StepUpUserSecurityReset, reset(plain.ID), false)
+	// The id as the route reads it, however it is spelled.
+	for _, id := range []string{"0" + fmt.Sprint(root), "+" + fmt.Sprint(root)} {
+		check(root, core.StepUpUserSecurityReset, "DELETE /api/v1/users/"+id+"/security", true)
+	}
+	check(plain.ID, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", false)
+	check(plain.ID, core.StepUpUserSecurityReset, reset(plain.ID), false)
+	// A code alone is refused, with the password it issues a proof.
+	clearLastStep(t, s, root)
+	in := VerifyInput{Scope: core.StepUpSelf2FADisable, Context: "POST /api/v1/me/two-factor/disable", Method: methodTOTP, Code: codeAt(t, secret, time.Now())}
+	if _, err := s.VerifyStepUp(core.WithUserID(ctx, root), nil, root, in, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("code without the password: %v", err)
+	}
+	in.Password = adminPassword
+	if _, err := s.VerifyStepUp(core.WithUserID(ctx, root), nil, root, in, testIP); err != nil {
+		t.Fatalf("code and password: %v", err)
+	}
+
+	// Two-factor and a passkey: dropping one leaves the other.
+	addPasskey(t, s, newAuthenticator(t, consoleOrigin, consoleHost), root)
+	check(root, core.StepUpSelf2FADisable, "POST /api/v1/me/two-factor/disable", false)
+	// A proof issued then, without the password, is not enough once the
+	// passkey is gone: the policy is applied again when it is spent.
+	disable := "POST /api/v1/me/two-factor/disable"
+	clearLastStep(t, s, root)
+	p, err := s.VerifyStepUp(core.WithUserID(ctx, root), nil, root, VerifyInput{Scope: core.StepUpSelf2FADisable, Context: disable, Method: methodTOTP, Code: codeAt(t, secret, time.Now())}, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Pool.Exec(ctx, `DELETE FROM user_passkeys WHERE user_id = $1`, root); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ConsumeStepUp(core.WithStepUp(core.WithUserID(ctx, root), p.Proof, disable), core.StepUpSelf2FADisable); !isVerificationRequired(err) {
+		t.Fatalf("a proof without the password after the last passkey went: %v", err)
+	}
+	addPasskey(t, s, newAuthenticator(t, consoleOrigin, consoleHost), root)
+	check(root, core.StepUpSelfPasskeyDelete, "DELETE /api/v1/me/passkeys/1", false)
+	check(root, core.StepUpUserSecurityReset, reset(root), true)
+	// The only passkey, without two-factor.
+	if _, err := s.db.Pool.Exec(ctx, `DELETE FROM user_totp WHERE user_id = $1`, root); err != nil {
+		t.Fatal(err)
+	}
+	check(root, core.StepUpSelfPasskeyDelete, "DELETE /api/v1/me/passkeys/1", true)
+	// The console asks with the operation (GET /me/verify/methods?context=).
+	check(root, core.StepUpUserSecurityReset, "", false)
+}
+
+// Two removals spent at once, each leaving the other's factor when its proof
+// was spent, cannot both go through: the removal checks the rule again with
+// the user's row locked, unless its proof was issued with the password.
+func TestSuperAdminConcurrentFactorRemovals(t *testing.T) {
+	t.Parallel()
+	e := setupAdmin(t)
+	s, ctx := e.svc, context.Background()
+	root := mustLogin(t, s, adminEmail, adminPassword).User.ID
+	spent := func(scope, operation string, password bool) context.Context {
+		c := core.WithStepUp(core.WithUserID(ctx, root), "spent", operation)
+		core.MarkStepUpSpent(c, scope, password)
+		return c
+	}
+	disable := "POST /api/v1/me/two-factor/disable"
+	enableTwoFactor(t, s, root)
+	// The passkey the proof counted on went meanwhile.
+	if err := s.DisableTwoFactor(spent(core.StepUpSelf2FADisable, disable, false), root); !isVerificationRequired(err) {
+		t.Fatalf("two-factor-only proof, no passkey left: %v", err)
+	}
+	if err := s.DisableTwoFactor(spent(core.StepUpSelf2FADisable, disable, true), root); err != nil {
+		t.Fatalf("proof with the password: %v", err)
+	}
+	pk := addPasskey(t, s, newAuthenticator(t, consoleOrigin, consoleHost), root)
+	del := fmt.Sprintf("DELETE /api/v1/me/passkeys/%d", pk.ID)
+	if err := s.DeletePasskey(spent(core.StepUpSelfPasskeyDelete, del, false), root, pk.ID); !isVerificationRequired(err) {
+		t.Fatalf("passkey-only proof for the last passkey: %v", err)
+	}
+	if err := s.DeletePasskey(spent(core.StepUpSelfPasskeyDelete, del, true), root, pk.ID); err != nil {
+		t.Fatalf("proof with the password: %v", err)
+	}
+
+	// A proof issued with the password (asked for: two-factor is the last
+	// factor) is spent without a second look.
+	secret, _ := enableTwoFactor(t, s, root)
+	clearLastStep(t, s, root)
+	p, err := s.VerifyStepUp(core.WithUserID(ctx, root), nil, root, VerifyInput{Scope: core.StepUpSelf2FADisable, Context: disable, Method: methodTOTP, Code: codeAt(t, secret, time.Now()), Password: adminPassword}, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spentCtx := core.WithStepUp(core.WithUserID(ctx, root), p.Proof, disable)
+	if err := s.ConsumeStepUp(spentCtx, core.StepUpSelf2FADisable); err != nil || !core.StepUpPassword(spentCtx) {
+		t.Fatalf("proof given with the password: %v", err)
+	}
+	if err := s.DisableTwoFactor(spentCtx, root); err != nil {
+		t.Fatalf("disable with that proof: %v", err)
 	}
 }

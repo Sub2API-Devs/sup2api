@@ -10,7 +10,7 @@ import type { PermissionModule } from '@/api/types'
 import PermissionTree from '@/views/roles/PermissionTree.vue'
 import { canonicalPermission, parsePermission } from '@/authz/implies'
 import { useAuthStore } from '@/stores/auth'
-import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
+import { errorMessage, fieldErrors, notifyError, verificationCancelled } from '@/utils/errors'
 
 interface AccessKey {
   id: number
@@ -47,7 +47,6 @@ const editing = ref<AccessKey | null>(null)
 const busy = ref(false)
 const errors = ref<Record<string, string>>({})
 const name = ref('')
-const password = ref('')
 const expires = ref('90')
 const granted = ref(new Set<string>())
 const created = ref('')
@@ -63,7 +62,6 @@ async function start(row: AccessKey | null) {
   errors.value = {}
   editing.value = row
   name.value = row?.name || ''
-  password.value = ''
   expires.value = '90'
   // Canonical, so a legacy own key and its scoped form are one choice (CONTRACTS §21).
   granted.value = new Set((row?.permissions.filter((p) => !row.lost.includes(p)) || []).map((p) => canonicalPermission(p) ?? p))
@@ -79,7 +77,8 @@ async function start(row: AccessKey | null) {
 const chosenActions = computed(() => new Set([...granted.value].map((k) => parsePermission(k)?.action ?? k)))
 const stepUpChosen = computed(() => modules.value.some((m) => m.permissions.some((p) => p.step_up && chosenActions.value.has(p.key))))
 
-const canSubmit = computed(() => !!name.value.trim() && !!password.value && granted.value.size > 0)
+// Saving asks for a step-up (self.access_key.write), answered by the StepUpDialog the HTTP layer opens.
+const canSubmit = computed(() => !!name.value.trim() && granted.value.size > 0)
 
 async function submit() {
   busy.value = true
@@ -87,15 +86,16 @@ async function submit() {
   const permissions = [...granted.value]
   try {
     if (editing.value) {
-      await api.patch(`/me/access-keys/${editing.value.id}`, { name: name.value, password: password.value, permissions })
+      await api.patch(`/me/access-keys/${editing.value.id}`, { name: name.value, permissions })
     } else {
       const expires_at = expires.value ? new Date(Date.now() + Number(expires.value) * 86400_000).toISOString() : null
-      const r = await api.post<AccessKey>('/me/access-keys', { name: name.value, password: password.value, permissions, expires_at })
+      const r = await api.post<AccessKey>('/me/access-keys', { name: name.value, permissions, expires_at })
       created.value = r.key || ''
     }
     open.value = false
     await load()
   } catch (e) {
+    if (verificationCancelled(e)) return
     errors.value = fieldErrors(e)
     if (!Object.keys(errors.value).length) errors.value = { form: errorMessage(e) }
   } finally {
@@ -168,9 +168,6 @@ const columns: TableColumn[] = [
         <!-- Scopes are offered within the user's own: a key never reaches beyond its user. -->
         <PermissionTree v-model:granted="granted" :modules="modules" :scope-limit="auth.scopes" />
       </div>
-      <SField :label="t('me.confirmPassword')" :error="errors.password" required>
-        <SInput v-model="password" type="password" autocomplete="current-password" revealable data-testid="access-key-password" />
-      </SField>
     </SFormModal>
 
     <SFormModal :open="!!created" :title="t('me.accessKeys.createdTitle')" width="md" persistent :submit-text="t('me.twoFactor.saved')" @update:open="created = ''" @submit="created = ''">

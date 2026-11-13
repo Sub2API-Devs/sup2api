@@ -43,6 +43,10 @@ const (
 	// StepUpHostInstall: installing or reaching code that runs on a host the
 	// core controls (the ccgateway controller and runtimes, SSH targets).
 	StepUpHostInstall = "host.install"
+	// StepUpAccessKeyWrite: creating an access key or changing one
+	// (login sessions only), which signs out a credential with the
+	// caller's rights.
+	StepUpAccessKeyWrite = "self.access_key.write"
 	// StepUpSuperAdminIdentity is the super admin changing its own account
 	// through an access key (UserGuard, ActOnIdentity): any proof the request
 	// already spent covers it.
@@ -68,6 +72,8 @@ type stepUpState struct {
 	proof     string
 	operation string
 	spent     string
+	// password: the spent proof was issued with the password checked.
+	password bool
 }
 
 // WithStepUp records the proof a request carries (may be empty) and its
@@ -95,11 +101,19 @@ func StepUpSpent(ctx context.Context) string {
 	return ""
 }
 
-// MarkStepUpSpent records that the request spent its proof on scope.
-func MarkStepUpSpent(ctx context.Context, scope string) {
+// MarkStepUpSpent records that the request spent its proof on scope, and
+// whether that proof was issued with the password checked.
+func MarkStepUpSpent(ctx context.Context, scope string, password bool) {
 	if st, ok := ctx.Value(stepUpCtxKey{}).(*stepUpState); ok {
-		st.spent = scope
+		st.spent, st.password = scope, password
 	}
+}
+
+// StepUpPassword reports whether the proof the request spent was issued
+// with the password checked.
+func StepUpPassword(ctx context.Context) bool {
+	st, ok := ctx.Value(stepUpCtxKey{}).(*stepUpState)
+	return ok && st.password
 }
 
 type sessionCtxKey struct{}

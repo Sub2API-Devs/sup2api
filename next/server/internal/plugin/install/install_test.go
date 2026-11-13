@@ -46,9 +46,11 @@ type fakePerms struct {
 	mu      sync.Mutex
 	syncs   []syncCall
 	deleted []string
-	// checked records CanGrantToRoles calls; denyRoles fails them.
+	// checked records CanGrantToRoles calls; denyRoles fails them, and
+	// canGrant (when set) decides them instead.
 	checked   [][]string
 	denyRoles error
+	canGrant  func(ctx context.Context, tx pgx.Tx, actorID int64, roles []string) error
 	// granted records GrantPluginPermission calls as "key=role,...".
 	granted []string
 }
@@ -68,10 +70,13 @@ func (f *fakePerms) SyncPlugin(_ context.Context, _ pgx.Tx, key string, defs []c
 	f.syncs = append(f.syncs, syncCall{key, defs, roles})
 	return nil
 }
-func (f *fakePerms) CanGrantToRoles(_ context.Context, _ pgx.Tx, _ int64, roles []string) error {
+func (f *fakePerms) CanGrantToRoles(ctx context.Context, tx pgx.Tx, actorID int64, roles []string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.checked = append(f.checked, roles)
+	if f.canGrant != nil {
+		return f.canGrant(ctx, tx, actorID, roles)
+	}
 	return f.denyRoles
 }
 func (f *fakePerms) GrantPluginPermission(_ context.Context, tx pgx.Tx, key string, roles []string) error {

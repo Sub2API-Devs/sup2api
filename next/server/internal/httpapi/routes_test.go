@@ -59,12 +59,18 @@ func TestCheckRoutes(t *testing.T) {
 	rules := RouteRules{
 		KnownKey:       func(k string) bool { return k == "x:read" || k == "x:extra" },
 		KnownStepUp:    func(s string) bool { return s == "x.reveal" },
+		StepUpKey:      func(k string) bool { return k == "x:read" },
 		Permissionless: map[string]Access{"POST /login": AccessPublic, "GET /me": AccessSession},
+		StepUpExempt:   map[string]string{"POST /me/verify-key": "session only"},
 	}
 	ok := []RouteSpec{
 		{Method: "POST", Path: "/login", Mode: ModePublic},
 		{Method: "GET", Path: "/me", Mode: ModeAuthed, NoAccessKey: true},
 		{Method: "GET", Path: "/x", Mode: ModePerm, Keys: []perm.Key{"x:read"}, Extra: []perm.Key{"x:extra"}, StepUp: "x.reveal"},
+		{Method: "POST", Path: "/me/verify-key", Mode: ModePerm, Keys: []perm.Key{"x:extra"}, StepUp: "x.reveal"},
+		// One flagged key is enough, whatever the mode.
+		{Method: "GET", Path: "/any", Mode: ModeAny, Keys: []perm.Key{"x:extra", "x:read"}, StepUp: "x.reveal"},
+		{Method: "GET", Path: "/rows", Mode: ModeScoped, Keys: []perm.Key{"x:read"}, StepUp: "x.reveal"},
 	}
 	if err := CheckRoutes(ok, rules); err != nil {
 		t.Fatal(err)
@@ -79,12 +85,34 @@ func TestCheckRoutes(t *testing.T) {
 		"unlisted open": {append(slices.Clone(ok), RouteSpec{Method: "POST", Path: "/me/verify", Mode: ModeAuthed}), "route POST /me/verify: authed route without a permission is not on the permissionless list"},
 		"stale entry":   {ok[1:], "permissionless list: POST /login is not a route without a permission"},
 		"lost auth":     {[]RouteSpec{{Method: "POST", Path: "/login", Mode: ModePublic}, {Method: "GET", Path: "/me", Mode: ModePublic}}, "route GET /me: public route, the permissionless list says session"},
-		"lost session":  {[]RouteSpec{ok[0], {Method: "GET", Path: "/me", Mode: ModeAuthed}}, "route GET /me: authed route, the permissionless list says session"},
+		// A step-up route must name a permission flagged stepUp, or be
+		// exempt; the exempt list names exactly such routes.
+		"unflagged step-up": {append(slices.Clone(ok), RouteSpec{Method: "GET", Path: "/y", Mode: ModePerm, Keys: []perm.Key{"x:extra"}, StepUp: "x.reveal"}),
+			"route GET /y: step-up route without a permission flagged stepUp is not on the exempt list"},
+		"flagged only in extra": {append(slices.Clone(ok), RouteSpec{Method: "GET", Path: "/y", Mode: ModePerm, Keys: []perm.Key{"x:extra"}, Extra: []perm.Key{"x:read"}, StepUp: "x.reveal"}),
+			"route GET /y: step-up route without a permission flagged stepUp"},
+		"session step-up route": {append(slices.Clone(ok), RouteSpec{Method: "POST", Path: "/me/keys", Mode: ModeAuthed, NoAccessKey: true, StepUp: "x.reveal"}),
+			"route POST /me/keys: step-up route without a permission flagged stepUp is not on the exempt list"},
+		"stale exempt": {ok[:3], "step-up exempt list: POST /me/verify-key is not a step-up route without a flagged permission"},
+		"lost session": {[]RouteSpec{ok[0], {Method: "GET", Path: "/me", Mode: ModeAuthed}}, "route GET /me: authed route, the permissionless list says session"},
 	} {
 		err := CheckRoutes(tc.specs, rules)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)
 		}
+	}
+}
+
+// An exemption names its reason.
+func TestCheckRoutesExemptNeedsAReason(t *testing.T) {
+	t.Parallel()
+	rules := RouteRules{
+		KnownKey: func(string) bool { return true }, KnownStepUp: func(string) bool { return true }, StepUpKey: func(string) bool { return false },
+		StepUpExempt: map[string]string{"GET /x": ""},
+	}
+	err := CheckRoutes([]RouteSpec{{Method: "GET", Path: "/x", Mode: ModePerm, Keys: []perm.Key{"x:read"}, StepUp: "x.reveal"}}, rules)
+	if err == nil || !strings.Contains(err.Error(), "route GET /x: the step-up exempt list gives no reason") {
+		t.Fatalf("%v", err)
 	}
 }
 

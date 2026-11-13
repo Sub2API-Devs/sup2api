@@ -119,7 +119,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 	}
 	wantSensitive := []string{
 		"account:credential:view", "account:delete", "account:own:credential:view", "account:own:delete", "account:relay",
-		"balance:adjust", "group:manage",
+		"apikey:self:manage", "balance:adjust", "group:manage",
 		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
 		"plugin:install", "plugin:manage", "plugin:uninstall",
 		"price:manage", "proxy:manage", "publisher:manage",
@@ -128,7 +128,7 @@ func TestCatalogFlaggedSets(t *testing.T) {
 		"task:manage", "task:run", "usage:settle", "user:delete", "user:password:reset",
 	}
 	wantStepUp := []string{
-		"account:credential:view", "account:own:credential:view",
+		"account:credential:view", "account:own:credential:view", "apikey:self:manage",
 		"plugin:grant:critical", "plugin:grant:db_schema_unconfined", "plugin:grant:high",
 		"plugin:install", "proxy:manage", "publisher:manage", "settings:manage",
 		"system:update:execute", "system:update:recover", "user:delete", "user:password:reset",

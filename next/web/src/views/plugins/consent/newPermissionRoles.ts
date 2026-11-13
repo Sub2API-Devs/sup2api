@@ -41,7 +41,8 @@ export function useNewPermissionRoles(review: Ref<PluginReview | null>) {
 
   const initial = (p: ReviewUserPermission) => (p.default_roles || []).filter(selectable)
   const selected = (p: ReviewUserPermission) => overrides.value[p.key] ?? initial(p)
-  const changed = (p: ReviewUserPermission) => !!overrides.value[p.key] && !same(overrides.value[p.key], initial(p))
+  /** Differs from the manifest defaults: a caller who cannot name a default may still send it without (an empty list included). */
+  const changed = (p: ReviewUserPermission) => !!overrides.value[p.key] && !same(overrides.value[p.key], p.default_roles || [])
   /** Changed, and a default role the caller cannot name drops out (it is sent without it). */
   const dropsDefaults = (p: ReviewUserPermission) => changed(p) && (p.default_roles || []).some((r) => !selectable(r))
 
@@ -53,5 +54,5 @@ export function useNewPermissionRoles(review: Ref<PluginReview | null>) {
   /** new_permission_roles of the consent: the changed permissions only. */
   const payload = () => Object.fromEntries(perms.value.filter(changed).map((p) => [p.key, selected(p)]))
 
-  return { choices, perms, selected, changed, dropsDefaults, toggle, payload }
+  return { choices, canName: selectable, perms, selected, changed, dropsDefaults, toggle, payload }
 }

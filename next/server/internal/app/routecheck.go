@@ -36,13 +36,24 @@ var permissionlessRoutes = func() map[string]httpapi.Access {
 	return out
 }()
 
+// stepUpExemptRoutes are the step-up routes none of whose permissions is
+// flagged stepUp (which tells an access key's owner the key will be asked
+// for a proof), each with the reason it need not be.
+var stepUpExemptRoutes = map[string]string{
+	// Access keys are written from a login session only (no permission, so
+	// none to flag): an access key never sees these routes.
+	"POST /me/access-keys":      "session only, no permission",
+	"PATCH /me/access-keys/:id": "session only, no permission",
+}
+
 // checkRoutes holds the registered console routes to the start-up rules
 // (httpapi.CheckRoutes) and binds the core menus to their pages' main
 // routes; a failure stops the start.
 func checkRoutes(r *httpapi.Router, az *authz.Service) error {
 	specs := r.Routes()
 	err := httpapi.CheckRoutes(specs, httpapi.RouteRules{
-		KnownKey: authz.KnownKey, KnownStepUp: iam.KnownStepUpScope, Permissionless: permissionlessRoutes,
+		KnownKey: authz.KnownKey, KnownStepUp: iam.KnownStepUpScope, StepUpKey: authz.StepUpKey,
+		Permissionless: permissionlessRoutes, StepUpExempt: stepUpExemptRoutes,
 	})
 	if err == nil {
 		err = az.BindMenuRoutes(httpapi.RouteKeys(specs))

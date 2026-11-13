@@ -18,8 +18,9 @@ import (
 // the permissions it creates to roles through defaultRoles and inheritFrom.
 // An upgrade doing so is approved without anyone only when every such grant
 // is of a non-sensitive permission to the built-in admin, operator or
-// supplier role (autoGrantRoles); otherwise someone entitled to the consent
-// page decides. Built-in plugins upgrade with the core and are approved by
+// supplier role (autoGrantRoles); otherwise someone decides on the consent
+// page, and only one who may name every role a grant needing consent goes
+// to (checkRolesGrantable), as confirming withheld grants needs. Built-in plugins upgrade with the core and are approved by
 // the system all the same (node readiness needs it), so their grants that
 // need consent are withheld and listed for review instead.
 
@@ -86,7 +87,9 @@ func planRoleGrants(ctx context.Context, q store.Querier, m *manifest.Manifest, 
 		}
 		for _, role := range roles[up.Key] {
 			// Manifest defaults name built-in roles only (manifest
-			// BuiltinRoleKeys); an explicit override is never planned.
+			// BuiltinRoleKeys). An operator's override may name custom
+			// roles: marked built-in here, they need consent all the same,
+			// no custom role being one of autoGrantRoles.
 			add(up, role, true, "default")
 		}
 		for _, k := range up.InheritFrom {
@@ -131,6 +134,17 @@ func inheritHolders(ctx context.Context, q store.Querier, keys []string) (map[st
 // needConsent reports whether any grant of gs needs consent.
 func needConsent(gs []RoleGrant) bool {
 	return slices.ContainsFunc(gs, func(g RoleGrant) bool { return g.NeedsConsent })
+}
+
+// consentRoles lists the roles of the grants of gs that need consent.
+func consentRoles(gs []RoleGrant) []string {
+	var out []string
+	for _, g := range gs {
+		if g.NeedsConsent {
+			out = append(out, g.Role)
+		}
+	}
+	return out
 }
 
 // withholdGrants splits plan into the grants made now and the ones withheld
