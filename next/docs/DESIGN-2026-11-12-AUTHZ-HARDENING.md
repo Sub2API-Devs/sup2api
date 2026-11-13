@@ -232,7 +232,8 @@
   - 持有 `balance:adjust` / `segment:manage` 的非超管给超管、或给角色权限超出自己可授予范围的用户调余额、移用户组、设/取消个人专属：由成功变为 403（`you cannot modify a superuser` / `you cannot modify a user with higher privileges`）。
   - 持有 `segment:manage` 的人把自己移入用户组、给自己设/取消个人专属：由成功变为 409；批量移入的 `user_ids` 里含本人或不可操作的用户时整批拒绝。经访问密钥调用同样适用（非超管的密钥主人不能给自己调；超管见 FU5）。
   - 前端未改：用户列表里对本人、对超管的“调整余额”“设为个人专属”等按钮仍显示，点击后得到上述 409/403 提示（按钮按目标隐藏可在前端任务里跟进）。
-  - 已知未覆盖：持有 `segment:manage` 的人不能把自己移入别的用户组，但仍能修改自己所在用户组（含自己的个人专属）的折扣、授权、专属倍率与专属价（FU2 已收紧，默认用户组除外）；软删除但仍留有角色行的高权限用户作为目标时回 403 而不是 404/400。
+  - 修改自己所在用户组（含自己的个人专属）的折扣、授权、专属倍率与专属价：已由 FU2 收紧（默认用户组除外）。
+  - 已知未覆盖：软删除但仍留有角色行的高权限用户作为目标时回 403 而不是 404/400。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
 ## T34 M11：用量详情的账号与本人视图字段（Detail.hideAccounts / redactForSelf）
@@ -433,5 +434,6 @@
 - 改动：新增 `segment.GuardOwnSegments(ctx, q, users, segmentIDs)`：调用者是其中任一用户组（默认用户组除外）的成员时经 `core.ActOnOthers(ctx, users, actor, actor)` 判断，非超管 409 `you cannot do this to yourself`，超管放行并由 `authz.ActOnSelf` 记 `user.act_on_self` 审计（FU5）。所有改变用户组定价或授权的入口只调这一个函数：`PATCH /segments/:id` 带 `discount` 时（只改名称、描述不检查）、`DELETE /segments/:id`（事务里，加锁之后）、`savePairs`（`PUT /segments/:id/groups` 与 `PUT /groups/:id/segments` 共用，事务里 `lockPairs` 之后，按 `items` 涉及的全部用户组）、billing `saveGroupPrices`（`PUT /groups/:id/model-prices`，事务里按 `segment_id` 非空的项，`segmentsOf`）。个人专属的设置走的就是这几个接口，设/取消个人专属已由 T33 检查。访问密钥照常先过路由权限（`segment:manage` / `group:manage`）。CONTRACTS §97.6 原“作用于用户组本身的写入不做目标用户检查（wontfix）”一段改写。无迁移。
 - 默认用户组豁免（主节点决定）：所有用户默认都在默认用户组，改它等同于改全平台定价，与 `price:manage`、`group:manage` 改全局价格同一性质，不算给自己定价；FU2 堵的是命名组与个人专属组里的自我定价。如需收紧，只要去掉 `GuardOwnSegments` SQL 里的 `NOT s.is_default`。
 - 测试：`segment` `TestSettingsOfOwnSegment`（自己所在命名组的折扣、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、删除均 409 且不写；改名与读取不受影响；不含自己的组与默认组成功；自己的个人专属同样 409；超管改自己所在组成功并有审计）；`billing` `TestGroupModelPricesOfOwnSegment`（自己所在命名组、个人专属的专属价 409，他人的组、分组自身价格、默认组 200）。
-- 影响对象：持 `segment:manage` / `group:manage` 的非超管（admin、operator 等）不能再修改自己所在命名用户组或自己个人专属的折扣、授权、专属倍率、专属价，也不能删除自己所在的命名组：由成功变为 409，需由超管或不在该组的人修改。默认用户组、只改名称或描述、他人所在的组不受影响。超管不受影响（每次多一条审计）。批量写入里只要有一个用户组含调用者，整批拒绝。
+- 影响对象：持 `segment:manage` / `group:manage` 的非超管（admin、operator 等）不能再修改自己所在命名用户组或自己个人专属的折扣、授权、专属倍率、专属价，也不能删除自己所在的命名组：由成功变为 409，需由超管或不在该组的人修改。默认用户组、只改名称或描述、他人所在的组不受影响。超管不受影响（每次多一条审计）。批量写入里只要有一个用户组含调用者，整批拒绝。分组自身的倍率与分组价格（`segment_id` 为 `null`）仍可由 `group:manage` 修改，和默认组一样按平台级处理。
+- 已知：超管的豁免审计经连接池写，先于写事务提交；写事务随后回滚（如专属价的外键冲突转 409）时审计行留下（只涉及超管、罕见，改为随事务写需要让 `ActOnSelf` 接收事务）。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。

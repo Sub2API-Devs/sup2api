@@ -115,8 +115,10 @@ func TestSettingsOfOwnSegment(t *testing.T) {
 	discount(other).ok(200)
 	grant(other).ok(200)
 	grantInGroup(other).ok(200)
-	discount(e.defaultSegment()).ok(200)
-	grantInGroup(e.defaultSegment()).ok(200)
+	// admin is in the default segment and no superuser: it is exempt.
+	require.Equal(t, e.defaultSegment(), e.segmentOf(e.admin))
+	e.do(e.admin, "PATCH", path("/segments/%d", e.defaultSegment()), map[string]any{"discount": "0.9"}).ok(200)
+	e.do(e.admin, "PUT", path("/groups/%d/segments", grp), map[string]any{"items": []map[string]any{{"segment_id": e.defaultSegment(), "granted": true}}}).ok(200)
 
 	personal := e.personal(operator)
 	discount(personal).failed(409, "conflict")
