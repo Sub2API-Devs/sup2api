@@ -29,7 +29,7 @@ type FlowView struct {
 	PublishedBy *int64          `json:"published_by"`
 	Groups      []int64         `json:"groups"`
 	// Scope is the audit scope (ScopeInput ...), null for a flow nobody
-	// chose one for: it moderates everything, as all (§72.4, 0.10.0).
+	// chose one for: it moderates the input, as ScopeNew (§72.4, 0.11.1).
 	Scope *string `json:"scope"`
 	// Accounts are the account bindings of the flow (§72.17).
 	Accounts []AccountBinding `json:"accounts"`
