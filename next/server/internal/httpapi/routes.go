@@ -42,6 +42,32 @@ type RouteSpec struct {
 	NoAccessKey bool
 }
 
+// Access is how a route without a permission lets its caller in.
+type Access string
+
+const (
+	// AccessPublic: anyone (ModePublic).
+	AccessPublic Access = "public"
+	// AccessAuthed: any signed-in caller or access key (ModeAuthed).
+	AccessAuthed Access = "authed"
+	// AccessSession: login sessions only (ModeAuthed on a SessionOnly view).
+	AccessSession Access = "session"
+)
+
+// access is how s lets callers in when it has no permission, "" when it
+// has one.
+func (s *RouteSpec) access() Access {
+	switch {
+	case s.Mode == ModePublic:
+		return AccessPublic
+	case s.Mode != ModeAuthed:
+		return ""
+	case s.NoAccessKey:
+		return AccessSession
+	}
+	return AccessAuthed
+}
+
 // ID is "<method> <path>", the way menus and the permissionless route list
 // name a route.
 func (s *RouteSpec) ID() string { return s.Method + " " + s.Path }

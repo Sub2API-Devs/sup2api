@@ -161,18 +161,19 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermScoped("GET", "/platforms", s.listPlatforms, browse...)
 	r.AuthedRead("/me/platforms", s.listMyPlatforms)
 	r.PermScoped("GET", "/account-types", s.listTypes, browse...)
-	r.PermScoped("GET", "/account-types/:plugin_key/:type/form", s.typeForm, browse...)
+	r.PermScoped("GET", "/account-types/:plugin_key/:type/form", s.typeForm, browse...).Uses(perm.AccountSettingsCustom)
 	r.PermScoped("GET", "/accounts", s.list, perm.AccountRead)
 	// Group binding, custom upstreams and guarded settings are checked per
 	// field (checkOwnChange, customSettings).
 	fieldKeys := []perm.Key{perm.GroupManage, perm.AccountGroupBind, perm.AccountRelay, perm.AccountSettingsCustom}
-	r.PermScoped("POST", "/accounts", s.create, perm.AccountCreate).Uses(fieldKeys...)
+	// settings:manage: a Claude Code runtime of anyone's (checkCCGatewayRuntime).
+	r.PermScoped("POST", "/accounts", s.create, perm.AccountCreate).Uses(fieldKeys...).Uses(perm.SettingsManage)
 	r.PermScoped("GET", "/accounts/:id", s.get, perm.AccountRead)
 	r.PermScoped("PATCH", "/accounts/:id", s.update, perm.AccountUpdate).Uses(fieldKeys...)
 	r.PermScoped("DELETE", "/accounts/:id", s.delete, perm.AccountDelete)
 	r.PermScoped("POST", "/accounts/:id/test", s.test, perm.AccountTest)
-	r.PermScoped("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, perm.AccountTest)
-	r.PermScoped("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, perm.AccountCreate)
+	r.PermScoped("POST", "/accounts/:id/models/fetch", s.fetchAccountModels, perm.AccountTest).Uses(perm.AccountRelay)
+	r.PermScoped("POST", "/account-types/:plugin_key/:type/models/fetch", s.fetchTypeModels, perm.AccountCreate).Uses(perm.AccountRelay)
 	// Plain-text credentials: a step-up proof each time (CONTRACTS §80.2).
 	r.StepUp(core.StepUpCredentialReveal).PermScoped("POST", "/accounts/:id/credentials/reveal", s.reveal, perm.AccountCredentialView)
 	// Subscription quota and balance (CONTRACTS §44, §51).

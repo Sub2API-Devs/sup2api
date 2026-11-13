@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
@@ -16,14 +17,17 @@ type RouteRules struct {
 	// KnownStepUp reports whether a step-up scope exists.
 	KnownStepUp func(scope string) bool
 	// Permissionless lists, by RouteSpec.ID, the routes allowed without a
-	// permission (ModePublic, ModeAuthed). A new one needs an entry, so
-	// opening a route to every caller is a reviewed decision.
-	Permissionless []string
+	// permission (ModePublic, ModeAuthed) and how each lets callers in. A
+	// new one needs an entry, so opening a route to every caller is a
+	// reviewed decision; so does a route losing authentication or its
+	// SessionOnly view.
+	Permissionless map[string]Access
 }
 
 // CheckRoutes checks the route table at start-up: every permission and
 // extra key is a core one, every step-up scope exists, and the routes
-// without a permission are exactly rules.Permissionless. It returns every
+// without a permission are exactly rules.Permissionless, with the same
+// access. It returns every
 // failure joined, nil when there is none.
 func CheckRoutes(specs []RouteSpec, rules RouteRules) error {
 	var errs []error
@@ -40,14 +44,17 @@ func CheckRoutes(specs []RouteSpec, rules RouteRules) error {
 		if s.StepUp != "" && !rules.KnownStepUp(s.StepUp) {
 			fail(s, "unknown step-up scope %q", s.StepUp)
 		}
-		if s.Mode == ModePublic || s.Mode == ModeAuthed {
+		if a := s.access(); a != "" {
 			open[s.ID()] = true
-			if !slices.Contains(rules.Permissionless, s.ID()) {
-				fail(s, "%s route without a permission is not on the permissionless list", s.Mode)
+			switch want, ok := rules.Permissionless[s.ID()]; {
+			case !ok:
+				fail(s, "%s route without a permission is not on the permissionless list", a)
+			case want != a:
+				fail(s, "%s route, the permissionless list says %s", a, want)
 			}
 		}
 	}
-	for _, id := range rules.Permissionless {
+	for _, id := range slices.Sorted(maps.Keys(rules.Permissionless)) {
 		if !open[id] {
 			errs = append(errs, fmt.Errorf("permissionless list: %s is not a route without a permission", id))
 		}

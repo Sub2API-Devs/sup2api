@@ -22,7 +22,7 @@ import (
 )
 
 func (s *Service) registerPreparationRoutes(r *httpapi.Router) {
-	r.PermScoped("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, perm.AccountCreate)
+	r.PermScoped("POST", "/account-types/:plugin_key/:type/preparations", s.createPreparation, perm.AccountCreate).Uses(perm.AccountRelay)
 	r.PermScoped("GET", "/account-preparations/:key/:action", s.preparationAction, perm.AccountCreate)
 	r.PermScoped("POST", "/account-preparations/:key/:action", s.preparationAction, perm.AccountCreate)
 	r.PermScoped("DELETE", "/account-preparations/:key", s.cancelPreparation, perm.AccountCreate)

@@ -59,7 +59,7 @@ func TestCheckRoutes(t *testing.T) {
 	rules := RouteRules{
 		KnownKey:       func(k string) bool { return k == "x:read" || k == "x:extra" },
 		KnownStepUp:    func(s string) bool { return s == "x.reveal" },
-		Permissionless: []string{"POST /login", "GET /me"},
+		Permissionless: map[string]Access{"POST /login": AccessPublic, "GET /me": AccessSession},
 	}
 	ok := []RouteSpec{
 		{Method: "POST", Path: "/login", Mode: ModePublic},
@@ -78,10 +78,27 @@ func TestCheckRoutes(t *testing.T) {
 		"unknown scope": {append(slices.Clone(ok), RouteSpec{Method: "GET", Path: "/y", Mode: ModePerm, Keys: []perm.Key{"x:read"}, StepUp: "y.reveal"}), `unknown step-up scope "y.reveal"`},
 		"unlisted open": {append(slices.Clone(ok), RouteSpec{Method: "POST", Path: "/me/verify", Mode: ModeAuthed}), "route POST /me/verify: authed route without a permission is not on the permissionless list"},
 		"stale entry":   {ok[1:], "permissionless list: POST /login is not a route without a permission"},
+		"lost auth":     {[]RouteSpec{{Method: "POST", Path: "/login", Mode: ModePublic}, {Method: "GET", Path: "/me", Mode: ModePublic}}, "route GET /me: public route, the permissionless list says session"},
+		"lost session":  {[]RouteSpec{ok[0], {Method: "GET", Path: "/me", Mode: ModeAuthed}}, "route GET /me: authed route, the permissionless list says session"},
 	} {
 		err := CheckRoutes(tc.specs, rules)
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)
 		}
+	}
+}
+
+func TestPublicOnAViewPanics(t *testing.T) {
+	t.Parallel()
+	r := NewRouter(gin.New(), keyTokens{}, fakeAuthz{})
+	for name, v := range map[string]*Router{"session": r.SessionOnly(), "step-up": r.StepUp("x.reveal")} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("Public on a %s view did not panic", name)
+				}
+			}()
+			v.Public("GET", "/"+name, func(*gin.Context) {})
+		}()
 	}
 }

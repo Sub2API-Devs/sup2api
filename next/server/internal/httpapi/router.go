@@ -42,8 +42,12 @@ func NewRouter(engine *gin.Engine, tokens core.TokenVerifier, authz core.Authori
 	return &Router{api: engine.Group(APIPrefix), tokens: tokens, authz: authz, stepUp: stepUp, routes: new([]*RouteSpec)}
 }
 
-// Public registers an unauthenticated route.
+// Public registers an unauthenticated route; on a SessionOnly or StepUp view
+// it panics, since it would enforce neither.
 func (r *Router) Public(method, path string, h ...gin.HandlerFunc) *RouteSpec {
+	if r.noKeys || r.scope != "" {
+		panic("httpapi: Public on a SessionOnly or StepUp view: " + method + " " + path)
+	}
 	r.api.Handle(method, path, h...)
 	return r.record(method, path, ModePublic, nil)
 }

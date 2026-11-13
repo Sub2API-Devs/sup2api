@@ -1105,10 +1105,13 @@
     - `POST /pricing/quote`：`group:read`、`user:read`、`segment:read`。
     - 插件同意页 `POST /plugins/:key/versions/:version/consent`：`plugin:grant:*`、`role:define`。
     - 插件设置的 GET 与 PUT：`plugin:read` / `plugin:manage`，并用 `.UsesPluginKeys()` 标记还检查插件声明的动态 key。
+    - 审查后补登：插件 `role-grants/confirm`、`reject`：`role:define`；两个 `models/fetch` 与 `preparations`：`account:relay`；`GET /account-types/:plugin_key/:type/form`：`account:settings:custom`；`POST /accounts`：`settings:manage`（Claude Code 运行环境）。
+    - 只登记放行检查；只为脱敏或补充展示做的检查（`redactBalance`、usage 统计、lookup 实体等）不登记。
   - `httpapi.CheckRoutes`（`httpapi/check.go`）在启动时检查，失败就拒绝启动（`app/routecheck.go`，在 `registerRoutes` 之后执行）：
     - `Keys` 与 `Extra` 都是核心目录或 `self` 里的 key（`authz.KnownKey`，旧 own 别名不算）。
     - `StepUp` scope 是已知 scope（`iam.KnownStepUpScope`）。
-    - 不需要权限的路由与白名单 `permissionlessRoutes` 完全一致，多了或少了都报错。
+    - 不需要权限的路由与白名单 `permissionlessRoutes` 完全一致，多了或少了都报错；白名单还写明访问方式（`public`、`authed`、`session`），路由丢了认证或 `SessionOnly` 视图也报错。
+    - `Public` 在 `SessionOnly`、`StepUp` 视图上注册直接 panic，因为这两种限制它都不会执行。
   - 菜单：`coreMenuItem.anyOf` 改为 `apis`，即页面主接口的 `RouteSpec.ID`。启动时 `authz.BindMenuRoutes(httpapi.RouteKeys(specs))` 取这些路由的 `Keys` 作为 anyOf，主接口不存在就拒绝启动；没有绑定之前，带 `apis` 的菜单项不显示（fail-closed）。现在每个菜单绑定的 key 与之前手写的完全一样，可见性不变。
 - 与 plan.json 原 spec 的出入：
   - 记录 Extra 的方法叫 `Uses`，因为 Go 里字段和方法不能同名 `Extra`。
@@ -1117,7 +1120,7 @@
   - 插件路由代理 `/p/:key/*path` 直接挂在 gin group 上，不进路由表。
 - 影响对象：启动流程（路由表或菜单不一致时拒绝启动）。新增不需要权限的接口时，必须同时加进 `permissionlessRoutes`。
 - 测试：
-  - httpapi：`TestRoutesRecordSpecs`、`TestCheckRoutes`（未知 key、未知 Extra、未知 scope、不在白名单、白名单过期）。
+  - httpapi：`TestRoutesRecordSpecs`、`TestCheckRoutes`（未知 key、未知 Extra、未知 scope、不在白名单、白名单过期、丢了认证、丢了只允许会话）、`TestPublicOnAViewPanics`。
   - authz：`TestBindMenuRoutes`（主接口换 key 时菜单跟着变；缺接口报错；未绑定时隐藏）。
   - app：`TestManagedRuntime*` 走真实 `app.Run`，真实路由表自检通过。故意往白名单加一条不存在的路由，核心以 `route check: …` 失败。
 - 回滚：revert（纯代码）。
