@@ -228,9 +228,9 @@
 
 - 改动：`billing.Service` 增加 `Users core.UserGuard`，`adjustBalance` 在 `Apply` 之前 `core.ActOnOthers(ctx, core.GuardOrDeny(s.Users), operator, id)`；`segment.Deps` 增加 `Users`（`New` 里 `core.GuardOrDeny`），`addMembers`（整批 `user_ids`，事务之前，一条 SQL）、`makePersonal`、`removePersonal`（路径上的用户）经 `Service.actOnOthers` 做同一检查；`app/phases.go` 把 authz 注入两处。未注入时一律拒绝（500），不会 panic 或放行。CONTRACTS §5.2、§5.5、§97.6 同步（含 wontfix：`PATCH/DELETE /segments/:id`、`PUT /segments/:id/groups`、`PUT /groups/:id/segments`、分组专属价作用于用户组本身，不做目标用户检查，个人专属（只有一个成员）也按用户组处理；`POST /usage/:id/refund` 延后）。
 - 影响对象：
-  - 持有 `balance:adjust` 的任何人（包括超管，决策 D6）给自己调余额：由 200 变为 409 `you cannot do this to yourself`。超管全局唯一（T18）且只有超管能操作超管，所以超管的余额不能再由任何人经这个接口调整；核心里没有别的人工入账途径（账本只有用量、`admin_adjust`、插件入账/扣款、退款），需要时由支付类插件入账，或用另一个账号调用网关。
+  - 持有 `balance:adjust` 的非超管给自己调余额：由 200 变为 409 `you cannot do this to yourself`。（原文“包括超管，决策 D6”已由 FU5 推翻：超管可以给自己调余额、选自己的用户组，见 FU5。）
   - 持有 `balance:adjust` / `segment:manage` 的非超管给超管、或给角色权限超出自己可授予范围的用户调余额、移用户组、设/取消个人专属：由成功变为 403（`you cannot modify a superuser` / `you cannot modify a user with higher privileges`）。
-  - 持有 `segment:manage` 的人把自己移入用户组、给自己设/取消个人专属：由成功变为 409；批量移入的 `user_ids` 里含本人或不可操作的用户时整批拒绝。经访问密钥调用同样适用（密钥主人不能给自己调）。
+  - 持有 `segment:manage` 的人把自己移入用户组、给自己设/取消个人专属：由成功变为 409；批量移入的 `user_ids` 里含本人或不可操作的用户时整批拒绝。经访问密钥调用同样适用（非超管的密钥主人不能给自己调；超管见 FU5）。
   - 前端未改：用户列表里对本人、对超管的“调整余额”“设为个人专属”等按钮仍显示，点击后得到上述 409/403 提示（按钮按目标隐藏可在前端任务里跟进）。
   - 已知未覆盖：持有 `segment:manage` 的人不能把自己移入别的用户组，但仍能修改自己所在用户组（含自己的个人专属）的折扣、授权、专属倍率与专属价（wontfix，见 CONTRACTS §97.6“目标用户检查”）；软删除但仍留有角色行的高权限用户作为目标时回 403 而不是 404/400。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
@@ -420,3 +420,10 @@
 - 改动：`PATCH /proxies/:id`（`proxy/proxy.go` `update`）在地址变化时照旧经 `checkPrivate` 判断（own 范围改到私网地址或改管理员放在私网地址上的代理的端口、协议仍 403），但写入 `allow_private` 的条件收窄为“host 变化（不分大小写与现值比较），或调用者只有 own 范围”。持 `proxy:manage` 只改 `port` / `protocol` 时保留原值。`private_test.go` `TestUpdateHostPrivate` 改断言：管理员对 `allow_private = false` 的 own 代理改端口、改协议后仍为 `false`；改 host 置 `true`，此后改端口保持 `true`；own 改端口照旧置回 `false`。CONTRACTS §43.3 同步。无迁移。
 - 影响对象：持 `proxy:manage` 的人（admin）编辑他人或自己的代理只动端口、协议时，`allow_private` 不再变成 `true`。此前这样编辑后，own 属主能把域名指向内网、经该代理连到私网地址。T30 升级说明里“改端口再改回以保留私网可达”的做法不再生效，需改动 host 再改回。own 级用户的行为不变。
 - 回滚：revert 这个提交即可，无迁移；期间写下的 `allow_private` 保留。
+
+## FU5 超管自作用豁免（T33 收紧的放宽，单独提交）
+
+- 改动：`core.UserGuard` 增加 `ActOnSelf(ctx, actorID) error`；`core.ActOnOthers` 在目标含调用者本人时先问 `ActOnSelf`，通过后把本人从目标中去掉，其余目标照常 `CanActOnUsers`。`authz.Service.ActOnSelf` 用 `usersRoleSet`（用户角色的授予集，不经访问密钥收窄）判断是否超管：不是 → `core.ErrSelfTarget`（409）；是 → 写一条审计 `user.act_on_self`（`detail = {reason: "self_by_superuser", via: "session" | "access_key", access_key_id?, request_id}`）后放行。审计只在这一处写，billing、segment 不做特判；`core.GuardOrDeny` 的未注入守卫对 `ActOnSelf` 同样回 500。路由的权限检查不变：访问密钥按“用户权限 ∩ 密钥权限”，超管的密钥只有显式带 `balance:adjust` / `segment:manage` 才能走到 `ActOnOthers`。
+- 测试：`core` `TestActOnOthers`（超管自作用放行且只把其余目标交给守卫、不改调用方切片；守卫拒绝仍生效）；`billing` `TestAdjustBalanceActsOnOthers` 超管自调改为 200，新增 `TestAdjustBalanceSuperuserSelf`（超管会话 200、超管带 `balance:adjust` 的密钥 200、超管不带该权限的密钥 403、非超管会话与密钥 409，两条审计分别为 session 与 `access_key_id`）；`segment` 新增 `TestSuperuserChoosesOwnSegment`（超管把自己移入用户组、设/取消自己的个人专属均成功，各有审计）。CONTRACTS 调余额一行、§97.6“目标用户检查”同步。无迁移。
+- 影响对象：超管（会话，或带相应权限的访问密钥）给自己调余额、把自己移入用户组、给自己设/取消个人专属由 409 变为成功，每次多一条 `user.act_on_self` 审计。非超管不变（仍 409，会话与密钥一样）。超管的访问密钥此前作用于本人时还会被 `CanActOnUsers` 以 `you cannot modify a superuser` 拒绝（决策 1），现在带了该接口权限即可作用于本人；作用于其他超管的规则不变（全局只有一个超管）。
+- 回滚：revert 这个提交即可，无迁移；已写的审计行保留。

@@ -65,6 +65,7 @@ func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error
 func (allowAll) CanGrant(context.Context, int64, []string) error      { return nil }
 func (allowAll) CanActOn(context.Context, int64, []string) error      { return nil }
 func (allowAll) CanActOnUsers(context.Context, int64, ...int64) error { return nil }
+func (allowAll) ActOnSelf(context.Context, int64) error               { return core.ErrSelfTarget }
 
 type env struct {
 	t   *testing.T

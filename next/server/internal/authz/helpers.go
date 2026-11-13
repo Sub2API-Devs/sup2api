@@ -162,12 +162,32 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID, targetID int64) err
 // right now: a disabled user can do nothing, and comparing against that
 // would let anyone with user:update re-enable a disabled admin or set its
 // password and take the account over (SEC-H2). The actor itself among the
-// targets and the system (actor 0) pass; ActOnOthers refuses the former. An
+// targets and the system (actor 0) pass; ActOnOthers asks ActOnSelf first. An
 // access key acts with less than its owner's roles, so its owner is a target
 // like any other: no access key changes a superuser, its own included
 // (decision 1).
 func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error {
 	return s.canActOnUsers(ctx, s.querier(), actorID, targetIDs...)
+}
+
+// ActOnSelf implements core.UserGuard: a superuser by its roles may act on
+// itself, through its session or an access key holding the route's
+// permission (the key never carries the flag, so this reads the roles, not
+// the key's set). Every exemption is audited here, the one place (FU5).
+func (s *Service) ActOnSelf(ctx context.Context, actorID int64) error {
+	q := s.querier()
+	set, err := s.usersRoleSet(ctx, q, []int64{actorID})
+	if err != nil {
+		return err
+	}
+	if !set.Superuser {
+		return core.ErrSelfTarget
+	}
+	detail := map[string]any{"reason": "self_by_superuser", "via": "session", "request_id": core.RequestID(ctx)}
+	if key, ok := core.AccessKey(ctx); ok && key.UserID == actorID {
+		detail["via"], detail["access_key_id"] = "access_key", key.KeyID
+	}
+	return s.audit(ctx, q, actorID, "user.act_on_self", "user", actorID, detail)
 }
 
 // canActOnUsers is CanActOnUsers reading through q.

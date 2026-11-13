@@ -67,8 +67,8 @@ func fieldError(ctx context.Context, field, code, en, zh string) core.FieldError
 }
 
 // actOnOthers fails unless the caller may choose the user group of the
-// users: none of them is the caller, and none holds roles granting more than
-// the caller's (C-L7).
+// users: none of them is the caller (unless a superuser), and none holds
+// roles granting more than the caller's (C-L7, FU5).
 func (s *Service) actOnOthers(ctx context.Context, userIDs ...int64) error {
 	actor, _ := core.UserID(ctx)
 	return core.ActOnOthers(ctx, s.users, actor, userIDs...)

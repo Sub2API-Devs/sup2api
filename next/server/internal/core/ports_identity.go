@@ -195,16 +195,26 @@ type UserGuard interface {
 	// actor itself among the targets (unless acting through its access
 	// key) and actor 0 (the system) pass.
 	CanActOnUsers(ctx context.Context, actorID int64, targetIDs ...int64) error
+	// ActOnSelf fails with ErrSelfTarget unless actorID's roles make it a
+	// superuser, whatever its access key narrows; each exemption is
+	// audited (self_by_superuser).
+	ActOnSelf(ctx context.Context, actorID int64) error
 }
 
-// ErrSelfTarget refuses an action nobody may take on themselves.
+// ErrSelfTarget refuses an action only a superuser may take on itself.
 var ErrSelfTarget = ErrConflict.WithMessage("you cannot do this to yourself")
 
-// ActOnOthers is UserGuard for actions nobody takes on themselves, such as
-// moving money to oneself or choosing one's own user group (M7, C-L7).
+// ActOnOthers is UserGuard for actions nobody but a superuser takes on
+// themselves, such as moving money to oneself or choosing one's own user
+// group (M7, C-L7, FU5). The route has already checked the permission, so a
+// superuser's access key reaches here only when it holds it; the actor
+// itself is then no target of CanActOnUsers.
 func ActOnOthers(ctx context.Context, g UserGuard, actorID int64, targetIDs ...int64) error {
 	if actorID != 0 && slices.Contains(targetIDs, actorID) {
-		return ErrSelfTarget
+		if err := g.ActOnSelf(ctx, actorID); err != nil {
+			return err
+		}
+		targetIDs = slices.DeleteFunc(slices.Clone(targetIDs), func(id int64) bool { return id == actorID })
 	}
 	return g.CanActOnUsers(ctx, actorID, targetIDs...)
 }
@@ -221,6 +231,8 @@ func GuardOrDeny(g UserGuard) UserGuard {
 type denyAllUsers struct{}
 
 func (denyAllUsers) CanActOnUsers(context.Context, int64, ...int64) error { return ErrInternal }
+
+func (denyAllUsers) ActOnSelf(context.Context, int64) error { return ErrInternal }
 
 // PermissionDef describes one permission in the catalog.
 type PermissionDef struct {

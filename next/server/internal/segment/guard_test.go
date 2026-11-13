@@ -9,9 +9,9 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 )
 
-// Whose user group a caller may choose is authz's CanActOnUsers, and never
-// their own (C-L7). admin and masked both hold segment:manage; the roles
-// decide.
+// Whose user group a caller may choose is authz's CanActOnUsers, and only a
+// superuser its own (C-L7, FU5). admin and masked both hold segment:manage;
+// the roles decide.
 func TestMembershipActsOnOthers(t *testing.T) {
 	e := setup(t)
 	az := authz.New(authz.Deps{DB: e.db})
@@ -51,6 +51,23 @@ func TestMembershipActsOnOthers(t *testing.T) {
 	depersonalize(e.admin).failed(403, "permission_denied")
 	depersonalize(e.plain).ok(204)
 	require.Equal(t, int64(2), e.id(`SELECT count(*) FROM segments WHERE kind = 'personal'`))
+}
+
+// A superuser chooses its own user group like anyone else's, and each time
+// leaves an audit row (FU5).
+func TestSuperuserChoosesOwnSegment(t *testing.T) {
+	e := setup(t)
+	az := authz.New(authz.Deps{DB: e.db})
+	require.NoError(t, az.SyncCore(context.Background()))
+	e.svc.users = az
+	e.exec(`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE key = $2`, e.admin, authz.RoleSuperAdmin)
+	vip := e.segment("VIP", "1")
+	e.do(e.admin, "POST", path("/segments/%d/members", vip), map[string]any{"user_ids": []int64{e.admin, e.plain}}).ok(200)
+	require.Equal(t, vip, e.segmentOf(e.admin))
+	e.do(e.admin, "POST", path("/users/%d/personal-segment", e.admin), map[string]any{}).ok(201)
+	e.do(e.admin, "DELETE", path("/users/%d/personal-segment", e.admin), nil).ok(204)
+	require.Equal(t, int64(3), e.id(`SELECT count(*) FROM audit_logs WHERE action = 'user.act_on_self' AND user_id = $1
+		AND target_id = $1::text AND detail->>'reason' = 'self_by_superuser' AND detail->>'via' = 'session'`, e.admin))
 }
 
 // A service built without a user guard refuses every change of membership.

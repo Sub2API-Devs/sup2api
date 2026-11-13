@@ -78,30 +78,48 @@ func TestMissingDetails(t *testing.T) {
 	}
 }
 
-// guardFunc adapts a function to UserGuard.
+// guardFunc adapts a function to UserGuard; superusers may act on
+// themselves.
 type guardFunc func(actorID int64, targetIDs ...int64) error
+
+var superusers = map[int64]bool{9: true}
 
 func (f guardFunc) CanActOnUsers(_ context.Context, actorID int64, targetIDs ...int64) error {
 	return f(actorID, targetIDs...)
 }
 
+func (guardFunc) ActOnSelf(_ context.Context, actorID int64) error {
+	if !superusers[actorID] {
+		return ErrSelfTarget
+	}
+	return nil
+}
+
 func TestActOnOthers(t *testing.T) {
 	ctx := context.Background()
-	asked := false
-	g := guardFunc(func(int64, ...int64) error { asked = true; return nil })
-	if err := ActOnOthers(ctx, g, 7, 3, 7); !errors.Is(err, ErrSelfTarget) || asked {
+	var asked []int64
+	g := guardFunc(func(_ int64, targets ...int64) error { asked = targets; return nil })
+	if err := ActOnOthers(ctx, g, 7, 3, 7); !errors.Is(err, ErrSelfTarget) || asked != nil {
 		t.Fatalf("self among targets: err = %v, asked = %v", err, asked)
 	}
-	if err := ActOnOthers(ctx, g, 7, 3, 4); err != nil || !asked {
+	if err := ActOnOthers(ctx, g, 7, 3, 4); err != nil || !slices.Equal(asked, []int64{3, 4}) {
 		t.Fatalf("others: err = %v, asked = %v", err, asked)
 	}
-	asked = false
-	if err := ActOnOthers(ctx, g, 0, 0, 3); err != nil || !asked {
+	if err := ActOnOthers(ctx, g, 0, 0, 3); err != nil || !slices.Equal(asked, []int64{0, 3}) {
 		t.Fatalf("system: err = %v, asked = %v", err, asked)
+	}
+	// A superuser passes ActOnSelf; the others are still the guard's, and
+	// the caller's slice is left alone.
+	targets := []int64{9, 3, 9}
+	if err := ActOnOthers(ctx, g, 9, targets...); err != nil || !slices.Equal(asked, []int64{3}) || !slices.Equal(targets, []int64{9, 3, 9}) {
+		t.Fatalf("superuser on itself: err = %v, asked = %v, targets = %v", err, asked, targets)
 	}
 	denied := guardFunc(func(int64, ...int64) error { return ErrPermissionDenied })
 	if err := ActOnOthers(ctx, denied, 7, 3); !errors.Is(err, ErrPermissionDenied) {
 		t.Fatalf("guard's denial: %v", err)
+	}
+	if err := ActOnOthers(ctx, denied, 9, 9, 3); !errors.Is(err, ErrPermissionDenied) {
+		t.Fatalf("guard's denial after the exemption: %v", err)
 	}
 }
 
