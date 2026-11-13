@@ -562,6 +562,31 @@
    "have": "account:update:group/12/*",
    "want": "account:update:own",
    "ok": false
+  },
+  {
+   "have": "account:own:read",
+   "want": "account:read:own",
+   "ok": false
+  },
+  {
+   "have": "account:own:update",
+   "want": "account:update:own",
+   "ok": false
+  },
+  {
+   "have": "proxy:own:manage",
+   "want": "proxy:manage:own",
+   "ok": false
+  },
+  {
+   "have": "role:manage",
+   "want": "role:assign",
+   "ok": false
+  },
+  {
+   "have": "role:manage",
+   "want": "role:define",
+   "ok": false
   }
  ],
  "allows": [
@@ -920,6 +945,32 @@
    "row": {
     "id": 3,
     "created_by": 8,
+    "group_ids": null
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "account:own:update"
+   ],
+   "action": "account:update",
+   "me": 7,
+   "row": {
+    "id": 125,
+    "created_by": 7,
+    "group_ids": null
+   },
+   "ok": false
+  },
+  {
+   "have": [
+    "proxy:own:manage"
+   ],
+   "action": "proxy:manage",
+   "me": 7,
+   "row": {
+    "id": 3,
+    "created_by": 7,
     "group_ids": null
    },
    "ok": false
