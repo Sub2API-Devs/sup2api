@@ -1418,6 +1418,14 @@ export interface HostPermissionReview {
   current_scope?: Record<string, unknown> | null
 }
 
+/** One host permission of an upgrade's diff (review.go DiffItem). */
+export interface ReviewDiffItem {
+  id: string
+  risk: HostPermissionReview['risk']
+  scope?: Record<string, unknown> | null
+  previous_scope?: Record<string, unknown> | null
+}
+
 export interface ReviewAccountType {
   id: string
   label: LText
@@ -1459,7 +1467,7 @@ export interface PluginReview {
   resources?: Record<string, any> | null
   external_services: string[]
   host_permissions: HostPermissionReview[]
-  diff?: { added: string[]; widened: string[]; removed: string[] } | null
+  diff?: { added: ReviewDiffItem[]; widened: ReviewDiffItem[]; removed: ReviewDiffItem[] } | null
   /** Role grants the new permissions get without overrides (defaultRoles, inheritFrom holders). */
   new_role_grants?: PluginRoleGrant[]
   /** One of them needs consent: the upgrade is not carried over. */

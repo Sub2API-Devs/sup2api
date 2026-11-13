@@ -326,6 +326,9 @@ plugins.set('videogen', {
 
 // ------------------------------------------------------------------ reviews
 
+/** An item of review.diff (review.go DiffItem). */
+const diffItem = (id: string, risk: string) => ({ id, risk })
+
 function guardReview(version: string, diff?: Any): Any {
   return {
     plugin_key: 'guard',
@@ -430,7 +433,7 @@ function anthropicReview(version: string): Any {
       { id: 'routes.webhook', risk: 'high', scope: { paths: ['/oauth/callback'] }, requires: 'plugin:grant:high' },
       { id: 'net', risk: 'high', scope: { domains: ['api.anthropic.com', 'console.anthropic.com'] }, requires: 'plugin:grant:high' }
     ],
-    diff: version === '0.1.0' ? null : { added: ['db.schema', 'jobs', 'routes.webhook'], widened: ['net'], removed: [] }
+    diff: version === '0.1.0' ? null : { added: [diffItem('db.schema', 'high'), diffItem('jobs', 'medium'), diffItem('routes.webhook', 'high')], widened: [diffItem('net', 'high')], removed: [] }
   }
 }
 
@@ -797,7 +800,7 @@ on('POST', '/plugins/retired-keys/:key/release', (req) => {
 on('POST', '/plugins/upload', stepUp('plugin.install', () => {
   // multipart bodies are not parsed by the mock server: pretend it was guard 0.1.1
   return stageVersion(
-    guardReview('0.1.1', { added: [], widened: ['gateway.hook'], removed: [] })
+    guardReview('0.1.1', { added: [], widened: [diffItem('gateway.hook', 'high')], removed: [] })
   )
 }))
 

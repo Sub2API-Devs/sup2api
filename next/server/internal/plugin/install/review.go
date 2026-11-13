@@ -395,8 +395,8 @@ func (r *Review) resolveDefaultRoles(ctx context.Context, q store.Querier, m *ma
 }
 
 // noteDBSchema sets NeedsDBSchemaUnconfined from the manifest's db.schema
-// request and the plugin's trust (the consent sends every checked host
-// permission as a grant, so a db.schema granted before is checked again).
+// request and the plugin's trust. A db.schema an upgrade carries over is not
+// checked again (decide); the console then asks for no grant right.
 func (s *Service) noteDBSchema(r *Review, m *manifest.Manifest) {
 	asks := slices.ContainsFunc(m.HostPermissions, func(hp manifest.HostPermission) bool { return hp.ID == "db.schema" })
 	r.NeedsDBSchemaUnconfined = asks && s.dbSchemaUnconfined(r.Trust == pkg.TrustOfficial)

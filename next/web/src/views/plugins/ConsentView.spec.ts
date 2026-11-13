@@ -241,11 +241,13 @@ describe('plugin consent page', () => {
         { id: 'http.client', risk: 'high', current_status: 'granted' },
         { id: 'db.core_views', risk: 'critical', optional: true }
       ] as never,
-      diff: { added: ['db.core_views'], widened: ['http.client'], removed: [] } as never
+      diff: { added: [{ id: 'db.core_views', risk: 'critical' }], widened: [{ id: 'http.client', risk: 'high' }], removed: [] } as never
     }))
     await flushPromises()
     // ui.native is kept; http.client is widened, so it is a new grant; db.core_views is new and needs the right.
+    // The diff lists items as the server sends them (review.go DiffItem), by id.
     expect(w.findAll('[data-testid="hp-carried"]')).toHaveLength(1)
+    expect(w.text()).not.toContain('[object Object]')
     expect((w.get('[data-testid="consent-approve"]').element as HTMLButtonElement).disabled).toBe(false)
     await w.findAll('[data-testid="host-permissions"] input[type="checkbox"]').find((b) => !(b.element as HTMLInputElement).disabled && !(b.element as HTMLInputElement).checked)!.setValue(true)
     await w.get('[data-testid="consent-approve"]').trigger('click')

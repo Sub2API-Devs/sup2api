@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SPageHeader, SSpinner, confirm, toast } from '@sub2api/ui'
-import type { HostPermissionReview, PluginReview, PluginRoleGrant } from '@/api/types'
+import type { HostPermissionReview, PluginReview, PluginRoleGrant, ReviewDiffItem } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -66,8 +66,8 @@ function requiredPermsOf(hp: HostPermissionReview, risk: Risk): string[] {
 const rows = computed<HPRow[]>(() => {
   const r = review.value
   if (!r) return []
-  const added = new Set(r.diff?.added || [])
-  const widened = new Set(r.diff?.widened || [])
+  const added = new Set(asArray<ReviewDiffItem>(r.diff?.added).map((d) => d.id))
+  const widened = new Set(asArray<ReviewDiffItem>(r.diff?.widened).map((d) => d.id))
   return asArray<HostPermissionReview>(r.host_permissions)
     .map((hp) => {
       const risk = riskOf(hp.id, hp.risk)
@@ -259,15 +259,15 @@ onMounted(load)
         <div class="space-y-2 text-sm">
           <div v-if="review.diff.added?.length" class="flex flex-wrap items-center gap-1.5">
             <span class="w-24 shrink-0 font-medium text-red-600 dark:text-red-400">+ {{ t('plugins.consent.diffAdded') }}</span>
-            <SBadge v-for="p in review.diff.added" :key="p" tone="danger">{{ hpLabel(p) }}</SBadge>
+            <SBadge v-for="p in review.diff.added" :key="p.id" tone="danger">{{ hpLabel(p.id) }}</SBadge>
           </div>
           <div v-if="review.diff.widened?.length" class="flex flex-wrap items-center gap-1.5">
             <span class="w-24 shrink-0 font-medium text-orange-600 dark:text-orange-400">↑ {{ t('plugins.consent.diffWidened') }}</span>
-            <SBadge v-for="p in review.diff.widened" :key="p" tone="warning">{{ hpLabel(p) }}</SBadge>
+            <SBadge v-for="p in review.diff.widened" :key="p.id" tone="warning">{{ hpLabel(p.id) }}</SBadge>
           </div>
           <div v-if="review.diff.removed?.length" class="flex flex-wrap items-center gap-1.5">
             <SHint inline class="w-24 shrink-0 font-medium">− {{ t('plugins.consent.diffRemoved') }}</SHint>
-            <SBadge v-for="p in review.diff.removed" :key="p" tone="gray"><span class="line-through">{{ hpLabel(p) }}</span></SBadge>
+            <SBadge v-for="p in review.diff.removed" :key="p.id" tone="gray"><span class="line-through">{{ hpLabel(p.id) }}</span></SBadge>
           </div>
           <SHint v-if="!review.diff.added?.length && !review.diff.widened?.length && !review.diff.removed?.length">
             {{ t('plugins.consent.diffNone') }}
