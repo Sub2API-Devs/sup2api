@@ -23,6 +23,7 @@ export default {
     superadmin_transfer: 'Transfer super admin',
     self_password_change: 'Change password',
     self_email_change: 'Change email',
+    self_2fa_enable: 'Turn on two-factor authentication',
     self_2fa_disable: 'Turn off two-factor authentication',
     self_2fa_backup_codes: 'Regenerate backup codes',
     self_passkey_add: 'Add a passkey',
@@ -34,6 +35,7 @@ export default {
     plugin_grant: 'Grant plugin permissions',
     publisher_manage: 'Manage publishers',
     system_update: 'Core upgrade',
+    host_install: 'Install or connect a remote host',
     superadmin_identity: 'Change the super admin account'
   }
 }

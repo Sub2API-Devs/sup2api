@@ -56,6 +56,7 @@ var stepUpScopes = map[string]bool{
 	core.StepUpSuperAdminTransfer: true,
 	core.StepUpSelfPassword:       true,
 	core.StepUpSelfEmail:          false,
+	core.StepUpSelf2FAEnable:      false,
 	core.StepUpSelf2FADisable:     false,
 	core.StepUpSelfBackupCodes:    false,
 	core.StepUpSelfPasskeyAdd:     false,

@@ -24,7 +24,7 @@ func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/passkey/finish", s.handlePasskeyLoginFinish)
 
 	r.Self(http.MethodGet, "/me/two-factor", selfSecurity, s.handleTwoFactor)
-	r.Self(http.MethodPost, "/me/two-factor/setup", selfSecurity, s.handleTwoFactorSetup)
+	r.StepUp(core.StepUpSelf2FAEnable).Self(http.MethodPost, "/me/two-factor/setup", selfSecurity, s.handleTwoFactorSetup)
 	r.Self(http.MethodPost, "/me/two-factor/enable", selfSecurity, s.handleTwoFactorEnable)
 	r.StepUp(core.StepUpSelf2FADisable).Self(http.MethodPost, "/me/two-factor/disable", selfSecurity, s.handleTwoFactorDisable)
 	r.StepUp(core.StepUpSelfBackupCodes).Self(http.MethodPost, "/me/two-factor/backup-codes", selfSecurity, s.handleBackupCodes)
@@ -180,13 +180,7 @@ func (s *Service) handleTwoFactor(c *gin.Context) {
 }
 
 func (s *Service) handleTwoFactorSetup(c *gin.Context) {
-	var in struct {
-		Password string `json:"password"`
-	}
-	if !httpapi.BindJSON(c, &in) {
-		return
-	}
-	out, err := s.StartTwoFactor(c.Request.Context(), actor(c), in.Password, c.ClientIP())
+	out, err := s.StartTwoFactor(c.Request.Context(), actor(c))
 	if err != nil {
 		failLogin(c, err)
 		return

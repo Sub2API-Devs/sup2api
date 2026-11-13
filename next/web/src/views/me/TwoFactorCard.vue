@@ -1,8 +1,7 @@
 <script setup lang="ts">
 // Two-factor authentication: enrolling an authenticator app, the backup codes
-// (shown once) and turning it off. Enrolling asks for the password; turning
-// it off and new backup codes are step-up operations, verified by the dialog
-// the request brings up.
+// (shown once) and turning it off. Enrolling, turning it off and new backup
+// codes are step-up operations, verified by the dialog the request brings up.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
@@ -31,18 +30,16 @@ async function load() {
 }
 onMounted(load)
 
-type Step = 'password' | 'scan' | 'codes' | ''
+type Step = 'scan' | 'codes' | ''
 const step = ref<Step>('')
 const busy = ref(false)
 const errors = ref<Record<string, string>>({})
-const password = ref('')
 const code = ref('')
 const setup = ref<Setup | null>(null)
 const backupCodes = ref<string[]>([])
 const backupText = computed(() => backupCodes.value.join('\n'))
 
 function open(next: Step) {
-  password.value = ''
   code.value = ''
   errors.value = {}
   step.value = next
@@ -62,9 +59,10 @@ async function attempt(fn: () => Promise<void>) {
     busy.value = false
   }
 }
+/** Enrolment starts with the step-up dialog the request brings up. */
 const start = () =>
-  attempt(async () => {
-    setup.value = await api.post<Setup>('/me/two-factor/setup', { password: password.value })
+  act(async () => {
+    setup.value = await api.post<Setup>('/me/two-factor/setup')
     open('scan')
   })
 const enable = () =>
@@ -113,15 +111,8 @@ const regenerate = () =>
         <SButton size="sm" data-testid="two-factor-regenerate" :disabled="busy" @click="regenerate">{{ t('me.twoFactor.regenerate') }}</SButton>
         <SButton size="sm" variant="danger" data-testid="two-factor-disable" :disabled="busy" @click="disable">{{ t('me.twoFactor.disable') }}</SButton>
       </template>
-      <SButton v-else-if="status" size="sm" variant="primary" icon="shield" data-testid="two-factor-enable" @click="open('password')">{{ t('me.twoFactor.enable') }}</SButton>
+      <SButton v-else-if="status" size="sm" variant="primary" icon="shield" data-testid="two-factor-enable" :disabled="busy" @click="start">{{ t('me.twoFactor.enable') }}</SButton>
     </template>
-
-    <SFormModal :open="step === 'password'" :title="t('me.twoFactor.enable')" width="sm" :loading="busy" :submit-text="t('common.next')" :submit-disabled="!password" @update:open="close" @submit="start">
-      <SAlert v-if="errors.form" tone="danger" dense>{{ errors.form }}</SAlert>
-      <SField :label="t('me.confirmPassword')" :error="errors.password" required>
-        <SInput v-model="password" type="password" autocomplete="current-password" revealable data-testid="two-factor-password" />
-      </SField>
-    </SFormModal>
 
     <SFormModal :open="step === 'scan'" :title="t('me.twoFactor.enable')" width="sm" :loading="busy" :submit-text="t('me.twoFactor.enableSubmit')" :submit-disabled="!code.trim()" @update:open="close" @submit="enable">
       <p class="text-sm text-fg-muted">{{ t('me.twoFactor.scanHint') }}</p>

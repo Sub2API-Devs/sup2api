@@ -24,7 +24,7 @@ describe('two-factor card', () => {
     ui.toast.mockReset()
   })
 
-  it('enrols: the password, then a code from the new secret, then the backup codes once', async () => {
+  it('enrols: step-up by the request, then a code from the new secret, then the backup codes once', async () => {
     let enabled = false
     api.get.mockImplementation(async () => ({ enabled, backup_codes_left: enabled ? 10 : 0 }))
     api.post.mockImplementation(async (path: string) => {
@@ -36,9 +36,7 @@ describe('two-factor card', () => {
     await flushPromises()
     await w.get('[data-testid="two-factor-enable"]').trigger('click')
     await flushPromises()
-    await w.get('[data-testid="two-factor-password"] input, input[data-testid="two-factor-password"]').setValue('pw')
-    await submit(w)
-    expect(api.post).toHaveBeenCalledWith('/me/two-factor/setup', { password: 'pw' })
+    expect(api.post).toHaveBeenCalledWith('/me/two-factor/setup')
     expect(w.get('[data-testid="two-factor-secret"]').text()).toBe('SECRET')
     await w.get('[data-testid="two-factor-code"] input, input[data-testid="two-factor-code"]').setValue('123456')
     await submit(w)
@@ -59,8 +57,6 @@ describe('two-factor card', () => {
     await flushPromises()
     await w.get('[data-testid="two-factor-enable"]').trigger('click')
     await flushPromises()
-    await w.get('[data-testid="two-factor-password"] input, input[data-testid="two-factor-password"]').setValue('pw')
-    await submit(w)
     await w.get('[data-testid="two-factor-code"] input, input[data-testid="two-factor-code"]').setValue('000000')
     await submit(w)
     expect(w.find('[data-testid="two-factor-secret"]').exists()).toBe(true)

@@ -56,7 +56,7 @@ func codeAt(t *testing.T, secret string, at time.Time) string {
 func enableTwoFactor(t *testing.T, s *Service, userID int64) (string, []string) {
 	t.Helper()
 	ctx := context.Background()
-	setup, err := s.StartTwoFactor(ctx, userID, adminPassword, testIP)
+	setup, err := s.StartTwoFactor(ctx, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,14 +80,11 @@ func clearLastStep(t *testing.T, s *Service, userID int64) {
 	}
 }
 
-func TestTwoFactorEnrolmentNeedsPasswordAndCode(t *testing.T) {
+func TestTwoFactorEnrolmentNeedsACode(t *testing.T) {
 	e := setupAdmin(t)
 	s, ctx := e.svc, context.Background()
 	id := mustLogin(t, s, adminEmail, adminPassword).User.ID
-	if _, err := s.StartTwoFactor(ctx, id, "wrong-password", testIP); !isCode(err, "invalid_argument") {
-		t.Fatalf("wrong password: %v", err)
-	}
-	setupOut, err := s.StartTwoFactor(ctx, id, adminPassword, testIP)
+	setupOut, err := s.StartTwoFactor(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +113,7 @@ func TestTwoFactorEnrolmentNeedsPasswordAndCode(t *testing.T) {
 	if strings.Contains(string(sealed), setupOut.Secret) {
 		t.Fatal("the secret is stored in the clear")
 	}
-	if _, err := s.StartTwoFactor(ctx, id, adminPassword, testIP); !isCode(err, "conflict") {
+	if _, err := s.StartTwoFactor(ctx, id); !isCode(err, "conflict") {
 		t.Fatalf("second setup: %v", err)
 	}
 }

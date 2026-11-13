@@ -224,10 +224,16 @@ type totpSetupPayload struct {
 	Sealed string `json:"sealed"`
 }
 
-// StartTwoFactor checks the password and starts enrolment: the secret stays in
-// a flow until a code from it proves the authenticator app has it.
-func (s *Service) StartTwoFactor(ctx context.Context, userID int64, password, ip string) (*TwoFactorSetup, error) {
-	email, err := s.confirmPassword(ctx, userID, password, ip)
+// StartTwoFactor starts enrolment: the secret stays in a flow until a code
+// from it proves the authenticator app has it. Adding a factor is a step-up
+// operation (self.2fa.enable, verified by the route): a password alone must
+// not add a factor that then passes every step-up of a passkey-only user.
+func (s *Service) StartTwoFactor(ctx context.Context, userID int64) (*TwoFactorSetup, error) {
+	var email string
+	err := s.db.Pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&email)
+	if store.IsNoRows(err) {
+		return nil, core.ErrUnauthenticated
+	}
 	if err != nil {
 		return nil, err
 	}

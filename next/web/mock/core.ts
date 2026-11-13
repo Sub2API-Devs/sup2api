@@ -267,11 +267,6 @@ on('PUT', '/me', (req) => ({ ...whoAmI(req.headers.authorization), display_name:
 const twoFactor = { enabled: false, left: 0 }
 const backupCodes = () => Array.from({ length: 10 }, (_, i) => `MOCK${i}-CODE${i}`)
 on('GET', '/me/two-factor', () => ({ enabled: twoFactor.enabled, enabled_at: twoFactor.enabled ? now() : undefined, backup_codes_left: twoFactor.left }))
-on('POST', '/me/two-factor/setup', (req) =>
-  req.body?.password === 'admin'
-    ? { flow_token: 'mock-totp', expires_in: 300, secret: 'MOCKSECRETMOCKSECRET', otpauth_url: 'otpauth://totp/mock', qr_code: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==' }
-    : fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
-)
 const codeError = () => fail(400, 'invalid_argument', 'incorrect code', { fields: [{ field: 'code', code: 'incorrect', message: 'incorrect verification code' }] })
 on('POST', '/me/two-factor/enable', (req) => {
   if (req.body?.code !== '123456') return codeError()
@@ -308,6 +303,10 @@ const stepUp = (scope: string, handler: MockHandler): MockHandler => (req) => {
   }
   return handler(req)
 }
+on('POST', '/me/two-factor/setup', stepUp('self.2fa.enable', () => ({
+  flow_token: 'mock-totp', expires_in: 300, secret: 'MOCKSECRETMOCKSECRET', otpauth_url: 'otpauth://totp/mock',
+  qr_code: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+})))
 on('POST', '/me/two-factor/disable', stepUp('self.2fa.disable', () => {
   twoFactor.enabled = false
   twoFactor.left = 0

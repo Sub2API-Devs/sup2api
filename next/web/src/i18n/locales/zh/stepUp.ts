@@ -23,6 +23,7 @@ export default {
     superadmin_transfer: '移交超级管理员',
     self_password_change: '修改登录密码',
     self_email_change: '修改邮箱',
+    self_2fa_enable: '开启两步验证',
     self_2fa_disable: '关闭两步验证',
     self_2fa_backup_codes: '重新生成备用码',
     self_passkey_add: '添加通行密钥',
@@ -34,6 +35,7 @@ export default {
     plugin_grant: '授予插件权限',
     publisher_manage: '管理发布者',
     system_update: '核心升级',
+    host_install: '安装或连接远程主机',
     superadmin_identity: '修改超级管理员账号'
   }
 }

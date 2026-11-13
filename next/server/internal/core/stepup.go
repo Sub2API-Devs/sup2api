@@ -28,6 +28,7 @@ const (
 	StepUpSuperAdminTransfer = "superadmin.transfer"
 	StepUpSelfPassword       = "self.password.change"
 	StepUpSelfEmail          = "self.email.change"
+	StepUpSelf2FAEnable      = "self.2fa.enable"
 	StepUpSelf2FADisable     = "self.2fa.disable"
 	StepUpSelfBackupCodes    = "self.2fa.backup_codes"
 	StepUpSelfPasskeyAdd     = "self.passkey.add"

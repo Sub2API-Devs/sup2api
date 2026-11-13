@@ -6949,7 +6949,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 ### 79.2 二次验证（`/me/two-factor`）
 
 - `GET`：`{enabled, enabled_at, backup_codes_left}`。
-- `POST /setup {password}`：返回 `{flow_token, secret, otpauth_url, qr_code}`（`qr_code` 是 PNG data URL，CSP 的 `img-src` 允许）。`POST /enable {flow_token, code}`：验证后开启，返回 10 个备用码，只显示这一次。
+- `POST /setup`（二次验证 `self.2fa.enable`，2026-11-13 期 4 整合审查起取代 `{password}`：只凭密码就能给只有通行密钥的账号加上 TOTP，此后 TOTP 能通过它的每一次二次验证；还没有任何因素时 proof 照常用密码取得）：返回 `{flow_token, secret, otpauth_url, qr_code}`（`qr_code` 是 PNG data URL，CSP 的 `img-src` 允许）。`POST /enable {flow_token, code}`：验证后开启，返回 10 个备用码，只显示这一次。
 - `POST /disable`、`POST /backup-codes`：二次验证 `self.2fa.disable` / `self.2fa.backup_codes`（§80.2；2026-11-13 起取代请求体 `{password, code}`）。
 - TOTP：SHA-1、6 位、30 秒，前后各容忍一个时间步；`last_step` 保证同一个码不能用两次。密钥用主密钥加密（AAD 绑定用户 id），备用码只存 bcrypt 哈希。
 - `DELETE /users/:id/security`（`user:password:reset`🔐🔑，2026-11-12 起，此前是 `user:update`）：管理员给丢失设备的用户清除二次验证和全部通行密钥；非超级管理员不能对超级管理员操作。清掉第二因子后账号只剩密码，与重置密码同级，所以共用同一个权限（权限标签改为“重置他人密码与两步验证”）；2026-11-13 起每次要二次验证 `user.security.reset`（§80.2，会话与带该权限的访问密钥一样；此前该权限只认会话），本人也一样，不再收请求体。经这个路由重置自己的因子同样需要这个权限（没有的人走 `/me/two-factor/disable`）。
@@ -7022,7 +7022,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 | `superadmin.transfer` | POST `/system/super-admin/transfer`（密码 + 第二因素） | `self:security`，且是超管本人 |
 | `self.password.change` | PUT `/me/password`、PATCH `/users/:id` 改自己的密码（密码 + 第二因素） | `self:security` / `user:update` |
 | `self.email.change` | PATCH `/users/:id` 只改自己的邮箱 | `user:update` |
-| `self.2fa.disable`、`self.2fa.backup_codes` | POST `/me/two-factor/disable`、`/backup-codes` | `self:security` |
+| `self.2fa.enable`、`self.2fa.disable`、`self.2fa.backup_codes` | POST `/me/two-factor/setup`、`/disable`、`/backup-codes` | `self:security` |
 | `self.passkey.add`、`self.passkey.delete` | POST `/me/passkeys/begin`、DELETE `/me/passkeys/:id` | `self:security` |
 | `user.password.reset` | PATCH `/users/:id` 改他人密码 | `user:password:reset` |
 | `user.security.reset` | DELETE `/users/:id/security`（含本人） | `user:password:reset` |

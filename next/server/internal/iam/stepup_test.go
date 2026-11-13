@@ -375,3 +375,20 @@ func TestSuperAdminKeyOnItsOwnRolesNeedsAProof(t *testing.T) {
 		t.Fatalf("key with a proof: %d %v", code, out)
 	}
 }
+
+// Adding a second factor is a step-up operation (self.2fa.enable): a
+// password alone must not enrol a TOTP that then passes every step-up of a
+// passkey-only user. With no factor yet the proof takes the password.
+func TestTwoFactorSetupNeedsAProof(t *testing.T) {
+	t.Parallel()
+	k := newKeyEnv(t)
+	session := mustLogin(t, k.s, adminEmail, adminPassword).AccessToken
+	const path = "/me/two-factor/setup"
+	if code, out := k.call(session, "POST", path, nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("no proof: %d %v", code, out)
+	}
+	proof := k.proof(t, session, core.StepUpSelf2FAEnable, "POST", path, map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(session, proof, "POST", path, nil); code != 200 {
+		t.Fatalf("with a proof: %d %v", code, out)
+	}
+}
