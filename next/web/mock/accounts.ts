@@ -762,6 +762,14 @@ function resolveProxy(req: MockRequest, b: Record<string, any>): { proxy_id?: nu
   return { proxy_created: false }
 }
 
+// Accounts in the caller's scope by status (T81): available = active and schedulable.
+on('GET', '/accounts/summary', (req) => {
+  const { who, scope } = accountScope(req, 'read')
+  const list = filterOwned(accounts, scope, who, {}).filter((a) => !a.orphaned)
+  const available = list.filter((a) => a.status === 'active' && a.schedulable).length
+  const disabled = list.filter((a) => a.status === 'disabled').length
+  return { total: list.length, available, auto_disabled: list.length - available - disabled, disabled }
+})
 on('GET', '/accounts', (req) => {
   const { who, scope } = accountScope(req, 'read')
   let list = filterOwned(accounts, scope, who, req.query)

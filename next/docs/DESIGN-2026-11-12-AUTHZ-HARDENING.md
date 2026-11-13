@@ -771,3 +771,9 @@
 - 改动：`PluginSummary`/`PluginDetail` 类型补 `role_grants_to_review`。插件列表状态列在非空时提示“N 项授权待确认”；详情页顶部 `parts/RoleGrantsReview.vue`（复用同意页的 `NewRoleGrants` 列表，需要确认的高亮）：持有 `plugin:install` 与 `role:define` 时显示“确认”“全部拒绝”，按版本依次 POST `…/versions/:version/role-grants/confirm|reject`，完成后重新加载详情；没有资格的只显示提示与所需权限（角色级资格 `CanGrantToRoles` 由服务端裁决，403 照常提示）。
 - 测试：`RoleGrantsReview.spec`（列表与高亮、按版本确认、全部拒绝、缺任一权限不显示按钮）。
 - 回滚：revert 提交即可，纯前端。
+
+## T81 W2-G5 前端：仪表盘账号状态卡片
+
+- 改动：新增 `dashboard/AccountStatusCard.vue`（可用/总数、自动停用与手动禁用、无可用为红、有自动停用为琥珀），管理员仪表盘改用它（原内联卡片与 tone 计算移入）。非管理员仪表盘：持有 `account:read` 或 `account:own:read` 时取 `GET /accounts/summary` 显示该卡片，不依赖 `usage:self:read`（供应商只有 own 级账号权限也能看到自己的账号状态）；刷新按钮一并重取。`AccountCounts` 类型共用；web mock 增加 `/accounts/summary`。
+- 测试：新增 `UserDashboard.spec`（own 级账号权限显示卡片与计数、无账号读权限不请求不显示）；`AdminDashboard.spec` 照常通过。
+- 回滚：revert 提交即可，纯前端。

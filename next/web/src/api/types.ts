@@ -1136,6 +1136,14 @@ export interface LedgerEntry {
   created_at: string
 }
 
+/** Account counts by status (GET /accounts/summary, usage overview `accounts`). */
+export interface AccountCounts {
+  total: number
+  available: number
+  auto_disabled: number
+  disabled: number
+}
+
 export interface UsageLog {
   id: number
   request_id: string
@@ -1254,7 +1262,7 @@ export interface UsageOverview {
   /** Operator view with user:read. */
   users?: { total: number; new_today: number; active_today: number }
   /** Operator view with account:read. */
-  accounts?: { total: number; available: number; auto_disabled: number; disabled: number }
+  accounts?: AccountCounts
 }
 
 export interface BillingSettings {
