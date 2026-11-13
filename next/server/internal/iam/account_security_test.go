@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -1391,4 +1392,53 @@ func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 	if code, out := k.callProof(narrow.Key, k.proof(t, narrow.Key, core.StepUpPluginInstall, "POST", "/plugins/upload", map[string]any{"method": "password", "password": adminPassword}), "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "permission_denied" {
 		t.Fatalf("key without plugin:install: %d %v", code, out)
 	}
+}
+
+// An access key's scopes are within its user's (CONTRACTS §21.0, R6): a key
+// wider than the user is refused at creation, its keys are stored canonical
+// (with the former own-level spelling for older cores) and listed
+// canonical, and a key stored before scopes existed narrows at use to the
+// user's scope of each action.
+func TestAccessKeyScopes(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	k.grantRole(t, k.userID, "seller", "account:own:read", "account:own:update", "proxy:own:manage")
+	for _, wide := range []string{"account:read", "account:update:group/3", "proxy:manage:proxy/1"} {
+		_, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "w", Password: adminPassword, Permissions: []string{wide}}, testIP)
+		var ce *core.Error
+		if !errors.As(err, &ce) || ce.Code != "permission_denied" || fmt.Sprint(ce.Details["missing"]) != "["+wide+"]" {
+			t.Fatalf("%s: %v", wide, err)
+		}
+	}
+	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "bad", Password: adminPassword, Permissions: []string{"user:read:own"}}, testIP); errCodeOf(err) != "invalid_argument" {
+		t.Fatalf("invalid key: %v", err)
+	}
+	key := k.createKey(t, k.userID, adminPassword, "account:own:read", "proxy:manage:own")
+	if fmt.Sprint(key.Permissions) != "[account:read:own proxy:manage:own]" {
+		t.Fatalf("listed = %v", key.Permissions)
+	}
+	var stored []string
+	if err := k.s.db.Pool.QueryRow(ctx, `SELECT permissions FROM user_access_keys WHERE id = $1`, key.ID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(stored) != "[account:own:read account:read:own proxy:manage:own proxy:own:manage]" {
+		t.Fatalf("stored = %v", stored)
+	}
+	// A key from before: account:update and account:delete for every row.
+	old := core.AccessKeyIdentity{UserID: k.userID, KeyID: 99, Permissions: []string{"account:update", "account:delete", "proxy:read"}}
+	set, err := k.authz.PermissionSet(core.WithAccessKey(core.WithUserID(ctx, k.userID), old), k.userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(set.KeyList()) != "[account:update:own]" {
+		t.Fatalf("old key narrows to %v", set.KeyList())
+	}
+}
+
+func errCodeOf(err error) string {
+	var ce *core.Error
+	if errors.As(err, &ce) {
+		return ce.Code
+	}
+	return ""
 }

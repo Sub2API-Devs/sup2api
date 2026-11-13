@@ -934,3 +934,20 @@
   - account `TestGroupScopedAccounts` 新增 `core.AuthorizeAccounts` 用例，插件账号路由与宿主 RPC 都走这条路径：范围内放行，范围外或未指定 id 时拒绝。
 - 未做，交给 R8 / 插件：插件 UI 宿主的 `hasAction` / `scope` API 与 moderation `host.ts` 的检查属于前端代码，兼容期内旧别名仍然有效。
 - 回滚：revert。
+
+## 期 4 R6：防提权与访问密钥的范围回归测试
+
+- 机制已在 R2a 生效：`Missing` 改为蕴含判断，`CanGrant`、`editableRole`、`checkAssignment`、`canActOnUsers` 自动比较范围；访问密钥沿用 S 组的 `grantablePermissions`，同时要求被用户蕴含；`Restrict` 按模式求交集。本项只补测试与契约。
+- 测试：
+  - authz `TestScopedGrantsAndManagement`（表驱动）：
+    - A 管 group/12，可以授出它的子集，但不能授出 group/13、account/X、group/*、own、全量 key、其他动作。`details.missing` 为规范 key。
+    - 定义角色时同一规则。
+    - A 可以分配子集角色，不能分配 B 的角色；不能操作 B 的持有者，可以操作子集的持有者。
+    - own 的相对语义；own 持有者不能操作分组管理员。
+    - 审计里是规范 key。
+  - iam `TestAccessKeyScopes`：
+    - 宽于用户范围的密钥被拒，`missing` 正确；不合法 key 400。
+    - 存储规范 key 并附带旧写法，列表只显示规范 key。
+    - 存量全量 key 收窄为用户的 own。
+  - 不可比组合被丢弃，已由 core `TestRestrictScoped` 覆盖。
+- 影响对象：无新增行为。回滚：revert。

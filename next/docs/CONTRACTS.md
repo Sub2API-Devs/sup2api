@@ -1084,6 +1084,15 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
   - ccgateway 账号运行时路由的 PUT（请求日志）改为 `Perm(account:update)`，仍只对全量开放。
   - `/proxies/probe` 不论是否保存，都要求能新建代理（全部或 own）。
   - `FindOrCreate` 只在新建时检查私网地址；范围内已有的代理按地址匹配，不受这条限制。
+- **防提权与访问密钥（期 4 R6，机制在 R2a 生效）**：
+  - 授出（新建或改角色、分配角色、`CanGrant`）与“能对谁操作”（`CanActOnUsers`）都按蕴含比较，只看 key 的文字，不看账号当前所在的分组：
+    - 只管 `group/12` 的人可以授出 `group/12`、`group/12/account/X`；不能授出 `group/13`、`account/X`、`group/*`、`own` 或全量 key。
+    - 不能操作持有这些范围的人。
+    - own 是相对语义：持有 own 的人可以把 own 授给别人。
+  - 拒绝时 `details.missing` 列出未被蕴含的规范 key。
+  - 访问密钥：创建或修改时每个 key 都要被用户蕴含，否则 403，`missing` 为规范 key。存储时规范化并附带旧写法，列表与审计显示规范 key。
+  - 存量不带后缀的密钥在使用时收窄为用户的范围。
+  - 审计 `role.create` / `role.permissions` 的 `permission_keys` 为规范 key。
 - **插件与 lookup（期 4 R5）**：
   - 插件账号路由（manifest `accounts`）与宿主 RPC `AccountScopeCheck` 都经 `AccountsInScope`，自动跟随范围。`all` 表示全部；否则 `allowed_ids` 是落在调用者范围内的 id。proto 与 SDK 注释已更新，接口形状不变。
   - `GET /lookup/accounts`、`/lookup/proxies` 按调用者 `account:read` / `proxy:read` 的范围过滤（任意范围都可调用），`mine=true` 在范围内再收窄。`/lookup/groups` 不变。
