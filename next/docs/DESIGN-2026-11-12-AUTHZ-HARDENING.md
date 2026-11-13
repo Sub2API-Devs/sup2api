@@ -502,6 +502,7 @@
   - 非超管（含内置 admin）在同意页勾选内置角色（admin、operator、supplier、user）或权限比自己大的自定义角色：由成功（期 3a 遗留路径，等于绕过决策 6 改内置角色）变为 403。不勾选时按 manifest 默认授予，不受影响。控制台列出全部角色，勾了不能改的角色会在提交时报错。
   - 旧控制台默认发 `role_keys_for_new_permissions: ["admin"]`：非超管用旧控制台安装带新权限的插件会 403，需要升级控制台或不勾选（发空数组）。
   - 只有 `role:define` 而不持有插件新权限的人，现在可以把新权限交给自己能改的自定义角色（新 key 不要求持有）。
+  - 待定（期 3 审查，未改代码）：“自己能改的自定义角色”包括操作者自己持有的角色，所以持有 `role:define` + `plugin:install` 的自定义角色可以把新插件权限（含 sensitive 的，如 payment `config:manage`）授给自己的角色，而 PUT `/roles/:id/permissions` 会因新增权限不在操作者之内拒绝同样的改动。可选收紧：显式指定的自定义角色还须在操作者的可分配清单内（`CanAssign`，期 3 审查 R1 后 `assign_custom` 不含自己的角色），或对自定义角色也检查新 key（等于只有超管能显式指定）。
 - 已知边界（审查发现，接受）：`role:define` 用权限缓存判断（与其他接口一致），角色本身的判断在事务里加锁进行；两者之间撤销 `role:define` 的极短窗口不处理。
 - 回滚：revert 这个提交即可，无迁移、无数据变化。
 
@@ -526,7 +527,7 @@
   - “不授予任何角色”的写法：`UserPermission.DefaultRoles` 区分省略（nil，`null` 同）与显式空数组：前者为 admin，后者不授予。字段去掉 `omitempty`，序列化往返不丢 `[]`（核心存的是包里的原始 manifest，不受影响；测试辅助会重新序列化）。校验不变。`moderation:exempt` 写 `"defaultRoles": []`。
   - 同意页（审查发现）：审核视图的 `user_permissions[].default_roles` 改为按当前目录算出的结果（`Review.resolveDefaultRoles` 复用 `catalogKeys` 与 `roleGrants`，上传与 `GET .../review` 都用），改名的 key 显示为空；控制台另显示“原 X 的持有者继承”（`inherit_from`）。
   - 测试：`TestRoleGrantsPriority` 增加改名、显式覆盖优先于改名与 `[]` 几种情形，`TestConsentRenameInheritsOnly` 走同意流程对比有无旧 key，`TestUserPermissionRoles` 覆盖省略、`null`、`[]` 与序列化往返。
-- 影响对象：升级 growth 时 `growth:use` 只给原 `growth:read` 的持有者（不再让所有用户突然能签到领奖）；`moderation:exempt` 在任何情况下都只靠继承。其他插件此后改名权限时同样只继承。显式写 `"defaultRoles": []` 的插件在旧核心上会被当成省略（给 admin）。
+- 影响对象：升级 growth 时 `growth:use` 只给原 `growth:read` 的持有者（不再让所有用户突然能签到领奖）；`moderation:exempt` 不按任何默认授予，只靠继承（安装者在同意页显式勾选角色时除外：旧字段 `role_keys_for_new_permissions` 作用于全部新权限，含改名的 key 与 exempt）。其他插件此后改名权限时同样只继承。显式写 `"defaultRoles": []` 的插件在旧核心上会被当成省略（给 admin）。
 - 回滚：revert 这个提交即可；回滚后升级同意时改名的新 key 又会叠加 `defaultRoles`，`[]` 回到等同省略。
 
 ## T61 W4-P8、W4-P9：新插件权限的状态跟随插件运行状态
