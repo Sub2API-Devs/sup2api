@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -1292,7 +1293,7 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 		"plugin:install", "plugin:uninstall", "plugin:grant:high", "plugin:grant:critical", "plugin:grant:db_schema_unconfined",
 		"publisher:manage", "system:update:execute", "system:update:recover",
 		"account:credential:view", "account:own:credential:view"}
-	// The plugin upload route as plugin/api registers it.
+	// A stand-in for the plugin upload route, guarded by the same permission.
 	k.r.Perm(http.MethodPost, "/plugins/upload", "plugin:install", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	mods, err := k.s.AccessKeyPermissions(ctx, root)
@@ -1314,11 +1315,11 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 		}
 	}
 
-	body := map[string]any{"name": "x", "password": adminPassword, "permissions": []string{"settings:read", "settings:manage"}}
+	body := map[string]any{"name": "x", "password": adminPassword, "permissions": []string{"settings:read", "settings:manage", "plugin:install"}}
 	code, out := k.call(login.AccessToken, "POST", "/me/access-keys", body)
 	e, _ := out["error"].(map[string]any)
 	details, _ := e["details"].(map[string]any)
-	if held, _ := details["session_only"].([]any); code != 403 || !slices.Contains(held, any("settings:manage")) || details["missing"] != nil {
+	if held, _ := details["session_only"].([]any); code != 403 || !slices.Contains(held, any("settings:manage")) || !slices.Contains(held, any("plugin:install")) || details["missing"] != nil {
 		t.Fatalf("choosing settings:manage: %d %v", code, out)
 	}
 
@@ -1329,7 +1330,7 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"settings:read"}) {
 		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
 	}
-	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 {
+	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 || !strings.Contains(fmt.Sprint(out), "plugin:install") {
 		t.Fatalf("stored plugin:install: %d %v", code, out)
 	}
 	if code, out := k.call(login.AccessToken, "POST", "/plugins/upload", nil); code != 204 {

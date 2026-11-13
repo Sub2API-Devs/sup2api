@@ -94,6 +94,7 @@
 | node | `node:read` |
 | gateway | `gateway:use` |
 | settings | `settings:read` `settings:manage`🔐🔑 |
+| system_update | `system:update:read` `system:update:execute`🔐🔑 `system:update:recover`🔐🔑 |
 
 内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（全部核心权限）、`operator`（运维：除 `settings` `sticky` `plugin` `publisher` 模块以外的全部核心权限，即没有系统设置、插件、插件市场和发布者页面）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。
 
@@ -1057,7 +1058,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 
 | 模块 | 新增 key | 说明 |
 |---|---|---|
-| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3），均无需二次验证 |
+| account | `account:own:read` `account:own:create` `account:own:update` `account:own:delete`🔐 `account:own:test` `account:own:credential:view`🔐🔑 | 只作用于 `created_by` = 调用者的账号；🔐 仅为展示标记（§3.3），均无需二次验证 |
 | account | `account:settings:custom` | 允许把受限设置（目前是 base_url，§21.3）改成插件官方值以外的值 |
 | account | `account:group:bind` | 允许 own 级用户绑定账号到分组（与 `group:manage` 二选一即可） |
 | account | `account:relay` | 允许 own 级用户新建可自定义上游的账号类型（如 relay）或修改其上游地址（§21.3.1） |
@@ -1087,7 +1088,7 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 | DELETE `/accounts/:id` | `account:delete`🔐 / `account:own:delete` | |
 | POST `/accounts/:id/test`、POST `/accounts/:id/models/fetch` | `account:test` / `account:own:test` | |
 | POST `/account-types/:plugin_key/:type/models/fetch` | `account:create` / `account:own:create` | 可带 `proxy_url`：只解析、临时用它发请求，**不查找不创建**代理、不需要代理权限；与 `proxy_id` 同时给出 400 `fields[{proxy_url, conflict}]`；`proxy_id` 的可见性规则同 POST `/accounts` |
-| POST `/accounts/:id/credentials/reveal` | `account:credential:view`🔐 / `account:own:credential:view`🔐 | |
+| POST `/accounts/:id/credentials/reveal` | `account:credential:view`🔐🔑 / `account:own:credential:view`🔐🔑 | |
 | GET `/account-types`、GET `/account-types/:p/:t/form`、GET `/platforms` | `account:read` / `account:own:read` / `account:own:create` | form 按调用者权限改写（§21.3） |
 | GET `/proxies`、GET `/proxies/:id` | `proxy:read` / `proxy:own:read` | 自己级只返回自己的；新增筛选 `created_by=<id>`（自己级下忽略；非正整数 400 `fields[{field:"created_by", code:"invalid"}]`）、`mine=true`（`strconv.ParseBool`） |
 | POST `/proxies` | `proxy:manage` / `proxy:own:manage` | `created_by` = 调用者 |
@@ -2456,7 +2457,7 @@ SDK 提供 `pluginsdk.TaskNotFound(reason)`、`pluginsdk.PollFailure(reason)` �
 
 **插件。** 内建与第三方插件均使用自身发布生命周期。核心升级预检当前启用及 rollout 中插件的 `hostCompat`；准备、准入和运行就绪检查本机是否加载已批准且兼容的插件。随包内建插件仅是首次安装来源，不覆盖已安装版本、不复活已删除插件。任务轮询、调度和记账仍由现有核心机制负责，更新主节点不独占业务任务。
 
-**管理接口。** `/api/v1/system/releases`、`/system/upgrades` 与计划的详情/事件接口需要 `system:update:read`；创建需要 `system:update:execute`，暂停/恢复/取消需要 `system:update:recover`，沿用核心 RBAC（无二次验证，§3.3）。创建携带 `release_digest`、预检取得的 `expected_revision` 和 `idempotency_key`，过期预检或同幂等键不同请求被拒绝。核心仅转发认证后的操作到 mode 0600 本机 socket。
+**管理接口。** `/api/v1/system/releases`、`/system/upgrades` 与计划的详情/事件接口需要 `system:update:read`；创建需要 `system:update:execute`，暂停/恢复/取消需要 `system:update:recover`，沿用核心 RBAC（无二次验证，§3.3）；execute 与 recover 只认登录会话，访问密钥不能带（§80）。创建携带 `release_digest`、预检取得的 `expected_revision` 和 `idempotency_key`，过期预检或同幂等键不同请求被拒绝。核心仅转发认证后的操作到 mode 0600 本机 socket。
 
 当前 v1 仅支持 schema/cluster/task/Host API 契约保持不变的滚动更新。维护迁移、跨协议转换、自动主节点选举、未经校验的任意目标强制回滚、网关自身更新不在此协议实现范围内。不能用新签名或更改声明绕过这些检查。
 
@@ -6881,7 +6882,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **子集在两处保证**：创建和修改时，选的权限必须都是用户现在持有的有效权限（否则 403，`details.missing`）。每次检查权限时，`authz.PermissionSet` 取“用户现有权限 ∩ 密钥权限”，所以用户失去权限，密钥立刻跟着失去；重新获得时也恢复。超级管理员的密钥不是超级管理员，只有选中的权限，`CanGrant`、`CanActOn`、`CanActOnUser` 看到的也是这个限制后的集合；`CanActOnUser` 对密钥不免检密钥主人本身（主人按其角色比较）。只限制密钥所属用户，查询其他用户的权限不受影响。
 - **只能用带权限的接口**：`Authed` 路由（没有权限键的接口）一律拒绝密钥（403），包括改密码、二次验证、通行密钥、会话、管理访问密钥本身，所以密钥不能给自己或别的密钥提权，也不能改登录方式。例外是只读的 `GET /me`、`/me/menus`、`/me/groups`、`/me/platforms`、`/me/assignable-roles`、`/system/version`（`AuthedRead`，`/system/version` 只返回版本号、是否托管、节点 id、boot id），返回的权限和菜单也是限制后的；`GET /lookup/:kind`（§96）也用 `AuthedRead` 注册，权限在处理函数里按 kind 检查。这些自身只读接口都按密钥收窄后的权限计算，只返回调用者自己能看到的东西，所以接受任意访问密钥（C-T1，按此口径不改）：`/me` 与菜单用收窄后的 `PermissionSet`，lookup 用 `CanAny` 和 `OwnerScope`，`/me/assignable-roles` 在密钥下为 `[]`（收窄后没有可分配角色）。
 - **只认会话的权限**（2026-11-12，`session_only`）：`user:password:reset`、`role:define`、`role:assign`、`settings:manage` 不能选给访问密钥，超级管理员也不行。判断只有 `authz.KeyAllowed` 一处：可选列表不显示，创建、修改时选了回 403（选了不持有的权限时先按 `details.missing` 拒绝；都持有时，只认会话的列在 `details.session_only`），已存的密钥在校验时丢掉它们（`GET /me/access-keys` 的 `lost` 含它们），所以以这些权限注册的路由（`settings:manage` 下 30 来条、`/roles` 写操作、`PUT /users/:id/roles`、改他人密码、清除他人两步验证 `DELETE /users/:id/security` 等）一律拒绝密钥（403 `permission_denied`）。`PermAny` 组合路由仍按其他 key 放行。
-- **只认会话的权限扩展**（2026-11-12，T57，决策 D4：代码执行、信任根、明文凭证）：`plugin:install`、`plugin:uninstall`、`plugin:grant:high`、`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`、`account:credential:view`、`account:own:credential:view` 同样不能选给访问密钥，规则与上一条相同（存量密钥里的列为 `lost`，运行时丢弃）。因此访问密钥不能上传、从市场安装、审批、卸载插件（`/plugins/upload` 等 403），不能管理发布者与公钥，不能执行或恢复核心升级；凭证明文回显本来就只认会话（上文）。访问密钥编辑账号时按“不能查看凭证”处理：保留掩码密钥同时改上游地址会要求重新输入（§21，`reenter_required`）。
+- **只认会话的权限扩展**（2026-11-12，T57，决策 D4：代码执行、信任根、明文凭证）：`plugin:install`、`plugin:uninstall`、`plugin:grant:high`、`plugin:grant:critical`、`plugin:grant:db_schema_unconfined`、`publisher:manage`、`system:update:execute`、`system:update:recover`、`account:credential:view`、`account:own:credential:view` 同样不能选给访问密钥，规则与上一条相同（存量密钥里的列为 `lost`，运行时丢弃）。因此访问密钥不能上传、从市场安装、审批、卸载插件（`/plugins/upload` 等 403），不能管理发布者与公钥，不能执行或恢复核心升级；凭证明文回显本来就只认会话（上文）。访问密钥在 `PATCH /accounts/:id` 与 `POST /accounts/:id/models/fetch` 上按“不能查看凭证”处理：保留掩码密钥同时改上游地址时 400 `fields[{credentials.<f>, reenter_required}]`，重新输入该密钥即可。
 - **明文回显只认登录会话**（2026-11-12）：回显已有密文的接口用 `SessionOnly()` 视图注册，有权限也拒绝密钥（403 `access keys cannot use this endpoint`）：`POST /me/api-keys/:id/reveal`、`POST /proxies/:id/reveal-url`、`POST /accounts/:id/credentials/reveal`。泄露的密钥因此拿不到 API Key、代理密码和账号凭证的明文。`/me/api-keys` 的创建与轮换返回的是新密钥，属于自动化的正当用途，照常接受密钥。`settings:manage` 下的 `remote-fingerprint` 会拨号到任意 host:port，但 SSH 安装控制器到内网主机是正当用途，不接 netguard；它靠 `settings:manage` 只认会话来防止被泄露的密钥利用（wontfix）。
 - **接口**（都只能用登录会话调用）：`GET /me/access-keys`（含 `lost`：已选但用户不再持有的权限）、`GET /me/access-keys/permissions`（可选的权限，只含自己持有的）、`POST /me/access-keys {name, password, permissions, expires_at}`（响应里的 `key` 只出现这一次）、`PATCH /me/access-keys/:id {name?, permissions?, password}`（改权限要密码）、`DELETE /me/access-keys/:id`。每个用户最多 20 个，有效期至少 1 小时或永不过期。
 - **存储和生命周期**：只存 SHA-256 和末 4 位。过期、删除或用户被禁用后回 401。改密码不影响密钥（和 GitHub 的个人令牌一样），要作废请删除。`last_used_at`、`last_used_ip` 每分钟最多更新一次。创建、修改、删除写审计日志（`user.access_key.*`）；密钥发起的操作，审计记录的操作者是它所属的用户。
