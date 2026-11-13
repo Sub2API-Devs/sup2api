@@ -925,3 +925,34 @@ func TestOneSuperAdminConcurrentCommits(t *testing.T) {
 	require.NoError(t, first)
 	require.True(t, store.IsUniqueViolation(second, "user_roles_one_superuser"), "the second holder: %v", second)
 }
+
+// 0100 adds accounts.admin_locked (W1-F10): existing accounts, disabled ones
+// included, start unlocked, and running it again changes nothing.
+func TestAccountAdminLockedMigration(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql)
+		require.NoError(t, err)
+	}
+	migrate := func() []string {
+		t.Helper()
+		done, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+		return done
+	}
+	const forget = `DELETE FROM schema_migrations WHERE id='0100_account_admin_locked.sql'`
+	exec(`ALTER TABLE accounts DROP COLUMN admin_locked;` + forget + `;
+		INSERT INTO accounts (name, plugin_key, type, credentials_enc, status, status_reason)
+		VALUES ('old', 'anthropic', 'apikey', '', 'disabled', 'disabled by administrator')`)
+	require.Equal(t, []string{"0100_account_admin_locked.sql"}, migrate())
+	var locked bool
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT admin_locked FROM accounts WHERE name = 'old'`).Scan(&locked))
+	require.False(t, locked, "accounts disabled before the migration are not locked")
+
+	exec(`UPDATE accounts SET admin_locked = true WHERE name = 'old';` + forget)
+	require.Equal(t, []string{"0100_account_admin_locked.sql"}, migrate())
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT admin_locked FROM accounts WHERE name = 'old'`).Scan(&locked))
+	require.True(t, locked, "a second run keeps the column")
+}

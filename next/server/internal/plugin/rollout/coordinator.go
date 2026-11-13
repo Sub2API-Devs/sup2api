@@ -401,17 +401,19 @@ func (c *Controller) commit(ctx context.Context, r *rolloutRow) error {
 				return fmt.Errorf("apply defaults: %w", err)
 			}
 		}
-		if r.action == "enable" {
-			if c.o.Perms != nil {
-				if err := c.o.Perms.SetPluginActive(ctx, tx, r.key, true); err != nil {
-					return err
-				}
+		// Every activation turns the plugin's permissions on, an upgrade too:
+		// a key registered while the plugin was not counted as running (a
+		// version approved between the commit and the end of an enable) is
+		// inserted disabled and nothing else would turn it on.
+		if c.o.Perms != nil {
+			if err := c.o.Perms.SetPluginActive(ctx, tx, r.key, true); err != nil {
+				return err
 			}
-			if c.o.Events != nil {
-				if err := c.o.Events.Emit(ctx, tx, core.Event{Type: core.EventPluginEnabled,
-					Payload: map[string]any{"plugin_key": r.key, "version": target}}); err != nil {
-					return err
-				}
+		}
+		if r.action == "enable" && c.o.Events != nil {
+			if err := c.o.Events.Emit(ctx, tx, core.Event{Type: core.EventPluginEnabled,
+				Payload: map[string]any{"plugin_key": r.key, "version": target}}); err != nil {
+				return err
 			}
 		}
 		c.log.Info("plugin rollout committed", "rollout_id", r.id, "plugin", r.key, "version", target)

@@ -97,7 +97,7 @@
 | settings | `settings:read` `settings:manage`🔐🔑 |
 | system_update | `system:update:read` `system:update:execute`🔐🔑👑 `system:update:recover`🔐🔑👑 |
 
-内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `supplier` 与 `user` 两个角色的默认权限（own 级账号与代理权限与全量级重复，保留是为了与角色编辑器“全部 = {all, own}”一致并能授出 supplier）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，没有任何插件权限，暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。
+内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `supplier` 与 `user` 两个角色的默认权限（own 级账号与代理权限与全量级重复，保留是为了与角色编辑器“全部 = {all, own}”一致并能授出 supplier）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，没有任何插件权限，暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。
 
 ## 5. REST API（`/api/v1`）
 
@@ -221,7 +221,7 @@
 | PUT `/plugins/:key/resources` `{memory_mb, cpu, max_threads, max_open_files}` | `plugin:manage` | |
 | PUT `/plugins/:key/egress-policy` `{policy}` | `plugin:manage` | |
 | GET `/plugins/:key/egress`（`?from=&to=`） | `plugin:egress:read` | 按域名汇总 + 明细 |
-| GET `/plugins/:key/jobs`，POST `/plugins/:key/jobs/:job_id/run` | `plugin:read` / `plugin:manage` | |
+| GET `/plugins/:key/jobs`，POST `/plugins/:key/jobs/:job_id/run` | `plugin:read` / `task:run`🔐 | 手动运行与 POST `/system/tasks/:name/run` 同口径（2026-11-12 权限加固 W4-A4，此前为 `plugin:manage`）；审计动作仍是 `plugin.job.run` |
 | GET `/plugins/:key/events` | `plugin:read` | 游标、积压、死信 |
 | GET `/ui/plugins` | auth | 前端扩展：`[{key, version, asset_base, menus, pages, slots, account_actions, native_entry, trust}]`（按权限过滤） |
 | GET `/nodes` | `node:read` | |
@@ -749,7 +749,8 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `groups` | `[{id, name}]`，按 id 升序 |
 | `proxy_id` | 可为 `null`（直连） |
 | `status` | `active` \| `disabled` |
-| `status_reason` | 管理员禁用时为 `"disabled by administrator"`，重新启用时清空 |
+| `status_reason` | 手动禁用时，全量范围（`account:update`）写 `"disabled by administrator"`，own 范围（`account:own:update`）写 `"disabled by owner"`；重新启用时清空 |
+| `admin_locked` | 管理员禁用锁（2026-11-12 权限加固 W1-F10，迁移 0100）：全量范围把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 true（账号已被属主禁用时同样置 true，原因改为管理员）；为 true 时 own 范围把 `status` 改为 `active` 或调用 `reset-status` 都返回 403 `account_locked_by_admin`，其余字段照常可改；全量范围启用或重置状态时清除。全量范围禁用自己创建的账号不上锁。存量账号为 false，不追溯 |
 | `schedulable`、`priority`、`max_concurrency` | `max_concurrency=0` 表示不限 |
 | `in_use` | 当前占用的并发槽位数（集群实时） |
 | `cooldown_until` | 冷却截止时间（按 Redis TTL 推算，精确到秒），未冷却为 `null` |
@@ -1123,6 +1124,8 @@ own 级用户（只有 `account:own:create` / `account:own:update`，无全部�
    - `schedulable`：无限制（全部级和 own 级相同）
    超出范围且与账号现值不同时返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"restricted"}]`。
 3. **可自定义上游的账号类型**（`AccountType.CustomUpstream()`：有未被 guardedSettings 限定的上游地址字段；未声明 `upstreamFields` 且无法推出时按“无 guardedSettings”判断，如 relay）：新建、修改时改了上游地址字段，以及 `POST /account-types/:p/:t/models/fetch`、`POST /account-types/:p/:t/preparations`、用改过上游地址的凭证调用 `POST /accounts/:id/models/fetch`，需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "account:relay"`）。改名、启停、改模型等不改地址的修改不需要。
+
+4. **管理员禁用锁**（2026-11-12 权限加固 W1-F10）：账号的 `admin_locked` 为 true（管理员禁用了它，§15.9）时，把 `status` 改为 `active`、调用 `POST /accounts/:id/reset-status` 都返回 403 `account_locked_by_admin`；其余字段照常可改。自己禁用的账号（`status_reason = "disabled by owner"`）可以自己恢复。控制台对这类账号禁用“启用”按钮并提示，不显示“重置状态”，批量启用跳过它们。
 
 全部级用户（有 `account:create` / `account:update`）不受上述限制。
 
@@ -2722,6 +2725,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 
 - 把账号绑定到分组需要 `group:manage` 或 `account:group:bind`；
 - `priority` 只能 0–100，`weight` 只能 1–100，`max_concurrency` 只能 1–1000，超出返回字段错误 `restricted`；
+- 管理员禁用的账号（`admin_locked`，§15.9、§21.3.1）不能自行启用或重置状态，403 `account_locked_by_admin`；
 - 账号类型**没有声明 `guardedSettings`** 时（relay、ccgateway 这类可以自填上游地址的类型；核心内置类型同样算），创建或修改需要 `account:relay`，否则 403，`details.required_permission = "account:relay"`。注意判断条件是"没有声明受限设置"，不是"类型叫 relay"：上游地址固定、不需要受限设置的类型（如 `claude_oauth`）目前也要求这个权限。
 
 ### 43.6 授予与操作他人的权限检查
@@ -2843,7 +2847,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 **`GET /api/v1/accounts`**（以及 `GET /accounts/:id` 等返回账号视图的接口）每项新增 `quota: QuotaSnapshot | null`：一次批量读 PG，**从不**触发上游请求；不支持额度的类型为 null；支持但尚无数据时为 `{supported: true, source: "", updated_at: null, error: "", windows: []}`。
 
-**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：
+**`POST /api/v1/accounts/:id/reset-status`**（`account:update` / `account:own:update`，`OwnerScope`）→ 200，返回账号视图（同 PATCH 响应）。2026-10-11 按用户要求改为显式恢复账号，而不再只是清冷却：own 范围遇到 `admin_locked` 的账号返回 403 `account_locked_by_admin`；全量范围重置时清除该锁（2026-11-12，见 §15.9 账号字段 `admin_locked`）。
 
 1. 在事务内按所属权限锁定账号，删除 Redis 冷却键 `cooldown:account:<id>`；
 2. 将账号 `status` 恢复为 `active`，清空 `status_reason`，包括 §42 自动禁用、管理员禁用及错误状态；**保留 `schedulable` 开关**，不会把手动关闭调度的账号重新放入请求池；
@@ -3325,7 +3329,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 | 方法 | 路径 | 请求 → 结果 |
 |---|---|---|
-| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick |
+| POST | `/system/ccgateway/drafts` | `{proxy_id}` → 201 `{key}`；立即 Kick。每个用户最多 3 个未完成的新建草稿（`account_id`、`retired_at`、`for_account` 都为空；重新授权的草稿不计），超出返回 429 `too_many_drafts`；持有 `settings:manage` 不受限。计数与插入是一条语句、不加锁，并发时可能多出 1 个（2026-11-12 权限加固 W1-F13）。预备容器 `POST /account-types/:plugin_key/:type/preparations` 同理：每个用户最多 3 个未完成的（未被账号采用、`state` 为 `pending`/`ready`、未过期），重复的 `idempotency_key` 不算新的，全量 `account:create` 不受限 |
 | PUT | `/system/ccgateway/drafts/:key` | `{proxy_id}` → `{key}`；重新 Kick |
 | DELETE | `/system/ccgateway/drafts/:key` | → 204；在控制器上删除运行环境并删行。控制器删不掉时行保留并标记为过期（`last_seen_at` 提前一天），返回 503 + reason，清理任务下一分钟重试 |
 | GET | `/system/ccgateway/drafts/:key/status` | `{key, status: creating\|ready\|blocked, reason?, container}` |
@@ -7442,7 +7446,7 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - 校验（SDK `check`）：只有 `type: "native"` 的页面能声明；至少一组；组和项的 `key` 符合 `^[a-z][a-z0-9_-]{0,31}$`，组 key 不重复，项 key 在整个页面内不重复（`?tab=` 不带组名）；标签不能为空；`icon` 必须是控制台图标集里的名字；`permission` 必须是 `userPermissions` 里声明的插件权限；`corePermission` 是核心权限 key，SDK 不认识核心权限，只检查不能是空白。
 - 权限过滤由核心做：`GET /ui/plugins` 返回页面前去掉调用者看不到的项。一项同时声明 `permission` 和 `corePermission` 时，持有任意一个就显示；两个都没有的项对能看到这个页面的人都显示。去掉后空的组不返回，一项都不剩时整个 `nav` 不返回。共享的清单不被改动。
 - 混跑：UI 3.13 及更早的控制台忽略 `nav`，所以插件页面自己要保留页内的分区切换（标签页等）作为回退；声明 `nav` 不提高插件要求的核心版本，`hostCompat` 不必因此改到 0.1.284 以上。UI 3.14 从核心 0.1.284 开始（0.1.283 是最后一个带 UI 3.13 的核心），`hostUICompat` 写 `^3.14` 时 `hostCompat` 要排除 0.1.283 及更早的核心。
-- 实现位置：`sdk/manifest/manifest.go`（`PageNav`、`NavGroup`、`NavItem`）、`sdk/manifest/check/ui.go`（`pageNav`、`uiFloors`）、`server/internal/plugin/api/ui.go`（`visibleNav`）；控制台见 `web/src/layouts/sidebarViews.ts`。
+- 实现位置：`sdk/manifest/manifest.go`（`PageNav`、`NavGroup`、`NavItem`）、`sdk/manifest/check/ui.go`（`pageNav`、`uiFloors`）、`sdk/manifest/visible_ui.go`（`FilterUI` 的 `visibleNav`）；控制台见 `web/src/layouts/sidebarViews.ts`。
 
 ## 91. 插件经账号代理发请求、CLEAR 清冷却（2026-11-10，codex 官方重置次数需要；核心 0.1.269）
 

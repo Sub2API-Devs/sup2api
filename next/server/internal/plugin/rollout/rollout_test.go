@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -490,7 +491,8 @@ func TestTwoNodeRollout(t *testing.T) {
 		return phase == rollout.PhaseActive && a.version(h.key) == "" && b.version(h.key) == ""
 	})
 	act, _, evs = h.rec.snapshot()
-	if len(act) != 2 || act[1] || evs[len(evs)-1] != "plugin.disabled:3.0.0" {
+	// The enable and the two committed upgrades turned the keys on.
+	if !slices.Equal(act, []bool{true, true, true, false}) || evs[len(evs)-1] != "plugin.disabled:3.0.0" {
 		t.Fatalf("perms=%v events=%v", act, evs)
 	}
 

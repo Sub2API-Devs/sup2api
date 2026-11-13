@@ -14,6 +14,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
@@ -835,7 +836,19 @@ func TestPluginCatalog(t *testing.T) {
 		{Key: "stats:read", Label: lt("View stats", "查看统计")},
 		{Key: "rules:manage", Label: lt("Manage rules", "管理规则"), Sensitive: true},
 	}
+	// First install: the plugin is not running, so its keys start disabled
+	// and enabling turns them on.
 	tx(func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", defs, []string{RoleAdmin}) })
+	if got := permissionStatus(t, db, "plugin.guard:stats:read"); got != "disabled" {
+		t.Fatalf("permission of an installed plugin: %s", got)
+	}
+	mustCan(t, s, admin, "plugin.guard:stats:read", false)
+	tx(func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE plugins SET status = 'enabled' WHERE key = 'guard'`); err != nil {
+			return err
+		}
+		return s.SetPluginActive(ctx, tx, "guard", true)
+	})
 	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return ok })
 	mustCan(t, s, user, "plugin.guard:stats:read", false)
 
@@ -870,6 +883,106 @@ func TestPluginCatalog(t *testing.T) {
 
 	tx(func(tx pgx.Tx) error { return s.DeletePlugin(ctx, tx, "guard") })
 	eventually(t, func() bool { ok, _ := s.Can(ctx, admin, "plugin.guard:stats:read"); return !ok })
+}
+
+func permissionStatus(t *testing.T, db *store.DB, key string) string {
+	t.Helper()
+	var status string
+	if err := db.Pool.QueryRow(context.Background(), `SELECT status FROM permissions WHERE key = $1`, key).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	return status
+}
+
+// A new plugin permission is active only while the plugin runs; a row which
+// already exists keeps its status. The statuses come from the install package
+// so the SQL list in SyncPlugin cannot drift from them.
+func TestSyncPluginNewPermissionFollowsPluginStatus(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	running := []string{install.StatusEnabled, install.StatusUpgrading}
+	sync := func(key string, defs ...core.PermissionDef) {
+		t.Helper()
+		if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, key, defs, nil) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, st := range []string{install.StatusAwaitingConsent, install.StatusInstalled, install.StatusEnabling,
+		install.StatusEnabled, install.StatusUpgrading, install.StatusDisabled} {
+		key := "st" + string(rune('a'+i))
+		if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ($1, '{"en":"P"}', $2)`, key, st); err != nil {
+			t.Fatal(err)
+		}
+		sync(key, core.PermissionDef{Key: "a:read"})
+		want := "disabled"
+		if slices.Contains(running, st) {
+			want = "active"
+		}
+		if got := permissionStatus(t, db, manifest.PermissionKey(key, "a:read")); got != want {
+			t.Errorf("plugin status %s: new permission %s, want %s", st, got, want)
+		}
+	}
+
+	// A version approved while the plugin is disabled: the new key waits for
+	// the next enable, the existing one is left as it is.
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	sync("guard", core.PermissionDef{Key: "a:read"})
+	if _, err := db.Pool.Exec(ctx, `UPDATE plugins SET status = 'disabled' WHERE key = 'guard'`); err != nil {
+		t.Fatal(err)
+	}
+	sync("guard", core.PermissionDef{Key: "a:read"}, core.PermissionDef{Key: "b:read"})
+	if a, b := permissionStatus(t, db, "plugin.guard:a:read"), permissionStatus(t, db, "plugin.guard:b:read"); a != "active" || b != "disabled" {
+		t.Fatalf("sync while disabled: existing %s, new %s", a, b)
+	}
+	// An upgrade of a running plugin: the new key works at once.
+	if _, err := db.Pool.Exec(ctx, `UPDATE plugins SET status = 'upgrading' WHERE key = 'guard'`); err != nil {
+		t.Fatal(err)
+	}
+	sync("guard", core.PermissionDef{Key: "a:read"}, core.PermissionDef{Key: "b:read"}, core.PermissionDef{Key: "c:read"})
+	if b, c := permissionStatus(t, db, "plugin.guard:b:read"), permissionStatus(t, db, "plugin.guard:c:read"); b != "disabled" || c != "active" {
+		t.Fatalf("sync while upgrading: existing %s, new %s", b, c)
+	}
+}
+
+// SyncPlugin stores the sort it is given (the manifest order install.
+// PermissionDefs numbers from 10) and corrects rows synced before.
+func TestSyncPluginSort(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('guard', '{"en":"Guard"}', 'enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	m := &manifest.Manifest{Key: "guard", UserPermissions: []manifest.UserPermission{{Key: "stats:read"}, {Key: "rules:manage"}}}
+	sorts := func() string {
+		t.Helper()
+		var got string
+		if err := db.Pool.QueryRow(ctx, `SELECT string_agg(key || '=' || sort, ',' ORDER BY sort, key) FROM permissions WHERE plugin_key = 'guard'`).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	// Rows as the old numbering left them: the first permission at 0 was
+	// taken for unset and given 10, the second kept its 1.
+	if err := db.Tx(ctx, func(tx pgx.Tx) error {
+		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read", Sort: 10}, {Key: "rules:manage", Sort: 1}}, nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := sorts(); got != "plugin.guard:rules:manage=1,plugin.guard:stats:read=10" {
+		t.Fatalf("old numbering: %s", got)
+	}
+	if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "guard", install.PermissionDefs(m), nil) }); err != nil {
+		t.Fatal(err)
+	}
+	if got := sorts(); got != "plugin.guard:stats:read=10,plugin.guard:rules:manage=20" {
+		t.Fatalf("after the next sync: %s", got)
+	}
 }
 
 func TestMenus(t *testing.T) {
@@ -912,11 +1025,41 @@ func TestMenus(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The sidebar shows exactly the plugin menus manifest.FilterUI leaves,
+	// the rule GET /ui/plugins answers by, with the same permission check.
+	sameAsUI := func(userID int64, menus []MenuSection) {
+		t.Helper()
+		set, err := s.PermissionSet(ctx, userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want, got []string
+		for _, p := range plugins {
+			allowed := func(perm string) bool { return perm == "" || set.Has(manifest.PermissionKey(p.Key, perm)) }
+			for _, m := range manifest.FilterUI(p.Manifest.UI, allowed, set.Has).Menus {
+				want = append(want, p.Key+":"+m.ID)
+			}
+		}
+		for _, sec := range menus {
+			for _, it := range sec.Items {
+				if it.PluginKey != "" {
+					got = append(got, it.ID)
+				}
+			}
+		}
+		slices.Sort(want)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Fatalf("user %d: sidebar plugin menus %v, FilterUI menus %v", userID, got, want)
+		}
+	}
+
 	user := addUser(t, s, "u@x.com", RoleUser)
 	menus, err := s.Menus(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
+	sameAsUI(user, menus)
 	var sections []string
 	for _, m := range menus {
 		sections = append(sections, m.Section)
@@ -944,6 +1087,7 @@ func TestMenus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sameAsUI(admin, menus)
 	sections = nil
 	for _, m := range menus {
 		sections = append(sections, m.Section)

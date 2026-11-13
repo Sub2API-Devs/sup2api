@@ -312,6 +312,10 @@ function onTestUpdated(saved: Account) {
 const testable = (a: Account) => canTest(a) && !a.orphaned
 const editable = (a: Account) => canUpdate(a) && !a.orphaned
 const toggleable = (a: Account) => editable(a) && accountControl(typeOf(a), 'schedulable').configurable
+// An account an administrator disabled (admin_locked): a caller with only the own-level key can neither enable it
+// nor reset its status (the server answers 403 account_locked_by_admin), so both are shown disabled or left out.
+const lockedByAdmin = (a: Account) => !!a.admin_locked && own.scopeOf(ACCOUNT_KEYS.update) !== 'all'
+const canEnable = (a: Account) => toggleable(a) && !lockedByAdmin(a)
 const selectable = (a: Account) => testable(a) || editable(a) || canDelete(a)
 const selection = useSelection<Account>({ items: list.items, key: (a) => a.id, selectable, loadAll: loadAllAccounts })
 const selectionKeys = computed({ get: () => selection.keys.value as unknown[], set: (v: unknown[]) => selection.update(v) })
@@ -332,6 +336,7 @@ const picked = computed(() => ({
   test: selection.rows.value.filter(testable),
   edit: selection.rows.value.filter(editable),
   toggle: selection.rows.value.filter(toggleable),
+  enable: selection.rows.value.filter(canEnable),
   reset: selection.rows.value.filter(canResetStatus),
   remove: selection.rows.value.filter(canDelete)
 }))
@@ -344,7 +349,7 @@ const bulkBusy = computed(() => batchRunning.value || bulk.running.value || decl
 // Same request and same rows as the row switch: enable takes every account that is not enabled (an automatic
 // disable included), disable every one not disabled by hand.
 async function bulkToggle(enable: boolean) {
-  const rows = picked.value.toggle.filter((a) => (enable ? !accountEnabled(a) : a.status !== 'disabled'))
+  const rows = enable ? picked.value.enable.filter((a) => !accountEnabled(a)) : picked.value.toggle.filter((a) => a.status !== 'disabled')
   if (!rows.length) return toast(t('accounts.bulk.nothingToChange'), 'info')
   const out = await bulk.run(rows, async (a, signal) => {
     patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, enabledPatch(enable), { signal, query: todayQuery() }))
@@ -375,7 +380,7 @@ const retentionOf = (a: Account) => typeOf(a)?.lifecycle?.deletion?.retentionDay
 /** The selected rows a declared bulk action targets: the same rows its row-menu entry shows on (CONTRACTS §23.3). */
 const declaredTargets = (x: PluginAccountActionEntry) => selection.rows.value.filter((a) => actionAppliesTo(x, a, canUpdate))
 const moreBulkActions = computed(() => [
-  { key: 'enable', label: t('accounts.bulk.enable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
+  { key: 'enable', label: t('accounts.bulk.enable', { n: picked.value.enable.length }), disabled: !picked.value.enable.length },
   { key: 'disable', label: t('accounts.bulk.disable', { n: picked.value.toggle.length }), disabled: !picked.value.toggle.length },
   { key: 'reset', label: t('accounts.bulk.reset', { n: picked.value.reset.length }), disabled: !picked.value.reset.length },
   ...plugins.accountActions.filter((x) => x.bulk).map((x) => ({ key: pluginAccountActionKey(x), label: t('accounts.bulk.pluginAction', { name: lt(x.label) || x.id, n: declaredTargets(x).length }), icon: x.icon, danger: x.danger, disabled: !declaredTargets(x).length }))
@@ -452,7 +457,7 @@ const balanceRefresh = useBalanceRefresh({
 })
 
 // A manual disable is undone with Enable; Reset status clears what the gateway set.
-const canResetStatus = (a: Account) => canUpdate(a) && !a.orphaned && a.status !== 'disabled'
+const canResetStatus = (a: Account) => canUpdate(a) && !a.orphaned && a.status !== 'disabled' && !lockedByAdmin(a)
 
 async function resetStatus(a: Account) {
   const ok = await confirm({ title: t('accounts.resetStatusTitle'), message: t('accounts.resetStatusConfirm', { name: a.name }), confirmText: t('accounts.resetStatus') })
@@ -511,7 +516,7 @@ async function refreshCreds(a: Account) {
 // offers Enable; the row menu offers such an account a manual disable.
 const togglingEnabled = ref(new Set<number>())
 async function toggleEnabled(a: Account, on: boolean) {
-  if (togglingEnabled.value.has(a.id) || !toggleable(a)) return
+  if (togglingEnabled.value.has(a.id) || !(on ? canEnable(a) : toggleable(a))) return
   togglingEnabled.value.add(a.id)
   const before = { status: a.status, schedulable: a.schedulable, status_reason: a.status_reason, auto_disabled_until: a.auto_disabled_until }
   patchAccount(a.id, { ...enabledPatch(on), ...(on ? { status_reason: '', auto_disabled_until: null } : {}) })
@@ -529,6 +534,7 @@ async function toggleEnabled(a: Account, on: boolean) {
 function enabledToggleTitle(a: Account) {
   if (!accountControl(typeOf(a), 'schedulable').configurable) return t('accounts.editorUi.commonControlFixed')
   if (accountEnabled(a)) return t('accounts.listUi.disableHint')
+  if (lockedByAdmin(a)) return t('accounts.listUi.adminLockedHint')
   return t(a.status === 'disabled' ? 'accounts.listUi.enableHint' : 'accounts.listUi.enableAutoHint')
 }
 const canDisable = (a: Account) => toggleable(a) && a.status !== 'disabled' && !accountEnabled(a)
@@ -757,7 +763,7 @@ function resetFilters() {
             v-if="editable(row)"
             size="xs"
             :tone="accountEnabled(row) ? 'danger' : 'info'"
-            :disabled="togglingEnabled.has(row.id) || !toggleable(row)"
+            :disabled="togglingEnabled.has(row.id) || !(accountEnabled(row) ? toggleable(row) : canEnable(row))"
             :aria-label="t(accountEnabled(row) ? 'accounts.listUi.disableAccount' : 'accounts.listUi.enableAccount', { name: row.name })"
             :title="enabledToggleTitle(row)"
             data-testid="account-enable-toggle"

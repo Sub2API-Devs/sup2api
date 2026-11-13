@@ -460,3 +460,48 @@
   - 控制台的 mock 数据（`web/mock/resources.ts`）仍是旧的 operator 默认集合，也没有 `audit` 模块，未同步（只影响本地 mock）。
   - 滚动升级：新旧节点混跑时最后启动的节点决定目录，旧节点启动会把 `audit:read` 的模块改回 `node`（仅展示分组），到某个新节点重启为止。
 - 回滚：revert 这个提交并 `DELETE FROM schema_migrations WHERE id = '0101_operator_assignable.sql';`（托管部署必须删：托管核心启动时核对迁移清单，库里有本版本不认识的迁移就拒绝启动；非托管部署不删也可。删掉后再次升级会重新执行该迁移，把超管期间经 PUT 设回的清单再次收窄）。可分配清单不会自动恢复：需要时由超管经 PUT `/roles/<operator id>/assignable` 设回（审计行的 `removed`、`removed_assign_custom` 记录了原值）。回滚后的 `SyncCore` 把 `audit:read` 的模块改回 `node`；期间被重置过的 operator 权限按旧代码再点一次“恢复默认”即回到旧默认集合。
+
+## T61 W4-P8、W4-P9：新插件权限的状态跟随插件运行状态
+
+- 改动：`authz.SyncPlugin` 新登记的插件权限不再一律 `active`：插件此刻在运行（`plugins.status` 为 `enabled` 或 `upgrading`，与 `plugin/install` 的常量一致，`TestSyncPluginNewPermissionFollowsPluginStatus` 逐个状态验证，防漂移）时为 `active`，否则为 `disabled`；已存在的行不动。禁用时的 `SetPluginActive(false)` 不变；`rollout` 的 `commit` 现在每次激活都调用 `SetPluginActive(true)`（此前只在启用时），见下面的偏离说明。W4-P9 不改行为：`rollout.finishFailed` 的升级分支加注释说明“同意新版本时登记的新 key 保留到激活另一个版本”，`TestPermissionCatalogFollowsRollouts` 用真实的目录与 `DefaultsApplier` 锁定整个生命周期。无迁移。CONTRACTS §4 同步。
+- 偏离任务说明（审查发现）：启用的 rollout 提交之后、完成之前，节点已经在服务，但 `plugins.status` 仍是 `enabling`；这段时间同意新版本（内置插件在滚动部署时会自动发生）登记的新 key 是 `disabled`，而升级提交原来不调用 `SetPluginActive`，这些 key 会一直停在 `disabled`，直到手工禁用再启用。因此升级提交也置 `active`（`plugin/rollout/coordinator.go`，超出任务列出的文件范围）。
+- 影响对象：首次安装（尚未启用）和禁用期间同意新版本时登记的权限，此前立即 `active`（持有它的角色在插件没运行时就“有”这个权限，`/me` 的权限列表与 `Can` 会把它算进去），现在到启用那一刻才生效；角色授予照常写入，启用后无需重新勾选。授予视角（角色的权限清单、能否授予与分配的判断）本来就包含 `disabled` 的插件权限，不变。运行中升级登记的新权限仍立即 `active`。存量行不追溯：已经是 `active` 的未运行插件的权限保持原状，直到该插件下一次禁用或启用。升级失败后残留的新 key 没有任何路由检查，激活另一个版本时按那个版本的 manifest 清理；只是禁用再启用同一版本不会清理。
+- 回滚：revert 这两个提交即可，无迁移；回滚后已登记为 `disabled` 的权限在插件下次启用时变为 `active`。
+
+## T62 W4-A4：插件任务手动运行统一要求 task:run（产品性收紧）
+
+- 改动：`POST /plugins/:key/jobs/:job_id/run` 的权限由 `plugin:manage` 改为 `task:run`（`plugin/api/api.go`，用 `task.PermRun`），与 `POST /system/tasks/:name/run` 同口径：同一个任务不再有两个权限不同的手动运行入口。审计动作仍是 `plugin.job.run`。插件详情“任务”页的“立即运行”按钮改按 `task:run` 显示（`JobsTab.vue`）。无迁移。CONTRACTS §5.7 路由表同步。
+- 影响对象：只有 `plugin:manage`、没有 `task:run` 的角色：调用由 204 变为 403 `details.permission = task:run`，按钮不再显示；内置 `admin` 两个权限都有，不受影响。反过来，只有 `task:run` 的人（内置 `operator` 默认有 `task:run`、没有 `plugin:*`）现在可以从这个接口运行插件任务，他此前已经能在定时任务页运行同一个任务（看插件的任务列表仍需 `plugin:read`，所以 `operator` 看不到这个页面）。访问密钥无变化：`task:run` 与 `plugin:manage` 一样不是只认会话的权限，密钥带上它即可调用。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T65 W4-A3、W4-P5：插件 UI 可见性过滤收敛为 manifest.FilterUI，插件权限排序修正
+
+- 改动：
+  - W4-A3（纯重构）：新增 `next/sdk/manifest/visible_ui.go`：`FilterUI(ui, allowed, allowedCore) VisibleUI`（`Menus`、`Pages`、`Slots`、`AccountActions`），逻辑原样搬自 `plugin/api/ui.go` 的 `visibleMenusAndPages`、`visibleNav` 与槽位、账号动作两段循环（含页面侧边导航 `nav` 的 `permission`/`corePermission` 规则）。`GET /ui/plugins`（`uiPlugins`）取全部，侧栏 `GET /me/menus`（`authz.pluginMenus`）只取 `.Menus`；两处的 `allowed` 都写成 `p == "" || set.Has(manifest.PermissionKey(key, p))`，核心权限用 `set.Has`。未声明权限的元素不询问回调直接可见。原 `plugin/api` 的四个用例搬到 `sdk/manifest/visible_ui_test.go`，`TestMenus` 断言侧栏的插件菜单与 `FilterUI` 结果一致。
+  - W4-P5：`install.PermissionDefs` 的 `Sort` 由 `i` 改为 `(i+1)*10`，`authz.SyncPlugin` 删除 `sort == 0` 时按位置补 `(i+1)*10` 的兜底，直接写入给定值。此前第一个权限的 0 被当成“未设置”补成 10，其余是 1、2、3…，于是 manifest 里排第一的权限在角色页排到后面（不超过 10 个权限的插件里排到最后）。
+- 影响对象：W4-A3 无行为变化。W4-P5 只影响角色页里插件权限的显示顺序：每个插件下一次同步权限目录（同意新版本，或激活另一个版本）时，`ON CONFLICT` 把存量行的 `sort` 改成 10、20、30…，顺序变为 manifest 声明的顺序；在那之前保持旧顺序，只是禁用再启用同一版本不会同步，一直不升级的插件保持旧顺序（不做一次性重排）。同意新版本到它激活之间，目录里是新旧两份 manifest 的并集，各自从 10 编号，同号的按 key 排。无迁移，权限判断不受影响。
+- 回滚：revert 这个提交即可；回滚后下一次同步把 `sort` 写回旧编号。
+
+## T63 W1-F10：管理员禁用锁 accounts.admin_locked（迁移 0100，产品性收紧）
+
+- 改动：
+  - 迁移 `0100_account_admin_locked.sql`：`accounts.admin_locked boolean NOT NULL DEFAULT false`（常量默认值，不重写表；`lock_timeout` 10 秒；存量为 false，不追溯）。
+  - `PATCH /accounts/:id`（`account/handlers.go`）：全量范围（`account:update`）把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 `admin_locked = true`，`status_reason` 仍是 `disabled by administrator`；own 范围（`account:own:update`）禁用写 `disabled by owner`，不动锁；全量范围设为 `active` 时清锁（`adminLockAfter`、`disabledReason`）。账号已被属主禁用时管理员再发一次 `disabled` 也上锁并把原因改成管理员的（按请求的状态判断，不要求状态发生变化）。
+  - `checkAdminLock` 是 `checkOwnChange` 的最后一步：own 范围、账号已上锁且请求把 `status` 改为 `active` → 403 `account_locked_by_admin`；`POST /accounts/:id/reset-status` 在 own 范围遇到上锁账号返回同一错误，全量范围的重置清锁。
+  - 账号视图增加 `admin_locked`。控制台账号页：只有 own 级更新权限的人在上锁账号上“启用”按钮禁用并提示“已被管理员禁用，只有管理员可以重新启用”，“重置状态”入口与批量启用跳过这些账号（`AccountsView.vue` 的 `lockedByAdmin`）。CONTRACTS §15.9 账号字段表、§21.3.1、§43.5 与 reset-status 一节同步；控制台 mock（`web/mock/accounts.ts`）同样处理。
+- 影响对象：
+  - 只有 own 级权限的账号创建人（供应商）：账号被管理员禁用后不能再自行启用或重置状态，需要管理员启用；此前可以立刻自己改回 `active`。修改其它字段（名称、凭证、用量上限等）不受影响，供应商调高用量上限仍然允许（已评估，不修）。自己禁用的账号照旧可以自己恢复。
+  - `status_reason` 文案：own 范围手动禁用由 `disabled by administrator` 变为 `disabled by owner`（依赖这个字符串的外部脚本需要注意；仓库内没有按它判断的代码）。
+  - 持有 `account:update` 的人（admin、operator）之间不互锁：任何全量范围的调用者都能启用。全量范围禁用自己创建的账号不上锁。
+  - 存量：迁移前已被管理员禁用的账号不上锁，需要锁住的由管理员重新禁用一次（对已禁用的账号再发一次 `status: disabled` 即可，控制台的按钮不会对已禁用账号发请求，需直接调接口或先启用再禁用）。
+  - 自动禁用（`auto_disabled`、`error`）与重新授权的恢复逻辑不变，它们不写也不读这个锁；上锁账号的状态是 `disabled`，重新授权本来就不恢复手动禁用。
+- 回滚：revert 这个提交即可；`admin_locked` 列留在库里无害（旧版本不读），需要时 `ALTER TABLE accounts DROP COLUMN admin_locked`。回滚后被锁的账号其创建人又可以自行启用。混跑时旧节点不认识这个锁：经旧节点处理的请求既不上锁也不拦截；旧节点启用过的上锁账号会留下一个“运行中但带锁”的残留，属主下次自己禁用时清掉（不会因此被锁住），全量范围的任何启用、重置也会清掉。
+- 已知边界（未处理，需要时另行决定）：锁只管启用与重置状态。有 `account:own:delete` 与 `account:own:create` 的属主可以删除被锁的账号再用同一凭证新建一个；审计里 `account.update` / `account.reset_status` 不单独记录上锁、解锁（可由操作者范围与状态变化推出）。
+
+## T64 W1-F13：草稿与预备容器的单用户数量上限
+
+- 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，不用 advisory 锁：该用户未完成的数量达到上限（两个包各一个常量 `maxOpenDrafts = 3`）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL AND for_account IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。无迁移。CONTRACTS §49.9 路由表同步。
+- 偏离任务说明：草稿的计数条件多了 `for_account IS NULL`，重新授权的草稿（每个账号至多一个、只能对自己能改的账号发起）不占新建账号的名额，否则同时给 3 个账号重新授权的人建不了新账号。ccgateway 类型的预备容器在 `ccgateway_runtimes` 里也有一行（`lifecycle.go`），它同时计入草稿数。
+- 影响对象：没有 `settings:manage` 的人（含只有 `account:create` 的运营）同时打开的新建草稿不能超过 3 个，own 级用户（`account:own:create`）同时进行的预备容器不能超过 3 个；此前不限，每个草稿占一个运行环境容器直到被采用、删除或被清理任务回收（草稿超时、预备容器 2 小时过期）。控制台一次只开一个草稿，关闭编辑器会删除，正常使用不会碰到；碰到时删掉一个或等回收后即可再建。并发请求下可能多出 1 个（已接受）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
