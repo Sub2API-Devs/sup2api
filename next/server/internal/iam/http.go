@@ -22,7 +22,9 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.SessionOnly().Handle(http.MethodPost, "/auth/logout", s.handleLogout)
 	r.AuthedRead("/me", s.handleMe)
 	r.Self(http.MethodPut, "/me", "self:profile", s.handleUpdateMe)
-	r.StepUp(core.StepUpSelfPassword).Self(http.MethodPut, "/me/password", selfSecurity, s.handleChangePassword)
+	// Step-up self.password.change in the handler, after the new password
+	// passes validation, so a rejected one does not spend the proof.
+	r.Self(http.MethodPut, "/me/password", selfSecurity, s.handleChangePassword)
 
 	r.Perm(http.MethodGet, "/users", "user:read", s.handleListUsers)
 	r.Perm(http.MethodPost, "/users", "user:create", s.handleCreateUser)
@@ -121,6 +123,14 @@ func (s *Service) handleChangePassword(c *gin.Context) {
 		NewPassword string `json:"new_password"`
 	}
 	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	if f := validatePassword("new_password", in.NewPassword); f != nil {
+		httpapi.Fail(c, core.InvalidFields(*f))
+		return
+	}
+	if err := s.ConsumeStepUp(c.Request.Context(), core.StepUpSelfPassword); err != nil {
+		httpapi.Fail(c, err)
 		return
 	}
 	if err := s.ChangePassword(c.Request.Context(), actor(c), s.currentFamily(c), in.NewPassword); err != nil {

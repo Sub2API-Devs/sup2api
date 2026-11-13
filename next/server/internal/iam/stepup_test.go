@@ -101,11 +101,18 @@ func TestVerifyStepUpRefusesThePasswordWithTwoFactor(t *testing.T) {
 	if _, err := s.VerifyStepUp(ctx, nil, id, VerifyInput{Scope: in.Scope, Context: in.Context, Method: methodTOTP, Code: "000000"}, testIP); !isBadSecondFactor(err) {
 		t.Fatalf("wrong code: %v", err)
 	}
+	var failed int
+	if err := s.db.Pool.QueryRow(ctx, `SELECT failed_attempts FROM user_totp WHERE user_id = $1`, id).Scan(&failed); err != nil || failed != 1 {
+		t.Fatalf("a wrong code is not counted towards the lockout: %d %v", failed, err)
+	}
+	// The password-too scopes refuse a code without the password.
+	if _, err := s.VerifyStepUp(ctx, nil, id, VerifyInput{Scope: core.StepUpSelfPassword, Context: in.Context, Method: methodTOTP, Code: codeAt(t, secret, time.Now())}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("own password scope without the password: %v", err)
+	}
 	p, err := s.VerifyStepUp(ctx, nil, id, VerifyInput{Scope: in.Scope, Context: in.Context, Method: methodTOTP, Code: codeAt(t, secret, time.Now())}, testIP)
 	if err != nil || p.Proof == "" || p.Scope != in.Scope || p.Context != in.Context || p.Method != methodTOTP || time.Until(p.ExpiresAt) > flowTTL {
 		t.Fatalf("code: %+v %v", p, err)
 	}
-	var failed int
 	if err := s.db.Pool.QueryRow(ctx, `SELECT failed_attempts FROM user_totp WHERE user_id = $1`, id).Scan(&failed); err != nil || failed != 0 {
 		t.Fatalf("failed attempts after a good code: %d %v", failed, err)
 	}

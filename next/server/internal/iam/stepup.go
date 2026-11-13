@@ -243,6 +243,9 @@ func (s *Service) BeginStepUpPasskey(ctx context.Context, r *http.Request, userI
 	if !methods.usable(methodPasskey) {
 		return nil, errMethodUnavailable
 	}
+	if wait := s.limiter.check(ctx, "", ip); wait > 0 {
+		return nil, rateLimitedError(ctx, wait)
+	}
 	if wait := s.limiter.allowPasskeyBegin(ctx, ip); wait > 0 {
 		return nil, rateLimitedError(ctx, wait)
 	}

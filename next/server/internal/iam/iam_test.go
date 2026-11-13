@@ -513,6 +513,9 @@ func TestHTTP(t *testing.T) {
 		t.Fatalf("change password without a proof: %d %v", code, out)
 	}
 	proof = c.proof(tok, core.StepUpSelfPassword, "PUT /api/v1/me/password", map[string]any{"method": "password", "password": adminPassword})
+	if code, out = c.doProof("PUT", "/me/password", tok, proof, map[string]any{"new_password": "short"}); code != 400 {
+		t.Fatalf("short password: %d %v", code, out)
+	}
 	if code, out = c.doProof("PUT", "/me/password", tok, proof, map[string]any{"new_password": "another-pass-1"}); code != 204 {
 		t.Fatalf("change password: %d %v", code, out)
 	}
