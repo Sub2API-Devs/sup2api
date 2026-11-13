@@ -16,7 +16,8 @@
 4. **滚动发布期间（非托管多节点部署）不要修改角色权限**，全部节点升级后再改（R2a：旧节点撤销 own 授予只删旧行；新节点保存角色时不再保留冗余旧 own 行，旧节点的字面比较会失败）。新旧混跑且最后启动的是新节点时，`role:manage` 已被标为 removed，旧节点上 admin 与 operator 都不能管理角色（旧节点只认 `role:manage`），由超管处理。最后启动的是旧节点时（旧节点重启、或整体回滚只剩旧节点），旧节点把 `role:manage` 改回 active，而 admin、operator 存量的 `role:manage` 授予行从未删除，所以两者在旧节点上都能再新建、改、删角色和分配角色，operator 也重新得到 D3（P4F1/0102）收回的角色定义权，直到某个新节点重启；回滚后的处理见第 2 节。托管升级先停副本再迁移，没有新旧混跑阶段。 同理 `apikey:self:manage` 行的 `sensitive`、`description` 列（期 4 收尾 F2）会被新旧节点重启时来回改写（每次改写推进一次 authz 版本，各节点重新加载权限缓存、控制台重新取权限，只在节点重启时发生），它们只供角色编辑器与访问密钥选择器展示、不参与授权（与 T10/U7 改敏感标记时接受的抖动相同；`step_up` 由代码目录提供，不在库里），全部节点升级后稳定。
 5. **插件与核心同发**（T84）：十个插件的 `hostCompat` 下限是 `>=0.1.286`，`sdk/manifest/check/ui.go` 记 UI 3.15 从核心 0.1.286 开始（moderation `hostUICompat ^3.15`）。发布号不是 0.1.286 时，把 `grep -rn 0.1.286 next/plugins next/sdk/manifest` 的结果与 `web/packages/ui/README.md`“UI SDK 3.15”一节一并改掉。dynweight 取 0.5.9（develop 已发布 0.5.8）。
 6. **正式打包用 `REQUIRE_UI=1`**：`deploy/docker/build-go.sh` 调用的 `tools/sub2api-plugin/scripts/build-demo.sh` 在原生 UI 未构建时加 `--allow-missing-ui`，设 `REQUIRE_UI=1` 时改为报错退出；`build-go.sh` 自己的通用回退分支（没有 build-demo.sh 时）不认这个变量，正式包不要走它。五个插件的原生 UI 需各自 `npm ci && npm run build`。
-7. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。发布前按运维清单第 8 条查；有安装时先卸载再装，或由用户决定一次性改 `publisher_id`（写审计）。
+7. **claude-oauth 发布者名**由 `sup2api` 改为 `sub2api`（T84）。已经装过 claude-oauth 的库，若 `plugins.publisher_id` 为空或指向另一个发布者，上传签名的 0.2.3 会 409“owned by another publisher”（`install/upload.go` `sameID`）。2026-11-14 已按用户授权只读核查生产：生产从未安装 claude-oauth（plugins、plugin_versions 均无记录），publishers 仅 id 1 `sub2api`，现有 10 个插件都归它，首次安装 0.2.3 直接归 `sub2api`，**不需要处理**（其他部署仍按运维清单第 8 条核对）。
+8a. **mailer 升到 0.1.2**：本分支改了 next/sdk（host.proto 等），mailer 0.1.1 重新打包内容会与生产已存的 0.1.1 不同，EnsureBuiltin 会保留旧包、拿不到新 SDK；因此 mailer 升一个 patch 版本（功能不变）。
 8. **存量多超管**：0098 遇到多个超管时停止启动，错误只列 user id。先 `sub2api admin recover-superadmin --email <要保留的那个>` 再启动（运维清单第 1 条）。
 9. **跨域部署**：服务端需 `Access-Control-Expose-Headers: X-Authz-Version`，否则控制台只能靠 403 触发重新取权限（T74）。
 10. **gateway 外壳的 tokenless 管理开关**：所有核心都带令牌后清除（运维清单第 7 条）。升级页把 preflight 的 `warnings` 显示为“提醒（不阻断升级）”。
@@ -163,7 +164,7 @@ FROM plugins pl LEFT JOIN publishers pub ON pub.id = pl.publisher_id WHERE pl.ke
 
 1. **已定（期 4 收尾 F1，统一为严的）**：插件升级授权的两条路径规则不同：第三方插件升级的同意页里，来自 `defaultRoles`/`inheritFrom` 的需同意授予（敏感、或给 user、自定义角色）只要 `plugin:install` + 二次验证就能批准；内置插件同一授予在插件页确认要 `role:define` + 能修改每个角色（内置角色只有超管）。可以统一为严的（同意页对需同意的计划授予也跑 `checkRolesGrantable`，admin 不能再批这类升级）或宽的（确认只要 `plugin:install`）。→ 同意页对需同意的计划授予也跑 `checkRolesGrantable`，见“期 4 收尾”。
 2. **已定（期 4 收尾 F2，本期就改）**：`apikey:self:manage` 没有 step-up 标记，而 `POST /me/api-keys/:id/reveal` 要 `apikey.reveal` proof，访问密钥选择器因此不提示。加标记按不变式还要 `sensitive=true`（目录行的列，滚动发布时新旧节点会来回改写），建议随 R2b 改；同时可把“step-up 路由必须引用带标记的 key”加进启动自检（本次试加后正是这一处报错，已撤回）。→ 本期加标记与自检，`sensitive` 列滚动发布期间的来回改写见发布约束 4。
-3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 7）。
+3. **claude-oauth 发布者改名**是否需要一次性迁移 `publisher_id`（发布约束 7）。（已定：生产核查无安装记录，不需处理）
 4. **已定（期 4 收尾 F3，改为二次验证）**：访问密钥的新建与修改仍只要密码，开了 2FA 的用户也可只凭密码签出宽权限的密钥；是否改为二次验证。
 5. **已定（期 4 收尾 F4，要密码 + 第二因素）**：超管只用一个因素就能清掉自己的全部因素（`user.security.reset` 或 `self.2fa.disable` 只要一种方式），此前要密码加验证码；是否让这两个 scope 对超管本人也要求密码。
 6. **ccgateway 运行时镜像上传**（`runtime/uploads*` 创建与分片）不要二次验证，只有 `load` 要；DECISIONS 原文是“安装与上传”。
