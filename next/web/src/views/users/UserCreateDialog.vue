@@ -47,7 +47,7 @@ const roleOptions = computed(() => {
 
 /** Non-default roles take role:assign; any role must be one the caller may grant. */
 function roleSelectable(key: string) {
-  if (key === DEFAULT_ROLE) return true
+  if (key === DEFAULT_ROLE) return managed.defaultWithin()
   return auth.has('role:assign') && managed.assignable(key)
 }
 

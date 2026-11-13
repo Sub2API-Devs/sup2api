@@ -76,11 +76,11 @@ describe('UsersView managed users (T78)', () => {
     expect(actions(w, 2)).not.toContain('balance')
   })
 
-  it('the super admin manages everyone, itself included, but never deletes itself', async () => {
+  it('the super admin manages everyone, itself included, but never deletes itself or resets its own 2FA here', async () => {
     mocks.superuser = true
     mocks.users = [user(1, ['super_admin']), user(3, ['admin'])]
     const w = await render()
-    expect(actions(w, 1)).toEqual(['edit', 'roles', 'pricing', 'ledger', 'security', 'balance'])
+    expect(actions(w, 1)).toEqual(['edit', 'roles', 'pricing', 'ledger', 'balance'])
     expect(actions(w, 3)).toContain('delete')
   })
 
@@ -120,5 +120,12 @@ describe('UsersView managed users (T78)', () => {
     await flushPromises()
     expect(w.get('[data-testid="modal"] input[value="operator"]').attributes('disabled')).toBeDefined()
     expect(w.get('[data-testid="modal"]').text()).toContain('user:delete')
+  })
+
+  it('holders of the default role are not managed when it is listed as not grantable', async () => {
+    mocks.assignable = [managed('supplier'), managed('user', false)]
+    mocks.users = [user(2, ['user'])]
+    const w = await render()
+    expect(actions(w, 2)).toEqual(['pricing', 'ledger'])
   })
 })

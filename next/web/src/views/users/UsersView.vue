@@ -119,7 +119,8 @@ function rowActions(u: User): MenuAction[] {
     { key: 'roles', label: t('users.assignRoles'), hidden: !may('role:assign') },
     { key: 'pricing', label: t('users.pricing.action'), hidden: !auth.has('segment:read') },
     { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
-    { key: 'security', label: t('users.resetSecurity'), hidden: !may('user:password:reset') },
+    // One's own second factor is reset under /me with the current password and a code.
+    { key: 'security', label: t('users.resetSecurity'), hidden: !may('user:password:reset') || self },
     { key: 'balance', label: t('users.adjustBalance'), hidden: !may('balance:adjust') },
     // Nobody disables or deletes themselves (a lock-out guard, not a permission).
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !may('user:delete') || self }
@@ -369,7 +370,7 @@ function remove(u: User) {
         <template v-for="o in roleChoices" :key="o.value" #[`option-${o.value}`]>
           <span class="mt-1 flex items-center gap-2">
             <SHint inline size="xs" class="font-mono">{{ o.value }}</SHint>
-            <SBadge v-if="o.value === 'super_admin'" size="xs" tone="accent">{{ t('users.superuser') }}</SBadge>
+            <SBadge v-if="roles.find((r) => r.key === o.value)?.superuser" size="xs" tone="accent">{{ t('users.superuser') }}</SBadge>
           </span>
         </template>
       </SChoiceCards>

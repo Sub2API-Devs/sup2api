@@ -689,6 +689,7 @@
 - 改动：新增 `composables/useAssignableRoles`：`GET /me/assignable-roles`，按“用户 id + `auth.permissionsEpoch`”缓存（T74 的 refreshPermissions 后失效）；`assignable(key)` = 在清单内且 `grantable`；`manageable(roles)` = 超管，或目标除默认 `user` 外的每个角色都 `assignable`（与后端 `CanActOnUsers` 同一口径，清单未加载时视为可以，由服务端裁决）；`withSupplierUser` 是“选 supplier 自动补 user”的唯一实现。
   - 用户页“分配角色”对话框：选项 = 可管理角色（`grantable=false` 的不能新加，提示缺的权限）+ 目标已持有但不在清单内的角色（勾选、锁定，原样提交）；选 supplier 自动补 user（与新建对话框一致）。行操作：编辑（含禁用）、分配角色、清两步验证、调余额、删除只对可管理的用户显示（原来对本人与超管仍显示，点击 403）；删除对本人仍隐藏（防锁死约束）。查看类操作（用户组与定价、余额流水）不变。
   - 新建用户对话框：只列默认角色 `user` 与可管理角色；`user` 总可选（D26），其余需要 `role:assign` 且可授予。
+- 审查补充：清两步验证对本人仍隐藏（本人走 `/me/*`，需当前密码与验证码）；默认角色 `user` 在清单里标为不可授予时，其持有者也视为不可管理（服务端比较目标全部角色的权限）；缓存在换用户、权限重载、登出时先清空，不再短暂给出上一份清单。未做：批量“移入用户组”与“用户组与定价”抽屉不按可管理过滤（仍由服务端 403），留待后续。
 - 影响对象：用户页的所有操作者。admin 不再看到对其他 admin、对自己的改动类按钮；operator 只对 supplier、user 显示。访问密钥下 `/me/assignable-roles` 为 `[]`，控制台按会话使用，不受影响。
 - 测试：新增 `UsersView.spec`（可管理才显示改动类操作、不可授予角色的持有者不可管理、超管管理所有人含自己但不删除自己、锁定角色原样提交、选 supplier 补 user、不可授予角色不能新加）；`UserCreateDialog.spec` 补可管理角色与 user 可选、无 role:assign 只能选 user。
 - 回滚：revert 提交即可，纯前端。

@@ -34,6 +34,7 @@ export function useAssignableRoles() {
     if (!key || (key === loadedFor && (loaded.value || pending))) return pending ?? Promise.resolve()
     loadedFor = key
     loaded.value = false
+    roles.value = [] // never another user's or an older list
     const mine = (pending = api
       .get<AssignableRole[]>('/me/assignable-roles')
       .then((list) => {
@@ -49,17 +50,29 @@ export function useAssignableRoles() {
       }))
     return mine
   }
-  watch(cacheKey, (k) => k && void load(), { immediate: true })
+  watch(
+    cacheKey,
+    (k) => {
+      if (k) void load()
+      else roles.value = [] // signed out
+    },
+    { immediate: true }
+  )
 
   const byKey = computed(() => new Map(roles.value.map((r) => [r.key, r])))
   /** Assigning `key` passes: on the list and grantable. */
   const assignable = (key: string) => !!byKey.value.get(key)?.grantable
   /**
+   * The default role needs no place on the list, but what it grants must be
+   * within the caller: listed as not grantable, it is not.
+   */
+  const defaultWithin = () => byKey.value.get(DEFAULT_ROLE)?.grantable !== false
+  /**
    * The caller may act on a user holding `userRoles`. Unknown (list not
    * loaded) counts as yes: the server still decides.
    */
   const manageable = (userRoles: string[] | undefined) =>
-    !!auth.me?.superuser || !loaded.value || (userRoles || []).every((k) => k === DEFAULT_ROLE || assignable(k))
+    !!auth.me?.superuser || !loaded.value || (userRoles || []).every((k) => (k === DEFAULT_ROLE ? defaultWithin() : assignable(k)))
 
-  return { roles, loaded, load, get: (key: string) => byKey.value.get(key), assignable, manageable }
+  return { roles, loaded, load, get: (key: string) => byKey.value.get(key), assignable, defaultWithin, manageable }
 }
