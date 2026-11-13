@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { i18n } from '@/i18n'
+import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
 import { CCGATEWAY_PAGE } from '@/views/plugins/pluginUtil'
 import { useSettingsMenu } from '@/views/settings/settingsNav'
 import { router } from './index'
@@ -115,16 +116,22 @@ describe('the settings entry', () => {
 })
 
 describe('the CCGateway page', () => {
-  it('has an address of its own, for settings:read', async () => {
-    expect(metaOf(CCGATEWAY_PAGE)).toMatchObject({ perm: 'settings:read', title: 'ccgateway.title' })
+  it('has an address of its own, for settings:read or a reader of the accounts', async () => {
+    expect(metaOf(CCGATEWAY_PAGE)).toMatchObject({ perm: ['settings:read', ...ACCOUNT_PAGE_PERMS], title: 'ccgateway.title' })
     expect(await follow(CCGATEWAY_PAGE)).toBe(CCGATEWAY_PAGE)
   })
 
-  it('is not for a caller without settings:read', async () => {
-    auth.denied = ['settings:read']
+  it('opens for an owner of accounts without settings:read: the core checks the containers by account:*', async () => {
+    auth.denied = ['settings:read', 'account:read']
+    await follow('/forbidden')
+    expect(await follow(CCGATEWAY_PAGE)).toBe(CCGATEWAY_PAGE)
+  })
+
+  it('is not for a caller with neither', async () => {
+    auth.denied = ['settings:read', ...ACCOUNT_PAGE_PERMS]
     // From another page: a link to the open page is no navigation.
     await follow('/forbidden')
-    expect(await follow(CCGATEWAY_PAGE)).toBe('/forbidden?perm=settings:read')
+    expect(await follow(CCGATEWAY_PAGE)).toMatch(/^\/forbidden\?perm=settings:read/)
   })
 
   it("takes over the plugin's settings addresses, keeping the anchor", async () => {

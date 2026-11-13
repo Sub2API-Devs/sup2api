@@ -166,7 +166,7 @@
 
 ## T17 设计 3.1.6、决策 2：服务器 CLI 恢复超管
 
-- 改动：新增 `sub2api admin recover-superadmin --email <已有用户> [--reset-password] [--reset-2fa]`（`cmd/sub2api/admin.go`）与 `iam.RecoverSuperAdmin`：按邮箱找未删除用户，被禁用则先启用，再经 `authz.TransferSuperAdmin(actor 0)` 成为唯一超管（其余持有者降为 `admin`，双方全部会话失效）；`--reset-password` 设 24 位随机密码并只在 stdout 打印一次；`--reset-2fa` 清除两步验证与通行密钥。审计 actor 为 0（`superadmin.transfer` 的 `via` 为 `cli`）。命令读与服务相同的环境变量（`DATABASE_URL` 等），不跑迁移、不连 Redis、不广播，运行中的节点最长 30 秒后生效。不新增 HTTP 恢复入口。`UpdateUser` 改他人密码时对系统（actor 0）不再检查 `user:password:reset`（系统没有角色，此前会被拒；HTTP 入口的 actor 永远不是 0）。CONTRACTS §43.6 同步。
+- 改动：新增 `sub2api admin recover-superadmin --email <已有用户> [--reset-password] [--reset-2fa]`（`cmd/sub2api/admin.go`）与 `iam.RecoverSuperAdmin`：按邮箱找未删除用户，被禁用则先启用，再经 `authz.TransferSuperAdmin(actor 0)` 成为唯一超管（其余未删除的持有者降为 `admin`，已软删除的只去掉超管角色、不补 `admin`，以免恢复该用户时带回管理权限；双方全部会话失效）；`--reset-password` 设 24 位随机密码并只在 stdout 打印一次；`--reset-2fa` 清除两步验证与通行密钥。审计 actor 为 0（`superadmin.transfer` 的 `via` 为 `cli`）。命令读与服务相同的环境变量（`DATABASE_URL` 等），不跑迁移、不连 Redis、不广播，运行中的节点最长 30 秒后生效。不新增 HTTP 恢复入口。`UpdateUser` 改他人密码时对系统（actor 0）不再检查 `user:password:reset`（系统没有角色，此前会被拒；HTTP 入口的 actor 永远不是 0）。CONTRACTS §43.6 同步。
 - 影响对象：只新增命令，已有接口行为不变。
 - 运维：多超管人工处理（T18 的超管唯一迁移检测到多个未删除的超管持有者时报错，服务不启动）：
   1. 从报错信息里的 user id 与邮箱中选出要保留的超管；
@@ -189,7 +189,7 @@
 - 改动：
   - 决策 1：`authz.CanActOnUsers` 只对本人的登录会话免检“作用于自己”；经访问密钥时（`core.ByAccessKey`）密钥主人和其他目标一样比较（密钥收窄后不是超管，也小于主人的角色）。超管自己带 `user:update` 的访问密钥 `PATCH /users/<超管>` 改显示名、带当前密码 `DELETE /users/<超管>/security` 清两步验证与通行密钥，由 200/204 变为 403 `you cannot modify a superuser`（后者在核对密码之前拒绝；T48 起 `DELETE /users/:id/security` 改用只限登录会话的 `user:password:reset`，访问密钥在权限阶段即 403 `details.permission = user:password:reset`，到不了这一步）；非超管的访问密钥经 `/users/:id` 改自己的资料，密钥权限不覆盖主人角色时同样 403（改自己的资料走 `/me` 或登录会话）。
   - dynweight 原生界面：没有 `group:read` 时不再请求 `GET /groups`（分组名显示 `#id`），没有全量级 `account:read` 时账号列表工具栏的降级标记不再请求 `GET /p/dynweight/degraded`、不显示。own 级用户打开账号页不再出现这两个 403。随 dynweight 重新打包（T84 升版本）生效。
-- 发布前提（T25/T84）：codex、dynweight、volcengine 的 manifest 改了路由的 `accounts` 但没有升版本。生产库已按 codex 0.1.3、dynweight 0.5.7、volcengine 0.12.6 存了旧 manifest，内置安装器遇到同版本不同内容会保留已存的行，registry 从库里的 manifest 读路由，所以不升版本上线时这三个插件路由的账号归属检查不生效（核心逻辑已在备份实例上用新 manifest 验证通过）。期 1 单独上线时必须先做 T84 的版本升级。
+- 发布前提（T84，按 PLAN 裁决 24 各插件任务都不升版本）：本分支改了这些插件而没有升版本：ccgateway 0.1.132（T26 `upstreamFields`）、codex 0.1.3（T25 路由 `accounts`、T26、T42 代码）、dynweight 0.5.7（T25 路由 `accounts`、原生界面）、volcengine 0.12.6（T25、T26）、payment 0.1.0（T35 代码）、claude-oauth 0.2.2（T26、T42 代码，非内置）。生产库已按这些版本存了旧 manifest，内置安装器遇到同版本不同内容会保留已存的行（`install/builtin.go` 日志 `version already stored with other content, keeping the stored one`），registry 从库里的 manifest 读路由与账号类型，节点也可能继续用旧包，所以不升版本上线时插件路由的账号归属检查、`upstreamFields` 与上述代码修复都不生效（期 2 生产备份验证确认：`builtin-relink.sh` 只改写包摘要，库里仍是生产的 manifest）。任何一期单独上线前都必须先做 T84：升这些插件的 manifest 版本（`deploy/docker/build-go.sh` 从 manifest 读版本，不另维护清单）。
 - 滚动升级与回滚（无代码改动，按此操作）：
   - 新旧节点混跑时，最后启动的节点决定权限目录：旧节点启动会把 `role:define`、`role:assign` 标为 removed、把 `role:manage` 恢复为 active、把 T10 补标的 8 个 sensitive 改回，新节点上 admin、operator 和自定义角色的持有者因此暂时失去角色管理，直到某个新节点重启。回滚时一次换掉全部节点；回滚后再升级时，保证最后启动的是新节点。超管不受影响；生产 admin、operator 无持有者、无自定义角色，实际影响近于零。
   - 回滚窗口里在旧版本上新建或修改、只勾了 `role:manage` 的角色，再次升级后不会自动得到 `role:define`、`role:assign`（`grantInherited` 只在新 key 首次插入时运行），也没有可分配清单（0097 的存量回填只在迁移时运行一次）。需要超管在角色页重新勾选并设置可分配清单。
@@ -268,6 +268,7 @@
 
 - 改动：新增共享原语 `core.AccountScope(action)`（`account:<action>` / `account:own:<action>`，`AccountsInScope` 与路由注册共用）。`ccgateway.RuntimeScope(method)`（读 = `account:read` / `account:own:read`，其余 = `account:update` / `account:own:update`）成为 `/system/ccgateway/accounts/:id/:action`、`cc-features`、`cc-features/preview` 与 `reauthorize`、`reauthorize/:key/commit` 的唯一 key 来源，不再包含 `settings:read` / `settings:manage`；`PUT request-logs` 只认 `account:update`。归属判断删除 `callerScope` 与两份手写 EXISTS，改调 `core.AccountAccess`（`ccgateway.Service.Accounts`，由 app 注入账号模块；未注入时 503），账号类型等附加条件仍在 ccgateway 自己的查询里。控制台：运行环境页的行操作（启动、重新授权）只按该行的 update 判断，请求日志控件只按 `account:update`；账号编辑里的重新授权面板不再把 `settings:*` 当作可读可写。CONTRACTS §49.5、§49.17、§65 同步。无迁移。
 - 影响对象：只有 `settings:read` / `settings:manage`、没有账号权限的角色，访问某个账号的运行环境状态、会话、健康、特性预览、请求日志设置，或对其同步、启动、授权、登出、重新授权，由 200 变为 403；控制台里对应按钮隐藏或置灰。需要这些操作的角色要另外授予 `account:read` / `account:update`（或 own 级）。settings 管理员仍可管理控制器、镜像、Worker 升级、清理、保留的运行环境、CLI 管理与默认规则，请求日志查看接口（列表、详情、文件）仍接受 `settings:read` / `settings:manage`；但查看器的搜索能力取自 `GET accounts/:id/request-logs`，只有 settings 权限、没有账号读权限的人从使用记录打开查看器时搜索筛选不显示（列表与详情照常）。`/system/ccgateway/cli/:id`（按账号 id 寻址的 CLI 管理）按镜像与控制器管理保留在 `settings:*`，不做归属检查（待确认是否随 T70 调整）。内置 admin、operator 默认同时持有 `account:read`、`account:update`，不受影响。后续任务（T70）不得把 `settings:*` 加回这些路由。
+- 期 2 生产备份验证修复：控制台 `/system/ccgateway` 页的路由守卫原只认 `settings:read`，与上面的后端口径不符（只有 own 级账号权限的人被挡在页外，只有 settings 权限的人进来后运行环境列表全部 403）。现在页面接受 `settings:read` 或账号列表的 key（`account:read` / `account:own:read`）：设置部分只给 `settings:read`，运行环境列表只给有账号读权限的人，只有账号权限时页面只显示运行环境列表；账号授权面板里“打开设置”按钮只给 `settings:read`。回滚：revert 该提交。
 - 不改（wontfix）：own 级调用者在特性预览里能看到继承值及其来源（分组与全局策略）；`GET health` 会记录运行环境上报的订阅类型、草稿的 `GET status` 会更新 `last_seen_at`（W1-F7）。代码里有注释。
 - 回滚：revert 这个提交（与 review fixes）即可，无迁移、无数据变化。
 

@@ -88,7 +88,8 @@ const children: RouteRecordRaw[] = [
     }
   },
 
-  { path: CCGATEWAY_PAGE, component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: 'settings:read', title: 'ccgateway.title', parent: '/plugins' } },
+  // The settings, or the account containers alone for an account reader (the core checks them by account:*, not settings:*).
+  { path: CCGATEWAY_PAGE, component: () => import('@/views/ccgateway/CCGatewayView.vue'), meta: { perm: ['settings:read', ...ACCOUNT_PAGE_PERMS], title: 'ccgateway.title', parent: '/plugins' } },
   { path: 'plugins', component: () => import('@/views/plugins/PluginsView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
   {
     path: 'plugins/:key/versions/:version/consent',

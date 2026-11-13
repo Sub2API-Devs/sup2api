@@ -568,7 +568,7 @@ defineExpose({
               <SButton size="sm" icon="refresh" :loading="busy === 'sync' || busy === 'create' || busy === 'proxy'" :disabled="acting || !canManage" data-testid="ccgateway-auth-retry" @click="retry">{{ t('ccgateway.accountAuth.retry') }}</SButton>
               <SButton v-if="isProxyReason(failure.reason)" size="sm" variant="ghost" icon="proxy" @click="emit('fix-proxy')">{{ t('ccgateway.accountAuth.blocked.pickProxy') }}</SButton>
               <SButton v-if="(draft && draftKey) || reauth" size="sm" variant="ghost" :disabled="acting" data-testid="ccgateway-auth-restart" @click="restartDraft">{{ t('ccgateway.accountAuth.restart') }}</SButton>
-              <SButton v-if="failure.setup?.length || failure.reason === 'not_configured'" size="sm" variant="ghost" icon="settings" :to="settingsLink" data-testid="ccgateway-auth-open-settings">{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
+              <SButton v-if="auth.has('settings:read') && (failure.setup?.length || failure.reason === 'not_configured')" size="sm" variant="ghost" icon="settings" :to="settingsLink" data-testid="ccgateway-auth-open-settings">{{ t('ccgateway.accountAuth.openSettings') }}</SButton>
             </template>
           </CcgErrorAlert>
           <!-- new account, no draft yet -->
