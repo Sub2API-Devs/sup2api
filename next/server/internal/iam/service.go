@@ -101,6 +101,7 @@ func New(d Deps) *Service {
 		priceRulesChanged: d.PriceRulesChanged, limiter: newLoginLimiter(d.Redis)}
 	s.dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), s.cost)
 	if d.Authz != nil {
+		d.Authz.UseStepUp(s)
 		// Status changes (disable/delete) bump the authz version.
 		d.Authz.OnChange(s.clearStatusCache)
 	}

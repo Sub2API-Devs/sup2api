@@ -56,21 +56,23 @@ func TestResetSecurityNeedsPasswordReset(t *testing.T) {
 
 	enroll()
 	denied("user:update alone", editor, "user:password:reset")
-	// The permission is session only: no access key carries it, whatever its
-	// owner holds and whatever else the key was given.
-	// Not even one stored with it before the permission became session only.
-	for who, owner := range map[string]int64{"an access key of a holder": resetterID, "an access key of the super admin": mustLogin(t, k.s, adminEmail, adminPassword).User.ID} {
-		key := k.createKey(t, owner, adminPassword, "user:read", "user:update")
-		if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'user:password:reset') WHERE id = $1`, key.ID); err != nil {
-			t.Fatal(err)
-		}
-		denied(who, key.Key, "user:password:reset")
+	// An access key needs the permission, then a step-up proof (期 4 S3).
+	narrow := k.createKey(t, resetterID, adminPassword, "user:read", "user:update")
+	denied("an access key without it", narrow.Key, "user:password:reset")
+	withPerm := k.createKey(t, resetterID, adminPassword, "user:read", "user:password:reset")
+	if code, out := k.call(withPerm.Key, "DELETE", target, nil); code != 403 || errCode(out) != "verification_required" || !enrolled() {
+		t.Fatalf("an access key with it, no proof: %d %v", code, out)
 	}
+	proof := k.proof(t, withPerm.Key, core.StepUpUserSecurityReset, "DELETE", target, map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(withPerm.Key, proof, "DELETE", target, nil); code != 204 || enrolled() {
+		t.Fatalf("an access key with it and a proof: %d %v", code, out)
+	}
+	enroll()
 
 	if code, out := k.call(resetter, "DELETE", target, nil); code != 403 || errCode(out) != "verification_required" {
 		t.Fatalf("holder without a proof: %d %v", code, out)
 	}
-	proof := k.proof(t, resetter, core.StepUpUserSecurityReset, "DELETE", target, map[string]any{"method": "password", "password": adminPassword})
+	proof = k.proof(t, resetter, core.StepUpUserSecurityReset, "DELETE", target, map[string]any{"method": "password", "password": adminPassword})
 	if code, out := k.callProof(resetter, proof, "DELETE", target, nil); code != 204 {
 		t.Fatalf("holder: %d %v", code, out)
 	}

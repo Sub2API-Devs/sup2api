@@ -116,7 +116,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("DELETE", "/proxies/:id", s.delete, write...)
 	r.PermAny("POST", "/proxies/:id/test", s.test, write...)
 	// The URL carries the plain-text password: sessions only (CONTRACTS §80).
-	r.SessionOnly().PermAny("POST", "/proxies/:id/reveal-url", s.revealURL, write...)
+	r.StepUp(core.StepUpProxyReveal).PermAny("POST", "/proxies/:id/reveal-url", s.revealURL, write...)
 	r.PermAny("POST", "/proxies/probe", s.probeURL, write...)
 }
 

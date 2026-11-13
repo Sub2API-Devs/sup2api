@@ -2,7 +2,6 @@ package authz
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
@@ -37,10 +36,6 @@ type corePerm struct {
 	// automatically. By default only the super admin holds it; a grant needs
 	// a holder, so delegating it starts with the super admin (decision D2).
 	superOnly bool
-	// sessionOnly keeps the permission out of access keys (KeyAllowed):
-	// identity takeover, host-level control, code execution, trust roots and
-	// plaintext credentials (CONTRACTS §80).
-	sessionOnly bool
 	// stepUp marks a permission some of whose routes need a step-up proof
 	// (httpapi.Router.StepUp, where the rule is); display only, for the
 	// access key selector. Always sensitive (TestCatalogFlagInvariants).
@@ -60,14 +55,14 @@ var coreModules = []coreModule{
 		{key: "user:read", en: "View users", zh: "查看用户"},
 		{key: "user:create", en: "Create users", zh: "新建用户"},
 		{key: "user:update", en: "Edit users", zh: "编辑用户"},
-		{key: "user:delete", en: "Delete users", zh: "删除用户", sensitive: true},
-		{key: "user:password:reset", en: "Reset user passwords and two-factor", zh: "重置他人密码与两步验证", sensitive: true, sessionOnly: true},
+		{key: "user:delete", en: "Delete users", zh: "删除用户", sensitive: true, stepUp: true},
+		{key: "user:password:reset", en: "Reset user passwords and two-factor", zh: "重置他人密码与两步验证", sensitive: true, stepUp: true},
 	}},
 	{"role", lt("Roles", "角色"), []corePerm{
 		{key: "role:read", en: "View roles and permissions", zh: "查看角色与权限"},
 		// role:manage was split in two; its holders keep both halves.
-		{key: "role:define", en: "Define roles", zh: "定义角色", sensitive: true, sessionOnly: true, inherits: []string{"role:manage"}},
-		{key: "role:assign", en: "Assign roles to users", zh: "给用户分配角色", sensitive: true, sessionOnly: true, inherits: []string{"role:manage"}},
+		{key: "role:define", en: "Define roles", zh: "定义角色", sensitive: true, inherits: []string{"role:manage"}},
+		{key: "role:assign", en: "Assign roles to users", zh: "给用户分配角色", sensitive: true, inherits: []string{"role:manage"}},
 	}},
 	{"apikey", lt("API keys", "API Key"), []corePerm{
 		{key: "apikey:self:manage", en: "Manage own API keys", zh: "管理自己的 API Key"},
@@ -88,7 +83,7 @@ var coreModules = []coreModule{
 		{key: "account:update", en: "Edit accounts", zh: "编辑账号"},
 		{key: "account:delete", en: "Delete accounts", zh: "删除账号", sensitive: true},
 		{key: "account:test", en: "Test accounts", zh: "测试账号"},
-		{key: "account:credential:view", en: "View account credentials", zh: "查看账号凭证", sensitive: true, sessionOnly: true},
+		{key: "account:credential:view", en: "View account credentials", zh: "查看账号凭证", sensitive: true, stepUp: true},
 		// Ownership (CONTRACTS §21): "own" keys only reach accounts the caller
 		// created; a full key above overrides its own counterpart.
 		{key: "account:own:read", en: "Read own accounts", zh: "查看自己创建的账号"},
@@ -96,14 +91,14 @@ var coreModules = []coreModule{
 		{key: "account:own:update", en: "Edit own accounts", zh: "编辑自己创建的账号"},
 		{key: "account:own:delete", en: "Delete own accounts", zh: "删除自己创建的账号", sensitive: true},
 		{key: "account:own:test", en: "Test own accounts", zh: "测试自己创建的账号"},
-		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true, sessionOnly: true},
+		{key: "account:own:credential:view", en: "View own account credentials", zh: "查看自己创建账号的凭证", sensitive: true, stepUp: true},
 		{key: "account:settings:custom", en: "Custom guarded settings (e.g. base URL)", zh: "自定义受限设置（如 Base URL）"},
 		{key: "account:group:bind", en: "Bind accounts to groups (own level)", zh: "将账号绑定到分组（own 级）"},
 		{key: "account:relay", en: "Create relay-type accounts with custom upstream", zh: "创建自定义上游的 relay 类账号", sensitive: true},
 	}},
 	{"proxy", lt("Proxies", "代理"), []corePerm{
 		{key: "proxy:read", en: "View proxies", zh: "查看代理"},
-		{key: "proxy:manage", en: "Manage proxies", zh: "管理代理", sensitive: true},
+		{key: "proxy:manage", en: "Manage proxies", zh: "管理代理", sensitive: true, stepUp: true},
 		{key: "proxy:own:read", en: "View own proxies", zh: "查看自己创建的代理"},
 		{key: "proxy:own:manage", en: "Manage own proxies", zh: "管理自己创建的代理"},
 	}},
@@ -130,18 +125,18 @@ var coreModules = []coreModule{
 	}},
 	{"plugin", lt("Plugins", "插件"), []corePerm{
 		{key: "plugin:read", en: "View plugins", zh: "查看插件"},
-		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true, sessionOnly: true},
+		{key: "plugin:install", en: "Install plugins", zh: "安装插件", sensitive: true, stepUp: true},
 		{key: "plugin:manage", en: "Manage plugins", zh: "管理插件", sensitive: true},
-		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true, sessionOnly: true},
-		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true, sessionOnly: true},
-		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true, superOnly: true, sessionOnly: true},
-		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true, superOnly: true, sessionOnly: true},
+		{key: "plugin:uninstall", en: "Uninstall plugins", zh: "卸载插件", sensitive: true},
+		{key: "plugin:grant:high", en: "Grant high-risk plugin permissions", zh: "授予插件高风险权限", sensitive: true, stepUp: true},
+		{key: "plugin:grant:critical", en: "Grant critical plugin permissions", zh: "授予插件关键权限", sensitive: true, superOnly: true, stepUp: true},
+		{key: "plugin:grant:db_schema_unconfined", en: "Grant db.schema to non-official plugins without role isolation", zh: "在无角色隔离时授予非官方插件 db.schema", sensitive: true, superOnly: true, stepUp: true},
 		{key: "plugin:egress:read", en: "View plugin egress traffic", zh: "查看插件出口流量"},
 		{key: "plugin:market:read", en: "Browse the plugin market", zh: "浏览插件市场"},
 	}},
 	{"publisher", lt("Publishers", "发布者"), []corePerm{
 		{key: "publisher:read", en: "View publishers", zh: "查看发布者"},
-		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true, superOnly: true, sessionOnly: true},
+		{key: "publisher:manage", en: "Manage publishers and keys", zh: "管理发布者与密钥", sensitive: true, superOnly: true, stepUp: true},
 	}},
 	{"node", lt("Cluster", "集群"), []corePerm{
 		{key: "node:read", en: "View cluster nodes", zh: "查看集群节点"},
@@ -159,12 +154,12 @@ var coreModules = []coreModule{
 	}},
 	{"settings", lt("Settings", "设置"), []corePerm{
 		{key: "settings:read", en: "View settings", zh: "查看设置"},
-		{key: "settings:manage", en: "Manage settings", zh: "管理设置", sensitive: true, sessionOnly: true},
+		{key: "settings:manage", en: "Manage settings", zh: "管理设置", sensitive: true},
 	}},
 	{"system_update", lt("Core updates", "核心升级"), []corePerm{
 		{key: "system:update:read", en: "View core updates", zh: "查看核心升级"},
-		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true, superOnly: true, sessionOnly: true},
-		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true, superOnly: true, sessionOnly: true},
+		{key: "system:update:execute", en: "Execute core updates", zh: "执行核心升级", sensitive: true, superOnly: true, stepUp: true},
+		{key: "system:update:recover", en: "Recover core updates", zh: "恢复核心升级", sensitive: true, superOnly: true, stepUp: true},
 	}},
 }
 
@@ -298,24 +293,16 @@ func CorePermissions() []core.PermissionDef {
 	return out
 }
 
-// sessionOnly reports whether key is a core permission only a session may use.
-func sessionOnly(key string) bool {
-	for _, m := range coreModules {
+// stepUpFlag reports whether key is marked stepUp (core or self module).
+func stepUpFlag(key string) bool {
+	for _, m := range slices.Concat(coreModules, []coreModule{selfModule}) {
 		for _, p := range m.perms {
 			if p.key == key {
-				return p.sessionOnly
+				return p.stepUp
 			}
 		}
 	}
 	return false
-}
-
-// KeyAllowed reports whether an access key may carry key: no plugin
-// permission (plugin routes take no access keys) and no sessionOnly core
-// one. It is the only such test; iam applies it wherever a key's
-// permissions are chosen, listed or used.
-func KeyAllowed(key string) bool {
-	return !strings.HasPrefix(key, "plugin.") && !sessionOnly(key)
 }
 
 var (

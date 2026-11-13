@@ -352,7 +352,7 @@ func (fakeSlots) InUseMany(_ context.Context, kind string, ids []int64) (map[int
 	return result, nil
 }
 
-type fakeTokens struct{}
+type fakeTokens struct{ testutil.StepUpPassed }
 
 func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
@@ -980,13 +980,14 @@ func TestAccountLifecycle(t *testing.T) {
 		t.Fatalf("reveal: %v", plain)
 	}
 	key := core.AccessKeyPrefix + strconv.FormatInt(e.uid, 10)
-	if code, raw := e.callRaw(key, "POST", fmt.Sprintf("/accounts/%d/credentials/reveal", id), nil); code != 403 ||
-		!strings.Contains(string(raw), "access keys cannot use this endpoint") {
+	// An access key with the permission reveals too, after the step-up
+	// (passed here; iam tests the proofs).
+	if code, raw := e.callRaw(key, "POST", fmt.Sprintf("/accounts/%d/credentials/reveal", id), nil); code != 200 {
 		t.Fatalf("access key reveal: %d %s", code, raw)
 	}
 	var audits int
 	_ = e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action = 'account.credentials.reveal'`).Scan(&audits)
-	if audits != 1 {
+	if audits != 2 {
 		t.Fatal("reveal not audited")
 	}
 	// Resubmitting the same credentials keeps the stored ciphertext; a real

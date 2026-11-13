@@ -39,6 +39,7 @@ type Service struct {
 	users      map[int64]core.PermissionSet
 	catalog    *catalogSnapshot
 	listeners  []func()
+	stepUp     core.StepUpVerifier
 }
 
 type permMeta struct {

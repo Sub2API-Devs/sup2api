@@ -728,10 +728,9 @@ type PermissionItem struct {
 	Label       core.LocalizedText `json:"label"`
 	Description core.LocalizedText `json:"description"`
 	Sensitive   bool               `json:"sensitive"`
-	SessionOnly bool               `json:"session_only"`
 	// StepUp: using it may need a step-up proof (catalog stepUp).
-	StepUp bool `json:"step_up"`
-	Status      string             `json:"status"`
+	StepUp bool   `json:"step_up"`
+	Status string `json:"status"`
 }
 
 // PermissionModule groups permissions by module.
@@ -768,7 +767,7 @@ ORDER BY p.source, p.module, p.sort, p.key`)
 		if it.Description == nil {
 			it.Description = core.LocalizedText{}
 		}
-		it.SessionOnly = sessionOnly(it.Key)
+		it.StepUp = stepUpFlag(it.Key)
 		m := byModule[module]
 		if m == nil {
 			m = &PermissionModule{Module: module, Source: source, PluginKey: pluginKey, Permissions: []PermissionItem{}}

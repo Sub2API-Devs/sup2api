@@ -254,3 +254,38 @@ func TestRenamePasskey(t *testing.T) {
 		t.Fatalf("too long: %d %v", code, out)
 	}
 }
+
+// 期 3 FU6's session-only rule became a step-up (期 4 S3): the super admin's
+// access key changes its own account with the permission and a proof.
+func TestSuperAdminKeyOnItsOwnAccountNeedsAProof(t *testing.T) {
+	t.Parallel()
+	k := newKeyEnv(t)
+	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
+	path := "/users/" + strconv.FormatInt(root, 10)
+	body := map[string]any{"display_name": "Root"}
+	narrow := k.createKey(t, root, adminPassword, "user:read")
+	if code, out := k.call(narrow.Key, "PATCH", path, body); code != 403 || errCode(out) != "permission_denied" {
+		t.Fatalf("key without user:update: %d %v", code, out)
+	}
+	key := k.createKey(t, root, adminPassword, "user:read", "user:update")
+	code, out := k.call(key.Key, "PATCH", path, body)
+	if code != 403 || errCode(out) != "verification_required" || out["error"].(map[string]any)["details"].(map[string]any)["scope"] != core.StepUpSuperAdminIdentity {
+		t.Fatalf("key without a proof: %d %v", code, out)
+	}
+	proof := k.proof(t, key.Key, core.StepUpSuperAdminIdentity, "PATCH", path, map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(key.Key, proof, "PATCH", path, body); code != 200 {
+		t.Fatalf("key with a proof: %d %v", code, out)
+	}
+	// Its own password: the password scope's proof covers the guard too.
+	pw := map[string]any{"password": "root-password-9"}
+	proof = k.proof(t, key.Key, core.StepUpSelfPassword, "PATCH", path, map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(key.Key, proof, "PATCH", path, pw); code != 200 {
+		t.Fatalf("own password through a key with a proof: %d %v", code, out)
+	}
+	mustLogin(t, k.s, adminEmail, "root-password-9")
+	// A session needs no proof for its own profile.
+	session := mustLogin(t, k.s, adminEmail, "root-password-9").AccessToken
+	if code, out := k.call(session, "PATCH", path, body); code != 200 {
+		t.Fatalf("session: %d %v", code, out)
+	}
+}

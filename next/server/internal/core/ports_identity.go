@@ -204,8 +204,8 @@ const (
 	ActOnData UserAction = iota
 	// ActOnIdentity changes the account itself: profile, email, password,
 	// second factors and passkeys, status, deletion, roles. A superuser's
-	// account changes only through its own session, never an access key
-	// (decision 1, FU6).
+	// account changes through an access key only with a step-up proof
+	// (期 4 S3, replacing decision 1's session-only rule).
 	ActOnIdentity
 )
 
@@ -216,8 +216,9 @@ type UserGuard interface {
 	// included: by the actor's roles, not narrowed by its access key, every
 	// role a target holds, the default user role aside, is one the actor may
 	// assign, and what the targets' roles grant is within the actor's (a
-	// superuser manages everyone). For ActOnIdentity a superuser target is
-	// refused to an access key. Actor 0 (the system) passes.
+	// superuser manages everyone). For ActOnIdentity a superuser target
+	// through an access key needs a step-up proof. Actor 0 (the system)
+	// passes.
 	CanActOnUsers(ctx context.Context, actorID int64, action UserAction, targetIDs ...int64) error
 }
 

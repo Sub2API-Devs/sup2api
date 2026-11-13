@@ -7,10 +7,14 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 	"github.com/gin-gonic/gin"
 )
 
-type updateRouteAuth struct{ allowed bool }
+type updateRouteAuth struct {
+	testutil.StepUpPassed
+	allowed bool
+}
 
 func (a updateRouteAuth) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: a.allowed}, nil
@@ -40,7 +44,7 @@ func TestUpdateSourceAndImportRequireAuthorization(t *testing.T) {
 		{"GET", "/system/update-check", true, true, 503},
 	} {
 		engine := gin.New()
-		auth := updateRouteAuth{tc.allowed}
+		auth := updateRouteAuth{allowed: tc.allowed}
 		RegisterRoutes(httpapi.NewRouter(engine, auth, auth), "", "", nil)
 		req := httptest.NewRequest(tc.method, "/api/v1"+tc.path, nil)
 		if tc.logged {

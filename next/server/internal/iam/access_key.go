@@ -65,9 +65,6 @@ func normalizeAccessKeyName(name string) (string, error) {
 // grantablePermissions checks a key's permissions against what the user holds
 // right now, the rule of §80: a key is a subset of its user. It returns them
 // sorted without duplicates. A superuser may choose any active permission.
-// Permissions no access key may carry (authz.KeyAllowed) are not offered and,
-// when held, are refused with their own detail (session_only) rather than as
-// missing.
 func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted []string) ([]string, error) {
 	if len(wanted) == 0 {
 		return nil, core.InvalidFields(core.FieldError{Field: "permissions", Code: "required", Message: "choose at least one permission"})
@@ -80,30 +77,19 @@ func (s *Service) grantablePermissions(ctx context.Context, userID int64, wanted
 	if err != nil {
 		return nil, err
 	}
-	known := make(map[string]struct{}, len(active))
-	for _, k := range active {
-		known[k] = struct{}{}
-	}
 	out := slices.Clone(wanted)
 	slices.Sort(out)
 	out = slices.Compact(out)
-	var missing, sessionOnly []string
+	var missing []string
 	for _, p := range out {
-		if _, ok := known[p]; !ok || !set.Has(p) {
+		if !slices.Contains(active, p) || !set.Has(p) {
 			missing = append(missing, p)
-		} else if !authz.KeyAllowed(p) {
-			sessionOnly = append(sessionOnly, p)
 		}
 	}
 	if len(missing) > 0 {
 		return nil, core.ErrPermissionDenied.WithMessage(t(ctx,
 			"an access key can only have permissions you hold",
 			"访问密钥只能拥有你自己的权限")).WithDetails(map[string]any{"missing": missing})
-	}
-	if len(sessionOnly) > 0 {
-		return nil, core.ErrPermissionDenied.WithMessage(t(ctx,
-			"these permissions can only be used in a signed-in session, not by an access key",
-			"这些权限只能在登录会话中使用，不能授予访问密钥")).WithDetails(map[string]any{"session_only": sessionOnly})
 	}
 	return out, nil
 }
@@ -116,7 +102,7 @@ func (s *Service) lostPermissions(ctx context.Context, userID int64, keys []*Acc
 	for _, k := range keys {
 		k.Lost = []string{}
 		for _, p := range k.Permissions {
-			if !set.Has(p) || !authz.KeyAllowed(p) {
+			if !set.Has(p) {
 				k.Lost = append(k.Lost, p)
 			}
 		}
@@ -274,7 +260,7 @@ func (s *Service) AccessKeyPermissions(ctx context.Context, userID int64) ([]*au
 	for _, m := range modules {
 		kept := m.Permissions[:0:0]
 		for _, p := range m.Permissions {
-			if (p.Status == "active" || p.Status == "") && set.Has(p.Key) && authz.KeyAllowed(p.Key) {
+			if (p.Status == "active" || p.Status == "") && set.Has(p.Key) {
 				kept = append(kept, p)
 			}
 		}
@@ -310,9 +296,6 @@ func (s *Service) VerifyAccessKey(ctx context.Context, raw, ip string) (core.Acc
 	if !active {
 		return id, core.ErrUnauthenticated.WithMessage("user is disabled or deleted")
 	}
-	// Stored keys may hold permissions no key may carry any more; they are
-	// dropped here, the only source of the identity's permissions.
-	id.Permissions = slices.DeleteFunc(id.Permissions, func(k string) bool { return !authz.KeyAllowed(k) })
 	if lastUsed == nil || time.Since(*lastUsed) > accessKeyTouchEvery {
 		if _, err := s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET last_used_at = now(), last_used_ip = $2 WHERE id = $1`, id.KeyID, ip); err != nil {
 			return id, err

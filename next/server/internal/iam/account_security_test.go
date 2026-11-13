@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -1290,45 +1289,35 @@ func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
 	if !seen["user:read"] || seen["user:delete"] || seen["role:assign"] {
 		t.Fatalf("catalog = %v", seen)
 	}
-	// A plugin permission cannot be chosen: plugin routes do not take keys.
+	// A plugin permission the user holds can be chosen (§80, 期 4 S4).
 	if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('demo', '{"en":"x"}', 'enabled')`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO permissions (key, module, label, source, plugin_key, status) VALUES ('plugin.demo:read', 'plugin.demo', '{"en":"x"}', 'plugin', 'demo', 'active')`); err != nil {
 		t.Fatal(err)
 	}
-	k.bump(t)
-	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
-	_, err = k.s.CreateAccessKey(ctx, root, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"plugin.demo:read"}}, testIP)
-	if !isCode(err, "permission_denied") {
+	k.grantRole(t, k.userID, "demo_reader", "plugin.demo:read")
+	key, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"plugin.demo:read", "user:read"}}, testIP)
+	if err != nil {
 		t.Fatalf("a plugin permission: %v", err)
 	}
-	mods, err = k.s.AccessKeyPermissions(ctx, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, m := range mods {
-		if m.Source == "plugin" {
-			t.Fatalf("catalog offers %s", m.Module)
-		}
-	}
-	// A stored key carrying one anyway lists it as lost and never uses it.
-	key := k.createKey(t, root, adminPassword, "user:read")
-	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = array_append(permissions, 'plugin.demo:read') WHERE id = $1`, key.ID); err != nil {
-		t.Fatal(err)
-	}
-	if list, err := k.s.AccessKeys(ctx, root); err != nil || len(list) != 1 || !slices.Equal(list[0].Lost, []string{"plugin.demo:read"}) {
-		t.Fatalf("lost = %+v, %v", list, err)
-	}
-	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"user:read"}) {
+	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"plugin.demo:read", "user:read"}) {
 		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	}
+	// Disabled with its plugin, it is lost until the plugin is back.
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE permissions SET status = 'disabled' WHERE key = 'plugin.demo:read'`); err != nil {
+		t.Fatal(err)
+	}
+	k.bump(t)
+	if list, err := k.s.AccessKeys(ctx, k.userID); err != nil || len(list) != 1 || !slices.Equal(list[0].Lost, []string{"plugin.demo:read"}) {
+		t.Fatalf("lost = %+v, %v", list, err)
 	}
 }
 
-// The session-only permissions (CONTRACTS §80) are never offered to a key,
-// not even a superuser's, cannot be chosen, and a stored key carrying one
-// lists it as lost and is refused on the routes it guards.
-func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
+// The former session-only permissions (期 4 S3) are offered to a key like any
+// other; the routes that execute code, reveal secrets or change trust roots
+// take a key with the permission only with a step-up proof.
+func TestFormerSessionOnlyPermissionsInAccessKeys(t *testing.T) {
 	k := newKeyEnv(t)
 	ctx := context.Background()
 	cipher, err := secret.New(make([]byte, 32))
@@ -1338,13 +1327,12 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 	ccgateway.New(k.s.db, cipher).RegisterRoutes(k.r)
 	login := mustLogin(t, k.s, adminEmail, adminPassword)
 	root := login.User.ID
-	sessionOnly := []string{"role:define", "role:assign", "settings:manage", "user:password:reset",
-		// T57: code execution, trust roots and plaintext credentials.
+	former := []string{"role:define", "role:assign", "settings:manage", "user:password:reset",
 		"plugin:install", "plugin:uninstall", "plugin:grant:high", "plugin:grant:critical", "plugin:grant:db_schema_unconfined",
 		"publisher:manage", "system:update:execute", "system:update:recover",
 		"account:credential:view", "account:own:credential:view"}
-	// A stand-in for the plugin upload route, guarded by the same permission.
-	k.r.Perm(http.MethodPost, "/plugins/upload", "plugin:install", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	// A stand-in for the plugin upload route, guarded the same way.
+	k.r.StepUp(core.StepUpPluginInstall).Perm(http.MethodPost, "/plugins/upload", "plugin:install", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
 	mods, err := k.s.AccessKeyPermissions(ctx, root)
 	if err != nil {
@@ -1356,57 +1344,30 @@ func TestSessionOnlyPermissionsStayOutOfAccessKeys(t *testing.T) {
 			offered[p.Key] = true
 		}
 	}
-	if !offered["settings:read"] {
-		t.Fatalf("catalog = %v", offered)
-	}
-	for _, p := range sessionOnly {
-		if offered[p] || authz.KeyAllowed(p) {
-			t.Fatalf("%s is offered to access keys", p)
+	for _, p := range former {
+		if !offered[p] {
+			t.Fatalf("%s is not offered to access keys", p)
 		}
 	}
-
-	body := map[string]any{"name": "x", "password": adminPassword, "permissions": []string{"settings:read", "settings:manage", "plugin:install"}}
-	code, out := k.call(login.AccessToken, "POST", "/me/access-keys", body)
-	e, _ := out["error"].(map[string]any)
-	details, _ := e["details"].(map[string]any)
-	if held, _ := details["session_only"].([]any); code != 403 || !slices.Contains(held, any("settings:manage")) || !slices.Contains(held, any("plugin:install")) || details["missing"] != nil {
-		t.Fatalf("choosing settings:manage: %d %v", code, out)
+	key := k.createKey(t, root, adminPassword, append([]string{"settings:read"}, former...)...)
+	if list, err := k.s.AccessKeys(ctx, root); err != nil || len(list[0].Lost) != 0 {
+		t.Fatalf("lost = %+v, %v", list, err)
 	}
-
-	key := k.createKey(t, root, adminPassword, "settings:read")
-	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET permissions = permissions || $2::text[] WHERE id = $1`, key.ID, sessionOnly); err != nil {
-		t.Fatal(err)
+	if code, out := k.call(key.Key, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 200 {
+		t.Fatalf("key with settings:manage: %d %v", code, out)
 	}
-	if id, err := k.s.VerifyAccessKey(ctx, key.Key, testIP); err != nil || !slices.Equal(id.Permissions, []string{"settings:read"}) {
-		t.Fatalf("verified permissions = %v, %v", id.Permissions, err)
+	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("key with plugin:install, no proof: %d %v", code, out)
 	}
-	if code, out := k.call(key.Key, "POST", "/plugins/upload", nil); code != 403 || !strings.Contains(fmt.Sprint(out), "plugin:install") {
-		t.Fatalf("stored plugin:install: %d %v", code, out)
+	proof := k.proof(t, key.Key, core.StepUpPluginInstall, "POST", "/plugins/upload", map[string]any{"method": "password", "password": adminPassword})
+	if code, out := k.callProof(key.Key, proof, "POST", "/plugins/upload", nil); code != 204 {
+		t.Fatalf("key with plugin:install and a proof: %d %v", code, out)
 	}
-	if code, out := k.call(login.AccessToken, "POST", "/plugins/upload", nil); code != 204 {
-		t.Fatalf("session plugin:install: %d %v", code, out)
+	if code, out := k.callProof(key.Key, proof, "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "verification_required" {
+		t.Fatalf("replayed proof: %d %v", code, out)
 	}
-	if code, out := k.call(key.Key, "GET", "/system/ccgateway/remote-config", nil); code != 200 {
-		t.Fatalf("settings:read: %d %v", code, out)
-	}
-	if code, out := k.call(key.Key, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 403 {
-		t.Fatalf("stored settings:manage: %d %v", code, out)
-	}
-	if code, out := k.call(login.AccessToken, "PUT", "/system/ccgateway/remote-config", map[string]any{"mode": "disabled"}); code != 200 {
-		t.Fatalf("session: %d %v", code, out)
-	}
-	code, out = k.call(login.AccessToken, "GET", "/me/access-keys", nil)
-	list, _ := out["data"].([]any)
-	if code != 200 || len(list) != 1 {
-		t.Fatalf("list: %d %v", code, out)
-	}
-	lost, _ := list[0].(map[string]any)["lost"].([]any)
-	if len(lost) != len(sessionOnly) {
-		t.Fatalf("lost = %v", lost)
-	}
-	for _, p := range sessionOnly {
-		if !slices.Contains(lost, any(p)) {
-			t.Fatalf("lost = %v, without %s", lost, p)
-		}
+	narrow := k.createKey(t, root, adminPassword, "settings:read")
+	if code, out := k.callProof(narrow.Key, k.proof(t, narrow.Key, core.StepUpPluginInstall, "POST", "/plugins/upload", map[string]any{"method": "password", "password": adminPassword}), "POST", "/plugins/upload", nil); code != 403 || errCode(out) != "permission_denied" {
+		t.Fatalf("key without plugin:install: %d %v", code, out)
 	}
 }

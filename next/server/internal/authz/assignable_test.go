@@ -252,13 +252,13 @@ func TestCanActOnUsersPeerProtection(t *testing.T) {
 	if err := s.CanActOnUsers(keyed, admin, core.ActOnData, admin2); !isCode(err, "permission_denied") || detail(err, "role") != RoleAdmin {
 		t.Fatalf("admin's access key on another admin: %v", err)
 	}
-	// The super admin's key: data of its owner yes, its account no
-	// (decision 1, until second factors on keys).
+	// The super admin's key: data of its owner yes, its account only with a
+	// step-up proof (期 4 S3; no verifier here, so none).
 	rootKey := core.WithAccessKey(ctx, core.AccessKeyIdentity{UserID: root, Permissions: []string{"user:read", "user:update", "balance:adjust"}})
 	if err := s.CanActOnUsers(rootKey, root, core.ActOnData, root, admin); err != nil {
 		t.Fatalf("super admin's key on its own data: %v", err)
 	}
-	if err := s.CanActOnUsers(rootKey, root, core.ActOnIdentity, root); !isCode(err, "permission_denied") || detail(err, "reason") != "session_only" {
+	if err := s.CanActOnUsers(rootKey, root, core.ActOnIdentity, root); !isCode(err, "verification_required") || detail(err, "scope") != core.StepUpSuperAdminIdentity {
 		t.Fatalf("super admin's key on its own account: %v", err)
 	}
 	if err := s.CanActOnUsers(rootKey, root, core.ActOnIdentity, admin); err != nil {

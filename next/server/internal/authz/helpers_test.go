@@ -211,7 +211,11 @@ func TestCanActOnUsers(t *testing.T) {
 	keyed := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 2, Permissions: []string{"users:read"}})
 	ownKey := core.WithAccessKey(context.Background(), core.AccessKeyIdentity{UserID: 1, Permissions: []string{"users:read"}})
 	bg := context.Background()
-	const sessionOnly = "a superuser's account changes only through the superuser's own session"
+	// No step-up verifier is set: a superuser's account through a key is
+	// refused for want of a proof; one the request already spent passes.
+	const sessionOnly = "verify it's you to continue"
+	spent := core.WithStepUp(keyed, "p", "op")
+	core.MarkStepUpSpent(spent, core.StepUpUserSecurityReset)
 	data, identity := core.ActOnData, core.ActOnIdentity
 	// Without a database there are no role keys: these cases judge only what
 	// the roles grant and the access key rule (FU6), so a non-superuser on
@@ -238,6 +242,7 @@ func TestCanActOnUsers(t *testing.T) {
 		{"superuser's key on its owner's data", keyed, 2, data, []int64{2}, ""},
 		{"superuser's key on its owner's account", keyed, 2, identity, []int64{2}, sessionOnly},
 		{"superuser's key on another superuser's account", keyed, 2, identity, []int64{3, 5}, sessionOnly},
+		{"superuser's key on its account after a proof", spent, 2, identity, []int64{2}, ""},
 		{"another user's key leaves the actor alone", keyed, 3, data, []int64{3}, ""},
 		{"a narrower key on its owner", ownKey, 1, identity, []int64{1}, ""},
 		{"a narrower key still within its owner's roles", ownKey, 1, data, []int64{4}, "you cannot modify a user with higher privileges"},
@@ -249,7 +254,7 @@ func TestCanActOnUsers(t *testing.T) {
 			switch {
 			case tt.wantErr == "" && err != nil:
 				t.Fatalf("CanActOnUsers() = %v, want nil", err)
-			case tt.wantErr != "" && (!errors.As(err, &e) || e.Code != "permission_denied" || e.Message != tt.wantErr):
+			case tt.wantErr != "" && (!errors.As(err, &e) || e.Message != tt.wantErr):
 				t.Fatalf("CanActOnUsers() = %v, want %q", err, tt.wantErr)
 			}
 		})

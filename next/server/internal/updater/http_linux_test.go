@@ -18,7 +18,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type bridgeAuth struct{ id int64 }
+type bridgeAuth struct {
+	testutil.StepUpPassed
+	id int64
+}
 
 func (a bridgeAuth) VerifyAccessToken(context.Context, string) (int64, error) { return a.id, nil }
 func (a bridgeAuth) Can(context.Context, int64, string) (bool, error)         { return true, nil }
@@ -56,7 +59,7 @@ func TestBridgeAuditsOnlySuccessfulMutations(t *testing.T) {
 	t.Cleanup(func() { _ = shell.Close() })
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	auth := bridgeAuth{uid}
+	auth := bridgeAuth{id: uid}
 	RegisterRoutes(httpapi.NewRouter(engine, auth, auth), socket, "", db)
 	cases := []struct{ method, path, action string }{
 		{"POST", "/system/upgrades", "system.upgrade.create"},

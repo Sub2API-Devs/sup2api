@@ -34,7 +34,7 @@ import (
 
 // ---------------------------------------------------------------- fakes
 
-type tokens struct{}
+type tokens struct{ testutil.StepUpPassed }
 
 func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	switch tok {
@@ -60,6 +60,7 @@ func (a authz) Can(ctx context.Context, uid int64, p string) (bool, error) {
 	ps, err := a.PermissionSet(ctx, uid)
 	return ps.Has(p), err
 }
+
 // Every signed-in user holds the self permissions, as authz gives them.
 func (authz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
 	var keys []string

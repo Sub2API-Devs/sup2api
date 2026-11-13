@@ -26,7 +26,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
-type fakeTokens struct{}
+type fakeTokens struct{ testutil.StepUpPassed }
 
 func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
@@ -244,8 +244,8 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 		t.Fatalf("reveal-url: %d %v, want %s", code, out, want)
 	}
 	code, out = call(t, engine, core.AccessKeyPrefix+strconv.FormatInt(admin, 10), "POST", fmt.Sprintf("/proxies/%d/reveal-url", id), nil)
-	if fail, _ := out["error"].(map[string]any); code != 403 || fail["message"] != "access keys cannot use this endpoint" {
-		t.Fatalf("access key reveal-url: %d %v", code, out)
+	if want := fmt.Sprintf("http://bob:s3cret@%s:%d", host, port); code != 200 || data(out)["url"] != want {
+		t.Fatalf("access key reveal-url (step-up passed): %d %v", code, out)
 	}
 
 	// Directory: cached client per proxy.
@@ -389,7 +389,7 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 		}
 		actions = append(actions, action)
 	}
-	if strings.Join(actions, ",") != "proxy.create,proxy.url.reveal,proxy.update,proxy.delete" {
+	if strings.Join(actions, ",") != "proxy.create,proxy.url.reveal,proxy.url.reveal,proxy.update,proxy.delete" {
 		t.Fatalf("audit actions %v", actions)
 	}
 }

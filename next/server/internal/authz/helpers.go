@@ -139,14 +139,6 @@ func cannotActOnPeer(ctx context.Context, roleKey string) *core.Error {
 		"你不能修改持有你无权分配的角色的用户")).WithDetails(map[string]any{"role": roleKey, "reason": "not_manageable"})
 }
 
-// superuserSessionOnly is the denial of a change to a superuser's account
-// through an access key (decision 1, canActOnUsers).
-func superuserSessionOnly(ctx context.Context) *core.Error {
-	return core.ErrPermissionDenied.WithMessage(t(ctx,
-		"a superuser's account changes only through the superuser's own session",
-		"超级管理员的账号只能由其本人的登录会话修改")).WithDetails(map[string]any{"reason": "session_only"})
-}
-
 // cannotActOnRole is the denial of a change to a role granting more than the
 // actor holds (editableRole).
 func cannotActOnRole(ctx context.Context) *core.Error {
@@ -200,8 +192,9 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID int64, action core.U
 // can do right now: a disabled user can do nothing, and comparing against
 // that would let anyone with user:update re-enable a disabled admin and take
 // the account over. The actor's side is its roles too: an access key narrows
-// what the caller may do (the route's permission), not whom. One exception
-// keeps decision 1: ActOnIdentity on a superuser is refused to an access key.
+// what the caller may do (the route's permission), not whom. ActOnIdentity
+// on a superuser through an access key needs a step-up proof (期 4 S3, in
+// place of decision 1's session-only rule).
 // An action on oneself that passes (only a superuser's, with the default
 // lists; also a custom role whose list names itself: assign_custom never
 // covers the holder's own roles, RolesPermissions) is audited here, the one
@@ -234,9 +227,13 @@ func (s *Service) canActOnUsers(ctx context.Context, q store.Querier, actorID in
 			return cannotActOnPeer(ctx, key)
 		}
 	}
-	// Only an actor that manages the superuser gets this far with one.
-	if action == core.ActOnIdentity && target.Superuser && core.ByAccessKey(ctx, actorID) {
-		return superuserSessionOnly(ctx)
+	// Only an actor that manages the superuser gets this far with one: the
+	// super admin itself. Through an access key it needs a step-up proof:
+	// the one the request spent on its own scope, or one of its own.
+	if action == core.ActOnIdentity && target.Superuser && core.ByAccessKey(ctx, actorID) && core.StepUpSpent(ctx) == "" {
+		if err := s.stepUpOrDeny().ConsumeStepUp(ctx, core.StepUpSuperAdminIdentity); err != nil {
+			return err
+		}
 	}
 	if !slices.Contains(ids, actorID) {
 		return nil
@@ -256,4 +253,29 @@ func (s *Service) auditSelf(ctx context.Context, q store.Querier, actorID int64)
 		detail["via"], detail["access_key_id"] = "access_key", key.KeyID
 	}
 	return s.audit(ctx, q, actorID, "user.act_on_self", "user", actorID, detail)
+}
+
+// UseStepUp sets the verifier of the step-up proofs canActOnUsers asks for
+// (iam, which is built after authz).
+func (s *Service) UseStepUp(v core.StepUpVerifier) {
+	s.mu.Lock()
+	s.stepUp = v
+	s.mu.Unlock()
+}
+
+// stepUpOrDeny is the step-up verifier, or one refusing every proof when
+// none is set: failing closed.
+func (s *Service) stepUpOrDeny() core.StepUpVerifier {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.stepUp == nil {
+		return noStepUp{}
+	}
+	return s.stepUp
+}
+
+type noStepUp struct{}
+
+func (noStepUp) ConsumeStepUp(_ context.Context, scope string) error {
+	return core.ErrVerificationRequired.WithDetails(map[string]any{"scope": scope})
 }
