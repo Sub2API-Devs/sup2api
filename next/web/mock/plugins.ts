@@ -2,6 +2,7 @@
 // grants, settings, resources, egress, jobs, events) and the plugin market.
 // /ui/plugins and /p/<key>/... live in pluginui.ts; publishers are not here.
 import { fail, noContent, now, on, paginate } from './router'
+import { stepUp } from './core'
 import { pluginPlatforms } from './platforms'
 import { pluginAccountCount, uninstallPluginAccounts } from './accounts'
 
@@ -793,18 +794,18 @@ on('POST', '/plugins/retired-keys/:key/release', (req) => {
   return { accounts_deleted: body.purge_accounts ? r.accounts : 0, kv_deleted: body.purge ? 1 : 0 }
 })
 
-on('POST', '/plugins/upload', () => {
+on('POST', '/plugins/upload', stepUp('plugin.install', () => {
   // multipart bodies are not parsed by the mock server: pretend it was guard 0.1.1
   return stageVersion(
     guardReview('0.1.1', { added: [], widened: ['gateway.hook'], removed: [] })
   )
-})
+}))
 
-on('POST', '/plugins/install-from-market', (req) => {
+on('POST', '/plugins/install-from-market', stepUp('plugin.install', (req) => {
   const { key, version } = req.body || {}
   if (!key || !version) return fail(400, 'invalid_argument', 'key and version are required')
   return stageVersion(reviewFor(key, version))
-})
+}))
 
 on('GET', '/plugins/:key', (req) => {
   const p = find(req.params.key)
@@ -830,7 +831,7 @@ on('GET', '/plugins/:key/versions/:version/review', (req) => {
   return r ?? fail(404, 'not_found', 'no review for this version')
 })
 
-on('POST', '/plugins/:key/versions/:version/consent', (req) => {
+on('POST', '/plugins/:key/versions/:version/consent', stepUp('plugin.grant', (req) => {
   const p = find(req.params.key)
   if (!p) return notFound(req.params.key)
   const grants: Array<{ permission: string; scope?: Any }> = req.body?.grants || []
@@ -841,7 +842,7 @@ on('POST', '/plugins/:key/versions/:version/consent', (req) => {
   if (p.status === 'awaiting_consent') p.status = 'installed'
   if (!p.active_version) p.desired_version = req.params.version
   return { ok: true }
-})
+}))
 
 on('POST', '/plugins/:key/versions/:version/reject', (req) => {
   const p = find(req.params.key)

@@ -2,7 +2,7 @@
 // publishers. (Accounts and account types live in their own mock module.)
 import { SCOPABLE, canonicalPermission, parsePermission } from '../src/authz/implies'
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
-import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, pricerUser, readonlyUser, userEmail, vendorUser } from './core'
+import { ALL_PERMISSIONS, caller, filterOwned, hasPerm, inScope, moderatorUser, ownerScope, pricerUser, readonlyUser, stepUp, userEmail, vendorUser } from './core'
 import { accounts, groupAccountCount, groupPlatforms, proxyAccountCount } from './accounts'
 import { pricedModels } from './billing'
 import { accessOf, findSegment, forgetGroup, forgetUser, groupAccess, moveUser, rateOf, rulesWhere, segmentOfUser, segmentRef, type RuleRow } from './pricingStore'
@@ -475,14 +475,14 @@ on('PATCH', '/users/:id', (req) => {
   u.updated_at = now()
   return userOut(u)
 })
-on('DELETE', '/users/:id', (req) => {
+on('DELETE', '/users/:id', stepUp('user.delete', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
   if (u.roles.includes('super_admin') && users.filter((x) => x.roles.includes('super_admin')).length <= 1) return fail(409, 'conflict', 'at least one super_admin must remain')
   users.splice(users.indexOf(u), 1)
   forgetUser(u.id)
   return noContent()
-})
+}))
 on('PUT', '/users/:id/roles', (req) => {
   const u = findUser(req)
   if (!u) return fail(404, 'not_found', 'user not found')
@@ -654,12 +654,12 @@ on('PATCH', '/me/api-keys/:id', (req) => {
   if (b.allowed_ips !== undefined) k.allowed_ips = b.allowed_ips
   return keyOut(k)
 })
-on('POST', '/me/api-keys/:id/reveal', (req) => {
+on('POST', '/me/api-keys/:id/reveal', stepUp('apikey.reveal', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
   if (!k) return fail(404, 'not_found', 'api key not found')
   if (legacyKeyIds.has(k.id)) return fail(409, 'conflict', 'This legacy key cannot be recovered. Create a new key to enable copying.')
   return { key: plaintextOf(k) }
-})
+}))
 on('POST', '/me/api-keys/:id/rotate', (req) => {
   const k = keys.find((x) => x.id === Number(req.params.id) && x.user_id === ME_ID)
   if (!k) return fail(404, 'not_found', 'api key not found')
@@ -850,14 +850,14 @@ on('DELETE', '/proxies/:id', (req) => {
   proxies.splice(proxies.indexOf(p), 1)
   return noContent()
 })
-on('POST', '/proxies/:id/reveal-url', (req) => {
+on('POST', '/proxies/:id/reveal-url', stepUp('proxy.reveal', (req) => {
   const r = managedProxy(req)
   if (!('p' in r)) return r
   const p = r.p
   const host = p.host.includes(':') ? `[${p.host}]` : p.host
   const cred = p.username || p.password ? `${encodeURIComponent(p.username)}:${encodeURIComponent(p.password)}@` : ''
   return { url: `${p.protocol}://${cred}${host}:${p.port}` }
-})
+}))
 on('POST', '/proxies/:id/test', async (req) => {
   const r = managedProxy(req)
   if (!('p' in r)) return r

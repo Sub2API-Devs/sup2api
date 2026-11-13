@@ -30,7 +30,7 @@ import type { Role, User } from '@/api/types'
 import { deleteWithConfirm, useStatusOptions } from '@/composables/crud'
 import { activeFilterCount, useList } from '@/composables/useList'
 import { useSelection } from '@/composables/useSelection'
-import { useAssignableRoles, withSupplierUser } from '@/composables/useAssignableRoles'
+import { SUPPLIER_ROLE, useAssignableRoles, withSupplierUser } from '@/composables/useAssignableRoles'
 import { useAuthStore } from '@/stores/auth'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -261,7 +261,7 @@ function openRoles(u: User) {
 
 /** Checking supplier checks the default role with it, as when creating a user. */
 function setRolesSel(v: ChoiceOption['value'][]) {
-  const added = v.includes('supplier') && !rolesSel.value.includes('supplier')
+  const added = v.includes(SUPPLIER_ROLE) && !rolesSel.value.includes(SUPPLIER_ROLE)
   rolesSel.value = added ? withSupplierUser(v.map(String)) : v
 }
 

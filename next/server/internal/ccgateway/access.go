@@ -22,8 +22,8 @@ func accountAction(method string) string {
 }
 
 // authorizeAccount checks that the caller may act on account id with method:
-// the "all" key reaches every account, the "own" key the ones the caller
-// created (others are not found). Whether the account exists and is a Claude
+// the account must be in the caller's data scope of the action (CONTRACTS
+// §21: every row, own, group or id ranges; others are not found). Whether the account exists and is a Claude
 // Code account stays with the caller's own query.
 func (s *Service) authorizeAccount(ctx context.Context, method string, id int64) error {
 	uid, _ := core.UserID(ctx)

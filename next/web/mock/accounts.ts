@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { fail, nextId, noContent, now, on, paginate, type MockRequest } from './router'
 import { activePlatforms, platformById, platformLabel } from './platforms'
-import { caller, filterOwned, hasAction, hasPerm, inScope, ownerScope, userEmail, type Identity } from './core'
+import { caller, filterOwned, hasAction, hasPerm, inScope, ownerScope, stepUp, userEmail, type Identity } from './core'
 import { resolveProxyURL, validateProxyURL } from './resources'
 import { codexAccountTypes, codexCredentialErrors } from './codex'
 import { customAccountTypes, customCredentialErrors, customForm } from './custom'
@@ -1142,9 +1142,9 @@ on('POST', '/accounts/:id/reset-status', (req) => {
   r.a.cooldown_reason = ''
   return withGroups(r.a)
 })
-on('POST', '/accounts/:id/credentials/reveal', (req) => {
+on('POST', '/accounts/:id/credentials/reveal', stepUp('credential.reveal', (req) => {
   const r = scopedAccount(req, 'credential:view')
   if (!('a' in r)) return r
   const a = r.a
   return { api_key: 'sk-ant-api03-mock-plaintext-key', base_url: a.credentials?.base_url || 'https://api.anthropic.com' }
-})
+}))

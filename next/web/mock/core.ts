@@ -296,7 +296,7 @@ on('POST', '/me/verify', (req) => {
   return { proof, expires_at: now(300), method, scope, context }
 })
 /** handler behind a one-time proof of scope, as Router.StepUp(scope). */
-const stepUp = (scope: string, handler: MockHandler): MockHandler => (req) => {
+export const stepUp = (scope: string, handler: MockHandler): MockHandler => (req) => {
   const proof = req.headers['x-verify-proof']
   if (!proof || !proofs.delete(proof)) {
     return fail(403, 'verification_required', "verify it's you to continue", { ...verifyMethods(scope), context: `${req.method} /api/v1${req.path}` })
