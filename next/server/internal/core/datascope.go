@@ -76,6 +76,12 @@ func (s DataScope) Restricted() bool { return !s.All }
 // Grouped reports whether s has a part that depends on group membership.
 func (s DataScope) Grouped() bool { return len(s.Groups) > 0 || len(s.PairID) > 0 }
 
+// HasGroup reports whether s reaches every account bound to group g
+// (group/g or group/*).
+func (s DataScope) HasGroup(g int64) bool {
+	return s.All || slices.Contains(s.Groups, 0) || slices.Contains(s.Groups, g)
+}
+
 // AllowsRow reports whether the row id, created by createdBy and bound to
 // groups (its current account_groups; nil for proxies), is in s.
 func (s DataScope) AllowsRow(id int64, createdBy *int64, groups []int64) bool {
@@ -117,7 +123,9 @@ var (
 func (t ScopeTable) Cond() string {
 	c := "(?::boolean OR COALESCE(" + t.Owner + " = ?::bigint, false) OR " + t.ID + " = ANY(?::bigint[])"
 	if t.Grouped {
-		c += " OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest(?::bigint[]) sg(g) ON sg.g = 0 OR sg.g = ag.group_id WHERE ag.account_id = " + t.ID + ")" +
+		// group/* is a flag of its own so that the group ids reach
+		// account_groups_group_idx (an "= 0 OR =" join would not).
+		c += " OR EXISTS (SELECT 1 FROM account_groups ag WHERE ag.account_id = " + t.ID + " AND (?::boolean OR ag.group_id = ANY(?::bigint[])))" +
 			" OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest(?::bigint[], ?::bigint[]) sp(g, x) ON sp.x = ag.account_id AND (sp.g = 0 OR sp.g = ag.group_id) WHERE ag.account_id = " + t.ID + ")"
 	}
 	return c + ")"
@@ -146,7 +154,9 @@ func (t ScopeTable) Args(s DataScope) []any {
 	}
 	args := []any{s.All, s.Owner, ids(s.IDs)}
 	if t.Grouped {
-		args = append(args, ids(s.Groups), ids(s.PairG), ids(s.PairID))
+		anyGroup := slices.Contains(s.Groups, 0)
+		groups := slices.DeleteFunc(slices.Clone(ids(s.Groups)), func(g int64) bool { return g == 0 })
+		args = append(args, anyGroup, groups, ids(s.PairG), ids(s.PairID))
 	}
 	return args
 }

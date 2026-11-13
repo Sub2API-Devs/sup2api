@@ -860,3 +860,36 @@
   - revert 代码即可，新表与新列旧代码都不读。
   - 访问密钥里的新写法在旧代码下被忽略，旧写法仍在，按审计 before 可还原。
   - 回滚期间写入的分组或 id 范围授予不生效（fail-closed）。
+
+## 期 4 R3：account 包收敛到 DataScope
+
+- 改动：
+  - `account`：`scopeOf(ctx, action)`（`core.Scope`）取代全部 `core.OwnerScope("account:x")`。`loadRow`、`fullView`、列表、删除、改写语句、统计、`CountAccounts`、`AccountsInScope` 一律使用 `core.AccountRows.SQL/Cond/Args`，旧的 `scoped()` 已删除。
+  - 受限档：`defaultConcurrency`、`checkOwnChange`、`adminLockAfter`、`disabledReason`、`checkCustomUpstream` 与 common controls 的签名从 `*int64` 改为 `core.DataScope`，判断改为 `Restricted()`，函数体不变（待定点 1：分组或指定账号范围的管理员同样受这些限制）。
+  - 单条判断（是否可执行账号动作、能否回显凭证）：列表用 `DataScope.AllowsRow`，配合视图里已有的 `group_ids`；单条记录用 `inScope`（一条 EXISTS）。
+  - 后置条件：
+    - 新建要求账号落在 create 范围内（`createInScope`，400 `not_in_scope`）。
+    - 改分组时，范围内的分组免 `account:group:bind`（`groupDiff.outside`，待定点 2）。
+    - 写入后在同一事务里复查账号仍在调用者的 update 范围内（`stillInScope`，403 `would_leave_scope`）。
+  - 列表的 `created_by` 筛选改为在范围内收窄。
+  - 删除账号（含插件清理）与删除分组时调用 `core.ClearScopeGrants`。
+  - `core.DataScope.HasGroup`。
+- 谓词性能（EXPLAIN，Postgres 17，2 万账号、100 个分组、约 2.65 万条 account_groups）：
+  - 初版“分组” EXISTS 用 `unnest(groups) ON g = 0 OR g = ag.group_id`，用不上 `account_groups_group_idx`，只能整表扫描：列表页 15 ms，计数 205 ms。
+  - 改为 `(<group/*>::boolean OR ag.group_id = ANY(<groups>))`，`group/*` 单独作为一个参数（参数共 7 个）后：
+    - 列表页（group/12 + group/40 + own，LIMIT 20）：组 id 走 `account_groups_group_idx` 的 hashed subplan，1.3 ms。
+    - 单条（分组 + 指定账号）：走 PK，0.6 ms。
+    - 汇总计数（group/12）：顺序扫描 accounts 并探测哈希，约 90 ms，与全量计数（约 53 ms）同一量级。
+  - 分组 + 指定账号这一支只有一个 `unnest` 并按 `account_id` 走 PK，单条或在列表里都只在命中前缀时执行。
+- 测试：
+  - account `TestGroupScopedAccounts`：
+    - 分组范围管理员只能列出、读取、改、删自己分组里的账号，其余 404。
+    - 新建必须落在自己的分组内；绑定自己范围内的分组不需要 bind 权限，范围外的分组 403。
+    - 解绑最后一个范围内分组时 `would_leave_scope`，并回滚。
+    - `group/*`、`group/*/account/X`、`account/X` 的列表；`AccountsInScope`。
+    - 他人绑定分组后立即生效；受限档的默认并发。
+  - `TestDeleteClearsScopedGrants`：删除账号、分组后，指向它们的授予被清除，前缀相同的其他 id 保留，写审计、推进版本。
+  - `TestOwnership`：`created_by` 在范围内筛选。
+  - core 谓词快照更新。
+- 影响对象：own 级用户的 `created_by=<他人>` 现在返回空列表（此前忽略该参数）。其余对 own 与全部范围的行为不变。
+- 回滚：revert（无迁移）。

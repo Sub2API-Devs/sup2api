@@ -63,7 +63,7 @@ func (s *Service) createPreparation(c *gin.Context) {
 		httpapi.Fail(c, core.ErrUnsupported)
 		return
 	}
-	if err := s.checkCustomUpstream(ctx, core.OwnerScope(ctx, "account:create"), binding); err != nil {
+	if err := s.checkCustomUpstream(ctx, s.scopeOf(ctx, perm.AccountCreate), binding); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -104,7 +104,7 @@ func (s *Service) createPreparation(c *gin.Context) {
 	// A preparation takes its resource (a runtime container) until it is
 	// adopted, cancelled or expires; the full account:create is not limited.
 	limit := core.MaxOpenDrafts
-	if core.OwnerScope(ctx, "account:create") == nil {
+	if s.scopeOf(ctx, perm.AccountCreate).All {
 		limit = 0 // no limit
 	}
 	var fresh bool // this request inserted the row

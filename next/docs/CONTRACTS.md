@@ -1070,6 +1070,10 @@ mock-upstream：`/v1/chat/completions` 请求里带名为 `submit_verdict` 的�
 - **迁移 0103**：建表加列；每个未 removed 的旧 own 授予若角色未持有对应全量 key，则写入 `(动作, 'own')`（审计 `authz.scope.migrate`，`via: migration 0103`、`from`、`key`；冗余的只记一次 `redundant: true`）；访问密钥在旧写法旁补上 `<动作>:own`（审计 `user.access_key.migrate`，含 before/after）；有写入才推进 authz 版本；可重复执行；不删除也不修改 `role_permissions`。
 - **访问密钥取交集**：创建/修改时每个 key 须被用户蕴含；运行时 `Restrict` 逐模式取较窄者（存量不带后缀的 key 遇到只有 own 的用户收窄为 own），不可比（如 `group/12` 与 `own`）丢弃。
 - **内置角色默认**：supplier = 8 个 `…:own`；operator 去掉冗余 own key，加 `account:credential:view:own`。
+- **账号（期 4 R3）**：列表、详情、写、删、测试、凭证、统计、汇总、动作、`AccountsInScope`（插件账号路由与宿主 RPC）都按调用者在对应动作上的范围过滤，越权一律 404。`mine=true`、`created_by=<id>` 在范围内再收窄（此前 own 级忽略 `created_by`）。受限档（范围不是全部）沿用 own 级的全部限制（并发默认与上限、管理员锁、受限设置、relay、绑定分组）。
+  - 新建：范围不含 own、只有分组时，`group_ids` 必须含其中一个分组，否则 400 `fields[{group_ids, not_in_scope}]`。
+  - 改分组：绑定或解绑自己范围内的分组（`group/G`、`group/*`）不需要 `account:group:bind`；写入后账号必须仍在调用者的 update 范围内，否则 403 `would_leave_scope`（整笔回滚）。
+  - 删除账号、删除分组时，清除点名它们的带范围授予（`core.ClearScopeGrants`，按角色审计 `authz.scope.clear`，推进 authz 版本）。
 
 ### 21.1 权限（§4 表同步更新）
 

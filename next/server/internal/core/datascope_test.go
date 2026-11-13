@@ -85,13 +85,13 @@ func TestScopeTableSQL(t *testing.T) {
 		t.Fatalf("proxy SQL = %s", got)
 	}
 	want := "($3::boolean OR COALESCE(a.created_by = $4::bigint, false) OR a.id = ANY($5::bigint[])" +
-		" OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest($6::bigint[]) sg(g) ON sg.g = 0 OR sg.g = ag.group_id WHERE ag.account_id = a.id)" +
-		" OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest($7::bigint[], $8::bigint[]) sp(g, x) ON sp.x = ag.account_id AND (sp.g = 0 OR sp.g = ag.group_id) WHERE ag.account_id = a.id))"
+		" OR EXISTS (SELECT 1 FROM account_groups ag WHERE ag.account_id = a.id AND ($6::boolean OR ag.group_id = ANY($7::bigint[])))" +
+		" OR EXISTS (SELECT 1 FROM account_groups ag JOIN unnest($8::bigint[], $9::bigint[]) sp(g, x) ON sp.x = ag.account_id AND (sp.g = 0 OR sp.g = ag.group_id) WHERE ag.account_id = a.id))"
 	if got := AccountRows.SQL(3); got != want {
 		t.Fatalf("account SQL =\n%s\nwant\n%s", got, want)
 	}
-	if n := len(AccountRows.Args(DataScope{})); n != 6 {
-		t.Fatalf("account args = %d", n)
+	if args := AccountRows.Args(DataScope{Groups: []int64{0, 12}}); len(args) != 7 || args[3] != true || len(args[4].([]int64)) != 1 {
+		t.Fatalf("account args = %#v", args)
 	}
 	if args := ProxyRows.Args(DataScope{}); len(args) != 3 || args[2] == nil {
 		t.Fatalf("proxy args = %#v", args)

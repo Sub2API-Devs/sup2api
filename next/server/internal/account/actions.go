@@ -8,6 +8,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/gin-gonic/gin"
 )
@@ -46,7 +47,7 @@ func (s *Service) executeAccountAction(c *gin.Context) {
 		return
 	}
 
-	scope := core.OwnerScope(ctx, "account:update")
+	scope := s.scopeOf(ctx, perm.AccountUpdate)
 	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -157,28 +158,15 @@ func (s *Service) listAccountActions(ctx context.Context, pluginKey, accountType
 }
 
 // visibleActions are the actions of account a that the caller may invoke:
-// every action when the caller may update that account (its own, or any with
-// the "all" key; declared actions all require account:update), otherwise
-// only the ones that require nothing. update is the caller's update range
-// (updateRange). Never nil.
-func (s *Service) visibleActions(ctx context.Context, a *row, update updateRange) []AccountAction {
+// every action when the caller may update that account (mayUpdate: a is in
+// its account:update scope; declared actions all require account:update),
+// otherwise only the ones that require nothing. Never nil.
+func (s *Service) visibleActions(ctx context.Context, a *row, mayUpdate bool) []AccountAction {
 	actions := s.listAccountActions(ctx, a.PluginKey, a.Type)
-	if update.ok && core.Allows(update.scope, a.CreatedBy) {
+	if mayUpdate {
 		return actions
 	}
 	return slices.DeleteFunc(actions, func(action AccountAction) bool { return action.Permission != "" })
-}
-
-// updateRange is which accounts the caller may update: core.ScopeOf of
-// account:update, read once for a whole list.
-type updateRange struct {
-	scope *int64
-	ok    bool
-}
-
-func (s *Service) updateRange(ctx context.Context) (r updateRange) {
-	r.scope, r.ok = core.ScopeOf(ctx, s.d.Authorizer, core.AccountScope("update"))
-	return r
 }
 
 // getAccountActions serves GET /accounts/:id/actions: lists available actions for an account.
@@ -189,12 +177,15 @@ func (s *Service) getAccountActions(c *gin.Context) {
 		return
 	}
 
-	scope := core.OwnerScope(ctx, "account:read")
-	a, err := s.loadRow(ctx, s.d.DB.Pool, id, scope, false)
+	a, err := s.loadRow(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountRead), false)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
-
-	httpapi.OK(c, gin.H{"actions": s.visibleActions(ctx, a, s.updateRange(ctx))})
+	mayUpdate, err := inScope(ctx, s.d.DB.Pool, id, s.scopeOf(ctx, perm.AccountUpdate))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, gin.H{"actions": s.visibleActions(ctx, a, mayUpdate)})
 }

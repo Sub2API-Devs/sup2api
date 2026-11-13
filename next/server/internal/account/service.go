@@ -347,23 +347,26 @@ var _ core.AccountAccess = (*Service)(nil)
 // accessActions are the actions AccountsInScope answers.
 var accessActions = []string{"read", "update", "test"}
 
-// AccountsInScope implements core.AccountAccess with the ownership condition
-// loadRow uses; the "own" result follows the order of ids, deduplicated.
+// AccountsInScope implements core.AccountAccess with the caller's data scope
+// of the action (CONTRACTS §21), as loadRow reads it; the narrowed result
+// follows the order of ids, deduplicated.
 func (s *Service) AccountsInScope(ctx context.Context, userID int64, action string, ids []int64) (bool, []int64, error) {
 	if !slices.Contains(accessActions, action) {
 		return false, nil, core.InvalidFields(core.FieldError{Field: "action", Code: "invalid",
 			Message: t(ctx, "Unknown account action", "未知的账号操作")})
 	}
-	scope, ok := core.ScopeOf(core.WithUserID(ctx, userID), s.d.Authorizer, core.AccountScope(action))
-	if !ok {
+	scope, err := core.Scope(core.WithUserID(ctx, userID), s.d.Authorizer, perm.AccountAction(action))
+	switch {
+	case err != nil:
+		return false, nil, err
+	case scope.Empty():
 		return false, nil, core.AccountsDenied(action)
-	}
-	if scope == nil {
+	case scope.All:
 		return true, nil, nil
 	}
 	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id FROM accounts a
-		WHERE a.id = ANY($1) AND a.deleted_at IS NULL AND `+scoped("$2")+`
-		ORDER BY array_position($1, a.id)`, ids, scope)
+		WHERE a.id = ANY($1) AND a.deleted_at IS NULL AND `+core.AccountRows.SQL(2)+`
+		ORDER BY array_position($1, a.id)`, append([]any{ids}, core.AccountRows.Args(scope)...)...)
 	if err != nil {
 		return false, nil, err
 	}

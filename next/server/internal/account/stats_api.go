@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/perm"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
@@ -99,8 +100,9 @@ func (s *Service) getAccountStats(c *gin.Context) {
 		return
 	}
 	ctx := c.Request.Context()
-	scope := core.OwnerScope(ctx, "account:read")
-	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id FROM accounts a WHERE a.id=ANY($1) AND a.deleted_at IS NULL AND `+scoped("$2"), ids, scope)
+	scope := s.scopeOf(ctx, perm.AccountRead)
+	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id FROM accounts a WHERE a.id=ANY($1) AND a.deleted_at IS NULL AND `+core.AccountRows.SQL(2),
+		append([]any{ids}, core.AccountRows.Args(scope)...)...)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

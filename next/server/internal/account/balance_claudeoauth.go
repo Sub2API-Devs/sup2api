@@ -37,7 +37,7 @@ type claudeOAuthBalanceProvider struct {
 }
 
 func (p *claudeOAuthBalanceProvider) QueryBalance(ctx context.Context, accountID int64) (*store.BalanceSnapshot, error) {
-	a, err := p.s.loadRow(ctx, p.s.d.DB.Pool, accountID, nil, false)
+	a, err := p.s.loadRow(ctx, p.s.d.DB.Pool, accountID, core.AllScope, false)
 	if err != nil {
 		return nil, fmt.Errorf("load account: %w", err)
 	}

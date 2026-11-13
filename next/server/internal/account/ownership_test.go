@@ -153,8 +153,12 @@ func TestOwnership(t *testing.T) {
 	if code, out := e.doAs(admin, "GET", "/accounts?created_by=abc", nil); code != 400 || fmt.Sprint(fieldsOf(out)) != "[created_by:invalid]" {
 		t.Fatalf("bad created_by: %d %v", code, out)
 	}
-	if _, out = e.doAs(alice, "GET", fmt.Sprintf("/accounts?created_by=%d", bob), nil); total(out) != 1 || listIDs(out) != strconv.FormatInt(aliceID, 10) {
-		t.Fatalf("alice created_by ignored: %v", out)
+	// created_by filters within the caller's range (CONTRACTS §21.0).
+	if _, out = e.doAs(alice, "GET", fmt.Sprintf("/accounts?created_by=%d", bob), nil); total(out) != 0 {
+		t.Fatalf("alice created_by bob: %v", out)
+	}
+	if _, out = e.doAs(alice, "GET", fmt.Sprintf("/accounts?created_by=%d", alice), nil); total(out) != 1 || listIDs(out) != strconv.FormatInt(aliceID, 10) {
+		t.Fatalf("alice created_by alice: %v", out)
 	}
 	if _, out = e.doAs(alice, "GET", "/accounts?mine=true", nil); total(out) != 1 {
 		t.Fatalf("alice mine: %v", out)

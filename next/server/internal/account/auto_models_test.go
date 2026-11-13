@@ -30,7 +30,7 @@ func autoModelsPatch(in *pluginv1.AccountLifecycleRequest) *pluginv1.AccountPatc
 
 func savedModels(t *testing.T, e *env, id int64) ([]string, *bool) {
 	t.Helper()
-	row, err := e.svc.loadRow(t.Context(), e.db.Pool, id, nil, false)
+	row, err := e.svc.loadRow(t.Context(), e.db.Pool, id, core.AllScope, false)
 	if err != nil {
 		t.Fatal(err)
 	}
