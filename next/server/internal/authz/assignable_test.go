@@ -470,7 +470,8 @@ func TestSetRoleAssignable(t *testing.T) {
 	if r, err := set(admin, teamID, true, RoleOperator); err != nil || !r.AssignCustom {
 		t.Fatalf("admin sets team: %+v %v", r, err)
 	}
-	if keys, custom := assignableOf(t, s, "team"); !slices.Equal(keys, []string{"definer", RoleOperator, "team"}) || !custom {
+	// The wildcard leaves out team itself (§43.6).
+	if keys, custom := assignableOf(t, s, "team"); !slices.Equal(keys, []string{"definer", RoleOperator}) || !custom {
 		t.Fatalf("team grants %v custom %v", keys, custom)
 	}
 }
@@ -579,5 +580,84 @@ func TestResetRoleAssignable(t *testing.T) {
 		if !slices.Equal(r.AssignableRoleKeys, want) || r.AssignCustom != def.assignCustom {
 			t.Errorf("%s reset to %v custom %v, want %v %v", role, r.AssignableRoleKeys, r.AssignCustom, want, def.assignCustom)
 		}
+	}
+}
+
+// "Every custom role" (assign_custom) never covers a role its holder holds
+// (§43.6): a lead with balance:adjust + assign_custom manages the holders of
+// other custom roles, not itself or other leads, and cannot hand out, by
+// assignment or through a role it defines, what would. A role named on the
+// list counts as listed. The super admin is unaffected.
+func TestAssignCustomExcludesOwnRole(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	root := addUser(t, s, "root@x.com", RoleSuperAdmin)
+	perms := []string{"user:read", "user:update", "balance:adjust", "role:define", "role:assign"}
+	lead, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "lead", Name: lt("lead", "lead"), PermissionKeys: perms, AssignCustom: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "staff", Name: lt("staff", "staff"), PermissionKeys: []string{"user:read"}}); err != nil {
+		t.Fatal(err)
+	}
+	lead1 := addUser(t, s, "lead1@x.com", RoleUser, "lead")
+	lead2 := addUser(t, s, "lead2@x.com", RoleUser, "lead")
+	staff := addUser(t, s, "staff@x.com", RoleUser, "staff")
+	plain := addUser(t, s, "plain@x.com", RoleUser)
+
+	if got, custom := assignableOf(t, s, "lead"); !slices.Equal(got, []string{"staff"}) || !custom {
+		t.Fatalf("lead assigns %v custom %v, want [staff] true", got, custom)
+	}
+	for _, target := range []int64{lead1, lead2} {
+		if err := s.CanActOnUsers(ctx, lead1, core.ActOnData, target); !isCode(err, "permission_denied") || detail(err, "role") != "lead" {
+			t.Fatalf("lead on lead %d: %v", target, err)
+		}
+	}
+	if err := s.CanActOnUsers(ctx, lead1, core.ActOnData, staff, plain); err != nil {
+		t.Fatalf("lead on a staff holder and a user: %v", err)
+	}
+	if err := s.CanActOnUsers(ctx, root, core.ActOnData, root, lead1, lead2); err != nil {
+		t.Fatalf("super admin: %v", err)
+	}
+	if err := setRoles(s, lead1, plain, RoleUser, "lead"); !isCode(err, "permission_denied") || detail(err, "role") != "lead" {
+		t.Fatalf("lead assigns lead: %v", err)
+	}
+	if err := setRoles(s, lead1, plain, RoleUser, "staff"); err != nil {
+		t.Fatalf("lead assigns staff: %v", err)
+	}
+	// A wildcard handed out through a new role or the lead's own list
+	// would cover lead: refused, whatever the flag the lead holds.
+	_, err = s.CreateRole(ctx, lead1, CreateRoleInput{Key: "deputy", Name: lt("deputy", "deputy"), PermissionKeys: []string{"user:read"}, AssignCustom: true})
+	if !isCode(err, "permission_denied") || !slices.Equal(detail(err, "missing_assignable").([]string), []string{"lead"}) {
+		t.Fatalf("lead creates a role with assign_custom: %v", err)
+	}
+	if _, err := s.SetRoleAssignable(ctx, lead1, lead.ID, AssignableInput{RoleKeys: []string{"lead"}, AssignCustom: true}); !isCode(err, "permission_denied") {
+		t.Fatalf("lead lists itself: %v", err)
+	}
+	// A holder of another wildcard role can assign lead, which the lead
+	// cannot: not managed either.
+	if _, err := s.CreateRole(ctx, root, CreateRoleInput{Key: "coach", Name: lt("coach", "coach"), PermissionKeys: []string{"user:read"}, AssignCustom: true}); err != nil {
+		t.Fatal(err)
+	}
+	coach := addUser(t, s, "coach@x.com", RoleUser, "coach")
+	if err := s.CanActOnUsers(ctx, lead1, core.ActOnData, coach); !isCode(err, "permission_denied") ||
+		!slices.Equal(detail(err, "missing_assignable").([]string), []string{"lead"}) {
+		t.Fatalf("lead on a coach: %v", err)
+	}
+
+	// Listed by name, lead manages leads, itself included, and assigns lead.
+	if _, err := s.SetRoleAssignable(ctx, root, lead.ID, AssignableInput{RoleKeys: []string{"lead"}, AssignCustom: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := assignableOf(t, s, "lead"); !slices.Equal(got, []string{"coach", "lead", "staff"}) {
+		t.Fatalf("lead listing itself assigns %v", got)
+	}
+	if err := s.CanActOnUsers(ctx, lead1, core.ActOnData, lead1, lead2, staff, coach); err != nil {
+		t.Fatalf("lead listing itself on leads: %v", err)
+	}
+	if err := setRoles(s, lead1, plain, RoleUser, "lead"); err != nil {
+		t.Fatalf("lead listing itself assigns lead: %v", err)
 	}
 }

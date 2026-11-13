@@ -349,9 +349,13 @@ WHERE ur.user_id = $1`, userID)
 // RolesPermissions returns the union of all permissions granted by the given
 // role keys, in the grant view: disabled (plugin) permissions count, removed
 // ones do not (M6). It also holds the roles they may assign: those listed,
-// never a superuser role, plus every custom role when one of them has
-// assign_custom. Used to compare what roles carry in grant checks; the
-// effective set (loadPermissionSet) counts active permissions only.
+// never a superuser role, plus, when one of them has assign_custom, every
+// custom role but roleKeys themselves. The wildcard never covers a role the
+// holder holds (CONTRACTS §43.6): a custom role with assign_custom does not
+// manage itself or its peers, nor hand out what does; a role listed by name
+// stays assignable as listed. Used to compare what roles carry in grant
+// checks; the effective set (loadPermissionSet) counts active permissions
+// only.
 func (s *Service) RolesPermissions(ctx context.Context, q store.Querier, roleKeys []string) (core.PermissionSet, error) {
 	set := core.PermissionSet{Keys: map[string]struct{}{}, Assignable: map[string]struct{}{}}
 	if len(roleKeys) == 0 {
@@ -389,7 +393,7 @@ SELECT COALESCE(array_agg(key), '{}') FROM (
     JOIN roles r ON r.id = ra.role_id AND r.key = ANY($1)
     JOIN roles ar ON ar.id = ra.assignable_role_id AND NOT ar.superuser
     UNION
-    SELECT c.key FROM roles c WHERE NOT c.builtin AND $2) a`, roleKeys, set.AssignCustom).Scan(&assignable); err != nil {
+    SELECT c.key FROM roles c WHERE NOT c.builtin AND $2 AND c.key <> ALL($1)) a`, roleKeys, set.AssignCustom).Scan(&assignable); err != nil {
 		return core.PermissionSet{}, err
 	}
 	for _, k := range assignable {

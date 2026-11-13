@@ -132,7 +132,7 @@
 
 ## T13 决策 3–5：可分配角色白名单数据层
 
-- 改动：迁移 `0097_role_assignable.sql` 新增 `roles.assign_custom`（“以及全部自定义角色”）与 `role_assignable_roles(role_id, assignable_role_id)`。存量等价：持有 `role:manage`（不看状态，拆分后已 removed）或 `role:assign` 的非超管角色得到 `assign_custom = true`，并可分配除 `super_admin`、`admin` 外的全部内置角色；全新库不动。内置默认清单（决策 5）：admin = operator、user + 全部自定义角色；operator = user（supplier 随 T52 建出后由 SyncCore 追加到 admin、operator）。SyncCore 新建内置角色时播种清单（不审计，与权限播种一致）；以后新建的内置角色追加到默认清单含它的已有内置角色上，写 `authz.sync.grant` 审计（via=`assignable`，`key` 为被追加的角色）。`core.PermissionSet` 增加 `Assignable`、`AssignCustom` 与 `CanAssign`；`RolesPermissions`（授予视角）加载它们（显式清单永不含超管角色，`assign_custom` 展开为全部非内置角色）；`Missing` 增加 `Assign`、`AssignCustom`，403 的 details 多 `missing_assignable`、`missing_assign_custom` 两个字段。访问密钥收窄后没有可分配角色。本提交不改 `SetUserRoles` 的分配规则（T14），不加接口（T15）。
+- 改动：迁移 `0097_role_assignable.sql` 新增 `roles.assign_custom`（“以及全部自定义角色”）与 `role_assignable_roles(role_id, assignable_role_id)`。存量等价：持有 `role:manage`（不看状态，拆分后已 removed）或 `role:assign` 的非超管角色得到 `assign_custom = true`，并可分配除 `super_admin`、`admin` 外的全部内置角色；全新库不动。内置默认清单（决策 5）：admin = operator、user + 全部自定义角色；operator = user（supplier 随 T52 建出后由 SyncCore 追加到 admin、operator）。SyncCore 新建内置角色时播种清单（不审计，与权限播种一致）；以后新建的内置角色追加到默认清单含它的已有内置角色上，写 `authz.sync.grant` 审计（via=`assignable`，`key` 为被追加的角色）。`core.PermissionSet` 增加 `Assignable`、`AssignCustom` 与 `CanAssign`；`RolesPermissions`（授予视角）加载它们（显式清单永不含超管角色，`assign_custom` 展开为全部非内置角色；期 3 审查 R1 起不含持有者自己的角色）；`Missing` 增加 `Assign`、`AssignCustom`，403 的 details 多 `missing_assignable`、`missing_assign_custom` 两个字段。访问密钥收窄后没有可分配角色。本提交不改 `SetUserRoles` 的分配规则（T14），不加接口（T15）。
 - 影响对象：作用于用户（`CanActOnUsers`/`CanActOnUser`：改资料、禁用、重置密码、分配角色时的目标检查）、授出角色（`SetUserRoles` 比较新增角色）与修改角色（`editableRole`：改名称描述、改权限、重置、删除）时，目标、新角色或被改角色能分配的角色也要在操作者的可分配范围内。因此：没有可分配清单的自定义角色持有者，即使权限覆盖 operator，也不能再作用于 operator 用户、授出 operator 角色或修改 operator 角色（operator 可分配 user）；admin 不能作用于持有“可分配 admin”的自定义角色的用户。内置 admin 之间、admin 对 operator/user 不受影响；超管不受影响。访问密钥（收窄后没有可分配角色）不能再作用于 operator、admin 等带清单的用户或授出这些角色。生产库只有 super_admin/admin/user/operator 且无自定义角色，迁移后 admin、operator 都得到 assign_custom 与 {operator, user}（operator 的清单在 T55 收紧）。
 - 回滚：revert 这个提交；表与列可保留（旧代码不读），或手工 `DROP TABLE role_assignable_roles; ALTER TABLE roles DROP COLUMN assign_custom; DELETE FROM schema_migrations WHERE id = '0097_role_assignable.sql';`。
 
@@ -567,7 +567,7 @@
   - 审计：作用于自己的成功检查记 `user.act_on_self`（`detail.self = true`，取代 FU5 的 `reason: self_by_superuser`）。
   - 已知：检查先于操作写审计，操作随后失败时审计行留下（同 FU5）。
 - 审查补充：`session_only` 的判断移到可管理检查之后，所以只有真能管理超管的操作者（超管本人）会看到它，admin 的密钥对超管仍是 `not_manageable`；FU2 的 409 文案本地化；注释更新。
-- 待确认：带 `assign_custom`（“全部自定义角色”）或清单列了自己的自定义角色，按同一规则能管理自己和同角色的持有者（`RolesPermissions` 把 `assign_custom` 展开为全部自定义角色，含自己这个角色），例如带 `balance:adjust` + `assign_custom` 的自定义角色可以给自己调余额、改自己用户组的定价。这是规则的字面结果，已写入 CONTRACTS §43.6；若不希望，可在 `canActOnUsers` 里对本人排除其自身的非内置角色。
+- 已定（期 3 审查 R1 改）：`assign_custom` 不含操作者自己持有的角色，带它的自定义角色不再管理自己与同角色的持有者，见“期 3 审查 R1”。
 - 回滚：revert FU6 的提交（与 review fixes）即可，回到 FU5 的行为；无迁移、无数据变化。合并提交无需回滚。
 
 - 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，不用 advisory 锁：该用户未完成的数量达到上限（两个包各一个常量 `maxOpenDrafts = 3`）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL AND for_account IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。无迁移。CONTRACTS §49.9 路由表同步。
@@ -645,3 +645,16 @@
 - 影响对象：此前因为用了 `$ref` 被打包拒绝的设置 schema，现在只要引用的是根上的本地定义、位置可达即可通过；已安装的旧包里这类 schema 此前整块按凭据掩码（顶层设置或全部），升级核心后改为逐字段掩码（被引用对象里未标记的字段，如 `label`，回显原值）。行为只会在“能精确定位到的字段”上放开，其余情况仍按不可达处理。
 - 审查修复：去重键由拼接字符串改为（值路径，目标）二元组。拼接时属性名与定义名里的 `\u0000` 可以构造出两个不同引用撞键，第二个被跳过，其中的密钥字段既不列出也不报告（有反例，已加为测试）。遍历改按键名排序：节点预算用尽后哪些引用不可达不再随 map 顺序变化，已安装包的 GET 与随后的 PUT 掩码一致。
 - 回滚：revert 这个提交即可；回滚后带本地引用的设置 schema 重新被打包拒绝，已安装的包回到整块掩码。
+
+## 期 3 审查 R1：`assign_custom` 不含操作者自己持有的角色（产品性收紧，改 FU6 的待确认项）
+
+- 背景：FU6 审查发现，带 `assign_custom`（“全部自定义角色”）的自定义角色按字面规则管理自己及同角色的其他持有者（例如带 `balance:adjust` + `assign_custom` 的角色能给自己调余额、经 FU2 改自己用户组的定价）。已定：通配不含操作者自己持有的角色，显式列在清单里的角色照旧按清单，超管不受影响。
+- 改动：只改 authz 的授予视角一处。`RolesPermissions` 把 `assign_custom` 展开为“除这组角色本身以外的全部自定义角色”（SQL 多一个 `c.key <> ALL($1)`），显式清单不变。它同时作用于：
+  - 可管理目标（`canActOnUsers`）：操作者一侧不再覆盖自己的角色，带 `assign_custom` 的 lead 对自己和其他 lead 403 `details.role = lead`；对其他自定义角色的持有者照旧。
+  - 分配角色（`checkAssignment`）：不能分配自己的角色（`notAssignable`）。
+  - 交出通配：`grantOf`（POST `/roles`、PUT `/roles/:id/assignable` 新开 `assign_custom`、POST `/roles/:id/reset`）把交出的 `assign_custom` 展开为除被写角色外的现有全部自定义角色，操作者须能逐个分配，否则 403 `details.missing_assignable`。否则 lead 可以建一个带 `assign_custom` 的 deputy 角色交给别人，由 deputy 管理 lead 的持有者，绕过同级保护。
+  - 目标一侧同样展开：持有另一个带 `assign_custom` 角色（能分配 lead）的用户，lead 不能作用于他（缺 lead，`missing_assignable`），也不能修改该角色（`editableRole`）。这是 SEC-H2 的同一比较，不是新规则。
+  - 多个目标或多个新增角色合并展开时排除的是并集；被排除的都是目标持有或新增的角色，各自另经 `CanAssign` 检查，所以不会少拒。
+- 测试：authz `TestAssignCustomExcludesOwnRole`（lead 对自己与其他 lead 403、对 staff 持有者与普通用户放行、不能分配 lead、不能建带 `assign_custom` 的角色、不能把自己列进清单、对另一个通配角色的持有者 403；超管照常；超管把 lead 按名字列进 lead 的清单后，lead 管理自己与其他 lead 并可分配 lead）；`TestSetRoleAssignable` 的展开结果不再含角色自己。
+- 影响对象：带 `assign_custom` 的自定义角色的持有者，经管理接口作用于自己或同角色的其他持有者、分配该角色、交出 `assign_custom` 由成功变为 403。内置 admin（`assign_custom`，不持有自定义角色）不受影响；admin 同时持有自定义角色时，该角色同样不被它的通配覆盖。生产库没有自定义角色，无影响。前端 `GET /me/assignable-roles` 随之不再列出自己的角色。无迁移。CONTRACTS §43.6、§15.7 角色对象、FU2 段同步。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。

@@ -170,7 +170,11 @@ func (s *Service) CreateRole(ctx context.Context, actorID int64, in CreateRoleIn
 		if err != nil {
 			return err
 		}
-		if err := s.covers(ctx, tx, actorID, grantOf(keys, roleKeysOf(assign), in.AssignCustom), cannotGrant(ctx)); err != nil {
+		grant, err := grantOf(ctx, tx, in.Key, keys, roleKeysOf(assign), in.AssignCustom)
+		if err != nil {
+			return err
+		}
+		if err := s.covers(ctx, tx, actorID, grant, cannotGrant(ctx)); err != nil {
 			return err
 		}
 		err = tx.QueryRow(ctx, `INSERT INTO roles (key, name, description) VALUES ($1, $2, $3) RETURNING id`,
@@ -283,7 +287,11 @@ func (s *Service) ResetRole(ctx context.Context, actorID, id int64) (*Role, erro
 		if err != nil {
 			return err
 		}
-		if err := s.covers(ctx, tx, actorID, grantOf(keys, roleKeysOf(assign), def.assignCustom), cannotGrant(ctx)); err != nil {
+		grant, err := grantOf(ctx, tx, r.Key, keys, roleKeysOf(assign), def.assignCustom)
+		if err != nil {
+			return err
+		}
+		if err := s.covers(ctx, tx, actorID, grant, cannotGrant(ctx)); err != nil {
 			return err
 		}
 		if err := setRoleAssignable(ctx, tx, id, assign, def.assignCustom); err != nil {
@@ -365,7 +373,11 @@ func (s *Service) SetRoleAssignable(ctx context.Context, actorID, id int64, in A
 		}
 		keys := roleKeysOf(assign)
 		added := addedKeys(keys, r.AssignableRoleKeys)
-		if err := s.covers(ctx, tx, actorID, grantOf(nil, added, in.AssignCustom && !r.AssignCustom), cannotGrant(ctx)); err != nil {
+		grant, err := grantOf(ctx, tx, r.Key, nil, added, in.AssignCustom && !r.AssignCustom)
+		if err != nil {
+			return err
+		}
+		if err := s.covers(ctx, tx, actorID, grant, cannotGrant(ctx)); err != nil {
 			return err
 		}
 		if err := setRoleAssignable(ctx, tx, id, assign, in.AssignCustom); err != nil {
@@ -392,13 +404,28 @@ func assignableRoles(ctx context.Context, q store.Querier, keys []string) ([]rol
 	return roles, nil
 }
 
-// grantOf is what a role write hands out: perms, and roles plus every
-// custom role when custom as what its holders may assign.
-func grantOf(perms, roles []string, custom bool) core.PermissionSet {
+// grantOf is what a write to role roleKey hands out to its holders: perms,
+// and roles plus, when custom, the "every custom role" flag and every custom
+// role but roleKey as what they may assign, expanded as RolesPermissions
+// does. Expanding it means the actor must be able to assign each of those
+// roles: a wildcard never covers the actor's own role (§43.6), so a holder
+// of a custom role with assign_custom cannot hand out, through another role,
+// a wildcard that manages its own role's holders.
+func grantOf(ctx context.Context, q store.Querier, roleKey string, perms, roles []string, custom bool) (core.PermissionSet, error) {
 	set := core.PermissionSetOf(perms...)
 	set.Assignable = core.PermissionSetOf(roles...).Keys
 	set.AssignCustom = custom
-	return set
+	if !custom {
+		return set, nil
+	}
+	var keys []string
+	if err := q.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM roles WHERE NOT builtin AND key <> $1`, roleKey).Scan(&keys); err != nil {
+		return core.PermissionSet{}, err
+	}
+	for _, k := range keys {
+		set.Assignable[k] = struct{}{}
+	}
+	return set, nil
 }
 
 // setRoleAssignable makes roles, plus every custom role when custom, the

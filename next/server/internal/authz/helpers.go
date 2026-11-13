@@ -203,8 +203,9 @@ func (s *Service) CanActOnUser(ctx context.Context, actorID int64, action core.U
 // what the caller may do (the route's permission), not whom. One exception
 // keeps decision 1: ActOnIdentity on a superuser is refused to an access key.
 // An action on oneself that passes (only a superuser's, with the default
-// lists; also a custom role with assign_custom, or listing itself, manages
-// its holders, themselves included) is audited here, the one place. The row
+// lists; also a custom role whose list names itself: assign_custom never
+// covers the holder's own roles, RolesPermissions) is audited here, the one
+// place. The row
 // says the check passed, not that the action then succeeded.
 func (s *Service) CanActOnUsers(ctx context.Context, actorID int64, action core.UserAction, targetIDs ...int64) error {
 	return s.canActOnUsers(ctx, s.querier(), actorID, action, targetIDs...)
