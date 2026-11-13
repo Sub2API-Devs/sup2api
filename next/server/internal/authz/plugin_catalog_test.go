@@ -111,6 +111,49 @@ WHERE action = 'authz.sync.grant' AND detail->>'key' = $1 AND detail->>'via' = '
 	}
 }
 
+// Only grants that exist before the sync are inherited: on a first install a
+// key inheriting from another new key gets none of its defaults, and a chain
+// through a key created in the same sync is not followed (manifest
+// InheritFrom; moderation:exempt from moderation:read).
+func TestSyncPluginInheritsOnlyEarlierGrants(t *testing.T) {
+	t.Parallel()
+	db := testutil.DB(t)
+	s := newService(t, db, newMemBus(), nil)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('mod', '{"en":"Mod"}', 'enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	sync := func(defs ...core.PermissionDef) {
+		t.Helper()
+		if err := db.Tx(ctx, func(tx pgx.Tx) error { return s.SyncPlugin(ctx, tx, "mod", defs) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const read, exempt, chained = "plugin.mod:read", "plugin.mod:exempt", "plugin.mod:chained"
+	// exempt is listed before and chained after what they inherit from, so
+	// neither the order nor the defaults written now matter.
+	sync(core.PermissionDef{Key: "exempt", GrantRoles: []string{}, InheritFrom: []string{"read"}},
+		core.PermissionDef{Key: "read", GrantRoles: []string{RoleAdmin}},
+		core.PermissionDef{Key: "chained", GrantRoles: []string{}, InheritFrom: []string{"exempt"}})
+	if got := permissionHolders(t, db, read); !slices.Equal(got, []string{RoleAdmin}) {
+		t.Fatalf("holders of %s: %v", read, got)
+	}
+	for _, key := range []string{exempt, chained} {
+		if got := permissionHolders(t, db, key); len(got) != 0 {
+			t.Fatalf("holders of %s on a first install: %v", key, got)
+		}
+	}
+	// An upgrade adding a key that inherits from an existing one does
+	// inherit its holders.
+	sync(core.PermissionDef{Key: "exempt", GrantRoles: []string{}, InheritFrom: []string{"read"}},
+		core.PermissionDef{Key: "read", GrantRoles: []string{RoleAdmin}},
+		core.PermissionDef{Key: "chained", GrantRoles: []string{}, InheritFrom: []string{"exempt"}},
+		core.PermissionDef{Key: "later", GrantRoles: []string{}, InheritFrom: []string{"read"}})
+	if got := permissionHolders(t, db, "plugin.mod:later"); !slices.Equal(got, []string{RoleAdmin}) {
+		t.Fatalf("holders of a key added later: %v", got)
+	}
+}
+
 // Handing new plugin permissions to a role is a change of that role
 // (editableRole): a custom role within the actor only, built-in roles the
 // super admin alone, super admin roles never; unknown roles are invalid.

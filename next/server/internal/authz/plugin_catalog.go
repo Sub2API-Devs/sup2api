@@ -74,10 +74,19 @@ RETURNING (xmax = 0)`, key, module, label, desc, pluginKey, d.Sensitive, d.Sort)
 			return err
 		}
 	}
+	// Only grants that exist before this sync are inherited: a key created
+	// now has none yet but the defaults just written, which are not its
+	// holders' rights, so it is left out of every from list.
+	isNew := make(map[string]bool, len(created))
+	for _, d := range created {
+		isNew[d.Key] = true
+	}
 	for _, d := range created {
 		from := make([]string, 0, len(d.InheritFrom))
 		for _, k := range d.InheritFrom {
-			from = append(from, manifest.PermissionKey(pluginKey, k))
+			if key := manifest.PermissionKey(pluginKey, k); !isNew[key] {
+				from = append(from, key)
+			}
 		}
 		if from = dedupe(from); len(from) > 0 {
 			if err := s.grantInherited(ctx, tx, d.Key, from); err != nil {
