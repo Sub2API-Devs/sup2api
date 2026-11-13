@@ -750,7 +750,7 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `proxy_id` | 可为 `null`（直连） |
 | `status` | `active` \| `disabled` |
 | `status_reason` | 手动禁用时，全量范围（`account:update`）写 `"disabled by administrator"`，own 范围（`account:own:update`）写 `"disabled by owner"`；重新启用时清空 |
-| `admin_locked` | 管理员禁用锁（2026-11-12 权限加固 W1-F10，迁移 0100）：全量范围把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 true（账号已被属主禁用时同样置 true，原因改为管理员）；为 true 时 own 范围把 `status` 改为 `active` 或调用 `reset-status` 都返回 403 `account_locked_by_admin`，其余字段照常可改；全量范围启用或重置状态时清除。全量范围禁用自己创建的账号不上锁。存量账号为 false，不追溯 |
+| `admin_locked` | 管理员禁用锁（2026-11-12 权限加固 W1-F10，迁移 0100）：全量范围把别人创建的账号（含没有创建人的历史账号）设为 `disabled` 时置 true（账号已被属主禁用时同样置 true，原因改为管理员）；为 true 且账号仍是 `disabled` 时 own 范围把 `status` 改为 `active` 或调用 `reset-status` 都返回 403 `account_locked_by_admin`（账号已是其他状态时视为残留的锁，不拦截，属主启用或重置时清除），其余字段照常可改；全量范围启用或重置状态时清除。全量范围禁用自己创建的账号不上锁。存量账号为 false，不追溯 |
 | `schedulable`、`priority`、`max_concurrency` | `max_concurrency=0` 表示不限 |
 | `in_use` | 当前占用的并发槽位数（集群实时） |
 | `cooldown_until` | 冷却截止时间（按 Redis TTL 推算，精确到秒），未冷却为 `null` |
@@ -1125,7 +1125,7 @@ own 级用户（只有 `account:own:create` / `account:own:update`，无全部�
    超出范围且与账号现值不同时返回 400 `invalid_argument`，`details.fields[{field:"<字段名>", code:"restricted"}]`。
 3. **可自定义上游的账号类型**（`AccountType.CustomUpstream()`：有未被 guardedSettings 限定的上游地址字段；未声明 `upstreamFields` 且无法推出时按“无 guardedSettings”判断，如 relay）：新建、修改时改了上游地址字段，以及 `POST /account-types/:p/:t/models/fetch`、`POST /account-types/:p/:t/preparations`、用改过上游地址的凭证调用 `POST /accounts/:id/models/fetch`，需要 `account:relay` 权限；无权限时返回 403 `permission_denied`（`details.required_permission = "account:relay"`）。改名、启停、改模型等不改地址的修改不需要。
 
-4. **管理员禁用锁**（2026-11-12 权限加固 W1-F10）：账号的 `admin_locked` 为 true（管理员禁用了它，§15.9）时，把 `status` 改为 `active`、调用 `POST /accounts/:id/reset-status` 都返回 403 `account_locked_by_admin`；其余字段照常可改。自己禁用的账号（`status_reason = "disabled by owner"`）可以自己恢复。控制台对这类账号禁用“启用”按钮并提示，不显示“重置状态”，批量启用跳过它们。
+4. **管理员禁用锁**（2026-11-12 权限加固 W1-F10）：账号的 `admin_locked` 为 true（管理员禁用了它，§15.9）且仍是 `disabled` 时，把 `status` 改为 `active`、调用 `POST /accounts/:id/reset-status` 都返回 403 `account_locked_by_admin`；其余字段照常可改。自己禁用的账号（`status_reason = "disabled by owner"`）可以自己恢复。控制台对这类账号禁用“启用”按钮并提示，不显示“重置状态”，批量启用跳过它们。
 
 全部级用户（有 `account:create` / `account:update`）不受上述限制。
 

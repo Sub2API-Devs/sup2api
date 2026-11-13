@@ -1073,9 +1073,12 @@ func (s *Service) checkOwnChange(ctx context.Context, scope *int64, ch ownChange
 var errAdminLocked = core.NewError(403, "account_locked_by_admin", "the account was disabled by an administrator")
 
 // checkAdminLock refuses an own-level caller moving a locked account (cur,
-// nil on create) to status: only active is refused, and only as a change.
+// nil on create) to status: only active is refused, and only from disabled,
+// the status the lock was set with (automatic states never apply to a
+// disabled account). A stale lock, left by an older node that enabled the
+// account, does not hold back an account the gateway disabled since.
 func checkAdminLock(ctx context.Context, cur *row, status *string) error {
-	if cur == nil || !cur.AdminLocked || status == nil || *status != "active" || cur.Status == "active" {
+	if cur == nil || !cur.AdminLocked || status == nil || *status != "active" || cur.Status != "disabled" {
 		return nil
 	}
 	return errAdminLocked.WithMessage(t(ctx,
@@ -1773,7 +1776,8 @@ func (s *Service) resetStatus(c *gin.Context) {
 		statusReset := a.Status != "active" || a.StatusReason != "" || a.AutoDisabledUntil != nil
 		if statusReset {
 			// A reset unlocks: the full scope's, or an own-level one which
-			// got past checkAdminLock (a stale lock on an active account).
+			// got past checkAdminLock (a stale lock on an account that is
+			// not disabled).
 			if _, err := tx.Exec(ctx, `UPDATE accounts SET status = 'active', status_reason = '', auto_disabled_until = NULL,
 				admin_locked = false, updated_at = clock_timestamp()
 				WHERE id = $1`, id); err != nil {

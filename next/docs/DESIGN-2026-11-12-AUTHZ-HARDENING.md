@@ -555,6 +555,7 @@
   - 持有 `account:update` 的人（admin、operator）之间不互锁：任何全量范围的调用者都能启用。全量范围禁用自己创建的账号不上锁。
   - 存量：迁移前已被管理员禁用的账号不上锁，需要锁住的由管理员重新禁用一次（对已禁用的账号再发一次 `status: disabled` 即可，控制台的按钮不会对已禁用账号发请求，需直接调接口或先启用再禁用）。
   - 自动禁用（`auto_disabled`、`error`）与重新授权的恢复逻辑不变，它们不写也不读这个锁；上锁账号的状态是 `disabled`，重新授权本来就不恢复手动禁用。
+  - 期 3 审查补：锁只在账号仍是 `disabled` 时拦截。旧节点启用过的上锁账号若随后被网关自动禁用（`auto_disabled`、`error`），此前属主启用与重置状态都会 403；现在放行并清掉残留的锁（服务端 `checkAdminLock` 与控制台 `lockedByAdmin` 同步）。
 - 回滚：revert 这个提交并 `DELETE FROM schema_migrations WHERE id = '0100_account_admin_locked.sql';`（托管部署必须删：托管核心启动时核对迁移清单，库里有本版本不认识的迁移就拒绝启动；非托管部署不删也可，同 0099、0101）；`admin_locked` 列留在库里无害（旧版本不读），需要时 `ALTER TABLE accounts DROP COLUMN admin_locked`（删列后必须同时删掉上面的 `schema_migrations` 行，否则再次升级不会重建该列）。回滚后被锁的账号其创建人又可以自行启用。混跑时旧节点不认识这个锁：经旧节点处理的请求既不上锁也不拦截；旧节点启用过的上锁账号会留下一个“运行中但带锁”的残留，属主下次自己禁用时清掉（不会因此被锁住），全量范围的任何启用、重置也会清掉。
 - 已知边界（未处理，需要时另行决定）：锁只管启用与重置状态。有 `account:own:delete` 与 `account:own:create` 的属主可以删除被锁的账号再用同一凭证新建一个；审计里 `account.update` / `account.reset_status` 不单独记录上锁、解锁（可由操作者范围与状态变化推出）。
 

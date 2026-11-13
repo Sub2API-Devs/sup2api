@@ -209,10 +209,11 @@ describe('account status recovery', () => {
       expect(toggle.attributes('title')).toBe('已被管理员禁用，只有管理员可以重新启用')
       await flip(toggle)
       expect(mocks.patch).not.toHaveBeenCalled()
-      // A locked account in another state than "disabled" would offer the reset link: not to this caller.
+      // A stale lock on an account the gateway disabled since holds nothing back, as on the server: the
+      // reset link is offered.
       list.items.value[0].status = 'error'
       await flushPromises()
-      expect(wrapper.find('[data-testid="account-reset-status"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="account-reset-status"]').exists()).toBe(true)
 
       // The full scope enables it as any other account.
       mocks.scope = 'all'

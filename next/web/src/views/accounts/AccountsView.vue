@@ -312,9 +312,10 @@ function onTestUpdated(saved: Account) {
 const testable = (a: Account) => canTest(a) && !a.orphaned
 const editable = (a: Account) => canUpdate(a) && !a.orphaned
 const toggleable = (a: Account) => editable(a) && accountControl(typeOf(a), 'schedulable').configurable
-// An account an administrator disabled (admin_locked): a caller with only the own-level key can neither enable it
-// nor reset its status (the server answers 403 account_locked_by_admin), so both are shown disabled or left out.
-const lockedByAdmin = (a: Account) => !!a.admin_locked && own.scopeOf(ACCOUNT_KEYS.update) !== 'all'
+// An account an administrator disabled (admin_locked, still disabled): a caller with only the own-level key can
+// neither enable it nor reset its status (the server answers 403 account_locked_by_admin), so both are shown
+// disabled or left out. A stale lock on an account in another status holds nothing back, as on the server.
+const lockedByAdmin = (a: Account) => !!a.admin_locked && a.status === 'disabled' && own.scopeOf(ACCOUNT_KEYS.update) !== 'all'
 const canEnable = (a: Account) => toggleable(a) && !lockedByAdmin(a)
 const selectable = (a: Account) => testable(a) || editable(a) || canDelete(a)
 const selection = useSelection<Account>({ items: list.items, key: (a) => a.id, selectable, loadAll: loadAllAccounts })
