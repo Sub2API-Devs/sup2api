@@ -11,7 +11,7 @@
   "icon": "assets/openai.svg",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
-  "hostCompat": ">=0.1.286 <0.2.0",
+  "hostCompat": ">=0.1.285 <0.2.0",
   "hostUICompat": "^3.8",
 
   "capabilities": [

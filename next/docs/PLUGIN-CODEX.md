@@ -1,6 +1,6 @@
 # codex 插件：ChatGPT 账号（Codex 设备码 / Sign in with ChatGPT）
 
-日期：2026-11-08（额度窗口 2026-11-09，官方用量重置次数 2026-11-10）。状态：已实现（插件 0.1.1 已上线；0.1.2 增加 `codex_device` 的 5h / 周额度窗口，见第 9 节，需核心 ≥0.1.257；0.1.3 接入官方用量重置次数，见第 10 节，需核心 ≥0.1.269；0.1.4 随权限加固发布，只改授权相关行为，见第 11 节，需核心 ≥0.1.286）。核心契约见 CONTRACTS §83（WebSocket 每轮 patch 见 §83.6），额度见 §44、§69。
+日期：2026-11-08（额度窗口 2026-11-09，官方用量重置次数 2026-11-10）。状态：已实现（插件 0.1.1 已上线；0.1.2 增加 `codex_device` 的 5h / 周额度窗口，见第 9 节，需核心 ≥0.1.257；0.1.3 接入官方用量重置次数，见第 10 节，需核心 ≥0.1.269；0.1.4 随权限加固发布，只改授权相关行为，见第 11 节，需核心 ≥0.1.285）。核心契约见 CONTRACTS §83（WebSocket 每轮 patch 见 §83.6），额度见 §44、§69。
 
 ## 1. 目标与边界
 
@@ -202,7 +202,7 @@
 
 功能与上游协议不变，只改授权相关行为；版本在期 4 T84 统一升级（[DESIGN-2026-11-12-AUTHZ-HARDENING.md](DESIGN-2026-11-12-AUTHZ-HARDENING.md)“期 4 T84”）。
 
-- **`hostCompat` `>=0.1.286 <0.2.0`**：`defaultRoles` 显式写出（旧核心把省略与 `[]` 混淆）和路由的 `accounts` 声明都需要权限加固后的核心。发布时按实际核心版本核对（`grep 0.1.286 next/plugins`）。
+- **`hostCompat` `>=0.1.285 <0.2.0`**：`defaultRoles` 显式写出（旧核心把省略与 `[]` 混淆）和路由的 `accounts` 声明都需要权限加固后的核心（0.1.285）。
 - **路由的账号范围（T25）**：`POST /reset-credits/list` 声明 `{"action":"update","from":["body:account_id"]}`，`POST /reset-credits/summary` 声明 `{"action":"read","from":["body:account_ids"]}`，核心按调用者对这些账号的范围放行（只有自己创建的账号的角色操作他人账号回 404，CONTRACTS §21）；`/reset-credits/consume` 不声明，由 `ui.accountActions` 推断为 `update` + `body:account_ids`。持有 `codex:reset` 但没有任何范围的 `account:update` 的角色调用 list / consume 由 200 变为 403。
 - **默认角色（T58）**：`codex:manage`、`codex:reset` 声明 `defaultRoles: ["admin", "operator"]`。新安装时授给这两个内置角色；已安装的库不回填（D9），升级时若新授予需要同意（敏感权限或授给 user、自定义角色），codex 作为内置插件会暂缓这些授予，由超管在插件页确认（P4C；授给内置角色只有超管能确认）。
 - **授权会话绑定发起人（T42）**：设备码与 Sign in with ChatGPT 的会话改用 `pluginsdk.SaveCallerSession` / `LoadCallerSession` / `UpdateCallerSession`，存 `{"uid", "v"}`。他人拿到 `session_id`：设备码轮询回 200 `expired`（与会话不存在相同），SIWC `exchange` 回 404 `session_expired`。升级或回滚时进行中的授权会话（不超过 15 分钟 / SIWC 会话有效期）需重新发起。重置次数缓存不是会话，改名 `loadCached` / `saveCached`，行为不变。
