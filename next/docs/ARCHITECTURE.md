@@ -1197,7 +1197,7 @@ sequenceDiagram
 | 调度 | 0.1.237 起走定时任务框架（CONTRACTS §77.8）：`cluster` 任务（默认）是 River 全集群任务 `plugin.<key>.<id>`，每个时段全集群只跑一次；`node` 任务每个加载了插件的节点各跑一次。执行节点调用本机插件的 `AppService.RunJob`。插件还可以经 Host API 9 在运行时登记任务 |
 | 保证 | 同一时段只跑一次（River 唯一键 + `scheduled_tasks` 租约 + `plugin_job_runs_slot_uniq`）；错过的触发不补跑。超时上限全集群 1 小时、每节点 10 分钟，更长的工作分段续跑 |
 | 记录 | `plugin_job_runs(id, plugin_key, job_id, node_id, scheduled_at, started_at, finished_at, status, error)`，保留最近 1000 条 |
-| 手动触发 | 插件详情页"立即执行"，需要 `plugin:manage` |
+| 手动触发 | 插件详情页"立即执行"，需要 `task:run` |
 | 禁用 | 插件禁用时停止调度 |
 
 ---
