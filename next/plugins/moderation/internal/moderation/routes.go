@@ -132,10 +132,13 @@ type Runtime struct {
 	// RedrawPanics counts the images skipped because their decoder panicked
 	// while they were redrawn for Jev, on this node since it started.
 	RedrawPanics int64 `json:"redraw_panics"`
-	AvgLatencyMs int64 `json:"avg_latency_ms"`
-	BlockedUsers int   `json:"blocked_users"`
-	WatchedUsers int   `json:"watched_users"`
-	DroppedCosts int64 `json:"dropped_costs"`
+	// ConnectRetries counts the auditor calls sent again after a connect
+	// failure (liveChannel.do), on this node since it started.
+	ConnectRetries int64 `json:"connect_retries"`
+	AvgLatencyMs   int64 `json:"avg_latency_ms"`
+	BlockedUsers   int   `json:"blocked_users"`
+	WatchedUsers   int   `json:"watched_users"`
+	DroppedCosts   int64 `json:"dropped_costs"`
 }
 
 func (p *Plugin) runtimeState() Runtime {
@@ -152,7 +155,7 @@ func (p *Plugin) runtimeState() Runtime {
 		Flows: len(s.flows), Auditors: len(s.auditors), QueueLen: qlen, QueueCap: qcap,
 		Dropped: p.stats.dropped.Load(), Inflight: p.stats.inflight.Load(), Calls: calls,
 		Errors: p.stats.errors.Load(), CacheHits: p.stats.cacheHits.Load(), CacheEntries: p.cache.Load().len(), CacheBytes: p.cache.Load().size(),
-		KVErrors: p.stats.kvErrors.Load(), KVWriting: p.stats.kvWriting.Load(), KVSkipped: p.stats.kvSkipped.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(),
+		KVErrors: p.stats.kvErrors.Load(), KVWriting: p.stats.kvWriting.Load(), KVSkipped: p.stats.kvSkipped.Load(), ImagesRefused: p.stats.imagesRefused.Load(), RedrawPanics: jevRedrawPanics.Load(), ConnectRetries: connectRetries.Load(),
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		DroppedCosts: p.hourly.dropped.Load(),
 	}

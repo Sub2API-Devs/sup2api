@@ -38,6 +38,8 @@ export interface Runtime {
   images_refused?: number
   /** image redraws that panicked in the decoder since the node started (the image is skipped, the text is still moderated) */
   redraw_panics?: number
+  /** auditor calls sent again after a connect failure since the node started (0.11.2) */
+  connect_retries?: number
   avg_latency_ms: number
   /** bumped by POST /verdict-cache/clear; absent before 0.8.0 */
   cache_epoch?: number
@@ -136,6 +138,8 @@ export interface Outcome {
   latency_ms: number
   skipped?: boolean
   err?: string
+  /** the error text with URL queries, credentials and token-like strings removed, at most 200 characters (0.11.2) */
+  err_detail?: string
   /** upstream status of the error (err); without one, the status with which the upstream refused the images (images_refused) */
   status?: number
   /** the upstream of an LLM auditor refused the call that carried the images (400, 413, 415, 422): no image was reviewed, the outcome is of a second call with the text alone, or skipped without a text */

@@ -73,7 +73,7 @@ func TestManifest(t *testing.T) {
 	// the forms) came with 0.1.279, UI 3.10 (SFilterBar more filters,
 	// SFilterChips, SChipList, TableColumn.grow) with 0.1.277, the verdict
 	// cache's batch KV calls with 0.1.273.
-	if m.Key != "moderation" || m.Version != "0.11.1" || m.HostCompat != ">=0.1.281 <0.2.0" || m.HostUICompat != "^3.13" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.11.2" || m.HostCompat != ">=0.1.281 <0.2.0" || m.HostUICompat != "^3.13" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}

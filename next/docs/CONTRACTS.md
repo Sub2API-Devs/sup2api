@@ -5145,6 +5145,12 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **LLM 理由上限 500 → 2000 字**（`llmReasonRunes`，问题集与 `llm_verdict` 审核器共用 `clipReason`）：正常理由一两句话（线上近 3 天命中记录最长 173 字），上限只防模型失控；超过时截到 1999 字并以“…”结尾，界面能看出被截过。理由写进每条记录的 trace 和缓存命中，一条调用结果最坏约 6 KB；命中超过缓存上限 60 KB（`maxHitBytes`）时只是不缓存，审核不受影响。
 - **界面**：逐级审核表格的理由不再是单行省略的列，改为在表格下方按调用（级 · 审核器）整段显示（保留换行，长词断行），弹窗宽度下也完整可见。封禁用户表的原因仍占一行，点击在行下方展开全文：用到 UI 3.13 的 `STable` `expandToggle: false` 和单元格 `toggleExpand()`，所以 **`hostUICompat` 改为 `^3.13`，`hostCompat` 抬到 `>=0.1.281 <0.2.0`**（0.1.280 是最后一个带 UI 3.12 的核心；线上核心 0.1.284 满足）。
 
+**0.11.2（无迁移；只合入 develop、未发布；`hostCompat`、`hostUICompat` 不变）**：
+- **默认内容直接显示、可查看、可恢复**（用户要求：默认 Jev 题目在界面上看不到）：审核器编辑里不再有“使用自己的题集”开关。Jev 和题表式 LLM 审核器的题目始终以列表直接显示和编辑；`config.questions` 为空（用默认题集）的审核器打开时显示当前默认题集（`GET /jev/default-questions` 的 `default`，设置里替换过就是替换后的题集）。`llm_verdict` 的 `system_prompt`、`categories` 为空时同样直接显示内置提示词和内置分类（同一接口的 `llm_system_prompt`、`llm_categories`）。顶部徽标标明“使用默认（版本）”“已基于默认修改”或“自定义”；“查看默认题目 / 查看默认提示词”在侧栏只读显示默认内容，逐题标出与正在编辑的内容相同、已修改或没有；“恢复为默认”确认后把正在编辑的内容换回默认，不自动保存，保存后才生效。保存规则：一部分在存的配置里为空（跟随默认）且编辑后的内容与默认相同时，仍按空保存，继续跟随默认；改动任何一处就按内容保存为审核器自己的；存的配置里本来就有的内容（即使与默认相同）照原样保存。所以只打开再保存一个用默认的审核器，配置和判定指纹都不变。设置页的默认题集选“内置”时也只读显示内置题集。接口不变（`GET /jev/default-questions` 已返回这些默认内容，权限仍是 `moderation:read`），不迁移数据。
+- **内置 Jev 题集换成线上 9 题**（`content-audit-v3-zh`）：线上 Jev 审核器（id 2）2026-11-13 的题面：删除原第 10 题 `custom/ai-detect-bypass`（降 AI 率不算违规），`custom/prompt-extraction` 加例外（要求对自身流程、技能或工具内容保密的指令不算），阈值改为 0.75 / 0.8 / 0.85，前言不变；题面、label、阈值以 `engine.go` `builtinQuestions` 为准（`unit_test.go` 核对每题的类别、名称和阈值）。题表式 LLM 审核器用同一个默认题集；`llm_verdict` 的内置分类和提示词里没有这些题，不变。原 10 题的线上内容哈希保留为旧版本 `content-audit-v2-zh`，还存着它副本的审核器照旧报这个版本。**用默认题集、且设置里没有替换默认题集的审核器升级后按新题集判定**：它们的判定指纹包含默认题集内容，随之改变，这些流程以前缓存的结论不再命中（预期）。`judgingVersion` 不加一（仍是 2）：内置题集已经通过默认题集内容进入指纹，加一只会让不用默认题集的流程（如只有 OpenAI 审核器的）也白白失效；`snapshot.go` 的注释已写明这一点。
+- **失败记录带脱敏错误摘要**：失败的调用在 trace 里除了 `err`（错误类型）和 `status`，**网络错误**（`err = network`）新增 `err_detail`：错误原文（去掉 `network: ` 前缀，即请求 URL、代理、失败的拨号或握手），去掉 URL 的查询串、片段和用户信息，像密钥的 `Bearer`/`Basic` 凭据，名字里带 `token`、`secret`、`password`、`api_key`、`private_key`、`authorization` 的键（含 `refresh_token`、`client_secret` 这类复合键）的值，`sk-` 一类前缀的密钥和字母数字混合的 32 位以上长串（UUID 形式的请求 id 保留），最多 200 字（`errdetail.go`）。**只记网络错误**：其他错误类型和状态码已经说清楚，或者原文里可能有上游返回的内容、从而回显用户输入（上游错误体、无法解析的 2xx 响应片段），这些不写 `err_detail`；它们的原文只在渠道测试和试跑的结果里显示，从不存进记录（不受 `store_text` 影响，也不会随缓存命中复制到别的记录）。记录详情的逐级审核里，结论徽标的提示和表格下方的“理由”区块显示“错误类型: 摘要”。0.11.2 之前写的记录没有这个字段，显示不变。
+- **连接阶段网络错误重试一次**：审核器调用（OpenAI 审核、Jev、三种 LLM 协议，`liveChannel.do`）还没拿到连接就失败时——TCP 连接、代理握手（HTTP `CONNECT`、SOCKS5）、TLS 握手，请求一个字节都没发出——在这次调用的超时（渠道超时，以及它所在的级和流程的超时）没到时立即再发一次，只一次；拿到连接以后（请求可能已被上游收到）的错误不重试。判定用 `httptrace` 的 `GotConn`：没触发就是连接阶段；而且错误要是暂时性的网络错误（`*net.OpError` 或握手中断的 EOF）。域名不存在（NXDOMAIN）、证书校验失败、代理对 `CONNECT` 回了错误状态、URL 协议不支持，再试一次结果也一样，不重试。每次重试计入 `GET /status` 的 `connect_retries` 和指标 `connect_retries`（本节点启动以来）。背景：线上一次失败是 SOCKS5 代理接受认证后约 5 秒没回 `CONNECT` 结果就断开。测试：`upstream_retry_test.go`（拒绝连接后重试成功、两次都失败只试两次、超时后不重试、请求发出后断开不重试、SOCKS5 握手后断开重试一次、LLM 协议同样重试、NXDOMAIN / 证书 / 代理拒绝 CONNECT / 不支持的协议不重试、重试计数；脱敏规则在 `errdetail_test.go`）。
+
 下面各小节里 AI 分析的内容是 0.9.x 及以前的行为，标"0.10.0 删除"。
 
 用户已确认的取舍：
@@ -5203,6 +5209,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **0.9.2（2026-11-12）**：只改原生界面和设置表单的 UI schema。封禁、添加观察、绑定和绑定预览里的用户 / 分组 / 账号改用宿主的实体选择器（§96.7）；设置页的白名单 / 黑名单改用 `entity-select` 部件（值仍是字符串数组）；提示词预览、流程和性能卡的分组筛选同样改用选择器。绑定页不再拉全量账号，只按 id 查已绑定账号的名称。**`hostUICompat` 改为 `^3.12`，`hostCompat` 抬到 `>=0.1.280 <0.2.0`**。接口、能力、宿主权限、迁移、设置 schema 都不变。
 - **0.9.3（2026-11-12）**：`block_message` 的默认值改为英文 `Your request was blocked by content moderation. Please revise your input and try again.`（`settings.go` 的 `DefaultBlockMessage`，`forms/settings.schema.json` 的 `default` 与它一致，有测试比对）。只影响没有保存过 `block_message` 的安装；已保存的值（包括以前的中文默认）原样使用，不做迁移。`hostCompat`、`hostUICompat`、接口、能力、宿主权限、迁移都不变。
 - **0.11.1**：版本 0.11.1，无迁移。没设范围的流程按 `input` 审、LLM 理由上限 2000 字（超出以“…”结尾）、逐级审核的理由整段显示，见 72 节开头"0.11.1"。封禁用户表的原因从单元格展开行，用到 UI 3.13，**`hostUICompat` 改为 `^3.13`，`hostCompat` 抬到 `>=0.1.281 <0.2.0`**。接口、能力、宿主权限、设置 schema 都不变，升级不需要管理员重新批准。
+- **0.11.2**：版本 0.11.2，无迁移。审核器编辑直接显示默认内容并可查看、恢复，内置 Jev 题集换成线上 9 题，失败调用的 trace 带脱敏错误摘要 `err_detail`，连接阶段网络错误重试一次，见 72 节开头"0.11.2"。没有用到新的平台能力，`hostCompat`、`hostUICompat`、接口、能力、宿主权限、设置 schema 都不变，升级不需要管理员重新批准。
 
 ### 72.4 抽取
 
@@ -5296,7 +5303,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 8. **判定缓存**（0.8.0；0.6–0.7 是只存通过的片段放行缓存）。规则照 new-api `verdict_cache.go`、`gate.go`，单位按 72.4 换成片段：
    - **范围**：`e{cache_epoch}:{flow_id}:{fp}`。
      - `cache_epoch` 是清空计数（`config_state.cache_epoch`）。
-     - `fp` 是流程的判定指纹（16 位十六进制），由会改变这个流程判定结果的东西算出：各级的 `combine`、`n`、`fallback` 和审核器列表；每个被引用的审核器的类型、渠道和已存的 `config` 原文；该渠道的类型、协议、`base_url`、`model`；用默认题集的审核器再加当前默认题集；以及代码里的常量 `judgingVersion`（内置题集、默认阈值、提示词模板这类写在代码里的判定默认值变了就加一；LLM 审核器默认发图片、默认提示词提到图片之后是 2）。
+     - `fp` 是流程的判定指纹（16 位十六进制），由会改变这个流程判定结果的东西算出：各级的 `combine`、`n`、`fallback` 和审核器列表；每个被引用的审核器的类型、渠道和已存的 `config` 原文；该渠道的类型、协议、`base_url`、`model`；用默认题集的审核器再加当前默认题集；以及代码里的常量 `judgingVersion`（默认阈值、提示词模板这类写在代码里的判定默认值变了就加一；内置题集不用加：用默认题集的审核器已经按题集内容算进指纹，0.11.2 换题集时没有加；LLM 审核器默认发图片、默认提示词提到图片之后是 2）。
      - 不进指纹：流程名、`model_filter`、`sample_rate`、总超时，渠道的名称、密钥、代理、超时、计费模型。改这些不影响缓存；改指纹里的任何一项，该流程的旧结论自动读不到。
    - **存储**：宿主 KV 的命名空间 `verdict`（各节点共用），加本节点的内存 LRU（`cache_entries` 条，另有 64 MiB 的字节上限，先到为准）作为它的缓存。**先 KV，后内存（0.8.1）**：值只在从 KV 读到、或被本节点的运行写进 KV 之后才进入内存，内存里没有 KV 里没有过的值。0.7.x 的命名空间 `pass` 里的缓存键不再读写，到期消失（告警状态仍在 `pass`，72.14）。
      - 片段键 `s:{范围}:{片段哈希}`，值是以空格分隔的若干项：`p<unix 秒>`（这个片段通过，数字是写入时间）和 `h<命中 id>@<unix 秒>`（指向一个命中条目）。一个片段最多保留 8 个指针（最新的）。**写入通过不抹掉指针**。
@@ -5384,7 +5391,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 13 个类别的默认阈值照抄 new-api `engine.go:26-31`，`config.thresholds` 可以逐类覆盖（范围大于 0 且不超过 1）。
   - 图片每次随机发一张；裸 base64 先嗅探 MIME 类型。带图请求返回 400 时，去掉图片重试一次。
 - **`typesafe`**：`POST {base}/v1/systemone`，请求体 `{model, state, questions}`。
-  - `config.questions = {preamble, items:[{category, label?, question, threshold}]}`；为空时用内置题集，题目原文照抄 new-api `jev_questions.go`（`content-audit-v2-zh`，10 题）。
+  - `config.questions = {preamble, items:[{category, label?, question, threshold}]}`；为空时用默认题集（设置里的 `jev_default_set`，没有时用内置题集）。内置题集到 0.11.1 照抄 new-api `jev_questions.go`（`content-audit-v2-zh`，10 题），0.11.2 起是线上 Jev 审核器 2026-11-13 的 9 题（`content-audit-v3-zh`，见 72 节开头"0.11.2"）。
   - **长上下文（0.8.0，照 new-api）**：每次调用都带请求头 `TypeSafe-Danger-Zone-Long-Context: true`。一次请求的预算是文字（一个字算一个 token）加图片合计 200000 token、base64 合计 24 MiB（0.7.2 及以前是 24k token，不带这个请求头）。按 new-api 文档，长上下文更慢、准确度略低、单价不变。
   - `config.review_images` 默认开，有图片时另带请求头 `TypeSafe-Danger-Zone-Images: true`。**图片规则（0.8.0）**：
     - System One 的规格：每边 280–1568 px、总像素 78,400–2,458,624、单张解码后 ≤16 MiB。内联的 PNG / JPEG 在规格内 → 原样发送，只读文件头，不解码像素。
@@ -5394,7 +5401,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
     - 重画的限制：同时最多 2 张，所有正在重画的图片的估算解码内存合计不超过 112 MiB（放不下的等待）；一次调用里重画最多用这次调用剩余时间的一半、且不超过 5 秒，到点时没画好的图和它后面需要重画的图都跳过。**文字总是送审**，不会因为图片慢而审不成。new-api 的上限是 5000 万像素，没有内存和时间这两项限制；插件进程内存上限是 512 MB（72.2 第 3 条）。
     - 规格化之后内容相同的图片只发一次；按顺序装，装不下预算的图片及其后的不发。
   - 上游返回 413 或 `max_tokens_exceeded` 且带了多张图时，只保留第一张图重试一次。
-  - `rules_version`：题表内容等于内置题集时报 `content-audit-v2-zh`；等于 new-api 已删除的两套旧内置题集时报 `content-audit-13-en-v1`、`content-audit-13-zh-v1`（0.8.0，此前显示为 `custom-…`）；其余为 `custom-` 加内容哈希。
+  - `rules_version`：题表内容等于内置题集时报 `content-audit-v3-zh`（0.11.1 及以前为 `content-audit-v2-zh`）；等于已删除的旧内置题集时报 `content-audit-13-en-v1`、`content-audit-13-zh-v1`（new-api 删除的两套，0.8.0，此前显示为 `custom-…`）或 `content-audit-v2-zh`（0.11.2 起，0.11.1 的 10 题）；其余为 `custom-` 加内容哈希。
 - **`llm_verdict`**：就是 §20.5 的 agent，提示词、分类、`tool_choice`、`max_turns`、温度、`max_tokens` 都放进 `config`。上游以 400 拒绝 `temperature` 参数时（有的模型已不再接受，如 claude-haiku-5-5 回 "`temperature` is deprecated for this model"），去掉该参数重发一次，此后这个审核器不再带它，直到配置重新加载（0.7.2）。
   - 判定：结论为 `block` 算命中；结论为 `flag` 时，`config.flag_as_hit` 为真才算命中（默认否）。
   - 分数：block = 1.0，flag = 0.5，pass = 0。
@@ -5613,7 +5620,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议（`analysis_id` 0.10.0 删除，带了也忽略）。`seen` 把新命中清零。0.8.0：列表每行带 `allowlisted`、`blocklisted`；把白名单用户设为 `enforce` 返回 400（`level` / `allowlisted`，72.8）。0.10.0：条目带 `locked`、`lock`，筛选 `locked`，计数 `counts.locked`；名单用户的条目一律 409 `locked`（72 节开头"0.10.0 第 4 期"）。0.11.0：`PUT`/`DELETE /watchlist/:user_id/lock`（manage）锁定、解锁，`allowlisted`、`blocklisted` 由锁定条目得出（72 节开头"0.11.0（contract）"） |
 | POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`observe` 按 post 执行，`enforce` 按 pre 执行，`none`（或不带）是没有名单条目的用户，按默认级别决定（0.8.0；此前固定为 post）；返回时机和"是否会被拒绝" |
 | POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认。0.8.0：new-api 的 `llm` 审核器导入为 `llm_questions` |
-| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（失败的 KV 批量调用次数；因调用方的 ctx 结束而没做成的不计，72.5 第 8 步"KV 出错"）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）、`runtime.images_refused`（LLM 审核器的带图调用被上游拒绝、改为只审文字的次数，72.6）；后三个是本节点启动以来的计数。0.8.1 加 `runtime.kv_writing`（此刻结论正在去 KV 路上的运行数，是瞬时值不是累计；持续增长说明 KV 不回答）和 `runtime.kv_skipped`（本节点启动以来整次没写缓存的运行数：人工处理可能在它的请求查缓存之后改过缓存，或本节点的内存缓存在那之后被换掉了，72.5 第 8 步的"写"）。概览页"队列与运行状态"卡片显示 `cache_bytes`、`kv_errors`、`kv_writing`、`images_refused`，0.8.2 起还有 `kv_skipped`（0.8.1 里它只在这里和健康指标里）；`redraw_panics` 只在这里和健康指标里 |
+| GET `/status`（72.14） | read | 0.8.0 加 `default_level`（`observe` \| `enforce`，`mode=off` 时为 `observe`）、`today.replayed`（已含在 `today.suspicious` 里）、`watch.blocking_with_new`、`runtime.cache_epoch`、`runtime.cache_bytes`、`runtime.kv_errors`（失败的 KV 批量调用次数；因调用方的 ctx 结束而没做成的不计，72.5 第 8 步"KV 出错"）、`runtime.redraw_panics`（因解码器 panic 跳过的图片数）、`runtime.images_refused`（LLM 审核器的带图调用被上游拒绝、改为只审文字的次数，72.6）、`runtime.connect_retries`（0.11.2：审核器调用在连接阶段失败后重试的次数）；后三个是本节点启动以来的计数。0.8.1 加 `runtime.kv_writing`（此刻结论正在去 KV 路上的运行数，是瞬时值不是累计；持续增长说明 KV 不回答）和 `runtime.kv_skipped`（本节点启动以来整次没写缓存的运行数：人工处理可能在它的请求查缓存之后改过缓存，或本节点的内存缓存在那之后被换掉了，72.5 第 8 步的"写"）。概览页"队列与运行状态"卡片显示 `cache_bytes`、`kv_errors`、`kv_writing`、`images_refused`，0.8.2 起还有 `kv_skipped`（0.8.1 里它只在这里和健康指标里）；`redraw_panics` 只在这里和健康指标里 |
 | POST `/blocks`（改） | manage | 0.8.0：白名单用户不能封禁，字段错误码 `allowlisted`（取代 `exempt`） |
 | POST `/test`（改） | manage | 请求体 `{text, images?, flow_id?}`：不带 flow_id 时按默认流程执行，返回每级的 trace |
 

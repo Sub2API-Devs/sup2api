@@ -515,7 +515,7 @@ func runStage(ctx context.Context, st Stage, audit auditFunc, prior []HitCategor
 		}
 		switch {
 		case o.Err != nil:
-			o.ErrType, o.Status = ErrType(o.Err), upstreamStatus(o.Err)
+			o.describeErr()
 			tr.Errored = true
 			errored++
 		case o.Skipped:
