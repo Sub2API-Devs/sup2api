@@ -94,9 +94,7 @@ type Preflight struct {
 	PrimaryNode      string   `json:"primary_node"`
 	Nodes            []string `json:"nodes"`
 	Blockers         []string `json:"blockers"`
-	// Warnings do not block the upgrade; the management API adds them.
-	Warnings []string `json:"warnings,omitempty"`
-	Strategy string   `json:"strategy"`
+	Strategy         string   `json:"strategy"`
 }
 type Event struct {
 	ID        int64     `json:"id"`

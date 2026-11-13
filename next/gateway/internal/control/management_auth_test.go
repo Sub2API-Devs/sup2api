@@ -1,13 +1,11 @@
 package control
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -28,47 +26,42 @@ func TestManagementTokenRequired(t *testing.T) {
 	}
 	reached := 0
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { reached++; w.WriteHeader(204) })
-	for _, allowMissing := range []bool{false, true} {
-		h := RequireManagementToken(token, allowMissing, inner)
-		for _, tc := range []struct {
-			name, header string
-			want         int
-		}{
-			{"missing", "", 401},
-			{"wrong token", "Bearer " + other, 401},
-			{"bare token", token, 401},
-			{"wrong scheme", "Basic " + token, 401},
-			{"token prefix", "Bearer " + token[:32], 401},
-			{"token with suffix", "Bearer " + token + "x", 401},
-			{"lowercase scheme", "bearer " + token, 401},
-			{"valid", "Bearer " + token, 204},
-		} {
-			if allowMissing && tc.name == "missing" {
-				tc.want = 204 // migration mode serves requests without any header
-			}
-			reached = 0
-			req := httptest.NewRequest("GET", "http://shell/system/upgrades", nil)
-			if tc.header != "" {
-				req.Header.Set("Authorization", tc.header)
-			}
-			w := httptest.NewRecorder()
-			h.ServeHTTP(w, req)
-			if w.Code != tc.want {
-				t.Errorf("allowMissing=%v %s: status %d want %d", allowMissing, tc.name, w.Code, tc.want)
-			}
-			if (tc.want == 401) != (reached == 0) {
-				t.Errorf("allowMissing=%v %s: handler reached %d times", allowMissing, tc.name, reached)
-			}
-			if tc.want == 401 && (!strings.Contains(w.Body.String(), "updater_unauthorized") || w.Header().Get("WWW-Authenticate") != "Bearer") {
-				t.Errorf("allowMissing=%v %s: unexpected 401 response %q", allowMissing, tc.name, w.Body.String())
-			}
+	h := RequireManagementToken(token, inner)
+	for _, tc := range []struct {
+		name, header string
+		want         int
+	}{
+		{"missing", "", 401},
+		{"wrong token", "Bearer " + other, 401},
+		{"bare token", token, 401},
+		{"wrong scheme", "Basic " + token, 401},
+		{"token prefix", "Bearer " + token[:32], 401},
+		{"token with suffix", "Bearer " + token + "x", 401},
+		{"lowercase scheme", "bearer " + token, 401},
+		{"valid", "Bearer " + token, 204},
+	} {
+		reached = 0
+		req := httptest.NewRequest("GET", "http://shell/system/upgrades", nil)
+		if tc.header != "" {
+			req.Header.Set("Authorization", tc.header)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != tc.want {
+			t.Errorf("%s: status %d want %d", tc.name, w.Code, tc.want)
+		}
+		if (tc.want == 401) != (reached == 0) {
+			t.Errorf("%s: handler reached %d times", tc.name, reached)
+		}
+		if tc.want == 401 && (!strings.Contains(w.Body.String(), "updater_unauthorized") || w.Header().Get("WWW-Authenticate") != "Bearer") {
+			t.Errorf("%s: unexpected 401 response %q", tc.name, w.Body.String())
 		}
 	}
 	// An empty token never matches, even "Bearer ".
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "http://shell/system/upgrades", nil)
 	req.Header.Set("Authorization", "Bearer ")
-	RequireManagementToken("", false, inner).ServeHTTP(w, req)
+	RequireManagementToken("", inner).ServeHTTP(w, req)
 	if w.Code != 401 {
 		t.Fatalf("empty token accepted: %d", w.Code)
 	}
@@ -82,7 +75,7 @@ func TestManagementHandlerRoutesRequireToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	blobs := &pluginblob.Service{Store: &pluginblob.Store{Dir: t.TempDir()}}
-	h := RequireManagementToken(token, false, ManagementHandler(&Store{}, blobs, nil))
+	h := RequireManagementToken(token, ManagementHandler(&Store{}, blobs, nil))
 	sum := strings.Repeat("a", 64)
 	for _, tc := range []struct{ method, path string }{
 		{"GET", "/system/upgrades"},
@@ -185,98 +178,5 @@ func TestManagementTokenFile(t *testing.T) {
 	}
 	if _, err = ReadManagementToken(filepath.Join(dir, "missing")); err == nil {
 		t.Fatal("missing token file accepted")
-	}
-}
-
-// The migration switch is visible while it is on: every request served
-// without a token is counted, and /metrics says whether the switch is set.
-func TestTokenlessManagementIsCounted(t *testing.T) {
-	t.Cleanup(func() { tokenlessStats.enabled.Store(false) })
-	token, err := NewManagementToken()
-	if err != nil {
-		t.Fatal(err)
-	}
-	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })
-	serve := func(h http.Handler, header string) {
-		req := httptest.NewRequest("GET", "http://shell/system/upgrades", nil)
-		if header != "" {
-			req.Header.Set("Authorization", header)
-		}
-		h.ServeHTTP(httptest.NewRecorder(), req)
-	}
-	metrics := func() string {
-		var b strings.Builder
-		writeTokenlessMetrics(&b)
-		return b.String()
-	}
-
-	open := RequireManagementToken(token, true, inner)
-	before := tokenlessStats.accepted.Load()
-	serve(open, "")
-	serve(open, "Bearer "+token) // authenticated: not counted
-	serve(open, "Bearer wrong")  // rejected: not counted
-	serve(open, "")
-	if got := tokenlessStats.accepted.Load() - before; got != 2 {
-		t.Fatalf("tokenless requests counted: %d, want 2", got)
-	}
-	if m := metrics(); !strings.Contains(m, "\ngateway_management_tokenless_enabled 1\n") ||
-		!strings.Contains(m, "\ngateway_management_tokenless_accepted_total "+strconv.FormatInt(before+2, 10)+"\n") {
-		t.Fatalf("metrics with the switch on:\n%s", m)
-	}
-
-	closed := RequireManagementToken(token, false, inner)
-	serve(closed, "")
-	if got := tokenlessStats.accepted.Load() - before; got != 2 {
-		t.Fatalf("a rejected request was counted: %d", got)
-	}
-	if m := metrics(); !strings.Contains(m, "\ngateway_management_tokenless_enabled 0\n") {
-		t.Fatalf("metrics with the switch off:\n%s", m)
-	}
-}
-
-// Over the management socket: /metrics carries the two series, and the
-// upgrade preflight warns for as long as the switch is on.
-func TestTokenlessManagementWarnsInPreflightAndMetrics(t *testing.T) {
-	t.Cleanup(func() { tokenlessStats.enabled.Store(false) })
-	s, _, _, target := setupEngines(t)
-	token, err := NewManagementToken()
-	if err != nil {
-		t.Fatal(err)
-	}
-	blobs := &pluginblob.Service{Store: &pluginblob.Store{Dir: t.TempDir()}}
-	call := func(h http.Handler, method, path, body string) string {
-		t.Helper()
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, httptest.NewRequest(method, "http://shell"+path, strings.NewReader(body)))
-		if w.Code != 200 {
-			t.Fatalf("%s %s: %d %s", method, path, w.Code, w.Body)
-		}
-		return w.Body.String()
-	}
-	preflight := `{"release_digest":"` + target.Digest + `"}`
-
-	before := tokenlessStats.accepted.Load()
-	open := RequireManagementToken(token, true, ManagementHandler(s, blobs, nil))
-	var out struct {
-		Data Preflight `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(call(open, "POST", "/system/upgrades/preflight", preflight)), &out); err != nil {
-		t.Fatal(err)
-	}
-	if len(out.Data.Warnings) != 1 || out.Data.Warnings[0] != tokenlessWarning || len(out.Data.Blockers) != 0 {
-		t.Fatalf("preflight with the switch on: %+v", out.Data)
-	}
-	if m := call(open, "GET", "/metrics", ""); !strings.Contains(m, "\ngateway_management_tokenless_enabled 1\n") ||
-		!strings.Contains(m, "\ngateway_management_tokenless_accepted_total "+strconv.FormatInt(before+2, 10)+"\n") {
-		t.Fatalf("metrics with the switch on:\n%s", m)
-	}
-
-	closed := RequireManagementToken(token, false, ManagementHandler(s, blobs, nil))
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "http://shell/system/upgrades/preflight", strings.NewReader(preflight))
-	req.Header.Set("Authorization", "Bearer "+token)
-	closed.ServeHTTP(w, req)
-	if w.Code != 200 || strings.Contains(w.Body.String(), "warnings") {
-		t.Fatalf("preflight with the switch off: %d %s", w.Code, w.Body)
 	}
 }

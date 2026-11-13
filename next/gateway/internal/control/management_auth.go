@@ -6,15 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
-	"time"
 )
 
 // The management socket's file mode does not separate processes of the same
@@ -93,52 +88,11 @@ func ReadManagementToken(path string) (string, error) {
 	return token, nil
 }
 
-// tokenlessStats is how the migration switch stands in this process (a
-// gateway serves one management socket): whether RequireManagementToken
-// serves requests without a token, and how many it served. /metrics exports
-// both and the upgrade preflight warns while the switch is on, so the
-// operator can tell when it is safe to clear.
-var tokenlessStats struct {
-	enabled  atomic.Bool
-	accepted atomic.Int64
-}
-
-// tokenlessWarning is what the upgrade preflight reports while the switch is on.
-const tokenlessWarning = "tokenless management is enabled; clear it once every core sends the token"
-
-// writeTokenlessMetrics writes tokenlessStats in the Prometheus text format.
-func writeTokenlessMetrics(w io.Writer) {
-	enabled := 0
-	if tokenlessStats.enabled.Load() {
-		enabled = 1
-	}
-	fmt.Fprintf(w, "# HELP gateway_management_tokenless_enabled Whether management requests without a token are served (1) or not (0)\n")
-	fmt.Fprintf(w, "# TYPE gateway_management_tokenless_enabled gauge\n")
-	fmt.Fprintf(w, "gateway_management_tokenless_enabled %d\n", enabled)
-	fmt.Fprintf(w, "# HELP gateway_management_tokenless_accepted_total Management requests served without a token\n")
-	fmt.Fprintf(w, "# TYPE gateway_management_tokenless_accepted_total counter\n")
-	fmt.Fprintf(w, "gateway_management_tokenless_accepted_total %d\n", tokenlessStats.accepted.Load())
-}
-
-// RequireManagementToken admits only requests that carry token. With
-// allowMissing, a request without any Authorization header is still served
-// (logged and counted in tokenlessStats) so a core release that predates the
-// token keeps working during a migration; a present but wrong token is always
-// rejected.
-func RequireManagementToken(token string, allowMissing bool, next http.Handler) http.Handler {
+// RequireManagementToken admits only requests that carry token.
+func RequireManagementToken(token string, next http.Handler) http.Handler {
 	want := []byte("Bearer " + token)
-	var lastWarn atomic.Int64
-	tokenlessStats.enabled.Store(allowMissing)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := r.Header.Get("Authorization")
-		if got == "" && allowMissing {
-			tokenlessStats.accepted.Add(1)
-			if now := time.Now().Unix(); lastWarn.Swap(now) < now-60 {
-				slog.Warn("management request without token accepted; remove allow_tokenless_management once every core sends it", "method", r.Method, "path", r.URL.Path)
-			}
-			next.ServeHTTP(w, r)
-			return
-		}
 		if token == "" || subtle.ConstantTimeCompare([]byte(got), want) != 1 {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("WWW-Authenticate", "Bearer")

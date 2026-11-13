@@ -22,7 +22,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -71,10 +70,6 @@ type config struct {
 	// ManagementTokenFile holds the per-boot bearer token of the management
 	// socket (default: shell.token beside the socket).
 	ManagementTokenFile string `json:"management_token_file"`
-	// AllowTokenlessManagement serves management requests that carry no
-	// Authorization header. Only for migrating from a core release that does
-	// not send the token yet; a wrong token is rejected either way.
-	AllowTokenlessManagement bool `json:"allow_tokenless_management"`
 	// PluginStoreMaxBytes bounds the total size of stored plugin packages
 	// (default 16 GiB); uploads beyond it are refused until GC frees space.
 	PluginStoreMaxBytes int64 `json:"plugin_store_max_bytes"`
@@ -423,9 +418,6 @@ func (s *serveSet) build(ctx context.Context) error {
 	if err = control.WriteManagementToken(c.ManagementTokenFile, managementToken); err != nil {
 		return fmt.Errorf("write management token: %w", err)
 	}
-	if c.AllowTokenlessManagement {
-		slog.Warn("allow_tokenless_management is set: management requests without a token are accepted")
-	}
 	cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
 	if err != nil {
 		return err
@@ -615,7 +607,7 @@ func (s *serveSet) listen() error {
 	if err = os.Chmod(c.ManagementSocket, 0600); err != nil {
 		return err
 	}
-	s.local = &http.Server{Handler: control.RequireManagementToken(s.managementToken, c.AllowTokenlessManagement, control.ManagementHandler(s.store, s.pluginBlobs, s.engine)), ReadHeaderTimeout: 5 * time.Second}
+	s.local = &http.Server{Handler: control.RequireManagementToken(s.managementToken, control.ManagementHandler(s.store, s.pluginBlobs, s.engine)), ReadHeaderTimeout: 5 * time.Second}
 	s.public = &http.Server{Addr: c.PublicAddr, Handler: s.router.Public(), ReadHeaderTimeout: 15 * time.Second}
 	s.private = &http.Server{Addr: c.PeerAddr, Handler: s.rt.PrivateHandler(), TLSConfig: proxy.ServerTLS(s.cert, s.ca), ReadHeaderTimeout: 15 * time.Second}
 	return nil
@@ -732,14 +724,6 @@ func readConfig(path string) (config, error) {
 	}
 	if v := os.Getenv("REDIS_URL"); v != "" {
 		c.RedisURL = v
-	}
-	// Compose renders an unset variable as empty, which keeps the file value.
-	if v := os.Getenv("SUB2API_ALLOW_TOKENLESS_MANAGEMENT"); v != "" {
-		allow, err := strconv.ParseBool(v)
-		if err != nil {
-			return c, fmt.Errorf("SUB2API_ALLOW_TOKENLESS_MANAGEMENT: %w", err)
-		}
-		c.AllowTokenlessManagement = allow
 	}
 	if c.Root == "" {
 		c.Root = "/var/lib/sub2api"

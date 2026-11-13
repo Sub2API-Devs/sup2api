@@ -92,7 +92,6 @@ func ManagementHandler(store *Store, blobs *pluginblob.Service, engine *Engine) 
 			fmt.Fprintf(w, "# TYPE gateway_upgrade_blocked gauge\n")
 			fmt.Fprintf(w, "gateway_upgrade_blocked{reason=%q} 1\n", blockedReason)
 		}
-		writeTokenlessMetrics(w)
 	})
 	mux.Handle("/", store.Handler())
 	return mux
