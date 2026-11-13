@@ -543,6 +543,7 @@
   "userPermissions": [
     {
       "key": "assets:read",
+      "defaultRoles": ["admin"],
       "label": {
         "en": "View the Ark asset library",
         "zh": "查看方舟素材库"
@@ -554,6 +555,7 @@
     },
     {
       "key": "assets:manage",
+      "defaultRoles": ["admin"],
       "label": {
         "en": "Manage the Ark asset library",
         "zh": "管理方舟素材库"

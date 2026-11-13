@@ -72,12 +72,12 @@ func TestSettingsSecrets(t *testing.T) {
 		{name: "$defs and the $ref using it", schema: `{"properties":{"a":{"$ref":"#/$defs/secret"},"b":{"$ref":"#/$defs/plain"},
 			"c":{"type":"array","items":{"$ref":"#/$defs/via"}}},
 			"$defs":{"secret":{"writeOnly":true},"plain":{"type":"string"},"via":{"properties":{"k":{"$ref":"#/$defs/secret"}}}}}`,
-			unreachable: []string{"/$defs/secret", "/$defs/via/properties/k/$ref", "/properties/a/$ref", "/properties/b/$ref", "/properties/c/items/$ref"}},
+			fields: map[string]bool{"a": true}, unreachable: []string{"/properties/c/items/$ref"}},
 		{name: "$ref to a reachable field", schema: `{"properties":{"a":{"writeOnly":true},"b":{"$ref":"#/properties/a"}}}`,
 			fields: map[string]bool{"a": true}, unreachable: []string{"/properties/b/$ref"}},
 		{name: "recursive $ref", schema: `{"properties":{"tree":{"$ref":"#/$defs/node"}},
 			"$defs":{"node":{"properties":{"next":{"$ref":"#/$defs/node"},"k":{"writeOnly":true}}}}}`,
-			unreachable: []string{"/$defs/node/properties/k", "/$defs/node/properties/next/$ref", "/properties/tree/$ref"}},
+			fields: map[string]bool{"tree/k": true}, unreachable: []string{"/properties/tree/$ref/properties/next/$ref"}},
 		{name: "recursive $ref without markers", schema: `{"properties":{"tree":{"$ref":"#/$defs/node"}},
 			"$defs":{"node":{"properties":{"next":{"$ref":"#/$defs/node"}}}}}`},
 		{name: "unresolvable $ref in a schema with markers", schema: `{"properties":{"a":{"writeOnly":true},"b":{"$ref":"#anchor"}}}`,
@@ -86,8 +86,8 @@ func TestSettingsSecrets(t *testing.T) {
 		{name: "properties named like keywords", schema: `{"properties":{"default":{"writeOnly":true},
 			"list":{"type":"array","items":{"properties":{"enum":{"writeOnly":true},"writeOnly":{"type":"boolean"}}}},
 			"r":{"$ref":"#/$defs/const"}},"$defs":{"const":{"properties":{"examples":{"format":"password"}}}}}`,
-			fields:      map[string]bool{"default": true},
-			unreachable: []string{"/$defs/const/properties/examples", "/properties/list/items/properties/enum", "/properties/r/$ref"}},
+			fields:      map[string]bool{"default": true, "r/examples": true},
+			unreachable: []string{"/properties/list/items/properties/enum"}},
 		{name: "$recursiveRef and $dynamicRef", schema: `{"$recursiveAnchor":true,"properties":{"key":{"writeOnly":true},
 			"child":{"$recursiveRef":"#"},"dyn":{"$dynamicRef":"#node"}}}`,
 			fields: map[string]bool{"key": true}, unreachable: []string{"/properties/child/$recursiveRef", "/properties/dyn/$dynamicRef"}},
@@ -104,6 +104,42 @@ func TestSettingsSecrets(t *testing.T) {
 			unreachable: []string{"/properties/a/$ref"}},
 		{name: "a property named $ref is not a reference", schema: `{"properties":{"k":{"writeOnly":true},"$ref":{"type":"string"}}}`,
 			fields: map[string]bool{"k": true}},
+		{name: "writeOnly fields of a local $defs object", schema: `{"properties":{"up":{"$ref":"#/$defs/creds"},"down":{"$ref":"#/$defs/creds","properties":{"x":{"x-sensitive":true}}}},
+			"$defs":{"creds":{"type":"object","properties":{"token":{"writeOnly":true},"url":{"x-sensitive":true},"name":{"type":"string"}}},"unused":{"items":{"writeOnly":true}}}}`,
+			fields: map[string]bool{"up/token": true, "up/url": false, "down/token": true, "down/url": false, "down/x": false}},
+		{name: "definitions and escaped names", schema: `{"properties":{"a":{"$ref":"#/definitions/a~1b~0c"},"b":{"$ref":"#/definitions/a~1b~0c"}},
+			"definitions":{"a/b~c":{"format":"password"}}}`,
+			fields: map[string]bool{"a": true, "b": true}},
+		{name: "a chain of references", schema: `{"properties":{"a":{"$ref":"#/$defs/x"},"o":{"$ref":"#/$defs/obj"}},
+			"$defs":{"x":{"$ref":"#/$defs/y"},"y":{"x-sensitive":true},"obj":{"$ref":"#/$defs/inner"},"inner":{"properties":{"k":{"$ref":"#/$defs/x"}}}}}`,
+			fields: map[string]bool{"a": false, "o/k": false}},
+		{name: "a field both direct and referenced", schema: `{"properties":{"a":{"$ref":"#/$defs/o","properties":{"k":{"x-sensitive":true}}}},
+			"$defs":{"o":{"properties":{"k":{"writeOnly":true}}}}}`,
+			fields: map[string]bool{"a/k": true}},
+		{name: "recursive $ref without markers in a schema with markers", schema: `{"properties":{"key":{"writeOnly":true},"tree":{"$ref":"#/$defs/node"}},
+			"$defs":{"node":{"properties":{"next":{"$ref":"#/$defs/node"},"v":{"type":"string"}}}}}`,
+			fields: map[string]bool{"key": true}},
+		{name: "mutual recursion with a marker", schema: `{"properties":{"a":{"$ref":"#/$defs/x"}},
+			"$defs":{"x":{"properties":{"y":{"$ref":"#/$defs/y"}}},"y":{"properties":{"k":{"writeOnly":true},"x":{"$ref":"#/$defs/x"}}}}}`,
+			fields: map[string]bool{"a/y/k": true}, unreachable: []string{"/properties/a/$ref/properties/y/$ref/properties/x/$ref"}},
+		{name: "a marked root definition at the root", schema: `{"$ref":"#/$defs/s","$defs":{"s":{"writeOnly":true}}}`,
+			unreachable: []string{"/$ref"}},
+		{name: "local references where no value path leads", schema: `{"properties":{"h":{"type":"array","items":{"$ref":"#/$defs/s"}},
+			"p":{"items":{"$ref":"#/$defs/plain"}}},"$defs":{"s":{"properties":{"k":{"writeOnly":true}}},"plain":{"type":"string"}}}`,
+			unreachable: []string{"/properties/h/items/$ref"}},
+		{name: "other reference forms stay unreachable", schema: `{"properties":{"k":{"writeOnly":true},
+			"deep":{"$ref":"#/$defs/o/properties/k"},"pct":{"$ref":"#/$defs/a%20b"},"ext":{"$ref":"other.json#/$defs/o"},
+			"tilde":{"$ref":"#/$defs/a~2"},"missing":{"$ref":"#/$defs/none"},"root":{"$ref":"#"},"dyn":{"$dynamicRef":"#/$defs/o"}},
+			"$defs":{"o":{"properties":{"k":{"type":"string"}}},"a b":{"type":"string"}}}`,
+			fields: map[string]bool{"k": true}, unreachable: []string{"/properties/deep/$ref", "/properties/dyn/$dynamicRef", "/properties/ext/$ref",
+				"/properties/missing/$ref", "/properties/pct/$ref", "/properties/root/$ref", "/properties/tilde/$ref"}},
+		{name: "local $ref below an embedded $id", schema: `{"properties":{"b":{"$id":"http://e/x","properties":{"c":{"$ref":"#/$defs/s"}}},
+			"d":{"$ref":"#/$defs/based"}},"$defs":{"s":{"writeOnly":true},"based":{"$id":"http://e/y","properties":{"e":{"$ref":"#/$defs/s"}}}}}`,
+			unreachable: []string{"/properties/b/properties/c/$ref", "/properties/d/$ref/properties/e/$ref"}},
+		{name: "names that would collide in a joined dedupe key", schema: `{"properties":{"x":{"$ref":"#/$defs/y\u0000$defs~1z"},
+			"x\u0000$defs":{"properties":{"y":{"$ref":"#/$defs/z"}}}},
+			"$defs":{"y\u0000$defs/z":{"properties":{"k1":{"writeOnly":true}}},"z":{"properties":{"k2":{"writeOnly":true}}}}}`,
+			fields: map[string]bool{"x/k1": true, "x\u0000$defs/y/k2": true}},
 		{name: "data keywords are not schemas", schema: `{"properties":{"a":{"type":"object","default":{"writeOnly":true},
 			"examples":[{"format":"password"}],"const":{"x-sensitive":true},"enum":[{"writeOnly":true}]}}}`},
 	}
@@ -143,7 +179,8 @@ func TestUnmaskableFields(t *testing.T) {
 		{name: "none"},
 		{name: "below top-level properties", fields: []string{"a/b", "hooks"},
 			unreachable: []string{"/properties/hooks/items/properties/token", "/properties/a~1b/$ref", "/properties/hooks/items"}},
-		{name: "$defs alone are judged where they are used", unreachable: []string{"/$defs/secret", "/definitions/x/properties/k"}},
+		{name: "below a followed reference", unreachable: []string{"/properties/a/$ref/items", "/properties/b/$ref/properties/c/$ref"}, fields: []string{"a", "b"}},
+		{name: "nested $defs belong to their property", unreachable: []string{"/properties/a/$defs/x"}, fields: []string{"a"}},
 		{name: "root keyword", unreachable: []string{"/properties/a/items", "/allOf/0/properties/x"}, fields: []string{"a"}, all: true},
 		{name: "root reference", unreachable: []string{"/$ref"}, all: true},
 		{name: "marked root", unreachable: []string{""}, all: true},
@@ -175,5 +212,69 @@ func TestSettingsSecretsCostIsLinear(t *testing.T) {
 	}
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("took %s", d)
+	}
+}
+
+// Following references stops past MaxSecretRefDepth references inside one
+// another and past MaxSecretRefNodes nodes; what is not followed is
+// unreachable, and the cost stays linear.
+func TestSettingsSecretsRefLimits(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`{"properties":{"a":{"$ref":"#/$defs/d0"}},"$defs":{`)
+	const chain = MaxSecretRefDepth + 8
+	for i := range chain {
+		fmt.Fprintf(&b, `"d%d":{"properties":{"v":{"type":"string"}},"$ref":"#/$defs/d%d"},`, i, i+1)
+	}
+	fmt.Fprintf(&b, `"d%d":{"properties":{"k":{"writeOnly":true}}}}}`, chain)
+	fields, unreachable := SettingsSecrets([]byte(b.String()))
+	if len(fields) != 0 || len(unreachable) != 1 || !strings.HasPrefix(unreachable[0], "/properties/a/$ref/$ref/") {
+		t.Fatalf("depth: fields %v, unreachable %v", fields, unreachable)
+	}
+
+	b.Reset()
+	b.WriteString(`{"$defs":{"c":{"properties":{"token":{"writeOnly":true}}}},"properties":{`)
+	const n = 3 * MaxSecretRefNodes
+	for i := range n {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `"p%d":{"$ref":"#/$defs/c"}`, i)
+	}
+	b.WriteString(`}}`)
+	start := time.Now()
+	fields, unreachable = SettingsSecrets([]byte(b.String()))
+	if len(fields) != MaxSecretRefNodes || len(fields)+len(unreachable) != n {
+		t.Fatalf("nodes: fields %d, unreachable %d", len(fields), len(unreachable))
+	}
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("took %s", d)
+	}
+}
+
+// Past the node budget, which references stay unreachable does not depend on
+// map order: the same schema always gives the same answer.
+func TestSettingsSecretsDeterministic(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`{"$defs":{"c":{"properties":{`)
+	for i := range 200 {
+		fmt.Fprintf(&b, `"f%d":{"properties":{"s":{"writeOnly":true}}},`, i)
+	}
+	b.WriteString(`"g":{"type":"string"}}}},"properties":{`)
+	for i := range 200 {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `"p%d":{"$ref":"#/$defs/c"}`, i)
+	}
+	b.WriteString(`}}`)
+	fields, unreachable := SettingsSecrets([]byte(b.String()))
+	if len(unreachable) == 0 {
+		t.Fatal("budget not reached")
+	}
+	for range 20 {
+		f, u := SettingsSecrets([]byte(b.String()))
+		if !reflect.DeepEqual(f, fields) || !reflect.DeepEqual(u, unreachable) {
+			t.Fatal("result depends on map order")
+		}
 	}
 }

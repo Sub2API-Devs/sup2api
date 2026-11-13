@@ -39,11 +39,13 @@
   "userPermissions": [
     {
       "key": "dynweight:read",
+      "defaultRoles": ["admin"],
       "label": { "en": "View dynamic weight", "zh": "查看动态权重" },
       "description": { "en": "The configuration, the effective weights and the events", "zh": "查看配置、有效权重和事件" }
     },
     {
       "key": "dynweight:manage",
+      "defaultRoles": ["admin"],
       "label": { "en": "Manage dynamic weight", "zh": "管理动态权重" },
       "description": { "en": "Change the configuration and reset effective weights", "zh": "修改配置、重置有效权重" }
     }

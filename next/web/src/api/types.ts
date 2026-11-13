@@ -1411,7 +1411,7 @@ export interface PluginReview {
   events: Array<string | Record<string, any>>
   routes: Array<Record<string, any>>
   menus: Array<Record<string, any>>
-  user_permissions: Array<{ key: string; label: LText; description?: LText; sensitive?: boolean }>
+  user_permissions: Array<{ key: string; label: LText; description?: LText; sensitive?: boolean; default_roles?: string[]; inherit_from?: string[] }>
   database?: { schema: string; migrations: string[] } | null
   resources?: Record<string, any> | null
   external_services: string[]

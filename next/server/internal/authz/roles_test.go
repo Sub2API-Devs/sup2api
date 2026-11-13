@@ -334,7 +334,7 @@ func TestSetRolePermissionsKeepsInactive(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.Tx(ctx, func(tx pgx.Tx) error {
-		return s.SyncPlugin(ctx, tx, "guard", []core.PermissionDef{{Key: "stats:read"}}, []string{RoleAdmin})
+		return s.SyncPlugin(ctx, tx, "guard", withRoles([]core.PermissionDef{{Key: "stats:read"}}, RoleAdmin))
 	}); err != nil {
 		t.Fatal(err)
 	}

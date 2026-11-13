@@ -18,9 +18,25 @@ import (
 
 // ConsentRequest is the body of POST /plugins/:key/versions/:version/consent.
 type ConsentRequest struct {
-	Grants                    []GrantInput `json:"grants"`
-	Denied                    []string     `json:"denied"`
-	RoleKeysForNewPermissions []string     `json:"role_keys_for_new_permissions"`
+	Grants []GrantInput `json:"grants"`
+	Denied []string     `json:"denied"`
+	// NewPermissionRoles overrides, per local userPermission key, the roles
+	// a permission created now is granted to (an empty list names no role;
+	// inheritFrom still applies).
+	NewPermissionRoles map[string][]string `json:"new_permission_roles,omitempty"`
+	// RoleKeysForNewPermissions (older consoles) overrides the roles of
+	// every permission NewPermissionRoles does not name; empty keeps the
+	// manifest defaults.
+	RoleKeysForNewPermissions []string `json:"role_keys_for_new_permissions"`
+}
+
+// overrideRoles reports the roles the request names for the local
+// userPermission key, if it overrides the manifest default.
+func (r ConsentRequest) overrideRoles(local string) ([]string, bool) {
+	if roles, ok := r.NewPermissionRoles[local]; ok {
+		return roles, true
+	}
+	return r.RoleKeysForNewPermissions, len(r.RoleKeysForNewPermissions) > 0
 }
 
 // GrantInput approves one host permission, optionally with a narrower scope.
@@ -80,6 +96,12 @@ func decide(m *manifest.Manifest, req ConsentRequest, current map[string]Grant, 
 			errs = append(errs, core.FieldError{Field: f, Code: "conflict", Message: fmt.Sprintf("permission %q is both granted and denied", d)})
 		}
 		denied[d] = true
+	}
+
+	for local := range req.NewPermissionRoles {
+		if !slices.ContainsFunc(m.UserPermissions, func(up manifest.UserPermission) bool { return up.Key == local }) {
+			errs = append(errs, core.FieldError{Field: "new_permission_roles." + local, Code: "unknown", Message: fmt.Sprintf("permission %q is not declared by the plugin", local)})
+		}
 	}
 
 	var out []decision
@@ -213,9 +235,14 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 	if err := s.checkGrantRights(ctx, actorID, decisions, c.trust, c.publisherID != nil); err != nil {
 		return nil, err
 	}
-	if err := s.checkRoleGrantRights(ctx, tx, actorID, m, req.RoleKeysForNewPermissions); err != nil {
+	existing, err := catalogKeys(ctx, tx, m)
+	if err != nil {
 		return nil, err
 	}
+	if err := s.checkRoleGrantRights(ctx, tx, actorID, m, req, existing); err != nil {
+		return nil, err
+	}
+	roles := roleGrants(m, req, existing)
 	for _, d := range decisions {
 		scope, _ := json.Marshal(d.scope)
 		if _, err := tx.Exec(ctx, `
@@ -235,7 +262,7 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 	status := c.pluginStatus
 	switch {
 	case !c.upgrade:
-		if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, req.RoleKeysForNewPermissions); err != nil {
+		if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, roles); err != nil {
 			return nil, err
 		}
 		name, _ := json.Marshal(m.Name)
@@ -248,7 +275,7 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 	case c.activeVersion == nil:
 		// Nothing is running: the newest approved version becomes the
 		// one to enable, so its defaults apply now.
-		if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, req.RoleKeysForNewPermissions); err != nil {
+		if err := s.d.Defaults.ApplyDefaults(ctx, tx, m, roles); err != nil {
 			return nil, err
 		}
 	default:
@@ -260,8 +287,8 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 			if err != nil {
 				return nil, err
 			}
-			defs := unionDefs(PermissionDefs(old), PermissionDefs(m))
-			if err := s.d.Permissions.SyncPlugin(ctx, tx, key, defs, req.RoleKeysForNewPermissions); err != nil {
+			defs := unionDefs(PermissionDefs(old, nil), PermissionDefs(m, roles))
+			if err := s.d.Permissions.SyncPlugin(ctx, tx, key, defs); err != nil {
 				return nil, err
 			}
 		}
@@ -277,7 +304,7 @@ func (s *Service) decideAndApply(ctx context.Context, tx pgx.Tx, key, version st
 		summary = append(summary, map[string]any{"permission": d.permission, "status": d.status, "scope": d.scope, "carried": d.carried})
 	}
 	return res, audit.Audit(ctx, tx, actorID, "plugin.consent", "plugin", key, map[string]any{
-		"version": version, "upgrade": c.upgrade, "decisions": summary, "role_keys": req.RoleKeysForNewPermissions,
+		"version": version, "upgrade": c.upgrade, "decisions": summary, "role_keys": req.RoleKeysForNewPermissions, "new_permission_roles": req.NewPermissionRoles,
 	})
 }
 
@@ -376,26 +403,27 @@ func (s *Service) checkGrantRights(ctx context.Context, actorID int64, ds []deci
 	return nil
 }
 
-// checkRoleGrantRights verifies the operator may hand the plugin permissions
-// this version adds to roles (SEC-H2): role:define, and holding each of them.
-// Only permissions the catalog does not have yet are handed out (authz
-// SyncPlugin), so an upgrade adding none needs neither - the console always
-// sends its default role, and carrying a running plugin forward must not
+// checkRoleGrantRights verifies the operator may hand the permissions this
+// version adds to the roles the request names (SEC-H2): role:define, and
+// every such role must be one the operator may change (CanGrantToRoles:
+// built-in roles only for the super admin, custom roles within the
+// operator's own rights, never a super admin role). The new permissions
+// themselves need not be held. Manifest defaultRoles are the catalog's own
+// defaults and need nothing. Only permissions the catalog does not have yet
+// are handed out (authz SyncPlugin), so an upgrade adding none needs nothing
+// even with roles named - carrying a running plugin forward must not
 // require role:define.
-func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, roleKeys []string) error {
-	if isSystem(ctx) || len(roleKeys) == 0 || len(m.UserPermissions) == 0 {
+func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID int64, m *manifest.Manifest, req ConsentRequest, existing map[string]bool) error {
+	if isSystem(ctx) {
 		return nil
 	}
-	perms := make([]string, 0, len(m.UserPermissions))
+	var roles []string
 	for _, up := range m.UserPermissions {
-		perms = append(perms, manifest.PermissionKey(m.Key, up.Key))
+		if named, ok := req.overrideRoles(up.Key); ok && !existing[manifest.PermissionKey(m.Key, up.Key)] {
+			roles = append(roles, named...)
+		}
 	}
-	var existing []string
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM permissions WHERE key = ANY($1)`, perms).Scan(&existing); err != nil {
-		return err
-	}
-	perms = slices.DeleteFunc(perms, func(p string) bool { return slices.Contains(existing, p) })
-	if len(perms) == 0 {
+	if len(roles) == 0 {
 		return nil
 	}
 	ok, err := s.d.Authz.Can(ctx, actorID, "role:define")
@@ -403,13 +431,36 @@ func (s *Service) checkRoleGrantRights(ctx context.Context, tx pgx.Tx, actorID i
 		return err
 	}
 	if !ok {
-		return core.ErrPermissionDenied.WithMessage("granting permissions to roles requires role:define")
+		return core.ErrPermissionDenied.WithMessage("granting permissions to roles requires role:define").
+			WithDetails(map[string]any{"permission": "role:define"})
 	}
-	// Actor must hold all permissions being granted to roles
-	if err := s.d.Authz.CanGrant(ctx, actorID, perms); err != nil {
-		return err
+	if s.d.Permissions == nil {
+		return core.ErrInternal.WithMessage("the permission catalog is not available")
 	}
-	return nil
+	slices.Sort(roles)
+	return s.d.Permissions.CanGrantToRoles(ctx, tx, actorID, slices.Compact(roles))
+}
+
+// catalogKeys are the keys of m's userPermissions and of their inheritFrom
+// that the permission catalog has now (in consent, tx holds the plugin row,
+// so no other consent changes them meanwhile).
+func catalogKeys(ctx context.Context, tx store.Querier, m *manifest.Manifest) (map[string]bool, error) {
+	var keys []string
+	for _, up := range m.UserPermissions {
+		keys = append(keys, manifest.PermissionKey(m.Key, up.Key))
+		for _, from := range up.InheritFrom {
+			keys = append(keys, manifest.PermissionKey(m.Key, from))
+		}
+	}
+	var found []string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(array_agg(key), '{}') FROM permissions WHERE key = ANY($1)`, keys).Scan(&found); err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(found))
+	for _, k := range found {
+		out[k] = true
+	}
+	return out, nil
 }
 
 // Reject marks a version rejected. A plugin that was never installed and

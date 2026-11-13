@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/jackc/pgx/v5"
 
@@ -24,12 +25,13 @@ func NewDefaultsApplier(perms core.PermissionCatalog) *DefaultsApplier {
 	return &DefaultsApplier{perms: perms}
 }
 
-// ApplyDefaults syncs the user permissions of m and drops host permission
-// grants the manifest no longer requests. It runs inside the caller's
-// transaction. Plugins bring no sticky rules (CONTRACTS §5.6).
-func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manifest.Manifest, grantNewPermissionsToRoleKeys []string) error {
+// ApplyDefaults syncs the user permissions of m, granting newly created ones
+// to the roles of grants (roleGrants), and drops host permission grants the
+// manifest no longer requests. It runs inside the caller's transaction.
+// Plugins bring no sticky rules (CONTRACTS §5.6).
+func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manifest.Manifest, grants map[string][]string) error {
 	if a.perms != nil {
-		if err := a.perms.SyncPlugin(ctx, tx, m.Key, PermissionDefs(m), grantNewPermissionsToRoleKeys); err != nil {
+		if err := a.perms.SyncPlugin(ctx, tx, m.Key, PermissionDefs(m, grants)); err != nil {
 			return fmt.Errorf("sync plugin permissions: %w", err)
 		}
 	}
@@ -45,8 +47,10 @@ func (a *DefaultsApplier) ApplyDefaults(ctx context.Context, tx pgx.Tx, m *manif
 }
 
 // PermissionDefs converts manifest userPermissions into catalog entries,
-// sorted in manifest order (10, 20, ...).
-func PermissionDefs(m *manifest.Manifest) []core.PermissionDef {
+// sorted in manifest order (10, 20, ...). A permission created now goes to
+// the roles grants holds for its local key (none when absent) and to the
+// holders of its inheritFrom keys.
+func PermissionDefs(m *manifest.Manifest, grants map[string][]string) []core.PermissionDef {
 	defs := make([]core.PermissionDef, 0, len(m.UserPermissions))
 	for i, up := range m.UserPermissions {
 		defs = append(defs, core.PermissionDef{
@@ -56,6 +60,8 @@ func PermissionDefs(m *manifest.Manifest) []core.PermissionDef {
 			Description: core.LocalizedText(up.Description),
 			Sensitive:   up.Sensitive,
 			Sort:        (i + 1) * 10,
+			GrantRoles:  grants[up.Key],
+			InheritFrom: up.InheritFrom,
 		})
 	}
 	return defs
@@ -76,6 +82,28 @@ func unionDefs(a, b []core.PermissionDef) []core.PermissionDef {
 		}
 		idx[d.Key] = len(out)
 		out = append(out, d)
+	}
+	return out
+}
+
+// roleGrants resolves, per local userPermission key, the roles a permission
+// created now is granted to: an explicit override (overrideRoles); none for
+// a rename or split, which inherits from an old key the catalog has
+// (existing, catalogKeys) and so only keeps that key's holders; otherwise
+// the manifest default (defaultRoles: admin when omitted, none when []). A
+// first install has no old key, so it gets the defaults.
+func roleGrants(m *manifest.Manifest, req ConsentRequest, existing map[string]bool) map[string][]string {
+	out := make(map[string][]string, len(m.UserPermissions))
+	for _, up := range m.UserPermissions {
+		renamed := slices.ContainsFunc(up.InheritFrom, func(from string) bool { return existing[manifest.PermissionKey(m.Key, from)] })
+		switch roles, ok := req.overrideRoles(up.Key); {
+		case ok:
+			out[up.Key] = roles
+		case renamed:
+			out[up.Key] = []string{}
+		default:
+			out[up.Key] = up.Roles()
+		}
 	}
 	return out
 }

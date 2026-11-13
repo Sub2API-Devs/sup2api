@@ -569,3 +569,79 @@
 - 审查补充：`session_only` 的判断移到可管理检查之后，所以只有真能管理超管的操作者（超管本人）会看到它，admin 的密钥对超管仍是 `not_manageable`；FU2 的 409 文案本地化；注释更新。
 - 待确认：带 `assign_custom`（“全部自定义角色”）或清单列了自己的自定义角色，按同一规则能管理自己和同角色的持有者（`RolesPermissions` 把 `assign_custom` 展开为全部自定义角色，含自己这个角色），例如带 `balance:adjust` + `assign_custom` 的自定义角色可以给自己调余额、改自己用户组的定价。这是规则的字面结果，已写入 CONTRACTS §43.6；若不希望，可在 `canActOnUsers` 里对本人排除其自身的非内置角色。
 - 回滚：revert FU6 的提交（与 review fixes）即可，回到 FU5 的行为；无迁移、无数据变化。合并提交无需回滚。
+
+- 改动：`POST /system/ccgateway/drafts`（`ccgateway/drafts.go` `draftCreate`）与 `POST /account-types/:plugin_key/:type/preparations`（`account/preparations.go` `createPreparation`）的 INSERT 改为带计数条件的单条 `INSERT ... SELECT ... WHERE`，不用 advisory 锁：该用户未完成的数量达到上限（两个包各一个常量 `maxOpenDrafts = 3`）时插入 0 行，返回 429 `too_many_drafts`（`core.ErrTooManyDrafts`）。草稿计 `created_by = 本人 AND account_id IS NULL AND retired_at IS NULL AND for_account IS NULL`；预备容器计 `created_by = 本人 AND account_id IS NULL AND state IN ('pending','ready') AND expires_at > now()`，同一个 `idempotency_key` 的重试不算新的。持有 `settings:manage`（草稿）或全量 `account:create`（预备容器）不受限。无迁移。CONTRACTS §49.9 路由表同步。
+- 偏离任务说明：草稿的计数条件多了 `for_account IS NULL`，重新授权的草稿（每个账号至多一个、只能对自己能改的账号发起）不占新建账号的名额，否则同时给 3 个账号重新授权的人建不了新账号。ccgateway 类型的预备容器在 `ccgateway_runtimes` 里也有一行（`lifecycle.go`），它同时计入草稿数。
+- 影响对象：没有 `settings:manage` 的人（含只有 `account:create` 的运营）同时打开的新建草稿不能超过 3 个，own 级用户（`account:own:create`）同时进行的预备容器不能超过 3 个；此前不限，每个草稿占一个运行环境容器直到被采用、删除或被清理任务回收（草稿超时、预备容器 2 小时过期）。控制台一次只开一个草稿，关闭编辑器会删除，正常使用不会碰到；碰到时删掉一个或等回收后即可再建。并发请求下可能多出 1 个（已接受）。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T58 P3：插件权限的默认角色与继承（manifest defaultRoles / inheritFrom）
+
+- 改动：
+  - SDK：`manifest.UserPermission` 增加 `defaultRoles`（首次登记时授予的内置角色，省略为 `admin`，`UserPermission.Roles()`）与 `inheritFrom`（首次登记时授予持有本插件这些旧本地 key 的角色）。`manifest.BuiltinRoleKeys = admin, operator, supplier, user`，与 `authz` 的内置角色（去掉超管）由 `TestManifestBuiltinRoleKeysMatchBuiltinRoles` 双向对照。校验：`defaultRoles` 只能取这四个（`invalid_value`，所以永远不含 `super_admin`）；`inheritFrom` 须是合法的本地 key 且不是自己（`invalid_value`；旧 key 通常已不再声明，所以不要求声明）。
+  - 核心：`core.PermissionDef` 增加 `GrantRoles`、`InheritFrom`；`SyncPlugin(ctx, tx, pluginKey, defs)` 去掉 `grantNewToRoleKeys` 参数：新插入的 key 授予 `GrantRoles`（照旧排除超管角色），再调用核心同步已有的 `grantInherited` 授予持有 `InheritFrom` 的角色，两种都写 `authz.sync.grant` 审计（`via` 为 `default` / `inherit`，后者带 `from`），全部在删除不再声明的旧 key 之前执行（`TestSyncPluginGrantRolesAndInheritFrom` 用改名锁定顺序）。此前插件新权限的角色授予不写审计。
+  - 安装：`roleGrants(m, req)` 按本地 key 给出新权限的角色：`ConsentRequest.new_permission_roles`（新字段，按 key 覆盖，空数组表示不授予）> 旧字段 `role_keys_for_new_permissions`（非空时作用于其余新权限）> manifest `defaultRoles`。`PermissionDefs(m, grants)` 与 `ApplyDefaults(ctx, tx, m, grants)` 共用它；`new_permission_roles` 指向未声明的权限时 400（`new_permission_roles.<key>` `unknown`）。内置插件启动时发空请求，按 manifest 默认授予，删除硬编码的 `admin`；协调器激活仍传 nil（新 key 在同意时已登记）。审核视图 `user_permissions[]` 增加 `default_roles`、`inherit_from`。`checkRoleGrantRights` 只检查请求显式指定的角色（manifest 默认属于系统目录默认，T59 再细化）。
+  - 控制台同意页：不再默认勾选 `admin`，每个新权限旁显示“默认授予：…”；勾选角色即覆盖默认（仍发旧字段 `role_keys_for_new_permissions`）。
+  - 插件 manifest（不升版本）：payment `recharge:use` → user/supplier/operator/admin，`config:manage` → admin；codex `codex:manage`、`codex:reset` 与 claude-oauth `claude_oauth:manage` → admin/operator。其余插件在 T60。
+- 影响对象：只影响此后首次登记的插件权限：
+  - 新装插件或升级新增的权限按 manifest 默认授予，可能不止 admin（例如 payment 的 `recharge:use` 直接给到 user，普通用户首次安装后即可充值，此前需要管理员手工给 user 角色勾选）；控制台默认不再把一切新权限交给 admin。
+  - 已存在的权限、角色授予不变，不做回填。需要让存量环境与新默认一致的，按需执行（示例，先确认插件已安装）：
+    ```sql
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id FROM roles r, permissions p
+    WHERE r.key IN ('user','supplier','operator','admin') AND p.key = 'plugin.payment:recharge:use'
+    ON CONFLICT DO NOTHING;
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT r.id, p.id FROM roles r, permissions p
+    WHERE r.key = 'operator' AND p.key IN ('plugin.codex:codex:manage','plugin.codex:codex:reset','plugin.claude_oauth:claude_oauth:manage')
+    ON CONFLICT DO NOTHING;
+    ```
+    手工 SQL 不写审计，也不会递增 `authz_meta.version`，各节点的权限缓存要到下一次权限变更或重启才刷新；更推荐在角色页勾选（立即生效并带审计）。
+  - 旧控制台（仍发 `role_keys_for_new_permissions: ["admin"]`）照旧只给 admin。
+  - 上传时自动沿用同意（`carryOverConsent`，升级没有新增宿主权限时）发的是空请求：新增的用户权限按 manifest 默认授予（改名的除外，只继承，见 T60 追加），无人审核；此前不授予任何角色（审查发现，接受：defaultRoles 本来就是系统目录默认，与核心升级自动授予一致）。
+  - 已知边界：`inheritFrom` 只看本次同步前已有的授予，同一次同步里新建的两个 key 之间不传递；协调器激活传 nil，激活时才重新建出的 key（例如升级失败后激活旧版本，旧版本里被新版本删掉的 key）只按 `inheritFrom` 继承、不按 `defaultRoles` 授予，此前同样不授予。
+- 回滚：revert 这个提交即可，无迁移；已按新默认授出的角色权限保留，需要时在角色页取消。
+
+## T59 P1：新插件权限的授予资格（manifest 默认按系统目录默认，显式覆盖走 editableRole，产品性收紧）
+
+- 改动：`install.checkRoleGrantRights` 只看同意请求显式指定的角色（`new_permission_roles` 或旧字段 `role_keys_for_new_permissions`，只算本次目录里还不存在的权限）：要求 `role:define`（403 `details.permission = role:define`），再调用新的 `core.PermissionCatalog.CanGrantToRoles(ctx, tx, actor, roleKeys)`。authz 的实现对每个角色走核心 `editableRole`（内置角色只有超管能改，决策 6；自定义角色当前权限须 ⊆ 操作者，M5），超管角色 403，未知角色 400 `role_keys` `unknown`；与其他角色写入一样先 `Bump` 并锁住角色行。去掉了此前“操作者必须持有被授予的新权限”（`CanGrant`）的要求：新 key 本身不要求操作者持有。manifest `defaultRoles` 不检查任何权限，在同一事务里由 `SyncPlugin` 以系统身份（actor 0）授予并写 `authz.sync.grant` 审计，与 `SyncCore` 自动授予一致。插件域不另写角色判断。
+- 测试：`authz.TestCanGrantToRoles`（真实库：operator 对权限 ⊆ 自己的自定义角色通过，对更大的自定义角色、内置角色、超管角色 403，未知 400；超管对内置与自定义通过、对超管角色 403），`install.TestConsentRoleGrantRights`（没有 `role:define` 带显式角色 403；目录拒绝时 403 且检查的是去重后的角色；不带显式角色时没有 `role:define` 也按 manifest 默认授予；升级不新增权限时带角色不需要 `role:define`）。
+- 影响对象：
+  - 非超管（含内置 admin）在同意页勾选内置角色（admin、operator、supplier、user）或权限比自己大的自定义角色：由成功（期 3a 遗留路径，等于绕过决策 6 改内置角色）变为 403。不勾选时按 manifest 默认授予，不受影响。控制台列出全部角色，勾了不能改的角色会在提交时报错。
+  - 旧控制台默认发 `role_keys_for_new_permissions: ["admin"]`：非超管用旧控制台安装带新权限的插件会 403，需要升级控制台或不勾选（发空数组）。
+  - 只有 `role:define` 而不持有插件新权限的人，现在可以把新权限交给自己能改的自定义角色（新 key 不要求持有）。
+- 已知边界（审查发现，接受）：`role:define` 用权限缓存判断（与其他接口一致），角色本身的判断在事务里加锁进行；两者之间撤销 `role:define` 的极短窗口不处理。
+- 回滚：revert 这个提交即可，无迁移、无数据变化。
+
+## T60：growth、moderation 权限语义拆分（inheritFrom 保留授权），moderation 工作人员缓存 60 秒，各插件写入 defaultRoles
+
+- 改动（插件只改代码与 manifest，不升版本）：
+  - growth：新增 `growth:use`（`inheritFrom: [growth:read]`，`defaultRoles: [user, supplier, operator, admin]`），守 4 条 `/me/*` 路由与“我的邀请”“每日签到”两个菜单；manifest 删除 `growth:read`；`growth:manage` 改名 `growth:stats:read`（`inheritFrom: [growth:manage]`，标签“查看增长后台”，保留 `sensitive`，`defaultRoles: [admin]`），守 5 条 `/admin/*` 路由与“增长管理”菜单。插件测试（testdata 副本同步）锁定路由与菜单的权限。
+  - moderation：新增 `moderation:exempt`（免于审核观察与封禁，`defaultRoles: []`、`inheritFrom: [moderation:read]`，只靠继承）；工作人员判定（`staff.go`，常量 `PermRead` 改为 `PermExempt`）由 read 改为 exempt；缓存 TTL 由 5 分钟降为 60 秒。`moderation:read`、`moderation:manage` 写 `defaultRoles: [admin]`。
+  - 其余插件按 T58 的表写 `defaultRoles: [admin]`：dynweight（`dynweight:read`、`dynweight:manage`）、volcengine（`assets:read`、`assets:manage`）、guard（三个）、anthropic（`model_catalog:read`）。与省略时的效果相同，只是写明。
+  - 测试：`authz.TestSyncPluginSplitsGrowthAndModeration` 读取仓库里的真实 growth、moderation manifest，在旧 key 上同步：持有 `growth:read` 的角色获得 `growth:use`、持有 `growth:manage` 的获得 `growth:stats:read`、持有 `moderation:read` 的（含自定义角色）获得 `moderation:exempt`，旧 growth key 删除。`moderation.TestStaffIsExemptHolderCachedAMinute`。
+- 影响对象：
+  - 生效时机：插件不升版本，已装这个版本的环境不会重新同步权限目录，以上变化要到下一次升版本（期 4 统一升）或重装时才生效。
+  - 升级 growth 后：存量授权按继承保留，`growth:use`、`growth:stats:read` 只给原来持有 `growth:read`、`growth:manage` 的角色（改名规则见下面的追加修改），用户无感；全新安装时 `growth:use` 按 `defaultRoles` 直接给 user、supplier、operator、admin（此前需要管理员手工授予）。角色页里 growth 的两个权限换了 key 与标签；直接写死旧 key 的外部脚本或自定义前端要改用新 key。旧 key 在激活新版本时删除，回到旧版本时旧 key 重新登记但不带授权（需要重新勾选）。
+  - 升级 moderation 后：持有 `moderation:read` 的角色同时获得 `moderation:exempt`，工作人员范围不变，不另外授予任何角色（`defaultRoles: []`）。此后两者可以分开：只读审核员可以取消 exempt 而照常被观察，被豁免者也不必能看审核页。取消豁免（或用户失去该权限）在 60 秒内生效（此前 5 分钟），每个用户每分钟最多问一次宿主。
+  - 命名一致性（`growth:stats:read` 与 `moderation:exempt` 的命名风格、`assets:*` 不带插件前缀等）：wontfix，key 改名会让存量授权依赖 `inheritFrom`，收益不足。
+- 回滚：revert 这个提交即可。已经同步过新 manifest 的环境回滚到旧代码后，旧 key 重新登记时没有授权（新 key 被删除），需要在角色页重新勾选 `growth:read`、`growth:manage`；moderation 回滚后 `moderation:exempt` 被删除、判定回到 read，无需处理。
+
+## T60 追加：改名只按继承授予；manifest `defaultRoles: []` 表示不授予（决策，审查后追加）
+
+- 改动：
+  - 改名规则（`install.roleGrants`）：新 key 声明了 `inheritFrom`，且同意时目录里已有其中某个旧 key（`catalogKeys` 一次查出本插件声明的 key 与它们的 `inheritFrom` key），视为改名或拆分，`GrantRoles` 为空，只靠 `SyncPlugin` 的继承；目录里没有旧 key（全新安装）才按 `defaultRoles`。没声明 `inheritFrom` 的新 key 照旧按 `defaultRoles`。同意请求的显式覆盖（`new_permission_roles`、旧字段）仍然优先。`checkRoleGrantRights` 复用同一份 `catalogKeys` 判断哪些 key 是新建的。
+  - “不授予任何角色”的写法：`UserPermission.DefaultRoles` 区分省略（nil，`null` 同）与显式空数组：前者为 admin，后者不授予。字段去掉 `omitempty`，序列化往返不丢 `[]`（核心存的是包里的原始 manifest，不受影响；测试辅助会重新序列化）。校验不变。`moderation:exempt` 写 `"defaultRoles": []`。
+  - 同意页（审查发现）：审核视图的 `user_permissions[].default_roles` 改为按当前目录算出的结果（`Review.resolveDefaultRoles` 复用 `catalogKeys` 与 `roleGrants`，上传与 `GET .../review` 都用），改名的 key 显示为空；控制台另显示“原 X 的持有者继承”（`inherit_from`）。
+  - 测试：`TestRoleGrantsPriority` 增加改名、显式覆盖优先于改名与 `[]` 几种情形，`TestConsentRenameInheritsOnly` 走同意流程对比有无旧 key，`TestUserPermissionRoles` 覆盖省略、`null`、`[]` 与序列化往返。
+- 影响对象：升级 growth 时 `growth:use` 只给原 `growth:read` 的持有者（不再让所有用户突然能签到领奖）；`moderation:exempt` 在任何情况下都只靠继承。其他插件此后改名权限时同样只继承。显式写 `"defaultRoles": []` 的插件在旧核心上会被当成省略（给 admin）。
+- 回滚：revert 这个提交即可；回滚后升级同意时改名的新 key 又会叠加 `defaultRoles`，`[]` 回到等同省略。
+
+## FU4：带密钥的插件设置 schema 支持本地 $ref（替代 T41 的一律拒绝）
+
+- 改动：`manifest.SettingsSecrets`（打包校验与核心掩码共用的同一个函数）跟随同文档的本地引用 `"#/$defs/<name>"`、`"#/definitions/<name>"`：名字须是一个 RFC 6901 记号（`~0` `~1` 解码，`~` 后必须是 0/1，含 `/` 或 `%` 的不认），目标须是根上 `$defs`/`definitions` 里的对象。目标按“写在引用处”处理：沿 `$ref` 链（最多 32 步，成环即止）看到的标记使引用处的属性成为字段，目标的 `properties` 接在引用处的值路径下继续走（深度 8 的限制不变）。根上的 `$defs`/`definitions` 不再直接扫描，只经引用读取。展开有界：同一值路径同一目标只展开一次；正在展开的目标再次被引用（环）、嵌套超过 `MaxSecretRefDepth = 32`、所有展开累计访问超过 `MaxSecretRefNodes = 10000` 个节点时，该引用记为不可达。不含任何标记的定义（直接或经引用都到不了标记，`markingDefs` 从“自身有标记或含不跟随的引用”的定义沿反向引用图一次求出）不展开，也不报错。从值路径到不了的位置（`items` 等）引用带标记的定义、`$dynamicRef`、`$recursiveRef`、外部引用、锚点、其他指针、嵌套 `$id`（改变基准 URI）之下的引用，在含标记的 schema 里仍是不可达。经引用发现的不可达标记写在引用下（`/properties/a/$ref/items`），`UnmaskableFields` 据此把整个顶层设置按凭据掩码；它不再特殊处理 `$defs` 开头的位置（根上的定义不再单独报告）。同一字段直接声明又经引用得到时只算一个，任一处是凭据即为凭据。打包校验的错误说明同步。
+- 与校验器的关系：核心用 `santhosh-tekuri/jsonschema/v6` 校验设置值，默认 2020-12 语义，`$ref` 与同级关键字同时生效，也认这两种指针；本实现更严（不认百分号编码、多段指针、锚点），只会多拒绝、多掩码，不会少掩码。`$schema` 声明 draft-07 时校验器忽略 `$ref` 的同级关键字，这里仍把同级的标记和属性算上，同样只会多掩码。`TestMaskValuesThroughLocalRef` 同时确认校验器沿同一引用校验。
+- 测试：沿用 T41 的测试表，旧的“有引用就报错”用例按新规则改写，补充：本地 `$defs` 对象里的 `writeOnly`/`x-sensitive` 字段被识别（两个属性引用同一定义各得一份）、`definitions` 与转义名、引用链、直接与引用重叠、无标记的递归定义、带标记的互相递归（环）、根上引用被标记的定义、到不了的位置引用、各种非本地或非法形式、嵌套 `$id`、嵌套 32 层以上与 10000 节点上限（3 万个引用线性完成）；核心 `plugin/api` 掩码测试；SDK 打包校验正反例。
+- 影响对象：此前因为用了 `$ref` 被打包拒绝的设置 schema，现在只要引用的是根上的本地定义、位置可达即可通过；已安装的旧包里这类 schema 此前整块按凭据掩码（顶层设置或全部），升级核心后改为逐字段掩码（被引用对象里未标记的字段，如 `label`，回显原值）。行为只会在“能精确定位到的字段”上放开，其余情况仍按不可达处理。
+- 审查修复：去重键由拼接字符串改为（值路径，目标）二元组。拼接时属性名与定义名里的 `\u0000` 可以构造出两个不同引用撞键，第二个被跳过，其中的密钥字段既不列出也不报告（有反例，已加为测试）。遍历改按键名排序：节点预算用尽后哪些引用不可达不再随 map 顺序变化，已安装包的 GET 与随后的 PUT 掩码一致。
+- 回滚：revert 这个提交即可；回滚后带本地引用的设置 schema 重新被打包拒绝，已安装的包回到整块掩码。

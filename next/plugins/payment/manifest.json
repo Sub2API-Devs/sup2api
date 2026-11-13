@@ -22,11 +22,13 @@
   "userPermissions": [
     {
       "key": "recharge:use",
+      "defaultRoles": ["user", "supplier", "operator", "admin"],
       "label": { "en": "Recharge and redeem", "zh": "充值与兑换" },
       "description": { "en": "Create recharge orders, view own orders and redeem codes", "zh": "创建充值订单、查看自己的订单、使用兑换码" }
     },
     {
       "key": "config:manage",
+      "defaultRoles": ["admin"],
       "label": { "en": "Manage payment configuration", "zh": "管理支付配置" },
       "description": { "en": "Payment settings, providers, redeem codes and promo codes", "zh": "支付设置、支付渠道、兑换码与优惠码" },
       "sensitive": true

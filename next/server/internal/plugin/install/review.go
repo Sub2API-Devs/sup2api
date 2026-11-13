@@ -120,6 +120,11 @@ type ReviewUserPerm struct {
 	Label       core.LocalizedText `json:"label"`
 	Description core.LocalizedText `json:"description,omitempty"`
 	Sensitive   bool               `json:"sensitive"`
+	// DefaultRoles are the roles the permission goes to when first created
+	// unless the consent overrides them (roleGrants: the manifest
+	// defaultRoles, none for a rename which only inherits from InheritFrom).
+	DefaultRoles []string `json:"default_roles"`
+	InheritFrom  []string `json:"inherit_from,omitempty"`
 }
 
 type ReviewDatabase struct {
@@ -303,7 +308,7 @@ func buildReview(m *manifest.Manifest, files map[string][]byte, ver *pkg.Verific
 	}
 	for _, up := range m.UserPermissions {
 		r.UserPermissions = append(r.UserPermissions, ReviewUserPerm{Key: up.Key, Label: core.LocalizedText(up.Label),
-			Description: core.LocalizedText(up.Description), Sensitive: up.Sensitive})
+			Description: core.LocalizedText(up.Description), Sensitive: up.Sensitive, DefaultRoles: up.Roles(), InheritFrom: up.InheritFrom})
 	}
 	if m.Database != nil {
 		r.Database = &ReviewDatabase{Schema: m.Database.Schema, Migrations: pkg.MigrationFiles(files, m.Database.Migrations)}
@@ -350,6 +355,20 @@ func diffGrants(m *manifest.Manifest, current map[string]Grant) *ReviewDiff {
 	return d
 }
 
+// resolveDefaultRoles sets each user permission's DefaultRoles to what a
+// consent naming no roles grants it given the catalog now (roleGrants).
+func (r *Review) resolveDefaultRoles(ctx context.Context, q store.Querier, m *manifest.Manifest) error {
+	existing, err := catalogKeys(ctx, q, m)
+	if err != nil {
+		return err
+	}
+	grants := roleGrants(m, ConsentRequest{}, existing)
+	for i := range r.UserPermissions {
+		r.UserPermissions[i].DefaultRoles = grants[r.UserPermissions[i].Key]
+	}
+	return nil
+}
+
 // Review returns the review of a stored version (for the consent page).
 func (s *Service) Review(ctx context.Context, key, version string) (*Review, error) {
 	var (
@@ -394,6 +413,9 @@ func (s *Service) Review(ctx context.Context, key, version string) (*Review, err
 		upgradeFrom, _ = s.runningVersion(ctx, s.d.DB.Pool, key, version)
 	}
 	r := buildReview(p.Manifest, p.Files, ver, s.opt.HostVersion, current)
+	if err := r.resolveDefaultRoles(ctx, s.d.DB.Pool, p.Manifest); err != nil {
+		return nil, err
+	}
 	r.ConsentStatus = consent
 	r.PackageSHA256, r.PackageSize, r.UploadedAt = sha, size, uploadedAt
 	r.UpgradeFrom = upgradeFrom

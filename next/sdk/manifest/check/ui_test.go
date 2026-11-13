@@ -844,12 +844,19 @@ func TestSettingsSecretsMustBeMaskable(t *testing.T) {
 	validate := func(schema string) map[string]string {
 		return codes(Validate(m, map[string][]byte{"settings.schema.json": []byte(schema)}, ValidateOptions{Tooling: true}))
 	}
-	if c := validate(`{"properties":{"key":{"writeOnly":true},"up":{"properties":{"url":{"x-sensitive":true}}},"tags":{"type":"array","items":{"type":"string"}}}}`); len(c) > 0 {
-		t.Fatalf("maskable secrets are valid: %v", c)
+	for _, schema := range []string{
+		`{"properties":{"key":{"writeOnly":true},"up":{"properties":{"url":{"x-sensitive":true}}},"tags":{"type":"array","items":{"type":"string"}}}}`,
+		`{"properties":{"a":{"$ref":"#/$defs/s"},"up":{"$ref":"#/definitions/creds"}},"$defs":{"s":{"format":"password"}},
+			"definitions":{"creds":{"properties":{"token":{"writeOnly":true}}}}}`,
+	} {
+		if c := validate(schema); len(c) > 0 {
+			t.Fatalf("maskable secrets are valid: %v", c)
+		}
 	}
 	for name, schema := range map[string]string{
 		"items":         `{"properties":{"hooks":{"type":"array","items":{"properties":{"token":{"writeOnly":true}}}}}}`,
-		"$ref":          `{"properties":{"a":{"$ref":"#/$defs/s"}},"$defs":{"s":{"format":"password"}}}`,
+		"$ref":          `{"properties":{"a":{"$ref":"#/$defs/s/properties/k"}},"$defs":{"s":{"properties":{"k":{"format":"password"}}}}}`,
+		"recursive":     `{"properties":{"t":{"$ref":"#/$defs/n"}},"$defs":{"n":{"properties":{"k":{"writeOnly":true},"next":{"$ref":"#/$defs/n"}}}}}`,
 		"root allOf":    `{"allOf":[{"properties":{"x":{"x-sensitive":true}}}]}`,
 		"not an object": `true`,
 	} {

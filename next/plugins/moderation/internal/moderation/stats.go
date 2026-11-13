@@ -540,7 +540,7 @@ func (p *Plugin) drainPricing(ctx context.Context, d time.Duration) {
 }
 
 // flushStats upserts the counters; on failure they are kept for the next
-// round. Users who are moderators (moderation:read) are left out of
+// round. Staff (moderation:exempt) are left out of
 // user_daily like new-api leaves out administrators; the counts of a user
 // whose check fails stay in the accumulator until a later flush can tell.
 // The readers of the tables call it first, so a run of this node shows up

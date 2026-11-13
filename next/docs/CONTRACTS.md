@@ -97,7 +97,7 @@
 | settings | `settings:read` `settings:manage`🔐🔑 |
 | system_update | `system:update:read` `system:update:execute`🔐🔑👑 `system:update:recover`🔐🔑👑 |
 
-内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `supplier` 与 `user` 两个角色的默认权限（own 级账号与代理权限与全量级重复，保留是为了与角色编辑器“全部 = {all, own}”一致并能授出 supplier）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，没有任何插件权限，暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。
+内置角色：`super_admin`（superuser，等同 `*`，含以后新增的权限，名称、描述、权限都不可编辑，不可重置或删除）、`admin`（除超管专属 👑 以外的全部核心权限）、`operator`（运维，2026-11-12 起为显式白名单，决策 D3：`user:read` `user:create` `user:update`、`role:read` `role:assign`、`group:read` `group:manage`、`segment:read` `segment:manage`、`account:read` `account:create` `account:update` `account:delete` `account:test`、`proxy:read` `proxy:manage`、`price:read`、`balance:all:read`、`usage:all:read`、`node:read`、`audit:read`、`task:read` `task:run`，加上 `supplier` 与 `user` 两个角色的默认权限（own 级账号与代理权限与全量级重复，保留是为了与角色编辑器“全部 = {all, own}”一致并能授出 supplier）；不含 `role:define`、`balance:adjust`、`usage:settle`、`user:delete`、`user:password:reset`、`account:credential:view`、`account:settings:custom`、`account:group:bind`、`account:relay`、`price:manage`、`task:manage` 以及 sticky、settings、plugin、publisher、system_update 各模块；以后新增的核心权限不会自动进入，要加进白名单）、`supplier`（供应商，2026-11-12：`account:own:read` `account:own:create` `account:own:update` `account:own:delete` `account:own:test` `account:own:credential:view` `proxy:own:read` `proxy:own:manage`，没有任何插件权限，暂不含 `account:group:bind`；附加型角色，供应商用户同时持有 `user` 与 `supplier`，控制台新建用户勾选 supplier 时自动勾上 user，§21）、`user`（`apikey:self:manage` `balance:self:read` `usage:self:read` `gateway:use`）。除 `super_admin` 外，内置角色的名称、权限、可分配清单可以编辑，但只有超级管理员能改（决策 6，§43.6）；新增的核心权限只自动授予默认集合包含它的内置角色；`POST /roles/:id/reset` 恢复默认（§15.7）。新用户默认分配 `user` 角色。插件权限的 key 为 `plugin.<插件key>:<插件内 key>`，模块为 `plugin.<插件key>`。插件权限的状态跟随插件：新登记的权限在插件运行中（`plugins.status` 为 `enabled`、`upgrading`）时为 `active`，否则为 `disabled`，每次激活（启用或升级提交）整体置为 `active`、禁用时整体置为 `disabled`；已有的行在同步时不改状态（2026-11-12 权限加固 W4-P8）。升级失败时，同意新版本时登记的新权限保留到激活另一个版本时再按其 manifest 清理（W4-P9）。新登记的插件权限授予 manifest `userPermissions[].defaultRoles` 列出的内置角色（`admin`、`operator`、`supplier`、`user`，即 `manifest.BuiltinRoleKeys`；省略或 `null` 时为 `admin`，显式 `[]` 表示不授予任何角色；超管角色本来拥有全部权限，不写入），以及持有本插件 `inheritFrom` 所列旧 key 的角色（改名、拆分不丢授权，先授予再删除不再声明的旧 key）。声明了 `inheritFrom` 且目录里已有其中某个旧 key 时视为改名或拆分，只按继承授予、不叠加 `defaultRoles`；全新安装没有旧 key，才按 `defaultRoles`；每一条都写 `authz.sync.grant` 审计（`detail.via` 为 `default` 或 `inherit`）。同意请求可以显式覆盖：`new_permission_roles: {<本地 key>: [角色 key]}` 优先（空数组表示不授予任何角色，`inheritFrom` 照常生效），其次旧字段 `role_keys_for_new_permissions`（非空时作用于其余全部新权限），都没有时按 manifest 默认；已存在的权限不受影响（2026-11-12 权限加固 T58）。manifest 默认属于系统目录默认，同意时不要求操作者的任何权限（审计操作者为系统）；显式指定的角色要求操作者持有 `role:define`，且每个角色都必须是操作者能修改的角色（与 `PUT /roles/:id/permissions` 同一判断：内置角色只有超管，自定义角色的现有权限须在操作者权限之内），超管角色一律 403，未知角色 400；新权限本身不要求操作者持有。只有本次真正新建的权限才检查，升级不新增权限时带了角色也不需要 `role:define`（T59）。
 
 ## 5. REST API（`/api/v1`）
 
@@ -210,7 +210,7 @@
 | POST `/plugins/upload`（multipart `file`） | `plugin:install` | → 安装审查信息 `review`（见下） |
 | POST `/plugins/install-from-market` `{source_id, key, version}` | `plugin:install` | → `review` |
 | GET `/plugins/:key/versions/:version/review` | `plugin:read` | 重新获取待确认版本的 `review` |
-| POST `/plugins/:key/versions/:version/consent` `{grants:[{permission, scope?}], denied:[permission], role_keys_for_new_permissions:[]}` | `plugin:install` + 按风险 `plugin:grant:high`/`plugin:grant:critical` | 确认授权 |
+| POST `/plugins/:key/versions/:version/consent` `{grants:[{permission, scope?}], denied:[permission], new_permission_roles?:{<本地 key>:[role]}, role_keys_for_new_permissions:[]}`（新权限的角色，省略按 manifest `defaultRoles`，§4） | `plugin:install` + 按风险 `plugin:grant:high`/`plugin:grant:critical` | 确认授权 |
 | POST `/plugins/:key/versions/:version/reject` | `plugin:install` | |
 | POST `/plugins/:key/enable`、`/disable` | `plugin:manage` | 发起发布 → `rollout` |
 | POST `/plugins/:key/upgrade` `{version}` | `plugin:manage` | 发起升级 → `rollout` |
@@ -938,7 +938,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 - 能力：`gateway.hook.v1`、`app.jobs.v1`、`app.broadcast.v1`、`http.routes.v1`；数据库 schema `plg_moderation`。
 - 钩子：`{id:"moderation", point:"gateway.request", order:200, match:{protocols:["anthropic.messages","openai.chat","openai.responses","gemini.generate","gemini.stream_generate"]}, needs:["model", "messages|@reverse|#(role==\"user\")", "input|@reverse|#(role==\"user\")", "[input]|#(%\"*\")", "contents|@reverse|#(role==\"user\")"], timeoutMs:30000, failure:"open"}`。order 200 让 guard（100）的关键词规则先跑，命中关键词就不再花 LLM 调用。
 - 任务：`cleanup`（`0 4 * * *`，按 `retention_days` 删旧记录、删已过期的封禁）。
-- 权限 `userPermissions`：`moderation:read`（查看概览、记录、封禁列表）、`moderation:manage`（删除记录、封禁/解封、在线测试）；下表"read/manage"即指这两个。
+- 权限 `userPermissions`：`moderation:read`（查看概览、记录、封禁列表）、`moderation:manage`（删除记录、封禁/解封、在线测试）；下表"read/manage"即指这两个。另有 `moderation:exempt`（免于审核观察与封禁，不守任何路由或菜单，`defaultRoles: []`、`inheritFrom: [moderation:read]`，只靠继承，2026-11-12 权限加固 T60），工作人员判定看它。
 - 宿主权限：`kv`、`db.schema`、`gateway.hook`（上面的 fields）、`jobs`、`broadcast`、`routes.admin`、`ui.menu`、`ui.native`、`net`（`domains:["*"]`，optional）。
 - 界面：菜单"提示词审核"（section `plugins`，icon `shield`，permission `moderation:read`），native 页面 `ModerationDashboard`；设置用 schema 表单（插件详情"设置"页）。
 - 内置：`deploy/docker/build-go.sh` 的 `BUILTIN_PLUGINS` 默认加 `moderation`；首次安装即启用，但 `mode` 默认 `off`，不配置时钩子直接放行。
@@ -2902,9 +2902,9 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 - 订阅事件：`user.created`、`usage.recorded`、`balance.changed`，每批 50 条。
 - 任务：`cleanup`，`0 3 * * *`，删除 90 天前的签到记录。
 - 数据库：`plg_growth`，迁移 `migrations/0001_init.sql`（全部 `IF NOT EXISTS`）。
-- 用户权限：`growth:read`（我的邀请、签到），`growth:manage`（管理页，`sensitive`）。
+- 用户权限（2026-11-12 权限加固 T60 改名，`inheritFrom` 保留存量授权）：`growth:use`（我的邀请、签到；`defaultRoles` user/supplier/operator/admin，继承 `growth:read`），`growth:stats:read`（“查看增长后台”，`sensitive`；继承 `growth:manage`）。旧的 `growth:read`、`growth:manage` 在同步后删除。
 - host 权限：`db.schema`、`events`（scope 同上三种事件）、`jobs`、`routes.user`、`routes.admin`、`ui.menu`、`ui.native`、`ledger.credit`（`{"maxPerTx": "10", "maxPerDay": "100"}`）。
-- 菜单：`me` 区的"我的邀请""每日签到"（`growth:read`），插件自己的 `growth` 区里的"增长管理"（`growth:manage`）。
+- 菜单：`me` 区的"我的邀请""每日签到"（`growth:use`），插件自己的 `growth` 区里的"增长管理"（`growth:stats:read`）。
 
 ### 45.2 表
 
@@ -2918,13 +2918,13 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
-| GET | `/me/referral` | `growth:read` | 我的邀请码（没有就生成）、邀请人、邀请人数、累计返利、返利最多的被邀请人、最近返利 |
-| POST | `/me/referral/bind` | `growth:read` | `{code}` 绑定邀请人；只能绑一次 |
-| GET | `/me/checkin/status` | `growth:read` | 今天是否已签到、今日奖励、连续天数、累计次数与金额、最近记录 |
-| POST | `/me/checkin` | `growth:read` | 签到 |
-| GET | `/admin/referrals`、`/admin/referrals/:user_id` | `growth:manage` | 邀请关系列表、单个用户详情 |
-| GET | `/admin/commissions`、`/admin/checkins` | `growth:manage` | 返利、签到记录 |
-| GET | `/admin/stats` | `growth:manage` | 汇总 |
+| GET | `/me/referral` | `growth:use` | 我的邀请码（没有就生成）、邀请人、邀请人数、累计返利、返利最多的被邀请人、最近返利 |
+| POST | `/me/referral/bind` | `growth:use` | `{code}` 绑定邀请人；只能绑一次 |
+| GET | `/me/checkin/status` | `growth:use` | 今天是否已签到、今日奖励、连续天数、累计次数与金额、最近记录 |
+| POST | `/me/checkin` | `growth:use` | 签到 |
+| GET | `/admin/referrals`、`/admin/referrals/:user_id` | `growth:stats:read` | 邀请关系列表、单个用户详情 |
+| GET | `/admin/commissions`、`/admin/checkins` | `growth:stats:read` | 返利、签到记录 |
+| GET | `/admin/stats` | `growth:stats:read` | 汇总 |
 
 绑定的规则：
 - 不能绑自己；
@@ -2968,7 +2968,7 @@ QuotaSnapshot = { supported: boolean, source: "passive"|"active"|"", updated_at:
 
 1. **授权上限偏小**：`ledger.credit` 只有单笔 $10、整个插件每天 $100（UTC 日，所有用户合计），超出的返利和签到都不发。用户多了很快就会触顶。需要按运营规模调大 scope，或者把大额返利拆成多笔。
 2. **注册归因**：没有"注册时带邀请码"的入口。任何已登录用户随时都能绑定一次邀请人，不限于新用户。
-3. **默认可见性**：普通用户角色默认没有 `growth:read`，需要管理员授予后才能看到菜单。
+3. **默认可见性**：2026-11-12 起新装时 `growth:use` 默认授予 user、supplier、operator、admin（manifest `defaultRoles`）；此前普通用户角色默认没有 `growth:read`，需要管理员授予后才能看到菜单。升级到带 `growth:use` 的版本时它是 `growth:read` 的改名：只授予存量 `growth:read` 的持有者，不叠加 `defaultRoles`（§4）。
 4. 原生 UI 的 `dist/` 不在仓库里，打包前要先构建 `ui/native`。
 
 ## 46. 充值支付与兑换码插件 payment（0.1.0，2026-10-04 起草，2026-10-05 按合并后实现修正）
@@ -5497,7 +5497,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **升级到 0.8.0 时的名单转换**（`parity.go`）：0.7.x 下 `mode=enforce` 时所有人先审，自动加入的条目却都是 observe 级；按 0.8.0 的规则（条目的级别优先）这些用户会变成只后审。所以插件首次以 0.8.0 运行、且当时 `mode=enforce` 时，把未过期的、`source=auto` 的 observe 级条目改为 enforce 级（各写一条 `watch_events`：`set_level`，reason 以"0.8.0 升级"开头，没有操作人；有效期和计数不动）。手动设的（`manual`）和 AI 降下来的（`analysis`）observe 级条目不动，这些用户升级后只后审。首次转换后的 24 小时内（`config_state.parity_converted_at` 起）每 5 秒再查一次这段时间里新加入的自动 observe 级条目（滚动升级期间 0.7.x 节点加的），同样转换；之后不再转换。每个条目一个事务，取锁顺序与其他名单操作相同。日志 `moderation: 0.8.0 watch list conversion`（`mode`、`converted`、`first_run`）。
 
-**管理员**：持有 `moderation:read` 的用户（版主）由插件自动识别（72.14），不进观察名单、不会被封禁，不需要为此把他们加进任何名单。（0.2 时插件识别不了管理员，曾建议把管理员加进 `exempt_user_ids`；这条建议早已作废，该设置在 0.8.0 退役，读作白名单，72.10。）
+**管理员**：持有 `moderation:exempt` 的用户（工作人员；2026-11-12 起由 `moderation:read` 拆出，存量持有 read 的角色同步时自动获得 exempt，结果缓存 60 秒）由插件自动识别（72.14），不进观察名单、不会被封禁，不需要为此把他们加进任何名单。（0.2 时插件识别不了管理员，曾建议把管理员加进 `exempt_user_ids`；这条建议早已作废，该设置在 0.8.0 退役，读作白名单，72.10。）
 
 **手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。没指定天数或 `expires_at` 时，observe 级的有效期是 `watch_days`，enforce 级不过期（加入和改级别都一样，照 new-api）。改级别时开新的计数窗口（照 new-api）：新 `violation_epoch`、计数和新命中清零、`since_at` 重设、`source` 改为 manual，返回的条目就是存下的值。
 - **0.8.0**：白名单用户不能手动设为 enforce 级（`POST /watchlist`、`PATCH /watchlist/:user_id` 返回 400，字段 `level`，码 `allowlisted`，"白名单用户只能设为观察"），可以以 observe 级加入。黑名单用户可以设任何级别，但名单级别不影响他们的时机（总是先审）。版主不能加入（字段 `user_id`，码 `staff`）。**0.10.0**：两个名单的用户是锁定条目，手动操作一律 409 `locked`（见 72 节开头"0.10.0 第 4 期"）；`auto_escalate` 见同处。
@@ -5809,7 +5809,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - **流程行 `errors` 的定义变了（0.8.0，照 new-api）**：按运行的 `errored` 计，即"有审核器出错或有级失败"的运行，不论最终结果是什么。0.7.2 及以前只在结果为 `error` 时加一。这样复核级坏了、初审命中仍然成立的运行，异常率还看得到。同一批流量下这个数只会变大或持平；它和"结果为 error 的记录数"不再是一回事。
   - 级行的级号是 spec 的级序号（补审级记在它自己的级号上）。
 - 渠道健康度不进 `stats_hourly`，记在 `costs` 的同一行（小时、渠道、来源）上：调用数、错误、延迟分桶。手动来源（test、try、simulate）不计入健康度。
-- `user_daily`：每个用户每个 UTC 日的审核数、可疑数、高危数、错误数、最近命中时间。共用一次 pre 审核的多个请求各记各的用户。持有 `moderation:read` 的用户（版主）不记。
+- `user_daily`：每个用户每个 UTC 日的审核数、可疑数、高危数、错误数、最近命中时间。共用一次 pre 审核的多个请求各记各的用户。持有 `moderation:exempt` 的用户（工作人员）不记。
 - 每个节点在内存里累加，每 10 秒写一次。写入串行，按固定键顺序 upsert，避免多节点死锁；失败的部分留到下一轮。读接口先写本节点的待写数据，其他节点最多晚 10 秒。
 - 不计入的情况：Shutdown 打断的运行，以及客户端已离开且没有命中的 pre 请求。
 - 清理：`stats_retention_days`（默认 90 天）删除 `stats_hourly`、`user_daily` 和 `costs`，与 72.10 的统计表一样在 `purgeRetention` 的锁内分批删除（0.5.1 起；此前 `costs` 固定保留 400 天、不分批）。
@@ -6372,7 +6372,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
     - 回传掩码的敏感地址不受此限：它沿用原值，地址没有变，凭据也不会被发到别处；所以"凭据全部重填、地址保持掩码"可以保存。
     - `plugin:manage` 不受此限制。
     - 实现：`sdk/manifest` `SettingsSecrets`（标记的唯一读法，打包校验与核心共用）、`plugin/api/settings.go` `schemaSecrets`、`mergeSettings`。
-  - **标记只能写在能掩码的位置**（2026-11-12）：只有沿 `properties` 嵌套对象能到达的属性（最多 8 层）能单独掩码；被标记的属性整体掩码，其下不再细分。`items`、`additionalProperties`、`patternProperties`、`allOf`/`anyOf`/`oneOf`、`if`/`then`/`else`、`$defs` 等其他位置的标记、超过 8 层的标记，打包校验报 `ui.settings.schema` `unmaskable_secret`；schema 里只要有任何标记，其中每个引用（`$ref`、`$dynamicRef`、`$recursiveRef`）也同样报错（不解析引用指向哪里，带密钥的设置 schema 不能用引用）；schema 文件不是 JSON 对象同样报错。校验之前已安装的包：含这类标记的顶层设置整块按凭据掩码；标记不属于某一个顶层设置时（根上的 `allOf`、`additionalProperties`、`$ref` 等），或 schema 文件不是 JSON 对象时，全部顶层设置按凭据掩码。
+  - **标记只能写在能掩码的位置**（2026-11-12）：只有沿 `properties` 嵌套对象能到达的属性（最多 8 层）能单独掩码；被标记的属性整体掩码，其下不再细分。`items`、`additionalProperties`、`patternProperties`、`allOf`/`anyOf`/`oneOf`、`if`/`then`/`else`、嵌套的 `$defs` 等其他位置的标记、超过 8 层的标记，打包校验报 `ui.settings.schema` `unmaskable_secret`。同文档的本地引用 `"$ref": "#/$defs/<名>"` 或 `"#/definitions/<名>"`（指向根上的 `$defs`/`definitions`，名字是一个 RFC 6901 记号，`~0` `~1` 解码，不接受百分号编码）按“目标写在引用处”处理：目标自身被标记则引用处的属性整体掩码，目标的 `properties` 接在引用处的路径下（同样最多 8 层）；根上的 `$defs`/`definitions` 只经引用读取，没被引用的定义不检查。引用成环、互相嵌套超过 32 层、全部展开累计超过 10000 个节点，或者从 `items` 等到不了的位置引用带标记的定义，都报错，位置写在引用下（如 `/properties/a/$ref/items`）。schema 里只要有任何标记，其他引用（`$dynamicRef`、`$recursiveRef`、外部引用、锚点、其他指针、嵌套 `$id` 之下的引用）照旧报错（2026-11-12 权限加固 FU4，此前任何引用都报错）；schema 文件不是 JSON 对象同样报错。校验之前已安装的包：含这类标记的顶层设置整块按凭据掩码；标记不属于某一个顶层设置时（根上的 `allOf`、`additionalProperties`、`$ref` 等），或 schema 文件不是 JSON 对象时，全部顶层设置按凭据掩码。
   - **没有 schema 的设置**（没有 `ui.settings`、iframe 或不带 schema 的 native，或包里缺 schema 文件）：已存值的每个顶层键都按凭据掩码，`secret_fields` 列出它们，回传掩码沿用原值，上面的重填规则同样适用。
   - `GET` 的回答多一个 `permission`：完整的 RBAC key（`plugin.<key>:<permission>`），没有声明时省略。
 - **审计**：设置修改照旧写 `plugin.settings.update`（`changed_keys`，不记值），现在多记 `request_id`；用户是谁看 `user_id`。

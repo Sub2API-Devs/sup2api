@@ -45,9 +45,9 @@
   "database": { "schema": "plg_guard", "migrations": "migrations/" },
 
   "userPermissions": [
-    { "key": "rules:read", "label": { "en": "View guard rules", "zh": "查看拦截规则" } },
-    { "key": "rules:manage", "label": { "en": "Manage guard rules", "zh": "管理拦截规则" } },
-    { "key": "stats:read", "label": { "en": "View guard statistics", "zh": "查看拦截统计" } }
+    { "key": "rules:read", "defaultRoles": ["admin"], "label": { "en": "View guard rules", "zh": "查看拦截规则" } },
+    { "key": "rules:manage", "defaultRoles": ["admin"], "label": { "en": "Manage guard rules", "zh": "管理拦截规则" } },
+    { "key": "stats:read", "defaultRoles": ["admin"], "label": { "en": "View guard statistics", "zh": "查看拦截统计" } }
   ],
 
   "routes": [

@@ -880,6 +880,20 @@ type UserPermission struct {
 	Label       LocalizedText `json:"label"`
 	Description LocalizedText `json:"description,omitempty"`
 	Sensitive   bool          `json:"sensitive,omitempty"`
+	// DefaultRoles are the built-in roles (BuiltinRoleKeys) the permission
+	// is granted to when the catalog first creates it: omitted (or null)
+	// means DefaultPermissionRoles, an empty list none. The core skips them
+	// for a rename (an inheritFrom key the catalog has), which only keeps
+	// the old key's holders. The super admin role holds every permission
+	// and is never listed. Not omitempty, so that marshalling keeps [] apart
+	// from omitted.
+	DefaultRoles []string `json:"defaultRoles"`
+	// InheritFrom are local keys of this plugin's permissions whose holders
+	// get this permission when the catalog first creates it: a renamed or
+	// split permission keeps its holders. Only grants that exist before the
+	// sync count, so a chain through another permission created in the same
+	// sync is not followed.
+	InheritFrom []string `json:"inheritFrom,omitempty"`
 }
 
 // Route is a plugin-owned console endpoint under /api/v1/p/<key>.

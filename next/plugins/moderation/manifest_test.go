@@ -78,10 +78,17 @@ func TestManifest(t *testing.T) {
 	perms := map[string]bool{}
 	for _, up := range m.UserPermissions {
 		perms[up.Key] = true
+		// moderation:exempt (staff) was split from moderation:read, whose
+		// holders inherit it; it has no default roles ([] is none) and no
+		// route or menu uses it.
+		if up.Key == moderation.PermExempt && (len(up.InheritFrom) != 1 || up.InheritFrom[0] != "moderation:read" || up.DefaultRoles == nil || len(up.DefaultRoles) != 0) {
+			t.Errorf("exempt = %+v", up)
+		}
 	}
-	if !perms["moderation:read"] || !perms["moderation:manage"] || len(perms) != 2 {
+	if !perms["moderation:read"] || !perms["moderation:manage"] || !perms[moderation.PermExempt] || len(perms) != 3 {
 		t.Fatalf("user permissions = %v", perms)
 	}
+	delete(perms, moderation.PermExempt)
 	routes := map[string]string{}
 	for _, r := range m.Routes {
 		if !perms[r.Permission] {
